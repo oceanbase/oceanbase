@@ -1626,7 +1626,7 @@ int ObRFInFilterVecMsg::do_might_contain_batch(const ObExpr &expr,
     batch_info_guard.set_batch_idx(batch_i);
     for (int64_t arg_i = 0; OB_SUCC(ret) && arg_i < expr.arg_cnt_; ++arg_i) {
       cur_row.row_.at(arg_i) = expr.args_[arg_i]->locate_expr_datum(ctx, batch_i);
-    }
+    } 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(rows_set_.exist_refactored(node))) {
       if (OB_HASH_NOT_EXIST == ret) {

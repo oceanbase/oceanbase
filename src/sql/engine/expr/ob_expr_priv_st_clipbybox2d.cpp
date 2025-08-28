@@ -57,7 +57,7 @@ int ObExprPrivSTClipByBox2D::calc_result_type2(ObExprResType &type, ObExprResTyp
   return ret;
 }
 
-int ObExprPrivSTClipByBox2D::process_input_geometry(omt::ObSrsCacheGuard &srs_guard, const ObExpr &expr, ObEvalCtx &ctx, MultimodeAlloctor &allocator,
+int ObExprPrivSTClipByBox2D::process_input_geometry(omt::ObSrsCacheGuard &srs_guard, const ObExpr &expr, ObEvalCtx &ctx, MultimodeAlloctor &allocator, 
     bool &is_null_res, ObGeometry *&geo1, ObGeometry *&geo2, const ObSrsItem *&srs1,
     const ObSrsItem *&srs2)
 {
@@ -138,7 +138,7 @@ int ObExprPrivSTClipByBox2D::eval_priv_st_clipbybox2d(
 
   if (OB_FAIL(process_input_geometry(srs_guard, expr, ctx, temp_allocator, is_null_res, geo1, geo2, srs1, srs2))) {
     LOG_WARN("fail to process input geometry", K(ret), K(geo1), K(geo2), K(is_null_res));
-  }
+  } 
   ObGeoBoostAllocGuard guard(tenant_id);
   lib::MemoryContext *mem_ctx = nullptr;
   if (OB_FAIL(ret) || is_null_res) {

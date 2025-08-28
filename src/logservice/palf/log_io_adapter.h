@@ -41,7 +41,7 @@ public:
   }
 public:
   LogIODeviceWrapper() : log_local_device_(NULL), device_manager_(NULL), is_inited_(false) {}
-  int init(const char *clog_dir,
+  int init(const char *clog_dir, 
            const int64_t disk_io_thread_count,
            const int64_t max_io_depth,
            common::ObIOManager *io_manager,
@@ -57,40 +57,40 @@ private:
 class LogIOAdapter
 {
 public:
-  LogIOAdapter() : tenant_id_(OB_INVALID_TENANT_ID), log_local_device_(NULL),
+  LogIOAdapter() : tenant_id_(OB_INVALID_TENANT_ID), log_local_device_(NULL), 
                    resource_manager_(NULL), io_manager_(NULL), is_inited_(false) {}
   ~LogIOAdapter() {
     destroy();
   }
-  int init(const int64_t tenant_id,
-           share::ObLocalDevice *log_local_device,
+  int init(const int64_t tenant_id, 
+           share::ObLocalDevice *log_local_device, 
            share::ObResourceManager *resource_manager,
            common::ObIOManager *io_manager);
   void destroy();
   bool is_valid() const {
     return is_valid_tenant_id(tenant_id_) && NULL != log_local_device_ && NULL != resource_manager_ && NULL != io_manager_;
   }
-  int open(const char *block_path,
-           const int flags,
+  int open(const char *block_path, 
+           const int flags, 
            const mode_t mode,
            ObIOFd &io_fd);
   int close(ObIOFd &io_fd);
-  int pwrite(const ObIOFd &io_fd,
-             const char *buf,
-             const int64_t count,
+  int pwrite(const ObIOFd &io_fd, 
+             const char *buf, 
+             const int64_t count, 
              const int64_t offset,
              int64_t &write_size);
-  int pread(const ObIOFd &io_fd,
-            const int64_t count,
+  int pread(const ObIOFd &io_fd, 
+            const int64_t count, 
             const int64_t offset,
-            char *buf,
+            char *buf, 
             int64_t &out_read_size,
             LogIOContext &io_ctx);
   // directly pread without iosolation
-  int pread(const ObIOFd &io_fd,
-            const int64_t count,
+  int pread(const ObIOFd &io_fd, 
+            const int64_t count, 
             const int64_t offset,
-            char *buf,
+            char *buf, 
             int64_t &out_read_size);
   int truncate(const ObIOFd &fd, const int64_t offset);
 private:

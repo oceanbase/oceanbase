@@ -247,7 +247,7 @@ int ObExecutingSqlStatRecord::assign(const ObExecutingSqlStatRecord& other)
   is_plan_cache_hit_ = other.is_plan_cache_hit();
 #define DEF_SQL_STAT_ITEM_COPY(def_name)           \
   def_name##_start_ = other.def_name##_start_;     \
-  def_name##_end_ = other.def_name##_end_;
+  def_name##_end_ = other.def_name##_end_;  
   DEF_SQL_STAT_ITEM_COPY(disk_reads);
   DEF_SQL_STAT_ITEM_COPY(buffer_gets);
   DEF_SQL_STAT_ITEM_COPY(elapsed_time);
@@ -316,13 +316,13 @@ int ObExecutingSqlStatRecord::move_to_sqlstat_cache(
       if (!sql_stat_value->get_key().is_valid()) {
         if (OB_FAIL(sql_stat_value->get_sql_stat_info().init(key, session_info, cur_sql, plan))) {
           LOG_WARN("failed to init sql stat info", K(ret));
-        }
+        } 
       }
 
       if (OB_SUCC(ret) && OB_FAIL(sql_stat_value->sum_stat_value(*this))) {
         LOG_WARN("sql_stat_value sum value failed", KR(ret));
       }
-    }
+    } 
   } else {
     LOG_WARN("the key is not valid which at plan cache mgr", KR(ret));
   }
@@ -343,7 +343,7 @@ int ObExecutedSqlStatRecord::sum_stat_value(ObExecutingSqlStatRecord& executing_
   int ret = OB_SUCCESS;
   (void)ATOMIC_AAF(&executions_total_, executing_record.get_is_in_retry()? 0:1 );
   (void)ATOMIC_AAF(&retry_total_, executing_record.get_is_in_retry()? 1:0 );
-
+  
   (void)ATOMIC_AAF(&disk_reads_total_, executing_record.get_disk_reads_delta());
   (void)ATOMIC_AAF(&buffer_gets_total_, executing_record.get_buffer_gets_delta());
   (void)ATOMIC_AAF(&elapsed_time_total_, executing_record.get_elapsed_time_delta());
@@ -372,7 +372,7 @@ int ObExecutedSqlStatRecord::sum_stat_value(ObExecutedSqlStatRecord& executed_re
   int ret = OB_SUCCESS;
   (void)ATOMIC_AAF(&executions_total_, executed_record.get_executions_total() );
   (void)ATOMIC_AAF(&retry_total_, executed_record.get_retry_total() );
-
+  
   (void)ATOMIC_AAF(&disk_reads_total_, executed_record.get_disk_reads_total());
   (void)ATOMIC_AAF(&buffer_gets_total_, executed_record.get_buffer_gets_total());
   (void)ATOMIC_AAF(&elapsed_time_total_, executed_record.get_elapsed_time_total());

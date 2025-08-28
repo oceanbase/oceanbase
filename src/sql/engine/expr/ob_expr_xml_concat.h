@@ -20,7 +20,7 @@
 #include "lib/xml/ob_xml_util.h"
 #include "lib/xml/ob_xpath.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
 namespace sql
 {

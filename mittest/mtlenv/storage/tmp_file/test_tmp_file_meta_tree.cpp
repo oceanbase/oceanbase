@@ -465,7 +465,7 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_read)
   STORAGE_LOG(INFO, "level_page_range_array", K(meta_tree_.level_page_range_array_));
 
   //we assume that there are some disk flushing and other operations here.
-  //After simulating the insert, we can see that the tmp file offset is [0, 25 * 128 * 8K],
+  //After simulating the insert, we can see that the tmp file offset is [0, 25 * 128 * 8K], 
   //  with each data item occupying 128 * 8K.
   STORAGE_LOG(INFO, "=======================first tree read=======================");
   ObArray<ObSharedNothingTmpFileDataItem> get_data_items;
@@ -2067,7 +2067,7 @@ TEST_F(TestSNTmpFileMetaTree, test_array_read)
   ASSERT_EQ(OB_SUCCESS, meta_tree_.insert_items(data_items_1));
   ASSERT_EQ(100, meta_tree_.data_item_array_.count());
 
-  //After simulating the insert, we can see that the tmp file offset is [0, 100 * 128 * 8K],
+  //After simulating the insert, we can see that the tmp file offset is [0, 100 * 128 * 8K], 
   //  with each data item occupying 128 * 8K.
   STORAGE_LOG(INFO, "=======================first array read=======================");
   ObArray<ObSharedNothingTmpFileDataItem> get_data_items;
@@ -2187,7 +2187,7 @@ TEST_F(TestSNTmpFileMetaTree, test_array_read_after_truncate)
   ASSERT_EQ(OB_SUCCESS, meta_tree_.insert_items(data_items));
   ASSERT_EQ(0, meta_tree_.level_page_range_array_.count());
   ASSERT_EQ(100, meta_tree_.data_item_array_.count());
-  //After simulating the insert, we can see that the tmp file offset is [0, 100 * 128 * 8K],
+  //After simulating the insert, we can see that the tmp file offset is [0, 100 * 128 * 8K], 
   //  with each data item occupying 128 * 8K.
   STORAGE_LOG(INFO, "=======================array truncate=======================");
   ASSERT_EQ(OB_SUCCESS, meta_tree_.truncate(0, 2 * 128 * ObTmpFileGlobal::PAGE_SIZE - 5));
@@ -2235,7 +2235,7 @@ TEST_F(TestSNTmpFileMetaTree, test_write_tail)
   ASSERT_EQ(OB_SUCCESS, meta_tree_.insert_items(data_items));
   ASSERT_EQ(0, meta_tree_.level_page_range_array_.count());
   ASSERT_EQ(4, meta_tree_.data_item_array_.count());
-  //After simulating the insert, we can see that the tmp file offset is [0, 100 * 128 * 8K],
+  //After simulating the insert, we can see that the tmp file offset is [0, 100 * 128 * 8K], 
   //  with each data item occupying 128 * 8K.
   //  we assume that the last page of the last data item is an unfilled page.
   STORAGE_LOG(INFO, "=======================first write tail=======================");

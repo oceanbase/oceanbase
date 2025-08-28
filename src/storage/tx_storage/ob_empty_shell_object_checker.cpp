@@ -63,7 +63,7 @@ int ObDDLEmptyShellChecker::periodic_check_normal()
       const ObTabletID &tablet_id = iter->first;
       const int64_t tag_deleted_us = iter->second;
       bool has_leak = false;
-      if (OB_FAIL(ls_->get_tablet_svr()->get_tablet(tablet_id, tablet_handle,
+      if (OB_FAIL(ls_->get_tablet_svr()->get_tablet(tablet_id, tablet_handle, 
         ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US * 10, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
         if (OB_TABLET_NOT_EXIST == ret) {
           has_leak = true;

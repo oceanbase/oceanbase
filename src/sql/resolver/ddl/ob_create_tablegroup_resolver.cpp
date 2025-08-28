@@ -45,7 +45,7 @@ int ObCreateTablegroupResolver::resolve(const ParseNode &parse_tree)
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("can not create tablegroup while observer is upgrading", KR(ret), K(tenant_id));
     }
-  }
+  }  
   ObString tablegroup_name;
   if (OB_SUCC(ret)) {
     if (NULL == (create_tablegroup_stmt = create_stmt<ObCreateTablegroupStmt>())) {

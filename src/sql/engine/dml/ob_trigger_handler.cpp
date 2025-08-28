@@ -246,7 +246,7 @@ int TriggerHandle::init_param_old_row(
       LOG_DEBUG("debug init param old expr", K(ret), K(i),
         K(ObToStringExpr(eval_ctx, *trig_ctdef.old_row_exprs_.at(i))));
     }
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(ret)) {  
     } else if (OB_NOT_NULL(trig_ctdef.rowid_old_expr_)) {
       ObDatum *datum;
       if (OB_FAIL(trig_ctdef.rowid_old_expr_->eval(eval_ctx, datum))) {
@@ -308,7 +308,7 @@ int TriggerHandle::init_param_new_row(
           LOG_WARN("failed to convert sql type to pl type", K(ret));
         }
       }
-
+      
       if (OB_SUCC(ret) && !trig_ctdef.trig_col_info_.get_flags()[i].is_rowid_
           && (ObCharType == result.get_type() || ObNCharType == result.get_type())) {
         // pad space for char type
@@ -565,12 +565,12 @@ int TriggerHandle::check_and_update_new_row(
                                                                               cmp_obj,
                                                                               NULL,
                                                                               &lob_allocator))) {
-              LOG_WARN("failed to convert lob", K(ret), K(new_obj));
+              LOG_WARN("failed to convert lob", K(ret), K(new_obj));                                                             
             } else if (OB_FAIL(ObTextStringIter::convert_outrow_lob_to_inrow_templob(new_cells[i],
                                                                               other_obj,
                                                                               NULL,
                                                                               &lob_allocator))) {
-              LOG_WARN("failed to convert lob", K(ret), K(i), K(new_cells[i]));
+              LOG_WARN("failed to convert lob", K(ret), K(i), K(new_cells[i]));  
             } else {
               is_strict_equal = cmp_obj.strict_equal(other_obj);
             }
@@ -621,7 +621,7 @@ int TriggerHandle::check_and_update_new_row(
           } else if (is_lob_storage(tmp_obj.get_type()) &&
                      OB_FAIL(ob_adjust_lob_datum(tmp_obj, expr->obj_meta_,
                                                  eval_ctx.exec_ctx_.get_allocator(), write_datum))) {
-          LOG_WARN("adjust lob datum failed", K(ret), K(tmp_obj.get_meta()), K(expr->obj_meta_));
+          LOG_WARN("adjust lob datum failed", K(ret), K(tmp_obj.get_meta()), K(expr->obj_meta_));                                   
         } else {
             expr->set_evaluated_flag(eval_ctx);
             LOG_DEBUG("trigger write new datum", K(tmp_obj), K(i),
@@ -1119,7 +1119,7 @@ int TriggerHandle::calc_system_trigger_logoff(ObSQLSessionInfo &session)
       THIS_WORKER.set_timeout_ts(old_timeout_ts);
     }
   }
-  return ret;
+  return ret; 
 }
 
 int TriggerHandle::calc_system_trigger_logon(ObSQLSessionInfo &session)
@@ -1247,7 +1247,7 @@ int TriggerHandle::check_longon_trigger_privilege(ObSQLSessionInfo &session,
                                                       PRIV_ID_ALTER_ANY_TRIG,
                                                       session.get_enable_role_array()));
   }
-  return ret;
+  return ret; 
 }
 
 int TriggerHandle::set_logoff_mark(ObSQLSessionInfo &session)

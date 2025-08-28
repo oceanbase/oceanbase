@@ -111,10 +111,10 @@ int handle_listed_object(ObBaseDirEntryOperator &op,
     if (OB_SUCC(ret)) {
       MEMCPY(entry.d_name, obj_name, obj_name_len);
       entry.d_name[obj_name_len] = '\0';
-      if (OB_FAIL(op.func(&entry))) {
+      if (OB_FAIL(op.func(&entry))) { 
         OB_LOG(WARN, "fail to exe application callback for listed object",
             K(ret), K(obj_name), K(obj_name_len), K(obj_size));
-      }
+      } 
     }
   }
   return ret;
@@ -134,7 +134,7 @@ int handle_listed_directory(ObBaseDirEntryOperator &op,
   } else {
     MEMCPY(entry.d_name, dir_name, dir_name_len);
     entry.d_name[dir_name_len] = '\0';
-    if (OB_FAIL(op.func(&entry))) {
+    if (OB_FAIL(op.func(&entry))) { 
       OB_LOG(WARN, "fail to exe application callback for listed directory",
           K(ret), K(dir_name), K(dir_name_len));
     }
@@ -431,7 +431,7 @@ int ObAppendableFragmentMeta::parse_from(ObString &fragment_name)
       type_ = ObAppendableFragmentType::APPENDABLE_FRAGMENT_DATA;
       if (OB_UNLIKELY(!is_valid())) {
         ret = OB_INVALID_ARGUMENT;
-        OB_LOG(WARN, "invalid fragment name", K(ret), K_(type), K(start_string), K(end_string),
+        OB_LOG(WARN, "invalid fragment name", K(ret), K_(type), K(start_string), K(end_string), 
           K(fragment_name), K_(start), K_(end), K_(suffix));
       }
     }
@@ -489,12 +489,12 @@ bool ObStorageObjectMeta::is_valid() const
     // for normal objs, fragment_metas_ must be empty;
     is_valid_flag &= fragment_metas_.empty();
   }
-
+  
   return is_valid_flag;
 }
 
 bool ObStorageObjectMeta::fragment_meta_cmp_func(
-    const ObAppendableFragmentMeta &left,
+    const ObAppendableFragmentMeta &left, 
     const ObAppendableFragmentMeta &right)
 {
   // for fragments with the same start offset, prioritize placing the largest fragment at the beginning,
@@ -503,7 +503,7 @@ bool ObStorageObjectMeta::fragment_meta_cmp_func(
 }
 
 int ObStorageObjectMeta::get_needed_fragments(
-    const int64_t start,
+    const int64_t start, 
     const int64_t end,
     ObArray<ObAppendableFragmentMeta> &fragments)
 {
@@ -528,7 +528,7 @@ int ObStorageObjectMeta::get_needed_fragments(
         std::upper_bound(fragment_metas_.begin(), fragment_metas_.end(), start_meta, fragment_meta_cmp_func);
     if (it == fragment_metas_.begin()) {
       ret = OB_ERR_UNEXPECTED;
-      OB_LOG(WARN, "the object data may contain holes, can't read correct data", K(ret), K(start), K(end),
+      OB_LOG(WARN, "the object data may contain holes, can't read correct data", K(ret), K(start), K(end), 
         K(fragment_metas_[0].start_));
     } else if (FALSE_IT(cur_fragment_idx = it - fragment_metas_.begin() - 1)) {
     } else {
@@ -538,7 +538,7 @@ int ObStorageObjectMeta::get_needed_fragments(
              && last_fragment_end < end) {
         if (fragment_metas_[cur_fragment_idx].start_ > last_fragment_end) {
           ret = OB_ERR_UNEXPECTED;
-          OB_LOG(WARN, "the object data may contain holes, can't read correct data", K(ret), K(start), K(end),
+          OB_LOG(WARN, "the object data may contain holes, can't read correct data", K(ret), K(start), K(end), 
             K(fragment_metas_[cur_fragment_idx]), K(last_fragment_end));
         } else if (OB_FAIL(fragments.push_back(fragment_metas_[cur_fragment_idx]))) {
           OB_LOG(WARN, "fail to push back fragement", K(ret), K(fragments));
@@ -554,8 +554,8 @@ int ObStorageObjectMeta::get_needed_fragments(
 
 /*--------------------------------ObStorageListCtxBase--------------------------------*/
 int ObStorageListCtxBase::init(
-    ObArenaAllocator &allocator,
-    const int64_t max_list_num,
+    ObArenaAllocator &allocator, 
+    const int64_t max_list_num, 
     const bool need_size)
 {
   int ret = OB_SUCCESS;
@@ -603,7 +603,7 @@ void ObStorageListCtxBase::reset()
   cur_listed_count_ = 0;
   total_list_limit_ = -1;
   if (OB_FAIL(ObDalAccessor::obdal_lister_free(opendal_lister_))) {
-    OB_LOG(WARN, "fail to free opendal lister", K(ret));
+    OB_LOG(WARN, "fail to free opendal lister", K(ret)); 
   }
 }
 
@@ -647,7 +647,7 @@ void ObStorageListObjectsCtx::reset()
 
 int ObStorageListObjectsCtx::init(
     ObArenaAllocator &allocator,
-    const int64_t max_list_num,
+    const int64_t max_list_num, 
     const bool need_size)
 {
   int ret = OB_SUCCESS;
@@ -805,7 +805,7 @@ int ObStoragePartInfoHandler::add_part_info(
     ret = OB_NOT_INIT;
     OB_LOG(WARN, "ObStoragePartInfoHandler not inited", K(ret));
   // checksum is allowed to be null
-  // e.g. S3 use md5 | OSS | COS | OBS
+  // e.g. S3 use md5 | OSS | COS | OBS 
   } else if (OB_UNLIKELY(part_id < 1) || OB_ISNULL(etag)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid args", K(ret), K(part_id), KP(etag));

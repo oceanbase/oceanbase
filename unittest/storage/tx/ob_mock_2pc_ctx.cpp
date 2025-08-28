@@ -437,7 +437,7 @@ bool MockOb2pcCtx::is_sub2pc() const
   return false;
 }
 
-bool MockOb2pcCtx::is_dup_tx() const
+bool MockOb2pcCtx::is_dup_tx() const 
 {
   return false;
 }

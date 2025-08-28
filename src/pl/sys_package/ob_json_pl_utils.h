@@ -38,12 +38,12 @@ public:
     PL_JSN_BLOB_TYPE,
     PL_JSN_JSON_TYPE,
   } ;
-
+  
   static int parse(sql::ObExecContext &ctx, sql::ParamStore &params,
                    common::ObObj &result, ObJsonNodeType expect_type = ObJsonNodeType::J_ERROR);
-  static int get_jsontree(sql::ObExecContext &ctx,
-                          ObObj &obj,
-                          ObJsonNode*& json_doc,
+  static int get_jsontree(sql::ObExecContext &ctx, 
+                          ObObj &obj, 
+                          ObJsonNode*& json_doc, 
                           ObPlJsonNode*& pl_json_node,
                           int32_t &err_behavior);
   static int get_jsontype(sql::ObExecContext &ctx,
@@ -55,7 +55,7 @@ public:
   static int make_jsontype(sql::ObExecContext &ctx, const ObString &str,
                            ObJsonInType in_type, ObJsonNodeType expect_type,
                            ObPLJsonBaseType *&jsontype);
-  static int make_jsontype(sql::ObExecContext &ctx,
+  static int make_jsontype(sql::ObExecContext &ctx, 
                            ObJsonNode* data,
                            int behavior,
                            ObPLJsonBaseType *&jsontype);
@@ -66,7 +66,7 @@ public:
                                                   ObJsonNode* json_ref_val,
                                                   ObJsonNode* json_val,
                                                   ObPLJsonBaseType *&jsontype);
-
+  
   static int print_decimal(number::ObNumber &num, ObScale scale, ObJsonBuffer &j_buf);
   static int get_json_object(sql::ObExecContext &ctx, ObJsonNode*& json_val);
   static int get_json_array(sql::ObExecContext &ctx, ObJsonNode*& json_val);
@@ -75,8 +75,8 @@ public:
   static int set_on_error(sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result);
   static int check_on_error(ObObj &obj, int& err_val);
   static bool proc_on_error(common::ObObj &result, int error_behavior, int &ret);
-  static bool is_pl_jsontype(int64_t id) {
-    return (id == JSN_PL_ELEMENT_TYPE_ID || id == JSN_PL_OBJECT_TYPE_ID || id == JSN_PL_ARRAY_TYPE_ID);
+  static bool is_pl_jsontype(int64_t id) { 
+    return (id == JSN_PL_ELEMENT_TYPE_ID || id == JSN_PL_OBJECT_TYPE_ID || id == JSN_PL_ARRAY_TYPE_ID); 
   }
 
   static bool is_hex(const uint8_t input);

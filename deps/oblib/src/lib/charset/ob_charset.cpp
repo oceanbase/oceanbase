@@ -1441,7 +1441,7 @@ int ObCharset::display_len(ObCollationType collation_type,
         ob_wc_t wc;
         int bytes = cs->cset->mb_wc(cs, &wc, buf + char_pos, buf + buf_size);
 
-        if (bytes < 0) {
+        if (bytes < 0) { 
           width = 1;
           found = true;
         } else {
@@ -1787,7 +1787,7 @@ ObCollationType ObCharset::collation_type(const ObString &cs_name)
   if (CS_TYPE_INVALID == collation_type) {
     if (0 == cs_name.case_compare("any_cs")) {
       collation_type = CS_TYPE_ANY;
-    }
+    } 
   }
   return collation_type;
 }
@@ -1853,7 +1853,7 @@ ObCollationType ObCharset::get_coll_type_by_nlssort_param(ObCharsetType charset_
     CS_TYPE_MACROMAN_BIN,
     CS_TYPE_SWE7_BIN,
   };
-
+  
 
   if (0 == nlssort_param.case_compare("SCHINESE_PINYIN_M")) {
     nls_coll_type = NLS_COLLATION_SCHINESE_PINYIN_M;
@@ -1988,7 +1988,7 @@ ObCharsetType ObCharset::ora_charset_type_to_charset_type(ObNlsCharsetId charset
       break;
     case CHARSET_ZHS32GB18030_2022_ID:
       cs_type = CHARSET_GB18030_2022;
-      break;
+      break; 
     case CHARSET_US7ASCII_ID:
       cs_type = CHARSET_ASCII;
       break;
@@ -2310,7 +2310,7 @@ int ObCharset::aggregate_collation_new(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN ("invalid collation level or type",
               K(ret), K(collation_level1), K(collation_type1), K(collation_level2), K(collation_type2));
-  } else if (collation_type1 != collation_type2 &&
+  } else if (collation_type1 != collation_type2 && 
              CS_LEVEL_EXPLICIT == collation_level1 &&
              CS_LEVEL_EXPLICIT == collation_level2) {
     ret = OB_CANT_AGGREGATE_2COLLATIONS;
@@ -2935,7 +2935,7 @@ bool ObCharset::is_default_collation(ObCollationType collation_type)
     case CS_TYPE_GB18030_2022_PINYIN_CI:
     case CS_TYPE_BINARY:
     case CS_TYPE_UTF16LE_GENERAL_CI:
-    case CS_TYPE_SJIS_JAPANESE_CI:
+    case CS_TYPE_SJIS_JAPANESE_CI: 
     case CS_TYPE_BIG5_CHINESE_CI:
     case CS_TYPE_HKSCS_BIN:
     case CS_TYPE_HKSCS31_BIN:
@@ -3707,7 +3707,7 @@ bool ObCharset::is_cjk_charset(ObCollationType collation_type)
                          cs_type == CHARSET_GB18030_2022 ||
                          cs_type == CHARSET_SJIS ||
                          cs_type == CHARSET_BIG5 ||
-                         cs_type == CHARSET_HKSCS ||
+                         cs_type == CHARSET_HKSCS || 
                          cs_type == CHARSET_HKSCS31);
   return is_cjk_charset;
 }
@@ -3876,7 +3876,7 @@ void ob_charset_loader_init_mysys(ObCharsetLoader *loader)
   loader->add_collation = NULL;
 }
 
-// use before is valid
+// use before is valid 
 int ObCharset::copy_zh_cs(ObCharsetInfo *from_cs, ObCharsetType charset_type, ObCharsetInfo *&to_cs)
 {
   int ret = OB_SUCCESS;
@@ -3946,7 +3946,7 @@ int ObCharset::init_charset_and_arr() {
 
   ObCharsetLoader loader;
   ob_charset_loader_init_mysys(&loader);
-  if (ob_charset_hkscs_bin.cset
+  if (ob_charset_hkscs_bin.cset 
     && ob_charset_hkscs_bin.cset->init
     && !ob_charset_hkscs_bin.cset->init(&ob_charset_hkscs_bin, &loader)) {
     ret = OB_ERR_UNEXPECTED;
@@ -3958,7 +3958,7 @@ int ObCharset::init_charset_and_arr() {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to init collation hkscs31", K(ret));
   }
-
+  
   if (OB_SUCC(ret)) {
     for (int i = 0; OB_SUCC(ret) && euro_collations[i] != nullptr; ++i) {
       ObCharsetInfo *cs = euro_collations[i];
@@ -4081,7 +4081,7 @@ int ObCharsetUtils::remove_char_endspace(ObString &str,
   int ret = OB_SUCCESS;
   const char *end = str.ptr() + str.length();
   end = (const char *) charsetInfo->cset->skip_trailing_space(charsetInfo, (const unsigned char *)str.ptr(), str.length());
-
+ 
   if (end >= str.ptr()) {
     str.assign_ptr(str.ptr(), end - str.ptr());
   } else {

@@ -71,7 +71,7 @@ class PluginHandleReleaseCallback
 public:
   PluginHandleReleaseCallback(const ObMemAttr &mem_attr) : mem_attr_(mem_attr)
   {}
-
+  
   int operator()(common::hash::HashMapPair<ObString, ObPluginHandle *> &node) const
   {
     int ret = OB_SUCCESS;
@@ -115,7 +115,7 @@ private:
 void ObPluginMgr::destroy()
 {
   int ret = OB_SUCCESS;
-
+  
   inited_  = false;
 
   ObMemAttr mem_attr;
@@ -323,14 +323,14 @@ int ObPluginMgr::register_plugin(const ObPluginEntry &plugin_entry)
   if (OB_FAIL(ret) && OB_NOT_NULL(entry_handle)) {
     OB_DELETE(ObPluginEntryHandle, OB_PLUGIN_MEMORY_LABEL, entry_handle);
   }
-
+  
   return ret;
 }
 
 int ObPluginMgr::install_library(const ObString &dl_name)
 {
   int ret = OB_SUCCESS;
-
+  
   ObPluginHandle *plugin_handle = nullptr;
 
   if (!inited_) {
@@ -374,7 +374,7 @@ int ObPluginMgr::find_or_load_dl(const ObString &dl_name, ObPluginHandle *&plugi
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("cannot install library because plugin dir is empty.");
     }
-
+    
     // load dynamic library
     ObPluginHandle *this_plugin_handle = nullptr;
     if (OB_SUCC(ret)) {
@@ -490,7 +490,7 @@ int ObPluginMgr::load_dynamic_plugins(const ObString &plugins_load)
   int ret = OB_SUCCESS;
   ObMemAttr mem_attr;
   mem_attr.label_ = OB_PLUGIN_MEMORY_LABEL;
-
+  
   ObArray<ObPluginLoadParam> plugin_load_params;
   if (!inited_) {
     ret = OB_NOT_INIT;

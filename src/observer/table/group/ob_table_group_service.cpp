@@ -199,7 +199,7 @@ int ObTableGroupService::process(ObTableGroupCtx &ctx, ObITableOp *op, bool is_d
   ObITableGroupKey *key = ctx.key_;
   ObSEArray<ObITableOp*, 32> ops;
   // check the group commit if is started in each process
-  if (!TABLEAPI_GROUP_COMMIT_MGR->is_timer_enable() &&
+  if (!TABLEAPI_GROUP_COMMIT_MGR->is_timer_enable() && 
       TABLEAPI_GROUP_COMMIT_MGR->check_and_enable_timer()) {
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(TABLEAPI_GROUP_COMMIT_MGR->start_timer())) {
@@ -211,7 +211,7 @@ int ObTableGroupService::process(ObTableGroupCtx &ctx, ObITableOp *op, bool is_d
     LOG_WARN("fail to check legality", K(ret));
   } else {
     bool need_execute_batch = false;
-    if (is_direct_execute) {
+    if (is_direct_execute) {  
       if (OB_FAIL(ops.push_back(op))) {
         LOG_WARN("fail to push back op", KPC(op), K(ret));
       } else {
@@ -228,7 +228,7 @@ int ObTableGroupService::process(ObTableGroupCtx &ctx, ObITableOp *op, bool is_d
         need_execute_batch = true;
       }
     }
-
+    
     if (OB_SUCC(ret) && need_execute_batch) {
       // execute and response if had_do_response = false
       if (OB_FAIL(execute_batch(ctx, ops, is_direct_execute, true /* add failed group */))) {
@@ -258,12 +258,12 @@ int ObTableGroupService::add_and_try_to_get_batch(ObITableOp *op, ObITableGroupV
     }
   } else if (OB_FAIL(ops.push_back(op))) {
     LOG_WARN("fail to push back op ", K(ret), KPC(op));
-  }
+  }  
   return ret;
 }
 
-int ObTableGroupService::execute_batch(ObTableGroupCtx &ctx,
-                                       ObIArray<ObITableOp *> &ops,
+int ObTableGroupService::execute_batch(ObTableGroupCtx &ctx, 
+                                       ObIArray<ObITableOp *> &ops, 
                                        bool is_direct_execute,
                                        bool add_fail_group)
 {
@@ -291,7 +291,7 @@ int ObTableGroupService::execute_batch(ObTableGroupCtx &ctx,
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (!is_direct_execute && OB_FAIL(functor.init(group, add_fail_group,
+  } else if (!is_direct_execute && OB_FAIL(functor.init(group, add_fail_group, 
               &failed_groups, &group_factory, &op_factory))) {
     LOG_WARN("fail to init group commit callback functor", K(ret));
   } else if (OB_FAIL(op_processor->init(ctx, &group->ops_))) {
@@ -315,7 +315,7 @@ int ObTableGroupService::execute_batch(ObTableGroupCtx &ctx,
     }
     group_factory.free(group);
   } else if (!ctx.trans_param_->had_do_response_
-      && OB_NOT_NULL(group)
+      && OB_NOT_NULL(group) 
       && group->is_inited_
       && OB_FAIL(ObTableGroupExecuteService::process_result(tmp_ret,
                                                             *group,

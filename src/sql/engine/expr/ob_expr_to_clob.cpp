@@ -103,13 +103,13 @@ int ObExprToClob::calc_to_clob_expr(const ObExpr &expr, ObEvalCtx &ctx,
     uint32_t result_len = 0;
     ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
     common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
-    char *buf = NULL;
+    char *buf = NULL; 
     int64_t reserve_len = raw_string.length() * 4;
     if (OB_ISNULL(buf = (char*)temp_allocator.alloc(reserve_len))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc mem failed", K(ret));
-    } else if (OB_FAIL(ObCharset::charset_convert(cs_type, raw_string.ptr(), raw_string.length(),
-                                                  cs_type, buf, reserve_len, result_len, false, false,
+    } else if (OB_FAIL(ObCharset::charset_convert(cs_type, raw_string.ptr(), raw_string.length(), 
+                                                  cs_type, buf, reserve_len, result_len, false, false, 
                                                   ObCharset::is_cs_unicode(cs_type) ? 0xFFFD : '?'))) {
       LOG_WARN("charset convert failed", K(ret));
     } else {

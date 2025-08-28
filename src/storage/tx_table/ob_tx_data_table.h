@@ -47,11 +47,11 @@ struct TxDataReadSchema
 
 // In Ob4.0, transaction state table is divided into tx data table and tx
 // context table. See details :
-//
+// 
 //
 // All operatitons related to tx_data are implemented by ObTxDataTable.
 // See details ::
-//
+// 
 class ObTxDataTable
 {
 public:
@@ -119,7 +119,7 @@ public:
   // The tx data table cannot be freezed more than once in 10 seconds
   static const int64_t MIN_FREEZE_TX_DATA_INTERVAL = 10LL * 1000LL * 1000LL;
 
-  // The tx data table should be freezed at least once each 5 minutes
+  // The tx data table should be freezed at least once each 5 minutes 
   static const int64_t MAX_FREEZE_TX_DATA_INTERVAL = 5LL * 60LL * 1000LL * 1000LL;
 
   enum COLUMN_ID_LIST

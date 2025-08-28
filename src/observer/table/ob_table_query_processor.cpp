@@ -186,8 +186,8 @@ int ObTableQueryP::query_and_result(ObTableApiScanExecutor *executor)
     }
 
     // check if need compress the result
-    if (OB_SUCC(ret) &&
-        OB_NOT_NULL(one_result) &&
+    if (OB_SUCC(ret) && 
+        OB_NOT_NULL(one_result) && 
         OB_TMP_FAIL(ObKVConfigUtil::get_compress_type(MTL_ID(), one_result->get_result_size(), compressor_type))) {
       LOG_WARN("fail to check compress config", K(tmp_ret), K(compressor_type));
     }
@@ -210,7 +210,7 @@ int ObTableQueryP::query_and_result(ObTableApiScanExecutor *executor)
               "receive_ts", get_receive_timestamp(), K(result_count), K_(result_row_count));
   #endif
 
-  OB_TABLE_END_AUDIT(ret_code, ret,
+  OB_TABLE_END_AUDIT(ret_code, ret, 
                      snapshot, get_tx_snapshot(),
                      stmt_type, StmtType::T_KV_QUERY,
                      return_rows, result_.get_row_count(),
@@ -291,7 +291,7 @@ int ObTableQueryP::new_try_process()
     exec_ctx_.set_timeout_ts(get_timeout_ts());
     exec_ctx_.set_audit_ctx(audit_ctx_);
     exec_ctx_.set_table_schema(table_schema_);
-  }
+  } 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObModelFactory::get_model_guard(allocator_, arg_.entity_type_, model_guard))) {
     LOG_WARN("fail to get model guard", K(ret), K(arg_.entity_type_));
@@ -347,7 +347,7 @@ int ObTableQueryP::try_process()
   return ret;
 }
 
-bool ObTableQueryP::is_new_try_process()
+bool ObTableQueryP::is_new_try_process() 
 {
   return arg_.entity_type_ == ObTableEntityType::ET_HKV &&
          !arg_.tablet_id_.is_valid() &&

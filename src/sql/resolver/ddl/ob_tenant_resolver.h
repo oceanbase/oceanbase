@@ -446,9 +446,9 @@ int ObTenantResolver<T>::check_support_option(const T *stmt, const ParseNode *no
           CHECK_SUPPORT_OPTION_USER_ERROR("enable_extended_rowid");
         }
 
-        case T_LOCALITY:
-        case T_PRIMARY_ZONE:
-        case T_TENANT_RESOURCE_POOL_LIST:
+        case T_LOCALITY: 
+        case T_PRIMARY_ZONE: 
+        case T_TENANT_RESOURCE_POOL_LIST: 
         case T_COMMENT: {
           // support option
           break;

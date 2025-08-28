@@ -123,7 +123,7 @@ int PalfHandleImpl::init(const int64_t palf_id,
              || NULL == log_block_pool
              || NULL == log_rpc
              || NULL == log_io_worker
-             || NULL == log_shared_queue_th
+             || NULL == log_shared_queue_th 
              || NULL == palf_env_impl
              || false == self.is_valid()
              || NULL == election_timer
@@ -195,7 +195,7 @@ int PalfHandleImpl::load(const int64_t palf_id,
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(log_dir), K(alloc_mgr),
         K(log_rpc), K(log_io_worker), K(log_shared_queue_th));
   } else if (OB_FAIL(log_engine_.load(palf_id, log_dir, alloc_mgr, log_block_pool, &log_cache_, log_rpc,
-        log_io_worker, log_shared_queue_th, &plugins_, entry_header, palf_epoch, PALF_BLOCK_SIZE,
+        log_io_worker, log_shared_queue_th, &plugins_, entry_header, palf_epoch, PALF_BLOCK_SIZE, 
         PALF_META_BLOCK_SIZE, io_adapter, is_integrity))) {
     PALF_LOG(WARN, "LogEngine load failed", K(ret), K(palf_id));
     // NB: when 'entry_header' is invalid, means that there is no data on disk, and set max_committed_end_lsn
@@ -732,7 +732,7 @@ int PalfHandleImpl::force_set_member_list(const common::ObMemberList &new_member
              new_replica_num != new_member_list.get_member_number()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", KR(ret), KPC(this), K(new_member_list), K(new_replica_num));
-  } else if (OB_FAIL(force_set_member_list_(new_member_list, new_replica_num))){
+  } else if (OB_FAIL(force_set_member_list_(new_member_list, new_replica_num))){ 
     PALF_LOG(WARN, "failed to force to set member list", KR(ret), KPC(this), K(new_member_list), K(new_replica_num));
   } else {
     PALF_LOG(INFO, "force to set member list successfully", K_(palf_id), K(new_member_list), K(new_replica_num));
@@ -3018,7 +3018,7 @@ int PalfHandleImpl::do_init_mem_(
   } else if (OB_FAIL(mode_mgr_.init(palf_id, self, log_meta.get_log_mode_meta(), &state_mgr_, &log_engine_, &config_mgr_, &sw_))) {
     PALF_LOG(WARN, "mode_mgr_ init failed", K(ret), K(palf_id));
   } else if (FALSE_IT(log_engine_.set_enable_fill_cache_functor(enable_fill_cache_functor))) {
-  } else {
+  } else {  
     palf_id_ = palf_id;
     fetch_log_engine_ = fetch_log_engine;
     allocator_ = alloc_mgr;
@@ -3267,7 +3267,7 @@ int PalfHandleImpl::receive_batch_log(const common::ObAddr &server,
     while (OB_SUCC(iterator.next())) {
       if (OB_FAIL(iterator.get_entry(buf_each_round, buf_len_each_round, curr_lsn_each_round, curr_log_proposal_id))) {
         PALF_LOG(ERROR, "get_entry failed", K(ret), KPC(this), K(iterator), KP(buf_each_round));
-      } else if (OB_FAIL(receive_log_(server, FETCH_LOG_RESP, msg_proposal_id, prev_lsn_each_round,
+      } else if (OB_FAIL(receive_log_(server, FETCH_LOG_RESP, msg_proposal_id, prev_lsn_each_round, 
             prev_log_proposal_id_each_round, curr_lsn_each_round, buf_each_round, buf_len_each_round))) {
         if (REACH_TIME_INTERVAL(100 * 1000)) {
           PALF_LOG(WARN, "receive_log failed", K(ret), KPC(this), K(iterator), K(server), K(FETCH_LOG_RESP),
@@ -3959,7 +3959,7 @@ int PalfHandleImpl::batch_fetch_log_each_round_(const common::ObAddr &server,
     if (OB_FAIL(submit_fetch_log_resp_(server, msg_proposal_id, prev_log_proposal_id, prev_lsn,
         curr_lsn, curr_log_buf, curr_log_buf_len))) {
       PALF_LOG(WARN, "submit_fetch_log_resp_ failed", K(ret), KPC(this), K(prev_lsn),
-          K(curr_lsn), K(curr_log_buf_len));
+          K(curr_lsn), K(curr_log_buf_len));      
     } else {
       log_end_pos += curr_log_buf_len;
       prev_lsn = curr_lsn;
@@ -3969,7 +3969,7 @@ int PalfHandleImpl::batch_fetch_log_each_round_(const common::ObAddr &server,
       remained_count--;
       remained_size -= curr_log_buf_len;
       PALF_LOG(TRACE, "submit_fetch_log_resp_ success", K(ret), KPC(this), K(prev_lsn),
-          K(curr_lsn), K(curr_log_buf_len));
+          K(curr_lsn), K(curr_log_buf_len));      
     }
   }
   int64_t send_end_ts = common::ObTimeUtility::current_time();
@@ -5710,12 +5710,12 @@ int PalfHandleImpl::raw_read(const LSN &lsn,
              K(read_size), K(readable_begin_lsn));
   } else if (lsn >= readable_end_lsn) {
     ret = OB_ERR_OUT_OF_UPPER_BOUND;
-    PALF_LOG(WARN, "read something out of upper bound", K(ret), K_(palf_id), K(lsn),
+    PALF_LOG(WARN, "read something out of upper bound", K(ret), K_(palf_id), K(lsn), 
              K(nbytes), K(read_size), K(readable_end_lsn));
     // only read the data before readable_end_lsn
   } else if (FALSE_IT(real_read_size = MIN(nbytes, readable_end_lsn - lsn))) {
   } else if (OB_FAIL(log_engine_.raw_read(lsn, real_read_size, need_read_block_header, read_buf, read_size, io_ctx))) {
-    PALF_LOG(WARN, "raw_read from storage failed", K(ret), K_(palf_id), K(lsn),
+    PALF_LOG(WARN, "raw_read from storage failed", K(ret), K_(palf_id), K(lsn), 
              K(nbytes), K(real_read_size), K(readable_end_lsn), K(read_size));
   } else {
     PALF_LOG(TRACE, "raw_read success", K(ret), K_(palf_id), K(lsn),  K(nbytes),
@@ -5739,7 +5739,7 @@ int PalfHandleImpl::force_set_member_list_(const common::ObMemberList &new_membe
       PALF_LOG(WARN, "failed to get prev member list", KR(ret), KPC(this));
     } else {
       ObMember tmp_member;
-      // get removed members which are in prev_member_list but not in new_member_list
+      // get removed members which are in prev_member_list but not in new_member_list 
       // args.removed_list_ will be used for update_match_lsn_map_()
       for (int64_t i = 0; OB_SUCC(ret) && i < prev_member_list.get_member_number(); ++i) {
         tmp_member.reset();

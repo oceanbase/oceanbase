@@ -74,7 +74,7 @@ public:
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual int64_t to_string(char* buf, const int64_t buf_len) const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override { return lib::Worker::CompatMode::MYSQL; }
-  virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
+  virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }  
   virtual int init_by_param(const share::ObIDagInitParam *param) override;
   virtual int create_first_task() override;
   virtual bool is_ha_dag() const override { return true; }

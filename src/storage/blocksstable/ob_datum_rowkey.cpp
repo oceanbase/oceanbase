@@ -520,7 +520,7 @@ int ObDiscreteDatumRowkey::deep_copy(ObDatumRowkey &dest, common::ObIAllocator &
 
 int ObDiscreteDatumRowkey::get_column_int(const int64_t col_idx, int64_t &int_val) const
 {
-  return rowkey_vector_->get_column_int(row_idx_, col_idx, int_val);
+  return rowkey_vector_->get_column_int(row_idx_, col_idx, int_val); 
 }
 
 int ObCommonDatumRowkey::compare(const ObDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,

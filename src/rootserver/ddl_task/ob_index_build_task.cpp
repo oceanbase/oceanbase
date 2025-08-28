@@ -712,7 +712,7 @@ int ObIndexBuildTask::wait_trans_end()
       LOG_WARN("update snapshot version failed", K(ret), K(task_id_), K(new_fetched_snapshot), K(persisted_snapshot));
     } else if (persisted_snapshot > 0) {
       // a persisted snapshot found, do not hold the new one repeatedly.
-      FLOG_INFO("found a persisted snapshot in inner table", K(task_id_), K(index_table_id_),
+      FLOG_INFO("found a persisted snapshot in inner table", K(task_id_), K(index_table_id_), 
           K(persisted_snapshot), K(new_fetched_snapshot));
     } else if (OB_FAIL(hold_snapshot(trans, new_fetched_snapshot))) {
       if (OB_SNAPSHOT_DISCARDED == ret) {
@@ -1086,7 +1086,7 @@ int ObIndexBuildTask::wait_data_complement()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected snapshot", K(ret), KPC(this));
   }
-
+  
   // submit a job to complete sstable for the index table on snapshot_version
   if (OB_SUCC(ret) && !state_finished && !is_sstable_complete_task_submitted()) {
     bool need_exec_new_inner_sql = false;
@@ -1902,7 +1902,7 @@ int ObIndexBuildTask::collect_longops_stat(ObLongopsValue &value)
         } else if (OB_FAIL(sql_monitor_stats_collector.get_next_sql_plan_monitor_stat(sql_monitor_stats))) {
           LOG_WARN("failed to get next sql plan monitor stats", K(ret));
         } else if (OB_FAIL(diagnose_info.process_sql_monitor_and_generate_longops_message(sql_monitor_stats, target_cg_cnt_, stat_info_, pos))) {
-          LOG_WARN("failed to process sql monitor and generate longops message", K(ret), K(sql_monitor_stats), K(target_cg_cnt_), K(stat_info_), K(pos));
+          LOG_WARN("failed to process sql monitor and generate longops message", K(ret), K(sql_monitor_stats), K(target_cg_cnt_), K(stat_info_), K(pos)); 
         }
       }
       break;

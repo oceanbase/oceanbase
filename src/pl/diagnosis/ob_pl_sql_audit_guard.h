@@ -126,7 +126,7 @@ private:
   observer::ObQueryRetryCtrl &retry_ctrl_;
   sql::ObPLSPITraceIdGuard &traceid_guard_;
   sql::stmt::StmtType stmt_type_;
-
+  
   sql::ObExecutingSqlStatRecord sqlstat_record_;
   int64_t sql_used_memory_size_;
   observer::ObProcessMallocCallback pmcb_;

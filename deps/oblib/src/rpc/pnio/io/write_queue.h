@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #define BUCKET_SIZE    1024
 typedef struct write_queue_t {
   dqueue_t queue;

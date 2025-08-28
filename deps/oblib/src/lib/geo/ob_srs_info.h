@@ -45,7 +45,7 @@ const static double OB_GEO_BOUNDS_DELTA = 0.01;
 #define SRID_LAEA_END_PG 999283
 // '+proj=stere +lat_0=90 +lat_ts=71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs'
 #define NORTH_STEREO_WKT R"(PROJCS["unknown",GEOGCS["unknown", DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.017453292519943278,AUTHORITY["EPSG","9122"]],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]],PROJECTION["Polar Stereopraphic",AUTHORITY["EPSG","9829"]],PARAMETER["Latitude of standard parallel",71,AUTHORITY["EPSG","8832"]],PARAMETER["Longitude of origin",0,AUTHORITY["EPSG","8833"]],PARAMETER["False easting",0,AUTHORITY["EPSG","8806"]],PARAMETER["False northing",0,AUTHORITY["EPSG","8807"]],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["E",SOUTH],AXIS["N",SOUTH],AUTHORITY["EPSG","9122"]])"
-// +proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs
+// +proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs  
 #define WORLD_MERCATOR_WKT R"(PROJCS["unknown",GEOGCS["unknown", DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.017453292519943278,AUTHORITY["EPSG","9122"]],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]],PROJECTION["Mercator",AUTHORITY["EPSG","9804"]],PARAMETER["Latitude of natural origin",0,AUTHORITY["EPSG","8801"]],PARAMETER["Longitude of natural origin",0,AUTHORITY["EPSG","8802"]],PARAMETER["Scale factor at natural origin",1,AUTHORITY["EPSG","8805"]],PARAMETER["False easting",0,AUTHORITY["EPSG","8806"]],PARAMETER["False northing",0,AUTHORITY["EPSG","8807"]],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["E",EAST],AXIS["N",NORTH],AUTHORITY["EPSG","9122"]])"
   // +proj=laea +lat_0=-90 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs
 #define SOUTH_LAMBERT_WKT R"(PROJCS["unknown",GEOGCS["unknown", DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.017453292519943278,AUTHORITY["EPSG","9122"]],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]],PROJECTION["Lambert Azimuthal Equal Area",AUTHORITY["EPSG","9820"]],PARAMETER["Latitude of natural origin",-90,AUTHORITY["EPSG","8801"]],PARAMETER["Longitude of natural origin",0,AUTHORITY["EPSG","8802"]],PARAMETER["False easting",0,AUTHORITY["EPSG","8806"]],PARAMETER["False northing",0,AUTHORITY["EPSG","8807"]],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["E",NORTH],AXIS["N",NORTH],AUTHORITY["EPSG","9122"]])"
@@ -65,7 +65,7 @@ enum class ObSrsType
 
 enum class ObAxisDirection
 {
-  INIT = 0,
+  INIT = 0,  
   EAST,
   SOUTH,
   WEST,
@@ -135,7 +135,7 @@ struct ObSpheroid
 };
 
 struct ObTowgs84
-{
+{ 
   bool is_valid;
   double value[WGS84_PARA_NUM];
 
@@ -157,7 +157,7 @@ struct ObPrimem
   double longtitude;
   ObRsAuthority authority;
 
-  ObPrimem() : longtitude(NAN) {}
+  ObPrimem() : longtitude(NAN) {}  
 };
 
 struct ObRsUnit
@@ -219,7 +219,7 @@ struct ObProjectionRs
   common::ObString rs_name;
   ObGeographicRs projected_rs;
   ObProjection projection;
-  ObProjectionPrams proj_params;
+  ObProjectionPrams proj_params; 
   ObRsUnit unit;
   ObRsAxisPair axis;
   ObRsAuthority authority;
@@ -252,7 +252,7 @@ public:
   virtual double inverse_flattening() const = 0;
   virtual bool is_wgs84() const = 0;
   virtual bool has_wgs84_value() const = 0;
-  virtual ObAxisDirection axis_direction(uint8_t axis_index) const = 0;
+  virtual ObAxisDirection axis_direction(uint8_t axis_index) const = 0;  
   virtual int get_proj4_param(ObIAllocator *allocator, ObString &proj4_param) const = 0;
   virtual uint32_t get_srid() const = 0;
   virtual void set_bounds(double min_x, double min_y, double max_x, double max_y) = 0;
@@ -358,7 +358,7 @@ private:
   ObAxisDirection axis_dir_[AXIS_DIRECTION_NUM]; // direction of x and y axis;
 
 protected:
-  ObVector<ObSimpleProjPram, common::ObFIFOAllocator> simple_proj_prams_; // should be filled by subclass
+  ObVector<ObSimpleProjPram, common::ObFIFOAllocator> simple_proj_prams_; // should be filled by subclass 
 };
 
 #define OB_GEO_REG_PROJ_PARAMS(...) \
@@ -371,7 +371,7 @@ for (int32_t i = 0; i < ARRAYSIZEOF(arr); ++i) { \
 // Unknown Projection Method
 // EPSG CODE: 0
 // Projection Parameters EPSG CODE: None
-// any other projection method can be represented by unknown projection method
+// any other projection method can be represented by unknown projection method 
 class ObUnknownProjectedSrs : public ObProjectedSrs
 {
 public:
@@ -395,7 +395,7 @@ public:
   void register_proj_params() override { OB_GEO_REG_PROJ_PARAMS( {8801, 8802, 8806, 8807} ); } // supported projection parameters
 };
 
-// Lambert Azimuthal Equal Area (Spherical) Projection Method
+// Lambert Azimuthal Equal Area (Spherical) Projection Method 
 // EPSG CODE: 1027
 // Projection Parameters EPSG CODE: 8801, 8802, 8806, 8807
 class ObLambertAzimuthalEqualAreaSphericalSrs: public ObProjectedSrs
@@ -757,7 +757,7 @@ public:
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::ALBERS_EQUAL_AREA; };
   void register_proj_params() override { OB_GEO_REG_PROJ_PARAMS( { 8821, 8822, 8823, 8824, 8826, 8827 } ); } // supported projection parameters
-};
+}; 
 
 // Transverse Mercator Zoned Grid System Projection Method
 // EPSG CODE: 9824
@@ -770,7 +770,7 @@ public:
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::TRANSVERSE_MERCATOR_ZONED_GRID_SYSTEM; };
   void register_proj_params() override { OB_GEO_REG_PROJ_PARAMS( { 8801, 8830, 8831, 8805, 8806, 8807 } ); } // supported projection parameters
-};
+}; 
 
 // Lambert Conic Conformal (West Orientated) Projection Method
 // EPSG CODE: 9826

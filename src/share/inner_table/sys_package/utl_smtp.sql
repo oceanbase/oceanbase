@@ -55,7 +55,7 @@ CREATE OR REPLACE PACKAGE utl_smtp AUTHID CURRENT_USER AS
                            secure_connection_before_smtp IN BOOLEAN DEFAULT FALSE,
                            secure_host     IN  VARCHAR2 DEFAULT NULL)
                            RETURN connection;
-
+                          
 
   FUNCTION command(c    IN OUT NOCOPY connection,
                    cmd  IN            VARCHAR2,
@@ -165,7 +165,7 @@ CREATE OR REPLACE PACKAGE utl_smtp AUTHID CURRENT_USER AS
 
   PROCEDURE quit(c IN OUT NOCOPY connection);
 
-
+  
   PROCEDURE close_connection(c IN OUT NOCOPY connection);
 
 END;

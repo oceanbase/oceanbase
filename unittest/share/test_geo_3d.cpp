@@ -55,7 +55,7 @@ public:
   int append_pointz(ObStringBuffer &buf, double x, double y, double z, ObGeoWkbByteOrder bo);
   int mock_get_tenant_srs_item(ObIAllocator &allocator, uint64_t srs_id, const ObSrsItem *&srs_item);
 private:
-  ObArenaAllocator allocator_;
+  ObArenaAllocator allocator_; 
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestGeo3D);
 };
@@ -118,7 +118,7 @@ void TestGeo3D::compare_to_3d_wkt_result(ObGeoType geo_type, ObString &wkt_3d, O
   ASSERT_EQ(wkt_3d_res, wkt);
 }
 
-void TestGeo3D::check_wkb_is_valid_3d(ObString &wkt, bool expected_valid)
+void TestGeo3D::check_wkb_is_valid_3d(ObString &wkt, bool expected_valid) 
 {
   ObArenaAllocator allocator(ObModIds::TEST);
   ObGeometry *geo = NULL;
@@ -174,7 +174,7 @@ int TestGeo3D::mock_get_tenant_srs_item(ObIAllocator &allocator, uint64_t srs_id
   rs.axis.y.direction = ObAxisDirection::EAST;
   rs.datum_info.towgs84.value[0] = -157.89;
   rs.datum_info.towgs84.value[1] = -17.16;
-  rs.datum_info.towgs84.value[2] = -78.41;
+  rs.datum_info.towgs84.value[2] = -78.41; 
   rs.datum_info.towgs84.value[3] = 2.118;
   rs.datum_info.towgs84.value[4] = 2.697;
   rs.datum_info.towgs84.value[5] = -1.434;
@@ -259,7 +259,7 @@ TEST_F(TestGeo3D, test_to_3d_wkt)
 
   wkt_3d = ObString::make_string("LINESTRING Z (1 1 1,1 2 1)");
   compare_to_3d_wkt_result(ObGeoType::LINESTRINGZ, wkt_3d, wkt_3d);
-
+  
   wkt_3d = ObString::make_string("POLYGON Z ((0 0 1,10 0 2,10 10 2,0 10 2,0 0 1),(2 2 5,2 5 4,5 5 3,5 2 3,2 2 5))");
   compare_to_3d_wkt_result(ObGeoType::POLYGONZ, wkt_3d, wkt_3d);
 

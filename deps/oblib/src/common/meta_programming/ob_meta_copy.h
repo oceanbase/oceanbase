@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef DEPS_OBLIB_SRC_COMMON_META_PROGRAMMING_OB_META_COPY_H
 #define DEPS_OBLIB_SRC_COMMON_META_PROGRAMMING_OB_META_COPY_H
 #include "ob_meta_define.h"
@@ -117,7 +117,7 @@ inline int move_or_copy_or_assign(T &&src,
 // 1.2 try move construction
 template <typename T,
           typename std::enable_if<std::is_rvalue_reference<T &&>::value &&
-                                  !std::is_move_assignable<T>::value &&
+                                  !std::is_move_assignable<T>::value && 
                                   std::is_move_constructible<T>::value, bool>::type = true>
 inline int move_or_copy_or_assign(T &&src,
                                   T &dst,

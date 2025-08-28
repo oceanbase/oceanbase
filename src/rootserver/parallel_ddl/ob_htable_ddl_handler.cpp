@@ -32,21 +32,21 @@ int ObHTableDDLHandler::gen_task_id_and_schema_versions_(const uint64_t schema_v
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = arg_.exec_tenant_id_;
   ObDDLTransController &controller = schema_service_.get_ddl_trans_controller();
-  if (OB_FAIL(ObDDLHelperUtils::gen_task_id_and_schema_versions(&controller, tenant_id,
+  if (OB_FAIL(ObDDLHelperUtils::gen_task_id_and_schema_versions(&controller, tenant_id, 
         schema_version_cnt, task_id))) {
     LOG_WARN("fail to gen task_id and schema_version", KR(ret), K(tenant_id));
   }
   return ret;
 }
 int ObHTableDDLHandler::wait_and_end_ddl_trans_(const int return_ret,
-                                                const int64_t task_id,
-                                                ObDDLSQLTransaction &trans,
+                                                const int64_t task_id, 
+                                                ObDDLSQLTransaction &trans, 
                                                 bool &need_clean_failed)
 {
   int ret = return_ret;
   const uint64_t tenant_id = arg_.exec_tenant_id_;
   ObDDLTransController &controller = schema_service_.get_ddl_trans_controller();
-  if (OB_FAIL(ObDDLHelperUtils::wait_and_end_ddl_trans(ret, &schema_service_, &controller, tenant_id,
+  if (OB_FAIL(ObDDLHelperUtils::wait_and_end_ddl_trans(ret, &schema_service_, &controller, tenant_id, 
         task_id, trans, need_clean_failed))) {
     LOG_WARN("fail to wait and end ddl trans", KR(ret));
   }
@@ -415,7 +415,7 @@ int ObDropHTableHandler::init()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("param_ is null", KR(ret));
     } else {
-      ObLatestSchemaGuard latest_schema_guard(&schema_service_, arg_.exec_tenant_id_);
+      ObLatestSchemaGuard latest_schema_guard(&schema_service_, arg_.exec_tenant_id_);      
       const uint64_t tenant_id = arg_.exec_tenant_id_;
       const ObString tablegroup_name = param_->table_group_arg_.tablegroup_name_;
       uint64_t tablegroup_id = OB_INVALID_ID;
@@ -576,7 +576,7 @@ int ObHTableControlHandler::init()
   int ret = OB_SUCCESS;
   if (OB_FAIL(kv_attribute_helper_.init(ddl_service_))) {
     LOG_WARN("fail to init kv_attribute helper", KR(ret));
-  }
+  } 
   return ret;
 }
 
@@ -612,7 +612,7 @@ int ObHTableDDLHandlerGuard::get_handler(ObDDLService &ddl_service,
       }
       break;
     }
-    case ObHTableDDLType::DISABLE_TABLE:
+    case ObHTableDDLType::DISABLE_TABLE: 
     case ObHTableDDLType::ENABLE_TABLE: {
       if (OB_ISNULL(handler_ = OB_NEWx(ObHTableControlHandler, &allocator_, ddl_service, schema_service, arg, res))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -634,16 +634,16 @@ int ObHTableDDLHandlerGuard::get_handler(ObDDLService &ddl_service,
 }
 
 ObHTableLockHelper::ObHTableLockHelper(share::schema::ObMultiVersionSchemaService *schema_service,
-                                       const uint64_t tenant_id,
+                                       const uint64_t tenant_id, 
                                        ObDDLSQLTransaction *external_trans)
   : ObDDLHelper(schema_service, tenant_id, "[htable lock helper]", external_trans),
     tablegroup_id_(OB_INVALID_ID),
     database_id_(OB_INVALID_ID),
     table_ids_()
-{}
+{}                             
 
-int ObHTableLockHelper::lock_objects(const ObString &tablegroup_name,
-                                     const ObString &database_name,
+int ObHTableLockHelper::lock_objects(const ObString &tablegroup_name, 
+                                     const ObString &database_name, 
                                      const ObIArray<ObString> &table_names,
                                      bool need_lock_id)
 {
@@ -670,10 +670,10 @@ int ObHTableLockHelper::lock_objects(const ObString &tablegroup_name,
   return ret;
 }
 
-// check htable if is exist or not,
+// check htable if is exist or not, 
 // if is exist, return OB_SUCCESS. Otherwise, return related error code
-int ObHTableLockHelper::check_htable_exist(const ObString &tablegroup_name,
-                                           const ObString &database_name,
+int ObHTableLockHelper::check_htable_exist(const ObString &tablegroup_name, 
+                                           const ObString &database_name, 
                                            const ObIArray<ObString> &table_names)
 {
   int ret = OB_SUCCESS;
@@ -696,7 +696,7 @@ int ObHTableLockHelper::check_htable_exist(const ObString &tablegroup_name,
       uint64_t table_id = OB_INVALID_ID;
       ObTableType table_type = ObTableType::MAX_TABLE_TYPE;
       int64_t schema_version = OB_INVALID_VERSION;
-      if (OB_FAIL(latest_schema_guard_.get_table_id(database_id_, 0 /* sess_id */, table_name,
+      if (OB_FAIL(latest_schema_guard_.get_table_id(database_id_, 0 /* sess_id */, table_name, 
             table_id, table_type, schema_version))) {
         LOG_WARN("fail to get table id", KR(ret), K(database_id_), K(table_name));
       } else if (OB_INVALID_ID == table_id) {
@@ -710,10 +710,10 @@ int ObHTableLockHelper::check_htable_exist(const ObString &tablegroup_name,
   return ret;
 }
 
-// check htable if is exist or not,
+// check htable if is exist or not, 
 // if is not exist, return OB_SUCCESS. Otherwise, return related error code
-int ObHTableLockHelper::check_htable_not_exist(const ObString &tablegroup_name,
-                                               const ObString &database_name,
+int ObHTableLockHelper::check_htable_not_exist(const ObString &tablegroup_name, 
+                                               const ObString &database_name, 
                                                const ObIArray<ObString> &table_names)
 {
   int ret = OB_SUCCESS;
@@ -739,7 +739,7 @@ int ObHTableLockHelper::check_htable_not_exist(const ObString &tablegroup_name,
       uint64_t parent_table_id = OB_INVALID_ID;
       ObTableType table_type = ObTableType::MAX_TABLE_TYPE;
       int64_t schema_version = OB_INVALID_VERSION;
-      if (OB_FAIL(latest_schema_guard_.get_table_id(database_id, 0 /* sess_id */, table_name,
+      if (OB_FAIL(latest_schema_guard_.get_table_id(database_id, 0 /* sess_id */, table_name, 
             table_id, table_type, schema_version))) {
         LOG_WARN("fail to get table id", KR(ret), K(database_id), K(table_name));
       } else if (OB_INVALID_ID != table_id) {
@@ -768,8 +768,8 @@ int ObHTableLockHelper::lock_database_by_name_(const ObString &database_name)
   return ret;
 }
 
-int ObHTableLockHelper::lock_tablegroup_and_tables_by_name_(const ObString &tablegroup_name,
-                                                            const ObString &database_name,
+int ObHTableLockHelper::lock_tablegroup_and_tables_by_name_(const ObString &tablegroup_name, 
+                                                            const ObString &database_name, 
                                                             const ObIArray<ObString> &table_names)
 {
   int ret = OB_SUCCESS;
@@ -798,17 +798,17 @@ int ObHTableLockHelper::lock_htable_objects_by_id_()
   if (OB_FAIL(add_lock_object_by_id_(database_id_,
              share::schema::DATABASE_SCHEMA, transaction::tablelock::SHARE))) {
     LOG_WARN("fail to add lock database id", KR(ret), K_(database_id));
-  } else if (OB_FAIL(add_lock_object_by_id_(tablegroup_id_,
+  } else if (OB_FAIL(add_lock_object_by_id_(tablegroup_id_, 
       share::schema::TABLEGROUP_SCHEMA, transaction::tablelock::EXCLUSIVE))) {
     LOG_WARN("fail to add lock tablegroup id", KR(ret), K_(tablegroup_id));
-  }
+  } 
   for (int64_t i = 0; i < table_ids_.count() && OB_SUCC(ret); i++) {
     uint64_t table_id = table_ids_.at(i);
     if (OB_FAIL(add_lock_object_by_id_(table_id, share::schema::TABLE_SCHEMA, transaction::tablelock::EXCLUSIVE))) {
       LOG_WARN("fail to add lock table id", KR(ret), K_(tenant_id));
-    }
+    } 
   }
-
+  
   if (FAILEDx(lock_existed_objects_by_id_())) {
     LOG_WARN("fail to lock objects by id", KR(ret));
   } else {  // double check for table_ids_ is consistent
@@ -817,10 +817,10 @@ int ObHTableLockHelper::lock_htable_objects_by_id_()
     // and we can ignore this check for now
     ObArray<uint64_t> ori_table_ids;
     ObArray<uint64_t> latest_table_ids;
-    ObArray<ObString> latest_table_names;  // not used
+    ObArray<ObString> latest_table_names;  // not used 
     if (OB_FAIL(ori_table_ids.assign(table_ids_))) {
       LOG_WARN("fail to assign origin table ids", KR(ret));
-    } else if (OB_FAIL(latest_schema_guard_.get_table_id_and_table_name_in_tablegroup(tablegroup_id_,
+    } else if (OB_FAIL(latest_schema_guard_.get_table_id_and_table_name_in_tablegroup(tablegroup_id_, 
         latest_table_names, latest_table_ids))) {
       LOG_WARN("failed to get table schemas in table group", KR(ret), K_(tablegroup_id));
     } else if (ori_table_ids.count() != latest_table_ids.count()) {

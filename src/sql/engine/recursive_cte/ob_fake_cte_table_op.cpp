@@ -366,7 +366,7 @@ int ObFakeCTETableOp::to_expr(
         }
         expr->set_evaluated_projected(ctx);
       }
-    }
+    } 
   }
   return ret;
 }
@@ -386,7 +386,7 @@ int ObFakeCTETableOp::attach_rows(
     } else if (OB_LIKELY(e->is_variable_res_buf())) {
       ObDatum *datums = e->locate_batch_datums(ctx);
       if (!e->is_batch_result()) {
-        if (OB_UNLIKELY(idx >= srows.at(0)->cnt_)) {
+        if (OB_UNLIKELY(idx >= srows.at(0)->cnt_)) { 
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("idx out of range", K(ret), K(idx), K(chosen_index), K(srows.at(0)->cnt_));
         } else {
@@ -406,7 +406,7 @@ int ObFakeCTETableOp::attach_rows(
     } else {
       if (!e->is_batch_result()) {
         ObDatum *datums = e->locate_datums_for_update(ctx, 1);
-        if (OB_UNLIKELY(idx >= srows.at(0)->cnt_)) {
+        if (OB_UNLIKELY(idx >= srows.at(0)->cnt_)) { 
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("idx out of range", K(ret), K(idx), K(chosen_index), K(srows.at(0)->cnt_));
         } else {

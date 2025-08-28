@@ -38,7 +38,7 @@ public:
     const common::ObIArray<sql::ObExpr*> &output_exprs,
     ObTableIterParam *&iter_param,
     const common::ObIArray<sql::ObExpr*> *agg_exprs = nullptr);
-private:
+private:  
   int new_iter_param(
       const int32_t cg_idx,
       const ObTableIterParam &row_param,

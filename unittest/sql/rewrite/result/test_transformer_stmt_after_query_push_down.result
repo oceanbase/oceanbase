@@ -7979,7 +7979,7 @@ SQL: select a.c2 from (select * from t1) a;
   "is_hierarchical_query":false
 }
 ***************   Case 17   ***************
-SQL: select a.c1 from (select * from t1) a group by a.c2 limit 1, 10;
+SQL: select a.c1 from (select * from t1) a group by a.c2 limit 1, 10; 
 {
   "stmt_type":1,
   "transpose_item":null,

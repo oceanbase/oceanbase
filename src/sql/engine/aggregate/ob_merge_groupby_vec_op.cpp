@@ -1721,7 +1721,7 @@ int ObMergeGroupByVecOp::collect_group_results(const RowMeta &row_meta,
             vec->set_payload(i, output_rollup_ids_[i], sizeof(int64_t));
           }
         }
-        MY_SPEC.rollup_id_expr_->set_evaluated_projected(eval_ctx_);
+        MY_SPEC.rollup_id_expr_->set_evaluated_projected(eval_ctx_);  
       }
     }
   }

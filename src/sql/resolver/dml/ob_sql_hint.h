@@ -362,7 +362,7 @@ struct JoinFilterPushdownHintInfo
                             const ObJoinFilterHint *&force_hint) const;
   TO_STRING_KV(K_(filter_table_id),
                  K_(join_filter_hints),
-                 K_(part_join_filter_hints));
+                 K_(part_join_filter_hints)); 
 
   uint64_t filter_table_id_;
   bool config_disable_;
@@ -413,7 +413,7 @@ struct ObLogPlanHint
 #else
   int init_log_plan_hint(ObSqlSchemaGuard &schema_guard,
                          const ObDMLStmt &stmt,
-                         const ObQueryHint &query_hint,
+                         const ObQueryHint &query_hint, 
                          const bool is_spm_evolution);
 #endif
   int init_other_opt_hints(ObSqlSchemaGuard &schema_guard,

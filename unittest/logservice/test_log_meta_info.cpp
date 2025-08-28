@@ -413,7 +413,7 @@ TEST(TestLogMetaInfos, test_log_snapshot_meta)
   EXPECT_EQ(log_snapshot_meta2.prev_log_info_, old_version.prev_log_info_);
   EXPECT_EQ(log_snapshot_meta2.version_, old_version.version_);
   EXPECT_EQ(log_snapshot_meta2.version_, LogSnapshotMeta::LOG_SNAPSHOT_META_VERSION);
-  // return OB_ENTRY_NOT_EXIST when prev_tail_lsn is same as base lsn of log_snapshot_meta2 but prev_log_info_ is invalid.
+  // return OB_ENTRY_NOT_EXIST when prev_tail_lsn is same as base lsn of log_snapshot_meta2 but prev_log_info_ is invalid. 
   EXPECT_EQ(OB_ENTRY_NOT_EXIST, log_snapshot_meta2.get_prev_log_info(prev_tail_lsn, result_log_info, output_prev_tail_lsn));
   EXPECT_EQ(result_log_info.is_valid(), false);
   EXPECT_EQ(output_prev_tail_lsn.is_valid(), false);
@@ -441,7 +441,7 @@ TEST(TestLogMetaInfos, test_log_snapshot_meta)
   EXPECT_EQ(log_snapshot_meta3.prev_log_tail_lsn_, old_version1.prev_log_tail_lsn_);
   EXPECT_EQ(log_snapshot_meta3.version_, old_version1.version_);
   EXPECT_EQ(log_snapshot_meta3.version_, LogSnapshotMeta::LOG_SNAPSHOT_META_VERSION);
-  // return OB_SUCCESS when base_lsn is same as base lsn of log_snapshot_meta2.
+  // return OB_SUCCESS when base_lsn is same as base lsn of log_snapshot_meta2. 
   EXPECT_EQ(OB_SUCCESS, log_snapshot_meta3.get_prev_log_info(prev_tail_lsn, result_log_info, output_prev_tail_lsn));
   EXPECT_EQ(result_log_info, prev_log_info);
   EXPECT_EQ(output_prev_tail_lsn.is_valid(), false);

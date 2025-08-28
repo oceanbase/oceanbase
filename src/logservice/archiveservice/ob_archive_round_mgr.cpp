@@ -148,7 +148,7 @@ int ObArchiveRoundMgr::get_backup_path_str_(char *buf, const int64_t buf_size) c
   return ret;
 }
 
-int ObArchiveRoundMgr::reset_backup_dest(const ArchiveKey &key)
+int ObArchiveRoundMgr::reset_backup_dest(const ArchiveKey &key) 
 {
   int ret = OB_SUCCESS;
 
@@ -188,7 +188,7 @@ int ObArchiveRoundMgr::reset_backup_dest(const ArchiveKey &key)
 }
 
 // Note: The member variable backup_dest_ in ObArchiveRoundMgr may not be up-to-date.
-// If you encounter the error ret == OB_OBJECT_STORAGE_PERMISSION_DENIED when accessing the archive path
+// If you encounter the error ret == OB_OBJECT_STORAGE_PERMISSION_DENIED when accessing the archive path 
 //with the backup_dest_ obtained from the ObArchiveRoundMgr::get_backup_dest_and_id function,
 // you need to call ObArchiveRoundMgr::reset_backup_dest to refresh backup_dest_.
 // For details, refer to the use of ObArchiveRoundMgr::reset_backup_dest in #define ADD_LS_RECORD_TASK(CLASS, type).

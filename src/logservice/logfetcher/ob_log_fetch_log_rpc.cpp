@@ -190,7 +190,7 @@ int FetchLogSRpc::RpcCB::process()
   if (OB_FAIL(do_process_(rcode, &result))) {
     LOG_ERROR("process fetch log callback fail", KR(ret), K(result), K(rcode), K(svr));
   }
-  // Aone:
+  // Aone: 
   // Note: destruct response after asynchronous RPC processing
   result.reset();
 
@@ -490,7 +490,7 @@ int FetchLogARpc::async_fetch_log(
     if (OB_FAIL(launch_async_raw_file_rpc_(static_cast<RawLogFileRpcRequest&>(*cur_req_), req_start_lsn,
       client_progress, false, rpc_send_succeed))) {
       if (OB_EAGAIN != ret) {
-        // we should have hold lock_ here, it's safe to print cur_req because there is
+        // we should have hold lock_ here, it's safe to print cur_req because there is 
         // no concurrency issue under lock protection
         LOG_ERROR("failed to launch raw file rpc", K(req_start_lsn), K(client_progress), KPC(cur_req_));
       }
@@ -992,7 +992,7 @@ int FetchLogARpc::handle_rpc_response_no_lock_(RawLogFileRpcRequest &request)
           LOG_ERROR("failed to get progress from host", K(host_));
         } else if (OB_FAIL(launch_async_raw_file_rpc_(request, next_req_lsn, progress, true, rpc_send_succeed))) {
           if (OB_EAGAIN != ret) {
-            // we should have hold lock_ here, it's safe to print request because there is
+            // we should have hold lock_ here, it's safe to print request because there is 
             // no concurrency issue under lock protection and request must be cur_req_
             LOG_ERROR("launch_async_rpc_ fail", KR(ret), K(request), K(next_req_lsn), K(progress));
           } else {

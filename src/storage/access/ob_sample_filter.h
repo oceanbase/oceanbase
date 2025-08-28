@@ -84,7 +84,7 @@ public:
 
 struct ObSampleIntervalParser
 {
-public:
+public: 
   ObSampleIntervalParser(const double p, const int64_t seed)
     : interval_id_(0),
       start_(0),
@@ -147,7 +147,7 @@ public:
       has_filtered_ = false;
     }
   }
-  OB_INLINE void inc_block_count(blocksstable::ObMicroIndexInfo &index_info, const bool need_reset)
+  OB_INLINE void inc_block_count(blocksstable::ObMicroIndexInfo &index_info, const bool need_reset) 
   {
     if (index_info.is_data_block()) {
       if (need_reset) { // has crossed the interval expansion point
@@ -194,8 +194,8 @@ public:
       const bool is_reverse_scan,
       common::ObIAllocator *allocator) = 0;
   virtual int build_row_id_handle(
-      const int16_t height,
-      const int32_t index_handle_cnt,
+      const int16_t height, 
+      const int32_t index_handle_cnt, 
       const int32_t data_handle_cnt) = 0;
   virtual int increase_row_num(const int64_t count) = 0;
   virtual int update_row_num_after_blockscan() = 0;
@@ -210,26 +210,26 @@ public:
       const bool is_major,
       common::ObBitmap &result_bitmap) = 0;
   virtual int apply_sample_filter( // for column store
-      const ObCSRange &range,
-      common::ObBitmap &result_bitmap) = 0;
+      const ObCSRange &range, 
+      common::ObBitmap &result_bitmap) = 0; 
   virtual void set_block_row_range(
-      const int64_t fetch_idx,
+      const int64_t fetch_idx, 
       const int64_t current,
       const int64_t last,
       const int64_t micro_row_count) = 0;
   OB_INLINE int64_t get_row_num() const { return row_num_; } // for debug
   OB_INLINE virtual common::ObIArray<uint64_t> &get_col_ids() override
-  {
-    return filter_.get_col_ids();
+  { 
+    return filter_.get_col_ids(); 
   }
   OB_INLINE sql::ObPushdownOperator & get_op() override
   {
     OB_ASSERT(false); // op_ maybe null, can not get_op in sample filter
     return op_;
   }
-  OB_INLINE int init_evaluated_datums(bool &is_valid) override
+  OB_INLINE int init_evaluated_datums(bool &is_valid) override 
   {
-    is_valid = true;
+    is_valid = true; 
     return OB_SUCCESS;
   }
   TO_STRING_KV(K_(is_inited), K_(row_num), K_(percent), K_(seed), K_(is_reverse_scan), K_(filter));
@@ -243,7 +243,7 @@ protected:
   DISALLOW_COPY_AND_ASSIGN(ObSampleFilterExecutor);
 };
 
-// Sample row with equal probability for each row.
+// Sample row with equal probability for each row. 
 class ObTrivalSampleFilterExecutor final : public ObSampleFilterExecutor
 {
 public:
@@ -264,7 +264,7 @@ public:
       const bool is_major,
       common::ObBitmap &result_bitmap) override;
   int apply_sample_filter( // for column store
-      const ObCSRange &range,
+      const ObCSRange &range, 
       common::ObBitmap &result_bitmap) override;
   int increase_row_num(const int64_t count) override
   {
@@ -272,10 +272,10 @@ public:
     return OB_SUCCESS;
   }
   int build_row_id_handle(
-      const int16_t height,
-      const int32_t index_handle_cnt,
+      const int16_t height, 
+      const int32_t index_handle_cnt, 
       const int32_t data_handle_cnt) override
-  {
+  { 
     UNUSEDx(height, index_handle_cnt, data_handle_cnt);
     return OB_SUCCESS;
   }
@@ -286,12 +286,12 @@ public:
       const int64_t level,
       const int64_t parent_fetch_idx,
       const int64_t child_prefetch_idx) override
-  {
+  { 
     UNUSEDx(index_info, level, parent_fetch_idx, child_prefetch_idx);
     return OB_SUCCESS;
-  }
+  } 
   void set_block_row_range(
-      const int64_t fetch_idx,
+      const int64_t fetch_idx, 
       const int64_t current,
       const int64_t last,
       const int64_t micro_row_count) override
@@ -319,8 +319,8 @@ public:
       const bool is_reverse_scan,
       common::ObIAllocator *allocator) override;
   int build_row_id_handle(
-      const int16_t height,
-      const int32_t index_handle_cnt,
+      const int16_t height, 
+      const int32_t index_handle_cnt, 
       const int32_t data_handle_cnt) override;
   int increase_row_num(const int64_t count) override;
   int update_row_num_after_blockscan() override;
@@ -335,10 +335,10 @@ public:
       const bool is_major,
       common::ObBitmap &result_bitmap) override;
   int apply_sample_filter( // for column store
-      const ObCSRange &range,
-      common::ObBitmap &result_bitmap) override;
+      const ObCSRange &range, 
+      common::ObBitmap &result_bitmap) override; 
   void set_block_row_range(
-      const int64_t fetch_idx,
+      const int64_t fetch_idx, 
       const int64_t current,
       const int64_t last,
       const int64_t micro_row_count) override
@@ -348,8 +348,8 @@ public:
     } else {
       block_row_range_.set(get_data_start_id(fetch_idx) + (micro_row_count - 1 - current), get_data_start_id(fetch_idx) + (micro_row_count - 1 - last));
     }
-  }
-  INHERIT_TO_STRING_KV("ObSampleFilterExecutor", ObSampleFilterExecutor,
+  }  
+  INHERIT_TO_STRING_KV("ObSampleFilterExecutor", ObSampleFilterExecutor, 
                         K_(interval_infos), K_(pd_row_range), K_(block_row_range),
                         K_(index_tree_height), K_(index_prefetch_depth), K_(data_prefetch_depth),
                         K_(boundary_point), K_(filter_state),
@@ -363,8 +363,8 @@ private:
   int64_t get_range_sample_count(const int64_t start_row_num, const int64_t end_row_num, int64_t &sample_count) const;
   int check_range_filtered(blocksstable::ObMicroIndexInfo &index_info, const int64_t start_row_num);
   int update_row_id_handle(
-      const int64_t level,
-      int32_t parent_fetch_idx,
+      const int64_t level, 
+      int32_t parent_fetch_idx, 
       int64_t child_prefetch_idx,
       const int64_t row_count);
   int set_sample_bitmap(
@@ -383,17 +383,17 @@ private:
     block_row_range_.reset();
   }
   OB_INLINE int64_t get_data_start_id(const int64_t micro_data_idx) const
-  {
-    return data_row_id_handle_[micro_data_idx % data_prefetch_depth_];
+  { 
+    return data_row_id_handle_[micro_data_idx % data_prefetch_depth_]; 
   }
   OB_INLINE int64_t get_sample_count(const int64_t start_iid, const int64_t end_iid, const int64_t interval_length) const
   {
-    return std::floor(static_cast<double>((end_iid + 1) * interval_length) * percent_ / 100.0)
+    return std::floor(static_cast<double>((end_iid + 1) * interval_length) * percent_ / 100.0) 
               - std::floor(static_cast<double>(start_iid * interval_length) * percent_ / 100.0);
-  }
-  OB_INLINE bool is_valid(const int64_t row_id) const
-  {
-    return row_id != OB_INVALID_ROW_ID;
+  } 
+  OB_INLINE bool is_valid(const int64_t row_id) const 
+  { 
+    return row_id != OB_INVALID_ROW_ID; 
   }
   static const int64_t EXPAND_INTERVAL_START = 1000000;
   static const int64_t EXPAND_INTERVAL_LENGTH = 1024;
@@ -420,7 +420,7 @@ public:
   virtual ~ObRowSampleFilter();
   void reuse()
   {
-    if (OB_NOT_NULL(sample_filter_)) {
+    if (OB_NOT_NULL(sample_filter_)) { 
       static_cast<ObSampleFilterExecutor*>(sample_filter_)->reuse();
     }
   }
@@ -438,11 +438,11 @@ public:
   {
     return allocator_;
   }
-  TO_STRING_KV(K_(is_inited),
-               KP_(sample_filter),
-               KP_(sample_node),
-               KP_(filter),
-               KP(filter_node_),
+  TO_STRING_KV(K_(is_inited), 
+               KP_(sample_filter), 
+               KP_(sample_node), 
+               KP_(filter), 
+               KP(filter_node_), 
                KP_(allocator));
 private:
   sql::ObPushdownFilterExecutor *sample_filter_;
@@ -459,7 +459,7 @@ public:
       const common::SampleInfo &sample_info,
       ObRowSampleFilter *&sample_filter,
       sql::ObPushdownOperator *op,
-      const bool is_reverse_scan,
+      const bool is_reverse_scan, 
       common::ObIAllocator *allocator);
   static void destroy_sample_filter(ObRowSampleFilter *&sample_filter);
 };

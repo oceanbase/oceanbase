@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #define USING_LOG_PREFIX SQL_REWRITE
 #include "sql/rewrite/ob_union_find.h"
 
@@ -20,7 +20,7 @@ using namespace common;
 namespace sql
 {
 
-int UnionFind::init()
+int UnionFind::init() 
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {

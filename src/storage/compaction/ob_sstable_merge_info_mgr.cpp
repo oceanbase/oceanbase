@@ -43,13 +43,13 @@ int ObTenantSSTableMergeInfoMgr::mtl_init(ObTenantSSTableMergeInfoMgr *&sstable_
 int64_t ObTenantSSTableMergeInfoMgr::cal_max()
 {
   const uint64_t tenant_id = MTL_ID();
-  int64_t max_size = std::min(lib::get_tenant_memory_limit(tenant_id) * MEMORY_PERCENTAGE / 100,
+  int64_t max_size = std::min(lib::get_tenant_memory_limit(tenant_id) * MEMORY_PERCENTAGE / 100, 
                           static_cast<int64_t>(POOL_MAX_SIZE));
   return max_size;
 }
 
-int ObTenantSSTableMergeInfoMgr::get_next_info(compaction::ObIDiagnoseInfoMgr::Iterator &major_iter,
-      compaction::ObIDiagnoseInfoMgr::Iterator &minor_iter,
+int ObTenantSSTableMergeInfoMgr::get_next_info(compaction::ObIDiagnoseInfoMgr::Iterator &major_iter, 
+      compaction::ObIDiagnoseInfoMgr::Iterator &minor_iter, 
       ObSSTableMergeHistory &merge_history, char *buf, const int64_t buf_len)
 {
   int ret = OB_SUCCESS;
@@ -76,13 +76,13 @@ int ObTenantSSTableMergeInfoMgr::init(const int64_t page_size)
   } else {
     int64_t max_size = cal_max();
     if (OB_FAIL(major_info_pool_.init(false,
-                                      MTL_ID(),
+                                      MTL_ID(), 
                                       "MajorMerge",
                                       page_size,
                                       max_size * (100 - MINOR_MEMORY_PERCENTAGE) / 100))) {
       STORAGE_LOG(WARN, "failed to init major info pool", K(ret));
     } else if (OB_FAIL(minor_info_pool_.init(false,
-                                      MTL_ID(),
+                                      MTL_ID(), 
                                       "MinorMerge",
                                       page_size,
                                       max_size * MINOR_MEMORY_PERCENTAGE / 100))) {
@@ -113,7 +113,7 @@ void ObTenantSSTableMergeInfoMgr::reset()
   STORAGE_LOG(INFO, "ObTenantSSTableMergeInfoMgr destroy finish");
 }
 
-int ObTenantSSTableMergeInfoMgr::open_iter(compaction::ObIDiagnoseInfoMgr::Iterator &major_iter,
+int ObTenantSSTableMergeInfoMgr::open_iter(compaction::ObIDiagnoseInfoMgr::Iterator &major_iter, 
       compaction::ObIDiagnoseInfoMgr::Iterator &minor_iter)
 {
   int ret = OB_SUCCESS;
@@ -135,10 +135,10 @@ int ObTenantSSTableMergeInfoMgr::set_max(int64_t max_size)
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTenantSSTableMergeInfoMgr is not init", K(ret));
   } else if (OB_FAIL(major_info_pool_.set_max(max_size * (100 - MINOR_MEMORY_PERCENTAGE) / 100))) {
-    STORAGE_LOG(WARN, "failed to resize major info pool", K(ret), "max_size",
+    STORAGE_LOG(WARN, "failed to resize major info pool", K(ret), "max_size", 
         max_size * (100 - MINOR_MEMORY_PERCENTAGE) / 100);
   } else if (OB_FAIL(minor_info_pool_.set_max(max_size * MINOR_MEMORY_PERCENTAGE / 100))) {
-    STORAGE_LOG(WARN, "failed to resize minor info pool", K(ret), "max_size",
+    STORAGE_LOG(WARN, "failed to resize minor info pool", K(ret), "max_size", 
         max_size * MINOR_MEMORY_PERCENTAGE / 100);
   }
   return ret;

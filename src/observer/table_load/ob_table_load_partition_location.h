@@ -54,12 +54,12 @@ public:
     TO_STRING_KV(K_(addr), KP_(partition_id_array_ptr));
   };
 public:
-  ObTableLoadPartitionLocation()
+  ObTableLoadPartitionLocation() 
     : allocator_("TLD_PL"),
-      is_inited_(false)
-  {
+      is_inited_(false) 
+  { 
     allocator_.set_tenant_id(MTL_ID());
-    tablet_ids_.set_tenant_id(MTL_ID());
+    tablet_ids_.set_tenant_id(MTL_ID()); 
   }
   int init(uint64_t tenant_id,
            const common::ObIArray<table::ObTableLoadPartitionId> &partition_ids);

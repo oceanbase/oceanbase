@@ -73,7 +73,7 @@ int ObMySQLResult::print_info() const
   return OB_SUCCESS;
 }
 
-int ObMySQLResult::format_precision_scale_length(int16_t &precision, int16_t &scale, int32_t &length,
+int ObMySQLResult::format_precision_scale_length(int16_t &precision, int16_t &scale, int32_t &length, 
                                                   oceanbase::common::ObObjType ob_type, oceanbase::common::ObCollationType meta_cs_type,DblinkDriverProto link_type, bool old_max_length) const
 {
   int ret = OB_SUCCESS;
@@ -105,7 +105,7 @@ int ObMySQLResult::format_precision_scale_length(int16_t &precision, int16_t &sc
       }
       case ObUFloatType:
       case ObUDoubleType:
-      case ObDoubleType:
+      case ObDoubleType: 
       case ObFloatType: {// for mysql double type and float type
         precision = length;
         length = -1;
@@ -115,7 +115,7 @@ int ObMySQLResult::format_precision_scale_length(int16_t &precision, int16_t &sc
         }
         break;
       }
-      case ObCharType:
+      case ObCharType: 
       case ObVarcharType: {
         if (OB_FAIL(common::ObCharset::get_mbminlen_by_coll(meta_cs_type, mbminlen))) {
           LOG_WARN("fail to get mbminlen", K(meta_cs_type), K(ret));
@@ -132,7 +132,7 @@ int ObMySQLResult::format_precision_scale_length(int16_t &precision, int16_t &sc
       case ObTinyIntType:
       case ObSmallIntType:
       case ObInt32Type:
-      case ObIntType:
+      case ObIntType: 
       case ObUTinyIntType:
       case ObUSmallIntType:
       case ObUInt32Type:
@@ -154,7 +154,7 @@ int ObMySQLResult::format_precision_scale_length(int16_t &precision, int16_t &sc
       }
       default:
        break;
-    }
+    } 
   } else {
     if (ob_is_nstring(ob_type)) {
       precision = LS_CHAR; // precision is LS_CHAR means national character set (unicode)
@@ -169,7 +169,7 @@ int ObMySQLResult::format_precision_scale_length(int16_t &precision, int16_t &sc
     // format scale from others to oceanbase
     if (DBLINK_DRV_OCI == link_type && ObDateTimeType == ob_type) {
       scale = 0;
-    } else if (tmp_scale < OB_MIN_NUMBER_SCALE || tmp_scale > OB_MAX_NUMBER_SCALE ||
+    } else if (tmp_scale < OB_MIN_NUMBER_SCALE || tmp_scale > OB_MAX_NUMBER_SCALE || 
               (-1 == precision && ObNumberType == ob_type)) {
       scale = OB_MIN_NUMBER_SCALE - 1; // format it to -85 if scale out of range
     } else {

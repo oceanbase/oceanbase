@@ -143,7 +143,7 @@ public:
 
 
 /// @see PCODE_DEF(OB_TABLE_API_EXECUTE, 0x1102)
-class ObTableOperationRequest final : public ObITableRequest
+class ObTableOperationRequest final : public ObITableRequest 
 {
   OB_UNIS_VERSION(1);
 public:
@@ -470,7 +470,7 @@ public:
       ls_op_ = nullptr;
     }
   }
-
+  
   bool is_hbase_put() const
   {
     bool bret = false;
@@ -524,7 +524,7 @@ public:
     }
     return op_cnt > 1;
   }
-
+  
   bool is_hbase_mix_batch() const
   {
     bool bret = false;
@@ -616,7 +616,7 @@ public:
   }
   OB_INLINE const ObIArray<ObString>& get_rowkey_names() const { return rowkey_names_; }
   OB_INLINE const ObIArray<ObString>& get_properties_names() const { return properties_names_; }
-  virtual int get_errno() const override
+  virtual int get_errno() const override 
   {
     int ret = OB_SUCCESS;
     if (count() != 0) {
@@ -657,11 +657,11 @@ class ObRedisRpcRequest final : public ObITableRequest
 {
   OB_UNIS_VERSION(1);
 public:
-  ObRedisRpcRequest() :
-      credential_(),
+  ObRedisRpcRequest() : 
+      credential_(), 
       redis_db_(common::OB_INVALID_ID),
-      ls_id_(),
-      tablet_id_(),
+      ls_id_(), 
+      tablet_id_(), 
       table_id_(common::OB_INVALID_ID),
       reserved_(0),
       resp_str_()
@@ -692,7 +692,7 @@ public:
   uint64_t redis_db_;
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
-  uint64_t table_id_;
+  uint64_t table_id_; 
   uint64_t reserved_; // reserved, fix 8 bytes
   ObString resp_str_;
 };

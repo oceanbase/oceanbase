@@ -54,28 +54,28 @@ enum class IterateEndReason {
   MAX_TYPE = 4
 };
 struct IterateEndInfo {
-  IterateEndInfo()
+  IterateEndInfo() 
   {
-    reset();
+    reset(); 
   }
   ~IterateEndInfo()
   {
     reset();
   }
-  void reset()
+  void reset() 
   {
     reason_ = IterateEndReason::MAX_TYPE;
     log_scn_.reset();
   }
-  bool is_valid() const
+  bool is_valid() const 
   {
-    return IterateEndReason::MAX_TYPE != reason_
+    return IterateEndReason::MAX_TYPE != reason_ 
            && log_scn_.is_valid();
   }
   bool is_iterate_end_by_replayable_point_scn() const
   {
     return IterateEndReason::DUE_TO_REPLAYABLE_POINT_SCN_LOG_ENTRY == reason_
-           || IterateEndReason::DUE_TO_REPLAYABLE_POINT_SCN_LOG_GROUP_ENTRY == reason_;
+           || IterateEndReason::DUE_TO_REPLAYABLE_POINT_SCN_LOG_GROUP_ENTRY == reason_; 
   }
   IterateEndReason reason_;
   SCN log_scn_;
@@ -143,7 +143,7 @@ public:
   //      - this replica has not finished flashback, and iterator start lsn is not the header of LogGroupEntry.
   int next(const share::SCN &replayable_point_scn,
            share::SCN &next_min_scn,
-           bool &iterate_end_by_replayable_point,
+           bool &iterate_end_by_replayable_point, 
            LogIOContext &io_ctx);
   // @retval
   //  OB_SUCCESS
@@ -175,7 +175,7 @@ private:
   //   OB_PARTIAL_LOG: this replica has not finished flashback, and iterator start lsn
   //                   is not the header of LogGroupEntry.
   int get_next_entry_(const SCN &replayable_point_scn,
-                      IterateEndInfo &info,
+                      IterateEndInfo &info, 
                       LogIOContext &io_ctx);
 
   // According to LogEntryType, deserialize different log entry
@@ -340,14 +340,14 @@ private:
       SCN min_scn;
       bool is_group_iterator = std::is_same<ENTRY, LogGroupEntry>::value;
       if (OB_FAIL(entry.get_log_min_scn(min_scn))) {
-        PALF_LOG(ERROR, "get_log_min_scn failed", K(ret), KPC(this), K(min_scn),
+        PALF_LOG(ERROR, "get_log_min_scn failed", K(ret), KPC(this), K(min_scn), 
             K(entry), K(replayable_point_scn));
       } else if ((is_group_iterator && entry.get_scn() > replayable_point_scn)
                  || (!is_group_iterator && min_scn > replayable_point_scn)) {
         info.log_scn_ = min_scn;
         info.reason_ = IterateEndReason::DUE_TO_REPLAYABLE_POINT_SCN_LOG_GROUP_ENTRY;
         ret = OB_ITER_END;
-        PALF_LOG(TRACE, "iterate end by replayable_point", K(ret), KPC(this), K(min_scn),
+        PALF_LOG(TRACE, "iterate end by replayable_point", K(ret), KPC(this), K(min_scn), 
             K(entry), K(replayable_point_scn), K(info), K(is_group_iterator));
       } else {
       }
@@ -373,14 +373,14 @@ private:
   {
     return 0 == lsn_2_offset(lsn, PALF_BLOCK_SIZE);
   }
-
+  
   void set_padding_info_(const LogGroupEntry &entry)
   {
     curr_entry_is_padding_ = entry.get_header().is_padding_log();
     padding_entry_size_ = entry.get_header().get_data_len();
     padding_entry_scn_ = entry.get_header().get_max_scn();
   }
-
+  
   void reset_padding_info_()
   {
     curr_entry_is_padding_ = false;
@@ -558,7 +558,7 @@ LSN LogIteratorImpl<ENTRY>::get_curr_read_lsn() const
 // NB: for restarting, the committed offset of sliding window is invalid.
 template <class ENTRY>
 int LogIteratorImpl<ENTRY>::get_next_entry_(const SCN &replayable_point_scn,
-                                            IterateEndInfo &info,
+                                            IterateEndInfo &info, 
                                             LogIOContext &io_ctx)
 {
   int ret = OB_SUCCESS;
@@ -635,7 +635,7 @@ int LogIteratorImpl<ENTRY>::next(const share::SCN &replayable_point_scn, LogIOCo
 template <class ENTRY>
 int LogIteratorImpl<ENTRY>::next(const share::SCN &replayable_point_scn,
                                  share::SCN &next_min_scn,
-                                 bool &iterate_end_by_replayable_point,
+                                 bool &iterate_end_by_replayable_point, 
                                  LogIOContext &io_ctx)
 {
   int ret = OB_SUCCESS;
@@ -708,7 +708,7 @@ int LogIteratorImpl<ENTRY>::next(const share::SCN &replayable_point_scn,
     } else if (iterate_end_by_replayable_point || IterateEndReason::DUE_TO_FILE_END_LSN_READ_NEW_DATA == info.reason_) {
       // when there is no log between [replayable_point_scn, 'curr_entry'), we can advance next_log_min_scn.
       next_min_scn = MIN(
-          (replayable_point_scn.is_valid() ? SCN::plus(replayable_point_scn, 1) : SCN::max_scn()),
+          (replayable_point_scn.is_valid() ? SCN::plus(replayable_point_scn, 1) : SCN::max_scn()), 
           info.log_scn_);
       PALF_LOG(TRACE, "update next_min_scn to min of replayable_point_scn and log_group_entry_min_scn_", KPC(this), K(info));
 
@@ -778,10 +778,10 @@ int LogIteratorImpl<ENTRY>::verify_accum_checksum_(const LogGroupEntry &entry,
     PALF_LOG(WARN, "invalid data", K(ret), KPC(this), K(entry));
   } else if (-1 == accumulate_checksum_) {
     new_accumulate_checksum = expected_verify_checksum;
-    PALF_LOG(TRACE, "init accumulate_checksum to first LogGroupEntry", K(entry), KPC(this),
+    PALF_LOG(TRACE, "init accumulate_checksum to first LogGroupEntry", K(entry), KPC(this), 
         K(new_accumulate_checksum));
   } else if (OB_FAIL(LogChecksum::verify_accum_checksum(
-                accumulate_checksum_, data_checksum,
+                accumulate_checksum_, data_checksum, 
                 expected_verify_checksum, new_accumulate_checksum))) {
     PALF_LOG(WARN, "verify accumlate checksum failed", K(ret), KPC(this), K(entry));
   } else {

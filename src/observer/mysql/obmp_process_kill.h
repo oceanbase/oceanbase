@@ -30,7 +30,7 @@ public:
 protected:
   int deserialize() override;
 private:
-  char kill_sql_buf_[KILL_SQL_BUF_SIZE];
+  char kill_sql_buf_[KILL_SQL_BUF_SIZE]; 
   DISALLOW_COPY_AND_ASSIGN(ObMPProcessKill);
 }; // end of class ObMPProcessKill
 

@@ -37,17 +37,17 @@ int ObQueryDriver::response_query_header(ObResultSet &result,
 {
   int ret = OB_SUCCESS;
   if (is_prexecute_) {
-    // 二合一协议发送 header 包, 不单独发送 column
+    // 二合一协议发送 header 包, 不单独发送 column 
     if (OB_FAIL(static_cast<ObMPStmtPrexecute&>(sender_).response_query_header(session_, result, need_flush_buffer))) {
       LOG_WARN("prexecute response query head fail. ", K(ret));
-    }
+    } 
   } else {
     if (NULL == result.get_field_columns()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("response field is null. ", K(ret));
     } else if (OB_FAIL(response_query_header(*result.get_field_columns(),
-                                             has_more_result,
-                                             need_set_ps_out_flag,
+                                             has_more_result, 
+                                             need_set_ps_out_flag, 
                                              false,
                                              &result))) {
       LOG_WARN("response query head fail. ", K(ret));
@@ -94,7 +94,7 @@ int ObQueryDriver::response_query_header(const ColumnsFieldIArray &fields,
       bool is_not_match = false;
       ObMySQLField field;
       const ObField &ob_field = fields.at(i);
-      if (NULL != result && result->get_is_com_filed_list()
+      if (NULL != result && result->get_is_com_filed_list() 
                          && OB_FAIL(is_com_filed_list_match_wildcard_str(
                                                   *result,
                                                   static_cast<ObCollationType>(ob_field.charsetnr_),
@@ -141,7 +141,7 @@ int ObQueryDriver::response_query_header(const ColumnsFieldIArray &fields,
     flags.status_flags_.OB_SERVER_MORE_RESULTS_EXISTS = has_more_result;
     flags.status_flags_.OB_SERVER_PS_OUT_PARAMS = need_set_ps_out_flag ? 1 : 0;
     // NULL == result 说明是老协议 ps cursor execute 回包，或者fetch 协议回包， cursor_exit = true
-    flags.status_flags_.OB_SERVER_STATUS_CURSOR_EXISTS = NULL == result ? 1 : 0;
+    flags.status_flags_.OB_SERVER_STATUS_CURSOR_EXISTS = NULL == result ? 1 : 0; 
     if (!session_.is_obproxy_mode()) {
       // in java client or others, use slow query bit to indicate partition hit or not
       flags.status_flags_.OB_SERVER_QUERY_WAS_SLOW = !session_.partition_hit().get_bool();
@@ -211,17 +211,17 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
       LOG_WARN("fields is null", K(ret), KP(fields));
     }
   }
-
+  
   ObCharsetType charset_type = CHARSET_INVALID;
   ObCharsetType nchar = CHARSET_INVALID;
-
+  
   if (OB_SUCC(ret)) {
     const ObSQLSessionInfo &my_session = result.get_session();
     if (OB_FAIL(my_session.get_ncharacter_set_connection(nchar))) {
       LOG_WARN("get ncharacter set connection failed", K(ret));
     } else if (OB_FAIL(my_session.get_character_set_results(charset_type))) {
       LOG_WARN("fail to get result charset", K(ret));
-    }
+    } 
   }
 
   while (OB_SUCC(ret) && row_num < limit_count && !OB_FAIL(result.get_next_row(result_row)) ) {
@@ -247,10 +247,10 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < row->get_count(); i++) {
       ObObj& value = row->get_cell(i);
-      if (result.is_ps_protocol() && !is_packed
+      if (result.is_ps_protocol() && !is_packed 
           && !(value.is_geometry() && lib::is_oracle_mode())) { // oracle gis will do cast in process_sql_udt_results
         if (value.get_type() != fields->at(i).type_.get_type()) {
-          ObCastCtx cast_ctx(&result.get_mem_pool(), NULL, CM_WARN_ON_FAIL,
+          ObCastCtx cast_ctx(&result.get_mem_pool(), NULL, CM_WARN_ON_FAIL, 
             fields->at(i).type_.get_collation_type());
           if (OB_FAIL(common::ObObjCaster::to_type(fields->at(i).type_.get_type(),
                                            cast_ctx,
@@ -292,7 +292,7 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
     if (OB_SUCC(ret)) {
       const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(&session_);
       ObSMRow sm(protocol_type, *row, dtc_params,
-                         session_,
+                         session_,  
                          result.get_field_columns(),
                          ctx_.schema_guard_,
                          session_.get_effective_tenant_id());
@@ -373,12 +373,12 @@ int ObQueryDriver::convert_string_value_charset(ObObj& value, ObResultSet &resul
                                                 common::ObIAllocator *alloc)
 {
   int ret = OB_SUCCESS;
-  if (lib::is_oracle_mode()
-            && (value.is_nchar() || value.is_nvarchar2())
-            && nchar != CHARSET_INVALID
+  if (lib::is_oracle_mode() 
+            && (value.is_nchar() || value.is_nvarchar2()) 
+            && nchar != CHARSET_INVALID 
             && nchar != CHARSET_BINARY) {
     charset_type = nchar;
-  }
+  } 
   ObCollationType to_collation_type = ObCharset::get_default_collation(charset_type);
   ObIAllocator *allocator = alloc;
   ObCollationType from_collation_type = value.get_collation_type();
@@ -409,9 +409,9 @@ int ObQueryDriver::convert_lob_value_charset(common::ObObj& value, sql::ObResult
 {
   int ret = OB_SUCCESS;
 
-  if (lib::is_oracle_mode()
-            && (value.is_nchar() || value.is_nvarchar2())
-            && nchar != CHARSET_INVALID
+  if (lib::is_oracle_mode() 
+            && (value.is_nchar() || value.is_nvarchar2()) 
+            && nchar != CHARSET_INVALID 
             && nchar != CHARSET_BINARY) {
     charset_type = nchar;
   }
@@ -437,9 +437,9 @@ int ObQueryDriver::convert_text_value_charset(common::ObObj& value, sql::ObResul
   int ret = OB_SUCCESS;
 
   const ObSQLSessionInfo &my_session = result.get_session();
-  if (lib::is_oracle_mode()
-            && (value.is_nchar() || value.is_nvarchar2())
-            && nchar != CHARSET_INVALID
+  if (lib::is_oracle_mode() 
+            && (value.is_nchar() || value.is_nvarchar2()) 
+            && nchar != CHARSET_INVALID 
             && nchar != CHARSET_BINARY) {
     charset_type = nchar;
   }
@@ -692,7 +692,7 @@ int ObQueryDriver::process_lob_locator_results(ObObj& value, sql::ObResultSet &r
   } else if (OB_ISNULL(allocator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lob fake allocator is null.", K(ret), K(value));
-  } else if (OB_FAIL(process_lob_locator_results(value,
+  } else if (OB_FAIL(process_lob_locator_results(value, 
                                                  session_.is_client_use_lob_locator(),
                                                  session_.is_client_support_lob_locatorv2(),
                                                  allocator,
@@ -715,9 +715,9 @@ int ObQueryDriver::process_lob_locator_results(ObObj& value,
   // 2. if client is_use_lob_locator, but not support outrow lob, return lob locator with inrow data
   //    refer to sz/aibo1m
   // 3. if client does not support use_lob_locator ,,return full lob data without locator header
-  bool is_lob_type = value.is_lob() || value.is_lob_locator()
+  bool is_lob_type = value.is_lob() || value.is_lob_locator() 
                      || value.is_json() || value.is_geometry() || value.is_roaringbitmap() ;
-  bool is_actual_return_lob_locator = is_use_lob_locator && !value.is_json()
+  bool is_actual_return_lob_locator = is_use_lob_locator && !value.is_json() 
                                       && !value.is_geometry() && !value.is_roaringbitmap();
   if (!is_lob_type) {
     // not lob types, do nothing
@@ -894,7 +894,7 @@ int ObQueryDriver::convert_lob_value_charset(ObObj& value,
 }
 
 int ObQueryDriver::convert_text_value_charset(ObObj& value,
-                                              ObCharsetType charset_type,
+                                              ObCharsetType charset_type, 
                                               ObIAllocator &allocator,
                                               const sql::ObSQLSessionInfo *session,
                                               sql::ObExecContext *exec_ctx)
@@ -929,7 +929,7 @@ int ObQueryDriver::convert_text_value_charset(ObObj& value,
           is_actual_return_lob_locator && lib::is_oracle_mode()) {
         ObLobLocatorV2 lob;
         ObString inrow_data;
-        if (OB_FAIL(process_lob_locator_results(value,
+        if (OB_FAIL(process_lob_locator_results(value, 
                                                 session->is_client_use_lob_locator(),
                                                 session->is_client_support_lob_locatorv2(),
                                                 &allocator,
@@ -1008,7 +1008,7 @@ int ObQueryDriver::convert_text_value_charset(ObObj& value,
           } else if (OB_FAIL(loc.get_lob_data_byte_len(lob_data_byte_len))) {
             LOG_WARN("Lob: get lob data byte len failed", K(ret), K(loc));
           }
-        }
+        } 
         if (OB_SUCC(ret)) {
           // mock result buffer and reserve data length
           // could do streaming charset convert
@@ -1048,7 +1048,7 @@ int ObQueryDriver::convert_text_value_charset(ObObj& value,
 /*@brief:is_com_filed_list_match_wildcard_str 用于匹配client发过来的COM_FIELD_LIST中包含的参数中有匹配符
 * 情形,eg:COM_FIELD_LIST(t1, c*) , t1 中有c1,c2,pk 三列 ==> 仅返回c1, c2，不返回 pk，因为他和 c* 不匹配;
 * 其规则类似于like情形；详细参考链接：
-*
+* 
 */
 int ObQueryDriver::is_com_filed_list_match_wildcard_str(ObResultSet &result,
                                                         const ObCollationType &from_collation,

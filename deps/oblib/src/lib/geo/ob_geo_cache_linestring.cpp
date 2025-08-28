@@ -87,7 +87,7 @@ int ObCachedGeoLinestring::intersects(ObGeometry& geo, ObGeoEvalCtx& gis_context
         }
       }
     }
-  }
+  } 
   return ret;
 }
 

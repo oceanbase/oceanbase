@@ -258,8 +258,8 @@ int ObTableApiService::init_tablet_ids_array(ObTableCtx &ctx,
     ObTableApiSessGuard *sess_guard = nullptr;
     ObKvSchemaCacheGuard *kv_schema_guard = nullptr;
     share::schema::ObSchemaGetterGuard *schema_guard = nullptr;
-    if (OB_ISNULL(sess_guard = ctx.get_sess_guard()) ||
-        OB_ISNULL(kv_schema_guard = ctx.get_schema_cache_guard()) ||
+    if (OB_ISNULL(sess_guard = ctx.get_sess_guard()) || 
+        OB_ISNULL(kv_schema_guard = ctx.get_schema_cache_guard()) || 
         OB_ISNULL(schema_guard = ctx.get_schema_guard())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("sess and schema members of ctx is NULL", K(ret), KP(sess_guard),
@@ -276,7 +276,7 @@ int ObTableApiService::calc_tablet_ids(ObTableCtx &ctx,
                                       ObIArray<ObTabletID> *&tablet_ids)
 {
   int ret = OB_SUCCESS;
-  const ObSimpleTableSchemaV2 *simple_table_schema = !ctx.is_index_scan() ?
+  const ObSimpleTableSchemaV2 *simple_table_schema = !ctx.is_index_scan() ? 
                     ctx.get_simple_table_schema() : ctx.get_index_schema();
   if (OB_ISNULL(simple_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
@@ -291,8 +291,8 @@ int ObTableApiService::calc_tablet_ids(ObTableCtx &ctx,
         clip_type = ObTablePartClipType::HOT_ONLY;
       }
       ObTablePartCalculator part_calc(ctx.get_allocator(),
-                                      *ctx.get_sess_guard(),
-                                      *ctx.get_schema_cache_guard(),
+                                      *ctx.get_sess_guard(), 
+                                      *ctx.get_schema_cache_guard(), 
                                       *ctx.get_schema_guard(),
                                       clip_type);
       if (OB_FAIL(part_calc.calc(ctx.get_index_table_id(), ranges, *tablet_ids))) {
@@ -330,8 +330,8 @@ int ObTableApiService::check_batch_args(ObTableCtx &ctx,
       LOG_WARN("fail to init tablet ids array", K(ret));
     } else {
       ObTablePartCalculator part_calc(ctx.get_allocator(),
-                                      *ctx.get_sess_guard(),
-                                      *ctx.get_schema_cache_guard(),
+                                      *ctx.get_sess_guard(), 
+                                      *ctx.get_schema_cache_guard(), 
                                       *ctx.get_schema_guard());
       if (OB_FAIL(part_calc.calc(ctx.get_table_id(), entities, *tmp_tablet_ids))) {
         LOG_WARN("fail to calc tablet_ids", K(ret), K(ctx.get_table_id()));
@@ -344,7 +344,7 @@ int ObTableApiService::check_batch_args(ObTableCtx &ctx,
   return ret;
 }
 
-bool ObTableApiService::need_calc_tablet_id(const common::ObIArray<ObTabletID> *tablet_ids,
+bool ObTableApiService::need_calc_tablet_id(const common::ObIArray<ObTabletID> *tablet_ids, 
                                             const common::ObIArray<ObITableEntity *> &entities)
 {
   bool bret = false;
@@ -398,11 +398,11 @@ int ObTableApiService::adjust_entities(ObTableCtx &ctx, const common::ObIArray<O
   return ret;
 }
 
-bool ObTableApiService::is_same_plan(ObTableOperationType::Type op_type,
+bool ObTableApiService::is_same_plan(ObTableOperationType::Type op_type, 
                                     ObITableEntity &src_i_entity, ObITableEntity &dest_i_entity)
 {
   bool bret = true;
-  if (op_type == ObTableOperationType::Type::UPDATE ||
+  if (op_type == ObTableOperationType::Type::UPDATE || 
       op_type == ObTableOperationType::Type::INSERT_OR_UPDATE) {
     ObTableEntity &src_entity = static_cast<ObTableEntity &>(src_i_entity);
     ObTableEntity &dst_entity = static_cast<ObTableEntity &>(dest_i_entity);
@@ -465,10 +465,10 @@ int ObTableApiService::process_dml_result(ObTableCtx &ctx, ObTableApiExecutor &e
   return ret;
 }
 
-int ObTableApiService::construct_entities_from_row(ObIAllocator &allocator,
+int ObTableApiService::construct_entities_from_row(ObIAllocator &allocator, 
                                                    ObKvSchemaCacheGuard &schema_cache_guard,
                                                    ObNewRow &row,
-                                                   const ObIArray<ObITableEntity*> &entities,
+                                                   const ObIArray<ObITableEntity*> &entities, 
                                                    ObIArray<ObTableOperationResult> &results)
 {
   int ret = OB_SUCCESS;
@@ -493,7 +493,7 @@ int ObTableApiService::construct_entities_from_row(ObIAllocator &allocator,
       LOG_WARN("fail to push back rowkey idx", K(ret), K(rowkey_column_ids[i]));
     }
   }
-
+  
   if (OB_SUCC(ret)) {
     ObSEArray<int64_t, 4> indexs;
     if (OB_FAIL(get_result_index(row, entities, rowkey_idxs, rowkey_cells, indexs))) {
@@ -530,7 +530,7 @@ int ObTableApiService::generate_scan_ranges_by_entities(const uint64_t table_id,
                                                         ObIArray<common::ObNewRange> &ranges)
 {
   int ret = OB_SUCCESS;
-
+  
   for (int64_t i = 0; OB_SUCC(ret) && i < entities.count(); ++i) {
     ObITableEntity *entity = entities.at(i);
     if (OB_ISNULL(entity)) {
@@ -546,13 +546,13 @@ int ObTableApiService::generate_scan_ranges_by_entities(const uint64_t table_id,
       }
     }
   }
-
+  
   return ret;
 }
 
 
 int ObTableApiService::get_result_index(const ObNewRow &row,
-                                        const ObIArray<ObITableEntity*> &entities,
+                                        const ObIArray<ObITableEntity*> &entities, 
                                         const ObIArray<uint64_t> &rowkey_ids,
                                         ObObj *rowkey_cells,
                                         ObIArray<int64_t> &indexs)
@@ -562,7 +562,7 @@ int ObTableApiService::get_result_index(const ObNewRow &row,
   for (int64_t pos = 0; pos < rowkey_ids.count(); ++pos) {
     rowkey_cells[pos] = row.get_cell(rowkey_ids.at(pos));
   }
-
+  
   ObRowkey row_rowkey(rowkey_cells, rowkey_ids.count());
   for (int64_t i = 0; i < entities.count() && OB_SUCC(ret); i++) {
     const ObITableEntity *entity = entities.at(i);
@@ -670,7 +670,7 @@ int ObTableApiRowIterator::init_audit_helper_if_need(ObTableCtx &ctx)
                                                                            ctx.get_table_name(),
                                                                            *ctx.get_sess_guard(),
                                                                            ctx.get_audit_ctx());
-          get_audit_helper_->start_audit();
+          get_audit_helper_->start_audit();                                                              
         }
       } else { // multi get
         stmt_type_ = StmtType::T_KV_MULTI_GET;

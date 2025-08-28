@@ -18,8 +18,8 @@
 #include "test_xml_utils.h"
 #include "libxml2/libxml/xmlmemory.h"
 #include "libxml2/libxml/parser.h"
-#undef private
-
+#undef private  
+ 
 namespace oceanbase {
 namespace common {
 
@@ -55,10 +55,10 @@ namespace ObXmlTestMemoryUsage {
 //   ObXmlTestArenaAllocator(const lib::ObLabel &label): ObArenaAllocator(label) {}
 //   virtual ~ObXmlTestArenaAllocator() {}
 
-//   virtual void *alloc(const int64_t sz) {
+//   virtual void *alloc(const int64_t sz) { 
 //     if (sz > 600)
 //       std::cout << "alloc size " << sz << std::endl;
-//     return arena_.alloc_aligned(sz);
+//     return arena_.alloc_aligned(sz); 
 //   }
 // };
 
@@ -372,7 +372,7 @@ TEST_F(TestXmlParser, test_predefined_entity_ref)
   "<amp>&amp;</amp>"
   "<apos>&apos;</apos>"
   "<quot>&quot;</quot>"
-  "</note>\n"
+  "</note>\n"    
   );
   ObArenaAllocator allocator(ObModIds::TEST);
   ObXmlDocument* doc = nullptr;
@@ -410,7 +410,7 @@ TEST_F(TestXmlParser, test_predefined_entity_ref_with_blank)
   "<amp>&amp;</amp>\n"
   "<apos>&apos;</apos>\n"
   "<quot>&quot;</quot>\n"
-  "</note>\n"
+  "</note>\n"    
   );
   ObArenaAllocator allocator(ObModIds::TEST);
   ObXmlDocument* doc = nullptr;
@@ -441,7 +441,7 @@ TEST_F(TestXmlParser, test_char_entity_ref)
   "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
   "<note>"
   "<lt>&#x0d;</lt>"
-  "</note>\n"
+  "</note>\n"    
   );
   ObArenaAllocator allocator(ObModIds::TEST);
   ObXmlDocument* doc = nullptr;
@@ -470,7 +470,7 @@ TEST_F(TestXmlParser, test_char_entity_ref_with_blank)
   "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
   "<note>\n"
   "<lt>&#x0d;</lt>\n"
-  "</note>\n"
+  "</note>\n"    
   );
   ObArenaAllocator allocator(ObModIds::TEST);
   ObXmlDocument* doc = nullptr;
@@ -1343,20 +1343,20 @@ TEST_F(TestXmlParser, test_parse_content_with_ns_attr)
   int ret = 0;
   common::ObString xml_text(
   "<BOOKS>"
-  "<bk:BOOK xmlns:bk=\"urn:example.microsoft.com:BookInfo\" "
-  "xmlns:money=\"urn:Finance:Money\">\n"
+  "<bk:BOOK xmlns:bk=\"urn:example.microsoft.com:BookInfo\" " 
+  "xmlns:money=\"urn:Finance:Money\">\n" 
   "  <bk:TITLE>Creepy Crawlies</bk:TITLE>\n"
   "  <bk:PRICE money:currency=\"US Dollar\">22.95</bk:PRICE>\n"
-  "</bk:BOOK>\n"
+  "</bk:BOOK>\n" 
   "</BOOKS>\n"
   );
   common::ObString serialize_text(
   "<BOOKS>"
-  "<bk:BOOK xmlns:bk=\"urn:example.microsoft.com:BookInfo\" "
-  "xmlns:money=\"urn:Finance:Money\">"
+  "<bk:BOOK xmlns:bk=\"urn:example.microsoft.com:BookInfo\" " 
+  "xmlns:money=\"urn:Finance:Money\">" 
   "<bk:TITLE>Creepy Crawlies</bk:TITLE>"
   "<bk:PRICE money:currency=\"US Dollar\">22.95</bk:PRICE>"
-  "</bk:BOOK>"
+  "</bk:BOOK>" 
   "</BOOKS>"
   );
 
@@ -1377,11 +1377,11 @@ TEST_F(TestXmlParser, test_parse_content_with_ns_attr_with_blank)
   int ret = 0;
   common::ObString xml_text(
   "<BOOKS>"
-  "<bk:BOOK xmlns:bk=\"urn:example.microsoft.com:BookInfo\" "
-  "xmlns:money=\"urn:Finance:Money\">\n"
+  "<bk:BOOK xmlns:bk=\"urn:example.microsoft.com:BookInfo\" " 
+  "xmlns:money=\"urn:Finance:Money\">\n" 
   "  <bk:TITLE>Creepy Crawlies</bk:TITLE>\n"
   "  <bk:PRICE money:currency=\"US Dollar\">22.95</bk:PRICE>\n"
-  "</bk:BOOK>\n"
+  "</bk:BOOK>\n" 
   "</BOOKS>\n"
   );
   ObArenaAllocator allocator(ObModIds::TEST);
@@ -1692,7 +1692,7 @@ TEST_F(TestXmlParser, test_version_is_2_0)
   ObArenaAllocator allocator(ObModIds::TEST);
   ObXmlDocument* doc = nullptr;
   ObMulModeMemCtx* ctx = nullptr;
-  ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
+  ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);  
   ret = ObXmlParserUtils::parse_document_text(ctx, xml_text, doc);
   ASSERT_EQ(OB_ERR_PARSER_SYNTAX, ret);
 }
@@ -2312,7 +2312,7 @@ TEST_F(TestXmlParser, test_ns_multi)
   "</other>"
   "<n2:country xmlns:n4=\"n4.xsd\">"
   "<n4:addr>shenzhen</n4:addr>"
-  "</n2:country>"
+  "</n2:country>"  
   "</n1:a>"
   );
 
@@ -2326,7 +2326,7 @@ TEST_F(TestXmlParser, test_ns_multi)
   "</other>"
   "<n2:country xmlns:n4=\"n4.xsd\">"
   "<n4:addr>shenzhen</n4:addr>"
-  "</n2:country>"
+  "</n2:country>"  
   "</n1:a>\n"
   );
 
@@ -2656,7 +2656,7 @@ TEST_F(TestXmlParser, test_mem_usage)
   std::cout << "ObLibTreeNodeVector " << sizeof(ObLibTreeNodeVector) << std::endl;
   std::cout << "LibTreeModuleArena " << sizeof(LibTreeModuleArena) << std::endl;
   std::cout << "ModulePageAllocator " << sizeof(ModulePageAllocator) << std::endl;
-
+  
   std::cout << "ObXmlNode " << sizeof(ObXmlNode) << std::endl;
   std::cout << "ObXmlDocument " << sizeof(ObXmlDocument) << std::endl;
   std::cout << "ObXmlElement " << sizeof(ObXmlElement) << std::endl;

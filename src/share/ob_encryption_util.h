@@ -59,7 +59,7 @@ enum ObCipherOpMode {
   ob_aes_128_ofb = 16,
   ob_aes_192_ofb = 17,
   ob_aes_256_ofb = 18,
-  ob_sm4_mode = 19,     // old sm4_ctr using NULL as IV which is wrong, should not be used
+  ob_sm4_mode = 19,     // old sm4_ctr using NULL as IV which is wrong, should not be used 
   ob_sm4_cbc_mode = 20, // sm4_cbc, use NULL as IV
   ob_aes_128_gcm = 21,
   ob_aes_192_gcm = 22,
@@ -291,7 +291,7 @@ public:
     OB_MAX_ENGINE
   };
   static ObTdeEncryptEngineLoader &get_instance();
-  ObTdeEncryptEngineLoader() {
+  ObTdeEncryptEngineLoader() { 
     ssl_init();
     MEMSET(tde_engine_, 0, sizeof(ENGINE*)*OB_MAX_ENGINE);
   }

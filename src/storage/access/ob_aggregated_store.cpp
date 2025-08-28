@@ -165,7 +165,7 @@ int ObAggRow::init(const ObTableAccessParam &param, const ObTableAccessContext &
         int32_t col_index = param.iter_param_.read_info_->get_columns_index().at(col_offset);
         const share::schema::ObColumnParam *col_param = out_cols_param->at(col_offset);
         sql::ObExpr *expr = param.output_exprs_->at(i);
-        ObAggCellBasicInfo basic_info(col_offset, col_index, col_param, expr,
+        ObAggCellBasicInfo basic_info(col_offset, col_index, col_param, expr, 
                                       batch_size, is_pad_char_to_full_length(context.sql_mode_));
         if (OB_FAIL(agg_cell_factory_.alloc_cell(basic_info, dummy_agg_cells_))) {
           LOG_WARN("Failed to alloc agg cell", K(ret), K(i));
@@ -199,7 +199,7 @@ int ObAggRow::init(const ObTableAccessParam &param, const ObTableAccessContext &
         } else {
           need_access_data_ = true;
         }
-        ObAggCellBasicInfo basic_info(col_offset, col_index, col_param, agg_expr,
+        ObAggCellBasicInfo basic_info(col_offset, col_index, col_param, agg_expr, 
                                       batch_size, is_pad_char_to_full_length(context.sql_mode_));
         if (OB_FAIL(agg_cell_factory_.alloc_cell(basic_info, agg_cells_, exclude_null))) {
           LOG_WARN("Failed to alloc agg cell", K(ret), K(i));

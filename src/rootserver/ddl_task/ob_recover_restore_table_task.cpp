@@ -32,7 +32,7 @@ ObRecoverRestoreTableTask::~ObRecoverRestoreTableTask()
 }
 
 int ObRecoverRestoreTableTask::init(
-    const ObTableSchema* src_table_schema, const ObTableSchema* dst_table_schema,
+    const ObTableSchema* src_table_schema, const ObTableSchema* dst_table_schema, 
     const int64_t task_id, const share::ObDDLType &ddl_type, const int64_t parallelism,
     const int64_t consumer_group_id, const int32_t sub_task_trace_id,
     const obrpc::ObAlterTableArg &alter_table_arg, const uint64_t tenant_data_version, const int64_t task_status, const int64_t snapshot_version)
@@ -177,7 +177,7 @@ int ObRecoverRestoreTableTask::fail()
   int ret = OB_SUCCESS;
   ObArenaAllocator tmp_arena("RestoreDDLClean");
   bool already_cleanuped = false;
-
+  
   int64_t rpc_timeout = 0;
   obrpc::ObTableItem table_item;
   obrpc::ObDropTableArg drop_table_arg;
@@ -271,7 +271,7 @@ int ObRecoverRestoreTableTask::check_health()
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(ObDDLUtil::check_tenant_status_normal(GCTX.sql_proxy_, tenant_id_))) {
-    // switch to build failed if the source tenant is been dropped,
+    // switch to build failed if the source tenant is been dropped, 
     // in order to remove the destination tenant's persistent task record.
     if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
       const ObDDLTaskStatus old_status = static_cast<ObDDLTaskStatus>(task_status_);

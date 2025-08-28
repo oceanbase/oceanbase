@@ -70,7 +70,7 @@ public:
   void stop();
   void wait();
   void destroy();
-
+  
 private:
   int inner_switch_to_leader();
   int inner_switch_to_follower();

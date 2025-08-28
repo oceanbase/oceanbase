@@ -297,7 +297,7 @@ int ObDropLobTask::check_switch_succ_()
     // lob_meta_table and lob_piece_table will be deleted at same time.
     task_status_ = ObDDLTaskStatus::SUCCESS;
     LOG_INFO("lob has been dropped", KR(ret), KPC(this), KPC(data_table_schema_ptr));
-  }
+  } 
   return ret;
 }
 

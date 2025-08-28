@@ -116,7 +116,7 @@ int ObTableGroupCommitEndTransCb::response_failed_results(int ret_code)
   if (OB_ISNULL(group_factory_) || OB_ISNULL(op_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("factory is NULL", KP(group_factory_), KP(op_factory_));
-  } else if (OB_FAIL(ObTableGroupExecuteService::response_failed_results(ret_code,
+  } else if (OB_FAIL(ObTableGroupExecuteService::response_failed_results(ret_code, 
                                                                          group_,
                                                                          *group_factory_,
                                                                          *op_factory_))) {
@@ -140,11 +140,11 @@ void ObTableGroupCommitEndTransCb::callback(int cb_param)
     tx_desc_ = NULL;
   }
   if (lock_handle_ != nullptr) {
-    HTABLE_LOCK_MGR->release_handle(*lock_handle_);
+    HTABLE_LOCK_MGR->release_handle(*lock_handle_); 
   }
   this->handin();
   CHECK_BALANCE("[table group commit async callback]");
-
+  
   if (OB_FAIL(cb_param)) {
     if (add_failed_group_) {
       // move group to failed_groups if execute failed.
@@ -254,7 +254,7 @@ int ObTableOpProcessor::process()
     if (OB_FAIL(execute_dml())) {
       LOG_WARN("fail to execute dml group", K(ret));
     }
-  }
+  }  
   return ret;
 }
 
@@ -329,8 +329,8 @@ int ObTableOpProcessor::execute_read()
   return ret;
 }
 
-int ObTableOpProcessor::init_batch_params(ObTableBatchCtx &batch_ctx,
-                                          ObIArray<ObTableOperation> &batch_ops,
+int ObTableOpProcessor::init_batch_params(ObTableBatchCtx &batch_ctx, 
+                                          ObIArray<ObTableOperation> &batch_ops, 
                                           ObIArray<ObTableOperationResult> &batch_result)
 {
   int ret = OB_SUCCESS;
@@ -389,7 +389,7 @@ int ObTableOpProcessor::init_table_ctx(ObTableBatchCtx &batch_ctx)
     tb_ctx.set_schema_cache_guard(group_ctx_->schema_cache_guard_);
     tb_ctx.set_schema_guard(group_ctx_->schema_guard_);
     tb_ctx.set_simple_table_schema(group_ctx_->simple_schema_);
-    tb_ctx.set_sess_guard(group_ctx_->sess_guard_);
+    tb_ctx.set_sess_guard(group_ctx_->sess_guard_);     
   }
 
   if (OB_FAIL(ret)) {
@@ -397,7 +397,7 @@ int ObTableOpProcessor::init_table_ctx(ObTableBatchCtx &batch_ctx)
   } else if (OB_FAIL(tb_ctx.init_common(*batch_ctx.credential_,
                                         single_op->tablet_id(),
                                         group_ctx_->timeout_ts_))) {
-    LOG_WARN("fail to init table tb_ctx common part", K(ret),
+    LOG_WARN("fail to init table tb_ctx common part", K(ret), 
               KPC(batch_ctx.credential_), K(group_ctx_->timeout_ts_));
   } else {
     switch (op_type) {
@@ -483,7 +483,7 @@ int ObTableGroupExecuteService::start_trans(ObTableBatchCtx &batch_ctx)
   int ret = OB_SUCCESS;
   ObTableCtx &tb_ctx = batch_ctx.tb_ctx_;
   ObTableTransParam *trans_param = batch_ctx.trans_param_;
-  int64_t timeout_ts = tb_ctx.get_timeout_ts();
+  int64_t timeout_ts = tb_ctx.get_timeout_ts();  
   bool need_global_snapshot = tb_ctx.need_dist_das();
   if (timeout_ts - ObClockGenerator::getClock() < 0) {
     timeout_ts = ObClockGenerator::getClock() + DEFAULT_TRANS_TIMEOUT;
@@ -498,7 +498,7 @@ int ObTableGroupExecuteService::start_trans(ObTableBatchCtx &batch_ctx)
                                        timeout_ts,
                                        need_global_snapshot))) {
     LOG_WARN("fail to init trans param", K(ret), K(batch_ctx));
-  } else if (batch_ctx.is_readonly_) {
+  } else if (batch_ctx.is_readonly_) {                        
     if (OB_FAIL(ObTableTransUtils::init_read_trans(*trans_param))) {
       LOG_WARN("fail to init read trans", K(ret), KPC(trans_param));
     }
@@ -539,7 +539,7 @@ int ObTableGroupExecuteService::end_trans(const ObTableBatchCtx &batch_ctx,
   return ret;
 }
 
-int ObTableGroupExecuteService::response(ObTableGroup &group,
+int ObTableGroupExecuteService::response(ObTableGroup &group,                      
                                          ObTableGroupFactory<ObTableGroup> &group_factory,
                                          ObTableGroupOpFactory &op_factory)
 {
@@ -605,7 +605,7 @@ int ObTableGroupExecuteService::response(ObTableGroup &group,
   return ret;
 }
 
-int ObTableGroupExecuteService::response_failed_results(int ret_code,
+int ObTableGroupExecuteService::response_failed_results(int ret_code,  
                                                         ObTableGroup &group,
                                                         ObTableGroupFactory<ObTableGroup> &group_factory,
                                                         ObTableGroupOpFactory &op_factory)
@@ -632,9 +632,9 @@ int ObTableGroupExecuteService::response_failed_results(int ret_code,
   return ret;
 }
 
-int ObTableGroupExecuteService::process_result(int ret_code,
+int ObTableGroupExecuteService::process_result(int ret_code, 
                                                ObTableGroup &group,
-                                               bool is_direct_execute,
+                                               bool is_direct_execute, 
                                                bool add_failed_group)
 {
   int ret = OB_SUCCESS;
@@ -666,7 +666,7 @@ int ObTableGroupExecuteService::process_result(int ret_code,
           LOG_WARN("fail to response fail result", K(ret), K(ret_code));
         }
       }
-    }
+    } 
   }
   return ret;
 }
@@ -693,7 +693,7 @@ int ObTableGroupExecuteService::execute(ObTableGroup &group, bool add_fail_group
   } else {
     ObTableGroupFactory<ObTableGroup> &group_factory = TABLEAPI_GROUP_COMMIT_MGR->get_group_factory();
     ObTableFailedGroups &failed_groups = TABLEAPI_GROUP_COMMIT_MGR->get_failed_groups();
-    ObTableGroupOpFactory &op_factory = TABLEAPI_GROUP_COMMIT_MGR->get_op_factory();
+    ObTableGroupOpFactory &op_factory = TABLEAPI_GROUP_COMMIT_MGR->get_op_factory();    
     ObTableGroupCommitCreateCbFunctor functor;
     group_ctx.group_type_ = group.group_meta_.type_;
     group_ctx.type_ = group.group_meta_.op_type_;
@@ -718,7 +718,7 @@ int ObTableGroupExecuteService::execute(ObTableGroup &group, bool add_fail_group
       LOG_WARN("fail to init op processor", K(ret));
     } else if (OB_FAIL(op_processor->process())) {
       LOG_WARN("fail to process op", K(ret));
-    }
+    } 
   }
 
   // clear thread local variables used to wait in queue
@@ -732,16 +732,17 @@ int ObTableGroupExecuteService::execute(ObTableGroup &group, bool add_fail_group
                                                               add_fail_group))) {
     LOG_WARN("fail to process result", K(ret), K(tmp_ret));
   } else {
-    LOG_DEBUG("[group commit debug] process result", K(ret), K(tmp_ret),
+    LOG_DEBUG("[group commit debug] process result", K(ret), K(tmp_ret), 
                   KPC(group_ctx.trans_param_), K(add_fail_group), K(group_ctx));
   }
   if (OB_NOT_NULL(op_processor)) {
     op_processor->~ObITableOpProcessor();
     op_processor = nullptr;
-  }
+  } 
   LOG_DEBUG("[group commit debug] execute batch", K(ret), KPC(group_ctx.trans_param_), K(add_fail_group), K(group_ctx));
   return ret;
 }
 
 } // end namespace table
 } // end namespace oceanbase
+

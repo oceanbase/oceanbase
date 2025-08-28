@@ -367,14 +367,14 @@ private:
   int recursive_check_auto_gen_column_names(ObSelectStmt *select_stmt, bool in_outer_stmt);
   int recursive_update_column_name(ObSelectStmt *select_stmt, ObRawExpr *expr);
   int check_listagg_aggr_param_valid(ObAggFunRawExpr *aggr_expr);
-
+  
   int add_alias_from_dot_notation(ObRawExpr *sel_expr, SelectItem& select_item);
 
   int check_and_mark_aggr_in_having_scope(ObSelectStmt *select_stmt);
   int mark_aggr_in_order_by_scope(ObSelectStmt *select_stmt);
   int check_aggr_in_select_scope(ObSelectStmt *select_stmt);
   int mark_aggr_in_select_scope(ObSelectStmt *select_stmt);
-
+  
   int check_audit_log_stmt(ObSelectStmt *select_stmt);
   int try_resolve_values_table_from_union(const ParseNode &parse_node, bool &resolve_happened);
   int check_union_to_values_table_valid(const ParseNode &parse_node,
@@ -389,26 +389,26 @@ private:
   int get_sensitive_rules(ObSelectStmt *select_stmt,
                           ObRawExpr *expr,
                           ObIArray<const ObSensitiveRuleSchema *> &sensitive_rules);
-  int get_sensitive_rules_in_column_ref_exprs(ObSelectStmt *select_stmt,
-                                              ObRawExpr *expr,
+  int get_sensitive_rules_in_column_ref_exprs(ObSelectStmt *select_stmt, 
+                                              ObRawExpr *expr, 
                                               ObIArray<const ObSensitiveRuleSchema *> &sensitive_rules);
-  int get_sensitive_rules_in_query_ref_exprs(ObSelectStmt *select_stmt,
-                                             ObRawExpr *expr,
+  int get_sensitive_rules_in_query_ref_exprs(ObSelectStmt *select_stmt, 
+                                             ObRawExpr *expr, 
                                              ObIArray<const ObSensitiveRuleSchema *> &sensitive_rules);
   int get_sensitive_rules_in_ref_query(ObSelectStmt *ref_query,
                                        ObRawExpr *outer_column_expr,
                                        ObIArray<const ObSensitiveRuleSchema *> &sensitive_rules);
   int get_sensitive_rules_in_cte_generated_col(ObSelectStmt *select_stmt,
-                                               ObColumnRefRawExpr *fake_cte_col_expr,
+                                               ObColumnRefRawExpr *fake_cte_col_expr, 
                                                ObIArray<const ObSensitiveRuleSchema *> &sensitive_rules);
   int get_real_cte_column_expr(ObColumnRefRawExpr *fake_cte_col_expr,
                                TableItem *fake_cte_table_item,
                                ObSelectStmt *select_stmt,
                                ObColumnRefRawExpr *&real_cte_col_expr,
                                ObSelectStmt *&real_cte_stmt);
-  int try_add_sensitive_field_expr(SelectItem &select_item,
+  int try_add_sensitive_field_expr(SelectItem &select_item, 
                                    ObIArray<const ObSensitiveRuleSchema *> &sensitive_rules);
-  int add_sensitive_field_expr(SelectItem &select_item,
+  int add_sensitive_field_expr(SelectItem &select_item, 
                                const ObSensitiveRuleSchema &sensitive_rule,
                                ObSysFunRawExpr *&sensitive_field_expr);
   bool is_child_resolver_of_dml();

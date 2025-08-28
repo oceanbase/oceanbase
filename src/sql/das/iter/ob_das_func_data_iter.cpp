@@ -207,11 +207,11 @@ int ObDASFuncDataIter::inner_release()
   }
   if (OB_NOT_NULL(main_lookup_iter_)) {
     main_lookup_iter_ = nullptr;
-  }
+  } 
   for (int64_t i = 0; i < iter_count_; i++) {
     if (OB_NOT_NULL(tr_merge_iters_[i])) {
       tr_merge_iters_[i] = nullptr;
-    }
+    } 
   }
   doc_ids_.reset();
   main_lookup_param_.destroy_schema_guard();
@@ -238,7 +238,7 @@ int ObDASFuncDataIter::inner_get_next_row()
     } else {
       ret = OB_SUCCESS;
     }
-  }
+  } 
 
   for (int64_t i = 0; OB_SUCC(ret) && i < iter_count_; i++) {
     if (OB_FAIL(tr_merge_iters_[i]->get_next_row())) {

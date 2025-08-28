@@ -291,8 +291,8 @@ int ObTenantMetaMemMgr::fetch_tenant_config()
 }
 
 int ObTenantMetaMemMgr::check_allow_tablet_gc(
-    const ObTabletID &tablet_id,
-    const int64_t transfer_seq,
+    const ObTabletID &tablet_id, 
+    const int64_t transfer_seq, 
     bool &allow)
 {
   int ret = OB_SUCCESS;
@@ -1759,7 +1759,7 @@ int ObTenantMetaMemMgr::get_tablet_with_allocator(
   } else if (OB_UNLIKELY(!handle.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet is null", K(ret), K(key), K(handle));
-  }
+  } 
 
   // get_meta_obj success or not set handle is disallow_copy_and_assign
   handle.set_wash_priority(priority);
@@ -1773,9 +1773,9 @@ int ObTenantMetaMemMgr::get_tablet_with_allocator(
 }
 
 int ObTenantMetaMemMgr::get_current_version_for_tablet(
-    const share::ObLSID &ls_id,
-    const ObTabletID &tablet_id,
-    int64_t &tablet_version,
+    const share::ObLSID &ls_id, 
+    const ObTabletID &tablet_id, 
+    int64_t &tablet_version, 
     int64_t &tablet_transfer_seq,
     bool &allow_tablet_version_gc)
 {
@@ -1789,7 +1789,7 @@ int ObTenantMetaMemMgr::get_current_version_for_tablet(
     LOG_WARN("invalid argument", K(ret), K(key));
   } else {
     ObBucketHashRLockGuard lock_guard(bucket_lock_, key.hash());
-    ObTabletPointer *tablet_ptr = nullptr;
+    ObTabletPointer *tablet_ptr = nullptr; 
     ObTabletPointerHandle ptr_handle(tablet_map_);
     ObTabletHandle tablet_handle;
     if (OB_FAIL(tablet_map_.get(key, ptr_handle))) {
@@ -2394,7 +2394,7 @@ int ObTenantMetaMemMgr::check_all_meta_mem_released(bool &is_released, const cha
     LOG_INFO("check all meta mem in t3m", K(module), K(is_released), K(memtable_cnt), K(ddl_kv_cnt),
         K(tablet_cnt), K(large_tablet_cnt), K(ddl_kv_mgr_cnt), K(tx_data_memtable_cnt_),
         K(tx_ctx_memtable_cnt_), K(lock_memtable_cnt_), K(full_tablet_cnt),
-        K(wait_gc_tablets_cnt), K(wait_gc_tables_cnt), K(tablet_cnt_in_map), K(external_tablet_cnt),
+        K(wait_gc_tablets_cnt), K(wait_gc_tables_cnt), K(tablet_cnt_in_map), K(external_tablet_cnt), 
         K(flying_tablet_pointer_cnt));
   }
   return ret;

@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 
 #define USING_LOG_PREFIX SERVER
 
@@ -117,7 +117,7 @@ namespace sql
     char *buf = NULL;
     int size = 0;
     FLTQueryInfo query_info;
-
+  
     // reserver memory for control info
     // if sys config in control info and sys parameter has modified, resend this control info.
     if (sess.get_control_info().is_valid_sys_config()
@@ -125,18 +125,18 @@ namespace sql
           && (sess.get_control_info().slow_query_thres_ == GCONF.trace_log_slow_query_watermark))) {
       sess.set_send_control_info(false);
     }
-
+  
     if (!sess.is_send_control_info()) {
       size += sess.get_control_info().get_serialize_size();
     }
-
+  
     // reserver memmory for query info
     if (sess.is_trace_enable()) {
       query_info.query_start_time_ = sess.get_query_start_time();
       query_info.query_end_time_ = ::oceanbase::common::ObTimeUtility::current_time();
       size += query_info.get_serialize_size();
     }
-
+  
     if (size == 0){
       // has not flt extra info, do nothing
     } else if (OB_UNLIKELY(size < 0)) {
@@ -157,14 +157,14 @@ namespace sql
         con.slow_query_thres_ = GCONF.trace_log_slow_query_watermark;
         con.show_trace_enable_ = sess.is_use_trace_log();
         sess.set_flt_control_info(con);
-
+  
         if (OB_FAIL(con.serialize(buf, size, pos))) {
           LOG_WARN("failed to serialize control info", K(pos), K(size));
         } else {
           sess.set_send_control_info(true);
         }
       }
-
+  
       // assamble query info
       if (OB_FAIL(ret)) {
         // do nothing
@@ -176,7 +176,7 @@ namespace sql
         }
       }
     }
-
+  
     // set session info to extra info
     if (OB_FAIL(ret)) {
       // do nothing
@@ -210,7 +210,7 @@ namespace sql
     }
     return ret;
   }
-
+  
   int ObFLTUtils::process_flt_extra_info(const char *buf,
                     const int64_t len, sql::ObSQLSessionInfo &sess)
   {
@@ -239,9 +239,9 @@ namespace sql
             }
             break;
           }
-
-          // for proxy types:
-
+  
+          // for proxy types: 
+  
           // for public types:
           case FLT_TYPE_APP_INFO: {
             // do nothing
@@ -260,7 +260,7 @@ namespace sql
                             .set_client_info(&sess, app_info.trace_client_info_))) {
                 LOG_WARN("failed to set client info name", K(ret));
               }
-
+  
               if (OB_FAIL(ret)) {
                 // do nothing
               } else if (OB_FAIL(init_app_info(sess, app_info))) {
@@ -312,7 +312,7 @@ namespace sql
                 sess.set_last_flt_span_id(empty_str);
                 ObSEArray<ObFLTSpanData, 4> rec_list;
 
-                LOG_TRACE("rec show trace drv span",
+                LOG_TRACE("rec show trace drv span", 
                           K(ObString(trace.show_trace_drv_span_.length(), trace.show_trace_drv_span_.ptr())),
                           KPHEX(trace.show_trace_drv_span_.ptr(), trace.show_trace_drv_span_.length()));
 
@@ -339,7 +339,7 @@ namespace sql
     } // while ends
     return ret;
   }
-
+  
   int ObFLTUtils::init_flt_log_framework(sql::ObSQLSessionInfo &sess, bool is_client_support_flt)
   {
     // initialize log framework
@@ -428,12 +428,12 @@ namespace sql
       FLT_SET_TRACE_LEVEL(sess.get_control_info().level_);
       FLT_SET_AUTO_FLUSH(sess.is_auto_flush_trace() || sess.is_use_trace_log());
     }
-
+  
     LOG_TRACE("flt init log", K(sess.is_trace_enable()),
                   K(sess.is_auto_flush_trace()), K(sess.get_control_info()));
     return ret;
   }
-
+  
   int ObFLTUtils::update_flush_policy_by_control_info(sql::ObSQLSessionInfo &sess)
   {
     int ret = OB_SUCCESS;
@@ -448,7 +448,7 @@ namespace sql
       } else {
         sess.set_trace_enable(false);
       }
-
+  
       // init flush trace
       if (con.rp_ == FLTControlInfo::RecordPolicy::RP_ALL) {
         if (sess.is_trace_enable()) {
@@ -650,7 +650,7 @@ namespace sql
     }
     return ret;
   }
-
+ 
   int ObFLTUtils::set_json_bool_val(ObString key, ObIJsonBase *jobject_ptr, int64_t& val) {
     int ret = OB_SUCCESS;
     ObIJsonBase *jbool_ptr = NULL;
@@ -671,7 +671,7 @@ namespace sql
   int handle_span_record(ObFLTSpanMgr *flt_span_manager, char* tag_buf, int64_t tag_len, ::oceanbase::trace::ObSpanCtx* span)
   {
     int ret = OB_SUCCESS;
-
+  
     if (OB_ISNULL(flt_span_manager)) {
       // failed to get flt span manager, maybe tenant has been dropped, NOT NEED TO record;
     } else if (!OBTRACE->is_enable_show_trace()) {
@@ -683,7 +683,7 @@ namespace sql
       char *buf = NULL;
       int64_t pos = 0;
       int64_t org_pos = 0;
-
+  
       if (NULL == (buf = (char*)allocator.alloc(len))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           if (REACH_TIME_INTERVAL(100 * 1000)) {
@@ -698,7 +698,7 @@ namespace sql
         } else {
           data.trace_id_.assign(buf+org_pos, pos - org_pos);
         }
-
+  
         // span id
         org_pos = pos;
         if (OB_FAIL(ret)) {
@@ -707,11 +707,11 @@ namespace sql
         } else {
           data.span_id_.assign(buf+org_pos, pos - org_pos);
         }
-
+  
         // span name
         data.span_name_.assign(const_cast<char *>(trace::__span_type_mapper[span->span_type_]),
                                 static_cast<int32_t>(strlen(trace::__span_type_mapper[span->span_type_])));
-
+  
         //parent_span_id_
         org_pos = pos;
         if (OB_FAIL(ret)) {
@@ -726,13 +726,13 @@ namespace sql
         }
         //data.parent_span_id_ = buf+org_pos;
         //data.parent_span_id_ = buf+org_pos;
-
+  
         if (OB_NOT_NULL(tag_buf) && tag_len != 0) {
           //skip "tags":[ and trim ]
           data.tags_.assign(tag_buf+sizeof("\"tags\":["), static_cast<int32_t>(tag_len-sizeof("\"tags\":[")-2));
           //data.tags_.assign(tag_buf, tag_len);
         }
-
+  
         // start ts
         data.start_ts_ = span->start_ts_;
         // end_ts
@@ -740,7 +740,7 @@ namespace sql
         // is_follow
         data.ref_type_ = span->is_follow_;
       }
-
+  
       // record span
       if (OB_FAIL(ret)) {
         // do nothing

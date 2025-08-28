@@ -56,7 +56,7 @@ int PalfEnv::create_palf_env(
     CLOG_LOG(WARN, "delete_tmp_file_or_directory_at failed", K(ret), K(base_dir));
   } else if (OB_FAIL(palf_env->palf_env_impl_.init(options, base_dir, self, obrpc::ObRpcNetHandler::CLUSTER_ID,
                                                    MTL_ID(), transport, batch_rpc,
-                                                   log_alloc_mgr, log_block_pool, monitor,
+                                                   log_alloc_mgr, log_block_pool, monitor, 
                                                    log_local_device, resource_manager, io_manager))) {
     PALF_LOG(WARN, "PalfEnvImpl init failed", K(ret), K(base_dir));
   } else {

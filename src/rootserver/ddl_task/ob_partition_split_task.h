@@ -53,7 +53,7 @@ public:
   bool operator==(const ObCheckProgressKey &other) const;
   bool operator!=(const ObCheckProgressKey &other) const;
   bool is_valid() const
-  {
+  { 
     return tablet_id_.is_valid();
   }
   int assign(const ObCheckProgressKey&other);
@@ -159,14 +159,14 @@ private:
                      const uint64_t table_id,
                      const uint64_t src_part_id,
                      const uint64_t dest_part_id);
-
+  
   int copy_src_part_stat_info_to_dest(common::ObMySQLTransaction &trans,
                                       const uint64_t table_id,
                                       const int64_t src_part_id,
                                       const ObIArray<uint64_t> &local_index_table_ids,
                                       const ObIArray<int64_t> &src_local_index_part_ids,
                                       const ObSArray<int64_t> &dest_part_ids,
-                                      const ObSArray<ObSArray<int64_t>> &dest_local_index_part_ids);
+                                      const ObSArray<ObSArray<int64_t>> &dest_local_index_part_ids); 
   int take_effect(const share::ObDDLTaskStatus next_task_status);
   int succ();
   int wait_recovery_task_finish(const share::ObDDLTaskStatus next_task_status);
@@ -194,7 +194,7 @@ private:
       bool &is_end);
   int check_compaction_progress(
       const share::ObLSID &ls_id,
-      const ObTabletID &tablet_id,
+      const ObTabletID &tablet_id, 
       const ObIArray<ObAddr> &split_replica_addrs,
       bool &is_end);
   int send_split_request(
@@ -211,7 +211,7 @@ private:
                            ObSArray<int64_t> &src_local_index_partition_ids, /* OUTPUT */
                            ObSArray<int64_t> &dest_partition_ids, /* OUTPUT */
                            ObSArray<ObSArray<int64_t>> &dest_local_index_partition_ids /* OUTPUT */);
-  int update_message_row_progress_(const oceanbase::share::ObDDLTaskStatus status,
+  int update_message_row_progress_(const oceanbase::share::ObDDLTaskStatus status, 
                                    const bool task_submitted,
                                    int64_t &pos);
   int update_message_tablet_progress_(const oceanbase::share::ObDDLTaskStatus status,

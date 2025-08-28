@@ -119,8 +119,8 @@ int ObResourceInnerSQLConnectionPool::acquire(
   } else { // get conn with conn_id from id_conn_map_ directly
     ObLatchWGuard guard(lock_, ObLatchIds::INNER_CONN_POOL_LOCK);
     if (OB_FAIL(id_conn_map_.get_refactored(conn_id, conn))) {
-      // Failed to get the connection by conn_id. the connection may not have received
-      // any requests from the source observer for more than ten minutes, and was then
+      // Failed to get the connection by conn_id. the connection may not have received 
+      // any requests from the source observer for more than ten minutes, and was then 
       // released by the connection leak check mechanism. Please check first.
       ret = OB_SESSION_NOT_FOUND;
       LOG_WARN("failed to get the connection by conn_id. the connection may not have received "
@@ -132,7 +132,7 @@ int ObResourceInnerSQLConnectionPool::acquire(
       LOG_WARN("conn is null", K(ret), K(conn_id));
     } else if (!inner_conn->is_idle()) {
       if (kill_using_conn) {
-        /* related issue :
+        /* related issue : 
          * Why we need to set need_trans_rollback flag to inner_conn ?
          * Consider this situation:
          * Local obs inner sql rpc is timeout or gets some errors, and then will transmit a rollback inner sql to remote obs.

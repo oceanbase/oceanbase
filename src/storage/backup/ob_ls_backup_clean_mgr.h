@@ -98,7 +98,7 @@ public:
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override
   { return lib::Worker::CompatMode::MYSQL; }
-  virtual uint64_t get_consumer_group_id() const override
+  virtual uint64_t get_consumer_group_id() const override 
   { return consumer_group_id_; }
   int create_first_task();
 
@@ -131,7 +131,7 @@ protected:
   int delete_backup_complement_log_files_();
   int delete_backup_complement_log_piece_(const share::ObBackupDest &complement_log_dest);
   int delete_backup_complement_log_ls_(const share::ObBackupPath &piece_dir,
-      const share::ObBackupDest &complement_log_dest, const int64_t dest_id,
+      const share::ObBackupDest &complement_log_dest, const int64_t dest_id, 
       const int64_t round_id, const int64_t piece_id);
   int get_set_ls_path_(share::ObBackupPath &path);
   int get_piece_ls_path(share::ObBackupPath &path);

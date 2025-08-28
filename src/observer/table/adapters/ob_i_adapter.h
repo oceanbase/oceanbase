@@ -20,14 +20,14 @@
 #include "ob_hbase_cell_iter.h"
 
 namespace oceanbase
-{
+{   
 namespace table
 {
 
 class ObIHbaseAdapter
 {
 public:
-  ObIHbaseAdapter()
+  ObIHbaseAdapter() 
       : allocator_("HbaseAdapAloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
   {}
 
@@ -40,7 +40,7 @@ public:
 
 protected:
   int init_table_ctx(ObTableExecCtx &exec_ctx,
-                     const ObITableEntity &cell,
+                     const ObITableEntity &cell, 
                      ObTableOperationType::Type op_type,
                      ObTableCtx &tb_ctx);
 

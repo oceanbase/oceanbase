@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 static int pktc_sk_check_connect(pktc_sk_t* s) {
   int err = 0;
   if (s->conn_ok) {

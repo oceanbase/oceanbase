@@ -90,3 +90,4 @@ int ObMemTrackerGuard::try_check_status(int64_t check_try_times)
   }
   return ret;
 }
+

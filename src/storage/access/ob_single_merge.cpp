@@ -248,7 +248,7 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
   if (NULL != rowkey_ && 0 < tables_.count()) {
     ObITable *table = tables_.at(0);
     bool have_uncommited_row = false;
-    const StorageScanType scan_type = access_ctx_->get_scan_type();
+    const StorageScanType scan_type = access_ctx_->get_scan_type(); 
     const ObITableReadInfo *read_info = access_param_->iter_param_.get_read_info();
     const ObTabletMeta &tablet_meta = get_table_param_->tablet_iter_.get_tablet()->get_tablet_meta();
     const int64_t read_snapshot_version = access_ctx_->trans_version_range_.snapshot_version_;

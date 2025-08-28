@@ -22,7 +22,7 @@
 
 namespace oceanbase
 {
-namespace storage
+namespace storage 
 {
 namespace mds
 {

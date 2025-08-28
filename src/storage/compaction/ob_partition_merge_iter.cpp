@@ -191,9 +191,9 @@ int ObPartitionMergeIter::init_query_base_params(const ObMergeParameter &merge_p
   if (OB_UNLIKELY(nullptr == read_info_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected null read info", K(ret));
-  } else if (OB_FAIL(access_param_.init_merge_param(tablet_id_.id(),
+  } else if (OB_FAIL(access_param_.init_merge_param(tablet_id_.id(), 
                                                     tablet_id_,
-                                                    *read_info_,
+                                                    *read_info_, 
                                                     is_multi_version_merge(static_param.get_merge_type()),
                                                     static_param.schema_->is_delete_insert_merge_engine()))) {
     LOG_WARN("Failed to init table access param", K(ret), KPC(this));
@@ -1076,7 +1076,7 @@ int ObPartitionMicroMergeIter::open_curr_range(const bool for_rewrite, const boo
     macro_block_opened_ = false;
     micro_block_iter_.reset();
     need_reuse_micro_block_ = false;
-
+    
     ret = ObPartitionMacroMergeIter::open_curr_range(for_rewrite);
     LOG_DEBUG("open curr range for macro block", K(*this), K(curr_block_desc_));
   } else if (!need_reuse_micro_block_) {

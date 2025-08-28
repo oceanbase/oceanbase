@@ -95,12 +95,12 @@ int ObExprCalcPartitionBase::calc_result_typeN(ObExprResType &type,
 }
 
 typedef int64_t (*GetPayloadFunc)(const char *payload);
-static int64_t get_64_len_val(const char *payload)
+static int64_t get_64_len_val(const char *payload) 
 {
   return *reinterpret_cast<const int64_t *>(payload);
 }
 
-static int64_t get_8_len_val(const char *payload)
+static int64_t get_8_len_val(const char *payload) 
 {
   return static_cast<int64_t>(*(reinterpret_cast<const uint8_t *>(payload)));
 }
@@ -156,8 +156,8 @@ int ObExprCalcPartitionBase::cg_expr(ObExprCGCtx &expr_cg_ctx,
       const ObExpr *part_expr = rt_expr.args_[0];
       if (T_OP_ROW != part_expr->type_ &&
           !table_schema->is_external_table() &&
-          (CALC_TABLET_ID == calc_part_info->calc_id_type_ ||
-           CALC_PARTITION_ID == calc_part_info->calc_id_type_) &&
+          (CALC_TABLET_ID == calc_part_info->calc_id_type_ || 
+           CALC_PARTITION_ID == calc_part_info->calc_id_type_) && 
           ERRSIM_USE_FAST_CALC_PART == OB_SUCCESS) {
         ObDASTabletMapper tablet_mapper;
         if (OB_ISNULL(expr_cg_ctx.session_)) {
@@ -225,7 +225,7 @@ int ObExprCalcPartitionBase::cg_expr(ObExprCGCtx &expr_cg_ctx,
               }
             }
             if (OB_SUCC(ret)) {
-              rt_expr.eval_vector_func_ =
+              rt_expr.eval_vector_func_ = 
                   ObExprCalcPartitionBase::fast_calc_partition_level_one_vector;
             }
           }
@@ -234,7 +234,7 @@ int ObExprCalcPartitionBase::cg_expr(ObExprCGCtx &expr_cg_ctx,
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("type invalid", K(part_expr->obj_meta_), KR(ret));
           } else {
-            rt_expr.eval_vector_func_ =
+            rt_expr.eval_vector_func_ = 
                 ObExprCalcPartitionBase::fast_calc_partition_level_one_vector;
           }
         } else if (table_schema->is_range_part()) {
@@ -246,7 +246,7 @@ int ObExprCalcPartitionBase::cg_expr(ObExprCGCtx &expr_cg_ctx,
                 OB_ISNULL(part_array[0]->get_high_bound_val().get_obj_ptr())) {
                 ret = OB_INVALID_ARGUMENT;
                 LOG_WARN("partition_array is null", K(ret));
-            } else if (part_expr->obj_meta_.get_type() !=
+            } else if (part_expr->obj_meta_.get_type() != 
                 part_array[0]->get_high_bound_val().get_obj_ptr()->get_meta().get_type()) {
               fallback = true;
             } else {
@@ -268,7 +268,7 @@ int ObExprCalcPartitionBase::cg_expr(ObExprCGCtx &expr_cg_ctx,
                   ret = OB_INVALID_ARGUMENT;
                   LOG_WARN("partition_array is null", K(ret));
               } else {
-                const ObIArray<common::ObNewRow> &list_row_values =
+                const ObIArray<common::ObNewRow> &list_row_values = 
                     part_array[0]->get_list_row_values();
                 ObObj *list_part_obj = list_row_values.at(0).cells_;
                 if (OB_ISNULL(list_part_obj)) {
@@ -278,7 +278,7 @@ int ObExprCalcPartitionBase::cg_expr(ObExprCGCtx &expr_cg_ctx,
                            list_part_obj->get_meta().get_type()) {
                   fallback = true;
                 } else {
-                  rt_expr.eval_vector_func_ =
+                  rt_expr.eval_vector_func_ = 
                       ObExprCalcPartitionBase::fast_calc_partition_level_one_vector;
                 }
               }
@@ -504,7 +504,7 @@ static int inner_fast_calc_range_partition_level_one_vector(ArgVec *vec,
   vec->get_payload(row_idx, is_null, payload, len);
   ObDatum datum(payload, len, is_null);
 
-  ObFixedArray<RangePartition, common::ObIAllocator>::const_iterator upper_res =
+  ObFixedArray<RangePartition, common::ObIAllocator>::const_iterator upper_res = 
         std::upper_bound(calc_part_ctx->range_partitions_.begin(),
                         calc_part_ctx->range_partitions_.end(),
                         datum,
@@ -604,14 +604,14 @@ static int inner_fast_calc_partition_level_one_vector(const ObExpr &expr,
     } else if (calc_part_ctx->inited_) {
       // base info for calc range/list partition inited already
     } else if (Type == ObExprCalcPartitionBase::PartType::RANGE) {
-      if (OB_FAIL(calc_part_ctx->init_calc_range_partition_base_info(*table_schema,
+      if (OB_FAIL(calc_part_ctx->init_calc_range_partition_base_info(*table_schema, 
                   *part_expr, ctx.exec_ctx_.get_allocator()))) {
         LOG_WARN("Fail to init range partition base info", K(ret));
       } else {
         calc_part_ctx->inited_ = true;
       }
     } else { // LIST
-      if (OB_FAIL(calc_part_ctx->init_calc_list_partition_base_info(*table_schema,
+      if (OB_FAIL(calc_part_ctx->init_calc_list_partition_base_info(*table_schema, 
                   *part_expr, ctx.exec_ctx_.get_allocator()))) {
         LOG_WARN("Fail to init list partition base info", K(ret));
       } else {
@@ -1431,7 +1431,7 @@ int ObExprCalcPartitionBase::ObExprCalcPartCtx::init_calc_range_partition_base_i
   }
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(part_cmp_.row_cmp_func_ = VectorCmpExprFuncsHelper::get_row_cmp_func(
-                                          part_expr.datum_meta_,
+                                          part_expr.datum_meta_, 
                                           part_expr.datum_meta_))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("row_cmp_func is null", K(ret), K(part_expr.datum_meta_));
@@ -1455,13 +1455,13 @@ int ObExprCalcPartitionBase::ObExprCalcPartCtx::init_calc_list_partition_base_in
   ObPartition * const* part_array = table_schema.get_part_array();
   int64_t list_val_cnt = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < part_num; ++i) {
-    const ObIArray<common::ObNewRow> &list_row_values =
+    const ObIArray<common::ObNewRow> &list_row_values = 
             part_array[i]->get_list_row_values();
     list_val_cnt += list_row_values.count();
     // calc default value position
     if (list_row_values.count() == 1
     && list_row_values.at(0).get_count() >= 1
-    && list_row_values.at(0).get_cell(0).is_max_value()) {
+    && list_row_values.at(0).get_cell(0).is_max_value()) {  
       default_list_part_idx_ = i;
     }
   }
@@ -1478,7 +1478,7 @@ int ObExprCalcPartitionBase::ObExprCalcPartCtx::init_calc_list_partition_base_in
         if (i == default_list_part_idx_) {
           continue;
         }
-        const ObIArray<common::ObNewRow> &list_row_values =
+        const ObIArray<common::ObNewRow> &list_row_values = 
               part_array[i]->get_list_row_values();
         for (int64_t j = 0; OB_SUCC(ret) && j < list_row_values.count(); ++j) {
           ObObj *list_part_obj = list_row_values.at(j).cells_;

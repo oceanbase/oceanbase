@@ -310,7 +310,7 @@ int ObTabletTableIterator::refresh_read_tables_from_tablet(
   } else if (major_sstable_only) {
     if (OB_FAIL(tablet_handle_.get_obj()->get_read_major_sstable(
         snapshot_version, *this, need_split_src_table))) {
-      LOG_WARN("failed to get read major sstable from tablet",
+      LOG_WARN("failed to get read major sstable from tablet", 
         K(ret), K(snapshot_version), K_(tablet_handle));
     }
   } else {

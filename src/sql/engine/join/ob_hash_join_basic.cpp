@@ -170,7 +170,7 @@ int ObHashJoinBatch::get_next_batch(const common::ObIArray<ObExpr*> &exprs,
                            reinterpret_cast<const ObChunkDatumStore::StoredRow **>(stored_row);
   read_rows = 0;
   while (OB_SUCC(ret) && 0 == read_rows) {
-    if (OB_FAIL(store_iter_.get_next_batch(exprs, ctx, max_rows, read_rows,
+    if (OB_FAIL(store_iter_.get_next_batch(exprs, ctx, max_rows, read_rows, 
                                                inner_stored_row))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("failed to get next row", K(ret));

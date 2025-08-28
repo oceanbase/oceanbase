@@ -68,7 +68,7 @@ enum ObTableProccessType
   TABLE_API_MULTI_CHECK_AND_INSERT_UP,
 
   // redis
-  // The sequence of redis ObTableProccessType is associated with that of RedisCommandType.
+  // The sequence of redis ObTableProccessType is associated with that of RedisCommandType. 
   // If you want to change it, you need to change RedisCommandType simultaneously
   TABLE_API_REDIS_TYPE_OFFSET,
   TABLE_API_REDIS_LINDEX,
@@ -169,7 +169,7 @@ enum ObTableProccessType
 struct ObTableHistogramType {
   sql::stmt::StmtType sql_type_;
   ObTableProccessType table_type_;
-
+  
   TO_STRING_KV(K(sql_type_), K(table_type_));
 };
 } // end namespace observer

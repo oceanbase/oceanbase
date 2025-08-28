@@ -135,7 +135,7 @@ int ObArchiveFileUtils::get_file_range(const ObString &prefix,
     file_range_op.get_file_id(min_file_id, max_file_id);
   }
 
-  return ret;
+  return ret; 
 }
 
 int ObArchiveFileUtils::list_files(const ObString &prefix,

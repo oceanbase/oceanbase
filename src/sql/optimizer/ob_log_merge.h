@@ -54,7 +54,7 @@ public:
   const common::ObIArray<std::pair<ObRawExpr*, ObRawExpr*>> &get_equal_pairs() const { return equal_pairs_; }
   int set_equal_pairs(const ObIArray<std::pair<ObRawExpr*, ObRawExpr*>> &equal_infos) { return equal_pairs_.assign(equal_infos); }
   virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
-  virtual int get_plan_item_info(PlanText &plan_text,
+  virtual int get_plan_item_info(PlanText &plan_text, 
                                 ObSqlPlanItem &plan_item) override;
   virtual int op_is_update_pk_with_dop(bool &is_update) override;
 protected:

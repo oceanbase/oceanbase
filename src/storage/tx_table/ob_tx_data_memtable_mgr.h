@@ -177,7 +177,7 @@ private:  // ObTxDataMemtableMgr
 
   int get_all_memtables_(ObTableHdlArray &handles);
 
-  int flush_all_frozen_memtables_(ObTableHdlArray &memtable_handles,
+  int flush_all_frozen_memtables_(ObTableHdlArray &memtable_handles, 
       const int64_t trace_id);
 
   ObTxDataMemtable *get_tx_data_memtable_(const int64_t pos) const;

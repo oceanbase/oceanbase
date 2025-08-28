@@ -47,4 +47,5 @@ private :
 };
 }
 }
-#endif /* OCEANBASE_SRC_SQL_ENGINE_EXPR_OB_EXPR_VEC_SCN_H_ */
+#endif /* OCEANBASE_SRC_SQL_ENGINE_EXPR_OB_EXPR_VEC_SCN_H_ */ 
+

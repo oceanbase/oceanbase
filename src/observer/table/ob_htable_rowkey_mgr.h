@@ -78,9 +78,9 @@ public:
   static int mtl_init(ObHTableRowkeyMgr *&service);
   int init();
   void destroy();
-  void record_htable_rowkey(const share::ObLSID &ls_id, int64_t table_id,
+  void record_htable_rowkey(const share::ObLSID &ls_id, int64_t table_id, 
                             common::ObTabletID tablet_id, const common::ObString &rowkey);
-  void record_htable_rowkey(const share::ObLSID &ls_id, int64_t table_id,
+  void record_htable_rowkey(const share::ObLSID &ls_id, int64_t table_id, 
                             const ObIArray<ObTabletID> &tablet_ids,
                             const ObString &rowkey);
   int register_rowkey_queue(const share::ObLSID &ls_id, HRowkeyQueue &queue);

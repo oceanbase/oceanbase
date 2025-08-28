@@ -117,7 +117,7 @@ struct fd_ssl_st
 {
   SSL *ssl;
   int hand_shake_done;
-  int type;
+  int type; 
   //USSL_AUTH_SSL_HANDSHAKE: only use ssl to do authentication
   //USSL_AUTH_SSL_IO ：use ssl to do authentication and I/O
 };
@@ -837,7 +837,7 @@ ssize_t writev_regard_ssl(int fildes, const struct iovec *iov, int iovcnt)
                           ERR_error_string(ERR_get_error(), NULL));
           }
           // errno: EIO, need destroy connection
-          // errno: EAGAIN:
+          // errno: EAGAIN: 
           // (1) wbytes larger than 0 (means already send some data successfully), just return wbytes
           // (2) wbytes equal to zero (means send the first iov), wbytes equals to n (-1 means socket buffer
           // temporarily unwritable, 0 means need destroy connection)

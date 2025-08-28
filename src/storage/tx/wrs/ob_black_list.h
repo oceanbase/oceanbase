@@ -237,12 +237,12 @@ public:
     }
   }
   ObBlackListHashNode* alloc_node(ObBLValue *val)
-  {
+  { 
     UNUSED(val);
     return op_alloc(ObBlackListHashNode);
   }
   void free_node(ObBlackListHashNode *node)
-  {
+  { 
     if (NULL != node) {
       op_free(node);
     }

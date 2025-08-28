@@ -1145,7 +1145,7 @@ int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
     }
   }
   if (OB_SUCC(ret)) {
-    scan_ctdef.table_param_.get_enable_lob_locator_v2()
+    scan_ctdef.table_param_.get_enable_lob_locator_v2() 
         = (cg_.get_cur_cluster_version() >= CLUSTER_VERSION_4_1_0_0);
     if (OB_FAIL(scan_ctdef.table_param_.convert(*table_schema, scan_ctdef.access_column_ids_,
                                                 scan_ctdef.pd_expr_spec_.pd_storage_flag_))) {
@@ -1755,7 +1755,7 @@ int ObDmlCgService::append_upd_old_row_cid(ObLogicalOperator &op,
     LOG_WARN("fail to append all pk to column_id", K(ret), K(table_schema->get_table_name_str()));
   } else if (!is_primary_index) {
     // append update column and shadow_pk dependent column
-    //
+    // 
     // When defensive_check verifies shadow_pk,
     // it will use the shadow_pk column and the columns that shadow_pk depends on for comparison. However,
     // in minimal mode, the columns that shadow_pk depends on will be cut out,
@@ -1922,7 +1922,7 @@ int ObDmlCgService::generate_minimal_delete_old_row_cid(ObLogDelUpd &op,
     LOG_WARN("fail to append all lob_storage column_id", K(ret), K(index_tid));
   } else if (!is_primary_index) {
     // index_table record PK and the dependent columns of shadow_pk
-    //
+    // 
     // When defensive_check verifies shadow_pk,
     // it will use the shadow_pk column and the columns that shadow_pk depends on for comparison. However,
     // in minimal mode, the columns that shadow_pk depends on will be cut out,
@@ -2873,9 +2873,9 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
                                              ref_trigger_info));
           if (OB_SUCC(ret) && NULL == ref_trigger_info) {
             ret = OB_ERR_TRIGGER_NOT_EXIST;
-            LOG_WARN("ref_trigger_info is NULL", K(trigger_info->get_ref_trg_db_name()),
+            LOG_WARN("ref_trigger_info is NULL", K(trigger_info->get_ref_trg_db_name()), 
                      K(trigger_info->get_ref_trg_name()), K(ret));
-            LOG_ORACLE_USER_ERROR(OB_ERR_TRIGGER_NOT_EXIST, trigger_info->get_ref_trg_name().length(),
+            LOG_ORACLE_USER_ERROR(OB_ERR_TRIGGER_NOT_EXIST, trigger_info->get_ref_trg_name().length(), 
                                   trigger_info->get_ref_trg_name().ptr());
           }
           if (OB_SUCC(ret)) {
@@ -2883,13 +2883,13 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
               if (!(trigger_info->is_row_level_before_trigger() && ref_trigger_info->is_row_level_before_trigger())
                   && !(trigger_info->is_row_level_after_trigger() && ref_trigger_info->is_row_level_after_trigger())
                   && !(trigger_info->is_stmt_level_before_trigger() && ref_trigger_info->is_stmt_level_before_trigger())
-                  && !(trigger_info->is_stmt_level_after_trigger()
+                  && !(trigger_info->is_stmt_level_after_trigger() 
                        && ref_trigger_info->is_stmt_level_after_trigger())) {
                 ret = OB_ERR_RECOMPILATION_OBJECT;
-                LOG_WARN("errors during recompilation/revalidation of trigger",
+                LOG_WARN("errors during recompilation/revalidation of trigger", 
                           KPC(trigger_info), KPC(ref_trigger_info), K(ret));
                 // ref_trg_db_name and trigger_info's database_name are the same
-                LOG_ORACLE_USER_ERROR(OB_ERR_RECOMPILATION_OBJECT,
+                LOG_ORACLE_USER_ERROR(OB_ERR_RECOMPILATION_OBJECT, 
                                       trigger_info->get_ref_trg_db_name().length(),
                                       trigger_info->get_ref_trg_db_name().ptr(),
                                       trigger_info->get_trigger_name().length(),
@@ -2967,7 +2967,7 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
       int64_t total_count = is_instead_of ? expectd_col_cnt : table_schema->get_column_count();
       for (i = 0; OB_SUCC(ret) && i < total_count; i++) {
         // how to calc cell_idx and proj_idx ?
-        // see
+        // see 
         ObExpr *new_expr = nullptr;
         ObExpr *old_expr = nullptr;
         bool need_add = false;
@@ -3587,7 +3587,7 @@ int ObDmlCgService::generate_fk_arg(ObForeignKeyArg &fk_arg,
   const ObIArray<uint64_t> &value_column_ids = check_parent_table ? fk_info.child_column_ids_ : fk_info.parent_column_ids_;
   const ObIArray<uint64_t> &name_column_ids = check_parent_table ? fk_info.parent_column_ids_ : fk_info.child_column_ids_;
   uint64_t name_table_id = check_parent_table ? fk_info.parent_table_id_ : fk_info.child_table_id_;
-
+  
   if (OB_FAIL(generate_dml_column_ids(op, index_dml_info.column_exprs_, column_ids))) {
     LOG_WARN("add column ids failed", K(ret));
   } else if (OB_FAIL(generate_updated_column_ids(op, index_dml_info.assignments_, column_ids, das_ctdef, updated_column_ids))) {
@@ -3819,7 +3819,7 @@ int ObDmlCgService::generate_fk_table_loc_info(uint64_t index_table_id,
       is_part_table = true;
     }
   }
-
+  
   return ret;
 }
 
@@ -3840,7 +3840,7 @@ int ObDmlCgService::get_fk_check_scan_table_id(const uint64_t parent_table_id,
 }
 
 int ObDmlCgService::generate_fk_scan_ctdef(share::schema::ObSchemaGetterGuard &schema_guard,
-                                          const uint64_t index_tid,
+                                          const uint64_t index_tid, 
                                           ObDASScanCtDef &scan_ctdef)
 {
   int ret = OB_SUCCESS;
@@ -3853,7 +3853,7 @@ int ObDmlCgService::generate_fk_scan_ctdef(share::schema::ObSchemaGetterGuard &s
       TABLE_SCHEMA, tenant_id, index_tid, scan_ctdef.schema_version_))) {
     LOG_WARN("fail to get schema version", K(ret), K(tenant_id), K(index_tid));
   } else {
-    scan_ctdef.table_param_.get_enable_lob_locator_v2()
+    scan_ctdef.table_param_.get_enable_lob_locator_v2() 
         = (cg_.get_cur_cluster_version() >= CLUSTER_VERSION_4_1_0_0);
     if (OB_FAIL(scan_ctdef.table_param_.convert(*table_schema, scan_ctdef.access_column_ids_,
                                                 scan_ctdef.pd_expr_spec_.pd_storage_flag_))) {
@@ -3869,7 +3869,7 @@ int ObDmlCgService::generate_fk_scan_part_id_expr(ObLogDelUpd &op,
                                                   ObForeignKeyCheckerCtdef &fk_ctdef)
 {
   int ret = OB_SUCCESS;
-
+  
   // check if the table to perform das scan task is partition table
   bool is_part_table = false;
   if (OB_SUCC(ret) && is_part_table) {
@@ -3885,7 +3885,7 @@ int ObDmlCgService::generate_fk_scan_part_id_expr(ObLogDelUpd &op,
                                                       index_tid,
                                                       CALC_PARTITION_TABLET_ID,
                                                       part_id_expr_for_lookup))) {
-      LOG_WARN("failed to gen calc part id expr", K(ret));
+      LOG_WARN("failed to gen calc part id expr", K(ret));                                                 
     } else if (OB_ISNULL(part_id_expr_for_lookup)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("part_id_expr for lookup is null", K(ret));
@@ -4118,7 +4118,7 @@ int ObDmlCgService::init_encrypt_table_meta_(
       // 在这种情况下, 我们认为这里是合理的, 缓存中可以不保存主密钥内容
       // cg阶段获取主密钥的任何失败我们可以接受
       // 兜底是执行期再次获取, 再次获取成功了则继续往下走, 失败了则报错出来.
-      // 见bug
+      // 见bug 
       ret = OB_SUCCESS;
     } else if (OB_FAIL(meta_cache.meta_.master_key_.set_content(
                                                         ObString(master_key_length, master_key)))) {
@@ -4151,10 +4151,10 @@ int ObDmlCgService::check_need_domain_id_merge_iter(
   const ObDelUpdStmt *dml_stmt = nullptr;
   domain_types.reset();
   domain_tids.reset();
-
+  
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(log_plan) ||
-      OB_ISNULL(schema_guard = log_plan->get_optimizer_context().get_schema_guard()) ||
+      OB_ISNULL(schema_guard = log_plan->get_optimizer_context().get_schema_guard()) || 
       OB_ISNULL(sql_schema_guard = log_plan->get_optimizer_context().get_sql_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected status", K(ret), KP(log_plan), KP(schema_guard), KP(sql_schema_guard));
@@ -4295,7 +4295,7 @@ int ObDmlCgService::generate_scan_with_domain_id_ctdef_if_need(
   } else if (tenant_data_version < DATA_VERSION_4_3_5_1) {
     // old version, we should produce doc id/vid ctdef
     if (domain_types.count() != 1 ||
-        (domain_types.at(0) != ObDomainIdUtils::ObDomainIDType::DOC_ID &&
+        (domain_types.at(0) != ObDomainIdUtils::ObDomainIDType::DOC_ID && 
          domain_types.at(0) != ObDomainIdUtils::ObDomainIDType::VID)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to check old version domain id", K(ret), K(domain_types));
@@ -4559,7 +4559,7 @@ int ObDmlCgService::check_is_main_table_in_fts_ddl(
     if (OB_SUCC(ret)) {
       if ((has_fts_index && (0 == fts_index_aux_count || 0 == fts_doc_word_aux_count)) // fts aux index count is 0
           || is_main_table_in_fts_ddl // some fts index is building
-          || fts_index_aux_count != fts_doc_word_aux_count) { // fts aux index count not match
+          || fts_index_aux_count != fts_doc_word_aux_count) { // fts aux index count not match 
         das_dml_ctdef.is_main_table_in_fts_ddl_ = true;
       } else {
         das_dml_ctdef.is_main_table_in_fts_ddl_ = false;

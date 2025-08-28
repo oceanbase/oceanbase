@@ -178,8 +178,8 @@ private:
   inline void lock_bucket(ObLatchBucket &bucket)
   {
     bucket.lock_.lock(ObLatchIds::LATCH_WAIT_QUEUE_LOCK, INT64_MAX/*abs_timeout_us*/, false/*is_atomic*/);
-    // ObLatchWaitQueue is called by ObLatch and nesting of wait_event occurs.
-    // Therefore we consider the wait event of ObLatchWaitQueue to be not atomic.
+    // ObLatchWaitQueue is called by ObLatch and nesting of wait_event occurs. 
+    // Therefore we consider the wait event of ObLatchWaitQueue to be not atomic. 
     // The implementation of wait event here will be modified later.
   }
 

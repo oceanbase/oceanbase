@@ -607,7 +607,7 @@ static int eval_substr_text(const ObCollationType &cs_type,
         input_iter.set_access_len(len);
         ObTextStringIterState state;
         ObString src_block_data;
-        while (OB_SUCC(ret)
+        while (OB_SUCC(ret) 
               && (state = input_iter.get_next_block(src_block_data)) == TEXTSTRING_ITER_NEXT) {
           if (!input_iter.is_outrow_lob()) {
             ObString inrow_result;
@@ -626,9 +626,9 @@ static int eval_substr_text(const ObCollationType &cs_type,
         }
         if (OB_FAIL(ret)) {
         } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
-          ret = (input_iter.get_inner_ret() != OB_SUCCESS) ?
+          ret = (input_iter.get_inner_ret() != OB_SUCCESS) ? 
                   input_iter.get_inner_ret() : OB_INVALID_DATA;
-          LOG_WARN("iter state invalid", K(ret), K(state), K(input_iter));
+          LOG_WARN("iter state invalid", K(ret), K(state), K(input_iter)); 
         } else {
           output_result.set_result();
         }

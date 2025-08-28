@@ -34,7 +34,7 @@ public:
   virtual ~ObDataMacroBlockMergeWriter();
   virtual void reset() override;
   virtual int open(
-      const ObDataStoreDesc &data_store_desc,
+      const ObDataStoreDesc &data_store_desc, 
       const int64_t parallel_idx,
       const blocksstable::ObMacroSeqParam &macro_seq_param,
       const share::ObPreWarmerParam &pre_warm_param,

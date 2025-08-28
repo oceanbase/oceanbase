@@ -444,8 +444,8 @@ int ObExprUDF::process_singal_out_param(int64_t i,
         // caller param may ref cursor, which may not allocated.
         if (modify->is_null()) {
           OX (iparams.at(i).copy_value_or_obj(*modify, true));
-          if (iparams.at(i).is_ref_cursor_type()) {
-            modify->set_is_ref_cursor_type(true);
+          if (iparams.at(i).is_ref_cursor_type()) {		
+            modify->set_is_ref_cursor_type(true);		
           }
           OX (modify->set_param_meta());
         } else if (!modify->is_ext()) {
@@ -1001,8 +1001,8 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 
   CK (OB_NOT_NULL(info));
   OZ (check_types(expr, *info));
-
-
+  
+  
   CK (OB_NOT_NULL(session = ctx.exec_ctx_.get_my_session()));
   CK (OB_NOT_NULL(pl_engine = session->get_pl_engine()));
   OZ (SMART_CALL(expr.eval_param_value(ctx)));
@@ -1024,7 +1024,7 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
       need_end_stmt = true;
       session->set_start_stmt();
     }
-
+    
     ObEvalCtx::TempAllocGuard memory_guard(ctx);
     ObArenaAllocator &allocator = memory_guard.get_allocator();
     int64_t cur_obj_count = 0;
@@ -1159,7 +1159,7 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
           OX (obj_self->set_is_null(false));
         }
       }
-
+    
       if (OB_READ_NOTHING == ret && info->is_called_in_sql_ && lib::is_oracle_mode()) {
         result.set_null();
         ret = OB_SUCCESS;

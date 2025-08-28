@@ -23,7 +23,7 @@ namespace palf
 {
 
 const int64_t RETRY_INTERVAL = 10*1000;
-int openat_with_retry(const int dir_fd,
+int openat_with_retry(const int dir_fd, 
                       const char *block_path,
                       const int flag,
                       const int mode,
@@ -284,7 +284,7 @@ int TrimLogDirectoryFunctor::func(const dirent *entry)
       PALF_LOG(WARN, "this is block is not used for palf!!!", K(ret), K(entry_name));
       // do nothing, skip invalid block like tmp
     } else {
-      if (true == str_is_flashback_block
+      if (true == str_is_flashback_block 
         && OB_FAIL(rename_flashback_to_normal_(entry_name))) {
         PALF_LOG(ERROR, "rename_flashback_to_normal failed", K(ret), K(dir_), K(entry_name));
       }
@@ -336,7 +336,7 @@ int TrimLogDirectoryFunctor::try_to_remove_block_(const int dir_fd, const char *
       ret = OB_SUCCESS;
       PALF_LOG(INFO, "before rename flashback to normal and after delete normal file, restart!!!", K(file_name));
     } else {
-      PALF_LOG(ERROR, "open file failed", K(file_name));
+      PALF_LOG(ERROR, "open file failed", K(file_name)); 
     }
   } else if (OB_FAIL(log_block_pool_->remove_block_at(dir_fd, file_name))) {
     PALF_LOG(ERROR, "remove_block_at failed", K(dir_fd), K(file_name));

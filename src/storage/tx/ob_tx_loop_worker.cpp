@@ -105,7 +105,7 @@ void ObTxLoopWorker::run1()
       last_tx_gc_ts_ = common::ObClockGenerator::getClock();
       can_gc_tx = true;
     }
-
+    
     //retain ctx gc, interval = 5s
     if (common::ObClockGenerator::getClock() - last_retain_ctx_gc_ts_ > TX_RETAIN_CTX_GC_INTERVAL) {
       TRANS_LOG(INFO, "try gc retain ctx");
@@ -198,7 +198,7 @@ int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc,
       // tx gc, interval = 15s
       if (can_tx_gc) {
         // TODO shanyan.g close ctx gc temporarily because of logical bug
-        //
+        // 
 
         // ATTENTION : get_max_decided_scn must before iterating all trans ctx.
         // set max_decided_scn as default value

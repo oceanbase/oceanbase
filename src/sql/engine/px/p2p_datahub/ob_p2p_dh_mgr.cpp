@@ -363,7 +363,7 @@ int ObP2PDatahubManager::P2PMsgSetCall::operator() (const common::hash::HashMapP
     ObP2PDatahubMsgBase *> &entry)
 {
   // entry.second == &dh_msg_
-  // once the msg is set to p2p datahub map, other threads will access it, so
+  // once the msg is set to p2p datahub map, other threads will access it, so 
   // the regenerate process must be done in the setting process.
   UNUSED(entry);
   int ret = OB_SUCCESS;

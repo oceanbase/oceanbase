@@ -164,7 +164,7 @@ public:
 
 #ifdef OB_BUILD_SHARED_STORAGE
   void report_tablet_id_for_tablet_version_gc(
-      const share::ObLSID &ls_id,
+      const share::ObLSID &ls_id, 
       const common::ObTabletID &tablet_id)
   {
     int ret = OB_SUCCESS;

@@ -52,7 +52,7 @@ OB_SERIALIZE_MEMBER((ObJoinFilterCountRowWholeMsg, ObDatahubWholeMsg), total_row
 int ObJoinFilterNdv::gather_piece_ndv(const ObJoinFilterNdv &piece_ndv, ObJoinFilterNdv &total_ndv)
 {
   int ret = OB_SUCCESS;
-  // 1.gather infomation which used to check if *in filter* active
+  // 1.gather infomation which used to check if *in filter* active 
   if (!piece_ndv.in_filter_active_) {
     // if one thread's ndv is not valid, the global ndv info is invalid
     total_ndv.in_filter_active_ = false;

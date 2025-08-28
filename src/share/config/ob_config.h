@@ -477,10 +477,10 @@ class ObConfigIntegralItem
   : public ObConfigItem
 {
 public:
-  ObConfigIntegralItem()
-    : value_(0), min_value_(0), max_value_(0),
+  ObConfigIntegralItem() 
+    : value_(0), min_value_(0), max_value_(0), 
       left_interval_opt_(ObConfigRangeOpts::OB_CONF_RANGE_NONE),
-      right_interval_opt_(ObConfigRangeOpts::OB_CONF_RANGE_NONE)
+      right_interval_opt_(ObConfigRangeOpts::OB_CONF_RANGE_NONE) 
   {
   }
   virtual ~ObConfigIntegralItem() {}

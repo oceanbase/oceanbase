@@ -52,10 +52,10 @@ bool ObRestoreSourceServiceUser::operator== (const ObRestoreSourceServiceUser &o
 {
   return (STRLEN(this->user_name_) == STRLEN(other.user_name_))
          && (STRLEN(this->tenant_name_) == STRLEN(other.tenant_name_))
-         && (0 == STRCMP(this->user_name_, other.user_name_))
+         && (0 == STRCMP(this->user_name_, other.user_name_)) 
          && (0 == STRCMP(this->tenant_name_, other.tenant_name_))
          && this->mode_ == other.mode_
-         && this->tenant_id_ == other.tenant_id_
+         && this->tenant_id_ == other.tenant_id_ 
          && this->cluster_id_ == other.cluster_id_;
 }
 
@@ -87,7 +87,7 @@ ObRestoreSourceServiceAttr::ObRestoreSourceServiceAttr()
 void ObRestoreSourceServiceAttr::reset()
 {
   addr_.reset();
-  user_.reset();
+  user_.reset();  
   encrypt_passwd_[0] = '\0';
 }
 
@@ -95,7 +95,7 @@ void ObRestoreSourceServiceAttr::reset()
    parse service attr from string
    eg: "ip_list=127.0.0.1:1001;127.0.0.1:1002,USER=restore_user@primary_tenant,PASSWORD=xxxxxx,TENANT_ID=1002,
    CLUSTER_ID=10001,COMPATIBILITY_MODE=MYSQL,IS_ENCRYPTED=true"
-*/
+*/ 
 int ObRestoreSourceServiceAttr::parse_service_attr_from_str(ObSqlString &value)
 {
   int ret = OB_SUCCESS;
@@ -146,11 +146,11 @@ int ObRestoreSourceServiceAttr::do_parse_sub_service_attr(const char *sub_value)
     } else if (0 == STRCASECMP(token, OB_STR_USER)) {
       if (OB_FAIL(set_service_user_config(saveptr))) {
         LOG_WARN("fail to set restore service user and tenant", K(token), K(saveptr));
-      }
+      } 
     } else if (0 == STRCASECMP(token, OB_STR_TENANT_ID)) {
       if (OB_FAIL(set_service_tenant_id(saveptr))) {
         LOG_WARN("fail to set restore service user and tenant", K(token), K(saveptr));
-      }
+      } 
     } else if (0 == STRCASECMP(token, OB_STR_CLUSTER_ID)) {
       if (OB_FAIL(set_service_cluster_id(saveptr))) {
         LOG_WARN("fail to set restore service user and tenant", K(token), K(saveptr));
@@ -163,7 +163,7 @@ int ObRestoreSourceServiceAttr::do_parse_sub_service_attr(const char *sub_value)
       if (OB_FAIL(set_service_passwd_no_encrypt(saveptr))) {
         LOG_WARN("fail to set restore service passwd", K(token), K(saveptr));
       }
-    } else if (0 == STRCASECMP(token, OB_STR_IS_ENCRYPTED)) {
+    } else if (0 == STRCASECMP(token, OB_STR_IS_ENCRYPTED)) { 
     } else {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("log restore source service do not have this config", K(token));
@@ -284,7 +284,7 @@ int ObRestoreSourceServiceAttr::set_service_passwd_no_encrypt(const char *passwd
 }
 
 // 127.0.0.1:1000;127.0.0.1:1001;127.0.0.1:1002 ==> 127.0.0.1:1000 127.0.0.1:1001 127.0.0.1:1002
-int ObRestoreSourceServiceAttr::parse_ip_port_from_str(const char *ip_list, const char *delimiter)
+int ObRestoreSourceServiceAttr::parse_ip_port_from_str(const char *ip_list, const char *delimiter) 
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ip_list) || OB_ISNULL(delimiter) || OB_UNLIKELY(STRLEN(ip_list) > OB_MAX_RESTORE_SOURCE_IP_LIST_LEN)) {
@@ -362,7 +362,7 @@ int ObRestoreSourceServiceAttr::gen_config_items(common::ObIArray<BackupConfigIt
   } else if(OB_FAIL(items.push_back(config))) {
      LOG_WARN("failed to push service source attr config", K(config));
   }
-
+ 
   // gen user config
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(config.key_.assign(OB_STR_USER))) {
@@ -447,7 +447,7 @@ int ObRestoreSourceServiceAttr::gen_service_attr_str(char *buf, const int64_t bu
   ObSqlString passwd_str;
   ObSqlString compat_str;
   ObSqlString is_encrypted_str;
-
+  
   if (OB_UNLIKELY(!is_valid() || OB_ISNULL(buf) || buf_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid service attr argument", KP(buf), K(buf_size));
@@ -466,7 +466,7 @@ int ObRestoreSourceServiceAttr::gen_service_attr_str(char *buf, const int64_t bu
     LOG_WARN("fail to assign str", K(compat_str), K(is_encrypted_str));
   } else if (OB_FAIL(databuff_printf(buf, buf_size, "%.*s", static_cast<int>(str.length()), str.ptr()))) {
     LOG_WARN("fail to print str", K(str));
-  }
+  } 
   return ret;
 }
 
@@ -528,7 +528,7 @@ int ObRestoreSourceServiceAttr::get_user_str_(ObSqlString &user_str) const
     LOG_WARN("fail to assign user name" ,K(user_.user_name_));
   } else if (OB_FAIL(user_str.append_fmt("@%s",user_.tenant_name_))) {
     LOG_WARN("fail to assign tenant name", K(user_.user_name_));
-  }
+  } 
   return ret;
 }
 
@@ -552,7 +552,7 @@ int ObRestoreSourceServiceAttr::get_password_str_(ObSqlString &passwd_str) const
   int ret = OB_SUCCESS;
   if (OB_FAIL(passwd_str.assign(encrypt_passwd_))) {
      LOG_WARN("fail to assign password");
-  }
+  } 
   return ret;
 }
 
@@ -700,7 +700,7 @@ int ObRestoreSourceServiceAttr::get_decrypt_password_key_(char *unencrypt_key, c
   char decrypt_key[OB_MAX_BACKUP_ACCESSKEY_LENGTH] = { 0 };
   int64_t buf_len = strlen(encrypt_passwd_);
   int64_t deserialize_size = 0;
-
+  
   if (OB_ISNULL(unencrypt_key) || OB_UNLIKELY((0 == buf_len) || (buf_size <= 0) || (buf_size < OB_MAX_PASSWORD_LENGTH))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get decrypt password, parameter is invalid", K(ret));
@@ -771,7 +771,7 @@ int ObRestoreSourceServiceAttr::check_restore_source_is_self_(bool &is_self, uin
   is_self = false;
   int64_t curr_cluster_id = GCONF.cluster_id;
 
-  // assume that cluster id is managed by
+  // assume that cluster id is managed by 
   if (tenant_id == user_.tenant_id_ && curr_cluster_id == user_.cluster_id_) {
     is_self = true;
     LOG_WARN("set standby itself as log restore source is not allowed");
@@ -782,9 +782,9 @@ int ObRestoreSourceServiceAttr::check_restore_source_is_self_(bool &is_self, uin
 
 bool ObRestoreSourceServiceAttr::operator==(const ObRestoreSourceServiceAttr &other) const
 {
-  return (this->user_ == other.user_)
+  return (this->user_ == other.user_) 
          && (STRLEN(this->encrypt_passwd_) == STRLEN(other.encrypt_passwd_))
-         && (0 == STRCMP(this->encrypt_passwd_, other.encrypt_passwd_))
+         && (0 == STRCMP(this->encrypt_passwd_, other.encrypt_passwd_)) 
          && compare_addr_(other.addr_);
 }
 
@@ -892,7 +892,7 @@ int ObRestoreSourceLocationPrimaryAttr::set_location_cluster_id_(const char *clu
   if (OB_ISNULL(cluster_id_str)
     || OB_UNLIKELY(0 == STRLEN(cluster_id_str) || STRLEN(cluster_id_str) > OB_MAX_BACKUP_DEST_LENGTH)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("location cluster id str is invalid", K(cluster_id_str));
+    LOG_WARN("location cluster id str is invalid", K(cluster_id_str));  
   } else if (OB_FAIL(ob_atoll(cluster_id_str, cluster_id_))) {
     LOG_WARN("fail to set location primary cluster id from string", K(cluster_id_str));
   }
@@ -905,7 +905,7 @@ int ObRestoreSourceLocationPrimaryAttr::set_location_tenant_id_(const char *tena
   char *p_end = nullptr;
   if (OB_ISNULL(tenant_id_str) || OB_UNLIKELY(0 == STRLEN(tenant_id_str))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("location tenant id is invalid", K(tenant_id_str));
+    LOG_WARN("location tenant id is invalid", K(tenant_id_str));  
   } else if (OB_FAIL(ob_strtoull(tenant_id_str, p_end, tenant_id_))) {
     LOG_WARN("fail to set location primary tenant id from string", K(tenant_id_str));
   }

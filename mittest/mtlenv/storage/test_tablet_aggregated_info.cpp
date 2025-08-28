@@ -60,7 +60,7 @@ TEST_F(TestTabletAggregatedInfo, test_space_usage)
   ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
   ObTablet *tablet = tablet_handle.get_obj();
-
+  
   // check tablet's space_usage with empty major sstable
   ObTabletHandle new_tablet_handle;
   const ObTabletPersisterParam param(ls_id, ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq());
@@ -72,7 +72,7 @@ TEST_F(TestTabletAggregatedInfo, test_space_usage)
   ASSERT_EQ(0, space_usage.all_sstable_meta_size_);
   ASSERT_EQ(0, space_usage.tablet_clustered_sstable_data_size_);
   ASSERT_NE(0, space_usage.tablet_clustered_meta_size_);
-
+  
   // check tablet's space_usage without sstable
   tablet->table_store_addr_.ptr_->major_tables_.reset();
   ObTabletHandle new_tablet_handle2;

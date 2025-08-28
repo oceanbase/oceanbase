@@ -432,10 +432,10 @@ private:
   /**
    * call dbms_udr.create_rule('select ?, 1 from dual', 'select ? + 1, 1 from dual');
    * call dbms_udr.create_rule('select ?, 2 from dual', 'select ? + 2, 1 from dual');
-   *
+   * 
    * template SQL: select ?, ? from dual has the following two constant constraints:
    * tpl_sql_const_cons_ : {{idx:1, raw_text:"1"}, {idx:1, raw_text:"2"}}
-   *
+   * 
    * The following constraints are generated when executing a SQL that does not hit any of the rules:
    * SQL: select 4, 5 from dual;
    * not_param_info_ : {}

@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 typedef struct fixed_stack_t
 {
   int top_;
@@ -63,3 +63,4 @@ inline void* fixed_stack_pop(fixed_stack_t* stk)
   }
   return p;
 }
+

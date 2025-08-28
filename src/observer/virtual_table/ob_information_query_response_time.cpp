@@ -133,7 +133,7 @@ int ObInfoSchemaQueryResponseTimeTable::process_curr_tenant(ObNewRow *&row)
         SERVER_LOG(WARN, "failed to get sum value",K(ret), K(MTL_ID()));
       } else if (OB_FAIL(process_row_data(row, cells))){
         SERVER_LOG(WARN, "process row data of time collector failed", K(MTL_ID()), K(ret));
-      }
+      } 
     } else if (utility_iter_ == time_collector_.utility().bound_count() && sql_type_iter_ == static_cast<int32_t>(RespTimeSqlType::END) -1 ){
       ret = OB_ITER_END;
     } else {

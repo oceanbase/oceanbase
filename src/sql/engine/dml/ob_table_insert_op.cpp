@@ -362,7 +362,7 @@ OB_INLINE int ObTableInsertOp::check_insert_affected_row()
                   "primary_ins_ctdef", pri_ctdef,
                   "index_ins_ctdef", idx_ctdef,
                   "primary_ins_rtdef", pri_rtdef,
-                  "index_ins_rtdef", idx_rtdef);
+                  "index_ins_rtdef", idx_rtdef); 
         LOG_DBA_ERROR_V2(OB_SQL_INSERT_AFFECTED_ROW_FAIL, ret, "Attention!!!", "data table delete affected row is not match with index table "
                   ", data table delete affected_rows is: ", pri_rtdef.das_rtdef_.affected_rows_,
                   ", index table delete affected_rows is: ", idx_rtdef.das_rtdef_.affected_rows_);

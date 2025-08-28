@@ -108,8 +108,8 @@ void ObTableApiSessPool::destroy()
   - nodes which have not been visited for more than 5 minutes will be retired.
   - move retired node to retired list.
   - why do I need to check whether the node is empty ？
-    -- after a node is created, the session may be initialized in init_sess_info() for
-    -- more than SESS_RETIRE_TIME (unit migration scenario).
+    -- after a node is created, the session may be initialized in init_sess_info() for 
+    -- more than SESS_RETIRE_TIME (unit migration scenario). 
     -- If the node is deleted during this time, it will be used after free.
 */
 int ObTableApiSessPool::retire_session_node()
@@ -229,7 +229,7 @@ int ObTableApiSessPool::get_sess_node(uint64_t key,
   2. create new one if not exist
   3. get session node value
     3.1 if there is no session node val in node list, extend it.
-
+  
   struct pool {
     map: [key1:node1][key2:node:2]
   }
@@ -410,7 +410,7 @@ int ObTableApiSessNodeVal::push_back_to_queue()
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(owner_node_) && OB_FAIL(owner_node_->push_back_sess_to_queue(this))) {
-    LOG_WARN("fail to push back session to queue", K(ret), K(owner_node_->sess_queue_.capacity()),
+    LOG_WARN("fail to push back session to queue", K(ret), K(owner_node_->sess_queue_.capacity()), 
       K(owner_node_->sess_queue_.get_curr_total()), K(owner_node_->sess_ref_cnt_));
   }
   return ret;

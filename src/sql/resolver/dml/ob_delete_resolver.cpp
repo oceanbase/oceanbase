@@ -71,7 +71,7 @@ int ObDeleteResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(parse_tree.children_[TABLE])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table_node is null", K(ret));
-  } else if (OB_FAIL(session_info_->check_feature_enable(ObCompatFeatureType::UPD_LIMIT_OFFSET,
+  } else if (OB_FAIL(session_info_->check_feature_enable(ObCompatFeatureType::UPD_LIMIT_OFFSET, 
                                                          disable_limit_offset))) {
     LOG_WARN("failed to check feature enable", K(ret));
   } else {

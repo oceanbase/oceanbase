@@ -969,8 +969,8 @@ int ObExprMultiSet::eval_multiset(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &r
   const ObExprMultiSetInfo *info = static_cast<ObExprMultiSetInfo *>(expr.extra_info_);
   if (OB_FAIL(expr.eval_param_value(ctx, datum1, datum2))) {
     LOG_WARN("failed to eval params", K(ret));
-  } else if (lib::is_oracle_mode()
-             && ObExtendType == expr.args_[0]->datum_meta_.type_
+  } else if (lib::is_oracle_mode() 
+             && ObExtendType == expr.args_[0]->datum_meta_.type_ 
              && ObExtendType == expr.args_[1]->datum_meta_.type_) {
     ObObj obj1;
     ObObj obj2;
@@ -1076,7 +1076,7 @@ int ObExprMultiSet::eval_multiset(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &r
           result.set_extend(reinterpret_cast<int64_t>(coll), coll->get_type());
         }
       }
-
+      
       OZ(res.from_obj(result, expr.obj_datum_map_));
       //Collection constructed here must be recorded and destructed at last
       if (OB_NOT_NULL(coll) && OB_NOT_NULL(coll->get_allocator())) {

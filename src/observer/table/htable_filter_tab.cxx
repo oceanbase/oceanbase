@@ -2,20 +2,20 @@
 /* A Bison parser, made by GNU Bison 2.4.1.  */
 
 /* Skeleton implementation for Bison's Yacc-like parsers in C
-
+   
       Copyright (C) 1984, 1989, 1990, 2000, 2001, 2002, 2003, 2004, 2005, 2006
    Free Software Foundation, Inc.
-
+   
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation, either version 3 of the License, or
    (at your option) any later version.
-
+   
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
-
+   
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
@@ -28,7 +28,7 @@
    special exception, which will cause the skeleton and the resulting
    Bison output files to be licensed under the GNU General Public
    License without this special exception.
-
+   
    This special exception was added by the Free Software Foundation in
    version 2.2 of Bison.  */
 
@@ -2117,7 +2117,7 @@ yyreduce:
                         LOG_WARN("no memory", K(ret));
                     } else if (OB_FAIL(parse_ctx->store_filter((yyval.fval)))) {
                         LOG_WARN("failed to store filter", K(ret));
-                    }
+                    } 
                     if (OB_SUCCESS != ret) {
                         ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse RandomRowFilter");
                         YYABORT;
@@ -2350,7 +2350,7 @@ yyreduce:
                             LOG_WARN("failed to store filter", K(ret));
                         }
                     }
-
+                    
                     if (OB_SUCCESS != ret) {
                         ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse InclusiveStopFilter");
                         YYABORT;

@@ -100,7 +100,7 @@ int ObMultipleScanMerge::switch_table(
                                     read_info->get_datum_utils(),
                                     access_ctx_->query_flag_.is_reverse_scan()))) {
     STORAGE_LOG(WARN, "Failed to init tree cmp", K(ret), K(access_param_->iter_param_));
-  }
+  } 
   return ret;
 }
 

@@ -171,7 +171,7 @@ int ObExprRegexpCount::regexp_count(const ObExpr &expr, ObEvalCtx &ctx, ObDatum 
       bool is_case_sensitive = ObCharset::is_bin_sort(expr.args_[0]->datum_meta_.cs_type_);
       uint32_t flags = 0;
       ObString text_utf;
-      ObString text_str;
+      ObString text_str; 
       bool is_null = true;
       if (reusable) {
         if (NULL == (regexp_ctx = static_cast<RegExpCtx *>(

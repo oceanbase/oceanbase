@@ -38,7 +38,7 @@ static bool ob_apply_bg_covered_by_with_pl_strategy(const ObGeometry *g1, const 
   const GeoType2 *geo2 = reinterpret_cast<const GeoType2 *>(g2->val());
   const ObSrsItem *srs = context.get_srs();
   boost::geometry::srs::spheroid<double> geog_sphere(srs->semi_major_axis(), srs->semi_minor_axis());
-  ObPlPaStrategy point_strategy(geog_sphere);
+  ObPlPaStrategy point_strategy(geog_sphere);  
 #ifdef USE_SPHERE_GEO
   return boost::geometry::covered_by(*geo1, *geo2, point_strategy);
 #else
@@ -140,9 +140,9 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomPoint, ObWkbGeomC
     ObGeoType sub_type = geo2->get_sub_type(sub_ptr);
     switch (sub_type) {
       case ObGeoType::POINT :
-      case ObGeoType::LINESTRING :
+      case ObGeoType::LINESTRING : 
       case ObGeoType::MULTIPOINT :
-      case ObGeoType::MULTILINESTRING :
+      case ObGeoType::MULTILINESTRING : 
       case ObGeoType::GEOMETRYCOLLECTION : {
         ObGeometry *sub_g2 = NULL;
         common::ObIAllocator *allocator = context.get_allocator();
@@ -197,14 +197,14 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomPoint, ObWkbGeomC
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_GEO1_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomPoint, bool)
-{
+{ 
   UNUSED(context);
   result = ob_apply_bg_covered_by<ObWkbGeomPoint, GeoType2>(g1, g2);
   return OB_SUCCESS;
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomMultiPoint, ObWkbGeomPoint, bool)
-{
+{ 
   UNUSED(context);
   const ObWkbGeomMultiPoint *geo1 = reinterpret_cast<const ObWkbGeomMultiPoint *>(g1->val());
   const ObWkbGeomPoint *geo2 = reinterpret_cast<const ObWkbGeomPoint *>(g2->val());
@@ -214,7 +214,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomMultiPoint, ObWkb
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_GEO1_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomMultiPoint, bool)
-{
+{ 
   UNUSED(context);
   INIT_SUCC(ret);
   const ObWkbGeomMultiPoint *geo1 = reinterpret_cast<const ObWkbGeomMultiPoint *>(g1->val());
@@ -228,41 +228,41 @@ OB_GEO_CART_BINARY_FUNC_GEO1_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomMultiPoint, 
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomMultiPoint, ObWkbGeomCollection, bool)
-{
+{ 
   return ob_caculate_mp_gc_cover_by<ObWkbGeomPoint, ObIWkbGeomPoint,
     ObWkbGeomCollection>(g1, g2, context, result);
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomLineString, ObWkbGeomLineString, bool)
-{
+{ 
   UNUSED(context);
   result = ob_apply_bg_covered_by<ObWkbGeomLineString, ObWkbGeomLineString>(g1, g2);
   return OB_SUCCESS;
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomLineString, ObWkbGeomPolygon, bool)
-{
+{ 
   UNUSED(context);
   result = ob_apply_bg_covered_by<ObWkbGeomLineString, ObWkbGeomPolygon>(g1, g2);
   return OB_SUCCESS;
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomLineString, ObWkbGeomMultiLineString, bool)
-{
+{ 
   UNUSED(context);
   result = ob_apply_bg_covered_by<ObWkbGeomLineString, ObWkbGeomMultiLineString>(g1, g2);
   return OB_SUCCESS;
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomLineString, ObWkbGeomMultiPolygon, bool)
-{
+{ 
   UNUSED(context);
   result = ob_apply_bg_covered_by<ObWkbGeomLineString, ObWkbGeomMultiPolygon>(g1, g2);
   return OB_SUCCESS;
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomLineString, ObWkbGeomCollection, bool)
-{
+{ 
   INIT_SUCC(ret);
   ObCartesianMultipoint *cart_multi_point = NULL;
   ObCartesianMultilinestring *cart_multi_line = NULL;
@@ -286,21 +286,21 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomLineString, ObWkb
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomPolygon, ObWkbGeomPolygon, bool)
-{
+{ 
   UNUSED(context);
   result = ob_apply_bg_covered_by<ObWkbGeomPolygon, ObWkbGeomPolygon>(g1, g2);
   return OB_SUCCESS;
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomPolygon, ObWkbGeomMultiPolygon, bool)
-{
+{ 
   UNUSED(context);
   result = ob_apply_bg_covered_by<ObWkbGeomPolygon, ObWkbGeomMultiPolygon>(g1, g2);
   return OB_SUCCESS;
-} OB_GEO_FUNC_END;
+} OB_GEO_FUNC_END;  
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomPolygon, ObWkbGeomCollection, bool)
-{
+{ 
   INIT_SUCC(ret);
   ObCartesianMultipoint *cart_multi_point = NULL;
   ObCartesianMultilinestring *cart_multi_line = NULL;
@@ -323,35 +323,35 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomPolygon, ObWkbGeo
 
 // wkb cart multilinestring
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomMultiLineString, ObWkbGeomLineString, bool)
-{
+{ 
   UNUSED(context);
   result = ob_apply_bg_covered_by<ObWkbGeomMultiLineString, ObWkbGeomLineString>(g1, g2);
   return OB_SUCCESS;
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomMultiLineString, ObWkbGeomPolygon, bool)
-{
+{ 
   UNUSED(context);
   result = ob_apply_bg_covered_by<ObWkbGeomMultiLineString, ObWkbGeomPolygon>(g1, g2);
   return OB_SUCCESS;
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomMultiLineString, ObWkbGeomMultiLineString, bool)
-{
+{ 
   UNUSED(context);
   result = ob_apply_bg_covered_by<ObWkbGeomMultiLineString, ObWkbGeomMultiLineString>(g1, g2);
   return OB_SUCCESS;
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomMultiLineString, ObWkbGeomMultiPolygon, bool)
-{
+{ 
   UNUSED(context);
   result = ob_apply_bg_covered_by<ObWkbGeomMultiLineString, ObWkbGeomMultiPolygon>(g1, g2);
   return OB_SUCCESS;
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomMultiLineString, ObWkbGeomCollection, bool)
-{
+{ 
   INIT_SUCC(ret);
   ObCartesianMultipoint *cart_multi_point = NULL;
   ObCartesianMultilinestring *cart_multi_line = NULL;
@@ -375,21 +375,21 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomMultiLineString, 
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomMultiPolygon, ObWkbGeomPolygon, bool)
-{
+{ 
   UNUSED(context);
   result = ob_apply_bg_covered_by<ObWkbGeomMultiPolygon, ObWkbGeomPolygon>(g1, g2);
   return OB_SUCCESS;
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomMultiPolygon, ObWkbGeomMultiPolygon, bool)
-{
+{ 
   UNUSED(context);
   result = ob_apply_bg_covered_by<ObWkbGeomMultiPolygon , ObWkbGeomMultiPolygon>(g1, g2);
   return OB_SUCCESS;
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomMultiPolygon, ObWkbGeomCollection, bool)
-{
+{ 
   INIT_SUCC(ret);
   ObCartesianMultipoint *cart_multi_point = NULL;
   ObCartesianMultilinestring *cart_multi_line = NULL;
@@ -411,7 +411,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomMultiPolygon, ObW
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomCollection, ObWkbGeomPoint, bool)
-{
+{ 
   INIT_SUCC(ret);
   ObCartesianMultipoint *cart_multi_point = NULL;
   ObCartesianMultilinestring *cart_multi_line = NULL;
@@ -420,7 +420,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomCollection, ObWkb
   if (OB_FAIL(ObGeoFuncUtils::ob_gc_prepare<ObCartesianGeometrycollection>(context, geo1, cart_multi_point,
                                                                            cart_multi_line, cart_multi_poly))) {
     LOG_WARN("failed to do gc prepare", K(ret));
-  } else if (!cart_multi_poly->empty() || !cart_multi_line->empty()) {
+  } else if (!cart_multi_poly->empty() || !cart_multi_line->empty()) { 
     result = false;
   } else if (cart_multi_point->empty()) {
     result = true;
@@ -435,7 +435,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomCollection, ObWkb
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomCollection, ObWkbGeomLineString, bool)
-{
+{ 
   INIT_SUCC(ret);
   ObCartesianMultipoint *cart_multi_point = NULL;
   ObCartesianMultilinestring *cart_multi_line = NULL;
@@ -444,7 +444,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomCollection, ObWkb
   if (OB_FAIL(ObGeoFuncUtils::ob_gc_prepare<ObCartesianGeometrycollection>(context, geo1, cart_multi_point,
                                                                            cart_multi_line, cart_multi_poly))) {
     LOG_WARN("failed to do gc prepare", K(ret));
-  } else if (!cart_multi_poly->empty()) {
+  } else if (!cart_multi_poly->empty()) { 
     result = false;
   } else if (cart_multi_point->empty() && cart_multi_line->empty()) {
     result = true;
@@ -462,7 +462,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomCollection, ObWkb
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomCollection, ObWkbGeomPolygon, bool)
-{
+{ 
   INIT_SUCC(ret);
   ObCartesianMultipoint *cart_multi_point = NULL;
   ObCartesianMultilinestring *cart_multi_line = NULL;
@@ -488,7 +488,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomCollection, ObWkb
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomCollection, ObWkbGeomMultiPoint, bool)
-{
+{ 
   INIT_SUCC(ret);
   ObCartesianMultipoint *cart_multi_point = NULL;
   ObCartesianMultilinestring *cart_multi_line = NULL;
@@ -513,10 +513,10 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomCollection, ObWkb
     }
   }
   return ret;
-} OB_GEO_FUNC_END;
+} OB_GEO_FUNC_END;  
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomCollection, ObWkbGeomMultiLineString, bool)
-{
+{ 
   INIT_SUCC(ret);
   ObCartesianMultipoint *cart_multi_point = NULL;
   ObCartesianMultilinestring *cart_multi_line = NULL;
@@ -540,10 +540,10 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomCollection, ObWkb
     }
   }
   return ret;
-} OB_GEO_FUNC_END;
+} OB_GEO_FUNC_END;  
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomCollection, ObWkbGeomMultiPolygon, bool)
-{
+{ 
   INIT_SUCC(ret);
   ObCartesianMultipoint *cart_multi_point = NULL;
   ObCartesianMultilinestring *cart_multi_line = NULL;
@@ -569,14 +569,14 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomCollection, ObWkb
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomCollection, ObWkbGeomCollection, bool)
-{
+{ 
   INIT_SUCC(ret);
   ObCartesianMultipoint *cart_multi_point1 = NULL;
   ObCartesianMultilinestring *cart_multi_line1 = NULL;
   ObCartesianMultipolygon *cart_multi_poly1 = NULL;
   ObCartesianMultipoint *cart_multi_point2 = NULL;
   ObCartesianMultilinestring *cart_multi_line2 = NULL;
-  ObCartesianMultipolygon *cart_multi_poly2 = NULL;
+  ObCartesianMultipolygon *cart_multi_poly2 = NULL;    
   ObGeometry *geo1 = const_cast<ObGeometry *>(reinterpret_cast<const ObGeometry *>(g1));
   ObGeometry *geo2 = const_cast<ObGeometry *>(reinterpret_cast<const ObGeometry *>(g2));
   if (OB_FAIL(ObGeoFuncUtils::ob_gc_prepare<ObCartesianGeometrycollection>(context, geo1, cart_multi_point1,
@@ -611,11 +611,11 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomCollection, ObWkb
         if (!diff_poly.empty()) {
           result = false;
         }
-      }
+      } 
     }
   }
   return ret;
-} OB_GEO_FUNC_END;
+} OB_GEO_FUNC_END;  
 
 // geographic point
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogPoint, ObWkbGeogCollection, bool)
@@ -626,7 +626,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogPoint, ObWkbGeogC
   const ObWkbGeogCollection *geo2 = reinterpret_cast<const ObWkbGeogCollection *>(g2->val());
   const ObSrsItem *srs = context.get_srs();
   boost::geometry::srs::spheroid<double> geog_sphere(srs->semi_major_axis(), srs->semi_minor_axis());
-  ObPlPaStrategy point_strategy(geog_sphere);
+  ObPlPaStrategy point_strategy(geog_sphere);    
   ObWkbGeogCollection::iterator iter = geo2->begin();
   typename ObWkbGeogCollection::const_pointer sub_ptr;
   for (; iter != geo2->end() && (result == false) && OB_SUCC(ret); ++iter) {
@@ -634,9 +634,9 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogPoint, ObWkbGeogC
     ObGeoType sub_type = geo2->get_sub_type(sub_ptr);
     switch (sub_type) {
       case ObGeoType::POINT :
-      case ObGeoType::LINESTRING :
+      case ObGeoType::LINESTRING : 
       case ObGeoType::MULTIPOINT :
-      case ObGeoType::MULTILINESTRING :
+      case ObGeoType::MULTILINESTRING : 
       case ObGeoType::GEOMETRYCOLLECTION :{
         ObGeometry *sub_g2 = NULL;
         common::ObIAllocator *allocator = context.get_allocator();
@@ -691,7 +691,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogPoint, ObWkbGeogC
           boost::geometry::correct(*multipoly_copy);
           result = boost::geometry::covered_by(*geo1, *multipoly_copy);
 #endif
-        }
+        }                
         break;
       }
       default : {
@@ -710,27 +710,27 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogMultiPoint, ObWkb
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogPoint, ObWkbGeogPoint, bool)
-{
+{ 
   UNUSED(context);
   result = ob_apply_bg_covered_by<ObWkbGeogPoint, ObWkbGeogPoint>(g1, g2);
   return OB_SUCCESS;
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogPoint, ObWkbGeogMultiPoint, bool)
-{
+{ 
   UNUSED(context);
   result = ob_apply_bg_covered_by<ObWkbGeogPoint, ObWkbGeogMultiPoint>(g1, g2);
   return OB_SUCCESS;
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_GEO1_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogPoint, bool)
-{
+{ 
   result = ob_apply_bg_covered_by_with_pl_strategy<ObWkbGeogPoint, GeoType2>(g1, g2, context);
   return OB_SUCCESS;
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogMultiPoint, ObWkbGeogPoint, bool)
-{
+{ 
   UNUSED(context);
   const ObWkbGeogMultiPoint *geo1 = reinterpret_cast<const ObWkbGeogMultiPoint *>(g1->val());
   const ObWkbGeogPoint *geo2 = reinterpret_cast<const ObWkbGeogPoint *>(g2->val());
@@ -740,7 +740,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogMultiPoint, ObWkb
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogMultiPoint, ObWkbGeogMultiPoint, bool)
-{
+{ 
   const ObWkbGeogMultiPoint *geo1 = reinterpret_cast<const ObWkbGeogMultiPoint *>(g1->val());
   const ObWkbGeogMultiPoint *geo2 = reinterpret_cast<const ObWkbGeogMultiPoint *>(g2->val());
   // travel every point in multipoint; check if any one is not covered by geo2(postgis)
@@ -752,14 +752,14 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogMultiPoint, ObWkb
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_GEO1_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogMultiPoint, bool)
-{
+{ 
   const ObSrsItem *srs = context.get_srs();
   const ObWkbGeogMultiPoint *geo1 = reinterpret_cast<const ObWkbGeogMultiPoint *>(g1->val());
   const GeoType2 *geo2 = reinterpret_cast<const GeoType2 *>(g2->val());
   // travel every point in multipoint; check if any one is not covered by geo2(postgis)
   result = true;
   boost::geometry::srs::spheroid<double> geog_sphere(srs->semi_major_axis(), srs->semi_minor_axis());
-  ObPlPaStrategy point_strategy(geog_sphere);
+  ObPlPaStrategy point_strategy(geog_sphere);  
   FOREACH_X(item, *geo1, (result == true)) {
 #ifdef USE_SPHERE_GEO
   result = boost::geometry::covered_by(*item, *geo2, point_strategy);
@@ -771,31 +771,31 @@ OB_GEO_GEOG_BINARY_FUNC_GEO1_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogMultiPoint, 
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogLineString, ObWkbGeogLineString, bool)
-{
+{ 
   result = ob_apply_bg_covered_by_with_ll_strategy<ObWkbGeogLineString, ObWkbGeogLineString>(g1, g2, context);
   return OB_SUCCESS;
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogLineString, ObWkbGeogPolygon, bool)
-{
+{ 
   result = ob_apply_bg_covered_by_with_ll_strategy<ObWkbGeogLineString, ObWkbGeogPolygon>(g1, g2, context);
   return OB_SUCCESS;
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogLineString, ObWkbGeogMultiLineString, bool)
-{
+{ 
   result = ob_apply_bg_covered_by_with_ll_strategy<ObWkbGeogLineString, ObWkbGeogMultiLineString>(g1, g2, context);
   return OB_SUCCESS;
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogLineString, ObWkbGeogMultiPolygon, bool)
-{
+{ 
   result = ob_apply_bg_covered_by_with_ll_strategy<ObWkbGeogLineString, ObWkbGeogMultiPolygon>(g1, g2, context);
   return OB_SUCCESS;
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogLineString, ObWkbGeogCollection, bool)
-{
+{ 
   INIT_SUCC(ret);
   ObGeographMultipoint *multi_point = NULL;
   ObGeographMultilinestring *multi_line = NULL;
@@ -829,21 +829,21 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogLineString, ObWkb
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogPolygon, ObWkbGeogPolygon, bool)
-{
+{ 
   UNUSED(context);
   result = ob_apply_bg_covered_by_with_ll_strategy<ObWkbGeogPolygon, ObWkbGeogPolygon>(g1, g2, context);
   return OB_SUCCESS;
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogPolygon, ObWkbGeogMultiPolygon, bool)
-{
+{ 
   UNUSED(context);
   result = ob_apply_bg_covered_by_with_ll_strategy<ObWkbGeogPolygon, ObWkbGeogMultiPolygon>(g1, g2, context);
   return OB_SUCCESS;
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogPolygon, ObWkbGeogCollection, bool)
-{
+{ 
   INIT_SUCC(ret);
   ObGeographMultipoint *multi_point = NULL;
   ObGeographMultilinestring *multi_line = NULL;
@@ -871,33 +871,33 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogPolygon, ObWkbGeo
 
 // wkb geog multilinestring
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogMultiLineString, ObWkbGeogLineString, bool)
-{
+{ 
   result = ob_apply_bg_covered_by_with_ll_strategy<ObWkbGeogMultiLineString, ObWkbGeogLineString>(g1, g2, context);
   return OB_SUCCESS;
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogMultiLineString, ObWkbGeogPolygon, bool)
-{
+{ 
   result = ob_apply_bg_covered_by_with_ll_strategy<ObWkbGeogMultiLineString, ObWkbGeogPolygon>(g1, g2, context);
   return OB_SUCCESS;
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogMultiLineString, ObWkbGeogMultiLineString, bool)
-{
+{ 
   result = ob_apply_bg_covered_by_with_ll_strategy<ObWkbGeogMultiLineString,
                                                    ObWkbGeogMultiLineString>(g1, g2, context);
   return OB_SUCCESS;
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogMultiLineString, ObWkbGeogMultiPolygon, bool)
-{
+{ 
   result = ob_apply_bg_covered_by_with_ll_strategy<ObWkbGeogMultiLineString,
                                                    ObWkbGeogMultiPolygon>(g1, g2, context);
   return OB_SUCCESS;
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogMultiLineString, ObWkbGeogCollection, bool)
-{
+{ 
   INIT_SUCC(ret);
   ObGeographMultipoint *multi_point = NULL;
   ObGeographMultilinestring *multi_line = NULL;
@@ -914,7 +914,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogMultiLineString, 
     ObIAllocator *allocator = context.get_allocator();
     uint32_t srid = srs->get_srid();
     boost::geometry::srs::spheroid<double> geog_sphere(srs->semi_major_axis(), srs->semi_minor_axis());
-    ObLlLaAaStrategy line_strategy(geog_sphere);
+    ObLlLaAaStrategy line_strategy(geog_sphere);        
     const ObWkbGeogMultiLineString *geo1 = reinterpret_cast<const ObWkbGeogMultiLineString *>(g1->val());
     ObGeographMultilinestring res_geo1(srid, *allocator);
     ObGeographMultilinestring res_geo2(srid, *allocator);
@@ -931,19 +931,19 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogMultiLineString, 
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogMultiPolygon, ObWkbGeogPolygon, bool)
-{
+{ 
   result = ob_apply_bg_covered_by_with_ll_strategy<ObWkbGeogMultiPolygon, ObWkbGeogPolygon>(g1, g2, context);
   return OB_SUCCESS;
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogMultiPolygon, ObWkbGeogMultiPolygon, bool)
-{
+{ 
   result = ob_apply_bg_covered_by_with_ll_strategy<ObWkbGeogMultiPolygon , ObWkbGeogMultiPolygon>(g1, g2, context);
   return OB_SUCCESS;
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogMultiPolygon, ObWkbGeogCollection, bool)
-{
+{ 
   INIT_SUCC(ret);
   ObGeographMultipoint *multi_point = NULL;
   ObGeographMultilinestring *multi_line = NULL;
@@ -970,7 +970,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogMultiPolygon, ObW
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogCollection, ObWkbGeogPoint, bool)
-{
+{ 
   INIT_SUCC(ret);
   ObGeographMultipoint *multi_point = NULL;
   ObGeographMultilinestring *multi_line = NULL;
@@ -983,7 +983,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogCollection, ObWkb
   } else if (OB_FAIL(ObGeoFuncUtils::ob_gc_prepare<ObGeographGeometrycollection>(context, geo1, multi_point,
                                                                                  multi_line, multi_poly))) {
     LOG_WARN("failed to do gc prepare", K(ret));
-  } else if (!multi_poly->empty() || !multi_line->empty()) {
+  } else if (!multi_poly->empty() || !multi_line->empty()) { 
     result = false;
   } else if (multi_point->empty()) {
     result = true;
@@ -998,7 +998,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogCollection, ObWkb
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogCollection, ObWkbGeogLineString, bool)
-{
+{ 
   INIT_SUCC(ret);
   ObGeographMultipoint *multi_point = NULL;
   ObGeographMultilinestring *multi_line = NULL;
@@ -1011,7 +1011,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogCollection, ObWkb
   } else if (OB_FAIL(ObGeoFuncUtils::ob_gc_prepare<ObGeographGeometrycollection>(context, geo1, multi_point,
                                                                                  multi_line, multi_poly))) {
     LOG_WARN("failed to do gc prepare", K(ret));
-  } else if (!multi_poly->empty()) {
+  } else if (!multi_poly->empty()) { 
     result = false;
   } else if (multi_point->empty() && multi_line->empty()) {
     result = true;
@@ -1027,7 +1027,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogCollection, ObWkb
       result = boost::geometry::covered_by(*multi_line, *geo2);
 #endif
     }
-    ObPlPaStrategy point_strategy(geog_sphere);
+    ObPlPaStrategy point_strategy(geog_sphere); 
     FOREACH_X(item, *multi_point, (result == true)) {
 #ifdef USE_SPHERE_GEO
       result = boost::geometry::covered_by(*item, *geo2, point_strategy);
@@ -1040,7 +1040,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogCollection, ObWkb
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogCollection, ObWkbGeogPolygon, bool)
-{
+{ 
   INIT_SUCC(ret);
   ObGeographMultipoint *multi_point = NULL;
   ObGeographMultilinestring *multi_line = NULL;
@@ -1085,7 +1085,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogCollection, ObWkb
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogCollection, ObWkbGeogMultiPoint, bool)
-{
+{ 
   INIT_SUCC(ret);
   ObGeographMultipoint *multi_point = NULL;
   ObGeographMultilinestring *multi_line = NULL;
@@ -1114,10 +1114,10 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogCollection, ObWkb
     }
   }
   return ret;
-} OB_GEO_FUNC_END;
+} OB_GEO_FUNC_END;  
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogCollection, ObWkbGeogMultiLineString, bool)
-{
+{ 
   INIT_SUCC(ret);
   ObGeographMultipoint *multi_point = NULL;
   ObGeographMultilinestring *multi_line = NULL;
@@ -1156,10 +1156,10 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogCollection, ObWkb
     }
   }
   return ret;
-} OB_GEO_FUNC_END;
+} OB_GEO_FUNC_END;  
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogCollection, ObWkbGeogMultiPolygon, bool)
-{
+{ 
   INIT_SUCC(ret);
   ObGeographMultipoint *multi_point = NULL;
   ObGeographMultilinestring *multi_line = NULL;
@@ -1204,14 +1204,14 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogCollection, ObWkb
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogCollection, ObWkbGeogCollection, bool)
-{
+{ 
   INIT_SUCC(ret);
   ObGeographMultipoint *multi_point1 = NULL;
   ObGeographMultilinestring *multi_line1 = NULL;
   ObGeographMultipolygon *multi_poly1 = NULL;
   ObGeographMultipoint *multi_point2 = NULL;
   ObGeographMultilinestring *multi_line2 = NULL;
-  ObGeographMultipolygon *multi_poly2 = NULL;
+  ObGeographMultipolygon *multi_poly2 = NULL;    
   ObGeometry *geo1 = const_cast<ObGeometry *>(reinterpret_cast<const ObGeometry *>(g1));
   ObGeometry *geo2 = const_cast<ObGeometry *>(reinterpret_cast<const ObGeometry *>(g2));
   const ObSrsItem *srs = context.get_srs();
@@ -1266,7 +1266,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogCollection, ObWkb
         if (!diff_poly.empty()) {
           result = false;
         }
-      }
+      } 
     }
   }
   return ret;

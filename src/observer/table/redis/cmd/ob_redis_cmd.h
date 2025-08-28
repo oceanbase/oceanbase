@@ -80,12 +80,12 @@ struct ObRedisAttr
 // The virtual base class of the redis command
 class RedisCommand
 {
-public:
+public:  
   using FieldValMap = common::hash::ObHashMap<ObString, ObString, common::hash::NoPthreadDefendMode>;
   using FieldSet = common::hash::ObHashSet<ObString, common::hash::NoPthreadDefendMode>;
   static constexpr int32_t DEFAULT_BUCKET_NUM = 1024;
-
-  RedisCommand()
+  
+  RedisCommand() 
       : is_inited_(false),
         key_(),
         sub_key_()
@@ -209,7 +209,7 @@ private:
   common::ObIAllocator *outer_allocator_; // refer to rpc allocator in read only operation
   common::ObArenaAllocator allocator_;
   // result_ must be accessed externally through the response_ member
-  ObRedisResult result_;
+  ObRedisResult result_; 
 public:
   table::ObTableEntityFactory<table::ObTableEntity> default_entity_factory_;
   int64_t db_;
@@ -217,7 +217,7 @@ public:
   ObLSID ls_id_;
   ObTabletID tablet_id_;
   char fix_buf_[FIX_BUF_SIZE]; // for RedisCommand
-  ObRedisResponse response_;
+  ObRedisResponse response_; 
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRedisOp);

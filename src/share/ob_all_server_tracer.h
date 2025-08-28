@@ -60,7 +60,7 @@ public:
       common::ObIArray<ObServerInfoInTable> &active_servers_info) const;
   virtual int get_alive_servers(const common::ObZone &zone, common::ObIArray<common::ObAddr> &server_list) const;
   // Atomically get alive_server and renew_time
-  virtual int get_alive_servers_with_renew_time(const common::ObZone &zone,
+  virtual int get_alive_servers_with_renew_time(const common::ObZone &zone, 
                                                 common::ObIArray<common::ObAddr> &server_list,
                                                 int64_t &renew_time) const;
   virtual int get_alive_servers_count(const common::ObZone &zone, int64_t &count) const;
@@ -102,20 +102,20 @@ public:
   int renew_tenant_map();
   int renew_tenant_map_by_id(const uint64_t tenant_id);
   int get_alive_tenant_servers(
-      const uint64_t tenant_id,
-      common::ObIArray<common::ObAddr> &alive_servers,
+      const uint64_t tenant_id, 
+      common::ObIArray<common::ObAddr> &alive_servers, 
       int64_t &renew_time) const;
 private:
-  /*
-    set new tenant_servers to tenant_map_,
-    this operation will compare renew_time,
+  /* 
+    set new tenant_servers to tenant_map_, 
+    this operation will compare renew_time, 
     and only the latest renew_time will be allowed to be inserted.
 
     @param[in] tenant_id:        Tenant for servers.
-    @param[in] tenant_servers:   Tenant’s machine address
+    @param[in] tenant_servers:   Tenant’s machine address 
     @return
       - OB_SUCCESS:               successfully
-      - OB_ERR_UNEXPECTED         The tenant_id in the input tenant_servers
+      - OB_ERR_UNEXPECTED         The tenant_id in the input tenant_servers 
                                   is for the meta tenant.
       - other:                    other failures
   */
@@ -140,7 +140,7 @@ public:
       : update_value_(update_value) {}
   ~ObTenantServersCacheUpdater() {}
   void operator()(common::hash::HashMapPair<
-                  uint64_t,
+                  uint64_t, 
                   ObTenantServers> &entry);
 private:
   const ObTenantServers &update_value_;
@@ -202,29 +202,29 @@ public:
   /*
     Atomically get alive_server and renew_time
     @param[in] zone               Retrieve the alive server for the specified zone.
-                                  If no specific zone is required,
+                                  If no specific zone is required, 
                                   enter an empty zone to obtain alive servers from all zones.
     @param[out] server_list       The returned alive_server
-                                  This may return empty (When the return ret is OB_SUCCESS,
+                                  This may return empty (When the return ret is OB_SUCCESS, 
                                   it applies to the following situations):
                                     1. No alive server for the corresponding zone.
                                     2. The server_tracer has not yet refreshed（Cache is empty）
     @param[out] renew_time        The time to get the servers from the table
                                   Effective only if server_list is not empty
-    @return
-      - other
+    @return 
+      - other      
   */
-  virtual int get_alive_servers_with_renew_time(const common::ObZone &zone,
-                                                common::ObIArray<common::ObAddr> &server_list,
+  virtual int get_alive_servers_with_renew_time(const common::ObZone &zone, 
+                                                common::ObIArray<common::ObAddr> &server_list, 
                                                 int64_t &renew_time) const;
   virtual int check_server_active(const common::ObAddr &server, bool &is_active) const;
   /*
-    if allow_broadcast is true,
-    RPC will be sent to all active machines to refresh their server trace maps
-    after the local machine's server trace map is successfully updated.
-    allow_broadcast defaults to false.
+    if allow_broadcast is true, 
+    RPC will be sent to all active machines to refresh their server trace maps 
+    after the local machine's server trace map is successfully updated. 
+    allow_broadcast defaults to false.   
 
-    @param[in] allow_broadcast          Indicates whether to broadcast to all machines for all_server_tracer refresh;
+    @param[in] allow_broadcast          Indicates whether to broadcast to all machines for all_server_tracer refresh; 
                                         defaults to false.
     @return
       - OB_NEED_RETRY                   The sys tenant has not yet been built
@@ -251,36 +251,36 @@ public:
   */
   int renew_tenant_servers_cache_map();
   /*
-    retrieve the address of the alive server corresponding to the tenant
-    based on the tenant_id（If a meta tenant is entered,
+    retrieve the address of the alive server corresponding to the tenant 
+    based on the tenant_id（If a meta tenant is entered, 
     it will be converted to the corresponding user tenant）
 
     @param[in] tenant_id          The tenant_id to be obtained
     @param[out] servers           The machine where the tenant unit is located
-                                  This may return empty (When the return ret is OB_SUCCESS,
+                                  This may return empty (When the return ret is OB_SUCCESS, 
                                   it applies to the following situations):
                                     1. The tenant does not exist (including being deleted).
                                     2. The tenant was just created and has not yet been refreshed.
                                     3. The tenant's server has been refreshed, but all servers are not alive.
     @param[out] renew_time        The time to get the servers from the table
                                   Effective only if server_list is not empty
-    @return
+    @return 
       - other
   */
-  int get_alive_tenant_servers(const uint64_t tenant_id,
-                               common::ObIArray<common::ObAddr> &servers,
+  int get_alive_tenant_servers(const uint64_t tenant_id, 
+                               common::ObIArray<common::ObAddr> &servers, 
                                int64_t &renew_time) const;
   /*
-    Refresh the server of the corresponding tenant
-    according to tenant_id（If a meta tenant is entered,
+    Refresh the server of the corresponding tenant 
+    according to tenant_id（If a meta tenant is entered, 
     it will be converted to the corresponding user tenant）
 
     @param[in] tenant_id          The tenant to refresh
-    @return
-      - OB_ENTRY_NOT_EXIST        There is no server information
+    @return 
+      - OB_ENTRY_NOT_EXIST        There is no server information 
                                   corresponding to the tenant in the table.
-                                  (The tenant may have already been deleted,
-                                  or the tenant ID does not exist.)
+                                  (The tenant may have already been deleted, 
+                                  or the tenant ID does not exist.) 
       - other
   */
   int renew_tenant_servers_cache_by_id(const uint64_t tenant_id);

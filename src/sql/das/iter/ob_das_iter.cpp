@@ -155,3 +155,5 @@ int ObDASIter::get_domain_id_merge_iter(ObDASDomainIdMergeIter *&domain_id_merge
 
 }  // namespace sql
 }  // namespace oceanbase
+
+

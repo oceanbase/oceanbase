@@ -42,7 +42,7 @@ int ObExprSdoRelate::calc_result_type3(ObExprResType &type,
   INIT_SUCC(ret);
 
   if (type1.get_type() == ObNullType) {
-  } else if (ob_is_nchar(type1.get_type())) {
+  } else if (ob_is_nchar(type1.get_type())) { 
     ret = OB_ERR_OPERATOR_NOT_EXIST;
     LOG_WARN("operator binding does not exist", K(ret));
   } else if (!ob_is_geometry(type1.get_type()) && !ob_is_string_type(type1.get_type())) {
@@ -51,7 +51,7 @@ int ObExprSdoRelate::calc_result_type3(ObExprResType &type,
   }
   if (OB_FAIL(ret)) {
   } else if (type2.get_type() == ObNullType) {
-  } else if (ob_is_nchar(type2.get_type())) {
+  } else if (ob_is_nchar(type2.get_type())) { 
     ret = OB_ERR_OPERATOR_NOT_EXIST;
     LOG_WARN("operator binding does not exist", K(ret));
   } else if (!ob_is_geometry(type2.get_type()) && !ob_is_string_type(type2.get_type())) {
@@ -59,10 +59,10 @@ int ObExprSdoRelate::calc_result_type3(ObExprResType &type,
     type2.set_calc_collation_type(CS_TYPE_BINARY);
   }
   if (OB_FAIL(ret)) {
-  } else if (type3.get_type() == ObNullType ) {
+  } else if (type3.get_type() == ObNullType ) { 
     ret = OB_INVALID_MASK;
     LOG_WARN("invalid mask param", K(ret), K(type3.get_type()));
-  } else if (ob_is_blob(type3.get_type(), type3.get_collation_type())
+  } else if (ob_is_blob(type3.get_type(), type3.get_collation_type()) 
             || ob_is_json(type3.get_type()) || ob_is_user_defined_type(type3.get_type())) {
     ret = OB_ERR_OPERATOR_NOT_EXIST;
     LOG_WARN("operator binding does not exist", K(ret));
@@ -101,7 +101,7 @@ int ObExprSdoRelate::get_params(ObExpr *param_expr, ObArenaAllocator& temp_alloc
       cmp_str[upper_str.length()] = '\0';
       MEMCPY(cmp_str, upper_str.ptr(), upper_str.length());
       if (nullptr != strstr(cmp_str, ObSdoRelationship::ANYINTERACT) && OB_FALSE_IT(mask.anyinteract_ = 1)) {
-      } else if (mask.anyinteract_ != 1
+      } else if (mask.anyinteract_ != 1 
                 && (strstr(cmp_str, ObSdoRelationship::CONTAINS)
                 || strstr(cmp_str, ObSdoRelationship::COVEREDBY)
                 || strstr(cmp_str, ObSdoRelationship::COVERS)
@@ -120,7 +120,7 @@ int ObExprSdoRelate::get_params(ObExpr *param_expr, ObArenaAllocator& temp_alloc
   return ret;
 }
 
-int ObExprSdoRelate::set_relate_result(ObIAllocator &res_alloc, ObDatum &res, bool result)
+int ObExprSdoRelate::set_relate_result(ObIAllocator &res_alloc, ObDatum &res, bool result) 
 {
   INIT_SUCC(ret);
 
@@ -236,7 +236,7 @@ int ObExprSdoRelate::eval_sdo_relate(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
         } else if (!is_geo1_cached && !is_geo2_cached && OB_FAIL(ObGeoExprUtils::get_srs_item(session->get_effective_tenant_id(), srs_guard, srid1, srs))) {
           LOG_WARN("fail to get srs item", K(ret), K(srid1));
         } else if (!is_geo1_cached && OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb1, geo1, nullptr, N_ST_INTERSECTS, ObGeoBuildFlag::GEO_ALLOW_3D_CARTESIAN))) {
-          LOG_WARN("get first geo by wkb failed", K(ret));
+          LOG_WARN("get first geo by wkb failed", K(ret));   
         } else if (!is_geo2_cached && OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb2, geo2, nullptr, N_ST_INTERSECTS, ObGeoBuildFlag::GEO_ALLOW_3D_CARTESIAN))) {
           LOG_WARN("get second geo by wkb failed", K(ret));
         } else if ((!is_geo1_cached && OB_FAIL(ObGeoExprUtils::check_empty(geo1, is_geo1_empty)))
@@ -244,7 +244,7 @@ int ObExprSdoRelate::eval_sdo_relate(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
           LOG_WARN("check geo empty failed", K(ret));
         } else if (is_geo1_empty || is_geo2_empty) {
           res.set_null();
-        } else if (ObGeoTypeUtil::is_3d_geo_type(geo1->type()) || ObGeoTypeUtil::is_3d_geo_type(geo2->type())) {
+        } else if (ObGeoTypeUtil::is_3d_geo_type(geo1->type()) || ObGeoTypeUtil::is_3d_geo_type(geo2->type())) { 
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("only support 2D spatial relationship", K(ret));
         } else if (OB_FAIL(ObGeoExprUtils::zoom_in_geos_for_relation(srs, *geo1, *geo2, is_geo1_cached, is_geo2_cached))) {

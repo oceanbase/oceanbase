@@ -51,7 +51,7 @@ int ObCreateUserExecutor::encrypt_passwd(const common::ObString& pwd,
   return ret;
 }
 
-int ObCreateUserExecutor::check_user_valid(ObSchemaGetterGuard& schema_guard,
+int ObCreateUserExecutor::check_user_valid(ObSchemaGetterGuard& schema_guard, 
                                            uint64_t priv_set,
                                            int64_t tenant_id,
                                            const ObString &user_name,
@@ -62,7 +62,7 @@ int ObCreateUserExecutor::check_user_valid(ObSchemaGetterGuard& schema_guard,
   ObSqlString full_user_name;
   bool existed = false;
   if (!ObSchemaChecker::enable_mysql_pl_priv_check(tenant_id, schema_guard)) {
-  } else if (OB_FAIL(full_user_name.append_fmt("%.*s@%.*s", user_name.length(), user_name.ptr(),
+  } else if (OB_FAIL(full_user_name.append_fmt("%.*s@%.*s", user_name.length(), user_name.ptr(), 
                                                 host_name.length(), host_name.ptr()))) {
     LOG_WARN("append fmt failed", K(ret));
   } else if (OB_FAIL(schema_guard.check_routine_definer_existed(tenant_id, full_user_name.string(), existed))) {

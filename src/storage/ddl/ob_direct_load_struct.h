@@ -91,8 +91,8 @@ public:
   share::ObLSID ls_id_;
   int64_t trans_version_;
   ObDirectLoadType direct_load_type_;
-  transaction::ObTransID trans_id_;
-  int64_t seq_no_; //
+  transaction::ObTransID trans_id_; 
+  int64_t seq_no_; // 
   uint64_t src_tenant_id_;
   transaction::ObTxDesc* tx_desc_;
 };
@@ -103,7 +103,7 @@ public:
   ObTabletDirectLoadMgrKey() // hash needed.
     : tablet_id_(), direct_load_type_(ObDirectLoadType::DIRECT_LOAD_INVALID), context_id_(0)
   { }
-
+  
   ObTabletDirectLoadMgrKey(const common::ObTabletID &tablet_id, const ObDirectLoadType &type, const int64_t ctx_id) // make sure type and ctx_id is correct.
     : tablet_id_(tablet_id)
   {
@@ -128,13 +128,13 @@ public:
   {
   }
   ~ObTabletDirectLoadMgrKey() = default;
-  uint64_t hash() const {
+  uint64_t hash() const { 
     return tablet_id_.hash() + murmurhash(&direct_load_type_, sizeof(direct_load_type_), 0)
-        + murmurhash(&context_id_, sizeof(context_id_), 0);
+        + murmurhash(&context_id_, sizeof(context_id_), 0); 
   }
   int hash(uint64_t &hash_val) const {hash_val = hash(); return OB_SUCCESS;}
-  bool is_valid() const {
-    return tablet_id_.is_valid() && is_valid_direct_load(direct_load_type_) &&
+  bool is_valid() const { 
+    return tablet_id_.is_valid() && is_valid_direct_load(direct_load_type_) && 
       (((is_shared_storage_dempotent_mode(direct_load_type_) || is_incremental_direct_load(direct_load_type_)) ? context_id_ > 0 : context_id_ == 0)); }
   bool operator == (const ObTabletDirectLoadMgrKey &other) const {
         return tablet_id_ == other.tablet_id_ && direct_load_type_ == other.direct_load_type_
@@ -241,7 +241,7 @@ public:
     column_flags_ = other.column_flags_;
     return OB_SUCCESS;
   }
-  TO_STRING_KV(K(is_valid_), K(col_type_), K(col_accuracy_), K(column_flags_));
+  TO_STRING_KV(K(is_valid_), K(col_type_), K(col_accuracy_), K(column_flags_)); 
 public:
   bool is_valid_;
   common::ObObjMeta col_type_;
@@ -315,14 +315,14 @@ public:
   int64_t task_cnt_;
   bool need_online_opt_stat_gather_;
   transaction::ObTxDesc *tx_desc_;
-  // default value is invalid tx_id,
-  // participant tx_id for the incremental direct load,
+  // default value is invalid tx_id, 
+  // participant tx_id for the incremental direct load, 
   // and invalid tx_id for the full_direct_load.
-  transaction::ObTransID trans_id_;
+  transaction::ObTransID trans_id_; 
   // default value is 0,
   // sequence number for the incremental direct load,
   // fixed 0 for the full direct load.
-  int64_t seq_no_; //
+  int64_t seq_no_; // 
   int64_t parallel_; // used to decide wehter need to use compress temp data in rescan task.
   int64_t max_batch_size_;
 };
@@ -790,7 +790,7 @@ public:
     const int64_t column_cnt,
     const int64_t snapshot_version,
     ObVectorIndexAlgorithmType index_type,
-    blocksstable::ObDatumRow *&datum_row) override;
+    blocksstable::ObDatumRow *&datum_row) override; 
   virtual int is_empty(bool &empty) override;
 
 private:
@@ -990,11 +990,11 @@ public:
       merge_slice_idx_(0),
       storage_schema_(nullptr),
       direct_load_type_(DIRECT_LOAD_MAX),
-      tenant_data_version_(0),
-      snapshot_version_(0),
-      ddl_task_id_(0),
+      tenant_data_version_(0), 
+      snapshot_version_(0), 
+      ddl_task_id_(0), 
       parallel_task_count_(0),
-      is_micro_index_clustered_(false),
+      is_micro_index_clustered_(false), 
       tablet_transfer_seq_(share::OB_INVALID_TRANSFER_SEQ),
       is_cs_replica_(false),
       is_inited_(false)
@@ -1156,10 +1156,10 @@ public:
       const int64_t slice_idx,
       const int64_t merge_slice_idx,
       const share::SCN &start_scn,
-      const int64_t rowkey_column_count,
-      const ObStorageSchema *storage_schema,
-      const ObIArray<ObColumnSchemaItem> &col_schema,
-      const int64_t dir_id,
+      const int64_t rowkey_column_count, 
+      const ObStorageSchema *storage_schema, 
+      const ObIArray<ObColumnSchemaItem> &col_schema, 
+      const int64_t dir_id, 
       const int64_t parallelism,
       const bool use_batch_store,
       const int64_t max_batch_size);
@@ -1339,7 +1339,7 @@ private:
       const bool is_slice_store,
       const int64_t dir_id,
       const int64_t parallelism,
-      const ObStorageSchema *storage_schema,
+      const ObStorageSchema *storage_schema, 
       const share::SCN &start_scn,
       const ObString vec_idx_param,
       const int64_t vec_dim,

@@ -54,7 +54,7 @@ int ObTableLoadEmptyInsertTabletCtxManager::init(
       LOG_WARN("fail to get all origin leader info", KR(ret));
     } else if (OB_FAIL(target_partition_location_.get_all_leader_info(target_all_leader_info_array_))) {
       LOG_WARN("fail to get all target leader info", KR(ret));
-    }
+    } 
   }
   if (OB_SUCC(ret)) {
     is_inited_ = true;

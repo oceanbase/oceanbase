@@ -359,7 +359,7 @@ int ObMajorMergeScheduler::do_one_round_major_merge(const int64_t expected_epoch
       // Place is_last_merge_complete() to the head of this while loop.
       // So as to break this loop at once, when the last merge is complete.
       // Otherwise, may run one extra loop that should not run, and thus incur error.
-      //
+      // 
       if (OB_FAIL(merge_info_mgr_->get_zone_merge_mgr().get_snapshot(global_info))) {
         LOG_WARN("fail to get zone global merge info", KR(ret));
       } else if (global_info.is_last_merge_complete()) {
@@ -632,7 +632,7 @@ int ObMajorMergeScheduler::try_update_epoch_and_reload()
         // Here, we do not know if freeze_service_epoch in __all_service_epoch has been updated to
         // latest_epoch. If it has been updated to latest_epoch, freeze_service_epoch in memory
         // must also be updated to latest_epoch. So as to keep freeze_service_epoch consistent in
-        // memory and table.
+        // memory and table. 
         int tmp_ret = OB_SUCCESS;
         if (OB_TMP_FAIL(update_epoch_in_memory_and_reload())) {
           if (OB_EAGAIN == tmp_ret) {

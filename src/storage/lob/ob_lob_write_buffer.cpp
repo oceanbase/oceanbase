@@ -195,7 +195,7 @@ int ObLobWriteBuffer::byte_write(
     }
   } else if (write_byte_offset + write_data.length() > buffer_size()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("out of buffer range", K(ret), K(write_byte_offset), K(buffer_size()), K(write_data));
+    LOG_WARN("out of buffer range", K(ret), K(write_byte_offset), K(buffer_size()), K(write_data)); 
   } else if (OB_FAIL(move_data_for_write(write_byte_offset, write_old_byte_len, write_data.length(), remain_buf))) {
     LOG_WARN("move_data_for_write fail", K(ret), K(write_byte_offset), K(write_old_byte_len), K(write_data));
   } else if (OB_FAIL(do_write(write_byte_offset, write_data))) {
@@ -469,7 +469,7 @@ int ObLobWriteBuffer::get_char_len(uint32_t &char_len) const
       LOG_WARN("unkown situtation", K(ret), KPC(this));
     } else {
       char_len = UINT32_MAX;
-    }
+    } 
   }
   return ret;
 }

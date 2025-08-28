@@ -108,7 +108,7 @@ int ObImportTableJobPersistHelper::get_all_import_table_jobs(
   LOG_INFO("get targets", K(ret), K(jobs), K(exec_tenant_id), K(sql));
   return ret;
 }
-
+  
 int ObImportTableJobPersistHelper::advance_status(
     common::ObISQLClient &proxy, const ObImportTableJob &job, const ObImportTableJobStatus &next_status) const
 {
@@ -175,14 +175,14 @@ int ObImportTableJobPersistHelper::move_import_job_to_history(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(job_id));
   } else if (OB_FAIL(sql.assign_fmt(
-      "insert into %s select * from %s where %s=%lu",
+      "insert into %s select * from %s where %s=%lu", 
       OB_ALL_IMPORT_TABLE_JOB_HISTORY_TNAME, OB_ALL_IMPORT_TABLE_JOB_TNAME,
       OB_STR_JOB_ID, job_id))) {
     LOG_WARN("failed to init sql", K(ret));
   } else if (OB_FAIL(proxy.write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
     LOG_WARN("failed to exec sql", K(ret), K(sql));
   } else if (OB_FALSE_IT(sql.reset())) {
-  } else if (OB_FAIL(sql.assign_fmt("delete from %s where %s=%lu",
+  } else if (OB_FAIL(sql.assign_fmt("delete from %s where %s=%lu", 
       OB_ALL_IMPORT_TABLE_JOB_TNAME, OB_STR_JOB_ID, job_id))) {
     LOG_WARN("failed to init sql", K(ret));
   } else if (OB_FAIL(proxy.write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
@@ -193,7 +193,7 @@ int ObImportTableJobPersistHelper::move_import_job_to_history(
   return ret;
 }
 
-int ObImportTableJobPersistHelper::get_import_table_job_history_by_initiator(common::ObISQLClient &proxy,
+int ObImportTableJobPersistHelper::get_import_table_job_history_by_initiator(common::ObISQLClient &proxy, 
     const uint64_t initiator_tenant_id, const uint64_t initiator_job_id, ObImportTableJob &job) const
 {
   int ret = OB_SUCCESS;
@@ -231,7 +231,7 @@ int ObImportTableJobPersistHelper::get_import_table_job_history_by_initiator(com
   return ret;
 }
 
-int ObImportTableJobPersistHelper::get_import_table_job_by_initiator(common::ObISQLClient &proxy,
+int ObImportTableJobPersistHelper::get_import_table_job_by_initiator(common::ObISQLClient &proxy, 
     const uint64_t initiator_tenant_id, const uint64_t initiator_job_id, ObImportTableJob &job) const
 {
   int ret = OB_SUCCESS;
@@ -379,7 +379,7 @@ int ObImportTableTaskPersistHelper::advance_status(
   return ret;
 }
 
-int ObImportTableTaskPersistHelper::get_all_import_table_tasks_by_initiator(common::ObISQLClient &proxy,
+int ObImportTableTaskPersistHelper::get_all_import_table_tasks_by_initiator(common::ObISQLClient &proxy, 
     const ObImportTableJob &job, common::ObIArray<ObImportTableTask> &tasks) const
 {
   int ret = OB_SUCCESS;
@@ -474,14 +474,14 @@ int ObImportTableTaskPersistHelper::move_import_task_to_history(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(job_id));
   } else if (OB_FAIL(sql.assign_fmt(
-      "insert into %s select * from %s where %s=%lu",
+      "insert into %s select * from %s where %s=%lu", 
       OB_ALL_IMPORT_TABLE_TASK_HISTORY_TNAME, OB_ALL_IMPORT_TABLE_TASK_TNAME,
       OB_STR_JOB_ID, job_id))) {
     LOG_WARN("failed to init sql", K(ret));
   } else if (OB_FAIL(proxy.write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
     LOG_WARN("failed to exec sql", K(ret), K(sql));
   } else if (OB_FALSE_IT(sql.reset())) {
-  } else if (OB_FAIL(sql.assign_fmt("delete from %s where %s=%lu",
+  } else if (OB_FAIL(sql.assign_fmt("delete from %s where %s=%lu", 
       OB_ALL_IMPORT_TABLE_TASK_TNAME, OB_STR_JOB_ID, job_id))) {
     LOG_WARN("failed to init sql", K(ret));
   } else if (OB_FAIL(proxy.write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {

@@ -20,7 +20,7 @@ namespace table
 {
 
 int ObIHbaseAdapter::init_table_ctx(ObTableExecCtx &exec_ctx,
-                                    const ObITableEntity &cell,
+                                    const ObITableEntity &cell, 
                                     ObTableOperationType::Type op_type,
                                     ObTableCtx &tb_ctx)
 {
@@ -36,7 +36,7 @@ int ObIHbaseAdapter::init_table_ctx(ObTableExecCtx &exec_ctx,
     simple_table_schema = exec_ctx.get_simple_schema();
   } else if (OB_FAIL(schema_guard.get_simple_table_schema(MTL_ID(), exec_ctx.get_table_id(), simple_table_schema))) {
     LOG_WARN("fail to get simple table schema", K(ret), K(exec_ctx.get_table_id()));
-  }
+  } 
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(simple_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
@@ -84,7 +84,7 @@ int ObIHbaseAdapter::init_table_ctx(ObTableExecCtx &exec_ctx,
       // do nothing
     } else if (OB_FAIL(tb_ctx.init_exec_ctx())) {
       LOG_WARN("fail to init exec ctx", K(ret), K(tb_ctx));
-    } else if (OB_FAIL(tb_ctx.init_trans(exec_ctx.get_trans_param().trans_desc_,
+    } else if (OB_FAIL(tb_ctx.init_trans(exec_ctx.get_trans_param().trans_desc_, 
                                          exec_ctx.get_trans_param().tx_snapshot_))) {
       LOG_WARN("fail to init trans", K(ret));
     } else {
@@ -94,8 +94,8 @@ int ObIHbaseAdapter::init_table_ctx(ObTableExecCtx &exec_ctx,
   return ret;
 }
 
-int ObIHbaseAdapter::init_scan(ObTableExecCtx &exec_ctx,
-                               const ObTableQuery &query,
+int ObIHbaseAdapter::init_scan(ObTableExecCtx &exec_ctx, 
+                               const ObTableQuery &query, 
                                ObTableCtx &tb_ctx)
 {
   int ret = OB_SUCCESS;
@@ -112,7 +112,7 @@ int ObIHbaseAdapter::init_scan(ObTableExecCtx &exec_ctx,
   if (tb_ctx.is_init()) {
     ret = OB_INIT_TWICE;
     LOG_INFO("tb ctx has been inited", K(tb_ctx));
-  } else if (OB_NOT_NULL(exec_ctx.get_simple_schema()) &&
+  } else if (OB_NOT_NULL(exec_ctx.get_simple_schema()) && 
              exec_ctx.get_table_id() == exec_ctx.get_simple_schema()->get_table_id()) {
     table_schema = exec_ctx.get_simple_schema();
   } else if (OB_FAIL(schema_guard.get_simple_table_schema(MTL_ID(), exec_ctx.get_table_id(), table_schema))) {
@@ -129,7 +129,7 @@ int ObIHbaseAdapter::init_scan(ObTableExecCtx &exec_ctx,
     LOG_WARN("fail to init table ctx scan part", K(ret), K(is_weak_read), K(exec_ctx.get_table_id()));
   } else if (OB_FAIL(tb_ctx.init_exec_ctx())) {
     LOG_WARN("fail to init exec ctx", K(ret), K(tb_ctx));
-  } else if (OB_FAIL(tb_ctx.init_trans(exec_ctx.get_trans_param().trans_desc_,
+  } else if (OB_FAIL(tb_ctx.init_trans(exec_ctx.get_trans_param().trans_desc_, 
                                        exec_ctx.get_trans_param().tx_snapshot_))) {
     LOG_WARN("fail to init trans", K(ret));
   } else {

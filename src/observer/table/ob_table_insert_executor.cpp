@@ -33,7 +33,7 @@ int ObTableApiInsertSpec::init_ctdefs_array(int64_t size) {
   return ret;
 }
 
-ObTableApiInsertSpec::~ObTableApiInsertSpec()
+ObTableApiInsertSpec::~ObTableApiInsertSpec() 
 {
   for (int64_t i = 0; i < ins_ctdefs_.count(); i++) {
     if (OB_NOT_NULL(ins_ctdefs_.at(i))) {
@@ -184,7 +184,7 @@ int ObTableApiInsertExecutor::get_next_row_from_child()
           tb_ctx_.set_tablet_id(tablet_id);
         }
       }
-
+      
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(process_single_operation(entity))) {
         LOG_WARN("fail to process single insert operation", K(ret));

@@ -72,7 +72,7 @@ public:
     }
     return ret;
   }
-
+    
   template<class List>
   int submit_batch_push_log_req(
       const List &member_list,

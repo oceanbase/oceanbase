@@ -48,7 +48,7 @@ if (OB_BUILD_OPENSOURCE)
   configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/pre_install.sh.template
                 ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/preinst
                 @ONLY)
-
+  
   configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/post_install.sh.template
                 ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/postinst
                 @ONLY)
@@ -61,8 +61,8 @@ if (OB_BUILD_OPENSOURCE)
                 ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/postrm
                 @ONLY)
 
-  set(CPACK_DEBIAN_SERVER_PACKAGE_CONTROL_EXTRA
-    ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/postinst
+  set(CPACK_DEBIAN_SERVER_PACKAGE_CONTROL_EXTRA 
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/postinst 
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/prerm
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/postrm)
 endif()

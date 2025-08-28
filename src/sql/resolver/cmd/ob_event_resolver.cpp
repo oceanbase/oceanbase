@@ -66,7 +66,7 @@ int ObEventResolver::resolve_create_event_stmt(const ParseNode &parse_node, ObEv
   OV (T_EVENT_JOB_CREATE == parse_node.type_, OB_ERR_UNEXPECTED, parse_node.type_);
   OV (8 == parse_node.num_child_, OB_ERR_UNEXPECTED, parse_node.num_child_);
   OX (event_info.set_tenant_id(session_info_->get_effective_tenant_id()));
-
+  
   OZ (resolve_event_definer(parse_node.children_[0], event_info));
   OZ (resolve_event_exist(parse_node.children_[1], event_info));
   OZ (resolve_event_name(parse_node.children_[2], event_info));
@@ -105,7 +105,7 @@ int ObEventResolver::resolve_drop_event_stmt(const ParseNode &parse_node, ObEven
   int ret = OB_SUCCESS;
   OV (T_EVENT_JOB_DROP == parse_node.type_, OB_ERR_UNEXPECTED, parse_node.type_);
   OV (2 == parse_node.num_child_, OB_ERR_UNEXPECTED, parse_node.num_child_);
-  OX (event_info.set_tenant_id(session_info_->get_effective_tenant_id()));
+  OX (event_info.set_tenant_id(session_info_->get_effective_tenant_id()));  
   OZ (resolve_event_exist(parse_node.children_[0], event_info));
   OZ (resolve_event_name(parse_node.children_[1], event_info));
   return ret;
@@ -191,7 +191,7 @@ int ObEventResolver::resolve_event_definer(const ParseNode *parse_node, ObEventI
     }
   }
 
-  return ret;
+  return ret;  
 }
 
 int ObEventResolver::resolve_event_exist(const ParseNode *parse_node, ObEventInfo &event_info)
@@ -297,7 +297,7 @@ int ObEventResolver::resolve_event_schedule(const ParseNode *parse_node, ObEvent
               LOG_WARN("event get time str failed", K(ret), KP(end_time_node));
             } else {
               event_info.set_end_time(end_time_us);
-            }
+            }          
           } else {
             event_info.set_end_time(OB_INVALID_TIMESTAMP);
           }
@@ -387,7 +387,7 @@ int ObEventResolver::resolve_event_body(const ParseNode *parse_node, ObEventInfo
       }
     }
     if (OB_SUCC(ret)) {
-      event_info.set_event_body(event_body_buf);
+      event_info.set_event_body(event_body_buf); 
     }
   }
   return ret;
@@ -432,7 +432,7 @@ int ObEventResolver::resolve_event_rename(const ParseNode *parse_node, ObEventIn
       }
       if (OB_SUCC(ret)) {
         snprintf(event_name_buf, OB_EVENT_NAME_MAX_LEN, "%lu.%s",session_info_->get_database_id(), rename_node->str_value_);
-        event_info.set_event_rename(event_name_buf);
+        event_info.set_event_rename(event_name_buf);  
         if (0 == event_info.get_event_name().compare(event_info.get_event_rename())) {
           ret = OB_ERR_EVENT_SAME_NAME;
         }
@@ -454,7 +454,7 @@ int ObEventResolver::get_repeat_interval(const ParseNode *repeat_num_node, const
     if (0 == date_unit_interval || OB_EVENT_INTERVAL_MAX_VALUE < date_unit_interval) {
       ret = OB_ERR_EVENT_INTERVAL_NOT_POSITIVE_OR_TOO_BIG;
       LOG_WARN("date_unit_interval error",
-             K(ret), K(date_unit_interval));
+             K(ret), K(date_unit_interval));      
     } else if (OB_ISNULL(date_unit_type)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("interval type is null",
@@ -506,7 +506,7 @@ int ObEventResolver::get_event_exec_env(ObEventInfo &event_info)
       LOG_WARN("generate exec env failed", K(ret), K(session_info_));
     } else {
       ObString event_exec_env(pos, event_exec_buf);
-      event_info.set_exec_env(event_exec_env);
+      event_info.set_exec_env(event_exec_env); 
     }
   }
   return ret;
@@ -520,8 +520,8 @@ int ObEventResolver::get_event_time_node_value(const ParseNode *parse_node, int6
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("time node is null", K(ret));
   } else if (T_VARCHAR == parse_node->type_) {
-    if(OB_FAIL(sql.assign_fmt("select TIME_TO_USEC (\'%.*s\') as time",  /* 如果输入为纯字符串, SQL 解析会删去 ' 号 需补回去 */
-                                                                        (int)parse_node->str_len_,
+    if(OB_FAIL(sql.assign_fmt("select TIME_TO_USEC (\'%.*s\') as time",  /* 如果输入为纯字符串, SQL 解析会删去 ' 号 需补回去 */ 
+                                                                        (int)parse_node->str_len_, 
                                                                         parse_node->str_value_))) {
      LOG_WARN("time node is not vaild", K(ret));
     }
@@ -547,7 +547,7 @@ int ObEventResolver::get_event_time_node_value(const ParseNode *parse_node, int6
             ret = OB_ERR_WRONG_VALUE;
             LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "AT", parse_node->str_value_);
           }
-        }
+        }     
       }
     }
   }

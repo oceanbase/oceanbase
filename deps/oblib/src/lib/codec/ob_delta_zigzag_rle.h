@@ -257,8 +257,8 @@ OB_INLINE static int decode(
         // b == 1, overflow
         // b == 0, repeat cnt
         if (b == 1) {
-          // can not be overflow
-          ret = OB_ERR_UNEXPECTED;
+          // can not be overflow 
+          ret = OB_ERR_UNEXPECTED; 
           LIB_LOG(WARN, "can not be overflow", K(ret), K(b), K(bw), K(br), K(out_pos));
         } else {
           ObBitUtils::get32(bw, br, 3, b);

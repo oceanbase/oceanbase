@@ -398,7 +398,7 @@ int UserMdsNode<K, V>::fill_event_(observer::MdsEvent &event,
   if (FALSE_IT(databuff_printf(stack_buffer, buffer_size, pos, user_data_))) {
   } else if (FALSE_IT(event.info_str_.assign_ptr(stack_buffer, pos))) {
   } else if (FALSE_IT(last_pos = pos)) {
-  }
+  } 
   if (nullptr != p_mds_row_) {
     if (FALSE_IT(databuff_printf(stack_buffer, buffer_size, pos, *p_mds_row_->key_))) {}
   } else {

@@ -206,7 +206,7 @@ int ObStorageDatumUtils::inner_init(
   int ret = OB_SUCCESS;
   is_oracle_mode_ = is_oracle_mode;
   // support column order index until next task done
-  //
+  // 
   // we could use the cmp funcs in the basic funcs directlly
   bool is_null_last = is_oracle_mode_;
   ObCmpFunc cmp_func;

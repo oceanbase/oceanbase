@@ -44,7 +44,7 @@ class ObExprVector : public ObFuncExprOperator
 public:
 
   static const int64_t MAX_VECTOR_DIM = 16000;
-
+  
   struct VectorCastInfo
   {
     VectorCastInfo()
@@ -60,7 +60,7 @@ public:
   };
 
 public:
-  explicit ObExprVector(common::ObIAllocator &alloc, ObExprOperatorType type,
+  explicit ObExprVector(common::ObIAllocator &alloc, ObExprOperatorType type, 
                                 const char *name, int32_t param_num, int32_t dimension);
   virtual ~ObExprVector() {};
   virtual int calc_result_type2(ObExprResType &type,
@@ -101,7 +101,7 @@ public:
   };
 public:
   explicit ObExprVectorDistance(common::ObIAllocator &alloc);
-  explicit ObExprVectorDistance(common::ObIAllocator &alloc, ObExprOperatorType type,
+  explicit ObExprVectorDistance(common::ObIAllocator &alloc, ObExprOperatorType type, 
                                 const char *name, int32_t param_num, int32_t dimension);
   virtual ~ObExprVectorDistance() {};
   virtual int calc_result_typeN(ObExprResType &type,
@@ -114,13 +114,13 @@ public:
                       ObExpr &rt_expr) const override;
   static int calc_distance(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
   static int calc_distance(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum, ObVecDisType dis_type);
-
+  
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprVectorDistance);
 };
 
 template <typename T>
-typename ObExprVectorDistance::DisFunc<T>::FuncPtrType ObExprVectorDistance::DisFunc<T>::distance_funcs[] =
+typename ObExprVectorDistance::DisFunc<T>::FuncPtrType ObExprVectorDistance::DisFunc<T>::distance_funcs[] = 
 {
   ObVectorCosineDistance<T>::cosine_distance_func,
   ObVectorIpDistance<T>::ip_distance_func,

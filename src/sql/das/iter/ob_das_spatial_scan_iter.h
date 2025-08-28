@@ -21,20 +21,20 @@ using namespace common;
 namespace sql
 {
 
-struct ObDASSpatialScanIterParam : public ObDASScanIterParam
+struct ObDASSpatialScanIterParam : public ObDASScanIterParam 
 {
 public:
   ObDASSpatialScanIterParam()
     : ObDASScanIterParam(),
       scan_rtdef_(nullptr)
   {}
-
+  
   ObDASScanRtDef *scan_rtdef_;
 
   virtual bool is_valid() const override
   {
     return nullptr != scan_rtdef_ && ObDASIterParam::is_valid();
-  }
+  }  
 };
 
 class ObDASSpatialScanIter : public ObDASScanIter
@@ -55,7 +55,7 @@ public:
 protected:
   virtual int inner_init(ObDASIterParam &param) override;
   virtual int inner_get_next_row() override;
-
+  
 private:
   int filter_by_mbr(bool &got_row);
   int filter_by_mbr(const ObObj &mbr_obj, bool &pass_through);

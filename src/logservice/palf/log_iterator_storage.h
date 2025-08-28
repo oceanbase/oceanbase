@@ -27,7 +27,7 @@ namespace oceanbase
 namespace palf
 {
 typedef ObFunction<LSN()> GetFileEndLSN;
-class IteratorStorage
+class IteratorStorage 
 {
 public:
   IteratorStorage();
@@ -45,7 +45,7 @@ public:
   int pread(const int64_t pos,
             const int64_t in_read_size,
             char *&buf,
-            int64_t &out_read_size,
+            int64_t &out_read_size, 
             LogIOContext &io_ctx);
   TO_STRING_KV(K_(start_lsn), K_(end_lsn), K_(read_buf), K_(block_size), KP(log_storage_), KPC(log_storage_),
                "storage_type", (NULL == log_storage_ ? "dummy" : log_storage_->get_log_storage_type_str()));
@@ -94,7 +94,7 @@ public:
   int pread(const LSN& lsn,
 	    const int64_t in_read_size,
 	    ReadBuf &read_buf,
-	    int64_t &out_read_size,
+	    int64_t &out_read_size, 
             LogIOContext &io_ctx) final;
   INHERIT_TO_STRING_KV("ILogStorage", ILogStorage, K_(start_lsn), K_(log_tail), KP(buf_), K_(buf_len), K_(is_inited));
 private:

@@ -179,7 +179,7 @@ int ObBackupPieceOp::func(const dirent *entry)
   } else if (FALSE_IT(len = strlen(entry->d_name) - strlen(OB_ARCHIVE_SUFFIX))) {
   } else if (len <= 0) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("file name without a unified suffix", K(ret), K(entry->d_name), K(OB_ARCHIVE_SUFFIX));
+    LOG_WARN("file name without a unified suffix", K(ret), K(entry->d_name), K(OB_ARCHIVE_SUFFIX)); 
   } else if (FALSE_IT(entry_suffix.assign_ptr(entry->d_name + len, strlen(OB_ARCHIVE_SUFFIX)))) {
   } else if (!entry_suffix.prefix_match(OB_ARCHIVE_SUFFIX)) {
     // not ended with archive suffix
@@ -324,7 +324,7 @@ int ObBackupComplementLogDagNet::start_running()
   if (OB_FAIL(ret) && OB_NOT_NULL(dag_scheduler) && OB_NOT_NULL(finish_dag)) {
     dag_scheduler->free_dag(*finish_dag);
   }
-
+  
   if (OB_FAIL(ret)) {
     if (OB_TMP_FAIL(ObBackupUtils::report_task_result(ctx_.job_desc_.job_id_,
                 ctx_.job_desc_.task_id_,
@@ -464,7 +464,7 @@ int ObBackupLSLogGroupDag::fill_info_param(compaction::ObIBasicInfoParam *&out_p
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls backup complement log dag do not init", K(ret));
-  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
+  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(), 
                                   static_cast<int64_t>(ctx_->tenant_id_), ctx_->backup_set_desc_.backup_set_id_,
                                   ls_id_.id()))){
     LOG_WARN("failed to add dag warning info param", K(ret));
@@ -672,7 +672,7 @@ int ObBackupLSLogGroupTask::record_server_event_()
                      "tenant_id", ctx_->tenant_id_,
                      "backup_set_id", ctx_->backup_set_desc_.backup_set_id_,
                      "ls_id", ctx_->ls_id_.id(),
-                     "turn_id", ctx_->turn_id_,
+                     "turn_id", ctx_->turn_id_, 
                      "retry_id", ctx_->retry_id_,
                      "is_only_calc_stat", ctx_->is_only_calc_stat_);
   }
@@ -736,7 +736,7 @@ int ObBackupLSLogDag::fill_info_param(compaction::ObIBasicInfoParam *&out_param,
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls backup complement log dag do not init", K(ret));
-  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
+  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(), 
                                   static_cast<int64_t>(ctx_->tenant_id_), ctx_->backup_set_desc_.backup_set_id_,
                                   ls_id_.id()))){
     LOG_WARN("failed to add dag warning info param", K(ret));
@@ -1478,7 +1478,7 @@ int ObBackupLSLogTask::generate_format_desc_(share::ObBackupFormatDesc &format_d
   return ret;
 }
 
-int ObBackupLSLogTask::transform_and_copy_meta_file_(const ObTenantArchivePieceAttr &piece_attr)
+int ObBackupLSLogTask::transform_and_copy_meta_file_(const ObTenantArchivePieceAttr &piece_attr) 
 {
   int ret = OB_SUCCESS;
   ObBackupDest src;
@@ -1759,7 +1759,7 @@ int ObBackupLSLogTask::record_server_event_()
                      "tenant_id", ctx_->tenant_id_,
                      "backup_set_id", ctx_->backup_set_desc_.backup_set_id_,
                      "ls_id", ctx_->ls_id_.id(),
-                     "turn_id", ctx_->turn_id_,
+                     "turn_id", ctx_->turn_id_, 
                      "retry_id", ctx_->retry_id_,
                      "is_only_calc_stat", ctx_->is_only_calc_stat_);
   }
@@ -2015,7 +2015,7 @@ int ObBackupLSLogFileTask::transfer_clog_file_(const ObBackupPath &src_path, con
   return ret;
 }
 
-int ObBackupLSLogFileTask::inner_transfer_clog_file_(const ObBackupPath &src_path, const ObBackupPath &dst_path,
+int ObBackupLSLogFileTask::inner_transfer_clog_file_(const ObBackupPath &src_path, const ObBackupPath &dst_path, 
     ObIODevice *&device_handle, ObIOFd &fd, const int64_t dst_len, int64_t &transfer_len)
 {
   int ret = OB_SUCCESS;
@@ -2248,7 +2248,7 @@ int ObBackupLSLogFinishTask::record_server_event_()
                      "tenant_id", ctx_->tenant_id_,
                      "backup_set_id", ctx_->backup_set_desc_.backup_set_id_,
                      "ls_id", ctx_->ls_id_.id(),
-                     "turn_id", ctx_->turn_id_,
+                     "turn_id", ctx_->turn_id_, 
                      "retry_id", ctx_->retry_id_,
                      "is_only_calc_stat", ctx_->is_only_calc_stat_);
   }
@@ -2307,7 +2307,7 @@ int ObBackupLSLogGroupFinishDag::fill_info_param(compaction::ObIBasicInfoParam *
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls backup complement log dag do not init", K(ret));
-  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
+  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(), 
                                   static_cast<int64_t>(ctx_->tenant_id_), ctx_->backup_set_desc_.backup_set_id_,
                                   ctx_->ls_id_.id()))){
     LOG_WARN("failed to add dag warning info param", K(ret));
@@ -2441,7 +2441,7 @@ int ObBackupLSLogGroupFinishTask::record_server_event_()
                      "tenant_id", ctx_->tenant_id_,
                      "backup_set_id", ctx_->backup_set_desc_.backup_set_id_,
                      "ls_id", ctx_->ls_id_.id(),
-                     "turn_id", ctx_->turn_id_,
+                     "turn_id", ctx_->turn_id_, 
                      "retry_id", ctx_->retry_id_,
                      "is_only_calc_stat", ctx_->is_only_calc_stat_);
   }

@@ -26,7 +26,7 @@ void ObAllVirtualDupLSTabletSet::reset()
   memset(ip_buffer_, 0, sizeof(ip_buffer_));
 
   ObVirtualTableScannerIterator::reset();
-  dup_ls_tablet_set_stat_iter_.reset();
+  dup_ls_tablet_set_stat_iter_.reset(); 
   all_tenants_.reset();
   self_addr_.reset();
   init_ = false;
@@ -158,23 +158,23 @@ int ObAllVirtualDupLSTabletSet::inner_get_next_row(ObNewRow *&row)
           cur_row_.cells_[i].set_varchar(tablet_set_stat.get_ls_state_str().ptr());
           break;
         case UNIQUE_ID:
-          cur_row_.cells_[i].set_int(tablet_set_stat.get_unique_id());
+          cur_row_.cells_[i].set_int(tablet_set_stat.get_unique_id()); 
           break;
         case ATTRIBUTE:
           cur_row_.cells_[i].set_varchar(tablet_set_stat.get_tablet_set_attr_str().ptr());
-          break;
+          break; 
         case COUNT:
           cur_row_.cells_[i].set_int(tablet_set_stat.get_count());
           break;
         case READABLE_SCN:
           tmp_ts_us = tablet_set_stat.get_readable_scn().convert_to_ts(true /*ignore invalid*/);
-          if (is_valid_timestamp_(tmp_ts_us)) {
+          if (is_valid_timestamp_(tmp_ts_us)) { 
             cur_row_.cells_[i].set_int(tmp_ts_us);
           }
           break;
         case CHANGE_SCN:
           tmp_ts_us = tablet_set_stat.get_change_scn().convert_to_ts(true /*ignore invalid*/);
-          if (is_valid_timestamp_(tmp_ts_us)) {
+          if (is_valid_timestamp_(tmp_ts_us)) { 
             cur_row_.cells_[i].set_int(tmp_ts_us);
           }
           break;

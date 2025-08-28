@@ -28,8 +28,8 @@ int ObRecoverTableUtil::check_compatible(const uint64_t target_tenant_id)
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("Tenant COMPATIBLE is below 4.2.1.0, recover table is not supported", K(ret), K(data_version));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Tenant COMPATIBLE is below 4.2.1.0, recover table is");
-  }
-
+  } 
+  
   // 2. check target meta tenant data version
   if (FAILEDx(GET_MIN_DATA_VERSION(gen_meta_tenant_id(target_tenant_id), data_version))) {
     LOG_WARN("fail to get meta tenant data version", K(ret), K(target_tenant_id));
@@ -37,8 +37,8 @@ int ObRecoverTableUtil::check_compatible(const uint64_t target_tenant_id)
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("Tenant COMPATIBLE is below 4.2.1.0, recover table is not supported", K(ret), K(data_version));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Tenant COMPATIBLE is below 4.2.1.0, recover table is");
-  }
-
+  } 
+  
   // 3. check target user tenant data version
   if (FAILEDx(GET_MIN_DATA_VERSION(target_tenant_id, data_version))) {
     LOG_WARN("fail to get user tenant data version", K(ret), K(target_tenant_id));
@@ -46,6 +46,6 @@ int ObRecoverTableUtil::check_compatible(const uint64_t target_tenant_id)
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("Tenant COMPATIBLE is below 4.2.1.0, recover table is not supported", K(ret), K(data_version));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Tenant COMPATIBLE is below 4.2.1.0, recover table is");
-  }
+  } 
   return ret;
 }

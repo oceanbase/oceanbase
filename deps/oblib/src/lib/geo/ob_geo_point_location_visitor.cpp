@@ -136,7 +136,7 @@ int ObGeoPointLocationVisitor::visit(ObIWkbGeomMultiPoint *geo)
 
 
 template<typename T_IBIN>
-int ObGeoPointLocationVisitor::calculate_point_location_in_linestring(T_IBIN *geo)
+int ObGeoPointLocationVisitor::calculate_point_location_in_linestring(T_IBIN *geo) 
 {
   int ret = OB_SUCCESS;
   const typename T_IBIN::value_type *line = reinterpret_cast<const typename T_IBIN::value_type*>(geo->val());

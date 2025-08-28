@@ -31,7 +31,7 @@ public:
   virtual ~ObExprPrivSTAsEwkt();
   virtual int calc_result_typeN(ObExprResType& type,
                                 ObExprResType* types,
-                                int64_t param_num,
+                                int64_t param_num, 
                                 common::ObExprTypeCtx& type_ctx)
                                 const override;
   virtual int calc_resultN(common::ObObj &result,

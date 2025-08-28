@@ -285,7 +285,7 @@ int ObSortOp::process_sort_batch()
       }
     }
     op_monitor_info_.otherstat_7_id_ = ObSqlMonitorStatIds::ROW_COUNT;
-    op_monitor_info_.otherstat_7_value_ = sort_row_count_;
+    op_monitor_info_.otherstat_7_value_ = sort_row_count_; 
     OZ(sort_impl_.sort());
     sort_impl_.collect_memory_dump_info(op_monitor_info_);
   } else {
@@ -395,7 +395,7 @@ int ObSortOp::scan_all_then_sort_batch()
       ret = OB_SUCCESS;
     }
     op_monitor_info_.otherstat_7_id_ = ObSqlMonitorStatIds::ROW_COUNT;
-    op_monitor_info_.otherstat_7_value_ = sort_row_count_;
+    op_monitor_info_.otherstat_7_value_ = sort_row_count_; 
     if (OB_SUCC(ret)) {
       if (OB_FAIL(cache_store.finish_add_row(false))) {
         LOG_WARN("fail to finish add row", K(ret));
@@ -493,8 +493,8 @@ int ObSortOp::inner_get_next_row()
       LOG_WARN("failed to get px size", K(ret));
     } else if (OB_FAIL(get_topn_count(topn_cnt))) {
       LOG_WARN("failed to get topn count", K(ret));
-    } else if (topn_cnt <= 0) {
-      iter_end_ = true;
+    } else if (topn_cnt <= 0) { 
+      iter_end_ = true; 
       ret = OB_ITER_END;
     } else if (MY_SPEC.prefix_pos_ > 0) {
       if (OB_FAIL(init_prefix_sort(tenant_id, row_count, false, topn_cnt))) {
@@ -547,7 +547,7 @@ int ObSortOp::inner_get_next_batch(const int64_t max_row_cnt)
       LOG_WARN("failed to get px size", K(ret));
     } else if (OB_FAIL(get_topn_count(topn_cnt))) {
       LOG_WARN("failed to get topn count", K(ret));
-    } else if (topn_cnt <= 0) {
+    } else if (topn_cnt <= 0) { 
       brs_.end_ = true;
       brs_.size_ = 0;
     } else if (MY_SPEC.prefix_pos_ > 0) {

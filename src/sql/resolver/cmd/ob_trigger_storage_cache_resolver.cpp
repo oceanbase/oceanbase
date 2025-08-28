@@ -46,10 +46,10 @@ int ObTriggerStorageCacheResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(parse_tree.children_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("children should not be null", K(ret));
-  } else if (OB_UNLIKELY(2 != parse_tree.num_child_) ||
+  } else if (OB_UNLIKELY(2 != parse_tree.num_child_) || 
              OB_ISNULL(parse_tree.children_[0])) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("children num not match or the children is null", K(ret), "num_child",
+    LOG_WARN("children num not match or the children is null", K(ret), "num_child", 
         parse_tree.num_child_, K(parse_tree.children_[0]));
   } else if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;

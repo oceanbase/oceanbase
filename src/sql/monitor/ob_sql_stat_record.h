@@ -52,7 +52,7 @@ public:
   int hash(uint64_t &hash_val) const;
   virtual bool is_equal(const sql::ObILibCacheKey &other) const;
   inline bool is_valid() const { return sql_id_[0] != '\0'; }
-  void set_sql_id(const ObString& sql_id) { sql_id.to_string(sql_id_, OB_MAX_SQL_ID_LENGTH); }
+  void set_sql_id(const ObString& sql_id) { sql_id.to_string(sql_id_, OB_MAX_SQL_ID_LENGTH); } 
   void set_plan_hash(const uint64_t plan_hash_val) { ATOMIC_STORE(&plan_hash_,plan_hash_val); }
   void set_source_addr(const ObAddr &source_addr) { source_addr_ = source_addr; }
   TO_STRING_KV(K_(sql_id), K_(plan_hash), K_(source_addr));
@@ -121,8 +121,8 @@ public:
   /// WARN: current sression's di address can be changed by time. So please always using
   /// get_local_diagnose_info() to get latest di paramter.
   int record_sqlstat_end_value(ObDiagnoseSessionInfo* di = nullptr);
-  // WARNNIGN!!!
-  // It is forbidden to use the cur_plan_ pointer on sql_ctx_,
+  // WARNNIGN!!! 
+  // It is forbidden to use the cur_plan_ pointer on sql_ctx_, 
   // which can be modified and risks CORE. It is only safe to use the result_set pointer.
   int move_to_sqlstat_cache(ObSQLSessionInfo &session_info,
                             ObString &cur_sql,
@@ -131,9 +131,9 @@ public:
 
   bool get_is_in_retry() const { return is_in_retry_; }
   void set_is_in_retry(const bool is_in_retry) { is_in_retry_ = is_in_retry; }
-  void set_rows_processed(int64_t rows_processed) { rows_processed_end_ = rows_processed; }
+  void set_rows_processed(int64_t rows_processed) { rows_processed_end_ = rows_processed; } 
   void inc_fetch_cnt() { fetches_end_ ++; }
-  void set_partition_cnt(int64_t partition_cnt) { partition_end_ = partition_cnt; }
+  void set_partition_cnt(int64_t partition_cnt) { partition_end_ = partition_cnt; } 
   bool is_route_miss() const { return is_route_miss_; }
   void set_is_route_miss(const bool is_route_miss) { is_route_miss_ = is_route_miss; }
   bool is_plan_cache_hit() const { return is_plan_cache_hit_;}
@@ -222,7 +222,7 @@ public:
     DEF_SQL_STAT_ITEM_CONSTRUCT(plan_cache_hit);
 #undef DEF_SQL_STAT_ITEM_CONSTRUCT
   }
-
+  
   ~ObExecutedSqlStatRecord() = default;
   int copy_sql_stat_info(const ObSqlStatInfo& sql_stat_info);
   int sum_stat_value(ObExecutingSqlStatRecord& executing_record);
@@ -264,7 +264,7 @@ public:
     DEF_SQL_STAT_ITEM_DELTA_FUNC(route_miss);
     DEF_SQL_STAT_ITEM_DELTA_FUNC(plan_cache_hit);
   #undef DEF_SQL_STAT_ITEM_DELTA_FUNC
-
+  
   TO_STRING_KV(K_(sql_stat_info));
 private:
   ObSqlStatInfo sql_stat_info_;

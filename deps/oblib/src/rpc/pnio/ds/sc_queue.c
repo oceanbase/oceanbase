@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 void sc_queue_init(sc_queue_t* q) {
   q->head.next = NULL;
   q->tail = &q->head;

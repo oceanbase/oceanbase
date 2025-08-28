@@ -111,10 +111,10 @@ private:
   int is_subquery_correlated(const ObSelectStmt *stmt,
                              hash::ObHashSet<uint64_t> &param_set,
                              bool &is_correlated);
-
+  
   int add_exec_params(const ObSelectStmt &stmt,
                       hash::ObHashSet<uint64_t> &param_set);
-
+  
   int has_new_exec_param(const ObRawExpr *expr,
                          const hash::ObHashSet<uint64_t> &param_set,
                          bool &has_new);
@@ -467,7 +467,7 @@ private:
                                                 const ObItemType &cmp_type);
   static int replace_align_date4cmp_recursively(ObRawExprFactory &expr_factory,
                                                 const ObSQLSessionInfo &session,
-                                                ObRawExpr *&root_expr);
+                                                ObRawExpr *&root_expr);                                   
   static int replace_inner_row_cmp_val_recursively(ObRawExprFactory &expr_factory,
                                                    const ObSQLSessionInfo &session,
                                                    ObRawExpr *&root_expr,
@@ -572,9 +572,9 @@ private:
                          ObIArray<ObRawExpr*> &params_exprs);
 
   int mock_select_list_for_inner_view(ObDMLStmt &batch_stmt, ObSelectStmt &inner_view);
-
+  
   int transform_outerjoin_exprs(ObDMLStmt *stmt, bool &trans_happened);
-
+  
   int remove_shared_expr(ObDMLStmt *stmt,
                          JoinedTable *joined_table,
                          hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode> &expr_set,
@@ -585,7 +585,7 @@ private:
                             bool is_nullside,
                             ObRawExpr *&expr,
                             bool &has_nullside_column);
-
+  
   int check_nullside_expr(ObRawExpr *expr, bool &bret);
 
   int transform_full_outer_join(ObDMLStmt *&stmt, bool &trans_happened);
@@ -661,7 +661,7 @@ private:
   int expand_last_insert_id_for_join(ObDMLStmt &stmt, JoinedTable *join_table, bool &is_happened);
   int remove_last_insert_id(ObRawExpr *&expr);
   int check_last_insert_id_removable(const ObRawExpr *expr, bool &is_removable);
-
+  
   int expand_correlated_cte(ObDMLStmt *stmt, bool& trans_happened);
   int check_exec_param_correlated(const ObRawExpr *expr, bool &is_correlated);
   int check_is_correlated_cte(ObSelectStmt *stmt, ObIArray<ObSelectStmt *> &visited_cte, bool &is_correlated);
@@ -672,45 +672,45 @@ private:
   int recursive_flatten_join_conditions(ObDMLStmt *stmt, TableItem *table, bool &trans_happened);
   int do_flatten_conditions(ObDMLStmt *stmt, ObIArray<ObRawExpr*> &conditions, bool &trans_happened);
   int expand_materialized_view(ObDMLStmt *stmt, bool &trans_happened);
-  int preserve_order_for_pagination(ObDMLStmt *stmt,
+  int preserve_order_for_pagination(ObDMLStmt *stmt, 
                                     bool &trans_happened);
-  int check_stmt_need_preserve_order(ObDMLStmt *stmt,
-                                     ObIArray<ObSelectStmt*> &preserve_order_stmts,
+  int check_stmt_need_preserve_order(ObDMLStmt *stmt, 
+                                     ObIArray<ObSelectStmt*> &preserve_order_stmts, 
                                      bool &is_valid);
 
-  int check_view_need_preserve_order(ObSelectStmt* stmt,
-                                     ObIArray<ObSelectStmt*> &preserve_order_stmts,
+  int check_view_need_preserve_order(ObSelectStmt* stmt, 
+                                     ObIArray<ObSelectStmt*> &preserve_order_stmts, 
                                      bool &need_preserve);
 
-  int check_set_stmt_need_preserve_order(ObSelectStmt* stmt,
-                                         ObIArray<ObSelectStmt*> &preserve_order_stmts,
+  int check_set_stmt_need_preserve_order(ObSelectStmt* stmt, 
+                                         ObIArray<ObSelectStmt*> &preserve_order_stmts, 
                                          bool &need_preserve);
 
   int add_order_by_for_stmt(ObSelectStmt* stmt, bool &trans_happened);
 
-  int get_rowkey_for_single_table(ObSelectStmt* stmt,
-                                  ObIArray<ObRawExpr*> &unique_keys,
+  int get_rowkey_for_single_table(ObSelectStmt* stmt, 
+                                  ObIArray<ObRawExpr*> &unique_keys, 
                                   bool &is_valid);
-
-  int preserve_order_for_gby(ObDMLStmt *stmt,
+                                  
+  int preserve_order_for_gby(ObDMLStmt *stmt, 
                              bool &trans_happened);
   int add_order_by_gby_for_stmt(ObSelectStmt* stmt, bool &trans_happened);
 
   int try_gen_straight_join_leading(ObDMLStmt *stmt, bool &trans_happened);
-  int get_flattened_tables_of_pure_straight_join(ObDMLStmt* stmt,
+  int get_flattened_tables_of_pure_straight_join(ObDMLStmt* stmt, 
                                                  ObIArray<TableItem*> &flattened_tables);
   int check_pure_straight_join_table(TableItem* table_item, bool &is_pure_straight_join,
                                      ObIArray<TableItem*> &flattened_tables);
   int add_ordered_hint(ObDMLStmt* stmt, ObStmtHint &stmt_hint);
-  int add_leading_hint_by_flattened_tables(ObDMLStmt* stmt,
-                                           ObStmtHint &stmt_hint,
+  int add_leading_hint_by_flattened_tables(ObDMLStmt* stmt, 
+                                           ObStmtHint &stmt_hint, 
                                            ObIArray<TableItem*> &flattened_tables);
-  int construct_leading_table(ObDMLStmt* stmt,
-                              ObIArray<TableItem*> &flattened_tables,
+  int construct_leading_table(ObDMLStmt* stmt, 
+                              ObIArray<TableItem*> &flattened_tables, 
                               ObLeadingTable &leading_table);
   int construct_leaf_leading_table(ObDMLStmt *stmt, TableItem *table, ObLeadingTable *&leading_table);
   int reset_view_base_and_transpose_item(ObDMLStmt *stmt);
-
+  
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransformPreProcess);
 };

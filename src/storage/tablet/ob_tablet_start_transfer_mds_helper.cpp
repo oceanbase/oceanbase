@@ -2308,7 +2308,7 @@ int ObTabletStartTransferInHelper::check_can_replay_redo_log_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check can replay redo log invalid argument", K(ret), K(tx_start_transfer_in_info),
         K(scn), K(migration_status), K(ls_restore_status));
-  } else if (ls_restore_status.is_in_restore_and_before_quick_restore_finish()
+  } else if (ls_restore_status.is_in_restore_and_before_quick_restore_finish() 
          && ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
     const SCN new_scn = SCN::scn_dec(scn);
     if (OB_FAIL(ObTransferUtils::get_gts(tenant_id, gts_scn))) {
@@ -2359,3 +2359,4 @@ int ObTabletStartTransferInHelper::check_can_replay_redo_log_(
 
 }
 }
+

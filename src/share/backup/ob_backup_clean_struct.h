@@ -192,7 +192,7 @@ struct ObBackupCleanLSTaskAttr final
   bool is_valid() const;
   void reset(); 
   bool is_delete_backup_set_task() const { return ObBackupCleanTaskType::BACKUP_SET == task_type_; }
-  bool is_delete_backup_complement_task() const {
+  bool is_delete_backup_complement_task() const { 
     return ObBackupCleanTaskType::BACKUP_COMPLEMENT_LOG == task_type_;
   }
   bool is_delete_backup_piece_task() const { return ObBackupCleanTaskType::BACKUP_PIECE == task_type_; }

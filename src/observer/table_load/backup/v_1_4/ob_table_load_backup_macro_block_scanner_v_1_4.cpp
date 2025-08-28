@@ -71,7 +71,7 @@ int ObTableLoadBackupMacroBlockScanner_V_1_4::get_next_row(common::ObNewRow *&ro
       LOG_WARN("fail to init_micro_block_scanner", KR(ret), K(block_idx_));
     }
   }
-
+  
   if (OB_SUCC(ret)) {
     if (OB_FAIL(micro_scanner_.get_next_row(row_))) {
       if (ret == OB_ITER_END) {
@@ -86,7 +86,7 @@ int ObTableLoadBackupMacroBlockScanner_V_1_4::get_next_row(common::ObNewRow *&ro
       } else {
         LOG_WARN("fail to get next row", KR(ret));
       }
-    }
+    } 
   }
   if (OB_SUCC(ret)) {
     row = &row_;
@@ -125,8 +125,8 @@ int ObTableLoadBackupMacroBlockScanner_V_1_4::init_micro_block_scanner()
     micro_scanner_.reset();
     if (OB_FAIL(macro_reader_.decompress_data(block_idx_))) {
       LOG_WARN("fail to decompress data", KR(ret), K(block_idx_));
-    } else if (OB_FAIL(micro_scanner_.init(macro_reader_.get_uncomp_buf(),
-                                           &column_map_ids_,
+    } else if (OB_FAIL(micro_scanner_.init(macro_reader_.get_uncomp_buf(), 
+                                           &column_map_ids_, 
                                            macro_reader_.get_column_map()))) {
       LOG_WARN("fail to init micro_scanner_", KR(ret));
     }

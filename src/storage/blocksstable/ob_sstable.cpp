@@ -258,7 +258,7 @@ ObSSTable::~ObSSTable()
 }
 
 int ObSSTable::init(
-    const ObTabletCreateSSTableParam &param,
+    const ObTabletCreateSSTableParam &param, 
     common::ObArenaAllocator *allocator)
 {
   int ret = OB_SUCCESS;
@@ -1759,7 +1759,7 @@ int ObSSTable::persist_linked_block_if_need(
     // linked block had been persisted
   } else if (is_small_sstable()) {
     // The small sstable needn't persist macro ids by linked block.
-  } else if (meta_->macro_info_.get_data_block_count() + meta_->macro_info_.get_other_block_count()
+  } else if (meta_->macro_info_.get_data_block_count() + meta_->macro_info_.get_other_block_count() 
               < block_cnt_threshold) {
     // need not persist linked_block
   } else if (OB_FAIL(link_write_info.init(ddl_redo_cb))) {

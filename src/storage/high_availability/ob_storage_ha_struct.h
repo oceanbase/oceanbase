@@ -516,7 +516,7 @@ public:
       K_(tablet_id),
       K_(is_committed));
   common::ObTabletID tablet_id_;
-  bool is_committed_;
+  bool is_committed_; 
 };
 
 class ObBackfillTabletsTableMgr final
@@ -561,8 +561,8 @@ private:
         const int64_t transfer_seq,
         const ObTabletRestoreStatus::STATUS &restore_status);
     int add_sstable(
-        const int64_t transfer_seq,
-        const share::SCN &transfer_start_scn,
+        const int64_t transfer_seq, 
+        const share::SCN &transfer_start_scn, 
         ObTableHandleV2 &table_handle);
     int get_all_sstables(ObTablesHandleArray &table_handle_array);
     int set_max_major_end_scn(const share::SCN &max_major_end_scn);
@@ -589,12 +589,12 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObBackfillTabletsTableMgr);
 };
 
-class ObMacroBlockReuseMgr final
+class ObMacroBlockReuseMgr final 
 {
 public:
   ObMacroBlockReuseMgr();
   ~ObMacroBlockReuseMgr();
-  int init();
+  int init(); 
   void reset();
   int destroy();
   int count(int64_t &count);
@@ -607,7 +607,7 @@ public:
     int64_t &data_checksum);
   // add the macro block logical ID -> [physical ID, data checksum] and data checksum mapping
   int add_macro_block_reuse_info(
-    const ObITable::TableKey &table_key,
+    const ObITable::TableKey &table_key, 
     const blocksstable::ObLogicMacroBlockId &logic_id,
     const blocksstable::MacroBlockId &macro_id,
     const int64_t &data_checksum);
@@ -620,9 +620,9 @@ public:
   static int64_t get_item_size() {
       // size of key + size of value + size pointer of next node (linear hash map)
       // see ObLinearHashMap::Node
-      return sizeof(blocksstable::ObLogicMacroBlockId)
-        + sizeof(MacroBlockReuseInfo)
-        + sizeof(void *);
+      return sizeof(blocksstable::ObLogicMacroBlockId) 
+        + sizeof(MacroBlockReuseInfo)  
+        + sizeof(void *); 
   }
 private:
   // physical ID and data checksum of a macro block, value of a single reuse map
@@ -637,7 +637,7 @@ private:
     int64_t data_checksum_;
 
     TO_STRING_KV(
-      K_(id),
+      K_(id), 
       K_(data_checksum));
   };
   // logical ID -> [physical ID, data checksum] mapping of a major sstable.
@@ -657,16 +657,16 @@ private:
     TO_STRING_KV(
       K_(tablet_id),
       K_(column_group_idx),
-      "table_type", ObITable::get_table_type_name(table_type_));
+      "table_type", ObITable::get_table_type_name(table_type_)); 
 
   public:
     common::ObTabletID tablet_id_;
     uint16_t column_group_idx_;
     ObITable::TableType table_type_;
   };
-  // Value of the reuse_maps, indicate the reuse info (logical ID -> [physical ID, data checksum] mapping) of a
+  // Value of the reuse_maps, indicate the reuse info (logical ID -> [physical ID, data checksum] mapping) of a 
   // specific version major sstable (the latest local snapshot version).
-  struct ReuseMajorTableValue final
+  struct ReuseMajorTableValue final 
   {
   public:
     ReuseMajorTableValue();

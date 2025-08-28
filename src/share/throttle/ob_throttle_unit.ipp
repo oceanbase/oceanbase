@@ -435,7 +435,7 @@ bool ObThrottleUnit<ALLOCATOR>::still_throttling(ObThrottleInfoGuard &ti_guard, 
   bool still_throttling = false;
   int64_t trigger_percentage = throttle_trigger_percentage_;
   ObThrottleInfo *ti_info = ti_guard.throttle_info();
-
+  
   // check if still throttling
   if (trigger_percentage < 100 && OB_NOT_NULL(ti_info)) {
     int64_t throttle_trigger = resource_limit_ * trigger_percentage / 100;

@@ -537,7 +537,7 @@ public:
     virtual void reuse() override;
 
     int init(const uint64_t tenant_id, const ObAggrInfo &aggr_info,
-             ObEvalCtx &eval_ctx, const bool need_rewind,
+             ObEvalCtx &eval_ctx, const bool need_rewind, 
              ObIOEventObserver *io_event_observer,
              ObMonitorNode &op_monitor_info);
 
@@ -1129,8 +1129,8 @@ private:
                                    GroupConcatExtraResult *&extra,
                                    ObDatum &concat_result);
 
-  int get_ora_xmlagg_result(const ObAggrInfo &aggr_info,
-                            GroupConcatExtraResult *&extra,
+  int get_ora_xmlagg_result(const ObAggrInfo &aggr_info, 
+                            GroupConcatExtraResult *&extra, 
                             ObDatum &concat_result);
   int get_asmvt_result(const ObAggrInfo &aggr_info,
                        GroupConcatExtraResult *&extra,
@@ -1271,9 +1271,9 @@ public:
       case T_FUN_JSON_ARRAYAGG:
       case T_FUN_ORA_JSON_ARRAYAGG:
       case T_FUN_JSON_OBJECTAGG:
-      case T_FUN_ORA_JSON_OBJECTAGG:
+      case T_FUN_ORA_JSON_OBJECTAGG: 
       case T_FUN_ORA_XMLAGG:
-      case T_FUN_SYS_ST_ASMVT:
+      case T_FUN_SYS_ST_ASMVT: 
       case T_FUN_SYS_RB_BUILD_AGG:
       case T_FUN_SYS_RB_OR_AGG:
       case T_FUN_SYS_RB_AND_AGG:

@@ -472,7 +472,7 @@ int ObSerialDfoScheduler::dispatch_sqcs(ObExecContext &exec_ctx,
           LOG_WARN("fail assign sqc", K(ret));
         } else if (FALSE_IT(sqc.set_need_report(true))) {
           // 必须发 rpc 之前设置为 true
-          // 原因见
+          // 原因见 
         } else if (OB_FAIL(OB_E(EventTable::EN_PX_SQC_INIT_FAILED) OB_SUCCESS)) {
           sqc.set_need_report(false);
           LOG_WARN("[SIM] server down. fail to init sqc", K(ret));
@@ -1505,7 +1505,7 @@ int ObPxNodePool::init(ObExecContext &exec_ctx)
 {
   int ret = OB_SUCCESS;
   if (px_node_policy_ == ObPxNodePolicy::INVALID) {
-    if (OB_ISNULL(exec_ctx.get_physical_plan_ctx()) ||
+    if (OB_ISNULL(exec_ctx.get_physical_plan_ctx()) || 
         OB_ISNULL(exec_ctx.get_physical_plan_ctx()->get_phy_plan())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("NULL phy plan ctx", K(ret), K(exec_ctx.get_physical_plan_ctx()));

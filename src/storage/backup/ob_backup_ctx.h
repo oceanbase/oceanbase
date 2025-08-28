@@ -228,7 +228,7 @@ struct ObBackupRetryCtx {
       K_(last_tablet_id),
       K_(last_tablet_meta_retry_ctx),
       K_(reused_pair_list));
-
+  
 private:
   struct BackupRetryCmp {
     bool operator()(const ObBackupRetryDesc &lhs, const ObBackupRetryDesc &rhs)
@@ -358,3 +358,4 @@ public:
 }  // namespace oceanbase
 
 #endif
+

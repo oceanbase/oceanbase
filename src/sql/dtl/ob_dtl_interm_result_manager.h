@@ -55,7 +55,7 @@ class ObDtlLinkedBuffer;
 struct ObDTLMemProfileKey {
   ObDTLMemProfileKey(uint64_t px_sequence_id, int64_t dfo_id)
     : px_sequence_id_(px_sequence_id), dfo_id_(dfo_id) {}
-
+  
   ObDTLMemProfileKey()
     : px_sequence_id_(-1), dfo_id_(-1) {}
 
@@ -81,7 +81,7 @@ struct ObDTLMemProfileKey {
   }
 
   TO_STRING_KV(K(px_sequence_id_), K(dfo_id_));
-
+  
   uint64_t px_sequence_id_;
   int64_t dfo_id_;
 };
@@ -139,7 +139,7 @@ public:
 
   static const int64_t CACHE_SIZE = 16 * 1024 * 1024; // 16M
   lib::ObMutex mutex_;
-
+  
   TO_STRING_KV(K(ref_count_), K(row_count_));
 };
 
@@ -231,7 +231,7 @@ public:
   ~ObDTLIntermResultInfoGuard() {
     reset();
   }
-  void set_result_info(ObDTLIntermResultInfo &result_info,
+  void set_result_info(ObDTLIntermResultInfo &result_info, 
                        ObDTLIntermResultManager *interm_res_manager);
   void reset();
   ObDTLIntermResultInfo *result_info_;
@@ -463,7 +463,7 @@ private:
   int process_dump(ObDTLIntermResultInfo &result_info,
                    ObDTLMemProfileInfo *mem_profile_info);
   bool need_dump(ObDTLMemProfileInfo *mem_profile_info)
-  { return mem_profile_info->sql_mem_processor_.get_data_size() >
+  { return mem_profile_info->sql_mem_processor_.get_data_size() > 
            mem_profile_info->sql_mem_processor_.get_mem_bound(); }
   int clear_mem_profile_map();
 

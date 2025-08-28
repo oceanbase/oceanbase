@@ -188,7 +188,7 @@ public:
   explicit TopFreHistVecExtraResult(common::ObIAllocator &alloc,
                                     ObMonitorNode &op_monitor_info)
     : VecExtraResult(alloc, op_monitor_info),
-      lob_prefix_allocator_("CalcTopkHist", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(),
+      lob_prefix_allocator_("CalcTopkHist", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), 
                             ObCtxIds::WORK_AREA),
       tmp_batch_cap_(0),
       tmp_batch_idx_(0),
@@ -203,14 +203,14 @@ public:
   virtual ~TopFreHistVecExtraResult();
 
   int init_topk_fre_histogram_item(ObIAllocator &allocator,
-                                   ObAggrInfo &aggr_info,
+                                   ObAggrInfo &aggr_info, 
                                    ObEvalCtx &eval_ctx);
 
   void reuse();
 
   int rewind();
 
-  ObTopKFrequencyHistograms &get_topk_hist()
+  ObTopKFrequencyHistograms &get_topk_hist() 
   {
     return topk_fre_hist_;
   }
@@ -237,7 +237,7 @@ public:
   OB_INLINE int flush_batch_rows()
   {
     int ret = OB_SUCCESS;
-    if (OB_FAIL(topk_fre_hist_.add_batch_items(tmp_batch_payloads_,
+    if (OB_FAIL(topk_fre_hist_.add_batch_items(tmp_batch_payloads_, 
                                                tmp_batch_payload_lens_,
                                                tmp_batch_hash_vals_,
                                                tmp_batch_idx_))) {
@@ -264,7 +264,7 @@ protected:
   const char **tmp_batch_payloads_;
   int32_t *tmp_batch_payload_lens_;
   uint64_t *tmp_batch_hash_vals_;
-  int64_t window_size_;
+  int64_t window_size_; 
   int64_t item_size_;
   int64_t max_disuse_cnt_;
   bool is_topk_hist_need_des_row_;
@@ -295,7 +295,7 @@ public:
       profile_(ObSqlWorkAreaType::HASH_WORK_AREA),
       sql_mem_processor_(profile_, op_monitor_info),
       batch_vector_(NULL),
-      lob_prefix_allocator_("LobHybridHist", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(),
+      lob_prefix_allocator_("LobHybridHist", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), 
                             ObCtxIds::WORK_AREA),
       bucket_num_(0), num_distinct_(0),
       null_count_(0), total_count_(0),
@@ -307,7 +307,7 @@ public:
       data_store_inited_(false)
     {}
 
-  virtual ~HybridHistVecExtraResult()
+  virtual ~HybridHistVecExtraResult() 
   {
     sql_mem_processor_.unregister_profile();
     store_.reset();
@@ -318,8 +318,8 @@ public:
     }
   }
 
-  int init_data_set(ObIAllocator &allocator,
-                    ObAggrInfo &aggr_info,
+  int init_data_set(ObIAllocator &allocator, 
+                    ObAggrInfo &aggr_info, 
                     ObEvalCtx &eval_ctx,
                     ObIOEventObserver *io_event_observer);
 
@@ -375,7 +375,7 @@ public:
 
   OB_INLINE ObIAllocator& get_lob_prefix_allocator() { return lob_prefix_allocator_; }
 
-  OB_INLINE void fill_row_desc()
+  OB_INLINE void fill_row_desc() 
   {
     BucketDesc &desc = batch_bucket_desc_[batch_idx_];
     desc.ep_count_ = repeat_count_;
@@ -441,7 +441,7 @@ protected:
 
 struct ExtraStores {
 
-  ExtraStores() :
+  ExtraStores() : 
     distinct_extra_store(nullptr),
     data_store(nullptr),
     top_fre_hist_store_(nullptr),

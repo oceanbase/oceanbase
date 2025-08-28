@@ -106,7 +106,7 @@ int ObLobManager::init()
   } else if (OB_FAIL(allocator_.init(common::ObMallocAllocator::get_instance(), OB_MALLOC_MIDDLE_BLOCK_SIZE, mem_attr))) {
     LOG_WARN("init allocator failed.", K(ret));
   } else if (OB_FAIL(ext_info_log_allocator_.init(
-      common::ObMallocAllocator::get_instance(),
+      common::ObMallocAllocator::get_instance(), 
       OB_MALLOC_NORMAL_BLOCK_SIZE,
       lib::ObMemAttr(tenant_id, "ExtInfoLog", ObCtxIds::LOB_CTX_ID)))) {
     LOG_WARN("init ext info log allocator failed.", K(ret));
@@ -492,7 +492,7 @@ int ObLobManager::query(ObString& data, ObLobQueryIter *&result)
   } else {
     result = iter;
   }
-  return ret;
+  return ret;  
 }
 
 int ObLobManager::load_all(ObLobAccessParam &param, ObLobPartialData &partial_data)
@@ -525,7 +525,7 @@ int ObLobManager::load_all(ObLobAccessParam &param, ObLobPartialData &partial_da
       } else if (OB_FAIL(ob_write_string(*param.allocator_, seq_id, chunk_index.seq_id_))) {
         LOG_WARN("ob_write_stringt seq id fail", K(ret), K(chunk_count), K(output_len), K(partial_data.chunk_size_), K(chunk_index), K(seq_id));
       } else if (OB_FAIL(partial_data.push_chunk_index(chunk_index))) {
-        LOG_WARN("push_back lob chunk index fail", KR(ret), K(chunk_count), K(output_len), K(partial_data.chunk_size_), K(chunk_index));
+        LOG_WARN("push_back lob chunk index fail", KR(ret), K(chunk_count), K(output_len), K(partial_data.chunk_size_), K(chunk_index)); 
       } else {
         offset += partial_data.chunk_size_;
       }
@@ -2260,7 +2260,7 @@ int ObLobManager::insert(ObLobAccessParam& param, const ObLobLocatorV2 &src_data
     LOG_WARN("null lob common", K(ret), K(param));
   } else if (! param.lob_common_->is_init_) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("lob common not init", K(ret), KPC(param.lob_common_), K(param));
+    LOG_WARN("lob common not init", K(ret), KPC(param.lob_common_), K(param));  
   } else if (OB_ISNULL(param.lob_data_ = reinterpret_cast<ObLobData*>(param.lob_common_->buffer_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lob_data_ is null", KR(ret), K(param));

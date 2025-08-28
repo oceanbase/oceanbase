@@ -65,13 +65,13 @@ public:
     const ObAddr &addr,
     int64_t startup_time,
     ObWrSnapshotStatus status);
-
+  
   // do delete single tenant`s snapshot that have survived for more than the RETENTION timestamp
   //
   // @tenant_id [in] the id of tenant
   // @cluster_id [in] the id of clusted
   // @end_ts_of_retention [in] the end timestamp of retention
-  // @task_timeout_ts [in] the timeout of delete task
+  // @task_timeout_ts [in] the timeout of delete task 
   // @rpc_timeout [in] the timeout of rpc request
   // @wr_proxy [in] the wr rpc proxy
   // @return the error code.
@@ -89,7 +89,7 @@ public:
   // @cluster_id [in] the id of clusted
   // @low_snap_id [in] the left of range
   // @high_snap_id [in] the right of range
-  // @task_timeout_ts [in] the timeout of delete task
+  // @task_timeout_ts [in] the timeout of delete task 
   // @rpc_timeout [in] the timeout of rpc request
   // @wr_proxy [in] the wr rpc proxy
   // @return the error code.
@@ -101,7 +101,7 @@ public:
       const int64_t task_timeout_ts,
       const int64_t rpc_timeout,
       const obrpc::ObWrRpcProxy &wr_proxy);
-
+  
   // Get the snapshot ids that have survived for more than the RETENTION timestamp
   //
   // @end_ts_of_retention [in] the end timestamp of retention
@@ -132,7 +132,7 @@ public:
     const int64_t cluster_id,
     const ObAddr &server_addr,
     common::ObIArray<int64_t> &to_delete_snap_ids);
-
+  
   // Modify the status of the snapshot to the deleted state
   //
   // @tenant_id [in] the id of tenant
@@ -144,7 +144,7 @@ public:
                                          const int64_t cluster_id,
                                          const ObAddr &server_addr,
                                          const common::ObIArray<int64_t> &to_delete_snap_ids);
-
+  
   // Check whether all tenants' snapshot task is finished
   //
   // @timeout_ts [in] the timestamp of timeout
@@ -155,7 +155,7 @@ public:
   static int get_last_snap_id(int64_t &snap_id);
   static int mins_to_duration(const int64_t mins, char* string);
   static int update_wr_control(const char* time_num_col_name,
-                               const int64_t mins,
+                               const int64_t mins, 
                                const char* time_col_name,
                                const int64_t tenant_id);
   static int fetch_retention_usec_from_wr_control(int64_t &retention);
@@ -198,7 +198,7 @@ private:
   bool is_running_task_;
   bool is_inited_;
   int64_t lazy_snapshot_interval_min_;
-  // Since accessing the snapshot_interval requires sending inner SQL,
+  // Since accessing the snapshot_interval requires sending inner SQL, 
   // after adding the feature of ASH early dump into disk, ASH thread will frequently send requests, blocking ASH execution.
   // Therefore, lazy_snapshot_interval_min_ is added to utilize a lazy loading mode to avoid the issue.
 };

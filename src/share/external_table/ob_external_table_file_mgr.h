@@ -168,7 +168,7 @@ public:
                                   const uint64_t part_id = -1,
                                   bool collect_statistic = true);
 
-  int get_all_records_from_inner_table(ObIAllocator &allocator,
+  int get_all_records_from_inner_table(ObIAllocator &allocator, 
                                     int64_t tenant_id,
                                     int64_t table_id,
                                     int64_t partition_id,
@@ -198,7 +198,7 @@ public:
     const uint64_t table_id,
     const uint64_t part_id,
     const ObIArray<ObAddr> &all_servers);
-
+  
   int refresh_external_table(const uint64_t tenant_id,
                             const uint64_t table_id,
                             ObSchemaGetterGuard &schema_guard,
@@ -213,7 +213,7 @@ public:
   int auto_refresh_external_table(ObExecContext &exec_ctx, const int64_t interval);
   static int calculate_odps_part_val_by_part_spec(const ObTableSchema *table_schema,
                                           const ObIArray<ObExternalFileInfoTmp> &file_infos,
-                                          ObIArray<ObNewRow> &part_vals,
+                                          ObIArray<ObNewRow> &part_vals, 
                                           ObIAllocator &allocator);
 private:
   int collect_odps_table_statistics(const bool collect_statistic,
@@ -252,45 +252,45 @@ private:
       const uint64_t tenant_id,
       const uint64_t object_id);
 
-  int construct_add_partition_sql(ObSqlString &sql,
-                                  const ObString &database_name,
-                                  const ObString &table_name,
-                                  const ObString &partition_name,
+  int construct_add_partition_sql(ObSqlString &sql, 
+                                  const ObString &database_name, 
+                                  const ObString &table_name, 
+                                  const ObString &partition_name, 
                                   common::ObFixedArray<ObObj, ObIAllocator> &val_list);
 
   int build_row_for_file_name(ObNewRow &row, ObIAllocator &allocator);
 
-  int get_genarated_expr_from_partition_column(const ObColumnSchemaV2 *column_schema,
-                                               const ObTableSchema *table_schema,
-                                              ObSQLSessionInfo *session_info,
-                                              ObRawExprFactory *expr_factory,
+  int get_genarated_expr_from_partition_column(const ObColumnSchemaV2 *column_schema, 
+                                               const ObTableSchema *table_schema, 
+                                              ObSQLSessionInfo *session_info, 
+                                              ObRawExprFactory *expr_factory, 
                                               ObSchemaGetterGuard &schema_guard,
-                                              ObIAllocator &allocator,
+                                              ObIAllocator &allocator, 
                                               ObRawExpr *&gen_expr);
 
-  int cg_expr_by_mocking_field_expr(const ObTableSchema *table_schema,
-                                    ObRawExpr *gen_expr,
-                                    ObSQLSessionInfo *session_info,
-                                    ObRawExprFactory *expr_factory,
+  int cg_expr_by_mocking_field_expr(const ObTableSchema *table_schema, 
+                                    ObRawExpr *gen_expr, 
+                                    ObSQLSessionInfo *session_info, 
+                                    ObRawExprFactory *expr_factory, 
                                     share::schema::ObSchemaGetterGuard &schema_guard,
                                     ObIAllocator &allocator,
                                     ObTempExpr *&temp_expr);
 
-  int cg_partition_expr_rt_expr(const ObTableSchema *table_schema,
-                                ObRawExprFactory *expr_factory,
-                                ObSQLSessionInfo *session_info,
+  int cg_partition_expr_rt_expr(const ObTableSchema *table_schema, 
+                                ObRawExprFactory *expr_factory, 
+                                ObSQLSessionInfo *session_info, 
                                 share::schema::ObSchemaGetterGuard &schema_guard,
-                                ObIAllocator &allocator,
+                                ObIAllocator &allocator, 
                                 ObIArray<ObTempExpr *> &temp_exprs);
   int get_all_partition_list_val(const ObTableSchema *table_schema, ObIArray<ObNewRow> &part_vals, ObIArray<int64_t> &part_ids);
   int calculate_file_part_val_by_file_name(const ObTableSchema *table_schema,
                                           const ObIArray<ObExternalFileInfoTmp> &file_infos,
-                                          ObIArray<ObNewRow> &part_vals,
+                                          ObIArray<ObNewRow> &part_vals, 
                                           share::schema::ObSchemaGetterGuard &schema_guard,
                                           ObExecContext &exec_ctx);
 
   int find_partition_existed(ObIArray<ObNewRow> &existed_part,
-                            ObNewRow &file_part_val,
+                            ObNewRow &file_part_val, 
                             int64_t &found);
   int get_part_id_to_file_urls_map(const ObTableSchema *table_schema,
                                     const ObDatabaseSchema *database_schema,
@@ -302,7 +302,7 @@ private:
                                     ObMySQLTransaction &trans,
                                     common::hash::ObHashMap<int64_t, ObIArray<ObString> *> &hash_map);
 
-  int get_file_sizes_by_map(ObIArray<ObString> &file_urls,
+  int get_file_sizes_by_map(ObIArray<ObString> &file_urls, 
                             ObIArray<int64_t> &file_sizes,
                             common::hash::ObHashMap<ObString, int64_t> &map);
 
@@ -314,19 +314,19 @@ private:
                                                              ObIArray<ObNewRow> &partitions_to_add,
                                                              ObIArray<ObPartition *> &partitions_to_del);
 
-  int add_item_to_map(ObIAllocator &allocator,
+  int add_item_to_map(ObIAllocator &allocator, 
                       common::hash::ObHashMap<int64_t, ObArray<ObExternalFileInfoTmp> *> &hash_map,
                       int64_t part_id, const ObExternalFileInfoTmp &file_info);
 
-  int create_alter_table_stmt(sql::ObExecContext &exec_ctx,
-                              const ObTableSchema *table_schema,
-                              const ObDatabaseSchema *database_schema,
+  int create_alter_table_stmt(sql::ObExecContext &exec_ctx, 
+                              const ObTableSchema *table_schema, 
+                              const ObDatabaseSchema *database_schema, 
                               const int64_t part_num,
                               const ObAlterTableArg::AlterPartitionType alter_part_type,
                               ObAlterTableStmt *&alter_table_stmt);
 
-  int alter_partition_for_ext_table(ObMySQLTransaction &trans,
-                                    sql::ObExecContext &exec_ctx,
+  int alter_partition_for_ext_table(ObMySQLTransaction &trans,  
+                                    sql::ObExecContext &exec_ctx, 
                                     ObAlterTableStmt *alter_table_stmt,
                                     ObIArray<int64_t> &file_part_ids);
 

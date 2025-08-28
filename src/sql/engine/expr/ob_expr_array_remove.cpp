@@ -38,8 +38,8 @@ ObExprArrayRemove::ObExprArrayRemove(ObIAllocator &alloc)
 ObExprArrayRemove::ObExprArrayRemove(ObIAllocator &alloc,
                          ObExprOperatorType type,
                          const char *name,
-                         int32_t param_num,
-                         int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension)
+                         int32_t param_num, 
+                         int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension) 
 {
 }
 
@@ -66,12 +66,12 @@ int ObExprArrayRemove::calc_result_type2(ObExprResType &type,
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, ob_obj_type_str(type1.get_type()), ob_obj_type_str(type2.get_type()));
   } else if (OB_FAIL(ObArrayExprUtils::deduce_array_type(exec_ctx, type1, type2, subschema_id))) {
     LOG_WARN("failed to get result array type subschema id", K(ret));
-  }
+  } 
   if (OB_SUCC(ret) && !type1.is_null()) {
     type.set_collection(subschema_id);
     type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObCollectionSQLType]).get_length());
   }
-
+  
   return ret;
 }
 
@@ -496,8 +496,8 @@ int ObExprArrayRemove::eval_array_remove_array_vector(const ObExpr &expr, ObEval
       } else if (!bret) {
         changed = false;
         res_arr_obj = arr_obj;
-      }
-
+      } 
+      
       if (OB_SUCC(ret) && !is_null_res) {
         if (changed) {
           if (OB_FAIL(ObArrayUtil::clone_except(tmp_allocator, *arr_obj, arr_val, right_vec->is_null(idx), res_arr_obj))) {
@@ -515,7 +515,7 @@ int ObExprArrayRemove::eval_array_remove_array_vector(const ObExpr &expr, ObEval
             }
           } else if (OB_FAIL(ObArrayExprUtils::set_array_res<ObVectorBase>(res_arr_obj, expr, ctx, static_cast<ObVectorBase *>(res_vec), idx))) {
             LOG_WARN("set array res failed", K(ret));
-          }
+          } 
           if (OB_SUCC(ret)) {
             eval_flags.set(idx);
             res_arr_obj->clear();
@@ -544,7 +544,7 @@ int ObExprArrayRemove::cg_expr(ObExprCGCtx &expr_cg_ctx,
     LOG_WARN("child is null", K(ret), K(rt_expr.args_[0]), K(rt_expr.args_[1]));
   } else {
     rt_expr.eval_func_ = NULL;
-    const ObObjType right_type = rt_expr.args_[1]->datum_meta_.type_;
+    const ObObjType right_type = rt_expr.args_[1]->datum_meta_.type_;  
     ObObjTypeClass right_tc = ob_obj_type_class(right_type);
     if (right_tc == ObNullTC) {
       if (ob_is_null(rt_expr.args_[0]->datum_meta_.type_)) {

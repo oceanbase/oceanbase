@@ -183,7 +183,7 @@ int ObRowVectorConverter::to_vector(const ObDatum &datum,
     case VEC_CONTINUOUS: {
       ObContinuousBase *conti_vec = static_cast<ObContinuousBase *>(vector);
       char *data_buf = conti_vec->get_data();
-      uint32_t *offsets = conti_vec->get_offsets();
+      uint32_t *offsets = conti_vec->get_offsets(); 
       if (0 == batch_idx) {
         offsets[0] = 0;
       }
@@ -194,7 +194,7 @@ int ObRowVectorConverter::to_vector(const ObDatum &datum,
         if (datum.len_ > 0) {
           MEMCPY(data_buf + offsets[batch_idx], datum.ptr_, datum.len_);
         }
-        offsets[batch_idx + 1] = offsets[batch_idx] + datum.len_;
+        offsets[batch_idx + 1] = offsets[batch_idx] + datum.len_; 
       }
       break;
     }

@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 namespace obrpc {
 
 class ObTxFreeRouteCheckAliveP : public ObRpcProcessor< ObTransRpcProxy::ObRpc<OB_TX_FREE_ROUTE_CHECK_ALIVE> >

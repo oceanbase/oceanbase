@@ -49,7 +49,7 @@ int read_compact_rowkey(ObBufferReader &buffer_reader,
   } else if (OB_FAIL(buffer_reader.set_pos(pos))) {
     LOG_WARN("set pos on buffer reader failed", KR(ret));
   }
-
+  
   return ret;
 }
 
@@ -72,55 +72,55 @@ int ObTableLoadBackupMacroBlockMeta_V_1_4::deserialize(const char *buf, int64_t 
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(buf), K(data_len));
   } else if (OB_FAIL(buffer_reader.read(header_size))) {
-    LOG_WARN("deserialization header_size error", KR(ret), K(header_size),
+    LOG_WARN("deserialization header_size error", KR(ret), K(header_size), 
               K(buffer_reader.capacity()), K(buffer_reader.pos()));
   } else if (OB_FAIL(buffer_reader.read(header_version))) {
-    LOG_WARN("deserialization header_version error", KR(ret), K(header_version),
+    LOG_WARN("deserialization header_version error", KR(ret), K(header_version), 
               K(buffer_reader.capacity()), K(buffer_reader.pos()));
   } else if (OB_FAIL(buffer_reader.read(attr_))) {
-    LOG_WARN("deserialization attr_ error", KR(ret), K_(attr), KR(ret),
+    LOG_WARN("deserialization attr_ error", KR(ret), K_(attr), KR(ret), 
               K(buffer_reader.capacity()), K(buffer_reader.pos()));
   } else if (OB_FAIL(buffer_reader.read(data_version_))) {
-    LOG_WARN("deserialization data_version_ error", KR(ret), K_(data_version),
+    LOG_WARN("deserialization data_version_ error", KR(ret), K_(data_version), 
               K(buffer_reader.capacity()), K(buffer_reader.pos()));
-  } else if (attr_ == ObTableLoadBackupMacroBlockType_V_1_4::SSTableData ||
-             attr_ == ObTableLoadBackupMacroBlockType_V_1_4::LobData ||
+  } else if (attr_ == ObTableLoadBackupMacroBlockType_V_1_4::SSTableData || 
+             attr_ == ObTableLoadBackupMacroBlockType_V_1_4::LobData || 
              attr_ == ObTableLoadBackupMacroBlockType_V_1_4::LobIndex) {
     if (OB_FAIL(buffer_reader.read(column_number_))) {
-      LOG_WARN("deserialization column_number_ error", KR(ret), K_(column_number),
+      LOG_WARN("deserialization column_number_ error", KR(ret), K_(column_number), 
                 K(buffer_reader.capacity()), K(buffer_reader.pos()));
     } else if (OB_FAIL(buffer_reader.read(rowkey_column_number_))) {
-      LOG_WARN("deserialization rowkey_column_number_ error", KR(ret), K_(rowkey_column_number),
+      LOG_WARN("deserialization rowkey_column_number_ error", KR(ret), K_(rowkey_column_number), 
                 K(buffer_reader.capacity()), K(buffer_reader.pos()));
     } else if (OB_FAIL(buffer_reader.read(column_index_scale_))) {
-      LOG_WARN("deserialization column_index_scale_ error", KR(ret), K_(column_index_scale),
+      LOG_WARN("deserialization column_index_scale_ error", KR(ret), K_(column_index_scale), 
                 K(buffer_reader.capacity()), K(buffer_reader.pos()));
     } else if (OB_FAIL(buffer_reader.read(row_store_type_))) {
-      LOG_WARN("deserialization flag_ error", KR(ret), K_(row_store_type),
+      LOG_WARN("deserialization flag_ error", KR(ret), K_(row_store_type), 
                 K(buffer_reader.capacity()), K(buffer_reader.pos()));
     } else if (OB_FAIL(buffer_reader.read(row_count_))) {
-      LOG_WARN("deserialization row_count_ error", KR(ret), K_(row_count),
+      LOG_WARN("deserialization row_count_ error", KR(ret), K_(row_count), 
                 K(buffer_reader.capacity()), K(buffer_reader.pos()));
     } else if (OB_FAIL(buffer_reader.read(occupy_size_))) {
-      LOG_WARN("deserialization occupy_size_ error", KR(ret), K_(occupy_size),
+      LOG_WARN("deserialization occupy_size_ error", KR(ret), K_(occupy_size), 
                 K(buffer_reader.capacity()), K(buffer_reader.pos()));
     } else if (OB_FAIL(buffer_reader.read(data_checksum_))) {
-      LOG_WARN("deserialization data_checksum_ error", KR(ret), K_(data_checksum),
+      LOG_WARN("deserialization data_checksum_ error", KR(ret), K_(data_checksum), 
                 K(buffer_reader.capacity()), K(buffer_reader.pos()));
     } else if (OB_FAIL(buffer_reader.read(micro_block_count_))) {
-      LOG_WARN("deserialization micro_block_count_ error", KR(ret), K_(micro_block_count),
+      LOG_WARN("deserialization micro_block_count_ error", KR(ret), K_(micro_block_count), 
                 K(buffer_reader.capacity()), K(buffer_reader.pos()));
     } else if (OB_FAIL(buffer_reader.read(micro_block_data_offset_))) {
-      LOG_WARN("deserialization micro_block_data_offset_ error", KR(ret), K_(micro_block_data_offset),
+      LOG_WARN("deserialization micro_block_data_offset_ error", KR(ret), K_(micro_block_data_offset), 
                 K(buffer_reader.capacity()), K(buffer_reader.pos()));
     } else if (OB_FAIL(buffer_reader.read(micro_block_index_offset_))) {
-      LOG_WARN("deserialization micro_block_index_offset_ error", KR(ret), K_(micro_block_index_offset),
+      LOG_WARN("deserialization micro_block_index_offset_ error", KR(ret), K_(micro_block_index_offset), 
                 K(buffer_reader.capacity()), K(buffer_reader.pos()));
     } else if (OB_FAIL(buffer_reader.read(micro_block_endkey_offset_))) {
-      LOG_WARN("deserialization micro_block_endkey_offset_ error", KR(ret), K_(micro_block_endkey_offset),
+      LOG_WARN("deserialization micro_block_endkey_offset_ error", KR(ret), K_(micro_block_endkey_offset), 
                 K(buffer_reader.capacity()), K(buffer_reader.pos()));
     } else if (OB_FAIL(buffer_reader.read_cstr(compressor_))) {
-      LOG_WARN("deserialization compressor_ error", KR(ret), K_(compressor), K(buffer_reader.capacity()),
+      LOG_WARN("deserialization compressor_ error", KR(ret), K_(compressor), K(buffer_reader.capacity()), 
                 K(buffer_reader.pos()));
     }
 
@@ -153,7 +153,7 @@ int ObTableLoadBackupMacroBlockMeta_V_1_4::deserialize(const char *buf, int64_t 
     if (OB_SUCC(ret)) {
       if (buffer_reader.pos() - start_pos < header_size) {
         if (OB_FAIL(buffer_reader.read(table_id_))) {
-          LOG_WARN("deserialization table_id_ error", KR(ret), K_(table_id),
+          LOG_WARN("deserialization table_id_ error", KR(ret), K_(table_id), 
                     K(buffer_reader.capacity()), K(buffer_reader.pos()));
         }
       }
@@ -162,7 +162,7 @@ int ObTableLoadBackupMacroBlockMeta_V_1_4::deserialize(const char *buf, int64_t 
     if (OB_SUCC(ret)) {
       if (buffer_reader.pos() - start_pos < header_size) {
         if (OB_FAIL(buffer_reader.read(data_seq_))) {
-          LOG_WARN("deserialization data_seq_ error", KR(ret), K_(data_seq),
+          LOG_WARN("deserialization data_seq_ error", KR(ret), K_(data_seq), 
                     K(buffer_reader.capacity()), K(buffer_reader.pos()));
         }
       } else {
@@ -200,7 +200,7 @@ int ObTableLoadBackupMacroBlockMeta_V_1_4::deserialize(const char *buf, int64_t 
       pos = buffer_reader.pos();
     }
   }
-
+  
   return ret;
 }
 

@@ -258,7 +258,7 @@ public:
   // geometrycollection
   virtual int visit_collectionz_start(ObGeometry3D *geo, uint32_t nums);
   virtual int visit_collectionz_end(ObGeometry3D *geo, uint32_t nums);
-  ObGeoStringBuffer &get_result() { return buffer_; }
+  ObGeoStringBuffer &get_result() { return buffer_; } 
 
 private:
   static const int MAX_DIGITS_IN_DOUBLE = 25;

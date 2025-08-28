@@ -402,3 +402,4 @@ int ObTempTableInsertVecOp::process_dump(dtl::ObDTLIntermResultInfo &interm_res_
 
 } // end namespace sql
 } // end namespace oceanbase
+

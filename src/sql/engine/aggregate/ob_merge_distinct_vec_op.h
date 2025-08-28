@@ -48,9 +48,9 @@ public:
                       const ObBatchRows *child_brs, int64_t col_idx, int64_t &last_idx);
 
   template<typename InputVec>
-  int compare_in_column_with_format(InputVec *vec, const ObBatchRows *child_brs, int64_t first_no_skip_idx,
+  int compare_in_column_with_format(InputVec *vec, const ObBatchRows *child_brs, int64_t first_no_skip_idx, 
                                     int64_t col_idx, int64_t &last_idx);
-
+  
   typedef ObFixedLengthVector<int64_t, VectorBasicOp<VEC_TC_INTEGER>> FixedLengthVectorBigInt;
   typedef ObDiscreteVector<VectorBasicOp<VEC_TC_STRING>> DiscreteVectorString;
 

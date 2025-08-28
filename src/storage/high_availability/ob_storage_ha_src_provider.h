@@ -38,7 +38,7 @@ public:
   virtual int get_ls_leader(const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObAddr &addr);
   virtual int get_ls(const share::ObLSID &ls_id, ObLSHandle &ls_handle);
   virtual bool check_tenant_primary();
-  // According to the replica type, determine whether to get learner list.
+  // According to the replica type, determine whether to get learner list. 
   // F replica get member list, R replica get member list and learner list.
   int get_member_list_by_replica_type(
       const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObReplicaMember &dst,
@@ -51,11 +51,11 @@ private:
       const bool need_learner_list, common::ObAddr &leader_addr,
       common::GlobalLearnerList &learner_list, common::ObIArray<common::ObAddr> &member_list);
   int filter_dest_replica_(
-      const common::ObReplicaMember &dst,
+      const common::ObReplicaMember &dst, 
       common::GlobalLearnerList &learner_list);
   // check whether the dst is the first C replica in the learner list
   int check_is_first_c_replica_(
-      const common::ObReplicaMember &dst,
+      const common::ObReplicaMember &dst, 
       const common::GlobalLearnerList &learner_list,
       const bool &need_learner_list,
       bool &is_first_c_replica);
@@ -91,9 +91,9 @@ public:
         is_first_c_replica_(false)
       {}
       ~ChooseSourcePolicyDetailedInfo() {}
-
+      
       TO_STRING_KV(
-        "policy_type", get_policy_str(policy_type_),
+        "policy_type", get_policy_str(policy_type_), 
         "chosen_policy_type_", get_policy_str(chosen_policy_type_),
         K_(use_c_replica_policy),
         K_(is_first_c_replica));
@@ -117,7 +117,7 @@ public:
   ChooseSourcePolicy get_policy_type() const { return policy_type_; }
   storage::ObStorageRpc *get_storage_rpc() const { return storage_rpc_; }
   const share::SCN &get_local_clog_checkpoint_scn() const { return local_clog_checkpoint_scn_; }
-  const share::SCN &get_palf_parent_checkpoint_scn() const { return palf_parent_checkpoint_scn_; }
+  const share::SCN &get_palf_parent_checkpoint_scn() const { return palf_parent_checkpoint_scn_; } 
   bool is_first_c_replica() const { return is_first_c_replica_; }
 
   const static char *ObChooseSourcePolicyStr[static_cast<int64_t>(ChooseSourcePolicy::MAX_POLICY)];
@@ -131,17 +131,17 @@ protected:
    * server_version: dest server_version >= src server_version
    * restore_status: if restore_status of ls is fail, migration needs to wait.
    * migration_status: OB_MIGRATION_STATUS_NONE
-   * replica type:
+   * replica type: 
    * 1. F replica could serve as the source of F/R/C replica
-   * 2. R replica could only serve as the source of R/C
+   * 2. R replica could only serve as the source of R/C 
    * 3. C replica could only serve as the source of C replica
    * clog_checkpoint: source checkpoint scn must be greater than or equal than palf_parent_checkpoint_scn_ and local_clog_checkpoint_scn_
    *
    * If must_choose_c_replica is true, the source must be C replica.
    */
   int check_replica_validity(
-      const common::ObAddr &addr, const common::ObReplicaMember &dst,
-      const common::GlobalLearnerList &learner_list, const bool &must_choose_c_replica,
+      const common::ObAddr &addr, const common::ObReplicaMember &dst, 
+      const common::GlobalLearnerList &learner_list, const bool &must_choose_c_replica, 
       obrpc::ObFetchLSMetaInfoResp &ls_info);
 
   virtual int inner_choose_ob_src(
@@ -215,7 +215,7 @@ private:
    * The layout of the sorted_addr_list is as follows:
    * |<---- same zone ----->|<------ same idc ------>|<----- same region ---->|<-- different region -->|
    * {addr[0], ...,  addr[p], addr[p+1], ..., addr[q], addr[q+1], ..., addr[s], addr[s+1], ..., addr[t]}
-   *                      |                        |                        |
+   *                      |                        |                        |       
    *                zone_end_index            idc_end_index         region_end_index
    */
   int divide_addr_list(
@@ -225,7 +225,7 @@ private:
       int64_t &zone_end_index,
       int64_t &idc_end_index,
       int64_t &region_end_index);
-  /*
+  /* 
    * Find source from the sorted addr list.
    * Will only choose the src in [start_index, end_index]
    * The chosen source must be valid (see ObStorageHASrcProvider::check_replica_validity).
@@ -240,7 +240,7 @@ private:
       const bool &must_choose_c_replica,
       common::ObAddr &chosen_src_addr);
 
-
+  
 private:
   ObLocalityManager *locality_manager_;
 
@@ -261,7 +261,7 @@ protected:
       const common::ObAddr &leader_addr, const common::GlobalLearnerList &learner_list,
       const common::ObIArray<common::ObAddr> &addr_list, const ObMigrationOpArg &arg, const bool &must_choose_c_replica,
       common::ObAddr &chosen_src_addr) override;
-
+    
   DISALLOW_COPY_AND_ASSIGN(ObMigrationSrcByCheckpointProvider);
 };
 
@@ -285,7 +285,7 @@ protected:
       common::ObAddr &chosen_src_addr) override;
 private:
   int check_replica_validity_(const int64_t cluster_id, const common::ObIArray<common::ObAddr> &addr_list,
-      const common::ObAddr &addr, const common::ObReplicaMember &dst,
+      const common::ObAddr &addr, const common::ObReplicaMember &dst, 
       const common::GlobalLearnerList &learner_list, const bool &must_choose_c_replica);
   DISALLOW_COPY_AND_ASSIGN(ObRSRecommendSrcProvider);
 };
@@ -297,21 +297,21 @@ public:
   ~ObStorageHAChooseSrcHelper();
   int init(
       const ObMigrationChooseSrcHelperInitParam &param,
-      storage::ObStorageRpc *storage_rpc,
+      storage::ObStorageRpc *storage_rpc, 
       ObStorageHAGetMemberHelper *member_helper);
   int get_available_src(const ObMigrationOpArg &arg, ObStorageHASrcInfo &src_info);
   static int get_policy_type(
-      const ObMigrationOpArg &arg,
+      const ObMigrationOpArg &arg, 
       const uint64_t tenant_id,
-      const bool enable_choose_source_policy,
+      const bool enable_choose_source_policy, 
       const char *policy_str,
       const common::GlobalLearnerList &learner_list,
       ObStorageHASrcProvider::ChooseSourcePolicy &policy,
       bool &use_c_replica_policy);
-
+  
 private:
   int init_rs_recommend_source_provider_(
-      const ObMigrationChooseSrcHelperInitParam &param,
+      const ObMigrationChooseSrcHelperInitParam &param, 
       storage::ObStorageRpc *storage_rpc,
       ObStorageHAGetMemberHelper *member_helper);
   int init_choose_source_by_location_provider_(
@@ -345,7 +345,7 @@ public:
   void reset();
   bool is_valid() const;
   int assign(const ObMigrationChooseSrcHelperInitParam &param);
-
+  
   TO_STRING_KV(
     K_(tenant_id), K_(ls_id), K_(local_clog_checkpoint_scn), K_(arg), K_(info), K_(policy), K_(use_c_replica_policy), K_(is_first_c_replica));
   uint64_t tenant_id_;

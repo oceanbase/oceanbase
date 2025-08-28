@@ -25,17 +25,17 @@ namespace common
 int ObWktParser::check_next_token(ObWktTokenType tkn_type)
 {
   int ret = OB_SUCCESS;
-  ObWktTokenVal tkn_val;
+  ObWktTokenVal tkn_val; 
   if (OB_FAIL(check_next_token_with_val(tkn_type, tkn_val))) {
     LOG_WARN("fail to check next token", K(ret), K(tkn_type));
   }
   return ret;
-}
+}	
 
 int ObWktParser::check_next_token_with_val(ObWktTokenType tkn_type, ObWktTokenVal &tkn_val)
 {
   int ret = OB_SUCCESS;
-  skip_left_space();
+  skip_left_space(); 
   if (is_wkt_end()) {
     ret = OB_ERR_PARSER_SYNTAX;
     LOG_WARN("fail to get next token, have reached the end of wkt", K(ret));
@@ -99,7 +99,7 @@ int ObWktParser::check_next_token_with_val(ObWktTokenType tkn_type, ObWktTokenVa
     }
   }
   return ret;
-}
+} 	
 
 int ObWktParser::check_next_token_with_val_keep_pos(ObWktTokenType tkn_type, ObWktTokenVal &tkn_val)
 {
@@ -238,7 +238,7 @@ int ObWktParser::process_number(ObWktTokenVal &tkn_val)
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error when cast string to double", K(ret), K(cur_pos_), K(val));
-  }
+  }             
 
   return ret;
 }
@@ -294,14 +294,14 @@ int ObWktParser::parse_geo_type(ObGeoType &geo_type)
     LOG_WARN("wkt has extra character after parse", K(ret), K(cur_pos_));
   } else {
     geo_type = ObGeoTypeUtil::get_geo_type_by_name(tkn_val_1.string_val_);
-  }
-
+  } 
+  
   if (OB_FAIL(ret)) {
   } else if (ObGeoTypeUtil::is_3d_geo_type(geo_type)) {
     // 3d type
     if (OB_FAIL(set_dimension(ObGeoDimType::IS_3D))) {
       LOG_WARN("fail to set dimension type", K(ret));
-    }
+    } 
   } else {
     ObWktTokenType tkn_type_2;
     ObWktTokenVal tkn_val_2;
@@ -349,49 +349,49 @@ int ObWktParser::inner_parse()
       case ObGeoType::POINT:
       case ObGeoType::POINTZ: {
         if (OB_FAIL(parse_point())) {
-          LOG_WARN("fail to parse point wkt", K(ret));
+          LOG_WARN("fail to parse point wkt", K(ret)); 
         }
         break;
       }
       case ObGeoType::LINESTRING:
       case ObGeoType::LINESTRINGZ: {
         if (OB_FAIL(parse_linestring())) {
-          LOG_WARN("fail to parse linestring wkt", K(ret));
+          LOG_WARN("fail to parse linestring wkt", K(ret)); 
         }
         break;
       }
-      case ObGeoType::POLYGON:
+      case ObGeoType::POLYGON: 
       case ObGeoType::POLYGONZ: {
         if (OB_FAIL(parse_polygon())) {
-          LOG_WARN("fail to parse polygon wkt", K(ret));
+          LOG_WARN("fail to parse polygon wkt", K(ret)); 
         }
         break;
       }
-      case ObGeoType::MULTIPOINT:
+      case ObGeoType::MULTIPOINT: 
       case ObGeoType::MULTIPOINTZ: {
         if (OB_FAIL(parse_multipoint())) {
-          LOG_WARN("fail to parse multipoint wkt", K(ret));
+          LOG_WARN("fail to parse multipoint wkt", K(ret)); 
         }
         break;
       }
       case ObGeoType::MULTILINESTRING:
       case ObGeoType::MULTILINESTRINGZ: {
         if (OB_FAIL(parse_mutilinestring())) {
-          LOG_WARN("fail to parse multilinestring wkt", K(ret));
+          LOG_WARN("fail to parse multilinestring wkt", K(ret)); 
         }
         break;
       }
-      case ObGeoType::MULTIPOLYGON:
+      case ObGeoType::MULTIPOLYGON: 
       case ObGeoType::MULTIPOLYGONZ: {
         if (OB_FAIL(parse_multipolygen())) {
-          LOG_WARN("fail to parse multipolygen wkt", K(ret));
+          LOG_WARN("fail to parse multipolygen wkt", K(ret)); 
         }
         break;
       }
       case ObGeoType::GEOMETRYCOLLECTION:
       case ObGeoType::GEOMETRYCOLLECTIONZ: {
         if (OB_FAIL(parse_geometrycollectioin())) {
-          LOG_WARN("fail to parse geometrycollection wkt", K(ret));
+          LOG_WARN("fail to parse geometrycollection wkt", K(ret)); 
         }
         break;
       }
@@ -420,8 +420,8 @@ int ObWktParser::refresh_type(uint64_t pos)
     LOG_WARN("fail to refresh type",K(ret));
   } else if (OB_FAIL(wkb_buf_.read(pos, type))) {
     LOG_WARN("fail to read type", K(ret));
-  } else if (dim_type_ == ObGeoDimType::IS_3D &&
-            type <= 7 &&
+  } else if (dim_type_ == ObGeoDimType::IS_3D && 
+            type <= 7 && 
             OB_FAIL(wkb_buf_.write(pos, type + 1000))) {
     LOG_WARN("fail to refresh type", K(ret), K(type));
   }
@@ -432,9 +432,9 @@ int ObWktParser::refresh_type(uint64_t pos)
 int ObWktParser::parse_point(bool with_brackets)
 {
   int ret = OB_SUCCESS;
-  ObWktTokenVal x_val;
+  ObWktTokenVal x_val; 
   ObWktTokenVal y_val;
-  ObWktTokenVal z_val;
+  ObWktTokenVal z_val; 
   if (with_brackets && OB_FAIL(check_next_token(ObWktTokenType::W_LEFT_B))) {
     LOG_WARN("fail to parse point, check next LEFT_B", K(ret));
   } else if (OB_FAIL(check_next_token_with_val(ObWktTokenType::W_NUMBER, x_val))) {
@@ -515,13 +515,13 @@ int ObWktParser::parse_linestring(bool is_ring)
           }
         }
       } while(has_more_geo && OB_SUCC(ret));
-
+      
       if (OB_SUCC(ret)) {
         if (is_ring) {
           if (num_points < 4) {
             ret = OB_ERR_PARSER_SYNTAX;
           } else {
-            uint8_t dim = dim_type_ == ObGeoDimType::IS_3D ? 3 : 2;
+            uint8_t dim = dim_type_ == ObGeoDimType::IS_3D ? 3 : 2; 
             // 3D ring is legal as long as the X/Y axes are equal
             bool not_same_point = MEMCMP(wkb_buf_.ptr() + pos + sizeof(uint32_t),
               wkb_buf_.ptr() + wkb_buf_.length() - dim * sizeof(double), 2 * sizeof(double));
@@ -575,7 +575,7 @@ int ObWktParser::parse_polygon()
           }
         }
       } while(has_more_geo && OB_SUCC(ret));
-
+      
       if (OB_SUCC(ret) && OB_FAIL(wkb_buf_.write(pos, num_lines))) {
         LOG_WARN("fail to backfill num lines for polygon", K(ret));
       }
@@ -591,11 +591,11 @@ int ObWktParser::parse_multi_geom(ObGeoType geo_type, bool brackets)
   int ret = OB_SUCCESS;
   ObFunction<int(void)> parse_func;
   if (ObGeoType::POINT == geo_type) {
-    parse_func = std::bind(&ObWktParser::parse_point, this, brackets);
+    parse_func = std::bind(&ObWktParser::parse_point, this, brackets); 
   } else if (ObGeoType::LINESTRING == geo_type) {
-    parse_func = std::bind(&ObWktParser::parse_linestring, this, false);
+    parse_func = std::bind(&ObWktParser::parse_linestring, this, false); 
   } else if (ObGeoType::POLYGON == geo_type) {
-    parse_func = std::bind(&ObWktParser::parse_polygon, this);
+    parse_func = std::bind(&ObWktParser::parse_polygon, this); 
   } else {
     ret = OB_ERR_PARSER_SYNTAX;
   }
@@ -637,7 +637,7 @@ int ObWktParser::parse_multi_geom(ObGeoType geo_type, bool brackets)
             }
           }
         } while(has_more_geo && OB_SUCC(ret));
-
+        
         if (OB_SUCC(ret) && OB_FAIL(wkb_buf_.write(pos, num_geo))) {
           LOG_WARN("fail to backfill num lines for polygon", K(ret));
         }
@@ -666,7 +666,7 @@ int ObWktParser::parse_multipoint()
 
 int ObWktParser::parse_mutilinestring()
 {
-  return parse_multi_geom(ObGeoType::LINESTRING);
+  return parse_multi_geom(ObGeoType::LINESTRING); 
 }
 
 int ObWktParser::parse_multipolygen()

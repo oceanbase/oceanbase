@@ -26,7 +26,7 @@ class ObExprArrayDistinct : public ObFuncExprOperator
 {
 public:
   explicit ObExprArrayDistinct(common::ObIAllocator &alloc);
-  explicit ObExprArrayDistinct(common::ObIAllocator &alloc, ObExprOperatorType type,
+  explicit ObExprArrayDistinct(common::ObIAllocator &alloc, ObExprOperatorType type, 
                                 const char *name, int32_t param_num, int32_t dimension);
   virtual ~ObExprArrayDistinct();
   virtual int calc_result_type1(ObExprResType &type,
@@ -40,7 +40,7 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
 private:
-
+  
   DISALLOW_COPY_AND_ASSIGN(ObExprArrayDistinct);
 };
 

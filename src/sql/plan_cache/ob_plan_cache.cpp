@@ -62,7 +62,7 @@ struct ObGetCandiBaselinePlanIdOp
       LOG_WARN("unexpected null plan", K(ret), K(plan));
     } else if (!plan->should_add_baseline() || plan->stat_.constructed_sql_.empty()) {
       // do nothing
-    } else if (!sql_id_.empty() && (db_id_ != plan->stat_.db_id_ || sql_id_ != plan->stat_.sql_id_)) {
+    } else if (!sql_id_.empty() && (db_id_ != plan->stat_.db_id_ || sql_id_ != plan->stat_.sql_id_)) {  
       // do nothing
     } else if (with_plan_hash_ && plan->stat_.plan_hash_value_ != plan_hash_value_) {
       // do nothing
@@ -2604,7 +2604,7 @@ int ObPlanCache::flush_pl_cache_single_cache_obj(uint64_t db_id, EvictAttr &attr
 
 template int ObPlanCache::flush_pl_cache_single_cache_obj<ObGetPLKVEntryBySchemaIdOp, uint64_t>(uint64_t db_id, uint64_t &schema_id);
 template int ObPlanCache::flush_pl_cache_single_cache_obj<ObGetPLKVEntryByDbIdOp, uint64_t>(uint64_t db_id, uint64_t &schema_id);
-template int ObPlanCache::flush_pl_cache_single_cache_obj<ObGetPLKVEntryBySQLIDOp, common::ObString>(uint64_t db_id, common::ObString &sql_id);
+template int ObPlanCache::flush_pl_cache_single_cache_obj<ObGetPLKVEntryBySQLIDOp, common::ObString>(uint64_t db_id, common::ObString &sql_id);                                
 
 int ObPlanCache::flush_pl_cache()
 {
@@ -2724,3 +2724,4 @@ void ObPlanCacheEliminationTask::run_free_cache_obj_task()
 
 } // end of namespace sql
 } // end of namespace oceanbase
+

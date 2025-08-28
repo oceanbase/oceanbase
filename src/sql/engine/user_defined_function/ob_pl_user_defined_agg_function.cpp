@@ -397,7 +397,7 @@ int ObPlAggUdfFunction::process_merge_pl_agg_udf(ObObjParam &pl_obj,
   ObString routine_name(strlen(str), str);
   ParamStore *udf_params = NULL;
   ObObj tmp_result;
-
+  
   //for pl agg udf, type member ODCIAggregateMerge() the first param must be self and is IN OUT,
   //the second param is IN. so we need rebuild relation infos.
   //see oracle url:https://docs.oracle.com/cd/B28359_01/appdev.111/b28425/ext_agg_ref.htm#CACBJHHI

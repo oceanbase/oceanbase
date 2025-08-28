@@ -27,7 +27,7 @@ namespace pl
 class ObPlJsonObject {
 public:
 
-  static const int64_t PL_MAX_JSN_KEY_LENGTH = 256;
+  static const int64_t PL_MAX_JSN_KEY_LENGTH = 256; 
 
   static int constructor(sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result);
   static int parse(sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result);
@@ -57,8 +57,8 @@ public:
   static int set_on_error(sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result);
 
 private:
-  static int get_internal(sql::ObExecContext &ctx,
-                          sql::ParamStore &params,
+  static int get_internal(sql::ObExecContext &ctx, 
+                          sql::ParamStore &params, 
                           common::ObObj &result,
                           bool is_res_obj);
 

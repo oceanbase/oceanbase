@@ -722,7 +722,7 @@ int LogSlidingWindow::generate_new_group_log_(const LSN &lsn,
         if (OB_FAIL(LogEntryHeader::generate_padding_log_buf(padding_log_body_size, scn, padding_valid_data, padding_valid_data_len))) {
           PALF_LOG(ERROR, "generate_padding_log_buf failed", K_(palf_id), K_(self), K(padding_valid_data_len),
             K(scn), K(padding_log_body_size));
-        }
+        } 
         // padding log, fill log body with PADDING_LOG_CONTENT_CHAR.
         else if (OB_FAIL(group_buffer_.fill_padding_body(lsn + LogGroupEntryHeader::HEADER_SER_SIZE, padding_valid_data, padding_valid_data_len, log_body_size))) {
           PALF_LOG(WARN, "group_buffer fill_padding_body failed", K(ret), K_(palf_id), K_(self), K(log_body_size));
@@ -2288,7 +2288,7 @@ int LogSlidingWindow::sliding_cb(const int64_t sn, const FixedSlidingWindowSlot 
             PALF_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "log_task life cost too much time", K_(palf_id), K_(self), K(log_id), KPC(log_task),
                 K(fs_cb_begin_ts), K(log_life_time));
           }
-        }
+        }   
 
         // update last_slide_lsn_ and submit fill cache task
         if (OB_SUCC(ret)) {
@@ -3264,7 +3264,7 @@ int LogSlidingWindow::receive_log(const common::ObAddr &src_server,
           // 1) new log_proposal_id != last_submit_log_pid, it cannot reach here, because it cannot be received.
           //
           // 2) new log_proposal_id == last_submit_log_pid, the local log_task's propsal_id should be equal
-          //      with last_submit_log_pid too. If not, local log shouldn't exist (it should already be
+          //      with last_submit_log_pid too. If not, local log shouldn't exist (it should already be 
           //      truncated by previous receive operation).
           //
           // In summary, (log_id <= last_submit_log_id) must be true.
@@ -4232,7 +4232,7 @@ int LogSlidingWindow::ack_log(const common::ObAddr &src_server, const LSN &end_l
   } else if (!in_member_list && !in_degraded_list) {
     // src_server is not paxos member or degraded learners, skip
     // why record end_lsn of degraded learners in match_lsn_map?
-    // if a degraded server recovers,
+    // if a degraded server recovers, 
     PALF_LOG(WARN, "src_server is not in curr_member_list/degraded_learner_list", K(ret), K_(palf_id), K_(self),
         K(src_server), K(member_list), K(degraded_learner_list));
   } else if (OB_FAIL(try_update_match_lsn_map_(src_server, end_lsn))) {

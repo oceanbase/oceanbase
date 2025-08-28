@@ -186,7 +186,7 @@ int ObGranuleUtil::split_granule_by_total_byte(ObIAllocator &allocator, int64_t 
     } else {
       OZ(granule_ranges.push_back(*range));
       OZ(granule_idx.push_back(task_idx++));
-      OZ(granule_tablets.push_back(tablets.at(0)));
+      OZ(granule_tablets.push_back(tablets.at(0)));      
     }
   }
   return ret;
@@ -262,7 +262,7 @@ int ObGranuleUtil::split_granule_for_external_table(ObIAllocator &allocator,
                OB_FAIL(granule_tablets.push_back(tablets.at(0)))) {
       LOG_WARN("fail to push back", K(ret));
     }
-  } else if (!external_table_files.empty() &&
+  } else if (!external_table_files.empty() && 
              ObExternalFileFormat::ODPS_FORMAT == external_file_format.format_type_) {
     LOG_TRACE("odps external table granule switch", K(ret), K(external_table_files.count()), K(external_table_files));
     if (!GCONF._use_odps_jni_connector) {
@@ -551,7 +551,7 @@ int ObGranuleUtil::split_block_granule(ObExecContext &exec_ctx,
           granule_tablets.count() != granule_ranges.count() ||
           granule_tablets.count() != granule_idx.count()) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("the ranges or offsets are empty", K(ret), K(granule_tablets.count()),  K(granule_ranges.count()),
+        LOG_WARN("the ranges or offsets are empty", K(ret), K(granule_tablets.count()),  K(granule_ranges.count()), 
                                       K(granule_idx.count()), K(granule_tablets), K(granule_ranges), K(granule_idx));
       }
     }

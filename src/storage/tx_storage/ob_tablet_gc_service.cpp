@@ -252,7 +252,7 @@ void ObTabletGCService::ObTabletChangeTask::runTimerTask()
             STORAGE_LOG(WARN, "failed to set ls transfer scn", KPC(ls), KR(ret), K(decided_scn));
           }
           // 9. check and gc deleted_tablets
-          else if (!only_persist && !deleted_tablets.empty()
+          else if (!only_persist && !deleted_tablets.empty() 
                    && OB_FAIL(tablet_gc_handler->gc_tablets(deleted_tablets))) {
             need_retry = true;
             STORAGE_LOG(WARN, "failed to gc tablet", KR(ret));

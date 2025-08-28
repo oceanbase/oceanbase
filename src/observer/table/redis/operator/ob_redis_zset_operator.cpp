@@ -70,9 +70,9 @@ int ZSetCommandOperator::do_zadd(int64_t db, const ObString &key,
 }
 
 int ZSetCommandOperator::do_zadd_data(
-    int64_t db,
-    const ObString &key,
-    const ZSetCommand::MemberScoreMap &mem_score_map,
+    int64_t db, 
+    const ObString &key, 
+    const ZSetCommand::MemberScoreMap &mem_score_map, 
     bool is_new_meta)
 {
   int ret = OB_SUCCESS;
@@ -191,7 +191,7 @@ int ZSetCommandOperator::do_zincrby(int64_t db, const ObString &key, const ObStr
       LOG_WARN("fail to check hash expire", K(ret), K(db), K(key));
     }
   }
-
+  
   if (OB_FAIL(ret)) {
   } else if (!is_meta_exists) {
     // insert both meta and data
@@ -200,7 +200,7 @@ int ZSetCommandOperator::do_zincrby(int64_t db, const ObString &key, const ObStr
       LOG_WARN("fail to generate meta entity", K(ret), K(db), K(key), KPC(meta));
     } else if (OB_FAIL(ops.insert_or_update(*put_meta_entity))) {
       LOG_WARN("fail to put meta entity", K(ret));
-    }
+    } 
   } else {
     bool is_data_exists = true;
     double old_val = 0.0;
@@ -305,9 +305,9 @@ int ZSetCommandOperator::do_zscore(int64_t db, const ObString &key, const ObStri
 }
 
 int ZSetCommandOperator::get_rank_in_same_score(
-  int64_t db,
-  ZRangeCtx &zrange_ctx,
-  const ObString &member,
+  int64_t db, 
+  ZRangeCtx &zrange_ctx, 
+  const ObString &member, 
   int64_t score,
   ObRedisZSetMeta *set_meta,
   int64_t &rank)
@@ -372,7 +372,7 @@ int ZSetCommandOperator::get_rank_in_same_score(
   } else if (OB_FAIL(query.add_select_column(COUNT_STAR_PROPERTY))) {
     LOG_WARN("fail to add select member column", K(ret), K(query));
   }
-
+  
   if (OB_SUCC(ret)) {
     SMART_VAR(ObTableCtx, tb_ctx, op_temp_allocator_)
     {
@@ -887,7 +887,7 @@ int ZSetCommandOperator::do_zcount(int64_t db, const ObString &key, double min, 
       LOG_WARN("fail to get meta", K(ret), K(db), K(key));
     }
   } else if (FALSE_IT(set_meta = reinterpret_cast<ObRedisZSetMeta*>(meta))) {
-  }
+  } 
 
   if (OB_FAIL(ret)) {
     if (ret == OB_ITER_END) {
@@ -1188,8 +1188,8 @@ int ZSetCommandOperator::do_zinter_store(int64_t db, const ObString &dest,
   return ret;
 }
 
-int ZSetCommandOperator::fill_set_batch_op(const ObRedisOp &op,
-                                           ObIArray<ObTabletID> &tablet_ids,
+int ZSetCommandOperator::fill_set_batch_op(const ObRedisOp &op, 
+                                           ObIArray<ObTabletID> &tablet_ids, 
                                            ObTableBatchOperation &batch_op)
 {
   int ret = OB_SUCCESS;
@@ -1206,7 +1206,7 @@ int ZSetCommandOperator::fill_set_batch_op(const ObRedisOp &op,
   ObString key;
   ObObj insert_obj;
   ObObj expire_obj;
-  for (ZSetCommand::MemberScoreMap::const_iterator iter = mem_score_map.begin();
+  for (ZSetCommand::MemberScoreMap::const_iterator iter = mem_score_map.begin(); 
       OB_SUCC(ret) && iter != mem_score_map.end(); ++iter) {
     insert_obj.set_timestamp(cur_ts);
     expire_obj.set_null();

@@ -315,7 +315,7 @@ int ObMallocAllocator::create_tenant_allocator(uint64_t tenant_id, ObTenantCtxAl
 }
 
 void ObMallocAllocator::destroy_tenant_allocator(ObTenantCtxAllocatorV2 *allocator)
-{
+{  
   for (int64_t ctx_id = 0; ctx_id < ObCtxIds::MAX_CTX_ID; ctx_id++) {
     allocator[ctx_id].~ObTenantCtxAllocatorV2();
   }

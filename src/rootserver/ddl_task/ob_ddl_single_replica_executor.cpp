@@ -177,7 +177,7 @@ int ObDDLReplicaBuildExecutor::build(const ObDDLReplicaBuildExecutorParam &param
       is_inited_ = true;
     }
     if (OB_FAIL(ret)) {
-      is_inited_ = false;
+      is_inited_ = false; 
     }
   } // lock scope, keep schedule_task() out of lock scope
 
@@ -347,7 +347,7 @@ int ObDDLReplicaBuildExecutor::check_build_end(const bool need_checksum, bool &i
     if (!share::is_tablet_split(ddl_type_) && need_checksum) {
       if (OB_FAIL(ObCheckTabletDataComplementOp::check_finish_report_checksum(
               dest_tenant_id_, dest_table_id, execution_id_, ddl_task_id_))) {
-        LOG_WARN("fail to check sstable checksum_report_finish",
+        LOG_WARN("fail to check sstable checksum_report_finish", 
             K(ret), K(dest_tenant_id_), K(dest_table_id), K(execution_id_), K(ddl_task_id_));
       }
     }
@@ -409,7 +409,7 @@ int ObDDLReplicaBuildExecutor::get_progress(int64_t &row_inserted, int64_t &phys
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("replica build executor not init", K(ret));
-  }
+  }  
   for (int64_t i = 0; OB_SUCC(ret) && i < replica_build_ctxs_.count(); ++i) {
     row_inserted += replica_build_ctxs_.at(i).row_inserted_;
     physical_row_count += replica_build_ctxs_.at(i).physical_row_count_;
@@ -754,7 +754,7 @@ int ObDDLReplicaBuildExecutor::refresh_replica_build_ctxs(
           if (OB_FAIL(new_build_ctx.assign(replica_build_ctxs_.at(j)))) {
             LOG_WARN("failed to assign to replica build ctx", K(ret));
           } else {
-            // use correspoinding tablet's old replica ctx to init
+            // use correspoinding tablet's old replica ctx to init 
             ctx_partial_inited = true;
           }
         }
@@ -785,7 +785,7 @@ int ObDDLReplicaBuildExecutor::refresh_replica_build_ctxs(
   } else if (new_replica_build_ctxs.count() != replica_tablet_ids.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the size of replica build ctxs doesn't equal to the size of replica_tablet_ids", K(ret), K(replica_build_ctxs_.count()), K(replica_tablet_ids.count()));
-  }
+  } 
   return ret;
 }
 

@@ -31,8 +31,8 @@ ObExprPrivSTGeogFromText::ObExprPrivSTGeogFromText(ObIAllocator &alloc)
 ObExprPrivSTGeogFromText::ObExprPrivSTGeogFromText(ObIAllocator &alloc,
                                                    ObExprOperatorType type,
                                                    const char *name,
-                                                   int32_t param_num,
-                                                   int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, NOT_VALID_FOR_GENERATED_COL, dimension)
+                                                   int32_t param_num, 
+                                                   int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, NOT_VALID_FOR_GENERATED_COL, dimension) 
 {
 }
 
@@ -44,7 +44,7 @@ int ObExprPrivSTGeogFromText::calc_result_type1(ObExprResType &type,
                                                 ObExprResType &type1,
                                                 common::ObExprTypeCtx &type_ctx) const
 {
-  UNUSED(type_ctx);
+  UNUSED(type_ctx); 
   int ret = OB_SUCCESS;
   if (ob_is_null(type1.get_type())) {
   } else if (!ob_is_string_type(type1.get_type())
@@ -128,8 +128,8 @@ int ObExprPrivSTGeogFromText::eval_priv_st_geogfromtext_common(const ObExpr &exp
       LOG_WARN("unexpected null geo after parse_wkt", K(ret), K(wkt));
     } else if (OB_FAIL(ObGeoExprUtils::correct_coordinate_range(srs_item, geo, func_name))) {
       LOG_WARN("check geo coordinate range failed", K(ret));
-    }
-
+    } 
+    
     if (OB_SUCC(ret)) {
       ObString res_wkb;
       if (OB_FAIL(ObGeoExprUtils::geo_to_wkb(*geo, expr, ctx, srs_item, res_wkb))) {

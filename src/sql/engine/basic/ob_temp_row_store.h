@@ -62,7 +62,7 @@ public:
    * the tial that records the position of each compact row is written from tail to head.
    *
    * The buffer is at the end of payload, the begin of buffer is the end of indexes.
-   * During random reading, use get_buffer() to find the end of indexes, then get the position by
+   * During random reading, use get_buffer() to find the end of indexes, then get the position by 
    * index, and finally obtain the compact row based on the position.
    */
   struct BatchCtx;
@@ -463,3 +463,4 @@ private:
 } // end namespace oceanbase
 
 #endif // OCEANBASE_BASIC_OB_TEMP_ROW_STORE_H_
+

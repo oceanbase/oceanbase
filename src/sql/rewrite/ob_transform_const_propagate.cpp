@@ -1129,7 +1129,7 @@ int ObTransformConstPropagate::recursive_replace_expr(ObRawExpr *&cur_expr,
   } else if (found || cur_expr->has_flag(IS_ROWID)) {
     // do nothing
     //because the column expr in rowid will be used to extract query range. So, we can't replace.
-    //see the issue:
+    //see the issue: 
   } else if (OB_FAIL(const_ctx.shared_expr_checker_.is_shared_expr(cur_expr, is_shared))) {
     LOG_WARN("failed to check is shared expr", K(ret));
   } else if (is_shared) {
@@ -1201,8 +1201,8 @@ int ObTransformConstPropagate::replace_internal(ObRawExpr *&cur_expr,
     } else if (OB_FAIL(ObTransformUtils::check_can_replace(cur_expr, parent_exprs,
                                                            used_in_compare, can_replace))) {
       LOG_WARN("failed to check can replace", K(ret));
-    }
-
+    } 
+    
     if (OB_FAIL(ret)) {
     } else if (!can_replace) {
       // do nothing
@@ -1391,7 +1391,7 @@ int ObTransformConstPropagate::check_need_cast_when_replace(ObRawExpr *expr,
   } else if (is_in_param) {
     // for static engine, all params in rigth side of in or not in should have same type
     need_cast = true;
-  } else if (const_expr->get_expr_type() == T_NULL &&
+  } else if (const_expr->get_expr_type() == T_NULL && 
              (ObDatumFuncs::is_null_aware_hash_type(expr->get_result_type().get_type()) ||
               ObDecimalIntType == expr->get_result_type().get_type())) {
     // To adapt to the behavior of casting NULL values for hash compare
@@ -2188,7 +2188,7 @@ int ObTransformConstPropagate::do_check_constraint_param_expr_vaildity(
         LOG_WARN("failed to check all const propagate column", K(ret));
       } else if (!is_valid) {
         //do nothing
-      } else if (complex_cst_info_idx >= 0
+      } else if (complex_cst_info_idx >= 0 
               && expr_const_infos.at(complex_cst_info_idx).multi_const_exprs_.count() > 10) {
         is_valid = false; //do not deduce big in
       //check rule 3
@@ -2356,9 +2356,9 @@ int ObTransformConstPropagate::do_replace_check_constraint_expr(ObDMLStmt *stmt,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error", K(ret), KPC(new_check_cst_expr));
     } else if (OB_ISNULL(value_expr = (part_column_expr == new_check_cst_expr->get_param_expr(0) ?
-                                                          new_check_cst_expr->get_param_expr(1) :
+                                                          new_check_cst_expr->get_param_expr(1) : 
                                                           new_check_cst_expr->get_param_expr(0)))) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_ERR_UNEXPECTED;                                                            
       LOG_WARN("value expr is null", K(ret));
     } else if (OB_FAIL(not_null_values.push_back(value_expr))) {
       LOG_WARN("push back failed", K(ret));
@@ -2399,7 +2399,7 @@ int ObTransformConstPropagate::do_replace_check_constraint_expr(ObDMLStmt *stmt,
         }
         trans_happened = true;
         LOG_TRACE("Succeed to do replace check constraint expr", KPC(new_check_cst_expr));
-      }
+      } 
     }
   }
   return ret;
@@ -2713,8 +2713,8 @@ int ObTransformConstPropagate::replace_select_exprs_skip_agg_internal(ObRawExpr 
 }
 
 // Check if all non-consts in T_OP_ROW can be replaced to consts.
-int ObTransformConstPropagate::check_can_replace_child_of_row(ConstInfoContext &const_ctx,
-                                                              ObRawExpr *&cur_expr,
+int ObTransformConstPropagate::check_can_replace_child_of_row(ConstInfoContext &const_ctx, 
+                                                              ObRawExpr *&cur_expr, 
                                                               bool &can_replace_child)
 {
   int ret = OB_SUCCESS;
@@ -2733,8 +2733,8 @@ int ObTransformConstPropagate::check_can_replace_child_of_row(ConstInfoContext &
         LOG_WARN("failed to push back expr", K(ret));
       }
     }
-    if (OB_SUCC(ret) && OB_FAIL(ObOptimizerUtil::is_const_expr_recursively(cur_expr,
-                                                                           const_cols,
+    if (OB_SUCC(ret) && OB_FAIL(ObOptimizerUtil::is_const_expr_recursively(cur_expr, 
+                                                                           const_cols, 
                                                                            is_const_recursively))) {
       LOG_WARN("failed to check const expr recursively", K(ret));
     } else {

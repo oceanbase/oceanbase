@@ -120,7 +120,7 @@ int ObFtsIndexBuildTask::init(
     LOG_WARN("fail to decide parallelism", K(ret), K(create_index_arg.index_type_), K(parallelism));
   } else {
     LOG_INFO("create_index_arg.index_type_x", K(create_index_arg.index_type_), K(create_index_arg.index_key_));
-
+    
     if (INDEX_TYPE_NORMAL_MULTIVALUE_LOCAL == create_index_arg.index_type_ ||
         INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL == create_index_arg.index_type_) {
       task_type_ = DDL_CREATE_MULTIVALUE_INDEX;
@@ -346,8 +346,8 @@ int ObFtsIndexBuildTask::check_health()
     LOG_WARN("refresh status failed", K(ret));
   } else if (OB_FAIL(refresh_schema_version())) {
     LOG_WARN("refresh schema version failed", K(ret));
-  } else if (status == ObDDLTaskStatus::FAIL) {
-    /*already failed, and have submitted drop index task, do nothing*/
+  } else if (status == ObDDLTaskStatus::FAIL) { 
+    /*already failed, and have submitted drop index task, do nothing*/ 
   } else if (OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), KP(GCTX.schema_service_));
@@ -373,7 +373,7 @@ int ObFtsIndexBuildTask::check_health()
         ret = check_errsim_error();
       }
     #endif
-    if (OB_FAIL(ret) && !ObIDDLTask::in_ddl_retry_white_list(ret)
+    if (OB_FAIL(ret) && !ObIDDLTask::in_ddl_retry_white_list(ret) 
       && static_cast<ObDDLTaskStatus>(task_status_) != ObDDLTaskStatus::FAIL) {
       const ObDDLTaskStatus old_status = static_cast<ObDDLTaskStatus>(task_status_);
       const ObDDLTaskStatus new_status = ObDDLTaskStatus::FAIL;
@@ -407,7 +407,7 @@ int ObFtsIndexBuildTask::get_next_status(share::ObDDLTaskStatus &next_status)
         next_status = ObDDLTaskStatus::WAIT_ROWKEY_DOC_TABLE_COMPLEMENT;
         break;
       }
-      case ObDDLTaskStatus::WAIT_ROWKEY_DOC_TABLE_COMPLEMENT: {
+      case ObDDLTaskStatus::WAIT_ROWKEY_DOC_TABLE_COMPLEMENT: { 
         bool need_to_load_dic = false;
         const ObString &parser_name = create_index_arg_.index_option_.parser_name_;
         if (is_fts_task() && OB_FAIL(ObFtsIndexBuilderUtil::check_need_to_load_dic(tenant_id_, parser_name, need_to_load_dic))) {
@@ -469,7 +469,7 @@ int ObFtsIndexBuildTask::prepare()
       next_status = ObDDLTaskStatus::FAIL;
       LOG_WARN("failed to get next status", K(ret), K(next_status));
     }
-
+    
     (void)switch_status(next_status, true, ret);
     ret = OB_SUCCESS;
   }
@@ -582,10 +582,10 @@ int ObFtsIndexBuildTask::prepare_rowkey_doc_table()
     } else if (OB_FAIL(get_next_status(next_status))) {
       next_status = ObDDLTaskStatus::FAIL;
       LOG_WARN("failed to get next status", K(ret), K(next_status));
-    }
+    } 
     (void)switch_status(next_status, next_status != ObDDLTaskStatus::FAIL, ret);
     LOG_WARN("generate schema finished", K(ret), K(parent_task_id_), K(task_id_), K(old_status), K(next_status), K(*this));
-
+    
     ret = OB_SUCCESS;
   }
   return ret;
@@ -617,22 +617,22 @@ int ObFtsIndexBuildTask::prepare_aux_index_tables()
   } else if (need_to_load_dic) {
     if (OB_FAIL(get_charset_type(charset_type))) {
       LOG_WARN("fail to get charset type", K(ret), K(tenant_id_), K(charset_type));
-    } else if (OB_FAIL(ObGenDicLoader::get_instance().get_dic_loader(tenant_id_,
-                                                                     parser_name,
-                                                                     charset_type,
+    } else if (OB_FAIL(ObGenDicLoader::get_instance().get_dic_loader(tenant_id_, 
+                                                                     parser_name, 
+                                                                     charset_type, 
                                                                      dic_loader_handle))) {
-      LOG_WARN("fail to get dic loader",
+      LOG_WARN("fail to get dic loader", 
           K(ret), K(tenant_id_), K(parser_name), K(charset_type));
     } else if (OB_UNLIKELY(!dic_loader_handle.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("the dic loader handle is not valid", K(ret), K(tenant_id_), K(dic_loader_handle));
     } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, task_id_))) {
       LOG_WARN("failed to get owner id", K(ret), K(task_id_));
-    } else if (OB_FAIL(ObDicLock::lock_dic_tables_out_trans(tenant_id_,
-                                                            *dic_loader_handle.get_loader(),
-                                                            transaction::tablelock::SHARE,
+    } else if (OB_FAIL(ObDicLock::lock_dic_tables_out_trans(tenant_id_, 
+                                                            *dic_loader_handle.get_loader(), 
+                                                            transaction::tablelock::SHARE, 
                                                             owner_id))) {
-      LOG_WARN("failed to lock all dictionary table",
+      LOG_WARN("failed to lock all dictionary table", 
           K(ret), K(tenant_id_), K(dic_loader_handle), K(owner_id));
     }
   }
@@ -689,7 +689,7 @@ int ObFtsIndexBuildTask::prepare_aux_index_tables()
                                        fts_doc_word_task_id_))) {
         LOG_WARN("failed to prepare aux table", K(ret),
             K(fts_doc_word_task_submitted_), K(fts_doc_word_aux_table_id_));
-        }
+        } 
       }
     }
   }
@@ -799,7 +799,7 @@ int ObFtsIndexBuildTask::record_index_table_id(
     rowkey_doc_aux_table_id_ = aux_table_id;
   } else if (share::schema::is_doc_rowkey_aux(index_type)) {
     doc_rowkey_aux_table_id_ = aux_table_id;
-  } else if (share::schema::is_fts_index_aux(index_type) ||
+  } else if (share::schema::is_fts_index_aux(index_type) || 
     is_multivalue_index_aux(index_type)) {
     domain_index_aux_table_id_ = aux_table_id;
   } else if (share::schema::is_fts_doc_word_aux(index_type)) {
@@ -818,7 +818,7 @@ int ObFtsIndexBuildTask::get_index_table_id(
     index_table_id = rowkey_doc_aux_table_id_;
   } else if (share::schema::is_doc_rowkey_aux(index_type)) {
     index_table_id = doc_rowkey_aux_table_id_;
-  } else if (share::schema::is_fts_index_aux(index_type) ||
+  } else if (share::schema::is_fts_index_aux(index_type) || 
     is_multivalue_index_aux(index_type)) {
     index_table_id = domain_index_aux_table_id_;
   } else if (share::schema::is_fts_doc_word_aux(index_type)) {
@@ -846,11 +846,11 @@ int ObFtsIndexBuildTask::load_dictionary()
     LOG_WARN("the task status for fts index not match", K(ret), K(task_status_), K(tenant_id_));
   } else if (OB_FAIL(get_charset_type(charset_type))) {
     LOG_WARN("fail to get charset type", K(ret), K(tenant_id_), K(charset_type));
-  } else if (OB_FAIL(ObGenDicLoader::get_instance().get_dic_loader(tenant_id_,
-                                                                   parser_name,
-                                                                   charset_type,
+  } else if (OB_FAIL(ObGenDicLoader::get_instance().get_dic_loader(tenant_id_, 
+                                                                   parser_name, 
+                                                                   charset_type, 
                                                                    dic_loader_handle))) {
-    LOG_WARN("fail to get dic loader",
+    LOG_WARN("fail to get dic loader", 
         K(ret), K(tenant_id_), K(parser_name), K(charset_type));
   } else if (OB_UNLIKELY(!dic_loader_handle.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
@@ -931,7 +931,7 @@ int ObFtsIndexBuildTask::get_charset_type(ObCharsetType &charset_type)
 // wait data complement of aux index tables
 int ObFtsIndexBuildTask::wait_aux_table_complement()
 {
-  using task_iter = common::hash::ObHashMap<uint64_t, share::ObDomainDependTaskStatus>::const_iterator;
+  using task_iter = common::hash::ObHashMap<uint64_t, share::ObDomainDependTaskStatus>::const_iterator; 
   int ret = OB_SUCCESS;
   bool child_task_failed = false;
   bool state_finished = false;
@@ -1010,7 +1010,7 @@ int ObFtsIndexBuildTask::wait_aux_table_complement()
       if (OB_FAIL(get_next_status(next_status))) {
         next_status = ObDDLTaskStatus::FAIL;
         LOG_WARN("failed to get next status", K(ret));
-      }
+      } 
     }
 
     (void)switch_status(next_status, next_status != ObDDLTaskStatus::FAIL, ret);
@@ -1611,7 +1611,7 @@ int ObFtsIndexBuildTask::refresh_task_context(const share::ObDDLTaskStatus statu
           }
           break;
         }
-        case ObDDLTaskStatus::LOAD_DICTIONARY:
+        case ObDDLTaskStatus::LOAD_DICTIONARY: 
         case ObDDLTaskStatus::GENERATE_DOC_AUX_SCHEMA: {
           break;
         }
@@ -1624,8 +1624,8 @@ int ObFtsIndexBuildTask::refresh_task_context(const share::ObDDLTaskStatus statu
           break;
         }
         case ObDDLTaskStatus::TAKE_EFFECT: {
-          if (is_fts_task() &&
-              (OB_INVALID_ID == domain_index_aux_table_id_ ||
+          if (is_fts_task() && 
+              (OB_INVALID_ID == domain_index_aux_table_id_ || 
               OB_INVALID_ID == fts_doc_word_aux_table_id_)) {
             if (OB_FAIL(ObDDLUtil::load_ddl_task(tenant_id_, task_id_, allocator_, task))) {
               LOG_WARN("fail to get fulltext task objection", K(ret));
@@ -1713,7 +1713,7 @@ int ObFtsIndexBuildTask::get_task_status()
 
 int ObFtsIndexBuildTask::clean_on_failed()
 {
-  using task_iter = common::hash::ObHashMap<uint64_t, share::ObDomainDependTaskStatus>::const_iterator;
+  using task_iter = common::hash::ObHashMap<uint64_t, share::ObDomainDependTaskStatus>::const_iterator; 
   int ret = OB_SUCCESS;
   bool state_finished = false;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -1822,16 +1822,16 @@ int ObFtsIndexBuildTask::submit_drop_fts_index_task()
     LOG_WARN("invalid argument", KR(ret), KP(GCTX.schema_service_));
   } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
     LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id_));
-  } else if (OB_INVALID_ID != rowkey_doc_aux_table_id_ &&
+  } else if (OB_INVALID_ID != rowkey_doc_aux_table_id_ && 
              OB_FAIL(drop_index_arg.index_ids_.push_back(rowkey_doc_aux_table_id_))) {
     LOG_WARN("fail to push back rowkey_doc_aux_table_id_", K(ret), K(rowkey_doc_aux_table_id_));
-  } else if (OB_INVALID_ID != doc_rowkey_aux_table_id_ &&
+  } else if (OB_INVALID_ID != doc_rowkey_aux_table_id_ && 
              OB_FAIL(drop_index_arg.index_ids_.push_back(doc_rowkey_aux_table_id_))) {
     LOG_WARN("fail to push back doc_rowkey_aux_table_id_", K(ret), K(doc_rowkey_aux_table_id_));
-  } else if (OB_INVALID_ID != domain_index_aux_table_id_ &&
+  } else if (OB_INVALID_ID != domain_index_aux_table_id_ && 
              OB_FAIL(drop_index_arg.index_ids_.push_back(domain_index_aux_table_id_))) {
     LOG_WARN("fail to push back domain_index_aux_table_id_", K(ret), K(domain_index_aux_table_id_));
-  } else if (OB_INVALID_ID != fts_doc_word_aux_table_id_ &&
+  } else if (OB_INVALID_ID != fts_doc_word_aux_table_id_ && 
              OB_FAIL(drop_index_arg.index_ids_.push_back(fts_doc_word_aux_table_id_))) {
     LOG_WARN("fail to push back fts_doc_word_aux_table_id_", K(ret), K(fts_doc_word_aux_table_id_));
   } else if (drop_index_arg.index_ids_.count() <= 0) {
@@ -1852,10 +1852,10 @@ int ObFtsIndexBuildTask::submit_drop_fts_index_task()
     LOG_WARN("database schema is null", KR(ret), KP(database_schema), KP(data_table_schema));
   } else {
     int64_t ddl_rpc_timeout = 0;
-    drop_index_arg.is_inner_          = true;
+    drop_index_arg.is_inner_          = true; 
     drop_index_arg.tenant_id_         = tenant_id_;
     drop_index_arg.exec_tenant_id_    = tenant_id_;
-    drop_index_arg.index_table_id_    = index_table_id;
+    drop_index_arg.index_table_id_    = index_table_id; 
     drop_index_arg.index_name_        = data_table_schema->get_table_name();  // not in used
     drop_index_arg.index_action_type_ = obrpc::ObIndexArg::DROP_INDEX;
     drop_index_arg.is_add_to_scheduler_ = true;
@@ -1955,7 +1955,7 @@ int ObFtsIndexBuildTask::collect_longops_stat(ObLongopsValue &value)
                                   MAX_LONG_OPS_MESSAGE_LENGTH,
                                   pos,
                                   "STATUS: GENERATE_ROWKEY_DOC_SCHEMA, ROWKEY_DOC_TASK_ID: %ld", rowkey_doc_task_id_))) {
-        LOG_WARN("failed to print", K(ret));
+        LOG_WARN("failed to print", K(ret)); 
       }
       break;
     }
@@ -2084,22 +2084,22 @@ int ObFtsIndexBuildTask::cleanup_impl()
     } else if (need_to_load_dic) {
       if (OB_FAIL(get_charset_type(charset_type))) {
         LOG_WARN("fail to get charset type", K(ret), K(tenant_id_), K(charset_type));
-      } else if (OB_FAIL(ObGenDicLoader::get_instance().get_dic_loader(tenant_id_,
-                                                                       parser_name,
-                                                                       charset_type,
+      } else if (OB_FAIL(ObGenDicLoader::get_instance().get_dic_loader(tenant_id_, 
+                                                                       parser_name, 
+                                                                       charset_type, 
                                                                        dic_loader_handle))) {
-
-          LOG_WARN("fail to get dic loader",
+        
+          LOG_WARN("fail to get dic loader", 
               K(ret), K(tenant_id_), K(parser_name), K(charset_type));
       } else if (OB_UNLIKELY(!dic_loader_handle.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("the dic loader handle is not valid", K(ret), K(tenant_id_), K(dic_loader_handle));
-      } else if (OB_FAIL(ObDicLock::unlock_dic_tables(tenant_id_,
-                                                      *dic_loader_handle.get_loader(),
-                                                      transaction::tablelock::SHARE,
-                                                      owner_id,
+      } else if (OB_FAIL(ObDicLock::unlock_dic_tables(tenant_id_, 
+                                                      *dic_loader_handle.get_loader(), 
+                                                      transaction::tablelock::SHARE, 
+                                                      owner_id, 
                                                       trans))) {
-        LOG_WARN("failed to unlock all dictionary tables",
+        LOG_WARN("failed to unlock all dictionary tables", 
             K(ret), K(tenant_id_), K(dic_loader_handle), K(owner_id));
       }
     }
@@ -2135,7 +2135,7 @@ int ObFtsIndexBuildTask::cleanup_impl()
 
 int ObFtsIndexBuildTask::verify_children_checksum() const
 {
-  // TODO
+  // TODO 
   // remove , as 1st, 2nd table get difference snapshot leading checksum not equal
   // issue 2024080900104086008
   return OB_SUCCESS;

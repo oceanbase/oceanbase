@@ -34,9 +34,9 @@ public:
                                 common::ObExprTypeCtx &type_ctx) const override;
 
   static int eval_delete_xml(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
-  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
-                      const ObRawExpr &raw_expr,
-                      ObExpr &rt_expr)
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, 
+                      const ObRawExpr &raw_expr, 
+                      ObExpr &rt_expr) 
                       const override;
 private:
   static int delete_xml(ObPathExprIter &xpath_iter, bool &should_reparse);

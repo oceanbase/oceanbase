@@ -97,7 +97,7 @@ int ObSetKvAttributeHelper::lock_objects_()
   RS_TRACE(lock_objects);
   if (FAILEDx(lock_for_common_ddl_())) { // online ddl lock & table lock
     LOG_WARN("fail to lock for common ddl", KR(ret));
-  }
+  } 
   for (int64_t i = 0; i < origin_table_schemas_.count() && OB_SUCC(ret); i++) {
     const ObTableSchema *orig_table_schema = origin_table_schemas_.at(i);
     if (OB_ISNULL(orig_table_schema)) {
@@ -117,8 +117,8 @@ int ObSetKvAttributeHelper::lock_objects_()
       LOG_WARN("database_schema's database name not equal to arg",
               KR(ret), K(database_schema->get_database_name_str()), K_(get_params_().database_name));
     }
-  }
-
+  } 
+  
   return ret;
 }
 
@@ -195,12 +195,12 @@ int ObSetKvAttributeHelper::lock_objects_by_name_()
     if (database_id_ == OB_INVALID_ID) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("database id is invalid", KR(ret));
-    } else if (OB_FAIL(latest_schema_guard_.get_table_id_and_table_name_in_tablegroup(tablegroup_id_,
+    } else if (OB_FAIL(latest_schema_guard_.get_table_id_and_table_name_in_tablegroup(tablegroup_id_, 
         table_names_, table_ids_))) {
       LOG_WARN("failed to get table schemas in table group", KR(ret), K_(tablegroup_id));
     } else if (table_names_.count() != table_ids_.count()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table id and name is not match", KR(ret), K_(tablegroup_id),
+      LOG_WARN("table id and name is not match", KR(ret), K_(tablegroup_id),  
         K_(get_params_().table_group_name), K_(table_names), K_(table_ids));
     } else if (table_names_.count() <= 0) {
       ret = OB_ERR_UNEXPECTED;
@@ -237,16 +237,16 @@ int ObSetKvAttributeHelper::lock_objects_by_id_()
     LOG_WARN("fail to lock database id", KR(ret), K_(database_id));
   } else if (OB_FAIL(add_lock_object_by_id_(tablegroup_id_, share::schema::TABLEGROUP_SCHEMA,
                      transaction::tablelock::EXCLUSIVE))) {
-    LOG_WARN("failed to add lock object by tablegroup id", KR(ret), K_(tablegroup_id));
+    LOG_WARN("failed to add lock object by tablegroup id", KR(ret), K_(tablegroup_id));                      
   }
 
   for (int64_t i = 0; i < table_ids_.count() && OB_SUCC(ret); i++) {
     uint64_t table_id = table_ids_.at(i);
     if (OB_FAIL(add_lock_object_by_id_(table_id, share::schema::TABLE_SCHEMA, transaction::tablelock::EXCLUSIVE))) {
       LOG_WARN("fail to lock table id", KR(ret), K_(tenant_id));
-    }
+    } 
   }
-
+  
   if (FAILEDx(lock_existed_objects_by_id_())) {
     LOG_WARN("fail to lock objects by id", KR(ret));
   } else {  // double check for table_ids_ is consistent
@@ -255,10 +255,10 @@ int ObSetKvAttributeHelper::lock_objects_by_id_()
     // supported in parallel ddl and we can ignore this check for now
     ObArray<uint64_t> ori_table_ids;
     ObArray<uint64_t> latest_table_ids;
-    ObArray<ObString> latest_table_names;  // not used
+    ObArray<ObString> latest_table_names;  // not used 
     if (OB_FAIL(ori_table_ids.assign(table_ids_))) {
       LOG_WARN("fail to assign origin table ids", KR(ret));
-    } else if (OB_FAIL(latest_schema_guard_.get_table_id_and_table_name_in_tablegroup(tablegroup_id_,
+    } else if (OB_FAIL(latest_schema_guard_.get_table_id_and_table_name_in_tablegroup(tablegroup_id_, 
         latest_table_names, latest_table_ids))) {
       LOG_WARN("failed to get table schemas in table group", KR(ret), K_(tablegroup_id));
     } else if (ori_table_ids.count() != latest_table_ids.count()) {
@@ -287,7 +287,7 @@ int ObSetKvAttributeHelper::lock_for_common_ddl_()
   if (OB_UNLIKELY(OB_INVALID_ID == database_id_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("database is not exist", KR(ret), K_(tenant_id));
-  }
+  } 
   for (int64_t i = 0; i < table_ids_.count() && OB_SUCC(ret); ++i) {
     const uint64_t table_id = table_ids_.at(i);
     const ObTableSchema *orig_table_schema = nullptr;
@@ -420,8 +420,8 @@ int ObSetKvAttributeHelper::check_and_modify_kv_attr_(ObKVAttr &kv_attr, bool is
   return ret;
 }
 
-int ObSetKvAttributeHelper::construct_ddl_stmt_(const ObString &table_name,
-                                               const ObString &kv_attr_str,
+int ObSetKvAttributeHelper::construct_ddl_stmt_(const ObString &table_name, 
+                                               const ObString &kv_attr_str, 
                                                ObString &ddl_stmt_str)
 {
   int ret = OB_SUCCESS;
@@ -434,7 +434,7 @@ int ObSetKvAttributeHelper::construct_ddl_stmt_(const ObString &table_name,
   if (OB_ISNULL(buf_ptr = static_cast<char *>(allocator_.alloc(total_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc buffer", KR(ret), K(total_len));
-  } else if (OB_FAIL(databuff_printf(buf_ptr, total_len, pos, ALTER_KV_ATTRIBUTE_FORMAT_STR,
+  } else if (OB_FAIL(databuff_printf(buf_ptr, total_len, pos, ALTER_KV_ATTRIBUTE_FORMAT_STR, 
       table_name_len, table_name.ptr(), kv_attr_str_len, kv_attr_str.ptr()))) {
     LOG_WARN("fail to format ddl stmt str", KR(ret), K(table_name), K(kv_attr_str));
   } else {

@@ -37,7 +37,7 @@ class ChunkChunkRowMeta;
  * offset_width:  the width of offset in var_column_offset (e.g., 2 bytes /4 bytes),
  *                4 bytes is for long row.
  * null_bitmap:   mark wether the i-th datum is null. equal to datum->desc.null_
- *
+ * 
  * to get i-th datum(fixed data):   1. get offset by row_meta.column_offset[i].
  *                                  2. use the offset to get fixed data ( ObDatum *datum = fixed_data + offset)
  * to get i-th datum(var_data):     1. find the var_data is the j-th var_data.
@@ -93,11 +93,11 @@ class ObCompactBlockReader final : public ObBlockIReader
 
 
 public:
-  ObCompactBlockReader(ObTempBlockStore *store = nullptr) : ObBlockIReader(store), row_meta_(nullptr),
-                                                  sr_buffer_(nullptr), sr_size_(0), cur_row_offset_width_(0),
+  ObCompactBlockReader(ObTempBlockStore *store = nullptr) : ObBlockIReader(store), row_meta_(nullptr), 
+                                                  sr_buffer_(nullptr), sr_size_(0), cur_row_offset_width_(0), 
                                                   cur_pos_in_blk_(0), cur_row_in_blk_(0) {};
   ObCompactBlockReader(ObTempBlockStore *store, const ChunkRowMeta *row_meta) : ObBlockIReader(store), row_meta_(row_meta),
-                                                      sr_buffer_(nullptr), sr_size_(0), cur_row_offset_width_(0),
+                                                      sr_buffer_(nullptr), sr_size_(0), cur_row_offset_width_(0), 
                                                       cur_pos_in_blk_(0), cur_row_in_blk_(0) {};
   virtual ~ObCompactBlockReader() { reset(); };
 

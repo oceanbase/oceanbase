@@ -69,7 +69,7 @@ void TestBlockMetaTree::SetUp()
   ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(TEST_TENANT_ID);
   ObTenantEnv::set_tenant(&tenant_base_);
   prepare_schema();
-  ASSERT_OK(data_desc_.init(table_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE,
+  ASSERT_OK(data_desc_.init(table_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE, 
                             1/*snapshot*/, 1/*data_version*/, table_schema_.get_micro_index_clustered(), 0 /*transfer_seq*/));
   data_desc_.get_col_desc().allocator_.set_tenant_id(500);
   ASSERT_OK(row_generate_.init(table_schema_, &allocator_));

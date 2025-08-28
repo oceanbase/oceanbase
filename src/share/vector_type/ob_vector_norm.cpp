@@ -15,7 +15,7 @@ namespace oceanbase
 {
 namespace common
 {
-int ObVectorNorm::vector_norm_square_func(const float *a, const int64_t len, double &norm_square)
+int ObVectorNorm::vector_norm_square_func(const float *a, const int64_t len, double &norm_square) 
 {
   return vector_norm_square_normal(a, len, norm_square);
 }

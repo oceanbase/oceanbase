@@ -229,8 +229,8 @@ public:
   OB_INLINE void unset_result_flag(uint32_t flag) { res_flags_ &= (~flag); }
   OB_INLINE bool has_result_flag(uint32_t flag) const { return res_flags_ & flag; }
   OB_INLINE uint32_t get_result_flag() const { return res_flags_; }
-  OB_INLINE bool is_oracle_integer() const { return lib::is_oracle_mode() && is_number()
-                                                    && -1 == get_accuracy().get_precision()
+  OB_INLINE bool is_oracle_integer() const { return lib::is_oracle_mode() && is_number() 
+                                                    && -1 == get_accuracy().get_precision() 
                                                     && 0 == get_accuracy().get_scale(); }
   OB_INLINE void mark_enum_set_with_subschema(const ObEnumSetMeta::MetaState state)
   {

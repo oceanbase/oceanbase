@@ -62,7 +62,7 @@ public:
 
 private:
   static const uint32_t MAX_N_POINTS = (uint32_t)(UINT_MAX32 -  WKB_COMMON_WKB_HEADER_LEN) / WKB_POINT_DATA_SIZE;
-  static const uint32_t MAX_MULIT_POINTS = (uint32_t)(UINT_MAX32 - WKB_COMMON_WKB_HEADER_LEN) /
+  static const uint32_t MAX_MULIT_POINTS = (uint32_t)(UINT_MAX32 - WKB_COMMON_WKB_HEADER_LEN) / 
                                                    (WKB_GEO_BO_SIZE + WKB_GEO_TYPE_SIZE + WKB_POINT_DATA_SIZE);
 
   ObString wkb_;

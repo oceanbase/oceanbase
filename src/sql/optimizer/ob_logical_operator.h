@@ -638,7 +638,7 @@ public:
   //   而 producer id 则延迟到后面的算子去生成（后面一定能遇到一个有能力生成这个表达式的算子）
   //
   // 表达式生成的过程非常绕，这里有一篇文档帮助你入门：
-  //  -
+  //  - 
   // 如果看完还不明白，请直接 @溪峰
   uint64_t consumer_id_;
   uint64_t producer_id_;
@@ -1165,7 +1165,7 @@ public:
    * get cur_op's expected_ordering
    */
   inline void set_is_local_order(bool is_local_order) { is_local_order_ = is_local_order; }
-  inline bool get_is_local_order() const { return is_local_order_; }
+  inline bool get_is_local_order() const { return is_local_order_; } 
   inline void set_is_range_order(bool is_range_order) { is_range_order_ = is_range_order; }
   inline bool get_is_range_order() const { return is_range_order_; }
 
@@ -1722,7 +1722,7 @@ public:
   virtual int close_px_resource_analyze(CLOSE_PX_RESOURCE_ANALYZE_DECLARE_ARG);
   int find_max_px_resource_child(OPEN_PX_RESOURCE_ANALYZE_DECLARE_ARG, int64_t start_idx);
 
-  inline ObIArray<double> &get_ambient_card() { return ambient_card_; }
+  inline ObIArray<double> &get_ambient_card() { return ambient_card_; } 
 
   int pre_check_can_px_batch_rescan(bool &find_nested_rescan,
                                     bool &find_rescan_px,

@@ -144,13 +144,13 @@ int ObServerConnectionPool::release(common::sqlclient::ObISQLConnection *conn, c
       }
     }
   }
-  LOG_TRACE("release connection to server conn pool", KP(this),
-                                                      K(busy_conn_count_),
-                                                      K(free_conn_count_),
-                                                      KP(connection),
-                                                      K(connection->get_sessid()),
-                                                      K(succ),
-                                                      K(ret),
+  LOG_TRACE("release connection to server conn pool", KP(this), 
+                                                      K(busy_conn_count_), 
+                                                      K(free_conn_count_), 
+                                                      KP(connection), 
+                                                      K(connection->get_sessid()), 
+                                                      K(succ), 
+                                                      K(ret), 
                                                       K(lbt()));
   return ret;
 }
@@ -225,7 +225,7 @@ int ObServerConnectionPool::init_dblink(uint64_t tenant_id, uint64_t dblink_id, 
     LOG_WARN("fail to init", K(ret));
   } else if (OB_INVALID_ID == dblink_id
              || 0 == port
-             || db_tenant.empty() || db_user.empty() || db_pass.empty()
+             || db_tenant.empty() || db_user.empty() || db_pass.empty() 
              || (!lib::is_oracle_mode() && db_name.empty())
              || OB_UNLIKELY(cluster_str.length() >= OB_MAX_CLUSTER_NAME_LENGTH)
              || OB_UNLIKELY(db_tenant.length() >= OB_MAX_TENANT_NAME_LENGTH)

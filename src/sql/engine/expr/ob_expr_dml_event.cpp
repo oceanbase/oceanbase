@@ -86,7 +86,7 @@ int ObExprDmlEvent::calc_dml_event(const ObExpr &expr,
         if (!ob_is_text_tc(expr.args_[1]->datum_meta_.type_)) {
           col = update_col->get_string();
         } else {
-          col = update_col->get_string();
+          col = update_col->get_string(); 
           OZ (sql::ObTextStringHelper::read_prefix_string_data(ctx,
                                                                *update_col,
                                                                expr.args_[1]->datum_meta_,

@@ -12,7 +12,7 @@
  */
 
 #ifndef OCEANBASE_SQL_OB_EXPR_ARRAY_EXTREME
-#define OCEANBASE_SQL_OB_EXPR_ARRAY_EXTREME
+#define OCEANBASE_SQL_OB_EXPR_ARRAY_EXTREME 
 
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "lib/udt/ob_array_type.h"

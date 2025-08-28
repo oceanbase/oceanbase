@@ -66,7 +66,7 @@ int ObFileReader::open(const ObFileReadParam &param, ObIAllocator &allocator, Ob
 {
   int ret = OB_SUCCESS;
   file_reader = nullptr;
-
+  
   if (param.file_location_ == ObLoadFileLocation::SERVER_DISK) {
     ObRandomFileReader *tmp_reader = OB_NEW(ObRandomFileReader, MEMORY_ATTR, allocator);
     if (OB_ISNULL(tmp_reader)) {
@@ -303,8 +303,8 @@ int ObRandomOSSReader::read(char *buf, int64_t count, int64_t &read_size)
     LOG_WARN("fail to async read oss buf", KR(ret), K_(offset), K(count), K(read_size));
   } else if (OB_FAIL(io_handle.wait())) {
     LOG_WARN("fail to wait", KR(ret));
-  }
-
+  } 
+  
   if (OB_SUCC(ret)) {
     read_size = io_handle.get_data_size();
     if (0 == read_size) {
@@ -381,7 +381,7 @@ ObPacketStreamFileReader::~ObPacketStreamFileReader()
   // But the client must send all file content to us and the
   // normal SQL processor cannot handle the packets, so we
   // eat all packets with file content.
-
+  
   // We will wait at most 10 seconds if there is no more data come in.
   const int64_t wait_timeout = 10 * 1000000L; // seconds
   timeout_ts_ = ObTimeUtility::current_time() + wait_timeout;

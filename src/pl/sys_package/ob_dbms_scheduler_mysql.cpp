@@ -187,7 +187,7 @@ int ObDBMSSchedulerMysql::get_and_increase_job_id(
   OZ (_generate_job_id(tenant_id, job_id));
   OX (result.set_int(job_id));
   LOG_INFO("get and increase job id", K(ret), K(job_id));
-  return ret;
+  return ret; 
 }
 
 int ObDBMSSchedulerMysql::_generate_job_id(int64_t tenant_id, int64_t &max_job_id)

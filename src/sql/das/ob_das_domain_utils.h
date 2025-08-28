@@ -208,9 +208,9 @@ private:
 
   static int get_pure_mutivalue_data(
     const ObString &json_str,
-    const char*& data,
+    const char*& data, 
     int64_t& data_len,
-    uint32_t& record_num);
+    uint32_t& record_num); 
 };
 
 class ObDomainDMLIterator
@@ -313,7 +313,7 @@ private:
     int64_t& multivalue_idx,
     int64_t& multivalue_arr_idx,
     ObString &multivalue_data);
-
+  
   int get_multivlaue_json_data_for_update(
     const ObChunkDatumStore::StoredRow *store_row,
     int64_t& multivalue_idx,

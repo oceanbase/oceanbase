@@ -30,7 +30,7 @@ int ObOutlineSqlService::insert_outline(const ObOutlineInfo &outline_info,
   int ret = OB_SUCCESS;
   if (!outline_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    SHARE_SCHEMA_LOG(WARN, "outline_info is invalid", K(outline_info), K(ret),
+    SHARE_SCHEMA_LOG(WARN, "outline_info is invalid", K(outline_info), K(ret), 
                         K(outline_info.is_format()),
                         K(outline_info.get_format_sql_text_str().empty()),
                         K(ObOutlineInfo::is_sql_id_valid(outline_info.get_format_sql_id_str())));
@@ -99,12 +99,12 @@ int ObOutlineSqlService::replace_outline(const ObOutlineInfo &outline_info,
             || OB_FAIL(dml.add_column("sql_id", outline_info.get_sql_id_str().empty() ? ObString::make_string("") : ObHexEscapeSqlStr(outline_info.get_sql_id_str())))
             || (is_formatoutline_compat(compat_version) &&
             OB_FAIL(dml.add_column("format_sql_text",
-                        outline_info.get_format_sql_text_str().empty() ?
+                        outline_info.get_format_sql_text_str().empty() ? 
                             ObString::make_string("") :
                             ObHexEscapeSqlStr(outline_info.get_format_sql_text_str()))))
             || (is_formatoutline_compat(compat_version) &&
               OB_FAIL(dml.add_column("format_sql_id",
-                  outline_info.get_format_sql_id_str().empty() ?
+                  outline_info.get_format_sql_id_str().empty() ? 
                   ObString::make_string("") :
                   ObHexEscapeSqlStr(outline_info.get_format_sql_id_str()))))
             || OB_FAIL(dml.add_column("version", ObHexEscapeSqlStr(outline_info.get_version_str())))

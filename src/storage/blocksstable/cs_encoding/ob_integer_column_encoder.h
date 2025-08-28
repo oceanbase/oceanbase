@@ -38,10 +38,10 @@ public:
   int64_t estimate_store_size() const override;
   ObCSColumnHeader::Type get_type() const override { return type_; }
   int get_identifier_and_stream_types(
-      ObColumnEncodingIdentifier &identifier, const ObIntegerStream::EncodingType *&types) const override;
+      ObColumnEncodingIdentifier &identifier, const ObIntegerStream::EncodingType *&types) const override; 
   int get_maximal_encoding_store_size(int64_t &size) const override;
   int get_string_data_len(uint32_t &len) const override
-  {
+  { 
     len = 0;
     return OB_SUCCESS;
   }

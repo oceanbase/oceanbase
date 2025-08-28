@@ -77,7 +77,7 @@ int ObExprPrivSTAsEwkt::calc_result_typeN(ObExprResType& type,
 
 /*
  * Input is either ob geometry or swkb.
- * axis-order issue
+ * axis-order issue 
  * may still need srs for validation input swkb in cast(hexstring->obgeometry)
  */
 int ObExprPrivSTAsEwkt::eval_priv_st_asewkt(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)

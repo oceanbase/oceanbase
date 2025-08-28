@@ -54,7 +54,7 @@ ObDASTCB::ObDASTCB()
 {
 }
 
-int ObDASTCB::init(int64_t task_id, const ObDASScanRtDef *scan_rtdef,
+int ObDASTCB::init(int64_t task_id, const ObDASScanRtDef *scan_rtdef, 
                    const ObDASScanCtDef *scan_ctdef, const ExprFixedArray *output_exprs,
                    ObDASTCBMemProfileKey &mem_profile_key, ObDASMemProfileInfo *mem_profile_info,
                    const ObDASTCBInterruptInfo &interrupt_info)
@@ -107,7 +107,7 @@ int ObDASTCB::init(int64_t task_id, const ObDASScanRtDef *scan_rtdef,
         LOG_WARN("alloc tcb vec store failed", K(ret));
       } else if (OB_ISNULL(vec_row_store_ = new(store_buf) ObTempRowStore())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("construct vec stored row array failed", K(ret));
+        LOG_WARN("construct vec stored row array failed", K(ret)); 
       } else if (OB_FAIL(vec_row_store_->init(*output_exprs,
                                               max_batch_size_,
                                               mem_attr,
@@ -147,7 +147,7 @@ int ObDASTCB::init(int64_t task_id, const ObDASScanRtDef *scan_rtdef,
           LOG_WARN("alloc stored row array failed", KR(ret));
         } else if (OB_ISNULL(stored_row_arr_ = static_cast<const ObChunkDatumStore::StoredRow **>(store_arr_buf))) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("construct stored row array failed", K(ret));
+          LOG_WARN("construct stored row array failed", K(ret));  
         }
       }
     }
@@ -490,7 +490,7 @@ int ObDASTaskResultMgr::save_task_result_by_normal(int64_t &read_rows,
                                                    ObDASMemProfileInfo *mem_profile_info)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(tcb) || OB_ISNULL(output_exprs) ||
+  if (OB_ISNULL(tcb) || OB_ISNULL(output_exprs) || 
       OB_ISNULL(eval_ctx) || OB_ISNULL(scan_rtdef) || OB_ISNULL(mem_profile_info)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("null pointer", KR(ret), KP(output_exprs), KP(eval_ctx), KP(scan_rtdef), KP(tcb));
@@ -648,7 +648,7 @@ int ObDASTaskResultMgr::save_task_result_by_vector(int64_t &read_rows,
                                                    ObDASMemProfileInfo *mem_profile_info)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(tcb) || OB_ISNULL(output_exprs) ||
+  if (OB_ISNULL(tcb) || OB_ISNULL(output_exprs) || 
       OB_ISNULL(eval_ctx) || OB_ISNULL(scan_rtdef) || OB_ISNULL(mem_profile_info)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("null pointer", KR(ret), KP(output_exprs), KP(eval_ctx), KP(scan_rtdef), KP(tcb));
@@ -704,7 +704,7 @@ int ObDASTaskResultMgr::save_task_result_by_vector(int64_t &read_rows,
           mem_limit = INT64_MAX;
           vec_row_store.set_mem_limit(4 * 1024 * 1024);
         }
-
+        
         if (iter_end) {
           ret = OB_ITER_END;
         } else if (OB_FAIL(result.get_next_rows(read_rows, max_batch_size))) {
@@ -867,7 +867,7 @@ int ObDASTaskResultMgr::iterator_task_result(ObDASDataFetchRes &res,
         need_unset_interrupt = true;
       }
     }
-
+    
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(tcb->register_reading())) {
       LOG_WARN("unregister reading tcb failed", KR(ret), K(task_id));
@@ -1144,7 +1144,7 @@ int ObDASTaskResultMgr::init_mem_profile(ObDASTCBMemProfileKey &key, ObDASMemPro
     LOG_WARN("null pointer", K(ret), K(key));
   } else {
     lib::ObMutexGuard guard(mem_map_mutex_);
-
+    
     ObAtomicGetMemProfileCall call;
     if (OB_FAIL(mem_profile_map_.atomic_refactored(key, call))) {
       if (ret == OB_HASH_NOT_EXIST) {
@@ -1155,8 +1155,8 @@ int ObDASTaskResultMgr::init_mem_profile(ObDASTCBMemProfileKey &key, ObDASMemPro
         int64_t op_id = scan_rtdef->scan_op_id_;
         int64_t cache_size = scan_rtdef->scan_rows_size_;
 
-        // this op id is brought from the ctrl svr in the rt of the das scan task,
-        // there may be old versions of observer, ObForeignKeyChecker, ObConflictChecker, etc.
+        // this op id is brought from the ctrl svr in the rt of the das scan task, 
+        // there may be old versions of observer, ObForeignKeyChecker, ObConflictChecker, etc. 
         // where the op id is not filled in.
         if (op_id == OB_INVALID_ID) {
           LOG_WARN("the sender did not enter the correct op id", K(op_id));
@@ -1169,13 +1169,13 @@ int ObDASTaskResultMgr::init_mem_profile(ObDASTCBMemProfileKey &key, ObDASMemPro
         if (cache_size <= 0 || cache_size > ObDASMemProfileInfo::CACHE_SIZE) {
           cache_size = ObDASMemProfileInfo::CACHE_SIZE;
         }
-
+        
         if (OB_ISNULL(info_buf = ob_malloc(sizeof(ObDASMemProfileInfo), mem_info_attr))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to alloc mem_profile_info", K(ret));
         } else if (OB_ISNULL(info = new(info_buf) ObDASMemProfileInfo(MTL_ID()))) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("construct mem profile info failed", K(ret));
+          LOG_WARN("construct mem profile info failed", K(ret));  
         } else if (OB_FAIL(info->allocator_.init(lib::ObMallocAllocator::get_instance(),
                                                  OB_MALLOC_NORMAL_BLOCK_SIZE,
                                                  allocator_attr))) {

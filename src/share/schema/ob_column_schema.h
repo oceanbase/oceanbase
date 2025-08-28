@@ -189,7 +189,7 @@ int assign(const ObColumnSchemaV2 &src_schema);
   // for primary key and identity column in Oracle mode.
 	// is_nullable() is usually used in Mysql mode, also used when schema interacts with inner table.
   // Following function is_not_null_for_read and is_not_null_for_write is more practical.
-	// More info:
+	// More info: 
   inline bool is_nullable() const { return is_nullable_; }
   inline bool is_zero_fill() const { return is_zero_fill_; }
   inline bool is_autoincrement() const { return is_autoincrement_; }
@@ -203,9 +203,9 @@ int assign(const ObColumnSchemaV2 &src_schema);
   inline bool is_string_lob() const { return column_flags_ & STRING_LOB_COLUMN_FLAG; }
   inline bool is_key_forbid_lob() const { return ob_is_text_tc(meta_type_.get_type()) && !is_string_lob(); }
 
-  inline bool is_xmltype() const {
+  inline bool is_xmltype() const { 
     return ((meta_type_.is_ext() || meta_type_.is_user_defined_sql_type()) && sub_type_ == T_OBJ_XML)
-           || meta_type_.is_xml_sql_type();
+           || meta_type_.is_xml_sql_type(); 
   }
 
   inline bool is_collection() const { return meta_type_.is_collection_sql_type(); }
@@ -343,7 +343,7 @@ int assign(const ObColumnSchemaV2 &src_schema);
   inline bool is_enum_or_set() const { return meta_type_.is_enum_or_set(); }
 
   inline static bool is_hidden_pk_column_id(const uint64_t column_id);
-  inline bool is_heap_table_primary_key_column() const
+  inline bool is_heap_table_primary_key_column() const 
   { return ::oceanbase::share::schema::is_heap_table_primary_key_column(column_flags_); }
   inline bool is_unused() const { return column_flags_ & UNUSED_COLUMN_FLAG; }
   inline bool is_user_visible_column() const { return !(is_hidden() || is_invisible_column()); }

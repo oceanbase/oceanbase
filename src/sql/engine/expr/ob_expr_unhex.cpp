@@ -90,7 +90,7 @@ int ObExprUnhex::eval_unhex(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_dat
         LOG_WARN("fail to eval unhex", K(ret), K(expr), K(*param));
       }
     } else {
-      //ret is other error code
+      //ret is other error code 
       LOG_WARN("fail to eval unhex", K(ret), K(expr), K(*param));
     }
   }

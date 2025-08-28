@@ -36,7 +36,7 @@ public:
     int ret = OB_SUCCESS;
     ObTransID trans_id;
     int64_t expire_ts = ObTimeUtility::current_time() + timeout_ts;
-
+    
     do {
       if (OB_SUCC(MTL(transaction::ObTransService *)->gen_trans_id(trans_id))) {
         unique_id = trans_id.get_id();

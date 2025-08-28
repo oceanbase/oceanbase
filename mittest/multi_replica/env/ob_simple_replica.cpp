@@ -167,7 +167,7 @@ int ObSimpleServerReplica::simple_init()
   for (int i = 0; i < MAX_FD_FILE; i++) {
     int len = strlen(OB_LOGGER.log_file_[i].filename_);
     if (len > 0) {
-      std::string cur_file_name = OB_LOGGER.log_file_[i].filename_;
+      std::string cur_file_name = OB_LOGGER.log_file_[i].filename_; 
       cur_file_name = cur_file_name.substr(cur_file_name.find_last_of("/\\") + 1);
       std::string ab_file = std::string(curr_dir) + "/" + run_dir_ + "/"
                             + cur_file_name;
@@ -176,7 +176,7 @@ int ObSimpleServerReplica::simple_init()
     }
   }
   // std::string ab_file = std::string(curr_dir) + "/" + run_dir_ + "/" + app_name_;
-  //
+  // 
   // std::string app_log_name = ab_file + ".log";
   // std::string app_rs_log_name = ab_file + "_rs.log";
   // std::string app_ele_log_name = ab_file + "_election.log";
@@ -265,7 +265,7 @@ int ObSimpleServerReplica::init_sql_proxy_with_short_wait()
   //param.sqlclient_wait_timeout_ = 10; // 10s
   // turn up it, make unittest pass
   param.sqlclient_wait_timeout_ = 3; // 3s
-  param.long_query_timeout_ = 3*1000*1000; // 3s
+  param.long_query_timeout_ = 3*1000*1000; // 3s 
   param.connection_refresh_interval_ = 200*1000; // 200ms
   param.connection_pool_warn_time_ = 10*1000*1000; // 1s
   param.sqlclient_per_observer_conn_limit_ = 1000;

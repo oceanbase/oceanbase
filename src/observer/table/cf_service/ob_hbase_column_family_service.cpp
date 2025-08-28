@@ -39,7 +39,7 @@ int ObHbaseCfServiceGuard::get_cf_service(ObHbaseColumnFamilyService *&cf_servic
   int ret = OB_SUCCESS;
   cf_service = nullptr;
   if (OB_ISNULL(cf_service_)) {
-    if (OB_FAIL(ObHbaseColumnFamilyService::alloc_family_sevice(allocator_,
+    if (OB_FAIL(ObHbaseColumnFamilyService::alloc_family_sevice(allocator_, 
                                                                 is_multi_cf_req_,
                                                                 cf_service_))) {
       LOG_WARN("failed to alloc column family service", K(ret), K_(is_multi_cf_req));
@@ -86,7 +86,7 @@ int ObHbaseColumnFamilyService::put(const ObHbaseTableCells &table_cells, ObTabl
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null tablet cells", K(ret));
     } else {
-      const ObTabletID &tablet_id = tablet_cells->get_tablet_id();
+      const ObTabletID &tablet_id = tablet_cells->get_tablet_id(); 
       const ObIArray<ObITableEntity *> &cells = tablet_cells->get_cells();
       for (int64_t j = 0; OB_SUCC(ret) && j < cells.count(); j++) {
         ObITableEntity *cell = cells.at(j);
@@ -155,7 +155,7 @@ int ObHbaseMultiCFService::put(const ObHbaseTableCells &table_cells, ObTableExec
 {
   int ret = OB_SUCCESS;
   const ObIArray<ObHbaseTabletCells *> &tablet_cells_arr = table_cells.get_tablet_cells_array();
-  const uint64_t table_id = table_cells.get_table_id();
+  const uint64_t table_id = table_cells.get_table_id(); 
   ObSEArray<ObITableEntity *, 4> all_cells;
   all_cells.set_attr(ObMemAttr(MTL_ID(), "HbaseCFAllCells"));
   for (int64_t i = 0; OB_SUCC(ret) && i < tablet_cells_arr.count(); i++) {
@@ -164,11 +164,11 @@ int ObHbaseMultiCFService::put(const ObHbaseTableCells &table_cells, ObTableExec
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null tablet cells", K(ret));
     } else {
-      const ObTabletID &tablet_id = tablet_cells->get_tablet_id();
+      const ObTabletID &tablet_id = tablet_cells->get_tablet_id(); 
       const ObIArray<table::ObITableEntity *> &cells = tablet_cells->get_cells();
       int cur_cell_idx = 0;
       while (OB_SUCC(ret) && cur_cell_idx < cells.count()) {
-        ObString first_family_name;
+        ObString first_family_name; 
         ObITableEntity *first_cell = cells.at(cur_cell_idx);
         if (OB_ISNULL(first_cell)) {
           ret = OB_ERR_UNEXPECTED;
@@ -260,8 +260,8 @@ int ObHbaseMultiCFService::construct_table_name(ObIAllocator &allocator,
 }
 
 int ObHbaseMultiCFService::find_real_table_tablet_id(ObTableExecCtx &exec_ctx,
-                                                     const uint64_t arg_table_id,
-                                                     const ObTabletID arg_tablet_id,
+                                                     const uint64_t arg_table_id, 
+                                                     const ObTabletID arg_tablet_id, 
                                                      const ObString &family_name,
                                                      uint64_t &real_table_id,
                                                      ObTabletID &real_tablet_id)
@@ -294,8 +294,8 @@ int ObHbaseMultiCFService::find_real_table_tablet_id(ObTableExecCtx &exec_ctx,
 }
 
 int ObHbaseMultiCFService::find_real_table_tablet_id(ObTableExecCtx &exec_ctx,
-                                                     const uint64_t arg_table_id,
-                                                     const ObTabletID &arg_tablet_id,
+                                                     const uint64_t arg_table_id, 
+                                                     const ObTabletID &arg_tablet_id, 
                                                      const ObSimpleTableSchemaV2 &real_simple_schema,
                                                      uint64_t &real_table_id,
                                                      ObTabletID &real_tablet_id)
@@ -343,7 +343,7 @@ int ObHbaseMultiCFService::get_family_from_cell(const ObITableEntity &entity, Ob
     LOG_WARN("fail to get qualifier value", K(ret));
   } else if (OB_NOT_NULL(qualifier.get_string().find('.'))) {
     family = qualifier.get_string().split_on('.');
-  }
+  } 
   return ret;
 }
 
@@ -357,7 +357,7 @@ int ObHbaseMultiCFService::get_family_from_cell(const ObNewRow &cell, ObString &
     ObString qualifier_str = cell.get_cell(ObHTableConstants::COL_IDX_Q).get_varchar();
     if (OB_NOT_NULL(qualifier_str.find('.'))) {
       family = qualifier_str.split_on('.');
-    }
+    } 
   }
   return ret;
 }
@@ -523,7 +523,7 @@ int ObHbaseColumnFamilyService::del(const ObHbaseTableCells &table_cells, ObTabl
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null tablet cells", K(ret));
     } else {
-      const ObTabletID &tablet_id = tablet_cells->get_tablet_id();
+      const ObTabletID &tablet_id = tablet_cells->get_tablet_id(); 
       const ObIArray<ObITableEntity *> &cells = tablet_cells->get_cells();
       for (int64_t j = 0; OB_SUCC(ret) && j < cells.count(); j++) {
         ObITableEntity *cell = cells.at(j);
@@ -544,7 +544,7 @@ int ObHbaseColumnFamilyService::del(const ObHbaseTableCells &table_cells, ObTabl
         }
       }
     }
-  }
+  } 
   return ret;
 }
 
@@ -560,7 +560,7 @@ int ObHbaseMultiCFService::del(const ObHbaseTableCells &table_cells, ObTableExec
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null tablet cells", K(ret));
     } else {
-      const ObTabletID &tablet_id = tablet_cells->get_tablet_id();
+      const ObTabletID &tablet_id = tablet_cells->get_tablet_id(); 
       const ObIArray<ObITableEntity *> &cells = tablet_cells->get_cells();
       for (int64_t j = 0; OB_SUCC(ret) && j < cells.count(); j++) {
         ObITableEntity *cell = cells.at(j);
@@ -583,7 +583,7 @@ int ObHbaseMultiCFService::del(const ObHbaseTableCells &table_cells, ObTableExec
         }
       }
     }
-  }
+  } 
   return ret;
 }
 

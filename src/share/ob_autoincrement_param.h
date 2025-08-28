@@ -154,7 +154,7 @@ struct AutoincParam
   // in order to support partitioning with auto increment pkey,
   // we have to **loose the restriction** that generated number must be
   // in intra-partition ascending order.
-  //
+  // 
   // If part_value_no_order_ flag = true, we can break this ordering restriction.
   // for compatibility consideration, part_value_no_order_ defaults to false
   bool              part_value_no_order_;

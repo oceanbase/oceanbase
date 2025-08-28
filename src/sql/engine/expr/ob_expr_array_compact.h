@@ -25,7 +25,7 @@ class ObExprArrayCompact : public ObFuncExprOperator
 {
 public:
   explicit ObExprArrayCompact(common::ObIAllocator &alloc);
-  explicit ObExprArrayCompact(common::ObIAllocator &alloc, ObExprOperatorType type,
+  explicit ObExprArrayCompact(common::ObIAllocator &alloc, ObExprOperatorType type, 
                               const char *name, int32_t param_num, int32_t dimension);
   virtual ~ObExprArrayCompact();
   virtual int calc_result_type1(ObExprResType &type, ObExprResType &type1,

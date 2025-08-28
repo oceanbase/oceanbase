@@ -45,7 +45,7 @@ void ObMaterialOp::destroy()
 
 int ObMaterialOp::init_material_impl(int64_t tenant_id, int64_t row_count)
 {
-  int ret = OB_SUCCESS;
+  int ret = OB_SUCCESS;  
   if (OB_FAIL(material_impl_.init(tenant_id, &eval_ctx_, &ctx_, &io_event_observer_))) {
     LOG_WARN("failed to init material impl", K(tenant_id));
   } else {
@@ -209,7 +209,7 @@ int ObMaterialOp::inner_get_next_batch(int64_t max_row_cnt)
     clear_evaluated_flag();
     if (is_first_ && OB_FAIL(get_all_batch_from_child(*ctx_.get_my_session()))) {
       LOG_WARN("failed to get all batch from child", K(child_), K(ret));
-    } else if (OB_FAIL(material_impl_.get_next_batch(child_->get_spec().output_,
+    } else if (OB_FAIL(material_impl_.get_next_batch(child_->get_spec().output_, 
                                                      std::min(MY_SPEC.max_batch_size_, max_row_cnt),
                                                      read_rows))) {
       if (OB_ITER_END != ret) {

@@ -86,7 +86,7 @@ private:
                        const ObArray<int64_t> &partitions,
                        ObDirectLoadResourceApplyArg &apply_arg,
                        bool &main_need_sort,
-                       bool &task_need_sort);
+                       bool &task_need_sort);             
   int gen_apply_arg(ObDirectLoadResourceApplyArg &apply_arg);
   int pre_begin_peers(ObDirectLoadResourceApplyArg &apply_arg);
   int confirm_begin_peers();

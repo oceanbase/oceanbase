@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef OCEANBASE_TRANSACTION_OB_TX_FREE_ROUTE_MSG_
 #define OCEANBASE_TRANSACTION_OB_TX_FREE_ROUTE_MSG_
 #include "share/ob_define.h"

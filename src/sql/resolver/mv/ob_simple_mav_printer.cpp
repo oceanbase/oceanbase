@@ -18,7 +18,7 @@ namespace oceanbase
 {
 using namespace common;
 namespace sql
-{
+{ 
 
 int ObSimpleMAVPrinter::gen_refresh_dmls(ObIArray<ObDMLStmt*> &dml_stmts)
 {
@@ -247,7 +247,7 @@ int ObSimpleMAVPrinter::gen_update_conds(const TableItem &target_table,
       /* do nothing */
     } else if (OB_FAIL(create_simple_column_expr(target_table.get_table_name(), select_items.at(i).alias_name_, target_table.table_id_, target_col))
                || OB_FAIL(create_simple_column_expr(source_table.get_table_name(), select_items.at(i).alias_name_, source_table.table_id_, source_col))) {
-      LOG_WARN("failed to create simple column exprs", K(ret));
+      LOG_WARN("failed to create simple column exprs", K(ret));    
     } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(ctx_.expr_factory_, T_OP_NSEQ, target_col, source_col, cond))) {
       LOG_WARN("failed to build null safe equal expr", K(ret));
     } else if (OB_FAIL(conds.push_back(cond))) {
@@ -1247,11 +1247,11 @@ int ObSimpleMAVPrinter::get_inner_sel_name_for_aggr(const ObAggFunRawExpr &aggr,
     int64_t pos = 0;
     const char* name_fmt = T_FUN_MIN == aggr.get_expr_type()
                            ? "MIN_%.*s$$" : "MAX_%.*s$$";
-
+    
     if (OB_FAIL(BUF_PRINTF(name_fmt, param_name.length(), param_name.ptr()))) {
       LOG_WARN("failed to print buff", K(ret));
     } else if (OB_FAIL(ob_write_string(ctx_.alloc_, ObString(pos, buf), sel_name))) {
-      LOG_WARN("Write string error", K(ret));
+      LOG_WARN("Write string error", K(ret));                             
     }
   }
   return ret;

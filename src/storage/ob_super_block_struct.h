@@ -198,7 +198,7 @@ public:
     min_macro_seq_(UINT64_MAX),
     max_macro_seq_(UINT64_MAX) {}
   virtual ~ObLSItem() { reset(); }
-
+  
   void reset()
   {
     ls_id_.reset();
@@ -325,7 +325,7 @@ public:
   OB_UNIS_VERSION(1);
 
 public:
-  common::ObSEArray<ObActiveTabletItem, 16> items_;
+  common::ObSEArray<ObActiveTabletItem, 16> items_; 
 };
 
 enum class ObPendingFreeTabletStatus : uint8_t
@@ -354,15 +354,15 @@ public:
     const int64_t free_time,
     const GCTabletType gc_type,
     const int64_t tablet_transfer_seq)
-    : tablet_id_(tablet_id), tablet_meta_version_(tablet_meta_version),
+    : tablet_id_(tablet_id), tablet_meta_version_(tablet_meta_version), 
       status_(status), free_time_(free_time),
       gc_type_(gc_type), tablet_transfer_seq_(tablet_transfer_seq)
   {}
 
   bool is_valid() const
-  {
+  { 
     return tablet_id_.is_valid() && tablet_meta_version_ > 0 &&
-        ObPendingFreeTabletStatus::MAX != status_ &&
+        ObPendingFreeTabletStatus::MAX != status_ && 
         tablet_transfer_seq_ != share::OB_INVALID_TRANSFER_SEQ;
   }
   bool operator == (const ObPendingFreeTabletItem &other) const {
@@ -402,7 +402,7 @@ public:
   OB_UNIS_VERSION(1);
 
 public:
-  common::ObSEArray<ObPendingFreeTabletItem, 16> items_;
+  common::ObSEArray<ObPendingFreeTabletItem, 16> items_; 
 };
 
 struct ObPrivateTabletCurrentVersion

@@ -227,7 +227,7 @@ const char *ObConfigItem::data_type() const
       break;
     }
     default: {
-      // default: ObConfigItemType::OB_CONF_ITEM_TYPE_UNKNOWN and
+      // default: ObConfigItemType::OB_CONF_ITEM_TYPE_UNKNOWN and 
       // other unexpected situations, return "UNKNOWN"
       type_ptr = DATA_TYPE_UNKNOWN;
       break;
@@ -606,7 +606,7 @@ bool ObConfigIntegralItem::check() const
   // check order: value_valid_ --> range --> customized checker (for DEF_XXX_WITH_CHECKER)
   bool bool_ret = false;
   if (!value_valid_) {
-  } else if (!check_range(left_interval_opt_, right_interval_opt_,
+  } else if (!check_range(left_interval_opt_, right_interval_opt_, 
                           value_, min_value_, max_value_)) {
   } else if (ck_ && !ck_->check(*this)) {
   } else {
@@ -755,7 +755,7 @@ bool ObConfigDoubleItem::check() const
   // check order: value_valid_ --> range --> customized checker (for DEF_XXX_WITH_CHECKER)
   bool bool_ret = false;
   if (!value_valid_) {
-  } else if (!check_range(left_interval_opt_, right_interval_opt_,
+  } else if (!check_range(left_interval_opt_, right_interval_opt_, 
                           value_, min_value_, max_value_)) {
   } else if (ck_ && !ck_->check(*this)) {
   } else {
@@ -1323,14 +1323,14 @@ ObConfigModeItem::ObConfigModeItem(ObConfigContainer *container,
   init(scope_info, name, def, info, attr);
 }
 
-ObConfigModeItem::~ObConfigModeItem()
+ObConfigModeItem::~ObConfigModeItem() 
 {
   if (parser_ != NULL) {
     delete parser_;
   }
 }
 
-bool ObConfigModeItem::set(const char *str)
+bool ObConfigModeItem::set(const char *str) 
 {
   bool valid = false;
   if (str == NULL || parser_ == NULL) {

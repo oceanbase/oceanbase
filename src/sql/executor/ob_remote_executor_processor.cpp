@@ -172,7 +172,7 @@ int ObRemoteBaseExecuteP<T>::base_before_process(int64_t tenant_schema_version,
         ret = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH; // 重写错误码，使得scheduler端能等待远端schema刷新并重试
       }
     } else if (ret == OB_TENANT_NOT_EXIST) {
-      // fix bug:
+      // fix bug: 
       // 控制端重启observer，导致租户schema没刷出来，发送过来的schema_version异常, 让对端重试
       ret = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
     } else {
@@ -420,7 +420,7 @@ int ObRemoteBaseExecuteP<T>::execute_remote_plan(ObExecContext &exec_ctx,
   ObPhysicalPlanCtx *plan_ctx = exec_ctx.get_physical_plan_ctx();
   ObOperator *se_op = nullptr; // static engine operator
   exec_ctx.set_use_temp_expr_ctx_cache(true);
-  rootserver::ObMViewMaintenanceService *mview_maintenance_service =
+  rootserver::ObMViewMaintenanceService *mview_maintenance_service = 
                                         MTL(rootserver::ObMViewMaintenanceService*);
   FLTSpanGuard(remote_execute);
   if (OB_ISNULL(plan_ctx) || OB_ISNULL(session) || OB_ISNULL(mview_maintenance_service)) {
@@ -616,7 +616,7 @@ void ObRemoteBaseExecuteP<T>::record_sql_audit_and_plan_stat(
     }
     ObSQLUtils::handle_audit_record(false, EXECUTE_REMOTE, *session);
   }
-
+  
 }
 
 template<typename T>
@@ -729,8 +729,8 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
         NG_TRACE_EXT(execute_task, OB_ID(task), task, OB_ID(stmt_type), plan->get_stmt_type());
         if (OB_FAIL(execute_remote_plan(exec_ctx_, *plan))) {
           LOG_WARN("execute remote plan failed", K(ret), K(task), K(exec_ctx_.get_das_ctx().get_snapshot()));
-        } else if (plan->try_record_plan_info()) {
-          if(exec_ctx_.get_feedback_info().is_valid() &&
+        } else if (plan->try_record_plan_info()) { 
+          if(exec_ctx_.get_feedback_info().is_valid() && 
              plan->get_logical_plan().is_valid() &&
              OB_FAIL(plan->set_feedback_info(exec_ctx_))) {
             LOG_WARN("failed to set feedback info", K(ret));

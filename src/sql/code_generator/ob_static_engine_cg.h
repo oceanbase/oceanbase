@@ -697,3 +697,4 @@ private:
 } // end namespace oceanbase
 
 #endif // OCEANBASE_SRC_OB_STATIC_ENGINE_CG_H_
+

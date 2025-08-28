@@ -160,7 +160,7 @@ template int ObGeoTreeUtil::create_geometry<ObGeographGeometrycollection>(uint32
 int ObLineString::create_linestring(ObGeoCRS crs, uint32_t srid,
                                     ObIAllocator &allocator, ObLineString*& output)
 {
-  return ObGeoTreeUtil::create_geometry<ObLineString,
+  return ObGeoTreeUtil::create_geometry<ObLineString, 
                                         ObCartesianLineString,
                                         ObGeographLineString>(crs, srid, allocator, output);
 }
@@ -168,7 +168,7 @@ int ObLineString::create_linestring(ObGeoCRS crs, uint32_t srid,
 int ObLinearring::create_linearring(ObGeoCRS crs, uint32_t srid,
                                     ObIAllocator &allocator, ObLinearring*& output)
 {
-  return ObGeoTreeUtil::create_geometry<ObLinearring,
+  return ObGeoTreeUtil::create_geometry<ObLinearring, 
                                         ObCartesianLinearring,
                                         ObGeographLinearring>(crs, srid, allocator, output);
 }
@@ -176,7 +176,7 @@ int ObLinearring::create_linearring(ObGeoCRS crs, uint32_t srid,
 int ObPolygon::create_polygon(ObGeoCRS crs, uint32_t srid,
                               ObIAllocator &allocator, ObPolygon*& output)
 {
-  return ObGeoTreeUtil::create_geometry<ObPolygon,
+  return ObGeoTreeUtil::create_geometry<ObPolygon, 
                                         ObCartesianPolygon,
                                         ObGeographPolygon>(crs, srid, allocator, output);
 }
@@ -184,7 +184,7 @@ int ObPolygon::create_polygon(ObGeoCRS crs, uint32_t srid,
 int ObGeometrycollection::create_collection(ObGeoCRS crs, uint32_t srid,
                                             ObIAllocator &allocator, ObGeometrycollection*& output)
 {
-  return ObGeoTreeUtil::create_geometry<ObGeometrycollection,
+  return ObGeoTreeUtil::create_geometry<ObGeometrycollection, 
                                         ObCartesianGeometrycollection,
                                         ObGeographGeometrycollection>(crs, srid, allocator, output);
 }
@@ -192,7 +192,7 @@ int ObGeometrycollection::create_collection(ObGeoCRS crs, uint32_t srid,
 int ObMultipoint::create_multipoint(ObGeoCRS crs, uint32_t srid,
                                     ObIAllocator &allocator, ObMultipoint*& output)
 {
-  return ObGeoTreeUtil::create_geometry<ObMultipoint,
+  return ObGeoTreeUtil::create_geometry<ObMultipoint, 
                                         ObCartesianMultipoint,
                                         ObGeographMultipoint>(crs, srid, allocator, output);
 }
@@ -200,7 +200,7 @@ int ObMultipoint::create_multipoint(ObGeoCRS crs, uint32_t srid,
 int ObMultilinestring::create_multilinestring(ObGeoCRS crs, uint32_t srid,
                                               ObIAllocator &allocator, ObMultilinestring*& output)
 {
-  return ObGeoTreeUtil::create_geometry<ObMultilinestring,
+  return ObGeoTreeUtil::create_geometry<ObMultilinestring, 
                                         ObCartesianMultilinestring,
                                         ObGeographMultilinestring>(crs, srid, allocator, output);
 }
@@ -208,7 +208,7 @@ int ObMultilinestring::create_multilinestring(ObGeoCRS crs, uint32_t srid,
 int ObMultipolygon::create_multipolygon(ObGeoCRS crs, uint32_t srid,
                                         ObIAllocator &allocator, ObMultipolygon*& output)
 {
-  return ObGeoTreeUtil::create_geometry<ObMultipolygon,
+  return ObGeoTreeUtil::create_geometry<ObMultipolygon, 
                                         ObCartesianMultipolygon,
                                         ObGeographMultipolygon>(crs, srid, allocator, output);
 }
@@ -406,7 +406,7 @@ int ObGeographGeometrycollection::set(uint32_t index, ObGeometry *geo)
   return ret;
 }
 
-int ObCartesianGeometrycollection::resize(int64_t size) {
+int ObCartesianGeometrycollection::resize(int64_t size) { 
   int ret = OB_SUCCESS;
   if (size > geoms_.size()) {
     if (OB_FAIL(geoms_.prepare_allocate(size))) {
@@ -416,11 +416,11 @@ int ObCartesianGeometrycollection::resize(int64_t size) {
     while (size != geoms_.size()) {
       geoms_.pop_back();
     }
-  }
+  } 
   return ret;
 }
 
-int ObGeographGeometrycollection::resize(int64_t size) {
+int ObGeographGeometrycollection::resize(int64_t size) { 
   int ret = OB_SUCCESS;
   if (size > geoms_.size()) {
     if (OB_FAIL(geoms_.prepare_allocate(size))) {
@@ -430,7 +430,7 @@ int ObGeographGeometrycollection::resize(int64_t size) {
     while (size != geoms_.size()) {
       geoms_.pop_back();
     }
-  }
+  } 
   return ret;
 }
 

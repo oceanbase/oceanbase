@@ -106,11 +106,11 @@ int ObBackupWrapperIODevice::setup_io_opts_for_backup_device(
         turn_id, retry_id, file_id, 0/*offset*/, 0/*length*/, block_type))) {
       LOG_WARN("failed to set tmp macro id", K(ret));
     } else {
-      opts->opts_[1].set(FIRST_ID_STR, tmp_macro_id.first_id_);
-      opts->opts_[2].set(SECOND_ID_STR, tmp_macro_id.second_id_);
-      opts->opts_[3].set(THIRD_ID_STR, tmp_macro_id.third_id_);
+      opts->opts_[1].set(FIRST_ID_STR, tmp_macro_id.first_id_); 
+      opts->opts_[2].set(SECOND_ID_STR, tmp_macro_id.second_id_); 
+      opts->opts_[3].set(THIRD_ID_STR, tmp_macro_id.third_id_); 
       opts->opts_[4].set("AccessType", OB_STORAGE_ACCESS_TYPES_STR[access_type]);
-      if (access_type == OB_STORAGE_ACCESS_APPENDER)
+      if (access_type == OB_STORAGE_ACCESS_APPENDER) 
       {
         opts->opts_[5].set("OpenMode", "CREATE_OPEN_NOLOCK");
       }
@@ -125,7 +125,7 @@ void ObBackupWrapperIODevice::destroy()
 }
 
 int ObBackupWrapperIODevice::open(
-    const char *pathname, const int flags, const mode_t mode,
+    const char *pathname, const int flags, const mode_t mode, 
     ObIOFd &fd, ObIODOpts *opts)
 {
   int ret = OB_SUCCESS;
@@ -178,7 +178,7 @@ int ObBackupWrapperIODevice::alloc_block(const ObIODOpts *opts, ObIOFd &block_id
 
 int ObBackupWrapperIODevice::pread(const ObIOFd &fd, const int64_t offset, const int64_t size,
     void *buf, int64_t &read_size, ObIODPreadChecker *checker)
-{
+{ 
   int ret = OB_SUCCESS;
   ObTimeGuard timeguard("ObBackupWrapperIODevice::pread", 10_ms);
   backup::ObBackupDeviceMacroBlockId macro_id;
@@ -192,12 +192,12 @@ int ObBackupWrapperIODevice::pread(const ObIOFd &fd, const int64_t offset, const
   } else {
     io_offset = macro_id.get_offset() + sizeof(ObBackupCommonHeader) + offset;
   }
-
-  if (OB_FAIL(ObObjectDevice::pread(fd,
-                                    io_offset,
-                                    size,
-                                    buf,
-                                    read_size,
+  
+  if (OB_FAIL(ObObjectDevice::pread(fd, 
+                                    io_offset, 
+                                    size, 
+                                    buf, 
+                                    read_size, 
                                     checker))) {
     LOG_WARN("failed to pread", K(ret), K(fd), K(offset), K(io_offset), K(size));
   } else {
@@ -207,7 +207,7 @@ int ObBackupWrapperIODevice::pread(const ObIOFd &fd, const int64_t offset, const
 }
 
 int ObBackupWrapperIODevice::pwrite(const ObIOFd &fd, const int64_t offset,
-    const int64_t size, const void *buf, int64_t &write_size)
+    const int64_t size, const void *buf, int64_t &write_size) 
 {
   int ret = OB_SUCCESS;
   ObTimeGuard timeguard("ObBackupWrapperIODevice::pwrite", 10_ms);
@@ -223,11 +223,11 @@ int ObBackupWrapperIODevice::pwrite(const ObIOFd &fd, const int64_t offset,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("only index block should pwrite", K(ret), K(macro_id), K(offset), K(size));
   }
-
-  if (FAILEDx(ObObjectDevice::pwrite(fd,
-                                     io_offset,
-                                     size,
-                                     buf,
+  
+  if (FAILEDx(ObObjectDevice::pwrite(fd, 
+                                     io_offset, 
+                                     size, 
+                                     buf, 
                                      write_size))) {
     LOG_WARN("failed to pwrite", K(ret), K(macro_id), K(offset), K(io_offset), K(size));
   } else {
@@ -470,8 +470,8 @@ void ObBackupDeviceHelper::release_backup_device(ObBackupWrapperIODevice *&devic
 
 int ObBackupDeviceHelper::get_device_and_fd(
     const uint64_t tenant_id,
-    const int64_t first_id,
-    const int64_t second_id,
+    const int64_t first_id, 
+    const int64_t second_id, 
     const int64_t third_id,
     ObStorageIdMod &mod,
     ObBackupWrapperIODevice *&device,
@@ -490,7 +490,7 @@ int ObBackupDeviceHelper::get_device_and_fd(
   io_d_opts.opt_cnt_ = BACKUP_WRAPPER_DEVICE_OPT_NUM;
   const int flag = -1;
   const mode_t mode = 0;
-  const bool is_index_block = backup_macro_id.is_index_block();
+  const bool is_index_block = backup_macro_id.is_index_block(); 
   char buf[common::OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
   ObBackupDest backup_dest;
   if (OB_FAIL(alloc_backup_device(tenant_id, device_hd))) {

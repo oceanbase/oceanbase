@@ -52,10 +52,10 @@ public:
     sqc_id_(common::OB_INVALID_ID)
   {}
   virtual ~ObSelectIntoOpInput() = default;
-  virtual int init(ObTaskInfo &task_info) override
-  {
+  virtual int init(ObTaskInfo &task_info) override 
+  { 
     UNUSED(task_info);
-    return common::OB_SUCCESS;
+    return common::OB_SUCCESS; 
   }
   virtual void reset() override {}
   virtual void set_task_id(int64_t task_id) { task_id_ = task_id; }
@@ -268,7 +268,7 @@ private:
   int odps_jni_commit_upload();
 
   int create_odps_schema();
-
+  
   int into_odps_jni_batch_one_col(int64_t col_idx, ObJniConnector::OdpsType odps_type, arrow::Field &arrow_field,
       ObDatumMeta &meta, ObObjMeta &obj_meta, ObIVector &expr_vector, arrow::ArrayBuilder *builder,
       const ObBatchRows &brs, int &act_cnt, ObIAllocator &alloc, const bool is_strict_mode, const ObDateSqlMode date_sql_mode);

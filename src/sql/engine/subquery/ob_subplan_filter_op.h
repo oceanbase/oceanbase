@@ -143,7 +143,7 @@ private:
   bool iter_end_;
   ObBatchResultHolder brs_holder_;
   // for vectorized end
-
+  
   common::ObArrayWrap<ObObjParam> das_batch_params_recovery_;
   // for das batch spf end
 };
@@ -269,7 +269,7 @@ private:
   // for px batch rescan end
   // for das batch rescan
   uint64_t current_group_;  //The group id in this time right iter rescan;
-
+  
   common::ObArrayWrap<ObSqlArrayObj> das_batch_params_;
   // for das batch rescan end
   ObChunkDatumStore left_rows_;

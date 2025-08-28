@@ -111,7 +111,7 @@ void TimeMap::summary(const char *map_name_str)
     const int64_t th_999_count = total_entry_ * 0.999;
     int64_t min_ms = 0;
     int64_t th_50_ms = 0;
-    int64_t th_90_ms = 0;
+    int64_t th_90_ms = 0; 
     int64_t th_99_ms = 0;
     int64_t th_999_ms = 0;
     int64_t cur_count = 0;
@@ -237,7 +237,7 @@ void Metrics::summary(
       struct timeval end_real_time;
       getrusage(RUSAGE_SELF, &end_usage);
       gettimeofday(&end_real_time, nullptr);
-
+      
       const double cost_time_s = cal_time_diff(start_real_time, end_real_time);
       const double user_cpu_time_s = cal_time_diff(start_usage.ru_utime, end_usage.ru_utime);
       const double sys_cpu_time_s = cal_time_diff(start_usage.ru_stime, end_usage.ru_stime);
@@ -310,7 +310,7 @@ int ITaskExecutor::prepare_(const int64_t object_id)
   int64_t pos = base_uri_len_;
   if (OB_FAIL(databuff_printf(base_uri_, sizeof(base_uri_), pos, "/%ld", object_id))) {
     OB_LOG(WARN, "fail to construct object name", K(ret), K_(base_uri), K(object_id));
-  }
+  } 
   return ret;
 }
 
@@ -390,7 +390,7 @@ int init_task_executor(const char *base_uri,
       ob_free(executor);
       executor = nullptr;
     }
-  }
+  } 
   return ret;
 }
 
@@ -466,8 +466,8 @@ int WriteTaskExecutor::execute()
     MEMCPY(write_buf_,
            RANDOM_CONTENT + ObRandom::rand(0, MAX_RANDOM_CONTENT_LEN - obj_size_),
            obj_size_);
-    write_buf_[obj_size_] = '\0';
-
+    write_buf_[obj_size_] = '\0'; 
+    
     if (OB_FAIL(adapter.write_single_file(base_uri_, storage_info_, write_buf_, obj_size_,
                                           ObStorageIdMod::get_default_id_mod()))) {
       OB_LOG(WARN, "fail to write file",
@@ -503,14 +503,14 @@ int AppendWriteTaskExecutor::init(const char *base_uri,
   int ret = OB_SUCCESS;
   if (OB_FAIL(ITaskExecutor::init(base_uri, storage_info, config))) {
     OB_LOG(WARN, "fail to init ITaskExecutor", K(ret), K(base_uri), KPC(storage_info), K(config));
-  } else if (OB_UNLIKELY(config.obj_size_ <= 0
+  } else if (OB_UNLIKELY(config.obj_size_ <= 0 
                          || config.fragment_size_ < 0
-                         || (config.fragment_size_ != DEFAULT_APPEND_FRAGMENT_SIZE && config.fragment_size_ > config.obj_size_)
+                         || (config.fragment_size_ != DEFAULT_APPEND_FRAGMENT_SIZE && config.fragment_size_ > config.obj_size_) 
                          || config.fragment_size_ >= MAX_RANDOM_CONTENT_LEN)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid arguments", K(ret), K(config));
-    std::cerr << LIGHT_RED
-              << "[ERROR] when type is append, the scope of fragment_size is [0, " << MAX_RANDOM_CONTENT_LEN << "]"
+    std::cerr << LIGHT_RED 
+              << "[ERROR] when type is append, the scope of fragment_size is [0, " << MAX_RANDOM_CONTENT_LEN << "]" 
               << ", and the obj_size should be greate than 0 and greater than fragment_size"
               << NONE_COLOR << std::endl;
   } else if (FALSE_IT(obj_size_ = config.obj_size_)) {
@@ -572,7 +572,7 @@ int AppendWriteTaskExecutor::execute()
              cur_append_size);
       write_buf_[cur_append_size] = '\0';
 
-      if (OB_FAIL(device_handle->pwrite(fd, cur_offset, cur_append_size,
+      if (OB_FAIL(device_handle->pwrite(fd, cur_offset, cur_append_size, 
                                         write_buf_, actual_write_size))) {
         OB_LOG(WARN, "fail to append object",
             K(ret), K_(base_uri), K(cur_offset), K(cur_append_size));
@@ -625,8 +625,8 @@ int MultipartWriteTaskExecutor::init(const char *base_uri,
       || config.fragment_size_ >= MAX_RANDOM_CONTENT_LEN)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid arguments", K(ret), K(config));
-    std::cerr << LIGHT_RED
-              << "[ERROR] when type is multi, the scope of fragment_size is [1, " << MAX_RANDOM_CONTENT_LEN << "]"
+    std::cerr << LIGHT_RED 
+              << "[ERROR] when type is multi, the scope of fragment_size is [1, " << MAX_RANDOM_CONTENT_LEN << "]" 
               << ", and the obj_size should be greater than 0 and greater than fragment_size"
               << NONE_COLOR << std::endl;
   } else if (FALSE_IT(obj_size_ = config.obj_size_)) {
@@ -684,7 +684,7 @@ int MultipartWriteTaskExecutor::execute()
              cur_part_size);
       write_buf_[cur_part_size] = '\0';
 
-      if (OB_FAIL(device_handle->pwrite(fd, cur_offset, cur_part_size,
+      if (OB_FAIL(device_handle->pwrite(fd, cur_offset, cur_part_size, 
                                         write_buf_, actual_write_size))) {
         OB_LOG(WARN, "fail to upload part",
             K(ret), K_(base_uri), K(cur_offset), K(cur_part_size), K(fd));
@@ -742,8 +742,8 @@ int ReadTaskExecutor::init(const char *base_uri,
       || config.obj_num_ <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid arguments", K(ret), K(config));
-    std::cerr << LIGHT_RED
-              << "[ERROR] when type is read, the scope of fragment_size is [0, " << obj_size_ << "]"
+    std::cerr << LIGHT_RED 
+              << "[ERROR] when type is read, the scope of fragment_size is [0, " << obj_size_ << "]" 
               << ", and the obj_num should be greater than 0"
               << NONE_COLOR << std::endl;
   } else if (FALSE_IT(obj_size_ = config.obj_size_)) {
@@ -777,7 +777,7 @@ int ReadTaskExecutor::execute()
     ObBackupIoAdapter adapter;
     const int64_t offset = (ObRandom::rand(0, obj_size_ - expected_read_size_) / ALIGNMENT) * ALIGNMENT;
     int64_t read_size = -1;
-
+    
     if (is_adaptive_ && OB_FAIL(adapter.adaptively_read_part_file(base_uri_,
         storage_info_, read_buf_, expected_read_size_, offset, read_size,
         ObStorageIdMod::get_default_id_mod()))) {
@@ -833,7 +833,7 @@ int DelTaskExecutor::execute()
   } else if (OB_ISNULL(storage_info_)) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "storage_info_ is null", K(ret), KP(storage_info_));
-  } else if (OB_UNLIKELY(storage_info_->is_enable_worm()
+  } else if (OB_UNLIKELY(storage_info_->is_enable_worm() 
                 && ObStorageDeleteMode::STORAGE_DELETE_MODE == storage_info_->get_delete_mode())) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(ERROR, "worm bucket can not do deleting opeartion", K(ret), KPC(storage_info_));
@@ -841,7 +841,7 @@ int DelTaskExecutor::execute()
     OB_LOG(WARN, "fail to prepare", K(ret), K_(base_uri), K(object_id));
   } else {
     ObBackupIoAdapter adapter;
-
+    
     if (is_adaptive_ && OB_FAIL(adapter.adaptively_del_file(base_uri_, storage_info_))) {
       OB_LOG(WARN, "fail to delete adaptive file",
           K(ret), K_(base_uri), KPC_(storage_info), K(object_id));
@@ -872,7 +872,7 @@ int IsExistTaskExecutor::init(const char *base_uri,
   } else if (OB_UNLIKELY(config.obj_num_ <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid arguments", K(ret), K(config));
-    std::cerr << LIGHT_RED
+    std::cerr << LIGHT_RED 
               << "[ERROR] when type is is_exist, the scope of obj_num should be greater than 0"
               << NONE_COLOR << std::endl;
   } else {
@@ -940,5 +940,5 @@ int ReadUsedProvidedTaskExecutor::prepare_(const int64_t object_id)
   return OB_SUCCESS;
 }
 
-}   //tools
+}   //tools 
 }   //oceanbase

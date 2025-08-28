@@ -224,7 +224,7 @@ TEST_F(ObTruncateInfoServiceTest, truncate_range_part)
   ASSERT_EQ(OB_SUCCESS, sql_proxy.acquire(conn));
 
   ObSqlString sql;
-
+  
   sql.assign_fmt("create table t_range1(c1 int, c2 int, c3 int, c4 int, primary key(c1, c2)) \
                   partition by range(c1) \
                   subpartition by range(c2) \

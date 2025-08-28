@@ -228,7 +228,7 @@ public:
   // When need to add other error codes, you need to add error code to need_fail_when_switch_to_primary()
   // that requires switch tenant to primary fail immediately
   // @param[out] end_scn, the end_scn of palf
-  // @param[out] archive_scn, if restore from archive ,archive scn is the **next** scn in archive logs
+  // @param[out] archive_scn, if restore from archive ,archive scn is the **next** scn in archive logs 
   // after end_lsn in palf, if restore from service, archive scn is the **max** scn of the service;
   // the difference is due to the costly archive store implemention, which would list all files in a piece
   // when get_max_archive_log, to avoid the list operation, the semantics of archive_scn is changed here;

@@ -47,7 +47,7 @@ int ObUpdateResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(update_stmt = create_stmt<ObUpdateStmt>())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("create update stmt failed");
-  } else if (OB_FAIL(session_info_->check_feature_enable(ObCompatFeatureType::UPD_LIMIT_OFFSET,
+  } else if (OB_FAIL(session_info_->check_feature_enable(ObCompatFeatureType::UPD_LIMIT_OFFSET, 
                                                          disable_limit_offset))) {
     LOG_WARN("failed to check feature enable", K(ret));
   } else {
@@ -703,7 +703,7 @@ int ObUpdateResolver::generate_batched_stmt_info()
 {
   int ret = OB_SUCCESS;
   //extract all predicate column from condition exprs
-  //see the issue:
+  //see the issue: 
   ObSEArray<ObRawExpr*, 4> predicate_columns;
   ObUpdateStmt *update_stmt = get_update_stmt();
   if (OB_ISNULL(update_stmt)) {

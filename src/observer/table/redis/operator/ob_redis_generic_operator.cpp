@@ -28,10 +28,10 @@ namespace table
 {
 
 int GenericCommandOperator::update_model_expire(
-  int64_t db,
+  int64_t db, 
   const ObString &key,
-  int64_t expire_ts,
-  ObRedisDataModel model,
+  int64_t expire_ts, 
+  ObRedisDataModel model, 
   ExpireStatus &expire_status)
 {
   int ret = OB_SUCCESS;
@@ -78,7 +78,7 @@ int GenericCommandOperator::update_model_expire(
       expire_obj.set_timestamp(expire_ts);
       if (OB_FAIL(meta->build_meta_rowkey(db, key, redis_ctx_, meta_entity))) {
         LOG_WARN("fail to gen entity with rowkey", K(ret));
-      } else if (OB_FAIL(meta_entity->set_property(ObRedisUtil::EXPIRE_TS_PROPERTY_NAME,
+      } else if (OB_FAIL(meta_entity->set_property(ObRedisUtil::EXPIRE_TS_PROPERTY_NAME, 
                                                   expire_obj))) {
         LOG_WARN("fail to get expire ts", K(ret));
       } else {
@@ -239,10 +239,10 @@ int GenericCommandOperator::do_ttl(int64_t db, const ObString &key, int64_t conv
 }
 
 int GenericCommandOperator::get_subkey_count_by_meta(
-  int64_t db,
+  int64_t db, 
   const ObString &key,
-  const ObRedisMeta *meta,
-  ObRedisDataModel model,
+  const ObRedisMeta *meta, 
+  ObRedisDataModel model, 
   int64_t &row_cnt)
 {
   int ret = OB_SUCCESS;
@@ -256,7 +256,7 @@ int GenericCommandOperator::get_subkey_count_by_meta(
       LOG_WARN("fail to add complex type scan range", K(ret), K(db), K(key));
     } else if (OB_FAIL(process_table_query_count(op_temp_allocator_, query, meta, row_cnt))) {
       LOG_WARN("fail to process table query count", K(ret), K(db), K(key), K(query));
-    }
+    } 
   }
   return ret;
 }
@@ -461,7 +461,7 @@ int GenericCommandOperator::do_del(int64_t db, const common::ObIArray<common::Ob
       if (ret != OB_HASH_EXIST) {
         LOG_WARN("fail to add key to set", K(ret), K(j), K(keys.at(j)));
       }
-    }
+    } 
     for (int i = ObRedisDataModel::STRING; OB_SUCC(ret) && i < ObRedisDataModel::MODEL_MAX; ++i) {
       redis_ctx_.cur_table_idx_ = i;
       model_ = static_cast<ObRedisDataModel>(i);

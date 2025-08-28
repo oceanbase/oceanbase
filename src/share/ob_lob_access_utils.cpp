@@ -123,7 +123,7 @@ static int init_lob_access_param(storage::ObLobAccessParam &param,
     COMMON_LOG(WARN, "Lob: invalid lob iter ctx.", K(ret));
   } else if (OB_ISNULL(allocator = (allocator == nullptr ? lob_iter_ctx->alloc_: allocator))) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "Lob: allocator is null", K(ret), KP(allocator), KP(lob_iter_ctx->alloc_));
+    COMMON_LOG(WARN, "Lob: allocator is null", K(ret), KP(allocator), KP(lob_iter_ctx->alloc_)); 
   } else if (!lob_iter_ctx->locator_.is_persist_lob()) {
     ret = OB_NOT_IMPLEMENT;
     COMMON_LOG(WARN, "Lob: outrow temp lob is not supported", K(ret), K(lob_iter_ctx->locator_));
@@ -146,7 +146,7 @@ static int init_lob_access_param(storage::ObLobAccessParam &param,
     // if tx_id is valid, means read may be in a tx
     // lob can not set read_latest flag
     // so reuse lob aux table iterator only if tx_id is invalid
-    // for exmaple
+    // for exmaple 
     //   insert into t values (1,'v0');
     //   insert ignore into t values (1,'v11'), (1,'v222') on duplicate key update c1 = md5(c1);
     // second read shoud get "v11" not "v0"
@@ -244,7 +244,7 @@ int ObTextStringIter::get_delta_lob_full_data(ObLobLocatorV2& lob_locator, ObIAl
         COMMON_LOG(WARN, "init_lob_access_param fail", K(ret));
       } else if (!param.ls_id_.is_valid() || !param.tablet_id_.is_valid()) {
         ret = OB_INVALID_ARGUMENT;
-        COMMON_LOG(WARN, "Lob: invalid param.", K(ret), K(param));
+        COMMON_LOG(WARN, "Lob: invalid param.", K(ret), K(param));  
       } else if ((param.len_ = param.byte_size_) <= 0) {
         ret = OB_ERR_UNEXPECTED;
         COMMON_LOG(WARN,"Lob: calc byte size is negative.", K(ret), K(param));
@@ -1255,14 +1255,14 @@ int ObTextStringResult::init(const int64_t res_len, ObString &res_buffer)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Lob: res buffer is not enough", K(ret), K(buff_len_), K(res_buffer));
   } else {
-    buffer_ = res_buffer.ptr();
+    buffer_ = res_buffer.ptr();    
     if (OB_FAIL(fill_temp_lob_header(res_len))) {
       LOG_WARN("Lob: fill_temp_lob_header failed", K(ret), K(type_), K(res_len));
     } else {
       is_init_ = true;
     }
   }
-
+  
   return ret;
 }
 
@@ -1452,7 +1452,7 @@ int64_t ObDeltaLob::get_header_serialize_size() const
   size += sizeof(ObLobCommon);
   // ObLobDiffHeader
   size += sizeof(ObLobDiffHeader);
-  return size;
+  return size;  
 }
 
 int ObDeltaLob::serialize(char* buf, const int64_t buf_len, int64_t& pos) const
@@ -1484,7 +1484,7 @@ int ObDeltaLob::serialize_header(char* buf, const int64_t buf_len, int64_t& pos,
     diff_header->persist_loc_size_ = static_cast<uint32_t>(get_partial_data_serialize_size());
     pos += size;
   }
-  return ret;
+  return ret; 
 }
 
 int ObDeltaLob::deserialize(const ObLobLocatorV2 &lob_locator)
@@ -1502,7 +1502,7 @@ int ObDeltaLob::deserialize(const ObLobLocatorV2 &lob_locator)
   } else if (OB_FAIL(deserialize_partial_data(diff_header))) {
     LOG_WARN("deserialize_partial_data fail", KR(ret), K(lob_locator), KPC(diff_header));
   } else if (OB_FAIL(deserialize_lob_diffs(lob_locator.ptr_, lob_locator.size_, diff_header))) {
-    LOG_WARN("deserialize_lob_diffs fail", KR(ret), K(lob_locator), KPC(diff_header));
+    LOG_WARN("deserialize_lob_diffs fail", KR(ret), K(lob_locator), KPC(diff_header));  
   }
   return ret;
 }

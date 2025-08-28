@@ -22,7 +22,7 @@ namespace share
 {
 class ObGetMaxCheckpointOp : public ObBaseDirEntryOperator
 {
-public:
+public: 
   ObGetMaxCheckpointOp(
       uint64_t& max_checkpoint_scn,
       const char *file_name,
@@ -44,17 +44,17 @@ private:
 //delete files with smaller checkpoint_scn in file name
 class ObDelHisCheckpointFileOp : public ObBaseDirEntryOperator
 {
-public:
+public: 
   ObDelHisCheckpointFileOp(
-      const uint64_t checkpoint_scn,
+      const uint64_t checkpoint_scn, 
       const ObBackupPath &path,
       const char *file_name,
-      const ObBackupFileSuffix &type,
+      const ObBackupFileSuffix &type, 
       const share::ObBackupStorageInfo *storage_info)
-    : checkpoint_scn_(checkpoint_scn),
-      path_(path),
-      file_name_(file_name),
-      type_(type),
+    : checkpoint_scn_(checkpoint_scn), 
+      path_(path), 
+      file_name_(file_name), 
+      type_(type), 
       storage_info_(storage_info),
       handled_file_num_(0) {}
   virtual ~ObDelHisCheckpointFileOp() {}

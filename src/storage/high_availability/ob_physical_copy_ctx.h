@@ -36,7 +36,7 @@ class ObCopyTabletRecordExtraInfo final
 {
 public:
   ObCopyTabletRecordExtraInfo();
-  ~ObCopyTabletRecordExtraInfo();
+  ~ObCopyTabletRecordExtraInfo(); 
   void reset();
 public:
   OB_INLINE void add_cost_time_ms(const int64_t &time_cost_ms) { ATOMIC_FAA(&cost_time_ms_, time_cost_ms); }
@@ -51,17 +51,17 @@ public:
   // not atomic, but only called when major sstable copy finish, which is sequential
   int update_max_reuse_mgr_size(ObMacroBlockReuseMgr *reuse_mgr);
 
-  TO_STRING_KV(K_(cost_time_ms), K_(total_data_size), K_(write_data_size), K_(major_count),
-      K_(macro_count), K_(major_macro_count), K_(reuse_macro_count), K_(max_reuse_mgr_size),
-      "restore_action", ObTabletRestoreAction::get_action_str(restore_action_));
+  TO_STRING_KV(K_(cost_time_ms), K_(total_data_size), K_(write_data_size), K_(major_count), 
+      K_(macro_count), K_(major_macro_count), K_(reuse_macro_count), K_(max_reuse_mgr_size), 
+      "restore_action", ObTabletRestoreAction::get_action_str(restore_action_)); 
 private:
   // The following 3 member variables are updated when writer of physical copy task finish
   // time cost of tablet copy (fully migration / restore of a single tablet)
-  int64_t cost_time_ms_;
-  // total data size reading from copy source (Byte)
-  int64_t total_data_size_;
+  int64_t cost_time_ms_; 
+  // total data size reading from copy source (Byte) 
+  int64_t total_data_size_; 
   // data size writing to dst (Byte) (only count the data size of new macro block)
-  int64_t write_data_size_;
+  int64_t write_data_size_; 
 
   // The following 5 member variables are updated when sstable copy finish
   // number of major sstable
@@ -75,8 +75,8 @@ private:
   // max reuse mgr size
   int64_t max_reuse_mgr_size_;
 
-  // The following 1 member variable are updated when tablet copy finish
-  // restore action (when migration, it is RESTORE_NONE)
+  // The following 1 member variable are updated when tablet copy finish 
+  // restore action (when migration, it is RESTORE_NONE) 
   ObTabletRestoreAction::ACTION restore_action_;
 };
 
@@ -95,27 +95,27 @@ struct ObPhysicalCopyCtx final
   bool is_valid() const;
   void reset();
 
-  TO_STRING_KV(K_(tenant_id),
-               K_(ls_id),
-               K_(tablet_id),
-               K_(src_info),
+  TO_STRING_KV(K_(tenant_id), 
+               K_(ls_id), 
+               K_(tablet_id), 
+               K_(src_info), 
                KP_(bandwidth_throttle),
-               KP_(svr_rpc_proxy),
-               K_(is_leader_restore),
+               KP_(svr_rpc_proxy), 
+               K_(is_leader_restore), 
                K_(restore_action),
                KP_(restore_base_info),
-               KP_(meta_index_store),
-               KP_(second_meta_index_store),
+               KP_(meta_index_store), 
+               KP_(second_meta_index_store), 
                KP_(ha_dag),
-               KP_(sstable_index_builder),
-               KP_(restore_macro_block_id_mgr),
+               KP_(sstable_index_builder), 
+               KP_(restore_macro_block_id_mgr), 
                K_(need_sort_macro_meta),
-               K_(need_check_seq),
-               K_(ls_rebuild_seq),
+               K_(need_check_seq), 
+               K_(ls_rebuild_seq), 
                K_(table_key),
-               KP_(macro_block_reuse_mgr),
-               K_(total_macro_count),
-               K_(reuse_macro_count),
+               KP_(macro_block_reuse_mgr), 
+               K_(total_macro_count), 
+               K_(reuse_macro_count), 
                KPC_(extra_info));
 
 

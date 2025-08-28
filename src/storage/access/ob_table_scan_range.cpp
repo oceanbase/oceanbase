@@ -91,26 +91,26 @@ int ObTableScanRange::init(ObTableScanParam &scan_param, const ObTablet &tablet,
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "Unexpected, index skip scan can only be used in scan", K(ret));
       } else if (OB_FAIL(init_rowkeys(tablet,
-          scan_param.is_tablet_spliting_,
-          scan_param.key_ranges_,
-          scan_param.scan_flag_,
+          scan_param.is_tablet_spliting_, 
+          scan_param.key_ranges_, 
+          scan_param.scan_flag_, 
           datum_utils))) {
         STORAGE_LOG(WARN, "Failed to init rowkeys", K(ret));
       }
     } else if (scan_param.use_index_skip_scan()) {
       if (OB_FAIL(init_ranges_in_skip_scan(tablet,
           scan_param.is_tablet_spliting_,
-          scan_param.key_ranges_,
-          scan_param.ss_key_ranges_,
-          scan_param.scan_flag_,
+          scan_param.key_ranges_, 
+          scan_param.ss_key_ranges_, 
+          scan_param.scan_flag_, 
           datum_utils))) {
-        STORAGE_LOG(WARN, "Failed to init range in skip scan",
+        STORAGE_LOG(WARN, "Failed to init range in skip scan", 
           K(ret), K(scan_param.key_ranges_), K(scan_param.ss_key_ranges_));
       }
     } else if (OB_FAIL(init_ranges(tablet,
         scan_param.is_tablet_spliting_,
-        scan_param.key_ranges_,
-        scan_param.scan_flag_,
+        scan_param.key_ranges_, 
+        scan_param.scan_flag_, 
         datum_utils))) {
       STORAGE_LOG(WARN, "Failed to init ranges", K(ret));
     }
@@ -142,7 +142,7 @@ int ObTableScanRange::init(
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to init table scan range", K(ret), K(simple_batch));
   } else if (FALSE_IT(allocator_ = &allocator)) {
-  } else if (OB_FAIL(split_query.get_tablet_handle(scan_param.tablet_id_,
+  } else if (OB_FAIL(split_query.get_tablet_handle(scan_param.tablet_id_, 
       scan_param.ls_id_, tablet_handle))) {
     STORAGE_LOG(WARN, "fail to get tablet handle", K(ret), K(scan_param));
   } else if (OB_FAIL(ObTabletSplitMdsHelper::get_is_spliting(*tablet_handle.get_obj(), is_tablet_spliting))) {
@@ -158,8 +158,8 @@ int ObTableScanRange::init(
       STORAGE_LOG(WARN, "Failed to push back range", K(ret));
     } else if (OB_FAIL(init_ranges(*tablet_handle.get_obj(),
         scan_param.is_tablet_spliting_,
-        ranges,
-        scan_flag,
+        ranges, 
+        scan_flag, 
         nullptr))) {
       STORAGE_LOG(WARN, "Failed to init ranges", K(ret));
     }
@@ -169,8 +169,8 @@ int ObTableScanRange::init(
     STORAGE_LOG(WARN, "Invalid simple batch", K(ret), K(simple_batch));
   } else if (OB_FAIL(init_ranges(*tablet_handle.get_obj(),
       scan_param.is_tablet_spliting_,
-      *simple_batch.ranges_,
-      scan_flag,
+      *simple_batch.ranges_, 
+      scan_flag, 
       nullptr))) { // 如果datum_utils不为nullptr不会对原来逻辑造成影响
     STORAGE_LOG(WARN, "Failed to init ranges", K(ret));
   }
@@ -202,7 +202,7 @@ int ObTableScanRange::always_false(const common::ObNewRange &range, bool &is_fal
 int ObTableScanRange::get_split_partition_rowkeys(
     const ObTablet &tablet,
     const common::ObIArray<common::ObNewRange> &ranges,
-    const blocksstable::ObStorageDatumUtils *datum_utils)
+    const blocksstable::ObStorageDatumUtils *datum_utils) 
 {
   int ret = OB_SUCCESS;
   ObPartitionSplitQuery split_query;
@@ -311,7 +311,7 @@ int ObTableScanRange::init_ranges(
       }
     } else {
       ObPartitionSplitQuery split_query;
-      if (is_tablet_spliting &&
+      if (is_tablet_spliting && 
           OB_FAIL(split_query.get_tablet_split_info(tablet, *allocator_))) {
         STORAGE_LOG(WARN, "fail to check tablet in spliting", K(ret), K(tablet_id));
       }
@@ -326,8 +326,8 @@ int ObTableScanRange::init_ranges(
           STORAGE_LOG(WARN, "Failed to transfer range to datum range", K(ret));
         } else if (is_tablet_spliting && OB_FAIL(split_query.get_split_datum_range(
             tablet,
-            datum_utils,
-            *allocator_,
+            datum_utils, 
+            *allocator_, 
             datum_range,
             is_false))) {
           STORAGE_LOG(WARN, "Failed to get split datum range", K(ret), K(tablet_id), K(ls_id));

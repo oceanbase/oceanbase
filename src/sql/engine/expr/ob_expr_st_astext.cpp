@@ -43,7 +43,7 @@ int ObExprSTAsText::calc_result_typeN(ObExprResType& type,
                                       int64_t param_num,
                                       ObExprTypeCtx& type_ctx) const
 {
-  UNUSED(type_ctx);
+  UNUSED(type_ctx); 
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(param_num > 2)) {
     ObString fun_name(get_name());
@@ -119,13 +119,13 @@ int ObExprSTAsText::eval_st_astext_common(const ObExpr &expr,
     is_geog = srs->is_geographical_srs();
     need_reverse = is_geog && (srs->is_lat_long_order());
   }
-
+  
   // get axis_order
   if (!is_null_result && OB_SUCC(ret) && num_args > 1 ) {
     ObGeoAxisOrder axis_order = ObGeoAxisOrder::INVALID;
     ObDatum *datum = NULL;
     ObString dstr;
-    if (OB_FAIL(tmp_allocator.eval_arg(expr.args_[1], ctx, datum))) {
+    if (OB_FAIL(tmp_allocator.eval_arg(expr.args_[1], ctx, datum))) { 
       LOG_WARN("eval axis_order axis_order failed", K(ret));
     } else if (datum->is_null()){
       is_null_result = true;
@@ -160,7 +160,7 @@ int ObExprSTAsText::eval_st_astext_common(const ObExpr &expr,
       }
     }
   }
-
+    
   if (!is_null_result && OB_SUCC(ret)) {
     if (OB_ISNULL(geo)) {
       ret = OB_ERR_UNEXPECTED;

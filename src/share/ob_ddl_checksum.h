@@ -157,7 +157,7 @@ private:
       common::ObMySQLProxy &sql_proxy,
       int64_t &execution_id);
   static int get_tablet_checksum_status(
-      const ObSqlString &sql,
+      const ObSqlString &sql, 
       const uint64_t tenant_id,
       ObIArray<uint64_t> &batch_tablet_ids,
       common::ObMySQLProxy &sql_proxy,

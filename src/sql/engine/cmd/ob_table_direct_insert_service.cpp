@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/cmd/ob_table_direct_insert_service.h"

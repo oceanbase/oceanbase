@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef __OB_SQL_ENG_PX_DH_OPT_STATS_GATHER_H__
 #define __OB_SQL_ENG_PX_DH_OPT_STATS_GATHER_H__
 

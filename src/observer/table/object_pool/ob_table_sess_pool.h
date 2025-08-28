@@ -212,24 +212,24 @@ public:
     }
     return ret;
   }
-  OB_INLINE const ObString get_tenant_name() const
-  {
+  OB_INLINE const ObString get_tenant_name() const 
+  { 
     ObString tenant_name = ObString::make_empty_string();
     if (OB_NOT_NULL(sess_node_val_) && OB_NOT_NULL(sess_node_val_->owner_node_)) {
       tenant_name = sess_node_val_->owner_node_->get_tenant_name();
     }
     return tenant_name;
   }
-  OB_INLINE const ObString get_database_name() const
-  {
+  OB_INLINE const ObString get_database_name() const 
+  { 
     ObString database_name = ObString::make_empty_string();
     if (OB_NOT_NULL(sess_node_val_) && OB_NOT_NULL(sess_node_val_->owner_node_)) {
       database_name = sess_node_val_->owner_node_->get_database_name();
     }
     return database_name;
   }
-  OB_INLINE const ObString get_user_name() const
-  {
+  OB_INLINE const ObString get_user_name() const 
+  { 
     ObString user_name = ObString::make_empty_string();
     if (OB_NOT_NULL(sess_node_val_) && OB_NOT_NULL(sess_node_val_->owner_node_)) {
       user_name = sess_node_val_->owner_node_->get_user_name();

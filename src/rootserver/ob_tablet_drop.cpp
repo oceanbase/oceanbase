@@ -118,7 +118,7 @@ int ObTabletDrop::add_drop_tablets_of_table_arg(
         int64_t part_num = table_schema.get_partition_num();
         ObPartition **hidden_part_array = table_schema.get_hidden_part_array();
         int64_t hidden_part_num = table_schema.get_hidden_partition_num();
-        int64_t total_part_num = part_num + hidden_part_num;
+        int64_t total_part_num = part_num + hidden_part_num; 
         if (OB_ISNULL(part_array)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("part array is null", K(table_schema), KR(ret));
@@ -130,7 +130,7 @@ int ObTabletDrop::add_drop_tablets_of_table_arg(
               part = part_array[i];
             } else if (OB_ISNULL(hidden_part_array) || i - part_num >= hidden_part_num) {
               ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("NULL ptr", K(i), K(table_schema), KR(ret));
+              LOG_WARN("NULL ptr", K(i), K(table_schema), KR(ret)); 
             } else {
               is_hidden = true;
               part = hidden_part_array[i - part_num];
@@ -203,11 +203,11 @@ int ObTabletDrop::get_ls_from_table(const share::schema::ObTableSchema &table_sc
     ObArray<ObTabletID> tablet_ids;
     if (OB_FAIL(table_schema.get_tablet_ids(tablet_ids))) {
       LOG_WARN("fail to get tablet ids", KR(ret), K(table_schema));
-    } else if (is_include_hidden
+    } else if (is_include_hidden 
             && 0 < table_schema.get_hidden_partition_num()
             && PARTITION_LEVEL_ONE == table_schema.get_part_level()
             && OB_FAIL(table_schema.get_first_level_hidden_tablet_ids(tablet_ids))) {
-      LOG_WARN("fail to get hidden tablet ids", KR(ret), K(table_schema));
+      LOG_WARN("fail to get hidden tablet ids", KR(ret), K(table_schema)); 
     } else if (OB_FAIL(share::ObTabletToLSTableOperator::batch_get_ls(trans_, tenant_id_, tablet_ids, assign_ls_id_array))) {
       LOG_WARN("fail to batch_get_ls", KR(ret), K(tenant_id_), K(table_schema));
     }
@@ -271,7 +271,7 @@ int ObTabletDrop::drop_tablet_(
       if (OB_ISNULL(table_schema_ptr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("NULL ptr", K(r), K(table_schema_ptr_array), KR(ret));
-      } else if (is_hidden &&
+      } else if (is_hidden && 
                (PARTITION_LEVEL_ONE != table_schema_ptr->get_part_level()
              || table_schema_ptr->get_hidden_partition_num() <= part_idx
              || 0 > part_idx)) {

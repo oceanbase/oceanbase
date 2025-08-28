@@ -183,8 +183,8 @@ enum OB_PRIV_SHIFT
    OB_PRIV_REFERENCES | OB_PRIV_TRIGGER)
 
 #define OB_PRIV_ROUTINE_ACC                                                     \
-  (OB_PRIV_ALTER_ROUTINE | OB_PRIV_EXECUTE)
-
+  (OB_PRIV_ALTER_ROUTINE | OB_PRIV_EXECUTE)                       
+  
 #define OB_PRIV_COLUMN_ACC                                                    \
   (OB_PRIV_INSERT | OB_PRIV_UPDATE | OB_PRIV_SELECT | OB_PRIV_REFERENCES)
 

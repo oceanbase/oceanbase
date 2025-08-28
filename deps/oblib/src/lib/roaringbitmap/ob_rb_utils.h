@@ -34,7 +34,7 @@ public:
   static int to_roaring64_bin(ObIAllocator &allocator, ObRbBinType rb_type, const ObString &rb_bin, ObString &roaring64_bin);
   static int get_cardinality(ObIAllocator &allocator, const ObString &rb_bin, uint64_t &cardinality);
   static int get_calc_cardinality(ObIAllocator &allocator, const ObString &rb1_bin, const ObString &rb2_bin, uint64_t &cardinality, ObRbOperation op);
-  static int get_and_cardinality(ObIAllocator &allocator,
+  static int get_and_cardinality(ObIAllocator &allocator, 
                                  const ObString &rb1_bin,
                                  ObRbBinType rb1_type,
                                  const ObString &rb2_bin,

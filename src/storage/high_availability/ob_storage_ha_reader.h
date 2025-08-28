@@ -83,8 +83,8 @@ struct ObCopyMacroBlockReaderInitParam final
   int assign(const ObCopyMacroBlockReaderInitParam &param);
 
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(table_key), KPC_(copy_macro_range_info), K_(src_info),
-      K_(is_leader_restore), K_(restore_action), KP_(bandwidth_throttle), KP_(svr_rpc_proxy),
-      KP_(restore_base_info), KP_(meta_index_store), KP_(second_meta_index_store),
+      K_(is_leader_restore), K_(restore_action), KP_(bandwidth_throttle), KP_(svr_rpc_proxy), 
+      KP_(restore_base_info), KP_(meta_index_store), KP_(second_meta_index_store), 
       KP_(restore_macro_block_id_mgr), KP_(macro_block_reuse_mgr));
 
   uint64_t tenant_id_;
@@ -377,7 +377,7 @@ public:
       obrpc::ObCopyTabletSSTableHeader &copy_header);
 
   void reset();
-
+      
 private:
   int check_need_copy_sstable_(
       blocksstable::ObSSTable *sstable,
@@ -930,7 +930,7 @@ private:
   const ObRestoreBaseInfo *restore_base_info_;
   backup::ObBackupMetaIndexStoreWrapper *second_meta_index_store_;
 
-
+  
   blocksstable::ObBufferReader backup_macro_data_buffer_;
   blocksstable::ObBufferReader backup_macro_read_buffer_;
   char *local_macro_data_buffer_;

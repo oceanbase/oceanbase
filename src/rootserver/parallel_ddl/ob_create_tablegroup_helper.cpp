@@ -195,7 +195,7 @@ int ObCreateTablegroupHelper::construct_and_adjust_result_(int &return_ret)
         "tablegroup_name", tablegroup.get_tablegroup_name_str());
     }
   }
-
+  
   return ret;
 }
 

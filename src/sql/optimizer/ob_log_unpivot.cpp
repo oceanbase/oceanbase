@@ -36,14 +36,14 @@ int ObLogUnpivot::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
   return OB_SUCCESS;
 }
 
-int ObLogUnpivot::get_plan_item_info(PlanText &plan_text,
+int ObLogUnpivot::get_plan_item_info(PlanText &plan_text, 
                                      ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
     LOG_WARN("failed to get plan item info", K(ret));
   } else {
-    BEGIN_BUF_PRINT;
+    BEGIN_BUF_PRINT; 
     if (OB_FAIL(BUF_PRINTF("unpivot(%s)",
         is_include_null_ ? "include null" : "exclude null"))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
@@ -77,7 +77,7 @@ int ObLogUnpivot::do_re_est_cost(EstimateCostInfo &param, double &card, double &
       LOG_WARN("failed to re est exchange cost", K(ret));
     } else {
       ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
-      op_cost = ObOptEstCost::cost_filter_rows(child_card / parallel,
+      op_cost = ObOptEstCost::cost_filter_rows(child_card / parallel, 
                                                get_filter_exprs(),
                                                opt_ctx);
       cost = child_cost + op_cost;
@@ -189,7 +189,7 @@ int ObLogUnpivot::compute_sharding_info()
     for (int64_t i = -1; OB_SUCC(ret) && i < child->get_weak_sharding().count(); ++i) {
       bool is_inherited_sharding = false;
       ObShardingInfo *sharding = (i == -1) ? child->get_strong_sharding() : child->get_weak_sharding().at(i);
-      bool keep_origin = OB_ISNULL(sharding) ? false :
+      bool keep_origin = OB_ISNULL(sharding) ? false : 
                          (ObOptimizerUtil::subset_exprs(sharding->get_partition_keys(), origin_exprs_) &&
                           ObOptimizerUtil::subset_exprs(sharding->get_sub_partition_keys(), origin_exprs_));
       // Only inherit the sharding when partition keys do not exist in the unpivot

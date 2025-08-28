@@ -101,7 +101,7 @@ int ObVectorQueryRowkeyIterator::get_next_rows(int64_t &count)
     if (ret != OB_ITER_END) {
       LOG_WARN("failed to get next rows", K(ret), K(count), K(batch_size_));
     }
-  }
+  } 
   return ret;
 }
 
@@ -333,7 +333,7 @@ int ObVectorQueryVidIterator::get_next_row(ObNewRow *&row, const sql::ExprFixedA
       obj_[i + 2].reset();
     }
     row_->reset();
-
+    
     obj_[0].set_float(distance_[cur_pos_]);
     obj_[1].set_int(vids_[cur_pos_]);
     if (!extra_info_ptr_.is_null()) {
@@ -357,7 +357,7 @@ int ObVectorQueryVidIterator::get_next_row(ObNewRow *&row, const sql::ExprFixedA
     row_->cells_ = obj_;
     row_->count_ = 2 + extra_column_count_;
     row_->projector_ = NULL;
-    row_->projector_size_ = 0;
+    row_->projector_size_ = 0; 
 
     row = row_;
   } else {
@@ -413,7 +413,7 @@ int ObVectorQueryVidIterator::get_next_rows(ObNewRow *&row, int64_t &size, const
         row->cells_ = obj;
         row->count_ = index * one_size_obj_count;
         row->projector_ = NULL;
-        row->projector_size_ = 0;
+        row->projector_size_ = 0; 
         size = index;
       }
     }
@@ -432,7 +432,7 @@ void ObVectorQueryVidIterator::reset()
   extra_info_ptr_.reset();
 }
 
-int ObPluginVectorIndexHelper::driect_merge_delta_and_snap_vids(const ObVsagQueryResult &first,
+int ObPluginVectorIndexHelper::driect_merge_delta_and_snap_vids(const ObVsagQueryResult &first, 
                                                                        const ObVsagQueryResult &second,
                                                                        int64_t &actual_cnt,
                                                                        int64_t *&vids_result,
@@ -498,13 +498,13 @@ int ObPluginVectorIndexHelper::driect_merge_delta_and_snap_vids(const ObVsagQuer
       actual_cnt = res_num;
     }
   }
-
+  
   return ret;
 }
 
-int ObPluginVectorIndexHelper::sort_merge_delta_and_snap_vids(const ObVsagQueryResult &first,
+int ObPluginVectorIndexHelper::sort_merge_delta_and_snap_vids(const ObVsagQueryResult &first, 
                                                          const ObVsagQueryResult &second,
-                                                         const int64_t total,
+                                                         const int64_t total, 
                                                          int64_t &actual_cnt,
                                                          int64_t *&vids_result,
                                                          float *&float_result,
@@ -630,7 +630,7 @@ int ObPluginVectorIndexHelper::sort_merge_delta_and_snap_vids(const ObVsagQueryR
           LOG_WARN("fail to check exist refactored", K(ret));
         }
       }
-
+      
       if (OB_SUCC(ret)) {
         actual_cnt = res_num;
       }
@@ -651,7 +651,7 @@ int ObPluginVectorIndexHelper::get_vector_memory_limit_size(const uint64_t tenan
     int64_t total_memory = lib::get_tenant_memory_limit(tenant_id);
     int64_t vector_limit = ObTenantVectorAllocator::get_vector_mem_limit_percentage(tenant_config);
     memory_limit = total_memory * vector_limit / 100;
-    LOG_TRACE("vector index memory limit debug", K(tenant_id), K(total_memory), K(vector_limit), K(memory_limit));
+    LOG_TRACE("vector index memory limit debug", K(tenant_id), K(total_memory), K(vector_limit), K(memory_limit)); 
   }
   return ret;
 }

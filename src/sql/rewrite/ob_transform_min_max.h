@@ -49,7 +49,7 @@ class ObAggFunRawExpr;
  * select min(pk) from t1
  * -->
  * select min(v.c1) from (select pk from t1 where pk is not null order by pk limit 1)
- *
+ * 
  * rewrite requests:
  * 1. max/min aggragate on a column of table, and this column is a index or the first nonconst column of index.
  * 2. select stmt is scalar group by and hasn't limit.

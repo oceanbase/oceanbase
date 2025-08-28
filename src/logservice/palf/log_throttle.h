@@ -132,7 +132,7 @@ private:
   //append_speed during current round, Bytes per usecond
   PalfThrottleOptions throttling_options_;
   LogThrottlingStat stat_;
-  mutable SpinLock lock_;
+  mutable SpinLock lock_; 
 };
 
 inline void LogWritingThrottle::notify_need_writing_throttling(const bool is_need) {

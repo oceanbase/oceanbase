@@ -63,7 +63,7 @@ private:
                     obmysql::ObPacketRecordWrapper &pkt_rec_wrapper,
                     void *&ipacket, bool &need_decode_more, Ob20Packet *pkt20);
   int decode_compressed_body(ObICSMemPool& pool, const char*& buf,
-                             const uint32_t comp_pktlen, const uint8_t comp_pktseq,
+                             const uint32_t comp_pktlen, const uint8_t comp_pktseq, 
                              const uint32_t pktlen_before_compress, rpc::ObPacket *&pkt);
   Obp20Decoder* svr_decoders_[OBP20_SVR_END-OBP20_PROXY_MAX_TYPE] = {
                               &trace_info_dcd_,

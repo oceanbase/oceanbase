@@ -114,11 +114,11 @@ public:
   share::ObFunctionType get_function_type() const { return log_io_user_prio(user_); }
   void set_start_lsn(const LSN &start_lsn) { iterator_info_.set_start_lsn(start_lsn); }
   LogIteratorInfo *get_iterator_info() { return &iterator_info_; }
-  void inc_read_io_cnt()
-  {
+  void inc_read_io_cnt() 
+  { 
     iterator_info_.inc_read_io_cnt();
   }
-  void inc_read_io_size(const int64_t read_size)
+  void inc_read_io_size(const int64_t read_size) 
   {
     iterator_info_.inc_read_io_size(read_size);
   }
@@ -141,8 +141,8 @@ public:
   TO_STRING_KV("user", log_io_user_str(user_), K_(palf_id), K_(iterator_info));
 private:
   bool is_enable_fill_cache_user_() const {
-    return (LogIOUser::RESTART == user_ ||
-            LogIOUser::FETCHLOG == user_ ||
+    return (LogIOUser::RESTART == user_ || 
+            LogIOUser::FETCHLOG == user_ || 
             LogIOUser::META_INFO == user_ ||
             LogIOUser::REPLAY == user_) ? false : true;
   }

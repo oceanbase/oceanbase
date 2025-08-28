@@ -297,7 +297,7 @@ struct ObCostTableScanInfo
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> ss_postfix_range_filters_;  // range conditions extract postfix range for skip scan
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> postfix_filters_; // filters evaluated before index back, but not index prefix
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> table_filters_;  // filters evaluated after index back
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> real_range_exprs_; // range conditions constructed by query range, only valid when unprecise_range_filters_ not empty
+  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> real_range_exprs_; // range conditions constructed by query range, only valid when unprecise_range_filters_ not empty 
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> precise_range_filters_; // precise range filters in origin filters
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> unprecise_range_filters_; // unprecise range filters in origin filters
   // domain index query exprs calculated by functional lookup
@@ -769,20 +769,20 @@ public:
 
   int cost_hash_set(const ObCostHashSetInfo &info, double &cost);
 
-  int cost_project(double rows,
+  int cost_project(double rows, 
                    const ObIArray<ColumnItem> &columns,
-                   bool is_get,
+                   bool is_get, 
                    bool use_column_store,
                    double &cost);
 
-  int cost_project(double rows,
+  int cost_project(double rows, 
                    const ObIArray<ObRawExpr*> &columns,
-                   bool is_get,
+                   bool is_get, 
                    bool use_column_store,
                    double &cost);
 
-  int cost_full_table_scan_project(double rows,
-                                   const ObCostTableScanInfo &est_cost_info,
+  int cost_full_table_scan_project(double rows, 
+                                   const ObCostTableScanInfo &est_cost_info, 
                                    bool is_get,
                                    double &cost);
 
@@ -835,11 +835,11 @@ public:
                               double &cost);
 
   int cost_px(int64_t parallel, double &px_cost);
-
-  int calc_range_cost(const ObTableMetaInfo& table_meta_info,
+  
+  int calc_range_cost(const ObTableMetaInfo& table_meta_info, 
                       const ObIArray<ObRawExpr *> &filters,
-                      int64_t index_column_count,
-                      int64_t range_count,
+                      int64_t index_column_count, 
+                      int64_t range_count, 
                       double range_sel,
                       double &cost);
   int calc_pred_cost_per_row(const ObRawExpr *expr,
@@ -981,18 +981,18 @@ public:
   { }
   ~ObCostTableScanSimpleInfo()=default;
   int init(const ObCostTableScanInfo &est_cost_info);
-  int calculate_table_dop(double range_row_count,
-                          double index_back_row_count,
+  int calculate_table_dop(double range_row_count, 
+                          double index_back_row_count, 
                           int64_t part_cnt,
-                          int64_t cost_threshold_us,
-                          int64_t parallel_degree_limit,
+                          int64_t cost_threshold_us, 
+                          int64_t parallel_degree_limit, 
                           int64_t &table_dop) const;
   int64_t get_range_columns_count() const { return range_count_; }
   bool get_is_spatial_index() const { return is_spatial_index_; }
   int64_t get_index_id() const { return index_id_; }
 
 private:
-  double calculate_table_scan_cost(double range_row_count,
+  double calculate_table_scan_cost(double range_row_count, 
                                    double index_back_row_count,
                                    int64_t part_cnt,
                                    int64_t parallel) const;

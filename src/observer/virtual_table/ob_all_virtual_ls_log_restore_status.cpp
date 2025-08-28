@@ -16,13 +16,13 @@
 #include "storage/tx_storage/ob_ls_service.h"   // ObLSService
 #include "rootserver/standby/ob_recovery_ls_service.h" //ObLSRecoveryService
 
-using namespace oceanbase::share;
+using namespace oceanbase::share; 
 
 namespace oceanbase
 {
 namespace observer
 {
-ObVirtualLSLogRestoreStatus::ObVirtualLSLogRestoreStatus() :
+ObVirtualLSLogRestoreStatus::ObVirtualLSLogRestoreStatus() : 
   is_inited_(false)
 {}
 
@@ -52,9 +52,9 @@ int ObVirtualLSLogRestoreStatus::inner_get_next_row(common::ObNewRow *&row)
   int ret = OB_SUCCESS;
   ObLSIterator *iter = NULL;
   common::ObSharedGuard<ObLSIterator> guard;
-
+  
   if (false == start_to_read_) {
-    auto func_iterate_tenant = [&]() -> int
+    auto func_iterate_tenant = [&]() -> int 
     {
       int ret = OB_SUCCESS;
       ObLSService *ls_svr = MTL(ObLSService*);
@@ -111,14 +111,14 @@ int ObVirtualLSLogRestoreStatus::inner_get_next_row(common::ObNewRow *&row)
                   SERVER_LOG(WARN, "ls recovery service is NULL", K(ret), K(ls));
                 } else if (OB_FAIL(ls_recovery_svr->get_sys_restore_status(sys_restore_status_info))) {
                   SERVER_LOG(WARN, "get sys restore status failed", K(ls));
-                  // use restore_status_info if get sys ls restore status failed
+                  // use restore_status_info if get sys ls restore status failed 
                   if (OB_FAIL(insert_ls_restore_status_info_(restore_status_info))) {
                     SERVER_LOG(WARN, "fail to insert ls restore status info", K(restore_status_info));
                   } else {
                     SERVER_LOG(TRACE, "insert ls restore status info success after get sys restore status failed", K(ls));
                     scanner_.add_row(cur_row_);
                   }
-                } else if (sys_restore_status_info.is_valid()
+                } else if (sys_restore_status_info.is_valid() 
                             && OB_FAIL(insert_ls_restore_status_info_(sys_restore_status_info))) {
                   SERVER_LOG(WARN, "fail to insert ls restore status info", K(sys_restore_status_info));
                 } else if (!sys_restore_status_info.is_valid()
@@ -153,12 +153,12 @@ int ObVirtualLSLogRestoreStatus::inner_get_next_row(common::ObNewRow *&row)
     } else {
       row = &cur_row_;
     }
-  }
+  }  
   return ret;
 }
 
 void ObVirtualLSLogRestoreStatus::destroy()
-{
+{ 
   is_inited_ = false;
   omt_ = NULL;
 }

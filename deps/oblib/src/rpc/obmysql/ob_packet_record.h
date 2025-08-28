@@ -12,8 +12,8 @@
 
 #ifndef _OB_MYSQL_OB_PACKET_RECORD_H_
 #define _OB_MYSQL_OB_PACKET_RECORD_H_
-#include "rpc/obmysql/ob_mysql_packet.h"
-#include "rpc/obmysql/ob_2_0_protocol_struct.h"
+#include "rpc/obmysql/ob_mysql_packet.h" 
+#include "rpc/obmysql/ob_2_0_protocol_struct.h" 
 
 namespace oceanbase
 {
@@ -104,14 +104,14 @@ public:
   //for mysql fragment end
 
   // for mysql protocol
-  inline void record_recieve_mysql_packet(ObMySQLRawPacket &__restrict__ pkt) __restrict__
+  inline void record_recieve_mysql_packet(ObMySQLRawPacket &__restrict__ pkt) __restrict__ 
   {
     obp_mysql_header_.mysql_header_.len_ = pkt.get_pkt_len();
     obp_mysql_header_.seq_ = pkt.get_seq();
-    obp_mysql_header_.type_ = static_cast<uint8_t>(pkt.get_cmd());
+    obp_mysql_header_.type_ = static_cast<uint8_t>(pkt.get_cmd()); 
     obp_mysql_header_.is_send_ = 0;
   }
-  inline void record_send_mysql_packet(ObMySQLPacket &__restrict__ pkt, int32_t len) __restrict__
+  inline void record_send_mysql_packet(ObMySQLPacket &__restrict__ pkt, int32_t len) __restrict__ 
   {
     if (pkt.get_mysql_packet_type() == ObMySQLPacketType::PKT_ROW ||
         pkt.get_mysql_packet_type() == ObMySQLPacketType::PKT_FIELD) {
@@ -120,10 +120,10 @@ public:
       obp_mysql_header_.mysql_header_.len_ = len;
     }
     obp_mysql_header_.seq_ = pkt.get_seq();
-    obp_mysql_header_.type_ = static_cast<uint8_t>(pkt.get_mysql_packet_type());
+    obp_mysql_header_.type_ = static_cast<uint8_t>(pkt.get_mysql_packet_type()); 
     obp_mysql_header_.is_send_ = 1;
   }
-  // for mysql protocol end
+  // for mysql protocol end 
 
   // for ob20 protocol
   inline void record_send_obp20_packet(uint32_t payload_len, Ob20ProtocolFlags flag,
@@ -148,7 +148,7 @@ public:
     obp_mysql_header_.com_len_ = obp20_pkt.get_comp_len();
     obp_mysql_header_.com_seq_ = obp20_pkt.get_comp_seq();
   }
-  // for ob20 protocol end
+  // for ob20 protocol end 
 
 
   // for compress mysql protocol
@@ -160,7 +160,7 @@ public:
     obp_mysql_header_.com_len_ = com_pkt.get_comp_len();
     obp_mysql_header_.com_seq_ = com_pkt.get_comp_seq();
   }
-  // for compress mysql protocol end
+  // for compress mysql protocol end 
 
   inline bool is_send_record() const __restrict__  {
     return obp_mysql_header_.is_send_ == 1;
@@ -231,7 +231,7 @@ class ObPacketRecordWrapper {
       }
     }
     // for 20 protocol end
-
+                              
 
     // for compress protocol
     inline void begin_seal_comp_pkt() { start_pkt_pos_ = cur_pkt_pos_; }
@@ -259,11 +259,11 @@ class ObPacketRecordWrapper {
         }
       }
     }
-    // for compress protocol end
+    // for compress protocol end 
 
 
     // for mysql protocol
-    inline void record_send_mysql_pkt(obmysql::ObMySQLPacket &__restrict__ pkt, int32_t len) __restrict__
+    inline void record_send_mysql_pkt(obmysql::ObMySQLPacket &__restrict__ pkt, int32_t len) __restrict__ 
     {
       if (pkt.get_mysql_packet_type() == last_type_) {
         // do nothing
@@ -278,7 +278,7 @@ class ObPacketRecordWrapper {
         receiving_file_contents_ = true;
       }
     }
-    inline void record_recieve_mysql_packet(obmysql::ObMySQLRawPacket &__restrict__ pkt) __restrict__
+    inline void record_recieve_mysql_packet(obmysql::ObMySQLRawPacket &__restrict__ pkt) __restrict__ 
     {
       int64_t idx = cur_pkt_pos_ % ObPacketRecordWrapper::REC_BUF_SIZE;
       pkt_rec_[idx].record_recieve_mysql_packet(pkt);
@@ -291,7 +291,7 @@ class ObPacketRecordWrapper {
         }
       }
     }
-    inline void record_recieve_mysql_pkt_fragment(int32_t recive) __restrict__
+    inline void record_recieve_mysql_pkt_fragment(int32_t recive) __restrict__ 
     {
       int64_t idx = cur_pkt_pos_ % ObPacketRecordWrapper::REC_BUF_SIZE;
       pkt_rec_[idx].record_recieve_mysql_pkt_fragment(recive);

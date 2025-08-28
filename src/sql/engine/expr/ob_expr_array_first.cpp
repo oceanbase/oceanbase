@@ -37,8 +37,8 @@ ObExprArrayFirst::ObExprArrayFirst(ObIAllocator &alloc)
 ObExprArrayFirst::ObExprArrayFirst(ObIAllocator &alloc,
                                    ObExprOperatorType type,
                                    const char *name,
-                                   int32_t param_num,
-                                   int32_t dimension) : ObExprArrayMapCommon(alloc, type, name, param_num, NOT_VALID_FOR_GENERATED_COL, dimension)
+                                   int32_t param_num, 
+                                   int32_t dimension) : ObExprArrayMapCommon(alloc, type, name, param_num, NOT_VALID_FOR_GENERATED_COL, dimension) 
 {
 }
 
@@ -82,7 +82,7 @@ int ObExprArrayFirst::calc_result_typeN(ObExprResType& type,
       LOG_WARN("invalid collection type", K(ret), K(coll_type->type_id_));
     }
   }
-
+  
   if (OB_FAIL(ret)) {
   } else if (is_null_res) {
     type.set_null();

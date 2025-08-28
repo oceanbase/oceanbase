@@ -232,7 +232,7 @@ int ObExprRegexpReplace::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_ex
   return ret;
 }
 
-int ObExprRegexpReplace::is_valid_for_generated_column(const ObRawExpr*expr,
+int ObExprRegexpReplace::is_valid_for_generated_column(const ObRawExpr*expr, 
                                                        const common::ObIArray<ObRawExpr *> &exprs,
                                                        bool &is_valid) const {
   int ret = OB_SUCCESS;
@@ -396,8 +396,8 @@ int ObExprRegexpReplace::vector_regexp_replace(VECTOR_EVAL_FUNC_ARG_DECL) {
       LOG_WARN("fail to init regexp", K(pattern), K(flags), K(ret));
     } else if (expr.arg_cnt_ > 2 && (expr.args_[2]->datum_meta_.cs_type_ == CS_TYPE_UTF8MB4_BIN ||
         expr.args_[2]->datum_meta_.cs_type_ == CS_TYPE_UTF8MB4_GENERAL_CI)) {
-      if (OB_FAIL(ObExprUtil::convert_string_collation(to_str, expr.args_[2]->datum_meta_.cs_type_,
-            to_utf16, ObCharset::is_bin_sort(expr.args_[2]->datum_meta_.cs_type_) ?
+      if (OB_FAIL(ObExprUtil::convert_string_collation(to_str, expr.args_[2]->datum_meta_.cs_type_, 
+            to_utf16, ObCharset::is_bin_sort(expr.args_[2]->datum_meta_.cs_type_) ? 
             CS_TYPE_UTF16_BIN : CS_TYPE_UTF16_GENERAL_CI, tmp_alloc))) {
         LOG_WARN("convert charset failed", K(ret));
       }

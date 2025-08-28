@@ -502,7 +502,7 @@ void TestCOSSTableRowScanner::test_delete_insert_blockscan_multi_range()
   ObCSRowId start_row_id = OB_INVALID_CS_ROW_ID;
   ObCSRowId end_row_id = OB_INVALID_CS_ROW_ID;
   int32_t range_idx = -1;
-
+  
   BlockScanState block_scan_state = BlockScanState::BLOCKSCAN_RANGE;
   get_blockscan_start(&multi_scanner_, start_row_id, range_idx, block_scan_state, false);
   ASSERT_EQ(range_row_ids_[0].start_row_id_, start_row_id);
@@ -560,7 +560,7 @@ void TestCOSSTableRowScanner::test_delete_insert_blockscan_skip_delete_key_end()
   BlockScanState block_scan_state = BlockScanState::BLOCKSCAN_RANGE;
   ObCSRowId start_row_id = OB_INVALID_CS_ROW_ID;
   ObCSRowId end_row_id = OB_INVALID_CS_ROW_ID;
-
+  
   int64_t border_id1 = 0;
   generate_border(border_id1, false/*is_reverse*/);
   OK(scanner_.refresh_blockscan_checker(border_rowkey_));
@@ -715,7 +715,7 @@ void TestCOSSTableRowScanner::test_delete_insert_blockscan_without_border_rowkey
   ASSERT_EQ(ROW_STORE_SCAN, scanner_.prefetcher_.block_scan_state_);
   OK(scanner_.try_skip_deleted_row(end_row_id));
   ASSERT_EQ(border_id, end_row_id);
-
+  
   border_id = row_cnt_;
   generate_border(border_id, false/*is_reverse*/);
   OK(scanner_.refresh_blockscan_checker(border_rowkey_));

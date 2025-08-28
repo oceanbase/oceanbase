@@ -67,7 +67,7 @@ public:
       K_(arc_limit));
   };
 
-  class TestSSMicroCacheParallellismThread : public Threads
+  class TestSSMicroCacheParallellismThread : public Threads 
   {
   public:
     TestSSMicroCacheParallellismThread(ObTenantBase *tenant_base, TestSSMicroCacheParallellismCtx &ctx)

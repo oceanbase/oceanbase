@@ -95,7 +95,7 @@ int OptSystemIoBenchmark::run_benchmark(ObIAllocator &allocator, const uint64_t 
   ObIOHandle io_handle;
   // prepare io bench
   ObSEArray<blocksstable::ObStorageObjectHandle, 16> block_handles;
-
+  
   const double MIN_FREE_SPACE_PERCENTAGE = 0.1; //
   const int64_t MIN_CALIBRATION_BLOCK_COUNT = 1024L * 1024L * 1024L / OB_DEFAULT_MACRO_BLOCK_SIZE;
   const int64_t MAX_CALIBRATION_BLOCK_COUNT = 20L * 1024L * 1024L * 1024L / OB_DEFAULT_MACRO_BLOCK_SIZE;

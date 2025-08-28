@@ -182,7 +182,7 @@ int ObDbmsStatsExecutor::gather_partition_stats(ObExecContext &ctx,
               LOG_WARN("fail to roll back transaction", K(tmp_ret));
             }
           }
-
+          
           if (OB_FAIL(ret)) {
             int temp_ret = ret;
             if (OB_FAIL(collect_executed_part_ids(derive_param, failed_part_ids))) {
@@ -810,7 +810,7 @@ int ObDbmsStatsExecutor::do_gather_stats_with_retry(ObExecContext &ctx,
           LOG_WARN("failed to do gather stats", K(ret));
         } else {
           // Phased memory release for split gather, in order to reuse memory
-          gather_param.allocator_->reuse();
+          gather_param.allocator_->reuse();  
         }
       } else {
         LOG_WARN("failed to do gather stats", K(ret));
@@ -909,7 +909,7 @@ int ObDbmsStatsExecutor::check_need_split_gather(const ObTableStatParam &param, 
       LOG_TRACE("stat gather will use split gather", K(param.degree_), K(gather_helper));
     }
     LOG_TRACE("succeed to get the maximum num of part and column for stat gather", K(param), K(gather_helper));
-  }
+  } 
   else {
     gather_helper.maximum_gather_part_cnt_ = partition_cnt;
     gather_helper.maximum_gather_col_cnt_ = std::min(column_cnt, MAX_GATHER_COLUMN_COUNT_PER_QUERY_FOR_LARGE_TENANT);
@@ -2077,7 +2077,7 @@ int ObDbmsStatsExecutor::try_use_prefix_index_refine_min_max(ObExecContext &ctx,
  * @param partition_id_block_map 分区ID到块统计信息的映射表
  * @param param 表统计参数配置
  * @param need_single_part  输出标志位，true表示需要单分区模式
- * @return
+ * @return 
  */
 int ObDbmsStatsExecutor::check_use_single_partition_gather(const PartitionIdBlockMap &partition_id_block_map,
                                                            const ObTableStatParam &param,

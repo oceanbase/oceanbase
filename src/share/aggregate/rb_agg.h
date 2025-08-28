@@ -328,3 +328,5 @@ inline int init_rb_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
 } // end namespace share
 } // end namespace oceanbase
 #endif // OCEANBASE_SHARE_RB_AGGREGATE_H_
+
+

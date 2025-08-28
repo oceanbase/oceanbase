@@ -44,7 +44,7 @@ public:
       dblink_groupby_expr_(NULL),
       only_need_contraints_(false),
       param_store_(param_store)
-
+      
   {}
   virtual ~ObGroupByChecker()
   {}

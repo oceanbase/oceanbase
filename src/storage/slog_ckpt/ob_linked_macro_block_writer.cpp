@@ -140,7 +140,7 @@ int ObLinkedMacroBlockWriter::write_block(
       } else if (OB_FAIL(write_ctx_.add_macro_block_id(handle_.get_macro_id()))) {
         LOG_WARN("fail to add macro id", K(ret), "macro id", handle_.get_macro_id());
       }
-
+      
       ObLogicMacroBlockId unused_logic_id;
       if (OB_SUCC(ret) && OB_NOT_NULL(write_callback)) {
         if (OB_FAIL(write_callback->write(handle_, unused_logic_id, const_cast<char*>(write_info.buffer_), write_info.size_, 0 /* unused row count*/))) {

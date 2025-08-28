@@ -30,7 +30,7 @@ int ObIModel::get_ls_id(const ObTabletID &tablet_id, ObLSID &ls_id)
   bool is_cache_hit = false;
 
   if (OB_FAIL(GCTX.location_service_->get(MTL_ID(),
-                                          tablet_id,
+                                          tablet_id, 
                                           0, /* expire_renew_time */
                                           is_cache_hit,
                                           ls_id))) {
@@ -137,7 +137,7 @@ int ObIModel::init_ls_id_tablet_op_map(const TabletIdOpsMap &tablet_map,
   for (; it != tablet_map.end() && OB_SUCC(ret); ++it) {
     ObTabletID tablet_id(it->first);
     if (OB_FAIL(GCTX.location_service_->get(MTL_ID(),
-                                            tablet_id,
+                                            tablet_id, 
                                             0, /* expire_renew_time */
                                             is_cache_hit,
                                             ls_id))) {
@@ -255,20 +255,20 @@ int ObIModel::init_tablet_id_ops_map(ObTableExecCtx &ctx,
       }
     }
 
-    LOG_DEBUG("init tablet id map", K(is_batch_get), K(is_query_and_mutate),
+    LOG_DEBUG("init tablet id map", K(is_batch_get), K(is_query_and_mutate), 
         K(only_one_ls), K(first_ls_id), K(tablet_op));
   }
 
   return ret;
 }
 
-int ObIModel::calc_single_op_tablet_id(ObTableExecCtx &ctx,
-                                       ObTablePartCalculator &calculator,
-                                       ObTableSingleOp &single_op,
+int ObIModel::calc_single_op_tablet_id(ObTableExecCtx &ctx, 
+                                       ObTablePartCalculator &calculator, 
+                                       ObTableSingleOp &single_op, 
                                        ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
-  if (single_op.get_op_type() == ObTableOperationType::SCAN ||
+  if (single_op.get_op_type() == ObTableOperationType::SCAN || 
       single_op.get_op_type() == ObTableOperationType::QUERY_AND_MUTATE) {
     const ObTableQuery *query = single_op.get_query();
     if (OB_ISNULL(query)) {
@@ -468,7 +468,7 @@ int ObIModel::pre_init_results(ObTableExecCtx &ctx,
           LOG_WARN("fail to assign property names to new result", K(ret));
         } else if (OB_FAIL(src_res.assign_properties_names(all_prop_name))) {
           LOG_WARN("fail to assign property names to result", K(ret));
-        }
+        }   
       }
     }
   }
@@ -501,7 +501,7 @@ int ObIModel::alloc_and_init_request_result(ObTableExecCtx &ctx,
   return ret;
 }
 
-/*
+/* 
 To ensure the execute order in mix batch, we generate a new ls req for each single op:
 case like :
 - src req: put -> delete -> get
@@ -553,7 +553,7 @@ int ObIModel::init_request_result_for_mix_batch(ObTableExecCtx &ctx,
   } else if (1 != src_req.ls_op_->count()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("should only has one tablet op", K(ret), K(src_req.ls_op_->count()));
-  } else if (src_req.ls_op_->at(0).count() != new_reqs.count() ||
+  } else if (src_req.ls_op_->at(0).count() != new_reqs.count() || 
              src_req.ls_op_->at(0).count() != new_results.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("new ls requests nums is not equal to single ops count", K(new_reqs.count()));
@@ -603,7 +603,7 @@ int ObIModel::init_request_result_for_mix_batch(ObTableExecCtx &ctx,
           } else if (OB_FAIL(new_single_ops.push_back(single_op))) {
             LOG_WARN("fail to push back single op", K(ret), K(i));
           } else if (OB_FAIL(GCTX.location_service_->get(MTL_ID(),
-                                            tablet_id,
+                                            tablet_id, 
                                             0, /* expire_renew_time */
                                             is_cache_hit,
                                             ls_id))) {
@@ -652,7 +652,7 @@ new_res_ls2:
     tablet_id1: [4][8][12][...]
     ...
 src_res: [0][1][2][...][n]
-*/
+*/ 
 int ObIModel::init_result(ObTableExecCtx &ctx,
                           const ObTableLSOpRequest &src_req,
                           ObTableLSOpResult &src_res)
@@ -885,7 +885,7 @@ int ObIModel::work(ObTableExecCtx &ctx,
                    ObTableQueryAsyncResult &res)
 {
   int ret = OB_SUCCESS;
-  ObIAsyncQueryIter *query_iter = nullptr;
+  ObIAsyncQueryIter *query_iter = nullptr; 
   const ObQueryOperationType query_type = req.query_type_;
   if (OB_ISNULL(query_session_)) {
     ret = OB_ERR_UNEXPECTED;

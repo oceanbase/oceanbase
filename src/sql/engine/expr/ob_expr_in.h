@@ -596,7 +596,7 @@ public:
   static int probe_fixed_col(const ObBitVector &skip,
                       const EvalBound &bound,
                       ObBitVector &eval_flags,
-                      LeftVec *&input_left_vec,
+                      LeftVec *&input_left_vec, 
                       ResVec *&res_vec,
                       ObExprInCtx *&in_ctx,
                       bool is_op_in);
@@ -665,9 +665,9 @@ protected:
                                      const int64_t batch_size,
                                      bool &can_cmp_mem);
   static void check_left_can_cmp_mem(const ObExpr &expr,
-                                     const ObBitVector &skip,
-                                     const ObBitVector &eval_flags,
-                                     const EvalBound &bound,
+                                     const ObBitVector &skip, 
+                                     const ObBitVector &eval_flags, 
+                                     const EvalBound &bound, 
                                      bool &can_cmp_mem);
 protected:
   typedef uint32_t ObExprInParamFlag;

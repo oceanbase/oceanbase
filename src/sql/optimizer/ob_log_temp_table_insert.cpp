@@ -109,7 +109,7 @@ int ObLogTempTableInsert::do_re_est_cost(EstimateCostInfo &param, double &card, 
   return ret;
 }
 
-int ObLogTempTableInsert::get_plan_item_info(PlanText &plan_text,
+int ObLogTempTableInsert::get_plan_item_info(PlanText &plan_text, 
                                              ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
@@ -117,9 +117,9 @@ int ObLogTempTableInsert::get_plan_item_info(PlanText &plan_text,
     LOG_WARN("failed to get plan item info", K(ret));
   } else {
     ObString &name = get_table_name();
-    BUF_PRINT_OB_STR(name.ptr(),
-                     name.length(),
-                     plan_item.object_alias_,
+    BUF_PRINT_OB_STR(name.ptr(), 
+                     name.length(), 
+                     plan_item.object_alias_, 
                      plan_item.object_alias_len_);
   }
   return ret;

@@ -52,12 +52,12 @@ int ObCreateDbLinkStmt::set_password(const common::ObString &pwd)
     LOG_WARN("failed to set plain password", K(ret));
   } else if (OB_FAIL(create_dblink_arg_.dblink_info_.do_encrypt_password())) {
     LOG_WARN("failed to encrypt password", K(ret), K(pwd));
-  }
+  } 
   return ret;
 }
 
-int ObCreateDbLinkStmt::set_reverse_password(const common::ObString &pwd)
-{
+int ObCreateDbLinkStmt::set_reverse_password(const common::ObString &pwd) 
+{ 
   int ret = OB_SUCCESS;
   uint64_t compat_version = 0;
   uint64_t tenant_id = create_dblink_arg_.dblink_info_.get_tenant_id();

@@ -95,13 +95,13 @@ enum ObLogBaseType
 
   // for tenant_transfer_service
   TENANT_TRANSFER_SERVICE_LOG_BASE_TYPE = 28,
-
-  //for tenant balance
+  
+  //for tenant balance 
   TENANT_BALANCE_SERVICE_LOG_BASE_TYPE = 29,
   //for tenant balance task execute
 
   BALANCE_EXECUTE_SERVICE_LOG_BASE_TYPE = 30,
-
+  
   //for backup task scheduler service
   BACKUP_TASK_SCHEDULER_LOG_BASE_TYPE = 31,
 
@@ -110,7 +110,7 @@ enum ObLogBaseType
 
   //for backup task scheduler service
   BACKUP_CLEAN_SERVICE_LOG_BASE_TYPE = 33,
-
+  
   //for log archive service
   BACKUP_ARCHIVE_SERVICE_LOG_BASE_TYPE = 34,
 
@@ -126,7 +126,7 @@ enum ObLogBaseType
   WORKLOAD_REPOSITORY_SERVICE_LOG_BASE_TYPE = 38,
 
   TTL_LOG_BASE_TYPE = 39,
-
+  
   // for table load resource manager
   TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE = 40,
 

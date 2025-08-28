@@ -191,6 +191,6 @@ bool PurgeThrottlingCbCtx::is_valid() const
 void PurgeThrottlingCbCtx::reset()
 {
   purge_type_ = MAX_PURGE_TYPE;
-}
+} 
 } // end of logservice
 } // end of oceanbase

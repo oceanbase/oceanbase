@@ -54,8 +54,8 @@ typedef enum JsnValueMisMatch {
 } JsnValueMisMatch;
 
 struct ObJsonCastParam {
-  ObJsonCastParam(ObObjType dst_type, ObCollationType in_coll_type, ObCollationType dst_coll_type, int8_t ascii_type) :
-    in_coll_type_(in_coll_type),
+  ObJsonCastParam(ObObjType dst_type, ObCollationType in_coll_type, ObCollationType dst_coll_type, int8_t ascii_type) : 
+    in_coll_type_(in_coll_type), 
     dst_coll_type_(dst_coll_type),
     dst_type_(dst_type),
     ascii_type_(ascii_type),
@@ -88,7 +88,7 @@ public:
   ObExprJsonQueryParamInfo(common::ObIAllocator &alloc, ObExprOperatorType type)
       : ObIExprExtraInfo(alloc, type), allocator_(alloc), truncate_(0),
         format_json_(0), wrapper_(0), empty_type_(0), error_type_(0),
-        pretty_type_(0), ascii_type_(0), scalars_type_(0),
+        pretty_type_(0), ascii_type_(0), scalars_type_(0), 
         path_str_(), on_mismatch_(alloc),
         on_mismatch_type_(alloc), j_path_(nullptr)
   {
@@ -99,7 +99,7 @@ public:
   int init_jsn_val_expr_param(ObIAllocator &alloc, ObExprCGCtx &op_cg_ctx, const ObRawExpr* raw_expr);
   int init_jsn_query_expr_param(ObIAllocator &alloc, ObExprCGCtx &op_cg_ctx, const ObRawExpr* raw_expr);
   int get_int_val_from_raw(ObIAllocator &alloc, ObExecContext *exec_ctx, const ObRawExpr* raw_expr, ObObj &const_data);
-  int init_mismatch_array(const ObRawExpr* raw_expr,
+  int init_mismatch_array(const ObRawExpr* raw_expr, 
                           ObExecContext *exec_ctx);
   int parse_json_path(ObString path_str, ObJsonPath*& j_path_);
 
@@ -138,7 +138,7 @@ public:
                             ObDatum &res);
   static int time_scale_check(const common::ObAccuracy &accuracy, int64_t &value,
                               bool strict = false);
-  static bool type_cast_to_string(ObString &json_string,
+  static bool type_cast_to_string(ObString &json_string, 
                                   common::ObIAllocator *allocator,
                                   ObEvalCtx &ctx,
                                   ObIJsonBase *j_base,
@@ -165,9 +165,9 @@ public:
                                          ObScale scale,
                                          ObObj &res_obj);
 
-  typedef int (*ObItemMethodValid)(ObIJsonBase*& in,
+  typedef int (*ObItemMethodValid)(ObIJsonBase*& in, 
                                   bool &is_null_result,
-                                  common::ObIAllocator *allocator,
+                                  common::ObIAllocator *allocator, 
                                   uint8_t &is_type_mismatch);
   typedef int (*ObJsonCastSqlDatum)(common::ObIAllocator *allocator,
                                     ObEvalCtx &ctx,
@@ -218,10 +218,10 @@ public:
   static ObJsonUtil::ObJsonCastSqlDatum get_json_datum_cast_func(ObObjType dst_type);
   static ObJsonUtil::ObJsonCastSqlScalar get_json_cast_func(ObObjType dst_type);
   static int get_json_path(ObExpr* expr,
-                          ObEvalCtx &ctx,
-                          bool &is_null_result,
+                          ObEvalCtx &ctx, 
+                          bool &is_null_result, 
                           ObJsonParamCacheCtx *&param_ctx,
-                          MultimodeAlloctor &temp_allocator,
+                          MultimodeAlloctor &temp_allocator, 
                           bool &is_cover_by_error);
   static int get_json_doc(ObExpr *expr,
                           ObEvalCtx &ctx,
@@ -232,9 +232,9 @@ public:
   static bool is_number_item_method(ObJsonPath* j_path);
   static int bit_length_check(const ObAccuracy &accuracy,
                               uint64_t &value);
-  static int padding_char_for_cast(int64_t padding_cnt,
+  static int padding_char_for_cast(int64_t padding_cnt, 
                                    const ObCollationType &padding_cs_type,
-                                   ObIAllocator &alloc,
+                                   ObIAllocator &alloc, 
                                    ObString &padding_res);
   static int set_mismatch_val(ObIArray<int8_t>& val, ObIArray<int8_t>& type, int64_t& opt_val, uint32_t& pos);
   template<typename T>
@@ -245,8 +245,8 @@ public:
   static void wrapper_set_timestamp_tz(ObObjType type, ObOTimestampData val, T& obj);
   template<typename T>
   static void wrapper_set_decimal_int(const ObDecimalInt *decint, ObScale scale, int32_t int_bytes, T& obj);
-
-  static int init_json_path(ObIAllocator &alloc, ObExprCGCtx &op_cg_ctx,
+  
+  static int init_json_path(ObIAllocator &alloc, ObExprCGCtx &op_cg_ctx, 
                             const ObRawExpr* path,
                             ObExprJsonQueryParamInfo& res);
 private:

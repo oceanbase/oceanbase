@@ -129,7 +129,7 @@ int ObDatumRowUtils::ob_create_rows_shallow_copy(ObIAllocator &allocator,
 
 int ObDatumRowUtils::prepare_rowkey(
     const ObDatumRow &datum_row,
-    const int key_datum_cnt,
+    const int key_datum_cnt, 
     const ObColDescIArray &col_descs,
     common::ObIAllocator &allocator,
     ObDatumRowkey &rowkey)

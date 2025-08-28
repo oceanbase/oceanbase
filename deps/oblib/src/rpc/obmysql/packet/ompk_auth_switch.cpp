@@ -67,4 +67,4 @@ int64_t OMPKAuthSwitch::to_string(char *buf, const int64_t buf_len) const
        K_(scramble));
   J_OBJ_END();
   return pos;
-}
+}  

@@ -22,9 +22,9 @@ namespace rootserver
 
 ObLoadSysPackageTask::ObLoadSysPackageTask(
     ObRootService &root_service,
-    int64_t fail_count)
-  : ObAsyncTimerTask(root_service.task_queue_), root_service_(root_service),
-  fail_count_(fail_count)
+    int64_t fail_count) 
+  : ObAsyncTimerTask(root_service.task_queue_), root_service_(root_service), 
+  fail_count_(fail_count) 
 {
   // retry until success
   set_retry_times(INT64_MAX);
@@ -118,13 +118,13 @@ int ObLoadSysPackageTask::wait_sys_package_ready(
       LOG_WARN("wait sys package ready failed", KR(ret), K(mode));
     } else {
       inprogress_job_count = 0;
-      if (mode != ObCompatibilityMode::ORACLE_MODE &&
+      if (mode != ObCompatibilityMode::ORACLE_MODE && 
           OB_ENTRY_NOT_EXIST != (tmp_ret = RS_JOB_FIND(LOAD_MYSQL_SYS_PACKAGE, job_id, sql_proxy,
             "tenant_id", OB_SYS_TENANT_ID))) {
           inprogress_job_count++;
           LOG_WARN("mysql job is not ready", K(tmp_ret), K(mode));
       }
-      if (mode != ObCompatibilityMode::MYSQL_MODE &&
+      if (mode != ObCompatibilityMode::MYSQL_MODE && 
           OB_ENTRY_NOT_EXIST != (tmp_ret = RS_JOB_FIND(LOAD_ORACLE_SYS_PACKAGE, job_id, sql_proxy,
             "tenant_id", OB_SYS_TENANT_ID))) {
           inprogress_job_count++;

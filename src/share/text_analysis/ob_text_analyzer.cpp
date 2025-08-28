@@ -80,7 +80,7 @@ int ObITextAnalyzer::add_tokenizer(const ObTextTokenizer::TokenizerType &type)
     if (FAILEDx(analyze_pipeline_.push_back(token_stream))) {
       LOG_WARN("failed to add tokenizer to analyse pipeline", K(ret),
           K(type), KPC(token_stream), K_(analyze_pipeline));
-    }
+    } 
   }
   return ret;
 }

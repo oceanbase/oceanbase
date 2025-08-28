@@ -70,7 +70,7 @@ void ObSemiStructColumnEncoder::reuse()
   semistruct_header_ = nullptr;
   sub_col_headers_ = nullptr;
   // sub column encoder will freed in ObSemiStructColumnEncodeCtx::reuse
-  // that will be called in ObMicroBlockCSEncoder::reuse, so here donot sub column encoder reuse
+  // that will be called in ObMicroBlockCSEncoder::reuse, so here donot sub column encoder reuse 
 }
 
 int ObSemiStructColumnEncoder::store_column(ObMicroBufferWriter &buf_writer)

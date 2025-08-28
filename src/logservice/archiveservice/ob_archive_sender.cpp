@@ -773,7 +773,7 @@ void ObArchiveSender::handle_archive_ret_code_(const ObLSID &id,
   } else if (OB_OBJECT_STORAGE_PERMISSION_DENIED == ret_code) {
     // backup permission denied
     if (REACH_TIME_INTERVAL(ARCHIVE_DBA_ERROR_LOG_PRINT_INTERVAL)) {
-      LOG_DBA_ERROR(OB_OBJECT_STORAGE_PERMISSION_DENIED,
+      LOG_DBA_ERROR(OB_OBJECT_STORAGE_PERMISSION_DENIED, 
           "msg", "archive dest permission denied, retrying after reset backup_dest", "ret", ret_code,
           "archive_dest_id", key.dest_id_,
           "archive_round", key.round_);

@@ -135,7 +135,7 @@ ObCCLRuleSchema &ObCCLRuleSchema::operator=(const ObCCLRuleSchema &other) {
         }
       }
     }
-
+    
     if (OB_FAIL(ret)) {
       error_ret_ = ret;
     }

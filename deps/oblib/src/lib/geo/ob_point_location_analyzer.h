@@ -28,7 +28,7 @@ public:
       rtree_index_(rtree_index),
       position_(ObPointLocation::INVALID),
       intersect_cnt_(0) {}
-
+    
   virtual ~ObPointLocationAnalyzer() {}
   int calculate_point_position(const ObPoint2d &test_point);
   ObPointLocation get_position() { return position_; }

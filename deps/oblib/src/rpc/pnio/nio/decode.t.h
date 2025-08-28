@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 static int my_sk_do_decode(my_sk_t* s, my_msg_t* msg, int64_t* avail_bytes) {
   int err = 0;
   void* b = NULL;

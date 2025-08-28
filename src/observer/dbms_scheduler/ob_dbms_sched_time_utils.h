@@ -99,7 +99,7 @@ private:
   bool find_weekno();
   bool find_month();
 
-
+  
   int hand_yearly();
   int hand_monthly();
   int hand_weekly();

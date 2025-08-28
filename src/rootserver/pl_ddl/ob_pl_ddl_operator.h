@@ -50,7 +50,7 @@ public:
                      share::schema::ObErrorInfo &error_info,
                      const common::ObString *ddl_stmt_str/*=NULL*/);
   //----End of functions for managing routine----
-
+  
   //----Functions for managing udt----
   int create_udt(share::schema::ObUDTTypeInfo &udt_info,
                  common::ObMySQLTransaction &trans,

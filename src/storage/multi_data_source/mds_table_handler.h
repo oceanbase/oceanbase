@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef SRC_STORAGE_MULTI_DATA_SOURCE_MDS_TABLE_HANDLER_H
 #define SRC_STORAGE_MULTI_DATA_SOURCE_MDS_TABLE_HANDLER_H
 #include "lib/lock/ob_small_spin_lock.h"

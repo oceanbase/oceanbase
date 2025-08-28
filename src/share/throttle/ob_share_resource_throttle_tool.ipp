@@ -232,8 +232,8 @@ int64_t ObShareResourceThrottleTool<FakeAllocator, Args...>::expected_wait_time(
   return expected_wait_time;
 }
 
-template <typename FakeAllocator, typename... Args>
-template <typename ALLOCATOR>
+template <typename FakeAllocator, typename... Args> 
+template <typename ALLOCATOR>                       
 void ObShareResourceThrottleTool<FakeAllocator, Args...>::do_throttle(const int64_t abs_expire_time)
 {
   int ret = OB_SUCCESS;

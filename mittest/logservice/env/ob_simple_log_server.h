@@ -73,7 +73,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::palf;
 using namespace oceanbase::share;
 
-class MockNetKeepAliveAdapter : public logservice::IObNetKeepAliveAdapter
+class MockNetKeepAliveAdapter : public logservice::IObNetKeepAliveAdapter 
 {
 public:
   MockNetKeepAliveAdapter() : log_deliver_(NULL) {}
@@ -375,7 +375,7 @@ public:
                      ObTenantIOManager *tio_manager) override final;
 public:
   int64_t get_node_id() {return node_id_;}
-  ILogBlockPool *get_block_pool() override final
+  ILogBlockPool *get_block_pool() override final 
   {return &log_block_pool_;};
   ObILogAllocator *get_allocator() override final
   { return allocator_; }
@@ -391,22 +391,22 @@ public:
   { palf_env = palf_env_; return OB_SUCCESS;}
   virtual void revert_palf_env(IPalfEnvImpl *palf_env) { UNUSED(palf_env); }
   bool is_valid() const override final {return NULL != palf_env_;}
-  IPalfEnvImpl *get_palf_env() override final
+  IPalfEnvImpl *get_palf_env() override final 
   { return palf_env_->get_palf_env_impl(); }
-  const std::string& get_clog_dir() const override final
+  const std::string& get_clog_dir() const override final 
   { return clog_dir_; }
-  common::ObAddr get_addr() const override final
+  common::ObAddr get_addr() const override final 
   { return addr_; }
-  ObTenantBase *get_tenant_base() const override final
+  ObTenantBase *get_tenant_base() const override final 
   { return tenant_base_; }
   logservice::ObLogFlashbackService *get_flashback_service() override final
   { return log_service_.get_flashback_service(); }
 	// Nowdat, not support drop packet from specificed address
-	void set_need_drop_packet(const bool need_drop_packet) override final
+	void set_need_drop_packet(const bool need_drop_packet) override final 
   { deliver_.set_need_drop_packet(need_drop_packet);}
-  void block_net(const ObAddr &src) override final
+  void block_net(const ObAddr &src) override final 
   { deliver_.block_net(src); }
-  void unblock_net(const ObAddr &src) override final
+  void unblock_net(const ObAddr &src) override final 
   { deliver_.unblock_net(src); }
   void block_pcode(const ObRpcPacketCode &pcode) override final
   { deliver_.block_pcode(pcode); }

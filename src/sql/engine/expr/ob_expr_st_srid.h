@@ -25,15 +25,15 @@ class ObExprSTSRID : public ObFuncExprOperator
 {
 public:
   explicit ObExprSTSRID(common::ObIAllocator &alloc);
-  explicit ObExprSTSRID(common::ObIAllocator &alloc, ObExprOperatorType type,
+  explicit ObExprSTSRID(common::ObIAllocator &alloc, ObExprOperatorType type, 
                         const char *name, int32_t param_num, int32_t dimension);
   virtual ~ObExprSTSRID();
   virtual int calc_result_typeN(ObExprResType& type,
                                 ObExprResType* types,
-                                int64_t param_num,
+                                int64_t param_num, 
                                 common::ObExprTypeCtx& type_ctx)
                                 const override;
-  static int eval_st_srid(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
+  static int eval_st_srid(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);                         
   static int eval_st_srid_common(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res, const char *func_name);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
                       const ObRawExpr &raw_expr,

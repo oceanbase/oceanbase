@@ -146,7 +146,7 @@ Expected<ObPLIRCompiler::CompileResult> ObPLIRCompiler::operator()(Module &M)
 
     legacy::PassManager PM;
     MCContext *Ctx;
-
+  
     if (TM->addPassesToEmitMC(PM, Ctx, ObjStream)) {
       return make_error<StringError>("Target does not support MC emission",
                                      inconvertibleErrorCode());

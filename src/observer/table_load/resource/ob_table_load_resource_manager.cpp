@@ -56,10 +56,10 @@ void ObTableLoadResourceManager::ObRefreshAndCheckTask::runTimerTask()
 /**
  * ObTableLoadResourceManager
  */
-ObTableLoadResourceManager::ObTableLoadResourceManager()
-  : refresh_and_check_task_(*this),
-    is_stop_(false),
-    resource_inited_(false),
+ObTableLoadResourceManager::ObTableLoadResourceManager() 
+  : refresh_and_check_task_(*this), 
+    is_stop_(false), 
+    resource_inited_(false), 
     is_inited_(false)
 {
 }
@@ -118,7 +118,7 @@ void ObTableLoadResourceManager::stop()
   }
 }
 
-int ObTableLoadResourceManager::wait()
+int ObTableLoadResourceManager::wait() 
 {
   if (OB_LIKELY(refresh_and_check_task_.is_inited_)) {
     TG_WAIT_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), refresh_and_check_task_);
@@ -127,7 +127,7 @@ int ObTableLoadResourceManager::wait()
   return release_all_resource();
 }
 
-void ObTableLoadResourceManager::destroy()
+void ObTableLoadResourceManager::destroy() 
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -289,7 +289,7 @@ int ObTableLoadResourceManager::release_resource(ObDirectLoadResourceReleaseArg 
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -372,7 +372,7 @@ int ObTableLoadResourceManager::update_resource(ObDirectLoadResourceUpdateArg &a
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -403,7 +403,7 @@ int ObTableLoadResourceManager::gen_update_arg(ObDirectLoadResourceUpdateArg &up
       while (OB_SUCC(result->next())) {
         ObString svr_ip;
         int32_t svr_port = -1;
-        ObAddr addr;
+        ObAddr addr; 
         EXTRACT_VARCHAR_FIELD_MYSQL(*result, "svr_ip", svr_ip);
         EXTRACT_INT_FIELD_MYSQL(*result, "svr_port", svr_port, int32_t);
         if (OB_SUCC(ret)) {
@@ -461,11 +461,11 @@ int ObTableLoadResourceManager::gen_check_res(bool first_check, ObDirectLoadReso
       }
     }
   }
-
+  
   return ret;
 }
 
-void ObTableLoadResourceManager::check_assigned_task(common::ObArray<ObDirectLoadResourceOpRes> &check_res)
+void ObTableLoadResourceManager::check_assigned_task(common::ObArray<ObDirectLoadResourceOpRes> &check_res) 
 {
   int ret = OB_SUCCESS;
   const int64_t bucket_num = 1024;
@@ -542,9 +542,9 @@ void ObTableLoadResourceManager::check_assigned_task(common::ObArray<ObDirectLoa
       if(OB_UNLIKELY(i + 1 >= need_track_array.count())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("need_track_array is error", KR(ret));
-      } else if (OB_UNLIKELY(need_track_array[i] < 0 ||
-                             need_track_array[i] >= check_res.count() ||
-                             need_track_array[i + 1] < 0 ||
+      } else if (OB_UNLIKELY(need_track_array[i] < 0 || 
+                             need_track_array[i] >= check_res.count() || 
+                             need_track_array[i + 1] < 0 || 
                              need_track_array[i + 1] >= check_res[i].assigned_array_.count())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("need_track_array value overflow", KR(ret), K(need_track_array[i]), K(need_track_array[i + 1]));
@@ -641,11 +641,11 @@ int ObTableLoadResourceManager::refresh_and_check(bool first_check)
     }
     check_assigned_task(check_res);
   }
-
+  
   return ret;
 }
 
-int ObTableLoadResourceManager::init_resource()
+int ObTableLoadResourceManager::init_resource() 
 {
   int ret = OB_SUCCESS;
   int64_t retry_time = 0;

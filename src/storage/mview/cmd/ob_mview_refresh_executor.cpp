@@ -47,7 +47,7 @@ void ObMViewRefreshArg::operator()(const ObMViewRefreshArg &other)
 }
 
 ObMViewRefreshExecutor::ObMViewRefreshExecutor()
-  : ctx_(nullptr), arg_(nullptr), session_info_(nullptr), schema_checker_(), tenant_id_(OB_INVALID_TENANT_ID)
+  : ctx_(nullptr), arg_(nullptr), session_info_(nullptr), schema_checker_(), tenant_id_(OB_INVALID_TENANT_ID) 
 {
 }
 
@@ -625,7 +625,7 @@ int ObMViewRefreshExecutor::scheduler_nested_mviews_sync_refresh_(
               need_retry = false;
               // optimise to avoid block other sync refresh
               int tmp_ret = OB_SUCCESS;
-              if (OB_TMP_FAIL(check_register_new_mview_list_(target_mview_id, mview_id, refresh_id,
+              if (OB_TMP_FAIL(check_register_new_mview_list_(target_mview_id, mview_id, refresh_id, 
                               target_data_sync_scn, target_mview_deps, mview_reverse_deps, trans, mv_sets))) {
                 LOG_INFO("fail to register new mview list", K(tmp_ret), K(mview_id), K(mview_info));
               }
@@ -690,7 +690,7 @@ int ObMViewRefreshExecutor::check_register_new_mview_list_(
                             const uint64_t refresh_id,
                             const share::SCN &target_data_sync_scn,
                             const rootserver::MViewDeps &target_mview_deps,
-                            const rootserver::MViewDeps &mview_reverse_deps,
+                            const rootserver::MViewDeps &mview_reverse_deps, 
                             ObMySQLTransaction &trans,
                             hash::ObHashSet<uint64_t> &mv_sets)
 {
@@ -775,7 +775,7 @@ int ObMViewRefreshExecutor::set_session_vars_(
                             ObMViewTransaction &trans)
 {
   int ret = OB_SUCCESS;
-  const uint64_t tenant_id = tenant_id_;
+  const uint64_t tenant_id = tenant_id_; 
   const ObTableSchema *mv_schema = nullptr;
   sql::ObSessionSysVar *collation_connection_var = nullptr;
   sql::ObSessionSysVar *compatibility_version_var = nullptr;
@@ -797,8 +797,8 @@ int ObMViewRefreshExecutor::set_session_vars_(
     } else if (OB_FAIL(trans.get_session_info()->update_sys_variable(
                        collation_connection_var->type_, collation_connection_var->val_))) {
       LOG_WARN("fail to update sys var", K(ret));
-    }
-
+    } 
+    
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(session_vars.get_local_var(ObSysVarClassType::SYS_VAR_OB_COMPATIBILITY_VERSION,
                        compatibility_version_var))) {

@@ -25,7 +25,7 @@ ObExternalTabletCntMap::ObExternalTabletCntMap()
  : is_inited_(false),
    bucket_lock_(),
    ex_tablet_map_()
-{
+{ 
 }
 
 int ObExternalTabletCntMap::init(const int64_t bucket_num, const uint64_t tenant_id)

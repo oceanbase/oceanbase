@@ -198,7 +198,7 @@ int ObGroupJoinBufffer::has_next_left_row(bool &has_next)
       LOG_WARN("left row read and group idx do not match", KR(ret),
                K(left_store_read_), K(left_store_group_idx_.count()));
     } else if (above_group_idx_for_read_ == left_store_group_idx_.at(left_store_read_)) {
-      // above_group_idx_for_read_ < left_store_group_idx_.at(left_store_read_) means the row of above_group_idx_ is end,
+      // above_group_idx_for_read_ < left_store_group_idx_.at(left_store_read_) means the row of above_group_idx_ is end, 
       // need to return iter_end, and rescan current NLJ operator
       // we are still reading results for the current rescan param, need to rescan right child
       has_next = true;
@@ -555,7 +555,7 @@ int ObGroupJoinBufffer::fill_group_buffer()
         save_last_row_ = true;
       }
     }
-    if (OB_SUCC(ret) || (ignore_end && OB_ITER_END == ret)) {
+    if (OB_SUCC(ret) || (ignore_end && OB_ITER_END == ret)) { 
       ret = OB_SUCCESS;
       ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(*ctx_);
       if (OB_FAIL(left_store_.finish_add_row(false))) {
@@ -595,7 +595,7 @@ int ObGroupJoinBufffer::batch_fill_group_buffer(const int64_t max_row_cnt,
       LOG_WARN("backup above params failed", KR(ret));
     }
 
-    // fill group join buffer of current op untill join buffer is full
+    // fill group join buffer of current op untill join buffer is full 
     if (OB_SUCC(ret)) {
       ObEvalCtx::BatchInfoScopeGuard batch_info_guard(*eval_ctx_);
       if (save_last_batch_) {

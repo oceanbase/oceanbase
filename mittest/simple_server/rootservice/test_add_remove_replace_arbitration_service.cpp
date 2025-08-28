@@ -60,7 +60,7 @@ TEST_F(TestAddRemoveReplaceArbitrationService, test_add_remove_replace)
   int over_max_length = OB_MAX_ARBITRATION_SERVICE_LENGTH + 1;
   ObMySQLProxy::MySQLResult res1;
   ObMySQLProxy::MySQLResult res2;
-  ObMySQLProxy::MySQLResult res3;
+  ObMySQLProxy::MySQLResult res3; 
 
   {
     ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("select repeat('1', %d) as str1", almost_max_length));

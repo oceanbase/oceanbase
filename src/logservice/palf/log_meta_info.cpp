@@ -1354,7 +1354,7 @@ int64_t LogSnapshotMeta::get_version_() const
   uint64_t min_data_version = DATA_VERSION_4_3_3_0;
   int64_t version = LOG_SNAPSHOT_META_VERSION;
   if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), min_data_version))) {
-    PALF_LOG(WARN, "GET_MIN_DATA_VERSION failed", KR(ret));
+    PALF_LOG(WARN, "GET_MIN_DATA_VERSION failed", KR(ret)); 
   } else if (min_data_version >= DATA_VERSION_4_3_3_0) {
     version = LOG_SNAPSHOT_META_VERSION_V2;
   } else {

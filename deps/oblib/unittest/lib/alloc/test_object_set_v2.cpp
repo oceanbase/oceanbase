@@ -56,7 +56,7 @@ TEST_F(TestObjectSet, basic)
     objs[i] = alloc_object(size, attr);
     if (NULL != local) {
       ASSERT_EQ(local, objs[i]);
-    } else if (NULL != avail) {
+    } else if (NULL != avail) { 
       ASSERT_EQ(NULL, avail_blist);
       ASSERT_EQ(avail, objs[i]->block());
     }

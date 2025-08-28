@@ -29,7 +29,7 @@ public:
   virtual ~ObExprIsJson();
   virtual int calc_result_typeN(ObExprResType& type,
                                 ObExprResType* types,
-                                int64_t param_num,
+                                int64_t param_num, 
                                 common::ObExprTypeCtx& type_ctx) const override;
   static int get_is_json_option(const ObExpr &expr, ObEvalCtx &ctx, int64_t idx, uint8_t& is_json_mode);
   static int check_is_json(const ObExpr &expr, ObEvalCtx &ctx,

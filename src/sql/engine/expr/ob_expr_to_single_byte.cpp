@@ -105,11 +105,11 @@ int calc_to_single_byte_expr(const ObString &input, const ObCollationType cs_typ
         OZ (ObCharset::wc_mb(cs_type, wc, ptr, buf + buf_len - ptr, length));
         ptr += length;
         LOG_DEBUG("process char", K(ret), K(wc));
-
+        
         return ret;
       };
     };
-
+    
     Functor temp_handler(cs_type, ptr, buf, buf_len);
     ObCharsetType charset_type = ObCharset::charset_type_by_coll(cs_type);
     OZ(ObFastStringScanner::foreach_char(input, charset_type, temp_handler));

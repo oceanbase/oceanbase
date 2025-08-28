@@ -93,13 +93,13 @@ private:
       is_merge_fts_index_ = true;
     }
     bool is_rowkey_doc_scan_in_func_lookup() const
-    {
+    { 
       return is_func_lookup_ && OB_INVALID_ID == curr_func_lookup_idx_;
     }
     TO_STRING_KV(K_(curr_func_lookup_idx), K_(is_func_lookup), K_(curr_merge_fts_idx), K_(is_merge_fts_index));
     int64_t curr_func_lookup_idx_;
     bool is_func_lookup_;
-
+    
     /* used by fts index in index merge */
     int64_t curr_merge_fts_idx_;
     bool is_merge_fts_index_;

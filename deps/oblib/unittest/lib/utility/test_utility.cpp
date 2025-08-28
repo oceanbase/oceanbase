@@ -58,7 +58,7 @@ TEST(utility, load_file_to_string)
   testFile << "test load_file_to_string";
   testFile.close();
   ASSERT_EQ(OB_SUCCESS, load_file_to_string(testPath, alloc, str));
-
+  
   ASSERT_EQ(0, str.ptr()[str.length()]);
 }
 

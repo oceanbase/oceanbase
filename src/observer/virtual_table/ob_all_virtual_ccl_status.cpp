@@ -27,7 +27,7 @@ namespace observer
 
 int ObGetAllCCLStatusOp::operator()(common::hash::HashMapPair<ObFormatSQLIDCCLRuleKey, ObCCLRuleConcurrencyValueWrapper*> &entry) {
   int ret = OB_SUCCESS;
-
+  
   if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator is NULL", K(ret));
@@ -171,3 +171,4 @@ int ObAllVirtualCCLStatus::process_curr_tenant(ObNewRow *&row)
 }
 } //end namespace observer
 } //end namespace oceanbase
+

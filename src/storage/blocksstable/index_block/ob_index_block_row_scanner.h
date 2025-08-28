@@ -293,7 +293,7 @@ public:
                                 ObCSRange &cs_range) override;
   virtual int get_end_key(ObCommonDatumRowkey &endkey) override;
   virtual int64_t get_cur_ps_node_index() { return cur_node_index_; }
-  virtual ObPointerSwizzleNode* get_cur_ps_node() {
+  virtual ObPointerSwizzleNode* get_cur_ps_node() { 
     return idx_data_header_->ps_node_array_ + cur_node_index_;
   }
   INHERIT_TO_STRING_KV("base iterator:", ObRAWIndexBlockRowIterator, "format:", "ObTFMIndexBlockRowIterator", KPC(idx_data_header_));
@@ -326,7 +326,7 @@ public:
   virtual ~ObIndexBlockRowScanner();
   void reuse();
   void reset();
-
+  
   int init(
       const ObStorageDatumUtils &datum_utils,
       ObIAllocator &allocator,

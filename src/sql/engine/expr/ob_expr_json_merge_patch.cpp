@@ -84,7 +84,7 @@ int ObExprJsonMergePatch::calc_result_typeN(ObExprResType& type,
       }
     }
 
-    // returning type : 2
+    // returning type : 2 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ObJsonExprHelper::parse_res_type(types_stack[0], types_stack[2], type, type_ctx))) {
        LOG_WARN("fail to parse res type.", K(ret));
@@ -297,7 +297,7 @@ int ObExprJsonMergePatch::eval_ora_json_merge_patch(const ObExpr &expr, ObEvalCt
     if (has_null) {
       res.set_null();
     } else {
-      ObJsonBuffer* jbuf = nullptr;
+      ObJsonBuffer* jbuf = nullptr; 
       ObString res_string;
       bool is_res_blob = expr.datum_meta_.cs_type_ == CS_TYPE_BINARY && dst_type == ObLongTextType;
 
@@ -323,9 +323,9 @@ int ObExprJsonMergePatch::eval_ora_json_merge_patch(const ObExpr &expr, ObEvalCt
           ObCollationType in_cs_type = CS_TYPE_UTF8MB4_BIN;
           ObCollationType dst_cs_type = expr.obj_meta_.get_collation_type();
           result_str = tmp_val;
-
+          
           if (OB_FAIL(ObJsonExprHelper::convert_string_collation_type(in_cs_type,
-                                                                      dst_cs_type,
+                                                                      dst_cs_type, 
                                                                       &temp_allocator,
                                                                       tmp_val,
                                                                       result_str))) {
@@ -335,14 +335,14 @@ int ObExprJsonMergePatch::eval_ora_json_merge_patch(const ObExpr &expr, ObEvalCt
           }
         }
 
-
+        
         if (OB_SUCC(ret) && is_asc && !is_res_blob /* clob varchar */ ) {
-          if (OB_FAIL(ObJsonExprHelper::character2_ascii_string(&temp_allocator, expr, ctx, tmp_val, 1))) {
+          if (OB_FAIL(ObJsonExprHelper::character2_ascii_string(&temp_allocator, expr, ctx, tmp_val, 1))) { 
             LOG_WARN("fail to transform string 2 ascii character", K(ret));
           }
         }
-
-
+        
+        
         if (is_trunc && dst_type != ObLongTextType) {
           if (tmp_val.length() > dst_len) {
             if (ob_is_string_type(dst_type)) {
@@ -352,7 +352,7 @@ int ObExprJsonMergePatch::eval_ora_json_merge_patch(const ObExpr &expr, ObEvalCt
                                                           tmp_val.length(), dst_len, char_len);
 
               tmp_val.assign_ptr(tmp_val.ptr(), real_dst_len);
-              // compact with oracle:
+              // compact with oracle: 
               if (real_dst_len != dst_len && real_dst_len > 0) {
                 // get last char
                 // must be utf8
@@ -400,7 +400,7 @@ int ObExprJsonMergePatch::eval_ora_json_merge_patch(const ObExpr &expr, ObEvalCt
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("failed to lltostr", K(ret), K(dst_len));
           }
-          if (!err_type) {
+          if (!err_type) { 
             ret = OB_ERR_VALUE_EXCEEDED_MAX;
             LOG_USER_ERROR(OB_ERR_VALUE_EXCEEDED_MAX, static_cast<int>(length), static_cast<int>(dst_len));
           } else {

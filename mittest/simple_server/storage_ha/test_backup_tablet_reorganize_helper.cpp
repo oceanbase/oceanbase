@@ -112,7 +112,7 @@ TEST_F(TestBackupTabletReorganizeHelper, test_reorganize_info)
   LOG_INFO("get leaf children", K(tablet_ids));
 }
 
-} // namespace
+} // namespace 
 } // namespace oceanbase
 
 int main(int argc, char **argv)

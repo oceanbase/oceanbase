@@ -111,7 +111,7 @@ int ObMViewUpdateDepsTask::need_schedule(bool &need_sche)
     }
   }
   LOG_INFO("check mview update deps task need schedule", K(ret), K(need_sche), K(tenant_id_));
-  return ret;
+  return ret; 
 }
 
 void ObMViewUpdateDepsTask::runTimerTask()

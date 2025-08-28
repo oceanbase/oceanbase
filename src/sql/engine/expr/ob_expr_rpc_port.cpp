@@ -47,7 +47,7 @@ int ObExprRpcPort::eval_rpc_port(const ObExpr &expr, ObEvalCtx &ctx,
   int ret = OB_SUCCESS;
   UNUSED(expr);
   UNUSED(ctx);
-  //see
+  //see 
   ObAddr addr = ObCurTraceId::get_addr();
   expr_datum.set_int32(addr.get_port());
   return ret;

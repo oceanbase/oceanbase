@@ -383,7 +383,7 @@ int LogBlockMgr::check_after_truncate_(const char *block_path, const offset_t of
   const int in_read_size = MIN(buf_len, log_block_size_-read_offset);
   const int64_t RETRY_INTERVAL = 10 * 1000;
   OB_ASSERT(backoff < LOG_DIO_ALIGN_SIZE);
-
+  
   do {
     if (OB_FAIL(io_adapter_->open(block_path, LOG_READ_FLAG, FILE_OPEN_MODE, io_fd))) {
       PALF_LOG(ERROR, "open by io_adapter failed", KPC(this), K(block_path));
@@ -392,7 +392,7 @@ int LogBlockMgr::check_after_truncate_(const char *block_path, const offset_t of
       ret = OB_SUCCESS;
     }
   } while (OB_FAIL(ret));
-
+  
   if (OB_FAIL(ret)) {
   } else if (NULL == (expected_data = \
       reinterpret_cast<char*>(ob_malloc(buf_len, "LogBlockMgr")))) {
@@ -416,7 +416,7 @@ int LogBlockMgr::check_after_truncate_(const char *block_path, const offset_t of
   } else {
     PALF_LOG(INFO, "check_after_truncate_ success", KPC(this), K(block_path), K(offset));
   }
-
+  
   if (!io_fd.is_valid() && OB_FAIL(io_adapter_->close(io_fd))) {
     PALF_LOG(ERROR, "io_adapter close failed", KPC(this), K(block_path));
   }

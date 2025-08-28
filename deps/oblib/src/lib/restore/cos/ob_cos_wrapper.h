@@ -61,7 +61,7 @@ OB_PUBLIC_API int ob_set_retry_headers(
 static constexpr int MAX_TAGGING_STR_LEN = 16;
 
 // COS domain name structure: bucket_name-appid.endpoint
-struct OB_PUBLIC_API ObCosAccount
+struct OB_PUBLIC_API ObCosAccount 
 {
   // max domain length
   static constexpr int MAX_COS_DOMAIN_LENGTH = 1536;
@@ -85,15 +85,15 @@ struct OB_PUBLIC_API ObCosAccount
   // cos object delete mode
   char delete_mode_[MAX_TAGGING_STR_LEN];
 
-  ObCosAccount()
+  ObCosAccount() 
   {
     memset(this, 0, sizeof(*this));
   }
 
   ~ObCosAccount() {}
 
-  void clear()
-  {
+  void clear() 
+  { 
     memset(this, 0, sizeof(*this));
   }
 
@@ -125,7 +125,7 @@ struct OB_PUBLIC_API CosStringBuffer
 
   ~CosStringBuffer() {}
 
-  bool empty() const
+  bool empty() const 
   {
     return NULL == data_ || 0 >= size_;
   }
@@ -152,7 +152,7 @@ struct OB_PUBLIC_API CosStringBuffer
   {
     return (!empty() && '\0' == data_[size_ - 1]) ? size_ - 1 : size_;
   }
-
+  
   int get_safe_str_len() const
   {
     return data_ != nullptr ? strlen(data_) : 0;
@@ -176,7 +176,7 @@ struct OB_PUBLIC_API CosStringBuffer
   {
     return (NULL != data_ && size_ >= 2 && data_[size_ - 1] == '\0' && data_[size_ - 2] == '/');
   }
-
+  
   bool is_null_or_end_with_slash() const
   {
     return (NULL == data_ || (is_end_with_slash_and_null()));
@@ -204,7 +204,7 @@ struct OB_PUBLIC_API CosObjectMeta
 
   ~CosObjectMeta() {}
 
-  void reset()
+  void reset() 
   {
     memset(this, 0, sizeof(*this));
     file_length_ = -1;
@@ -266,7 +266,7 @@ public:
     Handle *h,
     const CosStringBuffer &bucket_name,
     const CosStringBuffer &object_name);
-
+  
   static int batch_del(
     Handle *h,
     const CosStringBuffer &bucket_name,
@@ -275,14 +275,14 @@ public:
     int64_t *succeed_deleted_objects_len_list,
     const int64_t n_objects_to_delete,
     int64_t &n_succeed_deleted_objects);
-
+  
   // Tag one object from cos
   static int tag(
     Handle *h,
     const CosStringBuffer &bucket_name,
     const CosStringBuffer &object_name);
 
-
+  
   // Delete all objects that match the same dir_name prefix.
   static int del_objects_in_dir(
     Handle *h,
@@ -324,7 +324,7 @@ public:
     const CosStringBuffer &bucket_name,
     const CosStringBuffer &object_name,
     bool &is_tagging);
-
+  
   struct CosListObjPara
   {
     enum class CosListType
@@ -334,7 +334,7 @@ public:
       COS_PART_LIST_CTX
     };
 
-    CosListObjPara()
+    CosListObjPara() 
       : arg_(NULL), cur_obj_full_path_(NULL),
         full_path_size_(0), cur_object_size_str_(NULL), cur_object_size_str_len_(0),
         next_flag_(false), type_(CosListType::COS_LIST_INVALID),
@@ -349,7 +349,7 @@ public:
         const int64_t full_path_size,
         char *object_size_str,
         const int64_t object_size_len);
-
+    
     void *arg_;
     char *cur_obj_full_path_;
     struct dirent last_container_name_;
@@ -434,7 +434,7 @@ public:
     const CosStringBuffer &bucket_name,
     const CosStringBuffer &object_name,
     const CosStringBuffer &upload_id_str);
-
+  
   static int del_unmerged_parts(
     Handle *h,
     const CosStringBuffer &bucket_name,

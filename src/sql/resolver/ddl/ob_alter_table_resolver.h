@@ -110,7 +110,7 @@ private:
       share::schema::ObSchemaGetterGuard *schema_guard,
       const obrpc::ObCreateForeignKeyArg &foreign_key_arg);
   int resolve_alter_table_option_list(const ParseNode &node);
-  int check_drop_column_is_partition_key(const ObTableSchema &table_schema,
+  int check_drop_column_is_partition_key(const ObTableSchema &table_schema, 
                                          const ObString &column_name);
 
   int set_column_collation(share::schema::AlterColumnSchema &alter_column_schema);
@@ -177,9 +177,9 @@ private:
                              const share::schema::ObTableSchema &orig_table_schema);
   int resolve_rename_subpartition(const ParseNode &node,
                              const share::schema::ObTableSchema &orig_table_schema);
-  int resolve_alter_partition_storage_cache_policy(const ParseNode &node,
+  int resolve_alter_partition_storage_cache_policy(const ParseNode &node, 
                                                   const share::schema::ObTableSchema &orig_table_schema);
-  int resolve_alter_subpartition_storage_cache_policy(const ParseNode &node,
+  int resolve_alter_subpartition_storage_cache_policy(const ParseNode &node, 
                                                      const share::schema::ObTableSchema &orig_table_schema);
   int check_subpart_name(const share::schema::ObPartition &partition,
                          const share::schema::ObSubPartition &subpartition);

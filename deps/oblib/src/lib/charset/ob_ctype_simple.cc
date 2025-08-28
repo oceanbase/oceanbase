@@ -224,7 +224,7 @@ longlong ob_strntoll_8bit(const ObCharsetInfo *cs __attribute__((unused)),
   ulonglong cut_off;
   unsigned int cut_lim;
   const char *s = nptr, *e = nptr+l, *save;
-  *err= 0;
+  *err= 0;  
 
   while (s<e && ob_isspace(cs,*s)) {
     s++;
@@ -310,7 +310,7 @@ ulonglong ob_strntoull_8bit(const ObCharsetInfo *cs,
   ulonglong cut_off;
   unsigned int cut_lim;
   const char *s = nptr, *e = nptr + l, *save;
-  *err= 0;
+  *err= 0;   
 
   while (s<e && ob_isspace(cs,*s)) {
     s++;
@@ -698,11 +698,11 @@ bool ob_like_range_simple(const ObCharsetInfo *cs,
 
   for (; ptr != end && min_str != min_end && charlen > 0 ; ptr++, charlen--) {
     if (*ptr == escape_char && ptr+1 != end) {
-      ptr++;
+      ptr++;       
       *min_str++= *max_str++ = *ptr;
       continue;
     } else if (*ptr == w_one) {
-      *min_str++='\0';
+      *min_str++='\0';      
       *max_str++= (char) cs->max_sort_char;
       continue;
     } else if (*ptr == w_many) {
@@ -923,7 +923,7 @@ static size_t ob_strnxfrm_simple(const ObCharsetInfo* cs __attribute__((unused))
   const unsigned char *remainder;
   size_t frmlen;
   frmlen = dstlen > nweights ? nweights : dstlen;
-  frmlen = frmlen > srclen ? srclen : frmlen;
+  frmlen = frmlen > srclen ? srclen : frmlen; 
   end = src + frmlen;
   remainder = src + (frmlen % 8);
   *is_valid_unicode = 1;

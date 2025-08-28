@@ -229,7 +229,7 @@ int ObLogSet::compute_fd_item_set()
 }
 
 // just ignore table fd item now
-// todo: adjust log set fd, convert child fd set to currnet level stmt
+// todo: adjust log set fd, convert child fd set to currnet level stmt 
 int ObLogSet::append_child_fd_item_set(ObFdItemSet &all_fd_item_set, const ObFdItemSet &child_fd_item_set)
 {
   int ret = OB_SUCCESS;
@@ -339,7 +339,7 @@ int ObLogSet::compute_sharding_info()
     strong_sharding_ = get_plan()->get_optimizer_context().get_distributed_sharding();
   } else if (DistAlgo::DIST_NONE_HASH == set_dist_algo_) {
     is_partition_wise_ = false;
-    strong_sharding_ = first_child->get_strong_sharding();
+    strong_sharding_ = first_child->get_strong_sharding();    
     inherit_sharding_index_ = ObLogicalOperator::first_child;
   } else if (DistAlgo::DIST_HASH_NONE == set_dist_algo_) {
     is_partition_wise_ = false;
@@ -361,7 +361,7 @@ int ObLogSet::compute_sharding_info()
     is_partition_wise_ = false;
     strong_sharding_ = first_child->get_strong_sharding();
     inherit_sharding_index_ = ObLogicalOperator::first_child;
-  } else if (DistAlgo::DIST_HASH_LOCAL_PARTITION == set_dist_algo_ ||
+  } else if (DistAlgo::DIST_HASH_LOCAL_PARTITION == set_dist_algo_ || 
              DistAlgo::DIST_PARTITION_HASH_LOCAL == set_dist_algo_) {
     strong_sharding_ = get_plan()->get_optimizer_context().get_distributed_sharding();
   } else if (OB_FAIL(ObLogicalOperator::compute_sharding_info())) {
@@ -515,15 +515,15 @@ int ObLogSet::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_c
     LOG_WARN("failed to get re est cost infos", K(ret));
   } else if (is_recursive_union() || !is_set_distinct()) {
     ObCostMergeSetInfo cost_info(cost_infos, get_set_op(), stmt->get_select_item_size());
-    if (OB_FAIL(ObOptEstCost::cost_union_all(cost_info,
-                                             op_cost,
+    if (OB_FAIL(ObOptEstCost::cost_union_all(cost_info, 
+                                             op_cost, 
                                              get_plan()->get_optimizer_context()))) {
       LOG_WARN("estimate cost of SET operator failed", K(ret));
     }
   } else if (MERGE_SET == set_algo_) {
     ObCostMergeSetInfo cost_info(cost_infos, get_set_op(), stmt->get_select_item_size());
-    if (OB_FAIL(ObOptEstCost::cost_merge_set(cost_info,
-                                             op_cost,
+    if (OB_FAIL(ObOptEstCost::cost_merge_set(cost_info, 
+                                             op_cost, 
                                              get_plan()->get_optimizer_context()))) {
       LOG_WARN("estimate cost of SET operator failed", K(ret));
     }
@@ -539,8 +539,8 @@ int ObLogSet::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_c
                                        cost_infos.at(1).rows_, cost_infos.at(1).width_,
                                        get_set_op(), select_exprs,
                                        NULL, NULL /* no need for hash set*/ );
-      if (OB_FAIL(ObOptEstCost::cost_hash_set(hash_cost_info,
-                                              op_cost,
+      if (OB_FAIL(ObOptEstCost::cost_hash_set(hash_cost_info, 
+                                              op_cost, 
                                               get_plan()->get_optimizer_context()))) {
         LOG_WARN("Fail to calcuate hash set cost", K(ret));
       }
@@ -609,7 +609,7 @@ int ObLogSet::allocate_granule_pre(AllocGIContext &ctx)
     LOG_TRACE("in find partition wise state", K(ctx));
   } else if (DistAlgo::DIST_SET_PARTITION_WISE == set_dist_algo_
              && CLUSTER_VERSION_4_3_5_2 > GET_MIN_CLUSTER_VERSION()) {
-    // BLOCK GI for set partition is not supported before version 4352
+    // BLOCK GI for set partition is not supported before version 4352 
     if (!ctx.is_in_partition_wise_state() &&
         !ctx.is_in_pw_affinity_state()) {
       ctx.set_in_partition_wise_state(this);
@@ -891,8 +891,8 @@ int ObLogSet::construct_pq_set_hint(ObPQSetHint &hint)
         }
       }
     }
-    if (OB_SUCC(ret) && OB_FAIL(hint.set_pq_set_hint(set_dist_algo_,
-                                                     get_num_of_child(),
+    if (OB_SUCC(ret) && OB_FAIL(hint.set_pq_set_hint(set_dist_algo_, 
+                                                     get_num_of_child(), 
                                                      random_none_idx))) {
       LOG_WARN("failed to get dist methods", K(ret), K(set_dist_algo_), K(random_none_idx));
     }

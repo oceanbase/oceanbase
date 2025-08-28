@@ -1362,7 +1362,7 @@ int ObJoinFilterOp::init_material_parameters()
 
   // Consistent with build_row in hash join
   // eg: join cond is cast(left_table.c1) = right_table.c2, in hash join will material expr
-  // cast(left_table.c1) into build_row, so need to use build_rows_output_.
+  // cast(left_table.c1) into build_row, so need to use build_rows_output_. 
   if (OB_FAIL(ret)) {
   } else {
     const ObHashJoinVecSpec *hj_spec = static_cast<const ObHashJoinVecSpec *>(&parent_->get_spec());
@@ -1747,7 +1747,7 @@ int ObJoinFilterOp::fill_in_filter(const ObBatchRows &brs, uint64_t *hash_join_h
 int ObJoinFilterOp::build_ndv_info_before_aggregate(ObTMArray<ObJoinFilterNdv *> &ndv_info)
 {
   int ret = OB_SUCCESS;
-  // 1.set infomation which used to check if *in filter* active
+  // 1.set infomation which used to check if *in filter* active 
   if (nullptr == in_vec_msg_ || !in_vec_msg_->is_active()) {
     dh_ndv_.in_filter_active_ = false;
   } else {
@@ -2021,7 +2021,7 @@ int ObJoinFilterOp::open_join_filter_use()
             LOG_WARN("failed to assign hash_func");
           } else if (OB_FAIL(join_filter_ctx->cmp_funcs_.assign(MY_SPEC.cmp_funcs_))) {
             LOG_WARN("failed to assign cmp_funcs_");
-          } else if (ObP2PDatahubMsgBase::IN_FILTER_MSG == dh_msg_type &&
+          } else if (ObP2PDatahubMsgBase::IN_FILTER_MSG == dh_msg_type && 
               OB_FAIL(join_filter_ctx->cur_row_.prepare_allocate(MY_SPEC.cmp_funcs_.count()))) {
             LOG_WARN("failed to prepare_allocate cur_row_");
           } else if (spec_.use_rich_format_
@@ -2309,3 +2309,6 @@ int ObJoinFilterOp::close_join_filter_use()
   /*do nothing*/
   return ret;
 }
+
+
+

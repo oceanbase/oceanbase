@@ -195,7 +195,7 @@ int ObSqlUDT::set_null_bitmap(uint32_t index, bool is_null)
 
 // implement udt meta serialization
 // Notice: no deep copy in ObSqlUDTMeta serialzie/desrialize,
-// deep copy is done when subschema mapping serialzie/desriazlied
+// deep copy is done when subschema mapping serialzie/desriazlied 
 int ObSqlUDTMeta::deep_copy(ObIAllocator &allocator, ObSqlUDTMeta *&dst) const
 {
   int ret = OB_SUCCESS;

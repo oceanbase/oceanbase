@@ -181,7 +181,7 @@ int ObTempTableAccessOp::inner_rescan()
     while (!is_end && OB_SUCC(ret)) {
       if (OB_FAIL(check_status())) {
         LOG_WARN("check status failed", K(ret));
-      } else
+      } else 
       if (OB_FAIL(MY_INPUT.check_finish(is_end, index))) {
         LOG_WARN("failed to check finish.", K(ret));
       } else if (!is_end) {
@@ -192,7 +192,7 @@ int ObTempTableAccessOp::inner_rescan()
       }
     }
   }
-  if (OB_SUCC(ret) &&
+  if (OB_SUCC(ret) && 
       OB_FAIL(ObOperator::inner_rescan())) {
     LOG_WARN("failed to rescan", K(ret));
   }

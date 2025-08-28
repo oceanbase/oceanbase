@@ -103,3 +103,4 @@ bool FetchCtxMapHBFunc::operator()(const logservice::TenantLSID &tls_id, LSFetch
 
 } // namespace logfetcher
 } // namespace oceanbase
+

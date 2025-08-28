@@ -84,7 +84,7 @@ public:
       const char *buf,
       const int64_t buf_size);
   int remove_idempotence_checker();
-  TO_STRING_KV(K_(is_inited), K_(ls_id), K_(tablet_id),
+  TO_STRING_KV(K_(is_inited), K_(ls_id), K_(tablet_id), 
       K_(max_freeze_scn),
       K_(head), K_(tail), K_(ref_cnt));
 

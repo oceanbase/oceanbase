@@ -206,7 +206,7 @@ int ObTabletCreateSSTableParam::init_for_empty_major_sstable(const ObTabletID &t
 {
   int ret = OB_SUCCESS;
   set_init_value_for_column_store_();
-  if (OB_UNLIKELY(!storage_schema.is_valid() || !tablet_id.is_valid()
+  if (OB_UNLIKELY(!storage_schema.is_valid() || !tablet_id.is_valid() 
       || OB_INVALID_VERSION == snapshot_version)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(storage_schema), K(snapshot_version));
@@ -366,7 +366,7 @@ int ObTabletCreateSSTableParam::init_for_split_empty_minor_sstable(const ObTable
   full_column_cnt_ = 0;
   column_group_cnt_ = 1;
   return ret;
-}
+}                                                          
 
 int ObTabletCreateSSTableParam::init_for_transfer_empty_minor_sstable(const common::ObTabletID &tablet_id,
                                                                       const share::SCN &start_scn,
@@ -426,14 +426,14 @@ int ObTabletCreateSSTableParam::init_for_transfer_empty_minor_sstable(const comm
 
   if (OB_FAIL(table_schema.get_encryption_id(encrypt_id_))) {
     LOG_WARN("fail to get encryption id", K(ret), K(table_schema));
-  }
+  } 
 
   if (OB_SUCC(ret) && !is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid param", K(ret), K(*this));
   }
   return ret;
-}
+}                                                                       
 
 int ObTabletCreateSSTableParam::init_for_small_sstable(const blocksstable::ObSSTableMergeRes &res,
                                                        const ObITable::TableKey &table_key,
@@ -935,7 +935,7 @@ int ObTabletCreateSSTableParam::init_for_ss_ddl(blocksstable::ObSSTableMergeRes 
     nested_size_ = res.nested_size_;
     nested_offset_ = res.nested_offset_;
     table_shared_flag_.set_shared_sstable();
-    filled_tx_scn_ = table_key_.get_end_scn();
+    filled_tx_scn_ = table_key_.get_end_scn(); 
     ddl_scn_.set_min();
     sstable_logic_seq_ = 0;
     progressive_merge_round_ = 0;
@@ -1022,7 +1022,7 @@ int ObTabletCreateSSTableParam::init_for_split(const ObTabletID &dst_tablet_id,
     }
   }
   return ret;
-}
+}                                          
 
 int ObTabletCreateSSTableParam::init_for_lob_split(const ObTabletID &new_tablet_id,
                                                    const ObITable::TableKey &table_key,
@@ -1073,7 +1073,7 @@ int ObTabletCreateSSTableParam::init_for_lob_split(const ObTabletID &new_tablet_
 
   if (OB_FAIL(inner_init_with_merge_res(res))) {
     LOG_WARN("fail to inner init with merge res", K(ret), K(res));
-  }
+  } 
   if (OB_SUCC(ret) && table_key.is_major_sstable()) {
     if (OB_FAIL(column_checksums_.assign(res.data_column_checksums_))) {
       LOG_WARN("fill column checksum failed", K(ret), K(res));

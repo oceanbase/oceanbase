@@ -24,7 +24,7 @@ namespace oceanbase
 {
 namespace share
 {
-static const char* LS_BALANCE_TASK_HELPER_OP_ARRAY[] =
+static const char* LS_BALANCE_TASK_HELPER_OP_ARRAY[] = 
 {
   "ALTER_LS", "TRANSFER_BEGIN", "TRANSFER_END"
 };
@@ -80,14 +80,14 @@ int ObBalanceTaskHelperMeta::init(
     ls_group_id_ = ls_group_id;
   }
   return ret;
-}
+} 
 
 bool ObBalanceTaskHelperMeta::is_valid() const
 {
   return task_op_.is_valid()
          && src_ls_.is_valid()
          && OB_INVALID_ID != ls_group_id_;
-}
+} 
 
 void ObBalanceTaskHelperMeta::reset()
 {
@@ -95,7 +95,7 @@ void ObBalanceTaskHelperMeta::reset()
   src_ls_.reset();
   dest_ls_.reset();
   ls_group_id_ = OB_INVALID_ID;
-}
+} 
 
 int ObBalanceTaskHelperMeta::assign(const ObBalanceTaskHelperMeta &other)
 {
@@ -135,7 +135,7 @@ int ObBalanceTaskHelper::init(const uint64_t tenant_id,
     tenant_id_ = tenant_id;
   }
   return ret;
-}
+} 
 
 int ObBalanceTaskHelper::init(const share::SCN &operation_scn,
     const uint64_t tenant_id,
@@ -159,7 +159,7 @@ int ObBalanceTaskHelper::init(const share::SCN &operation_scn,
 bool ObBalanceTaskHelper::is_valid() const
 {
   return operation_scn_.is_valid() && balance_task_helper_meta_.is_valid() && is_valid_tenant_id(tenant_id_);
-}
+} 
 
 int ObBalanceTaskHelper::assign(const ObBalanceTaskHelper &other)
 {
@@ -182,7 +182,7 @@ void ObBalanceTaskHelper::reset()
   operation_scn_.reset();
   balance_task_helper_meta_.reset();
   tenant_id_ = OB_INVALID_TENANT_ID;
-}
+} 
 
 int ObBalanceTaskHelperTableOperator::insert_ls_balance_task(const ObBalanceTaskHelper &ls_balance_task,
                      ObISQLClient &client)

@@ -7,7 +7,7 @@
 // EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
-#define USING_LOG_PREFIX RS
+#define USING_LOG_PREFIX RS 
 #include "ob_backup_base_service.h"
 #include "logservice/ob_log_service.h"
 
@@ -74,7 +74,7 @@ void ObBackupBaseService::destroy()
   if (-1 != tg_id_) {
     TG_STOP(tg_id_);
     {
-      ObThreadCondGuard guard(thread_cond_);
+      ObThreadCondGuard guard(thread_cond_); 
       thread_cond_.broadcast();
     }
     TG_WAIT(tg_id_);
@@ -93,7 +93,7 @@ int ObBackupBaseService::start()
     LOG_WARN("not init", KR(ret));
   } else if (OB_FAIL(TG_REENTRANT_LOGICAL_START(tg_id_))) {
     LOG_WARN("failed to start", KR(ret));
-  }
+  } 
   LOG_INFO("[BACKUP_SERVICE] thread start", K(ret), K(tg_id_), K(thread_name_));
   return ret;
 }
@@ -201,7 +201,7 @@ int ObBackupBaseService::flush(share::SCN &scn)
   return OB_SUCCESS;
 }
 
-int ObBackupBaseService::check_leader()
+int ObBackupBaseService::check_leader() 
 {
   int ret = OB_SUCCESS;
   common::ObRole role;

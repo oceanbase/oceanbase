@@ -140,7 +140,7 @@ TEST_F(TestChekpointDiagnose, diagnose_info) {
   ASSERT_EQ(ret, OB_SUCCESS);
 
   ObMemtableDiagnoseInfo info1;
-  ret = mgr.read_diagnose_info<ObMemtableDiagnoseInfo>(trace_id1, [&](const ObTraceInfo &trace_info, const ObCheckpointDiagnoseKey& key, const ObMemtableDiagnoseInfo &info) -> int {
+  ret = mgr.read_diagnose_info<ObMemtableDiagnoseInfo>(trace_id1, [&](const ObTraceInfo &trace_info, const ObCheckpointDiagnoseKey& key, const ObMemtableDiagnoseInfo &info) -> int { 
       if (key.tablet_id_ == tablet_id1) {
         OB_ASSERT(trace_info.trace_id_ == trace_id1);
         OB_ASSERT(trace_info.memtable_diagnose_info_map_.size() == 2);
@@ -173,7 +173,7 @@ TEST_F(TestChekpointDiagnose, diagnose_info) {
   ret = mgr.update_schedule_dag_time(param3);
   ASSERT_EQ(ret, OB_SUCCESS);
 
-  ret = mgr.read_diagnose_info<ObMemtableDiagnoseInfo>(trace_id2, [&](const ObTraceInfo &trace_info, const ObCheckpointDiagnoseKey& key, const ObMemtableDiagnoseInfo &info) -> int {
+  ret = mgr.read_diagnose_info<ObMemtableDiagnoseInfo>(trace_id2, [&](const ObTraceInfo &trace_info, const ObCheckpointDiagnoseKey& key, const ObMemtableDiagnoseInfo &info) -> int { 
       if (key.tablet_id_ == tablet_id3) {
         OB_ASSERT(trace_info.trace_id_ == trace_id2);
         OB_ASSERT(trace_info.memtable_diagnose_info_map_.size() == 1);

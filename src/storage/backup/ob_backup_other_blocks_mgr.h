@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef _STORAGE_BACKUP_OTHER_BLOCKS_MGR_H_
+#ifndef _STORAGE_BACKUP_OTHER_BLOCKS_MGR_H_ 
 #define _STORAGE_BACKUP_OTHER_BLOCKS_MGR_H_
 
 #include "storage/blocksstable/index_block/ob_sstable_meta_info.h"
@@ -63,7 +63,7 @@ private:
   int get_total_other_block_count_(const common::ObTabletID &tablet_id,
       const blocksstable::ObSSTable &sstable, int64_t &total_count);
   int64_t get_list_count_() const;
-
+  
 private:
   bool is_inited_;
   mutable lib::ObMutex mutex_;

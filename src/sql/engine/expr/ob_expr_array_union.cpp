@@ -29,10 +29,10 @@ namespace oceanbase
 {
 namespace sql
 {
-ObExprArraySetOperation::ObExprArraySetOperation(common::ObIAllocator &alloc,
-                            ObExprOperatorType type,
-                            const char *name,
-                            int32_t param_num,
+ObExprArraySetOperation::ObExprArraySetOperation(common::ObIAllocator &alloc, 
+                            ObExprOperatorType type, 
+                            const char *name, 
+                            int32_t param_num, 
                             int32_t dimension)
                             : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension)
 {
@@ -42,8 +42,8 @@ ObExprArraySetOperation::~ObExprArraySetOperation()
 {
 }
 
-int ObExprArraySetOperation::calc_result_type2(ObExprResType &type,
-                                ObExprResType &type1,
+int ObExprArraySetOperation::calc_result_type2(ObExprResType &type, 
+                                ObExprResType &type1, 
                                 ObExprResType &type2,
                                 common::ObExprTypeCtx &type_ctx) const
 {
@@ -79,10 +79,10 @@ int ObExprArraySetOperation::calc_result_type2(ObExprResType &type,
     LOG_WARN("invalid collection type", K(ret), K(coll_type2->type_id_));
   } else if (OB_FAIL(ObExprResultTypeUtil::get_array_calc_type(exec_ctx, deduce_type, type2, deduce_type))) {
     LOG_WARN("deduce calc type failed", K(ret));
-  } else if (OB_FAIL(ObArrayExprUtils::get_array_element_type(exec_ctx,
-                                          deduce_type.get_subschema_id(),
-                                          res_elem_type,
-                                          depth,
+  } else if (OB_FAIL(ObArrayExprUtils::get_array_element_type(exec_ctx, 
+                                          deduce_type.get_subschema_id(), 
+                                          res_elem_type, 
+                                          depth, 
                                           is_vec))) {
       LOG_WARN("failed to get result element type", K(ret));
   } else if (is_vec) {
@@ -123,11 +123,11 @@ int ObExprArraySetOperation::calc_result_typeN(ObExprResType& type,
     } else if (coll_type->type_id_ != ObNestedType::OB_ARRAY_TYPE && coll_type->type_id_ != ObNestedType::OB_VECTOR_TYPE) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("invalid collection type", K(ret), K(coll_type->type_id_));
-    } else if (i > 0
-              && !is_null_res
-              && OB_FAIL(ObExprResultTypeUtil::get_array_calc_type(exec_ctx,
-                                                  deduce_type,
-                                                  types_stack[i],
+    } else if (i > 0 
+              && !is_null_res 
+              && OB_FAIL(ObExprResultTypeUtil::get_array_calc_type(exec_ctx, 
+                                                  deduce_type, 
+                                                  types_stack[i], 
                                                   deduce_type))) {
       LOG_WARN("deduce calc type failed", K(ret));
     }
@@ -139,10 +139,10 @@ int ObExprArraySetOperation::calc_result_typeN(ObExprResType& type,
     uint32_t depth = 0;
     ObDataType res_elem_type;
     bool is_vec = false;
-    if (OB_FAIL(ObArrayExprUtils::get_array_element_type(exec_ctx,
-                                      deduce_type.get_subschema_id(),
-                                      res_elem_type,
-                                      depth,
+    if (OB_FAIL(ObArrayExprUtils::get_array_element_type(exec_ctx, 
+                                      deduce_type.get_subschema_id(), 
+                                      res_elem_type, 
+                                      depth, 
                                       is_vec))) {
       LOG_WARN("failed to get result element type", K(ret));
     } else if (is_vec) {
@@ -158,9 +158,9 @@ int ObExprArraySetOperation::calc_result_typeN(ObExprResType& type,
   return ret;
 }
 
-int ObExprArraySetOperation::eval_array_set_operation(const ObExpr &expr,
-                                ObEvalCtx &ctx,
-                                ObDatum &res,
+int ObExprArraySetOperation::eval_array_set_operation(const ObExpr &expr, 
+                                ObEvalCtx &ctx, 
+                                ObDatum &res, 
                                 SetOperation operation)
 {
   int ret = OB_SUCCESS;
@@ -179,22 +179,22 @@ int ObExprArraySetOperation::eval_array_set_operation(const ObExpr &expr,
       src_arr[i] = NULL;
       if (subschema_id != expr.args_[i]->obj_meta_.get_subschema_id()) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("subschema id is not match",
-            K(ret),
-            K(subschema_id),
+        LOG_WARN("subschema id is not match", 
+            K(ret), 
+            K(subschema_id), 
             K(expr.args_[i]->obj_meta_.get_subschema_id()));
       } else if (OB_FAIL(expr.args_[i]->eval(ctx, datum))) {
         LOG_WARN("failed to eval args", K(ret));
       } else if (datum->is_null()) {
         is_null_res = true;
-      } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator,
-                                              ctx,
-                                              subschema_id,
-                                              datum->get_string(),
+      } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, 
+                                              ctx, 
+                                              subschema_id, 
+                                              datum->get_string(), 
                                               src_arr[i]))) {
         LOG_WARN("construct array obj failed", K(ret));
       }
-    }
+    }  
   }
   if (OB_FAIL(ret)) {
   } else if (is_null_res) {
@@ -212,10 +212,10 @@ int ObExprArraySetOperation::eval_array_set_operation(const ObExpr &expr,
   }
   if (!is_null_res && OB_SUCC(ret)) {
     ObString res_str;
-    if (OB_FAIL(ObArrayExprUtils::set_array_res(res_arr,
-                                      res_arr->get_raw_binary_len(),
-                                      expr,
-                                      ctx,
+    if (OB_FAIL(ObArrayExprUtils::set_array_res(res_arr, 
+                                      res_arr->get_raw_binary_len(), 
+                                      expr, 
+                                      ctx, 
                                       res_str))) {
       LOG_WARN("get array binary string failed", K(ret));
     } else {
@@ -225,10 +225,10 @@ int ObExprArraySetOperation::eval_array_set_operation(const ObExpr &expr,
   return ret;
 }
 
-int ObExprArraySetOperation::eval_array_set_operation_batch(const ObExpr &expr,
-                                ObEvalCtx &ctx,
-                                const ObBitVector &skip,
-                                const int64_t batch_size,
+int ObExprArraySetOperation::eval_array_set_operation_batch(const ObExpr &expr, 
+                                ObEvalCtx &ctx, 
+                                const ObBitVector &skip, 
+                                const int64_t batch_size, 
                                 SetOperation operation)
 {
   int ret = OB_SUCCESS;
@@ -240,7 +240,7 @@ int ObExprArraySetOperation::eval_array_set_operation_batch(const ObExpr &expr,
   ObIArrayType *res_arr = NULL;
   ObIArrayType *src_arr[expr.arg_cnt_];
   ObDatumVector arr_datums[expr.arg_cnt_];
-
+  
   if (ob_is_null(expr.obj_meta_.get_type())) {
     // do nothing
   } else {
@@ -275,7 +275,7 @@ int ObExprArraySetOperation::eval_array_set_operation_batch(const ObExpr &expr,
                                                 src_arr[i]))) {
           LOG_WARN("construct array obj failed", K(ret));
         }
-      } // end for
+      } // end for  
     }
     if (OB_FAIL(ret)) {
     } else if (is_null_res) {
@@ -285,7 +285,7 @@ int ObExprArraySetOperation::eval_array_set_operation_batch(const ObExpr &expr,
         LOG_WARN("failed to except array", K(ret));
       }
     } else if (OB_NOT_NULL(res_arr) && OB_FALSE_IT(res_arr->clear())) {
-    } else if (OB_ISNULL(res_arr)
+    } else if (OB_ISNULL(res_arr) 
               && OB_FAIL(ObArrayExprUtils::construct_array_obj(tmp_allocator, ctx, subschema_id, res_arr, false))) {
       LOG_WARN("construct array obj failed", K(ret));
     } else if (operation == UNIONINZE && OB_FAIL(res_arr->unionize(tmp_allocator, src_arr, expr.arg_cnt_))) {
@@ -317,9 +317,9 @@ int ObExprArraySetOperation::eval_array_set_operation_batch(const ObExpr &expr,
   return ret;
 }
 
-int ObExprArraySetOperation::eval_array_set_operation_vector(const ObExpr &expr,
-                                ObEvalCtx &ctx,
-                                const ObBitVector &skip,
+int ObExprArraySetOperation::eval_array_set_operation_vector(const ObExpr &expr, 
+                                ObEvalCtx &ctx, 
+                                const ObBitVector &skip, 
                                 const EvalBound &bound,
                                 SetOperation operation)
 {
@@ -363,10 +363,10 @@ int ObExprArraySetOperation::eval_array_set_operation_vector(const ObExpr &expr,
           is_null_res = true;
         } else {
           ObString arr_str = arr_vec[i]->get_string(j);
-          if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator,
-                                              ctx,
-                                              subschema_id,
-                                              arr_str,
+          if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator, 
+                                              ctx, 
+                                              subschema_id, 
+                                              arr_str, 
                                               src_arr[i]))) {
             LOG_WARN("construct array obj failed", K(ret));
           }
@@ -381,14 +381,14 @@ int ObExprArraySetOperation::eval_array_set_operation_vector(const ObExpr &expr,
         LOG_WARN("failed to except array", K(ret));
       }
     } else if (OB_NOT_NULL(res_arr) && OB_FALSE_IT(res_arr->clear())) {
-    } else if (OB_ISNULL(res_arr)
+    } else if (OB_ISNULL(res_arr) 
               && OB_FAIL(ObArrayExprUtils::construct_array_obj(tmp_allocator, ctx, subschema_id, res_arr, false))) {
       LOG_WARN("construct array obj failed", K(ret));
     } else if (operation == UNIONINZE && OB_FAIL(res_arr->unionize(tmp_allocator, src_arr, expr.arg_cnt_))) {
       LOG_WARN("failed to union array", K(ret));
     } else if (operation == INTERSECT && OB_FAIL(res_arr->intersect(tmp_allocator, src_arr, expr.arg_cnt_))) {
       LOG_WARN("failed to intersect array", K(ret));
-    }
+    } 
     if (!is_null_res && OB_SUCC(ret)) {
       if (res_format == VEC_DISCRETE) {
         if (OB_FAIL(ObArrayExprUtils::set_array_res<ObDiscreteFormat>(res_arr, expr, ctx, static_cast<ObDiscreteFormat *>(res_vec), j))) {
@@ -420,17 +420,17 @@ int ObExprArrayUnion::eval_array_union(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   return eval_array_set_operation(expr, ctx, res, UNIONINZE);
 }
 
-int ObExprArrayUnion::eval_array_union_batch(const ObExpr &expr,
+int ObExprArrayUnion::eval_array_union_batch(const ObExpr &expr, 
                           ObEvalCtx &ctx,
-                          const ObBitVector &skip,
+                          const ObBitVector &skip, 
                           const int64_t batch_size)
 {
   return eval_array_set_operation_batch(expr, ctx, skip, batch_size, UNIONINZE);
 }
 
-int ObExprArrayUnion::eval_array_union_vector(const ObExpr &expr,
+int ObExprArrayUnion::eval_array_union_vector(const ObExpr &expr, 
                           ObEvalCtx &ctx,
-                          const ObBitVector &skip,
+                          const ObBitVector &skip, 
                           const EvalBound &bound)
 {
   return eval_array_set_operation_vector(expr, ctx, skip, bound, UNIONINZE);
@@ -444,7 +444,7 @@ int ObExprArrayUnion::cg_expr(ObExprCGCtx &expr_cg_ctx,
   UNUSED(raw_expr);
   rt_expr.eval_func_ = eval_array_union;
   rt_expr.eval_batch_func_ = eval_array_union_batch;
-  rt_expr.eval_vector_func_ = eval_array_union_vector;
+  rt_expr.eval_vector_func_ = eval_array_union_vector;   
   return OB_SUCCESS;
 }
 

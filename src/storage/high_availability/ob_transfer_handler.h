@@ -70,20 +70,20 @@ public:
   int offline();
   void online();
   int set_related_info(
-      const share::ObTransferTaskID &task_id,
+      const share::ObTransferTaskID &task_id, 
       const share::SCN &start_scn);
   int get_related_info_task_id(share::ObTransferTaskID &task_id) const;
   int reset_related_info(const share::ObTransferTaskID &task_id);
   int record_error_diagnose_info_in_replay(
-      const share::ObTransferTaskID &task_id,
-      const share::ObLSID &dest_ls_id,
+      const share::ObTransferTaskID &task_id, 
+      const share::ObLSID &dest_ls_id, 
       const int result_code,
       const bool clean_related_info,
       const share::ObStorageHADiagTaskType type,
       const share::ObStorageHACostItemName result_msg);
   int record_error_diagnose_info_in_backfill(
       const share::SCN &log_sync_scn,
-      const share::ObLSID &dest_ls_id,
+      const share::ObLSID &dest_ls_id, 
       const int result_code,
       const ObTabletID &tablet_id,
       const ObMigrationStatus &migration_status,

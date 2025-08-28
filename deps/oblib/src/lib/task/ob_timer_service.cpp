@@ -556,11 +556,11 @@ int ObTimerService::pop_task(int64_t now, TaskToken *&task_token, int64_t &st)
         ++it;
         const int64_t now = ObSysTime::now().toMicroSeconds();
         const int64_t total_delay = now - token->scheduled_time_;
-        bool should_alarm = (total_delay > DELAY_IN_PRI_QUEUE_THREASHOLD)
+        bool should_alarm = (total_delay > DELAY_IN_PRI_QUEUE_THREASHOLD) 
             && (now - token->last_try_pop_time_ > ALARM_INTERVAL);
         if (should_alarm) {
           const int64_t threashold = DELAY_IN_PRI_QUEUE_THREASHOLD;
-          OB_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME,
+          OB_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, 
               "timer task too much delay because the same timer has another running task",
               KPC(token), KPC(running_task_token), K(total_delay), K(threashold), K_(tenant_id));
           token->last_try_pop_time_ = now;
@@ -689,7 +689,7 @@ bool ObTimerService::find_task_in_set(
 
 void ObTimerService::check_clock()
 {
-  // clock safty check. @see
+  // clock safty check. @see 
   const int64_t rt1 = ObTimeUtility::current_time();
   const int64_t rt2 = ObTimeUtility::current_time_coarse();
   const int64_t delta = rt1 > rt2 ? (rt1 - rt2) : (rt2 - rt1);

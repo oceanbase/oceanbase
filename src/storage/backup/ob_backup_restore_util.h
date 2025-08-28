@@ -35,13 +35,13 @@ public:
       const ObBackupMetaIndex &meta_index, ObBackupTabletMeta &tablet_meta);
   static int read_sstable_metas(const common::ObString &path, const share::ObBackupStorageInfo *storage_info, const common::ObStorageIdMod &mod,
       const ObBackupMetaIndex &meta_index, ObBackupMetaKVCache *kv_cache, common::ObIArray<ObBackupSSTableMeta> &sstable_metas);
-  static int read_macro_block_id_mapping_metas(const common::ObString &path, const share::ObBackupStorageInfo *storage_info, const common::ObStorageIdMod &mod,
+  static int read_macro_block_id_mapping_metas(const common::ObString &path, const share::ObBackupStorageInfo *storage_info, const common::ObStorageIdMod &mod, 
       const ObBackupMetaIndex &meta_index, ObBackupMacroBlockIDMappingsMeta &id_mappings_meta);
   static int read_macro_block_data(const common::ObString &path, const share::ObBackupStorageInfo *storage_info, const common::ObStorageIdMod &mod,
-      const ObBackupMacroBlockIndex &macro_index, const int64_t align_size, blocksstable::ObBufferReader &read_buffer,
+      const ObBackupMacroBlockIndex &macro_index, const int64_t align_size, blocksstable::ObBufferReader &read_buffer, 
       blocksstable::ObBufferReader &data_buffer);
   static int read_macro_block_data_with_retry(const common::ObString &path, const share::ObBackupStorageInfo *storage_info, const common::ObStorageIdMod &mod,
-      const ObBackupMacroBlockIndex &macro_index, const int64_t align_size, blocksstable::ObBufferReader &read_buffer,
+      const ObBackupMacroBlockIndex &macro_index, const int64_t align_size, blocksstable::ObBufferReader &read_buffer, 
       blocksstable::ObBufferReader &data_buffer); // max retry count is GCONF._restore_io_max_retry_count
   static int read_ddl_sstable_other_block_id_list_in_ss_mode(
       const share::ObBackupDest &backup_set_dest, const common::ObString &path, const share::ObBackupStorageInfo *storage_info, const ObStorageIdMod &mod,
@@ -57,7 +57,7 @@ private:
   static int prepare_ddl_sstable_other_block_id_reader_(
       const share::ObBackupDest &backup_set_dest, const common::ObString &path, const share::ObBackupStorageInfo *storage_info, const ObStorageIdMod &mod,
       const ObBackupMetaIndex &meta_index, const storage::ObITable::TableKey &table_key, ObBackupLinkedBlockItemReader &reader, bool &has_any_block);
-  static const int64_t READ_MACRO_BLOCK_RETRY_INTERVAL = 1 * 1000 * 1000LL; // 1s
+  static const int64_t READ_MACRO_BLOCK_RETRY_INTERVAL = 1 * 1000 * 1000LL; // 1s      
 };
 
 }  // namespace backup

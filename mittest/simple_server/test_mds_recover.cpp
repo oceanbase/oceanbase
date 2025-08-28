@@ -226,7 +226,7 @@ void advance_checkpoint(share::ObLSID ls_id, share::SCN aim_scn)
   int64_t retry_times = 60;
   SCN checkpoint = SCN::min_scn();
   // 2. 等max_decided_scn推过目标点
-  SCN max_decided_scn;
+  SCN max_decided_scn; 
   do {
     ret = ls_handle.get_ls()->get_max_decided_scn(max_decided_scn);
     ::sleep(1);

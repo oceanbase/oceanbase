@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace storage {
 namespace mds {
 void *DefaultAllocator::alloc(const int64_t size) {
-  void *ptr = std::malloc(size);// ob_malloc(size, "MDS");
+  void *ptr = std::malloc(size);// ob_malloc(size, "MDS"); 
   ATOMIC_INC(&alloc_times_);
   MDS_LOG(DEBUG, "alloc obj", KP(ptr), K(size), K(lbt()));
   return ptr;
@@ -31,7 +31,7 @@ void DefaultAllocator::free(void *ptr) {
   std::free(ptr);// ob_free(ptr);
 }
 void *MdsAllocator::alloc(const int64_t size) {
-  void *ptr = std::malloc(size);// ob_malloc(size, "MDS");
+  void *ptr = std::malloc(size);// ob_malloc(size, "MDS"); 
   ATOMIC_INC(&alloc_times_);
   MDS_LOG(DEBUG, "alloc obj", KP(ptr), K(size), K(lbt()));
   return ptr;
@@ -111,7 +111,7 @@ int construct_tested_mds_table(MdsTableHandle &handle) {
   vector<MdsCtx*> v_ctx;
   for (int i = 0; i < 7; ++i) {
     v_ctx.push_back(new MdsCtx(MdsWriter(transaction::ObTransID(i))));
-  }
+  } 
   if (OB_FAIL(handle.init<UnitTestMdsTable>(MdsAllocator::get_instance(), ObTabletID(1), share::ObLSID(1), share::SCN::min_scn(), (ObTabletPointer*)0x111))) {
   } else if (OB_FAIL(handle.set<ExampleUserData1>(1, *v_ctx[0]))) {
   } else if (FALSE_IT(v_ctx[0]->on_redo(mock_scn(50)))) {
@@ -189,7 +189,7 @@ TEST_F(TestMdsTableFlush, normal_flush) {
   ASSERT_EQ(true, is_flusing);
   ASSERT_EQ(mock_scn(499), handle.p_mds_table_base_->flushing_scn_);
   scan_cnt = 0;
-
+  
   ASSERT_EQ(OB_SUCCESS, (handle.scan_all_nodes_to_dump<ScanRowOrder::ASC, ScanNodeOrder::FROM_OLD_TO_NEW>([&scan_cnt](const MdsDumpKV &kv) -> int {
     scan_cnt++;
     return OB_SUCCESS;

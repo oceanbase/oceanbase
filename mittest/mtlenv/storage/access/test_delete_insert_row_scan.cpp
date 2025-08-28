@@ -1202,7 +1202,7 @@ TEST_F(TestDeleteInsertRowScan, test_multi_version_row_filter)
   ObStorageDatum filter_val;
   filter_val.set_int(5);
   // second column != 5
-  OK(create_pushdown_filter(true,
+  OK(create_pushdown_filter(true, 
                             common::OB_APP_MIN_COLUMN_ID + 1,
                             filter_val,
                             ObWhiteFilterOperatorType::WHITE_OP_NE,
@@ -1942,7 +1942,7 @@ TEST_F(TestDeleteInsertRowScan, test_cross_version_filter)
       "5        -90      0           19     9     DELETE    NORMAL        CLF\n"
       "6        -90      0           19     9     DELETE    NORMAL        CLF\n"
       "7        -90      0           19     9     DELETE    NORMAL        CLF\n"
-      "8        -90      0           19     9     DELETE    NORMAL        CLF\n"
+      "8        -90      0           19     9     DELETE    NORMAL        CLF\n"   
       "9        -90      MIN         19     9     DELETE    NORMAL        SCF\n"
       "9        -90      0           19     9     DELETE    NORMAL        C\n"
       "9        -80      DI_VERSION  19     9     INSERT    NORMAL        CL\n"
@@ -2150,7 +2150,7 @@ TEST_F(TestDeleteInsertRowScan, test_cross_version_partial_filter)
       "1        -80      MIN         19     9     INSERT    NORMAL        SCF\n"
       "1        -80      DI_VERSION  19     9     INSERT    NORMAL        C\n"
       "1        -70      0           9      9     DELETE    NORMAL        CL\n"
-      "5        -90      0           19     9     DELETE    NORMAL        CLF\n"
+      "5        -90      0           19     9     DELETE    NORMAL        CLF\n"  
       "9        -90      MIN         19     9     DELETE    NORMAL        SCF\n"
       "9        -90      0           19     9     DELETE    NORMAL        C\n"
       "9        -80      DI_VERSION  19     9     INSERT    NORMAL        CL\n";
@@ -2304,7 +2304,7 @@ TEST_F(TestDeleteInsertRowScan, test_cross_version_without_filter)
       "5        -90      0           19     9     DELETE    NORMAL        CLF\n"
       "6        -90      0           19     9     DELETE    NORMAL        CLF\n"
       "7        -90      0           19     9     DELETE    NORMAL        CLF\n"
-      "8        -90      0           19     9     DELETE    NORMAL        CLF\n"
+      "8        -90      0           19     9     DELETE    NORMAL        CLF\n"   
       "9        -90      MIN         19     9     DELETE    NORMAL        SCF\n"
       "9        -90      0           19     9     DELETE    NORMAL        C\n"
       "9        -80      DI_VERSION  19     9     INSERT    NORMAL        CL\n"
@@ -2497,7 +2497,7 @@ TEST_F(TestDeleteInsertRowScan, test_multi_sstables_cross_version)
   prepare_data_end(handle1, ObITable::MAJOR_SSTABLE);
   table_store_iter.add_table(handle1.get_table());
   STORAGE_LOG(INFO, "finish prepare sstable1");
-
+  
   // minor sstable 1
   ObTableHandleV2 handle2;
   const char *micro_data2[1];
@@ -2534,7 +2534,7 @@ TEST_F(TestDeleteInsertRowScan, test_multi_sstables_cross_version)
       "12       -140     0           19     9     DELETE    NORMAL        C\n"
       "12       -130     DI_VERSION  19     9     INSERT    NORMAL        C\n"
       "12       -120     0           9      9     DELETE    NORMAL        CL\n";
-
+  
   snapshot_version = 150;
   scn_range.start_scn_.convert_for_tx(100);
   scn_range.end_scn_.convert_for_tx(150);
@@ -2547,7 +2547,7 @@ TEST_F(TestDeleteInsertRowScan, test_multi_sstables_cross_version)
   // minor sstable 3
   ObTableHandleV2 handle4;
   const char *micro_data4[1];
-  micro_data4[0] =
+  micro_data4[0] = 
       "bigint   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
       "6        -110     MIN         9      9     INSERT    NORMAL        SCF\n"
       "6        -110     DI_VERSION  9      9     INSERT    NORMAL        C\n"
@@ -2559,7 +2559,7 @@ TEST_F(TestDeleteInsertRowScan, test_multi_sstables_cross_version)
       "12       -140     0           19     9     DELETE    NORMAL        C\n"
       "12       -130     DI_VERSION  19     9     INSERT    NORMAL        C\n"
       "12       -120     0           9      9     DELETE    NORMAL        CL\n";
-
+  
   snapshot_version = 200;
   scn_range.start_scn_.convert_for_tx(150);
   scn_range.end_scn_.convert_for_tx(200);
@@ -2609,7 +2609,7 @@ TEST_F(TestDeleteInsertRowScan, test_multi_sstables_cross_version)
       "13        9       9    INSERT    NORMAL\n"
       "14        9       9    INSERT    NORMAL\n"
       "15        9       9    INSERT    NORMAL\n";
-
+  
   ret = OB_SUCCESS;
   int64_t count = 0;
   int64_t total_count = 0;
@@ -2730,7 +2730,7 @@ TEST_F(TestDeleteInsertRowScan, test_crossed_minor_and_major)
       "3         19      9    INSERT    NORMAL\n"
       "6         19      9    INSERT    NORMAL\n"
       "7         19      9    INSERT    NORMAL\n";
-
+  
   ret = OB_SUCCESS;
   int64_t count = 0;
   int64_t total_count = 0;

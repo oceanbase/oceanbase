@@ -146,7 +146,7 @@ int ObHbaseTabletMergeIterator::init_cell_iters()
         LOG_WARN("fail to open iter", K(ret));
       } else if (OB_ISNULL(tmp_cell_row_iter = OB_NEWx(ObHbaseCellRowIter, &allocator_, tmp_cell_iter))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to alloc memory", K(ret), K(sizeof(ObHbaseCellRowIter)));
+        LOG_WARN("fail to alloc memory", K(ret), K(sizeof(ObHbaseCellRowIter))); 
       } else {}
 
       if (OB_FAIL(ret)) {

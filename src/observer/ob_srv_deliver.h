@@ -82,9 +82,9 @@ public:
   }
   class Thread : public lib::TGRunnable {
   public:
-    Thread(ObReqQueue &queue, const char *thread_name,
+    Thread(ObReqQueue &queue, const char *thread_name, 
             const uint64_t tenant_id, const uint64_t group_id)
-        : queue_(queue), thread_name_(thread_name),
+        : queue_(queue), thread_name_(thread_name), 
           tenant_id_(tenant_id), group_id_(group_id) {}
     void run1()
     {

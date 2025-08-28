@@ -375,7 +375,7 @@ private:
   int prepare_tablet_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
       const share::ObBackupDataType &backup_data_type, int64_t &count);
   int check_tablet_split_status_(const uint64_t tenant_id, const common::ObTabletID &tablet_id, bool &need_skip_tablet);
-
+  
   // make sure clog checkpoint scn of the returned tablet is >= consistent_scn.
   int get_tablet_handle_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
       ObBackupTabletHandleRef *&tablet_ref, bool &is_split_dst);
@@ -410,7 +410,7 @@ private:
   int check_tablet_status_(const storage::ObTabletHandle &tablet_handle, bool &is_normal, bool &is_split_dst);
   int get_tablet_status_(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, ObTabletStatus &status);
   int get_tenant_meta_index_turn_id_(int64_t &turn_id);
-  int get_tenant_meta_index_retry_id_(const share::ObBackupDataType &backup_data_type,
+  int get_tenant_meta_index_retry_id_(const share::ObBackupDataType &backup_data_type, 
       const int64_t turn_id, int64_t &retry_id);
   int push_item_to_queue_(const ObBackupProviderItem &item);
   int pop_item_from_queue_(ObBackupProviderItem &item);
@@ -469,7 +469,7 @@ private:
   int get_from_ready_list_(common::ObIArray<ObBackupProviderItem> &list);
   int put_to_pending_list_(const common::ObIArray<ObBackupProviderItem> &list);
   bool all_item_is_reused(const common::ObIArray<ObBackupProviderItem> &list) const;
-
+      
 private:
   static const int64_t BATCH_MOVE_COUNT = 128;
   static const int64_t DEFAULT_WAIT_TIME_MS = 10 * 1000;     // 10s
@@ -494,3 +494,4 @@ private:
 }  // namespace oceanbase
 
 #endif
+

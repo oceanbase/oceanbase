@@ -188,7 +188,7 @@ public:
   typedef hash::ObHashMap<uint8_t, ObTestStorageMeta> MetaMap;
   // for object_storage, it is the common prefix
   // for file system, it is the parent dir
-  const char *default_dir = "TestCStorageDir";
+  const char *default_dir = "TestCStorageDir"; 
   const char *default_put_obj = "cs_put";
   const char *default_append_obj = "cs_append.bak";
   const static int64_t default_round = 5;
@@ -250,7 +250,7 @@ private:
   int force_delete_dir(const common::ObString &uri);
   int write_single_file(const common::ObString &uri, const int64_t length, const int64_t buf_len = -1);
   int write_single_file(const common::ObString &uri, const char *buf, const int64_t length);
-  int write_multi_files(const common::ObString &uri, const int64_t length, const int64_t file_num,
+  int write_multi_files(const common::ObString &uri, const int64_t length, const int64_t file_num, 
                         const char *file_prefix, const int64_t start_idx = 0);
   int append_write(const common::ObString &uri, const int64_t offset, const int64_t length);
   int read_single_file(const common::ObString &uri, const int64_t offset, const int64_t length);
@@ -259,7 +259,7 @@ private:
   int get_file_length(const common::ObString &uri, const bool is_adaptive, int64_t &file_length);
   int list_directories(const common::ObString &uri, const bool is_adaptive, common::ObBaseDirEntryOperator &op);
   int list_files(const common::ObString &uri, const bool is_adaptive, common::ObBaseDirEntryOperator &op);
-  int detect_storage_obj_meta(const common::ObString &uri, const bool is_adaptive, const bool need_fragment_meta,
+  int detect_storage_obj_meta(const common::ObString &uri, const bool is_adaptive, const bool need_fragment_meta, 
                               ObStorageObjectMeta &obj_meta);
 
 private:
@@ -274,7 +274,7 @@ private:
 };
 
 TestCommonStorage::TestCommonStorage()
-  : meta_map_(), cur_meta_(nullptr), cur_type_(ObTestStorageType::TEST_STORAGE_INVALID),
+  : meta_map_(), cur_meta_(nullptr), cur_type_(ObTestStorageType::TEST_STORAGE_INVALID), 
     cur_storage_info_(), need_clear_prev_data_(false), need_clear_cur_data_(false)
 {}
 
@@ -357,8 +357,8 @@ int TestCommonStorage::mainly_check(const bool is_basic_situation, const bool cl
     if (OB_UNLIKELY(!meta.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       OB_LOG(WARN, "meta should not be invalid", K(ret), K(meta));
-    } else if (meta.is_obj_type() && OB_FAIL(TestCommonStorageUtil::build_object_storage_info(meta.config_.bucket_,
-               meta.config_.endpoint_, meta.config_.ak_, meta.config_.sk_, meta.config_.region_, meta.config_.appid_,
+    } else if (meta.is_obj_type() && OB_FAIL(TestCommonStorageUtil::build_object_storage_info(meta.config_.bucket_, 
+               meta.config_.endpoint_, meta.config_.ak_, meta.config_.sk_, meta.config_.region_, meta.config_.appid_, 
                meta.config_.checksum_type_, cur_storage_info_))) {
       OB_LOG(WARN, "fail to build object storage info", K(ret), K(meta));
     } else if (meta.is_file_type() && OB_FAIL(TestCommonStorageUtil::build_fs_storage_info(cur_storage_info_))) {
@@ -472,7 +472,7 @@ int TestCommonStorage::check_basic_writer()
     OB_LOG(WARN, "fail to write single file", K(ret), K(uri_buf));
   }
 
-  // mkdir "/parent_path/append_file1.bak/" and write "/parent_path/append_file1.bak/@APD_PART@FORMAT_META"
+  // mkdir "/parent_path/append_file1.bak/" and write "/parent_path/append_file1.bak/@APD_PART@FORMAT_META" 
   if (FAILEDx(build_uri(uri_buf, OB_MAX_URI_LENGTH, "append_file1.bak/"))) {
     OB_LOG(WARN, "fail to build uri", K(ret));
   } else if (OB_FAIL(create_fs_dir(uri_buf, true))) {
@@ -518,7 +518,7 @@ int TestCommonStorage::check_basic_appender()
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -551,7 +551,7 @@ int TestCommonStorage::check_basic_multipartwriter()
         if (OB_SUCC(ret) && OB_FAIL(multiwriter.complete())) {
           OB_LOG(WARN, "fail to complete", K(ret));
         }
-
+        
         int tmp_ret = OB_SUCCESS;
         if (OB_TMP_FAIL(multiwriter.close())) {
           ret = (OB_SUCCESS != ret) ? ret : tmp_ret;
@@ -601,7 +601,7 @@ int TestCommonStorage::check_basic_reader()
   } else if (OB_FAIL(adaptive_read_file(uri_buf, 100/*offset*/, 400))) {
     OB_LOG(WARN, "fail to adaptive read file", K(ret), K(uri_buf));
   }
-
+  
   return ret;
 }
 
@@ -609,7 +609,7 @@ int TestCommonStorage::check_basic_util()
 {
   int ret = OB_SUCCESS;
   /*
-   * Mainly to check these interfaces:
+   * Mainly to check these interfaces: 
    *
    * mkdir、write_single_file、del_dir、is_tagging、is_exist、get_file_length、
    * list_appendable_file_fragments、del_file、detect_storage_obj_meta、
@@ -617,7 +617,7 @@ int TestCommonStorage::check_basic_util()
    */
   char uri_buf[OB_MAX_URI_LENGTH] = { 0 };
   const int64_t buf_len = OB_MAX_URI_LENGTH;
-
+  
   // create dir && delete dir && is_exist
   if (OB_FAIL(build_uri(uri_buf, buf_len, "tmp_dir/"))) {
     OB_LOG(WARN, "fail to build uri", K(ret), K(default_dir));
@@ -869,7 +869,7 @@ int TestCommonStorage::check_abnormal_appender()
     OB_LOG(WARN, "fail to build uri", K(ret));
   } else {
     int tmp_ret = append_write(uri_buf, 100/*offset*/, 200/*length*/);
-    if (cur_type_ == ObTestStorageType::TEST_STORAGE_S3 ||
+    if (cur_type_ == ObTestStorageType::TEST_STORAGE_S3 || 
         cur_type_ == ObTestStorageType::TEST_STORAGE_FS) {
       // nfs can succ, but the file length is 200, cuz nfs open file with O_APPEND
       // s3 can succ, but there won't exist FORMAT_META
@@ -893,7 +893,7 @@ int TestCommonStorage::check_abnormal_appender()
     OB_LOG(WARN, "fail to append write", K(ret), K(uri_buf));
   } else {
     int tmp_ret = append_write(uri_buf, 200/*offset*/, 100/*length*/);
-    if (cur_type_ == ObTestStorageType::TEST_STORAGE_S3 ||
+    if (cur_type_ == ObTestStorageType::TEST_STORAGE_S3 || 
         cur_type_ == ObTestStorageType::TEST_STORAGE_FS) {
       // nfs can succ, but the file length is 200, cuz nfs open file with O_APPEND
       // s3 can succ, but there won't exist FORMAT_META
@@ -1033,7 +1033,7 @@ int TestCommonStorage::build_uri(char *uri_buf, const int64_t buf_len, const cha
     OB_LOG(WARN, "cur meta should not be null", K(ret));
   } else {
     if (cur_meta_->is_file_type()) {
-      if (OB_FAIL(TestCommonStorageUtil::gen_fs_uri(uri_buf, buf_len, cur_meta_->config_.fs_path_,
+      if (OB_FAIL(TestCommonStorageUtil::gen_fs_uri(uri_buf, buf_len, cur_meta_->config_.fs_path_, 
           default_dir, file_name))) {
         OB_LOG(WARN, "fail to gen fs uri", K(ret), K(default_dir));
       }
@@ -1065,7 +1065,7 @@ int TestCommonStorage::delete_listed_objects(const common::ObString &uri)
 }
 
 int TestCommonStorage::create_fs_dir(
-    const common::ObString &uri,
+    const common::ObString &uri, 
     const bool drop_if_exist)
 {
   int ret = OB_SUCCESS;
@@ -1132,7 +1132,7 @@ int TestCommonStorage::remove_empty_dir(const common::ObString &uri)
   } else if (OB_FAIL(util.del_dir(uri))) {
     OB_LOG(WARN, "fail to delete dir", K(ret), K(uri));
   }
-
+  
   bool is_dir_exist = false;
   if (OB_FAIL(util.is_exist(uri, false/*is_adaptive*/, is_dir_exist))) {
     OB_LOG(WARN, "fail to check is_exist", K(ret), K(uri));
@@ -1181,8 +1181,8 @@ int TestCommonStorage::write_single_file(const common::ObString &uri, const char
   } else {
     if (OB_FAIL(writer.write(buf, length))) {
       OB_LOG(WARN, "fail to write", K(ret), K(length), K(uri));
-    }
-
+    } 
+    
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(writer.close())) {
       ret = (OB_SUCCESS != ret) ? ret : tmp_ret;
@@ -1193,9 +1193,9 @@ int TestCommonStorage::write_single_file(const common::ObString &uri, const char
 }
 
 int TestCommonStorage::write_multi_files(
-    const common::ObString &uri,
-    const int64_t length,
-    const int64_t file_num,
+    const common::ObString &uri, 
+    const int64_t length, 
+    const int64_t file_num, 
     const char *file_prefix,
     const int64_t start_idx)
 {
@@ -1329,7 +1329,7 @@ int TestCommonStorage::delete_single_file(const common::ObString &uri)
   } else if (OB_FAIL(util.del_file(uri))) {
     OB_LOG(WARN, "fail to delete file", K(ret), K(uri));
   }
-
+  
   bool is_file_exist = false;
   if (FAILEDx(util.is_exist(uri, false/*is_adaptive*/, is_file_exist))) {
     OB_LOG(WARN, "fail to check is_exist", K(ret), K(uri));
@@ -1414,7 +1414,7 @@ int TestCommonStorage::list_files(const common::ObString &uri, const bool is_ada
 }
 
 int TestCommonStorage::detect_storage_obj_meta(
-    const common::ObString &uri, const bool is_adaptive,
+    const common::ObString &uri, const bool is_adaptive, 
     const bool need_fragment_meta, ObStorageObjectMeta &obj_meta)
 {
   int ret = OB_SUCCESS;

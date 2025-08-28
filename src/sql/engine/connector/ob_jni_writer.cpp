@@ -90,7 +90,7 @@ int JniWriter::do_open() {
       }
     }
   }
-
+  
   return ret;
 }
 int JniWriter::init_jni_table_writer_(JNIEnv *env)
@@ -174,7 +174,7 @@ int JniWriter::init_jni_table_writer_(JNIEnv *env)
         if (OB_FAIL(check_jni_exception_(env))) {
           ret = OB_JNI_ERROR;
           LOG_WARN("failed to initialize a writer instance.", K(ret));
-        }
+        } 
         if (OB_SUCC(ret)) {
           env->DeleteLocalRef(hashmap_object);
           if (OB_FAIL(check_jni_exception_(env))) {
@@ -217,7 +217,7 @@ int JniWriter::init_jni_method_(JNIEnv *env) {
     }
   }
   if (OB_SUCC(ret)) {
-    jni_writer_write_next_brs_ =
+    jni_writer_write_next_brs_ = 
       env->GetMethodID(jni_writer_cls_, "writeNextBrs", "(JI)V");
     if (OB_FAIL(check_jni_exception_(env))) {
       ret = OB_INVALID_ERROR;
@@ -351,7 +351,7 @@ int JniWriter::do_open_record(int block_id) {
     LOG_WARN("get a null jni env", K(ret));
   }
   if (OB_SUCC(ret)) {
-
+    
     env->CallVoidMethod(jni_writer_obj_, jni_writer_open_, block_id);
     if (OB_FAIL(check_jni_exception_(env))) {
       LOG_WARN("failed to open record writer", K(ret));
@@ -488,7 +488,7 @@ int JniWriter::get_session_id(ObIAllocator& outstring_alloc_, ObString& sid) {
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -516,7 +516,7 @@ int JniWriter::finish_write()
 int JniWriter::append_block_id(int64_t block_id)
 {
   int ret = OB_SUCCESS;
-
+ 
   JNIEnv *env = nullptr;
   if (OB_FAIL(get_jni_env(env))) {
     LOG_WARN("failed to get jni env", K(ret));
@@ -536,7 +536,7 @@ int JniWriter::append_block_id(int64_t block_id)
 int JniWriter::commit_session(int64_t num_block)
 {
   int ret = OB_SUCCESS;
-
+ 
   JNIEnv *env = nullptr;
   if (OB_FAIL(get_jni_env(env))) {
     LOG_WARN("failed to get jni env", K(ret));

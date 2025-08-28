@@ -12,13 +12,13 @@
 
 // Define a function type of resource manager
 // Examples:
-//   Defination:
+//   Defination: 
 //     DAG_SCHEDULER_DAG_PRIO_DEF(TEST_FUNCTION)
-//   Use this function type:
+//   Use this function type: 
 //     ObFunctionType func_type = ObFunctionType::PRIO_TEST_FUNCTION
-//   Get function name:
+//   Get function name: 
 //     ObString functiono_name = get_io_function_name(ObFunctionType::PRIO_TEST_FUNCTION)
-//   Check if function name exist:
+//   Check if function name exist: 
 //     bool is_exist = false;
 //     check_if_function_exist("TEST_FUNCTION", is_exist)
 #ifdef OB_RESOURCE_FUNCTION_TYPE_DEF
@@ -76,7 +76,7 @@ int check_if_function_exist(const ObString &function_name, bool &exist);
 class ObResMgrVarcharValue
 {
 public:
-  ObResMgrVarcharValue()
+  ObResMgrVarcharValue() 
   {
     MEMSET(value_buf_, 0, sizeof(value_buf_));
   }
@@ -369,7 +369,7 @@ public:
   }
   int assign(const ObResourceMappingRule &other);
   TO_STRING_KV(K_(tenant_id),
-               K_(group_id),
+               K_(group_id),  
                K_(attr),
                K_(value),
                K_(group));

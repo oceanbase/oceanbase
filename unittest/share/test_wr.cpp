@@ -44,7 +44,7 @@ TEST_F(TestWr, wr_collector_is_can_retry)
   ASSERT_EQ(false, ObWrCollector::is_can_retry(OB_ERR_FUNCTION_UNKNOWN));
   ASSERT_EQ(false, ObWrCollector::is_can_retry(OB_OBJECT_NAME_EXIST));
 
-  // err that can be retried
+  // err that can be retried 
   ASSERT_EQ(true, ObWrCollector::is_can_retry(OB_SCHEMA_EAGAIN));
   ASSERT_EQ(true, ObWrCollector::is_can_retry(OB_LOCATION_NOT_EXIST));
   ASSERT_EQ(true, ObWrCollector::is_can_retry(OB_GTS_NOT_READY));

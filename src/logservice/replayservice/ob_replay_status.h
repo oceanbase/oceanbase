@@ -336,7 +336,7 @@ private:
   //initial log scn when enable replay, logs which scn small than this value should skip replay
   share::SCN base_scn_;
   //for unittest, should be a member not pointer
-  palf::PalfBufferIterator iterator_;
+  palf::PalfBufferIterator iterator_; 
 };
 
 class ObReplayServiceReplayTask : public ObReplayServiceTask

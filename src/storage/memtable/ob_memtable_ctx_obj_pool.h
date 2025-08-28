@@ -18,7 +18,7 @@
 
 namespace oceanbase
 {
-namespace memtable
+namespace memtable 
 {
 
 class ObMemtableCtxObjPool

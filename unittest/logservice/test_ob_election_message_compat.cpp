@@ -176,7 +176,7 @@ int ElectionPrepareRequestMsgMiddleOld::set(const ElectionPriority *priority,
 bool ElectionPrepareRequestMsgMiddleOld::is_buffer_valid() const { return is_buffer_valid_; }
 
 const char *ElectionPrepareRequestMsgMiddleOld::get_priority_buffer() const { return (char*)priority_buffer_; }
-
+  
 common::ObRole ElectionPrepareRequestMsgMiddleOld::get_role() const { return static_cast<common::ObRole>(role_); }
 
 LogConfigVersion ElectionPrepareRequestMsgMiddleOld::get_membership_version() const { return membership_version_; }

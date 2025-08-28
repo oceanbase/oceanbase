@@ -110,7 +110,7 @@ void FakeObScanTable::SetUpTestCase()
   ASSERT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
   MTL(transaction::ObTransService*)->tx_desc_mgr_.tx_id_allocator_ =
     [](transaction::ObTransID &tx_id) { tx_id = transaction::ObTransID(1001); return OB_SUCCESS; };
-
+ 
   ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
 }
 

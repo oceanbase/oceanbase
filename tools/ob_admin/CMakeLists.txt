@@ -72,7 +72,7 @@ add_executable(ob_admin
 
   object_storage_driver_quality/ob_admin_object_storage_driver_quality.h
   object_storage_driver_quality/ob_admin_object_storage_driver_quality.cpp
-  object_storage_driver_quality/ob_admin_object_storage_driver_quality_scene.cpp
+  object_storage_driver_quality/ob_admin_object_storage_driver_quality_scene.cpp 
   object_storage_driver_quality/ob_admin_object_storage_driver_quality_task_handler.cpp
 
   #trx_tool/ob_admin_trx_executor.h
@@ -150,7 +150,7 @@ add_executable(ob_admin
 
   object_storage_driver_quality/ob_admin_object_storage_driver_quality.h
   object_storage_driver_quality/ob_admin_object_storage_driver_quality.cpp
-  object_storage_driver_quality/ob_admin_object_storage_driver_quality_scene.cpp
+  object_storage_driver_quality/ob_admin_object_storage_driver_quality_scene.cpp 
   object_storage_driver_quality/ob_admin_object_storage_driver_quality_task_handler.cpp
 
   #trx_tool/ob_admin_trx_executor.h

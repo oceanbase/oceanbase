@@ -377,11 +377,11 @@ OB_DECLARE_SSE42_SPECIFIC_CODE(
       __m128 va = _mm_loadu_ps(a + i);
       __m128 vb = _mm_loadu_ps(b + i);
 
-      __m128 vbf = _mm_set1_ps(bf);
+      __m128 vbf = _mm_set1_ps(bf); 
       __m128 vb_scaled = _mm_mul_ps(vb, vbf);
 
       __m128 vresult = _mm_add_ps(va, vb_scaled);
-
+      
       _mm_storeu_ps(c + i, vresult);
     }
 
@@ -506,7 +506,7 @@ OB_DECLARE_AVX2_SPECIFIC_CODE(
   }
 
   inline static void fvec_madd(size_t n, const float* a, float bf, const float* b, float* c) {
-    const __m256 vbf = _mm256_set1_ps(bf);
+    const __m256 vbf = _mm256_set1_ps(bf); 
     size_t i = 0;
     for (; i + 15 < n; i += 16) {
         __m256 va0 = _mm256_loadu_ps(a + i);
@@ -1182,3 +1182,4 @@ inline static int l2_square_neon(const float *x, const float *y, const int64_t l
 }  // namespace common
 }  // namespace oceanbase
 #endif
+

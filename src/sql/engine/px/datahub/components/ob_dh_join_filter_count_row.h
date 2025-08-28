@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #pragma once
 
 #include "sql/engine/px/datahub/ob_dh_msg.h"
@@ -76,7 +76,7 @@ public:
 
   TO_STRING_KV(K_(in_filter_active), K_(hllc));
   bool in_filter_active_{false};
-  uint64_t in_filter_ndv_{0};
+  uint64_t in_filter_ndv_{0};   
   // == 435 BP1 Begin to Use ==
   bool use_hllc_estimate_ndv_{false};
   uint64_t bf_ndv_{0};

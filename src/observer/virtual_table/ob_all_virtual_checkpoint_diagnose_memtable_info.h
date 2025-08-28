@@ -41,7 +41,7 @@ friend class GenerateCheckpointUnitRow;
   virtual int inner_get_next_row(common::ObNewRow *&row);
 };
 
-struct GenerateMemtableRow
+struct GenerateMemtableRow 
 {
 public:
   GenerateMemtableRow() = delete;
@@ -50,8 +50,8 @@ public:
   GenerateMemtableRow(ObAllVirtualCheckpointDiagnoseMemtableInfo &virtual_table)
     : virtual_table_(virtual_table)
   {}
-  int operator()(const storage::checkpoint::ObTraceInfo &trace_info,
-      const storage::checkpoint::ObCheckpointDiagnoseKey &key,
+  int operator()(const storage::checkpoint::ObTraceInfo &trace_info, 
+      const storage::checkpoint::ObCheckpointDiagnoseKey &key, 
       const storage::checkpoint::ObMemtableDiagnoseInfo &memtable_diagnose_info) const;
 
 private:
@@ -67,8 +67,8 @@ public:
   GenerateCheckpointUnitRow(ObAllVirtualCheckpointDiagnoseCheckpointUnitInfo &virtual_table)
     : virtual_table_(virtual_table)
   {}
-  int operator()(const storage::checkpoint::ObTraceInfo &trace_info,
-      const storage::checkpoint::ObCheckpointDiagnoseKey &key,
+  int operator()(const storage::checkpoint::ObTraceInfo &trace_info, 
+      const storage::checkpoint::ObCheckpointDiagnoseKey &key, 
       const storage::checkpoint::ObCheckpointUnitDiagnoseInfo &checkpoint_unit_diagnose_info) const;
 
 private:

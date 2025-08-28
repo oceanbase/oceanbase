@@ -20,12 +20,12 @@
 #include "storage/shared_storage/micro_cache/ob_ss_micro_cache_util.h"
 #include "storage/shared_storage/micro_cache/ckpt/ob_ss_linked_phy_block_writer.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace storage
+namespace storage 
 {
 using namespace oceanbase::common;
-class TestSSMicroCacheUtil : public ::testing::Test
+class TestSSMicroCacheUtil : public ::testing::Test 
 {
 public:
   TestSSMicroCacheUtil() {}
@@ -221,7 +221,7 @@ TEST_F(TestSSMicroCacheUtil, test_parse_normal_phy_block)
   const int64_t micro_cnt = 1024;
   const int64_t macro_cnt = 5;
   write_batch_macro_block_data(micro_cnt, macro_cnt);
-
+  
   ObSSPhysicalBlockHandle phy_blk_handle;
   const int64_t phy_blk_idx = 3;
   phy_blk_mgr.get_block_handle(3, phy_blk_handle);

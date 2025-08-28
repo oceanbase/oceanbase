@@ -29,7 +29,7 @@ ObStaticDataStoreDesc::ObStaticDataStoreDesc()
 
 bool ObStaticDataStoreDesc::is_valid() const
 {
-  bool is_valid =
+  bool is_valid = 
          ls_id_.is_valid()
          && tablet_id_.is_valid()
          && compressor_type_ > ObCompressorType::INVALID_COMPRESSOR

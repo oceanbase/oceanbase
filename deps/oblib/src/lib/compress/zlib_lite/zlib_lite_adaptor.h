@@ -17,7 +17,7 @@
 
 namespace oceanbase
 {
-namespace common
+namespace common 
 {
 namespace ZLIB_LITE
 {
@@ -28,14 +28,14 @@ class OB_PUBLIC_API ObZlibLiteAdaptor {
 public:
   using allocator = void *(*)(int64_t);
   using deallocator = void (*)(void *);
-
+  
 public:
   explicit ObZlibLiteAdaptor();
   virtual ~ObZlibLiteAdaptor();
 
   int  init(allocator alloc, deallocator dealloc, int32_t io_thread_count);
   void deinit();
-
+  
   int64_t compress(const char* src_buffer,
                const int64_t src_data_size,
                char* dst_buffer,

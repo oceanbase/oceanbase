@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 void fixed_stack_init(fixed_stack_t* stk)
 {
   stk->top_ = 0;

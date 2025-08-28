@@ -76,16 +76,16 @@ struct ObBatchCreateTabletHelper
 public:
   ObBatchCreateTabletHelper()
     : batch_arg_(),
-      table_schemas_map_(),
+      table_schemas_map_(), 
       auto_part_size_arr_(),
-      result_(common::OB_NOT_MASTER),
+      result_(common::OB_NOT_MASTER), 
       next_(NULL)
   {}
   int init(const share::ObLSID &ls_key,
            const int64_t tenant_id,
            const share::SCN &major_frozen_scn,
            const bool need_check_tablet_cnt);
-  int try_add_table_schema(const share::schema::ObTableSchema *table_schema,
+  int try_add_table_schema(const share::schema::ObTableSchema *table_schema, 
       const uint64_t tenant_data_version,
       const bool need_create_empty_major_sstable,
       int64_t &index,
@@ -134,7 +134,7 @@ const static int64_t BATCH_ARG_SIZE = 1024 * 1024;  // 1M
                   trans_(trans),
                   need_check_tablet_cnt_(false),
                   inited_(false) {}
-
+  
   virtual ~ObTabletCreator();
   int init(const bool need_check_tablet_cnt);
   int execute();

@@ -49,7 +49,7 @@ static constexpr char MINICORE_SCRIPT[] = "if [ -e bin/minicore.py ]; then\n"
 "fi\n"
 "[ $(ls -1 core.*.mini 2>/dev/null | wc -l) -gt 5 ] && ls -1 core.*.mini -t | tail -n 1 | xargs rm -f";
 
-static constexpr char FASTSTACK_SCRIPT[] =
+static constexpr char FASTSTACK_SCRIPT[] = 
 "path_to_obstack=\"bin/obstack\"\n"
 "if [ ! -x \"$path_to_obstack\" ]; then\n"
 "  path_to_obstack=$(command -v obstack)\n"

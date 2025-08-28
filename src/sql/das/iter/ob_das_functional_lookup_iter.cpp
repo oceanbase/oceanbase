@@ -32,7 +32,7 @@ int ObDASFuncLookupIter::inner_init(ObDASIterParam &param)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("inner init das iter with bad param type", K(param), K(ret));
   } else {
-    ObDASFuncLookupIterParam &lookup_param = static_cast<ObDASFuncLookupIterParam&>(param);
+    ObDASFuncLookupIterParam &lookup_param = static_cast<ObDASFuncLookupIterParam&>(param);    
     state_ = LookupState::INDEX_SCAN;
     index_end_ = false;
     default_batch_row_count_ = lookup_param.default_batch_row_count_;
@@ -190,7 +190,7 @@ int ObDASFuncLookupIter::inner_get_next_rows(int64_t &count, int64_t capacity)
     ret = OB_ITER_END;
   } else if (OB_UNLIKELY(default_row_batch_cnt < cap_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected key ranges count", K(default_row_batch_cnt), K(capacity),
+    LOG_WARN("unexpected key ranges count", K(default_row_batch_cnt), K(capacity), 
       K_(cap), K(index_scan_param.key_ranges_.count()), K(ret));
   } else if (OB_FAIL(ObDASLookupIter::inner_get_next_rows(count, capacity))) {
     if (OB_ITER_END != ret) {

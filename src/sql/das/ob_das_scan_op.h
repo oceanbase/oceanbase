@@ -73,7 +73,7 @@ struct ObDASTCBMemProfileKey {
   {
     return (fake_unique_id_ > 0) && (timestamp_ > 0);
   }
-
+  
   uint64_t fake_unique_id_;
   uint64_t timestamp_;
 
@@ -618,3 +618,4 @@ private:
 }  // namespace sql
 }  // namespace oceanbase
 #endif /* OBDEV_SRC_SQL_DAS_OB_DAS_SCAN_OP_H_ */
+

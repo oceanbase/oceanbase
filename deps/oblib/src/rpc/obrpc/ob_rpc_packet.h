@@ -197,7 +197,7 @@ public:
   TO_STRING_KV(K(checksum_), K(pcode_), K(hlen_), K(priority_),
                K(flags_), K(tenant_id_), K(priv_tenant_id_), K(session_id_),
                K(trace_id_), K(timeout_), K_(timestamp), K_(dst_cluster_id), K_(cost_time),
-               K(compressor_type_), K(original_len_), K(src_cluster_id_), K(seq_no_),
+               K(compressor_type_), K(original_len_), K(src_cluster_id_), K(seq_no_), 
                K(data_version_));
 
   ObRpcPacketHeader() { memset(this, 0, sizeof(*this)); flags_ |= (OB_LOG_LEVEL_NONE & OB_LOG_LEVEL_MASK); }

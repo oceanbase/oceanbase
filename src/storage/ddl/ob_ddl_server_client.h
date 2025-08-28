@@ -50,10 +50,10 @@ public:
   static int build_ddl_single_replica_response(const obrpc::ObDDLBuildSingleReplicaResponseArg &arg);
 private:
   static int wait_task_reach_pending(
-      const uint64_t tenant_id,
-      const int64_t task_id,
+      const uint64_t tenant_id, 
+      const int64_t task_id, 
       int64_t &snapshot_version,
-      uint64_t &data_format_version,
+      uint64_t &data_format_version, 
       ObMySQLProxy &sql_proxy,
       bool &is_no_logging);
   static int heart_beat_clear(const int64_t task_id, const uint64_t tenant_id);

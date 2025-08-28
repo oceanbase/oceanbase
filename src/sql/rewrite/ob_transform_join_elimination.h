@@ -200,20 +200,20 @@ private:
                                TableItem *source_table,
                                ObIArray<ObRawExpr *> &join_conditions,
                                ObSqlBitSet<> &right_rel_ids);
-
+  
   int adjust_relation_exprs(const ObSqlBitSet<8, int64_t> &right_rel_ids,
                             const ObIArray<ObRawExpr *> &join_conditions,
                             ObIArray<ObRawExpr *> &relation_exprs,
                             bool &is_valid);
-
+  
   int compute_table_expr_ref_count(const ObSqlBitSet<> &rel_ids,
                                    const ObIArray<ObRawExpr *> &exprs,
                                    int64_t &total_ref_count);
-
+  
   int compute_table_expr_ref_count(const ObSqlBitSet<> &rel_ids,
                                    const ObIArray<ObRawExprPointer> &exprs,
                                    int64_t &total_ref_count);
-
+  
   int compute_table_expr_ref_count(const ObSqlBitSet<> &rel_ids,
                                    const ObRawExpr* exprs,
                                    int64_t &total_ref_count);

@@ -93,7 +93,7 @@ int ObExprPrivSTGeoHash::calc_geohash(ObGeogBox *&gbox, int precision, ObStringB
       // process longitude
       mid = (lon_range[0] + lon_range[1]) / 2;
       if (lon >= mid) {
-        // for compatibility，not using "ObGeoBoxUtil::is_float_gteq" here
+        // for compatibility，not using "ObGeoBoxUtil::is_float_gteq" here 
         ch_index |=  bits_mask[bit];
         lon_range[0] = mid;
       } else {
@@ -103,7 +103,7 @@ int ObExprPrivSTGeoHash::calc_geohash(ObGeogBox *&gbox, int precision, ObStringB
       // process latitute
       mid = (lat_range[0] + lat_range[1]) / 2;
       if (lat >= mid) {
-        // for compatibility，not using "ObGeoBoxUtil::is_float_gteq" here
+        // for compatibility，not using "ObGeoBoxUtil::is_float_gteq" here 
         ch_index |=  bits_mask[bit];
         lat_range[0] = mid;
       } else {
@@ -284,7 +284,7 @@ int ObExprPrivSTGeoHash::process_input_geometry(
       } else {
         precision = static_cast<int>(tmp_prec);
       }
-    }
+    } 
   }
   return ret;
 }
@@ -305,7 +305,7 @@ int ObExprPrivSTGeoHash::eval_priv_st_geohash(const ObExpr &expr, ObEvalCtx &ctx
 
   if (OB_FAIL(process_input_geometry(expr, ctx, temp_allocator, is_null_res, geo, precision))) {
     LOG_WARN("fail to process input geometry", K(ret), K(is_null_res), K(geo), K(precision));
-  }
+  } 
   ObGeoBoostAllocGuard guard(tenant_id);
   lib::MemoryContext *mem_ctx = nullptr;
   if (OB_FAIL(ret)) {

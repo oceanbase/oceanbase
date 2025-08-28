@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #define USING_LOG_PREFIX SQL_PC
 #include "sql/plan_cache/ob_values_table_compression.h"
 #include "sql/resolver/ob_resolver_utils.h"
@@ -699,7 +699,7 @@ void ObValuesTableCompression::skip_space(ObRawSql &raw_sql)
   bool is_space = true;
   while (!raw_sql.search_end_ && is_space && raw_sql.cur_pos_ < raw_sql.raw_sql_len_) {
     if (is_mysql_space(raw_sql.raw_sql_[raw_sql.cur_pos_])) {
-      raw_sql.scan(1);
+      raw_sql.scan(1);																									
     } else {
       is_space = false;
     }
@@ -832,7 +832,7 @@ int ObValuesTableCompression::parser_values_row_str(ObIAllocator &allocator,
         is_first = false;
       } else if (cur_param_count != param_count) {
         LOG_WARN("should not be here", K(ret), K(cur_param_count), K(param_count));
-      }
+      } 
       row_count++;
     }
 
@@ -846,17 +846,17 @@ int ObValuesTableCompression::parser_values_row_str(ObIAllocator &allocator,
         int64_t length = new_pos;
         MEMCPY(buffer, new_no_param_sql.ptr(), length);
         new_sql_len += length;
-
+        
         length = first_sql_end_pos + 1 - old_pos;
         MEMCPY(buffer + new_pos, no_param_sql.ptr() + old_pos, length);
         new_sql_len += length;
         new_pos += length;
         old_pos = end_pos + 1;
-
+        
         length = no_param_sql_len - old_pos;
         MEMCPY(buffer + new_pos, no_param_sql.ptr() + old_pos, length);
         new_sql_len += length;
-
+        
         delta_length = end_pos - first_sql_end_pos;
         new_no_param_sql.assign_ptr(buffer, new_sql_len);
         can_batch_opt = true;

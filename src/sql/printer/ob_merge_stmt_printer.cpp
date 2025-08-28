@@ -28,10 +28,10 @@ int ObMergeStmtPrinter::do_print()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt should not be NULL", K(ret));
   } else {
-    expr_printer_.init(buf_,
-                       buf_len_,
-                       pos_,
-                       schema_guard_,
+    expr_printer_.init(buf_, 
+                       buf_len_, 
+                       pos_, 
+                       schema_guard_, 
                        print_params_,
                        param_store_);
     if (OB_FAIL(print())) {
@@ -64,7 +64,7 @@ int ObMergeStmtPrinter::print()
     }
     if (OB_SUCC(ret) && OB_FAIL(print_temp_table_as_cte())) {
       LOG_WARN("failed to print cte", K(ret));
-    }
+    } 
     DATA_PRINTF("merge ");
     if (OB_SUCC(ret) && print_hint()) {
       LOG_WARN("failed to print hint", K(ret));

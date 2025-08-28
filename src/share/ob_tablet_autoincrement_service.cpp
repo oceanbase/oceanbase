@@ -325,9 +325,9 @@ int ObTabletAutoincrementService::get_autoinc_seq(const uint64_t tenant_id, cons
 }
 
 int ObTabletAutoincrementService::get_autoinc_seq_for_mlog(
-    const uint64_t tenant_id,
+    const uint64_t tenant_id, 
     const ObLSID &ls_id,
-    const common::ObTabletID &tablet_id,
+    const common::ObTabletID &tablet_id, 
     uint64_t &autoinc_seq)
 {
   int ret = OB_SUCCESS;
@@ -367,7 +367,7 @@ int ObTabletAutoincrementService::get_autoinc_seq_for_mlog(
 
   if (OB_SUCC(ret)) {
     bool need_retry = false;
-    const int64_t abs_timeout_us = THIS_WORKER.is_timeout_ts_valid() ?
+    const int64_t abs_timeout_us = THIS_WORKER.is_timeout_ts_valid() ? 
       THIS_WORKER.get_timeout_ts() : ObTimeUtility::current_time() + GCONF.rpc_timeout;
     do {
       need_retry = false;

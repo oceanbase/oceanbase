@@ -150,7 +150,7 @@ private:
    *  2. arraybinding 模式下， 此值代表了 array 的大小
    *  3. exact_fetch + select 模式下， 此值代表了返回结果集的大小
    *  4. 其余场景，此值 > 0 表示需要有结果集返回
-   **/
+   **/ 
   int32_t iteration_count_;
   uint32_t exec_mode_;
   uint32_t close_stmt_count_;

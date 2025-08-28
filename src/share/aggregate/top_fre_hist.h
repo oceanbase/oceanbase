@@ -24,7 +24,7 @@ namespace aggregate
 {
 
 template <VecValueTypeClass in_tc, bool is_merge>
-class TopFreHist final
+class TopFreHist final 
   : public BatchAggregateWrapper<TopFreHist<in_tc, is_merge>>
 {
   static const constexpr int64_t TOPK_HISTOGRAMS_BUF_LENGTH = sizeof(ObTopKFrequencyHistograms);
@@ -50,7 +50,7 @@ public:
     return ret;
   }
 
-  OB_INLINE int add_top_k_frequency_item(RuntimeContext &agg_ctx,
+  OB_INLINE int add_top_k_frequency_item(RuntimeContext &agg_ctx, 
                                          TopFreHistVecExtraResult *extra,
                                          HashFuncTypeForTc hash_func,
                                          const int32_t agg_col_id,
@@ -86,7 +86,7 @@ public:
         SQL_LOG(WARN, "hash func failed", K(ret));
       } else if (OB_FAIL(extra->add_one_batch_item(new_prev_datum.ptr_, new_prev_datum.pack_, hash_val))) {
         SQL_LOG(WARN, "failed to add one batch item", K(ret));
-      }
+      } 
     } else if (in_tc == VEC_TC_STRING) {
       int64_t truncated_str_len = 0;
       truncated_str_len = len;
@@ -194,7 +194,7 @@ public:
     }
     return ret;
   }
-
+  
   inline int add_one_row(RuntimeContext &agg_ctx, int64_t row_num, int64_t batch_size,
                          const bool is_null, const char *data, const int32_t data_len,
                          int32_t agg_col_idx, char *agg_cell) override
@@ -205,14 +205,14 @@ public:
       HashFuncTypeForTc hash_func = VecTCHashCalc<in_tc, ObMurmurHash, true>::hash;
       TopFreHistVecExtraResult *extra = agg_ctx.get_extra_top_fre_hist_store(agg_col_idx, agg_cell);
       if (OB_LIKELY(!is_null)) {
-        if (OB_FAIL(add_top_k_frequency_item(agg_ctx,
-                                             extra,
-                                             hash_func,
-                                             agg_col_idx,
-                                             data,
+        if (OB_FAIL(add_top_k_frequency_item(agg_ctx, 
+                                             extra, 
+                                             hash_func, 
+                                             agg_col_idx, 
+                                             data, 
                                              data_len))) {
           SQL_LOG(WARN, "failed to add top k frequency item", K(ret));
-        } else if (!is_merge &&
+        } else if (!is_merge && 
                    OB_FAIL(extra->flush_batch_rows())) {
           SQL_LOG(WARN, "failed to flush batch rows", K(ret));
         } else if (!is_merge && is_lob_vec_tc()) {
@@ -226,7 +226,7 @@ public:
     return ret;
   }
 
-  inline bool is_lob_vec_tc()
+  inline bool is_lob_vec_tc() 
   {
     return in_tc == VEC_TC_LOB ||
            in_tc == VEC_TC_JSON ||
@@ -251,7 +251,7 @@ public:
     return extra;
   }
 
-  inline int64_t get_batch_calc_info(RuntimeContext &agg_ctx,
+  inline int64_t get_batch_calc_info(RuntimeContext &agg_ctx, 
                                      int32_t agg_col_id,
                                      char *agg_cell) override
   {

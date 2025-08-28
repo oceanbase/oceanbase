@@ -58,18 +58,18 @@ int ObTableLoadBackupTable_V_1_4::scan(int64_t part_idx, ObNewRowIterator *&iter
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(part_idx < 0 || part_idx >= part_list_.count() || subpart_count <= 0 ||
+  } else if (OB_UNLIKELY(part_idx < 0 || part_idx >= part_list_.count() || subpart_count <= 0 || 
                          subpart_idx < 0 || subpart_idx >= subpart_count)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(part_idx), K(part_list_.count()), K(subpart_count),
              K(subpart_idx));
-  } else if (OB_FAIL(databuff_printf(data_buf, OB_MAX_URI_LENGTH, data_pos, "%.*s%.*s/%.*s/",
-                                     data_path_.length(), data_path_.ptr(),
+  } else if (OB_FAIL(databuff_printf(data_buf, OB_MAX_URI_LENGTH, data_pos, "%.*s%.*s/%.*s/", 
+                                     data_path_.length(), data_path_.ptr(), 
                                      part_list_[part_idx].length(), part_list_[part_idx].ptr(),
                                      table_id_.length(), table_id_.ptr()))) {
     LOG_WARN("fail to fill data_buf", KR(ret), K(data_pos), K(part_list_[part_idx]), K(table_id_));
-  } else if (OB_FAIL(databuff_printf(meta_buf, OB_MAX_URI_LENGTH, meta_pos, "%.*s%.*s/%.*s/",
-                                     meta_path_.length(), meta_path_.ptr(),
+  } else if (OB_FAIL(databuff_printf(meta_buf, OB_MAX_URI_LENGTH, meta_pos, "%.*s%.*s/%.*s/", 
+                                     meta_path_.length(), meta_path_.ptr(), 
                                      part_list_[part_idx].length(), part_list_[part_idx].ptr(),
                                      table_id_.length(), table_id_.ptr()))) {
     LOG_WARN("fail to fill meta_buf", KR(ret), K(meta_pos), K(part_list_[part_idx]), K(table_id_));
@@ -78,10 +78,10 @@ int ObTableLoadBackupTable_V_1_4::scan(int64_t part_idx, ObNewRowIterator *&iter
     if (OB_ISNULL(scanner = OB_NEWx(ObTableLoadBackupPartScanner_V_1_4, &allocator))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc memory", KR(ret));
-    } else if (OB_FAIL(scanner->init(storage_info_, column_ids_,
+    } else if (OB_FAIL(scanner->init(storage_info_, column_ids_, 
                                      ObString(data_pos, data_buf), ObString(meta_pos, meta_buf),
                                      subpart_count, subpart_idx))) {
-      LOG_WARN("fail to init iter", KR(ret), K(table_id_), K(subpart_count), K(subpart_idx));
+      LOG_WARN("fail to init iter", KR(ret), K(table_id_), K(subpart_count), K(subpart_idx));  
     } else {
       iter = scanner;
     }
@@ -109,9 +109,9 @@ int ObTableLoadBackupTable_V_1_4::parse_path(const ObString &path)
   } else {
     int64_t pos = 0;
     char buf[OB_MAX_URI_LENGTH];
-    if (OB_FAIL(databuff_printf(buf, OB_MAX_URI_LENGTH, pos, "%.*s",
+    if (OB_FAIL(databuff_printf(buf, OB_MAX_URI_LENGTH, pos, "%.*s", 
                                 path.length(), path.ptr()))) {
-      LOG_WARN("fail to fill buf", KR(ret), K(pos), K(path));
+      LOG_WARN("fail to fill buf", KR(ret), K(pos), K(path));                            
     } else {
       if (buf[pos - 1] != '/') {
         buf[pos++] = '/';
@@ -161,20 +161,20 @@ int ObTableLoadBackupTable_V_1_4::get_column_ids()
   char *file_buf = nullptr;
   int64_t read_size = 0;
   int64_t file_length = 0;
-  if (OB_FAIL(databuff_printf(buf, OB_MAX_URI_LENGTH, pos, "%.*s%.*s_definition",
+  if (OB_FAIL(databuff_printf(buf, OB_MAX_URI_LENGTH, pos, "%.*s%.*s_definition", 
                               meta_path_.length(), meta_path_.ptr(),
                               table_id_.length(), table_id_.ptr()))) {
     LOG_WARN("fail to fill buf", KR(ret), K(meta_path_), K(table_id_));
-  } else if (OB_FAIL(ObTableLoadBackupFileUtil::get_file_length(ObString(pos, buf),
-                                                                &storage_info_,
+  } else if (OB_FAIL(ObTableLoadBackupFileUtil::get_file_length(ObString(pos, buf), 
+                                                                &storage_info_, 
                                                                 file_length))) {
     LOG_WARN("fail to get_file_length", KR(ret), K(ObString(pos, buf)));
   } else if (OB_ISNULL(file_buf = static_cast<char*>(allocator_.alloc(file_length)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", KR(ret), K(file_length));
-  } else if (OB_FAIL(ObTableLoadBackupFileUtil::read_single_file(ObString(pos, buf),
-                                                                 &storage_info_,
-                                                                 file_buf,
+  } else if (OB_FAIL(ObTableLoadBackupFileUtil::read_single_file(ObString(pos, buf), 
+                                                                 &storage_info_, 
+                                                                 file_buf, 
                                                                  file_length,
                                                                  read_size))) {
     LOG_WARN("fail to read_single_file", KR(ret), K(ObString(pos, buf)));

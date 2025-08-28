@@ -505,7 +505,7 @@ int ObAdminDumpMetaBlock::do_dump_(ObAdminDumpIterator &iter,
         LOG_WARN("deserialize log_meta failed", K(ret), K(iter));
       } else {
         ObCStringHelper helper;
-        fprintf(stdout, "BlockID:%s, LSN:%s, SIZE:%ld, META_ENTRY:%s\n",
+        fprintf(stdout, "BlockID:%s, LSN:%s, SIZE:%ld, META_ENTRY:%s\n", 
                 block_name, helper.convert(lsn), total_size, helper.convert(log_meta));
       }
     }

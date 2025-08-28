@@ -310,7 +310,7 @@ int ObStaticEngineExprCG::cg_expr_basic(const ObIArray<ObRawExpr *> &raw_exprs)
     rt_expr->is_static_const_ = raw_expr->is_static_const_expr();
     rt_expr->is_dynamic_const_ = raw_expr->is_dynamic_const_expr();
     rt_expr->is_boolean_ = raw_expr->is_bool_expr();
-    rt_expr->nullable_ = !(raw_expr->is_column_ref_expr()
+    rt_expr->nullable_ = !(raw_expr->is_column_ref_expr() 
                             && (static_cast<ObColumnRefRawExpr *> (raw_expr))->get_result_type().has_result_flag(NOT_NULL_FLAG));
     if (T_OP_ROW != raw_expr->get_expr_type()) {
       // init datum_meta_
@@ -425,7 +425,7 @@ int ObStaticEngineExprCG::cg_expr_basic(const ObIArray<ObRawExpr *> &raw_exprs)
     }
     if (result_meta.is_collection_sql_type() && OB_FAIL(init_attr_expr(rt_expr, raw_expr))) {
       LOG_WARN("failed to init attr expr", K(ret), K(raw_expr), K(rt_expr));
-    }
+    } 
     if (OB_SUCC(ret)) {
       rt_expr->local_session_var_id_ = raw_expr->get_local_session_var_id();
     }
@@ -549,7 +549,7 @@ int ObStaticEngineExprCG::cg_expr_by_operator(const ObIArray<ObRawExpr *> &raw_e
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("arg is null", K(raw_expr), K(rt_expr), K(ret));
     } else if (T_QUESTIONMARK == rt_expr->type_ &&
-              (raw_expr->has_flag(IS_TABLE_ASSIGN) ||
+              (raw_expr->has_flag(IS_TABLE_ASSIGN) || 
                (rt_question_mark_eval_ && (!is_dynamic_eval_qm(*raw_expr) || !contain_dynamic_eval_rt_qm_)))) {
       // generate question mark expr for get param from param store directly
       // if the questionmark is from TABLE_ASSIGN, use eval_assign_question_mark_func

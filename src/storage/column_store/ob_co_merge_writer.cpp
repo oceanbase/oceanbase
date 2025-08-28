@@ -565,7 +565,7 @@ int ObCOMergeRowWriter::init(ObBasicTabletMergeCtx &ctx,
   } else if (OB_FAIL(basic_init(default_row, merge_param, read_info, cg_column_cnt, table, add_column))) {
     STORAGE_LOG(WARN, "Failed to init default row", K(ret), K(cg_column_cnt));
   }
-
+  
   return ret;
 }
 

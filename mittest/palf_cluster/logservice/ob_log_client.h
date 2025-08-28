@@ -239,7 +239,7 @@ public:
     return NULL;
   }
 
-  bool can_submit() const
+  bool can_submit() const 
   {
     return ATOMIC_LOAD(&is_returned_);
   }

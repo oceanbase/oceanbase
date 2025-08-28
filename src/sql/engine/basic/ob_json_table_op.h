@@ -156,7 +156,7 @@ struct JtScanCtx {
         context(nullptr),
         table_func_(nullptr),
         default_ns() {}
-
+  
   bool is_xml_table_func() {
     return spec_ptr_->table_type_ == OB_ORA_XML_TABLE_TYPE;
   }
@@ -186,10 +186,10 @@ struct JtScanCtx {
 
   bool is_evaled_;
   bool is_cover_error_;
-  bool is_need_end_; // parse input json doc fail will affect by column
+  bool is_need_end_; // parse input json doc fail will affect by column 
   bool is_charset_converted_;
   bool is_const_input_;
-  int error_code_;
+  int error_code_; 
   int32_t ord_val_;
   ObDatum* res_obj_;
   ObDatum** data_;
@@ -233,7 +233,7 @@ public:
 
 private:
   int init();
-  int reset_variable();  // reset var in rescan
+  int reset_variable();  // reset var in rescan 
   int init_data_obj(); // allocate data_ array
   int generate_column_trees(JtColTreeNode*& root);
   int find_column(int32_t id, JtColTreeNode* root, JtColTreeNode*& col);
@@ -415,7 +415,7 @@ public:
   int eval_regular_col(void *in, JtScanCtx* ctx, bool& is_null_value); // process regular column
   JtColType type() { return static_cast<JtColType>(col_info_.col_type_); }
   JtNodeType node_type() { return node_type_; }
-
+  
   int32_t total_;
   void *path_;
   void* curr_;
@@ -430,7 +430,7 @@ public:
   void *emp_val_;
   void *err_val_;
   // data in curr_ is datum type, not json/xml ,0 is not datum, 1 is empty datum, 2 is error datum.
-  ResultType res_flag_;
+  ResultType res_flag_; 
   MulModeTableType tab_type_; // distinct xml path or json path , due to not common root
   JtNodeType node_type_;  // distinct regcol in scan node or regcol
   ObJsonExprParam expr_param_;
@@ -467,8 +467,8 @@ class ScanNode : public ObMultiModeTableNode
   ObRegCol* reg_col_node(size_t i) { return reg_col_defs_.at(i); }
   ObIArray<int64_t>& child_node_ref() { return child_idx_; }
   void reset_reg_columns(JtScanCtx* ctx);
-  void* get_curr_iter_value() {
-    return seek_node_.iter_;
+  void* get_curr_iter_value() { 
+    return seek_node_.iter_; 
   }
 
   TO_STRING_KV(K_(node_type),
@@ -493,16 +493,16 @@ public:
   int reset(JtScanCtx* ctx);
   int open(JtScanCtx* ctx);
   int get_next_row(void* in, JtScanCtx* ctx, bool& is_null_value);
-  void set_left(ObMultiModeTableNode* node) {
-    left_ = node;
+  void set_left(ObMultiModeTableNode* node) { 
+    left_ = node; 
   }
-  void set_right(ObMultiModeTableNode* node) {
-    right_ = node;
+  void set_right(ObMultiModeTableNode* node) { 
+    right_ = node; 
   }
   ObMultiModeTableNode* left() { return left_; }
   ObMultiModeTableNode* right() { return right_; }
-  void* get_curr_iter_value() {
-    return left_->get_curr_iter_value();
+  void* get_curr_iter_value() { 
+    return left_->get_curr_iter_value(); 
   }
 
   TO_STRING_KV(K_(node_type),
@@ -511,8 +511,8 @@ public:
 
   ObMultiModeTableNode *left_;
   ObMultiModeTableNode *right_;
-  bool is_left_iter_end_;    // judge left child whether evaled_,
-  bool is_right_iter_end_;  // judge right child whether evaled_,
+  bool is_left_iter_end_;    // judge left child whether evaled_,  
+  bool is_right_iter_end_;  // judge right child whether evaled_,  
 };
 
 class JoinNode : public UnionNode
@@ -556,7 +556,7 @@ public:
                                              ObExpr* default_expr,
                                              ObExpr* expr,
                                              ObIJsonBase* j_base);
-  static int parse_default_value_2json(ObExpr* default_expr,
+  static int parse_default_value_2json(ObExpr* default_expr, 
                                        JtScanCtx* ctx,
                                        ObDatum*& tmp_datum,
                                        ObIJsonBase *&res);

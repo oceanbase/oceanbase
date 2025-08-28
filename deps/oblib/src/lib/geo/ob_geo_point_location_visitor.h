@@ -26,7 +26,7 @@ public:
   : test_point_(test_point),
     point_location_(ObPointLocation::INVALID) {}
   virtual ~ObGeoPointLocationVisitor() {}
-  bool prepare(ObGeometry *geo);
+  bool prepare(ObGeometry *geo);  
   int visit(ObIWkbGeomPolygon *geo);
   int visit(ObIWkbGeogPolygon *geo);
   int visit(ObIWkbPoint *geo);
@@ -36,7 +36,7 @@ public:
   int visit(ObIWkbGeogLineString *geo);
   int visit(ObIWkbGeomMultiLineString *geo);
   int visit(ObIWkbGeogMultiLineString *geo);
-
+  
   int visit(ObIWkbGeometry *geo) { UNUSED(geo); return OB_SUCCESS; }
   bool is_end(ObIWkbGeogLinearRing *geo) { UNUSED(geo); return true; }
   bool is_end(ObIWkbGeomLinearRing *geo) { UNUSED(geo); return true; }

@@ -60,7 +60,7 @@ public:
                                         const int ret_code,
                                         const ObDDLTaskInfo &addition_info);
 
-  INHERIT_TO_STRING_KV("ObDDLTask", ObDDLTask, K_(rowkey_vid), K_(vid_rowkey), K_(domain_index), K_(vec_index_id),
+  INHERIT_TO_STRING_KV("ObDDLTask", ObDDLTask, K_(rowkey_vid), K_(vid_rowkey), K_(domain_index), K_(vec_index_id), 
                       K_(vec_index_snapshot_data), K(wait_trans_ctx_));
 private:
   static const int64_t OB_DROP_VEC_INDEX_TASK_VERSION = 1;

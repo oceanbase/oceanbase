@@ -118,7 +118,7 @@ public:
   ExprFixedArray right_child_fetcher_equal_keys_;
   common::ObFixedArray<int64_t, common::ObIAllocator> left_child_fetcher_equal_keys_idx_;
   common::ObFixedArray<int64_t, common::ObIAllocator> right_child_fetcher_equal_keys_idx_;
-
+  
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMergeJoinVecSpec);
 };
@@ -195,7 +195,7 @@ public:
       return ret;
     }
     virtual void reuse() = 0;
-
+ 
   protected:
     const ObJoinType join_type_;
     const bool is_right_drive_;
@@ -254,7 +254,7 @@ public:
     int match_proc(ObBatchRows &brs) override final;
     int init_match_flags();
     int expand_match_flags_if_necessary(const int64_t size);
-    inline bool reach_cur_group_end(int64_t row_id)
+    inline bool reach_cur_group_end(int64_t row_id) 
     {
       bool is_crossing = false;
       if (row_id >= 0) {
@@ -268,7 +268,7 @@ public:
       return is_crossing;
     }
 
-    inline int set_group_end_row_id(int64_t row_id)
+    inline int set_group_end_row_id(int64_t row_id) 
     {
       int ret = OB_SUCCESS;
       if (group_boundary_row_id_array_idx_ < 0 ||
@@ -290,7 +290,7 @@ public:
       }
       if (OB_NOT_NULL(group_boundary_row_id_array_)) {
         MEMSET(group_boundary_row_id_array_, 0, sizeof(int64_t) * (row_id_array_size_ + 1));
-      }
+      }   
     }
     inline bool all_groups_consumed() { return cur_group_idx_ >= group_pairs_.count(); }
     inline void reuse() override final
@@ -474,7 +474,7 @@ public:
         equal_key_exprs_(nullptr),
         store_rows_(nullptr),
         mocked_null_row_(nullptr),
-        max_batch_size_(-1),
+        max_batch_size_(-1), 
         source_(nullptr),
         eval_ctx_(eval_ctx),
         row_store_(nullptr),
@@ -629,7 +629,7 @@ public:
     const common::ObFixedArray<int64_t, common::ObIAllocator> *equal_key_idx_arry_ptr_;
     int64_t *col_equal_group_boundary_;
   };
-
+  
   ObMergeJoinVecOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input);
   virtual ~ObMergeJoinVecOp() { destroy(); }
   virtual int inner_switch_iterator() override;

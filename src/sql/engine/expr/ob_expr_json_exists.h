@@ -30,16 +30,16 @@ public:
   virtual ~ObExprJsonExists();
   virtual int calc_result_typeN(ObExprResType& type,
                                 ObExprResType* types,
-                                int64_t param_num,
+                                int64_t param_num, 
                                 common::ObExprTypeCtx& type_ctx) const override;
   virtual bool need_rt_ctx() const override { return true; }
-  static int get_path(const ObExpr &expr, ObEvalCtx &ctx, ObJsonPath* &j_path,
+  static int get_path(const ObExpr &expr, ObEvalCtx &ctx, ObJsonPath* &j_path, 
                       common::ObIAllocator &allocator,
                       ObJsonPathCache &ctx_cache, ObJsonPathCache* &path_cache);
-  static int get_var_data(const ObExpr &expr, ObEvalCtx &ctx, common::ObIAllocator &allocator,
-                           uint16_t index, ObIJsonBase*& j_base);
-  static int get_json_data(const ObExpr &expr, ObEvalCtx &ctx, common::ObIAllocator &allocator,
-                           uint16_t index, ObIJsonBase*& j_base, bool &is_null, bool need_to_tree,
+  static int get_var_data(const ObExpr &expr, ObEvalCtx &ctx, common::ObIAllocator &allocator, 
+                           uint16_t index, ObIJsonBase*& j_base);                    
+  static int get_json_data(const ObExpr &expr, ObEvalCtx &ctx, common::ObIAllocator &allocator, 
+                           uint16_t index, ObIJsonBase*& j_base, bool &is_null, bool need_to_tree, 
                            bool need_quote);
   static int get_passing(const ObExpr &expr, ObEvalCtx &ctx, PassingMap &pass_map,
                         uint32_t param_num, common::ObIAllocator &temp_allocator);

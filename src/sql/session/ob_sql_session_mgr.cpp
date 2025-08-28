@@ -816,7 +816,7 @@ int ObSQLSessionMgr::mark_sessid_unused(uint32_t sess_id)
     // 由于server_id == 0时, 此时的local_seq，是由ATOMIC_FAA(&abnormal_seq, 1)产生，
     // 使用ATOMIC_FAA的原因无从考证（原作者的信息描述无任何具体信息），采取保守修改策略
     // local_seq未曾从sessid_sequence_队列中获取,所以不需要归还到队列，不然会导致队列溢出的bug
-    // bug详情:
+    // bug详情:  
   } else if (OB_FAIL(sessid_sequence_.push(reinterpret_cast<void*>(sess_id & MAX_LOCAL_SEQ)))) {
     LOG_WARN("fail to push sessid to sessid_sequence_", K(sess_id), K(ret));
   }
@@ -913,10 +913,10 @@ bool ObSQLSessionMgr::CheckSessionFunctor::operator()(sql::ObSQLSessionMgr::Key 
          sess_info->get_stmt_type() != stmt::T_DELETE &&
          sess_info->get_stmt_type() != stmt::T_MERGE &&
          sess_info->get_stmt_type() != stmt::T_REPLACE &&
-         sess_info->get_stmt_type() != stmt::T_EXPLAIN) ||
-        sess_info->get_ddl_info().is_ddl() ||
+         sess_info->get_stmt_type() != stmt::T_EXPLAIN) || 
+        sess_info->get_ddl_info().is_ddl() || 
         OB_NOT_NULL(sess_info->get_pl_context()) ||
-        !sess_info->is_user_session() ||
+        !sess_info->is_user_session() || 
         sess_info->is_remote_session() ||
         sess_info->get_current_trace_id().is_invalid()) {
       //filter out DDL, PL and physical restore tenant statements, because they are not subject to query timeout control.
@@ -924,10 +924,10 @@ bool ObSQLSessionMgr::CheckSessionFunctor::operator()(sql::ObSQLSessionMgr::Key 
       LOG_WARN("failed to get sesion variable", K(ret));
     } else if (sess_info->get_query_start_time() > 0 &&
                cur_time - sess_info->get_query_start_time() > timeout_multiplier * query_timeout + 1000000) {
-      LOG_ERROR("detect sql hung!!!", K(sess_info->get_current_trace_id()),
+      LOG_ERROR("detect sql hung!!!", K(sess_info->get_current_trace_id()), 
                                       K(sess_info->get_cur_sql_id()),
                                       K(sess_info->get_thread_id()),
-                                      K(cur_time - sess_info->get_query_start_time()),
+                                      K(cur_time - sess_info->get_query_start_time()), 
                                       K(query_timeout), K(timeout_multiplier),
                                       "session_state", ObString::make_string(sess_info->get_session_state_str()),
                                       K(sess_info->get_current_query_string()));

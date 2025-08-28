@@ -138,7 +138,7 @@ int ObXmlNode::update(int64_t pos, ObIMulModeBase* new_node)
 }
 
 // new node replace old node in element child
-int ObXmlNode::update(ObIMulModeBase* old_node, ObIMulModeBase* new_node)
+int ObXmlNode::update(ObIMulModeBase* old_node, ObIMulModeBase* new_node) 
 {
   INIT_SUCC(ret);
   ObXmlNode* o_node = NULL;
@@ -171,7 +171,7 @@ bool ObXmlNode::is_equal_node(const ObIMulModeBase* other)
   } else if (other->is_tree()) {
     res = static_cast<ObIMulModeBase*>(this) == other;
   }
-
+  
   return res;
 }
 
@@ -183,7 +183,7 @@ bool ObXmlNode::is_node_before(const ObIMulModeBase* other)
   } else if (other->is_tree()) {
     res = static_cast<ObIMulModeBase*>(this) < other;
   }
-
+  
   return res;
 }
 bool ObXmlElement::is_element(ObString tag)
@@ -241,7 +241,7 @@ bool ObXmlElement::has_attribute_with_ns(ObXmlAttribute *ns)
   bool is_found = false;
   for (int64_t i = 0; !is_found && i < attribute_size(); i++) {
     ObXmlAttribute *t_attr = static_cast<ObXmlAttribute*>(attributes_->at(i));
-    if (t_attr->type() == ObMulModeNodeType::M_ATTRIBUTE
+    if (t_attr->type() == ObMulModeNodeType::M_ATTRIBUTE 
         && ns == t_attr->get_ns()) {
       is_found = true;
     }
@@ -282,7 +282,7 @@ int ObXmlElement::clone(ObMulModeMemCtx *ctx, ObXmlNode *&node)
   if (OB_ISNULL(node)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocator xml text node.", K(ret));
-  } else if (OB_ISNULL(ele = static_cast<ObXmlElement*>(node)) ||
+  } else if (OB_ISNULL(ele = static_cast<ObXmlElement*>(node)) || 
              OB_ISNULL(origin_node = static_cast<ObXmlNode*>(this))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("clone new node cast to element is null", K(ret));
@@ -325,7 +325,7 @@ int ObXmlElement::clone(ObMulModeMemCtx *ctx, ObXmlNode *&node)
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -334,12 +334,12 @@ ObXmlAttribute* ObXmlElement::get_attribute_by_name(const ObString& ns_value, co
   ObXmlAttribute* res_node = NULL;
   ObXmlAttribute* t_attr = NULL;
   for (int64_t i = 0; i < attribute_size(); i++) {
-    if (attributes_->at(i)->type() == ObMulModeNodeType::M_ATTRIBUTE
+    if (attributes_->at(i)->type() == ObMulModeNodeType::M_ATTRIBUTE 
         && 0 == name.compare(attributes_->at(i)->get_key())) {
       t_attr = dynamic_cast<ObXmlAttribute*>(attributes_->at(i));
-      if (!ns_value.empty()
-          && ((OB_ISNULL(t_attr->get_ns())
-                  && !(t_attr->get_prefix().compare(ObXmlConstants::XML_STRING) == 0
+      if (!ns_value.empty() 
+          && ((OB_ISNULL(t_attr->get_ns()) 
+                  && !(t_attr->get_prefix().compare(ObXmlConstants::XML_STRING) == 0 
                         && ns_value.compare(ObXmlConstants::XML_NAMESPACE_SPECIFICATION_URI) == 0))   // ns_value not null but attr without ns
               || (OB_NOT_NULL(t_attr->get_ns())   // attr with ns but ns mismatch
                   && 0 != ns_value.compare(t_attr->get_ns()->get_value())))) { // ns mismatch do nothing
@@ -357,7 +357,7 @@ ObXmlAttribute* ObXmlElement::get_ns_by_name(const ObString& name)
 {
   ObXmlAttribute* res_node = NULL;
   for (int64_t i = 0; i < attribute_size(); i++) {
-    if (attributes_->at(i)->type() == ObMulModeNodeType::M_NAMESPACE
+    if (attributes_->at(i)->type() == ObMulModeNodeType::M_NAMESPACE 
         && 0 == name.compare(attributes_->at(i)->get_key())) {
       res_node = dynamic_cast<ObXmlAttribute*>(attributes_->at(i));
       break;
@@ -385,7 +385,7 @@ int ObXmlElement::get_namespace_default(ObIArray<ObIMulModeBase*> &value)
 bool ObXmlElement::is_invalid_namespace(ObXmlAttribute* ns)
 {
   return get_ns()->type() == ObMulModeNodeType::M_NAMESPACE
-          && (0 == ns->get_key().compare(get_ns()->get_key()))
+          && (0 == ns->get_key().compare(get_ns()->get_key())) 
           && (0 == ns->get_value().compare(get_ns()->get_value()));
 }
 
@@ -402,9 +402,9 @@ int ObXmlElement::get_value(ObString& value, int64_t index)
 int ObXmlNode::get_range(int64_t start_idx, int64_t last_idx, ObIArray<ObIMulModeBase*> &res, ObMulModeFilter* filter)
 {
   INIT_SUCC(ret);
-
+  
   IndexRange range = ObLibContainerNode::get_effective_range(start_idx, last_idx);
-
+  
   iterator first = begin() + range.first;
   iterator finish = end();
   iterator last = begin() + range.second;
@@ -748,7 +748,7 @@ int ObXmlElement::get_valid_ns_from_parent(NsMap &ns_map, ObXmlNode* cur_node)
       if (!is_init_) {
       } else if (is_init_ && OB_ISNULL(t_element->attributes_->at(i))) {
         LOG_WARN("node in pos is null", K(ret), K(i));
-      } else if (t_element->attributes_->at(i)->type() == ObMulModeNodeType::M_NAMESPACE
+      } else if (t_element->attributes_->at(i)->type() == ObMulModeNodeType::M_NAMESPACE 
           && OB_ISNULL(ns_map.get(t_element->attributes_->at(i)->get_key()))) {
         ret = add_update_ns_map(ns_map, t_element->attributes_->at(i)->get_key(), t_element->attributes_->at(i));
       }
@@ -806,7 +806,7 @@ int ObXmlElement::append_unparse_text(const ObString &str)
   char* str_buf = NULL;
   size_t str_len = str.length();
   // need_com record whether last element is unparse node
-  need_com = this->size() > 1 && this->at(this->size() - 1)->type() == M_ELEMENT
+  need_com = this->size() > 1 && this->at(this->size() - 1)->type() == M_ELEMENT 
               && dynamic_cast<ObXmlElement*>(this->at(this->size() - 1))->is_unparse();
   if (need_com) {
     new_text = dynamic_cast<ObXmlText*>(this->at(this->size() - 1)->at(0));
@@ -870,7 +870,7 @@ int ObXmlElement::remove_ns_value_from_array(NsArray& ns_array, ObXmlAttribute* 
   int64_t pos = -1;
   int64_t size_arr = ns_array.size();
   for (int64_t i = (size_arr - 1); i >= 0; i--) {
-    if (0 == node->get_key().compare(ns_array.at(i)->get_key())
+    if (0 == node->get_key().compare(ns_array.at(i)->get_key()) 
         && 0 == node->get_value().compare(ns_array.at(i)->get_value())) {
       pos = i;
       break;
@@ -892,12 +892,12 @@ int ObXmlElement::check_node_valid_with_ns(NsArray& ns_array, ObXmlNode* cur_nod
     ObXmlAttribute* t_attr = NULL;
     switch(cur_node->type()) {
       case ObMulModeNodeType::M_DOCUMENT :
-      case ObMulModeNodeType::M_CONTENT :
+      case ObMulModeNodeType::M_CONTENT : 
       case ObMulModeNodeType::M_ELEMENT : {
         ObXmlElement *cur_element = static_cast<ObXmlElement*>(cur_node);
         // add ns in cur node
         for (int i = 0; OB_SUCC(ret) && i < cur_element->attribute_size(); i ++) {
-          if (operator_data == OperaType::APPEND
+          if (operator_data == OperaType::APPEND 
               && cur_element->attributes_->at(i)->type() == ObMulModeNodeType::M_NAMESPACE) {
             if (OB_FAIL(ns_array.push_back(dynamic_cast<ObXmlAttribute*>(cur_element->attributes_->at(i))))) {
               LOG_WARN("fail to add ns to array", K(ret));
@@ -923,7 +923,7 @@ int ObXmlElement::check_node_valid_with_ns(NsArray& ns_array, ObXmlNode* cur_nod
         }
         // check attribute ns valid in cur_node
         for (int i = 0; OB_SUCC(ret) && i < cur_element->attribute_size(); i ++) {
-          if (cur_element->attributes_->at(i)->type() == ObMulModeNodeType::M_ATTRIBUTE
+          if (cur_element->attributes_->at(i)->type() == ObMulModeNodeType::M_ATTRIBUTE 
               && OB_FAIL(SMART_CALL(check_node_valid_with_ns(ns_array, cur_element->attributes_->at(i), operator_data, valid_type)))) {
             LOG_WARN("failed to check attribute node", K(ret), K(i));
           }
@@ -1000,10 +1000,10 @@ int ObXmlElement::update_attribute(ObXmlNode* xnode, int pos, bool ns_check)
     xnode->set_parent(this);
 
     ObXmlAttribute *cur_attr = static_cast<ObXmlAttribute*>(xnode);
-    if (ns_check && cur_attr->type() == ObMulModeNodeType::M_NAMESPACE
+    if (ns_check && cur_attr->type() == ObMulModeNodeType::M_NAMESPACE 
                 && OB_FAIL(Validate_XML_Tree_Legitimacy(xnode, OperaType::APPEND, ValidType::ALL))) {
       LOG_WARN("fail to upadate namespace", K(ret));
-    } else if (ns_check && cur_attr->type() == ObMulModeNodeType::M_ATTRIBUTE
+    } else if (ns_check && cur_attr->type() == ObMulModeNodeType::M_ATTRIBUTE 
                 && OB_FAIL(Validate_XML_Tree_Legitimacy(xnode, OperaType::APPEND))) {
       LOG_WARN("fail to namespace failed", K(ret));
     } else if (OB_FAIL(attributes_->update(pos, xnode))) {
@@ -1176,7 +1176,7 @@ int ObXmlElement::get_ns_value(const ObString& prefix, ObString& ns_value, int& 
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -1192,8 +1192,8 @@ ObIMulModeBase* ObXmlElement::attribute_at(int64_t pos, ObIMulModeBase* buffer)
   return res;
 }
 
-int ObXmlElement::get_attribute(ObXmlAttribute*& res, int64_t pos)
-{
+int ObXmlElement::get_attribute(ObXmlAttribute*& res, int64_t pos) 
+{ 
   INIT_SUCC(ret);
   if (pos < 0 || pos >= attribute_size()) {
     ret = OB_INVALID_ARGUMENT;
@@ -1206,7 +1206,7 @@ int ObXmlElement::get_attribute(ObXmlAttribute*& res, int64_t pos)
 }
 
 int ObXmlElement::get_attribute(ObIArray<ObIMulModeBase*>& res, ObMulModeNodeType filter_type, int32_t flags)
-{
+{ 
   INIT_SUCC(ret);
 
   if (filter_type == M_NAMESPACE) {
@@ -1225,12 +1225,12 @@ int ObXmlElement::get_attribute(ObIArray<ObIMulModeBase*>& res, ObMulModeNodeTyp
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get attr list", K(ret), K(filter_type));
   }
-
+ 
   return ret;
 }
 
 int ObXmlElement::get_attribute(ObIMulModeBase*& res, ObMulModeNodeType filter_type, const ObString& key1, const ObString &key2)
-{
+{ 
   INIT_SUCC(ret);
 
   if (filter_type == M_NAMESPACE) {
@@ -1241,7 +1241,7 @@ int ObXmlElement::get_attribute(ObIMulModeBase*& res, ObMulModeNodeType filter_t
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get attr list", K(ret), K(filter_type));
   }
-
+ 
   return ret;
 }
 
@@ -1261,10 +1261,10 @@ bool ObXmlElement::check_if_defined_ns()
   return ret_bool;
 }
 
-int ObXmlElement::add_attr_by_str(const ObString& name,
-                                  const ObString& value,
+int ObXmlElement::add_attr_by_str(const ObString& name, 
+                                  const ObString& value, 
                                   ObMulModeNodeType type,
-                                  bool ns_check,
+                                  bool ns_check, 
                                   int pos)
 {
   INIT_SUCC(ret);

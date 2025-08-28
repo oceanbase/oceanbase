@@ -387,10 +387,10 @@ public:
                            bool fmt_int_or_ch_decint = false);
 
   static int set_string_val_charset(ObIAllocator &allocator,
-                                    ObObjParam &val,
-                                    ObString &charset,
-                                    ObObj &result_val,
-                                    bool is_strict_mode,
+                                    ObObjParam &val, 
+                                    ObString &charset, 
+                                    ObObj &result_val, 
+                                    bool is_strict_mode, 
                                     bool return_ret);
 
   static int resolve_data_type(const ParseNode &type_node,
@@ -793,9 +793,9 @@ public:
                                                      const ObRawExprResType &column_type,
                                                      const ObString &column_name,
                                                      ObObj &part_value);
-  static ObRawExpr *find_file_column_expr(ObIArray<ObRawExpr *> &pseudo_exprs,
-                                          int64_t table_id,
-                                          int64_t column_idx,
+  static ObRawExpr *find_file_column_expr(ObIArray<ObRawExpr *> &pseudo_exprs, 
+                                          int64_t table_id, 
+                                          int64_t column_idx, 
                                           const ObString &expr_name);
   static int calc_file_column_idx(const ObString &column_name, uint64_t &file_column_idx);
   static int build_file_column_expr_for_odps(
@@ -888,7 +888,7 @@ public:
                                               ObString &result_value);
   static int get_generated_column_expr_temp(TableItem *table_item,
                                             ObIArray<ObRawExpr *> &gen_col_depend, ObIArray<ObString> &gen_col_names,
-                                            ObIArray<ObColumnSchemaV2 *> &gen_col_schema,
+                                            ObIArray<ObColumnSchemaV2 *> &gen_col_schema, 
                                             ObSqlSchemaGuard *schema_guard,
                                             common::ObIAllocator &allocator,
                                             ObRawExprFactory &expr_factory,
@@ -935,7 +935,7 @@ public:
 
   static int64_t get_mysql_max_partition_num(const uint64_t tenant_id);
   static int check_schema_valid_for_mview(const share::schema::ObTableSchema &table_schema);
-  static int generate_subschema_id(ObSQLSessionInfo &session_info,
+  static int generate_subschema_id(ObSQLSessionInfo &session_info, 
                                    const common::ObIArray<common::ObString> &extended_type_info,
                                    uint16_t &subschema_id);
   static bool is_external_pseudo_column(const ObRawExpr &expr);

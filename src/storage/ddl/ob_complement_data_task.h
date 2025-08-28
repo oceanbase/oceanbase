@@ -39,7 +39,7 @@ int add_dag_and_get_progress(
   } else if (OB_FAIL(MTL(ObTenantDagScheduler*)->add_dag(dag))) {
     // caution ret = OB_EAGAIN or OB_SIZE_OVERFLOW
     if (OB_EAGAIN == ret
-        && OB_TMP_FAIL(MTL(ObTenantDagScheduler*)->get_dag_progress<T>(dag, row_inserted, physical_row_count))) {
+        && OB_TMP_FAIL(MTL(ObTenantDagScheduler*)->get_dag_progress<T>(dag, row_inserted, physical_row_count))) { 
       // tmp_ret is used to prevent the failure from affecting DDL_Task status
       LOG_WARN("get complement data progress failed", K(tmp_ret), K(ret));
     }
@@ -55,9 +55,9 @@ struct ObComplementDataParam final
 {
 public:
   ObComplementDataParam():
-    is_inited_(false), orig_tenant_id_(common::OB_INVALID_TENANT_ID), dest_tenant_id_(common::OB_INVALID_TENANT_ID),
-    orig_ls_id_(share::ObLSID::INVALID_LS_ID), dest_ls_id_(share::ObLSID::INVALID_LS_ID), orig_table_id_(common::OB_INVALID_ID),
-    dest_table_id_(common::OB_INVALID_ID), orig_tablet_id_(ObTabletID::INVALID_TABLET_ID), dest_tablet_id_(ObTabletID::INVALID_TABLET_ID),
+    is_inited_(false), orig_tenant_id_(common::OB_INVALID_TENANT_ID), dest_tenant_id_(common::OB_INVALID_TENANT_ID), 
+    orig_ls_id_(share::ObLSID::INVALID_LS_ID), dest_ls_id_(share::ObLSID::INVALID_LS_ID), orig_table_id_(common::OB_INVALID_ID), 
+    dest_table_id_(common::OB_INVALID_ID), orig_tablet_id_(ObTabletID::INVALID_TABLET_ID), dest_tablet_id_(ObTabletID::INVALID_TABLET_ID), 
     row_store_type_(common::ENCODING_ROW_STORE), orig_schema_version_(0), dest_schema_version_(0),
     snapshot_version_(0), task_id_(0), execution_id_(-1), tablet_task_id_(0), compat_mode_(lib::Worker::CompatMode::INVALID), data_format_version_(0),
     orig_schema_tablet_size_(0), dest_schema_cg_cnt_(0), user_parallelism_(0), concurrent_cnt_(0), ranges_(),
@@ -83,10 +83,10 @@ public:
     const bool need_rescan_fill_cg);
   bool is_valid() const
   {
-    return common::OB_INVALID_TENANT_ID != orig_tenant_id_ && common::OB_INVALID_TENANT_ID != dest_tenant_id_
-           && orig_ls_id_.is_valid() && dest_ls_id_.is_valid() && common::OB_INVALID_ID != orig_table_id_
+    return common::OB_INVALID_TENANT_ID != orig_tenant_id_ && common::OB_INVALID_TENANT_ID != dest_tenant_id_ 
+           && orig_ls_id_.is_valid() && dest_ls_id_.is_valid() && common::OB_INVALID_ID != orig_table_id_ 
            && common::OB_INVALID_ID != dest_table_id_ && orig_tablet_id_.is_valid() && dest_tablet_id_.is_valid()
-           && snapshot_version_ > 0 && compat_mode_ != lib::Worker::CompatMode::INVALID && execution_id_ >= 0 && tablet_task_id_ > 0
+           && snapshot_version_ > 0 && compat_mode_ != lib::Worker::CompatMode::INVALID && execution_id_ >= 0 && tablet_task_id_ > 0 
            && data_format_version_ > 0 && orig_schema_tablet_size_ > 0 && dest_schema_cg_cnt_ > 0 && user_parallelism_ > 0;
   }
 
@@ -124,8 +124,8 @@ public:
     is_no_logging_ = false;
     ranges_.reset();
   }
-  TO_STRING_KV(K_(is_inited), K_(orig_tenant_id), K_(dest_tenant_id), K_(orig_ls_id), K_(dest_ls_id),
-      K_(orig_table_id), K_(dest_table_id), K_(orig_tablet_id), K_(dest_tablet_id), K_(orig_schema_version),
+  TO_STRING_KV(K_(is_inited), K_(orig_tenant_id), K_(dest_tenant_id), K_(orig_ls_id), K_(dest_ls_id), 
+      K_(orig_table_id), K_(dest_table_id), K_(orig_tablet_id), K_(dest_tablet_id), K_(orig_schema_version), 
       K_(tablet_task_id), K_(dest_schema_version), K_(snapshot_version), K_(task_id),
       K_(execution_id), K_(compat_mode), K_(data_format_version), K_(orig_schema_tablet_size),K_(user_parallelism),
       K_(concurrent_cnt), K_(ranges), K_(need_rescan_fill_cg), K_(is_no_logging));
@@ -169,20 +169,20 @@ struct ObComplementDataContext final
 {
 public:
   ObComplementDataContext():
-    is_inited_(false), ddl_agent_(), direct_load_type_(ObDirectLoadType::DIRECT_LOAD_INVALID),
+    is_inited_(false), ddl_agent_(), direct_load_type_(ObDirectLoadType::DIRECT_LOAD_INVALID), 
     is_major_sstable_exist_(false), complement_data_ret_(common::OB_SUCCESS),
     lock_(ObLatchIds::COMPLEMENT_DATA_CONTEXT_LOCK), concurrent_cnt_(0),
     physical_row_count_(0), row_scanned_(0), row_inserted_(0), cg_row_inserted_(0), context_id_(0), lob_cols_cnt_(0), total_slice_cnt_(-1)
   {}
   ~ObComplementDataContext() { destroy(); }
   int init(
-    const ObComplementDataParam &param,
+    const ObComplementDataParam &param, 
     const share::schema::ObTableSchema &hidden_table_schema);
   void destroy();
   int write_start_log(const ObComplementDataParam &param);
   int add_column_checksum(const ObIArray<int64_t> &report_col_checksums, const ObIArray<int64_t> &report_col_ids);
   int get_column_checksum(ObIArray<int64_t> &report_col_checksums, ObIArray<int64_t> &report_col_ids);
-  TO_STRING_KV(K_(is_inited), K_(ddl_agent), K_(direct_load_type), K_(is_major_sstable_exist), K_(complement_data_ret), K_(concurrent_cnt),
+  TO_STRING_KV(K_(is_inited), K_(ddl_agent), K_(direct_load_type), K_(is_major_sstable_exist), K_(complement_data_ret), K_(concurrent_cnt), 
       K_(physical_row_count), K_(row_scanned), K_(row_inserted), K_(cg_row_inserted), K_(context_id), K_(lob_cols_cnt), K_(total_slice_cnt));
 public:
   bool is_inited_;
@@ -224,7 +224,7 @@ public:
   int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override
   { return param_.compat_mode_; }
-  virtual uint64_t get_consumer_group_id() const override
+  virtual uint64_t get_consumer_group_id() const override 
   { return consumer_group_id_; }
   virtual int create_first_task() override;
   virtual bool ignore_warning() override;
@@ -354,7 +354,7 @@ public:
   virtual ~ObScan() = default;
   virtual int get_origin_table_checksum(ObArray<int64_t> &report_col_checksums, ObArray<int64_t> &report_col_ids) = 0;
 protected:
-  int64_t storaged_index_with_extra_rowkey(const int64_t i)
+  int64_t storaged_index_with_extra_rowkey(const int64_t i) 
   {
     return i < schema_rowkey_cnt_ ? i : i + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   }
@@ -385,11 +385,11 @@ public:
                  blocksstable::ObDatumRange &range);
   virtual int get_next_row(const blocksstable::ObDatumRow *&tmp_row) override;
   int get_origin_table_checksum(
-      ObArray<int64_t> &report_col_checksums,
+      ObArray<int64_t> &report_col_checksums, 
       ObArray<int64_t> &report_col_ids) override;
 private:
   int get_output_columns(
-      const share::schema::ObTableSchema &hidden_table_schema,
+      const share::schema::ObTableSchema &hidden_table_schema, 
       common::ObIArray<ObColDesc> &col_ids);
   int get_exist_column_mapping(
       const share::schema::ObTableSchema &data_table_schema,
@@ -401,7 +401,7 @@ private:
       const share::schema::ObTableSchema &data_table_schema);
   int construct_access_param(
       const share::schema::ObTableSchema &data_table_schema,
-      const ObTabletID &tablet_id);
+      const ObTabletID &tablet_id); 
   int construct_range_ctx(common::ObQueryFlag &query_flag, const share::ObLSID &ls_id);
   int construct_multiple_scan_merge(ObTablet &tablet, blocksstable::ObDatumRange &range);
   int construct_multiple_scan_merge(

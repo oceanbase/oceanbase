@@ -129,7 +129,7 @@ private:
                   const common::ObDatum &max_datum,
                   const bool &is_max_prefix,
                   sql::ObBoolMask &fal_desc);
-
+  
   int black_filter_on_min_max(const uint32_t col_idx,
                               const uint64_t row_count,
                               const ObObjMeta &obj_meta,

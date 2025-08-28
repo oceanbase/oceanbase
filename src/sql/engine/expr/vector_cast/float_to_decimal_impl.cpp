@@ -34,7 +34,7 @@ namespace sql
     3. Init the eps = 2^(63-3), which represents the max error of lx
        it can be calculated with the method mentioned in the paper:
        "Printing Floating-Point Numbers Quickly and Accurately with Integers".
-    4. Get the margin_low and margin_high of lx, which represents the
+    4. Get the margin_low and margin_high of lx, which represents the 
        margin between lx and the nearest double value.
        if lx = 15, then its real_exponent is -49, margin = 1.0 * 2^-49.
     5. Cast the lx to decimal value with Steele & White's algorithm,
@@ -176,7 +176,7 @@ int ObFloatToDecimal::float2decimal(double x, const bool is_oracle_mode, ob_gcvt
           res += item;
           low_calc = 2.0l * lx - margin_low;
           high_calc = 2.0l * lx + margin_high - 2.0l;
-          if (std::abs(low_calc) <= eps ||
+          if (std::abs(low_calc) <= eps || 
               (std::abs(high_calc) <= eps)) {
             ret = OB_ERR_UNEXPECTED;
             break;
@@ -192,7 +192,7 @@ int ObFloatToDecimal::float2decimal(double x, const bool is_oracle_mode, ob_gcvt
           ++scale;
         }
         if (low && high) {
-          if (std::abs(0.5l - lx) <= eps)
+          if (std::abs(0.5l - lx) <= eps) 
             ret = OB_ERR_UNEXPECTED;
           if(lx > 0.5l) res++;
         } else if (high) {

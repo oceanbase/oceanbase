@@ -1036,7 +1036,7 @@ inline int ob_charset_decode_unicode<CHARSET_UTF16LE>(const unsigned char *str, 
   if ((unicode_value = uint2korr(str)) < OB_UTF16_SURROGATE_HIGH_FIRST ||
       (unicode_value > OB_UTF16_SURROGATE_LOW_LAST))
     return 2; /* [0000-D7FF,E000-FFFF] */
-
+  
   if (unicode_value >= OB_UTF16_SURROGATE_LOW_FIRST)
     return OB_CS_ILSEQ; /* [DC00-DFFF] Low surrogate part without high part */
 
@@ -1044,10 +1044,10 @@ inline int ob_charset_decode_unicode<CHARSET_UTF16LE>(const unsigned char *str, 
 
   str += 2;
 
-  if ((lo = uint2korr(str)) < OB_UTF16_SURROGATE_LOW_FIRST ||
+  if ((lo = uint2korr(str)) < OB_UTF16_SURROGATE_LOW_FIRST || 
       lo > OB_UTF16_SURROGATE_LOW_LAST)
     return OB_CS_ILSEQ; /* Expected low surrogate part, got something else */
-
+  
   unicode_value = 0x10000 + (((unicode_value & 0x3FF) << 10) | (lo & 0x3FF));
   return 4;
 }

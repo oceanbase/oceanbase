@@ -132,7 +132,7 @@ int databuff_print_id_value(char *buf, const int64_t buf_len, int64_t &pos,
   int ret = OB_SUCCESS;
   if (OB_SUCC(databuff_print_id_value(buf, buf_len, pos, head_key, std::forward<T>(head)))) {
     ret = databuff_print_id_value(buf, buf_len, pos, std::forward<ARGS>(others)...);
-  }
+  } 
   return ret;
 };
 

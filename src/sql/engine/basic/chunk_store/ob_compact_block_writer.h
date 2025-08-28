@@ -39,7 +39,7 @@ namespace sql
  * offset_width:  the width of offset in var_column_offset (e.g., 2 bytes /4 bytes),
  *                4 bytes is for long row.
  * null_bitmap:   mark wether the i-th datum is null. equal to datum->desc.null_
- *
+ * 
  * to get i-th datum(fixed data):   1. get offset by row_meta.column_offset[i].
  *                                  2. use the offset to get fixed data ( ObDatum *datum = fixed_data + offset)
  * to get i-th datum(var_data):     1. find the var_data is the j-th var_data.

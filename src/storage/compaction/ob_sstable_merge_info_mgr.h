@@ -31,8 +31,8 @@ class ObTenantSSTableMergeInfoMgr
 public:
   static int mtl_init(ObTenantSSTableMergeInfoMgr *&sstable_merge_info);
   static int64_t cal_max();
-  static int get_next_info(compaction::ObIDiagnoseInfoMgr::Iterator &major_iter,
-      compaction::ObIDiagnoseInfoMgr::Iterator &minor_iter,
+  static int get_next_info(compaction::ObIDiagnoseInfoMgr::Iterator &major_iter, 
+      compaction::ObIDiagnoseInfoMgr::Iterator &minor_iter, 
       compaction::ObSSTableMergeHistory &merge_history, char *buf, const int64_t buf_len);
   ObTenantSSTableMergeInfoMgr();
   virtual ~ObTenantSSTableMergeInfoMgr();
@@ -40,7 +40,7 @@ public:
   int add_sstable_merge_info(compaction::ObSSTableMergeHistory &merge_history);
   void reset();
   void destroy();
-  int open_iter(compaction::ObIDiagnoseInfoMgr::Iterator &major_iter,
+  int open_iter(compaction::ObIDiagnoseInfoMgr::Iterator &major_iter, 
                 compaction::ObIDiagnoseInfoMgr::Iterator &minor_iter);
 
   int set_max(int64_t max_size);

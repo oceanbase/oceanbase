@@ -30,10 +30,10 @@ ObExprXmlAttributes::ObExprXmlAttributes(ObIAllocator &alloc)
 
 ObExprXmlAttributes::~ObExprXmlAttributes() {}
 
-int ObExprXmlAttributes::calc_result_typeN(ObExprResType &type,
-                                          ObExprResType *types_stack,
-                                          int64_t param_num,
-                                          ObExprTypeCtx &type_ctx)
+int ObExprXmlAttributes::calc_result_typeN(ObExprResType &type, 
+                                          ObExprResType *types_stack, 
+                                          int64_t param_num, 
+                                          ObExprTypeCtx &type_ctx) 
                                           const
 {
   UNUSED(type_ctx);

@@ -53,7 +53,7 @@ int ObForeignKeyChecker::reuse() {
 int ObForeignKeyChecker::do_fk_check_batch(bool &all_has_result)
 {
   int ret = OB_SUCCESS;
-
+  
   int64_t get_row_count = 0;
   if (0 == batch_distinct_fk_cnt_) {
     LOG_TRACE("distinct foreign key count is 0 in a batch");
@@ -439,7 +439,7 @@ int ObForeignKeyChecker::build_primary_table_range(const ObIArray<ObForeignKeyCo
       if(OB_FAIL(ObObjCaster::to_type(dst_obj_meta.get_type(), cast_ctx, ori_obj, tmp_obj))) {
         LOG_WARN("fail to cast type", K(ret), K(col_obj_meta), K(dst_obj_meta));
         if (ret == OB_DATA_OUT_OF_RANGE) {
-          // To compatible with MySQL.
+          // To compatible with MySQL. 
           // Also, if the value is not in the range, then it means that there's no referenced row.
           ret = OB_ERR_NO_REFERENCED_ROW;
         }
@@ -533,7 +533,7 @@ int ObForeignKeyChecker::build_index_table_range(const ObIArray<ObForeignKeyColu
         if(OB_FAIL(ObObjCaster::to_type(dst_obj_meta.get_type(), cast_ctx, ori_obj, tmp_obj))) {
           LOG_WARN("fail to cast type", K(ret), K(col_obj_meta), K(dst_obj_meta));
           if (ret == OB_DATA_OUT_OF_RANGE) {
-            // To compatible with MySQL.
+            // To compatible with MySQL. 
             // Also, if the value is not in the range, then it means that there's no referenced row.
             ret = OB_ERR_NO_REFERENCED_ROW;
           }
@@ -639,7 +639,7 @@ int ObForeignKeyChecker::build_index_table_range_need_shadow_column(const ObIArr
         if(OB_FAIL(ObObjCaster::to_type(dst_obj_meta.get_type(), cast_ctx, ori_obj, tmp_obj))) {
           LOG_WARN("fail to cast type", K(ret), K(col_obj_meta), K(dst_obj_meta));
           if (ret == OB_DATA_OUT_OF_RANGE) {
-            // To compatible with MySQL.
+            // To compatible with MySQL. 
             // Also, if the value is not in the range, then it means that there's no referenced row.
             ret = OB_ERR_NO_REFERENCED_ROW;
           }

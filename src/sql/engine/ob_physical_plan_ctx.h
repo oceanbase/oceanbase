@@ -98,11 +98,11 @@ class ObPhysicalPlanCtx
 public:
   explicit ObPhysicalPlanCtx(common::ObIAllocator &allocator);
   virtual ~ObPhysicalPlanCtx();
-  void destroy()
+  void destroy() 
   {
     total_memstore_read_row_count_ = 0;
     total_ssstore_read_row_count_ = 0;
-    // Member variables that need to request additional memory
+    // Member variables that need to request additional memory 
     // with another allocator should call destroy here.
     subschema_ctx_.destroy();
     all_local_session_vars_.destroy();
@@ -649,7 +649,7 @@ private:
   // if current expr is in insert values, this is the expr's index in value row
   int64_t curr_col_index_;
   share::CacheHandle *autoinc_cache_handle_;
-  // last_insert_id return to client
+  // last_insert_id return to client 
   uint64_t last_insert_id_to_client_;
   // first auto-increment value in current stmt, last_insert_id which record in session
   uint64_t last_insert_id_cur_stmt_;

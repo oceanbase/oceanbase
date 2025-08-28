@@ -446,7 +446,7 @@ int ObUnitTableOperator::get_resource_pool(common::ObISQLClient &sql_client,
     } else {
       sqlclient::ObMySQLResult *result = NULL;
       if (OB_FAIL(sql_string.assign_fmt("SELECT * FROM %s WHERE resource_pool_id = %lu%s",
-          OB_ALL_RESOURCE_POOL_TNAME, pool_id,
+          OB_ALL_RESOURCE_POOL_TNAME, pool_id, 
           select_for_update ? " FOR UPDATE" : ""))) {
         LOG_WARN("assign sql string failed", K(ret), K(pool_id), K(select_for_update));
       } else if (OB_FAIL(sql_client.read(res, sql_string.ptr()))) {
@@ -1014,8 +1014,8 @@ int ObUnitTableOperator::get_unit_stats(common::ObIArray<ObUnitStat> &unit_stats
              "status in ('%s', '%s') is_migrating "
              "from %s where status in ('%s', '%s', '%s') group by unit_id",
              migrate_in_status_str, migrate_out_status_str,
-             OB_ALL_VIRTUAL_UNIT_TNAME,
-             normal_status_str, migrate_in_status_str, migrate_out_status_str)))
+             OB_ALL_VIRTUAL_UNIT_TNAME, 
+             normal_status_str, migrate_in_status_str, migrate_out_status_str))) 
       // only count unit in NORMAL or MIGRATE IN or MIGRATE OUT status on servers
     {
       LOG_WARN("append_fmt failed", KR(ret));
@@ -1027,7 +1027,7 @@ int ObUnitTableOperator::get_unit_stats(common::ObIArray<ObUnitStat> &unit_stats
 }
 
 int ObUnitTableOperator::get_tenant_servers(
-    common::ObIArray<ObTenantServers> &all_tenant_servers,
+    common::ObIArray<ObTenantServers> &all_tenant_servers, 
     const uint64_t tenant_id /* = OB_INVALID_TENANT_ID */) const
 {
   int ret = OB_SUCCESS;
@@ -1051,7 +1051,7 @@ int ObUnitTableOperator::get_tenant_servers(
       }
     } else if (OB_FAIL(sql.append_fmt("where tenant_id != -1 order by tenant_id"))) {
       LOG_WARN("sql append_fmt failed", KR(ret));
-    }
+    } 
     if (FAILEDx(read_tenant_servers(sql, all_tenant_servers))) {
       LOG_WARN("read_tenant_servers failed", KR(ret), K(sql));
     }
@@ -1235,7 +1235,7 @@ int ObUnitTableOperator::read_unit_config(const ObMySQLResult &result,
       false/*skip_null_error*/, true/*skip_column_error*/, ObUnitResource::DEFAULT_NET_BANDWIDTH);
     EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "net_bandwidth_weight", net_bandwidth_weight, int64_t,
       false/*skip_null_error*/, true/*skip_column_error*/, ObUnitResource::DEFAULT_NET_BANDWIDTH_WEIGHT);
-
+  
     if (-1 == data_disk_size) {
       // for compatability, lower version default value may be -1. Set as 0.
       data_disk_size = 0;
@@ -1415,8 +1415,8 @@ int ObUnitTableOperator::read_tenants(ObSqlString &sql,
 #undef READ_ITEMS
 
 int ObUnitTableOperator::read_tenant_server(
-    const ObMySQLResult &result,
-    uint64_t &tenant_id,
+    const ObMySQLResult &result, 
+    uint64_t &tenant_id, 
     common::ObAddr &server,
     common::ObAddr &migrate_from_server) const
 {
@@ -1442,7 +1442,7 @@ int ObUnitTableOperator::read_tenant_server(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to use ip and port to set the server", KR(ret), K(ip), K(port));
     } else if (OB_UNLIKELY(false == migrate_from_server.set_ip_addr(
-          migrate_from_svr_ip,
+          migrate_from_svr_ip, 
           migrate_from_svr_port))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to use ip and port to set the migrate_from_server", KR(ret), K(migrate_from_svr_ip), K(migrate_from_svr_port));
@@ -1491,30 +1491,30 @@ int ObUnitTableOperator::read_tenant_servers(
           } else if (OB_FAIL(read_tenant_server(*result, tenant_id, server, migrate_server))) {
             LOG_WARN("read_tenant_server failed", KR(ret));
           } else {
-            if (tenant_servers.is_valid()
+            if (tenant_servers.is_valid() 
                   && tenant_id != tenant_servers.get_tenant_id()) {
               if (OB_FAIL(all_tenant_servers.push_back(tenant_servers))) {
                 LOG_WARN("push back failed", KR(ret), K(tenant_servers));
               } else {
                 tenant_servers.reset();
               }
-            }
+            } 
             if (FAILEDx(tenant_servers.init_or_insert_server(
-                  tenant_id,
-                  server,
+                  tenant_id, 
+                  server, 
                   migrate_server,
                   renew_time))) {
-              LOG_WARN("failed to init_or_insert_server", KR(ret),
+              LOG_WARN("failed to init_or_insert_server", KR(ret), 
                   K(tenant_id), K(server), K(migrate_server), K(renew_time));
             }
           } // end else
         } // end while
-
+        
         // put the last tenant_servers into tenant_servers
         if (OB_FAIL(ret)) {
         } else if (OB_UNLIKELY(!tenant_servers.is_valid())) {
           ret = OB_ENTRY_NOT_EXIST;
-          LOG_WARN("the query result is empty because the table is empty or there is no required value in the table",
+          LOG_WARN("the query result is empty because the table is empty or there is no required value in the table", 
               KR(ret), K(sql));
         } else if (OB_FAIL(all_tenant_servers.push_back(tenant_servers))) {
           LOG_WARN("push_back failed", KR(ret), K(tenant_servers));

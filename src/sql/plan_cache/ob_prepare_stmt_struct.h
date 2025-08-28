@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef OCEANBASE_SQL_PLAN_CACHE_OB_PREPARE_STMT_STRUCT_H_
 #define OCEANBASE_SQL_PLAN_CACHE_OB_PREPARE_STMT_STRUCT_H_
 
@@ -91,7 +91,7 @@ public:
     };
   };
   uint64_t db_id_;
-  // MySQL allows session-level temporary tables with the same name to have different schema definitions.
+  // MySQL allows session-level temporary tables with the same name to have different schema definitions. 
   // In order to distinguish this scenario, an incremental id is used to generate different prepared
   // statements each time.
   uint64_t inc_id_;

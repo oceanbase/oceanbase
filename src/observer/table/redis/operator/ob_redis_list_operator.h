@@ -112,7 +112,7 @@ public:
   }
   virtual ~ListCommandOperator() = default;
   int do_push(
-      int64_t db,
+      int64_t db, 
       const common::ObString &key,
       const common::ObIArray<common::ObString> &values,
       bool push_left,
@@ -123,7 +123,7 @@ public:
   int do_range(int64_t db, const common::ObString &key, int64_t start, int64_t end);
   int do_trim(int64_t db, const common::ObString &key, int64_t start, int64_t end);
   int do_insert(
-      int64_t db,
+      int64_t db, 
       const common::ObString &key,
       bool is_before_pivot,
       const common::ObString &pivot,
@@ -215,13 +215,13 @@ private:
   int build_rowkey(int64_t db, const ObString &key, bool is_data, const int64_t *index, bool is_min, ObRowkey &rowkey);
   int pop_single_count_list(int64_t db, const ObString &key, ObRedisListMeta &list_meta, const bool pop_left, common::ObString &res_value);
   int pop_multi_count_list(
-      int64_t db,
+      int64_t db, 
       const common::ObString &key,
       const bool pop_left,
       ObRedisListMeta &list_meta,
       common::ObString &res_value);
   int update_list_after_pop(
-      int64_t db,
+      int64_t db, 
       const ObString &key,
       const ListElement &old_borded,
       const ListElement &new_borded,

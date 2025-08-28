@@ -112,7 +112,7 @@ Worker::Status Worker::check_wait()
   Worker::Status ret_status = WS_NOWAIT;
   int ret = common_yield();
   if (OB_SUCCESS != ret && OB_CANCELED != ret) {
-    ret_status = WS_INVALID;
+    ret_status = WS_INVALID;    
   }
   return ret_status;
 }

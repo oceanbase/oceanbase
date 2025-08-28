@@ -33,7 +33,7 @@ public:
   virtual int transform_one_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
                                  ObDMLStmt *&stmt,
                                  bool &trans_happened) override;
-  virtual int check_hint_status(const ObDMLStmt &stmt, bool &need_trans) override;
+  virtual int check_hint_status(const ObDMLStmt &stmt, bool &need_trans) override;                                                                                                                                                                                 
 
   int do_transform(ObDMLStmt *stmt,
                    bool ignore_all_select_exprs,
@@ -366,8 +366,8 @@ private:
 
   int check_constraint_value_validity(ObRawExpr *value_expr, bool &reject);
 
-  int check_can_replace_child_of_row(ConstInfoContext &const_ctx,
-                                     ObRawExpr *&cur_expr,
+  int check_can_replace_child_of_row(ConstInfoContext &const_ctx, 
+                                     ObRawExpr *&cur_expr, 
                                      bool &can_replace_child);
 
 private:

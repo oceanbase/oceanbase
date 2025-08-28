@@ -19,9 +19,9 @@
 #include "storage/shared_storage/micro_cache/ckpt/ob_ss_linked_phy_block_reader.h"
 #include "storage/shared_storage/micro_cache/ckpt/ob_ss_linked_phy_block_writer.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace storage
+namespace storage 
 {
 using namespace oceanbase::storage;
 
@@ -97,7 +97,7 @@ int ItemInfo::init(const int64_t buf_len)
     } else {
       memset(buf_, 'a', buf_len);
     }
-
+    
     if (OB_SUCC(ret)) {
       buf_len_ = buf_len;
       crc_ = static_cast<uint32_t>(ob_crc64(buf_, buf_len));

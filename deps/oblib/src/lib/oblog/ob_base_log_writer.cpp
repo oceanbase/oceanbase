@@ -155,7 +155,7 @@ void ObBaseLogWriter::destroy()
     }
     log_write_cond_->signal(UINT32_MAX);
     log_flush_cond_->signal(UINT32_MAX);
-
+    
     if (max_buffer_item_cnt_){
       int64_t pop_idx = ATOMIC_LOAD(&log_item_pop_idx_) % max_buffer_item_cnt_;
       int64_t i = pop_idx;
@@ -184,7 +184,7 @@ void ObBaseLogWriter::destroy()
   if (OB_NOT_NULL(log_flush_cond_)) {
     OB_DELETE(SimpleCond, "BaseLogWriter", log_flush_cond_);
   }
-
+  
   max_buffer_item_cnt_ = 0;
   has_stopped_ = true;
 }

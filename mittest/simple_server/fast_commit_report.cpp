@@ -374,7 +374,7 @@ public:
   void insert_data_single(const int row_count)
   {
     fprintf(stdout, "start insert data, data count : %d \n", row_count);
-
+    
     ObSqlString sql;
     int64_t affected_rows = 0;
 
@@ -505,7 +505,7 @@ public:
     TRANS_LOG(INFO, "insert data single cost", K(end_time - begin_time), K(begin_time), K(end_time));
   }
 
-
+  
   void read_data(const int row_count)
   {
     ObSqlString sql;
@@ -529,7 +529,7 @@ public:
 
     const int64_t begin_time = ObTimeUtility::current_time();
     sql.assign_fmt("SELECT/*+ enable_parallel_dml PARALLEL(%ld) */ * FROM test_fast_commit;", SELECT_PARALLEL);
-
+    
     TRANS_LOG(INFO, "do select sql", K(sql));
     ASSERT_EQ(OB_SUCCESS, connection->execute_read(OB_SYS_TENANT_ID, sql.ptr(), read_res));
     const int64_t end_time = ObTimeUtility::current_time();
@@ -543,7 +543,7 @@ public:
     if (READ_CNT > 100) {
       TOTAL_READ_TIME += (end_time - begin_time);
     }
-
+    
 
     sqlclient::ObMySQLResult *result = read_res.get_result();
     ASSERT_NE(nullptr, result);
@@ -727,7 +727,7 @@ TEST_F(ObFastCommitReport, fast_commit_report)
           TOTAL_FC_SESSION,
           SELECT_PARALLEL);
 
-  sleep(SLEEP_SECONDS);
+  sleep(SLEEP_SECONDS); 
 }
 
 

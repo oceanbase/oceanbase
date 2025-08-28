@@ -90,9 +90,9 @@ int parse_init(ParseResult *p)
 #ifdef OB_BUILD_ORACLE_PARSER
     if (IS_ORACLE_COMPATIBLE) {
       ObCharsetParserType type = CHARSET_PARSER_TYPE_NONE;
-      if (ret = obcharset_get_parser_type_by_coll(p->connection_collation_, &type),
+      if (ret = obcharset_get_parser_type_by_coll(p->connection_collation_, &type), 
                  0 != ret) {
-        (void)snprintf(p->error_msg_, MAX_ERROR_MSG, "get charset failed: %u",
+        (void)snprintf(p->error_msg_, MAX_ERROR_MSG, "get charset failed: %u", 
                                                     p->connection_collation_);
       } else {
         switch(type) {
@@ -140,9 +140,9 @@ int parse_terminate(ParseResult *p)
 #ifdef OB_BUILD_ORACLE_PARSER
     if (IS_ORACLE_COMPATIBLE) {
       ObCharsetParserType type = CHARSET_PARSER_TYPE_NONE;
-      if (ret = obcharset_get_parser_type_by_coll(p->connection_collation_, &type),
+      if (ret = obcharset_get_parser_type_by_coll(p->connection_collation_, &type), 
                  0 != ret) {
-        (void)snprintf(p->error_msg_, MAX_ERROR_MSG, "get charset failed: %u",
+        (void)snprintf(p->error_msg_, MAX_ERROR_MSG, "get charset failed: %u", 
                                                     p->connection_collation_);
       } else {
         switch(type) {
@@ -230,9 +230,9 @@ int parse_sql(ParseResult *p, const char *buf, size_t input_len)
 #ifdef OB_BUILD_ORACLE_PARSER
         if (IS_ORACLE_COMPATIBLE) {
           ObCharsetParserType type = CHARSET_PARSER_TYPE_NONE;
-          if (ret = obcharset_get_parser_type_by_coll(p->connection_collation_, &type),
+          if (ret = obcharset_get_parser_type_by_coll(p->connection_collation_, &type), 
                     0 != ret) {
-            (void)snprintf(p->error_msg_, MAX_ERROR_MSG, "get charset failed: %u",
+            (void)snprintf(p->error_msg_, MAX_ERROR_MSG, "get charset failed: %u", 
                                                         p->connection_collation_);
           } else {
             switch(type) {

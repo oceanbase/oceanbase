@@ -53,13 +53,13 @@ public:
   static int multi_get(ObTableCtx &ctx, const ObIArray<ObITableEntity*> &entities, ObIArray<ObTableOperationResult> *results = nullptr);
   static int multi_delete(ObTableCtx &ctx, const ObIArray<ObITableEntity*> &entities, ObIArray<ObTableOperationResult> *results = nullptr);
   static int multi_replace(ObTableCtx &ctx, const ObIArray<ObITableEntity*> &entities, ObIArray<ObTableOperationResult> *results = nullptr);
-  static int construct_entities_from_row(ObIAllocator &allocator,
+  static int construct_entities_from_row(ObIAllocator &allocator, 
                                          ObKvSchemaCacheGuard &schema_cache_guard,
                                          ObNewRow &row,
-                                         const ObIArray<ObITableEntity*> &entities,
+                                         const ObIArray<ObITableEntity*> &entities, 
                                          ObIArray<ObTableOperationResult> &results);
   static int get_result_index(const ObNewRow &row,
-                              const ObIArray<ObITableEntity*> &entities,
+                              const ObIArray<ObITableEntity*> &entities, 
                               const ObIArray<uint64_t> &rowkey_ids,
                               ObObj *rowkey_cells,
                               ObIArray<int64_t> &indexs);
@@ -146,7 +146,7 @@ private:
       // cache is release, avoid others to visit it
       ctx.set_expr_info(nullptr);
     }
-    OB_TABLE_END_AUDIT(ret_code, ret,
+    OB_TABLE_END_AUDIT(ret_code, ret, 
                        snapshot, ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
                        stmt_type, STMT_TYPE);
     return ret;
@@ -209,7 +209,7 @@ private:
     }
     // cache is release, avoid others to visit it
     ctx.set_expr_info(nullptr);
-    OB_TABLE_END_AUDIT(ret_code, ret,
+    OB_TABLE_END_AUDIT(ret_code, ret, 
                        snapshot, ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
                        stmt_type, STMT_TYPE);
     return ret;
@@ -277,7 +277,7 @@ private:
     }
     // cache is release, avoid others to visit it
     ctx.set_expr_info(nullptr);
-    OB_TABLE_END_AUDIT(ret_code, ret,
+    OB_TABLE_END_AUDIT(ret_code, ret, 
                        snapshot, ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
                        stmt_type, STMT_TYPE);
     return ret;
@@ -301,9 +301,9 @@ public:
     }
   };
 public:
-  OB_INLINE ObTableCtx* get_tb_ctx()
+  OB_INLINE ObTableCtx* get_tb_ctx() 
   {
-    return OB_NOT_NULL(scan_executor_) ? &scan_executor_->get_table_ctx() : nullptr;
+    return OB_NOT_NULL(scan_executor_) ? &scan_executor_->get_table_ctx() : nullptr; 
   }
   virtual int init(ObTableCtx &ctx);
   virtual int open();

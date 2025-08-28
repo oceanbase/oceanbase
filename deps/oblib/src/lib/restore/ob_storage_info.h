@@ -8,8 +8,8 @@
  *  EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  *  MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  *  See the Mulan PubL v2 for more details.
- *  Authors:
- *
+ *  Authors: 
+ *      
  */
 
 #ifndef OCEANBASE_LIB_RESTORE_OB_STORAGE_INFO_H_
@@ -142,7 +142,7 @@ struct ObSTSToken
   // increase the cpu consumption, so we optimize it by using a fixed-length char array. When the
   // length of sts_token is less than 1024, allocation is no longer performed, but data_arr is used
   // directly for storage. Please refer to the documentation for details:
-  //
+  // 
   char data_arr_[OB_PREDEFINED_STS_TOKEN_LENGTH];
   int64_t data_len_;
   bool is_below_predefined_length_;
@@ -205,7 +205,7 @@ enum ObStorageDeleteMode: uint8_t
 };
 
 class ObObjectStorageInfo;
-class ObStorageAccount
+class ObStorageAccount 
 {
 public:
   ObStorageAccount();
@@ -214,7 +214,7 @@ public:
   virtual bool is_valid() const { return is_valid_; }
   virtual int assign(const ObObjectStorageInfo *storage_info) = 0;
 
-  TO_STRING_KV(K(is_valid_), K(delete_mode_), K(endpoint_), K(access_id_),
+  TO_STRING_KV(K(is_valid_), K(delete_mode_), K(endpoint_), K(access_id_), 
       K(sts_token_), KP(access_key_));
 
 public:
@@ -261,19 +261,19 @@ public:
   virtual bool is_valid() const;
   virtual int validate_arguments() const;
 
-  // This function allows the device_manager to determine the key values for different storage information.
+  // This function allows the device_manager to determine the key values for different storage information. 
   // Since delete_mode and addressing_mode are recorded in the extension field, they are not separately recorded.
   virtual int get_device_map_key_str(char *key_str, const int64_t len) const;
   virtual int64_t get_device_map_key_len() const;
-  // This function retrieves authentication information.
+  // This function retrieves authentication information. 
   // When assume_role is not used, it functions the same as get_storage_info_str.
-  virtual int get_authorization_str(char *authorization_str,
-                                    const int64_t authorization_str_len,
+  virtual int get_authorization_str(char *authorization_str, 
+                                    const int64_t authorization_str_len, 
                                     ObSTSToken &sts_token) const;
 
   virtual int get_storage_info_str(char *storage_info, const int64_t info_len) const;
   virtual int to_account(ObStorageAccount &account) const;
-
+  
   TO_STRING_KV(K_(endpoint), K_(access_id), K_(extension), "type", get_type_str(),
       K_(checksum_type), K_(max_iops), K_(max_bandwidth), KP_(role_arn), KP_(external_id), K_(enable_worm));
 protected:
@@ -461,7 +461,7 @@ public:
   int64_t original_access_time_us_;
 };
 
-// @brief ObClusterEnableObdalConfigBase is used to check whether enable obdal or not.
+// @brief ObClusterEnableObdalConfigBase is used to check whether enable obdal or not. 
 class ObClusterEnableObdalConfigBase
 {
 public:

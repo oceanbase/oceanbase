@@ -453,7 +453,7 @@ int ObQueryEngine::estimate_size(const ObMemtableKey *start_key,
   int64_t unused_top_level = 0;
   int64_t unused_btree_node_count = 0;
   if (OB_FAIL(inner_loop_find_level_(
-          start_key, end_key, ESTIMATE_CHILD_COUNT_THRESHOLD, unused_top_level, unused_btree_node_count, total_rows)))
+          start_key, end_key, ESTIMATE_CHILD_COUNT_THRESHOLD, unused_top_level, unused_btree_node_count, total_rows))) 
   {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;

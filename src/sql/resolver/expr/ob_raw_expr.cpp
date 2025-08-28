@@ -459,7 +459,7 @@ int ObRawExpr::formalize(const ObSQLSessionInfo *session_info,
     LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
   } else if (OB_FAIL(extract_info())) {
     LOG_WARN("failed to extract info", K(*this));
-  } else if (need_deduce_type &&
+  } else if (need_deduce_type && 
              OB_FAIL(deduce_type(session_info, solidify_session_vars, local_vars, local_var_id))) {
     LOG_WARN("failed to deduce type", K(*this));
   } else if (OB_FAIL(calc_hash())) {
@@ -639,10 +639,10 @@ bool ObRawExpr::is_multivalue_index_column_expr() const
   bool bool_ret = false;
   const ObRawExpr *param_asis = nullptr;
   const ObRawExpr *param_multi = nullptr;
-  if (get_expr_type() == T_FUN_SYS_JSON_QUERY &&
-      get_param_count() >= 13 &&
+  if (get_expr_type() == T_FUN_SYS_JSON_QUERY && 
+      get_param_count() >= 13 && 
       OB_NOT_NULL(param_asis = get_param_expr(8)) && param_asis->is_const_raw_expr() &&
-      OB_NOT_NULL(param_multi = get_param_expr(12)) && param_multi->is_const_raw_expr())
+      OB_NOT_NULL(param_multi = get_param_expr(12)) && param_multi->is_const_raw_expr()) 
   {
     common::ObObj value_asis = (static_cast<const ObConstRawExpr *>(param_asis))->get_value();
     common::ObObj value_multi = (static_cast<const ObConstRawExpr *>(param_multi))->get_value();
@@ -686,11 +686,11 @@ bool ObRawExpr::is_multivalue_define_json_expr() const
   bool b_ret = false;
   const ObRawExpr *asis_expr = nullptr;
   const ObRawExpr *multi_expr = nullptr;
-  if (type_ == T_FUN_SYS_JSON_QUERY &&
-      get_param_count() >= 13 &&
-      OB_NOT_NULL(asis_expr = get_param_expr(8)) &&
+  if (type_ == T_FUN_SYS_JSON_QUERY && 
+      get_param_count() >= 13 && 
+      OB_NOT_NULL(asis_expr = get_param_expr(8)) && 
       asis_expr->is_const_expr() &&
-      OB_NOT_NULL(multi_expr = get_param_expr(12)) &&
+      OB_NOT_NULL(multi_expr = get_param_expr(12)) && 
       multi_expr->is_const_expr()) {
     const ObConstRawExpr *const_expr1 = static_cast<const ObConstRawExpr*>(asis_expr);
     const ObConstRawExpr *const_expr2 = static_cast<const ObConstRawExpr*>(multi_expr);
@@ -703,7 +703,7 @@ bool ObRawExpr::is_multivalue_define_json_expr() const
 bool ObRawExpr::extract_multivalue_json_expr(const ObRawExpr*& json_expr) const
 {
   bool found = false;
-
+  
   for (int i = 0; i < get_param_count() && !found; ++i) {
     const ObRawExpr *child = get_param_expr(i);
     if (OB_ISNULL(child)) {
@@ -3302,7 +3302,7 @@ bool ObOpRawExpr::is_white_runtime_filter_expr() const
   // white filter
   } else if (T_OP_PUSHDOWN_TOPN_FILTER == type_ && 1 == exprs_.count()
              && T_REF_COLUMN == exprs_.at(0)->get_expr_type()) {
-    // FIXME: @zhouhaiyu.zhy
+    // FIXME: @zhouhaiyu.zhy 
     // for now, storage pushdown filter can not process both a < 10 and a is null in one filter
     // so disable white topn runtime filter
     // LOG_TRACE("[TopN Filter] push topn filter as white filter");
@@ -3350,7 +3350,7 @@ void ObPLAssocIndexRawExpr::inner_calc_hash()
   expr_hash_ = common::do_hash(for_write_, expr_hash_);
   expr_hash_ = common::do_hash(out_of_range_set_err_, expr_hash_);
   expr_hash_ = common::do_hash(parent_type_, expr_hash_);
-  expr_hash_ = common::do_hash(is_index_by_varchar_, expr_hash_);
+  expr_hash_ = common::do_hash(is_index_by_varchar_, expr_hash_); 
 }
 
 bool ObPLAssocIndexRawExpr::inner_same_as(const ObRawExpr &expr,
@@ -4477,7 +4477,7 @@ bool ObSysFunRawExpr::inner_json_expr_same_as(
     l_expr->extract_multivalue_json_expr(l_expr);
   }
 
-  if (l_expr->get_expr_type() == T_FUN_SYS_JSON_QUERY
+  if (l_expr->get_expr_type() == T_FUN_SYS_JSON_QUERY 
       && r_expr->is_domain_json_expr()) {
     const ObRawExpr *r_param_expr = nullptr;
     const ObRawExpr *l_param_expr = l_expr->get_param_expr(1);
@@ -4485,7 +4485,7 @@ bool ObSysFunRawExpr::inner_json_expr_same_as(
     const ObRawExpr *r_column_expr = nullptr;
     const ObRawExpr *l_column_expr = l_expr->get_param_expr(0);
 
-    if (r_expr->get_expr_type() == T_FUN_SYS_JSON_MEMBER_OF) {
+    if (r_expr->get_expr_type() == T_FUN_SYS_JSON_MEMBER_OF) { 
       r_param_expr = r_expr->get_param_expr(1);
     } else {
       r_param_expr = r_expr->get_param_expr(0);
@@ -4522,7 +4522,7 @@ bool ObSysFunRawExpr::inner_json_expr_same_as(
   } else if (l_expr->get_expr_type() == r_expr->get_expr_type()) {
     bool_ret = l_expr->same_as(*r_expr, check_context);
   }
-
+  
   return bool_ret;
 }
 
@@ -4532,7 +4532,7 @@ bool ObSysFunRawExpr::inner_same_as(
 {
   bool bool_ret = false;
   if (get_expr_type() != expr.get_expr_type()) {
-    if (expr.get_expr_type() ==  T_OP_BOOL && expr.is_domain_json_expr() &&
+    if (expr.get_expr_type() ==  T_OP_BOOL && expr.is_domain_json_expr() && 
         IS_QUERY_JSON_EXPR(get_expr_type())) {
       const ObRawExpr* right_expr = ObRawExprUtils::skip_inner_added_expr(&expr);
       bool_ret = inner_json_expr_same_as(*right_expr, check_context);
@@ -4610,7 +4610,7 @@ bool ObSysFunRawExpr::inner_same_as(
       // so do not share expr
       if ((T_FUN_SYS_JSON_REPLACE == get_expr_type() ||
            T_FUN_SYS_JSON_SET == get_expr_type() ||
-           T_FUN_SYS_JSON_REMOVE == get_expr_type())) {
+           T_FUN_SYS_JSON_REMOVE == get_expr_type())) { 
         bool_ret = false;
       }
       if (bool_ret && T_FUN_SYS_CALC_PARTITION_ID == get_expr_type()) {
@@ -5160,7 +5160,7 @@ int ObSequenceRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64
     LOG_WARN("fail to BUF_PRINTF", K(ret));
   } else if (is_dblink_sys_func()) {
     if (OB_FAIL(BUF_PRINTF("@%.*s",
-                          get_dblink_name().length(),
+                          get_dblink_name().length(), 
                           get_dblink_name().ptr()))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
     }

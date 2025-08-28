@@ -81,7 +81,7 @@ void HazardPointer::set_next(HazardPointer* next)
 {
   next_ = next;
 }
-
+ 
 void HazardPointer::set_next_atomic(HazardPointer* next)
 {
   HazardPointer** addr = &next_;

@@ -16,7 +16,7 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "lib/xml/ob_multi_mode_interface.h"
-namespace oceanbase
+namespace oceanbase 
 {
 
 namespace sql
@@ -24,7 +24,7 @@ namespace sql
 
 class ObExprXmlcast : public ObFuncExprOperator
 {
-  public:
+  public: 
   explicit ObExprXmlcast(common::ObIAllocator &alloc);
   virtual ~ObExprXmlcast();
   virtual int calc_result_type2(ObExprResType &type,
@@ -32,13 +32,13 @@ class ObExprXmlcast : public ObFuncExprOperator
                                 ObExprResType &type2,
                                 common::ObExprTypeCtx &type_ctx) const;
 
-  static int eval_xmlcast(const ObExpr &expr, ObEvalCtx &ctx,  ObDatum &res);
-  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
-                      const ObRawExpr &raw_expr,
-                      ObExpr &rt_expr)
+  static int eval_xmlcast(const ObExpr &expr, ObEvalCtx &ctx,  ObDatum &res);          
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, 
+                      const ObRawExpr &raw_expr, 
+                      ObExpr &rt_expr) 
                       const override;
   DECLARE_SET_LOCAL_SESSION_VARS;
-
+  
 private:
   int set_dest_type(ObExprResType &param_type, ObExprResType &dst_type, ObExprTypeCtx &type_ctx) const;
   static int extract_xml_text_node(ObMulModeMemCtx* mem_ctx, ObIMulModeBase *xml_doc, ObString &res);

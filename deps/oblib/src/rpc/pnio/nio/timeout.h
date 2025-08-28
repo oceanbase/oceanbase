@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 static bool is_epoll_handle_timeout(int64_t time_limit)
 {
   return time_limit > 0 && rk_get_corse_us() > time_limit;

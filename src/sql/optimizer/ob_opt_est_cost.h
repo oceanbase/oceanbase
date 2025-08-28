@@ -112,38 +112,38 @@ public:
                                    const ObIArray<ObRawExpr *> &disinct_columns,
                                    const ObOptimizerContext &opt_ctx);
 
-  static double cost_get_rows(double rows,
+  static double cost_get_rows(double rows, 
                               const ObOptimizerContext &opt_ctx);
 
-  static double cost_sequence(double rows,
-                              double uniq_sequence_cnt,
+  static double cost_sequence(double rows, 
+                              double uniq_sequence_cnt, 
                               const ObOptimizerContext &opt_ctx);
 
-  static double cost_material(const double rows,
-                              const double average_row_size,
+  static double cost_material(const double rows, 
+                              const double average_row_size, 
                               const ObOptimizerContext &opt_ctx);
 
-  static double cost_read_materialized(const double rows,
+  static double cost_read_materialized(const double rows, 
                                        const ObOptimizerContext &opt_ctx);
 
-  static double cost_filter_rows(double rows,
-                                 ObIArray<ObRawExpr*> &filters,
+  static double cost_filter_rows(double rows, 
+                                 ObIArray<ObRawExpr*> &filters, 
                                  const ObOptimizerContext &opt_ctx);
 
-  static int cost_subplan_filter(const ObSubplanFilterCostInfo &info,
-                                 double &cost,
+  static int cost_subplan_filter(const ObSubplanFilterCostInfo &info, 
+                                 double &cost, 
                                  const ObOptimizerContext &opt_ctx);
 
-  static int cost_union_all(const ObCostMergeSetInfo &info,
-                            double &cost,
+  static int cost_union_all(const ObCostMergeSetInfo &info, 
+                            double &cost, 
                             const ObOptimizerContext &opt_ctx);
 
-  static int cost_merge_set(const ObCostMergeSetInfo &info,
-                            double &cost,
+  static int cost_merge_set(const ObCostMergeSetInfo &info, 
+                            double &cost, 
                             const ObOptimizerContext &opt_ctx);
 
-  static int cost_hash_set(const ObCostHashSetInfo &info,
-                           double &cost,
+  static int cost_hash_set(const ObCostHashSetInfo &info, 
+                           double &cost, 
                            const ObOptimizerContext &opt_ctx);
 
   static double cost_quals(double rows, 
@@ -175,7 +175,7 @@ public:
                                double &cmp_cost,
                                const ObOptimizerContext &opt_ctx);
 
-  static double cost_late_materialization_table_get(int64_t column_cnt,
+  static double cost_late_materialization_table_get(int64_t column_cnt, 
                                                     const ObOptimizerContext &opt_ctx);
 
   static void cost_late_materialization_table_join(double left_card,
@@ -198,22 +198,22 @@ public:
                                   double &cost,
                                   const ObOptimizerContext &opt_ctx);
 
-  static int cost_insert(ObDelUpCostInfo& cost_info,
-                         double &cost,
+  static int cost_insert(ObDelUpCostInfo& cost_info, 
+                         double &cost, 
                          const ObOptimizerContext &opt_ctx);
 
-  static int cost_update(ObDelUpCostInfo& cost_info,
-                         double &cost,
+  static int cost_update(ObDelUpCostInfo& cost_info, 
+                         double &cost, 
                          const ObOptimizerContext &opt_ctx);
 
-  static int cost_delete(ObDelUpCostInfo& cost_info,
-                         double &cost,
+  static int cost_delete(ObDelUpCostInfo& cost_info, 
+                         double &cost, 
                          const ObOptimizerContext &opt_ctx);
 
-  static int calc_range_cost(const ObTableMetaInfo& table_meta_info,
+  static int calc_range_cost(const ObTableMetaInfo& table_meta_info, 
                             const ObIArray<ObRawExpr *> &filters,
-                            int64_t index_column_count,
-                            int64_t range_count,
+                            int64_t index_column_count, 
+                            int64_t range_count, 
                             double range_sel,
                             double &cost,
                             const ObOptimizerContext &opt_ctx);

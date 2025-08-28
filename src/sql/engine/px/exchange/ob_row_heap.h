@@ -144,7 +144,7 @@ public:
 
 /*
  * 对来自 N 个 CHANNEL 的行堆排序，N 随着 EOF 通道增多而减少
- * ref:
+ * ref:  
  */
 template <class COMPARE = ObRowComparer, class ROW = common::ObNewRow>
 class ObRowHeap

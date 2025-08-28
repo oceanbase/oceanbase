@@ -103,7 +103,7 @@ class ObRawExprPrinter
     PRINT_IDENT(ident_str);               \
     PRINT_QUOT;                           \
   } while (0)
-
+  
 // cast函数在parse阶段用到这两个宏, 但定义在sql_parse_tab.c中
 // cast函数功能不完善，beta之前不会修改, 先定义在这里
 // TODO@nijia.nj

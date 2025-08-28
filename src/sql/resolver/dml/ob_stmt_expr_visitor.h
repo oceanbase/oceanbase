@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef OB_STMT_EXPR_VISITOR_H
 #define OB_STMT_EXPR_VISITOR_H
 #include "sql/ob_sql_utils.h"
@@ -49,10 +49,10 @@ enum DmlStmtScope {
   SCOPE_QUALIFY_FILTER
 };
 
-class ObStmtExprVisitor
+class ObStmtExprVisitor 
 {
 public:
-  ObStmtExprVisitor() : flags_(0xffffffff),
+  ObStmtExprVisitor() : flags_(0xffffffff), 
     is_recursive_(false)
   {}
 
@@ -64,12 +64,12 @@ public:
                            const DmlStmtScope my_scope);
 
   virtual int do_visit(ObRawExpr *&expr) = 0;
-
-  void add_all()
+  
+  void add_all() 
   {
     flags_ = 0xffffffff;
   }
-
+  
   void set_relation_scope()
   {
     remove_scope(SCOPE_BASIC_TABLE);
@@ -77,32 +77,32 @@ public:
     remove_scope(SCOPE_SHADOW_COLUMN);
     remove_scope(SCOPE_INSERT_DESC);
   }
-
+  
   void remove_all()
   {
     flags_ = 0;
   }
-
-  void add_scope(DmlStmtScope scope)
+  
+  void add_scope(DmlStmtScope scope) 
   {
     flags_ = static_cast<uint32_t>((flags_ | (1L << scope)));
   }
 
   void add_scope(const ObIArray<DmlStmtScope> &scopes);
-
-  void remove_scope(DmlStmtScope scope)
+  
+  void remove_scope(DmlStmtScope scope) 
   {
     flags_ = (flags_ & (~(1L << scope)));
   }
-
+  
   void remove_scope(const ObIArray<DmlStmtScope> &scopes);
-
-  bool is_required(const DmlStmtScope scope)
+  
+  bool is_required(const DmlStmtScope scope) 
   {
     return 0 != (flags_ & (1L << scope));
   }
-
-  bool is_recursive() const { return is_recursive_; }
+  
+  bool is_recursive() const { return is_recursive_; } 
   void set_recursive(bool flag) { is_recursive_ = flag; }
 
 private:
@@ -167,14 +167,14 @@ public:
     add_scope(scopes);
   }
   int do_visit(ObRawExpr *&expr) override;
-  void set_expr_flags_required(const ObExprInfo &expr_flags, bool match_any = true)
+  void set_expr_flags_required(const ObExprInfo &expr_flags, bool match_any = true) 
   {
     expr_flags_ = &expr_flags;
     match_any_ = match_any;
   }
   RelExprCheckerBase *checker_;
 private:
-  bool match_any_;  // set the matching mode, where true indicates that an intersection is sufficient,
+  bool match_any_;  // set the matching mode, where true indicates that an intersection is sufficient, 
                     // and false means that it is necessary to completely contain the required flags.
   const ObExprInfo *expr_flags_;  // retrieve expressions that contain required flags.
 };
@@ -189,7 +189,7 @@ public:
     remove_all();
     add_scope(scopes);
   }
-
+  
   virtual int do_visit(ObRawExpr *&expr) override;
   int add_replace_exprs(const ObIArray<ObRawExpr *> &from_exprs,
                         const ObIArray<ObRawExpr *> &to_exprs,
@@ -209,14 +209,14 @@ class ObStmtExprCopier : public ObStmtExprVisitor
 public:
   ObStmtExprCopier(ObRawExprCopier &copier) : copier_(copier)
   {}
-
+  
   virtual int do_visit(ObRawExpr *&expr) override;
 
 private:
   ObRawExprCopier &copier_;
 };
 
-class ObSharedExprChecker : public ObStmtExprVisitor
+class ObSharedExprChecker : public ObStmtExprVisitor 
 {
 public:
   ObSharedExprChecker() : stmt_expr_set_(NULL),
@@ -232,7 +232,7 @@ private:
   hash::ObHashSet<uint64_t> shared_expr_set_;
 };
 
-class ObStmtExecParamFormatter : public ObStmtExprVisitor
+class ObStmtExecParamFormatter : public ObStmtExprVisitor 
 {
 public:
   ObStmtExecParamFormatter() {}
@@ -240,7 +240,7 @@ public:
   virtual int do_visit(ObRawExpr *&expr) override;
 
   int do_formalize_exec_param(ObRawExpr *&expr, bool &is_happened);
-
+  
 };
 
 class ObStmtExprChecker : public ObStmtExprVisitor

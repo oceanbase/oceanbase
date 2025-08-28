@@ -362,7 +362,7 @@ int ObLogExprValues::allocate_expr_post(ObAllocExprContext &ctx)
     LOG_WARN("failed to append exprs", K(ret));
   } else if (value_exprs_.empty() && OB_FAIL(allocate_dummy_output())) {
     LOG_WARN("failed to allocate dummy output", K(ret));
-  } else if (!query_ctx->var_init_exprs_.empty() &&
+  } else if (!query_ctx->var_init_exprs_.empty() && 
              OB_FAIL(get_plan()->get_optimizer_context().get_all_exprs().append(query_ctx->var_init_exprs_))) {
     // make sure var_init_exprs in CG context
     LOG_WARN("failed to append var init exprs", K(ret));
@@ -506,7 +506,7 @@ int ObLogExprValues::extract_err_log_info()
   return ret;
 }
 
-int ObLogExprValues::get_plan_item_info(PlanText &plan_text,
+int ObLogExprValues::get_plan_item_info(PlanText &plan_text, 
                                         ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;

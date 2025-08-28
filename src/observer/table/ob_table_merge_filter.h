@@ -34,8 +34,8 @@ public:
   virtual ~ObTableRowIterator() = default;
 public:
   virtual int next_row() = 0;
-  virtual Row *get_cur_row() = 0;
-  virtual const Row *get_cur_row() const = 0;
+  virtual Row *get_cur_row() = 0; 
+  virtual const Row *get_cur_row() const = 0; 
   virtual int rescan(ReScanParam&... rescan_param) = 0;
 
   bool valid() const { return valid_; }
@@ -136,7 +136,7 @@ private:
   common::ObBinaryHeap<RowIterator*, HeapCompare, 64> binary_heap_;
   common::ObSEArray<RowIterator *, 8> inner_row_iters_;
   bool is_inited_;
-  RowIterator *last_pop_iter_;
+  RowIterator *last_pop_iter_; 
 };
 
 template <typename Row, typename Compare, typename RowIterator>
@@ -402,7 +402,7 @@ public:
       ResultIterType *result_iter = result_iters.at(i);
       if (OB_ISNULL(tmp_result_row_iter = OB_NEWx(ObTableResultRowIter, &allocator_, result_iter))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to alloc memory", K(ret), K(sizeof(ObTableResultRowIter)));
+        LOG_WARN("fail to alloc memory", K(ret), K(sizeof(ObTableResultRowIter))); 
       } else if (OB_FAIL(result_row_iters_.push_back(tmp_result_row_iter))) {
         LOG_WARN("fail to add result row iter", K(ret));
         tmp_result_row_iter->~ObTableResultRowIter();

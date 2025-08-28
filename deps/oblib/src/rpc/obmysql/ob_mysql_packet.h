@@ -99,11 +99,11 @@ enum class ObMySQLPacketType
   PKT_OKP,       // 2 -> okp;
   PKT_ERR,       // 3 -> error packet;
   PKT_EOF,       // 4 -> eof packet;
-  PKT_ROW,       // 5 -> row packet;
+  PKT_ROW,       // 5 -> row packet; 
   PKT_FIELD,     // 6 -> field packet;
   PKT_PIECE,     // 7 -> piece packet;
   PKT_STR,       // 8 -> string packet;
-  PKT_PREPARE,   // 9 -> prepare packet;
+  PKT_PREPARE,   // 9 -> prepare packet; 
   PKT_RESHEAD,   // 10 -> result header packet
   PKT_PREXEC,    // 11 -> prepare execute packet;
   PKT_AUTH_SWITCH,// 12 -> auth switch request packet;

@@ -34,3 +34,4 @@ OB_SERIALIZE_MEMBER((ObForceDropLonelyLobAuxTableArg, ObDDLArg), tenant_id_, dat
 
 }//end namespace obrpc
 }//end namespace oceanbase
+

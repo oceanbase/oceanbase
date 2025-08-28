@@ -57,7 +57,7 @@ public:
 class ObHbaseAdapterGuard
 {
 public:
-  ObHbaseAdapterGuard(ObIAllocator &alloc, const ObTableExecCtx &exec_ctx)
+  ObHbaseAdapterGuard(ObIAllocator &alloc, const ObTableExecCtx &exec_ctx) 
     : allocator_(alloc), exec_ctx_(exec_ctx), hbase_adapter_(nullptr)
   {}
   ~ObHbaseAdapterGuard()

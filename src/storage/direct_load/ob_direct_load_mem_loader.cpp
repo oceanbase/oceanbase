@@ -80,7 +80,7 @@ int ObDirectLoadMemLoader::work()
         }
       } else if (nullptr == chunk && OB_FAIL(mem_ctx_->acquire_chunk(chunk))) {
         LOG_WARN("fail to acquire chunk", KR(ret));
-      }
+      } 
       if (OB_SUCC(ret)) {
         row = *external_row;
         if (OB_FAIL(chunk->add_item(row))) {

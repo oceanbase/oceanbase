@@ -3756,7 +3756,7 @@ int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
       if (!col->is_nullable()) {
         col_param.set_is_not_null_column();
       }
-      if (lib::is_mysql_mode() &&
+      if (lib::is_mysql_mode() && 
           col->get_meta_type().get_type_class() == ColumnTypeClass::ObTextTC) {
         col_param.set_is_text_column();
       }
@@ -4859,7 +4859,7 @@ int ObDbmsStats::parser_for_all_clause(const ParseNode *for_all_node,
         LOG_WARN("failed to parse size clause", K(ret));
       } else {
         use_size_auto = size_conf.is_auto();
-
+        
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < column_params.count(); ++i) {
@@ -5943,7 +5943,7 @@ int ObDbmsStats::do_gather_table_stats(sql::ObExecContext &ctx,
       } else if (OB_FAIL(gather_table_stats_with_default_param(ctx, duration_time, stat_table, task_info))) {
         LOG_WARN("failed to gather table stats with default param", K(ret));
       }
-
+      
       if (OB_FAIL(ret)) {
         if (OB_ERR_QUERY_INTERRUPTED == ret) {
           LOG_WARN("query interrupted", K(ret));
@@ -6065,7 +6065,7 @@ int ObDbmsStats::get_table_stale_percent(sql::ObExecContext &ctx,
     }
   } else if (OB_FAIL(get_non_partitioned_table_stale_percent(ctx, tenant_id, table_schema, stat_table))) {
     LOG_WARN("failed to get common table stale percent", K(ret));
-  } else {
+  } else { 
     /*do nothing*/
   }
   return ret;
@@ -6191,7 +6191,7 @@ int ObDbmsStats::gather_table_stats_with_default_param(ObExecContext &ctx,
   ObOptStatGatherStatList::instance().push(gather_stat);
   ObOptStatGatherAudit audit(tmp_alloc);
   ObOptStatRunningMonitor running_monitor(ctx.get_allocator(), ObTimeUtility::current_time(), stat_param.allocator_->used(), gather_stat, audit);
-
+  
   if (OB_FAIL(running_monitor.add_monitor_info(ObOptStatRunningPhase::GATHER_PREPARE))) {
       LOG_WARN("failed to add add monitor info", K(ret));
   } else if (OB_FAIL(ObDbmsStatsUtils::get_valid_duration_time(task_info.task_start_time_,
@@ -6214,7 +6214,7 @@ int ObDbmsStats::gather_table_stats_with_default_param(ObExecContext &ctx,
     LOG_WARN("failed to get stats consumer gourp id");
   } else if (OB_FAIL(running_monitor.add_table_info(stat_param, stat_table.stale_percent_))) {
     LOG_WARN("failed to add table info", K(ret));
-  } else if (OB_FAIL(gather_table_stats_by_parts(ctx, task_info.task_start_time_, duration_time, stat_param,
+  } else if (OB_FAIL(gather_table_stats_by_parts(ctx, task_info.task_start_time_, duration_time, stat_param, 
               failed_part_and_subpart_ids, succ_part_and_subpart_ids,  running_monitor))) {
     LOG_WARN("failed to gather table stats", K(ret));
     int tmp_ret_code = ret;
@@ -6691,7 +6691,7 @@ bool ObDbmsStats::need_gather_index_stats(const ObTableStatParam &param)
  * possible values are:
  *  ALL: Gather all (subpartition, partition, and global)
  *  AUTO: Oracle recommends setting granularity to the default value of AUTO to gather subpartition,
- *        partition, or global statistics, depending on partition type.
+ *        partition, or global statistics, depending on partition type. 
  *  DEFAULT: Gathers global and partition-level
  *  GLOBAL: Gather global only
  *  GLOBAL AND PARTITION: Gather global and partition-level
@@ -6700,7 +6700,7 @@ bool ObDbmsStats::need_gather_index_stats(const ObTableStatParam &param)
  *  PARTITION: Gather partition-level
  *  SUBPARTITION: Gather subpartition-level
  *  Oracle granularity actual behavior survey:
- *
+ *    
  * @return
  */
 int ObDbmsStats::resovle_granularity(ObGranularityType granu_type,
@@ -6888,7 +6888,7 @@ int ObDbmsStats::refresh_tenant_schema_guard(ObExecContext &ctx, const uint64_t 
     } else {
       ctx.get_sql_ctx()->schema_guard_ = &(cached_schema_info.get_schema_guard());
     }
-  }
+  }  
   return ret;
 }
 
@@ -6919,7 +6919,7 @@ int ObDbmsStats::gather_system_stats(sql::ObExecContext &ctx,
     LOG_WARN("failed to check system stat table ready", K(ret));
   } else if (OB_FAIL(ObDbmsStatsExecutor::gather_system_stats(ctx, session->get_effective_tenant_id()))) {
     LOG_WARN("failed to gather system stats", K(ret));
-  } else if (OB_FAIL(update_system_stats_cache(session->get_rpc_tenant_id(),
+  } else if (OB_FAIL(update_system_stats_cache(session->get_rpc_tenant_id(), 
                                               session->get_effective_tenant_id()))) {
     LOG_WARN("failed to update system stat cache", K(ret));
   }
@@ -6953,7 +6953,7 @@ int ObDbmsStats::delete_system_stats(sql::ObExecContext &ctx,
     LOG_WARN("failed to check system stat table ready", K(ret));
   } else if (OB_FAIL(ObDbmsStatsExecutor::delete_system_stats(ctx, session->get_effective_tenant_id()))) {
     LOG_WARN("failed to delete system stats", K(ret));
-  } else if (OB_FAIL(update_system_stats_cache(session->get_rpc_tenant_id(),
+  } else if (OB_FAIL(update_system_stats_cache(session->get_rpc_tenant_id(), 
                                               session->get_effective_tenant_id()))) {
     LOG_WARN("failed to update system stat cache", K(ret));
   }
@@ -7014,10 +7014,10 @@ int ObDbmsStats::set_system_stats(sql::ObExecContext &ctx,
   } else if (OB_FAIL(num_value.extract_valid_int64_with_trunc(param.value_))) {
     LOG_WARN("failed to cast number to double" , K(ret));
   } else if (OB_FALSE_IT(param.tenant_id_ = session->get_effective_tenant_id())) {
-  } else if (OB_FAIL(ObDbmsStatsExecutor::set_system_stats(ctx,
+  } else if (OB_FAIL(ObDbmsStatsExecutor::set_system_stats(ctx, 
                                                            param))) {
     LOG_WARN("failed to set system stats", K(param), K(ret));
-  } else if (OB_FAIL(update_system_stats_cache(session->get_rpc_tenant_id(),
+  } else if (OB_FAIL(update_system_stats_cache(session->get_rpc_tenant_id(), 
                                               session->get_effective_tenant_id()))) {
     LOG_WARN("failed to update system stat cache", K(ret));
   }
@@ -7110,8 +7110,8 @@ int ObDbmsStats::check_system_stat_table_ready(int64_t tenant_id)
 }
 /**
  * @brief ObDbmsStats::copy_table_stats
- * @param ctx
- * @param params
+ * @param ctx 
+ * @param params 
  *     0. ownname        VARCHAR2,
  *     1. tabname        VARCHAR2,
  *     2. srcpartname    VARCHAR2,
@@ -7119,8 +7119,8 @@ int ObDbmsStats::check_system_stat_table_ready(int64_t tenant_id)
  *     4. scale_factor	 VARCHAR2,
  *     5. flags						DECIMAL DEFAULT NULL,
  *     6. force            BOOLEAN DEFAULT FALSE
- * @param result
- * @return int
+ * @param result 
+ * @return int 
  */
 
 int ObDbmsStats::copy_table_stats(sql::ObExecContext &ctx,
@@ -7386,11 +7386,11 @@ int ObDbmsStats::async_gather_table_stats(sql::ObExecContext &ctx,
     //in upgrade, don't async gather table stats
   } else {
     const int64_t max_slice_cnt = 2000;  // maximum tables we can async gather stats at each iteration
-    const int64_t MAX_BATCH = 3;
+    const int64_t MAX_BATCH = 3; 
     ObSEArray<AsyncStatTable, 16> async_stat_tables;
     int64_t total_part_cnt = 0;
     int64_t batch = 0;
-
+    
     int64_t last_table_id = 0;
     int64_t last_tablet_id = 0;
     do {
@@ -7423,7 +7423,7 @@ int ObDbmsStats::async_gather_table_stats(sql::ObExecContext &ctx,
   return ret;
 }
 
-int ObDbmsStats::adjust_index_column_params(ObExecContext &ctx,
+int ObDbmsStats::adjust_index_column_params(ObExecContext &ctx, 
                                             ObTableStatParam &index_param,
                                             ObIArray<uint64_t> &filter_column_ids)
 {
@@ -7460,7 +7460,7 @@ int ObDbmsStats::get_no_deduce_basic_stats_column_ids(const ObTableStatParam &pa
       if (OB_FAIL(column_ids.push_back(param.column_params_.at(i).column_id_))) {
         LOG_WARN("failed to push back column ids", K(ret));
       }
-    }
+    } 
   }
   return ret;
 }
@@ -7642,8 +7642,8 @@ int ObDbmsStats::adjust_async_gather_stat_option(ObExecContext &ctx,
   return ret;
 }
 
-int ObDbmsStats::adjust_text_column_basic_stats(ObExecContext &ctx,
-                                                const share::schema::ObTableSchema &schema,
+int ObDbmsStats::adjust_text_column_basic_stats(ObExecContext &ctx, 
+                                                const share::schema::ObTableSchema &schema,  
                                                 ObTableStatParam &param)
 {
   int ret = OB_SUCCESS;
@@ -7729,7 +7729,7 @@ int ObDbmsStats::update_analyze_failed_count(const ObTableStatParam &stat_param,
   THIS_WORKER.set_session(NULL);
   const int64_t MAX_UPDATE_OPT_GATHER_STAT_TIMEOUT = 2000000;//default 2 seconds
   THIS_WORKER.set_timeout_ts(MAX_UPDATE_OPT_GATHER_STAT_TIMEOUT + ObTimeUtility::current_time());
-
+  
   int64_t affected_rows = 0;
   if (OB_SUCC(ret) && OB_FAIL(ObOptStatManager::get_instance().update_table_stat_failed_count(
                           stat_param.tenant_id_, stat_table.table_id_, failed_part_ids, affected_rows))) {
@@ -7742,8 +7742,8 @@ int ObDbmsStats::update_analyze_failed_count(const ObTableStatParam &stat_param,
 
 int ObDbmsStats::gather_table_stats_by_parts(ObExecContext &ctx,
                                              const int64_t task_start_time,
-                                             const int64_t duration_time,
-                                             ObTableStatParam &stat_param,
+                                             const int64_t duration_time, 
+                                             ObTableStatParam &stat_param, 
                                              ObSEArray<int64_t, 4> &failed_part_ids,
                                              ObSEArray<int64_t, 4> &succ_part_and_subpart_ids,
                                              ObOptStatRunningMonitor &running_monitor)

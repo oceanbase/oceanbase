@@ -164,3 +164,4 @@ int ObExprZipf::cg_expr(ObExprCGCtx &expr_cg_ctx,
 
 } /* namespace sql */
 } /* namespace oceanbase */
+

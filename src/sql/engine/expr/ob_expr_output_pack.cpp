@@ -243,9 +243,9 @@ int ObExprOutputPack::convert_string_value_charset(common::ObObj &value,
   } else if (OB_FAIL(my_session.get_ncharacter_set_connection(ncharset_type))) {
     LOG_WARN("fail to get result charset", K(ret));
   } else {
-    if (lib::is_oracle_mode()
-        && (value.is_nchar() || value.is_nvarchar2())
-        && ncharset_type != CHARSET_INVALID
+    if (lib::is_oracle_mode() 
+        && (value.is_nchar() || value.is_nvarchar2()) 
+        && ncharset_type != CHARSET_INVALID 
         && ncharset_type != CHARSET_BINARY) {
       charset_type = ncharset_type;
     }
@@ -274,9 +274,9 @@ int ObExprOutputPack::convert_lob_value_charset(common::ObObj &value,
   } else if (OB_FAIL(my_session.get_ncharacter_set_connection(ncharset_type))) {
     LOG_WARN("fail to get result charset", K(ret));
   } else {
-    if (lib::is_oracle_mode()
-        && (value.is_nchar() || value.is_nvarchar2())
-        && ncharset_type != CHARSET_INVALID
+    if (lib::is_oracle_mode() 
+        && (value.is_nchar() || value.is_nvarchar2()) 
+        && ncharset_type != CHARSET_INVALID 
         && ncharset_type != CHARSET_BINARY) {
       charset_type = ncharset_type;
     }
@@ -337,9 +337,9 @@ int ObExprOutputPack::convert_text_value_charset(common::ObObj& value,
     } else if (OB_FAIL(my_session.get_ncharacter_set_connection(ncharset_type))) {
     LOG_WARN("fail to get result charset", K(ret));
   } else {
-    if (lib::is_oracle_mode()
-        && (value.is_nchar() || value.is_nvarchar2())
-        && ncharset_type != CHARSET_INVALID
+    if (lib::is_oracle_mode() 
+        && (value.is_nchar() || value.is_nvarchar2()) 
+        && ncharset_type != CHARSET_INVALID 
         && ncharset_type != CHARSET_BINARY) {
       charset_type = ncharset_type;
     }
@@ -566,7 +566,7 @@ int ObExprOutputPack::process_lob_locator_results(common::ObObj& value,
         }
       }
     } else {
-      OB_ASSERT(0);
+      OB_ASSERT(0); 
     }
   } else if ((!is_use_lob_locator && lib::is_oracle_mode())
              || lib::is_mysql_mode()) {

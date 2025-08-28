@@ -61,7 +61,7 @@ private:
                                const ObTableStatParam &data_param,
                                const ObTableStatParam &index_param,
                                int64_t &index_partition_id);
-
+                               
   int add_no_use_das_hint(common::ObIAllocator &alloc, const ObString &table_name);
 };
 

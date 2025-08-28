@@ -140,7 +140,7 @@ int ObDirectLoadExternalTableCompactor::get_table(ObDirectLoadTableHandle &table
       LOG_WARN("fail to assign fragments", KR(ret));
     } else if (OB_FAIL(table_manager->alloc_external_table(table_handle))) {
       LOG_WARN("fail to alloc external table", KR(ret));
-    } else if (FALSE_IT(external_table = static_cast<ObDirectLoadExternalTable*>(table_handle.get_table()))) {
+    } else if (FALSE_IT(external_table = static_cast<ObDirectLoadExternalTable*>(table_handle.get_table()))) { 
     } else if (OB_FAIL(external_table->init(create_param))) {
       LOG_WARN("fail to init external table", KR(ret));
     }

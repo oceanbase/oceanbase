@@ -132,7 +132,7 @@ int ObExprPrivSTPoint::eval_priv_st_point(const ObExpr &expr,
   // get srid
   if (!is_null_result && OB_SUCC(ret) && num_args > 2) {
     if (expr.args_[2]->is_boolean_) {
-      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;   
       LOG_WARN("invalid type", K(ret));
     } else if (OB_FAIL(expr.args_[2]->eval(ctx, datum_srid))) {
       LOG_WARN("fail to eval second argument", K(ret));
@@ -155,7 +155,7 @@ int ObExprPrivSTPoint::eval_priv_st_point(const ObExpr &expr,
       }
     }
   }
-
+  
   if (OB_SUCC(ret) && !is_null_result) {
     double x = 0.0;
     double y = 0.0;

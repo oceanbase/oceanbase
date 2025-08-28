@@ -33,7 +33,7 @@ public :
 
   int get_raw_binary(char *res_buf, int64_t buf_len);
   int32_t get_data_binary_len()
-  {
+  { 
     return keys_->get_data_binary_len() + values_->get_data_binary_len();
   }
   int get_data_binary(char *res_buf, int64_t buf_len);
@@ -74,7 +74,7 @@ public :
   uint32_t *get_offsets() const { return keys_->get_offsets(); }
   uint8_t *get_nullbitmap() const { return keys_->get_nullbitmap(); }
   void set_element_type(int32_t type) {} // not supported
-  void set_array_type(const ObCollectionTypeBase *array_type) {
+  void set_array_type(const ObCollectionTypeBase *array_type) { 
     map_type_ = static_cast<const ObCollectionMapType*>(array_type);
   }
   int elem_at(uint32_t idx, ObObj &elem_obj) const { return OB_NOT_SUPPORTED; }
@@ -85,7 +85,7 @@ public :
   int set_offsets(uint32_t *offsets, int64_t length) { return OB_NOT_SUPPORTED; }
   int compare(const ObIArrayType &right, int &cmp_ret) const;
 
-  int compare_at(uint32_t left_begin, uint32_t left_len, uint32_t right_begin, uint32_t right_len,
+  int compare_at(uint32_t left_begin, uint32_t left_len, uint32_t right_begin, uint32_t right_len,  
                  const ObIArrayType &right, int &cmp_ret) const;
   bool sort_cmp(uint32_t idx_l, uint32_t idx_r) const { return true; } // not supported
   int contains_all(const ObIArrayType &other, bool &bret) const { return OB_NOT_SUPPORTED; }

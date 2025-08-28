@@ -164,7 +164,7 @@ int ObCloneTenantResolver::resolve(const ParseNode &parse_tree)
           K(tenant_snapshot_name), K(resource_pool_name), K(unit_config_name));
     }
   }
-
+  
   return ret;
 }
 

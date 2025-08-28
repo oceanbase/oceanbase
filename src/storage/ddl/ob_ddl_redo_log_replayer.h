@@ -45,7 +45,7 @@ public:
   int replay_inc_commit(const ObDDLIncCommitLog &log, const share::SCN &scn);
 private:
   void destroy();
-
+  
 private:
   static const int64_t TOTAL_LIMIT = 10 * 1024 * 1024 * 1024L;
   static const int64_t HOLD_LIMIT = 10 * 1024 * 1024 * 1024L;

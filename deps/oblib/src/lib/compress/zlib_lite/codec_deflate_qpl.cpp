@@ -61,9 +61,9 @@ int CodecDeflateQpl::init(qpl_path_t path, QplAllocator &allocator, int32_t job_
   if (nullptr == random_engine_ptr) {
   } else {
     random_engine_ = new (random_engine_ptr)std::mt19937();
-
+  
     //const char * qpl_version = qpl_get_library_version();
-
+  
     /// Get size required for saving a single qpl job object
     uint32_t job_size = 0;
     qpl_get_job_size(path, &job_size);
@@ -81,17 +81,17 @@ int CodecDeflateQpl::init(qpl_path_t path, QplAllocator &allocator, int32_t job_
       job_ptr_locks_ = nullptr;
       return -1;
     }
-
+  
     /// Initialize pool for storing all job object pointers
     /// Reallocate buffer by shifting address offset for each job object.
     for (uint32_t index = 0; index < job_num_; ++index) {
       new (job_ptr_locks_ + index) std::atomic_bool();
 
       qpl_job * qpl_job_ptr = (qpl_job *)(jobs_buffer_ + index * job_size);
-      int status = qpl_init_job(path, qpl_job_ptr);
+      int status = qpl_init_job(path, qpl_job_ptr); 
       if (status != QPL_STS_OK) {
         job_pool_ready_ = false;
-
+      
         for (uint32_t i = 0; i < index; i++) {
           qpl_fini_job(job_ptr_pool_[i]);
         }
@@ -115,7 +115,7 @@ int CodecDeflateQpl::init(qpl_path_t path, QplAllocator &allocator, int32_t job_
       unlock_job(index);
     }
   }
-
+    
   job_pool_ready_ = true;
   return 0;
 }
@@ -228,13 +228,13 @@ qpl_job * CodecDeflateQpl::acquire_job(uint32_t & job_id)
   return job;
 }
 
-int64_t CodecDeflateQpl::do_compress_data(const char * source, uint32_t source_size, char * dest, uint32_t dest_size)
+int64_t CodecDeflateQpl::do_compress_data(const char * source, uint32_t source_size, char * dest, uint32_t dest_size) 
 {
   uint32_t job_id = -1;
   qpl_job * job_ptr = nullptr;
   uint32_t compressed_size = 0;
   int64_t  ret = RET_ERROR;
-
+  
   job_ptr = acquire_job(job_id);
 
   if (job_ptr != nullptr) {
@@ -267,7 +267,7 @@ int64_t CodecDeflateQpl::do_decompress_data(const char * source, uint32_t source
   qpl_job * job_ptr = nullptr;
   uint32_t  decompressed_size = 0;
   int64_t   ret = RET_ERROR;
-
+  
   job_ptr = acquire_job(job_id);
 
   if (job_ptr != nullptr) {
@@ -286,7 +286,7 @@ int64_t CodecDeflateQpl::do_decompress_data(const char * source, uint32_t source
     } else {
       ret = RET_ERROR;
     }
-
+    
     release_job(job_id, job_ptr);
   }
 
@@ -314,7 +314,7 @@ void qpl_deinit()
 {
   CodecDeflateQpl &hardware_qpl = CodecDeflateQpl::get_hardware_instance();
   hardware_qpl.deinit();
-
+  
   CodecDeflateQpl &software_qpl = CodecDeflateQpl::get_software_instance();
   software_qpl.deinit();
 }

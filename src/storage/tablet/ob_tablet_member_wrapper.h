@@ -146,3 +146,4 @@ const T *ObTabletMemberWrapper<T, U>::get_member() const
 } // namespace oceanbase
 
 #endif // OCEANBASE_STORAGE_OB_TABLET_MEMBER_WRAPPER
+

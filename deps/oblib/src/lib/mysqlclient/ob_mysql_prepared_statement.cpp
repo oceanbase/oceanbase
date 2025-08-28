@@ -1496,7 +1496,7 @@ int ObMySQLProcStatement::bind_proc_param(ObIAllocator &allocator,
         is_output = r_param->is_out_sp_param() || r_param->is_inout_sp_param();
         if (is_output && OB_FAIL(basic_out_param.push_back(std::make_pair(i + start_pos - skip_cnt, i)))) {
           LOG_WARN("push back failed", K(ret), K(i));
-        } else if (OB_FAIL(bind_param(i + start_pos - skip_cnt, i + (routine_info.is_function() ? 1 : 0),
+        } else if (OB_FAIL(bind_param(i + start_pos - skip_cnt, i + (routine_info.is_function() ? 1 : 0), 
                                       is_output, tz_info, param, routine_info, allocator))) {
           LOG_WARN("failed to bind param", K(ret));
         }
@@ -1568,7 +1568,7 @@ int ObMySQLProcStatement::bind_proc_param_with_composite_type(
           OZ (basic_out_param.push_back(std::make_pair(get_basic_param_start_pos() + basic_param_cnt, i)));
         }
         OZ (bind_param(get_basic_param_start_pos() + basic_param_cnt,
-                       i + (is_func ? 1 : 0),
+                       i + (is_func ? 1 : 0), 
                        is_out, tz_info, obj_param, routine_info, allocator));
         OX (basic_param_cnt++);
       }
@@ -1656,7 +1656,7 @@ int ObMySQLProcStatement::build_record_meta(ObIAllocator &allocator,
       OZ (get_com_datas().push_back(com_data));
     }
   }
-  return ret;
+  return ret;       
 }
 
 int ObMySQLProcStatement::build_record_element(int64_t position,
@@ -1889,7 +1889,7 @@ int ObMySQLProcStatement::build_array_buffer(int64_t position,
     MYSQL_COMPLEX_BIND_PLARRAY *my_array = NULL;
     int64_t ele_cnt = is_out ? 0 : (coll->get_count() < 0 ? 0 : coll->get_count());
     int64_t array_elem_size = convert_type_to_complex(ele_type);
-    int64_t buf_len = sizeof(MYSQL_COMPLEX_BIND_PLARRAY)
+    int64_t buf_len = sizeof(MYSQL_COMPLEX_BIND_PLARRAY) 
                       + array_elem_size * (ele_cnt == 0 ? 1 : ele_cnt);
     char *buf = NULL;
     if (OB_ISNULL(buf = (char *)allocator.alloc(buf_len))) {
@@ -1940,7 +1940,7 @@ int ObMySQLProcStatement::check_assoc_array(pl::ObPLCollection *coll)
     pl::ObPLAssocArray *assoc = static_cast<pl::ObPLAssocArray *>(coll);
     ObObj *keys = NULL;
     CK (OB_NOT_NULL(assoc));
-    if (OB_SUCC(ret)
+    if (OB_SUCC(ret) 
         && assoc->get_count() > 0
         && NULL != (keys = assoc->get_key())
         && NULL != assoc->get_sort()) {
@@ -2157,14 +2157,14 @@ int ObMySQLProcStatement::process_proc_output_params(ObIAllocator &allocator,
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("obj is NULL", K(ret));
             } else if (OB_FAIL(convert_proc_output_param_result(basic_out_param.at(i).second, *tz_info,
-                                                                *bind_param, obj,
+                                                                *bind_param, obj, 
                                                                 routine_info, allocator, is_return_value))) {
               LOG_WARN("fail to convert proc output param result", K(ret));
             }
           }
         } // end for
         // process composite out param
-        OZ (process_composite_out_param(allocator, params, result, basic_out_param.count(),
+        OZ (process_composite_out_param(allocator, params, result, basic_out_param.count(), 
                                     routine_info, udts, tz_info));
       }
     }
@@ -3265,7 +3265,7 @@ int ObMySQLProcStatement::get_anonymous_param_count(ParamStore &params,
                       param_cnt++;
                     }
                   }
-                }
+                }  
               } else {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("type is error", K(ret), KPC(coll_type));
@@ -3464,9 +3464,9 @@ int ObMySQLProcStatement::store_array_element(ObObj &obj,
           OV (OB_NOT_NULL(ora_time = reinterpret_cast<ORACLE_TIME *>(allocator.alloc(len))), OB_ALLOCATE_MEMORY_FAILED);
           if (OB_SUCC(ret)) {
             MEMSET(ora_time, 0, sizeof(ORACLE_TIME));
-            const int32_t unsigned_year = ob_time.parts_[DT_YEAR] >= 0 ?
+            const int32_t unsigned_year = ob_time.parts_[DT_YEAR] >= 0 ? 
                                           ob_time.parts_[DT_YEAR] : (0 - ob_time.parts_[DT_YEAR]);
-            int32_t century = static_cast<int32_t>(unsigned_year / YEARS_PER_CENTURY
+            int32_t century = static_cast<int32_t>(unsigned_year / YEARS_PER_CENTURY 
                                           * (ob_time.parts_[DT_YEAR] >= 0 ? 1 : -1));
             int32_t decade = static_cast<int32_t>(unsigned_year % YEARS_PER_CENTURY);
             if (0 == century) {
@@ -3490,7 +3490,7 @@ int ObMySQLProcStatement::store_array_element(ObObj &obj,
               }
               const int32_t unsigned_offset = (ob_time.parts_[DT_OFFSET_MIN] >= 0 ?
                                       ob_time.parts_[DT_OFFSET_MIN] : (0 - ob_time.parts_[DT_OFFSET_MIN]));
-              int32_t offset_hour = static_cast<int32_t>(unsigned_offset / MINS_PER_HOUR
+              int32_t offset_hour = static_cast<int32_t>(unsigned_offset / MINS_PER_HOUR 
                                     * (ob_time.parts_[DT_OFFSET_MIN] >= 0 ? 1 : -1));
               int32_t offset_minute = static_cast<int32_t>(unsigned_offset % MINS_PER_HOUR);
               if (0 == offset_hour) {

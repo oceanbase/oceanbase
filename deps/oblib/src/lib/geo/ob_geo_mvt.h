@@ -91,7 +91,7 @@ public:
            const ObString &feat_id, const uint32_t extent);
   inline bool is_inited() { return inited_; }
   inline const common::ObString& get_geom_name() const { return geom_name_; }
-  inline common::ObString& get_geom_name() { return geom_name_; }
+  inline common::ObString& get_geom_name() { return geom_name_; } 
   int init_layer();
   int generate_feature(ObObj *tmp_obj, uint32_t obj_cnt);
   int transform_geom(const ObGeometry &geo);

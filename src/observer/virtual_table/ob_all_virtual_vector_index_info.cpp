@@ -49,7 +49,7 @@ int ObVectorIndexInfoIterator::get_next_info(ObVectorIndexInfo &info)
   if (!is_opened_) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "not init", K(ret));
-  } else if (index_idx_ >= complete_tablet_ids_.count() + partial_tablet_ids_.count() &&
+  } else if (index_idx_ >= complete_tablet_ids_.count() + partial_tablet_ids_.count() && 
           cache_idx_ >= cache_tablet_ids_.count()) {
     ret = OB_ITER_END;
   } else if (cache_idx_ < cache_tablet_ids_.count()) {

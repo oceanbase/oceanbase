@@ -711,7 +711,7 @@ OB_DEF_SERIALIZE(ObTableParam)
     OB_UNIS_ENCODE(is_multivalue_index_);
   }
   if (OB_SUCC(ret)) {
-    OB_UNIS_ENCODE(is_column_replica_table_);
+    OB_UNIS_ENCODE(is_column_replica_table_); 
   }
   if (OB_SUCC(ret)) {
     OB_UNIS_ENCODE(is_vec_index_);
@@ -720,7 +720,7 @@ OB_DEF_SERIALIZE(ObTableParam)
     OB_UNIS_ENCODE(is_partition_table_);
   }
   if (OB_SUCC(ret)) {
-    OB_UNIS_ENCODE(is_normal_cgs_at_the_end_);
+    OB_UNIS_ENCODE(is_normal_cgs_at_the_end_); 
   }
   if (OB_SUCC(ret) && is_fts_index_) {
     OB_UNIS_ENCODE(parser_properties_);
@@ -817,7 +817,7 @@ OB_DEF_DESERIALIZE(ObTableParam)
                 is_multivalue_index_);
   }
   if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_DECODE,
+    LST_DO_CODE(OB_UNIS_DECODE, 
                 is_column_replica_table_);
   }
   if (OB_SUCC(ret)) {
@@ -829,7 +829,7 @@ OB_DEF_DESERIALIZE(ObTableParam)
                 is_partition_table_);
   }
   if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_DECODE,
+    LST_DO_CODE(OB_UNIS_DECODE, 
                 is_normal_cgs_at_the_end_);
   }
   if (OB_SUCC(ret) && is_fts_index_ && pos < data_len) {
@@ -1030,7 +1030,7 @@ int ObTableParam::construct_columns_and_projector(
     is_column_replica_table_ = true;
     has_all_column_group = false;
   }
-
+  
   if (OB_FAIL(ret)) {
   } else if (!is_column_replica_table_ && OB_FAIL(table_schema.has_all_column_group(has_all_column_group))) {
     LOG_WARN("Failed to check if has all column group", K(ret));

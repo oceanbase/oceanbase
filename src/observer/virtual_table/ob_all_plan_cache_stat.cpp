@@ -320,7 +320,7 @@ int ObAllPlanCacheStatI1::get_all_tenant_ids(ObIArray<uint64_t> &tenant_ids)
 
   for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids_.count(); i++) {
     // to keep the save interface
-    if (common::OB_INVALID_TENANT_ID == tenant_ids_.at(i)
+    if (common::OB_INVALID_TENANT_ID == tenant_ids_.at(i) 
         || is_virtual_tenant_id(tenant_ids_.at(i))
         || (!is_sys_tenant(effective_tenant_id_) && tenant_ids_.at(i) != effective_tenant_id_)) {
       // skip
@@ -372,7 +372,7 @@ int ObAllPlanCacheStat::get_row_from_tenants()
   } else {
     uint64_t tenant_id = tenant_id_array_.at(tenant_id_array_idx_);
     MTL_SWITCH(tenant_id) {
-      ObPlanCache *plan_cache = MTL(ObPlanCache*);
+      ObPlanCache *plan_cache = MTL(ObPlanCache*); 
       if (OB_FAIL(fill_cells(*plan_cache))) {
         SERVER_LOG(WARN, "fail to fill cells", K(ret), K(cur_row_));
       } else {

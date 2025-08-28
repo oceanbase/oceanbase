@@ -78,7 +78,7 @@ public:
   }
   ObConnectResource(uint64_t cur_connections, uint64_t history_connections, int64_t cur_time,
                     int64_t tenant_id)
-      : rwlock_(), cur_connections_(cur_connections),
+      : rwlock_(), cur_connections_(cur_connections), 
         history_connections_(history_connections),
         start_time_(cur_time),
         tenant_id_(tenant_id)

@@ -3569,7 +3569,7 @@ TEST_F(TestMultiVersionMerge, check_shadow_row_fuse)
   ObTxTableGuard tx_table_guard;
   get_tx_table_guard(tx_table_guard);
   ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
-
+  
   ObTxData *tx_data = new ObTxData();
   ASSERT_EQ(OB_SUCCESS, tx_data->init_tx_op());
   transaction::ObTransID tx_id = 1;
@@ -3679,7 +3679,7 @@ TEST_F(TestMultiVersionMerge, check_shadow_row_with_first)
   ObTxTableGuard tx_table_guard;
   get_tx_table_guard(tx_table_guard);
   ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
-
+  
   ObTxData *tx_data = new ObTxData();
   ASSERT_EQ(OB_SUCCESS, tx_data->init_tx_op());
   transaction::ObTransID tx_id = 1;
@@ -3796,7 +3796,7 @@ TEST_F(TestMultiVersionMerge, check_shadow_row_lost)
   ObTxTableGuard tx_table_guard;
   get_tx_table_guard(tx_table_guard);
   ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
-
+  
   ObTxData *tx_data = new ObTxData();
   ASSERT_EQ(OB_SUCCESS, tx_data->init_tx_op());
   transaction::ObTransID tx_id = 1;

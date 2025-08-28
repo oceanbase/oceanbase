@@ -96,7 +96,7 @@ int ObStorageHdfsBase::parse_namenode_and_path(const ObString &uri_str)
 }
 
 int ObStorageHdfsBase::get_or_create_fs(const ObString &uri,
-                                        ObObjectStorageInfo *storage_info)
+                                        ObObjectStorageInfo *storage_info) 
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(uri) || OB_ISNULL(storage_info)) {
@@ -120,7 +120,7 @@ int ObStorageHdfsBase::get_or_create_fs(const ObString &uri,
   return ret;
 }
 
-int ObStorageHdfsBase::get_or_create_read_file(const ObString &uri)
+int ObStorageHdfsBase::get_or_create_read_file(const ObString &uri) 
 {
   int ret = OB_SUCCESS;
   if (!is_opened_readable_file_) {
@@ -267,7 +267,7 @@ int ObStorageHdfsJniUtil::get_file_length(const common::ObString &uri, int64_t &
 }
 
 int ObStorageHdfsJniUtil::head_object_meta(const common::ObString &uri,
-                                           ObStorageObjectMetaBase &obj_meta)
+                                           ObStorageObjectMetaBase &obj_meta) 
 {
   int ret = OB_SUCCESS;
   ObStorageObjectMetaBase meta;

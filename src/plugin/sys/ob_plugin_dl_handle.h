@@ -26,7 +26,7 @@ class ObPluginDlHandle final
 public:
   ObPluginDlHandle() = default;
   ~ObPluginDlHandle();
-
+  
   int init(const common::ObString &dl_path, const common::ObString &dl_name);
   void destroy();
 

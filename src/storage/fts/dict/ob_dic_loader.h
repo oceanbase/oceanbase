@@ -25,7 +25,7 @@ public:
   struct ObDicTableInfo
   {
   public:
-    ObDicTableInfo(const char **raw_data = nullptr, uint64_t array_size = 0, const char *table_name = nullptr, uint64_t table_id = 0) :
+    ObDicTableInfo(const char **raw_data = nullptr, uint64_t array_size = 0, const char *table_name = nullptr, uint64_t table_id = 0) : 
         raw_data_(raw_data), array_size_(array_size), table_name_(table_name), table_id_(table_id) { }
     ~ObDicTableInfo() = default;
     TO_STRING_KV(

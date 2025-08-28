@@ -26,7 +26,7 @@ class ObTTLService : public logservice::ObIReplaySubHandler,
                      public logservice::ObIRoleChangeSubHandler
 {
 public:
-  ObTTLService()
+  ObTTLService() 
     : is_inited_(false),
       tenant_id_(OB_INVALID_TENANT_ID),
       tenant_ttl_mgr_(nullptr),
@@ -40,22 +40,22 @@ public:
     return OB_SUCCESS;
   }
   share::SCN get_rec_scn() override { return share::SCN::max_scn(); }
-
+ 
   // for replay, do nothing
   int replay(const void *buffer,
              const int64_t buf_size,
              const palf::LSN &lsn,
-             const share::SCN &scn)
-  {
+             const share::SCN &scn) 
+  { 
     UNUSED(buffer);
     UNUSED(buf_size);
     UNUSED(lsn);
     UNUSED(scn);
-    return OB_SUCCESS;
+    return OB_SUCCESS; 
   }
   static int mtl_init(ObTTLService *&service);
   // switch leader
-  void switch_to_follower_forcedly();
+  void switch_to_follower_forcedly(); 
   int switch_to_leader();
   int switch_to_follower_gracefully();
   int resume_leader() { return switch_to_leader(); }

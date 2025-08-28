@@ -15,14 +15,14 @@
 #define USING_LOG_PREFIX SERVER
 using namespace oceanbase::common;
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace share
+namespace share 
 {
 
 const char *OB_INDEX_USAGE_MANAGER = "IndexUsageMgr";
 
-void ObIndexUsageOp::operator()(common::hash::HashMapPair<ObIndexUsageKey, ObIndexUsageInfo> &data)
+void ObIndexUsageOp::operator()(common::hash::HashMapPair<ObIndexUsageKey, ObIndexUsageInfo> &data) 
 {
   if (ObIndexUsageOpMode::UPDATE == op_mode_) {
     ATOMIC_INC(&data.second.total_exec_count_);
@@ -37,16 +37,16 @@ ObIndexUsageInfoMgr::ObIndexUsageInfoMgr()
     : is_inited_(false), is_enabled_(false), is_sample_mode_(true), max_entries_(30000),
       current_time_(common::ObClockGenerator::getClock()),
       min_tenant_data_version_(0),
-      tenant_id_(OB_INVALID_TENANT_ID),
+      tenant_id_(OB_INVALID_TENANT_ID), 
       hashmap_count_(0),
       index_usage_map_(nullptr), report_task_(), refresh_conf_task_(), allocator_() {}
 
-ObIndexUsageInfoMgr::~ObIndexUsageInfoMgr()
+ObIndexUsageInfoMgr::~ObIndexUsageInfoMgr() 
 {
   destroy();
 }
 
-int ObIndexUsageInfoMgr::mtl_init(ObIndexUsageInfoMgr *&index_usage_mgr)
+int ObIndexUsageInfoMgr::mtl_init(ObIndexUsageInfoMgr *&index_usage_mgr) 
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
@@ -71,8 +71,8 @@ uint64_t ObIndexUsageInfoMgr::calc_hashmap_count(const uint64_t tenant_id)
 
   hashmap_count = hashmap_memory_limit / ONE_HASHMAP_MEMORY + 1;
 
-  LOG_TRACE("success to get hash map count",
-    K(tenant_min_cpu), K(tenant_min_thread_cnt), K(tenant_memory_limit),
+  LOG_TRACE("success to get hash map count", 
+    K(tenant_min_cpu), K(tenant_min_thread_cnt), K(tenant_memory_limit), 
     K(hashmap_memory), K(hashmap_tenant_memory_limit), K(hashmap_memory_limit), K(hashmap_count));
   return hashmap_count;
 }
@@ -110,11 +110,11 @@ void ObIndexUsageInfoMgr::destroy_hash_map()
   }
 }
 
-int ObIndexUsageInfoMgr::init(const uint64_t tenant_id)
+int ObIndexUsageInfoMgr::init(const uint64_t tenant_id) 
 {
   int ret = OB_SUCCESS;
   const ObMemAttr attr(tenant_id, OB_INDEX_USAGE_MANAGER);
-
+  
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
@@ -136,7 +136,7 @@ int ObIndexUsageInfoMgr::init(const uint64_t tenant_id)
   return ret;
 }
 
-void ObIndexUsageInfoMgr::destroy()
+void ObIndexUsageInfoMgr::destroy() 
 {
   if (is_inited_) {
     // cancel report task
@@ -147,7 +147,7 @@ void ObIndexUsageInfoMgr::destroy()
         TG_WAIT_TASK(MTL(omt::ObSharedTimer *)->get_tg_id(), report_task_);
         report_task_.destroy();
       }
-    }
+    } 
     if (refresh_conf_task_.get_is_inited()) {
       bool is_exist = true;
       if (TG_TASK_EXIST(MTL(omt::ObSharedTimer *)->get_tg_id(), refresh_conf_task_, is_exist) == OB_SUCCESS && is_exist) {
@@ -163,7 +163,7 @@ void ObIndexUsageInfoMgr::destroy()
   }
 }
 
-int ObIndexUsageInfoMgr::start()
+int ObIndexUsageInfoMgr::start() 
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -183,7 +183,7 @@ int ObIndexUsageInfoMgr::start()
   return ret;
 }
 
-void ObIndexUsageInfoMgr::stop()
+void ObIndexUsageInfoMgr::stop() 
 {
   if (OB_LIKELY(report_task_.get_is_inited())) {
     TG_CANCEL_TASK(MTL(omt::ObSharedTimer *)->get_tg_id(), report_task_);
@@ -193,7 +193,7 @@ void ObIndexUsageInfoMgr::stop()
   }
 }
 
-void ObIndexUsageInfoMgr::wait()
+void ObIndexUsageInfoMgr::wait() 
 {
   if (OB_LIKELY(report_task_.get_is_inited())) {
     TG_WAIT_TASK(MTL(omt::ObSharedTimer *)->get_tg_id(), report_task_);
@@ -203,7 +203,7 @@ void ObIndexUsageInfoMgr::wait()
   }
 }
 
-bool ObIndexUsageInfoMgr::sample_filterd(const uint64_t random_num)
+bool ObIndexUsageInfoMgr::sample_filterd(const uint64_t random_num) 
 {
   bool is_filtered = true;
   if (!is_sample_mode_) {
@@ -222,7 +222,7 @@ bool ObIndexUsageInfoMgr::sample_filterd(const uint64_t random_num)
   return is_filtered;
 }
 
-void ObIndexUsageInfoMgr::update(const uint64_t tenant_id, const uint64_t index_table_id)
+void ObIndexUsageInfoMgr::update(const uint64_t tenant_id, const uint64_t index_table_id) 
 {
   int ret = OB_SUCCESS;
   uint64_t random_num = common::ObClockGenerator::getClock();

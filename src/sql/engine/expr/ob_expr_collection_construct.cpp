@@ -204,7 +204,7 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
         static_cast<pl::ObPLVArray*>(coll)->set_capacity(info->capacity_);
       }
     } else if (pl::PL_ASSOCIATIVE_ARRAY_TYPE == info->type_) {
-       if (NULL == (coll =
+       if (NULL == (coll = 
         static_cast<pl::ObPLAssocArray*>(alloc.alloc(sizeof(pl::ObPLAssocArray) + 8)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to allocate memory for pl collection", K(ret), K(coll));

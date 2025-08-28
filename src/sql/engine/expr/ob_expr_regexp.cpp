@@ -61,7 +61,7 @@ int ObExprRegexp::calc_result_type2(ObExprResType &type,
   int ret = OB_SUCCESS;
   ObRawExpr * raw_expr = type_ctx.get_raw_expr();
   ObCollationType res_cs_type = CS_TYPE_INVALID;
-  ObCollationLevel res_cs_level = CS_LEVEL_INVALID;
+  ObCollationLevel res_cs_level = CS_LEVEL_INVALID; 
   CK(NULL != type_ctx.get_raw_expr());
   if (type1.is_null() || type2.is_null()) {
     type.set_int32();

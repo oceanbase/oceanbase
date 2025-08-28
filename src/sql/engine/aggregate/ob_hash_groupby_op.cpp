@@ -2634,7 +2634,7 @@ int ObHashGroupByOp::load_one_row()
       uint64_t hash_val = 0;
       if (OB_FAIL(calc_groupby_exprs_hash(dup_groupby_exprs_, srow, hash_val))) {
         LOG_WARN("failed to calc hash", K(ret), K(llc_est_.enabled_));
-      } else if (OB_FAIL(bypass_add_llc_map(hash_val,
+      } else if (OB_FAIL(bypass_add_llc_map(hash_val, 
                                             ObThreeStageAggrStage::FIRST_STAGE == MY_SPEC.aggr_stage_ ?
                                             by_pass_nth_group_ > MY_SPEC.dist_col_group_idxs_.count() : true))) {
         LOG_WARN("failed to add llc map", K(ret));
@@ -2711,16 +2711,16 @@ int ObHashGroupByOp::by_pass_prepare_one_batch(const int64_t batch_size)
       LOG_WARN("fail to calc groupby exprs hash batch", K(ret));
     } else {
       calc_groupby_exprs_hash_batch(dup_groupby_exprs_, brs_);
-      if (MY_SPEC.skew_detection_enabled_ &&
+      if (MY_SPEC.skew_detection_enabled_ && 
           popular_map_.size() > 0 &&
           OB_FAIL(bypass_process_popular_value_batch())) {
         LOG_WARN("failed to process popular value", K(ret), K(llc_est_.enabled_), K(MY_SPEC.skew_detection_enabled_), K(popular_map_.size()));
-      } else if (llc_est_.enabled_ &&
-                 OB_FAIL(bypass_add_llc_map_batch(ObThreeStageAggrStage::FIRST_STAGE == MY_SPEC.aggr_stage_ ?
+      } else if (llc_est_.enabled_ && 
+                 OB_FAIL(bypass_add_llc_map_batch(ObThreeStageAggrStage::FIRST_STAGE == MY_SPEC.aggr_stage_ ? 
                                                   by_pass_nth_group_ > MY_SPEC.dist_col_group_idxs_.count() : true))) {
         LOG_WARN("failed to add llc map batch", K(ret));
       }
-    }
+    }  
   }
 
   if (OB_FAIL(ret) || can_skip_last_group_) {
@@ -3010,11 +3010,11 @@ int ObHashGroupByOp::bypass_process_popular_value(bool &is_popular_value)
 int ObHashGroupByOp::bypass_process_popular_value_batch()
 {
   int ret = OB_SUCCESS;
-  const ObChunkDatumStore::StoredRow **store_rows = NULL;
+  const ObChunkDatumStore::StoredRow **store_rows = NULL;  
   ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
   batch_info_guard.set_batch_size(brs_.size_);
   if (popular_map_.size()) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < brs_.size_; i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < brs_.size_; i++) {      
       batch_info_guard.set_batch_idx(i);
       if(brs_.skip_->exist(i)) {
         continue;
@@ -3096,7 +3096,7 @@ int ObHashGroupByOp::by_pass_restart_round()
   // otherwise resize to init size to avoid L2 cache overflow
   if (MY_SPEC.skew_detection_enabled_ && bypass_ctrl_.by_passing()) {
     // for popular values, so do not need to be big
-    OZ(local_group_rows_.resize(&mem_context_->get_malloc_allocator(),
+    OZ(local_group_rows_.resize(&mem_context_->get_malloc_allocator(), 
       INIT_BUCKET_COUNT_FOR_POPULAR));
   } else {
     // if last round is in L2 cache, reuse the bucket
@@ -3141,17 +3141,17 @@ int64_t ObHashGroupByOp::get_input_size() const
   return res;
 }
 
-void ObHashGroupByOp::calc_avg_group_mem()
-{
-  if (0 == llc_est_.avg_group_mem_ && llc_est_.enabled_)
-  {
+void ObHashGroupByOp::calc_avg_group_mem() 
+{ 
+  if (0 == llc_est_.avg_group_mem_ && llc_est_.enabled_) 
+  { 
     int64_t row_cnt = local_group_rows_.size();
     int64_t part_cnt = detect_part_cnt(row_cnt);
     int64_t data_size = get_actual_mem_used_size();
     int64_t est_extra_size = data_size + part_cnt * ObHashGroupByOp::FIX_SIZE_PER_PART;
     double data_ratio = (0 == est_extra_size) ? 0 : (data_size * 1.0 / est_extra_size);
-    llc_est_.avg_group_mem_ = (0 == row_cnt || 0 == data_ratio) ? 128 : (data_size * data_ratio / row_cnt);
-  }
+    llc_est_.avg_group_mem_ = (0 == row_cnt || 0 == data_ratio) ? 128 : (data_size * data_ratio / row_cnt); 
+  } 
 }
 
 int ObGroupRowHashTable::add_hashval_to_llc_map(LlcEstimate &llc_est)
@@ -3204,7 +3204,7 @@ int ObHashGroupByOp::check_llc_ndv()
     has_enough_mem_for_deduplication = (global_bound_size * LlcEstimate::GLOBAL_BOUND_RATIO_) > (llc_est_.avg_group_mem_ * ndv);
     LOG_TRACE("check llc ndv", K(ndv_ratio_is_small_enough), K(ndv), K(llc_est_.est_cnt_), K(has_enough_mem_for_deduplication), K(llc_est_.avg_group_mem_), K(global_bound_size), K(get_actual_mem_used_size()));
     if (!has_enough_mem_for_deduplication) {
-      //continue bypass and stop estimating llc ndv
+      //continue bypass and stop estimating llc ndv 
       llc_est_.enabled_ = false;
       LOG_TRACE("stop check llc ndv and continue bypass", K(ndv_ratio_is_small_enough), K(ndv), K(llc_est_.est_cnt_), K(has_enough_mem_for_deduplication), K(llc_est_.avg_group_mem_), K(global_bound_size), K(get_actual_mem_used_size()));
     } else if (ndv_ratio_is_small_enough) {
@@ -3216,7 +3216,7 @@ int ObHashGroupByOp::check_llc_ndv()
       }
       LOG_TRACE("reback into deduplication state and stop bypass and stop estimating llc ndv", K(ndv_ratio_is_small_enough), K(ndv), K(llc_est_.est_cnt_), K(has_enough_mem_for_deduplication), K(llc_est_.avg_group_mem_), K(global_bound_size), K(get_actual_mem_used_size()));
     } else {
-      //do nothing, continue bypass and estimate llc ndv
+      //do nothing, continue bypass and estimate llc ndv 
     }
   }
   return ret;
@@ -3244,7 +3244,7 @@ int ObHashGroupByOp::bypass_add_llc_map_batch(bool ready_to_check_ndv) {
     llc_add_value(hash_vals_[i]);
   }
   if ((llc_est_.est_cnt_ - llc_est_.last_est_cnt_) > LlcEstimate::ESTIMATE_MOD_NUM_ && ready_to_check_ndv) {
-    if (OB_FAIL(check_llc_ndv())) {
+    if (OB_FAIL(check_llc_ndv())) { 
       LOG_WARN("failed to check llc ndv", K(ret));
     }
   }

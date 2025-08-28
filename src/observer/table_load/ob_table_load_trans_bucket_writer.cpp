@@ -47,7 +47,7 @@ ObTableLoadTransBucketWriter::SessionContext::~SessionContext()
   reset();
 }
 
-void ObTableLoadTransBucketWriter::SessionContext::reset()
+void ObTableLoadTransBucketWriter::SessionContext::reset() 
 {
   for (int64_t i = 0; i < load_bucket_array_.count(); ++i) {
     ObTableLoadBucket *load_bucket = load_bucket_array_.at(i);

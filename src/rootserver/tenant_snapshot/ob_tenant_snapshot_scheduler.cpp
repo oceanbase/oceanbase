@@ -408,7 +408,7 @@ int ObTenantSnapshotScheduler::prepare_for_create_tenant_snapshot_(
   return ret;
 }
 
-//TODO: whether "create_abort" ls need to be added.
+//TODO: whether "create_abort" ls need to be added. 
 int ObTenantSnapshotScheduler::generate_snap_ls_items_(
     const ObTenantSnapshotID &tenant_snapshot_id,
     const uint64_t user_tenant_id,
@@ -713,7 +713,7 @@ int ObTenantSnapshotScheduler::check_create_tenant_snapshot_result_(
     LOG_WARN("invalid argument", KR(ret), K(create_job));
   } else if (paxos_replica_num <= 0) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected paxos_replica_num", KR(ret), K(paxos_replica_num));
+    LOG_WARN("unexpected paxos_replica_num", KR(ret), K(paxos_replica_num)); 
   // TODO: Whether to use arbitration service is pending.
   } else if (arbitration_service_status.is_enable_like()) {
     if (paxos_replica_num != 2 && paxos_replica_num != 4) {

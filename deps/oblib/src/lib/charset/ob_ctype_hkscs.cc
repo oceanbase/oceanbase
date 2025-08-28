@@ -166,16 +166,16 @@ bool hkscs31_init(ObCharsetInfo *cs, ObCharsetLoader *loader) {
   pair<decltype(hkscs31_to_uni_map.begin()), bool> ret;
   if (hkscs31_to_uni_map.size() == 0) {
     for (int i = 0; i < size_of_hkscs31_to_uni_map_array && succ; ++i) {
-	    ret = hkscs31_to_uni_map.insert(hkscs31_to_uni_map_array[i]);
+ 	    ret = hkscs31_to_uni_map.insert(hkscs31_to_uni_map_array[i]);
       succ = succ && ret.second;
     }
   }
   pair<decltype(uni_to_hkscs31_map.begin()), bool> rett;
   if (succ && uni_to_hkscs31_map.size() == 0) {
     for (int i = 0; i < size_of_uni_to_hkscs31_map_array && succ; ++i) {
-	    rett = uni_to_hkscs31_map.insert(uni_to_hkscs31_map_array[i]);
+ 	    rett = uni_to_hkscs31_map.insert(uni_to_hkscs31_map_array[i]);
       succ = succ && rett.second;
-	 }
+ 	 }
   }
   hkscs31_to_uni_map.rehash(20019);
   uni_to_hkscs31_map.rehash(20019);
@@ -267,7 +267,7 @@ ObCharsetInfo ob_charset_hkscs_bin = {
     &ob_charset_hkscs_handler,
     &ob_collation_mb_bin_handler,
     PAD_SPACE};
-
+  
 ObCharsetInfo ob_charset_hkscs31_bin = {
     153,
     0,

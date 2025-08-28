@@ -177,7 +177,7 @@ int ObUniqueIndexChecker::scan_table_with_column_checksum(
           LOG_WARN("snapshot version has been discarded", K(ret));
         }
       } else if (OB_FAIL(local_scan.init(*param.col_ids_, *param.org_col_ids_, *param.output_projector_,
-              *param.data_table_schema_, param.snapshot_version_, *param.index_schema_,
+              *param.data_table_schema_, param.snapshot_version_, *param.index_schema_, 
               true/*unique_index_checking*/))) {
         LOG_WARN("init local scan failed", K(ret));
       } else if (OB_FAIL(local_scan.table_scan(*param.data_table_schema_, ls_id_, tablet_id_, iterator, query_flag, range))) {
@@ -547,7 +547,7 @@ int ObUniqueIndexChecker::check_unique_index(ObIDag *dag)
   }
   if (OB_SUCCESS != ret && share::ObIDDLTask::in_ddl_retry_white_list(ret)) {
     need_report_error_msg = false;
-  }
+  }    
   if (is_inited_ && need_report_error_msg) {
     int tmp_ret = OB_SUCCESS;
     int report_ret_code = OB_SUCCESS;
@@ -803,7 +803,7 @@ int ObUniqueCheckingDag::fill_info_param(compaction::ObIBasicInfoParam *&out_par
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret));
-  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
+  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(), 
                                 static_cast<int64_t>(tablet_id_.id()), index_id))) {
     STORAGE_LOG(WARN, "failed to fill info param", K(ret));
   }
@@ -821,7 +821,7 @@ int ObUniqueCheckingDag::fill_dag_key(char *buf, const int64_t buf_len) const
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret));
-  }
+  } 
   else {
     int64_t pos = 0;
     if (OB_FAIL(databuff_print_multi_objs(buf, buf_len, pos,

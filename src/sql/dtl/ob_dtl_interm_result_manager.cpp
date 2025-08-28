@@ -610,7 +610,7 @@ int ObDTLIntermResultManager::process_interm_result_inner(ObDtlLinkedBuffer &buf
         }
       }
     } else {
-      ObAtomicAppendPartBlockCall call(buffer.buf(), start_pos, length, rows,
+      ObAtomicAppendPartBlockCall call(buffer.buf(), start_pos, length, rows, 
                                        is_eof, this, mem_profile_info);
       if (OB_FAIL(atomic_append_part_block(interm_res_key, call))) {
         if (OB_HASH_NOT_EXIST == ret &&
@@ -786,11 +786,11 @@ int ObDTLIntermResultManager::process_dump(ObDTLIntermResultInfo &result_info,
       }
     }
   }
-
+  
   return ret;
 }
 
-// Currently, only interm results of parallel execution (px)
+// Currently, only interm results of parallel execution (px) 
 // are integrated with automatic memory management.
 int ObDTLIntermResultManager::access_mem_profile(const ObDTLMemProfileKey &mem_profile_key,
                                                  ObDTLMemProfileInfo *&mem_profile_info,
@@ -821,7 +821,7 @@ int ObDTLIntermResultManager::access_mem_profile(const ObDTLMemProfileKey &mem_p
     LOG_DEBUG("Current situation of accessing intermediate results in the profile.",
               K(mem_profile_info->ref_count_), K(mem_profile_key), K(buffer));
   }
-  return ret;
+  return ret; 
 }
 
 int ObDTLIntermResultManager::init_mem_profile(const ObDTLMemProfileKey &key,
@@ -851,7 +851,7 @@ int ObDTLIntermResultManager::init_mem_profile(const ObDTLMemProfileKey &key,
     } else if (ret == OB_HASH_NOT_EXIST) {
       ret = OB_SUCCESS;
       void *info_buf = nullptr;
-      ObMemAttr mem_info_attr(MTL_ID(), "IRMMemInfo", common::ObCtxIds::EXECUTE_CTX_ID);
+      ObMemAttr mem_info_attr(MTL_ID(), "IRMMemInfo", common::ObCtxIds::EXECUTE_CTX_ID); 
       ObMemAttr allocator_attr(MTL_ID(), "DtlIntermRes", common::ObCtxIds::WORK_AREA);
       int64_t cache_size = buffer.get_input_rows() * buffer.get_input_width();
       if (cache_size <= 0 || cache_size > ObDTLMemProfileInfo::CACHE_SIZE) {
@@ -960,7 +960,7 @@ void ObDTLIntermResultManager::free_mem_profile(ObDTLMemProfileInfo *&info)
 }
 
 int ObDTLIntermResultManager::init_result_info_store(ObDTLIntermResultInfoGuard &result_info_guard,
-                                  ObDtlLinkedBuffer &buffer)
+                                  ObDtlLinkedBuffer &buffer) 
 {
   int ret = OB_SUCCESS;
   if (result_info_guard.result_info_->store_type_ == ObDTLIntermResultInfo::StoreType::DATUM) {
@@ -971,9 +971,9 @@ int ObDTLIntermResultManager::init_result_info_store(ObDTLIntermResultInfoGuard 
   } else if (result_info_guard.result_info_->store_type_ == ObDTLIntermResultInfo::StoreType::ROW) {
     ObMemAttr mem_attr(buffer.tenant_id(), "RowDtlIntermRes", ObCtxIds::EXECUTE_CTX_ID);
     if (OB_FAIL(result_info_guard.result_info_->get_row_store()->init(
-                                                  buffer.get_row_meta(),
+                                                  buffer.get_row_meta(), 
                                                   buffer.get_max_batch_size(),
-                                                  mem_attr,
+                                                  mem_attr, 
                                                   0 /*mem_limit*/,
                                                   true /*enable_dump*/,
                                                   NONE_COMPRESSOR))) {

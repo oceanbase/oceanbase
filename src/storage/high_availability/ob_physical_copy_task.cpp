@@ -112,7 +112,7 @@ int ObPhysicalCopyTask::process()
             K(copied_ctx.get_macro_block_count()), K(copied_ctx));
       }
     }
-    copy_ctx_->total_macro_count_ += copied_ctx.get_macro_block_count();
+    copy_ctx_->total_macro_count_ += copied_ctx.get_macro_block_count(); 
     copy_ctx_->reuse_macro_count_ += copied_ctx.use_old_macro_block_count_;
     LOG_INFO("physical copy task finish", K(ret), KPC(copy_macro_range_info_), KPC(copy_ctx_));
   }
@@ -207,7 +207,7 @@ int ObPhysicalCopyTask::fetch_macro_block_(
       ret = OB_ERR_SYS;
       LOG_ERROR("list count not match", K(ret), K(copy_table_key_), KPC(copy_macro_range_info_),
           K(copied_ctx.get_macro_block_count()), K(copied_ctx));
-    }
+    } 
 
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
@@ -383,8 +383,8 @@ int ObPhysicalCopyTask::get_ddl_macro_block_restore_reader_(
   ObCopyDDLMacroBlockRestoreReader *tmp_reader = NULL;
 
   reader = nullptr;
-  if (!copy_ctx_->is_leader_restore_
-      || !init_param.is_valid()
+  if (!copy_ctx_->is_leader_restore_ 
+      || !init_param.is_valid() 
       || !init_param.table_key_.is_ddl_dump_sstable()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get ddl macro block restore reader get invalid argument", K(ret), KPC(copy_ctx_), K(init_param));
@@ -413,8 +413,8 @@ int ObPhysicalCopyTask::get_remote_macro_block_restore_reader_(
   ObCopyRemoteSSTableMacroBlockRestoreReader *tmp_reader = nullptr;
 
   reader = nullptr;
-  if (!copy_ctx_->is_leader_restore_
-      || !ObTabletRestoreAction::is_restore_replace_remote_sstable(copy_ctx_->restore_action_)
+  if (!copy_ctx_->is_leader_restore_ 
+      || !ObTabletRestoreAction::is_restore_replace_remote_sstable(copy_ctx_->restore_action_) 
       || !init_param.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get remote macro block restore reader get invalid argument", K(ret), KPC(copy_ctx_), K(init_param));
@@ -431,7 +431,7 @@ int ObPhysicalCopyTask::get_remote_macro_block_restore_reader_(
   if (OB_NOT_NULL(tmp_reader)) {
     MTL_DELETE(ObCopyRemoteSSTableMacroBlockRestoreReader, "RMacroRReader", tmp_reader);
   }
-
+  
   return ret;
 }
 
@@ -443,7 +443,7 @@ int ObPhysicalCopyTask::get_macro_block_writer_(
   int ret = OB_SUCCESS;
   ObStorageHAMacroBlockWriter *tmp_writer = nullptr;
   const ObMigrationSSTableParam *sstable_param = nullptr;
-  const bool is_shared_storage = GCTX.is_shared_storage_mode();
+  const bool is_shared_storage = GCTX.is_shared_storage_mode(); 
   if (OB_ISNULL(reader) || OB_ISNULL(index_block_rebuilder)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("macro block writer get invalid argument", K(ret), KP(reader), KP(index_block_rebuilder));
@@ -467,7 +467,7 @@ int ObPhysicalCopyTask::get_macro_block_writer_(
     if (OB_ISNULL(tmp_writer)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory", K(ret));
-    } else if (OB_FAIL(tmp_writer->init(copy_ctx_->tenant_id_, copy_ctx_->ls_id_, copy_ctx_->tablet_id_,
+    } else if (OB_FAIL(tmp_writer->init(copy_ctx_->tenant_id_, copy_ctx_->ls_id_, copy_ctx_->tablet_id_, 
         this->get_dag()->get_dag_id(), sstable_param, reader, index_block_rebuilder, copy_ctx_->extra_info_))) {
       STORAGE_LOG(WARN, "failed to init macro block writer", K(ret), KPC(copy_ctx_));
     } else {
@@ -622,7 +622,7 @@ int ObPhysicalCopyTask::record_server_event_()
         "table_key", copy_table_key_,
         "macro_block_count", copy_macro_range_info_->macro_block_count_,
         "src", copy_ctx_->src_info_.src_addr_);
-  }
+  } 
   return ret;
 }
 

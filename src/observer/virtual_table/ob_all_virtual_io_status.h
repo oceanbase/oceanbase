@@ -169,7 +169,7 @@ private:
   {
   public:
     ScheduleInfo();
-    ~ScheduleInfo();
+    ~ScheduleInfo();    
     TO_STRING_KV(K(thread_id_),K(tenant_id_), K(group_id_), K(queuing_count_));
   public:
     uint64_t thread_id_;

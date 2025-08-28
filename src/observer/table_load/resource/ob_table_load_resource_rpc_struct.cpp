@@ -19,16 +19,16 @@ namespace oceanbase
 namespace observer
 {
 
-OB_SERIALIZE_MEMBER(ObDirectLoadResourceOpRequest,
-                    command_type_,
+OB_SERIALIZE_MEMBER(ObDirectLoadResourceOpRequest, 
+                    command_type_, 
                     arg_content_);
 
-OB_UNIS_DEF_SERIALIZE(ObDirectLoadResourceOpResult,
-                      command_type_,
+OB_UNIS_DEF_SERIALIZE(ObDirectLoadResourceOpResult, 
+                      command_type_, 
                       res_content_);
 
-OB_UNIS_DEF_SERIALIZE_SIZE(ObDirectLoadResourceOpResult,
-                           command_type_,
+OB_UNIS_DEF_SERIALIZE_SIZE(ObDirectLoadResourceOpResult, 
+                           command_type_, 
                            res_content_);
 
 OB_DEF_DESERIALIZE(ObDirectLoadResourceOpResult)
@@ -52,32 +52,32 @@ OB_DEF_DESERIALIZE(ObDirectLoadResourceOpResult)
 }
 
 OB_SERIALIZE_MEMBER_SIMPLE(ObDirectLoadResourceUnit,
-                           addr_,
-                           thread_count_,
+                           addr_, 
+                           thread_count_, 
                            memory_size_);
 
-OB_SERIALIZE_MEMBER_SIMPLE(ObDirectLoadResourceApplyArg,
-                           tenant_id_,
-                           task_key_,
+OB_SERIALIZE_MEMBER_SIMPLE(ObDirectLoadResourceApplyArg, 
+                           tenant_id_, 
+                           task_key_, 
                            apply_array_);
 
-OB_SERIALIZE_MEMBER_SIMPLE(ObDirectLoadResourceReleaseArg,
-                           tenant_id_,
+OB_SERIALIZE_MEMBER_SIMPLE(ObDirectLoadResourceReleaseArg, 
+                           tenant_id_, 
                            task_key_);
 
-OB_SERIALIZE_MEMBER_SIMPLE(ObDirectLoadResourceUpdateArg,
-                           tenant_id_,
+OB_SERIALIZE_MEMBER_SIMPLE(ObDirectLoadResourceUpdateArg, 
+                           tenant_id_, 
                            thread_count_,
                            memory_size_,
                            addrs_);
 
-OB_SERIALIZE_MEMBER_SIMPLE(ObDirectLoadResourceCheckArg,
+OB_SERIALIZE_MEMBER_SIMPLE(ObDirectLoadResourceCheckArg, 
                            tenant_id_,
                            avail_memory_,
                            first_check_);
 
-OB_SERIALIZE_MEMBER_SIMPLE(ObDirectLoadResourceOpRes,
-                           error_code_,
+OB_SERIALIZE_MEMBER_SIMPLE(ObDirectLoadResourceOpRes, 
+                           error_code_, 
                            avail_memory_,
                            assigned_array_);
 

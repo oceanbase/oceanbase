@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #include "lib/charset/ob_ctype_tis620_tab.h"
 #include "lib/charset/ob_ctype_tis620.h"
 

@@ -45,8 +45,8 @@ public:
                           common::ObISQLClient &sql_proxy,
                           const share::ObBackupLSTaskAttr &ls_attr,
                           const share::ObHAResultInfo &result_info);
-  static int check_ls_is_dropped(const share::ObBackupLSTaskAttr &ls_attr,
-                                 common::ObISQLClient &sql_proxy,
+  static int check_ls_is_dropped(const share::ObBackupLSTaskAttr &ls_attr, 
+                                 common::ObISQLClient &sql_proxy, 
                                  bool &is_dropped);
 private:
   int gen_and_add_task_();

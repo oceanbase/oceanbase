@@ -715,7 +715,7 @@ int ObTenantCheckpointSlogHandler::write_checkpoint(bool is_force)
 
   uint64_t tenant_id = MTL_ID();
   omt::ObTenant *tenant = static_cast<omt::ObTenant*>(share::ObTenantEnv::get_tenant());
-
+  
   HEAP_VARS_3((ObTenantSuperBlock, super_block, tenant_id), (ObTenantSuperBlock, last_super_block), (ObTenantStorageCheckpointWriter, tenant_storage_ckpt_writer)) {
     last_super_block = tenant->get_super_block();
     //Don't compare to MERGE_SCHEDULER_PTR->get_frozen_version(), because we expect to do
@@ -769,7 +769,7 @@ int ObTenantCheckpointSlogHandler::write_checkpoint(bool is_force)
         LOG_WARN("fail to write_checkpoint", K(ret));
       }
       clean_copy_status();
-
+      
       if (OB_SUCC(ret)) {
         lib::ObMutexGuard guard(super_block_mutex_);
         super_block.copy_snapshots_from(tenant->get_super_block());
@@ -1375,7 +1375,7 @@ int ObTenantCheckpointSlogHandler::parse(
           LOG_WARN("fail to deserialize tablet meta", K(ret), KP(buf), K(len), K(pos));
         } else {
           ObCStringHelper helper;
-          if (0 > fprintf(stream, "%s\n version:%d length:%d\n%s\n", slog_name, version, length,
+          if (0 > fprintf(stream, "%s\n version:%d length:%d\n%s\n", slog_name, version, length, 
               helper.convert(slog_entry))) {
             ret = OB_IO_ERROR;
             LOG_WARN("Fail to print slog to file.", K(ret));
@@ -1552,8 +1552,8 @@ int ObTenantCheckpointSlogHandler::read_empty_shell_file(
 
 [[nodiscard]] ObTenantCheckpointSlogHandler::ObCkptSlogROptLockGuard::ObCkptSlogROptLockGuard(
     const ObTenantCheckpointSlogHandler &ckpt_slog_hdl)
-  : ckpt_slog_hdl_(ckpt_slog_hdl),
-    ret_(OB_NOT_INIT),
+  : ckpt_slog_hdl_(ckpt_slog_hdl), 
+    ret_(OB_NOT_INIT), 
     slot_id_(0)
 {
   if (GCTX.is_shared_storage_mode()) {

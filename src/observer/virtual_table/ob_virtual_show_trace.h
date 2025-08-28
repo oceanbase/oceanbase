@@ -50,7 +50,7 @@ public:
   int fill_cells(sql::ObFLTShowTraceRec &record);
   int get_tag_buf(char *&tag_buf);
   int alloc_trace_rec(sql::ObFLTShowTraceRec *&rec);
-
+  
 private:
   enum SYS_COLUMN
   {

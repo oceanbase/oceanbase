@@ -53,7 +53,7 @@ private:
 typedef ObSEArray<ObLogMinerColVal, 1> ObLogMinerColumnVals;
 struct DbAndTableWrapper
 {
-  DbAndTableWrapper(const char *db_name, const char *tbl_name):
+  DbAndTableWrapper(const char *db_name, const char *tbl_name): 
       db_name_(db_name),
       table_name_(tbl_name) {}
 

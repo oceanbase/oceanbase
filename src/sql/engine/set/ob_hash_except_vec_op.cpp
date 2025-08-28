@@ -41,7 +41,7 @@ int ObHashExceptVecOp::inner_open()
         alloc(MY_SPEC.max_batch_size_ * sizeof(ObCompactRow *))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc store rows", K(ret));
-  }
+  } 
   return ret;
 }
 
@@ -169,9 +169,9 @@ int ObHashExceptVecOp::get_next_batch_from_hashtable(const int64_t batch_size)
       if (OB_SUCC(ret) && OB_FAIL(hp_infras_.open_hash_table_part())) {
         LOG_WARN("failed to open hashtable part", K(ret));
       }
-    } else if (OB_FAIL(hp_infras_.get_next_hash_table_batch(MY_SPEC.set_exprs_,
-                                                            batch_size,
-                                                            read_rows,
+    } else if (OB_FAIL(hp_infras_.get_next_hash_table_batch(MY_SPEC.set_exprs_, 
+                                                            batch_size, 
+                                                            read_rows, 
                                                             const_cast<const ObCompactRow **>(store_rows_)))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("failed to get next hash table batch", K(ret));

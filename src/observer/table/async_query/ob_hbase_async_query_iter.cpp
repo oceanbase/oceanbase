@@ -35,7 +35,7 @@ namespace table
   ObHbaseAsyncQueryIter::~ObHbaseAsyncQueryIter()
   {
     if (OB_NOT_NULL(result_iter_)) {
-      result_iter_->close();
+      result_iter_->close(); 
       result_iter_->~ObHbaseQueryResultIterator();
       result_iter_ = nullptr;
     }
@@ -98,7 +98,7 @@ namespace table
     if (OB_NOT_NULL(exec_ctx.get_audit_ctx())) {
       exec_ctx.get_audit_ctx()->need_audit_ = true;
     }
-    OB_TABLE_END_AUDIT(ret_code, ret,
+    OB_TABLE_END_AUDIT(ret_code, ret, 
                        snapshot, exec_ctx.get_trans_param().tx_snapshot_,
                        stmt_type, StmtType::T_KV_QUERY,
                        return_rows, result.get_row_count(),
@@ -187,7 +187,7 @@ namespace table
     if (OB_NOT_NULL(exec_ctx.get_audit_ctx())) {
       exec_ctx.get_audit_ctx()->need_audit_ = true;
     }
-    OB_TABLE_END_AUDIT(ret_code, ret,
+    OB_TABLE_END_AUDIT(ret_code, ret, 
                        snapshot, exec_ctx.get_trans_param().tx_snapshot_,
                        stmt_type, StmtType::T_KV_QUERY,
                        return_rows, result.get_row_count(),

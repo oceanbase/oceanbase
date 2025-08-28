@@ -66,8 +66,8 @@ public:
   ObRootQueue() : ObRaQueue(), SlotLock_(nullptr)
   {
   }
-  ~ObRootQueue()
-  {
+  ~ObRootQueue() 
+  { 
     destroy();
   }
 
@@ -231,7 +231,7 @@ public:
       int64_t start_idx = idx * leaf_queue_size_ + leaf_rec->get_pop_idx();
       set_start_idx(start_idx);
     }
-
+    
     revert_leaf_queue(&tmp_ref, leaf_rec);
     return ret;
   }
@@ -264,9 +264,9 @@ private:
    * 2.leaf_queue == nullptr && corresponding rlock is unlocked.
    * This is not a good interface design (maybe RAII is better), but it has already been implemented this way.
    * So inside this class public function, if you call get_leaf_queue(), revert_leaf_queue() must appear in pairs to make sure rlock is unlocked.
-
+   
    * Due to historical reasons, so far there are still 1 situation where get_leaf_queue() and revert_leaf_queue() each appear:
-   * The iteration process of sql audit, which would use ObDlQueue::get() to lock leaf_queue while call ObDlQueue::revert() later when it get next row.
+   * The iteration process of sql audit, which would use ObDlQueue::get() to lock leaf_queue while call ObDlQueue::revert() later when it get next row. 
    */
   int get_leaf_queue(const int64_t idx, ObLeafQueue *&leaf_queue, Root_Ref* ref);
   void revert_leaf_queue(Root_Ref* ref, ObLeafQueue *&leaf_queue);

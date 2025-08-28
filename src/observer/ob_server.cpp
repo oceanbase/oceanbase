@@ -892,7 +892,7 @@ void ObServer::destroy()
     deinit_plugin();
 
     deinit_zlib_lite_compressor();
-
+    
     FLOG_INFO("begin to destroy log io device wrapper");
     LOG_IO_DEVICE_WRAPPER.destroy();
     FLOG_INFO("log io device wrapper destroyed");
@@ -2534,10 +2534,10 @@ int ObServer::init_io()
                                                   data_disk_percentage,
                                                   log_disk_percentage))) {
           LOG_ERROR("cal_all_part_disk_size failed", KR(ret));
-        } else if (OB_FAIL(LOG_IO_DEVICE_WRAPPER.init(storage_env_.clog_dir_,
-                                                      io_config.disk_io_thread_count_,
-                                                      max_io_depth,
-                                                      &OB_IO_MANAGER,
+        } else if (OB_FAIL(LOG_IO_DEVICE_WRAPPER.init(storage_env_.clog_dir_, 
+                                                      io_config.disk_io_thread_count_, 
+                                                      max_io_depth, 
+                                                      &OB_IO_MANAGER, 
                                                       &ObDeviceManager::get_instance()))) {
           LOG_ERROR("log_io_device_wrapper init failed", KR(ret));
         } else {

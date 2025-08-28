@@ -218,7 +218,7 @@ public:
     common::databuff_printf(buf, buf_len, pos, trans_version_);
     common::databuff_printf(buf, buf_len, pos, " commit_version=");
     common::databuff_printf(buf, buf_len, pos, commit_version_);
-    common::databuff_printf(buf, buf_len, pos, " lock_wait_start_ts=%ld replay_compact_version=",
+    common::databuff_printf(buf, buf_len, pos, " lock_wait_start_ts=%ld replay_compact_version=", 
         lock_wait_start_ts_);
     common::databuff_printf(buf, buf_len, pos, replay_compact_version_);
     common::databuff_printf(buf, buf_len, pos, "}");

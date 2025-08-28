@@ -67,12 +67,12 @@ public:
   bool is_##STATUS##_status() const { return TENANT_STATUS == value_; };
 
 IS_TENANT_STATUS(NORMAL_STATUS, normal) 
-IS_TENANT_STATUS(SWITCHING_TO_PRIMARY_STATUS, switching_to_primary)
-IS_TENANT_STATUS(PREPARE_FLASHBACK_FOR_FAILOVER_TO_PRIMARY_STATUS, prepare_flashback_for_failover_to_primary)
+IS_TENANT_STATUS(SWITCHING_TO_PRIMARY_STATUS, switching_to_primary) 
+IS_TENANT_STATUS(PREPARE_FLASHBACK_FOR_FAILOVER_TO_PRIMARY_STATUS, prepare_flashback_for_failover_to_primary) 
 IS_TENANT_STATUS(FLASHBACK_STATUS, flashback) 
-IS_TENANT_STATUS(PREPARE_SWITCHING_TO_STANDBY_STATUS, prepare_switching_to_standby)
-IS_TENANT_STATUS(SWITCHING_TO_STANDBY_STATUS, switching_to_standby)
-IS_TENANT_STATUS(PREPARE_FLASHBACK_FOR_SWITCH_TO_PRIMARY_STATUS, prepare_flashback_for_switch_to_primary)
+IS_TENANT_STATUS(PREPARE_SWITCHING_TO_STANDBY_STATUS, prepare_switching_to_standby) 
+IS_TENANT_STATUS(SWITCHING_TO_STANDBY_STATUS, switching_to_standby) 
+IS_TENANT_STATUS(PREPARE_FLASHBACK_FOR_SWITCH_TO_PRIMARY_STATUS, prepare_flashback_for_switch_to_primary) 
 #undef IS_TENANT_STATUS 
 
   TO_STRING_KV("switchover_status", to_str(), K_(value));

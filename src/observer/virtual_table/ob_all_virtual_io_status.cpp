@@ -956,7 +956,7 @@ int ObAllVirtualGroupIOStat::record_user_group_io_status(const int64_t tenant_id
                      io_config.group_configs_.at(local_group_config_index).group_name_,
                      write_item_group_name_len);
               write_item.group_name_[write_item_group_name_len] = '\0';
-
+              
               write_item.min_iops_ = group_min_iops;
               write_item.max_iops_ = group_max_iops;
               write_item.max_net_bandwidth_ = group_max_net_bandwidth;
@@ -1016,7 +1016,7 @@ int ObAllVirtualGroupIOStat::record_sys_group_io_status(const int64_t tenant_id,
           remote_read_index = left + static_cast<int64_t>(ObIOGroupMode::REMOTEREAD);
           local_write_index = left + static_cast<int64_t>(ObIOGroupMode::LOCALWRITE);
           remote_write_index = left + static_cast<int64_t>(ObIOGroupMode::REMOTEWRITE);
-
+    
           if (local_read_index < 0 || remote_read_index < 0 ||
                local_write_index < 0 || local_write_index < 0) {
           } else {
@@ -1076,7 +1076,7 @@ int ObAllVirtualGroupIOStat::record_sys_group_io_status(const int64_t tenant_id,
                 LOG_WARN("convert bandwidth format failed", K(ret), K(write_item));
               } else if (OB_FAIL(group_io_stats_.push_back(write_item))) {
                 LOG_WARN("push back group io stat failed", K(ret), K(write_item));
-              }
+              } 
             }
           }
         }

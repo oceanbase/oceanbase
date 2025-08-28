@@ -212,7 +212,7 @@ int ObDeadLockInnerTableService::insert_all(const ObIArray<ObDetectorInnerReport
         DETECT_LOG(WARN, "insert item failed", KR(ret), K(info));
       }
     }
-
+ 
     if (OB_SUCC(ret)) {
       DETECT_LOG(INFO, "insert items success", K(infos));
     }

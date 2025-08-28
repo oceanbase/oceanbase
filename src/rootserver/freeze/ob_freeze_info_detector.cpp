@@ -150,7 +150,7 @@ void ObMajorMergeInfoDetector::run3()
           LOG_INFO("ERRSIM SKIP_REFRESH_ZONE_INFO", K(ret));
           ret = OB_SUCCESS;
         }
-#endif
+#endif        
         if (OB_FAIL(!skip_refresh_zone_info && try_update_zone_info(proposal_id))) {
           LOG_WARN("fail to try update zone info", KR(ret), K_(tenant_id), K(proposal_id));
         }
@@ -352,8 +352,8 @@ int ObMajorMergeInfoDetector::try_adjust_global_merge_info(const int64_t expecte
   int ret = OB_SUCCESS;
   bool is_initial = false;
   // both primary and standby tenants should adjust global_merge_info to skip unnecessary major freeze
-  // primary tenants:
-  // standby tenants:
+  // primary tenants: 
+  // standby tenants: 
   if (!is_global_merge_info_adjusted_) {
     bool is_restore = false;
     if (OB_FAIL(check_tenant_is_restore(tenant_id_, is_restore))) {

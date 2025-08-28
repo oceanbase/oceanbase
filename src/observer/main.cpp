@@ -680,7 +680,7 @@ const char* __asan_default_options()
 int main(int argc, char *argv[])
 {
   int ret = OB_SUCCESS;
-  size_t stack_size = 16<<20;
+  size_t stack_size = 16<<20; 
   struct rlimit limit;
   if (0 == getrlimit(RLIMIT_STACK, &limit)) {
     if (RLIM_INFINITY != limit.rlim_cur) {

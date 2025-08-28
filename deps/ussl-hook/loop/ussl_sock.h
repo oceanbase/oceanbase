@@ -41,7 +41,7 @@ typedef struct ussl_sf_t
 
 #ifndef EPOLLPENDING
 #define EPOLLPENDING EPOLLONESHOT
-#endif
+#endif 
 
 inline void ussl_skset(ussl_sock_t *s, uint32_t m) { s->mask |= m; }
 inline void ussl_skclear(ussl_sock_t *s, uint32_t m) { s->mask &= ~m; }

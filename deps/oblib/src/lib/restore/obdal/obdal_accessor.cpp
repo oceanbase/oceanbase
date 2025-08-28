@@ -33,9 +33,9 @@ void opendal_bytes_init(opendal_bytes &bytes, const char *buf, const int64_t buf
 class ObDalWrapper
 {
 public:
-  static opendal_error *obdal_init_env(void *malloc, void *free, void *log_handler, const int32_t log_level, const int64_t thread_cnt, const int64_t pool_max_idle_per_host, const int64_t pool_max_idle_time_s)
+  static opendal_error *obdal_init_env(void *malloc, void *free, void *log_handler, const int32_t log_level, const int64_t thread_cnt, const int64_t pool_max_idle_per_host, const int64_t pool_max_idle_time_s) 
   {
-    return opendal_init_env(malloc, free, log_handler, log_level, thread_cnt, pool_max_idle_per_host, pool_max_idle_time_s);
+    return opendal_init_env(malloc, free, log_handler, log_level, thread_cnt, pool_max_idle_per_host, pool_max_idle_time_s); 
   }
   static void obdal_fin_env()
   {
@@ -49,7 +49,7 @@ public:
   static void obdal_span_free(ObSpan *&span)
   {
     ob_drop_span(span);
-  }
+  } 
   // operator
   static void obdal_operator_options_new(opendal_operator_options *&options)
   {
@@ -78,7 +78,7 @@ public:
   {
     opendal_bytes bytes;
     opendal_bytes_init(bytes, buf, buf_size, buf_size);
-
+    
     return opendal_operator_write(op, path, &bytes);
   }
   static opendal_error *obdal_operator_reader(const opendal_operator *op, const char *path, opendal_reader *&reader)
@@ -138,7 +138,7 @@ public:
     tagging = result.tagging;
     return result.error;
   }
-
+    
   // tagging
   static void obdal_object_tagging_new(opendal_object_tagging *&tagging)
   {
@@ -216,7 +216,7 @@ public:
   {
     opendal_bytes bytes;
     opendal_bytes_init(bytes, buf, buf_size, buf_size);
-
+    
     opendal_result_writer_write result = opendal_writer_write(writer, &bytes);
     write_size = result.size;
     return result.error;
@@ -225,7 +225,7 @@ public:
   {
     opendal_bytes bytes;
     opendal_bytes_init(bytes, buf, buf_size, buf_size);
-
+     
     opendal_result_writer_write result = opendal_writer_write_with_offset(writer, offset, &bytes);
     write_size = result.size;
     return result.error;
@@ -436,7 +436,7 @@ public:
   {
     ObDalWrapper::obdal_operator_free(op);
   }
-
+  
   // need retry
   static int obdal_operator_write(const opendal_operator *op, const char *path, const char *buf, const int64_t buf_size)
   {
@@ -494,7 +494,7 @@ public:
     }
     return ret;
   }
-
+  
   // need retry
   static int obdal_operator_stat(const opendal_operator *op, const char *path, opendal_metadata *&meta)
   {
@@ -513,7 +513,7 @@ public:
     if (OB_UNLIKELY(error != nullptr)) {
       handle_obdal_error_and_free(error, ret);
     }
-    return ret;
+    return ret; 
   }
   static int obdal_operator_deleter(const opendal_operator *op, opendal_deleter *&deleter)
   {
@@ -522,7 +522,7 @@ public:
     if (OB_UNLIKELY(error != nullptr)) {
       handle_obdal_error_and_free(error, ret);
     }
-    return ret;
+    return ret; 
   }
   // need retry
   static int obdal_operator_put_object_tagging(const opendal_operator *op, const char *path, const opendal_object_tagging *tagging)
@@ -570,9 +570,9 @@ public:
   static int obdal_lister_next(opendal_lister *lister, struct opendal_entry *&entry)
   {
     int ret = OB_SUCCESS;
-    // Each call to obdal_lister_next does not necessarily involve I/O operations.
-    // When I/O does not occur, ignoring the return value (is_temporary) and retrying is not idempotent.
-    // Therefore, it is important to disregard the errsim test in this context.
+    // Each call to obdal_lister_next does not necessarily involve I/O operations. 
+    // When I/O does not occur, ignoring the return value (is_temporary) and retrying is not idempotent. 
+    // Therefore, it is important to disregard the errsim test in this context. 
     // As a result, the errsim retry tests in ob_admin will ignore the error injection for this function.
     ObStorageObdalRetryStrategy<> strategy(ObObjectStorageTenantGuard::get_timeout_us(), false/* errsim_enable */);
     opendal_error *error = execute_until_timeout(strategy, ObDalWrapper::obdal_lister_next, lister, std::ref(entry));
@@ -745,7 +745,7 @@ public:
   }
   static void obdal_bytes_free(opendal_bytes *bytes)
   {
-    ObDalWrapper::obdal_bytes_free(bytes);
+    ObDalWrapper::obdal_bytes_free(bytes); 
   }
   static void obdal_c_char_free(char *c_char)
   {
@@ -828,7 +828,7 @@ void convert_obdal_error(const opendal_error *error, int &ob_errcode)
     } else if (error->code == OPENDAL_INVALID_OBJECT_STORAGE_ENDPOINT) {
       ob_errcode = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
     } else if (error->code == OPENDAL_CHECKSUM_ERROR) {
-      // checksum error are offten caused by network issues, so we convert it to
+      // checksum error are offten caused by network issues, so we convert it to 
       // io error to make it easier for user to retry.
       ob_errcode = OB_OBJECT_STORAGE_IO_ERROR;
     } else if (error->code == OPENDAL_REGION_MISMATCH) {
@@ -866,7 +866,7 @@ ObDalLogSpanGuard::~ObDalLogSpanGuard()
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(ob_span_)) {
     if (OB_FAIL(do_safely_without_ret(ObDalRetryLayer::obdal_span_free, ob_span_))) {
-      OB_LOG(WARN, "failed to free span", K(ret), KP(ob_span_));
+      OB_LOG(WARN, "failed to free span", K(ret), KP(ob_span_)); 
     }
   }
 }
@@ -874,22 +874,22 @@ ObDalLogSpanGuard::~ObDalLogSpanGuard()
 //========================= ObDalAccessor =========================
 
 int ObDalAccessor::init_env(
-    void *malloc,
-    void *free,
-    void *log_handler,
+    void *malloc, 
+    void *free, 
+    void *log_handler, 
     const int32_t log_level,
-    const int64_t thread_cnt,
-    const int64_t pool_max_idle_per_host,
+    const int64_t thread_cnt, 
+    const int64_t pool_max_idle_per_host, 
     const int64_t pool_max_idle_time_s)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(malloc) || OB_ISNULL(free) || OB_ISNULL(log_handler)
+  if (OB_ISNULL(malloc) || OB_ISNULL(free) || OB_ISNULL(log_handler) 
       || OB_UNLIKELY(log_level < 0 || log_level >= OB_LOG_LEVEL_MAX)
       || OB_UNLIKELY(thread_cnt <= 0 || pool_max_idle_per_host <= 0 || pool_max_idle_time_s <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", K(ret), KP(malloc), KP(free), KP(log_handler), K(log_level), K(thread_cnt), K(pool_max_idle_per_host), K(pool_max_idle_time_s));
   } else if (OB_FAIL(do_safely(ObDalRetryLayer::obdal_init_env, malloc, free, log_handler, log_level, thread_cnt, pool_max_idle_per_host, pool_max_idle_time_s))) {
-    OB_LOG(WARN, "failed init obdal env", K(ret), KP(malloc), KP(free), KP(log_handler), K(log_level), K(thread_cnt), K(pool_max_idle_per_host), K(pool_max_idle_time_s));
+    OB_LOG(WARN, "failed init obdal env", K(ret), KP(malloc), KP(free), KP(log_handler), K(log_level), K(thread_cnt), K(pool_max_idle_per_host), K(pool_max_idle_time_s)); 
   }
   return ret;
 }
@@ -917,8 +917,8 @@ int ObDalAccessor::obdal_operator_options_new(opendal_operator_options *&options
 }
 
 int ObDalAccessor::obdal_operator_options_set(
-    opendal_operator_options *options,
-    const char *key,
+    opendal_operator_options *options, 
+    const char *key, 
     const char *value)
 {
   ObDalLogSpanGuard obdal_span;
@@ -1075,7 +1075,7 @@ int ObDalAccessor::obdal_operator_multipart_writer(
 }
 
 int ObDalAccessor::obdal_operator_delete(
-    const opendal_operator *op,
+    const opendal_operator *op, 
     const char *path)
 {
   ObDalLogSpanGuard obdal_span;
@@ -1085,18 +1085,18 @@ int ObDalAccessor::obdal_operator_delete(
     OB_LOG(WARN, "invalid argument", K(ret), KP(op), KP(path));
   } else if (OB_FAIL(do_safely(ObDalRetryLayer::obdal_operator_delete, op, path))) {
     OB_LOG(WARN, "fail to exec operator delete", K(ret), K(path));
-  }
+  } 
   return ret;
 }
 
 int ObDalAccessor::obdal_operator_stat(
-    const opendal_operator *op,
-    const char *path,
+    const opendal_operator *op, 
+    const char *path, 
     opendal_metadata *&meta)
 {
   ObDalLogSpanGuard obdal_span;
   int ret = OB_SUCCESS;
-  opendal_result_stat result;
+  opendal_result_stat result; 
   if (OB_ISNULL(op) || OB_ISNULL(path)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", K(ret), KP(op), KP(path));
@@ -1138,7 +1138,7 @@ int ObDalAccessor::obdal_operator_list(
 }
 
 int ObDalAccessor::obdal_operator_deleter(
-    const opendal_operator *op,
+    const opendal_operator *op, 
     opendal_deleter *&deleter)
 {
   ObDalLogSpanGuard obdal_span;
@@ -1363,10 +1363,10 @@ int ObDalAccessor::obdal_metadata_free(opendal_metadata *&metadata)
 }
 
 int ObDalAccessor::obdal_reader_read(
-    opendal_reader *reader,
-    char *buf,
-    const int64_t buf_size,
-    const int64_t offset,
+    opendal_reader *reader, 
+    char *buf, 
+    const int64_t buf_size, 
+    const int64_t offset, 
     int64_t &read_size)
 {
   ObDalLogSpanGuard obdal_span;
@@ -1485,7 +1485,7 @@ int ObDalAccessor::obdal_multipart_writer_initiate(opendal_multipart_writer *wri
     OB_LOG(WARN, "invalid argument", K(ret), KP(writer));
   } else if (OB_FAIL(do_safely(ObDalRetryLayer::obdal_multipart_writer_initiate, writer))) {
     OB_LOG(WARN, "failed to init multipart writer", K(ret));
-  }
+  } 
   return ret;
 }
 
@@ -1559,7 +1559,7 @@ int ObDalAccessor::obdal_deleter_delete(opendal_deleter *deleter, const char *pa
     OB_LOG(WARN, "invalid argument", K(ret), KP(path));
   } else if (OB_FAIL(do_safely(ObDalRetryLayer::obdal_deleter_delete, deleter, path))) {
     OB_LOG(WARN, "failed to add file to deleter", K(ret), K(path));
-  }
+  } 
   return ret;
 }
 
@@ -1590,7 +1590,7 @@ int ObDalAccessor::obdal_deleter_flush(opendal_deleter *deleter, int64_t &delete
     OB_LOG(WARN, "invalid argument", K(ret), KP(deleter));
   } else if (OB_FAIL(do_safely(ObDalRetryLayer::obdal_deleter_flush, deleter, std::ref(deleted)))) {
     OB_LOG(WARN, "failed to flush deleter", K(ret));
-  }
+  } 
   return ret;
 }
 

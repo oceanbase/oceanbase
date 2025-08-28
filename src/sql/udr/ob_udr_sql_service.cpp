@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #define USING_LOG_PREFIX SQL_QRR
 #include "share/ob_max_id_fetcher.h"
 #include "observer/ob_sql_client_decorator.h"
@@ -66,9 +66,9 @@ int ObUDRSqlService::gen_insert_rule_dml(const ObUDRInfo &arg,
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(tenant_id,
-                                                                                  arg.tenant_id_)))
+                                                                                  arg.tenant_id_)))                            
     || OB_FAIL(dml.add_pk_column("rule_name", ObHexEscapeSqlStr(arg.rule_name_)))
-    || OB_FAIL(dml.add_column("rule_id", arg.rule_id_))
+    || OB_FAIL(dml.add_column("rule_id", arg.rule_id_))   
     || OB_FAIL(dml.add_column("pattern", ObHexEscapeSqlStr(arg.pattern_)))
     || OB_FAIL(dml.add_column("db_name", ObHexEscapeSqlStr(arg.db_name_)))
     || OB_FAIL(dml.add_column("replacement", ObHexEscapeSqlStr(arg.replacement_)))
@@ -124,7 +124,7 @@ int ObUDRSqlService::fetch_max_rule_version(const uint64_t tenant_id,
   int ret = OB_SUCCESS;
   uint64_t rule_version = OB_INVALID_VERSION;
   ObMaxIdFetcher id_fetcher(*sql_proxy_);
-  if (OB_FAIL(id_fetcher.fetch_max_id(*sql_proxy_, tenant_id,
+  if (OB_FAIL(id_fetcher.fetch_max_id(*sql_proxy_, tenant_id, 
               OB_MAX_USED_REWRITE_RULE_VERSION_TYPE, rule_version))) {
     LOG_WARN("failed to fetch max rule version", K(ret), K(tenant_id));
   } else {
@@ -266,7 +266,7 @@ int ObUDRSqlService::clean_up_items_marked_for_deletion(const uint64_t tenant_id
   int64_t affected_rows = 0;
   if (OB_FAIL(ret)) {
   } else if (sql.assign_fmt("delete FROM %s WHERE status = %ld \
-                             AND DATEDIFF(now(), gmt_modified) >= %ld",
+                             AND DATEDIFF(now(), gmt_modified) >= %ld", 
             OB_ALL_TENANT_REWRITE_RULES_TNAME,
             static_cast<int64_t>(ObUDRInfo::DELETE_STATUS),
             DELETE_DATE_INTERVAL_THRESHOLD)) {

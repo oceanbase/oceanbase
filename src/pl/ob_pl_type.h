@@ -243,7 +243,7 @@ OB_INLINE bool is_mocked_anonymous_array_id(uint64_t udt_id)
   // anonymous_array will use OB_PL_MOCK_ANONYMOUS_ID to generate a mocked id ,
   // OB_PL_MOCK_ANONYMOUS_ID = (uint64)OB_INVALID_ID - 1.
   // Why do not use OB_INVALID_ID? Anonymous block has declare local nested type (this package_id is OB_INVALID_ID)
-  // use OB_INVALID_ID - 1 to identify this scenery.
+  // use OB_INVALID_ID - 1 to identify this scenery. 
   // So the first 40 bits of mocked id in hex is: 0xFFFFFFFFFE
   // We can use (mocked_id & mask) to get the first 40 bits and check if it is mocked.
   return (udt_id & mask) == res || OB_INVALID_ID == udt_id;
@@ -583,7 +583,7 @@ public:
                                         const int64_t len,
                                         ObIntervalDSValue val,
                                         int64_t &pos,
-                                        const ObScale scale);
+                                        const ObScale scale);                                                
 
   int convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) const;
 
@@ -729,10 +729,10 @@ public:
   static const uint32_t ENUM_TYPE_INFO_BUCKET_NUM = 64;
   typedef common::ObSEArray<ObIArray<common::ObString>*, ENUM_TYPE_INFO_BUCKET_NUM> ObEnumTypeInfoArray;
   typedef common::hash::ObHashMap<ObPLEnumSetCtx::ObPLTypeInfoKey, uint64_t, common::hash::NoPthreadDefendMode> ObEnumTypeInfoReverseMap;
-
+  
   public:
   ObPLEnumSetCtx(ObIAllocator &allocator) :
-  is_inited_(false),
+  is_inited_(false), 
   used_type_info_id_(0),
   allocator_(allocator) {}
 
@@ -935,7 +935,7 @@ class ObPLCursorInfo
 public:
   ObPLCursorInfo(bool is_explicit = true) :
     id_(OB_INVALID_ID),
-    entity_(nullptr),
+    entity_(nullptr), 
     is_explicit_(is_explicit),
     current_position_(OB_INVALID_ID),
     bulk_rowcount_(),
@@ -1140,12 +1140,12 @@ public:
 
   inline ObIAllocator *get_allocator() { return NULL == entity_ ? allocator_ : &entity_->get_arena_allocator(); }
 
-  inline void set_ref_by_refcursor() {
+  inline void set_ref_by_refcursor() { 
     set_flag_bit(REF_BY_REFCURSOR);
     clear_flag_bit(DBMS_SQL_CURSOR);
   }
   inline bool is_ref_by_refcursor() const { return test_flag_bit(REF_BY_REFCURSOR); }
-  inline void set_dbms_sql_cursor() {
+  inline void set_dbms_sql_cursor() { 
     set_flag_bit(DBMS_SQL_CURSOR);
     clear_flag_bit(REF_BY_REFCURSOR);
   }

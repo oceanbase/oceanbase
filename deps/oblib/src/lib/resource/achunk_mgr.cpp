@@ -375,7 +375,7 @@ int64_t AChunkMgr::to_string(char *buf, const int64_t buf_len) const
   int64_t large_unmaps = 0;
   int64_t huge_maps = 0;
   int64_t huge_unmaps = 0;
-
+  
   for (int i = 0; i <= MAX_NORMAL_ACHUNK_INDEX; ++i) {
     for (int j = 0; j < OB_MAX_NUMA_NUM; ++j) {
       normal_maps += get_maps(i, j);

@@ -136,7 +136,7 @@ private:
                                    int64_t &elem_count,
                                    ObMultiSetType ms_type,
                                    ObMultiSetModifier ms_modifier);
-
+  
   static int eval_multiset_composite(ObExecContext &exec_ctx,
                                      const common::ObObj &obj1,
                                      const common::ObObj &obj2,

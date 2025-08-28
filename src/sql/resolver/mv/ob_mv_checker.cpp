@@ -603,7 +603,7 @@ int ObMVChecker::check_and_expand_mav_aggrs(const ObSelectStmt &stmt,
 }
 
 // fast refres can not support for these funs if there is only insert dml on base table.
-int ObMVChecker::check_and_expand_mav_aggr(const ObSelectStmt &stmt,
+int ObMVChecker::check_and_expand_mav_aggr(const ObSelectStmt &stmt, 
                                            ObAggFunRawExpr *aggr,
                                            ObIArray<ObAggFunRawExpr*> &all_aggrs,
                                            ObIArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>> &expand_aggrs,
@@ -1304,7 +1304,7 @@ int ObMVChecker::check_match_major_refresh_mv(const ObSelectStmt &stmt, bool &is
     LOG_INFO("[MAJ_REF_MV] join table size not valid", KR(ret), "table_size", stmt.get_table_size(),
              "joined_table_count", joined_tables.count());
   } else if (FALSE_IT(joined_table = joined_tables.at(0))) {
-  } else if (OB_ISNULL(joined_table) ||
+  } else if (OB_ISNULL(joined_table) || 
              OB_ISNULL(joined_table->left_table_) || OB_ISNULL(joined_table->right_table_)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("joined_table is null", KR(ret));
@@ -1446,7 +1446,7 @@ int ObMVChecker::check_right_table_join_key_valid(const ObSelectStmt &stmt,
 
 int ObMVChecker::check_left_table_partition_rule_valid(const ObSelectStmt &stmt,
                                                        const TableItem *left_table,
-                                                       const ObTableSchema *left_table_schema,
+                                                       const ObTableSchema *left_table_schema, 
                                                        bool &is_valid)
 {
   int ret = OB_SUCCESS;
@@ -1461,7 +1461,7 @@ int ObMVChecker::check_left_table_partition_rule_valid(const ObSelectStmt &stmt,
   } else {
     const schema::ObPartitionOption &left_partop = left_table_schema->get_part_option();
     const schema::ObPartitionOption &mv_partop = mv_container_table_schema_.get_part_option();
-    // TODO for now only works for collect_mv, we could relax the rule later: partition type can
+    // TODO for now only works for collect_mv, we could relax the rule later: partition type can 
     // be other type, partition func expr should consider about column name alias, etc.
     if (!left_partop.is_hash_part() || !mv_partop.is_hash_part()) {
       is_valid = false;

@@ -642,7 +642,7 @@ private:
   inline bool is_r_pending_() const
   { return tx_ls_state_mgr_.is_resume_leader_pending(); }
 
-  inline bool is_f_pending_() const
+  inline bool is_f_pending_() const 
   { return tx_ls_state_mgr_.is_follower_swl_pending(); }
 
   inline bool is_pending_() const

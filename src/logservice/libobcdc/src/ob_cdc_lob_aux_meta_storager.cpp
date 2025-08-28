@@ -433,7 +433,7 @@ int ObCDCLobAuxMetaStorager::del_lob_col_value_(
           LOG_ERROR("del fail", KR(ret), K(key));
         }
       } // for
-    }
+    } 
   }
   return ret;
 }

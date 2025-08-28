@@ -114,7 +114,7 @@ int ObSequenceSqlService::get_sequence_sync_value(const uint64_t tenant_id,
         if (OB_ITER_END != ret) {
           LOG_WARN("fail to get next row", K(ret), K(tname), K(tenant_id), K(sequence_id));
         } else {
-          // OB_ITER_END means there is no record in table,
+          // OB_ITER_END means there is no record in table, 
           // thus the sync value is its' start value, and init the table when operate it.
         }
       } else {

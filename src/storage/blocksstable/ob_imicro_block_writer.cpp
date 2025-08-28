@@ -135,7 +135,7 @@ int ObMicroBlockDesc::deep_copy(
         allocator.free(row_buffer);
       }
     }
-  }
+  } 
   return ret;
 }
 

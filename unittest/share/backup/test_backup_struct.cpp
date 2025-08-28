@@ -151,7 +151,7 @@ TEST(ObBackupDest, oss)
   ASSERT_EQ(OB_SUCCESS, dest.get_backup_dest_str(backup_dest_str, sizeof(backup_dest_str)));
   ASSERT_EQ(0, strcmp(backup_dest_str, "oss://backup_dir?host=xxx.com&access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F&delete_mode=tagging"));
   ASSERT_EQ(OB_SUCCESS, dest.get_backup_path_str(backup_path_str, sizeof(backup_path_str)));
-  ASSERT_EQ(0, strcmp(backup_path_str, "oss://backup_dir?host=xxx.com"));
+  ASSERT_EQ(0, strcmp(backup_path_str, "oss://backup_dir?host=xxx.com")); 
   ASSERT_TRUE(dest.is_root_path_equal(dest1));
   bool is_equal = false;
   ASSERT_EQ(OB_SUCCESS, dest.is_backup_path_equal(dest1, is_equal));
@@ -198,8 +198,8 @@ TEST(ObBackupDest, oss_encrypt)
   ASSERT_EQ(OB_SUCCESS, dest.get_backup_dest_str(backup_dest_str, sizeof(backup_dest_str)));
   ASSERT_EQ(0, strcmp(backup_dest_str, "oss://backup_dir?host=xxx.com&access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F"));
   ASSERT_EQ(OB_SUCCESS, dest.get_backup_path_str(backup_path_str, sizeof(backup_path_str)));
-  ASSERT_EQ(0, strcmp(backup_path_str, "oss://backup_dir?host=xxx.com"));
-
+  ASSERT_EQ(0, strcmp(backup_path_str, "oss://backup_dir?host=xxx.com")); 
+  
   dest1.reset();
   ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension));
   ASSERT_TRUE(dest == dest1);
@@ -234,7 +234,7 @@ TEST(ObBackupDest, cos)
   ASSERT_EQ(OB_SUCCESS, dest.get_backup_dest_str(backup_dest_str, sizeof(backup_dest_str)));
   ASSERT_EQ(0, strcmp(backup_dest_str, "cos://backup_dir?host=xxx.com&access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F&delete_mode=tagging&appid=333"));
   ASSERT_EQ(OB_SUCCESS, dest.get_backup_path_str(backup_path_str, sizeof(backup_path_str)));
-  ASSERT_EQ(0, strcmp(backup_path_str, "cos://backup_dir?host=xxx.com"));
+  ASSERT_EQ(0, strcmp(backup_path_str, "cos://backup_dir?host=xxx.com")); 
   ASSERT_TRUE(dest.is_root_path_equal(dest1));
   bool is_equal = false;
   ASSERT_EQ(OB_SUCCESS, dest.is_backup_path_equal(dest1, is_equal));
@@ -281,8 +281,8 @@ TEST(ObBackupDest, cos_encrypt)
   ASSERT_EQ(OB_SUCCESS, dest.get_backup_dest_str(backup_dest_str, sizeof(backup_dest_str)));
   ASSERT_EQ(0, strcmp(backup_dest_str, "cos://backup_dir?host=xxx.com&access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F&appid=333"));
   ASSERT_EQ(OB_SUCCESS, dest.get_backup_path_str(backup_path_str, sizeof(backup_path_str)));
-  ASSERT_EQ(0, strcmp(backup_path_str, "cos://backup_dir?host=xxx.com"));
-
+  ASSERT_EQ(0, strcmp(backup_path_str, "cos://backup_dir?host=xxx.com")); 
+  
   dest1.reset();
   ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension));
   ASSERT_TRUE(dest == dest1);

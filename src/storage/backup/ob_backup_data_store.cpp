@@ -625,7 +625,7 @@ int ObBackupDataStore::read_ls_meta_infos(ObBackupLSMetaInfosDesc &ls_meta_infos
   return ret;
 }
 
-int ObBackupDataStore::write_tablet_to_ls_info(const ObBackupDataTabletToLSDesc &tablet_to_ls_info,
+int ObBackupDataStore::write_tablet_to_ls_info(const ObBackupDataTabletToLSDesc &tablet_to_ls_info, 
     const int64_t turn_id, const share::ObBackupDataType &type)
 {
   int ret = OB_SUCCESS;
@@ -646,7 +646,7 @@ int ObBackupDataStore::write_tablet_to_ls_info(const ObBackupDataTabletToLSDesc 
   return ret;
 }
 
-int ObBackupDataStore::read_tablet_to_ls_info(const int64_t turn_id, const share::ObBackupDataType &type,
+int ObBackupDataStore::read_tablet_to_ls_info(const int64_t turn_id, const share::ObBackupDataType &type, 
     ObBackupDataTabletToLSDesc &tablet_to_ls_info)
 {
   int ret = OB_SUCCESS;
@@ -666,11 +666,11 @@ int ObBackupDataStore::read_tablet_to_ls_info(const int64_t turn_id, const share
     LOG_WARN("fail to assign full path", K(ret));
   } else if (OB_FAIL(read_single_file(full_path, tablet_to_ls_info))) {
     LOG_WARN("failed to read single file", K(ret), K(full_path));
-  }
+  } 
   return ret;
 }
 
-int ObBackupDataStore::read_tablet_list(const share::ObBackupDataType &type, const int64_t turn_id, const ObLSID &ls_id,
+int ObBackupDataStore::read_tablet_list(const share::ObBackupDataType &type, const int64_t turn_id, const ObLSID &ls_id, 
     ObIArray<common::ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;
@@ -703,7 +703,7 @@ int ObBackupDataStore::read_tablet_list(const share::ObBackupDataType &type, con
 int ObBackupDataStore::write_tenant_backup_set_infos(const ObTenantBackupSetInfosDesc &tenant_backup_set_infos)
 {
   int ret = OB_SUCCESS;
-
+  
   ObBackupPathString full_path;
   share::ObBackupPath path;
 
@@ -716,7 +716,7 @@ int ObBackupDataStore::write_tenant_backup_set_infos(const ObTenantBackupSetInfo
     LOG_WARN("fail to assign full path", K(ret));
   } else if (OB_FAIL(write_single_file(full_path, tenant_backup_set_infos))) {
     LOG_WARN("fail to write single file", K(ret));
-  }
+  } 
 
   return ret;
 }
@@ -760,7 +760,7 @@ int ObBackupDataStore::write_backup_set_placeholder(
     const bool is_inner,
     const bool is_start, 
     const bool is_succeed,
-    const SCN &replay_scn,
+    const SCN &replay_scn, 
     const SCN &min_restore_scn)
 {
   int ret = OB_SUCCESS;
@@ -993,7 +993,7 @@ int ObBackupDataStore::write_root_key_info(const uint64_t tenant_id)
   } else if (OB_FAIL(ObMasterKeyUtil::backup_root_key(tenant_id, path.get_obstr(),
                                               backup_set_dest_.get_storage_info(), empty_str))) {
     LOG_WARN("fail to backup root key", K(ret));
-  }
+  } 
 #endif
   return ret;
 }
@@ -1012,7 +1012,7 @@ int ObBackupDataStore::read_root_key_info(const uint64_t tenant_id)
   } else if (OB_FAIL(ObMasterKeyUtil::restore_root_key(tenant_id, path.get_obstr(),
                                               backup_set_dest_.get_storage_info(), empty_str))) {
     LOG_WARN("fail to backup root key", K(ret));
-  }
+  } 
 #endif
   return ret;
 }
@@ -1021,8 +1021,8 @@ int ObBackupDataStore::get_backup_set_placeholder_path_(
     const bool is_inner, 
     const bool is_start, 
     const bool is_succeed, 
-    const SCN &replay_scn,
-    const SCN &min_restore_scn,
+    const SCN &replay_scn, 
+    const SCN &min_restore_scn, 
     share::ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
@@ -1053,8 +1053,8 @@ int ObBackupDataStore::get_backup_set_placeholder_path_(
 
 int ObBackupDataStore::get_backup_set_array(
     const common::ObString &passwd_array,
-    const SCN &restore_scn,
-    SCN &restore_start_scn,
+    const SCN &restore_scn, 
+    SCN &restore_start_scn, 
     common::ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list)
 {
   int ret = OB_SUCCESS;
@@ -1074,10 +1074,10 @@ int ObBackupDataStore::get_backup_set_array(
       LOG_WARN("fail to get simple backup placeholder dir", K(ret));
     } else if (OB_FAIL(util.list_files(tenant_backup_placeholder_dir_path.get_obstr(), storage_info, op))) {
       LOG_WARN("fail to list files", K(ret), K(tenant_backup_placeholder_dir_path));
-    } else if (OB_FAIL(do_get_backup_set_array_(passwd_array, restore_scn, op, backup_set_list,
+    } else if (OB_FAIL(do_get_backup_set_array_(passwd_array, restore_scn, op, backup_set_list, 
         global_max_backup_set_id, restore_start_scn))) {
       LOG_WARN("fail to do get backup set array", K(ret), K(op));
-    }
+    } 
   }
   return ret;
 }
@@ -1095,7 +1095,7 @@ int ObBackupDataStore::get_max_backup_set_file_info(const common::ObString &pass
     const ObBackupStorageInfo *storage_info = get_storage_info();
     op.reset();
     ObSArray<share::ObBackupSetDesc> backup_set_desc_array;
-    if (OB_FAIL(share::ObBackupPathUtil::get_backup_sets_dir_path(get_backup_dest(),
+    if (OB_FAIL(share::ObBackupPathUtil::get_backup_sets_dir_path(get_backup_dest(), 
         tenant_backup_placeholder_dir_path))) {
       LOG_WARN("fail to get simple backup placeholder dir", K(ret));
     } else if (OB_FAIL(util.list_files(tenant_backup_placeholder_dir_path.get_obstr(), storage_info, op))) {
@@ -1153,7 +1153,7 @@ int ObBackupDataStore::get_backup_sys_time_zone_wrap(common::ObTimeZoneInfoWrap 
     const ObBackupStorageInfo *storage_info = get_storage_info();
     op.reset();
     ObSArray<share::ObBackupSetDesc> backup_set_desc_array;
-    if (OB_FAIL(share::ObBackupPathUtil::get_backup_sets_dir_path(get_backup_dest(),
+    if (OB_FAIL(share::ObBackupPathUtil::get_backup_sets_dir_path(get_backup_dest(), 
         tenant_backup_placeholder_dir_path))) {
       LOG_WARN("fail to get simple backup placeholder dir", K(ret));
     } else if (OB_FAIL(util.list_files(tenant_backup_placeholder_dir_path.get_obstr(), storage_info, op))) {
@@ -1194,9 +1194,9 @@ int ObBackupDataStore::get_backup_sys_time_zone_wrap(common::ObTimeZoneInfoWrap 
             int32_t offset = 0;
             int ret_more = OB_SUCCESS;
             bool is_oracle_mode = locality_info.compat_mode_ == lib::Worker::CompatMode::ORACLE;
-            if (OB_FAIL(ObTimeConverter::str_to_offset(time_zone,
-                                                       offset,
-                                                       ret_more,
+            if (OB_FAIL(ObTimeConverter::str_to_offset(time_zone, 
+                                                       offset, 
+                                                       ret_more, 
                                                        is_oracle_mode))) {
               LOG_WARN("invalid time zone offset", K(ret), K(time_zone), K(offset), K(is_oracle_mode));
             } else {
@@ -1235,9 +1235,9 @@ int ObBackupDataStore::get_single_backup_set_sys_time_zone_wrap(common::ObTimeZo
         int32_t offset = 0;
         int ret_more = OB_SUCCESS;
         bool is_oracle_mode = locality_info.compat_mode_ == lib::Worker::CompatMode::ORACLE;
-        if (OB_FAIL(ObTimeConverter::str_to_offset(time_zone,
-                                                    offset,
-                                                    ret_more,
+        if (OB_FAIL(ObTimeConverter::str_to_offset(time_zone, 
+                                                    offset, 
+                                                    ret_more, 
                                                     is_oracle_mode))) {
           LOG_WARN("invalid time zone offset", K(ret), K(time_zone), K(offset), K(is_oracle_mode));
         } else {
@@ -1252,7 +1252,7 @@ int ObBackupDataStore::get_single_backup_set_sys_time_zone_wrap(common::ObTimeZo
 }
 
 int ObBackupDataStore::do_get_backup_set_array_(const common::ObString &passwd_array, 
-    const SCN &restore_scn, const ObBackupSetFilter &op,
+    const SCN &restore_scn, const ObBackupSetFilter &op, 
     common::ObIArray<share::ObRestoreBackupSetBriefInfo> &tmp_backup_set_list, 
     int64_t &cur_max_backup_set_id, SCN &restore_start_scn)
 {
@@ -1326,7 +1326,7 @@ int ObBackupDataStore::do_get_backup_set_array_(const common::ObString &passwd_a
           } else {
             LOG_WARN("fail to get refactored", K(ret), K(backup_set_file));
           }
-        } else if (OB_FAIL(backup_set_map.set_refactored(backup_set_file.backup_set_id_, backup_set_desc))) {
+        } else if (OB_FAIL(backup_set_map.set_refactored(backup_set_file.backup_set_id_, backup_set_desc))) {                                                
           LOG_WARN("fail to set refactored backup set map", K(ret), "backup set id", backup_set_file.backup_set_id_, 
               K(backup_set_desc));
         } else {
@@ -1530,7 +1530,7 @@ int ObBackupDataStore::read_tablet_to_ls_info_v_4_1_x(
       } else {
         break;
       }
-    }
+    } 
   }
   if (OB_FAIL(ret)) {
   } else if (tablet_ids.empty()) {
@@ -1591,7 +1591,7 @@ int ObBackupDataStore::write_single_table_list_part_file(const share::SCN &scn, 
     LOG_WARN("fail to get table list part file path", K(ret), K_(backup_set_dest), K(scn), K(part_no));
   } else if (OB_FAIL(write_single_file(path.get_obstr(), table_list))) {
     LOG_WARN("fail to write single file", K(ret));
-  }
+  } 
 
   return ret;
 }
@@ -1613,7 +1613,7 @@ int ObBackupDataStore::write_table_list_meta_info(const share::SCN &scn, const O
     LOG_WARN("fail to get table list meta path", K(ret), K(scn));
   } else if (OB_FAIL(write_single_file(path.get_obstr(), desc))) {
     LOG_WARN("fail to write single file", K(ret), K(desc));
-  }
+  } 
 
   return ret;
 }
@@ -1650,7 +1650,7 @@ int ObBackupDataStore::is_table_list_meta_exist(const share::SCN &scn, bool &is_
     LOG_WARN("failed to get format file path", K(ret));
   } else if (OB_FAIL(util.is_exist(full_path.get_obstr(), storage_info, is_exist))) {
     LOG_WARN("failed to check format file exist.", K(ret), K(full_path));
-  }
+  } 
   return ret;
 }
 

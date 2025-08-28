@@ -56,7 +56,7 @@ bool ReadBuf::operator!=(const ReadBuf &rhs) const
 
 ReadBuf &ReadBuf::operator=(const ReadBuf &rhs)
 {
-  buf_ = rhs.buf_;
+  buf_ = rhs.buf_; 
   buf_len_ = rhs.buf_len_;
   return *this;
 }
@@ -116,7 +116,7 @@ bool is_valid_raw_read_buf(const ReadBuf &raw_read_buf,
     const int64_t aligned_nbytes = common::upper_align(nbytes, LOG_DIO_ALIGN_SIZE);
     bool_ret = (ptr == aligned_ptr && offset == aligned_offset && nbytes == aligned_nbytes);
   }
-  return bool_ret;
+  return bool_ret; 
 }
 
 } // end of logservice

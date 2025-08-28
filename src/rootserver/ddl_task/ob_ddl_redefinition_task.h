@@ -91,7 +91,7 @@ public:
   ObSyncTabletAutoincSeqCtx();
   ~ObSyncTabletAutoincSeqCtx() {}
   int init(
-      const uint64_t src_tenant_id,
+      const uint64_t src_tenant_id, 
       const uint64_t dst_tenant_id,
       int64_t src_table_id,
       int64_t dest_table_id);
@@ -131,7 +131,7 @@ private:
 class ObDDLRedefinitionTask : public ObDDLTask
 {
 public:
-  explicit ObDDLRedefinitionTask(const share::ObDDLType task_type):
+  explicit ObDDLRedefinitionTask(const share::ObDDLType task_type): 
     ObDDLTask(task_type), sync_tablet_autoinc_seq_ctx_(),
     build_replica_request_time_(0), complete_sstable_job_ret_code_(INT64_MAX), alter_table_arg_(),
     dependent_task_result_map_(), has_synced_autoincrement_(false),
@@ -198,7 +198,7 @@ protected:
                                      const ObTableSchema &data_table_schema,
                                      const ObTableSchema &new_table_schema);
   // get source table and partition level stats.
-  int get_src_part_stats(const ObTableSchema &data_table_schema,
+  int get_src_part_stats(const ObTableSchema &data_table_schema, 
                          ObIArray<ObOptTableStat> &part_stats);
   // get source table and partition level column stats.
   int get_src_column_stats(const ObTableSchema &data_table_schema,
@@ -267,9 +267,9 @@ protected:
   int get_estimated_timeout(const share::schema::ObTableSchema *dst_table_schema, int64_t &estimated_timeout);
   int get_orig_all_index_tablet_count(ObSchemaGetterGuard &schema_guard, int64_t &all_tablet_count);
 
-  int generate_rebuild_index_arg_list(const int64_t tenant_id,
-                                      const int64_t table_id,
-                                      ObSchemaGetterGuard &schema_guard,
+  int generate_rebuild_index_arg_list(const int64_t tenant_id, 
+                                      const int64_t table_id, 
+                                      ObSchemaGetterGuard &schema_guard, 
                                       obrpc::ObAlterTableArg &alter_table_arg);
   int64_t get_build_replica_request_time();
 private:
@@ -292,7 +292,7 @@ protected:
     int64_t ret_code_;
     int64_t task_id_;
   };
-  static const int64_t OB_REDEFINITION_TASK_VERSION = 1L;
+  static const int64_t OB_REDEFINITION_TASK_VERSION = 1L; 
   static const int64_t MAX_DEPEND_OBJECT_COUNT = 100L;
   static const int64_t RETRY_INTERVAL = 1 * 1000 * 1000; // 1s
   static const int64_t RETRY_LIMIT = 100;   

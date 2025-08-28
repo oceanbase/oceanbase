@@ -39,7 +39,7 @@ DEF_TO_STRING(ObUnitPlacementStrategy::ObServerResource)
   // DATA_DISK
   (void)databuff_printf(buf, buf_len, pos,
       "data_disk_capacity:\"%.9gGB\", data_disk_assigned:\"%.9gGB\"",
-      capacity_[RES_DATA_DISK]/1024/1024/1024, assigned_[RES_DATA_DISK] >= 0
+      capacity_[RES_DATA_DISK]/1024/1024/1024, assigned_[RES_DATA_DISK] >= 0 
         ? assigned_[RES_DATA_DISK]/1024/1024/1024 : assigned_[RES_DATA_DISK]);
   J_OBJ_END();
   return pos;

@@ -1530,7 +1530,7 @@ int ObFastParserBase::process_hex_number(bool is_quote)
   char next_ch = raw_sql_.scan();
   if (is_quote) {
     // X'([0-9A-F])*'
-#if defined(__GNUC__) && defined(__x86_64__)
+#if defined(__GNUC__) && defined(__x86_64__) 
     bool is_arch_supported{true};
     process_hex_chars_simd(raw_sql_, is_arch_supported);
     if (!is_arch_supported) {
@@ -1560,7 +1560,7 @@ int ObFastParserBase::process_hex_number(bool is_quote)
     }
   } else {
     // 0X([0-9A-F])+
-#if defined(__GNUC__) && defined(__x86_64__)
+#if defined(__GNUC__) && defined(__x86_64__) 
     bool is_arch_supported{true};
     process_hex_chars_simd(raw_sql_, is_arch_supported);
     if (!is_arch_supported) {

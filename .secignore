@@ -23,11 +23,11 @@
   https://github.com/mcmilk/zstdmt
   http://www.xxhash.com
   http://www.example.com*
-
-
-
-
-
+  
+  
+  
+  
+  
   http://www.python.org/*
   https://oracle.github.io/*
   https://en.wikipedia.org/wiki/*
@@ -67,7 +67,7 @@
   https://connect.microsoft.com/VisualStudio*
   https://dev.mysql.com/doc/*
   http://www.openssl.org/docs*
-
+  
   https://docs.oracle.com/*
   https://bugzilla.redhat.com/*
   https://hbase.apache.org/*
@@ -147,9 +147,9 @@
   http://bazaar.launchpad.net/*
   http://stackoverflow.com/*
   https://stackoverflow.com/*
-  https://cloud.tencent.com/*
-
-
+  https://cloud.tencent.com/*  
+  
+  
   libecb@schmorp.de
   http://software.schmorp.de/*
   http://www-01.ibm.com/*
@@ -176,13 +176,13 @@
   https://www.techonthenet.com/oracle/*
   http://www.techonthenet.com/oracle/*
   http://review.alibaba-inc.com/*
-
+  
   http://docs.oracle.com/*
   https://oracle-base.com/*
   https://www.kernel.org/doc/*
-
-
-
+  
+  
+  
   https://community.oracle.com/tech/*
   https://docs.docker.com/*
   http://helloworld.com/*
@@ -220,7 +220,7 @@
   https://www.mathjax.org
   https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.2/.
   https://issues.apache.org/*
-
+  
 **/*.result
   *
   http://oracle.chinaitlab.com*
@@ -232,7 +232,7 @@
   https://dev.mysql.com*
   https://docs.cts.t.taobao.com*
   http://www.cmd5.com/*
-
+  
   https://127.0.0.1*
   https://produkty*
   http://tambov.irr.ru/*
@@ -309,7 +309,7 @@
   https://dev.mysql.com*
   https://docs.cts.t.taobao.com*
   http://www.cmd5.com/*
-
+  
   https://127.0.0.1*
   www.360.com
   www.wangyi.com
@@ -384,7 +384,7 @@
   https://dev.mysql.com*
   https://docs.cts.t.taobao.com*
   http://www.cmd5.com/*
-
+  
   https://127.0.0.1*
   www.360.com
   www.wangyi.com

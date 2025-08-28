@@ -56,9 +56,9 @@ TEST_F(TestJsonSchema, test_parse_json_schema_ref)
                           "\"last_name\": { \"$ref\": \"#/$defs/name\" }},"
                           "\"required\": [\"first_name\", \"last_name\"],"
                           "\"$defs\": {\"name\": { \"type\": \"string\" }}}");
-
+  
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ASSERT_EQ(OB_SUCCESS, j_tree->print(j_buf, false));
   ASSERT_EQ(j_schema_to_str, ObString(j_buf.length(), j_buf.ptr()));
   common::ObString j_text_wrong("{\"$id\": \"httpexample.com/schemas/customer\","
@@ -68,7 +68,7 @@ TEST_F(TestJsonSchema, test_parse_json_schema_ref)
                                 "\"required\": [\"first_name\", \"last_name\"],"
                                 "\"$defs\": {\"name\": { \"type\": \"string\" }}}");
   ASSERT_EQ(OB_ERR_UNSUPPROTED_REF_IN_JSON_SCHEMA, ObJsonBaseFactory::get_json_base(&allocator, j_text_wrong,
-            ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+            ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));                                                                                                                                      
 }
 
 TEST_F(TestJsonSchema, test_parse_json_schema_dup_key)
@@ -87,9 +87,9 @@ TEST_F(TestJsonSchema, test_parse_json_schema_dup_key)
                           "\"required\": [\"test_name\"],"
                           "\"$defs\": {\"name\": { \"type\": \"string\" }}}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ASSERT_EQ(OB_SUCCESS,j_tree->print(j_buf, false));
-  ASSERT_EQ(j_schema_to_str, ObString(j_buf.length(), j_buf.ptr()));
+  ASSERT_EQ(j_schema_to_str, ObString(j_buf.length(), j_buf.ptr()));      
   common::ObString j_text_wrong("{\"$id\": \"httpexample.com/schemas/customer\","
                                 "\"type\": \"object\","
                                 "\"properties\": {\"first_name\": { \"$ref\": \"#/$defs/name\" },"
@@ -98,7 +98,7 @@ TEST_F(TestJsonSchema, test_parse_json_schema_dup_key)
                                 "\"required\": [\"first_name\", \"last_name\"],"
                                 "\"$defs\": {\"name\": { \"type\": \"string\" }}}");
   ASSERT_EQ(OB_ERR_UNSUPPROTED_REF_IN_JSON_SCHEMA, ObJsonBaseFactory::get_json_base(&allocator, j_text_wrong,
-            ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+            ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));                                                                                                                                 
 }
 
 # define STRING_TYPE_COUNT 2
@@ -115,7 +115,7 @@ TEST_F(TestJsonSchema, test_parse_string_type)
   ObJsonBuffer j_buf(&allocator);
   common::ObString j_text("{\"type\": \"string\",\"pattern\":\"^S_\",\"minLength\": 2,\"maxLength\": 3}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   int schema_count = json_schema.schema_map_->element_count();
@@ -144,7 +144,7 @@ TEST_F(TestJsonSchema, test_parse_number_type)
   ObJsonBuffer j_buf(&allocator);
   common::ObString j_text("{\"type\": \"number\", \"minimum\": 0, \"maximum\": 100, \"exclusiveMinimum\": false, \"exclusiveMaximum\": true}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   int schema_count = json_schema.schema_map_->element_count();
@@ -172,7 +172,7 @@ TEST_F(TestJsonSchema, test_parse_integer_type)
   ObJsonBuffer j_buf(&allocator);
   common::ObString j_text("{\"type\": \"integer\",\"type\": \"number\", \"minimum\": 0, \"maximum\": 100,\"exclusiveMaximum\": true, \"exclusiveMinimum\": false}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   int schema_count = json_schema.schema_map_->element_count();
@@ -201,7 +201,7 @@ TEST_F(TestJsonSchema, test_parse_null_type)
   ObJsonBuffer j_buf(&allocator);
   common::ObString j_text("{\"type\": \"null\", \"enum\": [\"red\", \"amber\", \"green\"], \"minimum\": 0, \"maximum\": 100,\"exclusiveMaximum\": true}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   int schema_count = json_schema.schema_map_->element_count();
@@ -229,7 +229,7 @@ TEST_F(TestJsonSchema, test_parse_boolean_type)
   ObJsonBuffer j_buf(&allocator);
   common::ObString j_text("{\"type\": \"boolean\", \"enum\": [\"red\", \"amber\", \"green\"], \"minimum\": 0, \"maximum\": 100,\"exclusiveMaximum\": true}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   int schema_count = json_schema.schema_map_->element_count();
@@ -262,7 +262,7 @@ TEST_F(TestJsonSchema, test_parse_property)
     "\"street_name\": { \"type\": \"string\" },"
     "\"street_type\": { \"enum\": [\"Street\", \"Avenue\", \"Boulevard\"]}}}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   int schema_count = json_schema.schema_map_->element_count();
@@ -296,7 +296,7 @@ TEST_F(TestJsonSchema, test_parse_dep_required)
     "\"street_type\": { \"enum\": [\"Street\", \"Avenue\", \"Boulevard\"]}},"
     "\"dependencies\": {\"credit_card\": [\"billing_address\"]}}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   int schema_count = json_schema.schema_map_->element_count();
@@ -336,7 +336,7 @@ TEST_F(TestJsonSchema, test_parse_dep_unnested)
         "\"billing_address\": { \"type\": \"number\" }}},"
     "\"name\": [\"last_name\"]}}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   int schema_count = json_schema.schema_map_->element_count();
@@ -376,7 +376,7 @@ TEST_F(TestJsonSchema, test_parse_dep_nested)
     "\"dependencies\": {\"billing_address\": { \"required\": [\"credit_card\"]}}},"
     "\"name\": [\"billing_address\"]}}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   int schema_count = json_schema.schema_map_->element_count();
@@ -409,7 +409,7 @@ TEST_F(TestJsonSchema, test_parse_pattern_pro)
     "\"^I_\": { \"type\": \"integer\" },"
     "\"^*\": { \"type\": \"boolean\" }}}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   int schema_count = json_schema.schema_map_->element_count();
@@ -445,7 +445,7 @@ TEST_F(TestJsonSchema, test_parse_pattern_and_pro)
     "\"S_25\": { \"type\": \"number\" },"
     "\"I_0\": { \"type\": \"string\" }}}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   int schema_count = json_schema.schema_map_->element_count();
@@ -479,7 +479,7 @@ TEST_F(TestJsonSchema, test_parse_add_pro)
     "\"^*\": { \"type\": \"boolean\" }},"
     "\"additionalProperties\": false }");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   int schema_count = json_schema.schema_map_->element_count();
@@ -518,7 +518,7 @@ TEST_F(TestJsonSchema, test_parse_pattern_pro_additional)
     "\"additionalProperties\": { \"type\": \"string\" },"
     "\"required\": [\"name\", \"email\"]}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   int schema_count = json_schema.schema_map_->element_count();
@@ -536,7 +536,7 @@ TEST_F(TestJsonSchema, test_parse_pattern_pro_additional)
 # define ITEMS_COUNT 2
 ObString itmes_str[ITEMS_COUNT] = {
   "{\"items\": {\"schema\": {\"enum\": [1, 2, 3, 4], \"type\": 8}}, \"schema\": {\"type\": 64}}",
-  "{}",
+  "{}", 
 };
 TEST_F(TestJsonSchema, test_parse_items)
 {
@@ -549,7 +549,7 @@ TEST_F(TestJsonSchema, test_parse_items)
   "\"items\": { \"type\": \"number\","
               "\"enum\": [1, 2, 3, 4] }}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   int schema_count = json_schema.schema_map_->element_count();
@@ -583,7 +583,7 @@ TEST_F(TestJsonSchema, test_parse_tuple_items)
     "{ \"enum\": [\"NW\", \"NE\", \"SW\", \"SE\"] }],"
   "\"additionalItems\": false}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   int schema_count = json_schema.schema_map_->element_count();
@@ -617,7 +617,7 @@ TEST_F(TestJsonSchema, test_parse_add_items)
     "{ \"enum\": [\"NW\", \"NE\", \"SW\", \"SE\"] }],"
   "\"additionalItems\": { \"type\": \"string\" }}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   int schema_count = json_schema.schema_map_->element_count();
@@ -656,7 +656,7 @@ TEST_F(TestJsonSchema, test_all_of_unnested)
     "{ \"type\": \"string\"},"
     "{ \"maxLength\": 5 }]}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   int schema_count = json_schema.schema_map_->element_count();
@@ -697,7 +697,7 @@ TEST_F(TestJsonSchema, test_all_of_nested)
     "{ \"maxLength\": 5 },"
     "{ \"allOf\": [{\"type\": \"number\", \"allOf\":[{\"required\":[\"city\"]} ]} ]} ]}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   int schema_count = json_schema.schema_map_->element_count();
@@ -734,7 +734,7 @@ TEST_F(TestJsonSchema, test_not_nested)
   "\"not\": "
     "{ \"not\": {\"required\":[\"city\"]}}}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   int schema_count = json_schema.schema_map_->element_count();
@@ -780,9 +780,9 @@ TEST_F(TestJsonSchema, test_complex_schema)
   ObJsonSeekResult hit;
   ObJsonBuffer j_buf(&allocator);
   common::ObString j_text("{\"type\": \"object\","
-  "\"properties\": {\"street_address\": { \"type\": \"object\", \"properties\": {\"k2\":{\"type\": \"string\"}}}},"
+  "\"properties\": {\"street_address\": { \"type\": \"object\", \"properties\": {\"k2\":{\"type\": \"string\"}}}}," 
   "\"patternProperties\": {\"^city*\": { \"type\": \"string\" }},"
-  "\"additionalProperties\": { \"type\": \"string\" },"
+  "\"additionalProperties\": { \"type\": \"string\" },"   
   "\"required\": [\"street_address\"],"
 
   "\"allOf\": [{\"type\":\"object\",\"require\":[\"state\"]},"
@@ -795,7 +795,7 @@ TEST_F(TestJsonSchema, test_complex_schema)
     "{ \"oneOf\": [{\"type\": \"number\"},{\"maxmum\":10},"
     "{\"type\": \"object\",\"properties\": {\"street_address\":{\"type\": \"string\"}}}]}]}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   int schema_count = json_schema.schema_map_->element_count();
@@ -824,7 +824,7 @@ TEST_F(TestJsonSchema, test_validate_string_type)
   ObJsonBuffer j_buf(&allocator);
   common::ObString j_text("{\"type\": \"string\",\"pattern\":\"^S_\",\"minLength\": 2,\"maxLength\": 3}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   ObJsonSchemaValidator schema_validator(&allocator, json_schema.schema_map_);
@@ -832,7 +832,7 @@ TEST_F(TestJsonSchema, test_validate_string_type)
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, string_validator_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_doc, 0));
   for (int i = 0; i < STRING_VALIDATOR_COUNT; ++i) {
-    ObIJsonBase *j_value = NULL;
+    ObIJsonBase *j_value = NULL; 
     bool is_valid = false;
     ASSERT_EQ(OB_SUCCESS,j_doc->get_array_element(i, j_value));
     ASSERT_EQ(OB_SUCCESS,schema_validator.schema_validator(j_value, is_valid));
@@ -855,7 +855,7 @@ TEST_F(TestJsonSchema, test_validate_null_type)
   ObJsonBuffer j_buf(&allocator);
   common::ObString j_text("{\"type\": \"null\",\"pattern\":\"^S_\",\"minLength\": 2,\"maxLength\": 3}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   ObJsonSchemaValidator schema_validator(&allocator, json_schema.schema_map_);
@@ -863,7 +863,7 @@ TEST_F(TestJsonSchema, test_validate_null_type)
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, null_validator_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_doc, 0));
   for (int i = 0; i < NULL_VALIDATOR_COUNT; ++i) {
-    ObIJsonBase *j_value = NULL;
+    ObIJsonBase *j_value = NULL; 
     bool is_valid = false;
     ASSERT_EQ(OB_SUCCESS,j_doc->get_array_element(i, j_value));
     ASSERT_EQ(OB_SUCCESS,schema_validator.schema_validator(j_value, is_valid));
@@ -885,7 +885,7 @@ TEST_F(TestJsonSchema, test_validate_bool_type)
   ObJsonBuffer j_buf(&allocator);
   common::ObString j_text("{\"type\": \"boolean\",\"pattern\":\"^S_\",\"minLength\": 2,\"maxLength\": 3}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   ObJsonSchemaValidator schema_validator(&allocator, json_schema.schema_map_);
@@ -893,7 +893,7 @@ TEST_F(TestJsonSchema, test_validate_bool_type)
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, null_validator_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_doc, 0));
   for (int i = 0; i < NULL_VALIDATOR_COUNT; ++i) {
-    ObIJsonBase *j_value = NULL;
+    ObIJsonBase *j_value = NULL; 
     bool is_valid = false;
     ASSERT_EQ(OB_SUCCESS,j_doc->get_array_element(i, j_value));
     ASSERT_EQ(OB_SUCCESS,schema_validator.schema_validator(j_value, is_valid));
@@ -916,7 +916,7 @@ TEST_F(TestJsonSchema, test_validate_number_type)
   ObJsonBuffer j_buf(&allocator);
   common::ObString j_text("{\"type\": \"number\", \"minimum\": 0, \"maximum\": 100, \"exclusiveMinimum\": false, \"exclusiveMaximum\": true}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   ObJsonSchemaValidator schema_validator(&allocator, json_schema.schema_map_);
@@ -924,7 +924,7 @@ TEST_F(TestJsonSchema, test_validate_number_type)
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, number_validator_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_doc, 0));
   for (int i = 0; i < NUMBER_VALIDATOR_COUNT; ++i) {
-    ObIJsonBase *j_value = NULL;
+    ObIJsonBase *j_value = NULL; 
     bool is_valid = false;
     ASSERT_EQ(OB_SUCCESS,j_doc->get_array_element(i, j_value));
     ASSERT_EQ(OB_SUCCESS,schema_validator.schema_validator(j_value, is_valid));
@@ -947,7 +947,7 @@ TEST_F(TestJsonSchema, test_validate_integer_type)
   ObJsonBuffer j_buf(&allocator);
   common::ObString j_text("{\"type\": \"integer\", \"minimum\": 0, \"maximum\": 100.5, \"exclusiveMinimum\": false, \"exclusiveMaximum\": true}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   ObJsonSchemaValidator schema_validator(&allocator, json_schema.schema_map_);
@@ -955,7 +955,7 @@ TEST_F(TestJsonSchema, test_validate_integer_type)
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, integer_validator_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_doc, 0));
   for (int i = 0; i < INTEGER_VALIDATOR_COUNT; ++i) {
-    ObIJsonBase *j_value = NULL;
+    ObIJsonBase *j_value = NULL; 
     bool is_valid = false;
     ASSERT_EQ(OB_SUCCESS,j_doc->get_array_element(i, j_value));
     ASSERT_EQ(OB_SUCCESS,schema_validator.schema_validator(j_value, is_valid));
@@ -990,7 +990,7 @@ TEST_F(TestJsonSchema, test_object_scalar_type)
                           "\"dependencies\": {\"credit_card\": [\"billing_address\"]},"
                           "\"required\": [\"name\"]}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   ObJsonSchemaValidator schema_validator(&allocator, json_schema.schema_map_);
@@ -998,7 +998,7 @@ TEST_F(TestJsonSchema, test_object_scalar_type)
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, object_scalar_validator_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_doc, 0));
   for (int i = 0; i < OBJECT_SCALAR_VALIDATOR_COUNT; ++i) {
-    ObIJsonBase *j_value = NULL;
+    ObIJsonBase *j_value = NULL; 
     bool is_valid = false;
     ASSERT_EQ(OB_SUCCESS, j_doc->get_array_element(i, j_value));
     ASSERT_EQ(OB_SUCCESS,schema_validator.schema_validator(j_value, is_valid));
@@ -1026,7 +1026,7 @@ TEST_F(TestJsonSchema, test_array_scalar_type)
   ObJsonBuffer j_buf(&allocator);
   common::ObString j_text("{\"type\": \"array\", \"minItems\": 2.5, \"maxItems\": 5, \"uniqueItems\": true}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   ObJsonSchemaValidator schema_validator(&allocator, json_schema.schema_map_);
@@ -1034,7 +1034,7 @@ TEST_F(TestJsonSchema, test_array_scalar_type)
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, array_scalar_validator_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_doc, 0));
   for (int i = 0; i < ARRAY_SCALAR_VALIDATOR_COUNT; ++i) {
-    ObIJsonBase *j_value = NULL;
+    ObIJsonBase *j_value = NULL; 
     bool is_valid = false;
     ASSERT_EQ(OB_SUCCESS, j_doc->get_array_element(i, j_value));
     ASSERT_EQ(OB_SUCCESS,schema_validator.schema_validator(j_value, is_valid));
@@ -1057,7 +1057,7 @@ TEST_F(TestJsonSchema, test_enum_validator)
   ObJsonBuffer j_buf(&allocator);
   common::ObString j_text("{\"enum\": [\"test\", 1, false, null, [2], {\"test\":3}]}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   ObJsonSchemaValidator schema_validator(&allocator, json_schema.schema_map_);
@@ -1065,7 +1065,7 @@ TEST_F(TestJsonSchema, test_enum_validator)
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator,enum_validator_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_doc, 0));
   for (int i = 0; i < ENUM_VALIDATOR_COUNT; ++i) {
-    ObIJsonBase *j_value = NULL;
+    ObIJsonBase *j_value = NULL; 
     bool is_valid = false;
     ASSERT_EQ(OB_SUCCESS, j_doc->get_array_element(i, j_value));
     ASSERT_EQ(OB_SUCCESS,schema_validator.schema_validator(j_value, is_valid));
@@ -1098,7 +1098,7 @@ TEST_F(TestJsonSchema, test_pro_validator)
     "\"street_type\": { \"enum\": [\"Street\", \"Avenue\", \"Boulevard\"]}},"
     "\"additionalProperties\": false}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   ObJsonSchemaValidator schema_validator(&allocator, json_schema.schema_map_);
@@ -1106,7 +1106,7 @@ TEST_F(TestJsonSchema, test_pro_validator)
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, pro_validator_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_doc, 0));
   for (int i = 0; i < PRO_VALIDATOR_COUNT; ++i) {
-    ObIJsonBase *j_value = NULL;
+    ObIJsonBase *j_value = NULL; 
     bool is_valid = false;
     ASSERT_EQ(OB_SUCCESS, j_doc->get_array_element(i, j_value));
     ASSERT_EQ(OB_SUCCESS,schema_validator.schema_validator(j_value, is_valid));
@@ -1142,7 +1142,7 @@ TEST_F(TestJsonSchema, test_pattern_pro_validator)
     "\"^I_\": { \"type\": \"integer\"}},"
     "\"additionalProperties\": false}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   ObJsonSchemaValidator schema_validator(&allocator, json_schema.schema_map_);
@@ -1150,7 +1150,7 @@ TEST_F(TestJsonSchema, test_pattern_pro_validator)
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, pattern_pro_validator_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_doc, ObJsonParser::JSN_PRESERVE_DUP_FLAG));
   for (int i = 0; i < PATTERN_PRO_VALIDATOR_COUNT; ++i) {
-    ObIJsonBase *j_value = NULL;
+    ObIJsonBase *j_value = NULL; 
     bool is_valid = false;
     ASSERT_EQ(OB_SUCCESS, j_doc->get_array_element(i, j_value));
     ASSERT_EQ(OB_SUCCESS,schema_validator.schema_validator(j_value, is_valid));
@@ -1187,7 +1187,7 @@ TEST_F(TestJsonSchema, test_add_pro_validator)
   "\"patternProperties\": {\"^S_\": { \"type\": \"string\" },\"^I_\": { \"type\": \"integer\" }},"
   "\"additionalProperties\": { \"type\": \"string\" }}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   ObJsonSchemaValidator schema_validator(&allocator, json_schema.schema_map_);
@@ -1202,7 +1202,7 @@ TEST_F(TestJsonSchema, test_add_pro_validator)
     cout<<"json_schema "<<i<<" : "<<j_buf.ptr()<<endl;
   }
   for (int i = 0; i < ADD_PRO_VALIDATOR_COUNT; ++i) {
-    ObIJsonBase *j_value = NULL;
+    ObIJsonBase *j_value = NULL; 
     bool is_valid = false;
     ASSERT_EQ(OB_SUCCESS, j_doc->get_array_element(i, j_value));
     ASSERT_EQ(OB_SUCCESS,schema_validator.schema_validator(j_value, is_valid));
@@ -1230,7 +1230,7 @@ TEST_F(TestJsonSchema, test_items_validator)
   "\"items\": { \"enum\": [\"NW\", \"NE\", \"SW\", \"SE\"]},"
   "\"additionalItems\": true}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   ObJsonSchemaValidator schema_validator(&allocator, json_schema.schema_map_);
@@ -1238,7 +1238,7 @@ TEST_F(TestJsonSchema, test_items_validator)
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, items_validator_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_doc, 0));
   for (int i = 0; i < ITEMS_VALIDATOR_COUNT; ++i) {
-    ObIJsonBase *j_value = NULL;
+    ObIJsonBase *j_value = NULL; 
     bool is_valid = false;
     ASSERT_EQ(OB_SUCCESS, j_doc->get_array_element(i, j_value));
     ASSERT_EQ(OB_SUCCESS,schema_validator.schema_validator(j_value, is_valid));
@@ -1270,7 +1270,7 @@ TEST_F(TestJsonSchema, test_tuple_items_validator)
     "{ \"enum\": [\"NW\", \"NE\", \"SW\", \"SE\"] }],"
   "\"additionalItems\": false}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   ObJsonSchemaValidator schema_validator(&allocator, json_schema.schema_map_);
@@ -1278,7 +1278,7 @@ TEST_F(TestJsonSchema, test_tuple_items_validator)
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, tuple_items_validator_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_doc, 0));
   for (int i = 0; i < TUPLE_ITEMS_VALIDATOR_COUNT; ++i) {
-    ObIJsonBase *j_value = NULL;
+    ObIJsonBase *j_value = NULL; 
     bool is_valid = false;
     ASSERT_EQ(OB_SUCCESS, j_doc->get_array_element(i, j_value));
     ASSERT_EQ(OB_SUCCESS, schema_validator.schema_validator(j_value, is_valid));
@@ -1310,7 +1310,7 @@ TEST_F(TestJsonSchema, test_add_items_validator)
     "{ \"enum\": [\"NW\", \"NE\", \"SW\", \"SE\"] }],"
   "\"additionalItems\": { \"type\": \"number\" }}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   ObJsonSchemaValidator schema_validator(&allocator, json_schema.schema_map_);
@@ -1318,7 +1318,7 @@ TEST_F(TestJsonSchema, test_add_items_validator)
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, add_items_validator_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_doc, 0));
   for (int i = 0; i < ADD_ITEMS_VALIDATOR_COUNT; ++i) {
-    ObIJsonBase *j_value = NULL;
+    ObIJsonBase *j_value = NULL; 
     bool is_valid = false;
     ASSERT_EQ(OB_SUCCESS, j_doc->get_array_element(i, j_value));
     ASSERT_EQ(OB_SUCCESS, schema_validator.schema_validator(j_value, is_valid));
@@ -1352,7 +1352,7 @@ TEST_F(TestJsonSchema, test_unnested_allof_validator)
   "\"additionalItems\": false,"
   "\"allOf\": [{\"items\":{ \"maxLength\": 6 }}]}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   ObJsonSchemaValidator schema_validator(&allocator, json_schema.schema_map_);
@@ -1360,7 +1360,7 @@ TEST_F(TestJsonSchema, test_unnested_allof_validator)
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, unnested_allof_validator_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_doc, 0));
   for (int i = 0; i < UNNESTED_ALLOF_VALIDATOR_COUNT; ++i) {
-    ObIJsonBase *j_value = NULL;
+    ObIJsonBase *j_value = NULL; 
     bool is_valid = false;
     ASSERT_EQ(OB_SUCCESS, j_doc->get_array_element(i, j_value));
     ASSERT_EQ(OB_SUCCESS, schema_validator.schema_validator(j_value, is_valid));
@@ -1394,7 +1394,7 @@ TEST_F(TestJsonSchema, test_unnested_anyof_validator)
   "\"additionalItems\": false,"
   "\"anyOf\": [{\"items\":{ \"maxLength\": 6 }}, {\"items\":{ \"maxLength\": 9 }}]}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   ObJsonSchemaValidator schema_validator(&allocator, json_schema.schema_map_);
@@ -1402,7 +1402,7 @@ TEST_F(TestJsonSchema, test_unnested_anyof_validator)
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, unnested_anyof_validator_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_doc, 0));
   for (int i = 0; i < UNNESTED_ANYOF_VALIDATOR_COUNT; ++i) {
-    ObIJsonBase *j_value = NULL;
+    ObIJsonBase *j_value = NULL; 
     bool is_valid = false;
     ASSERT_EQ(OB_SUCCESS, j_doc->get_array_element(i, j_value));
     ASSERT_EQ(OB_SUCCESS, schema_validator.schema_validator(j_value, is_valid));
@@ -1436,7 +1436,7 @@ TEST_F(TestJsonSchema, test_unnested_oneof_validator)
   "\"additionalItems\": false,"
   "\"oneOf\": [{\"items\":{ \"maxLength\": 6 }}, {\"items\":{ \"maxLength\": 12 }}]}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   ObJsonSchemaValidator schema_validator(&allocator, json_schema.schema_map_);
@@ -1444,7 +1444,7 @@ TEST_F(TestJsonSchema, test_unnested_oneof_validator)
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, unnested_oneof_validator_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_doc, 0));
   for (int i = 0; i < UNNESTED_ONEOF_VALIDATOR_COUNT; ++i) {
-    ObIJsonBase *j_value = NULL;
+    ObIJsonBase *j_value = NULL; 
     bool is_valid = false;
     ASSERT_EQ(OB_SUCCESS, j_doc->get_array_element(i, j_value));
     ASSERT_EQ(OB_SUCCESS, schema_validator.schema_validator(j_value, is_valid));
@@ -1478,7 +1478,7 @@ TEST_F(TestJsonSchema, test_unnested_not_validator)
   "\"additionalItems\": false,"
   "\"not\": {\"items\":{ \"minLength\": 9 }}}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   ObJsonSchemaValidator schema_validator(&allocator, json_schema.schema_map_);
@@ -1486,7 +1486,7 @@ TEST_F(TestJsonSchema, test_unnested_not_validator)
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, unnested_not_validator_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_doc, 0));
   for (int i = 0; i < UNNESTED_NOT_VALIDATOR_COUNT; ++i) {
-    ObIJsonBase *j_value = NULL;
+    ObIJsonBase *j_value = NULL; 
     bool is_valid = false;
     ASSERT_EQ(OB_SUCCESS, j_doc->get_array_element(i, j_value));
     ASSERT_EQ(OB_SUCCESS, schema_validator.schema_validator(j_value, is_valid));
@@ -1524,7 +1524,7 @@ TEST_F(TestJsonSchema, test_unnested_dep_schema_validator)
         "\"billing_address\": {  \"maxLength\": 6  }}},"
     "\"name\": [\"last_name\"]}}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   ObJsonSchemaValidator schema_validator(&allocator, json_schema.schema_map_);
@@ -1532,7 +1532,7 @@ TEST_F(TestJsonSchema, test_unnested_dep_schema_validator)
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, unnested_dep_schema_validator_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_doc, 0));
   for (int i = 0; i < UNNESTED_DEP_SCHEMA_VALIDATOR_COUNT; ++i) {
-    ObIJsonBase *j_value = NULL;
+    ObIJsonBase *j_value = NULL; 
     bool is_valid = false;
     ASSERT_EQ(OB_SUCCESS, j_doc->get_array_element(i, j_value));
     ASSERT_EQ(OB_SUCCESS, schema_validator.schema_validator(j_value, is_valid));
@@ -1578,7 +1578,7 @@ TEST_F(TestJsonSchema, test_complex_schema_validator)
     "{ \"oneOf\": [{\"type\": \"number\"},{\"maximum\":10},"
     "{\"type\": \"object\",\"properties\": {\"street_address\":{\"type\": \"string\"}}}]}]}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   ObJsonSchemaValidator schema_validator(&allocator, json_schema.schema_map_);
@@ -1593,7 +1593,7 @@ TEST_F(TestJsonSchema, test_complex_schema_validator)
     //cout<<"json_schema "<<i<<" : "<<j_buf.ptr()<<endl;
   }
   for (int i = 0; i < COMPLEX_VALIDATOR_COUNT; ++i) {
-    ObIJsonBase *j_value = NULL;
+    ObIJsonBase *j_value = NULL; 
     bool is_valid = false;
     ASSERT_EQ(OB_SUCCESS, j_doc->get_array_element(i, j_value));
     ASSERT_EQ(OB_SUCCESS, schema_validator.schema_validator(j_value, is_valid));
@@ -1617,7 +1617,7 @@ TEST_F(TestJsonSchema, test_complex_schema2)
            " { \"$ref\": \"#/definitions/item\" }]}");
   ObString j_doc_txt("[[ {\"foo\": null}, {\"foo\": null} ]]");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
-      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG));
+      ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree, ObJsonParser::JSN_SCHEMA_FLAG)); 
   ObJsonSchemaTree json_schema(&allocator);
   ASSERT_EQ(OB_SUCCESS, json_schema.build_schema_tree(j_tree));
   ObJsonSchemaValidator schema_validator(&allocator, json_schema.schema_map_);

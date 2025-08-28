@@ -51,46 +51,46 @@ public:
   ~ObImportTableTaskGenerator() {}
 
   int init(
-      share::schema::ObMultiVersionSchemaService &schema_service,
+      share::schema::ObMultiVersionSchemaService &schema_service, 
       common::ObMySQLProxy &sql_proxy);
 
   int gen_import_task(
-      share::ObImportTableJob &import_job,
+      share::ObImportTableJob &import_job, 
       common::ObIArray<share::ObImportTableTask> &import_tasks);
 
 
 private:
   int gen_db_import_tasks_(
-      share::ObImportTableJob &import_job,
+      share::ObImportTableJob &import_job, 
       common::ObIArray<share::ObImportTableTask> &import_tasks);
   int gen_one_db_import_tasks_(
-      share::ObImportTableJob &import_job,
+      share::ObImportTableJob &import_job, 
       const share::ObImportDatabaseItem &db_item,
       common::ObIArray<share::ObImportTableTask> &import_tasks);
   int gen_table_import_tasks_(
-      share::ObImportTableJob &import_job,
+      share::ObImportTableJob &import_job, 
       common::ObIArray<share::ObImportTableTask> &import_tasks);
   int gen_table_import_task_(
-      share::ObImportTableJob &import_job,
-      const share::ObImportTableItem &item,
+      share::ObImportTableJob &import_job, 
+      const share::ObImportTableItem &item, 
       share::ObImportTableTask &import_task);
   int fill_import_task_from_import_db_(
       share::ObImportTableJob &import_job,
       share::schema::ObSchemaGetterGuard &guard,
       const share::ObImportDatabaseItem &db_item,
       const share::ObImportTableItem &table_item,
-      const share::schema::ObTableSchema &table_schema,
+      const share::schema::ObTableSchema &table_schema, 
       share::ObImportTableTask &import_task);
   int fill_import_task_from_import_table_(
       share::ObImportTableJob &import_job,
       share::schema::ObSchemaGetterGuard &guard,
-      const share::schema::ObTableSchema &table_schema,
+      const share::schema::ObTableSchema &table_schema, 
       const share::ObImportTableItem &table_item,
       share::ObImportTableTask &import_task);
   int fill_import_task_(
       share::ObImportTableJob &import_job,
       share::schema::ObSchemaGetterGuard &guard,
-      const share::schema::ObTableSchema &table_schema,
+      const share::schema::ObTableSchema &table_schema, 
       const share::ObImportTableItem &table_item,
       const share::ObImportTableItem &remap_table_item,
       share::ObImportTableTask &import_task);
@@ -99,23 +99,23 @@ private:
       const share::schema::ObTableSchema &table_schema,
       const share::ObImportTableItem &table_item);
   int fill_common_para_(
-    const share::ObImportTableJob &import_job,
-    const share::schema::ObTableSchema &table_schema,
+    const share::ObImportTableJob &import_job, 
+    const share::schema::ObTableSchema &table_schema, 
     share::ObImportTableTask &task);
   int fill_tablespace_(
-    const share::ObImportTableJob &import_job,
+    const share::ObImportTableJob &import_job, 
     share::schema::ObSchemaGetterGuard &guard,
-    const share::schema::ObTableSchema &table_schema,
-    const share::ObImportTableItem &table_item,
+    const share::schema::ObTableSchema &table_schema, 
+    const share::ObImportTableItem &table_item, 
     share::ObImportTableTask &task);
   int fill_tablegroup_(
-    const share::ObImportTableJob &import_job,
+    const share::ObImportTableJob &import_job, 
     share::schema::ObSchemaGetterGuard &guard,
-    const share::schema::ObTableSchema &table_schema,
-    const share::ObImportTableItem &table_item,
+    const share::schema::ObTableSchema &table_schema, 
+    const share::ObImportTableItem &table_item, 
     share::ObImportTableTask &task);
   int check_target_schema_(
-      share::ObImportTableJob &import_job,
+      share::ObImportTableJob &import_job, 
       const share::ObImportTableTask &task);
 private:
   bool is_inited_;

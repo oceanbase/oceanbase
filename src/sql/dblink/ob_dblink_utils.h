@@ -38,7 +38,7 @@ public:
   static int init_oci_envs_func_ptr();
 #endif
   static int get_charset_id(ObSQLSessionInfo *session_info,
-                            uint16_t &charset_id,
+                            uint16_t &charset_id, 
                             uint16_t &ncharset_id);
   static int init_dblink_param_ctx(common::sqlclient::dblink_param_ctx &param_ctx,
                                                     sql::ObSQLSessionInfo *session_info,
@@ -51,12 +51,12 @@ public:
   static int get_local_session_vars(sql::ObSQLSessionInfo *session_info,
                                     ObIAllocator &allocator,
                                     common::sqlclient::dblink_param_ctx &param_ctx);
-  static int get_set_sql_mode_cstr(sql::ObSQLSessionInfo *session_info,
-                                   const char *&set_sql_mode_cstr,
+  static int get_set_sql_mode_cstr(sql::ObSQLSessionInfo *session_info, 
+                                   const char *&set_sql_mode_cstr, 
                                    ObIAllocator &allocator);
   static int get_set_names_charset_type(sql::ObSQLSessionInfo *session_info, ObCharsetType &charset_type);
   static int get_ob_query_timeout_value(sql::ObSQLSessionInfo *session_info, int64_t &timeout);
-  static int get_set_transaction_isolation_cstr(sql::ObSQLSessionInfo *session_info,
+  static int get_set_transaction_isolation_cstr(sql::ObSQLSessionInfo *session_info, 
                                                 const char *&set_isolation_level);
   static int get_spell_collation_type(ObSQLSessionInfo *session, ObCollationType &spell_coll);
 public:
@@ -177,9 +177,9 @@ public:
   {
     reset();
   }
-  inline void reset()
-  {
-    arena_alloc_.reset();
+  inline void reset() 
+  { 
+    arena_alloc_.reset(); 
     const bool force_disconnect = true;
     clean_dblink_conn(force_disconnect);
     free_dblink_conn_pool();
@@ -229,7 +229,7 @@ public:
                N_TYPE_VALUE, type_value_);
   int32_t pos_;
   int32_t idx_;
-  int8_t type_value_;
+  int8_t type_value_; 
   /*
     if type_value_ = -1, means TimeOutHint, used in 3.x, unused in 4.x.
     if type_value_ >= int8_t(ObObjType::ObNullType) and type_value_ <= int8_t(ObObjType::ObMaxType), means the value of ObObjType.

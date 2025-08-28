@@ -67,8 +67,8 @@ private:
   const char  *qpl_excute_path_;
 
   QplAllocator allocator_;
-
-  /// Maximum jobs running in parallel
+  
+  /// Maximum jobs running in parallel 
   int32_t job_num_;
   /// Entire buffer for storing all job objects
   char * jobs_buffer_;

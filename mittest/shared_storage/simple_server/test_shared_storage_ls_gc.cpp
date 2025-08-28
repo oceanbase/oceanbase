@@ -49,7 +49,7 @@ TestRunCtx RunCtx;
 
 class ObCheckDirEmptOp : public ObBaseDirEntryOperator
 {
-public:
+public: 
   ObCheckDirEmptOp() : file_cnt_(0) {}
   ~ObCheckDirEmptOp() {}
   void reset() { file_cnt_ = 0; }
@@ -221,7 +221,7 @@ void ObSharedStorageTest::wait_minor_finish()
   int64_t affected_rows = 0;
   int64_t row_cnt = 0;
   do {
-    ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("select count(*) as row_cnt from oceanbase.__all_virtual_table_mgr where tenant_id=%lu and tablet_id=%lu and table_type=0;",
+    ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("select count(*) as row_cnt from oceanbase.__all_virtual_table_mgr where tenant_id=%lu and tablet_id=%lu and table_type=0;", 
           RunCtx.tenant_id_, RunCtx.tablet_id_.id()));
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       ASSERT_EQ(OB_SUCCESS, sql_proxy.read(res, sql.ptr()));
@@ -430,7 +430,7 @@ int main(int argc, char **argv)
   char buf[1000];
   const int64_t cur_time_ns = ObTimeUtility::current_time_ns();
   memset(buf, 1000, sizeof(buf));
-  databuff_printf(buf, sizeof(buf), "%s/%lu?host=%s&access_id=%s&access_key=%s&s3_region=%s&max_iops=2000&max_bandwidth=200000000B&scope=region",
+  databuff_printf(buf, sizeof(buf), "%s/%lu?host=%s&access_id=%s&access_key=%s&s3_region=%s&max_iops=2000&max_bandwidth=200000000B&scope=region", 
       oceanbase::unittest::S3_BUCKET, cur_time_ns, oceanbase::unittest::S3_ENDPOINT, oceanbase::unittest::S3_AK, oceanbase::unittest::S3_SK, oceanbase::unittest::S3_REGION);
   oceanbase::shared_storage_info = buf;
   while(EOF != (c = getopt(argc,argv,"t:l:"))) {

@@ -56,7 +56,7 @@ public:
   virtual bool ignore_warning() override;
   virtual lib::Worker::CompatMode get_compat_mode() const override
   { return lib::Worker::CompatMode::MYSQL; } // TODO@wenqu: confirm it
-  virtual uint64_t get_consumer_group_id() const override
+  virtual uint64_t get_consumer_group_id() const override 
   { return consumer_group_id_; }
   virtual bool is_ha_dag() const override { return false; }
 private:
@@ -149,7 +149,7 @@ public:
       const ObStorageSchema *storage_schema,
       common::ObArenaAllocator &allocator,
       ObTableHandleV2 &sstable_handle);
-
+  
   static int update_ddl_table_store(
       ObLS &ls,
       ObTablet &tablet,
@@ -204,7 +204,7 @@ public:
       bool &is_data_continue,
       share::SCN &compact_start_scn,
       share::SCN &compact_end_scn);
-
+    
   static int schedule_ddl_minor_merge_on_demand(
       const bool need_freeze,
       const share::ObLSID &ls_id,

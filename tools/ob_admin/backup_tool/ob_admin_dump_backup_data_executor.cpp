@@ -177,7 +177,7 @@ int ObAdminDumpBackupDataUtil::read_index_file_trailer(const common::ObString &b
   return ret;
 }
 
-int ObAdminDumpBackupDataUtil::read_tablet_metas_file_trailer(const common::ObString &backup_path,
+int ObAdminDumpBackupDataUtil::read_tablet_metas_file_trailer(const common::ObString &backup_path, 
     const common::ObString &storage_info_str, backup::ObTabletInfoTrailer &tablet_meta_trailer)
 {
   int ret = OB_SUCCESS;
@@ -199,7 +199,7 @@ int ObAdminDumpBackupDataUtil::read_tablet_metas_file_trailer(const common::ObSt
     STORAGE_LOG(WARN, "failed to pread file", K(ret), K(backup_path), K(storage_info_str), K(file_length), K(trailer_len));
   } else if (OB_FAIL(serializer_wrapper.deserialize(buf, trailer_len, pos))) {
     STORAGE_LOG(WARN, "failed to deserialize.", K(ret));
-  }
+  } 
   return ret;
 }
 
@@ -593,7 +593,7 @@ int ObAdminDumpBackupDataExecutor::execute(int argc, char *argv[])
     bool is_table_list_dir = false;
     if (OB_FAIL(check_is_table_list_dir_(is_table_list_dir))) {
       STORAGE_LOG(WARN, "fail to check is table list dir", K(ret));
-    }
+    } 
     if (OB_FAIL(ret)) {
     } else if (is_table_list_dir) {
       if (OB_FAIL(handle_print_table_list_())) {
@@ -1287,15 +1287,15 @@ int ObAdminDumpBackupDataExecutor::print_macro_block_index_file()
     buf += header_size;
     ObBufferReader buffer_reader(buf, length - header_size - trailer_size);
 
-    std::function<int(const share::ObBackupCommonHeader &)> print_func1 =
+    std::function<int(const share::ObBackupCommonHeader &)> print_func1 = 
         std::bind(&ObAdminDumpBackupDataExecutor::dump_common_header_, this, std::placeholders::_1);
     std::function<int(const backup::ObBackupMultiLevelIndexHeader &)> print_func2 =
         std::bind(&ObAdminDumpBackupDataExecutor::dump_multi_level_index_header_, this, std::placeholders::_1);
-    std::function<int(const common::ObIArray<backup::ObBackupMacroBlockIndex> &)> print_func3 =
+    std::function<int(const common::ObIArray<backup::ObBackupMacroBlockIndex> &)> print_func3 = 
         std::bind(&ObAdminDumpBackupDataExecutor::dump_macro_block_index_list_, this, std::placeholders::_1);
     std::function<int(const common::ObIArray<backup::ObBackupMacroBlockIndexIndex> &)> print_func4 =
         std::bind(&ObAdminDumpBackupDataExecutor::dump_macro_block_index_index_list_, this, std::placeholders::_1);
-
+    
     typedef int(*ParseFuncType)(blocksstable::ObBufferReader &,
                                 const std::function<int(const share::ObBackupCommonHeader &)> &,
                                 const std::function<int(const backup::ObBackupMultiLevelIndexHeader &)> &,
@@ -1718,7 +1718,7 @@ int ObAdminDumpBackupDataExecutor::print_ls_tablet_meta_tablets_()
     int64_t cur_total_len = 0;
     char *buf = nullptr;
     while (OB_SUCC(ret) && cur_buf_offset < tablet_meta_trailer.length_) {
-      const uint64_t buf_len = tablet_meta_trailer.length_ - cur_buf_offset < DEFAULT_BUF_LEN ?
+      const uint64_t buf_len = tablet_meta_trailer.length_ - cur_buf_offset < DEFAULT_BUF_LEN ? 
                                tablet_meta_trailer.length_ - cur_buf_offset : DEFAULT_BUF_LEN;
       if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(buf_len)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1776,7 +1776,7 @@ int ObAdminDumpBackupDataExecutor::print_ls_tablet_meta_tablets_()
     }
     if (OB_SUCC(ret) && OB_FAIL(dump_tablet_trailer_(tablet_meta_trailer))) {
       STORAGE_LOG(WARN, "failed to inner print tablet trailer", K(ret));
-    }
+    } 
   }
   return ret;
 }
@@ -1808,7 +1808,7 @@ int ObAdminDumpBackupDataExecutor::print_tenant_backup_set_infos_()
     if (OB_FAIL(dump_tenant_backup_set_infos_file_(file_desc.backup_set_infos_))) {
         STORAGE_LOG(WARN, "fail to dump archive piece info file", K(ret), K(file_desc));
       }
-  }
+  } 
   return ret;
 }
 
@@ -2634,7 +2634,7 @@ int ObAdminDumpBackupDataExecutor::dump_tenant_backup_set_infos_(const ObIArray<
       char buf[OB_MAX_INTEGER_DISPLAY_WIDTH] = { 0 };
       char str_buf[OB_MAX_TEXT_LENGTH] = { 0 };
       char min_restore_scn_str_buf[OB_MAX_TIME_STR_LENGTH] = { 0 };
-      if (OB_FAIL(ObTimeConverter::scn_to_str(backup_set_desc.min_restore_scn_.get_val_for_inner_table_field(),
+      if (OB_FAIL(ObTimeConverter::scn_to_str(backup_set_desc.min_restore_scn_.get_val_for_inner_table_field(), 
                                               time_zone_wrap.get_time_zone_info(),
                                               min_restore_scn_str_buf,
                                               OB_MAX_TIME_STR_LENGTH,
@@ -3172,7 +3172,7 @@ int ObAdminDumpBackupDataExecutor::handle_print_table_list_()
     if (OB_UNLIKELY(offset_ == 0 && length_ == 0)) {
       if (OB_FAIL(print_table_list_meta_info_(scn_val))) {
         STORAGE_LOG(WARN, "fail to print table list items", K(ret));
-      }
+      } 
     } else if (OB_FAIL(print_table_list_items_(scn_val))) {
       STORAGE_LOG(WARN, "fail to print table list items", K(ret));
     }
@@ -3192,7 +3192,7 @@ int ObAdminDumpBackupDataExecutor::check_is_table_list_dir_(bool &is_table_list_
     char *token = NULL;
     char *saveptr = NULL;
     const char *delimeter = "/";
-    int64_t info_len = strlen(backup_path_);
+    int64_t info_len = strlen(backup_path_); 
     int64_t pos = 0;
     if (OB_FAIL(databuff_printf(tmp, OB_MAX_BACKUP_PATH_LENGTH, pos, "%s", backup_path_))) {
       STORAGE_LOG(WARN, "fail to databuff printf", K(ret), K_(backup_path));
@@ -3224,7 +3224,7 @@ int ObAdminDumpBackupDataExecutor::get_max_table_list_scn(uint64_t &scn_val)
   ObBackupIoAdapter util;
   share::SCN scn = share::SCN::min_scn();
   ObGetMaxTableListSCNOp max_scn_op(scn);
-
+  
   if (OB_FAIL(path.init(ObString(backup_path_)))) {
     STORAGE_LOG(WARN, "fail to init backup path", K(ret), K_(backup_path));
   } else if (OB_FAIL(storage_info.set(backup_path_, storage_info_))) {
@@ -3266,7 +3266,7 @@ int ObAdminDumpBackupDataExecutor::read_table_list_meta_info_(const uint64_t scn
     STORAGE_LOG(WARN, "fail to join table list meta info file", K(ret), K(scn));
   } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(full_path.get_obstr(), ObString(storage_info_), desc))) {
     STORAGE_LOG(WARN, "fail to read locality info", K(ret), K(backup_path_), K(storage_info_));
-  }
+  } 
   return ret;
 }
 
@@ -3357,7 +3357,7 @@ int ObAdminDumpBackupDataExecutor::read_table_list_part_file_(const uint64_t scn
     STORAGE_LOG(WARN, "fail to join table list file", K(ret), K(scn_val), K(part_no));
   } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(full_path.get_obstr(), ObString(storage_info_), desc))) {
     STORAGE_LOG(WARN, "fail to read locality info", K(ret), K(backup_path_), K(storage_info_));
-  }
+  } 
   return ret;
 }
 

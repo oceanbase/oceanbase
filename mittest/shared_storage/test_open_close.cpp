@@ -64,10 +64,10 @@ public:
       macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
       macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
       macro_id.set_second_id(tablet_id_); // tablet_id
-      macro_id.set_third_id(server_id_);  //tenant_seq
+      macro_id.set_third_id(server_id_);  //tenant_seq 
       for (int64_t i = 0; i < read_times_; ++i) {
         macro_id.set_macro_transfer_seq(0); // transfer_seq
-        macro_id.set_tenant_seq(idx * file_num_per_thread_ + 1 + (i % file_num_per_thread_));  //seq_id
+        macro_id.set_tenant_seq(idx * file_num_per_thread_ + 1 + (i % file_num_per_thread_));  //seq_id 
         get_read_device_and_fd(get_fd_from_cache_, fd_cache_, macro_id, io_info);
         ObIOHandle io_handle;
         ASSERT_EQ(OB_SUCCESS, ObIOManager::get_instance().aio_read(io_info, io_handle));

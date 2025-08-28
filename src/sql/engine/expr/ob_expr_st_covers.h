@@ -32,7 +32,7 @@ public:
                                 common::ObExprTypeCtx &type_ctx) const override;
   static int eval_st_covers(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   template<typename ResType>
-  static int eval_st_covers_common(const ObExpr &expr,
+  static int eval_st_covers_common(const ObExpr &expr, 
                                    ObEvalCtx &ctx,
                                    MultimodeAlloctor &temp_allocator,
                                    ObString wkb1,

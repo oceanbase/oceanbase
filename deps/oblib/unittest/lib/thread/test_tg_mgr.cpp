@@ -19,12 +19,12 @@ using namespace oceanbase::lib;
 
 class TestTG : public testing::Test
 {
-protected:
+protected:  
   static void SetUpTestCase()
   {
     ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
-  }
-
+  } 
+ 
   static void TearDownTestCase()
   {
     ObTimerService::get_instance().stop();

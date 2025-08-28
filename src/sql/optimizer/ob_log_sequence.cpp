@@ -93,7 +93,7 @@ int ObLogSequence::do_re_est_cost(EstimateCostInfo &param, double &card, double 
   } else if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
     LOG_WARN("failed to re est cost", K(ret));
   } else {
-    op_cost = ObOptEstCost::cost_sequence(child_card,
+    op_cost = ObOptEstCost::cost_sequence(child_card, 
                                           nextval_seq_ids_.count(),
                                           get_plan()->get_optimizer_context());
     cost = child_cost + op_cost;
@@ -128,3 +128,4 @@ int ObLogSequence::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
   }
   return ret;
 }
+

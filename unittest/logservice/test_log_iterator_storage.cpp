@@ -21,7 +21,7 @@ namespace oceanbase
 {
 // 单元测试中，将每个文件以及每条日志设置的小一些，可以在有限的时间内跑到更多的场景
 const int64_t default_phy_block_size = 16 * 1024;
-const int64_t default_block_size = default_phy_block_size - palf::MAX_INFO_BLOCK_SIZE;
+const int64_t default_block_size = default_phy_block_size - palf::MAX_INFO_BLOCK_SIZE; 
 // 每个文件中存在8K/256(32)条日志
 const int64_t single_log_entry_size = 256;
 const int64_t log_entrys_in_single_block = default_block_size / single_log_entry_size;
@@ -96,11 +96,11 @@ virtual int upload_block_impl_(const uint64_t tenant_id,
       }
     }
 
-    if (OB_SUCC(ret)
+    if (OB_SUCC(ret) 
         && OB_FAIL(GLOBAL_EXT_HANDLER.upload(tenant_id, palf_id, block_id, write_buf, default_phy_block_size))) {
       CLOG_LOG(ERROR, "upload failed", K(tenant_id), K(palf_id), K(block_id));
     }
-  }
+  } 
   if (NULL != write_buf) {
     mtl_free(write_buf);
   }
@@ -225,7 +225,7 @@ TEST_F(TestLogIteratorStorage, test_memory_storage)
     // OB_ERR_UNEXPECTED, lsn和log_tail不连续
     EXPECT_EQ(OB_ERR_UNEXPECTED, tmp_mem_storage.append(LSN(10), buf, MAX_INFO_BLOCK_SIZE));
 
-    // OB_SUCCESS
+    // OB_SUCCESS 
     LSN init_lsn(0);
     EXPECT_EQ(OB_SUCCESS, tmp_mem_storage.append(init_lsn, buf, MAX_INFO_BLOCK_SIZE));
     EXPECT_EQ(tmp_mem_storage.start_lsn_, init_lsn);
@@ -402,7 +402,7 @@ TEST_F(TestLogIteratorStorage, test_shared_storage)
                                                             invalid_read_buf, out_read_size, io_ctx));
     EXPECT_EQ(OB_INVALID_ARGUMENT, tmp_shared_storage.pread(invalid_lsn, invalid_read_size,
                                                             read_buf, out_read_size, io_ctx));
-
+    
     // OB_NO_SUCH_FILE_OR_DIRECTORY
     EXPECT_EQ(OB_NO_SUCH_FILE_OR_DIRECTORY, tmp_shared_storage.pread(start_lsn, MAX_INFO_BLOCK_SIZE,
                                                                      read_buf, out_read_size, io_ctx));
@@ -599,7 +599,7 @@ TEST_F(TestLogIteratorStorage, test_log_iterator)
   EXPECT_EQ(OB_SUCCESS, hybrid_storage.init(tenant_id, palf_id_shared, shared_start_lsn, suggessted_read_buf_size, &ext_handler));
   auto get_file_end_lsn = [&local_end_lsn] {
     return local_end_lsn;
-  };
+  }; 
   hybrid_storage.local_storage_.palf_handle_guard_.palf_handle_.palf_handle_impl_ = &local_storage;
 
   // shared | local
@@ -607,14 +607,14 @@ TEST_F(TestLogIteratorStorage, test_log_iterator)
   // 验证正常读取操作，从shared 读到 local
   {
     CLOG_LOG(INFO, "begin case1");
-    std::vector<LSN> local_start_lsns =
+    std::vector<LSN> local_start_lsns = 
       {local_start_lsn, local_start_lsn + default_block_size, local_start_lsn + 2 * default_block_size};
     for (auto tmp_local_start_lsn : local_start_lsns) {
       S2Iterator s2_iterator;
       local_storage.set_start_lsn(tmp_local_start_lsn);
       EXPECT_EQ(OB_SUCCESS, s2_iterator.init(shared_start_lsn, get_file_end_lsn, &hybrid_storage));
       s2_iterator.iterator_impl_.next_round_pread_size_ = iterator_single_read_size;
-      int ret = OB_SUCCESS;
+      int ret = OB_SUCCESS; 
       LogEntry entry;
       LSN lsn;
       while (OB_SUCC(s2_iterator.next())) {
@@ -636,13 +636,13 @@ TEST_F(TestLogIteratorStorage, test_log_iterator)
   {
     hybrid_storage.local_storage_.palf_handle_guard_.palf_handle_.palf_handle_impl_ = NULL;
     CLOG_LOG(INFO, "begin case2");
-    std::vector<LSN> shared_start_lsns =
+    std::vector<LSN> shared_start_lsns = 
       {shared_start_lsn, shared_start_lsn + default_block_size, shared_start_lsn + 2 * default_block_size};
     for (auto tmp_shared_start_lsn : shared_start_lsns) {
       S2Iterator s2_iterator;
       EXPECT_EQ(OB_SUCCESS, s2_iterator.init(tmp_shared_start_lsn, get_file_end_lsn, &hybrid_storage));
       s2_iterator.iterator_impl_.next_round_pread_size_ = iterator_single_read_size;
-      int ret = OB_SUCCESS;
+      int ret = OB_SUCCESS; 
       LogEntry entry;
       LSN lsn;
       while (OB_SUCC(s2_iterator.next())) {
@@ -676,7 +676,7 @@ TEST_F(TestLogIteratorStorage, test_log_iterator)
       // 将iterator的单次读磁盘大小变小
       EXPECT_EQ(OB_SUCCESS, s2_iterator.init(local_start_lsn, get_file_end_lsn, &hybrid_storage));
       s2_iterator.iterator_impl_.next_round_pread_size_ = iterator_single_read_size;
-      int ret = OB_SUCCESS;
+      int ret = OB_SUCCESS; 
       LogEntry entry;
       LSN lsn;
       while (OB_SUCC(s2_iterator.next())) {

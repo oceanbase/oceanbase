@@ -132,7 +132,7 @@ public:
   inline double get_sort_key_width() const { return sort_key_width_; }
   virtual bool is_block_op() const override { return !is_prefix_sort(); }
   virtual int compute_op_ordering() override;
-  virtual int get_plan_item_info(PlanText &plan_text,
+  virtual int get_plan_item_info(PlanText &plan_text, 
                               ObSqlPlanItem &plan_item) override;
   inline bool enable_pd_topn_filter() const { return topn_filter_info_.enabled_; }
   inline int64_t get_p2p_sequence_id() const { return topn_filter_info_.p2p_sequence_id_; }

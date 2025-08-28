@@ -136,7 +136,7 @@ int ObBatchFreezeTabletsTask::inner_process()
       LOG_WARN_RET(tmp_ret, "get invalid tablet pair", K(cur_pair));
     } else if (cur_pair.schedule_merge_scn_ > weak_read_ts) {
       // no need to force freeze
-    } else if (OB_TMP_FAIL(MTL(ObTenantFreezer *)->tablet_freeze(param.ls_id_,
+    } else if (OB_TMP_FAIL(MTL(ObTenantFreezer *)->tablet_freeze(param.ls_id_, 
                                                                  cur_pair.tablet_id_,
                                                                  true/*is_sync*/,
                                                                  max_retry_time_us,

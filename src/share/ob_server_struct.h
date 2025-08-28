@@ -290,7 +290,7 @@ struct ObGlobalContext
   void init();
   bool is_inited() const { return inited_; }
   // Refer to the high availability zone design document
-  //
+  // 
   bool is_observer() const;
   common::ObClusterRole get_cluster_role() const;
   share::ServerServiceStatus get_server_service_status() const;

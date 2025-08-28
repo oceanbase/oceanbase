@@ -28,9 +28,9 @@ namespace share {
  * @brief Generic Resource Throttling Unit
  *
  * This class is used to manage resource throttling to ensure it doesn't exceed a specified resource limit.
- * It includes resource allocation and throttling functionality. When using this throttling class, users need to
- * provide a functor themselves to assist the throttling unit in updating certain values that are essential for
- * throttling, such as the throttle trigger percentage (throttle_trigger_percentage_).
+ * It includes resource allocation and throttling functionality. When using this throttling class, users need to 
+ * provide a functor themselves to assist the throttling unit in updating certain values that are essential for 
+ * throttling, such as the throttle trigger percentage (throttle_trigger_percentage_). 
  *
  * If these values do not require dynamic updates for
  * the current throttling module, they can be set as constants within the functor.
@@ -39,7 +39,7 @@ namespace share {
  *
  *
  * using MyClassThrottleUnit = share::ObThrottleUnit<UpdateMyClassThrottleConfigHandle>;
- *
+ * 
  */
 template <typename ALLOCATOR>
 class ObThrottleUnit {
@@ -126,7 +126,7 @@ public:
    * @return True if throttling is still required, false otherwise.
    */
   bool still_throttling(ObThrottleInfoGuard &ti_guard, const int64_t holding_size);
-
+  
   /**
    * @brief Advance clock once if needed.
    *
@@ -207,7 +207,7 @@ private:
   int64_t last_update_limit_ts_;
   int64_t tenant_id_;
   double decay_factor_;
-
+  
 
   // Save throttle infos created by different threads.
   ObThrottleInfoHashMap throttle_info_map_;

@@ -552,7 +552,7 @@ int ObDASDomainIdMergeIter::concat_rows(int64_t &count, int64_t capacity)
             }
           }
         }
-
+        
         if (OB_SUCC(ret)) {
           ret = expect_iter_end ? OB_ITER_END : OB_SUCCESS;
         }

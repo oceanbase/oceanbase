@@ -507,7 +507,7 @@ int ObRowGenerate::set_obj(const ObObjType &column_type,
     case ObTextType:
     case ObMediumTextType:
     case ObLongTextType: 
-    case ObJsonType:
+    case ObJsonType: 
     case ObGeometryType:
     case ObRoaringBitmapType: {
       ObLobCommon *value = NULL;

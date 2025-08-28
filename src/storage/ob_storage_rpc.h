@@ -566,7 +566,7 @@ public:
   int assign(const ObTransferTabletInfoArg &other);
   void reset();
 
-  TO_STRING_KV(K_(tenant_id), K_(src_ls_id), K_(dest_ls_id),
+  TO_STRING_KV(K_(tenant_id), K_(src_ls_id), K_(dest_ls_id), 
        K_(tablet_list), K_(data_version), K_(new_mv_merge_scn));
   uint64_t tenant_id_;
   share::ObLSID src_ls_id_;
@@ -856,7 +856,7 @@ public:
   ~ObGetMigrationCacheJobInfoArg() {}
   bool is_valid() const;
   void reset();
-
+  
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(task_count));
 public:
   uint64_t tenant_id_;
@@ -1686,7 +1686,7 @@ public:
       const ObStorageHASrcInfo &src_info,
       const share::ObLSID &ls_id,
       SCN &scn);
-
+  
   virtual int lock_config_change(
       const uint64_t tenant_id,
       const ObStorageHASrcInfo &src_info,

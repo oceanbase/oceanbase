@@ -89,10 +89,10 @@ int ObOLAPAsyncJobResolver::resolve_submit_job_stmt(const ParseNode &parse_tree,
       LOG_WARN("failed to allocate memory", K(ret));
     } else {
       memset(definer_buf, 0, definer_buf_size);
-      snprintf(definer_buf, definer_buf_size, "%.*s@%.*s", session_info_->get_user_name().length(), session_info_->get_user_name().ptr(),
+      snprintf(definer_buf, definer_buf_size, "%.*s@%.*s", session_info_->get_user_name().length(), session_info_->get_user_name().ptr(), 
                                                            session_info_->get_host_name().length(), session_info_->get_host_name().ptr());
       stmt.set_job_definer(definer_buf);
-    }
+    } 
 
     if (OB_SUCC(ret)) {
       const uint64_t tenant_id = params_.session_info_->get_effective_tenant_id();
@@ -112,7 +112,7 @@ int ObOLAPAsyncJobResolver::resolve_submit_job_stmt(const ParseNode &parse_tree,
         memset(sql_buf, 0, OB_JOB_SQL_MAX_LENGTH);
         snprintf(sql_buf, OB_JOB_SQL_MAX_LENGTH, "%.*s;", (int)parse_tree.str_len_, parse_tree.str_value_);
         stmt.set_job_action(sql_buf);
-      }
+      }    
     }
 
     if (OB_SUCC(ret)) {
@@ -127,7 +127,7 @@ int ObOLAPAsyncJobResolver::resolve_submit_job_stmt(const ParseNode &parse_tree,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("generate exec env failed", K(ret), K(session_info_));
         } else {
-          stmt.set_exec_env((ObString(pos, job_exec_buf)));
+          stmt.set_exec_env((ObString(pos, job_exec_buf))); 
         }
       }
     }
@@ -146,7 +146,7 @@ int ObOLAPAsyncJobResolver::resolve_submit_job_stmt(const ParseNode &parse_tree,
           memset(job_name_buf, 0, OB_JOB_NAME_MAX_LENGTH);
           snprintf(job_name_buf, OB_JOB_NAME_MAX_LENGTH, "%"PRIu64"%"PRIu64,stmt.get_database_id(), stmt.get_job_id());
           stmt.set_job_name(job_name_buf);
-        }
+        }   
       }
     }
   }
@@ -175,7 +175,7 @@ int ObOLAPAsyncJobResolver::resolve_cancel_job_stmt(const ParseNode &parse_tree,
         memset(job_name_buf, 0, OB_JOB_NAME_MAX_LENGTH);
         snprintf(job_name_buf, OB_JOB_NAME_MAX_LENGTH, "%.*s", (int)job_name_node->str_len_, job_name_node->str_value_);
         stmt->set_job_name(job_name_buf);
-      }
+      }    
     }
   }
   return ret;

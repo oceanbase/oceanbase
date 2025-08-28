@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #define USING_LOG_PREFIX SQL_OPT
 #include "sql/optimizer/ob_log_link_dml.h"
 
@@ -57,7 +57,7 @@ int ObLogLinkDml::get_explain_name_internal(char *buf, const int64_t buf_len, in
   return ret;
 }
 
-int ObLogLinkDml::get_plan_item_info(PlanText &plan_text,
+int ObLogLinkDml::get_plan_item_info(PlanText &plan_text, 
                                      ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
@@ -69,7 +69,7 @@ int ObLogLinkDml::get_plan_item_info(PlanText &plan_text,
       LOG_WARN("failed to get explain name", K(ret));
     }
     END_BUF_PRINT(plan_item.operation_, plan_item.operation_len_);
-  }
+  } 
   return ret;
 }
 

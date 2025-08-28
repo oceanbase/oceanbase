@@ -63,10 +63,10 @@ enum ObJsonPathNodeType {
   JPN_BEGIN_FILTER_FLAG,
   JPN_EQUAL, // predicate ==
   JPN_UNEQUAL, // !=
-  JPN_LARGGER, // >
-  JPN_LARGGER_EQUAL, // >=
-  JPN_SMALLER, // <
-  JPN_SMALLER_EQUAL, // <=
+  JPN_LARGGER, // > 
+  JPN_LARGGER_EQUAL, // >= 
+  JPN_SMALLER, // < 
+  JPN_SMALLER_EQUAL, // <= 
   JPN_SUBSTRING, // has substring
   JPN_STARTS_WITH, // starts with
   JPN_LIKE, // like
@@ -84,7 +84,7 @@ enum ObJsonPathNodeType {
   JPN_BOOL_TRUE,
   JPN_BOOL_FALSE,
   JPN_NULL,
-  JPN_SCALAR,	// quoted
+  JPN_SCALAR,	// quoted 
   JPN_SUB_PATH,
   JPN_END_FILTER_CONTENT_FLAG,
 
@@ -377,7 +377,7 @@ private:
   int parse_comp_half(ObJsonPathFilterNode* filter_comp_node, bool left);
   int parse_comparison(ObFilterArrayPointers& filter_stack, bool not_exists);
   int is_legal_comparison(ObJsonPathFilterNode* filter_comp_node);
-  bool is_illegal_comp_for_func(const ObJsonPathNodeType last_path_node_type,
+  bool is_illegal_comp_for_func(const ObJsonPathNodeType last_path_node_type, 
                                 const ObJsonPathNodeType scalar_type, const ObPathScalar scalar);
   int parse_filter_node();
   int parse_condition(ObFilterArrayPointers& filter_stack, ObCharArrayPointers& char_stack, char in);
@@ -408,7 +408,7 @@ public:
   typedef ObVector<ObJsonPath*, JsonPathArena> ObJsonPathPointers;
   typedef ObVector<ObPathCacheStat, PathCacheStatArena> ObPathCacheStatArr;
   static const int64_t DEFAULT_PAGE_SIZE = (1LL << 10); // 1kb
-
+ 
 public:
   ObJsonPathCache(common::ObIAllocator *allocator) :
         allocator_(allocator),

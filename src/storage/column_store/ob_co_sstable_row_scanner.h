@@ -179,7 +179,7 @@ protected:
 private:
   int init_group_by_info(ObTableAccessContext &context);
   int push_group_by_processor(ObICGIterator *cg_iterator);
-
+  
   bool is_new_group_;
   bool reverse_scan_;
   bool is_limit_end_;

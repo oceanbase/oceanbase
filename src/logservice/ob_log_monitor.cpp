@@ -54,7 +54,7 @@ int ObLogMonitor::record_election_leader_change_event(const int64_t palf_id, con
 }
 
 int ObLogMonitor::record_reconfiguration_event(const char *sub_event,
-                                               const int64_t palf_id,
+                                               const int64_t palf_id,  
                                                const palf::LogConfigVersion& config_version,
                                                const int64_t prev_replica_num,
                                                const int64_t curr_replica_num,

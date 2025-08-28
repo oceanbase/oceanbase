@@ -62,7 +62,7 @@ public:
   int64_t get_string(char *buf, const int64_t buf_len) const;
   int64_t get_string_length() const;
   TO_STRING_KV(K_(compat_version), K_(checksum_method), K_(checksum_bytes), K_(column_checksums));
-
+  
   int set_with_str(const int64_t compaction_scn_val, const ObString &str);
   int set_with_str(const ObDataChecksumType type, const ObString &str);
   int get_str_obj(
@@ -313,9 +313,9 @@ private:
       bool &is_finished);
   static int batch_check_tablet_checksum_in_range_(
       common::ObISQLClient &sql_client,
-      const uint64_t tenant_id,
+      const uint64_t tenant_id, 
       const common::ObTabletID &start_tablet_id,
-      const common::ObTabletID &end_tablet_id);
+      const common::ObTabletID &end_tablet_id); 
 
 public:
   // get column checksum from item and store result in map
@@ -350,7 +350,7 @@ int ObTabletReplicaChecksumOperator::construct_batch_get_sql_str_(
       pairs_cnt < 1) {
     ret = OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "invalid argument", KR(ret), K(start_idx), K(end_idx), K(pairs_cnt));
-  } else if (OB_FAIL(sql.append_fmt("SELECT * FROM %s WHERE tenant_id = '%lu' AND (tablet_id, ls_id) IN ((",
+  } else if (OB_FAIL(sql.append_fmt("SELECT * FROM %s WHERE tenant_id = '%lu' AND (tablet_id, ls_id) IN ((", 
       OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME, tenant_id))) {
     SHARE_LOG(WARN, "fail to assign sql", KR(ret), K(tenant_id));
   }
@@ -369,7 +369,7 @@ int ObTabletReplicaChecksumOperator::construct_batch_get_sql_str_(
       }
     } // end of for
     if (OB_SUCC(ret) && with_compaction_scn) {
-      if (OB_FAIL(sql.append_fmt(" AND compaction_scn %s %ld",
+      if (OB_FAIL(sql.append_fmt(" AND compaction_scn %s %ld", 
           include_larger_than ? ">=" : "=", compaction_scn.get_val_for_inner_table_field()))) {
         SHARE_LOG(WARN, "fail to assign sql", KR(ret), K(tenant_id), K(compaction_scn));
       }
@@ -389,7 +389,7 @@ public:
   TO_STRING_KV(KPC_(normal_ckm_item), K_(cs_replica_ckm_items));
 private:
   const ObTabletReplicaChecksumItem *normal_ckm_item_;
-  ObSEArray<const ObTabletReplicaChecksumItem *, 3> cs_replica_ckm_items_; // at most support 3 cs replicas now
+  ObSEArray<const ObTabletReplicaChecksumItem *, 3> cs_replica_ckm_items_; // at most support 3 cs replicas now 
 };
 
 } // share

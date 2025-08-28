@@ -67,7 +67,7 @@ TEST_F(TestRedisParser, test_decode_err) {
   ObString method;
   method.assign_buffer(cmd_name_buf_, sizeof(cmd_name_buf_));
   ObArray<ObString> args;
-  // invalid length
+  // invalid length 
   ObString msg = "*3\r\n$3\r\nGET\r\n$6\r\nfoobar\r\n";
   ObArenaAllocator allocator(ObModIds::TEST);
   ObString redis_msg;

@@ -374,7 +374,7 @@ ObCharsetInfo ob_charset_big5_chinese_ci = {
     &ob_charset_big5_handler,
     &ob_collation_big5_chinese_ci_handler,
     PAD_SPACE};
-
+  
 ObCharsetInfo ob_charset_big5_bin = {
     84,
     0,

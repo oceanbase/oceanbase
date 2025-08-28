@@ -15,7 +15,7 @@
 namespace oceanbase
 {
 using namespace share;
-namespace storage
+namespace storage 
 {
 
 int ObIMemtable::get_ls_id(ObLSID &ls_id) {

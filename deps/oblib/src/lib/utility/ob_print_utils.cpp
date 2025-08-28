@@ -55,7 +55,7 @@ int hex_to_cstr(const void *in_data,
   int ret = OB_SUCCESS;
   int64_t pos = 0;
   if (OB_FAIL(hex_to_cstr(in_data, data_length, buff, buff_size, pos))) {
-    LOG_WARN("fail to hex to cstr", K(ret), K(in_data));
+    LOG_WARN("fail to hex to cstr", K(ret), K(in_data)); 
   }
   return ret;
 }

@@ -156,7 +156,7 @@ int ObConfigManager::load_config(const char *path)
     buf = NULL;
   }
 
-  //
+  // 
   // 为了避免和 got_version 有并发问题，
   // 必须等到 load_config 调用后， got_version 才工作
   init_config_load_ = true;
@@ -301,9 +301,9 @@ int ObConfigManager::dump2file_unsafe(const char* path) const
         ret = OB_SUCCESS;
       }
     }
-
+    
     // write server config
-
+    
   }
   return ret;
 }

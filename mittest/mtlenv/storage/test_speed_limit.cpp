@@ -39,7 +39,7 @@ namespace storage
 class TestSpeedLimit : public ::testing::Test
 {
 public:
-  TestSpeedLimit()
+  TestSpeedLimit() 
     : timer_(),
       task_(*this)
       {}
@@ -103,14 +103,14 @@ public:
     while (accumulate_interval < dt) {
       the_page_interval = static_cast<int64_t>(decay_factor_ * cur_chunk_seq * cur_chunk_seq * cur_chunk_seq) * allocate_size_in_the_page / MEM_SLICE_SIZE;
       accumulate_interval += the_page_interval;
-
-      mem_can_be_assigned += (accumulate_interval > dt ?
+      
+      mem_can_be_assigned += (accumulate_interval > dt ? 
                               allocate_size_in_the_page - (accumulate_interval - dt) * allocate_size_in_the_page / the_page_interval :
                               allocate_size_in_the_page);
       allocate_size_in_the_page = MEM_SLICE_SIZE;
       cur_chunk_seq += double(1);
     }
-
+    
     return mem_can_be_assigned;
   }
 
@@ -121,8 +121,8 @@ public:
       int64_t trigger_mem_limit = lastest_memstore_threshold_ * trigger_percentage_ / 100;
       int64_t can_assign_in_next_period = calc_mem_limit(hold_, trigger_mem_limit, ADVANCE_CLOCK_INTERVAL);
       expected_wait_time = (seq - clock_) * ADVANCE_CLOCK_INTERVAL / can_assign_in_next_period;
-    }
-
+    } 
+    
     return expected_wait_time;
   }
 
@@ -165,7 +165,7 @@ public:
     decay_factor_ = decay_factor_ < 0 ? 0 : decay_factor_;
     COMMON_LOG(INFO, "recalculate decay factor", K(trigger_percentage_),
               K(decay_factor_), K(writing_throttling_maximum_duration_), K(available_mem), K(N));
-
+    
     return ret;
   }
 
@@ -176,7 +176,7 @@ public:
     if (clock_ < req) {
       COMMON_LOG(INFO, "CCTT 1", K(clock_), K(req));
     }
-
+    
     return req <= clock_;
   }
 
@@ -199,7 +199,7 @@ public:
   int64_t lastest_memstore_threshold_;
   int64_t hold_;
   int64_t writing_throttling_maximum_duration_;
-
+  
   typedef common::SpinRWLock RWLock;
   typedef common::SpinRLockGuard  RLockGuard;
   typedef common::SpinWLockGuard  WLockGuard;
@@ -279,7 +279,7 @@ TEST_F(TestSpeedLimit, test_speed_limit)
 
   int insert_thread_num = 5;
   for (int i = 0; i < insert_thread_num; ++i) {
-    insert_threads.push_back(std::thread([this]() {
+    insert_threads.push_back(std::thread([this]() { 
       const int64_t start_time = ObTimeUtility::current_time();
       while (ObTimeUtility::current_time() - start_time <= WRITE_DURATION) {
         write(1600);

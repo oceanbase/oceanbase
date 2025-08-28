@@ -29,10 +29,10 @@ namespace oceanbase
 {
 namespace table
 {
-struct ObTableIndexInfo
+struct ObTableIndexInfo 
 {
   typedef common::ObSEArray<common::ObTableID, 4, common::ModulePageAllocator, true> TableIDArray;
-  ObTableIndexInfo()
+  ObTableIndexInfo() 
       : data_table_id_(common::OB_INVALID_ID),
         index_table_id_(common::OB_INVALID_ID),
         index_schema_(nullptr),
@@ -41,7 +41,7 @@ struct ObTableIndexInfo
         lookup_part_id_expr_(nullptr),
         old_part_id_expr_(nullptr),
         new_part_id_expr_(nullptr),
-        related_index_ids_()
+        related_index_ids_() 
   {}
   TO_STRING_KV(K_(data_table_id),
               K_(index_table_id),
@@ -65,7 +65,7 @@ struct ObTableIndexInfo
     related_index_ids_.reset();
   }
 
-  uint64_t data_table_id_;
+  uint64_t data_table_id_;  
   // when is primary index, index_table_id == data_table_id
   uint64_t index_table_id_;
   const share::schema::ObTableSchema *index_schema_;
@@ -135,10 +135,10 @@ struct ObTableAssignment : public sql::ObAssignment
   ObString generated_expr_str_; // for append/increment
   sql::ObColumnRefRawExpr *delta_expr_; // for append/increment
   common::ObObj assign_value_;
-  // did user assign specific value or not,
+  // did user assign specific value or not, 
   // e.g. virtual generated column will be added into assignment internally
   //     when its dependent column is assigned by user but its is_assigned_ will false
-  bool is_assigned_;
+  bool is_assigned_; 
 };
 
 enum ObTableExecutorType
@@ -508,8 +508,8 @@ public:
   }
   OB_INLINE bool need_full_rowkey_op() const
   {
-    return ObTableOperationType::Type::DEL == operation_type_
-      || ObTableOperationType::Type::UPDATE == operation_type_
+    return ObTableOperationType::Type::DEL == operation_type_ 
+      || ObTableOperationType::Type::UPDATE == operation_type_ 
       || ObTableOperationType::Type::GET == operation_type_;
   }
   // for dml
@@ -636,9 +636,9 @@ public:
   OB_INLINE void set_need_dist_das(bool need_dist_das) { need_dist_das_ = need_dist_das; }
   OB_INLINE void set_is_redis_ttl_table(bool is_redis_ttl_table) { is_redis_ttl_table_ = is_redis_ttl_table; }
   OB_INLINE void set_redis_ttl_ctx(ObRedisTTLCtx *redis_ttl_ctx) { redis_ttl_ctx_ = redis_ttl_ctx; }
-  OB_INLINE bool add_redis_meta_range() {
-      return is_redis_ttl_table_
-             && OB_NOT_NULL(redis_ttl_ctx_)
+  OB_INLINE bool add_redis_meta_range() { 
+      return is_redis_ttl_table_ 
+             && OB_NOT_NULL(redis_ttl_ctx_) 
              && OB_ISNULL(redis_ttl_ctx_->get_meta())
              && redis_ttl_ctx_->get_model() != ObRedisDataModel::STRING
              && operation_type_ != ObTableOperationType::DEL
@@ -729,8 +729,8 @@ public:
   int check_is_cs_replica_query(bool &is_cs_replica_query) const;
 
 
-  static int check_insert_up_can_use_put(ObKvSchemaCacheGuard &schema_cache_guard,
-                                         const ObITableEntity *entity,
+  static int check_insert_up_can_use_put(ObKvSchemaCacheGuard &schema_cache_guard, 
+                                         const ObITableEntity *entity, 
                                          bool is_client_set_put,
                                          bool is_htable,
                                          bool is_full_binlog_image,
@@ -874,7 +874,7 @@ private:
   bool need_dist_das_; // used for init das_ref
   ObTableApiCredential *credential_;
   ObTableAuditCtx *audit_ctx_;
-  bool is_redis_ttl_table_; // redis ttl table and other ttl table behave differently
+  bool is_redis_ttl_table_; // redis ttl table and other ttl table behave differently 
   ObRedisTTLCtx *redis_ttl_ctx_;
   // for fulltext index
   bool has_fts_index_;

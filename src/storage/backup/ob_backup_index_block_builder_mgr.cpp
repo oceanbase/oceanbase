@@ -193,7 +193,7 @@ int ObBackupTaskIndexRebuilderMgr::prepare_index_block_rebuilder_(
   } else if (OB_ISNULL(sstable_index_builder)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sstable index builder should not be null", K(ret));
-  } else if (OB_FAIL(rebuilder->init(*sstable_index_builder,
+  } else if (OB_FAIL(rebuilder->init(*sstable_index_builder, 
                                      task_idx,
                                      table_key,
                                      &device_handle_array))) {
@@ -1019,12 +1019,12 @@ int ObBackupTabletSSTableIndexBuilderMgr::close_sstable_index_builder_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table key is not expected", K(ret), KP(index_builder), KP(device_handle));
   } else if (OB_FAIL(index_builder->close(sstable_merge_res,
-                                          OB_DEFAULT_MACRO_BLOCK_SIZE/*nested_size*/,
+                                          OB_DEFAULT_MACRO_BLOCK_SIZE/*nested_size*/, 
                                           0/*nested_offset*/,
                                           nullptr,
                                           device_handle))) {
     LOG_WARN("failed to close sstable index builder", K(ret));
-  }
+  } 
   return ret;
 }
 
@@ -1080,7 +1080,7 @@ int ObBackupTabletSSTableIndexBuilderMgr::update_logic_id_to_macro_index(
     } else {
       LOG_INFO("update logic id to macro index", K(logic_id), K(macro_index));
     }
-  }
+  } 
   return ret;
 }
 
@@ -1134,3 +1134,4 @@ int ObBackupTabletSSTableIndexBuilderMgr::check_real_macro_index_exist(
 
 }
 }
+

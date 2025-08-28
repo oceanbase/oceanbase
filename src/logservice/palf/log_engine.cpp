@@ -984,7 +984,7 @@ int LogEngine::fill_cache_when_slide(const LSN &begin_lsn, const int64_t size)
     PALF_LOG(WARN, "LogEngine is not inited", K(ret), KPC(this));
   } else if (OB_FAIL(log_storage_.fill_cache_when_slide(begin_lsn, size))) {
     PALF_LOG(WARN, "fill_cache_when_slide failed", K(ret), K(begin_lsn), K(size));
-  }
+  } 
 
   return ret;
 }
@@ -1631,7 +1631,7 @@ int LogEngine::generate_purge_throttling_task_(const PurgeThrottlingCbCtx &purge
   return ret;
 }
 
-int LogEngine::generate_fill_cache_task_(const LSN &lsn,
+int LogEngine::generate_fill_cache_task_(const LSN &lsn, 
                                          const int64_t size,
                                          LogFillCacheTask *&fill_cache_task)
 {
@@ -1705,7 +1705,7 @@ int LogEngine::update_config_meta_guarded_by_lock_(const LogConfigMeta &config_m
   return ret;
 }
 
-// Background:
+// Background: 
 int LogEngine::try_clear_up_holes_and_check_storage_integrity_(
     const LSN &last_entry_begin_lsn,
     const block_id_t &expected_next_block_id,

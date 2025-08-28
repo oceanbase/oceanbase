@@ -67,7 +67,7 @@ int ObCreateDbLinkResolver::resolve(const ParseNode &parse_tree)
     LOG_TRACE("debug dblink create", K(session_info_->get_database_id()));
   }
   if (!lib::is_oracle_mode() && OB_SUCC(ret)) {
-    if (compat_version_ < DATA_VERSION_4_2_0_0) {
+    if (compat_version_ < DATA_VERSION_4_2_0_0) { 
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("mysql dblink is not supported when MIN_DATA_VERSION is below DATA_VERSION_4_2_0_0", K(ret));
     } else if (NULL != node->children_[IF_NOT_EXIST]) {
@@ -186,8 +186,8 @@ int ObCreateDbLinkResolver::resolve(const ParseNode &parse_tree)
     ObString host_str;
     ObString ip_port, conn_str;
     ParseNode *host_node = NULL;
-    const bool support_domin_name = compat_version_ >= DATA_VERSION_4_3_3_0 ||
-                                    (compat_version_ >= MOCK_DATA_VERSION_4_2_1_8 && compat_version_ < DATA_VERSION_4_2_2_0) ||
+    const bool support_domin_name = compat_version_ >= DATA_VERSION_4_3_3_0 || 
+                                    (compat_version_ >= MOCK_DATA_VERSION_4_2_1_8 && compat_version_ < DATA_VERSION_4_2_2_0) || 
                                     (compat_version_ >= MOCK_DATA_VERSION_4_2_5_0 && compat_version_ < DATA_VERSION_4_3_0_0);
     if (OB_ISNULL(node->children_[IP_PORT]) || OB_ISNULL(node->children_[IP_PORT]->children_)
         || OB_ISNULL(host_node = node->children_[IP_PORT]->children_[0])) {
@@ -299,8 +299,8 @@ int ObCreateDbLinkResolver::resolve_opt_reverse_link(const ParseNode *node, sql:
     ObString host_str;
     ObString ip_port, conn_str;
     ParseNode *host_node = NULL;
-    const bool support_domin_name = compat_version_ >= DATA_VERSION_4_3_3_0 ||
-                                    (compat_version_ >= MOCK_DATA_VERSION_4_2_1_8 && compat_version_ < DATA_VERSION_4_2_2_0) ||
+    const bool support_domin_name = compat_version_ >= DATA_VERSION_4_3_3_0 || 
+                                    (compat_version_ >= MOCK_DATA_VERSION_4_2_1_8 && compat_version_ < DATA_VERSION_4_2_2_0) || 
                                     (compat_version_ >= MOCK_DATA_VERSION_4_2_5_0 && compat_version_ < DATA_VERSION_4_3_0_0);
     if (OB_FAIL(ret)) {
       // do nothing

@@ -14,7 +14,7 @@
 #include <iomanip>
 #include "observer/ob_srv_network_frame.h"
 #ifdef OB_BUILD_TDE_SECURITY
-#include "share/ob_encrypt_kms.h"
+#include "share/ob_encrypt_kms.h" 
 #endif
 using namespace std;
 using namespace oceanbase::common;
@@ -244,7 +244,7 @@ int ObAdminServerExecutor::load_ssl_config()
     if (EASY_OK != easy_ssl_ob_config_check(ca_cert, public_cert, private_key, NULL, NULL, !use_bkmi, is_sm)) {
       COMMON_LOG(ERROR, "Local file mode: key and cert not match");
       ret = OB_INVALID_CONFIG;
-    } else if (OB_FAIL(observer::ObSrvNetworkFrame::extract_expired_time(OB_CLIENT_SSL_CERT_FILE,
+    } else if (OB_FAIL(observer::ObSrvNetworkFrame::extract_expired_time(OB_CLIENT_SSL_CERT_FILE, 
       ssl_key_expired_time))) {
       COMMON_LOG(ERROR, "extract_expired_time failed", KR(ret));
     } else if (OB_FAIL(client_.load_ssl_config(use_bkmi, is_sm, ca_cert, public_cert, private_key, NULL, NULL))) {

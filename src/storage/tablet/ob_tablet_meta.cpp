@@ -137,14 +137,14 @@ int ObTabletMeta::init(
     report_status_.data_checksum_ = 0;
     report_status_.row_count_ = 0;
 
-    if (has_cs_replica) { // cs replica is visable when doing offline ddl
+    if (has_cs_replica) { // cs replica is visable when doing offline ddl 
       if (need_generate_cs_replica_cg_array) {
         ddl_replay_status_ = CS_REPLICA_VISIBLE_AND_REPLAY_COLUMN; // need process cs replica locally
       } else {
         ddl_replay_status_ = CS_REPLICA_VISIBLE_AND_REPLAY_ROW; // do need not process cs replica locally
       }
     } else {
-      ddl_replay_status_ = CS_REPLICA_INVISILE; // cs replica is not visable when doing offline ddl
+      ddl_replay_status_ = CS_REPLICA_INVISILE; // cs replica is not visable when doing offline ddl 
     }
 
     if (OB_FAIL(ret)) {
@@ -170,7 +170,7 @@ int ObTabletMeta::init(
       } else {
         last_persisted_committed_tablet_status_.reset();
       }
-      is_inited_ = true;
+      is_inited_ = true;      
     }
   }
 

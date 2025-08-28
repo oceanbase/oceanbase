@@ -283,8 +283,8 @@ int ObArchivePersistHelper::get_binding(common::ObISQLClient &proxy, const bool 
 }
 
 int ObArchivePersistHelper::get_dest_state(
-    common::ObISQLClient &proxy,
-    const bool need_lock,
+    common::ObISQLClient &proxy, 
+    const bool need_lock, 
     const int64_t dest_no,
     ObLogArchiveDestState &state) const
 {
@@ -530,7 +530,7 @@ int ObArchivePersistHelper::get_round_stopping_ts(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tenant archive table operator not init", K(ret));
-  } else if (OB_FAIL(sql.append_fmt("select time_to_usec(gmt_modified) as stopping_ts from %s where tenant_id=%ld and dest_no=%ld and status='STOPPING'",
+  } else if (OB_FAIL(sql.append_fmt("select time_to_usec(gmt_modified) as stopping_ts from %s where tenant_id=%ld and dest_no=%ld and status='STOPPING'", 
                      OB_ALL_LOG_ARCHIVE_PROGRESS_TNAME,
                      tenant_id_,
                      dest_no))) {
@@ -875,7 +875,7 @@ int ObArchivePersistHelper::get_candidate_obsolete_backup_pieces(common::ObISQLC
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid backup_dest_str", K(ret), K(backup_dest_str));
   } else if (OB_FAIL(sql.assign_fmt("select * from %s where %s=%lu and %s<=%lu and %s='%s' and %s!='%s'",
-      OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, OB_STR_TENANT_ID, tenant_id_, OB_STR_CHECKPOINT_SCN,
+      OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, OB_STR_TENANT_ID, tenant_id_, OB_STR_CHECKPOINT_SCN, 
       end_scn.get_val_for_inner_table_field(), OB_STR_PATH, backup_dest_str, OB_STR_FILE_STATUS, OB_STR_DELETED))) {
     LOG_WARN("failed to append fmt", K(ret));
   } else {
@@ -1161,7 +1161,7 @@ int ObArchivePersistHelper::get_pieces_by_range(common::ObISQLClient &proxy, con
     HEAP_VAR(ObMySQLProxy::ReadResult, res) {
       ObMySQLResult *result = NULL;
       if (OB_FAIL(sql.assign_fmt("select * from %s where %s=%lu and %s=%ld and %s!='%s' and %s>=%ld and %s<=%ld order by %s asc",
-          OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, OB_STR_TENANT_ID, tenant_id_, OB_STR_DEST_ID,
+          OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, OB_STR_TENANT_ID, tenant_id_, OB_STR_DEST_ID, 
           dest_id, OB_STR_FILE_STATUS, OB_STR_DELETED,
           OB_STR_PIECE_ID, start_piece_id, OB_STR_PIECE_ID, end_piece_id, OB_STR_PIECE_ID))) {
         LOG_WARN("failed to append fmt", K(ret));
@@ -1277,7 +1277,7 @@ int ObArchivePersistHelper::do_parse_ls_archive_piece_summary_result_(sqlclient:
   uint64_t start_scn = 0;
   uint64_t checkpoint_scn = 0;
   char status_str[OB_DEFAULT_STATUS_LENTH] = "";
-
+  
   EXTRACT_INT_FIELD_MYSQL(result, "ls_id", ls_id, int64_t);
   if (OB_SUCC(ret)) {
     // log stream is in table __all_ls_log_archive_progress.

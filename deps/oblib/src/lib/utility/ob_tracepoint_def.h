@@ -643,3 +643,4 @@ GLOBAL_ERRSIM_POINT_DEF(2625, EN_DELETE_HTABLE_SKIP_CF_ERR, "delete htable table
 GLOBAL_ERRSIM_POINT_DEF(2651, EN_AUTO_SPLIT_SCHEDULER_ERR, "inject error in auto split schedule step");
 // DDL end
 #endif /*GLOBAL_ERRSIM_POINT_DEF*/
+

@@ -127,7 +127,7 @@ int ObSMHandler::on_connect(easy_connection_t *c)
 
 int ObSMHandler::on_disconnect(easy_connection_t *c)
 {
-  //
+  // 
   int eret = EASY_OK;
   int tmp_ret = OB_SUCCESS;
   ObSMConnection *conn = NULL;
@@ -270,7 +270,7 @@ int ObSMHandler::on_close(easy_connection_t *c)
              "c/s protocol", get_cs_protocol_type_name(conn->get_cs_protocol_type()),
              "is_need_clear_sessid_", conn->is_need_clear_sessid_,
              "is_sess_alloc_", conn->is_sess_alloc_,
-             K(ret),
+             K(ret), 
              K(trace_id),
              K(conn->pkt_rec_wrapper_),
              K(disconnect_state));

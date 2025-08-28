@@ -134,7 +134,7 @@ public:
            || type == ObMySQLDateType || type == ObMySQLDateTimeType)
            && (cs == CS_TYPE_COLLATION_FREE || cs == CS_TYPE_BINARY || cs == CS_TYPE_UTF8MB4_BIN
               || cs == CS_TYPE_GBK_BIN || cs == CS_TYPE_GB18030_BIN || cs == CS_TYPE_UTF8MB4_GENERAL_CI
-              || cs == CS_TYPE_GBK_CHINESE_CI
+              || cs == CS_TYPE_GBK_CHINESE_CI 
               // utf 16 will be open later
               //|| cs == CS_TYPE_UTF16_GENERAL_CI || cs == CS_TYPE_UTF16_BIN
               || cs == CS_TYPE_GB18030_CHINESE_CI || ObCharset::is_gb18030_2022(cs));

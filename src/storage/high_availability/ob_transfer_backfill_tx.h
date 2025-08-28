@@ -257,8 +257,8 @@ private:
       ObTablesHandleArray &filled_table_handle_array);
 
   void process_transfer_perf_diagnose_(
-      const int64_t timestamp,
-      const int64_t start_ts,
+      const int64_t timestamp, 
+      const int64_t start_ts, 
       const bool is_report,
       const share::ObLSID &dest_ls_id,
       const share::SCN &log_sync_scn,

@@ -378,3 +378,4 @@ int ObTableJsonArrayBuilder::add(ObTableJsonArrayBuilder &arr)
   }
   return ret;
 }
+

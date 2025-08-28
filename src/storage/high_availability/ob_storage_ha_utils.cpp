@@ -244,7 +244,7 @@ int ObStorageHAUtils::check_ls_deleted(
 }
 
 int ObStorageHAUtils::check_tablet_is_deleted(
-    const ObTabletHandle &tablet_handle,
+    const ObTabletHandle &tablet_handle, 
     bool &is_deleted)
 {
   int ret = OB_SUCCESS;
@@ -609,7 +609,7 @@ int ObStorageHAUtils::get_tablet_backup_size_in_bytes(
   ObTabletResidentInfo info;
   const ObTabletMapKey key(ls_id, tablet_id);
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-
+    
   if (!ls_id.is_valid() || !tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(t3m->get_tablet_resident_info(key, info))) {
@@ -631,7 +631,7 @@ int ObStorageHAUtils::get_tablet_occupy_size_in_bytes(
   ObTabletResidentInfo info;
   const ObTabletMapKey key(ls_id, tablet_id);
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-
+    
   if (!ls_id.is_valid() || !tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(t3m->get_tablet_resident_info(key, info))) {
@@ -1392,8 +1392,8 @@ int ObTransferUtils::check_ls_replay_scn(
 }
 
 void ObTransferUtils::transfer_tablet_restore_stat(
-    const uint64_t tenant_id,
-    const share::ObLSID &src_ls_id,
+    const uint64_t tenant_id, 
+    const share::ObLSID &src_ls_id, 
     const share::ObLSID &dest_ls_id)
 {
   int ret = OB_SUCCESS;
@@ -1445,7 +1445,7 @@ void ObTransferUtils::transfer_tablet_restore_stat(
       if (OB_FAIL(helper.transfer_tablet(trans, src_ls_key, dest_ls_key))) {
         LOG_WARN("fail to transfer tablet restore stat", K(ret), K(src_ls_key), K(dest_ls_key));
       }
-    }
+    } 
 
     if (trans.is_started()) {
       int tmp_ret = OB_SUCCESS;
@@ -1454,7 +1454,7 @@ void ObTransferUtils::transfer_tablet_restore_stat(
         ret = OB_SUCC(ret) ? tmp_ret : ret;
       }
     }
-
+    
     if (FAILEDx(dest_ls->get_ls_restore_handler()->restore_stat().inc_total_tablet_cnt())) {
       LOG_WARN("fail to inc dest ls total tablet cnt", K(ret), K(dest_ls_key));
     } else if (OB_FAIL(src_ls->get_ls_restore_handler()->restore_stat().dec_total_tablet_cnt())) {
@@ -1473,7 +1473,7 @@ int ObStorageHAUtils::build_major_sstable_reuse_info(
   int ret = OB_SUCCESS;
   ObTablet *tablet = nullptr;
   ObTabletMemberWrapper<ObTabletTableStore> wrapper;
-  ObTableHandleV2 latest_major;
+  ObTableHandleV2 latest_major; 
 
   if (!tablet_handle.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -1484,10 +1484,10 @@ int ObStorageHAUtils::build_major_sstable_reuse_info(
       LOG_INFO("reuse info mgr has been inited before (maybe retry), won't init again", K(macro_block_reuse_mgr.is_inited()));
     } else if (OB_FAIL(macro_block_reuse_mgr.init())) {
       LOG_WARN("failed to init reuse info mgr", K(ret));
-    }
+    } 
 
     // 1. for shared storage mode, we won't build reuse info
-    // 2. when restore, we won't build reuse info for lastest major sstable, because restore always read all sstable from backup media
+    // 2. when restore, we won't build reuse info for lastest major sstable, because restore always read all sstable from backup media 
     // (i.e. will scan all sstables' macro block again when tablet restore dag retry)
     // when migrate, we will keep the major sstable already been copied to dest server, so we need to build reuse info for lastest major sstable
     // that already been copied to dest server
@@ -1526,7 +1526,7 @@ int ObStorageHAUtils::build_major_sstable_reuse_info(
         if (OB_FAIL(ret)) {
           macro_block_reuse_mgr.reset();
         }
-      }
+      }  
     }
   }
 
@@ -1541,7 +1541,7 @@ int ObStorageHAUtils::get_latest_available_major_(
   latest_major.reset();
   ObTableHandleV2 cur_major_handle;
   ObSSTableMetaHandle sst_meta_hdl;
-
+  
   // major sstables must be sorted by snapshot version in ascending order
   // get the latest major sstable that has no backup data and all previous major sstables have backup data
   while (OB_SUCC(ret)) {
@@ -1564,7 +1564,7 @@ int ObStorageHAUtils::get_latest_available_major_(
     } else if (OB_FAIL(sstable->get_meta(sst_meta_hdl))) {
       LOG_WARN("failed to get sstable meta", K(ret), KPC(sstable));
     } else if (sst_meta_hdl.get_sstable_meta().get_basic_meta().table_backup_flag_.has_backup()) {
-      // stop at the first major sstable that has backup data
+      // stop at the first major sstable that has backup data 
       break;
     } else {
       latest_major = cur_major_handle;
@@ -1575,7 +1575,7 @@ int ObStorageHAUtils::get_latest_available_major_(
 }
 
 int ObStorageHAUtils::get_latest_major_sstable_array_(
-    ObTableHandleV2 &latest_major,
+    ObTableHandleV2 &latest_major, 
     common::ObArray<ObSSTableWrapper> &major_sstables)
 {
   int ret = OB_SUCCESS;
@@ -1605,10 +1605,10 @@ int ObStorageHAUtils::get_latest_major_sstable_array_(
     } else if (!ObITable::is_major_sstable(sstable->get_key().table_type_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid sstable type, not major sstable", K(ret), KPC(sstable));
-    }
+    } 
     // won't set meta hdl here, because meta hdl is already hold by outer table handle (latest_major)
     else if (OB_FAIL(major_sstable_wrapper.set_sstable(sstable))) {
-      LOG_WARN("failed to set sstable for major sstable wrapper", K(ret), KPC(sstable));
+      LOG_WARN("failed to set sstable for major sstable wrapper", K(ret), KPC(sstable));    
     } else if (OB_FAIL(major_sstables.push_back(major_sstable_wrapper))) {
       LOG_WARN("failed to push back major sstable wrapper", K(ret), K(major_sstable_wrapper));
     }
@@ -1620,15 +1620,15 @@ int ObStorageHAUtils::get_latest_major_sstable_array_(
       LOG_WARN("co sstable should not be null or invalid", K(ret), K(latest_major), KPC(co_sstable));
     } else if (OB_FAIL(co_sstable->get_all_tables(major_sstables))) {
       LOG_WARN("failed to get all co & cg tables", K(ret), K(table_key), KPC(co_sstable));
-    }
+    } 
   }
 
   return ret;
 }
 
 int ObStorageHAUtils::build_reuse_info_(
-    const common::ObArray<ObSSTableWrapper> &major_sstables,
-    const ObTabletHandle &tablet_handle,
+    const common::ObArray<ObSSTableWrapper> &major_sstables, 
+    const ObTabletHandle &tablet_handle, 
     ObMacroBlockReuseMgr &macro_block_reuse_mgr)
 {
   int ret = OB_SUCCESS;
@@ -1646,7 +1646,7 @@ int ObStorageHAUtils::build_reuse_info_(
   return ret;
 }
 
-void ObStorageHAUtils::sort_table_key_array_by_snapshot_version(common::ObArray<ObITable::TableKey> &table_key_array)
+void ObStorageHAUtils::sort_table_key_array_by_snapshot_version(common::ObArray<ObITable::TableKey> &table_key_array) 
 {
   TableKeySnapshotVersionComparator cmp;
   lib::ob_sort(table_key_array.begin(), table_key_array.end(), cmp);

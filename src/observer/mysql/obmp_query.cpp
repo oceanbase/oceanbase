@@ -342,7 +342,7 @@ int ObMPQuery::process()
     session.set_last_trace_id(ObCurTraceId::get_trace_id());
     IGNORE_RETURN record_flt_trace(session);
     // clear thread-local variables used for queue waiting
-    // to prevent async callbacks from finishing before
+    // to prevent async callbacks from finishing before 
     // request_finish_callback, which may free the request.
     // this operation should be protected by the session lock.
     if (async_resp_used) {
@@ -350,8 +350,8 @@ int ObMPQuery::process()
     }
   }
 
-  /* Function setup_user_resource_group cause performance regression.
-      No need to setup group_id here,
+  /* Function setup_user_resource_group cause performance regression. 
+      No need to setup group_id here, 
       Only setup group_id in MPConnect
   */
   if (is_conn_valid()) {
@@ -391,7 +391,7 @@ int ObMPQuery::process()
     need_retry_ = true;
   }
 
-  // bugfix:
+  // bugfix: 
   // 必须总是将 THIS_WORKER 里的指针设置为 null
   THIS_WORKER.set_session(NULL); // clear session
 
@@ -404,7 +404,7 @@ int ObMPQuery::process()
 
 /*
  * Try to evaluate multiple update queries as a single query to optimize rpc cost
- * for details, please ref to
+ * for details, please ref to 
  */
 int ObMPQuery::try_batched_multi_stmt_optimization(sql::ObSQLSessionInfo &session,
                                                    ObSMConnection *conn,
@@ -1685,7 +1685,7 @@ OB_INLINE int ObMPQuery::response_result(ObMySQLResultSet &result,
       ret = drv.response_result(result); \
       session.set_pl_query_sender(NULL); \
     }
-
+  
     if (result.is_pl_stmt(result.get_stmt_type())) {
       ENABLE_SQL_MEMLEAK_GUARD;
       CMD_EXEC;
@@ -1700,7 +1700,7 @@ OB_INLINE int ObMPQuery::response_result(ObMySQLResultSet &result,
   return ret;
 }
 
-inline void ObMPQuery::record_stat(const stmt::StmtType type,
+inline void ObMPQuery::record_stat(const stmt::StmtType type, 
                                    const int64_t end_time,
                                    const sql::ObSQLSessionInfo& session,
                                    const int64_t ret,

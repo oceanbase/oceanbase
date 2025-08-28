@@ -153,14 +153,14 @@ TEST_F(TestMacroBlockId, test_transfer_seq)
   ret = test_block_id.serialize(buf, 50, pos);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   ASSERT_EQ(0, pos);
-
+  
   test_block_id.set_meta_transfer_seq(0);
   test_block_id.set_meta_version_id(100002);
 
   ret = test_block_id.serialize(buf, 50, pos);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(32, pos);
-
+  
   pos = 0;
   ret = test_block_id.deserialize(buf, 50, pos);
   ASSERT_EQ(OB_SUCCESS, ret);

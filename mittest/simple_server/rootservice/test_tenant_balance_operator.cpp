@@ -1,4 +1,4 @@
-// owner: msy164651
+// owner: msy164651 
 // owner group: rs
 
 /**
@@ -59,7 +59,7 @@ TEST_F(TestBalanceOperator, BalanceJob)
   int64_t unit_group_num = 0;
   ObString comment;
   ObString balance_strategy(share::LS_BALANCE_BY_EXPAND);
-
+  
   ASSERT_EQ(OB_INVALID_ARGUMENT, job.init(0, job_id, job_type, job_status, primary_zone_num, unit_group_num, comment, balance_strategy));
   job_type = ObBalanceJobType(ObString("LS_BALANCE"));
   ASSERT_EQ(OB_INVALID_ARGUMENT, job.init(tenant_id_, job_id, job_type, job_status, primary_zone_num, unit_group_num, comment, balance_strategy));
@@ -178,7 +178,7 @@ TEST_F(TestBalanceOperator, BalanceTask)
  common::ObMySQLTransaction trans2;
  ASSERT_EQ(OB_SUCCESS, trans2.start(&sql_proxy, tenant_id));
  ASSERT_EQ(OB_SUCCESS, ObBalanceTaskTableOperator::update_task_status(new_task, transfer_status, trans2));
- ASSERT_EQ(OB_SUCCESS, trans2.end(true));
+ ASSERT_EQ(OB_SUCCESS, trans2.end(true));  
  ASSERT_EQ(OB_SUCCESS, ObBalanceTaskTableOperator::get_balance_task(OB_SYS_TENANT_ID, task_id , false, sql_proxy, new_task, start_time, finish_time));
  LOG_INFO("[MITTEST]balance_task", K(new_task));
  //start transfer task
@@ -206,7 +206,7 @@ TEST_F(TestBalanceOperator, BalanceTask)
  common::ObMySQLTransaction trans1;
  ASSERT_EQ(OB_SUCCESS, trans1.start(&sql_proxy, tenant_id));
  ASSERT_EQ(OB_SUCCESS, ObBalanceTaskTableOperator::update_task_status(new_task, completed_status, trans1));
- ASSERT_EQ(OB_SUCCESS, trans1.end(true));
+ ASSERT_EQ(OB_SUCCESS, trans1.end(true));  
  ObMySQLTransaction trans;
  ASSERT_EQ(OB_SUCCESS, trans.start(&sql_proxy, tenant_id));
  ASSERT_EQ(OB_SUCCESS, ObBalanceTaskTableOperator::clean_task(OB_SYS_TENANT_ID, task_id, trans));
@@ -398,8 +398,8 @@ TEST_F(TestBalanceOperator, balance_execute)
     ASSERT_EQ(ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_ALTER), ls_balance.task_array_[2].get_task_type());
     ASSERT_EQ(ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_ALTER), ls_balance.task_array_[3].get_task_type());
     ASSERT_EQ(ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_MERGE), ls_balance.task_array_[4].get_task_type());
-
-  }
+ 
+  } 
 
   //case 9 7->4
   MTL_SWITCH(tenant_id) {
@@ -513,18 +513,18 @@ TEST_F(TestBalanceOperator, merge_task)
   common::ObMySQLTransaction trans;
   ASSERT_EQ(OB_SUCCESS, trans.start(&sql_proxy, tenant_id));
   ASSERT_EQ(OB_SUCCESS, ObBalanceTaskTableOperator::update_task_part_list(tenant_id, task_id, part_list, trans));
-  ASSERT_EQ(OB_SUCCESS, trans.end(true));
+  ASSERT_EQ(OB_SUCCESS, trans.end(true)); 
   ASSERT_EQ(OB_SUCCESS, ObBalanceTaskTableOperator::start_transfer_task(tenant_id, task_id, transfer_task_id, sql_proxy));
   ObTransferPartList to_do_part_list;
   bool all_part_transferred = false;
   ASSERT_EQ(OB_SUCCESS, ObBalanceTaskTableOperator::finish_transfer_task(task, transfer_task_id, part_list, sql_proxy, to_do_part_list, all_part_transferred));
   ASSERT_EQ(0, to_do_part_list.count());
-  ASSERT_EQ(true, all_part_transferred);
+  ASSERT_EQ(true, all_part_transferred); 
   LOG_INFO("testtest8: start set part list");
   common::ObMySQLTransaction trans1;
   ASSERT_EQ(OB_SUCCESS, trans1.start(&sql_proxy, tenant_id));
   ASSERT_EQ(OB_SUCCESS, ObBalanceTaskTableOperator::update_task_part_list(tenant_id, task_id, part_list, trans1));
-  ASSERT_EQ(OB_SUCCESS, trans1.end(true));
+  ASSERT_EQ(OB_SUCCESS, trans1.end(true));  
   ASSERT_EQ(OB_SUCCESS, ObBalanceTaskTableOperator::start_transfer_task(tenant_id, task_id, transfer_task_id, sql_proxy));
   ASSERT_EQ(OB_SUCCESS, ObBalanceTaskTableOperator::finish_transfer_task(task, transfer_task_id, part_list, sql_proxy, to_do_part_list, all_part_transferred));
   ASSERT_EQ(0, to_do_part_list.count());
@@ -533,11 +533,11 @@ TEST_F(TestBalanceOperator, merge_task)
   common::ObMySQLTransaction trans2;
   ASSERT_EQ(OB_SUCCESS, trans2.start(&sql_proxy, tenant_id));
   ASSERT_EQ(OB_SUCCESS, ObBalanceTaskTableOperator::update_task_part_list(tenant_id, task_id, part_list, trans2));
-  ASSERT_EQ(OB_SUCCESS, trans2.end(true));
+  ASSERT_EQ(OB_SUCCESS, trans2.end(true));  
   ASSERT_EQ(OB_SUCCESS, ObBalanceTaskTableOperator::start_transfer_task(tenant_id, task_id, transfer_task_id, sql_proxy));
   ASSERT_EQ(OB_SUCCESS, ObBalanceTaskTableOperator::finish_transfer_task(task, transfer_task_id, part_list, sql_proxy, to_do_part_list, all_part_transferred));
   ASSERT_EQ(0, to_do_part_list.count());
-  ASSERT_EQ(true, all_part_transferred);
+  ASSERT_EQ(true, all_part_transferred); 
 }
 
 TEST_F(TestBalanceOperator, ls_balance_helper)
@@ -551,12 +551,12 @@ TEST_F(TestBalanceOperator, ls_balance_helper)
   SCN invalid_scn;
   ASSERT_EQ(OB_INVALID_ARGUMENT, task.init(
       tenant_id, invalid_scn, invalid_op,
-      src_ls_id, dest_ls_id, ls_group_id));
+      src_ls_id, dest_ls_id, ls_group_id));      
   ObBalanceTaskHelperOp op(1);
   ASSERT_EQ(OB_INVALID_ARGUMENT, task.init(
       tenant_id, invalid_scn, op,
       src_ls_id, dest_ls_id, ls_group_id));
-  uint64_t ts = 10000000000000;
+  uint64_t ts = 10000000000000; 
   SCN scn;
   ASSERT_EQ(OB_SUCCESS, scn.convert_from_ts(ts));
   ASSERT_EQ(OB_INVALID_ARGUMENT, task.init(
@@ -592,14 +592,14 @@ TEST_F(TestBalanceOperator, ls_balance_helper)
   ts = 10000000000000;
   ASSERT_EQ(new_task.at(0).get_operation_scn().convert_to_ts(), ts);
   ASSERT_EQ(new_task.at(0).get_ls_group_id(), 0);
-  ASSERT_EQ(OB_SUCCESS, ObBalanceTaskHelperTableOperator::remove_task(tenant_id,
+  ASSERT_EQ(OB_SUCCESS, ObBalanceTaskHelperTableOperator::remove_task(tenant_id, 
         new_task.at(0).get_operation_scn(), sql_proxy));
   ASSERT_EQ(OB_SUCCESS, ObBalanceTaskHelperTableOperator::load_tasks_order_by_scn(
         tenant_id, sql_proxy, op_scn, new_task));
   ASSERT_EQ(1, new_task.count());
 
   ASSERT_EQ(ls_group_id, new_task.at(0).get_ls_group_id());
-}
+} 
 } // namespace share
 } // namespace oceanbase
 

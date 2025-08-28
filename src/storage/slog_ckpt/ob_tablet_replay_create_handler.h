@@ -141,7 +141,7 @@ public:
 private:
   static bool is_suitable_to_aggregate_(const int64_t tablet_cnt_in_block, const int64_t valid_size_in_block)
   {
-    return tablet_cnt_in_block > AGGREGATE_CNT_THRESHOLD && valid_size_in_block > AGGREGATE_SIZE_THRESHOLD;
+    return tablet_cnt_in_block > AGGREGATE_CNT_THRESHOLD && valid_size_in_block > AGGREGATE_SIZE_THRESHOLD; 
   }
   int do_replay(
       const ObTabletReplayItem &replay_item,

@@ -2999,7 +2999,7 @@ int ObService::build_ddl_single_replica_request(const ObDDLBuildSingleReplicaReq
       } else {
         dag = nullptr;
       }
-
+      
       if (OB_NOT_NULL(dag)) {
         // to free dag.
         dag_scheduler->free_dag(*dag);
@@ -3011,7 +3011,7 @@ int ObService::build_ddl_single_replica_request(const ObDDLBuildSingleReplicaReq
         ret = OB_SIZE_OVERFLOW == saved_ret ? OB_EAGAIN : ret;
       }
       LOG_INFO("obs get rpc to build drop column dag", K(ret));
-    } else if (ObDDLType(arg.ddl_type_) == ObDDLType::DDL_DROP_VEC_INDEX) {
+    } else if (ObDDLType(arg.ddl_type_) == ObDDLType::DDL_DROP_VEC_INDEX) { 
       ObTenantDagScheduler *dag_scheduler = nullptr;
       ObDeleteLobMetaRowDag *dag = nullptr;
       if (OB_ISNULL(dag_scheduler = MTL(ObTenantDagScheduler *))) {
@@ -3669,7 +3669,7 @@ int ObService::force_set_server_list(const obrpc::ObForceSetServerListArg &arg, 
                   LOG_WARN("new_member_list add_member failed", K(ret), K(server));
                 }
               }
-
+                
               if (OB_FAIL(ret)) {
               } else if (arg.replica_num_ != new_member_list.get_member_number()) {
                 ret = OB_STATE_NOT_MATCH;
@@ -3680,8 +3680,8 @@ int ObService::force_set_server_list(const obrpc::ObForceSetServerListArg &arg, 
                 COMMON_LOG(INFO, "execute force_set_server_list successfully with "
                            "current tenant and ls", K(arg), K(tenant_id), K(ls_id));
               }
-            }
-
+            } 
+              
             int tmp_ret = OB_SUCCESS;
             if (OB_TMP_FAIL(result_info.add_ls_info(ls_id, ret))) {
               LOG_WARN("add_result_info failed", K(tmp_ret), K(ls_id), "actual ret", ret);
@@ -3702,8 +3702,8 @@ int ObService::force_set_server_list(const obrpc::ObForceSetServerListArg &arg, 
         if (0 != result_info.failed_ls_info_.size()) {
           all_succeed = false;
         }
-        ret = OB_SUCCESS; // ignore failed return code, keep executing next tenant
-      } // MTL_SWITCH end
+        ret = OB_SUCCESS; // ignore failed return code, keep executing next tenant         
+      } // MTL_SWITCH end      
     } // for end
 
     if (all_succeed) {
@@ -3851,7 +3851,7 @@ int ObService::get_ls_replayed_scn(
     }
 
     if (OB_SUCC(ret) && ERRSIM_GET_LS_READABLE_SCN_OLD) {
-      const int64_t current_time = ObTimeUtility::current_time() -
+      const int64_t current_time = ObTimeUtility::current_time() - 
         GCONF.internal_sql_execute_timeout;
       cur_readable_scn.convert_from_ts(current_time);
       LOG_WARN("set ls replica readble_scn small", K(arg), K(cur_readable_scn),
@@ -3996,7 +3996,7 @@ int ObService::change_external_storage_dest(obrpc::ObAdminSetConfigArg &arg)
     const common::ObFixedLengthString<common::OB_MAX_CONFIG_VALUE_LEN> &access_info = arg.items_.at(1).value_;
     const common::ObFixedLengthString<common::OB_MAX_CONFIG_VALUE_LEN> &attribute = arg.items_.at(2).value_;
 
-    ChangeExternalStorageDestMgr change_mgr;
+    ChangeExternalStorageDestMgr change_mgr; 
     const bool has_access_info = !access_info.is_empty();
     const bool has_attribute = !attribute.is_empty();
     ObBackupPathString backup_path;

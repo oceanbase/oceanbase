@@ -151,7 +151,7 @@ public:
       } else {
         this->log_block_mgr_.min_log_disk_size_for_all_tenants_ = tmp_min_log_disk_size_for_all_tenants;
         map_[key] = new_size;
-      }
+      } 
     }
     return ret;
   };
@@ -468,14 +468,14 @@ TEST_F(TestServerLogBlockMgr, create_tenant_resize)
     [&](){
       for (int i = 4+OB_MAX_RESERVED_TENANT_ID; i < 1000+OB_MAX_RESERVED_TENANT_ID; i++) {
         create_tenant(i, 32*MB);
-      };
+      }; 
     }
   );
   std::thread t_create2(
     [&](){
       for (int i = 4+OB_MAX_RESERVED_TENANT_ID; i < 1000+OB_MAX_RESERVED_TENANT_ID; i++) {
         create_tenant(i, 32*MB);
-      };
+      }; 
     }
   );
   std::thread t_update1(
@@ -483,7 +483,7 @@ TEST_F(TestServerLogBlockMgr, create_tenant_resize)
       usleep(10);
       for (int i = 4+OB_MAX_RESERVED_TENANT_ID; i < 1000+OB_MAX_RESERVED_TENANT_ID; i++) {
         update_tenant(i, 128*MB);
-      };
+      }; 
     }
   );
   std::thread t_update2(
@@ -491,7 +491,7 @@ TEST_F(TestServerLogBlockMgr, create_tenant_resize)
       usleep(10);
       for (int i = 4+OB_MAX_RESERVED_TENANT_ID; i < 1000+OB_MAX_RESERVED_TENANT_ID; i++) {
         update_tenant(i, 128*MB);
-      };
+      }; 
     }
   );
   t_create1.join();
@@ -503,14 +503,14 @@ TEST_F(TestServerLogBlockMgr, create_tenant_resize)
     [&](){
       for (int i = 4+OB_MAX_RESERVED_TENANT_ID; i < 1000+OB_MAX_RESERVED_TENANT_ID; i++) {
         remove_tenant(i);
-      };
+      }; 
     }
   );
   std::thread t_remove2(
     [&](){
       for (int i = 4+OB_MAX_RESERVED_TENANT_ID; i < 1000+OB_MAX_RESERVED_TENANT_ID; i++) {
         remove_tenant(i);
-      };
+      }; 
     }
   );
   t_remove1.join();

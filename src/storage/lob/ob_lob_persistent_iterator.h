@@ -136,9 +136,9 @@ public:
 
   /**
    * currently only used by json partial update
-   *
+   * 
    * DONOT use other situation
-   *
+   * 
    * get idx lob meta info
   */
   int get_next_row(int idx, ObLobMetaInfo &info);
@@ -253,7 +253,7 @@ public:
   int init(ObLobAccessParam *param, ObLobMetaWriteIter *meta_iter);
   virtual ~ObLobPersistInsertIter() {}
   virtual int get_next_row(blocksstable::ObDatumRow *&row);
-	virtual void reset() { new_row_.reset(); }
+	virtual void reset() { new_row_.reset(); }  
 
 private:
   // disallow copy
@@ -301,7 +301,7 @@ public:
   int init();
 
   virtual int get_next_row(blocksstable::ObDatumRow *&row);
-	virtual void reset() {}
+	virtual void reset() {} 
 
 private:
   ObIAllocator *allocator_;

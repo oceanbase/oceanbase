@@ -177,7 +177,7 @@ ObWkbGeomInnerPoint::ObWkbGeomInnerPoint(const ObWkbGeomInnerPoint& p)
 bool ObWkbGeomInnerPoint::equals(const ObWkbGeomInnerPoint& p) const
 {
   bool bret = false;
-  if ((fabs(this->get<0>() - p.get<0>()) <= OB_GEO_TOLERANCE) &&
+  if ((fabs(this->get<0>() - p.get<0>()) <= OB_GEO_TOLERANCE) && 
       (fabs(this->get<1>() - p.get<1>()) <= OB_GEO_TOLERANCE)) {
     bret = true;
   }

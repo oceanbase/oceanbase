@@ -73,7 +73,7 @@ static int check_ls_not_exist(const uint64_t tenant_id, const common::ObArray<sh
       LOG_WARN("failed to check ls exist", KR(ret), K(i), K(tenant_id), K(ls_id));
     } else if (state.is_deleted()) {
       ++not_exist_ls_cnt;
-      LOG_WARN("ls is deleted", KR(ret), K(i), K(tenant_id), K(ls_id), K(state));
+      LOG_WARN("ls is deleted", KR(ret), K(i), K(tenant_id), K(ls_id), K(state));      
     }
   }
   if (OB_SUCC(ret)) {
@@ -157,7 +157,7 @@ int ObDDLService::force_drop_lonely_lob_aux_table(const obrpc::ObForceDropLonely
           }
         }
       }
-
+    
       // 5. drop lob piece table
       if (OB_FAIL(ret)) {
       } else if (FALSE_IT(tmp_lob_table_schema.reset())) {

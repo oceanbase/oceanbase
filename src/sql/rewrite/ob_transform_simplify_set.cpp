@@ -188,8 +188,8 @@ int ObTransformSimplifySet::add_order_by(ObSelectStmt *stmt, ObSelectStmt *upper
 //    e.g. select * from t1 union select * from t2 order by (select min(c1) from t3) limit 1;
 // 2. 下推 distinct/limit
 //    如果 upper stmt 有 order by 且不能下推，不能下推 disdinct/limit
-int ObTransformSimplifySet::check_can_push(ObSelectStmt *stmt, ObSelectStmt *upper_stmt,
-                                           bool &need_push_distinct, bool &need_push_orderby,
+int ObTransformSimplifySet::check_can_push(ObSelectStmt *stmt, ObSelectStmt *upper_stmt, 
+                                           bool &need_push_distinct, bool &need_push_orderby, 
                                            bool &can_push)
 {
   int ret = OB_SUCCESS;
@@ -202,8 +202,8 @@ int ObTransformSimplifySet::check_can_push(ObSelectStmt *stmt, ObSelectStmt *upp
   } else if (!upper_stmt->has_limit()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("upper_stmt should have limit ", K(ret), K(upper_stmt->has_limit()));
-  } else if (NULL == upper_stmt->get_limit_expr() ||
-             NULL != upper_stmt->get_limit_percent_expr() ||
+  } else if (NULL == upper_stmt->get_limit_expr() || 
+             NULL != upper_stmt->get_limit_percent_expr() || 
              upper_stmt->is_fetch_with_ties()) {
     can_push = false;
   } else if (stmt->has_limit() || stmt->is_contains_assignment()) {
@@ -266,7 +266,7 @@ int ObTransformSimplifySet::add_limit_order_distinct_for_union(const common::ObI
         if (OB_ISNULL(child_stmt = child_stmts.at(i))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null", K(ret));
-        } else if (OB_FAIL(check_can_push(child_stmt, select_stmt, need_push_distinct,
+        } else if (OB_FAIL(check_can_push(child_stmt, select_stmt, need_push_distinct, 
                                           need_push_orderby, can_push))) {
           LOG_WARN("Failed to check left stmt", K(ret));
         } else if (!can_push) {
@@ -517,7 +517,7 @@ int ObTransformSimplifySet::pruning_set_query(common::ObIArray<ObParentDMLStmt> 
         LOG_WARN("fail to push back", K(ret));
       }
     }
-    if (OB_SUCC(ret) && remove_list.count() > 0 &&
+    if (OB_SUCC(ret) && remove_list.count() > 0 && 
         remove_list.at(0) == 0) {
       if (OB_FAIL(check_first_stmt_removable(parent_stmts,
                                              select_stmt,
@@ -745,10 +745,10 @@ int ObTransformSimplifySet::replace_set_stmt_with_child_stmt(ObSelectStmt *&pare
       * if we meet conflict order by items. We can't directly reset child's order by.
       *  e.g., select * from t1 order by c1 limit 2 UNION ALL select * from t2 where 1=2 order by c2;
       * if we overwrite the order by, the result is not correct.
-      *
+      * 
       * 3. for distinct.
       * if child stmt has limit, we can't add distinct to child stmt. Since limit should be done before distinct.
-      *
+      * 
       * 4. select into is not allowed in subquery, we add the code here to handle conflict select into.
       * just in case of some transformer rule generating conflict select into.
     */
@@ -785,9 +785,9 @@ int ObTransformSimplifySet::replace_set_stmt_with_child_stmt(ObSelectStmt *&pare
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected null pointer", K(ret), KP(expr1), KP(expr2));
           } else {
-            if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*(ctx_->expr_factory_),
+            if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*(ctx_->expr_factory_), 
                                                                expr1,
-                                                               expr2,
+                                                               expr2, 
                                                                ctx_->session_info_))) {
               LOG_WARN("fail to add cast expr for replace", K(ret));
             } else {
@@ -804,10 +804,10 @@ int ObTransformSimplifySet::replace_set_stmt_with_child_stmt(ObSelectStmt *&pare
 }
 
 /*
-  consider following sql:
+  consider following sql: 
     UPDATE test1 full join  test2 ON test1.h3=null set test1.h2='null' where test2.h2='akeyashi';
-  The full join will be expanded into a set of left join and anti join. If the left join is eliminated at this time,
-  the null column in the anti join will be filled in the dml table info of the upper update statement,
+  The full join will be expanded into a set of left join and anti join. If the left join is eliminated at this time, 
+  the null column in the anti join will be filled in the dml table info of the upper update statement, 
   which may cause an exception.
 */
 int ObTransformSimplifySet::check_first_stmt_removable(common::ObIArray<ObParentDMLStmt> &parent_stmts,
@@ -836,7 +836,7 @@ int ObTransformSimplifySet::check_first_stmt_removable(common::ObIArray<ObParent
     LOG_WARN("failed to check is dml table", K(ret));
   } else if (is_dml_table) {
     can_remove = false;
-  }
+  } 
   return ret;
 }
 

@@ -1394,7 +1394,7 @@ int ObLoadDataSPImpl::next_file_buffer(ObExecContext &ctx,
         box.job_status->read_bytes_ += box.read_cursor.read_size_;
       } else if (box.file_reader->eof()) {
         box.read_cursor.is_end_file_ = true;
-        LOG_DEBUG("LOAD DATA reach file end", K(box.read_cursor));
+        LOG_DEBUG("LOAD DATA reach file end", K(box.read_cursor));        
       }
     }
 
@@ -1945,7 +1945,7 @@ int ObLoadDataSPImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
   HEAP_VAR(ToolBox, box) {
     //init toolbox
     OZ (box.init(ctx, load_stmt));
-
+    
     LOG_INFO("LOAD DATA start report"
              , "file_path", load_stmt.get_load_arguments().file_name_
              , "table_name", load_stmt.get_load_arguments().combined_name_
@@ -1954,7 +1954,7 @@ int ObLoadDataSPImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
              , "load_mode", box.insert_mode
              , "transaction_timeout", box.txn_timeout
              );
-
+    
     ObString filename;
     while (OB_SUCC(ret) && OB_SUCC(box.file_iter.get_next_file(filename))) {
       LOG_TRACE("begin to load file", K(filename));
@@ -3261,7 +3261,7 @@ int ObLoadDataURLImpl::construct_sql(ObLoadDataStmt &load_stmt, ObSqlString &sql
   ObLoadDataHint stmt_hints = load_stmt.get_hints();
 
   OZ (sql.append(load_args.dupl_action_ == ObLoadDupActionType::LOAD_REPLACE ? "replace " : "insert "));
-
+  
   // 只有当hint不为空时才添加
   if (!stmt_hints.get_hint_str().empty()) {
 
@@ -3281,7 +3281,7 @@ int ObLoadDataURLImpl::construct_sql(ObLoadDataStmt &load_stmt, ObSqlString &sql
     OZ (sql.append("ignore "));
   }
 
-  OZ (sql.append_fmt(" into %.*s ",
+  OZ (sql.append_fmt(" into %.*s ", 
                 load_args.combined_name_.length(), load_args.combined_name_.ptr()));
 
   ObIArray<ObString> &part_names = load_stmt.get_part_names();

@@ -218,3 +218,4 @@ void ObTempTableTransformationVecOp::destroy()
 
 } // end namespace sql
 } // end namespace oceanbase
+

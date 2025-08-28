@@ -131,7 +131,7 @@ public:
 
   explicit ObTenantSrs()
     : alloc_("TenantSrs"), sql_proxy_(nullptr), inited_(false),
-      last_sys_snapshot_(nullptr), last_user_snapshot_(nullptr),
+      last_sys_snapshot_(nullptr), last_user_snapshot_(nullptr),     
       srs_old_snapshots_(&mode_arena_, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR),
       remote_sys_srs_version_(0), remote_user_srs_version_(0),
       local_sys_srs_version_(0), local_user_srs_version_(0), infinite_plane_() {}

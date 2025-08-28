@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #include <gtest/gtest.h>
 
 #define USING_LOG_PREFIX OBLOG
@@ -333,7 +333,7 @@ void ObTxLogGenerator::gen_commit_log()
       mds_arr,
       trans_type_,
       last_lsn_(),
-      ls_info_arr,
+      ls_info_arr, 
       prev_log_type);
   LOG_DEBUG("gen commit_log", K(commit_log));
   EXPECT_EQ(OB_SUCCESS, block_builder_.fill_tx_log_except_redo(commit_log));

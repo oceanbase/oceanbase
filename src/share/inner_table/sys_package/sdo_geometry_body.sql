@@ -1,7 +1,7 @@
 #type_name:sdo_geometry
 #package_name:sdo_geometry
 
-CREATE OR REPLACE TYPE BODY SDO_GEOMETRY AS
+CREATE OR REPLACE TYPE BODY SDO_GEOMETRY AS 
 
   -- extraction functions
   MEMBER FUNCTION GET_WKB RETURN BLOB DETERMINISTIC;

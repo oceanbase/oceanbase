@@ -932,11 +932,11 @@ int ObStorageHATabletsBuilder::get_major_sstable_max_snapshot_(
   } else if (major_sstable_array.count() > 0 && OB_FAIL(major_sstable_array.get_all_table_wrappers(sstables))) {
     LOG_WARN("failed to get all tables", K(ret), K(param_));
   } else {
-    ObSSTableMetaHandle sst_meta_hdl;
+    ObSSTableMetaHandle sst_meta_hdl;      
     MajorSSTableSnapshotVersionCmp cmp;
 
     // step 1: sort major sstables by snapshot version
-    lib::ob_sort(sstables.begin(), sstables.end(), cmp);
+    lib::ob_sort(sstables.begin(), sstables.end(), cmp); 
 
     // step 2: get the major that has maximun snapshot version
     // and all major snapshot version lower than it has no backup
@@ -2151,13 +2151,13 @@ void ObStorageHATabletBuilderUtil::BuildTabletTableExtraParam::reset()
 }
 
 int ObStorageHATabletBuilderUtil::BatchBuildTabletTablesExtraParam::get_extra_table_param(
-    const ObITable::TableKey &table_key,
+    const ObITable::TableKey &table_key, 
     bool &is_exist,
     BuildTabletTableExtraParam &out_param) const
 {
   int ret = OB_SUCCESS;
   int64_t i = 0;
-
+  
   out_param.reset();
   is_exist = false;
   for (; i < param_array_.count(); i++) {
@@ -2234,18 +2234,18 @@ int ObStorageHATabletBuilderUtil::build_tablet_with_major_tables(
   return ret;
 }
 
-/*
+/*   
  *    There may be hybrid type of major sstable in column store replica.
  *
  *    Time (evnet)       F replica         C Rreplica
- *    t1 (init)          MAJOR_V0
+ *    t1 (init)          MAJOR_V0 
  *    t2 (compaction)    MAJOR_V1
- *                       MAJOR_V0
+ *                       MAJOR_V0 
  *    t3 (migration)     MAJOR_V1          CO_MAJOR_V1
- *                       MAJOR_V0          MAJOR_V0
+ *                       MAJOR_V0          MAJOR_V0 
  *    t4 (compaction)    MAJOR_V2          CO_MAJOR_V2
  *                       MAJOR_V1          CO_MAJOR_V1
- *                       MAJOR_V0          MAJOR_V0
+ *                       MAJOR_V0          MAJOR_V0 
  *    t5 (compaction)    MAJOR_V3          replay slow, network partition..
  *                       MAJOR_V2          CO_MAJOR_V2
  *                       MAJOR_V1          CO_MAJOR_V1
@@ -2263,7 +2263,7 @@ int ObStorageHATabletBuilderUtil::build_tablet_for_hybrid_store_(
     const ObBuildMajorSSTablesParam &major_sstables_param,
     const BatchBuildTabletTablesExtraParam &extra_param)
 {
-  // tablet with alter column group delayed with have major sstable in the front
+  // tablet with alter column group delayed with have major sstable in the front 
   int ret = OB_SUCCESS;
   ObTablesHandleArray row_store_major_tables;
   ObTablesHandleArray column_store_major_tables;
@@ -2304,10 +2304,10 @@ int ObStorageHATabletBuilderUtil::build_tablet_for_hybrid_store_(
       if (FAILEDx(column_store_major_tables.add_table(table_handle))) {
         LOG_WARN("failed to add row store major table", K(ret), K(table_handle));
       }
-    }
+    } 
   }
 
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret)) { 
   } else if (row_store_major_tables.empty() && column_store_major_tables.empty()) {
   } else if (!row_store_major_tables.empty() && !column_store_major_tables.empty()) {
     ret = OB_ERR_UNEXPECTED;
@@ -2346,7 +2346,7 @@ int ObStorageHATabletBuilderUtil::build_tablet_with_major_tables(
   } else if (OB_FAIL(check_hybrid_store(major_sstables_param.storage_schema_, major_tables, is_hybrid_store))) {
     LOG_WARN("failed to check hybrid store", K(ret), K(major_sstables_param), K(major_tables));
   } else if (is_hybrid_store) {
-    if (OB_FAIL(ObStorageHATabletBuilderUtil::build_tablet_for_hybrid_store_(ls,
+    if (OB_FAIL(ObStorageHATabletBuilderUtil::build_tablet_for_hybrid_store_(ls, 
         tablet_id, major_tables, major_sstables_param, extra_param))) {
       LOG_WARN("failed to built tablet with hybrid tables", K(ret), K(tablet_id), KPC(ls));
     }
@@ -2402,11 +2402,11 @@ int ObStorageHATabletBuilderUtil::build_tablet_for_row_store_(
         LOG_WARN("fail to get table handle from array by table key", K(ret), KPC(table_ptr), K(major_tables));
       } else if (OB_FAIL(extra_batch_param.get_extra_table_param(table_ptr->get_key(), exist_extra_param, extra_param))) {
         LOG_WARN("fail to get extra table param", K(ret), K(extra_batch_param), KPC(table_ptr));
-      } else if (OB_FAIL(inner_update_tablet_table_store_with_major_(multi_version_start,
+      } else if (OB_FAIL(inner_update_tablet_table_store_with_major_(multi_version_start, 
                                                                      major_table_handle,
                                                                      extra_batch_param,
-                                                                     ls,
-                                                                     tablet,
+                                                                     ls, 
+                                                                     tablet, 
                                                                      major_sstables_param,
                                                                      transfer_seq,
                                                                      extra_param))) {
@@ -2574,10 +2574,10 @@ int ObStorageHATabletBuilderUtil::build_tablet_with_co_tables_(
     } else if (OB_FAIL(extra_batch_param.get_extra_table_param(major_table_handle.get_table()->get_key(), exist_extra_param, extra_param))) {
       LOG_WARN("fail to get extra table param", K(ret), K(extra_batch_param), "major_sstable", PC(major_table_handle.get_table()));
     } else if (OB_FAIL(inner_update_tablet_table_store_with_major_(multi_version_start,
-                                                                   major_table_handle,
+                                                                   major_table_handle, 
                                                                    extra_batch_param,
-                                                                   ls,
-                                                                   tablet,
+                                                                   ls, 
+                                                                   tablet, 
                                                                    major_sstables_param,
                                                                    transfer_seq,
                                                                    extra_param))) {
@@ -2673,7 +2673,7 @@ int ObStorageHATabletBuilderUtil::inner_update_tablet_table_store_with_major_(
                             static_cast<const blocksstable::ObSSTable *>(table),
                             true/*allow_duplicate_sstable*/);
     if (OB_FAIL(param.init_with_ha_info(
-            ObHATableStoreParam(transfer_seq,
+            ObHATableStoreParam(transfer_seq, 
                                 true /*need_check_sstable*/,
                                 true /*need_check_transfer_seq*/,
                                 batch_extra_param.need_replace_remote_sstable_,
@@ -2736,8 +2736,8 @@ int ObStorageHATabletBuilderUtil::build_table_with_minor_tables(
 
   const bool is_replace_remote = ObTabletRestoreAction::is_restore_replace_remote_sstable(param.restore_action_);
   bool need_tablet_meta_merge = true;
-  // When we want to place the minor tables on the source side in the local table store,
-  // whatever from backup or other observer, tablet meta merge action is necessary,
+  // When we want to place the minor tables on the source side in the local table store, 
+  // whatever from backup or other observer, tablet meta merge action is necessary, 
   // except for the following one cases.
   if (is_replace_remote) {
     // Tablet meta merge happened when restore remote sstable, no need for this time.
@@ -2891,7 +2891,7 @@ bool ObStorageHATabletBuilderUtil::BatchBuildMinorSSTablesParam::is_valid() cons
 {
   return OB_NOT_NULL(ls_)
       && tablet_id_.is_valid()
-      && OB_NOT_NULL(src_tablet_meta_)
+      && OB_NOT_NULL(src_tablet_meta_) 
       && src_tablet_meta_->is_valid()
       && ObTabletRestoreAction::is_valid(restore_action_)
       && release_mds_scn_.is_valid();

@@ -1091,7 +1091,7 @@ easy_ssl_ctx_t *easy_ssl_ctx_load(easy_pool_t *pool, const char *ssl_ca,
             easy_info_log("SSL_CTX_use_enc_certificate failed");
             goto error_exit;
         }
-    }
+    } 
 #endif
     if (!is_babassl) {
         if (easy_ssl_client_certificate_for_mysql_memory(ss, ssl_ca) != EASY_OK) {
@@ -1820,7 +1820,7 @@ static int easy_ssl_dhparam(easy_ssl_ctx_t *ssl, char *file)
           DH_free(dh);
           return EASY_ERROR;
         }
-
+        
         SSL_CTX_set_tmp_dh(ssl->ctx, dh);
 
         DH_free(dh);

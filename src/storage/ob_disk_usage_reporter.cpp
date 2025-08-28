@@ -214,8 +214,8 @@ int ObDiskUsageReportTask::count_tenant_data(const uint64_t tenant_id)
           STORAGE_LOG(WARN, "unexpected error!!! ls must not nullptr", K(tablet_map_key.ls_id_));
         } else if (OB_FAIL(ls->get_ls_role(ls_role))) {
           STORAGE_LOG(WARN, "fail to get ls_role", K(ret), KPC(ls));
-        }
-
+        } 
+        
         if (OB_FAIL(ret)) {
         } else if (OB_ISNULL(tablet_pointer = static_cast<const ObTabletPointer*>(pointer_handle.get_resource_ptr()))) {
           ret = OB_ERR_UNEXPECTED;
@@ -269,7 +269,7 @@ int ObDiskUsageReportTask::count_tenant_data(const uint64_t tenant_id)
     #ifdef OB_BUILD_SHARED_STORAGE
     else if (OB_FAIL(result_map_.set_refactored(major_data_key,std::make_pair(tablet_shared_occupy_size, tablet_shared_occupy_size), 1 /* whether allowed to override */))) {
       STORAGE_LOG(WARN, "failed to insert data info result_map_", K(ret), K(major_data_key), K(tablet_shared_occupy_size));
-    }
+    } 
     #endif
   }
   return ret;
@@ -595,3 +595,4 @@ int ObDiskUsageReportTask::delete_tenant_usage_stat(const uint64_t tenant_id)
 
 } // namespace storage
 } // namespace oceanbase
+

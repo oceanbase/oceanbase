@@ -65,7 +65,7 @@ class SetSessionTimeout:
     sql = "set @@session.ob_query_timeout = {0}".format(time)
     logging.info(sql)
     cur.execute(sql)
-
+  
   def get_session_timeout(self, cur):
     sql = "select @@session.ob_query_timeout"
     cur.execute(sql)

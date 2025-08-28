@@ -2927,7 +2927,7 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObMySQLDateTimeType */
     ObMaxType,         /* ObRoaringBitmapType */
   },
-
+  
   /*ObDecimalIntType*/
   {
     ObDoubleType,        /* NullType  */

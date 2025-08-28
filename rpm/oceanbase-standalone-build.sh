@@ -49,3 +49,4 @@ cd ${TOP_DIR}
     --make rpm || exit 1
 
 mv build_rpm/*.rpm $CURDIR || exit 2
+

@@ -150,3 +150,4 @@ int ObAllTracepointInfo::fill_scanner()
 
 }/* ns observer*/
 }/* ns oceanbase */
+

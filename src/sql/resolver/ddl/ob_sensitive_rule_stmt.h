@@ -45,7 +45,7 @@ public:
   OB_INLINE void set_protection_policy(const obrpc::ObSensitiveRuleDDLArg::ObSensitiveProtectionPolicy policy) { arg_.schema_.set_protection_policy(policy); }
   OB_INLINE void set_schema_version(const int64_t schema_version) { arg_.schema_.set_schema_version(schema_version); }
   OB_INLINE void set_enabled(const bool enabled) { arg_.schema_.set_enabled(enabled); }
-  OB_INLINE int set_sensitive_rule_name(const common::ObString &rule_name)
+  OB_INLINE int set_sensitive_rule_name(const common::ObString &rule_name) 
   {
     int ret = OB_SUCCESS;
     if (OB_FAIL(arg_.schema_.set_sensitive_rule_name(rule_name))) {
@@ -53,7 +53,7 @@ public:
     }
     return ret;
   }
-  OB_INLINE int set_method(const common::ObString &method)
+  OB_INLINE int set_method(const common::ObString &method) 
   {
     int ret = OB_SUCCESS;
     if (OB_FAIL(arg_.schema_.set_method(method))) {
@@ -61,7 +61,7 @@ public:
     }
     return ret;
   }
-  OB_INLINE int add_sensitive_field_item(const uint64_t table_id, const uint64_t column_id)
+  OB_INLINE int add_sensitive_field_item(const uint64_t table_id, const uint64_t column_id) 
   {
     int ret = OB_SUCCESS;
     if (OB_FAIL(arg_.schema_.add_sensitive_field_item(table_id, column_id))) {

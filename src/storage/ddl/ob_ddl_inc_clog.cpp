@@ -39,15 +39,15 @@ int ObDDLIncLogBasic::init(const ObTabletID &tablet_id, const ObTabletID &lob_me
   return ret;
 }
 
-uint64_t ObDDLIncLogBasic::hash() const
-{
+uint64_t ObDDLIncLogBasic::hash() const 
+{ 
   uint64_t hash_val = 0;
   hash_val = common::murmurhash(&tablet_id_, sizeof(tablet_id_), hash_val);
   hash_val = common::murmurhash(&lob_meta_tablet_id_, sizeof(lob_meta_tablet_id_), hash_val);
   return hash_val;
 }
 
-int ObDDLIncLogBasic::hash(uint64_t &hash_val) const
+int ObDDLIncLogBasic::hash(uint64_t &hash_val) const 
 {
   hash_val = hash();
   return OB_SUCCESS;

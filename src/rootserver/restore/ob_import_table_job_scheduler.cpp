@@ -24,23 +24,23 @@ using namespace common;
 using namespace share;
 
 ObImportTableJobScheduler::ObImportTableJobScheduler()
-  : is_inited_(false),
-    tenant_id_(OB_INVALID_TENANT_ID),
-    schema_service_(nullptr),
-    sql_proxy_(nullptr),
-    job_helper_(),
+  : is_inited_(false), 
+    tenant_id_(OB_INVALID_TENANT_ID), 
+    schema_service_(nullptr), 
+    sql_proxy_(nullptr), 
+    job_helper_(), 
     task_helper_()
 {}
 
 int ObImportTableJobScheduler::init(
-    share::schema::ObMultiVersionSchemaService &schema_service,
+    share::schema::ObMultiVersionSchemaService &schema_service, 
     common::ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
-  const uint64_t tenant_id = gen_user_tenant_id(MTL_ID());
+  const uint64_t tenant_id = gen_user_tenant_id(MTL_ID()); 
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
-    LOG_WARN("ObImportTableJobScheduler init twice", K(ret));
+    LOG_WARN("ObImportTableJobScheduler init twice", K(ret)); 
   } else if (OB_FAIL(job_helper_.init(tenant_id))) {
     LOG_WARN("failed to init table op", K(ret), K(tenant_id));
   } else if (OB_FAIL(task_helper_.init(tenant_id))) {
@@ -92,7 +92,7 @@ void ObImportTableJobScheduler::do_work()
         LOG_WARN("invalid tenant", K(ret), K(job));
       }
     }
-  }
+  } 
 }
 
 int ObImportTableJobScheduler::check_compatible_() const
@@ -230,7 +230,7 @@ int ObImportTableJobScheduler::reconstruct_ref_constraint_(share::ObImportTableJ
   } else {
     LOG_INFO("[IMPORT_TABLE]finish reconstruct ref constraint", K(job));
     ROOTSERVICE_EVENT_ADD("import_table", "reconstruct_ref_constraint",
-                          "tenant_id", job.get_tenant_id(),
+                          "tenant_id", job.get_tenant_id(), 
                           "job_id", job.get_job_id());
   }
   return ret;
@@ -248,7 +248,7 @@ int ObImportTableJobScheduler::finish_(const share::ObImportTableJob &job)
   } else {
     LOG_INFO("[IMPORT_TABLE]import table job finish", K(job));
     ROOTSERVICE_EVENT_ADD("import_table", "import table finish",
-                          "tenant_id", job.get_tenant_id(),
+                          "tenant_id", job.get_tenant_id(), 
                           "job_id", job.get_job_id());
   }
   return ret;
@@ -317,7 +317,7 @@ int ObImportTableJobScheduler::gen_import_table_task_(share::ObImportTableJob &j
       } else {
         LOG_INFO("[IMPORT_TABLE] succeed generate import table task", K(import_tasks), K(next_status));
         ROOTSERVICE_EVENT_ADD("import_table", "generate import table task",
-                              "tenant_id", job.get_tenant_id(),
+                              "tenant_id", job.get_tenant_id(), 
                               "job_id", job.get_job_id(),
                               "task_count", import_tasks.count());
       }
@@ -390,7 +390,7 @@ int ObImportTableJobScheduler::do_after_import_all_table_(share::ObImportTableJo
   } else {
     LOG_INFO("[IMPORT_TABLE]importing table finished", K(import_tasks), K(next_status));
     ROOTSERVICE_EVENT_ADD("import_table", "import table task finish",
-                          "tenant_id", job.get_tenant_id(),
+                          "tenant_id", job.get_tenant_id(), 
                           "job_id", job.get_job_id(),
                           "succeed_import_table_count", job.get_finished_table_count(),
                           "failed_import_table_count", job.get_failed_table_count());
@@ -508,7 +508,7 @@ int ObImportTableJobScheduler::canceling_(share::ObImportTableJob &job)
     } else {
       LOG_INFO("[IMPORT_TABLE]succeed to cancel import table job", K(job));
       ROOTSERVICE_EVENT_ADD("import_table", "cancel import table task",
-                      "tenant_id", job.get_tenant_id(),
+                      "tenant_id", job.get_tenant_id(), 
                       "job_id", job.get_job_id());
     }
   } else {
@@ -534,7 +534,7 @@ int ObImportTableJobScheduler::check_import_ddl_task_exist_(const share::ObImpor
   } else if (OB_FAIL(ObDDLErrorMessageTableOperator::get_ddl_error_message(tenant_id,
                                                                       task_id,
                                                                       -1 /* target_object_id */,
-                                                                      ObAddr()/*unused addr*/,
+                                                                      ObAddr()/*unused addr*/, 
                                                                       false /* is_ddl_retry_task */,
                                                                       *sql_proxy_,
                                                                       error_message,
@@ -584,13 +584,13 @@ int ObImportTableJobScheduler::advance_status_(
   return ret;
 }
 
-int ObImportTableTaskScheduler::init(share::schema::ObMultiVersionSchemaService &schema_service,
+int ObImportTableTaskScheduler::init(share::schema::ObMultiVersionSchemaService &schema_service, 
     common::ObMySQLProxy &sql_proxy, share::ObImportTableTask &task)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
-    LOG_WARN("ObImportTableTaskScheduler init twice", K(ret));
+    LOG_WARN("ObImportTableTaskScheduler init twice", K(ret)); 
   } else if (OB_FAIL(helper_.init(task.get_tenant_id()))) {
     LOG_WARN("failed to init recover table persist helper", K(ret));
   } else {
@@ -659,7 +659,7 @@ int ObImportTableTaskScheduler::init_()
   if (OB_FAIL(gen_import_ddl_task_())) {
     LOG_WARN("failed to generate import ddl task", K(ret), KPC_(import_task));
   }
-
+  
   int tmp_ret = OB_SUCCESS;
   if (OB_TMP_FAIL(try_advance_status_(ret))) {
     LOG_WARN("failed to advance status", K(tmp_ret), K(ret));
@@ -694,7 +694,7 @@ int ObImportTableTaskScheduler::try_advance_status_(const int err_code)
       if (OB_FAIL(result.set_result(err_code, trace_id, GCONF.self_addr_))) {
         LOG_WARN("failed to set result", K(ret));
       } else if (OB_FALSE_IT(import_task_->set_result(result))) {
-      }
+      } 
     }
     if (FAILEDx(helper_.advance_status(*sql_proxy_, *import_task_, next_status))) {
       LOG_WARN("failed to advance status", K(ret), KPC_(import_task), K(next_status));
@@ -745,7 +745,7 @@ int ObImportTableTaskScheduler::check_import_ddl_task_exist_(bool &is_exist)
   } else if (OB_FAIL(ObDDLErrorMessageTableOperator::get_ddl_error_message(tenant_id,
                                                                       task_id,
                                                                       -1 /* target_object_id */,
-                                                                      ObAddr()/*unused addr*/,
+                                                                      ObAddr()/*unused addr*/, 
                                                                       false /* is_ddl_retry_task */,
                                                                       *sql_proxy_,
                                                                       error_message,
@@ -770,10 +770,10 @@ int ObImportTableTaskScheduler::construct_import_table_arg_(obrpc::ObRecoverRest
   MTL_SWITCH(OB_SYS_TENANT_ID) {
     if (OB_FAIL(schema_service_->get_tenant_schema_guard(import_task_->get_src_tenant_id(), src_tenant_guard))) {
       LOG_WARN("failed to get tenant schema guard", K(ret), KPC_(import_task));
-    } else if (OB_FAIL(src_tenant_guard.get_table_schema(import_task_->get_src_tenant_id(),
-                                                        import_task_->get_src_database(),
-                                                        import_task_->get_src_table(),
-                                                        false,
+    } else if (OB_FAIL(src_tenant_guard.get_table_schema(import_task_->get_src_tenant_id(), 
+                                                        import_task_->get_src_database(), 
+                                                        import_task_->get_src_table(), 
+                                                        false, 
                                                         src_table_schema))) {
       LOG_WARN("failed to get table schema", K(ret), KPC_(import_task));
     } else if (OB_ISNULL(src_table_schema)) {
@@ -799,20 +799,20 @@ int ObImportTableTaskScheduler::construct_import_table_arg_(obrpc::ObRecoverRest
     if (OB_UNLIKELY(0 >= ddl_parallelism)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("parallelism is 0 not allowed", K(ret));
-    } else if (OB_FAIL(share::ObBackupUtils::get_tenant_sys_time_zone_wrap(import_task_->get_tenant_id(),
-                                                                    time_zone,
+    } else if (OB_FAIL(share::ObBackupUtils::get_tenant_sys_time_zone_wrap(import_task_->get_tenant_id(), 
+                                                                    time_zone, 
                                                                     arg.tz_info_wrap_))) {
       LOG_WARN("failed to get tenant sys timezoen wrap", K(ret), KPC_(import_task));
-    } else if (OB_FAIL(src_tenant_guard.get_tenant_system_variable(import_task_->get_src_tenant_id(),
-                                                                    share::SYS_VAR_NLS_DATE_FORMAT,
+    } else if (OB_FAIL(src_tenant_guard.get_tenant_system_variable(import_task_->get_src_tenant_id(), 
+                                                                    share::SYS_VAR_NLS_DATE_FORMAT, 
                                                                     data_format_schema))) {
       LOG_WARN("fail to get tenant system variable", K(ret));
-    } else if (OB_FAIL(src_tenant_guard.get_tenant_system_variable(import_task_->get_src_tenant_id(),
-                                                                    share::SYS_VAR_NLS_TIMESTAMP_FORMAT,
+    } else if (OB_FAIL(src_tenant_guard.get_tenant_system_variable(import_task_->get_src_tenant_id(), 
+                                                                    share::SYS_VAR_NLS_TIMESTAMP_FORMAT, 
                                                                     nls_timestamp_format))) {
       LOG_WARN("fail to get tenant system variable", K(ret));
-    } else if (OB_FAIL(src_tenant_guard.get_tenant_system_variable(import_task_->get_src_tenant_id(),
-                                                                    share::SYS_VAR_NLS_TIMESTAMP_TZ_FORMAT,
+    } else if (OB_FAIL(src_tenant_guard.get_tenant_system_variable(import_task_->get_src_tenant_id(), 
+                                                                    share::SYS_VAR_NLS_TIMESTAMP_TZ_FORMAT, 
                                                                     nls_timestamp_tz_format))) {
       LOG_WARN("fail to get tenant system variable", K(ret));
     } else if (OB_ISNULL(data_format_schema) || OB_ISNULL(nls_timestamp_format) || OB_ISNULL(nls_timestamp_tz_format)) {
@@ -846,17 +846,17 @@ int ObImportTableTaskScheduler::construct_import_table_schema_(
     target_table_schema.set_tenant_id(import_task_->get_tenant_id());
     target_table_schema.set_table_name(import_task_->get_target_table());
     target_table_schema.set_table_id(OB_INVALID_ID);
-
+    
     target_table_schema.set_data_table_id(0);
     target_table_schema.clear_constraint();
     target_table_schema.clear_foreign_key_infos();
     target_table_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_NORMAL);
     target_table_schema.set_mlog_tid(OB_INVALID_ID); // mlog (if exists) will be discarded
     target_table_schema.set_tmp_mlog_tid(OB_INVALID_ID);
-
+    
     uint64_t database_id = OB_INVALID_ID;
-    if (OB_FAIL(target_tenant_guard.get_database_id(import_task_->get_tenant_id(),
-                                                    import_task_->get_target_database(),
+    if (OB_FAIL(target_tenant_guard.get_database_id(import_task_->get_tenant_id(), 
+                                                    import_task_->get_target_database(), 
                                                     database_id))) {
       LOG_WARN("failed to get database id", K(ret), KPC_(import_task));
     } else if (OB_INVALID_ID == database_id) {
@@ -868,21 +868,21 @@ int ObImportTableTaskScheduler::construct_import_table_schema_(
 
     uint64_t table_group_id = OB_INVALID_ID;
     if (import_task_->get_target_tablegroup().empty()) {
-    } else if (FAILEDx(target_tenant_guard.get_tablegroup_id(import_task_->get_tenant_id(),
-                                                             import_task_->get_target_tablegroup(),
+    } else if (FAILEDx(target_tenant_guard.get_tablegroup_id(import_task_->get_tenant_id(), 
+                                                             import_task_->get_target_tablegroup(), 
                                                              table_group_id))) {
       LOG_WARN("failed to get table group id", K(ret), KPC_(import_task));
     } else if (OB_INVALID_ID == table_group_id) {
       ret = OB_TABLEGROUP_NOT_EXIST;
       LOG_WARN("invalid target tablegroup id", K(ret), K(table_group_id), KPC_(import_task));
     } else {
-      target_table_schema.set_tablegroup_id(table_group_id);
+      target_table_schema.set_tablegroup_id(table_group_id); 
     }
 
     const schema::ObTablespaceSchema *schema = nullptr;
     if (import_task_->get_target_tablespace().empty()) {
-    } else if (FAILEDx(target_tenant_guard.get_tablespace_schema_with_name(import_task_->get_tenant_id(),
-                                                                           import_task_->get_target_tablespace(),
+    } else if (FAILEDx(target_tenant_guard.get_tablespace_schema_with_name(import_task_->get_tenant_id(), 
+                                                                           import_task_->get_target_tablespace(), 
                                                                            schema))) {
       LOG_WARN("failed to get tablespace schema", K(ret), KPC_(import_task));
     } else if (OB_ISNULL(schema)) {
@@ -896,7 +896,7 @@ int ObImportTableTaskScheduler::construct_import_table_schema_(
       target_table_schema.set_master_key_id(schema->get_master_key_id());
       target_table_schema.set_tablespace_id(schema->get_tablespace_id());
     }
-  }
+  } 
   return ret;
 }
 
@@ -911,7 +911,7 @@ int ObImportTableTaskScheduler::wait_import_ddl_task_finish_(bool &is_finish)
   if (OB_FAIL(ObDDLErrorMessageTableOperator::get_ddl_error_message(tenant_id,
                                                                     task_id,
                                                                     -1 /* target_object_id */,
-                                                                    ObAddr()/*unused addr*/,
+                                                                    ObAddr()/*unused addr*/, 
                                                                     false /* is_ddl_retry_task */,
                                                                     *sql_proxy_,
                                                                     error_message,
@@ -963,7 +963,7 @@ int ObImportTableTaskScheduler::statistics_import_results_()
     ret = OB_SUCCESS;
     LOG_INFO("target table is not exist", K(tenant_id), K(db_name), K(table_name));
     ObImportResult::Comment comment;
-    if (OB_TMP_FAIL(databuff_printf(comment.ptr(), comment.capacity(),
+    if (OB_TMP_FAIL(databuff_printf(comment.ptr(), comment.capacity(), 
       "table %.*s has been deleted by user", table_name.length(), table_name.ptr()))) {
       LOG_WARN("failed to databuff printf", K(ret), K(tmp_ret));
     } else {
@@ -982,3 +982,5 @@ int ObImportTableTaskScheduler::statistics_import_results_()
   }
   return ret;
 }
+
+

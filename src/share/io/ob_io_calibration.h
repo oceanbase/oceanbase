@@ -76,7 +76,7 @@ private:
   int find_item(const ObIOMode mode, const int64_t size, int64_t &item_idx) const;
 private:
   MeasureItemArray measure_items_[static_cast<int>(ObIOMode::MAX_MODE)];
-
+  
 };
 
 class ObIOBenchRunner : public lib::TGRunnable

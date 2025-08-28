@@ -33,7 +33,7 @@ class ObSequenceSpec : public ObOpSpec
 {
   OB_UNIS_VERSION_V(1);
 public:
-
+ 
 
   ObSequenceSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type);
 

@@ -181,7 +181,7 @@ int ObTempTableAccessVecOp::inner_rescan()
     while (!is_end && OB_SUCC(ret)) {
       if (OB_FAIL(check_status())) {
         LOG_WARN("check status failed", K(ret));
-      } else
+      } else 
       if (OB_FAIL(MY_INPUT.check_finish(is_end, index))) {
         LOG_WARN("failed to check finish.", K(ret));
       } else if (!is_end) {
@@ -192,7 +192,7 @@ int ObTempTableAccessVecOp::inner_rescan()
       }
     }
   }
-  if (OB_SUCC(ret) &&
+  if (OB_SUCC(ret) && 
       OB_FAIL(ObOperator::inner_rescan())) {
     LOG_WARN("failed to rescan", K(ret));
   }
@@ -325,7 +325,7 @@ int ObTempTableAccessVecOp::locate_next_interm_result(bool &is_end)
 }
 
 
-// Set the iterator (col_store_it_) to the beginning of the memory location
+// Set the iterator (col_store_it_) to the beginning of the memory location 
 // of the target intermediate result (located according to result_id).
 int ObTempTableAccessVecOp::locate_interm_result(int64_t result_id)
 {
@@ -392,3 +392,4 @@ int ObTempTableAccessVecOp::get_local_interm_result_id(int64_t &result_id)
 
 } // end namespace sql
 } // end namespace oceanbase
+

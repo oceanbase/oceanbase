@@ -622,17 +622,17 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       case stmt::T_LOAD_INDEX_INTO_CACHE:
       case stmt::T_FLUSH_PRIVILEGES:
       case stmt::T_INSTALL_PLUGIN:
-      case stmt::T_UNINSTALL_PLUGIN:
+      case stmt::T_UNINSTALL_PLUGIN:  
       case stmt::T_FLUSH_MOCK:
       case stmt::T_FLUSH_TABLE_MOCK:
       case stmt::T_FLUSH_MOCK_LIST:
       case stmt::T_HANDLER_MOCK:
-      case stmt::T_SHOW_PLUGINS:
-      case stmt::T_CREATE_SERVER:
-      case stmt::T_ALTER_SERVER:
-      case stmt::T_DROP_SERVER:
-      case stmt::T_CREATE_LOGFILE_GROUP:
-      case stmt::T_ALTER_LOGFILE_GROUP:
+      case stmt::T_SHOW_PLUGINS: 
+      case stmt::T_CREATE_SERVER: 
+      case stmt::T_ALTER_SERVER: 
+      case stmt::T_DROP_SERVER: 
+      case stmt::T_CREATE_LOGFILE_GROUP: 
+      case stmt::T_ALTER_LOGFILE_GROUP: 
       case stmt::T_DROP_LOGFILE_GROUP:
       case stmt::T_GRANT_PROXY:
       case stmt::T_REVOKE_PROXY: {

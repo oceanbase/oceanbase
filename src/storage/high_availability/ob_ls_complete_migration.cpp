@@ -113,8 +113,8 @@ ObLSCompleteMigrationParam::ObLSCompleteMigrationParam()
 
 bool ObLSCompleteMigrationParam::is_valid() const
 {
-  return arg_.is_valid()
-      && !task_id_.is_invalid() && rebuild_seq_ >= 0
+  return arg_.is_valid() 
+      && !task_id_.is_invalid() && rebuild_seq_ >= 0 
       && OB_NOT_NULL(svr_rpc_proxy_) && OB_NOT_NULL(storage_rpc_);
 }
 
@@ -300,7 +300,7 @@ int ObLSCompleteMigrationDagNet::fill_comment(char *buf, const int64_t buf_len) 
     LOG_WARN("failed to get trace id string", K(ret), "arg", ctx_.arg_);
   } else {
     int64_t pos = 0;
-    ret = databuff_printf(buf, buf_len, pos,
+    ret = databuff_printf(buf, buf_len, pos, 
         "ObLSCompleteMigrationDagNet: tenant_id=%lu, ls_id=", ctx_.tenant_id_);
     OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx_.arg_.ls_id_);
     OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos,
@@ -399,7 +399,7 @@ int ObLSCompleteMigrationDagNet::trans_rebuild_fail_status_(
   bool is_tenant_dropped = false;
   if (!ObMigrationStatusHelper::is_valid(current_migration_status)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("current migration status is invalid", K(ret), K(current_migration_status));
+    LOG_WARN("current migration status is invalid", K(ret), K(current_migration_status)); 
   } else if (ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD != current_migration_status
       && ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_WAIT != current_migration_status
       && ObMigrationStatus::OB_MIGRATION_STATUS_NONE != current_migration_status) {
@@ -491,14 +491,14 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
               result = OB_ERR_UNEXPECTED;
               if (OB_FAIL(ctx_.set_result(result, false/*need_retry*/))) {
                 LOG_WARN("failed to set result", K(ret), K(result), K(ctx_));
-              }
+              } 
             }
             LOG_ERROR("current migration status is final state and unexpected", K(OB_ERR_UNEXPECTED), K(current_migration_status), K(ctx_));
           }
         } else if (ctx_.is_failed()) {
           if (ObMigrationOpType::REBUILD_LS_OP == ctx_.arg_.type_) {
             if (OB_FAIL(trans_rebuild_fail_status_(*ls, current_migration_status, new_migration_status))) {
-              LOG_WARN("failed check rebuild status", K(ret), K(current_migration_status), K(new_migration_status));
+              LOG_WARN("failed check rebuild status", K(ret), K(current_migration_status), K(new_migration_status)); 
             }
           } else if (OB_FAIL(ObMigrationStatusHelper::trans_fail_status(current_migration_status, new_migration_status))) {
             LOG_WARN("failed to trans fail status", K(ret), K(current_migration_status), K(new_migration_status));
@@ -675,7 +675,7 @@ int ObCompleteMigrationDag::fill_info_param(compaction::ObIBasicInfoParam *&out_
   if (FALSE_IT(ctx = static_cast<ObLSCompleteMigrationCtx *>(ha_dag_net_ctx_))) {
   } else {
     ObCStringHelper helper;
-    if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
+    if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(), 
                                 static_cast<int64_t>(ctx->tenant_id_), ctx->arg_.ls_id_.id(),
                                 static_cast<int64_t>(ctx->arg_.type_),
                                 "dag_net_task_id", helper.convert(ctx->task_id_),
@@ -846,7 +846,7 @@ int ObInitialCompleteMigrationTask::process()
     }
   }
 
-
+  
 
   if (OB_SUCCESS != (tmp_ret = record_server_event_())) {
     LOG_WARN("failed to record server event", K(tmp_ret), K(ret));
@@ -1793,7 +1793,7 @@ int ObWaitDataReadyTask::check_need_wait_(
 }
 
 int ObWaitDataReadyTask::check_need_wait_transfer_table_replace_(
-    ObLS *ls,
+    ObLS *ls, 
     bool &need_wait)
 {
   int ret = OB_SUCCESS;
@@ -1968,7 +1968,7 @@ int ObWaitDataReadyTask::check_tablet_ready_(
           if (minor_sstables.empty()) {
             max_minor_end_scn_ = MAX(max_minor_end_scn_, tablet->get_tablet_meta().get_max_replayed_scn());
           } else {
-            max_minor_end_scn_ = MAX3(max_minor_end_scn_,
+            max_minor_end_scn_ = MAX3(max_minor_end_scn_, 
                                      minor_sstables.get_boundary_table(true)->get_end_scn(),
                                      tablet->get_tablet_meta().get_max_replayed_scn());
           }

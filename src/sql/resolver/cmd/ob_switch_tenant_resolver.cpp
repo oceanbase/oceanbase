@@ -98,7 +98,7 @@ int ObSwitchTenantResolver::resolve_switch_tenant(const ParseNode &parse_tree)
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(stmt->get_arg().init(session_info_->get_effective_tenant_id(), op_type, tenant_name, is_verify))) {
-      LOG_WARN("fail to init arg", KR(ret), K(stmt->get_arg()),
+      LOG_WARN("fail to init arg", KR(ret), K(stmt->get_arg()), 
                 K(session_info_->get_effective_tenant_id()), K(tenant_name), K(op_type), K(is_verify));
     } else {
       stmt_ = stmt;

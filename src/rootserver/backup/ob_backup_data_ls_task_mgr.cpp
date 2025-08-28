@@ -339,7 +339,7 @@ int ObBackupDataLSTaskMgr::handle_execute_over(
     // do nothing
   } else if (OB_FAIL(ls_attr.task_type_.get_backup_data_type(backup_data_type))) {
     LOG_WARN("failed to get backup data type", K(ret), K(ls_attr));
-  } else if (OB_FAIL(backup::ObLSBackupOperator::mark_ls_task_info_final(ls_attr.task_id_, ls_attr.tenant_id_,
+  } else if (OB_FAIL(backup::ObLSBackupOperator::mark_ls_task_info_final(ls_attr.task_id_, ls_attr.tenant_id_, 
       ls_attr.ls_id_, ls_attr.turn_id_, ls_attr.retry_id_, backup_data_type, sql_proxy))) {
     LOG_WARN("[DATA_BACKUP]failed to update ls task info final to True", K(ret), K(ls_attr));
   }
@@ -389,7 +389,7 @@ int ObBackupDataLSTaskMgr::redo_ls_task(
     } else {
       LOG_INFO("redo ls task", K(turn_id), K(retry_id), K(ls_attr));
     }
-  }
+  } 
   return ret;
 }
 
@@ -459,7 +459,7 @@ int ObBackupDataLSTaskMgr::finish_(int64_t &finish_cnt)
       } else if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(ls_attr_->tenant_id_)))) {
         LOG_WARN("fail to start trans", K(ret));
       } else {
-        if (OB_FAIL(redo_ls_task(*backup_service_, trans, *ls_attr_, ls_attr_->start_turn_id_,
+        if (OB_FAIL(redo_ls_task(*backup_service_, trans, *ls_attr_, ls_attr_->start_turn_id_, 
           ls_attr_->turn_id_, next_retry_id))) {
             LOG_WARN("[DATA_BACKUP]failed to redo ls task", K(ret), KPC(ls_attr_));
         } 

@@ -467,7 +467,7 @@ int ObStorageHADagUtils::check_self_is_valid_member(
       is_valid_member = false;
       LOG_INFO("self is not valid member", K(ret), K(member), K(member_info), K(self_addr), K(ls_id));
     } else {
-      is_valid_member = true;
+      is_valid_member = true; 
     }
   }
   return ret;
@@ -730,7 +730,7 @@ int ObHATabletGroupMgr::get_tablet_group_ctx(
 /******************ObStorageHATaskUtils*********************/
 int ObStorageHATaskUtils::check_need_copy_sstable(
     const ObMigrationSSTableParam &param,
-    const bool &is_restore,
+    const bool &is_restore, 
     ObTabletHandle &tablet_handle,
     bool &need_copy)
 {

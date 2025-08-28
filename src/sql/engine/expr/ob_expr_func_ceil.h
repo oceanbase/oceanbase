@@ -42,7 +42,7 @@ public:
       const bool is_floor, const ObDatum *arg_datum,
       const ObDatumMeta &in_meta, const ObDatumMeta &out_meta,
       ObDatum &res_datum);
-
+      
   template <typename T, bool IS_FLOOR, bool NEG>
   static T ceil_floor_trival(T in, const T in_scale_power, const T in_scale_power_minus_one);
 

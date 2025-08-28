@@ -56,7 +56,7 @@ double ObOptCostModelParameter::get_micro_block_rnd_cost(const OptSystemStat& st
 
 double ObOptCostModelParameter::get_project_column_cost(const OptSystemStat& stat,
                                                         int64_t type,
-                                                        bool is_rnd,
+                                                        bool is_rnd,        
                                                         bool use_column_store) const
 {
     if (stat.get_cpu_speed() <= 0) {

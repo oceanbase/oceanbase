@@ -28,9 +28,9 @@
 #include "ob_vector_kmeans_ctx.h"
 #include "share/vector_index/ob_vector_index_ivf_cache_mgr.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace share
+namespace share 
 {
 struct ObIvfHelperKey final
 {
@@ -89,7 +89,7 @@ typedef common::hash::ObHashMap<common::ObTabletID, ObIvfCacheMgr*> IvfCacheMgrM
 class ObPluginVectorIndexMgr
 {
 public:
-  ObPluginVectorIndexMgr(lib::MemoryContext &memory_context, uint64_t tenant_id)
+  ObPluginVectorIndexMgr(lib::MemoryContext &memory_context, uint64_t tenant_id) 
     : is_inited_(false),
       need_check_(false),
       ls_id_(),
@@ -170,13 +170,13 @@ public:
                             ObString *vec_index_param,
                             int64_t dim);
   int check_and_merge_partial_inner(ObVecIdxSharedTableInfoMap &info_map, ObIAllocator &allocator);
-
+  
   // maintance interface
   int check_need_mem_data_sync_task(bool &need_sync);
   int erase_complete_adapter(ObTabletID tablet_id);
   int erase_partial_adapter(ObTabletID tablet_id);
   int erase_ivf_build_helper(const ObIvfHelperKey &key);
-  int release_ivf_cache_mgr(ObIvfCacheMgr* &mgr);
+  int release_ivf_cache_mgr(ObIvfCacheMgr* &mgr); 
   int set_ivf_cache_mgr(const ObIvfCacheMgrKey& cachr_mgr_key,
                         ObIvfCacheMgr *cache_mgr,
                         int overwrite = 0);
@@ -224,7 +224,7 @@ private:
 private:
   static const int64_t DEFAULT_ADAPTER_HASH_SIZE = 1000;
   static const int64_t DEFAULT_CANDIDATE_ADAPTER_HASH_SIZE = 1000;
-
+  
   typedef common::RWLock RWLock;
   typedef RWLock::RLockGuard RLockGuard;
   typedef RWLock::WLockGuard WLockGuard;
@@ -290,7 +290,7 @@ class ObPluginVectorIndexService : public logservice::ObIReplaySubHandler,
                                    public logservice::ObIRoleChangeSubHandler
 {
 public:
-  ObPluginVectorIndexService()
+  ObPluginVectorIndexService() 
   : is_inited_(false),
     has_start_(false),
     tenant_id_(OB_INVALID_TENANT_ID),
@@ -327,16 +327,16 @@ public:
   int replay(const void *buffer,
              const int64_t buf_size,
              const palf::LSN &lsn,
-             const share::SCN &scn)
-  {
+             const share::SCN &scn) 
+  { 
     UNUSED(buffer);
     UNUSED(buf_size);
     UNUSED(lsn);
     UNUSED(scn);
-    return OB_SUCCESS;
+    return OB_SUCCESS; 
   }
   void inner_switch_to_follower();
-  void switch_to_follower_forcedly();
+  void switch_to_follower_forcedly(); 
   int switch_to_leader();
   int switch_to_follower_gracefully();
   int resume_leader() { return switch_to_leader(); }
@@ -364,7 +364,7 @@ public:
   int check_and_merge_adapter(ObLSID ls_id, ObVecIdxSharedTableInfoMap &info_map);
   int acquire_vector_index_mgr(ObLSID ls_id, ObPluginVectorIndexMgr *&mgr);
 
-  // user interfaces
+  // user interfaces 
   int acquire_adapter_guard(ObLSID ls_id,
                             ObTabletID tablet_id,
                             ObIndexType type,

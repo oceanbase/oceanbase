@@ -267,7 +267,7 @@ public:
   //     node waits for the node's 2pc state response before responsing its 2pc
   //     state to his parent node.
   //
-  // Detailed design is in
+  // Detailed design is in 
   virtual int64_t get_downstream_size() const = 0;
   virtual int64_t get_self_id() = 0;
   // is_root returns whether it is the root participant in the cycle two phase

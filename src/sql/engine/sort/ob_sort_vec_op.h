@@ -102,7 +102,7 @@ private:
   int init_temp_row_store(const common::ObIArray<ObExpr *> &exprs, const int64_t batch_size,
                           const ObMemAttr &mem_attr, const bool is_sort_key, ObCompressorType compress_type,
                           ObTempRowStore &row_store);
-  void reset_pd_topn_filter_expr_ctx();
+  void reset_pd_topn_filter_expr_ctx();  
 
 private:
   ObSortVecOpProvider sort_op_provider_;

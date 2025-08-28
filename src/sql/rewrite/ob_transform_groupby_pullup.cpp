@@ -57,7 +57,7 @@ int ObTransformGroupByPullup::transform_one_stmt(common::ObIArray<ObParentDMLStm
       LOG_WARN("failed to get transform view", K(ret));
     } else if (OB_FAIL(do_groupby_pull_up(view_stmt, valid_views.at(i), unique_key_provider))) {
       LOG_WARN("failed to do pull up group by", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*ctx_, parent_stmts, stmt,
+    } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*ctx_, parent_stmts, stmt, 
                                                                           false, partial_cost_check))) {
       LOG_WARN("failed to check partial cost eval validity", K(ret));
     } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt,
@@ -290,7 +290,7 @@ int ObTransformGroupByPullup::check_groupby_pullup_validity(ObDMLStmt *stmt,
     ObSQLSessionInfo *session_info = NULL;
     ObQueryCtx *query_ctx = NULL;
     OPT_TRACE("try", table);
-    if (OB_ISNULL(ctx_) ||
+    if (OB_ISNULL(ctx_) || 
         OB_ISNULL(session_info = ctx_->session_info_) ||
         OB_ISNULL(query_ctx = stmt->get_query_ctx())) {
       ret = OB_ERR_UNEXPECTED;
@@ -1003,8 +1003,8 @@ int ObTransformGroupByPullup::wrap_case_when(ObSelectStmt &child_stmt,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null expr", K(ret));
     } else if (OB_FALSE_IT(cast_expr = null_expr)) {
-    } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_,
-                                                                      expr, cast_expr,
+    } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_, 
+                                                                      expr, cast_expr, 
                                                                       ctx_->session_info_))) {
       LOG_WARN("failed to add cast", K(ret));
     } else if (OB_FAIL(ObTransformUtils::build_case_when_expr(child_stmt,
@@ -1018,8 +1018,8 @@ int ObTransformGroupByPullup::wrap_case_when(ObSelectStmt &child_stmt,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("case when expr is null", K(ret));
     } else if (OB_FALSE_IT(case_when_with_cast = case_when_expr)) {
-    } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_,
-                                                                      expr, case_when_with_cast,
+    } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_, 
+                                                                      expr, case_when_with_cast, 
                                                                       ctx_->session_info_))) {
       LOG_WARN("failed to add cast", K(ret));
     } else {
@@ -1285,7 +1285,7 @@ int ObTransformGroupByPullup::find_operator(ObLogicalOperator* root,
   if (OB_ISNULL(root)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null logical operator", K(ret));
-  } else if (log_op_def::LOG_SUBPLAN_SCAN == root->get_type() &&
+  } else if (log_op_def::LOG_SUBPLAN_SCAN == root->get_type() && 
              static_cast<ObLogSubPlanScan *>(root)->get_subquery_id() == view_table_id) {
     subplan_root = root;
   } else {
@@ -1350,7 +1350,7 @@ int ObTransformGroupByPullup::find_base_operator(ObLogicalOperator *&root)
         OB_ISNULL(root = root->get_child(ObLogicalOperator::first_child))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null logical operator", K(ret));
-    }
+    } 
   }
   return ret;
 }
@@ -1369,8 +1369,8 @@ int ObTransformGroupByPullup::extract_columns_in_join_conditions(
       LOG_WARN("get unexpected null", K(parent), K(ret));
     } else if (log_op_def::LOG_JOIN == parent->get_type()) {
       ObLogJoin *join_op = static_cast<ObLogJoin*>(parent);
-
-      if (HASH_JOIN == join_op->get_join_algo() ||
+      
+      if (HASH_JOIN == join_op->get_join_algo() || 
           MERGE_JOIN == join_op->get_join_algo()) {
         tmp_column_exprs.reuse();
         if (OB_FAIL(ObRawExprUtils::extract_column_exprs(join_op->get_equal_join_conditions(),
@@ -1410,13 +1410,13 @@ int ObTransformGroupByPullup::extract_columns_in_join_conditions(
           }
         }
       }
-    }
+    } 
   }
   return ret;
 }
 
-int ObTransformGroupByPullup::get_group_by_subset(ObRawExpr *expr,
-                                                  const ObIArray<ObRawExpr *> &group_exprs,
+int ObTransformGroupByPullup::get_group_by_subset(ObRawExpr *expr, 
+                                                  const ObIArray<ObRawExpr *> &group_exprs, 
                                                   ObIArray<ObRawExpr *> &subset_group_exprs)
 {
   int ret = OB_SUCCESS;
@@ -1442,13 +1442,13 @@ int ObTransformGroupByPullup::get_group_by_subset(ObRawExpr *expr,
   return ret;
 }
 
-int ObTransformGroupByPullup::get_group_by_subset(ObIArray<ObRawExpr *> &exprs,
-                                                  const ObIArray<ObRawExpr *> &group_exprs,
+int ObTransformGroupByPullup::get_group_by_subset(ObIArray<ObRawExpr *> &exprs, 
+                                                  const ObIArray<ObRawExpr *> &group_exprs, 
                                                   ObIArray<ObRawExpr *> &subset_group_exprs)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
-    if (OB_FAIL(get_group_by_subset(exprs.at(i), group_exprs,
+    if (OB_FAIL(get_group_by_subset(exprs.at(i), group_exprs, 
                                     subset_group_exprs))) {
       LOG_WARN("check group by exprs failed", K(ret));
     }

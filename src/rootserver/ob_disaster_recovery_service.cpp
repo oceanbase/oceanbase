@@ -255,7 +255,7 @@ int ObDRService::get_service_epoch_to_check_(
       service_epoch_to_check = epoch_of_service_thread;
     } else {
       service_epoch_to_check = 0;
-    }
+    }  
   } else if (is_meta_tenant(provide_service_tenant)) {
     service_epoch_to_check = epoch_of_service_thread;
   } else {

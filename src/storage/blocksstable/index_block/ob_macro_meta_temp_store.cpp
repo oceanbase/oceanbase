@@ -62,7 +62,7 @@ OB_DEF_SERIALIZE(ObMacroMetaTempStore::StoreItem)
         index_block_buf_size_,
         macro_meta_block_size_);
   }
-
+  
   if (OB_SUCC(ret)) {
     MEMCPY(buf + pos, index_block_buf_, index_block_buf_size_);
     pos += index_block_buf_size_;

@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/tablet/ob_tablet_macro_info_iterator.h"
@@ -208,7 +208,7 @@ int ObMacroInfoIterator::read_from_memory()
       cur_type_ = target_type_;
     }
   }
-
+  
   if (OB_SUCC(ret)) {
     switch (cur_type_) {
       case ObTabletMacroType::META_BLOCK:
@@ -258,7 +258,7 @@ int ObMacroInfoIterator::read_from_disk()
   int64_t pos = 0;
   const ObTabletMacroType prev_type = cur_type_;
   const bool target_iter = ObTabletMacroType::MAX != target_type_;
-
+  
   if (OB_UNLIKELY(ObTabletMacroType::INVALID_TYPE == target_type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid target_type", K(ret));
@@ -284,7 +284,7 @@ int ObMacroInfoIterator::read_from_disk()
       }
     } while (OB_SUCC(ret) && target_iter && cur_type_ != target_type_);
   }
-
+  
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (ObTabletMacroType::SHARED_DATA_BLOCK == cur_type_) {
@@ -306,7 +306,7 @@ int ObMacroInfoIterator::read_from_disk()
       LOG_WARN("fail to convert to block info", K(ret), K(tmp_arr));
     }
   }
-
+  
   if (OB_ITER_END == ret && !target_iter) {
     ret = OB_SUCCESS;
     cur_type_ = ObTabletMacroType::LINKED_BLOCK;

@@ -29,7 +29,7 @@ int ObVectorNormalize::L2_normalize_vector(const int64_t dim, float *data, float
   } else {
     const float float_accuracy = 0.00001;
     float norm_l2_sqr = ObVectorL2Distance<float>::l2_norm_square(data, dim);
-
+    
     if (norm_l2_sqr > 0 && fabs(1.0f - norm_l2_sqr) > float_accuracy) {
       float norm_l2 = sqrt(norm_l2_sqr);
       for (int64_t i = 0; i < dim; ++i) {
@@ -142,7 +142,7 @@ int ObVectorClusterHelper::get_nearest_probe_centers(
       allocator.free(norm_vector);
     }
   }
-
+  
   return ret;
 }
 
@@ -199,8 +199,8 @@ void ObVectorClusterHelper::reset()
 }
 
 int ObVectorClusterHelper::get_center_id_from_string(
-    ObCenterId &center_id,
-    const ObString &str,
+    ObCenterId &center_id, 
+    const ObString &str, 
     uint8_t flag/* = IVF_PARSE_CENTER*/)
 {
   int ret = OB_SUCCESS;
@@ -236,7 +236,7 @@ int ObVectorClusterHelper::set_center_id_to_string(const ObCenterId &center_id, 
       str.set_length(0);
     }
   }
-
+  
   if (OB_SUCC(ret)) {
     ObCenterId tmp;
     tmp.tablet_id_ = htonll(center_id.tablet_id_);
@@ -250,8 +250,8 @@ int ObVectorClusterHelper::set_center_id_to_string(const ObCenterId &center_id, 
 }
 
 int ObVectorClusterHelper::get_pq_center_id_from_string(
-    ObPqCenterId &pq_center_id,
-    const ObString &str,
+    ObPqCenterId &pq_center_id, 
+    const ObString &str, 
     uint8_t flag/* = IVF_PARSE_PQ_CENTER*/)
 {
   int ret = OB_SUCCESS;
@@ -275,12 +275,12 @@ int ObVectorClusterHelper::get_pq_center_id_from_string(
 
 
 int ObVectorClusterHelper::set_pq_center_id_to_string(
-    const ObPqCenterId &pq_center_id,
-    ObString &str,
+    const ObPqCenterId &pq_center_id, 
+    ObString &str, 
     ObIAllocator *alloc/* = nullptr*/)
 {
   int ret = OB_SUCCESS;
-
+  
   if (!pq_center_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid cluster center id", K(ret), K(pq_center_id));
@@ -295,7 +295,7 @@ int ObVectorClusterHelper::set_pq_center_id_to_string(
       str.set_length(0);
     }
   }
-
+  
   if (OB_SUCC(ret)) {
     ObPqCenterId tmp;
     tmp.tablet_id_ = htonll(pq_center_id.tablet_id_);

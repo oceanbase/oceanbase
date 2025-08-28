@@ -41,7 +41,7 @@ class ObLogValuesTableAccess : public ObLogicalOperator
     virtual int get_plan_item_info(PlanText &plan_text, ObSqlPlanItem &plan_item) override;
     int mark_probably_local_exprs();
     int allocate_dummy_output();
-
+    
     const common::ObIArray<ObColumnRefRawExpr *> &get_column_exprs() const { return column_exprs_; }
     common::ObIArray<ObColumnRefRawExpr *> &get_column_exprs() { return column_exprs_; }
     inline const ObValuesTableDef *get_values_table_def() { return table_def_; }

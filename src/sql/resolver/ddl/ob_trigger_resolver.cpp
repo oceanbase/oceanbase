@@ -758,7 +758,7 @@ int ObTriggerResolver::resolve_sys_base_object(const ParseNode &parse_node,
                                                ObCreateTriggerArg &trigger_arg)
 {
   int ret = OB_SUCCESS;
-  uint64_t trg_db_id = OB_INVALID_ID;
+  uint64_t trg_db_id = OB_INVALID_ID; 
   ObTriggerInfo &trg_info = trigger_arg.trigger_info_;
   const uint64_t tenant_id = trg_info.get_tenant_id();
   ObSchemaGetterGuard *schema_guard = NULL;
@@ -1283,7 +1283,7 @@ int ObTriggerResolver::resolve_order_clause(const ParseNode *parse_node, ObCreat
         if (OB_SUCC(ret) && is_oracle_mode) {
           uint64_t ref_db_id = OB_INVALID_ID;
           OZ (schema_checker_->get_database_id(trg_info.get_tenant_id(), ref_trg_db_name, ref_db_id));
-          if (OB_SUCC(ret) && (trg_info.get_database_id() == ref_db_id)
+          if (OB_SUCC(ret) && (trg_info.get_database_id() == ref_db_id) 
               && (trg_info.get_trigger_name() == ref_trg_name)) {
             ret = OB_ERR_REF_CYCLIC_IN_TRG;
             LOG_WARN("OBE-25023: cyclic trigger dependency is not allowed", K(ret));
@@ -1414,7 +1414,7 @@ int ObTriggerResolver::analyze_trigger(ObSchemaGetterGuard &schema_guard,
                                 trigger_info.get_package_body_info().get_package_id(),
                                 trigger_info.get_package_body_info().get_schema_version(),
                                 &package_spec_ast));
-      OZ (ObTriggerInfo::gen_package_source(trigger_info.get_tenant_id(),
+      OZ (ObTriggerInfo::gen_package_source(trigger_info.get_tenant_id(), 
                                             trigger_info.get_trigger_body_package_id(trigger_info.get_trigger_id()),
                                             source, false, schema_guard, allocator));
       OZ (compiler.analyze_package(source,

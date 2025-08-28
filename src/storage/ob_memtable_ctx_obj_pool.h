@@ -20,7 +20,7 @@
 
 namespace oceanbase
 {
-namespace transaction
+namespace transaction 
 {
 
 

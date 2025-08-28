@@ -44,15 +44,15 @@ struct ObPhysicalCopyTaskInitParam final
   bool is_valid() const;
 
 
-  TO_STRING_KV(K_(tenant_id),
-               K_(ls_id),
-               K_(tablet_id),
-               K_(src_info),
+  TO_STRING_KV(K_(tenant_id), 
+               K_(ls_id), 
+               K_(tablet_id), 
+               K_(src_info), 
                KPC_(sstable_param),
-               K_(sstable_macro_range_info),
+               K_(sstable_macro_range_info), 
                KP_(tablet_copy_finish_task),
-               KP_(ls),
-               K_(is_leader_restore),
+               KP_(ls), 
+               K_(is_leader_restore), 
                K_(restore_action),
                KP_(restore_base_info),
                KP_(meta_index_store),
@@ -108,10 +108,10 @@ protected:
   virtual int check_sstable_param_for_init_(const ObMigrationSSTableParam *src_sstable_param) const = 0;
   int init_create_sstable_param_(ObTabletCreateSSTableParam &param) const;
   int init_create_sstable_param_(
-      const blocksstable::ObSSTableMergeRes &res,
+      const blocksstable::ObSSTableMergeRes &res, 
       ObTabletCreateSSTableParam &param) const;
   int do_create_sstable_(
-      const ObTabletCreateSSTableParam &param,
+      const ObTabletCreateSSTableParam &param, 
       ObTableHandleV2 &table_handle) const;
 
 
@@ -127,7 +127,7 @@ protected:
 
 
 // Create empty SSTable whose index does not need to be rebuilt. Empty SSTable
-// is the SSTable with data_macro_block_count 0, except for only shared macro
+// is the SSTable with data_macro_block_count 0, except for only shared macro 
 // blocks SSTable, whose data_macro_block_count is 0 but is not empty.
 class ObCopiedEmptySSTableCreator final : public ObCopiedSSTableCreatorImpl
 {
@@ -175,7 +175,7 @@ private:
 
 
 // Create shared-only-macro-blocks SSTable, currently only ddl sstable in shared storage mode. This kind of SSTable
-// does not own an index, but should record the macro ids on meta. Macro blocks are required to copy only during
+// does not own an index, but should record the macro ids on meta. Macro blocks are required to copy only during 
 // leader restore, otherwise, are not.
 class ObCopiedSharedMacroBlocksSSTableCreator final : public ObCopiedSSTableCreatorImpl
 {
@@ -194,8 +194,8 @@ private:
 #endif
 
 
-// Create shared SSTable which is not empty. Shared SSTable is the SSTable whose macro blocks, including data and
-// index blocks, are all in shared or backup storage. Macro blocks need not copy and index does not need to be
+// Create shared SSTable which is not empty. Shared SSTable is the SSTable whose macro blocks, including data and 
+// index blocks, are all in shared or backup storage. Macro blocks need not copy and index does not need to be 
 // rebuilt, just put the ObMigrationSSTableParam from source into local table store. This is happen during migration
 // or follower restore, when source SSTable is shared.
 class ObCopiedSharedSSTableCreator final : public ObCopiedSSTableCreatorImpl
@@ -281,7 +281,7 @@ private:
   int alloc_and_init_sstable_creator_(ObCopiedSSTableCreatorImpl *&sstable_creator);
   void free_sstable_creator_(ObCopiedSSTableCreatorImpl *&sstable_creator);
   int get_space_optimization_mode_(
-      const ObMigrationSSTableParam *sstable_param,
+      const ObMigrationSSTableParam *sstable_param, 
       ObSSTableIndexBuilder::ObSpaceOptimizationMode &mode);
 
 private:

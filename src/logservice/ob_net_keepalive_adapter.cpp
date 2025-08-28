@@ -12,7 +12,7 @@
 #include "rpc/obrpc/ob_net_keepalive.h"       // ObNetKeepAlive
 #include "share/ob_lease_struct.h"            // RSS_IS_STOPPED
 
-namespace oceanbase
+namespace oceanbase 
 {
 namespace logservice
 {

@@ -44,10 +44,10 @@ class ObImportTableJobScheduler final
 public:
   ObImportTableJobScheduler();
   ~ObImportTableJobScheduler() {}
-  int init(share::schema::ObMultiVersionSchemaService &schema_service,
+  int init(share::schema::ObMultiVersionSchemaService &schema_service, 
       common::ObMySQLProxy &sql_proxy);
   void do_work();
-
+  
 private:
   int check_compatible_() const;
   int process_(share::ObImportTableJob &job);
@@ -82,11 +82,11 @@ class ObImportTableTaskScheduler final
 {
 public:
   ObImportTableTaskScheduler()
-    : is_inited_(false), schema_service_(nullptr), sql_proxy_(nullptr), import_task_(nullptr),
+    : is_inited_(false), schema_service_(nullptr), sql_proxy_(nullptr), import_task_(nullptr), 
       helper_() {}
   virtual ~ObImportTableTaskScheduler() { reset(); }
-  int init(share::schema::ObMultiVersionSchemaService &schema_service,
-      common::ObMySQLProxy &sql_proxy,
+  int init(share::schema::ObMultiVersionSchemaService &schema_service, 
+      common::ObMySQLProxy &sql_proxy, 
       share::ObImportTableTask &task);
   void reset();
   int process();

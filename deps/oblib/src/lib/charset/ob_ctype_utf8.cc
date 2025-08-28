@@ -1,12 +1,12 @@
-/**
- * Copyright (code) 2021 OceanBase
- * OceanBase CE is licensed under Mulan PubL v2.
- * You can use this software according to the terms and conditions of the Mulan PubL v2.
- * You may obtain a copy of Mulan PubL v2 at:
- *          http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+/** 
+ * Copyright (code) 2021 OceanBase 
+ * OceanBase CE is licensed under Mulan PubL v2. 
+ * You can use this software according to the terms and conditions of the Mulan PubL v2. 
+ * You may obtain a copy of Mulan PubL v2 at: 
+ *          http://license.coscl.org.cn/MulanPubL-2.0 
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, 
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, 
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE. 
  * See the Mulan PubL v2 for more details.
  */
  /*
@@ -292,7 +292,7 @@ static inline void ob_tosort_unicode(ObUnicaseInfo *uni_plane, ob_wc_t *wc, unsi
       *wc= (flags & OB_CS_LOWER_SORT) ?
            page[*wc & 0xFF].tolower :
            page[*wc & 0xFF].sort;
-    }
+    } 
   } else {
     *wc = OB_CS_REPLACEMENT_CHARACTER;
   }
@@ -340,7 +340,7 @@ int __attribute__ ((noinline))  ob_strnncollsp_utf8mb4_help(
   int swap= 1;
   if (srclen != dstlen) {
     if (diff_if_only_endspace_difference) {
-      res= 1;
+      res= 1;                              
     }
     if (srclen < dstlen) {
       srclen= dstlen;
@@ -628,7 +628,7 @@ static int ob_wildcmp_unicode_impl_help(const ObCharsetInfo *cs,
        *has_returned = 1;
        break;
      } else if (w_wc != (ob_wc_t) escape_char && w_wc == (ob_wc_t) w_many) {
-       result = 1;
+       result = 1; 
        break;
      }
      wild_str += scan;
@@ -669,7 +669,7 @@ static int ob_wildcmp_unicode_impl_help(const ObCharsetInfo *cs,
        ret = (str != str_end);
        *has_returned = 1;
        break;
-     }
+     } 
    }
    *str_ = str;
    *str_end_ = str_end;
@@ -688,7 +688,7 @@ static int ob_wildcmp_unicode_impl(const ObCharsetInfo *cs,
                         int escape_char, int w_one, int w_many,
                         ObUnicaseInfo *weights, int recurse_level)
 {
-  int result= -1;
+  int result= -1;                             
   ob_wc_t src_wc = 0;
   ob_wc_t w_wc = 0;
   int scan = 0;
@@ -712,7 +712,7 @@ static int ob_wildcmp_unicode_impl(const ObCharsetInfo *cs,
         &has_returned);
     if (has_returned == 1) {
       return tmp;
-    } else if (w_wc == (ob_wc_t) w_many) {
+    } else if (w_wc == (ob_wc_t) w_many) {                                             
       while (wild_str != wild_end) {
         if ((scan= mb_wc(cs, &w_wc, (const unsigned char*)wild_str,
                          (const unsigned char*)wild_end)) <= 0) {
@@ -730,11 +730,11 @@ static int ob_wildcmp_unicode_impl(const ObCharsetInfo *cs,
           continue;
         }
         }
-        break;
+        break;  
       }
 
       if (wild_str == wild_end) {
-        return 0;
+        return 0;                
       } else if (str == str_end) {
         return -1;
       } else if ((scan= mb_wc(cs, &w_wc, (const unsigned char*)wild_str,
@@ -1007,35 +1007,35 @@ static ObCollationHandler ob_collation_utf8mb4_bin_handler =
 
 ObCharsetInfo ob_charset_utf8mb4_general_ci=
 {
-  45,0,0,
-  OB_CS_COMPILED|OB_CS_PRIMARY|OB_CS_STRNXFRM|OB_CS_UNICODE|OB_CS_UNICODE_SUPPLEMENT|OB_CS_CI,
-  OB_UTF8MB4,
+  45,0,0,              
+  OB_CS_COMPILED|OB_CS_PRIMARY|OB_CS_STRNXFRM|OB_CS_UNICODE|OB_CS_UNICODE_SUPPLEMENT|OB_CS_CI,  
+  OB_UTF8MB4,         
   OB_UTF8MB4_GENERAL_CI,
-  "UTF-8 Unicode",
+  "UTF-8 Unicode",    
+  NULL,               
   NULL,
-  NULL,
-  ctype_utf8mb4,
-  to_lower_utf8mb4,
-  to_upper_utf8mb4,
-  to_upper_utf8mb4,
-  NULL,
-  NULL,
-  NULL,
+  ctype_utf8mb4,      
+  to_lower_utf8mb4,   
+  to_upper_utf8mb4,   
+  to_upper_utf8mb4,   
+  NULL,     
+  NULL,               
+  NULL,               
   &ob_unicase_default,
-  NULL,
-  NULL,
+  NULL,               
+  NULL,               
+  1,                  
+  1,                  
+  1,                  
+  1,                  
+  4,                  
   1,
-  1,
-  1,
-  1,
-  4,
-  1,
-  0,
-  0xFFFF,
-  ' ',
-  0,
-  1,
-  1,
+  0,                  
+  0xFFFF,             
+  ' ',                
+  0,                  
+  1,                  
+  1,                  
   &ob_charset_utf8mb4_handler,
   &ob_collation_utf8mb4_general_ci_handler,
   PAD_SPACE
@@ -1043,37 +1043,38 @@ ObCharsetInfo ob_charset_utf8mb4_general_ci=
 
 ObCharsetInfo ob_charset_utf8mb4_bin=
 {
-  46,0,0,
+  46,0,0,             
   OB_CS_COMPILED|OB_CS_BINSORT|OB_CS_STRNXFRM|
-  OB_CS_UNICODE|OB_CS_UNICODE_SUPPLEMENT,
-  OB_UTF8MB4,
-  OB_UTF8MB4_BIN,
-  "UTF-8 Unicode",
+  OB_CS_UNICODE|OB_CS_UNICODE_SUPPLEMENT, 
+  OB_UTF8MB4,         
+  OB_UTF8MB4_BIN,     
+  "UTF-8 Unicode",    
+  NULL,               
   NULL,
+  ctype_utf8mb4,      
+  to_lower_utf8mb4,   
+  to_upper_utf8mb4,     
+  NULL,               
   NULL,
-  ctype_utf8mb4,
-  to_lower_utf8mb4,
-  to_upper_utf8mb4,
-  NULL,
-  NULL,
-  NULL,
+  NULL,               
   NULL,
   &ob_unicase_default,
-  NULL,
-  NULL,
+  NULL,               
+  NULL,               
+  1,                  
+  1,                  
+  1,                  
+  1,                  
+  4,                  
   1,
-  1,
-  1,
-  1,
-  4,
-  1,
-  0,
-  0xFFFF,
-  ' ',
-  0,
-  1,
-  1,
+  0,                  
+  0xFFFF,             
+  ' ',                
+  0,                  
+  1,                  
+  1,                  
   &ob_charset_utf8mb4_handler,
   &ob_collation_utf8mb4_bin_handler,
   PAD_SPACE
 };
+

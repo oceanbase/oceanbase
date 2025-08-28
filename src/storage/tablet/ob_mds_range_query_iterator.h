@@ -203,7 +203,7 @@ int ObSingleTabletMdsRangeQueryIterator<K, T>::advance_mds_table_iter()
           MDS_LOG(DEBUG, "succeed to get next from mds table iter", K(ret), K_(mds_table_key), KPC_(mds_table_val), K(read_version_range_.snapshot_version_));
           break;
         }
-
+        
       }
     }
   }

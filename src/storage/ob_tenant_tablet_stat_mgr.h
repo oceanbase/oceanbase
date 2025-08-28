@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef OCEANBASE_STORAGE_TENANT_TABLET_STAT_MGR_H_
 #define OCEANBASE_STORAGE_TENANT_TABLET_STAT_MGR_H_
 
@@ -154,7 +154,7 @@ public:
   static constexpr int64_t QUERY_BASIC_ITER_TABLE_CNT = 5;
   static constexpr int64_t MERGE_BASIC_ROW_CNT = 10000;
 public:
-  ObTabletStat tablet_stat_;       // tablet statistics recently
+  ObTabletStat tablet_stat_;       // tablet statistics recently 
   ObTabletStat total_tablet_stat_; // tablet statistics since last compaction
   share::schema::ObTableModeFlag mode_;
   double boost_factor_;

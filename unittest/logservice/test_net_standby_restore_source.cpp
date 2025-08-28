@@ -49,7 +49,7 @@ TEST(TestRestoreSource, test_net_standby_restore_source)
   EXPECT_EQ(0, STRCMP(attr.user_.tenant_name_, "primary_tenant"));
   EXPECT_EQ(attr.user_.mode_, ObCompatibilityMode::MYSQL_MODE);
   EXPECT_TRUE(attr.user_ == tmp_attr.user_);
-
+  
 
 // check attr
   common::ObAddr addr1(common::ObAddr::VER::IPV4, "127.0.0.1", 1001);
@@ -71,7 +71,7 @@ TEST(TestRestoreSource, test_net_standby_restore_source)
 
   (void)attr.get_compatibility_mode_str_(mode_str);
   EXPECT_EQ(0, STRCMP(mode_str.ptr(), "MYSQL"));
-
+  
 
   EXPECT_TRUE(attr.service_user_is_valid());
   EXPECT_TRUE(attr.service_host_is_valid());
@@ -84,7 +84,7 @@ TEST(TestRestoreSource, test_net_standby_restore_source)
   (void)attr1.assign(attr);
   attr1.set_service_cluster_id("-1");
   EXPECT_FALSE(attr1.is_valid());
-
+  
   (void)attr2.assign(attr);
   attr2.set_service_tenant_id("0");
   EXPECT_FALSE(attr2.is_valid());

@@ -124,7 +124,7 @@ public:
   ObIvfPreFilter(uint64_t tenant_id,
                FilterType type = FilterType::ROARING_BITMAP,
                ObIAllocator *allocator = nullptr,
-               uint8_t *bitmap = nullptr) :
+               uint8_t *bitmap = nullptr) : 
                tenant_id_(tenant_id),
                type_(type),
                roaring_bitmap_(nullptr),
@@ -285,10 +285,10 @@ protected:
     ObIvfCentCache &cent_cache,
     bool is_vectorized);
   int get_centers_cache(
-      bool is_vectorized,
-      bool is_pq_centers,
+      bool is_vectorized, 
+      bool is_pq_centers, 
       ObIvfCacheMgrGuard &cache_guard,
-      ObIvfCentCache *&cent_cache,
+      ObIvfCentCache *&cent_cache, 
       bool &is_cache_usable);
   virtual int try_write_pq_centroid_cache(
     ObIvfCentCache &cent_cache,
@@ -480,10 +480,10 @@ protected:
     int &push_count);
   int calc_distance_between_pq_ids(
     bool is_vectorized,
-    const ObString &pq_center_ids,
-    const ObIArray<float *> &splited_residual,
+    const ObString &pq_center_ids, 
+    const ObIArray<float *> &splited_residual, 
     float &distance);
-  int calc_distance_between_pq_ids_by_cache(ObIvfCentCache &cent_cache,
+  int calc_distance_between_pq_ids_by_cache(ObIvfCentCache &cent_cache, 
                                             const ObString &pq_center_ids,
                                             const ObIArray<float *> &splited_residual,
                                             float &distance);
@@ -491,9 +491,9 @@ protected:
     ObIvfCentCache &cent_cache,
     bool is_vectorized) override;
   int get_pq_precomputetable_cache(
-      bool is_vectorized,
+      bool is_vectorized, 
       ObIvfCacheMgrGuard &cache_guard,
-      ObIvfCentCache *&cent_cache,
+      ObIvfCentCache *&cent_cache, 
       bool &is_cache_usable);
   int try_write_pq_precompute_table_cache(
     ObIvfCentCache &cent_cache,

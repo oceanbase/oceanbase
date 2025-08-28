@@ -26,7 +26,7 @@ ObStorageHADiagIterator::ObStorageHADiagIterator()
   : keys_(),
     cnt_(0),
     cur_idx_(0),
-    is_opened_(false)
+    is_opened_(false) 
 {
 }
 
@@ -36,7 +36,7 @@ int ObStorageHADiagIterator::open(const ObStorageHADiagType &type)
   if (is_opened_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("The ObStorageHADiagIterator has been opened", K(ret));
-  } else if (type >= ObStorageHADiagType::MAX_TYPE
+  } else if (type >= ObStorageHADiagType::MAX_TYPE 
     || type < ObStorageHADiagType::ERROR_DIAGNOSE) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument!", K(ret), K(type));
@@ -50,9 +50,9 @@ int ObStorageHADiagIterator::open(const ObStorageHADiagType &type)
     } else {
       cur_idx_ = 0;
       cnt_ = keys_.count();
-      is_opened_ = true;
+      is_opened_ = true;      
     }
-  }
+  } 
   return ret;
 }
 
@@ -68,7 +68,7 @@ int ObStorageHADiagIterator::get_next_info(ObStorageHADiagInfo &info)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected array count", K(ret), K(cnt_));
   } else {
-    ObStorageHADiagMgr *mgr = nullptr;
+    ObStorageHADiagMgr *mgr = nullptr; 
     if (OB_ISNULL(mgr = MTL(ObStorageHADiagMgr *))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get ObStorageHADiagMgr from MTL", K(ret));
@@ -140,7 +140,7 @@ ObStorageHADiagMgr::ObStorageHADiagMgr()
     allocator_(),
     task_list_(),
     service_(nullptr),
-    lock_()
+    lock_() 
 {
 }
 
@@ -158,9 +158,9 @@ int ObStorageHADiagMgr::init(
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObStorageHADiagMgr has already been inited", K(ret));
-  } else if (OB_INVALID_TENANT_ID == tenant_id
-    || page_size <= 0
-    || max_size <= 0
+  } else if (OB_INVALID_TENANT_ID == tenant_id 
+    || page_size <= 0 
+    || max_size <= 0 
     || max_size < page_size) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(page_size), K(max_size));
@@ -196,7 +196,7 @@ void ObStorageHADiagMgr::destroy()
 {
   is_inited_ = false;
   common::SpinWLockGuard guard(lock_);
-  clear_with_no_lock_();
+  clear_with_no_lock_(); 
   allocator_.reset();
   service_ = nullptr;
 }
@@ -211,7 +211,7 @@ void ObStorageHADiagMgr::clear_with_no_lock_()
 }
 
 int ObStorageHADiagMgr::add_or_update(
-    const ObStorageHADiagTaskKey &task_key,
+    const ObStorageHADiagTaskKey &task_key, 
     const ObStorageHADiagInfo &input_info,
     const bool is_report)
 {
@@ -254,7 +254,7 @@ int ObStorageHADiagMgr::add_or_update(
 }
 
 int ObStorageHADiagMgr::add_task_(
-    const ObStorageHADiagTaskKey &task_key,
+    const ObStorageHADiagTaskKey &task_key, 
     const ObStorageHADiagInfo &input_info,
     ObStorageHADiagTask *&out_task)
 {
@@ -289,8 +289,8 @@ int ObStorageHADiagMgr::add_task_(
 }
 //TODO(zhixing.yh) modify task key relationship with info, info include task key
 int ObStorageHADiagMgr::create_task_(
-    const ObStorageHADiagTaskKey &task_key,
-    const ObStorageHADiagInfo &input_info,
+    const ObStorageHADiagTaskKey &task_key, 
+    const ObStorageHADiagInfo &input_info, 
     ObStorageHADiagTask *&task)
 {
   int ret = OB_SUCCESS;
@@ -336,7 +336,7 @@ int ObStorageHADiagMgr::create_task_(
   } else {
     task = tmp_task;
   }
-
+  
   return ret;
 }
 
@@ -373,7 +373,7 @@ int ObStorageHADiagMgr::del(const ObStorageHADiagTaskKey &task_key)
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -385,7 +385,7 @@ int ObStorageHADiagMgr::get_iter_array(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (type < ObStorageHADiagType::ERROR_DIAGNOSE
+  } else if (type < ObStorageHADiagType::ERROR_DIAGNOSE 
              || type >= ObStorageHADiagType::MAX_TYPE) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(type));
@@ -450,7 +450,7 @@ int ObStorageHADiagMgr::copy_with_nolock_(const ObStorageHADiagTaskKey &key, ObS
     LOG_WARN("fail to check task exist", K(ret), K(key));
   } else if (OB_FAIL(info.assign(*task_info))) {
     LOG_WARN("fail to copy info", K(ret), KPC(task_info));
-  } else if (ObStorageHADiagModule::TRANSFER_PERF_DIAGNOSE == key.module_
+  } else if (ObStorageHADiagModule::TRANSFER_PERF_DIAGNOSE == key.module_ 
       && OB_FAIL(static_cast<ObTransferPerfDiagInfo &>(info).copy_item_list(
       static_cast<ObTransferPerfDiagInfo &>(*task_info)))) {
     LOG_WARN("fail to copy item list to info", K(ret), KPC(task_info));
@@ -486,13 +486,13 @@ void ObStorageHADiagMgr::free_(ObStorageHADiagTask *&task)
 //TODO(zhixing.yh) modify task key relationship with info, info include task key
 //can not reset info, perf diagnose info perhaps already init
 int ObStorageHADiagMgr::construct_diagnose_info(
-    const share::ObTransferTaskID task_id, const share::ObLSID &ls_id,
-    const share::ObStorageHADiagTaskType type, const int64_t retry_id,
+    const share::ObTransferTaskID task_id, const share::ObLSID &ls_id, 
+    const share::ObStorageHADiagTaskType type, const int64_t retry_id, 
     const int result_code, const share::ObStorageHADiagModule module,
     share::ObStorageHADiagInfo &info)
 {
   int ret = OB_SUCCESS;
-  if (!task_id.is_valid()
+  if (!task_id.is_valid() 
       || !ls_id.is_valid()
       || type >= ObStorageHADiagTaskType::MAX_TYPE
       || type < ObStorageHADiagTaskType::TRANSFER_START
@@ -509,7 +509,7 @@ int ObStorageHADiagMgr::construct_diagnose_info(
     info.retry_id_ = retry_id;
     info.result_code_ = result_code;
   }
-  return ret;
+  return ret; 
 }
 
 int ObStorageHADiagMgr::construct_error_diagnose_info(share::ObTransferErrorDiagInfo &info)
@@ -518,7 +518,7 @@ int ObStorageHADiagMgr::construct_error_diagnose_info(share::ObTransferErrorDiag
   info.timestamp_ = ObTimeUtility::current_time();
   info.trace_id_ = *ObCurTraceId::get_trace_id();
   info.thread_id_ = GETTID();
-  return ret;
+  return ret; 
 }
 
 int ObStorageHADiagMgr::construct_diagnose_info_key(
@@ -542,7 +542,7 @@ int ObStorageHADiagMgr::construct_diagnose_info_key(
       || diag_type < ObStorageHADiagType::ERROR_DIAGNOSE
       || retry_id < 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(task_id), K(module), K(type),
+    LOG_WARN("invalid argument", K(ret), K(task_id), K(module), K(type), 
         K(diag_type), K(retry_id));
   } else {
     key.tenant_id_ = MTL_ID();
@@ -553,15 +553,15 @@ int ObStorageHADiagMgr::construct_diagnose_info_key(
     key.diag_type_ = diag_type;
     key.tablet_id_ = tablet_id;
   }
-  return ret;
+  return ret; 
 }
 
 //TODO(zhixing.yh) add result_msg
 int ObStorageHADiagMgr::add_info_to_mgr(
     const ObStorageHADiagInfo &info,
     const ObStorageHADiagTaskKey &key,
-    const bool is_report)
-{
+    const bool is_report)  
+{ 
   int ret = OB_SUCCESS;
   ObStorageHADiagMgr *mgr = nullptr;
   if (!info.is_valid() || !key.is_valid()) {
@@ -608,14 +608,14 @@ int ObStorageHADiagMgr::append_error_diagnose_info(
 }
 
 int ObStorageHADiagMgr::add_transfer_error_diagnose_info(
-    const share::ObTransferTaskID task_id, const share::ObLSID &ls_id,
-    const share::ObStorageHADiagTaskType type, const int64_t retry_id,
+    const share::ObTransferTaskID task_id, const share::ObLSID &ls_id, 
+    const share::ObStorageHADiagTaskType type, const int64_t retry_id, 
     const int result_code, const common::ObTabletID &tablet_id, const share::ObStorageHACostItemName result_msg)
 {
   int ret = OB_SUCCESS;
   share::ObTransferErrorDiagInfo info;
   share::ObStorageHADiagTaskKey key;
-  if (!task_id.is_valid()
+  if (!task_id.is_valid() 
       || !ls_id.is_valid()
       || type >= ObStorageHADiagTaskType::MAX_TYPE
       || type < ObStorageHADiagTaskType::TRANSFER_START
@@ -623,14 +623,14 @@ int ObStorageHADiagMgr::add_transfer_error_diagnose_info(
       || OB_SUCCESS == result_code) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(task_id), K(ls_id), K(type), K(retry_id), K(result_code));
-  } else if (OB_FAIL(construct_diagnose_info(task_id, ls_id, type, retry_id, result_code,
+  } else if (OB_FAIL(construct_diagnose_info(task_id, ls_id, type, retry_id, result_code, 
       ObStorageHADiagModule::TRANSFER_ERROR_DIAGNOSE, info))) {
     LOG_WARN("failed to construct error diagnose info", K(ret), K(task_id), K(ls_id), K(type), K(retry_id), K(result_code));
   } else if (OB_FAIL(append_error_diagnose_info(tablet_id, result_msg, info))) {
     LOG_WARN("fail to append diagnose info", K(ret), K(tablet_id), K(result_msg));
   } else if (OB_FAIL(construct_error_diagnose_info(info))) {
     LOG_WARN("failed to construct error diagnose info", K(ret));
-  } else if (OB_FAIL(construct_diagnose_info_key(task_id, ObStorageHADiagModule::TRANSFER_ERROR_DIAGNOSE,
+  } else if (OB_FAIL(construct_diagnose_info_key(task_id, ObStorageHADiagModule::TRANSFER_ERROR_DIAGNOSE, 
       type, ObStorageHADiagType::ERROR_DIAGNOSE, retry_id, tablet_id, key))) {
     LOG_WARN("failed to construct error diagnose info key", K(ret), K(task_id), K(type), K(retry_id), K(tablet_id));
   } else if (OB_FAIL(add_info_to_mgr(info, key, true/*is_report*/))) {
@@ -640,23 +640,23 @@ int ObStorageHADiagMgr::add_transfer_error_diagnose_info(
 }
 
 int ObStorageHADiagMgr::add_transfer_error_diagnose_info(
-    const share::ObTransferTaskID task_id, const share::ObLSID &ls_id,
-    const share::ObStorageHADiagTaskType type, const int64_t retry_id,
+    const share::ObTransferTaskID task_id, const share::ObLSID &ls_id, 
+    const share::ObStorageHADiagTaskType type, const int64_t retry_id, 
     const int result_code, const share::ObStorageHACostItemName result_msg)
 {
   int ret = OB_SUCCESS;
   common::ObTabletID unused_tablet_id;
-  if (OB_FAIL(add_transfer_error_diagnose_info(task_id, ls_id, type, retry_id,
+  if (OB_FAIL(add_transfer_error_diagnose_info(task_id, ls_id, type, retry_id, 
       result_code, unused_tablet_id, result_msg))) {
-    LOG_WARN("fail to add transfer error diagnose info", K(ret), K(task_id), K(ls_id), K(type),
+    LOG_WARN("fail to add transfer error diagnose info", K(ret), K(task_id), K(ls_id), K(type), 
         K(retry_id), K(result_code), K(unused_tablet_id), K(result_msg));
   }
   return ret;
 }
 
 int ObStorageHADiagMgr::construct_perf_diagnose_info(
-    const int64_t tablet_count,
-    const int64_t start_timestamp,
+    const int64_t tablet_count, 
+    const int64_t start_timestamp, 
     share::ObTransferPerfDiagInfo &info)
 {
   int ret = OB_SUCCESS;
@@ -672,8 +672,8 @@ int ObStorageHADiagMgr::construct_perf_diagnose_info(
 }
 
 int ObStorageHADiagMgr::add_transfer_perf_diagnose_info(
-    const share::ObStorageHADiagTaskKey &key,
-    const int64_t start_timestamp, const int64_t tablet_count,
+    const share::ObStorageHADiagTaskKey &key, 
+    const int64_t start_timestamp, const int64_t tablet_count, 
     const bool is_report, share::ObTransferPerfDiagInfo &info)
 {
   int ret = OB_SUCCESS;
@@ -701,7 +701,7 @@ int ObStorageHADiagMgr::add_key_to_service_(const ObIArray<ObStorageHADiagTaskKe
 }
 
 int ObStorageHADiagMgr::add_task_key_to_report_array_(
-    const share::ObTransferTaskID &task_id,
+    const share::ObTransferTaskID &task_id, 
     ObIArray<ObStorageHADiagTaskKey> &task_keys) const
 {
   int ret = OB_SUCCESS;

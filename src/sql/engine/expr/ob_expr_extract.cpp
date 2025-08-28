@@ -214,7 +214,7 @@ ObOTimestampData get_otimestamp_value(const ObDatum &param, ObObjType type)
 
 int ObExprExtract::calc_oracle(const ObSQLSessionInfo *session,
                                ObEvalCtx &ctx,
-                               const ObObjType date_type,
+                               const ObObjType date_type, 
                                const ObDatum &date,
                                const ObDateUnitType &extract_field,
                                ObIAllocator *allocator,
@@ -447,10 +447,10 @@ int ObExprExtract::calc_extract_mysql(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
     bool is_null = false;
     int64_t value = 0;
     if (OB_FAIL(ObExprExtract::calc(date_type, *param_datum2,
-                                    extract_field,
-                                    scale,
+                                    extract_field, 
+                                    scale, 
                                     cast_mode, tz_info,
-                                    cur_ts_value,
+                                    cur_ts_value, 
                                     date_sql_mode, has_lob_header, is_null, value))) {
       LOG_WARN("failed to calculate extract expression", K(ret));
     } else if (is_null) {

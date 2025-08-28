@@ -371,7 +371,7 @@ int ObExprFindInSet::calc_find_in_set_vector_dispatch(
   return ret;
 }
 
-template <typename Arg0Vec, typename ResVec>
+template <typename Arg0Vec, typename ResVec> 
 int ObExprFindInSet::calc_find_in_set_vector_dispatch(VECTOR_EVAL_FUNC_ARG_DECL) {
   int ret = OB_SUCCESS;
   Arg0Vec *str_vec = reinterpret_cast<Arg0Vec *>(expr.args_[0]->get_vector(ctx));

@@ -613,7 +613,7 @@ int ObTimeUtility2::str_to_usec(const ObString &date, int64_t &usec)
   return ret;
 }
 
-//TODO:: not support Julian day now. @yanhua
+//TODO:: not support Julian day now. @yanhua 
 bool ObTimeUtility2::is_valid_year(int year)
 {
   //(0, 9999]

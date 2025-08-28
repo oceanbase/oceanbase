@@ -72,7 +72,7 @@ public:
   ObDASTCB();
   ~ObDASTCB() {}
 
-  int init(int64_t task_id, const ObDASScanRtDef *scan_rtdef,
+  int init(int64_t task_id, const ObDASScanRtDef *scan_rtdef, 
            const ObDASScanCtDef *scan_ctdef, const ExprFixedArray *output_exprs,
            ObDASTCBMemProfileKey &mem_profile_key, ObDASMemProfileInfo *mem_profile_info,
            const ObDASTCBInterruptInfo &interrupt_info);
@@ -361,7 +361,7 @@ private:
 private:
   static const int64_t DAS_TCB_MAP_SHRINK_THRESHOLD = 128;
   static const int64_t DAS_TCB_CHECK_INTERRUPT_INTERVAL = 32; // check interrupt per 32 loop
-  typedef common::hash::ObHashMap<ObDASTCBMemProfileKey,
+  typedef common::hash::ObHashMap<ObDASTCBMemProfileKey, 
                                   ObDASMemProfileInfo*> MemProfileMap;
   typedef common::ObLinkHashMap<DASTCBInfo,
                                 ObDASTCB,

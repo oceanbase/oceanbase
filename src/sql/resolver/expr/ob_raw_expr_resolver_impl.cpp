@@ -43,7 +43,7 @@ int ObRawExprResolverImpl::resolve(const ParseNode *node,
                                    ObIArray<ObUserVarIdentRawExpr*> &user_var_exprs,
                                    ObIArray<ObInListInfo> &inlist_infos,
                                    ObIArray<ObMatchFunRawExpr*> &match_exprs)
-{
+{ 
   ctx_.columns_ = &columns;
   ctx_.op_exprs_ = &op_exprs;
   ctx_.sys_vars_ = &sys_vars;
@@ -356,7 +356,7 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
           } else if (ob_is_extend(data_type)) {
             ParseNode *name_node = node->children_[0];
             CK (lib::is_oracle_mode());
-            CK (OB_NOT_NULL(ctx_.session_info_),
+            CK (OB_NOT_NULL(ctx_.session_info_),  
                 OB_NOT_NULL(ctx_.schema_checker_),
                 OB_NOT_NULL(ctx_.schema_checker_->get_schema_guard()));
             CK (OB_NOT_NULL(name_node));
@@ -453,9 +453,9 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
                       type_val[3] = final_type.get_data_type()->get_scale()& 0xffff;
                     }
                     c_expr->set_accuracy(final_type.get_data_type()->get_accuracy());
-                    int64_t v = (((unsigned long)type_val[3] << 48) & 0xffff000000000000)
-                                  | (((unsigned long)type_val[2] << 32) & 0x0000ffff00000000)
-                                  | ((type_val[1] << 16) & 0x00000000ffff0000)
+                    int64_t v = (((unsigned long)type_val[3] << 48) & 0xffff000000000000) 
+                                  | (((unsigned long)type_val[2] << 32) & 0x0000ffff00000000) 
+                                  | ((type_val[1] << 16) & 0x00000000ffff0000) 
                                   | (type_val[0] & 0x000000000000ffff);
                     val.set_int(v);
                     need_set = false;
@@ -505,7 +505,7 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
                   coll_type = ObCharset::get_default_collation(charset_type);
                 }
               } else if (ctx_.is_in_system_view_) {
-                //for mysql system view, cast char type always has default collation
+                //for mysql system view, cast char type always has default collation 
                 coll_type = ObCharset::get_system_collation();
               } else {
                 // use connection_collation. for cast('a' as char)
@@ -572,7 +572,7 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
       case T_ANY:
         //fall through
       case T_ALL: {
-        if (OB_FAIL(ctx_.parents_expr_info_.add_member(node->type_ == T_ANY ?
+        if (OB_FAIL(ctx_.parents_expr_info_.add_member(node->type_ == T_ANY ? 
                                                        IS_WITH_ANY : IS_WITH_ALL))) {
           LOG_WARN("failed to add member", K(ret));
         } else if (OB_FAIL(process_any_or_all_node(node, expr))) {
@@ -1307,7 +1307,7 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
       case T_FUN_SYS_POLYGON:
       case T_FUN_SYS_MULTIPOLYGON:
       case T_FUN_SYS_GEOMCOLLECTION:
-      case T_FUN_SYS_ARRAY:
+      case T_FUN_SYS_ARRAY: 
       case T_FUN_SYS_MAP: {
         OZ (process_geo_func_node(node, expr));
         break;
@@ -1716,7 +1716,7 @@ int ObRawExprResolverImpl::process_xml_element_node(const ParseNode *node, ObRaw
   return ret;
 }
 
-int ObRawExprResolverImpl::process_xml_attributes_values_node(const ParseNode *node, ObRawExpr *&expr)
+int ObRawExprResolverImpl::process_xml_attributes_values_node(const ParseNode *node, ObRawExpr *&expr) 
 {
   INIT_SUCC(ret);
   int cur_col_size = ctx_.columns_->count();
@@ -1761,8 +1761,8 @@ int ObRawExprResolverImpl::process_xml_attributes_values_node(const ParseNode *n
         // parameter 1 of function xmlelement without aliased
         ret = OB_ERR_XMLELEMENT_ALIASED;
         LOG_WARN("get column raw text failed", K(ret));
-      } else if (!col_name.empty() && OB_FAIL(ObRawExprResolverImpl::malloc_new_specified_type_node(ctx_.expr_factory_.get_allocator(),
-                                                                                ObString(col_name.length(), easy_string_toupper(col_name.ptr())),
+      } else if (!col_name.empty() && OB_FAIL(ObRawExprResolverImpl::malloc_new_specified_type_node(ctx_.expr_factory_.get_allocator(), 
+                                                                                ObString(col_name.length(), easy_string_toupper(col_name.ptr())), 
                                                                                 &key_node, T_CHAR))) {
         LOG_WARN("create key node failed", K(ret));
       } else {
@@ -1838,8 +1838,8 @@ int ObRawExprResolverImpl::process_remote_sequence_node(const ParseNode *node, O
       if (OB_FAIL(resolve_dblink_udf_expr(NULL, column_ref, expr))) {
         LOG_WARN("resolve dblink udf expr failed", K(ret), K(column_ref));
       }
-    } else if (OB_FAIL(ctx_.schema_checker_->get_dblink_schema(tenant_id,
-                                                               column_ref.dblink_name_,
+    } else if (OB_FAIL(ctx_.schema_checker_->get_dblink_schema(tenant_id, 
+                                                               column_ref.dblink_name_, 
                                                                dblink_schema))) {
       LOG_WARN("failed to get dblink schema", K(ret));
     } else if (OB_ISNULL(dblink_schema)) {
@@ -2024,7 +2024,7 @@ int ObRawExprResolverImpl::process_xml_attributes_node(const ParseNode *node, Ob
           OZ(param_exprs.push_back(para_expr->get_param_expr(i)));
         }
         break;
-      } else if (T_LINK_NODE == node_ptr->type_ &&
+      } else if (T_LINK_NODE == node_ptr->type_ && 
                   node_ptr->children_[0]->num_child_ == 2) {
         ++attributes_count;
         const ParseNode *expr_node = node_ptr->children_[0];
@@ -2511,7 +2511,7 @@ int ObRawExprResolverImpl::check_pl_udf(ObQualifiedName &q_name,
 
 // PL SCOPE : local udf/local variables > sys function > public function
 // SQL SCOPE : sys function > local udf/local variables > public function
-// actually we only need recongnise sys function
+// actually we only need recongnise sys function 
 int ObRawExprResolverImpl::check_name_type(
   ObQualifiedName &q_name, ObStmtScope scope, AccessNameType &type)
 {
@@ -2592,7 +2592,7 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
     ObString ident_name(static_cast<int32_t>(
       func_node.children_[0]->str_len_), func_node.children_[0]->str_value_);
     get_special_func_ident_name(ident_name, func_node.type_);
-
+   
     // first bit in value_ of T_FUN_SYS node is used to mark NEW keyword,
     // value_ & 0x1 == 1: not used,
     // value_ & 0x1 == 0: used,
@@ -2628,7 +2628,7 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
           access_ident.set_pl_udf();
         }
       }
-
+      
       if (OB_FAIL(ret)) {
       } else if (name_type != PL_UDF
           && func_node.num_child_ == 3
@@ -2659,7 +2659,7 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
           } else if (func_node.type_ == T_FUN_SYS_XML_FOREST) {
             OZ (process_xml_forest_node(&func_node, func_expr));
           } else if (func_node.type_ == T_FUN_ORA_XMLAGG) {
-            OZ (process_agg_node(&func_node, func_expr));
+            OZ (process_agg_node(&func_node, func_expr)); 
           }else {
             OZ (process_fun_sys_node(&func_node, func_expr, false));
           }
@@ -2846,7 +2846,7 @@ int ObRawExprResolverImpl::resolve_obj_access_idents(const ParseNode &node, ObQu
     LOG_WARN("left node of obj access is null", K(ret), K(node.type_), KP(node.children_));
   } else if (OB_FAIL(resolve_left_node_of_obj_access_idents(*(node.children_[0]), q_name))) {
     LOG_WARN("failed to resolve left node of obj access", K(ret), K(q_name));
-  }
+  } 
   if (OB_SUCC(ret) && OB_NOT_NULL(node.children_[1])) {
     if (OB_FAIL(SMART_CALL(resolve_right_node_of_obj_access_idents(*(node.children_[1]), q_name)))) {
       LOG_WARN("failed to resolve right node of obj access", K(ret));
@@ -3172,7 +3172,7 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
                                              nullptr != ctx_.secondary_namespace_,
                                              ctx_.formalize_const_int_prec_))) {
     LOG_WARN("failed to resolve const", K(ret));
-  } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(lib::is_mysql_mode() && node.type_ == T_NCHAR ?
+  } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(lib::is_mysql_mode() && node.type_ == T_NCHAR ? 
                                                                               T_VARCHAR : node.type_, c_expr))) {
     LOG_WARN("fail to create raw expr", K(ret));
   } else if (OB_ISNULL(c_expr)) {
@@ -3440,7 +3440,7 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
       }
       // force sql run das logic if sql stmt has pl question mark expr, and its type is complex type
       if (OB_SUCC(ret) &&
-          OB_NOT_NULL(ctx_.stmt_) &&
+          OB_NOT_NULL(ctx_.stmt_) && 
           OB_NOT_NULL(c_expr) &&
           OB_NOT_NULL(session_info->get_pl_context()) &&
           T_QUESTIONMARK == c_expr->get_expr_type() &&
@@ -3746,7 +3746,7 @@ int ObRawExprResolverImpl::check_replace_lambda_params_node(const ParseNode *par
         }
       }
     }
-  }
+  } 
   return ret;
 }
 
@@ -4230,7 +4230,7 @@ int ObRawExprResolverImpl::process_operator_node(const ParseNode *node, ObRawExp
       ctx_.op_exprs_->push_back(b_expr);
       LOG_DEBUG("ctx_.op_exprs_ push", K(b_expr->get_param_count()), K(*b_expr));
     }
-  } else if (lib::is_oracle_mode()
+  } else if (lib::is_oracle_mode() 
             && ((T_FUN_SYS_SDO_RELATE == sub_expr1->get_expr_type() && sub_expr2->is_const_expr())
             || (T_FUN_SYS_SDO_RELATE == sub_expr2->get_expr_type() && sub_expr1->is_const_expr()))) {
     ParseNode* const_node = sub_expr1->is_const_expr() ? node->children_[0] : node->children_[1];
@@ -4520,7 +4520,7 @@ int ObRawExprResolverImpl::process_between_node(const ParseNode *node, ObRawExpr
         LOG_WARN("fail to extract info child 3 of between node", K(ret));
       } else if (btw_params[1]->has_flag(CNT_PL_UDF)
                  || btw_params[2]->has_flag(CNT_PL_UDF)) {
-        // skip rewrite, relevant issue :
+        // skip rewrite, relevant issue : 
       } else if (btw_params[1]->is_const_expr()
                  && btw_params[2]->is_const_expr()) {
         // We will transform if the second and the third param are both const value or const expr
@@ -4969,8 +4969,8 @@ int ObRawExprResolverImpl::resolve_right_branch_of_in_op(const ParseNode *node,
       }
     }
   /* do as normal process */
-  } else if (node->type_ == T_SELECT
-             && OB_FAIL(ctx_.parents_expr_info_.add_member(op_type == T_OP_IN ? IS_WITH_ANY
+  } else if (node->type_ == T_SELECT 
+             && OB_FAIL(ctx_.parents_expr_info_.add_member(op_type == T_OP_IN ? IS_WITH_ANY 
                                                                               : IS_WITH_ALL))) {
     // [for oracle mode] set IS_WITH_ANY/ALL flag before resolving subquery
     // for deciding if char data with different lengths should be converted to varchar2 or not
@@ -5066,7 +5066,7 @@ int ObRawExprResolverImpl::process_case_node(const ParseNode *node, ObRawExpr *&
       } else if (T_REF_QUERY == default_expr->get_expr_type() && static_cast<ObQueryRefRawExpr*>(default_expr)->is_cursor()) {
         ret = OB_ERR_INVALID_CURSOR_EXPR;
         LOG_WARN("CURSOR expression not allowed in else.", K(ret));
-      }
+      } 
       if (OB_SUCC(ret)){
         if (T_QUESTIONMARK == default_expr->get_expr_type()) {
           if (default_expr->get_result_meta().get_type() != ObNullType) {
@@ -5388,7 +5388,7 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&e
           LOG_WARN("fail to recursive resolve expr list item", K(ret));
         } else if ((i == 4) && (0 == def_val.case_compare(node->children_[i]->raw_text_))) {
           (static_cast<ObConstRawExpr *>(sub_expr))->set_scale(1);
-        }
+        } 
         if (OB_SUCC(ret) && OB_FAIL(agg_expr->add_real_param_expr(sub_expr))) {
           LOG_WARN("fail to add param expr to agg expr", K(ret));
         }
@@ -5419,7 +5419,7 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&e
           LOG_WARN("fail to add param expr to agg expr", K(ret));
         }
       } // end for
-    } else if (T_FUN_ORA_XMLAGG == node->type_) {
+    } else if (T_FUN_ORA_XMLAGG == node->type_) { 
       sub_expr = NULL;
       for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
         if (OB_ISNULL(node->children_[i])) {
@@ -5458,7 +5458,7 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&e
               }
             }
           }
-        }
+        } 
       }
     } else if (T_FUNC_SYS_ARRAY_AGG == node->type_) {
       sub_expr = NULL;
@@ -5980,7 +5980,7 @@ int ObRawExprResolverImpl::process_xmlparse_node(const ParseNode *node, ObRawExp
     OZ(func_expr->init_param_exprs(child_num));
     OX(func_expr->set_func_name(ObString::make_string("xmlparse")));
   }
-
+  
   // add param
   for (int32_t i = 0; OB_SUCC(ret) && i < child_num; i++) {
     ObRawExpr *para_expr = NULL;
@@ -5991,13 +5991,13 @@ int ObRawExprResolverImpl::process_xmlparse_node(const ParseNode *node, ObRawExp
       int flag = node->reserved_;
       if (OB_NOT_NULL(ctx_.stmt_) && ctx_.stmt_->is_select_stmt()){
         flag |= 0x08;
-      }
+      } 
       ObConstRawExpr *const_expr = static_cast<ObConstRawExpr *>(para_expr);
       ObObj val;
       val.set_int(flag);
       const_expr->set_value(val);
     }
-
+   
     //para_expr->clear_flag(IS_CALCULABLE_EXPR);
     OZ(func_expr->add_param_expr(para_expr));
   }
@@ -6582,7 +6582,7 @@ int ObRawExprResolverImpl::malloc_new_specified_type_node(common::ObIAllocator &
   return ret;
 }
 
-// use： json value (mismatch ype)
+// use： json value (mismatch ype) 
 int ObRawExprResolverImpl::expand_node(common::ObIAllocator &allocator, ParseNode *node, int p, ObVector<const ParseNode*> &arr) {
   int ret = OB_SUCCESS;
   if (node->type_ == T_LINK_NODE || node->type_ == T_VALUE_VECTOR)
@@ -6618,7 +6618,7 @@ int ObRawExprResolverImpl::remove_format_json_opt_in_pl(ParseNode *node, int8_t 
       } else if (node->children_[i - 1]->type_ != T_CHAR) {
         node->children_[i]->value_ = 0;
       }
-    }
+    } 
   } else if (expr_flag == OPT_JSON_ARRAY) {
     for (int64_t i = 1; i < num; i += 2) {
       if (OB_ISNULL(node->children_[i]) || OB_ISNULL(node->children_[i - 1])) {
@@ -6630,7 +6630,7 @@ int ObRawExprResolverImpl::remove_format_json_opt_in_pl(ParseNode *node, int8_t 
       } else if (node->children_[i - 1]->type_ != T_CHAR) {
         node->children_[i]->value_ = 0;
       }
-    }
+    } 
   }
   return ret;
 }
@@ -6773,7 +6773,7 @@ int ObRawExprResolverImpl::process_ora_json_object_node(const ParseNode *node, O
     }
     num = node->num_child_;
   }
-
+  
   ObSysFunRawExpr *func_expr = NULL;
   if (OB_SUCC(ret) && OB_SUCC(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_JSON_OBJECT, func_expr))) {
     CK(OB_NOT_NULL(func_expr));
@@ -6784,7 +6784,7 @@ int ObRawExprResolverImpl::process_ora_json_object_node(const ParseNode *node, O
 
   // check pl clause : with unique keys/ returning type
   if (OB_SUCC(ret) && lib::is_oracle_mode() && ctx_.current_scope_ == T_PL_SCOPE) {
-    if (OB_NOT_NULL(node->children_[0]->children_[0])
+    if (OB_NOT_NULL(node->children_[0]->children_[0]) 
         && node->children_[0]->children_[0]->type_ == T_COLUMN_REF
         && OB_NOT_NULL(node->children_[0]->children_[0]->children_[2])
         && node->children_[0]->children_[0]->children_[2]->type_ == T_STAR) {
@@ -6802,7 +6802,7 @@ int ObRawExprResolverImpl::process_ora_json_object_node(const ParseNode *node, O
     } else if (OB_FAIL(remove_format_json_opt_in_pl(const_cast<ParseNode *>(node->children_[0]), OPT_JSON_OBJECT))) {
       LOG_WARN("set format json fail", K(ret));
     }
-  }
+  } 
 
   if (OB_SUCC(ret)) {
     const ParseNode *key_value = node->children_[0];
@@ -6811,11 +6811,11 @@ int ObRawExprResolverImpl::process_ora_json_object_node(const ParseNode *node, O
       LOG_WARN("entry node is null");
     } else {
       int d_len = strlen("default");
-      if (node->children_[3]->value_ == 1 && node->children_[1]->value_ == 0
+      if (node->children_[3]->value_ == 1 && node->children_[1]->value_ == 0 
          && OB_NOT_NULL(node->children_[2]->raw_text_) && 0 == strncmp(node->children_[2]->raw_text_,"default", d_len)) {
         int last_arg_idx = key_value->num_child_ - 3;
-        if (last_arg_idx >= 0 && key_value->children_[last_arg_idx]->type_ == T_OBJ_ACCESS_REF && key_value->children_[last_arg_idx + 1]->type_ == T_NULL
-            && (OB_NOT_NULL(key_value->children_[last_arg_idx + 2]->raw_text_) && 0 == strncmp(key_value->children_[last_arg_idx + 2]->raw_text_, "default", d_len))
+        if (last_arg_idx >= 0 && key_value->children_[last_arg_idx]->type_ == T_OBJ_ACCESS_REF && key_value->children_[last_arg_idx + 1]->type_ == T_NULL 
+            && (OB_NOT_NULL(key_value->children_[last_arg_idx + 2]->raw_text_) && 0 == strncmp(key_value->children_[last_arg_idx + 2]->raw_text_, "default", d_len)) 
             && key_value->children_[last_arg_idx + 1]->value_ == 2) {
           ret = OB_ERR_MISS_VALUE;
           LOG_WARN("illegal use of 'strcit' clause.");
@@ -6840,7 +6840,7 @@ int ObRawExprResolverImpl::process_ora_json_object_node(const ParseNode *node, O
             int val_pos = i + 1; //  key is i where i % 3 == 0 , value is i + 1, format json is i + 2
             if (OB_ISNULL(cur_node_kv)) {
             } else if (cur_node_kv->type_ == T_COLUMN_REF // process star node
-                       && OB_NOT_NULL(cur_node_kv->children_[2])
+                       && OB_NOT_NULL(cur_node_kv->children_[2]) 
                        && cur_node_kv->children_[2]->type_ == T_STAR
                        && OB_FAIL(ObRawExprResolverImpl::create_json_object_star_node(data_node, ctx_.expr_factory_.get_allocator(), i))) {
               LOG_WARN("fail to create json object star node", K(ret));
@@ -6855,7 +6855,7 @@ int ObRawExprResolverImpl::process_ora_json_object_node(const ParseNode *node, O
             } else if (OB_ISNULL(para_expr)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("raw expr is null", K(ret), K(i));
-            } else if ((i % JSON_OBJECT_GROUP == ObJsonObjectEntry::JSON_OBJECT_KEY) && data_node->children_[val_pos]->type_ == T_NULL
+            } else if ((i % JSON_OBJECT_GROUP == ObJsonObjectEntry::JSON_OBJECT_KEY) && data_node->children_[val_pos]->type_ == T_NULL 
                         && data_node->children_[val_pos]->value_ == 2  // 2 is flag of empty value
                         && !(((para_expr->get_expr_type() == T_COLUMN_REF  // column type
                               || para_expr->get_expr_type() == T_REF_COLUMN)
@@ -6863,10 +6863,10 @@ int ObRawExprResolverImpl::process_ora_json_object_node(const ParseNode *node, O
                         || para_expr->get_expr_type() == T_FUN_SYS_ROWNUM)) {  // rownum
               ret = OB_ERR_MISS_VALUE;
               LOG_WARN("missing value keyword", K(ret), K(para_expr->get_expr_type()), K(i));
-            } else if ((i % JSON_OBJECT_GROUP == ObJsonObjectEntry::JSON_OBJECT_KEY)  && data_node->children_[val_pos]->type_ == T_NULL
+            } else if ((i % JSON_OBJECT_GROUP == ObJsonObjectEntry::JSON_OBJECT_KEY)  && data_node->children_[val_pos]->type_ == T_NULL 
                                      && data_node->children_[val_pos]->value_ == 2   // 2 is flag of empty value
                                      && (((para_expr->get_expr_type() == T_COLUMN_REF   // column type
-                                          || para_expr->get_expr_type() == T_REF_COLUMN)
+                                          || para_expr->get_expr_type() == T_REF_COLUMN) 
                                         && ctx_.columns_->at(ctx_.columns_->count() - 1).access_idents_.at(0).get_type() == oceanbase::sql::UNKNOWN)
                                       || para_expr->get_expr_type() == T_FUN_SYS_ROWNUM)) {  // rownum
               ObString col_name;
@@ -6962,7 +6962,7 @@ int ObRawExprResolverImpl::process_json_query_node(const ParseNode *node, ObRawE
     OX(func_expr->set_func_name(ObString::make_string("json_query")));
   }
   const ParseNode *path_node = node->children_[1];
-  // check path
+  // check path 
   if (OB_SUCC(ret) && OB_FAIL(pre_check_json_path_valid(path_node))) {
     LOG_WARN("pre check path fail", K(ret));
   }
@@ -6990,8 +6990,8 @@ int ObRawExprResolverImpl::process_json_query_node(const ParseNode *node, ObRawE
   }
 
   if (OB_SUCC(ret) && !is_mvi
-      && returning_type->int16_values_[OB_NODE_CAST_TYPE_IDX] != T_VARCHAR
-      && returning_type->int16_values_[OB_NODE_CAST_TYPE_IDX] != T_LONGTEXT
+      && returning_type->int16_values_[OB_NODE_CAST_TYPE_IDX] != T_VARCHAR 
+      && returning_type->int16_values_[OB_NODE_CAST_TYPE_IDX] != T_LONGTEXT 
       && returning_type->int16_values_[OB_NODE_CAST_TYPE_IDX] != T_JSON
       && returning_type->type_ != T_NULL) {
     ret = OB_ERR_INVALID_DATA_TYPE_RETURNING;
@@ -7003,7 +7003,7 @@ int ObRawExprResolverImpl::process_json_query_node(const ParseNode *node, ObRawE
   }
 
   // [0:json_text][1:json_path][2:returning_type][3:truncate][4:scalars][5:pretty][6:ascii]
-  // [7:wrapper][8:asis][9:error_type][10:empty_type][11:mismatch][12:multivalue]
+  // [7:wrapper][8:asis][9:error_type][10:empty_type][11:mismatch][12:multivalue] 
   for (int32_t i = 0; OB_SUCC(ret) && i < num; i++) {
     ObRawExpr *para_expr = NULL;
     CK(OB_NOT_NULL(node->children_[i]));
@@ -7071,7 +7071,7 @@ int ObRawExprResolverImpl::process_json_exists_node(const ParseNode *node, ObRaw
 int ObRawExprResolverImpl::pre_check_json_path_valid(const ParseNode *node)
 {
   INIT_SUCC(ret);
-
+  
   ObString j_path_text(node->str_len_, node->str_value_);
   ObJsonPath j_path(j_path_text, &ctx_.expr_factory_.get_allocator());
   if (j_path_text.length() == 0) {
@@ -7112,15 +7112,15 @@ int ObRawExprResolverImpl::process_json_value_node(const ParseNode *node, ObRawE
   }
   // pl mode check whether has mismatch
   if (lib::is_oracle_mode() && ctx_.current_scope_ == T_PL_SCOPE) {
-    if (node->children_[9]->num_child_ != 2
-        || node->children_[9]->children_[0]->value_ != 3
+    if (node->children_[9]->num_child_ != 2 
+        || node->children_[9]->children_[0]->value_ != 3 
         || node->children_[9]->children_[1]->value_ != 7) {
       ret = OB_ERR_PARSE_PLSQL;
       LOG_USER_ERROR(OB_ERR_PARSE_PLSQL, "\"MISMATCH\"", "error empty");
     }
   }
   const ParseNode *path_node = node->children_[1];
-  // check path
+  // check path 
   if (OB_SUCC(ret) && lib::is_oracle_mode() && OB_FAIL(pre_check_json_path_valid(path_node))) {
     LOG_WARN("pre check path fail", K(ret));
   }
@@ -7157,9 +7157,9 @@ int ObRawExprResolverImpl::process_json_value_node(const ParseNode *node, ObRawE
     error_type = node->children_[7];
     error_default_value = node->children_[8];
   }
-  // if use defualt, value should not be null , support
+  // if use defualt, value should not be null , support 
   if (OB_SUCC(ret)) {
-    if (OB_NOT_NULL(empty_type) && empty_type->value_ == 2) {
+    if (OB_NOT_NULL(empty_type) && empty_type->value_ == 2) { 
       if (OB_NOT_NULL(empty_default_value) && empty_default_value->type_ == T_NULL) {
         if (lib::is_oracle_mode()) {
           ret = OB_ERR_DEFAULT_VALUE_NOT_LITERAL;
@@ -7194,7 +7194,7 @@ int ObRawExprResolverImpl::process_json_value_node(const ParseNode *node, ObRawE
       } else if (OB_FAIL(func_expr->init_param_exprs(num + mismatch_arr.size()))) {
         LOG_WARN("failed to init param exprs", K(ret));
       } else {
-        // [json_text][json_path][returning_type][empty_type][empty_default_value][error_type][error_default_value]
+        // [json_text][json_path][returning_type][empty_type][empty_default_value][error_type][error_default_value] 
         ParseNode *cur_node = NULL;
         for (int32_t i = 0; OB_SUCC(ret) && i < num; i++) {
           cur_node = node->children_[i];
@@ -7315,7 +7315,7 @@ int ObRawExprResolverImpl::process_json_array_node(const ParseNode *node, ObRawE
     } else if (OB_FAIL(remove_format_json_opt_in_pl(const_cast<ParseNode *>(expr_node), OPT_JSON_ARRAY))) {
       LOG_WARN("set format json fail", K(ret));
     }
-  }
+  } 
 
   for (int i = 0; OB_SUCC(ret) && i < expr_node->num_child_; ++i) {
     ObRawExpr *para_expr = NULL;
@@ -7583,7 +7583,7 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node,
         } else {
           ret = OB_ERR_PARSER_SYNTAX;
           LOG_WARN("cast ignore only allowed in inner path", K(ret));
-        }
+        } 
       }
     }
   }
@@ -7624,7 +7624,7 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node,
           }
         } //end for
 
-        //
+        // 
         // check param count
         if (ret != OB_SUCCESS) {
           int temp_ret = ret;
@@ -7732,7 +7732,7 @@ int ObRawExprResolverImpl::process_sys_func_params(ObSysFunRawExpr &func_expr, i
         }
       }
       break;
-    case T_FUN_SYS_DATE_ADD:
+    case T_FUN_SYS_DATE_ADD: 
         // Added a fourth parameter to distinguish between “date + interval” and “interval + date”
         // So you should use it to distinguish these two cases
         if(4 == func_expr.get_param_count()) {

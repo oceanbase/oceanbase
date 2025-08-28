@@ -31,7 +31,7 @@ enum ObDmlGTSOptState
   WITH_UNIQUE_GLOBAL_INDEX_STATE = 2,
   GTE_GTS_STATE = 3,
 };
-
+  
 class ForeignKeyHandle
 {
 public:
@@ -44,7 +44,7 @@ public:
   static int do_handle(ObTableModifyOp &op,
                        const ObDMLBaseCtDef &dml_ctdef,
                        ObDMLBaseRtDef &dml_rtdef);
-
+  
 private:
   static int value_changed(ObTableModifyOp &op,
                            const common::ObIArray<ObForeignKeyColumn> &columns,
@@ -68,10 +68,10 @@ private:
                                    ObForeignKeyChecker *fk_checker);
   static int cascade(ObTableModifyOp &modify_op, const ObForeignKeyArg &fk_arg,
                      const ObExprPtrIArray &old_row, const ObExprPtrIArray &new_row);
-
+  
   static int set_null(ObTableModifyOp &modify_op, const ObForeignKeyArg &fk_arg,
                      const ObExprPtrIArray &old_row);
-
+  
   static int gen_set(ObEvalCtx &eval_ctx, char *&buf, int64_t &len, int64_t &pos,
                      const common::ObIArray<ObForeignKeyColumn> &columns,
                      const ObExprPtrIArray &row, common::ObIAllocator &alloc,
@@ -85,12 +85,12 @@ private:
                               const ObExprPtrIArray &row, const char *delimiter,
                               common::ObIAllocator &alloc,
                               const common::ObObjPrintParams &print_params, bool forbid_null);
-
+  
   static int gen_column_null_value(ObEvalCtx &ctx, char *&buf, int64_t &len, int64_t &pos,
                               const common::ObIArray<ObForeignKeyColumn> &columns,
                               common::ObIAllocator &alloc,
                               const common::ObObjPrintParams &print_params);
-
+  
   static int is_self_ref_row(ObEvalCtx &ctx, const ObExprPtrIArray &row,
                              const ObForeignKeyArg &fk_arg, bool &is_self_ref);
 };
@@ -142,9 +142,9 @@ public:
       uint64_t use_dist_das_                    : 1;
       uint64_t has_instead_of_trigger_          : 1; // abandoned, don't use again
       uint64_t is_pdml_update_split_            : 1; // 标记delete, insert op是否由update拆分而来
-      uint64_t check_fk_batch_                  : 1; // mark if the foreign key constraint can be checked in batch
+      uint64_t check_fk_batch_                  : 1; // mark if the foreign key constraint can be checked in batch    
       uint64_t is_pdml_                         : 1;
-      uint64_t need_foreign_key_check_          : 1; // mark if need foreign key check
+      uint64_t need_foreign_key_check_          : 1; // mark if need foreign key check  
       uint64_t need_trigger_fire_               : 1; // mark if need trigger fire
       uint64_t reserved_                        : 52;
     };

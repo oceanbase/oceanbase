@@ -1845,7 +1845,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_iow_memleak)
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 32, leader_idx, log_entry_size));
     EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->sw_.get_max_lsn()));
     LSN end_lsn = leader.get_palf_handle_impl()->get_end_lsn();
-
+    
     IOTaskCond cond(id, leader.palf_env_impl_->last_palf_epoch_);
     EXPECT_EQ(OB_SUCCESS, iow->submit_io_task(&cond));
     sleep(1);
@@ -1872,7 +1872,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_iow_memleak)
   }
   delete_paxos_group(id);
 
-  // case2: palf epoch has been changed during after_consume
+  // case2: palf epoch has been changed during after_consume 
   {
     PalfHandleImplGuard leader;
     EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
@@ -1927,7 +1927,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_iow_memleak)
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 32, leader_idx, log_entry_size));
     EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->sw_.get_max_lsn()));
     LSN end_lsn = leader.get_palf_handle_impl()->get_end_lsn();
-    // case2: palf epoch has been changed during after_consume
+    // case2: palf epoch has been changed during after_consume 
     IOTaskConsumeCond consume_cond(id, leader.palf_env_impl_->last_palf_epoch_);
     EXPECT_EQ(OB_SUCCESS, iow->submit_io_task(&consume_cond));
     sleep(3);

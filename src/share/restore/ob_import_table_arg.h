@@ -60,15 +60,15 @@ private:
   template <typename T>
   int get_item_array_format_str_(
       const T &array,
-      common::ObIAllocator &allocator,
+      common::ObIAllocator &allocator, 
       common::ObString &str) const;
-
+  
   template <typename T>
   int get_item_array_hex_format_str_(
       const T &array,
-      common::ObIAllocator &allocator,
+      common::ObIAllocator &allocator, 
       common::ObString &str) const;
-
+  
   template <typename T>
   int item_array_deserialize_hex_format_str_(
     T& array,
@@ -87,14 +87,14 @@ private:
 template <typename T>
 int ObImportTableArg::get_item_array_format_str_(
     const T &array,
-    common::ObIAllocator &allocator,
+    common::ObIAllocator &allocator, 
     common::ObString &str) const
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
   int64_t str_buf_len = array.get_format_serialize_size();
   char *str_buf = NULL;
-
+  
   if (str_buf_len >= OB_MAX_LONGTEXT_LENGTH) {
     ret = OB_SIZE_OVERFLOW;
     SHARE_LOG(WARN, "format str is too long", K(ret), K(str_buf_len));
@@ -107,21 +107,21 @@ int ObImportTableArg::get_item_array_format_str_(
     str.assign_ptr(str_buf, str_buf_len);
     SHARE_LOG(INFO, "get format import item array str", K(str));
   }
-
+  
   return ret;
 }
 
 template <typename T>
 int ObImportTableArg::get_item_array_hex_format_str_(
     const T &array,
-    common::ObIAllocator &allocator,
+    common::ObIAllocator &allocator, 
     common::ObString &str) const
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
   int64_t str_buf_len = array.get_hex_format_serialize_size();
   char *str_buf = NULL;
-
+  
   if (str_buf_len >= OB_MAX_LONGTEXT_LENGTH) {
     ret = OB_SIZE_OVERFLOW;
     SHARE_LOG(WARN, "hex format str is too long", K(ret), K(str_buf_len));
@@ -133,10 +133,10 @@ int ObImportTableArg::get_item_array_hex_format_str_(
   } else {
     str.assign_ptr(str_buf, str_buf_len);
   }
-
+  
   return ret;
 }
-
+  
 template <typename T>
 int ObImportTableArg::item_array_deserialize_hex_format_str_(
     T& array,

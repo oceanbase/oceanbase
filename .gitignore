@@ -336,13 +336,13 @@ tools/systemd/profile/postrm
 tools/ocp/software_package
 
 ############# unittest #############
-unittest/**/test_*
-unittest/**/*_test
-unittest/**/**/test_*
-unittest/**/**/*_test
-unittest/**/unittest_*
-!unittest/**/test_*.*
-!unittest/**/**/test_*.*
+unittest/**/test_*		
+unittest/**/*_test		
+unittest/**/**/test_*		
+unittest/**/**/*_test		
+unittest/**/unittest_*		
+!unittest/**/test_*.*		
+!unittest/**/**/test_*.*		
 !unittest/**/unittest_*.*
 
 unittest/clog/deploy/log_tool

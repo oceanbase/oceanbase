@@ -91,7 +91,7 @@ int ObGeoFuncUtils::ob_geo_gc_union(lib::MemoryContext &mem_ctx,
         } else {
           boost::geometry::srs::spheroid<double> geog_sphere(srs.semi_major_axis(), srs.semi_minor_axis());
           boost::geometry::strategy::area::geographic<> area_strategy(geog_sphere);
-          boost::geometry::correct(*pol, area_strategy);
+          boost::geometry::correct(*pol, area_strategy);          
         }
 
         ObGeoEvalCtx gis_context(mem_ctx, &srs);
@@ -164,14 +164,14 @@ int ObGeoFuncUtils::ob_geo_gc_union(lib::MemoryContext &mem_ctx,
   return ret;
 }
 
-// flatten geometrycollection to tree multipoint, multilinestring, multipolygon
+// flatten geometrycollection to tree multipoint, multilinestring, multipolygon 
 // in this func, the geometry is create
 template<typename GcTreeType>
 int ObGeoFuncUtils::ob_geo_gc_split(ObIAllocator &allocator,
                                     const GcTreeType &gc,
                                     typename GcTreeType::sub_mpt_type *&mpt,
                                     typename GcTreeType::sub_ml_type *&ml,
-                                    typename GcTreeType::sub_mp_type *&mpo)
+                                    typename GcTreeType::sub_mp_type *&mpo) 
 {
   INIT_SUCC(ret);
   typedef typename GcTreeType::sub_mpt_type MPT;
@@ -190,7 +190,7 @@ int ObGeoFuncUtils::ob_geo_gc_split(ObIAllocator &allocator,
       ret = OB_ALLOCATE_MEMORY_FAILED;
       OB_LOG(WARN, "failed to allocate memory", K(ret));
     } else if (OB_FAIL(ob_geo_gc_split_inner(gc, *mpt, *ml, *mpo))) {
-      OB_LOG(WARN, "failed to falatten geometrycollection", K(ret));
+      OB_LOG(WARN, "failed to falatten geometrycollection", K(ret));                                          
     }
   }
 
@@ -224,13 +224,13 @@ int ObGeoFuncUtils::ob_gc_prepare(const ObGeoEvalCtx &context,
   multi_line = OB_NEWx(typename GcTreeType::sub_ml_type, &tmp_alloc, gc->get_srid(), tmp_alloc);
   multi_poly = OB_NEWx(typename GcTreeType::sub_mp_type, &tmp_alloc, gc->get_srid(), tmp_alloc);
   multi_point = OB_NEWx(typename GcTreeType::sub_mpt_type, allocator, gc->get_srid(), *allocator);
-
+    
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(multi_point)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "failed to allocate memory", K(ret));
   } else if (OB_FAIL(ObGeoFuncUtils::ob_geo_gc_split_inner(*gc_tree, *multi_point, *multi_line, *multi_poly))) {
-    OB_LOG(WARN, "failed to falatten geometrycollection", K(ret));
+    OB_LOG(WARN, "failed to falatten geometrycollection", K(ret));                                          
   } else if (OB_FAIL(ObGeoFuncUtils::ob_geo_gc_union(context.get_mem_ctx(), *srs, multi_point,
                                                       multi_line, multi_poly))) {
     OB_LOG(WARN, "failed to do gc union", K(ret));
@@ -239,7 +239,7 @@ int ObGeoFuncUtils::ob_gc_prepare(const ObGeoEvalCtx &context,
 }
 
 
-// flatten tree gc to tree multipoint, multilinestring, multipolygon
+// flatten tree gc to tree multipoint, multilinestring, multipolygon 
 template<typename GcTreeType>
 int ObGeoFuncUtils::ob_geo_gc_split_inner(const GcTreeType &gc,
                                           typename GcTreeType::sub_mpt_type &mpt,
@@ -251,12 +251,12 @@ int ObGeoFuncUtils::ob_geo_gc_split_inner(const GcTreeType &gc,
   typedef typename GcTreeType::sub_ml_type ML;
   typedef typename GcTreeType::sub_mp_type MPO;
 
-  ObGeoCRS crs = gc.crs();
+  ObGeoCRS crs = gc.crs(); 
   if (crs != mpt.crs() || crs != ml.crs() || crs != mpo.crs()) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "geometries should in same crs", K(ret), K(crs));
   }
-
+  
   for (uint64_t i = 0; i < gc.size() && OB_SUCC(ret); i++) {
     switch (gc[i].type()) {
       case ObGeoType::POINT: {
@@ -316,7 +316,7 @@ int ObGeoFuncUtils::ob_geo_gc_split_inner(const GcTreeType &gc,
         OB_LOG(WARN, "unexpected geometry type", K(ret));
       }
     }
-  }
+  } 
 
   return ret;
 }

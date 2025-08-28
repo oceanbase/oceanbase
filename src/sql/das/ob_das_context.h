@@ -248,7 +248,7 @@ public:
 
 private:
   ObDASCtx &ctx_;
-  int64_t current_group_;
+  int64_t current_group_; 
   int64_t group_rescan_cnt_;
   const GroupParamArray *group_params_;
 };

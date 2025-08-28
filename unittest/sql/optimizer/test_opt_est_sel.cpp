@@ -210,7 +210,7 @@ void TestOptEstSel::before_process(const char *sql_str, ObDMLStmt *&dml_stmt, Ob
   ObStmt *stmt = NULL;
   // resolver does not generate questionmark expr, selectivity changes.
   // ONLY affect UT, observer is okay. Tracked by separated isssue
-  //
+  // 
   do_resolve(sql_str, stmt, false, JSON_FORMAT, OB_SUCCESS, false);
 
   dml_stmt = static_cast<ObDMLStmt *>(stmt);

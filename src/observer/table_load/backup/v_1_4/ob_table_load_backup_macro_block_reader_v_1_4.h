@@ -52,7 +52,7 @@ class ObTableLoadBackupMacroBlockReader_V_1_4
 public:
   ObTableLoadBackupMacroBlockReader_V_1_4()
     : allocator_("TLD_BMBR_V_1_4"),
-      micro_index_(nullptr),
+      micro_index_(nullptr), 
       compressor_(nullptr),
       buf_(nullptr),
       buf_size_(0),

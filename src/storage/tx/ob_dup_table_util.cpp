@@ -506,7 +506,7 @@ int ObDupTableLSHandler::safe_to_destroy(bool &is_dup_table_handler_safe)
 {
   int ret = OB_SUCCESS;
   is_dup_table_handler_safe = false;
-  //can not submit log after the offline
+  //can not submit log after the offline  
   if (is_inited()) {
     if (OB_NOT_NULL(log_operator_) && log_operator_->is_busy()) {
       ret = OB_EAGAIN;
@@ -604,16 +604,16 @@ int ObDupTableLSHandler::ls_loop_handle()
         } else if (OB_TMP_FAIL(try_to_confirm_tablets_(min_lease_ts_info.max_replayed_scn_))) {
           DUP_TABLE_LOG(WARN, "try confirm tablets failed", K(tmp_ret), K(min_lease_ts_info));
         }
-
+ 
         if (OB_TMP_FAIL(tablets_mgr_ptr_->scan_readable_set_for_gc(
                 ATOMIC_LOAD(&interface_stat_.dup_table_ls_leader_takeover_ts_)))) {
           DUP_TABLE_LOG(WARN, "scan readable set failed", K(tmp_ret));
         }
 
         // submit lease log
-        if(OB_FAIL(ret))
+        if(OB_FAIL(ret)) 
         {
-        } else
+        } else 
           if (OB_ISNULL(log_operator_)) {
             ret = OB_INVALID_ARGUMENT;
             DUP_TABLE_LOG(WARN, "invalid log operator ptr", K(ret), KP(log_operator_));
@@ -1148,13 +1148,13 @@ bool ObDupTableLSHandler::check_tablet_set_exist()
     int64_t readable_and_need_confirm_set_count =
               tablets_mgr_ptr_->get_readable_tablet_set_count()
               + tablets_mgr_ptr_->get_need_confirm_tablet_set_count();
-
+    
     // if readable and need confirm set count > 0, return true
     if (readable_and_need_confirm_set_count > 0 ) {
       bool_ret = true;
     } else {
       // if changing new and removing set exist return true
-      bool chaning_and_removing_tablet_exist =
+      bool chaning_and_removing_tablet_exist = 
           tablets_mgr_ptr_->check_changing_new_tablet_exist()
           || tablets_mgr_ptr_->check_removing_tablet_exist();
       if (chaning_and_removing_tablet_exist) {
@@ -1175,7 +1175,7 @@ int ObDupTableLSHandler::get_local_ts_info(DupTableTsInfo &ts_info)
   if (!is_inited() || OB_ISNULL(ts_sync_mgr_ptr_)) {
     ret = OB_NOT_INIT;
     DUP_TABLE_LOG(WARN, "DupTableLSHandler not init", K(ret), K(is_inited_), KP(ts_sync_mgr_ptr_));
-  } else if (!ls_state_helper_.is_active_ls()) {
+  } else if (!ls_state_helper_.is_active_ls()) { 
     ret = OB_LS_OFFLINE;
     DUP_TABLE_LOG(WARN, "the ls is not active", K(ret), KPC(this));
   } else if (OB_FAIL(ts_sync_mgr_ptr_->get_local_ts_info(ts_info))) {
@@ -1367,7 +1367,7 @@ int ObDupTableLSHandler::switch_to_leader()
   const bool is_resume = false;
 
   SpinRLockGuard r_init_guard(init_rw_lock_);
-
+  
   ObDupTableLSRoleStateContainer restore_state_container;
   if (OB_FAIL(ls_state_helper_.prepare_state_change(ObDupTableLSRoleState::LS_TAKEOVER_SUCC,
                                                     restore_state_container))) {
@@ -1772,7 +1772,7 @@ void ObDupTableLoopWorker::stop()
     DUP_TABLE_LOG(INFO, "stop ObDupTableLoopWorker");
   }
   lib::ThreadPool::stop();
-  // is_started_ = false; // start a threadpool and release it in the funticon of destroy
+  // is_started_ = false; // start a threadpool and release it in the funticon of destroy 
 }
 
 void ObDupTableLoopWorker::wait()
@@ -1894,7 +1894,7 @@ int ObDupTableLoopWorker::CopyDupLsIdFunctor::operator()(common::hash::HashSetTy
   return ret;
 }
 
-// trans service -> dup worker -> ls service -> dup ls handler -> iterate
+// trans service -> dup worker -> ls service -> dup ls handler -> iterate    
 int ObDupTableLoopWorker::iterate_dup_ls(ObDupLSLeaseMgrStatIterator &collect_iter)
 {
   int ret = OB_SUCCESS;
@@ -1956,7 +1956,7 @@ int ObDupTableLoopWorker::iterate_dup_ls(ObDupLSTabletSetStatIterator &collect_i
     ARRAY_FOREACH(ls_id_array, i) {
       const share::ObLSID cur_ls_id = ls_id_array.at(i);
       ObDupTableLSHandler *cur_dup_ls_handler = nullptr;
-      ObLSHandle ls_handle;
+      ObLSHandle ls_handle; 
 
       if (OB_TMP_FAIL(ls_service->get_ls(cur_ls_id, ls_handle, ObLSGetMod::TRANS_MOD))) {
         if (OB_LS_NOT_EXIST != tmp_ret) {
@@ -2000,7 +2000,7 @@ int ObDupTableLoopWorker::iterate_dup_ls(ObDupLSTabletsStatIterator &collect_ite
     ARRAY_FOREACH(ls_id_array, i) {
       const share::ObLSID cur_ls_id = ls_id_array.at(i);
       ObDupTableLSHandler *cur_dup_ls_handler = nullptr;
-      ObLSHandle ls_handle;
+      ObLSHandle ls_handle; 
 
       if (OB_TMP_FAIL(ls_service->get_ls(cur_ls_id, ls_handle, ObLSGetMod::TRANS_MOD))) {
         if (OB_LS_NOT_EXIST != tmp_ret) {

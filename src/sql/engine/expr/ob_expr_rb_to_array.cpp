@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  * This file contains implementation for rb_to_array.
  */
-
+ 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_rb_to_array.h"
 #include "sql/engine/expr/ob_expr_rb_func_helper.h"
@@ -46,7 +46,7 @@ int ObExprRbToArray::calc_result_type1(ObExprResType &type,
   ObExecContext *exec_ctx = NULL;
   ObString res_type_info = "ARRAY(BIGINT UNSIGNED)";
   uint16_t subschema_id;
-
+  
   if (ob_is_null(type1.get_type())) {
     type.set_null();
   } else if (!(type1.is_roaringbitmap() || type1.is_hex_string())) {
@@ -99,9 +99,9 @@ int ObExprRbToArray::eval_rb_to_array(const ObExpr &expr,
   return ret;
 }
 
-int ObExprRbToArray::eval_rb_to_array_vector(const ObExpr &expr,
+int ObExprRbToArray::eval_rb_to_array_vector(const ObExpr &expr, 
                                               ObEvalCtx &ctx,
-                                              const ObBitVector &skip,
+                                              const ObBitVector &skip, 
                                               const EvalBound &bound)
 {
   int ret = OB_SUCCESS;
@@ -133,7 +133,7 @@ int ObExprRbToArray::eval_rb_to_array_vector(const ObExpr &expr,
           LOG_WARN("fail to get input roaringbitmap", K(ret));
         } else if (OB_FAIL(rb_to_array(expr, ctx, tmp_allocator, rb, arr_res))) {
           LOG_WARN("fail to convert to array", K(ret));
-        }
+        } 
       }
 
       if (OB_FAIL(ret)){
@@ -154,21 +154,21 @@ int ObExprRbToArray::eval_rb_to_array_vector(const ObExpr &expr,
         } else {
           eval_flags.set(idx);
         }
-      }
+      } 
     } //end for
   }
   return ret;
 }
 
-int ObExprRbToArray::rb_to_array(const ObExpr &expr,
+int ObExprRbToArray::rb_to_array(const ObExpr &expr, 
                 ObEvalCtx &ctx,
-                ObIAllocator &alloc,
+                ObIAllocator &alloc, 
                 ObRoaringBitmap *&rb,
                 ObIArrayType *&arr_res)
 {
   INIT_SUCC(ret);
   void *iter_buff = nullptr;
-  const uint16_t meta_id = expr.obj_meta_.get_subschema_id();
+  const uint16_t meta_id = expr.obj_meta_.get_subschema_id();   
   if (OB_FAIL(ObArrayExprUtils::construct_array_obj(alloc, ctx, meta_id, arr_res, false))){
     LOG_WARN("fail to construct array obj.", K(ret));
   } else if(rb->get_cardinality() == 0) {
@@ -203,7 +203,7 @@ int ObExprRbToArray::rb_to_array(const ObExpr &expr,
         LOG_WARN("failed to get next value on roaringbitmap iter", K(ret));
       }
     }
-  }
+  }   
   ObRbUtils::rb_destroy(rb);
   return ret;
 }

@@ -599,7 +599,7 @@ public:
     }
     return query_ctx;
   }
-
+  
   ObDiagnosisManager& get_diagnosis_manager() { return diagnosis_manager_; }
   common::ObArenaAllocator &get_deterministic_udf_cache_allocator() { return deterministic_udf_cache_allocator_; }
 
@@ -781,7 +781,7 @@ protected:
   ObUserLoggingCtx user_logging_ctx_;
   // for online stats gathering
   bool is_online_stats_gathering_;
-
+  
   // for calculating idempotent auto increment value in DDL
   bool is_ddl_idempotent_auto_inc_;
   int64_t table_all_slice_count_;

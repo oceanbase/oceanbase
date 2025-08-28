@@ -173,7 +173,7 @@ public:
   }
 
   // currently a query could involve multiple fts indexes, such as index merge or func lookup,
-  // and fts_idx_ serves as a unique identifier for each fts index, such as locating the corresponding
+  // and fts_idx_ serves as a unique identifier for each fts index, such as locating the corresponding 
   // fts tablet ids in ObDASRelatedTabletID.
   // fts_idx_ is dynamically generated during execution based on the rtdef tree and does not need to be serialized.
   int64_t fts_idx_;

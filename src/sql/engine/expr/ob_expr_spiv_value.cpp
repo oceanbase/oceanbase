@@ -78,3 +78,4 @@ int ObExprSpivValue::generate_spiv_value(
 
 }  // namespace sql
 }  // namespace oceanbase
+

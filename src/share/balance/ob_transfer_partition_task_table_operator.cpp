@@ -23,7 +23,7 @@ using namespace transaction;
 using namespace common;
 namespace share
 {
-static const char* TRP_TASK_STATUS_ARRAY[] =
+static const char* TRP_TASK_STATUS_ARRAY[] = 
 {
   "WAITING", "INIT", "DOING", "COMPLETED", "FAILED", "CANCELED"
 };
@@ -59,7 +59,7 @@ ObTransferPartitionTaskStatus::ObTransferPartitionTaskStatus(const ObString &str
 
 int ObTransferPartitionTask::simple_init(const uint64_t tenant_id,
            const ObTransferPartInfo &part_info,
-           const ObLSID &dest_ls, const ObTransferPartitionTaskID &task_id)
+           const ObLSID &dest_ls, const ObTransferPartitionTaskID &task_id) 
 {
   int ret = OB_SUCCESS;
   reset();
@@ -78,7 +78,7 @@ int ObTransferPartitionTask::simple_init(const uint64_t tenant_id,
     comment_.reset();
   }
   return ret;
-}
+} 
 
 int ObTransferPartitionTask::init(const uint64_t tenant_id,
            const ObTransferPartInfo &part_info,
@@ -109,7 +109,7 @@ int ObTransferPartitionTask::init(const uint64_t tenant_id,
     task_status_ = task_status;
   }
   return ret;
-}
+} 
 
 bool ObTransferPartitionTask::is_valid() const
 {
@@ -149,7 +149,7 @@ void ObTransferPartitionTask::reset()
   transfer_task_id_.reset();
   task_status_.reset();
   comment_.reset();
-}
+} 
 
 int ObTransferPartitionTaskTableOperator::insert_new_task(
     const uint64_t tenant_id,
@@ -384,16 +384,16 @@ int ObTransferPartitionTaskTableOperator::rollback_from_doing_to_waiting(const u
   ObTransferPartitionTaskStatus old_status = ObTransferPartitionTaskStatus::TRP_TASK_STATUS_DOING;
   ObTransferPartitionTaskStatus new_status = ObTransferPartitionTaskStatus::TRP_TASK_STATUS_WAITING;
   ObBalanceJobID invalid_job_id;
-  ObTransferTaskID invalid_task_id;
+  ObTransferTaskID invalid_task_id; 
   ObSqlString sql;
-  ObSqlString part_list_sql;
+  ObSqlString part_list_sql; 
   int64_t affected_row = 0;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !job_id.is_valid()
         || part_list.count() <= 0 || comment.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(job_id),
         K(part_list), K(comment));
-  } else if (OB_FAIL(append_sql_with_part_list_(part_list, part_list_sql))) {
+  } else if (OB_FAIL(append_sql_with_part_list_(part_list, part_list_sql))) { 
     LOG_WARN("failed to append sql", KR(ret), K(part_list));
   } else if (OB_FAIL(sql.assign_fmt(
                  "update %s set transfer_task_id = %ld, balance_job_id = %ld, "
@@ -427,7 +427,7 @@ int ObTransferPartitionTaskTableOperator::start_transfer_task(const uint64_t ten
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
-  ObSqlString part_list_sql;
+  ObSqlString part_list_sql; 
   int64_t affected_row = 0;
   //由于一个transfer partition任务会经过多轮transfer，所以start_transfer_task会调度多轮
   //可能status为init或者doing
@@ -438,7 +438,7 @@ int ObTransferPartitionTaskTableOperator::start_transfer_task(const uint64_t ten
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(transfer_task_id), K(job_id),
         K(part_list));
-  } else if (OB_FAIL(append_sql_with_part_list_(part_list, part_list_sql))) {
+  } else if (OB_FAIL(append_sql_with_part_list_(part_list, part_list_sql))) { 
     LOG_WARN("failed to append sql", KR(ret), K(part_list));
   } else if (OB_FAIL(sql.assign_fmt("update %s set transfer_task_id = %ld, status = '%s' "
           "where balance_job_id = %ld and status in ('%s', '%s') "
@@ -462,7 +462,7 @@ int ObTransferPartitionTaskTableOperator::start_transfer_task(const uint64_t ten
 
 int ObTransferPartitionTaskTableOperator::finish_task(const uint64_t tenant_id,
                          const ObTransferPartList &part_list,
-                         const ObTransferPartitionTaskID &max_task_id,
+                         const ObTransferPartitionTaskID &max_task_id, 
                          const ObTransferPartitionTaskStatus &status,
                          const ObString &comment,
                          ObMySQLTransaction &trans)
@@ -472,15 +472,15 @@ int ObTransferPartitionTaskTableOperator::finish_task(const uint64_t tenant_id,
   ObSqlString delete_sql;
   ObSqlString condition_sql;
   ObSqlString part_list_sql;
-  int64_t affected_row = 0;
-  int64_t delete_affected_row = 0;
+  int64_t affected_row = 0; 
+  int64_t delete_affected_row = 0; 
   const char* table_column = "table_id, object_id, task_id, dest_ls, balance_job_id, transfer_task_id";
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !max_task_id.is_valid()
    || !status.is_valid() || part_list.count() <= 0 || !status.is_finish_status())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(status),
     K(part_list), K(max_task_id));
-  } else if (OB_FAIL(append_sql_with_part_list_(part_list, part_list_sql))) {
+  } else if (OB_FAIL(append_sql_with_part_list_(part_list, part_list_sql))) { 
     LOG_WARN("failed to append sql", KR(ret), K(part_list));
   } else if (OB_FAIL(condition_sql.assign_fmt("(table_id, object_id) in (%s) and task_id <= %ld",
                   part_list_sql.ptr(), max_task_id.id()))) {
@@ -583,7 +583,7 @@ int ObTransferPartitionTaskTableOperator::append_sql_with_part_list_(
     LOG_WARN("invalid argument", KR(ret), K(sql), K(part_list));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < part_list.count(); ++i) {
-    const ObTransferPartInfo& part = part_list.at(i);
+    const ObTransferPartInfo& part = part_list.at(i); 
     if (0 != i && OB_FAIL(sql.append(", "))) {
       LOG_WARN("failed to append sql", KR(ret), K(i));
     } else if (OB_FAIL(sql.append_fmt("(%ld, %ld)", part.table_id(),
@@ -642,13 +642,13 @@ int ObTransferPartitionTaskTableOperator::load_part_list_task(
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
-  ObSqlString part_list_sql;
+  ObSqlString part_list_sql; 
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
                   || part_list.count() <= 0
                   || !job_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(part_list), K(job_id));
-  } else if (OB_FAIL(append_sql_with_part_list_(part_list, part_list_sql))) {
+  } else if (OB_FAIL(append_sql_with_part_list_(part_list, part_list_sql))) { 
     LOG_WARN("failed to append sql", KR(ret), K(part_list));
   } else if (OB_FAIL(sql.assign_fmt("select * from %s where balance_job_id = %ld "
                                 "and (table_id, object_id) in (%s)",

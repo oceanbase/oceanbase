@@ -33,7 +33,7 @@ ObExprPrivSTPointOnSurface::~ObExprPrivSTPointOnSurface()
 
 int ObExprPrivSTPointOnSurface::calc_result_type1(
     ObExprResType &type, ObExprResType &type1, common::ObExprTypeCtx &type_ctx) const
-{
+{ 
   int ret = OB_SUCCESS;
   ObObjType obj_type1 = type1.get_type();
 
@@ -85,7 +85,7 @@ int ObExprPrivSTPointOnSurface::process_input_geometry(
       LOG_USER_ERROR(OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS, N_PRIV_ST_ASMVTGEOM,
                   ObGeoTypeUtil::get_geo_name_by_type(geo1->type()));
       LOG_WARN("Geometry in geographical srs can not be input", K(ret), K(srs1));
-    }
+    } 
   }
 
   return ret;
@@ -105,7 +105,7 @@ int ObExprPrivSTPointOnSurface::eval_priv_st_pointonsurface(const ObExpr &expr, 
 
   if (OB_FAIL(process_input_geometry(expr, ctx, temp_allocator, is_null_res, geo1))) {
     LOG_WARN("fail to process input geometry", K(ret), K(geo1), K(is_null_res));
-  }
+  } 
   ObGeoBoostAllocGuard guard(tenant_id);
   lib::MemoryContext *mem_ctx = nullptr;
   if (OB_FAIL(ret) || is_null_res) {

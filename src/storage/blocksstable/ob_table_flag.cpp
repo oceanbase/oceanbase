@@ -98,3 +98,4 @@ OB_SERIALIZE_MEMBER(ObTableSharedFlag, flag_);
 
 }
 }
+

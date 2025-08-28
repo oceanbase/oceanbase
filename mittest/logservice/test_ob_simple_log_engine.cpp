@@ -210,7 +210,7 @@ TEST_F(TestObSimpleLogClusterLogEngine, flashback_restart)
 
   {
     PalfHandleImplGuard leader1;
-    EXPECT_EQ(OB_SUCCESS, get_leader(id_1, leader1, leader_idx_1));
+    EXPECT_EQ(OB_SUCCESS, get_leader(id_1, leader1, leader_idx_1)); 
     LogStorage *log_storage = &leader1.get_palf_handle_impl()->log_engine_.log_storage_;
     EXPECT_LE(2, log_storage->block_mgr_.max_block_id_);
     EXPECT_EQ(OB_SUCCESS, log_storage->block_mgr_.create_tmp_block_handler(2));
@@ -232,11 +232,11 @@ TEST_F(TestObSimpleLogClusterLogEngine, flashback_restart)
         PALF_LOG(ERROR, "block_id is not same as curr_writable_handler_, unexpected error",
             K(ret), K(block_id), KPC(block_mgr));
       } else if (OB_FAIL(block_id_to_string(block_id, block_path, OB_MAX_FILE_NAME_LENGTH))) {
-	PALF_LOG(ERROR, "block_id_to_string failed", K(ret), K(block_id));
+      	PALF_LOG(ERROR, "block_id_to_string failed", K(ret), K(block_id));
       } else if (OB_FAIL(block_id_to_tmp_string(block_id, tmp_block_path, OB_MAX_FILE_NAME_LENGTH))) {
-	PALF_LOG(ERROR, "block_id_to_tmp_string failed", K(ret), K(block_id));
+      	PALF_LOG(ERROR, "block_id_to_tmp_string failed", K(ret), K(block_id));
       } else if (OB_FAIL(block_id_to_flashback_string(block_id, flashback_block_path, OB_MAX_FILE_NAME_LENGTH))) {
-	PALF_LOG(ERROR, "block_id_to_flashback_string failed", K(ret), K(block_id));
+      	PALF_LOG(ERROR, "block_id_to_flashback_string failed", K(ret), K(block_id));
       } else if (OB_FAIL(block_mgr->do_rename_and_fsync_(tmp_block_path, flashback_block_path))) {
         PALF_LOG(ERROR, "do_rename_and_fsync_ failed", K(ret), KPC(block_mgr));
       } else {
@@ -411,7 +411,7 @@ TEST_F(TestObSimpleLogClusterLogEngine, exception_path)
   {
     block_id_t tmp_block_id = LOG_INVALID_BLOCK_ID;
     SCN tmp_scn;
-    EXPECT_EQ(OB_ENTRY_NOT_EXIST, log_engine_->get_min_block_info(tmp_block_id, tmp_scn));
+    EXPECT_EQ(OB_ENTRY_NOT_EXIST, log_engine_->get_min_block_info(tmp_block_id, tmp_scn)); 
   }
 
   PALF_LOG(INFO, "directory is empty");
@@ -778,7 +778,7 @@ TEST_F(TestObSimpleLogClusterLogEngine, limit_reduce_task)
     EXPECT_EQ(prev_handle_count+1, log_io_worker->batch_io_task_mgr_.handle_count_);
     prev_handle_count = log_io_worker->batch_io_task_mgr_.handle_count_;
     PALF_LOG(INFO, "after first LT");
-
+    
     // case3：测试小日志场景
     EXPECT_EQ(OB_SUCCESS, log_io_worker->submit_io_task(&io_task_cond_7));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader_7, 30, id_7, 1024));

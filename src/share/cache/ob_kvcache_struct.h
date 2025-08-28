@@ -219,22 +219,22 @@ struct ObKVCacheInfo
   TO_STRING_KV(K_(inst_key), K_(status));
 };
 
-struct ObKVCacheStoreMemblockInfo
+struct ObKVCacheStoreMemblockInfo 
 {
 public:
   ObKVCacheStoreMemblockInfo()
-    : tenant_id_(OB_INVALID_TENANT_ID),
-      cache_id_(-1),
+    : tenant_id_(OB_INVALID_TENANT_ID), 
+      cache_id_(-1), 
       ref_count_(-1),
-      using_status_(-1),
-      policy_(-1),
-      kv_cnt_(-1),
-      get_cnt_(-1),
-      recent_get_cnt_(-1),
-      priority_(0),
-      score_(0),
-      align_size_(-1),
-      cache_name_(),
+      using_status_(-1), 
+      policy_(-1), 
+      kv_cnt_(-1), 
+      get_cnt_(-1), 
+      recent_get_cnt_(-1), 
+      priority_(0), 
+      score_(0), 
+      align_size_(-1), 
+      cache_name_(), 
       memblock_ptr_()
   {
     memset(cache_name_, 0, MAX_CACHE_NAME_LENGTH);
@@ -244,7 +244,7 @@ public:
   bool is_valid() const;
   TO_STRING_KV(K_(tenant_id), K_(cache_id), K_(ref_count), K_(using_status), K_(policy), K_(kv_cnt), K_(get_cnt),
           K_(recent_get_cnt), K_(priority), K_(score), K_(align_size), KP_(cache_name), KP_(memblock_ptr));
-public:
+public: 
   uint64_t tenant_id_;
   int64_t cache_id_;
   int64_t ref_count_;

@@ -100,11 +100,11 @@ void ObStorageHADiagTaskKey::reset()
 bool ObStorageHADiagTaskKey::is_valid() const
 {
   return tenant_id_ != OB_INVALID_TENANT_ID
-      && task_id_ >= 0
-      && module_ < ObStorageHADiagModule::MAX_MODULE
-      && module_ >= ObStorageHADiagModule::TRANSFER_ERROR_DIAGNOSE
+      && task_id_ >= 0 
+      && module_ < ObStorageHADiagModule::MAX_MODULE 
+      && module_ >= ObStorageHADiagModule::TRANSFER_ERROR_DIAGNOSE 
       && type_ < ObStorageHADiagTaskType::MAX_TYPE
-      && type_ >= ObStorageHADiagTaskType::TRANSFER_START
+      && type_ >= ObStorageHADiagTaskType::TRANSFER_START 
       && retry_id_ >= 0
       && diag_type_ < ObStorageHADiagType::MAX_TYPE
       && diag_type_ >= ObStorageHADiagType::ERROR_DIAGNOSE;
@@ -185,7 +185,7 @@ ObStorageHADiagInfo::ObStorageHADiagInfo()
     task_(nullptr),
     tablet_id_()
 {
-}
+} 
 
 int ObStorageHADiagInfo::assign(const ObStorageHADiagInfo &info)
 {
@@ -223,7 +223,7 @@ void ObStorageHADiagInfo::reset()
 
 bool ObStorageHADiagInfo::is_valid() const
 {
-  return task_id_ > 0
+  return task_id_ > 0 
       && ls_id_.is_valid()
       && module_ < ObStorageHADiagModule::MAX_MODULE
       && module_ >= ObStorageHADiagModule::TRANSFER_ERROR_DIAGNOSE
@@ -357,7 +357,7 @@ const char * ObStorageHADiagInfo::get_type_str() const
  */
 ObStorageHADiagTask::ObStorageHADiagTask()
   : key_(),
-    val_(nullptr)
+    val_(nullptr) 
 {
 }
 
@@ -382,7 +382,7 @@ bool ObStorageHADiagTask::is_valid() const
 ObTransferErrorDiagInfo::ObTransferErrorDiagInfo()
   : ObStorageHADiagInfo(),
     trace_id_(),
-    thread_id_(0)
+    thread_id_(0) 
 {
 }
 
@@ -425,8 +425,8 @@ int ObTransferErrorDiagInfo::get_task_id(char *info, const int64_t size) const
 
 bool ObTransferErrorDiagInfo::is_valid() const
 {
-  return ObStorageHADiagInfo::is_valid()
-      && trace_id_.is_valid()
+  return ObStorageHADiagInfo::is_valid() 
+      && trace_id_.is_valid() 
       && thread_id_ > 0;
 }
 
@@ -509,7 +509,7 @@ ObIStorageHACostItem::ObIStorageHACostItem()
 
 bool ObIStorageHACostItem::is_valid() const
 {
-  return name_ >= ObStorageHACostItemName::TRANSFER_START_BEGIN
+  return name_ >= ObStorageHACostItemName::TRANSFER_START_BEGIN 
          && name_ < ObStorageHACostItemName::MAX_NAME
          && type_ >= ObStorageHACostItemType::ACCUM_COST_TYPE
          && type_ < ObStorageHACostItemType::MAX_TYPE
@@ -528,7 +528,7 @@ uint32_t ObIStorageHACostItem::get_size() const
   return sizeof(ObStorageHACostItemName) + sizeof(ObStorageHACostItemType) + sizeof(int64_t);
 }
 
-int ObIStorageHACostItem::assign(const ObIStorageHACostItem &item)
+int ObIStorageHACostItem::assign(const ObIStorageHACostItem &item) 
 {
   int ret = OB_SUCCESS;
   if (!item.is_valid()) {
@@ -708,7 +708,7 @@ int ObStorageHACostAccumItem::deep_copy(ObIAllocator &allocator, ObIStorageHACos
 
 bool ObStorageHACostAccumItem::is_valid() const
 {
-  return ObIStorageHACostItem::is_valid()
+  return ObIStorageHACostItem::is_valid() 
          && cost_time_ >= 0;
 }
 
@@ -760,7 +760,7 @@ int ObStorageHATimestampItem::get_str(char *str, const int64_t size, int64_t &po
 
 bool ObStorageHATimestampItem::is_valid() const
 {
-  return ObIStorageHACostItem::is_valid()
+  return ObIStorageHACostItem::is_valid() 
          && timestamp_ >= 0;
 }
 
@@ -829,7 +829,7 @@ int ObStorageHATimestampItem::update(const ObIStorageHACostItem &item)
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("crucial cost accum type can not update", K(ret), K(item.type_));
   } else {
-    // do nothing, FLUENT_TIMESTAMP_TYPE and CRUCIAL_TIMESTAMP only
+    // do nothing, FLUENT_TIMESTAMP_TYPE and CRUCIAL_TIMESTAMP only 
     // record the time of the first generation and do not update with retries.
   }
   return ret;
@@ -879,7 +879,7 @@ int ObTransferPerfDiagInfo::init(ObIAllocator *allocator, const int64_t tenant_i
 
 bool ObTransferPerfDiagInfo::is_valid() const
 {
-  return is_inited_ && end_timestamp_ > 0 && tablet_count_ > 0
+  return is_inited_ && end_timestamp_ > 0 && tablet_count_ > 0 
       && !items_.is_empty() && !item_map_.empty();
 }
 

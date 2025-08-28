@@ -161,7 +161,7 @@ def do_upgrade_by_argv(argv):
     except mysql.connector.Error as e:
       logging.exception('mysql connctor error')
       logging.exception('run error, maybe you can reference ' + upgrade_params.rollback_sql_filename + ' to rollback it')
-      raise
+      raise 
     except Exception as e:
       logging.exception('normal error')
       logging.exception('run error, maybe you can reference ' + upgrade_params.rollback_sql_filename + ' to rollback it')

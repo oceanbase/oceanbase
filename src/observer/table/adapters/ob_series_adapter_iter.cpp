@@ -15,7 +15,7 @@
 #include "ob_series_adapter_iter.h"
 
 namespace oceanbase
-{
+{   
 namespace table
 {
 
@@ -397,7 +397,7 @@ int ObHbaseSeriesCellIter::get_next_cell(ObNewRow *&row, uint8_t depth)
         LOG_WARN("fail to pop", K(ret));
       } else if (OB_FAIL(compare_.get_error_code())) {
         ret = compare_.get_error_code();
-        LOG_WARN("fail to compare row", K(ret));
+        LOG_WARN("fail to compare row", K(ret)); 
       } else if (OB_FAIL(is_in_range(*row, in_range))) {
         LOG_WARN("fail to eval row is valid", K(ret), KPC(row), K(in_range));
       }
@@ -418,3 +418,4 @@ int ObHbaseSeriesCellIter::get_next_cell(ObNewRow *&row, uint8_t depth)
 
 } // end of namespace table
 } // end of namespace oceanbase
+  

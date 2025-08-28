@@ -31,13 +31,13 @@ namespace rootserver
 int ObAlterTableConstraintChecker::check_can_change_cst_column_name(
     const obrpc::ObAlterTableArg &alter_table_arg,
     const ObTableSchema &orig_table_schema,
-    const uint64_t tenant_data_version,
-    bool &can_change_cst_column_name)
+    const uint64_t tenant_data_version, 
+    bool &can_change_cst_column_name) 
 {
   int ret = OB_SUCCESS;
   can_change_cst_column_name = false;
   const share::schema::AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
-
+  
   if (DATA_VERSION_4_3_5_2 <= tenant_data_version
    &&  ObAlterTableArg::ADD_CONSTRAINT == alter_table_arg.alter_constraint_type_
    && alter_table_arg.is_only_alter_column()
@@ -58,7 +58,7 @@ int ObAlterTableConstraintChecker::check_can_change_cst_column_name(
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("iter is NULL", K(ret));
         } else if (OB_ISNULL(col_schema = orig_table_schema.get_column_schema(alter_column_schema->get_column_id()))) {
-        } else if (col_schema->get_column_name_str() != alter_column_schema->get_column_name_str() && col_schema->get_column_id() != col_id) {
+        } else if (col_schema->get_column_name_str() != alter_column_schema->get_column_name_str() && col_schema->get_column_id() != col_id) { 
           // ensures that the column being renamed and the column to which the constraint is added are the same.
           can_change_cst_column_name = false;
         }
@@ -86,7 +86,7 @@ int ObAlterTableConstraintChecker::check_can_add_cst_on_multi_column(
     for (; OB_SUCC(ret) && can_add_cst_on_multi_column && iter != alter_table_schema.constraint_end(); iter++) {
       if (OB_ISNULL(iter) || OB_ISNULL(*iter)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("constraint iter is null", K(ret));
+        LOG_WARN("constraint iter is null", K(ret)); 
       } else if (CONSTRAINT_TYPE_NOT_NULL != (*iter)->get_constraint_type()) {
         can_add_cst_on_multi_column = false;
       } else if (OB_UNLIKELY(1 != (*iter)->get_column_cnt())) {
@@ -158,9 +158,9 @@ int ObAlterTableConstraintChecker::check_alter_table_constraint(
       } else if (change_cst_column_name) {
         ddl_type = share::ObDDLType::DDL_CHANGE_COLUMN_NAME;
         ret = OB_NOT_SUPPORTED;
-      } else if (alter_table_arg.alter_table_schema_.get_constraint_count() > 1
+      } else if (alter_table_arg.alter_table_schema_.get_constraint_count() > 1 
               && OB_FAIL(check_can_add_cst_on_multi_column(alter_table_arg, tenant_data_version, can_add_cst_on_multi_column))) {
-        LOG_WARN("failed to check can modify column name and constraint", K(ret), K(alter_table_arg));
+        LOG_WARN("failed to check can modify column name and constraint", K(ret), K(alter_table_arg)); 
       } else if (can_add_cst_on_multi_column) {
         ddl_type = share::ObDDLType::DDL_TABLE_REDEFINITION;
       } else {
@@ -178,7 +178,7 @@ int ObAlterTableConstraintChecker::check_alter_table_constraint(
       } else if (OB_FAIL(ObSchemaUtils::is_drop_column_only(alter_table_arg.alter_table_schema_, is_drop_col_only))) {
         LOG_WARN("fail to check is drop column only", K(ret), K(alter_table_arg.alter_table_schema_));
       } else if (share::ObDDLType::DDL_TABLE_REDEFINITION == ddl_type && is_drop_col_only && is_column_group_store) {
-        // for column store, drop column is table redefinition
+        // for column store, drop column is table redefinition      
       } else if (OB_FAIL(ddl_service.check_is_alter_decimal_int_offline(ddl_type,
                                                             orig_table_schema,
                                                             alter_table_arg.alter_table_schema_,
@@ -207,7 +207,7 @@ int ObAlterTableConstraintChecker::check_alter_table_constraint(
 
 // check whether it's modify column not null or modify constraint state, which need send two rpc.
 int ObAlterTableConstraintChecker::need_modify_not_null_constraint_validate(
-  rootserver::ObDDLService &ddl_service,
+  rootserver::ObDDLService &ddl_service, 
   const obrpc::ObAlterTableArg &alter_table_arg,
   const uint64_t tenant_data_version,
   bool &is_add_not_null_col,

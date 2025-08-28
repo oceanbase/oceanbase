@@ -615,9 +615,9 @@ int ObMigrateLSReplicaTask::execute(
           false/*skip_change_member_list(not used)*/,
           get_force_data_src_member(),
           get_prioritize_same_zone_src()))) {
-    /*
-     During parallel migration, the same zone data source is preferred.
-     If multiple replica select the same server as the data source,
+    /* 
+     During parallel migration, the same zone data source is preferred. 
+     If multiple replica select the same server as the data source, 
      it will cause greater IO pressure on the corresponding server and affect normal function.
      In addition, high IO pressure will also affect the speed of copying data and lose the advantage of parallel migration.
     */

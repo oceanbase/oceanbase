@@ -58,7 +58,7 @@ public:
 
   // get log restore source
   int get_source(ObLogRestoreSourceItem &item);
-
+  
   int get_source_for_update(ObLogRestoreSourceItem &item, common::ObMySQLTransaction &trans);
 
   static int get_backup_dest(const ObLogRestoreSourceItem &item, ObBackupDest& dest);

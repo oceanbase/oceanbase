@@ -186,9 +186,9 @@ private:
   int get_diagnose_support_info_(share::ObLSID &dest_ls_id, share::SCN &backfill_scn) const;
   int get_dest_transfer_seq_(const common::ObTabletID &tablet_id, int64_t &transfer_seq) const;
   void process_transfer_perf_diagnose_(
-      const int64_t timestamp,
-      const int64_t start_ts,
-      const bool is_report,
+      const int64_t timestamp, 
+      const int64_t start_ts, 
+      const bool is_report, 
       const ObStorageHACostItemName name,
       const int result) const;
 private:
@@ -221,10 +221,10 @@ private:
 
   int get_diagnose_support_info_(share::ObLSID &dest_ls_id, share::SCN &log_sync_scn) const;
   void process_transfer_perf_diagnose_(
-      const int64_t timestamp,
-      const int64_t start_ts,
-      const bool is_report,
-      const ObStorageHACostItemType type,
+      const int64_t timestamp, 
+      const int64_t start_ts, 
+      const bool is_report, 
+      const ObStorageHACostItemType type, 
       const ObStorageHACostItemName name,
       const int result) const;
 private:

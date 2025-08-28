@@ -74,7 +74,7 @@ public:
   }
 private:
   common::ObSEArray<ObPieceMsgCtx *, 2> ctxs_;
-  common::ObSEArray<dtl::ObDtlMsgType, 2> types_;
+  common::ObSEArray<dtl::ObDtlMsgType, 2> types_; 
 };
 
 }

@@ -23,7 +23,7 @@ struct ObImportPartitionItem final : public ObIImportSchemaItem
 {
   OB_UNIS_VERSION(1);
 public:
-  ObImportPartitionItem() :
+  ObImportPartitionItem() : 
       ObIImportSchemaItem(ItemType::PARTITION),
       database_name_(),
       table_name_(),
@@ -44,8 +44,8 @@ public:
   virtual bool case_mode_equal(const ObIImportItem &other) const override;
   virtual int64_t get_format_serialize_size() const override;
   virtual int format_serialize(
-      char *buf,
-      const int64_t buf_len,
+      char *buf, 
+      const int64_t buf_len, 
       int64_t &pos) const override;
 
   virtual int deep_copy(common::ObIAllocator &allocator, const ObIImportItem &src) override;

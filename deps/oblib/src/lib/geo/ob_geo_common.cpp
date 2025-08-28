@@ -68,7 +68,7 @@ void ObGeoWkbByteOrderUtil::write<double>(char* data, double val, ObGeoWkbByteOr
       *reinterpret_cast<double*>(data) = val;
   } else {
     for(int i = 0; i < 8; i++) {
-      data[i] = reinterpret_cast<char *>(&val)[7 - i];
+      data[i] = reinterpret_cast<char *>(&val)[7 - i]; 
     }
   }
 }
@@ -80,7 +80,7 @@ void ObGeoWkbByteOrderUtil::write<uint32_t>(char* data, uint32_t val, ObGeoWkbBy
     *reinterpret_cast<uint32_t*>(data) = val;
   } else {
     for(int i = 0; i < 4; i++) {
-      data[i] = reinterpret_cast<char *>(&val)[3 - i];
+      data[i] = reinterpret_cast<char *>(&val)[3 - i]; 
     }
   }
 }
@@ -108,7 +108,7 @@ int ObWkbBuffer::append(uint32_t val)
   if (OB_FAIL(reserve(sizeof(uint32_t)))) {
     LOG_WARN("fail to reserve more buffer", K(ret));
   } else {
-    ObGeoWkbByteOrderUtil::write<uint32_t>(buf_.ptr() + buf_.length(), val, bo_);
+    ObGeoWkbByteOrderUtil::write<uint32_t>(buf_.ptr() + buf_.length(), val, bo_); 
     buf_.set_length(buf_.length() + sizeof(uint32_t));
   }
   return ret;
@@ -162,7 +162,7 @@ int ObWkbBuffer::read(uint64_t pos, uint32_t &val)
 
 const ObString ObWkbBuffer::string() const
 {
-  return buf_.string();
+  return buf_.string(); 
 }
 
 uint64_t ObWkbBuffer::length() const
@@ -192,6 +192,6 @@ int ObWkbBuffer::set_length(const uint64_t len)
 {
   return buf_.set_length(len);
 }
-
+  
 } // namespace common
 } // namespace oceanbase

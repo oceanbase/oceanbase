@@ -5705,7 +5705,7 @@ ObMySQLDate ObTimeConverter::ob_time_to_mdate(ObTime &ob_time)
     mdate.year_ = parts[DT_YEAR];
     mdate.month_ = parts[DT_MON];
     mdate.day_ = parts[DT_MDAY];
-  }
+  } 
   return mdate;
 }
 

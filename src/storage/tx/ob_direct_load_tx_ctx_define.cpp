@@ -251,7 +251,7 @@ int ObDLIBatchSet::before_submit_ddl_end(const ObDDLIncLogBasic &key, const shar
   } else if (info_in_hashset->is_ddl_end_logging()){
     ret = OB_ENTRY_EXIST;
     TRANS_LOG(WARN, "The DDL end is logging", K(ret), K(batch_info),KPC(info_in_hashset),K(end_scn));
-  }
+  }   
 
   return ret;
 }

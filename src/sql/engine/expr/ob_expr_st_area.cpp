@@ -39,7 +39,7 @@ int ObExprSTArea::calc_result_type1(ObExprResType &type,
                                     ObExprResType &type1,
                                     common::ObExprTypeCtx &type_ctx) const
 {
-  UNUSED(type_ctx);
+  UNUSED(type_ctx); 
   INIT_SUCC(ret);
   if (ob_is_numeric_type(type1.get_type())) {
     type1.set_calc_type(ObLongTextType);
@@ -88,7 +88,7 @@ int ObExprSTArea::eval_st_area(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
     } else if (geo->type() != ObGeoType::POLYGON && geo->type() != ObGeoType::MULTIPOLYGON) {
       ret = OB_ERR_UNEXPECTED_GEOMETRY_TYPE;
       LOG_WARN("unexpected geometry type for st_area", K(ret));
-      LOG_USER_ERROR(OB_ERR_UNEXPECTED_GEOMETRY_TYPE, "POLYGON/MULTIPOLYGON",
+      LOG_USER_ERROR(OB_ERR_UNEXPECTED_GEOMETRY_TYPE, "POLYGON/MULTIPOLYGON", 
         ObGeoTypeUtil::get_geo_name_by_type(geo->type()), N_ST_AREA);
     } else if (OB_FAIL(guard.init())) {
       LOG_WARN("fail to init geo allocator guard", K(ret));

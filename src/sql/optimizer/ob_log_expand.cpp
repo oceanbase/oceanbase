@@ -381,8 +381,8 @@ int ObLogExpand::gen_expand_exprs(ObRawExprFactory &factory, ObSQLSessionInfo *s
     }
     for (int i = 0; OB_SUCC(ret) && i < gby_exprs.count(); i++) {
       for (int j = origin_size; OB_SUCC(ret) && j < dup_expr_pairs.count(); j++) {
-        if (OB_FAIL(replace_expr(gby_exprs.at(i),
-                                dup_expr_pairs.at(j).element<0>(),
+        if (OB_FAIL(replace_expr(gby_exprs.at(i), 
+                                dup_expr_pairs.at(j).element<0>(), 
                                 dup_expr_pairs.at(j).element<1>()))) {
           LOG_WARN("replace expr failed", K(ret));
         }

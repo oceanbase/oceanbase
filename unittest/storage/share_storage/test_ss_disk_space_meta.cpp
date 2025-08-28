@@ -18,13 +18,13 @@
 
 #include "storage/shared_storage/ob_disk_space_meta.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace storage
+namespace storage 
 {
 using namespace oceanbase::common;
 
-class TestSSDiskSpaceMeta : public ::testing::Test
+class TestSSDiskSpaceMeta : public ::testing::Test 
 {
 public:
   TestSSDiskSpaceMeta();

@@ -64,3 +64,4 @@ oblib_add_extra_objects(${CMAKE_CURRENT_BINARY_DIR}/zlib_lite_objs.o)
 
 oblib_add_library(zlib_lite zlib_lite_objs.o)
 target_link_libraries(zlib_lite zlib_lite_qpl)
+

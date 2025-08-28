@@ -87,7 +87,7 @@ int ObAllVirtualTenantMviewRunningJob::inner_get_next_row(ObNewRow *&row)
       row = &cur_row_;
     }
   }
-
+  
   return ret;
 }
 
@@ -97,9 +97,9 @@ int ObAllVirtualTenantMviewRunningJob::FillScanner::operator()(
   int ret = OB_SUCCESS;
   ObMViewOpArg &mview_op = entry.second;
 
-  if (OB_UNLIKELY(0 == port_ ||
-                  OB_INVALID_TENANT_ID == effective_tenant_id_ ||
-                  NULL == scanner_ ||
+  if (OB_UNLIKELY(0 == port_ || 
+                  OB_INVALID_TENANT_ID == effective_tenant_id_ || 
+                  NULL == scanner_ || 
                   NULL == cur_row_ ||
                   NULL == cur_row_->cells_)) {
     ret = OB_NOT_INIT;

@@ -989,11 +989,11 @@ private:
     const share::ObServerInfoInTable &server_info,
     obrpc::ObGetServerResourceInfoResult &report_servers_resource_info) const ;
   int inner_check_pool_in_shrinking_(
-      const uint64_t pool_id,
+      const uint64_t pool_id, 
       bool &is_shrinking);
   int inner_commit_shrink_tenant_resource_pool_(
       common::ObMySQLTransaction &trans,
-      const uint64_t tenant_id,
+      const uint64_t tenant_id, 
       const common::ObArray<share::ObResourcePool*> &pools);
 
   int check_shrink_resource_(const common::ObIArray<share::ObResourcePool *> &pools,
@@ -1134,7 +1134,7 @@ private:
       const double hard_limit,
       ObResourceType &not_enough_resource,
       AlterResourceErr &not_enough_resource_config) const;
-  //LOCK IN
+  //LOCK IN 
   int commit_shrink_resource_pool_in_trans_(
     const common::ObIArray<share::ObResourcePool *> &pools,
     common::ObMySQLTransaction &trans,

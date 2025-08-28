@@ -1,4 +1,4 @@
-// owner: jinqian.zzy
+// owner: jinqian.zzy 
 // owner group: rs
 
 /**
@@ -43,7 +43,7 @@ public:
 TEST_F(TestParallelMigrationMode, test_parse_from_string)
 {
   int ret = OB_SUCCESS;
-
+  
   rootserver::ObParallelMigrationMode mode;
   ObString auto_mode("auto");
   ObString on_mode("on");
@@ -62,7 +62,7 @@ TEST_F(TestParallelMigrationMode, test_parse_from_string)
   ret = mode.parse_from_string(off_mode);
   ASSERT_EQ(true, mode.is_off_mode());
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   mode.reset();
   ret = mode.parse_from_string(not_valid_mode);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);

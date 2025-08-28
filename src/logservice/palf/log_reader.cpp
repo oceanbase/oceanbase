@@ -120,7 +120,7 @@ int LogReader::pread(const block_id_t block_id,
       const int64_t accum_read_cost_ts = ATOMIC_AAF(&accum_read_cost_ts_, cost_ts);
       if (palf_reach_time_interval(PALF_IO_STAT_PRINT_INTERVAL_US, last_accum_read_statistic_time_)) {
         const int64_t avg_pread_cost = accum_read_cost_ts / accum_read_io_count;
-        PALF_LOG(INFO, "[PALF STAT READ LOG INFO FROM DISK]", K(accum_read_io_count),
+        PALF_LOG(INFO, "[PALF STAT READ LOG INFO FROM DISK]", K(accum_read_io_count), 
                  K(accum_read_log_size), K(avg_pread_cost));
         ATOMIC_STORE(&accum_read_io_count_, 0);
         ATOMIC_STORE(&accum_read_log_size_, 0);
@@ -175,7 +175,7 @@ int LogReader::inner_pread_(const ObIOFd &read_io_fd,
     if (OB_SUCC(ret)) {
       io_ctx.inc_read_io_cnt();
       io_ctx.inc_read_io_size(out_read_size);
-
+      
       out_read_size = MIN(out_read_size - static_cast<int32_t>(backoff), in_read_size);
       MEMMOVE(read_buf, read_buf + backoff, in_read_size);
       PALF_LOG(TRACE, "inner_read_ success", K(ret), K(read_io_fd), K(aligned_start_offset),

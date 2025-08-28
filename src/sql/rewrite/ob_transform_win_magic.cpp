@@ -228,8 +228,8 @@ int ObTransformWinMagic::do_transform(common::ObIArray<ObParentDMLStmt> &parent_
     LOG_WARN("win magic do transform from type failed", K(ret));
   } else if (OB_FAIL(try_to_push_down_join(trans_stmt))) {
     LOG_WARN("try to push down join failed.", K(*trans_stmt));
-  } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*ctx_, parent_stmts,
-                                                                        stmt, false,
+  } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*ctx_, parent_stmts, 
+                                                                        stmt, false, 
                                                                         partial_cost_check))) {
     LOG_WARN("failed to check partial cost eval validity", K(ret));
   } else if (OB_FAIL(accept_transform(parent_stmts,
@@ -286,7 +286,7 @@ int ObTransformWinMagic::do_transform_from_type(ObDMLStmt *&stmt,
   ObDMLStmt *roll_up_stmt = NULL;
   bool match_main =false; 
 
-  if (OB_ISNULL(stmt) ||
+  if (OB_ISNULL(stmt) || 
       OB_ISNULL(drill_down_table = main_stmt->get_table_item(main_stmt->get_from_item(drill_down_idx))) ||
       OB_ISNULL(drill_down_stmt = drill_down_table->ref_query_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1142,7 +1142,7 @@ int ObTransformWinMagic::adjust_column_and_table(ObDMLStmt *main_stmt,
   for (int64_t i = 0; OB_SUCC(ret) && i < map_info.semi_info_map_.count(); ++i) {
     int64_t idx = map_info.semi_info_map_.at(i);
     SemiInfo *semi = NULL;
-    TableItem * right_table = NULL;
+    TableItem * right_table = NULL; 
     if (idx == OB_INVALID_ID) {
       // do nothing
     } else if (OB_UNLIKELY(idx < 0 || idx >= main_stmt->get_semi_info_size()) ||
@@ -1177,8 +1177,8 @@ int ObTransformWinMagic::adjust_column_and_table(ObDMLStmt *main_stmt,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("index is invalid", K(ret), K(idx), K(table));
     } else if (ObOptimizerUtil::find_item(rm_semi_right_tables, table)) {
-      // After removing the semi join information from the main statement,
-      // the corresponding right table of the semi join will no longer be accessible
+      // After removing the semi join information from the main statement, 
+      // the corresponding right table of the semi join will no longer be accessible 
       // in the main statement and should be removed from the table mapping.
     } else if (OB_FAIL(main_tables.push_back(table))) {
       LOG_WARN("failed to push back table item", K(ret));
@@ -1278,18 +1278,18 @@ int ObTransformWinMagic::adjust_column_and_table(ObDMLStmt *main_stmt,
 
   ObSEArray<ObRawExpr *, 4> new_col_for_pseudo_cols;
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObOptimizerUtil::remove_item(main_stmt->get_pseudo_column_like_exprs(),
+  } else if (OB_FAIL(ObOptimizerUtil::remove_item(main_stmt->get_pseudo_column_like_exprs(), 
                                                   pushed_pseudo_column_exprs))) {
     LOG_WARN("remove item failed", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx_,
-                                                               *view,
-                                                               main_stmt,
-                                                               merged_pseudo_column_exprs,
+  } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx_, 
+                                                               *view, 
+                                                               main_stmt, 
+                                                               merged_pseudo_column_exprs, 
                                                                new_col_for_pseudo_cols))) {
     LOG_WARN("create columns for view failed", K(ret));
   } else if (OB_FAIL(main_stmt->replace_relation_exprs(pushed_pseudo_column_exprs, new_col_for_pseudo_cols))) {
     LOG_WARN("replace inner stmt expr failed", K(ret));
-  }
+  } 
 
   ObSEArray<ObRawExpr *, 4> new_col_in_main;
   //create select item for view
@@ -1313,7 +1313,7 @@ int ObTransformWinMagic::adjust_column_and_table(ObDMLStmt *main_stmt,
     LOG_WARN("remove column item failed", K(ret));
   } else if (OB_FAIL(main_stmt->replace_relation_exprs(pushed_column_exprs, new_col_in_main))) {
     LOG_WARN("replace inner stmt expr failed", K(ret));
-  }
+  } 
   
   //add is not null expr
   for (int64_t i = 0; OB_SUCC(ret) && i < view_stmt->get_group_expr_size(); i++) {
@@ -1366,7 +1366,7 @@ int ObTransformWinMagic::adjust_agg_to_win(ObSelectStmt *view_stmt)
       LOG_WARN("failed to create window function", K(ret));
     } else if (OB_FAIL(view_stmt->add_window_func_expr(win_expr))) {
       LOG_WARN("failed to add window func expr", K(ret));
-    }
+    }  
   }
 
   if (OB_SUCC(ret)) {
@@ -1393,7 +1393,7 @@ int ObTransformWinMagic::adjust_agg_to_win(ObSelectStmt *view_stmt)
 }
 
 int ObTransformWinMagic::adjust_view_for_trans(ObDMLStmt *main_stmt, 
-                                               TableItem *&drill_down_table,
+                                               TableItem *&drill_down_table, 
                                                TableItem *roll_up_table,
                                                TableItem *&transed_view_table,
                                                ObIArray<ObRawExpr *> &new_transed_output,

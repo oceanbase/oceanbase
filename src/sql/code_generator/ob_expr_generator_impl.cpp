@@ -660,7 +660,7 @@ int ObExprGeneratorImpl::visit_simple_op(ObNonTerminalRawExpr &expr)
         case T_FUN_SYS_PRIV_SQL_UDT_CONSTRUCT: {
           ObExprUdtConstruct *object_op = static_cast<ObExprUdtConstruct*>(op);
           ret = visit_sql_udt_construct_expr(expr, object_op);
-          break;
+          break;          
         }
         case T_FUN_SYS_PRIV_SQL_UDT_ATTR_ACCESS: {
           ObExprUDTAttributeAccess *access_op = static_cast<ObExprUDTAttributeAccess*>(op);

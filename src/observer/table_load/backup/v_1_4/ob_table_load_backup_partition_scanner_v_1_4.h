@@ -37,12 +37,12 @@ public:
     macro_block_list_.set_tenant_id(MTL_ID());
   }
   virtual ~ObTableLoadBackupPartScanner_V_1_4() {}
-  int init(const share::ObBackupStorageInfo &storage_info, const ObIArray<int64_t> &column_ids,
-           const ObString &data_path, const ObString &meta_path,
+  int init(const share::ObBackupStorageInfo &storage_info, const ObIArray<int64_t> &column_ids, 
+           const ObString &data_path, const ObString &meta_path, 
            int64_t subpart_count, int64_t subpart_idx);
   void reset() override;
   int get_next_row(ObNewRow *&row) override;
-  TO_STRING_KV(K(storage_info_), K(column_ids_), K(data_path_), K(macro_block_list_),
+  TO_STRING_KV(K(storage_info_), K(column_ids_), K(data_path_), K(macro_block_list_), 
                K(block_idx_), K(block_start_idx_), K(block_end_idx_));
 private:
   int init_macro_block_list(const ObString &meta_path);

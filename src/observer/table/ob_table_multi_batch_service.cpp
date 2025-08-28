@@ -26,7 +26,7 @@ int ObTableMultiBatchService::execute(ObTableMultiBatchCtx &ctx,
   int ret = OB_SUCCESS;
   const ObIArray<ObTableBatchOperation> &batch_ops = request.get_ops();
   const int64_t count = batch_ops.count();
-
+  
   if (!request.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ObTableMultiBatchRequest is invalid", K(ret), K(request));
@@ -54,3 +54,4 @@ int ObTableMultiBatchService::execute(ObTableMultiBatchCtx &ctx,
 
   return ret;
 }
+

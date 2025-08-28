@@ -16,7 +16,7 @@
 #include "lib/ob_date_unit_type.h"
 #include "lib/container/ob_iarray.h"
 #include "lib/timezone/ob_timezone_info.h"
-#include "share/config/ob_server_config.h"
+#include "share/config/ob_server_config.h"  
 namespace oceanbase
 {
 namespace share
@@ -35,10 +35,10 @@ const char *const OB_NONE_STORAGE_CACHE_POLICY_STR = "{\"GLOBAL\":\"NONE\"}";
 const char *const OB_DEFAULT_PART_STORAGE_CACHE_POLICY_STR = "NONE";
 const int64_t OB_INVALID_TG_ID = 0;
 const int32_t OB_INVALID_PARTITION_LEVEL = -1;
-// storage_cache_policy format:
+// storage_cache_policy format: 
 // {GLOBAL: HOT_POLICY|AUTO_POLICY, GRANULARITY: PARTITION|ROW} or
-// {GRANULARITY: PARTITION|ROW, BOUNDARY_COLUMN: column_name,
-// BOUNDARY_COLUMN_UNIT: SECOND|MILLISECOND|MICROSECOND|NANOSECOND,
+// {GRANULARITY: PARTITION|ROW, BOUNDARY_COLUMN: column_name, 
+// BOUNDARY_COLUMN_UNIT: SECOND|MILLISECOND|MICROSECOND|NANOSECOND, 
 // HOT_RETENTION_INTERVAL: interval_num, HOT_RETENTION_UNIT: HOUR|DAY|WEEK|MONTH|YEAR}
 static constexpr int64_t OB_MAX_STORAGE_CACHE_POLICY_LENGTH = 229;
 
@@ -86,10 +86,10 @@ typedef ObStorageCacheGlobalPolicy::PolicyType ObStorageCachePolicyType;
 
 bool is_part_storage_cache_policy_type_default(const ObStorageCachePolicyType &part_storage_cache_policy_type);
 
-int get_storage_cache_policy_type_from_str(const common::ObString &storage_cache_policy_str,
+int get_storage_cache_policy_type_from_str(const common::ObString &storage_cache_policy_str, 
                                            ObStorageCachePolicyType &policy_type);
 
-int get_storage_cache_policy_type_from_part_str(const common::ObString &storage_cache_policy_part_str,
+int get_storage_cache_policy_type_from_part_str(const common::ObString &storage_cache_policy_part_str, 
                                                 ObStorageCachePolicyType &policy_type);
 
 
@@ -142,8 +142,8 @@ public:
   bool is_none_policy() const { return global_policy_ == ObStorageCacheGlobalPolicy::NONE_POLICY; };
   bool is_hot_policy() const { return global_policy_ == ObStorageCacheGlobalPolicy::HOT_POLICY; };
   bool is_auto_policy() const { return global_policy_ == ObStorageCacheGlobalPolicy::AUTO_POLICY; };
-  bool is_global_policy() const
-  { return global_policy_ == ObStorageCacheGlobalPolicy::HOT_POLICY
+  bool is_global_policy() const 
+  { return global_policy_ == ObStorageCacheGlobalPolicy::HOT_POLICY 
         || global_policy_ == ObStorageCacheGlobalPolicy::AUTO_POLICY
         || global_policy_ == ObStorageCacheGlobalPolicy::NONE_POLICY; };
   bool is_time_policy() const;
@@ -216,4 +216,4 @@ private:
 
 }
 }
-#endif
+#endif 

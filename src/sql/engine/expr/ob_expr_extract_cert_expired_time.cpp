@@ -30,7 +30,7 @@ ObExprExtractExpiredTime::ObExprExtractExpiredTime(common::ObIAllocator& alloc)
                          NOT_ROW_DIMENSION)
 {
 }
-
+                            
 ObExprExtractExpiredTime::~ObExprExtractExpiredTime() {}
 
 int ObExprExtractExpiredTime::calc_result_type1(ObExprResType &type,
@@ -53,7 +53,7 @@ int ObExprExtractExpiredTime::calc_result_type1(ObExprResType &type,
   return ret;
 }
 
-int ObExprExtractExpiredTime::eval_extract_cert_expired_time(const ObExpr &expr, ObEvalCtx &ctx,
+int ObExprExtractExpiredTime::eval_extract_cert_expired_time(const ObExpr &expr, ObEvalCtx &ctx, 
                                                               ObDatum &res)
 {
   int ret = OB_SUCCESS;
@@ -108,3 +108,4 @@ int ObExprExtractExpiredTime::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr 
 
 }
 }
+

@@ -447,7 +447,7 @@ int ObDynamicPartitionManager::build_high_bound_val_(const int64_t timestamp, Ob
       LOG_WARN("fail to get table time zone wrap", KR(ret));
     } else {
       switch (obj_type) {
-        case ObObjType::ObIntType:
+        case ObObjType::ObIntType: 
         case ObObjType::ObNumberType: {
           ObString bigint_precision = policy_.bigint_precision_;
           int64_t scale = bigint_precision_scale_(bigint_precision);
@@ -524,7 +524,7 @@ int ObDynamicPartitionManager::get_start_precreate_timestamp_(int64_t &timestamp
 {
   int ret = OB_SUCCESS;
   timestamp = 0;
-
+  
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else {
@@ -715,7 +715,7 @@ int ObDynamicPartitionManager::fetch_timestamp_from_part_key_(
 int ObDynamicPartitionManager::get_session_time_zone_str_(char *buf, const int64_t len, int64_t &pos)
 {
   int64_t ret = OB_SUCCESS;
-
+  
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else {
@@ -890,7 +890,7 @@ int ObDynamicPartitionManager::check_precreate_time_is_valid_(const ObTableSchem
       LOG_WARN("invalid precreate time", KR(ret), K(precreate_time_unit), K(time_unit));
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "dynamic partition precreate_time");
     } else {
-      // To avoid precreating too many partitions at a time,
+      // To avoid precreating too many partitions at a time, 
       // (MAX_PRECREATE_PART_NUM * time_unit_hour_num) / (precreate_num * precreate_hour_num) should >= 1
       int64_t ratio = MAX_PRECREATE_PART_NUM * time_unit_hour_num / precreate_num / precreate_hour_num;
       if (ratio < 1) {
@@ -1341,7 +1341,7 @@ bool ObDynamicPartitionManager::is_valid_time_unit_(ObObjType type, ObDateUnitTy
 }
 
 int ObDynamicPartitionManager::update_dynamic_partition_policy_with_str_(
-  const ObString &str,
+  const ObString &str, 
   bool is_alter,
   ObDynamicPartitionPolicy &policy)
 {
@@ -1400,7 +1400,7 @@ int ObDynamicPartitionManager::update_dynamic_partition_policy_with_str_(
             } else {
               policy.time_zone_ = v;
             }
-          }
+          } 
         } else if (0 == k.case_compare("BIGINT_PRECISION")) {
           if (is_alter) {
             ret = OB_NOT_SUPPORTED;
@@ -1489,7 +1489,7 @@ int ObDynamicPartitionManager::get_time_zone_wrap_(const uint64_t tenant_id, con
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tz map is null", KR(ret));
   } else if (OB_FAIL(tz_info_wrap.init_time_zone(time_zone,
-                                                 OB_INVALID_VERSION,
+                                                 OB_INVALID_VERSION, 
                                                  *(const_cast<ObTZInfoMap *>(tz_map_wrap.get_tz_map()))))) {
     LOG_WARN("failed to init time zone", KR(ret), K(time_zone));
   }

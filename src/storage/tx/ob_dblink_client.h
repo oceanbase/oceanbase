@@ -47,7 +47,7 @@ typedef ObSEArray<common::ObFixedLengthString<128>, SavePointArraySize> SavePoin
 //    2) IDLE => START => END => PREPARING => RDONLY_PREPARED
 // 3. one phase rollback
 //    1) IDLE => START => END => ROLLBACKING => ROLLBACKED
-//
+// 
 // exception
 // 1. if START and xa end fails, the cooresponding connection should be disconnected
 // 2. if PREPARING, xa prepare fails and xa rollback succeeds, the connection can be reused

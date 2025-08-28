@@ -37,10 +37,10 @@ int ObTenantStsCredentialMgr::get_sts_credential(
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || is_virtual_tenant_id(tenant_id))) {
     // If the tenant is invalid or illegal, the sts_credential of the system tenant will be used as
     // a backup. Please refer to the following document for specific reasons.
-    //
+    // 
     tenant_id = OB_SYS_TENANT_ID;
     OB_LOG(WARN, "invalid tenant ctx, use sys tenant", K(ret), K(tenant_id));
-  }
+  } 
   if (OB_SUCC(ret)) {
     if (is_meta_tenant(tenant_id)) {
       tenant_id = gen_user_tenant_id(tenant_id);
@@ -95,7 +95,7 @@ int ObClusterVersionMgr::is_supported_assume_version() const
 {
   int ret = OB_SUCCESS;
   uint64 min_cluster_version = GET_MIN_CLUSTER_VERSION();
-  if (min_cluster_version < MOCK_CLUSTER_VERSION_4_2_5_0
+  if (min_cluster_version < MOCK_CLUSTER_VERSION_4_2_5_0 
       || (min_cluster_version >= CLUSTER_VERSION_4_3_0_0
       && min_cluster_version < CLUSTER_VERSION_4_3_5_0)) {
     ret = OB_NOT_SUPPORTED;
@@ -113,11 +113,11 @@ int ObClusterVersionMgr::is_supported_enable_worm_version() const
 {
   int ret = OB_SUCCESS;
   const uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
-  if (min_cluster_version <= MOCK_CLUSTER_VERSION_4_2_5_5
+  if (min_cluster_version <= MOCK_CLUSTER_VERSION_4_2_5_5 
     || (min_cluster_version >= CLUSTER_VERSION_4_3_0_0 && min_cluster_version < CLUSTER_VERSION_4_3_5_2)) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "setting 'enable_worm' for cluster version lower than 4.3.5.2 is");
-    OB_LOG(WARN, "setting 'enable_worm' for cluster version lower than 4.3.5.2 is is not supported",
+    OB_LOG(WARN, "setting 'enable_worm' for cluster version lower than 4.3.5.2 is is not supported", 
               KR(ret), K(min_cluster_version));
   }
   return ret;
@@ -132,7 +132,7 @@ int ObClusterVersionMgr::is_supported_azblob_version() const
     OB_LOG(WARN, "cluster version is too low for azblob", K(ret), K(min_cluster_version));
   } else if (GCTX.is_shared_storage_mode()) {
     ret = OB_NOT_SUPPORTED;
-    OB_LOG(WARN, "azblob is not supported as a storage destination in shared storage mode.", KR(ret));
+    OB_LOG(WARN, "azblob is not supported as a storage destination in shared storage mode.", KR(ret));  
   }
   return ret;
 }

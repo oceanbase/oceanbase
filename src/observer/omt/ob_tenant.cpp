@@ -525,7 +525,7 @@ int ObResourceGroup::clear_worker()
 {
   int ret = OB_SUCCESS;
   ObMutexGuard guard(workers_lock_);
-
+  
   int tmp_ret = OB_SUCCESS;
   const int64_t timeout = 10 * 1000;
   ObLink* task = nullptr;
@@ -540,7 +540,7 @@ int ObResourceGroup::clear_worker()
       LOG_ERROR("req queue pop successfully but task is NULL");
     }
   }
-
+  
   for (int32_t level = 0; level < MULTI_LEVEL_QUEUE_SIZE; level++) {
     while (multi_level_queue_.get_size(level) > 0) {
       if (OB_TMP_FAIL(multi_level_queue_.pop(task, level, timeout))) {
@@ -554,7 +554,7 @@ int ObResourceGroup::clear_worker()
     }
   }
 
-
+ 
   while (nesting_workers_.get_size() > 0) {
     int ret = OB_SUCCESS;
     DLIST_FOREACH_REMOVESAFE(wnode, nesting_workers_) {
@@ -1394,7 +1394,7 @@ int ObTenant::recv_group_request(ObRequest &req, int64_t group_id)
       using obrpc::ObRpcPacket;
       const ObRpcPacket &pkt
           = static_cast<const ObRpcPacket&>(req.get_packet());
-      req_level = min(pkt.get_request_level(), MAX_REQUEST_LEVEL - 1);
+      req_level = min(pkt.get_request_level(), MAX_REQUEST_LEVEL - 1); 
     }
     if (req_level < 0) {
       ret = OB_ERR_UNEXPECTED;
@@ -1546,8 +1546,8 @@ int ObTenant::recv_request(ObRequest &req)
   if (OB_SUCC(ret)) {
     EVENT_INC(REQUEST_ENQUEUE_COUNT);
   }
-
-  if (OB_SIZE_OVERFLOW == ret || (GCONF._faststack_req_queue_size_threshold.get_value() > 0 &&
+  
+  if (OB_SIZE_OVERFLOW == ret || (GCONF._faststack_req_queue_size_threshold.get_value() > 0 && 
       req_queue_.size() >= GCONF._faststack_req_queue_size_threshold.get_value())) {
     IGNORE_RETURN faststack();
   }
@@ -1704,7 +1704,7 @@ void ObTenant::regist_threads_to_cgroup()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-
+  
   // set cgroup configs
   if (OB_TMP_FAIL(cgroup_ctrl_.set_cpu_shares(id_, unit_min_cpu_, OB_INVALID_GROUP_ID))) {
     LOG_WARN_RET(tmp_ret, "set tenant cpu shares failed", K(tmp_ret), K_(id), K_(unit_min_cpu));

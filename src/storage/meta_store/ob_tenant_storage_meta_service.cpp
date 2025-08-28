@@ -365,7 +365,7 @@ int ObTenantStorageMetaService::inner_get_blocks_for_tablet_(
             }
             break;
           }
-        } else if (!block_info.macro_id_.is_private_data_or_meta() &&
+        } else if (!block_info.macro_id_.is_private_data_or_meta() && 
                    !block_info.macro_id_.is_shared_data_or_meta()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected storage_object_type detected", K(ret), K(block_info));
@@ -601,10 +601,10 @@ int ObTenantStorageMetaService::update_shared_tablet_meta_list(
   } else if (FALSE_IT(gc_scn = tablet_meta_gc_version.tablet_version_arr_.at(0).scn_)) {
   } else if (!gc_scn.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("gc scn is invalid", K(ret));
+    LOG_WARN("gc scn is invalid", K(ret)); 
   } else if (gc_scn >= new_tablet_meta_scn) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tablet_meta_version has been gc", K(ret), K(gc_scn), K(new_tablet_meta_scn));
+    LOG_WARN("tablet_meta_version has been gc", K(ret), K(gc_scn), K(new_tablet_meta_scn)); 
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < old_tablet_meta_version_list.tablet_version_arr_.count(); i++) {
@@ -612,23 +612,23 @@ int ObTenantStorageMetaService::update_shared_tablet_meta_list(
     const int64_t tablet_meta_create_ts = old_tablet_meta_version_list.tablet_version_arr_.at(i).tablet_meta_create_ts_;
     if (!tablet_meta_scn.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tablet meta scn is invalid", K(ret), K(i), K(new_tablet_meta_version_list));
+      LOG_WARN("tablet meta scn is invalid", K(ret), K(i), K(new_tablet_meta_version_list)); 
     } else if (gc_scn < tablet_meta_scn) {
       if (tablet_meta_scn >= new_tablet_meta_scn) {
         ret = OB_ENTRY_EXIST;
         LOG_INFO("new tablet_meta_version is not more than old tablet_meta_version", K(ret), K(new_tablet_meta_scn), K(tablet_meta_scn));
       } else if (OB_FAIL(new_tablet_meta_version_list.tablet_version_arr_.push_back(ObGCTabletMetaInfo(tablet_meta_scn, tablet_meta_create_ts)))) {
-        LOG_WARN("failed to push back", K(ret), K(i), K(new_tablet_meta_version_list));
+        LOG_WARN("failed to push back", K(ret), K(i), K(new_tablet_meta_version_list)); 
       }
     }
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(new_tablet_meta_version_list.tablet_version_arr_.push_back(ObGCTabletMetaInfo(new_tablet_meta_scn, new_tablet_meta_create_ts)))) {
-    LOG_WARN("failed to push back", K(ret), K(new_tablet_meta_version_list), K(new_tablet_meta_scn));
+    LOG_WARN("failed to push back", K(ret), K(new_tablet_meta_version_list), K(new_tablet_meta_scn)); 
   } else if (OB_FAIL(force_write_gc_tablet_scn_arr_(tablet_id, blocksstable::ObStorageObjectType::SHARED_MAJOR_META_LIST, new_tablet_meta_version_list))) {
-    LOG_WARN("failed to write_gc_tablet_scn_arr", K(ret), K(new_tablet_meta_scn), K(new_tablet_meta_version_list));
+    LOG_WARN("failed to write_gc_tablet_scn_arr", K(ret), K(new_tablet_meta_scn), K(new_tablet_meta_version_list)); 
   }
-  FLOG_INFO("finish update_shared_tablet_meta_list", K(ret), K(tablet_id), K(new_tablet_meta_scn), K(new_tablet_meta_version_list));
+  FLOG_INFO("finish update_shared_tablet_meta_list", K(ret), K(tablet_id), K(new_tablet_meta_scn), K(new_tablet_meta_version_list)); 
   return ret;
 }
 int ObTenantStorageMetaService::ss_write_gc_info_(

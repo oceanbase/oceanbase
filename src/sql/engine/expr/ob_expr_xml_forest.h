@@ -19,7 +19,7 @@
 #include "lib/container/ob_vector.h"
 #include "lib/xml/ob_xml_util.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
 namespace sql
 {
@@ -38,9 +38,9 @@ public:
   static int eval_xml_forest(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
 
   virtual int cg_expr(
-      ObExprCGCtx &expr_cg_ctx,
-      const ObRawExpr &raw_expr,
-      ObExpr &rt_expr)
+      ObExprCGCtx &expr_cg_ctx, 
+      const ObRawExpr &raw_expr, 
+      ObExpr &rt_expr) 
       const override;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprXmlForest);

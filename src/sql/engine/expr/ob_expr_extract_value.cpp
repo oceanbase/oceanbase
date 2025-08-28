@@ -25,7 +25,7 @@ namespace oceanbase
 namespace sql
 {
 
-ObExprExtractValue::ObExprExtractValue(common::ObIAllocator &alloc)
+ObExprExtractValue::ObExprExtractValue(common::ObIAllocator &alloc) 
   : ObFuncExprOperator(alloc, T_FUN_SYS_XML_EXTRACTVALUE, N_EXTRACTVALUE, MORE_THAN_ONE, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
@@ -94,7 +94,7 @@ int ObExprExtractValue::calc_result_typeN(ObExprResType &type,
         ret = OB_ERR_INVALID_XPATH_EXPRESSION;
       }
     }
-
+    
   }
   if (OB_FAIL(ret)) {
   } else if (is_mysql_mode) {
@@ -203,7 +203,7 @@ int ObExprExtractValue::eval_mysql_extract_value(const ObExpr &expr, ObEvalCtx &
   } else if (OB_FAIL(ObXMLExprHelper::get_str_from_expr(expr.args_[1], ctx, xpath_expr, allocator))) {
     LOG_WARN("get xpath expr failed.", K(ret));
   }
-
+  
   lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
   if (OB_FAIL(ret) || step_next) {
   } else if (OB_FAIL(ObMulModeFactory::get_xml_base(xml_mem_ctx, xml_frag, ObNodeMemType::TREE_TYPE, ObNodeMemType::BINARY_TYPE, xml_base, M_DOCUMENT))) {
@@ -334,7 +334,7 @@ int ObExprExtractValue::extract_mysql_xpath_result(ObMulModeMemCtx *xml_mem_ctx,
   return ret;
 }
 
-int ObExprExtractValue::extract_xpath_result(ObMulModeMemCtx *xml_mem_ctx, ObString& xpath_str, ObString& default_ns,
+int ObExprExtractValue::extract_xpath_result(ObMulModeMemCtx *xml_mem_ctx, ObString& xpath_str, ObString& default_ns, 
                                              ObIMulModeBase* xml_doc, ObPathVarObject* prefix_ns, ObString &xml_res)
 {
   int ret = OB_SUCCESS;
@@ -381,7 +381,7 @@ int ObExprExtractValue::extract_xpath_result(ObMulModeMemCtx *xml_mem_ctx, ObStr
   }
   // check if match the rules
   if (OB_FAIL(ret)) {
-  } else if (valid_node_num > 1 ||
+  } else if (valid_node_num > 1 || 
              (valid_node_num == 1 && (skip_node_num > 0 || text_node_num > 0))) {
     ret = OB_ERR_EXTRACTVALUE_MULTI_NODES;
     LOG_WARN("EXTRACTVALUE returns value of only one node", K(ret));
@@ -402,10 +402,10 @@ int ObExprExtractValue::extract_xpath_result(ObMulModeMemCtx *xml_mem_ctx, ObStr
 
   // if match, extract the value
   if (OB_FAIL(ret)) {
-  } else if (result_nodes.count() == 1 &&
+  } else if (result_nodes.count() == 1 && 
              OB_FAIL(extract_node_value(*xml_mem_ctx->allocator_, result_nodes.at(0), xml_res))) {
     LOG_WARN("fail to extract node value", K(ret));
-  } else if (result_nodes.count() > 1 &&
+  } else if (result_nodes.count() > 1 && 
              OB_FAIL(merge_text_nodes_with_same_parent(xml_mem_ctx->allocator_, result_nodes, xml_res))) {
     LOG_WARN("fail to merge text nodes", K(ret), K(result_nodes.count()));
   }
@@ -419,12 +419,12 @@ int ObExprExtractValue::extract_xpath_result(ObMulModeMemCtx *xml_mem_ctx, ObStr
   return ret;
 }
 
-int ObExprExtractValue::merge_text_nodes_with_same_parent(ObIAllocator *allocator,
-                                                          ObIArray<ObIMulModeBase *> &result_nodes,
+int ObExprExtractValue::merge_text_nodes_with_same_parent(ObIAllocator *allocator, 
+                                                          ObIArray<ObIMulModeBase *> &result_nodes, 
                                                           ObString &xml_res)
 {
   int ret = OB_SUCCESS;
-  // text-nodes or skip-nodes has same parent
+  // text-nodes or skip-nodes has same parent 
   ObIMulModeBase *child_node = NULL;
   ObStringBuffer *buffer = NULL;
   if (OB_ISNULL(buffer = OB_NEWx(ObStringBuffer, allocator, allocator))) {
@@ -439,7 +439,7 @@ int ObExprExtractValue::merge_text_nodes_with_same_parent(ObIAllocator *allocato
       LOG_WARN("fail to append text value", K(ret));
     }
   } // end for
-
+  
   if (OB_SUCC(ret)) {
     xml_res.assign_ptr(buffer->ptr(), buffer->length());
   }
@@ -459,13 +459,13 @@ int ObExprExtractValue::append_text_value(ObStringBuffer &buffer, ObIMulModeBase
       LOG_WARN("fail to get node value", K(ret));
     } else if (OB_FAIL(buffer.append(tmp_res))) {
       LOG_WARN("fail to append buffer", K(ret), K(buffer));
-    }
+    }     
   }
   return ret;
 }
 
-int ObExprExtractValue::append_text_into_buffer(ObIAllocator *allocator,
-                                                ObIArray<ObIMulModeBase *> &result_nodes,
+int ObExprExtractValue::append_text_into_buffer(ObIAllocator *allocator, 
+                                                ObIArray<ObIMulModeBase *> &result_nodes, 
                                                 ObStringBuffer &buffer)
 {
   INIT_SUCC(ret);
@@ -553,14 +553,14 @@ int ObExprExtractValue::extract_node_value(ObIAllocator &allocator, ObIMulModeBa
   return ret;
 }
 
-int ObExprExtractValue::has_same_parent_node(ObMulModeMemCtx *xml_mem_ctx, ObString& xpath_str, ObString& default_ns,
+int ObExprExtractValue::has_same_parent_node(ObMulModeMemCtx *xml_mem_ctx, ObString& xpath_str, ObString& default_ns, 
                                              ObIMulModeBase* xml_doc, ObPathVarObject* prefix_ns, bool &is_same_parent)
 {
   int ret = OB_SUCCESS;
   ObPathExprIter xpath_iter(xml_mem_ctx->allocator_);
   ObIMulModeBase *node = NULL;
   int64_t node_num = 0;
-  ObStringBuffer buffer(xml_mem_ctx->allocator_);
+  ObStringBuffer buffer(xml_mem_ctx->allocator_);  
   ObString parent_xpath;
   if (OB_FAIL(buffer.append(xpath_str))) {
     LOG_WARN("fail to append buffer", K(ret));
@@ -610,7 +610,7 @@ int ObExprExtractValue::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_e
   } else {
     rt_expr.eval_func_ = eval_mysql_extract_value;
   }
-
+  
   return OB_SUCCESS;
 }
 

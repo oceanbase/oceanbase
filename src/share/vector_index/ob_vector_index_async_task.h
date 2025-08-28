@@ -17,22 +17,22 @@
 #include "share/vector_index/ob_plugin_vector_index_adaptor.h"
 #include "share/vector_index/ob_vector_index_i_task_executor.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace share
+namespace share 
 {
 // schedule vector tasks for a ls
 class ObPluginVectorIndexMgr;
-class ObVecAsyncTaskExector final : public ObVecITaskExecutor
+class ObVecAsyncTaskExector final : public ObVecITaskExecutor 
 {
-public:
-  ObVecAsyncTaskExector()
+public: 
+  ObVecAsyncTaskExector() 
     : ObVecITaskExecutor()
   {}
   virtual ~ObVecAsyncTaskExector() {}
   int load_task(uint64_t &task_trace_base_num) override;
   int check_and_set_thread_pool() override;
-private:
+private:  
   bool check_operation_allow() override;
 };
 

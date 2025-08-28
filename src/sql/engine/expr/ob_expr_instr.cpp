@@ -179,9 +179,9 @@ static int calc_oracle_instr_text(ObTextStringIter &haystack_iter,
         not_first_search = true;
       }
       if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
-        ret = (haystack_iter.get_inner_ret() != OB_SUCCESS) ?
+        ret = (haystack_iter.get_inner_ret() != OB_SUCCESS) ? 
               haystack_iter.get_inner_ret() : OB_INVALID_DATA;
-        LOG_WARN("iter state invalid", K(ret), K(state), K(haystack_iter));
+        LOG_WARN("iter state invalid", K(ret), K(state), K(haystack_iter)); 
       } else {
         if (idx != 0) {
           // 需要加上get next block实际访问过的长度
@@ -198,7 +198,7 @@ static int calc_oracle_instr_text(ObTextStringIter &haystack_iter,
       int64_t max_access_len = 0;
       bool access_inrow_lob_prefix = false; // only access prefix of an inrow lob
       if (OB_FAIL(haystack_iter.get_char_len(total_char_len))) {
-        LOG_WARN("get haystack char len failed", K(ret), K(state));
+        LOG_WARN("get haystack char len failed", K(ret), K(state)); 
       } else if (haystack_iter.is_outrow_lob()) {
         max_access_len = total_char_len + pos_int + 1;
         haystack_iter.set_start_offset(-pos_int - 1); // start char len
@@ -252,9 +252,9 @@ static int calc_oracle_instr_text(ObTextStringIter &haystack_iter,
       }
       if (OB_FAIL(ret)) {
       } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
-        ret = (haystack_iter.get_inner_ret() != OB_SUCCESS) ?
+        ret = (haystack_iter.get_inner_ret() != OB_SUCCESS) ? 
               haystack_iter.get_inner_ret() : OB_INVALID_DATA;
-        LOG_WARN("iter state invalid", K(ret), K(state), K(haystack_iter));
+        LOG_WARN("iter state invalid", K(ret), K(state), K(haystack_iter)); 
       } else {
         if (idx != 0 && !access_inrow_lob_prefix) {
           // need to count accessed length by get_next_block

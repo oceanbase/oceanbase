@@ -25,7 +25,7 @@ const char* ObLogInsertAll::get_name() const
   return ret;
 }
 
-int ObLogInsertAll::get_plan_item_info(PlanText &plan_text,
+int ObLogInsertAll::get_plan_item_info(PlanText &plan_text, 
                                        ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
@@ -34,9 +34,9 @@ int ObLogInsertAll::get_plan_item_info(PlanText &plan_text,
   } else {
     BEGIN_BUF_PRINT;
     if (OB_FAIL(print_table_infos(ObString::make_string("columns"),
-                                  buf,
-                                  buf_len,
-                                  pos,
+                                  buf, 
+                                  buf_len, 
+                                  pos, 
                                   type))) {
       LOG_WARN("failed to print table infos", K(ret));
     } else if (is_multi_conditions_insert()) {

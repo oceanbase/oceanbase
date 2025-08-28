@@ -314,7 +314,7 @@ ObLogDelUpd::ObLogDelUpd(ObDelUpdLogPlan &plan)
 {
 }
 
-int ObLogDelUpd::get_plan_item_info(PlanText &plan_text,
+int ObLogDelUpd::get_plan_item_info(PlanText &plan_text, 
                                     ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
@@ -330,14 +330,14 @@ int ObLogDelUpd::get_plan_item_info(PlanText &plan_text,
                                                 base_table,
                                                 index_table))) {
       BEGIN_BUF_PRINT;
-      if (OB_FAIL(BUF_PRINTF("%.*s(%.*s)",
-                             base_table.length(),
+      if (OB_FAIL(BUF_PRINTF("%.*s(%.*s)", 
+                             base_table.length(), 
                              base_table.ptr(),
-                             index_table.length(),
+                             index_table.length(), 
                              index_table.ptr()))) {
         LOG_WARN("failed to print str", K(ret));
       }
-      END_BUF_PRINT(plan_item.object_alias_,
+      END_BUF_PRINT(plan_item.object_alias_, 
                     plan_item.object_alias_len_);
     }
   }
@@ -1161,9 +1161,9 @@ int ObLogDelUpd::get_table_index_name(const IndexDMLInfo &index_info,
   return ret;
 }
 
-int ObLogDelUpd::print_table_infos(const ObString &prefix,
-                                   char *buf,
-                                   int64_t &buf_len,
+int ObLogDelUpd::print_table_infos(const ObString &prefix, 
+                                   char *buf, 
+                                   int64_t &buf_len, 
                                    int64_t &pos,
                                    ExplainType type)
 {
@@ -1221,8 +1221,8 @@ int ObLogDelUpd::print_table_infos(const ObString &prefix,
 }
 
 int ObLogDelUpd::print_assigns(const ObAssignments &assigns,
-                               char *buf,
-                               int64_t &buf_len,
+                               char *buf, 
+                               int64_t &buf_len, 
                                int64_t &pos,
                                ExplainType type)
 {
@@ -1772,7 +1772,7 @@ int ObLogDelUpd::print_used_hint(PlanText &plan_text)
   } else  {
     const ObHint *hint = get_plan()->get_log_plan_hint().get_normal_hint(T_USE_DISTRIBUTED_DML);
     if (NULL != hint) {
-      bool match_hint = is_multi_part_dml() ?
+      bool match_hint = is_multi_part_dml() ? 
                         hint->is_enable_hint() : hint->is_disable_hint();
       if (match_hint && OB_FAIL(hint->print_hint(plan_text))) {
         LOG_WARN("failed to print use multi part dml hint", K(ret));

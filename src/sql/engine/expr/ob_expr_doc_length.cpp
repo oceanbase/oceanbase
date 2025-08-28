@@ -80,3 +80,4 @@ int ObExprDocLength::generate_doc_length(
 }
 }  // namespace sql
 }  // namespace oceanbase
+

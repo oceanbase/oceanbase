@@ -171,8 +171,8 @@ void ObUnixDomainListener::run1()
                 ret = OB_ERR_UNEXPECTED;
                 OB_LOG(ERROR, "ObUnixDomainListener accept failed", K(listen_fd_), K(errno));
               }
-            } else {
-              conn_ev.events = EPOLLIN;
+            } else {    
+              conn_ev.events = EPOLLIN;    
               conn_ev.data.fd = conn_fd;
               if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, conn_fd, &conn_ev) < 0) {
                 OB_LOG(ERROR, "ObUnixDomainListener add event to epoll failed", K(epoll_fd), K(conn_fd), K(errno));

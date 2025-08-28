@@ -61,7 +61,7 @@ class ObStandardGroupVisitor: public ObRawExprVisitor
 {
 public:
   ObStandardGroupVisitor(ObStandardGroupChecker* checker,
-                         bool is_in_subquery = false)
+                         bool is_in_subquery = false) 
     : checker_(checker),
       is_in_subquery_(is_in_subquery),
       skip_expr_(NULL) {}

@@ -48,7 +48,7 @@ public:
   virtual int64_t get_server_count() const;
   virtual int get_tenant_ids(common::ObIArray<uint64_t> &tenant_ids) override;
   virtual int get_tenant_servers(const uint64_t tenant_id, common::ObIArray<ObAddr> &tenant_servers) override;
-  // Aone:
+  // Aone: 
   // Call when ObMySQLConnectionPool background timing task refresh, in the process of refreshing the connection pool of read and write locks, when the config server exception, parsing does not return, resulting in write locks can not be released, thus affecting the Formatter refresh schema to get server list, resulting in Delay
   // Optimisation options.
   // (1) Timed task do nothing in the background, relying on ObLog active refresh calls

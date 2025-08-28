@@ -173,7 +173,7 @@ public:
   inline void set_gather_audit(const char *ptr, int32_t len) { gather_audit_.assign_ptr(ptr, len); }
   inline const ObString &get_gather_audit() const { return gather_audit_; }
   sql::ObSQLSessionInfo *get_session() { return task_info_.session_; }
-  inline int64_t get_consecutive_failed_count() { return consecutive_failed_count_;}
+  inline int64_t get_consecutive_failed_count() { return consecutive_failed_count_;} 
 
   inline void set_consecutive_failed_count(int64_t failed_count) { consecutive_failed_count_ = failed_count; }
 

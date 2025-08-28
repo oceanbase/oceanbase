@@ -36,7 +36,7 @@ ObExprArrayAppendCommon::ObExprArrayAppendCommon(common::ObIAllocator &alloc, Ob
 
 ObExprArrayAppendCommon::ObExprArrayAppendCommon(ObIAllocator &alloc, ObExprOperatorType type,
                                                      const char *name, int32_t param_num, int32_t dimension)
-    : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension)
+    : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension) 
 {
 }
 
@@ -65,7 +65,7 @@ int ObExprArrayAppendCommon::calc_result_type2(ObExprResType &type,
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "ARRAY", ob_obj_type_str(type1.get_type()));
   } else if (OB_FAIL(ObArrayExprUtils::deduce_array_type(exec_ctx, type1, type2, subschema_id))) {
     LOG_WARN("failed to get result array type subschema id", K(ret));
-  }
+  } 
   // set result type
   if (OB_FAIL(ret)) {
   } else if (is_null_res) {
@@ -165,7 +165,7 @@ int ObExprArrayAppendCommon::eval_append_batch(const ObExpr &expr, ObEvalCtx &ct
       if (arr_datum.at(j)->is_null()) {
         is_null_res = true;
       } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id,
-                                                         arr_datum.at(j)->get_string(), src_arr))) {
+                                                         arr_datum.at(j)->get_string(), src_arr))) { 
         LOG_WARN("construct array obj failed", K(ret));
       } else if (OB_NOT_NULL(res_arr)) {
         res_arr->clear();
@@ -367,7 +367,7 @@ ObExprArrayAppend::ObExprArrayAppend(common::ObIAllocator &alloc)
 {
 }
 
-ObExprArrayAppend::ObExprArrayAppend(common::ObIAllocator &alloc, ObExprOperatorType type,
+ObExprArrayAppend::ObExprArrayAppend(common::ObIAllocator &alloc, ObExprOperatorType type, 
                                          const char *name, int32_t param_num, int32_t dimension)
     : ObExprArrayAppendCommon(alloc, type, name, param_num, dimension)
 {
@@ -410,7 +410,7 @@ ObExprArrayPrepend::ObExprArrayPrepend(common::ObIAllocator &alloc)
 {
 }
 
-ObExprArrayPrepend::ObExprArrayPrepend(common::ObIAllocator &alloc, ObExprOperatorType type,
+ObExprArrayPrepend::ObExprArrayPrepend(common::ObIAllocator &alloc, ObExprOperatorType type, 
                                        const char *name, int32_t param_num, int32_t dimension)
     : ObExprArrayAppendCommon(alloc, type, name, param_num, dimension)
 {

@@ -48,7 +48,7 @@ namespace rootserver
  *  it is impossible to clearly derive the change of zone
  */
 int ObParallelCreateTenantExecutor::execute(obrpc::UInt64 &tenant_id)
-{
+{ 
   const int64_t start_time = ObTimeUtility::fast_current_time();
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -393,7 +393,7 @@ int ObParallelCreateTenantExecutor::wait_ls_leader_(const uint64_t tenant_id, co
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   int64_t wait_leader = 0;
-  // ignore LOG_USER_ERROR when trying to read from __all_ls_meta_table
+  // ignore LOG_USER_ERROR when trying to read from __all_ls_meta_table 
   ObWarningBufferIgnoreScope ignore_errors_in_warning_buffer;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("failed to check inner stat", KR(ret));
@@ -624,7 +624,7 @@ int ObParallelCreateTenantExecutor::check_inner_stat_()
   if (!create_tenant_arg_.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("create tenant arg is invalid", KR(ret), K(create_tenant_arg_));
-  } else if (OB_ISNULL(rpc_proxy_) || OB_ISNULL(common_rpc_) || OB_ISNULL(sql_proxy_)
+  } else if (OB_ISNULL(rpc_proxy_) || OB_ISNULL(common_rpc_) || OB_ISNULL(sql_proxy_) 
       || OB_ISNULL(schema_service_) || OB_ISNULL(lst_operator_) || OB_ISNULL(location_service_)
       || OB_ISNULL(rs_mgr_)) {
     ret = OB_ERR_UNEXPECTED;

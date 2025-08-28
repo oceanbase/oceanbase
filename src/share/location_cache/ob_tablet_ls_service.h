@@ -76,7 +76,7 @@ public:
       const uint64_t tenant_id,
       const ObTabletID &tablet_id);
   // Batch renew the mapping between the tablet and LS synchronously
-  //
+  // 
   // The default value of expire_renew_time is INT64_MAX, which indicates a full refresh.
   // If expire_renew_time is set to a different value, on-demand refresh will be triggered.
   //
@@ -86,7 +86,7 @@ public:
   //
   // @param [in] tenant_id: target tenant which the tablet belongs to
   // @param [in] tablet_ids: target tablet_id list
-  // @param [in] expire_renew_time: INT64_MAX for full tablet_list refresh; otherwise, on-demand.
+  // @param [in] expire_renew_time: INT64_MAX for full tablet_list refresh; otherwise, on-demand. 
   //                                Default is INT64_MAX.
   // @param [out] ls_ids: array of ls_ids that tablet belongs to
   // @return OB_SUCCESS: process successfully
@@ -133,8 +133,8 @@ private:
   int erase_cache_(const uint64_t tenant_id, const ObTabletID &tablet_id);
   /*
     Fetch tablet_ls_caches with tablet_id renew time greater than expire_renew_time.
-    If none is found or the renew time is outdated (less than expire_renew_time),
-    return an invalid tablet_ls_cache
+    If none is found or the renew time is outdated (less than expire_renew_time), 
+    return an invalid tablet_ls_cache 
 
     @param [in] tenant_id               target tenant which the tablet belongs to
     @param [in] tablet_id               target tablet_id

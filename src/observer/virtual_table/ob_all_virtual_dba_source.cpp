@@ -81,7 +81,7 @@ int ObAllVirtualDbaSource::inner_get_next_row(common::ObNewRow *&row)
         start_to_read_ = true;
       }
     }
-
+    
     if (OB_SUCC(ret) && start_to_read_) {
       ret = get_next_source_line(row);
     }
@@ -93,7 +93,7 @@ int ObAllVirtualDbaSource::get_next_source_line(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   bool found_line = false;
-
+  
   while (OB_SUCC(ret) && !found_line) {
     if (iter_state_.lines_.count() == 0) {
       ObString source_text;
@@ -143,7 +143,7 @@ int ObAllVirtualDbaSource::get_next_source_line(common::ObNewRow *&row)
           }
           continue;
       }
-
+      
       if (!source_text.empty()) {
         if (OB_FAIL(split_text_into_lines(source_text, iter_state_.lines_))) {
           SERVER_LOG(WARN, "fail to split text into lines", K(ret));
@@ -151,10 +151,10 @@ int ObAllVirtualDbaSource::get_next_source_line(common::ObNewRow *&row)
           iter_state_.line_idx_ = 0;
         }
       }
-
+      
       if (OB_SUCC(ret) && iter_state_.lines_.count() == 0) {
         bool need_next_type = move_to_next_object_type();
-
+        
         if (need_next_type) {
           if (move_to_next_object_type()) {
             ret = OB_ITER_END;
@@ -164,11 +164,11 @@ int ObAllVirtualDbaSource::get_next_source_line(common::ObNewRow *&row)
         continue;
       }
     }
-
+    
     if (iter_state_.line_idx_ < iter_state_.lines_.count()) {
       const ObString &line_text = iter_state_.lines_.at(iter_state_.line_idx_);
       int64_t line_num = iter_state_.line_idx_ + 1;
-
+      
       switch (iter_state_.current_type_) {
         case SOURCE_PACKAGE:
           if (iter_state_.object_idx_ < package_array_.count()) {
@@ -205,7 +205,7 @@ int ObAllVirtualDbaSource::get_next_source_line(common::ObNewRow *&row)
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid source object type", K(iter_state_.current_type_), K(ret));
       }
-
+      
       if (OB_SUCC(ret)) {
         iter_state_.line_idx_++;
         if (found_line) {
@@ -214,7 +214,7 @@ int ObAllVirtualDbaSource::get_next_source_line(common::ObNewRow *&row)
       }
     } else {
       bool need_next_type = move_to_next_object();
-
+      
       if (need_next_type) {
         if (move_to_next_object_type()) {
           ret = OB_ITER_END;
@@ -223,7 +223,7 @@ int ObAllVirtualDbaSource::get_next_source_line(common::ObNewRow *&row)
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -231,15 +231,15 @@ int ObAllVirtualDbaSource::split_text_into_lines(const ObString &text, ObArray<O
 {
   int ret = OB_SUCCESS;
   lines.reset();
-
+  
   if (text.empty()) {
     return ret;
   }
-
+  
   const char *start = text.ptr();
   const char *end = text.ptr() + text.length();
   const char *line_start = start;
-
+  
   for (const char *p = start; p < end; ++p) {
     if (*p == '\n' || *p == '\r') {
       if (p > line_start) {
@@ -250,14 +250,14 @@ int ObAllVirtualDbaSource::split_text_into_lines(const ObString &text, ObArray<O
           break;
         }
       }
-
+      
       if (p + 1 < end && ((*p == '\r' && *(p + 1) == '\n') || (*p == '\n' && *(p + 1) == '\r'))) {
         p++;
       }
       line_start = p + 1;
     }
   }
-
+  
   if (OB_SUCC(ret) && line_start < end) {
     ObString line;
     line.assign_ptr(line_start, static_cast<int32_t>(end - line_start));
@@ -265,12 +265,12 @@ int ObAllVirtualDbaSource::split_text_into_lines(const ObString &text, ObArray<O
       SERVER_LOG(WARN, "fail to push back last line", K(ret));
     }
   }
-
+  
   return ret;
 }
 
-int ObAllVirtualDbaSource::fill_row_from_package(const ObPackageInfo *package_info,
-                                                const ObString &line_text,
+int ObAllVirtualDbaSource::fill_row_from_package(const ObPackageInfo *package_info, 
+                                                const ObString &line_text, 
                                                 int64_t line_num)
 {
   int ret = OB_SUCCESS;
@@ -279,7 +279,7 @@ int ObAllVirtualDbaSource::fill_row_from_package(const ObPackageInfo *package_in
     SERVER_LOG(WARN, "package info is null", K(ret));
   } else {
     ObObj *cells = cur_row_.cells_;
-
+    
     const ObDatabaseSchema *db_schema = NULL;
     bool is_sys_object = (package_info->get_tenant_id() == OB_SYS_TENANT_ID);
     if (!is_sys_object) {
@@ -290,7 +290,7 @@ int ObAllVirtualDbaSource::fill_row_from_package(const ObPackageInfo *package_in
         SERVER_LOG(WARN, "database schema is null", K(ret));
       }
     }
-
+    
     if (OB_SUCC(ret)) {
       for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < output_column_ids_.count(); ++col_idx) {
         const uint64_t col_id = output_column_ids_.at(col_idx);
@@ -365,8 +365,8 @@ int ObAllVirtualDbaSource::fill_row_from_package(const ObPackageInfo *package_in
   return ret;
 }
 
-int ObAllVirtualDbaSource::fill_row_from_routine(const ObRoutineInfo *routine_info,
-                                                const ObString &line_text,
+int ObAllVirtualDbaSource::fill_row_from_routine(const ObRoutineInfo *routine_info, 
+                                                const ObString &line_text, 
                                                 int64_t line_num)
 {
   int ret = OB_SUCCESS;
@@ -375,7 +375,7 @@ int ObAllVirtualDbaSource::fill_row_from_routine(const ObRoutineInfo *routine_in
     SERVER_LOG(WARN, "routine info is null", K(ret));
   } else {
     ObObj *cells = cur_row_.cells_;
-
+    
     const ObDatabaseSchema *db_schema = NULL;
     bool is_sys_object = (routine_info->get_tenant_id() == OB_SYS_TENANT_ID);
     if (!is_sys_object) {
@@ -386,7 +386,7 @@ int ObAllVirtualDbaSource::fill_row_from_routine(const ObRoutineInfo *routine_in
         SERVER_LOG(WARN, "database schema is null", K(ret));
       }
     }
-
+    
     if (OB_SUCC(ret)) {
       for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < output_column_ids_.count(); ++col_idx) {
         const uint64_t col_id = output_column_ids_.at(col_idx);
@@ -461,8 +461,8 @@ int ObAllVirtualDbaSource::fill_row_from_routine(const ObRoutineInfo *routine_in
   return ret;
 }
 
-int ObAllVirtualDbaSource::fill_row_from_trigger(const ObTriggerInfo *trigger_info,
-                                                const ObString &line_text,
+int ObAllVirtualDbaSource::fill_row_from_trigger(const ObTriggerInfo *trigger_info, 
+                                                const ObString &line_text, 
                                                 int64_t line_num)
 {
   int ret = OB_SUCCESS;
@@ -471,7 +471,7 @@ int ObAllVirtualDbaSource::fill_row_from_trigger(const ObTriggerInfo *trigger_in
     SERVER_LOG(WARN, "trigger info is null", K(ret));
   } else {
     ObObj *cells = cur_row_.cells_;
-
+    
     const ObDatabaseSchema *db_schema = NULL;
     bool is_sys_object = (trigger_info->get_tenant_id() == OB_SYS_TENANT_ID);
     if (!is_sys_object) {
@@ -482,7 +482,7 @@ int ObAllVirtualDbaSource::fill_row_from_trigger(const ObTriggerInfo *trigger_in
         SERVER_LOG(WARN, "database schema is null", K(ret));
       }
     }
-
+    
     if (OB_SUCC(ret)) {
       for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < output_column_ids_.count(); ++col_idx) {
         const uint64_t col_id = output_column_ids_.at(col_idx);
@@ -546,7 +546,7 @@ int ObAllVirtualDbaSource::fill_row_from_trigger(const ObTriggerInfo *trigger_in
                 cells[col_idx].set_number(database_id_number);
               }
             }
-            break;
+            break;            
           default:
             ret = OB_ERR_UNEXPECTED;
             SERVER_LOG(WARN, "invalid column id", K(col_id), K(ret));
@@ -559,7 +559,7 @@ int ObAllVirtualDbaSource::fill_row_from_trigger(const ObTriggerInfo *trigger_in
 
 int ObAllVirtualDbaSource::fill_row_from_udt(const ObUDTTypeInfo *udt_info,
                                             const share::schema::ObUDTObjectType *object_type_info,
-                                            const ObString &line_text,
+                                            const ObString &line_text, 
                                             int64_t line_num)
 {
   int ret = OB_SUCCESS;
@@ -571,7 +571,7 @@ int ObAllVirtualDbaSource::fill_row_from_udt(const ObUDTTypeInfo *udt_info,
     SERVER_LOG(WARN, "object type info is null", K(ret));
   } else {
     ObObj *cells = cur_row_.cells_;
-
+    
     const ObDatabaseSchema *db_schema = NULL;
     bool is_sys_object = (udt_info->get_tenant_id() == OB_SYS_TENANT_ID);
     if (!is_sys_object) {
@@ -582,7 +582,7 @@ int ObAllVirtualDbaSource::fill_row_from_udt(const ObUDTTypeInfo *udt_info,
         SERVER_LOG(WARN, "database schema is null", K(ret));
       }
     }
-
+    
     if (OB_SUCC(ret)) {
       for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < output_column_ids_.count(); ++col_idx) {
         const uint64_t col_id = output_column_ids_.at(col_idx);
@@ -667,14 +667,14 @@ int ObAllVirtualDbaSource::get_package_arrays()
 {
   int ret = OB_SUCCESS;
   package_array_.reset();
-
+  
   ObArray<const ObPackageInfo *> package_infos;
   if (OB_FAIL(schema_guard_->get_package_infos_in_tenant(tenant_id_, package_infos))) {
     SERVER_LOG(WARN, "fail to get package infos", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < package_infos.count(); ++i) {
       const ObPackageInfo *package_info = package_infos.at(i);
-      if (OB_NOT_NULL(package_info) &&
+      if (OB_NOT_NULL(package_info) && 
           package_info->get_database_id() != OB_SYS_DATABASE_ID) {
         if (OB_FAIL(package_array_.push_back(package_info))) {
           SERVER_LOG(WARN, "fail to push back package info", K(ret));
@@ -689,14 +689,14 @@ int ObAllVirtualDbaSource::get_routine_arrays()
 {
   int ret = OB_SUCCESS;
   routine_array_.reset();
-
+  
   ObArray<const ObRoutineInfo *> routine_infos;
   if (OB_FAIL(schema_guard_->get_routine_infos_in_tenant(tenant_id_, routine_infos))) {
     SERVER_LOG(WARN, "fail to get routine infos", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < routine_infos.count(); ++i) {
       const ObRoutineInfo *routine_info = routine_infos.at(i);
-      if (OB_NOT_NULL(routine_info) &&
+      if (OB_NOT_NULL(routine_info) && 
           routine_info->get_database_id() != OB_SYS_DATABASE_ID &&
           routine_info->get_routine_type() != ROUTINE_PACKAGE_TYPE &&
           routine_info->get_routine_type() != ROUTINE_UDT_TYPE) {
@@ -713,14 +713,14 @@ int ObAllVirtualDbaSource::get_trigger_arrays()
 {
   int ret = OB_SUCCESS;
   trigger_array_.reset();
-
+  
   ObArray<const ObTriggerInfo *> trigger_infos;
   if (OB_FAIL(schema_guard_->get_trigger_infos_in_tenant(tenant_id_, trigger_infos))) {
     SERVER_LOG(WARN, "fail to get trigger infos", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < trigger_infos.count(); ++i) {
       const ObTriggerInfo *trigger_info = trigger_infos.at(i);
-      if (OB_NOT_NULL(trigger_info) &&
+      if (OB_NOT_NULL(trigger_info) && 
           trigger_info->get_database_id() != OB_SYS_DATABASE_ID) {
         if (OB_FAIL(trigger_array_.push_back(trigger_info))) {
           SERVER_LOG(WARN, "fail to push back trigger info", K(ret));
@@ -735,16 +735,16 @@ int ObAllVirtualDbaSource::get_udt_arrays()
 {
   int ret = OB_SUCCESS;
   udt_array_.reset();
-
+  
   ObArray<const ObUDTTypeInfo *> udt_infos;
   if (OB_FAIL(schema_guard_->get_udt_infos_in_tenant(tenant_id_, udt_infos))) {
     SERVER_LOG(WARN, "fail to get udt infos", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < udt_infos.count(); ++i) {
       const ObUDTTypeInfo *udt_info = udt_infos.at(i);
-      if (OB_NOT_NULL(udt_info) &&
+      if (OB_NOT_NULL(udt_info) && 
           udt_info->get_database_id() != OB_SYS_DATABASE_ID) {
-
+        
         const common::ObIArray<share::schema::ObUDTObjectType*> &object_type_infos = udt_info->get_object_type_infos();
         bool has_any_object = false;
         for (int64_t j = 0; j < object_type_infos.count() && !has_any_object; ++j) {
@@ -753,7 +753,7 @@ int ObAllVirtualDbaSource::get_udt_arrays()
             has_any_object = true;
           }
         }
-
+        
         if (has_any_object) {
           if (OB_FAIL(udt_array_.push_back(udt_info))) {
             SERVER_LOG(WARN, "fail to push back udt info", K(ret));
@@ -793,7 +793,7 @@ int ObAllVirtualDbaSource::get_system_routine_arrays()
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < sys_routines.count(); ++i) {
       const ObRoutineInfo *routine_info = sys_routines.at(i);
-      if (OB_NOT_NULL(routine_info) &&
+      if (OB_NOT_NULL(routine_info) && 
           routine_info->get_routine_type() != ROUTINE_PACKAGE_TYPE &&
           routine_info->get_routine_type() != ROUTINE_UDT_TYPE) {
         if (OB_FAIL(routine_array_.push_back(routine_info))) {
@@ -842,7 +842,7 @@ int ObAllVirtualDbaSource::get_system_udt_arrays()
             has_any_object = true;
           }
         }
-
+        
         if (has_any_object) {
           if (OB_FAIL(udt_array_.push_back(udt_info))) {
             SERVER_LOG(WARN, "fail to push system udt info", K(ret));
@@ -863,11 +863,11 @@ bool ObAllVirtualDbaSource::move_to_next_object()
     if (iter_state_.object_idx_ < udt_array_.count()) {
       udt_info = udt_array_.at(iter_state_.object_idx_);
     }
-
+    
     if (OB_NOT_NULL(udt_info)) {
       const common::ObIArray<share::schema::ObUDTObjectType*> &object_type_infos = udt_info->get_object_type_infos();
       iter_state_.udt_object_type_idx_++;
-
+      
       if (iter_state_.udt_object_type_idx_ >= object_type_infos.count()) {
         iter_state_.object_idx_++;
         iter_state_.udt_object_type_idx_ = 0;
@@ -879,10 +879,10 @@ bool ObAllVirtualDbaSource::move_to_next_object()
   } else {
     iter_state_.object_idx_++;
   }
-
+  
   iter_state_.line_idx_ = 0;
   iter_state_.lines_.reset();
-
+  
   return is_current_object_array_exhausted();
 }
 
@@ -893,7 +893,7 @@ bool ObAllVirtualDbaSource::move_to_next_object_type()
   iter_state_.udt_object_type_idx_ = 0;
   iter_state_.line_idx_ = 0;
   iter_state_.lines_.reset();
-
+  
   return (iter_state_.current_type_ >= MAX_SOURCE_TYPE);
 }
 

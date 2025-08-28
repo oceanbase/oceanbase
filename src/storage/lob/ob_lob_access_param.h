@@ -40,7 +40,7 @@ public:
     : tmp_allocator_(nullptr), allocator_(nullptr),
       tx_desc_(nullptr), snapshot_(), tx_id_(),
       sql_mode_(SMO_DEFAULT), dml_base_param_(nullptr),
-      tenant_id_(MTL_ID()), src_tenant_id_(MTL_ID()),
+      tenant_id_(MTL_ID()), src_tenant_id_(MTL_ID()), 
       ls_id_(), tablet_id_(), lob_meta_tablet_id_(), lob_piece_tablet_id_(),
       coll_type_(), lob_locator_(nullptr), lob_common_(nullptr),
       lob_data_(nullptr), byte_size_(0), handle_size_(0), timeout_(0),
@@ -50,7 +50,7 @@ public:
       read_latest_(false), scan_backward_(false), is_fill_zero_(false), from_rpc_(false),
       inrow_read_nocopy_(false), is_store_char_len_(true), need_read_latest_(false), no_need_retry_(false), is_mlog_(false), try_flush_redo_(false),
       main_table_rowkey_col_(false), is_index_table_(false), enable_remote_retry_(false),
-      inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD), schema_chunk_size_(OB_DEFAULT_LOB_CHUNK_SIZE),
+      inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD), schema_chunk_size_(OB_DEFAULT_LOB_CHUNK_SIZE), 
       access_ctx_(nullptr), addr_(), lob_id_geneator_(nullptr), data_row_(nullptr)
   {}
   ~ObLobAccessParam();
@@ -91,7 +91,7 @@ public:
 
   /**
    * return true if char_len filed is exist
-   */
+   */ 
   bool lob_handle_has_char_len_field() const;
 
   /**
@@ -197,7 +197,7 @@ public:
   // whether need retry when some error occur
   bool no_need_retry_;
   bool is_mlog_;
-  // before 4.3.4 lob meta tablet is writed before main tablet,
+  // before 4.3.4 lob meta tablet is writed before main tablet, 
   // to avoid rollback cost too much there is a flag in ObWriteFlag to control skip flush redo.
   // but after 4.3.4, lob meta tablet is writed after main table, so no need skip flush redo
   // so add this flag to control this behavior for upgrade compatibility.
@@ -221,7 +221,7 @@ struct ObLobCompareParams {
     : collation_left_(CS_TYPE_INVALID),
       collation_right_(CS_TYPE_INVALID),
       offset_left_(0),
-      offset_right_(0),
+      offset_right_(0), 
       compare_len_(0),
       timeout_(0),
       tx_desc_(nullptr)
@@ -266,3 +266,5 @@ struct ObLobStorageParam
 }  // end namespace oceanbase
 
 #endif  // OCEANBASE_STORAGE_OB_LOB_ACCESS_PARAM_H_
+
+

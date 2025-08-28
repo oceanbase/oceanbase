@@ -71,12 +71,12 @@ public:
                                       bool is_get = false,
                                       ObIAllocator *scan_allocator = nullptr);
   static int get_rowkey(ObIAllocator &allocator, const ObDASScanCtDef * ctdef, ObDASScanRtDef *rtdef, ObRowkey *&rowkey);
-
-  static int get_rowkey_pre_filter(ObIAllocator &allocator,
-                                   bool is_vectorized,
-                                   ObDASIter *iter,
-                                   const ObDASScanCtDef *ctdef,
-                                   ObDASScanRtDef *rtdef,
+  
+  static int get_rowkey_pre_filter(ObIAllocator &allocator, 
+                                   bool is_vectorized, 
+                                   ObDASIter *iter, 
+                                   const ObDASScanCtDef *ctdef, 
+                                   ObDASScanRtDef *rtdef, 
                                    ObIArray<ObRowkey *> &rowkeys);
 };
 

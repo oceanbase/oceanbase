@@ -76,6 +76,6 @@
 #elif defined(__GNUC__) && defined(__IWMMXT__)
 /* GCC-compatible compiler, targeting ARM with WMMX */
 #include <mmintrin.h>
-#endif
+#endif 
 
 #endif //  OB_SSE_TO_NEON_H

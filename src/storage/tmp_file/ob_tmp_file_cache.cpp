@@ -754,7 +754,7 @@ int ObTmpPageCache::ObTmpCachedReadPageIOCallback::inner_process(const char *dat
   int ret = OB_SUCCESS;
   ObDIActionGuard action_guard("ObTmpCachedReadPageIOCallback");
   ObTimeGuard time_guard("TmpCachedReadPage_Callback_Process", 100000); //100ms
-
+  
   if (OB_ISNULL(cache_) || OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Invalid tmp page cache callback allocator", KR(ret), KP(cache_), KP(allocator_));

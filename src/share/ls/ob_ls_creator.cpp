@@ -958,7 +958,7 @@ int ObLSCreator::check_set_memberlist_result_(
     LOG_WARN("invalid argument", KR(ret));
   } else if (return_code_array.count() != set_member_list_proxy_.get_results().count()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("rpc count not equal to result count", KR(ret),
+    LOG_WARN("rpc count not equal to result count", KR(ret), 
         K(return_code_array.count()), K(set_member_list_proxy_.get_results().count()));
   } else {
     // don't use arg/dest here because call() may has failure.
@@ -1146,7 +1146,7 @@ int ObLSCreator::compensate_zone_readonly_replica_(
   } else {
     ObReplicaType replica_type_to_add = ObReplicaType::REPLICA_TYPE_INVALID;
     if (zlocality.get_columnstore_replica_num() > 0) {
-      // For C zone locality, compensate C-replica.
+      // For C zone locality, compensate C-replica. 
       replica_type_to_add = ObReplicaType::REPLICA_TYPE_COLUMNSTORE;
     } else {
       // For other zone locality (F/R), compensate R-replica

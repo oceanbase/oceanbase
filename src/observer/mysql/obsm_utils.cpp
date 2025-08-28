@@ -331,7 +331,7 @@ int ObSMUtils::cell_str(
               } else {
                 if (OB_NOT_NULL(element_type.get_data_type())) {
                   ObObjType obj_type = element_type.get_data_type()->get_obj_type();
-                  if (ob_is_string_tc(obj_type) || ob_is_text_tc(obj_type)
+                  if (ob_is_string_tc(obj_type) || ob_is_text_tc(obj_type) 
                       || element_type.get_data_type()->get_meta_type().is_clob_locator()) {
                     ObCollationType cs_conn = CS_TYPE_INVALID;
                     if (OB_FAIL(session.get_collation_connection(cs_conn))) {
@@ -696,7 +696,7 @@ int ObSMUtils::extend_cell_str(char *buf, const int64_t len,
     OB_LOG(WARN, "size over flow.", K(ret), K(len), K(user_type->get_name()));
   } else {
     ObArenaAllocator alloc;
-    char* tmp_buf = static_cast<char*>(alloc.alloc(len - pos));
+    char* tmp_buf = static_cast<char*>(alloc.alloc(len - pos)); 
     int64_t tmp_pos = 0;
     MEMCPY(tmp_buf + tmp_pos, user_type->get_name().ptr(), user_type->get_name().length());
     tmp_pos += user_type->get_name().length();
@@ -712,7 +712,7 @@ int ObSMUtils::extend_cell_str(char *buf, const int64_t len,
       ret = OB_ERR_UNEXPECTED;
       OB_LOG(WARN, "tmp_buf length is not enough.", K(ret), K(pos), K(len), K(tmp_pos));
     }
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(ret)) { 
       // do nothing
     } else if (OB_FAIL(ObMySQLUtil::store_length(buf, len, tmp_pos, pos))) {
       OB_LOG(WARN, "store length fail.", K(ret), K(pos), K(len), K(tmp_pos));

@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/optimizer/ob_direct_load_optimizer_ctx.h"
@@ -119,15 +119,15 @@ int ObDirectLoadOptimizerCtx::init_direct_load_ctx(ObExecContext *exec_ctx, ObLo
         }
       }
     }
-    LOG_INFO("init direct load ctx result", K(ret), K(direct_load_hint), K(append), K(table_id_), K(load_method_),
-        K(insert_mode_), K(load_mode_), K(load_level_), K(dup_action_), K(max_error_row_count_), K(need_sort_),
+    LOG_INFO("init direct load ctx result", K(ret), K(direct_load_hint), K(append), K(table_id_), K(load_method_), 
+        K(insert_mode_), K(load_mode_), K(load_level_), K(dup_action_), K(max_error_row_count_), K(need_sort_), 
         K(can_use_direct_load_), K(use_direct_load_), K(is_optimized_by_default_load_mode_));
   }
   return ret;
 }
 
 int ObDirectLoadOptimizerCtx::init_direct_load_ctx(
-    const ObInsertStmt &stmt,
+    const ObInsertStmt &stmt, 
     ObOptimizerContext &optimizer_ctx)
 {
   int ret = OB_SUCCESS;
@@ -185,7 +185,7 @@ int ObDirectLoadOptimizerCtx::init_direct_load_ctx(
           } else {
             table_id_ = table_item->ref_id_;
             load_level_ = table_item->part_ids_.empty() ? ObDirectLoadLevel::TABLE : ObDirectLoadLevel::PARTITION;
-            dup_action_ = insert_mode_ == ObDirectLoadInsertMode::INC_REPLACE ?
+            dup_action_ = insert_mode_ == ObDirectLoadInsertMode::INC_REPLACE ? 
                 ObLoadDupActionType::LOAD_REPLACE : ObLoadDupActionType::LOAD_STOP_ON_DUP;
           }
         }
@@ -221,13 +221,13 @@ int ObDirectLoadOptimizerCtx::init_direct_load_ctx(
             ret = OB_NOT_SUPPORTED;
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "normal table overwrite using non-direct insert is");
             LOG_WARN("normal table overwrite using non-direct insert is not support", KR(ret));
-          }
+          } 
         }
       }
     }
     LOG_INFO("init direct load ctx result", K(ret), K(direct_load_hint), K(global_hint.has_append()), K(table_id_), K(load_method_), K(insert_mode_), K(load_mode_), K(load_level_), K(dup_action_),
         K(max_error_row_count_), K(need_sort_), K(can_use_direct_load_), K(use_direct_load_), K(is_optimized_by_default_load_mode_));
-
+    
     if (load_method_ > 0) {
       // Only for direct load
       DEBUG_SYNC(AFTER_DIRECT_LOAD_FIRST_CHECK_IS_SUPPORT);
@@ -237,7 +237,7 @@ int ObDirectLoadOptimizerCtx::init_direct_load_ctx(
   return ret;
 }
 
-void ObDirectLoadOptimizerCtx::enable_by_direct_load_hint(const ObDirectLoadHint &hint)
+void ObDirectLoadOptimizerCtx::enable_by_direct_load_hint(const ObDirectLoadHint &hint) 
 {
   need_sort_ = hint.need_sort_;
   insert_mode_ = ObDirectLoadInsertMode::NORMAL;
@@ -252,14 +252,14 @@ void ObDirectLoadOptimizerCtx::enable_by_direct_load_hint(const ObDirectLoadHint
   }
 }
 
-void ObDirectLoadOptimizerCtx::enable_by_append_hint()
+void ObDirectLoadOptimizerCtx::enable_by_append_hint() 
 {
   need_sort_ = true;
   insert_mode_ = ObDirectLoadInsertMode::NORMAL;
   load_method_ = ObDirectLoadMethod::FULL;
 }
 
-void ObDirectLoadOptimizerCtx::enable_by_config()
+void ObDirectLoadOptimizerCtx::enable_by_config() 
 {
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   const ObString &config_str = tenant_config->default_load_mode.get_value_string();
@@ -280,7 +280,7 @@ void ObDirectLoadOptimizerCtx::enable_by_config()
   }
 }
 
-void ObDirectLoadOptimizerCtx::enable_by_overwrite()
+void ObDirectLoadOptimizerCtx::enable_by_overwrite() 
 {
   need_sort_ = true;
   load_method_ =  ObDirectLoadMethod::FULL;
@@ -369,7 +369,7 @@ int ObDirectLoadOptimizerCtx::check_support_direct_load(ObExecContext *exec_ctx)
     } else if (OB_FAIL(ObTableLoadSchema::get_column_ids(table_schema, column_ids))) {
       LOG_WARN("fail to get column ids", KR(ret));
     } else if (OB_FAIL(ObTableLoadService::check_support_direct_load(
-        *schema_guard,
+        *schema_guard, 
         table_id_,
         load_method_,
         insert_mode_,
@@ -378,7 +378,7 @@ int ObDirectLoadOptimizerCtx::check_support_direct_load(ObExecContext *exec_ctx)
         column_ids))) {
       LOG_WARN("fail to check support direct load", K(ret));
     }
-  }
+  } 
   return ret;
 }
 

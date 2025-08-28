@@ -578,13 +578,13 @@ int ObTabletPointerMap::get_meta_obj_with_external_memory(
   bool is_in_memory = false;
   guard.reset();
   ObTabletHandle tmp_guard; // ensure deserialize_post_work is safe
-
+  
   if (OB_UNLIKELY(!key.is_valid() || (force_alloc_new && nullptr != op))) { /*only support filter when not force new*/
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(key));
   } else if (CLICK_FAIL(ResourceMap::hash_func_(key, hash_val))) {
     STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
-  }
+  } 
 
   if (OB_SUCC(ret)) {
     if ((nullptr == op && CLICK_FAIL(try_get_in_memory_meta_obj(key, ptr_hdl, tmp_guard, is_in_memory)))
@@ -633,7 +633,7 @@ int ObTabletPointerMap::get_meta_obj_with_external_memory(
             STORAGE_LOG(WARN, "fail to try get in memory meta obj", K(ret), K(key));
           } else if (is_in_memory) {
             tmp_guard.set_wash_priority(WashTabletPriority::WTP_LOW);
-          }
+          } 
 
           if (OB_FAIL(ret)) {
           } else if (!force_alloc_new && is_in_memory) {
@@ -678,7 +678,7 @@ int ObTabletPointerMap::get_meta_obj_with_external_memory(
             guard.set_obj(t, &allocator, t3m);
           }
         }
-
+        
         if ((OB_FAIL(ret) && OB_NOT_NULL(t)) || need_free_obj) {
           t->dec_macro_ref_cnt();
         }

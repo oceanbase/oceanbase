@@ -132,12 +132,12 @@ int ObGrantExecutor::execute(ObExecContext &ctx, ObGrantStmt &stmt)
         || OB_FAIL(append(arg.upd_col_ids_, stmt.get_upd_col_ids()))
         || OB_FAIL(append(arg.ref_col_ids_, stmt.get_ref_col_ids()))) {
         LOG_WARN("append failed", K(ret));
-    } else if (lib::is_mysql_mode() && arg.object_type_ == ObObjectType::TABLE
+    } else if (lib::is_mysql_mode() && arg.object_type_ == ObObjectType::TABLE 
                 && arg.column_names_priv_.count() > 0) {
       if (arg.object_id_ == OB_INVALID) {
         //do nothing
         //todo: oracle every object will use id, and should also record the schema version in future.
-      } else if (stmt.get_table_schema_version() != 0
+      } else if (stmt.get_table_schema_version() != 0 
                   && OB_FAIL(arg.based_schema_object_infos_.push_back(ObBasedSchemaObjectInfo(arg.object_id_,
                                                                             TABLE_SCHEMA,
                                                                             stmt.get_table_schema_version())))) {
@@ -391,7 +391,7 @@ int ObRevokeExecutor::revoke_table(obrpc::ObCommonRpcProxy *rpc_proxy,
       if (arg.obj_id_ == OB_INVALID) {
         //do nothing
         //todo: oracle every object will use id, and should also record the schema version in future.
-      } else if (lib::is_mysql_mode() && stmt.get_table_schema_version()!= 0 &&
+      } else if (lib::is_mysql_mode() && stmt.get_table_schema_version()!= 0 && 
                 OB_FAIL(arg.based_schema_object_infos_.push_back(ObBasedSchemaObjectInfo(arg.obj_id_,
                                                                             TABLE_SCHEMA,
                                                                             stmt.get_table_schema_version())))) {

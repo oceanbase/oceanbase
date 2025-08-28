@@ -28,18 +28,18 @@ public:
   explicit ObExprArrayIntersect(common::ObIAllocator &alloc);
   virtual ~ObExprArrayIntersect();
   static int eval_array_intersect(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
-  static int eval_array_intersect_batch(const ObExpr &expr,
+  static int eval_array_intersect_batch(const ObExpr &expr, 
                 ObEvalCtx &ctx,
-                const ObBitVector &skip,
+                const ObBitVector &skip, 
                 const int64_t batch_size);
-  static int eval_array_intersect_vector(const ObExpr &expr,
+  static int eval_array_intersect_vector(const ObExpr &expr, 
                 ObEvalCtx &ctx,
-                const ObBitVector &skip,
+                const ObBitVector &skip, 
                 const EvalBound &bound);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
                   const ObRawExpr &raw_expr,
                   ObExpr &rt_expr) const override;
-private:
+private: 
   DISALLOW_COPY_AND_ASSIGN(ObExprArrayIntersect);
 };
 

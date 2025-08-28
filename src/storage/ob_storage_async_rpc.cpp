@@ -82,3 +82,4 @@ int ObHAAsyncRpcArg::set_ha_async_arg(
   }
   return ret;
 }
+

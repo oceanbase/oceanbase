@@ -79,7 +79,7 @@ private:
                             bool stmt_may_reduce_row_count, bool &trans_happened);
   int extract_params(ObRawExpr *expr, ObExprNodeMap &child_reject_map,
                      common::ObIArray<ObRawExpr*> &param_exprs);
-  int search_expr_cannot_pullup(ObRawExpr *expr,
+  int search_expr_cannot_pullup(ObRawExpr *expr, 
                                 ObExprNodeMap &expr_map,
                                 common::ObIArray<ObRawExpr *> &expr_cannot_pullup);
   int is_stmt_may_reduce_row_count(const ObSelectStmt &stmt, bool &is_true);

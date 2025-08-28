@@ -37,7 +37,7 @@ int ObExprPrivSTGeomFromEwkt::calc_result_type1(ObExprResType &type,
                                             ObExprResType &type1,
                                             common::ObExprTypeCtx &type_ctx) const
 {
-  UNUSED(type_ctx);
+  UNUSED(type_ctx); 
   int ret = OB_SUCCESS;
   if (ob_is_null(type1.get_type())) {
   } else if (!ob_is_string_type(type1.get_type())
@@ -79,8 +79,8 @@ int ObExprPrivSTGeomFromEwkt::eval_st_geomfromewkt(const ObExpr &expr, ObEvalCtx
         expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), wkt))) {
       LOG_WARN("fail to get real string data", K(ret), K(wkt));
     } else if (FALSE_IT(tmp_allocator.set_baseline_size(wkt.length()))) {
-    }
-  }
+    } 
+  } 
   // get srid
   if (!is_null_result && OB_SUCC(ret) && OB_NOT_NULL(wkt.find(';'))) {
     ObString srid_str = wkt.split_on(';');

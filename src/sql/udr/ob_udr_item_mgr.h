@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 
 #ifndef OB_SQL_UDR_OB_UDR_ITEM_MGR_H_
 #define OB_SQL_UDR_OB_UDR_ITEM_MGR_H_
@@ -68,7 +68,7 @@ public:
       pattern_digest_(pattern_digest),
       db_name_(db_name),
       normalized_pattern_(normalized_pattern) {}
-
+    
     inline uint64_t hash() const
     {
       uint64_t hash_ret = murmurhash(&tenant_id_, sizeof(uint64_t), 0);
@@ -121,7 +121,7 @@ public:
     int remove_rule_item(const int64_t rule_id);
     int get_rule_item_by_id(const int64_t rule_id, ObUDRItem *&rule_item);
     const RuleItemList &get_rule_item_list() const { return rule_item_list_; }
-
+  
     TO_STRING_KV(K_(rule_item_list));
     common::ObIAllocator &allocator_;
     int64_t ref_count_;
@@ -147,7 +147,7 @@ public:
                    PatternConstConsList *cst_cons_list = NULL);
   int fuzzy_check_by_pattern_digest(const uint64_t pattern_digest,
                                     bool &is_exists);
-
+  
 private:
   template<typename T, typename ...Args>
   int alloc(UDRRefObjGuard<T> &guard, Args&& ...args);

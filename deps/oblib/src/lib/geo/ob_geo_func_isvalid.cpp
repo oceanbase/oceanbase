@@ -27,7 +27,7 @@ namespace common
 template <typename GeoType>
 static int eval_isvalid_without_strategy(const ObGeometry *g,
                                          const ObGeoEvalCtx &context,
-                                         bool &result)
+                                         bool &result) 
 {
   INIT_SUCC(ret);
   const GeoType *geo_condidate = nullptr;
@@ -51,9 +51,9 @@ static int eval_isvalid_without_strategy(const ObGeometry *g,
 }
 
 template <typename GeoType>
-static int eval_isvalid_with_strategy(const ObGeometry *g,
+static int eval_isvalid_with_strategy(const ObGeometry *g, 
                                       const ObGeoEvalCtx &context,
-                                      bool &result)
+                                      bool &result) 
 {
   INIT_SUCC(ret);
   const ObSrsItem *srs = context.get_srs();
@@ -92,7 +92,7 @@ public:
   struct Eval
   {
     static int eval(const ObGeometry *g, const ObGeoEvalCtx &context, bool &result)
-    {
+    { 
       UNUSED(context);
       return eval_isvalid_without_strategy<GeoType>(g, context, result);
     }
@@ -101,7 +101,7 @@ public:
 private:
   template <typename CollectonType>
   static int eval_isvalid_geometry_collection(const ObGeometry *g,
-                                              const ObGeoEvalCtx &context,
+                                              const ObGeoEvalCtx &context, 
                                               bool &result)
   {
     INIT_SUCC(ret);

@@ -39,7 +39,7 @@ int ObTransformMVRewrite::transform_one_stmt(common::ObIArray<ObParentDMLStmt> &
     ObSelectStmt *new_stmt = NULL;
     const ObCollationType cs_type = stmt->get_query_ctx()->get_query_hint().cs_type_;
     const ObMVRewriteHint *myhint = static_cast<const ObMVRewriteHint*>(get_hint(stmt->get_stmt_hint()));
-    for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->mv_infos_.count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->mv_infos_.count(); ++i) { 
       bool is_happened = false;
       bool is_match_hint = true;
       MvInfo &mv_info = ctx_->mv_infos_.at(i);
@@ -212,7 +212,7 @@ int ObTransformMVRewrite::construct_transform_hint(ObDMLStmt &stmt, void *trans_
 
 /**
  * @brief ObTransformMVRewrite::gen_base_table_map
- *
+ * 
  * Generate the table map between from_tables and to_tables based on ref_id.
  *
  * e.g. INPUT  from_tables: t1, t1, t1, t2, t3
@@ -1022,7 +1022,7 @@ int ObTransformMVRewrite::inner_build_query_tree_delta_part(MvRewriteHelper &hel
     LOG_WARN("get unexpected null", K(ret), K(table));
   } else if (table->is_joined_table()) {
     // if both left and right child are delta tables, generate a new join node
-    // if only one child is delta table, merge the child tree node into query tree
+    // if only one child is delta table, merge the child tree node into query tree 
     const JoinedTable *join_table = static_cast<const JoinedTable*>(table);
     JoinTreeNode *left_node = NULL;
     JoinTreeNode *right_node = NULL;
@@ -1518,7 +1518,7 @@ int ObTransformMVRewrite::find_mv_not_null_expr(MvRewriteHelper &helper,
 
 /**
  * @brief ObTransformMVRewrite::check_predicate_compatibility
- * Check whether mv predicate and query predicate are same, and generate
+ * Check whether mv predicate and query predicate are same, and generate 
  * compensation predicates.
  */
 int ObTransformMVRewrite::check_predicate_compatibility(MvRewriteHelper &helper,
@@ -1926,7 +1926,7 @@ int ObTransformMVRewrite::check_other_predicate(MvRewriteHelper &helper,
 
 /**
  * @brief ObTransformMVRewrite::check_compensation_preds_validity
- *
+ * 
  * If mv has group by, check all columns in mv compensation predicates are mv's
  * group by column.
  */
@@ -2124,7 +2124,7 @@ int ObTransformMVRewrite::compare_expr(MvRewriteCheckCtx &context,
     }
   }
   return ret;
-}
+} 
 
 int ObTransformMVRewrite::check_group_by_col(MvRewriteHelper &helper,
                                              bool &is_valid)
@@ -2419,7 +2419,7 @@ int ObTransformMVRewrite::compute_agg_expr_map(MvRewriteHelper &helper,
                                                ObAggFunRawExpr *query_expr,
                                                MvRewriteCheckCtx &context,
                                                bool &is_valid)
-{
+{ 
   int ret = OB_SUCCESS;
   ObRawExpr *mv_select_expr = NULL;
   is_valid = true;
@@ -2505,7 +2505,7 @@ int ObTransformMVRewrite::check_agg_roll_up_expr(ObRawExpr *agg_expr,
 
 /**
  * @brief ObTransformMVRewrite::wrap_agg_roll_up_expr
- *
+ * 
  * @param ori_expr the origin aggregate expr, used to determine the roll up func type
  * @param output_expr the expr found in mv stmt, roll up will be performed on this expr
  */
@@ -2777,7 +2777,7 @@ int ObTransformMVRewrite::create_mv_column_item(MvRewriteHelper &helper)
 
 /**
  * @brief ObTransformMVRewrite::adjust_rewrite_stmt
- *
+ * 
  * Generate the rewrite stmt, and replace column expr of tables in mv into mv column.
  *
  * 1. Generate new from items and joined tables for rewrite stmt based on query
@@ -2981,10 +2981,10 @@ int ObTransformMVRewrite::adjust_aggr_winfun_expr(ObSelectStmt *rewrite_stmt)
 
 /**
  * @brief ObTransformMVRewrite::adjust_mv_item
- *
+ * 
  * 1. If there is mv compensation predicates, create an inline view and add
  *    compensation predicates into view.
- * 2. Expand real-time mv if needed.
+ * 2. Expand real-time mv if needed. 
  */
 int ObTransformMVRewrite::adjust_mv_item(MvRewriteHelper &helper)
 {
@@ -3068,7 +3068,7 @@ int ObTransformMVRewrite::check_rewrite_expected(MvRewriteHelper &helper,
   } else if (!is_match_index) {
     is_expected = false;
     OPT_TRACE("condition does not match index, can not rewrite");
-  } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*ctx_, *parent_stmts_, ori_stmt,
+  } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*ctx_, *parent_stmts_, ori_stmt, 
                                                                         true, partial_cost_check))) {
     LOG_WARN("failed to check partial cost eval validity", K(ret));
   } else if (OB_FAIL(accept_transform(*parent_stmts_, ori_stmt, rewrite_stmt,

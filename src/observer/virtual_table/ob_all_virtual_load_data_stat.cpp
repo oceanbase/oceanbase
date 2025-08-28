@@ -219,7 +219,7 @@ int ObAllVirtualLoadDataStat::inner_get_next_row(ObNewRow *&row)
         }
         case MESSAGE: {
           int64_t pos = 0;
-          if (OB_FAIL(databuff_printf(job_status->message_, common::MAX_LOAD_DATA_MESSAGE_LENGTH, pos,
+          if (OB_FAIL(databuff_printf(job_status->message_, common::MAX_LOAD_DATA_MESSAGE_LENGTH, pos, 
                                       "COMPACT_STAGE_LOAD_ROWS: %ld, COMPACT_STAGE_DUMP_ROWS: %ld, "
                                       "COMPACT_STAGE_PRODUCT_TMP_FILES: %ld, COMPACT_STAGE_CONSUME_TMP_FILES: %ld, "
                                       "COMPACT_STAGE_MERGE_WRITE_ROWS: %ld, MERGE_STAGE_WRITE_ROWS: %ld",

@@ -709,7 +709,7 @@ public:
   OB_INLINE uint64_t size() const { return value_.length(); }
   OB_INLINE uint64_t get_serialize_size()
   {
-    return sizeof(uint8_t) + sizeof(uint16_t) + sizeof(uint64_t) + size(); // [vertype][field_type][length][value];
+    return sizeof(uint8_t) + sizeof(uint16_t) + sizeof(uint64_t) + size(); // [vertype][field_type][length][value]; 
   }
   ObJsonNode *clone(ObIAllocator* allocator, bool is_deep_copy = false) const;
 private:
@@ -735,10 +735,10 @@ public:
   }
   OB_INLINE ObJsonNodeType json_type() const override { return ObJsonNodeType::J_BOOLEAN; }
   OB_INLINE void set_value(bool value) { value_ = value; }
-  OB_INLINE bool value() const
-  {
+  OB_INLINE bool value() const 
+  { 
     bool bool_ret = (value_ != 0);
-    return bool_ret;
+    return bool_ret; 
   }
   OB_INLINE uint64_t get_serialize_size() { return sizeof(char); }
   ObJsonNode *clone(ObIAllocator* allocator, bool is_deep_copy = false) const;
@@ -834,9 +834,9 @@ public:
   }
   int parse();
 
-  OB_INLINE ObJsonNodeType json_type() const override
+  OB_INLINE ObJsonNodeType json_type() const override 
   {
-    return field_type_ == ObIntervalYMType ? ObJsonNodeType::J_OYEARMONTH : ObJsonNodeType::J_ODAYSECOND;
+    return field_type_ == ObIntervalYMType ? ObJsonNodeType::J_OYEARMONTH : ObJsonNodeType::J_ODAYSECOND; 
   }
   OB_INLINE void set_value(const char *str, uint64_t length) { str_val_.assign_ptr(str, length); }
   OB_INLINE const common::ObString &value() const { return str_val_; }
@@ -850,14 +850,14 @@ public:
 private:
   ObString str_val_;
   ObObjType field_type_;
-  union IntervalValue {
+  union IntervalValue { 
     ObIntervalYMValue ym_;
     ObIntervalDSValue ds_;
     IntervalValue() {}
   } val_;
 };
 
-class ObJsonORawString : public ObJsonScalar
+class ObJsonORawString : public ObJsonScalar 
 {
 public:
   explicit ObJsonORawString(const char *str, uint64_t length, ObJsonNodeType node_type)
@@ -900,7 +900,7 @@ public:
   {
     return serialization::encoded_length_vi64(length()) + length();
   }
-  ObJsonNode *clone(ObIAllocator* allocator, bool is_deep_copy = false) const;
+  ObJsonNode *clone(ObIAllocator* allocator, bool is_deep_copy = false) const;  
 private:
   ObString str_val_;
   ObJsonNodeType json_type_;

@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef __OB_SQL_ENG_PX_DH_INIT_CHANNEL_H__
 #define __OB_SQL_ENG_PX_DH_INIT_CHANNEL_H__
 #include "sql/engine/px/datahub/ob_dh_msg.h"
@@ -38,7 +38,7 @@ public:
 public:
   ObInitChannelPieceMsg() : piece_count_(0) {}
   ~ObInitChannelPieceMsg() = default;
-  void reset()
+  void reset() 
   {
     op_id_ = OB_INVALID_ID;
     source_dfo_id_ = OB_INVALID_ID;

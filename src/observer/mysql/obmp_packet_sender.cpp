@@ -112,7 +112,7 @@ int ObMPPacketSender::init(rpc::ObRequest *req)
 int ObMPPacketSender::clone_from(ObMPPacketSender& that, int64_t com_offset)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(do_init(that.req_, that.seq_, that.comp_context_.seq_ + com_offset,
+  if (OB_FAIL(do_init(that.req_, that.seq_, that.comp_context_.seq_ + com_offset, 
                       that.conn_valid_, that.req_has_wokenup_, that.query_receive_ts_))) {
     SERVER_LOG(ERROR, "clone packet sender fail", K(ret));
   } else {
@@ -987,7 +987,7 @@ int ObMPPacketSender::try_encode_with(ObMySQLPacket &pkt,
         } else {
           // try again with larger buf size
           const int64_t new_alloc_size = TRY_EZ_BUF_SIZES[try_steps++];
-          // refer to doc:
+          // refer to doc: 
           if (OB_SIZE_OVERFLOW != last_ret && OB_BUF_NOT_ENOUGH != last_ret) {
             ret = last_ret;
             LOG_WARN("last_ret is not size overflow, need check code", K(last_ret));
@@ -1049,7 +1049,7 @@ int ObMPPacketSender::flush_buffer(const bool is_last)
       // We use the field to indicate if we should set `is last packet flag`
       proto20_context_.is_filename_packet_ = false;
     }
-
+    
     //int64_t buf_sz = ez_buf_->last - ez_buf_->pos;
     if (OB_SUCCESS != ret) {
     } else if (ObRequest::TRANSPORT_PROTO_EASY == nio_protocol_) {

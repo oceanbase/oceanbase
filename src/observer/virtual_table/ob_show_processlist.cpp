@@ -170,7 +170,7 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
               // this is a tmp solution to avoid core when we execute 'show processlist'
               // before we finally find the reason and resolve the bug. otherwise we cannot
               // use this command in on-line cluster.
-              // see
+              // see 
               cur_row_->cells_[cell_idx].set_varchar("");
               cur_row_->cells_[cell_idx].set_collation_type(default_collation);
             } else {
@@ -418,7 +418,7 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
                                                   ? -1 : sess_info->get_control_info().sample_pct_*100);
           } break;
           case RECORD_POLICY: {
-            if (sess_info->get_control_info().rp_ ==
+            if (sess_info->get_control_info().rp_ == 
                                     sql::FLTControlInfo::RecordPolicy::RP_ALL) {
               cur_row_->cells_[cell_idx].set_varchar("ALL");
               cur_row_->cells_[cell_idx].set_collation_type(ObCharset::get_default_collation(

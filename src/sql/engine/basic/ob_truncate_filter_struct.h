@@ -208,7 +208,7 @@ public:
     : ObPushdownFilterNode(alloc, PushdownFilterType::TRUNCATE_BLACK_FILTER)
   {
   }
-  ~ObTruncateBlackFilterNode() {}
+  ~ObTruncateBlackFilterNode() {}  
 };
 
 class ObTruncateBlackFilterExecutor : public ObPushdownFilterExecutor, public ObITruncateFilterExecutor

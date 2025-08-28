@@ -174,7 +174,7 @@ int ObAnonymousBlockResolver::add_param()
     anonymous_stmt = static_cast<ObAnonymousBlockStmt*>(stmt_);
   }
   CK (OB_NOT_NULL(anonymous_stmt));
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret)) { 
   } else if (params_.param_list_->count() > 0) {
     CK (params_.param_list_->count() == params_.query_ctx_->question_marks_count_);
     for (int64_t i = 0; OB_SUCC(ret) && i < params_.param_list_->count(); ++i) {

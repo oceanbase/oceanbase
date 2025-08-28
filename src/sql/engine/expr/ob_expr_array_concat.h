@@ -26,13 +26,13 @@ class ObExprArrayConcat : public ObFuncExprOperator
 {
 public:
   explicit ObExprArrayConcat(common::ObIAllocator &alloc);
-  explicit ObExprArrayConcat(common::ObIAllocator &alloc, ObExprOperatorType type,
+  explicit ObExprArrayConcat(common::ObIAllocator &alloc, ObExprOperatorType type, 
                                 const char *name, int32_t param_num, int32_t dimension);
   virtual ~ObExprArrayConcat();
 
   virtual int calc_result_typeN(ObExprResType& type,
                                 ObExprResType* types,
-                                int64_t param_num,
+                                int64_t param_num, 
                                 common::ObExprTypeCtx& type_ctx) const override;
   static int eval_array_concat(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   static int eval_array_concat_batch(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const int64_t batch_size);
@@ -42,7 +42,7 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
 private:
-
+  
   DISALLOW_COPY_AND_ASSIGN(ObExprArrayConcat);
 };
 

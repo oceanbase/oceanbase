@@ -30,7 +30,7 @@ int ObGeoReverseCoordinateVisitor::reverse_point_coordinate(ObIWkbGeogPoint *geo
   int ret = OB_SUCCESS;
   double x = geo->x();
   double y = geo->y();
-  ObWkbGeogPoint* inner_pt = reinterpret_cast<ObWkbGeogPoint*>(const_cast<char*>(geo->val()));
+  ObWkbGeogPoint* inner_pt = reinterpret_cast<ObWkbGeogPoint*>(const_cast<char*>(geo->val())); 
   if (OB_ISNULL(inner_pt)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("unexpected null geo value");

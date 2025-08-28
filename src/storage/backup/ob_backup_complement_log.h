@@ -342,7 +342,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupLSLogFinishTask);
 };
 
-class ObBackupLSLogGroupFinishDag : public share::ObIDag
+class ObBackupLSLogGroupFinishDag : public share::ObIDag 
 {
 public:
   ObBackupLSLogGroupFinishDag();

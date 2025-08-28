@@ -91,17 +91,17 @@ int ObDMLStmtPrinter::prepare_dblink_hint(ObQueryHint &query_hint_dblink)
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret));
         } else {
-          query_hint_dblink.get_global_hint().merge_tm_sessid_tx_id(reverse_dblink_info->get_tx_id(),
+          query_hint_dblink.get_global_hint().merge_tm_sessid_tx_id(reverse_dblink_info->get_tx_id(), 
                                                                     reverse_dblink_info->get_tm_sessid());
-          LOG_TRACE("set tx_id_ and tm_sessid to stmt", K(reverse_dblink_info->get_tx_id()),
+          LOG_TRACE("set tx_id_ and tm_sessid to stmt", K(reverse_dblink_info->get_tx_id()), 
                                                         K(reverse_dblink_info->get_tm_sessid()));
         }
       } else {
         // reset dblink hint, to unparse a link sql without dblink_info hint
         query_hint_dblink.get_global_hint().reset_tm_sessid_tx_id_hint();
       }
-      if ((session_->is_in_transaction() &&
-            transaction::ObTxIsolationLevel::RC == session_->get_tx_desc()->get_isolation_level()) ||
+      if ((session_->is_in_transaction() && 
+            transaction::ObTxIsolationLevel::RC == session_->get_tx_desc()->get_isolation_level()) || 
             !session_->is_in_transaction()) {
         query_hint_dblink.get_global_hint().set_flashback_read_tx_uncommitted(true);
       }
@@ -162,7 +162,7 @@ int ObDMLStmtPrinter::print_hint()
     if (OB_SUCC(ret)) {
       const ObQueryHint &query_hint = stmt_->get_query_ctx()->get_query_hint();
       ObQueryHint query_hint_dblink;
-      if (print_params_.for_dblink_ &&
+      if (print_params_.for_dblink_ && 
           is_first_stmt_for_hint_ &&
           OB_FAIL(prepare_dblink_hint(query_hint_dblink))) {
         LOG_WARN("failed to print dblink hint", K(ret));
@@ -264,7 +264,7 @@ int ObDMLStmtPrinter::print_table_with_subquery(const TableItem *table_item)
     if (table_item->is_lateral_table()) {
       DATA_PRINTF("lateral ");
     }
-    if (OB_SUCC(ret) && OB_FAIL(print_subquery(table_item->ref_query_,
+    if (OB_SUCC(ret) && OB_FAIL(print_subquery(table_item->ref_query_, 
                                subquery_print_params))) {
       LOG_WARN("failed to print subquery", K(ret));
     } else if (!table_item->alias_name_.empty()) {
@@ -924,7 +924,7 @@ int ObDMLStmtPrinter::print_json_return_type(int64_t value, ObDataType data_type
     int16_t cast_type = parse_node.int16_values_[OB_NODE_CAST_TYPE_IDX];
     const ObLengthSemantics length_semantics = data_type.get_length_semantics();
     const ObScale scale = data_type.get_scale();
-
+    
     switch (cast_type) {
       case T_CHAR: {
         int16_t collation = parse_node.int16_values_[OB_NODE_CAST_COLL_IDX];
@@ -942,7 +942,7 @@ int ObDMLStmtPrinter::print_json_return_type(int64_t value, ObDataType data_type
           // CHARACTER
           if (len == DEFAULT_VARCHAR_LEN) {
             break;
-          } else if (length_semantics == LS_BYTE && len == -1) {
+          } else if (length_semantics == LS_BYTE && len == -1) { 
             DATA_PRINTF(" VARCHAR2");
             break;
           } else {
@@ -1116,14 +1116,14 @@ int ObDMLStmtPrinter::print_binary_charset_collation(int64_t value, ObDataType d
 int ObDMLStmtPrinter::print_mysql_json_return_type(int64_t value, ObDataType data_type)
 {
   int ret = OB_SUCCESS;
-
+  
   ParseNode parse_node;
   parse_node.value_ = value;
 
   int16_t cast_type = data_type.get_obj_type();
   const ObLengthSemantics length_semantics = data_type.get_length_semantics();
   const ObScale scale = data_type.get_scale();
-
+  
   switch (cast_type) {
     case T_CHAR: {
       int32_t len = parse_node.int32_values_[0];
@@ -1522,7 +1522,7 @@ int ObDMLStmtPrinter::get_json_table_column_if_exists(int32_t id, ObDmlJtColDef*
     } else if (cur_col->col_base_info_.id_ == id) {
       exists = true;
       col = cur_col;
-    } else if (cur_col->col_base_info_.parent_id_ < 0
+    } else if (cur_col->col_base_info_.parent_id_ < 0 
                || cur_col->col_base_info_.col_type_ == static_cast<int32_t>(NESTED_COL_TYPE)) {
       col_stack.remove(col_stack.count() - 1);
       for (size_t i = 0; !exists && i < cur_col->nested_cols_.count(); ++i) {
@@ -1533,7 +1533,7 @@ int ObDMLStmtPrinter::get_json_table_column_if_exists(int32_t id, ObDmlJtColDef*
         } else if (nest_col->col_base_info_.id_ == id) {
           exists = true;
           col = nest_col;
-        } else if (nest_col->col_base_info_.col_type_ == static_cast<int32_t>(NESTED_COL_TYPE)
+        } else if (nest_col->col_base_info_.col_type_ == static_cast<int32_t>(NESTED_COL_TYPE) 
                   && OB_FAIL(col_stack.push_back(nest_col))) {
           LOG_WARN("fail to store col node tmp", K(ret));
         }
@@ -1544,7 +1544,7 @@ int ObDMLStmtPrinter::get_json_table_column_if_exists(int32_t id, ObDmlJtColDef*
   if (OB_SUCC(ret) && !exists) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to find col node", K(ret));
-  }
+  } 
   return ret;
 }
 
@@ -1562,7 +1562,7 @@ int ObDMLStmtPrinter::build_json_table_nested_tree(const TableItem* table_item, 
     } else {
       col_def = new (col_def) ObDmlJtColDef();
       col_def->col_base_info_.assign(info);
-
+      
       if (info.col_type_ != NESTED_COL_TYPE) {
         ColumnItem* col_item = stmt_->get_column_item_by_id(table_item->table_id_, info.output_column_idx_);
         if (OB_ISNULL(col_item)) {
@@ -1670,7 +1670,7 @@ int ObDMLStmtPrinter::print_json_table_nested_column(const TableItem *table_item
         } else if (col_info.allow_scalar_ == 1) {
           DATA_PRINTF(" disallow scalars");
         }
-
+        
         if (OB_FAIL(ret)) {
         } else if (col_info.wrapper_ == 0) {
           DATA_PRINTF(" without wrapper");
@@ -1798,7 +1798,7 @@ int ObDMLStmtPrinter::print_json_table_nested_column(const TableItem *table_item
         }
         if (OB_SUCC(ret) && col_info.on_empty_ == 2) {
           DATA_PRINTF(" default ");
-          if (OB_SUCC(ret)
+          if (OB_SUCC(ret) 
               && OB_FAIL(expr_printer_.do_print(cur_def->empty_expr_, T_NONE_SCOPE))) {
             LOG_WARN("fail to print default value col", K(ret));
           }
@@ -1813,13 +1813,13 @@ int ObDMLStmtPrinter::print_json_table_nested_column(const TableItem *table_item
         }
         if (OB_SUCC(ret) && col_info.on_empty_ == 2) {
           DATA_PRINTF(" default ");
-          if (OB_SUCC(ret)
+          if (OB_SUCC(ret) 
               && OB_FAIL(expr_printer_.do_print(cur_def->empty_expr_, T_NONE_SCOPE))) {
             LOG_WARN("fail to print default value col", K(ret));
           }
-        }
+        }    
       }
-    }
+    }    
   }
 
   for (size_t i = 0; OB_SUCC(ret) && i < col_def.nested_cols_.count(); ++i) {
@@ -1880,7 +1880,7 @@ int ObDMLStmtPrinter::print_xml_table(const TableItem *table_item)
   }
   DATA_PRINTF(" COLUMNS ");
   OZ (print_json_table_nested_column(table_item, *root_def));
-
+  
   return ret;
 }
 
@@ -1928,7 +1928,7 @@ int ObDMLStmtPrinter::print_json_table(const TableItem *table_item)
   DATA_PRINTF(" columns (");
   OZ (print_json_table_nested_column(table_item, *root_def));
   DATA_PRINTF(" )");
-
+  
   return ret;
 }
 
@@ -1991,7 +1991,7 @@ int ObDMLStmtPrinter::print_base_table(const TableItem *table_item)
           explain_non_extend = !static_cast<const ObExplainStmt *>
                                 (stmt_->get_query_ctx()->root_stmt_)->is_explain_extended();
         }
-        if (OB_NOT_NULL(table_item->flashback_query_expr_) &&
+        if (OB_NOT_NULL(table_item->flashback_query_expr_) && 
             // do not print flashback of link table when explain [basic]
             !(table_item->is_link_table() && explain_non_extend)) {
           if (table_item->flashback_query_type_ == TableItem::USING_TIMESTAMP) {
@@ -2422,7 +2422,7 @@ int ObDMLStmtPrinter::print_fetch()
       }
     }
     //fetch only/with ties
-    if (OB_SUCC(ret) &&
+    if (OB_SUCC(ret) && 
         (NULL != stmt_->get_limit_expr() || NULL != stmt_->get_limit_percent_expr()) ) {
       if (stmt_->is_fetch_with_ties()) {
         DATA_PRINTF(" with ties");

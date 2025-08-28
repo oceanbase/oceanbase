@@ -171,7 +171,7 @@ int ObCommonSqlProxy::write(const uint64_t tenant_id, const char *sql, const int
 }
 
 int ObCommonSqlProxy::write(const uint64_t tenant_id, const ObString sql,
-                        int64_t &affected_rows, int64_t compatibility_mode,
+                        int64_t &affected_rows, int64_t compatibility_mode, 
                         const ObSessionParam *param /* = nullptr*/,
                         const common::ObAddr *sql_exec_addr)
 {
@@ -512,7 +512,7 @@ int ObDbLinkProxy::prepare_enviroment(const sqlclient::dblink_param_ctx &param_c
     } else {
       LOG_DEBUG("set session variable nls_date_format");
       dblink_conn->set_session_init_status(true);
-    }
+    } 
   }
   return ret;
 }

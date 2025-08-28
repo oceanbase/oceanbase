@@ -127,7 +127,7 @@ public:
   static void SetUpTestCase()
   {
     ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
-  }
+  } 
   static void TearDownTestCase()
   {
     ObTimerService::get_instance().stop();
@@ -192,7 +192,7 @@ ObTableApiSessNodeVal g_sess_node_val(NULL, 500);
 void TestCreateExecutor::fake_ctx_init_common(ObTableCtx &fake_ctx, ObTableSchema *table_schema)
 {
   fake_ctx.schema_guard_ = &schema_guard_;
-  fake_ctx.table_schema_ = table_schema;
+  fake_ctx.table_schema_ = table_schema;  
   fake_ctx.schema_cache_guard_ = &schema_cache_guard_;
   fake_ctx.tenant_id_ = table_schema->get_tenant_id();
   fake_ctx.database_id_ = table_schema->get_database_id();

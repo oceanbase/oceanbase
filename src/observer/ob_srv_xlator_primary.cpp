@@ -188,7 +188,7 @@ void oceanbase::observer::init_srv_xlator_for_logservice(ObSrvRpcXlator *xlator)
   RPC_PROCESSOR(logservice::LogFlashbackMsgP);
 #ifdef OB_BUILD_ARBITRATION
   RPC_PROCESSOR(logservice::LogProbeRsP);
-#endif
+#endif 
   RPC_PROCESSOR(logservice::LogGetCkptReqP);
 #ifdef OB_BUILD_SHARED_STORAGE
   RPC_PROCESSOR(logservice::LogSyncBaseLSNReqP);

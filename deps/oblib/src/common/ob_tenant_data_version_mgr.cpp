@@ -16,9 +16,9 @@
 #define DV_ILOG_F(fmt, args...) COMMON_LOG(INFO, "[DATA_VERSION] " fmt, ##args)
 #define DV_TLOG(fmt, args...) COMMON_LOG(TRACE, "[DATA_VERSION] " fmt, ##args)
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace common
+namespace common 
 {
 
 ObTenantDataVersionMgr& ObTenantDataVersionMgr::get_instance()
@@ -82,7 +82,7 @@ int ObTenantDataVersionMgr::get(const uint64_t tenant_id, uint64_t &data_version
   return ret;
 }
 
-int ObTenantDataVersionMgr::set(const uint64_t tenant_id, const uint64_t data_version)
+int ObTenantDataVersionMgr::set(const uint64_t tenant_id, const uint64_t data_version) 
 {
   int ret = OB_SUCCESS;
   ObTenantDataVersion *version = NULL;
@@ -219,7 +219,7 @@ int ObTenantDataVersionMgr::load_from_file()
               ret = OB_SUCCESS;
             }
           }
-        }
+        } 
       }
     }
     if (0 != close(fd)) {
@@ -236,7 +236,7 @@ int ObTenantDataVersionMgr::load_from_file()
 }
 
 int ObTenantDataVersionMgr::set_(const uint64_t tenant_id,
-                                 const uint64_t data_version)
+                                 const uint64_t data_version) 
 {
   int ret = OB_SUCCESS;
   ObTenantDataVersion *version = NULL;
@@ -264,7 +264,7 @@ int ObTenantDataVersionMgr::set_(const uint64_t tenant_id,
     if (OB_NOT_NULL(version) && (version->is_removed() || data_version <= old_version)) {
       COMMON_LOG(INFO,
                  "tenant is removed or new data_version is not bigger than old "
-                 "value, no need to update tenant data_version", K(tenant_id),
+                 "value, no need to update tenant data_version", K(tenant_id), 
                  "is_removed", version->is_removed(),
                  "old_version", old_version,
                  "new_version", data_version);
@@ -286,7 +286,7 @@ int ObTenantDataVersionMgr::set_(const uint64_t tenant_id,
         version->set_version(data_version);
       }
 
-      DV_ILOG_F("Tenant DATA_VERSION is changed", K(ret), K(tenant_id),
+      DV_ILOG_F("Tenant DATA_VERSION is changed", K(ret), K(tenant_id), 
                 "old_version", DVP(old_version),
                 "new_version", DVP(data_version));
     }
@@ -325,7 +325,7 @@ int ObTenantDataVersionMgr::set_and_dump_to_file_(const uint64_t tenant_id,
         if (OB_FAIL(dump_data_version_(
                 dump_buf, buf_length, pos, iter_tenant_id,
                 iter_version->is_removed(),
-                iter_version->get_remove_timestamp(),
+                iter_version->get_remove_timestamp(), 
                 data_version))) {
           COMMON_LOG(WARN, "fail to dump data_version", K(ret),
                      K(iter_tenant_id), KDV(data_version), K(*iter_version));
@@ -383,7 +383,7 @@ int ObTenantDataVersionMgr::remove_and_dump_to_file_(const uint64_t tenant_id,
         COMMON_LOG(WARN, "iter_version is null", K(iter_tenant_id));
       } else if (iter_tenant_id == tenant_id) {
         if (OB_FAIL(dump_data_version_(dump_buf, buf_length, pos, iter_tenant_id,
-                                       true /*removed*/,
+                                       true /*removed*/, 
                                        remove_ts,
                                        iter_version->get_version()))) {
           COMMON_LOG(WARN, "fail to dump data_version", K(ret),

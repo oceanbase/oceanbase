@@ -84,7 +84,7 @@ int ObHbaseExplicitColumnTracker::check_column(const ObHTableCell &cell, ObHTabl
     // Compare specific column to current column
     //
     cmp_ret = ObHTableUtils::compare_qualifier(cell.get_qualifier(), curr_column_->first);
-
+    
     // Column Matches. Return include code. The caller would call checkVersions
     // to limit the number of versions.
     if (0 == cmp_ret) {
@@ -299,7 +299,7 @@ void ObHbaseWildcardColumnTracker::reset()
 
 int32_t ObHbaseWildcardColumnTracker::get_cur_version()
 {
-  return current_count_;
+  return current_count_;  
 }
 
 /**
@@ -392,7 +392,7 @@ int ObHbaseRowIterator::get_and_init_cell_iter(ObIAllocator &allocator,
   }
 
   if (OB_SUCC(ret)) {
-    cell_iter = tmp_cell_iter;
+    cell_iter = tmp_cell_iter; 
   } else if (OB_NOT_NULL(tmp_cell_iter)) {
     tmp_cell_iter->close();
     tmp_cell_iter->~ObHbaseICellIter();
@@ -474,7 +474,7 @@ void ObHbaseRowIterator::close()
   if (OB_NOT_NULL(cell_iter_)) {
     cell_iter_->close();
   }
-
+  
   is_inited_ = false;
 }
 
@@ -660,7 +660,7 @@ int ObHbaseRowIterator::get_next_row_internal(ResultType *&result)
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -748,9 +748,9 @@ int ObHbaseRowIterator::get_next_row_internal_normal(ResultType *&result)
         case ObHTableMatchCode::DONE_SCAN:
           has_more_cells_ = false;
           loop = false;
-          // need to scan the last kq for recording expired rowkey
+          // need to scan the last kq for recording expired rowkey 
           // when scan return OB_ITER_END, cur_cell_ will be empty
-          // but the ret code will be covered
+          // but the ret code will be covered 
           if (NULL != curr_cell_.get_ob_row()) {
             ret = seek_or_skip_to_next_col(curr_cell_);
           }
@@ -776,7 +776,7 @@ int ObHbaseRowIterator::get_next_row_internal_normal(ResultType *&result)
   if (OB_ITER_END == ret) {
     ret = OB_SUCCESS;
   }
-
+  
   if (OB_FAIL(ret)) {
     LOG_WARN("fail to execute with match_code", K(ret), K(match_code));
   }
@@ -994,7 +994,7 @@ void ObHbaseRowIterator::set_need_verify_cell_ttl(bool need_verify_cell_ttl) {
 int ObHbaseRowIterator::try_record_expired_rowkey(const ObHTableCellEntity &cell)
 {
   int ret = OB_SUCCESS;
-  // TODO: rowkeyTTL should be collected and exeucte on LS leader, which
+  // TODO: rowkeyTTL should be collected and exeucte on LS leader, which   
   // maybe not work in secondary-part scenarios
   // if (!is_timeseries_table_ && !is_cur_row_expired_) {
   //   if (need_verify_cell_ttl_ && OB_NOT_NULL(matcher_) && OB_FAIL(matcher_->is_cell_ttl_expired(cell, is_cur_row_expired_))) {
@@ -1012,7 +1012,7 @@ int ObHbaseRowIterator::try_record_expired_rowkey(const ObHTableCellEntity &cell
 
 void ObHbaseRowIterator::try_record_expired_rowkey(const int32_t versions, const ObString &rowkey)
 {
-  // TODO: rowkeyTTL should be collected and exeucte on LS leader, which
+  // TODO: rowkeyTTL should be collected and exeucte on LS leader, which   
   // maybe not work in secondary-part scenarios
   // if (!is_timeseries_table_ && max_version_ > 0 && !is_cur_row_expired_ && versions > max_version_) {
   //   is_cur_row_expired_ = true;
@@ -1222,7 +1222,7 @@ int ObHbaseCFIterator::init()
     if (OB_FAIL(init_hbase_filter(exec_ctx_.get_allocator(), hbase_params, filter_))) {
       LOG_WARN("fail to init hbase filter", K(ret));
     }
-  }
+  } 
 
   if (OB_SUCC(ret)) {
     if (!is_timeseries_table_ && ObQueryFlag::Reverse == query.get_scan_order()) {
@@ -1530,7 +1530,7 @@ int ObHbaseReversedRowIterator::seek_or_skip_to_next_col_inner(const ObString &r
         }
       }
     } else {
-      allocator_.reuse();
+      allocator_.reuse(); 
       curr_cell_.set_ob_row(ob_next_column_row);
     }
   }
@@ -1589,7 +1589,7 @@ void ObHbaseCFIterator::close()
   }
 }
 
-bool ObHbaseCFIterator::has_more_result() const
+bool ObHbaseCFIterator::has_more_result() const 
 {
   bool bret = false;
   if (OB_NOT_NULL(row_iterator_)) {
@@ -1820,7 +1820,7 @@ void ObHbaseTSWildcardColumnTracker::reset()
 
 int32_t ObHbaseTSWildcardColumnTracker::get_cur_version()
 {
-  return 0;
+  return 0;  
 }
 
 bool ObHbaseTSWildcardColumnTracker::is_done(int64_t timestamp) const

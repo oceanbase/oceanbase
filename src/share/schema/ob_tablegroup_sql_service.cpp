@@ -80,7 +80,7 @@ int ObTablegroupSqlService::update_tablegroup(ObTablegroupSchema &new_schema,
     LOG_WARN("fail to add pk column", K(ret), K(new_schema));
   }
   int64_t affected_rows = 0;
-  ObDMLExecHelper exec(sql_client, exec_tenant_id);
+  ObDMLExecHelper exec(sql_client, exec_tenant_id);                               
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(exec.exec_update(OB_ALL_TABLEGROUP_TNAME, dml, affected_rows))) {
     LOG_WARN("fail to exec update", K(ret));

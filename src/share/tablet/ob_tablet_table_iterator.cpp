@@ -71,7 +71,7 @@ int ObTabletMetaIterator::next(ObTabletInfo &tablet_info)
         if (OB_FAIL(tablet_info.assign(prefetched_tablets_.at(prefetch_tablet_idx_)))) {
           LOG_WARN("fail to assign tablet_info", KR(ret), K_(prefetch_tablet_idx));
         } else if (tablet_info.replica_count() > 0) {
-          //
+          // 
           if (OB_FAIL(tablet_info.filter(filters_))) {
             LOG_WARN("fail to filter tablet_info", KR(ret), K(tablet_info));
           } else {
@@ -120,7 +120,7 @@ int ObCompactionTabletMetaIterator::next(ObTabletInfo &tablet_info)
     if (OB_FAIL(ObTabletMetaIterator::next(tablet_info))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("fail to get next tablet info", KR(ret));
-      }
+      } 
     } else if (!tablet_info.is_valid()) {
       if (tablet_info.get_replicas().empty()) {
         // ObTabletMetaIterator::next may fillter some replica members and make tablet_info invalid, skip and fetch next one
@@ -128,7 +128,7 @@ int ObCompactionTabletMetaIterator::next(ObTabletInfo &tablet_info)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tablet_info is invalid", KR(ret), K(tablet_info));
       }
-    }
+    } 
   } while (OB_SUCC(ret) && !tablet_info.is_valid());
   return ret;
 }

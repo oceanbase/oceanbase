@@ -30,7 +30,7 @@ using namespace oceanbase::common;
  * e.g.
  * select count(distinct c1), sum(c2) from t1 group by c3;
  * ->
- * select count(view1.c1), sum(view1.sum(c2))
+ * select count(view1.c1), sum(view1.sum(c2)) 
  * from (select c1, c3, sum(c2) from t1 group by c1, c3) view1
  * group by c3;
  */
@@ -51,7 +51,7 @@ int ObTransformDistinctAggregate::transform_one_stmt(common::ObIArray<ObParentDM
     LOG_WARN("failed to transform distinct aggregate", K(ret));
   } else if (trans_happened && OB_FAIL(add_transform_hint(*stmt))) {
     LOG_WARN("failed to add transform hint", K(ret));
-  }
+  } 
   return ret;
 }
 
@@ -170,7 +170,7 @@ int ObTransformDistinctAggregate::check_transform_validity(const ObDMLStmt *stmt
         // do nothing
       } else if (OB_FAIL(replacer.do_visit(aggr_expr))) {
         LOG_WARN("failed to replace param expr", K(ret));
-      }
+      } 
     }
   }
   return ret;
@@ -258,7 +258,7 @@ int ObTransformDistinctAggregate::classify_aggr_exprs(const ObIArray<ObAggFunRaw
 
 /**
  * @brief ObTransformDistinctAggregate::construct_view_select_exprs
- *
+ * 
  * view select exprs = distinct columns + non distinct aggrs
  */
 int ObTransformDistinctAggregate::construct_view_select_exprs(const ObIArray<ObAggFunRawExpr*> &non_distinct_aggr,
@@ -277,7 +277,7 @@ int ObTransformDistinctAggregate::construct_view_select_exprs(const ObIArray<ObA
 
 /**
  * @brief ObTransformDistinctAggregate::construct_view_group_exprs
- *
+ * 
  * view group exprs = origin group exprs + distinct columns
  */
 int ObTransformDistinctAggregate::construct_view_group_exprs(const ObIArray<ObRawExpr*> &ori_group_expr,

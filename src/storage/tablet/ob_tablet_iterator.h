@@ -67,8 +67,8 @@ public:
   ObLSTabletAddrIterator &operator=(const ObLSTabletAddrIterator&) = delete;
 public:
   int get_next_tablet_addr(ObTabletMapKey &key, ObMetaDiskAddr &addr);
-  void reset() {
-    ls_tablet_service_ = nullptr;
+  void reset() { 
+    ls_tablet_service_ = nullptr; 
     idx_ = -1;
     tablet_ids_.reset();
   }

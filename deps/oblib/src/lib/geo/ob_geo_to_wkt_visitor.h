@@ -46,8 +46,8 @@ public:
   int visit(ObIWkbGeogPoint *geo);
   int visit(ObIWkbGeomPoint *geo);
   int visit(ObIWkbGeogLineString *geo);
-  int visit(ObIWkbGeomLineString *geo);
-  int visit(ObIWkbGeogMultiPoint *geo);
+  int visit(ObIWkbGeomLineString *geo);  
+  int visit(ObIWkbGeogMultiPoint *geo);  
   int visit(ObIWkbGeomMultiPoint *geo);
   int visit(ObIWkbGeogMultiLineString *geo);
   int visit(ObIWkbGeomMultiLineString *geo);
@@ -57,7 +57,7 @@ public:
   int visit(ObIWkbGeomMultiPolygon *geo);
   int visit(ObIWkbGeogCollection *geo);
   int visit(ObIWkbGeomCollection *geo);
-
+ 
   bool is_end(ObIWkbGeogLineString *geo) { UNUSED(geo); return true; }
   bool is_end(ObIWkbGeomLineString *geo) { UNUSED(geo); return true; }
   bool is_end(ObIWkbGeogLinearRing *geo) { UNUSED(geo); return true; }
@@ -103,7 +103,7 @@ private:
   int estimate_polygon_len(T_IBIN *geo);
 
 public:
-  static int convert_double_to_str(char* buff, uint64_t buff_size, double val, bool has_scale,
+  static int convert_double_to_str(char* buff, uint64_t buff_size, double val, bool has_scale, 
                                 int16_t scale, bool is_oracle_mode, uint64_t &out_len);
   static int append_double_oracle(char *buff, const int32_t buff_size, uint64_t &out_len, double value);
   static int append_double_with_prec(char *buff, const int32_t buff_size, uint64_t &out_len, double value, int16_t scale);

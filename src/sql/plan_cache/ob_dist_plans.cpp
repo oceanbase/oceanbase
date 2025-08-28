@@ -43,7 +43,7 @@ int ObDistPlans::get_plan(ObPlanCacheCtx &pc_ctx,
   //because get_phy_locations will build the related_tablet_map in ObDASCtx
   //and add candi table location into DASCtx
   if (!pc_ctx.try_get_plan_) {
-    DAS_CTX(pc_ctx.exec_ctx_).clear_all_location_info();
+    DAS_CTX(pc_ctx.exec_ctx_).clear_all_location_info(); 
   }
   if (OB_ISNULL(plan_set_)) {
     ret = OB_ERR_UNEXPECTED;

@@ -141,7 +141,7 @@ private:
   static const int64_t MAX_MB_NUM = DEFAULT_MAX_CACHE_SIZE / lib::ACHUNK_SIZE;
 
 public:
-  static const int64_t MAX_MB_HANDLE_NUM =
+  static const int64_t MAX_MB_HANDLE_NUM = 
         MAX_MB_NUM + 2 * (ObKVCacheStore::WASH_THREAD_RETIRE_LIMIT + ObKVCacheStore::RETIRE_LIMIT * OB_MAX_THREAD_NUM);
 
 private:

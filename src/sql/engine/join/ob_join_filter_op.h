@@ -497,7 +497,7 @@ public:
   bool force_dump_{false};
   bool has_sent_runtime_filter_{false};
   const ExprFixedArray *build_rows_output_{nullptr};
-  ExprFixedArray build_rows_output_for_compat_;
+  ExprFixedArray build_rows_output_for_compat_; 
 
   // for build count opt
   bool in_filter_active_{false};

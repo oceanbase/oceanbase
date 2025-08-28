@@ -26,7 +26,7 @@ struct ObVectorNorm
 {
   static int vector_norm_square_func(const float *a, const int64_t len, double &norm_square);
   static int vector_norm_func(const float *a, const int64_t len, double &norm);
-
+  
   // normal func
   OB_INLINE static int vector_norm_square_normal(const float *a, const int64_t len, double &norm_square);
   // TODO(@jingshui) add simd func

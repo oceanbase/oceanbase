@@ -11,7 +11,7 @@
  */
 
 #ifndef OB_ADMIN_IO_DRIVER_QUALITY_H_
-#define OB_ADMIN_IO_DRIVER_QUALITY_H_
+#define OB_ADMIN_IO_DRIVER_QUALITY_H_ 
 
 #include <stdio.h>
 #include <time.h>
@@ -59,7 +59,7 @@ constexpr int64_t MAX_OBJECT_NAME_LENGTH = 50;
 constexpr int64_t MAX_OBJECT_NAME_SUFFIX_LENGTH = 16;
 constexpr int64_t MIN_OBJECT_SIZE = 0;
 constexpr int64_t SMALL_OBJECT_SIZE_LIMIT = 128 * 1024;          // 128 KB
-constexpr int64_t NORMAL_OBJECT_SIZE_LIMIT = 2L * 1024 * 1024;   // 2MB
+constexpr int64_t NORMAL_OBJECT_SIZE_LIMIT = 2L * 1024 * 1024;   // 2MB 
 constexpr int64_t LARGE_OBJECT_SIZE_LIMIT = 128L * 1024 * 1024;  // 128MB
 constexpr int64_t MEMORY_LIMITED_SIZE = 16L * 1024 * 1024 * 1024;
 constexpr int64_t FINAL_OBJECT_STORAGE_MEMORY_LIMIT = 50 * 1024 * 1024;   // 50MB
@@ -70,9 +70,9 @@ constexpr double SMALL_OBJECT_SIZE_RATE = 0.2;
 constexpr double NORMAL_OBJECT_SIZE_RATE = 0.75;
 static_assert(SMALL_OBJECT_SIZE_RATE + NORMAL_OBJECT_SIZE_RATE < 1, "The sum of SMALL_OBJECT_SIZE_RATE and NORMAL_OBJECT_SIZE_LIMIT should be less than 1");
 
-// Default Scene Parameter
+// Default Scene Parameter 
 constexpr int64_t DEFAULT_RUN_TIME_S                = 20;           // the default running time of the scene
-constexpr int64_t DEFAULT_INTERVAL_S                = 1;            // the default interval between each metric display
+constexpr int64_t DEFAULT_INTERVAL_S                = 1;            // the default interval between each metric display 
 constexpr int64_t DEFAULT_THREAD_CNT                = 16;           // the dafault thread cnt for task hanlder
 constexpr int64_t DEFAULT_LIMIT_RUN_TIME_S          = 10;           // the default duration of the restrictions in the limited scene
 constexpr int64_t DEFAULT_LIMIT_MEMORY_MB           = 64;           // the default memory limited in the limited scene
@@ -85,7 +85,7 @@ constexpr int64_t DEFAULT_PROB_OF_PARALLEL          = 10;
 enum OSDQOpType
 {
   WRITE_SINGLE_FILE,
-  MULTIPART_WRITE,
+  MULTIPART_WRITE, 
   APPEND_WRITE,
   READ_SINGLE_FILE,
   DEL_FILE,
@@ -118,7 +118,7 @@ int generate_content_by_object_id(char *buf, const int64_t buf_len, const int64_
 
 /**
  *  @brief Verify that content is correct by object_id
- *
+ *  
  *  @param buf [in] The pointer to the content
  *  @param buf_len [in] The length of the buf
  *  @param object_id [in] The Object's ID
@@ -128,31 +128,31 @@ int check_content_by_object_id(const char *buf, const int64_t buf_len, const int
 /**
  *  @brief Get a random length for performing a write operation or a read operation
  *
- *  @return content_length Indicates the content length generated
+ *  @return content_length Indicates the content length generated 
  */
 int64_t get_random_content_length(const OSDQOpType op_type);
 
 /**
  *  @brief Generate object_name from object_id.
  *         For example, if object_id is k, then the generated line will be like object_k_{suffic}, where suffic is a random string of length MAX_OBJECT_NAME_SUFFIX_LENGTH containing numbers and upper and lower case letters.
- *  @param object_id [in] The Object's ID
+ *  @param object_id [in] The Object's ID 
  *  @param object_name [out] The Object's name
  *  @param object_name_len [in] indicates the maximum length of object_name
  */
 int construct_object_name(const int64_t object_id, char *object_name, const int64_t object_name_len);
 
 int construct_file_path(
-    const char *base_uri,
-    const char *object_name,
-    char *file_path,
-    const int64_t file_path_length);
+    const char *base_uri, 
+    const char *object_name, 
+    char *file_path, 
+    const int64_t file_path_length); 
 
 ObVSliceAlloc &get_vslice_alloc_instance();
 
 extern int64_t allocator_cnt;
 
 template <typename T>
-class STLMemAllocator
+class STLMemAllocator 
 {
 public:
   ObVSliceAlloc &allocator_;
@@ -175,14 +175,14 @@ public:
   template <typename U>
   STLMemAllocator(const STLMemAllocator<U> &other) : allocator_(other.allocator_)
   {}
-  pointer allocate(size_type n, const_void_pointer hint = 0)
+  pointer allocate(size_type n, const_void_pointer hint = 0) 
   {
     int ret = OB_SUCCESS;
     void *ptr = nullptr;
     do {
       ptr = allocator_.alloc(n * sizeof(T));
       if (OB_ISNULL(ptr)) {
-        ::usleep(10000); //10ms
+        ::usleep(10000); //10ms 
         if (TC_REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           OB_LOG(WARN, "failed to allocate memory", KR(ret), K(n));
@@ -195,7 +195,7 @@ public:
   void deallocate(pointer p, size_type n) noexcept { allocator_.free(p); }
   size_type max_size() const noexcept { return allocator_.limit(); }
   template <typename U, typename... Args>
-  void construct(U *p, Args &&...args)
+  void construct(U *p, Args &&...args) 
   {
     new(p) U(std::forward<Args>(args)...);
   }
@@ -236,7 +236,7 @@ public:
   ~OSDQTimeMap() {}
   /**
    *  @brief Add the time consumed by a IO operaton to the time_map
-   *  @param cost_time_us [in] the time consumed by a IO operaton
+   *  @param cost_time_us [in] the time consumed by a IO operaton 
    */
   int log_entry(const int64_t cost_time_us);
   /**
@@ -246,38 +246,38 @@ public:
   int summary(const char *map_name_str, OSDQLogEntry &log) const;
 
   /**
-   *  @brief Just estimating the dynamic memory requested by time_map_
-   */
+   *  @brief Just estimating the dynamic memory requested by time_map_ 
+   */ 
   TO_STRING_KV(K_(total_entry));
 private:
   int64_t total_entry_;
-  std::map<int64_t, int64_t, std::less<int64_t>,
+  std::map<int64_t, int64_t, std::less<int64_t>, 
     STLMemAllocator<std::pair<const int64_t, int64_t>>> time_map_;
 };
 
 /**
  * @class OSDQMetric
  * @brief record the runtime metric, like requests statistics, memory info, cpu info, etc.
- *        Since the size of read and write operation can be random,
+ *        Since the size of read and write operation can be random, 
  *        statistics will be categorised by request size
  *        The following table shows the relationship between file size and attributes:
  *
- *            File Size                 | Attribute
+ *            File Size                 | Attribute 
  *            ------------------------------------------
- *            file_size <= 128KB        | small object
+ *            file_size <= 128KB        | small object 
  *            128 KB < file_size <= 2MB | normal object
  *            2MB < file_size <= 128MB  | large object
- */
+ */ 
 class OSDQMetric
 {
-
+  
 public:
   enum ObjectSizeType
   {
     SMALL_OBJECT = 0,
     NORMAL_OBJECT_SIZE = 1,
     LARGE_OBJECT_SIZE = 2,
-    MAX_OJBECT_SIZE_TYPE
+    MAX_OJBECT_SIZE_TYPE 
   };
 
   struct ReqStatisticalsInfo
@@ -302,7 +302,7 @@ public:
     double real_cpu_usage_;
   };
 
-  struct MemInfo
+  struct MemInfo 
   {
     MemInfo();
     double start_vm_size_kb_;
@@ -330,9 +330,9 @@ public:
    *  @param object_size [in] the operation's size
    */
   int add_latency_metric(
-      const int64_t op_start_time_us,
-      const OSDQOpType op_type,
-      const int64_t object_size);
+      const int64_t op_start_time_us, 
+      const OSDQOpType op_type, 
+      const int64_t object_size); 
   int add_queued_entry();
   int sub_queued_entry();
   int summary(const bool is_final = false);
@@ -376,7 +376,7 @@ private:
  *  @class OSDQMonitor
  *  @brief Monitoring threads, used to print monitoring data such as qps, latency, etc. at regular intervals.
  */
-class OSDQMonitor : public common::ObTimerTask
+class OSDQMonitor : public common::ObTimerTask 
 {
 public:
   OSDQMonitor();
@@ -394,11 +394,11 @@ private:
   int tg_id_;
 };
 
-struct OSDQParameters
+struct OSDQParameters 
 {
   OSDQParameters();
   ~OSDQParameters() {}
-  TO_STRING_KV(K(base_path_), K(storage_info_str_), K(scene_type_),
+  TO_STRING_KV(K(base_path_), K(storage_info_str_), K(scene_type_), 
       K(run_time_s_), K(interval_s_), K(thread_cnt_), K(resource_limited_type_),
       K(limit_run_time_s_), K(limit_memory_mb_), K(limit_cpu_));
   // common param
@@ -418,12 +418,12 @@ struct OSDQParameters
 
 class OSDQScene;
 /**
- *  @class ObAdminObjectStorageDriverQualityExecutor
+ *  @class ObAdminObjectStorageDriverQualityExecutor 
  *  @brief The execution entry point of the programme, used for parameter parsing, to start the execution of the scenario.
  */
 class ObAdminObjectStorageDriverQualityExecutor : public ObAdminExecutor
 {
-  enum SceneType
+  enum SceneType 
   {
     HYBRID_TEST_SCENE,
     RESOURCE_LIMITED_SCENE,
@@ -446,7 +446,7 @@ private:
   void free_scene_(OSDQScene *&scene);
 
 private:
-  OSDQParameters params_;
+  OSDQParameters params_; 
   OSDQMetric metric_;
   OSDQMonitor monitor_;
 private:
@@ -462,7 +462,7 @@ public:
   OSDQIDGenerator() : current_id_(0) {}
   int64_t get_next_id() { return current_id_.fetch_add(1) + 1; }
 
-  static OSDQIDGenerator &get_instance()
+  static OSDQIDGenerator &get_instance() 
   {
      static OSDQIDGenerator instance;
      return instance;
@@ -476,7 +476,7 @@ private:
  *  @class OSDQFileSet
  *  @brief This class maintains a set of files that have been written, along with the file path.
  */
-class OSDQFileSet
+class OSDQFileSet 
 {
   template <typename T>
   struct equal_to {
@@ -493,8 +493,8 @@ public:
   /**
    *  @brief randomly select a file from the file set that have been written to
    *         then delete it from the file set
-   *  @param object_id [out] the selected file's object_id
-   *  @param file_path [out] the selected file's path
+   *  @param object_id [out] the selected file's object_id 
+   *  @param file_path [out] the selected file's path 
    */
   int fetch_and_delete_file(int64_t &object_id, char *&file_path);
   size_t size() const;
@@ -536,7 +536,7 @@ public:
   virtual ~OSDQTaskHandler();
   int init(
       const char *base_uri,
-      OSDQMetric *metric,
+      OSDQMetric *metric, 
       OSDQFileSet *file_set,
       const share::ObBackupStorageInfo *storage_info);
   void destroy();
@@ -555,7 +555,7 @@ public:
   int gen_task(OSDQTask *&task);
   int gen_write_task(OSDQTask *task, const OSDQOpType op_type);
   int handle_write_task(const OSDQTask *task);
-  int gen_read_single_task(OSDQTask *task);
+  int gen_read_single_task(OSDQTask *task); 
   int handle_read_single_task(OSDQTask *task);
   int gen_del_task(OSDQTask *task);
   int handle_del_task(OSDQTask *task);
@@ -571,9 +571,9 @@ private:
   int handle_multipart_write_task_helper_(const OSDQTask *task);
   int handle_append_write_task_helper_(const OSDQTask *task);
   bool check_parallel_write_result_(
-      const OSDQOpType op_type1,
-      const int ret1,
-      const OSDQOpType op_type2,
+      const OSDQOpType op_type1, 
+      const int ret1, 
+      const OSDQOpType op_type2, 
       const int ret2);
 
   void push_req_result_(const int ret);
@@ -583,7 +583,7 @@ private:
   int64_t op_type_random_boundaries_[OSDQOpType::MAX_OPERATE_TYPE];
   int64_t prob_of_writing_old_data_;    // the range is [0, 100), 0 indicates impossiblly write old file
   int64_t prob_of_parallel_;            // the probabilty of parallelly execution, generally considering only write or read operations
-
+  
 private:
   bool is_inited_;
   bool is_stopped_;
@@ -594,7 +594,7 @@ private:
   OSDQFileSet *file_set_;
   const share::ObBackupStorageInfo *storage_info_;
   ObBackupIoAdapter adapter_;
-  lib::ObMutex mutex_;
+  lib::ObMutex mutex_; 
   std::vector<int, STLMemAllocator<int>> req_results_;
 };
 
@@ -628,11 +628,11 @@ protected:
  *  @class OSDQHybridTestScene
  *  @brief Hybrid scene
  */
-class OSDQHybridTestScene : public OSDQScene
+class OSDQHybridTestScene : public OSDQScene 
 {
 public:
   OSDQHybridTestScene();
-  virtual ~OSDQHybridTestScene() {}
+  virtual ~OSDQHybridTestScene() {} 
   virtual int init(const OSDQParameters *param, OSDQMetric *metric) override;
   virtual bool param_valid(const OSDQParameters *param) override;
   virtual int execute() override;
@@ -641,14 +641,14 @@ public:
 /**
  *  @class OSDQResourceLimitedScene
  *  @brief resource limited scene, contain:
- *          - 0 network packet loss resource limited
- *          - 1 network bandwidth limited
- *          - 2 memory limited
- *          - 3 cpu limited
+ *          - 0 network packet loss resource limited   
+ *          - 1 network bandwidth limited 
+ *          - 2 memory limited 
+ *          - 3 cpu limited 
  */
 class OSDQResourceLimitedScene : public OSDQScene
 {
-  enum ResourceLimitedType
+  enum ResourceLimitedType 
   {
     NETWORK_PACKET_LOSS_LIMITED_TYPE,
     NETWORK_BANDWIDTH_LIMITED_TYPE,
@@ -669,19 +669,19 @@ private:
   int test_memory_limit_();
   int test_cpu_limit_();
   static void inner_disrupt_network_(
-      const int64_t sleep_time_s,
+      const int64_t sleep_time_s, 
       const char *class_handle,
       std::mutex &mtx,
       std::condition_variable &cv,
       bool &ready);
   static void inner_limit_memory_(
-      const int64_t sleep_time_s,
+      const int64_t sleep_time_s, 
       const int64_t limit_memory_size_mb,
       std::mutex &mtx,
       std::condition_variable &cv,
       bool &ready);
   static void inner_limit_cpu_(
-      const int64_t sleep_time_s,
+      const int64_t sleep_time_s, 
       const double cpu_rate,
       std::mutex &mtx,
       std::condition_variable &cv,

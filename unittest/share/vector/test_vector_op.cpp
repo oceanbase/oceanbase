@@ -329,7 +329,7 @@ TEST(ObTestVectorBasicOp, cmp_op)
   l_meta.set_interval_ds(), r_meta.set_interval_ds();
   test_fixed_length_cmp<VEC_TC_INTERVAL_DS, VEC_TC_INTERVAL_DS, ObIntervalDSValue,
                         ObIntervalDSValue>(l_meta, r_meta, "interval-interval");
-
+  
   l_meta.set_decimal_int(0), r_meta.set_decimal_int(0);
   test_fixed_length_cmp<VEC_TC_DEC_INT32, VEC_TC_DEC_INT32, int32_t, int32_t>(l_meta, r_meta,
                                                                               "dec32-dec32");

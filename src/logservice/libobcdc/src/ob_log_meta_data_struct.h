@@ -273,3 +273,4 @@ typedef common::ObLinkHashMap<MetaDataKey, ObDictTenantInfo> DataDictTenantMap;
 } // namespace oceanbase
 
 #endif
+

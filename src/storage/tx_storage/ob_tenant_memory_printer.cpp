@@ -99,7 +99,7 @@ int ObTenantMemoryPrinter::print_tenant_usage()
     // print global chunk freelist
     const int64_t max_unmanaged_memory_size = 10LL<<30;
     int64_t resident_size = 0;
-    int64_t memory_used = get_virtual_memory_used(&resident_size);
+    int64_t memory_used = get_virtual_memory_used(&resident_size); 
     int64_t limit = CHUNK_MGR.get_limit();
     if (resident_size > limit + max_unmanaged_memory_size) {
       LOG_ERROR("RESIDENT_SIZE OVER MEMORY_LIMIT", K(resident_size), K(limit));

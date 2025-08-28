@@ -41,7 +41,7 @@ public:
   { return access_exprs_; }
   inline common::ObIArray<ObRawExpr *> &get_access_exprs()
   { return access_exprs_; }
-  virtual int get_plan_item_info(PlanText &plan_text,
+  virtual int get_plan_item_info(PlanText &plan_text, 
                                 ObSqlPlanItem &plan_item) override;
   int get_temp_table_plan(ObLogicalOperator *& insert_op);
   virtual int get_card_without_filter(double &card) override;

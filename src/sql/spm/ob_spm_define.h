@@ -50,7 +50,7 @@ struct ObBaselineKey : public ObILibCacheKey
     format_sql_id_(),
     sql_cs_type_(common::ObCollationType::CS_TYPE_INVALID) {}
   ObBaselineKey(const ObBaselineKey &other)
-  : ObILibCacheKey(ObLibCacheNameSpace::NS_SPM),
+  : ObILibCacheKey(ObLibCacheNameSpace::NS_SPM), 
     db_id_(other.db_id_),
     constructed_sql_(other.constructed_sql_),
     sql_id_(other.sql_id_),

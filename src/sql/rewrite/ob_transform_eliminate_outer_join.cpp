@@ -51,7 +51,7 @@ int ObTransformEliminateOuterJoin::eliminate_outer_join(ObIArray<ObParentDMLStmt
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 16> conditions;
   trans_happened = false;
-  ObDMLStmt* parent_stmt = parent_stmts.empty() ? NULL : parent_stmts.at(parent_stmts.count() - 1).stmt_;
+  ObDMLStmt* parent_stmt = parent_stmts.empty() ? NULL : parent_stmts.at(parent_stmts.count() - 1).stmt_; 
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt should not be null", K(ret));
@@ -656,7 +656,7 @@ int ObTransformEliminateOuterJoin::can_be_eliminated_with_null_side_column_in_ag
     LOG_WARN("failed to get right table relation ids", K(ret));
   } else {
     can_eliminate = true;
-
+    
     if (!is_only_full_group_by_on(ctx_->session_info_->get_sql_mode())) {
       for (int64_t i = 0; OB_SUCC(ret) && can_eliminate && i < select_stmt->get_select_item_size(); ++i) {
         if (OB_FAIL(check_expr_ref_column_all_in_aggr(select_stmt->get_select_item(i).expr_, can_eliminate))) {
@@ -664,7 +664,7 @@ int ObTransformEliminateOuterJoin::can_be_eliminated_with_null_side_column_in_ag
         }
       }
     }
-
+    
     for (int64_t i = 0; OB_SUCC(ret) && can_eliminate && i < select_stmt->get_aggr_item_size(); ++i) {
       ObAggFunRawExpr *aggr_expr = select_stmt->get_aggr_item(i);
       right_col_exprs.reuse();

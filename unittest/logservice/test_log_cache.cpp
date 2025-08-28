@@ -41,9 +41,9 @@ public:
   static void SetUpTestCase() {
     ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
     EXPECT_EQ(OB_SUCCESS, ObKVGlobalCache::get_instance().init(&ObTenantMemLimitGetter::get_instance(),
-                                                             DEFAULT_BUCKET_NUM,
+                                                             DEFAULT_BUCKET_NUM, 
                                                              DEFAULT_MAX_CACHE_SIZE,
-                                                             lib::ACHUNK_SIZE,
+                                                             lib::ACHUNK_SIZE, 
                                                              KV_CACHE_WASH_TIMER_INTERVAL_US));
   }
   static void TearDownTestCase() {
@@ -103,7 +103,7 @@ TEST_F(TestLogCache, test_basic_func)
     ReadBuf read_buf(buf, MAX_LOG_BUFFER_SIZE);
     EXPECT_EQ(OB_SUCCESS, cold_cache.fill_cache_lines_(flashback_version, lsn, MAX_LOG_BODY_SIZE, read_buf.buf_));
   }
-
+  
   {
     iterator_info.reset();
     int64_t out_read_size = 0;
@@ -153,7 +153,7 @@ TEST_F(TestLogCache, test_miss)
     EXPECT_EQ(MAX_LOG_BODY_SIZE - real_read_size, in_read_size);
     EXPECT_EQ(real_read_size, out_read_size);
   }
-
+  
   // test miss for first read
   {
     iterator_info.reset();

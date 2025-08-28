@@ -263,8 +263,8 @@ public:
   int ss_replay_create_tablet(const ObMetaDiskAddr &disk_addr, const ObTabletID &tablet_id);
   int write_tablet_id_set_to_pending_free();
   int ss_replay_create_tablet_for_trans_info_tmp(
-    const ObMetaDiskAddr &current_disk_addr,
-    const ObLSHandle &ls_handle,
+    const ObMetaDiskAddr &current_disk_addr, 
+    const ObLSHandle &ls_handle, 
     const ObTabletID &tablet_id);
 #endif
   // Get tablet handle but ignore empty shell. Return OB_TABLET_NOT_EXIST if it is empty shell.
@@ -956,7 +956,7 @@ private:
       blocksstable::ObDatumRow *new_datum_rows);
 
 private:
-  static int get_storage_row(const blocksstable::ObDatumRow &sql_row,
+  static int get_storage_row(const blocksstable::ObDatumRow &sql_row, 
                              const ObIArray<uint64_t> &column_ids,
                              const ObColDescIArray &column_descs,
                              ObRowGetter &row_getter,

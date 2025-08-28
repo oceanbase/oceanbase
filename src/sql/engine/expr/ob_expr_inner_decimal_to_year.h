@@ -21,7 +21,7 @@ namespace sql
 {
 //This expression is used to extract double to int range.
 //inner_decimal_to_year(val)
-//for example: inner_decimal_to_year(1991) = 1991
+//for example: inner_decimal_to_year(1991) = 1991 
 class ObExprInnerDecimalToYear : public ObFuncExprOperator
 {
 public:

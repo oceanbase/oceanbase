@@ -20,14 +20,14 @@
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "mittest/shared_storage/clean_residual_data.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace storage
+namespace storage 
 {
 using namespace oceanbase::common;
 using namespace oceanbase::blocksstable;
 
-class TestSSMicroMetaManager : public ::testing::Test
+class TestSSMicroMetaManager : public ::testing::Test 
 {
 public:
   TestSSMicroMetaManager() = default;
@@ -41,19 +41,19 @@ private:
   const static uint32_t ORI_MICRO_REF_CNT = 0;
 
 public:
-  class TestSSMicroMetaMgrThread : public Threads
+  class TestSSMicroMetaMgrThread : public Threads 
   {
   public:
-    enum class TestParallelType
+    enum class TestParallelType 
     {
       TEST_PARALLEL_ADD_AND_GET_MICRO_META,
       TEST_PARALLEL_ADD_SAME_MICRO_META,
     };
 
   public:
-    TestSSMicroMetaMgrThread(ObTenantBase *tenant_base, ObSSMicroMetaManager *micro_meta_mgr,
+    TestSSMicroMetaMgrThread(ObTenantBase *tenant_base, ObSSMicroMetaManager *micro_meta_mgr, 
       ObSSMemBlock *mem_blk, TestParallelType type)
-        : tenant_base_(tenant_base), micro_meta_mgr_(micro_meta_mgr), mem_blk_(mem_blk),
+        : tenant_base_(tenant_base), micro_meta_mgr_(micro_meta_mgr), mem_blk_(mem_blk), 
           type_(type), fail_cnt_(0), exe_cnt_(0)
     {}
     void run(int64_t idx) final
@@ -147,19 +147,19 @@ int TestSSMicroMetaManager::TestSSMicroMetaMgrThread::parallel_add_and_get_micro
     bool real_add = false;
     if (OB_FAIL(mem_blk_->calc_write_location(micro_key, micro_size, data_offset, idx_offset))) {
       LOG_WARN("fail to calc_write_location", KR(ret), K(i), K(micro_key));
-    } else if (OB_FAIL(mem_blk_->write_micro_data(micro_key, micro_data, micro_size, data_offset, idx_offset,
+    } else if (OB_FAIL(mem_blk_->write_micro_data(micro_key, micro_data, micro_size, data_offset, idx_offset, 
                micro_crc))) {
       LOG_WARN("fail to write_micro_data", KR(ret), K(i), K(micro_key));
-    } else if (OB_FAIL(micro_meta_mgr_->add_or_update_micro_block_meta(micro_key, micro_size, micro_crc, mem_blk_handle,
+    } else if (OB_FAIL(micro_meta_mgr_->add_or_update_micro_block_meta(micro_key, micro_size, micro_crc, mem_blk_handle, 
               real_add))) {
       LOG_WARN("fail to add or update micro_block meta", KR(ret), K(micro_key), K(micro_size), KPC_(mem_blk));
     }
-
+    
     ObSSMicroBlockMetaHandle micro_handle;
-    if (FAILEDx(micro_meta_mgr_->get_micro_block_meta_handle(micro_key, micro_info, micro_handle,
+    if (FAILEDx(micro_meta_mgr_->get_micro_block_meta_handle(micro_key, micro_info, micro_handle, 
         mem_blk_handle, phy_blk_handle, true))) {
       LOG_WARN("fail to get micro block meta handle", KR(ret), K(micro_key));
-    }
+    } 
   }
 
   if (OB_FAIL(ret)) {
@@ -186,7 +186,7 @@ int TestSSMicroMetaManager::TestSSMicroMetaMgrThread::parallel_add_same_micro_me
   uint32_t micro_crc = 0;
   mem_blk_handle.set_ptr(mem_blk_);
   bool real_add = false;
-  if (OB_FAIL(micro_meta_mgr_->add_or_update_micro_block_meta(micro_key, micro_size, micro_crc,
+  if (OB_FAIL(micro_meta_mgr_->add_or_update_micro_block_meta(micro_key, micro_size, micro_crc, 
       mem_blk_handle, real_add))) {
     LOG_WARN("fail to add or update micro_block meta", KR(ret), K(micro_key), K(micro_size), KPC_(mem_blk));
   } else {
@@ -197,7 +197,7 @@ int TestSSMicroMetaManager::TestSSMicroMetaMgrThread::parallel_add_same_micro_me
 
   ObSSMicroBlockMetaHandle micro_handle;
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(micro_meta_mgr_->get_micro_block_meta_handle(micro_key, micro_info,
+  } else if (OB_FAIL(micro_meta_mgr_->get_micro_block_meta_handle(micro_key, micro_info, 
              micro_handle, mem_blk_handle, phy_blk_handle, true))) {
     LOG_WARN("fail to get micro block meta handle", KR(ret), K(micro_key));
   }
@@ -348,7 +348,7 @@ TEST_F(TestSSMicroMetaManager, test_micro_map_iter)
   ASSERT_EQ(ori_micro_ref_cnt + 2, tmp_micro_meta->ref_cnt_);
   ASSERT_EQ(ori_cnt + 1, micro_meta_mgr.arc_info_.seg_info_arr_[ARC_T1].cnt_);
   ASSERT_EQ(ori_size + micro_size, micro_meta_mgr.arc_info_.seg_info_arr_[ARC_T1].size_);
-
+  
 
   const ObSSMicroBlockCacheKey *cur_micro_key = nullptr;
   ObSSMicroBlockMetaHandle cur_micro_handle;
@@ -411,7 +411,7 @@ TEST_F(TestSSMicroMetaManager, test_random_acquire_cold_micro_blocks)
   ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.acquire_cold_micro_blocks(arc_iter_info, ARC_T1));
   ASSERT_LT(0, arc_iter_info.t1_micro_heap_.count());
   ASSERT_LE(arc_iter_info.t1_micro_heap_.count(), arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.exp_iter_cnt_);
-
+  
   const int64_t expect_micro_cnt = arc_iter_info.t1_micro_heap_.count();
   int64_t cold_micro_cnt = 0;
   int ret = OB_SUCCESS;
@@ -734,7 +734,7 @@ TEST_F(TestSSMicroMetaManager, micro_meta_manager)
     ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.force_unmark_reorganizing(tmp_micro_key));
     ASSERT_EQ(0, tmp_micro_meta->is_reorganizing_);
   }
-
+  
   // mock evict
   tmp_micro_meta->is_persisted_ = true;
   tmp_micro_meta->is_in_ghost_ = true;
@@ -915,7 +915,7 @@ TEST_F(TestSSMicroMetaManager, test_clear_tablet_micro_meta_and_update_valid_len
   MEMSET(write_buf, 'a', micro_size);
 
   const int64_t id1 = 1000;
-  const int64_t id2 = 2000;
+  const int64_t id2 = 2000; 
   for (int64_t i = 0; i < micro_cnt; ++i) {
     const int64_t tablet_id = (i == 0 ? id1 : id2);
     MacroBlockId macro_id(0, tablet_id, 0);
@@ -1052,7 +1052,7 @@ TEST_F(TestSSMicroMetaManager, test_arc_limit_p)
   // 3. collect all micro_blocks in B1
   micro_block_info_arr.reuse();
   ObSSMicroMetaManager::SSMicroMap &micro_map = micro_cache->micro_meta_mgr_.micro_meta_map_;
-  ObSSMicroMetaManager::SSMicroMap::BlurredIterator micro_iter_(micro_map);
+  ObSSMicroMetaManager::SSMicroMap::BlurredIterator micro_iter_(micro_map); 
   micro_iter_.rewind();
   while (OB_SUCC(ret)) {
     const ObSSMicroBlockCacheKey *micro_key = nullptr;

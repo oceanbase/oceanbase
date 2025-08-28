@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef _OB_SQL_EXPR_FORMAT_BYTES_H
 #define _OB_SQL_EXPR_FORMAT_BYTES_H
 

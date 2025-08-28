@@ -2330,7 +2330,7 @@ int ObLoadDataDirectImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
       LOG_USER_ERROR(OB_ROWKEY_ORDER_ERROR, "The data to be imported is unordered, please set need_sort to true");
     }
   }
-
+  
   direct_loader_.destroy();
   if (OB_NOT_NULL(session)) {
     session->reset_cur_phy_plan_to_null();

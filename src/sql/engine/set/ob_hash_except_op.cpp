@@ -42,7 +42,7 @@ int ObHashExceptOp::inner_open()
       alloc(MY_SPEC.max_batch_size_ * sizeof(ObChunkDatumStore::StoredRow *))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc store rows", K(ret));
-  }
+  } 
   return ret;
 }
 

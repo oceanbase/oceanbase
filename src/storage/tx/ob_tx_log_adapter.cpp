@@ -210,7 +210,7 @@ int ObLSTxLogAdapter::submit_log(const char *buf,
         cur_ts = ObTimeUtility::current_time();
       }
     } while (OB_EAGAIN == ret && cur_ts < expire_us);
-
+    
   }
   TRANS_LOG(DEBUG, "ObLSTxLogAdapter::submit_ls_log", KR(ret), KP(cb));
 

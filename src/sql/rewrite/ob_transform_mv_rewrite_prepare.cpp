@@ -78,7 +78,7 @@ int ObTransformMVRewritePrepare::check_table_has_mv(const ObDMLStmt *stmt,
   int ret = OB_SUCCESS;
   ObSEArray<ObSelectStmt*, 4> child_stmts;
   has_mv = false;
-  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->schema_checker_)
+  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->schema_checker_) 
       || OB_ISNULL(ctx_->session_info_) || OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(ctx_), K(stmt));
@@ -172,7 +172,7 @@ int ObTransformMVRewritePrepare::prepare_mv_info(const ObDMLStmt *root_stmt)
     LOG_WARN("failed to sort mv infos", K(ret));
   } else {
     OPT_TRACE("prepare", ctx_->mv_infos_.count(), "materialized view(s) to perform rewrite");
-  }
+  } 
   return ret;
 }
 

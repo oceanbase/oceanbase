@@ -272,8 +272,8 @@ public:
                                           const share::schema::ObTableSchema &new_table_schema,
                                           const ObIArray<uint64_t> &column_ids,
                                           const share::schema::ObColumnGroupSchema &column_group);
-  int update_origin_column_group_with_new_schema(ObMySQLTransaction &trans,
-                                                const ObTableSchema &origin_table_schema,
+  int update_origin_column_group_with_new_schema(ObMySQLTransaction &trans, 
+                                                const ObTableSchema &origin_table_schema, 
                                                 const ObTableSchema &new_table_schema);
   int insert_single_column(common::ObMySQLTransaction &trans,
                            const share::schema::ObTableSchema &new_table_schema,
@@ -1091,7 +1091,7 @@ private:
                                      share::schema::ObSchemaGetterGuard &schema_guard);
   int update_table_version_of_db(const share::schema::ObDatabaseSchema &database_schema,
                                  common::ObMySQLTransaction &trans);
-
+  
   int get_user_id_for_inner_ur(
       share::schema::ObUserInfo &user,
       bool &is_inner_ur,
@@ -1206,10 +1206,10 @@ private:
   int init_tenant_optimizer_stats_info(const share::schema::ObSysVariableSchema &sys_variable,
                                        uint64_t tenant_id,
                                        ObMySQLTransaction &trans);
-
+                                   
   int init_tenant_recompile_pl_obj(const share::schema::ObSysVariableSchema &sys_variable,
                                        uint64_t tenant_id,
-                                       ObMySQLTransaction &trans);
+                                       ObMySQLTransaction &trans);                                   
   int init_tenant_spm_configure(uint64_t tenant_id, ObMySQLTransaction &trans);
   int init_tenant_scheduled_job(
       const share::schema::ObSysVariableSchema &sys_variable,

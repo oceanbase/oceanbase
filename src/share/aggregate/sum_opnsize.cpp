@@ -51,7 +51,7 @@ int init_sum_opnsize_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id
       ret = init_agg_func<
               SumOpNSize<VEC_TC_INTEGER, true>>(agg_ctx, agg_col_id, has_distinct, allocator, agg);
     }
-  }
+  }  
   return ret;
 }
 

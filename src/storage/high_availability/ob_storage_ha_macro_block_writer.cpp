@@ -56,7 +56,7 @@ int ObStorageHAMacroBlockWriter::init(
 	          || dag_id.is_invalid()
             || OB_ISNULL(sstable_param)
             || OB_ISNULL(reader)
-            || OB_ISNULL(index_block_rebuilder)
+            || OB_ISNULL(index_block_rebuilder) 
             || OB_ISNULL(extra_info))
   {
     ret = OB_INVALID_ARGUMENT;
@@ -168,7 +168,7 @@ int ObStorageHAMacroBlockWriter::process(
         STORAGE_LOG(WARN, "failed to check is task canceled", K(ret), K_(dag_id));
       } else if (is_cancel) {
         ret = OB_CANCELED;
-        STORAGE_LOG(WARN, "copy task has been canceled, skip remaining macro blocks",
+        STORAGE_LOG(WARN, "copy task has been canceled, skip remaining macro blocks", 
           K(ret), K_(dag_id), "finished_macro_block_count", copied_ctx.macro_block_list_.count());
         break;
       } else if (OB_FAIL(ObStorageHAUtils::check_disk_space())) {
@@ -404,7 +404,7 @@ int ObStorageHASharedMacroBlockWriter::append_macro_row_(
   } else {
     // sstable which only shared macro blocks need not rebuild index.
   }
-
+  
   return ret;
 }
 

@@ -75,7 +75,7 @@ int ObExprOraLoginUser::eval_ora_login_user(const ObExpr &expr,
   return ret;
 }
 
-int ObExprOraLoginUser::cg_expr(ObExprCGCtx &op_cg_ctx,
+int ObExprOraLoginUser::cg_expr(ObExprCGCtx &op_cg_ctx, 
                                 const ObRawExpr &raw_expr,
                                 ObExpr &rt_expr) const
 {

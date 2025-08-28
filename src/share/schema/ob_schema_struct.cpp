@@ -2067,7 +2067,7 @@ int ObTenantSchema::set_zone_replica_attr_array(
   } else {
     zone_replica_attr_array_.init(src.count(), static_cast<SchemaZoneReplicaAttrSet *>(buf), src.count());
     // call construct func in advance to avoid core status
-    //
+    // 
     ARRAY_NEW_CONSTRUCT(SchemaZoneReplicaAttrSet, zone_replica_attr_array_);
     for (int64_t i = 0; i < src.count() && OB_SUCC(ret); ++i) {
       const SchemaZoneReplicaAttrSet &src_replica_attr_set = src.at(i);
@@ -2117,7 +2117,7 @@ int ObTenantSchema::set_zone_replica_attr_array(
   } else {
     zone_replica_attr_array_.init(src.count(), static_cast<SchemaZoneReplicaAttrSet *>(buf), src.count());
     // call construct func in advance to avoid core status
-    //
+    // 
     ARRAY_NEW_CONSTRUCT(SchemaZoneReplicaAttrSet, zone_replica_attr_array_);
     for (int64_t i = 0; i < src.count() && OB_SUCC(ret); ++i) {
       const share::ObZoneReplicaAttrSet &src_replica_attr_set = src.at(i);
@@ -5856,10 +5856,10 @@ OB_DEF_DESERIALIZE(ObBasePartition)
     LOG_WARN("fail to deserialze low_bound_val", KR(ret));
   }
   ObString external_location;
-  LST_DO_CODE(OB_UNIS_DECODE,
-              tablet_id_,
-              external_location,
-              split_source_tablet_id_,
+  LST_DO_CODE(OB_UNIS_DECODE, 
+              tablet_id_, 
+              external_location, 
+              split_source_tablet_id_, 
               part_storage_cache_policy_type_);
   if (OB_SUCC(ret) && OB_FAIL(set_low_bound_val(low_bound_val))) {
     LOG_WARN("Fail to deep copy low_bound_val", K(ret), K(low_bound_val));
@@ -5875,7 +5875,7 @@ OB_DEF_SERIALIZE_SIZE(ObBasePartition)
   LST_DO_CODE(OB_UNIS_ADD_LEN, tenant_id_, table_id_, part_id_,
       schema_version_, name_, high_bound_val_, status_, list_row_values_,
       part_idx_, is_empty_partition_name_,
-      tablespace_id_, partition_type_, low_bound_val_, tablet_id_,
+      tablespace_id_, partition_type_, low_bound_val_, tablet_id_, 
       external_location_, split_source_tablet_id_, part_storage_cache_policy_type_);
   return len;
 }
@@ -7705,7 +7705,7 @@ int ObPartitionUtils::calc_hash_part_idx(const uint64_t val,
   const static int64_t max_part_num_log2 = 64;
   // This function is used by SQL. Should ensure SQL runs in MySQL mode when query sys table.
   if (lib::is_oracle_mode()) {
-    //
+    // 
     // It will not be a negative number, so use forced conversion instead of floor
     N = static_cast<int64_t>(std::log(part_num) / std::log(2));
     if (N >= max_part_num_log2) {
@@ -8198,7 +8198,7 @@ int ObPartitionUtils::check_interval_partition_table(
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObVectorIndexRefreshInfo,
+OB_SERIALIZE_MEMBER(ObVectorIndexRefreshInfo, 
                     exec_env_,
                     index_params_);
 
@@ -8893,9 +8893,9 @@ int ObUserInfo::assign_proxy_info_array_(ObProxyInfo **src_arr,
   if (src_cnt == 0) {
     //do nothing
   } else if (NULL == (tmp_arr = static_cast<ObProxyInfo**>(
-              alloc(sizeof(ObProxyInfo*) * src_cnt)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("Fail to allocate memory for array_.", K(src_cnt), KR(ret));
+              alloc(sizeof(ObProxyInfo*) * src_cnt)))) { 
+    ret = OB_ALLOCATE_MEMORY_FAILED; 
+    LOG_ERROR("Fail to allocate memory for array_.", K(src_cnt), KR(ret)); 
   } else {
     MEMSET(tmp_arr, 0, sizeof(ObProxyInfo*) * src_cnt);
     tmp_capacity = src_cnt;
@@ -8905,13 +8905,13 @@ int ObUserInfo::assign_proxy_info_array_(ObProxyInfo **src_arr,
       if (OB_ISNULL(src_info)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error", K(ret));
-      } else if (OB_ISNULL(tar_info = OB_NEWx(ObProxyInfo, get_allocator(), get_allocator()))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate memory", K(ret), K(get_allocator()));
-      } else if (OB_FAIL(tar_info->assign(*src_info))) {
-        LOG_WARN("failed to assign proxy info", K(ret));
-      } else {
-        tmp_arr[tmp_cnt++] = tar_info;
+      } else if (OB_ISNULL(tar_info = OB_NEWx(ObProxyInfo, get_allocator(), get_allocator()))) { 
+        ret = OB_ALLOCATE_MEMORY_FAILED; 
+        LOG_WARN("failed to allocate memory", K(ret), K(get_allocator())); 
+      } else if (OB_FAIL(tar_info->assign(*src_info))) { 
+        LOG_WARN("failed to assign proxy info", K(ret)); 
+      } else { 
+        tmp_arr[tmp_cnt++] = tar_info; 
       }
     }
 
@@ -8994,44 +8994,44 @@ bool ObUserInfo::is_valid() const
   return ObSchema::is_valid() && ObPriv::is_valid();
 }
 
-int ObUserInfo::add_proxy_info_(ObProxyInfo **&arr, uint64_t &capacity, uint64_t &cnt, const ObProxyInfo &proxy_info)
+int ObUserInfo::add_proxy_info_(ObProxyInfo **&arr, uint64_t &capacity, uint64_t &cnt, const ObProxyInfo &proxy_info) 
 {
   int ret = OB_SUCCESS;
-  if (0 == capacity) {
-    if (NULL == (arr = static_cast<ObProxyInfo**>(
-        alloc(sizeof(ObProxyInfo*) * DEFAULT_ARRAY_CAPACITY)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("Fail to allocate memory for array_.", KR(ret));
-    } else {
-      capacity = DEFAULT_ARRAY_CAPACITY;
+  if (0 == capacity) { 
+    if (NULL == (arr = static_cast<ObProxyInfo**>( 
+        alloc(sizeof(ObProxyInfo*) * DEFAULT_ARRAY_CAPACITY)))) { 
+      ret = OB_ALLOCATE_MEMORY_FAILED; 
+      LOG_ERROR("Fail to allocate memory for array_.", KR(ret)); 
+    } else { 
+      capacity = DEFAULT_ARRAY_CAPACITY; 
       MEMSET(arr, 0, sizeof(ObProxyInfo*) * DEFAULT_ARRAY_CAPACITY);
-    }
-  } else if (cnt >= capacity) {
-    int64_t tmp_size = 2 * capacity;
-    ObProxyInfo **tmp = NULL;
-    if (NULL == (tmp = static_cast<ObProxyInfo**>(
-        alloc(sizeof(ObProxyInfo*) * tmp_size)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("Fail to allocate memory for array_, ", K(tmp_size), KR(ret));
-    } else {
-      MEMCPY(tmp, arr, sizeof(ObProxyInfo*) * capacity);
-      free(arr);
-      arr = tmp;
-      capacity = tmp_size;
-    }
-  }
+    } 
+  } else if (cnt >= capacity) { 
+    int64_t tmp_size = 2 * capacity; 
+    ObProxyInfo **tmp = NULL; 
+    if (NULL == (tmp = static_cast<ObProxyInfo**>( 
+        alloc(sizeof(ObProxyInfo*) * tmp_size)))) { 
+      ret = OB_ALLOCATE_MEMORY_FAILED; 
+      LOG_ERROR("Fail to allocate memory for array_, ", K(tmp_size), KR(ret)); 
+    } else { 
+      MEMCPY(tmp, arr, sizeof(ObProxyInfo*) * capacity); 
+      free(arr); 
+      arr = tmp; 
+      capacity = tmp_size; 
+    } 
+  } 
 
-  if (OB_SUCC(ret)) {
-    ObProxyInfo *info = OB_NEWx(ObProxyInfo, get_allocator(), get_allocator());
-    if (NULL == info) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory", K(ret), K(get_allocator()));
-    } else if (OB_FAIL(info->assign(proxy_info))) {
-      LOG_WARN("failed to assign proxy info", K(ret));
-    } else {
-      arr[cnt++] = info;
-    }
-  }
+  if (OB_SUCC(ret)) { 
+    ObProxyInfo *info = OB_NEWx(ObProxyInfo, get_allocator(), get_allocator()); 
+    if (NULL == info) { 
+      ret = OB_ALLOCATE_MEMORY_FAILED; 
+      LOG_WARN("failed to allocate memory", K(ret), K(get_allocator())); 
+    } else if (OB_FAIL(info->assign(proxy_info))) { 
+      LOG_WARN("failed to assign proxy info", K(ret)); 
+    } else { 
+      arr[cnt++] = info; 
+    } 
+  } 
   return ret;
 }
 
@@ -9220,24 +9220,24 @@ int ObUserInfo::deserialize_proxy_info_array_(ObProxyInfo **&arr, uint64_t &cnt,
     capacity = 0;
     arr = NULL;
   } else if (NULL == (arr = static_cast<ObProxyInfo**>(
-            alloc(sizeof(ObProxyInfo*) * cnt)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("Fail to allocate memory for array_.", KR(ret));
+            alloc(sizeof(ObProxyInfo*) * cnt)))) { 
+    ret = OB_ALLOCATE_MEMORY_FAILED; 
+    LOG_ERROR("Fail to allocate memory for array_.", KR(ret)); 
   } else {
     MEMSET(arr, 0, sizeof(ObProxyInfo*) * cnt);
     for (int64_t i = 0; OB_SUCC(ret) && i < cnt; i++) {
       ObProxyInfo proxy_info(&tmp_allocator);
       LST_DO_CODE(OB_UNIS_DECODE, proxy_info);
       if (OB_SUCC(ret)) {
-        ObProxyInfo *info = OB_NEWx(ObProxyInfo, get_allocator(), get_allocator());
-        if (NULL == info) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to allocate memory", K(ret), K(get_allocator()));
-        } else if (OB_FAIL(info->assign(proxy_info))) {
-          LOG_WARN("failed to assign proxy info", K(ret));
-        } else {
-          arr[i] = info;
-        }
+        ObProxyInfo *info = OB_NEWx(ObProxyInfo, get_allocator(), get_allocator()); 
+        if (NULL == info) { 
+          ret = OB_ALLOCATE_MEMORY_FAILED; 
+          LOG_WARN("failed to allocate memory", K(ret), K(get_allocator())); 
+        } else if (OB_FAIL(info->assign(proxy_info))) { 
+          LOG_WARN("failed to assign proxy info", K(ret)); 
+        } else { 
+          arr[i] = info; 
+        } 
       }
     }
   }
@@ -10952,7 +10952,7 @@ int ObOutlineParamsWrapper::has_concurrent_limit_param(bool &has_limit_param) co
 }
 
 int ObOutlineParamsWrapper::get_concurrent_limit_param(const ParamStore &const_param_store,
-                                                       int64_t &param_idx,
+                                                       int64_t &param_idx, 
                                                        int64_t &concurrent_num) const
 {
   int ret = OB_SUCCESS;
@@ -11193,11 +11193,11 @@ bool ObOutlineInfo::is_valid_for_replace() const
   } else if (name_.empty() || owner_.empty() || version_.empty()
              || (outline_content_.empty() && !has_outline_params())) {
     valid_ret = false;
-  } else if (!is_format() && !((!signature_.empty() && !sql_text_.empty() && sql_id_.empty()) ||
-                                (signature_.empty() && sql_text_.empty() && is_sql_id_valid(sql_id_)))) {
+  } else if (!is_format() && !((!signature_.empty() && !sql_text_.empty() && sql_id_.empty()) || 
+                                (signature_.empty() && sql_text_.empty() && is_sql_id_valid(sql_id_)))) { 
     valid_ret = false;
   } else if (is_format() && !((!signature_.empty() && !format_sql_text_.empty() && sql_id_.empty()) ||
-                             (signature_.empty() && format_sql_text_.empty() && is_sql_id_valid(format_sql_id_)))) {
+                             (signature_.empty() && format_sql_text_.empty() && is_sql_id_valid(format_sql_id_)))) { 
     valid_ret = false;
   } else if (OB_INVALID_ID == tenant_id_ || OB_INVALID_ID == database_id_
              || OB_INVALID_ID == outline_id_) {
@@ -11469,7 +11469,7 @@ bool ObDbLinkBaseInfo::is_valid() const
 }
 
 int ObDbLinkBaseInfo::do_decrypt_password()
-{
+{ 
   int ret = OB_SUCCESS;
   if (!plain_password_.empty()) {
     // do_nothing
@@ -11488,7 +11488,7 @@ int ObDbLinkBaseInfo::do_decrypt_password()
       LOG_WARN("plain_password_ is empty", K(ret));
     }
   }
-  return ret;
+  return ret; 
 }
 
 int ObDbLinkBaseInfo::do_decrypt_reverse_password()
@@ -11538,10 +11538,10 @@ int ObDbLinkBaseInfo::dblink_encrypt(common::ObString &src, common::ObString &ds
     char hex_buff[common::OB_MAX_ENCRYPTED_PASSWORD_LENGTH + 1] = {0}; // +1 to reserve space for \0
     int64_t encrypt_len = -1;
     if (OB_FAIL(oceanbase::share::ObEncryptionUtil::encrypt_sys_data(tenant_id_,
-                                                   src.ptr(),
-                                                   src.length(),
-                                                   encrypted_string,
-                                                   common::OB_MAX_ENCRYPTED_PASSWORD_LENGTH,
+                                                   src.ptr(), 
+                                                   src.length(), 
+                                                   encrypted_string, 
+                                                   common::OB_MAX_ENCRYPTED_PASSWORD_LENGTH, 
                                                    encrypt_len))) {
 
       LOG_WARN("fail to encrypt_sys_data", KR(ret), K(src));
@@ -11609,7 +11609,7 @@ int ObDbLinkBaseInfo::dblink_decrypt(common::ObString &src, common::ObString &ds
   } else {
     dst = src;
   }
-
+  
 #endif
   return ret;
 }
@@ -12370,7 +12370,7 @@ bool ObForeignKeyInfo::is_sys_generated_name(bool check_unknown) const
   } else if (GENERATED_TYPE_UNKNOWN == name_generated_type_ && check_unknown) {
     const char *cst_type_name = "_OBFK_";
     const int64_t cst_type_name_len = static_cast<int64_t>(strlen(cst_type_name));
-    bret = (0 != ObCharset::instr(ObCollationType::CS_TYPE_UTF8MB4_BIN,
+    bret = (0 != ObCharset::instr(ObCollationType::CS_TYPE_UTF8MB4_BIN, 
                   foreign_key_name_.ptr(), foreign_key_name_.length(), cst_type_name, cst_type_name_len));
   } else {
     bret = false;
@@ -14308,7 +14308,7 @@ int ObRlsPolicySchema::rebuild_with_table_schema(const ObRlsPolicySchema &src_sc
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("rls sec column is null", KR(ret));
     } else if (NULL == (column_schema = table_schema.get_column_schema(sec_column_array_[i]->get_column_id())) || column_schema->is_unused()) {
-      // do nothing
+      // do nothing 
     } else {
       sec_column_array_[column_cnt_++] = sec_column_array_[i];
     }
@@ -14655,7 +14655,7 @@ OB_DEF_DESERIALIZE(ObColumnGroupSchema)
           if (OB_FAIL(serialization::decode(buf, data_len, pos, column_id))) {
             LOG_WARN("fail to deserialize column_id", KR(ret), K(i));
           } else if (OB_FAIL(add_column_id(column_id))) {
-            LOG_WARN("fail to add column_id", KR(ret), K(i), K(column_id), K(column_id_count),
+            LOG_WARN("fail to add column_id", KR(ret), K(i), K(column_id), K(column_id_count), 
               K_(column_id_cnt), K_(column_id_arr_capacity));
           }
         }
@@ -14676,7 +14676,7 @@ OB_DEF_SERIALIZE_SIZE(ObColumnGroupSchema)
               block_size_,
               compressor_type_,
               row_store_type_);
-
+  
   len += serialization::encoded_length_vi64(column_id_cnt_);
   for (int64_t i = 0; i < column_id_cnt_; ++i) {
     len += serialization::encoded_length_vi64(column_id_arr_[i]);
@@ -14883,7 +14883,7 @@ void ObColumnGroupSchema::remove_all_cols() {
 int ObColumnGroupSchema::get_column_group_type_name(ObString &readable_cg_name) const
 {
   int ret = OB_SUCCESS;
-  if (column_group_type_ >=  ObColumnGroupType::NORMAL_COLUMN_GROUP ||
+  if (column_group_type_ >=  ObColumnGroupType::NORMAL_COLUMN_GROUP || 
       column_group_type_ < ObColumnGroupType::DEFAULT_COLUMN_GROUP) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("receive not suppoted column group type", K(ret), K(column_group_type_));

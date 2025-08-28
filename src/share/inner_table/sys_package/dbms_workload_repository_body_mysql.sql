@@ -48,5 +48,5 @@ CREATE OR REPLACE PACKAGE BODY dbms_workload_repository
         SELECT "Other formats are not currently supported besides text and html" AS Message;
     END IF;
   END ;
-
+  
 END dbms_workload_repository;

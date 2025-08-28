@@ -299,7 +299,7 @@ DEF_ASH_FLAGS_SETTER_GUARD(in_extract_query_range)
 #undef DEF_ASH_FLAGS_SETTER_GUARD
 
 #define ACTIVE_SESSION_FLAG_SETTER_GUARD(ash_flag_type)                                            \
-  ObActiveSession_##ash_flag_type##_FlagSetterGuard _ash_flag_setter_guard;
+  ObActiveSession_##ash_flag_type##_FlagSetterGuard _ash_flag_setter_guard; 
 
 class ObASHSetInnerSqlWaitGuard {
 public:

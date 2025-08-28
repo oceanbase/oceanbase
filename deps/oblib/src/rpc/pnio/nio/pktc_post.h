@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 static pktc_sk_t* pktc_do_connect(pktc_t* cl, addr_t dest) {
   pktc_sk_t* sk = NULL;
   ef(!(sk = pktc_sk_new(&cl->sf)));

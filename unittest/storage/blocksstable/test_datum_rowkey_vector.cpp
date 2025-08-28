@@ -306,7 +306,7 @@ TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_locate_key)
   rowkey_vector.columns_ = col_vectors;
   rowkey_vector.col_cnt_ = 1;
   rowkey_vector.row_cnt_ = row_count;
-
+  
   ObDatumRowkey rowkey;
   ObStorageDatum rowkey_datums[1];
   ret = rowkey.assign(rowkey_datums, 1);
@@ -350,14 +350,14 @@ TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_locate_range)
   int_vec.row_cnt_ = row_count;
   int_vec.nulls_ = nulls;
   int_vec.has_null_ = false;
-
+  
   ObColumnVector col_vectors[1];
   col_vectors[0] = int_vec;
   ObRowkeyVector rowkey_vector;
   rowkey_vector.columns_ = col_vectors;
   rowkey_vector.col_cnt_ = 1;
   rowkey_vector.row_cnt_ = row_count;
-
+  
   ObDatumRange range;
   ObDatumRowkey start_key, end_key;
   ObStorageDatum start_datums[1];
@@ -438,7 +438,7 @@ TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_locate_range_2int_col)
   int ret = 0;
   ObStorageDatumUtils datum_utils;
   prepare_datum_util(2, datum_utils);
-
+  
   int64_t row_count = 13;
   int64_t int_arr0[13] = {1,1,1,2,2,2,2,2,3,3,4,5,7};
   bool bool_arr0[13] = {false,false,false,false,false,false,false,false,false,false,false,false,false};
@@ -641,7 +641,7 @@ TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_locate_range_with_datum)
   for (int64_t i = 0; i < row_count; ++i) {
     datums[i].set_int(i);
   }
-
+  
   buf = allocator_.alloc(sizeof(ObStorageDatum) *row_count);
   ASSERT_TRUE(buf != nullptr);
   datums = new (buf) ObStorageDatum[row_count];
@@ -669,7 +669,7 @@ TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_locate_range_with_datum)
     rowkey_vector.discrete_rowkey_array_[i].row_idx_ = i;
     rowkey_vector.discrete_rowkey_array_ [i].rowkey_vector_ = &rowkey_vector;
   }
-
+  
   ObDatumRange range;
   ObDatumRowkey start_key, end_key;
   ObStorageDatum start_datums[2];
@@ -990,7 +990,7 @@ TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_deep_copy)
   int_vec1.signed_ints_ = int_arr1;
   int_vec1.nulls_ = bool_arr1;
   int_vec1.is_filled_ = true;
-
+  
   col_vectors[0] = int_vec0;
   col_vectors[1] = int_vec1;
   rowkey_vector.columns_ = col_vectors;
@@ -1020,7 +1020,7 @@ TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_deep_copy)
                         + sizeof(ObDatumRowkey) + sizeof(ObStorageDatum) * 2 // last rowkey
                         + sizeof(ObDiscreteDatumRowkey) * row_count; // discrete datum rowkey array
   ASSERT_EQ(buf_size, expected_size);
-
+  
   void *buf = allocator_.alloc(buf_size);
   ASSERT_TRUE(buf != nullptr);
   ObRowkeyVector new_vector;

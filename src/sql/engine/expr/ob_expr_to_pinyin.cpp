@@ -34,7 +34,7 @@ ObExprToPinyin::~ObExprToPinyin()
 {
 }
 
-int ObExprToPinyin::calc_convert_mode(const ObString &convert_option,
+int ObExprToPinyin::calc_convert_mode(const ObString &convert_option, 
                                       ModeOption &convert_mode)
 {
   int ret = OB_SUCCESS;
@@ -134,7 +134,7 @@ uint64_t convert_to_sortkey(ObIAllocator &alloc, ObString input) {
   size_t buf_len = cs->coll->strnxfrmlen(cs, cs->mbmaxlen*input.length());
   bool is_valid_unicode_tmp = 1;
   size_t result_len = 0;
-
+  
   uint64_t sortkey = -1;
   if (OB_ISNULL(buf = static_cast<char*>(alloc.alloc(buf_len)))) {
     int ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -217,7 +217,7 @@ ObString convert_word_to_pinyin(ObIAllocator &alloc, ObString input, bool firstW
 }
 
 struct Functor {
-  Functor(char *buf, int64_t &off, ObIAllocator &alloc, ModeOption &mode)
+  Functor(char *buf, int64_t &off, ObIAllocator &alloc, ModeOption &mode) 
           : buf(buf), off(off), calc_alloc(alloc), firstWord(true), convert_mode(mode) {}
   char *buf;
   int64_t &off;

@@ -1068,7 +1068,7 @@ int ObPxTransmitOp::try_extend_selector_array(int64_t target_count, bool is_fixe
                 (ctx_.get_allocator().alloc(params_.selector_array_max_size_ * sizeof(char *))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc params_.fixed_rows_", K(ret), K(params_.selector_array_max_size_));
-      } else if (OB_ISNULL(params_.row_idx_ = static_cast<int64_t *>
+      } else if (OB_ISNULL(params_.row_idx_ = static_cast<int64_t *> 
                 (ctx_.get_allocator().alloc(params_.selector_array_max_size_ * sizeof(int64_t))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc params_.row_idx_", K(ret), K(params_.selector_array_max_size_));

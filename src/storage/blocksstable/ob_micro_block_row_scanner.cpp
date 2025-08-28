@@ -817,7 +817,7 @@ int ObIMicroBlockRowScanner::filter_pushdown_filter(
   } else if (ObIMicroBlockReader::Decoder == reader_->get_type() ||
              ObIMicroBlockReader::CSDecoder == reader_->get_type()) {
     // change to black filter in below situation
-    // 1. if need project lob column and micro block has outrow lob
+    // 1. if need project lob column and micro block has outrow lob  
     // 2. if it is semistruct_filter_node, but not cs decoder (beacuase semistrcut white filter only support cs decoder)
     if ((param_->has_lob_column_out() && reader_->has_lob_out_row())
         || (filter->is_semistruct_filter_node() && ObIMicroBlockReader::CSDecoder != reader_->get_type())) {
@@ -1230,7 +1230,7 @@ int ObIMicroBlockRowScanner::get_next_border_rows(const ObDatumRowkey &rowkey)
 }
 
 int ObIMicroBlockRowScanner::check_and_revert_non_border_rowkey(
-    const ObDatumRowkey &border_rowkey,
+    const ObDatumRowkey &border_rowkey, 
     const ObDatumRow &deleted_row,
     ObCSRowId &co_current)
 {
@@ -1285,11 +1285,11 @@ int ObIMicroBlockRowScanner::get_filter_result(ObFilterResult &res)
 }
 
 bool ObIMicroBlockRowScanner::is_di_bitmap_valid() const
-{
-  return param_->is_delete_insert_ &&
-         !can_ignore_multi_version_ &&
+{ 
+  return param_->is_delete_insert_ && 
+         !can_ignore_multi_version_ && 
          reader_ != memtable_reader_ &&
-         nullptr != di_bitmap_;
+         nullptr != di_bitmap_; 
 }
 
 int ObIMicroBlockRowScanner::init_bitmap(ObCGBitmap *&bitmap, bool is_all_true)
@@ -2275,7 +2275,7 @@ int ObMultiVersionDIMicroBlockRowScanner::open(
     } else {
       use_private_bitmap_ = true;
     }
-  }
+  } 
   return ret;
 }
 
@@ -2388,7 +2388,7 @@ int ObMultiVersionDIMicroBlockRowScanner::inner_get_next_header_info(
   }
   if (OB_SUCC(ret)) {
     index = index + 1;
-    LOG_DEBUG("[MULTIVERSION MOW] inner get next header info", K(ret), K_(macro_id), K(index),
+    LOG_DEBUG("[MULTIVERSION MOW] inner get next header info", K(ret), K_(macro_id), K(index), 
         K(version_fit), K(row_flag), K_(read_row_direct_flag), K_(is_last_multi_version_row));
   }
   return ret;

@@ -472,31 +472,31 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
     RETRIEVE_UINT_VALUE(backup_tenant_id, job);
     RETRIEVE_INT_VALUE(restore_start_ts, job);
     RETRIEVE_INT_VALUE(restoring_start_ts, job);
-    if (OB_SUCC(ret)) {
-      if (name == "restore_scn") {
-        uint64_t current_value = share::OB_INVALID_SCN_VAL;
+    if (OB_SUCC(ret)) { 
+      if (name == "restore_scn") { 
+        uint64_t current_value = share::OB_INVALID_SCN_VAL; 
         SCN restore_scn;
-        if (OB_FAIL(retrieve_uint_value(result, current_value))) {
-          LOG_WARN("fail to retrive int value", K(ret), "column_name", "restore_scn");
+        if (OB_FAIL(retrieve_uint_value(result, current_value))) { 
+          LOG_WARN("fail to retrive int value", K(ret), "column_name", "restore_scn"); 
         } else if (OB_FAIL(restore_scn.convert_for_inner_table_field(current_value))) {
-          LOG_WARN("fail to set restore scn", K(ret));
+          LOG_WARN("fail to set restore scn", K(ret)); 
         } else {
-          (job).set_restore_scn(restore_scn);
-        }
+          (job).set_restore_scn(restore_scn); 
+        } 
       }
     }
 
-    if (OB_SUCC(ret)) {
-      if (name == "consistent_scn") {
-        uint64_t current_value = share::OB_INVALID_SCN_VAL;
+    if (OB_SUCC(ret)) { 
+      if (name == "consistent_scn") { 
+        uint64_t current_value = share::OB_INVALID_SCN_VAL; 
         SCN consistent_scn;
-        if (OB_FAIL(retrieve_uint_value(result, current_value))) {
-          LOG_WARN("fail to retrive int value", K(ret), "column_name", "consistent_scn");
+        if (OB_FAIL(retrieve_uint_value(result, current_value))) { 
+          LOG_WARN("fail to retrive int value", K(ret), "column_name", "consistent_scn"); 
         } else if (OB_FAIL(consistent_scn.convert_for_inner_table_field(current_value))) {
-          LOG_WARN("fail to set restore scn", K(ret));
+          LOG_WARN("fail to set restore scn", K(ret)); 
         } else {
-          (job).set_consistent_scn(consistent_scn);
-        }
+          (job).set_consistent_scn(consistent_scn); 
+        } 
       }
     }
 
@@ -520,14 +520,14 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
     RETRIEVE_INT_VALUE(backup_compatible, job);
     RETRIEVE_STR_VALUE(sts_credential, job);
 
-    if (OB_SUCC(ret)) {
-      if (name == "backup_dest") {
-        ObString value;
-        EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "value", value, true, false, value);
-        if (FAILEDx((job).set_backup_dest(value))) {
-          LOG_WARN("failed to set column value", KR(ret), K(value));
-        }
-      }
+    if (OB_SUCC(ret)) { 
+      if (name == "backup_dest") { 
+        ObString value; 
+        EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "value", value, true, false, value); 
+        if (FAILEDx((job).set_backup_dest(value))) { 
+          LOG_WARN("failed to set column value", KR(ret), K(value)); 
+        } 
+      } 
     }
 
     if (OB_SUCC(ret)) {
@@ -575,7 +575,7 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
           } else {
             job.set_restore_type(tmp_restore_type);
           }
-
+          
         }
       }
     }
@@ -711,7 +711,7 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
             LOG_WARN("invalid restore progress display str extracted from sql", K(ret), K(display_mode_str));
           } else {
             job.set_progress_display_mode(tmp_display_mode);
-          }
+          }          
         }
       }
     }
@@ -1106,7 +1106,7 @@ int ObPhysicalRestoreTableOperator::get_restore_job_by_sql_(
 int ObPhysicalRestoreTableOperator::check_finish_restore_to_target_status(
     const ObLSRestoreStatus &sys_ls_target_status,
     const ObLSRestoreStatus &user_ls_target_status,
-    bool &is_finished,
+    bool &is_finished, 
     bool &is_success)
 {
   int ret = OB_SUCCESS;

@@ -44,7 +44,7 @@ public:
   static int calc_text(const ObExpr &expr, ObEvalCtx &ctx, const ObString &sep_str,
                        const ObIArray<ObExpr *> &words, ObIAllocator &temp_allocator, ObDatum &res);
   DECLARE_SET_LOCAL_SESSION_VARS;
-
+  
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprConcatWs);

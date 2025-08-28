@@ -317,7 +317,7 @@ int ObDASScanOp::init_scan_param()
   scan_param_.auto_split_filter_type_ = scan_ctdef_->pd_expr_spec_.auto_split_filter_type_;
   scan_param_.auto_split_filter_ = scan_ctdef_->pd_expr_spec_.auto_split_expr_;
   scan_param_.auto_split_params_ = const_cast<ExprFixedArray *>(&(scan_ctdef_->pd_expr_spec_.auto_split_params_));
-
+  
   scan_param_.is_mds_query_ = false;
   scan_param_.main_table_scan_stat_.tsc_monitor_info_ = scan_rtdef_->tsc_monitor_info_;
   scan_param_.in_row_cache_threshold_ = scan_rtdef_->in_row_cache_threshold_;
@@ -1297,7 +1297,7 @@ int ObDASScanOp::get_hnsw_ir_tablet_ids(
       case ObTSCIRScanType::OB_NOT_A_SPEC_SCAN: {
         break;
       }
-      case ObTSCIRScanType::OB_IR_INV_IDX_SCAN:
+      case ObTSCIRScanType::OB_IR_INV_IDX_SCAN: 
       case ObTSCIRScanType::OB_VEC_FILTER_SCAN: {
         vec_row_tid = related_tablet_ids_.at(i);
         break;
@@ -1350,7 +1350,7 @@ int ObDASScanOp::get_spiv_ir_tablet_ids(
       case ObTSCIRScanType::OB_NOT_A_SPEC_SCAN: {
         break;
       }
-      case ObTSCIRScanType::OB_IR_INV_IDX_SCAN:
+      case ObTSCIRScanType::OB_IR_INV_IDX_SCAN: 
       case ObTSCIRScanType::OB_VEC_FILTER_SCAN: {
         vec_row_tid = related_tablet_ids_.at(i);
         break;
@@ -1358,11 +1358,11 @@ int ObDASScanOp::get_spiv_ir_tablet_ids(
       case ObTSCIRScanType::OB_VEC_SPIV_INDEX_SCAN: {
         dim_docid_value_tid = related_tablet_ids_.at(i);
         break;
-      }
+      }  
       case ObTSCIRScanType::OB_VEC_ROWKEY_VID_SCAN: {
         rowkey_doc_tid = related_tablet_ids_.at(i);
         break;
-      }
+      }      
       default: {
         break;
       }
@@ -2062,3 +2062,4 @@ int ObLocalIndexLookupOp::revert_iter()
 
 }  // namespace sql
 }  // namespace oceanbase
+

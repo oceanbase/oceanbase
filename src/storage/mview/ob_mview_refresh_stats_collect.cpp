@@ -123,7 +123,7 @@ int ObMViewRefreshStatsCollection::collect_after_refresh(ObMViewRefreshCtx &refr
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  ObSchemaGetterGuard schema_guard;
+  ObSchemaGetterGuard schema_guard; 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObMViewRefreshStatsCollection not init", KR(ret), KP(this));

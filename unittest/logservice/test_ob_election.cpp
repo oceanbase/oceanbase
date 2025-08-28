@@ -270,7 +270,7 @@ void calculate_and_print_max_min_average(const vector<int64_t> &leader_takeover_
 //   int64_t min = INT64_MAX, max = 0, average = 0;
 //   calculate_and_print_max_min_average(leader_takeover_time, disconnect_leader_time,
 //                                       min, max, average);
-//   // see:
+//   // see: 
 //   int64_t expected_min = 4 * MAX_TST + 3 * MSG_DELAY - (0.5 * MAX_TST - MSG_DELAY);
 //   int64_t expected_max = 4 * (MAX_TST + MSG_DELAY);
 //   int64_t expected_average = 4 * MAX_TST + 3.5 * MSG_DELAY - 0.5 * (0.5 * MAX_TST - MSG_DELAY);
@@ -334,7 +334,7 @@ void calculate_and_print_max_min_average(const vector<int64_t> &leader_takeover_
 //   int64_t min = INT64_MAX, max = 0, average = 0;
 //   calculate_and_print_max_min_average(leader_takeover_time, disconnect_leader_time,
 //                                       min, max, average);
-//   // see:
+//   // see: 
 //   int64_t expected_min = 4 * MAX_TST + 3 * MSG_DELAY - (0.5 * MAX_TST - MSG_DELAY);
 //   int64_t expected_max = 4 * (MAX_TST + MSG_DELAY);
 //   int64_t expected_average = 4 * MAX_TST + 3.5 * MSG_DELAY - 0.5 * (0.5 * MAX_TST - MSG_DELAY);

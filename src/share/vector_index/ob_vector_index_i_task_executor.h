@@ -15,15 +15,15 @@
 
 #include "share/vector_index/ob_vector_index_async_task_util.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace share
+namespace share 
 {
 
 class ObVecITaskExecutor
 {
-public:
-  ObVecITaskExecutor()
+public: 
+  ObVecITaskExecutor() 
     : is_inited_(false),
       tenant_id_(OB_INVALID_TENANT_ID),
       vector_index_service_(nullptr),

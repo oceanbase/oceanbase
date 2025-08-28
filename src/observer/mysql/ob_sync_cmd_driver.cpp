@@ -168,7 +168,7 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet &result)
         need_send_eof = true;
       }
     }
-  } else if (is_prexecute_) {
+  } else if (is_prexecute_) { 
     if (OB_FAIL(response_query_header(result, false, false , // in prexecute , has_more_result and has_ps out is no matter, it will be recalc
                                       true))) {
       // need close result set
@@ -177,7 +177,7 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet &result)
         LOG_WARN("close result failed", K(close_ret));
       }
       LOG_WARN("prexecute response query head fail. ", K(ret));
-    }
+    } 
   }
 
   if (OB_SUCC(ret)) {
@@ -325,14 +325,14 @@ int ObSyncCmdDriver::response_query_result(ObMySQLResultSet &result)
   } else {
     ObCharsetType charset_type = CHARSET_INVALID;
     ObCharsetType nchar = CHARSET_INVALID;
-
+    
     if (OB_SUCC(ret)) {
       const ObSQLSessionInfo &my_session = result.get_session();
       if (OB_FAIL(my_session.get_ncharacter_set_connection(nchar))) {
         LOG_WARN("get ncharacter set connection failed", K(ret));
       } else if (OB_FAIL(my_session.get_character_set_results(charset_type))) {
         LOG_WARN("fail to get result charset", K(ret));
-      }
+      } 
     }
 
     ObNewRow *tmp_row = const_cast<ObNewRow*>(row);

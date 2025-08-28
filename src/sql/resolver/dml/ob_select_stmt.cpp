@@ -466,7 +466,7 @@ int ObSelectStmt::iterate_stmt_expr(ObStmtExprVisitor &visitor)
     } else if (OB_FAIL(visitor.visit(having_exprs_, SCOPE_HAVING))) {
       LOG_WARN("failed to visit having exprs", K(ret));
     } else if (OB_FAIL(visitor.visit(agg_items_, SCOPE_DICT_FIELDS))) {
-      LOG_WARN("failed to visit aggr items", K(ret));
+      LOG_WARN("failed to visit aggr items", K(ret));   
     } else if (OB_FAIL(iterate_rollup_items(rollup_items_, visitor))) {
       LOG_WARN("failed to iterate multi rollup items", K(ret));
     } else if (OB_FAIL(iterate_cube_items(cube_items_, visitor))) {
@@ -493,7 +493,7 @@ int ObSelectStmt::iterate_stmt_expr(ObStmtExprVisitor &visitor)
       LOG_WARN("failed to visit connect by exprs", K(ret));
     } else if (OB_FAIL(visitor.visit(connect_by_prior_exprs_, SCOPE_DICT_FIELDS))) {
       LOG_WARN("failed to visit connect by prior exprs", K(ret));
-    }
+    } 
     for (int64_t i = 0; OB_SUCC(ret) && i < search_by_items_.count(); i++) {
       if (OB_FAIL(visitor.visit(search_by_items_.at(i).expr_, SCOPE_DICT_FIELDS))) {
         LOG_WARN("failed to visit search by items", K(ret));
@@ -550,7 +550,7 @@ int ObSelectStmt::iterate_group_items(ObIArray<ObGroupbyExpr> &group_items,
     if (OB_FAIL(visitor.visit(group_items.at(i).groupby_exprs_, SCOPE_GROUPBY))) {
       LOG_WARN("failed to visit groupby exprs", K(ret));
     }
-  }
+  } 
   return ret;
 }
 
@@ -1639,7 +1639,7 @@ int ObSelectStmt::check_from_dup_insensitive(bool &is_from_dup_insens) const
  * Check whether the select stmt has duplicate-insensitive aggregation.
  * The stmt should have group by and only contain aggregate function listed: BIT_AND(),
  * BIT_OR(), MAX(), MIN() APPROX_COUNT_DISTINCT(), and other aggr func with DISTINCT.
- *
+ * 
  * @param is_dup_insens_aggr True if select stmt has duplicate-insensitive aggregation.
  */
 int ObSelectStmt::is_duplicate_insensitive_aggregation(bool &is_dup_insens_aggr) const

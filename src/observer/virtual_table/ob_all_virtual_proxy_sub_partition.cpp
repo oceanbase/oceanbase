@@ -211,8 +211,8 @@ int ObAllVirtualProxySubPartition::fill_row_(const ObSubPartition &sub_partition
       is_oracle_mode))) {
     LOG_WARN("fail to get oracle mode", KR(ret), K(sub_partition));
   } else if (OB_FAIL(tenant_schema_guard_.get_table_schema(
-      tenant_id,
-      table_id,
+      tenant_id, 
+      table_id, 
       table_schema))) {
     LOG_WARN("get table schema failed", KR(ret), K(tenant_id), K(table_id));
   } else if (OB_ISNULL(table_schema)) {

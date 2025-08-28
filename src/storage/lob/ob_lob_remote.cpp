@@ -152,7 +152,7 @@ int ObLobRemoteUtil::query(ObLobAccessParam& param, const ObLobQueryArg::QueryTy
     if (timeout < ObStorageRpcProxy::STREAM_RPC_TIMEOUT) {
       timeout = ObStorageRpcProxy::STREAM_RPC_TIMEOUT;
     }
-
+    
     if (OB_FAIL(svr_rpc_proxy->to(dst_addr).by(remote_ctx->query_arg_.tenant_id_)
                     .dst_cluster_id(GCONF.cluster_id)
                     .ratelimit(true).bg_flow(obrpc::ObRpcProxy::BACKGROUND_FLOW)

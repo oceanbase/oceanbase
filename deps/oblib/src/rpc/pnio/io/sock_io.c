@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 static int sk_translate_io_error(sock_t* s, int64_t bytes, uint32_t epbit) {
   if (bytes > 0) {
     // TODO fengshuo.fs: ignore 127.0.0.1 and local_io

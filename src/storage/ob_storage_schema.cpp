@@ -405,10 +405,10 @@ int ObStorageColumnGroupSchema::copy_from(ObIArray<ObColDesc> &column_ids,
  * ObUpdateCSReplicaSchemaParam
  * */
 ObUpdateCSReplicaSchemaParam::ObUpdateCSReplicaSchemaParam()
-  : tablet_id_(),
+  : tablet_id_(), 
     major_column_cnt_(0),
     update_type_(UpdateType::MAX_TYPE),
-    is_inited_(false)
+    is_inited_(false) 
 {
 
 }
@@ -442,8 +442,8 @@ int ObUpdateCSReplicaSchemaParam::init(
 
 bool ObUpdateCSReplicaSchemaParam::is_valid() const
 {
-  return is_inited_
-      && tablet_id_.is_valid()
+  return is_inited_ 
+      && tablet_id_.is_valid() 
       && major_column_cnt_ > ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()
       && update_type_ >= UpdateType::REFRESH_TABLE_SCHEMA
       && update_type_ < UpdateType::MAX_TYPE;
@@ -490,7 +490,7 @@ ObStorageSchema::~ObStorageSchema()
   reset();
 }
 
-// move storage_schema_version calculation here
+// move storage_schema_version calculation here 
 int ObStorageSchema::set_storage_schema_version(const uint64_t tenant_data_version)
 {
   int ret = OB_SUCCESS;
@@ -555,7 +555,7 @@ int ObStorageSchema::init(
   } else if (OB_FAIL(generate_column_group_array(input_schema, allocator))) {
     STORAGE_LOG(WARN, "Failed to generate column group array", K(ret));
   }
-
+  
   bool is_column_table_schema = false;
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(!ObStorageSchema::is_valid())) {
@@ -594,7 +594,7 @@ int ObStorageSchema::init(
     STORAGE_LOG(WARN, "invalid args", K(ret), K(old_schema), K(skip_column_info));
   } else if (OB_FAIL(copy_from(old_schema))) {
     STORAGE_LOG(WARN, "failed to copy from old schema", K(ret), K(old_schema));
-  } else if (FALSE_IT(column_info_simplified_ = (skip_column_info || old_schema.column_info_simplified_))) {
+  } else if (FALSE_IT(column_info_simplified_ = (skip_column_info || old_schema.column_info_simplified_))) { 
   } else if (OB_UNLIKELY(generate_cs_replica_cg_array && column_group_schema != nullptr)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid args to init storage schema", K(ret), KPC(column_group_schema));
@@ -608,7 +608,7 @@ int ObStorageSchema::init(
       STORAGE_LOG(WARN, "invalid args", K(ret), K(update_param), K(skip_column_info), K(old_schema));
     }
   }
-
+  
   if (OB_FAIL(ret)) {
   } else {
     allocator_ = &allocator;
@@ -762,7 +762,7 @@ int ObStorageSchema::refactor_storage_schema(
         }
       }
       if (!column_group_array_.empty()) {
-        /*
+        /* 
          * Used for column store tablet split in the future.
          * Similar to truncate skip_idx_attr_array_, the cg of newly added column is added at the end.
          * The column idx calculation takes 2 multi-version column, so use update_param.major_column_cnt_ to truncate.
@@ -1179,7 +1179,7 @@ int ObStorageSchema::deserialize_column_array(
         if (OB_FAIL(column.deserialize(buf, data_len, pos))) {
           STORAGE_LOG(WARN, "Fail to deserialize column schema", K(ret));
         }
-      }
+      } 
 
       if (OB_SUCC(ret) && column.orig_default_value_.get_deep_copy_size() > 0) {
         ObStorageColumnSchema deep_copy_column;
@@ -1285,11 +1285,11 @@ int ObStorageSchema::generate_cs_replica_cg_array(common::ObIAllocator &allocato
   /*
    * column idx in ObStorageColumnGroupSchema means the offset in column_ids(row keys in the front and according to the definition order).
    * rowkey_array_ init with the definition order, so need sort to decide the column idx.
-   *
+   * 
    * For example, if create a table with (v1, k1, v2, k2, v3, k3, primary key(k3, k1, k2))
    *                                [v1, k1, v2, k2, v3, k3]
    * the column id from v1 to k3 is [16, 17, 18, 19, 20, 21]
-   *
+   * 
    *                                [k3, k1, k2, tid, sql, v1, v2, v3]
    *          array idx is          [ 0,  1,  2,   3,   4,  5,  6,  7]
    * but the column_ids is          [21, 17, 19,   7,   8, 16, 18, 20]
@@ -1305,7 +1305,7 @@ int ObStorageSchema::generate_cs_replica_cg_array(common::ObIAllocator &allocato
   } else if (OB_FAIL(cg_schemas.push_back(column_group))) {
     STORAGE_LOG(WARN, "failed to add column group", K(ret), K(column_group));
     column_group.destroy(allocator);
-  }
+  } 
 
   for (int64_t i = 0; OB_SUCC(ret) && i < column_array_.count(); i++) {
     const ObStorageColumnSchema &column = column_array_.at(i);
@@ -1327,7 +1327,7 @@ int ObStorageSchema::generate_cs_replica_cg_array(common::ObIAllocator &allocato
       } else {
         column_idx = normal_column_start_idx++;
       }
-
+      
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(generate_single_column_group_schema(column_group, ObRowStoreType::CS_ENCODING_ROW_STORE, column_idx, allocator))) {
         STORAGE_LOG(WARN, "failed to generate_single_column_group_schema", K(ret), K(i));
@@ -1483,13 +1483,13 @@ int ObStorageSchema::get_base_rowkey_column_group_index(int32_t &cg_idx) const
 }
 
 int ObStorageSchema::get_column_group_index(
-    const uint64_t &column_id,
+    const uint64_t &column_id, 
     const int32_t &column_idx,
     int32_t &cg_idx) const
 {
   int ret = OB_SUCCESS;
   const int64_t column_group_cnt = column_group_array_.count();
-  const bool is_multi_version_col = OB_HIDDEN_TRANS_VERSION_COLUMN_ID == column_id
+  const bool is_multi_version_col = OB_HIDDEN_TRANS_VERSION_COLUMN_ID == column_id 
                                  || OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID == column_id;
   cg_idx = OB_INVALID_INDEX; // -1
   if (OB_UNLIKELY(1 >= column_group_cnt)) {
@@ -1707,7 +1707,7 @@ int ObStorageSchema::generate_column_array(
       const ObObj &orig_default_val = col->get_orig_default_value();
       if (OB_FAIL(datum.from_obj_enhance(orig_default_val))) {
         STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret));
-      } else if (is_lob_storage(col->get_data_type()) && !datum.has_lob_header()
+      } else if (is_lob_storage(col->get_data_type()) && !datum.has_lob_header() 
               && OB_FAIL(ObLobManager::fill_lob_header(*allocator_, datum))) {
         STORAGE_LOG(WARN, "failed to fill lob header", K(ret), K(datum));
       } else if (need_trim_default_val && orig_default_val.is_fixed_len_char_type()
@@ -1727,7 +1727,7 @@ int ObStorageSchema::generate_column_array(
               col_schema.default_checksum_ = errsim_datum.checksum(0);
             }
           }
-          STORAGE_LOG(INFO, "ERRSIM: whether to trim space for default checksum", K(ret), K(errsim_code), K(need_trim_default_val),
+          STORAGE_LOG(INFO, "ERRSIM: whether to trim space for default checksum", K(ret), K(errsim_code), K(need_trim_default_val), 
                             K(original_checksum), "current_checksum", col_schema.default_checksum_);
         }
 #endif

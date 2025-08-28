@@ -804,7 +804,7 @@ int ObTransService::register_mds_into_tx(ObTxDesc &tx_desc,
   tx_param.isolation_ = tx_desc.isolation_;
   tx_param.timeout_us_ = tx_desc.timeout_us_;
   ObTxSEQ savepoint;
-
+  
   if (OB_UNLIKELY(!tx_desc.is_valid() || !ls_id.is_valid() || type <= ObTxDataSourceType::UNKNOWN
                   || type >= ObTxDataSourceType::MAX_TYPE || OB_ISNULL(buf) || buf_len < 0)) {
     ret = OB_INVALID_ARGUMENT;

@@ -111,7 +111,7 @@ static int add_c_to_learner_list(const common::ObAddr &addr, common::GlobalLearn
       LOG_WARN("failed to add server", K(ret), K(c_replica));
     }
   }
-
+  
   return ret;
 }
 
@@ -512,7 +512,7 @@ static share::SCN mock_ckpt_inc(share::SCN &local_ls_checkpoint_scn)
 }
 
 static int get_checkpoint_policy(
-    const ObMigrationOpArg &arg,
+    const ObMigrationOpArg &arg, 
     const uint64_t tenant_id,
     const common::GlobalLearnerList &learner_list,
     ObStorageHASrcProvider::ChooseSourcePolicy &policy,
@@ -530,7 +530,7 @@ static int get_checkpoint_policy(
 
 
 static int get_recommand_policy(
-    const ObMigrationOpArg &arg,
+    const ObMigrationOpArg &arg, 
     const uint64_t tenant_id,
     const common::GlobalLearnerList &learner_list,
     ObStorageHASrcProvider::ChooseSourcePolicy &policy,
@@ -547,7 +547,7 @@ static int get_recommand_policy(
 }
 
 static int get_idc_policy(
-    const ObMigrationOpArg &arg,
+    const ObMigrationOpArg &arg, 
     const uint64_t tenant_id,
     const common::GlobalLearnerList &learner_list,
     ObStorageHASrcProvider::ChooseSourcePolicy &policy,
@@ -564,7 +564,7 @@ static int get_idc_policy(
 }
 
 static int get_region_policy(
-    const ObMigrationOpArg &arg,
+    const ObMigrationOpArg &arg, 
     const uint64_t tenant_id,
     const common::GlobalLearnerList &learner_list,
     ObStorageHASrcProvider::ChooseSourcePolicy &policy,

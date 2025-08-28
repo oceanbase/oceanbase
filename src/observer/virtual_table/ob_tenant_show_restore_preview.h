@@ -25,14 +25,14 @@ namespace observer
 
 class ObTenantShowRestorePreview : public common::ObVirtualTableIterator
 {
-  enum BackupType
+  enum BackupType 
   {
     BACKUP_TYPE_SET = 0,
     BACKUP_TYPE_PIECE = 1,
     BACKUP_TYPE_MAX = 2,
   };
 
-  enum RestorePreviewColumn
+  enum RestorePreviewColumn 
   {
     BACKUP_TYPE  = common::OB_APP_MIN_COLUMN_ID,
     BACKUP_ID    = common::OB_APP_MIN_COLUMN_ID + 1,

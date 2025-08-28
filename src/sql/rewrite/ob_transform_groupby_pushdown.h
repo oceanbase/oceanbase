@@ -340,8 +340,8 @@ private:
   int get_transed_table(ObIArray<PushDownParam> &params, ObIArray<TableItem *> &tables);
 
   int get_tables_from_params(ObDMLStmt &stmt,
-                             ObIArray<PushDownParam> &params,
-                             ObIArray<PushDownParam> &cross_join_params,
+                             ObIArray<PushDownParam> &params, 
+                             ObIArray<PushDownParam> &cross_join_params, 
                              ObIArray<ObSEArray<TableItem *, 4>> &trans_tables,
                              const bool force_rewrite,
                              bool disassemble_join = true);

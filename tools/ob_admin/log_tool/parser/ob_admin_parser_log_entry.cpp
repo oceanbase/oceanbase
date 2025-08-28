@@ -199,7 +199,7 @@ int ObAdminParserLogEntry::parse_trans_service_log_(ObTxLogBlock &tx_log_block, 
               ObTxDirectLoadIncLog::TempRef temp_ref;
               ObTxDirectLoadIncLog::ConstructArg arg(temp_ref);
               ObTxDirectLoadIncLog dli_log(arg);
-
+            
               if (OB_FAIL(dump_tx_id_ts_(str_arg_.writer_ptr_, tx_id, has_dumped_tx_id))) {
                 LOG_WARN("failed to dump_tx_id_ts_", K(ret));
               } else if (OB_FAIL(tx_log_block.deserialize_log_body(dli_log))) {

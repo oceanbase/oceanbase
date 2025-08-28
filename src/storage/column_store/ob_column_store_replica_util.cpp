@@ -33,7 +33,7 @@ int ObCSReplicaUtil::check_is_cs_replica(
   if (OB_FAIL(table_schema.get_is_row_store(is_row_store))) {
     LOG_WARN("fail to get is row store", K(ret), K(table_schema));
   } else {
-    is_cs_replica = is_row_store
+    is_cs_replica = is_row_store 
                  && table_schema.is_user_table()
                  && !tablet.is_row_store() // tablet in cs replica is not row store
                  && tablet.get_tablet_id().is_user_tablet();
@@ -42,7 +42,7 @@ int ObCSReplicaUtil::check_is_cs_replica(
 }
 
 int ObCSReplicaUtil::check_local_is_cs_replica(
-    const share::ObLSID &ls_id,
+    const share::ObLSID &ls_id, 
     bool &is_cs_replica)
 {
   int ret = OB_SUCCESS;
@@ -54,7 +54,7 @@ int ObCSReplicaUtil::check_local_is_cs_replica(
     if (OB_LS_NOT_EXIST == ret) {
       // Only use weak consistency locally read for cs replica, so local ls must exist.
       // If ls not exist, table param or dml param is constructed remotely, ignore it.
-      ret = OB_SUCCESS;
+      ret = OB_SUCCESS; 
     } else {
       LOG_WARN("failed to get ls", K(ret), K(ls_id));
     }
@@ -68,7 +68,7 @@ int ObCSReplicaUtil::check_local_is_cs_replica(
 }
 
 int ObCSReplicaUtil::check_has_cs_replica(
-    const share::ObLSID &ls_id,
+    const share::ObLSID &ls_id, 
     bool &has_column_store_replica)
 {
   int ret = OB_SUCCESS;
@@ -95,7 +95,7 @@ int ObCSReplicaUtil::check_need_generate_cs_replica_cg_array(
 {
   int ret = OB_SUCCESS;
   need_generate_cs_replica_cg_array = ls.is_cs_replica()
-                           && tablet_id.is_user_tablet()
+                           && tablet_id.is_user_tablet() 
                            && schema.is_row_store()
                            && schema.is_user_data_table();
   return ret;
@@ -220,10 +220,10 @@ int ObCSReplicaUtil::check_need_process_cs_replica_for_offline_ddl(
   } else if (OB_FAIL(orig_table_schema.get_is_column_store(is_column_group_store))) {
     LOG_WARN("fail to check schema is column group store", K(ret));
   } else if (is_column_group_store) {
-    // originally column store
+    // originally column store 
 #ifdef ERRSIM
   } else if (OB_UNLIKELY(EN_LS_NOT_SEE_CS_REPLICA_FOR_COMPLEMENT_DAG)) {
-    int tmp_ret = EN_LS_NOT_SEE_CS_REPLICA_FOR_COMPLEMENT_DAG;
+    int tmp_ret = EN_LS_NOT_SEE_CS_REPLICA_FOR_COMPLEMENT_DAG;   
     need_process = false;
     LOG_INFO("ERRSIM EN_LS_NOT_SEE_CS_REPLICA_FOR_COMPLEMENT_DAG, not see cs replica when set ddl type", K(tmp_ret), K(need_process));
 #endif
@@ -269,7 +269,7 @@ int ObCSReplicaUtil::check_need_wait_for_report(
   } else if (!is_normal_status(cs_replica_status)) {
     need_wait_for_report = true;
     LOG_INFO("tablet status is not normal, try report later", K(ret), K(cs_replica_status), K(ls), K(tablet));
-  }
+  } 
   return ret;
 }
 
@@ -381,7 +381,7 @@ int ObCSReplicaUtil::get_full_column_array_from_table_schema(
       LOG_WARN("alloc and new failed", K(ret));
     } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
       LOG_WARN("unable to get tenant data version", K(ret));
-    } else if (OB_FAIL(full_storage_schema->init(allocator, *table_schema, simplified_schema.get_compat_mode(),
+    } else if (OB_FAIL(full_storage_schema->init(allocator, *table_schema, simplified_schema.get_compat_mode(), 
                   false/*skip_column_info*/, tenant_data_version, true/*generate_cs_replica_cg_array*/))) {
       LOG_WARN("failed to init storage schema", K(ret), K(table_id));
     } else if (OB_FAIL(get_column_array_from_full_storage_schema(allocator, expected_stored_column_cnt, *full_storage_schema, column_array))) {
@@ -418,7 +418,7 @@ int ObCSReplicaUtil::get_column_array_from_full_storage_schema(
     }
   }
 
-  if (OB_UNLIKELY(column_cnt <= 0 || column_cnt > full_storage_schema.column_array_.count()
+  if (OB_UNLIKELY(column_cnt <= 0 || column_cnt > full_storage_schema.column_array_.count() 
                || expected_stored_column_cnt <= 0 || expected_stored_column_cnt != stored_column_cnt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected column cnt", K(ret), K(column_cnt), K(stored_column_cnt), K(expected_stored_column_cnt), K(stored_column_cnt), K(full_storage_schema));
@@ -456,13 +456,13 @@ int ObCSReplicaUtil::get_rebuild_storage_schema(
 {
   int ret = OB_SUCCESS;
   ObStorageSchema *schema = nullptr;
-  if (OB_UNLIKELY(OB_NOT_NULL(full_storage_schema) || !param.is_valid()
+  if (OB_UNLIKELY(OB_NOT_NULL(full_storage_schema) || !param.is_valid() 
                   || !simplified_schema.is_valid() || !simplified_schema.is_column_info_simplified())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KPC(full_storage_schema), K(param), K(simplified_schema));
   } else if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, schema))) {
     LOG_WARN("fail to alloc and new storage schema", K(ret));
-  } else if (OB_FAIL(schema->init(allocator, simplified_schema, false /*skip_column_info*/,
+  } else if (OB_FAIL(schema->init(allocator, simplified_schema, false /*skip_column_info*/, 
                                   nullptr /*column_group_schema*/, true /*need_generate_cs_replica_cg_array*/, &param))) {
     LOG_WARN("fail to init full storage schema", K(ret), K(simplified_schema));
   }
@@ -525,7 +525,7 @@ ObCSReplicaStorageSchemaGuard::~ObCSReplicaStorageSchemaGuard()
 
 int ObCSReplicaStorageSchemaGuard::init(
     const ObTabletHandle &tablet_handle,
-    compaction::ObCompactionMemoryContext &mem_ctx)
+    compaction::ObCompactionMemoryContext &mem_ctx) 
 {
   int ret = OB_SUCCESS;
   ObStorageSchema *schema_on_tablet = nullptr;
@@ -560,7 +560,7 @@ int ObCSReplicaStorageSchemaGuard::load(ObStorageSchema *&storage_schema)
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("not init", K(ret));
+    LOG_WARN("not init", K(ret)); 
   } else if (OB_ISNULL(schema_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema is nullptr", K(ret));

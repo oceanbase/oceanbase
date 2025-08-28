@@ -126,7 +126,7 @@ public:
   {
     return normal_total() + special_total_;
   }
-
+  
 private:
   void *inner_alloc_align(const int64_t size, const int64_t align);
   BasePageHeader *get_page_header(void *p);

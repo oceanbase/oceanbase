@@ -245,7 +245,7 @@ int ObRemoteLocationAdaptor::add_rawpath_source_(const share::ObLogRestoreSource
     ObSqlString tmp_str;
     char *token = nullptr;
     char *saveptr = nullptr;
-
+    
     if (OB_FAIL(tmp_str.assign(item.value_))) {
       LOG_WARN("fail to parse rawpath value", K(item));
     } else {

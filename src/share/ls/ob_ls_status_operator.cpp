@@ -45,7 +45,7 @@ bool ObLSStatusInfo::is_valid() const
          && (ls_id_.is_sys_ls()
              || (OB_INVALID_ID != ls_group_id_
                  && OB_INVALID_ID != unit_group_id_))
-         && !ls_is_invalid_status(status_)
+         && !ls_is_invalid_status(status_) 
          && flag_.is_valid();
 }
 
@@ -345,7 +345,7 @@ int ObLSStatusOperator::update_ls_status_in_trans(
   int ret = OB_SUCCESS;
   ObAllTenantInfo tenant_info;
   if (OB_UNLIKELY(!id.is_valid()
-                  || ls_is_invalid_status(new_status)
+                  || ls_is_invalid_status(new_status) 
                   || ls_is_invalid_status(old_status)
                   || OB_INVALID_TENANT_ID == tenant_id
                   || !switch_status.is_valid())) {
@@ -395,9 +395,9 @@ int ObLSStatusOperator::update_ls_status_in_trans(
 
 int ObLSStatusOperator::alter_ls_group_id(const uint64_t tenant_id, const ObLSID &id,
                        const uint64_t old_ls_group_id,
-                       const uint64_t new_ls_group_id,
-                       const uint64_t old_unit_group_id,
-                       const uint64_t new_unit_group_id,
+                       const uint64_t new_ls_group_id, 
+                       const uint64_t old_unit_group_id, 
+                       const uint64_t new_unit_group_id, 
                        ObISQLClient &client)
 {
   int ret = OB_SUCCESS;
@@ -426,13 +426,13 @@ int ObLSStatusOperator::alter_ls_group_id(const uint64_t tenant_id, const ObLSID
     }
     ALL_LS_EVENT_ADD(tenant_id, id, "alter_ls_group", ret, sql);
   }
-  return ret;
+  return ret; 
 }
 
 int ObLSStatusOperator::alter_unit_group_id(const uint64_t tenant_id, const ObLSID &id,
                        const uint64_t ls_group_id,
-                       const uint64_t old_unit_group_id,
-                       const uint64_t new_unit_group_id,
+                       const uint64_t old_unit_group_id, 
+                       const uint64_t new_unit_group_id, 
                        ObISQLClient &client)
 {
   int ret = OB_SUCCESS;
@@ -460,7 +460,7 @@ int ObLSStatusOperator::alter_unit_group_id(const uint64_t tenant_id, const ObLS
     }
     ALL_LS_EVENT_ADD(tenant_id, id, "alter_unit_group", ret, sql);
   }
-  return ret;
+  return ret; 
 }
 
 int ObLSStatusOperator::update_init_member_list(
@@ -797,7 +797,7 @@ int ObLSStatusOperator::set_list_with_hex_str_(
     LOG_WARN("deserialize error", KR(ret), K(deserialize_pos), K(deserialize_size));
   } else if (deserialize_pos < deserialize_size - 1) {
     //When deserialize_buf applies for memory, it applies for one more storage '\0',
-    //so after member_list is deserialized,
+    //so after member_list is deserialized, 
     //pos can only go to the position of deserialize_size - 1, and will not point to '\0'
     // have to parse flag
     ObMemberListFlag flag;
@@ -1305,7 +1305,7 @@ int ObLSStatusOperator::construct_ls_log_stat_replica_(
   if (FAILEDx(helper.convert(paxos_member_list_str, paxos_member_list_ptr))) {
     LOG_WARN("convert paxos_member_list failed", KR(ret), K(paxos_member_list_str));
   } else if (OB_FAIL(ObLSReplica::text2member_list(
-      paxos_member_list_ptr,
+      paxos_member_list_ptr, 
       member_list))) {
     LOG_WARN("text2member_list failed", KR(ret), K(paxos_member_list_str));
   } else if (OB_UNLIKELY(!server.set_ip_addr(svr_ip, static_cast<uint32_t>(svr_port)))) {
@@ -1561,7 +1561,7 @@ int ObLSStatusOperator::check_all_ls_has_leader(
 }
 
 int ObLSStatusOperator::get_all_tenant_related_ls_status_info(
-      common::ObMySQLProxy &sql_proxy,
+      common::ObMySQLProxy &sql_proxy, 
       const uint64_t tenant_id,
       ObLSStatusInfoIArray &ls_status_info_array)
 {

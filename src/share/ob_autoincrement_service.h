@@ -167,7 +167,7 @@ struct TableNode: public common::LinkHashValue<AutoincKey>
   // we are not sure if curr_node is avaliable.
   // it will become avaliable again after fetch a new node
   // and combine them together.
-  // ref:
+  // ref: 
   bool curr_node_state_is_pending_;
   int64_t  autoinc_version_;
 };
@@ -233,7 +233,7 @@ public:
                                 bool &is_valid,
                                 uint64_t &new_end);
 private:
-  int check_inner_autoinc_version(const int64_t &request_autoinc_version,
+  int check_inner_autoinc_version(const int64_t &request_autoinc_version, 
                                   const int64_t &inner_autoinc_version,
                                   const AutoincKey &key);
 private:

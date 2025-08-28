@@ -458,7 +458,7 @@ private:
   TableLocationFixedArray table_locations_;
   //used for array binding, only local plan
   ObPhysicalPlan *array_binding_plan_;
-  common::ObSEArray<ObPhysicalPlan *, 4> local_plans_;
+  common::ObSEArray<ObPhysicalPlan *, 4> local_plans_; 
 #ifdef OB_BUILD_SPM
   ObEvolutionPlan local_evolution_plan_;
   ObEvolutionPlan dist_evolution_plan_;

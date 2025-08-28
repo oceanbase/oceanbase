@@ -107,7 +107,7 @@ int ObRoutePolicy::filter_replica(const ObAddr &local_server,
   if (OB_SUCC(ret)) {
     for (int64_t i = candi_replicas.count()-1; OB_SUCC(ret) && i >= 0; --i) {
       CandidateReplica &cur_replica = candi_replicas.at(i);
-      if (cur_replica.is_filter_ &&
+      if (cur_replica.is_filter_ && 
           ((policy_type == COLUMN_STORE_ONLY && !ObReplicaTypeCheck::is_columnstore_replica(cur_replica.get_replica_type()))
           || (policy_type != COLUMN_STORE_ONLY && ObReplicaTypeCheck::is_columnstore_replica(cur_replica.get_replica_type()))) &&
           OB_FAIL(candi_replicas.remove(i))) {
@@ -147,7 +147,7 @@ int ObRoutePolicy::calculate_replica_priority(const ObAddr &local_server,
   } else if (candi_replicas.count() <= 1) {
     ObRoutePolicyType policy_type = get_calc_route_policy_type(ctx);
     if (1 == candi_replicas.count() &&
-        policy_type == COLUMN_STORE_ONLY &&
+        policy_type == COLUMN_STORE_ONLY && 
         !is_inner_table &&
         !ObReplicaTypeCheck::is_columnstore_replica(candi_replicas.at(0).get_replica_type())) {
       ret = OB_NO_REPLICA_VALID;

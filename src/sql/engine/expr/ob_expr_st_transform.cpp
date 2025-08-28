@@ -115,7 +115,7 @@ int ObExprSTTransform::eval_st_transform(const ObExpr &expr, ObEvalCtx &ctx, ObD
       if (OB_SUCC(ret)) {
         if (dest_srid == src_srid) { // return src geo directly
           ObString res_wkb;
-          if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb, src_geo, src_srs_item, N_ST_TRANSFORM,
+          if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb, src_geo, src_srs_item, N_ST_TRANSFORM, 
                                                       ObGeoBuildFlag::GEO_ALLOW_3D | GEO_NOT_COPY_WKB))) {
             LOG_WARN("fail to create geo", K(ret), K(wkb));
           } else if (OB_FAIL(ObGeoExprUtils::geo_to_wkb(*src_geo, expr, ctx, src_srs_item, res_wkb))) {
@@ -124,7 +124,7 @@ int ObExprSTTransform::eval_st_transform(const ObExpr &expr, ObEvalCtx &ctx, ObD
             res.set_string(res_wkb);
             need_eval = false;
           }
-        } else if (OB_ISNULL(src_srs_item)) { // valid only when dest srid is also 0
+        } else if (OB_ISNULL(src_srs_item)) { // valid only when dest srid is also 0 
           ret = OB_ERR_TRANSFORM_SOURCE_SRS_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_ERR_TRANSFORM_SOURCE_SRS_NOT_SUPPORTED, src_srid);
         } else if (dest_srid == 0) { // valid only when src srid is also 0
@@ -165,7 +165,7 @@ int ObExprSTTransform::eval_st_transform(const ObExpr &expr, ObEvalCtx &ctx, ObD
           LOG_WARN("failed to get proj4 prams from srs", K(ret), K(src_srid));
         }
       }
-
+      
       // eval by bg
       ObGeoBoostAllocGuard guard(tenant_id);
       lib::MemoryContext *mem_ctx = nullptr;
@@ -213,8 +213,8 @@ int ObExprSTTransform::eval_st_transform(const ObExpr &expr, ObEvalCtx &ctx, ObD
           } else {
             res.set_string(res_wkb);
           }
-        }
-      }
+        } 
+      } 
       if (mem_ctx != nullptr) {
         temp_allocator.add_ext_used((*mem_ctx)->arena_used());
       }

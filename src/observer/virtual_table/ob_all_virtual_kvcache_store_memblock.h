@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef OB_ALL_VIRTUAL_KVCACHE_STORE_MEMBLOCK_H_
 #define OB_ALL_VIRTUAL_KVCACHE_STORE_MEMBLOCK_H_
 #include "share/ob_virtual_table_scanner_iterator.h"

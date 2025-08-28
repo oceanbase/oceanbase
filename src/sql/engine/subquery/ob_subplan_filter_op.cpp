@@ -1350,7 +1350,7 @@ int ObSubPlanFilterOp::prepare_onetime_exprs()
       TSC
       PX COORD
         EXCHANGE (thread +1)
-
+    
     if PX COORD is onetime expr, SPF use extra thread calc it and release it until ITER_END，
     A large number of threads are wasted when multiple onetime expr coexist
     So we drain every onetime expr after calc

@@ -64,7 +64,7 @@ public:
                                                             const ObTableStatParam &param,
                                                             const ObIArray<ObOptStat> &part_index_stats,
                                                             ObIArray<ObOptStat> &approx_part_opt_stats);
-
+  
   static int derive_global_index_column_stat_by_part_index(ObExecContext &ctx,
                                                            ObIAllocator &alloc,
                                                            const ObTableStatParam &param,

@@ -1,4 +1,4 @@
-// owner: shenyunlong.syl
+// owner: shenyunlong.syl 
 // owner group: shenzhen
 
 /**
@@ -145,7 +145,7 @@ TEST_F(TestHTableLock, basic_test)
   // 1. acquire htable lock handle for a running tx
   ASSERT_EQ(OB_SUCCESS, HTABLE_LOCK_MGR->acquire_handle(fake_tx_id, lock_handle));
   ASSERT_TRUE(lock_handle != nullptr);
-  // 2. add htable lock on htable row in demand during tx
+  // 2. add htable lock on htable row in demand during tx 
   ASSERT_EQ(OB_SUCCESS, HTABLE_LOCK_MGR->lock_row(fake_table_id, fake_key, ObHTableLockMode::SHARED, *lock_handle));
   // 3. release htable lock handle after transaction commit or rollback
   ASSERT_EQ(OB_SUCCESS, HTABLE_LOCK_MGR->release_handle(*lock_handle));
@@ -262,7 +262,7 @@ TEST_F(TestHTableLock, share_exclusive)
   ASSERT_EQ(OB_SUCCESS, HTABLE_LOCK_MGR->acquire_handle(fake_tx_id2, lock_handle2));
   ASSERT_TRUE(lock_handle2 != nullptr);
 
-  // lock handle1 add share lock, and lock handle2 add exclusive lock
+  // lock handle1 add share lock, and lock handle2 add exclusive lock 
   ASSERT_EQ(OB_SUCCESS, HTABLE_LOCK_MGR->lock_row(fake_table_id, fake_key, ObHTableLockMode::SHARED, *lock_handle1));
   ASSERT_EQ(OB_TRY_LOCK_ROW_CONFLICT, HTABLE_LOCK_MGR->lock_row(fake_table_id, fake_key, ObHTableLockMode::EXCLUSIVE, *lock_handle2));
 
@@ -276,7 +276,7 @@ TEST_F(TestHTableLock, share_exclusive)
   ASSERT_EQ(OB_SUCCESS, HTABLE_LOCK_MGR->acquire_handle(fake_tx_id2, lock_handle2));
   ASSERT_TRUE(lock_handle2 != nullptr);
 
-  // lock handle1 add exclusive lock, and lock handle2 add share lock
+  // lock handle1 add exclusive lock, and lock handle2 add share lock 
   ASSERT_EQ(OB_SUCCESS, HTABLE_LOCK_MGR->lock_row(fake_table_id, fake_key, ObHTableLockMode::EXCLUSIVE, *lock_handle1));
   ASSERT_EQ(OB_TRY_LOCK_ROW_CONFLICT, HTABLE_LOCK_MGR->lock_row(fake_table_id, fake_key, ObHTableLockMode::SHARED, *lock_handle2));
 
@@ -302,11 +302,11 @@ TEST_F(TestHTableLock, exclusive_exclusive)
   ASSERT_EQ(OB_SUCCESS, HTABLE_LOCK_MGR->acquire_handle(fake_tx_id2, lock_handle2));
   ASSERT_TRUE(lock_handle2 != nullptr);
 
-  // lock handle1 add exclusive lock, and lock handle2 add exclusive lock
+  // lock handle1 add exclusive lock, and lock handle2 add exclusive lock 
   ASSERT_EQ(OB_SUCCESS, HTABLE_LOCK_MGR->lock_row(fake_table_id, fake_key, ObHTableLockMode::EXCLUSIVE, *lock_handle1));
   ASSERT_EQ(OB_TRY_LOCK_ROW_CONFLICT, HTABLE_LOCK_MGR->lock_row(fake_table_id, fake_key, ObHTableLockMode::EXCLUSIVE, *lock_handle2));
 
-  // release lock handle1
+  // release lock handle1 
   ASSERT_EQ(OB_SUCCESS, HTABLE_LOCK_MGR->release_handle(*lock_handle1));
   // lock handle2 try to add exclusive lock again
   ASSERT_EQ(OB_SUCCESS, HTABLE_LOCK_MGR->lock_row(fake_table_id, fake_key, ObHTableLockMode::EXCLUSIVE, *lock_handle2));

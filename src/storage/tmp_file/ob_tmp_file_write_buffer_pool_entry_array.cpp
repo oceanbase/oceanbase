@@ -166,3 +166,4 @@ void ObTmpWriteBufferPoolEntryArray::pop_back()
 
 }  // end namespace tmp_file
 }  // end namespace oceanbase
+

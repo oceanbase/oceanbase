@@ -156,10 +156,10 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
 
       if (OB_FAIL(ret)) {
         // do nothing
-      } else if ((is_prexecute_ && stmt::T_SELECT != result.get_stmt_type())
+      } else if ((is_prexecute_ && stmt::T_SELECT != result.get_stmt_type()) 
         || (!is_prexecute_ && sender_.need_send_extra_ok_packet() && !result.has_more_result())) {
         // 二合一协议 select 语句的 OK 包全部放在协议层发送
-        // sync plan 此时需要为 二合一协议单独发送 OK 包 ， for obproxy，
+        // sync plan 此时需要为 二合一协议单独发送 OK 包 ， for obproxy， 
         // in multi-stmt, send extra ok packet in the last stmt(has no more result)
         ObOKPParam ok_param;
         ok_param.affected_rows_ = result.get_affected_rows();

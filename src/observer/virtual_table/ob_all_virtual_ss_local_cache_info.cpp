@@ -333,7 +333,7 @@ int ObAllVirtualSSLocalCacheInfo::process_curr_tenant(common::ObNewRow *&row)
     if (OB_SUCC(ret) && cur_idx_ >= inst_list_.count()) {
       ret = OB_ITER_END;
     }
-
+    
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; i++) {
       const uint64_t col_id = output_column_ids_.at(i);
       switch (col_id) {

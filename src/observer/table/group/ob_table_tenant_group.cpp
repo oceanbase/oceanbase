@@ -98,7 +98,7 @@ void ObTableGroupCommitMgr::ObTableGroupTriggerTask::runTimerTask(void)
 int ObTableGroupCommitMgr::ObTableGroupTriggerTask::run_trigger_task()
 {
   int ret = OB_SUCCESS;
-
+  
   if (OB_FAIL(trigger_other_group())) {
     LOG_WARN("fail to trigger other group", K(ret));
   } else if (OB_FAIL(trigger_failed_group())) {
@@ -441,7 +441,7 @@ int ObTableGroupCommitMgr::clean_group_map()
       allocator_.free(key);
       key = nullptr;
     }
-
+    
   }
 
   return ret;
@@ -515,7 +515,7 @@ int ObTableGroupCommitMgr::clean_failed_groups()
     if (OB_NOT_NULL(group)) {
       group_factory_.free(group);
     }
-  }
+  } 
   return ret;
 }
 
@@ -527,7 +527,7 @@ void ObTableGroupCommitMgr::destroy()
     if (timer_.inited()) {
       timer_.destroy();
     }
-    // 2. clean remian groups in group_map
+    // 2. clean remian groups in group_map 
     if (OB_FAIL(clean_group_map())) {
       LOG_WARN("fail to clean group map", K(ret));
     }

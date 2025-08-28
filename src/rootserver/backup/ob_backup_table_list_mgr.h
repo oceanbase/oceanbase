@@ -30,7 +30,7 @@ namespace rootserver
 
 class ObGetMaxTableListPartNoOp : public ObBaseDirEntryOperator
 {
-public:
+public: 
   ObGetMaxTableListPartNoOp(
       const share::SCN &scn,
       int64_t &max_table_list_part_no)
@@ -48,7 +48,7 @@ private:
 
 class ObGetMaxTableListSCNOp : public ObBaseDirEntryOperator
 {
-public:
+public: 
   ObGetMaxTableListSCNOp(share::SCN &max_scn)
     : max_scn_(max_scn) {}
   virtual ~ObGetMaxTableListSCNOp() {}
@@ -62,7 +62,7 @@ private:
 
 class ObGetTableListPartialMetasOp : public ObBaseDirEntryOperator
 {
-public:
+public: 
   ObGetTableListPartialMetasOp(
       const share::SCN &scn,
       const ObBackupDest *backup_set_dest,

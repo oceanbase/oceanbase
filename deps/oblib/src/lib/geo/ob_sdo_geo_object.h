@@ -37,9 +37,9 @@ enum ObSdoGeoAttrIdx
 struct ObSdoPoint
 {
 public:
-  ObSdoPoint(double x, double y)
+  ObSdoPoint(double x, double y) 
     : x_(x), y_(y), has_z_(false), is_null_(false) {}
-  ObSdoPoint(double x, double y, double z)
+  ObSdoPoint(double x, double y, double z) 
     : x_(x), y_(y), has_z_(true), z_(z), is_null_(false) {}
   ObSdoPoint() : has_z_(false), is_null_(true) {}
   bool operator==(const ObSdoPoint &other) const;
@@ -56,7 +56,7 @@ public:
 
 private:
   bool need_sci_format(double num) { return num <= -1e9 || num >= 1e10; }
-
+  
   double x_;
   double y_;
   bool has_z_;
@@ -67,15 +67,15 @@ private:
 class ObSdoGeoObject
 {
 public:
-  ObSdoGeoObject(ObGeoType gtype, ObSdoPoint point, ObIAllocator &allocator, uint32_t srid = UINT32_MAX)
-    : gtype_(gtype), point_(point), srid_(srid),
+  ObSdoGeoObject(ObGeoType gtype, ObSdoPoint point, ObIAllocator &allocator, uint32_t srid = UINT32_MAX) 
+    : gtype_(gtype), point_(point), srid_(srid), 
       elem_info_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR)),
       ordinates_(DEFAULT_PAGE_SIZE_ORDINATES, ModulePageAllocator(allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR))
       {}
-
-  ObSdoGeoObject(ObGeoType gtype, ObArray<uint64_t> elem_info,
+  
+  ObSdoGeoObject(ObGeoType gtype, ObArray<uint64_t> elem_info, 
       ObArray<double> ordinates, ObIAllocator &allocator, uint32_t srid = UINT32_MAX)
-      : gtype_(gtype), srid_(srid),
+      : gtype_(gtype), srid_(srid), 
       elem_info_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR)),
       ordinates_(DEFAULT_PAGE_SIZE_ORDINATES, ModulePageAllocator(allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR))
   {}

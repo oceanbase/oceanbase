@@ -19,9 +19,9 @@
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "test_ss_common_util.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace storage
+namespace storage 
 {
 using namespace oceanbase::common;
 
@@ -46,7 +46,7 @@ public:
   int get_error_code() { return common::OB_SUCCESS; }
 };
 
-class TestSSReorganizePhyBlock : public ::testing::Test
+class TestSSReorganizePhyBlock : public ::testing::Test 
 {
 public:
   TestSSReorganizePhyBlock() {}
@@ -96,8 +96,8 @@ void TestSSReorganizePhyBlock::TearDown()
 }
 
 void TestSSReorganizePhyBlock::write_batch_micro_block(
-    const int64_t micro_cnt,
-    const int64_t micro_size,
+    const int64_t micro_cnt, 
+    const int64_t micro_size, 
     const int64_t start_macro_id)
 {
   ObArenaAllocator allocator;
@@ -135,7 +135,7 @@ TEST_F(TestSSReorganizePhyBlock, test_reorganize_phy_block_task)
   micro_ckpt_task.is_inited_ = false;
   ObSSExecuteBlkCheckpointTask &blk_ckpt_task = micro_cache->task_runner_.blk_ckpt_task_;
   blk_ckpt_task.is_inited_ = false;
-
+  
   ObSSMemDataManager *mem_data_mgr = &(micro_cache->mem_data_mgr_);
   ASSERT_NE(nullptr, mem_data_mgr);
   ObSSMicroMetaManager *micro_meta_mgr = &(micro_cache->micro_meta_mgr_);
@@ -199,7 +199,7 @@ TEST_F(TestSSReorganizePhyBlock, test_reorganize_phy_block_task)
     ASSERT_EQ(micro_data_info.micro_index_arr_.count(), micro_data_info_arr.at(i).get_micro_count());
     ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
   }
-
+  
   {
     TestReorganSSMicroDataInfo micro_data_info;
     // to sealed the last mem_block

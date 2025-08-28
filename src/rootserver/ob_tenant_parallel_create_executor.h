@@ -17,15 +17,15 @@
 #include "src/share/ls/ob_ls_table_operator.h"
 #include "rootserver/ob_rs_async_rpc_proxy.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace rootserver
+namespace rootserver 
 {
 class ObParallelCreateTenantExecutor
 {
 public:
   ObParallelCreateTenantExecutor() : create_tenant_arg_(), rpc_proxy_(NULL), common_rpc_(NULL),
-    sql_proxy_(NULL), schema_service_(NULL), lst_operator_(NULL), location_service_(NULL),
+    sql_proxy_(NULL), schema_service_(NULL), lst_operator_(NULL), location_service_(NULL), 
     ctx_(), create_tenant_schema_result_(), user_tenant_schema_(), meta_tenant_schema_() {}
   int execute(obrpc::UInt64 &tenant_id);
   int init(
@@ -37,7 +37,7 @@ public:
       share::ObLSTableOperator *lst_operator,
       share::ObLocationService *location_service);
   TO_STRING_KV(K_(create_tenant_arg), KP_(rpc_proxy), KP_(common_rpc), KP_(sql_proxy),
-      KP_(schema_service), KP_(lst_operator), KP_(location_service), K_(ctx),
+      KP_(schema_service), KP_(lst_operator), KP_(location_service), K_(ctx), 
       K_(create_tenant_schema_result), K(user_tenant_schema_), K(meta_tenant_schema_));
 private:
   int create_user_ls_(ObParallelCreateNormalTenantProxy &proxy);

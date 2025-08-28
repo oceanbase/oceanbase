@@ -34,7 +34,7 @@ int ObDDLResolver::get_storage_cache_tbl_schema(const ObTableSchema *&tbl_schema
     } else if (OB_ISNULL(tbl_schema = &create_table_stmt->get_create_table_arg().schema_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("create table schema is null", KR(ret));
-    }
+    } 
   } else if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
     // get table schema from schema_checker_, the table schema is not in alter_table_schema
     // because the alter_table_schema does not contain the part level and is_user_table
@@ -57,14 +57,14 @@ int ObDDLResolver::get_storage_cache_tbl_schema(const ObTableSchema *&tbl_schema
     } else if (OB_ISNULL(tbl_schema = &create_index_stmt->get_create_index_arg().index_schema_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table schema is null", KP(tbl_schema), K(ret));
-    }
-  }
+    } 
+  } 
   return ret;
 }
 
-// @param is_alter_add_index: Since alter table includes multiple operations, not just alter add index,
+// @param is_alter_add_index: Since alter table includes multiple operations, not just alter add index, 
 // use this parameter to mark the current statement as an alter add index statement.
-// true if the statement is alter add index, false otherwise. Cause alter table is not only
+// true if the statement is alter add index, false otherwise. Cause alter table is not only 
 int ObDDLResolver::set_default_storage_cache_policy(const bool is_alter_add_index)
 {
   int ret = OB_SUCCESS;
@@ -318,12 +318,12 @@ int ObDDLResolver::check_and_set_default_storage_cache_policy()
   int ret = OB_SUCCESS;
   bool need_set_default_storage_cache_policy = false;
   const ObTableSchema *tbl_schema = nullptr;
-  if (stmt::T_CREATE_TABLE == stmt_->get_stmt_type() ||
+  if (stmt::T_CREATE_TABLE == stmt_->get_stmt_type() || 
       stmt::T_CREATE_INDEX == stmt_->get_stmt_type()) {
     if (OB_FAIL(get_storage_cache_tbl_schema(tbl_schema))) {
       LOG_WARN("failed to get storage cache tbl schema", K(ret));
     } else if (OB_NOT_NULL(tbl_schema)) {
-      // When creating a table/index, if the table/index is a user table,
+      // When creating a table/index, if the table/index is a user table, 
       // set the default storage cache policy to true
       // need_set_default_storage_cache_policy means this stmt should has a default storage cache policy (not the tenant config)
       if (tbl_schema->is_user_table()) {
@@ -436,7 +436,7 @@ int ObDDLResolver::check_alter_stmt_storage_cache_policy(const ObTableSchema *or
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("index arg is null", K(ret));
             } else if (obrpc::ObIndexArg::ALTER_INDEX == alter_index_arg->index_action_type_) {
-              // Since the alter table on the resolver side cannot distinguish between various behaviors,
+              // Since the alter table on the resolver side cannot distinguish between various behaviors, 
               // alter_index_arg_list will be reused by other behaviors.
               // Therefore, no judgment is made here on behaviors other than alter_index.
               ObString index_table_name;
@@ -461,7 +461,7 @@ int ObDDLResolver::check_alter_stmt_storage_cache_policy(const ObTableSchema *or
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "not support to alter multiple index with storage cache policy");
             LOG_WARN("alter index with storage cache policy for multiple index is not supported", K(ret));
           }
-
+        
           // Check alter table storage_cache_policy
           if (OB_FAIL(ret)) {
           } else if (OB_ISNULL(tbl_schema)) {
@@ -535,7 +535,7 @@ int ObDDLResolver::check_storage_cache_policy(ObStorageCachePolicy &storage_cach
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "cache policy not support part key using expr");
       }
     }
-
+    
     if (OB_FAIL(ret)) {
     } else {
       switch(ob_obj_type_class(column_schema->get_data_type())) {
@@ -550,7 +550,7 @@ int ObDDLResolver::check_storage_cache_policy(ObStorageCachePolicy &storage_cach
           }
           break;
         }
-        case ObDateTimeTC:
+        case ObDateTimeTC: 
         case ObOTimestampTC:
         case ObDateTC:
         case ObYearTC:
@@ -590,7 +590,7 @@ int ObDDLResolver::check_storage_cache_policy(ObStorageCachePolicy &storage_cach
           column_id = column_schema->get_column_id();
           if (OB_FAIL(check_column_is_first_part_key(part_key_info, column_id))) {
             LOG_WARN("check column is first part key failed", K(ret), K(column_id));
-          }
+          } 
         }
       } else if (PARTITION_LEVEL_TWO == part_level) {
         // When the partition level is two
@@ -618,13 +618,13 @@ int ObDDLResolver::check_storage_cache_policy(ObStorageCachePolicy &storage_cach
           }
         }
       }
-    }
+    } 
   }
   return ret;
 }
 
 /*************************ObAlterTableResolver*************************/
-int ObAlterTableResolver::resolve_alter_partition_storage_cache_policy(const ParseNode &node,
+int ObAlterTableResolver::resolve_alter_partition_storage_cache_policy(const ParseNode &node, 
     const share::schema::ObTableSchema &orig_table_schema)
 {
   int ret = OB_SUCCESS;
@@ -633,9 +633,9 @@ int ObAlterTableResolver::resolve_alter_partition_storage_cache_policy(const Par
   if (T_ALTER_PARTITION_STORAGE_CACHE_POLICY != node.type_
       || 2 != node.num_child_
       || OB_ISNULL(node.children_[0])
-      || OB_ISNULL(node.children_[1])) {
+      || OB_ISNULL(node.children_[1])) { 
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid parse tree when alter partition storage cache policy",
+    LOG_WARN("invalid parse tree when alter partition storage cache policy", 
         K(ret), K(node.num_child_), K(node.type_));
   } else if (!orig_table_schema.is_user_table()) {
     ret = OB_NOT_SUPPORTED;
@@ -732,7 +732,7 @@ int ObAlterTableResolver::resolve_alter_subpartition_storage_cache_policy(const 
       LOG_WARN("get storage cache policy type failed", KR(ret), K(new_storage_cache_policy));
     } else {
       str_toupper(new_storage_cache_policy.ptr(), new_storage_cache_policy.length());
-
+    
       const ObPartitionOption &ori_part_option = orig_table_schema.get_part_option();
       ParseNode *name_list = node.children_[0];
       if (OB_ISNULL(name_list)) {
@@ -779,12 +779,12 @@ int ObAlterTableResolver::resolve_alter_subpartition_storage_cache_policy(const 
 int ObAlterTableResolver::resolve_alter_index_storage_cache_policy(const ParseNode &node)
 {
   int ret = OB_SUCCESS;
-  if (T_INDEX_ALTER_STORAGE_CACHE_POLICY != node.type_
+  if (T_INDEX_ALTER_STORAGE_CACHE_POLICY != node.type_ 
       || 2 != node.num_child_
       || OB_ISNULL(node.children_[0])
       || OB_ISNULL(node.children_[1])) {
     ret = OB_ERR_UNEXPECTED;
-    SQL_RESV_LOG(WARN, "invalid parse tree when alter index storage cache policy",
+    SQL_RESV_LOG(WARN, "invalid parse tree when alter index storage cache policy", 
         K(ret), K(node.num_child_), K(node.type_));
   } else {
     ParseNode *index_node = node.children_[0];
@@ -829,7 +829,7 @@ int ObAlterTableResolver::resolve_alter_index_storage_cache_policy(const ParseNo
 
 /*************************ObStorageCacheUtil*************************/
 
-int ObStorageCacheUtil::print_table_storage_cache_policy(const ObTableSchema &table_schema, char* buf, const int64_t &buf_len, int64_t &pos)
+int ObStorageCacheUtil::print_table_storage_cache_policy(const ObTableSchema &table_schema, char* buf, const int64_t &buf_len, int64_t &pos) 
 {
   int ret = OB_SUCCESS;
   ObStorageCachePolicy storage_cache_policy;
@@ -860,7 +860,7 @@ int ObStorageCacheUtil::print_table_storage_cache_policy(const ObTableSchema &ta
       }
     }
   } else if (storage_cache_policy.is_time_policy()) {
-    if (OB_ISNULL(storage_cache_policy.get_column_name()) ||
+    if (OB_ISNULL(storage_cache_policy.get_column_name()) || 
         0 == storage_cache_policy.get_hot_retention_interval()||
         !storage_cache_policy.is_valid_date_unit_type()) {
       ret = OB_ERR_UNEXPECTED;
@@ -876,13 +876,13 @@ int ObStorageCacheUtil::print_table_storage_cache_policy(const ObTableSchema &ta
       }
       ObString column_unit(column_unit_str);
       ObString hot_retention_unit(ob_date_unit_type_str_upper(storage_cache_policy.get_hot_retention_unit()));
-
+     
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "storage_cache_policy (boundary_column = %.*s, ",
                                   column_name.length(), column_name.ptr()))) {
         LOG_WARN("failed to print boudary column", K(ret), K(storage_cache_policy), K(pos));
-      } else if (ObBoundaryColumnUnit::is_valid(storage_cache_policy.get_column_unit()) &&
-                OB_FAIL(databuff_printf(buf, buf_len, pos, "boundary_column_unit = \'%.*s\', ",
+      } else if (ObBoundaryColumnUnit::is_valid(storage_cache_policy.get_column_unit()) && 
+                OB_FAIL(databuff_printf(buf, buf_len, pos, "boundary_column_unit = \'%.*s\', ", 
                                                             column_unit.length(), column_unit.ptr()))) { //TODO @baonian.wcx wati to check is time unit necessary
         LOG_WARN("failed to pint column unit", K(ret), K(storage_cache_policy), K(pos));
       } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "hot_retention = %lu ",
@@ -890,7 +890,7 @@ int ObStorageCacheUtil::print_table_storage_cache_policy(const ObTableSchema &ta
       } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%.*s)  ", hot_retention_unit.length(),
                                                                       hot_retention_unit.ptr()))) {
         LOG_WARN("failed to print storage cache policy", K(ret), K(storage_cache_policy), K(pos));
-      }
+      } 
     }
   }
   return ret;
@@ -905,7 +905,7 @@ int ObStorageCacheUtil::check_alter_column_validation(const AlterColumnSchema *a
     if (OB_ISNULL(orig_column = orig_table_schema.get_column_schema(alter_column_schema->get_column_id()))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get column schema", K(ret), KPC(alter_column_schema), K(orig_table_schema));
-    }
+    } 
     // check for storage cache policy
     ObStorageCachePolicy cache_policy;
     if (OB_FAIL(ret)) {
@@ -921,10 +921,10 @@ int ObStorageCacheUtil::check_alter_column_validation(const AlterColumnSchema *a
         if (!ObStorageCacheUtil::is_type_change_allow(orig_column->get_data_type(), alter_column_schema->get_data_type())) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "change storage cache policy boundary column type");
-        LOG_WARN("not supported column type change on the boundary column, please remove the storage cache policy first.",
+        LOG_WARN("not supported column type change on the boundary column, please remove the storage cache policy first.", 
             K(ret), K(orig_column), KPC(alter_column_schema), K(cache_policy.get_column_name()));
         }
-      }
+      } 
     }
   }
   return ret;
@@ -1017,7 +1017,7 @@ int ObStorageCacheUtil::check_alter_subpartiton_storage_cache_policy(const share
   const ObPartitionLevel part_level = orig_table_schema.get_part_level();
   const AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
   ObCheckPartitionMode check_partition_mode = CHECK_PARTITION_MODE_NORMAL;
-
+ 
   if (OB_FAIL(GET_MIN_DATA_VERSION(orig_table_schema.get_tenant_id(), tenant_data_version))) {
     LOG_WARN("get data version failed", KR(ret), K(orig_table_schema.get_tenant_id()));
   } else if (tenant_data_version < DATA_VERSION_4_3_5_2) {
@@ -1125,7 +1125,7 @@ int ObStorageCacheUtil::get_range_part_level(const share::schema::ObTableSchema 
           LOG_WARN("there must be a range type partition in the partition and the sub_partition for storage cache policy", K(ret));
         }
       }
-    }
+    } 
   }
   return ret;
 }

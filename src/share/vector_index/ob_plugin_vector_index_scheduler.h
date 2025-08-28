@@ -24,9 +24,9 @@
 #include "logservice/ob_log_handler.h"
 #include "share/vector_index/ob_ivf_async_task_executor.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace share
+namespace share 
 {
 
 class ObPluginVectorIndexService;
@@ -70,7 +70,7 @@ public:
   ~ObVectorIndexSyncLogCb() {
     destory();
   }
-
+  
   void reset()
   {
     ATOMIC_SET(&is_callback_invoked_, false);
@@ -86,7 +86,7 @@ public:
   }
 
   int on_success();
-
+ 
   int on_failure();
 
   TO_STRING_KV(K_(is_callback_invoked), K_(is_success), KP_(log_buffer));
@@ -168,9 +168,9 @@ struct ObPluginVectorIndexTaskCtx
       in_queue_(false),
       task_status_(ObVectorIndexTaskStatus::OB_TTL_TASK_PREPARE)
   {}
-  TO_STRING_KV(K_(index_table_id), K_(index_tablet_id), K_(task_start_time), K_(last_modify_time),
+  TO_STRING_KV(K_(index_table_id), K_(index_tablet_id), K_(task_start_time), K_(last_modify_time), 
                K_(failure_times), K_(err_code), K_(in_queue), K_(task_status));
-  ObTabletID index_tablet_id_;
+  ObTabletID index_tablet_id_;  
   uint64_t index_table_id_;
   int64_t task_start_time_;
   int64_t last_modify_time_;
@@ -188,8 +188,8 @@ class ObPluginVectorIndexLoadScheduler : public common::ObTimerTask,
                                          public logservice::ObICheckpointSubHandler,
                                          public logservice::ObIRoleChangeSubHandler
 {
-public:
-  ObPluginVectorIndexLoadScheduler()
+public: 
+  ObPluginVectorIndexLoadScheduler() 
     : is_inited_(false),
       is_leader_(false),
       need_do_for_switch_(false),
@@ -234,7 +234,7 @@ public:
   // core interfaces
   int execute_adapter_maintenance();
   int acquire_adapter_in_maintenance(const int64_t table_id, const ObTableSchema *table_schema);
-  int set_shared_table_info_in_maintenance(const int64_t table_id,
+  int set_shared_table_info_in_maintenance(const int64_t table_id, 
                                            const ObTableSchema *table_schema,
                                            ObVecIdxSharedTableInfoMap &shared_table_info_map);
   int check_task_state(ObPluginVectorIndexMgr *mgr, ObPluginVectorIndexTaskCtx *task_ctx, bool &is_stop);
@@ -263,7 +263,7 @@ public:
   int handle_submit_callback(const bool success);
   int handle_replay_result(ObVectorIndexSyncLog &ls_log);
   int replay(const void *buffer, const int64_t buf_size, const palf::LSN &lsn, const share::SCN &log_scn);
-
+  
   // checkpoint interfaces
   int flush(share::SCN &scn);
   share::SCN get_rec_scn();
@@ -283,11 +283,11 @@ public:
   int64_t get_dag_ref() const { return ATOMIC_LOAD(&dag_ref_cnt_); }
 
   int safe_to_destroy(bool &is_safe);
-
+  
   TO_STRING_KV(K_(is_inited), K_(is_leader), K_(need_do_for_switch), K_(is_stopped), K_(is_logging),
-               K_(need_refresh), K_(tenant_id), K_(ttl_tablet_timer_tg_id), K_(interval_factor),
-               K_(basic_period), K_(current_memory_config), K_(dag_ref_cnt),
-               KP_(vector_index_service), KP_(ls),
+               K_(need_refresh), K_(tenant_id), K_(ttl_tablet_timer_tg_id), K_(interval_factor), 
+               K_(basic_period), K_(current_memory_config), K_(dag_ref_cnt), 
+               KP_(vector_index_service), KP_(ls), 
                K_(local_schema_version), K_(local_tenant_task));
 
 private:
@@ -306,10 +306,10 @@ private:
   static const int64_t DEFAULT_TABLE_ARRAY_SIZE = 200;
   static const int64_t TBALE_GENERATE_BATCH_SIZE = 200;
 
-  // 1. is_leader_: Only leader is allowed to generate memdata sync logs,
+  // 1. is_leader_: Only leader is allowed to generate memdata sync logs, 
   //   but execute of memdata sync task is allowed on leader/follower
-  // 2. need_do_for_switch_ is intended to skip some loops currently being executed,
-  //   but in the context of vector indexing, only when leader to follwer need processing currently,
+  // 2. need_do_for_switch_ is intended to skip some loops currently being executed, 
+  //   but in the context of vector indexing, only when leader to follwer need processing currently, 
   //   which duplicates the function of is_leader_.
   // 3. is_stopped_ is set only when the timer is stopped, stop to schedule memedata sync tasks
 
@@ -384,7 +384,7 @@ public:
       task_ctx_(nullptr)
   {}
   ~ObVectorIndexTaskParam() {}
-  bool is_valid() const
+  bool is_valid() const 
   {
     return tenant_id_ != OB_INVALID_ID
            && ls_id_.is_valid()
@@ -436,7 +436,7 @@ typedef common::hash::ObHashMap<common::ObTabletID, ObPluginVectorIndexAdaptor*>
 class ObVectorIndexMemSyncInfo
 {
 public:
-  ObVectorIndexMemSyncInfo(uint64_t tenant_id) :
+  ObVectorIndexMemSyncInfo(uint64_t tenant_id) : 
     processing_first_mem_sync_(true),
     first_mem_sync_map_(),
     second_mem_sync_map_(),
@@ -452,7 +452,7 @@ public:
   int add_task_to_waiting_map(ObVectorIndexSyncLog &ls_log);
   int add_task_to_waiting_map(VectorIndexAdaptorMap &adapter_map);
   int add_task_to_waiting_map(ObTabletID &tablet_id, int64_t table_id);
-  int count_processing_finished(bool &is_finished,
+  int count_processing_finished(bool &is_finished, 
                                 uint32_t &total_count,
                                 uint32_t &finished_count);
   void check_and_switch_if_needed(bool &need_sync, bool &all_finished);

@@ -365,7 +365,7 @@ int ObPLObjectValue::set_max_concurrent_num_for_add(ObPLCacheCtx &pc_ctx)
                         outline_info));
   if (NULL != outline_info && outline_info->has_outline_params()) {
     OZ (inner_set_max_concurrent_num(outline_info));
-  }
+  }                  
   return ret;
 }
 
@@ -388,7 +388,7 @@ int ObPLObjectValue::set_max_concurrent_num_for_get(ObPLCacheCtx &pc_ctx)
   } else if (NULL != outline_info) {
     if (outline_info->get_outline_id() == pl_routine_obj_->get_stat().outline_version_.object_id_
         && pl_routine_obj_->get_stat().outline_version_.version_ == outline_info->get_schema_version()) {
-      // do nothing
+      // do nothing 
     } else if (outline_info->has_outline_params()) {
       // reset concurrent num
       OZ (inner_set_max_concurrent_num(outline_info));
@@ -536,11 +536,11 @@ int ObPLObjectValue::check_value_version(share::schema::ObSchemaGetterGuard *sch
           // do nothing
         } else if (schema_obj1->schema_type_ == schema_obj2.schema_type_ &&
                    schema_obj1->schema_id_ == schema_obj2.schema_id_) {
-          if (TABLE_SCHEMA == schema_obj1->schema_type_) {
+          if (TABLE_SCHEMA == schema_obj1->schema_type_) {          
             ObSEArray<ObPLTableColumnInfo, 6> column_infos;
             OZ (obtain_new_column_infos(*schema_guard, schema_obj2, column_infos));
-            OX (is_old_version =
-                  schema_obj1->table_name_ != schema_obj2.table_name_ ||
+            OX (is_old_version = 
+                  schema_obj1->table_name_ != schema_obj2.table_name_ || 
                   !schema_obj1->match_columns(column_infos));
           } else if (SEQUENCE_SCHEMA == schema_obj1->schema_type_) {
             // alter sequence should not make pl cache obj expired
@@ -847,7 +847,7 @@ int ObPLObjectValue::match_dep_schema(const ObPLCacheCtx &pc_ctx,
   } else {
     // oracle模式临时表实际上就是实表, 只需比较schema信息即可;
     // mysql模式临时表不能用于trigger, sql语句的表依赖信息也不会加到存储过程依赖列表中
-    // 因此, 移除临时表比较sessid相关逻辑
+    // 因此, 移除临时表比较sessid相关逻辑 
     for (int64_t i = 0; OB_SUCC(ret) && is_same && i < schema_array.count(); i++) {
       if (OB_ISNULL(stored_schema_objs_.at(i))) {
         ret = OB_INVALID_ARGUMENT;
@@ -1227,15 +1227,15 @@ int ObPLObjectSet::before_cache_evicted()
   } else if (plan_cache->get_mem_hold() > plan_cache->get_mem_high()) {
     if (compile_time >= LONG_COMPILE_TIME) {
       LOG_WARN("Plan cache size reached upper limit and evict obj which need long time to re-compile",
-                  K(ret), K(plan_cache->get_tenant_id()), K(stat_array), K(compile_time),
+                  K(ret), K(plan_cache->get_tenant_id()), K(stat_array), K(compile_time), 
                   K(plan_cache->get_mem_hold()), K(plan_cache->get_mem_high()));
     } else {
-      LOG_TRACE("Plan cache size reached upper limit need check plan cache mem conf",
-                  K(ret), K(plan_cache->get_tenant_id()), K(stat_array),
+      LOG_TRACE("Plan cache size reached upper limit need check plan cache mem conf", 
+                  K(ret), K(plan_cache->get_tenant_id()), K(stat_array), 
                   K(plan_cache->get_mem_hold()), K(plan_cache->get_mem_high()));
     }
   } else if (has_out_of_date_obj) {
-    LOG_TRACE("Remove out_of_dated pl cache obj which has mismatched dep schema version",
+    LOG_TRACE("Remove out_of_dated pl cache obj which has mismatched dep schema version", 
             K(ret), K(plan_cache->get_tenant_id()), K(stat_array));
   }
   return ret;
@@ -1305,7 +1305,7 @@ int ObPLObjectSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
                                         schema_array))) {
       if (OB_OLD_SCHEMA_VERSION == ret) {
         has_old_version_err = true;
-      } else {
+      } else {                                  
         LOG_WARN("failed to get all table schema", K(ret));
       }
     } else if (schema_array.count() != 0 && OB_FAIL(pl_object_value->match_dep_schema(pc_ctx, schema_array, is_same))) {
@@ -1470,7 +1470,7 @@ int ObPLCacheCtx::assemble_format_routine_name(ObString& out_name, ObPLCacheObje
 {
   int ret = OB_SUCCESS;
   ObString db_name;
-  ObString rt_name;
+  ObString rt_name; 
   char *new_buffer = NULL;
   CK (OB_NOT_NULL(routine));
   if (NS_PKG == routine->get_ns()) {
@@ -1484,7 +1484,7 @@ int ObPLCacheCtx::assemble_format_routine_name(ObString& out_name, ObPLCacheObje
     OX (db_name.assign_ptr(func->get_database_name().ptr(), func->get_database_name().length()));
     OX (rt_name.assign_ptr(func->get_function_name().ptr(), func->get_function_name().length()));
   }
-
+  
   if (OB_SUCCESS != ret) {
   } else if (OB_ISNULL(new_buffer =
       static_cast<char*>(routine->get_allocator().alloc(db_name.length() + rt_name.length() + 2)))) {

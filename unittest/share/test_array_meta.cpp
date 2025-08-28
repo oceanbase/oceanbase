@@ -33,7 +33,7 @@ public:
   {}
 
 private:
-  ObArenaAllocator allocator_;
+  ObArenaAllocator allocator_; 
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestArrayMeta);
 };
@@ -69,7 +69,7 @@ TEST_F(TestArrayMeta, serialize_deserialize)
 
 
   ObSqlCollectionInfo type_info_parse(allocator);
-  type_info_parse.set_name(type_name);
+  type_info_parse.set_name(type_name);  
   ASSERT_EQ(OB_SUCCESS, type_info_parse.parse_type_info());
   ObCollectionArrayType *arr_meta = static_cast<ObCollectionArrayType *>(type_info_parse.collection_meta_);
   ASSERT_EQ(arr_meta->type_id_, ObNestedType::OB_ARRAY_TYPE);
@@ -555,7 +555,7 @@ TEST_F(TestArrayMeta, array_nested_compare)
   EXPECT_TRUE((*arr_var1) == (*arr_var2));
   ASSERT_EQ(hash_val1, hash_val2);
   std::cout << "arr_hash1: " << hash_val1 << "; arr_hash2: " << hash_val2 << std::endl;
-
+  
   ObString arr2_text("[[3.14159, 95.27, null, null], [8.878, 912.33], [333, 12.134, null]]");
   arr_var2->clear();
   ASSERT_EQ(OB_SUCCESS, sql::ObArrayCastUtils::string_cast(allocator, arr2_text, arr_var2, arr_type1->element_type_));
@@ -690,7 +690,7 @@ TEST_F(TestArrayMeta, array_contains_all)
   bret = false;
   ASSERT_EQ(OB_SUCCESS, arr_var1->contains_all(*arr_var2, bret));
   ASSERT_EQ(bret, false);
-
+  
 }
 
 TEST_F(TestArrayMeta, varchar_array_contains_all)
@@ -808,7 +808,7 @@ TEST_F(TestArrayMeta, array_overlaps)
   bret = false;
   ASSERT_EQ(OB_SUCCESS, arr_var1->overlaps(*arr_var2, bret));
   ASSERT_EQ(bret, false);
-
+  
 }
 
 TEST_F(TestArrayMeta, varchar_array_overlaps)
@@ -955,7 +955,7 @@ TEST_F(TestArrayMeta, nested_array_distinct)
   ASSERT_EQ(OB_SUCCESS, arr_dist->init());
   ASSERT_EQ(OB_SUCCESS, arr_dist->print(format_str));
   std::cout << "arr_va1: " << format_str.ptr() << std::endl;
-
+  
 }
 
 TEST_F(TestArrayMeta, array_nested_hasset)
@@ -981,7 +981,7 @@ TEST_F(TestArrayMeta, array_nested_hasset)
   ASSERT_EQ(OB_SUCCESS, nested_arrs.create(10));
   ASSERT_EQ(OB_SUCCESS, nested_arrs.set_refactored(*static_cast<ObArrayNested *>(arr_var1), 0));
   ASSERT_EQ(OB_HASH_EXIST, nested_arrs.set_refactored(*static_cast<ObArrayNested *>(arr_var2), 0));
-
+  
   arr_var2->clear();
   ASSERT_EQ(OB_SUCCESS, sql::ObArrayCastUtils::string_cast(allocator, arr2_text, arr_var2, dst_elem_type));
   ASSERT_EQ(OB_SUCCESS, arr_var2->init());
@@ -1057,7 +1057,7 @@ TEST_F(TestArrayMeta, varchar_array_remove)
   ASSERT_EQ(OB_SUCCESS, arr_res->init());
   ASSERT_EQ(OB_SUCCESS, arr_res->print(format_str));
   std::cout << "arr_va1 remove null: " << format_str.ptr() << std::endl;
-
+  
 }
 
 TEST_F(TestArrayMeta, nested_array_remove)
@@ -1093,7 +1093,7 @@ TEST_F(TestArrayMeta, nested_array_remove)
   ASSERT_EQ(OB_SUCCESS, arr_res->init());
   ASSERT_EQ(OB_SUCCESS, arr_res->print(format_str));
   std::cout << "arr_va1: " << format_str.ptr() << std::endl;
-
+  
   arr_res->clear();
   format_str.reset();
   ASSERT_EQ(OB_SUCCESS, ObArrayUtil::clone_except(allocator, *arr_var1, arr_var2, true, arr_res));

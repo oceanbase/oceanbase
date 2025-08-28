@@ -31,7 +31,7 @@ static const char* TENANT_ROLE_ARRAY[] =
 };
 
 OB_SERIALIZE_MEMBER(ObTenantRole, value_);
-DEFINE_TO_YSON_KV(ObTenantRole,
+DEFINE_TO_YSON_KV(ObTenantRole, 
                   OB_ID(value), value_);
 
 const char* ObTenantRole::to_str() const
@@ -68,12 +68,12 @@ ObTenantRole::ObTenantRole(const ObString &str)
 #define GEN_IS_TENANT_ROLE(TENANT_ROLE_VALUE, TENANT_ROLE) \
   bool is_##TENANT_ROLE##_tenant(const ObTenantRole::Role value) { return TENANT_ROLE_VALUE == value; }
 
-GEN_IS_TENANT_ROLE(ObTenantRole::Role::INVALID_TENANT, invalid)
-GEN_IS_TENANT_ROLE(ObTenantRole::Role::PRIMARY_TENANT, primary)
-GEN_IS_TENANT_ROLE(ObTenantRole::Role::STANDBY_TENANT, standby)
-GEN_IS_TENANT_ROLE(ObTenantRole::Role::RESTORE_TENANT, restore)
+GEN_IS_TENANT_ROLE(ObTenantRole::Role::INVALID_TENANT, invalid) 
+GEN_IS_TENANT_ROLE(ObTenantRole::Role::PRIMARY_TENANT, primary) 
+GEN_IS_TENANT_ROLE(ObTenantRole::Role::STANDBY_TENANT, standby) 
+GEN_IS_TENANT_ROLE(ObTenantRole::Role::RESTORE_TENANT, restore) 
 GEN_IS_TENANT_ROLE(ObTenantRole::Role::CLONE_TENANT, clone)
-#undef GEN_IS_TENANT_ROLE
+#undef GEN_IS_TENANT_ROLE 
 
 
 }  // share

@@ -402,7 +402,7 @@ int ObSharedNothingTmpFileMetaTree::try_to_fill_rightmost_leaf_page_(
       if (!level_page_range_array_.empty() && OB_FAIL(level_origin_page_write_counts.push_back(count))) {
         STORAGE_LOG(WARN, "fail to push back", KR(ret), K(fd_), K(count));
       } else if (page_header.item_num_ < MAX_PAGE_DATA_ITEM_NUM) {
-        if (OB_FAIL(write_items_(leaf_page_buff, data_items, 0, count))) {
+        if (OB_FAIL(write_items_(leaf_page_buff, data_items, 0, count))) { 
           STORAGE_LOG(WARN, "fail to write items", KR(ret), K(fd_), KP(leaf_page_buff), K(data_items));
         } else if (OB_FAIL(wbp_->notify_dirty(fd_, page_id, leaf_page_offset))) {
           STORAGE_LOG(ERROR, "fail to notify dirty for meta", KR(ret), K(fd_), K(page_id), K(leaf_page_offset));
@@ -574,7 +574,7 @@ int ObSharedNothingTmpFileMetaTree::try_to_fill_rightmost_internal_page_(
 {
   int ret = OB_SUCCESS;
   write_count = 0;
-  //only a writing thread, array count will not change
+  //only a writing thread, array count will not change 
   if (OB_UNLIKELY(meta_items.empty()
                   || page_level < 1
                   || page_level >= level_page_range_array_.count()
@@ -1000,7 +1000,7 @@ int ObSharedNothingTmpFileMetaTree::backtrace_search_data_items_(
                   || data_items.empty()
                   || offset >= end_offset)) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(ERROR, "invalid argument", KR(ret), K(fd_), K(search_path), K(data_items),
+    STORAGE_LOG(ERROR, "invalid argument", KR(ret), K(fd_), K(search_path), K(data_items),   
                                                     K(end_offset), K(offset));
   } else {
     const int16_t FULL_PAGE_META_ITEM_NUM =
@@ -1928,7 +1928,7 @@ int ObSharedNothingTmpFileMetaTree::evict_meta_pages(
           }
           if (OB_SUCC(ret)) {
             if (end_page_id == cur_page_id) {
-              //all pages in this level are evicted
+              //all pages in this level are evicted 
               level_page_range_array_[level].start_page_id_ = ObTmpFileGlobal::INVALID_PAGE_ID;
               level_page_range_array_[level].end_page_id_ = ObTmpFileGlobal::INVALID_PAGE_ID;
               level_page_range_array_[level].flushed_end_page_id_ = ObTmpFileGlobal::INVALID_PAGE_ID;

@@ -102,3 +102,4 @@ int ObHbaseOp::init()
 
   return ret;
 }
+

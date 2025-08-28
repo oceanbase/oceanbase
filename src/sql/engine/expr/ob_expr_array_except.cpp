@@ -36,17 +36,17 @@ int ObExprArrayExcept::eval_array_except(const ObExpr &expr, ObEvalCtx &ctx, ObD
   return eval_array_set_operation(expr, ctx, res, EXCEPT);
 }
 
-int ObExprArrayExcept::eval_array_except_batch(const ObExpr &expr,
+int ObExprArrayExcept::eval_array_except_batch(const ObExpr &expr, 
                           ObEvalCtx &ctx,
-                          const ObBitVector &skip,
+                          const ObBitVector &skip, 
                           const int64_t batch_size)
 {
   return eval_array_set_operation_batch(expr, ctx, skip, batch_size, EXCEPT);
 }
 
-int ObExprArrayExcept::eval_array_except_vector(const ObExpr &expr,
+int ObExprArrayExcept::eval_array_except_vector(const ObExpr &expr, 
                           ObEvalCtx &ctx,
-                          const ObBitVector &skip,
+                          const ObBitVector &skip, 
                           const EvalBound &bound)
 {
   return eval_array_set_operation_vector(expr, ctx, skip, bound, EXCEPT);

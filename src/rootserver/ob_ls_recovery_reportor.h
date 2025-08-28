@@ -73,8 +73,8 @@ public:
   * Description: The function reports the SYS_LS ls_recovery_stat , based on this report, further reports tenant_info.
   * It ensures that when there are multi-source transactions,
   * the sync_scn in tenant_info is always equal to the sync_scn of SYS_LS, so that during failover, there is no need to refer to the sync_scn of SYS_LS.
-  * param[in] ls_recovery_stat: sys_ls
-  * param[in] tenant_role:for doubule check, can not report while switchover
+  * param[in] ls_recovery_stat: sys_ls 
+  * param[in] tenant_role:for doubule check, can not report while switchover 
   * param[in] update_readable_scn: only update readable_scn
   * param[in] check_sync_valid: need to check sync_scn of sys_ls is equal to sync_scn of tenant_info. for check
   * param[in] trans

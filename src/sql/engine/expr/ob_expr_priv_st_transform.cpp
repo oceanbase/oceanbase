@@ -34,7 +34,7 @@ int ObExprPrivSTTransform::calc_result_typeN(ObExprResType& type,
                                              int64_t param_num,
                                              ObExprTypeCtx& type_ctx) const
 {
-  UNUSED(type_ctx);
+  UNUSED(type_ctx); 
   int ret = OB_SUCCESS;
 
   const ObObjType &type1 = types_stack[0].get_type();
@@ -58,7 +58,7 @@ int ObExprPrivSTTransform::calc_result_typeN(ObExprResType& type,
         }
       }
     }
-
+    
     if (OB_SUCC(ret)) {
       ObCastMode cast_mode = type_ctx.get_cast_mode();
       cast_mode &= ~CM_WARN_ON_FAIL; // make cast return error when fail
@@ -89,7 +89,7 @@ int ObExprPrivSTTransform::eval_priv_st_transform(const ObExpr &expr, ObEvalCtx 
   bool need_eval = true;
 
   if (expr.args_[1]->is_boolean_ || (param_num > 2 && expr.args_[2]->is_boolean_)) {
-    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;   
     LOG_WARN("invalid type", K(ret));
   } else if (OB_FAIL(temp_allocator.eval_arg(expr.args_[0], ctx, gis_datum))) {
     LOG_WARN("eval geo arg failed", K(ret));
@@ -114,7 +114,7 @@ int ObExprPrivSTTransform::eval_priv_st_transform(const ObExpr &expr, ObEvalCtx 
       LOG_WARN("get tenant srs guard failed", K(session->get_effective_tenant_id()), K(src_srid), K(ret));
     } else if (src_srid != 0 && OB_FAIL(srs_guard.get_srs_item(src_srid, src_srs_item))) {
       LOG_WARN("failed to get srs item", K(ret), K(src_srid));
-    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb, src_geo, src_srs_item, N_PRIV_ST_TRANSFORM,
+    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb, src_geo, src_srs_item, N_PRIV_ST_TRANSFORM, 
                                                     GEO_ALLOW_3D | GEO_NOT_COPY_WKB))) {
       LOG_WARN("get geo by wkb failed", K(ret), K(wkb));
       if (ret != OB_ERR_SRS_NOT_FOUND) {
@@ -133,7 +133,7 @@ int ObExprPrivSTTransform::eval_priv_st_transform(const ObExpr &expr, ObEvalCtx 
             if (dest_srid == 0) {
               ret = OB_ERR_TRANSFORM_TARGET_SRS_NOT_SUPPORTED;
               LOG_USER_ERROR(OB_ERR_TRANSFORM_TARGET_SRS_NOT_SUPPORTED, dest_srid);
-            } else if (src_srid == 0) {
+            } else if (src_srid == 0) { 
               ret = OB_ERR_TRANSFORM_SOURCE_SRS_NOT_SUPPORTED;
               LOG_USER_ERROR(OB_ERR_TRANSFORM_SOURCE_SRS_NOT_SUPPORTED, src_srid);
             } else if (dest_srid == src_srid) { // return src geo directly
@@ -155,12 +155,12 @@ int ObExprPrivSTTransform::eval_priv_st_transform(const ObExpr &expr, ObEvalCtx 
             ret = OB_ERR_TRANSFORM_SOURCE_SRS_NOT_SUPPORTED;
             LOG_USER_ERROR(OB_ERR_TRANSFORM_SOURCE_SRS_NOT_SUPPORTED, src_srid);
           } else {
-            dest_proj4_param = datum2->get_string();
+            dest_proj4_param = datum2->get_string(); 
             if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(temp_allocator, *datum2,
                         expr.args_[1]->datum_meta_, expr.args_[1]->obj_meta_.has_lob_header(), dest_proj4_param))) {
               LOG_WARN("fail to get real data.", K(ret), K(dest_proj4_param));
             } else if (FALSE_IT(temp_allocator.add_baseline_size(dest_proj4_param.length()))) {
-            }
+            } 
           }
         }
 
@@ -204,10 +204,10 @@ int ObExprPrivSTTransform::eval_priv_st_transform(const ObExpr &expr, ObEvalCtx 
                       expr.args_[2]->datum_meta_, expr.args_[2]->obj_meta_.has_lob_header(), dest_proj4_param))) {
             LOG_WARN("fail to get real data.", K(ret), K(dest_proj4_param));
           } else if (FALSE_IT(temp_allocator.add_baseline_size(dest_proj4_param.length()))) {
-          }
+          } 
         }
       }
-
+      
       // eval by bg
       ObGeoBoostAllocGuard guard(tenant_id);
       lib::MemoryContext *mem_ctx = nullptr;
@@ -260,8 +260,8 @@ int ObExprPrivSTTransform::eval_priv_st_transform(const ObExpr &expr, ObEvalCtx 
           } else {
             res.set_string(res_wkb);
           }
-        }
-      }
+        } 
+      } 
       if (mem_ctx != nullptr) {
         temp_allocator.add_ext_used((*mem_ctx)->arena_used());
       }

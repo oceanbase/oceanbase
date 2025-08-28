@@ -84,7 +84,7 @@ int ObJsonDiffLog::to_string(ObIAllocator &allocator, ObString &result)
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(buffer.append("]"))) { // diffs end
+    } else if (OB_FAIL(buffer.append("]"))) { // diffs end 
       LOG_WARN("buffer append fail", KR(ret));
     } else if (OB_FAIL(buffer.append("}"))) {
       LOG_WARN("buffer append fail", KR(ret));
@@ -218,7 +218,7 @@ int ObExtInfoCallback::set(
       LOG_WARN("write row data fail", K(ret));
     } else if (OB_ISNULL(mutator_row_buf_ = static_cast<char*>(allocator_->alloc(len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("alloc mutator_row_buf fail", K(ret), K(len));
+      LOG_WARN("alloc mutator_row_buf fail", K(ret), K(len));      
     } else {
       MEMCPY(mutator_row_buf_, buf, len);
       mutator_row_len_ = len;
@@ -377,7 +377,7 @@ int ObExtInfoCbRegister::build_data_iter(ObObj &ext_info_data)
   } else if (OB_FAIL(lob_mgr->query(*lob_param_, data_iter_))) {
     LOG_WARN("build data iter fail", K(ret), K(lob_param_));
   }
-
+  
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(data_iter_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -385,7 +385,7 @@ int ObExtInfoCbRegister::build_data_iter(ObObj &ext_info_data)
   } else if (OB_FALSE_IT(data_buf_len = std::min(data_size_ + header_.get_serialize_size(), OB_EXT_INFO_LOG_BLOCK_MAX_SIZE))) {
   } else if (OB_ISNULL(data_buf = reinterpret_cast<char*>(tmp_allocator_.alloc(data_buf_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("alloc lob param fail", K(ret), K(data_buf_len));
+    LOG_WARN("alloc lob param fail", K(ret), K(data_buf_len));    
   } else {
     data_buffer_.assign_buffer(data_buf, data_buf_len);
   }
@@ -435,11 +435,11 @@ int ObExtInfoCbRegister::get_lob_id(const ObString &index_data, const ObObjType 
 {
   int ret = OB_SUCCESS;
   if (is_lob_storage(type)) {
-    ObLobCommon *lob_common = nullptr;
+    ObLobCommon *lob_common = nullptr; 
     ObString str_data = index_data;
     if (str_data.empty()) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("index lob data is empty", K(ret), K(index_data));
+      LOG_WARN("index lob data is empty", K(ret), K(index_data));    
     } else if (OB_ISNULL(lob_common = reinterpret_cast<ObLobCommon*>(str_data.ptr()))) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("lob_common is null", K(ret), K(index_data));

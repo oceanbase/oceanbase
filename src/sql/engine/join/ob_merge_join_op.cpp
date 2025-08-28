@@ -1543,7 +1543,7 @@ int ObMergeJoinOp::match_group_rows(const int64_t max_row_cnt)
   LOG_DEBUG("start match group rows", K(left_empty_allowed), K(right_empty_allowed),
               K(match_groups_.count()), K(output_cache_.count()));
   int ret = OB_SUCCESS;
-  // put params of other conds always in the first row of batch, so set batch_idx to 0
+  // put params of other conds always in the first row of batch, so set batch_idx to 0 
   // and batch_size to 1 here.
   ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
   batch_info_guard.set_batch_idx(0);
@@ -1739,7 +1739,7 @@ int ObMergeJoinOp::output_cache_rows()
   } else {
     batch_join_state_ = BJS_MATCH_GROUP;
   }
-
+  
   LOG_DEBUG("output rows in cache", K(brs_.size_), K(output_cache_.count()), K(batch_join_state_),
               K(&left_brs_fetcher_), K(&right_brs_fetcher_));
   return ret;

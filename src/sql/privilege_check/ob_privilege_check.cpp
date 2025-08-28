@@ -404,7 +404,7 @@ int add_plainaccess_priv_to_need_priv(const uint64_t tenant_id,
     plainaccess_priv.priv_level_ = OB_PRIV_SENSITIVE_RULE_LEVEL;
     plainaccess_priv.sensitive_rule_ = sensitive_rule->get_sensitive_rule_name();
     plainaccess_priv.priv_set_ = OB_PRIV_PLAINACCESS;
-    ADD_NEED_PRIV(plainaccess_priv);
+    ADD_NEED_PRIV(plainaccess_priv);  
   }
   return ret;
 }
@@ -485,8 +485,8 @@ int add_col_priv_to_need_priv(
             } else if (table_id == value_desc->get_table_id()
                       && value_desc->get_column_id() >= OB_APP_MIN_COLUMN_ID) {
               OZ (need_priv.columns_.push_back(value_desc->get_column_name()));
-              OZ (add_plainaccess_priv_to_need_priv(session_priv.tenant_id_,
-                                                    table_item.ref_id_,
+              OZ (add_plainaccess_priv_to_need_priv(session_priv.tenant_id_, 
+                                                    table_item.ref_id_, 
                                                     value_desc->get_column_id(),
                                                     need_privs));
             }
@@ -509,11 +509,11 @@ int add_col_priv_to_need_priv(
                   LOG_WARN("col_expr is null");
                 } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr, col_exprs))) {
                   LOG_WARN("extract column exprs failed", K(ret));
-                } else if (col_expr->get_table_id() == table_id
+                } else if (col_expr->get_table_id() == table_id 
                         && col_expr->get_column_id() >= OB_APP_MIN_COLUMN_ID) {
                   OZ (need_priv.columns_.push_back(col_expr->get_column_name()));
-                  OZ (add_plainaccess_priv_to_need_priv(session_priv.tenant_id_,
-                                                        table_item.ref_id_,
+                  OZ (add_plainaccess_priv_to_need_priv(session_priv.tenant_id_, 
+                                                        table_item.ref_id_, 
                                                         col_expr->get_column_id(),
                                                         need_privs));
                 }
@@ -556,11 +556,11 @@ int add_col_priv_to_need_priv(
                   if (OB_ISNULL(col_expr)) {
                     ret = OB_ERR_UNEXPECTED;
                     LOG_WARN("col_expr is null");
-                  } else if (col_expr->get_table_id() == table_id
+                  } else if (col_expr->get_table_id() == table_id 
                           && col_expr->get_column_id() >= OB_APP_MIN_COLUMN_ID) {
                     OZ (need_priv.columns_.push_back(col_expr->get_column_name()));
-                    OZ (add_plainaccess_priv_to_need_priv(session_priv.tenant_id_,
-                                                          table_info->ref_table_id_,
+                    OZ (add_plainaccess_priv_to_need_priv(session_priv.tenant_id_, 
+                                                          table_info->ref_table_id_, 
                                                           col_expr->get_column_id(),
                                                           need_privs));
                   } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(value_expr, col_exprs))) {
@@ -601,12 +601,12 @@ int add_col_priv_to_need_priv(
             LOG_WARN("unexpected error", K(ret));
           } else if (col_expr->get_table_id() == table_id && col_expr->get_column_id() >= OB_APP_MIN_COLUMN_ID) {
             OZ (need_priv.columns_.push_back(col_expr->get_column_name()));
-            if (ObStmt::is_dml_stmt(basic_stmt->get_stmt_type())
+            if (ObStmt::is_dml_stmt(basic_stmt->get_stmt_type()) 
                 && (basic_stmt->get_stmt_type() != stmt::T_DELETE)
                 && (basic_stmt->get_stmt_type() != stmt::T_SELECT)
                 && (basic_stmt->get_stmt_type() != stmt::T_EXPLAIN)) {
               // need plainaccess privilege for dml stmts except for delete
-              OZ (add_plainaccess_priv_to_need_priv(session_priv.tenant_id_, table_item.ref_id_,
+              OZ (add_plainaccess_priv_to_need_priv(session_priv.tenant_id_, table_item.ref_id_, 
                 col_expr->get_column_id(), need_privs));
             }
           }
@@ -1175,9 +1175,9 @@ int get_dml_stmt_ora_need_privs(
   return ret;
 }
 
-int check_encrypt_priv_for_expr(const ObRawExpr *expr,
-                                bool &need_encrypt_priv,
-                                bool &need_decrypt_priv,
+int check_encrypt_priv_for_expr(const ObRawExpr *expr, 
+                                bool &need_encrypt_priv, 
+                                bool &need_decrypt_priv, 
                                 ObIArray<ObNeedPriv> &need_privs)
 {
   int ret = OB_SUCCESS;
@@ -1190,18 +1190,18 @@ int check_encrypt_priv_for_expr(const ObRawExpr *expr,
     if (OB_ISNULL(param_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null param expr", K(ret));
-    } else if (OB_FAIL(SMART_CALL(check_encrypt_priv_for_expr(param_expr,
-                                                              need_encrypt_priv,
-                                                              need_decrypt_priv,
+    } else if (OB_FAIL(SMART_CALL(check_encrypt_priv_for_expr(param_expr, 
+                                                              need_encrypt_priv, 
+                                                              need_decrypt_priv, 
                                                               need_privs)))) {
       LOG_WARN("failed to check if expr contains enhanced aes expr", K(ret));
     }
   }
   if (OB_FAIL(ret)) {
   } else {
-    // expr with a valid encryption_mode_ is implicitly created by a sensitive rule.
+    // expr with a valid encryption_mode_ is implicitly created by a sensitive rule. 
     // Do not check encryption privilege for such expr.
-    need_encrypt_priv |= (T_FUN_SYS_ENHANCED_AES_ENCRYPT == expr->get_expr_type()
+    need_encrypt_priv |= (T_FUN_SYS_ENHANCED_AES_ENCRYPT == expr->get_expr_type() 
                           && expr->get_encryption_mode() == ob_invalid_mode);
     need_decrypt_priv |= T_FUN_SYS_ENHANCED_AES_DECRYPT == expr->get_expr_type();
   }
@@ -1228,22 +1228,22 @@ int add_encrypt_priv_to_need_privs(const ObDMLStmt *dml_stmt, ObIArray<ObNeedPri
       if (OB_ISNULL(value_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null expr", K(ret));
-      } else if (OB_FAIL(check_encrypt_priv_for_expr(value_expr,
-                                                     need_encrypt_priv,
-                                                     need_decrypt_priv,
+      } else if (OB_FAIL(check_encrypt_priv_for_expr(value_expr, 
+                                                     need_encrypt_priv, 
+                                                     need_decrypt_priv, 
                                                      need_privs))) {
         LOG_WARN("failed to check encrypt priv for insert value expr", K(ret));
       }
     }
-  }
+  } 
   for (int64_t i = 0; OB_SUCC(ret) && (!need_encrypt_priv || !need_decrypt_priv) && i < relation_exprs.count(); ++i) {
     ObRawExpr *expr = relation_exprs.at(i);
     if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null expr", K(ret));
-    } else if (OB_FAIL(check_encrypt_priv_for_expr(expr,
-                                                   need_encrypt_priv,
-                                                   need_decrypt_priv,
+    } else if (OB_FAIL(check_encrypt_priv_for_expr(expr, 
+                                                   need_encrypt_priv, 
+                                                   need_decrypt_priv, 
                                                    need_privs))) {
       LOG_WARN("failed to check encrypt priv for relation expr", K(ret));
     }
@@ -1398,7 +1398,7 @@ int get_dml_stmt_need_privs(
                 need_priv.priv_set_ &= ~OB_PRIV_SELECT;
               }
             }
-
+            
             if (OB_SUCC(ret)) {
               if (lib::is_mysql_mode()) {
                 if (OB_FAIL(add_col_priv_to_need_priv(basic_stmt, *table_item, session_priv, need_privs))) {
@@ -2609,7 +2609,7 @@ int get_routine_stmt_need_privs(
   if (OB_ISNULL(basic_stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Basic stmt should be not be NULL", K(ret));
-  } else if (OB_UNLIKELY(stmt::T_CREATE_ROUTINE != basic_stmt->get_stmt_type()
+  } else if (OB_UNLIKELY(stmt::T_CREATE_ROUTINE != basic_stmt->get_stmt_type() 
                         && stmt::T_DROP_ROUTINE != basic_stmt->get_stmt_type()
                         && stmt::T_ALTER_ROUTINE != basic_stmt->get_stmt_type())) {
     ret = OB_INVALID_ARGUMENT;
@@ -2618,40 +2618,40 @@ int get_routine_stmt_need_privs(
   } else if (lib::is_oracle_mode()) {
     //do nothing
   } else if (stmt::T_CREATE_ROUTINE == basic_stmt->get_stmt_type()) {
-    const ObCreateRoutineStmt *stmt = static_cast<const ObCreateRoutineStmt*>(basic_stmt);
-    if (stmt->get_routine_arg().routine_info_.get_routine_type() == ObRoutineType::ROUTINE_PROCEDURE_TYPE
-        || stmt->get_routine_arg().routine_info_.get_routine_type() == ObRoutineType::ROUTINE_FUNCTION_TYPE) {
+    const ObCreateRoutineStmt *stmt = static_cast<const ObCreateRoutineStmt*>(basic_stmt); 
+    if (stmt->get_routine_arg().routine_info_.get_routine_type() == ObRoutineType::ROUTINE_PROCEDURE_TYPE 
+        || stmt->get_routine_arg().routine_info_.get_routine_type() == ObRoutineType::ROUTINE_FUNCTION_TYPE) { 
       ObNeedPriv need_priv;
-      need_priv.table_ = stmt->get_routine_arg().routine_info_.get_routine_name();
-      need_priv.db_ = stmt->get_routine_arg().db_name_;
-      need_priv.obj_type_ = stmt->get_routine_arg().routine_info_.get_routine_type() == ObRoutineType::ROUTINE_PROCEDURE_TYPE ? ObObjectType::PROCEDURE : ObObjectType::FUNCTION;
-      need_priv.priv_level_ = OB_PRIV_ROUTINE_LEVEL;
-      need_priv.priv_set_ = OB_PRIV_CREATE_ROUTINE;
-      ADD_NEED_PRIV(need_priv);
+      need_priv.table_ = stmt->get_routine_arg().routine_info_.get_routine_name(); 
+      need_priv.db_ = stmt->get_routine_arg().db_name_; 
+      need_priv.obj_type_ = stmt->get_routine_arg().routine_info_.get_routine_type() == ObRoutineType::ROUTINE_PROCEDURE_TYPE ? ObObjectType::PROCEDURE : ObObjectType::FUNCTION; 
+      need_priv.priv_level_ = OB_PRIV_ROUTINE_LEVEL; 
+      need_priv.priv_set_ = OB_PRIV_CREATE_ROUTINE; 
+      ADD_NEED_PRIV(need_priv); 
     }
   } else if (stmt::T_ALTER_ROUTINE == basic_stmt->get_stmt_type()) {
-    const ObAlterRoutineStmt *stmt = static_cast<const ObAlterRoutineStmt*>(basic_stmt);
-    if (stmt->get_routine_arg().routine_info_.get_routine_type() == ObRoutineType::ROUTINE_PROCEDURE_TYPE
-        || stmt->get_routine_arg().routine_info_.get_routine_type() == ObRoutineType::ROUTINE_FUNCTION_TYPE) {
+    const ObAlterRoutineStmt *stmt = static_cast<const ObAlterRoutineStmt*>(basic_stmt); 
+    if (stmt->get_routine_arg().routine_info_.get_routine_type() == ObRoutineType::ROUTINE_PROCEDURE_TYPE 
+        || stmt->get_routine_arg().routine_info_.get_routine_type() == ObRoutineType::ROUTINE_FUNCTION_TYPE) { 
       ObNeedPriv need_priv;
-      need_priv.table_ = stmt->get_routine_arg().routine_info_.get_routine_name();
-      need_priv.db_ = stmt->get_routine_arg().db_name_;
-      need_priv.obj_type_ = stmt->get_routine_arg().routine_info_.get_routine_type() == ObRoutineType::ROUTINE_PROCEDURE_TYPE ? ObObjectType::PROCEDURE : ObObjectType::FUNCTION;
-      need_priv.priv_level_ = OB_PRIV_ROUTINE_LEVEL;
-      need_priv.priv_set_ = OB_PRIV_ALTER_ROUTINE;
-      ADD_NEED_PRIV(need_priv);
+      need_priv.table_ = stmt->get_routine_arg().routine_info_.get_routine_name(); 
+      need_priv.db_ = stmt->get_routine_arg().db_name_; 
+      need_priv.obj_type_ = stmt->get_routine_arg().routine_info_.get_routine_type() == ObRoutineType::ROUTINE_PROCEDURE_TYPE ? ObObjectType::PROCEDURE : ObObjectType::FUNCTION; 
+      need_priv.priv_level_ = OB_PRIV_ROUTINE_LEVEL; 
+      need_priv.priv_set_ = OB_PRIV_ALTER_ROUTINE; 
+      ADD_NEED_PRIV(need_priv); 
     }
   } else if (stmt::T_DROP_ROUTINE == basic_stmt->get_stmt_type()) {
-    const ObDropRoutineStmt *stmt = static_cast<const ObDropRoutineStmt*>(basic_stmt);
-    if (stmt->get_routine_arg().routine_type_ == ObRoutineType::ROUTINE_PROCEDURE_TYPE
-        || stmt->get_routine_arg().routine_type_ == ObRoutineType::ROUTINE_FUNCTION_TYPE) {
+    const ObDropRoutineStmt *stmt = static_cast<const ObDropRoutineStmt*>(basic_stmt); 
+    if (stmt->get_routine_arg().routine_type_ == ObRoutineType::ROUTINE_PROCEDURE_TYPE 
+        || stmt->get_routine_arg().routine_type_ == ObRoutineType::ROUTINE_FUNCTION_TYPE) { 
       ObNeedPriv need_priv;
-      need_priv.table_ = stmt->get_routine_arg().routine_name_;
-      need_priv.db_ = stmt->get_routine_arg().db_name_;
-      need_priv.obj_type_ = stmt->get_routine_arg().routine_type_ == ObRoutineType::ROUTINE_PROCEDURE_TYPE ? ObObjectType::PROCEDURE : ObObjectType::FUNCTION;
-      need_priv.priv_level_ = OB_PRIV_ROUTINE_LEVEL;
-      need_priv.priv_set_ = OB_PRIV_ALTER_ROUTINE;
-      ADD_NEED_PRIV(need_priv);
+      need_priv.table_ = stmt->get_routine_arg().routine_name_; 
+      need_priv.db_ = stmt->get_routine_arg().db_name_; 
+      need_priv.obj_type_ = stmt->get_routine_arg().routine_type_ == ObRoutineType::ROUTINE_PROCEDURE_TYPE ? ObObjectType::PROCEDURE : ObObjectType::FUNCTION; 
+      need_priv.priv_level_ = OB_PRIV_ROUTINE_LEVEL; 
+      need_priv.priv_set_ = OB_PRIV_ALTER_ROUTINE; 
+      ADD_NEED_PRIV(need_priv); 
     }
   }
   return ret;
@@ -3611,7 +3611,7 @@ int ObPrivilegeCheck::check_privilege_new(
                                     CHECK_FLAG_NORMAL));
         OZ (stmt_ora_need_privs.need_privs_.assign(tmp_ora_need_privs));
         if (OB_SUCC(ret) && basic_stmt->get_stmt_type() == stmt::T_VARIABLE_SET) {
-          has_global_variable =
+          has_global_variable = 
                            static_cast<const ObVariableSetStmt*>(basic_stmt)->has_global_variable();
         }
         OZ (check_read_only(ctx, basic_stmt->get_stmt_type(), has_global_variable, stmt_need_privs));
@@ -3685,7 +3685,7 @@ int ObPrivilegeCheck::check_privilege(
       } else if (OB_FAIL(stmt_need_privs.need_privs_.assign(tmp_need_privs))) {
         LOG_WARN("fail to assign need_privs", K(ret));
       } else if (basic_stmt->get_stmt_type() == stmt::T_VARIABLE_SET) {
-        has_global_variable =
+        has_global_variable = 
                            static_cast<const ObVariableSetStmt*>(basic_stmt)->has_global_variable();
       }
       OZ (check_read_only(ctx, basic_stmt->get_stmt_type(), has_global_variable, stmt_need_privs));
@@ -4659,7 +4659,7 @@ int ObPrivilegeCheck::check_sensitive_rule_plainaccess_priv(const share::schema:
     } else if (OB_FAIL(check_privilege(*session_info.get_cur_exec_ctx()->get_sql_ctx(), stmt_need_privs))) {
       if (OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE == ret) {
         // no plainaccess privilege
-        LOG_WARN("no plainaccess privilege", K(ret), K(tenant_id), K(user_id),
+        LOG_WARN("no plainaccess privilege", K(ret), K(tenant_id), K(user_id), 
                                              K(rule_schema->get_sensitive_rule_name()));
       } else {
         LOG_WARN("fail to check privilege", K(ret));

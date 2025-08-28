@@ -221,7 +221,7 @@ int AllocOpContext::visit(uint64_t op_id, uint8_t flag)
     ObSEArray<uint64_t, 8> new_op_ids;
     if (OB_FAIL(visited_map_.set_refactored(flag, new_op_ids))) {
       LOG_WARN("fail to set_refactored", K(ret));
-    } else {
+    } else { 
       op_ids = visited_map_.get(flag);
     }
   }
@@ -2595,7 +2595,7 @@ int ObLogicalOperator::reorder_filter_exprs()
     LOG_WARN("reorder filter exprs failed", K(ret));
   } else if (log_op_def::LOG_JOIN == get_type()) {
     ObLogJoin *join_op = static_cast<ObLogJoin *>(this);
-    if (OB_FAIL(reorder_filters_exprs(get_plan()->get_predicate_selectivities(),
+    if (OB_FAIL(reorder_filters_exprs(get_plan()->get_predicate_selectivities(), 
                                       join_op->get_join_filters()))) {
       LOG_WARN("reorder join filters failed", K(ret));
     }
@@ -2764,7 +2764,7 @@ int ObLogicalOperator::gen_location_constraint(void *ctx)
           }
         } else {
           bool find = false;
-          ObIArray<ObTablePartitionInfo *> & partition_infos =
+          ObIArray<ObTablePartitionInfo *> & partition_infos = 
               get_plan()->get_optimizer_context().get_table_partition_info();
           for (int64_t i = 0; !find && i < partition_infos.count(); ++i) {
             const ObTablePartitionInfo *cur_info = partition_infos.at(i);
@@ -2775,7 +2775,7 @@ int ObLogicalOperator::gen_location_constraint(void *ctx)
             }
           }
           if (!find) {
-            // local multi part insert, remove location constraint of insert table because
+            // local multi part insert, remove location constraint of insert table because 
             // we didn't add it's table location.
           } else if (OB_FAIL(loc_cons_ctx->base_table_constraints_.push_back(loc_cons))) {
             LOG_WARN("failed to push back location constraint", K(ret));
@@ -4185,7 +4185,7 @@ int ObLogicalOperator::px_pipe_blocking_post(ObPxPipeBlockingCtx &ctx)
               OZ (allocate_material(i));
             }
           } else if (LOG_WINDOW_FUNCTION == child->get_type()) {
-            /*
+            /* 
              Window function participators require sync responds from datahub between threads.
              Consider the following scene : (DOP = 2)
 
@@ -4336,9 +4336,9 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
                                                             COMPAT_VERSION_4_3_2) &&
             LOG_SORT == get_parent()->get_type()) {
           ObLogSort *parent = static_cast<ObLogSort*>(get_parent());
-          if (parent->is_local_merge_sort() &&
+          if (parent->is_local_merge_sort() && 
               NULL != parent->get_topn_expr()) {
-            gi_op->add_flag(GI_FORCE_PARTITION_GRANULE);
+            gi_op->add_flag(GI_FORCE_PARTITION_GRANULE);    
           }
         }
         bool found_child = false;
@@ -4591,7 +4591,7 @@ int ObLogicalOperator::pw_allocate_granule_post(AllocGIContext &ctx)
     // However, at most one gi_random can be supported within a DFO,
     // so that won't work in the plan found in this bug.
     // Now we support GI rescan in partition_wise_state so we just push up the GI here in such case
-    //
+    // 
     if (ctx.is_in_partition_wise_state() && is_fully_partition_wise()) {
       ctx.alloc_gi_ = true;
       if (OB_FAIL(allocate_granule_nodes_above(ctx))) {
@@ -5264,9 +5264,9 @@ int ObLogicalOperator::find_table_scan(ObLogicalOperator* root_op,
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && NULL == scan_op && i < root_op->get_num_of_child(); ++i) {
       ObLogicalOperator *child = root_op->get_child(i);
-      if (OB_FAIL(SMART_CALL(find_table_scan(child,
-                                             table_id,
-                                             scan_op,
+      if (OB_FAIL(SMART_CALL(find_table_scan(child, 
+                                             table_id, 
+                                             scan_op, 
                                              table_scan_has_exchange,
                                              has_px_coord)))) {
         LOG_WARN("failed to find operator", K(ret));
@@ -5982,7 +5982,7 @@ int ObLogicalOperator::check_subplan_filter_child_exchange_rescanable()
   // 从second child起, 均需要标记为px coord.
   // 右孩子们是否标记为px coord取决于是否需要rescan.
   // 左孩子是否标记为px, 取决于右子孩子是否有onetime expr, 原因是需要先获取expr值, 再下压至左孩子,
-  // 详见issue
+  // 详见issue 
   /*
     update:
     If an onetime expr contains at least two subqueries (e.g., subquery comparisons), the
@@ -6529,7 +6529,7 @@ int ObLogicalOperator::check_use_child_ordering(bool &used, int64_t &inherit_chi
         LOG_STAT_COLLECTOR == get_type() ||
         LOG_OPTIMIZER_STATS_GATHERING == get_type() ||
         LOG_SELECT_INTO == get_type()) {
-      used = false;
+      used = false;    
     } else {
       used = true;
     }
@@ -6595,7 +6595,7 @@ int ObLogicalOperator::open_px_resource_analyze(OPEN_PX_RESOURCE_ANALYZE_DECLARE
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(find_max_px_resource_child(OPEN_PX_RESOURCE_ANALYZE_ARG, child_idx))) {
       LOG_WARN("find max px resource child failed", K(ret));
-    } else {
+    } else { 
       for (; child_idx < get_num_of_child() && OB_SUCC(ret); child_idx++) {
         if (child_idx == max_px_thread_branch_ || child_idx == max_px_group_branch_) {
           // skip, open later

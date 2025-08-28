@@ -66,7 +66,7 @@ public:
           } else if (out_tc == VEC_TC_NUMBER && OB_FAIL(get_grouping_id(aggr_info, grouping_vec->get_int(i),
                                                                         reinterpret_cast<number::ObCompactNumber *>(agg_cell)))) {
             SQL_LOG(WARN, "get grouping id failed", K(ret));
-          } else if (out_tc == VEC_TC_INTEGER && OB_FAIL(get_grouping_id(aggr_info, grouping_vec->get_int(i),
+          } else if (out_tc == VEC_TC_INTEGER && OB_FAIL(get_grouping_id(aggr_info, grouping_vec->get_int(i), 
                                                                          reinterpret_cast<int64_t *>(agg_cell)))) {
             SQL_LOG(WARN, "get grouping id failed", K(ret));
           } else {
@@ -93,7 +93,7 @@ public:
           } else if (out_tc == VEC_TC_NUMBER && OB_FAIL(get_grouping_id(aggr_info, grouping_vec->get_int(row_sel.index(i)),
                                                                         reinterpret_cast<number::ObCompactNumber *>(agg_cell)))) {
             SQL_LOG(WARN, "get grouping id failed", K(ret));
-          } else if (out_tc == VEC_TC_INTEGER && OB_FAIL(get_grouping_id(aggr_info, grouping_vec->get_int(row_sel.index(i)),
+          } else if (out_tc == VEC_TC_INTEGER && OB_FAIL(get_grouping_id(aggr_info, grouping_vec->get_int(row_sel.index(i)), 
                                                                          reinterpret_cast<int64_t *>(agg_cell)))) {
             SQL_LOG(WARN, "get grouping id failed", K(ret));
           } else {
@@ -133,7 +133,7 @@ public:
         } else if (out_tc == VEC_TC_NUMBER && OB_FAIL(get_grouping_id(aggr_info, grouping_vec->get_int(batch_idx),
                                                                       reinterpret_cast<number::ObCompactNumber *>(agg_cell)))) {
           SQL_LOG(WARN, "get grouping id failed", K(ret));
-        } else if (out_tc == VEC_TC_INTEGER && OB_FAIL(get_grouping_id(aggr_info, grouping_vec->get_int(batch_idx),
+        } else if (out_tc == VEC_TC_INTEGER && OB_FAIL(get_grouping_id(aggr_info, grouping_vec->get_int(batch_idx), 
                                                                        reinterpret_cast<int64_t *>(agg_cell)))) {
           SQL_LOG(WARN, "get grouping id failed", K(ret));
         } else {

@@ -29,7 +29,7 @@ public:
   virtual int resolve(const ParseNode &parse_tree);
 private:
   int resolve_log_restore_source_(ObCreateTenantStmt *stmt, ParseNode *log_restore_source_node) const;
-
+  
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObCreateStandbyTenantResolver);

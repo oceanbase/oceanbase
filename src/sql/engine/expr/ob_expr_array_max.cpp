@@ -142,7 +142,7 @@ int ObExprArrayExtreme::eval_array_extreme(const ObExpr &expr, ObEvalCtx &ctx, O
     LOG_WARN("failed to eval source array arg", K(ret));
   } else if (arr_datum->is_null()) {
     res.set_null();
-  } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_datum->get_string(), src_arr))) {
+  } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_datum->get_string(), src_arr))) { 
     LOG_WARN("construct array obj failed", K(ret));
   } else if (OB_FAIL(calc_extreme(src_arr, res_obj, is_max))) {
     LOG_WARN("calc array extreme value failed", K(ret));
@@ -181,7 +181,7 @@ int ObExprArrayExtreme::eval_array_extreme_batch(const ObExpr &expr, ObEvalCtx &
       eval_flags.set(j);
       if (arr_array.at(j)->is_null()) {
         res_datum.at(j)->set_null();
-      } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_array.at(j)->get_string(), src_arr))) {
+      } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_array.at(j)->get_string(), src_arr))) { 
         LOG_WARN("construct array obj failed", K(ret));
       } else if (OB_FAIL(calc_extreme(src_arr, res_obj, is_max))) {
         LOG_WARN("calc array extreme value failed", K(ret));
@@ -278,7 +278,7 @@ int ObExprArrayMax::cg_expr(ObExprCGCtx &expr_cg_ctx,
   UNUSED(raw_expr);
   rt_expr.eval_func_ = eval_array_max;
   rt_expr.eval_batch_func_ = eval_array_max_batch;
-  rt_expr.eval_vector_func_ = eval_array_max_vector;
+  rt_expr.eval_vector_func_ = eval_array_max_vector; 
   return OB_SUCCESS;
 }
 
@@ -317,7 +317,7 @@ int ObExprArrayMin::cg_expr(ObExprCGCtx &expr_cg_ctx,
   UNUSED(raw_expr);
   rt_expr.eval_func_ = eval_array_min;
   rt_expr.eval_batch_func_ = eval_array_min_batch;
-  rt_expr.eval_vector_func_ = eval_array_min_vector;
+  rt_expr.eval_vector_func_ = eval_array_min_vector; 
   return OB_SUCCESS;
 }
 

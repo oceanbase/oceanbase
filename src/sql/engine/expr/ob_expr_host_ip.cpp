@@ -69,7 +69,7 @@ int ObExprHostIP::eval_host_ip(const ObExpr &expr, ObEvalCtx &ctx,
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "buff is null", K(ret));
   } else {
-    //see
+    //see 
     ObAddr addr = ObCurTraceId::get_addr();
     MEMSET(buf, 0, OB_IP_STR_BUFF);
     if (!addr.ip_to_string(buf, OB_IP_STR_BUFF)) {

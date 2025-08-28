@@ -74,7 +74,7 @@ TEST(TestBackupDeviceWrapper, test_alloc_block) {
 
   ObIOFd write_io_fd;
   OK(wrapper_io_write.open(uri, -1, 0, write_io_fd, &io_d_opts_write));
-
+ 
   // Allocate a block
   ObIOFd block_id;
   OK(wrapper_io_write.alloc_block(&io_d_opts_write, block_id));
@@ -103,7 +103,7 @@ TEST(TestBackupDeviceWrapper, test_alloc_block) {
   ObBackupWrapperIODevice wrapper_io_read;
   ObIOFd read_io_fd;
   OK(wrapper_io_read.open(uri, -1, 0, read_io_fd, &io_d_opts_read));
-
+  
   read_io_fd.first_id_ = block_id.first_id_;
   read_io_fd.second_id_ = block_id.second_id_;
   read_io_fd.third_id_ = block_id.third_id_;
@@ -118,7 +118,7 @@ TEST(TestBackupDeviceWrapper, test_alloc_block) {
   for (int64_t i = 0; i < size; ++i) {
     if (read_buf[i] != write_buf[i]) {
       is_same = false;
-      break;
+      break; 
     }
   }
 

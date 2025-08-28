@@ -63,9 +63,9 @@ public:
   void set_lock_stmt_type(const int64_t stmt_type) { lock_stmt_type_ = stmt_type; }
   int64_t get_lock_mode() const { return lock_mode_; }
   int64_t get_wait_lock_seconds() const { return wait_lock_seconds_; }
-  virtual int check_is_simple_lock_stmt(bool &is_valid) const override {
+  virtual int check_is_simple_lock_stmt(bool &is_valid) const override { 
     is_valid = true;
-    return common::OB_SUCCESS;
+    return common::OB_SUCCESS;  
   };
   int64_t get_lock_stmt_type() const { return lock_stmt_type_; }
   const ObIArray<ObMySQLLockNode> &get_mysql_lock_list() const { return mysql_lock_list_; }

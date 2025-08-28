@@ -223,7 +223,7 @@ int ObSimpleLogServer::init_io_(const std::string &cluster_name)
     }
     if (OB_SUCC(ret)) {
       log_block_pool_.get_tenants_log_disk_size_func_ = [this, &storage_env](int64_t &log_disk_size) -> int
-      {
+      { 
         log_disk_size = log_block_pool_.lower_align_(storage_env.log_disk_size_);
         return OB_SUCCESS;
       };

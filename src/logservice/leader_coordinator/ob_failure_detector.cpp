@@ -162,7 +162,7 @@ void ObFailureDetector::detect_failure()
 #ifdef OB_BUILD_ARBITRATION
   // election silent check
   detect_election_silent_();
-#endif
+#endif 
 }
 
 int ObFailureDetector::add_failure_event(const FailureEvent &event)

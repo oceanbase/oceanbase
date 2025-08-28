@@ -76,7 +76,7 @@ public:
 
   void set_synced() { has_synced_ = true; }
   bool is_synced() const { return has_synced_; }
-
+  
   void set_has_deserialized_buffer_ctx() { has_deserialized_buffer_ctx_ = true; }
   bool has_deserialized_buffer_ctx() const { return has_deserialized_buffer_ctx_; }
 

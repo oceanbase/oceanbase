@@ -326,8 +326,8 @@ int ObColumnNamespaceChecker::check_column_exists(const TableItem &table_item, c
       for (int64_t i = 0; OB_SUCC(ret) && i < ref_stmt->get_select_item_size(); ++i) {
         SelectItem& tmp_select_item = ref_stmt->get_select_item(i);
         if (ObCharset::case_compat_mode_equal(col_name, tmp_select_item.alias_name_)) {
-          unduplicable_count += ref_stmt->is_from_pivot()
-                || (tmp_select_item.expr_->is_column_ref_expr()
+          unduplicable_count += ref_stmt->is_from_pivot() 
+                || (tmp_select_item.expr_->is_column_ref_expr() 
                   && !(static_cast<ObColumnRefRawExpr *>(tmp_select_item.expr_)->is_joined_dup_column())) ? 1 : 0;
           // In oracle mode, const expr does not raise ambiguously error. More than one aggr funcs in PIVOT shuold
           // raise ambiguously error.

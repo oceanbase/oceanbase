@@ -53,7 +53,7 @@ public:
   ~ObMediumCompactionScheduleFunc() {}
 
   /*
-   * see
+   * see 
    * standby tenant should catch up broadcast scn when freeze info is recycled
    */
   static int decide_standy_tenant_schedule(

@@ -23,7 +23,7 @@ namespace oceanbase
 {
 namespace observer
 {
-
+  
 
 class ObSimpleServer
 {

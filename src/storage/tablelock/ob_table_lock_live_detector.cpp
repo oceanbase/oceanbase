@@ -795,7 +795,7 @@ int ObTableLockDetector::check_lock_owner_exist_in_inner_table(sql::ObSQLSession
       need_release_conn = true;
     }
   }
-
+ 
   if (client_session_create_ts <= 0) {
     // if client_session_create_ts <= 0, means there's no accurate client_session_create_ts
     // (from lock live detector), so we only judge client_session_id in this situation

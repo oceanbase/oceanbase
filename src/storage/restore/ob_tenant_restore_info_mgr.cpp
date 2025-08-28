@@ -97,7 +97,7 @@ void ObTenantRestoreInfoMgr::stop()
 }
 
 void ObTenantRestoreInfoMgr::destroy()
-{
+{ 
   stop();
   wait();
   LOG_INFO("tenant restore info mgr destroy", K_(tenant_id));
@@ -156,7 +156,7 @@ int ObTenantRestoreInfoMgr::refresh_restore_info()
     } else if (OB_FAIL(persist_helper.init(tenant_id_, share::OBCG_STORAGE /*group_id*/))) {
       LOG_WARN("failed to init persist helper", K(ret), K_(tenant_id));
     } else if (OB_FAIL(persist_helper.get_backup_dest_list_from_restore_info(
-                       *sql_proxy,
+                       *sql_proxy, 
                        restore_job_id_,
                        backup_dest_list))) {
       LOG_WARN("failed to get backup dest list from restore info", K(ret), K_(tenant_id));

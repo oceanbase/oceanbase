@@ -139,7 +139,7 @@ void do_bp_encode_t(int64_t l_count, const UIntT *in, UIntT *out)
           out += ((128 * m) / CHAR_BIT / sizeof(UIntT));
         } else {
           // not support
-
+        
         }
       }
     }
@@ -216,7 +216,7 @@ TEST_F(ObBitPackingPerformanceTest, test) {
   int64_t buf_len = l_count * sizeof(uint32_t);
   char *out = new char[buf_len];
   memset(out, 0, buf_len);
-
+   
   _genDataRandom<uint32_t>(in32, l_count, 10, false);
   do_bp_encode_t(l_count, (const uint32_t *)in32.data(), (uint32_t *)out);
   do_bp_decode_t(l_count, (const uint32_t *)in32.data(), (uint32_t *)out);

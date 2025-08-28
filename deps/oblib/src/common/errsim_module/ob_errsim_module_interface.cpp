@@ -59,3 +59,4 @@ int __attribute__((weak)) add_tenant_errsim_event(
 
 } // common
 } // oceanbase
+

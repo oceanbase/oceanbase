@@ -334,7 +334,7 @@ int ObIndexTreePrefetcher::check_bloom_filter(
       read_handle.has_macro_block_bf_ = true;
     }
     bool is_contain = true;
-    const MacroBlockId macro_id = GCTX.is_shared_storage_mode() && index_info.has_valid_shared_macro_id() ?
+    const MacroBlockId macro_id = GCTX.is_shared_storage_mode() && index_info.has_valid_shared_macro_id() ? 
       index_info.get_shared_data_macro_id() : index_info.get_macro_id();
     if (OB_UNLIKELY(!macro_id.is_valid())) {
       ret = OB_ERR_UNEXPECTED;

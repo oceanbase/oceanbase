@@ -476,7 +476,7 @@ int ObMemtableMutatorRow::serialize(char *buf, int64_t &buf_len, int64_t &pos,
     table_id_ = encrypt_meta->table_id_;
     if (OB_FAIL(encrypt_info.store_and_get_old(table_id_, *encrypt_meta, &old_meta))) {
       if (ret == OB_ENTRY_EXIST) {
-        //if hash exist, we give priority to the old_meta
+        //if hash exist, we give priority to the old_meta 
         //in order to avoid inconsistent encrypt_meta for the same table_id
         use_old = true;
         ret = OB_SUCCESS;
@@ -534,7 +534,7 @@ int ObMemtableMutatorRow::serialize(char *buf, int64_t &buf_len, int64_t &pos,
     } else {
       pos = new_pos;
     }
-  }
+  } 
   return ret;
 }
 
@@ -905,7 +905,7 @@ int ObMutatorWriter::append_row_kv(
     ObMutatorRowHeader row_header;
     row_header.mutator_type_ = MutatorType::MUTATOR_ROW;
     row_header.tablet_id_ = redo.tablet_id_;
-    //TODO: table_id is just used as encrypt_index,
+    //TODO: table_id is just used as encrypt_index, 
     //      if table_id is no longer used, we may rename it in the future
     ObMemtableMutatorRow row(table_id,
                              rowkey,

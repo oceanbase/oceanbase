@@ -263,10 +263,10 @@ int ObLSPrepareMigrationDagNet::fill_comment(char *buf, const int64_t buf_len) c
     LOG_WARN("failed to get trace id string", K(ret), "arg", ctx_.arg_);
   } else {
     int64_t pos = 0;
-    ret = databuff_printf(buf, buf_len, pos, "ObLSMigrationPrepareDagNet: tenant_id=%ld, ls_id=",
+    ret = databuff_printf(buf, buf_len, pos, "ObLSMigrationPrepareDagNet: tenant_id=%ld, ls_id=", 
         ctx_.tenant_id_);
     OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx_.arg_.ls_id_);
-    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos,
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, 
         ", migration_type=%d, trace_id=%s", ctx_.arg_.type_, task_id_str);
     if (OB_FAIL(ret)) {
       LOG_WARN("failed to fill comment", K(ret), "arg", ctx_.arg_);
@@ -285,7 +285,7 @@ int ObLSPrepareMigrationDagNet::fill_dag_net_key(char *buf, const int64_t buf_le
     int64_t pos = 0;
     ret = databuff_printf(buf, buf_len, pos, "ObLSMigrationDagNet: ls_id = ");
     OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx_.arg_.ls_id_);
-    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", migration_type = %s",
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", migration_type = %s", 
         ObMigrationOpType::get_str(ctx_.arg_.type_));
     if (OB_FAIL(ret)) {
       LOG_WARN("failed to fill comment", K(ret), K(ctx_));

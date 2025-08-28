@@ -42,9 +42,9 @@ static void InitDecintInfo(const wide::ObWideInteger<Bits, Signed> &val, ObScale
   decint_info.negative = val.is_negative();
   int64_t scale_factor = 0, binary_digits_cnt = 0;
   wide::ObWideInteger<Bits, signed> quo = 1;
-  wide::ObWideInteger<Bits, signed> num =
+  wide::ObWideInteger<Bits, signed> num = 
                         wide::ObWideInteger<Bits, Signed>::_impl::make_positive(val);
-  /*
+  /* 
   To scale the decimalint to [0, 1e19), we need to calculate the scale factor first.
   If decimalint >= 1e19, the scale should be 10 ^ -(decimal_digits_cnt - 1 - 18).
   For example, if the decimalint is 1234567890123456789000, then the scale factor

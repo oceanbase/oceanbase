@@ -227,8 +227,8 @@ int ObGrantResolver::resolve_col_names_mysql(
   ObObjectType object_type = grant_stmt->get_object_type();
   uint64_t obj_id = grant_stmt->get_object_id();
   ObArray<ObString> column_names;
-  if (OB_ISNULL(grant_stmt) || OB_ISNULL(column_list)
-      || OB_ISNULL(schema_checker) || OB_ISNULL(session_info)
+  if (OB_ISNULL(grant_stmt) || OB_ISNULL(column_list) 
+      || OB_ISNULL(schema_checker) || OB_ISNULL(session_info) 
       || OB_ISNULL(schema_checker->get_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "unexpected error", K(ret));
@@ -242,7 +242,7 @@ int ObGrantResolver::resolve_col_names_mysql(
       } else {
         const share::schema::ObColumnSchemaV2 *column_schema = NULL;
         const ObSimpleTableSchemaV2 *table_schema = NULL;
-        if (OB_FAIL(ob_write_string(allocator, ObString(static_cast<int32_t>(child_node->str_len_),
+        if (OB_FAIL(ob_write_string(allocator, ObString(static_cast<int32_t>(child_node->str_len_), 
                                             const_cast<char *>(child_node->str_value_)), column_name))) {
           SQL_RESV_LOG(WARN, "ob write string failed", K(ret));
         } else if (OB_FAIL(grant_stmt->add_column_privs(column_name, priv_type))) {
@@ -301,7 +301,7 @@ int ObGrantResolver::resolve_priv_set(
           } else if (privs_node->children_[i]->num_child_ == 1) {
             if (OB_FAIL(ObSQLUtils::compatibility_check_for_mysql_role_and_column_priv(tenant_id))) {
               SQL_RESV_LOG(WARN, "grant or revoke column priv is not suppported", KR(ret));
-            } else if (OB_FAIL(resolve_col_names_mysql(grant_stmt, priv_type,
+            } else if (OB_FAIL(resolve_col_names_mysql(grant_stmt, priv_type, 
                                                 privs_node->children_[i]->children_[0],
                                                 schema_checker, session_info, allocator))) {
               SQL_RESV_LOG(WARN, "resolve col names failed", K(ret));

@@ -403,7 +403,7 @@ int ObDropIndexExecutor::execute(ObExecContext &ctx, ObDropIndexStmt &stmt)
     LOG_WARN("fail to get first stmt" , K(ret));
   } else {
     tmp_arg.ddl_stmt_str_ = first_stmt;
-
+    
   }
   if (OB_FAIL(ret)) {
   } else if (NULL == my_session) {

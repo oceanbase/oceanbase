@@ -134,7 +134,7 @@ int ObPartSqlHelper::iterate_all_part(
     ObPartition **part_array = table_->get_part_array();
     ObPartition **hidden_part_array = table_->get_hidden_part_array();
     int64_t hidden_part_num = include_hidden ? table_->get_hidden_partition_num() : 0;
-    int64_t total_part_num = part_num + hidden_part_num;
+    int64_t total_part_num = part_num + hidden_part_num; 
     int64_t count = 0;
     if (OB_ISNULL(part_array)) {
       ret = OB_ERR_UNEXPECTED;
@@ -147,7 +147,7 @@ int ObPartSqlHelper::iterate_all_part(
         part = part_array[i];
       } else if (OB_ISNULL(hidden_part_array)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("hidden part array is null", K(ret), KP(hidden_part_array));
+        LOG_WARN("hidden part array is null", K(ret), KP(hidden_part_array)); 
       } else {
         part = hidden_part_array[i - part_num];
       }

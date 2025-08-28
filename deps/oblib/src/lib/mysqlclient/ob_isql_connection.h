@@ -87,7 +87,7 @@ public:
 class ObISQLConnection
 {
 public:
-  ObISQLConnection() :
+  ObISQLConnection() : 
        oracle_mode_(false),
        is_inited_(false),
        dblink_id_(OB_INVALID_ID),
@@ -211,8 +211,8 @@ public:
   void set_session_init_status(bool status) { is_inited_ = status;}
   virtual void set_user_timeout(int64_t user_timeout) { UNUSED(user_timeout); }
   virtual int64_t get_user_timeout() const { return 0; }
-  int is_session_inited(const sqlclient::dblink_param_ctx &param_ctx, bool &is_inited)
-  {
+  int is_session_inited(const sqlclient::dblink_param_ctx &param_ctx, bool &is_inited) 
+  { 
     int ret = OB_SUCCESS;
     is_inited = true;
     const char *sql_mode_cstr = param_ctx.set_sql_mode_cstr_;
@@ -226,7 +226,7 @@ public:
               && 0 != ObString(sql_mode_cstr).compare(last_set_sql_mode_cstr_)) {
       is_inited = false;
     }
-    return ret;
+    return ret; 
   }
   int save_last_set_sql_mode_cstr(const char *str)
   {

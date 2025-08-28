@@ -46,7 +46,7 @@ int ObRebuildIndexTask::init(
     const int64_t task_id,
     const share::ObDDLType &ddl_type,
     const uint64_t data_table_id,
-    const uint64_t index_table_id,  // domain index table id
+    const uint64_t index_table_id,  // domain index table id 
     const int64_t schema_version,
     const int64_t parent_task_id,
     const int64_t consumer_group_id,
@@ -205,7 +205,7 @@ int ObRebuildIndexTask::drop_index_impl()
       LOG_WARN("drop index failed", KR(ret), K(ddl_rpc_timeout));
     } else {
       index_drop_task_id_ = drop_index_res.task_id_;
-      LOG_INFO("success to submit drop vector index task", K(ret),
+      LOG_INFO("success to submit drop vector index task", K(ret), 
         K(new_index_id_), K(target_object_name_), K(index_drop_task_id_), K(drop_index_arg));
     }
   }
@@ -219,9 +219,9 @@ int ObRebuildIndexTask::prepare_drop_index_arg(ObSchemaGetterGuard &schema_guard
                                                obrpc::ObDropIndexArg &drop_index_arg)
 {
   // we set the drop_index_arg.index_name_ as index_name is following the reason:
-  // 1. In the success process, the index table and the new index table have already swapped names.
-  //    At this point, the index_name of the old index that needs to be deleted should be the new index name.
-  // 2. In the failure process, the new table needs to be deleted, and the new table and the old table have not swapped names.
+  // 1. In the success process, the index table and the new index table have already swapped names. 
+  //    At this point, the index_name of the old index that needs to be deleted should be the new index name. 
+  // 2. In the failure process, the new table needs to be deleted, and the new table and the old table have not swapped names. 
   //    At this point, the index_name is also the old table name.
   int ret = OB_SUCCESS;
   uint64_t data_version = 0;
@@ -322,9 +322,9 @@ int ObRebuildIndexTask::rebuild_vec_index_impl()
   } else if (OB_ISNULL(index_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("index schema is null", KR(ret), K(target_object_id_));
-  } else if (index_schema->is_vec_delta_buffer_type() &&          // only hnsw index here, because ivf not support refresh
+  } else if (index_schema->is_vec_delta_buffer_type() &&          // only hnsw index here, because ivf not support refresh 
              OB_FAIL(ObVectorIndexUtil::get_dbms_vector_job_info(*GCTX.sql_proxy_, tenant_id_,
-                                                                 index_schema->get_table_id(),
+                                                                 index_schema->get_table_id(), 
                                                                  dbms_vector_job_info_allocator,
                                                                  schema_guard,
                                                                  job_info))) {
@@ -356,7 +356,7 @@ int ObRebuildIndexTask::rebuild_vec_index_impl()
       create_index_arg.index_type_ = index_schema->get_index_type();
       create_index_arg.index_name_ = rebuild_index_arg_.index_name_;  // new index name was generated at ddl_service of rebuild_vec_index func
       create_index_arg.index_table_id_ = target_object_id_;           // old table 3 index ID;
-      create_index_arg.database_name_ = rebuild_index_arg_.database_name_;
+      create_index_arg.database_name_ = rebuild_index_arg_.database_name_; 
       create_index_arg.is_rebuild_index_ = true;
       create_index_arg.tenant_id_ = tenant_id_;
       create_index_arg.exec_tenant_id_ = tenant_id_;
@@ -424,7 +424,7 @@ int ObRebuildIndexTask::rebuild_mlog_impl()
     create_mlog_arg.task_id_ = task_id_;
     create_mlog_arg.create_tmp_mlog_ = true;
   }
-
+  
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(GCTX.rs_rpc_proxy_->timeout(ddl_rpc_timeout)
                          .create_mlog(create_mlog_arg, create_mlog_res))) {
@@ -459,8 +459,8 @@ int ObRebuildIndexTask::create_and_wait_rebuild_task_finish(const ObDDLTaskStatu
       LOG_INFO("failed to create vec index, reset new_index_id_ to avoid submit drop again", KR(ret));
     }
     LOG_WARN("check ddl task finish failed", K(ret), K(index_build_task_id_));
-  }
-
+  } 
+  
   if (state_finished || OB_FAIL(ret)) {
     DEBUG_SYNC(REBUILD_INDEX_WAIT_CREATE_TASK_FINISH);
     (void)switch_status(new_status, true, ret);
@@ -497,38 +497,38 @@ int ObRebuildIndexTask::update_task_message(common::ObISQLClient &proxy)
 }
 
 int ObRebuildIndexTask::get_new_index_table_id(
-    ObSchemaGetterGuard &schema_guard,
-    const int64_t tenant_id,
-    const int64_t database_id,
+    ObSchemaGetterGuard &schema_guard, 
+    const int64_t tenant_id, 
+    const int64_t database_id, 
     const int64_t data_table_id,
-    const ObString &index_name,
+    const ObString &index_name,  
     int64_t &index_id)
-{
+{ 
   int ret = OB_SUCCESS;
-
+  
   char full_index_name_buf[OB_MAX_TABLE_NAME_LENGTH];
   const ObTableSchema *new_index_schema = nullptr;
   const bool is_index = true;
   ObString new_index_name;
   int64_t pos = 0;
-  if (index_name.empty() || tenant_id == OB_INVALID_ID ||
+  if (index_name.empty() || tenant_id == OB_INVALID_ID || 
       data_table_id == OB_INVALID_ID || database_id == OB_INVALID_ID) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid argument",
+    LOG_WARN("invalid argument", 
       K(ret), K(index_name), K(tenant_id), K(data_table_id), K(database_id));
-  } else if (OB_FAIL(databuff_printf(full_index_name_buf,
-                                     OB_MAX_TABLE_NAME_LENGTH,
-                                     pos,
+  } else if (OB_FAIL(databuff_printf(full_index_name_buf, 
+                                     OB_MAX_TABLE_NAME_LENGTH, 
+                                     pos, 
                                      "__idx_%lu_%.*s",
                                      data_table_id,
                                      index_name.length(),
                                      index_name.ptr()))) {
     LOG_WARN("fail to printf current time", K(ret));
-  } else if (OB_FALSE_IT(new_index_name.assign_ptr(full_index_name_buf,
+  } else if (OB_FALSE_IT(new_index_name.assign_ptr(full_index_name_buf, 
                                                    static_cast<int32_t>(pos)))) {
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
-                                                   database_id,
-                                                   new_index_name,
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, 
+                                                   database_id, 
+                                                   new_index_name, 
                                                    is_index,
                                                    new_index_schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(new_index_name));
@@ -745,7 +745,7 @@ int ObRebuildIndexTask::switch_index_name(const ObDDLTaskStatus next_task_status
   const ObTableSchema *index_schema = nullptr;
   const ObDatabaseSchema *database_schema = NULL;
   ObDDLTaskType ddl_task_type = INVALID_TASK;
-
+  
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
@@ -784,7 +784,7 @@ int ObRebuildIndexTask::switch_index_name(const ObDDLTaskStatus next_task_status
       alter_table_arg.ddl_task_type_ = ddl_task_type;
       alter_table_arg.table_id_ = target_object_id_; // Old index id, the id of the old table number 3.
       alter_table_arg.hidden_table_id_ = new_index_id_; // New index id, the id of the new table number 3, obtained after rebuilding the index.
-      alter_table_arg.task_id_ = task_id_;  // rebuild index task id
+      alter_table_arg.task_id_ = task_id_;  // rebuild index task id 
       alter_table_arg.tz_info_wrap_.set_tz_info_offset(0);
       alter_table_arg.nls_formats_[ObNLSFormatEnum::NLS_DATE] = ObTimeConverter::COMPAT_OLD_NLS_DATE_FORMAT;
       alter_table_arg.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP] = ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_FORMAT;
@@ -927,10 +927,10 @@ int ObRebuildIndexTask::succ()
 }
 
 /*
-  1. If the deletion of the old table fails in the above logic,
+  1. If the deletion of the old table fails in the above logic, 
      then wait for the completion of the old table deletion process and no need to drop new table
   2. If it is not because the deletion of the old table failed, then here triggers the drop task of the new table.
-  3. If the names of the old and new tables have already been swapped, then the old table should be deleted in case of failure,
+  3. If the names of the old and new tables have already been swapped, then the old table should be deleted in case of failure, 
      otherwise the new table should be deleted.
 */
 int ObRebuildIndexTask::fail()
@@ -945,7 +945,7 @@ int ObRebuildIndexTask::fail()
   } else if (OB_FAIL(check_ddl_task_finish(tenant_id_, index_drop_task_id_, is_finished))) {
     LOG_WARN("fail to check drop index task finished", K(ret));
   }
-  // we need to ensure when this rebuild task is finished, there is no duplicated indexes left
+  // we need to ensure when this rebuild task is finished, there is no duplicated indexes left 
   // on the base table, so we have to wait until the drop task succeeds.
   if (is_finished) {
     if (OB_FAIL(cleanup())) {
@@ -985,11 +985,11 @@ int ObRebuildIndexTask::cleanup_impl()
       LOG_WARN("start transaction failed", K(ret));
     } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, task_id_))) {
       LOG_WARN("failed to get owner id", K(ret), K(task_id_));
-    } else if (OB_FAIL(ObDDLLock::unlock_for_rebuild_index(*data_schema,
-                                                old_index_table_id,
-                                                new_index_table_id,
-                                                is_global_vector_index,
-                                                owner_id,
+    } else if (OB_FAIL(ObDDLLock::unlock_for_rebuild_index(*data_schema, 
+                                                old_index_table_id, 
+                                                new_index_table_id, 
+                                                is_global_vector_index, 
+                                                owner_id, 
                                                 trans))) {
       LOG_WARN("failed to unlock rebuild index ddl", K(ret), K(task_id_));
     }
@@ -1149,9 +1149,9 @@ int64_t ObRebuildIndexTask::get_serialize_param_size() const
   int len = 0;
   len += ObDDLTask::get_serialize_param_size();
   len += rebuild_index_arg_.get_serialize_size();
-  LST_DO_CODE(OB_UNIS_ADD_LEN,
-              index_build_task_id_,
-              index_drop_task_id_,
+  LST_DO_CODE(OB_UNIS_ADD_LEN, 
+              index_build_task_id_, 
+              index_drop_task_id_, 
               new_index_id_,
               target_object_name_);
   return len;

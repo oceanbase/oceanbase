@@ -26,7 +26,7 @@ namespace oceanbase
 namespace sql
 {
 
-ObExprExtractXml::ObExprExtractXml(common::ObIAllocator &alloc)
+ObExprExtractXml::ObExprExtractXml(common::ObIAllocator &alloc) 
   : ObFuncExprOperator(alloc, T_FUN_SYS_XML_EXTRACT, N_EXTRACT_XML, MORE_THAN_ONE, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
@@ -66,7 +66,7 @@ int ObExprExtractXml::calc_result_typeN(ObExprResType &type,
         ret = OB_ERR_INVALID_XPATH_EXPRESSION;
       }
     }
-
+    
     if (OB_SUCC(ret)) {
       type.set_sql_udt(ObXMLSqlType);
     }
@@ -94,7 +94,7 @@ int ObExprExtractXml::eval_extract_xml(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   bool is_null_res = false;
   ObString blob_locator;
   // eval arg
-
+  
   ObMulModeMemCtx* mem_ctx = nullptr;
 
   if (OB_ISNULL(ctx.exec_ctx_.get_my_session())) {
@@ -118,7 +118,7 @@ int ObExprExtractXml::eval_extract_xml(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   } else if (OB_FAIL(ObXMLExprHelper::construct_namespace_params(namespace_str, default_ns, prefix_ns, allocator))) {
     LOG_WARN("fail to construct namespace params", K(ret), K(namespace_str));
   }
-
+  
   lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObXMLExprHelper::get_xml_base(mem_ctx, xml_datum, cs_type, expect_type, xml_doc, node_type, ObGetXmlBaseType::OB_SHOULD_CHECK))) {

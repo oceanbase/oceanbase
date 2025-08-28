@@ -109,7 +109,7 @@ int ObBackupPath::add_backup_suffix(const ObBackupFileSuffix &type)
       }
       default: {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unknow backup file suffix type", K(ret), K(type));
+        LOG_WARN("unknow backup file suffix type", K(ret), K(type));  
       }
     }
 
@@ -448,10 +448,10 @@ int ObBackupPath::join_meta_info_turn_and_retry(const int64_t turn_id, const int
   if (cur_pos_ <= 0) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K(*this));
-  } else if (!is_final_fuse && OB_FAIL(databuff_printf(path_, sizeof(path_), cur_pos_,
+  } else if (!is_final_fuse && OB_FAIL(databuff_printf(path_, sizeof(path_), cur_pos_, 
       "/%s_%ld_%s_%ld", OB_STR_META_INFO_TURN, turn_id, OB_STR_RETRY, retry_id))) {
     LOG_WARN("failed to join info retry", K(ret), K(retry_id), K(*this));
-  } else if (is_final_fuse && OB_FAIL(databuff_printf(path_, sizeof(path_), cur_pos_,
+  } else if (is_final_fuse && OB_FAIL(databuff_printf(path_, sizeof(path_), cur_pos_, 
       "/%s_%ld_%s_%ld", OB_STR_FUSED_META_INFO_TURN, turn_id, OB_STR_RETRY, retry_id))) {
     LOG_WARN("failed to join info retry", K(ret), K(retry_id), K(*this));
   } else if (OB_FAIL(trim_right_backslash())) {
@@ -555,7 +555,7 @@ int ObBackupPath::join_ls_meta_index_file()
 }
 
 // param case: file_name -> 'checkpoint_info', checkpoint -> 1632889932327676777, type -> ARCHIVE
-// result : oss://backup/[file_name].[checkpoint].obarc
+// result : oss://backup/[file_name].[checkpoint].obarc 
 int ObBackupPath::join_checkpoint_info_file(const common::ObString &file_name, const uint64_t checkpoint, const ObBackupFileSuffix &type)
 {
   int ret = OB_SUCCESS;
@@ -619,7 +619,7 @@ int ObBackupPath::join_table_list_meta_info_file(const share::SCN &scn)
   if (cur_pos_ <= 0) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K(*this));
-  } else if (OB_FAIL(databuff_printf(file_name,
+  } else if (OB_FAIL(databuff_printf(file_name, 
                                      sizeof(file_name),
                                      "%s.%lu",
                                      OB_STR_TABLE_LIST_META_INFO,
@@ -640,7 +640,7 @@ int ObBackupPath::join_major_compaction_mview_dep_tablet_list_file()
   if (cur_pos_ <= 0) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K(*this));
-  } else if (OB_FAIL(databuff_printf(file_name,
+  } else if (OB_FAIL(databuff_printf(file_name, 
                                      sizeof(file_name),
                                      "%s",
                                      OB_STR_MAJOR_COMPACTION_MVIEW_DEP_TABLET_LIST))) {
@@ -654,7 +654,7 @@ int ObBackupPath::join_major_compaction_mview_dep_tablet_list_file()
 }
 
 // param case: entry_d_name -> 'checkpoint_info.1678226622262333112.obarc', file_name -> 'checkpoint_info', type -> ARCHIVE
-// result : checkpoint -> 1678226622262333112
+// result : checkpoint -> 1678226622262333112 
 int ObBackupPath::parse_checkpoint(const char *entry_d_name, const common::ObString &file_name, const ObBackupFileSuffix &type, uint64_t &checkpoint)
 {
   int ret = OB_SUCCESS;
@@ -720,7 +720,7 @@ int ObBackupPath::join_tenant_macro_block_index_file(const ObBackupDataType &bac
 }
 
 // param case: entry_d_name -> 'table_list.1702352553000000000.1.obbak', file_name -> 'table_list', type -> BACKUP
-// result : part_no -> 1
+// result : part_no -> 1 
 int ObBackupPath::parse_partial_table_list_file_name(const char *entry_d_name, const share::SCN &scn, int64_t &part_no)
 {
   int ret = OB_SUCCESS;
@@ -935,10 +935,10 @@ int ObBackupPathUtil::get_backup_set_inner_placeholder_prefix(
   const char *backup_type_str = backup_set_desc.backup_type_.is_full_backup() ? "full" : "inc";
   if (OB_ISNULL(placeholder_prefix)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("placeholder_prefix is null", K(ret));
-  } else if (OB_FAIL(databuff_printf(placeholder_prefix, length,
+    LOG_WARN("placeholder_prefix is null", K(ret));    
+  } else if (OB_FAIL(databuff_printf(placeholder_prefix, length, 
       "backup_set_%lu_%s_", backup_set_desc.backup_set_id_, backup_type_str))) {
-    LOG_WARN("failed to format backup set placeholder prefix", K(ret), K(backup_set_desc));
+    LOG_WARN("failed to format backup set placeholder prefix", K(ret), K(backup_set_desc)); 
   }
 
   return ret;
@@ -947,7 +947,7 @@ int ObBackupPathUtil::get_backup_set_inner_placeholder_prefix(
 // file:///obbackup/backup_set_1_full/backup_set_1_full_xxxx_xxxxx.obbak
 int ObBackupPathUtil::get_backup_set_inner_placeholder(
     const share::ObBackupDest &backup_set_dest, const share::ObBackupSetDesc &backup_set_desc, 
-    const SCN &replay_scn, const SCN &min_restore_scn,
+    const SCN &replay_scn, const SCN &min_restore_scn, 
     share::ObBackupPath &backup_path)
 {
   int ret = OB_SUCCESS;
@@ -1187,7 +1187,7 @@ int ObBackupPathUtil::get_ls_info_data_info_dir_path(const share::ObBackupDest &
 }
 
 int ObBackupPathUtil::get_ls_info_data_info_dir_path(const share::ObBackupDest &backup_tenant_dest,
-    const share::ObBackupSetDesc &desc, const share::ObBackupDataType &type, const int64_t turn_id,
+    const share::ObBackupSetDesc &desc, const share::ObBackupDataType &type, const int64_t turn_id, 
     share::ObBackupPath &backup_path)
 {
   int ret = OB_SUCCESS;
@@ -1579,7 +1579,7 @@ int ObBackupPathUtil::get_ls_log_archive_prefix(const share::ObBackupDest &backu
   return ret;
 }
 
-int ObBackupPathUtil::get_table_list_dir_path(const share::ObBackupDest &backup_tenant_dest,
+int ObBackupPathUtil::get_table_list_dir_path(const share::ObBackupDest &backup_tenant_dest, 
       const share::ObBackupSetDesc &desc, share::ObBackupPath &backup_path)
 {
   int ret = OB_SUCCESS;
@@ -1599,7 +1599,7 @@ int ObBackupPathUtil::get_table_list_dir_path(const share::ObBackupDest &backup_
       LOG_WARN("fail to get backup set info path", K(ret), K(backup_set_dest));
   } else if (OB_FAIL(backup_path.join_table_list_dir())) {
     LOG_WARN("fail to join table list dir", K(ret), K(backup_set_dest), K(backup_path));
-  }
+  } 
   return ret;
 }
 
@@ -1641,7 +1641,7 @@ int ObBackupPathUtil::get_major_compaction_mview_dep_tablet_list_path(const shar
   return ret;
 }
 
-int ObBackupPathUtil::construct_backup_set_dest(const share::ObBackupDest &backup_tenant_dest,
+int ObBackupPathUtil::construct_backup_set_dest(const share::ObBackupDest &backup_tenant_dest, 
     const share::ObBackupSetDesc &backup_desc, share::ObBackupDest &backup_set_dest)
 {
   int ret = OB_SUCCESS;
@@ -1671,7 +1671,7 @@ int ObBackupPathUtil::construct_backup_set_dest(const share::ObBackupDest &backu
   return ret;
 }
 
-int ObBackupPathUtil::construct_backup_complement_log_dest(const share::ObBackupDest &backup_tenant_dest,
+int ObBackupPathUtil::construct_backup_complement_log_dest(const share::ObBackupDest &backup_tenant_dest, 
     const share::ObBackupSetDesc &backup_desc, share::ObBackupDest &backup_set_dest)
 {
   int ret = OB_SUCCESS;
@@ -1803,7 +1803,7 @@ int ObBackupPathUtilV_4_3_2::get_ls_backup_data_dir_path(const share::ObBackupDe
 }
 
 // file:///obbackup/backup_set_1_full/log_stream_1/user_data_turn_1_retry_0/meta_index.obbak
-int ObBackupPathUtilV_4_3_2::get_ls_meta_index_backup_path(const share::ObBackupDest &backup_set_dest,
+int ObBackupPathUtilV_4_3_2::get_ls_meta_index_backup_path(const share::ObBackupDest &backup_set_dest, 
     const share::ObLSID &ls_id, const ObBackupDataType &backup_data_type,
     const int64_t turn_id, const int64_t retry_id, ObBackupPath &path)
 {
@@ -1865,8 +1865,8 @@ int ObBackupPathUtilV_4_3_2::get_macro_block_backup_path(const share::ObBackupDe
 }
 
 // file:///obbackup/backup_set_1_full/log_stream_1/major_data_turn_1_retry_0/macro_block_index.obbak
-int ObBackupPathUtilV_4_3_2::get_ls_macro_block_index_backup_path(const share::ObBackupDest &backup_set_dest,
-    const share::ObLSID &ls_id, const ObBackupDataType &backup_data_type, const int64_t turn_id,
+int ObBackupPathUtilV_4_3_2::get_ls_macro_block_index_backup_path(const share::ObBackupDest &backup_set_dest, 
+    const share::ObLSID &ls_id, const ObBackupDataType &backup_data_type, const int64_t turn_id, 
     const int64_t retry_id, ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
@@ -1926,8 +1926,8 @@ int ObBackupPathUtilV_4_3_2::get_tenant_macro_block_index_backup_path(const shar
 }
 
 // file:///obbackup/backup_set_1_full/log_stream_1/major_data_turn_1_retry_0/intermediate_layer_index.1.obbak
-int ObBackupPathUtilV_4_3_2::get_intermediate_layer_index_backup_path(const share::ObBackupDest &backup_set_dest,
-    const share::ObLSID &ls_id, const ObBackupDataType &backup_data_type, const int64_t turn_id,
+int ObBackupPathUtilV_4_3_2::get_intermediate_layer_index_backup_path(const share::ObBackupDest &backup_set_dest, 
+    const share::ObLSID &ls_id, const ObBackupDataType &backup_data_type, const int64_t turn_id, 
     const int64_t retry_id, const int64_t file_id, const ObBackupIntermediateTreeType &tree_type, ObBackupPath &path)
 {
   int ret = OB_SUCCESS;

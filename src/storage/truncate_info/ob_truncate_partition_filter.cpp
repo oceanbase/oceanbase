@@ -413,7 +413,7 @@ void ObTruncatePartitionFilterFactory::destroy_truncate_partition_filter(ObTrunc
       outer_allocator->free(truncate_part_filter);
     }
     truncate_part_filter = nullptr;
-  }
+  }  
 }
 
 }

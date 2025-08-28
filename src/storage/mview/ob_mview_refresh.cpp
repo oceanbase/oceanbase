@@ -309,7 +309,7 @@ int ObMViewRefresher::prepare_for_refresh()
                                                              &schema_guard,
                                                              base_table_scn_range.start_scn_,
                                                              base_table_scn_range.end_scn_,
-                                                             &mview_refresh_scn_range.start_scn_,
+                                                             &mview_refresh_scn_range.start_scn_, 
                                                              &mview_refresh_scn_range.end_scn_,
                                                              dependency_infos,
                                                              can_fast_refresh,
@@ -418,7 +418,7 @@ int ObMViewRefresher::fetch_based_infos(ObSchemaGetterGuard &schema_guard)
         const uint64_t mlog_table_id = based_table_schema->get_mlog_tid();
         const ObTableSchema *mlog_table_schema = nullptr;
         ObMLogInfo mlog_info;
-        if (OB_INVALID_ID != mlog_table_id) {
+        if (OB_INVALID_ID != mlog_table_id) { 
           if (OB_FAIL(schema_guard.get_table_schema(tenant_id, mlog_table_id, mlog_table_schema))) {
             LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(mlog_table_id));
           } else if (OB_ISNULL(mlog_table_schema)) {
@@ -497,7 +497,7 @@ int ObMViewRefresher::check_fast_refreshable_(
         } else if (!mlog_info.is_valid()) {
           ret = OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH;
           LOG_WARN("table does not have mlog", KR(ret), K(i), K(dependency_infos), K(mlog_info));
-        } else {
+        } else { 
           uint64_t check_scn = refresh_ctx_->mview_info_.get_is_synced() ?
                               refresh_ctx_->mview_info_.get_data_sync_scn():
                               refresh_ctx_->mview_info_.get_last_refresh_scn();
@@ -729,7 +729,7 @@ int ObMViewRefresher::fast_refresh()
         } else {
           uint64_t check_scn = mview_info.get_is_synced() ?
                               mview_info.get_data_sync_scn() :
-                              mview_info.get_last_refresh_scn();
+                              mview_info.get_last_refresh_scn(); 
           if (OB_UNLIKELY(new_mlog_info.get_last_purge_scn() > check_scn)) {
             ret = OB_ERR_MLOG_IS_YOUNGER;
             LOG_WARN("mlog is younger than last refresh", KR(ret), K(mview_info), K(i),

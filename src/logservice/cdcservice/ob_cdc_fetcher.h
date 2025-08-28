@@ -24,7 +24,7 @@
 #include "ob_cdc_define.h"
 #include "ob_cdc_struct.h"                      // ClientLSCtx
 #include "logservice/archiveservice/large_buffer_pool.h" // LargeBufferPool
-#include "logservice/ob_log_handler.h" // PalfGroupBufferIterator
+#include "logservice/ob_log_handler.h" // PalfGroupBufferIterator 
 
 namespace oceanbase
 {

@@ -673,7 +673,7 @@ public:
 
   inline bool is_const_expr() const { return is_static_const_ || is_dynamic_const_; }
 
-  inline bool is_vector_sort_expr() const {
+  inline bool is_vector_sort_expr() const { 
     return type_ == T_FUN_SYS_L2_DISTANCE ||
            type_ == T_FUN_SYS_L2_SQUARED ||
            type_ == T_FUN_SYS_INNER_PRODUCT ||
@@ -1413,7 +1413,7 @@ OB_INLINE int ObExpr::eval_vector(ObEvalCtx &ctx,
 }
 
 OB_INLINE VectorFormat ObExpr::get_default_res_format() const {
-  return !batch_result_ ? VEC_UNIFORM_CONST
+  return !batch_result_ ? VEC_UNIFORM_CONST 
          : (datum_meta_.type_ == ObNullType ? VEC_UNIFORM
          : (is_fixed_length_data_ ? VEC_FIXED : VEC_DISCRETE));
 }

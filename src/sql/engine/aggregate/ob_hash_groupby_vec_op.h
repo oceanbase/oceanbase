@@ -210,7 +210,7 @@ public:
   // for batch
   virtual int inner_get_next_batch(const int64_t max_row_cnt) override;
   void calc_avg_group_mem();
-  OB_INLINE void llc_add_value(int64_t hash_value)
+  OB_INLINE void llc_add_value(int64_t hash_value) 
   {
     ObAggregateProcessor::llc_add_value(hash_value, llc_est_.llc_map_);
     ++llc_est_.est_cnt_;
@@ -352,7 +352,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObHashGroupByVecOp);
   int init_popular_values(); // Data skew constructs the initial popular map based on the data
                             // during the loaddata sampling period and use in the bypass phase.
-  int by_pass_return_batch(int64_t op_max_batch_size);
+  int by_pass_return_batch(int64_t op_max_batch_size);                          
   int update_popular_map();
 
 private:

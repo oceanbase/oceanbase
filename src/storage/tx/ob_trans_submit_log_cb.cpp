@@ -32,7 +32,7 @@ void ObTxBaseLogCb::reset()
   lsn_.reset();
   submit_ts_ = 0;
 
-  log_size_ = 0;
+  log_size_ = 0; 
 }
 
 void ObTxBaseLogCb::reuse()
@@ -178,9 +178,9 @@ int ObTxLogCb::on_success()
     const bool bk_is_reserved = group_ptr_->is_reserved();
     ObTxLogCbGroup *bk_group_ptr = group_ptr_;
     ObPartTransCtx *part_ctx = group_ptr_->get_tx_ctx();
-    const ObTransID tx_id = part_ctx->get_trans_id();
+    const ObTransID tx_id = part_ctx->get_trans_id();  
     const ObLSID ls_id = part_ctx->get_ls_id();
-    const share::SCN log_ts = log_ts_;
+    const share::SCN log_ts = log_ts_;  
     if (NULL == part_ctx) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "ctx is null", K(ret), KPC(part_ctx));
@@ -206,9 +206,9 @@ int ObTxLogCb::on_failure()
     const bool bk_is_reserved = group_ptr_->is_reserved();
     ObTxLogCbGroup *bk_group_ptr = group_ptr_;
     ObPartTransCtx *part_ctx = group_ptr_->get_tx_ctx();
-    const ObTransID tx_id = part_ctx->get_trans_id();
+    const ObTransID tx_id = part_ctx->get_trans_id();  
     const ObLSID ls_id = part_ctx->get_ls_id();
-    const share::SCN log_ts = log_ts_;
+    const share::SCN log_ts = log_ts_;  
     if (NULL == part_ctx) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "ctx is null", KR(ret), K(*this));

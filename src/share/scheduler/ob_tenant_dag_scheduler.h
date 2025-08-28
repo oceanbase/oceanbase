@@ -387,7 +387,7 @@ public:
   void set_dag_ret(const int ret) { ATOMIC_VCAS(&dag_ret_, common::OB_SUCCESS, ret); }
   int get_dag_ret() const { return dag_ret_; };
   virtual void set_dag_error_location() { /*do nothing*/ }
-  void set_dag_error_location(const char* filename,
+  void set_dag_error_location(const char* filename, 
       const int line, const char* function) { error_location_.set(filename, line, function); }
   void set_dag_status(const ObDagStatus status) { dag_status_ = status; }
   ObDagStatus get_dag_status() const { return dag_status_; }
@@ -417,7 +417,7 @@ public:
       diagnose_type = ObDiagnoseTabletType::TYPE_MINOR_MERGE;
     } else if (ObDagType::ObDagTypeEnum::DAG_TYPE_REFRESH_SSTABLES == type) {
       diagnose_type = ObDiagnoseTabletType::TYPE_S2_REFRESH;
-    } else if (ObDagType::ObDagTypeEnum::DAG_TYPE_MAJOR_MERGE <= type
+    } else if (ObDagType::ObDagTypeEnum::DAG_TYPE_MAJOR_MERGE <= type 
             && ObDagType::ObDagTypeEnum::DAG_TYPE_CO_MERGE_FINISH >= type) {
       diagnose_type = ObDiagnoseTabletType::TYPE_MEDIUM_MERGE;
     } else if (ObDagType::ObDagTypeEnum::DAG_TYPE_TX_TABLE_MERGE == type) {
@@ -464,7 +464,7 @@ public:
   virtual int gene_warning_info(ObDagWarningInfo &info, ObIAllocator &allocator);
   virtual bool ignore_warning() { return false; }
   virtual bool check_need_stop_dag(const int error_code) { return false; }
-  virtual int decide_retry_strategy(const int error_code, ObDagRetryStrategy &retry_status) { retry_status = DAG_CAN_RETRY; return OB_SUCCESS; }
+  virtual int decide_retry_strategy(const int error_code, ObDagRetryStrategy &retry_status) { retry_status = DAG_CAN_RETRY; return OB_SUCCESS; } 
   virtual bool inner_check_can_retry();
   bool check_can_retry();
   void set_max_retry_times(const uint32_t max_retry_times)
@@ -522,7 +522,7 @@ public:
   void set_dag_emergency(const bool emergency) { emergency_ = emergency; }
   bool get_emergency() const { return emergency_; }
   int handle_retry_strategy(const int errcode);
-  bool need_skip_retry() const { return DAG_SKIP_RETRY == retry_strategy_
+  bool need_skip_retry() const { return DAG_SKIP_RETRY == retry_strategy_ 
                                      || DAG_AND_DAG_NET_SKIP_RETRY == retry_strategy_; }
 
   DECLARE_VIRTUAL_TO_STRING;
@@ -833,7 +833,7 @@ public:
   void destroy();
   int init(
       const uint64_t tenant_id,
-      const int64_t dag_limit,
+      const int64_t dag_limit, 
       ObIAllocator &allocator,
       ObIAllocator &ha_allocator,
       ObTenantDagScheduler &scheduler);
@@ -863,8 +863,8 @@ public:
       int64_t &start_time);
   int64_t get_dag_net_count(const ObDagNetType::ObDagNetTypeEnum type);
   int loop_running_dag_net_list();
-  // do not hold dag_net_map_lock_, otherwise deadlock when clear_dag_net_ctx,  see
-  int loop_finished_dag_net_list();
+  // do not hold dag_net_map_lock_, otherwise deadlock when clear_dag_net_ctx,  see 
+  int loop_finished_dag_net_list(); 
   int loop_blocking_dag_net_list();
   int check_dag_net_exist(
     const ObDagId &dag_id, bool &exist);
@@ -895,11 +895,11 @@ private:
   ObTenantDagScheduler *scheduler_;
   lib::ObMutex dag_net_map_lock_;
   DagNetMap dag_net_map_; // lock by dag_net_map_lock_
-  /*
+  /* 
    * blocking and running list should always locked by dag_net_map_lock_, but finished not.
-   * finished dag net list must without lock when free dag net, otherwise it would deadlock when clearing dag net ctx
+   * finished dag net list must without lock when free dag net, otherwise it would deadlock when clearing dag net ctx 
    */
-  DagNetList dag_net_list_[DAG_NET_LIST_MAX];
+  DagNetList dag_net_list_[DAG_NET_LIST_MAX]; 
   DagNetIdMap dag_net_id_map_; // for HA to search dag_net of specified dag_id  // lock by dag_net_map_lock_
   int64_t dag_net_cnts_[ObDagNetType::DAG_NET_TYPE_MAX];  // lock by dag_net_map_lock_
 };
@@ -914,9 +914,9 @@ public:
   {}
   ~ObReclaimUtil(){}
   int64_t compute_expected_reclaim_worker_cnt(
-    const int64_t total_running_task_cnt,
-    const int64_t free_worker_cnt,
-    const int64_t total_worker_cnt);
+    const int64_t total_running_task_cnt, 
+    const int64_t free_worker_cnt, 
+    const int64_t total_worker_cnt); 
   void reset();
 
 public:
@@ -945,14 +945,14 @@ public:
   int init(
       const uint64_t tenant_id,
       const int64_t dag_limit,
-      const int64_t priority,
+      const int64_t priority, 
       ObIAllocator &allocator,
       ObIAllocator &ha_allocator,
       ObTenantDagScheduler &scheduler);
   bool is_empty() const
   {
     bool bret = true;
-    bret &= (dag_list_[READY_DAG_LIST].is_empty()
+    bret &= (dag_list_[READY_DAG_LIST].is_empty() 
       && dag_list_[WAITING_DAG_LIST].is_empty()
       && dag_list_[RANK_DAG_LIST].is_empty());
     return bret;
@@ -1264,8 +1264,8 @@ public:
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
       COMMON_LOG(WARN, "ObDagScheduler is not inited", K(ret));
-    } else if (OB_ISNULL(dag) ||
-        (ObDagType::DAG_TYPE_DDL != dag->get_type()
+    } else if (OB_ISNULL(dag) || 
+        (ObDagType::DAG_TYPE_DDL != dag->get_type() 
         && ObDagType::DAG_TYPE_TABLET_SPLIT != dag->get_type()
         && ObDagType::DAG_TYPE_LOB_SPLIT != dag->get_type())) {
       ret = OB_INVALID_ARGUMENT;

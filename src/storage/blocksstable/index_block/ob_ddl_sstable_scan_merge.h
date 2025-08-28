@@ -52,7 +52,7 @@ public:
     is_scan_left_border_ = false;
     is_scan_right_border_ = false;
   }
-  TO_STRING_KV(K_(equal_with_next), K_(end_key), KPC(header_), K_(iter_idx), K_(is_scan_left_border), K_(is_scan_right_border),
+  TO_STRING_KV(K_(equal_with_next), K_(end_key), KPC(header_), K_(iter_idx), K_(is_scan_left_border), K_(is_scan_right_border), 
                K_(agg_buf_size), K_(row_offset), KP_(idx_minor_info), KP_(agg_row_buf));
 public:
   bool equal_with_next_; // for simple row merger

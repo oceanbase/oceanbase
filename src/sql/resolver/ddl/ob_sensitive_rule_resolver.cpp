@@ -27,7 +27,7 @@ ObSensitiveRuleResolver::~ObSensitiveRuleResolver()
 }
 
 #ifdef OB_BUILD_TDE_SECURITY
-int ObSensitiveRuleResolver::resolve_rule_name(const ParseNode *rule_name_node,
+int ObSensitiveRuleResolver::resolve_rule_name(const ParseNode *rule_name_node, 
                                                ObSensitiveRuleStmt &stmt)
 {
   int ret = OB_SUCCESS;
@@ -55,20 +55,20 @@ int ObSensitiveRuleResolver::resolve_rule_name(const ParseNode *rule_name_node,
   return ret;
 }
 
-int ObSensitiveRuleResolver::resolve_protection_spec(const ParseNode *protection_spec_node,
+int ObSensitiveRuleResolver::resolve_protection_spec(const ParseNode *protection_spec_node, 
                                                      ObSensitiveRuleStmt &stmt)
 {
   int ret = OB_SUCCESS;
   ParseNode *rule_policy_node = NULL;
   ParseNode *method_node = NULL;
   ObCollationType cs_type = CS_TYPE_UTF8MB4_BIN;
-  if (OB_ISNULL(protection_spec_node)
+  if (OB_ISNULL(protection_spec_node) 
       || OB_UNLIKELY(protection_spec_node->type_ != T_SENSITIVE_PROTECTION_SPEC)
-      || OB_UNLIKELY(protection_spec_node->num_child_ != 1)
+      || OB_UNLIKELY(protection_spec_node->num_child_ != 1) 
       || OB_ISNULL(protection_spec_node->children_[0])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid protection spec node", K(ret), K(protection_spec_node));
-  } else if (OB_ISNULL(rule_policy_node = protection_spec_node->children_[0])
+  } else if (OB_ISNULL(rule_policy_node = protection_spec_node->children_[0]) 
              || OB_UNLIKELY(rule_policy_node->num_child_ != 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid rule policy node", K(ret), K(rule_policy_node));
@@ -112,12 +112,12 @@ int ObSensitiveRuleResolver::resolve_protection_spec(const ParseNode *protection
   return ret;
 }
 
-int ObSensitiveRuleResolver::resolve_sensitive_field(const ParseNode *sensitive_field_list_node,
+int ObSensitiveRuleResolver::resolve_sensitive_field(const ParseNode *sensitive_field_list_node, 
                                                      ObSensitiveRuleStmt &stmt)
 {
   int ret = OB_SUCCESS;
   obrpc::ObSensitiveRuleDDLArg &arg = stmt.get_ddl_arg();
-  if (OB_ISNULL(sensitive_field_list_node)
+  if (OB_ISNULL(sensitive_field_list_node) 
       || OB_UNLIKELY(sensitive_field_list_node->type_ != T_SENSITIVE_FIELD_LIST)
       || OB_UNLIKELY(sensitive_field_list_node->num_child_ <= 0)) {
     ret = OB_ERR_UNEXPECTED;
@@ -130,7 +130,7 @@ int ObSensitiveRuleResolver::resolve_sensitive_field(const ParseNode *sensitive_
     const ObTableSchema *tbl_schema = NULL;
     ParseNode *column_list_node = NULL;
     ObSensitiveFieldItemWithName sensitive_field_item_with_name; // used for privilege check
-    if (OB_ISNULL(sensitive_field_node)
+    if (OB_ISNULL(sensitive_field_node) 
         || OB_UNLIKELY(sensitive_field_node->num_child_ != 2)
         || OB_ISNULL(sensitive_field_node->children_[0])
         || OB_ISNULL(column_list_node = sensitive_field_node->children_[1])) {
@@ -149,8 +149,8 @@ int ObSensitiveRuleResolver::resolve_sensitive_field(const ParseNode *sensitive_
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table schema is null", K(ret), K(database_name), K(table_name));
     } else if (OB_FAIL(stmt.get_ddl_arg().based_schema_object_infos_.push_back(
-                ObBasedSchemaObjectInfo(tbl_schema->get_table_id(),
-                                        TABLE_SCHEMA,
+                ObBasedSchemaObjectInfo(tbl_schema->get_table_id(), 
+                                        TABLE_SCHEMA, 
                                         tbl_schema->get_schema_version())))) {
       LOG_WARN("push back based schema object info failed", K(ret));
     } else {
@@ -236,7 +236,7 @@ int ObCreateSensitiveRuleResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_FAIL(resolve_sensitive_field(parse_tree.children_[1], *stmt))) {
     LOG_WARN("fail to resolve sensitive field", K(ret));
   }
-
+  
   return ret;
 }
 #else
@@ -290,7 +290,7 @@ int ObDropSensitiveRuleResolver::resolve(const ParseNode &parse_tree)
   } else if (FALSE_IT(stmt->set_ddl_type(OB_DDL_DROP_SENSITIVE_RULE))) {
   } else if (OB_FAIL(resolve_rule_name(parse_tree.children_[0], *stmt))) {
   }
-
+  
   return ret;
 }
 #else
@@ -378,7 +378,7 @@ int ObAlterSensitiveRuleResolver::resolve(const ParseNode &parse_tree)
         break;
     }
   }
-
+  
   return ret;
 }
 #else

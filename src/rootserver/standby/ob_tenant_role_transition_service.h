@@ -61,9 +61,9 @@ public:
 /**
   * @description:
   *    Find the ls_id that are not in the array_r from array_l, and refresh the location of these ls
-  * @param[in] array_l
-  * @param[in] array_r
-  * @param[in] tenant_id
+  * @param[in] array_l 
+  * @param[in] array_r 
+  * @param[in] tenant_id 
   * @return return code
   */
 template <typename ARRAY>
@@ -186,7 +186,7 @@ public:
    * @description:
    *    wait tenant sync to switchover checkpoint until timeout
    * @param[in] tenant_id
-   * @param[in] primary_checkpoints primary switchover checkpoint
+   * @param[in] primary_checkpoints primary switchover checkpoint 
    * @return return code
    */
   int wait_tenant_sync_to_latest_until_timeout_(const uint64_t tenant_id, const ObAllTenantInfo &tenant_info);
@@ -196,11 +196,11 @@ public:
    * @description:
    *    do the checking to see whether the standby tenant ls has synchronize to primary tenant checkpoints
    * @param[in] tenant_id the tenant id to check
-   * @param[in] primary_checkpoints primary switchover checkpoint
+   * @param[in] primary_checkpoints primary switchover checkpoint 
    * @param[out] has_sync_to_checkpoint whether the standby tenant sync to primary tenant checkpoints
    * @return return code
    */
-  int check_sync_to_restore_source_(const uint64_t tenant_id,
+  int check_sync_to_restore_source_(const uint64_t tenant_id, 
                                     const ObAllTenantInfo &tenant_info,
                                     bool &has_sync_to_checkpoint);
 
@@ -212,7 +212,7 @@ public:
    * @param[in] tenant_id the tenant to get switchover checkpoint
    * @param[in] status_info_array ls list to get sync scn
    * @param[in] get_latest_scn whether to get latest scn
-   * @param[out] checkpoints switchover checkpoint
+   * @param[out] checkpoints switchover checkpoint 
    * @return return code
    */
   static int get_checkpoints_by_rpc(
@@ -246,18 +246,18 @@ private:
   /**
    * @description:
    *    get max ls sync_scn across all ls in checkpoints array
-   * @param[in] checkpoints switchover checkpoint
+   * @param[in] checkpoints switchover checkpoint 
    * @param[out] max_checkpoint_scn
    * @return return code
    */
   int get_max_checkpoint_scn_(
-      const ObIArray<obrpc::ObCheckpoint> &checkpoints,
+      const ObIArray<obrpc::ObCheckpoint> &checkpoints, 
       share::SCN &max_checkpoint_scn);
 
   /**
    * @description:
    *    get sys ls sync_snapshot from checkpoints array
-   * @param[in] checkpoints checkpoint
+   * @param[in] checkpoints checkpoint 
    * @return return code
    */
   int get_sys_ls_sync_scn_(

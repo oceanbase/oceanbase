@@ -173,7 +173,7 @@ public:
                                             ObEvalCtx &ctx,
                                             ObDiagnosisManager& diagnosis_manager);
   inline static bool check_is_ascii(ObString &str);
-
+  
   template <PARAM_TC TC>
   static int inner_loop_for_convert_batch(const ObExpr &expr,
                                           ObEvalCtx &ctx,

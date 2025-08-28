@@ -251,7 +251,7 @@ int ObOptEstCostModel::cost_nestloop(const ObCostNLJoinInfo &est_cost_info,
     cost += left_rows * once_rescan_cost;
     //qual cost
     double qual_cost = cost_quals(left_rows * right_rows, est_cost_info.equal_join_conditions_) +
-                       cost_quals(left_rows * right_rows, est_cost_info.other_join_conditions_);
+                       cost_quals(left_rows * right_rows, est_cost_info.other_join_conditions_);     
     cost += qual_cost;
     double join_cost = cost_params_.get_join_per_row_cost(sys_stat_) * out_tuples;
     cost += join_cost;
@@ -308,7 +308,7 @@ int ObOptEstCostModel::cost_mergejoin(const ObCostMergeJoinInfo &est_cost_info,
   // get_next_row()获取左表和右表所有行的代价
   cost += cost_params_.get_cpu_tuple_cost(sys_stat_) * (left_rows + right_rows);
   // 谓词代价
-  cost += cost_quals(cond_tuples, est_cost_info.equal_join_conditions_) +
+  cost += cost_quals(cond_tuples, est_cost_info.equal_join_conditions_) + 
           cost_quals(cond_tuples, est_cost_info.other_join_conditions_);
   // JOIN连接的代价
   cost += cost_params_.get_join_per_row_cost(sys_stat_)  * out_tuples;
@@ -1204,7 +1204,7 @@ double ObOptEstCostModel::cost_hash_distinct(double rows,
  */
 double ObOptEstCostModel::cost_sequence(double rows, double uniq_sequence_cnt)
 {
-  return cost_params_.get_cpu_tuple_cost(sys_stat_) * rows +
+  return cost_params_.get_cpu_tuple_cost(sys_stat_) * rows + 
           cost_params_.get_cpu_operator_cost(sys_stat_) * uniq_sequence_cnt;
 }
 /**
@@ -1376,13 +1376,13 @@ int ObOptEstCostModel::cost_basic_table(const ObCostTableScanInfo &est_cost_info
   double index_scan_cost = 0;
   double index_back_cost = 0;
   double das_rpc_cost = 0.0;
-  // calc scan one partition cost
-  if (OB_FAIL(cost_index_scan(est_cost_info,
+  // calc scan one partition cost 
+  if (OB_FAIL(cost_index_scan(est_cost_info, 
                               row_count_per_part,
                               index_scan_cost))) {
     LOG_WARN("failed to calc index scan cost", K(ret));
   } else if (est_cost_info.index_meta_info_.is_index_back_ &&
-              OB_FAIL(cost_index_back(est_cost_info,
+              OB_FAIL(cost_index_back(est_cost_info, 
                                     row_count_per_part,
                                     per_part_limit_cnt,
                                     index_back_cost))) {
@@ -1411,12 +1411,12 @@ int ObOptEstCostModel::cost_index_scan(const ObCostTableScanInfo &est_cost_info,
 {
   int ret = OB_SUCCESS;
   if (est_cost_info.use_column_store_ &&
-      OB_FAIL(cost_column_store_index_scan(est_cost_info,
+      OB_FAIL(cost_column_store_index_scan(est_cost_info, 
                                           row_count,
                                           index_scan_cost))) {
     LOG_WARN("failed to calc column store index scan cost", K(ret));
   } else if (!est_cost_info.use_column_store_ &&
-             OB_FAIL(cost_row_store_index_scan(est_cost_info,
+             OB_FAIL(cost_row_store_index_scan(est_cost_info, 
                                               row_count,
                                               index_scan_cost))) {
     LOG_WARN("failed to calc row store index scan cost", K(ret));
@@ -1431,13 +1431,13 @@ int ObOptEstCostModel::cost_index_back(const ObCostTableScanInfo &est_cost_info,
 {
   int ret = OB_SUCCESS;
   if (est_cost_info.index_back_with_column_store_ &&
-      OB_FAIL(cost_column_store_index_back(est_cost_info,
+      OB_FAIL(cost_column_store_index_back(est_cost_info, 
                                           row_count,
                                           limit_count,
                                           index_back_cost))) {
     LOG_WARN("failed to calc column store index back cost", K(ret));
   } else if (!est_cost_info.index_back_with_column_store_ &&
-             OB_FAIL(cost_row_store_index_back(est_cost_info,
+             OB_FAIL(cost_row_store_index_back(est_cost_info, 
                                               row_count,
                                               limit_count,
                                               index_back_cost))) {
@@ -1479,7 +1479,7 @@ int ObOptEstCostModel::cost_column_store_index_scan(const ObCostTableScanInfo &e
       } else if (est_cost_info.index_meta_info_.is_index_back_ &&
                 OB_FAIL(column_group_est_cost_info.index_access_column_items_.assign(cg_info.access_column_items_))) {
         LOG_WARN("failed to assign filters", K(ret));
-      } else if (OB_FAIL(cost_row_store_index_scan(column_group_est_cost_info,
+      } else if (OB_FAIL(cost_row_store_index_scan(column_group_est_cost_info, 
                                                    cg_row_count,
                                                    column_group_cost))) {
         LOG_WARN("failed to calc index scan cost", K(ret), K(cg_row_count), K(column_group_est_cost_info));
@@ -1535,7 +1535,7 @@ int ObOptEstCostModel::cost_column_store_index_back(const ObCostTableScanInfo &e
         LOG_WARN("failed to assign filters", K(ret));
       } else if (OB_FAIL(column_group_est_cost_info.access_column_items_.assign(cg_info.access_column_items_))) {
         LOG_WARN("failed to assign filters", K(ret));
-      } else if (OB_FAIL(cost_range_get(column_group_est_cost_info,
+      } else if (OB_FAIL(cost_range_get(column_group_est_cost_info, 
                                         false,
                                         cg_row_count,
                                         column_group_cost))) {
@@ -1568,14 +1568,14 @@ int ObOptEstCostModel::cost_column_store_index_back(const ObCostTableScanInfo &e
 
 int ObOptEstCostModel::cost_row_store_index_scan(const ObCostTableScanInfo &est_cost_info,
                                                 double row_count,
-                                                double &index_scan_cost)
+                                                double &index_scan_cost) 
 {
   int ret = OB_SUCCESS;
   //refine row count for index skip scan
   if (!est_cost_info.ss_ranges_.empty() && est_cost_info.ss_prefix_ndv_ > 0) {
     row_count /= est_cost_info.ss_prefix_ndv_;
   }
-  if (ObSimpleBatch::T_GET == est_cost_info.batch_type_ ||
+  if (ObSimpleBatch::T_GET == est_cost_info.batch_type_ || 
       ObSimpleBatch::T_MULTI_GET == est_cost_info.batch_type_) {
     if (OB_FAIL(cost_range_get(est_cost_info,
                                true,
@@ -1583,7 +1583,7 @@ int ObOptEstCostModel::cost_row_store_index_scan(const ObCostTableScanInfo &est_
                                index_scan_cost))) {
       LOG_WARN("Failed to estimate get cost", K(ret));
     }
-  } else if (ObSimpleBatch::T_SCAN == est_cost_info.batch_type_ ||
+  } else if (ObSimpleBatch::T_SCAN == est_cost_info.batch_type_ || 
              ObSimpleBatch::T_MULTI_SCAN == est_cost_info.batch_type_) {
     if (OB_FAIL(cost_range_scan(est_cost_info,
                                 true,
@@ -1627,7 +1627,7 @@ int ObOptEstCostModel::cost_row_store_index_scan(const ObCostTableScanInfo &est_
       LOG_WARN("Failed to estimate get cost", K(ret));
     }
     double aggregation_cost = (row_count + row_count) * cost_params_.get_per_aggr_func_cost(sys_stat_);
-    double fulltext_scan_cost = 2 * inv_index_range_scan_cost + doc_id_full_scan_cost +
+    double fulltext_scan_cost = 2 * inv_index_range_scan_cost + doc_id_full_scan_cost + 
                                 aggregation_cost + doc_id_index_back_cost;
     index_scan_cost = fulltext_scan_cost;
     LOG_TRACE("OPT::[COST FULLTEXT INDEX SCAN]", K(fulltext_scan_cost), K(ret));
@@ -1645,7 +1645,7 @@ int ObOptEstCostModel::cost_row_store_index_scan(const ObCostTableScanInfo &est_
 int ObOptEstCostModel::cost_row_store_index_back(const ObCostTableScanInfo &est_cost_info,
                                                  double row_count,
                                                  double limit_count,
-                                                 double &index_back_cost)
+                                                 double &index_back_cost) 
 {
   int ret = OB_SUCCESS;
   double network_cost = 0.0;
@@ -1755,8 +1755,8 @@ int ObOptEstCostModel::cost_global_index_back_with_rp(double row_count,
                             /static_cast<double>(table_meta_info->table_column_count_);
     network_cost = transform_size * cost_params_.get_network_trans_per_byte_cost(sys_stat_) +
             row_count * cost_params_.get_table_loopup_per_row_rpc_cost(sys_stat_);
-    OPT_TRACE_COST_MODEL(KV(network_cost), "=", KV(transform_size), "*",
-                         cost_params_.get_network_trans_per_byte_cost(sys_stat_), "+",
+    OPT_TRACE_COST_MODEL(KV(network_cost), "=", KV(transform_size), "*", 
+                         cost_params_.get_network_trans_per_byte_cost(sys_stat_), "+", 
                          KV(row_count), "*", cost_params_.get_table_loopup_per_row_rpc_cost(sys_stat_));
     LOG_TRACE("OPT::[COST GLOBAL INDEX BACK WITH RPC]", K(network_cost), K(table_meta_info->average_row_size_),
             K(row_count), K(table_meta_info->table_column_count_));
@@ -1767,7 +1767,7 @@ int ObOptEstCostModel::cost_global_index_back_with_rp(double row_count,
 int ObOptEstCostModel::cost_range_scan(const ObCostTableScanInfo &est_cost_info,
 																			 bool is_scan_index,
                                        double row_count,
-                                       double &range_scan_cost)
+                                       double &range_scan_cost) 
 {
   int ret = OB_SUCCESS;
   // 从memtable读取数据的代价，待提供
@@ -1776,12 +1776,12 @@ int ObOptEstCostModel::cost_range_scan(const ObCostTableScanInfo &est_cost_info,
   double memtable_merge_cost = 0;
   double io_cost = 0.0;
   double cpu_cost = 0.0;
-  if (OB_FAIL(range_scan_io_cost(est_cost_info,
+  if (OB_FAIL(range_scan_io_cost(est_cost_info, 
                                  is_scan_index,
                                  row_count,
                                  io_cost))) {
     LOG_WARN("failed to calc table scan io cost", K(ret));
-  } else if (OB_FAIL(range_scan_cpu_cost(est_cost_info,
+  } else if (OB_FAIL(range_scan_cpu_cost(est_cost_info, 
                                          is_scan_index,
                                          row_count,
                                          false,
@@ -1790,14 +1790,14 @@ int ObOptEstCostModel::cost_range_scan(const ObCostTableScanInfo &est_cost_info,
   } else {
     if (io_cost > cpu_cost) {
         range_scan_cost = io_cost + memtable_cost + memtable_merge_cost;
-        OPT_TRACE_COST_MODEL(KV(range_scan_cost), "=", KV(io_cost), "+",
+        OPT_TRACE_COST_MODEL(KV(range_scan_cost), "=", KV(io_cost), "+", 
                              KV(memtable_cost), "+", KV(memtable_merge_cost));
     } else {
         range_scan_cost = cpu_cost + memtable_cost + memtable_merge_cost;
-        OPT_TRACE_COST_MODEL(KV(range_scan_cost), "=", KV(cpu_cost), "+",
+        OPT_TRACE_COST_MODEL(KV(range_scan_cost), "=", KV(cpu_cost), "+", 
                              KV(memtable_cost), "+", KV(memtable_merge_cost));
     }
-    LOG_TRACE("OPT:[COST RANGE SCAN]", K(is_scan_index), K(row_count), K(range_scan_cost),
+    LOG_TRACE("OPT:[COST RANGE SCAN]", K(is_scan_index), K(row_count), K(range_scan_cost), 
             K(io_cost), K(cpu_cost), K(memtable_cost), K(memtable_merge_cost));
   }
   return ret;
@@ -1806,7 +1806,7 @@ int ObOptEstCostModel::cost_range_scan(const ObCostTableScanInfo &est_cost_info,
 int ObOptEstCostModel::cost_range_get(const ObCostTableScanInfo &est_cost_info,
 																			 bool is_scan_index,
                                        double row_count,
-                                       double &range_get_cost)
+                                       double &range_get_cost) 
 {
   int ret = OB_SUCCESS;
   // 从memtable读取数据的代价，待提供
@@ -1815,13 +1815,13 @@ int ObOptEstCostModel::cost_range_get(const ObCostTableScanInfo &est_cost_info,
   double memtable_merge_cost = 0;
   double io_cost = 0.0;
   double cpu_cost = 0.0;
-  if (OB_FAIL(range_get_io_cost(est_cost_info,
+  if (OB_FAIL(range_get_io_cost(est_cost_info, 
                                 is_scan_index,
                                 row_count,
                                 io_cost))) {
     LOG_WARN("failed to calc table get io cost", K(ret));
-  } else if (OB_FAIL(range_scan_cpu_cost(est_cost_info,
-                                         is_scan_index,
+  } else if (OB_FAIL(range_scan_cpu_cost(est_cost_info, 
+                                         is_scan_index, 
                                          row_count,
                                          true,
                                          cpu_cost))) {
@@ -1832,7 +1832,7 @@ int ObOptEstCostModel::cost_range_get(const ObCostTableScanInfo &est_cost_info,
     range_get_cost = cpu_cost + io_cost + fetch_row_cost + memtable_cost + memtable_merge_cost;
     OPT_TRACE_COST_MODEL(KV(range_get_cost), "=", KV(cpu_cost), "+", KV(io_cost), "+", KV(fetch_row_cost), "+",
                          KV(memtable_cost), "+", KV(memtable_merge_cost));
-    LOG_TRACE("OPT:[COST RANGE GET]", K(is_scan_index), K(row_count), K(range_get_cost),
+    LOG_TRACE("OPT:[COST RANGE GET]", K(is_scan_index), K(row_count), K(range_get_cost), 
             K(io_cost), K(cpu_cost), K(fetch_row_cost), K(memtable_cost), K(memtable_merge_cost));
   }
   return ret;
@@ -1841,7 +1841,7 @@ int ObOptEstCostModel::cost_range_get(const ObCostTableScanInfo &est_cost_info,
 int ObOptEstCostModel::range_get_io_cost(const ObCostTableScanInfo &est_cost_info,
                                         bool is_scan_index,
                                         double row_count,
-                                        double &io_cost)
+                                        double &io_cost) 
 {
   int ret = OB_SUCCESS;
   io_cost = 0.0;
@@ -1883,7 +1883,7 @@ int ObOptEstCostModel::range_get_io_cost(const ObCostTableScanInfo &est_cost_inf
       OPT_TRACE_COST_MODEL(KV(io_cost), "= 0");
     } else {
       io_cost = first_block_cost + cost_params_.get_micro_block_rnd_cost(sys_stat_) * (num_micro_blocks_read-1);
-      OPT_TRACE_COST_MODEL(KV(io_cost), "=", KV(first_block_cost), "+",
+      OPT_TRACE_COST_MODEL(KV(io_cost), "=", KV(first_block_cost), "+", 
                            cost_params_.get_micro_block_rnd_cost(sys_stat_), "* (", KV(num_micro_blocks_read), "-1)");
     }
     LOG_TRACE("OPT:[COST RANGE GET IO]", K(is_scan_index), K(row_count), K(io_cost), K(num_micro_blocks),
@@ -1895,7 +1895,7 @@ int ObOptEstCostModel::range_get_io_cost(const ObCostTableScanInfo &est_cost_inf
 int ObOptEstCostModel::range_scan_io_cost(const ObCostTableScanInfo &est_cost_info,
                                           bool is_scan_index,
                                           double row_count,
-                                          double &io_cost)
+                                          double &io_cost) 
 {
   int ret = OB_SUCCESS;
   io_cost = 0.0;
@@ -1936,7 +1936,7 @@ int ObOptEstCostModel::range_scan_io_cost(const ObCostTableScanInfo &est_cost_in
       OPT_TRACE_COST_MODEL(KV(io_cost), "=", KV(first_block_cost));
     } else {
       io_cost = first_block_cost + cost_params_.get_micro_block_seq_cost(sys_stat_) * (num_micro_blocks_read-1);
-      OPT_TRACE_COST_MODEL(KV(io_cost), "=", KV(first_block_cost), "+",
+      OPT_TRACE_COST_MODEL(KV(io_cost), "=", KV(first_block_cost), "+", 
                            cost_params_.get_micro_block_seq_cost(sys_stat_), "* (", KV(num_micro_blocks_read), "-1)");
     }
     LOG_TRACE("OPT:[COST RANGE SCAN IO]", K(is_scan_index), K(row_count), K(io_cost), K(num_micro_blocks),
@@ -1949,7 +1949,7 @@ int ObOptEstCostModel::range_scan_cpu_cost(const ObCostTableScanInfo &est_cost_i
                                           bool is_scan_index,
                                           double row_count,
                                           bool is_get,
-                                          double &cpu_cost)
+                                          double &cpu_cost) 
 {
   int ret = OB_SUCCESS;
   double project_cost = 0.0;
@@ -1980,8 +1980,8 @@ int ObOptEstCostModel::range_scan_cpu_cost(const ObCostTableScanInfo &est_cost_i
       LOG_WARN("failed to cost project", K(ret));
     }
   }
-  if (FAILEDx(cost_functional_lookup(est_cost_info.postfix_filters_,
-                                     est_cost_info.table_filters_,
+  if (FAILEDx(cost_functional_lookup(est_cost_info.postfix_filters_, 
+                                     est_cost_info.table_filters_, 
                                      est_cost_info.functional_lookup_exprs_,
                                      row_count,
                                      functional_lookup_cost))) {
@@ -2311,10 +2311,10 @@ int ObOptEstCostModel::cost_project(double rows,
       LOG_WARN("failed to push back expr", K(ret));
     }
   }
-  if (OB_SUCC(ret) &&
-      OB_FAIL(cost_project(rows,
-                           project_columns,
-                           is_get,
+  if (OB_SUCC(ret) && 
+      OB_FAIL(cost_project(rows, 
+                           project_columns, 
+                           is_get, 
                            use_column_store,
                            cost))) {
     LOG_WARN("failed to calc project cost", K(ret));
@@ -2343,16 +2343,16 @@ int ObOptEstCostModel::cost_project(double rows,
         // int
         project_one_row_cost += cost_params_.get_project_column_cost(sys_stat_,
                                                                      ObIntTC,
-                                                                     is_get,
+                                                                     is_get, 
                                                                      use_column_store);
-      } else if (type.is_json() ||
+      } else if (type.is_json() || 
                  type.is_geometry() ||
                  type.is_xml_sql_type() ||
                  type.is_text() ||
                  type.is_lob()) {
         project_one_row_cost += cost_params_.get_project_column_cost(sys_stat_,
                                                                      type.get_type_class(),
-                                                                     is_get,
+                                                                     is_get, 
                                                                      use_column_store);
       } else if (type.get_accuracy().get_length() > 0) {
         // ObStringTC
@@ -2360,19 +2360,19 @@ int ObOptEstCostModel::cost_project(double rows,
         string_width = std::min(string_width, ObOptEstCostModel::DEFAULT_MAX_STRING_WIDTH);
         project_one_row_cost += cost_params_.get_project_column_cost(sys_stat_,
                                                                      ObStringTC,
-                                                                     is_get,
+                                                                     is_get, 
                                                                      use_column_store) * string_width;
       } else if (type.get_accuracy().get_precision() > 0 || type.is_oracle_integer()) {
         // number, time
         project_one_row_cost += cost_params_.get_project_column_cost(sys_stat_,
                                                                      ObNumberTC,
-                                                                     is_get,
+                                                                     is_get, 
                                                                      use_column_store);
       } else {
         // default for DEFAULT PK
         project_one_row_cost += cost_params_.get_project_column_cost(sys_stat_,
                                                                      ObIntTC,
-                                                                     is_get,
+                                                                     is_get, 
                                                                      use_column_store);
       }
     }
@@ -2382,8 +2382,8 @@ int ObOptEstCostModel::cost_project(double rows,
   return ret;
 }
 
-int ObOptEstCostModel::cost_full_table_scan_project(double rows,
-                                                    const ObCostTableScanInfo &est_cost_info,
+int ObOptEstCostModel::cost_full_table_scan_project(double rows, 
+                                                    const ObCostTableScanInfo &est_cost_info, 
                                                     bool is_get,
                                                     double &cost)
 {
@@ -2393,27 +2393,27 @@ int ObOptEstCostModel::cost_full_table_scan_project(double rows,
   double project_one_row_cost = 0;
   double project_full_row_count = rows * est_cost_info.table_filter_sel_
                                        * est_cost_info.join_filter_sel_;
-  if (OB_FAIL(ObRawExprUtils::extract_column_exprs(est_cost_info.postfix_filters_,
+  if (OB_FAIL(ObRawExprUtils::extract_column_exprs(est_cost_info.postfix_filters_, 
                                                   filter_columns))) {
     LOG_WARN("failed to extract column exprs", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(est_cost_info.table_filters_,
+  } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(est_cost_info.table_filters_, 
                                                          filter_columns))) {
     LOG_WARN("failed to extract column exprs", K(ret));
-  } else if (OB_FAIL(cost_project(project_full_row_count,
-                                  est_cost_info.access_column_items_,
+  } else if (OB_FAIL(cost_project(project_full_row_count, 
+                                  est_cost_info.access_column_items_, 
                                   is_get,
                                   est_cost_info.use_column_store_,
                                   cost))) {
     LOG_WARN("failed to calc project cost", K(ret));
-  } else if (OB_FAIL(cost_project(rows,
-                                  filter_columns,
+  } else if (OB_FAIL(cost_project(rows, 
+                                  filter_columns, 
                                   is_get,
                                   est_cost_info.use_column_store_,
                                   cost_project_filter_column))) {
     LOG_WARN("failed to calc project cost", K(ret));
   } else {
     cost += cost_project_filter_column;
-    LOG_TRACE("COST TABLE SCAN PROJECT:", K(rows), K(project_full_row_count),
+    LOG_TRACE("COST TABLE SCAN PROJECT:", K(rows), K(project_full_row_count), 
                                       K(cost_project_filter_column), K(cost));
   }
   return ret;
@@ -2465,7 +2465,7 @@ int ObOptEstCostModel::cost_one_qual(const ObRawExpr *expr, double &cost)
   } else if (expr->has_flag(CNT_MATCH_EXPR)) {
     cost += cost_params_.get_functional_lookup_per_row_cost(sys_stat_);
   } else if (IS_SPATIAL_OP(expr->get_expr_type())
-       || IS_GEO_OP(expr->get_expr_type())
+       || IS_GEO_OP(expr->get_expr_type()) 
        || expr->is_spatial_expr()) {
     cost += cost_params_.get_comparison_cost(sys_stat_, ObGeometryTC);
   } else if (expr->is_udf_expr()) {
@@ -2541,10 +2541,10 @@ int ObOptEstCostModel::cost_delete(ObDelUpCostInfo& cost_info, double &cost)
   return ret;
 }
 
-int ObOptEstCostModel::calc_range_cost(const ObTableMetaInfo& table_meta_info,
+int ObOptEstCostModel::calc_range_cost(const ObTableMetaInfo& table_meta_info, 
                                       const ObIArray<ObRawExpr *> &filters,
-                                      int64_t index_column_count,
-                                      int64_t range_count,
+                                      int64_t index_column_count, 
+                                      int64_t range_count, 
                                       double range_sel,
                                       double &cost)
 {
@@ -2753,11 +2753,11 @@ int ObCostTableScanSimpleInfo::init(const ObCostTableScanInfo &est_cost_info)
   return ret;
 }
 
-int ObCostTableScanSimpleInfo::calculate_table_dop(double range_row_count,
-                          double index_back_row_count,
+int ObCostTableScanSimpleInfo::calculate_table_dop(double range_row_count, 
+                          double index_back_row_count, 
                           int64_t part_cnt,
-                          int64_t cost_threshold_us,
-                          int64_t parallel_degree_limit,
+                          int64_t cost_threshold_us, 
+                          int64_t parallel_degree_limit, 
                           int64_t &table_dop) const
 {
   int ret = OB_SUCCESS;
@@ -2772,10 +2772,10 @@ int ObCostTableScanSimpleInfo::calculate_table_dop(double range_row_count,
     LOG_WARN("unexpect param", K(ret));
   }
   OPT_TRACE_TITLE("calculate table dop");
-  OPT_TRACE(KV_(is_index_back), KV_(is_global_index), KV_(part_count),
+  OPT_TRACE(KV_(is_index_back), KV_(is_global_index), KV_(part_count), 
             KV_(table_micro_blocks), KV_(index_micro_blocks), KV_(range_count),
-            KV_(table_row_count), KV_(postix_filter_qual_cost_per_row),
-            KV_(table_filter_qual_cost_per_row), KV_(index_scan_project_cost_per_row),
+            KV_(table_row_count), KV_(postix_filter_qual_cost_per_row), 
+            KV_(table_filter_qual_cost_per_row), KV_(index_scan_project_cost_per_row), 
             KV_(index_back_project_cost_per_row), KV_(row_width));
   while (OB_SUCC(ret) && ObGlobalHint::UNSET_PARALLEL == table_dop) {
     cost = calculate_table_scan_cost(range_row_count, index_back_row_count, part_cnt, cur_parallel);
@@ -2799,7 +2799,7 @@ int ObCostTableScanSimpleInfo::calculate_table_dop(double range_row_count,
   return ret;
 }
 
-double ObCostTableScanSimpleInfo::calculate_table_scan_cost(double range_row_count,
+double ObCostTableScanSimpleInfo::calculate_table_scan_cost(double range_row_count, 
                                                      double index_back_row_count,
                                                      int64_t part_cnt,
                                                      int64_t parallel) const

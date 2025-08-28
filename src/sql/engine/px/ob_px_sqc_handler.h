@@ -154,7 +154,7 @@ private:
   trace::FltTransCtx flt_ctx_;
   int64_t rpc_level_;
   uint64_t node_sequence_id_;
-  /* At first， sqc must wait for all workers start, and then check whether it is interrupted.
+  /* At first， sqc must wait for all workers start, and then check whether it is interrupted. 
    * If so, sqc will broadcast interruption to all workers in case that some workers have not registered interruption when qc send interruption.
    * Then we find that sqc may hang at waiting for all workers start, so sqc check whether interrupted while waiting now.
    * This change makes that if worker starts after sqc broadcast interruption, it will miss the interruption.

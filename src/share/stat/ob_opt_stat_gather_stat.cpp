@@ -434,3 +434,4 @@ int ObOptStatGatherStatList::cancel_gather_stats(const uint64_t tenant_id,
   }
   return ret;
 }
+

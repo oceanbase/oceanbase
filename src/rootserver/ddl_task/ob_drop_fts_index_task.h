@@ -110,7 +110,7 @@ private:
   ObFTSDDLChildTaskInfo fts_doc_word_;
   bool drop_domain_index_finish_;
   bool drop_doc_word_index_finish_;
-  bool drop_doc_rowkey_index_finish_;
+  bool drop_doc_rowkey_index_finish_; 
   bool drop_rowkey_doc_index_finish_;
 };
 

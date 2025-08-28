@@ -25,7 +25,7 @@ oblib_add_library(restore OBJECT
   hmac_signature.cpp
   ob_object_device.h
   ob_object_storage_base.cpp
-  obdal/obdal_accessor.h
+  obdal/obdal_accessor.h 
   obdal/obdal_accessor.cpp)
 
 add_library(oss INTERFACE)

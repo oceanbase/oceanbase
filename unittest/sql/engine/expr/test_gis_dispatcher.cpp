@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #include <gtest/gtest.h>
 #include "lib/geo/ob_geo_func_register.h"
 #include "ob_geo_func_testx.h"
@@ -68,7 +68,7 @@ TEST_F(TestGisDispatcher, not_impl)
   int ret = OB_SUCCESS;
   int result;
   lib::MemoryContext mem_context;
-  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, 
       lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
   ObGeoEvalCtx gis_context(mem_context);
   ret = ObGisTestFunc<ObGeoFuncTestType::NotImplemented>::geo_func::eval(gis_context, result);
@@ -101,7 +101,7 @@ TEST_F(TestGisDispatcher, dispatcher)
   ObArenaAllocator allocator(ObModIds::TEST);
   ObSrsItem srs(NULL);
   lib::MemoryContext mem_context;
-  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, 
       lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
   ObGeoEvalCtx gis_context(mem_context, &srs);
   ObGeometry *gis_args[3][8] = {{0}};
@@ -113,7 +113,7 @@ TEST_F(TestGisDispatcher, dispatcher)
   gis_args[static_cast<int>(ObGeoCRS::Cartesian)][static_cast<int>(ObGeoType::MULTILINESTRING)] = &cml;
   gis_args[static_cast<int>(ObGeoCRS::Cartesian)][static_cast<int>(ObGeoType::MULTIPOLYGON)] = &cma;
   gis_args[static_cast<int>(ObGeoCRS::Cartesian)][static_cast<int>(ObGeoType::GEOMETRYCOLLECTION)] = &cc;
-
+  
   gis_args[static_cast<int>(ObGeoCRS::Geographic)][static_cast<int>(ObGeoType::POINT)] = &gp;
   gis_args[static_cast<int>(ObGeoCRS::Geographic)][static_cast<int>(ObGeoType::LINESTRING)] = &gl;
   gis_args[static_cast<int>(ObGeoCRS::Geographic)][static_cast<int>(ObGeoType::POLYGON)] = &ga;
@@ -175,9 +175,9 @@ TEST_F(TestGisDispatcher, specialization_and_exception_test)
   ObArenaAllocator allocator(ObModIds::TEST);
   ObSrsItem srs(NULL);
   lib::MemoryContext mem_context;
-  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, 
       lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
-  ObGeoEvalCtx gis_context(mem_context, &srs);
+  ObGeoEvalCtx gis_context(mem_context, &srs);  
   ret = gis_context.append_geo_arg(&cp);
   ASSERT_EQ(ret, OB_SUCCESS);
 
@@ -270,7 +270,7 @@ TEST_F(TestGisDispatcher, specialization_and_exception_test)
   ret = ObGisTestFunc<ObGeoFuncTestType::TypeX>::geo_func::eval(gis_context, result);
   ASSERT_EQ(ret, OB_ERR_BOOST_GEOMETRY_CENTROID_EXCEPTION);
   ASSERT_EQ(result, 666);
-}
+} 
 
 } // namespace sql
 } // namespace oceanbase

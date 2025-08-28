@@ -210,7 +210,7 @@ void PxWorkerFunctor::operator ()(bool need_exec)
               // 绑定sqc_handler，方便算子任何地方都可以拿sqc_handle
               runtime_arg.sqc_handler_ = sqc_handler;
             }
-
+            
             // 执行
             ObPxTaskProcess worker(*env_arg_.get_gctx(), runtime_arg);
             worker.set_is_oracle_mode(env_arg_.is_oracle_mode());

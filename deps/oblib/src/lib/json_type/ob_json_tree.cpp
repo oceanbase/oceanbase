@@ -580,7 +580,7 @@ ObJsonNode *ObJsonObject::clone(ObIAllocator* allocator, bool is_deep_copy) cons
           LOG_WARN("allocate memory failed", K(ret), K(object_array_[i].get_key().length()));
         } else {
           key_str.assign_buffer(str_buf, object_array_[i].get_key().length());
-          if (object_array_[i].get_key().length() !=
+          if (object_array_[i].get_key().length() != 
                 key_str.write(object_array_[i].get_key().ptr(), object_array_[i].get_key().length())) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("fail to get text from expr", K(ret), K(key_str));
@@ -726,7 +726,7 @@ int ObJsonObject::add(const common::ObString &key, ObJsonNode *value, bool with_
     value->set_parent(this);
     ObJsonObjectPair pair(key, value);
 
-    if (is_schema) {
+    if (is_schema) { 
       // if is schema, keep the first value, don't raise error or overwrite
       ObJsonKeyCompare cmp(use_lexicographical_order_);
       ObJsonObjectArray::iterator low_iter = std::lower_bound(object_array_.begin(),
@@ -826,7 +826,7 @@ void ObJsonObject::unique()
       cur_ref = pos_ref;
     } else {
       cur++;
-      if (cur != pos) {
+      if (cur != pos) { 
         object_array_[cur] = pos_ref;
       }
     }
@@ -835,7 +835,7 @@ void ObJsonObject::unique()
   while (++cur < last) {
     object_array_.pop_back();
   }
-
+  
 }
 
 void ObJsonObject::clear()
@@ -1187,7 +1187,7 @@ ObJsonNode *ObJsonTreeUtil::clone_new_node(ObIAllocator* allocator, Args &&... a
   T *new_node = NULL;
 
   if (OB_ISNULL(buf)) {
-    LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc memory for ObJsonNode");
+    LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc memory for ObJsonNode");    
   } else {
     new_node = new(buf)T(std::forward<Args>(args)...);
   }
@@ -1314,7 +1314,7 @@ ObJsonNode *ObJsonOInterval::clone(ObIAllocator* allocator, bool is_deep_copy) c
   return str_node;
 }
 
-ObJsonNode *ObJsonNull::clone(ObIAllocator* allocator, bool is_deep_copy) const
+ObJsonNode *ObJsonNull::clone(ObIAllocator* allocator, bool is_deep_copy) const 
 {
   return ObJsonTreeUtil::clone_new_node<ObJsonNull>(allocator, is_not_null_);
 }

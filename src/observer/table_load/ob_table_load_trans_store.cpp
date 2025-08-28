@@ -956,8 +956,8 @@ int ObTableLoadTransStoreWriter::cast_row(ObArenaAllocator &cast_allocator,
   return ret;
 }
 
-int ObTableLoadTransStoreWriter::cast_row(int32_t session_id,
-                                          const ObTableLoadObjRow &obj_row,
+int ObTableLoadTransStoreWriter::cast_row(int32_t session_id, 
+                                          const ObTableLoadObjRow &obj_row, 
                                           const ObDirectLoadDatumRow *&datum_row)
 {
   int ret = OB_SUCCESS;

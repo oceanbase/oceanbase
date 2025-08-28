@@ -162,11 +162,11 @@ int ObAllVirtualLSReplicaTaskPlan::get_full_row_(
     ADD_COLUMN(set_varchar, table, "target_replica_svr_ip", target_ip_str, columns);
     ADD_COLUMN(set_int, table, "target_replica_svr_port", target_port, columns);
     ADD_COLUMN(set_int, table, "target_paxos_replica_number", task_stat.get_target_replica_paxos_replica_number(), columns);
-    ADD_COLUMN(set_varchar, table, "target_replica_type", ObShareUtil::replica_type_to_string(task_stat.get_target_replica_type()), columns);
+    ADD_COLUMN(set_varchar, table, "target_replica_type", ObShareUtil::replica_type_to_string(task_stat.get_target_replica_type()), columns); 
     ADD_COLUMN(set_varchar, table, "source_replica_svr_ip", task_stat.get_source_server().is_valid() ? source_ip_str : "", columns);
     ADD_COLUMN(set_int, table, "source_replica_svr_port", source_port, columns); 
     ADD_COLUMN(set_int, table, "source_paxos_replica_number", task_stat.get_source_replica_paxos_replica_number(), columns);
-    ADD_COLUMN(set_varchar, table, "source_replica_type", task_stat.get_source_server().is_valid() ? ObShareUtil::replica_type_to_string(task_stat.get_source_replica_type()) : "", columns);
+    ADD_COLUMN(set_varchar, table, "source_replica_type", task_stat.get_source_server().is_valid() ? ObShareUtil::replica_type_to_string(task_stat.get_source_replica_type()) : "", columns); 
     ADD_COLUMN(set_varchar, table, "task_exec_svr_ip", execute_ip_str, columns);
     ADD_COLUMN(set_int, table, "task_exec_svr_port", execute_port, columns);
     ADD_COLUMN(set_varchar, table, "comment", task_stat.get_comment().string(), columns);

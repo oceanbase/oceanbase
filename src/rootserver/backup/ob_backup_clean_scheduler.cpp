@@ -230,7 +230,7 @@ int ObBackupCleanScheduler::get_need_reload_task(
       } else if (!is_valid) {
         LOG_INFO("[BACKUP_CLEAN]tenant status is not valid, no need to reload task");
       } else if (OB_FAIL(get_job_need_reload_task(job, allocator, tasks))){
-        LOG_WARN("failed to get job need reload task", K(ret));
+        LOG_WARN("failed to get job need reload task", K(ret)); 
       }
     }
   }
@@ -479,7 +479,7 @@ int ObBackupCleanScheduler::persist_job_task_(ObBackupCleanJobAttr &job_attr)
     if (OB_FAIL(get_next_job_id_(trans, job_attr.tenant_id_, job_attr.job_id_))) {
       LOG_WARN("failed to get next job id", K(ret));
     } else if (OB_FALSE_IT(job_attr.initiator_job_id_ = job_attr.job_id_)) {
-    } else if (OB_FAIL(backup_service_->check_leader())) {
+    } else if (OB_FAIL(backup_service_->check_leader())) { 
       LOG_WARN("failed to check leader", K(ret));
     } else if (OB_FAIL(ObBackupCleanJobOperator::insert_job(trans, job_attr))) {
       LOG_WARN("failed to insert user tenant backup clean job", K(ret), K(job_attr));
@@ -541,7 +541,7 @@ int ObBackupCleanScheduler::start_tenant_backup_clean_(const ObBackupCleanJobAtt
     } else if (OB_FAIL(new_job_attr.executor_tenant_id_.push_back(new_job_attr.tenant_id_))) {
       LOG_WARN("failed to push back tenant id", K(ret));
     } else if (OB_FALSE_IT(new_job_attr.initiator_job_id_ = new_job_attr.job_id_)) { 
-    } else if (OB_FAIL(backup_service_->check_leader())) {
+    } else if (OB_FAIL(backup_service_->check_leader())) { 
       LOG_WARN("failed to check leader", K(ret));
     } else if (OB_FAIL(ObBackupCleanJobOperator::insert_job(trans, new_job_attr))) {
       LOG_WARN("failed to insert backup clean job", K(ret), K(new_job_attr));
@@ -879,7 +879,7 @@ int ObUserTenantBackupDeleteMgr::check_log_archive_dest_validity_()
       dest_mgr.reset();
       if (OB_FAIL(helper.get_archive_dest(*sql_proxy_, need_lock, archive_dest.first, archive_dest_str))) {
         LOG_WARN("failed to get archive path", K(ret));
-      } else if (OB_FAIL(dest_mgr.init(job_attr_->tenant_id_, ObBackupDestType::TYPE::DEST_TYPE_ARCHIVE_LOG, archive_dest_str,  *sql_proxy_))) {
+      } else if (OB_FAIL(dest_mgr.init(job_attr_->tenant_id_, ObBackupDestType::TYPE::DEST_TYPE_ARCHIVE_LOG, archive_dest_str,  *sql_proxy_))) { 
         LOG_WARN("failed to init dest manager", K(ret), K(job_attr_), K(archive_dest_str));
       } else if (OB_FAIL(dest_mgr.check_dest_validity(*rpc_proxy_, true/*need_format_file*/))) {
         LOG_WARN("failed to check archive dest validity", K(ret), K(job_attr_), K(archive_dest_str));
@@ -1126,11 +1126,11 @@ int ObUserTenantBackupDeleteMgr::do_backup_clean_tasks_(const ObArray<ObBackupCl
       if (ObBackupCleanStatus::Status::FAILED == task_attr.status_.status_) {
         if (OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM == task_attr.result_) {
           // do nothing
-          // The clean task failed due to the worm.
+          // The clean task failed due to the worm. 
           // The failure of a single task does not affect the execution of other tasks.
         } else {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("set task status can not be failed", K(ret), K(task_attr));
+          LOG_WARN("set task status can not be failed", K(ret), K(task_attr));  
         }
       } else if (ObBackupCleanStatus::Status::COMPLETED == task_attr.status_.status_
           || ObBackupCleanStatus::Status::CANCELED == task_attr.status_.status_) {
@@ -1170,7 +1170,7 @@ int ObUserTenantBackupDeleteMgr::handle_backup_clean_task(
     } else if (ObBackupCleanStatus::Status::FAILED == task_attr.status_.status_ && !has_failed) { // return first failed
       if (OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM == task_attr.result_) {
         // Unlike other failures, a failure due to the worm does not affect the execution of other tasks.
-        // However, when all tasks are completed or failed due to worm,
+        // However, when all tasks are completed or failed due to worm, 
         // the job should be marked as failed, with the error code recorded as OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM.
         has_failed_by_worm = true;
       } else {
@@ -1186,26 +1186,26 @@ int ObUserTenantBackupDeleteMgr::handle_backup_clean_task(
   } else if (has_task) {
     if (!has_failed) {
       if (OB_FAIL(do_backup_clean_tasks_(task_attrs))) {
-        LOG_WARN("failed to do set tasks", K(ret));
-      }
+        LOG_WARN("failed to do set tasks", K(ret)); 
+      } 
     } else {
       if (OB_FAIL(do_cancel_())) {
-        LOG_WARN("failed to cancel task", K(ret));
+        LOG_WARN("failed to cancel task", K(ret)); 
       }
     }
   } else {
     if (has_failed) {
-      next_status.status_ = ObBackupCleanStatus::Status::FAILED;
+      next_status.status_ = ObBackupCleanStatus::Status::FAILED; 
     } else if (has_failed_by_worm) {
       result = OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM;
-      next_status.status_ = ObBackupCleanStatus::Status::FAILED;
+      next_status.status_ = ObBackupCleanStatus::Status::FAILED; 
     } else {
       next_status.status_ = ObBackupCleanStatus::Status::COMPLETED;
     }
   }
 
-  FLOG_INFO("[BACKUP_CLEAN]handle backup clean task", K(ret),
-      K(*job_attr_), K(next_status.status_), K(has_failed), K(has_task));
+  FLOG_INFO("[BACKUP_CLEAN]handle backup clean task", K(ret), 
+      K(*job_attr_), K(next_status.status_), K(has_failed), K(has_task)); 
   return ret;
 }
 
@@ -1965,7 +1965,7 @@ int ObBackupAutoObsoleteDeleteTrigger::start_auto_delete_obsolete_data_()
     LOG_WARN("backup auto delete obsolete bakcup do not init", K(ret));
   } else if (is_user_tenant(tenant_id_)) {
     recovery_window = 0;
-    default_delete_policy.reset();
+    default_delete_policy.reset(); 
     obrpc::ObBackupCleanArg arg;
     arg.initiator_tenant_id_ = tenant_id_; // cluster-level automatic backup clean
     arg.tenant_id_ = tenant_id_;

@@ -98,7 +98,7 @@ int ObExprRbSelect::eval_rb_select(const ObExpr &expr,
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
   lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObRbExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "ROARINGBITMAP"));
-
+  
   bool is_null_result = false;
   bool is_empty_bitmap = false;
   int num_args = expr.arg_cnt_;

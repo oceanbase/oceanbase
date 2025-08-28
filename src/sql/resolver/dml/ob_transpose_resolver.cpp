@@ -162,7 +162,7 @@ int ObTransposeResolver::resolve(const ParseNode &parse_tree) {
     } else if (OB_ISNULL(trans_def)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret));
-    } else if (trans_def->is_unpivot() &&
+    } else if (trans_def->is_unpivot() && 
                OB_FAIL(try_add_cast_to_unpivot(static_cast<UnpivotDef &>(*trans_def)))) {
       LOG_WARN("fail to add cast to unpivot", KPC(orig_table_item), K(ret));
     } else if (OB_FAIL(get_old_or_group_column(columns_in_aggrs, *orig_table_item, *trans_def))) {
@@ -705,7 +705,7 @@ int ObTransposeResolver::get_old_or_group_column(
                 || ObJsonType == col_ref_expr->get_data_type()
                 || ObGeometryType == col_ref_expr->get_data_type()
                 || ObExtendType == col_ref_expr->get_data_type()) {
-        ret = (lib::is_oracle_mode() && ObJsonType == col_ref_expr->get_data_type())
+        ret = (lib::is_oracle_mode() && ObJsonType == col_ref_expr->get_data_type()) 
                 ? OB_ERR_INVALID_CMP_OP : OB_ERR_INVALID_TYPE_FOR_OP;
         LOG_WARN("group by lob expr is not allowed", K(ret));
       }

@@ -59,10 +59,10 @@ public:
 	static int parse(const common::ObString &stmt,
 									 const FPContext &fp_ctx,
 									 common::ObIAllocator &allocator,
-									 char *&no_param_sql,
-									 int64_t &no_param_sql_len,
-									 ParamList *&param_list,
-									 int64_t &param_num);
+			 						 char *&no_param_sql,
+			 						 int64_t &no_param_sql_len,
+			 						 ParamList *&param_list,
+			 						 int64_t &param_num);
 	static int parse(const common::ObString &stmt,
 									 const FPContext &fp_ctx,
 									 common::ObIAllocator &allocator,
@@ -457,7 +457,7 @@ protected:
 		return is_valid_char(ch) &&
 		static_cast<uint8_t>(ch) >= 0x40 && static_cast<uint8_t>(ch) <= 0xfe;
 	}
-
+	
 	// [\x81-\xfe]
 	inline bool is_hk2(char ch)
 	{
@@ -467,7 +467,7 @@ protected:
 	}
 
 	inline bool notascii(char ch)
-	{
+	{	
 		return 	is_valid_char(ch) &&
 				(static_cast<uint8_t>(ch) >= 0x80 && static_cast<uint8_t>(ch) <= 0xFF);
 	}

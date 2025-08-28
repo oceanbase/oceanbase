@@ -47,7 +47,7 @@ public:
   virtual int deserialize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t buf_size, int64_t &pos) override;
   virtual int64_t get_serialize_param_size() const override;
   virtual int on_child_task_finish(const uint64_t child_task_key, const int ret_code) override { return OB_SUCCESS; }
-
+  
   INHERIT_TO_STRING_KV("ObDDLTask", ObDDLTask, K_(centroid), K_(cid_vector), K_(rowkey_cid), K_(sq_meta), K_(pq_centroid), K_(pq_code));
 private:
   static const int64_t OB_DROP_VEC_IVF_INDEX_TASK_VERSION = 1;
@@ -61,7 +61,7 @@ private:
   int drop_aux_ivfflat_index_table(const share::ObDDLTaskStatus &status);
   int drop_aux_ivfsq8_index_table(const share::ObDDLTaskStatus &status);
   int drop_aux_ivfpq_index_table(const share::ObDDLTaskStatus &status);
-
+  
   int check_drop_index_finish(
       const uint64_t tenant_id,
       const int64_t task_id,

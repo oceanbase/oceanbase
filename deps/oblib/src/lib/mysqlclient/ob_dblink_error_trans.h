@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef OBDBLINKERROR_H
 #define OBDBLINKERROR_H
 #include "lib/utility/ob_edit_distance.h"
@@ -53,9 +53,9 @@ namespace sqlclient
 
 class ObDblinkErrorTrans {
 public:
-  static int external_errno_to_ob_errno(bool is_oci_client,
-                                        int external_errno,
-                                        const char *external_errmsg,
+  static int external_errno_to_ob_errno(bool is_oci_client, 
+                                        int external_errno, 
+                                        const char *external_errmsg, 
                                         int &ob_errno);
 };
 
@@ -107,7 +107,7 @@ public:
   }
   int init(uint64_t tenant_id);
   int set_dblink_conn(uint32_t sessid, common::sqlclient::ObISQLConnection *dblink_conn);
-  int get_dblink_conn(uint32_t sessid, uint64_t dblink_id,
+  int get_dblink_conn(uint32_t sessid, uint64_t dblink_id, 
                       common::sqlclient::ObISQLConnection *&dblink_conn);
   int clean_dblink_conn(uint32_t sessid, bool force_disconnect);
 private:

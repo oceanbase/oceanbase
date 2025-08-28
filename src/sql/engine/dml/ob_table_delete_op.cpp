@@ -129,7 +129,7 @@ OB_INLINE int ObTableDeleteOp::inner_open_with_das()
   return ret;
 }
 
-int ObTableDeleteOp::check_need_exec_single_row()
+int ObTableDeleteOp::check_need_exec_single_row() 
 {
   int ret = OB_SUCCESS;
   ret = ObTableModifyOp::check_need_exec_single_row();
@@ -343,7 +343,7 @@ int ObTableDeleteOp::check_delete_affected_row()
         ObString func_name = ObString::make_string("check_delete_affected_row");
         LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
         LOG_ERROR_RET(OB_ERR_DEFENSIVE_CHECK, "Fatal Error!!! data table delete affected row is not match with index table",
-                  K(ret), K(primary_write_rows), K(index_write_rows),
+                  K(ret), K(primary_write_rows), K(index_write_rows), 
                   KPC(primary_del_ctdef), K(primary_del_rtdef),
                   KPC(index_del_ctdef), K(index_del_rtdef));
         LOG_DBA_ERROR_V2(OB_SQL_DELETE_AFFECTED_ROW_FAIL, ret, "Attention!!!", "data table delete affected row is not match with index table"

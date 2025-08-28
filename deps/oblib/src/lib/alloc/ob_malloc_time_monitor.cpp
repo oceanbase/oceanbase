@@ -31,7 +31,7 @@ void ObMallocTimeMonitor::print()
     int64_t right = TIME_SLOT[i + 1];
     databuff_printf(buf, sizeof(buf), pos, "[MALLOC_TIME_MONITOR] [%8ld,%20ld): delta_total_cost_time=%15ld, delta_count=%15ld, avg_cost_time=%8ld\n",
                     left, right, delta_total_cost_time, delta_count, avg_cost_time);
-
+    
   }
   buf[pos] = '\0';
   _OB_LOG(INFO, "[MALLOC_TIME_MONITOR] show the distribution of ob_malloc's cost_time\n%s", buf);

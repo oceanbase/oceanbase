@@ -97,15 +97,15 @@ TEST(TestObPluginMgr, test_find_plugin_with_version)
     nullptr,
     nullptr
   };
-
+  
   ObPluginHandle plugin_handle_100;
   ASSERT_EQ(OB_SUCCESS, plugin_handle_100.init(plugin_mgr,
                                                OBP_PLUGIN_API_VERSION_CURRENT,
                                                ObString("plugin_handle_100"),
                                                &plugin_100));
-
+  
   ObIPluginDescriptor *test_ftparser_100 = new ObTestPluginAdaptor();
-
+  
   ObPluginEntry plugin_entry_100;
   plugin_entry_100.interface_type = OBP_PLUGIN_TYPE_FT_PARSER;
   plugin_entry_100.name = test_plugin_name;
@@ -119,9 +119,9 @@ TEST(TestObPluginMgr, test_find_plugin_with_version)
                                                OBP_PLUGIN_API_VERSION_CURRENT,
                                                ObString("plugin_handle_110"),
                                                &plugin_110));
-
+  
   ObIPluginDescriptor *test_ftparser_110 = new ObTestPluginAdaptor();
-
+  
   ObPluginEntry plugin_entry_110;
   plugin_entry_110.interface_type = OBP_PLUGIN_TYPE_FT_PARSER;
   plugin_entry_110.name = test_plugin_name;
@@ -157,7 +157,7 @@ TEST(TestObPluginMgr, test_find_plugin_with_version)
                                                 OBP_MAKE_VERSION(1, 1, 0), entry_handle));
   ASSERT_NE(nullptr, entry_handle);
   ASSERT_EQ(OBP_MAKE_VERSION(1, 1, 0), entry_handle->library_version());
-
+  
   ASSERT_EQ(OB_SUCCESS, plugin_mgr->find_plugin(OBP_PLUGIN_TYPE_FT_PARSER, test_plugin_name,
                                                 OBP_MAKE_VERSION(1, 0, 0), entry_handle));
   ASSERT_NE(nullptr, entry_handle);
@@ -168,12 +168,12 @@ TEST(TestObPluginMgr, test_find_plugin_with_version)
   ASSERT_EQ(nullptr, entry_handle);
 
   ASSERT_EQ(OB_SUCCESS, plugin_mgr->register_plugin(plugin_entry_200));
-
+  
   ASSERT_EQ(OB_SUCCESS, plugin_mgr->find_plugin(OBP_PLUGIN_TYPE_FT_PARSER, test_plugin_name,
                                                 OBP_MAKE_VERSION(2, 0, 0), entry_handle));
   ASSERT_NE(nullptr, entry_handle);
   ASSERT_EQ(OBP_MAKE_VERSION(2, 0, 0), entry_handle->library_version());
-
+  
   ASSERT_EQ(OB_SUCCESS, plugin_mgr->find_plugin(OBP_PLUGIN_TYPE_FT_PARSER, test_plugin_name, entry_handle));
   ASSERT_NE(nullptr, entry_handle);
   ASSERT_EQ(OBP_MAKE_VERSION(2, 0, 0), entry_handle->library_version());

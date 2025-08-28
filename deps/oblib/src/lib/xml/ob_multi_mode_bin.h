@@ -91,10 +91,10 @@ typedef struct ObMulModeBinHeader {
   ObMulModeBinHeader() {
     (&type_)[1] = 0;
   }
-  ObMulModeBinHeader(uint8_t type,
-    uint8_t kv_entry_type,
-    uint8_t count_type,
-    uint8_t obj_type,
+  ObMulModeBinHeader(uint8_t type, 
+    uint8_t kv_entry_type, 
+    uint8_t count_type, 
+    uint8_t obj_type, 
     uint8_t is_continous)
     : type_(type),
       kv_entry_size_type_(kv_entry_type),
@@ -107,7 +107,7 @@ typedef struct ObMulModeBinHeader {
   uint8_t kv_entry_size_type_   : 2; // the size describe var size of key_entry，val_entry
   uint8_t count_size_type_   : 2; // the size describe var size of element count
   uint8_t obj_size_type_ : 2; // the size describe var size of key_entry，val_entry
-  uint8_t is_continuous_  : 1; // memory of current node and subtree is continous
+  uint8_t is_continuous_  : 1; // memory of current node and subtree is continous 
   uint8_t reserved_   : 1; // reserved bit
   char used_size_[]; // var size
 
@@ -119,9 +119,9 @@ typedef std::pair<uint8_t, uint8_t> ObMulModeExtendStorageType;
 
 class ObMulBinHeaderSerializer {
 public:
-  ObMulBinHeaderSerializer(ObStringBuffer* buffer,
-                           ObMulModeNodeType type,
-                           uint64_t total_size,
+  ObMulBinHeaderSerializer(ObStringBuffer* buffer, 
+                           ObMulModeNodeType type, 
+                           uint64_t total_size, 
                            uint64_t count);
 
   ObMulBinHeaderSerializer(const char* data, uint64_t length);
@@ -168,7 +168,7 @@ public:
   uint8_t obj_var_size_type_;
   uint8_t entry_var_size_type_;
   uint8_t count_var_size_type_;
-
+  
   // meta info
   uint8_t obj_var_size_;
   uint8_t entry_var_size_;
@@ -198,8 +198,8 @@ public:
   ObMulModeContainerSerializer(const char* data, int64_t length);
   ObMulModeContainerSerializer(ObIMulModeBase* root, ObStringBuffer* buffer, int64_t children_count);
 
-  bool need_serialize_key() {
-    return root_->data_type() == OB_XML_TYPE || root_->type() == M_OBJECT;
+  bool need_serialize_key() { 
+    return root_->data_type() == OB_XML_TYPE || root_->type() == M_OBJECT; 
   }
 
   bool is_kv_seperate() { return root_->data_type() == OB_XML_TYPE; }
@@ -238,7 +238,7 @@ inline bool is_valid_xml_type(uint8_t type)
   return (type >= M_UNPARESED_DOC && type <= M_DTD);
 }
 
-inline bool is_extend_type(ObMulModeNodeType type)
+inline bool is_extend_type(ObMulModeNodeType type) 
 {
   return (type >= M_EXTENT_LEVEL2 && type <= M_EXTENT_LEVEL0);
 }
@@ -287,7 +287,7 @@ inline ObMulModeExtendStorageType get_extend_storage_type(ObMulModeNodeType type
   } else {
     res.first = ObMulModeNodeType::M_EXTENT_LEVEL0 - ((type - 0x7f) >> 8);
   }
-
+  
   res.second = (type & 0xff) - 0x7f;
   return res;
 }
@@ -364,24 +364,24 @@ public:
 // use for merge binary, make sure base_node is binary
   virtual int merge(ObIMulModeBase& origin, ObIMulModeBase& patch, ObIMulModeBase& res);
 protected:
-  virtual int inner_merge(ObBinMergeCtx& ctx, ObIMulModeBase& origin,
+  virtual int inner_merge(ObBinMergeCtx& ctx, ObIMulModeBase& origin, 
                           ObIMulModeBase& patch, ObIMulModeBase& res, bool retry = false);
-  virtual int init_merge_info(ObBinMergeCtx& ctx, ObIMulModeBase& origin,
+  virtual int init_merge_info(ObBinMergeCtx& ctx, ObIMulModeBase& origin, 
                               ObIMulModeBase& patch, ObIMulModeBase& res) = 0;
-  virtual int if_need_merge(ObBinMergeCtx& ctx, ObIMulModeBase& origin,
+  virtual int if_need_merge(ObBinMergeCtx& ctx, ObIMulModeBase& origin, 
                             ObIMulModeBase& patch, ObIMulModeBase& res, bool& need_merge) = 0;
-  virtual bool if_need_append_key(ObBinMergeCtx& ctx, ObIMulModeBase& origin,
+  virtual bool if_need_append_key(ObBinMergeCtx& ctx, ObIMulModeBase& origin, 
                                   ObIMulModeBase& patch, ObIMulModeBase& res) = 0;
-  virtual int append_res_without_merge(ObBinMergeCtx& ctx, ObIMulModeBase& origin,
+  virtual int append_res_without_merge(ObBinMergeCtx& ctx, ObIMulModeBase& origin, 
                                       ObIMulModeBase& patch, ObIMulModeBase& res) = 0;
   virtual int append_value_without_merge(ObBinMergeCtx& ctx, ObIMulModeBase& value, ObIMulModeBase& res) = 0;
-  virtual int append_key_without_merge(ObBinMergeCtx& ctx, ObIMulModeBase& origin,
+  virtual int append_key_without_merge(ObBinMergeCtx& ctx, ObIMulModeBase& origin, 
                                       ObMulBinHeaderSerializer& header, ObIMulModeBase& res) = 0;
-  virtual int append_header_to_res(ObBinMergeCtx& ctx, ObIMulModeBase& origin, ObIMulModeBase& patch,
+  virtual int append_header_to_res(ObBinMergeCtx& ctx, ObIMulModeBase& origin, ObIMulModeBase& patch, 
                                   ObMulBinHeaderSerializer& header, ObIMulModeBase& res);
-  virtual int append_merge_key(ObBinMergeCtx& ctx, ObIMulModeBase& origin, ObIMulModeBase& patch,
+  virtual int append_merge_key(ObBinMergeCtx& ctx, ObIMulModeBase& origin, ObIMulModeBase& patch, 
                               ObMulBinHeaderSerializer& header, ObIMulModeBase& res) = 0;
-  virtual int append_value_by_idx(bool is_origin, int idx, ObBinMergeCtx& ctx, ObIMulModeBase& origin,
+  virtual int append_value_by_idx(bool is_origin, int idx, ObBinMergeCtx& ctx, ObIMulModeBase& origin, 
                                   ObIMulModeBase& patch, ObMulBinHeaderSerializer& header, ObIMulModeBase& res) = 0;
   virtual int set_value_offset(int idx, uint64_t offset, ObBinMergeCtx& ctx, ObIMulModeBase& res) = 0;
   virtual uint64_t estimated_length(bool retry, ObBinMergeCtx& ctx, ObIMulModeBase& origin, ObIMulModeBase& patch) = 0;

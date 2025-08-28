@@ -26,7 +26,7 @@ class ObGeoReverseCoordinateVisitor : public ObEmptyGeoVisitor
 public:
   ObGeoReverseCoordinateVisitor() {}
   virtual ~ObGeoReverseCoordinateVisitor() {}
-  bool prepare(ObGeometry *geo);
+  bool prepare(ObGeometry *geo);  
   int visit(ObIWkbGeogPoint *geo);
   int visit(ObIWkbGeogLineString *geo) { UNUSED(geo); return OB_SUCCESS; }
   int visit(ObIWkbGeogLinearRing *geo) { UNUSED(geo); return OB_SUCCESS; }

@@ -2920,7 +2920,7 @@ static constexpr ObObjType RELATIONAL_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObLobType     */
     ObMaxType,         /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
-    ObMaxType,         /* ObUserDefinedSQLType*/
+    ObMaxType,         /* ObUserDefinedSQLType*/    
     ObMaxType,         /* ObDecimalIntType */
     ObMaxType,         /*  ObCollectionSQLType*/
     ObMaxType,    /* ObMySQLDateType */

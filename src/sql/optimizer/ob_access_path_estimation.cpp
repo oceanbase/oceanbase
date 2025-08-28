@@ -350,7 +350,7 @@ int ObAccessPathEstimation::choose_best_est_method(ObOptimizerContext &ctx,
   * 5. EST_STORAGE_DEFAULT: Use the storage layer and default statistics to estimate rows.
   * 6. EST_STAT: Use collected statistics to estimate rows.
   * 7. EST_DEFAULT: Use default statistics to estimate rows.
-  *
+  * 
   * We prioritize them based on three different scenarios:
   * 1. Normal scene: STORAGE > STAT > DYNAMIC SAMPLING > DEFAULT
   * 2. Simple scene (DYNAMIC SAMPLING is not helpful for final rowcount): lower the priority of dynamic sampling because of its high cost.
@@ -617,7 +617,7 @@ int ObAccessPathEstimation::process_table_default_estimation(ObOptimizerContext 
     } else if (OB_FAIL(process_statistics_estimation(ctx, path))) {
       // use default opt table meta inited in ObJoinOrder::init_est_sel_info_for_access_path
       LOG_WARN("failed to process statistics estimation", K(ret));
-    }
+    } 
   }
   return ret;
 }
@@ -1133,7 +1133,7 @@ int ObAccessPathEstimation::process_storage_estimation_result(ObOptimizerContext
     }
   }
 
-  // Check whether results are reliable
+  // Check whether results are reliable 
   for (int64_t i = 0; OB_SUCC(ret) && is_reliable && i < result_helpers.count(); ++i) {
     // all choosed partitions are empty, do not use the result
     if ((result_helpers.at(i).path_->is_global_index_ &&
@@ -1262,7 +1262,7 @@ int ObAccessPathEstimation::estimate_prefix_range_rowcount(
   if (new_range_with_exec_param) {
     /**
      * new query range extraction always get (min; max) for range graph with exec param.
-     * for NLJ push down path with expr (c1 = 1 and c2 = ?). old query range generate
+     * for NLJ push down path with expr (c1 = 1 and c2 = ?). old query range generate 
      * (1, min; 1, max), New query range generate (min, min; max, max). This behavior will
      * cause row estimate with new query range get a larger result.Hence, we need multiple
      * prefix_filter_sel for push down path with exec param to get a more accurate row count.
@@ -1453,7 +1453,7 @@ int ObAccessPathEstimation::choose_storage_estimation_ranges(const int64_t range
       }
       // push_back scan_range for first priority
       if (OB_FAIL(ret) || scan_ranges.count() == range_limit) {
-      } else if (scan_ranges.count() > range_limit) {
+      } else if (scan_ranges.count() > range_limit) { 
         if (OB_FAIL(ObOptimizerUtil::choose_random_members(STORAGE_EST_SAMPLE_SEED, scan_ranges, range_limit, valid_ranges))) {
           LOG_WARN("failed to choose random ranges", K(ret), K(range_limit), K(scan_ranges));
         } else if (OB_FAIL(scan_ranges.assign(valid_ranges))) {
@@ -1514,7 +1514,7 @@ int ObAccessPathEstimation::get_valid_partition_info(ObOptimizerContext &ctx,
         valid_partition_info = nullptr;
       } else if (OB_FAIL(get_valid_partition_info(ctx, table_partition_info, *valid_partition_info))) {
         LOG_WARN("failed to get valid partition info", K(ret));
-      }
+      } 
     }
   }
   return ret;
@@ -1624,7 +1624,7 @@ int ObAccessPathEstimation::add_index_info(ObOptimizerContext &ctx,
     }
     if (FAILEDx(construct_scan_range_batch(allocator, scan_ranges, index_est_arg->batch_))) {
       LOG_WARN("failed to construct scan range batch", K(ret));
-    }
+    } 
   }
   return ret;
 }
@@ -1718,7 +1718,7 @@ int ObAccessPathEstimation::calc_skip_scan_prefix_ndv(AccessPath &ap, double &pr
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null",  K(ret), K(join_order), K(log_plan), K(table_meta_info));
   } else {
-    // generate temporary update table metas use prefix range conditions
+    // generate temporary update table metas use prefix range conditions 
     SMART_VAR(OptTableMetas, tmp_metas) {
       ObSEArray<ObRawExpr*, 4> prefix_exprs;
       const double prefix_range_row_count = table_meta_info->table_row_count_
@@ -1840,8 +1840,8 @@ int ObAccessPathEstimation::reset_skip_scan_info(ObCostTableScanInfo &est_cost_i
                                                              filter_sel,
                                                              all_predicate_sel))) {
     LOG_WARN("failed to calculate selectivity", K(est_cost_info.postfix_filters_), K(ret));
-  } else if (OptSkipScanState::SS_HINT_ENABLE != use_skip_scan) {
-    // TODO: only for bug fix of
+  } else if (OptSkipScanState::SS_HINT_ENABLE != use_skip_scan) { 
+    // TODO: only for bug fix of 
     // Here should be optimized later.
     est_cost_info.ss_ranges_.reuse();
     est_cost_info.ss_postfix_range_filters_.reuse();
@@ -2205,7 +2205,7 @@ int ObAccessPathEstimation::storage_estimate_range_rowcount(ObOptimizerContext &
       }
     }
   }
-
+  
   if (OB_FAIL(ret) || need_fallback) {
   } else if (OB_ISNULL(ranges)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2636,7 +2636,7 @@ int ObAccessPathEstimation::add_ds_result_items(ObIArray<AccessPath *> &paths,
     } else if (!filter_item.exprs_.empty() &&
                OB_FAIL(ds_result_items.push_back(filter_item))) {
       LOG_WARN("failed to push back", K(ret));
-    }
+    } 
     //3.init query range item
     for (int64_t i = 0; OB_SUCC(ret) && i < paths.count(); ++i) {
       if (OB_ISNULL(paths.at(i))) {

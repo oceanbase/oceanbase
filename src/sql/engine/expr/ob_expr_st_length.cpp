@@ -128,7 +128,7 @@ int ObExprSTLength::eval_st_length(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
           ret = OB_OPERATE_OVERFLOW;
           LOG_WARN("Length value is out of range in st_length", K(ret));
           LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "Length", N_ST_LENGTH);
-        }
+        } 
       }
     }
     if (mem_ctx != nullptr) {

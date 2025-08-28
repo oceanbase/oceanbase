@@ -81,7 +81,7 @@ inline bool has_extra_info(ObAggrInfo &info)
   case T_FUNC_SYS_ARRAY_AGG:
   case T_FUN_HYBRID_HIST:
   case T_FUN_TOP_FRE_HIST:
-  case T_FUN_AGG_UDF:
+  case T_FUN_AGG_UDF: 
   case T_FUN_SYS_RB_OR_CARDINALITY_AGG:
   case T_FUN_SYS_RB_AND_CARDINALITY_AGG: {
     has = true;
@@ -1044,8 +1044,8 @@ public:
         ret = extra->add_batch(param_exprs, ctx, bound, skip, row_sel.selector(), row_sel.size(),
                                agg_ctx.allocator_);
       }
-      if (OB_FAIL(ret)) {
-        SQL_LOG(WARN, "add batch rows failed", K(ret));
+      if (OB_FAIL(ret)) { 
+        SQL_LOG(WARN, "add batch rows failed", K(ret)); 
       }
     }
 

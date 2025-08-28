@@ -318,7 +318,7 @@ int ObRawExprInfoExtractor::visit(ObOpRawExpr &expr)
       if (OB_FAIL(expr.add_flag(IS_IS_EXPR))) {
         LOG_WARN("failed to add flag IS_IS_EXPR", K(ret));
       }
-    }
+    } 
   } else if (3 == expr.get_param_count()) {
     // triple operator
     ObRawExpr *param_expr1 = expr.get_param_expr(0);
@@ -711,7 +711,7 @@ int ObRawExprInfoExtractor::visit(ObMatchFunRawExpr &expr)
 }
 
 /*
-The definition of IS_EXPR_DETERMINISTIC:
+The definition of IS_EXPR_DETERMINISTIC: 
 https://docs.oracle.com/en/database/oracle/oracle-database/23/lnpls/DETERMINISTIC-clause.html#GUID-6AECC957-27CC-4334-9F43-0FBE88F92654
 1. A deterministic must return the same value on two distinct invocations if the arguments provided to the two invocations are the same.
 2. A DETERMINISTIC may not have side effects.

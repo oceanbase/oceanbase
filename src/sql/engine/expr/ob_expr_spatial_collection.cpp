@@ -25,14 +25,14 @@ namespace sql
 ObExprSpatialCollection::ObExprSpatialCollection(ObIAllocator &alloc,
                                                  ObExprOperatorType type,
                                                  const char *name,
-                                                 int32_t param_num,
+                                                 int32_t param_num, 
                                                  int32_t dimension)
     : ObFuncExprOperator(alloc,
                          type,
                          name,
                          param_num,
                          VALID_FOR_GENERATED_COL,
-                         dimension)
+                         dimension) 
 {
 }
 

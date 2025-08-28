@@ -81,7 +81,7 @@ private:
   static int storage_estimate_block_count_and_row_count(const obrpc::ObEstBlockArgElement &arg,
                                                         obrpc::ObEstBlockResElement &res);
   static int storage_estimate_skip_rate(const obrpc::ObEstSkipRateArgElement &arg,
-                                        obrpc::ObEstSkipRateResElement &res);
+                                        obrpc::ObEstSkipRateResElement &res);                                          
 };
 
 }

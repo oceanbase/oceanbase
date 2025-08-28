@@ -65,7 +65,7 @@ private:
       const common::ObQueryFlag &scan_flag,
       const blocksstable::ObStorageDatumUtils *datum_utils);
   int always_false(
-      const common::ObNewRange &range,
+      const common::ObNewRange &range, 
       bool &is_false);
   int get_split_partition_rowkeys(
       const ObTablet &tablet_handle,

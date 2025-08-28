@@ -102,7 +102,7 @@ int ObExprPLSeqNextval::eval_pl_seq_next_val(
                                                   seq_schema))) {
       LOG_WARN("fail get sequence schema", K(seq_id), K(ret));
     } else {
-      ObSequenceValue seq_value;
+      ObSequenceValue seq_value; 
       ObAutoincrementService &auto_service = ObAutoincrementService::get_instance();
       if (seq_schema->get_order_flag()
           && seq_schema->get_cache_order_mode() == NEW_ACTION) {
@@ -114,7 +114,7 @@ int ObExprPLSeqNextval::eval_pl_seq_next_val(
           LOG_WARN("fail get nextval for seq", K(tenant_id), K(seq_id), K(ret));
         }
       }
-
+      
       if (OB_FAIL(ret)) {
         // do nothing
       }else if (OB_FAIL(session->set_sequence_value(tenant_id, seq_id, seq_value))) {

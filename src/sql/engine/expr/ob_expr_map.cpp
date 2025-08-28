@@ -33,8 +33,8 @@ ObExprMap::ObExprMap(ObIAllocator &alloc)
 ObExprMap::ObExprMap(ObIAllocator &alloc,
                          ObExprOperatorType type,
                          const char *name,
-                         int32_t param_num,
-                         int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension)
+                         int32_t param_num, 
+                         int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension) 
 {
 }
 
@@ -215,7 +215,7 @@ int ObExprMap::deduce_element_type(ObExecContext *exec_ctx, ObExprResType* types
       }
     }
   } // end for
-
+  
   // set params calculate type
   for (int64_t i = 0; i < param_num && OB_SUCC(ret); i++) {
     if (types_stack[i].is_null()) {

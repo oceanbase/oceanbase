@@ -324,7 +324,7 @@ int ObDirectLoadMultipleHeapTableCompactor::get_table(ObDirectLoadTableHandle &t
       ObDirectLoadTableHandle heap_table_handle;
       ObDirectLoadITable *itable = nullptr;
       ObDirectLoadMultipleHeapTable *heap_table = nullptr;
-
+      
       if (OB_FAIL(table_mgr->alloc_multiple_heap_table(heap_table_handle))) {
         LOG_WARN("fail to alloc multiple heap table table", KR(ret));
       } else if (FALSE_IT(heap_table = static_cast<ObDirectLoadMultipleHeapTable*>(heap_table_handle.get_table()))){

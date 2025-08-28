@@ -53,21 +53,21 @@ int ObExprWeightString::calc_result_typeN(ObExprResType &type,
       types_stack[0].set_calc_type(ObVarcharType);
     } else {
       coll_level = types_stack[0].get_collation_level();
-      if (types_stack[0].get_type() > ObUNumberType &&
-          types_stack[0].get_type() != ObBitType &&
+      if (types_stack[0].get_type() > ObUNumberType && 
+          types_stack[0].get_type() != ObBitType && 
           types_stack[0].get_type() != ObYearType &&
           types_stack[0].get_type() != ObDecimalIntType) {
         // When the input is not a numeric type, convert to a varchar type
         type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_NULL_ON_WARN);
         types_stack[0].set_calc_type(ObVarcharType);
-      }
+      } 
     }
     ObCollationType collation_type = types_stack[0].get_collation_type();
     const ObCharsetInfo *cs = ObCharset::get_charset(collation_type); 
     CK (OB_NOT_NULL(cs));
     if (OB_SUCC(ret)) {
       if (types_stack[0].get_type() == ObDateTimeType ||
-          types_stack[0].get_type() == ObTimestampType ||
+          types_stack[0].get_type() == ObTimestampType || 
           types_stack[0].get_type() == ObDateType ||
           types_stack[0].get_type() == ObTimeType ) {
         // For types such as date, time, etc., the max_lenght is the length of the type entered
@@ -76,7 +76,7 @@ int ObExprWeightString::calc_result_typeN(ObExprResType &type,
         max_length = result_length;
       } else if (as_binary) {
         // In the case of as_binary, the max_length with nweight as the output result
-        max_length = nweight;
+        max_length = nweight; 
       } else {
         // If the input is others, use cs->mbmaxlen to calculate the max_length
         max_length = cs->mbmaxlen * MAX(nweight, types_stack[0].get_length()*cs->mbmaxlen);
@@ -123,7 +123,7 @@ int ObExprWeightString::eval_weight_string(const ObExpr &expr, ObEvalCtx &ctx, O
     ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
     if (arg->is_null()) {
       res_datum.set_null();
-    } else if (!as_binary && (expr.args_[0]->datum_meta_.type_ <= ObUNumberType ||
+    } else if (!as_binary && (expr.args_[0]->datum_meta_.type_ <= ObUNumberType || 
                               expr.args_[0]->datum_meta_.type_ == ObBitType ||
                               expr.args_[0]->datum_meta_.type_ == ObYearType ||
                               expr.args_[0]->datum_meta_.type_ == ObDecimalIntType)) {
@@ -140,7 +140,7 @@ int ObExprWeightString::eval_weight_string(const ObExpr &expr, ObEvalCtx &ctx, O
         }
       } else {
 
-
+      
         // Get the character set and collation information of the input string
         ObCollationType collation_type = CS_TYPE_INVALID;
         if (as_binary) {
@@ -148,12 +148,12 @@ int ObExprWeightString::eval_weight_string(const ObExpr &expr, ObEvalCtx &ctx, O
         } else {
           collation_type = expr.args_[0]->datum_meta_.cs_type_;
         }
-        const ObCharsetInfo *cs = ObCharset::get_charset(collation_type);
+        const ObCharsetInfo *cs = ObCharset::get_charset(collation_type); 
         CK (OB_NOT_NULL(cs));
         if (OB_SUCC(ret)) {
           flags = ob_strxfrm_flag_normalize(flags, cs->levels_for_order);
           // calc the length of result
-          size_t frm_length = 0;
+          size_t frm_length = 0; 
           size_t tmp_length = 0;
           if (result_length > 0) {
             tmp_length = result_length;
@@ -175,7 +175,7 @@ int ObExprWeightString::eval_weight_string(const ObExpr &expr, ObEvalCtx &ctx, O
             }
             bool is_valid_unicode_tmp = 1;
             char *out_buf = expr.get_str_res_mem(ctx, tmp_length);
-            // For the case where the input is an empty string but the nweight is not 0,
+            // For the case where the input is an empty string but the nweight is not 0, 
             // the weight_string function will call strnxfrm() to padding the result
             // eg:
             // mysql> select HEX(WEIGHT_STRING('' as char(3)));
@@ -184,7 +184,7 @@ int ObExprWeightString::eval_weight_string(const ObExpr &expr, ObEvalCtx &ctx, O
             // +-----------------------------------+
             // | 002000200020                      |
             // +-----------------------------------+
-            // However, the strnxfrm requires that the input cannot be a null ptr,
+            // However, the strnxfrm requires that the input cannot be a null ptr, 
             // so an empty string is set as the input.
             const char* tmp_empty_str = "";
             if (OB_ISNULL(out_buf)) {
@@ -192,12 +192,12 @@ int ObExprWeightString::eval_weight_string(const ObExpr &expr, ObEvalCtx &ctx, O
               LOG_WARN("failed to alloc output buf",K(ret));
             } else {
               frm_length = cs->coll->strnxfrm(cs,
-                                            reinterpret_cast<uchar *>(out_buf),
-                                            tmp_length,
+                                            reinterpret_cast<uchar *>(out_buf), 
+                                            tmp_length, 
                                             used_nweights,
                                             str.ptr() != NULL? reinterpret_cast<const uchar *>(str.ptr()) : reinterpret_cast<const uchar *>(tmp_empty_str),
                                             input_length,
-                                            flags,
+                                            flags, 
                                             &is_valid_unicode_tmp);
               res_datum.set_string(out_buf,frm_length);
             }

@@ -78,7 +78,7 @@ private:
    */
   int write_data(int fd, char *buffer, size_t length) const;
   int read_data(int fd, char *buffer, size_t length) const;
-
+  
   inline bool check_kv_char(const char ch) {
     return ((ch >= '0' && ch <= '9') ||
             (ch >= 'a' && ch <= 'z') ||

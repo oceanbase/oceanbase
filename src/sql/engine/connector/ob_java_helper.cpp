@@ -150,7 +150,7 @@ int JVMFunctionHelper::reset_ref()
   return ret;
 }
 
-void *JVMFunctionHelper::ob_alloc_jni(void* ctxp, int64_t size)
+void *JVMFunctionHelper::ob_alloc_jni(void* ctxp, int64_t size) 
 {
   void *ptr = nullptr;
   ObJavaEnvContext *ctx = static_cast<ObJavaEnvContext *>(ctxp);
@@ -174,7 +174,7 @@ void *JVMFunctionHelper::ob_alloc_jni(void* ctxp, int64_t size)
   return ptr;
 }
 
-void *JVMFunctionHelper::ob_alloc_hdfs(void* ctxp, int64_t size)
+void *JVMFunctionHelper::ob_alloc_hdfs(void* ctxp, int64_t size) 
 {
   void *ptr = nullptr;
   ObHdfsEnvContext *ctx = static_cast<ObHdfsEnvContext *>(ctxp);
@@ -359,7 +359,7 @@ int JVMFunctionHelper::open_java_lib(ObJavaEnvContext &java_env_ctx)
   if (OB_ISNULL(jvm_lib_buf = static_cast<char *>(ob_alloc_jni(&java_env_ctx, load_lib_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate jni env for jvm lib", K(ret));
-  } else if (OB_FAIL(get_lib_path(jvm_lib_buf, load_lib_size, jvm_lib_name))) {
+  } else if (OB_FAIL(get_lib_path(jvm_lib_buf, load_lib_size, jvm_lib_name))) { 
     // if return OB_SUCCESS, this func will obtain the C-style jvm lib path string.
     LOG_WARN("failed to get jvm path", K(ret));
   } else if (OB_ISNULL(jvm_lib_handle_ = LIB_OPEN(jvm_lib_buf))) {
@@ -389,7 +389,7 @@ int JVMFunctionHelper::open_java_lib(ObJavaEnvContext &java_env_ctx)
   return ret;
 }
 
-int JVMFunctionHelper::open_hdfs_lib(ObHdfsEnvContext &hdfs_env_ctx)
+int JVMFunctionHelper::open_hdfs_lib(ObHdfsEnvContext &hdfs_env_ctx) 
 {
   int ret = OB_SUCCESS;
   char * hdfs_lib_buf = nullptr;
@@ -632,12 +632,12 @@ bool JVMFunctionHelper::is_valid_loaded_jars_() {
           real_jar_version = static_cast<uint64_t>(jar_version);
         }
       }
-      jni_env_->DeleteLocalRef(cls);
+      jni_env_->DeleteLocalRef(cls); 
     }
   }
-
+  
   // Note!!!
-  // Current jar version should be matched to jar version
+  // Current jar version should be matched to jar version 
   // which is in "tools/upgrade/deps_compat.yml".
   if (OB_FAIL(ret)) {
     /* do nothing */

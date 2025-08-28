@@ -29,8 +29,8 @@ namespace sql
 ObExprMapComponents::ObExprMapComponents(ObIAllocator &alloc,
                          ObExprOperatorType type,
                          const char *name,
-                         int32_t param_num,
-                         int32_t dimension) : ObFuncExprOperator(alloc, type, name,1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+                         int32_t param_num, 
+                         int32_t dimension) : ObFuncExprOperator(alloc, type, name,1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION) 
 {
 }
 
@@ -122,9 +122,9 @@ int ObExprMapComponents::eval_map_components(const ObExpr &expr, ObEvalCtx &ctx,
   return ret;
 }
 
-int ObExprMapComponents::eval_map_components_vector(const ObExpr &expr,
+int ObExprMapComponents::eval_map_components_vector(const ObExpr &expr, 
                          ObEvalCtx &ctx,
-                         const ObBitVector &skip,
+                         const ObBitVector &skip, 
                          const EvalBound &bound,
                          bool is_key)
 {
@@ -169,17 +169,17 @@ int ObExprMapComponents::eval_map_components_vector(const ObExpr &expr,
         }
       } else if (OB_FAIL(ObArrayExprUtils::set_array_res<ObVectorBase>(res_arr, expr, ctx, static_cast<ObVectorBase *>(res_vec), idx))) {
         LOG_WARN("set array res failed", K(ret));
-      }
+      } 
     } // end for
   }
   return ret;
 }
 
-int ObExprMapComponents::get_map_components_arr_vector(ObIAllocator &tmp_allocator,
-                                  ObEvalCtx &ctx,
+int ObExprMapComponents::get_map_components_arr_vector(ObIAllocator &tmp_allocator, 
+                                  ObEvalCtx &ctx, 
                                   ObExpr &param_expr,
-                                  const uint16_t subschema_id,
-                                  int64_t row_idx,
+                                  const uint16_t subschema_id, 
+                                  int64_t row_idx, 
                                   ObIArrayType *&arr_res,
                                   bool is_key)
 {
@@ -231,8 +231,8 @@ int ObExprMapComponents::get_map_components_arr_vector(ObIAllocator &tmp_allocat
 
 int ObExprMapComponents::get_map_components_arr(ObIAllocator &tmp_allocator,
                                     ObEvalCtx &ctx,
-                                    ObString &map_blob,
-                                    ObIArrayType *&arr_res,
+                                    ObString &map_blob, 
+                                    ObIArrayType *&arr_res, 
                                     uint16_t &res_subschema_id,
                                     uint16_t &subschema_id,
                                     bool is_key)

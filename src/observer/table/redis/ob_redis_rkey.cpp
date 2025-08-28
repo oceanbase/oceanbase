@@ -100,9 +100,9 @@ int ObRedisRKey::key_length_to_hex(ObString &key_length_str)
 // rowkey: (db, rkey)
 // part_key: list, string: (db, rkey)
 //           zset, set, list: (db, vk)
-int ObRedisRKeyUtil::gen_partition_key_by_rowkey(ObRedisDataModel model,
+int ObRedisRKeyUtil::gen_partition_key_by_rowkey(ObRedisDataModel model, 
                                                  ObIAllocator &allocator,
-                                                 const ObRowkey &rowkey,
+                                                 const ObRowkey &rowkey, 
                                                  ObRowkey &partition_key)
 {
   int ret = OB_SUCCESS;
@@ -124,7 +124,7 @@ int ObRedisRKeyUtil::gen_partition_key_by_rowkey(ObRedisDataModel model,
       partition_key.get_obj_ptr()[ObRedisUtil::COL_IDX_RKEY].set_varbinary(key);
     }
   }
-
+  
   return ret;
 }
 

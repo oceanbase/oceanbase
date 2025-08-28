@@ -189,13 +189,13 @@ int ObVirtualSqlMonitor::inner_get_next_row(common::ObNewRow *&row)
           case TENANT_ID: {
             cells[cell_idx].set_int(tenant_id_);
             break;
-          }
+          } 
           case SVR_IP: {
             cells[cell_idx].set_varchar(ipstr_);
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                     ObCharset::get_default_charset()));
             break;
-          }
+          } 
           case SVR_PORT: {
             cells[cell_idx].set_int(port_);
             break;
@@ -252,7 +252,7 @@ int ObVirtualSqlMonitor::inner_get_next_row(common::ObNewRow *&row)
             ret = OB_ERR_UNEXPECTED;
             SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(col_id));
             break;
-          }
+          }   
         }
       }
 

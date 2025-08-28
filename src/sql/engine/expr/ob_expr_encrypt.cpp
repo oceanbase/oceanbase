@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #define USING_LOG_PREFIX SQL_EXE
 #include "ob_expr_encrypt.h"
 #include "sql/engine/ob_exec_context.h"
@@ -54,7 +54,7 @@ int ObExprDesEncrypt::calc_result_typeN(ObExprResType& type,
     types_stack[0].set_calc_collation_type(types_stack[0].get_collation_type());
     types_stack[0].set_calc_collation_level(types_stack[0].get_collation_level());
     if (2 == param_num) {
-      if (ob_is_integer_type(types_stack[1].get_type()) ||
+      if (ob_is_integer_type(types_stack[1].get_type()) || 
           ObBitType == types_stack[1].get_type() ||
           ObYearType == types_stack[1].get_type()) {
         types_stack[1].set_calc_type(common::ObIntType);
@@ -604,7 +604,7 @@ int ObExprEncrypt::eval_encrypt(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res
     char tmp_res[14];
     ObEvalCtx::TempAllocGuard alloc_guard(ctx);
     ObIAllocator &calc_alloc = alloc_guard.get_allocator();
-
+    
     if (src.is_null()) {
       res.set_null();
     } else if (src.get_string().empty()) {
@@ -667,7 +667,7 @@ int ObExprEncrypt::eval_encrypt_batch(const ObExpr &expr, ObEvalCtx &ctx, const 
   ObEvalCtx::TempAllocGuard alloc_guard(ctx);
   ObIAllocator &calc_alloc = alloc_guard.get_allocator();
   char salt[3];
-
+  
   if (OB_FAIL(expr.args_[0]->eval_batch(ctx, skip, batch_size))) {
     LOG_WARN("eval args_[0] failed", K(ret));
   } else {
@@ -882,7 +882,7 @@ int ObExprEncode::eval_encode_batch(const ObExpr &expr, ObEvalCtx &ctx, const Ob
       } else {
         ObString src_str = src_array.at(j)->get_string();
         ObString key_str = key_array.at(j)->get_string();
-
+        
         char * res_buf = expr.get_str_res_mem(ctx, src_str.length(), j);
         crypt.init(key_str);
         if (OB_FAIL(crypt.encode(src_str, res_buf))) {

@@ -219,7 +219,7 @@ TEST_F(TestDataSplit, test_single_replica_request_arg_serialize)
   memset(serialize_buf, 0, sizeof(serialize_buf));
   obrpc::ObDDLBuildSingleReplicaRequestArg split_arg;
   ret = prepare_mock_start_arg(true, split_arg);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_SUCCESS, ret);  
   ret = split_arg.serialize(serialize_buf, buf_len, write_pos);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(split_arg.get_serialize_size(), write_pos);
@@ -312,7 +312,7 @@ TEST_F(TestDataSplit, test_convert_rowkey_to_range)
       }
     }
   }
-  STORAGE_LOG(INFO, "TestDataSplit::test_convert_rowkey_to_range", K(ret), "parallel_datum_rowkey_list", split_arg.parallel_datum_rowkey_list_,
+  STORAGE_LOG(INFO, "TestDataSplit::test_convert_rowkey_to_range", K(ret), "parallel_datum_rowkey_list", split_arg.parallel_datum_rowkey_list_, 
       K(datum_ranges_array));
 }
 

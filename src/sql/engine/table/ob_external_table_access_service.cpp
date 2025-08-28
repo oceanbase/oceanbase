@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #define USING_LOG_PREFIX SQL
 
 #include "ob_external_table_access_service.h"
@@ -70,8 +70,8 @@ bool ObExternalDataAccessDriver::is_opened() const
   return fd_.is_valid();
 }
 
-int ObExternalDataAccessDriver::get_file_sizes(const ObString &location,
-                                               const ObIArray<ObString> &urls,
+int ObExternalDataAccessDriver::get_file_sizes(const ObString &location, 
+                                               const ObIArray<ObString> &urls, 
                                                ObIArray<int64_t> &file_sizes)
 {
   int ret = OB_SUCCESS;
@@ -80,7 +80,7 @@ int ObExternalDataAccessDriver::get_file_sizes(const ObString &location,
   for (int64_t i = 0; OB_SUCC(ret) && i < urls.count(); i++) {
     int64_t len = 0;
     ObSqlString path;
-    if (OB_FAIL(path.append(tmp_location.trim())) ||
+    if (OB_FAIL(path.append(tmp_location.trim())) || 
         (*(path.ptr() + path.length() - 1) != '/' && OB_FAIL(path.append("/"))) ||
         OB_FAIL(path.append(urls.at(i)))) {
       LOG_WARN("append string failed", K(ret));
@@ -265,8 +265,8 @@ private:
 int ObExternalDataAccessDriver::get_file_list(const ObString &path,
                                               const ObString &pattern,
                                               const ObExprRegexpSessionVariables &regexp_vars,
-                                              ObIArray<ObString> &file_urls,
-                                              ObIArray<int64_t> &file_sizes,
+                                              ObIArray<ObString> &file_urls, 
+                                              ObIArray<int64_t> &file_sizes, 
                                               ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
@@ -617,7 +617,7 @@ int ObExternalTableAccessService::table_scan(
       break;
     case ObExternalFileFormat::ODPS_FORMAT:
       if (!GCONF._use_odps_jni_connector) {
-#if defined(OB_BUILD_CPP_ODPS)
+#if defined(OB_BUILD_CPP_ODPS) 
         if (OB_ISNULL(row_iter = OB_NEWx(ObODPSTableRowIterator,
                                          (scan_param.allocator_)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;

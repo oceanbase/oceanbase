@@ -45,7 +45,7 @@ using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 using namespace oceanbase::common::sqlclient;
 
-ObString get_display_mysql_version_cfg()
+ObString get_display_mysql_version_cfg() 
 {
   return GCONF._display_mysql_version.get_value_string();;
 }
@@ -512,7 +512,7 @@ void ObSQLUtils::clear_expr_eval_flags(const ObExpr &expr, ObEvalCtx &ctx)
   if (expr.eval_func_ != NULL || T_OP_ROW == expr.type_) {
     // The eval_func_ of the T_OP_ROW expression is null, causing the issue where the evaluation
     // flag of the child expressions is not cleared. For more detail, see issue
-    //
+    // 
     expr.get_eval_info(ctx).clear_evaluated_flag();
     for (int64_t i = 0; i < expr.arg_cnt_; i++) {
       clear_expr_eval_flags(*expr.args_[i], ctx);
@@ -661,7 +661,7 @@ int ObSQLUtils::is_collation_data_version_valid(ObCollationType collation_type, 
     SQL_LOG(WARN, "Unicode collation not supported when data_version < 4_2_4_0 or between [430,433)", K(collation_type), K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Unicode collation not supported when data_version < 4_2_4_0 or between [430,433), unicode collation is");
   } else if ((
-                data_version < MOCK_DATA_VERSION_4_2_5_0 ||
+                data_version < MOCK_DATA_VERSION_4_2_5_0 || 
                 (data_version >= DATA_VERSION_4_3_0_0 && data_version < DATA_VERSION_4_3_4_0)
               )
               &&
@@ -674,7 +674,7 @@ int ObSQLUtils::is_collation_data_version_valid(ObCollationType collation_type, 
                   ((CS_TYPE_UTF8MB4_0900_AI_CI <= collation_type && collation_type <= CS_TYPE_UTF8MB4_MN_CYRL_0900_AS_CS)
                    || (CS_TYPE_UTF16_ICELANDIC_UCA_CI <= collation_type && collation_type <= CS_TYPE_UTF16_VIETNAMESE_CI)
                    || (CS_TYPE_UTF8MB4_ICELANDIC_UCA_CI <= collation_type && collation_type <= CS_TYPE_UTF8MB4_VIETNAMESE_CI)
-                   || CS_TYPE_BIG5_BIN == collation_type
+                   || CS_TYPE_BIG5_BIN == collation_type 
                    || CS_TYPE_BIG5_CHINESE_CI == collation_type
                    || CS_TYPE_HKSCS31_BIN == collation_type
                    || CS_TYPE_HKSCS_BIN == collation_type
@@ -928,8 +928,8 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
                 // should call ObUserDefinedType::destruct_obj later
                 // fix bug:
                 // create table udt_t1 (
-                //   id int,
-                //   x1 sdo_geometry DEFAULT
+                //   id int, 
+                //   x1 sdo_geometry DEFAULT 
                 //      sdo_geometry(2002, null, null,
                 //                   sdo_elem_info_array (1,2,1),
                 //                   sdo_ordinate_array (10,25, 20,30, 25,25, 30,30)));
@@ -1345,7 +1345,7 @@ int ObSQLUtils::extract_odps_part_spec(const ObString &all_part_spec, ObIArray<O
 }
 
 int ObSQLUtils::get_external_table_type(const uint64_t tenant_id,
-                                        const uint64_t table_id,
+                                        const uint64_t table_id, 
                                         ObExternalFileFormat::FormatType &type)
 {
   int ret = OB_SUCCESS;
@@ -1369,7 +1369,7 @@ int ObSQLUtils::get_external_table_type(const ObTableSchema *table_schema, ObExt
   } else {
     ObExternalFileFormat format;
     ObArenaAllocator allocator;
-    ObString table_format_or_properties = table_schema->get_external_file_format().empty() ?
+    ObString table_format_or_properties = table_schema->get_external_file_format().empty() ? 
                                   table_schema->get_external_properties(): table_schema->get_external_file_format();
     if (OB_FAIL(get_external_table_type(table_format_or_properties, type))) {
       LOG_WARN("failed to get external table type", K(ret), K(table_format_or_properties));
@@ -1378,7 +1378,7 @@ int ObSQLUtils::get_external_table_type(const ObTableSchema *table_schema, ObExt
   return ret;
 }
 
-int ObSQLUtils::get_external_table_type(const ObString &table_format_or_properties,
+int ObSQLUtils::get_external_table_type(const ObString &table_format_or_properties, 
                                         ObExternalFileFormat::FormatType &type) {
   int ret = OB_SUCCESS;
   ObExternalFileFormat format;
@@ -1394,7 +1394,7 @@ int ObSQLUtils::get_external_table_type(const ObString &table_format_or_properti
 
 
 int ObSQLUtils::is_odps_external_table(const uint64_t tenant_id,
-                                       const uint64_t table_id,
+                                       const uint64_t table_id, 
                                        bool &is_odps_external_table)
 {
   int ret = OB_SUCCESS;
@@ -1408,7 +1408,7 @@ int ObSQLUtils::is_odps_external_table(const uint64_t tenant_id,
   return ret;
 }
 
-int ObSQLUtils::is_odps_external_table(const ObTableSchema *table_schema,
+int ObSQLUtils::is_odps_external_table(const ObTableSchema *table_schema, 
                                        bool &is_odps_external_table)
 {
   int ret = OB_SUCCESS;
@@ -1425,7 +1425,7 @@ int ObSQLUtils::is_odps_external_table(const ObTableSchema *table_schema,
   return ret;
 }
 
-int ObSQLUtils::is_odps_external_table(const ObString &table_format_or_properties,
+int ObSQLUtils::is_odps_external_table(const ObString &table_format_or_properties, 
                                        bool &is_odps_external_table)
 {
   int ret = OB_SUCCESS;
@@ -1439,7 +1439,7 @@ int ObSQLUtils::is_odps_external_table(const ObString &table_format_or_propertie
   return ret;
 }
 
-int ObSQLUtils::get_odps_api_mode(const ObString &table_format_or_properties,
+int ObSQLUtils::get_odps_api_mode(const ObString &table_format_or_properties, 
                                     bool &is_odps_external_table,
                                     ObODPSGeneralFormat::ApiMode& mode)
 {
@@ -1518,7 +1518,7 @@ int ObSQLUtils::get_proxy_can_activate_role(const ObIArray<uint64_t> &role_id_ar
   } else if (proxied_info.proxy_flags_ == PROXY_USER_NO_ROLES_BE_ACTIVATED) {
     new_role_id_array.reuse();
     new_role_id_option_array.reuse();
-  } else if (proxied_info.proxy_flags_ == PROXY_USER_ACTIVATE_ALL_ROLES)  {
+  } else if (proxied_info.proxy_flags_ == PROXY_USER_ACTIVATE_ALL_ROLES)  {  
     OZ (new_role_id_array.assign(role_id_array));
     OZ (new_role_id_option_array.assign(role_id_option_array));
   } else {
@@ -2219,7 +2219,7 @@ int ObSQLUtils::get_outline_key(ObIAllocator &allocator,
                                                                         raw_params,
                                                                         parse_mode))) {
       LOG_WARN("fail to fast_parameterize_sql", K(ret));
-    } else if (need_format
+    } else if (need_format 
           && OB_FAIL(ObSqlParameterization::formalize_sql_filter_hint(allocator, no_param_sql, no_param_sql, raw_params))) {
       LOG_WARN("failed to formalize fast parser sql", K(no_param_sql), K(ret));
     } else if (check_param && OB_FAIL(ObSqlParameterization::check_and_generate_param_info(raw_params,
@@ -2232,7 +2232,7 @@ int ObSQLUtils::get_outline_key(ObIAllocator &allocator,
         LOG_WARN("fail to check and generate not params",
                  K(ret), K(query_sql), K(no_param_sql));
       }
-    } else if (OB_UNLIKELY(NULL == (buf = (char *)allocator.alloc(format_len))) ||
+    } else if (OB_UNLIKELY(NULL == (buf = (char *)allocator.alloc(format_len))) || 
         OB_UNLIKELY(NULL == (buf2 = (char *)allocator.alloc(format_len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("fail to alloc buf", K(ret));
@@ -2240,7 +2240,7 @@ int ObSQLUtils::get_outline_key(ObIAllocator &allocator,
       LOG_WARN("fail to construct_sql", K(ret), K(no_param_sql), K(special_params.count()));
     } else if (FALSE_IT(constructed_sql.assign_ptr(buf, pos))) {
       // do nothing
-    } else if (need_format
+    } else if (need_format 
           && OB_FAIL(ObSqlParameterization::try_format_in_expr(constructed_sql, buf2, format_len, pos2, can_format))) {
       LOG_WARN("fail to format in expr", K(ret));
     } else {
@@ -2382,7 +2382,7 @@ int ObSQLUtils::reconstruct_sql(ObIAllocator &allocator, const ObStmt *stmt, ObS
 int ObISqlPrinter::do_print(ObIAllocator &allocator, ObString &result)
 {
   int ret = OB_SUCCESS;
-  //First try 64K buf on the stack, if it fails, then try 128K.
+  //First try 64K buf on the stack, if it fails, then try 128K. 
   //If it still fails, allocate 256K from the heap. If it continues to fail, expand twice each time.
   int64_t res_len = 0;
   SMART_VAR(char[OB_MAX_SQL_LENGTH], buf) {
@@ -2427,7 +2427,7 @@ int ObISqlPrinter::do_print(ObIAllocator &allocator, ObString &result)
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -2475,10 +2475,10 @@ int ObSQLUtils::print_sql(char *buf,
   if (OB_SUCC(ret)) {
     switch (reconstruct_stmt->get_stmt_type()) {
     case stmt::T_SELECT: {
-      ObSelectStmtPrinter printer(buf,
-                                  buf_len,
-                                  &pos,
-                                  static_cast<const ObSelectStmt*>(reconstruct_stmt),
+      ObSelectStmtPrinter printer(buf, 
+                                  buf_len, 
+                                  &pos, 
+                                  static_cast<const ObSelectStmt*>(reconstruct_stmt), 
                                   schema_guard,
                                   print_params,
                                   param_store,
@@ -2493,11 +2493,11 @@ int ObSQLUtils::print_sql(char *buf,
     }
       break;
     case stmt::T_INSERT_ALL: {
-      ObInsertAllStmtPrinter printer(buf,
-                                    buf_len,
-                                    &pos,
+      ObInsertAllStmtPrinter printer(buf, 
+                                    buf_len, 
+                                    &pos, 
                                     static_cast<const ObInsertAllStmt*>(reconstruct_stmt),
-                                    schema_guard,
+                                    schema_guard, 
                                     print_params,
                                     param_store,
                                     session);
@@ -2510,11 +2510,11 @@ int ObSQLUtils::print_sql(char *buf,
       break;
     case stmt::T_REPLACE:
     case stmt::T_INSERT: {
-      ObInsertStmtPrinter printer(buf,
-                                  buf_len,
-                                  &pos,
+      ObInsertStmtPrinter printer(buf, 
+                                  buf_len, 
+                                  &pos, 
                                   static_cast<const ObInsertStmt*>(reconstruct_stmt),
-                                  schema_guard,
+                                  schema_guard, 
                                   print_params,
                                   param_store,
                                   session);
@@ -2526,11 +2526,11 @@ int ObSQLUtils::print_sql(char *buf,
     }
       break;
     case stmt::T_DELETE: {
-      ObDeleteStmtPrinter printer(buf,
-                                  buf_len,
-                                  &pos,
+      ObDeleteStmtPrinter printer(buf, 
+                                  buf_len, 
+                                  &pos, 
                                   static_cast<const ObDeleteStmt*>(reconstruct_stmt),
-                                  schema_guard,
+                                  schema_guard, 
                                   print_params,
                                   param_store,
                                   session);
@@ -2542,11 +2542,11 @@ int ObSQLUtils::print_sql(char *buf,
     }
       break;
     case stmt::T_UPDATE: {
-      ObUpdateStmtPrinter printer(buf,
-                                  buf_len,
-                                  &pos,
+      ObUpdateStmtPrinter printer(buf, 
+                                  buf_len, 
+                                  &pos, 
                                   static_cast<const ObUpdateStmt*>(reconstruct_stmt),
-                                  schema_guard,
+                                  schema_guard, 
                                   print_params,
                                   param_store,
                                   session);
@@ -2558,11 +2558,11 @@ int ObSQLUtils::print_sql(char *buf,
     }
       break;
     case stmt::T_MERGE: {
-      ObMergeStmtPrinter printer(buf,
-                                  buf_len,
+      ObMergeStmtPrinter printer(buf, 
+                                  buf_len, 
                                   &pos,
                                   static_cast<const ObMergeStmt*>(reconstruct_stmt),
-                                  schema_guard,
+                                  schema_guard, 
                                   print_params,
                                   param_store,
                                   session);
@@ -2574,7 +2574,7 @@ int ObSQLUtils::print_sql(char *buf,
     }
       break;
     default: {
-
+      
     }
       break;
     }
@@ -3365,7 +3365,7 @@ int ObSQLUtils::choose_best_partition_replica_addr(const ObAddr &local_addr,
         LOG_TRACE("has other region replica", K(selected_addr));
       } else {
         ret = OB_NO_READABLE_REPLICA;
-        LOG_WARN("No useful replica found", K(ret), K(local_addr), K(candi_replicas),
+        LOG_WARN("No useful replica found", K(ret), K(local_addr), K(candi_replicas), 
                  K(all_server_arr));
       }
     }
@@ -3509,7 +3509,7 @@ int ObSQLUtils::merge_solidified_vars_into_type_ctx(ObExprTypeCtx &type_ctx,
     }
   }
   if (OB_SUCC(ret)) {
-    uint64_t compat_version = type_ctx.get_compat_version();
+    uint64_t compat_version = type_ctx.get_compat_version();  
     if (OB_FAIL(merge_solidified_var_into_compat_version(&session_vars_snapshot, compat_version))) {
       LOG_WARN("get sql mode failed", K(ret));
     } else {
@@ -5006,7 +5006,7 @@ int ObSqlGeoUtils::check_srid_by_srs(uint64_t tenant_id, uint64_t srid)
     LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "srid", "UINT32_MAX");
   } else if (srid != 0 &&
       OB_FAIL(OTSRS_MGR->get_tenant_srs_guard(srs_guard))) {
-    LOG_WARN("failed to get srs guard", K(tenant_id), K(srid), K(ret));
+    LOG_WARN("failed to get srs guard", K(tenant_id), K(srid), K(ret));    
   } else if (OB_FAIL(srs_guard.get_srs_item(srid, srs))) {
     LOG_WARN("get srs failed", K(srid), K(ret));
   }
@@ -5043,7 +5043,7 @@ int ObPreCalcExprConstraint::assign(const ObPreCalcExprConstraint &other, common
   return ret;
 }
 
-int ObPreCalcExprConstraint::check_is_match(ObDatumObjParam &datum_param,
+int ObPreCalcExprConstraint::check_is_match(ObDatumObjParam &datum_param, 
                                             ObExecContext &exec_ctx,
                                             bool &is_match) const
 {
@@ -5125,7 +5125,7 @@ int ObRowidConstraint::assign(const ObPreCalcExprConstraint &other, common::ObIA
   return ret;
 }
 
-int ObRowidConstraint::check_is_match(ObDatumObjParam &datum_param,
+int ObRowidConstraint::check_is_match(ObDatumObjParam &datum_param, 
                                       ObExecContext &exec_ctx,
                                       bool &is_match) const
 {
@@ -5675,7 +5675,7 @@ int ObSQLUtils::split_remote_object_storage_url(ObString &url, common::ObObjectS
     LOG_WARN("incorrect uri", K(ret));
   }
   LOG_DEBUG("check access info", K(access_id), K(access_key), K(host_name), K(url));
-
+  
   //fill storage_info
   if (OB_SUCC(ret) && OB_NOT_NULL(storage_info)) {
     int64_t pos = 0;
@@ -5735,9 +5735,9 @@ int ObSQLUtils::check_location_access_priv(const ObString &location, ObSQLSessio
 
 int ObSQLUtils::check_sql_map_expected_resource_group(const ObSqlCtx &context,
                                                       const ObResultSet &result,
-                                                      const ObResolverParams *resolve_ctx,
-                                                      const ObStmt *stmt,
-                                                      ObPCResourceMapRule &resource_map_rule)
+                                                      const ObResolverParams *resolve_ctx, 
+                                                      const ObStmt *stmt, 
+                                                      ObPCResourceMapRule &resource_map_rule) 
 {
   int ret = OB_SUCCESS;
   // check whether match resource group
@@ -5820,7 +5820,7 @@ int ObSQLUtils::check_hint_for_resource_group(uint64_t tenant_id,
   ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
   if (OB_FAIL(rule_mgr.get_group_id_by_name(tenant_id, group_name, group_id))) {
     if (OB_HASH_NOT_EXIST == ret) {
-      // create directive and delete it immediately，may haven't beed flush into disk storage
+      // create directive and delete it immediately，may haven't beed flush into disk storage 
       // group not exist, or hint is invalid，need to try to match column rule
       ret = OB_SUCCESS;
       LOG_TRACE("resource group specified by hint did not exist", K(resource_group_str), K(tenant_id));
@@ -5945,7 +5945,7 @@ int ObSQLUtils::check_column_with_res_mapping_rule(const ObResolverParams *resol
   const ObSQLSessionInfo *session_info = resolve_ctx->session_info_;
   const ObSchemaChecker *schema_checker = resolve_ctx->schema_checker_;
   const ParamStore *param_store = resolve_ctx->param_list_;
-
+  
   ObResourceColMappingRuleManager &col_rule_mgr = G_RES_MGR.get_col_mapping_rule_mgr();
   uint64_t db_id = session_info->get_database_id();
   uint64_t tenant_id = session_info->get_effective_tenant_id();
@@ -6023,7 +6023,7 @@ int ObSQLUtils::async_recompile_view(const share::schema::ObTableSchema &old_vie
     const ObColumnSchemaV2 *column_schema;
     uint64_t column_id;
     bool is_column_schema_null = false;
-    for (int64_t i = 0; OB_SUCC(ret) && !is_column_schema_null
+    for (int64_t i = 0; OB_SUCC(ret) && !is_column_schema_null 
                         && i < select_stmt->get_select_item_size(); ++i) {
       column_id = i + OB_APP_MIN_COLUMN_ID;
       column_schema = old_view_schema.get_column_schema(column_id);
@@ -6184,7 +6184,7 @@ int ObSQLUtils::check_sys_view_changed(const share::schema::ObTableSchema &old_v
     }
   }
   return ret;
-}
+}            
 
 int ObSQLUtils::find_synonym_ref_obj(const ObString &database_name,
                                      const ObString &object_name,
@@ -6311,7 +6311,7 @@ int ObSQLUtils::find_synonym_ref_obj(const uint64_t database_id,
                                             share::schema::ObPackageType::PACKAGE_TYPE,
                                             COMPATIBLE_ORACLE_MODE,
                                             package_info))) {
-    LOG_WARN("failed to get package info", K(ret));
+    LOG_WARN("failed to get package info", K(ret));            
   } else if (nullptr != package_info) {
     exist = true;
     object_id = package_info->get_package_id();
@@ -6321,7 +6321,7 @@ int ObSQLUtils::find_synonym_ref_obj(const uint64_t database_id,
                                             share::schema::ObPackageType::PACKAGE_TYPE,
                                             COMPATIBLE_ORACLE_MODE,
                                             package_info))) {
-    LOG_WARN("failed to get package info", K(ret));
+    LOG_WARN("failed to get package info", K(ret));            
   } else if (nullptr != package_info) {
     exist = true;
     object_id = package_info->get_package_id();
@@ -6332,7 +6332,7 @@ int ObSQLUtils::find_synonym_ref_obj(const uint64_t database_id,
 }
 
 int ObSQLUtils::print_identifier_require_quotes(ObCollationType collation_type,
-                                                const ObString &ident,
+                                                const ObString &ident, 
                                                 bool &require)
 {
   int ret = OB_SUCCESS;

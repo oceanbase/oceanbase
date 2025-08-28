@@ -163,14 +163,14 @@ int ObCheckConstraintValidationTask::process()
     LOG_WARN("fail to finish check constraint task", K(ret), K(tmp_ret));
   }
   char table_id_buffer[256];
-  snprintf(table_id_buffer, sizeof(table_id_buffer), "data_table_id:%ld, target_object_id:%ld",
+  snprintf(table_id_buffer, sizeof(table_id_buffer), "data_table_id:%ld, target_object_id:%ld", 
             data_table_id_, target_object_id_);
   ROOTSERVICE_EVENT_ADD("ddl scheduler", "check constraint validation task process finish",
     K_(tenant_id),
     "ret", ret,
     K_(trace_id),
     K_(task_id),
-    K_(constraint_id),
+    K_(constraint_id), 
     K_(schema_version),
     table_id_buffer);
   LOG_INFO("process check constraint validation task", "ddl_event_info", ObDDLEventInfo(), K(task_id_), K(constraint_id_));
@@ -244,7 +244,7 @@ int ObForeignKeyConstraintValidationTask::check_fk_by_send_sql() const
   ObSchemaGetterGuard schema_guard;
   // notice that data_table_id_ may be parent_table_id or child_table_id,
   // for example: data_table_id will be parent_table_id when altering non-ref column type of parent table.
-  //
+  // 
   const ObTableSchema *data_table_schema = nullptr;
   const ObDatabaseSchema *data_database_schema = nullptr;
   const ObTableSchema *child_table_schema = nullptr;
@@ -780,7 +780,7 @@ int ObConstraintTask::wait_trans_end()
       } else {
         LOG_WARN("hold snapshot version failed", K(ret));
       }
-    }
+    } 
     if (trans.is_started()) {
       const bool need_commit = (ret == OB_SUCCESS);
       const int tmp_ret = trans.end(need_commit);

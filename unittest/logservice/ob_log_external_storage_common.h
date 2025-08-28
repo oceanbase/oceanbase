@@ -180,7 +180,7 @@ public:
   {
     // 本地盘的delete_palf操作要求palf目录下不为空
     GLOBAL_UTILS.delete_blocks(tenant_id, palf_id, 0, MAX_BLOCK_ID+1);
-    return GLOBAL_UTILS.delete_palf(tenant_id, palf_id);
+    return GLOBAL_UTILS.delete_palf(tenant_id, palf_id);    
   }
 
 private:
@@ -254,7 +254,7 @@ TEST_F(TestLogEXTUtils, basic_interface)
   // 前置条件准备
   EXPECT_EQ(OB_SUCCESS, create_tenant(tenant_id));
   EXPECT_EQ(OB_SUCCESS, create_palf(tenant_id, palf_id));
-
+  
   // 产生4个文件，最小的block_id为10
   std::vector<SCN> scns(4, SCN::min_scn());
   int64_t start_ts = ObTimeUtility::current_time();
@@ -264,8 +264,8 @@ TEST_F(TestLogEXTUtils, basic_interface)
   const block_id_t start_block_id = 10;
   const block_id_t end_block_id = 15;
   EXPECT_EQ(OB_SUCCESS, upload_blocks(tenant_id, palf_id, 10, scns));
-
-  uint64_t invalid_tenant_id = OB_INVALID_TENANT_ID;
+  
+  uint64_t invalid_tenant_id = OB_INVALID_TENANT_ID;  
   uint64_t valid_tenant_id = 1;
   int64_t invalid_palf_id = INVALID_PALF_ID;
   int64_t valid_palf_id = 1;
@@ -298,7 +298,7 @@ TEST_F(TestLogEXTUtils, basic_interface)
     EXPECT_EQ(start_block_id, oldest_block_id);
 
     // OB_ALLOCATE_MEMORY_FAILED AND OB_OBJECT_STORAGE_IO_ERROR
-
+    
     CLOG_LOG(INFO, "begin case1 not exist");
     // OB_ENTRY_NOT_EXIST
     uint64_t not_exist_tenant_id = 500;
@@ -352,7 +352,7 @@ TEST_F(TestLogEXTUtils, basic_interface)
     EXPECT_EQ(newest_block_id, tmp_start_block_id);
 
     // OB_ALLOCATE_MEMORY_FAILED AND OB_OBJECT_STORAGE_IO_ERROR
-
+    
     CLOG_LOG(INFO, "begin case2 not exist");
 
     // OB_ENTRY_NOT_EXIST
@@ -369,7 +369,7 @@ TEST_F(TestLogEXTUtils, basic_interface)
     EXPECT_EQ(OB_SUCCESS, ObSharedLogUtils::get_newest_block(
       tenant_id, palf_id, tmp_start_block_id, newest_block_id));
 
-    // 起点文件在oss上不存在
+    // 起点文件在oss上不存在 
     tmp_start_block_id = end_block_id;
     EXPECT_EQ(OB_ENTRY_NOT_EXIST, ObSharedLogUtils::get_newest_block(
       tenant_id, palf_id, tmp_start_block_id, newest_block_id));
@@ -397,7 +397,7 @@ TEST_F(TestLogEXTUtils, basic_interface)
     EXPECT_EQ(block_min_scn, scns[0]);
 
     // OB_ALLOCATE_MEMORY_FAILED AND OB_OBJECT_STORAGE_IO_ERROR
-
+    
     CLOG_LOG(INFO, "begin case2 entry not exist");
     // OB_ENTRY_NOT_EXIST
     uint64_t not_exist_tenant_id = 500;
@@ -451,8 +451,8 @@ TEST_F(TestLogEXTUtils, basic_interface)
         tmp_tenant_id, tmp_palf_id, tmp_oldest_block));
       EXPECT_EQ(tmp_start_block+1003, tmp_oldest_block);
       EXPECT_EQ(OB_SUCCESS, delete_palf(tmp_tenant_id, tmp_palf_id));
-      bool tmp_palf_exist = false;
-      bool tmp_tenant_exist = false;
+      bool tmp_palf_exist = false; 
+      bool tmp_tenant_exist = false; 
       CLOG_LOG(INFO, "runlin trace delete_palf", K(tmp_tenant_id), K(tmp_palf_id));
       EXPECT_EQ(OB_SUCCESS, ObSharedLogUtils::check_palf_exist(
         tmp_tenant_id, tmp_palf_id, tmp_palf_exist));
@@ -475,7 +475,7 @@ TEST_F(TestLogEXTUtils, basic_interface)
     EXPECT_EQ(oldest_block_id, start_block_id);
 
     // OB_ALLOCATE_MEMORY_FAILED AND OB_OBJECT_STORAGE_IO_ERROR
-
+    
     // 删除不存在文件
     uint64_t not_exist_tenant_id = 500;
     EXPECT_EQ(OB_SUCCESS, ObSharedLogUtils::delete_blocks(
@@ -503,7 +503,7 @@ TEST_F(TestLogEXTUtils, basic_interface)
       tenant_id, palf_id, valid_block_id, valid_uri, dest));
     EXPECT_EQ(0, STRNCMP(valid_uri, OB_FILE_PREFIX, strlen(OB_FILE_PREFIX)));
   }
-
+  
   // case7: 验证ObSharedLogUtils::delete_tenant和delete_palf
   // case7.1 验证ObSharedLogUtils::check_palf_exist
   // case7.2 验证ObSharedLogUtils::check_tenant_exist
@@ -643,7 +643,7 @@ TEST_F(TestLogEXTUtils, basic_interface)
         EXPECT_EQ(OB_SUCCESS, ObSharedLogUtils::check_tenant_exist(
           tmp_tenant_id, tmp_tenant_exist));
         EXPECT_EQ(false, tmp_tenant_exist);
-      } // end
+      } // end 
     }
   }
 }

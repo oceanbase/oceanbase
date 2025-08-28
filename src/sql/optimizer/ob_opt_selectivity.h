@@ -208,12 +208,12 @@ class OptSelectivityCtx
   double get_current_rows() const { return current_rows_; }
   void set_current_rows(const double current_rows) { current_rows_ = current_rows; }
 
-  const ObEstCorrelationModel &get_correlation_model() const
-  {
-    return ObEstCorrelationModel::get_correlation_model(opt_ctx_.get_correlation_type());
+  const ObEstCorrelationModel &get_correlation_model() const 
+  { 
+    return ObEstCorrelationModel::get_correlation_model(opt_ctx_.get_correlation_type()); 
   }
 
-  uint64_t get_compat_version() const {
+  uint64_t get_compat_version() const { 
     return OB_ISNULL(opt_ctx_.get_query_ctx()) ? 0 :
            opt_ctx_.get_query_ctx()->optimizer_features_enable_version_;
   }
@@ -230,7 +230,7 @@ class OptSelectivityCtx
   int get_ambient_card(const uint64_t table_id, double &table_ambient_card) const;
   int get_ambient_card(const ObRelIds &rel_ids, double &table_ambient_card) const;
   void set_assumption_type(ObJoinType type) { assumption_type_ = type; }
-  ObJoinType get_assumption_type() const {
+  ObJoinType get_assumption_type() const { 
     return UNKNOWN_JOIN == assumption_type_ ? join_type_ : assumption_type_;
   }
   const ObIArray<ExprDeduceInfo> &get_deduce_infos() const { return deduce_infos_; }
@@ -380,7 +380,7 @@ public:
     num_null_ = rows * EST_DEF_COL_NULL_RATIO;
   }
   double get_base_ndv() const { return base_ndv_; }
-  void set_base_ndv(double ndv) { base_ndv_ = ndv; }
+  void set_base_ndv(double ndv) { base_ndv_ = ndv; } 
 
   TO_STRING_KV(K_(column_id), K_(ndv), K_(num_null), K_(avg_len), K_(hist_scale),
                K_(min_val), K_(max_val) , K_(min_max_inited), K_(cg_macro_blk_cnt),
@@ -473,9 +473,9 @@ public:
            const ObTablePartitionInfo *table_partition_info,
            const ObTableMetaInfo *base_meta_info);
 
-  // int update_stat(const double rows, const bool can_reduce, const bool can_enlarge);
+  // int update_stat(const double rows, const bool can_reduce, const bool can_enlarge);                    
   int add_column_meta_no_dup(const ObIArray<uint64_t> &column_id, const OptSelectivityCtx &ctx);
-
+  
   const OptColumnMeta* get_column_meta(const uint64_t column_id) const;
   OptColumnMeta* get_column_meta(const uint64_t column_id);
   uint64_t get_table_id() const { return table_id_; }
@@ -488,7 +488,7 @@ public:
   void set_base_rows(const double rows) { base_rows_ = rows; }
   int64_t get_version() const { return last_analyzed_; }
   void set_version(const int64_t version) { last_analyzed_ = version; }
-  int64_t get_micro_block_count() const { return micro_block_count_; }
+  int64_t get_micro_block_count() const { return micro_block_count_; } 
   const common::ObIArray<int64_t>& get_all_used_parts() const { return all_used_parts_; }
   common::ObIArray<int64_t> &get_all_used_parts() { return all_used_parts_; }
   const common::ObIArray<ObTabletID>& get_all_used_tablets() const { return all_used_tablets_; }
@@ -524,7 +524,7 @@ public:
     base_meta_info_ = NULL;
     real_rows_ = -1.0;
   }
-
+  
   static int refine_column_stat(const ObGlobalColumnStat &stat,
                                 double rows,
                                 OptColumnMeta &col_meta);
@@ -544,7 +544,7 @@ private:
                          const ObGlobalColumnStat &stat,
                          OptColumnMeta &col_meta);
 
-private :
+private : 
   uint64_t table_id_;
   uint64_t ref_table_id_;
   double rows_;
@@ -562,7 +562,7 @@ private :
   ObSEArray<int64_t, 1, common::ModulePageAllocator, true> stat_parts_;
   ObSEArray<int64_t, 1, common::ModulePageAllocator, true> hist_parts_;
   double scale_ratio_;
-
+  
   // only valid for child stmt meta of set distinct stmt
   double distinct_rows_;
 
@@ -596,7 +596,7 @@ struct OptSelectivityDSParam {
 enum class DistinctEstType
 {
   BASE,     // estimate the ndv without any filters
-  CURRENT,  // estimate current ndv according to current rows and ambient cardinality
+  CURRENT,  // estimate current ndv according to current rows and ambient cardinality 
 };
 
 class OptTableMetas
@@ -723,7 +723,7 @@ public:
   }
 
   ObRelIds rel_id_;
-  ObSEArray<ObRawExpr *, 2> exprs_;
+  ObSEArray<ObRawExpr *, 2> exprs_; 
 };
 
 class ObOptSelectivity
@@ -924,7 +924,7 @@ public:
                                                  const ObRawExpr *&expr,
                                                  double &ndv,
                                                  double &not_null_sel);
-
+    
   
   static int get_column_min_max(const OptTableMetas &table_metas,
                                 const OptSelectivityCtx &ctx,

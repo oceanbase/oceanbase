@@ -222,7 +222,7 @@ private:
       ObLS *ls,
       bool &need_skip);
   int check_need_wait_transfer_table_replace_(
-      ObLS *ls,
+      ObLS *ls, 
       bool &need_wait);
   int wait_log_replay_to_max_minor_end_scn_();
   int check_ls_and_task_status_(

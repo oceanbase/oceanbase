@@ -750,8 +750,8 @@ void ObTriggerInfo::calc_package_source_size(const ObTriggerInfo &trigger_info,
   } else {
     spec_size = STRLEN(lib::is_oracle_mode() ? PACKAGE_SPEC_FMT : PACKAGE_SPEC_FMT_MYSQL)
                 + spec_params_size;
-    body_size = STRLEN(lib::is_oracle_mode() ? (trigger_info.is_compound_dml_type() ? PACKAGE_BODY_FMT_COMPOUND
-                                                                                    : PACKAGE_BODY_FMT)
+    body_size = STRLEN(lib::is_oracle_mode() ? (trigger_info.is_compound_dml_type() ? PACKAGE_BODY_FMT_COMPOUND 
+                                                                                    : PACKAGE_BODY_FMT) 
                                             : PACKAGE_BODY_FMT_MYSQL)
                 + body_params_size;
   }
@@ -1196,7 +1196,7 @@ int ObTriggerInfo::replace_table_name_in_body(ObTriggerInfo &trigger_info,
   OV (OB_NOT_NULL(stmt_list_node->children_));
   // trigger source node
   OV (OB_NOT_NULL(trg_source_node = stmt_list_node->children_[0]));
-
+  
   OV (2 == trg_source_node->num_child_);
   OV (OB_NOT_NULL(trg_def_node = trg_source_node->children_[1]));
   if (OB_FAIL(ret)) {

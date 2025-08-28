@@ -37,7 +37,7 @@ public:
     void *next_;
     int8_t src_type_;
     T obj_;
-
+    
 
     ObjItem() : src_type_(SRC_UNKNOWN), obj_()
     {}

@@ -50,7 +50,7 @@ int ObDirectLoadMultipleSSTableScanMergeLoserTreeCompare::init(
 
 int ObDirectLoadMultipleSSTableScanMergeLoserTreeCompare::cmp(
   const ObDirectLoadMultipleSSTableScanMergeLoserTreeItem &lhs,
-  const ObDirectLoadMultipleSSTableScanMergeLoserTreeItem &rhs,
+  const ObDirectLoadMultipleSSTableScanMergeLoserTreeItem &rhs, 
   int64_t &cmp_ret)
 {
   int ret = OB_SUCCESS;

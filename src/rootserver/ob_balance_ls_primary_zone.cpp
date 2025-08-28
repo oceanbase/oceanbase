@@ -94,7 +94,7 @@ int ObBalanceLSPrimaryZone::adjust_primary_zone_by_ls_group_(
   const uint64_t tenant_id = tenant_schema.get_tenant_id();
   const int64_t ls_count = primary_zone_infos.count();
   const int64_t primary_zone_count = primary_zone_array.count();
-  if (OB_UNLIKELY(0 == primary_zone_count
+  if (OB_UNLIKELY(0 == primary_zone_count 
         || 0 == ls_count || !tenant_schema.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(primary_zone_infos),
@@ -102,17 +102,17 @@ int ObBalanceLSPrimaryZone::adjust_primary_zone_by_ls_group_(
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy is null", KR(ret));
-  } else if (1 == ls_count
+  } else if (1 == ls_count 
       && primary_zone_infos.at(0).get_ls_id().is_sys_ls()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("can not be sys ls", KR(ret), K(ls_count), K(primary_zone_infos));
   } else {
     //Algorithm Description:
-    //Assumption: We have 5 ls, 3 primary_zones(z1, z2, z3).
+    //Assumption: We have 5 ls, 3 primary_zones(z1, z2, z3). 
     //1. Set the primary zone of ls to  tenant's primary zone,
     //choose the least number of log streams on the zone is selected for all zones
-    //2. After all the primary_zone of the ls are in the primary_zone of the tenant,
-    //choose the primary_zone with the most and least ls. Adjust a certain number of ls to the smallest zone without exceeding the balance
+    //2. After all the primary_zone of the ls are in the primary_zone of the tenant, 
+    //choose the primary_zone with the most and least ls. Adjust a certain number of ls to the smallest zone without exceeding the balance 
     //while guaranteeing that the number of the zone with the most is no less than the average.
     ObArray<ObZone> ls_primary_zone;//is match with primary_zone_infos
     ObSEArray<uint64_t, 3> count_group_by_zone;//ls count of each primary zone
@@ -133,7 +133,7 @@ int ObBalanceLSPrimaryZone::adjust_primary_zone_by_ls_group_(
         LOG_WARN("failed to update ls primary zone", KR(ret), "primary_zone_info", primary_zone_infos.at(i),
             K(new_primary_zone), K(new_zone_priority));
       }
-    }
+    } 
   }
   return ret;
 }
@@ -426,3 +426,4 @@ int ObBalanceLSPrimaryZone::check_sys_ls_primary_zone_balanced(const uint64_t te
 
 }//end of rootserver
 }
+

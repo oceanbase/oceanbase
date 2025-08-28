@@ -61,7 +61,7 @@ int ObExprJsonSchemaValid::cg_expr(ObExprCGCtx &op_cg_ctx,
 {
   INIT_SUCC(ret);
   const ObRawExpr *schema = raw_expr.get_param_expr(0);
-  if (lib::is_mysql_mode() && OB_JSON_SCHEMA_EXPR_ARG_NUM == rt_expr.arg_cnt_
+  if (lib::is_mysql_mode() && OB_JSON_SCHEMA_EXPR_ARG_NUM == rt_expr.arg_cnt_ 
      && OB_NOT_NULL(schema) && (schema->is_const_expr() || schema->is_static_scalar_const_expr())
      && schema->get_expr_type() != T_OP_GET_USER_VAR) {
     ObIAllocator &alloc = *op_cg_ctx.allocator_;
@@ -77,7 +77,7 @@ int ObExprJsonSchemaValid::cg_expr(ObExprCGCtx &op_cg_ctx,
       rt_expr.extra_info_ = info;
     }
   }
-
+  
   if (OB_SUCC(ret)) {
     rt_expr.eval_func_ = eval_json_schema_valid;
   }
@@ -153,8 +153,8 @@ OB_DEF_SERIALIZE_SIZE(ObExprJsonSchemaValidInfo)
   return len;
 }
 
-int ObExprJsonSchemaValidInfo::init_json_schema_extra_info(ObIAllocator &alloc,
-                                                          ObExprCGCtx &op_cg_ctx,
+int ObExprJsonSchemaValidInfo::init_json_schema_extra_info(ObIAllocator &alloc, 
+                                                          ObExprCGCtx &op_cg_ctx, 
                                                           const ObRawExpr* schema,
                                                           bool& got_data)
 {

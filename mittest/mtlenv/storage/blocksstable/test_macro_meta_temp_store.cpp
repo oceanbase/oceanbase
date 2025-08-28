@@ -94,7 +94,7 @@ TEST_F(TestMacroMetaTempStore, test_macro_meta_temp_store)
   for (int64_t i = 0; i < test_macro_block_cnt; ++i) {
     write_one_macro_block();
   }
-
+  
   ObSEArray<MacroBlockId, 10> write_macro_ids;
   ASSERT_EQ(OB_SUCCESS, write_macro_ids.assign(macro_writer_.get_macro_block_write_ctx().get_macro_block_list()));
 

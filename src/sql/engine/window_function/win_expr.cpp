@@ -1393,7 +1393,7 @@ int eval_and_check_between_literal(winfunc::WinExprEvalCtx &ctx, ObBitVector &ev
       case common::VEC_FIXED: {
         switch (vec_tc) {
           LST_DO_CODE(CHECK_BTW_FIXED_VAL, VEC_TC_INTEGER, VEC_TC_UINTEGER, VEC_TC_FLOAT,
-                      VEC_TC_DOUBLE, VEC_TC_FIXED_DOUBLE, VEC_TC_BIT, VEC_TC_INTERVAL_YM, VEC_TC_INTERVAL_DS,
+                      VEC_TC_DOUBLE, VEC_TC_FIXED_DOUBLE, VEC_TC_BIT, VEC_TC_INTERVAL_YM, VEC_TC_INTERVAL_DS, 
                       VEC_TC_DEC_INT32, VEC_TC_DEC_INT64, VEC_TC_DEC_INT128, VEC_TC_DEC_INT256, VEC_TC_DEC_INT512);
           default: {
             ret = OB_ERR_UNEXPECTED;

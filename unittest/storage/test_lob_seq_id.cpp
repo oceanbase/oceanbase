@@ -216,7 +216,7 @@ TEST_F(TestLobSeqId, test_chunk_size_v1_to_v0)
   ctx_v1.modified_len_ = 111111;
   ctx_v1.chunk_size_ = 4;
   ctx_v1.first_meta_offset_ = 1234567;
-
+  
   ObLobDataOutRowCtxV0 ctx_v0;
   ASSERT_EQ(sizeof(ObLobDataOutRowCtx), sizeof(ObLobDataOutRowCtxV0));
   MEMCPY(&ctx_v0, &ctx_v1, sizeof(ObLobDataOutRowCtx));

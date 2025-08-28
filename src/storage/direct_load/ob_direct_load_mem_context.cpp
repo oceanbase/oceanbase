@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_direct_load_mem_context.h"
@@ -229,7 +229,7 @@ int ObDirectLoadMemContext::init_enc_params(
         LOG_WARN("fail to push back", KR(ret));
       }
     }
-
+    
     if (OB_SUCC(ret)) {
       for (int i = 0; i < enc_params_.count(); i++) {
         if (!ObOrderPerservingEncoder::can_encode_sortkey(enc_params_.at(i).type_, enc_params_.at(i).cs_type_)) {

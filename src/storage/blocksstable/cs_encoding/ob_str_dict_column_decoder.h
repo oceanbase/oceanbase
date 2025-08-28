@@ -39,7 +39,7 @@ public:
     const int64_t row_id,
     ObStorageDatum &datum,
     storage::ObAggCellBase &agg_cell) const override;
-
+  
   virtual ObCSColumnHeader::Type get_type() const override { return type_; }
 };
 

@@ -207,8 +207,8 @@ int ObTableCtx::get_expr_from_column_items(const ObString &col_name, ObRawExpr *
       expr = nullptr;
       ret = OB_SUCCESS;
     } else {
-      LOG_WARN("fail to get column info idx", K(col_name));
-    }
+      LOG_WARN("fail to get column info idx", K(col_name));    
+    }    
   } else {
     expr = column_items_.at(idx).raw_expr_;
   }
@@ -230,8 +230,8 @@ int ObTableCtx::get_expr_from_column_items(const ObString &col_name, ObColumnRef
       expr = nullptr;
       ret = OB_SUCCESS;
     } else {
-      LOG_WARN("fail to get column info idx", K(col_name));
-    }
+      LOG_WARN("fail to get column info idx", K(col_name));    
+    }    
   } else {
     expr = column_items_.at(idx).expr_;
   }
@@ -300,7 +300,7 @@ int ObTableCtx::init_common(ObTableApiCredential &credential,
                             const int64_t &timeout_ts)
 {
   int ret = OB_SUCCESS;
-
+  
   if (OB_FAIL(init_common_without_check(credential, arg_tablet_id, timeout_ts))) {
     LOG_WARN("fail to init common without check", K(ret), K(credential), K(timeout_ts));
   } else if (OB_FAIL(check_legality())) {
@@ -659,7 +659,7 @@ int ObTableCtx::adjust_rowkey()
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "auto increment column set to be partition column");
           LOG_WARN("auto increment column could not be partition column", K(ret));
-        } else if (!is_full_filled && !need_full_rowkey_op()) {
+        } else if (!is_full_filled && !need_full_rowkey_op()) { 
           // curr column is auto_increment and user not fill，no need to check
           need_check = false;
         }
@@ -676,7 +676,7 @@ int ObTableCtx::adjust_rowkey()
         } else if (idx >= entity_rowkey_cnt) {
           ret = OB_KV_ROWKEY_COUNT_NOT_MATCH;
           LOG_USER_ERROR(OB_KV_ROWKEY_COUNT_NOT_MATCH, schema_rowkey_cnt, entity_rowkey_cnt);
-          LOG_WARN("entity rowkey count mismatch table schema rowkey count", K(ret),
+          LOG_WARN("entity rowkey count mismatch table schema rowkey count", K(ret), 
                     K(entity_rowkey_cnt), K(schema_rowkey_cnt), K(rowkey));
         } else if (is_need_ajust_date_op() && OB_FAIL(adjust_date_obj(*col_info, obj_ptr[idx]))) { // other op adjust in cg write_datum
           LOG_WARN("fail to adjust date object", K(ret), K(obj_ptr[idx]), KPC(col_info));
@@ -709,7 +709,7 @@ int ObTableCtx::adjust_rowkey()
 int ObTableCtx::adjust_properties()
 {
   int ret = OB_SUCCESS;
-  bool skip_adjust_prop = (ObTableOperationType::Type::GET == operation_type_ ||
+  bool skip_adjust_prop = (ObTableOperationType::Type::GET == operation_type_ || 
                           ObTableOperationType::Type::DEL == operation_type_);
   if (skip_adjust_prop) {
     // do nothing
@@ -722,7 +722,7 @@ int ObTableCtx::adjust_properties()
     const ObIArray<ObObj> &prop_objs = entity->get_properties_values();
     if (prop_names.count() != prop_objs.count()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("property name count is not equal to property obj count", K(ret),
+      LOG_WARN("property name count is not equal to property obj count", K(ret), 
                 K(prop_names.count()), K(prop_objs.count()));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < prop_names.count(); i++) {
@@ -1008,7 +1008,7 @@ int ObTableCtx::generate_key_range(const ObIArray<ObString> &scan_ranges_columns
     1. init some common scan parameters such as is_weak_read_、scan_order_、limit_、is_index_back_ and so on.
     2. genreate key range。
     3. check is_index_back_ when do index scan, need index back if the query column is not in the index table.
-    4. select_col_ids_ is same order with schema,
+    4. select_col_ids_ is same order with schema, 
       query_col_ids_ and query_col_names_ is same with user query column order.
 */
 int ObTableCtx::init_scan(const ObTableQuery &query,
@@ -1068,7 +1068,7 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
       }
     }
   }
-
+  
   if (OB_SUCC(ret)) {
     bool is_cache_hit = false;
     if (OB_FAIL(GCTX.location_service_->get(tenant_id_,
@@ -1118,7 +1118,7 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
           } else if (is_index_scan_ && !is_index_back_ && OB_ISNULL(index_schema_->get_column_schema(column_name))) {
             is_index_back_ = true;
           }
-        } else if (ObTableUtils::has_exist_in_columns(select_columns, col_info->column_name_)
+        } else if (ObTableUtils::has_exist_in_columns(select_columns, col_info->column_name_) 
             || (is_ttl_table_ && has_exist_in_array(ttl_columns, col_info->column_name_))) {
           if (OB_FAIL(select_col_ids_.push_back(col_info->column_id_))) {
             LOG_WARN("fail to add column id", K(ret));
@@ -1246,7 +1246,7 @@ int ObTableCtx::check_if_can_skip_update_index(const ObTableSchema *index_schema
         LOG_WARN("assign column item is null", K(ret), K(assign));
       } else if (is_full_index) {
         // if assigins has fts col, we can not skip fts index schema
-        // and columns in fts index schema may be not contained in assigns,
+        // and columns in fts index schema may be not contained in assigns, 
         // such as rowkey-doc and doc-rowkey table
         found = assign.column_info_->is_fulltext_column();
       } else if (OB_NOT_NULL(index_schema->get_column_schema(assign.column_info_->column_id_))) {
@@ -1291,7 +1291,7 @@ int ObTableCtx::init_put(bool allow_insup)
 {
   int ret = OB_SUCCESS;
 
-  if (ObTableOperationType::PUT != operation_type_ &&
+  if (ObTableOperationType::PUT != operation_type_ && 
       (allow_insup && ObTableOperationType::INSERT_OR_UPDATE != operation_type_)) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "invalid operation type use put");
@@ -1732,7 +1732,7 @@ int ObTableCtx::init_increment(bool return_affected_entity, bool return_rowkey)
         if (ob_is_varbinary_type(assign.column_info_->type_.get_type(), assign.column_info_->type_.get_collation_type())
             && ob_is_varbinary_type(delta.get_type(), delta.get_collation_type())) {
           // for Redis varbinary increment
-          total_len = strlen("trim(trailing '.' from trim(trailing '0' from IFNULL(CAST(`` AS DECIMAL(65,17)), 0) + CAST(`` AS DECIMAL(65,17))))")
+          total_len = strlen("trim(trailing '.' from trim(trailing '0' from IFNULL(CAST(`` AS DECIMAL(65,17)), 0) + CAST(`` AS DECIMAL(65,17))))") 
                           + 1 + column_name.length() + column_name.length();
           format_str = "trim(trailing '.' from trim(trailing '0' from IFNULL(CAST(`%s` AS DECIMAL(65,17)), 0) + CAST(`%s` AS DECIMAL(65,17))))";
         } else if (ob_is_int_tc(assign.column_info_->type_.get_type()) && ob_is_int_tc(delta.get_type())) {
@@ -1787,7 +1787,7 @@ int ObTableCtx::classify_scan_exprs()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("col info is NULL", K(ret), K(i));
       } else if (has_exist_in_array(select_col_ids_, col_info->column_id_)) {
-        if (OB_ISNULL(tmp_item.expr_)) {
+        if (OB_ISNULL(tmp_item.expr_)) { 
           // use column ref exprs, cause select exprs no need to calculate
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("column ref expr is NULL", K(ret), K(i));
@@ -1850,7 +1850,7 @@ int ObTableCtx::init_fts_schema()
     LOG_WARN("fail to get rowkey doc table schema", K(ret), K(fts_ctx_->rowkey_doc_tid_));
   } else if (OB_FAIL(schema_guard_->get_table_schema(tenant_id_, fts_ctx_->doc_rowkey_tid_, fts_ctx_->doc_rowkey_schema_))) {
     LOG_WARN("fail to get doc rowkey table schema", K(ret), K(fts_ctx_->doc_rowkey_tid_));
-  }
+  } 
   return ret;
 }
 
@@ -1875,7 +1875,7 @@ int ObTableCtx::init_exec_ctx(bool need_das_ctx/*true*/)
 /*
   init the das context:
     - generate table loc for all the index table and add to das context
-    - generate the local tablet loc and add to das context,
+    - generate the local tablet loc and add to das context, 
       "local tablet loc" means tablet id has been calculated and is in local observer
       - for dml, get and primary index scan: primary table;
       - for global/local index scan: index table;
@@ -1901,9 +1901,9 @@ int ObTableCtx::init_das_context(ObDASCtx &das_ctx)
     } else if (OB_ISNULL(index_info.loc_meta_ = OB_NEWx(ObDASTableLocMeta, (&allocator_), allocator_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc loc_meta", K(ret));
-    } else if (OB_FAIL(ObTableLocCgService::generate_table_loc_meta(*this,
-                                                                    *index_schema,
-                                                                    *index_info.loc_meta_,
+    } else if (OB_FAIL(ObTableLocCgService::generate_table_loc_meta(*this, 
+                                                                    *index_schema, 
+                                                                    *index_info.loc_meta_, 
                                                                     related_index_tids))) {
       LOG_WARN("fail to generate table location meta", K(ret));
     } else if (OB_FAIL(exec_ctx_.get_das_ctx().extended_table_loc(*index_info.loc_meta_, table_loc))) {
@@ -2045,7 +2045,7 @@ int ObTableCtx::init_index_info(const ObString &index_name, const uint64_t arg_t
             /*
               check the route info if is valid when use global index to scan, for the reason that:
               when scan with global index, the client should send the request using global index route,
-              meanings the arg_table_id should be represented global index table. Also, arg_table_name
+              meanings the arg_table_id should be represented global index table. Also, arg_table_name 
               is always primary table name.
             */
             ret = OB_ERR_KV_GLOBAL_INDEX_ROUTE;
@@ -2288,8 +2288,8 @@ int ObTableCtx::check_insert_up_can_use_put(bool &use_put)
   return ret;
 }
 
-int ObTableCtx::check_insert_up_can_use_put(ObKvSchemaCacheGuard &schema_cache_guard,
-                                            const ObITableEntity *entity,
+int ObTableCtx::check_insert_up_can_use_put(ObKvSchemaCacheGuard &schema_cache_guard, 
+                                            const ObITableEntity *entity, 
                                             bool is_client_set_put,
                                             bool is_htable,
                                             bool is_full_binlog_image,
@@ -2311,7 +2311,7 @@ int ObTableCtx::check_insert_up_can_use_put(ObKvSchemaCacheGuard &schema_cache_g
   } else if (has_secondary_index) {
     /* has index, can not use put:
        for local/global index: insert a new row insert of covering the old row
-       when the assign value of index column is new. */
+       when the assign value of index column is new. */ 
     can_use_put = false;
   } else if (has_lob_column) {
     // has lob column cannot use put: may cause lob storeage leak when put row to lob meta table
@@ -2353,7 +2353,7 @@ int ObTableCtx::check_insert_up_can_use_put(ObKvSchemaCacheGuard &schema_cache_g
 int ObTableCtx::generate_table_schema_for_cg()
 {
   int ret = OB_SUCCESS;
-
+  
   // generate table_schema
   if (OB_NOT_NULL(table_schema_)) {
   } else if (OB_ISNULL(schema_guard_)) {
@@ -2367,7 +2367,7 @@ int ObTableCtx::generate_table_schema_for_cg()
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table schema is null", KR(ret), K(simple_table_schema_->get_tenant_id()), K(simple_table_schema_->get_table_id()));
   }
-
+  
   // generate primary_index_schema
   if (OB_SUCC(ret)) {
     bool find_primary_index = false;
@@ -2385,7 +2385,7 @@ int ObTableCtx::generate_table_schema_for_cg()
     if (OB_FAIL(init_fts_schema())) {
       LOG_WARN("fail to init rowkey doc schema", K(ret));
     }
-  }
+  } 
 
   return ret;
 }
@@ -2455,7 +2455,7 @@ int ObTableCtx::prepare_text_retrieval_scan()
         if (OB_UNLIKELY(fwd_idx_name.length() <= fwd_idx_suffix_len)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid argument", K(ret), K(fwd_idx_name), K(fwd_idx_suffix_len));
-        } else if (OB_FALSE_IT(fwd_idx_prefix_name.assign_ptr(fwd_idx_name.ptr(),
+        } else if (OB_FALSE_IT(fwd_idx_prefix_name.assign_ptr(fwd_idx_name.ptr(), 
                                                               fwd_idx_name.length() - fwd_idx_suffix_len))) {
         } else if (fwd_idx_prefix_name.compare(inv_idx_name) == 0) {
           found_fwd_idx = true;

@@ -20,24 +20,24 @@ namespace sql {
  *
  * 1. decorrelate normal lateral derived table or can create spj stmt
  * select t1.*, v.* from t1, lateral (select * from t2 where t1.a = t2.a) v;
- *   =>
+ *   => 
  * select t1.*, v.* from t1, (select * from t2) v where t1.a = v.a;
- *
+ * 
  * select  t1.*,v.* from t1, lateral (select count(t2.c1), t2.c2 from t2 group by c2 having t2.c2 = t1.c1 ) v;
  *   =>
  * select t1.*,v.* from test.t1,(select * from (select count(c1),c2 from t2 group by c2) VIEW1) v where (v.c2 = t1.c1);
  *
  * 2. decorrelate aggr lateral derived table
  * select * from t1, lateral (select  sum(b) from t2 where t1.a = t2.a);
- *   =>
+ *   => 
  * select * from t1 left join (select sum(b) from t2 group by t2.a) v on v.a = t1.a;
  *
  * select * from t1, lateral (select  count(b) from t2 where t1.a = t2.a);
  *   =>
  * select t1.*, case when v.a is null then 0 else v.`count(b)` from
  *     t1 left join (select a, count(b) from t2 group by t2.a) v on v.a = t1.a;
- *
- * select * from t3,
+ * 
+ * select * from t3, 
 *      lateral (select  sum(b) from t2 where t2.a = t3.c1 group by b) v;
  *   =>
  *  select * from t3, (select sum(b), a from t2 group by b,a) v where v.a = t3.c1;
@@ -55,11 +55,11 @@ int ObTransformDecorrelate::transform_one_stmt(common::ObIArray<ObParentDMLStmt>
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(decorrelate_lateral_derived_table(stmt,
-                                                       decorrelate_stmts,
+  } else if (OB_FAIL(decorrelate_lateral_derived_table(stmt, 
+                                                       decorrelate_stmts, 
                                                        is_lateral_trans_happened))) {
     LOG_WARN("failed to decorrlate lateral derived table", K(ret));
-  } else if (OB_FAIL(decorrelate_aggr_lateral_derived_table(stmt,
+  } else if (OB_FAIL(decorrelate_aggr_lateral_derived_table(stmt, 
                                                             decorrelate_stmts,
                                                             is_aggr_lateral_trans_happened))) {
     LOG_WARN("failed to decorrelate aggr lateral derived table", K(ret));
@@ -87,12 +87,12 @@ int ObTransformDecorrelate::transform_one_stmt_with_outline(common::ObIArray<ObP
   ObSEArray<ObSelectStmt*, 4> decorrelate_stmts;
   do {
     is_happened = false;
-    if (OB_FAIL(decorrelate_lateral_derived_table(stmt,
-                                                  decorrelate_stmts,
+    if (OB_FAIL(decorrelate_lateral_derived_table(stmt, 
+                                                  decorrelate_stmts, 
                                                   is_happened))) {
       LOG_WARN("failed to decorrlate lateral derived table", K(ret));
-    } else if (!is_happened &&
-               OB_FAIL(decorrelate_aggr_lateral_derived_table(stmt,
+    } else if (!is_happened && 
+               OB_FAIL(decorrelate_aggr_lateral_derived_table(stmt, 
                                                               decorrelate_stmts,
                                                               is_happened))) {
       LOG_WARN("failed to decorrelate aggr lateral derived table", K(ret));
@@ -154,8 +154,8 @@ int ObTransformDecorrelate::construct_transform_hint(ObDMLStmt &stmt, void *tran
   return ret;
 }
 
-int ObTransformDecorrelate::decorrelate_lateral_derived_table(ObDMLStmt *stmt,
-                                                              ObIArray<ObSelectStmt*> &decorrelate_stmts,
+int ObTransformDecorrelate::decorrelate_lateral_derived_table(ObDMLStmt *stmt, 
+                                                              ObIArray<ObSelectStmt*> &decorrelate_stmts, 
                                                               bool &trans_happened)
 {
   int ret = OB_SUCCESS;
@@ -182,16 +182,16 @@ int ObTransformDecorrelate::decorrelate_lateral_derived_table(ObDMLStmt *stmt,
                   K(table_item->table_id_));
       }
     } else if (table_item->is_lateral_table()) {
-      if (OB_FAIL(transform_lateral_inline_view(stmt,
-                                                table_item,
-                                                decorrelate_stmts,
+      if (OB_FAIL(transform_lateral_inline_view(stmt, 
+                                                table_item, 
+                                                decorrelate_stmts, 
                                                 true,
                                                 NULL,
                                                 is_happened))) {
         LOG_WARN("failed to transform lateral table item", K(ret));
       } else {
         trans_happened |= is_happened;
-        LOG_TRACE("succeed to do decorrelate for basic lateral derived table",
+        LOG_TRACE("succeed to do decorrelate for basic lateral derived table", 
                   K(is_happened),
                   K(table_item->table_id_));
       }
@@ -376,16 +376,16 @@ int ObTransformDecorrelate::check_transform_validity(ObDMLStmt *stmt,
   } else if (is_ref_outer) {
     is_valid = false;
     OPT_TRACE("lateral ref outer table, cannot decorrelate");
-  } else if (ref_query->is_set_stmt()) {
+  } else if (ref_query->is_set_stmt()) { 
     ObIArray<ObSelectStmt*> &set_queries = ref_query->get_set_query();
     for (int64_t i = 0; is_valid && OB_SUCC(ret) && i < set_queries.count(); ++i) {
-      if (OB_FAIL(check_lateral_inline_view_validity(table_item,
+      if (OB_FAIL(check_lateral_inline_view_validity(table_item, 
                                                      set_queries.at(i),
                                                      is_valid))) {
         LOG_WARN("failed to check subquery valid", K(ret));
       }
     }
-  } else if (OB_FAIL(check_lateral_inline_view_validity(table_item,
+  } else if (OB_FAIL(check_lateral_inline_view_validity(table_item, 
                                                         ref_query,
                                                         is_valid))) {
     LOG_WARN("failed to check subquery valid", K(ret));
@@ -412,7 +412,7 @@ int ObTransformDecorrelate::check_transform_validity(ObDMLStmt *stmt,
   } else if (can_be_decorrelate_direct) {
     // do nothing
   } else if (OB_FAIL(ObTransformUtils::check_correlated_exprs_can_pullup(table_item->exec_params_,
-                                                                         *ref_query,
+                                                                         *ref_query, 
                                                                          is_valid))) {
     LOG_WARN("failed to check can unnest with spj", K(ret));
   } else if (!is_valid) {
@@ -490,8 +490,8 @@ int ObTransformDecorrelate::check_lateral_inline_view_validity(TableItem *table_
   } else if (check_status) {
     is_valid = false;
     OPT_TRACE("lateral inline view select expr contain subquery");
-  } else if (OB_FAIL(ObTransformUtils::is_from_item_correlated(table_item->exec_params_,
-                                                               *ref_query,
+  } else if (OB_FAIL(ObTransformUtils::is_from_item_correlated(table_item->exec_params_, 
+                                                               *ref_query, 
                                                                check_status))) {
     LOG_WARN("failed to check if from items contains correlated subquery", K(ret));
   } else if (check_status) {
@@ -543,7 +543,7 @@ int ObTransformDecorrelate::do_transform_lateral_inline_view(ObDMLStmt *stmt,
     LOG_WARN("get unexpected null", K(ret), K(can_push_where), K(joined_table));
   } else if (need_create_spj) {
     if (OB_FAIL(ObTransformUtils::create_spj_and_pullup_correlated_exprs(table_item->exec_params_,
-                                                                         ref_query,
+                                                                         ref_query, 
                                                                          ctx_))) {
       LOG_WARN("failed to create spj and pullup correlated exprs", K(ret));
     } else {
@@ -574,7 +574,7 @@ int ObTransformDecorrelate::do_transform_lateral_inline_view(ObDMLStmt *stmt,
                                                      select_exprs,
                                                      new_column_exprs))) {
       LOG_WARN("failed to except exprs", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_,
+    } else if (OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_, 
                                                             new_column_exprs,
                                                             ref_query))) {
       LOG_WARN("failed to create select item", K(ret));
@@ -675,12 +675,12 @@ int ObTransformDecorrelate::decorrelate_aggr_lateral_derived_table(ObDMLStmt *st
         LOG_WARN("failed to transform aggr lateral inline view", K(ret));
       } else {
         trans_happened |= is_happened;
-        LOG_TRACE("succeed to do decorrelate for aggr lateral derived table",
+        LOG_TRACE("succeed to do decorrelate for aggr lateral derived table", 
                   K(is_happened),
                   K(table_item->table_id_));
       }
     }
-    if (OB_SUCC(ret) && !is_happened &&
+    if (OB_SUCC(ret) && !is_happened && 
         OB_FAIL(from_item_list.push_back(stmt->get_from_item(i)))) {
       LOG_WARN("failed to push back array", K(ret));
     }
@@ -779,7 +779,7 @@ int ObTransformDecorrelate::check_transform_aggr_validity(ObDMLStmt *stmt,
     LOG_WARN("failed to check subquery select item", K(ret));
   } else if (!is_valid) {
     OPT_TRACE("has not sum/count/min/max aggregation");
-  } else if (OB_FAIL(check_lateral_inline_view_validity(table_item,
+  } else if (OB_FAIL(check_lateral_inline_view_validity(table_item, 
                                                         ref_query,
                                                         is_valid))) {
     LOG_WARN("failed to check lateral inline view validity", K(ret));
@@ -818,7 +818,7 @@ int ObTransformDecorrelate::check_transform_aggr_condition_validity(ObDMLStmt *s
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("condition expr is null", K(ret));
       } else if (OB_FAIL(ObTransformUtils::is_correlated_expr(table_item->exec_params_,
-                                                              cond,
+                                                              cond, 
                                                               is_correlated))) {
         LOG_WARN("failed to check is correlated expr", K(ret));
       } else if (!is_correlated) {
@@ -858,7 +858,7 @@ int ObTransformDecorrelate::do_transform_aggr_lateral_inline_view(
   if (OB_ISNULL(stmt) ||
       OB_ISNULL(ref_query) ||
       OB_ISNULL(table_item) ||
-      OB_ISNULL(ctx_) ||
+      OB_ISNULL(ctx_) || 
       OB_ISNULL(ctx_->allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -869,7 +869,7 @@ int ObTransformDecorrelate::do_transform_aggr_lateral_inline_view(
   } else if (table_item->alias_name_.empty() &&
              OB_FALSE_IT(table_item->alias_name_ = table_item->table_name_)) {
     // do nothing
-  }
+  } 
 
   for (int64_t i = 0; OB_SUCC(ret) && i < pullup_conds.count(); ++i) {
     ObRawExpr *cond_expr = pullup_conds.at(i);
@@ -915,18 +915,18 @@ int ObTransformDecorrelate::do_transform_aggr_lateral_inline_view(
     LOG_WARN("failed to get select exprs", K(ret));
   } else if (ObOptimizerUtil::find_item(select_exprs, not_null_expr, &idx)) {
     not_null_expr = view_columns.at(idx);
-  }
-
+  } 
+  
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(gather_select_item_null_propagate(ref_query, is_null_prop))) {
     LOG_WARN("failed to gather select item null propagate", K(ret));
   } else if (OB_FAIL(ObTransformUtils::deduce_query_values(*ctx_,
-                                                           *stmt,
-                                                           is_null_prop,
+                                                           *stmt, 
+                                                           is_null_prop, 
                                                            not_null_expr,
                                                            true,
-                                                           select_exprs,
-                                                           view_columns,
+                                                           select_exprs, 
+                                                           view_columns, 
                                                            real_values))) {
     LOG_WARN("failed to deduce query values", K(ret));
   } else if (OB_FAIL(stmt->replace_relation_exprs(view_columns, real_values))) {
@@ -943,7 +943,7 @@ int ObTransformDecorrelate::do_transform_aggr_lateral_inline_view(
                                          joined_table_list))) {
     LOG_WARN("failed to transform from list", K(ret));
   }
-  return ret;
+  return ret;                                          
 }
 
 int ObTransformDecorrelate::gather_select_item_null_propagate(ObSelectStmt *ref_query,
@@ -975,7 +975,7 @@ int ObTransformDecorrelate::gather_select_item_null_propagate(ObSelectStmt *ref_
       // do nothing
     } else if (OB_FAIL(ObTransformUtils::is_null_propagate_expr(expr, vars, is_null_prop.at(i)))) {
       LOG_WARN("failed to check is null propagate expr", K(ret));
-    }
+    } 
   }
   return ret;
 }

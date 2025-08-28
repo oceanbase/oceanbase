@@ -75,7 +75,7 @@ public:
     return opt_server_list_.push_back(server);
   }
 
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(major_freeze), K(freeze_all_flag_),
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(major_freeze), K(freeze_all_flag_), 
                K(opt_server_list_), K(opt_tenant_ids_), K(opt_tablet_id_), K(opt_ls_id_));
 private:
   bool major_freeze_;
@@ -88,7 +88,7 @@ private:
   common::ObSArray<uint64_t> opt_tenant_ids_;
   // for minor_freeze only
   common::ObZone opt_zone_;
-
+  
   // for minor_freeze only
   common::ObTabletID opt_tablet_id_;
   int64_t opt_ls_id_;
@@ -916,7 +916,7 @@ private:
 class ObCancelRestoreStmt : public ObSystemCmdStmt
 {
 public:
-  ObCancelRestoreStmt()
+  ObCancelRestoreStmt() 
     : ObSystemCmdStmt(stmt::T_CANCEL_RESTORE),
       drop_tenant_arg_() {}
   virtual ~ObCancelRestoreStmt() {}
@@ -1457,7 +1457,7 @@ private:
 class ObCancelCloneStmt : public ObSystemCmdStmt
 {
 public:
-  ObCancelCloneStmt()
+  ObCancelCloneStmt() 
     : ObSystemCmdStmt(stmt::T_CANCEL_CLONE),
       clone_tenant_name_() {}
   virtual ~ObCancelCloneStmt() {}
@@ -1546,7 +1546,7 @@ public:
 
   OB_INLINE table::ObModuleDataArg &get_arg() { return arg_; }
   OB_INLINE const table::ObModuleDataArg &get_arg() const { return arg_; }
-
+  
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(arg));
 private:
   table::ObModuleDataArg arg_;

@@ -24,7 +24,7 @@ class ObExprPrivSTGeogFromText : public ObFuncExprOperator
 {
 public:
   explicit ObExprPrivSTGeogFromText(common::ObIAllocator &alloc);
-  explicit ObExprPrivSTGeogFromText(common::ObIAllocator &alloc, ObExprOperatorType type,
+  explicit ObExprPrivSTGeogFromText(common::ObIAllocator &alloc, ObExprOperatorType type, 
                                     const char *name, int32_t param_num, int32_t dimension);
   virtual ~ObExprPrivSTGeogFromText();
   virtual int calc_result_type1(ObExprResType &type,

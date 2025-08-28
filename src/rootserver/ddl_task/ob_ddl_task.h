@@ -301,14 +301,14 @@ public:
       const uint64_t tenant_id,
       const int64_t task_id,
       const int64_t task_status);
-
+  
   static int update_snapshot_version_if_not_exist(
       common::ObISQLClient &sql_client,
       const uint64_t tenant_id,
       const int64_t task_id,
       const int64_t new_fetched_snapshot,
       int64_t &persisted_snapshot);
-
+  
   static int update_snapshot_version(
       common::ObISQLClient &sql_client,
       const uint64_t tenant_id,
@@ -481,7 +481,7 @@ public:
   static int to_hex_str(const ObString &src, ObSqlString &dst);
 
   static int kill_task_inner_sql(
-      common::ObMySQLProxy &proxy,
+      common::ObMySQLProxy &proxy, 
       const common::ObCurTraceId::TraceId &trace_id,
       const uint64_t tenant_id,
       const int64_t task_id,
@@ -490,7 +490,7 @@ public:
 
   //query the internal table __all_virtual_session_info to obtain the executing tasks sql meeting specified mode.
   static int get_running_tasks_inner_sql(
-      common::ObMySQLProxy &proxy,
+      common::ObMySQLProxy &proxy, 
       const common::ObCurTraceId::TraceId &trace_id,
       const uint64_t tenant_id,
       const int64_t task_id,
@@ -521,8 +521,8 @@ private:
 
   static int64_t get_record_id(share::ObDDLType ddl_type, int64_t origin_id);
   static int kill_inner_sql(
-      common::ObMySQLProxy &proxy,
-      const uint64_t tenant_id,
+      common::ObMySQLProxy &proxy, 
+      const uint64_t tenant_id, 
       const uint64_t session_id);
 
   static int get_task_record(
@@ -737,8 +737,8 @@ public:
   int64_t get_parallelism() const { return parallelism_; }
   uint64_t get_gmt_create() const { return gmt_create_; }
   void set_gmt_create(uint64_t gmt_create) { gmt_create_ = gmt_create; }
-  static int deep_copy_table_arg(common::ObIAllocator &allocator,
-                                 const obrpc::ObDDLArg &source_arg,
+  static int deep_copy_table_arg(common::ObIAllocator &allocator, 
+                                 const obrpc::ObDDLArg &source_arg, 
                                  obrpc::ObDDLArg &dest_arg);
   void set_longops_stat(share::ObDDLLongopsStat *longops_stat) { longops_stat_ = longops_stat; }
   share::ObDDLLongopsStat *get_longops_stat() const { return longops_stat_; }

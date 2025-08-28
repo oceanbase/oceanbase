@@ -34,7 +34,7 @@ int ObExprSTIsValid::calc_result_type1(ObExprResType &type,
                                        ObExprResType &type1,
                                        common::ObExprTypeCtx &type_ctx) const
 {
-  UNUSED(type_ctx);
+  UNUSED(type_ctx); 
   int ret = OB_SUCCESS;
   if (ob_is_null(type1.get_type())) {
     // do nothing
@@ -66,7 +66,7 @@ int ObExprSTIsValid::eval_st_isvalid(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   ObGeometry *geo = NULL;
   bool is_geog = false;
   bool isvalid_res = false;
-
+  
   if (OB_FAIL(tmp_allocator.eval_arg(expr.args_[0], ctx, datum))) {
     LOG_WARN("failed to eval first argument", K(ret));
   } else if (datum->is_null()) {

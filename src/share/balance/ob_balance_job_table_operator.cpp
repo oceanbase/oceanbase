@@ -23,7 +23,7 @@ namespace oceanbase
 {
 namespace share
 {
-static const char* BALANCE_JOB_STATUS_ARRAY[] =
+static const char* BALANCE_JOB_STATUS_ARRAY[] = 
 {
   "DOING", "CANCELING", "COMPLETED", "CANCELED"
 };
@@ -61,7 +61,7 @@ ObBalanceJobStatus::ObBalanceJobStatus(const ObString &str)
   }
 }
 
-const char* ObBalanceJobType::to_str() const
+const char* ObBalanceJobType::to_str() const 
 {
   STATIC_ASSERT(
       ARRAYSIZEOF(BALANCE_JOB_TYPE) == BALANCE_JOB_MAX,
@@ -124,7 +124,7 @@ int ObBalanceJob::init(const uint64_t tenant_id,
     unit_group_num_ = unit_group_num;
   }
   return ret;
-}
+} 
 
 bool ObBalanceJob::is_valid() const
 {
@@ -135,7 +135,7 @@ bool ObBalanceJob::is_valid() const
          && job_type_.is_valid()
          && job_status_.is_valid()
          && !balance_strategy_.empty();
-}
+} 
 
 void ObBalanceJob::reset()
 {
@@ -147,7 +147,7 @@ void ObBalanceJob::reset()
   job_status_.reset();
   comment_.reset();
   balance_strategy_.reset();
-}
+} 
 
 int ObBalanceJobTableOperator::insert_new_job(const ObBalanceJob &job,
                      ObISQLClient &client)
@@ -159,7 +159,7 @@ int ObBalanceJobTableOperator::insert_new_job(const ObBalanceJob &job,
   if (OB_UNLIKELY(!job.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("job is invalid", KR(ret), K(job));
-  } else if (OB_FAIL(fill_dml_spliter(dml, job))) {
+  } else if (OB_FAIL(fill_dml_spliter(dml, job))) { 
     LOG_WARN("failed to assign sql", KR(ret), K(job));
   } else if (OB_FAIL(dml.finish_row())) {
     LOG_WARN("failed to finish row", KR(ret), K(job));

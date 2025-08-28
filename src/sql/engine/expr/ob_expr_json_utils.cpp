@@ -153,7 +153,7 @@ int ObJsonUtil::set_mismatch_val(ObIArray<int8_t>& val, ObIArray<int8_t>& type, 
     }
   } else if (opt_val >= OB_JSON_TYPE_MISSING_DATA &&
               opt_val <= OB_JSON_TYPE_DOT) {
-
+    
     /* one mismatch val has multi mismatch type*/
     uint8_t t_value = type.at(pos);
     type.pop_back();
@@ -175,14 +175,14 @@ int ObJsonUtil::set_mismatch_val(ObIArray<int8_t>& val, ObIArray<int8_t>& type, 
       }
     }
     type.push_back(t_value);
-  } else {
+  } else { 
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("option type error", K(opt_val), K(ret));
   }
   return ret;
 }
 
-int ObJsonUtil::init_json_path(ObIAllocator &alloc, ObExprCGCtx &op_cg_ctx,
+int ObJsonUtil::init_json_path(ObIAllocator &alloc, ObExprCGCtx &op_cg_ctx, 
                                const ObRawExpr* path,
                                ObExprJsonQueryParamInfo& res)
 {
@@ -190,7 +190,7 @@ int ObJsonUtil::init_json_path(ObIAllocator &alloc, ObExprCGCtx &op_cg_ctx,
   ObObj const_data;
   bool got_data = false;
   ObExecContext *exec_ctx = op_cg_ctx.session_->get_cur_exec_ctx();
-  if (OB_NOT_NULL(path)
+  if (OB_NOT_NULL(path) 
       && (path->is_const_expr() || path->is_static_scalar_const_expr())
       && path->get_expr_type() != T_OP_GET_USER_VAR) {
     void* buf = alloc.alloc(sizeof(ObJsonPath));
@@ -203,7 +203,7 @@ int ObJsonUtil::init_json_path(ObIAllocator &alloc, ObExprCGCtx &op_cg_ctx,
                                                                 got_data,
                                                                 alloc))) {
       LOG_WARN("failed to calc offset expr", K(ret));
-    } else if (!got_data || const_data.is_null()
+    } else if (!got_data || const_data.is_null() 
                 || !ob_is_string_type(const_data.get_type())) {
       ret = OB_ERR_INVALID_INPUT_ARGUMENT;
       LOG_WARN("fail to get int value", K(ret));
@@ -648,9 +648,9 @@ int ObJsonUtil::bit_length_check(const ObAccuracy &accuracy,
 // padding %padding_cnt character, we also need to convert collation type here.
 // eg: select cast('abc' as nchar(100)) from dual;
 //     the space must be in utf16, because dst_type is nchar
-int ObJsonUtil::padding_char_for_cast(int64_t padding_cnt,
+int ObJsonUtil::padding_char_for_cast(int64_t padding_cnt, 
                                       const ObCollationType &padding_cs_type,
-                                      ObIAllocator &alloc,
+                                      ObIAllocator &alloc, 
                                       ObString &padding_res)
 {
   int ret = OB_SUCCESS;
@@ -855,8 +855,8 @@ int cast_to_string(common::ObIAllocator *allocator,
     } else {
       ObObjType in_type = ObLongTextType;
       ObString temp_str_val(j_buf.length(), j_buf.ptr());
-      bool is_need_string_string_convert = ((CS_TYPE_BINARY == cast_param.dst_coll_type_)
-                          || (ObCharset::charset_type_by_coll(cast_param.in_coll_type_) !=
+      bool is_need_string_string_convert = ((CS_TYPE_BINARY == cast_param.dst_coll_type_) 
+                          || (ObCharset::charset_type_by_coll(cast_param.in_coll_type_) != 
                               ObCharset::charset_type_by_coll(cast_param.dst_coll_type_)))
                               && !(lib::is_mysql_mode() && temp_str_val.length() == 0);
       if (is_need_string_string_convert) {
@@ -917,8 +917,8 @@ int cast_to_string(common::ObIAllocator *allocator,
       if (lib::is_oracle_mode()) {
         max_accuracy_len =  (cast_param.dst_type_ == ObLongTextType) ? OB_MAX_LONGTEXT_LENGTH : accuracy.get_length();
       } else { // mysql mode
-        max_accuracy_len = (ob_obj_type_class(cast_param.dst_type_) == ObTextTC)
-                                ? ObAccuracy::DDL_DEFAULT_ACCURACY[cast_param.dst_type_].get_length()
+        max_accuracy_len = (ob_obj_type_class(cast_param.dst_type_) == ObTextTC) 
+                                ? ObAccuracy::DDL_DEFAULT_ACCURACY[cast_param.dst_type_].get_length() 
                                     : accuracy.get_length();
       }
       if (max_accuracy_len > 0 && lib::is_oracle_mode()) {
@@ -931,14 +931,14 @@ int cast_to_string(common::ObIAllocator *allocator,
       if (OB_SUCC(ret)) {
         if (max_accuracy_len == DEFAULT_STR_LENGTH) { // default string len
         } else if (cast_param.is_trunc_ && max_accuracy_len < str_len_char) {
-          if (!cast_param.is_const_ && (j_base->json_type() == ObJsonNodeType::J_INT
-               || j_base->json_type() == ObJsonNodeType::J_UINT
+          if (!cast_param.is_const_ && (j_base->json_type() == ObJsonNodeType::J_INT 
+               || j_base->json_type() == ObJsonNodeType::J_UINT 
                || j_base->json_type() == ObJsonNodeType::J_BOOLEAN
                || j_base->json_type() == ObJsonNodeType::J_DOUBLE
                || j_base->json_type() == ObJsonNodeType::J_DECIMAL)) {
             ret = OB_ERR_VALUE_EXCEEDED_MAX;
           } else {
-            // bugfix:
+            // bugfix: 
             // Q1:SELECT c1 ,jt.ww b_c1 FROM t1, json_table ( c2 columns( ww varchar2(2 char) truncate  path '$.a')) jt ;
             // Q2:SELECT c1 ,jt.ww b_c1 FROM t1, json_table ( c2 columns( ww varchar2(2 byte) truncate path '$.a')) jt;
             // should not split in the middle of char
@@ -990,11 +990,11 @@ int cast_to_string(common::ObIAllocator *allocator,
       }
     }
   }
-
+  
   return ret;
 }
 
-bool ObJsonUtil::type_cast_to_string(ObString &json_string,
+bool ObJsonUtil::type_cast_to_string(ObString &json_string, 
                                      common::ObIAllocator *allocator,
                                      ObEvalCtx &ctx,
                                      ObIJsonBase *j_base,
@@ -1033,17 +1033,17 @@ int cast_to_datetime(common::ObIAllocator *allocator,
                                         true,
                                         cvrt_ctx.oracle_nls_format_))) {
         LOG_WARN("common_get_nls_format failed", K(ret));
-      } else if (!j_base->is_json_date(j_base->json_type())
+      } else if (!j_base->is_json_date(j_base->json_type()) 
                   && ObJsonUtil::type_cast_to_string(json_string, allocator, ctx, j_base, accuracy) && json_string.length() > 0) {
-        ObJsonString json_str(json_string.ptr(),json_string.length());
+        ObJsonString json_str(json_string.ptr(),json_string.length()); 
         if (CAST_FAIL(json_str.to_datetime(val, &cvrt_ctx))) {
           is_type_mismatch = 1;
           LOG_WARN("wrapper to datetime failed.", K(ret), K(*j_base));
-        }
+        } 
       } else if (CAST_FAIL(j_base->to_datetime(val, &cvrt_ctx))) {
         is_type_mismatch = 1;
         LOG_WARN("wrapper to datetime failed.", K(ret), K(*j_base));
-      }
+      } 
       if (OB_SUCC(ret) && CAST_FAIL(ObJsonUtil::datetime_scale_check(accuracy, val))) {
         LOG_WARN("datetime_scale_check failed.", K(ret));
       }
@@ -1115,7 +1115,7 @@ int cast_to_timstamp(common::ObIAllocator *allocator,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid otimestamp, set it null ", K(ot_data), K(scale), "orig_date", out_val);
         }
-      }
+      } 
     }
     if (OB_SUCC(ret) && (!cast_param.is_only_check_)) {
       if (cast_param.dst_type_ == ObTimestampTZType) {
@@ -1273,7 +1273,7 @@ int cast_to_time(common::ObIAllocator *allocator,
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("json base is null", K(ret));
   } else if (CAST_FAIL(j_base->to_time(val))) {
-    if (ret == OB_ERR_UNEXPECTED
+    if (ret == OB_ERR_UNEXPECTED 
         && cast_param.relaxed_time_convert_) {
       if (j_base->json_type() == ObJsonNodeType::J_INT) {
         ret = OB_SUCCESS;
@@ -1328,8 +1328,8 @@ int cast_to_year(common::ObIAllocator *allocator,
   UNUSED(ctx);
   UNUSED(accuracy);
   UNUSED(is_type_mismatch);
-  // Compatible with mysql.
-  // There is no year type in json binary, it is store as a full int.
+  // Compatible with mysql. 
+  // There is no year type in json binary, it is store as a full int. 
   // For example, 1901 is stored as 1901, not 01.
   // in mysql 8.0, json is converted to int first, then converted to year.
   // However, json value returning as different behavior to cast expr.
@@ -1343,7 +1343,7 @@ int cast_to_year(common::ObIAllocator *allocator,
     LOG_WARN("json base is null", K(ret));
   } else if (CAST_FAIL(j_base->to_int(int_val))) {
     LOG_WARN("wrapper to year failed.", K(ret), K(*j_base));
-  } else if ((lib::is_oracle_mode() || !cast_param.relaxed_time_convert_)
+  } else if ((lib::is_oracle_mode() || !cast_param.relaxed_time_convert_) 
               && (0 != int_val && (int_val < min_year || int_val > max_year))) {
     // different with cast, if 0 < int val < 100, do not add base year
     LOG_DEBUG("int out of year range", K(int_val));
@@ -1491,7 +1491,7 @@ int cast_to_decimalint(common::ObIAllocator *allocator,
     }
   }
   return ret;
-}
+} 
 
 int cast_to_bit(common::ObIAllocator *allocator,
                 ObEvalCtx &ctx,
@@ -1628,7 +1628,7 @@ int ObJsonUtil::cast_json_scalar_to_sql_obj(common::ObIAllocator *allocator,
     ObDatum res_datum;
     char datum_buffer[OBJ_DATUM_STRING_RES_SIZE] = {0};
     res_datum.ptr_ = datum_buffer;
-
+    
     if (is_use_dynamic_buffer) {
       void* buffer = allocator->alloc(OBJ_DATUM_STRING_RES_SIZE);
       if (OB_ISNULL(buffer)) {
@@ -1642,7 +1642,7 @@ int ObJsonUtil::cast_json_scalar_to_sql_obj(common::ObIAllocator *allocator,
     ObJsonCastParam cast_param(obj_type, ObCollationType::CS_TYPE_UTF8MB4_BIN, collation, false);
     cast_param.relaxed_time_convert_ = true;
     uint8_t is_type_mismatch = false;
-
+    
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(cast_to_res(allocator, ctx, j_base, accuracy, cast_param, res_datum, is_type_mismatch))) {
       LOG_WARN("fail to cast.", K(ret));
@@ -1650,7 +1650,7 @@ int ObJsonUtil::cast_json_scalar_to_sql_obj(common::ObIAllocator *allocator,
       res_obj.set_type(obj_type);
       res_obj.set_collation_type(collation);
       res_obj.set_scale(scale);
-
+      
       if (OB_FAIL(res_datum.to_obj(res_obj, res_obj.meta_))) {
         LOG_WARN("fail datum to obj.", K(ret));
       }
@@ -1673,7 +1673,7 @@ int ObJsonUtil::cast_json_scalar_to_sql_obj(common::ObIAllocator *allocator,
     ObEvalCtx ctx(*exec_ctx);
     ObAccuracy temp_accuracy = col_res_type.get_accuracy();
     ret =  cast_json_scalar_to_sql_obj(allocator, ctx, j_base,
-                                      col_res_type.get_collation_type(),
+                                      col_res_type.get_collation_type(), 
                                       temp_accuracy,
                                       col_res_type.get_type(),
                                       col_res_type.get_scale(),
@@ -1683,7 +1683,7 @@ int ObJsonUtil::cast_json_scalar_to_sql_obj(common::ObIAllocator *allocator,
 }
 
 /*
-ObJsonUtil::ObJsonCastSqlDatum OB_JSON_CAST_DATUM_EXPLICIT[ObMaxTC] =
+ObJsonUtil::ObJsonCastSqlDatum OB_JSON_CAST_DATUM_EXPLICIT[ObMaxTC] = 
 {
   // ObNullTC      = 0,    // null
   cast_to_null<ObDatum>,
@@ -1729,7 +1729,7 @@ ObJsonUtil::ObJsonCastSqlDatum OB_JSON_CAST_DATUM_EXPLICIT[ObMaxTC] =
   cast_not_expected<ObDatum>,
   // ObLobTC           = 21, //oracle lob typeclass ObLobType not use
   cast_not_expected<ObDatum>,
-  // ObJsonTC          = 22, // json type class
+  // ObJsonTC          = 22, // json type class 
   cast_to_json<ObDatum>,
   // ObGeometryTC      = 23, // geometry type class
   cast_not_expected<ObDatum>,
@@ -1737,7 +1737,7 @@ ObJsonUtil::ObJsonCastSqlDatum OB_JSON_CAST_DATUM_EXPLICIT[ObMaxTC] =
   cast_not_expected<ObDatum>,
 };
 
-ObJsonUtil::ObJsonCastSqlObj OB_JSON_CAST_OBJ_EXPLICIT[ObMaxTC] =
+ObJsonUtil::ObJsonCastSqlObj OB_JSON_CAST_OBJ_EXPLICIT[ObMaxTC] = 
 {
   // ObNullTC      = 0,    // null
   cast_to_null<ObObj>,
@@ -1783,7 +1783,7 @@ ObJsonUtil::ObJsonCastSqlObj OB_JSON_CAST_OBJ_EXPLICIT[ObMaxTC] =
   cast_not_expected<ObObj>,
   // ObLobTC           = 21, //oracle lob typeclass ObLobType not use
   cast_not_expected<ObObj>,
-  // ObJsonTC          = 22, // json type class
+  // ObJsonTC          = 22, // json type class 
   cast_to_json<ObObj>,
   // ObGeometryTC      = 23, // geometry type class
   cast_not_expected<ObObj>,
@@ -1792,7 +1792,7 @@ ObJsonUtil::ObJsonCastSqlObj OB_JSON_CAST_OBJ_EXPLICIT[ObMaxTC] =
 };
 */
 
-ObJsonUtil::ObJsonCastSqlScalar OB_JSON_CAST_SQL_EXPLICIT[ObMaxTC] =
+ObJsonUtil::ObJsonCastSqlScalar OB_JSON_CAST_SQL_EXPLICIT[ObMaxTC] = 
 {
   // ObNullTC      = 0,    // null
   cast_to_null,
@@ -1838,7 +1838,7 @@ ObJsonUtil::ObJsonCastSqlScalar OB_JSON_CAST_SQL_EXPLICIT[ObMaxTC] =
   cast_not_expected,
   // ObLobTC           = 21, //oracle lob typeclass ObLobType not use
   cast_not_expected,
-  // ObJsonTC          = 22, // json type class
+  // ObJsonTC          = 22, // json type class 
   cast_to_json,
   // ObGeometryTC      = 23, // geometry type class
   cast_not_expected,
@@ -1858,10 +1858,10 @@ ObJsonUtil::ObJsonCastSqlScalar OB_JSON_CAST_SQL_EXPLICIT[ObMaxTC] =
 #undef GET_SESSION
 
 int ObJsonUtil::get_json_path(ObExpr* expr,
-                              ObEvalCtx &ctx,
-                              bool &is_null_result,
+                              ObEvalCtx &ctx, 
+                              bool &is_null_result, 
                               ObJsonParamCacheCtx *&param_ctx,
-                              MultimodeAlloctor &temp_allocator,
+                              MultimodeAlloctor &temp_allocator, 
                               bool &is_cover_by_error)
 {
   INIT_SUCC(ret);
@@ -1871,8 +1871,8 @@ int ObJsonUtil::get_json_path(ObExpr* expr,
   ObJsonPath* j_path = nullptr;
   ObString j_path_text;
   ObJsonPathCache* path_cache = path_cache = param_ctx->get_path_cache();
-  // parse json path
-  if (!param_ctx->is_first_exec_ && param_ctx->is_json_path_const_
+  // parse json path 
+  if (!param_ctx->is_first_exec_ && param_ctx->is_json_path_const_ 
       && OB_NOT_NULL(path_cache)) {
   } else {
     type = expr->datum_meta_.type_;
@@ -1976,9 +1976,9 @@ int ObJsonUtil::get_json_doc(ObExpr *expr,
   return ret;
 }
 
-int func_upper_json_string(ObIJsonBase*& in,
+int func_upper_json_string(ObIJsonBase*& in, 
                            bool &is_null_result,
-                           common::ObIAllocator *allocator,
+                           common::ObIAllocator *allocator, 
                            uint8_t &is_type_mismatch)
 {
   UNUSED(is_null_result);
@@ -1990,9 +1990,9 @@ int func_upper_json_string(ObIJsonBase*& in,
   return OB_SUCCESS;
 }
 
-int func_conversion_fail(ObIJsonBase*& in,
+int func_conversion_fail(ObIJsonBase*& in, 
                          bool &is_null_result,
-                         common::ObIAllocator *allocator,
+                         common::ObIAllocator *allocator, 
                          uint8_t &is_type_mismatch)
 {
   INIT_SUCC(ret);
@@ -2005,9 +2005,9 @@ int func_conversion_fail(ObIJsonBase*& in,
   return ret;
 }
 
-int func_str_json_null(ObIJsonBase*& in,
+int func_str_json_null(ObIJsonBase*& in, 
                        bool &is_null_result,
-                       common::ObIAllocator *allocator,
+                       common::ObIAllocator *allocator, 
                        uint8_t &is_type_mismatch)
 {
   INIT_SUCC(ret);
@@ -2020,9 +2020,9 @@ int func_str_json_null(ObIJsonBase*& in,
   return ret;
 }
 
-int func_num_json_null(ObIJsonBase*& in,
+int func_num_json_null(ObIJsonBase*& in, 
                        bool &is_null_result,
-                       common::ObIAllocator *allocator,
+                       common::ObIAllocator *allocator, 
                        uint8_t &is_type_mismatch)
 {
   INIT_SUCC(ret);
@@ -2035,9 +2035,9 @@ int func_num_json_null(ObIJsonBase*& in,
   return ret;
 }
 
-int set_null_result(ObIJsonBase*& in,
+int set_null_result(ObIJsonBase*& in, 
                     bool &is_null_result,
-                    common::ObIAllocator *allocator,
+                    common::ObIAllocator *allocator, 
                     uint8_t &is_type_mismatch)
 {
   UNUSED(in);
@@ -2047,9 +2047,9 @@ int set_null_result(ObIJsonBase*& in,
   return OB_SUCCESS;
 }
 
-int cast_succ(ObIJsonBase*& in,
+int cast_succ(ObIJsonBase*& in, 
               bool &is_null_result,
-              common::ObIAllocator *allocator,
+              common::ObIAllocator *allocator, 
               uint8_t &is_type_mismatch)
 {
   UNUSED(in);
@@ -2059,9 +2059,9 @@ int cast_succ(ObIJsonBase*& in,
   return OB_SUCCESS;
 }
 
-int func_path_syntax_fail(ObIJsonBase*& in,
+int func_path_syntax_fail(ObIJsonBase*& in, 
                           bool &is_null_result,
-                          common::ObIAllocator *allocator,
+                          common::ObIAllocator *allocator, 
                           uint8_t &is_type_mismatch)
 {
   INIT_SUCC(ret);
@@ -2074,9 +2074,9 @@ int func_path_syntax_fail(ObIJsonBase*& in,
   return ret;
 }
 
-int func_bool_json_int(ObIJsonBase*& in,
+int func_bool_json_int(ObIJsonBase*& in, 
                         bool &is_null_result,
-                        common::ObIAllocator *allocator,
+                        common::ObIAllocator *allocator, 
                         uint8_t &is_type_mismatch)
 {
   INIT_SUCC(ret);
@@ -2089,16 +2089,16 @@ int func_bool_json_int(ObIJsonBase*& in,
     } else {
       tmp_ans = new (tmp_ans) ObJsonBoolean(is_true);
       in = tmp_ans;
-    }
+    } 
   } else {
     is_null_result = true;
   }
   return ret;
 }
 
-int func_bool_json_double(ObIJsonBase*& in,
+int func_bool_json_double(ObIJsonBase*& in, 
                           bool &is_null_result,
-                          common::ObIAllocator *allocator,
+                          common::ObIAllocator *allocator, 
                           uint8_t &is_type_mismatch)
 {
   INIT_SUCC(ret);
@@ -2111,7 +2111,7 @@ int func_bool_json_double(ObIJsonBase*& in,
     } else {
       tmp_ans = new (tmp_ans) ObJsonBoolean(is_true);
       in = tmp_ans;
-    }
+    } 
   } else {
     is_null_result = true;
   }
@@ -2119,7 +2119,7 @@ int func_bool_json_double(ObIJsonBase*& in,
 }
 
 // 17 * 30
-ObJsonUtil::ObItemMethodValid OB_JSON_VALUE_ITEM_METHOD_CAST_FUNC[ObMaxItemMethod][ObMaxJsonType] =
+ObJsonUtil::ObItemMethodValid OB_JSON_VALUE_ITEM_METHOD_CAST_FUNC[ObMaxItemMethod][ObMaxJsonType] = 
 {
   {
     // abs -> **
@@ -2684,9 +2684,9 @@ ObJsonUtil::ObItemMethodValid OB_JSON_VALUE_ITEM_METHOD_CAST_FUNC[ObMaxItemMetho
   },
 };
 
-// ItemJsonCompare
+// ItemJsonCompare 
 
-int OB_JSON_QUERY_ITEM_METHOD_NULL_OPTION[ObMaxItemMethod][ObMaxJsonType] =
+int OB_JSON_QUERY_ITEM_METHOD_NULL_OPTION[ObMaxItemMethod][ObMaxJsonType] = 
 {
   {
     // abs -> **
@@ -3295,9 +3295,9 @@ ObJsonUtil::ObJsonCastSqlScalar ObJsonUtil::get_json_cast_func(ObObjType dst_typ
 
 bool ObJsonUtil::is_number_item_method(ObJsonPath* j_path)
 {
-  return j_path->get_last_node_type() == JPN_NUMBER
-          || j_path->get_last_node_type() == JPN_NUM_ONLY
-          || j_path->get_last_node_type() == JPN_LENGTH
+  return j_path->get_last_node_type() == JPN_NUMBER 
+          || j_path->get_last_node_type() == JPN_NUM_ONLY 
+          || j_path->get_last_node_type() == JPN_LENGTH 
           || j_path->get_last_node_type() == JPN_TYPE
           || j_path->get_last_node_type() == JPN_SIZE;
 }

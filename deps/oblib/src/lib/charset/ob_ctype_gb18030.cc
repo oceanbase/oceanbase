@@ -1,14 +1,14 @@
 /**
- * Copyright (c) 2021 OceanBase
- * OceanBase CE is licensed under Mulan PubL v2.
- * You can use this software according to the terms and conditions of the Mulan PubL v2.
- * You may obtain a copy of Mulan PubL v2 at:
- *          http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * Copyright (c) 2021 OceanBase 
+ * OceanBase CE is licensed under Mulan PubL v2. 
+ * You can use this software according to the terms and conditions of the Mulan PubL v2. 
+ * You may obtain a copy of Mulan PubL v2 at: 
+ *          http://license.coscl.org.cn/MulanPubL-2.0 
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, 
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, 
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE. 
  * See the Mulan PubL v2 for more details.
- */
+ */ 
 
 #include "lib/charset/ob_charset.h"
 #include "lib/charset/ob_gb18030_2022_tab.h"
@@ -752,7 +752,7 @@ static int ob_wildcmp_gb18030_impl(const ObCharsetInfo *cs, const char *str,
         return 1;
 
       if (w_gb != escape_char && w_gb == w_many) {
-        result = 1;
+        result = 1;   
         break;
       }
 
@@ -769,7 +769,7 @@ static int ob_wildcmp_gb18030_impl(const ObCharsetInfo *cs, const char *str,
       str += s_len;
 
       if (!escaped && w_gb == w_one) {
-        result = 1;
+        result = 1;   
       } else {
         s_gb = get_weight_for_gb18030_chs<GET_CHS_WEIGHT, CASESENSITIVE>(cs, str - s_len, s_len);
         w_gb = get_weight_for_gb18030_chs<GET_CHS_WEIGHT, CASESENSITIVE>(cs, wild_str - w_len, w_len);
@@ -777,11 +777,11 @@ static int ob_wildcmp_gb18030_impl(const ObCharsetInfo *cs, const char *str,
       }
 
       if (wild_str == wild_end)
-        return (str != str_end);
+        return (str != str_end);   
     }
 
         if (w_gb == w_many) {
-
+        
       for (; wild_str != wild_end;) {
         if ((w_len = get_code_and_length(cs, wild_str, wild_end, &w_gb)) == 0) {
           return 1;
@@ -796,10 +796,10 @@ static int ob_wildcmp_gb18030_impl(const ObCharsetInfo *cs, const char *str,
           str += s_len;
           continue;
         } else
-        break;
+        break;   
       }
 
-      if (wild_str == wild_end) return 0;
+      if (wild_str == wild_end) return 0;   
       else if (str == str_end) return -1;
       else if ((w_len = get_code_and_length(cs, wild_str, wild_end, &w_gb)) == 0)
         return 1;
@@ -823,9 +823,9 @@ static int ob_wildcmp_gb18030_impl(const ObCharsetInfo *cs, const char *str,
 
           s_gb = get_weight_for_gb18030_chs<GET_CHS_WEIGHT, CASESENSITIVE>(cs, str, s_len);
           w_gb = get_weight_for_gb18030_chs<GET_CHS_WEIGHT, CASESENSITIVE>(cs, wild_str - w_len, w_len);
-          if (s_gb == w_gb) {
+          if (s_gb == w_gb) { 
               break;
-          } else  {
+          } else  { 
           str += s_len;
         }
         }
@@ -1066,34 +1066,34 @@ ObCharsetInfo ob_charset_gb18030_chinese_cs = {
 ObCharsetInfo ob_charset_gb18030_bin = {
     oceanbase::common::CS_TYPE_GB18030_BIN,
     0,
-    0,
-    OB_CS_COMPILED | OB_CS_BINSORT,
-    "gb18030",
-    "gb18030_bin",
-    "",
+    0,                                
+    OB_CS_COMPILED | OB_CS_BINSORT,   
+    "gb18030",                        
+    "gb18030_bin",                    
+    "",                               
     NULL,
     NULL,
-    ctype_gb18030,
-    to_lower_gb18030,
-    to_upper_gb18030,
+    ctype_gb18030,                    
+    to_lower_gb18030,                 
+    to_upper_gb18030,                 
+    NULL,                             
+    NULL,                             
     NULL,
     NULL,
-    NULL,
-    NULL,
-    &ob_caseinfo_gb18030,
-    NULL,
-    NULL,
-    1,
-    2,
-    2,
-    1,
-    4,
+    &ob_caseinfo_gb18030,             
+    NULL,                             
+    NULL,                             
+    1,                                
+    2,                                
+    2,                                
+    1,                                
+    4,                                
     2,                                               /* mbmaxlenlen   */
-    0,
-    0xFEFEFEFE,
-    ' ',
-    1,
-    1,
+    0,                                
+    0xFEFEFEFE,                       
+    ' ',                              
+    1,                                
+    1,                                
     1,
     &ob_charset_gb18030_handler,
     &ob_collation_mb_bin_handler,
@@ -1174,13 +1174,13 @@ static uint unicode_2022_idx(uint wc)
 }
 
 
-//Swap the unicode for a 2-length GB18030 code and a 4-length GB18030 code
+//Swap the unicode for a 2-length GB18030 code and a 4-length GB18030 code 
 static void swap_code_for_gb18030_2022(const char *char_GB_2, const char *char_GB_4, uint16_t OLD_UNI_2, uint16_t OLD_UNI_4)
 {
   int ret = 0;
   const unsigned char *GB_2 = reinterpret_cast<const unsigned char *>(char_GB_2);
   const unsigned char *GB_4 = reinterpret_cast<const unsigned char *>(char_GB_4);
-
+  
   /* set 2-byte GB18030-2022 tab */
   {
     unsigned int idx = gb18030_2_idx(GB_2);
@@ -1378,7 +1378,7 @@ int init_gb18030_2022()
   MEMCPY(tab_gb18030_2022_2_uni, tab_gb18030_2_uni, sizeof(tab_gb18030_2_uni));
   /**
    * In order to add [GB+82358F33, GB+82359134] and [GB+84318236, GB+84318537] to tab_gb18030_2022_4_uni,
-   * split tab_gb18030_4_uni as [0, P1), [P1, P2), [P2, END]
+   * split tab_gb18030_4_uni as [0, P1), [P1, P2), [P2, END] 
    * P1 is the index of GB+82358F33
    * P2 is the index of GB+84309C38*/
   const static unsigned int P1 = 0x4A63 - 6637 - 2110;
@@ -1412,7 +1412,7 @@ int init_gb18030_2022()
     const static int GB_diff_FOR_U9FA6 =  0x9FA6 - 0x5543;
     tab_uni_gb18030_2022_p1[i + sizeof(tab_uni_gb18030_p1)/sizeof(uint16_t)] = i + GB_diff_FOR_U9FA6;
   }
-
+  
   /* Copy tab_uni_gb18030_p2 */
   MEMCPY(tab_uni_gb18030_2022_p2, tab_uni_gb18030_p2, sizeof(tab_uni_gb18030_p2));
 
@@ -1807,7 +1807,7 @@ ObCharsetInfo ob_charset_gb18030_2022_radical_cs =
   &ob_collation_2022_radical_cs_handler,
   PAD_SPACE
 };
-
+       
 ObCharsetInfo ob_charset_gb18030_2022_stroke_ci =
 {
   oceanbase::common::CS_TYPE_GB18030_2022_STROKE_CI,

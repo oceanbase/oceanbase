@@ -235,8 +235,8 @@ int ObRootMinorFreeze::init_params_by_ls_or_tablet(const uint64_t tenant_id,
     } else if (OB_FAIL(GCTX.location_service_->get(tenant_id, tablet_id, expire_renew_time, is_cache_hit, ls_id))) {
       LOG_WARN("fail to get ls id according to tablet_id", K(ret), K(tenant_id), K(tablet_id));
     }
-  }
-
+  } 
+  
   if (OB_FAIL(ret)) {
   } else if (ls_id.is_valid()) {
     // get ls location by ls_id

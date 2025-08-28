@@ -53,14 +53,14 @@ enum ObMulModeNodeType
   // the following is for xml type
   M_UNPARESED_DOC, //14
   M_UNPARSED, // 15
-  M_DOCUMENT, //
-  M_CONTENT, //
+  M_DOCUMENT, // 
+  M_CONTENT, // 
   M_ELEMENT, // 18
   M_ATTRIBUTE, // 19
   M_NAMESPACE,
   M_INSTRUCT,
   M_TEXT, // 22
-  M_COMMENT,
+  M_COMMENT, 
   M_CDATA, // 24
   M_ENTITY,
   M_ENTITY_REF, // 26
@@ -238,11 +238,11 @@ public:
       new (write_buf) T(iter);
       pos_++;
     }
-
+  
     return ret;
   }
 
-  int extend()
+  int extend() 
   {
     INIT_SUCC(ret);
     int64_t length = buffer_.length();
@@ -270,7 +270,7 @@ public:
       int64_t offset = (size - 1) * sizeof(T);
       T* tmp = reinterpret_cast<T*>(buffer_.ptr() + offset);
       tmp->~T();
-
+      
       --pos_;
     }
   }
@@ -292,12 +292,12 @@ public:
     int32_t size = pos_;
     OB_ASSERT(pos < size);
     int64_t offset = pos * node_size;
-
+    
     if (OB_SUCC(ret)) {
       char* write_buf = buffer_.ptr() + offset;
       new (write_buf) T(iter);
     }
-
+  
     return ret;
   }
 
@@ -346,14 +346,14 @@ private:
 
 class ObIMulModeBase {
 public:
-  ObIMulModeBase(ObNodeMemType mem_type,
-                 ObNodeDataType data_type,
+  ObIMulModeBase(ObNodeMemType mem_type, 
+                 ObNodeDataType data_type, 
                  ObIAllocator *allocator)
   : meta_(mem_type, data_type),
     allocator_(allocator)
   {}
 
-  ObIMulModeBase(ObNodeMemType mem_type,
+  ObIMulModeBase(ObNodeMemType mem_type, 
                  ObNodeDataType data_type)
   : meta_(mem_type, data_type),
     allocator_(nullptr)
@@ -481,7 +481,7 @@ public:
    *  iff pos larger than size(), or smaller than 0, return error code
   */
   virtual int remove(int64_t pos) = 0;
-
+  
   /**
    * remove speicfied node from current node
    * return error code if node not exists
@@ -493,7 +493,7 @@ public:
    * if pos is too large or smaller, return error
   */
   virtual int update(int64_t pos, ObIMulModeBase* new_node) = 0;
-
+  
   /**
    * update specified postion member under current node
    * return error code iff old_node not found
@@ -506,13 +506,13 @@ public:
 
   /**
    * for node compare
-   */
+   */ 
   // virtual int compare(const ObIMulModeBase &other, int &res) = 0;
 
-  int64_t to_string(char *buf, const int64_t buf_len) const {
+  int64_t to_string(char *buf, const int64_t buf_len) const { 
     int64_t pos = 0;
     databuff_printf(buf, buf_len, pos, "data_type = %d, m_type_=%d", meta_.data_type_, meta_.m_type_);
-    return pos;
+    return pos;  
   }
 
   virtual ObMulModeMemCtx* get_mem_ctx() { return nullptr; }
@@ -574,7 +574,7 @@ public:
    */
   virtual const char *get_data();
   /***
-   * get data length
+   * get data length 
    */
   virtual uint64_t get_data_length();
   /**
@@ -591,7 +591,7 @@ public:
   virtual ObScale get_decimal_scale();
 
   virtual ObTime get_time();
-
+  
   /*  // for cast
   *  virtual int to_int(int64_t &value, bool check_range = false, bool force_convert = false) const = 0;
   *  virtual int to_uint(uint64_t &value, bool fail_on_negative = false, bool check_range = false) const = 0;
@@ -611,7 +611,7 @@ protected:
   ObIAllocator *allocator_;
 
 };
-
+  
 } // namespace common
 } // namespace oceanbase
 

@@ -24,7 +24,7 @@ int ObRecursiveInnerDataOp::init(const ObExpr *search_expr, const ObExpr *cycle_
   int ret = OB_SUCCESS;
   search_expr_ = search_expr;
   cycle_expr_ = cycle_expr;
-
+  
   if (OB_ISNULL(ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql session info is null", K(ret));
@@ -239,7 +239,7 @@ int ObRecursiveInnerDataOp::try_format_output_batch(int64_t batch_size, int64_t 
     // try format row
     if (OB_SUCC(ret)) {
       guard.set_batch_idx(i);
-      if (OB_FAIL(assign_to_cur_row(result_node.stored_row_))) {
+      if (OB_FAIL(assign_to_cur_row(result_node.stored_row_))) { 
         LOG_WARN("Failed to assign input row to cur row", K(ret));
       } else if (OB_FAIL(add_pseudo_column(result_node.is_cycle_))) {
         LOG_WARN("Add pseudo column failed", K(ret));
@@ -505,7 +505,7 @@ int ObRecursiveInnerDataOp::try_get_right_rows(
   }
   // try to get row again
   if (OB_SUCC(ret)) {
-    if (batch_mode && is_bulk_search()) {
+    if (batch_mode && is_bulk_search()) { 
       if (OB_FAIL(try_format_output_batch(batch_size, read_rows))) {
         if (ret != OB_ITER_END) {
           LOG_WARN("failed to get next batch", K(ret));

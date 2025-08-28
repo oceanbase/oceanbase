@@ -16,10 +16,10 @@
 #include "storage/tx/ob_trans_define.h"
 #include "lib/allocator/ob_mod_define.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
 
-namespace transaction
+namespace transaction 
 {
 struct DupTabletSetChangeStatus;
 // base data structure for dup table
@@ -170,9 +170,9 @@ class ObDupTableLSTabletSetStat: public ObDupTableLSBaseStat
 public:
   ObDupTableLSTabletSetStat() { reset(); }
   ~ObDupTableLSTabletSetStat() { destroy(); }
-
+  
   void reset();
-  void destroy() { reset(); }
+  void destroy() { reset(); } 
   OB_INLINE void set_is_master(const bool is_master) { is_master_ = is_master; }
   OB_INLINE void set_unique_id(const int64_t unique_id) { unique_id_ = unique_id; }
   OB_INLINE void set_count(const int64_t count) { count_ = count; }
@@ -206,7 +206,7 @@ public:
   INHERIT_TO_STRING_KV("ObDupTableLSTabletSet", ObDupTableLSBaseStat, K_(is_master),
                        K_(unique_id), K_(count), K_(attr), K_(readable_scn),
                        K_(change_scn), K_(need_confirm_scn), K_(state), K_(trx_ref));
-
+  
 private:
   bool is_master_;
   int64_t unique_id_;

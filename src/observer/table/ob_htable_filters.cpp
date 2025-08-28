@@ -449,8 +449,8 @@ int DependentColumnFilter::filter_cell(const ObHTableCell &cell, ReturnCode &ret
         ret_code = ReturnCode::INCLUDE;
       }
     }
-  }
-
+  } 
+  
   return ret;
 }
 
@@ -774,7 +774,7 @@ int FilterListAND::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
           case ReturnCode::INCLUDE_AND_SEEK_NEXT_ROW: {
             break;
           }
-          case ReturnCode::SEEK_NEXT_USING_HINT: {
+          case ReturnCode::SEEK_NEXT_USING_HINT: {  
             if (OB_FAIL(seek_hint_filters_.push_back(filter))) {
               LOG_WARN("failed to push back", K(ret));
             }
@@ -785,7 +785,7 @@ int FilterListAND::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
         }
       }
     }
-  }// end for
+  }// end for  
   for (; i < N && ret == OB_SUCCESS; ++i) {
     Filter *filter = filters_.at(i);
     if (filter != NULL && filter->is_hinting_filter()) {
@@ -1112,8 +1112,8 @@ int FilterListOR::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
           if (ReturnCode::SEEK_NEXT_USING_HINT != local_rc) {
             every_filter_return_hint = false;
           }
-          if (ReturnCode::INCLUDE == local_rc
-              || ReturnCode::INCLUDE_AND_NEXT_COL == local_rc
+          if (ReturnCode::INCLUDE == local_rc 
+              || ReturnCode::INCLUDE_AND_NEXT_COL == local_rc 
               || ReturnCode::INCLUDE_AND_SEEK_NEXT_ROW == local_rc) {
             cell_included_.at(i) = true;
           }
@@ -1503,7 +1503,7 @@ int SingleColumnValueExcludeFilter::filter_row_cells(ObTableQueryDListResult &ce
     int64_t &row_count = cells.get_row_count();
     --row_count;
   }
-
+  
   return ret;
 }
 
@@ -1944,8 +1944,8 @@ int RowTracker::init(const ObString &cur_row)
   if (inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("row tracker has been inited", K(ret));
-  } else if (nullptr == (order_ = is_reversed_ ?
-      static_cast<Order*>(OB_NEWx(DESC, &allocator_))
+  } else if (nullptr == (order_ = is_reversed_ ? 
+      static_cast<Order*>(OB_NEWx(DESC, &allocator_)) 
       : static_cast<Order*>(OB_NEWx(ASC, &allocator_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("no memory", K(ret));
@@ -2638,7 +2638,7 @@ void CheckAndMutateFilter::reset()
   matched_column_ = false;
 }
 
-// NOTE: when value_is_null is true，cannot return other cell directly
+// NOTE: when value_is_null is true，cannot return other cell directly 
 // 判断是否 check 通过，例如当整个 column family 为空的时候，result_count = 0，但是应该是 check 通过
 
 // NOTE: when value_is_null is true, cannot return other cells directly and determine whether check is

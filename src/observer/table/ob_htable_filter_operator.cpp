@@ -92,7 +92,7 @@ void ObHColumnDescriptor::from_kv_attribute(const ObKVAttr &kv_attributes)
 
 void ObHColumnDescriptor::reset()
 {
-  time_to_live_ = 0;
+  time_to_live_ = 0;   
   max_version_ = 0;
 }
 
@@ -188,7 +188,7 @@ int ObHTableExplicitColumnTracker::check_column(const ObHTableCell &cell, ObHTab
     // Compare specific column to current column
     //
     cmp_ret = ObHTableUtils::compare_qualifier(cell.get_qualifier(), curr_column_->first);
-
+    
     // Column Matches. Return include code. The caller would call checkVersions
     // to limit the number of versions.
     if (0 == cmp_ret) {
@@ -404,7 +404,7 @@ void ObHTableWildcardColumnTracker::reset()
 
 int32_t ObHTableWildcardColumnTracker::get_cur_version()
 {
-  return current_count_;
+  return current_count_;  
 }
 
 ////////////////////////////////////////////////////////////////
@@ -912,9 +912,9 @@ int ObHTableRowIterator::get_next_result_internal(ResultType*& result)
         case ObHTableMatchCode::DONE_SCAN:
           has_more_cells_ = false;
           loop = false;
-          // need to scan the last kq for recording expired rowkey
+          // need to scan the last kq for recording expired rowkey 
           // when scan return OB_ITER_END, cur_cell_ will be empty
-          // but the ret code will be covered
+          // but the ret code will be covered 
           if (NULL != curr_cell_.get_ob_row()) {
             ret = seek_or_skip_to_next_col(curr_cell_);
           }
@@ -1199,7 +1199,7 @@ ObHTableReversedRowIterator::ObHTableReversedRowIterator(const ObTableQuery &que
       iter_allocator_("HtbRevIterAloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       reversed_range_alloc_("HtbRevRanAloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       forward_child_op_(nullptr),
-      spec_(nullptr),
+      spec_(nullptr), 
       forward_tb_ctx_(iter_allocator_),
       expr_frame_info_(iter_allocator_)
 {}
@@ -1440,7 +1440,7 @@ int ObHTableReversedRowIterator::seek_or_skip_to_next_col_inner(const ObString &
         }
       }
     } else {
-      allocator_.reuse();
+      allocator_.reuse(); 
       curr_cell_.set_ob_row(ob_next_column_row);
     }
   }
@@ -1531,7 +1531,7 @@ int ObHTableReversedRowIterator::create_forward_child_op()
                  reversed_tb_ctx.get_tablet_id(),
                  reversed_tb_ctx.get_timeout_ts()))) {
     LOG_WARN("fail to init table forward_ctx common part", K(ret), K(reversed_tb_ctx.get_table_name()));
-  } else if (OB_FAIL(forward_tb_ctx_.init_scan(*query_, reversed_tb_ctx.is_weak_read(),
+  } else if (OB_FAIL(forward_tb_ctx_.init_scan(*query_, reversed_tb_ctx.is_weak_read(), 
                      reversed_tb_ctx.get_table_id()))) {
     LOG_WARN("fail to init table forward_ctx scan part", K(ret), K(forward_tb_ctx_));
   }

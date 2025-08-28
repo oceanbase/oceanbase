@@ -191,13 +191,13 @@ int ObODPSJNITableRowIterator::init(const storage::ObTableScanParam *scan_param)
   } else if (OB_ISNULL(scan_param_) || OB_ISNULL(scan_param_->ext_file_column_exprs_) || OB_ISNULL(scan_param_->op_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("wrong scan param for scan");
-  } else {
+  } else { 
     ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
     if (scan_param->external_file_format_.odps_format_.api_mode_ != ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
       if (OB_FAIL(init_jni_schema_scanner(scan_param->external_file_format_.odps_format_, eval_ctx.exec_ctx_.get_my_session()))) {
         // Using schema scanner to get columns
         LOG_WARN("failed to init odps jni scanner", K(ret));
-      }
+      } 
     } else {
       if (OB_FAIL(init_jni_meta_scanner(scan_param->external_file_format_.odps_format_, eval_ctx.exec_ctx_.get_my_session()))) {
         // Using schema scanner to get columns
@@ -232,7 +232,7 @@ int ObODPSJNITableRowIterator::init(const storage::ObTableScanParam *scan_param)
       MEMCPY(ob_time_.tz_name_, timezone_str_.ptr(), timezone_str_.length());
       ob_time_.tz_name_[timezone_str_.length()] = '\0';
       ob_time_.is_tz_name_valid_ = true;
-    }
+    } 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(odps_params_map_.set_refactored(
                   ObString::make_string("service"), ObString::make_string("reader"), 1))) {
@@ -287,7 +287,7 @@ int ObODPSJNITableRowIterator::init_required_mini_params(const ObSQLSessionInfo*
           OB_FAIL(ob_write_string(arena_alloc_, odps_format_.quota_, quota, true)) ||
           OB_FAIL(ob_write_string(arena_alloc_, odps_format_.endpoint_, endpoint, true)) ||
           OB_FAIL(ob_write_string(arena_alloc_, odps_format_.tunnel_endpoint_, tunnel_endpoint, true)) ||
-          OB_FAIL(ob_write_string(arena_alloc_, odps_format_.compression_code_, compression_code, true)) ||
+          OB_FAIL(ob_write_string(arena_alloc_, odps_format_.compression_code_, compression_code, true)) || 
           OB_FAIL(ob_write_string(arena_alloc_, tmp_trace_id, trace_id, true))) {
     LOG_WARN("failed to write string", K(ret));
   } else if (OB_FAIL(odps_params_map_.set_refactored(ObString::make_string("access_id"), access_id, 1))) {
@@ -547,7 +547,7 @@ int ObODPSJNITableRowIterator::extract_mirror_odps_column(ObString &mirror_colum
   ObString type_expr;
   if (odps_type == OdpsType::CHAR || odps_type == OdpsType::VARCHAR) {
     // if type is `CHAR` or `VARCHAR`, then it will be with `length`
-    int length = 0;
+    int length = 0;  
     if (OB_FAIL(get_int_from_mirror_column_string(mirror_column_string, length))) {
       LOG_WARN("failed to get length", K(mirror_column_string));
     } else if (OB_FAIL(get_int_from_mirror_column_string(mirror_column_string, type_size))) {
@@ -612,7 +612,7 @@ int ObODPSJNITableRowIterator::get_int_from_mirror_column_string(ObString &mirro
   if (OB_UNLIKELY(!int_str.is_numeric())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid int value string", K(int_str));
-  } else {
+  } else {  
     int_val = ObCharset::strntoll(int_str.ptr(), int_str.length(), 10, &err);
     if (OB_UNLIKELY(0 != err)) {
       ret = OB_INVALID_ARGUMENT;
@@ -813,7 +813,7 @@ int ObODPSJNITableRowIterator::init_part_spec(const ObString& part_spec) {
   int ret = OB_SUCCESS;
   ObString temp_partition_spec = ObString::make_string("partition_spec");
   ObString partition_spec;
-
+ 
   if (!odps_params_map_.created() && OB_FAIL(odps_params_map_.create(MAX_PARAMS_SIZE, "JNITableParams"))) {
     LOG_WARN("failed to create odps params map", K(ret));
   } else if (OB_FAIL(ob_write_string(arena_alloc_, part_spec, partition_spec, true))) {
@@ -839,14 +839,14 @@ int ObODPSJNITableRowIterator::init_all_columns_name_as_odps_params()
       // If external_file_exprs is empty, but total_column_ids_ is not,
       // means that the query is only partition column(s).
     }
-
+    
     /**
      * tunnel 不需要分区列，但是性能差，因为每个分区都要开session
      * storage 需要把分区列，透给java
      */
     ObSqlString required_fields;
     ObSqlString field_types;
-
+ 
 
     int64_t column_count = obexpr_odps_nonpart_col_idsmap_.count();
     int64_t pc_count = obexpr_odps_part_col_idsmap_.count();
@@ -955,7 +955,7 @@ int ObODPSJNITableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
 
 
 int ObODPSJNITableRowIterator::next_task_storage_row_without_data_getter(const int64_t capacity)
-{
+{ 
   int ret = OB_SUCCESS;
   const ExprFixedArray &file_column_exprs = *(scan_param_->ext_file_column_exprs_);
   ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
@@ -1002,7 +1002,7 @@ int ObODPSJNITableRowIterator::get_next_rows_storage_api(int64_t &count, int64_t
   column_exprs_alloc_.clear();
   int64_t should_read_rows = 0;
   ObEvalCtx &ctx = scan_param_->op_->get_eval_ctx();
-  if (is_empty_external_file_exprs_
+  if (is_empty_external_file_exprs_ 
      && 0 == mirror_partition_column_list_.count()
      && odps_format_.api_mode_  == ObODPSGeneralFormat::ApiMode::ROW) {
     if (state_.count_ >= state_.step_ && OB_FAIL(next_task_storage_row_without_data_getter(capacity))) {
@@ -1015,7 +1015,7 @@ int ObODPSJNITableRowIterator::get_next_rows_storage_api(int64_t &count, int64_t
       // is not a real column.
       should_read_rows = std::min(capacity, state_.step_ - state_.count_);
       state_.count_ += should_read_rows;
-      if (0 == should_read_rows) {
+      if (0 == should_read_rows) { 
         if (INT64_MAX == state_.step_ || state_.count_ == state_.step_) {
           state_.step_ = state_.count_;  // go to next task
           count = 0;
@@ -1367,7 +1367,7 @@ int ObODPSJNITableRowIterator::get_next_rows_tunnel(int64_t &count, int64_t capa
       should_read_rows = std::min(capacity, state_.step_ - state_.count_);
       state_.count_ += should_read_rows;
 
-      if (0 == should_read_rows) {
+      if (0 == should_read_rows) { 
         if (INT64_MAX == state_.step_ || state_.count_ == state_.step_) {
           state_.step_ = state_.count_;  // go to next task
           count = 0;
@@ -1379,7 +1379,7 @@ int ObODPSJNITableRowIterator::get_next_rows_tunnel(int64_t &count, int64_t capa
         if (obexpr_odps_part_col_idsmap_.count() != 0) {
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(fill_column_exprs_tunnel(file_column_exprs, ctx, should_read_rows))) {
-            LOG_WARN("failed to fill column exprs", K(ret), K(count));
+            LOG_WARN("failed to fill column exprs", K(ret), K(count));    
           }
         }
       }
@@ -1514,7 +1514,7 @@ int ObODPSJNITableRowIterator::get_next_rows_tunnel(int64_t &count, int64_t capa
 }
 
 int ObODPSJNITableRowIterator::next_task_tunnel_without_data_getter(const int64_t capacity)
-{
+{ 
   int ret = OB_SUCCESS;
   const ExprFixedArray &file_column_exprs = *(scan_param_->ext_file_column_exprs_);
   ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
@@ -1639,7 +1639,7 @@ int ObODPSJNITableRowIterator::next_task_tunnel(const int64_t capacity)
       LOG_WARN("failed to resolve odps start step", K(ret));
     }
     LOG_TRACE("next_task_tunnel", K(ret), K(part_id), K(part_spec), K(start), K(step));
-
+    
     if (OB_FAIL(ret)) {
     } else if (part_spec.compare("#######DUMMY_FILE#######") == 0) {
       ret = OB_ITER_END;
@@ -2482,7 +2482,7 @@ int ObODPSJNITableRowIterator::fill_column_arrow(ObEvalCtx &ctx, const ObExpr &e
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected expr type", K(ret), K(type), K(column_idx));
       }
-    } else if (field->type()->id() == arrow::Type::STRING ||
+    } else if (field->type()->id() == arrow::Type::STRING || 
                field->type()->id() == arrow::Type::BINARY) {
       std::shared_ptr<arrow::StringArray> s_array = std::static_pointer_cast<arrow::StringArray>(array);
       ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
@@ -2517,7 +2517,7 @@ int ObODPSJNITableRowIterator::fill_column_arrow(ObEvalCtx &ctx, const ObExpr &e
           }
         }
       } else if ((ObVarcharType == type && (column.type_ == OdpsType::STRING || column.type_ == OdpsType::BINARY)) ||
-                  ((ObTinyTextType == type || ObTextType == type || ObLongTextType == type || ObMediumTextType == type)
+                  ((ObTinyTextType == type || ObTextType == type || ObLongTextType == type || ObMediumTextType == type) 
                       && (column.type_ == OdpsType::STRING || column.type_ == OdpsType::BINARY)) ||
                   (ObJsonType == type && column.type_ == OdpsType::JSON)) {
         for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < num_rows; ++row_idx) {
@@ -2533,7 +2533,7 @@ int ObODPSJNITableRowIterator::fill_column_arrow(ObEvalCtx &ctx, const ObExpr &e
             } else {
               judge_length = out_length;
             }
-            if (!(text_type_length_is_valid_at_runtime(type, judge_length)
+            if (!(text_type_length_is_valid_at_runtime(type, judge_length) 
                 || varchar_length_is_valid_at_runtime(type, out_charset, judge_length, expr.max_length_))) {
               ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
               LOG_WARN("unexpected data length", K(ret), K(out_length), K(judge_length), K(expr.max_length_), K(type));
@@ -2625,10 +2625,10 @@ int ObODPSJNITableRowIterator::fill_column_arrow(ObEvalCtx &ctx, const ObExpr &e
           batch_info_guard.set_batch_idx(row_idx);
           if (!date_array->IsNull(row_idx)) {
             int64_t v = date_array->Value(row_idx);
-            int64_t datetime = v * 1000;
-
+            int64_t datetime = v * 1000;            
+            
             int32_t offset_sec = 0;
-
+           
             if (OB_ERR_UNKNOWN_TIME_ZONE ==timezone_ret_) {
               ObTimeConvertCtx cvrt_ctx(TZ_INFO(session_ptr_), true);
               ObOTimestampData tmp_ot_data;
@@ -2678,7 +2678,7 @@ int ObODPSJNITableRowIterator::fill_column_arrow(ObEvalCtx &ctx, const ObExpr &e
           if (!date_array->IsNull(row_idx)) {
             int64_t v = date_array->Value(row_idx);
             int64_t datetime = 0;
-            if (timestamp_type->unit() == arrow::TimeUnit::SECOND) {
+            if (timestamp_type->unit() == arrow::TimeUnit::SECOND) { 
               datetime = v * 1000000;
             } else if (timestamp_type->unit() == arrow::TimeUnit::MILLI) {
               datetime = v * 1000;
@@ -2701,14 +2701,14 @@ int ObODPSJNITableRowIterator::fill_column_arrow(ObEvalCtx &ctx, const ObExpr &e
       } else if (is_mysql_mode()) {
         ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
         batch_info_guard.set_batch_idx(0);
-
+        
         for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < num_rows; ++row_idx) {
           batch_info_guard.set_batch_idx(row_idx);
           if (!date_array->IsNull(row_idx)) {
             int64_t v = date_array->Value(row_idx); // us
 
             int64_t datetime = 0;
-            if (timestamp_type->unit() == arrow::TimeUnit::SECOND) {
+            if (timestamp_type->unit() == arrow::TimeUnit::SECOND) { 
               datetime = v * 1000000;
             } else if (timestamp_type->unit() == arrow::TimeUnit::MILLI) {
               datetime = v * 1000;
@@ -2717,7 +2717,7 @@ int ObODPSJNITableRowIterator::fill_column_arrow(ObEvalCtx &ctx, const ObExpr &e
             } else {
               datetime = v / 1000;
             }
-
+  
             int32_t offset_sec = 0;
             if (OB_ERR_UNKNOWN_TIME_ZONE ==timezone_ret_) {
               ObTimeConvertCtx cvrt_ctx(TZ_INFO(session_ptr_), true);
@@ -2756,7 +2756,7 @@ int ObODPSJNITableRowIterator::fill_column_arrow(ObEvalCtx &ctx, const ObExpr &e
         LOG_WARN("unexpected expr type", K(ret), K(type), K(column_idx));
       }
     } else if (field->type()->id() == arrow::Type::LIST) {
-      std::shared_ptr<arrow::ListArray> list_array
+      std::shared_ptr<arrow::ListArray> list_array 
         = std::static_pointer_cast<arrow::ListArray>(array);
       ObODPSArrayHelper *array_helper = array_helpers_.at(column_idx);
       if (OB_ISNULL(array_helper)) {
@@ -2782,7 +2782,7 @@ int ObODPSJNITableRowIterator::fill_column_arrow(ObEvalCtx &ctx, const ObExpr &e
             } else if (OB_FAIL(ObArrayExprUtils::set_array_res(child_array,
                                                                child_array->get_raw_binary_len(),
                                                                expr,
-                                                               ctx,
+                                                               ctx, 
                                                                res_str))) {
               LOG_WARN("get array binary string failed", K(ret));
             } else {
@@ -2791,7 +2791,7 @@ int ObODPSJNITableRowIterator::fill_column_arrow(ObEvalCtx &ctx, const ObExpr &e
           } else {
             datums[row_idx].set_null();
           }
-        }
+        }      
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected expr type", K(ret), K(type), K(column_idx));
@@ -2804,8 +2804,8 @@ int ObODPSJNITableRowIterator::fill_column_arrow(ObEvalCtx &ctx, const ObExpr &e
   return ret;
 }
 
-template<typename T>
-int fill_numeric_array_type(T arrow_array,
+template<typename T> 
+int fill_numeric_array_type(T arrow_array, 
                             const std::shared_ptr<arrow::Field> field,
                             ObODPSArrayHelper *array_helper)
 {
@@ -2973,7 +2973,7 @@ int ObODPSJNITableRowIterator::fill_array_arrow(const std::shared_ptr<arrow::Arr
       }
     } else if (arrow::Type::LIST == element_field->type()->id() &&
                ObCollectionSQLType == array_helper->element_type_) {
-      std::shared_ptr<arrow::ListArray> list_array
+      std::shared_ptr<arrow::ListArray> list_array 
               = std::static_pointer_cast<arrow::ListArray>(array);
       ObArrayNested *nested_array = static_cast<ObArrayNested *>(array_helper->array_);
       ObIArrayType *child_array = array_helper->child_helper_->array_;
@@ -3070,7 +3070,7 @@ int ObODPSJNITableRowIterator::create_odps_decoder(ObEvalCtx &ctx,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null");
       } else if (OB_FAIL(array_decoder->init(column_meta, ctx, expr, array_helper))) {
-        LOG_WARN("failed to init fixed decoder");
+        LOG_WARN("failed to init fixed decoder");      
       } else if (OB_UNLIKELY(odps_column.child_columns_.count() != 1)){
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected child columns count", K(odps_column.child_columns_));
@@ -3134,7 +3134,7 @@ int ObODPSJNITableRowIterator::OdpsFixedTypeDecoder::init(JniScanner::JniTableMe
   if (OB_FAIL(OdpsDecoder::init(column_meta, ctx, expr, array_helper))) {
     LOG_WARN("failed to init");
   } else {
-    // Hold the column address
+    // Hold the column address 
     column_addr_ = column_meta.next_meta_as_long();
   }
   return ret;
@@ -3214,7 +3214,7 @@ int ObODPSJNITableRowIterator::OdpsFixedTypeDecoder::decode(ObEvalCtx &ctx, cons
   } else if (odps_type == OdpsType::BOOLEAN) {
     ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
     batch_info_guard.set_batch_idx(0);
-    if (ObTinyIntType == type_ && !is_oracle_mode()) {
+    if (ObTinyIntType == type_ && !is_oracle_mode()) {  
       for (int row_idx = offset; OB_SUCC(ret) && row_idx < offset + size; ++row_idx) {
         batch_info_guard.set_batch_idx(row_idx);
         char* null_value = reinterpret_cast<char*>(null_map_ptr_ + row_idx);
@@ -3308,7 +3308,7 @@ int ObODPSJNITableRowIterator::OdpsFixedTypeDecoder::decode(ObEvalCtx &ctx, cons
     ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
     batch_info_guard.set_batch_idx(0);
     if ((ObTinyIntType == type_ || ObSmallIntType == type_ ||
-         ObInt32Type == type_ || ObIntType == type_) && !is_oracle_mode()) {
+         ObInt32Type == type_ || ObIntType == type_) && !is_oracle_mode()) {  
       for (int64_t row_idx = offset; OB_SUCC(ret) && row_idx < offset + size; ++row_idx) {
         batch_info_guard.set_batch_idx(row_idx);
         char* null_value = reinterpret_cast<char*>(null_map_ptr_ + row_idx);
@@ -3479,7 +3479,7 @@ int ObODPSJNITableRowIterator::OdpsFixedTypeDecoder::decode(ObEvalCtx &ctx, cons
   } else if (odps_type == OdpsType::DECIMAL) {
     ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
     batch_info_guard.set_batch_idx(0);
-    if (ObDecimalIntType == type_ && is_root_) {
+    if (ObDecimalIntType == type_ && is_root_) {  
       for (int64_t row_idx = offset; OB_SUCC(ret) && row_idx < offset + size; ++row_idx) {
         batch_info_guard.set_batch_idx(row_idx);
         char* null_value = reinterpret_cast<char*>(null_map_ptr_ + row_idx);
@@ -3581,7 +3581,7 @@ int ObODPSJNITableRowIterator::OdpsFixedTypeDecoder::decode(ObEvalCtx &ctx, cons
             }
           }
         } else {
-          datums_[row_idx].set_null();
+          datums_[row_idx].set_null();          
         }
       }
     } else {
@@ -3619,7 +3619,7 @@ int ObODPSJNITableRowIterator::OdpsFixedTypeDecoder::decode(ObEvalCtx &ctx, cons
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected expr type", K(ret), K(type_));
     }
-  } else if (odps_type == OdpsType::DATE) {
+  } else if (odps_type == OdpsType::DATE) { 
     ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
     batch_info_guard.set_batch_idx(0);
     // DATE should be after DATETIME
@@ -3679,7 +3679,7 @@ int ObODPSJNITableRowIterator::OdpsVarietyTypeDecoder::decode(ObEvalCtx &ctx, co
         if (OB_LIKELY(is_root_)) {
           datums_[row_idx].set_null();
         } else if (OB_FAIL(array_->push_null())) {
-          LOG_WARN("failed to push null to array");
+          LOG_WARN("failed to push null to array"); 
         }
       } else {
         ObString temp_str;
@@ -3714,11 +3714,11 @@ int ObODPSJNITableRowIterator::OdpsVarietyTypeDecoder::decode(ObEvalCtx &ctx, co
       }
     }
   } else if (odps_type == OdpsType::STRING || odps_type == OdpsType::BINARY || odps_type == OdpsType::JSON) {
-    if (ObVarcharType == type_ ||
-          ((ObTinyTextType == type_ ||
+    if (ObVarcharType == type_ ||   
+          ((ObTinyTextType == type_ || 
              ObTextType == type_ ||
              ObLongTextType == type_ ||
-             ObMediumTextType == type_ ||
+             ObMediumTextType == type_ || 
              ObJsonType == type_) &&
             is_root_)) {
       ObObjType in_type = ObVarcharType;
@@ -3734,7 +3734,7 @@ int ObODPSJNITableRowIterator::OdpsVarietyTypeDecoder::decode(ObEvalCtx &ctx, co
           if (OB_LIKELY(is_root_)) {
             datums_[row_idx].set_null();
           } else if (OB_FAIL(array_->push_null())) {
-            LOG_WARN("failed to push null to array");
+            LOG_WARN("failed to push null to array"); 
           }
         } else {
           int length = 0;
@@ -3749,7 +3749,7 @@ int ObODPSJNITableRowIterator::OdpsVarietyTypeDecoder::decode(ObEvalCtx &ctx, co
           } else {
             judge_length = length;
           }
-          if (!(text_type_length_is_valid_at_runtime(type_, judge_length)
+          if (!(text_type_length_is_valid_at_runtime(type_, judge_length) 
                 || varchar_length_is_valid_at_runtime(type_, out_charset, judge_length, type_length_))) {
             ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
             LOG_WARN("unexpected data length", K(ret), K(length), K(type_length_), K(type_));
@@ -3824,7 +3824,7 @@ int ObODPSJNITableRowIterator::OdpsVarietyTypeDecoder::decode(ObEvalCtx &ctx, co
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected odps type", K(ret), K(odps_type), K(type_), K(is_root_));
   }
-
+  
   return ret;
 }
 
@@ -3884,7 +3884,7 @@ int ObODPSJNITableRowIterator::OdpsArrayTypeDecoder::decode(ObEvalCtx &ctx, cons
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected odps type or ob type", K(ret), K(odps_type), K(type_), K(is_root_));
-  }
+  } 
   return ret;
 }
 
@@ -3941,7 +3941,7 @@ int ObODPSJNITableRowIterator::construct_predicate_using_white_filter(const ObDA
   } else if (OB_ISNULL(buf = static_cast<char*>(arena_alloc.alloc(default_length)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memeory for print obj");
-  } else if (OB_FAIL(print_predicate_string(access_exprs, das_ctdef.pd_expr_spec_.ext_file_column_exprs_,
+  } else if (OB_FAIL(print_predicate_string(access_exprs, das_ctdef.pd_expr_spec_.ext_file_column_exprs_, 
                                             filter, print_params, arena_alloc, buf, default_length,
                                             predicate, can_pushdown, true))) {
     LOG_WARN("failed to check filter can pushdown");
@@ -3956,7 +3956,7 @@ int ObODPSJNITableRowIterator::construct_predicate_using_white_filter(const ObDA
       alloc_buf[predicate.length()] = '\0';
       predicate_buf_ = alloc_buf;
     }
-  }
+  }  
   return ret;
 }
 
@@ -3997,7 +3997,7 @@ int ObODPSJNITableRowIterator::init_access_exprs(const ObDASScanCtDef &das_ctdef
   if (OB_SUCC(ret) && is_valid &&
       access_exprs.count() != das_ctdef.pd_expr_spec_.ext_file_column_exprs_.count()) {
     // External table may map one odps column to multiple ob column. In this sinario, we can not map
-    // an access expr to an odps column.
+    // an access expr to an odps column. 
     // e.g.  create external table t1 (c1 TINYINT as (external$tablecol1),
     //                                 c2 TINYINT(1) as (external$tablecol1));
     is_valid = false;
@@ -4241,7 +4241,7 @@ int ObODPSJNITableRowIterator::check_type_for_pushdown(const MirrorOdpsJniColumn
   //       (WHITE_OP_EQ == cmp_type || WHITE_OP_NE == cmp_type)) {
   //     is_valid = true;
   //   }
-  // } else
+  // } else 
   if (mirror_column.type_ == OdpsType::TINYINT ||
              mirror_column.type_ == OdpsType::SMALLINT ||
              mirror_column.type_ == OdpsType::INT ||
@@ -4276,7 +4276,7 @@ int ObODPSJNITableRowIterator::check_type_for_pushdown(const MirrorOdpsJniColumn
     // But pushdown predicate can only use datetime with 0 scale.
     // For consistency, we can not pushdown equal condition.
 
-    // TODO: @yibo.tyf check datum value and pushdown equal predicate if
+    // TODO: @yibo.tyf check datum value and pushdown equal predicate if 
     // datetime doesn't have decimals.
     if (ob_is_datetime_or_mysql_datetime(obj_meta.get_type()) &&
         (WHITE_OP_LT == cmp_type || WHITE_OP_GT == cmp_type)) {
@@ -4690,7 +4690,7 @@ int ObOdpsJniUploaderMgr::get_odps_uploader_in_px(
     }
     if (OB_SUCC(ret)) {
       odps_uploader.writer_ptr = writer_ptr;
-    }
+    } 
     // 成功和失败后上层出去之后由ObSelectIntoOp::destroy析构
   }
   return ret;
@@ -4719,7 +4719,7 @@ int ObOdpsJniUploaderMgr::commit_session(int64_t num_block) {
       LOG_WARN("failed to commit ", K(ret));
     }
   }
-  return ret;
+  return ret; 
 }
 
 void ObOdpsJniUploaderMgr::release_hold_session()

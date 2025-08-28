@@ -18,7 +18,7 @@ namespace oceanbase
 namespace share
 {
 
-int ObFlushExternalTableKVCacheP::process()
+int ObFlushExternalTableKVCacheP::process() 
 {
   int ret = OB_SUCCESS;
   ObFlushExternalTableFileCacheReq &req = arg_;
@@ -30,7 +30,7 @@ int ObFlushExternalTableKVCacheP::process()
   return OB_SUCCESS;
 }
 
-int ObAsyncLoadExternalTableFileListP::process()
+int ObAsyncLoadExternalTableFileListP::process() 
 {
   int ret = OB_SUCCESS;
   ObLoadExternalFileListReq &req = arg_;

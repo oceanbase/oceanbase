@@ -30,7 +30,7 @@ ObExprJsonExists::~ObExprJsonExists()
 
 int ObExprJsonExists::calc_result_typeN(ObExprResType& type,
                                         ObExprResType* types_stack,
-                                        int64_t param_num,
+                                        int64_t param_num, 
                                         common::ObExprTypeCtx& type_ctx) const
 {
   UNUSED(type_ctx);
@@ -126,7 +126,7 @@ int ObExprJsonExists::calc_result_typeN(ObExprResType& type,
   return ret;
 }
 
-int ObExprJsonExists::get_path(const ObExpr &expr, ObEvalCtx &ctx,
+int ObExprJsonExists::get_path(const ObExpr &expr, ObEvalCtx &ctx, 
                               ObJsonPath* &j_path, common::ObIAllocator &allocator,
                               ObJsonPathCache &ctx_cache, ObJsonPathCache* &path_cache)
 {
@@ -244,7 +244,7 @@ int ObExprJsonExists::get_passing(const ObExpr &expr, ObEvalCtx &ctx, PassingMap
     json_arg = expr.args_[i];
     type = json_arg->datum_meta_.type_;
     ObIJsonBase *json_data = nullptr;
-
+    
     // get json_value, value could be null
     if (type == ObNullType) {
       ret = OB_ERR_INVALID_VARIABLE_IN_JSON_PATH;
@@ -283,13 +283,13 @@ int ObExprJsonExists::get_passing(const ObExpr &expr, ObEvalCtx &ctx, PassingMap
   return ret;
 }
 
-int ObExprJsonExists::get_error_or_empty(const ObExpr &expr, ObEvalCtx &ctx, uint32_t idx, uint8_t &result)
+int ObExprJsonExists::get_error_or_empty(const ObExpr &expr, ObEvalCtx &ctx, uint32_t idx, uint8_t &result) 
 {
   INIT_SUCC(ret);
   ObExpr *json_arg = expr.args_[idx];
   ObObjType val_type = json_arg->datum_meta_.type_;
   ObDatum *json_datum = NULL;
-
+    
   val_type = json_arg->datum_meta_.type_;
   if (OB_FAIL(json_arg->eval(ctx, json_datum))) {
     LOG_WARN("eval json arg failed", K(ret));
@@ -334,12 +334,12 @@ int ObExprJsonExists::get_empty_option(int8_t option_on_empty, bool& res_val)
     // b. The path expression is empty, and the three on empty clauses all return the error code when the path is empty
     // Therefore, when implementing, follow the behavior of oracle, without distinguishing the three clauses, as long as there is no true result, it will return false
     case OB_JSON_ERROR_ON_EMPTY:
-    case OB_JSON_FALSE_ON_EMPTY:
+    case OB_JSON_FALSE_ON_EMPTY: 
     case OB_JSON_TRUE_ON_EMPTY:
     case OB_JSON_DEFAULT_ON_ERROR: {
       res_val = false;
       break;
-    }
+    } 
     default: {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("on_empty_option type error", K(option_on_empty), K(ret));
@@ -366,7 +366,7 @@ int ObExprJsonExists::get_error_option(int8_t option_on_error, bool& res_val)
       ret = OB_SUCCESS;
       res_val = true;
       break;
-    }
+    } 
     default: {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("on_empty_option type error", K(option_on_error), K(ret));
@@ -419,7 +419,7 @@ int ObExprJsonExists::eval_json_exists(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   uint8_t option_on_error = 0;
   uint8_t option_on_empty = 0;
   ObJsonSeekResult hit;
-
+  
   // get json
   // No error is reported when the json data is empty, no error is reported anyway, and the result is false
   // When error on error, json parses an error and reports an error, otherwise no error is reported (false on error by default)
@@ -442,7 +442,7 @@ int ObExprJsonExists::eval_json_exists(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     }
   }
 
-  // get passing
+  // get passing 
   if (OB_SUCC(ret) && !is_null_json && !is_cover_by_error) {
     if (param_num == 5) {
       has_passing = false;
@@ -502,20 +502,20 @@ int ObExprJsonExists::eval_json_exists(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   if (OB_SUCC(ret) || is_cover_by_error) {
     if (OB_FAIL(set_result(res, hit, option_on_error, option_on_empty, is_cover_by_error, is_null_json))) {
       LOG_WARN("json_exists failed to set result.", K(ret));
-    }
+    }   
   }
-  return ret;
+  return ret;   
 }
 
 int ObExprJsonExists::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
-                              ObExpr &rt_expr) const
+                              ObExpr &rt_expr) const 
 {
   INIT_SUCC(ret);
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
   rt_expr.eval_func_ = eval_json_exists;
   return OB_SUCCESS;
-  return ret;
+  return ret; 
 }
 
 }

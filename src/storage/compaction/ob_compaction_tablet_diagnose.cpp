@@ -14,9 +14,9 @@
 #include "ob_compaction_tablet_diagnose.h"
 #include "share/rc/ob_tenant_base.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace compaction
+namespace compaction 
 {
 /*
  * ObDiagnoseTabletMgr implement
@@ -40,8 +40,8 @@ int ObDiagnoseTabletMgr::init()
     LOG_WARN("ObDiagnoseTabletMgr has already been initiated", K(ret));
   } else if (OB_FAIL(diagnose_tablet_map_.create(MAX_DIAGNOSE_TABLET_BUCKET_NUM, "DiaTabletMap", "DiaTabletNode", MTL_ID()))) {
     LOG_WARN("Fail to create diagnose tablet map", K(ret));
-  }
-
+  } 
+  
   if (OB_SUCC(ret)) {
     is_inited_ = true;
   } else {
@@ -59,8 +59,8 @@ void ObDiagnoseTabletMgr::destroy()
 
 // for diagnose
 int ObDiagnoseTabletMgr::add_diagnose_tablet(
-  const share::ObLSID &ls_id,
-  const ObTabletID &tablet_id,
+  const share::ObLSID &ls_id, 
+  const ObTabletID &tablet_id, 
   const share::ObDiagnoseTabletType type)
 {
   int ret = OB_SUCCESS;
@@ -68,7 +68,7 @@ int ObDiagnoseTabletMgr::add_diagnose_tablet(
     ret = OB_NOT_INIT;
     LOG_WARN("ObDiagnoseTabletMgr is not init", K(ret));
   } else {
-    if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid()
+    if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() 
         || !is_valid_diagnose_tablet_type(type))) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(type));
@@ -106,7 +106,7 @@ int ObDiagnoseTabletMgr::get_diagnose_tablets(ObIArray<ObDiagnoseTablet> &diagno
     LOG_WARN("ObDiagnoseTabletMgr is not init", K(ret));
   } else {
     lib::ObMutexGuard guard(diagnose_lock_);
-    for (DiagnoseTabletMap::iterator iter = diagnose_tablet_map_.begin();
+    for (DiagnoseTabletMap::iterator iter = diagnose_tablet_map_.begin(); 
         OB_SUCC(ret) && iter != diagnose_tablet_map_.end(); ++iter) {
       if (OB_FAIL(diagnose_tablets.push_back(iter->first))) {
         LOG_WARN("fail to get diagnose tablet", K(ret));
@@ -117,7 +117,7 @@ int ObDiagnoseTabletMgr::get_diagnose_tablets(ObIArray<ObDiagnoseTablet> &diagno
 }
 
 int ObDiagnoseTabletMgr::delete_diagnose_tablet(
-  const share::ObLSID &ls_id,
+  const share::ObLSID &ls_id, 
   const ObTabletID &tablet_id,
   const share::ObDiagnoseTabletType type)
 {
@@ -126,7 +126,7 @@ int ObDiagnoseTabletMgr::delete_diagnose_tablet(
     ret = OB_NOT_INIT;
    LOG_WARN("ObDiagnoseTabletMgr is not init", K(ret));
   } else {
-    if (!ls_id.is_valid() || !tablet_id.is_valid()
+    if (!ls_id.is_valid() || !tablet_id.is_valid() 
         || !is_valid_diagnose_tablet_type(type)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(type));

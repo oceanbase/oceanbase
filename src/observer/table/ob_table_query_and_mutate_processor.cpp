@@ -125,7 +125,7 @@ int ObTableQueryAndMutateP::before_process()
 int32_t ObTableQueryAndMutateP::get_stat_process_type(bool is_hkv, bool is_check_and_execute, ObTableOperationType::Type type)
 {
   int32_t process_type = ObTableProccessType::TABLE_API_PROCESS_TYPE_MAX;
-
+  
   if (is_hkv) {
     switch (type) {
       case table::ObTableOperationType::DEL: {

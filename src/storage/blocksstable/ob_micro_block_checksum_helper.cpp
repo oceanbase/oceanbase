@@ -37,11 +37,11 @@ int ObMicroBlockChecksumHelper::init(
       if (LOCAL_INTEGER_COL_CNT >= integer_col_cnt_) {
         integer_col_buf_ = local_integer_col_buf_;
         integer_col_idx_ = local_integer_col_idx_;
-      } else if (OB_ISNULL(integer_col_buf_ =
+      } else if (OB_ISNULL(integer_col_buf_ = 
           static_cast<int64_t*>(allocator_.alloc(sizeof(int64_t) * integer_col_cnt_)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "failed to alloc integer_col_buf", K(ret), K_(integer_col_cnt));
-      } else if (OB_ISNULL(integer_col_idx_ =
+      } else if (OB_ISNULL(integer_col_idx_ = 
           static_cast<int16_t*>(allocator_.alloc(sizeof(int16_t) * integer_col_cnt_)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "failed to alloc integer_col_idx", K(ret), K_(integer_col_cnt));
@@ -62,7 +62,7 @@ int ObMicroBlockChecksumHelper::init(
     col_descs_ = col_descs;
   } else {
     reset();
-  }
+  } 
   return ret;
 }
 
@@ -125,10 +125,10 @@ int ObMicroBlockChecksumHelper::cal_rows_checksum(
 }
 
 int ObMicroBlockChecksumHelper::cal_column_checksum(
-    const ObIArray<ObIVector *> &vectors,
-    const int64_t start,
+    const ObIArray<ObIVector *> &vectors, 
+    const int64_t start, 
     const int64_t row_count,
-    int64_t *curr_micro_column_checksum)
+    int64_t *curr_micro_column_checksum) 
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY((nullptr == curr_micro_column_checksum) || nullptr == col_descs_ || vectors.count() != col_descs_->count())) {
@@ -137,11 +137,11 @@ int ObMicroBlockChecksumHelper::cal_column_checksum(
   } else {
     if (is_arch_supported(common::ObTargetArch::SSE42)) {
       if (OB_FAIL(cal_column_checksum_sse42(vectors, start, row_count, curr_micro_column_checksum))) {
-        STORAGE_LOG(WARN, "failed to cal column checksum using sse42 func", K(ret));
+        STORAGE_LOG(WARN, "failed to cal column checksum using sse42 func", K(ret)); 
       }
     } else {
       if (OB_FAIL(cal_column_checksum_normal(vectors, start, row_count, curr_micro_column_checksum))) {
-        STORAGE_LOG(WARN, "failed to cal column checksum using normal func", K(ret));
+        STORAGE_LOG(WARN, "failed to cal column checksum using normal func", K(ret)); 
       }
     }
   }
@@ -151,8 +151,8 @@ int ObMicroBlockChecksumHelper::cal_column_checksum(
 #if defined (__x86_64__)
 __attribute__((target("sse4.2")))
 int ObMicroBlockChecksumHelper::cal_column_checksum_sse42(
-    const ObIArray<ObIVector *> &vectors,
-    const int64_t start,
+    const ObIArray<ObIVector *> &vectors, 
+    const int64_t start, 
     const int64_t row_count,
     int64_t *curr_micro_column_checksum)
 {
@@ -325,8 +325,8 @@ int ObMicroBlockChecksumHelper::cal_column_checksum_sse42(
 }
 #else
 int ObMicroBlockChecksumHelper::cal_column_checksum_sse42(
-    const ObIArray<ObIVector *> &vectors,
-    const int64_t start,
+    const ObIArray<ObIVector *> &vectors, 
+    const int64_t start, 
     const int64_t row_count,
     int64_t *curr_micro_column_checksum)
 {
@@ -335,8 +335,8 @@ int ObMicroBlockChecksumHelper::cal_column_checksum_sse42(
 #endif
 
 int ObMicroBlockChecksumHelper::cal_column_checksum_normal(
-    const ObIArray<ObIVector *> &vectors,
-    const int64_t start,
+    const ObIArray<ObIVector *> &vectors, 
+    const int64_t start, 
     const int64_t row_count,
     int64_t *curr_micro_column_checksum)
 {

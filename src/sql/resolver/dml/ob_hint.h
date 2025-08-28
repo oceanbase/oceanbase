@@ -483,7 +483,7 @@ struct ObGlobalHint {
                K_(has_dbms_stats_hint),
                K_(parallel_das_dml_option),
                K_(dynamic_sampling),
-               K_(alloc_op_hints),
+               K_(alloc_op_hints), 
                K_(dblink_hints),
                K_(px_node_hint));
 
@@ -1250,7 +1250,7 @@ public:
   const ObIArray<ObTableInHint> &get_left_tables() const { return left_tables_; }
   bool is_part_join_filter_hint() const { return T_PX_PART_JOIN_FILTER == hint_type_; }
   bool has_left_tables() const { return !left_tables_.empty(); }
-  bool has_pushdown_filter_table() const { return !pushdown_filter_table_.table_name_.empty(); }
+  bool has_pushdown_filter_table() const { return !pushdown_filter_table_.table_name_.empty(); } 
 
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(filter_table), K_(left_tables));
 
@@ -1280,10 +1280,10 @@ class ObPQSetHint : public ObOptHint
 
   const ObIArray<ObItemType> &get_dist_methods() const { return dist_methods_; }
   ObIArray<ObItemType> &get_dist_methods() { return dist_methods_; }
-  int set_pq_set_hint(const DistAlgo dist_algo,
-                      const int64_t child_num,
+  int set_pq_set_hint(const DistAlgo dist_algo, 
+                      const int64_t child_num, 
                       const int64_t random_none_idx);
-  uint64_t get_dist_algo(int64_t &random_none_idx) const
+  uint64_t get_dist_algo(int64_t &random_none_idx) const 
   { return get_dist_algo(dist_methods_, random_none_idx); }
   const ObString &get_left_branch() const { return left_branch_; }
   void set_left_branch(const ObString &left_branch) { return left_branch_.assign_ptr(left_branch.ptr(), left_branch.length()); }

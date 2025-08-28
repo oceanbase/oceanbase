@@ -454,7 +454,7 @@ std::string generate_random_string(std::mt19937_64& rng) {
   std::uniform_int_distribution<int> dist(0, CHAR_SET.size() - 1);
   std::string result;
   result.reserve(STR_LENGTH);
-
+  
   for (int i = 0; i < STR_LENGTH; ++i) {
       result += CHAR_SET[dist(rng)];
   }

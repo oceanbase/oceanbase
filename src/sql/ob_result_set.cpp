@@ -336,7 +336,7 @@ int ObResultSet::start_stmt()
   } else {
     if (phy_plan->has_link_udf() && ac) {
       my_session_.set_autocommit(false);
-      my_session_.set_restore_auto_commit();
+      my_session_.set_restore_auto_commit(); 
     }
     if (0 < plan_ctx->get_tx_id()) {
       const transaction::ObTransID tx_id(plan_ctx->get_tx_id());
@@ -378,7 +378,7 @@ int ObResultSet::start_stmt()
       get_trans_state().set_start_stmt_executed(OB_SUCC(ret));
     }
     if (OB_SUCC(ret) &&
-        (plan_ctx->get_hint_xa_trans_stop_check_lock() ||
+        (plan_ctx->get_hint_xa_trans_stop_check_lock() || 
          plan_ctx->get_main_xa_trans_branch())) {
       transaction::ObTxDesc *tx_desc = my_session_.get_tx_desc();
       ObXACtx *xa_ctx = NULL;
@@ -395,7 +395,7 @@ int ObResultSet::start_stmt()
         } else {
           // is_executing() can not tell us weather xa checking lock is stoped, need a var to record this.
           //succ to stop check stmt lock", K(ret), K(xid));
-          xa_checking_lock_stoped_ = true;
+          xa_checking_lock_stoped_ = true; 
         }
       }
     }
@@ -413,7 +413,7 @@ int ObResultSet::end_stmt(const bool is_rollback)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid inner state", K(plan_ctx));
   } else if (xa_checking_lock_stoped_ &&
-             (plan_ctx->get_hint_xa_trans_stop_check_lock() ||
+             (plan_ctx->get_hint_xa_trans_stop_check_lock() || 
               plan_ctx->get_main_xa_trans_branch())) {
     transaction::ObTxDesc *tx_desc = my_session_.get_tx_desc();
     LOG_TRACE("start check stmt lock", KP(plan_ctx), K(ret), K(plan_ctx->get_hint_xa_trans_stop_check_lock()), K(plan_ctx->get_main_xa_trans_branch()), K(tx_desc));
@@ -551,7 +551,7 @@ bool ObResultSet::transaction_set_violation_and_retry(int &err, int64_t &retry_t
       LOG_WARN("failed to close plan", K(err), K(ret));
     } else {
       // OB_SNAPSHOT_DISCARDED should not retry now, see:
-      //
+      // 
       // so we remove this condition: OB_TRANSACTION_SET_VIOLATION == err
       if (/*OB_TRANSACTION_SET_VIOLATION == err &&*/ is_isolation_RR_or_SE) {
         // rewrite err in ObQueryRetryCtrl::test_and_save_retry_state().
@@ -575,7 +575,7 @@ OB_INLINE int ObResultSet::do_open_plan(ObExecContext &ctx)
   int ret = OB_SUCCESS;
   ctx.reset_op_env();
   exec_result_ = &(ctx.get_task_exec_ctx().get_execute_result());
-  rootserver::ObMViewMaintenanceService *mview_maintenance_service =
+  rootserver::ObMViewMaintenanceService *mview_maintenance_service = 
                                         MTL(rootserver::ObMViewMaintenanceService*);
   if (stmt::T_PREPARE != stmt_type_) {
     if (OB_FAIL(ctx.init_phy_op(physical_plan_->get_phy_operator_size()))) {
@@ -664,7 +664,7 @@ int ObResultSet::set_mysql_info()
     if (OB_NOT_NULL(buffer)) {
       warning_cnt = buffer->get_total_warning_count();
     }
-    int result_len = snprintf(message_ + pos, MSG_SIZE - pos, OB_LOAD_DATA_MSG_FMT,
+    int result_len = snprintf(message_ + pos, MSG_SIZE - pos, OB_LOAD_DATA_MSG_FMT, 
                               plan_ctx->get_row_matched_count(), plan_ctx->get_row_deleted_count(),
                               plan_ctx->get_row_duplicated_count(), warning_cnt);
     if (OB_UNLIKELY(result_len < 0) || OB_UNLIKELY(result_len >= MSG_SIZE - pos)) {
@@ -1156,7 +1156,7 @@ OB_INLINE int ObResultSet::auto_end_plan_trans(ObPhysicalPlan& plan,
 #ifdef OB_BUILD_AUDIT_SECURITY
         {
           // do security audit before async end trans to avoid deadlock of query_lock.
-          //
+          // 
           // don't need to set ret
           ObSqlCtx *sql_ctx = get_exec_context().get_sql_ctx();
           if (OB_ISNULL(sql_ctx)) {
@@ -1362,8 +1362,8 @@ bool ObResultSet::need_end_trans_callback() const
     } else {}
     if (stmt::T_ANONYMOUS_BLOCK == get_stmt_type() && is_oracle_mode()) {
       need = ac && !explicit_start_trans && !is_with_rows();
-    } else if (OB_LIKELY(NULL != physical_plan_) &&
-               OB_LIKELY(physical_plan_->is_need_trans()) &&
+    } else if (OB_LIKELY(NULL != physical_plan_) && 
+               OB_LIKELY(physical_plan_->is_need_trans()) && 
                !physical_plan_->is_link_dml_plan() &&
                !physical_plan_->has_link_udf()) {
       need = (true == ObSqlTransUtil::plan_can_end_trans(ac, explicit_start_trans)) &&
@@ -1647,9 +1647,9 @@ int ObResultSet::construct_field_name(const common::ObIArray<ObPCParam *> &raw_p
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < field_columns_.count(); i++) {
-    if (OB_FAIL(construct_display_field_name(field_columns_.at(i),
-                                             raw_params,
-                                             is_first_parse,
+    if (OB_FAIL(construct_display_field_name(field_columns_.at(i), 
+                                             raw_params, 
+                                             is_first_parse, 
                                              session_info))) {
       LOG_WARN("failed to construct display name", K(ret), K(field_columns_.at(i)));
     } else {
@@ -1918,7 +1918,7 @@ void ObResultSet::replace_lob_type(const ObSQLSessionInfo &session,
       // for 8.x always return MYSQL_TYPE_BLOB, and do text type judge in mysql-jdbc by length
       mfield.type_ = obmysql::EMySQLFieldType::MYSQL_TYPE_BLOB;
     } else if (mfield.type_ == obmysql::EMySQLFieldType::MYSQL_TYPE_JSON) {
-      // for mysql 5.x json response as plain text not binary, but the charset always binary
+      // for mysql 5.x json response as plain text not binary, but the charset always binary 
       mfield.charsetnr_ = common::CS_TYPE_BINARY;
     }
   }

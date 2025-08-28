@@ -48,7 +48,7 @@ public:
   int deduce_aggr_bound_predicates(ObTransformerCtx &ctx,
                                    ObIArray<ObRawExpr *> &target_exprs,
                                    ObIArray<ObRawExpr *> &aggr_bound_preds);
-
+  
   static bool find_equal_expr(const ObIArray<ObRawExpr *> &exprs,
                               const ObRawExpr *target,
                               int64_t *idx = NULL,
@@ -80,7 +80,7 @@ public:
            expr.has_flag(CNT_SUB_QUERY);
   }
 
-  static int check_lossless_cast_table_filter(ObRawExpr *expr,
+  static int check_lossless_cast_table_filter(ObRawExpr *expr, 
                                               ObRawExpr *&cast_expr,
                                               bool &is_valid);
 private:
@@ -249,7 +249,7 @@ private:
                             bool &is_valid);
 
   int check_cmp_metas_for_general_preds(ObRawExpr *left_pexr, ObRawExpr *pred,  bool &type_safe);
-
+  
   bool has_raw_const_equal_condition(int64_t param_idx);
 private:
   ObObjMeta cmp_type_; // the compare meta used by all exprs in the graph

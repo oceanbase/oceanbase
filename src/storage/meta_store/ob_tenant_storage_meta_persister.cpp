@@ -665,9 +665,9 @@ int ObTenantStorageMetaPersister::safe_batch_write_remove_tablets_slog_(
 }
 
 int ObTenantStorageMetaPersister::get_items_from_pending_free_tablet_array(
-    const ObLSID &ls_id,
+    const ObLSID &ls_id, 
     const int64_t ls_epoch,
-    ObIArray<ObPendingFreeTabletItem> &items)
+    ObIArray<ObPendingFreeTabletItem> &items) 
 {
   int ret = OB_SUCCESS;
   items.reuse();
@@ -677,7 +677,7 @@ int ObTenantStorageMetaPersister::get_items_from_pending_free_tablet_array(
     lib::ObMutexGuard guard(peding_free_map_lock_);
     if (OB_FAIL(pending_free_tablet_arr_map_.get_refactored(key, array_info))) {
       LOG_WARN("fail to get pending free tablet array info", K(ret), K(key));
-    }
+    } 
   }
   if (OB_FAIL(ret)) {
     if (OB_HASH_NOT_EXIST == ret) {
@@ -698,8 +698,8 @@ int ObTenantStorageMetaPersister::get_items_from_pending_free_tablet_array(
   return ret;
 }
 int ObTenantStorageMetaPersister::delete_items_from_pending_free_tablet_array(
-    const ObLSID &ls_id,
-    const int64_t ls_epoch,
+    const ObLSID &ls_id, 
+    const int64_t ls_epoch, 
     const ObIArray<ObPendingFreeTabletItem> &items)
 {
   int ret = OB_SUCCESS;
@@ -719,7 +719,7 @@ int ObTenantStorageMetaPersister::delete_items_from_pending_free_tablet_array(
       ret = OB_SUCCESS;
     } else {
       LOG_WARN("fail to get pending free tablet array info", K(ret), K(key));
-    }
+    }  
   } else if (OB_ISNULL(array_info)) {
     ret = OB_ERR_UNEXPECTED; // get_refactored successfully, but array_info = nullptr
     LOG_WARN("array info is nullptr", K(ret), K(key));
@@ -872,8 +872,8 @@ int ObTenantStorageMetaPersister::ss_check_and_delete_tablet_current_version(
     uint64_t retry_count = 0;
     while (OB_FAIL(ss_delete_tablet_current_version_(tablet_id, ls_id, ls_epoch))) {
       LOG_WARN("try delete tablet current version failed", K(ret), K(tablet_id), K(ls_id), K(ls_epoch), K(retry_count));
-      retry_count++;
-      usleep(1000 * 1000); // sleep 1s for each time
+      retry_count++;  
+      usleep(1000 * 1000); // sleep 1s for each time 
       if (retry_count > 60) { // 1min
         LOG_ERROR("failed to delete tablet current version", K(ret), K(tablet_id), K(ls_id), K(ls_epoch), K(retry_count));
         break;
@@ -900,7 +900,7 @@ int ObTenantStorageMetaPersister::ss_remove_tablet_(
   // create_empty_shell may delete old tablet whose process like transfer out
   GCTabletType gc_type = GCTabletType::TransferOut;
   uint64_t seq = 0;
-  if (OB_FAIL(tablet_handle.get_obj()->get_tablet_status(share::SCN::max_scn(),
+  if (OB_FAIL(tablet_handle.get_obj()->get_tablet_status(share::SCN::max_scn(), 
           data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {
     if (OB_EMPTY_RESULT == ret) {
       ret = OB_SUCCESS;
@@ -944,7 +944,7 @@ int ObTenantStorageMetaPersister::ss_remove_tablet_(
     ObLSPendingFreeTabletArray tmp_array;
     lib::ObMutexGuard guard(array_info->lock_);
     const int64_t curr_t = ObTimeUtility::fast_current_time();
-    const ObPendingFreeTabletItem tablet_item(tablet_id, tablet_addr.block_id().meta_version_id(),
+    const ObPendingFreeTabletItem tablet_item(tablet_id, tablet_addr.block_id().meta_version_id(), 
         ObPendingFreeTabletStatus::WAIT_GC, curr_t, gc_type, tablet_addr.block_id().meta_transfer_seq());
     if (OB_FAIL(tmp_array.assign(array_info->pending_free_tablet_arr_))) {
       LOG_WARN("fail to assign pending free tablet array", K(ret));
@@ -962,7 +962,7 @@ int ObTenantStorageMetaPersister::ss_remove_tablet_(
       // make sure delete current_version after updating pending_free_talet_arr
       while (OB_FAIL(ss_delete_tablet_current_version_(tablet_id, ls_id, ls_epoch))) {
         // Q: Why we delete current_version after writing pending_free_tablet_arr ?
-        // A: 1. If we deleted current_version firstly,
+        // A: 1. If we deleted current_version firstly, 
         //       the deleted tablet may be replay during reboot (pending_free_tablet_arr may not be written down).
         //       When loading the tablet, the current version is not exist, which had been deleted;
         //    2. The active_tablet_arr only record the tablets persisted.
@@ -1042,7 +1042,7 @@ int ObTenantStorageMetaPersister::update_tenant_ls_item_(
     if (OB_FAIL(TENANT_SEQ_GENERATOR.get_private_object_seq(sup_seq))) {
       LOG_WARN("fail to get tenant_object_seq", K(ret));
     }
-  }
+  } 
 
   if (OB_FAIL(ret)) {
   } else {
@@ -1198,9 +1198,9 @@ int ObTenantStorageMetaPersister::ss_write_pending_free_tablet_array_(
 }
 
 int ObTenantStorageMetaPersister::ss_batch_remove_ls_tablets(
-    const share::ObLSID &ls_id,
+    const share::ObLSID &ls_id, 
     const int64_t ls_epoch,
-    const ObIArray<common::ObTabletID> &tablet_id_arr,
+    const ObIArray<common::ObTabletID> &tablet_id_arr, 
     const ObIArray<ObMetaDiskAddr> &tablet_addr_arr,
     const bool delete_current_version)
 {
@@ -1263,7 +1263,7 @@ int ObTenantStorageMetaPersister::ss_batch_remove_ls_tablets(
           common::ObTabletID tablet_id = tablet_id_arr.at(i);
           ObMetaDiskAddr tablet_addr = tablet_addr_arr.at(i);
 
-          ObPendingFreeTabletItem tablet_item(tablet_id, tablet_addr.block_id().meta_version_id(),
+          ObPendingFreeTabletItem tablet_item(tablet_id, tablet_addr.block_id().meta_version_id(), 
               ObPendingFreeTabletStatus::WAIT_GC, INT64_MAX /* delete_time */ , GCTabletType::DropLS,
               tablet_addr.block_id().meta_transfer_seq());
           if (has_exist_in_array(tmp_pending_free_array.items_, tablet_item)) {
@@ -1273,7 +1273,7 @@ int ObTenantStorageMetaPersister::ss_batch_remove_ls_tablets(
             LOG_WARN("fail to push back tablet item", K(ret), K(tablet_item));
           }
         }
-        /*
+        /* 
           3. persist new pending_free_tablet_arr, and update array_info.
             Avoiding separated IO, do not delete current_version for each tablet in there, which will be deleted later.
         */

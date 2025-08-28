@@ -19,9 +19,9 @@ namespace share
 {
 // ObImportTableArg
 OB_SERIALIZE_MEMBER(
-    ObImportTableArg,
-    is_import_all_,
-    database_array_,
+    ObImportTableArg, 
+    is_import_all_, 
+    database_array_, 
     table_array_,
     partition_array_);
 
@@ -171,7 +171,7 @@ int ObImportTableArg::check_table_dup(const ObImportTableItem &item, bool &is_du
   is_dup = false;
   if (table_array_.is_exist(item)) {
     is_dup = true;
-    if (OB_FAIL(dup_item.assign_fmt("duplicate recover table, %.*s.%.*s",
+    if (OB_FAIL(dup_item.assign_fmt("duplicate recover table, %.*s.%.*s", 
         item.database_name_.length(), item.database_name_.ptr(),
         item.table_name_.length(), item.table_name_.ptr()))) {
       LOG_WARN("failed to assign fmt", K(ret));
@@ -185,7 +185,7 @@ int ObImportTableArg::check_partion_dup(const ObImportPartitionItem &item, bool 
   is_dup = false;
   if (partition_array_.is_exist(item)) {
     is_dup = true;
-    if (OB_FAIL(dup_item.assign_fmt("duplicate recover partition, %.*s.%.*s:%.*s",
+    if (OB_FAIL(dup_item.assign_fmt("duplicate recover partition, %.*s.%.*s:%.*s", 
         item.database_name_.length(), item.database_name_.ptr(),
         item.table_name_.length(), item.table_name_.ptr(),
         item.partition_name_.length(), item.partition_name_.ptr()))) {

@@ -347,17 +347,17 @@ public:
   bool read_elr() const { return core_.is_elr(); }
   /**
    * only used for lob, other situation DONOT use
-   *
+   * 
    * special serialize interface for lob to avoid lob locator too large
-   */
+   */ 
   int serialize_for_lob(const share::ObLSID &ls_id, SERIAL_PARAMS) const;
   int deserialize_for_lob(DESERIAL_PARAMS);
   int64_t get_serialize_size_for_lob(const share::ObLSID &ls_id) const;
   /**
    * deprecated interface, DONOT use !
-   *
+   * 
    * only used for lob, other situation DONOT use
-   *
+   * 
    * offline ddl with lob can only get ObTxSnapshot
    * so provide one interface to build ObTxReadSnapshot from ObTxSnapshot
    * master no need use this
@@ -365,9 +365,9 @@ public:
   int build_snapshot_for_lob(const ObTxSnapshot &core, const share::ObLSID &ls_id);
   /**
    * deprecated interface, DONOT use !
-   *
+   * 
    * only used for lob, other situation DONOT use
-   *
+   * 
    * in upgarge, old lob locator will use ObMemLobTxInfo store tx info
    * so provide one interface to build ObTxReadSnapshot from ObMemLobTxInfo
    */
@@ -378,7 +378,7 @@ public:
       const share::ObLSID &ls_id);
   /**
    * only used for lob, other situation DONOT use
-   *
+   * 
    * determine whether the current snapshot is within a transaction
    *
    * Return:

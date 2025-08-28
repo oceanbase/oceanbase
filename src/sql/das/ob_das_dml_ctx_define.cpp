@@ -157,7 +157,7 @@ int ObDASDMLIterator::get_next_row(blocksstable::ObDatumRow *&datum_row)
     }
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret)) { 
     if (das_ctdef_->table_param_.get_data_table().is_domain_index()
         && !das_ctdef_->is_access_vidx_as_master_table_) {
       if (OB_FAIL(get_next_domain_index_row(datum_row))) {

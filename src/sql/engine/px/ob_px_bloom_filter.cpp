@@ -38,7 +38,7 @@ public:
   {}
   OB_INLINE int operator()(int64_t i) {
     (void)bloom_filter_->prefetch_bits_block(hash_values_[i]);
-    return OB_SUCCESS;
+    return OB_SUCCESS; 
   }
 private:
   ObPxBloomFilter *bloom_filter_;

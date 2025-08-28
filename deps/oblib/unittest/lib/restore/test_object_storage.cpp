@@ -50,7 +50,7 @@ int TestObjectStorageListOp::func(const dirent *entry)
 }
 
 class TestObjectStorage : public ::testing::Test
-{
+{ 
 public:
   TestObjectStorage() {}
   virtual ~TestObjectStorage(){}
@@ -93,7 +93,7 @@ public:
       }
       if (OB_SUCC(ret) && OB_FAIL(util.del_file(uri))) {
         OB_LOG(WARN, "fail to del normal file", K(ret), K(uri));
-      }
+      } 
     }
     util.close();
     return ret;
@@ -112,7 +112,7 @@ public:
       ret = OB_INVALID_ARGUMENT;
       OB_LOG(WARN, "storage type invalid", K(ret), K(storage_type), K(bucket));
     }
-
+  
     if (OB_FAIL(ret)) {
     } else if (storage_type == ObStorageType::OB_STORAGE_FILE) {
       if (OB_FAIL(info_base.set(storage_type, account))) {
@@ -141,7 +141,7 @@ public:
       }
 
       if (OB_SUCC(ret) && OB_FAIL(info_base.set(storage_type, account))) {
-        OB_LOG(WARN, "fail to set storage info", K(ret), K(storage_type), K(account));
+        OB_LOG(WARN, "fail to set storage info", K(ret), K(storage_type), K(account)); 
       }
     }
     return ret;
@@ -164,12 +164,12 @@ char TestObjectStorage::dir_uri[OB_MAX_URI_LENGTH] = { 0 };
 ObObjectStorageInfo TestObjectStorage::info_base;
 
 int test_gen_object_meta(
-    const char **fragments,
+    const char **fragments, 
     const int64_t n_fragments,
-    const int64_t n_remained_fragments,
-    const int64_t *expected_start,
+    const int64_t n_remained_fragments, 
+    const int64_t *expected_start, 
     const int64_t *expected_end,
-    const int64_t expected_file_length,
+    const int64_t expected_file_length, 
     ObStorageObjectMeta &appendable_obj_meta)
 {
   int ret = OB_SUCCESS;
@@ -198,11 +198,11 @@ int test_gen_object_meta(
   } else if (n_remained_fragments != appendable_obj_meta.fragment_metas_.count()) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "not expected value", K(ret), K(n_remained_fragments), K(appendable_obj_meta.fragment_metas_.count()));
-  }
-
+  } 
+  
   for (int64_t i = 0; OB_SUCC(ret) && i < n_remained_fragments; i++) {
     if (!appendable_obj_meta.fragment_metas_[i].is_data() || !appendable_obj_meta.fragment_metas_[i].is_valid() ||
-        expected_start[i] != appendable_obj_meta.fragment_metas_[i].start_ ||
+        expected_start[i] != appendable_obj_meta.fragment_metas_[i].start_ || 
         expected_end[i] != appendable_obj_meta.fragment_metas_[i].end_) {
       ret = OB_ERR_UNEXPECTED;
       OB_LOG(WARN, "not expected value", K(ret), K(i), K(appendable_obj_meta.fragment_metas_[i]), K(expected_start[i]), K(expected_end[i]));
@@ -212,10 +212,10 @@ int test_gen_object_meta(
 }
 
 int test_get_needed_fragments(
-    const int64_t start,
+    const int64_t start, 
     const int64_t end,
-    const int64_t n_expected_fragments,
-    const int64_t *expected_start,
+    const int64_t n_expected_fragments, 
+    const int64_t *expected_start, 
     const int64_t *expected_end,
     ObStorageObjectMeta &appendable_obj_meta)
 {
@@ -230,7 +230,7 @@ int test_get_needed_fragments(
 
   for (int64_t i = 0; OB_SUCC(ret) && i < n_expected_fragments; i++) {
     if (!fragments_need_to_read[i].is_data() || !fragments_need_to_read[i].is_valid() ||
-        expected_start[i] != fragments_need_to_read[i].start_ ||
+        expected_start[i] != fragments_need_to_read[i].start_ || 
         expected_end[i] != fragments_need_to_read[i].end_) {
       ret = OB_ERR_UNEXPECTED;
       OB_LOG(WARN, "not expected value", K(ret), K(i), K(fragments_need_to_read[i]), K(expected_start[i]), K(expected_end[i]));
@@ -279,9 +279,9 @@ TEST_F(TestObjectStorage, test_appendable_object_util)
       int64_t n_remained_fragments = sizeof(expected_start) / sizeof(int64_t);
       int64_t expected_file_length = 0;
       ObStorageObjectMeta appendable_obj_meta;
-      ASSERT_EQ(OB_SUCCESS, test_gen_object_meta(fragments, n_fragments, n_remained_fragments,
+      ASSERT_EQ(OB_SUCCESS, test_gen_object_meta(fragments, n_fragments, n_remained_fragments, 
         expected_start, expected_end, expected_file_length, appendable_obj_meta));
-
+      
       ObArray<ObAppendableFragmentMeta> fragments_need_to_read;
       ASSERT_EQ(OB_INVALID_ARGUMENT,
           appendable_obj_meta.get_needed_fragments(-1, 1, fragments_need_to_read));
@@ -302,9 +302,9 @@ TEST_F(TestObjectStorage, test_appendable_object_util)
       int64_t n_remained_fragments = sizeof(expected_start) / sizeof(int64_t);
       int64_t expected_file_length = 20;
       ObStorageObjectMeta appendable_obj_meta;
-      ASSERT_EQ(OB_SUCCESS, test_gen_object_meta(fragments, n_fragments, n_remained_fragments,
+      ASSERT_EQ(OB_SUCCESS, test_gen_object_meta(fragments, n_fragments, n_remained_fragments, 
         expected_start, expected_end, expected_file_length, appendable_obj_meta));
-
+      
       ObArray<ObAppendableFragmentMeta> fragments_need_to_read;
       ASSERT_EQ(OB_ERR_UNEXPECTED,
           appendable_obj_meta.get_needed_fragments(5, 8, fragments_need_to_read));
@@ -314,14 +314,14 @@ TEST_F(TestObjectStorage, test_appendable_object_util)
           appendable_obj_meta.get_needed_fragments(5, 15, fragments_need_to_read));
       ASSERT_EQ(OB_INVALID_ARGUMENT,
           appendable_obj_meta.get_needed_fragments(11, 11, fragments_need_to_read));
-
+      
       {
         int64_t start = 10;
         int64_t end = 18;
         int64_t expected_start[] = {10};
         int64_t expected_end[] = {20};
         int64_t n_expected_fragments = sizeof(expected_start) / sizeof(int64_t);
-        ASSERT_EQ(OB_SUCCESS, test_get_needed_fragments(start, end, n_expected_fragments, expected_start,
+        ASSERT_EQ(OB_SUCCESS, test_get_needed_fragments(start, end, n_expected_fragments, expected_start, 
                   expected_end, appendable_obj_meta));
       }
       {
@@ -330,7 +330,7 @@ TEST_F(TestObjectStorage, test_appendable_object_util)
         int64_t expected_start[] = {10};
         int64_t expected_end[] = {20};
         int64_t n_expected_fragments = sizeof(expected_start) / sizeof(int64_t);
-        ASSERT_EQ(OB_SUCCESS, test_get_needed_fragments(start, end, n_expected_fragments, expected_start,
+        ASSERT_EQ(OB_SUCCESS, test_get_needed_fragments(start, end, n_expected_fragments, expected_start, 
                   expected_end, appendable_obj_meta));
       }
       {
@@ -339,7 +339,7 @@ TEST_F(TestObjectStorage, test_appendable_object_util)
         int64_t expected_start[] = {10};
         int64_t expected_end[] = {20};
         int64_t n_expected_fragments = sizeof(expected_start) / sizeof(int64_t);
-        ASSERT_EQ(OB_SUCCESS, test_get_needed_fragments(start, end, n_expected_fragments, expected_start,
+        ASSERT_EQ(OB_SUCCESS, test_get_needed_fragments(start, end, n_expected_fragments, expected_start, 
                   expected_end, appendable_obj_meta));
       }
       {
@@ -348,7 +348,7 @@ TEST_F(TestObjectStorage, test_appendable_object_util)
         int64_t expected_start[] = {10};
         int64_t expected_end[] = {20};
         int64_t n_expected_fragments = sizeof(expected_start) / sizeof(int64_t);
-        ASSERT_EQ(OB_SUCCESS, test_get_needed_fragments(start, end, n_expected_fragments, expected_start,
+        ASSERT_EQ(OB_SUCCESS, test_get_needed_fragments(start, end, n_expected_fragments, expected_start, 
                   expected_end, appendable_obj_meta));
       }
       {
@@ -357,11 +357,11 @@ TEST_F(TestObjectStorage, test_appendable_object_util)
         int64_t expected_start[] = {};
         int64_t expected_end[] = {};
         int64_t n_expected_fragments = sizeof(expected_start) / sizeof(int64_t);
-        ASSERT_EQ(OB_SUCCESS, test_get_needed_fragments(start, end, n_expected_fragments, expected_start,
+        ASSERT_EQ(OB_SUCCESS, test_get_needed_fragments(start, end, n_expected_fragments, expected_start, 
                   expected_end, appendable_obj_meta));
       }
     }
-
+    
     {
       // valid fragment name
       const char *valid_fragments[] = {
@@ -370,7 +370,7 @@ TEST_F(TestObjectStorage, test_appendable_object_util)
           "0-3", "0-3", "0-1", "1-2", "2-3",                  // covered "0-3"
           "7-8", "8-9", "9-10", "10-11", "11-12", "12-20",    // no gap
           // "22-25" & "21-24" are covered by "15-25", and there is a gap from "15-25" to "26-30"
-          "15-25", "22-25", "21-24", "26-30",
+          "15-25", "22-25", "21-24", "26-30",   
           "30-1234567", "10000-1234567", "28-1234566"
       };
       int64_t n_fragments = sizeof(valid_fragments) / sizeof(char *);
@@ -380,16 +380,16 @@ TEST_F(TestObjectStorage, test_appendable_object_util)
       int64_t expected_file_length = 1234567;
       ObStorageObjectMeta appendable_obj_meta;
       // (ObStorageObjectMetaType::OB_OBJ_SIMULATE_APPEND);
-      ASSERT_EQ(OB_SUCCESS, test_gen_object_meta(valid_fragments, n_fragments, n_remained_fragments,
+      ASSERT_EQ(OB_SUCCESS, test_gen_object_meta(valid_fragments, n_fragments, n_remained_fragments, 
         expected_start, expected_end, expected_file_length, appendable_obj_meta));
-
+      
       {
         int64_t start = 0;
         int64_t end = 3;
         int64_t expected_start[] = {0};
         int64_t expected_end[] = {3};
         int64_t n_expected_fragments = sizeof(expected_start) / sizeof(int64_t);
-        ASSERT_EQ(OB_SUCCESS, test_get_needed_fragments(start, end, n_expected_fragments, expected_start,
+        ASSERT_EQ(OB_SUCCESS, test_get_needed_fragments(start, end, n_expected_fragments, expected_start, 
                   expected_end, appendable_obj_meta));
       }
       {
@@ -398,7 +398,7 @@ TEST_F(TestObjectStorage, test_appendable_object_util)
         int64_t expected_start[] = {1};
         int64_t expected_end[] = {7};
         int64_t n_expected_fragments = sizeof(expected_start) / sizeof(int64_t);
-        ASSERT_EQ(OB_SUCCESS, test_get_needed_fragments(start, end, n_expected_fragments, expected_start,
+        ASSERT_EQ(OB_SUCCESS, test_get_needed_fragments(start, end, n_expected_fragments, expected_start, 
                   expected_end, appendable_obj_meta));
       }
       {
@@ -407,13 +407,13 @@ TEST_F(TestObjectStorage, test_appendable_object_util)
         int64_t expected_start[] = {0, 1, 7, 8, 9, 10, 11, 12};
         int64_t expected_end[] = {3, 7, 8, 9, 10, 11, 12, 20};
         int64_t n_expected_fragments = sizeof(expected_start) / sizeof(int64_t);
-        ASSERT_EQ(OB_SUCCESS, test_get_needed_fragments(start, end, n_expected_fragments, expected_start,
+        ASSERT_EQ(OB_SUCCESS, test_get_needed_fragments(start, end, n_expected_fragments, expected_start, 
                   expected_end, appendable_obj_meta));
       }
       {
         ObArray<ObAppendableFragmentMeta> fragments_need_to_read;
         ASSERT_EQ(OB_ERR_UNEXPECTED,
-          appendable_obj_meta.get_needed_fragments(15, 30, fragments_need_to_read));
+          appendable_obj_meta.get_needed_fragments(15, 30, fragments_need_to_read));      
       }
       {
         int64_t start = 28;
@@ -421,7 +421,7 @@ TEST_F(TestObjectStorage, test_appendable_object_util)
         int64_t expected_start[] = {26, 30};
         int64_t expected_end[] = {30, 1234567};
         int64_t n_expected_fragments = sizeof(expected_start) / sizeof(int64_t);
-        ASSERT_EQ(OB_SUCCESS, test_get_needed_fragments(start, end, n_expected_fragments, expected_start,
+        ASSERT_EQ(OB_SUCCESS, test_get_needed_fragments(start, end, n_expected_fragments, expected_start, 
                   expected_end, appendable_obj_meta));
       }
     }
@@ -438,7 +438,7 @@ TEST_F(TestObjectStorage, test_check_storage_obj_meta)
     const int64_t ts = ObTimeUtility::current_time();
     ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
         bucket, dir_name, tmp_append_dir, ts));
-
+    
     {
       ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri),
                                             "%s/test_appendable_%ld.back",
@@ -523,7 +523,7 @@ TEST_F(TestObjectStorage, test_util_list_files)
     ObStorageUtil util;
     const char *tmp_util_dir = "test_util_list_files";
     const int64_t ts = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld", 
         bucket, dir_name, tmp_util_dir, ts));
     ASSERT_EQ(OB_SUCCESS, util.open(&info_base));
 
@@ -533,7 +533,7 @@ TEST_F(TestObjectStorage, test_util_list_files)
       TestObjectStorageListOp op;
       ASSERT_EQ(OB_INVALID_BACKUP_DEST, util.list_files(uri, op));
     }
-
+    
     int64_t file_num = 1001;
     const char *write_content = "0123456789";
 
@@ -589,7 +589,7 @@ TEST_F(TestObjectStorage, test_util_list_files)
       ASSERT_EQ(OB_SUCCESS, util.list_files(dir_uri, false, list_empty_op));
       ASSERT_EQ(0, list_empty_op.object_names_.size());
     }
-
+    
     util.close();
   }
 }
@@ -601,7 +601,7 @@ TEST_F(TestObjectStorage, test_util_list_directories)
     ObStorageUtil util;
     const char *tmp_util_dir = "test_util_list_directories";
     const int64_t ts = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld", 
         bucket, dir_name, tmp_util_dir, ts));
     ASSERT_EQ(OB_SUCCESS, util.open(&info_base));
 
@@ -611,7 +611,7 @@ TEST_F(TestObjectStorage, test_util_list_directories)
       TestObjectStorageListOp op;
       ASSERT_EQ(OB_INVALID_BACKUP_DEST, util.list_directories(uri, false/*is_adaptive*/, op));
     }
-
+    
     int64_t file_num = 1001;
     const char *write_content = "0123456789";
 
@@ -657,7 +657,7 @@ TEST_F(TestObjectStorage, test_util_list_directories)
         ASSERT_EQ(OB_SUCCESS, util.del_file(uri));
       }
     }
-
+    
     util.close();
   }
 }
@@ -672,7 +672,7 @@ TEST_F(TestObjectStorage, test_util_list_adaptive_files)
     const int64_t ts = ObTimeUtility::current_time();
     ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
         bucket, dir_name, tmp_append_dir, ts));
-
+    
     {
       std::set<std::string> files;
       ObStorageAppender appender;
@@ -705,7 +705,7 @@ TEST_F(TestObjectStorage, test_util_list_adaptive_files)
           ASSERT_EQ(OB_SUCCESS, appender.close());
         }
       };
-
+      
       // 文件层级
       // 第一级：0-normal, 0-appendable, 0-appendable.back .... 9-normal, 9-appendable, 9-appendable.back
       // 第二级：0/0-normal, 0/0-appendable, 0/0-appendable.back, ... 9/9-normal, 9/9-appendable, 9/9-appendable.back
@@ -767,9 +767,9 @@ TEST_F(TestObjectStorage, test_append_rw)
     ASSERT_EQ(OB_SUCCESS, util.open(&info_base));
     const char *tmp_append_dir = "test_append";
     const int64_t ts = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld", 
         bucket, dir_name, tmp_append_dir, ts));
-
+    
     {
       ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/test_append_file_%ld.back",
                                             dir_uri, ObTimeUtility::current_time()));
@@ -861,14 +861,14 @@ TEST_F(TestObjectStorage, test_append_rw)
       ASSERT_EQ(OB_SUCCESS, util.del_file(uri, true));
       ASSERT_FALSE(appender.is_opened());
     }
-
+    
     if (info_base.get_type() == ObStorageType::OB_STORAGE_S3) {
       ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/test_append_file_%ld.back",
                                             dir_uri, ObTimeUtility::current_time()));
 
       ObStorageAppender appender;
       ASSERT_EQ(OB_SUCCESS, appender.open(uri, &info_base));
-
+    
       const int64_t content_length = 100;
       char content[content_length] = { 0 };
       for (int64_t i = 0; i < content_length; i++) {
@@ -878,7 +878,7 @@ TEST_F(TestObjectStorage, test_append_rw)
       // "0-3",  "0-3", "0-1", "1-2", "2-3",               // covered "0-3"
       // "7-8", "8-9", "9-10", "10-11", "11-12", "12-20",  // no gap
       // "22-25" & "21-24" are covered by "15-25", and there is a gap from "15-25" to "26-30"
-      // "15-25", "22-25", "21-24", "26-30", "30-100", "28-100"
+      // "15-25", "22-25", "21-24", "26-30", "30-100", "28-100" 
       int64_t fragment_start[] = {1,2,3,4,1,1,1,0,0,0,1,2,7,8,9,10,11,12,15,22,21,26,30,28};
       int64_t fragment_end[] = {7,5,6,7,7,7,5,3,3,1,2,3,8,9,10,11,12,20,25,25,24,30,100,100};
       ASSERT_EQ(sizeof(fragment_start), sizeof(fragment_end));
@@ -898,7 +898,7 @@ TEST_F(TestObjectStorage, test_append_rw)
       ASSERT_EQ(sizeof(read_start), sizeof(read_end));
       test_read_appendable_object(content, content_length,
           sizeof(read_start) / sizeof(int64_t), read_start, read_end, reader);
-
+    
       char buf[content_length];
       int64_t read_size = -1;
       ASSERT_EQ(OB_ERR_UNEXPECTED,
@@ -909,7 +909,7 @@ TEST_F(TestObjectStorage, test_append_rw)
         ASSERT_EQ(OB_INVALID_ARGUMENT, reader.pread(buf, 1, -1, read_size));
         ASSERT_EQ(OB_INVALID_ARGUMENT, reader.pread(NULL, 1, 0, read_size));
       }
-
+    
       OB_LOG(INFO, "-=-=-=-=-===========-=-=====-=-=-=-=-=-=-=-=-=-=-=-=");
       ASSERT_EQ(OB_SUCCESS, appender.close());
       // open before close, read after close
@@ -952,7 +952,7 @@ TEST_F(TestObjectStorage, test_append_rw)
 
       ObStorageAppender appender;
       ASSERT_EQ(OB_SUCCESS, appender.open(uri, &info_base));
-
+    
       const int64_t content_length = 100;
       char content[content_length] = { 0 };
       for (int64_t i = 0; i < content_length; i++) {
@@ -962,7 +962,7 @@ TEST_F(TestObjectStorage, test_append_rw)
       // "0-3",  "0-3", "0-1", "1-2", "2-3",               // covered "0-3"
       // "7-8", "8-9", "9-10", "10-11", "11-12", "12-20",  // no gap
       // "22-25" & "21-24" are covered by "15-25", and there is a gap from "15-25" to "26-30"
-      // "15-25", "22-25", "21-24", "26-30", "30-100", "28-100"
+      // "15-25", "22-25", "21-24", "26-30", "30-100", "28-100" 
       int64_t fragment_start[] = {1,2,3,4,1,1,1,0,0,0,1,2,7,8,9,10,11,12,15,22,21,26,30,28};
       int64_t fragment_end[] = {7,5,6,7,7,7,5,3,3,1,2,3,8,9,10,11,12,20,25,25,24,30,100,100};
       ASSERT_EQ(sizeof(fragment_start), sizeof(fragment_end));
@@ -977,7 +977,7 @@ TEST_F(TestObjectStorage, test_append_rw)
       ObStorageAdaptiveReader reader;
       ASSERT_EQ(OB_SUCCESS, reader.open(uri, &info_base));
       ASSERT_EQ(content_length, reader.get_length());
-
+    
       char buf[content_length];
       int64_t read_size = -1;
       ASSERT_EQ(OB_ERR_UNEXPECTED,
@@ -986,7 +986,7 @@ TEST_F(TestObjectStorage, test_append_rw)
 
       // fill gap
       ASSERT_EQ(OB_SUCCESS, appender.pwrite(content + 25, 1, 25));
-
+      
       // now gap is filled
       ASSERT_EQ(OB_SUCCESS, reader.open(uri, &info_base));
       ASSERT_EQ(content_length, reader.get_length());
@@ -1003,7 +1003,7 @@ TEST_F(TestObjectStorage, test_append_rw)
       // ASSERT_EQ(0, appendable_obj_meta.fragment_metas_[0].start_);
       // ASSERT_EQ(9223372036854775807, appendable_obj_meta.fragment_metas_[0].end_);
       // ASSERT_EQ(content_length, appendable_obj_meta.length_);
-
+    
       ASSERT_EQ(OB_SUCCESS, appender.close());
       ASSERT_EQ(OB_SUCCESS, reader.open(uri, &info_base));
       // open before close, read after close
@@ -1051,7 +1051,7 @@ TEST_F(TestObjectStorage, test_append_rw)
       ASSERT_EQ(OB_SUCCESS, appender_a.open(uri, &info_base));
       ASSERT_EQ(OB_SUCCESS, appender_b.open(uri, &info_base));
       ASSERT_EQ(OB_SUCCESS, appender_c.open(uri, &info_base));
-
+    
       const int64_t content_length = 100;
       char content[content_length] = { 0 };
       for (int64_t i = 0; i < content_length; i++) {
@@ -1061,7 +1061,7 @@ TEST_F(TestObjectStorage, test_append_rw)
       // "0-3",  "0-3", "0-1", "1-2", "2-3",               // covered "0-3"
       // "7-8", "8-9", "9-10", "10-11", "11-12", "12-20",  // no gap
       // "22-25" & "21-24" are covered by "15-25"
-      // "15-25", "22-25", "21-24", "25-30", "30-100", "28-100"
+      // "15-25", "22-25", "21-24", "25-30", "30-100", "28-100" 
       int64_t fragment_start[] = {1,2,3,4,1,1,1,0,0,0,1,2,7,8,9,10,11,12,15,22,21,25,30,28};
       int64_t fragment_end[] = {7,5,6,7,7,7,5,3,3,1,2,3,8,9,10,11,12,20,25,25,24,30,100,100};
       ASSERT_EQ(sizeof(fragment_start), sizeof(fragment_end));
@@ -1096,7 +1096,7 @@ TEST_F(TestObjectStorage, test_append_rw)
       read_thread_b.join();
       ASSERT_EQ(content_length, reader_a.get_length());
       ASSERT_EQ(content_length, reader_b.get_length());
-
+    
       // open before close, read after close
       ASSERT_EQ(OB_SUCCESS, appender_a.close());
       ASSERT_EQ(OB_SUCCESS, appender_b.close());
@@ -1200,7 +1200,7 @@ TEST_F(TestObjectStorage, test_cross_testing)
                                            appid, region, nullptr, cross_info));
     ObStorageUtil util;
     ASSERT_EQ(OB_SUCCESS, util.open(&cross_info));
-
+    
     // constuct obj name, should be compatible with nfs
     const char *tmp_dir = "test_cross_appendable";
     const int64_t ts = ObTimeUtility::current_time();
@@ -1235,7 +1235,7 @@ TEST_F(TestObjectStorage, test_cross_testing)
     // "0-3",  "0-3", "0-1", "1-2", "2-3",               // covered "0-3"
     // "7-8", "8-9", "9-10", "10-11", "11-12", "12-20",  // no gap
     // "22-25" & "21-24" are covered by "15-25"
-    // "15-25", "22-25", "21-24", "25-30", "30-100", "28-100"
+    // "15-25", "22-25", "21-24", "25-30", "30-100", "28-100" 
     int64_t fragment_start[] = {1,2,3,4,1,1,1,0,0,0,1,2,7,8,9,10,11,12,15,22,21,25,30,28};
     int64_t fragment_end[] = {7,5,6,7,7,7,5,3,3,1,2,3,8,9,10,11,12,20,25,25,24,30,100,100};
     const int64_t content_length = 100;
@@ -1323,7 +1323,7 @@ TEST_F(TestObjectStorage, test_read_single_file)
       ASSERT_EQ(6, read_size);
       ASSERT_EQ(0, strncmp(read_buf, "123456", 6));
       ASSERT_EQ(OB_SUCCESS, reader.close());
-
+      
       ASSERT_EQ(OB_SUCCESS, util.del_file(uri));
     }
 
@@ -1365,7 +1365,7 @@ TEST_F(TestObjectStorage, test_multipart_write)
     const int64_t ts = ObTimeUtility::current_time();
     ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
         bucket, dir_name, tmp_dir, ts));
-
+    
     const int64_t content_size = 20 * 1024 * 1024L + 7; // 20M + 7B
     ObArenaAllocator allocator;
     char *write_buf = (char *)allocator.alloc(content_size);
@@ -1377,9 +1377,9 @@ TEST_F(TestObjectStorage, test_multipart_write)
       write_buf[i] = alphanum[ObRandom::rand(0, sizeof(alphanum) - 2)];
     }
     write_buf[content_size - 1] = '\0';
-
+    
     ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/test_multipart", dir_uri));
-
+    
     {
       // test abort
       ObStorageMultiPartWriter writer;
@@ -1424,7 +1424,7 @@ TEST_F(TestObjectStorage, test_del_unmerged_parts)
     const int64_t ts = ObTimeUtility::current_time();
     ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
         bucket, dir_name, tmp_dir, ts));
-
+    
     const int64_t content_size = 20 * 1024 * 1024L + 7; // 20M + 7B
     ObArenaAllocator allocator;
     char *write_buf = (char *)allocator.alloc(content_size);
@@ -1436,7 +1436,7 @@ TEST_F(TestObjectStorage, test_del_unmerged_parts)
       write_buf[i] = alphanum[ObRandom::rand(0, sizeof(alphanum) - 2)];
     }
     write_buf[content_size - 1] = '\0';
-
+    
     ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/%s", dir_uri, tmp_dir));
     ObStorageMultiPartWriter writer;
     ASSERT_EQ(OB_SUCCESS, writer.open(uri, &info_base));
@@ -1451,7 +1451,7 @@ TEST_F(TestObjectStorage, test_del_unmerged_parts)
     } else if (info_base.get_type() == ObStorageType::OB_STORAGE_COS) {
       ASSERT_EQ(OB_OBJECT_STORAGE_IO_ERROR, writer.close());
     }
-
+    
   }
 }
 
@@ -1462,7 +1462,7 @@ TEST_F(TestObjectStorage, test_util_is_tagging)
     ObStorageUtil util;
     const char *tmp_util_dir = "test_util_is_tagging";
     const int64_t ts = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld", 
       bucket, dir_name, tmp_util_dir, ts));
 
     bool is_tagging = true;
@@ -1495,20 +1495,20 @@ TEST_F(TestObjectStorage, test_util_is_tagging)
     ASSERT_EQ(OB_OBJECT_NOT_EXIST, util.is_tagging(uri, is_tagging));
     tmp_info_base.reset();
     util.close();
-
+    
     // tagging mode
     ASSERT_EQ(OB_SUCCESS, set_storage_info(bucket, endpoint, secretid, secretkey,
                                            appid, region, "delete_mode=tagging", tmp_info_base));
-
+    
     ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/tagging_mode", dir_uri));
     ASSERT_EQ(OB_SUCCESS, util.open(&tmp_info_base));
     ASSERT_EQ(OB_OBJECT_NOT_EXIST, util.is_tagging(uri, is_tagging));
     ASSERT_EQ(OB_SUCCESS, util.write_single_file(uri, write_content, strlen(write_content)));
-
+    
     is_tagging = true;
     ASSERT_EQ(OB_SUCCESS, util.is_tagging(uri, is_tagging));
     ASSERT_FALSE(is_tagging);
-
+    
     ASSERT_EQ(OB_SUCCESS, util.del_file(uri));
     ASSERT_EQ(OB_SUCCESS, util.is_tagging(uri, is_tagging));
     ASSERT_TRUE(is_tagging);
@@ -1519,7 +1519,7 @@ TEST_F(TestObjectStorage, test_util_is_tagging)
     // clean
     ASSERT_EQ(OB_SUCCESS, set_storage_info(bucket, endpoint, secretid, secretkey,
                                            appid, region, nullptr, tmp_info_base));
-
+    
     ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/tagging_mode", dir_uri));
     ASSERT_EQ(OB_SUCCESS, util.open(&tmp_info_base));
     ASSERT_EQ(OB_SUCCESS, util.del_file(uri));

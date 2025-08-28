@@ -99,3 +99,4 @@ public:
 }  // end namespace oceanbase
 
 #endif  // OCEANBASE_STORAGE_OB_LOB_CURSOR_H_
+

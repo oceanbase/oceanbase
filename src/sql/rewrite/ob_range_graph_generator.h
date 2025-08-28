@@ -51,9 +51,9 @@ struct RangeNodeCmp
   }
 };
 
-struct RangeNodeConnectInfo
+struct RangeNodeConnectInfo 
 {
-  RangeNodeConnectInfo()
+  RangeNodeConnectInfo() 
     : inited_(false),
       data_(nullptr),
       node_count_(0),
@@ -102,7 +102,7 @@ private:
                               int64_t expr_depth,
                               bool &is_precise,
                               OffsetDesc &offset_desc);
-
+  
   static void set_new_start_key(ObRangeNode &l_node, ObRangeNode &r_node, const int64_t column_cnt, int64_t start_offset);
   static void set_new_end_key(ObRangeNode &l_node, ObRangeNode &r_node, const int64_t column_cnt, int64_t start_offset);
 
@@ -136,7 +136,7 @@ private:
   static int generate_node_id(ObRangeNode *range_node, uint64_t &node_count);
 
   int check_graph_type(ObRangeNode *range_node);
-
+  
   bool is_precise_get(ObRangeNode *range_node) const;
   bool is_standard_range(ObRangeNode *range_node) const;
   int get_max_precise_pos(ObRangeNode *range_node, int64_t &max_precise_pos, int64_t start_pos = 0) const;
@@ -171,7 +171,7 @@ private:
                                    RangeNodeConnectInfo &connect_info,
                                    common::hash::ObHashMap<uint64_t, ObRangeNode*> &refined_ranges,
                                    common::hash::ObHashSet<uint64_t> &shared_ranges);
-  static int check_crop_range_node_valid(ObRangeNode *range_node,
+  static int check_crop_range_node_valid(ObRangeNode *range_node, 
                                          ObRangeNode *next_range_node,
                                          RangeNodeConnectInfo &connect_info);
   static int reset_node_id(ObRangeNode *range_node);
@@ -181,12 +181,12 @@ private:
                                               RangeNodeConnectInfo &connect_info);
   static int collect_range_node_connect_info(ObRangeNode *range_node,
                                       RangeNodeConnectInfo &connect_info);
-
+  
   static int get_offset_desc(const ObRangeNode *range_node, OffsetDesc &offset_desc);
 
   static int get_start_from_zero(const ObRangeNode *range_node, bool &start_from_zero);
 
-  static int check_can_fast_nlj_range_extraction(const ObRangeNode *range_node,
+  static int check_can_fast_nlj_range_extraction(const ObRangeNode *range_node, 
                                                  const ObRangeMap &range_map,
                                                  bool is_equal_range,
                                                  bool &fast_nlj_range);
@@ -202,7 +202,7 @@ private:
   int formalize_one_range_exprs(const ObRangeNode &range_node,
                                 ObSqlBitSet<> &exprs_bitset,
                                 ObSqlBitSet<> &in_params_bitset);
-  int formalize_in_param_exprs(int64_t in_idx,
+  int formalize_in_param_exprs(int64_t in_idx, 
                                ObSqlBitSet<> &exprs_bitset,
                                ObSqlBitSet<> &in_params_bitset);
 private:

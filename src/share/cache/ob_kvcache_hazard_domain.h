@@ -67,7 +67,7 @@ private:
   int hazptr_protect(bool& success, ObKVMemBlockHandle* mb_handle, int32_t seq_num);
   int hazptr_protect(bool& success, ObKVMemBlockHandle* mb_handle);
   void hazptr_release();
-  void hazptr_reset();
+  void hazptr_reset(); 
   ObKVMemBlockHandle* hazptr_get_mb_handle() const;
   int hazptr_assign(const HazptrHolder& other);
   void hazptr_move_from(HazptrHolder& other);
@@ -160,7 +160,7 @@ private:
   // wash() may move using_blocks to recycling_blocks and reorder recycling_blocks
   // tranverse() need to tranverse all recycling_blocks and using_blocks
   // this lock is used to make sure reclaim() and wash() are not running at the same time
-  lib::ObMutex blocks_mu_;
+  lib::ObMutex blocks_mu_; 
   BlockList blocks_;
   SList<T> avai_list_;
   double memory_efficiency_;

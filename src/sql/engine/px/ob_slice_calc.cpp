@@ -1774,9 +1774,9 @@ int ObSlaveMapPkeyHashIdxCalc::get_task_idx_by_tablet_id(ObEvalCtx &eval_ctx,
     } else if (task_idx_array->count() <= 0){
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("the size of task idx array is zero", K(ret));
-    } else if (OB_FAIL(hash_calc_.calc_slice_idx<USE_VEC>(eval_ctx,
-                                                          task_idx_array->count(),
-                                                          hash_idx,
+    } else if (OB_FAIL(hash_calc_.calc_slice_idx<USE_VEC>(eval_ctx, 
+                                                          task_idx_array->count(), 
+                                                          hash_idx, 
                                                           skip))) {
       LOG_WARN("fail calc hash value", K(ret));
     } else if (ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW == hash_idx) {
@@ -2135,7 +2135,7 @@ int ObWfHybridDistSliceIdCalc::get_multi_slice_idx_vector_inner(const ObIArray<O
       }
       if (OB_FAIL(ret)){
       } else if (OB_FAIL(end_indexes.push_back(slice_flatten_indexes.count()))) {
-        LOG_WARN("put the i_th row end_idx failed", K(ret), K(i),
+        LOG_WARN("put the i_th row end_idx failed", K(ret), K(i), 
           K(slice_flatten_indexes.count()), K(end_indexes.count()));
       }
     }

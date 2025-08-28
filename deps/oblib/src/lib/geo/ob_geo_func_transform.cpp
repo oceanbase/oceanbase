@@ -111,8 +111,8 @@ private:
       for (; iter != src_geo->end() && OB_SUCC(ret); ++iter) {
         sub_ptr = iter.operator->();
         ObGeoType sub_type = src_geo->get_sub_type(sub_ptr);
-        ObGeometry *sub_res = NULL;
-        ObIWkbGeomPoint sub_geo; // just for setting data, doesn't matter what type it is
+        ObGeometry *sub_res = NULL;  
+        ObIWkbGeomPoint sub_geo; // just for setting data, doesn't matter what type it is  
         sub_geo.set_data(sub_ptr);
         switch (sub_type) {
           case ObGeoType::POINT : {

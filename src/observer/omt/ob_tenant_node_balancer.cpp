@@ -402,7 +402,7 @@ int ObTenantNodeBalancer::check_new_tenant(
       }
     }
   }
-
+  
   if (OB_FAIL(ret)) {
     // failed
   } else if (OB_ISNULL(tenant)) {
@@ -447,7 +447,7 @@ int ObTenantNodeBalancer::check_new_tenant(
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -569,7 +569,7 @@ int ObTenantNodeBalancer::fetch_effective_tenants(const TenantUnits &old_tenants
           }
         }
         // Check if resources are already released:
-        // 1. if not released, update status to WAIT_GC if status is not WAIT_GC or DELETING,
+        // 1. if not released, update status to WAIT_GC if status is not WAIT_GC or DELETING, 
         //    and push it back to effective tenants to avoid starting deleting.
         // 2. if released, ignore this tenant, let it be deleted in subsequent process.
         bool is_released = false;

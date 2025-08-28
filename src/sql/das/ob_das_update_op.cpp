@@ -278,7 +278,7 @@ int ObDASUpdIterator::get_next_rows(blocksstable::ObDatumRow *&rows, int64_t &ro
       LOG_WARN("new rows is null", K(ret));
     } else {
       rows = new_rows_;
-      row_count = got_row_count_;
+      row_count = got_row_count_; 
       got_row_count_ = 0;
     }
   }
@@ -435,7 +435,7 @@ int ObDASIndexDMLAdaptor<DAS_OP_TABLE_UPDATE, ObDASUpdIterator>::write_rows(cons
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("update row to partition storage failed", K(ret));
     }
-  } else if (!(ctdef.is_ignore_ ||
+  } else if (!(ctdef.is_ignore_ || 
             ctdef.table_param_.get_data_table().is_domain_index())
       && 0 == affected_rows) {
     ret = OB_ERR_UNEXPECTED;

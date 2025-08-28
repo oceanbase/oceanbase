@@ -63,7 +63,7 @@ static int apply_bg_union(const ObGeometry *g1, const ObGeometry *g2, const ObGe
     const GeometryType2 *geo2 = NULL;
     if (g1->is_tree()) {
       geo1 = reinterpret_cast<const GeometryType1 *>(g1);
-      geo2 = reinterpret_cast<const GeometryType2 *>(g2);
+      geo2 = reinterpret_cast<const GeometryType2 *>(g2);      
     } else {
       geo1 = reinterpret_cast<const GeometryType1 *>(g1->val());
       geo2 = reinterpret_cast<const GeometryType2 *>(g2->val());
@@ -143,7 +143,7 @@ static int apply_bg_union_collection(const ObGeometry *g1, const ObGeometry *g2,
         LOG_WARN("failed to do geo1 to_tree visit", K(ret));
       } else if (OB_FAIL(res->push_back(*geo1_visitor.get_geometry()))) {
         LOG_WARN("failed to push geo1 to collection", K(ret));
-      }
+      }        
     }
 
     if (OB_SUCC(ret)) {
@@ -153,8 +153,8 @@ static int apply_bg_union_collection(const ObGeometry *g1, const ObGeometry *g2,
   return ret;
 }
 
-template <typename GeometryType1, typename GeometryType2,
-          typename IGeometryType1, typename IGeometryType2,
+template <typename GeometryType1, typename GeometryType2, 
+          typename IGeometryType1, typename IGeometryType2, 
           typename GeometryRes>
 static int apply_bg_multi_union_collection(const ObGeometry *g1, const ObGeometry *g2, const ObGeoEvalCtx &context, ObGeometry *&result)
 {
@@ -175,7 +175,7 @@ static int apply_bg_multi_union_collection(const ObGeometry *g1, const ObGeometr
         LOG_WARN("failed to do geo2 to_tree visit", K(ret));
       } else if (OB_FAIL(res->push_back(*geo2_visitor.get_geometry()))) {
         LOG_WARN("failed to push geo2 to collection", K(ret));
-      }
+      } 
     }
 
     if (OB_SUCC(ret) && apply_bg_disjoint(geo1, geo2, context)) {
@@ -190,7 +190,7 @@ static int apply_bg_multi_union_collection(const ObGeometry *g1, const ObGeometr
     if (OB_SUCC(ret)) {
       result = res;
     }
-  }
+  } 
   return ret;
 }
 
@@ -313,7 +313,7 @@ static int apply_bg_union_multiline_multipolygon(const ObGeometry *g1, const ObG
             }
           }
         }
-      }
+      } 
     }
   }
   if (OB_SUCC(ret)) {
@@ -363,7 +363,7 @@ static int apply_bg_union_multipoint_multigeo(const ObGeometry *g1, const ObGeom
             }
           }
         }
-      }
+      } 
     }
   }
   if (OB_SUCC(ret)) {
@@ -404,7 +404,7 @@ static int apply_bg_union_multipoint_geo(const ObGeometry *g1, const ObGeometry 
           }
         }
       }
-    }
+    } 
   }
   if (OB_SUCC(ret)) {
     result = res;
@@ -529,7 +529,7 @@ public:
   }
 };
 
-// cartesian point
+// cartesian point 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncUnionImpl, ObWkbGeomPoint, ObWkbGeomPoint, ObGeometry *)
 {
   return apply_bg_union<ObWkbGeomPoint, ObWkbGeomPoint, ObCartesianMultipoint>(g1, g2, context, result);
@@ -550,7 +550,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncUnionImpl, ObWkbGeomPoint, ObWkbGeomPolyg
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncUnionImpl, ObWkbGeomPoint, ObWkbGeomMultiPoint, ObGeometry *)
 {
   return apply_bg_union<ObWkbGeomPoint, ObWkbGeomMultiPoint,
-                        ObCartesianMultipoint>(g1, g2, context, result);
+                        ObCartesianMultipoint>(g1, g2, context, result);      
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncUnionImpl, ObWkbGeomPoint, ObWkbGeomMultiLineString, ObGeometry *)
@@ -660,7 +660,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncUnionImpl, ObWkbGeomMultiPoint, ObWkbGeom
 {
   return apply_bg_union_multipoint_geo<ObWkbGeomMultiPoint, ObWkbGeomPolygon,
     ObCartesianMultipoint, ObIWkbGeomPolygon,
-    ObCartesianPolygon, ObCartesianGeometrycollection>(g1, g2, context, result);
+    ObCartesianPolygon, ObCartesianGeometrycollection>(g1, g2, context, result);      
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncUnionImpl, ObWkbGeomMultiPoint, ObWkbGeomMultiPoint, ObGeometry *)
@@ -800,7 +800,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncUnionImpl, ObWkbGeogPoint, ObWkbGeogPolyg
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncUnionImpl, ObWkbGeogPoint, ObWkbGeogMultiPoint, ObGeometry *)
 {
   return apply_bg_union<ObWkbGeogPoint, ObWkbGeogMultiPoint,
-                        ObGeographMultipoint>(g1, g2, context, result);
+                        ObGeographMultipoint>(g1, g2, context, result);      
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncUnionImpl, ObWkbGeogPoint, ObWkbGeogMultiLineString, ObGeometry *)
@@ -910,7 +910,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncUnionImpl, ObWkbGeogMultiPoint, ObWkbGeog
 {
   return apply_bg_union_multipoint_geo<ObWkbGeogMultiPoint, ObWkbGeogPolygon,
     ObGeographMultipoint, ObIWkbGeogPolygon,
-    ObGeographPolygon, ObGeographGeometrycollection>(g1, g2, context, result);
+    ObGeographPolygon, ObGeographGeometrycollection>(g1, g2, context, result);      
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncUnionImpl, ObWkbGeogMultiPoint, ObWkbGeogMultiPoint, ObGeometry *)

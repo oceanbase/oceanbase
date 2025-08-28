@@ -226,7 +226,7 @@ int ObCreateCCLRuleResolver::resolve(const ParseNode &parse_tree)
       if (OB_NOT_NULL(ccl_filter_option_node)) {
         ObString ccl_filter_keyword;
         if (ccl_filter_option_node->type_ == T_FILTER_KEYWORDS_LIST) {
-          // constructe keywords
+          // constructe keywords 
           ObString ccl_keywords;
           if (OB_FAIL(merge_strings_with_escape(*ccl_filter_option_node, ';', '\\', ccl_keywords))) {
             LOG_WARN("fail to construct ccl keywords from parse node", K(ret));
@@ -266,7 +266,7 @@ int ObCreateCCLRuleResolver::resolve(const ParseNode &parse_tree)
       }
     }
 
-    // 7. resolve ccl_per_sql, it == NULL if it's rule level
+    // 7. resolve ccl_per_sql, it == NULL if it's rule level 
     if (OB_SUCC(ret)) {
       ParseNode *ccl_for_affect_scope_node = node->children_[CCL_AFFECT_SCOPE];
       create_ccl_rule_stmt->set_affect_scope(ccl_for_affect_scope_node == NULL ? ObCCLAffectScope::RULE_LEVEL : ObCCLAffectScope::FORMAT_SQLID_LEVEL);
@@ -284,7 +284,7 @@ int ObCreateCCLRuleResolver::resolve(const ParseNode &parse_tree)
 }
 
 int ObCreateCCLRuleResolver::escape_string(const ObString &original_string,
-                                           char separator,
+                                           char separator, 
                                            char escape_char,
                                            ObString &after_escape_string) {
   int ret = OB_SUCCESS;

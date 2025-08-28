@@ -66,7 +66,7 @@ bool ObRpcSessionHandler::wakeup_next_thread(ObRequest &req)
         ObRpcPacketCode pcode = pkt.get_pcode();
         bool is_stream_last = pkt.is_stream_last();
         LOG_WARN_RET(OB_ERR_UNEXPECTED, "previous stream request hasn't been processed yet, "
-                     "this might be an abort packet that indicates execution has timed out",
+                     "this might be an abort packet that indicates execution has timed out", 
                      K(pcode), K(is_stream_last), "previous request", *wait_object.req_);
         bret = false;
       } else {

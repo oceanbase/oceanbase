@@ -22,7 +22,7 @@ namespace observer
 {
 using namespace common;
 
-int ObTableLoadBackupFileUtil::list_directories(const common::ObString &path,
+int ObTableLoadBackupFileUtil::list_directories(const common::ObString &path, 
                                                 const share::ObBackupStorageInfo *storage_info,
                                                 ObIArray<ObString> &part_list,
                                                 ObIAllocator &allocator)
@@ -49,8 +49,8 @@ int ObTableLoadBackupFileUtil::list_directories(const common::ObString &path,
   return ret;
 }
 
-int ObTableLoadBackupFileUtil::get_file_length(const common::ObString &path,
-                                               const share::ObBackupStorageInfo *storage_info,
+int ObTableLoadBackupFileUtil::get_file_length(const common::ObString &path, 
+                                               const share::ObBackupStorageInfo *storage_info, 
                                                int64_t &file_length)
 {
   int ret = OB_SUCCESS;
@@ -74,16 +74,16 @@ int ObTableLoadBackupFileUtil::get_file_length(const common::ObString &path,
   return ret;
 }
 
-int ObTableLoadBackupFileUtil::read_single_file(const common::ObString &path,
-                                                const share::ObBackupStorageInfo *storage_info,
-                                                char *buf,
+int ObTableLoadBackupFileUtil::read_single_file(const common::ObString &path, 
+                                                const share::ObBackupStorageInfo *storage_info, 
+                                                char *buf, 
                                                 const int64_t buf_size,
                                                 int64_t &read_size)
 {
   int ret = OB_SUCCESS;
   int64_t retry_count = 0;
   ObBackupIoAdapter adapter;
-
+  
   while (OB_SUCC(ret)) {
     if (OB_FAIL(adapter.read_single_file(path, storage_info, buf, buf_size, read_size, ObStorageIdMod(table::OB_STORAGE_ID_DDL, ObStorageUsedMod::STORAGE_USED_DDL)))) {
       LOG_WARN("fail to list directories", K(ret), K(retry_count));

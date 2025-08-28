@@ -498,7 +498,7 @@ int ObExprCollPred::eval_coll_pred(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
           pred_res = COLL_PRED_NULL;
         } else if (OB_FAIL(calc_is_submultiset(ctx.exec_ctx_, obj1, obj2, pred_res))) {
           LOG_WARN("failed to call submultiset", K(ret));
-        }
+        } 
 
         if (OB_FAIL(ret)) {
           // do nothing
@@ -563,7 +563,7 @@ int ObExprCollPred::eval_coll_pred(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
                                                             cp_cast_mode))) {
                 LOG_WARN("failed to get default cast mode", K(ret));
               }
-              const ObDataTypeCastParams dtc_params
+              const ObDataTypeCastParams dtc_params 
                     = ObBasicSessionInfo::create_dtc_params(ctx.exec_ctx_.get_my_session());
               ObCastCtx cast_ctx(&ctx.exec_ctx_.get_allocator(),
                                 &dtc_params,
@@ -592,7 +592,7 @@ int ObExprCollPred::eval_coll_pred(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
                       ObObj *curr = c2->get_data() + i;
 
                       CK (OB_NOT_NULL(curr));
-
+                      
                       if (OB_SUCC(ret) && curr->is_null()) {
                         has_null = true;
                         break;
@@ -902,7 +902,7 @@ int ObExprCollPred::eval_is_set_composit(ObExecContext &exec_ctx,
 
   if (OB_SUCC(ret)) {
     ObBitSet<> out_args;
-
+  
     if (OB_FAIL(ObExprMultiSet::eval_composite_relative_anonymous_block(exec_ctx,
                                                                         IS_SET_PL,
                                                                         params,

@@ -114,13 +114,13 @@ public:
   int allocate_startup_expr_post(int64_t child_idx) override;
 
   int allocate_subquery_id();
-
+  
   int replace_nested_subquery_exprs(ObRawExprReplacer &replacer);
-  virtual int get_plan_item_info(PlanText &plan_text,
+  virtual int get_plan_item_info(PlanText &plan_text, 
                                 ObSqlPlanItem &plan_item) override;
 
   common::ObIArray<ObExecParamRawExpr *> &get_above_pushdown_left_params() { return above_pushdown_left_params_; }
-
+  
   common::ObIArray<ObExecParamRawExpr *> &get_above_pushdown_right_params() { return above_pushdown_right_params_; }
 
   int get_repart_sharding_info(ObLogicalOperator* child_op,

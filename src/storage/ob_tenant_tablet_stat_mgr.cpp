@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_tenant_tablet_stat_mgr.h"
@@ -184,7 +184,7 @@ ObTabletStat& ObTabletStat::archive(int64_t factor)
 }
 
 /************************************* ObTableQueuingModeCfg *************************************/
-const ObTableQueuingModeCfg& ObTableQueuingModeCfg::get_basic_config(const QueuingMode mode)
+const ObTableQueuingModeCfg& ObTableQueuingModeCfg::get_basic_config(const QueuingMode mode) 
 {
   static const ObTableQueuingModeCfg QUEUING_MODE_CFG[static_cast<int64_t>(QueuingMode::TABLE_MODE_MAX) + 1] = {
     ObTableQueuingModeCfg(), // MODE_NORMAL            30 * 10000, 1.0      TABLE_MODE_NORMAL
@@ -275,7 +275,7 @@ bool ObTabletStatAnalyzer::has_accumnulated_delete() const
   bool bret = false;
   if (is_queuing_table_mode(mode_)) {
     const ObTableQueuingModeCfg &queuing_cfg = ObTableQueuingModeCfg::get_basic_config(mode_);
-    const int64_t adaptive_threshold = compaction::ObAdaptiveMergePolicy::TOMBSTONE_ROW_COUNT_THRESHOLD * queuing_cfg.queuing_factor_;
+    const int64_t adaptive_threshold = compaction::ObAdaptiveMergePolicy::TOMBSTONE_ROW_COUNT_THRESHOLD * queuing_cfg.queuing_factor_; 
     bret = total_tablet_stat_.delete_row_cnt_ >= queuing_cfg.total_delete_row_cnt_
         || tablet_stat_.update_row_cnt_ + tablet_stat_.delete_row_cnt_ > adaptive_threshold;
   }
@@ -304,7 +304,7 @@ bool ObTenantSysStat::is_small_tenant() const
   bool bret = false;
   // 8c16g
   const int64_t cpu_threshold = 8;
-  // When the tenant memory exceeds 10GB, the meta tenant occupies at least 10% of the memory.
+  // When the tenant memory exceeds 10GB, the meta tenant occupies at least 10% of the memory. 
   const int64_t mem_threshold = (16L << 30) * 9 / 10;
   bret = max_cpu_cnt_ < cpu_threshold || memory_limit_ < mem_threshold;
   return bret;
@@ -1164,7 +1164,7 @@ void ObTenantTabletStatMgr::refresh_queuing_mode()
 int ObTenantTabletStatMgr::get_queuing_cfg(
     const share::ObLSID &ls_id,
     const common::ObTabletID &tablet_id,
-    ObTableQueuingModeCfg& queuing_cfg)
+    ObTableQueuingModeCfg& queuing_cfg) 
 {
   int ret = OB_SUCCESS;
   const ObTabletStatKey key(ls_id, tablet_id);

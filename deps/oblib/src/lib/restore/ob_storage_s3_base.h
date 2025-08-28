@@ -94,11 +94,11 @@ public:
 
 protected:
   virtual std::streampos seekoff(
-      std::streamoff off,
-      std::ios_base::seekdir dir,
+      std::streamoff off, 
+      std::ios_base::seekdir dir, 
       std::ios_base::openmode which = std::ios_base::in | std::ios_base::out) override
   {
-    std::streampos result = std::streampos(std::streamoff(-1));
+    std::streampos result = std::streampos(std::streamoff(-1)); 
     if (which & std::ios_base::in) {
       char *new_pos = gptr();
       if (dir == std::ios_base::beg) {
@@ -118,7 +118,7 @@ protected:
   }
 
   virtual std::streampos seekpos(
-      std::streampos pos,
+      std::streampos pos, 
       std::ios_base::openmode which = std::ios_base::in | std::ios_base::out) override
   {
     return seekoff(std::streamoff(pos), std::ios_base::beg, which);
@@ -136,9 +136,9 @@ struct ObS3Account
   bool is_valid() const { return is_valid_; }
   int64_t hash() const;
   TO_STRING_KV(K_(is_valid), K_(delete_mode), K_(region), K_(endpoint), K_(access_id), KP_(secret_key), K_(sts_token), K_(addressing_model));
-
+  
   int parse_from(const char *storage_info_str, const int64_t size);
-
+  
   bool is_valid_;
   int64_t delete_mode_;
   char region_[MAX_S3_REGION_LENGTH];           // region of endpoint
@@ -370,7 +370,7 @@ public:
   virtual int open(const ObString &uri, ObObjectStorageInfo *storage_info);
   virtual int inner_open(const ObString &uri, ObObjectStorageInfo *storage_info);
   virtual bool is_inited() const { return is_inited_; }
-
+  
   int get_s3_file_meta(S3ObjectMeta &meta)
   {
     return do_safely(&ObStorageS3Base::get_s3_file_meta_, this, meta);
@@ -484,7 +484,7 @@ public:
   virtual int open(ObObjectStorageInfo *storage_info) override;
   virtual void close() override;
   virtual int head_object_meta(const ObString &uri, ObStorageObjectMetaBase &obj_meta) override;
-
+  
   virtual int is_exist(const ObString &uri, bool &exist) override
   {
     return do_safely(&ObStorageS3Util::is_exist_, this, uri, exist);

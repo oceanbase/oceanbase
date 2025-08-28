@@ -166,7 +166,7 @@ static void check_json_diff_valid(ObIAllocator &allocator, const ObString& j_tex
   ASSERT_EQ(OB_SUCCESS, j_target_bin.reset(update_buffer, 0, &j_target_bin_ctx));
   ObJsonBuffer j_target_buffer(&allocator);
   ASSERT_EQ(OB_SUCCESS, j_target_bin.print(j_target_buffer, false));
-  ASSERT_EQ(std::string(j_src_buffer.ptr(), j_src_buffer.length()), std::string(j_target_buffer.ptr(), j_target_buffer.length()));
+  ASSERT_EQ(std::string(j_src_buffer.ptr(), j_src_buffer.length()), std::string(j_target_buffer.ptr(), j_target_buffer.length())); 
   ASSERT_NE(std::string(j_src_buffer.ptr(), j_src_buffer.length()), std::string(j_text.ptr(), j_text.length()));
   ASSERT_NE(std::string(j_target_buffer.ptr(), j_target_buffer.length()), std::string(j_text.ptr(), j_text.length()));
   std::cout << "-------- origin" << std::endl;
@@ -174,7 +174,7 @@ static void check_json_diff_valid(ObIAllocator &allocator, const ObString& j_tex
   std::cout << "-------- src" << std::endl;
   std::cout << std::string(j_src_buffer.ptr(), j_src_buffer.length()) << std::endl;
   std::cout << "-------- target" << std::endl;
-  std::cout << std::string(j_target_buffer.ptr(), j_target_buffer.length()) << std::endl;
+  std::cout << std::string(j_target_buffer.ptr(), j_target_buffer.length()) << std::endl;  
 }
 
 // rapidjson 解析仅包含字符串的json text测试
@@ -1073,7 +1073,7 @@ void createTime(ObTime &ob_time)
 //    common::ObString str("20210906");
 //    ASSERT_EQ(OB_SUCCESS, ObTimeConverter::str_to_ob_time_with_date(str, ob_time));
 //  }
-//
+//  
 //  void createDateTime(ObTime &ob_time)
 //  {
 //    ob_time.mode_ = DT_TYPE_DATETIME;
@@ -1081,7 +1081,7 @@ void createTime(ObTime &ob_time)
 //    ASSERT_EQ(OB_SUCCESS, ObTimeConverter::str_to_ob_time_with_date(str, ob_time));
 //    ASSERT_EQ(OB_SUCCESS, ObTimeConverter::validate_datetime(ob_time));
 //  }
-//
+//  
 //  TEST_F(TestJsonBin, dateAndTimeTest)
 //  {
 //    common::ObArenaAllocator allocator(ObModIds::TEST);
@@ -1097,14 +1097,14 @@ void createTime(ObTime &ob_time)
 //    ASSERT_EQ(OB_SUCCESS, array.append(&jt));
 //    ASSERT_EQ(OB_SUCCESS, array.append(&jd));
 //    ASSERT_EQ(OB_SUCCESS, array.append(&jtd));
-//
+//  
 //    ObIJsonBase *j_tree_array = &array;
 //    ObIJsonBase *j_bin_array = NULL;
 //    ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::transform(&allocator, j_tree_array,
 //          ObJsonInType::JSON_BIN, j_bin_array));
 //    ASSERT_EQ(ObJsonNodeType::J_ARRAY, j_bin_array->json_type());
 //    ASSERT_EQ(3, j_bin_array->element_count());
-//
+//  
 //    // check time 19:18:17.654321
 //    ObIJsonBase *j_bin1 = NULL;
 //    ASSERT_EQ(OB_SUCCESS, j_bin_array->get_array_element(0, j_bin1));
@@ -1115,7 +1115,7 @@ void createTime(ObTime &ob_time)
 //    ASSERT_EQ(18, jt1.parts_[DT_MIN]);
 //    ASSERT_EQ(17, jt1.parts_[DT_SEC]);
 //    ASSERT_EQ(654321, jt1.parts_[DT_USEC]);
-//
+//    
 //    // check date 20210906
 //    j_bin1 = NULL;
 //    ASSERT_EQ(OB_SUCCESS, j_bin_array->get_array_element(1, j_bin1));
@@ -1124,7 +1124,7 @@ void createTime(ObTime &ob_time)
 //    ASSERT_EQ(2021, jt1.parts_[DT_YEAR]);
 //    ASSERT_EQ(9, jt1.parts_[DT_MON]);
 //    ASSERT_EQ(6, jt1.parts_[DT_MDAY]);
-//
+//    
 //    // check datetime 2021-09-06 11:12:13.456789
 //    j_bin1 = NULL;
 //    ASSERT_EQ(OB_SUCCESS, j_bin_array->get_array_element(2, j_bin1));
@@ -2711,7 +2711,7 @@ TEST_F(TestJsonBin, test_remove_diff)
       ASSERT_EQ(ObJsonNodeType::J_DOUBLE, bin->json_type());
       ASSERT_EQ(100.1, bin->get_double());
     }
-
+  
     {
       ASSERT_EQ(OB_SUCCESS, bin->move_parent_iter());
       ASSERT_EQ(OB_SUCCESS, bin->element(4));
@@ -2866,7 +2866,7 @@ TEST_F(TestJsonBin, test_insert_diff)
     {
       ASSERT_EQ(OB_SUCCESS, bin->element(11));
       ASSERT_EQ(ObJsonNodeType::J_BOOLEAN, bin->json_type());
-      ASSERT_FALSE(bin->get_boolean());
+      ASSERT_FALSE(bin->get_boolean()); 
     }
   }
 }
@@ -2979,7 +2979,7 @@ TEST_F(TestJsonBin, test_get_parent)
     common::ObString path_str("$.order.stcok");
     ObJsonPath test_path(path_str, &allocator);
     ASSERT_EQ(OB_SUCCESS, test_path.parse_path());
-
+  
     ObJsonSeekResult hit;
     int cnt = test_path.path_node_cnt();
     ASSERT_EQ(OB_SUCCESS, j_bin->seek(test_path, cnt, false, false, hit));
@@ -2998,7 +2998,7 @@ TEST_F(TestJsonBin, test_get_parent)
     ASSERT_EQ(ObJsonNodeType::J_STRING, j_bin_str->json_type());
     ASSERT_TRUE(j_bin_str->is_bin());
     ASSERT_EQ(OB_SUCCESS, j_parent_bin->replace(j_child_bin, j_bin_str));
-    ASSERT_EQ(OB_SUCCESS, j_bin->get_raw_binary(result, &allocator));
+    ASSERT_EQ(OB_SUCCESS, j_bin->get_raw_binary(result, &allocator));    
   }
 
   {
@@ -3017,7 +3017,7 @@ TEST_F(TestJsonBin, test_get_parent)
     common::ObString path_str("$.age");
     ObJsonPath test_path(path_str, &allocator);
     ASSERT_EQ(OB_SUCCESS, test_path.parse_path());
-
+  
     ObJsonSeekResult hit;
     int cnt = test_path.path_node_cnt();
     ASSERT_EQ(OB_SUCCESS, j_bin->seek(test_path, cnt, false, false, hit));
@@ -3175,7 +3175,7 @@ TEST_F(TestJsonBin, test_type)
   ObJsonDecimal j_dec_1(res_nmb, res_precision, res_scale);
   ASSERT_EQ(OB_SUCCESS, tree.add("j_dec_1", &j_dec_1));
 
-  nmb_str.assign_ptr("-1.1234e9", STRLEN("-1.1234e9"));
+  nmb_str.assign_ptr("-1.1234e9", STRLEN("-1.1234e9"));  
   res_precision = 10;
   res_scale = 4;
   ASSERT_EQ(OB_SUCCESS, res_nmb.from_sci_opt(nmb_str.ptr(), nmb_str.length(), allocator, &res_precision, &res_scale));
@@ -3243,7 +3243,7 @@ TEST_F(TestJsonBin, test_type)
   ASSERT_EQ(OB_SUCCESS, bin.to_tree(tree_2));
   ASSERT_EQ(OB_SUCCESS, tree_2->print(j_tree_buffer_2, false));
   ObString j_tree_str_2 = j_tree_buffer_2.string();
-  ASSERT_EQ(std::string(j_tree_str.ptr(), j_tree_str.length()), std::string(j_tree_str_2.ptr(), j_tree_str_2.length()));
+  ASSERT_EQ(std::string(j_tree_str.ptr(), j_tree_str.length()), std::string(j_tree_str_2.ptr(), j_tree_str_2.length()));  
 
   ObJsonBuffer j_bin_buffer_2(&allocator);
   ASSERT_EQ(OB_SUCCESS, bin.rebuild(j_bin_buffer_2));
@@ -3253,7 +3253,7 @@ TEST_F(TestJsonBin, test_type)
   ObJsonBuffer j_bin_buffer_2_1(&allocator);
   ASSERT_EQ(OB_SUCCESS, bin2.print(j_bin_buffer_2_1, false));
   ObString j_bin_str_2 = j_bin_buffer_2_1.string();
-  ASSERT_EQ(std::string(j_tree_str.ptr(), j_tree_str.length()), std::string(j_bin_str_2.ptr(), j_bin_str_2.length()));
+  ASSERT_EQ(std::string(j_tree_str.ptr(), j_tree_str.length()), std::string(j_bin_str_2.ptr(), j_bin_str_2.length())); 
 
 }
 
@@ -3285,12 +3285,12 @@ static void json_set(ObIAllocator& allocator, ObString& j_text, std::vector<std:
     ObIJsonBase *j_old_node = hit[0];
     ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, value,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_BIN, j_new_node));
-    ASSERT_EQ(OB_SUCCESS, j_old_node->get_parent(j_parent));
+    ASSERT_EQ(OB_SUCCESS, j_old_node->get_parent(j_parent));   
     if(OB_NOT_NULL(j_parent)) {
       ASSERT_EQ(OB_SUCCESS, j_parent->replace(j_old_node, j_new_node));
     } else {
       ASSERT_EQ(OB_SUCCESS, j_bin->replace(j_old_node, j_new_node));
-    }
+    }  
   }
   check_diff_valid(allocator, result, update_ctx);
   check_json_diff_valid(allocator, j_text, update_ctx, 2);
@@ -3337,7 +3337,7 @@ TEST_F(TestJsonBin, test_array_remove)
   common::ObString path_str("$.like[1]");
   ObJsonPath test_path(path_str, &allocator);
   ASSERT_EQ(OB_SUCCESS, test_path.parse_path());
-
+  
   ObJsonSeekResult hit;
   int cnt = test_path.path_node_cnt();
   ASSERT_EQ(OB_SUCCESS, j_bin->seek(test_path, cnt, false, false, hit));

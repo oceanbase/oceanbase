@@ -1020,7 +1020,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLForLoopStmt &s)
 
         if (OB_SUCC(ret)) {
           ObLLVMValue &index = generator_.get_current_loop()->index_;
-
+          
           if (OB_ISNULL(index.get_v())) {
             ObLLVMType obj_type;
 
@@ -1642,7 +1642,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLReturnStmt &s)
           OZ (generator_.extract_obobj_from_objparam(p_result_obj, result));
           OZ (generator_.get_helper().create_store(result, p_result));
         }
-
+        
         OZ (generator_.finish_current(final_branch));
         OZ (generator_.set_current(final_branch));
       }
@@ -1667,7 +1667,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLReturnStmt &s)
                                      s.get_block()->in_warning()));
       }
     }
-
+    
     // close cursor
     OZ (generator_.generate_close_loop_cursor(false, 0));
 
@@ -3152,7 +3152,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLFetchStmt &s)
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -5753,7 +5753,7 @@ int ObPLCodeGenerator::generate_expr_next_and_check(const ObPLForLoopStmt &s,
 
     CK (OB_NOT_NULL(get_current_loop()));
     CK (OB_NOT_NULL(get_current_loop()->index_.get_v()));
-
+  
     OZ (get_helper().create_load(ObString("load_index_obj"), get_current_loop()->index_, index_obj));
     OZ (get_helper().create_store(index_obj, dest_datum));
   }
@@ -5784,7 +5784,7 @@ int ObPLCodeGenerator::generate_expr_next_and_check(const ObPLForLoopStmt &s,
   OZ (set_current(not_continue_block));
   OZ (get_helper().create_br(normal_block));
   OZ (set_current(normal_block));
-
+  
   if (OB_SUCC(ret)) {
     ObSEArray<std::pair<ObLLVMValue, ObLLVMBasicBlock>, 2> incoming;
     ObLLVMType ir_type;
@@ -6241,7 +6241,7 @@ int ObPLCodeGenerator::generate_global_string(const ObString &string, ObLLVMValu
 
   CK (OB_NOT_NULL(result.first.get_v()));
   CK (OB_NOT_NULL(result.second.get_v()));
-
+  
   if (OB_SUCC(ret)) {
     str = result.first;
     len = result.second;
@@ -6998,7 +6998,7 @@ int ObPLCodeGenerator::generate_arith_calc(ObLLVMValue &left,
     OZ (helper_.set_insert_point(succ_block));
     OZ (helper_.create_br(end_block));
     OZ (set_current(end_block));
-
+    
     if (OB_SUCC(ret)) {
       ObSEArray<std::pair<ObLLVMValue, ObLLVMBasicBlock>, 2> incoming;
       ObLLVMType ir_type;
@@ -8513,7 +8513,7 @@ int ObPLCodeGenerator::final_expression(ObPLCompileUnit &pl_func)
           LOG_WARN("Invalid arguments", K(i), K(raw_expr), K(expression), K(ret));
         } else {
           // TODO bin.lb: No need to generate expression if static engine enabled
-          //
+          // 
           if (OB_FAIL(expr_generator.generate(*raw_expr, *expression))) {
             SQL_LOG(WARN, "Generate post_expr error", K(ret), KPC(raw_expr));
           } else {
@@ -8534,7 +8534,7 @@ int ObPLCodeGenerator::generate_goto_label(const ObPLStmt &stmt)
 {
   int ret = OB_SUCCESS;
   if (stmt.get_is_goto_dst()) {
-
+    
     if (NULL == get_current().get_v()) {
         //控制流已断，后面的语句不再处理
     } else {
@@ -8720,7 +8720,7 @@ int ObPLCodeGenerator::generate_out_param(
                                     s.get_block()->in_notfound(),
                                     s.get_block()->in_warning(),
                                     OB_INVALID_ID));
-          if (OB_SUCC(ret)
+          if (OB_SUCC(ret) 
               && is_mocked_anonymous_array_id(udt_id)
               && !param_desc.at(i).is_pure_out()) {
             ObSEArray<ObLLVMValue, 3> args;
@@ -10122,7 +10122,7 @@ int ObPLCodeGenerator ::extract_element_from_collection(jit::ObLLVMValue &p_stru
   ObLLVMValue p_result;
   ObLLVMType obj_type;
   ObLLVMType obj_arr_type;
-
+ 
   OZ (extract_element_ptr_from_collection(p_struct, p_result));
   OZ (helper_.create_load(ObString("load_element"), p_result, result));
   OZ (adt_service_.get_obj(obj_type));
@@ -10445,7 +10445,7 @@ int ObPLCodeGenerator::generate_get_parent_allocator(ObLLVMValue &allocator,
       LOG_WARN("fail to create load", K(ret));
     }
   }
-
+  
   return ret;
 }
 

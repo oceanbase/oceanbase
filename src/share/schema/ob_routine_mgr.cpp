@@ -349,7 +349,7 @@ int ObRoutineMgr::check_user_reffered_by_definer(const ObString &user_name, bool
       LOG_WARN("NULL ptr", K(ret), K(routine));
     } else if (0 == user_name.compare(routine->get_priv_user())) {
       ref = true;
-    }
+    } 
   }
   return ret;
 }

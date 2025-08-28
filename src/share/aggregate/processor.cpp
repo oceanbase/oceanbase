@@ -584,7 +584,7 @@ int Processor::init_aggr_row_extra_info(RuntimeContext &agg_ctx, char *extra_arr
       if (aggr_info.has_order_by_) {
         agg_ctx.need_advance_collect_ = true;
         ExtraStores *&extra = get_extra_stores(i, agg_ctx, extra_array_buf);
-
+        
         if (OB_FAIL(alloc_extra_stores(agg_ctx, extra))) {
           SQL_LOG(WARN, "alloc extra struct failed", K(ret));
         } else {
@@ -615,7 +615,7 @@ int Processor::init_aggr_row_extra_info(RuntimeContext &agg_ctx, char *extra_arr
                                   extra_allocator, *agg_ctx.op_monitor_info_))) {
             // do nothing
           } else if (OB_FAIL(top_store->init_topk_fre_histogram_item(agg_ctx.allocator_,
-                                                                     aggr_info,
+                                                                     aggr_info, 
                                                                      agg_ctx.eval_ctx_))) {
             LOG_WARN("failed to init topk fre histogram item", K(ret));
           } else {
@@ -633,7 +633,7 @@ int Processor::init_aggr_row_extra_info(RuntimeContext &agg_ctx, char *extra_arr
       } else {
         HybridHistVecExtraResult *&store = extra->hybrid_hist_store_;
         DataStoreVecExtraResult *&data_store = extra->data_store;
-
+          
         if (nullptr == store) {
           void *tmp_buf = NULL;
           extra->is_hybrid_hist_ = true;
@@ -643,13 +643,13 @@ int Processor::init_aggr_row_extra_info(RuntimeContext &agg_ctx, char *extra_arr
           } else if (OB_FALSE_IT(store = new (tmp_buf) HybridHistVecExtraResult(
                                   extra_allocator, *agg_ctx.op_monitor_info_))) {
             // do nothing
-          } else if (OB_FAIL(store->init_data_set(agg_ctx.allocator_,
+          } else if (OB_FAIL(store->init_data_set(agg_ctx.allocator_, 
                                                   aggr_info,
                                                   agg_ctx.eval_ctx_,
                                                   agg_ctx.io_event_observer_))) {
             LOG_WARN("failed to init data set", K(ret));
-          } else if (OB_FAIL(alloc_extra_space_with_order_by(agg_ctx,
-                                                             data_store,
+          } else if (OB_FAIL(alloc_extra_space_with_order_by(agg_ctx, 
+                                                             data_store, 
                                                              extra_allocator,
                                                              aggr_info))) {
             SQL_LOG(WARN, "alloc extra space with order by failed", K(ret));
@@ -682,8 +682,8 @@ int Processor::init_aggr_row_extra_info(RuntimeContext &agg_ctx, char *extra_arr
     case T_FUN_ORA_JSON_OBJECTAGG:
     case T_FUN_ORA_XMLAGG:
     case T_FUN_AGG_UDF:
-    case T_FUNC_SYS_ARRAY_AGG:
-    case T_FUN_SYS_RB_OR_CARDINALITY_AGG:
+    case T_FUNC_SYS_ARRAY_AGG: 
+    case T_FUN_SYS_RB_OR_CARDINALITY_AGG: 
     case T_FUN_SYS_RB_AND_CARDINALITY_AGG: {
       agg_ctx.need_advance_collect_ = true;
       ret = OB_NOT_SUPPORTED;
@@ -932,7 +932,7 @@ int Processor::collect_empty_set(bool collect_for_third_stage) const
       case T_FUN_COUNT_SUM:
       case T_FUN_APPROX_COUNT_DISTINCT:
       case T_FUN_KEEP_COUNT:
-      case T_FUN_GROUP_PERCENT_RANK:
+      case T_FUN_GROUP_PERCENT_RANK: 
       case T_FUN_SUM_OPNSIZE: {
         if (lib::is_oracle_mode()) {
           number::ObNumber zero_nmb;

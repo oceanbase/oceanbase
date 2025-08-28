@@ -656,7 +656,7 @@ private:
   ObJoinFilterPartitionSplitter *join_filter_partition_splitter_{nullptr};
 
   // for compat
-  common::ObFixedArray<int64_t, common::ObIAllocator> build_key_proj_;
+  common::ObFixedArray<int64_t, common::ObIAllocator> build_key_proj_; 
   ExprFixedArray build_rows_output_;
 };
 

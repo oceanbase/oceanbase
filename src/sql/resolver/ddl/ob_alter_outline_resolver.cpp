@@ -58,7 +58,7 @@ int ObAlterOutlineResolver::resolve(const ParseNode &parse_tree)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid node children", K(node->children_[3]), K(node->children_));
     } else {
-      is_format_otl = (node->children_[3]->value_
+      is_format_otl = (node->children_[3]->value_ 
                         == ObOutlineType::OUTLINE_TYPE_FORMAT);
       alter_outline_stmt->set_format_outline(is_format_otl);
     }

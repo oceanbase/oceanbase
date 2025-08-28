@@ -82,7 +82,7 @@ private:
                                        const common::ObIArray<sql::ObExpr *> &delta_row,
                                        const ObTableEntity &entity);
 
-  static int build_refresh_values(ObTableCtx &ctx,
+  static int build_refresh_values(ObTableCtx &ctx, 
                                   const ObTableEntity &entity,
                                   ObIArray<const ObObj*>& refresh_value_array);
 
@@ -122,20 +122,20 @@ private:
   static int add_extra_column_exprs(ObTableCtx &ctx);
   static int add_all_calc_tablet_id_exprs(ObTableCtx &ctx);
   static int generate_calc_tablet_id_exprs(ObTableCtx &ctx);
-  static int generate_calc_tablet_id_expr(ObTableCtx &ctx,
-                                          const ObTableSchema &index_schema,
+  static int generate_calc_tablet_id_expr(ObTableCtx &ctx, 
+                                          const ObTableSchema &index_schema, 
                                           ObRawExpr *&expr);
   static int replace_assign_column_ref_expr(ObTableCtx &ctx, ObRawExpr *&expr);
   static int build_partition_expr(ObTableCtx &ctx,
                                   const ObTableSchema &table_schema,
-                                  const ObIArray<sql::ObRawExpr*> &part_column_exprs,
+                                  const ObIArray<sql::ObRawExpr*> &part_column_exprs, 
                                   bool is_sub_part,
-                                  sql::ObRawExpr *&partition_key_expr);
-  static int get_part_key_column_expr(ObTableCtx &ctx,
+                                  sql::ObRawExpr *&partition_key_expr);                               
+  static int get_part_key_column_expr(ObTableCtx &ctx, 
                                       const ObPartitionKeyInfo &partition_keys,
                                       ObIArray<sql::ObRawExpr*> &part_keys_expr);
-  static int replace_column_ref_in_part_expr(const ObIArray<sql::ObRawExpr*> &part_column_exprs,
-                                             sql::ObRawExpr *&partition_key_expr);
+  static int replace_column_ref_in_part_expr(const ObIArray<sql::ObRawExpr*> &part_column_exprs, 
+                                             sql::ObRawExpr *&partition_key_expr); 
 private:
   static int write_datum(ObTableCtx &ctx,
                          common::ObIAllocator &allocator,
@@ -235,8 +235,8 @@ private:
                                        ObTableIndexInfo &index_info,
                                        ObIAllocator &allocator,
                                        ObTableUpdCtDef &udp_ctdef);
-  static int generate_assign_row(ObTableCtx &ctx,
-                                 ObTableIndexInfo &index_info,
+  static int generate_assign_row(ObTableCtx &ctx, 
+                                 ObTableIndexInfo &index_info, 
                                  ObIArray<ObRawExpr*> &new_row,
                                  ObIArray<ObRawExpr*> &full_row,
                                  ObIArray<ObRawExpr*> &delta_row);
@@ -427,7 +427,7 @@ private:
                                   common::ObIArray<sql::ObRawExpr*> &access_exprs);
   static int generate_output_exprs(const ObTableCtx &ctx,
                                    common::ObIArray<sql::ObExpr *> &output_exprs);
-
+  
   static int generate_pushdown_aggr_ctdef(const ObTableCtx &ctx,
                                           sql::ObDASScanCtDef &das_tsc_ctdef);
 
@@ -436,7 +436,7 @@ private:
                                    sql::ObDASScanCtDef &das_tsc_ctdef);
   static int extract_select_output_column_ids(const ObTableCtx &ctx,
                                               ObDASScanCtDef &das_tsc_ctdef,
-                                              const ObTableSchema *table_schema,
+                                              const ObTableSchema *table_schema, 
                                               ObIArray<uint64_t> &tsc_out_cols);
   static int generate_table_lookup_ctdef(const ObTableCtx &ctx,
                                          ObIAllocator &allocator,

@@ -172,7 +172,7 @@ int ObExprSTSymDifference::eval_st_symdifference(const ObExpr &expr, ObEvalCtx &
     } else if (OB_ISNULL(mem_ctx = guard.get_memory_ctx())) {
       ret = OB_ERR_NULL_VALUE;
       LOG_WARN("fail to get mem ctx", K(ret));
-    }
+    } 
     if (OB_SUCC(ret)) {
       ObGeoEvalCtx gis_context(*mem_ctx, srs);
       bool is_empty_res = false;
@@ -186,7 +186,7 @@ int ObExprSTSymDifference::eval_st_symdifference(const ObExpr &expr, ObEvalCtx &
         LOG_WARN("check geo empty failed", K(ret));
       } else if (is_empty_res) {
         // 2D return GEOMETRYCOLLECTION EMPTY, 3D return GEOMETRYCOLLECTION Z EMPTY
-        if (OB_FAIL(ObGeoExprUtils::create_3D_empty_collection(temp_allocator, geo1->get_srid(), is_3d_geo1,
+        if (OB_FAIL(ObGeoExprUtils::create_3D_empty_collection(temp_allocator, geo1->get_srid(), is_3d_geo1, 
                       geo1->crs() == ObGeoCRS::Geographic, diff_res))) {
           LOG_WARN("fail to create 3D empty collection", K(ret));
         }

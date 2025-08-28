@@ -121,7 +121,7 @@ int ObExprFuncPartHash::calc_hash_value_with_seed(const ObObj &obj, int64_t seed
 {
   int ret = OB_SUCCESS;
   ObObjType type = obj.get_type();
-  //定长类型需要去除末尾空格, 见
+  //定长类型需要去除末尾空格, 见 
   if (ObCharType == type || ObNCharType == type) {
     ObObj obj_trimmed;
     int32_t val_len = obj.get_val_len();

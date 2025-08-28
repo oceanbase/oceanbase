@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #define USING_LOG_PREFIX SHARE
 #include "ob_tablet_meta_table_compaction_operator.h"
 #include "share/ob_service_epoch_proxy.h"
@@ -36,7 +36,7 @@ int ObTabletMetaTableCompactionOperator::batch_set_info_status(
       "UPDATE %s SET status = '%ld' WHERE tenant_id = %ld",
       OB_ALL_TABLET_META_TABLE_TNAME, (int64_t)ObTabletReplica::ScnStatus::SCN_STATUS_ERROR,
       tenant_id))) {
-    LOG_WARN("fail to assign sql", KR(ret), K(tenant_id));
+    LOG_WARN("fail to assign sql", KR(ret), K(tenant_id)); 
   } else {
     for (int64_t idx = 0; OB_SUCC(ret) && (idx < error_pairs.count()); ++idx) {
       const ObTabletLSPair &pair = error_pairs.at(idx).tablet_info_;

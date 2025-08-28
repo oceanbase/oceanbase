@@ -187,7 +187,7 @@ int FetchLogSRpc::RpcCB::process()
       LOG_ERROR("process fetch log callback fail", KR(ret), K(result), K(rcode), K(svr));
     }
   }
-  // Aone:
+  // Aone: 
   // Note: destruct response after asynchronous RPC processing
   result.reset();
 
@@ -1130,7 +1130,7 @@ int FetchLogARpc::RpcCB::process()
       LOG_ERROR("process fetch log callback fail", KR(ret), K(result), K(rcode), K(svr), K_(host));
     }
   }
-  // Aone:
+  // Aone: 
   // Note: Active destructe response after asynchronous RPC processing
   result.reset();
 
@@ -1273,7 +1273,7 @@ void FetchLogARpc::RpcRequestList::add(RpcRequest *req)
       tail_ = req;
     } else {
       tail_->next_ = req;
-      // fix
+      // fix 
       tail_ = req;
     }
 

@@ -109,7 +109,7 @@ public:
 protected:
   virtual bool for_flush() override { return true; }
 };
-
+ 
 
 class ObMdsTableMiniMerger
 {

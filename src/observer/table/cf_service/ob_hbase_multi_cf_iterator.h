@@ -76,7 +76,7 @@ public:
     allocator_.reset();
   }
   virtual int init();
-  virtual void close()
+  virtual void close() 
   {
     for (int64_t i = 0; i < cf_iters_.count(); i++) {
       if (OB_NOT_NULL(cf_iters_.at(i))) {
@@ -124,7 +124,7 @@ private:
     return lhs->get_table_name() < rhs->get_table_name();
   }
 private:
-  common::ObArenaAllocator allocator_;
+  common::ObArenaAllocator allocator_; 
   const ObHbaseQuery &hbase_query_;
   ObTableExecCtx &exec_ctx_;
   common::ObSEArray<ObHbaseCFQuery *, 4> cf_queries_;

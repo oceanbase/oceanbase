@@ -86,7 +86,7 @@ private:
   struct _func_traits : public _func_traits<decltype(&F::operator())> {};
   template<typename F>
   struct func_traits : public _func_traits<typename std::decay<F>::type> {};
-
+  
   static const int64_t MAX_HP_INFRAS_CNT = 16;
   int alloc_hp_infras(HashPartInfrasVec *&hp_infras);
   template<typename F,
@@ -179,7 +179,7 @@ public:
     hp_infras_group_.reset();
     arena_alloc_.reset();
   }
-
+  
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObHashPartInfrasVecMgr);

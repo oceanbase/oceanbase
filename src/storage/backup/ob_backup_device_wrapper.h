@@ -38,7 +38,7 @@ public:
       const int64_t turn_id, const int64_t retry_id, const int64_t file_id, const ObBackupDeviceMacroBlockId::BlockType &block_type,
       const ObStorageAccessType &access_type, ObIODOpts *io_d_opts);
   virtual void destroy() override;
-  virtual int open(const char *pathname, const int flags, const mode_t mode,
+  virtual int open(const char *pathname, const int flags, const mode_t mode, 
                    ObIOFd &fd, ObIODOpts *opts = NULL) override;
   virtual int alloc_block(const ObIODOpts *opts, ObIOFd &block_id) override;
   virtual int pread(const ObIOFd &fd, const int64_t offset, const int64_t size,
@@ -102,11 +102,11 @@ public:
   static int alloc_backup_device(const uint64_t tenant_id, ObBackupWrapperIODevice *&device);
   static void release_backup_device(ObBackupWrapperIODevice *&device);
   static int get_device_and_fd(const uint64_t tenant_id,
-                               const int64_t first_id,
-                               const int64_t second_id,
+                               const int64_t first_id, 
+                               const int64_t second_id, 
                                const int64_t third_id,
                                ObStorageIdMod &mod,
-                               ObBackupWrapperIODevice *&device,
+                               ObBackupWrapperIODevice *&device, 
                                ObIOFd &fd);
   static int close_device_and_fd(ObBackupWrapperIODevice *&device_handle, ObIOFd &fd);
 
@@ -127,3 +127,4 @@ private:
 }
 
 #endif
+

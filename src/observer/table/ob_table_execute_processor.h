@@ -60,7 +60,7 @@ private:
   {
     int ret = OB_SUCCESS;
     table::ObTableExecuteCreateCbFunctor functor;
-
+  
     if (OB_FAIL(start_trans(false,
                             arg_.consistency_level_,
                             tb_ctx_.get_ls_id(),

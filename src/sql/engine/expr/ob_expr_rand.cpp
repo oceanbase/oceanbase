@@ -191,3 +191,4 @@ int ObExprRand::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
 }
 } /* namespace sql */
 } /* namespace oceanbase */
+

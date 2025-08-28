@@ -44,7 +44,7 @@ int ObTableLoadBackupUtil_V_1_4::get_column_ids_from_create_table_sql(const ObSt
       if (OB_FAIL(lines.push_back(token))) {
         LOG_WARN("fail to push back", KR(ret));
       } else {
-        token = strtok_r(NULL, "\n", &save_ptr);
+        token = strtok_r(NULL, "\n", &save_ptr); 
       }
     }
   }

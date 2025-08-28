@@ -100,7 +100,7 @@ int ObDagWarningHistoryManager::mtl_init(ObDagWarningHistoryManager *&dag_warnin
 int64_t ObDagWarningHistoryManager::cal_max()
 {
   const uint64_t tenant_id = MTL_ID();
-  int64_t max_size = std::min(lib::get_tenant_memory_limit(tenant_id) * MEMORY_PERCENTAGE / 100,
+  int64_t max_size = std::min(lib::get_tenant_memory_limit(tenant_id) * MEMORY_PERCENTAGE / 100, 
                           static_cast<int64_t>(POOL_MAX_SIZE));
   return max_size;
 }

@@ -298,7 +298,7 @@ int ObHashJoinVecOp::init_join_table_ctx()
   } else if (ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version() >= CLUSTER_VERSION_4_3_5_0) {
     jt_ctx_.build_output_ = &MY_SPEC.build_rows_output_;
   } else {
-    // for compat, gen build_key_proj_ and build_rows_output_ again
+    // for compat, gen build_key_proj_ and build_rows_output_ again 
     build_key_proj_.set_allocator(&eval_ctx_.exec_ctx_.get_allocator());
     build_rows_output_.set_allocator(&eval_ctx_.exec_ctx_.get_allocator());
     OZ (build_key_proj_.init(jt_ctx_.build_keys_->count()));
@@ -322,7 +322,7 @@ int ObHashJoinVecOp::init_join_table_ctx()
     jt_ctx_.build_output_ = &build_rows_output_;
     jt_ctx_.build_key_proj_ = &build_key_proj_;
   }
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret)) { 
   } else {
     jt_ctx_.probe_output_ = &right_->get_spec().output_;
     jt_ctx_.calc_exprs_ = &MY_SPEC.calc_exprs_;
@@ -2144,7 +2144,7 @@ int ObHashJoinVecOp::prepare_hash_table()
   }
   if (OB_SUCC(ret) && need_build_hash_table) {
     if (!is_shared_ && profile_.get_bucket_size() >= UINT32_MAX) {
-      // Current robin hash table can't support the number of buckets exceeding uint32, and needs to be rolled back to a generic hash table
+      // Current robin hash table can't support the number of buckets exceeding uint32, and needs to be rolled back to a generic hash table 
       if (NULL != alloc_) {
         join_table_.free(alloc_);
       }
@@ -2666,7 +2666,7 @@ int ObHashJoinVecOp::probe()
       if (OB_FAIL(ret)) {
       } else {
         // if probe_batch_rows from stored, need to eval probe key
-        // eg:
+        // eg: 
         // join key: a1 = cast(b1)
         // after get probe batch rows from stored
         // attach rows only fill expr(b1)

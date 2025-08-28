@@ -257,7 +257,7 @@ int64_t ObCompactionDagStatus::get_cost_long_time(const int64_t prio)
 /*
  * ObCompactionSuggestionMgr implement
  * */
-const char *ObCompactionSuggestionMgr::ObCompactionSuggestionReasonStr[] =
+const char *ObCompactionSuggestionMgr::ObCompactionSuggestionReasonStr[] = 
 {
   "dag cnt is full",
   "scheduling cannot keep up with the speed of adding",
@@ -601,7 +601,7 @@ int ObCompactionSuggestionIterator::open(const int64_t tenant_id)
       }
     }
   } // end for
-
+  
   if (OB_SUCC(ret)) {
     cur_idx_ = 0;
     is_opened_ = true;

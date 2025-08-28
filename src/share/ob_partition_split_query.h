@@ -39,8 +39,8 @@ namespace share
 class ObPartitionSplitQuery final
 {
 public:
-  ObPartitionSplitQuery() :
-    split_info_()
+  ObPartitionSplitQuery() : 
+    split_info_() 
   {}
   ~ObPartitionSplitQuery() {
     split_info_.reset();
@@ -72,7 +72,7 @@ public:
       ObIAllocator &allocator,
       blocksstable::ObDatumRange &datum_range,
       bool &is_empty_range);
-
+      
   int get_tablet_split_info(
       const ObTablet &tablet,
       ObIAllocator &allocator);
@@ -94,7 +94,7 @@ public:
 
   int check_rowkey_is_included(
       const ObTablet &tablet,
-      const blocksstable::ObDatumRowkey &target_rowkey,
+      const blocksstable::ObDatumRowkey &target_rowkey, 
       const blocksstable::ObStorageDatumUtils *datum_utils,
       bool &is_included);
 
@@ -105,7 +105,7 @@ private:
       sql::ExprFixedArray *filter_params);
 
   int set_split_info(const storage::ObTabletSplitTscInfo &split_info);
-
+  
   int copy_split_key(
       const blocksstable::ObDatumRowkey &split_key,
       const int64_t src_datum_cnt,

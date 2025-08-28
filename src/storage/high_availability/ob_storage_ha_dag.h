@@ -103,8 +103,8 @@ public:
   virtual int report_result();
   virtual lib::Worker::CompatMode get_compat_mode() const override
   { return compat_mode_; }
-  virtual uint64_t get_consumer_group_id() const override
-  { return consumer_group_id_; }
+  virtual uint64_t get_consumer_group_id() const override 
+  { return consumer_group_id_; }  
   ObIHADagNetCtx *get_ha_dag_net_ctx() const { return ha_dag_net_ctx_; }
   virtual bool is_ha_dag() const override { return true; }
 

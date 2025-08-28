@@ -152,7 +152,7 @@ public:
   size_type size() const { return vec_.size(); }
   bool empty() const { return vec_.size() == 0;}
   void pop_front() { vec_.remove(0); }
-  int resize(int64_t size) {
+  int resize(int64_t size) { 
     int ret = OB_SUCCESS;
     if (size > vec_.size()) {
       if (OB_FAIL(vec_.prepare_allocate(size))) {
@@ -173,7 +173,7 @@ public:
   const value_type &front() const { return *(vec_.begin()); }
   value_type &operator[](int64_t i) { return vec_[i]; }
   const value_type &operator[](int64_t i) const { return vec_[i]; }
-  // iterator
+  // iterator 
   iterator begin() { return vec_.begin(); }
   const_iterator begin() const { return const_iterator(&*(const_cast<common::ObArray<T, ModulePageAllocator, false> *>(&vec_))->begin()); }
   iterator end() { return vec_.end(); }
@@ -269,7 +269,7 @@ public:
   double y() const override { return point_.get<1>(); }
   void y(double d) override { point_.set<1>(d); }
   // visitor
-  int do_visit(ObIGeoVisitor &visitor);
+  int do_visit(ObIGeoVisitor &visitor);  
   // boost geometry adaptor
   template<std::size_t K>
   double get() const;
@@ -320,7 +320,7 @@ public:
 class ObCartesianLineString : public ObLineString
 {
 public:
-  // iterator
+  // iterator 
   typedef ObGeomVector<ObWkbGeomInnerPoint>::value_type value_type;
   typedef ObGeomVector<ObWkbGeomInnerPoint>::iterator iterator;
   typedef ObGeomVector<ObWkbGeomInnerPoint>::const_iterator const_iterator;
@@ -336,11 +336,11 @@ public:
   ObCartesianLineString(const ObCartesianLineString&) = default;
   ObCartesianLineString &operator=(const ObCartesianLineString&) = default;
   ~ObCartesianLineString() {}
-
+  
   // Geometry interface
   ObGeoCRS crs() const override { return ObGeoCRS::Cartesian; }
   bool empty() const { return points_.empty(); }
-
+  
   // vector interface
   int push_back(ObWkbGeomInnerPoint& point) { return points_.push_back(point); }
   int push_back(const ObWkbGeomInnerPoint& point) { return points_.push_back(point); }
@@ -388,7 +388,7 @@ public:
   ObGeographLineString(const ObGeographLineString&) = default;
   ObGeographLineString &operator=(const ObGeographLineString&) = default;
   ~ObGeographLineString() {}
-
+  
   ObGeoCRS crs() const override { return ObGeoCRS::Geographic; }
   bool empty() const { return points_.empty(); }
 
@@ -407,7 +407,7 @@ public:
   const ObWkbGeogInnerPoint &operator[](int32_t i) const { return points_[i]; }
   // visitor interface
   int do_visit(ObIGeoVisitor &visitor);
-
+  
   iterator begin() { return points_.begin(); }
   const_iterator begin() const { return points_.begin(); }
   iterator end() { return points_.end(); }
@@ -556,10 +556,10 @@ public:
   ObCartesianPolygon &operator=(const ObCartesianPolygon &rhs) = default;
   ~ObCartesianPolygon() {};
   ObGeoCRS crs() const override { return ObGeoCRS::Cartesian; }
-
+  
   // visitor interface
   int do_visit(ObIGeoVisitor &visitor);
-
+  
   int push_back(const ObLinearring &ring) override;
   bool empty() const override { return (exterior_.empty() && inner_rings_.size() == 0); }
   uint64_t size() const override { return !exterior_.empty() ? inner_ring_size() + 1 : inner_ring_size(); } // 内外边界总数
@@ -602,7 +602,7 @@ public:
 
   // visitor interface
   int do_visit(ObIGeoVisitor &visitor);
-
+  
   int push_back(const ObLinearring &ring) override;
   bool empty() const override { return (exterior_.empty() && inner_rings_.size() == 0); }
   uint64_t size() const override { return !exterior_.empty() ? inner_ring_size() + 1 : inner_ring_size(); } // 内外边界总数
@@ -687,7 +687,7 @@ public:
   ~ObCartesianMultipoint() {}
 
   ObGeoCRS crs() const override { return ObGeoCRS::Cartesian; }
-
+  
   int push_back(const ObWkbGeomInnerPoint& point) { return points_.push_back(point); }
   void pop_front() override { points_.pop_front(); }
   bool empty() const override { return points_.empty(); }
@@ -706,10 +706,10 @@ public:
   const ObWkbGeomInnerPoint &front() const { return points_.front(); }
   ObWkbGeomInnerPoint &operator[](int32_t i) { return points_[i]; }
   const ObWkbGeomInnerPoint &operator[](int32_t i) const { return points_[i]; }
-
+    
   // visitor interface
   int do_visit(ObIGeoVisitor &visitor);
-
+  
   iterator begin() { return points_.begin(); }
   const_iterator begin() const { return points_.begin(); }
   iterator end() { return points_.end(); }
@@ -741,7 +741,7 @@ public:
   ~ObGeographMultipoint() {}
 
   ObGeoCRS crs() const override { return ObGeoCRS::Geographic; }
-
+  
   int push_back(const ObWkbGeogInnerPoint& point) { return points_.push_back(point); }
   void pop_front() override { points_.pop_front(); }
   bool empty() const override { return points_.empty(); }
@@ -760,10 +760,10 @@ public:
   const ObWkbGeogInnerPoint &front() const { return points_.front(); }
   ObWkbGeogInnerPoint &operator[](int32_t i) { return points_[i]; }
   const ObWkbGeogInnerPoint &operator[](int32_t i) const { return points_[i]; }
-
+    
   // visitor interface
   int do_visit(ObIGeoVisitor &visitor);
-
+  
   iterator begin() { return points_.begin(); }
   const_iterator begin() const { return points_.begin(); }
   iterator end() { return points_.end(); }
@@ -846,7 +846,7 @@ public:
 
   // visitor interface
   int do_visit(ObIGeoVisitor &visitor);
-
+  
   iterator begin() { return lines_.begin(); }
   const_iterator begin() const { return lines_.begin(); }
   iterator end() { return lines_.end(); }
@@ -881,7 +881,7 @@ public:
 
   // Geometry interface
   ObGeoCRS crs() const override { return ObGeoCRS::Geographic; }
-
+  
   // vector interface
   int push_back(const ObGeometry& line) { return lines_.push_back(static_cast<const ObGeographLineString &>(line)); }
   void pop_front() override { lines_.pop_front(); }
@@ -901,10 +901,10 @@ public:
   const ObGeographLineString &front() const { return *(lines_.begin()); }
   ObGeographLineString &operator[](int32_t i) { return lines_[i]; }
   const ObGeographLineString &operator[](int32_t i) const { return lines_[i]; }
-
+    
   // visitor interface
   int do_visit(ObIGeoVisitor &visitor);
-
+  
   iterator begin() { return lines_.begin(); }
   const_iterator begin() const { return lines_.begin(); }
   iterator end() { return lines_.end(); }
@@ -967,7 +967,7 @@ public:
 
   // Geometry interface
   ObGeoCRS crs() const override { return ObGeoCRS::Cartesian; }
-
+  
   // vector interface
   int push_back(const ObGeometry& poly) { return polygons_.push_back(static_cast<const ObCartesianPolygon &>(poly)); }
   void pop_front() override { polygons_.pop_front(); }
@@ -987,9 +987,9 @@ public:
   const ObCartesianPolygon &front() const { return *(polygons_.begin()); }
   ObCartesianPolygon &operator[](int32_t i) { return polygons_[i]; }
   const ObCartesianPolygon &operator[](int32_t i) const { return polygons_[i]; }
-
+    
   int do_visit(ObIGeoVisitor &visitor);
-
+  
   iterator begin() { return polygons_.begin(); }
   const_iterator begin() const { return polygons_.begin(); }
   iterator end() { return polygons_.end(); }
@@ -1022,7 +1022,7 @@ public:
 
   // Geometry interface
   ObGeoCRS crs() const override { return ObGeoCRS::Geographic; }
-
+  
   // vector interface
   int push_back(const ObGeometry& poly) { return polygons_.push_back(static_cast<const ObGeographPolygon &>(poly)); }
   void pop_front() override { polygons_.pop_front(); }
@@ -1042,10 +1042,10 @@ public:
   const ObGeographPolygon &front() const { return *(polygons_.begin()); }
   ObGeographPolygon &operator[](int32_t i) { return polygons_[i]; }
   const ObGeographPolygon &operator[](int32_t i) const { return polygons_[i]; }
-
+    
   // visitor interface
   int do_visit(ObIGeoVisitor &visitor);
-
+  
   iterator begin() { return polygons_.begin(); }
   const_iterator begin() const { return polygons_.begin(); }
   iterator end() { return polygons_.end(); }

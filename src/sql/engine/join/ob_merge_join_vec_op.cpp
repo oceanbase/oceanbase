@@ -359,7 +359,7 @@ int ObMergeJoinVecOp::ObSemiAntiJoinTracker::SemiAntiMatchPair::next_row_pair(
       LOG_WARN("iter next left row failed", K(ret), K(vec_idx));
     }
   }
-
+  
   if (OB_SUCC(ret) && need_next_group) {
     if (OB_FAIL(get_next_group_pair())) {
       if (ret != OB_ITER_END) {
@@ -720,7 +720,7 @@ int ObMergeJoinVecOp::ObMergeJoinCursor::find_small_group(
         } else {
           all_find = true;
           break;
-        }
+        } 
       }
     }
     if (need_store_uneuqal) {
@@ -767,7 +767,7 @@ int ObMergeJoinVecOp::ObMergeJoinCursor::get_next_batch_from_source(int64_t batc
     reach_end_ = true;
   } else if (OB_FAIL(eval_all_exprs())) {
     LOG_WARN("eval all exprs failed", K(ret), K(*all_exprs_));
-  } else {
+  } else {  
     saved_ = false;
     restored_ = true;
   }
@@ -775,7 +775,7 @@ int ObMergeJoinVecOp::ObMergeJoinCursor::get_next_batch_from_source(int64_t batc
     cur_brs_->size_ = 0;
     cur_batch_idx_ = 0;
   }
-
+  
   return ret;
 }
 
@@ -968,7 +968,7 @@ int ObMergeJoinVecOp::ObMergeJoinCursor::get_equal_group(RowGroup &group)
             store_brs_.skip_->unset(i);
             ++cur_batch_equal_rows_cnt;
           }
-        }
+        }   
       }
       if (need_store_equal_group) {
         next_stored_row_id_ += cur_batch_equal_rows_cnt;
@@ -1211,7 +1211,7 @@ ObMergeJoinVecOp::ObMergeJoinVecOp(ObExecContext &exec_ctx,
                                    const ObOpSpec &spec, ObOpInput *input)
     : ObJoinVecOp(exec_ctx, spec, input), join_state_(JOIN_BEGIN),
       mem_context_(nullptr), allocator_(nullptr),
-      right_match_cursor_(nullptr), left_match_cursor_(nullptr),
+      right_match_cursor_(nullptr), left_match_cursor_(nullptr), 
       group_pairs_(), output_cache_(),
       output_row_num_(-1), left_cursor_(nullptr, *this, eval_ctx_),
       right_cursor_(nullptr, *this, eval_ctx_),
@@ -1379,7 +1379,7 @@ template <bool need_store_left_unequal_group,
           bool need_store_right_equal_group>
 int ObMergeJoinVecOp::join_both() {
   int ret = OB_SUCCESS;
-  // clean for join both
+  // clean for join both 
   left_cursor_.clean_row_store();
   right_cursor_.clean_row_store();
   group_pairs_.reuse();
@@ -1486,7 +1486,7 @@ int ObMergeJoinVecOp::join_both() {
       if (OB_FAIL(common_tracker->init_match_flags())) {
         LOG_WARN("expand group flags failed", K(ret));
       }
-    }
+    }  
   }
   return ret;
 }

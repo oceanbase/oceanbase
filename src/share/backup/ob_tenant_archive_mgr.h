@@ -39,19 +39,19 @@ public:
 
   // piece op
   static int decide_piece_id(
-      const SCN &piece_start_scn,
+      const SCN &piece_start_scn, 
       const int64_t start_piece_id, 
       const int64_t piece_switch_interval, 
-      const SCN &scn,
+      const SCN &scn, 
       int64_t &piece_id);
   static int decide_piece_start_scn(
-      const SCN & piece_start_scn,
+      const SCN & piece_start_scn, 
       const int64_t start_piece_id, 
       const int64_t piece_switch_interval, 
       const int64_t piece_id, 
       SCN &start_scn);
   static int decide_piece_end_scn(
-      const SCN &piece_start_scn,
+      const SCN &piece_start_scn, 
       const int64_t start_piece_id, 
       const int64_t piece_switch_interval, 
       const int64_t piece_id, 

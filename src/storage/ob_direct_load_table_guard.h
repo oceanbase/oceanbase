@@ -61,7 +61,7 @@ private:
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
   const share::SCN &ddl_redo_scn_;
-  ObTableHandleV2 table_handle_;
+  ObTableHandleV2 table_handle_; 
   int64_t construct_timestamp_;
 };
 

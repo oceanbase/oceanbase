@@ -1,4 +1,4 @@
-// owner: wangzhennan.wzn
+// owner: wangzhennan.wzn 
 // owner group: rs
 
 /**
@@ -380,7 +380,7 @@ void TestTenantTransferService::create_hidden_table()
   ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();
   ObSqlString sql;
   int64_t affected_rows = 0;
-
+  
   INNER_EXE_SQL(OB_SYS_TENANT_ID, "set ob_global_debug_sync = 'reset';");
   INNER_EXE_SQL(OB_SYS_TENANT_ID, "alter system set debug_sync_timeout = '1000s';");
   usleep(100000);
@@ -460,7 +460,7 @@ TEST_F(TestTenantTransferService, test_transfer_retry_limit)
   ObTransferTaskID current_failed_task_id;
   ObTransferTaskID last_failed_task_id;
   int64_t retry_count = 0;
-  // an error occurred before the task execution started
+  // an error occurred before the task execution started 
   ASSERT_TRUE(BUSY_IDLE_TIME_US == tenant_transfer->calc_transfer_retry_interval_(current_failed_task_id, retry_count, last_failed_task_id));
   ASSERT_TRUE(0 == retry_count);
   // an error occurred during the first attempt to execute the task

@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #include <gtest/gtest.h>
 #include <boost/geometry.hpp>
 #include <boost/foreach.hpp>
@@ -23,7 +23,7 @@
 
 
 namespace bg = boost::geometry;
-
+ 
 namespace oceanbase {
 namespace common {
 
@@ -231,7 +231,7 @@ TEST_F(TestGeoTree, point)
   p.y(-4.567);
   ASSERT_EQ(-3.123, p.get<0>());
   ASSERT_EQ(-4.567, p.get<1>());
-
+  
   p.x(1.7976931348623157e308);
   p.y(-1.7976931348623157e308);
   EXPECT_EQ(1.7976931348623157e308, p.x());
@@ -344,7 +344,7 @@ TEST_F(TestGeoTree, Polygon)
   ASSERT_TRUE(poly->is_empty());
 
   ObCartesianLinearring outer_ring(0, allocator);
-
+  
   outer_ring.push_back(ObWkbGeomInnerPoint(0.0, 0.0));
   outer_ring.push_back(ObWkbGeomInnerPoint(10.0, 0.0));
   outer_ring.push_back(ObWkbGeomInnerPoint(10.0, 10.0));
@@ -648,16 +648,16 @@ void clip_visitor_test(const ObString &wkt, const ObString &wkt_res, ObGeogBox &
   ObArenaAllocator allocator(ObModIds::TEST);
   ObGeometry *geo_tree = nullptr;
   wkt_to_tree_geo(wkt, allocator, geo_tree);
-
+  
   ObGeometry *geo_res = nullptr;
   lib::MemoryContext mem_context;
-  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, 
       lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
   ObGeoBoxClipVisitor clip_visitor(box, mem_context);
   ASSERT_EQ(geo_tree->do_visit(clip_visitor), OB_SUCCESS);
   ASSERT_EQ(clip_visitor.get_geometry(geo_res), OB_SUCCESS);
   ASSERT_EQ(geo_res == nullptr, false);
-
+  
   ObString wkt_cal;
   tree_geo_to_wkt(allocator, geo_res, wkt_cal);
   ASSERT_EQ(wkt_cal == wkt_res, true);
@@ -752,48 +752,48 @@ TEST_F(TestGeoTree, clip_visitor)
   clip_visitor_test("POLYGON((-2 -2,-2 12,12 12,12 -2,-2 -2),(-1 -1,11 -1,11 11,-1 11,-1 -1))",
         "EMPTY", box1);
   clip_visitor_test("POLYGON((-2 -2,-2 12,12 12,12 -2,-2 -2),(1 1,9 1,9 9,1 9,1 1))",
-        "POLYGON((0 0,0 10,10 10,10 0,0 0),(1 1,9 1,9 9,1 9,1 1))", box1);
+        "POLYGON((0 0,0 10,10 10,10 0,0 0),(1 1,9 1,9 9,1 9,1 1))", box1); 
   clip_visitor_test("POLYGON((5 5,15 5,15 -5,5 -5,5 5),(8 1,8 -1,9 -1,9 1,8 1))",
-        "POLYGON((5 0,5 5,10 5,10 0,9 0,9 1,8 1,8 0,5 0))", box1);
+        "POLYGON((5 0,5 5,10 5,10 0,9 0,9 1,8 1,8 0,5 0))", box1); 
   clip_visitor_test("POLYGON((-6 5,5 5,5 -6,-6 5))",
-        "POLYGON((0 0,0 5,5 5,5 0,0 0))", box1);
+        "POLYGON((0 0,0 5,5 5,5 0,0 0))", box1); 
   clip_visitor_test("POLYGON((-15 -15,-15 15,15 15,15 -15,-15 -15),(-5 5,-5 -5,5 -5,5 5,-5 5))",
-        "POLYGON((0 5,0 10,10 10,10 0,5 0,5 5,0 5))", box1);
+        "POLYGON((0 5,0 10,10 10,10 0,5 0,5 5,0 5))", box1); 
   clip_visitor_test("POLYGON((-15 -15,-15 15,15 15,15 -15,-15 -15),(-6 5,5 -6,5 5,-6 5))",
-        "POLYGON((0 5,0 10,10 10,10 0,5 0,5 5,0 5))", box1);
+        "POLYGON((0 5,0 10,10 10,10 0,5 0,5 5,0 5))", box1); 
   clip_visitor_test("POLYGON((-15 -15,-15 15,15 15,15 -15,-15 -15),(-5 5,-6 5,-6 6,-5 6,-5 5))",
-        "POLYGON((0 0,0 10,10 10,10 0,0 0))", box1);
+        "POLYGON((0 0,0 10,10 10,10 0,0 0))", box1); 
   clip_visitor_test("POLYGON((-15 -15,-15 15,15 15,15 -15,-15 -15),(0 5,-1 5,-1 6,0 6,0 5))",
-        "POLYGON((0 0,0 10,10 10,10 0,0 0))", box1);
+        "POLYGON((0 0,0 10,10 10,10 0,0 0))", box1); 
   ObGeogBox box2 = {10, 100, 10, 100, 0, 0};
   clip_visitor_test("POLYGON((50 50,200 50,200 200,50 200,50 50))", // CCW
-        "POLYGON((50 50,50 100,100 100,100 50,50 50))", box2);
+        "POLYGON((50 50,50 100,100 100,100 50,50 50))", box2); 
   clip_visitor_test("POLYGON((50 50,50 200,200 200,200 50,50 50))", // CW
-        "POLYGON((50 50,50 100,100 100,100 50,50 50))", box2);
+        "POLYGON((50 50,50 100,100 100,100 50,50 50))", box2); 
   // box1
   clip_visitor_test("POLYGON("
         "(-10 2,-10 8,8 8,8 2,-10 2)," // CW
         "(-5 6,-5 4,5 4,5 6,-5 6)"     // CCW
         ")",
-        "POLYGON((0 2,0 4,5 4,5 6,0 6,0 8,8 8,8 2,0 2))", box1);
+        "POLYGON((0 2,0 4,5 4,5 6,0 6,0 8,8 8,8 2,0 2))", box1); 
   clip_visitor_test("POLYGON("
         "(-10 2,-10 8,8 8,8 2,-10 2)," // CW
         "(-5 6,5 6,5 4,-5 4,-5 6)"     // CW
         ")",
-        "POLYGON((0 2,0 4,5 4,5 6,0 6,0 8,8 8,8 2,0 2))", box1);
+        "POLYGON((0 2,0 4,5 4,5 6,0 6,0 8,8 8,8 2,0 2))", box1); 
   clip_visitor_test("POLYGON("
         "(-10 2,8 2,8 8,-10 8,-10 2)," // CCW
         "(-5 6,5 6,5 4,-5 4,-5 6)"     // CW
         ")",
-        "POLYGON((0 2,0 4,5 4,5 6,0 6,0 8,8 8,8 2,0 2))", box1);
+        "POLYGON((0 2,0 4,5 4,5 6,0 6,0 8,8 8,8 2,0 2))", box1); 
   clip_visitor_test("POLYGON("
         "(-10 -10,-10 20,20 20,20 -10,-10 -10)," // CW
         "(-5 -5,0 -5,0 0,-5 0,-5 -5)"     // CCW
         ")",
-        "POLYGON((0 0,0 10,10 10,10 0,0 0))", box1);
+        "POLYGON((0 0,0 10,10 10,10 0,0 0))", box1); 
   ObGeogBox box3 = {3.0481343214686657e-14, 20000000.000000, -20000000.000000, -1.000000, 0, 0};
   clip_visitor_test("POLYGON((3.0481343214686657e-14 -20000000, 200000000 -20000000, 200000000 -1, 3.0481343214686657e-14 -1, 3.0481343214686657e-14 -20000000))",
-        "POLYGON((0.000000000000030481343214686657 -20000000,0.000000000000030481343214686657 -1,20000000 -1,20000000 -20000000,0.000000000000030481343214686657 -20000000))", box3);
+        "POLYGON((0.000000000000030481343214686657 -20000000,0.000000000000030481343214686657 -1,20000000 -1,20000000 -20000000,0.000000000000030481343214686657 -20000000))", box3); 
   // EMPTY
   clip_visitor_test("GEOMETRYCOLLECTION EMPTY", "EMPTY", box1);
 }
@@ -813,12 +813,12 @@ void affine_visitor_test(const ObString &wkt, const ObString &wkt_res, ObAffineM
 TEST_F(TestGeoTree, affine_visitor)
 {
   ObAffineMatrix affine = {1, 0, 0, 0, -1, 0, 0, 0, 1, 0, 4096, 0};
-  affine_visitor_test("MULTILINESTRING((1 1, 501 501, 1001 1001),(2 2, 502 502, 1002 1002))",
+  affine_visitor_test("MULTILINESTRING((1 1, 501 501, 1001 1001),(2 2, 502 502, 1002 1002))", 
       "MULTILINESTRING((1 4095,501 3595,1001 3095),(2 4094,502 3594,1002 3094))", affine);
-  affine_visitor_test("POLYGON ((0 0, 10 0, 10 5, 0 -5, 0 0))",
+  affine_visitor_test("POLYGON ((0 0, 10 0, 10 5, 0 -5, 0 0))", 
       "POLYGON((0 4096,10 4096,10 4091,0 4101,0 4096))", affine);
   ObAffineMatrix affine2 = {1, 0, 0, 0, -1, 0, 0, 0, 1, 0, 100, 0};
-  affine_visitor_test("LINESTRING(0 0, 2 20, -2 40, -4 60, 4 80, 0 100)",
+  affine_visitor_test("LINESTRING(0 0, 2 20, -2 40, -4 60, 4 80, 0 100)", 
       "LINESTRING(0 100,2 80,-2 60,-4 40,4 20,0 0)", affine2);
   ObAffineMatrix affine3 = {1, 0, 0, 0, -1, 0, 0, 0, 1, 0, 10, 0};
   affine_visitor_test("POLYGON((10 10, 10 0, 0 0, 0 10, 10 10),(9 9, 1 9, 1 1, 9 1, 9 9),(8 8, 8 2, 2 2, 2 8, 8 8),(7 7, 7 3, 3 3, 3 7, 7 7))",
@@ -846,7 +846,7 @@ void grid_visitor_test(const ObString &wkt, const ObString &wkt_res, double size
 
 TEST_F(TestGeoTree, grid_visitor)
 {
-  grid_visitor_test("LINESTRING(0 100,2 80,-2 60,-4 40,4 20,0 0)",
+  grid_visitor_test("LINESTRING(0 100,2 80,-2 60,-4 40,4 20,0 0)", 
                     "LINESTRING(0 100,2 80,-2 60,-4 40,4 20,0 0)", 1);
   grid_visitor_test("LINESTRING(0 0,1 1,2 2,3 3,4 4,5 5)", "LINESTRING(0 0,2 2,4 4)", 2);
   grid_visitor_test("POINT(5.1423999999 5.1423999999)", "POINT(5.1424 5.1424)", 0.0001);
@@ -854,11 +854,11 @@ TEST_F(TestGeoTree, grid_visitor)
   grid_visitor_test("MULTIPOLYGON(((0 0,10 0,10 10,0 10,0 0)))", "EMPTY", 20);
   // different from PG, PG keeps duplicate point in multipoint
   grid_visitor_test("MULTIPOINT(0 0,1 1, 2 2, 3 3, 4 4, 5 5)", "MULTIPOINT((0 0),(2 2),(4 4))", 2);
-  grid_visitor_test("MULTIPOLYGON(((0 0,10 0,10 10,0 10,0 0),(4 4, 4 5, 5 5, 5 4, 4 4)))",
+  grid_visitor_test("MULTIPOLYGON(((0 0,10 0,10 10,0 10,0 0),(4 4, 4 5, 5 5, 5 4, 4 4)))", 
                     "MULTIPOLYGON(((0 0,10 0,10 10,0 10,0 0)))", 2);
-  grid_visitor_test("MULTIPOLYGON(((0 0,10 0,10 10,0 10,0 0),(4 4, 4 5, 5 5, 5 4, 4 4)))",
+  grid_visitor_test("MULTIPOLYGON(((0 0,10 0,10 10,0 10,0 0),(4 4, 4 5, 5 5, 5 4, 4 4)))", 
                     "EMPTY", 20);
-  grid_visitor_test("MULTIPOLYGON(((2804.095091749914 -121.44277270394377,2791.718504895922 -51.02501018997282,2803.097353688907 33.77655080938712,2790.942259743344 -68.17042267904617,2804.095091749914 -121.44277270394377)))",
+  grid_visitor_test("MULTIPOLYGON(((2804.095091749914 -121.44277270394377,2791.718504895922 -51.02501018997282,2803.097353688907 33.77655080938712,2790.942259743344 -68.17042267904617,2804.095091749914 -121.44277270394377)))", 
                     "MULTIPOLYGON(((2804 -121,2792 -51,2803 34,2791 -68,2804 -121)))", 1);
 }
 
@@ -867,7 +867,7 @@ void simplify_visitor_test(const ObString &wkt, const ObString &wkt_res, double 
   ObArenaAllocator allocator(ObModIds::TEST);
   ObGeometry *geo_tree = nullptr;
   wkt_to_tree_geo(wkt, allocator, geo_tree);
-
+  
   ASSERT_EQ(ObGeoMVTUtil::simplify_geometry(geo_tree, tolerance, keep_collapsed), OB_SUCCESS);
 
   ObString wkt_cal;
@@ -877,9 +877,9 @@ void simplify_visitor_test(const ObString &wkt, const ObString &wkt_res, double 
 
 TEST_F(TestGeoTree, simplify_visitor)
 {
-  simplify_visitor_test("POLYGON((10 0,10 10,0 10,0 0,10 0),(9 1,1 1,1 9,9 9,9 1),(8 2,8 8,2 8,2 2,8 2),(7 3,7 7,3 7,3 3,7 3))",
+  simplify_visitor_test("POLYGON((10 0,10 10,0 10,0 0,10 0),(9 1,1 1,1 9,9 9,9 1),(8 2,8 8,2 8,2 2,8 2),(7 3,7 7,3 7,3 3,7 3))", 
       "POLYGON((10 0,10 10,0 10,0 0,10 0),(9 1,1 1,1 9,9 9,9 1),(8 2,8 8,2 8,2 2,8 2),(7 3,7 7,3 7,3 3,7 3))", 0, false);
-  simplify_visitor_test("MULTILINESTRING((1 4095,501 3595,1001 3095),(2 4094,502 3594,1002 3094))",
+  simplify_visitor_test("MULTILINESTRING((1 4095,501 3595,1001 3095),(2 4094,502 3594,1002 3094))", 
       "MULTILINESTRING((1 4095,1001 3095),(2 4094,1002 3094))", 0, false);
   simplify_visitor_test("LINESTRING(0 0, 1 0, 1 1, 0 1, 0 0)", "LINESTRING(0 0,0 0)", 10, true);
   simplify_visitor_test("POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))", "POLYGON((0 0,1 0,1 1,0 0))", 10, true);

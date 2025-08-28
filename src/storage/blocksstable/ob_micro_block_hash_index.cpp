@@ -51,7 +51,7 @@ int ObMicroBlockHashIndexBuilder::init_if_needed(const ObDataStoreDesc *data_sto
   bool need_build = false;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
-    STORAGE_LOG(WARN, "Micro_hash_index_builder is inited twice", K(ret));
+    STORAGE_LOG(WARN, "Micro_hash_index_builder is inited twice", K(ret)); 
   } else if (OB_UNLIKELY(nullptr == data_store_desc || !data_store_desc->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to init micro hash index block builder", K(ret), KPC(data_store_desc));
@@ -183,12 +183,12 @@ int ObMicroBlockHashIndex::init(const ObMicroBlockData &micro_block_data)
     ret = OB_INVALID_DATA;
     STORAGE_LOG(WARN, "Invalid micro block header", K(ret), K(micro_block_data));
   } else {
-    const uint32_t hash_index_offset_from_end = micro_block_header->hash_index_offset_from_end_;
-    const char* start_data = micro_block_data.get_buf() + micro_block_data.get_buf_size()
+    const uint32_t hash_index_offset_from_end = micro_block_header->hash_index_offset_from_end_; 
+    const char* start_data = micro_block_data.get_buf() + micro_block_data.get_buf_size() 
                                  - hash_index_offset_from_end;
     const uint8_t reserved_byte = reinterpret_cast<const uint8_t *>(start_data)[0];
     bucket_table_ = reinterpret_cast<const uint8_t *>(start_data + get_fixed_header_size());
-    num_buckets_ = reinterpret_cast<const uint16_t *>(start_data + 1)[0];
+    num_buckets_ = reinterpret_cast<const uint16_t *>(start_data + 1)[0];                        
     STORAGE_LOG(DEBUG, "ObMicroBlockHashIndex init", K(num_buckets_), K(reserved_byte));
     bool is_valid = num_buckets_ != 0 && num_buckets_ <= MAX_BUCKET_NUMBER
                         && reserved_byte == RESERVED_BYTE

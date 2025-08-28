@@ -130,7 +130,7 @@ TEST_F(TestSSMicroCacheEviction, test_delete_ghost_micro)
     for (int64_t j = 0; j < micro_cnt; ++j) {
       const int32_t offset = payload_offset + j * micro_size;
       const ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
-      ASSERT_EQ(OB_SUCCESS, micro_cache->add_micro_block_cache(micro_key, data_buf, micro_size,
+      ASSERT_EQ(OB_SUCCESS, micro_cache->add_micro_block_cache(micro_key, data_buf, micro_size, 
         ObSSMicroCacheAccessType::COMMON_IO_TYPE));
     }
     ASSERT_EQ(OB_SUCCESS,TestSSCommonUtil::wait_for_persist_task());
@@ -191,7 +191,7 @@ TEST_F(TestSSMicroCacheEviction, test_delete_ghost_micro)
   step1: write cache_file_size * 50% data to T1, then read this part of data again and transfer it to T2.
   step2: write cache_file_size until usage of cache_data_block reach limit.
   step3: adjust arc_limit to 0, and the background thread clears all micro_meta which is persisted.
-  step4: check the number of micro_cnt, total_micro_cnt <= bg_mem_blk.max_micro_cnt + fg_mem_blk.max_micro_cnt,
+  step4: check the number of micro_cnt, total_micro_cnt <= bg_mem_blk.max_micro_cnt + fg_mem_blk.max_micro_cnt, 
          and all used phy_blk is added into reusable_set.
 */
 TEST_F(TestSSMicroCacheEviction, test_delete_all_persisted_micro)
@@ -273,7 +273,7 @@ TEST_F(TestSSMicroCacheEviction, test_delete_all_persisted_micro)
   // print micro map
   LOG_INFO("start print micro map");
   ObSSMicroMetaManager::SSMicroMap &micro_map = micro_cache->micro_meta_mgr_.micro_meta_map_;
-  ObSSMicroMetaManager::SSMicroMap::BlurredIterator micro_iter_(micro_map);
+  ObSSMicroMetaManager::SSMicroMap::BlurredIterator micro_iter_(micro_map); 
   micro_iter_.rewind();
   for (int64_t i = 1; ; ++i) {
     const ObSSMicroBlockCacheKey *micro_key = nullptr;

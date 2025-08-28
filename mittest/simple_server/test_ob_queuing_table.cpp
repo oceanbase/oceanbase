@@ -1,4 +1,4 @@
-// owner: chengkong.oyhr
+// owner: chengkong.oyhr 
 // owner group: storage
 
 /**
@@ -31,10 +31,10 @@ public:
     ReportStat() = default;
     ReportStat(
       const char* tname,
-      const ObTableModeFlag mode,
-      const int64_t ls_id,
-      const uint64_t tablet_id,
-      const uint32_t query_cnt,
+      const ObTableModeFlag mode, 
+      const int64_t ls_id, 
+      const uint64_t tablet_id, 
+      const uint32_t query_cnt, 
       const uint64_t scan_physical_row_cnt)
     : tname_(tname),
       mode_(mode)
@@ -53,27 +53,27 @@ public:
 public:
   ObQueuingTableTest() : ObSimpleClusterTestBase("test_ob_queuing_table") {}
   void create_table_and_fetch_infomations(
-    int &ret,
-    const char *tname,
-    const ObTableModeFlag mode,
-    int64_t &ls_id,
+    int &ret, 
+    const char *tname, 
+    const ObTableModeFlag mode, 
+    int64_t &ls_id, 
     uint64_t &tablet_id);
   void wait_refresh();
   void check_report_stats(ObIArray<ReportStat> &report_stats);
   void mock_one_table(
-    ObIArray<ReportStat> &report_stats,
-    const char* tname,
-    uint32_t &base_query_cnt,
+    ObIArray<ReportStat> &report_stats, 
+    const char* tname, 
+    uint32_t &base_query_cnt, 
     uint64_t &base_scan_physical_row_cnt,
     const ObTableModeFlag mode);
   void alter_table_mode(const char*tname, const ObTableModeFlag new_mode);
 };
 
 void ObQueuingTableTest::create_table_and_fetch_infomations(
-  int &ret,
-  const char *tname,
-  const ObTableModeFlag mode,
-  int64_t &ls_id,
+  int &ret, 
+  const char *tname, 
+  const ObTableModeFlag mode, 
+  int64_t &ls_id, 
   uint64_t &tablet_id)
 {
   ret = OB_SUCCESS;
@@ -87,7 +87,7 @@ void ObQueuingTableTest::create_table_and_fetch_infomations(
     ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
     LOG_INFO("finish create table", K(tname));
   }
-
+  
   static bool need_init = true;
   if (need_init) {
     need_init = false;
@@ -134,7 +134,7 @@ void ObQueuingTableTest::wait_refresh()
   const int64_t last_update_time = stat_mgr->get_last_update_time();
   const int64_t TIMEOUT_INTERVAL = 5 * ObTenantTabletStatMgr::CHECK_INTERVAL;
   LOG_INFO("Wait until ObTenantTabletStatMgr refresh", K(current_time), K(last_update_time));
-
+  
   while (last_update_time == stat_mgr->get_last_update_time()) {
     LOG_INFO("sleep for a while");
     usleep(ObTenantTabletStatMgr::CHECK_INTERVAL / 2);
@@ -167,9 +167,9 @@ void ObQueuingTableTest::check_report_stats(ObIArray<ReportStat> &report_stats)
 }
 
 void ObQueuingTableTest::mock_one_table(
-  ObIArray<ReportStat> &report_stats,
-  const char* tname,
-  uint32_t &base_query_cnt,
+  ObIArray<ReportStat> &report_stats, 
+  const char* tname, 
+  uint32_t &base_query_cnt, 
   uint64_t &base_scan_physical_row_cnt,
     const ObTableModeFlag mode)
 {
@@ -178,7 +178,7 @@ void ObQueuingTableTest::mock_one_table(
   int64_t cur_ls_id = OB_INVALID_ID;
   uint64_t cur_tablet_id = OB_INVALID_ID;
   ObTenantTabletStatMgr *stat_mgr = MTL(ObTenantTabletStatMgr *);
-
+  
   ASSERT_NE(nullptr, stat_mgr);
   create_table_and_fetch_infomations(ret, tname, mode, cur_ls_id, cur_tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);

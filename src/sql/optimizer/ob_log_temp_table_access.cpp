@@ -133,14 +133,14 @@ int ObLogTempTableAccess::do_re_est_cost(EstimateCostInfo &param, double &card, 
   return ret;
 }
 
-int ObLogTempTableAccess::get_plan_item_info(PlanText &plan_text,
+int ObLogTempTableAccess::get_plan_item_info(PlanText &plan_text, 
                                              ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
     LOG_WARN("failed to get plan item info", K(ret));
   } else {
-    BEGIN_BUF_PRINT;
+    BEGIN_BUF_PRINT; 
     // print access
     const ObIArray<ObRawExpr*> &access = get_access_exprs();
     EXPLAIN_PRINT_EXPRS(access, type);
@@ -152,21 +152,21 @@ int ObLogTempTableAccess::get_plan_item_info(PlanText &plan_text,
     const ObString &access_name = get_access_name();
     BEGIN_BUF_PRINT;
     if (access_name.empty()) {
-      if (OB_FAIL(BUF_PRINTF("%.*s",
-                             temp_table_name.length(),
+      if (OB_FAIL(BUF_PRINTF("%.*s", 
+                             temp_table_name.length(), 
                              temp_table_name.ptr()))) {
         LOG_WARN("failed to print str", K(ret));
       }
     } else {
-      if (OB_FAIL(BUF_PRINTF("%.*s(%.*s)",
-                             access_name.length(),
+      if (OB_FAIL(BUF_PRINTF("%.*s(%.*s)", 
+                             access_name.length(), 
                              access_name.ptr(),
-                             temp_table_name.length(),
+                             temp_table_name.length(), 
                              temp_table_name.ptr()))) {
         LOG_WARN("failed to print str", K(ret));
       }
     }
-    END_BUF_PRINT(plan_item.object_alias_,
+    END_BUF_PRINT(plan_item.object_alias_, 
                   plan_item.object_alias_len_);
   }
   return ret;

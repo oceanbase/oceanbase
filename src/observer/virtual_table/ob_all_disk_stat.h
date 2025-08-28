@@ -58,3 +58,4 @@ private:
 }
 }
 #endif /* OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_DISK_STAT_TABLE */
+

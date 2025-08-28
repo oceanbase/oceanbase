@@ -797,7 +797,7 @@ int ObColumnSchemaV2::get_each_column_group_name(ObString &cg_name) const {
   int ret = OB_SUCCESS;
   /* to avoid column_name_str not end with \0, write cg_name using ObString::write*/
   char tmp_cg_name[OB_MAX_COLUMN_GROUP_NAME_LENGTH] = {'\0'};
-  int32_t write_len = snprintf(tmp_cg_name, OB_MAX_COLUMN_GROUP_NAME_LENGTH, "%.*s_%.*s",
+  int32_t write_len = snprintf(tmp_cg_name, OB_MAX_COLUMN_GROUP_NAME_LENGTH, "%.*s_%.*s", 
                                static_cast<int>(strlen(OB_COLUMN_GROUP_NAME_PREFIX)),
                                OB_COLUMN_GROUP_NAME_PREFIX,
                                column_name_.length(),
@@ -816,7 +816,7 @@ int ObColumnSchemaV2::get_each_column_group_name(ObString &cg_name) const {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to write column group name to str", K(ret), K(cg_name), K(write_len));
     }
-  }
+  } 
   return ret;
 }
 

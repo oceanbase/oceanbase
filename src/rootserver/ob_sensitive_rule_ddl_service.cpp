@@ -52,14 +52,14 @@ int ObSensitiveRuleDDLService::update_table_schema(ObSensitiveRuleSchema &schema
         LOG_WARN("fail to assign table schema", K(ret));
       } else {
         new_schema.set_schema_version(schema.get_schema_version());
-        if (OB_FAIL(ddl_operator.update_table_attribute(new_schema, trans,
+        if (OB_FAIL(ddl_operator.update_table_attribute(new_schema, trans, 
                                                         OB_DDL_ALTER_TABLE, NULL))) {
           LOG_WARN("fail to update table schema", K(ret));
         }
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -89,25 +89,25 @@ int ObSensitiveRuleDDLService::sensitive_field_validation_check(const ObSensitiv
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("column schema is null", K(ret), K(item));
     } else if (OB_FAIL(schema_guard.get_sensitive_rule_schema_by_column(tenant_id,
-                                                                        item.table_id_,
+                                                                        item.table_id_, 
                                                                         item.column_id_,
                                                                         exist_schema))) {
       LOG_WARN("failed to check if sensitive column exists", K(ret));
-    } else if (should_exist
-               && (NULL == exist_schema
+    } else if (should_exist 
+               && (NULL == exist_schema  
                    || exist_schema->get_sensitive_rule_id() != schema.get_sensitive_rule_id())) {
       ret = OB_SENSITIVE_COLUMN_NOT_EXIST;
       LOG_WARN("sensitive column not exist", K(ret), K(item));
-      LOG_USER_ERROR(OB_SENSITIVE_COLUMN_NOT_EXIST, table_schema->get_table_name_str().length(),
-                                                    table_schema->get_table_name_str().ptr(),
-                                                    column_schema->get_column_name_str().length(),
+      LOG_USER_ERROR(OB_SENSITIVE_COLUMN_NOT_EXIST, table_schema->get_table_name_str().length(), 
+                                                    table_schema->get_table_name_str().ptr(), 
+                                                    column_schema->get_column_name_str().length(), 
                                                     column_schema->get_column_name_str().ptr());
     } else if (!should_exist && NULL != exist_schema) {
       ret = OB_SENSITIVE_COLUMN_EXIST;
       LOG_WARN("sensitive column already exist", K(ret), K(item));
-      LOG_USER_ERROR(OB_SENSITIVE_COLUMN_EXIST, table_schema->get_table_name_str().length(),
-                                                table_schema->get_table_name_str().ptr(),
-                                                column_schema->get_column_name_str().length(),
+      LOG_USER_ERROR(OB_SENSITIVE_COLUMN_EXIST, table_schema->get_table_name_str().length(), 
+                                                table_schema->get_table_name_str().ptr(), 
+                                                column_schema->get_column_name_str().length(), 
                                                 column_schema->get_column_name_str().ptr());
     } else { /* do nothing */ }
   }
@@ -122,7 +122,7 @@ int ObSensitiveRuleDDLService::ddl_validation_check(ObSchemaOperationType ddl_ty
   const uint64_t tenant_id = new_schema.get_tenant_id();
   bool is_schema_exist = false;
   const ObSensitiveRuleSchema *old_schema = NULL;
-  if (OB_FAIL(schema_guard.get_sensitive_rule_schema_by_name(tenant_id,
+  if (OB_FAIL(schema_guard.get_sensitive_rule_schema_by_name(tenant_id, 
                                                              new_schema.get_sensitive_rule_name_str(),
                                                              old_schema))) {
     LOG_WARN("failed to check if schema exists", K(ret));
@@ -132,7 +132,7 @@ int ObSensitiveRuleDDLService::ddl_validation_check(ObSchemaOperationType ddl_ty
         if (OB_NOT_NULL(old_schema)) {
           ret = OB_SENSITIVE_RULE_EXIST;
           LOG_WARN("sensitive rule already exist", K(ret), K(old_schema));
-          LOG_USER_ERROR(OB_SENSITIVE_RULE_EXIST, old_schema->get_sensitive_rule_name_str().length(),
+          LOG_USER_ERROR(OB_SENSITIVE_RULE_EXIST, old_schema->get_sensitive_rule_name_str().length(), 
                                                   old_schema->get_sensitive_rule_name_str().ptr());
         } else if (OB_FAIL(sensitive_field_validation_check(new_schema, schema_guard, false))) {
           LOG_WARN("check if sensitive column exists failed", K(ret));
@@ -147,13 +147,13 @@ int ObSensitiveRuleDDLService::ddl_validation_check(ObSchemaOperationType ddl_ty
         if (OB_ISNULL(old_schema)) {
           ret = OB_SENSITIVE_RULE_NOT_EXIST;
           LOG_WARN("sensitive rule not exist", K(ret), K(new_schema));
-          LOG_USER_ERROR(OB_SENSITIVE_RULE_NOT_EXIST, new_schema.get_sensitive_rule_name_str().length(),
+          LOG_USER_ERROR(OB_SENSITIVE_RULE_NOT_EXIST, new_schema.get_sensitive_rule_name_str().length(), 
                                                       new_schema.get_sensitive_rule_name_str().ptr());
         } else if (FALSE_IT(new_schema.set_sensitive_rule_id(old_schema->get_sensitive_rule_id()))) {
-        } else if (OB_DDL_ALTER_SENSITIVE_RULE_ADD_COLUMN == ddl_type
+        } else if (OB_DDL_ALTER_SENSITIVE_RULE_ADD_COLUMN == ddl_type 
                    && OB_FAIL(sensitive_field_validation_check(new_schema, schema_guard, false))) {
           LOG_WARN("check if sensitive column exists failed", K(ret));
-        } else if (OB_DDL_ALTER_SENSITIVE_RULE_DROP_COLUMN == ddl_type
+        } else if (OB_DDL_ALTER_SENSITIVE_RULE_DROP_COLUMN == ddl_type 
                    && OB_FAIL(sensitive_field_validation_check(new_schema, schema_guard, true))) {
           LOG_WARN("check if sensitive column exists failed", K(ret));
         }
@@ -193,7 +193,7 @@ int ObSensitiveRuleDDLService::handle_sensitive_rule_ddl(const ObSensitiveRuleDD
   } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
     LOG_WARN("failed to get tenant schema version", K(ret), K(tenant_id));
   } else {
-    // 2. start DDL transaction
+    // 2. start DDL transaction 
     ObDDLSQLTransaction trans(&ddl_service_->get_schema_service());
     ObSensitiveRuleDDLOperator ddl_operator(ddl_service_->get_schema_service(), ddl_service_->get_sql_proxy());
     if (OB_FAIL(trans.start(&ddl_service_->get_sql_proxy(), tenant_id, refreshed_schema_version))) {
@@ -202,11 +202,11 @@ int ObSensitiveRuleDDLService::handle_sensitive_rule_ddl(const ObSensitiveRuleDD
     } else if (OB_FAIL(ddl_validation_check(arg.ddl_type_, schema, schema_guard))) {
       LOG_WARN("ddl validation check failed", K(ret));
     // 4. call ObDDLOperator related function & update related table schema
-    } else if (OB_FAIL(ddl_operator.handle_sensitive_rule_function(schema,
-                                                                   trans,
-                                                                   arg.ddl_type_,
-                                                                   arg.ddl_stmt_str_,
-                                                                   tenant_id,
+    } else if (OB_FAIL(ddl_operator.handle_sensitive_rule_function(schema, 
+                                                                   trans, 
+                                                                   arg.ddl_type_, 
+                                                                   arg.ddl_stmt_str_, 
+                                                                   tenant_id, 
                                                                    schema_guard,
                                                                    arg.user_id_))) {
       LOG_WARN("handle sensitive rule function failed", K(ret));
@@ -351,9 +351,9 @@ int ObSensitiveRuleDDLService::drop_sensitive_column_caused_by_drop_column_onlin
   } else if (OB_FAIL(ddl_service_->check_inner_stat())) {
     LOG_WARN("check inner stat failed", KR(ret));
   } else {
-    ObSensitiveRuleDDLOperator sensitive_rule_ddl_operator(ddl_service_->get_schema_service(),
+    ObSensitiveRuleDDLOperator sensitive_rule_ddl_operator(ddl_service_->get_schema_service(), 
                                                            ddl_service_->get_sql_proxy());
-    if (OB_FAIL(sensitive_rule_ddl_operator.drop_sensitive_column_cascades(origin_table_schema,
+    if (OB_FAIL(sensitive_rule_ddl_operator.drop_sensitive_column_cascades(origin_table_schema, 
                                                                            drop_cols_id_arr,
                                                                            trans, schema_guard))) {
       LOG_WARN("drop sensitive column in drop table failed", KR(ret), K(origin_table_schema));
@@ -384,7 +384,7 @@ int ObSensitiveRuleDDLService::rebuild_hidden_table_sensitive_columns(
   } else if (OB_FAIL(col_name_map.init(orig_table_schema, hidden_table_schema, alter_table_schema))) {
     LOG_WARN("failed to init column name map", K(ret));
   } else {
-    ObSensitiveRuleDDLOperator sensitive_rule_ddl_operator(ddl_service_->get_schema_service(),
+    ObSensitiveRuleDDLOperator sensitive_rule_ddl_operator(ddl_service_->get_schema_service(), 
                                                            ddl_service_->get_sql_proxy());
     for (int64_t i = 0; OB_SUCC(ret) && i < sensitive_rules.count(); i++) {
       const ObSensitiveRuleSchema *sensitive_rule = sensitive_rules.at(i);
@@ -417,9 +417,9 @@ int ObSensitiveRuleDDLService::rebuild_hidden_table_sensitive_columns(
           } else if (OB_ISNULL(hidden_col_schema = hidden_table_schema.get_column_schema(hidden_col_name))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("hidden col schema is null", KR(ret));
-          } else if (OB_FAIL(rebuild_schema.add_sensitive_field_item(hidden_table_schema.get_table_id(),
+          } else if (OB_FAIL(rebuild_schema.add_sensitive_field_item(hidden_table_schema.get_table_id(), 
                                                                      hidden_col_schema->get_column_id()))) {
-            LOG_WARN("add sensitive field item failed",
+            LOG_WARN("add sensitive field item failed", 
                      KR(ret), K(hidden_table_schema.get_table_id()), K(hidden_col_schema->get_column_id()));
           }
         }
@@ -438,20 +438,20 @@ int ObSensitiveRuleDDLService::rebuild_hidden_table_sensitive_columns(
       //     ObSensitiveFieldItem orig_item(orig_col_schema->get_table_id(), orig_col_schema->get_column_id());
       //     if (!has_exist_in_array(sensitive_rule->get_sensitive_field_items(), orig_item)) {
       //       // not sensitive column, do nothing
-      //     } else if (OB_FAIL(rebuild_schema.add_sensitive_field_item(hidden_table_schema.get_table_id(),
+      //     } else if (OB_FAIL(rebuild_schema.add_sensitive_field_item(hidden_table_schema.get_table_id(), 
       //                                                                hidden_col_schema->get_column_id()))) {
-      //       LOG_WARN("add sensitive field item failed",
+      //       LOG_WARN("add sensitive field item failed", 
       //                KR(ret), K(hidden_table_schema.get_table_id()), K(hidden_col_schema->get_column_id()));
       //     }
       //   }
       // }
       if (OB_FAIL(ret)) {
       } else if(OB_FAIL(sensitive_rule_ddl_operator.handle_sensitive_rule_function(
-                                                      rebuild_schema, trans,
+                                                      rebuild_schema, trans, 
                                                       OB_DDL_ALTER_SENSITIVE_RULE_ADD_COLUMN,
-                                                      empty_ddl_stmt, tenant_id,
+                                                      empty_ddl_stmt, tenant_id, 
                                                       schema_guard, OB_INVALID_ID))) {
-        LOG_WARN("failed to rebuild column for sensitive rule after creating hidden table",
+        LOG_WARN("failed to rebuild column for sensitive rule after creating hidden table", 
                   KR(ret), K(rebuild_schema));
       }
     }

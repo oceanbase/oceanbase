@@ -1,6 +1,6 @@
 The development guide is located under the [docs](docs/README.md) folder.
 
-# Contribution Guidelines
+# Contribution Guidelines 
 
 Welcome to [oceanbase]! We're thrilled that you'd like to contribute. Your help is essential for making it better.
 

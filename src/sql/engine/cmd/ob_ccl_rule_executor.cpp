@@ -74,7 +74,7 @@ int ObCreateCCLRuleExecutor::execute(ObExecContext &ctx, ObCreateCCLRuleStmt &st
       "ret", ret,
       "trace_id", *ObCurTraceId::get_trace_id(),
       "rpc_dst", common_rpc_proxy->get_server(),
-      "ccl_rule_id", database_id,
+      "ccl_rule_id", database_id, 
       "schema_version", create_ccl_rule_arg.ccl_rule_schema_.get_schema_version());
   }
   return ret;

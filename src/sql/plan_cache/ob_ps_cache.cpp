@@ -805,7 +805,7 @@ int ObPsCache::destroy_cached_ps(const ObPsStmtId inner_stmt_id)
       LOG_WARN("ps stmt info is NULL", K(ret), K(inner_stmt_id));
     } else if (OB_SUCCESS != (tmp_ret = erase_stmt_item(inner_stmt_id, stmt_info->get_sql_key()))){
       LOG_WARN("failed to erase stmt item", K(tmp_ret), K(inner_stmt_id));
-    }
+    } 
     if (OB_SUCC(ret)) {
       ObIAllocator *info_alloc = nullptr;
       if (OB_ISNULL(info_alloc = stmt_info->get_external_allocator())) {

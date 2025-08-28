@@ -72,7 +72,7 @@ public:
       const storage::ObGetMergeTablesParam &param,
       storage::ObLS &ls,
       const storage::ObTablet &tablet,
-      storage::ObGetMergeTablesResult &result);
+      storage::ObGetMergeTablesResult &result);  
   static int get_convert_co_major_merge_tables(
       const storage::ObGetMergeTablesParam &param,
       storage::ObLS &ls,
@@ -303,7 +303,7 @@ private:
         const storage::ObTablet &tablet,
         storage::ObGetMergeTablesResult &result);
   static int add_meta_merge_result(
-      storage::ObITable *table,
+      storage::ObITable *table,  
       const storage::ObStorageMetaHandle &table_meta_handle,
       storage::ObGetMergeTablesResult &result,
       const bool update_snapshot_flag);
@@ -386,11 +386,11 @@ public:
       const ObStorageSchema &storage_schema,
       ObCOMajorSSTableStatus &major_sstable_status);
   static bool whether_to_build_row_store(
-      const int64_t &estimate_row_cnt,
+      const int64_t &estimate_row_cnt, 
       const int64_t &column_cnt);
   static bool whether_to_rebuild_column_store(
       const ObCOMajorSSTableStatus &major_sstable_status,
-      const int64_t &estimate_row_cnt,
+      const int64_t &estimate_row_cnt, 
       const int64_t &column_cnt);
   static int accumulate_physical_row_cnt(
       const ObIArray<ObITable *> &tables,
@@ -402,7 +402,7 @@ public:
       ObCOMajorMergeType &major_merge_type);
 
 private:
-  // Thresholds for swtiching major sstable
+  // Thresholds for swtiching major sstable 
   // build row store
   static const int64_t ROW_CNT_THRESHOLD_BUILD_ROW_STORE = 10000;
   static const int64_t COL_CNT_THRESHOLD_BUILD_ROW_STORE = 3;

@@ -59,7 +59,7 @@ int pwrite_one_log_by_log_storage(PalfHandleImplGuard &leader, const LogGroupEnt
     PALF_LOG(ERROR, "openat failed", K(ret), K(block_path), KPC(log_storage));
   } else if (OB_FAIL(entry.serialize(serialize_buf, entry.get_serialize_size(), pos))) {
     PALF_LOG(ERROR, "serialize failed", K(ret), K(block_path), KPC(log_storage), K(entry));
-  } else if (0 >= pwrite(block_fd,
+  } else if (0 >= pwrite(block_fd, 
         serialize_buf,
         entry.get_serialize_size(), write_offset)) {
     ret = convert_sys_errno();
@@ -123,7 +123,7 @@ TEST_F(TestObSimpleLogDataIntergrity, accumlate_checksum)
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 2, id, 1234));
     const LSN end_max_lsn = leader.get_palf_handle_impl()->get_max_lsn();
     EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, end_max_lsn));
-
+      
     LSN curr_lsn;
     LogGroupEntry entry;
     PalfGroupBufferIterator iterator;
@@ -167,7 +167,7 @@ TEST_F(TestObSimpleLogDataIntergrity, accumlate_checksum)
     int64_t pos = sizeof(LogGroupEntryHeader);
     DataFaultInject inject = [&pos, &entry](char *buf) {
       int64_t memset_len = entry.get_serialize_size()-pos;
-      memset(buf+pos, 0, memset_len);
+      memset(buf+pos, 0, memset_len); 
     };
     EXPECT_EQ(OB_SUCCESS, make_log_group_entry_partial_error(entry, output_buf, inject));
     EXPECT_EQ(OB_SUCCESS, pwrite_one_log_by_log_storage(leader, entry, max_lsn));
@@ -212,7 +212,7 @@ TEST_F(TestObSimpleLogDataIntergrity, accumlate_checksum)
     int64_t pos = sizeof(LogGroupEntryHeader) + 16;
     DataFaultInject inject = [&pos, &entry](char *buf) {
       int64_t memset_len = entry.get_serialize_size()-pos;
-      memset(buf+pos, 0, memset_len);
+      memset(buf+pos, 0, memset_len); 
     };
     EXPECT_EQ(OB_SUCCESS, make_log_group_entry_partial_error(entry, output_buf, inject));
     EXPECT_EQ(OB_SUCCESS, pwrite_one_log_by_log_storage(leader, entry, max_lsn));
@@ -343,7 +343,7 @@ TEST_F(TestObSimpleLogDataIntergrity, log_corrupted)
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 2, id, 1234));
   const LSN end_max_lsn = leader.get_palf_handle_impl()->get_max_lsn();
   EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, end_max_lsn));
-
+    
   LSN curr_lsn;
   LogGroupEntry entry;
   PalfGroupBufferIterator iterator;
@@ -372,3 +372,4 @@ int main(int argc, char **argv)
 {
   RUN_SIMPLE_LOG_CLUSTER_TEST(TEST_NAME);
 }
+

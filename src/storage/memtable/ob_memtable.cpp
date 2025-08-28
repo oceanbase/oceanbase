@@ -892,10 +892,10 @@ int ObMemtable::get(
 
 /**
  * @brief Construct iterator for table scan or mini merge
- *
- * @param[in] param
- * @param[in] context
- * @param[in] range
+ * 
+ * @param[in] param 
+ * @param[in] context 
+ * @param[in] range 
  * @param[out] row_iter return an iterator if constructing is successful
  */
 int ObMemtable::scan(const ObTableIterParam &param,
@@ -3579,7 +3579,7 @@ int ObMemtable::check_set_row_with_nop_col_(const ObMemtableSetArg &memtable_set
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(ERROR, "get unexpected nop column in delete_insert table", K(ret), K(has_nop_in_new_row), K(has_nop_in_old_row), KPC(new_row), KPC(old_row));
       }
-
+      
     }
   }
   return ret;

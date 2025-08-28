@@ -106,7 +106,7 @@ public:
   }
   ~ObSessionDDLInfo() = default;
   inline int init (const InnerDDLInfo ddl_info,
-                   const uint64_t session_id) { ddl_info_ = ddl_info;
+                   const uint64_t session_id) { ddl_info_ = ddl_info;  
                                                 session_id_ = session_id;
                                                 return is_valid() ? OB_SUCCESS
                                                                     : OB_INVALID_ARGUMENT; }
@@ -239,7 +239,7 @@ class ObDbLinkProxy : public ObCommonSqlProxy
 public:
   virtual bool is_oracle_mode() const override { return true; }
   virtual int init(sqlclient::ObDbLinkConnectionPool *pool);
-  int create_dblink_pool(const sqlclient::dblink_param_ctx &param_ctx,
+  int create_dblink_pool(const sqlclient::dblink_param_ctx &param_ctx, 
                          const ObString &host_name, int32_t port,
                          const ObString &db_tenant, const ObString &db_user,
                          const ObString &db_pass, const ObString &db_name,

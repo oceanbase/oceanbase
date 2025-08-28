@@ -592,7 +592,7 @@ ob_set_subtarget(ob_share schema
   schema/ob_ccl_schema_struct.cpp
   schema/ob_ccl_rule_mgr.cpp
   schema/ob_ccl_rule_sql_service.cpp
-
+  
   schema/ob_sensitive_rule_mgr.cpp
   schema/ob_sensitive_rule_schema_struct.cpp
   schema/ob_sensitive_rule_sql_service.cpp

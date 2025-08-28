@@ -35,7 +35,7 @@ int ObSSTableMacroBlockChecker::check(
         K(check_level));
   } else if (ObMacroBlockCheckLevel::CHECK_LEVEL_NONE == check_level) {
     //do nothing
-  } else if (ObMacroBlockCommonHeader::MACRO_BLOCK_COMMON_HEADER_MAGIC ==
+  } else if (ObMacroBlockCommonHeader::MACRO_BLOCK_COMMON_HEADER_MAGIC == 
              reinterpret_cast<const ObMacroBlockCommonHeader*>(macro_block_buf + pos)->get_magic()) {
     ObMacroBlockCommonHeader common_header;
     if (OB_FAIL(common_header.deserialize(macro_block_buf, macro_block_buf_size, pos))) {
@@ -58,7 +58,7 @@ int ObSSTableMacroBlockChecker::check(
       STORAGE_LOG(WARN, "fail to check logical checksum", K(ret), K(common_header),
           KP(macro_block_buf), K(macro_block_buf_size));
     }
-  } else if (ObSharedObjectHeader::OB_SHARED_BLOCK_HEADER_MAGIC ==
+  } else if (ObSharedObjectHeader::OB_SHARED_BLOCK_HEADER_MAGIC == 
              reinterpret_cast<const ObSharedObjectHeader*>(macro_block_buf + pos)->magic_) {
     ObSharedObjectHeader shared_obj_header;
     if (OB_FAIL(shared_obj_header.deserialize(macro_block_buf, macro_block_buf_size, pos))) {
@@ -74,7 +74,7 @@ int ObSSTableMacroBlockChecker::check(
     }
   } else {
     ret = OB_NOT_SUPPORTED;
-    STORAGE_LOG(ERROR, "BlockHeader should be ObMacroBlockCommonHeader or OB_SHARED_BLOCK_HEADER_MAGIC",
+    STORAGE_LOG(ERROR, "BlockHeader should be ObMacroBlockCommonHeader or OB_SHARED_BLOCK_HEADER_MAGIC", 
               K(ret), KP(macro_block_buf), K(macro_block_buf_size), K(pos));
   }
   return ret;

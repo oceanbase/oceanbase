@@ -187,7 +187,7 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
     LOG_WARN("fail to get host.", K(root_->get_server()), K(ret));
   } else {
     close();
-    LOG_INFO("connecting to mysql server", "ip", host, "port", root_->get_server().get_port(),
+    LOG_INFO("connecting to mysql server", "ip", host, "port", root_->get_server().get_port(), 
               "host_name", root_->get_host_name(), "host port", root_->get_port());
     mysql_init(&mysql_);
 #ifdef OB_BUILD_TDE_SECURITY
@@ -667,7 +667,7 @@ int ObMySQLConnection::set_session_variable(const ObString &name, const ObString
 
 // When the main database is in the switching state, the external SQL will be affected by the ob_read_consistency set by the user, and the standby database may weakly read the internal table, but an error is reported because multiple versions do not exist.
 // In fact, the current code does not require external SQL to weaken consistent reads. For the implementation of ObMySqlConnection, it is restricted to use strong consistent reads.
-// bug:
+// bug: 
 int ObMySQLConnection::reset_read_consistency()
 {
   int ret = OB_SUCCESS;

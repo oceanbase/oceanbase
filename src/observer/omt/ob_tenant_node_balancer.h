@@ -80,7 +80,7 @@ private:
   static const int64_t RECYCLE_LATENCY = 180L * 1000L * 1000L;
   ObTenantNodeBalancer();
   ~ObTenantNodeBalancer();
-
+  
   int check_new_tenants(share::TenantUnits &units);
   int check_new_tenant(const share::ObUnitInfoGetter::ObTenantConfig &unit,
                        const bool check_data_version,

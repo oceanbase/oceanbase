@@ -44,15 +44,15 @@ private:
   /* functions */
   int switch_resource_plan(const uint64_t tenant_id, common::ObString &plan_name);
   int flush_directive_to_cgroup_fs(ObPlanDirectiveSet &directives);
-  int flush_directive_to_iops_control(const uint64_t tenant_id,
-                                      ObPlanDirectiveSet &directives,
+  int flush_directive_to_iops_control(const uint64_t tenant_id, 
+                                      ObPlanDirectiveSet &directives, 
                                       ObPlanDirective &other_group_directive);
   int clear_deleted_directives(const uint64_t tenant_id, ObPlanDirectiveSet &directives);
-  int normalize_iops_directives(const uint64_t tenant_id,
-                                ObPlanDirectiveSet &directives,
+  int normalize_iops_directives(const uint64_t tenant_id, 
+                                ObPlanDirectiveSet &directives, 
                                 ObPlanDirective &other_group_directive);
-  int normalize_net_bandwidth_directives(const uint64_t tenant_id,
-                                         ObPlanDirectiveSet &directives,
+  int normalize_net_bandwidth_directives(const uint64_t tenant_id, 
+                                         ObPlanDirectiveSet &directives, 
                                          ObPlanDirective &other_group_directive);
   common::hash::ObHashMap<uint64_t, ObResMgrVarcharValue> tenant_plan_map_;
   int32_t background_quota_;

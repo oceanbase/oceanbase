@@ -59,10 +59,10 @@ typedef ObDList<ObRangeExprDesc> ExprDescList;
 struct OffsetDesc
 {
   OffsetDesc()
-  : min_(INT64_MAX), max_(0)
+  : min_(INT64_MAX), max_(0) 
   {}
   OffsetDesc(const OffsetDesc &other)
-  : min_(other.min_), max_(other.max_)
+  : min_(other.min_), max_(other.max_) 
   {}
   inline void merge_desc(const OffsetDesc &other)
   {
@@ -113,7 +113,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObRangeNode);
 public:
   common::ObIAllocator &allocator_;
-  union {
+  union {  
     uint32_t flags_;
     struct { // FARM COMPAT WHITELIST
       uint32_t always_true_:    1;
@@ -124,8 +124,8 @@ public:
       uint32_t is_phy_rowid_:   1;
       uint32_t is_domain_node_: 1; // FARM COMPAT WHITELIST
       uint32_t is_not_in_node_: 1;
-      uint32_t is_like_node_:   1; // for generate range expr
-      uint32_t is_rowid_node_:  1; // for generate range expr
+      uint32_t is_like_node_:   1; // for generate range expr 
+      uint32_t is_rowid_node_:  1; // for generate range expr 
       uint32_t reserved_:      22;
     };
   };
@@ -167,7 +167,7 @@ public:
         uint32_t is_expr_:        1;
         uint32_t null_safe_:      1;
         /**
-         * rowid_idx_ =
+         * rowid_idx_ = 
          *  0     : current final info is not rowid
          *  1-129 : current final info is logical rowid
          *  255   : current final info is physical rowid
@@ -218,7 +218,7 @@ class ObFastFinalPos
 {
   OB_UNIS_VERSION(1);
 public:
-  ObFastFinalPos() :
+  ObFastFinalPos() : 
     index_(-1),
     offset_(-1),
     flags_(0) {}
@@ -460,7 +460,7 @@ public:
   int set_ss_range_exprs(ObIArray<ObRawExpr*> &range_exprs) { return ss_range_exprs_.assign(range_exprs); }
   int set_unprecise_range_exprs(ObIArray<ObRawExpr*> &range_exprs) { return unprecise_range_exprs_.assign(range_exprs); }
   void set_fast_nlj_range(bool v) { fast_nlj_range_ = v; }
-
+  
   int serialize_range_graph(ObRangeNode *range_node, char *buf,
                             int64_t buf_len, int64_t &pos) const;
   int deserialize_range_graph(ObRangeNode *&range_node, const char *buf,

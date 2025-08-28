@@ -20,7 +20,7 @@ namespace sql
 {
 int ObFtsEvalNode::print_node(ObFtsEvalNode *node, const ObArray<ObString> &tokens, int level)
 {
-  int ret = OB_SUCCESS;
+  int ret = OB_SUCCESS;  
   if (!node) {
   } else if (node->leaf_node_) {
     LOG_WARN("fts compute leaf node:", K(level), K(node->postion_), K(tokens.at(node->postion_)));

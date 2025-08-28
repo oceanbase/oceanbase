@@ -21,7 +21,7 @@ namespace storage
 namespace checkpoint
 {
 
-void ObTraceInfo::init(const int64_t trace_id,
+void ObTraceInfo::init(const int64_t trace_id, 
     const share::ObLSID &ls_id,
     const int64_t checkpoint_start_time)
 {
@@ -225,8 +225,8 @@ int ObCheckpointDiagnoseMgr::update_start_gc_time_for_checkpoint_unit(const ObCh
   return ret;
 }
 
-void UpdateFreezeInfo::operator()(ObMemtableDiagnoseInfo &info) const
-{
+void UpdateFreezeInfo::operator()(ObMemtableDiagnoseInfo &info) const 
+{  
   const int64_t start_time = ObTimeUtility::current_time();
   info.rec_scn_ = rec_scn_;
   info.start_scn_ = start_scn_;
@@ -234,12 +234,12 @@ void UpdateFreezeInfo::operator()(ObMemtableDiagnoseInfo &info) const
   info.occupy_size_ = occupy_size_;
   info.frozen_finish_time_ = start_time;
   TRANS_LOG(INFO, "update_freeze_info", K(info), K(param_));
-}
+}                               
 int ObCheckpointDiagnoseMgr::update_freeze_info(const ObCheckpointDiagnoseParam &param,
     const share::SCN &rec_scn,
     const share::SCN &start_scn,
     const share::SCN &end_scn,
-    const int64_t occupy_size)
+    const int64_t occupy_size) 
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -253,7 +253,7 @@ int ObCheckpointDiagnoseMgr::update_freeze_info(const ObCheckpointDiagnoseParam 
     if (OB_ISNULL(trace_info_ptr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("trace_info is NULL", KR(ret), K(param));
-    } else if (OB_FAIL(trace_info_ptr->update_diagnose_info<ObMemtableDiagnoseInfo>(param,
+    } else if (OB_FAIL(trace_info_ptr->update_diagnose_info<ObMemtableDiagnoseInfo>(param, 
             UpdateFreezeInfo(param, rec_scn, start_scn, end_scn, occupy_size)))) {
       LOG_WARN("failed to add_memtable_diagnose_info", KR(ret), K(param));
 
@@ -334,14 +334,14 @@ int ObCheckpointDiagnoseMgr::update_start_gc_time_for_memtable(const ObCheckpoin
   return ret;
 }
 
-void UpdateMergeInfoForMemtable::operator()(ObMemtableDiagnoseInfo &info) const
-{
+void UpdateMergeInfoForMemtable::operator()(ObMemtableDiagnoseInfo &info) const 
+{  
   info.merge_start_time_ = merge_start_time_;
   info.merge_finish_time_ = merge_finish_time_;
   info.occupy_size_ = occupy_size_;
   info.concurrent_cnt_ = concurrent_cnt_;
   TRANS_LOG(DEBUG, "update_merge_info", K(info), K(param_));
-}
+}                               
 int ObCheckpointDiagnoseMgr::update_merge_info_for_memtable(const ObCheckpointDiagnoseParam &param,
     int64_t merge_start_time,
     int64_t merge_finish_time,
@@ -369,14 +369,14 @@ int ObCheckpointDiagnoseMgr::update_merge_info_for_memtable(const ObCheckpointDi
   return ret;
 }
 
-int GetTraceInfoForMemtable::operator()(ObTraceInfo &trace_info) const
-{
+int GetTraceInfoForMemtable::operator()(ObTraceInfo &trace_info) const 
+{  
   if (param_.freeze_clock_ == trace_info.freeze_clock_ - 1
       && param_.ls_id_ == trace_info.ls_id_.id()) {
     ret_ = &trace_info;
   }
   return OB_SUCCESS;
-}
+}                               
 ObTraceInfo* ObCheckpointDiagnoseMgr::get_trace_info_for_memtable(const ObCheckpointDiagnoseParam &param)
 {
   ObTraceInfo *ret = NULL;

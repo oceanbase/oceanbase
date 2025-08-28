@@ -121,7 +121,7 @@ void TabletLocationRateLimit::control_rate_limit(
   } else {
     wait_ts = calc_wait_ts_(tablet_cnt, max(exec_ts, 0), rate_limit_conf);
     if (wait_ts > 0) {
-      FLOG_INFO("[LOCATION_STATISTIC] rate limit",
+      FLOG_INFO("[LOCATION_STATISTIC] rate limit", 
                 K_(tablet_cnt), K_(start_ts), K(exec_ts),
                 K(rate_limit_conf), K(wait_ts));
       ob_usleep(static_cast<useconds_t>(wait_ts));

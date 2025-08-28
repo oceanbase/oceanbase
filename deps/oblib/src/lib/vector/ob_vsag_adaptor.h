@@ -48,14 +48,14 @@ public:
 };
 /**
  *   * Get the version based on git revision
- *   *
+ *   * 
  *   * @return the version text
  *   */
 extern std::string version();
 
 /**
  *   * Init the vsag library
- *   *
+ *   * 
  *   * @return true always
  *   */
 extern bool is_init();
@@ -79,9 +79,9 @@ int construct_vsag_create_param(
     int max_degree, int ef_construction, int ef_search, void *allocator,
     int extra_info_size, int16_t refine_type, int16_t bq_bits_query,
     bool bq_use_fht, char *result_param_str);
-int construct_vsag_search_param(uint8_t create_type,
-                                             int64_t ef_search,
-                                             bool use_extra_info_filter,
+int construct_vsag_search_param(uint8_t create_type, 
+                                             int64_t ef_search, 
+                                             bool use_extra_info_filter, 
                                              char *result_param_str);
 int create_index(VectorIndexPtr& index_handler, IndexType index_type,
                  const char* dtype,
@@ -112,9 +112,9 @@ int fdeserialize(VectorIndexPtr& index_handler, std::istream& in_stream);
 int delete_index(VectorIndexPtr& index_handler);
 void delete_iter_ctx(void *iter_ctx);
 uint64_t estimate_memory(VectorIndexPtr& index_handler, const uint64_t row_count, const bool is_build);
-int get_extra_info_by_ids(VectorIndexPtr& index_handler,
-                          const int64_t* ids,
-                          int64_t count,
+int get_extra_info_by_ids(VectorIndexPtr& index_handler, 
+                          const int64_t* ids, 
+                          int64_t count, 
                           char *extra_infos);
 int immutable_optimize(VectorIndexPtr& index_handler);
 

@@ -79,7 +79,7 @@ int ObTableLoadBackupMicroBlockRecordHeader_V_1_4::check_record(const char *ptr,
     ret = OB_BUF_NOT_ENOUGH;
     LOG_WARN("invalid args, header size too small", K(record_header_len), K(size));
   } else {
-    const ObTableLoadBackupMicroBlockRecordHeader_V_1_4 *header =
+    const ObTableLoadBackupMicroBlockRecordHeader_V_1_4 *header = 
             reinterpret_cast<const ObTableLoadBackupMicroBlockRecordHeader_V_1_4*>(ptr);
     const char *payload_ptr = ptr + record_header_len;
     int64_t payload_size = size - record_header_len;
@@ -103,15 +103,15 @@ int ObTableLoadBackupMicroBlockRecordHeader_V_1_4::check_record(const char *ptr,
 /**
  * ObTableLoadBackupMicroBlockScanner_V_1_4
  */
-int ObTableLoadBackupMicroBlockScanner_V_1_4::init(const char *buf,
-                                                   const ObIArray<int64_t> *column_ids,
+int ObTableLoadBackupMicroBlockScanner_V_1_4::init(const char *buf, 
+                                                   const ObIArray<int64_t> *column_ids, 
                                                    const ObTableLoadBackupColumnMap_V_1_4 *column_map)
 {
   int ret = OB_SUCCESS;
   // meta只在内部的scan中可能会用到，所以为nullptr是可能存在的
-  if (OB_UNLIKELY(buf == nullptr ||
-                  column_ids == nullptr ||
-                  column_map == nullptr ||
+  if (OB_UNLIKELY(buf == nullptr || 
+                  column_ids == nullptr || 
+                  column_map == nullptr || 
                   !column_map->is_inited())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(buf), KP(column_ids), KP(column_map));
@@ -150,11 +150,11 @@ int ObTableLoadBackupMicroBlockScanner_V_1_4::get_next_row(common::ObNewRow &row
     LOG_WARN("not init", KR(ret));
   } else if(cur_idx_ >= header_->row_count_) {
     ret = OB_ITER_END;
-  } else if (OB_FAIL(reader_.read_meta_row(*column_ids_,
-                                           column_map_,
-                                           data_begin_,
-                                           *(index_begin_ + cur_idx_ + 1),
-                                           *(index_begin_ + cur_idx_),
+  } else if (OB_FAIL(reader_.read_meta_row(*column_ids_, 
+                                           column_map_, 
+                                           data_begin_, 
+                                           *(index_begin_ + cur_idx_ + 1), 
+                                           *(index_begin_ + cur_idx_), 
                                            row))) {
     LOG_WARN("row reader fail to read row", KR(ret));
   } else {

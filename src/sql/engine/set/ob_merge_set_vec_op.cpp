@@ -317,7 +317,7 @@ int ObMergeSetVecOp::distinct_for_batch(ObOperator &child_op, const ObBatchRows 
   int64_t last_cmp_idx = first_active_idx;
   int64_t child_skip_cnt = row_brs.skip_->accumulate_bit_cnt(row_brs.size_);
   int last_row_cmp_ret = -1;
-
+  
   // 1.get first_no_skip
   result_brs.size_ = row_brs.size_;
   result_brs.skip_->set_all(row_brs.size_); // default skip
@@ -332,7 +332,7 @@ int ObMergeSetVecOp::distinct_for_batch(ObOperator &child_op, const ObBatchRows 
   } else {
     first_active_idx = 0;
   }
-
+  
   // 2. deduplicate last row
   if (!is_first) {
     if (compare_idx < 0) {
@@ -340,7 +340,7 @@ int ObMergeSetVecOp::distinct_for_batch(ObOperator &child_op, const ObBatchRows 
                       child_op.get_spec().output_,
                       curr_idx, eval_ctx_, last_row_cmp_ret))) {
         LOG_WARN("failed to compare row", K(ret));
-      }
+      } 
     } else if (compare_idx >= 0) {
       if (OB_FAIL(cmp_(compare_expr, child_op.get_spec().output_,
                       compare_idx, curr_idx, eval_ctx_, last_row_cmp_ret))) {
@@ -376,7 +376,7 @@ int ObMergeSetVecOp::distinct_for_batch(ObOperator &child_op, const ObBatchRows 
         case VEC_FIXED : {
           // 对big_int进行特化
           if (ob_is_integer_type(child_op.get_spec().output_.at(col_idx)->datum_meta_.type_)) {
-            ObFixedLengthVector<int64_t, VectorBasicOp<VEC_TC_INTEGER>> *fixed_vec =
+            ObFixedLengthVector<int64_t, VectorBasicOp<VEC_TC_INTEGER>> *fixed_vec = 
               static_cast<ObFixedLengthVector<int64_t, VectorBasicOp<VEC_TC_INTEGER>> *> (vec);
             if (OB_FAIL(compare_in_column_with_format<FixedLengthVectorBigInt>(fixed_vec, &row_brs,
                 first_active_idx, col_idx, last_idx, col_expr, result_brs))) {
@@ -392,7 +392,7 @@ int ObMergeSetVecOp::distinct_for_batch(ObOperator &child_op, const ObBatchRows 
         }
         case VEC_DISCRETE : {
           if (ob_is_string_tc(child_op.get_spec().output_.at(col_idx)->datum_meta_.type_)) {
-            ObDiscreteVector<VectorBasicOp<VEC_TC_STRING>> *string_vec =
+            ObDiscreteVector<VectorBasicOp<VEC_TC_STRING>> *string_vec = 
               static_cast<ObDiscreteVector<VectorBasicOp<VEC_TC_STRING>> *> (vec);
             if (OB_FAIL(compare_in_column_with_format<DiscreteVectorString>(string_vec, &row_brs,
                 first_active_idx, col_idx, last_idx, col_expr, result_brs))) {
@@ -413,7 +413,7 @@ int ObMergeSetVecOp::distinct_for_batch(ObOperator &child_op, const ObBatchRows 
           }
         }
       }
-      if (col_idx < child_op.get_spec().output_.count() - 1 &&
+      if (col_idx < child_op.get_spec().output_.count() - 1 && 
           result_brs.skip_->accumulate_bit_cnt(row_brs.size_) <= child_skip_cnt + (last_row_cmp_ret == 0 ? 1 : 0)) {
         break;
       }
@@ -433,20 +433,20 @@ int ObMergeSetVecOp::compare_in_column(InputVec * vec, int64_t first_active_idx,
   int64_t last_cmp_idx = first_active_idx;
   int64_t curr_idx = first_active_idx + 1;
   for (; curr_idx < child_brs->size_ && OB_SUCC(ret) ; curr_idx++) {
-    if (ALL_ROWS_ACTIVE && FIRST_COL) { // skip and out are false, do not continue, need compare
+    if (ALL_ROWS_ACTIVE && FIRST_COL) { // skip and out are false, do not continue, need compare 
     } else if (ALL_ROWS_ACTIVE && !FIRST_COL) { // skip is false, judge out
-      if (!result_brs.skip_->at(curr_idx)) {
+      if (!result_brs.skip_->at(curr_idx)) { 
         // curr_idx row is out, do not need compare, but need update last_cmp_idx
         last_cmp_idx = curr_idx;
-        continue;
+        continue; 
       }
     } else if (!ALL_ROWS_ACTIVE && FIRST_COL) { // out is false, judge skip
       if (child_brs->skip_->at(curr_idx)) { continue; } // skip row
     } else if (!ALL_ROWS_ACTIVE && !FIRST_COL) {
       if (child_brs->skip_->at(curr_idx)) { continue; }
-      if (!result_brs.skip_->at(curr_idx)) {
+      if (!result_brs.skip_->at(curr_idx)) { 
         last_cmp_idx = curr_idx;
-        continue;
+        continue; 
       }
     }
 
@@ -475,7 +475,7 @@ int ObMergeSetVecOp::compare_in_column(InputVec * vec, int64_t first_active_idx,
   return ret;
 }
 
-template<typename InputVec>
+template<typename InputVec> 
 int ObMergeSetVecOp::compare_in_column_with_format(InputVec *vec, const ObBatchRows *child_brs,
     int64_t first_active_idx, int64_t col_idx, int64_t &last_idx, const sql::ObExpr &col_expr,
     ObBatchRows &result_brs)

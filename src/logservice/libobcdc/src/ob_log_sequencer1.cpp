@@ -1122,7 +1122,7 @@ int ObLogSequencer::handle_multi_data_source_info_(
         }
       }
     }
-
+    
     if (OB_SUCC(ret) && part_trans_task->is_sys_ls_part_trans() && part_trans_task->need_update_table_id_cache()) {
       if (OB_FAIL(wait_until_parser_done_("update_table_id_cache_op", stop_flag))) {
         if (OB_IN_STOP_STATE != ret) {
@@ -1460,7 +1460,7 @@ int ObLogSequencer::update_table_id_cache_(IObLogPartMgr &part_mgr, const PartTr
       }
     }
   }
-
+  
   return ret;
 }
 

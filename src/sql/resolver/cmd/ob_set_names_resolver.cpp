@@ -58,7 +58,7 @@ int ObSetNamesResolver::resolve(const ParseNode &parse_tree)
           ObCollationType col_type = ObCharset::get_default_collation(ObCharset::charset_type(charset));
           if (!ObCharset::is_valid_collation(col_type)) {
             ret = OB_ERR_UNKNOWN_CHARSET;
-            LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, charset.length(), charset.ptr());
+            LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, charset.length(), charset.ptr()); 
           } else if (ObCharset::get_charset(col_type)->mbminlen > 1) {
             ret = OB_ERR_WRONG_VALUE_FOR_VAR;
             LOG_USER_ERROR(OB_ERR_WRONG_VALUE_FOR_VAR,

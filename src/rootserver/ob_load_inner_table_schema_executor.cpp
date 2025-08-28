@@ -30,7 +30,7 @@ const share::ObLoadInnerTableSchemaInfo *ObLoadInnerTableSchemaExecutor::ALL_LOA
     &share::ALL_CORE_TABLE_LOAD_INFO,
     &share::ALL_TABLE_LOAD_INFO,
     &share::ALL_COLUMN_LOAD_INFO,
-    &share::ALL_DDL_OPERATION_LOAD_INFO,
+    &share::ALL_DDL_OPERATION_LOAD_INFO,   
     &share::ALL_TABLE_HISTORY_LOAD_INFO,
     &share::ALL_COLUMN_HISTORY_LOAD_INFO,
 };
@@ -359,7 +359,7 @@ int ObLoadInnerTableSchemaExecutor::execute()
         LOG_WARN("this worker is timeout", KR(ret), K(THIS_WORKER.get_timeout_remain()));
       } else if (proxy.check_has_error_result()) { // check_has_error_result is not thread safe
         rpc_has_error = true;
-      } else if (finished_rpc_count + parallel_count_ > called_rpc_count ||
+      } else if (finished_rpc_count + parallel_count_ > called_rpc_count || 
           OB_UNLIKELY(get_load_schema_hang_enabled())) {
         if (OB_FAIL(call_next_arg_(proxy))) {
           LOG_WARN("failed to call next arg", KR(ret));

@@ -14,9 +14,9 @@
 
 using namespace oceanbase::obrpc;
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace common
+namespace common 
 {
 extern "C" {
 int ob_decode_pcode(const char *buf, const int64_t data_len, int64_t *pos, uint32_t *val)
@@ -59,7 +59,7 @@ int ob_judge_is_tableapi_pcode_from_raw_packet(const char *buf, ssize_t data_len
   int ret = OB_SUCCESS;
   if (NULL != buf) {
     int demand_length = OB_NET_HEADER_LENGTH + 4;
-    if (data_len >= demand_length && 0 == memcmp(buf, ObRpcPacket::MAGIC_HEADER_FLAG,
+    if (data_len >= demand_length && 0 == memcmp(buf, ObRpcPacket::MAGIC_HEADER_FLAG, 
         sizeof(ObRpcPacket::MAGIC_HEADER_FLAG))) {
       int64_t pos = 0;
       uint32_t pcode = 0;

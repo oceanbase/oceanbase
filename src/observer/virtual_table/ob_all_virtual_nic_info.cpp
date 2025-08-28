@@ -54,7 +54,7 @@ int ObAllVirtualNicInfo::inner_open()
       SERVER_LOG(WARN, "fail to deep copy GCONF.devname", K(GCONF.devname), K(ret));
     } else if (sizeof(devname_) < tmp_devname.length() + 1) {
       ret = OB_SIZE_OVERFLOW;
-      SERVER_LOG(WARN, "buff is not enough to hold devname",
+      SERVER_LOG(WARN, "buff is not enough to hold devname", 
           K(sizeof(devname_)), K(tmp_devname.length()), K(ret));
     } else {
       svr_port_ = svr_addr.get_port();
@@ -101,7 +101,7 @@ int ObAllVirtualNicInfo::inner_get_next_row(common::ObNewRow *&row)
             break;
           }
           case SPEED_MBPS: {
-            // bytes/sec --> Mbits/sec: speed_Mbps = speed_byte_ps * 8 / 1024 / 1024
+            // bytes/sec --> Mbits/sec: speed_Mbps = speed_byte_ps * 8 / 1024 / 1024 
             cells[i].set_int((ObServer::get_instance().get_network_speed()) >> 17);
             break;
           }

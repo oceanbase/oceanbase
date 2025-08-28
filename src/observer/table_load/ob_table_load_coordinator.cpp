@@ -386,10 +386,10 @@ int ObTableLoadCoordinator::calc_memory_size(
     ObDirectLoadResourceUnit &unit = apply_arg.apply_array_[i];
     int64_t min_sort_memory = unit.thread_count_ * ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT * 4;
     int64_t min_unsort_memory = 0;
-    int64_t thread_count = write_session_count;
+    int64_t thread_count = write_session_count; 
     // insert into 和 insert overwrite各个节点的并发在写入数据阶段是独立的
     if (ObDirectLoadMode::is_insert_overwrite(ctx_->param_.load_mode_) || ObDirectLoadMode::is_insert_into(ctx_->param_.load_mode_)) {
-      thread_count = unit.thread_count_;
+      thread_count = unit.thread_count_; 
     }
     if (ctx_->schema_.is_table_without_pk_) {
       if (!ctx_->param_.need_sort_) {
@@ -429,10 +429,10 @@ int ObTableLoadCoordinator::calc_memory_size(
     int64_t min_memory = MIN(min_part_memory *  unit.thread_count_, memory_limit); // 至少需要分配的内存
     int64_t min_sort_memory = MIN(unit.thread_count_ * ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT * 4, memory_limit); // 排序至少需要分配的内存
     int64_t min_unsort_memory = 0;
-    int64_t thread_count = write_session_count;
+    int64_t thread_count = write_session_count; 
     // insert into 和 insert overwrite各个节点的并发在写入数据阶段是独立的
     if (ObDirectLoadMode::is_insert_overwrite(ctx_->param_.load_mode_) || ObDirectLoadMode::is_insert_into(ctx_->param_.load_mode_)) {
-      thread_count = unit.thread_count_;
+      thread_count = unit.thread_count_; 
     }
     min_unsort_memory = MIN(part_unsort_memory * partitions[i] * thread_count, memory_limit); // 不排序最少需要分配的内存
     if (task_need_sort) {
@@ -451,7 +451,7 @@ int ObTableLoadCoordinator::calc_memory_size(
   return ret;
 }
 
-int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_arg)
+int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_arg) 
 {
   int ret = OB_SUCCESS;
   ObTenant *tenant = nullptr;
@@ -459,7 +459,7 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
   uint64_t cluster_version = ctx_->ddl_param_.cluster_version_;
   if (OB_FAIL(GCTX.omt_->get_tenant(tenant_id, tenant))) {
     LOG_INFO("fail to get tenant", KR(ret), K(tenant_id));
-  } else if (cluster_version < CLUSTER_VERSION_4_2_2_0 ||
+  } else if (cluster_version < CLUSTER_VERSION_4_2_2_0 || 
              (cluster_version >= CLUSTER_VERSION_4_3_0_0 && cluster_version < CLUSTER_VERSION_4_3_1_0)) {
     // not support resource manage
     if (OB_FAIL(coordinator_ctx_->init_partition_location_and_store_infos())) {
@@ -569,15 +569,15 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
           ctx_->param_.task_need_sort_ = task_need_sort;
           ctx_->param_.session_count_ = coord_session_count;
           ctx_->param_.write_session_count_ = write_session_count;
-          ctx_->param_.exe_mode_ = (ctx_->schema_.is_table_without_pk_ ?
-              (main_need_sort ? ObTableLoadExeMode::MULTIPLE_HEAP_TABLE_COMPACT : ObTableLoadExeMode::FAST_HEAP_TABLE) :
+          ctx_->param_.exe_mode_ = (ctx_->schema_.is_table_without_pk_ ? 
+              (main_need_sort ? ObTableLoadExeMode::MULTIPLE_HEAP_TABLE_COMPACT : ObTableLoadExeMode::FAST_HEAP_TABLE) : 
               (main_need_sort ? ObTableLoadExeMode::MEM_COMPACT : ObTableLoadExeMode::GENERAL_TABLE_COMPACT));
           ctx_->job_stat_->parallel_ = coord_session_count;
           if (OB_FAIL(ObTableLoadService::add_assigned_task(apply_arg))) {
             LOG_WARN("fail to add_assigned_task", KR(ret));
           } else {
             ctx_->set_assigned_resource();
-            FLOG_INFO("gen_apply_arg", K(retry_count), K(ctx_->param_), K(parallel_servers_target), K(limit_session_count), K(total_session_count),
+            FLOG_INFO("gen_apply_arg", K(retry_count), K(ctx_->param_), K(parallel_servers_target), K(limit_session_count), K(total_session_count), 
                 K(memory_limit), K(part_unsort_memory), K(min_part_memory), K(partitions), K(main_need_sort), K(task_need_sort), K(apply_arg));
             break;
           }
@@ -585,7 +585,7 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -2294,7 +2294,7 @@ int ObTableLoadCoordinator::write_peer_leader(const ObTableLoadTransId &trans_id
       int64_t buf_len = tablet_obj_rows.get_serialize_size();
       char *buf = static_cast<char *>(allocator.alloc(buf_len));
       if (OB_ISNULL(buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
+        ret = OB_ALLOCATE_MEMORY_FAILED; 
         LOG_WARN("failed to allocate memory", KR(ret), K(buf_len));
       } else if (OB_FAIL(tablet_obj_rows.serialize(buf, buf_len, pos))) {
         LOG_WARN("failed to serialize obj row array", KR(ret), KP(buf), K(buf_len), K(pos));

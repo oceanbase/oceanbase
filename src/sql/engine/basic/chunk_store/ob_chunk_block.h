@@ -86,7 +86,7 @@ public:
   int32_t extra_off_;
   int32_t fix_data_off_;
   int32_t var_data_off_;
-
+  
   ObFixedArray<int32_t, ObIAllocator> column_length_;
   ObFixedArray<int32_t, ObIAllocator> column_offset_;
 };

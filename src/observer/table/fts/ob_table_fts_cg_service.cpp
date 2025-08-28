@@ -230,8 +230,8 @@ int ObTableFtsExprCgService::generate_topn_related_params(ObTableCtx &ctx, ObTex
   return ret;
 }
 
-int ObTableFtsExprCgService::generate_match_against_exprs(ObTableCtx &ctx,
-                                                       ObMatchFunRawExpr *&match_expr,
+int ObTableFtsExprCgService::generate_match_against_exprs(ObTableCtx &ctx, 
+                                                       ObMatchFunRawExpr *&match_expr, 
                                                        ObRawExpr *&pushdown_match_filter)
 {
   int ret = OB_SUCCESS;
@@ -308,7 +308,7 @@ int ObTableFtsExprCgService::generate_match_against_exprs(ObTableCtx &ctx,
       match_expr = match_against;
     }
   }
-  // construct pushdown match filter:
+  // construct pushdown match filter: 
   //  T_OP_BOOL
   //     |
   // T_FUN_MATCH_AGAINST
@@ -402,12 +402,12 @@ int ObTableFtsDmlCgService::generate_rowkey_doc_das_ctdef(ObTableCtx &ctx, ObDAS
       }
     }
   }
-
+  
   return ret;
 }
 
-int ObTableFtsDmlCgService::generate_rowkey_doc_ctdef(ObTableCtx &ctx,
-                                                   ObIAllocator &allocator,
+int ObTableFtsDmlCgService::generate_rowkey_doc_ctdef(ObTableCtx &ctx, 
+                                                   ObIAllocator &allocator, 
                                                    ObDASAttachSpec &attach_spec,
                                                    ObDASScanCtDef *&rowkey_doc_scan_ctdef)
 {
@@ -535,7 +535,7 @@ int ObTableFtsDmlCgService::check_is_main_table_in_fts_ddl(ObTableCtx &ctx,
     if (OB_SUCC(ret)) {
       if ((has_fts_index && (0 == fts_index_aux_count || 0 == fts_doc_word_aux_count)) // fts aux index count is 0
           || is_main_table_in_fts_ddl // some fts index is building
-          || fts_index_aux_count != fts_doc_word_aux_count) { // fts aux index count not match
+          || fts_index_aux_count != fts_doc_word_aux_count) { // fts aux index count not match 
         das_dml_ctdef.is_main_table_in_fts_ddl_ = true;
       } else {
         das_dml_ctdef.is_main_table_in_fts_ddl_ = false;
@@ -547,8 +547,8 @@ int ObTableFtsDmlCgService::check_is_main_table_in_fts_ddl(ObTableCtx &ctx,
   return ret;
 }
 
-int ObTableFtsTscCgService::extract_text_ir_access_columns(const ObTableCtx &ctx,
-                                                           ObDASScanCtDef &scan_ctdef,
+int ObTableFtsTscCgService::extract_text_ir_access_columns(const ObTableCtx &ctx, 
+                                                           ObDASScanCtDef &scan_ctdef, 
                                                            ObIArray<ObRawExpr *> &access_exprs) {
   int ret = OB_SUCCESS;
   uint64_t scan_table_id = scan_ctdef.ref_table_id_;
@@ -569,7 +569,7 @@ int ObTableFtsTscCgService::extract_text_ir_access_columns(const ObTableCtx &ctx
       case ObTSCIRScanType::OB_IR_INV_IDX_SCAN:
         if (OB_ISNULL(tr_info->token_cnt_column_) || OB_ISNULL(tr_info->doc_id_column_) || OB_ISNULL(tr_info->doc_length_column_)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("inv index expr is NULL", KP(tr_info->token_cnt_column_), KP(tr_info->doc_id_column_),
+          LOG_WARN("inv index expr is NULL", KP(tr_info->token_cnt_column_), KP(tr_info->doc_id_column_), 
                     KP(tr_info->doc_length_column_), K(ret));
         } else if (OB_FAIL(add_var_to_array_no_dup(access_exprs, static_cast<ObRawExpr*>(tr_info->token_cnt_column_)))) {
           LOG_WARN("failed to push token cnt column to access exprs", K(ret));
@@ -631,7 +631,7 @@ int ObTableFtsTscCgService::extract_text_ir_das_output_column_ids(const ObTableC
   } else if (ObTSCIRScanType::OB_IR_INV_IDX_SCAN == scan_ctdef.ir_scan_type_) {
     if (OB_ISNULL(tr_info->token_cnt_column_) || OB_ISNULL(tr_info->doc_id_column_) || OB_ISNULL(tr_info->doc_id_column_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tr_info exprs is NULL", K(ret), KP(tr_info->token_cnt_column_),
+      LOG_WARN("tr_info exprs is NULL", K(ret), KP(tr_info->token_cnt_column_), 
                 KP(tr_info->doc_id_column_), KP(tr_info->doc_id_column_));
     } else if (OB_FAIL(tsc_out_cols.push_back(
         static_cast<ObColumnRefRawExpr *>(tr_info->token_cnt_column_)->get_column_id()))) {
@@ -670,7 +670,7 @@ int ObTableFtsTscCgService::get_fts_schema(const ObTableCtx &ctx, uint64_t table
         LOG_WARN("tr_info is NULL", K(ret));
       } else if (OB_FAIL(schema_guard->get_table_schema(ctx.get_tenant_id(), table_id, index_schema))) {
         LOG_WARN("fail to get rowkey doc table schema", K(ret), K(table_id));
-      }
+      } 
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected table id", K(ret), K(table_id));
@@ -873,7 +873,7 @@ int ObTableFtsTscCgService::generate_text_ir_ctdef(const ObTableCtx &ctx,
  if (OB_SUCC(ret) && ctx.is_index_back()) {
     ObDASIRAuxLookupCtDef *aux_lookup_ctdef = nullptr;
     ObDASBaseCtDef *ir_output_ctdef = static_cast<ObDASBaseCtDef *>(ir_scan_ctdef);
-    if (OB_FAIL(generate_doc_id_lookup_ctdef(ctx, allocator, tsc_ctdef, ir_output_ctdef,
+    if (OB_FAIL(generate_doc_id_lookup_ctdef(ctx, allocator, tsc_ctdef, ir_output_ctdef, 
                   index_back_doc_id_column, aux_lookup_ctdef))) {
       LOG_WARN("generate doc id lookup ctdef failed", K(ret));
     } else if (OB_FAIL(append_fts_relavence_project_col(aux_lookup_ctdef, ir_scan_ctdef))) {
@@ -882,7 +882,7 @@ int ObTableFtsTscCgService::generate_text_ir_ctdef(const ObTableCtx &ctx,
       root_ctdef = aux_lookup_ctdef;
     }
   }
-
+  
   return ret;
 }
 
@@ -1002,7 +1002,7 @@ int ObTableFtsTscCgService::generate_text_ir_spec_exprs(const ObTableCtx &ctx, O
     const UIntFixedArray &inv_scan_col_id = text_ir_scan_ctdef.get_inv_idx_scan_ctdef()->access_column_ids_;
     const ObColumnRefRawExpr *doc_id_column = static_cast<ObColumnRefRawExpr *>(tr_info->doc_id_column_);
     const ObColumnRefRawExpr *doc_length_column = static_cast<ObColumnRefRawExpr *>(tr_info->doc_length_column_);
-
+    
     int64_t doc_id_col_idx = -1;
     int64_t doc_length_col_idx = -1;
     for (int64_t i = 0; i < inv_scan_col_id.count(); ++i) {
@@ -1107,7 +1107,7 @@ int ObTableFtsTscCgService::generate_doc_id_lookup_ctdef(const ObTableCtx &ctx,
       aux_lookup_ctdef->children_[0] = ir_scan_ctdef;
       aux_lookup_ctdef->children_[1] = scan_ctdef;
     }
-
+    
     if (OB_SUCC(ret)) {
       if (OB_FAIL(aux_lookup_ctdef->result_output_.assign(result_outputs))) {
         LOG_WARN("assign result output failed", K(ret));
@@ -1143,10 +1143,10 @@ int ObTableFtsTscCgService::append_fts_relavence_project_col(ObDASIRAuxLookupCtD
   return ret;
 }
 
-int ObTableFtsTscCgService::generate_das_scan_ctdef_with_doc_id(ObIAllocator &alloc,
+int ObTableFtsTscCgService::generate_das_scan_ctdef_with_doc_id(ObIAllocator &alloc, 
                                                                const ObTableCtx &ctx,
                                                                ObTableApiScanCtDef &tsc_ctdef,
-                                                               ObDASScanCtDef *scan_ctdef,
+                                                               ObDASScanCtDef *scan_ctdef, 
                                                                ObDASDomainIdMergeCtDef *&doc_id_merge_ctdef)
 {
   int ret = OB_SUCCESS;
@@ -1185,8 +1185,8 @@ int ObTableFtsTscCgService::generate_das_scan_ctdef_with_doc_id(ObIAllocator &al
   return ret;
 }
 
-int ObTableFtsTscCgService::generate_rowkey_doc_ctdef(ObIAllocator &alloc,
-                                                     const ObTableCtx &ctx,
+int ObTableFtsTscCgService::generate_rowkey_doc_ctdef(ObIAllocator &alloc, 
+                                                     const ObTableCtx &ctx, 
                                                      ObTableApiScanCtDef &tsc_ctdef,
                                                      ObDASScanCtDef *&rowkey_doc_scan_ctdef)
 {

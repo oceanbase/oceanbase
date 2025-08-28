@@ -600,13 +600,13 @@ public:
   void set_incarnation_id(const uint64_t incarnation_id) { incarnation_id_ = incarnation_id; }
   int64_t column_group_id() const { return column_group_id_; }
   void set_column_group_id(const uint64_t column_group_id) { column_group_id_ = column_group_id; }
-  int64_t macro_transfer_seq() const { return macro_transfer_seq_; }
+  int64_t macro_transfer_seq() const { return macro_transfer_seq_; }  
   void set_macro_transfer_seq(const int64_t macro_transfer_seq) { macro_transfer_seq_ = macro_transfer_seq; }
-  uint64_t tenant_seq() const { return tenant_seq_; }
+  uint64_t tenant_seq() const { return tenant_seq_; }  
   void set_tenant_seq(const uint64_t tenant_seq) { tenant_seq_ = tenant_seq; }
-  int64_t meta_transfer_seq() const { return meta_transfer_seq_; }
+  int64_t meta_transfer_seq() const { return meta_transfer_seq_; }  
   void set_meta_transfer_seq(const int64_t meta_transfer_seq) { meta_transfer_seq_ = meta_transfer_seq; }
-  uint64_t meta_version_id() const { return meta_version_id_; }
+  uint64_t meta_version_id() const { return meta_version_id_; } 
   void set_meta_version_id(const uint64_t meta_version_id) { meta_version_id_ = meta_version_id; }
 
   // Deivce mode

@@ -1658,7 +1658,7 @@ int ObDRWorker::UnitProvider::init(
       tenant_id_ = tenant_id;
       inited_ = true;
     }
-  }
+  } 
   return ret;
 }
 
@@ -2594,7 +2594,7 @@ int ObDRWorker::add_task_(
       new_task = nullptr;
     }
   }
-  return ret;
+  return ret; 
 }
 
 int ObDRWorker::check_and_init_info_for_alter_ls_(
@@ -2731,13 +2731,13 @@ int ObDRWorker::check_task_execute_server_status_(
     } else if (OB_FAIL(SVR_TRACER.get_server_info(task_execute_server, server_info))) {
       LOG_WARN("fail to check server active", KR(ret), K(task_execute_server));
     } else if (!server_info.is_alive()) {
-      snprintf(err_msg, sizeof(err_msg),
+      snprintf(err_msg, sizeof(err_msg), 
       "The task needs to be executed on %s which status is not alive and the current operation is", addr_str_buf);
       ret = OB_OP_NOT_ALLOW;
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
       LOG_WARN("server is not active", KR(ret), K(task_execute_server), K(server_info));
     } else if (need_check_can_migrate_in && !server_info.can_migrate_in()) {
-      snprintf(err_msg, sizeof(err_msg),
+      snprintf(err_msg, sizeof(err_msg), 
       "The task needs to be executed on %s which can not migrate in and the current operation is", addr_str_buf);
       ret = OB_OP_NOT_ALLOW;
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
@@ -2882,7 +2882,7 @@ int ObDRWorker::build_remove_replica_task_(
     ObReplicaMember remove_member;
     ObDRTaskKey task_key;
     common::ObZone zone;
-    ObDRTaskType task_type = ObReplicaTypeCheck::is_paxos_replica_V2(replica_type)
+    ObDRTaskType task_type = ObReplicaTypeCheck::is_paxos_replica_V2(replica_type) 
                            ? ObDRTaskType::LS_REMOVE_PAXOS_REPLICA : ObDRTaskType::LS_REMOVE_NON_PAXOS_REPLICA;
     if (FALSE_IT(task_id.init(GCONF.self_addr_))) {
     } else if (OB_FAIL(remove_member.init(member_to_remove, replica_type))) {
@@ -3653,7 +3653,7 @@ int ObDRWorker::try_remove_permanent_offline_replicas(
       common::ObReplicaType replica_type = REPLICA_TYPE_READONLY;
       if (OB_FAIL(learner_list.get_member_by_index(index, learner_to_remove))) {
         LOG_WARN("fail to get learner by index", KR(ret), K(index));
-      } else if (FALSE_IT(replica_type = learner_to_remove.is_columnstore() ?
+      } else if (FALSE_IT(replica_type = learner_to_remove.is_columnstore() ? 
                             REPLICA_TYPE_COLUMNSTORE : REPLICA_TYPE_READONLY)) {
         // shall never be here
       } else if (OB_FAIL(do_single_replica_permanent_offline_(
@@ -3938,7 +3938,7 @@ int ObDRWorker::generate_migrate_ls_task(
       const DRServerStatInfo &server_stat_info,
       const DRUnitStatInfo &unit_stat_info,
       const DRUnitStatInfo &unit_in_group_stat_info,
-      const ObReplicaMember &dst_member,
+      const ObReplicaMember &dst_member, 
       DRLSInfo &dr_ls_info,
       int64_t &acc_dr_task)
 {
@@ -4568,7 +4568,7 @@ int ObDRWorker::try_shrink_resource_pools(
               && unit_in_group_stat_info->get_unit_id() == unit_stat_info->get_unit_id()) {
             // do nothing
             LOG_INFO("deleting unit is on specific unit group, do not process replica for deleting unit",
-                KPC(ls_replica), K(only_for_display), K(acc_dr_task), KP(ls_status_info),
+                KPC(ls_replica), K(only_for_display), K(acc_dr_task), KP(ls_status_info), 
                 KP(unit_in_group_stat_info), KP(unit_stat_info), K(dr_ls_info));
           } else if (ObReplicaTypeCheck::is_non_paxos_replica(ls_replica->get_replica_type())) {
             // 1.1 try to generate and execute remove learner task

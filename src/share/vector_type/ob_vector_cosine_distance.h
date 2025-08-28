@@ -99,7 +99,7 @@ OB_INLINE int cosine_similarity_normal(const uint8_t *a, const uint8_t *b, const
 }
 
 template <typename T>
-OB_INLINE double ObVectorCosineDistance<T>::get_cosine_distance(double similarity)
+OB_INLINE double ObVectorCosineDistance<T>::get_cosine_distance(double similarity) 
 {
   if (similarity > 1.0) {
     similarity = 1.0;
@@ -204,7 +204,7 @@ inline static int cosine_similarity(const float *a, const float *b, const int64_
   } else if (OB_FAIL(cosine_calculate_normal(a, b, len, ip, abs_dist_a, abs_dist_b))) {
     LIB_LOG(WARN, "failed to cal cosine normal", K(ret), K(ip));
   }
-
+  
   if (OB_FAIL(ret)) {
   } else if (0 == abs_dist_a || 0 == abs_dist_b) {
     ret = OB_ERR_NULL_VALUE;
@@ -287,7 +287,7 @@ inline static int cosine_similarity(const float *a, const float *b, const int64_
       LIB_LOG(WARN, "failed to cal cosine", K(ret), K(ip));
     }
   }
-
+  
   if (OB_FAIL(ret)) {
   } else if (0 == abs_dist_a || 0 == abs_dist_b) {
     ret = OB_ERR_NULL_VALUE;

@@ -128,7 +128,7 @@ int64_t ObDeleteLobMetaRowDag::hash() const
     tmp_ret = OB_ERR_SYS;
     LOG_ERROR("table schema must not be NULL", K(tmp_ret), K(is_inited_), K(param_));
   } else {
-    hash_val = param_.tenant_id_
+    hash_val = param_.tenant_id_ 
              + param_.table_id_
              + param_.schema_id_
              + param_.ls_id_.hash()
@@ -153,8 +153,8 @@ bool ObDeleteLobMetaRowDag::operator==(const ObIDag &other) const
     } else {
       is_equal = (param_.tenant_id_ == dag.param_.tenant_id_) && (param_.tenant_id_ == dag.param_.tenant_id_) &&
                  (param_.table_id_ == dag.param_.table_id_) && (param_.schema_id_ == dag.param_.schema_id_) &&
-                 (param_.ls_id_ == dag.param_.ls_id_) && (param_.tablet_id_ == dag.param_.tablet_id_) &&
-                 (param_.dest_tablet_id_ == dag.param_.dest_tablet_id_) &&
+                 (param_.ls_id_ == dag.param_.ls_id_) && (param_.tablet_id_ == dag.param_.tablet_id_) && 
+                 (param_.dest_tablet_id_ == dag.param_.dest_tablet_id_) && 
                  (param_.delete_lob_meta_ret_ == dag.param_.delete_lob_meta_ret_);
     }
   }
@@ -170,7 +170,7 @@ int ObDeleteLobMetaRowDag::fill_info_param(compaction::ObIBasicInfoParam *&out_p
   } else if (OB_UNLIKELY(!param_.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid param", K(ret), K(param_));
-  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
+  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(), 
                                 param_.ls_id_.id(),
                                 static_cast<int64_t>(param_.table_id_),
                                 static_cast<int64_t>(param_.tablet_id_.id()),
@@ -420,7 +420,7 @@ int ObDeleteLobMetaRowTask::process()
           if (OB_ITER_END != ret) {
             LOG_WARN("failed to get next row from snapshot table.", K(ret));
           }
-        } else if (datum_row->get_column_count() != 1) {
+        } else if (datum_row->get_column_count() != 1) { 
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get row column cnt invalid.", K(ret), K(datum_row->get_column_count()));
         } else if (OB_FAIL(ObInsertLobColumnHelper::delete_lob_column(param_->allocator_,

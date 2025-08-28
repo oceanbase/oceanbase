@@ -29,7 +29,7 @@ int ObSrsUtils::check_authority(const ObRsAuthority& auth, const char *target_au
   res = true;
   if (!auth.is_valid) {
     if (!allow_invalid) {
-      res = false;
+      res = false; 
     }
   } else {
     int code = ObCharset::strntoll(auth.org_code.ptr(), auth.org_code.length(), 10, &ret);
@@ -236,7 +236,7 @@ int ObSpatialReferenceSystemBase::create_project_srs(ObIAllocator* allocator, ui
       case static_cast<int>(ObProjectionType::ALBERS_EQUAL_AREA) : {
         ret = create_srs_internal<ObAlbersEqualAreaSrs>(allocator, srs_id, rs, srs_info);
         break;
-      }
+      }      
       case static_cast<int>(ObProjectionType::TRANSVERSE_MERCATOR_ZONED_GRID_SYSTEM) : {
         ret = create_srs_internal<ObTransverseMercatorZonedGridSystemSrs>(allocator, srs_id, rs, srs_info);
         break;
@@ -326,7 +326,7 @@ ObGeographicSrs::ObGeographicSrs(common::ObIAllocator* alloc)
   : semi_major_axis_(NAN), inverse_flattening_(NAN),
     is_wgs84_(false), prime_meridian_(NAN), angular_factor_(NAN), bounds_info_(),
     proj4text_()
-{
+{ 
   for (uint8_t i = 0; i < WGS84_PARA_NUM; i++) {
     wgs84_[i] = NAN;
   }
@@ -590,7 +590,7 @@ int ObSrsItem::longtitude_convert_from_radians(double longtitude, double &value)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid srs type", K(type), K(angle), K(longtitude));
   }
-  return ret;
+  return ret;  
 }
 
 double ObSrsItem::semi_minor_axis() const

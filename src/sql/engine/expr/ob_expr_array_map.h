@@ -93,13 +93,13 @@ class ObExprArrayMap : public ObExprArrayMapCommon
 {
 public:
   explicit ObExprArrayMap(common::ObIAllocator &alloc);
-  explicit ObExprArrayMap(common::ObIAllocator &alloc, ObExprOperatorType type,
+  explicit ObExprArrayMap(common::ObIAllocator &alloc, ObExprOperatorType type, 
                                 const char *name, int32_t param_num, int32_t dimension);
   virtual ~ObExprArrayMap();
-
+  
   virtual int calc_result_typeN(ObExprResType& type,
                                 ObExprResType* types,
-                                int64_t param_num,
+                                int64_t param_num, 
                                 common::ObExprTypeCtx& type_ctx) const override;
   static int eval_array_map(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,

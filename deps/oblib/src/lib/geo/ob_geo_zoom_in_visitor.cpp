@@ -27,7 +27,7 @@ int ObGeoZoomInVisitor::zoom_in_point(T_Point *geo)
       longti *= 10;
       lati *= 10;
       geo->x(longti);
-      geo->y(lati);
+      geo->y(lati); 
     }
   } else {
     uint32_t count = 0;

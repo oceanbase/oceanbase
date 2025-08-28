@@ -35,13 +35,13 @@ int ObJniConnector::check_jni_exception_(JNIEnv *env) {
           "getMessage",
           "()Ljava/lang/String;"
       );
-
+      
       if (getMessageMethod != nullptr) {
           jstring jmsg = (jstring)env->CallObjectMethod(thr, getMessageMethod);
           if (env->ExceptionCheck()) {
               env->ExceptionClear(); // 防止调用过程中产生新异常
           }
-
+          
           if (jmsg != nullptr) {
               const char* cmsg = env->GetStringUTFChars(jmsg, nullptr);
               LOG_WARN("Exception Message: ", K(cmsg), K(ret));
@@ -54,23 +54,23 @@ int ObJniConnector::check_jni_exception_(JNIEnv *env) {
       jclass stringWriterClass = env->FindClass("java/io/StringWriter");
       jmethodID stringWriterCtor = env->GetMethodID(stringWriterClass, "<init>", "()V");
       jobject stringWriter = env->NewObject(stringWriterClass, stringWriterCtor);
-
+    
       jclass printWriterClass = env->FindClass("java/io/PrintWriter");
       jmethodID printWriterCtor = env->GetMethodID(printWriterClass, "<init>", "(Ljava/io/Writer;)V");
       jobject printWriter = env->NewObject(printWriterClass, printWriterCtor, stringWriter);
 
       // 调用printStackTrace
       jmethodID printStackTraceMethod = env->GetMethodID(
-          throwableClass,
-          "printStackTrace",
+          throwableClass, 
+          "printStackTrace", 
           "(Ljava/io/PrintWriter;)V"
       );
       env->CallVoidMethod(thr, printStackTraceMethod, printWriter);
 
       // 获取堆栈字符串
       jmethodID toStringMethod = env->GetMethodID(
-          stringWriterClass,
-          "toString",
+          stringWriterClass, 
+          "toString", 
           "()Ljava/lang/String;"
       );
       jstring stackTrace = (jstring)env->CallObjectMethod(stringWriter, toStringMethod);
@@ -87,7 +87,7 @@ int ObJniConnector::check_jni_exception_(JNIEnv *env) {
       env->DeleteLocalRef(throwableClass);
       env->DeleteLocalRef(printWriterClass);
       env->DeleteLocalRef(stringWriterClass);
-
+      
       env->ExceptionDescribe();
       env->ExceptionClear(); // 清除异常状态
       env->DeleteLocalRef(thr);

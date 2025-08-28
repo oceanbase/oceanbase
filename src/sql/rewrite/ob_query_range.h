@@ -555,9 +555,9 @@ public:
                              int64_t &range_prefix_count,
                              bool &contain_always_false) const;
   virtual bool is_fast_nlj_range() const { return false; }
-  // get prefix string (without wildcards) length of like pattern
-  static int get_pattern_prefix_len(const ObCollationType &cs_type,
-                                    const ObString &escape_str,
+  // get prefix string (without wildcards) length of like pattern 
+  static int get_pattern_prefix_len(const ObCollationType &cs_type, 
+                                    const ObString &escape_str, 
                                     const ObString &pattern_str,
                                     int32_t &pattern_prefix_len);
   bool is_equal_range() const override { return table_graph_.is_equal_range_; }
@@ -772,18 +772,18 @@ private:
                             const bool& need_geo_rebuild);
   int union_in_with_in(ObKeyPartList &or_list,
                        ObKeyPart *cur1,
-                       ObKeyPart *cur2,
+                       ObKeyPart *cur2, 
                        ObExecContext *exec_ctx,
                        const ObDataTypeCastParams &dtc_params,
                        bool &has_union);
   int union_in_with_normal(ObKeyPart *cur1,
-                            ObKeyPart *cur2,
+                            ObKeyPart *cur2, 
                             ObExecContext *exec_ctx,
                             const ObDataTypeCastParams &dtc_params,
                             bool &is_unioned,
                             bool &need_remove_normal);
   int union_single_equal_cond(ObKeyPart *cur1,
-                              ObKeyPart *cur2,
+                              ObKeyPart *cur2, 
                               const ObObj &val,
                               ObExecContext *exec_ctx,
                               const ObDataTypeCastParams &dtc_params,
@@ -859,9 +859,9 @@ private:
 // domain index interface functions
   int pre_extract_domain_op(const ObOpRawExpr *domain_expr,
                             ObKeyPart *&out_key_part,
-                            const ObDataTypeCastParams &dtc_params,
+                            const ObDataTypeCastParams &dtc_params, 
                             const bool is_single_op);
-
+  
   // check if only domain op (use in optimizer when is true)
   bool is_single_domain_op(const ObRawExpr *expr_root);
   // following functions are expected to be used only by domain index:
@@ -871,30 +871,30 @@ private:
   int domain_index_init_key_part(const ObRawExpr *expr, ObKeyPart *&out_key_part,
                                 ObDomainOpType & op_type, bool& need_extract);
   // use for simple predicate, which connect by only one way
-  int doamain_index_get_simple_range(const ObDomainOpType op_type, ObKeyPart *&out_key_part,
-                                    ObExecContext *exec_ctx, const ObDataTypeCastParams &dtc_params,
+  int doamain_index_get_simple_range(const ObDomainOpType op_type, ObKeyPart *&out_key_part, 
+                                    ObExecContext *exec_ctx, const ObDataTypeCastParams &dtc_params, 
                                     bool is_single_op);
   // use for simple predicate, get all keyparts that need to be connected
-  int doamain_index_get_keyparts(const ObDomainOpType op_type, ObIArray<ObKeyPart*> &key_parts,
-                                ObKeyPart *&out_key_part, ObExecContext *exec_ctx,
+  int doamain_index_get_keyparts(const ObDomainOpType op_type, ObIArray<ObKeyPart*> &key_parts, 
+                                ObKeyPart *&out_key_part, ObExecContext *exec_ctx, 
                                 const ObDataTypeCastParams &dtc_params, bool is_single_op);
   // use for simple predicate, chose connect way: and/or
-  int doamain_index_connect_keyparts(const ObDomainOpType op_type, ObIArray<ObKeyPart*> &key_parts,
-                              ObKeyPart *&out_key_part, ObExecContext *exec_ctx,
+  int doamain_index_connect_keyparts(const ObDomainOpType op_type, ObIArray<ObKeyPart*> &key_parts, 
+                              ObKeyPart *&out_key_part, ObExecContext *exec_ctx, 
                               const ObDataTypeCastParams &dtc_params);
   // use for simple predicate, connect key parts
-  int doamain_index_connect_and_or(ObIArray<ObKeyPart*> &key_parts, ObKeyPart *&out_key_part,
-                                    ObExecContext *exec_ctx, const ObDataTypeCastParams &dtc_params,
+  int doamain_index_connect_and_or(ObIArray<ObKeyPart*> &key_parts, ObKeyPart *&out_key_part, 
+                                    ObExecContext *exec_ctx, const ObDataTypeCastParams &dtc_params, 
                                     bool is_and_op);
-  int domain_index_set_equal_keyparts(const common::ObObj &const_param,
-                                      ObKeyPart *&out_key_part,
+  int domain_index_set_equal_keyparts(const common::ObObj &const_param, 
+                                      ObKeyPart *&out_key_part, 
                                       const ObDataTypeCastParams &dtc_params);
   // for domain predicate that need third arg
   int domain_get_extra_param(ObDomainOpType& op, const ObRawExpr *expr, const ObConstRawExpr *&extra_item);
-  int get_json_array_keyparts(ObIJsonBase* j_base, ObIArray<ObKeyPart*> &key_parts,
-                              ObKeyPart *&out_key_part, ObExecContext *exec_ctx,
+  int get_json_array_keyparts(ObIJsonBase* j_base, ObIArray<ObKeyPart*> &key_parts, 
+                              ObKeyPart *&out_key_part, ObExecContext *exec_ctx, 
                               const ObDataTypeCastParams &dtc_params);
-  int get_json_array_in_keyparts(ObIJsonBase* j_base, ObKeyPart *&out_key_part,
+  int get_json_array_in_keyparts(ObIJsonBase* j_base, ObKeyPart *&out_key_part, 
                                 ObExecContext *exec_ctx, const ObDataTypeCastParams &dtc_params);
   // functions used for geo predicate
   int get_geo_range(const common::ObObj &wkb, const ObDomainOpType op_type, ObKeyPart *out_key_part);
@@ -911,36 +911,36 @@ private:
   int set_geo_keypart_whole_range(ObKeyPart &out_key_part);
   int overwrite_keypart(ObKeyPart* out_key_part, ObKeyPart* src_key_part);
   int reset_domain_op_by_param_pos(const bool is_left_column, ObDomainOpType & op_type);
-  int get_domain_range(const common::ObObj &const_param, const common::ObDomainOpType op_type,
-                       ObKeyPart *&out_key_part, ObExecContext *exec_ctx,
+  int get_domain_range(const common::ObObj &const_param, const common::ObDomainOpType op_type, 
+                       ObKeyPart *&out_key_part, ObExecContext *exec_ctx, 
                        const ObDataTypeCastParams &dtc_params, bool is_single_op = false);
-  int get_simple_domain_range(const common::ObObj &const_param, const common::ObDomainOpType op_type,
-                              ObKeyPart *&out_key_part, ObExecContext *exec_ctx,
+  int get_simple_domain_range(const common::ObObj &const_param, const common::ObDomainOpType op_type, 
+                              ObKeyPart *&out_key_part, ObExecContext *exec_ctx, 
                               const ObDataTypeCastParams &dtc_params, bool is_single_op);
-  int get_simple_domain_keyparts(const common::ObObj &const_param, const common::ObDomainOpType op_type,
-                                ObIArray<ObKeyPart*> &key_parts, ObKeyPart *&out_key_part,
-                                ObExecContext *exec_ctx, const ObDataTypeCastParams &dtc_params,
+  int get_simple_domain_keyparts(const common::ObObj &const_param, const common::ObDomainOpType op_type, 
+                                ObIArray<ObKeyPart*> &key_parts, ObKeyPart *&out_key_part, 
+                                ObExecContext *exec_ctx, const ObDataTypeCastParams &dtc_params, 
                                 bool is_single_op);
-  int connect_domain_keyparts(const common::ObDomainOpType op_type, ObIArray<ObKeyPart*> &key_parts,
-                              ObKeyPart *&out_key_part, ObExecContext *exec_ctx,
+  int connect_domain_keyparts(const common::ObDomainOpType op_type, ObIArray<ObKeyPart*> &key_parts, 
+                              ObKeyPart *&out_key_part, ObExecContext *exec_ctx, 
                               const ObDataTypeCastParams &dtc_params);
-  int connect_and_or_domain_keyparts(ObIArray<ObKeyPart*> &key_parts, ObKeyPart *&out_key_part,
-                                    ObExecContext *exec_ctx, const ObDataTypeCastParams &dtc_params,
+  int connect_and_or_domain_keyparts(ObIArray<ObKeyPart*> &key_parts, ObKeyPart *&out_key_part, 
+                                    ObExecContext *exec_ctx, const ObDataTypeCastParams &dtc_params, 
                                     bool is_and_op);
   int set_normal_key_true_or_false(ObKeyPart *&out_key_part, bool is_always_true);
   int get_member_of_keyparts(const common::ObObj &const_param, ObKeyPart *&out_key_part, ObExecContext *exec_ctx,
                              const ObDataTypeCastParams &dtc_params, const int64_t cur_datetime);
-  int get_contain_or_overlaps_keyparts(const common::ObObj &const_param, const common::ObDomainOpType op_type,
-                                      ObIArray<ObKeyPart*> &key_parts, ObKeyPart *&out_key_part,
-                                      ObExecContext *exec_ctx, const ObDataTypeCastParams &dtc_params,
+  int get_contain_or_overlaps_keyparts(const common::ObObj &const_param, const common::ObDomainOpType op_type, 
+                                      ObIArray<ObKeyPart*> &key_parts, ObKeyPart *&out_key_part, 
+                                      ObExecContext *exec_ctx, const ObDataTypeCastParams &dtc_params, 
                                       bool is_single_op);
-  int get_complex_domain_range(const common::ObObj &const_param, const common::ObDomainOpType op_type,
+  int get_complex_domain_range(const common::ObObj &const_param, const common::ObDomainOpType op_type, 
                                ObKeyPart *&out_key_part, const ObDataTypeCastParams &dtc_params);
   int get_extra_param(const ObRawExpr *expr, const ObConstRawExpr *&extra_item);
   int need_extract_domain_range(const ObOpRawExpr *domain_expr, ObKeyPart *&out_key_part, bool& need_extract);
   int init_domain_key_part(const ObRawExpr *expr,  ObKeyPart *&out_key_part,
                           ObDomainOpType & op_type, bool& need_extract);
-  inline bool is_simple_domain_op(const common::ObDomainOpType op_type) { return op_type > common::ObDomainOpType::T_INVALID
+  inline bool is_simple_domain_op(const common::ObDomainOpType op_type) { return op_type > common::ObDomainOpType::T_INVALID 
                                                                               || op_type < common::ObDomainOpType::T_DOMAIN_OP_END;}
   bool is_single_op(const ObRawExpr *expr_root);
   bool need_extra_param(ObDomainOpType & op_type);
@@ -1035,7 +1035,7 @@ private:
   static const int64_t RANGE_BUCKET_SIZE = 1000;
   static const int64_t MAX_RANGE_SIZE_OLD = 10000;
   static const int64_t MAX_RANGE_SIZE_NEW = 100000;
-  static const int64_t MAX_JSON_ARRAY_CHANGE_TO_OR_SIZE = 10;
+  static const int64_t MAX_JSON_ARRAY_CHANGE_TO_OR_SIZE = 10; 
   typedef common::ObObjStore<ObKeyPart*, common::ObIAllocator&> KeyPartStore;
 private:
   ObRangeGraph table_graph_;

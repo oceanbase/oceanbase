@@ -813,7 +813,7 @@ int ObDDLMemtable::init_ddl_index_iterator(const blocksstable::ObStorageDatumUti
 }
 
 ObDDLKV::ObDDLKV()
-  : is_inited_(false), is_closed_(false), is_inc_ddl_kv_(false), is_independent_freezed_(false), lock_(),
+  : is_inited_(false), is_closed_(false), is_inc_ddl_kv_(false), is_independent_freezed_(false), lock_(), 
     arena_allocator_("DDL_CONTAINER", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     tablet_id_(), ddl_start_scn_(SCN::min_scn()), ddl_snapshot_version_(0), data_format_version_(0), trans_id_(),
     data_schema_version_(0), column_count_(0),
@@ -1373,7 +1373,7 @@ int64_t ObDDLKV::get_memory_used() const
   TCRLockGuard guard(lock_);
   for (int64_t i = 0; i < ddl_memtables_.count(); ++i) {
     if (nullptr != ddl_memtables_.at(i)) {
-      total_used_memory += ddl_memtables_.at(i)->get_memory_used();
+      total_used_memory += ddl_memtables_.at(i)->get_memory_used(); 
     }
   }
   return total_used_memory;
@@ -1430,7 +1430,7 @@ int ObDDLKV::init(const ObITable::TableKey &table_key,
   return ret;
 }
 
-bool ObDDLKV::ready_for_flush() {
+bool ObDDLKV::ready_for_flush() { 
   if (is_frozen_memtable()) {
     return ready_for_flush_();
   } else {
@@ -1439,7 +1439,7 @@ bool ObDDLKV::ready_for_flush() {
   }
 }
 
-bool ObDDLKV::ready_for_flush_() {
+bool ObDDLKV::ready_for_flush_() { 
   int ret = OB_SUCCESS;
   bool ready_for_flush = false;
   const ObLSID ls_id = get_ls_id();
@@ -1473,8 +1473,8 @@ bool ObDDLKV::ready_for_flush_() {
                   KPC(this));
     }
   }
-
-  return ready_for_flush;
+  
+  return ready_for_flush; 
 }
 
 

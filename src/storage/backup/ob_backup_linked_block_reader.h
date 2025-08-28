@@ -29,7 +29,7 @@ class ObBackupLinkedBlockReader final
 public:
   ObBackupLinkedBlockReader();
   ~ObBackupLinkedBlockReader();
-
+  
   int init(const share::ObBackupDest &backup_set_dest,
       const ObBackupLinkedBlockAddr &entry_block_id, const int64_t total_block_count,
       const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key,

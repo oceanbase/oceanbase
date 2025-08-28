@@ -1537,7 +1537,7 @@ int ObHashJoinOp::calc_basic_info(bool global_info)
     }
     LOG_DEBUG("debug row_count and input_size", K(row_count), K(global_info), K(is_shared_));
   } else if (nullptr != left_batch_) {
-    // NESTLOOP processor, our memory is not enough to hold entire left partition,
+    // NESTLOOP processor, our memory is not enough to hold entire left partition, 
     // try to estimate max row count we can hold
     row_count = 0;
     if (left_batch_->get_chunk_row_store().get_row_cnt() > 0) {
@@ -1545,7 +1545,7 @@ int ObHashJoinOp::calc_basic_info(bool global_info)
                         / left_batch_->get_chunk_row_store().get_row_cnt();
       row_count = std::max(static_cast<int64_t> (MIN_BATCH_ROW_CNT_NESTLOOP),
                                     static_cast<int64_t> (remain_data_memory_size_ / avg_len));
-
+      
     } else {
       row_count = MIN_BATCH_ROW_CNT_NESTLOOP;
     }
@@ -4426,7 +4426,7 @@ int ObHashJoinOp::calc_hash_value(
       skipped = true;
     } else {
       hash_value = common::murmurhash64A(&null_random_hash_value_, sizeof(int64_t), HASH_SEED);
-      null_random_hash_value_++;
+      null_random_hash_value_++; 
     }
   }
   hash_value = hash_value & ObHashJoinStoredJoinRow::HASH_VAL_MASK;
@@ -4474,7 +4474,7 @@ int ObHashJoinOp::calc_hash_value_batch(const ObIArray<ObExpr*> &join_keys,
           if (skip_null) {
           } else {
             hash_vals[i] = common::murmurhash64A(&null_random_hash_value_, sizeof(int64_t), HASH_SEED);
-            null_random_hash_value_++;
+            null_random_hash_value_++; 
             right_selector_[selector_idx++] = i;
           }
         } else {

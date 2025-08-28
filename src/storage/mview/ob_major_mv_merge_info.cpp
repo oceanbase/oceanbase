@@ -222,7 +222,7 @@ int ObMVMergeSCNHelper::on_replay(
 }
 
 int ObMVCheckReplicaHelper::get_and_update_merge_info(
-      const share::ObLSID &ls_id,
+      const share::ObLSID &ls_id, 
       ObMajorMVMergeInfo &info)
 {
   int ret = OB_SUCCESS;
@@ -291,7 +291,7 @@ int ObMVCheckReplicaHelper::get_and_update_merge_info(
     } else if (min_major_mv_merge_scn < info.major_mv_merge_scn_) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("min_major_mv_merge_scn is less info.major_mv_merge_scn", K(ret), K(info), K(min_major_mv_merge_scn));
-    }
+    } 
     // there is no new mv tablet
     else if (min_major_mv_merge_scn.is_max()) {
       if (OB_FAIL(ls->set_major_mv_merge_scn(info.major_mv_merge_scn_safe_calc_))) {

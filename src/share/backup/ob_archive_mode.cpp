@@ -15,7 +15,7 @@
 
 namespace oceanbase
 {
-namespace share
+namespace share 
 {
 
 /**

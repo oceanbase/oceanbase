@@ -61,3 +61,4 @@ public:
 } // namespace unittest
 } // namespace oceanbase
 #endif // OCEANBASE_UNITTEST_MOCK_MERGE_ITERATOR_H_
+

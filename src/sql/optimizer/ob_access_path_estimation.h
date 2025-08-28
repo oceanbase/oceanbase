@@ -51,7 +51,7 @@ struct EstResultHelper
     int64_t valid_partition_count_;
 
     TO_STRING_KV(K_(logical_row_count),
-                 K_(physical_row_count),
+                 K_(physical_row_count), 
                  K_(est_partition_count),
                  K_(valid_partition_count));
   };
@@ -218,7 +218,7 @@ private:
                                          const int64_t range_limit,
                                          const ObCandiTabletLocIArray &index_partitions,
                                          EstResultHelper &result_helper);
-
+  
   static int add_storage_estimation_task_by_ranges(ObOptimizerContext &ctx,
                                                    ObIAllocator &arena,
                                                    ObExecContext &exec_ctx,
@@ -443,7 +443,7 @@ public:
                                        const ObIArray<int64_t> &part_projector,
                                        bool &is_valid_range);
 
-
+  
 public:
   uint64_t ref_table_id_;
   share::schema::ObPartitionLevel part_level_;

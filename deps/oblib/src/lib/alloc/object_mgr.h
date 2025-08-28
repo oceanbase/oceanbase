@@ -132,7 +132,7 @@ public:
   AObject *alloc_object(uint64_t size, const ObMemAttr &attr);
   AObject *realloc_object(
       AObject *obj, const uint64_t size, const ObMemAttr &attr);
-
+  
   void free_object(AObject *obj);
 
   ABlock *alloc_block(uint64_t size, const ObMemAttr &attr) override;

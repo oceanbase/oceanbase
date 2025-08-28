@@ -139,7 +139,7 @@ int ObPxTaskProcess::process()
     ObPxRpcInitSqcArgs &arg = arg_.sqc_handler_->get_sqc_init_arg();
     SQL_INFO_GUARD(arg.sqc_.get_monitoring_info().cur_sql_, session->get_cur_sql_id());
     const bool enable_perf_event = lib::is_diagnose_info_enabled();
-    const bool enable_sql_audit =
+    const bool enable_sql_audit = 
         GCONF.enable_sql_audit && session->get_local_ob_enable_sql_audit();
     const bool enable_sqlstat = session->is_sqlstat_enabled();
     ObAuditRecordData &audit_record = session->get_raw_audit_record();
@@ -216,7 +216,7 @@ int ObPxTaskProcess::process()
         arg_.sqc_task_ptr_->set_ssstore_read_row_count(exec_record.get_ssstore_read_row_count());
       }
     }
-
+    
     if (enable_sqlstat && OB_NOT_NULL(arg_.exec_ctx_->get_sql_ctx())) {
       sqlstat_record.record_sqlstat_end_value();
       const ObPhysicalPlan *phy_plan = arg_.des_phy_plan_;

@@ -224,7 +224,7 @@ int ObLSServiceHelper::construct_ls_status_machine(
     LOG_WARN("failed to get all ls status by order", KR(ret));
   } else if (1 == status_info_array.count() && status_info_array.at(0).ls_is_tenant_dropping()
       && status_info_array.at(0).ls_id_.is_sys_ls()) {
-    //Due to SYS_LS being tenant_dropping, it cannot be read,
+    //Due to SYS_LS being tenant_dropping, it cannot be read, 
     //so it cannot be read during the construction of the state machine of __all_ls,
     //it needs to be mocked the content of the ls table
     ObLSAttr ls_info;
@@ -383,7 +383,7 @@ int ObLSServiceHelper::get_primary_zone_unit_array(const share::schema::ObTenant
       LOG_WARN("failed to get unit group array", KR(ret), K(tenant_id));
     }
   }
-
+ 
   return ret;
 }
 ERRSIM_POINT_DEF(ERRSIM_LS_NO_REPORT);
@@ -626,7 +626,7 @@ int ObLSServiceHelper::revision_to_equal_status_(const ObLSStatusMachineParamete
   const share::ObLSStatusInfo &status_info = machine.status_info_;
   const share::ObLSAttr &ls_info = machine.ls_info_;
   const uint64_t tenant_id = tenant_ls_info.get_tenant_id();
-  ObLSStatusOperator status_op;
+  ObLSStatusOperator status_op; 
   if (OB_UNLIKELY(!machine.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("status machine is valid", KR(ret), K(machine));
@@ -1072,7 +1072,7 @@ int ObLSServiceHelper::balance_ls_group_between_unit_group_(ObTenantLSInfo& tena
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(min_index), K(max_index), K(tenant_ls_info));
   } else {
-    ObUnitGroupInfo &dest_info = tenant_ls_info.get_unit_group_array().at(min_index);
+    ObUnitGroupInfo &dest_info = tenant_ls_info.get_unit_group_array().at(min_index); 
     ObUnitGroupInfo &src_info = tenant_ls_info.get_unit_group_array().at(max_index);
     const int64_t ls_group_count = src_info.ls_group_ids_.count();
     if (ls_group_count < 1) {
@@ -1165,7 +1165,7 @@ int ObLSServiceHelper::try_shrink_standby_unit_group_(
               LOG_WARN("failed to next unit group", KR(ret), K(unit_group_index), K(tenant_ls_info));
             } else {
               ObUnitGroupInfo &dest_info = unit_group_array.at(unit_group_index);
-              const uint64_t ls_group_id = unit_group_info.ls_group_ids_.at(j);
+              const uint64_t ls_group_id = unit_group_info.ls_group_ids_.at(j); 
               if (OB_FAIL(try_update_ls_unit_group_(tenant_ls_info, ls_group_id,
                       unit_group_info, dest_info))) {
                 LOG_WARN("failed to update ls unit group", KR(ret), K(ls_group_id),
@@ -1237,7 +1237,7 @@ int ObTenantLSInfo::gather_all_ls_info_()
   if (OB_ISNULL(sql_proxy_) || OB_ISNULL(tenant_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy or tenant schema is null", KR(ret), KP(tenant_schema_), KP(sql_proxy_));
-  } else if (OB_ISNULL(trans_)) {
+  } else if (OB_ISNULL(trans_)) { 
     if (OB_FAIL(status_operator_.get_all_ls_status_by_order(
                  tenant_id_, status_info_array, *sql_proxy_))) {
       LOG_WARN("failed to get all ls status by order", KR(ret), K(tenant_id_), KP(trans_));
@@ -1629,3 +1629,4 @@ int ObLSServiceHelper::get_ls_all_replica_readable_scn_(const uint64_t tenant_id
 
 }//end of rootserver
 }
+

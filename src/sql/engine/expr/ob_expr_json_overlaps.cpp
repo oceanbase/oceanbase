@@ -49,7 +49,7 @@ int ObExprJsonOverlaps::calc_result_type2(ObExprResType &type,
   } else if (OB_FAIL(ObJsonExprHelper::is_valid_for_json(type1, 1, N_JSON_OVERLAPS))) {
     LOG_WARN("wrong type for json doc.", K(ret), K(type1.get_type()));
   }
-
+  
   if (OB_FAIL(ret))  {
   } else if (!ob_is_string_type(type2.get_type())) {
   } else if (OB_FAIL(ObJsonExprHelper::is_valid_for_json(type2, 2, N_JSON_OVERLAPS))) {

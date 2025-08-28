@@ -118,7 +118,7 @@ int ObRedisCommandFactory::cmd_to_type(const ObString &cmd_name, RedisCommandTyp
   } else {
     cmd_type = static_cast<RedisCommandType>(std::get<0>(tmp_type_enbale_group));
   }
-
+  
   return ret;
 }
 

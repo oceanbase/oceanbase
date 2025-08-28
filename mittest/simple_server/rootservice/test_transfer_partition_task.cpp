@@ -70,7 +70,7 @@ TEST_F(TestTransferPartition, TransferPartitionTask)
   ASSERT_EQ(OB_SUCCESS, task.simple_init(tenant_id_, part_info, ls, task_id));
   ASSERT_EQ(OB_INVALID_ARGUMENT, task.init(tenant_id_, part_info, ls, invalid_task_id,
         job_id, ObTransferTaskID(1), status, comment));
-  ASSERT_EQ(OB_INVALID_ARGUMENT, task.init(tenant_id_, part_info, ls, task_id,
+  ASSERT_EQ(OB_INVALID_ARGUMENT, task.init(tenant_id_, part_info, ls, task_id, 
         job_id, ObTransferTaskID(1), invalid_status, comment));
   ASSERT_EQ(OB_SUCCESS, task.init(tenant_id_, part_info, ls, task_id, job_id,
         ObTransferTaskID(1), status, comment));
@@ -86,7 +86,7 @@ TEST_F(TestTransferPartition, TransferPartitionTask)
   ASSERT_EQ(1, task_array.count());
   LOG_INFO("[MITTEST]new task", K(task_array));
   ASSERT_EQ(status, task_array.at(0).get_task_status());
-
+   
   // case 3: 验证不同的事务，在第一个事务没有提交之前，另外一个事务不能写入
   ASSERT_EQ(OB_SUCCESS, trans.start(&sql_proxy, tenant_id_));
   ObTransferPartitionTask new_task;
@@ -203,7 +203,7 @@ TEST_F(TestTransferPartition, TransferPartitionTask)
     LOG_INFO("[MITTEST]balance_task", K(start_time), K(finish_time), K(new_task3));
 
   }
-
+  
   //case 8: 验证rollback
   ASSERT_EQ(OB_SUCCESS, trans.start(&sql_proxy, tenant_id_));
   ASSERT_EQ(OB_INVALID_ARGUMENT, ObTransferPartitionTaskTableOperator::rollback_all_to_waitting(
@@ -221,7 +221,7 @@ TEST_F(TestTransferPartition, TransferPartitionTask)
 
 }
 
-
+ 
 } // namespace share
 } // namespace oceanbase
 

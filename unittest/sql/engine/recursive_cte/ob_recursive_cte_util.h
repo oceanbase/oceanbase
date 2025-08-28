@@ -30,8 +30,8 @@
       _OB_LOG(WARN, "fail to fill row, ret=%d", ret); \
     } else {\
       ObCStringHelper helper; \
-	printf("FAKE row=%s\n", helper.convert(my_row));\
-	printf("FAKE except_row=%s\n", helper.convert(_row)); \
+    	printf("FAKE row=%s\n", helper.convert(my_row));\
+    	printf("FAKE except_row=%s\n", helper.convert(_row)); \
       ASSERT_TRUE(_row.count_ == my_row.count_); \
       for (int64_t i = start_idx; i < end_idx; ++i) { \
         ObCStringHelper tmp_helper; \

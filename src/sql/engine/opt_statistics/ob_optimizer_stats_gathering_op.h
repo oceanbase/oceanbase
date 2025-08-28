@@ -28,7 +28,7 @@
 namespace oceanbase
 {
 namespace sql
-{
+{  
 
 class ObOptimizerStatsGatheringSpec : public ObOpSpec
 {
@@ -83,7 +83,7 @@ public:
   virtual void destroy() override;
 
   virtual void reset();
-  // will be called from datahub, when qc/sqc finish gathering stats, the function will be called in dh.
+  // will be called from datahub, when qc/sqc finish gathering stats, the function will be called in dh. 
   int on_piece_msg(const ObOptStatsGatherPieceMsg &piece_msg);
   // after dh receive all piece_msg, msg_end will be called.
   int msg_end();
@@ -95,7 +95,7 @@ private:
   // set piece_msg's basic info, copy tab/column stats from stat_map to piece_msg's array.
   int build_piece_msg(ObOptStatsGatherPieceMsg &piece,
                       ObPxSQCProxy &proxy);
-
+  
   // send piece_msg, no need to wait the whole msg.
   int send_stats();
   int calc_stats();
@@ -115,8 +115,8 @@ private:
   int merge_col_stat(ObOptColumnStat *src_col_stat);
 
   // get stats array from stats map
-  int get_tab_stats(common::ObIArray<ObOptTableStat*>& tab_stats);
-  int get_col_stats(common::ObIArray<ObOptColumnStat*>& col_stats);
+  int get_tab_stats(common::ObIArray<ObOptTableStat*>& tab_stats); 
+  int get_col_stats(common::ObIArray<ObOptColumnStat*>& col_stats); 
 
   uint64_t tenant_id_;
 

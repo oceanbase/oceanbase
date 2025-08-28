@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/cmd/ob_event_executor.h"
 
@@ -107,8 +107,8 @@ int ObAlterEventExecutor::execute(ObExecContext &ctx, ObAlterEventStmt &stmt)
   ObMySQLTransaction trans;
   if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id))) {
     LOG_WARN("failed to start trans", KR(ret), K(stmt.get_event_info().get_tenant_id()));
-  } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::get_dbms_sched_job_info(*GCTX.sql_proxy_,
-                                                                              tenant_id,
+  } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::get_dbms_sched_job_info(*GCTX.sql_proxy_, 
+                                                                              tenant_id, 
                                                                               false, // is_oracle_tenant
                                                                               stmt.get_event_info().get_event_name(),
                                                                               allocator,
@@ -135,8 +135,8 @@ int ObAlterEventExecutor::execute(ObExecContext &ctx, ObAlterEventStmt &stmt)
         obj.set_bool(false);
       }
       OZ (dbms_scheduler::ObDBMSSchedJobUtils::update_dbms_sched_job_info(trans, job_info, ObString("auto_drop"), obj));
-    }
-
+    } 
+  
     if (OB_SUCC(ret) && ObEventInfo::ObEventBoolType::NOT_SET != stmt.get_event_info().get_is_enable()) {
       ObObj obj;
       if (ObEventInfo::ObEventBoolType::SET_TRUE == stmt.get_event_info().get_is_enable()) {
@@ -145,21 +145,21 @@ int ObAlterEventExecutor::execute(ObExecContext &ctx, ObAlterEventStmt &stmt)
         obj.set_bool(false);
       }
       OZ (dbms_scheduler::ObDBMSSchedJobUtils::update_dbms_sched_job_info(trans, job_info, ObString("enabled"), obj));
-    }
+    } 
 
 
     if (OB_SUCC(ret) && !stmt.get_event_info().get_event_comment().empty()) {
       ObObj obj;
       obj.set_char(stmt.get_event_info().get_event_comment());
       OZ (dbms_scheduler::ObDBMSSchedJobUtils::update_dbms_sched_job_info(trans, job_info, ObString("comments"), obj));
-    }
+    } 
 
 
     if (OB_SUCC(ret) && !stmt.get_event_info().get_event_body().empty()) {
       ObObj obj;
       obj.set_char(stmt.get_event_info().get_event_body());
       OZ (dbms_scheduler::ObDBMSSchedJobUtils::update_dbms_sched_job_info(trans, job_info, ObString("job_action"), obj));
-    }
+    } 
 
     if (OB_SUCC(ret) && OB_INVALID_TIMESTAMP != stmt.get_event_info().get_start_time()) {
       int64_t start_date_us = stmt.get_event_info().get_start_time();
@@ -195,7 +195,7 @@ int ObAlterEventExecutor::execute(ObExecContext &ctx, ObAlterEventStmt &stmt)
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "modify EVENT NAME that has already started");
       }
-    }
+    } 
 
     if (trans.is_started()) {
       int tmp_ret = OB_SUCCESS;
@@ -225,8 +225,8 @@ int ObDropEventExecutor::execute(ObExecContext &ctx, ObDropEventStmt &stmt)
     const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
     if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::remove_dbms_sched_job(
         *GCTX.sql_proxy_,
-        stmt.get_event_info().get_tenant_id(),
-        stmt.get_event_info().get_event_name(),
+        stmt.get_event_info().get_tenant_id(), 
+        stmt.get_event_info().get_event_name(), 
         stmt.get_event_info().get_if_exist_or_if_not_exist())
     )) {
       if (ret == OB_INVALID_ARGUMENT) {

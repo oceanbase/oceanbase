@@ -424,8 +424,8 @@ ObSchemaCache::~ObSchemaCache()
 
 void ObSchemaCache::destroy()
 {
-  tablet_cache_.destroy();
-  cache_.destroy();
+  tablet_cache_.destroy(); 
+  cache_.destroy(); 
 
   NoSwapCache::iterator iter;
   for (iter = sys_cache_.begin(); iter != sys_cache_.end(); ++iter) {
@@ -433,7 +433,7 @@ void ObSchemaCache::destroy()
       mem_context_->free((void *)iter->second);
     }
   }
-  sys_cache_.destroy();
+  sys_cache_.destroy(); 
   if (mem_context_ != nullptr) {
     DESTROY_CONTEXT(mem_context_);
     mem_context_ = nullptr;
@@ -529,7 +529,7 @@ bool ObSchemaCache::need_use_sys_cache(const ObSchemaCacheKey &cache_key) const
         is_need = true;
       } else if (!is_virtual_table(cache_key.schema_id_)
                 && !is_sys_view(cache_key.schema_id_)) {
-        is_need = true;
+        is_need = true;          
       }
       // normal tenant's virtual table and view schema should use kvcache to store
     }

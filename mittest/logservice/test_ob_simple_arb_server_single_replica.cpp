@@ -104,7 +104,7 @@ TEST_F(TestObSimpleMutilArbServer, create_mutil_tenant)
   EXPECT_EQ(OB_SUCCESS, map.get_refactored(cluster_id, info));
   EXPECT_EQ(4, info.tenant_count_);
   EXPECT_EQ(OB_SUCCESS, palf_env_mgr->create_arbitration_instance(
-        palflite::PalfEnvKey(cluster_id, 1), arb_server->self_, 1001,
+        palflite::PalfEnvKey(cluster_id, 1), arb_server->self_, 1001, 
         ObTenantRole(ObTenantRole::PRIMARY_TENANT)));
   auto update_meta = [](palflite::PalfEnvLiteMgr::MapPair &pair) -> void{
     auto &info = pair.second;
@@ -298,7 +298,7 @@ TEST_F(TestObSimpleMutilArbServer, restart_arb)
   // test add tenant without cluster, generate placeholder
   EXPECT_EQ(OB_SUCCESS, palf_env_mgr->create_palf_env_lite(palflite::PalfEnvKey(cluster_ids[0], 1)));
   EXPECT_TRUE(palf_env_mgr->is_cluster_placeholder_exists(cluster_ids[0]));
-
+  
   palflite::PalfEnvLite *palf_env_lite = NULL;
   IPalfHandleImpl *ipalf_handle_impl = NULL;
   {
@@ -347,7 +347,7 @@ TEST_F(TestObSimpleMutilArbServer, multi_thread)
   auto create_func = [&]() {
     for (auto ls_id : ls_ids) {
       int ret = palf_env_mgr->create_arbitration_instance(
-            palflite::PalfEnvKey(cluster_id, 1), arb_server->self_, 1001,
+            palflite::PalfEnvKey(cluster_id, 1), arb_server->self_, 1001, 
             ObTenantRole(ObTenantRole::PRIMARY_TENANT));
       if (OB_SUCCESS == ret) {
         ATOMIC_INC(&create_success_count);
@@ -356,7 +356,7 @@ TEST_F(TestObSimpleMutilArbServer, multi_thread)
         ASSERT_EQ(false, true);
       } else {
       }
-    }
+    } 
   };
   int64_t remove_success_count = 0;
   auto remove_func = [&] () {
@@ -379,7 +379,7 @@ TEST_F(TestObSimpleMutilArbServer, multi_thread)
     create_threads.emplace_back(std::thread(create_func));
   }
   for (int i = 0; i < thread_count; i++) {
-    create_threads[i].join();
+    create_threads[i].join(); 
   }
   ASSERT_EQ(thread_count*ls_ids.size(), create_success_count);
   std::vector<std::thread> remove_threads;
@@ -388,7 +388,7 @@ TEST_F(TestObSimpleMutilArbServer, multi_thread)
     remove_threads.emplace_back(std::thread(remove_func));
   }
   for (int i = 0; i < thread_count; i++) {
-    remove_threads[i].join();
+    remove_threads[i].join(); 
   }
   ASSERT_EQ(thread_count*ls_ids.size(), remove_success_count);
 
@@ -401,3 +401,4 @@ int main(int argc, char **argv)
 {
   RUN_SIMPLE_LOG_CLUSTER_TEST(TEST_NAME);
 }
+

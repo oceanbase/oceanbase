@@ -29,7 +29,7 @@ public:
   }
 
   void set_whole_range();
-
+  
   void set_false_range();
 
   int compare_with_end(const SimpleRange &r, int &cmp) const;
@@ -86,7 +86,7 @@ public:
   virtual ~ObSelEstimator() = default;
 
   static int append_estimators(ObIArray<ObSelEstimator *> &sel_estimators, ObSelEstimator *new_estimator);
-
+  
   // Check whether it is related to other ObSelEstimator, and if so, merge them
   virtual int merge(const ObSelEstimator &other, bool &is_success) = 0;
   // check whether it is independent of any other ObSelEstimator
@@ -315,7 +315,7 @@ private:
                                 const ObObj &constobj2,
                                 const double rows_per_group,
                                 const ObItemType type,
-                                const bool is_sum);
+                                const bool is_sum);  
 
   static int is_valid_agg_qual(const ObRawExpr &qual,
                                bool &is_valid,
@@ -453,7 +453,7 @@ public:
     }
     return ret;
   }
-  inline static bool check_expr_valid(const ObRawExpr &expr) {
+  inline static bool check_expr_valid(const ObRawExpr &expr) { 
     return T_OP_IN == expr.get_expr_type() || T_OP_NOT_IN == expr.get_expr_type();
   }
 private:
@@ -499,7 +499,7 @@ public:
                       const OptSelectivityCtx &ctx,
                       double &selectivity,
                       ObIArray<ObExprSelPair> &all_predicate_sel) override;
-  inline static bool check_expr_valid(const ObRawExpr &expr) {
+  inline static bool check_expr_valid(const ObRawExpr &expr) { 
     return T_OP_IS == expr.get_expr_type() || T_OP_IS_NOT == expr.get_expr_type();
   }
 private:
@@ -563,7 +563,7 @@ public:
                       const OptSelectivityCtx &ctx,
                       double &selectivity,
                       ObIArray<ObExprSelPair> &all_predicate_sel) override;
-  inline static bool check_expr_valid(const ObRawExpr &expr) {
+  inline static bool check_expr_valid(const ObRawExpr &expr) { 
     return IS_RANGE_CMP_OP(expr.get_expr_type());
   }
 private:
@@ -601,7 +601,7 @@ public:
             T_OP_NSEQ == expr.get_expr_type() ||
             T_OP_NE == expr.get_expr_type();
   }
-
+ 
   //1. var = | <=> const, get_simple_predicate_sel
   //2. func(var) = | <=> const,
   //       only simple op(+,-,*,/), get_simple_predicate_sel,
@@ -638,7 +638,7 @@ private:
   /**
    * calculate equal predicate with format `contain_column_expr = not_contain_column_expr` by ndv
    * e.g. `c1 = 1`, `c1 + 1 = 2`, `c1 + c2 = 10`
-   * if contain_column_expr contain not monotonic operator or has more than one column,
+   * if contain_column_expr contain not monotonic operator or has more than one column, 
    *    selectivity = DEFAULT_EQ_SEL
    * if contain_column_expr contain only one column and contain only monotonic operator,
    *    selectivity = 1 / ndv
@@ -864,15 +864,15 @@ public:
 
     VIRTUAL_TO_STRING_KV(K_(col1), KPC_(col2),
                          K_(coefficient1), K_(coefficient2));
-
-    const ObColumnRefRawExpr *col1_;
+  
+    const ObColumnRefRawExpr *col1_; 
     const ObColumnRefRawExpr *col2_;
     double coefficient1_;
     double coefficient2_;
   };
 
 public:
-  ObInequalJoinSelEstimator() :
+  ObInequalJoinSelEstimator() : 
     ObSelEstimator(ObSelEstType::INEQUAL_JOIN),
     use_default_(false) {}
   virtual ~ObInequalJoinSelEstimator() = default;
@@ -898,7 +898,7 @@ private:
 
   static void cmp_term(const Term &t1, const Term &t2, bool &equal, bool &need_reverse);
 
-  static int extract_ineq_qual(const OptSelectivityCtx &ctx,
+  static int extract_ineq_qual(const OptSelectivityCtx &ctx, 
                                const ObRawExpr &qual,
                                bool &is_valid);
 

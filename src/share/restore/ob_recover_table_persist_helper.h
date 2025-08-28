@@ -37,18 +37,18 @@ public:
       ObRecoverTableJob &job) const;
 
   int is_recover_table_job_exist(common::ObISQLClient &proxy, const uint64_t target_tenant_id, bool &is_exist) const;
-
-  int advance_status(common::ObISQLClient &proxy,
+  
+  int advance_status(common::ObISQLClient &proxy, 
       const ObRecoverTableJob &job, const ObRecoverTableStatus &next_status) const;
   int force_cancel_recover_job(common::ObISQLClient &proxy) const;
 
-  int get_recover_table_job_by_initiator(common::ObISQLClient &proxy,
+  int get_recover_table_job_by_initiator(common::ObISQLClient &proxy, 
       const ObRecoverTableJob &initiator_job, ObRecoverTableJob &target_job) const;
 
   int delete_recover_table_job(common::ObISQLClient &proxy, const ObRecoverTableJob &job) const;
   int insert_recover_table_job_history(common::ObISQLClient &proxy, const ObRecoverTableJob &job) const;
 
-  int get_recover_table_job_history_by_initiator(common::ObISQLClient &proxy,
+  int get_recover_table_job_history_by_initiator(common::ObISQLClient &proxy, 
       const ObRecoverTableJob &initiator_job, ObRecoverTableJob &target_job) const;
   TO_STRING_KV(K_(is_inited), K_(tenant_id));
 private:

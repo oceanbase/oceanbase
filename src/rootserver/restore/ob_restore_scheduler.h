@@ -33,7 +33,7 @@ namespace rootserver
 class ObRestoreService;
 // Running in a single thread.
 // schedule restore job, register to sys ls of meta tenant
-class ObRestoreScheduler
+class ObRestoreScheduler 
 {
 public:
   static const int64_t MAX_RESTORE_TASK_CNT = 10000;
@@ -112,9 +112,9 @@ private:
   int fill_backup_storage_info_(const share::ObPhysicalRestoreJob &job_info);
   int remove_backup_storage_info_(const share::ObPhysicalRestoreJob &job_info);
   int stat_restore_progress_(
-      common::ObISQLClient &proxy,
-      const share::ObPhysicalRestoreJob &job_info,
-      const bool is_restore_stat_start,
+      common::ObISQLClient &proxy, 
+      const share::ObPhysicalRestoreJob &job_info, 
+      const bool is_restore_stat_start, 
       const bool is_restore_finish);
   int set_restoring_start_ts_(common::ObISQLClient &proxy, const share::ObPhysicalRestoreJob &job_info);
   int update_tenant_restore_data_mode_to_remote_(const uint64_t tenant_id);

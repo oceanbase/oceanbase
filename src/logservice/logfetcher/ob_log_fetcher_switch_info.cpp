@@ -70,3 +70,4 @@ const char *print_switch_reason(const KickOutReason reason)
 
 } // namespace logfetcher
 } // namespace oceanbase
+

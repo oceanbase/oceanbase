@@ -1138,7 +1138,7 @@ bool ObMigrationOpArg::is_valid() const
       && src_.is_valid()
       && dst_.is_valid()
       && (paxos_replica_number_ > 0 || ObMigrationOpType::REBUILD_LS_OP == type_)
-      && (ObMigrationOpType::MIGRATE_LS_OP == type_ ?
+      && (ObMigrationOpType::MIGRATE_LS_OP == type_ ? 
          (src_.get_server() != dst_.get_server()) : true);
 
   if (b_ret) {
@@ -2346,7 +2346,7 @@ ObMacroBlockReuseMgr::~ObMacroBlockReuseMgr()
   }
 }
 
-int ObMacroBlockReuseMgr::init()
+int ObMacroBlockReuseMgr::init() 
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
@@ -2395,7 +2395,7 @@ void ObMacroBlockReuseMgr::reset()
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(reuse_maps_.reset())) {
-      LOG_WARN("failed to reset reuse maps", K(ret));
+      LOG_WARN("failed to reset reuse maps", K(ret)); 
     }
   }
 
@@ -2404,7 +2404,7 @@ void ObMacroBlockReuseMgr::reset()
   }
 }
 
-int ObMacroBlockReuseMgr::destroy()
+int ObMacroBlockReuseMgr::destroy() 
 {
   int ret = OB_SUCCESS;
 
@@ -2413,7 +2413,7 @@ int ObMacroBlockReuseMgr::destroy()
   } else {
     reset();
     if (OB_FAIL(reuse_maps_.destroy())) {
-      LOG_WARN("failed to destroy reuse maps", K(ret));
+      LOG_WARN("failed to destroy reuse maps", K(ret)); 
     } else {
       is_inited_ = false;
     }
@@ -2449,11 +2449,11 @@ int ObMacroBlockReuseMgr::count(int64_t &count)
       } else if (OB_FAIL(reuse_value->count(tmp_count))) {
         LOG_WARN("fail to count item in single reuse map", K(ret), KPC(reuse_value));
       } else {
-        count += tmp_count;
+        count += tmp_count; 
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -2543,11 +2543,11 @@ int ObLSMemberListInfo::assign(const ObLSMemberListInfo &info)
 }
 
 int ObMacroBlockReuseMgr::get_macro_block_reuse_info(
-    const ObITable::TableKey &table_key,
+    const ObITable::TableKey &table_key, 
     const blocksstable::ObLogicMacroBlockId &logic_id,
     blocksstable::MacroBlockId &macro_id,
     int64_t &data_checksum)
-{
+{ 
   int ret = OB_SUCCESS;
   ReuseMajorTableKey reuse_key;
   ReuseMap *reuse_map = nullptr;
@@ -2593,7 +2593,7 @@ int ObMacroBlockReuseMgr::add_macro_block_reuse_info(
   ReuseMap *reuse_map = nullptr;
   MacroBlockReuseInfo reuse_info;
   int64_t snapshot_version = 0;
-  int64_t input_snapshot_version = 0;
+  int64_t input_snapshot_version = 0; 
   int64_t co_base_snapshot_version = 0;
 
   if (!is_inited_) {
@@ -2615,7 +2615,7 @@ int ObMacroBlockReuseMgr::add_macro_block_reuse_info(
   } else if (OB_FAIL(reuse_map->insert(logic_id, reuse_info))) {
     LOG_WARN("fail to add reuse info into reuse map", K(ret), K(logic_id), K(table_key));
   }
-
+  
   return ret;
 }
 
@@ -2636,7 +2636,7 @@ int ObMacroBlockReuseMgr::update_single_reuse_map(const ObITable::TableKey &tabl
     LOG_WARN("invalid argument", K(ret), K(table_key), K(tablet_handle), K(sstable));
   } else if (OB_FAIL(get_reuse_key_(table_key, reuse_key))) {
     LOG_WARN("failed to get reuse key", K(ret), K(table_key));
-  } else if (OB_FAIL(get_major_snapshot_version(table_key, max_snapshot_version, co_base_snapshot_version))) {
+  } else if (OB_FAIL(get_major_snapshot_version(table_key, max_snapshot_version, co_base_snapshot_version))) { 
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       need_build = true;
@@ -2672,7 +2672,7 @@ int ObMacroBlockReuseMgr::get_major_snapshot_version(const ObITable::TableKey &t
   ReuseMap *reuse_map = nullptr;
   co_base_snapshot_version = 0;
   snapshot_version = 0;
-
+  
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("macro block reuse mgr do not init", K(ret));
@@ -2741,7 +2741,7 @@ ObMacroBlockReuseMgr::ReuseMajorTableValue::ReuseMajorTableValue()
     snapshot_version_(0),
     co_base_snapshot_version_(0),
     reuse_map_()
-{
+{  
 }
 
 ObMacroBlockReuseMgr::ReuseMajorTableValue::~ReuseMajorTableValue()
@@ -2759,7 +2759,7 @@ int ObMacroBlockReuseMgr::ReuseMajorTableValue::init(const int64_t &snapshot_ver
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
-    LOG_WARN("reuse major table value init twice", K(ret));
+    LOG_WARN("reuse major table value init twice", K(ret));  
   } else if (snapshot_version < 0 || co_base_snapshot_version < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid snapshot version", K(ret), K(snapshot_version), K(co_base_snapshot_version));
@@ -2789,7 +2789,7 @@ int ObMacroBlockReuseMgr::ReuseMajorTableValue::count(int64_t &count)
 }
 
 int ObMacroBlockReuseMgr::get_reuse_key_(const ObITable::TableKey &table_key, ReuseMajorTableKey &reuse_key)
-{
+{ 
   int ret = OB_SUCCESS;
   reuse_key.reset();
 
@@ -2806,9 +2806,9 @@ int ObMacroBlockReuseMgr::get_reuse_key_(const ObITable::TableKey &table_key, Re
 }
 
 int ObMacroBlockReuseMgr::get_reuse_value_(
-    const ObITable::TableKey &table_key,
-    ReuseMap *&reuse_map,
-    int64_t &snapshot_version,
+    const ObITable::TableKey &table_key, 
+    ReuseMap *&reuse_map, 
+    int64_t &snapshot_version, 
     int64_t &co_base_snapshot_version)
 {
   int ret = OB_SUCCESS;
@@ -2831,7 +2831,7 @@ int ObMacroBlockReuseMgr::get_reuse_value_(
     snapshot_version = reuse_value->snapshot_version_;
     co_base_snapshot_version = reuse_value->co_base_snapshot_version_;
   }
-
+    
   return ret;
 }
 
@@ -2852,11 +2852,11 @@ int ObMacroBlockReuseMgr::remove_single_reuse_map_(const ReuseMajorTableKey &reu
     free_reuse_value_(reuse_value);
   }
 
-  return ret;
+  return ret; 
 }
 
 int ObMacroBlockReuseMgr::build_single_reuse_map_(
-    const ObITable::TableKey &table_key,
+    const ObITable::TableKey &table_key, 
     const storage::ObTabletHandle &tablet_handle,
     const blocksstable::ObSSTable &sstable)
 {
@@ -2917,10 +2917,10 @@ int ObMacroBlockReuseMgr::build_single_reuse_map_(
               logic_id = data_macro_block_meta.get_logic_id();
               reuse_info.id_ = data_macro_block_meta.get_macro_id();
               reuse_info.data_checksum_ = data_macro_block_meta.get_meta_val().data_checksum_;
-
+              
               if (OB_FAIL(reuse_value->reuse_map_.insert(logic_id, reuse_info))) {
                 LOG_WARN("failed to insert reuse info into reuse map", K(ret), K(logic_id), K(reuse_info), K(table_key));
-              }
+              } 
             }
           }
 
@@ -2940,8 +2940,8 @@ int ObMacroBlockReuseMgr::build_single_reuse_map_(
 }
 
 int ObMacroBlockReuseMgr::prepare_reuse_value_(
-    const int64_t &snapshot_version,
-    const int64_t &co_base_snapshot_version,
+    const int64_t &snapshot_version, 
+    const int64_t &co_base_snapshot_version, 
     ReuseMajorTableValue *&reuse_value)
 {
   int ret = OB_SUCCESS;

@@ -612,18 +612,18 @@ protected:
   int extend_domain_obj_buffer(uint32_t size);
   int fill_generated_multivalue_column(ObStorageDatum* store_datums);
   int multivalue_get_pure_data(ObIAllocator& tmp_allocator,
-                               const char*& data,
+                               const char*& data, 
                                int64_t& data_len,
                                uint32_t& rowkey_start,
-                               uint32_t& rowkey_end,
-                               uint32_t& record_num,
+                               uint32_t& rowkey_end, 
+                               uint32_t& record_num, 
                                bool& is_save_rowkey);
   int inner_get_next_multivalue_index_row();
   void set_real_rescan_cnt(int64_t real_rescan_cnt) { group_rescan_cnt_ = real_rescan_cnt; }
   int64_t get_real_rescan_cnt() { return group_rescan_cnt_; }
 
   // in_batch_rescan_subplan means the ancestor operator(NLJ/SPF) of TSC uses bacth rescan
-  bool in_batch_rescan_subplan()
+  bool in_batch_rescan_subplan() 
   {
     return !tsc_rtdef_.bnlj_params_.empty();
   }
@@ -733,13 +733,13 @@ protected:
     ParamStore &param_store_;
     int64_t range_buffer_idx_;
   };
-
+  
   OB_INLINE void* locate_range_buffer()
-  {
-    int64_t column_count = MY_SPEC.tsc_ctdef_.get_query_range_provider().get_column_count();
-    size_t range_size = sizeof(ObNewRange) + sizeof(ObObj) * column_count * 2;
-    void *range_buffers = static_cast<char*>(tsc_rtdef_.range_buffers_) + tsc_rtdef_.range_buffer_idx_ * range_size;
-    return range_buffers;
+  { 
+    int64_t column_count = MY_SPEC.tsc_ctdef_.get_query_range_provider().get_column_count(); 
+    size_t range_size = sizeof(ObNewRange) + sizeof(ObObj) * column_count * 2; 
+    void *range_buffers = static_cast<char*>(tsc_rtdef_.range_buffers_) + tsc_rtdef_.range_buffer_idx_ * range_size; 
+    return range_buffers; 
   }
 private:
   const ObTableScanSpec& get_tsc_spec() {return MY_SPEC;}

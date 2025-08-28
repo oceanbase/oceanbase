@@ -100,13 +100,13 @@ public:
   OB_INLINE bool has_after_point() const { return 1 == after_stmt_ || 1 == after_row_; }
   OB_INLINE bool has_stmt_point() const { return 1 == before_stmt_ || 1 == after_stmt_; }
   OB_INLINE bool has_row_point() const { return 1 == before_row_ || 1 == after_row_ || 1 == instead_row_; }
-  OB_INLINE bool only_before_row() const { return 1 == before_row_ && 0 == after_row_
+  OB_INLINE bool only_before_row() const { return 1 == before_row_ && 0 == after_row_ 
                                            && 0 == before_stmt_ && 0 == after_stmt_ && 0 == instead_row_; }
-  OB_INLINE bool only_after_row() const { return 0 == before_row_ && 1 == after_row_
+  OB_INLINE bool only_after_row() const { return 0 == before_row_ && 1 == after_row_ 
                                            && 0 == before_stmt_ && 0 == after_stmt_ && 0 == instead_row_; }
-  OB_INLINE bool only_before_stmt() const { return 0 == before_row_ && 0 == after_row_
+  OB_INLINE bool only_before_stmt() const { return 0 == before_row_ && 0 == after_row_ 
                                             && 1 == before_stmt_ && 0 == after_stmt_ && 0 == instead_row_; }
-  OB_INLINE bool only_after_stmt() const { return 0 == before_row_ && 0 == after_row_
+  OB_INLINE bool only_after_stmt() const { return 0 == before_row_ && 0 == after_row_ 
                                            && 0 == before_stmt_ && 1 == after_stmt_ && 0 == instead_row_; }
   OB_INLINE void set_before_event() { before_event_ = 1; }
   OB_INLINE void set_after_event() { after_event_ = 1; }

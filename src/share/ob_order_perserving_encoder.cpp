@@ -348,7 +348,7 @@ int ObOrderPerservingEncoder::encode_from_string_varlen(
   bool is_valid_uni = false;
 
   int64_t safty_buf_size = 20;
-  // tail is up to 8 byte and [space] will be expand to 10byte,
+  // tail is up to 8 byte and [space] will be expand to 10byte, 
   // therefore safty buffer size round up to 20(byte)
   // and src will only expand 7 times at most when encoding.
   // for bad case

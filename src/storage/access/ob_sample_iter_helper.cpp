@@ -140,7 +140,7 @@ int ObGetSampleIterHelper::get_memtable_sample_ranges_(const ObIArray<memtable::
       split_failed_count++;
     } else {
       // split succeed. try to record all these ranges into smpale_ranges array
-      for (int64_t range_idx = 0; range_idx < single_memtable_sample_ranges.count(); range_idx++) {
+      for (int64_t range_idx = 0; range_idx < single_memtable_sample_ranges.count(); range_idx++) { 
         if (OB_TMP_FAIL(sample_ranges.push_back(single_memtable_sample_ranges.at(range_idx)))) {
           STORAGE_LOG(WARN, "push back sample ranges failed", KR(tmp_ret), K(range_idx), K(sample_ranges));
           if (0 == range_idx) {
@@ -163,9 +163,9 @@ int ObGetSampleIterHelper::get_memtable_sample_ranges_(const ObIArray<memtable::
     if (OB_FAIL(sample_ranges.push_back(table_scan_range_.get_ranges().at(0)))) {
       STORAGE_LOG(WARN, "push back datum range to sample memtable ranges failed", KR(ret), K(memtables));
     }
-    FLOG_INFO("split memtables failed",
-              KR(ret),
-              "Table Scan Range", table_scan_range_.get_ranges().at(0),
+    FLOG_INFO("split memtables failed", 
+              KR(ret), 
+              "Table Scan Range", table_scan_range_.get_ranges().at(0), 
               K(sample_ranges));
   }
   return ret;

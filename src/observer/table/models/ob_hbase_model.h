@@ -20,7 +20,7 @@
 #include "observer/table/common/ob_hbase_common_struct.h"
 
 namespace oceanbase
-{
+{   
 namespace table
 {
 
@@ -101,7 +101,7 @@ private:
   int process_query_and_mutate_group(ObTableExecCtx &ctx,
                                      LSOPGrouper::BatchGroupType &group,
                                      ObHbaseColumnFamilyService &cf_service);
-
+  
   int process_check_and_mutate_group(ObTableExecCtx &ctx,
                                      LSOPGrouper::BatchGroupType &group,
                                      ObHbaseColumnFamilyService &cf_service);
@@ -127,7 +127,7 @@ private:
                                const ObTableQueryAndMutateRequest &req,
                                ObTableQueryAndMutateResult &res,
                                ObHbaseColumnFamilyService &cf_service);
-
+  
   int replace_timestamp(ObTableExecCtx &ctx, ObTableLSOpRequest &req);
   int replace_timestamp(ObTableExecCtx &ctx, ObTableQueryAndMutateRequest &req);
   int calc_tablets(ObTableExecCtx &ctx, const ObTableQueryAndMutateRequest &req);
@@ -168,8 +168,8 @@ private:
                                 const ObQueryOperationType query_type,
                                 ObTableNewQueryAsyncSession *&query_session) override;
   int prepare_ls_result(const ObTableLSOp &req, ObTableLSOpResult &res);
-  int construct_del_query(ObHbaseTableCells &table_cells,
-                          ObTableExecCtx &exec_ctx,
+  int construct_del_query(ObHbaseTableCells &table_cells, 
+                          ObTableExecCtx &exec_ctx, 
                           ObHbaseColumnFamilyService &cf_service,
                           ObHbaseQuery &query);
   int add_dict_and_bm_to_result_entity(const ObTableLSOp &ls_op,

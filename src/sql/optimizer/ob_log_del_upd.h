@@ -274,7 +274,7 @@ public:
   { is_index_maintenance_ = is_index_maintenance; }
   bool is_index_maintenance() const { return is_index_maintenance_; }
   // update 拆成 del+ins 时，ins 的 table location 是 uncertain 的，需要全表更新
-  //
+  // 
   void set_table_location_uncertain(bool uncertain) { table_location_uncertain_ = uncertain; }
   bool is_table_location_uncertain() const { return table_location_uncertain_; }
   void set_pdml_update_split(bool is_pdml_update_split) { is_pdml_update_split_ = is_pdml_update_split; }
@@ -387,14 +387,14 @@ protected:
   int generate_ddl_slice_id_expr();
 
   int print_table_infos(const ObString &prefix,
-                        char *buf,
-                        int64_t &buf_len,
-                        int64_t &pos,
+                        char *buf, 
+                        int64_t &buf_len, 
+                        int64_t &pos, 
                         ExplainType type);
   int print_assigns(const ObAssignments &assigns,
-                    char *buf,
-                    int64_t &buf_len,
-                    int64_t &pos,
+                    char *buf, 
+                    int64_t &buf_len, 
+                    int64_t &pos, 
                     ExplainType type);
   int check_has_trigger(uint64_t tid, bool &has_trg);
   int build_rowid_expr(uint64_t table_id,
@@ -409,8 +409,8 @@ protected:
                                         const uint64_t ref_tid,
                                         ObLogExchange *&producer,
                                         ObLogTableScan *&src_tsc);
-
-  virtual int get_plan_item_info(PlanText &plan_text,
+                                
+  virtual int get_plan_item_info(PlanText &plan_text, 
                                 ObSqlPlanItem &plan_item) override;
 
   virtual int print_outline_data(PlanText &plan_text) override;
@@ -437,7 +437,7 @@ protected:
   bool need_barrier_; // row movement 场景下为了避免 insert、delete 同时操作同一行，需要加入 barrier
   bool is_first_dml_op_; // 第一个 dml op 可以和 tsc 形成 partition wise 结构，可少分配一个 exchange
   // update 拆成 del+ins 时，ins 的 table location 是 uncertain 的，需要全表更新
-  //
+  // 
   bool table_location_uncertain_;
   bool is_pdml_update_split_; // 标记delete, insert op是否由update拆分而来
   int64_t das_dop_; // zero marks not use parallel_das_dml

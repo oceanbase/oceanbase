@@ -58,7 +58,7 @@ private:
                 void *&ipacket, bool &need_decode_more, int64_t &pos);
 
   int process_mysql_packet(ObMysqlPktContext &context,
-                           obmysql::ObPacketRecordWrapper *pkt_rec_wrapper,
+                           obmysql::ObPacketRecordWrapper *pkt_rec_wrapper, 
                            ObICSMemPool& pool,
                            void *&ipacket, bool &need_decode_more);
   int process_one_mysql_packet(ObMysqlPktContext &context,

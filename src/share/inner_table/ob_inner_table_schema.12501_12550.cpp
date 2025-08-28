@@ -3008,7 +3008,7 @@ int ObInnerTableSchema::all_virtual_ddl_diagnose_info_all_virtual_ddl_diagnose_i
       false, //is_autoincrement
       false, //is_on_update_for_timestamp
       false, //is_hidden
-      true);//is_storing_column
+      true);//is_storing_column 
   }
 
   if (OB_SUCC(ret)) {
@@ -3026,7 +3026,7 @@ int ObInnerTableSchema::all_virtual_ddl_diagnose_info_all_virtual_ddl_diagnose_i
       false, //is_autoincrement
       false, //is_on_update_for_timestamp
       false, //is_hidden
-      true);//is_storing_column
+      true);//is_storing_column 
   }
 
   if (OB_SUCC(ret)) {

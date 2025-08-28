@@ -90,7 +90,7 @@ int ObGeoWkbCheckVisitor::check_ring(T *geo)
       LOG_WARN("invalid point number of ring", K(ret), K(pos_), K(po_num), K(ObGeoType::LINESTRING), K(wkb_));
     } else if (po_num < 4) {
       ret = OB_INVALID_DATA;
-      LOG_WARN("invalid point number of ring", K(ret), K(pos_), K(po_num), K(ObGeoType::LINESTRING), K(wkb_));
+      LOG_WARN("invalid point number of ring", K(ret), K(pos_), K(po_num), K(ObGeoType::LINESTRING), K(wkb_));        
     } else {
       pos_ += WKB_GEO_ELEMENT_NUM_SIZE;
       if (wkb_.length() < po_num * WKB_POINT_DATA_SIZE + pos_) {

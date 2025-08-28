@@ -772,7 +772,7 @@ int ObSSTableMeta::fill_cg_sstables(
     const int64_t new_progressive_merge_step)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(new_progressive_merge_step != OB_INVALID_INDEX_INT64
+  if (OB_UNLIKELY(new_progressive_merge_step != OB_INVALID_INDEX_INT64 
     && (new_progressive_merge_step < MIN_PROGRESSIVE_MERGE_STEP || new_progressive_merge_step > MAX_PROGRESSIVE_MERGE_STEP) )) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid new progressive merge step", K(ret), K(new_progressive_merge_step));
@@ -1101,7 +1101,7 @@ bool ObMigrationSSTableParam::is_only_shared_macro_blocks_sstable() const
 int ObMigrationSSTableParam::get_merge_res(blocksstable::ObSSTableMergeRes &res) const
 {
   int ret = OB_SUCCESS;
-  res.root_desc_.addr_ = root_block_addr_;
+  res.root_desc_.addr_ = root_block_addr_; 
   res.root_desc_.buf_ = root_block_buf_;
   res.root_desc_.height_ = basic_meta_.data_index_tree_height_;
   res.data_root_desc_.addr_ = data_block_macro_meta_addr_;
@@ -1245,7 +1245,7 @@ int ObMigrationSSTableParam::deserialize_(const char *buf, const int64_t data_le
   } else if (pos < data_len && OB_FAIL(addr_deserialize(buf, data_len, pos,
       data_block_macro_meta_addr_, data_block_macro_meta_buf_))) {
     STORAGE_LOG(WARN, "fail to deserialize address and buf", K(ret), KP(buf), K(data_len), K(pos));
-  }
+  } 
 
   LST_DO_CODE(OB_UNIS_DECODE, is_meta_root_);
 

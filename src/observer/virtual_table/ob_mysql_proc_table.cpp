@@ -186,7 +186,7 @@ int ObMySQLProcTable::inner_get_next_row(common::ObNewRow *&row)
                     } else {
                       char *param_list_buf = NULL;
                       int64_t param_list_buf_size = OB_MAX_VARCHAR_LENGTH;
-                      if (OB_UNLIKELY(NULL == (param_list_buf
+                      if (OB_UNLIKELY(NULL == (param_list_buf 
                           = static_cast<char *>(allocator_->alloc(param_list_buf_size))))) {
                         ret = OB_ALLOCATE_MEMORY_FAILED;
                         SERVER_LOG(WARN, "fail to alloc param_list_buf", K(ret));
@@ -341,11 +341,11 @@ int ObMySQLProcTable::inner_get_next_row(common::ObNewRow *&row)
                     } else {
                       const ObString &body = routine_info->get_routine_body();
                       cells[col_idx].set_varchar(body);
-                      cells[col_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+                      cells[col_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset())); 
                     }
                     break;
                   }
-                  case (CREATED):
+                  case (CREATED): 
                   case (MODIFIED): {
                     int64_t routine_time = OB_INVALID_TIMESTAMP;
                     get_info_from_all_routine(col_id, routine_info, routine_time);
@@ -468,12 +468,12 @@ int ObMySQLProcTable::get_info_from_all_routine(const uint64_t col_id,
                             " database_id = %ld and package_id = %ld "
                             " and routine_id = %lu and subprogram_id = %ld";
       ObSqlString sql;
-      if (OB_FAIL(sql.append_fmt(sql_str, col_name.length(), col_name.ptr(),
-                                routine_info->get_database_id() & 0xFFFFFFFF,
+      if (OB_FAIL(sql.append_fmt(sql_str, col_name.length(), col_name.ptr(), 
+                                routine_info->get_database_id() & 0xFFFFFFFF, 
                                 routine_info->get_package_id(),
                                 routine_info->get_routine_id() & 0xFFFFFFFF,
                                 routine_info->get_subprogram_id()))) {
-        SERVER_LOG(WARN, "fail to append sql", K(sql_str), K(routine_info->get_database_id()),
+        SERVER_LOG(WARN, "fail to append sql", K(sql_str), K(routine_info->get_database_id()), 
           K(routine_info->get_routine_id()), K(ret));
       } else if (OB_ISNULL(sql_proxy)) {
         ret = OB_ERR_UNEXPECTED;
@@ -488,7 +488,7 @@ int ObMySQLProcTable::get_info_from_all_routine(const uint64_t col_id,
         const common::ObTimeZoneInfo *time_info = NULL;
         ret = result->get_timestamp(col_idx, time_info, routine_time);
       }
-
+    
       if (OB_LIKELY(OB_ITER_END == ret)) {
         ret = OB_SUCCESS;
         SERVER_LOG(INFO, "get null info from all_routine", K(col_name));

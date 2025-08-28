@@ -844,7 +844,7 @@ int ObTenantSnapshotTableOperator::update_tenant_snap_item(const ObString &snaps
   } else if (OB_FAIL(dml.get_extra_condition().assign_fmt("%s = '%.*s'",
                           "snapshot_name", snapshot_name.length(), snapshot_name.ptr()))) {
     LOG_WARN("add extra_condition failed", KR(ret));
-  } else if (OB_FAIL(dml.get_extra_condition().append_fmt(" AND %s = '%s'",
+  } else if (OB_FAIL(dml.get_extra_condition().append_fmt(" AND %s = '%s'", 
                             "status", tenant_snap_status_to_str(old_status)))) {
     LOG_WARN("add extra_condition failed", KR(ret));
   } else if (OB_FAIL(dml.splice_update_sql(OB_ALL_TENANT_SNAPSHOT_TNAME, sql))) {

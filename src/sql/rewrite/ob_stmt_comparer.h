@@ -186,8 +186,8 @@ struct ObStmtCompareContext : ObExprEqualCheckContext
     override_set_op_compare_ = true;
   }
   virtual ~ObStmtCompareContext() {}
-
-  // since the init() func only initialize the class members,
+  
+  // since the init() func only initialize the class members, 
   // it is better to use constructor
   // for common expression extraction
   void init(const ObIArray<ObHiddenColumnItem> *calculable_items);
@@ -329,7 +329,7 @@ public:
                               ObRawExprCopier &expr_copier,
                               ObIArray<ObRawExpr*> &compute_exprs,
                               bool &is_all_computable);
-
+  
   static int inner_compute_expr(const ObRawExpr *target_expr,
                                 const ObIArray<ObRawExpr*> &source_exprs,
                                 ObStmtCompareContext &context,

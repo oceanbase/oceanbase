@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX STORAGE
+#define USING_LOG_PREFIX STORAGE 
 
 #include "storage/backup/ob_backup_linked_block_writer.h"
 
@@ -33,7 +33,7 @@ ObBackupLinkedBlockWriter::ObBackupLinkedBlockWriter()
     current_block_addr_()
 {
 }
-
+    
 ObBackupLinkedBlockWriter::~ObBackupLinkedBlockWriter()
 {
 }
@@ -159,7 +159,7 @@ int ObBackupLinkedBlockItemWriter::init(const ObLSBackupDataParam &param,
     cur_block_write_item_cnt_ = 0;
     total_block_write_item_cnt_ = 0;
     prev_block_addr_.reset();
-    has_prev_ = false;
+    has_prev_ = false; 
     write_ctx_ = &write_ctx;
     is_closed_ = false;
     is_inited_ = true;

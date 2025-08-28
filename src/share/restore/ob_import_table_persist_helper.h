@@ -35,14 +35,14 @@ public:
   int get_import_table_job(common::ObISQLClient &proxy, const uint64_t tenant_id, const int64_t job_id,
       ObImportTableJob &job) const;
   int get_all_import_table_jobs(common::ObISQLClient &proxy, common::ObIArray<ObImportTableJob> &jobs) const;
-  int advance_status(common::ObISQLClient &proxy,
+  int advance_status(common::ObISQLClient &proxy, 
       const ObImportTableJob &job, const ObImportTableJobStatus &next_status) const;
 
   int report_import_job_statistics(common::ObISQLClient &proxy, const ObImportTableJob &job) const;
   int move_import_job_to_history(common::ObISQLClient &proxy, const uint64_t tenant_id, const int64_t job_id) const;
-  int get_import_table_job_history_by_initiator(common::ObISQLClient &proxy,
+  int get_import_table_job_history_by_initiator(common::ObISQLClient &proxy, 
       const uint64_t initiator_tenant_id, const uint64_t initiator_job_id, ObImportTableJob &job) const;
-  int get_import_table_job_by_initiator(common::ObISQLClient &proxy,
+  int get_import_table_job_by_initiator(common::ObISQLClient &proxy, 
       const uint64_t initiator_tenant_id, const uint64_t initiator_job_id, ObImportTableJob &job) const;
   int force_cancel_import_job(common::ObISQLClient &proxy) const;
   int report_statistics(common::ObISQLClient &proxy, const ObImportTableJob &job) const;
@@ -64,14 +64,14 @@ public:
   uint64_t get_exec_tenant_id() const override { return gen_meta_tenant_id(tenant_id_); }
   int insert_import_table_task(common::ObISQLClient &proxy, const ObImportTableTask &task) const;
 
-  int get_all_import_table_tasks_by_initiator(common::ObISQLClient &proxy,
+  int get_all_import_table_tasks_by_initiator(common::ObISQLClient &proxy, 
       const ObImportTableJob &job, common::ObIArray<ObImportTableTask> &tasks) const;
   int get_one_batch_unfinish_tasks(common::ObISQLClient &proxy, const ObImportTableJob &job,
     const int64_t k, common::ObIArray<ObImportTableTask> &tasks) const;
   int get_recover_table_task(common::ObISQLClient &proxy, const uint64_t tenant_id, const int64_t task_id,
       ObImportTableTask &task) const;
 
-  int advance_status(common::ObISQLClient &proxy,
+  int advance_status(common::ObISQLClient &proxy, 
       const ObImportTableTask &task, const ObImportTableTaskStatus &next_status) const;
 
   int move_import_task_to_history(common::ObISQLClient &proxy, const uint64_t tenant_id, const int64_t job_id) const;

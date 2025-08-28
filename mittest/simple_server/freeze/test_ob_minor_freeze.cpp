@@ -1,4 +1,4 @@
-// owner: gengli.wzy
+// owner: gengli.wzy 
 // owner group: transaction
 
 /**
@@ -40,7 +40,7 @@
 namespace oceanbase
 {
 const int SLEEP_TIME = 100;
-namespace storage
+namespace storage 
 {
 int64_t ObITabletMemtable::inc_write_ref_()
 {

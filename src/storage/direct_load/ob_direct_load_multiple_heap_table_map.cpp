@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#define USING_LOG_PREFIX STORAGE
+#define USING_LOG_PREFIX STORAGE 
 
 #include "storage/direct_load/ob_direct_load_multiple_heap_table_map.h"
 

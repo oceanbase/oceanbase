@@ -190,7 +190,7 @@ int ObCDCTabletChangeInfo::parse_create_tablet_op_(
         const int64_t table_schema_idx = tb_schema_index_arr.at(tablet_id_idx);
         uint64_t table_id = common::OB_INVALID_ID;
         share::schema::ObTableType table_type = share::schema::MAX_TABLE_TYPE;
-        if (OB_UNLIKELY(0 > table_schema_idx
+        if (OB_UNLIKELY(0 > table_schema_idx 
               || (create_tablet_schemas.count() <= table_schema_idx && table_schemas.count() <= table_schema_idx))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("invalid table_schema_index", KR(ret), K(tls_id), K(ob_create_tablet_info), K(table_schemas), K(table_schema_idx));

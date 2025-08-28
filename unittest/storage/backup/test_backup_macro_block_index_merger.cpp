@@ -96,7 +96,7 @@ public:
   }
 
   virtual int prepare_macro_block_iterators_(
-      const ObBackupIndexMergeParam &merge_param, const common::ObIArray<ObBackupRetryDesc> &retry_list,
+      const ObBackupIndexMergeParam &merge_param, const common::ObIArray<ObBackupRetryDesc> &retry_list, 
       common::ObISQLClient &sql_proxy, common::ObIArray<ObIMacroBlockIndexIterator *> &iterators) override
   {
     int ret = OB_SUCCESS;

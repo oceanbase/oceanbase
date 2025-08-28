@@ -373,7 +373,7 @@ private:
   int init_decoders();
   int add_decoder(const int64_t store_idx,
                   const common::ObObjMeta &obj_meta,
-                  const ObColumnParam *col_param,
+                  const ObColumnParam *col_param, 
                   int64_t &decoders_buf_pos,
                   ObColumnDecoder &dest);
   int decode_cells(const uint64_t row_id,

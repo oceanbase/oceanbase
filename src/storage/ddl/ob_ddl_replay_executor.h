@@ -130,12 +130,12 @@ protected:
 #endif
 private:
   int do_inc_replay_(
-      ObTabletHandle &tablet_handle,
-      blocksstable::ObMacroBlockWriteInfo &write_info,
+      ObTabletHandle &tablet_handle, 
+      blocksstable::ObMacroBlockWriteInfo &write_info, 
       storage::ObDDLMacroBlock &macro_block);
   int do_full_replay_(
-      ObTabletHandle &tablet_handle,
-      blocksstable::ObMacroBlockWriteInfo &write_info,
+      ObTabletHandle &tablet_handle, 
+      blocksstable::ObMacroBlockWriteInfo &write_info, 
       storage::ObDDLMacroBlock &macro_block);
   int filter_redo_log_(
       const ObDDLMacroBlockRedoInfo &redo_info,
@@ -301,8 +301,8 @@ protected:
   virtual int do_replay_(ObTabletHandle &handle) override;
 private:
   static int modify_tablet_restore_status_if_need(
-      const ObIArray<ObTabletID> &dest_tablet_ids,
-      const ObTabletHandle &src_tablet_handle,
+      const ObIArray<ObTabletID> &dest_tablet_ids, 
+      const ObTabletHandle &src_tablet_handle, 
       ObLS* ls);
   int check_can_skip_replay(ObTabletHandle &handle, bool &can_skip);
 private:
@@ -372,3 +372,4 @@ private:
 }  // end namespace oceanbase
 
 #endif  // OCEANBASE_STORAGE_OB_DDL_REDO_LOG_REPLAYER_H
+

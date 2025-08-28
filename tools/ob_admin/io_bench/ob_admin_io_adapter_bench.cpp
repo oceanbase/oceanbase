@@ -60,7 +60,7 @@ int ObAdminIOAdapterBenchmarkExecutor::execute(int argc, char *argv[])
       STORAGE_LOG(WARN, "failed to create_and_add_tenant_allocator", K(ret));
     }
   }
-
+ 
   if (FAILEDx(tenant_base->init())) {
     STORAGE_LOG(WARN, "failed to init tenant base", K(ret));
   } else if (FALSE_IT(ObTenantEnv::set_tenant(tenant_base))) {
@@ -219,7 +219,7 @@ int ObAdminIOAdapterBenchmarkExecutor::parse_cmd_(int argc, char *argv[])
         break;
       }
       case 'a': {
-        // 必须在 ObDeviceManager::get_instance().init_devices_env() 之后执行
+        // 必须在 ObDeviceManager::get_instance().init_devices_env() 之后执行 
         cluster_enable_obdal_config = &ObClusterEnableObdalConfigBase::get_instance();
         break;
       }
@@ -237,15 +237,15 @@ int ObAdminIOAdapterBenchmarkExecutor::parse_cmd_(int argc, char *argv[])
           } else if (strcmp(opt_name, "append-fragment-size") == 0) {
             if (OB_FAIL(c_str_to_int(optarg, append_fragment_size_))) {
               OB_LOG(WARN, "failed to parse append fragment size", KR(ret), K((char *) optarg));
-            }
+            } 
           } else if (strcmp(opt_name, "multi-size") == 0) {
             if (OB_FAIL(c_str_to_int(optarg, multi_size_))) {
               OB_LOG(WARN, "failed to parse multi size", KR(ret), K((char *) optarg));
-            }
+            } 
           } else if (strcmp(opt_name, "multi-fragment-size") == 0) {
             if (OB_FAIL(c_str_to_int(optarg, multi_fragment_size_))) {
               OB_LOG(WARN, "failed to parse multi fragment size", KR(ret), K((char *) optarg));
-            }
+            } 
           }
           break;
         } else {
@@ -276,10 +276,10 @@ int ObAdminIOAdapterBenchmarkExecutor::parse_cmd_(int argc, char *argv[])
         if (OB_FAIL(databuff_printf(base_path_, sizeof(base_path_), base_path_len, "/test_io_device_%s", time_buffer))) {
           OB_LOG(WARN, "failed to databuff printf", K(ret));
         }
-      }
+      } 
 
       TaskConfig write_config(thread_num_, max_task_run_times_, time_limit_s_,
-          write_size_, obj_num_, -1, is_adaptive_,
+          write_size_, obj_num_, -1, is_adaptive_, 
           BenchmarkTaskType::BENCHMARK_TASK_NORMAL_WRITE, BenchmarkTaskTypeStr[BenchmarkTaskType::BENCHMARK_TASK_NORMAL_WRITE]);
       if (FAILEDx(databuff_printf(write_config.base_path_, sizeof(write_config.base_path_), "%s/write", base_path_))) {
         OB_LOG(WARN, "failed to databuff printf", K(ret));
@@ -377,7 +377,7 @@ int CleanOp::func(const dirent *entry)
   if (OB_ISNULL(storage_info_)) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "storage_info_ is null", K(ret), KP(storage_info_));
-  } else if (OB_UNLIKELY(storage_info_->is_enable_worm()
+  } else if (OB_UNLIKELY(storage_info_->is_enable_worm() 
                 && ObStorageDeleteMode::STORAGE_DELETE_MODE == storage_info_->get_delete_mode())) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(ERROR, "worm bucket can not do deleting opeartion", K(ret), KPC(storage_info_));
@@ -451,7 +451,7 @@ int ObAdminIOAdapterBenchmarkExecutor::run_all_tests_()
       std::cout << LIGHT_RED << "[ERROR] " << "failed to check empty path, please make sure the destination is connected" << NONE_COLOR << std::endl;
     }
   }
-
+  
   for (int i = 0; OB_SUCC(ret) && i < configs_.size(); i++) {
     if (OB_FAIL(runner.init(configs_[i].base_path_, &storage_info, configs_[i]))) {
       OB_LOG(WARN, "failed to init ObBackupIoAdapterBenchmarkRunner", K(ret), K(base_path_), K(storage_info), K(configs_[i]));
@@ -463,7 +463,7 @@ int ObAdminIOAdapterBenchmarkExecutor::run_all_tests_()
       PrintHelper::print_dump_title("Testing");
       PrintHelper::print_dump_line("Task Config", print_config_buf);
       PrintHelper::print_dump_line("Task work path", configs_[i].base_path_);
-
+      
 
       if (FAILEDx(runner.do_benchmark())) {
         OB_LOG(WARN, "failed to do benchmark",
@@ -585,7 +585,7 @@ int ObBackupIoAdapterBenchmarkRunner::do_benchmark()
   struct timeval start_real_time;
   getrusage(RUSAGE_SELF, &start_usage);
   gettimeofday(&start_real_time, nullptr);
-
+  
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     OB_LOG(WARN, "ObBackupIoAdapterBenchmarkRunner not init", K(ret));
@@ -621,7 +621,7 @@ void ObBackupIoAdapterBenchmarkRunner::run1()
   ITaskExecutor *executor = nullptr;
   const uint64_t thread_idx = get_thread_idx();
   char uri[common::OB_MAX_URI_LENGTH];
-
+  
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     OB_LOG(WARN, "ObBackupIoAdapterBenchmarkRunner not init", K(ret));
@@ -636,7 +636,7 @@ void ObBackupIoAdapterBenchmarkRunner::run1()
     OB_LOG(WARN, "fail to make base task dir for current thread",
         K(ret), K_(base_uri), K(thread_idx));
   }
-
+  
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(BenchmarkTaskType::BENCHMARK_TASK_DEL == config_.type_ && storage_info_->is_enable_worm()
                 && ObStorageDeleteMode::STORAGE_DELETE_MODE == storage_info_->get_delete_mode())) {
@@ -669,5 +669,5 @@ void ObBackupIoAdapterBenchmarkRunner::run1()
   }
 }
 
-}   //tools
+}   //tools 
 }   //oceanbase

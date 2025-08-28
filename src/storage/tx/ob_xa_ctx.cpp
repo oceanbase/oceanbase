@@ -996,7 +996,7 @@ int ObXACtx::process_start_stmt_response(const obrpc::ObXAStartStmtRPCResponse &
 
   TRANS_LOG(INFO, "process start stmt response", K(ret), K(res));
   sync_stmt_info_cond_.notify(ret);
-  REC_TRACE_EXT(tlog_, xa_start_stmt_response, OB_Y(ret), OB_ID(ctx_ref), get_uref());
+  REC_TRACE_EXT(tlog_, xa_start_stmt_response, OB_Y(ret), OB_ID(ctx_ref), get_uref()); 
 
   return ret;
 }
@@ -1610,7 +1610,7 @@ int ObXACtx::xa_start_remote_second_(const ObXATransID &xid,
   ObTransCond cond;
   const int64_t wait_time = (INT64_MAX / 2 ) - now;
   xa_sync_status_cond_.reset();
-
+  
   if (OB_ISNULL(xa_rpc_) || OB_ISNULL(xa_service_)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "xa rpc is null", K(ret), K(xid), KP(xa_rpc_), KP(xa_service_));

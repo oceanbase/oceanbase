@@ -86,7 +86,7 @@ void finish_check_serialization();
 #define OB_UNIS_ENCODE(obj) OB_UNIS_ENCODE_IF(obj, true)
 #define OB_UNIS_DECODE(obj) OB_UNIS_DECODE_IF(obj, true)
 
-// int FUNC(tmp, obj): copy tmp to obj
+// int FUNC(tmp, obj): copy tmp to obj 
 #define OB_UNIS_DECODE_AND_FUNC(obj, FUNC)                       \
   if (OB_SUCC(ret)) {                                            \
     typeof(obj) tmp;                                             \
@@ -343,7 +343,7 @@ const static int64_t UNIS_VERSION = VER
     OB_UNIS_DECODE(objs[i]);                                    \
   }
 
-// ATTENTION!!! macro OB_UNIS_DECODE_ARRAY and OB_UNIS_DECODE_ARRAY_AND_FUNC is not same
+// ATTENTION!!! macro OB_UNIS_DECODE_ARRAY and OB_UNIS_DECODE_ARRAY_AND_FUNC is not same 
 // OB_UNIS_DECODE_ARRAY_AND_FUNC will decode objs_count, while OB_UNIS_DECODE_ARRAY will not
 #define OB_UNIS_DECODE_ARRAY_AND_FUNC(objs, objs_count, FUNC)                                           \
   if (OB_SUCC(ret)) {                                                                                   \

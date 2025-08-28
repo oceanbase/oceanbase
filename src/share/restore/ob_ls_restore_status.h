@@ -85,7 +85,7 @@ public:
   static const char *get_restore_status_str(const ObLSRestoreStatus &status);
   bool is_valid() const { return is_valid_(status_); }
 
-
+  
   bool is_restore_start() const { return Status::RESTORE_START == status_; }
   bool is_quick_restore() const { return Status::QUICK_RESTORE == status_; }
   bool is_restore_major_data() const { return Status::RESTORE_MAJOR_DATA == status_; }
@@ -102,22 +102,22 @@ public:
   bool is_quick_restore_finish() const { return Status::QUICK_RESTORE_FINISH == status_;}
 
 
-  bool is_in_restoring() const
-  {
+  bool is_in_restoring() const 
+  { 
     return (status_ >= Status::RESTORE_START && status_ < QUICK_RESTORE_FINISH)
-           || (status_ > QUICK_RESTORE_FINISH && status_ < Status::RESTORE_FAILED);
+           || (status_ > QUICK_RESTORE_FINISH && status_ < Status::RESTORE_FAILED); 
   }
-  bool is_in_restoring_or_failed() const
-  {
+  bool is_in_restoring_or_failed() const 
+  { 
     return is_in_restoring() || RESTORE_FAILED == status_;
   }
-  bool is_in_restore_status() const
-  {
-    return status_ >= Status::RESTORE_START && status_ <= Status::RESTORE_FAILED;
+  bool is_in_restore_status() const 
+  { 
+    return status_ >= Status::RESTORE_START && status_ <= Status::RESTORE_FAILED; 
   }
-  bool is_valid_restore_status() const
-  {
-    return is_in_restore_status() || Status::NONE == status_;
+  bool is_valid_restore_status() const 
+  { 
+    return is_in_restore_status() || Status::NONE == status_; 
   }
   bool is_wait_status() const
   {
@@ -169,15 +169,15 @@ public:
   }
   bool is_in_restore_and_before_quick_restore() const
   {
-    return status_ >= RESTORE_START && status_ <= WAIT_RESTORE_TO_CONSISTENT_SCN;
+    return status_ >= RESTORE_START && status_ <= WAIT_RESTORE_TO_CONSISTENT_SCN; 
   }
   bool is_before_restore_to_consistent_scn() const
   {
-    return status_ >= RESTORE_START && status_ < WAIT_RESTORE_TO_CONSISTENT_SCN;
+    return status_ >= RESTORE_START && status_ < WAIT_RESTORE_TO_CONSISTENT_SCN; 
   }
   bool is_before_restore_major_data() const
   {
-    return status_ >= RESTORE_START && status_ < RESTORE_MAJOR_DATA;
+    return status_ >= RESTORE_START && status_ < RESTORE_MAJOR_DATA; 
   }
   bool check_allow_read() const
   {

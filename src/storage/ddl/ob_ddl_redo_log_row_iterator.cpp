@@ -25,19 +25,19 @@ using namespace share::schema;
 
 ObDDLRedoLogRowIterator::ObDDLRedoLogRowIterator(ObIAllocator &allocator, const uint64_t tenant_id)
   : allocator_(allocator),
-    iter_(allocator, tenant_id),
+    iter_(allocator, tenant_id), 
     rowkey_obobj_(nullptr),
     schema_rowkey_column_count_(0),
     is_inited_(false)
-{
+{ 
 }
 
 ObDDLRedoLogRowIterator::~ObDDLRedoLogRowIterator()
-{
+{ 
   reset();
 }
 
-int ObDDLRedoLogRowIterator::init(const ObString &data_buffer)
+int ObDDLRedoLogRowIterator::init(const ObString &data_buffer) 
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(iter_.open(data_buffer.ptr(), data_buffer.length()))) {
@@ -71,7 +71,7 @@ void ObDDLRedoLogRowIterator::reset()
 int ObDDLRedoLogRowIterator::get_next_row(const ObDatumRow *&row,
                                              const ObStoreRowkey *&rowkey,
                                              ObTxSEQ &seq_no,
-                                             blocksstable::ObDmlRowFlag &row_flag)
+                                             blocksstable::ObDmlRowFlag &row_flag) 
 {
   int ret = OB_SUCCESS;
   row = nullptr;
@@ -112,7 +112,7 @@ int ObDDLRedoLogRowIterator::get_next_row(const ObDatumRow *&row,
 int ObDDLRedoLogRowIterator::get_next_lob_meta_row(const ObLobMetaInfo *&row,
                                                       const ObStoreRowkey *&rowkey,
                                                       ObTxSEQ &seq_no,
-                                                      blocksstable::ObDmlRowFlag &row_flag)
+                                                      blocksstable::ObDmlRowFlag &row_flag) 
 {
   // 一期暂不支持
   return OB_NOT_SUPPORTED;

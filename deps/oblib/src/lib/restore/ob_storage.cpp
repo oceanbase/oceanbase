@@ -109,8 +109,8 @@ bool is_storage_type_match(const common::ObString &uri, const ObStorageType &typ
 }
 
 bool is_object_storage_type(const ObStorageType &type)
-{
-  return ObStorageType::OB_STORAGE_FILE != type
+{ 
+  return ObStorageType::OB_STORAGE_FILE != type 
       && ObStorageType::OB_STORAGE_MAX_TYPE != type;
 }
 
@@ -149,7 +149,7 @@ int build_full_dir_path(const char *dir_path, char *dir_path_buf, const int64_t 
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
-  if (OB_ISNULL(dir_path) || OB_ISNULL(dir_path_buf) ||
+  if (OB_ISNULL(dir_path) || OB_ISNULL(dir_path_buf) || 
       OB_UNLIKELY(strlen(dir_path) <= 0 || dir_path_buf_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid arguments", K(ret), K(dir_path), KP(dir_path_buf), K(dir_path_buf_len));
@@ -227,7 +227,7 @@ int ListAppendableObjectFragmentOp::gen_object_meta(ObStorageObjectMeta &obj_met
       }
       j++;
     }
-
+      
     if (OB_FAIL(ret)) {
     } else if (selected_idx == i) {
       if (i <  meta_arr_.size() - 1) {
@@ -265,7 +265,7 @@ int DelAppendableObjectFragmentOp::func(const dirent *entry)
   if (OB_ISNULL(entry)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", K(ret));
-  } else if (OB_FAIL(databuff_printf(obj_fragment_path, sizeof(obj_fragment_path),
+  } else if (OB_FAIL(databuff_printf(obj_fragment_path, sizeof(obj_fragment_path), 
              "%s%s%s", uri_.ptr(), delemiter_str, entry->d_name))) {
     OB_LOG(WARN, "fail to construct appendable obj fragment path", K(ret), K_(uri), K(delemiter_str), K(entry->d_name));
   } else if (OB_FAIL(util_.del_file(obj_fragment_path))) {
@@ -280,7 +280,7 @@ int DelAppendableObjectFragmentOp::func(const dirent *entry)
 
 /**
  * ------------------------------ObTopNMinimumDirEntryWithMarkerOperator------------------------------
- */
+ */ 
 
 // return true when lsh is smaller than or equal to rhs
 bool less_than(const char *lhs, const char *rhs)
@@ -306,7 +306,7 @@ ObTopNMinimumDirEntryWithMarkerOperator::~ObTopNMinimumDirEntryWithMarkerOperato
 {
   n_ = -1;
   heap_.reset();
-  allocator_.reset();
+  allocator_.reset(); 
 }
 
 bool ObTopNMinimumDirEntryWithMarkerOperator::TopNCompElement::operator()(const Entry &lhs,
@@ -331,7 +331,7 @@ int ObTopNMinimumDirEntryWithMarkerOperator::func(const dirent *entry)
   const char *d_name = nullptr;
   Entry tmp_entry;
   if (OB_UNLIKELY(n_ <= 0) || OB_ISNULL(entry) || OB_ISNULL(entry->d_name)) {
-    ret = OB_INVALID_ARGUMENT;
+    ret = OB_INVALID_ARGUMENT; 
     STORAGE_LOG(WARN, "invalid argument", K(ret), K_(n), KP(entry));
   } else if (FALSE_IT(d_name = entry->d_name)) {
     // filter each dirent whose name is smaller than or equal to marker_
@@ -367,7 +367,7 @@ int ObTopNMinimumDirEntryWithMarkerOperator::handle_each_dir_entry(
       STORAGE_LOG(WARN, "pop failed", K(ret));
     }
   }
-  // Data obtained using a max heap is in descending order.
+  // Data obtained using a max heap is in descending order. 
   // To maintain consistency with the results returned by object storage,
   // the obtained data is processed in reverse order.
   for (int64_t i = entry_list.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
@@ -438,14 +438,14 @@ int ObTopNMinimumDirEntryWithMarkerOperator::try_replace_top_(const char *d_name
       STORAGE_LOG(WARN, "TopNDir replace_top failed", K(ret), K(new_entry), K(top_data));
     }
   }
-
+  
   return ret;
 }
 
 /**
  * ------------------------------ObStorageGlobalIns------------------------------
  */
-ObStorageGlobalIns::ObStorageGlobalIns()
+ObStorageGlobalIns::ObStorageGlobalIns() 
   :io_prohibited_(false)
 {}
 
@@ -636,8 +636,8 @@ int ObStorageUtil::detect_storage_obj_meta(
       need_detect_appendable = false;
       obj_meta.type_ = ObStorageObjectMetaType::OB_OBJ_NORMAL;
     }
-  }
-
+  } 
+  
   if (OB_SUCC(ret) && need_detect_appendable) {
     obj_meta.reset();
     int64_t pos = 0;
@@ -646,7 +646,7 @@ int ObStorageUtil::detect_storage_obj_meta(
       if (OB_FAIL(read_seal_meta_if_needed(uri, obj_meta))) {
         OB_LOG(WARN, "fail to read seal meta if needed", K(ret), K(uri));
       }
-
+      
       // If not exist seal meta, we need to list all files and check format meta exist or not.
       // format meta must exist, otherwise need to return error.
       if (OB_SUCC(ret) && !obj_meta.is_exist_) {
@@ -667,7 +667,7 @@ int ObStorageUtil::detect_storage_obj_meta(
       } else {
         if (ObStorageObjectMetaType::OB_FS_DIR == obj_meta.type_) {
           ret = OB_INVALID_ARGUMENT;
-          OB_LOG(WARN, "please set is_adaptive as false when want to check a common dir exist or not",
+          OB_LOG(WARN, "please set is_adaptive as false when want to check a common dir exist or not", 
             K(ret), K(uri), K(is_adaptive));
         }
       }
@@ -786,7 +786,7 @@ int ObStorageUtil::is_exist(const common::ObString &uri, const bool is_adaptive,
   } else if (OB_FAIL(detect_storage_obj_meta(uri, is_adaptive, false/*need_fragment_meta*/, obj_meta))) {
     OB_LOG(WARN, "fail to detect storage obj type", K(ret), K(uri), K(is_adaptive));
   } else {
-    exist = obj_meta.is_exist_;
+    exist = obj_meta.is_exist_; 
   }
 
   return ret;
@@ -842,7 +842,7 @@ int ObStorageUtil::get_file_length(const common::ObString &uri, const bool is_ad
   } else {
     file_length = obj_meta.length_;
   }
-
+    
   if (OB_SUCC(ret)) {
     if (file_length == 0) {
       OB_LOG(INFO, "this file is empty", K(ret), K(uri), K(file_length));
@@ -851,7 +851,7 @@ int ObStorageUtil::get_file_length(const common::ObString &uri, const bool is_ad
       OB_LOG(WARN, "this file length is invalid", K(ret), K(uri), K(file_length));
     }
   }
-
+  
   return ret;
 }
 
@@ -923,8 +923,8 @@ int ObStorageUtil::del_appendable_file(const ObString &uri)
 }
 
 int ObStorageUtil::list_files(
-    const common::ObString &uri,
-    const bool is_adaptive,
+    const common::ObString &uri, 
+    const bool is_adaptive, 
     common::ObBaseDirEntryOperator &op)
 {
   int ret = OB_SUCCESS;
@@ -960,7 +960,7 @@ int ObStorageUtil::list_files(
 }
 
 int ObStorageUtil::list_adaptive_files(
-    const common::ObString &uri,
+    const common::ObString &uri, 
     common::ObBaseDirEntryOperator &op)
 {
   int ret = OB_SUCCESS;
@@ -1243,7 +1243,7 @@ int ObStorageUtil::handle_listed_fs(
     const bool is_slash_end = is_end_with_slash(uri.ptr());
     const char *slash_delimiter = is_slash_end ? "" : "/";
     char tmp_uri[OB_MAX_URI_LENGTH] = { 0 };
-
+    
     int64_t size = 0;
     // When handling file system list_files, the result will only save file's name(not include dir path)
     for (int64_t i = 0; OB_SUCC(ret) && (i < list_ctx->rsp_num_); ++i) {
@@ -1254,7 +1254,7 @@ int ObStorageUtil::handle_listed_fs(
         if (op.need_get_file_size()) {
           if (OB_FAIL(databuff_printf(tmp_uri, OB_MAX_URI_LENGTH, "%s%s%s", uri.ptr(), slash_delimiter,
               list_ctx->name_arr_[i]))) {
-            STORAGE_LOG(WARN, "fail to build appendable file uri", K(ret), K(i), K(uri), K(is_slash_end),
+            STORAGE_LOG(WARN, "fail to build appendable file uri", K(ret), K(i), K(uri), K(is_slash_end), 
               KP(list_ctx->name_arr_[i]));
           } else if (OB_FAIL(get_adaptive_file_length(tmp_uri, size))) {
             OB_LOG(WARN, "fail to get adaptive file length", K(ret), KP(tmp_uri));
@@ -1381,7 +1381,7 @@ int ObStorageUtil::get_file_length(const common::ObString &uri, int64_t &file_le
       STORAGE_LOG(WARN, "failed to get_file_length", K(ret), K(uri));
     }
   }
-
+    
   if (OB_SUCC(ret)) {
     if (file_length == 0) {
       STORAGE_LOG(INFO, "this file is empty", K(ret), K(uri), K(file_length));
@@ -1390,7 +1390,7 @@ int ObStorageUtil::get_file_length(const common::ObString &uri, int64_t &file_le
       STORAGE_LOG(WARN, "this file length is invalid", K(ret), K(uri), K(file_length));
     }
   }
-
+  
   if (OB_FAIL(ret)) {
     EVENT_INC(ObStatEventIds::OBJECT_STORAGE_IO_HEAD_FAIL_COUNT);
   }
@@ -1436,7 +1436,7 @@ int ObStorageUtil::get_adaptive_file_length(const common::ObString &uri, int64_t
       file_length = obj_meta.length_;
     }
   }
-
+  
   if (OB_SUCC(ret)) {
     if (file_length == 0) {
       STORAGE_LOG(INFO, "this file is empty", K(ret), K(uri), K(file_length));
@@ -1445,7 +1445,7 @@ int ObStorageUtil::get_adaptive_file_length(const common::ObString &uri, int64_t
       STORAGE_LOG(WARN, "this file length is invalid", K(ret), K(uri), K(file_length));
     }
   }
-
+  
   return ret;
 }
 
@@ -1525,7 +1525,7 @@ int ObStorageUtil::batch_del_files(
     int64_t object_start = 0;
     char bucket_with_prefix[OB_MAX_URI_LENGTH] = { 0 };
     MEMSET(bucket_with_prefix, 0, sizeof(bucket_with_prefix));
-
+    
     if (OB_FAIL(files_to_delete_map.create(177, mem_tag))) {
       STORAGE_LOG(WARN, "fail to create map", K(ret), K(uri), K_(device_type));
     } else if (OB_UNLIKELY(!is_storage_type_match(uri, device_type_))) {
@@ -1607,7 +1607,7 @@ int ObStorageUtil::batch_del_files(
         }
       }
       if (OB_SUCCESS == tmp_ret) {
-        // Successfully recorded all objects that failed to delete,
+        // Successfully recorded all objects that failed to delete, 
         // resetting the error code accordingly.
         ret = OB_SUCCESS;
       }
@@ -2040,7 +2040,7 @@ int ObStorageReader::open(const common::ObString &uri,
   } else {
     storage_info_ = storage_info;
   }
-
+  
 
   if (!head_meta) {
   } else {
@@ -2342,7 +2342,7 @@ int ObStorageAdaptiveReader::pread(char *buf,
         }
         EVENT_INC(ObStatEventIds::BACKUP_IO_READ_COUNT);
       }
-
+      
       if (OB_SUCC(ret)) {
         read_size = cur_read_size;
       }
@@ -2350,7 +2350,7 @@ int ObStorageAdaptiveReader::pread(char *buf,
 
     if (OB_NOT_NULL(tmp_reader)) {
       tmp_reader->~ObIStorageReader();
-      // tmp_reader is alloced by allocator, no need actively free
+      // tmp_reader is alloced by allocator, no need actively free 
     }
   } else {
     ret = OB_ERR_SYS;
@@ -2596,8 +2596,8 @@ int ObStorageAppender::open(
     } else {
       appender_ = &obdal_appender_;
     }
-  } else if (OB_STORAGE_OSS == type_ ||
-             OB_STORAGE_COS == type_ ||
+  } else if (OB_STORAGE_OSS == type_ || 
+             OB_STORAGE_COS == type_ || 
              OB_STORAGE_S3 == type_) {
     if (OB_STORAGE_OSS == type_) {
       appender_ = &oss_appender_;
@@ -2832,7 +2832,7 @@ int ObStorageAppender::seal_for_adaptive()
     if (OB_FAIL(ret)) {
       if (OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM == ret && storage_info_->is_enable_worm()) {
         ret = OB_SUCCESS;
-        OB_LOG(INFO, "seal meta file exist, can not seal file again, ignore the error code",
+        OB_LOG(INFO, "seal meta file exist, can not seal file again, ignore the error code", 
                         KR(ret), K(seal_meta_uri), KPC_(storage_info));
       }
     }
@@ -2863,7 +2863,7 @@ ObStorageMultiPartWriter::~ObStorageMultiPartWriter()
 }
 
 int ObStorageMultiPartWriter::open(
-    const common::ObString &uri,
+    const common::ObString &uri, 
     common::ObObjectStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
@@ -2898,8 +2898,8 @@ int ObStorageMultiPartWriter::open(
     } else {
       multipart_writer_ = &obdal_multipart_writer_;
     }
-  } else if (OB_STORAGE_OSS == type ||
-             OB_STORAGE_COS == type ||
+  } else if (OB_STORAGE_OSS == type || 
+             OB_STORAGE_COS == type || 
              OB_STORAGE_S3 == type) {
     if (OB_STORAGE_OSS == type) {
       multipart_writer_ = &oss_multipart_writer_;
@@ -3293,7 +3293,7 @@ int ObStorageDirectMultiPartWriter::close()
       STORAGE_LOG(WARN, "failed to close multipart writer", K(ret));
     }
   }
-
+  
   reset();
   return ret;
 }

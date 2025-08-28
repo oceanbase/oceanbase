@@ -197,7 +197,7 @@ private:
         LOG_WARN("failed to do geometry collection union", K(ret));
       } else if (OB_ISNULL(mpt) || OB_ISNULL(mls) || OB_ISNULL(mpy)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null geometry collection union", K(ret), KP(mpt), KP(mls), KP(mpy));
+        LOG_WARN("unexpected null geometry collection union", K(ret), KP(mpt), KP(mls), KP(mpy)); 
       }
 
       // do difference
@@ -262,7 +262,7 @@ private:
             }
           }
         }
-      }
+      } 
     }
 
     if (OB_SUCC(ret)) {
@@ -415,7 +415,7 @@ private:
         LOG_WARN("fail to append buffer", K(ret), K(GEO_NUM));
       } else if (OB_FAIL(buffer.append(g->val(), g->length()))) {
         LOG_WARN("fail to append buffer", K(ret));
-      } else if (OB_FAIL(ObGeoTypeUtil::create_geo_by_type(allocator, static_cast<ObGeoType>(multi_type_num),
+      } else if (OB_FAIL(ObGeoTypeUtil::create_geo_by_type(allocator, static_cast<ObGeoType>(multi_type_num), 
                                                           g->crs() == ObGeoCRS::Geographic, true, res, g->get_srid()))) {
         LOG_WARN("failed to create wkb", K(ret));
       } else {
@@ -1264,7 +1264,7 @@ OB_GEO_CART_TREE_FUNC_BEGIN(ObGeoFuncDifferenceImpl, ObCartesianMultipolygon, Ob
 
 OB_GEO_CART_TREE_FUNC_BEGIN(ObGeoFuncDifferenceImpl, ObCartesianGeometrycollection, ObCartesianMultilinestring, ObGeometry *)
 {
-  return apply_bg_difference_collection<ObCartesianGeometrycollection, ObCartesianMultipoint, ObCartesianMultilinestring,
+  return apply_bg_difference_collection<ObCartesianGeometrycollection, ObCartesianMultipoint, ObCartesianMultilinestring, 
                                         ObCartesianMultipolygon>(g1, g2, context, result);
 } OB_GEO_FUNC_END;
 

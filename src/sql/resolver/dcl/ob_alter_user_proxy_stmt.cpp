@@ -26,3 +26,4 @@ ObAlterUserProxyStmt::ObAlterUserProxyStmt()
 ObAlterUserProxyStmt::~ObAlterUserProxyStmt()
 {
 }
+

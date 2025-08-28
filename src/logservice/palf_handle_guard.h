@@ -37,7 +37,7 @@ public:
       palf_env_ = nullptr;
     }
   }
-
+  
   bool is_valid() const
   {
     return palf_handle_.is_valid();

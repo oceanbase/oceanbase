@@ -229,7 +229,7 @@ struct ObAlterMViewArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObAlterMViewArg():
+  ObAlterMViewArg(): 
     exec_env_(),
     is_alter_on_query_computation_(false),
     enable_on_query_computation_(false),
@@ -360,7 +360,7 @@ public:
   bool is_valid() const;
   void reset();
   int assign(const ObAlterMLogArg &other);
-
+  
   TO_STRING_KV(K_(exec_env),
                K_(is_alter_table_dop),
                K_(table_dop),

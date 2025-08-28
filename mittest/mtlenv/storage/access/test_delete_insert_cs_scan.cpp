@@ -1049,7 +1049,7 @@ TEST_F(TestDeleteInsertCSScan, test_multi_version_row_filter)
   ObStorageDatum filter_val;
   filter_val.set_int(5);
   // second column != 5
-  OK(create_pushdown_filter(true,
+  OK(create_pushdown_filter(true, 
                             common::OB_APP_MIN_COLUMN_ID + 1,
                             filter_val,
                             ObWhiteFilterOperatorType::WHITE_OP_NE,
@@ -1499,7 +1499,7 @@ TEST_F(TestDeleteInsertCSScan, test_multi_minor_major_version_overlap)
   ObStorageDatum filter_val;
   filter_val.set_int(30);
   // second column != 30
-  OK(create_pushdown_filter(true,
+  OK(create_pushdown_filter(true, 
                             common::OB_APP_MIN_COLUMN_ID + 1,
                             filter_val,
                             ObWhiteFilterOperatorType::WHITE_OP_NE,

@@ -24,8 +24,8 @@ TestStorageS3Common() {}
 
 void init()
 {
-  ASSERT_EQ(OB_SUCCESS,
-            databuff_printf(account, sizeof(account),
+  ASSERT_EQ(OB_SUCCESS, 
+            databuff_printf(account, sizeof(account), 
             "s3_region=%s&host=%s&access_id=%s&access_key=%s",
             region, endpoint, secretid, secretkey));
   //build s3_base
@@ -81,7 +81,7 @@ TEST_F(TestBackupIOAdapterAccessS3, test_basic_rw)
     ObBackupIoAdapter adapter;
     const char *tmp_dir = "test_basic_rw";
     const int64_t ts = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld", 
         bucket, dir_name, tmp_dir, ts));
 
     // write
@@ -137,7 +137,7 @@ TEST_F(TestBackupIOAdapterAccessS3, test_util)
     ObBackupIoAdapter adapter;
     const char *tmp_dir = "test_util";
     const int64_t ts = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld", 
         bucket, dir_name, tmp_dir, ts));
     ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/0", dir_uri));
 
@@ -169,7 +169,7 @@ TEST_F(TestBackupIOAdapterAccessS3, test_list_files)
     ObBackupIoAdapter adapter;
     const char *tmp_dir = "test_list_files";
     const int64_t ts = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld", 
         bucket, dir_name, tmp_dir, ts));
 
     int64_t file_num = 11;
@@ -178,7 +178,7 @@ TEST_F(TestBackupIOAdapterAccessS3, test_list_files)
     for (int64_t file_idx = 0; file_idx < file_num; file_idx++) {
       ASSERT_EQ(OB_SUCCESS,
           databuff_printf(uri, sizeof(uri), format, dir_uri, object_prefix_len, file_idx, file_idx));
-      ASSERT_EQ(OB_SUCCESS,
+      ASSERT_EQ(OB_SUCCESS, 
           adapter.write_single_file(uri, &s3_base, write_content, strlen(write_content),
                                     ObStorageIdMod::get_default_id_mod()));
     }
@@ -207,7 +207,7 @@ TEST_F(TestBackupIOAdapterAccessS3, test_list_directories)
     ObBackupIoAdapter adapter;
     const char *tmp_dir = "test_list_directories";
     const int64_t ts = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld", 
         bucket, dir_name, tmp_dir, ts));
 
     int64_t file_num = 11;
@@ -244,7 +244,7 @@ TEST_F(TestBackupIOAdapterAccessS3, test_is_tagging)
     ObBackupIoAdapter adapter;
     const char *tmp_util_dir = "test_util_is_tagging";
     const int64_t ts = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld", 
       bucket, dir_name, tmp_util_dir, ts));
 
     bool is_tagging = true;
@@ -253,23 +253,23 @@ TEST_F(TestBackupIOAdapterAccessS3, test_is_tagging)
     const char *write_content = "123456789ABCDEF";
 
     // wrong tag mode
-    ASSERT_EQ(OB_SUCCESS,
-              databuff_printf(tmp_account, sizeof(tmp_account),
+    ASSERT_EQ(OB_SUCCESS, 
+              databuff_printf(tmp_account, sizeof(tmp_account), 
               "s3_region=%s&host=%s&access_id=%s&access_key=%s&delete_mode=tag",
               region, endpoint, secretid, secretkey));
     ASSERT_EQ(OB_INVALID_ARGUMENT, tmp_s3_base.set(ObStorageType::OB_STORAGE_S3, tmp_account));
     tmp_s3_base.reset();
 
-    ASSERT_EQ(OB_SUCCESS,
-              databuff_printf(tmp_account, sizeof(tmp_account),
+    ASSERT_EQ(OB_SUCCESS, 
+              databuff_printf(tmp_account, sizeof(tmp_account), 
               "s3_region=%s&host=%s&access_id=%s&access_key=%s&delete_mode=delete_delete",
               region, endpoint, secretid, secretkey));
     ASSERT_EQ(OB_INVALID_ARGUMENT, tmp_s3_base.set(ObStorageType::OB_STORAGE_S3, tmp_account));
     tmp_s3_base.reset();
 
     // delete mode
-    ASSERT_EQ(OB_SUCCESS,
-              databuff_printf(tmp_account, sizeof(tmp_account),
+    ASSERT_EQ(OB_SUCCESS, 
+              databuff_printf(tmp_account, sizeof(tmp_account), 
               "s3_region=%s&host=%s&access_id=%s&access_key=%s&delete_mode=delete",
               region, endpoint, secretid, secretkey));
     ASSERT_EQ(OB_SUCCESS, tmp_s3_base.set(ObStorageType::OB_STORAGE_S3, tmp_account));
@@ -284,35 +284,35 @@ TEST_F(TestBackupIOAdapterAccessS3, test_is_tagging)
     ASSERT_EQ(OB_SUCCESS, adapter.del_file(uri, &tmp_s3_base));
     ASSERT_EQ(OB_OBJECT_NOT_EXIST, adapter.is_tagging(uri, &tmp_s3_base, is_tagging));
     tmp_s3_base.reset();
-
+    
     // tagging mode
-    ASSERT_EQ(OB_SUCCESS,
-              databuff_printf(tmp_account, sizeof(tmp_account),
+    ASSERT_EQ(OB_SUCCESS, 
+              databuff_printf(tmp_account, sizeof(tmp_account), 
               "s3_region=%s&host=%s&access_id=%s&access_key=%s&delete_mode=tagging",
               region, endpoint, secretid, secretkey));
     ASSERT_EQ(OB_SUCCESS, tmp_s3_base.set(ObStorageType::OB_STORAGE_S3, tmp_account));
-
+    
     ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/tagging_mode", dir_uri));
     ASSERT_EQ(OB_SUCCESS,
         adapter.write_single_file(uri, &tmp_s3_base, write_content, strlen(write_content),
                                   ObStorageIdMod::get_default_id_mod()));
-
+    
     is_tagging = true;
     ASSERT_EQ(OB_SUCCESS, adapter.is_tagging(uri, &tmp_s3_base, is_tagging));
     ASSERT_FALSE(is_tagging);
-
+    
     ASSERT_EQ(OB_SUCCESS, adapter.del_file(uri, &tmp_s3_base));
     ASSERT_EQ(OB_SUCCESS, adapter.is_tagging(uri, &tmp_s3_base, is_tagging));
     ASSERT_TRUE(is_tagging);
     tmp_s3_base.reset();
 
     // clean
-    ASSERT_EQ(OB_SUCCESS,
-              databuff_printf(tmp_account, sizeof(tmp_account),
+    ASSERT_EQ(OB_SUCCESS, 
+              databuff_printf(tmp_account, sizeof(tmp_account), 
               "s3_region=%s&host=%s&access_id=%s&access_key=%s",
               region, endpoint, secretid, secretkey));
     ASSERT_EQ(OB_SUCCESS, tmp_s3_base.set(ObStorageType::OB_STORAGE_S3, tmp_account));
-
+    
     ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/tagging_mode", dir_uri));
     ASSERT_EQ(OB_SUCCESS, adapter.del_file(uri, &tmp_s3_base));
     ASSERT_EQ(OB_OBJECT_NOT_EXIST, adapter.is_tagging(uri, &tmp_s3_base, is_tagging));

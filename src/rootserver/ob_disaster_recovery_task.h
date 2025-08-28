@@ -302,7 +302,7 @@ public:
   void set_schedule_time(const int64_t schedule_time) { schedule_time_ = schedule_time; }
   bool in_schedule() const { return schedule_time_ > 0; }
   ObDRLSReplicaTaskStatus get_task_status() const {return task_status_; }
-  void set_task_status(const ObDRLSReplicaTaskStatus task_status) { task_status_ = task_status; }
+  void set_task_status(const ObDRLSReplicaTaskStatus task_status) { task_status_ = task_status; } 
   const ObSqlString& get_execute_result() const { return execute_result_; }
   int set_execute_result(const ObString &execute_result) { return execute_result_.assign(execute_result); }
 public:

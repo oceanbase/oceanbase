@@ -132,7 +132,7 @@ public:
   int check_has_for_update(const ObDMLStmt::TempTableInfo &helper, bool &has_for_update);
 
   int remove_simple_stmts(ObIArray<ObSelectStmt*> &stmts);
-
+  
   int get_non_correlated_subquery(ObDMLStmt *stmt,
                                   const uint64_t recursive_level,
                                   hash::ObHashMap<uint64_t, uint64_t> &param_level,
@@ -273,17 +273,17 @@ public:
                               ObIArray<ObSelectStmt *> &stmts,
                               ObIArray<ObSelectStmt *> *origin_stmts);
   int need_check_global_cte_cost(const ObDMLStmt *root_stmt,
-                                 const ObIArray<ObSelectStmt *> &origin_stmts,
-                                 const hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> &parent_map,
+                                 const ObIArray<ObSelectStmt *> &origin_stmts, 
+                                 const hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> &parent_map, 
                                  const ObSelectStmt *temp_table_query,
                                  ObIArray<int64_t> &semi_join_stmt_ids,
                                  bool &check_global_cost);
-  int add_semi_to_inner_hint_if_need(ObDMLStmt *copy_root_stmt,
+  int add_semi_to_inner_hint_if_need(ObDMLStmt *copy_root_stmt, 
                                      ObIArray<int64_t> &semi_join_stmt_ids);
-  int check_inline_temp_table_by_cost(ObDMLStmt *root_stmt,
-                                      ObDMLStmt::TempTableInfo &temp_table_info,
+  int check_inline_temp_table_by_cost(ObDMLStmt *root_stmt, 
+                                      ObDMLStmt::TempTableInfo &temp_table_info, 
                                       bool &need_inline);
-  int prepare_inline_materialize_stmts(ObDMLStmt *root_stmt,
+  int prepare_inline_materialize_stmts(ObDMLStmt *root_stmt, 
                                        ObDMLStmt::TempTableInfo &temp_table_info,
                                        ObIArray<ObSelectStmtPointer> &stmt_ptrs,
                                        ObIArray<ObSelectStmt *> &inline_stmts,
@@ -299,7 +299,7 @@ public:
                                   bool is_trans_stmt);
   int evaluate_inline_materialize_costs(ObDMLStmt *origin_root,
                                         bool need_check_plan,
-                                        ObDMLStmt *inline_root,
+                                        ObDMLStmt *inline_root, 
                                         ObIArray<ObSelectStmt *> &copy_inline_stmts,
                                         ObDMLStmt *materialize_root,
                                         ObIArray<ObSelectStmt *> &copy_materialize_stmts,
@@ -312,14 +312,14 @@ public:
                                   ObIArray<ObSelectStmtPointer> &stmt_ptrs);
   int gather_materialize_blacklist(ObLogicalOperator *op, ObIArray<uint64_t> &blacklist);
   int get_all_view_stmts(ObDMLStmt *stmt, ObIArray<ObSelectStmt*> &view_stmts);
-  int check_stmt_in_blacklist(const ObSelectStmt *stmt,
-                              const ObIArray<ObString> &blacklist,
+  int check_stmt_in_blacklist(const ObSelectStmt *stmt, 
+                              const ObIArray<ObString> &blacklist, 
                               bool &in_blacklist);
-  int check_evaluate_after_transform(ObDMLStmt *root_stmt,
+  int check_evaluate_after_transform(ObDMLStmt *root_stmt, 
                                      ObIArray<ObSelectStmt *> &stmts,
                                      bool &can_eval);
-  int update_table_id_for_pseudo_columns(ObSelectStmt *view,
-                                         ObSelectStmt *temp_table_query,
+  int update_table_id_for_pseudo_columns(ObSelectStmt *view, 
+                                         ObSelectStmt *temp_table_query, 
                                          const ObStmtMapInfo& map_info);
 private:
   ObArenaAllocator allocator_;

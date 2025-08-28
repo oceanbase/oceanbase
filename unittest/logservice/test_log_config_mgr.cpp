@@ -237,8 +237,8 @@ TEST_F(TestLogConfigMgr, test_config_change_lock)
   EXPECT_EQ(OB_SUCCESS, default_config_info.generate(init_member_list, 3, learner_list, init_config_version));
 
 
-  const int64_t lock_type_try_lock = ConfigChangeLockType::LOCK_PAXOS_MEMBER_CHANGE;
-  const int64_t lock_type_unlock = ConfigChangeLockType::LOCK_NOTHING;
+  const int64_t lock_type_try_lock = ConfigChangeLockType::LOCK_PAXOS_MEMBER_CHANGE; 
+  const int64_t lock_type_unlock = ConfigChangeLockType::LOCK_NOTHING; 
   LogLockMeta lock_meta;
   EXPECT_EQ(OB_SUCCESS, lock_meta.generate(2, lock_type_try_lock));
   LogConfigInfoV2 locked_config_info;
@@ -1037,7 +1037,7 @@ TEST_F(TestLogConfigMgr, test_apply_config_meta)
     EXPECT_EQ(expect_replica_num, 4);
     EXPECT_EQ(cm.log_ms_meta_.curr_.config_.log_sync_replica_num_, 3);
     EXPECT_EQ(cm.log_ms_meta_.curr_.config_.log_sync_memberlist_.get_member_number(), 2);
-    // remove (C, 4), reentrant
+    // remove (C, 4), reentrant 
     EXPECT_EQ(OB_SUCCESS, cm.append_config_meta_(1, remove_c_arg, already_finished));
     EXPECT_EQ(OB_SUCCESS, cm.get_curr_member_list(expect_member_list, expect_replica_num));
     EXPECT_EQ(expect_replica_num, 4);

@@ -1,4 +1,4 @@
-// owner: wangzhennan.wzn
+// owner: wangzhennan.wzn 
 // owner group: rs
 
 /**
@@ -222,7 +222,7 @@ TEST_F(TestLocationService, test_check_ls_exist)
   ASSERT_EQ(OB_SUCCESS, create_tenant("tt2"));
   ASSERT_EQ(OB_SUCCESS, get_tenant_id(user_tenant_id, "tt2"));
   uint64_t meta_tenant_id = gen_meta_tenant_id(user_tenant_id);
-
+ 
   ObLSID user_ls_id(1001);
   ObLSID uncreated_ls_id(6666);
   ObLSID invalid_ls_id(123);
@@ -414,7 +414,7 @@ TEST_F(TestLocationService, test_clear_ls_location)
   location.reset();
   ASSERT_EQ(OB_SUCCESS, ls_location_service->get_from_cache_(GCONF.cluster_id, meta_tenant_id, SYS_LS, location));
   ASSERT_TRUE(location.get_cache_key() == ObLSLocationCacheKey(GCONF.cluster_id, meta_tenant_id, SYS_LS));
-
+ 
   // drop tenant force
   ASSERT_EQ(OB_SUCCESS, delete_tenant("tt1"));
   // meta tenant is dropped in schema and user tenant unit has been gc
@@ -454,7 +454,7 @@ TEST_F(TestLocationService, get_vtable_location)
   ASSERT_EQ(OB_SUCCESS ,vtable_location_service->vtable_get(OB_SYS_TENANT_ID, OB_ALL_VIRTUAL_CORE_META_TABLE_TID, INT64_MAX, is_cache_hit, servers));
   ASSERT_TRUE(is_cache_hit == false);
   ASSERT_TRUE(servers.at(0) == rs_addr);
-
+  
   ObZone all_zone;
   servers.reuse();
   common::ObArray<common::ObAddr> alive_servers;
@@ -470,7 +470,7 @@ TEST_F(TestLocationService, get_vtable_location)
   } else{
     ASSERT_TRUE(alive_servers.count() == servers.count());
   }
-
+  
   ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("alter system set_tp tp_name = CLUSTER_LOCATION_INFO_ERROR, error_code = 4018, frequency = 1"));
   ASSERT_EQ(OB_SUCCESS, inner_proxy.write(OB_SYS_TENANT_ID, sql.ptr(), affected_rows));
   ASSERT_EQ(OB_LOCATION_NOT_EXIST, vtable_location_service->vtable_get(g_tenant_id, OB_ALL_VIRTUAL_DISK_STAT_TID, 0, is_cache_hit, servers));

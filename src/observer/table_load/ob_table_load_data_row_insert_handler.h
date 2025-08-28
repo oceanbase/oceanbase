@@ -32,7 +32,7 @@ public:
   ObTableLoadDataRowInsertHandler();
   virtual ~ObTableLoadDataRowInsertHandler();
   int init(ObTableLoadStoreCtx *store_ctx);
-
+  
   /**
    * handle rows direct insert into sstable
    */

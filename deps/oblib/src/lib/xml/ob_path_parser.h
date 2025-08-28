@@ -82,10 +82,10 @@ public:
 // todo: path cache
 class ObPathParser {
 public:
-  ObPathParser(ObMulModeMemCtx* ctx, const ObParserType& parser_type, const ObString& path,
-              ObString& default_ns, ObPathVarObject* pass_var) :
-    allocator_(ctx->allocator_), parser_type_(parser_type), expression_(path), default_ns_(default_ns),
-    pass_var_(pass_var), bad_index_(-1), index_(0), len_(path.length()),
+  ObPathParser(ObMulModeMemCtx* ctx, const ObParserType& parser_type, const ObString& path, 
+              ObString& default_ns, ObPathVarObject* pass_var) : 
+    allocator_(ctx->allocator_), parser_type_(parser_type), expression_(path), default_ns_(default_ns), 
+    pass_var_(pass_var), bad_index_(-1), index_(0), len_(path.length()), 
     is_first_node_(true), ctx_(ctx) {}
   explicit ObPathParser(const ObString& path, common::ObIAllocator *allocator);
   virtual ~ObPathParser() {}
@@ -112,7 +112,7 @@ private:
   int parse_func_arg(ObPathFuncNode*& func_node, ObPathArgType patharg_type = NOT_SUBPATH);
   int parse_func_node(ObPathArgType patharg_type = NOT_SUBPATH);
   int trans_to_filter_op(ObPathRootNode*& origin_root, int filter_num, bool is_first, ObPathNode*& op_root);
-  int push_filter_char_in(const ObXpathFilterChar& in, ObPathVectorPointers& node_stack,
+  int push_filter_char_in(const ObXpathFilterChar& in, ObPathVectorPointers& node_stack, 
                           ObFilterCharPointers& char_stack, ObPathArgType patharg_type);
   int get_xpath_ident(char*& str, uint64_t& length, bool& is_func);
   int get_xpath_literal(char*& str, uint64_t& length);
@@ -171,8 +171,8 @@ public:
   static bool is_nodetest_start_char(const char ch);
   static bool is_function_start_char(const char ch);
   static bool is_func_must_in_pred(const ObFuncType& func_type);
-  static bool is_illegal_comp_for_filter(const ObFilterType& type, ObPathNode* left, ObPathNode* right);
-  static bool is_boolean_ans(ObFilterType type);
+  static bool is_illegal_comp_for_filter(const ObFilterType& type, ObPathNode* left, ObPathNode* right); 
+  static bool is_boolean_ans(ObFilterType type); 
   static bool is_boolean_subpath_arg(ObPathNode* node);
   static bool is_position(ObPathNode* node);
 };

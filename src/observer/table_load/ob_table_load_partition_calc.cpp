@@ -46,7 +46,7 @@ ObTableLoadPartitionCalc::~ObTableLoadPartitionCalc()
   exec_ctx_.set_physical_plan_ctx(NULL);
 }
 
-int ObTableLoadPartitionCalc::init(const ObTableLoadParam &param,
+int ObTableLoadPartitionCalc::init(const ObTableLoadParam &param, 
                                    sql::ObSQLSessionInfo *session_info,
                                    const ObIArray<ObTabletID> &tablet_ids)
 {

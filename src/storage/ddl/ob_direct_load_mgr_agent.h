@@ -64,7 +64,7 @@ public:
       ObIStoreRowIterator *iter,
       int64_t &affected_rows);
   int close_sstable_slice(
-      const ObDirectLoadSliceInfo &slice_info,
+      const ObDirectLoadSliceInfo &slice_info, 
       ObInsertMonitor *insert_monitor,
       blocksstable::ObMacroDataSeq &next_seq);
   int calc_range(const int64_t context_id, const int64_t thread_cnt);
@@ -109,7 +109,7 @@ private:
       ObIStoreRowIterator *iter,
       int64_t &affected_rows);
   int close_sstable_slice_for_ss(
-      const ObDirectLoadSliceInfo &slice_info,
+      const ObDirectLoadSliceInfo &slice_info, 
       ObInsertMonitor *insert_monitor,
       blocksstable::ObMacroDataSeq &next_seq);
 
@@ -140,7 +140,7 @@ private:
       ObIStoreRowIterator *iter,
       int64_t &affected_rows);
   int close_sstable_slice_for_sn(
-      const ObDirectLoadSliceInfo &slice_info,
+      const ObDirectLoadSliceInfo &slice_info, 
       ObInsertMonitor *insert_monitor,
       blocksstable::ObMacroDataSeq &next_seq);
 private:

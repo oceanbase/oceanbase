@@ -772,7 +772,7 @@ void ObSharedObjectReaderWriter::reset()
   is_inited_ = false;
 }
 
-int callback_do_write_io(const ObSharedObjectWriteInfo &write_info)
+int callback_do_write_io(const ObSharedObjectWriteInfo &write_info) 
 {
   int ret = OB_SUCCESS;
   if (!write_info.is_valid()) {
@@ -784,7 +784,7 @@ int callback_do_write_io(const ObSharedObjectWriteInfo &write_info)
   return ret;
 }
 
-int callback_do_write_io(const ObIArray<ObSharedObjectWriteInfo> &write_infos)
+int callback_do_write_io(const ObIArray<ObSharedObjectWriteInfo> &write_infos) 
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < write_infos.count(); ++i) {
@@ -893,7 +893,7 @@ int ObSharedObjectReaderWriter::async_link_write(
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
       LOG_WARN("Not init", K(ret));
-    } else if (OB_FAIL(shared_obj_handle.wait())) {
+    } else if (OB_FAIL(shared_obj_handle.wait())) {    
       LOG_WARN("Fail to wait other blocks finish", K(ret), K(shared_obj_handle));
     } else if (GCTX.is_shared_storage_mode() && OB_FAIL(do_switch(write_args.object_opt_))) {
       LOG_WARN("fail to switch object for shared storage", K(ret), K(write_args));
@@ -1085,7 +1085,7 @@ int ObSharedObjectReaderWriter::inner_write_block(
       object_info.io_desc_.set_unsealed();
       object_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_BLOCK_RW_IO);
       object_info.ls_epoch_id_ = write_info.ls_epoch_;
-
+      
       if (OB_FAIL(ret)) {
       } else if (OB_NOT_NULL(write_info.write_callback_) && need_flush) {
         ObLogicMacroBlockId unused_logic_id;
@@ -1093,7 +1093,7 @@ int ObSharedObjectReaderWriter::inner_write_block(
           LOG_WARN("failed to write call back", K(ret));
         }
       }
-
+      
       if (OB_FAIL(ret)) {
       } else {
       // io_callback

@@ -100,7 +100,7 @@ int ObExprAscii::calc(common::ObObj &obj,
   } else {
     ObString str_val = obj1.get_string();
     if (OB_FAIL(sql::ObTextStringHelper::read_prefix_string_data(expr_ctx.calc_buf_, obj1, str_val))) {
-      LOG_WARN("failed to get string data", K(ret), K(obj1.get_meta()));
+      LOG_WARN("failed to get string data", K(ret), K(obj1.get_meta()));                                                     
     } else {
       calc_ascii_inner(obj, expr_ctx, str_val);
     }
@@ -143,7 +143,7 @@ int ObExprAscii::calc_ascii_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
                                                               expr.args_[0]->obj_meta_.has_lob_header(),
                                                               &temp_allocator,
                                                               str_val))) {
-        LOG_WARN("failed to get lob data", K(ret), K(expr.args_[0]->datum_meta_));
+        LOG_WARN("failed to get lob data", K(ret), K(expr.args_[0]->datum_meta_));   
       } else {
         calc_ascii_expr_inner(res_datum, str_val);
       }
@@ -238,7 +238,7 @@ int ObExprOrd::calc(common::ObObj &obj,
     if (!ob_is_text_tc(obj1.get_type())) {
       ret = calc_ord_inner(type, str_val, cs_type, obj);
     } else if (OB_FAIL(sql::ObTextStringHelper::read_prefix_string_data(expr_ctx.calc_buf_, obj1, str_val))) {
-      LOG_WARN("failed to get lob data", K(ret), K(obj1.get_meta()));
+      LOG_WARN("failed to get lob data", K(ret), K(obj1.get_meta()));                                                     
     } else {
       ret = calc_ord_inner(type, str_val, cs_type, obj);
     }
@@ -320,7 +320,7 @@ int ObExprOrd::calc_ord_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_da
                                                               expr.args_[0]->obj_meta_.has_lob_header(),
                                                               &temp_allocator,
                                                               str_val))) {
-        LOG_WARN("failed to get string data", K(ret), K(expr.args_[0]->datum_meta_));
+        LOG_WARN("failed to get string data", K(ret), K(expr.args_[0]->datum_meta_));   
       } else {
         ret = calc_ord_expr_inner(cs_type, str_val, res_int, res_null);
       }

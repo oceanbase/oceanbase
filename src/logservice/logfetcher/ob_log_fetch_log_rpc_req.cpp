@@ -488,7 +488,7 @@ void RpcRequestList::add(FetchLogRpcReq *req)
       tail_ = req;
     } else {
       tail_->next_ = req;
-      // fix
+      // fix 
       tail_ = req;
     }
 

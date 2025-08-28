@@ -29,7 +29,7 @@ public:
   static int check_alter_partiton_storage_cache_policy(const share::schema::ObTableSchema &orig_table_schema,
                                                        const obrpc::ObAlterTableArg &alter_table_arg);
   static int check_alter_subpartiton_storage_cache_policy(const share::schema::ObTableSchema &orig_table_schema,
-                                                          const obrpc::ObAlterTableArg &alter_table_arg);
+                                                          const obrpc::ObAlterTableArg &alter_table_arg); 
   static int check_column_is_first_part_key(const ObPartitionKeyInfo &part_key_info, const uint64_t column_id);
   static int get_range_part_level(const share::schema::ObTableSchema &tbl_schema, const ObStorageCachePolicy &storage_cache_policy,
                                   int32_t &part_level);

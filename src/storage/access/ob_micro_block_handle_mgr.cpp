@@ -353,7 +353,7 @@ bool ObCacheMemController::reach_hold_limit_limit() const
 }
 
 void ObCacheMemController::update_data_block_io_size_limit(
-    const int64_t block_size,
+    const int64_t block_size, 
     const bool is_data_block,
     const bool use_cache)
 {
@@ -470,12 +470,12 @@ int ObMicroBlockHandleMgr::get_micro_block_handle(
     LOG_WARN("Fail to fill micro block deserialize meta", K(ret));
   } else if (FALSE_IT(micro_block_handle.init(tenant_id, macro_id, offset, size, index_block_info.get_logic_micro_id(),
                                               index_block_info.get_data_checksum(), this))) {
-  } else if (OB_LIKELY(nullptr != ps_node)
+  } else if (OB_LIKELY(nullptr != ps_node)   
       && OB_SUCC(ps_node->access_mem_ptr(micro_block_handle.cache_handle_))) {
     // get data / index block cache with direct memory pointer
     micro_block_handle.block_state_ = ObSSTableMicroBlockState::IN_BLOCK_CACHE;
     cache->cache_hit(table_store_stat_->block_cache_hit_cnt_);
-    LOG_DEBUG("Access memory pointer successfully", K(tenant_id), K(macro_id), K(offset), KPC(ps_node),
+    LOG_DEBUG("Access memory pointer successfully", K(tenant_id), K(macro_id), K(offset), KPC(ps_node), 
                                                     K(micro_block_handle.cache_handle_), K(cur_level));
   } else {
     ObMicroBlockCacheKey key(tenant_id, index_block_info);

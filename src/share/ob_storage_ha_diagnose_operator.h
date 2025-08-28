@@ -31,7 +31,7 @@ namespace share
 {
 class ObDMLSqlSplicer;
 
-class ObStorageHADiagOperator final
+class ObStorageHADiagOperator final 
 {
 public:
   ObStorageHADiagOperator();
@@ -41,36 +41,36 @@ public:
 
   void reset();
   int get_batch_row_keys(
-          common::ObISQLClient &sql_proxy,
+          common::ObISQLClient &sql_proxy, 
           const uint64_t tenant_id,
           const ObStorageHADiagModule &module,
           const int64_t last_end_timestamp,
           ObIArray<int64_t> &timestamp_array) const;
 
   int insert_row(
-          common::ObISQLClient &sql_proxy,
-          const uint64_t tenant_id,
+          common::ObISQLClient &sql_proxy, 
+          const uint64_t tenant_id, 
           const uint64_t report_tenant_id,
           const ObStorageHADiagInfo &info_row,
           const ObStorageHADiagModule &module);
   int do_batch_delete(
-          common::ObISQLClient &sql_proxy,
+          common::ObISQLClient &sql_proxy, 
           const uint64_t tenant_id,
           const ObStorageHADiagModule &module,
           const ObIArray<int64_t> &timestamp_array,
           const int64_t delete_timestamp,
           int64_t &delete_index) const;
   int check_transfer_task_exist(
-          common::ObISQLClient &sql_proxy,
+          common::ObISQLClient &sql_proxy, 
           const uint64_t tenant_id,
           const share::ObTransferTaskID &task_id,
           int64_t &result_count) const;
-
+  
 private:
   int fill_dml_(
-          const uint64_t tenant_id,
-          const uint64_t report_tenant_id,
-          const ObStorageHADiagInfo &input_info,
+          const uint64_t tenant_id, 
+          const uint64_t report_tenant_id, 
+          const ObStorageHADiagInfo &input_info, 
           ObDMLSqlSplicer &dml);
 
   int get_table_name_(const ObStorageHADiagModule &module, const char *&table_name) const;

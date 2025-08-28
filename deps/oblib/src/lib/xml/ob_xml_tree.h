@@ -76,7 +76,7 @@ public:
 
     iterator(const ObLibContainerNode::iterator& from)
       : ObLibContainerNode::iterator(from) {}
-
+    
 
     ObIMulModeBase* operator*() {
       ObLibContainerNode* tmp = ObLibContainerNode::iterator::operator*();
@@ -97,20 +97,20 @@ public:
     iterator operator++(int) { return iterator(ObLibContainerNode::iterator::operator++(0)); }
     iterator operator--(int) { return iterator(ObLibContainerNode::iterator::operator--(0)); }
     void set_range(int64_t start, int64_t finish) { ObLibContainerNode::iterator::set_range(start, finish); }
-
-    bool operator<(const iterator& iter) {
-      const ObLibContainerNode::iterator* p = &iter;
-      return ObLibContainerNode::iterator::operator<(*p);
+    
+    bool operator<(const iterator& iter) { 
+      const ObLibContainerNode::iterator* p = &iter; 
+      return ObLibContainerNode::iterator::operator<(*p); 
     }
 
     bool operator>(const iterator& iter) {
-      const ObLibContainerNode::iterator* p = &iter;
-      return ObLibContainerNode::iterator::operator>(*p);
+      const ObLibContainerNode::iterator* p = &iter; 
+      return ObLibContainerNode::iterator::operator>(*p); 
     }
 
     bool operator<=(const iterator& iter) {
-      const ObLibContainerNode::iterator* p = &iter;
-      return ObLibContainerNode::iterator::operator<=(*p);
+      const ObLibContainerNode::iterator* p = &iter; 
+      return ObLibContainerNode::iterator::operator<=(*p); 
     }
 
     iterator operator-(int size) { return iterator(ObLibContainerNode::iterator::operator-(size)); }
@@ -118,19 +118,19 @@ public:
     iterator operator+=(int size) { return iterator(ObLibContainerNode::iterator::operator+=(size)); }
     iterator operator-=(int size) { return iterator(ObLibContainerNode::iterator::operator-=(size)); }
 
-    int64_t operator-(const iterator& iter) {
-      const ObLibContainerNode::iterator* p = &iter;
-      return ObLibContainerNode::iterator::operator-(*p);
+    int64_t operator-(const iterator& iter) { 
+      const ObLibContainerNode::iterator* p = &iter; 
+      return ObLibContainerNode::iterator::operator-(*p); 
     }
 
-    bool operator==(const iterator& iter) {
-      const ObLibContainerNode::iterator* p = &iter;
-      return ObLibContainerNode::iterator::operator==(*p);
+    bool operator==(const iterator& iter) { 
+      const ObLibContainerNode::iterator* p = &iter; 
+      return ObLibContainerNode::iterator::operator==(*p); 
     }
 
-    bool operator!=(const iterator& iter) {
-      const ObLibContainerNode::iterator* p = &iter;
-      return ObLibContainerNode::iterator::operator!=(*p);
+    bool operator!=(const iterator& iter) { 
+      const ObLibContainerNode::iterator* p = &iter; 
+      return ObLibContainerNode::iterator::operator!=(*p); 
     }
   };
 
@@ -143,17 +143,17 @@ public:
   void set_flags(uint32_t flags) { ObLibContainerNode::set_flags(flags); }
 
   int get_range(int64_t start, int64_t end, ObIArray<ObIMulModeBase*> &res, ObMulModeFilter* filter = nullptr);
-
+  
   int get_before(ObIArray<ObIMulModeBase*> &res, ObMulModeFilter* filter = nullptr);
   int get_after(ObIArray<ObIMulModeBase*> &res, ObMulModeFilter* filter = nullptr);
   int get_children(ObIArray<ObIMulModeBase*> &res, ObMulModeFilter* filter = nullptr) override;
   int get_children(const ObString& key, ObIArray<ObIMulModeBase*>& res,  ObMulModeFilter* filter = nullptr) override;
   int get_node_count(ObMulModeNodeType node_type, int &count);
   int get_descendant(ObIArray<ObIMulModeBase*>& res, scan_type type,  ObMulModeFilter* filter = nullptr);
-  int64_t to_string(char *buf, const int64_t buf_len) {
+  int64_t to_string(char *buf, const int64_t buf_len) { 
     int64_t pos = 0;
     databuff_printf(buf, buf_len, pos, "is_tree = %d", 1);
-    return pos;
+    return pos;  
   }
 
   virtual ObXmlNode* get_parent() {return static_cast<ObXmlNode*>(ObLibContainerNode::get_parent());}
@@ -192,7 +192,7 @@ public:
   virtual int insert(int64_t pos, ObIMulModeBase* node);
   // drop node
   virtual int remove(int64_t pos);
-  // delete the specified node
+  // delete the specified node 
   virtual int remove(ObIMulModeBase* node);
   // replace node
   virtual int update(int64_t pos, ObIMulModeBase* new_node);
@@ -216,7 +216,7 @@ public:
   virtual int get_attribute(ObIMulModeBase*& res, ObMulModeNodeType filter_type, const ObString& key1, const ObString &key2 = ObString()) { return OB_NOT_SUPPORTED; }
   int get_raw_binary(common::ObString &out, ObIAllocator *allocator);
   bool is_xml_doc_over_depth(uint64_t depth);
-
+  
   void set_delta_serialize_size(int64_t size) { serialize_size_ += size; }
 
   virtual bool has_flags(ObMulModeNodeFlag flag) { return false; }
@@ -249,7 +249,7 @@ public:
   ObXmlElement(ObMulModeNodeType type, ObMulModeMemCtx *ctx);
   ObXmlElement(ObMulModeNodeType type, ObMulModeMemCtx *ctx, const ObString& tag);
   virtual ~ObXmlElement() {}
-
+  
   int init();
   int64_t to_string(char *buf, const int64_t buf_len) const
   {
@@ -273,7 +273,7 @@ public:
   bool is_element(ObString tag);
   bool has_attribute() { return attribute_size() > 0; };  // size > 0
   bool has_attribute(const ObString& ns_value, const ObString& name); // name if exist
-  bool has_attribute_with_ns(ObXmlAttribute *ns); // find if has the namespace of attribute is the given ns
+  bool has_attribute_with_ns(ObXmlAttribute *ns); // find if has the namespace of attribute is the given ns 
   int get_attribute_pos(ObMulModeNodeType xml_type, const ObString& name, int64_t &pos); // return attribute pos
   ObXmlAttribute* get_attribute_by_name(const ObString& ns_value, const ObString& name); // get attr by name
   ObXmlAttribute* get_ns_by_name(const ObString& name); // get namespace by name
@@ -286,21 +286,21 @@ public:
   ObIMulModeBase* attribute_at(int64_t pos, ObIMulModeBase* buffer = nullptr);
   int64_t attribute_size() {return is_init_ ? attributes_->size() : 0;}
   int add_attribute(ObXmlNode* xnode, bool ns_check = false, int pos = -1);
-  int add_attr_by_str(const ObString& name,
-                      const ObString& value,
-                      ObMulModeNodeType type = ObMulModeNodeType::M_NAMESPACE,
-                      bool ns_check = false,
+  int add_attr_by_str(const ObString& name, 
+                      const ObString& value, 
+                      ObMulModeNodeType type = ObMulModeNodeType::M_NAMESPACE, 
+                      bool ns_check = false, 
                       int pos = -1);
   int update_attribute(ObXmlNode* xnode, int pos, bool ns_check = false);
   int remove_attribute(int pos);
   int remove_namespace(int pos, bool ns_check = false);
-  int get_attribute_list(ObIArray<ObIMulModeBase*> &value); //
+  int get_attribute_list(ObIArray<ObIMulModeBase*> &value); // 
   int add_element(ObXmlNode* xnode, bool ns_check = false, int pos = -1);
   int append_unparse_text(const ObString &str);
   int update_element(ObXmlNode* xnode, int pos, bool ns_check = false);
   int update_element(ObXmlNode* xnode, const ObString& name, bool ns_check = false);
   int remove_element(ObXmlNode* xnode);
-  int get_element_list(ObIArray<ObIMulModeBase*> &value); //
+  int get_element_list(ObIArray<ObIMulModeBase*> &value); // 
   int get_element_by_name(const ObString& ns_value, const ObString& name, ObIArray<ObIMulModeBase*> &value);
   // namespace
   void set_ns(ObXmlAttribute* xnode);  // set namespace
@@ -347,17 +347,17 @@ private:
   ObXmlNode* attributes_; // include namespace
   // namespace
   ObXmlAttribute* name_spaces_;         // point to namespace in attr
-  // parse flag
-  union {
-    uint16 flags_;
-    struct {
+  // parse flag 
+  union { 
+    uint16 flags_; 
+    struct { 
       uint16_t standalone_ : 4;    // : default 0, yes 1, no 2, other 3;
       uint16_t has_xml_decl_: 1;   // no 0， yes 1
       uint16_t is_empty_: 1;       // empty
       uint16_t is_unparse_: 1;     // well format element
       uint16_t encoding_val_empty_: 1;    //  has encoding clause but encoding value is null
-      uint16_t reserved_: 8;
-    };
+      uint16_t reserved_: 8; 
+    }; 
   };
   bool is_init_;
 
@@ -506,7 +506,7 @@ public:
     databuff_printf(buf, buf_len, pos, "xml_type = %d", type());
     return pos;
   }
-  void set_value(const ObString &value) {text_.assign_ptr(value.ptr(), value.length()); length_ = value.length();}
+  void set_value(const ObString &value) {text_.assign_ptr(value.ptr(), value.length()); length_ = value.length();} 
   virtual int get_key(ObString& res, int64_t index = -1);
   // text without key
   virtual ObString get_key() { return ""; }

@@ -322,7 +322,7 @@ TEST_F(TestMemCtxTableLock, rollback_table_lock)
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(lock_exist, false);
 
-  // 2. check rollback OUT_TRANS lock
+  // 2. check rollback OUT_TRANS lock 
   // 2.1 add lock record
   LOG_INFO("TestMemCtxTableLock::rollback_table_lock 2.1");
   ObTableLockOp lock_op2 = DEFAULT_OUT_TRANS_LOCK_OP;
@@ -355,7 +355,7 @@ TEST_F(TestMemCtxTableLock, rollback_table_lock)
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(lock_exist, true);
 
-  // 3. check rollback OUT_TRANS and IN_TRANS lock
+  // 3. check rollback OUT_TRANS and IN_TRANS lock 
   // 3.1 add lock record
   LOG_INFO("TestMemCtxTableLock::rollback_table_lock 3.1");
   ret = mem_ctx_.add_lock_record(lock_op1,
@@ -450,7 +450,7 @@ TEST_F(TestMemCtxTableLock, rollback_table_lock)
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(lock_exist, true);
 
-  // 3.4 clean lock record
+  // 3.4 clean lock record 
   LOG_INFO("TestMemCtxTableLock::rollback_table_lock 3.4");
   mem_ctx_.remove_lock_record(lock_op1);
   mem_ctx_.remove_lock_record(lock_op2);

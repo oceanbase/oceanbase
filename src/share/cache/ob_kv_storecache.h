@@ -293,7 +293,7 @@ public:
   bool need_trace() const;
   storage::ObStorageCheckID get_check_id() const { return static_cast<storage::ObStorageCheckID>(get_mb_handle()->inst_->cache_id_); }
   TO_STRING_KV(K_(hazptr_holder));
-
+  
 private:
   template<class Key, class Value> friend class ObIKVCache;
   template<class Key, class Value> friend class ObKVCache;

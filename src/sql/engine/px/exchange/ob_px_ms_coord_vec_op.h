@@ -142,7 +142,7 @@ public:
   }
 private:
   virtual int free_allocator();
-
+  
   int next_row(const bool need_store_output);
   // fetch row from reader
   int next_row_from_heap(ObReceiveRowReader &reader, bool &wait_next_msg, const bool need_store_output);

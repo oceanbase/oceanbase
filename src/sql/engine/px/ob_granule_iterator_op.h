@@ -233,7 +233,7 @@ private:
     // use opt means partition_pruning is enabled and pos of task of each tablet is recorded in rescan_tasks_map_.
     bool use_opt_;
     common::ObSEArray<int64_t, OB_MIN_PARALLEL_TASK_COUNT * 2> rescan_tasks_pos_;
-    // key is tablet_id, value is
+    // key is tablet_id, value is 
     // 1.non-pw: pos. call ObGITaskSet::get_task_at_pos(pos) to get ObGranuleTaskInfo.
     // 2.pw: rescan_task_idx_. pwj_rescan_task_infos_[rescan_task_idx_] to get ObGranuleTaskInfo.
     hash::ObHashMap<uint64_t, int64_t, common::hash::NoPthreadDefendMode> rescan_tasks_map_;

@@ -396,7 +396,7 @@ void ObjectSet::do_free_object(AObject *obj)
 {
   const int64_t hold = obj->hold(cells_per_block_);
   const int64_t used = obj->alloc_bytes_;
-
+  
   alloc_bytes_ -= obj->alloc_bytes_;
   used_bytes_ -= hold;
 

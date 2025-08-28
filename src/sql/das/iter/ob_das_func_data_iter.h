@@ -51,13 +51,13 @@ public:
  * FTS DATA Iter:
  *
  *
- *                  FTS_DATA_Iter
- *                /    |     |     \
+ *                  FTS_DATA_Iter                             
+ *                /    |     |     \                          
  *             /      |       |       \
  *          /        |         |         \
- *       /          |           |           \
- *  TR_ITER1    TR_ITER2    TR_ITER3 ...  MAIN_LOOKUP_ITER(may be null)
- *
+ *       /          |           |           \                           
+ *  TR_ITER1    TR_ITER2    TR_ITER3 ...  MAIN_LOOKUP_ITER(may be null) 
+ * 
  **/
 
 class ObDASFuncDataIter final : public ObDASIter

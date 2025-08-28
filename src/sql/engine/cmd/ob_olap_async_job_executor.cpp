@@ -45,7 +45,7 @@ int ObOLAPAsyncCancelJobExecutor::execute(ObExecContext &ctx, ObOLAPAsyncCancelJ
         allocator,
         job_info))) {
     LOG_WARN("get job info failed", KR(ret), K(tenant_id), K(stmt.get_job_name()));
-  } else if (!job_info.is_olap_async_job()) {
+  } else if (!job_info.is_olap_async_job()) { 
     ret = OB_ENTRY_NOT_EXIST;
     LOG_WARN("cancel not olap async job", KR(ret), K(tenant_id), K(job_info));
   } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::check_dbms_sched_job_priv(user_info, job_info))) {

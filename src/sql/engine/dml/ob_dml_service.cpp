@@ -162,7 +162,7 @@ int ObDMLService::check_column_null(
         LOG_USER_WARN(OB_BAD_NULL_ERROR, column_name.length(), column_name.ptr());
       }
     } else if (ob_is_user_defined_type(expr->obj_meta_.get_type())) {
-      // do nothing for xml column
+      // do nothing for xml column 
     } else {
       //output warning msg
       const ObString &column_name = column_info.column_name_;
@@ -256,7 +256,7 @@ int ObDMLService::check_rowkey_is_null(const ObExprPtrIArray &row,
   return ret;
 }
 
-int ObDMLService::check_table_cycle(const DASTableIdList* parent_table_set, const uint64_t table_id, bool &exist)
+int ObDMLService::check_table_cycle(const DASTableIdList* parent_table_set, const uint64_t table_id, bool &exist) 
 {
   int ret = OB_SUCCESS;
   exist = false;
@@ -398,7 +398,7 @@ int ObDMLService::create_rowkey_check_hashset(int64_t estimate_row,
       rowkey_dist_ctx = new (buf) SeRowkeyDistCtx();
       int64_t match_rows = estimate_row > ObDMLBaseCtDef::MIN_ROWKEY_DISTINCT_BUCKET_NUM ?
                             estimate_row : ObDMLBaseCtDef::MIN_ROWKEY_DISTINCT_BUCKET_NUM;
-      //
+      // 
       // match_rows是优化器估行的结果，如果这个值很大，
       // 直接创建有这么多bucket的hashmap会申请
       // 不到内存，这里做了限制为64k，防止报内存不足的错误
@@ -1419,7 +1419,7 @@ int ObDMLService::split_upd_to_del_and_ins(const ObUpdCtDef &upd_ctdef,
   }
 
   if (OB_SUCC(ret)) {
-    //because of this bug:
+    //because of this bug: 
     //if the updated row is moved across partitions, we must delete old row at first
     //and then store new row to a temporary buffer,
     //only when all old rows have been deleted, new rows can be inserted
@@ -2027,7 +2027,7 @@ int ObDMLService::init_upd_rtdef(
       LOG_WARN("fail to init ObRowkey used for distinct check", K(ret));
     }
   }
-
+  
   // Calculate if there exists table cycle.
   // If there exists duplicate tables in the parent table set, then has_table_cycle = true
   // Otherwise it is false.
@@ -2047,7 +2047,7 @@ int ObDMLService::init_upd_rtdef(
       // For example, create table A(a int primary key, a2 int, foreign key(a2) references A(a) on update cascade)
       // execute 'update A set a = a * 10;', it will first update A(a), then update A(a2)
       // When it updates A(a), upd_ctdef.need_check_table_cycle_ = true. 'A' is added to the parent table set.
-      // When it updates A(a2) through the inner sql, upd_ctdef.need_check_table_cycle_ = false.
+      // When it updates A(a2) through the inner sql, upd_ctdef.need_check_table_cycle_ = false. 
       // because there is no cycle if we only update A(a2).
       // but we need to check the cycle, because it may be from A(a).
       if (OB_FAIL(check_table_cycle(parent_table_set, upd_table_id, upd_rtdef.has_table_cycle_))) {
@@ -2777,7 +2777,7 @@ int ObDMLService::handle_after_processing_multi_row(ObDMLModifyRowsList *dml_mod
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dml operator or modify rows list is null", K(dml_modify_rows), K(dml_op));
   } else if (FALSE_IT(is_iter_end = dml_op->iter_end_)) {
-  } else if (!is_iter_end && OB_ISNULL(dml_op->last_store_row_.get_store_row()) &&
+  } else if (!is_iter_end && OB_ISNULL(dml_op->last_store_row_.get_store_row()) && 
     OB_FAIL(dml_op->last_store_row_.init(dml_op->get_exec_ctx().get_allocator(), dml_op->get_child()->get_spec().output_.count()))) {
     LOG_WARN("failed to init shadow stored row", K(ret));
   } else if (!is_iter_end && OB_FAIL(dml_op->last_store_row_.shadow_copy(dml_op->get_child()->get_spec().output_, dml_op->get_eval_ctx()))) {

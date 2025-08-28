@@ -71,7 +71,7 @@ public:
   }
   ~ObCompactionHistogramStat() {}
 
-  void clear()
+  void clear() 
   {
     running_cnt_ = 0;
     failed_cnt_ = 0;

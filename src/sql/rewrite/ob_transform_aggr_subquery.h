@@ -227,7 +227,7 @@ private:
                                 bool &limit_single_set,
                                 int64_t &limit_value,
                                 bool check_limit = true);
-
+  
   int check_subquery_aggr_item(const ObSelectStmt &subquery,
                                bool &is_valid);
 
@@ -243,9 +243,9 @@ private:
   int check_subquery_select(const ObQueryRefRawExpr &query_ref, bool &is_valid);
   int check_subquery_orderby(const ObQueryRefRawExpr &query_ref, bool &is_valid);
 
-  int check_limit_single_set_validity(const ObSelectStmt &subquery,
+  int check_limit_single_set_validity(const ObSelectStmt &subquery, 
                                       const ObRawExpr &parent_expr,
-                                      bool &is_valid,
+                                      bool &is_valid, 
                                       ObIArray<ObPCParamEqualInfo>& equal_param_info);
 
   int check_join_first_condition_for_limit_1(ObQueryRefRawExpr &query_ref,
@@ -253,7 +253,7 @@ private:
                                              bool &is_valid);
 
   int check_subquery_having(const ObQueryRefRawExpr &query_ref,
-                            const ObSelectStmt &subquery,
+                            const ObSelectStmt &subquery, 
                             bool &is_valid);
 
   int check_subquery_conditions(ObQueryRefRawExpr &query_ref,
@@ -268,9 +268,9 @@ private:
 
   int modify_aggr_param_expr_for_outer_join(TransformParam& trans_param);
 
-  int modify_vector_comparison_expr_if_necessary(ObSelectStmt &select_stmt,
-                                                 ObRawExprFactory *expr_factory,
-                                                 ObSEArray<ObRawExpr*, 4> &select_exprs,
+  int modify_vector_comparison_expr_if_necessary(ObSelectStmt &select_stmt, 
+                                                 ObRawExprFactory *expr_factory, 
+                                                 ObSEArray<ObRawExpr*, 4> &select_exprs, 
                                                  ObRawExpr *parent_expr_of_query_ref,
                                                  ObRawExpr *&vec_cmp_expr);
 

@@ -190,10 +190,10 @@ void ObTenantInfoLoader::run2()
 }
 
 void ObTenantInfoLoader::dump_tenant_info_(
-      const int64_t sql_update_cost_time,
-      const bool is_sys_ls_leader,
-      const int64_t broadcast_cost_time,
-      const int64_t end_time_us,
+      const int64_t sql_update_cost_time, 
+      const bool is_sys_ls_leader, 
+      const int64_t broadcast_cost_time, 
+      const int64_t end_time_us, 
       int64_t &last_dump_time_us)
 {
   int ret = OB_SUCCESS;
@@ -215,16 +215,16 @@ void ObTenantInfoLoader::dump_tenant_info_(
       if (OB_NOT_NULL(THE_TRACE)) {
         THE_TRACE->reset();
       }
-      NG_TRACE_EXT(ob_tenant_info_loader, OB_ID(tenant_id), tenant_id_,
-                   OB_ID(is_sys_ls_leader), is_sys_ls_leader,
-                   OB_ID(broadcast_cost_time), broadcast_cost_time,
-                   OB_ID(broadcast_times), broadcast_times_,
-                   OB_ID(broadcast_per_sec), broadcast_per_sec,
-                   OB_ID(rpc_update_times), rpc_update_times,
-                   OB_ID(rpc_update_per_sec), rpc_update_per_sec,
-                   OB_ID(last_rpc_update_time_us), last_rpc_update_time_us_,
-                   OB_ID(sql_update_cost_time), sql_update_cost_time,
-                   OB_ID(sql_update_times), sql_update_times,
+      NG_TRACE_EXT(ob_tenant_info_loader, OB_ID(tenant_id), tenant_id_, 
+                   OB_ID(is_sys_ls_leader), is_sys_ls_leader, 
+                   OB_ID(broadcast_cost_time), broadcast_cost_time, 
+                   OB_ID(broadcast_times), broadcast_times_, 
+                   OB_ID(broadcast_per_sec), broadcast_per_sec, 
+                   OB_ID(rpc_update_times), rpc_update_times, 
+                   OB_ID(rpc_update_per_sec), rpc_update_per_sec, 
+                   OB_ID(last_rpc_update_time_us), last_rpc_update_time_us_, 
+                   OB_ID(sql_update_cost_time), sql_update_cost_time, 
+                   OB_ID(sql_update_times), sql_update_times, 
                    OB_ID(tenant_info_cache), tenant_info_cache_, OB_ID(is_inited), is_inited_);
       FORCE_PRINT_TRACE(THE_TRACE, "[dump tenant_info_loader]");
       ATOMIC_STORE(&broadcast_times_, 0);
@@ -412,7 +412,7 @@ void ObTenantInfoLoader::broadcast_tenant_info_content_()
   const int64_t cost_time_us = ObTimeUtility::current_time() - begin_time;
   const int64_t PRINT_INTERVAL = 3 * 1000 * 1000L;
   if (REACH_TIME_INTERVAL(PRINT_INTERVAL)) {
-    LOG_INFO("broadcast_tenant_info_content_ finished", KR(ret), K_(tenant_id), K(cost_time_us),
+    LOG_INFO("broadcast_tenant_info_content_ finished", KR(ret), K_(tenant_id), K(cost_time_us), 
            K(return_code_array), K_(broadcast_times));
   }
   return ;
@@ -425,7 +425,7 @@ int ObTenantInfoLoader::get_valid_sts_after(const int64_t specified_time_us, sha
   share::ObAllTenantInfo tenant_info;
   int64_t last_sql_update_time = OB_INVALID_TIMESTAMP;
   int64_t ora_rowscn = 0;
-
+    
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
@@ -565,7 +565,7 @@ int ObTenantInfoLoader::get_global_replayable_scn(share::SCN &replayable_scn)
   replayable_scn.set_min();
 
   if (OB_SYS_TENANT_ID == MTL_ID() || is_meta_tenant(MTL_ID())) {
-    // there isn't replayable_scn for SYS/META tenant
+    // there isn't replayable_scn for SYS/META tenant 
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("there isn't replayable_scn for SYS/META tenant", KR(ret));
   } else {
@@ -595,7 +595,7 @@ int ObTenantInfoLoader::get_local_replayable_scn(share::SCN &replayable_scn)
                                                            data_version_barrier_scn))) {
       LOG_WARN("failed to get is_data_version_crossed", KR(ret));
     } else if (is_data_version_crossed) {
-
+      
     } else if (!data_version_barrier_scn.is_valid_and_not_min()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("data_version_barrier_scn is invalid", K(ret), K(data_version_barrier_scn));
@@ -654,7 +654,7 @@ int ObTenantInfoLoader::get_tenant_info(share::ObAllTenantInfo &tenant_info)
   tenant_info.reset();
 
   if (OB_SYS_TENANT_ID == MTL_ID() || is_meta_tenant(MTL_ID())) {
-    // there isn't tenant info for SYS/META tenant
+    // there isn't tenant info for SYS/META tenant 
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("there isn't tenant info for SYS/META tenant", KR(ret));
   } else {
@@ -725,7 +725,7 @@ int ObTenantInfoLoader::update_tenant_info_cache(const int64_t new_ora_rowscn,
   return ret;
 }
 
-DEFINE_TO_YSON_KV(ObAllTenantInfoCache,
+DEFINE_TO_YSON_KV(ObAllTenantInfoCache, 
                   OB_ID(tenant_info), tenant_info_,
                   OB_ID(last_sql_update_time), last_sql_update_time_,
                   OB_ID(ora_rowscn), ora_rowscn_,
@@ -747,7 +747,7 @@ void ObAllTenantInfoCache::reset()
 }
 
 ERRSIM_POINT_DEF(ERRSIM_UPDATE_TENANT_INFO_CACHE_ERROR);
-int ObAllTenantInfoCache::refresh_tenant_info(const uint64_t tenant_id,
+int ObAllTenantInfoCache::refresh_tenant_info(const uint64_t tenant_id, 
                                               common::ObMySQLProxy *sql_proxy,
                                               bool &content_changed)
 {
@@ -786,19 +786,19 @@ int ObAllTenantInfoCache::refresh_tenant_info(const uint64_t tenant_id,
         LOG_WARN("failed to assign new tenant info", KR(ret), K(ora_rowscn), K(new_tenant_info),
                  K(finish_data_version), K(data_version_barrier_scn));
       }
-      // In order to provide sts an accurate time of tenant info refresh time, it is necessary to
+      // In order to provide sts an accurate time of tenant info refresh time, it is necessary to 
       // update last_sql_update_time_ after sql refresh
       last_sql_update_time_ = new_refresh_time_us;
     } else {
       ret = OB_EAGAIN;
-      LOG_WARN("refresh tenant info conflict", KR(ret), K(new_tenant_info), K(new_refresh_time_us),
+      LOG_WARN("refresh tenant info conflict", KR(ret), K(new_tenant_info), K(new_refresh_time_us), 
                                       K(tenant_id), K(tenant_info_), K(last_sql_update_time_), K(ora_rowscn_), K(ora_rowscn));
     }
   }
 
   if (dump_tenant_info_interval_.reach()) {
-    LOG_INFO("refresh tenant info", KR(ret), K(new_tenant_info), K(new_refresh_time_us),
-                                    K(tenant_id), K(tenant_info_), K(last_sql_update_time_),
+    LOG_INFO("refresh tenant info", KR(ret), K(new_tenant_info), K(new_refresh_time_us), 
+                                    K(tenant_id), K(tenant_info_), K(last_sql_update_time_), 
                                     K(ora_rowscn_), K(content_changed));
   }
 

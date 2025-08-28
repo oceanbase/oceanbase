@@ -547,7 +547,7 @@ int ObAsyncRpcProxy<PC, RpcArg, RpcResult, Func, RpcProxy>::check_return_cnt(
   typedef obrpc::ObAsyncRpcProxy<code, arg, result, \
     int (obrpc::ObSrvRpcProxy::*)(const arg &, obrpc::ObSrvRpcProxy::AsyncCB<code> *, const obrpc::ObRpcOpts &), obrpc::ObSrvRpcProxy> name
 
-// the async rpc for ObCommonRpcProxy
+// the async rpc for ObCommonRpcProxy 
 #define RPC_RS(code, arg, result, name) \
   typedef obrpc::ObAsyncRpcProxy<code, arg, result, \
     int (obrpc::ObCommonRpcProxy::*)(const arg &, obrpc::ObCommonRpcProxy::AsyncCB<code> *, const obrpc::ObRpcOpts &), obrpc::ObCommonRpcProxy> name

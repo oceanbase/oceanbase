@@ -166,7 +166,7 @@ TEST_F(TestDecimalIntPdFilter, test_decimal_int_decoder)
   }
 
 
-  col_offset = 1; // INTEGER: INT32_MIN, INT32_MAX, null, [-500 ~ 496]
+  col_offset = 1; // INTEGER: INT32_MIN, INT32_MAX, null, [-500 ~ 496] 
   // check NU/NN
   {
     int64_t ref_arr[1];
@@ -183,7 +183,7 @@ TEST_F(TestDecimalIntPdFilter, test_decimal_int_decoder)
     int64_t res_arr_ne[5] = {999, 998, 998, 998, 999};
     decimal_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_NE, 5, 1, res_arr_ne);
   }
-
+  
   // check LT/LE/GT/GE
   {
     int128_t ref_arr[5] = {int128_t(INT64_MIN) << 64, INT32_MIN, 0, INT32_MAX, int128_t(INT64_MAX) << 64};
@@ -199,7 +199,7 @@ TEST_F(TestDecimalIntPdFilter, test_decimal_int_decoder)
     int64_t res_arr_ge[5] = {999, 999, 498, 1, 0};
     decimal_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_GE, 5, 1, res_arr_ge);
   }
-
+  
   // check IN/BT
   {
     int128_t ref_arr[5] = {int128_t(INT64_MIN) << 64, INT32_MIN, 0, INT32_MAX, int128_t(INT64_MAX) << 64};
@@ -231,7 +231,7 @@ TEST_F(TestDecimalIntPdFilter, test_decimal_int_decoder)
     int64_t res_arr_ne[5] = {998, 999, 999, 998, 999};
     decimal_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_NE, 5, 1, res_arr_ne);
   }
-
+  
   // check LT/LE/GT/GE
   {
     int256_t ref_arr[5] = {int256_t(INT64_MIN) << 192, INT32_MIN, 0, INT32_MAX, INT64_MAX};
@@ -247,7 +247,7 @@ TEST_F(TestDecimalIntPdFilter, test_decimal_int_decoder)
     int64_t res_arr_ge[5] = {999, 998, 998, 998, 0};
     decimal_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_GE, 5, 1, res_arr_ge);
   }
-
+  
   // check IN/BT
   {
     int128_t ref_arr[5] = {int128_t(INT64_MIN) << 64, INT32_MIN, 0, INT32_MAX, INT64_MAX};
@@ -278,7 +278,7 @@ TEST_F(TestDecimalIntPdFilter, test_decimal_int_decoder)
     int64_t res_arr_ne[5] = {999, 989, 989, 990, 999};
     decimal_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_NE, 5, 1, res_arr_ne);
   }
-
+  
   // check LT/LE/GT/GE
   {
     int512_t ref_arr[5] = {int128_t(INT64_MIN) << 64, -50, 0, 49, INT64_MAX};
@@ -294,7 +294,7 @@ TEST_F(TestDecimalIntPdFilter, test_decimal_int_decoder)
     int64_t res_arr_ge[5] = {999, 999, 499, 9, 0};
     decimal_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_GE, 5, 1, res_arr_ge);
   }
-
+  
   // check IN/BT
   {
     int128_t ref_arr[5] = {int128_t(INT64_MIN) << 64, -50, 0, 49, INT64_MAX};
@@ -325,7 +325,7 @@ TEST_F(TestDecimalIntPdFilter, test_decimal_int_decoder)
     int64_t res_arr_ne[5] = {998, 999, 998, 999, 998};
     decimal_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_NE, 5, 1, res_arr_ne);
   }
-
+  
   // check LT/LE/GT/GE
   {
     int128_t ref_arr[5] = {(int128_t)INT64_MIN << 64, INT64_MIN, 0, INT64_MAX, int128_t(INT64_MAX) << 64};
@@ -341,7 +341,7 @@ TEST_F(TestDecimalIntPdFilter, test_decimal_int_decoder)
     int64_t res_arr_ge[5] = {999, 998, 998, 1, 1};
     decimal_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_GE, 5, 1, res_arr_ge);
   }
-
+  
   // check IN/BT
   {
     int128_t ref_arr[5] = {(int128_t)INT64_MIN << 64, INT64_MIN, 0, INT64_MAX, int128_t(INT64_MAX) << 64};
@@ -372,7 +372,7 @@ TEST_F(TestDecimalIntPdFilter, test_decimal_int_decoder)
     int64_t res_arr_ne[5] = {1, 2, 2, 2, 1};
     decimal_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_NE, 5, 1, res_arr_ne);
   }
-
+  
   // check LT/LE/GT/GE
   {
     int128_t ref_arr[5] = {(int128_t)INT64_MIN << 64, INT64_MIN, 0, INT64_MAX, int128_t(INT64_MAX) << 64};
@@ -388,7 +388,7 @@ TEST_F(TestDecimalIntPdFilter, test_decimal_int_decoder)
     int64_t res_arr_ge[5] = {2, 1, 1, 1, 1};
     decimal_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_GE, 5, 1, res_arr_ge);
   }
-
+  
   // check IN/BT
   {
     int128_t ref_arr[5] = {(int128_t)INT64_MIN << 64, INT64_MIN, 0, INT64_MAX, int128_t(INT64_MAX) << 64};
@@ -419,7 +419,7 @@ TEST_F(TestDecimalIntPdFilter, test_decimal_int_decoder)
     int64_t res_arr_ne[5] = {999, 989, 989, 990, 999};
     decimal_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_NE, 5, 1, res_arr_ne);
   }
-
+  
   // check LT/LE/GT/GE
   {
     int512_t ref_arr[5] = {(int512_t)INT64_MIN << 128, (int512_t)-50 << 128 , 0, (int512_t)49 << 128 , int512_t(INT64_MAX) << 128};
@@ -437,7 +437,7 @@ TEST_F(TestDecimalIntPdFilter, test_decimal_int_decoder)
   }
   // check IN/BT
   // if filter precision is different with col precision, the hash is different even if the integer value is equal
-  /*
+  /* 
   {
     int512_t ref_arr[5] = {(int512_t)INT64_MIN << 128, (int512_t)-50 << 128 , 0, (int512_t)49 << 128 , int512_t(INT64_MAX) << 128};
     int64_t res_arr[1] = {29};
@@ -531,7 +531,7 @@ TEST_F(TestDecimalIntPdFilter, test_decimal_int_const_decoder)
     int64_t res_arr_ne[5] = {40, 989, 989, 989, 990};
     decimal_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_NE, 5, 1, res_arr_ne);
   }
-
+  
   // check LT/LE/GT/GE
   {
     int128_t ref_arr[5] = {INT32_MAX, 950, 960, 989, 990};

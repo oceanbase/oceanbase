@@ -230,7 +230,7 @@ int ObIMemtableMgr::init(
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "ls should not be NULL", KR(ret), KP(ls));
-  } else if (OB_FAIL(init(tablet_id, ls_id, 0, 0, compat_mode,
+  } else if (OB_FAIL(init(tablet_id, ls_id, 0, 0, compat_mode, 
           ls->get_log_handler(), ls->get_freezer(), t3m))) {
     STORAGE_LOG(WARN, "failed to init memtable mgr", KR(ret), K(tablet_id), K(ls_id));
   }

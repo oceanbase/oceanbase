@@ -160,7 +160,7 @@ int ObKVCacheMap::get_batch_data_block_cache_key(
         iter = iter->next_;
       }
     }
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret)) { 
       bucket_start_pos_ = end_pos >= bucket_num_ ? 0 : end_pos;
     }
   }

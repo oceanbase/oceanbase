@@ -457,7 +457,7 @@ int ObDataAccessService::do_async_remote_das_task(ObDASRef &das_ref,
           LOG_WARN("get detectable id failed", K(ret));
         }
       }
-
+      
       if (OB_FAIL(ret)) {
       } else if (OB_UNLIKELY(ObDasTaskStatus::UNSTART != task_op->get_task_status())) {
         ret = OB_ERR_UNEXPECTED;

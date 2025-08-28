@@ -122,7 +122,7 @@ public:
   int init_query_ctx(const uint64_t table_id,
                      const ObTabletID tablet_id,
                      const ObString &table_name,
-                     const bool is_tablegroup_req,
+                     const bool is_tablegroup_req, 
                      table::ObTableApiCredential &credential);
   int get_or_create_exec_ctx(table::ObTableExecCtx *&async_exec_ctx);
 public:
@@ -141,7 +141,7 @@ public:
     ObTableTransParam trans_param_;
     uint64_t table_id_;
     common::ObTabletID tablet_id_;
-    const share::schema::ObTableSchema *table_schema_;
+    const share::schema::ObTableSchema *table_schema_;  
   };
 private:
   table::ObIAsyncQueryIter *query_iter_;
@@ -150,71 +150,71 @@ private:
 };
 
 struct ObTableInfoBase
-{
-  explicit ObTableInfoBase()
-                          : table_id_(OB_INVALID_ID),
-                            simple_schema_(nullptr),
-                            schema_cache_guard_(),
-                            schema_version_(OB_INVALID_VERSION) {}
+{  
+  explicit ObTableInfoBase()  
+                          : table_id_(OB_INVALID_ID),  
+                            simple_schema_(nullptr),  
+                            schema_cache_guard_(),  
+                            schema_version_(OB_INVALID_VERSION) {}  
 
-  virtual ~ObTableInfoBase() {}
+  virtual ~ObTableInfoBase() {}  
 
-  int64_t get_table_id() const {
-    return table_id_;
-  }
+  int64_t get_table_id() const {  
+    return table_id_;  
+  }  
 
-  void set_table_id(int64_t table_id) {
-    table_id_ = table_id;
-  }
+  void set_table_id(int64_t table_id) {  
+    table_id_ = table_id;  
+  }  
 
-  const ObString& get_real_table_name() const {
-    return real_table_name_;
-  }
+  const ObString& get_real_table_name() const {  
+    return real_table_name_;  
+  }  
 
-  void set_real_table_name(const ObString& real_table_name) {
-    real_table_name_ = real_table_name;
-  }
+  void set_real_table_name(const ObString& real_table_name) {  
+    real_table_name_ = real_table_name;  
+  }  
 
-  const share::schema::ObSimpleTableSchemaV2* get_simple_schema() {
-    return simple_schema_;
-  }
+  const share::schema::ObSimpleTableSchemaV2* get_simple_schema() {  
+    return simple_schema_;  
+  }  
 
-  void set_simple_schema(const share::schema::ObSimpleTableSchemaV2* simple_schema) {
-    simple_schema_ = simple_schema;
-  }
+  void set_simple_schema(const share::schema::ObSimpleTableSchemaV2* simple_schema) {  
+    simple_schema_ = simple_schema;  
+  }  
 
-  table::ObKvSchemaCacheGuard& get_schema_cache_guard() {
-    return schema_cache_guard_;
-  }
+  table::ObKvSchemaCacheGuard& get_schema_cache_guard() {  
+    return schema_cache_guard_;  
+  }  
 
-  void set_schema_cache_guard(const table::ObKvSchemaCacheGuard& schema_cache_guard) {
-    schema_cache_guard_ = schema_cache_guard;
-  }
+  void set_schema_cache_guard(const table::ObKvSchemaCacheGuard& schema_cache_guard) {  
+    schema_cache_guard_ = schema_cache_guard;  
+  }  
 
-  int64_t get_schema_version() const {
-    return schema_version_;
-  }
+  int64_t get_schema_version() const {  
+    return schema_version_;  
+  }  
 
-  void set_schema_version(int64_t schema_version) {
-    schema_version_ = schema_version;
-  }
+  void set_schema_version(int64_t schema_version) {  
+    schema_version_ = schema_version;  
+  }  
 
-  TO_STRING_KV(K(table_id_),
-               KP(simple_schema_),
-               K(schema_cache_guard_),
-               K(schema_version_));
-
-  int64_t table_id_;
-  ObString real_table_name_;
-  const share::schema::ObSimpleTableSchemaV2* simple_schema_;
-  table::ObKvSchemaCacheGuard schema_cache_guard_;
-  int64_t schema_version_;
+  TO_STRING_KV(K(table_id_),  
+               KP(simple_schema_),  
+               K(schema_cache_guard_),  
+               K(schema_version_));  
+  
+  int64_t table_id_;  
+  ObString real_table_name_;  
+  const share::schema::ObSimpleTableSchemaV2* simple_schema_;  
+  table::ObKvSchemaCacheGuard schema_cache_guard_;  
+  int64_t schema_version_;  
 };
 
 
 struct ObTableSingleQueryInfo : public ObTableInfoBase
 {
-  explicit ObTableSingleQueryInfo(common::ObIAllocator &allocator):
+  explicit ObTableSingleQueryInfo(common::ObIAllocator &allocator): 
     tb_ctx_(allocator),
     row_iter_(),
     result_(),
@@ -270,7 +270,7 @@ struct ObTableQueryAsyncCtx : public table::ObTableQueryBatchCtx
   }
 
   // Computes the real tablet ID on the server side during multi-table queries
-  int64_t part_idx_;
+  int64_t part_idx_; 
   int64_t subpart_idx_;
   int64_t schema_version_;
   table::ObTableApiSessGuard *sess_guard_;
@@ -279,7 +279,7 @@ struct ObTableQueryAsyncCtx : public table::ObTableQueryBatchCtx
   table::ObTableApiScanExecutor *executor_;
   table::ObTableApiScanRowIterator row_iter_;
   common::ObArray<ObTableSingleQueryInfo*> multi_cf_infos_;
-  // record table_id and tablet_id pass by client, especially for global index:
+  // record table_id and tablet_id pass by client, especially for global index:  
   // - index_table_id is the id of index table
   // - index_tablet_id is the query index tablet
   uint64_t index_table_id_;

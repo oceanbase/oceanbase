@@ -69,7 +69,7 @@ public:
   inline bool force_push_down() const { return force_push_down_; }
   inline void set_force_push_down(bool force_push_down) { force_push_down_ = force_push_down; }
   int get_distinct_output_exprs(ObIArray<ObRawExpr *> &output_exprs);
-  virtual int get_plan_item_info(PlanText &plan_text,
+  virtual int get_plan_item_info(PlanText &plan_text, 
                                 ObSqlPlanItem &plan_item) override;
   virtual int print_outline_data(PlanText &plan_text) override;
   virtual int print_used_hint(PlanText &plan_text) override;

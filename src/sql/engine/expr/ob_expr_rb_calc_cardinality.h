@@ -33,7 +33,7 @@ public:
                                 ObExprResType &type1,
                                 ObExprResType &type2,
                                 common::ObExprTypeCtx &type_ctx)
-                                const override;
+                                const override; 
   static int eval_rb_calc_cardinality(const ObExpr &expr,
                                       ObEvalCtx &ctx,
                                       ObDatum &res,

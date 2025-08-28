@@ -144,7 +144,7 @@ public:
 
 
   // @brief adjust the total disk space contains by ObServerLogBlockMgr.
-  //
+  // 
   // get 'log_disk_size' from GCONF.
   //
   // This is an atomic operation.
@@ -176,7 +176,7 @@ public:
 
   // @brief before 'create_tenant' in ObMultiTenant, need allocate log disk size firstly.
   // @param[in] the log disk size need by tenant.
-  // @return
+  // @return 
   //   OB_SUCCESS
   //   OB_MACHINE_RESOURCE_NOT_ENOUGH
   // NB: accurately, when tenant has existed in 'omt_', we can create it in ObServerLogBlockMgr
@@ -197,7 +197,7 @@ public:
                     const int64_t new_log_disk_size,
                     int64_t &allowed_log_disk_size,
                     ObLogService *log_service);
-
+	
   // @brief after 'del_tenant' in ObMultiTenant success, need remove it from ObServerLogBlockMgr
   // NB: accurately, when tenant not exist in 'omt_', we can remove it from ObServerLogBlockMgr
   int remove_tenant(const int64_t log_disk_size);
@@ -326,10 +326,10 @@ private:
   // In remove_tenant, need update it with 'get_all_tenants_log_disk_size_'.
   //
   // After restart, all tenants which need exist in 'omt_' has been loaded,
-  // and then, we cal init 'min_log_disk_size_for_all_tenants_' via
+  // and then, we cal init 'min_log_disk_size_for_all_tenants_' via 
   // get_all_tenants_log_disk_size_(int64_t) in start().
   //
-  // NB: before start(), can not execute resize, and the initial value of
+  // NB: before start(), can not execute resize, and the initial value of 
   // 'min_log_disk_size_for_all_tenants_' is 0.
   int64_t min_log_disk_size_for_all_tenants_;
   GetTenantsLogDiskSize get_tenants_log_disk_size_func_;

@@ -108,7 +108,7 @@ public:
   int64_t limit_num_;
   common::ObString log_file_;
   common::ObString bad_file_;
-
+  
   TO_STRING_KV(K(is_enabled_), K(limit_num_), K(log_file_), K(bad_file_));
 };
 
@@ -335,7 +335,7 @@ public:
     FORCE_OFF
   };
   // 切换自治事务一定需要切换嵌套语句，否则切回主事务后语句执行的上下文信息可能已经有变化，比如：
-  //
+  // 
   // 所以原则上TransSavedValue应该包含StmtSavedValue的所有属性，考虑将前者作为后者的子类，
   // 但有几个属性在两者中都存在、需要执行的操作却不同，最后决定将两者处理相同的属性抽出来放进
   // 公共基类BaseSavedValue，方便最大程度复用代码，将来新增属性时也要参考类似原则确定放在哪个类中。
@@ -583,7 +583,7 @@ public:
   const common::ObString get_tenant_name() const;
   uint64_t get_priv_tenant_id() const { return tenant_id_; }
   const common::ObString get_effective_tenant_name() const;
-  // 关于各种tenant_id的使用，可参考
+  // 关于各种tenant_id的使用，可参考 
   uint64_t get_effective_tenant_id() const { return effective_tenant_id_; }
   // RPC framework use rpc_tenant_id() to deliver remote/distribute tasks.
   void set_rpc_tenant_id(uint64_t tenant_id) { rpc_tenant_id_ = tenant_id; }
@@ -2351,8 +2351,8 @@ private:
       bool inc_runtime_filter_wait_time_ms_:1;
       bool inc_runtime_filter_max_in_num_:1;
       bool inc_runtime_bloom_filter_max_size_:1;
-      bool inc_enable_rich_vector_format_:1;
-      bool inc_ncharacter_set_connection_:1;
+      bool inc_enable_rich_vector_format_:1; 
+      bool inc_ncharacter_set_connection_:1; 
       bool inc_default_lob_inrow_threshold_:1;
       bool inc_ob_enable_pl_cache_:1;
       bool inc_compat_type_:1;
@@ -2362,7 +2362,7 @@ private:
       bool inc_security_version_:1;
       bool inc_ob_enable_ps_parameter_anonymous_block_:1;
       bool inc_current_default_catalog_:1;
-      // when add new inc bit, please update reserved_bits_,
+      // when add new inc bit, please update reserved_bits_, 
       // so that the total bits is 64
       int reserved_bits_:5;
     };
@@ -2627,7 +2627,7 @@ private:
   common::ObSEArray<uint64_t, 4> enable_role_ids_;
   uint64_t sys_var_config_hash_val_;
   char thread_name_[OB_THREAD_NAME_BUF_LEN];
-  bool is_real_inner_session_;
+  bool is_real_inner_session_; 
   // Currently, when inner sql is executed, the session will be created from session_mgr in most cases. We think he is an inner session;
   // In addition, in situations such as PL execution, the external session will be passed to the inner sql Connection. In this case, it is not considered an inner session.
   // There are differences between the two in terms of ASH statistics and so on, so they should be distinguished.

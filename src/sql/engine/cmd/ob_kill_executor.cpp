@@ -448,7 +448,7 @@ int ObKillExecutor::get_remote_session_location(const ObKillSessionArg &arg,
         }
       }
     }
-
+  
     if (OB_FAIL(ret)) {
     } else {
       UNUSED(tmp_real_str_len);

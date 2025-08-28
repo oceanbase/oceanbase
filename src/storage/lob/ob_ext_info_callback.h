@@ -76,7 +76,7 @@ private:
   ObJsonDiffHeader diff_header_;
 
   ObJsonDiffArray diffs_;
-
+  
 };
 
 class ObExtInfoCallback : public memtable::ObITransCallback
@@ -143,7 +143,7 @@ public:
   static int alloc_seq_no(
       transaction::ObTxDesc *tx_desc,
       const transaction::ObTxSEQ &parent_seq_no,
-      const int64_t data_size, /*include header size*/
+      const int64_t data_size, /*include header size*/ 
       transaction::ObTxSEQ &seq_no_st,
       int64_t &seq_no_cnt);
 

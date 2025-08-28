@@ -135,7 +135,7 @@ int ObRawExprCopier::check_need_copy(const ObRawExpr *old_expr,
   new_expr = NULL;
   if (OB_FAIL(find_in_copy_context(old_expr, new_expr))) {
     LOG_WARN("faild to find in copy context", K(ret));
-  } else if (OB_ISNULL(new_expr) &&
+  } else if (OB_ISNULL(new_expr) && 
              old_expr->is_exec_param_expr() &&
              !static_cast<const ObExecParamRawExpr *>(old_expr)->is_onetime()) {
     // TODO link.zt skip the copy of exec param expr
@@ -323,7 +323,7 @@ int ObRawExprCopier::do_copy_expr(const ObRawExpr *old_expr,
  * @param from_expr : the input expr to be replaced
  * @param to_expr : the output expr generaetd by replacing the input expr
  * @param replacer : tells how to replace a expr node
- * @return
+ * @return 
  */
 int ObRawExprCopier::copy_on_replace(ObRawExpr *from_expr,
                                      ObRawExpr *&to_expr,
@@ -361,7 +361,7 @@ int ObRawExprCopier::copy_on_replace(ObRawExpr *from_expr,
         LOG_WARN("failed to static replace expr", K(ret));
       } else if (param == new_param) {
         // do noting if the param does not change, or the expr is marked as uncopy.
-      } else if (from_expr == to_expr &&
+      } else if (from_expr == to_expr && 
                  OB_FAIL(copy_expr_node(from_expr, to_expr))) {
         // the param is changed, create a copy of the from_expr
         // and then make modifications on the copy (to_expr).

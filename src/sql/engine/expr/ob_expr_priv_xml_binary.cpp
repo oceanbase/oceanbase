@@ -34,7 +34,7 @@ int ObExprPrivXmlBinary::calc_result_typeN(ObExprResType& type,
                                            int64_t param_num,
                                            ObExprTypeCtx& type_ctx) const
 {
-  UNUSED(type_ctx);
+  UNUSED(type_ctx); 
   int ret = OB_SUCCESS;
   // 1st param is schema id for validation from column definition
   //   schema id in xml data maybe 0 or different from column definition
@@ -52,7 +52,7 @@ int ObExprPrivXmlBinary::calc_result_typeN(ObExprResType& type,
              && !types_stack[1].is_null()) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("invalid type", K(ret), K(types_stack[1].get_type()));
-  }
+  } 
   if (OB_SUCC(ret)) {
     if (types_stack[1].is_character_type() && types_stack[1].get_charset_type() != CHARSET_UTF8MB4) {
       types_stack[1].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN); // remove later
@@ -86,7 +86,7 @@ int ObExprPrivXmlBinary::eval_priv_xml_binary(const ObExpr &expr, ObEvalCtx &ctx
       }
     }
   }
-
+  
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(expr.args_[0]->eval(ctx, schema_id))) {
     LOG_WARN("eval geo arg failed", K(ret));
@@ -104,7 +104,7 @@ int ObExprPrivXmlBinary::eval_priv_xml_binary(const ObExpr &expr, ObEvalCtx &ctx
     ObCollationType cs_type = expr.args_[1]->obj_meta_.is_character_type()
                               ? expr.args_[1]->obj_meta_.get_collation_type()
                               : CS_TYPE_BINARY;
-    ObObjType in_type = expr.args_[1]->obj_meta_.is_character_type()
+    ObObjType in_type = expr.args_[1]->obj_meta_.is_character_type() 
                         ? expr.args_[1]->obj_meta_.get_type()
                         : ObLongTextType;
     ObMulModeMemCtx* mem_ctx = nullptr;
@@ -112,7 +112,7 @@ int ObExprPrivXmlBinary::eval_priv_xml_binary(const ObExpr &expr, ObEvalCtx &ctx
     if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&tmp_allocator, mem_ctx))) {
       LOG_WARN("fail to create tree memory context", K(ret));
     } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator,
-                                                                  in_type,
+                                                                  in_type, 
                                                                   cs_type,
                                                                   true,
                                                                   xml_plain_text))) {
@@ -156,22 +156,22 @@ int ObExprPrivXmlBinary::eval_priv_xml_binary(const ObExpr &expr, ObEvalCtx &ctx
       if (OB_FAIL(ObXmlUtil::xml_bin_header_info(xml_plain_text, type, size))) {
       } else if (type == M_UNPARESED_DOC || (size < xml_plain_text.length() && type == M_DOCUMENT)) {
         ObString res_string;
-        if (OB_FAIL(common::ObMulModeFactory::get_xml_base(mem_ctx, xml_plain_text,
+        if (OB_FAIL(common::ObMulModeFactory::get_xml_base(mem_ctx, xml_plain_text, 
                                                             ObNodeMemType::BINARY_TYPE,
-                                                            ObNodeMemType::BINARY_TYPE,
+                                                            ObNodeMemType::BINARY_TYPE, 
                                                             xml_root))) {
           LOG_WARN("get xml base failed", K(ret));
-        } else if (OB_ISNULL(xml_root)) {
+        } else if (OB_ISNULL(xml_root)) { 
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("xml_root is null", K(ret));
-        } else if (xml_root->check_extend()) {
+        } else if (xml_root->check_extend()) { 
           ObXmlBin* bin = static_cast<ObXmlBin*>(xml_root);
           if (OB_FAIL(bin->merge_extend(extend))) {
             LOG_WARN("fail to merge extend", K(ret));
           } else {
             xml_root = &extend;
           }
-        }
+        } 
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(xml_root->get_raw_binary(res_string, mem_ctx->allocator_))) {
           LOG_WARN("get raw binary failed", K(ret));

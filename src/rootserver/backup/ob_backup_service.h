@@ -22,10 +22,10 @@ namespace rootserver
 {
 class ObBackupTaskScheduler;
 // the backup service who relay on ObBackupTaskScheduler must inherit this.
-class ObBackupService : public ObBackupBaseService
+class ObBackupService : public ObBackupBaseService 
 {
 public:
-  ObBackupService(): is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), can_schedule_(false), task_scheduler_(nullptr),
+  ObBackupService(): is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), can_schedule_(false), task_scheduler_(nullptr), 
       schema_service_(nullptr) {}
   virtual ~ObBackupService() {};
   int init();
@@ -33,7 +33,7 @@ public:
   virtual int process(int64_t &last_schedule_ts) = 0;
   void destroy() override final;
 public:
-
+  
   virtual ObIBackupJobScheduler *get_scheduler(const BackupJobType &type) = 0;
   virtual int get_need_reload_task(
       common::ObIAllocator &allocator, common::ObIArray<ObBackupScheduleTask *> &tasks) = 0;
@@ -49,7 +49,7 @@ public:
   bool can_schedule();
   TO_STRING_KV(K_(tenant_id), K_(can_schedule))
 protected:
-  virtual int sub_init(common::ObMySQLProxy &sql_proxy, obrpc::ObSrvRpcProxy &rpc_proxy,
+  virtual int sub_init(common::ObMySQLProxy &sql_proxy, obrpc::ObSrvRpcProxy &rpc_proxy, 
            share::schema::ObMultiVersionSchemaService &schema_service,
            share::ObLocationService &loacation_service,
            ObBackupTaskScheduler &task_scheduler) = 0;
@@ -78,7 +78,7 @@ public:
   int handle_backup_database(const obrpc::ObBackupDatabaseArg &arg);
   int handle_backup_database_cancel(const uint64_t tenant_id, const ObIArray<uint64_t> &managed_tenant_ids);
 private:
-  int sub_init(common::ObMySQLProxy &sql_proxy, obrpc::ObSrvRpcProxy &rpc_proxy,
+  int sub_init(common::ObMySQLProxy &sql_proxy, obrpc::ObSrvRpcProxy &rpc_proxy, 
     share::schema::ObMultiVersionSchemaService &schema_service, share::ObLocationService &loacation_service,
     ObBackupTaskScheduler &task_scheduler) override;
 private:
@@ -103,7 +103,7 @@ public:
   int handle_delete_policy(const obrpc::ObDeletePolicyArg &arg);
   int handle_backup_delete_obsolete(const obrpc::ObBackupCleanArg &arg);
 private:
-  virtual int sub_init(common::ObMySQLProxy &sql_proxy, obrpc::ObSrvRpcProxy &rpc_proxy,
+  virtual int sub_init(common::ObMySQLProxy &sql_proxy, obrpc::ObSrvRpcProxy &rpc_proxy, 
                   share::schema::ObMultiVersionSchemaService &schema_service,
                   share::ObLocationService &loacation_service,
                   ObBackupTaskScheduler &task_scheduler) override;

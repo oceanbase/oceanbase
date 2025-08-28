@@ -324,7 +324,7 @@ int ObTxDataTable::insert(ObTxData *&tx_data)
 
 // In order to support the commit log without undo actions, the tx data related to a single
 // transaction may be inserted multiple times. For more details, see
-//
+// 
 int ObTxDataTable::insert_(ObTxData *&tx_data, ObTxDataMemtableWriteGuard &write_guard)
 {
   int ret = OB_SUCCESS;
@@ -767,7 +767,7 @@ int ObTxDataTable::self_freeze_task()
 }
 
 // The main steps in calculating upper_trans_version. For more details, see :
-//
+// 
 int ObTxDataTable::get_upper_trans_version_before_given_scn(const SCN sstable_end_scn, SCN &upper_trans_version)
 {
   int ret = OB_SUCCESS;
@@ -1333,7 +1333,7 @@ bool ObTxDataTable::FreezeFrequencyController::need_re_freeze(const share::ObLSI
   const int64_t last_freeze_ts = ATOMIC_LOAD(&last_freeze_ts_);
   const int64_t last_request_ts = ATOMIC_LOAD(&last_request_ts_);
   const int64_t current_time = ObClockGenerator::getClock();
-  // This condition can be confusing. For details, see
+  // This condition can be confusing. For details, see 
   bool condition1_satisfied =
       last_request_ts > last_freeze_ts && current_time - last_freeze_ts > 2 * MIN_FREEZE_TX_DATA_INTERVAL;
   // Trigger TxData Freeze every 5 minutes

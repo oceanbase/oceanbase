@@ -50,22 +50,22 @@ int ObTableLoadBackupMacroBlockReader_V_1_4::inner_init()
   int ret = OB_SUCCESS;
   int64_t meta_len = 0;
   int64_t macro_block_size = 0;
-  if (OB_ISNULL(meta_.endkey_ = static_cast<ObObj *>(allocator_.alloc(sizeof(ObObj) *
+  if (OB_ISNULL(meta_.endkey_ = static_cast<ObObj *>(allocator_.alloc(sizeof(ObObj) * 
                   ObTableLoadBackupColumnMap_V_1_4::OB_TABLE_LOAD_PRE_ROW_MAX_COLUMNS_COUNT)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc_memory", KR(ret));
-  } else if (OB_FAIL(serialization::decode_i64(buf_,
-                                        buf_size_,
-                                        pos_,
+  } else if (OB_FAIL(serialization::decode_i64(buf_, 
+                                        buf_size_, 
+                                        pos_, 
                                         &meta_len))) {
     LOG_WARN("fail to decode", KR(ret));
-  } else if (OB_FAIL(meta_.deserialize(buf_,
-                                       buf_size_,
+  } else if (OB_FAIL(meta_.deserialize(buf_, 
+                                       buf_size_, 
                                        pos_))) {
     LOG_WARN("fail to deserialize meta_", KR(ret));
-  } else if (OB_FAIL(serialization::decode_i64(buf_,
-                                               buf_size_,
-                                               pos_,
+  } else if (OB_FAIL(serialization::decode_i64(buf_, 
+                                               buf_size_, 
+                                               pos_, 
                                                &macro_block_size))) {
     LOG_WARN("fail to decode", KR(ret));
   } else if (OB_FAIL(column_map_.init(&meta_))) {
@@ -128,9 +128,9 @@ int ObTableLoadBackupMacroBlockReader_V_1_4::decompress_data(const int32_t micro
         int64_t decomp_size = 0;
         if (OB_FAIL(alloc_buf(header->data_length_))) {
           LOG_WARN("fail to allocate buf", KR(ret));
-        } else if (OB_FAIL(compressor_ != nullptr && compressor_->decompress(comp_buf,
-                                                                             comp_size,
-                                                                             decomp_buf_,
+        } else if (OB_FAIL(compressor_ != nullptr && compressor_->decompress(comp_buf, 
+                                                                             comp_size, 
+                                                                             decomp_buf_, 
                                                                              decomp_buf_size_,
                                                                              decomp_size))) {
           LOG_WARN("fail to decompress", KR(ret));
@@ -157,7 +157,7 @@ int ObTableLoadBackupMacroBlockReader_V_1_4::alloc_buf(const int64_t buf_size)
     } else {
       decomp_buf_size_ = buf_size;
     }
-  }
+  } 
 
   return ret;
 }

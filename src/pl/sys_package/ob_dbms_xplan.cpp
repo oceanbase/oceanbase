@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_dbms_xplan.h"
 #include "observer/ob_inner_sql_connection_pool.h"
@@ -57,7 +57,7 @@ int ObDbmsXplan::enable_opt_trace(ObExecContext &ctx, ParamStore &params, ObObj 
   } else if (OB_FAIL(level_num.cast_to_int64(level))) {
     LOG_WARN("failed to cast int", K(ret));
   } else if (OB_FALSE_IT(session->get_optimizer_tracer().set_session_info(session))) {
-  } else if (OB_FAIL(session->get_optimizer_tracer().enable_trace(identifier,
+  } else if (OB_FAIL(session->get_optimizer_tracer().enable_trace(identifier, 
                                                                   sql_id,
                                                                   level))) {
     LOG_WARN("failed to enable optimizer tracer", K(ret));
@@ -122,7 +122,7 @@ int ObDbmsXplan::set_opt_trace_parameter(ObExecContext &ctx, ParamStore &params,
     LOG_WARN("failed to get number value", K(ret));
   } else if (OB_FAIL(level_num.cast_to_int64(level))) {
     LOG_WARN("failed to cast int", K(ret));
-  } else if (OB_FAIL(session->get_optimizer_tracer().set_parameters(identifier,
+  } else if (OB_FAIL(session->get_optimizer_tracer().set_parameters(identifier, 
                                                                     sql_id,
                                                                     level))) {
     LOG_WARN("failed to init optimizer tracer", K(ret));
@@ -165,7 +165,7 @@ int ObDbmsXplan::display(sql::ObExecContext &ctx,
     sql_plan.set_session_info(session);
     ObSEArray<ObSqlPlanItem*, 4> plan_infos;
     ObSEArray<ObSqlPlanItem*, 4> cur_plan_infos;
-    if (OB_FAIL(get_plan_info_by_plan_table(ctx,
+    if (OB_FAIL(get_plan_info_by_plan_table(ctx, 
                                             table_name,
                                             statement_id,
                                             filter_preds,
@@ -182,9 +182,9 @@ int ObDbmsXplan::display(sql::ObExecContext &ctx,
         LOG_WARN("unexpect null plan item", K(ret));
       } else if (item->id_ <= last_id) {
         //new plan
-        if (OB_FAIL(sql_plan.format_sql_plan(cur_plan_infos,
-                                            type,
-                                            option,
+        if (OB_FAIL(sql_plan.format_sql_plan(cur_plan_infos, 
+                                            type, 
+                                            option, 
                                             plan_text,
                                             alloc_buffer))) {
           LOG_WARN("failed to format sql plan", K(ret));
@@ -201,9 +201,9 @@ int ObDbmsXplan::display(sql::ObExecContext &ctx,
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(sql_plan.format_sql_plan(cur_plan_infos,
-                                                type,
-                                                option,
+    } else if (OB_FAIL(sql_plan.format_sql_plan(cur_plan_infos, 
+                                                type, 
+                                                option, 
                                                 plan_text,
                                                 alloc_buffer))) {
       LOG_WARN("failed to format sql plan", K(ret));
@@ -264,8 +264,8 @@ int ObDbmsXplan::display_cursor(sql::ObExecContext &ctx,
     LOG_WARN("failed to get sql string", K(ret));
   } else if (!use_old_params && OB_FAIL(params.at(idx++).get_varchar(plan_name))) {
     LOG_WARN("failed to get plan name", K(ret));
-  } else if (!use_old_params && !plan_name.empty() && OB_FAIL(num_val.from(plan_name.ptr(),
-                                                        plan_name.length(),
+  } else if (!use_old_params && !plan_name.empty() && OB_FAIL(num_val.from(plan_name.ptr(), 
+                                                        plan_name.length(), 
                                                         ctx.get_allocator()))) {
       ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
       LOG_WARN("failed to get plan hash");
@@ -297,20 +297,20 @@ int ObDbmsXplan::display_cursor(sql::ObExecContext &ctx,
     if (0 == svr_ip.length() &&
         OB_FAIL(get_server_ip_port(ctx, svr_ip, svr_port))) {
       LOG_WARN("failed to get svr ip and port", K(ret));
-    } else if (OB_FAIL(get_plan_info_by_id(ctx,
-                                           tenant_id,
-                                           svr_ip,
-                                           svr_port,
+    } else if (OB_FAIL(get_plan_info_by_id(ctx, 
+                                           tenant_id, 
+                                           svr_ip, 
+                                           svr_port, 
                                            plan_id,
                                            sql_handle,
-                                           plan_hash,
+                                           plan_hash, 
                                            plan_infos))) {
       LOG_WARN("failed to get plan info", K(ret));
     } else if (OB_FAIL(get_plan_format(format, type, option))) {
       LOG_WARN("failed to get plan format type", K(ret));
-    } else if (OB_FAIL(sql_plan.format_sql_plan(plan_infos,
-                                                type,
-                                                option,
+    } else if (OB_FAIL(sql_plan.format_sql_plan(plan_infos, 
+                                                type, 
+                                                option, 
                                                 plan_text))) {
       LOG_WARN("failed to format sql plan", K(ret));
     } else if (OB_FAIL(set_display_result(ctx, plan_text, result))) {
@@ -345,8 +345,8 @@ int ObDbmsXplan::display_sql_plan_baseline(sql::ObExecContext &ctx,
     LOG_WARN("failed to get sql string", K(ret));
   } else if (OB_FAIL(params.at(idx++).get_varchar(plan_name))) {
     LOG_WARN("failed to get plan name", K(ret));
-  } else if (OB_FAIL(num_val.from(plan_name.ptr(),
-                                  plan_name.length(),
+  } else if (OB_FAIL(num_val.from(plan_name.ptr(), 
+                                  plan_name.length(), 
                                   ctx.get_allocator()))) {
     ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
     LOG_WARN("failed to get plan hash", K(ret));
@@ -379,31 +379,31 @@ int ObDbmsXplan::display_sql_plan_baseline(sql::ObExecContext &ctx,
     ObSqlPlan sql_plan(ctx.get_allocator());
     sql_plan.set_session_info(session);
     ObSEArray<ObSqlPlanItem*, 4> plan_infos;
-    if (0 == svr_ip.length() &&
+    if (0 == svr_ip.length() && 
         OB_FAIL(get_server_ip_port(ctx, svr_ip, svr_port))) {
       LOG_WARN("failed to get svr ip and port", K(ret));
-    } else if (OB_FAIL(get_baseline_plan_info(ctx,
-                                              tenant_id,
-                                              svr_ip,
-                                              svr_port,
+    } else if (OB_FAIL(get_baseline_plan_info(ctx, 
+                                              tenant_id, 
+                                              svr_ip, 
+                                              svr_port, 
                                               sql_handle,
-                                              plan_hash,
+                                              plan_hash, 
                                               plan_infos))) {
       LOG_WARN("failed to get plan info", K(ret));
     } else {
       if (OB_FAIL(get_plan_format(format, type, option))) {
         LOG_WARN("failed to get plan format type", K(ret));
-      } else if (OB_FAIL(sql_plan.format_sql_plan(plan_infos,
-                                                  type,
-                                                  option,
+      } else if (OB_FAIL(sql_plan.format_sql_plan(plan_infos, 
+                                                  type, 
+                                                  option, 
                                                   plan_text))) {
         LOG_WARN("failed to format sql plan", K(ret));
       } else if (EXPLAIN_EXTENDED == type &&
-                 OB_FAIL(get_baseline_plan_detail(ctx,
-                                                  sql_handle,
-                                                  plan_name,
+                 OB_FAIL(get_baseline_plan_detail(ctx, 
+                                                  sql_handle, 
+                                                  plan_name, 
                                                   tenant_id,
-                                                  plan_text,
+                                                  plan_text, 
                                                   true))) {
         LOG_WARN("failed to get baseline plan detail", K(ret));
       } else if (OB_FAIL(set_display_result(ctx, plan_text, result))) {
@@ -451,21 +451,21 @@ int ObDbmsXplan::display_active_session_plan(sql::ObExecContext &ctx,
     ObSqlPlan sql_plan(ctx.get_allocator());
     sql_plan.set_session_info(session);
     ObSEArray<ObSqlPlanItem*, 4> plan_infos;
-    if (0 == svr_ip.length() &&
+    if (0 == svr_ip.length() && 
         OB_FAIL(get_server_ip_port(ctx, svr_ip, svr_port))) {
       LOG_WARN("failed to get svr ip and port", K(ret));
-    } else if (OB_FAIL(get_plan_info_by_session_id(ctx,
-                                                  session_id,
-                                                  svr_ip,
+    } else if (OB_FAIL(get_plan_info_by_session_id(ctx, 
+                                                  session_id, 
+                                                  svr_ip, 
                                                   svr_port,
                                                   session->get_effective_tenant_id(),
                                                   plan_infos))) {
       LOG_WARN("failed to get plan info", K(ret));
     } else if (OB_FAIL(get_plan_format(format, type, option))) {
       LOG_WARN("failed to get plan format type", K(ret));
-    } else if (OB_FAIL(sql_plan.format_sql_plan(plan_infos,
-                                                type,
-                                                option,
+    } else if (OB_FAIL(sql_plan.format_sql_plan(plan_infos, 
+                                                type, 
+                                                option, 
                                                 plan_text))) {
       LOG_WARN("failed to format sql plan", K(ret));
     } else if (OB_FAIL(set_display_result(ctx, plan_text, result))) {
@@ -499,7 +499,7 @@ int ObDbmsXplan::get_server_ip_port(sql::ObExecContext &ctx,
 }
 
 int ObDbmsXplan::get_plan_format(const ObString &format,
-                                ExplainType &type,
+                                ExplainType &type, 
                                 ObExplainDisplayOpt& option)
 {
   int ret = OB_SUCCESS;
@@ -532,7 +532,7 @@ int ObDbmsXplan::set_display_result(sql::ObExecContext &ctx,
   int ret = OB_SUCCESS;
   if (lib::is_oracle_mode()) {
     if (OB_FAIL(set_display_result_for_oracle(ctx,
-                                              plan_text,
+                                              plan_text, 
                                               result))) {
       LOG_WARN("failed to set display result", K(ret));
     }
@@ -574,7 +574,7 @@ int ObDbmsXplan::set_display_result_for_oracle(sql::ObExecContext &exec_ctx,
                                                   NULL,
                                                   *table,
                                                   plan_strs.count()))) {
-        LOG_WARN("failed to set collection size", K(ret));
+        LOG_WARN("failed to set collection size", K(ret));                                  
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < plan_strs.count(); ++i) {
@@ -639,7 +639,7 @@ int ObDbmsXplan::get_plan_info_by_plan_table(sql::ObExecContext &ctx,
       LOG_WARN("failed to assign string", K(ret));
     }
   } else if (0 == statement_id.length()) {
-    if (OB_FAIL(filter.assign_fmt("%.*s",
+    if (OB_FAIL(filter.assign_fmt("%.*s", 
                                   0 == filter_preds.length() ?
                                   (int)true_filter.length() :
                                   filter_preds.length(),
@@ -650,9 +650,9 @@ int ObDbmsXplan::get_plan_info_by_plan_table(sql::ObExecContext &ctx,
       LOG_WARN("failed to assign string", K(ret));
     }
   } else {
-    if (OB_FAIL(filter.assign_fmt("STATEMENT_ID='%.*s' AND %.*s",
-                                  statement_id.length(),
-                                  statement_id.ptr(),
+    if (OB_FAIL(filter.assign_fmt("STATEMENT_ID='%.*s' AND %.*s", 
+                                  statement_id.length(), 
+                                  statement_id.ptr(), 
                                   0 == filter_preds.length() ?
                                   (int)true_filter.length() :
                                   filter_preds.length(),
@@ -724,7 +724,7 @@ int ObDbmsXplan::get_plan_info_by_id(sql::ObExecContext &ctx,
                                       const ObString &svr_ip,
                                       int64_t svr_port,
                                       uint64_t plan_id,
-                                      const ObString &sql_handle,
+                                      const ObString &sql_handle, 
                                       uint64_t plan_hash,
                                       ObIArray<ObSqlPlanItem*> &plan_infos)
 {
@@ -791,8 +791,8 @@ int ObDbmsXplan::get_plan_info_by_id(sql::ObExecContext &ctx,
   } else if (plan_hash != 0 && OB_FAIL(sql.append_fmt("AND PLAN_HASH=%lu ", plan_hash))) {
     LOG_WARN("failed to append string", K(ret));
   } else if (!sql_handle.empty() &&
-             OB_FAIL(sql.append_fmt("AND SQL_ID='%.*s' ",
-                                    sql_handle.length(),
+             OB_FAIL(sql.append_fmt("AND SQL_ID='%.*s' ", 
+                                    sql_handle.length(), 
                                     sql_handle.ptr()))) {
     LOG_WARN("failed to assign string", K(ret));
   } else if (OB_FAIL(sql.append_fmt("ORDER BY ID "))) {
@@ -827,12 +827,12 @@ int ObDbmsXplan::get_plan_info_by_id(sql::ObExecContext &ctx,
               AND SQL_ID='%.*s' \
               %s )\
             WHERE RANK=1 ) ",
-            tenant_id,
-            svr_ip.length(),
-            svr_ip.ptr(),
-            svr_port,
-            plan_hash,
-            sql_handle.length(),
+            tenant_id, 
+            svr_ip.length(), 
+            svr_ip.ptr(), 
+            svr_port,  
+            plan_hash, 
+            sql_handle.length(), 
             sql_handle.ptr(),
             plan_id_char))) {
         LOG_WARN("failed to assign string", K(ret));
@@ -901,7 +901,7 @@ int ObDbmsXplan::get_baseline_plan_info(sql::ObExecContext &ctx,
                                         const ObString &svr_ip,
                                         int64_t svr_port,
                                         const ObString &sql_handle,
-                                        uint64_t plan_hash,
+                                        uint64_t plan_hash, 
                                         ObIArray<ObSqlPlanItem*> &plan_infos)
 {
   int ret = OB_SUCCESS;
@@ -959,7 +959,7 @@ int ObDbmsXplan::get_baseline_plan_info(sql::ObExecContext &ctx,
                   AND SVR_PORT=%ld\
                   AND PLAN_HASH=%lu\
                   AND SQL_ID='%.*s'\
-                  ORDER BY ID",
+                  ORDER BY ID", 
                   tenant_id,
                   svr_ip.length(),
                   svr_ip.ptr(),
@@ -993,12 +993,12 @@ int ObDbmsXplan::get_baseline_plan_info(sql::ObExecContext &ctx,
             AND PLAN_HASH=%lu \
             AND SQL_ID='%.*s' ) \
           WHERE RANK=1 ) ",
-          tenant_id,
-          svr_ip.length(),
-          svr_ip.ptr(),
-          svr_port,
-          plan_hash,
-          sql_handle.length(),
+          tenant_id, 
+          svr_ip.length(), 
+          svr_ip.ptr(), 
+          svr_port,  
+          plan_hash, 
+          sql_handle.length(), 
           sql_handle.ptr()))) {
       LOG_WARN("failed to assign string", K(ret));
     } else if OB_FAIL(sql.append_fmt("SELECT \
@@ -1062,8 +1062,8 @@ int ObDbmsXplan::get_baseline_plan_info(sql::ObExecContext &ctx,
 }
 
 int ObDbmsXplan::get_baseline_plan_detail(sql::ObExecContext &ctx,
-                                          const ObString& sql_handle,
-                                          const ObString& plan_name,
+                                          const ObString& sql_handle, 
+                                          const ObString& plan_name, 
                                           int64_t tenant_id,
                                           PlanText &plan_text,
                                           bool from_plan_cache)
@@ -1075,10 +1075,10 @@ int ObDbmsXplan::get_baseline_plan_detail(sql::ObExecContext &ctx,
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null session", K(ret));
-  } else if (is_sys_tenant(session->get_effective_tenant_id()) &&
+  } else if (is_sys_tenant(session->get_effective_tenant_id()) && 
       OB_FAIL(baseline_filter.assign_fmt("__all_virtual_plan_baseline_item where tenant_id=%ld", tenant_id))) {
     LOG_WARN("failed to assign string", K(ret));
-  } else if (!is_sys_tenant(session->get_effective_tenant_id()) &&
+  } else if (!is_sys_tenant(session->get_effective_tenant_id()) && 
              OB_FAIL(baseline_filter.assign_fmt("__all_plan_baseline_item"))) {
     LOG_WARN("failed to assign string", K(ret));
   } else if (OB_FAIL(sql.assign_fmt("select * from (select ORIGIN_SQL sql_text,\
@@ -1104,9 +1104,9 @@ int ObDbmsXplan::get_baseline_plan_detail(sql::ObExecContext &ctx,
                               plan_name.length(),
                               plan_name.ptr()))) {
     LOG_WARN("failed to assign string", K(ret));
-  } else if (OB_FAIL(inner_get_baseline_plan_detail(ctx,
-                                                    sql,
-                                                    plan_text,
+  } else if (OB_FAIL(inner_get_baseline_plan_detail(ctx, 
+                                                    sql, 
+                                                    plan_text, 
                                                     from_plan_cache))) {
     LOG_WARN("failed to get plan info", K(ret));
   }
@@ -1130,8 +1130,8 @@ int ObDbmsXplan::inner_get_baseline_plan_detail(sql::ObExecContext &ctx,
       if (OB_ISNULL(my_session)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("session is null", K(ret), K(my_session));
-      } else if (OB_FAIL(sql_proxy->read(res,
-                                         my_session->get_effective_tenant_id(),
+      } else if (OB_FAIL(sql_proxy->read(res, 
+                                         my_session->get_effective_tenant_id(), 
                                          sql.ptr()))) {
         LOG_WARN("failed to execute recover sql", K(ret), K(sql));
       } else if (OB_ISNULL(mysql_result = res.get_result())) {
@@ -1139,9 +1139,9 @@ int ObDbmsXplan::inner_get_baseline_plan_detail(sql::ObExecContext &ctx,
         LOG_WARN("execute sql fail", K(ret), K(my_session->get_effective_tenant_id()), K(sql));
       }
       if (OB_SUCC(ret) && OB_SUCC(mysql_result->next())) {
-        if (OB_FAIL(format_baseline_plan_detail(ctx,
-                                                *mysql_result,
-                                                plan_text,
+        if (OB_FAIL(format_baseline_plan_detail(ctx, 
+                                                *mysql_result, 
+                                                plan_text, 
                                                 from_plan_cache))) {
           LOG_WARN("failed to format plan detail", K(ret));
         }
@@ -1155,7 +1155,7 @@ int ObDbmsXplan::inner_get_baseline_plan_detail(sql::ObExecContext &ctx,
 }
 
 int ObDbmsXplan::format_baseline_plan_detail(sql::ObExecContext &ctx,
-                                              sqlclient::ObMySQLResult& mysql_result,
+                                              sqlclient::ObMySQLResult& mysql_result, 
                                               PlanText &plan_text,
                                               bool from_plan_cache)
 {
@@ -1361,8 +1361,8 @@ int ObDbmsXplan::get_plan_info_by_session_id(sql::ObExecContext &ctx,
   return ret;
 }
 
-int ObDbmsXplan::inner_get_plan_info(sql::ObExecContext &ctx,
-                                    const ObSqlString& sql,
+int ObDbmsXplan::inner_get_plan_info(sql::ObExecContext &ctx, 
+                                    const ObSqlString& sql, 
                                     ObIArray<ObSqlPlanItem*> &plan_infos,
                                     const bool is_from_wr)
 {
@@ -1378,8 +1378,8 @@ int ObDbmsXplan::inner_get_plan_info(sql::ObExecContext &ctx,
       if (OB_ISNULL(my_session)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("session is null", K(ret), K(my_session));
-      } else if (OB_FAIL(sql_proxy->read(res,
-                                         my_session->get_effective_tenant_id(),
+      } else if (OB_FAIL(sql_proxy->read(res, 
+                                         my_session->get_effective_tenant_id(), 
                                          sql.ptr()))) {
         LOG_WARN("failed to execute recover sql", K(ret), K(sql));
       } else if (OB_ISNULL(mysql_result = res.get_result())) {
@@ -1409,8 +1409,8 @@ int ObDbmsXplan::inner_get_plan_info(sql::ObExecContext &ctx,
   return ret;
 }
 
-int ObDbmsXplan::inner_get_plan_info_use_current_session(sql::ObExecContext &ctx,
-                                                        const ObSqlString& sql,
+int ObDbmsXplan::inner_get_plan_info_use_current_session(sql::ObExecContext &ctx, 
+                                                        const ObSqlString& sql, 
                                                         ObIArray<ObSqlPlanItem*> &plan_infos)
 {
   int ret = OB_SUCCESS;
@@ -1463,7 +1463,7 @@ int ObDbmsXplan::inner_get_plan_info_use_current_session(sql::ObExecContext &ctx
 }
 
 int ObDbmsXplan::read_plan_info_from_result(sql::ObExecContext &ctx,
-                                            sqlclient::ObMySQLResult& mysql_result,
+                                            sqlclient::ObMySQLResult& mysql_result, 
                                             ObSqlPlanItem &plan_info,
                                             bool is_from_wr)
 {

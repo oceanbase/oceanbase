@@ -32,7 +32,7 @@ public:
   static int calc_quote_expr(const ObExpr &expr, ObEvalCtx &ctx,
                                  ObDatum &res_datum);
   DECLARE_SET_LOCAL_SESSION_VARS;
-
+  
 private:
   static const int16_t APPEND_LEN = 2;
   static const int16_t LEN_OF_NULL = 4;

@@ -164,7 +164,7 @@ private:
   // @param[in]: start_scn
   // @param[in]: tablet_list
   // @param[out]: transfer_out_info
-  int build_tx_finish_transfer_in_info_(const share::ObTransferTaskID &task_id, const share::ObLSID &src_ls_id,
+  int build_tx_finish_transfer_in_info_(const share::ObTransferTaskID &task_id, const share::ObLSID &src_ls_id, 
       const share::ObLSID &dest_ls_id,
       const share::SCN &start_scn, const common::ObArray<share::ObTransferTabletInfo> &tablet_list,
       ObTXFinishTransferInInfo &transfer_out_info);
@@ -175,7 +175,7 @@ private:
   // @param[in]: finish_scn
   // @param[in]: tablet_list
   // @param[out]: transfer_out_info
-  int build_tx_finish_transfer_out_info_(const share::ObTransferTaskID &task_id, const share::ObLSID &src_ls_id,
+  int build_tx_finish_transfer_out_info_(const share::ObTransferTaskID &task_id, const share::ObLSID &src_ls_id, 
       const share::ObLSID &dest_ls_id,
       const share::SCN &finish_scn, const common::ObArray<share::ObTransferTabletInfo> &tablet_list,
       ObTXFinishTransferOutInfo &transfer_out_info);
@@ -262,24 +262,24 @@ private:
   int select_transfer_task_for_update_(const share::ObTransferTaskID &task_id, ObMySQLTransaction &trans);
 
   int record_server_event_(
-      const int32_t result,
+      const int32_t result, 
       const bool is_ready,
       const int64_t round,
       const share::SCN &start_scn) const;
   int write_server_event_(
-      const int32_t result,
-      const ObSqlString &extra_info,
+      const int32_t result, 
+      const ObSqlString &extra_info, 
       const share::ObTransferStatus &status) const;
 
   void process_perf_diagnose_info_(
-      const ObStorageHACostItemName name,
+      const ObStorageHACostItemName name, 
       const int64_t start_ts,
       const int64_t tablet_count,
       const int64_t round, const bool is_report) const;
 
   void process_perf_diagnose_info_(
-      const ObStorageHACostItemName name,
-      const int64_t round,
+      const ObStorageHACostItemName name, 
+      const int64_t round, 
       const bool is_report) const;
 
 private:

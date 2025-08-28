@@ -287,7 +287,7 @@ private:
   //ObNullEndTransCallback null_callback_;
   // used for manage ObSQLSessionInfo
   HashMap sessinfo_map_;
-  // design doc:
+  // design doc: 
   // |<---------------------------------32bit---------------------------->|
   // 31b 30b   29b                18b  16b                              0b
   // +----+------------------------------+--------------------------------+

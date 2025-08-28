@@ -2625,7 +2625,7 @@ int ObMultiVersionSchemaService::refresh_and_add_schema(const ObIArray<uint64_t>
       } else if (check_bootstrap) {
         // The schema refresh triggered by the heartbeat is forbidden in the bootstrap phase,
         // and it needs to be judged in the schema_refresh_mutex_lock
-        //
+        // 
         int64_t baseline_schema_version = OB_INVALID_VERSION;
         if (OB_FAIL(get_baseline_schema_version(OB_SYS_TENANT_ID, true/*auto_update*/, baseline_schema_version))) {
           LOG_WARN("fail to get baseline_schema_version", K(ret));
@@ -2734,7 +2734,7 @@ int ObMultiVersionSchemaService::get_schema_version_by_timestamp(
 // Unlike the startup time, liboblog assumes that the Partition set of the tenant's initial user table is empty.
 // In order to ensure that the ddl is not output and the Partition is not obtained,
 // the schema_version needs to be as small as possible.
-//
+// 
 // Discuss several situations:
 // 1. OB_DDL_ADD_TENANT: Indicates a tenant created in a non-split mode,
 //  and the schema_version can be the schema_version corresponding to OB_DDL_ADD_TENANT;
@@ -4220,7 +4220,7 @@ int ObMultiVersionSchemaService::get_tenant_received_broadcast_version(
 
 int ObMultiVersionSchemaService::get_tenant_broadcast_consensus_version(
     const uint64_t tenant_id,
-    int64_t &consensus_version)
+    int64_t &consensus_version) 
 {
   int ret = OB_SUCCESS;
   if (OB_INVALID_TENANT_ID == tenant_id) {

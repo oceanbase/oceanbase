@@ -69,7 +69,7 @@ TEST_F(TestLAMicroKeyManager, test_push_micro_key_to_hashset)
   macro_id.set_second_id(100);  //tablet_id
   macro_id.set_third_id(101);   //seq_id
   macro_id.set_macro_transfer_seq(0); // transfer_seq
-  macro_id.set_tenant_seq(102);  //tenant_seq
+  macro_id.set_tenant_seq(102);  //tenant_seq 
   ObSSMicroBlockCacheKey micro_key;
   ObSSMicroBlockCacheKeyMeta micro_meta;
   micro_key = ObSSMicroBlockCacheKey(ObSSMicroBlockId(macro_id, 103/*offset*/, 104/*size*/));

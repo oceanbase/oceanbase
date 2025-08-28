@@ -402,7 +402,7 @@ private:
                       int64_t first_row_same_order_upper_bound,
                       int64_t last_row_same_order_lower_bound);
 
-
+ 
 
   OB_INLINE int64_t next_nonskip_row_index(int64_t cur_idx, const ObBatchRows &brs);
 

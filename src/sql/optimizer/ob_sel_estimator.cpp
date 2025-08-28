@@ -393,7 +393,7 @@ int ObInSelEstimator::get_in_sel(const OptTableMetas &table_metas,
     const ObColumnRefRawExpr *col = static_cast<const ObColumnRefRawExpr *>(left_expr);
     hash::ObHashSet<ObObj> obj_set;
     ObHistEqualSelHelper helper;
-    if (OB_FAIL(obj_set.create(hash::cal_next_prime(right_expr->get_param_count()),
+    if (OB_FAIL(obj_set.create(hash::cal_next_prime(right_expr->get_param_count()), 
                                "OptSelHashSet", "OptSelHashSet"))) {
       LOG_WARN("failed to create hash set", K(ret), K(right_expr->get_param_count()));
     } else if (OB_FAIL(ObOptSelectivity::get_column_basic_sel(table_metas, ctx, *left_expr, &distinct_sel, &null_sel))) {
@@ -916,10 +916,10 @@ int ObEqualSelEstimator::get_simple_equal_sel(const OptTableMetas &table_metas,
 }
 
 /**
- * For the equal predicate 'a = b', we calculate the NDV of (a, b),
- * and use the maximum number of tuples that might satisfy the equality as the result of predicate filtering.
+ * For the equal predicate 'a = b', we calculate the NDV of (a, b), 
+ * and use the maximum number of tuples that might satisfy the equality as the result of predicate filtering. 
  * Therefore, the selectivity should be 'min(ndv(a), ndv(b)) / ndv(a, b)'.
- * In the case of a join, the left and right sides of the equality are always independent,
+ * In the case of a join, the left and right sides of the equality are always independent, 
  * so the selectivity can be simplified as '1 / max(ndv(a), ndv(b))'.
 */
 int ObEqualSelEstimator::get_cntcol_op_cntcol_sel(const OptTableMetas &table_metas,
@@ -1735,7 +1735,7 @@ int ObLikeSelEstimator::calculate_like_sel_by_substr(const OptTableMetas &table_
   double variable_len = 0;
   double pattern_len = 0;
   double substr_ndv = 1.0;
-  double pattern_ndv = 1.0;
+  double pattern_ndv = 1.0; 
   double substr_nns = 1.0;
   double pattern_nns = 1.0; // assume that the pattern is not null
   double wildcard_length = 1.0;
@@ -2023,7 +2023,7 @@ int ObRangeSelEstimator::get_sel(const OptTableMetas &table_metas,
     LOG_WARN("unexpected expr", KPC(this));
   } else if (OB_FAIL(ObOptSelectivity::get_column_range_sel(
       table_metas, ctx, *column_expr_, range_exprs_, true, selectivity))) {
-    LOG_WARN("failed to calc qual selectivity", KPC(column_expr_), K(range_exprs_), K(ret));
+    LOG_WARN("failed to calc qual selectivity", KPC(column_expr_), K(range_exprs_), K(ret));       
   } else {
     selectivity = ObOptSelectivity::revise_between_0_1(selectivity);
   }
@@ -2599,7 +2599,7 @@ double ObInequalJoinSelEstimator::get_gt_sel(double min1,
   } else if (offset >= min1 + max2 && offset < max1 + min2 && max1 - min1 > OB_DOUBLE_EPSINON) {
     selectivity = (min2 + max2 + 2 * max1 - 2 * offset) / (2 * (max1 - min1));
   } else if (offset < max1 + max2 && total > OB_DOUBLE_EPSINON) {
-    selectivity = (max1 + max2 - offset) * (max1 + max2 - offset) / (2 * total);
+    selectivity = (max1 + max2 - offset) * (max1 + max2 - offset) / (2 * total); 
   } else {
     selectivity = 0.0;
   }
@@ -2616,7 +2616,7 @@ double ObInequalJoinSelEstimator::get_any_gt_sel(double min1,
   if (offset < min1 + max2) {
     selectivity = 1.0;
   } else if (offset < max1 + max2 && max1 - min1 > OB_DOUBLE_EPSINON) {
-    selectivity = (max1 + max2 - offset) / (max1 - min1);
+    selectivity = (max1 + max2 - offset) / (max1 - min1); 
   } else {
     selectivity = 0.0;
   }
@@ -2633,7 +2633,7 @@ double ObInequalJoinSelEstimator::get_all_gt_sel(double min1,
   if (offset < min1 + min2) {
     selectivity = 1.0;
   } else if (offset < max1 + min2 && max1 - min1 > OB_DOUBLE_EPSINON) {
-    selectivity = (max1 + min2 - offset) / (max1 - min1);
+    selectivity = (max1 + min2 - offset) / (max1 - min1); 
   } else {
     selectivity = 0.0;
   }
@@ -2880,7 +2880,7 @@ int ObSelEstimatorFactory::create_estimator(const OptSelectivityCtx &ctx,
   }
   for (int64_t i = 0; OB_SUCC(ret) && NULL == new_estimator && i < func_cnt; i ++) {
     if (OB_FAIL(create_estimator_funcs[i](*this, ctx, *expr, new_estimator))) {
-      LOG_WARN("failed to create estimator", K(ret));
+      LOG_WARN("failed to create estimator", K(ret));  
     }
   }
   if (OB_SUCC(ret) && OB_ISNULL(new_estimator)) {

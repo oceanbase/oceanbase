@@ -43,7 +43,7 @@ public:
   ObBackupTaskSchedulerQueue();
   virtual ~ObBackupTaskSchedulerQueue();
 
-  int init(const int64_t bucket_num,
+  int init(const int64_t bucket_num, 
            obrpc::ObSrvRpcProxy *rpc_proxy,
            ObBackupTaskScheduler *task_scheduler,
            const int64_t max_size,
@@ -133,7 +133,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupTaskSchedulerQueue);
 };
 
-class ObBackupTaskScheduler : public ObBackupBaseService
+class ObBackupTaskScheduler : public ObBackupBaseService 
 {
 public:
   const static int64_t MAX_BACKUP_TASK_QUEUE_LIMIT = 1024;
@@ -189,7 +189,7 @@ private:
   lib::ObMutex scheduler_mtx_;
   ObBackupTaskSchedulerQueue queue_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;
-  common::ObMySQLProxy *sql_proxy_;
+  common::ObMySQLProxy *sql_proxy_; 
   share::schema::ObMultiVersionSchemaService *schema_service_;
   common::ObArray<ObBackupService *> backup_srv_array_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupTaskScheduler);

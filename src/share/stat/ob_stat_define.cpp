@@ -92,7 +92,7 @@ bool ObColumnStatParam::is_valid_refine_min_max_type(const ObObjType type)
       type_class == ColumnTypeClass::ObOTimestampTC ||
       type_class == ColumnTypeClass::ObDecimalIntTC) {
     ret = true;
-  }
+  } 
   return ret;
 }
 
@@ -112,7 +112,7 @@ int StatTable::assign(const StatTable &other)
 }
 
 /**
- * @brief
+ * @brief 
  *  The order to gather tables
  *  1. gather user tables
  *     if table is a 'big table', make it at last
@@ -120,9 +120,9 @@ int StatTable::assign(const StatTable &other)
  *     else, gather them according to the last gather duration
  *  2. gather sys tables
  *     so as to user tables
- * @param other
- * @return true
- * @return false
+ * @param other 
+ * @return true 
+ * @return false 
  */
 bool ObStatTableWrapper::operator<(const ObStatTableWrapper &other) const
 {
@@ -391,7 +391,7 @@ OB_SERIALIZE_MEMBER(ObOptDmlStat,
                     delete_row_count_);
 
 
-class BasicStatAuditItem : public AuditBaseItem
+class BasicStatAuditItem : public AuditBaseItem 
 {
 public:
   BasicStatAuditItem(ObIAllocator &allocator, bool is_index) :
@@ -399,7 +399,7 @@ public:
    cost_time_(0),
    is_index_(is_index) {}
   virtual ~BasicStatAuditItem() {}
-
+  
   virtual int64_t get_cost_time() const { return cost_time_; }
   DECLARE_VIRTUAL_TO_STRING;
 public:
@@ -460,11 +460,11 @@ public:
   HistogramAuditItem(uint64_t part_id,
                      uint64_t topk_cost,
                      uint64_t hybird_cost) :
-    part_id_(part_id),
+    part_id_(part_id), 
     topk_cost_time_(topk_cost),
     hybrid_cost_time_(hybird_cost) {}
   virtual ~HistogramAuditItem() {}
-
+  
   virtual int64_t get_cost_time() const { return topk_cost_time_ + hybrid_cost_time_; }
 
   DECLARE_VIRTUAL_TO_STRING;
@@ -503,7 +503,7 @@ public:
   static const int64_t REFINE_MIN_MAX_USE_INDEX = 1;
   static const int64_t REFINE_MIN_MAX_USE_SKIP_INDEX = 2;
 public:
-  RefineMinMaxAuditItem(int64_t type, uint64_t part_id, int64_t cost_time)
+  RefineMinMaxAuditItem(int64_t type, uint64_t part_id, int64_t cost_time) 
     : type_(type),
       part_id_(part_id),
       cost_time_(cost_time) {}
@@ -546,7 +546,7 @@ public:
   FlushStatsAuditItem(int64_t cost_time) :
     cost_time_(cost_time) {}
   virtual ~FlushStatsAuditItem() {}
-
+  
   virtual int64_t get_cost_time() const { return cost_time_; }
 
   TO_STRING_KV("TYPE", "Flush", "COST", cost_time_);
@@ -582,7 +582,7 @@ public:
   int64_t cost_time_;
 };
 
-ObOptStatGatherAudit::~ObOptStatGatherAudit()
+ObOptStatGatherAudit::~ObOptStatGatherAudit() 
 {
   for (int64_t i = 0; i < audit_items_.count(); ++i) {
     AuditBaseItem* item = audit_items_.at(i);
@@ -639,7 +639,7 @@ DEF_TO_STRING(ObOptStatGatherAudit)
     if (!audit_items_.empty()) {
       ObSEArray<AuditBaseItem*, 4> items;
       if (OB_SUCC(items.assign(audit_items_))) {
-        lib::ob_sort(&items.at(0),
+        lib::ob_sort(&items.at(0), 
                      &items.at(0) + items.count(),
                      AuditBaseItemCmp());
         pos = inner_to_string(items, buf, buf_len);

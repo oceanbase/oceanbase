@@ -214,3 +214,4 @@ int ObDatumStringTextCmpImpl::cmp_out_row(const ObDatum &l, const ObDatum &r, in
   cmp_ret = cmp_ret > 0 ? 1 : (cmp_ret < 0 ? -1 : 0);
   return ret;
 }
+

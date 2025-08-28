@@ -96,7 +96,7 @@ public:
       common::ObIArray<ObLogicTabletID> &sys_tablet_id_list,
       common::ObIArray<ObLogicTabletID> &data_tablet_id_list,
       CopyTabletSimpleInfoMap &simple_info_map);
-  // Restore PENDING tablets meta. PENDING tablets will be exist at restore phase RESTORE_SYS_TABLETS,
+  // Restore PENDING tablets meta. PENDING tablets will be exist at restore phase RESTORE_SYS_TABLETS, 
   // RESTORE_TO_CONSISTENT_SCN, or QUICK_RESTORE. Leader gets the meta from backup, follower gets it from leader.
   // If that tablet meta identified uniquely by transfer sequence exists, replace and update the restore status to EMPTY.
   // Otherwise, just update it to UNDEFINED.
@@ -176,7 +176,7 @@ private:
   {
     bool operator()(const ObSSTableWrapper &lhs, const ObSSTableWrapper &rhs) const;
   };
-
+  
   bool is_inited_;
   ObStorageHATabletsBuilderParam param_;
   DISALLOW_COPY_AND_ASSIGN(ObStorageHATabletsBuilder);
@@ -311,7 +311,7 @@ class ObStorageHATabletBuilderUtil
 public:
   struct BuildTabletTableExtraParam
   {
-    BuildTabletTableExtraParam()
+    BuildTabletTableExtraParam() 
       : is_leader_restore_(false), table_key_(), start_meta_macro_seq_(0) {}
 
     int assign(const BuildTabletTableExtraParam &other);
@@ -322,15 +322,15 @@ public:
     ObITable::TableKey table_key_;
     int64_t start_meta_macro_seq_;
 
-    TO_STRING_KV(K_(is_leader_restore), K_(table_key), K_(start_meta_macro_seq));
+    TO_STRING_KV(K_(is_leader_restore), K_(table_key), K_(start_meta_macro_seq)); 
   };
-
+  
   struct BatchBuildTabletTablesExtraParam
   {
     BatchBuildTabletTablesExtraParam() : need_replace_remote_sstable_(false), param_array_(), is_only_replace_major_(false) {}
 
     int get_extra_table_param(
-        const ObITable::TableKey &table_key,
+        const ObITable::TableKey &table_key, 
         bool &is_exist,
         BuildTabletTableExtraParam &param) const;
     bool has_extra_param() const;

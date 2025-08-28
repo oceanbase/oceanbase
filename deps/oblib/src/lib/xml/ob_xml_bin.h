@@ -24,14 +24,14 @@ namespace common {
 
 /**
  * xml binary format as following
- *
+ * 
  * | common_header | doc_header | element header | key entry | value_entry | real key | real value |
- *
+ * 
 */
 
 /**
  * element header:
- * |uint16_t flags | prefix_ | standalone(uint16_t) |
+ * |uint16_t flags | prefix_ | standalone(uint16_t) | 
 */
 struct ObXmlElementBinHeader {
   ObXmlElementBinHeader()
@@ -80,7 +80,7 @@ public:
 
 /**
  *  header:
- * |uint8_t flags | prefix_ |
+ * |uint8_t flags | prefix_ | 
 */
 struct ObXmlAttrBinHeader {
   ObXmlAttrBinHeader(const ObString& prefix, ObMulModeNodeType type)
@@ -143,7 +143,7 @@ private:
 
 /**
  * text header:
- * | type | value |
+ * | type | value | 
 */
 class ObXmlTextSerializer {
 public:
@@ -176,7 +176,7 @@ struct ObXmlDocBinHeader {
       version_(),
       encoding_(),
       elem_header_(0, "") {}
-
+  
   ObXmlDocBinHeader(int32_t sort_flag)
     : flags_(sort_flag),
       version_len_(0),
@@ -186,7 +186,7 @@ struct ObXmlDocBinHeader {
       encoding_(),
       elem_header_(0, "") {}
 
-  ObXmlDocBinHeader(const ObString& version,
+  ObXmlDocBinHeader(const ObString& version, 
                     const ObString& encoding,
                     uint16_t encoding_empty,
                     uint16_t standalone,
@@ -276,7 +276,7 @@ public:
 
     bool is_valid() { return l_start_ != -1; }
     int64_t size() { return l_last_ - l_start_ + 1; }
-
+  
     MemberArray()
       : g_start_(-1),
         g_last_(-1),
@@ -387,7 +387,7 @@ struct ObXmlBinMetaParser {
     key_entry_size_type_(0),
     value_entry_size_(0),
     value_entry_size_type_(0) {}
-
+  
   ObXmlBinMetaParser(const char* data, int64_t len)
     : ObXmlBinMetaParser()
   {
@@ -429,14 +429,14 @@ struct ObXmlBinMetaParser {
       key_entry_size_type_(other.key_entry_size_type_),
       value_entry_size_(other.value_entry_size_),
       value_entry_size_type_(other.value_entry_size_type_) {}
+  
 
-
-  bool operator==(const ObXmlBinMetaParser& other) {
-    return data_ == other.data_ && len_ == other.len_;
+  bool operator==(const ObXmlBinMetaParser& other) { 
+    return data_ == other.data_ && len_ == other.len_; 
   }
 
-  bool operator<(const ObXmlBinMetaParser& other) {
-    return data_ < other.data_;
+  bool operator<(const ObXmlBinMetaParser& other) { 
+    return data_ < other.data_; 
   }
   ObXmlBinMetaParser& operator=(const ObXmlBinMetaParser& other) {
     new (this) ObXmlBinMetaParser(other);
@@ -456,7 +456,7 @@ struct ObXmlBinMetaParser {
   uint8_t get_key_entry_size_type();
   uint8_t get_value_entry_size();
   uint8_t get_value_entry_size_type();
-
+  
   int64_t get_key_offset(int64_t index);
   int64_t get_value_offset(int64_t index);
   int64_t get_index(int64_t index);
@@ -475,12 +475,12 @@ struct ObXmlBinMetaParser {
 
   uint32_t prefix_len_;
   uint32_t value_len_;
-
+  
   char* key_ptr_;
   char* version_ptr_;
   char* encoding_ptr_;
   char* prefix_ptr_;
-
+  
   char* value_ptr_;
   int32_t index_entry_;
   int32_t key_entry_;
@@ -488,7 +488,7 @@ struct ObXmlBinMetaParser {
 
   ObMulModeNodeType type_;
   int32_t child_pos_;
-
+  
   int32_t idx_;
   int32_t sort_idx_;
   bool parsed_;
@@ -502,13 +502,13 @@ struct ObXmlBinMetaParser {
 
   uint8_t index_entry_size_;
   uint8_t index_entry_size_type_;
-
+  
   uint8_t key_entry_size_;
   uint8_t key_entry_size_type_;
-
+  
   uint8_t value_entry_size_;
   uint8_t value_entry_size_type_;
-
+  
   TO_STRING_KV(K(len_),
                K(total_),
                K(count_),
@@ -549,14 +549,14 @@ public:
     : ObIMulModeBase(ObNodeMemType::BINARY_TYPE, ObNodeDataType::OB_XML_TYPE),
       buffer_(),
       meta_(),
-      ctx_(nullptr),
+      ctx_(nullptr), 
       buffer_for_extend_(false) {}
 
   ObXmlBin(const ObXmlBin& other, ObMulModeMemCtx* ctx)
     : ObIMulModeBase(ObNodeMemType::BINARY_TYPE, ObNodeDataType::OB_XML_TYPE),
       buffer_(),
       meta_(other.meta_),
-      ctx_(ctx),
+      ctx_(ctx), 
       buffer_for_extend_(false)
   {
     if (ctx && ctx->allocator_) {
@@ -591,7 +591,7 @@ public:
   {
   }
 
-  ObXmlBin& operator=(const ObXmlBin& rhs)
+  ObXmlBin& operator=(const ObXmlBin& rhs) 
   {
     new (this) ObXmlBin(rhs);
     return *this;
@@ -677,7 +677,7 @@ public:
 
   virtual int get_value(ObIMulModeBase*& value, int64_t index = -1);
 
-
+   
   virtual int get_value(ObString& value, int64_t index = -1);
 
   ObString get_prefix();
@@ -685,7 +685,7 @@ public:
   ObString get_version();
 
   uint16_t get_encoding_flag() { return meta_.encoding_val_empty_;}
-
+  
   uint16_t has_xml_decl() { return meta_.has_xml_decl_;}
   uint16_t is_unparse() { return meta_.is_unparse_;}
   ObIMulModeBase* get_attribute_handle() { return nullptr; }
@@ -701,7 +701,7 @@ public:
   bool get_is_empty();
 
   bool has_flags(ObMulModeNodeFlag flag);
-
+  
   /**
    * under current node
    * get specified element's key string
@@ -740,12 +740,12 @@ public:
   int get_before(ObIArray<ObIMulModeBase*>& nodes, ObMulModeFilter* filter = nullptr);
 
   int get_descendant(ObIArray<ObIMulModeBase*>& nodes, scan_type type, ObMulModeFilter* filter = nullptr);
-
+  
   /**
    * get all childrent member under current node, whose key string is equal with input key stirng
   */
   int get_children(const ObString& key, ObIArray<ObIMulModeBase*>& res, ObMulModeFilter* filter = nullptr);
-
+  
   /**
    * current node's binary
   */
@@ -754,7 +754,7 @@ public:
   /**
    * for node compare
    * current json use
-   */
+   */ 
   virtual int compare(const ObIMulModeBase &other, int &res) { return 0; }
 
   /**
@@ -860,14 +860,14 @@ public:
   bool operator!=(const ObXmlBinIterator& rhs);
   bool operator<=(const ObXmlBinIterator& rhs);
 
-  int64_t to_string(char *buf, const int64_t buf_len) const {
+  int64_t to_string(char *buf, const int64_t buf_len) const { 
     int64_t pos = 0;
     databuff_printf(buf, buf_len, pos, "cur_pos = %ld, total_=%ld", cur_pos_, total_);
-    return pos;
+    return pos;  
   }
-
+  
 protected:
-
+  
   bool is_valid_;
   bool is_sorted_iter_;
   int error_code_;
@@ -881,22 +881,22 @@ protected:
 
 typedef struct ObBinMergeKeyInfo {
   ObBinMergeKeyInfo()
-    : key_ptr_(nullptr),
-     key_len_(0),
-     origin_index_(0),
-     text_index_(0),
+    : key_ptr_(nullptr), 
+     key_len_(0), 
+     origin_index_(0), 
+     text_index_(0), 
      is_origin_(false) {}
   ObBinMergeKeyInfo(char* key_ptr, int64_t key_len, int64_t origin_index, int64_t text_index, bool is_origin)
-   : key_ptr_(key_ptr),
-     key_len_(key_len),
-     origin_index_(origin_index),
-     text_index_(text_index),
+   : key_ptr_(key_ptr), 
+     key_len_(key_len), 
+     origin_index_(origin_index), 
+     text_index_(text_index), 
      is_origin_(is_origin) {}
   ObBinMergeKeyInfo(const ObBinMergeKeyInfo& other)
-   : key_ptr_(other.key_ptr_),
-     key_len_(other.key_len_),
-     origin_index_(other.origin_index_),
-     text_index_(other.text_index_),
+   : key_ptr_(other.key_ptr_), 
+     key_len_(other.key_len_), 
+     origin_index_(other.origin_index_), 
+     text_index_(other.text_index_), 
      is_origin_(other.is_origin_) {}
   char* key_ptr_;
   int64_t key_len_;
@@ -945,26 +945,26 @@ public:
 class ObXmlBinMerge : public ObMulModeBinMerge {
 protected:
   friend class ObXmlBin;
-  virtual int init_merge_info(ObBinMergeCtx& ctx, ObIMulModeBase& origin,
+  virtual int init_merge_info(ObBinMergeCtx& ctx, ObIMulModeBase& origin, 
                               ObIMulModeBase& patch, ObIMulModeBase& res);
-  virtual int if_need_merge(ObBinMergeCtx& ctx, ObIMulModeBase& origin,
+  virtual int if_need_merge(ObBinMergeCtx& ctx, ObIMulModeBase& origin, 
                             ObIMulModeBase& patch, ObIMulModeBase& res, bool& need_merge);
-  virtual bool if_need_append_key(ObBinMergeCtx& ctx, ObIMulModeBase& origin,
+  virtual bool if_need_append_key(ObBinMergeCtx& ctx, ObIMulModeBase& origin, 
                                   ObIMulModeBase& patch, ObIMulModeBase& res);
-  virtual int append_res_without_merge(ObBinMergeCtx& ctx, ObIMulModeBase& origin,
+  virtual int append_res_without_merge(ObBinMergeCtx& ctx, ObIMulModeBase& origin, 
                                       ObIMulModeBase& patch, ObIMulModeBase& res);
   virtual int append_value_without_merge(ObBinMergeCtx& ctx, ObIMulModeBase& value, ObIMulModeBase& res);
-  virtual int append_key_without_merge(ObBinMergeCtx& ctx, ObIMulModeBase& origin,
+  virtual int append_key_without_merge(ObBinMergeCtx& ctx, ObIMulModeBase& origin, 
                                       ObMulBinHeaderSerializer& header, ObIMulModeBase& res);
-  virtual int append_merge_key(ObBinMergeCtx& ctx, ObIMulModeBase& origin, ObIMulModeBase& patch,
+  virtual int append_merge_key(ObBinMergeCtx& ctx, ObIMulModeBase& origin, ObIMulModeBase& patch, 
                               ObMulBinHeaderSerializer& header, ObIMulModeBase& res);
-  virtual int append_value_by_idx(bool is_origin, int idx, ObBinMergeCtx& ctx, ObIMulModeBase& origin,
+  virtual int append_value_by_idx(bool is_origin, int idx, ObBinMergeCtx& ctx, ObIMulModeBase& origin, 
                                   ObIMulModeBase& patch, ObMulBinHeaderSerializer& header, ObIMulModeBase& res);
   virtual int set_value_offset(int idx, uint64_t offset, ObBinMergeCtx& ctx, ObIMulModeBase& res);
   virtual uint64_t estimated_length(bool retry, ObBinMergeCtx& ctx, ObIMulModeBase& origin, ObIMulModeBase& patch);
   virtual uint64_t estimated_count(bool retry, ObBinMergeCtx& ctx, ObIMulModeBase& origin, ObIMulModeBase& patch);
   virtual ObMulModeNodeType get_res_type(const ObMulModeNodeType &origin_type, const ObMulModeNodeType &res_type) { return origin_type;}
-  int collect_merge_key(ObBinMergeCtx& ctx, ObIMulModeBase& origin, ObIMulModeBase& patch,
+  int collect_merge_key(ObBinMergeCtx& ctx, ObIMulModeBase& origin, ObIMulModeBase& patch, 
                       ObMulBinHeaderSerializer& header, ObArray<ObBinMergeKeyInfo>& attr_vec);
   int reserve_meta(ObMulBinHeaderSerializer& header);
   void do_sort(ObArray<ObBinMergeKeyInfo>& attr_vec);

@@ -309,7 +309,7 @@ public:
   // for batch
   virtual int inner_get_next_batch(const int64_t max_row_cnt) override;
   void calc_avg_group_mem();
-  OB_INLINE void llc_add_value(int64_t hash_value)
+  OB_INLINE void llc_add_value(int64_t hash_value) 
   {
     ObAggregateProcessor::llc_add_value(hash_value, llc_est_.llc_map_);
     ++llc_est_.est_cnt_;

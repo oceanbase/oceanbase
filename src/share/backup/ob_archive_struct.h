@@ -492,7 +492,7 @@ struct ObPieceKey final
       piece_id_(other.piece_id_) {}
 
   uint64_t hash() const;
-
+  
   int hash(uint64_t &hash_val) const
   {
     hash_val = hash();

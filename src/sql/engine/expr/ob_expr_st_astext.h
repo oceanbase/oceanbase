@@ -28,7 +28,7 @@ class ObExprSTAsText : public ObFuncExprOperator
 {
 public:
   explicit ObExprSTAsText(common::ObIAllocator &alloc,
-                          ObExprOperatorType type,
+                          ObExprOperatorType type, 
                           const char *name,
                           int32_t param_num,
                           int32_t dimension);

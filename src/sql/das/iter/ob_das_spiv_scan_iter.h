@@ -34,7 +34,7 @@ public:
       snapshot_(nullptr),
       scan_iter_(nullptr),
       scan_ctdef_(nullptr),
-      scan_rtdef_(nullptr),
+      scan_rtdef_(nullptr), 
       dim_(UINT_MAX32),
       dim_docid_value_tablet_id_(ObTabletID::INVALID_TABLET_ID) {}
 
@@ -42,9 +42,9 @@ public:
   {
     return ls_id_.is_valid() &&
            nullptr != tx_desc_ &&
-           nullptr != snapshot_ &&
-           nullptr != scan_iter_ &&
-           dim_docid_value_tablet_id_.is_valid();
+           nullptr != snapshot_ && 
+           nullptr != scan_iter_ && 
+           dim_docid_value_tablet_id_.is_valid();    
   }
 
   share::ObLSID ls_id_;
@@ -77,7 +77,7 @@ public:
       is_inited_(false)
 {
 }
-
+  
   virtual ~ObDASSPIVScanIter() {}
   virtual int do_table_scan() override;
   virtual int rescan() override;
@@ -85,13 +85,13 @@ public:
 
   int build_range(ObNewRange &range, uint64_t table_id);
 
-  void set_ls_tablet_id(const share::ObLSID &ls_id, const ObTabletID &related_tablet_id)
+  void set_ls_tablet_id(const share::ObLSID &ls_id, const ObTabletID &related_tablet_id) 
   {
     ls_id_ = ls_id;
     dim_docid_value_tablet_id_ = related_tablet_id;
   }
 
-protected:
+protected: 
   virtual int inner_init(ObDASIterParam &param) override;
   virtual int inner_reuse() override;
   virtual int inner_release() override;

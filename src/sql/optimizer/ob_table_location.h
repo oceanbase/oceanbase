@@ -789,7 +789,7 @@ public:
                                        uint64_t ref_table_id,
                                        ObDASTableLoc *&table_loc);
   bool is_duplicate_table() const { return loc_meta_.is_dup_table_; }
-  bool is_dynamic_replica_select_table() const { return is_dynamic_replica_select_table_; }
+  bool is_dynamic_replica_select_table() const { return is_dynamic_replica_select_table_; } 
   void set_dynamic_replica_select_table(const bool is_dynamic_replica_select_table) {
     is_dynamic_replica_select_table_ = is_dynamic_replica_select_table;
   }
@@ -1021,7 +1021,7 @@ private:
                             RowDesc &row_desc,
                             RowDesc &gen_row_desc,
                             const bool only_gen_cols = false);
-  int check_can_replace(ObRawExpr *gen_col_expr,
+  int check_can_replace(ObRawExpr *gen_col_expr, 
                         ObRawExpr *col_expr,
                         bool &can_replace);
   //add partition column
@@ -1242,7 +1242,7 @@ private:
                          bool &always_true,
                          ObPartLocCalcNode *&calc_node,
                          ObExecContext *exec_ctx);
-
+  
   int calc_list_value_partition_ids(
       ObExecContext &exec_ctx,
       ObDASTabletMapper &tablet_mapper,

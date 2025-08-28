@@ -295,7 +295,7 @@ int ObGeoInteriorPointVisitor::inner_calculate_crossing_points(
   for (iter++; iter < ring.end(); iter++) {
     if (iter->get<1>() < ymin) {
       ymin = iter->get<1>();
-    }
+    } 
     if (iter->get<1>() > ymax) {
       ymax = iter->get<1>();
     }

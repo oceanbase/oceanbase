@@ -22,7 +22,7 @@ namespace obrpc
 {
 class ObNetKeepAlive;
 }
-namespace logservice
+namespace logservice 
 {
 class IObNetKeepAliveAdapter {
 public:

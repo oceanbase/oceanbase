@@ -29,7 +29,7 @@ namespace sql
  *    document token count: count of tokens in specific document
  *    average document token count: average count of tokens in document in retrieval domain
  *    related token count: count of query token in specific document
- *
+ *  
  *    p_k1, p_b, p_epsilon: parameters to tune bm25 score, hard coded for now.
  */
 class ObExprBM25 : public ObFuncExprOperator

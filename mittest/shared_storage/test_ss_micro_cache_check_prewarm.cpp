@@ -19,13 +19,13 @@
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "test_ss_common_util.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace storage
+namespace storage 
 {
 using namespace oceanbase::common;
 
-class TestSSMicroCacheCheckPrewarm : public ::testing::Test
+class TestSSMicroCacheCheckPrewarm : public ::testing::Test 
 {
 public:
   TestSSMicroCacheCheckPrewarm() {}
@@ -69,7 +69,7 @@ TEST_F(TestSSMicroCacheCheckPrewarm, test_check_prewarm)
   ObSSExecuteBlkCheckpointTask &blk_ckpt_task = micro_cache->task_runner_.blk_ckpt_task_;
   blk_ckpt_task.is_inited_ = false;
   usleep(1000 * 1000);
-
+  
   ObSSMemDataManager *mem_data_mgr = &(micro_cache->mem_data_mgr_);
   ASSERT_NE(nullptr, mem_data_mgr);
   ObSSMicroMetaManager *micro_meta_mgr = &(micro_cache->micro_meta_mgr_);
@@ -118,12 +118,12 @@ TEST_F(TestSSMicroCacheCheckPrewarm, test_check_prewarm)
     ASSERT_NE(nullptr, micro_meta); \
     ASSERT_EQ(true, micro_meta->is_in_l1_); \
     ASSERT_EQ(false, micro_meta->is_in_ghost_); \
-
+  
   #define CHECK_IN_B1(micro_meta) \
     ASSERT_NE(nullptr, micro_meta); \
     ASSERT_EQ(true, micro_meta->is_in_l1_); \
     ASSERT_EQ(true, micro_meta->is_in_ghost_); \
-
+  
   #define CHECK_IN_T2(micro_meta) \
     ASSERT_NE(nullptr, micro_meta); \
     ASSERT_EQ(false, micro_meta->is_in_l1_); \
@@ -133,7 +133,7 @@ TEST_F(TestSSMicroCacheCheckPrewarm, test_check_prewarm)
     ASSERT_NE(nullptr, micro_meta); \
     ASSERT_EQ(false, micro_meta->is_in_l1_); \
     ASSERT_EQ(true, micro_meta->is_in_ghost_); \
-
+  
   #define GET_CURR_ARC_SEG_CNT() \
     int64_t ori_t1_cnt = arc_info.seg_info_arr_[ARC_T1].cnt_; \
     int64_t ori_b1_cnt = arc_info.seg_info_arr_[ARC_B1].cnt_; \
@@ -269,7 +269,7 @@ TEST_F(TestSSMicroCacheCheckPrewarm, test_check_prewarm)
     ObSSCacheHitType hit_type = ObSSCacheHitType::SS_CACHE_MISS;
     ObSSMicroBaseInfo micro_info;
     ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::init_io_info(io_info, tmp_micro_key, micro_size, read_buf));
-    ASSERT_EQ(OB_SUCCESS, micro_cache->inner_get_micro_block_handle(tmp_micro_key, micro_info,
+    ASSERT_EQ(OB_SUCCESS, micro_cache->inner_get_micro_block_handle(tmp_micro_key, micro_info, 
       micro_meta_handle, mem_blk_handle, io_info.phy_block_handle_, hit_type, false/*update_arc*/));
     CHECK_IN_B1(tmp_micro_meta);
     ASSERT_EQ(hit_type, ObSSCacheHitType::SS_CACHE_MISS);
@@ -304,7 +304,7 @@ TEST_F(TestSSMicroCacheCheckPrewarm, test_check_prewarm)
     CHECK_IN_B2(tmp_micro_meta);
     ASSERT_EQ(ori_t2_cnt, arc_info.seg_info_arr_[ARC_T2].cnt_);
     ASSERT_EQ(ori_b2_cnt + 1, arc_info.seg_info_arr_[ARC_B2].cnt_);
-
+    
     // 3.2.3 get existed B2 micro_block. Res: still in B2, but marked as invalid
     io_info.reset();
     mem_blk_handle.reset();
@@ -312,7 +312,7 @@ TEST_F(TestSSMicroCacheCheckPrewarm, test_check_prewarm)
     hit_type = ObSSCacheHitType::SS_CACHE_MISS;
     micro_info.reset();
     ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::init_io_info(io_info, tmp_micro_key, micro_size, read_buf));
-    ASSERT_EQ(OB_SUCCESS, micro_cache->inner_get_micro_block_handle(tmp_micro_key, micro_info,
+    ASSERT_EQ(OB_SUCCESS, micro_cache->inner_get_micro_block_handle(tmp_micro_key, micro_info, 
       micro_meta_handle, mem_blk_handle, io_info.phy_block_handle_, hit_type, true/*update_arc*/));
     CHECK_IN_B2(tmp_micro_meta);
     ASSERT_EQ(hit_type, ObSSCacheHitType::SS_CACHE_MISS);

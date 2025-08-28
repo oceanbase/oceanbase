@@ -251,7 +251,7 @@ int ObExprRepeat::calc(ObObj &result,
   } else if (!ob_is_text_tc(res_type)) {
     ret = repeat(output, is_null, text, count, *allocator, max_result_size);
   } else {
-    ret = repeat_text(res_type, has_lob_header, output, is_null,
+    ret = repeat_text(res_type, has_lob_header, output, is_null, 
                       text, count, *allocator, max_result_size);
   }
   if (OB_FAIL(ret)) {
@@ -308,7 +308,7 @@ int ObExprRepeat::eval_repeat(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_
       ret = repeat(output, is_null,
                    text_str, count->get_int(), expr_res_alloc, max_size);
     } else { // text tc
-      ret = repeat_text(expr.datum_meta_.type_, has_lob_header, output, is_null,
+      ret = repeat_text(expr.datum_meta_.type_, has_lob_header, output, is_null, 
                         text_str, count->get_int(), expr_res_alloc, max_size);
     }
     if (OB_FAIL(ret)) {
@@ -339,13 +339,13 @@ int ObExprRepeat::repeat_vector(VECTOR_EVAL_FUNC_ARG_DECL)
     const Arg0Vec *arg0_vec = static_cast<const Arg0Vec *>(expr.args_[0]->get_vector(ctx));
     const Arg1Vec *arg1_vec = static_cast<const Arg1Vec *>(expr.args_[1]->get_vector(ctx));
 
-    // the count may be a variable number, repeat expr support the
+    // the count may be a variable number, repeat expr support the 
     ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
     batch_info_guard.set_batch_size(bound.batch_size());
     for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
       if (skip.at(idx) || eval_flags.at(idx)) {
         continue;
-      }
+      } 
 
       batch_info_guard.set_batch_idx(idx);
       if (arg0_vec->is_null(idx) || arg1_vec->is_null(idx)) {

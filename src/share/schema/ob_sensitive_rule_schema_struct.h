@@ -26,22 +26,22 @@ struct ObSensitiveFieldItem final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObSensitiveFieldItem()
+  ObSensitiveFieldItem() 
     : table_id_(common::OB_INVALID_ID),
       column_id_(common::OB_INVALID_ID)
   {}
-
-  ObSensitiveFieldItem(const uint64_t table_id, const uint64_t column_id)
-    : table_id_(table_id),
-      column_id_(column_id)
+  
+  ObSensitiveFieldItem(const uint64_t table_id, const uint64_t column_id) 
+    : table_id_(table_id), 
+      column_id_(column_id) 
   {}
 
   bool operator==(const ObSensitiveFieldItem &other) const {
     return table_id_ == other.table_id_ && column_id_ == other.column_id_;
   }
-
+  
   ~ObSensitiveFieldItem() {}
-
+  
   void reset()
   {
     table_id_ = common::OB_INVALID_ID;
@@ -121,10 +121,10 @@ public:
   OB_INLINE int set_method(const common::ObString &method) { return deep_copy_str(method, method_); }
   OB_INLINE int set_sensitive_field_items(const ObIArray<ObSensitiveFieldItem> &sensitive_field_items) { return sensitive_field_items_.assign(sensitive_field_items); }
   OB_INLINE int add_sensitive_field_item(ObSensitiveFieldItem &item) { return sensitive_field_items_.push_back(item); }
-  OB_INLINE int add_sensitive_field_item(uint64_t table_id, uint64_t column_id)
-  {
+  OB_INLINE int add_sensitive_field_item(uint64_t table_id, uint64_t column_id) 
+  { 
     ObSensitiveFieldItem item(table_id, column_id);
-    return sensitive_field_items_.push_back(item);
+    return sensitive_field_items_.push_back(item); 
   }
   // get methods
   OB_INLINE uint64_t get_tenant_id() const { return tenant_id_; }
@@ -145,12 +145,12 @@ public:
   int64_t get_convert_size() const override;
 
   // other methods
-  TO_STRING_KV(K_(tenant_id),
-               K_(sensitive_rule_id),
-               K_(protection_policy),
-               K_(schema_version),
-               K_(sensitive_rule_name),
-               K_(method),
+  TO_STRING_KV(K_(tenant_id), 
+               K_(sensitive_rule_id), 
+               K_(protection_policy), 
+               K_(schema_version), 
+               K_(sensitive_rule_name), 
+               K_(method), 
                K_(enabled),
                K_(sensitive_field_items));
 private:
@@ -167,11 +167,11 @@ private:
 struct ObSensitiveRulePrivSortKey
 {
   ObSensitiveRulePrivSortKey() : tenant_id_(OB_INVALID_ID), user_id_(OB_INVALID_ID) {}
-  ObSensitiveRulePrivSortKey(const uint64_t tenant_id,
-                             const uint64_t user_id,
-                             const common::ObString &sensitive_rule)
+  ObSensitiveRulePrivSortKey(const uint64_t tenant_id, 
+                             const uint64_t user_id, 
+                             const common::ObString &sensitive_rule) 
     : tenant_id_(tenant_id), user_id_(user_id), sensitive_rule_(sensitive_rule) {}
-
+  
   bool operator==(const ObSensitiveRulePrivSortKey &rhs) const
   {
     return (tenant_id_ == rhs.tenant_id_)
@@ -239,15 +239,15 @@ public:
   bool operator==(const ObSensitiveRulePriv &other);
 
   // for sort
-  ObSensitiveRulePrivSortKey get_sort_key() const
+  ObSensitiveRulePrivSortKey get_sort_key() const 
   { return ObSensitiveRulePrivSortKey(tenant_id_, user_id_, sensitive_rule_); }
   static bool cmp(const ObSensitiveRulePriv *lhs, const ObSensitiveRulePriv *rhs)
   { return (NULL != lhs && NULL != rhs) ? lhs->get_sort_key() < rhs->get_sort_key() : false; }
-  static bool cmp_sort_key(const ObSensitiveRulePriv *lhs, const ObSensitiveRulePrivSortKey &sort_key)
+  static bool cmp_sort_key(const ObSensitiveRulePriv *lhs, const ObSensitiveRulePrivSortKey &sort_key) 
   { return NULL != lhs ? lhs->get_sort_key() < sort_key : false; }
   static bool equal(const ObSensitiveRulePriv *lhs, const ObSensitiveRulePriv *rhs)
   { return (NULL != lhs && NULL != rhs) ? lhs->get_sort_key() == rhs->get_sort_key() : false; }
-  static bool equal_sort_key(const ObSensitiveRulePriv *lhs, const ObSensitiveRulePrivSortKey &sort_key)
+  static bool equal_sort_key(const ObSensitiveRulePriv *lhs, const ObSensitiveRulePrivSortKey &sort_key) 
   { return NULL != lhs ? lhs->get_sort_key() == sort_key : false; }
 
   // set methods

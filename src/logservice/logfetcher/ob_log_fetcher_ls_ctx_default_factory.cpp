@@ -81,3 +81,4 @@ int ObLogFetcherLSCtxDefaultFactory::free(LSFetchCtx *ptr)
 
 } // namespace logfetcher
 } // namespace oceanbase
+

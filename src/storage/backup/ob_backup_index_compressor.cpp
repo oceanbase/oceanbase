@@ -30,7 +30,7 @@ ObBackupIndexBlockCompressor::ObBackupIndexBlockCompressor()
 
 ObBackupIndexBlockCompressor::~ObBackupIndexBlockCompressor()
 {
-
+  
 }
 
 void ObBackupIndexBlockCompressor::reuse()

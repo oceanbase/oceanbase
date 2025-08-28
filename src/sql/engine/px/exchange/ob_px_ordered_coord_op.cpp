@@ -271,7 +271,7 @@ int ObPxOrderedCoordOp::next_row(ObReceiveRowReader &reader, bool &wait_next_msg
   int ret = OB_SUCCESS;
   wait_next_msg = true;
   LOG_TRACE("Begin next_row");
-  metric_.mark_interval_start();
+  metric_.mark_interval_start(); 
   ret = reader.get_next_row(MY_SPEC.child_exprs_, MY_SPEC.dynamic_const_exprs_, eval_ctx_);
   metric_.mark_interval_end(&time_recorder_);
   if (OB_ITER_END == ret) {

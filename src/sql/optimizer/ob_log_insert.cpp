@@ -74,7 +74,7 @@ const char* ObLogInsert::get_name() const
   return ret;
 }
 
-int ObLogInsert::get_plan_item_info(PlanText &plan_text,
+int ObLogInsert::get_plan_item_info(PlanText &plan_text, 
                                 ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
@@ -83,17 +83,17 @@ int ObLogInsert::get_plan_item_info(PlanText &plan_text,
   } else {
     BEGIN_BUF_PRINT;
     if (OB_FAIL(print_table_infos(ObString::make_string("columns"),
-                                  buf,
-                                  buf_len,
-                                  pos,
+                                  buf, 
+                                  buf_len, 
+                                  pos, 
                                   type))) {
       LOG_WARN("failed to print table info", K(ret));
     } else if (NULL != table_partition_info_) {
       if (OB_FAIL(BUF_PRINTF(", "))) {
         LOG_WARN("BUG_PRINTF fails", K(ret));
-      } else if (OB_FAIL(explain_print_partitions(*table_partition_info_,
-                                                  buf,
-                                                  buf_len,
+      } else if (OB_FAIL(explain_print_partitions(*table_partition_info_, 
+                                                  buf, 
+                                                  buf_len, 
                                                   pos))) {
         LOG_WARN("Failed to print partitions");
       } else { }//do nothing
@@ -120,9 +120,9 @@ int ObLogInsert::get_plan_item_info(PlanText &plan_text,
       } else if (OB_FAIL(BUF_PRINTF("      update("))) {
         LOG_WARN("BUG_PRINTF fails", K(ret));
       } else if (OB_FAIL(print_assigns(table_insert_info->assignments_,
-                                       buf,
-                                       buf_len,
-                                       pos,
+                                       buf, 
+                                       buf_len, 
+                                       pos, 
                                        type))) {
         LOG_WARN("failed to print assigns", K(ret));
       } else { /* Do nothing */ }

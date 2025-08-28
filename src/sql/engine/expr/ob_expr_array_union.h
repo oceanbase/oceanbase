@@ -29,28 +29,28 @@ public:
     INTERSECT = 1,
     EXCEPT = 2,
   };
-  explicit ObExprArraySetOperation(common::ObIAllocator &alloc,
-              ObExprOperatorType type,
-              const char *name, int32_t param_num,
+  explicit ObExprArraySetOperation(common::ObIAllocator &alloc, 
+              ObExprOperatorType type, 
+              const char *name, int32_t param_num, 
               int32_t dimension);
   virtual ~ObExprArraySetOperation();
-  virtual int calc_result_type2(ObExprResType &type,
-                  ObExprResType &type1,
+  virtual int calc_result_type2(ObExprResType &type, 
+                  ObExprResType &type1, 
                   ObExprResType &type2,
                   common::ObExprTypeCtx &type_ctx) const override;
   virtual int calc_result_typeN(ObExprResType& type,
                   ObExprResType* types,
-                  int64_t param_num,
+                  int64_t param_num, 
                   common::ObExprTypeCtx& type_ctx) const override;
   static int eval_array_set_operation(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res, SetOperation operation);
-  static int eval_array_set_operation_batch(const ObExpr &expr,
+  static int eval_array_set_operation_batch(const ObExpr &expr, 
                 ObEvalCtx &ctx,
-                const ObBitVector &skip,
+                const ObBitVector &skip, 
                 const int64_t batch_size,
                 SetOperation operation);
-  static int eval_array_set_operation_vector(const ObExpr &expr,
+  static int eval_array_set_operation_vector(const ObExpr &expr, 
                 ObEvalCtx &ctx,
-                const ObBitVector &skip,
+                const ObBitVector &skip, 
                 const EvalBound &bound,
                 SetOperation operation);
 private:
@@ -63,18 +63,18 @@ public:
   explicit ObExprArrayUnion(common::ObIAllocator &alloc);
   virtual ~ObExprArrayUnion();
   static int eval_array_union(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
-  static int eval_array_union_batch(const ObExpr &expr,
+  static int eval_array_union_batch(const ObExpr &expr, 
                 ObEvalCtx &ctx,
-                const ObBitVector &skip,
+                const ObBitVector &skip, 
                 const int64_t batch_size);
-  static int eval_array_union_vector(const ObExpr &expr,
+  static int eval_array_union_vector(const ObExpr &expr, 
                 ObEvalCtx &ctx,
-                const ObBitVector &skip,
+                const ObBitVector &skip, 
                 const EvalBound &bound);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
                   const ObRawExpr &raw_expr,
                   ObExpr &rt_expr) const override;
-private:
+private: 
   DISALLOW_COPY_AND_ASSIGN(ObExprArrayUnion);
 };
 

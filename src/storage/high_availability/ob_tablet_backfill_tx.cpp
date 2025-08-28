@@ -1028,7 +1028,7 @@ int ObTabletBackfillTXTask::get_dest_transfer_seq_(const common::ObTabletID &tab
   int ret = OB_SUCCESS;
   transfer_seq = -1;
   ObLSID dest_ls_id;
-  share::SCN unused_scn;
+  share::SCN unused_scn; 
   ObTabletHandle handle;
   ObLSService *ls_service;
   ObLSHandle ls_handle;

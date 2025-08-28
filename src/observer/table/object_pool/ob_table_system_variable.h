@@ -39,7 +39,7 @@ public:
     {
       tenant_kv_mode_ = val;
     }
-  private:
+  private: 
     ObKvModeType tenant_kv_mode_;
   };
 
@@ -122,7 +122,7 @@ public:
         }
       } while (!ATOMIC_CMP_AND_EXCHANGE(&flag_, &old_flag, new_flag));
     }
-  private:
+  private: 
     int64_t binlog_row_image_;
     int64_t kv_group_commit_batch_size_;
     int64_t group_rw_mode_;

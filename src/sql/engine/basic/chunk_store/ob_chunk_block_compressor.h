@@ -27,7 +27,7 @@ public:
   virtual ~ObChunkBlockCompressor();
   void reset();
   int init(const ObCompressorType type);
-  int compress(const char *in, const int64_t in_size, const int64_t max_comp_size,
+  int compress(const char *in, const int64_t in_size, const int64_t max_comp_size, 
                char *out, int64_t &out_size);
   int decompress(const char *in, const int64_t in_size, const int64_t uncomp_size,
       char *out, int64_t &out_size);

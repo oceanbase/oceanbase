@@ -86,16 +86,16 @@ int ObExprArrayLength::eval_array_length(const ObExpr &expr, ObEvalCtx &ctx, ObD
     ObString arr_str = datum_arr->get_string();
     uint32_t len = 0;
     char *raw_str = nullptr;
-    if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator,
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator, 
                                       ObLongTextType,
-                                      CS_TYPE_BINARY,
-                                      true,
+                                      CS_TYPE_BINARY, 
+                                      true, 
                                       arr_str))) {
-      LOG_WARN("fail to get real data.", K(ret), K(arr_str));
+      LOG_WARN("fail to get real data.", K(ret), K(arr_str)); 
     } else if (arr_type->type_id_ == ObNestedType::OB_ARRAY_TYPE){
       raw_str = arr_str.ptr();
       len = *reinterpret_cast<uint32_t *>(raw_str);
-      res.set_uint32(len);
+      res.set_uint32(len);     
     } else if (arr_type->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
       len = arr_str.length() / sizeof(float);
       res.set_uint32(len);
@@ -108,9 +108,9 @@ int ObExprArrayLength::eval_array_length(const ObExpr &expr, ObEvalCtx &ctx, ObD
   return ret;
 }
 
-int ObExprArrayLength::eval_array_length_batch(const ObExpr &expr,
+int ObExprArrayLength::eval_array_length_batch(const ObExpr &expr, 
                                               ObEvalCtx &ctx,
-                                              const ObBitVector &skip,
+                                              const ObBitVector &skip, 
                                               const int64_t batch_size)
 {
   int ret = OB_SUCCESS;
@@ -137,15 +137,15 @@ int ObExprArrayLength::eval_array_length_batch(const ObExpr &expr,
         ObString arr_str = arr_array.at(j)->get_string();
         uint32_t len = 0;
         char *raw_str = nullptr;
-        if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator,
+        if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator, 
                                           ObLongTextType,
-                                          CS_TYPE_BINARY,
-                                          true,
+                                          CS_TYPE_BINARY, 
+                                          true, 
                                           arr_str))) {
           LOG_WARN("fail to get real data.", K(ret), K(arr_str));
         } else if (arr_type->type_id_ == ObNestedType::OB_ARRAY_TYPE){
           raw_str = arr_str.ptr();
-          len = *reinterpret_cast<uint32_t *>(raw_str);
+          len = *reinterpret_cast<uint32_t *>(raw_str);          
           res_datum.at(j)->set_uint32(len);
         } else if (arr_type->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
           len = arr_str.length() / sizeof(float);
@@ -161,9 +161,9 @@ int ObExprArrayLength::eval_array_length_batch(const ObExpr &expr,
   return ret;
 }
 
-int ObExprArrayLength::eval_array_length_vector(const ObExpr &expr,
+int ObExprArrayLength::eval_array_length_vector(const ObExpr &expr, 
                                                 ObEvalCtx &ctx,
-                                                const ObBitVector &skip,
+                                                const ObBitVector &skip, 
                                                 const EvalBound &bound)
 {
   int ret = OB_SUCCESS;
@@ -193,15 +193,15 @@ int ObExprArrayLength::eval_array_length_vector(const ObExpr &expr,
       } else if (!ObCollectionExprUtil::is_compact_fmt_cell(arr_str.ptr())) {
         ret = OB_ERR_UNEXPECTED;
         SQL_LOG(WARN, "unexpected data format", K(ret));
-      } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator,
+      } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator, 
                                             ObLongTextType,
-                                            CS_TYPE_BINARY,
-                                            true,
+                                            CS_TYPE_BINARY, 
+                                            true, 
                                             arr_str))) {
         LOG_WARN("fail to get real data.", K(ret), K(arr_str));
       } else if (arr_type->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
         raw_str = arr_str.ptr();
-        len = *reinterpret_cast<uint32_t *>(raw_str);
+        len = *reinterpret_cast<uint32_t *>(raw_str);                 
         res_vec->set_uint(idx, static_cast<uint64_t>(len));
       } else if (arr_type->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
         len = arr_str.length() / sizeof(float);
@@ -216,8 +216,8 @@ int ObExprArrayLength::eval_array_length_vector(const ObExpr &expr,
   return ret;
 }
 
-int ObExprArrayLength::cg_expr(ObExprCGCtx &expr_cg_ctx,
-                              const ObRawExpr &raw_expr,
+int ObExprArrayLength::cg_expr(ObExprCGCtx &expr_cg_ctx, 
+                              const ObRawExpr &raw_expr, 
                               ObExpr &rt_expr) const
 {
   UNUSED(expr_cg_ctx);

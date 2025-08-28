@@ -271,7 +271,7 @@ int ObDBMSVectorMySql::index_vector_memory_estimate(ObPLExecCtx &ctx, ParamStore
     uint64_t tablet_max_num_vectors = 0;
     ObVectorIndexParam index_param;
 
-    // resolve table name and column name,
+    // resolve table name and column name, 
     if (OB_ISNULL(allocator)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("allocator is null", K(ret));
@@ -422,7 +422,7 @@ int ObDBMSVectorMySql::parse_idx_param(const ObString &idx_type_str,
     LOG_WARN("fail to parser params from string", K(ret), K(param_str));
   } else if (index_param.dist_algorithm_ == VIDA_MAX) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("unexpected setting of vector index param, distance has not been set",
+    LOG_WARN("unexpected setting of vector index param, distance has not been set", 
       K(ret), K(index_param.dist_algorithm_));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "the vector index params of distance not set is");
   } else if (OB_UNLIKELY(dim_count == 0 || dim_count > MAX_DIM_LIMITED)) {

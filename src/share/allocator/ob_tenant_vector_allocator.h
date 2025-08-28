@@ -20,7 +20,7 @@ namespace share {
 
 class ObVectorMemContext {
 public:
-    ObVectorMemContext()
+    ObVectorMemContext() 
     : check_cnt_(0),
       memory_context_(nullptr),
       throttle_tool_(nullptr) {};
@@ -73,12 +73,12 @@ class ObVsagMemContext : public vsag::Allocator,
                          public ObVectorMemContext
 {
 public:
-  ObVsagMemContext(uint64_t *all_vsag_use_mem)
+  ObVsagMemContext(uint64_t *all_vsag_use_mem) 
     : all_vsag_use_mem_(all_vsag_use_mem),
       mem_context_(nullptr) {};
-  ~ObVsagMemContext() {
+  ~ObVsagMemContext() { 
     if (mem_context_ != nullptr) {
-      DESTROY_CONTEXT(mem_context_);
+      DESTROY_CONTEXT(mem_context_); 
       mem_context_ = nullptr;
     }
   }
@@ -120,12 +120,12 @@ private:
 class ObIvfMemContext : public ObVectorMemContext
 {
 public:
-  ObIvfMemContext(uint64_t *all_vsag_use_mem)
+  ObIvfMemContext(uint64_t *all_vsag_use_mem) 
     : all_vsag_use_mem_(all_vsag_use_mem),
       mem_context_(nullptr) {};
-  ~ObIvfMemContext() {
+  ~ObIvfMemContext() { 
     if (mem_context_ != nullptr) {
-      DESTROY_CONTEXT(mem_context_);
+      DESTROY_CONTEXT(mem_context_); 
       mem_context_ = nullptr;
     }
   }

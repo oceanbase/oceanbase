@@ -34,10 +34,10 @@ namespace dbms_scheduler
 {
 ObDBMSSchedFuncSet ObDBMSSchedFuncSet::instance_;
 
-int ObDBMSSchedJobUtils::check_is_valid_name(const ObString &name)
+int ObDBMSSchedJobUtils::check_is_valid_name(const ObString &name) 
 {
   int ret = OB_SUCCESS;
-  if (NULL != name.find('\'') || NULL != name.find('\"') ||
+  if (NULL != name.find('\'') || NULL != name.find('\"') || 
       NULL != name.find(';') || NULL != name.find('`') || NULL != name.find(' ')) {
       ret = OB_ERR_ILLEGAL_NAME;
   }
@@ -53,7 +53,7 @@ int ObDBMSSchedJobUtils::check_is_valid_job_style(const ObString &str)
   return ret;
 }
 
-int ObDBMSSchedJobUtils::check_is_valid_argument_num(const int64_t num)
+int ObDBMSSchedJobUtils::check_is_valid_argument_num(const int64_t num) 
 {
   int ret = OB_SUCCESS;
   if (0 > num) {
@@ -85,7 +85,7 @@ int ObDBMSSchedJobUtils::check_is_valid_sched_type(const ObString &str)
   return ret;
 }
 
-int ObDBMSSchedJobUtils::check_is_valid_state(const ObString &str)
+int ObDBMSSchedJobUtils::check_is_valid_state(const ObString &str) 
 {
   int ret = OB_SUCCESS;
   if (0 != str.case_compare("STARTED") && 0 != str.case_compare("SUCCEEDED") &&
@@ -97,7 +97,7 @@ int ObDBMSSchedJobUtils::check_is_valid_state(const ObString &str)
   return ret;
 }
 
-int ObDBMSSchedJobUtils::check_is_valid_end_date(const int64_t start_date, const int64_t end_date)
+int ObDBMSSchedJobUtils::check_is_valid_end_date(const int64_t start_date, const int64_t end_date) 
 {
   int ret = OB_SUCCESS;
   const int64_t now = ObTimeUtility::current_time();
@@ -116,7 +116,7 @@ int ObDBMSSchedJobUtils::check_is_valid_repeat_interval(const int64_t tenant_id,
   return ret;
 }
 
-int ObDBMSSchedJobUtils::check_is_valid_max_run_duration(const int64_t max_run_duration)
+int ObDBMSSchedJobUtils::check_is_valid_max_run_duration(const int64_t max_run_duration) 
 {
   int ret = OB_SUCCESS;
   if (0 > max_run_duration) {
@@ -306,7 +306,7 @@ int ObDBMSSchedJobInfo::deep_copy(ObIAllocator &allocator, const ObDBMSSchedJobI
   OZ (ob_write_string(allocator, other.this_exec_addr_, this_exec_addr_));
   OZ (ob_write_string(allocator, other.this_exec_trace_id_, this_exec_trace_id_));
   //处理存在兼容性问题的列
-  //job style
+  //job style 
   OZ (ob_write_string(allocator, "REGULAR", job_style_));
 
   return ret;
@@ -407,7 +407,7 @@ int ObDBMSSchedJobUtils::stop_dbms_sched_job(
     if (OB_SUCC(ret)) {
       if (OB_FAIL(sql.append_fmt("select svr_ip, svr_port, session_id from %s where tenant_id = %lu and job_name = \'%.*s\'",
         OB_ALL_VIRTUAL_TENANT_SCHEDULER_RUNNING_JOB_TNAME, tenant_id, job_info.job_name_.length(),job_info.job_name_.ptr()))) {
-        LOG_WARN("append sql failed", KR(ret));
+        LOG_WARN("append sql failed", KR(ret)); 
       } else {
         SMART_VAR(ObMySQLProxy::MySQLResult, result) {
           if (OB_FAIL(sql_client.read(result, sql.ptr()))) {
@@ -535,7 +535,7 @@ int ObDBMSSchedJobUtils::create_dbms_sched_job(
   //check argument
   } else if (OB_FAIL(check_is_valid_argument_num(job_info.number_of_argument_))) {
     ret = OB_INVALID_ARGUMENT;
-
+  
   //check database_id/user_id
   // } else if (OB_INVALID_ID == job_info.database_id_ || OB_INVALID_ID == job_info.user_id_) {
   //   ret = OB_INVALID_ARGUMENT;
@@ -575,7 +575,7 @@ int ObDBMSSchedJobUtils::create_dbms_sched_job(
           OZ (dml.add_gmt_modified(now));
           OZ (dml.add_pk_column("tenant_id",
               ObSchemaUtils::get_extract_tenant_id(job_info.tenant_id_, job_info.tenant_id_)));
-          if ((MOCK_DATA_VERSION_4_2_4_0 <= data_version && DATA_VERSION_4_3_0_0 > data_version) ||
+          if ((MOCK_DATA_VERSION_4_2_4_0 <= data_version && DATA_VERSION_4_3_0_0 > data_version) || 
               data_version > DATA_VERSION_4_3_2_0) {
             OZ (dml.add_column("user_id", job_info.user_id_));
             OZ (dml.add_column("database_id", job_info.database_id_));
@@ -590,7 +590,7 @@ int ObDBMSSchedJobUtils::create_dbms_sched_job(
             OZ (dml.add_column("`interval#`", ObHexEscapeSqlStr(ObString("null"))));
           } else {
             OZ (dml.add_column("`interval#`", ObHexEscapeSqlStr(job_info.repeat_interval_)));
-          }
+          } 
           OZ (dml.add_column("flag", 0));
           OZ (dml.add_column("job_name", ObHexEscapeSqlStr(job_info.job_name_)));
           OZ (dml.add_column("job_style", ObHexEscapeSqlStr(job_info.job_style_)));
@@ -767,12 +767,12 @@ int ObDBMSSchedJobUtils::update_dbms_sched_job_info(common::ObISQLClient &sql_cl
       LOG_WARN("affected_rows unexpected to be two", KR(ret), K(affected_rows));
     }
   }
-  return ret;
+  return ret;  
 }
 
 int ObDBMSSchedJobUtils::get_dbms_sched_job_info(common::ObISQLClient &sql_client,
                                                  const uint64_t tenant_id,
-                                                 const bool is_oracle_tenant,
+                                                 const bool is_oracle_tenant, 
                                                  const ObString &job_name,
                                                  common::ObIAllocator &allocator,
                                                  ObDBMSSchedJobInfo &job_info)
@@ -809,7 +809,7 @@ int ObDBMSSchedJobUtils::get_dbms_sched_job_info(common::ObISQLClient &sql_clien
       }
     }
   }
-  return ret;
+  return ret;  
 }
 
 int ObDBMSSchedJobUtils::check_dbms_sched_job_priv(const ObUserInfo *user_info,

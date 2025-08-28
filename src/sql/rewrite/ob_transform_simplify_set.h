@@ -62,7 +62,7 @@ private:
   int add_distinct(ObSelectStmt *stmt, ObSelectStmt *select_stmt);
   int add_limit(ObSelectStmt *stmt, ObSelectStmt *select_stmt);
   int add_order_by(ObSelectStmt *stmt, ObSelectStmt *select_stmt);
-  int check_can_push(ObSelectStmt *stmt, ObSelectStmt *upper_stmt, bool &need_push_distinct,
+  int check_can_push(ObSelectStmt *stmt, ObSelectStmt *upper_stmt, bool &need_push_distinct, 
                      bool &need_push_orderby, bool &can_push);
 
   int pruning_set_query(common::ObIArray<ObParentDMLStmt> &parent_stmts,

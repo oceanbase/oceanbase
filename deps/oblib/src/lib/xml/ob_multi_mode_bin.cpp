@@ -22,10 +22,10 @@ class ObIMulModeBase;
 
 
 ObMulBinHeaderSerializer::ObMulBinHeaderSerializer(
-  ObStringBuffer* buffer,
-  ObMulModeNodeType type,
-  uint64_t total_size,
-  uint64_t count)
+  ObStringBuffer* buffer, 
+  ObMulModeNodeType type, 
+  uint64_t total_size, 
+  uint64_t count) 
   : buffer_(buffer),
     begin_(buffer->length()),
     total_(total_size),
@@ -40,12 +40,12 @@ ObMulBinHeaderSerializer::ObMulBinHeaderSerializer(
   obj_var_size_ = ObMulModeVar::get_var_size(obj_var_size_type_);
   entry_var_size_ = obj_var_size_;
   count_var_size_ = ObMulModeVar::get_var_size(count_var_size_type_);
-
+  
   count_var_offset_ = MUL_MODE_BIN_HEADER_LEN;
   if (is_extend_type(type)) {
     count_var_offset_++;
   }
-
+  
   obj_var_offset_ = count_var_offset_ + count_var_size_;
 }
 
@@ -101,7 +101,7 @@ int ObMulBinHeaderSerializer::serialize()
                                                       ObMulModeVar::get_var_type(count_),
                                                       ObMulModeVar::get_var_type(total_),
                                                       static_cast<uint8_t>(1));
-
+    
     if (is_extend_type(type_)) {
       ObMulModeExtendStorageType tmp = get_extend_storage_type(type_);
       *reinterpret_cast<uint8_t*>(buffer_->ptr() + start()) = static_cast<uint8_t>(tmp.first);
@@ -151,7 +151,7 @@ int ObMulBinHeaderSerializer::deserialize()
 
       if (obj_var_offset_ + obj_var_size_ > data_len_) {
         ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("failed to deserialize, data len less than 2", K(ret), K(type_),
+        LOG_WARN("failed to deserialize, data len less than 2", K(ret), K(type_), 
                 K(data_len_), K(entry_var_size_), K(count_var_size_), K(obj_var_size_));
       } else {
         if (is_extend_type(type_)) {
@@ -162,7 +162,7 @@ int ObMulBinHeaderSerializer::deserialize()
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -262,7 +262,7 @@ int ObMulModeScalarSerializer::serialize_string(ObIMulModeBase* node, int32_t de
       LOG_WARN("failed to append string value", K(ret));
     }
   }
-
+  
   return ret;
 }
 
@@ -305,7 +305,7 @@ int ObMulModeScalarSerializer::serialize_time(ObIMulModeBase* node, int32_t dept
 int ObMulModeScalarSerializer::serialize_double(ObIMulModeBase* node, int32_t depth)
 {
   INIT_SUCC(ret);
-
+  
   double value = node->get_double();
   if (isnan(value) || isinf(value)) {
     ret = OB_INVALID_NUMERIC;
@@ -696,8 +696,8 @@ int ObMulModeBinMerge::merge(ObIMulModeBase& origin, ObIMulModeBase& patch, ObIM
   }
   return ret;
 }
-int ObMulModeBinMerge::inner_merge(ObBinMergeCtx& ctx, ObIMulModeBase& origin,
-                                  ObIMulModeBase& patch, ObIMulModeBase& res, bool retry)
+int ObMulModeBinMerge::inner_merge(ObBinMergeCtx& ctx, ObIMulModeBase& origin, 
+                                  ObIMulModeBase& patch, ObIMulModeBase& res, bool retry) 
 {
   INIT_SUCC(ret);
   // duplicate ns that defined in this element should be delete
@@ -726,7 +726,7 @@ int ObMulModeBinMerge::inner_merge(ObBinMergeCtx& ctx, ObIMulModeBase& origin,
   } else {
     // init common_header, the total_size and count is not precise
     // check after all value is merged
-    ObMulBinHeaderSerializer cur_header(ctx.buffer_, get_res_type(origin.type(), patch.type()),
+    ObMulBinHeaderSerializer cur_header(ctx.buffer_, get_res_type(origin.type(), patch.type()), 
                                         estimated_length(retry, ctx, origin, patch),
                                         estimated_count(retry, ctx, origin, patch));
     if (OB_FAIL(append_header_to_res(ctx, origin, patch, cur_header, res))) {
@@ -760,9 +760,9 @@ int ObMulModeBinMerge::inner_merge(ObBinMergeCtx& ctx, ObIMulModeBase& origin,
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (merged_len < start) {
+    } else if (merged_len < start) { 
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("error length", K(ret));
+      LOG_WARN("error length", K(ret)); 
     } else if (ObMulModeVar::get_var_type(merged_len - start) > cur_header.get_obj_var_size_type()
       || ObMulModeVar::get_var_type(cur_header.count_) > cur_header.get_count_var_size_type()) {
       if (retry) {
@@ -792,7 +792,7 @@ int ObMulModeBinMerge::inner_merge(ObBinMergeCtx& ctx, ObIMulModeBase& origin,
   return ret;
 }
 // serialize common header
-int ObMulModeBinMerge::append_header_to_res(ObBinMergeCtx& ctx, ObIMulModeBase& origin, ObIMulModeBase& patch,
+int ObMulModeBinMerge::append_header_to_res(ObBinMergeCtx& ctx, ObIMulModeBase& origin, ObIMulModeBase& patch, 
                                             ObMulBinHeaderSerializer& header, ObIMulModeBase& res)
 {
   INIT_SUCC(ret);

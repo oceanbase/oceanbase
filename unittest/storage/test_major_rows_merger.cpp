@@ -438,7 +438,7 @@ TEST_F(ObMajorRowsMergerTest, two_iters)
   trans_version_range.snapshot_version_ = 100;
   trans_version_range.multi_version_start_ = 1;
   trans_version_range.base_version_ = 1;
-
+  
   prepare_merge_context(MAJOR_MERGE, false, trans_version_range, merge_context);
   ObMergeParameter merge_param(merge_context.static_param_);
   OK(merge_param.init(merge_context, 0, &allocator_));

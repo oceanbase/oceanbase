@@ -36,7 +36,7 @@ class ObMySQLResult;
 }
 }
 namespace share
-{
+{ 
 class SCN;
 ObLSStatus str_to_ls_status(const ObString &status_str);
 const char* ls_status_to_str(const ObLSStatus &status);
@@ -116,7 +116,7 @@ class SCN;
 //TODO for duplicate ls
 enum ObLSFlagForCompatible
 {
-  OB_LS_FLAG_NORMAL = 0,
+  OB_LS_FLAG_NORMAL = 0, 
 };
 class ObLSFlag
 {
@@ -315,7 +315,7 @@ public:
   /**
    * @description:
    *    get ls list from all_ls table,
-   *    if want to get accurate LS list, set lock_sys_ls to true to lock SYS LS in __all_ls table
+   *    if want to get accurate LS list, set lock_sys_ls to true to lock SYS LS in __all_ls table 
    *    to make sure mutual exclusion with load balancing thread
    * @param[in] lock_sys_ls whether lock SYS LS in __all_ls table
    * @param[out] ls_operation_array ls list

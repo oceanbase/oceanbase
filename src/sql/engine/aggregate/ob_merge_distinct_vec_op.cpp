@@ -100,14 +100,14 @@ int ObMergeDistinctVecOp::inner_get_next_batch(const int64_t max_row_cnt)
 }
 
 template<typename InputVec>
-int ObMergeDistinctVecOp::compare_in_column_with_format(InputVec *vec, const ObBatchRows *child_brs, int64_t first_active_idx,
+int ObMergeDistinctVecOp::compare_in_column_with_format(InputVec *vec, const ObBatchRows *child_brs, int64_t first_active_idx, 
                                                         int64_t col_idx, int64_t &last_idx) {
   int ret = OB_SUCCESS;
   if (vec->has_null()) {
     if (child_brs->all_rows_active_ && col_idx == 0) {
       if (OB_FAIL((compare_in_column<InputVec, true, true, true>)(vec, first_active_idx, child_brs, col_idx, last_idx))) {
         LOG_WARN("failed to cmp compare in column", K(ret), K(col_idx));
-      }
+      } 
     } else if (child_brs->all_rows_active_ && col_idx != 0) {
       if (OB_FAIL((compare_in_column<InputVec, true, false, true>)(vec, first_active_idx, child_brs, col_idx, last_idx))) {
         LOG_WARN("failed to cmp compare in column", K(ret), K(col_idx));
@@ -120,12 +120,12 @@ int ObMergeDistinctVecOp::compare_in_column_with_format(InputVec *vec, const ObB
       if (OB_FAIL((compare_in_column<InputVec, false, false, true>)(vec, first_active_idx, child_brs, col_idx, last_idx))) {
         LOG_WARN("failed to cmp compare in column", K(ret), K(col_idx));
       }
-    }
+    } 
   } else {
     if (child_brs->all_rows_active_ && col_idx == 0) {
       if (OB_FAIL((compare_in_column<InputVec, true, true, false>)(vec, first_active_idx, child_brs, col_idx, last_idx))) {
         LOG_WARN("failed to cmp compare in column", K(ret), K(col_idx));
-      }
+      } 
     } else if (child_brs->all_rows_active_ && col_idx != 0) {
       if (OB_FAIL((compare_in_column<InputVec, true, false, false>)(vec, first_active_idx, child_brs, col_idx, last_idx))) {
         LOG_WARN("failed to cmp compare in column", K(ret), K(col_idx));
@@ -138,7 +138,7 @@ int ObMergeDistinctVecOp::compare_in_column_with_format(InputVec *vec, const ObB
       if (OB_FAIL((compare_in_column<InputVec, false, false, false>)(vec, first_active_idx, child_brs, col_idx, last_idx))) {
         LOG_WARN("failed to cmp compare in column", K(ret), K(col_idx));
       }
-    }
+    } 
   }
 
   return ret;
@@ -153,7 +153,7 @@ int ObMergeDistinctVecOp::deduplicate_for_batch(bool has_last, const ObBatchRows
   int64_t last_cmp_idx = first_active_idx;
   int64_t child_skip_cnt = child_brs->skip_->accumulate_bit_cnt(child_brs->size_);
   bool equal = false;
-
+  
   // 1.get first_no_skip
   brs_.skip_->set_all(child_brs->size_); // default skip
   if (!child_brs->all_rows_active_) {
@@ -200,14 +200,14 @@ int ObMergeDistinctVecOp::deduplicate_for_batch(bool has_last, const ObBatchRows
             // 测试发现，对于bigint类型，当前列的每一行不判断（是否被上一列的比较输出）直接进行比较性能通常更高(at有位运算导致)，
             // 首列过滤行较少时，将后续列看作是first_col不进行当前行out的取值性能会更好
             // 而对于第一列就输出大量行，此时仍将后续列视为first_col的话性能会发生较大回退，因此暂时不进行该优化
-            ObFixedLengthVector<int64_t, VectorBasicOp<VEC_TC_INTEGER>> *fixed_vec =
+            ObFixedLengthVector<int64_t, VectorBasicOp<VEC_TC_INTEGER>> *fixed_vec = 
               static_cast<ObFixedLengthVector<int64_t, VectorBasicOp<VEC_TC_INTEGER>> *> (vec);
             if (OB_FAIL(compare_in_column_with_format<FixedLengthVectorBigInt>(fixed_vec, child_brs,
                 first_active_idx, col_idx, last_idx))) {
               LOG_WARN("compare in column wihh format failed", K(ret));
             }
           } else {
-            if (OB_FAIL(compare_in_column_with_format<ObIVector>(vec, child_brs, first_active_idx,
+            if (OB_FAIL(compare_in_column_with_format<ObIVector>(vec, child_brs, first_active_idx, 
                 col_idx, last_idx))) {
               LOG_WARN("compare in column wihh format failed", K(ret));
             }
@@ -222,7 +222,7 @@ int ObMergeDistinctVecOp::deduplicate_for_batch(bool has_last, const ObBatchRows
               LOG_WARN("compare in column wihh format failed", K(ret));
             }
           } else {
-            if (OB_FAIL(compare_in_column_with_format<ObIVector>(vec, child_brs, first_active_idx,
+            if (OB_FAIL(compare_in_column_with_format<ObIVector>(vec, child_brs, first_active_idx, 
                 col_idx, last_idx))) {
               LOG_WARN("compare in column wihh format failed", K(ret));
             }
@@ -230,13 +230,13 @@ int ObMergeDistinctVecOp::deduplicate_for_batch(bool has_last, const ObBatchRows
           break;
         }
         default : {
-          if (OB_FAIL(compare_in_column_with_format<ObIVector>(vec, child_brs, first_active_idx,
+          if (OB_FAIL(compare_in_column_with_format<ObIVector>(vec, child_brs, first_active_idx, 
               col_idx, last_idx))) {
             LOG_WARN("compare in column wihh format failed", K(ret));
           }
         }
       }
-      if (col_idx < MY_SPEC.distinct_exprs_.count() - 1 &&
+      if (col_idx < MY_SPEC.distinct_exprs_.count() - 1 && 
           brs_.skip_->accumulate_bit_cnt(child_brs->size_) <= child_skip_cnt + (equal ? 1 : 0)) {
         break;
       }
@@ -266,21 +266,21 @@ int ObMergeDistinctVecOp::compare_in_column(InputVec * vec, int64_t first_active
   int64_t curr_idx = first_active_idx + 1;
   const sql::ObExpr &col_expr = *MY_SPEC.distinct_exprs_.at(col_idx);
   for (; curr_idx < child_brs->size_ && OB_SUCC(ret) ; curr_idx++) {
-    if (ALL_ROWS_ACTIVE && FIRST_COL) { // skip and out are false, do not continue, need compare
+    if (ALL_ROWS_ACTIVE && FIRST_COL) { // skip and out are false, do not continue, need compare 
     } else if (ALL_ROWS_ACTIVE && !FIRST_COL) { // skip is false, judge out
-      if (!brs_.skip_->at(curr_idx)) {
+      if (!brs_.skip_->at(curr_idx)) { 
         // curr_idx row is out, do not need compare, but need update last_cmp_idx
         last_cmp_idx = curr_idx;
-        continue;
-      }
+        continue; 
+      } 
     } else if (!ALL_ROWS_ACTIVE && FIRST_COL) { // out is false, judge skip
       if (child_brs->skip_->at(curr_idx)) { continue; } // skip row
     } else if (!ALL_ROWS_ACTIVE && !FIRST_COL) {
       if (child_brs->skip_->at(curr_idx)) { continue; }
-      if (!brs_.skip_->at(curr_idx)) {
+      if (!brs_.skip_->at(curr_idx)) { 
         last_cmp_idx = curr_idx;
-        continue;
-      }
+        continue; 
+      } 
     }
 
     // curr_idx row is neither skip nor out, cmp with last_cmp_idx
@@ -292,7 +292,7 @@ int ObMergeDistinctVecOp::compare_in_column(InputVec * vec, int64_t first_active
     } else {
       if (OB_FAIL(vec->no_null_cmp(col_expr, curr_idx, last_cmp_idx, cmp_ret))) {
         LOG_WARN("no_null_cmp failed", K(curr_idx), K(last_cmp_idx), K(cmp_ret), K(ret));
-      }
+      } 
     }
     if (OB_FAIL(ret)) {
     } else if (cmp_ret == 0) { // equal, do nothing

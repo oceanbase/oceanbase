@@ -24,16 +24,16 @@ namespace oceanbase
 namespace sql
 {
 
-ObExprXmlparse :: ObExprXmlparse(common::ObIAllocator &alloc)
+ObExprXmlparse :: ObExprXmlparse(common::ObIAllocator &alloc) 
   : ObFuncExprOperator(alloc, T_FUN_SYS_XMLPARSE, N_XMLPARSE, MORE_THAN_TWO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 
 ObExprXmlparse::~ObExprXmlparse() {}
 
-int ObExprXmlparse::calc_result_typeN(ObExprResType &type,
-                                      ObExprResType *types_stack,
-                                      int64_t param_num,
+int ObExprXmlparse::calc_result_typeN(ObExprResType &type, 
+                                      ObExprResType *types_stack, 
+                                      int64_t param_num, 
                                       ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
@@ -166,7 +166,7 @@ int ObExprXmlparse::eval_xmlparse(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &r
         }
       }
     }
-
+    
 
     if (OB_SUCC(ret)) {
       ObCollationType session_cs_type = CS_TYPE_UTF8MB4_BIN;
@@ -184,10 +184,10 @@ int ObExprXmlparse::eval_xmlparse(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &r
   return ret;
 }
 
-int ObExprXmlparse::get_clause_opt(const ObExpr &expr,
-                                   ObEvalCtx &ctx,
-                                   uint8_t index,
-                                   uint8_t &type,
+int ObExprXmlparse::get_clause_opt(const ObExpr &expr, 
+                                   ObEvalCtx &ctx, 
+                                   uint8_t index, 
+                                   uint8_t &type, 
                                    uint8_t size_para)
 {
   INIT_SUCC(ret);
@@ -212,7 +212,7 @@ int ObExprXmlparse::get_clause_opt(const ObExpr &expr,
       } else {
         type = static_cast<uint8_t>(option_type);
       }
-    }
+    }   
   }
   return ret;
 }

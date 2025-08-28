@@ -51,14 +51,14 @@ public:
   static const int64_t XA_CACHE_ITEM_EXPIRE_TIME = 2000000; // 2s
   ObXACacheItem(): state_(ObXATransState::UNKNOWN), create_timestamp_(0) {}
   ~ObXACacheItem() { reset(); }
-  void reset()
+  void reset() 
   {
     state_ = ObXATransState::UNKNOWN;
     create_timestamp_ = 0;
     xid_.reset();
   }
 
-  bool is_valid_to_query(ObXATransID xid)
+  bool is_valid_to_query(ObXATransID xid) 
   {
     return this->xid_.all_equal_to(xid);
   }

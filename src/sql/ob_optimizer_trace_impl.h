@@ -9,9 +9,9 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef _OB_OPTIMIZER_TRACE_IMPL_H
-#define _OB_OPTIMIZER_TRACE_IMPL_H
+#define _OB_OPTIMIZER_TRACE_IMPL_H 
 
 #include "lib/file/ob_file.h"
 #include "lib/allocator/ob_allocator.h"
@@ -282,11 +282,11 @@ class ObOptimizerTraceImpl
 public:
   ObOptimizerTraceImpl();
   ~ObOptimizerTraceImpl();
-  int enable_trace(const common::ObString &identifier,
+  int enable_trace(const common::ObString &identifier, 
                    const common::ObString &sql_id,
                    const int trace_level);
 
-  int set_parameters(const common::ObString &identifier,
+  int set_parameters(const common::ObString &identifier, 
                     const common::ObString &sql_id,
                     const int trace_level);
   void reset();
@@ -307,7 +307,7 @@ public:
   inline void decrease_section() { if (section_ > 0) --section_; }
   inline void set_session_info(ObSQLSessionInfo* info) { session_info_ = info; }
   void resume_trace();
-  void stop_trace();
+  void stop_trace();  
   void restart_trace();
 
 /***********************************************/
@@ -358,12 +358,12 @@ public:
 /***********************************************/
   //for class ObRawExpr
   template <typename T>
-  typename std::enable_if<std::is_base_of<ObRawExpr, T>::value, int>::type
+  typename std::enable_if<std::is_base_of<ObRawExpr, T>::value, int>::type 
   append(const T* expr);
 
   //for class ObDMLStmt
   template <typename T>
-  typename std::enable_if<std::is_base_of<ObDMLStmt, T>::value, int>::type
+  typename std::enable_if<std::is_base_of<ObDMLStmt, T>::value, int>::type 
   append(const T* value);
 
   template <typename T>
@@ -404,7 +404,7 @@ private:
 
 //for class ObRawExpr
 template <typename T>
-typename std::enable_if<std::is_base_of<ObRawExpr, T>::value, int>::type
+typename std::enable_if<std::is_base_of<ObRawExpr, T>::value, int>::type 
 ObOptimizerTraceImpl::append(const T* expr)
 {
   int ret = OB_SUCCESS;
@@ -430,7 +430,7 @@ ObOptimizerTraceImpl::append(const T* expr)
 
 //for class ObDMLStmt
 template <typename T>
-typename std::enable_if<std::is_base_of<ObDMLStmt, T>::value, int>::type
+typename std::enable_if<std::is_base_of<ObDMLStmt, T>::value, int>::type 
 ObOptimizerTraceImpl::append(const T* value)
 {
   int ret = OB_SUCCESS;
@@ -438,8 +438,8 @@ ObOptimizerTraceImpl::append(const T* value)
   ObObjPrintParams print_params;
   common::ObArenaAllocator allocator("OptimizerTrace");
   // TODO: @zhenling, use a valid schema guard in each query
-  if (OB_FAIL(ObSQLUtils::reconstruct_sql(allocator,
-                                          value,
+  if (OB_FAIL(ObSQLUtils::reconstruct_sql(allocator, 
+                                          value, 
                                           sql,
                                           NULL,
                                           print_params))) {

@@ -3660,7 +3660,7 @@ int ObTransferHandler::inner_do_with_abort_status_(
     } else if (OB_SUCCESS != EN_TRANSEFR_UNLOCK_MEMBER_LIST_FAILED) {
       ret = EN_TRANSEFR_UNLOCK_MEMBER_LIST_FAILED;
       STORAGE_LOG(WARN, "fake EN_TRANSEFR_UNLOCK_MEMBER_LIST_FAILED", K(ret));
-#endif
+#endif 
     } else if (OB_FAIL(inner_unlock_ls_member_list_(task_info, task_info.dest_ls_id_, member_list,
         status, true/*need_check_palf_leader*/, task_info.dest_ls_id_))) {
       LOG_WARN("failed to unlock ls member list", K(ret), K(task_info));

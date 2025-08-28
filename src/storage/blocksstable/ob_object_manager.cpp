@@ -88,10 +88,10 @@ int64_t ObStorageObjectOpt::to_string(char *buf, const int64_t buf_len) const
   case ObStorageObjectType::PRIVATE_TABLET_META: {
     if(OB_FAIL(databuff_printf(buf, buf_len, pos, "object_type=%s (ls_id=%lu,tablet_id=%lu,version=%lu,transfer_seq=%lu)",
                get_storage_objet_type_str(object_type_),
-               ss_private_tablet_opt_.ls_id_, ss_private_tablet_opt_.tablet_id_,
+               ss_private_tablet_opt_.ls_id_, ss_private_tablet_opt_.tablet_id_, 
                ss_private_tablet_opt_.version_, ss_private_tablet_opt_.tablet_transfer_seq_))) {
       LOG_WARN("failed to print data into buf", K(ret), K(buf_len), K(pos), K(get_storage_objet_type_str(object_type_)),
-                                                K(ss_private_tablet_opt_.ls_id_), K(ss_private_tablet_opt_.tablet_id_),
+                                                K(ss_private_tablet_opt_.ls_id_), K(ss_private_tablet_opt_.tablet_id_), 
                                                 K(ss_private_tablet_opt_.version_), K(ss_private_tablet_opt_.tablet_transfer_seq_));
     }
     break;

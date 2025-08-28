@@ -53,7 +53,7 @@ private:
   int64_t  precision_width_size_;
   bool is_monotonic_inc_integer_dict_;
 
-
+  
 };
 
 }  // end namespace blocksstable

@@ -371,7 +371,7 @@ select * from t_not_exist
 --error 5207
 select c1 a, C2 A from t1 order by a
 
-## bug
+## bug 
 select * from (t1);
 select * from (t1,t2);
 select * from (t1,(t2));
@@ -383,7 +383,7 @@ select * from (t1 join t2) join t3;
 #select * from (t1,t2) join (t3,t4);
 #select * from (t1 join t2) join (t3,t4);
 
-#
+# 
 select * from t1 join t2 on t1.c1=t2.c1, t3 join t4 on t3.c3=t4.c3;
 select * from t1 join t2 using(c1), t3 join t4 using(c3);
 

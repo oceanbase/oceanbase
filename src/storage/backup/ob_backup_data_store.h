@@ -90,7 +90,7 @@ private:
 struct ObBackupDeletedTabletToLSDesc final : public ObExternBackupDataDesc
 {
 public:
-  static const uint8_t FILE_VERSION = 1;
+  static const uint8_t FILE_VERSION = 1; 
   OB_UNIS_VERSION(FILE_VERSION);
 public:
   ObBackupDeletedTabletToLSDesc()
@@ -296,12 +296,12 @@ private:
 struct ObBackupPartialTableListDesc final : public ObExternBackupDataDesc
 {
 public:
-  static const uint8_t FILE_VERSION = 1;
+  static const uint8_t FILE_VERSION = 1; 
   OB_UNIS_VERSION(1);
 public:
   ObBackupPartialTableListDesc()
     : ObExternBackupDataDesc(ObBackupFileType::BACKUP_TABLE_LIST_FILE, FILE_VERSION),
-      items_() {}
+      items_() {} 
   virtual ~ObBackupPartialTableListDesc() {}
   bool is_valid() const override;
   void reset();
@@ -316,7 +316,7 @@ private:
 struct ObBackupTableListMetaInfoDesc final : public ObExternBackupDataDesc
 {
 public:
-  static const uint8_t FILE_VERSION = 1;
+  static const uint8_t FILE_VERSION = 1; 
   OB_UNIS_VERSION(1);
 public:
   ObBackupTableListMetaInfoDesc()
@@ -324,7 +324,7 @@ public:
       scn_(share::SCN::min_scn()),
       count_(0),
       batch_size_(0),
-      partial_metas_() {}
+      partial_metas_() {} 
   virtual ~ObBackupTableListMetaInfoDesc() {}
   bool is_valid() const override;
   TO_STRING_KV(K_(count), K_(batch_size), K_(partial_metas));
@@ -395,11 +395,11 @@ public:
   // get the ls_meta_infos of target turn_id and ls_id
   int read_ls_meta_infos(const share::ObLSID &ls_id, storage::ObLSMetaPackage &ls_meta_package);
   // write and read tablet_to_ls_info
-  int write_tablet_to_ls_info(const ObBackupDataTabletToLSDesc &tablet_to_ls_info,
+  int write_tablet_to_ls_info(const ObBackupDataTabletToLSDesc &tablet_to_ls_info, 
       const int64_t turn_id, const share::ObBackupDataType &type);
-  int read_tablet_to_ls_info(const int64_t turn_id, const share::ObBackupDataType &type,
+  int read_tablet_to_ls_info(const int64_t turn_id, const share::ObBackupDataType &type, 
       ObBackupDataTabletToLSDesc &tablet_to_ls_info);
-  int read_tablet_list(const share::ObBackupDataType &type, const int64_t turn_id, const share::ObLSID &ls_id,
+  int read_tablet_list(const share::ObBackupDataType &type, const int64_t turn_id, const share::ObLSID &ls_id, 
       ObIArray<common::ObTabletID> &tablet_ids);
   int read_deleted_tablet_info(const ObLSID &ls_id, ObIArray<ObTabletID> &deleted_tablet_ids);
   
@@ -426,7 +426,7 @@ public:
   int write_backup_set_info(const ObExternBackupSetInfoDesc &backup_set_info);
   int read_backup_set_info(ObExternBackupSetInfoDesc &backup_set_info);
   int is_backup_set_info_file_exist(bool &is_exist) const;
-  int get_backup_set_array(const common::ObString &passwd_array, const share::SCN &restore_scn,
+  int get_backup_set_array(const common::ObString &passwd_array, const share::SCN &restore_scn, 
       share::SCN &restore_start_scn, common::ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list);
   int get_max_backup_set_file_info(const common::ObString &passwd_array, ObBackupSetFileDesc &output_desc);
   int get_backup_sys_time_zone_wrap(common::ObTimeZoneInfoWrap & time_zone_wrap);
@@ -473,7 +473,7 @@ public:
     }
   };
 private:
-  int do_get_backup_set_array_(const common::ObString &passwd_array, const share::SCN &restore_scn,
+  int do_get_backup_set_array_(const common::ObString &passwd_array, const share::SCN &restore_scn, 
       const ObBackupSetFilter &op, common::ObIArray<share::ObRestoreBackupSetBriefInfo> &tmp_backup_set_list, 
       int64_t &cur_max_backup_set_id, share::SCN &restore_start_scn);
   int get_backup_set_placeholder_path_(const bool is_inner, const bool is_start, const bool is_succeed, 

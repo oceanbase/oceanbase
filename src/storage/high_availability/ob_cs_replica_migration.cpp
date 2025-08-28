@@ -72,8 +72,8 @@ bool ObTabletCOConvertCtx::is_valid() const
   return tablet_id_.is_valid()
       && co_dag_net_id_.is_valid()
       && status_ >= Status::UNKNOWN
-      && status_ < Status::MAX_STATUS
-      && retry_cnt_ >= 0
+      && status_ < Status::MAX_STATUS 
+      && retry_cnt_ >= 0 
       && eagain_cnt_ >= 0
       && is_inited_;
 }
@@ -149,7 +149,7 @@ int ObHATabletGroupCOConvertCtx::inner_init()
         LOG_WARN("failed to push back co convert ctx", K(ret), K(co_convert_ctx));
       } else if (OB_FAIL(idx_map_.set_refactored(tablet_id, idx))) {
         LOG_WARN("failed to set ctx idx into map", K(ret), K(tablet_id), K(idx));
-      }
+      } 
     }
   }
   return ret;
@@ -274,7 +274,7 @@ int ObHATabletGroupCOConvertCtx::update_deleted_data_tablet_status(
 {
   int ret = OB_SUCCESS;
   ObHATabletGroupCOConvertCtx *group_convert_ctx = nullptr;
-  if (OB_UNLIKELY(OB_ISNULL(tablet_group_ctx)
+  if (OB_UNLIKELY(OB_ISNULL(tablet_group_ctx) 
       || !tablet_group_ctx->is_cs_replica_ctx())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tablet group ctx", K(ret), K(tablet_id), KPC(tablet_group_ctx));
@@ -355,7 +355,7 @@ int ObHATabletGroupCOConvertCtx::inner_check_and_schedule(ObLS &ls, const ObTabl
       inner_set_convert_finish(convert_ctxs_[idx]);
     }
   }
-
+  
   if (OB_FAIL(ret)) {
   } else if (!convert_ctxs_[idx].is_progressing()) {
   } else if (OB_ISNULL(tablet)) {
@@ -371,7 +371,7 @@ int ObHATabletGroupCOConvertCtx::inner_check_and_schedule(ObLS &ls, const ObTabl
     LOG_WARN("failed to schedule convert co merge", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_EAGAIN == schedule_ret && !convert_ctxs_[idx].is_eagain_exhausted()) {
     if (REACH_THREAD_TIME_INTERVAL(10 * 60 * 1000 * 1000L /*10min*/)) {
-      LOG_INFO("[CS-Replica] convert co merge is doing now, please wait for a while, or set EN_DISABLE_WAITING_CONVERT_CO_WHEN_MIGRATION tracepoint to skip it",
+      LOG_INFO("[CS-Replica] convert co merge is doing now, please wait for a while, or set EN_DISABLE_WAITING_CONVERT_CO_WHEN_MIGRATION tracepoint to skip it", 
         K(schedule_ret), K(ls_id), K(tablet_id), K(convert_ctxs_[idx]));
     }
     convert_ctxs_[idx].inc_eagain_cnt();
@@ -395,7 +395,7 @@ ObDataTabletsCheckCOConvertDag::ObDataTabletsCheckCOConvertDag()
     ls_(nullptr),
     first_start_time_(0),
     is_inited_(false)
-{
+{ 
 }
 
 ObDataTabletsCheckCOConvertDag::~ObDataTabletsCheckCOConvertDag()
@@ -477,7 +477,7 @@ int ObDataTabletsCheckCOConvertDag::inner_check_can_schedule(
       can_schedule = true;
       reason = ObCheckScheduleReason::ALL_DETERMINISTIC;
     } else if (wait_one_round_time > OB_DATA_TABLETS_NOT_CHECK_CONVERT_THRESHOLD) {
-      can_schedule = true;
+      can_schedule = true; 
       reason = ObCheckScheduleReason::WAIT_TIME_EXCEED;
     }
   }
@@ -501,7 +501,7 @@ int ObDataTabletsCheckCOConvertDag::init(
     LOG_WARN("can not init twice", K(ret));
   } else if (OB_UNLIKELY(OB_ISNULL(ha_dag_net_ctx) || OB_ISNULL(ls))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument to init ObDataTabletsCheckCOConvertDag",
+    LOG_WARN("invalid argument to init ObDataTabletsCheckCOConvertDag", 
               K(ret), KPC(ha_dag_net_ctx), KPC(ls));
   } else if (OB_FAIL(check_convert_ctx_valid(ha_dag_net_ctx))) {
     LOG_WARN("ha dag net ctx is invalid", K(ret), KPC(ha_dag_net_ctx));
@@ -517,7 +517,7 @@ int ObDataTabletsCheckCOConvertDag::check_convert_ctx_valid(ObIHADagNetCtx *ha_d
 {
   int ret = OB_SUCCESS;
   ObMigrationCtx *migration_ctx = nullptr;
-  if (OB_UNLIKELY(OB_ISNULL(ha_dag_net_ctx)
+  if (OB_UNLIKELY(OB_ISNULL(ha_dag_net_ctx) 
                || ObIHADagNetCtx::DagNetCtxType::LS_MIGRATION != ha_dag_net_ctx->get_dag_net_ctx_type())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid ha_dag_net_ctx", K(ret), KPC(ha_dag_net_ctx));
@@ -589,7 +589,7 @@ int64_t ObDataTabletsCheckCOConvertDag::hash() const
   int64_t hash_value = 0;
   ObMigrationCtx *ctx = nullptr;
   if (IS_NOT_INIT) {
-    LOG_ERROR_RET(OB_NOT_INIT, "tablet check convert dag not init");
+    LOG_ERROR_RET(OB_NOT_INIT, "tablet check convert dag not init");  
   } else if (OB_ISNULL(ctx = get_migration_ctx())) {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "migration ctx should not be NULL", KP(ctx));
   } else {
@@ -639,10 +639,10 @@ int ObDataTabletsCheckConvertTask::init(
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("can not init twice", K(ret));
-  } else if (OB_UNLIKELY(OB_ISNULL(ha_dag_net_ctx) || OB_ISNULL(ls)
+  } else if (OB_UNLIKELY(OB_ISNULL(ha_dag_net_ctx) || OB_ISNULL(ls) 
           || ObIHADagNetCtx::LS_MIGRATION != ha_dag_net_ctx->get_dag_net_ctx_type())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument to init ObDataTabletsCheckConvertTask",
+    LOG_WARN("invalid argument to init ObDataTabletsCheckConvertTask", 
               K(ret), KPC(ha_dag_net_ctx), KPC(ls));
   } else {
     ctx_ = static_cast<ObMigrationCtx *>(ha_dag_net_ctx);

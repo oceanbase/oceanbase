@@ -93,8 +93,8 @@ int ObSequenceNamespaceChecker::check_sequence_namespace(const ObQualifiedName &
     ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo*>(session_info);
     const ObSequenceSchema* seq_schema = NULL;
     ObString database_name;
-    if (OB_FAIL(const_cast<ObSchemaChecker*>(schema_checker)->get_dblink_schema(tenant_id,
-                                                                                q_name.dblink_name_,
+    if (OB_FAIL(const_cast<ObSchemaChecker*>(schema_checker)->get_dblink_schema(tenant_id, 
+                                                                                q_name.dblink_name_, 
                                                                                 dblink_schema))) {
       LOG_WARN("failed to get dblink schema", K(ret));
     } else if (OB_ISNULL(dblink_schema)) {
@@ -114,14 +114,14 @@ int ObSequenceNamespaceChecker::check_sequence_namespace(const ObQualifiedName &
                         session_info, nls_db_name))) {
       LOG_WARN("convert charset of database name failed", K(ret));
     } else if (OB_FAIL(session_info->get_dblink_sequence_id(nls_seq_name,
-                                                            dblink_id,
+                                                            dblink_id, 
                                                             sequence_id))) {
       LOG_WARN("failed to get dblink sequence id", K(ret));
-    } else if (OB_FAIL(check_link_sequence_exists(dblink_schema,
+    } else if (OB_FAIL(check_link_sequence_exists(dblink_schema, 
                                                   session,
                                                   nls_db_name,
                                                   nls_seq_name,
-                                                  exist,
+                                                  exist, 
                                                   has_currval,
                                                   currval))) {
       LOG_WARN("failed to check link sequence exists", K(ret));
@@ -136,9 +136,9 @@ int ObSequenceNamespaceChecker::check_sequence_namespace(const ObQualifiedName &
                OB_FAIL(session->get_dblink_sequence_schema(sequence_id, seq_schema))) {
       LOG_WARN("failed to check sequence", K(ret));
     } else if (NULL == seq_schema &&
-               OB_FAIL(fetch_dblink_sequence_schema(tenant_id,
+               OB_FAIL(fetch_dblink_sequence_schema(tenant_id, 
                                                     session_info->get_database_id(),
-                                                    dblink_id,
+                                                    dblink_id, 
                                                     nls_seq_name,
                                                     session,
                                                     sequence_id,
@@ -178,10 +178,10 @@ int ObSequenceNamespaceChecker::fetch_dblink_sequence_schema(const uint64_t tena
   } else if (OB_FAIL(session_info->get_dblink_sequence_id(sequence_name, dblink_id, sequence_id))) {
     LOG_WARN("failed to get dblink sequence id", K(ret));
   } else if (OB_FALSE_IT(session_has_sequence_id = (OB_INVALID_ID != sequence_id))) {
-  } else if (!session_has_sequence_id &&
+  } else if (!session_has_sequence_id && 
              OB_FAIL(session_info->get_next_sequence_id(sequence_id))) {
     LOG_WARN("failed to fetch new_sequence_id", K(tenant_id), K(ret));
-  } else if (!session_has_sequence_id &&
+  } else if (!session_has_sequence_id && 
             OB_FAIL(session_info->set_dblink_sequence_id(sequence_name, dblink_id, sequence_id))) {
     LOG_WARN("failed to set dblink sequence id", K(ret));
   } else {
@@ -274,10 +274,10 @@ int ObSequenceNamespaceChecker::check_link_sequence_exists(const ObDbLinkSchema 
   } else if (sql_request_level < 1 || sql_request_level > 3) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid sql_request_level", K(sql_request_level), K(ret));
-  } else if (OB_FAIL(ObDblinkService::init_dblink_param_ctx(param_ctx,
-                                                            session_info,
+  } else if (OB_FAIL(ObDblinkService::init_dblink_param_ctx(param_ctx, 
+                                                            session_info, 
                                                             allocator, //useless in oracle mode
-                                                            dblink_schema->get_dblink_id(),
+                                                            dblink_schema->get_dblink_id(), 
                                                             static_cast<DblinkDriverProto>(dblink_schema->get_driver_proto()),
                                                             DblinkPoolType::DBLINK_POOL_SCHEMA))) {
     LOG_WARN("failed to init dblink param ctx", K(ret), K(param_ctx));
@@ -303,8 +303,8 @@ int ObSequenceNamespaceChecker::check_link_sequence_exists(const ObDbLinkSchema 
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       const int64_t col_idx = 0;
       common::sqlclient::ObISQLConnection *dblink_conn = NULL;
-      if (OB_FAIL(sql.append_fmt(lib::is_oracle_mode() ?
-                                sql_str_fmt_array[sql_request_level - 1] :
+      if (OB_FAIL(sql.append_fmt(lib::is_oracle_mode() ? 
+                                sql_str_fmt_array[sql_request_level - 1] : 
                                 sql_str_fmt_array_mysql_mode[sql_request_level - 1],
                                 database_name.length(), database_name.ptr(),
                                 sequence_name.length(), sequence_name.ptr()))) {

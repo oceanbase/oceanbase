@@ -59,8 +59,8 @@ public:
   virtual int on_child_task_finish(
     const uint64_t child_task_key,
     const int ret_code) override;
-  virtual bool task_can_retry() const override
-  {
+  virtual bool task_can_retry() const override 
+  { 
     return share::ObDDLTaskStatus::WAIT_ROWKEY_DOC_TABLE_COMPLEMENT == task_status_
            ? is_retryable_ddl_
            : true;
@@ -96,7 +96,7 @@ public:
   void set_doc_rowkey_aux_task_id(const uint64_t id) { doc_rowkey_task_id_ = id; }
   void set_fts_index_aux_task_id(const uint64_t id) { domain_index_aux_task_id_ = id; }
   void set_fts_doc_word_aux_task_id(const uint64_t id) { fts_doc_word_task_id_ = id; }
-
+  
   int update_task_message(common::ObISQLClient &proxy);
 
 private:
@@ -156,7 +156,7 @@ private:
 
 private:
   typedef share::ObDomainDependTaskStatus DependTaskStatus;
-
+  
   struct ColumnChecksumInfo final
   {
   public:

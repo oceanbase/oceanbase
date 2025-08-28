@@ -708,7 +708,7 @@ int ObOperator::output_expr_sanity_check_batch_inner(const ObExpr &expr)
     ObDiscreteBase *dis_data = static_cast<ObDiscreteBase *>(ivec);
     ObBitmapNullVectorBase *nulls = static_cast<ObBitmapNullVectorBase *>(ivec);
     char **ptrs = dis_data->get_ptrs();
-    ObLength *lens = dis_data->get_lens();
+    ObLength *lens = dis_data->get_lens();        
     for (int j = 0; j < brs_.size_; j++) {
       if (!brs_.skip_->at(j) && !nulls->is_null(j)) {
         SANITY_CHECK_RANGE(ptrs[j], lens[j]);
@@ -1237,7 +1237,7 @@ int ObOperator::submit_op_monitor_node()
   if (GCONF.enable_sql_audit) {
     // Record monitor info in sql_plan_monitor
     // Some records that meets the conditions needs to be archived
-    // Reference document:
+    // Reference document: 
     op_monitor_info_.close_time_ = oceanbase::common::ObClockGenerator::getClock();
     ObPlanMonitorNodeList *list = MTL(ObPlanMonitorNodeList*);
     if (list && spec_.plan_ && ctx_.get_physical_plan_ctx()) {
@@ -1533,7 +1533,7 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
           (*e)->get_eval_info(eval_ctx_).projected_ = true;
         }
       }
-
+      
       if (OB_SUCC(ret) && GET_MY_SESSION(eval_ctx_.exec_ctx_)->is_diagnosis_enabled()) {
         if (OB_FAIL(do_diagnosis(eval_ctx_.exec_ctx_, *brs_.skip_))) {
           LOG_WARN("fail to do diagnosis", K(ret));
@@ -1640,7 +1640,7 @@ int ObOperator::convert_vector_format()
       if (OB_FAIL((*e)->cast_to_uniform(brs_.size_, eval_ctx_, brs_.skip_))) {
         LOG_WARN("expr evaluate failed", K(ret), KPC(*e), K_(eval_ctx));
       }
-    }
+    } 
   }
   return ret;
 }
@@ -1840,7 +1840,7 @@ int ObOperator::do_drain_exch()
     // get_next_batch function again theoretically. However, we cannot guarantee that there won't be
     // any bugs that call get_next_batch again after drain. To prevent this situation, we set the
     // all iter end flags here.
-    // For specific case, refer to issue:
+    // For specific case, refer to issue: 
     brs_.end_ = true;
     batch_reach_end_ = true;
     row_reach_end_ = true;

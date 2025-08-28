@@ -44,7 +44,7 @@ public:
       download_handle_(NULL),
       record_reader_handle_(NULL) {}
     int reuse();
-    TO_STRING_KV(K(task_idx_),
+    TO_STRING_KV(K(task_idx_), 
                  K(part_id_),
                  K(start_),
                  K(step_),
@@ -65,18 +65,18 @@ public:
     ObNewRow part_list_val_;
   };
   struct OdpsPartition {
-    OdpsPartition() :
+    OdpsPartition() : 
       name_(""),
       record_count_(-1)
     {
     }
-    OdpsPartition(const std::string &name) :
+    OdpsPartition(const std::string &name) : 
       name_(name),
       record_count_(-1)
     {
     }
     OdpsPartition(const std::string &name,
-                  int64_t &record_count) :
+                  int64_t &record_count) : 
       name_(name),
       record_count_(record_count)
     {
@@ -102,7 +102,7 @@ public:
     TO_STRING_KV(K(ObString(name_.c_str())), K(type_info_.mType), K(type_info_.mPrecision), K(type_info_.mScale), K(type_info_.mSpecifiedLength));
   };
 public:
-  ObODPSTableRowIterator() :
+  ObODPSTableRowIterator() : 
     odps_format_(),
     account_(),
     conf_(),
@@ -166,12 +166,12 @@ private:
   int inner_get_next_row(bool &need_retry);
   int prepare_expr();
   int next_task();
-  int print_type_map_user_info(apsara::odps::sdk::ODPSColumnTypeInfo odps_type_info,
+  int print_type_map_user_info(apsara::odps::sdk::ODPSColumnTypeInfo odps_type_info, 
                                 const ObExpr *ob_type_expr);
-  int check_type_static(apsara::odps::sdk::ODPSColumnTypeInfo odps_type_info,
+  int check_type_static(apsara::odps::sdk::ODPSColumnTypeInfo odps_type_info, 
                         const ObExpr *ob_type_expr,
                         ObODPSArrayHelper *array_helper);
-  int check_type_static(apsara::odps::sdk::ODPSColumnTypeInfo odps_type_info,
+  int check_type_static(apsara::odps::sdk::ODPSColumnTypeInfo odps_type_info, 
                         const ObObjType ob_type,
                         const int32_t ob_type_length,
                         const int32_t ob_type_precision,
@@ -203,7 +203,7 @@ private:
   apsara::odps::sdk::ODPSTableRecordPtr *records_;
   int64_t batch_size_; // -1 means not inited, 0 means call get_next_row(), > 0 means call get_next_rows()
   bool get_next_task_; // only used for get next task and recall inner_get_next_row() when curren task was iter end.
-  common::ObMalloc malloc_alloc_;
+  common::ObMalloc malloc_alloc_; 
   common::ObArenaAllocator arena_alloc_;
   common::ObMemAttr mem_attr_;
   ObString timezone_str_;
@@ -216,8 +216,8 @@ class ObOdpsPartitionDownloaderMgr
 public:
   typedef common::hash::ObHashMap<int64_t, int64_t, common::hash::SpinReadWriteDefendMode> OdpsMgrMap;
   struct OdpsPartitionDownloader {
-    OdpsPartitionDownloader() :
-      odps_driver_(),
+    OdpsPartitionDownloader() : 
+      odps_driver_(), 
       odps_partition_downloader_(NULL),
       downloader_init_status_(0)
     {}
@@ -242,8 +242,8 @@ public:
     ObIAllocator *downloader_alloc_;
     ErrType err_;
   public:
-    explicit DeleteDownloaderFunc(ObIAllocator *downloader_alloc) :
-                              downloader_alloc_(downloader_alloc),
+    explicit DeleteDownloaderFunc(ObIAllocator *downloader_alloc) : 
+                              downloader_alloc_(downloader_alloc), 
                               err_(ErrType::SUCCESS) {}
     virtual ~DeleteDownloaderFunc() = default;
     int operator()(common::hash::HashMapPair<int64_t, int64_t> &kv);

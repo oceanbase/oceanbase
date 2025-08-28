@@ -21,15 +21,15 @@
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "mittest/shared_storage/clean_residual_data.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace storage
+namespace storage 
 {
 using namespace oceanbase::common;
 using namespace oceanbase::blocksstable;
 using namespace oceanbase::lib;
 
-class TestSSMemDataManager : public ::testing::Test
+class TestSSMemDataManager : public ::testing::Test 
 {
 public:
   TestSSMemDataManager() {}
@@ -38,10 +38,10 @@ public:
   static void TearDownTestCase();
 
 public:
-  class TestSSMemDataMgrThread : public Threads
+  class TestSSMemDataMgrThread : public Threads 
   {
   public:
-    enum class TestParallelType
+    enum class TestParallelType 
     {
       TEST_PARALLEL_ALLOCATE_MEM_BLOCK,
       TEST_PARALLEL_ALLOC_AND_FREE_BG_MEM_BLOCK, // FARM COMPAT WHITELIST, renamed
@@ -305,10 +305,10 @@ TEST_F(TestSSMemDataManager, test_mem_data_mgr_mini_mode)
   ObSSMemDataManager mem_data_mgr(cache_stat);
   const uint64_t tenant_id = OB_SERVER_TENANT_ID;
   const int64_t block_size = DEFAULT_BLOCK_SIZE;
-  const int64_t cache_file_size = (1L << 30);
+  const int64_t cache_file_size = (1L << 30); 
 
   ASSERT_EQ(OB_SUCCESS, mem_data_mgr.init(tenant_id, cache_file_size, block_size, true/*is_mini_mode*/));
-
+  
   ObSSMemBlockPool &mem_blk_pool = mem_data_mgr.mem_block_pool_;
   ASSERT_EQ(MINI_MODE_BASE_MEM_BLK_CNT, mem_blk_pool.def_count_);
   ASSERT_EQ(MIN_DYNAMIC_MEM_BLK_CNT, mem_blk_pool.max_extra_count_);
@@ -374,8 +374,8 @@ TEST_F(TestSSMemDataManager, test_parallel_allocate_mem_block)
   ObSSMemDataManager mem_data_mgr(cache_stat);
   const uint64_t tenant_id = MTL_ID();
   ASSERT_EQ(true, is_valid_tenant_id(tenant_id));
-  const int64_t cache_file_size = (1L << 30);
-
+  const int64_t cache_file_size = (1L << 30); 
+  
   ASSERT_EQ(OB_SUCCESS, mem_data_mgr.init(tenant_id, cache_file_size, BLOCK_SIZE, false/*is_mini_mode*/));
 
   TestSSMemDataManager::TestSSMemDataMgrThread threads(
@@ -397,7 +397,7 @@ TEST_F(TestSSMemDataManager, test_parallel_alloc_and_free_bg_mem_block)
   ObSSMemDataManager mem_data_mgr(cache_stat);
   const uint64_t tenant_id = MTL_ID();
   ASSERT_EQ(true, is_valid_tenant_id(tenant_id));
-  const int64_t cache_file_size = (1L << 30);
+  const int64_t cache_file_size = (1L << 30); 
   ASSERT_EQ(OB_SUCCESS, mem_data_mgr.init(tenant_id, cache_file_size, BLOCK_SIZE, false/*is_mini_mode*/));
 
   TestSSMemDataManager::TestSSMemDataMgrThread threads(
@@ -418,7 +418,7 @@ TEST_F(TestSSMemDataManager, test_parallel_add_and_get_micro_data)
   ObSSMemDataManager mem_data_mgr(cache_stat);
   const uint64_t tenant_id = MTL_ID();
   ASSERT_EQ(true, is_valid_tenant_id(tenant_id));
-  const int64_t cache_file_size = (1L << 30);
+  const int64_t cache_file_size = (1L << 30); 
 
   ASSERT_EQ(OB_SUCCESS, mem_data_mgr.init(tenant_id, cache_file_size, BLOCK_SIZE, false/*is_mini_mode*/));
   TestSSMemDataManager::TestSSMemDataMgrThread threads(

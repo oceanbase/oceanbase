@@ -269,7 +269,7 @@ int SetCommandOperator::is_key_member(int64_t db, const ObString &key, const ObS
   return ret;
 }
 
-int SetCommandOperator::insert_single_data(int64_t db, const ObString &key,
+int SetCommandOperator::insert_single_data(int64_t db, const ObString &key, 
                                            const ObString &member, bool &is_duplicated)
 {
   int ret = OB_SUCCESS;
@@ -426,7 +426,7 @@ int SetCommandOperator::do_aggregate_store(
   return ret;
 }
 
-int SetCommandOperator::do_sismember(int64_t db, const ObString &key,
+int SetCommandOperator::do_sismember(int64_t db, const ObString &key, 
                                      const ObString &member)
 {
   int ret = OB_SUCCESS;
@@ -834,7 +834,7 @@ int SetCommandOperator::do_spop(int64_t db, const common::ObString &key, const c
 int SetCommandOperator::do_srand_member(int64_t db, const common::ObString &key, const common::ObString &count_str)
 {
   int ret = OB_SUCCESS;
-
+  
   SrandResult srand_result(op_temp_allocator_);
 
   int64_t count = 1;
@@ -877,9 +877,9 @@ int SetCommandOperator::do_srand_member(int64_t db, const common::ObString &key,
   return ret;
 }
 
-int SetCommandOperator::do_smove(int64_t db,
-                                 const ObString &src,
-                                 const ObString &dest,
+int SetCommandOperator::do_smove(int64_t db, 
+                                 const ObString &src, 
+                                 const ObString &dest, 
                                  const ObString &member)
 {
   int ret = OB_SUCCESS;
@@ -918,13 +918,13 @@ int SetCommandOperator::do_smove(int64_t db,
       bool is_duplicated = false; /*unused*/
       if (OB_FAIL(insert_single_data(db, dest, member, is_duplicated))) {
         LOG_WARN("fail to build rowkey entity", K(ret), K(member), K(db), K(dest));
-      }
+      } 
     }
   }
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(reinterpret_cast<ObRedisSingleCtx&>(redis_ctx_).response_.set_res_int(exists ? 1 : 0))) {
-      LOG_WARN("fail to set response int", K(ret), K(exists));
+      LOG_WARN("fail to set response int", K(ret), K(exists));    
     }
   } else if (ObRedisErr::is_redis_error(ret)) {
     RESPONSE_REDIS_ERROR(reinterpret_cast<ObRedisSingleCtx &>(redis_ctx_).response_, fmt_redis_msg_.ptr());
@@ -1042,8 +1042,8 @@ int SetCommandOperator::do_srem(int64_t db, const ObString &key, const common::O
   return ret;
 }
 
-int SetCommandOperator::fill_set_batch_op(const ObRedisOp &op,
-                                           ObIArray<ObTabletID> &tablet_ids,
+int SetCommandOperator::fill_set_batch_op(const ObRedisOp &op, 
+                                           ObIArray<ObTabletID> &tablet_ids, 
                                            ObTableBatchOperation &batch_op)
 {
   int ret = OB_SUCCESS;
@@ -1060,7 +1060,7 @@ int SetCommandOperator::fill_set_batch_op(const ObRedisOp &op,
   ObString key;
   ObObj insert_obj;
   ObObj expire_obj;
-  for (SAdd::MemberSet::const_iterator iter = mem_set.begin();
+  for (SAdd::MemberSet::const_iterator iter = mem_set.begin(); 
       OB_SUCC(ret) && iter != mem_set.end(); ++iter) {
     insert_obj.set_timestamp(cur_ts);
     expire_obj.set_null();

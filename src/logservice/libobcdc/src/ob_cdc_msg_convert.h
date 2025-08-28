@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef OCEANBASE_CDC_MSG_CONVERT_H__
 #define OCEANBASE_CDC_MSG_CONVERT_H__
 

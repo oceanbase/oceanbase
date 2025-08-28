@@ -41,7 +41,7 @@ int ObAlterIncPartPolicyHelper::alter_partition_policy()
     // This constant indicates that if the key exists in the set, OB_HASH_EXIST will be returned.
     const int OVERWRITE_FLAG = 0;
     const int BUCKET_NUM = 16;
-
+    
     if (OB_ISNULL(part_array)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("inc table part_array is null", KR(ret), KP(inc_table_));
@@ -54,7 +54,7 @@ int ObAlterIncPartPolicyHelper::alter_partition_policy()
       ObSqlString part_history_sql;
       int64_t affected_rows = 0;
       int64_t part_id = OB_INVALID_OBJECT_ID;
-
+      
       for (int64_t i = 0; OB_SUCC(ret) && i < inc_part_num; ++i) {
         inc_part = part_array[i];
         if (OB_ISNULL(inc_part)) {
@@ -115,7 +115,7 @@ int ObAlterIncPartPolicyHelper::alter_partition_policy()
       } else if (OB_UNLIKELY(exist_part_ids.size() != affected_rows)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected affected rows", KR(ret), K(exist_part_ids.size()), K(affected_rows), K(part_history_sql));
-      }
+      } 
       FLOG_INFO("alter partition policy finish", KR(ret), K(part_sql), K(part_history_sql), K(affected_rows), K(inc_part_num));
     }
   }
@@ -142,7 +142,7 @@ int ObAlterIncSubpartPolicyHelper::alter_subpartition_policy()
     // This constant indicates that if the key exists in the set, OB_HASH_EXIST will be returned.
     const int OVERWRITE_FLAG = 0;
     const int BUCKET_NUM = 16;
-
+    
     if (OB_ISNULL(part_array)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("partition array is null", KR(ret), KP(inc_table_));
@@ -155,7 +155,7 @@ int ObAlterIncSubpartPolicyHelper::alter_subpartition_policy()
       ObSqlString subpart_history_sql;
       int64_t affected_rows = 0;
       int64_t subpart_id = OB_INVALID_OBJECT_ID;
-
+      
       for (int64_t i = 0; OB_SUCC(ret) && i < inc_part_num; ++i) {
         inc_part = part_array[i];
         if (OB_ISNULL(inc_part)) {
@@ -177,11 +177,11 @@ int ObAlterIncSubpartPolicyHelper::alter_subpartition_policy()
               } else if (FALSE_IT(subpart_id = inc_subpart->get_sub_part_id())) {
               } else if (OB_FAIL(exist_subpart_ids.set_refactored(subpart_id, OVERWRITE_FLAG/*flag*/))) {
                 if (OB_HASH_EXIST == ret) {
-                  LOG_WARN("duplicate subpartition when alter subpartition storage_cache_policy", KR(ret), K(subpart_id), KPC(inc_subpart), KPC(inc_part),
+                  LOG_WARN("duplicate subpartition when alter subpartition storage_cache_policy", KR(ret), K(subpart_id), KPC(inc_subpart), KPC(inc_part), 
                       K(inc_subpart_num), K(inc_part_num));
                   LOG_USER_ERROR(OB_HASH_EXIST, "duplicate subpartition when alter subpartition storage_cache_policy");
                 } else {
-                  LOG_WARN("failed to set refactored for exist_subpart_ids", KR(ret), K(subpart_id), KPC(inc_subpart), KPC(inc_part),
+                  LOG_WARN("failed to set refactored for exist_subpart_ids", KR(ret), K(subpart_id), KPC(inc_subpart), KPC(inc_part), 
                       K(inc_subpart_num), K(inc_part_num));
                 }
               } else {
@@ -233,7 +233,7 @@ int ObAlterIncSubpartPolicyHelper::alter_subpartition_policy()
       } else if (OB_UNLIKELY(exist_subpart_ids.size() != affected_rows)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected affected rows", KR(ret), K(exist_subpart_ids.size()), K(affected_rows), K(subpart_history_sql));
-      }
+      } 
       FLOG_INFO("alter subpartition policy success", KR(ret), K(subpart_sql), K(subpart_history_sql), K(affected_rows), K(exist_subpart_ids.size()));
     }
   }

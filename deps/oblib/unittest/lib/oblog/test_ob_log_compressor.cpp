@@ -149,7 +149,7 @@ TEST(ObLogCompressor, base_compressor_test)
   int test_count = 1000;
   int test_size = test_count * sizeof(int);
   ObCompressor *compressor_zstd;
-
+  
   // get compressor
   ASSERT_EQ(OB_SUCCESS, ObCompressorPool::get_instance().get_compressor(ZSTD_1_3_8_COMPRESSOR, compressor_zstd));
 

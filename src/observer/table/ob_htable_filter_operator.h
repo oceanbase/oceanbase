@@ -39,7 +39,7 @@ public:
 
   int compare(const common::ObNewRow &lhs, const common::ObNewRow &rhs, int &cmp_ret) const override;
   bool operator()(const common::ObNewRow &lhs, const common::ObNewRow &rhs) override;
-};
+};  
 
 class ObTableHbaseRowKeyReverseCompare final : public table::ObTableMergeFilterCompare
 {
@@ -56,7 +56,7 @@ class ObHColumnDescriptor final
 public:
   ObHColumnDescriptor()
       :time_to_live_(0),
-       max_version_(0)
+       max_version_(0) 
   {}
   void reset();
   int from_string(const common::ObString &kv_attributes);
@@ -353,7 +353,7 @@ private:
   int init_async_forward_tb_ctx();
   virtual table::ObTableApiScanRowIterator* get_forward_child_op() { return forward_child_op_; }
   int create_forward_child_op();
-
+  
 private:
   common::ObArenaAllocator iter_allocator_;  // used for forward iter
   common::ObArenaAllocator reversed_range_alloc_;  // used for reversed range

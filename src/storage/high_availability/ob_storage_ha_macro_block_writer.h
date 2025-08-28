@@ -112,7 +112,7 @@ private:
       const char *buf,
       const int64_t size,
       const blocksstable::MacroBlockId &macro_id) override;
-
+  
   DISALLOW_COPY_AND_ASSIGN(ObStorageHALocalMacroBlockWriter);
 };
 
@@ -135,7 +135,7 @@ private:
       const char *buf,
       const int64_t size,
       const blocksstable::MacroBlockId &macro_id) override;
-
+  
   DISALLOW_COPY_AND_ASSIGN(ObStorageHASharedMacroBlockWriter);
 };
 

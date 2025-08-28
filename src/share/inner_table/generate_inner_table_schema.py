@@ -1360,8 +1360,8 @@ def generate_virtual_agent_misc_data(f):
     in_tenant_space = base_kw.has_key('in_tenant_space') and base_kw['in_tenant_space']
     only_sys = all_only_sys_table_name.has_key(base_kw['table_name']) and all_only_sys_table_name[base_kw['table_name']] and "OB_SYS_DATABASE_ID" != kw['database_id']
     mysql_compat_agent_table_name = base_kw['table_name']
-    mysql_compat_agent = (mysql_compat_agent_tables.has_key(mysql_compat_agent_table_name)
-                          and mysql_compat_agent_tables[mysql_compat_agent_table_name]
+    mysql_compat_agent = (mysql_compat_agent_tables.has_key(mysql_compat_agent_table_name) 
+                          and mysql_compat_agent_tables[mysql_compat_agent_table_name] 
                           and "OB_SYS_DATABASE_ID" == kw['database_id'])
     iter_init += """
     case %s: {
@@ -1380,7 +1380,7 @@ def generate_virtual_agent_misc_data(f):
        vt_iter = agent_iter;
       }
       break;
-    }\n""" % (tid, base_tid, in_tenant_space and 'false' or 'true', only_sys and 'true' or 'false',
+    }\n""" % (tid, base_tid, in_tenant_space and 'false' or 'true', only_sys and 'true' or 'false', 
               ', Worker::CompatMode::MYSQL' if mysql_compat_agent else '')
 
   iter_init += '  END_CREATE_VT_ITER_SWITCH_LAMBDA\n'
@@ -1449,7 +1449,7 @@ def def_agent_index_table(index_name, index_table_id, index_columns, index_using
     raise Exception("index name mismatch", index_kw['index_name'], real_index_name)
   if not index_kw['index_columns'] == index_columns:
     raise Exception("index column mismatch", index_kw['index_columns'], index_columns)
-
+  
 
   index_def = ''
   cpp_f_tmp = cpp_f
@@ -1472,9 +1472,9 @@ def def_agent_index_table(index_name, index_table_id, index_columns, index_using
   kw["real_vt"] = True
   real_table_virtual_table_names.append(kw)
 
-  #In order to upgrade compatibility,
-  #the oracle inner table index cannot be added to the schema of the main table following the path of the main table.
-  #Only the schema refresh triggered by the creation of the index table can add simple index info,
+  #In order to upgrade compatibility, 
+  #the oracle inner table index cannot be added to the schema of the main table following the path of the main table. 
+  #Only the schema refresh triggered by the creation of the index table can add simple index info, 
   #so the agent table index is not added to the sys index here
 
   #sys_index_tables.append(kw)
@@ -2039,7 +2039,7 @@ def def_table_schema(**keywords):
     lob_aux_ids.append([keywords['table_id'], keywords['table_name'], piece_tid, 'AUX_LOB_PIECE', lob_aux_data_def, is_in_tenant_space, cluster_private])
     ptid = table_name2tid(keywords['table_name'] + '_aux_lob_piece')
     add_field('aux_lob_piece_tid', ptid)
-
+  
   if keywords.has_key("index_name") and not type(keywords['index']) == dict:
     add_index_method_end(max_used_column_idx)
   else:
@@ -2763,7 +2763,7 @@ def generate_inner_table_hard_code_schema_mapping(f):
 def run_command(command, raise_error = True):
   import os
   print "run command '{}'".format(command)
-  ret = os.system(command)
+  ret = os.system(command) 
   if ret != 0 and raise_error:
     raise BaseException("failed to run command '{}'".format(command))
   return ret

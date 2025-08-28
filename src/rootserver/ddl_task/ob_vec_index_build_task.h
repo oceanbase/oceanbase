@@ -153,7 +153,7 @@ private:
   struct CheckTaskStatusFn final
   {
   public:
-    CheckTaskStatusFn(common::hash::ObHashMap<uint64_t, share::ObDomainDependTaskStatus> &dependent_task_result_map,
+    CheckTaskStatusFn(common::hash::ObHashMap<uint64_t, share::ObDomainDependTaskStatus> &dependent_task_result_map, 
                       int64_t &finished_task_cnt, bool &child_task_failed, bool &state_finished, const uint64_t tenant_id) :
       dependent_task_result_map_(dependent_task_result_map),
       finished_task_cnt_(finished_task_cnt),

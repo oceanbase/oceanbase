@@ -53,7 +53,7 @@ public:
                       ObExpr &rt_expr) const override;
   static int calc_expr_insert(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   DECLARE_SET_LOCAL_SESSION_VARS;
-
+  
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprInsert);

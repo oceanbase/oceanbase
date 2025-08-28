@@ -61,7 +61,7 @@ public:
   {
     // List objects under the specified directory that are lexicographically greater than 'marker',
     // and the number of objects returned does not exceed op.get_scan_count()
-    // If 'marker' is "", it means
+    // If 'marker' is "", it means 
     // the listing starts from the lexicographically smallest object in the specified directory
     // If op.get_scan_count() is <= 0,
     // it indicates there is no upper limit on the number of objects listed

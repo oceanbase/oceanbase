@@ -378,11 +378,11 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
           } else {
             OZ (call_proc_info->set_db_name(session_info_->get_database_name()));
           }
-
+          
         }
       } else {
         CK (OB_NOT_NULL(parse_tree.children_[1]->children_[0]));
-        OZ (resolve_dblink_routine_name(*parse_tree.children_[0],
+        OZ (resolve_dblink_routine_name(*parse_tree.children_[0], 
                                         *parse_tree.children_[1]->children_[0],
                                         dblink_name,
                                         db_name,
@@ -582,7 +582,7 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
     OZ (call_proc_info->final_expression(params, session_info_, schema_checker_->get_schema_mgr()));
     OX (stmt->set_call_proc_info(call_proc_info));
     int64_t compile_end = ObTimeUtility::current_time();
-    if (params_.is_execute_call_stmt_
+    if (params_.is_execute_call_stmt_ 
         && 0 != params_.cur_sql_.length()
         && NULL == stmt->get_dblink_routine_info()) {
       if (NULL != params_.param_list_) {

@@ -178,7 +178,7 @@ struct InParamMeta
 
 struct InParamValsWrapper
 {
-  InParamValsWrapper():
+  InParamValsWrapper(): 
     param_vals_(),
     cmp_funcs_()
     { }
@@ -266,7 +266,7 @@ struct ObInKeyPart
   InParamMeta* create_param_meta(common::ObIAllocator &alloc);
   int get_obj_cmp_funcs(ObIArray<obj_cmp_func> &cmp_funcs);
 
-  uint64_t table_id_;
+  uint64_t table_id_;  
   InParamsArr in_params_;
   OffsetsArr offsets_;
   // if key is is not strict in, need to store the missing offsets
@@ -335,7 +335,7 @@ public:
   void link_gt(ObKeyPart *and_next);
   ObKeyPart *general_or_next();
   ObKeyPart *cut_general_or_next();
-
+  
   bool equal_to(const ObKeyPart *other);
   bool key_node_is_equal(const ObKeyPart *other);
   bool is_equal_condition() const;
@@ -350,14 +350,14 @@ public:
   inline bool is_in_key() const {return T_IN_KEY == key_type_ && in_keypart_ != NULL && in_keypart_->in_type_ == T_IN_KEY_PART; }
   inline bool is_not_in_key() const {return T_IN_KEY == key_type_ && in_keypart_ != NULL && in_keypart_->in_type_ == T_NOT_IN_KEY_PART; }
   inline bool is_geo_key() const { return T_DOMAIN_KEY == key_type_ && domain_keypart_ != NULL && (domain_keypart_->domain_op_ >= ObDomainOpType::T_GEO_COVERS && domain_keypart_->domain_op_ <= ObDomainOpType::T_GEO_RELATE); }
-  inline bool is_domain_key() const { return T_DOMAIN_KEY == key_type_ && domain_keypart_ != NULL; }
+  inline bool is_domain_key() const { return T_DOMAIN_KEY == key_type_ && domain_keypart_ != NULL; } 
 
   int create_normal_key();
   int create_like_key();
   int create_in_key();
   int create_not_in_key();
   int create_domain_key();
-
+  
   inline ObNormalKeyPart *get_normal_key()
   {
     ObNormalKeyPart *normal_key = NULL;
@@ -410,7 +410,7 @@ public:
   int remove_in_params_vals(const common::ObIArray<int64_t> &val_idx);
   int remove_in_dup_vals();
   int convert_to_true_or_false(bool is_always_true);
-
+  
   int cast_value_type(const common::ObDataTypeCastParams &dtc_params, ObExecContext *exec_ctx,
                       const int64_t cur_datetime, bool contain_row, bool &is_bound_modified);
 

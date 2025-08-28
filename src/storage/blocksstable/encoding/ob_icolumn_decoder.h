@@ -115,9 +115,9 @@ struct ObVectorDecodeCtx
       const int64_t vec_offset,
       sql::VectorHeader &vec_header)
     : ptr_arr_(ptr_arr), len_arr_(len_arr), row_ids_(row_ids), row_cap_(row_cap),
-      vec_offset_(vec_offset), vec_header_(vec_header),
+      vec_offset_(vec_offset), vec_header_(vec_header), 
       default_datum_(nullptr) {}
-
+  
   OB_INLINE void set_default_datum(const ObStorageDatum &default_datum)
   {
     default_datum_ = &default_datum;

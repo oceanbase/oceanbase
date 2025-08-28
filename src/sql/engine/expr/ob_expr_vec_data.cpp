@@ -78,3 +78,4 @@ int ObExprVecData::cg_expr(
 
 }  // namespace sql
 }  // namespace oceanbase
+

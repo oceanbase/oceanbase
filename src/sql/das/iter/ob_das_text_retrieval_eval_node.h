@@ -29,7 +29,7 @@ public:
     AND = 0, // +
     NOT = 1, // -
     OR = 2,  // ()
-    NO_OPERATOR = 3,
+    NO_OPERATOR = 3, 
     MORE = 4, // >
     LESS = 5, // <
     NEGATIVE = 6, // ～

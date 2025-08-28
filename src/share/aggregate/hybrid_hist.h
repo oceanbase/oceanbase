@@ -22,13 +22,13 @@ namespace share
 namespace aggregate
 {
 
-class HybridHist final
+class HybridHist final 
   : public BatchAggregateWrapper<HybridHist>
 {
 public:
   static const constexpr VecValueTypeClass IN_TC = VEC_TC_NULL;
   static const constexpr VecValueTypeClass OUT_TC = VEC_TC_LOB;
-
+  
 public:
   HybridHist() {}
 
@@ -42,13 +42,13 @@ public:
     ObExpr *param_expr = param_exprs.at(0);
     const ObObjMeta &obj_meta = param_expr->obj_meta_;
     if (obj_meta.is_string_type() && !obj_meta.is_lob_storage()) {
-      ret = inner_add_batch_rows<true, false>(agg_ctx, skip, bound, *param_expr,
+      ret = inner_add_batch_rows<true, false>(agg_ctx, skip, bound, *param_expr, 
                                                agg_col_id, agg_cell, row_sel);
     } else if (obj_meta.is_lob_storage()) {
-      ret = inner_add_batch_rows<false, true>(agg_ctx, skip, bound, *param_expr,
+      ret = inner_add_batch_rows<false, true>(agg_ctx, skip, bound, *param_expr, 
                                                agg_col_id, agg_cell, row_sel);
     } else {
-      ret = inner_add_batch_rows<false, false>(agg_ctx, skip, bound, *param_expr,
+      ret = inner_add_batch_rows<false, false>(agg_ctx, skip, bound, *param_expr, 
                                                agg_col_id, agg_cell, row_sel);
     }
     if (OB_FAIL(ret)) {
@@ -76,8 +76,8 @@ public:
       if (all_not_null && bound.get_all_rows_active()) {
         for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
           columns.get_payload(i, payload, len);
-          ret = add_row<is_string, is_lob>(agg_ctx, agg_col_id, agg_cell,
-                                           extra, cmp_func,
+          ret = add_row<is_string, is_lob>(agg_ctx, agg_col_id, agg_cell, 
+                                           extra, cmp_func, 
                                            obj_meta, payload, len);
         }
       } else if (all_not_null) {
@@ -86,8 +86,8 @@ public:
             // do nothing
           } else {
             columns.get_payload(i, payload, len);
-            ret = add_row<is_string, is_lob>(agg_ctx, agg_col_id, agg_cell,
-                                             extra, cmp_func,
+            ret = add_row<is_string, is_lob>(agg_ctx, agg_col_id, agg_cell, 
+                                             extra, cmp_func, 
                                              obj_meta, payload, len);
           }
         }
@@ -99,8 +99,8 @@ public:
             extra->inc_null_count();
           } else {
             columns.get_payload(i, payload, len);
-            ret = add_row<is_string, is_lob>(agg_ctx, agg_col_id, agg_cell,
-                                             extra, cmp_func,
+            ret = add_row<is_string, is_lob>(agg_ctx, agg_col_id, agg_cell, 
+                                             extra, cmp_func, 
                                              obj_meta, payload, len);
           }
         }
@@ -110,8 +110,8 @@ public:
         for (int i = 0; OB_SUCC(ret) && i < row_sel.size(); i++) {
           int row_num = row_sel.index(i);
           columns.get_payload(row_num, payload, len);
-          ret = add_row<is_string, is_lob>(agg_ctx, agg_col_id, agg_cell,
-                                           extra, cmp_func,
+          ret = add_row<is_string, is_lob>(agg_ctx, agg_col_id, agg_cell, 
+                                           extra, cmp_func, 
                                            obj_meta, payload, len);
         }
       } else {
@@ -121,8 +121,8 @@ public:
             extra->inc_null_count();
           } else {
             columns.get_payload(row_num, payload, len);
-            ret = add_row<is_string, is_lob>(agg_ctx, agg_col_id, agg_cell,
-                                             extra, cmp_func,
+            ret = add_row<is_string, is_lob>(agg_ctx, agg_col_id, agg_cell, 
+                                             extra, cmp_func, 
                                              obj_meta, payload, len);
           }
         }
@@ -141,9 +141,9 @@ public:
 
   template<bool is_string, bool is_lob>
   OB_INLINE int add_row(RuntimeContext &agg_ctx,
-                        const int32_t agg_col_id,
+                        const int32_t agg_col_id, 
                         const char *agg_cell,
-                        HybridHistVecExtraResult *extra,
+                        HybridHistVecExtraResult *extra, 
                         NullSafeRowCmpFunc cmp_func,
                         const ObObjMeta &obj_meta,
                         const char* payload,
@@ -179,14 +179,14 @@ public:
 
     if (OB_FAIL(ret)) {
     } else if (OB_UNLIKELY(extra->get_num_distinct() == 0)) {
-      DataStoreVecExtraResult *data_store = agg_ctx.get_extra_data_store(agg_col_id,
+      DataStoreVecExtraResult *data_store = agg_ctx.get_extra_data_store(agg_col_id, 
                                                                          agg_cell);
       extra->add_payload(payload, len);
-      extra->calc_total_count(data_store->get_sort_count());
+      extra->calc_total_count(data_store->get_sort_count());                                                               
     } else if (OB_FAIL(cmp_func(obj_meta,
                                 obj_meta,
                                 payload, len, false,
-                                extra->get_prev_payload(),
+                                extra->get_prev_payload(), 
                                 extra->get_prev_payload_len(),
                                 false, cmp_ret))) {
       SQL_LOG(WARN, "failed to cmp null first row", K(ret));
@@ -244,7 +244,7 @@ public:
     }
     return ret;
   }
-
+  
   inline int add_one_row(RuntimeContext &agg_ctx, int64_t row_num, int64_t batch_size,
                          const bool is_null, const char *data, const int32_t data_len,
                          int32_t agg_col_idx, char *agg_cell) override

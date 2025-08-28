@@ -21,7 +21,7 @@ class ObIRawExprCopier
 public:
 
   ObIRawExprCopier(ObRawExprFactory &expr_factory) : expr_factory_(expr_factory) {}
-
+  
   virtual ~ObIRawExprCopier() {}
 
   virtual int check_need_copy(const ObRawExpr *old_expr, ObRawExpr *&new_expr) = 0;
@@ -120,17 +120,17 @@ public:
    * @brief add_skipped_expr
    *  skip the target expr tree or expr node during copying/copy_on_replace
    * @param target
-   * @param include_child
+   * @param include_child 
    *     include_child = true, skip the whole expr tree
    *     include_child = false, skip the expr node itself only, its children still
    *                            need to be copied or replaced
-   * @return
+   * @return 
    */
   int add_skipped_expr(const ObRawExpr *target, bool include_child = true);
 
   template <typename T>
   int add_skipped_expr(const ObIArray<T *> &targets, bool include_child = true);
-
+  
   /**
    * @brief add_replaced_expr
    *  replace the from_expr with the new_expr when copy a expr tree
@@ -173,11 +173,11 @@ private:
 private:
   hash::ObHashSet<uint64_t> new_exprs_;
   hash::ObHashMap<uint64_t, uint64_t> copied_exprs_;
-
-  // these exprs can be modified directly,
+ 
+  // these exprs can be modified directly, 
   // there is no need to create a copy
   // and do replacement on its copy.
-  ObArray<const ObRawExpr *> uncopy_expr_nodes_;
+  ObArray<const ObRawExpr *> uncopy_expr_nodes_; 
 };
 
 template <typename T>

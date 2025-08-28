@@ -85,13 +85,13 @@ int ObLobRetryUtil::check_need_retry(ObLobAccessParam &param, const int error_co
 
 bool ObLobRetryUtil::is_remote_ret_can_retry(int ret)
 {
-  return (ret == OB_REPLICA_NOT_READABLE) ||
+  return (ret == OB_REPLICA_NOT_READABLE) || 
          (ret == OB_RPC_CONNECT_ERROR) ||
-         (ret == OB_RPC_SEND_ERROR) ||
-         (ret == OB_RPC_POST_ERROR) ||
-         (ret == OB_NOT_MASTER) ||
-         (ret == OB_NO_READABLE_REPLICA) ||
-         (ret == OB_TABLET_NOT_EXIST) ||
+         (ret == OB_RPC_SEND_ERROR) || 
+         (ret == OB_RPC_POST_ERROR) || 
+         (ret == OB_NOT_MASTER) || 
+         (ret == OB_NO_READABLE_REPLICA) || 
+         (ret == OB_TABLET_NOT_EXIST) || 
          (ret == OB_LS_NOT_EXIST) ||
          (ret == OB_LS_OFFLINE);
 }

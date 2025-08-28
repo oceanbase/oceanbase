@@ -138,7 +138,7 @@ int ObAllVirtualDagWarningHistory::process_curr_tenant(ObNewRow *&row)
       MEMSET(warning_info_buf_, '\0', sizeof(warning_info_buf_));
       int64_t pos = 0;
       if (dag_warning_info_.location_.is_valid()) {
-        common::databuff_printf(warning_info_buf_, sizeof(warning_info_buf_), pos, "%s:%d(%s),",
+        common::databuff_printf(warning_info_buf_, sizeof(warning_info_buf_), pos, "%s:%d(%s),", 
           dag_warning_info_.location_.filename_,
           dag_warning_info_.location_.line_,
           dag_warning_info_.location_.function_);

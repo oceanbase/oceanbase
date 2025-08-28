@@ -101,7 +101,7 @@ private:
   int inner_add_batch(const common::ObDatum **datums, const common::ObIArray<ObExpr *> &exprs,
                       const uint16_t selector[], const int64_t size,
                       ObChunkDatumStore::StoredRow **stored_rows);
-
+  
   int add_batch_fallback(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &ctx,
                          const ObBitVector &skip, const int64_t batch_size,
                          const uint16_t selector[], const int64_t size,

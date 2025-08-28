@@ -23,7 +23,7 @@ namespace oceanbase
 namespace storage
 {
 
-class ObDDLIncLogHandle
+class ObDDLIncLogHandle 
 {
 public:
   static const int64_t DDL_INC_LOG_TIMEOUT = 60 * 1000 * 1000; // 1min
@@ -50,7 +50,7 @@ public:
   void reset();
   static bool need_retry(int ret_code, bool allow_remote_write);
   int write_inc_start_log_with_retry(
-      const ObTabletID &lob_meta_tablet_id,
+      const ObTabletID &lob_meta_tablet_id, 
       transaction::ObTxDesc *tx_desc,
       share::SCN &start_scn);
   int write_inc_redo_log_with_retry(
@@ -65,7 +65,7 @@ public:
       transaction::ObTxDesc *tx_desc);
 private:
   int write_inc_start_log(
-      const ObTabletID &lob_meta_tablet_id,
+      const ObTabletID &lob_meta_tablet_id, 
       transaction::ObTxDesc *tx_desc,
       share::SCN &start_scn);
   int write_inc_redo_log(

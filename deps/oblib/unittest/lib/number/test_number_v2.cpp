@@ -2509,7 +2509,7 @@ TEST(ObNumber, format_number_format_cmp)
     number::ObNumber num1, num2, value_old,value_new;
     for (int64_t i = 0; i < 11; ++i) {
       allocator.free();
-
+      
       {
         ObLogger::ObTraceLogGuard trace_log_guard; // prevent printing log
         num1.from_v1(const_number_str + i, j, allocator);

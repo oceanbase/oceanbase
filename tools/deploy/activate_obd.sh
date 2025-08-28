@@ -14,7 +14,7 @@ export OBD_BIN=${_OBD_BIN:-$DEP_PATH/usr/bin/obd}
 export PATH=$DEP_PATH/usr/bin/:$PATH
 alias obd="${OBD_BIN}"
 export OBD_HOME=${_OBD_HOME:-$DIR/tools/deploy}
-export OBD_INSTALL_PRE=${_OBD_INSTALL_PRE:-$DEP_PATH}
+export OBD_INSTALL_PRE=${_OBD_INSTALL_PRE:-$DEP_PATH} 
 export OBD_PORT_GEN=$((100*($(id -u)%500)+10000))
 
 if [ ${_OBD_PROFILE} ]; then

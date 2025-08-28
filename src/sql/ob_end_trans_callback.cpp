@@ -61,14 +61,14 @@ void ObEndTransAsyncCallback::callback(int cb_param, const transaction::ObTransI
 void ObEndTransAsyncCallback::callback(int cb_param)
 {
   // Add ASH flags to async commit of transactions
-  // In the start of async commit in func named ` ObSqlTransControl::do_end_trans_() `,
+  // In the start of async commit in func named ` ObSqlTransControl::do_end_trans_() `, 
   // set the ash flag named  `in_committing_` to true.
   ObDiagnosticInfoSwitchGuard g(diagnostic_info_);
   if (OB_NOT_NULL(diagnostic_info_)) {
     common::ObDiagnosticInfo *di = diagnostic_info_;
     reset_diagnostic_info();
-    di->get_ash_stat().in_committing_ = false;
-    di->get_ash_stat().in_sql_execution_ = true;
+    di->get_ash_stat().in_committing_ = false; 
+    di->get_ash_stat().in_sql_execution_ = true; 
     di->end_wait_event(ObWaitEventIds::ASYNC_COMMITTING_WAIT, false);
   }
   bool need_disconnect = false;

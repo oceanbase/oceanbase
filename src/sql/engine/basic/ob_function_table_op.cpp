@@ -168,7 +168,7 @@ int ObFunctionTableOp::inner_get_next_row_udf()
         OZ (get_current_result(record_obj));
         if (OB_FAIL(ret)) {
         } else if (ObUserDefinedSQLType == record_obj.get_type()) {
-          obj_stack[0] = record_obj;
+          obj_stack[0] = record_obj;   
         } else if (record_obj.is_pl_extend()) {
           CK (OB_NOT_NULL(composite = reinterpret_cast<pl::ObPLComposite*>(record_obj.get_ext())));
           if (OB_SUCC(ret)) {

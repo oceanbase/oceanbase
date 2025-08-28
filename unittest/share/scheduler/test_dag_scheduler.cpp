@@ -444,7 +444,7 @@ public:
     return ret;
   }
   INHERIT_TO_STRING_KV("ObITask", ObITask, "type", "MaybeCanceledLoopWaitTask", K(*dag_), K_(seq), K_(cnt), K_(cancel_seq));
-
+  
 private:
   int64_t seq_;
   int64_t cnt_;
@@ -532,8 +532,8 @@ public:
   void set_id(int64_t id) { id_ = id; }
   AtomicOperator &get_op() { return op_; }
   void set_running() { running_ = true; }
-  virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param,
-      ObIAllocator &allocator) const override
+  virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, 
+      ObIAllocator &allocator) const override 
   {
     int ret = OB_SUCCESS;
     if (!is_inited_) {
@@ -550,8 +550,8 @@ public:
   }
   virtual lib::Worker::CompatMode get_compat_mode() const override
   { return lib::Worker::CompatMode::MYSQL; }
-  virtual uint64_t get_consumer_group_id() const override
-  { return consumer_group_id_; }
+  virtual uint64_t get_consumer_group_id() const override 
+  { return consumer_group_id_; }  
   virtual bool is_ha_dag() const override { return false; }
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, K_(is_inited), K_(type), K_(id), K(task_list_.get_size()));
 protected:
@@ -804,8 +804,8 @@ class ObGenerateNextFailTask : public ObITask
 public:
   ObGenerateNextFailTask() : ObITask(ObITask::TASK_TYPE_UT), cnt_(0) {}
   virtual ~ObGenerateNextFailTask() {}
-  virtual int generate_next_task(ObITask *&next_task)
-  {
+  virtual int generate_next_task(ObITask *&next_task) 
+  { 
     int ret = OB_ERR_UNEXPECTED;
     cnt_++;
     COMMON_LOG(WARN, "failed to generate next task", K(ret), K_(cnt));
@@ -1526,7 +1526,7 @@ void print_state(int64_t idx)
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
   COMMON_LOG(INFO, "scheduler state: ", K(scheduler->get_total_running_task_cnt()), K(scheduler->work_thread_num_),
-      K(scheduler->total_worker_cnt_), K(scheduler->prio_sche_[idx].limits_),
+      K(scheduler->total_worker_cnt_), K(scheduler->prio_sche_[idx].limits_), 
       K(scheduler->prio_sche_[idx].running_task_cnts_));
 }
 
@@ -1586,7 +1586,7 @@ TEST_F(TestDagScheduler, test_set_concurrency)
 
 TEST_F(TestDagScheduler, stress_test)
 {
-
+  
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
   ASSERT_EQ(OB_SUCCESS, scheduler->init(MTL_ID(), time_slice, 64, 100 * 1000));
@@ -1947,7 +1947,7 @@ TEST_F(TestDagScheduler, test_cancel_running_dag)
   EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(cancel_dag));
   wait_scheduler();
   EXPECT_EQ(8, op.value());
-  // Example for canceling a maybe finished dag
+  // Example for canceling a maybe finished dag 
   EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(cancel_dag_key));
   EXPECT_EQ(OB_SUCCESS, cancel_dag_key->init(1)); // the same hash key with cancel_dag
   EXPECT_EQ(OB_SUCCESS, scheduler->cancel_dag(cancel_dag_key, true));
@@ -1979,7 +1979,7 @@ TEST_F(TestDagScheduler, test_generate_next_task_failed)
   ObGenerateNextFailDag *dag = nullptr;
   EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(dag));
   EXPECT_EQ(OB_SUCCESS, dag->init());
-  EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag));
+  EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag)); 
   wait_scheduler();
 }
 
@@ -2003,7 +2003,7 @@ TEST_F(TestDagScheduler, test_maybe_cycle_tasks)
           dag = nullptr;
         }
       } else {
-        EXPECT_EQ(OB_SUCCESS, ret);
+        EXPECT_EQ(OB_SUCCESS, ret); 
       }
     }
   }
@@ -2017,7 +2017,7 @@ TEST_F(TestDagScheduler, test_max_concurrent_task)
   ASSERT_EQ(OB_SUCCESS, scheduler->init(MTL_ID(), time_slice, 64));
   EXPECT_EQ(OB_SUCCESS, scheduler->set_thread_score(ObDagPrio::DAG_PRIO_COMPACTION_MID, 7));
   EXPECT_EQ(7, scheduler->prio_sche_[ObDagPrio::DAG_PRIO_COMPACTION_MID].limits_);
-
+  
   const int64_t dag_cnt = 3;
   ObLSID ls_id(1001);
   bool finish_flag[dag_cnt] = {false, false, false};
@@ -2035,7 +2035,7 @@ TEST_F(TestDagScheduler, test_max_concurrent_task)
     EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag));
   }
   CHECK_EQ_UTIL_TIMEOUT(6, scheduler->get_running_task_cnt(ObDagPrio::DAG_PRIO_COMPACTION_MID));
-
+  
   AtomicOperator op(0);
   TestDag *dag1 = nullptr;
   AtomicIncTask *inc_task = nullptr;

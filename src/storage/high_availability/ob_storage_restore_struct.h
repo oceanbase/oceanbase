@@ -110,7 +110,7 @@ struct ObRestoreUtils
   static int get_backup_data_type(
       const ObITable::TableKey &table_key,
       share::ObBackupDataType &data_type);
-
+  
   // call backup::ObLSBackupFactory::free to release iterator after not use.
   static int create_backup_sstable_sec_meta_iterator(
       const uint64_t tenant_id,

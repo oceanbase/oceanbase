@@ -19,9 +19,9 @@
 #include "lib/lock/ob_mutex.h"
 #include "lib/restore/ob_i_storage.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace common
+namespace common 
 {
 
 class ObHdfsFsClient;
@@ -34,7 +34,7 @@ static constexpr int MAX_HDFS_CLIENT_NUM = 97;
 
 typedef lib::ObLockGuard<lib::ObMutex> LockGuard;
 
-class ObHdfsFsClient
+class ObHdfsFsClient 
 {
 public:
   ObHdfsFsClient();
@@ -102,7 +102,7 @@ private:
 };
 
 // Cache for HDFS file system
-class ObHdfsFsCache
+class ObHdfsFsCache 
 {
 public:
   ~ObHdfsFsCache() = default;

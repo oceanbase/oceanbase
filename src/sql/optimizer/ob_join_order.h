@@ -286,7 +286,7 @@ struct EstimateCostInfo {
   bool override_;
 };
 
-enum DomainIndexType
+enum DomainIndexType 
 {
   NON_DOMAIN_INDEX = 0,
   FTS_INDEX = 1,
@@ -563,7 +563,7 @@ class Path
     // remember the parallel info to get this sharding
     int64_t parallel_;
     OpParallelRule op_parallel_rule_;
-    int64_t available_parallel_; // parallel degree used by serial path to enable parallel again
+    int64_t available_parallel_; // parallel degree used by serial path to enable parallel again 
     int64_t server_cnt_;
     common::ObSEArray<common::ObAddr, 8, common::ModulePageAllocator, true> server_list_;
     bool is_pipelined_path_;
@@ -639,7 +639,7 @@ class Path
     }
     bool is_get() const { return is_get_; }
     void set_is_get(bool is_get) { is_get_ = is_get; }
-    double get_table_row_count() const
+    double get_table_row_count() const 
     { return est_cost_info_.table_meta_info_ == NULL ? 1.0 : est_cost_info_.table_meta_info_->table_row_count_; }
     void set_output_row_count(double output_row_count) { est_cost_info_.output_row_count_ = output_row_count; }
     double get_output_row_count() const { return est_cost_info_.output_row_count_; }
@@ -794,7 +794,7 @@ class Path
   };
 
   /**
-   * describe the index tree used in INDEX MEGRE,
+   * describe the index tree used in INDEX MEGRE, 
    * each node in the index tree corresponds one-to-one with a node in the query predicate tree.
    */
   struct ObIndexMergeNode
@@ -927,7 +927,7 @@ class Path
                               EstimateCostInfo &left_param,
                               EstimateCostInfo &right_param,
                               bool re_est_for_op);
-    int re_estimate_rows(ObIArray<JoinFilterInfo> &pushdown_join_filter_infos,
+    int re_estimate_rows(ObIArray<JoinFilterInfo> &pushdown_join_filter_infos, 
                          double left_output_rows,
                          double right_output_rows,
                          double &row_count);
@@ -1383,7 +1383,7 @@ struct NullAwareAntiJoinInfo {
         inv_idx_id_(common::OB_INVALID_ID),
         query_range_(NULL),
         query_range_row_count_(-1),
-        selectivity_(-1.0)
+        selectivity_(-1.0) 
       {}
 
       ObMatchFunRawExpr *match_expr_;
@@ -1547,11 +1547,11 @@ struct NullAwareAntiJoinInfo {
                               bool &is_unique_index,
                               bool &is_index_back,
                               bool &is_global_index);
-
-    int get_matched_inv_index_tid(ObMatchFunRawExpr *match_expr,
+    
+    int get_matched_inv_index_tid(ObMatchFunRawExpr *match_expr, 
                                   uint64_t ref_table_id,
                                   uint64_t &inv_idx_tid);
-
+    
     int get_vector_index_tid_from_expr(ObSqlSchemaGuard *schema_guard,
                                       ObRawExpr *vector_expr,
                                       const uint64_t table_id,
@@ -1784,7 +1784,7 @@ struct NullAwareAntiJoinInfo {
                                         ObIndexInfoCache &index_info_cache,
                                         ObIArray<AccessPath *> &access_paths,
                                         bool &ignore_normal_access_path);
-
+    
     int get_candi_index_merge_trees(const uint64_t table_id,
                                     const uint64_t ref_table_id,
                                     const PathHelper &helper,
@@ -1864,22 +1864,22 @@ struct NullAwareAntiJoinInfo {
 
     int init_filter_selectivity(ObCostTableScanInfo &est_cot_info);
 
-    int init_column_store_est_info(const uint64_t table_id,
-                                   const uint64_t ref_id,
+    int init_column_store_est_info(const uint64_t table_id, 
+                                   const uint64_t ref_id, 
                                    ObCostTableScanInfo &est_cost_info);
 
-    int init_column_store_est_info_with_filter(const uint64_t table_id,
-                                                    ObCostTableScanInfo &est_cost_info,
-                                                    const OptTableMetas& table_opt_meta,
+    int init_column_store_est_info_with_filter(const uint64_t table_id, 
+                                                    ObCostTableScanInfo &est_cost_info, 
+                                                    const OptTableMetas& table_opt_meta, 
                                                     ObIArray<ObRawExpr*> &filters,
                                                     ObIArray<ObCostColumnGroupInfo> &column_group_infos,
                                                     ObSqlBitSet<> &used_column_ids,
                                                     FilterCompare &filter_compare,
                                                     const bool use_filter_sel);
 
-    int init_column_store_est_info_with_other_column(const uint64_t table_id,
-                                                    ObCostTableScanInfo &est_cost_info,
-                                                    const OptTableMetas& table_opt_meta,
+    int init_column_store_est_info_with_other_column(const uint64_t table_id, 
+                                                    ObCostTableScanInfo &est_cost_info, 
+                                                    const OptTableMetas& table_opt_meta, 
                                                     ObSqlBitSet<> &used_column_ids);
 
     int will_use_das(const uint64_t table_id,
@@ -1943,21 +1943,21 @@ struct NullAwareAntiJoinInfo {
                                         int64_t index_id,
                                         const ObTableSchema *index_schema,
                                         int64_t &out_index_prefix);
-
-    int check_enable_better_inlist(int64_t table_id,
-                                   bool &enable_better_inlist,
+    
+    int check_enable_better_inlist(int64_t table_id, 
+                                   bool &enable_better_inlist, 
                                    bool &enable_index_prefix_cost);
 
     int get_candi_range_expr(const ObIArray<ColumnItem> &range_columns,
                             const ObIArray<ObRawExpr*> &predicates,
                             ObIArray<ObRawExpr*> &range_predicates);
 
-    int calculate_range_expr_cost(ObIArray<CandiRangeExprs*> &sorted_predicates,
-                                  ObIArray<ObRawExpr*> &range_exprs,
-                                  int64_t range_column_count,
-                                  int64_t range_count,
+    int calculate_range_expr_cost(ObIArray<CandiRangeExprs*> &sorted_predicates, 
+                                  ObIArray<ObRawExpr*> &range_exprs, 
+                                  int64_t range_column_count, 
+                                  int64_t range_count, 
                                   double &cost);
-
+    
     int calculate_range_and_filter_expr_cost(ObIArray<ObRawExpr*> &range_exprs,
                                              ObIArray<ObRawExpr*> &filter_exprs,
                                              int64_t range_column_count,
@@ -1969,18 +1969,18 @@ struct NullAwareAntiJoinInfo {
                                 const ObIArray<uint64_t> &total_range_counts,
                                 int64_t &better_index_prefix);
 
-    int sort_predicate_by_index_column(const ObIArray<ColumnItem> &range_columns,
-                                       const ObIArray<ObRawExpr*> &predicates,
+    int sort_predicate_by_index_column(const ObIArray<ColumnItem> &range_columns, 
+                                       const ObIArray<ObRawExpr*> &predicates, 
                                        ObIArray<CandiRangeExprs*> &sort_exprs,
                                        bool &has_in_pred);
 
-    int is_eq_or_in_range_expr(ObRawExpr* expr,
-                               int64_t &column_id,
-                               bool &is_in_expr,
+    int is_eq_or_in_range_expr(ObRawExpr* expr, 
+                               int64_t &column_id, 
+                               bool &is_in_expr, 
                                bool &is_valid);
 
-    int get_range_filter(ObIArray<CandiRangeExprs*> &sort_exprs,
-                         ObIArray<ObRawExpr*> &range_exprs,
+    int get_range_filter(ObIArray<CandiRangeExprs*> &sort_exprs, 
+                         ObIArray<ObRawExpr*> &range_exprs, 
                          ObIArray<ObRawExpr*> &filters);
 
     int extract_geo_preliminary_query_range(const ObIArray<ColumnItem> &range_columns,
@@ -2018,7 +2018,7 @@ struct NullAwareAntiJoinInfo {
     int check_exprs_overlap_gis_index(const ObIArray<ObRawExpr*>& quals,
                                       const ObIArray<ObRawExpr*>& keys,
                                       bool &match);
-
+    
     int check_exprs_overlap_multivalue_index(const uint64_t table_id,
                                              const uint64_t index_table_id,
                                              const ObIArray<ObRawExpr*>& quals,
@@ -2716,7 +2716,7 @@ struct NullAwareAntiJoinInfo {
   private:
     int compute_cost_and_prune_access_path(PathHelper &helper,
                                            ObIArray<AccessPath *> &access_paths);
-
+    
     int prune_none_range_path(ObIArray<Path*> &inner_paths);
 
     int revise_output_rows_after_creating_path(PathHelper &helper,
@@ -2828,16 +2828,16 @@ struct NullAwareAntiJoinInfo {
                                   const ObTableSchema &index_schema,
                                   ObIArray<ColumnItem> &range_columns,
                                   ObQueryRangeProvider *&query_range);
-    int estimate_fts_index_scan(uint64_t table_id,
-                                uint64_t ref_table_id,
+    int estimate_fts_index_scan(uint64_t table_id, 
+                                uint64_t ref_table_id, 
                                 uint64_t index_id,
                                 const ObTablePartitionInfo *partition_info,
-                                const ObTableSchema *index_schema,
+                                const ObTableSchema *index_schema, 
                                 ObQueryRangeProvider *query_range,
                                 int64_t &query_range_row_count,
                                 double &selectivity);
     int add_valid_fts_index_ids(PathHelper &helper, uint64_t *index_tid_array, int64_t &size);
-    int add_valid_fts_index_ids_for_dml(const PathHelper &helper,
+    int add_valid_fts_index_ids_for_dml(const PathHelper &helper, 
                                         const uint64_t table_id,
                                         ObIArray<uint64_t> &valid_index_ids);
     int add_valid_vec_index_ids(const ObDMLStmt &stmt,
@@ -2845,7 +2845,7 @@ struct NullAwareAntiJoinInfo {
                                 const uint64_t table_id,
                                 const uint64_t ref_table_id,
                                 const bool has_aggr,
-                                uint64_t *index_tid_array,
+                                uint64_t *index_tid_array, 
                                 int64_t &size,
                                 PathHelper &helper);
     int add_valid_vec_index_ids(const ObDMLStmt &stmt,
@@ -2971,23 +2971,23 @@ struct NullAwareAntiJoinInfo {
                                         ObRawExpr *&new_op_expr,
                                         PathHelper &helper);
 
-    int deduce_common_gen_col_index_expr(ObRawExpr *pred,
-                                        const TableItem *table_item,
+    int deduce_common_gen_col_index_expr(ObRawExpr *pred, 
+                                        const TableItem *table_item, 
                                         ObColumnRefRawExpr *gen_col,
-                                        ObIArray<ObRawExpr*> &simple_gen_col_preds,
-                                        ObRawExpr *&new_pred,
+                                        ObIArray<ObRawExpr*> &simple_gen_col_preds, 
+                                        ObRawExpr *&new_pred, 
                                         PathHelper &helper);
-
+    
     int check_match_prefix_index(ObRawExpr *expr,
                                 const TableItem *table_item,
                                 ObIArray<ObColumnRefRawExpr*> &prefix_cols,
                                 ObIArray<ObRawExpr*> &simple_prefix_preds,
                                 bool &is_match);
-
-    int check_match_common_gen_col_index(ObRawExpr *expr,
-                                        const TableItem *table_item,
-                                        ObIArray<ObColumnRefRawExpr*> &common_gen_cols,
-                                        ObIArray<ObRawExpr*> &simple_gen_col_preds,
+    
+    int check_match_common_gen_col_index(ObRawExpr *expr, 
+                                        const TableItem *table_item, 
+                                        ObIArray<ObColumnRefRawExpr*> &common_gen_cols, 
+                                        ObIArray<ObRawExpr*> &simple_gen_col_preds, 
                                         bool &match_common_gen_col_idx);
 
     int check_simple_expr_match_prefix_index(ObRawExpr *expr,
@@ -2998,7 +2998,7 @@ struct NullAwareAntiJoinInfo {
                                             ObItemType &type,
                                             ObIArray<ObColumnRefRawExpr*> &cur_prefix_cols,
                                             bool &is_match);
-
+    
     int check_simple_expr_match_gen_col_index(ObRawExpr *expr,
                                               const TableItem *table_item,
                                               ObIArray<ObColumnRefRawExpr*> &candi_gen_cols,
@@ -3010,19 +3010,19 @@ struct NullAwareAntiJoinInfo {
                                       ObRawExpr *&matched_expr,
                                       bool &is_match,
                                       bool &is_precise_deduced);
-
+    
     int check_simple_prefix_cmp_expr(ObRawExpr *expr,
                                       ObColumnRefRawExpr *&column_expr,
                                       ObRawExpr *&value_expr,
                                       ObRawExpr *&escape_expr,
                                       ObItemType &type,
                                       bool &is_valid);
-
-    int deduce_prefix_str_idx_expr(ObRawExpr *pred,
-                                  const TableItem *table_item,
+    
+    int deduce_prefix_str_idx_expr(ObRawExpr *pred, 
+                                  const TableItem *table_item, 
                                   ObColumnRefRawExpr *prefix_col,
-                                  ObIArray<ObRawExpr*> &simple_prefix_preds,
-                                  ObRawExpr *&new_pred,
+                                  ObIArray<ObRawExpr*> &simple_prefix_preds, 
+                                  ObRawExpr *&new_pred, 
                                   PathHelper &helper);
 
 

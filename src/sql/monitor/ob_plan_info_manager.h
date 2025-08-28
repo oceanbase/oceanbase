@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef SRC_OBSERVER_PLAN_INFO_MGR_H_
 #define SRC_OBSERVER_PLAN_INFO_MGR_H_
 #include "lib/allocator/ob_allocator.h"
@@ -121,7 +121,7 @@ struct ObLogicalPlanRawData
   int64_t logical_plan_len_;  //compress data length
   //uncompress data length, used for uncompress function
   //if values is -1, logical plan not be compressed
-  int64_t uncompress_len_;
+  int64_t uncompress_len_;    
 };
 
 } // end of namespace sql

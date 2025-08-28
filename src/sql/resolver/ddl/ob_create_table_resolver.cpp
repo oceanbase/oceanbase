@@ -657,10 +657,10 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
 
         // resolve table organizations before resolve table elements
         if (OB_FAIL(ret)) {
-          //do nothing
+          //do nothing 
         } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
           LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
-        } else if (!is_inner_table(table_id_) && !lib::is_oracle_mode() &&
+        } else if (!is_inner_table(table_id_) && !lib::is_oracle_mode() && 
                     OB_FAIL(resolve_table_organization(tenant_config, create_table_node->children_[4]))) {
           SQL_RESV_LOG(WARN, "resolve table organization failed", K(ret));
         } else if (is_organization_set_to_heap()) {
@@ -1253,7 +1253,7 @@ int ObCreateTableResolver::check_generated_partition_column(ObTableSchema &table
         } else {
           OZ (check_external_table_generated_partition_column_sanity(table_schema, dependant_expr, external_part_idx));
         }
-      } /*
+      } /*  
         if gc column is partition key, then this is no restriction
         else {
         //check Expr Function for generated column whether allowed.
@@ -1720,14 +1720,14 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
 
           if (OB_SUCC(ret)) {
             if (is_mysql_mode()) {
-              // In MySQL mode, when column definitions are provided in a CTAS,
+              // In MySQL mode, when column definitions are provided in a CTAS, 
               // they are always complete (name,type,attri,...) and will ignore the deduced attributes from SELECT statement.
               if (OB_FAIL(cols_with_nullable_specified_.push_back(column.get_column_name_str()))) {
                 SQL_RESV_LOG(WARN, "push back column with defination", K(ret));
               }
             } else if (is_oracle_mode) {
               if (!stat.is_set_not_null_ && !stat.is_set_null_) {
-                // In Oracle mode, the column definitions provided in CTAS are incomplete (cannot specify column types).
+                // In Oracle mode, the column definitions provided in CTAS are incomplete (cannot specify column types). 
                 // When column attributes are not explicitly specified, the values are derived from the SELECT statement.
               } else if (OB_FAIL(cols_with_nullable_specified_.push_back(column.get_column_name_str()))) {
                 SQL_RESV_LOG(WARN, "push back column with defination", K(ret));
@@ -1741,7 +1741,7 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
               //then resolve it in resolve_index_node()
               if (OB_FAIL(uk_or_heap_table_pk_add_to_index_list(index_node_position_list, i))) {
                 SQL_RESV_LOG(WARN, "add heap table pk to index list failed", K(ret));
-              }
+              } 
             }
           }
 
@@ -1798,7 +1798,7 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
           }
 
           if (OB_SUCC(ret) && lib::is_oracle_mode()) {
-            // column from resolved_cols may be invalid
+            // column from resolved_cols may be invalid 
             if (OB_FAIL(add_udt_hidden_column(table_schema, resolved_cols, column))) {
               LOG_WARN("generate hidden column for udt failed");
             }
@@ -2372,7 +2372,7 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
                 org_column->set_charset_type(column.get_charset_type());
                 org_column->set_collation_type(column.get_collation_type());
                 org_column->set_accuracy(column.get_accuracy());
-                bool need_set_nullable = !ObOptimizerUtil::find_item(cols_with_nullable_specified_,
+                bool need_set_nullable = !ObOptimizerUtil::find_item(cols_with_nullable_specified_, 
                                                                      org_column->get_column_name_str());
                 // nullable property of org_column instead of column should be set.
                 if (need_set_nullable && OB_FAIL(set_nullable_for_cta_column(select_stmt,
@@ -2402,7 +2402,7 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
             column.set_column_id(gen_column_id());
             ObColumnSchemaV2 *org_column = table_schema.get_column_schema(column.get_column_name());
             if (OB_NOT_NULL(org_column)) {
-              bool need_set_nullable = !ObOptimizerUtil::find_item(cols_with_nullable_specified_,
+              bool need_set_nullable = !ObOptimizerUtil::find_item(cols_with_nullable_specified_, 
                                                                    org_column->get_column_name_str());
               //同名列存在, 为了和mysql保持一致, 需要调整原列的顺序
               ObColumnSchemaV2 new_column;
@@ -2416,11 +2416,11 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
               if (OB_FAIL(ret)) {
               } else if (1 == table_schema.get_column_count()) {
                 //do nothing, 只有一列就不用调整了
-                if (need_set_nullable && OB_FAIL(set_nullable_for_cta_column(select_stmt,
-                                                                             *org_column,
-                                                                             expr,
-                                                                             table_name_,
-                                                                             *allocator_,
+                if (need_set_nullable && OB_FAIL(set_nullable_for_cta_column(select_stmt, 
+                                                                             *org_column, 
+                                                                             expr, 
+                                                                             table_name_, 
+                                                                             *allocator_, 
                                                                              stmt_))) {
                   LOG_WARN("failed to check and set nullable for cta.", K(ret));
                 }
@@ -3284,7 +3284,7 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
                 process_heap_table_primary_key = true;
               }
             }
-          }
+          } 
         }
       }
       if (OB_SUCC(ret)) {
@@ -3894,7 +3894,7 @@ int ObCreateTableResolver::check_max_row_data_length(const ObTableSchema &table_
       SQL_RESV_LOG(WARN, "too big rowsize", KR(ret), K(is_oracle_mode), K(row_data_length), K(rowkey_data_length));
     }
   }
-
+  
   return ret;
 }
 
@@ -4059,7 +4059,7 @@ int ObCreateTableResolver::resolve_primary_key_node_in_heap_table(const ParseNod
 }
 
 int ObCreateTableResolver::resolve_single_column_primary_key_node(const ParseNode *column_list_node, ObTableSchema &tbl_schema,
-                                                                  bool &process_heap_table_primary_key, ObString &first_column_name)
+                                                                  bool &process_heap_table_primary_key, ObString &first_column_name) 
 {
   int ret = OB_SUCCESS;
   process_heap_table_primary_key = true;
@@ -4108,12 +4108,12 @@ int ObCreateTableResolver::resolve_single_column_primary_key_node(const ParseNod
             // do nothing
           }
         }
-
+        
         if (OB_SUCC(ret)) {
           if (0 == i) {
             first_column_name = sort_item.column_name_;
           }
-
+          
           sort_item.order_type_ = common::ObOrderType::ASC;
           if (OB_FAIL(add_sort_column(sort_item))) {
             SQL_RESV_LOG(WARN, "add sort column failed", K(ret), K(sort_item));

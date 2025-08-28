@@ -122,7 +122,7 @@ void ObTenantThreadHelper::destroy()
   if (-1 != tg_id_) {
     TG_STOP(tg_id_);
     {
-      ObThreadCondGuard guard(thread_cond_);
+      ObThreadCondGuard guard(thread_cond_); 
       thread_cond_.broadcast();
     }
     TG_WAIT(tg_id_);
@@ -244,12 +244,12 @@ void ObTenantThreadHelper::run1() {
 }
 void ObTenantThreadHelper::idle(const int64_t idle_time_us)
 {
-  ObThreadCondGuard guard(thread_cond_);
+  ObThreadCondGuard guard(thread_cond_); 
   ObBKGDSessInActiveGuard inactive_guard;
   thread_cond_.wait_us(idle_time_us);
 }
 
-int ObTenantThreadHelper::get_tenant_schema(const uint64_t tenant_id,
+int ObTenantThreadHelper::get_tenant_schema(const uint64_t tenant_id, 
   share::schema::ObTenantSchema &tenant_schema)
 {
   int ret = OB_SUCCESS;
@@ -371,3 +371,4 @@ void ObTenantThreadHelper::wakeup()
 
 }//end of rootserver
 }
+

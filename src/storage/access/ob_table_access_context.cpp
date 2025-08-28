@@ -214,7 +214,7 @@ int ObTableAccessContext::init(ObTableScanParam &scan_param,
     table_scan_stat_->reset();
     table_store_stat_.in_row_cache_threshold_ = scan_param.in_row_cache_threshold_;
     trans_version_range_ = trans_version_range;
-    need_scn_ = scan_param.need_scn_ ||
+    need_scn_ = scan_param.need_scn_ || 
                 (nullptr != scan_param.table_param_ && OB_INVALID_INDEX != scan_param.table_param_->get_read_info().get_trans_col_index());
     range_array_pos_ = &scan_param.range_array_pos_;
     use_fuse_row_cache_ = false;
@@ -234,7 +234,7 @@ int ObTableAccessContext::init(ObTableScanParam &scan_param,
                   table_scan_stat_,
                   query_flag_))) {
       LOG_WARN("Fail to init micro block handle mgr", K(ret));
-    } else if (scan_param.sample_info_.is_row_sample()
+    } else if (scan_param.sample_info_.is_row_sample() 
         && OB_FAIL(ObRowSampleFilterFactory::build_sample_filter(
           scan_param.sample_info_,
           sample_filter_,

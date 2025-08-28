@@ -19,12 +19,12 @@
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "test_ss_common_util.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace storage
+namespace storage 
 {
 using namespace oceanbase::common;
-class TestSSMicroCacheStat : public ::testing::Test
+class TestSSMicroCacheStat : public ::testing::Test 
 {
 public:
   TestSSMicroCacheStat() {}
@@ -65,7 +65,7 @@ TEST_F(TestSSMicroCacheStat, test_micro_cache_stat)
   ObSSExecuteBlkCheckpointTask &blk_ckpt_task = micro_cache->task_runner_.blk_ckpt_task_;
   blk_ckpt_task.is_inited_ = false;
   ObSSReleaseCacheTask &arc_task = micro_cache->task_runner_.release_cache_task_;
-
+  
   ObSSMemDataManager *mem_data_mgr = &(micro_cache->mem_data_mgr_);
   ASSERT_NE(nullptr, mem_data_mgr);
   ObSSMicroMetaManager *micro_meta_mgr = &(micro_cache->micro_meta_mgr_);
@@ -76,7 +76,7 @@ TEST_F(TestSSMicroCacheStat, test_micro_cache_stat)
   ObSSMicroCacheStat &cache_stat = micro_cache->get_micro_cache_stat();
   ASSERT_EQ(cache_stat.phy_blk_stat().total_blk_cnt_, phy_blk_mgr->blk_cnt_info_.total_blk_cnt_);
   ASSERT_EQ(cache_stat.mem_blk_stat().mem_blk_def_cnt_, mem_data_mgr->mem_block_pool_.def_count_);
-  ASSERT_EQ(cache_stat.mem_blk_stat().mem_blk_fg_max_cnt_ + cache_stat.mem_blk_stat().mem_blk_bg_max_cnt_,
+  ASSERT_EQ(cache_stat.mem_blk_stat().mem_blk_fg_max_cnt_ + cache_stat.mem_blk_stat().mem_blk_bg_max_cnt_, 
             mem_data_mgr->mem_block_pool_.get_max_count());
   ASSERT_EQ(0, cache_stat.micro_stat().total_micro_cnt_);
 
@@ -96,7 +96,7 @@ TEST_F(TestSSMicroCacheStat, test_micro_cache_stat)
   const int64_t ori_pool_def_cnt = mem_data_mgr->mem_block_pool_.def_count_;
   ASSERT_LT(0, ori_pool_def_cnt);
   int64_t cur_pool_def_cnt = ori_pool_def_cnt;
-
+  
   ASSERT_LT(cur_pool_def_cnt, available_block_cnt);
   // 1. write some fulfilled mem_block
   int32_t cur_mem_micro_cnt = micro_cnt;
@@ -128,7 +128,7 @@ TEST_F(TestSSMicroCacheStat, test_micro_cache_stat)
   ASSERT_EQ(1, cache_stat.io_stat().prewarm_io_param_.add_cnt_);
   ASSERT_EQ(micro_size, cache_stat.io_stat().prewarm_io_param_.add_bytes_);
   ASSERT_EQ(1, cache_stat.hit_stat().prewarm_new_add_cnt_);
-
+  
   ASSERT_EQ(cur_pool_def_cnt, cache_stat.phy_blk_stat().data_blk_used_cnt_);
   ASSERT_EQ(cur_pool_def_cnt * micro_cnt + 1, cache_stat.micro_stat().total_micro_cnt_);
   ObSSARCInfo &arc_info = micro_meta_mgr->arc_info_;
@@ -313,7 +313,7 @@ TEST_F(TestSSMicroCacheStat, test_micro_cache_stat)
   cache_stat.cache_load_.common_io_load_.write_load_.update_load_param(1, 200, 12 * 1024 * 1024);
   available_space = 0;
   ASSERT_EQ(OB_SUCCESS, micro_cache->get_available_space_for_prewarm(available_space));
-  ASSERT_EQ(available_space,
+  ASSERT_EQ(available_space, 
       max_cache_data_blk_cnt * block_size * (SS_ARC_LIMIT_MAX_PREWARM_PCT - cache_data_blk_usage_pct) / 100 - SS_CLOSE_EVICTION_DIFF_SIZE);
 
   // 8. make arc work_limit=0

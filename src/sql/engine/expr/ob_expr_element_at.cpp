@@ -116,7 +116,7 @@ int ObExprElementAt::eval_element_at(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     LOG_WARN("failed to eval index arg", K(ret));
   } else if (arr_datum->is_null() || idx_datum->is_null()) {
     res.set_null();
-  } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_datum->get_string(), src_arr))) {
+  } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_datum->get_string(), src_arr))) { 
     LOG_WARN("construct array obj failed", K(ret));
   } else if (OB_FALSE_IT(idx = idx_datum->get_int() - 1)) {
   } else if (idx < 0 || idx >= src_arr->size() || idx > UINT32_MAX) {
@@ -177,7 +177,7 @@ int ObExprElementAt::eval_element_at_batch(const ObExpr &expr, ObEvalCtx &ctx,
       eval_flags.set(j);
       if (arr_array.at(j)->is_null() || idx_array.at(j)->is_null()) {
         res_datum.at(j)->set_null();
-      } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_array.at(j)->get_string(), src_arr))) {
+      } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_array.at(j)->get_string(), src_arr))) { 
         LOG_WARN("construct array obj failed", K(ret));
       } else if (OB_FALSE_IT(idx = idx_array.at(j)->get_int() - 1)) {
       } else if (idx < 0 || idx >= src_arr->size() || idx > UINT32_MAX) {
@@ -319,7 +319,7 @@ int ObExprElementAt::cg_expr(ObExprCGCtx &expr_cg_ctx,
   UNUSED(raw_expr);
   rt_expr.eval_func_ = eval_element_at;
   rt_expr.eval_batch_func_ = eval_element_at_batch;
-  rt_expr.eval_vector_func_ = eval_element_at_vector;
+  rt_expr.eval_vector_func_ = eval_element_at_vector; 
   return OB_SUCCESS;
 }
 

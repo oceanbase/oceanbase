@@ -66,7 +66,7 @@ int ObDataMacroBlockMergeWriter::open(
 int ObDataMacroBlockMergeWriter::append_row(
     const ObDatumRow &row,
     const ObMacroBlockDesc *curr_macro_desc)
-{
+{ 
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(curr_macro_desc) && OB_UNLIKELY(!curr_macro_desc->is_valid_with_macro_meta())) {
     ret = OB_INVALID_ARGUMENT;

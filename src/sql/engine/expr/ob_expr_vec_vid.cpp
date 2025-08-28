@@ -99,3 +99,4 @@ int ObExprVecVid::cg_expr(
 
 }  // namespace sql
 }  // namespace oceanbase
+

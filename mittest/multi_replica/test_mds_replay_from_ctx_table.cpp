@@ -209,7 +209,7 @@ TEST_F(GET_RESTART_ZONE_TEST_CLASS_NAME(2, 1), restart_zone2_from_tx_ctx_table)
   ASSERT_EQ(ls_handle.is_valid(), true);
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tx_ctx(register_succ_arg.tx_id_, true, tx_ctx));
 
-  RETRY_UNTIL_TIMEOUT(tx_ctx->ctx_source_ == PartCtxSource::RECOVER
+  RETRY_UNTIL_TIMEOUT(tx_ctx->ctx_source_ == PartCtxSource::RECOVER 
                    && tx_ctx->create_ctx_scn_ == register_succ_arg.register_scn2_,
                       5 * 1000 * 1000, 5000);
   // tx_ctx->print_trace_log();

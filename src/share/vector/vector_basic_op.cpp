@@ -16,7 +16,7 @@ namespace oceanbase
 {
 namespace common
 {
-HashFuncTypeForTc get_hashfunc_by_tc(VecValueTypeClass tc)
+HashFuncTypeForTc get_hashfunc_by_tc(VecValueTypeClass tc) 
 {
   HashFuncTypeForTc res_func;
   switch (tc) {
@@ -172,7 +172,7 @@ HashFuncTypeForTc get_hashfunc_by_tc(VecValueTypeClass tc)
   return res_func;
 }
 
-NullHashFuncTypeForTc get_null_hashfunc_by_tc(VecValueTypeClass tc)
+NullHashFuncTypeForTc get_null_hashfunc_by_tc(VecValueTypeClass tc) 
 {
   NullHashFuncTypeForTc res_func;
   switch (tc) {

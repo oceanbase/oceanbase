@@ -106,7 +106,7 @@ enum SetAlgo
 };
 
 /********
- * When modifying DistAlgo, the function ob_dist_algo_str
+ * When modifying DistAlgo, the function ob_dist_algo_str 
  * needs to be modified synchronously ！！！
  ************/
 enum DistAlgo
@@ -302,7 +302,7 @@ inline DistAlgo get_opposite_distributed_type(DistAlgo dist_type)
     break;
   case DistAlgo::DIST_SET_RANDOM:
     oppo_type = DistAlgo::DIST_SET_RANDOM;
-    break;
+    break;  
   default:
     break;
   }

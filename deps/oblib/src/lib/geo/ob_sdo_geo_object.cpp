@@ -63,7 +63,7 @@ int ObSdoPoint::to_text(ObStringBuffer &buf)
   } else if (OB_FAIL(buf.append(")"))){
     LOG_WARN("fail to print (", K(ret));
   }
-  return ret;
+  return ret; 
 }
 
 int ObSdoGeoObject::to_text(ObStringBuffer &buf)
@@ -107,7 +107,7 @@ int ObSdoGeoObject::to_text(ObStringBuffer &buf)
       LOG_WARN("fail to print point type start", K(ret));
     } else if (OB_FAIL(buf.append("("))){
       LOG_WARN("fail to print (", K(ret));
-    }
+    } 
     for (uint64_t i = 0; i < elem_info_.count() && OB_SUCC(ret); i++) {
       if ((len = snprintf(number_buf, 128, "%lu", elem_info_.at(i))) < 0) {
         ret = OB_ERR_UNEXPECTED;
@@ -133,7 +133,7 @@ int ObSdoGeoObject::to_text(ObStringBuffer &buf)
       LOG_WARN("fail to print point type start", K(ret));
     } else if (OB_FAIL(buf.append("("))){
       LOG_WARN("fail to print (", K(ret));
-    }
+    } 
     for (uint64_t i = 0; i < ordinates_.count() && OB_SUCC(ret); i++) {
       if (OB_FAIL(ObGeoTypeUtil::print_double(ordinates_.at(i), buf))) {
         LOG_WARN("fail to val to string", K(ret), K(ordinates_.at(i)));
@@ -154,7 +154,7 @@ int ObSdoGeoObject::to_text(ObStringBuffer &buf)
 bool ObSdoGeoObject::operator==(const ObSdoGeoObject &other) const
 {
   bool bret = false;
-  if (gtype_ == other.get_gtype() && srid_ == other.get_srid() &&
+  if (gtype_ == other.get_gtype() && srid_ == other.get_srid() && 
       point_ == other.get_point() && elem_info_.count() == other.get_elem_info().count() &&
       ordinates_.count() == other.get_ordinates().count()) {
     bret = true;

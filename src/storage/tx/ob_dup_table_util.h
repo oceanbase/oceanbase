@@ -251,7 +251,7 @@ public:
   int64_t get_committing_dup_trx_cnt();
   int add_commiting_dup_trx(const ObTransID &tx_id);
   int remove_commiting_dup_trx(const ObTransID &tx_id);
-
+  
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDupTableLSHandler);
 
@@ -261,7 +261,7 @@ private:
   int leader_revoke_(const bool is_forcedly);
 
   int try_to_confirm_tablets_(const share::SCN &confirm_ts);
-
+  
   int recover_ckpt_into_memory_();
 
   int errsim_leader_revoke_();
@@ -278,7 +278,7 @@ private:
   int64_t total_block_confirm_ref_; // block new dup tablet confirmed
 
   ObSpinLock committing_dup_trx_lock_;
-  common::hash::ObHashSet<ObTransID> committing_dup_trx_set_;
+  common::hash::ObHashSet<ObTransID> committing_dup_trx_set_; 
 
   share::SCN self_max_replayed_scn_;
   int64_t last_max_replayed_scn_update_ts_;

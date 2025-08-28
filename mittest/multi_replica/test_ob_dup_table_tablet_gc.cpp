@@ -87,7 +87,7 @@ TEST_F(GET_ZONE_TEST_CLASS_NAME(1), create_and_drop_dup_table)
     for (int i = 1; i <= loop_cnt; i++) {
       rand = std::rand() % 10 + 1;
       name_rand = std::rand() % 13331 + uid;
-
+      
       if (rand <= 7) {
         w_lock.lock();
         std::pair<std::set<int>::iterator, bool> insert_res = create_table_set.insert(name_rand);
@@ -170,7 +170,7 @@ TEST_F(GET_ZONE_TEST_CLASS_NAME(1), create_and_drop_dup_table)
 
   LOG_STDOUT("Drop all dup table\n");
   sleep(300);
-
+  
   READ_SQL_BY_CONN(test_conn, after_drop_all_tablet_info_result, check_tablet_to_ls_sql.c_str());
   ASSERT_EQ(OB_SUCCESS, after_drop_all_tablet_info_result->next());
   ASSERT_EQ(OB_SUCCESS, after_drop_all_tablet_info_result->get_int("count(*)", dup_tablet_cnt));
@@ -180,7 +180,7 @@ TEST_F(GET_ZONE_TEST_CLASS_NAME(1), create_and_drop_dup_table)
   READ_SQL_BY_CONN(test_conn, after_drop_all_tablet_result,
                    "select count(*) as res from "
                    "oceanbase.__all_virtual_dup_ls_tablets where ls_state = 'LEADER'");
-  ASSERT_EQ(OB_SUCCESS, after_drop_all_tablet_result->next());
+  ASSERT_EQ(OB_SUCCESS, after_drop_all_tablet_result->next()); 
   ASSERT_EQ(OB_SUCCESS, after_drop_all_tablet_result->get_uint("res", tablet_count));
   LOG_STDOUT("Check tablet, remain_tablets:%lu, real_tablets:%lu\n", dup_tablet_cnt, tablet_count);
   ASSERT_EQ(true, tablet_count == dup_tablet_cnt);

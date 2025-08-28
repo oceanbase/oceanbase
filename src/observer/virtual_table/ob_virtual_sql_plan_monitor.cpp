@@ -724,7 +724,7 @@ int ObVirtualSqlPlanMonitor::convert_node_to_row(ObMonitorNode &node, ObNewRow *
         break;
       }
       case DB_TIME: {
-        // concept:
+        // concept: 
         cells[cell_idx].set_int(node.db_time_);
         break;
       }

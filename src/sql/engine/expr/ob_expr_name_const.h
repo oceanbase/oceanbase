@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef _OCEANBASE_SQL_OB_EXPR_NAME_CONST_H_
 #define _OCEANBASE_SQL_OB_EXPR_NAME_CONST_H_
 #include "lib/ob_name_def.h"

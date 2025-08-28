@@ -40,13 +40,13 @@ private:
   virtual int inner_fetch_rows(const int64_t batch_size, uint64_t &count, const int64_t datum_offset) override final;
   int check_need_access_data(const ObTableIterParam &iter_param, ObTableAccessContext &access_ctx);
   bool check_agg_finished();
-  OB_INLINE int64_t get_bound_row_id() const
+  OB_INLINE int64_t get_bound_row_id() const 
   {
     int64_t bound_row_id  = 0;
     if (is_reverse_scan_) {
       bound_row_id = OB_INVALID_CS_ROW_ID == current_ ? query_index_range_.start_row_id_ : current_ + 1;
     } else {
-      bound_row_id = OB_INVALID_CS_ROW_ID == current_ ? query_index_range_.end_row_id_ : current_ - 1;
+      bound_row_id = OB_INVALID_CS_ROW_ID == current_ ? query_index_range_.end_row_id_ : current_ - 1; 
     }
     return bound_row_id;
   }

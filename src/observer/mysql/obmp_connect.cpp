@@ -197,7 +197,7 @@ int ObMPConnect::init_process_single_stmt(const ObMultiStmtItem &multi_stmt_item
   // init_connect可以执行query和dml语句，必须加上req_timeinfo_guard
   observer::ObReqTimeGuard req_timeinfo_guard;
   //Do not change the order of SqlCtx and Allocator. ObSqlCtx uses the resultset's allocator to
-  //allocate memory for ObSqlCtx::base_constraints_. The allocator must be deconstructed after sqlctx.
+  //allocate memory for ObSqlCtx::base_constraints_. The allocator must be deconstructed after sqlctx. 
   ObArenaAllocator allocator(ObModIds::OB_SQL_SESSION);
   ObSqlCtx ctx;
   ctx.exec_type_ = MpQuery;
@@ -422,7 +422,7 @@ int ObMPConnect::process()
       const int login_warning_buf_len = 50;
       char login_warning[login_warning_buf_len];
       int tmp_ret = OB_SUCCESS;
-
+    
       if (OB_TMP_FAIL(ObLicenseUtils::get_login_message(login_warning, login_warning_buf_len))) {
         LOG_WARN("fail to get login warning message", KR(ret));
         login_warning[0] = '\0';
@@ -693,13 +693,13 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
           if (OB_FAIL(schema_guard.is_user_empty_passwd(login_info, is_empty_passwd))) {
             LOG_WARN("failed to check is user account is empty && login_info.passwd_ is empty", K(ret), K(login_info.passwd_));
           } else if (!is_empty_passwd && // user account with empty password do not need auth switch, same as MySQL 5.7 and 8.x
-                    OB_CLIENT_NON_STANDARD == conn->client_type_ && // client is not OB's C/JAVA client
+                    OB_CLIENT_NON_STANDARD == conn->client_type_ && // client is not OB's C/JAVA client 
                     !hsr_.get_auth_plugin_name().empty() && // client do not use mysql_native_method
                     hsr_.get_auth_plugin_name().compare(AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD) &&
                     GCONF._enable_auth_switch &&
                     (!conn->is_proxy_ || conn->proxy_version_ >= PROXY_VERSION_4_3_3_0)) {
             // Client is not use mysql_native_password method,
-            // but observer only support mysql_native_password in user account's authentication,
+            // but observer only support mysql_native_password in user account's authentication, 
             // so observer need tell client use mysql_native_password method by sending "AuthSwitchRequest"
             LOG_TRACE("auth plugin from client is not mysql_native_password, start to auth switch request", K(ret), K(hsr_.get_auth_plugin_name()));
             conn->set_auth_switch_phase(); // State of connection turn to auth_switch_phase
@@ -727,9 +727,9 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
                 ++receive_asr_times;
                 usleep(10 * 1000); // Sleep 10 ms at every time trying receive auth-switch-response mysql pkt
                 // TO DO:
-                // In most unix system, The max TCP Retransmission Timeout is under 240 seconds,
+                // In most unix system, The max TCP Retransmission Timeout is under 240 seconds, 
                 // we need to set a suitable timeout, what should this be?
-                if (ObTimeUtil::current_time() - start_wait_asr_time > 10000000) {
+                if (ObTimeUtil::current_time() - start_wait_asr_time > 10000000) { 
                   ret = OB_WAIT_NEXT_TIMEOUT;
                   RPC_LOG(WARN, "read auth switch response pkt timeout, disconnect", K(ret), K(receive_asr_times));
                   LOG_WARN("read auth switch response pkt timeout, disconnect", K(ret), K(receive_asr_times));
@@ -758,9 +758,9 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
                 const char *auth_data = asr_raw_pkt->get_cdata();
                 const int64_t auth_data_len = asr_raw_pkt->get_clen();
                 void *auth_buf = NULL;
-                // Length of authentication response data in AuthSwitchResponse which is using mysql_native_password methon is 20 byte,
+                // Length of authentication response data in AuthSwitchResponse which is using mysql_native_password methon is 20 byte, 
                 // the ObSMConnection::SCRAMBLE_BUF_SIZE is 20
-                if (ObSMConnection::SCRAMBLE_BUF_SIZE != auth_data_len) {
+                if (ObSMConnection::SCRAMBLE_BUF_SIZE != auth_data_len) { 
                   ret = OB_PASSWORD_WRONG;
                   LOG_WARN("invalid length of authentication response data", K(ret), K(auth_data_len), K(ObString(auth_data_len, auth_data)));
                 } else if (OB_ISNULL(auth_buf = asr_mem_pool_.alloc(auth_data_len))) {
@@ -883,7 +883,7 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
       if (OB_SUCC(ret)) {
         // Attention!! must set session capability firstly
         if (ORACLE_MODE == session.get_compatibility_mode()) {
-          //
+          // 
           hsr_.set_client_found_rows();
         }
         session.set_capability(hsr_.get_capability_flags());
@@ -897,8 +897,8 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
           LOG_WARN("failed to set_user", K(ret));
         } else if (OB_FAIL(session.set_real_client_ip_and_port(client_ip_, client_port_))) {
           LOG_WARN("failed to set_real_client_ip_and_port", K(ret));
-        } else if (OB_FAIL(session.set_proxy_user(session_priv.proxy_user_name_,
-                                                  session_priv.proxy_host_name_,
+        } else if (OB_FAIL(session.set_proxy_user(session_priv.proxy_user_name_, 
+                                                  session_priv.proxy_host_name_, 
                                                   session_priv.proxy_user_id_))) {
           LOG_WARN("failed to set proxy user");
         } else if (OB_FAIL(session.set_default_database(session_priv.db_))) {
@@ -1603,7 +1603,7 @@ int ObMPConnect::get_tenant_id(ObSMConnection &conn, uint64_t &tenant_id)
       LOG_WARN("schema_service or ob_service is NULL", KR(ret), K(tenant_id));
     } else if (!GCTX.schema_service_->is_tenant_refreshed(tenant_id)) {
       bool is_empty = false;
-      if (is_sys_tenant(tenant_id)
+      if (is_sys_tenant(tenant_id) 
           && OB_FAIL(GCTX.ob_service_->check_server_empty(is_empty))) {
         LOG_WARN("fail to check server is empty", KR(ret));
       } else if (is_sys_tenant(tenant_id) && is_empty) {

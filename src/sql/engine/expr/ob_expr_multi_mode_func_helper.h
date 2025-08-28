@@ -95,7 +95,7 @@ public:
   int eval_arg(const ObExpr *arg, ObEvalCtx &ctx, common::ObDatum *&datum);
   void add_ext_used(uint64_t add);
   void memory_usage_check_if_need();
-  TO_STRING_KV(K_(ret), K_(baseline_size), K_(type), K_(func_name),
+  TO_STRING_KV(K_(ret), K_(baseline_size), K_(type), K_(func_name), 
       K_(mem_threshold_flag), K_(check_level), K(cur_func_used()), K(ext_used_));
 private:
   static uint64_t get_expected_multiple(uint64_t type);

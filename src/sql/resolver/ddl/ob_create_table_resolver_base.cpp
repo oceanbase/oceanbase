@@ -208,7 +208,7 @@ int ObCreateTableResolverBase::set_table_option_to_schema(ObTableSchema &table_s
         ret = OB_NOT_SUPPORTED;
         SQL_RESV_LOG(WARN, "Not allowed to use zlib compressor!", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "zlib compressor");
-      }
+      } 
     }
 
     if (OB_SUCC(ret)) {
@@ -253,13 +253,13 @@ int ObCreateTableResolverBase::set_table_option_to_schema(ObTableSchema &table_s
       } else if (tenant_data_version < DATA_VERSION_4_2_1_2){
         // lob_inrow_threshold is added in 421 bp2
         // so need ensure lob_inrow_threshold is 4096 before 421 bp2 for compat
-        lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
+        lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD; 
         table_schema.set_lob_inrow_threshold(lob_inrow_threshold_);
       } else if (OB_FALSE_IT((lob_inrow_threshold_ = session_info_->get_default_lob_inrow_threshold()))) {
       } else if (lob_inrow_threshold_ < OB_MIN_LOB_INROW_THRESHOLD || lob_inrow_threshold_ > OB_MAX_LOB_INROW_THRESHOLD) {
         ret = OB_INVALID_ARGUMENT;
         SQL_RESV_LOG(ERROR, "invalid inrow threshold", K(ret), K(lob_inrow_threshold_));
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "invalid inrow threshold");
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "invalid inrow threshold"); 
       } else {
         table_schema.set_lob_inrow_threshold(lob_inrow_threshold_);
       }
@@ -346,8 +346,8 @@ uint64_t ObCreateTableResolverBase::gen_column_group_id()
   return ++cur_column_group_id_;
 }
 
-int ObCreateTableResolverBase::resolve_column_group_helper(const ParseNode *cg_node,
-                                                            ObTableSchema &table_schema)
+int ObCreateTableResolverBase::resolve_column_group_helper(const ParseNode *cg_node, 
+                                                            ObTableSchema &table_schema) 
 {
   int ret = OB_SUCCESS;
   ObArray<uint64_t> column_ids; // not include virtual column
@@ -406,19 +406,19 @@ int ObCreateTableResolverBase::resolve_column_group_helper(const ParseNode *cg_n
       if (OB_FAIL(ret)) {
       } else if (!ObSchemaUtils::can_add_column_group(table_schema)) {
       } else if (ObTableStoreFormat::is_row_with_column_store(table_store_type)) {
-        if (OB_FAIL(ObSchemaUtils::build_all_column_group(table_schema, table_schema.get_tenant_id(),
+        if (OB_FAIL(ObSchemaUtils::build_all_column_group(table_schema, table_schema.get_tenant_id(), 
                                                           build_old_version_cg ? table_schema.get_max_used_column_group_id() + 1 : ALL_COLUMN_GROUP_ID, all_cg))) {
           LOG_WARN("fail to add all column group", K(ret));
         } else if (OB_FAIL(table_schema.add_column_group(all_cg))) {
           LOG_WARN("fail to build all column group", K(ret));
         }
       }
-    }
+    }                
 
     // add default_type column_group, build a empty and then use alter_deafult_cg
     if (OB_SUCC(ret)) {
       ObColumnGroupSchema tmp_cg;
-      column_ids.reuse();
+      column_ids.reuse(); 
       if (OB_FAIL(build_column_group(table_schema, ObColumnGroupType::DEFAULT_COLUMN_GROUP,
           OB_DEFAULT_COLUMN_GROUP_NAME, column_ids, DEFAULT_TYPE_COLUMN_GROUP_ID, tmp_cg))) {
         LOG_WARN("fail to build default type column_group", KR(ret), K(table_store_type),

@@ -80,10 +80,10 @@ int ObExplainLogPlan::generate_normal_raw_plan()
                                                       0 == statement_id.length() ? "" : statement_id,
                                                       explain_stmt->get_display_opt(),
                                                       plan_strs))) {
-        LOG_WARN("failed to store sql plan", K(ret));
+        LOG_WARN("failed to store sql plan", K(ret));                                      
       } else {
         //For explain stmt, we can do pack at the stage of expr alloc,
-        //But we need to use the FALSE flag to tell the driver
+        //But we need to use the FALSE flag to tell the driver 
         //to use normal encoding instead of memcopy
         optimizer_context_.set_packed(false);
       }
@@ -133,7 +133,7 @@ int ObExplainLogPlan::check_explain_generate_plan_with_outline(ObLogPlan *real_p
   } else if (session_info->is_inner() || sql_ctx->is_prepare_protocol_) {
     /* do not check explain for inner sql (include query in PL) */
   } else if (OB_UNLIKELY(get_optimizer_context().get_query_ctx() != NULL
-                         && get_optimizer_context().get_query_ctx()->get_injected_random_status())) {
+                         && get_optimizer_context().get_query_ctx()->get_injected_random_status())) { 
     /* do nothing */
   } else if (sql_ctx->multi_stmt_item_.is_part_of_multi_stmt()
              && sql_ctx->multi_stmt_item_.get_seq_num() > 0) {
@@ -189,12 +189,12 @@ int ObExplainLogPlan::check_explain_generate_plan_with_outline(ObLogPlan *real_p
           ret = OB_OUTLINE_NOT_REPRODUCIBLE;
           LOG_WARN("failed to generate plan use outline", K(sql_ctx->first_outline_data_));
         }
-        if (query_ctx->all_equal_param_constraints_.count() != sql_ctx->first_equal_param_cons_cnt_ ||
-            query_ctx->all_plan_const_param_constraints_.count() != sql_ctx->first_const_param_cons_cnt_ ||
+        if (query_ctx->all_equal_param_constraints_.count() != sql_ctx->first_equal_param_cons_cnt_ || 
+            query_ctx->all_plan_const_param_constraints_.count() != sql_ctx->first_const_param_cons_cnt_ || 
             query_ctx->all_expr_constraints_.count() != sql_ctx->first_expr_cons_cnt_) {
           ret = OB_OUTLINE_NOT_REPRODUCIBLE;
-          LOG_WARN("failed to generate plan use outline", K(sql_ctx->first_equal_param_cons_cnt_),
-                                                          K(sql_ctx->first_const_param_cons_cnt_),
+          LOG_WARN("failed to generate plan use outline", K(sql_ctx->first_equal_param_cons_cnt_), 
+                                                          K(sql_ctx->first_const_param_cons_cnt_), 
                                                           K(sql_ctx->first_expr_cons_cnt_),
                                                           K(query_ctx->all_equal_param_constraints_.count()),
                                                           K(query_ctx->all_plan_const_param_constraints_.count()),

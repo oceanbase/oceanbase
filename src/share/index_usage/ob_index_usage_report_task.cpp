@@ -16,9 +16,9 @@
 
 using namespace oceanbase::common;
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace share
+namespace share 
 {
 
 const char *OB_INDEX_USAGE_REPORT_TASK = "IndexUsageReportTask";
@@ -49,12 +49,12 @@ const char *OB_INDEX_USAGE_REPORT_TASK = "IndexUsageReportTask";
   " bucket_1000_plus_rows_returned = bucket_1000_plus_rows_returned + VALUES(bucket_1000_plus_rows_returned),"   \
   " last_used = VALUES(last_used),"                                                                              \
   " last_flush_time = VALUES(last_flush_time) "
-ObIndexUsageReportTask::ObIndexUsageReportTask() :
-  is_inited_(false),
+ObIndexUsageReportTask::ObIndexUsageReportTask() : 
+  is_inited_(false), 
   mgr_(nullptr),
   sql_proxy_(nullptr) {}
 
-int ObIndexUsageReportTask::GetIndexUsageItemsFn::operator()(common::hash::HashMapPair<ObIndexUsageKey, ObIndexUsageInfo> &entry)
+int ObIndexUsageReportTask::GetIndexUsageItemsFn::operator()(common::hash::HashMapPair<ObIndexUsageKey, ObIndexUsageInfo> &entry) 
 {
   int ret = OB_SUCCESS;
   bool exist = true;
@@ -67,7 +67,7 @@ int ObIndexUsageReportTask::GetIndexUsageItemsFn::operator()(common::hash::HashM
   } else if (!exist) {
     if (OB_FAIL(remove_items_.push_back(entry.first))) {
       LOG_WARN("fail to push back remove key", K(ret), K(entry.first));
-    }
+    } 
   } else {
     if (entry.second.has_data()) { // has new data
       ObIndexUsagePair pair;
@@ -93,7 +93,7 @@ int ObIndexUsageReportTask::GetIndexUsageItemsFn::operator()(common::hash::HashM
   return ret;
 }
 
-int ObIndexUsageReportTask::init(ObIndexUsageInfoMgr *mgr)
+int ObIndexUsageReportTask::init(ObIndexUsageInfoMgr *mgr) 
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(mgr)) {
@@ -121,7 +121,7 @@ void ObIndexUsageReportTask::destroy()
   deleted_map_.clear();
 }
 
-void ObIndexUsageReportTask::runTimerTask()
+void ObIndexUsageReportTask::runTimerTask() 
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -130,7 +130,7 @@ void ObIndexUsageReportTask::runTimerTask()
   }
 }
 
-int ObIndexUsageReportTask::storage_index_usage(const ObIndexUsagePairList &info_list)
+int ObIndexUsageReportTask::storage_index_usage(const ObIndexUsagePairList &info_list) 
 {
   int ret = OB_SUCCESS;
   uint64_t data_version = 0;
@@ -189,7 +189,7 @@ int ObIndexUsageReportTask::storage_index_usage(const ObIndexUsagePairList &info
   return ret;
 }
 
-int ObIndexUsageReportTask::del_index_usage(const ObIndexUsageKey &key)
+int ObIndexUsageReportTask::del_index_usage(const ObIndexUsageKey &key) 
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
@@ -198,7 +198,7 @@ int ObIndexUsageReportTask::del_index_usage(const ObIndexUsageKey &key)
   uint64_t extract_tenant_id = ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id);
   ObDMLSqlSplicer dml;
   ObDMLExecHelper exec(*sql_proxy_, tenant_id);
-
+  
   if (OB_ISNULL(sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql_proxy is null", K(ret));
@@ -216,7 +216,7 @@ int ObIndexUsageReportTask::del_index_usage(const ObIndexUsageKey &key)
   return ret;
 }
 
-int ObIndexUsageReportTask::check_and_delete(const ObIArray<ObIndexUsageKey> &candidate_deleted_item, ObIndexUsageHashMap *hashmap)
+int ObIndexUsageReportTask::check_and_delete(const ObIArray<ObIndexUsageKey> &candidate_deleted_item, ObIndexUsageHashMap *hashmap) 
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(hashmap)) {
@@ -239,7 +239,7 @@ int ObIndexUsageReportTask::check_and_delete(const ObIArray<ObIndexUsageKey> &ca
         LOG_WARN("fail to get from deleted map", K(ret));
       }
     } else if (++value <= MAX_CHECK_NOT_EXIST_CNT) { // update
-      if (OB_FAIL(deleted_map_.set_refactored(key, value, true /* overwrite */))) {
+      if (OB_FAIL(deleted_map_.set_refactored(key, value, true /* overwrite */))) { 
         LOG_WARN("fail to set deleted map", K(ret), K(key), K(value));
       }
     } else { // delete
@@ -259,7 +259,7 @@ int ObIndexUsageReportTask::check_and_delete(const ObIArray<ObIndexUsageKey> &ca
           } else {
             LOG_WARN("fail to del index usage hashmap record", K(ret), K(key));
           }
-        }
+        } 
       }
     }
   }
@@ -270,7 +270,7 @@ int ObIndexUsageReportTask::check_and_delete(const ObIArray<ObIndexUsageKey> &ca
 1. dump ObIndexUsageInfo by batch size DUMP_BATCH_SIZE to dump limit MAX_DUMP_ITEM_COUNT (1 cycle)
 2. check deleted index to del record in hashmap or in inner table
 */
-int ObIndexUsageReportTask::dump()
+int ObIndexUsageReportTask::dump() 
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(mgr_)) {
@@ -281,7 +281,7 @@ int ObIndexUsageReportTask::dump()
     mgr_->refresh_config();
     GetIndexUsageItemsFn index_usage_items_fn(deleted_map_, tenant_id, mgr_->get_allocator());
     // dump batch
-    for (int64_t i = 0; OB_SUCC(ret) && i < mgr_->get_hashmap_count() &&
+    for (int64_t i = 0; OB_SUCC(ret) && i < mgr_->get_hashmap_count() && 
       index_usage_items_fn.total_dump_count_ < MAX_DUMP_ITEM_COUNT; ++i) {
       ObIndexUsageHashMap *hashmap = mgr_->get_index_usage_map() + i;
       {
@@ -302,7 +302,7 @@ int ObIndexUsageReportTask::dump()
           if (OB_ITER_END != ret) {
             LOG_WARN("foreach refactored failed", K(ret), K(tenant_id));
           } else {
-            ret = OB_SUCCESS; // reach max dump count
+            ret = OB_SUCCESS; // reach max dump count 
           }
         }
       }
@@ -311,7 +311,7 @@ int ObIndexUsageReportTask::dump()
         const uint64_t dump_item_count = index_usage_items_fn.dump_items_.size();
         uint64_t index = 0;
         ObIndexUsagePairList tmp_list(mgr_->get_allocator());
-        for (ObIndexUsagePairList::const_iterator it = index_usage_items_fn.dump_items_.begin();
+        for (ObIndexUsagePairList::const_iterator it = index_usage_items_fn.dump_items_.begin(); 
           OB_SUCC(ret) && index < dump_item_count; it++, index++) {
           ObIndexUsagePair tmp_pair;
           tmp_pair.init(it->first, it->second);  // clear data
@@ -340,8 +340,8 @@ int ObIndexUsageReportTask::dump()
 }
 
 // ========================= refresh tenant config ===========================//
-ObIndexUsageRefreshConfTask::ObIndexUsageRefreshConfTask() :
-  is_inited_(false), mgr_(nullptr)
+ObIndexUsageRefreshConfTask::ObIndexUsageRefreshConfTask() : 
+  is_inited_(false), mgr_(nullptr) 
 {}
 
 int ObIndexUsageRefreshConfTask::init(ObIndexUsageInfoMgr *mgr)
@@ -363,7 +363,7 @@ void ObIndexUsageRefreshConfTask::destroy()
   set_mgr(nullptr);
 }
 
-void ObIndexUsageRefreshConfTask::runTimerTask()
+void ObIndexUsageRefreshConfTask::runTimerTask() 
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(mgr_)) {
@@ -377,7 +377,7 @@ void ObIndexUsageRefreshConfTask::runTimerTask()
       mgr_->set_max_entries(tenant_config->_iut_max_entries.get());
       mgr_->set_is_enabled(tenant_config->_iut_enable);
       mgr_->set_is_sample_mode(tenant_config->_iut_stat_collection_type.get_value_string().case_compare("SAMPLED") == 0);
-      LOG_TRACE("success to refresh index usage config.",
+      LOG_TRACE("success to refresh index usage config.", 
         K(mgr_->get_max_entries()), K(mgr_->get_is_enabled()), K(mgr_->get_is_sample_mode()));
     }
     // get data version

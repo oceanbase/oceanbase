@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef OB_TRANSFORM_DBLINK_H_
 #define OB_TRANSFORM_DBLINK_H_
 
@@ -90,8 +90,8 @@ private:
 
   int pack_link_table(ObDMLStmt *stmt, bool &trans_happened);
 
-  int collect_link_table(ObDMLStmt *stmt,
-                         ObIArray<LinkTableHelper> &helpers,
+  int collect_link_table(ObDMLStmt *stmt, 
+                         ObIArray<LinkTableHelper> &helpers, 
                          uint64_t &dblink_id,
                          bool &is_reverse_link,
                          bool &all_table_from_one_dblink);
@@ -117,14 +117,14 @@ private:
                               bool &is_link_semi_info,
                               bool &is_right_link_table,
                               bool &is_reverse_link);
-
+  
   int add_link_table(TableItem *table,
                     uint64_t dblink_id,
                     bool is_reverse_link,
                     JoinedTable *parent_table,
                     SemiInfo* parent_semi_info,
                     ObIArray<LinkTableHelper> &helpers);
-
+  
   int add_link_semi_info(SemiInfo *semi_info,
                          uint64_t dblink_id,
                          bool is_reverse_link,
@@ -132,8 +132,8 @@ private:
 
   int split_link_table_info(ObDMLStmt *stmt, ObIArray<LinkTableHelper> &helpers);
 
-  int inner_split_link_table_info(ObDMLStmt *stmt,
-                                  LinkTableHelper &helper,
+  int inner_split_link_table_info(ObDMLStmt *stmt, 
+                                  LinkTableHelper &helper, 
                                   ObIArray<LinkTableHelper> &new_helpers);
 
   int connect_table(ObDMLStmt *stmt, ObRawExpr *expr, UnionFind &uf);
@@ -144,12 +144,12 @@ private:
 
   int collect_pushdown_conditions(ObDMLStmt *stmt, ObIArray<LinkTableHelper> &helpers);
 
-  int has_none_pushdown_expr(ObIArray<ObRawExpr*> &exprs,
+  int has_none_pushdown_expr(ObIArray<ObRawExpr*> &exprs, 
                              uint64_t dblink_id,
                              bool &has);
 
-  int has_none_pushdown_expr(ObRawExpr* expr,
-                             uint64_t dblink_id,
+  int has_none_pushdown_expr(ObRawExpr* expr, 
+                             uint64_t dblink_id, 
                              bool &has);
 
   int inner_pack_link_table(ObDMLStmt *stmt, LinkTableHelper &helper);

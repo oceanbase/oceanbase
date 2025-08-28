@@ -31,13 +31,13 @@ public:
   ~ObPluginVersionAdaptor() = default;
 
   ObPluginVersion version() const;
-
+  
   ObPluginVersion major() const;
   ObPluginVersion minor() const;
   ObPluginVersion patch() const;
 
   int64_t to_string(char buf[], int64_t buf_len) const;
-
+  
 private:
   ObPluginVersion version_;
 };

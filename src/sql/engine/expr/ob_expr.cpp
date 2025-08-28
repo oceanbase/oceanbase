@@ -622,7 +622,7 @@ DEF_TO_STRING(ObToStringExpr)
       if (NULL == tmp_mem) {
         J_OBJ_START();
         J_KV("Expr print ERROR", "alloc memory failed");
-        J_OBJ_END();
+        J_OBJ_END(); 
       } else {
         ObBitVector *skip = to_bit_vector(tmp_mem);
         skip->set_all(batch_size);
@@ -1242,7 +1242,7 @@ int VectorHeader::init_uniform_const_vector(VecValueTypeClass vec_value_tc,
     UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_COLLECTION);
     UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_MYSQL_DATETIME);
     UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_MYSQL_DATE);
-    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_ROARINGBITMAP);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_ROARINGBITMAP);    
     #undef UNIFORM_CONST_VECTOR_INIT_SWITCH
     default:
       ret = OB_INVALID_ARGUMENT;

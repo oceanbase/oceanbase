@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace storage {
 namespace mds {
 void *DefaultAllocator::alloc(const int64_t size) {
-  void *ptr = std::malloc(size);// ob_malloc(size, "MDS");
+  void *ptr = std::malloc(size);// ob_malloc(size, "MDS"); 
   ATOMIC_INC(&alloc_times_);
   MDS_LOG(DEBUG, "alloc obj", KP(ptr), K(size), K(lbt()));
   return ptr;
@@ -31,7 +31,7 @@ void DefaultAllocator::free(void *ptr) {
   std::free(ptr);// ob_free(ptr);
 }
 void *MdsAllocator::alloc(const int64_t size) {
-  void *ptr = std::malloc(size);// ob_malloc(size, "MDS");
+  void *ptr = std::malloc(size);// ob_malloc(size, "MDS"); 
   ATOMIC_INC(&alloc_times_);
   MDS_LOG(DEBUG, "alloc obj", KP(ptr), K(size), K(lbt()));
   return ptr;

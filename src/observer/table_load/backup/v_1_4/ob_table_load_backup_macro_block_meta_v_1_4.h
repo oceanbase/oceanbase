@@ -70,15 +70,15 @@ public:
       collation_free_endkey_(nullptr) {}
   ~ObTableLoadBackupMacroBlockMeta_V_1_4() {}
   int deserialize(const char *buf, int64_t data_len, int64_t &pos);
-  TO_STRING_KV(K(attr_), K(data_version_), K(column_number_), K(rowkey_column_number_),
-               K(column_index_scale_), K(row_store_type_), K(row_count_), K(occupy_size_),
-               K(data_checksum_), K(micro_block_count_), K(micro_block_data_offset_),
-               K(micro_block_index_offset_), K(micro_block_endkey_offset_), K(OB_P(compressor_)),
+  TO_STRING_KV(K(attr_), K(data_version_), K(column_number_), K(rowkey_column_number_), 
+               K(column_index_scale_), K(row_store_type_), K(row_count_), K(occupy_size_), 
+               K(data_checksum_), K(micro_block_count_), K(micro_block_data_offset_), 
+               K(micro_block_index_offset_), K(micro_block_endkey_offset_), K(OB_P(compressor_)), 
                K(ObArrayWrap<uint16_t>(column_id_array_, column_number_)),
-               K(ObArrayWrap<ObObjMeta>(column_type_array_, column_number_)),
-               K(ObArrayWrap<int64_t>(column_checksum_, column_number_)),
-               K(ObRowkey(endkey_, rowkey_column_number_)), K(table_id_), K(data_seq_), K(schema_version_),
-               K(write_seq_), K(create_timestamp_), K(retire_timestamp_), K(bf_build_timestamp_),
+               K(ObArrayWrap<ObObjMeta>(column_type_array_, column_number_)), 
+               K(ObArrayWrap<int64_t>(column_checksum_, column_number_)), 
+               K(ObRowkey(endkey_, rowkey_column_number_)), K(table_id_), K(data_seq_), K(schema_version_), 
+               K(write_seq_), K(create_timestamp_), K(retire_timestamp_), K(bf_build_timestamp_), 
                K(ObArrayWrap<int64_t>(empty_read_cnt_, rowkey_column_number_)),
                K(ObRowkey(collation_free_endkey_, rowkey_column_number_)));
 public:

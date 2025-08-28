@@ -142,7 +142,7 @@ select /*+no_use_px*/ t1.c1 from t1 left join t2 t on t1.c1=t.c1,t2 left join t3
 # case 39 const predicates
 select * from t1 where true;
 # TODO shengle, core in pre calc expr, mysqltest not core, may unitest problem
-#
+# 
 # select * from t1 where 1=2;
 # select * from t1, t2 where 1+1=2 and t1.c1=t2.c1+1;
 select * from t1 left join t2 t on t1.c1=t.c1 where false;
@@ -588,7 +588,7 @@ select c1, (select count(c1) from t7 where c1=t4.c1) calc_total, (select count(c
 select c1, (select count(c1) from t7 ) calc_total, (select count(c1) from t8 ) calc_new from t4  where c1 in (select distinct c1 from t1);
 select distinct (select c1) from t4 limit 100;
 
-#bug
+#bug 
 select * from t4 where c1 > 0 and c1 < 100 order by c2 limit 1;
 
 #like and between selectivity

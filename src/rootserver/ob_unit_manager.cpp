@@ -9304,7 +9304,7 @@ int ObUnitManager::admin_migrate_unit(
       LOG_WARN("fail to check server can_migrate_in", KR(ret), K(unit_info.unit_.migrate_from_server_));
     } else if (OB_FAIL(cancel_migrate_unit(
             unit_info.unit_, can_migrate_in))) {
-		LOG_WARN("failed to cancel migrate unit", KR(ret), K(unit_info), K(can_migrate_in));
+	  	LOG_WARN("failed to cancel migrate unit", KR(ret), K(unit_info), K(can_migrate_in));
     }
   } else if (OB_FAIL(SVR_TRACER.get_server_zone(unit_info.unit_.server_, src_zone))) {
     LOG_WARN("get server zone failed", "server", unit_info.unit_.server_, KR(ret));

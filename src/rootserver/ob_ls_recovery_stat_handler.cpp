@@ -274,12 +274,12 @@ int ObLSRecoveryStatHandler::reset_inner_readable_scn()
     config_version_in_inner_.reset();
     readable_scn_upper_limit_.reset();
   }
-  return ret;
+  return ret; 
 }
 
 int ObLSRecoveryStatHandler::wait_can_change_member_list(
     const ObMemberList &new_member_list, const int64_t paxos_replica_num,
-    const int64_t timeout)
+    const int64_t timeout) 
 {
   int ret = OB_SUCCESS;
   const int64_t now = ObTimeUtility::current_time();
@@ -443,7 +443,7 @@ int ObLSRecoveryStatHandler::check_member_change_valid_(
       LOG_INFO("cannot find server readable scn", K(server), K(replicas_scn_),
           K(readable_scn_upper_limit_), "ls_id", ls_->get_ls_id());
     }
-  }
+  } 
   return ret;
 }
 
@@ -483,11 +483,11 @@ int ObLSRecoveryStatHandler::increase_ls_replica_readable_scn_(SCN &readable_scn
   } else if (!(first_proposal_id == second_proposal_id
              && first_role == second_role)) {
     ret = OB_NOT_MASTER;
-    LOG_WARN("not leader", KR(ret), K(first_proposal_id), K(second_proposal_id), K(first_role),
+    LOG_WARN("not leader", KR(ret), K(first_proposal_id), K(second_proposal_id), K(first_role), 
                            K(second_role), KPC_(ls));
   } else {
     if (sync_scn < replayable_scn && readable_scn == sync_scn
-        && sync_scn.is_valid_and_not_min() && replayable_scn.is_valid_and_not_min()
+        && sync_scn.is_valid_and_not_min() && replayable_scn.is_valid_and_not_min() 
         && readable_scn.is_valid_and_not_min()) {
       // two scenarios
       // 1. when sync scn is pushed forward in switchover
@@ -549,7 +549,7 @@ int ObLSRecoveryStatHandler::set_add_replica_server(
     SpinWLockGuard guard(lock_);
     extra_server_ = server;
   }
-
+  
   return ret;
 }
 
@@ -581,17 +581,17 @@ int ObLSRecoveryStatHandler::do_get_ls_level_readable_scn_(SCN &read_scn)
     read_scn = majority_min_readable_scn;
   }
 
-  LOG_TRACE("do_get_ls_level_readable_scn_ finished", KR(ret), KPC_(ls), K(read_scn),
+  LOG_TRACE("do_get_ls_level_readable_scn_ finished", KR(ret), KPC_(ls), K(read_scn), 
       K(majority_min_readable_scn));
 
   return ret;
 }
 
 int ObLSRecoveryStatHandler::construct_new_member_list_(
-    const common::ObMemberList &member_list_ori,
-    const common::GlobalLearnerList &degraded_list,
+    const common::ObMemberList &member_list_ori, 
+    const common::GlobalLearnerList &degraded_list, 
     const int64_t paxos_replica_number_ori,
-    ObIArray<common::ObAddr> &member_list_new,
+    ObIArray<common::ObAddr> &member_list_new, 
     int64_t &paxos_replica_number_new)
 {
   int ret = OB_SUCCESS;
@@ -626,7 +626,7 @@ int ObLSRecoveryStatHandler::construct_new_member_list_(
     if (OB_FAIL(ret)) {
     } else if (!found_me) {
       ret = OB_EAGAIN;
-      LOG_WARN("current leader degraded, try again", KR(ret), K(member_list_ori), K(degraded_list),
+      LOG_WARN("current leader degraded, try again", KR(ret), K(member_list_ori), K(degraded_list), 
           K(paxos_replica_number_ori), K(member_list_new), K(paxos_replica_number_new));
     }
   }
@@ -718,7 +718,7 @@ int ObLSRecoveryStatHandler::get_latest_palf_stat_(
   } else if (!ob_member_list_latest.member_addr_equal(palf_stat.paxos_member_list_)
       || paxos_replica_number_latest != palf_stat.paxos_replica_num_) {
     ret = OB_EAGAIN;
-    LOG_WARN("palf_stat is not latest, try again", KR(ret), KPC_(ls), K(ob_member_list_latest),
+    LOG_WARN("palf_stat is not latest, try again", KR(ret), KPC_(ls), K(ob_member_list_latest), 
         K(paxos_replica_number_latest), K(palf_stat));
   }
 
@@ -742,7 +742,7 @@ int ObLSRecoveryStatHandler::check_can_use_new_version_(bool &is_valid_use)
   } else {
     is_valid_use = true;
   }
-  return ret;
+  return ret; 
 }
 
 int ObLSRecoveryStatHandler::construct_addr_list_(
@@ -803,7 +803,7 @@ int ObLSRecoveryStatHandler::check_member_change_valid_(
 {
   int ret = OB_SUCCESS;
   SCN readable_scn;
-  palf::PalfStat palf_stat;
+  palf::PalfStat palf_stat; 
   ObArray<ObAddr> addr_list;
   is_valid = false;
   if (OB_UNLIKELY(!new_member_list.is_valid() || 0 >= paxos_replica_num)) {
@@ -880,7 +880,7 @@ int ObLSRecoveryStatHandler::gather_replica_readable_scn()
           KR(tmp_ret), KR(ret), K(palf_stat_second));
     }
   }
-  if (OB_NOT_MASTER != ret) {
+  if (OB_NOT_MASTER != ret) { 
     if (OB_TMP_FAIL(dump_all_replica_readable_scn_(OB_FAIL(ret)))) {
       LOG_WARN("failed to dump replica readable scn", KR(ret), KR(tmp_ret));
     }
@@ -969,17 +969,17 @@ int ObLSRecoveryStatHandler::get_majority_readable_scn_(
     LOG_WARN("invalid argument", KR(ret), K(leader_readable_scn));
   } else if (OB_FAIL(get_latest_palf_stat_(palf_stat_first))) {
     LOG_WARN("get latest palf_stat failed", KR(ret), KPC_(ls));
-  } else if (OB_FAIL(construct_new_member_list_(palf_stat_first.paxos_member_list_,
-          palf_stat_first.degraded_list_,
+  } else if (OB_FAIL(construct_new_member_list_(palf_stat_first.paxos_member_list_, 
+          palf_stat_first.degraded_list_, 
           palf_stat_first.paxos_replica_num_,
-          member_list_new,
+          member_list_new, 
           paxos_replica_number_new))) {
     LOG_WARN("construct_new_member_list failed", KR(ret), KPC_(ls), K(palf_stat_first));
   } else if (OB_FAIL(check_can_use_new_version_(is_valid_to_use))) {
     LOG_WARN("failed to check can use new version", KR(ret));
   } else if (is_valid_to_use) {
     //use readable in memory
-    if (OB_FAIL(do_get_majority_readable_scn_V2_(member_list_new,
+    if (OB_FAIL(do_get_majority_readable_scn_V2_(member_list_new, 
     rootserver::majority(paxos_replica_number_new), palf_stat_first.config_version_,
     majority_min_readable_scn))) {
       LOG_WARN("failed to get majority readable scn", KR(ret), K(palf_stat_first),
@@ -990,9 +990,9 @@ int ObLSRecoveryStatHandler::get_majority_readable_scn_(
       LOG_WARN("failed to set inner readable scn", KR(ret), K(palf_stat_first),
         K(majority_min_readable_scn));
     }
-  } else if (OB_FAIL(do_get_majority_readable_scn_(member_list_new,
+  } else if (OB_FAIL(do_get_majority_readable_scn_(member_list_new, 
           leader_readable_scn, rootserver::majority(paxos_replica_number_new), majority_min_readable_scn))) {
-    LOG_WARN("do_get_majority_readable_scn_ failed", KR(ret), K(member_list_new), K(leader_readable_scn),
+    LOG_WARN("do_get_majority_readable_scn_ failed", KR(ret), K(member_list_new), K(leader_readable_scn), 
         K(paxos_replica_number_new), K(palf_stat_first), K(majority_min_readable_scn));
   }
   if (FAILEDx(get_latest_palf_stat_(palf_stat_second))) {
@@ -1006,7 +1006,7 @@ int ObLSRecoveryStatHandler::get_majority_readable_scn_(
 }
 
 int ObLSRecoveryStatHandler::do_get_majority_readable_scn_(
-    const ObIArray<common::ObAddr> &ob_member_list,
+    const ObIArray<common::ObAddr> &ob_member_list, 
     const share::SCN &leader_readable_scn,
     const int64_t majority_cnt,
     share::SCN &majority_min_readable_scn)
@@ -1033,12 +1033,12 @@ int ObLSRecoveryStatHandler::do_get_majority_readable_scn_(
       || 0 >= majority_cnt
       || 0 > need_query_member_cnt) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(leader_readable_scn), K(self_addr),
+    LOG_WARN("invalid argument", KR(ret), K(leader_readable_scn), K(self_addr), 
         K(majority_cnt), K(need_query_member_cnt), K(ob_member_list));
   } else if (0 == need_query_member_cnt) {
     ret = OB_SUCCESS;
     majority_min_readable_scn = leader_readable_scn;
-    LOG_INFO("single replica, majority_min_readable_scn = leader_readable_scn", KR(ret),
+    LOG_INFO("single replica, majority_min_readable_scn = leader_readable_scn", KR(ret), 
         K(ob_member_list), K(leader_readable_scn));
   } else if (OB_FAIL(arg.init(tenant_id_, ls_->get_ls_id(), false))) {
     LOG_WARN("failed to init arg", KR(ret), K_(tenant_id), KPC_(ls));
@@ -1100,7 +1100,7 @@ int ObLSRecoveryStatHandler::do_get_majority_readable_scn_(
             return_code_array,
             proxy,
             majority_min_readable_scn))) {
-      LOG_WARN("failed to calc_majority_min_readable_scn", KR(ret), K(leader_readable_scn),
+      LOG_WARN("failed to calc_majority_min_readable_scn", KR(ret), K(leader_readable_scn), 
           K(ob_member_list), K(return_code_array));
     }
   }
@@ -1142,7 +1142,7 @@ int ObLSRecoveryStatHandler::do_get_majority_readable_scn_V2_(
       }
     }
   }
-  if (FAILEDx(do_calc_majority_min_readable_scn_(need_query_member_cnt,
+  if (FAILEDx(do_calc_majority_min_readable_scn_(need_query_member_cnt, 
           replica_readble_scn, majority_min_readable_scn))) {
     LOG_WARN("failed to calc majority readable scn", KR(ret),
     K(need_query_member_cnt), K(replica_readble_scn));

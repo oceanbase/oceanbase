@@ -30,7 +30,7 @@ public:
   virtual ~ObAlterAutoPartAttrOp() = default;
 
   int alter_table_auto_part_attr_if_need(
-      const obrpc::ObAlterTableArg &alter_table_arg,
+      const obrpc::ObAlterTableArg &alter_table_arg, 
       const share::ObDDLType ddl_type,
       share::schema::ObSchemaGetterGuard &schema_guard,
       ObTableSchema &table_schema,
@@ -40,7 +40,7 @@ public:
       obrpc::ObAlterTableArg &alter_table_arg,
       ObTableSchema &new_index_schema);
   void switch_ddl_type_if_need(
-      const obrpc::ObAlterTableArg &alter_table_arg,
+      const obrpc::ObAlterTableArg &alter_table_arg, 
       share::ObDDLType &ddl_type);
   int check_alter_table_partition_attr(
       const obrpc::ObAlterTableArg &alter_table_arg,
@@ -53,41 +53,41 @@ public:
       share::schema::ObTableSchema &new_table_schema);
 private:
   int get_part_key_column_ids(
-      const ObTableSchema &table_schema,
+      const ObTableSchema &table_schema, 
       ObIArray<uint64_t> &part_key_ids);
   int check_part_key_column_type(
-      const ObTableSchema &table_schema,
-      const ObPartitionOption &alter_part_option,
+      const ObTableSchema &table_schema, 
+      const ObPartitionOption &alter_part_option, 
       bool &is_valid_part_column);
   int check_and_set_table_auto_part_func(
-      const ObPartitionOption &alter_part_option,
+      const ObPartitionOption &alter_part_option, 
       ObTableSchema &table_schema);
   int alter_global_indexes_auto_part_attribute_online(
       const ObPartitionOption &part_option,
       const ObTableSchema &table_schema,
       ObSchemaGetterGuard &schema_guard,
       rootserver::ObDDLOperator &ddl_operator,
-      ObMySQLTransaction &trans,
+      ObMySQLTransaction &trans, 
       ObArray<uint64_t> &modified_index_type_ids);
   int sync_aux_tables_partition_option(
       const ObTableSchema &table_schema,
       ObSchemaGetterGuard &schema_guard,
       rootserver::ObDDLOperator &ddl_operator,
-      ObMySQLTransaction &trans,
+      ObMySQLTransaction &trans, 
       ObArray<uint64_t> &modified_index_type_ids);
   int check_auto_part_table_unique_index(
       const ObTableSchema &table_schema,
       ObString &alter_table_part_func_expr,
       ObSchemaGetterGuard &schema_guard);
   int update_global_auto_split_attr(
-      const ObPartitionOption &alter_part_option,
+      const ObPartitionOption &alter_part_option, 
       ObTableSchema &new_index_schema);
   int extract_potential_partition_func_type(
       const ObTableSchema &table_schema,
       const ObString &part_func_expr,
       ObPartitionFuncType &part_func_type);
   int switch_global_local_index_type(
-      const ObTableSchema &index_schema,
+      const ObTableSchema &index_schema, 
       ObIndexType& index_type);
   int lock_for_modify_auto_part_size(
       const ObTableSchema &table_schema,

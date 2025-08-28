@@ -118,7 +118,7 @@ int ObArchivePathUtil::get_pieces_dir_path(const ObBackupDest &dest, ObBackupPat
 
 // // oss://archive/pieces/piece_d[dest_id]r[round_id]p[piece_id]_start_20220601T120000.obarc
 int ObArchivePathUtil::get_piece_start_file_path(const ObBackupDest &dest, const int64_t dest_id, 
-    const int64_t round_id, const int64_t piece_id, const SCN &start_scn,
+    const int64_t round_id, const int64_t piece_id, const SCN &start_scn, 
     ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
@@ -139,7 +139,7 @@ int ObArchivePathUtil::get_piece_start_file_path(const ObBackupDest &dest, const
 
 // oss://archive/pieces/piece_d[dest_id]r[round_id]p[piece_id]_end_20220601T120000.obarc
 int ObArchivePathUtil::get_piece_end_file_path(const ObBackupDest &dest, const int64_t dest_id, 
-    const int64_t round_id, const int64_t piece_id, const SCN &end_scn,
+    const int64_t round_id, const int64_t piece_id, const SCN &end_scn, 
     ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
@@ -211,7 +211,7 @@ int ObArchivePathUtil::get_piece_checkpoint_dir_path(const ObBackupDest &dest, c
 
   if (OB_FAIL(get_piece_dir_path(dest, dest_id, round_id, piece_id, path))) {
     LOG_WARN("failed to get piece dir path", K(ret), K(dest), K(round_id), K(dest_id), K(piece_id));
-  } else if (OB_FAIL(path.join("checkpoint", ObBackupFileSuffix::NONE))) {
+  } else if (OB_FAIL(path.join("checkpoint", ObBackupFileSuffix::NONE))) { 
     LOG_WARN("failed to join checkpoint dir path", K(ret), K(path));
   }
   return ret;
@@ -225,7 +225,7 @@ int ObArchivePathUtil::get_piece_checkpoint_dir_path(
   path.reset();
   if (OB_FAIL(path.init(dest.get_root_path()))) {
     LOG_WARN("failed to assign dest path", K(ret), K(dest));
-  } else if (OB_FAIL(path.join("checkpoint", ObBackupFileSuffix::NONE))) {
+  } else if (OB_FAIL(path.join("checkpoint", ObBackupFileSuffix::NONE))) { 
     LOG_WARN("failed to join checkpoint dir path", K(ret), K(path));
   }
   return ret;
@@ -252,13 +252,13 @@ int ObArchivePathUtil::get_piece_checkpoint_file_path(const ObBackupDest &dest, 
 {
   int ret = OB_SUCCESS;
   char file_name[OB_MAX_BACKUP_PATH_LENGTH] = { 0 };
-
+ 
   if (OB_FAIL(get_piece_checkpoint_dir_path(dest, path))) {
     LOG_WARN("failed to get piece dir path", K(ret), K(dest), K(file_id));
   } else if (OB_FAIL(databuff_printf(file_name, sizeof(file_name), "checkpoint_info.%ld", file_id))) {
     LOG_WARN("failed to assign checkpoint info path", K(ret), K(dest), K(file_id));
   } else if (OB_FAIL(path.join(file_name, ObBackupFileSuffix::ARCHIVE))) {
-    LOG_WARN("failed to join file name", K(ret), K(path), K(file_name));
+    LOG_WARN("failed to join file name", K(ret), K(path), K(file_name)); 
   }
   return ret;
 }
@@ -289,7 +289,7 @@ int ObArchivePathUtil::get_piece_inner_placeholder_file_path(const ObBackupDest 
 }
 
 // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/logstream_[ls_id]/
-int ObArchivePathUtil::get_piece_ls_dir_path(const ObBackupDest &dest, const int64_t dest_id,
+int ObArchivePathUtil::get_piece_ls_dir_path(const ObBackupDest &dest, const int64_t dest_id, 
     const int64_t round_id, const int64_t piece_id, const ObLSID &ls_id, ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
@@ -305,7 +305,7 @@ int ObArchivePathUtil::get_piece_ls_dir_path(const ObBackupDest &dest, const int
 }
 
 // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/logstream_[ls_id]/log/
-int ObArchivePathUtil::get_piece_ls_log_dir_path(const ObBackupDest &dest, const int64_t dest_id,
+int ObArchivePathUtil::get_piece_ls_log_dir_path(const ObBackupDest &dest, const int64_t dest_id, 
     const int64_t round_id, const int64_t piece_id, const ObLSID &ls_id, ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
@@ -318,7 +318,7 @@ int ObArchivePathUtil::get_piece_ls_log_dir_path(const ObBackupDest &dest, const
 }
 
 // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/logstream_[ls_id]/file_info.obarc
-int ObArchivePathUtil::get_ls_file_info_path(const ObBackupDest &dest, const int64_t dest_id,
+int ObArchivePathUtil::get_ls_file_info_path(const ObBackupDest &dest, const int64_t dest_id, 
     const int64_t round_id, const int64_t piece_id, const ObLSID &ls_id, ObBackupPath &path)
 {
   int ret = OB_SUCCESS;

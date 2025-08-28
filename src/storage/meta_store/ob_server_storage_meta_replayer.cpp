@@ -34,7 +34,7 @@ int ObServerStorageMetaReplayer::init(
     ret = OB_INIT_TWICE;
     LOG_WARN("ObServerStorageMetaReplayer has inited", K(ret));
   } else {
-    is_shared_storage_ = is_shared_storage;
+    is_shared_storage_ = is_shared_storage; 
     persister_ = &persister;
     ckpt_slog_handler_ = &ckpt_slog_handler;
     is_inited_ = true;
@@ -68,7 +68,7 @@ int ObServerStorageMetaReplayer::start_replay()
     } else if (OB_FAIL(apply_replay_result_(tenant_meta_map))) {
       LOG_WARN("fail to apply repaly result", K(ret));
     }
-#endif
+#endif 
   }
 
   if (OB_FAIL(ret)) {
@@ -288,7 +288,7 @@ int ObServerStorageMetaReplayer::ss_start_replay_(TENANT_META_MAP &tenant_meta_m
 
   for (int64_t i = 0; OB_SUCC(ret) && i < super_block.body_.tenant_cnt_; i++) {
     ObTenantMeta tenant_meta;
-    const ObTenantItem &item = super_block.body_.tenant_item_arr_[i];
+    const ObTenantItem &item = super_block.body_.tenant_item_arr_[i]; 
     tenant_meta.epoch_ = item.epoch_;
     tenant_meta.create_status_ = item.status_;
     if (ObTenantCreateStatus::CREATED == tenant_meta.create_status_) {
@@ -299,7 +299,7 @@ int ObServerStorageMetaReplayer::ss_start_replay_(TENANT_META_MAP &tenant_meta_m
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (ObTenantCreateStatus::CREATE_ABORT == item.status_ ||
+    } else if (ObTenantCreateStatus::CREATE_ABORT == item.status_ || 
                ObTenantCreateStatus::DELETED == item.status_ ) {
       // do nothing
     } else if (OB_FAIL(tenant_meta_map.set_refactored(item.tenant_id_, tenant_meta))) {
@@ -340,7 +340,7 @@ int ObServerStorageMetaReplayer::ss_read_tenant_unit_(
   return ret;
 }
 
-#endif
+#endif 
 
 
 } // namespace storage

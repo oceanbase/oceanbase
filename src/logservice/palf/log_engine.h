@@ -227,7 +227,7 @@ public:
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
       PALF_LOG(ERROR, "LogEngine not init", K(ret), KPC(this));
-    } else if (!need_batch_rpc
+    } else if (!need_batch_rpc 
                && OB_FAIL(log_net_service_.submit_push_log_req(member_list,
                                                                push_log_type,
                                                                msg_proposal_id,
@@ -477,7 +477,7 @@ private:
                                LogIOFlashbackTask *&flashback_task);
   int generate_purge_throttling_task_(const PurgeThrottlingCbCtx &purge_cb_ctx,
                                       LogIOPurgeThrottlingTask *&purge_task);
-  int generate_fill_cache_task_(const LSN &lsn,
+  int generate_fill_cache_task_(const LSN &lsn, 
                                 const int64_t size,
                                 LogFillCacheTask *&fill_cache_task);
   int update_config_meta_guarded_by_lock_(const LogConfigMeta &meta, LogMeta &log_meta);
@@ -504,7 +504,7 @@ private:
   int integrity_verify_(const LSN &last_meta_entry_start_lsn,
                         const LSN &last_group_entry_header_lsn,
                         bool &is_integrity);
-  void set_enable_fill_cache_functor(const EnableFillCacheFunctor &functor);
+  void set_enable_fill_cache_functor(const EnableFillCacheFunctor &functor);                        
 private:
   DISALLOW_COPY_AND_ASSIGN(LogEngine);
 

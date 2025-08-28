@@ -32,7 +32,7 @@ using namespace omt;
  * ObTableLoadAssignedMemoryManager
  */
 
-ObTableLoadAssignedMemoryManager::ObTableLoadAssignedMemoryManager()
+ObTableLoadAssignedMemoryManager::ObTableLoadAssignedMemoryManager() 
   : avail_sort_memory_(0),
     avail_memory_(0),
     chunk_count_(0),
@@ -40,11 +40,11 @@ ObTableLoadAssignedMemoryManager::ObTableLoadAssignedMemoryManager()
 {
 }
 
-ObTableLoadAssignedMemoryManager::~ObTableLoadAssignedMemoryManager()
+ObTableLoadAssignedMemoryManager::~ObTableLoadAssignedMemoryManager() 
 {
 }
 
-int ObTableLoadAssignedMemoryManager::init()
+int ObTableLoadAssignedMemoryManager::init() 
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -67,10 +67,10 @@ int ObTableLoadAssignedMemoryManager::assign_memory(bool is_sort, int64_t assign
     ObMutexGuard guard(mutex_);
     chunk_count_ += (is_sort ? assign_memory / ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT : 0);
     avail_sort_memory_ -= (is_sort ? 0 : assign_memory);
-    LOG_INFO("ObTableLoadAssignedMemoryManager::assign_memory",
+    LOG_INFO("ObTableLoadAssignedMemoryManager::assign_memory", 
         K(MTL_ID()), K(is_sort), K(chunk_count_), K(assign_memory), K(avail_sort_memory_), K(avail_memory_));
   }
-
+  
   return ret;
 }
 
@@ -84,7 +84,7 @@ int ObTableLoadAssignedMemoryManager::recycle_memory(bool is_sort, int64_t assig
     ObMutexGuard guard(mutex_);
     chunk_count_ -= (is_sort ? assign_memory / ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT : 0);
     avail_sort_memory_ += (is_sort ? 0 : assign_memory);
-    LOG_INFO("ObTableLoadAssignedMemoryManager::recycle_memory",
+    LOG_INFO("ObTableLoadAssignedMemoryManager::recycle_memory", 
         K(MTL_ID()), K(is_sort), K(chunk_count_), K(assign_memory), K(avail_sort_memory_), K(avail_memory_));
   }
 
@@ -92,7 +92,7 @@ int ObTableLoadAssignedMemoryManager::recycle_memory(bool is_sort, int64_t assig
 }
 
 int64_t ObTableLoadAssignedMemoryManager::get_avail_memory()
-{
+{ 
   int64_t avail_memory;
   {
     ObMutexGuard guard(mutex_);
@@ -101,7 +101,7 @@ int64_t ObTableLoadAssignedMemoryManager::get_avail_memory()
   return avail_memory;
 }
 
-int ObTableLoadAssignedMemoryManager::refresh_avail_memory(int64_t avail_memory)
+int ObTableLoadAssignedMemoryManager::refresh_avail_memory(int64_t avail_memory) 
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -116,7 +116,7 @@ int ObTableLoadAssignedMemoryManager::refresh_avail_memory(int64_t avail_memory)
   return ret;
 }
 
-int ObTableLoadAssignedMemoryManager::get_sort_memory(int64_t &sort_memory)
+int ObTableLoadAssignedMemoryManager::get_sort_memory(int64_t &sort_memory) 
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -134,7 +134,7 @@ int ObTableLoadAssignedMemoryManager::get_sort_memory(int64_t &sort_memory)
       sort_memory = MAX(avail_sort_memory_ / chunk_count_, ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT);
     }
   }
-
+  
   return ret;
 }
 

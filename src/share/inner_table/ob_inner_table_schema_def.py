@@ -24,12 +24,12 @@
 #    Virtual table started with '__tenant_virtual' is used for special cmd(such as show cmd), which can't be queried by SQL.
 # 5. System view's table_name should be referred from MySQL/Oracle.
 # 6. Definition of Oracle Virtual Table/Oracle System View can be referred from document:
-#
+#    
 # 7. Difference between REAL_AGENT and SYS_AGENT:
 #     sys_agent access tables belong to sys tenant only
 #     real_agent access tables belong to current tenant
 # 8. Virtual table system design summary:
-#
+#    
 # 9. For compatibility, when add new column for system table, new column's definition should be "not null + default value" or "nullable".
 #    Specially, when column types are as follows:
 #    1. double、number：default value is not supported, so new column definition should be "nullable".
@@ -7537,7 +7537,7 @@ all_user_proxy_info_def = dict(
     table_type = 'SYSTEM_TABLE',
     gm_columns = ['gmt_create', 'gmt_modified'],
     rowkey_columns = [
-	('tenant_id', 'int', 'false'),
+      	('tenant_id', 'int', 'false'),
         ('client_user_id', 'int', 'false'),
         ('proxy_user_id', 'int', 'false'),
     ],
@@ -7558,7 +7558,7 @@ all_user_proxy_role_info_def = dict(
     table_type = 'SYSTEM_TABLE',
     gm_columns = ['gmt_create', 'gmt_modified'],
     rowkey_columns = [
-	('tenant_id', 'int', 'false'),
+      	('tenant_id', 'int', 'false'),
         ('client_user_id', 'int', 'false'),
         ('proxy_user_id', 'int', 'false'),
         ('role_id', 'int', 'false'),
@@ -24124,7 +24124,7 @@ def_table_schema(
 			              ) AS container_table
 			          WHERE
 			              mv_table.data_table_id = container_table.table_id
-							and mv_table.table_type = 7
+			      				and mv_table.table_type = 7
                     and mv_table.tenant_id = container_table.tenant_id
 			      )
 
@@ -24257,7 +24257,7 @@ def_table_schema(
 			         ) AS container_table
 			     WHERE
 			        mv_table.data_table_id = container_table.table_id
-							and mv_table.table_type = 7
+			 				and mv_table.table_type = 7
               and mv_table.tenant_id = container_table.tenant_id
 			 )
 
@@ -25699,7 +25699,7 @@ def_table_schema(
 			              ) AS container_table
 			          WHERE
 			              mv_table.data_table_id = container_table.table_id
-							and mv_table.table_type = 7
+			      				and mv_table.table_type = 7
 			      )
 
 			      UNION ALL
@@ -25832,7 +25832,7 @@ def_table_schema(
 			         ) AS container_table
 			     WHERE
 			         mv_table.data_table_id = container_table.table_id
-							and mv_table.table_type = 7
+			 				and mv_table.table_type = 7
 			 )
 
 			 UNION ALL
@@ -37217,7 +37217,7 @@ def_table_schema(
     gm_columns      = [],
     in_tenant_space = True,
     view_definition = """
-	select
+  	select
       LAST_ANALYZED,
       CPU_SPEED AS `CPU_SPEED(MHZ)`,
       DISK_SEQ_READ_SPEED AS `DISK_SEQ_READ_SPEED(MB/S)`,
@@ -40831,8 +40831,8 @@ def_table_schema(
         ELSE atnt.tenant_id
       END AS TENANT_ID,
       CASE
-	WHEN avt.table_type in (12, 13) THEN avt.data_table_id
-	ELSE avt.table_id
+      	WHEN avt.table_type in (12, 13) THEN avt.data_table_id
+      	ELSE avt.table_id
       END as TABLE_ID,
       CASE
         WHEN atnt.tenant_name LIKE 'META$%' THEN
@@ -44749,7 +44749,7 @@ def_table_schema(
                 ) container_table
             WHERE
                 mv_table.data_table_id = container_table.table_id
-							and mv_table.table_type = 7
+			  				and mv_table.table_type = 7
         )
 
         UNION ALL
@@ -44869,7 +44869,7 @@ def_table_schema(
                 ) container_table
             WHERE
                 mv_table.data_table_id = container_table.table_id
-							and mv_table.table_type = 7
+			  				and mv_table.table_type = 7
         )
 
         UNION ALL
@@ -44984,7 +44984,7 @@ def_table_schema(
                 ) container_table
             WHERE
                 mv_table.data_table_id = container_table.table_id
-							and mv_table.table_type = 7
+			  				and mv_table.table_type = 7
         )
 
         UNION ALL
@@ -52162,7 +52162,7 @@ def_table_schema(
                     ) container_table
                 WHERE
                     mv_table.data_table_id = container_table.table_id
-							and mv_table.table_type = 7
+			      				and mv_table.table_type = 7
             )
 
             UNION ALL
@@ -52427,7 +52427,7 @@ def_table_schema(
                ) container_table
            WHERE
                mv_table.data_table_id = container_table.table_id
-							and mv_table.table_type = 7
+			 				and mv_table.table_type = 7
        )
 
        UNION ALL
@@ -56455,7 +56455,7 @@ def_table_schema(
 )
 
 # This view shows audits caused by not exists/exsits error.
-# bugfix:
+# bugfix: 
 # return code refers from: select dbms_metadata.get_ddl('VIEW','DBA_AUDIT_EXISTS') from dual;
 def_table_schema(
   owner = 'sean.yyj',
@@ -63394,7 +63394,7 @@ def_table_schema(
     gm_columns      = [],
     in_tenant_space = True,
     view_definition = """
-	SELECT
+  	SELECT
       CAST(A.DATABASE_NAME AS VARCHAR2(128)) AS LOG_OWNER,
       CAST(CASE WHEN BITAND((D.TABLE_MODE / POWER(2, 24)), 1) = 0 THEN D.TABLE_NAME ELSE (SELECT T1.TABLE_NAME FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T1 WHERE T1.DATA_TABLE_ID = D.TABLE_ID and T1.TABLE_TYPE = 7) END AS VARCHAR2(128)) AS MASTER,
       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS LOG_TABLE,
@@ -63460,7 +63460,7 @@ def_table_schema(
     gm_columns      = [],
     in_tenant_space = True,
     view_definition = """
-	SELECT
+  	SELECT
       CAST(A.DATABASE_NAME AS VARCHAR2(128)) AS LOG_OWNER,
       CAST(CASE WHEN BITAND((D.TABLE_MODE / POWER(2, 24)), 1) = 0 THEN D.TABLE_NAME ELSE (SELECT T1.TABLE_NAME FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T1 WHERE T1.DATA_TABLE_ID = D.TABLE_ID and T1.TABLE_TYPE = 7) END AS VARCHAR2(128)) AS MASTER,
       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS LOG_TABLE,
@@ -71191,7 +71191,7 @@ FROM (
                    ) container_table
                WHERE
                    mv_table.data_table_id = container_table.table_id
-							and mv_table.table_type = 7
+			     				and mv_table.table_type = 7
            )
 
            UNION ALL
@@ -72665,7 +72665,7 @@ def_table_schema(
     gm_columns      = [],
     in_tenant_space = True,
     view_definition = """
-	SELECT
+  	SELECT
       LAST_ANALYZED,
       CPU_SPEED AS \"CPU_SPEED(MHZ)\",
       DISK_SEQ_READ_SPEED AS \"DISK_SEQ_READ_SPEED(MB/S)\",

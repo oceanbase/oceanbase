@@ -148,7 +148,7 @@ int ObSrvXlator::th_destroy()
 }
 
 typedef union EP_RPCP_BUF {
-  char rpcp_buffer_[RPCP_BUF_SIZE]; // reserve memory for rpc processor
+  char rpcp_buffer_[RPCP_BUF_SIZE]; // reserve memory for rpc processor 
   char ep_buffer_[sizeof (ObErrorP) + sizeof (ObMPError)];
   char obmp_query_buffer_[ObMPQuery::MAX_SELF_OBJ_SIZE];
 } EP_RPCP_BUF;

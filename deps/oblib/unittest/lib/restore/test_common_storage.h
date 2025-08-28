@@ -29,7 +29,7 @@
  *    S3_SK as correct info, so as to oss、cos
  *
  * 2. For NFS, you just need to revise FS_PATH as empty string(means "") or some other value, but not INVALID_STR. It will
- *    build a directory in the same directory as this test bin file.
+ *    build a directory in the same directory as this test bin file. 
  *
  * NOTICE: consider the running time, you'd better check these media one by one, or it may be timeout.
  */
@@ -105,7 +105,7 @@ public:
         field_name##_[val_len] = '\0'; \
       } \
     } \
-
+  
   SET_FIELD(bucket);
   SET_FIELD(region);
   SET_FIELD(endpoint);

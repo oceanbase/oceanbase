@@ -266,9 +266,9 @@ public:
   ObDDLFinishLog();
   ~ObDDLFinishLog() = default;
   void reset();
-  int init(const int64_t tenant_id,
+  int init(const int64_t tenant_id, 
            const share::ObLSID ls_id,
-           const ObITable::TableKey &table_key,
+           const ObITable::TableKey &table_key, 
            const char* buf,
            const int64_t buf_len,
            const blocksstable::MacroBlockId &macro_block_id,
@@ -299,7 +299,7 @@ public:
   inline bool is_failed() const { return status_.is_failed(); }
   inline bool is_finished() const { return status_.is_finished(); }
   int get_ret_code() const { return status_.get_ret_code(); }
-  void try_release();
+  void try_release();  
   const char *get_cb_name() const override { return "DDLFinishClogCb"; }
   TO_STRING_KV(K(is_inited_), K(status_), K(finish_log_));
 private:
@@ -346,10 +346,10 @@ public:
   ~ObTabletSplitInfo() = default;
   int assign(const ObTabletSplitInfo &info);
   bool is_valid() const;
-  TO_STRING_KV(K_(table_id), K_(lob_table_id), K_(schema_version),
-    K_(task_id), K_(source_tablet_id), K_(dest_tablets_id),
-    K_(compaction_scn), K_(data_format_version), K_(consumer_group_id),
-    K_(can_reuse_macro_block), K_(split_sstable_type), K_(lob_col_idxs),
+  TO_STRING_KV(K_(table_id), K_(lob_table_id), K_(schema_version), 
+    K_(task_id), K_(source_tablet_id), K_(dest_tablets_id), 
+    K_(compaction_scn), K_(data_format_version), K_(consumer_group_id), 
+    K_(can_reuse_macro_block), K_(split_sstable_type), K_(lob_col_idxs), 
     K_(parallel_datum_rowkey_list));
 public:
   common::ObArenaAllocator rowkey_allocator_; // alloc buf for datum rowkey.

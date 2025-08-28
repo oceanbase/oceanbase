@@ -224,7 +224,7 @@ int ObDomainIdUtils::get_domain_tid_table_by_type(ObDomainIDType type,
             LOG_WARN("fail to get rowkey doc table id, retry", K(ret), KPC(data_table));
             ret = OB_SCHEMA_EAGAIN;
           } else {
-            LOG_WARN("fail to get rowkey doc table id", K(ret), KPC(data_table));
+            LOG_WARN("fail to get rowkey doc table id", K(ret), KPC(data_table)); 
           }
         }
         break;
@@ -308,8 +308,8 @@ int ObDomainIdUtils::get_domain_tid_table_by_cid(
 
 
 int ObDomainIdUtils::get_domain_id_col(
-    ObDomainIDType type,
-    const void *table_schema,
+    ObDomainIDType type, 
+    const void *table_schema, 
     ObIArray<uint64_t>& col_id,
     sql::ObSqlSchemaGuard *schema_guard /*= nullptr*/)
 {
@@ -371,7 +371,7 @@ int ObDomainIdUtils::get_domain_id_col(
           LOG_WARN("fail to push back col id", K(ret));
         } else if (OB_FAIL(col_id.push_back(pq_cids_col_id))) {
           LOG_WARN("fail to push back col id", K(ret));
-        }
+        } 
         break;
       }
       default: {
@@ -384,9 +384,9 @@ int ObDomainIdUtils::get_domain_id_col(
 }
 
 int ObDomainIdUtils::get_domain_id_cols(
-    ObDomainIDType type,
-    const void *table_schema,
-    ObIArray<uint64_t>& rowkey_cids,
+    ObDomainIDType type, 
+    const void *table_schema, 
+    ObIArray<uint64_t>& rowkey_cids, 
     sql::ObSqlSchemaGuard *schema_guard /*= nullptr*/)
 {
   int ret = OB_SUCCESS;
@@ -703,7 +703,7 @@ int ObDomainIdUtils::fill_batch_domain_id_datum(ObDomainIDType type, void *expr,
 }
 
 int ObDomainIdUtils::get_pq_cids_col_id(
-    const ObTableSchema &index_table_schema,
+    const ObTableSchema &index_table_schema, 
     const ObTableSchema &data_table_schema,
     uint64_t &pq_cids_col_id)
 {
@@ -791,7 +791,7 @@ int ObDomainIdUtils::resort_domain_info_by_base_cols(
       }
     }
   }
-
+  
   return ret;
 }
 

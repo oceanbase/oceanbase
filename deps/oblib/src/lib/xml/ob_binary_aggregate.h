@@ -58,11 +58,11 @@ struct ObAggBinKeyInfo {
 typedef common::ObArray<ObAggBinKeyInfo*> ObAggBinKeyArray;
 class ObBinAggSerializer {
 public:
-  ObBinAggSerializer(ObIAllocator* allocator_,
-                     ObBinAggType type,
-                     uint8_t header_type,
-                     bool need_merge_unparsed = false,
-                     ObIAllocator* tmp_allocator = nullptr,
+  ObBinAggSerializer(ObIAllocator* allocator_, 
+                     ObBinAggType type, 
+                     uint8_t header_type, 
+                     bool need_merge_unparsed = false, 
+                     ObIAllocator* tmp_allocator = nullptr, 
                      ObIAllocator* arr_allocator = nullptr);
 
   // finaly serialize
@@ -95,9 +95,9 @@ private:
   bool has_unique_flag() { return type_ == AGG_JSON && sort_and_unique_; }
   bool is_xml_type() { return type_ == AGG_XML; }
   bool is_json_type() { return type_ == AGG_JSON; }
-  bool json_not_sort() {
-    return type_ == AGG_JSON
-           && header_type_ == (static_cast<uint8_t>(ObJsonNodeType::J_OBJECT))
+  bool json_not_sort() { 
+    return type_ == AGG_JSON 
+           && header_type_ == (static_cast<uint8_t>(ObJsonNodeType::J_OBJECT)) 
            && !sort_and_unique_ ;
   }
   // stable sort
@@ -117,8 +117,8 @@ private:
   void set_index_entry(int64_t origin_index, int64_t sort_index);
   void set_value_entry(int64_t entry_idx,  uint8_t type, int64_t value_offset);
   bool need_to_add_node(int64_t key_count, ObMulModeNodeType type);
-  int copy_and_reset(ObIAllocator* new_allocator,
-                     ObIAllocator* old_allocator,
+  int copy_and_reset(ObIAllocator* new_allocator, 
+                     ObIAllocator* old_allocator, 
                      ObStringBuffer &add_value);
   bool first_alloc_flag() { return alloc_flag_ == ObBinAggAllocFlag::AGG_ALLOC_A; }
   void set_first_alloc() { alloc_flag_ = ObBinAggAllocFlag::AGG_ALLOC_A;}
@@ -136,7 +136,7 @@ private:
   static int element_serialize(ObIAllocator* allocator_, ObString value, ObStringBuffer &res);
   static constexpr int REPLACE_MEMORY_SIZE_THRESHOLD = 8 << 20; // 8M
 private:
-  // At present, there is no encapsulated interface for lob's append.
+  // At present, there is no encapsulated interface for lob's append. 
   // Use ObStringBuffer, and replace it with lob after the implementation of subsequent lob placement.
   ObStringBuffer value_; // value buffer
   ObStringBuffer key_; // key buffer
@@ -150,7 +150,7 @@ private:
   bool merge_text_;
   uint8_t header_type_;
   uint8_t alloc_flag_;
-
+  
   int32_t type_; // ObBinAggType 0:json 1:xml
   int64_t key_len_;
   int64_t value_len_;
@@ -162,7 +162,7 @@ private:
   int64_t value_entry_start_;
   int8_t value_entry_size_;
   int64_t key_start_;
-
+  
   ObIAllocator* allocator_;
   ObIAllocator* back_allocator_;
   ObIAllocator* arr_allocator_;

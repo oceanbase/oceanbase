@@ -852,7 +852,7 @@ int ObIndexBlockTreeCursor::move_until_cannot_skip(int64_t &remain_step)
 int ObIndexBlockTreeCursor::move_forward_micro(const uint64_t step)
 {
   int ret = OB_SUCCESS;
-
+  
   int64_t remain_step = step;
   int64_t next_idx = 0;
 
@@ -916,7 +916,7 @@ int ObIndexBlockTreeCursor::move_forward_micro(const uint64_t step)
             LOG_WARN("Fail to move forward micro", K(ret), K(remain_step), KPC(curr_path_item_));
           } else if (OB_FAIL(read_next_level_row(curr_path_item_->curr_row_idx_))) {
             LOG_WARN("Fail to read next level row", K(ret), KPC(curr_path_item_));
-          }
+          } 
         } else if (OB_FAIL(move_until_cannot_skip(remain_step))) {
           LOG_WARN("Fail to move until cannot skip", K(ret), K(remain_step));
         }

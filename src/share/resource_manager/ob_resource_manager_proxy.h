@@ -196,7 +196,7 @@ public:
       const common::ObString &plan,
       const common::ObString &group,
       ObPlanDirective &directive);
-
+  
 private:
   int allocate_consumer_group_id(
       common::ObMySQLTransaction &trans,
@@ -248,11 +248,11 @@ private:
   int get_percentage(const char *name, const common::ObObj &obj, int64_t &v);
   // max_iops >= min_iops, 否则抛出错误
   int check_iops_validity(
-      const uint64_t tenant_id,
+      const uint64_t tenant_id, 
       const common::ObString &plan_name,
       const common::ObString &group,
-      const int64_t iops_minimum,
-      const int64_t iops_maximum,
+      const int64_t iops_minimum, 
+      const int64_t iops_maximum, 
       bool &valid,
       ObIArray<ObPlanDirective> &directives);
 

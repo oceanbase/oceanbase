@@ -432,7 +432,7 @@ public:
       return MAX_PRECISION_DECIMAL_INT_512;
     }
   }
-
+  
   inline static int get_zero_value_byte_precision(int16_t precision, const ObDecimalInt *&decint, int32_t &int_bytes)
   {
     int ret = OB_SUCCESS;

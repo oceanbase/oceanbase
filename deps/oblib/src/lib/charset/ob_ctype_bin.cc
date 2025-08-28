@@ -214,7 +214,7 @@ int ob_wildcmp_bin_impl(const ObCharsetInfo *cs,
       if (str == str_end || likeconv(cs,*wild_str++) != likeconv(cs,*str++)) {
         return(1);			 
       } else if (wild_str == wild_end) {
-        return(str != str_end);
+        return(str != str_end);		 
       } else {
         result=1;
       }
@@ -366,7 +366,7 @@ void ob_hash_sort_8bit_bin(const ObCharsetInfo *cs,
 }
 void ob_hash_sort_bin(const ObCharsetInfo *cs __attribute__((unused)),
                       const unsigned char *key, size_t len,
-                      unsigned long int *nr1, unsigned long int *nr2,
+                      unsigned long int *nr1, unsigned long int *nr2, 
                       const bool calc_end_space,
                       hash_algo hash_algo)
 {
@@ -455,7 +455,7 @@ ObCollationHandler ob_collation_binary_handler =
 ObCharsetInfo ob_charset_bin =
 {
   63,0,0,
-  OB_CS_COMPILED|OB_CS_BINSORT|OB_CS_PRIMARY,
+  OB_CS_COMPILED|OB_CS_BINSORT|OB_CS_PRIMARY, 
   "binary",
   "binary",
   "",

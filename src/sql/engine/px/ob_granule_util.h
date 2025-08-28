@@ -98,7 +98,7 @@ enum ObGranuleType
   OB_PARTITION_GRANULE
 };
 
-//
+// 
 // 《PX的GI详细实现》
 enum ObGranuleSplitterType
 {

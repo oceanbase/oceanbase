@@ -142,7 +142,7 @@ int ObShowGrants::add_priv_map_recursively(uint64_t user_id, PRIV_MAP &priv_map,
       priv_key.sensitive_rule_name_ = sensitive_rule_priv_array.at(i)->get_sensitive_rule_name_str();
       OZ (add_priv_map(priv_map, priv_key, sensitive_rule_priv_array.at(i)->get_priv_set()));
     }
-
+    
 
     if (OB_SUCC(ret) && expand_roles) {
       for (int i = 0; OB_SUCC(ret) && i < user_info->get_role_id_array().count(); i++) {
@@ -247,7 +247,7 @@ int ObShowGrants::inner_get_next_row(common::ObNewRow *&row)
           for (PRIV_MAP::const_iterator iter = priv_map.begin(); OB_SUCC(ret) && iter != priv_map.end(); ++iter) {
             const PrivKey &priv_key = iter->first;
             const ObPrivSet &privs = iter->second;
-            if (priv_key.catalog_name_.empty()
+            if (priv_key.catalog_name_.empty() 
                 && priv_key.db_name_.empty()
                 && priv_key.sensitive_rule_name_.empty()) {
               pos = 0;
@@ -262,8 +262,8 @@ int ObShowGrants::inner_get_next_row(common::ObNewRow *&row)
 #ifdef OB_BUILD_TDE_SECURITY
               if (OB_SUCC(ret)
                   && OB_PRIV_ALL == (privs & OB_PRIV_ALL)
-                  && 0 != (privs & (OB_PRIV_ENCRYPT
-                                    | OB_PRIV_DECRYPT
+                  && 0 != (privs & (OB_PRIV_ENCRYPT 
+                                    | OB_PRIV_DECRYPT 
                                     | OB_PRIV_PLAINACCESS))) {
                 pos = 0;
                 have_priv.priv_set_ = (privs & ~OB_PRIV_ALL);
@@ -328,7 +328,7 @@ int ObShowGrants::inner_get_next_row(common::ObNewRow *&row)
             if (OB_FAIL(priv_key_value_set.push_back(priv_key_array.at(i)))) {
               LOG_WARN("push back failed", K(ret));
             } else if (i + 1 < priv_key_array.count()) {
-              if (priv_key_array.at(i).first.db_name_ != priv_key_array.at(i + 1).first.db_name_
+              if (priv_key_array.at(i).first.db_name_ != priv_key_array.at(i + 1).first.db_name_ 
                  || priv_key_array.at(i).first.table_name_ != priv_key_array.at(i + 1).first.table_name_) {
                 need_print = true;
               }
@@ -834,7 +834,7 @@ int ObShowGrants::print_privs_to_buff(
          SERVER_LOG(WARN, "print obj privs failed", K(ret));
       }
     } else {
-      if (0 == (priv_set & (priv_all | OB_PRIV_ENCRYPT | OB_PRIV_DECRYPT | OB_PRIV_PLAINACCESS))
+      if (0 == (priv_set & (priv_all | OB_PRIV_ENCRYPT | OB_PRIV_DECRYPT | OB_PRIV_PLAINACCESS)) 
           && (priv_key_array == NULL || priv_key_array->empty())) {
         ret = databuff_printf(buf, buf_len, pos, " USAGE");
       } else if (priv_all == (priv_set & priv_all)) {
@@ -858,21 +858,21 @@ int ObShowGrants::print_privs_to_buff(
         if ((priv_set & OB_PRIV_INSERT) && OB_SUCCESS == ret) {
           ret = BUF_PRINTF(" INSERT,");
         }
-        if (OB_SUCC(ret) && priv_key_array != NULL && OB_FAIL(print_column_privs_to_buff(buf, buf_len, pos,
+        if (OB_SUCC(ret) && priv_key_array != NULL && OB_FAIL(print_column_privs_to_buff(buf, buf_len, pos, 
                                                                                 *priv_key_array, OB_PRIV_INSERT))) {
           LOG_WARN("print column privs to buff failed", K(ret));
         }
         if ((priv_set & OB_PRIV_UPDATE) && OB_SUCCESS == ret) {
           ret = BUF_PRINTF(" UPDATE,");
         }
-        if (OB_SUCC(ret) && priv_key_array != NULL && OB_FAIL(print_column_privs_to_buff(buf, buf_len, pos,
+        if (OB_SUCC(ret) && priv_key_array != NULL && OB_FAIL(print_column_privs_to_buff(buf, buf_len, pos, 
                                                                               *priv_key_array, OB_PRIV_UPDATE))) {
           LOG_WARN("print column privs to buff failed", K(ret));
         }
         if ((priv_set & OB_PRIV_SELECT) && OB_SUCCESS == ret) {
           ret = BUF_PRINTF(" SELECT,");
         }
-        if (OB_SUCC(ret) && priv_key_array != NULL && OB_FAIL(print_column_privs_to_buff(buf, buf_len, pos,
+        if (OB_SUCC(ret) && priv_key_array != NULL && OB_FAIL(print_column_privs_to_buff(buf, buf_len, pos, 
                                                                                 *priv_key_array, OB_PRIV_SELECT))) {
           LOG_WARN("print column privs to buff failed", K(ret));
         }
@@ -915,7 +915,7 @@ int ObShowGrants::print_privs_to_buff(
         if ((priv_set & OB_PRIV_REFERENCES) && OB_SUCCESS == ret) {
           ret = BUF_PRINTF(" REFERENCES,");
         }
-        if (OB_SUCC(ret) && priv_key_array != NULL && OB_FAIL(print_column_privs_to_buff(buf, buf_len, pos,
+        if (OB_SUCC(ret) && priv_key_array != NULL && OB_FAIL(print_column_privs_to_buff(buf, buf_len, pos, 
                                                                               *priv_key_array, OB_PRIV_REFERENCES))) {
           LOG_WARN("print column privs to buff failed", K(ret));
         }

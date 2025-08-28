@@ -372,7 +372,7 @@ class ObLogRawPathPieceContext
     public:
     palf::LSN operator()() const {return palf::LSN(palf::LOG_MAX_LSN_VAL);}
   };
-
+  
 public:
   ObLogRawPathPieceContext();
   ~ObLogRawPathPieceContext();
@@ -421,7 +421,7 @@ private:
 
 private:
   bool is_inited_;
-  share::ObLSID id_;
+  share::ObLSID id_;      
   DirArray array_;        // piece list
   int64_t index_;         // current read piece index
   int64_t file_id_;       // current read file id

@@ -831,7 +831,7 @@ int ObExprInOrNotIn::cg_expr_without_row(ObExprCGCtx &expr_cg_ctx,
       } else {
         func_ptr = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
           left_type, right_type, scale1, scale2, prec1, prec2, lib::is_oracle_mode(), left_cs, has_lob_header);
-      }
+      }          
       for (int i = 0; i < rt_expr.inner_func_cnt_; i++) {
         rt_expr.inner_functions_[i] = (void *)func_ptr;
       }
@@ -853,7 +853,7 @@ int ObExprInOrNotIn::cg_expr_without_row(ObExprCGCtx &expr_cg_ctx,
             (ob_is_urowid(left_type) || ob_is_urowid(right_type))) {
           rt_expr.eval_batch_func_ = &ObExprInOrNotIn::eval_batch_in_without_row_fallback;
           rt_expr.eval_vector_func_ = tmp_in_ret == OB_SUCCESS ?
-                                      &ObExprInOrNotIn::eval_vector_in_without_row_fallback :
+                                      &ObExprInOrNotIn::eval_vector_in_without_row_fallback : 
                                       nullptr;
         } else {
           rt_expr.eval_batch_func_ = &ObExprInOrNotIn::eval_batch_in_without_row;
@@ -1160,11 +1160,11 @@ int ObExprInOrNotIn::eval_batch_in_without_row_fallback(const ObExpr &expr,
             } else {
               bool is_equal = false;
               left = &input_left[idx];
-              is_equal = (left->len_ >= len0
-                          && 0 == MEMCMP(ptr0, left->ptr_, len0)
+              is_equal = (left->len_ >= len0 
+                          && 0 == MEMCMP(ptr0, left->ptr_, len0) 
                           && is_all_space(left->ptr_ + len0, left->len_ - len0));
-              is_equal = is_equal || (left->len_ >= len1
-                                      && 0 == MEMCMP(ptr1, left->ptr_, len1)
+              is_equal = is_equal || (left->len_ >= len1 
+                                      && 0 == MEMCMP(ptr1, left->ptr_, len1) 
                                       && is_all_space(left->ptr_ + len1, left->len_ - len1));
               results[idx].set_int(is_equal);
             }
@@ -1303,8 +1303,8 @@ int ObExprInOrNotIn::inner_eval_vector_in_without_row_fallback(const ObExpr &exp
   // perform a short-circuit calculation and return immediately.
   if (!left_all_null) {
     /*
-    * CAN_CMP_MEM used for common short path
-    * the params of left and right
+    * CAN_CMP_MEM used for common short path 
+    * the params of left and right 
     * both are string type
     * both are CS_TYPE_UTF8MB4_BIN
     * both dont have null value
@@ -1322,7 +1322,7 @@ int ObExprInOrNotIn::inner_eval_vector_in_without_row_fallback(const ObExpr &exp
       if (OB_FAIL(expr.args_[1]->args_[i]->eval(ctx, right_store[i]))) {
         LOG_WARN("failed to eval right datum", K(ret), K(i));
       } else {
-        check_right_can_cmp_mem(*right_store[i], expr.args_[1]->args_[i]->obj_meta_,
+        check_right_can_cmp_mem(*right_store[i], expr.args_[1]->args_[i]->obj_meta_, 
                                 can_cmp_mem, right_has_null);
       }
     }
@@ -1334,7 +1334,7 @@ int ObExprInOrNotIn::inner_eval_vector_in_without_row_fallback(const ObExpr &exp
         const char *ptr0 = right_store[0]->ptr_;
         const char *ptr1 = right_store[1]->ptr_;
         uint32_t len0 = right_store[0]->len_;
-        uint32_t len1 = right_store[1]->len_;
+        uint32_t len1 = right_store[1]->len_;          
         const char *left_str_ptr = nullptr;
         int32_t left_str_len = 0;
         for (; OB_SUCC(ret) && idx < bound.end(); ++idx) {
@@ -1347,11 +1347,11 @@ int ObExprInOrNotIn::inner_eval_vector_in_without_row_fallback(const ObExpr &exp
               break;
             } else {
               bool is_equal = false;
-              is_equal = (left_str_len >= len0
-                          && 0 == MEMCMP(ptr0, left_str_ptr, len0)
+              is_equal = (left_str_len >= len0 
+                          && 0 == MEMCMP(ptr0, left_str_ptr, len0) 
                           && is_all_space(left_str_ptr + len0, left_str_len - len0));
-              is_equal = is_equal || (left_str_len >= len1
-                                      && 0 == MEMCMP(ptr1, left_str_ptr, len1)
+              is_equal = is_equal || (left_str_len >= len1 
+                                      && 0 == MEMCMP(ptr1, left_str_ptr, len1) 
                                       && is_all_space(left_str_ptr + len1, left_str_len - len1));
               res_vec->set_int(idx, T_OP_IN == expr.type_ ? is_equal : !is_equal);
             }
@@ -1367,7 +1367,7 @@ int ObExprInOrNotIn::inner_eval_vector_in_without_row_fallback(const ObExpr &exp
         ObLength l_len = 0;
         int cmp_ret = 0;
         sql::RowCmpFunc row_cmp_func = VectorCmpExprFuncsHelper::get_row_cmp_func(
-                                                  expr.args_[0]->datum_meta_,
+                                                  expr.args_[0]->datum_meta_, 
                                                   expr.args_[1]->args_[0]->datum_meta_);
         if (OB_ISNULL(row_cmp_func)) {
           ret = OB_ERR_UNEXPECTED;
@@ -2008,7 +2008,7 @@ inline int ObExprInOrNotIn::probe_item(bool is_op_in,
 
 template <typename LeftVec, typename ResVec, typename RawKeyType>
 int ObExprInOrNotIn::probe_fixed_col(const ObBitVector &skip, const EvalBound &bound,
-                  ObBitVector &eval_flags, LeftVec *&input_left_vec,
+                  ObBitVector &eval_flags, LeftVec *&input_left_vec, 
                   ResVec *&res_vec, ObExprInCtx *&in_ctx, bool is_op_in) {
   int ret = OB_SUCCESS;
   for (int32_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
@@ -2077,14 +2077,14 @@ inline int ObExprInOrNotIn::probe_col(const ObExpr &expr,
         }
         eval_flags.set_all(begin, end);
       } else if (ItemKT::KT_INT8B == get_key_type(vec_tc)) {
-        ret = probe_fixed_col<LeftVec, ResVec, normal_inkey_t>(skip, bound,
+        ret = probe_fixed_col<LeftVec, ResVec, normal_inkey_t>(skip, bound, 
                                                                eval_flags, input_left_vec,
                                                                res_vec, in_ctx, is_op_in);
         if (OB_FAIL(ret)) {
           LOG_WARN("failed to probe fixed_8B col", K(ret));
         }
       } else if (ItemKT::KT_INT4B == get_key_type(vec_tc)) {
-        ret = probe_fixed_col<LeftVec, ResVec, uint32_t>(skip, bound,
+        ret = probe_fixed_col<LeftVec, ResVec, uint32_t>(skip, bound, 
                                                          eval_flags, input_left_vec,
                                                          res_vec, in_ctx, is_op_in);
         if (OB_FAIL(ret)) {
@@ -2519,13 +2519,13 @@ void ObExprInOrNotIn::check_left_can_cmp_mem(const ObExpr &expr,
 }
 
 void ObExprInOrNotIn::check_left_can_cmp_mem(const ObExpr &expr,
-                                             const ObBitVector &skip,
-                                             const ObBitVector &eval_flags,
-                                             const EvalBound &bound,
+                                             const ObBitVector &skip, 
+                                             const ObBitVector &eval_flags, 
+                                             const EvalBound &bound, 
                                              bool &can_cmp_mem)
 {
-  can_cmp_mem = can_cmp_mem && 2 == expr.inner_func_cnt_
-                && ObBitVector::bit_op_zero(skip, eval_flags, bound,
+  can_cmp_mem = can_cmp_mem && 2 == expr.inner_func_cnt_ 
+                && ObBitVector::bit_op_zero(skip, eval_flags, bound, 
                                [](const uint64_t l, const uint64_t r) { return (l | r); });
 }
 

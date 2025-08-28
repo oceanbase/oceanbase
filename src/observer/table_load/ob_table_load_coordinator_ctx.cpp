@@ -582,7 +582,7 @@ int ObTableLoadCoordinatorCtx::init_partition_ids(const ObIArray<ObTabletID> &ta
         } else if (OB_FAIL(target_partition_ids_.push_back(target_id))) {
           LOG_WARN("fail to push target id", KR(ret));
         }
-      }
+      } 
       // empty partition
       else if (OB_HASH_NOT_EXIST == ret) {
         if (OB_FAIL(empty_partition_ids_.push_back(origin_id))) {
@@ -634,7 +634,7 @@ int ObTableLoadCoordinatorCtx::init_empty_insert_tablet_ctx_manager()
   if (OB_NOT_NULL(empty_insert_tablet_ctx_manager_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("empty_insert_tablet_ctx_manager is not nullptr", KR(ret));
-  } else if (OB_ISNULL(empty_insert_tablet_ctx_manager_
+  } else if (OB_ISNULL(empty_insert_tablet_ctx_manager_ 
                         = OB_NEWx(ObTableLoadEmptyInsertTabletCtxManager,
                                   (&allocator_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -951,8 +951,8 @@ int ObTableLoadCoordinatorCtx::init_complete()
     LOG_WARN("fail to init task scheduler", KR(ret));
   } else if (OB_FAIL(task_scheduler_->start())) {
     LOG_WARN("fail to start task scheduler", KR(ret));
-  }
-
+  } 
+  
   return ret;
 }
 

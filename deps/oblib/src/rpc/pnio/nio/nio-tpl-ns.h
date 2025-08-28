@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef __ns__
 #define __ns__
 #define my_flush_cb tns(_flush_cb)
@@ -52,3 +52,4 @@
 #undef my_sk_consume
 #undef my_wq_flush
 #endif
+

@@ -146,9 +146,9 @@ public:
                                 ObTabletCacheInterval &interval);
   int get_autoinc_seq(const uint64_t tenant_id, const common::ObTabletID &tablet_id, uint64_t &autoinc_seq, const int64_t cache_size=ObTabletAutoincrementService::DEFAULT_CACHE_SIZE);
   int get_autoinc_seq_for_mlog(
-      const uint64_t tenant_id,
+      const uint64_t tenant_id, 
       const ObLSID &ls_id,
-      const common::ObTabletID &tablet_id,
+      const common::ObTabletID &tablet_id, 
       uint64_t &autoinc_seq);
   int clear_tablet_autoinc_seq_cache(const uint64_t tenant_id, const common::ObIArray<common::ObTabletID> &tablet_ids, const int64_t abs_timeout_us);
 private:

@@ -180,9 +180,9 @@ OB_UNIS_VERSION(1);
 
 public:
   ObSubSchemaCtx(ObIAllocator &allocator) :
-    is_inited_(false), used_subschema_id_(MAX_NON_RESERVED_SUBSCHEMA_ID),
+    is_inited_(false), used_subschema_id_(MAX_NON_RESERVED_SUBSCHEMA_ID), 
     reserved_(0), fields_(NULL), allocator_(allocator) {}
-
+  
   ~ObSubSchemaCtx() { reset(); }
 
   int init();

@@ -1243,8 +1243,8 @@ int ObIHashPartInfrastructure::process_dump(bool is_block, bool &full_by_pass)
 void ObHashPartInfrastructureVecImpl::reset()
 {
   if (nullptr != hp_infras_) {
-    hp_infras_->reset();
-  }
+    hp_infras_->reset(); 
+  }  
   is_inited_ = false;
 }
 
@@ -1775,7 +1775,7 @@ int64_t ObHashPartInfrastructureVecImpl::get_actual_mem_used() const
   int64_t actual_mem_used = 0;
   HP_INFRAS_STATUS_CHECK
   {
-    actual_mem_used = hp_infras_->get_hash_store_mem_used()
+    actual_mem_used = hp_infras_->get_hash_store_mem_used() 
       + hp_infras_->get_hash_table_mem_used();
   }
   return actual_mem_used;
@@ -1854,3 +1854,4 @@ int ObHashPartInfrastructureVecImpl::rewind()
   return ret;
 }
 //////////////////// end ObHashPartInfrastructureVecImpl //////////////////
+

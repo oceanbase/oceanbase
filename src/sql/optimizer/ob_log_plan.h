@@ -123,14 +123,14 @@ struct ObDistinctAggrBatch
   // second: the mocked aggr expr for three stage push down
   ObSEArray<std::pair<ObAggFunRawExpr *, ObAggFunRawExpr *>, 2,
   ModulePageAllocator, true> mocked_aggrs_;
-
+ 
   // first: the origin distint param expr
   // second: the mocked pseudo expr for the distinct param.
   ObSEArray<std::pair<ObRawExpr *, ObRawExpr *>, 1,
   ModulePageAllocator, true> mocked_params_;
   TO_STRING_KV(K(mocked_aggrs_), K(mocked_params_));
 };
-
+  
 struct CandidatePlan
 {
   CandidatePlan(ObLogicalOperator *plan_tree)
@@ -267,7 +267,7 @@ public:
   int update_re_est_cost(ObLogicalOperator *op);
 
   int collect_table_location(ObLogicalOperator *op);
-  int collect_vec_index_location_related_info(ObLogTableScan &tsc_op,
+  int collect_vec_index_location_related_info(ObLogTableScan &tsc_op, 
                                               TableLocRelInfo& rel_info);
   int collect_location_related_info(ObLogicalOperator &op);
   int build_location_related_tablet_ids();
@@ -489,11 +489,11 @@ public:
                                                               !force_dist_hash_ &&
                                                               !force_pull_to_local_ &&
                                                               !force_hash_local_); }
-    inline bool allow_dist_hash() const { return ignore_hint_ || (!force_basic_ &&
+    inline bool allow_dist_hash() const { return ignore_hint_ || (!force_basic_ && 
                                                                   !force_partition_wise_ &&
                                                                   !force_pull_to_local_ &&
                                                                   !force_hash_local_); }
-    inline bool allow_partition_wise() const { return ignore_hint_ || (!force_basic_ &&
+    inline bool allow_partition_wise() const { return ignore_hint_ || (!force_basic_ && 
                                                                        !force_dist_hash_ &&
                                                                        !force_pull_to_local_ &&
                                                                        !force_hash_local_); }
@@ -544,7 +544,7 @@ public:
 
     // for rollup distributor and collector
     ObRawExpr *rollup_id_expr_;
-
+    
     ObArray<ObRawExpr*> pushdown_groupby_columns_;
     // distinct of group expr
     double group_ndv_;
@@ -682,16 +682,16 @@ public:
                                                            const ObIArray<ObLogicalOperator*> &subquery_ops,
                                                            const ObIArray<ObExecParamRawExpr *> &params,
                                                            ObExchangeInfo &exch_info);
-
+  
   /**
    * @brief Compute to check whether we need add random shuffle exchange for subplan filter
    * @param[in] top  Left child of subplan filter operator
    * @param[in] params  Exec exprs of subplan filter operator, used to construct Hash Shuffle Exchange
    * @param[in] dist_algo
-   * @param[out] exch_info Shuffle exchange operator info that generate
+   * @param[out] exch_info Shuffle exchange operator info that generate 
    * @return
    */
-  int compute_subplan_filter_random_shuffle_info(ObLogicalOperator* top,
+  int compute_subplan_filter_random_shuffle_info(ObLogicalOperator* top, 
                                                  const ObIArray<ObExecParamRawExpr *> &params,
                                                  const DistAlgo dist_algo,
                                                  ObExchangeInfo &exch_info);
@@ -816,7 +816,7 @@ public:
                           const ObIArray<ObAggFunRawExpr*> &aggr_items,
                           const bool is_from_povit,
                           GroupingOpHelper &groupby_helper);
-
+  
   int init_hash_rollup_info(const ObIArray<ObRawExpr*> &groupby_exprs,
                             const ObIArray<ObRawExpr*> &rollup_exprs,
                             const ObIArray<ObAggFunRawExpr*> &aggr_items,
@@ -842,7 +842,7 @@ public:
 
   int init_distinct_helper(const ObIArray<ObRawExpr*> &distinct_exprs,
                            GroupingOpHelper &distinct_helper);
-
+  
   int check_stmt_is_all_distinct_col(const ObSelectStmt *stmt,
                                      const ObIArray<ObRawExpr*> &distinct_exprs,
                                      bool &is_all_distinct_col);
@@ -851,7 +851,7 @@ public:
 
   int check_storage_distinct_pushdown(const ObIArray<ObRawExpr*> &distinct_exprs,
                                       bool &can_push);
-
+  
   int check_aggr_pushdown_enabled(ObSQLSessionInfo &session_info,
                                   bool &enable_aggr_push_down,
                                   bool &enable_groupby_push_down);
@@ -869,7 +869,7 @@ public:
                                                const uint64_t table_id,
                                                const ObIArray<ObRawExpr *> &pushdown_groupby_columns,
                                                bool &can_push);
-
+  
   int check_scalar_aggr_can_storage_pushdown(const uint64_t table_id,
                                              const ObIArray<ObAggFunRawExpr *> &aggrs,
                                              ObIArray<ObRawExpr *> &pushdown_groupby_columns,
@@ -970,7 +970,7 @@ public:
                                       const ObIArray<OrderItem> &sort_keys,
                                       const bool need_sort,
                                       const bool is_local_order);
-
+  
   int allocate_dist_range_sort_for_select_into(ObLogicalOperator *&top,
                                       const ObIArray<OrderItem> &sort_keys,
                                       const bool need_sort,
@@ -1545,29 +1545,29 @@ public:
                                     const uint64_t& vec_col_id,
                                     ObLogTableScan *table_scan);
   int prepare_multivalue_retrieval_scan(ObLogicalOperator *scan);
-  int try_push_topn_into_domain_scan(ObLogicalOperator *&top,
-                                    ObRawExpr *topn_expr,
-                                    ObRawExpr *limit_expr,
-                                    ObRawExpr *offset_expr,
+  int try_push_topn_into_domain_scan(ObLogicalOperator *&top, 
+                                    ObRawExpr *topn_expr, 
+                                    ObRawExpr *limit_expr, 
+                                    ObRawExpr *offset_expr, 
                                     bool is_fetch_with_ties,
                                     bool need_exchange,
-                                    const ObIArray<OrderItem> &sort_keys,
+                                    const ObIArray<OrderItem> &sort_keys, 
                                     bool &need_further_sort);
-  int try_push_topn_into_vector_index_scan(ObLogicalOperator *&top,
-                                          ObRawExpr *topn_expr,
-                                          ObRawExpr *limit_expr,
-                                          ObRawExpr *offset_expr,
+  int try_push_topn_into_vector_index_scan(ObLogicalOperator *&top, 
+                                          ObRawExpr *topn_expr, 
+                                          ObRawExpr *limit_expr, 
+                                          ObRawExpr *offset_expr, 
                                           bool is_fetch_with_ties,
                                           bool need_exchange,
-                                          const ObIArray<OrderItem> &sort_keys,
+                                          const ObIArray<OrderItem> &sort_keys, 
                                           bool &need_further_sort);
-  int try_push_topn_into_text_retrieval_scan(ObLogicalOperator *&top,
-                                             ObRawExpr *topn_expr,
-                                             ObRawExpr *limit_expr,
-                                             ObRawExpr *offset_expr,
+  int try_push_topn_into_text_retrieval_scan(ObLogicalOperator *&top, 
+                                             ObRawExpr *topn_expr, 
+                                             ObRawExpr *limit_expr, 
+                                             ObRawExpr *offset_expr, 
                                              bool is_fetch_with_ties,
                                              bool need_exchange,
-                                             const ObIArray<OrderItem> &sort_keys,
+                                             const ObIArray<OrderItem> &sort_keys, 
                                              bool &need_further_sort);
   static int adjust_dup_table_replica_by_cons(
     const ObIArray<ObDupTabConstraint> &dup_table_replica_cons,
@@ -1651,8 +1651,8 @@ protected:
 
   int init_json_table_depend_info(const ObIArray<TableItem*> &table_items);
   // init json_table non_const default value
-  int init_json_table_column_depend_info(ObRelIds& depend_table_set,
-                                                   TableItem* json_table,
+  int init_json_table_column_depend_info(ObRelIds& depend_table_set, 
+                                                   TableItem* json_table, 
                                                    const ObDMLStmt *stmt);
   int init_default_val_json(ObRelIds& depend_table_set,
                             ObRawExpr*& default_expr);

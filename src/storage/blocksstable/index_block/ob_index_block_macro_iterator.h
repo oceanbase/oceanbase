@@ -56,7 +56,7 @@ public:
                K_(is_deleted), K_(is_clustered_index_tree));
 };
 
-// ObIndexBlockMacroIterator cannot guarantee the life of previous iteration products after move_forward()
+// ObIndexBlockMacroIterator cannot guarantee the life of previous iteration products after move_forward() 
 // todo @qilu: refine after delete ObIndexBlockMacroIterator
 struct ObMicroIndexRowItem final
 {

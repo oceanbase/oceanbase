@@ -120,7 +120,7 @@ ObTruncateInfoClogReplayExecutor::ObTruncateInfoClogReplayExecutor(
 }
 
 int ObTruncateInfoClogReplayExecutor::init(
-  mds::BufferCtx &user_ctx,
+  mds::BufferCtx &user_ctx, 
   const share::SCN &scn)
 {
   int ret = OB_SUCCESS;

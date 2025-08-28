@@ -145,7 +145,7 @@ int ObMajorFreezeHelper::get_freeze_info(
   ObArray<obrpc::ObSimpleFreezeInfo> tmp_info_array;
   bool want_to_freeze_all = param.freeze_all_ || param.freeze_all_user_ || param.freeze_all_meta_;
   if (want_to_freeze_all) {
-    if (OB_FAIL(get_specific_tenant_freeze_info(param.freeze_all_, param.freeze_all_user_,
+    if (OB_FAIL(get_specific_tenant_freeze_info(param.freeze_all_, param.freeze_all_user_, 
                                                 param.freeze_all_meta_, tmp_info_array))) {
       LOG_WARN("fail to get specific tenant freeze info", KR(ret));
     }
@@ -254,14 +254,14 @@ int ObMajorFreezeHelper::get_all_tenant_freeze_info(
   return ret;
 }
 
-int ObMajorFreezeHelper::get_specific_tenant_freeze_info(
-    bool freeze_all,
-    bool freeze_all_user,
-    bool freeze_all_meta,
+int ObMajorFreezeHelper::get_specific_tenant_freeze_info( 
+    bool freeze_all, 
+    bool freeze_all_user, 
+    bool freeze_all_meta, 
     common::ObIArray<obrpc::ObSimpleFreezeInfo> &freeze_info_array)
 {
   int ret = OB_SUCCESS;
-  // if min_cluster_version < 4.2.1.0，disable all_user/all_meta,
+  // if min_cluster_version < 4.2.1.0，disable all_user/all_meta, 
   // and make tenant=all effective for all tenants.
   if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_1_0) {
     if (freeze_all_user || freeze_all_meta) {
@@ -291,7 +291,7 @@ int ObMajorFreezeHelper::get_specific_tenant_freeze_info(
       for (int64_t i = 0; OB_SUCC(ret) && (i < tmp_freeze_info_array.count()); ++i) {
         if (func(tmp_freeze_info_array.at(i).tenant_id_)) {
           if (OB_FAIL(freeze_info_array.push_back(tmp_freeze_info_array.at(i)))) {
-            LOG_WARN("fail to push back freeze info",
+            LOG_WARN("fail to push back freeze info", 
                      KR(ret), K(i), "freeze_info", tmp_freeze_info_array.at(i));
           }
         }
@@ -448,7 +448,7 @@ int ObMajorFreezeHelper::do_tenant_admin_merge(
   } else {
     want_to_freeze_all = param.need_all_ || param.need_all_user_ || param.need_all_meta_;
     if (want_to_freeze_all) {
-      if (OB_FAIL(get_specific_tenant_freeze_info(param.need_all_, param.need_all_user_,
+      if (OB_FAIL(get_specific_tenant_freeze_info(param.need_all_, param.need_all_user_, 
                                                   param.need_all_meta_, freeze_info_array))) {
         LOG_WARN("fail to get specific tenant freeze info", KR(ret));
       }

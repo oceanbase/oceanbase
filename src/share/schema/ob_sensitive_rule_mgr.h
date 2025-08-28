@@ -18,7 +18,7 @@
 #include "share/schema/ob_schema_struct.h"
 #include "lib/container/ob_vector.h"
 #include "share/schema/ob_sensitive_rule_schema_struct.h"
-
+ 
 namespace oceanbase
 {
 namespace share
@@ -178,7 +178,7 @@ public:
   int get_schema_by_name(const uint64_t tenant_id,
                          const common::ObString &name,
                          const ObSensitiveRuleSchema *&schema) const;
-  int get_schema_by_column(const uint64_t tenant_id,
+  int get_schema_by_column(const uint64_t tenant_id, 
                            const uint64_t table_id,
                            const uint64_t column_id,
                            const ObSensitiveRuleSchema *&schema) const;
@@ -196,9 +196,9 @@ public:
     return lhs->get_tenant_id() == rhs->get_tenant_id()
            && lhs->get_sensitive_rule_id() == rhs->get_sensitive_rule_id();
   }
-  static bool compare_with_tenant_sensitive_rule_id(const ObSensitiveRuleSchema *lhs,
+  static bool compare_with_tenant_sensitive_rule_id(const ObSensitiveRuleSchema *lhs, 
                                                     const ObTenantSensitiveRuleId &id);
-  static bool equal_to_tenant_sensitive_rule_id(const ObSensitiveRuleSchema *lhs,
+  static bool equal_to_tenant_sensitive_rule_id(const ObSensitiveRuleSchema *lhs, 
                                                 const ObTenantSensitiveRuleId &id);
 
   int get_schema_count(int64_t &schema_count) const;
@@ -220,3 +220,4 @@ private:
 }  // end namespace oceanbase
 
 #endif // OB_SENSITIVE_RULE_MGR_H
+ 

@@ -57,7 +57,7 @@ int ObMockResolver::resolve(const ParseNode& parse_tree)
       }
       break;
     }
-    case T_FLUSH_MOCK_LIST:
+    case T_FLUSH_MOCK_LIST: 
     {
       ObMockStmt *mock_stmt = NULL;
       if (OB_UNLIKELY(NULL == (mock_stmt = create_stmt<ObMockStmt>()))) {

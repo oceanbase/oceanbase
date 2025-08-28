@@ -37,7 +37,7 @@ ObExprArraySort::ObExprArraySort(ObIAllocator &alloc)
 
 ObExprArraySort::ObExprArraySort(ObIAllocator &alloc, ObExprOperatorType type,
                                        const char *name, int32_t param_num, int32_t dimension)
-    : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension)
+    : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension) 
 {
 }
 
@@ -153,7 +153,7 @@ int ObExprArraySort::eval_array_sort_batch(const ObExpr &expr, ObEvalCtx &ctx,
       if (arr_datum.at(j)->is_null()) {
         res_datum.at(j)->set_null();
       } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id,
-                                                         arr_datum.at(j)->get_string(), src_arr))) {
+                                                         arr_datum.at(j)->get_string(), src_arr))) { 
         LOG_WARN("construct array obj failed", K(ret));
       } else if (OB_NOT_NULL(res_arr) && OB_FALSE_IT(res_arr->clear())) {
       } else if (OB_ISNULL(res_arr) && OB_FAIL(ObArrayExprUtils::construct_array_obj(tmp_allocator,ctx, subschema_id, res_arr, false))) {
@@ -246,7 +246,7 @@ int ObExprArraySort::eval_array_sort_vector(const ObExpr &expr, ObEvalCtx &ctx,
         }
       } else if (OB_FAIL(ObArrayExprUtils::set_array_res<ObVectorBase>(res_arr, expr, ctx, static_cast<ObVectorBase *>(res_vec), idx))) {
         LOG_WARN("set array res failed", K(ret));
-      }
+      } 
     } //end for
   }
   return ret;

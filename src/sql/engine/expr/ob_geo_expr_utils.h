@@ -44,7 +44,7 @@ struct ObGeoUnit
 };
 
 const ObGeoUnit OB_GEO_UNITS[] = {
-  // order by unit s, asc
+  // order by unit s, asc 
   { "British chain (Benoit 1895 A)", 20.1167824 },
   { "British chain (Benoit 1895 B)", 20.116782494375872 },
   { "British chain (Sears 1922 truncated)", 20.116756 },
@@ -203,27 +203,27 @@ public:
   static ObGeoConstParamCache* get_geo_constParam_cache(const uint64_t& id, ObExecContext *exec_ctx);
   static void expr_get_const_param_cache(ObGeoConstParamCache* const_param_cache, ObGeometry *&geo, uint32_t& srid, bool& is_geo_cached, int cache_idx);
   static int expr_prepare_build_geometry(MultimodeAlloctor &allocator, const ObDatum &datum, const ObExpr &gis_arg, ObString& wkb, ObGeoType& type, uint32_t& srid);
-  static int check_box_intersects(ObGeometry &geo1, ObGeometry &geo2, lib::MemoryContext& ctx,
-                                   ObGeoConstParamCache* const_param_cache,
+  static int check_box_intersects(ObGeometry &geo1, ObGeometry &geo2, lib::MemoryContext& ctx, 
+                                   ObGeoConstParamCache* const_param_cache, 
                                    bool is_geo1_cached, bool is_geo2_cached, bool& box_intersects);
   static int string_to_double(const common::ObString &in_str, ObCollationType cs_type, double &res);
-  static int get_intersects_res(ObGeometry &geo1, ObGeometry &geo2,
+  static int get_intersects_res(ObGeometry &geo1, ObGeometry &geo2, 
                                 ObExpr *gis_arg1, ObExpr *gis_arg2,
-                                ObGeoConstParamCache* const_param_cache,
+                                ObGeoConstParamCache* const_param_cache, 
                                 const ObSrsItem *srs,
                                 lib::MemoryContext *mem_ctx, bool& res);
 private:
   static int ob_geo_find_unit(const ObGeoUnit *units, const ObString &name, double &factor);
   static int init_box_by_geo(ObGeometry &geo, lib::MemoryContext& ctx, ObGeogBox *&box_ptr);
-  static void init_boxes_by_cache(ObGeogBox *&box_ptr1, ObGeogBox& box1,
-                                  ObGeogBox *&box_ptr2, ObGeogBox& box2,
-                                  ObGeoConstParamCache* const_param_cache,
+  static void init_boxes_by_cache(ObGeogBox *&box_ptr1, ObGeogBox& box1, 
+                                  ObGeogBox *&box_ptr2, ObGeogBox& box2, 
+                                  ObGeoConstParamCache* const_param_cache, 
                                   bool is_geo1_cached, bool is_geo2_cached);
   static void init_box_by_cache(ObGeogBox *&box_ptr, ObGeogBox& box, ObCachedGeom* cache);
 };
 
 class ObGeoConstParamCache : public ObExprOperatorCtx {
-
+ 
 public:
   ObGeoConstParamCache(common::ObIAllocator *allocator) :
         ObExprOperatorCtx(),
@@ -232,7 +232,7 @@ public:
         cached_param1_(nullptr),
         param2_(nullptr),
         cached_param2_(nullptr) {}
-  ~ObGeoConstParamCache();
+  ~ObGeoConstParamCache();  
 
   ObGeometry *get_const_param_cache(int arg_idx);
   ObCachedGeom *get_cached_geo(int arg_idx);

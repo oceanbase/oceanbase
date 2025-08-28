@@ -21,7 +21,7 @@
 namespace oceanbase
 {
 namespace observer
-{
+{ 
 
 struct ObCCLStatus {
   uint64_t tenant_id_;
@@ -83,7 +83,7 @@ private:
   ObAddr svr_addr_;
   char svr_ip_buf_[common::OB_IP_STR_BUFF];
   common::ObSEArray<ObCCLStatus, 1000> tmp_ccl_status_;
-
+  
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualCCLStatus);
 };
@@ -92,3 +92,5 @@ private:
 } //end namespace oceanbase
 
 #endif /* OCEANBASE_OBSERVER_OB_ALL_VIRTUAL_CCL_STATUS_H */
+
+

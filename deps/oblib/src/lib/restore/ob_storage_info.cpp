@@ -8,8 +8,8 @@
  *  EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  *  MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  *  See the Mulan PubL v2 for more details.
- *  Authors:
- *
+ *  Authors: 
+ *      
  */
 #define USING_LOG_PREFIX STORAGE
 
@@ -36,7 +36,7 @@ const char *get_storage_checksum_type_str(const ObStorageChecksumType &type)
   return str;
 }
 
-bool is_use_obdal()
+bool is_use_obdal() 
 {
   if (OB_NOT_NULL(cluster_enable_obdal_config)) {
     return cluster_enable_obdal_config->is_enable_obdal();
@@ -46,8 +46,8 @@ bool is_use_obdal()
 }
 
 //***********************ObSTSToken***************************
-ObSTSToken::ObSTSToken() :
-            data_(nullptr),
+ObSTSToken::ObSTSToken() : 
+            data_(nullptr), 
             allocator_(OB_DEVICE_CREDENTIAL_ALLOCATOR),
             data_len_(0),
             is_below_predefined_length_(false),
@@ -78,7 +78,7 @@ int ObSTSToken::set(const ObString &token)
     reset();
   }
   if (!token.empty()) {
-    if (OB_UNLIKELY(token.length() > OB_PREDEFINED_STS_TOKEN_LENGTH - 1)
+    if (OB_UNLIKELY(token.length() > OB_PREDEFINED_STS_TOKEN_LENGTH - 1) 
         && OB_FAIL(ob_dup_cstring(allocator_, token, data_))) {
       OB_LOG(WARN, "failed to deep copy ObSTSToken", K(ret), K(token));
     } else if (token.length() <= OB_PREDEFINED_STS_TOKEN_LENGTH - 1) {
@@ -281,7 +281,7 @@ bool ObObjectStorageInfo::is_enable_worm() const
   return enable_worm_;
 }
 
-ObClusterVersionBaseMgr *ObObjectStorageInfo::cluster_version_mgr_ = nullptr;
+ObClusterVersionBaseMgr *ObObjectStorageInfo::cluster_version_mgr_ = nullptr; 
 int ObObjectStorageInfo::register_cluster_version_mgr(ObClusterVersionBaseMgr *cluster_version_mgr)
 {
   int ret = OB_SUCCESS;
@@ -338,7 +338,7 @@ int ObObjectStorageInfo::set(const common::ObStorageType device_type, const char
       LOG_WARN("azblob version is not supported", K(ret), K(device_type));
     }
   }
-
+  
   if (OB_FAIL(ret)) {
   } else if (FALSE_IT(device_type_ = device_type)) {
   } else if (0 == strlen(storage_info)) {
@@ -378,7 +378,7 @@ int ObObjectStorageInfo::validate_arguments() const
       if (is_assume_role_mode_) {
         if (OB_UNLIKELY(0 != strlen(access_id_) || 0 != strlen(access_key_))) {
           ret = OB_INVALID_BACKUP_DEST;
-          LOG_WARN("ak/sk should not given in assume_role mode",
+          LOG_WARN("ak/sk should not given in assume_role mode", 
               K(ret), K_(access_id), KP_(access_key), K(strlen(access_id_)), K(strlen(access_key_)));
         }
       } else {
@@ -401,15 +401,15 @@ int ObObjectStorageInfo::validate_arguments() const
     if (OB_UNLIKELY(!(OB_MD5_ALGO == checksum_type_ && OB_STORAGE_OSS == device_type_))) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("device or checksum type don't support enable_worm", K(ret), KPC(this));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED,
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, 
           "Only OSS and checksum_type=md5 support setting enable_worm, other devices or checksum types are");
-    } else if (OB_UNLIKELY(is_use_obdal())) {
+    } else if (OB_UNLIKELY(is_use_obdal())) { 
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("using obdal mode don't support enable_worm", K(ret), KPC(this));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "setting enable_worm=true when using obdal is");
     }
   }
-
+  
   return ret;
 }
 
@@ -538,7 +538,7 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
             || ObStorageType::OB_STORAGE_AZBLOB == device_type_
             || is_use_obdal()) {
           ret = OB_INVALID_BACKUP_DEST;
-          LOG_WARN("OB_STORAGE_FILE don't support assume role yet",
+          LOG_WARN("OB_STORAGE_FILE don't support assume role yet", 
               K(ret), K_(device_type), KP(token));
         } else if (OB_FAIL(set_storage_info_field_(token, role_arn_, sizeof(role_arn_)))) {
           LOG_WARN("failed to set role arn", K(ret), KP(token), KP_(role_arn), K(sizeof(role_arn_)));
@@ -546,7 +546,7 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
       } else if (0 == strncmp(EXTERNAL_ID, token, strlen(EXTERNAL_ID))) {
         if (ObStorageType::OB_STORAGE_FILE == device_type_) {
           ret = OB_INVALID_BACKUP_DEST;
-          LOG_WARN("OB_STORAGE_FILE don't support external id yet", K(ret),
+          LOG_WARN("OB_STORAGE_FILE don't support external id yet", K(ret), 
               K_(device_type), KP(token));
         } else if (OB_FAIL(set_storage_info_field_(token, external_id_, sizeof(external_id_)))) {
           LOG_WARN("failed to set external id", K(ret), KP(token), KP_(external_id),
@@ -658,7 +658,7 @@ bool is_obdal_supported_checksum(const ObStorageType storage_type, const ObStora
 {
   bool ret = true;
   if (storage_type == OB_STORAGE_S3) {
-    if (checksum_type != ObStorageChecksumType::OB_MD5_ALGO
+    if (checksum_type != ObStorageChecksumType::OB_MD5_ALGO 
         && checksum_type != ObStorageChecksumType::OB_CRC32_ALGO
         && checksum_type != ObStorageChecksumType::OB_NO_CHECKSUM_ALGO) {
       ret = false;
@@ -713,7 +713,7 @@ int ObObjectStorageInfo::set_checksum_type_(const char *checksum_type_str)
     OB_LOG(WARN, "not supported checksum type for s3",
         K(ret), K_(device_type), K(checksum_type_str), K_(checksum_type));
   }
-
+  
   return ret;
 }
 
@@ -918,7 +918,7 @@ int ObObjectStorageInfo::get_device_map_key_str(char *key_str, const int64_t len
     // access by assume_role
     int64_t pos = 0;
     if (OB_FAIL(databuff_printf(key_str, len, pos, "%u&%u&%u&%s&%s&%s",
-            static_cast<uint32_t>(device_type_), static_cast<uint32_t>(checksum_type_),
+            static_cast<uint32_t>(device_type_), static_cast<uint32_t>(checksum_type_), 
             static_cast<uint8_t>(is_use_obdal()),
             endpoint_, role_arn_, extension_))) {
       LOG_WARN("failed to set key str with assume role", K(ret), K(len), K(pos), KPC(this));
@@ -1174,7 +1174,7 @@ int ObDeviceCredentialKey::construct_signed_url(char *url_buf, const int64_t url
   ObStsCredential sts_credential;
   using ParamType = std::pair<const char *, const char *>;
   ObArray<ParamType> params;
-
+  
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     OB_LOG(WARN, "ObDeviceCredentialKey is not valid", K(ret));
@@ -1246,7 +1246,7 @@ int check_sts_credential_format(const char *sts_credential_str, ObStsCredential 
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(sts_credential_str)
-      || OB_UNLIKELY(strlen(sts_credential_str) <= 0
+      || OB_UNLIKELY(strlen(sts_credential_str) <= 0 
       || strlen(sts_credential_str) >= OB_MAX_STS_CREDENTIAL_LENGTH)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), KP(sts_credential_str));
@@ -1343,14 +1343,14 @@ void ObDeviceCredentialMgr::destroy()
 }
 
 int ObDeviceCredentialMgr::connect_to_sts(
-    const ObDeviceCredentialKey &credential_key,
+    const ObDeviceCredentialKey &credential_key, 
     ResponseAndAllocator &res_and_allocator)
 {
   int ret = OB_SUCCESS;
   OBJECT_STORAGE_GUARD(nullptr/*storage_info*/, "ObDeviceCredentialMgr::connect_to_sts", IO_HANDLED_SIZE_ZERO);
   CURL *curl = nullptr;
   char json_data[OB_MAX_ASSUME_ROLE_JSON_DATA_LENGTH] = {0};
-
+  
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDeviceCredentialMgr not init", K(ret));
@@ -1467,7 +1467,7 @@ int ObDeviceCredentialMgr::curl_credential(
 }
 
 int ObDeviceCredentialMgr::curl_credential(
-    const ObDeviceCredentialKey &credential_key,
+    const ObDeviceCredentialKey &credential_key, 
     const bool update_access_time)
 {
   int ret = OB_SUCCESS;
@@ -1571,7 +1571,7 @@ int ObDeviceCredentialMgr::get_credential(
       } else {
         LOG_INFO("succeed refreshing the cached credential",
             K(credential_key), K(remained_time_us));
-
+        
         if (OB_TMP_FAIL(get_credential_from_map_(credential_key, tmp_credential))) {
           LOG_WARN("fail to get refreshed credential",
               K(ret), K(tmp_ret), K(credential_key), K(remained_time_us));
@@ -1593,7 +1593,7 @@ int ObDeviceCredentialMgr::get_credential(
 }
 
 int ObDeviceCredentialMgr::get_credential_from_map_(
-    const ObDeviceCredentialKey &credential_key,
+    const ObDeviceCredentialKey &credential_key, 
     ObObjectStorageCredential &device_credential)
 {
   int ret = OB_SUCCESS;
@@ -1616,9 +1616,9 @@ int ObDeviceCredentialMgr::get_credential_from_map_(
 }
 
 int64_t ObDeviceCredentialMgr::on_write_data_(
-    const void *ptr,
-    const int64_t size,
-    const int64_t nmemb,
+    const void *ptr, 
+    const int64_t size, 
+    const int64_t nmemb, 
     void *user_data)
 {
   int ret = OB_SUCCESS;
@@ -1702,7 +1702,7 @@ int64_t ObDeviceCredentialMgr::debug_callback(
 }
 
 int ObDeviceCredentialMgr::parse_device_credential_(
-    const char *res_ptr,
+    const char *res_ptr, 
     ObObjectStorageCredential &credential)
 {
   int ret = OB_SUCCESS;

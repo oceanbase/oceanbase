@@ -755,7 +755,7 @@ int ObPxRpcInitSqcArgs::do_deserialize(int64_t &pos, const char *net_buf, int64_
     }
     if (OB_SUCC(ret)) {
       // Compact mode may not set while rpc argument deserialize, set it manually.
-      // See:
+      // See: 
       lib::CompatModeGuard g(ORACLE_MODE == exec_ctx_->get_my_session()->get_compatibility_mode()
           ? lib::Worker::CompatMode::ORACLE
           : lib::Worker::CompatMode::MYSQL);

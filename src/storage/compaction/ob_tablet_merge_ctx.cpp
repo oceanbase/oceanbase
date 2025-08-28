@@ -39,7 +39,7 @@ int ObTabletMergeCtx::prepare_index_tree()
 {
   return ObBasicTabletMergeCtx::build_index_tree(
     merge_info_,
-    &get_tablet()->get_rowkey_read_info());
+    &get_tablet()->get_rowkey_read_info()); 
 }
 
 void ObTabletMergeCtx::update_and_analyze_progress()

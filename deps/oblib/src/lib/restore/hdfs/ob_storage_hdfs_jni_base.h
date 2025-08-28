@@ -33,7 +33,7 @@ public:
   virtual void close() override;
 
   virtual int head_object_meta(const ObString &uri, ObStorageObjectMetaBase &obj_meta) override;
-
+  
   virtual int is_exist(const ObString &uri, bool &exist) override;
   virtual int get_file_length(const ObString &uri, int64_t &file_length) override;
   virtual int del_file(const ObString &uri) override;

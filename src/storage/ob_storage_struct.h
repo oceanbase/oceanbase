@@ -642,7 +642,7 @@ public:
   bool is_split_dst_without_partkey() const;
   void reset();
 
-  TO_STRING_KV(K_(start_partkey),
+  TO_STRING_KV(K_(start_partkey), 
     K_(end_partkey), K_(is_split_dst), K_(split_type), K_(split_cnt), K_(partkey_is_rowkey_prefix));
 
 public:

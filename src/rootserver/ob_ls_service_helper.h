@@ -73,7 +73,7 @@ struct ObUnitGroupInfo
   void reset();
   int assign(const ObUnitGroupInfo &other);
   int remove_ls_group(const uint64_t ls_group_id);
-  bool operator==(const ObUnitGroupInfo &other) const;
+  bool operator==(const ObUnitGroupInfo &other) const; 
 
   uint64_t unit_group_id_;
   share::ObUnit::Status unit_status_;
@@ -106,7 +106,7 @@ struct ObLSStatusMachineParameter
 {
   ObLSStatusMachineParameter() : ls_id_(), status_info_(), ls_info_() {}
   virtual ~ObLSStatusMachineParameter() {}
-  bool is_valid() const
+  bool is_valid() const 
   {
     return ls_id_.is_valid()
            && (share::OB_LS_EMPTY == status_info_.status_
@@ -115,7 +115,7 @@ struct ObLSStatusMachineParameter
   int init(const share::ObLSID &id, const share::ObLSStatusInfo &status_info,
            const share::ObLSAttr &ls_info);
   void reset();
-  share::ObLSID ls_id_;
+  share::ObLSID ls_id_;                
   share::ObLSStatusInfo status_info_;//for create ls and status of __all_ls_status
   share::ObLSAttr ls_info_;
   TO_STRING_KV(K_(ls_id), K_(status_info), K_(ls_info));
@@ -196,7 +196,7 @@ private:
   share::ObLSStatusInfoArray status_array_;
   common::hash::ObHashMap<share::ObLSID, int64_t> status_map_;
   ObUnitGroupInfoArray unit_group_array_;
-  ObLSGroupInfoArray ls_group_array_;
+  ObLSGroupInfoArray ls_group_array_; 
   ObArray<common::ObZone> primary_zone_;
   uint64_t tenant_id_;
   ObMySQLTransaction *trans_;
@@ -248,7 +248,7 @@ public:
   static int process_alter_ls(const share::ObLSID &ls_id,
       const uint64_t &old_ls_group_id,
       const uint64_t &new_ls_group_id,
-      const uint64_t &old_unit_group_id,
+      const uint64_t &old_unit_group_id, 
       ObTenantLSInfo& tenant_ls_info,
       common::ObISQLClient &sql_proxy);
   static int wait_all_tenants_user_ls_sync_scn(common::hash::ObHashMap<uint64_t, share::SCN> &tenants_sys_ls_target_scn);

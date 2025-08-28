@@ -14,9 +14,9 @@
 
 #include "gtest/gtest.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace common
+namespace common 
 {
 
 int do_test() {
@@ -75,14 +75,14 @@ int do_test() {
     return 0;
 }
 
-TEST(CompositeCodecTest, emptyArray)
+TEST(CompositeCodecTest, emptyArray) 
 {
   ASSERT_EQ(0, do_test());
 }
 
 } // namespace common
 } // namespace oceanbase
-
+ 
 int main(int argc, char **argv)
 {
   ::testing::InitGoogleTest(&argc,argv);

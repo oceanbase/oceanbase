@@ -328,7 +328,7 @@ public:
     uint64_t flags_;
     struct { // FARM COMPAT WHITELIST
       uint64_t execute_directly_                : 1;
-      uint64_t enable_rich_format_              : 1;
+      uint64_t enable_rich_format_              : 1; 
       uint64_t do_gts_opt_                      : 1;
       uint64_t reserved_                        : 62;
     };
@@ -363,3 +363,4 @@ OB_INLINE int ObDASRef::prepare_das_task(const ObDASTabletLoc *tablet_loc, DASOp
 }  // namespace sql
 }  // namespace oceanbase
 #endif /* OBDEV_SRC_SQL_DAS_OB_DAS_REF_H_ */
+

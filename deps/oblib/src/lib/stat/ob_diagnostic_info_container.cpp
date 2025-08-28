@@ -726,7 +726,7 @@ int ObDiagnosticInfoContainer::for_each_and_delay_release_ref(
           if (OB_TMP_FAIL(runnings.dec_ref(di))) {
             LOG_ERROR("failed to dec ref", K(tmp_ret));
           }
-
+          
           if (tmp_ret != OB_SUCCESS) {
             ret = tmp_ret;
           }
@@ -745,7 +745,7 @@ int ObDiagnosticInfoContainer::for_each_and_delay_release_ref(
     if (OB_TMP_FAIL(runnings.dec_ref(di_array[i]))) {
       LOG_ERROR("failed to dec ref", K(tmp_ret));
     }
-
+    
     if (tmp_ret != OB_SUCCESS) {
       ret = tmp_ret;
     }

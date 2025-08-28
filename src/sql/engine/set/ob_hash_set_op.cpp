@@ -291,7 +291,7 @@ int ObHashSetOp::build_hash_table_from_left_batch(bool from_child, const int64_t
         LOG_WARN("failed to get left batch", K(ret));
       } else if (left_brs->end_ && 0 == left_brs->size_) {
         ret = OB_ITER_END;
-      } else if (OB_FAIL(hp_infras_.calc_hash_value_for_batch(left_->get_spec().output_, left_brs->size_,
+      } else if (OB_FAIL(hp_infras_.calc_hash_value_for_batch(left_->get_spec().output_, left_brs->size_, 
                                                       left_brs->skip_, hash_values_for_batch_))) {
         LOG_WARN("failed to calc hash value for batch", K(ret));
       } else if (OB_FAIL(hp_infras_.insert_row_for_batch(left_->get_spec().output_, hash_values_for_batch_, 

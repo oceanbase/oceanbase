@@ -41,7 +41,7 @@ public:
   }
   ObSqlProfileExecInfo(const ObSqlProfileExecInfo& other)
       : dop_(other.dop_), plan_id_(other.plan_id_), exec_id_(other.exec_id_),
-        session_id_(other.session_id_), db_id_(other.db_id_),
+        session_id_(other.session_id_), db_id_(other.db_id_), 
         my_session_(other.my_session_),
         disable_auto_mem_mgr_(other.disable_auto_mem_mgr_) {
     if (*(other.get_sql_id()) == '\0') {

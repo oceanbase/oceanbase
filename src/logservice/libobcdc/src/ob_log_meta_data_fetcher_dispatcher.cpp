@@ -136,3 +136,4 @@ int ObLogMetaDataFetcherDispatcher::dispatch_to_log_meta_data_replayer_(
 
 } // namespace libobcdc
 } // namespace oceanbase
+

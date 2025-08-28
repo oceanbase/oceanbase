@@ -61,14 +61,14 @@ void ObTenantBalanceService::destroy()
 }
 
 int ObTenantBalanceService::balance_primary_zone_()
-{
+{ 
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else if (OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ptr is null", KR(ret), KP(GCTX.schema_service_));
+    LOG_WARN("ptr is null", KR(ret), KP(GCTX.schema_service_)); 
   } else {
     ObTenantSchema tenant_schema;
     if (OB_FAIL(get_tenant_schema(tenant_id_, tenant_schema))) {
@@ -120,7 +120,7 @@ void ObTenantBalanceService::do_work()
             LOG_WARN("failed to gather ls status stat", KR(ret), K(tenant_id_));
           } else if (OB_FAIL(ls_balance_(job_cnt))) {
             LOG_WARN("failed to do ls balance", KR(ret));
-          }
+          } 
         } else { // disable transfer
           ObTenantSchema tenant_schema_copy;
           if (OB_FAIL(get_tenant_schema(tenant_id_, tenant_schema_copy))) {
@@ -326,7 +326,7 @@ int ObTenantBalanceService::is_ls_balance_finished(const uint64_t &tenant_id, bo
       // primary tenant and enable_rebalance = true and enable_transfer = true
       if (OB_FAIL(is_primary_tenant_ls_balance_finished_(tenant_id, is_finished))) {
         LOG_WARN("fail to execute is_primary_tenant_ls_balance_finished_", KR(ret), K(tenant_id));
-      }
+      } 
     } else {
       // primary tenant and enable_rebalance = true and enable_transfer = false
       if (OB_FAIL(is_standby_tenant_ls_balance_finished_(tenant_id, is_finished))) {
@@ -334,7 +334,7 @@ int ObTenantBalanceService::is_ls_balance_finished(const uint64_t &tenant_id, bo
       }
     }
   } else {
-    // standby & restore
+    // standby & restore 
     if (OB_FAIL(is_standby_tenant_ls_balance_finished_(tenant_id, is_finished))) {
       LOG_WARN("fail to execute is_standby_tenant_ls_balance_finished_", KR(ret), K(tenant_id), K(is_primary));
     }
@@ -803,7 +803,7 @@ int ObTenantBalanceService::persist_job_and_task_in_trans_(const share::ObBalanc
         if (ls_array_.at(i) != tmp_ls_array.at(i)) {
           ret = OB_NEED_RETRY;
           LOG_WARN("ls status info change, need retry", KR(ret),
-          "ls_status", ls_array_.at(i), "ls_status_new", tmp_ls_array.at(i));
+          "ls_status", ls_array_.at(i), "ls_status_new", tmp_ls_array.at(i)); 
         }
       }//end for
     }
@@ -1047,7 +1047,7 @@ int ObTenantBalanceService::transfer_partition_(int64_t &job_cnt)
       }
       END_TRANSACTION(trans)
     }
-  }
+  } 
 
   ISTAT("finish transfer partition", KR(ret), K(job_cnt),
       "enable transfer", ObShareUtil::is_tenant_enable_transfer(tenant_id_));
@@ -1060,3 +1060,4 @@ int ObTenantBalanceService::transfer_partition_(int64_t &job_cnt)
 #undef STAT
 }
 }
+

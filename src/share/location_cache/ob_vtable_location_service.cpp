@@ -90,7 +90,7 @@ int ObVTableLocationService::vtable_get(
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("failed to check inner stat", KR(ret));
   } else if (OB_UNLIKELY(OB_INVALID_ID == table_id
-      || !is_valid_tenant_id(tenant_id)
+      || !is_valid_tenant_id(tenant_id) 
       || !is_virtual_table(table_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(table_id));
@@ -109,7 +109,7 @@ int ObVTableLocationService::vtable_get(
     need_renew = true;
     LOG_TRACE("locations are expired, need renew", K(tenant_id), K(table_id),
         K(expire_renew_time), K(renew_time));
-  }
+  } 
 
   if (OB_SUCC(ret)) {
     if (need_renew) { // synchronous renew
@@ -119,7 +119,7 @@ int ObVTableLocationService::vtable_get(
       }
     } else {
       is_cache_hit = true;
-      if (locations.count() > 0
+      if (locations.count() > 0 
           && (ObTimeUtility::current_time() 
               - renew_time
               >= GCONF.virtual_table_location_cache_expire_time)) { // asynchronous renew
@@ -128,7 +128,7 @@ int ObVTableLocationService::vtable_get(
           LOG_WARN("add location update task failed", 
               KR(temp_ret), K(tenant_id), K(table_id), K(locations));
         } else {
-          LOG_INFO("vtable nonblock renew success", K(tenant_id), K(table_id),
+          LOG_INFO("vtable nonblock renew success", K(tenant_id), K(table_id), 
               "current time", ObTimeUtility::current_time(),
               "last renew time", renew_time,
               "cache expire time", GCONF.virtual_table_location_cache_expire_time.str());
@@ -136,7 +136,7 @@ int ObVTableLocationService::vtable_get(
       }
     }
   }
-
+  
   if (OB_TIMEOUT == ret) {
     ret = OB_GET_LOCATION_TIME_OUT;
   }
@@ -147,7 +147,7 @@ int ObVTableLocationService::get_from_vtable_cache_(
     const uint64_t tenant_id,
     const uint64_t table_id,
     common::ObIArray<common::ObAddr> &locations,
-    int64_t &renew_time) const
+    int64_t &renew_time) const 
 {
   int ret = OB_SUCCESS;
   locations.reset();
@@ -156,7 +156,7 @@ int ObVTableLocationService::get_from_vtable_cache_(
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("failed to check inner stat", KR(ret));
   } else if (OB_UNLIKELY(OB_INVALID_ID == table_id
-        || !is_valid_tenant_id(tenant_id)
+        || !is_valid_tenant_id(tenant_id) 
         || !is_virtual_table(table_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(table_id));
@@ -180,7 +180,7 @@ int ObVTableLocationService::get_from_vtable_cache_(
   } else if (vtable_type.is_tenant_distributed()) {
     if (OB_FAIL(get_tenant_locations_(tenant_id, locations, renew_time))) {
       LOG_WARN("failed to get tenant locations", KR(ret), K(tenant_id), K(table_id));
-    }
+    } 
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the vtable_type is invalid", KR(ret), K(vtable_type));
@@ -190,7 +190,7 @@ int ObVTableLocationService::get_from_vtable_cache_(
     ret = OB_ENTRY_NOT_EXIST;
     LOG_INFO("location needs to be refreshed", K(tenant_id), K(table_id));
   } else {
-    LOG_TRACE("location hit in vtable cache", K(vtable_type),
+    LOG_TRACE("location hit in vtable cache", K(vtable_type), 
         K(table_id), K(locations), K(renew_time));
   }
   return ret;
@@ -211,7 +211,7 @@ int ObVTableLocationService::renew_vtable_location_(
   int64_t default_timeout = GCONF.rpc_timeout;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("failed to check inner stat", KR(ret));
-  } else if (OB_UNLIKELY(OB_INVALID_ID == table_id
+  } else if (OB_UNLIKELY(OB_INVALID_ID == table_id 
       || !is_virtual_table(table_id))
       || !is_valid_tenant_id(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
@@ -236,7 +236,7 @@ int ObVTableLocationService::renew_vtable_location_(
   } else if (vtable_type.is_cluster_distributed()) {
     if (OB_TMP_FAIL(SVR_TRACER.refresh())) {
       LOG_WARN("failed to refresh all_server_tracer", KR(tmp_ret));
-    }
+    } 
     // ignore tmp_ret
     if (OB_FAIL(get_cluster_locations_(locations, renew_time))) {
       LOG_WARN("failed to get refreshed alive server list", KR(ret));
@@ -244,7 +244,7 @@ int ObVTableLocationService::renew_vtable_location_(
   } else if (vtable_type.is_tenant_distributed()) {
     if (OB_TMP_FAIL(SVR_TRACER.renew_tenant_servers_cache_by_id(tenant_id))) {
       LOG_WARN("failed to renew_tenant_servers_cache_by_id", KR(tmp_ret), K(tenant_id));
-    }
+    } 
     // ignore tmp_ret
     if (OB_FAIL(get_tenant_locations_(tenant_id, locations, renew_time))) {
       LOG_WARN("failed to get_alive_tenant_servers", KR(ret));
@@ -253,11 +253,11 @@ int ObVTableLocationService::renew_vtable_location_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the vtable_type is invalid", KR(ret), K(vtable_type));
   }
-  // If unable to retrieve after attempting refresh,
+  // If unable to retrieve after attempting refresh, 
   // set ret to OB_LOCATION_NOT_EXIST.
   if (OB_SUCC(ret) && locations.empty()) {
     ret = OB_LOCATION_NOT_EXIST;
-    LOG_WARN("can not find location after attempting refresh", KR(ret),
+    LOG_WARN("can not find location after attempting refresh", KR(ret), 
         K(tenant_id), K(table_id));
   }
   NG_TRACE_EXT(renew_vtable_loc_end, OB_ID(ret), ret, OB_ID(table_id), table_id);
@@ -265,7 +265,7 @@ int ObVTableLocationService::renew_vtable_location_(
 }
 
 int ObVTableLocationService::get_rs_locations_(
-    common::ObIArray<common::ObAddr> &server,
+    common::ObIArray<common::ObAddr> &server, 
     int64_t &renew_time) const
 {
   // Get rs location from rs_mgr_
@@ -299,12 +299,12 @@ int ObVTableLocationService::get_cluster_locations_(
     LOG_WARN("failed to check inner stat", KR(ret));
   } else if (OB_FAIL(SVR_TRACER.get_alive_servers_with_renew_time(all_zone, servers, renew_time))) {
     LOG_WARN("failed to get alive server list", KR(ret));
-  }
+  } 
   return ret;
 }
 
 int ObVTableLocationService::get_tenant_locations_(
-    const uint64_t tenant_id,
+    const uint64_t tenant_id, 
     common::ObIArray<common::ObAddr> &servers,
     int64_t &renew_time) const
 {

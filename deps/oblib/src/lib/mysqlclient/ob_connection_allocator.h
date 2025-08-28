@@ -480,9 +480,9 @@ int ObLruConnectionAllocator<T>::get_cached(T *&conn, uint32_t sessid)
     } else if (OB_FAIL(conn_array_erase(conn_array, conn))) {
       ObLruConnectionAllocator<T>::free(conn);
       _OB_LOG(WARN, "failed to erase conn from conn_array, other_sessid=%u, sessid=%u, ret=%d", other_sessid, sessid, ret);
-    } else if (!is_session_share_conns_) {
-      conn->set_sessid(0);
-      // get conn from other seesion, set sessid as 0,
+    } else if (!is_session_share_conns_) { 
+      conn->set_sessid(0); 
+      // get conn from other seesion, set sessid as 0, 
       // and will close it at ObServerConnectionPool::acquire() and int ObOciServerConnectionPool::acquire(ObOciConnection *&conn, uint32_t sessid).
       _OB_LOG(TRACE, "get conn from other seesion, other_sessid=%u, sessid=%u, ret=%d", other_sessid, sessid, ret);
     }

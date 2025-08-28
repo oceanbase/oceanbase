@@ -30,10 +30,10 @@ namespace blocksstable
 // Only MIN_MAX skipping index is supported now.
 enum ObSkipIndexType : uint8_t
 {
-  MIN_MAX,
+  MIN_MAX, 
   BLOOM_FILTER,
   NGRAM_BLOOM_FILTER,
-  MAX_TYPE
+  MAX_TYPE 
 };
 
 enum ObSkipIndexColType : uint8_t

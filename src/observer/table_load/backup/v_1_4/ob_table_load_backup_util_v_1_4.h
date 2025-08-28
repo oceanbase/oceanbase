@@ -27,7 +27,7 @@ class ObTableLoadBackupUtil_V_1_4
 public:
   ObTableLoadBackupUtil_V_1_4() {}
   ~ObTableLoadBackupUtil_V_1_4() {}
-  static int get_column_ids_from_create_table_sql(const ObString &sql, ObIArray<int64_t> &column_ids);
+  static int get_column_ids_from_create_table_sql(const ObString &sql, ObIArray<int64_t> &column_ids); 
 };
 
 } // namespace observer

@@ -516,7 +516,7 @@ private:
   common::ObIODevice *io_device_;
   ObMacroBlockRewriteSeqGenerator blk_seq_generator_;
   int64_t alloc_num_;
-
+  
   // for resource_isolation
   uint64_t group_id_;
 

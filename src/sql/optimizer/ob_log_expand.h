@@ -65,7 +65,7 @@ public:
                                                 const ObIArray<ObRawExpr *> &rollup_exprs,
                                                 const ObIArray<ObAggFunRawExpr *> &aggr_items,
                                                 ObIArray<DupRawExprPair> &dup_expr_pairs);
-
+                                                
   static int unshare_constraints(ObRawExprCopier &copier, ObIArray<ObExprConstraint> &constraints);
   TO_STRING_KV(K(""));
 

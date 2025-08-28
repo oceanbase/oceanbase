@@ -216,7 +216,7 @@ public:
                               common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
                               uint64_t tenant_id,
                               uint64_t dep_obj_id,
-                              uint64_t schema_version, uint64_t owner_id);
+                              uint64_t schema_version, uint64_t owner_id);                                
 
   TO_STRING_KV(K_(tenant_id),
                K_(dep_obj_id),

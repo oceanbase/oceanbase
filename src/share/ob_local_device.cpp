@@ -855,7 +855,7 @@ int ObLocalDevice::write(
 
 int ObLocalDevice::upload_part(
     const ObIOFd &fd,
-    const char *buf,
+    const char *buf, 
     const int64_t size,
     const int64_t part_id,
     int64_t &write_size)

@@ -186,7 +186,7 @@ int ObTableInsertAllOp::write_row_to_das_buffer()
         }
       } // end for global index ctdef loop
 
-      // NOTE: for insert all into t1,t2, t1 is the parent table of t2, Single-line execution is required to ensure oracle compatibility
+      // NOTE: for insert all into t1,t2, t1 is the parent table of t2, Single-line execution is required to ensure oracle compatibility 
       if (OB_SUCC(ret) && execute_single_row_ && OB_FAIL(submit_all_dml_task())) {
         LOG_WARN("failed to push dml task", K(ret));
       }

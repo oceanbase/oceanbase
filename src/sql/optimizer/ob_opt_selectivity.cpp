@@ -94,7 +94,7 @@ int OptSelectivityCtx::init_deduce_infos(AccessPath *path)
   } else {
     const ObIArray<DeducedExprInfo> &prefix_deduce_info = path->parent_->get_deduce_info();
     ExprDeduceInfo *deduce_info = NULL;
-    /**
+    /** 
      * all range filters => real range filters => precise range filters
      * e.g. for index (c1,c2) and filters `c1 = 1`, `(c2,c3) in ((1,1), (2,2))`
      *      precise range filters: `c1 = 1`
@@ -102,7 +102,7 @@ int OptSelectivityCtx::init_deduce_infos(AccessPath *path)
      *      real range filters: `c1 = 1` and `c2 in (1,2)`
      *      deduce infos:
      *      `c1 = 1 and (c2,c3) in ((1,1), (2,2))` => `c1 = 1 and c2 in (1,2)` => `c1 = 1`
-     */
+     */   
     if (OB_SUCC(ret) && !path->est_cost_info_.real_range_exprs_.empty() &&
         (!path->est_cost_info_.prefix_filters_.empty() || !path->est_cost_info_.pushdown_prefix_filters_.empty())) {
       if (OB_ISNULL(deduce_info = deduce_infos_.alloc_place_holder())) {
@@ -478,7 +478,7 @@ int OptTableMeta::refine_column_meta(const OptSelectivityCtx &ctx,
                                    const uint64_t column_id,
                                    const ObGlobalColumnStat &stat,
                                    OptColumnMeta &col_meta)
-{
+{ 
   int ret = OB_SUCCESS;
   bool is_single_pkey = (1 == pk_ids_.count() && pk_ids_.at(0) == column_id) ||
                          column_id == OB_HIDDEN_PK_INCREMENT_COLUMN_ID;
@@ -1264,7 +1264,7 @@ int ObOptSelectivity::calculate_join_selectivity(const OptTableMetas &table_meta
     } else {
       // We remember each predicate's selectivity in the plan so that we can reorder them
       // in the vector of filters according to their selectivity.
-      LOG_PRINT_EXPR(TRACE, "calculate one qual selectivity", *qual, K(single_sel));
+      LOG_PRINT_EXPR(TRACE, "calculate one qual selectivity", *qual, K(single_sel)); 
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < sel_estimators.count(); ++i) {
@@ -1287,7 +1287,7 @@ int ObOptSelectivity::calculate_join_selectivity(const OptTableMetas &table_meta
   }
 
   /**
-   * For complex inner/outer join (which has at least two kinds of quals or one complex join qual),
+   * For complex inner/outer join (which has at least two kinds of quals or one complex join qual), 
    * we assume that each row of the small table matches at least one row of the large table.
   */
   if (OB_SUCC(ret) && ctx.check_opt_compat_version(COMPAT_VERSION_4_2_5, COMPAT_VERSION_4_3_0,
@@ -1308,10 +1308,10 @@ int ObOptSelectivity::calculate_join_selectivity(const OptTableMetas &table_meta
       }
       /**
        * If the join has some normal quals, the selectivity could not be greater than the minimal one
-       * e.g. For join condition `A = B and M = N and X like Y`,
+       * e.g. For join condition `A = B and M = N and X like Y`, 
        *      join_selectivity should be less than `A = B` and 'M = N',
        *      but could be greater than `X like Y`.
-       *      Because we assume that the selectivity of single equal quals is reliable.
+       *      Because we assume that the selectivity of single equal quals is reliable. 
       */
       default_complex_sel = std::min(default_complex_sel, reliable_sel_upper_bound);
       selectivity = std::max(selectivity, default_complex_sel);
@@ -1585,7 +1585,7 @@ int ObOptSelectivity::calculate_qual_selectivity(const OptTableMetas &table_meta
   } else {
     // We remember each predicate's selectivity in the plan so that we can reorder them
     // in the vector of filters according to their selectivity.
-    LOG_PRINT_EXPR(TRACE, "calculate one qual selectivity", qual, K(selectivity));
+    LOG_PRINT_EXPR(TRACE, "calculate one qual selectivity", qual, K(selectivity)); 
   }
   return ret;
 }
@@ -2473,7 +2473,7 @@ int ObOptSelectivity::get_column_min_max(const OptTableMetas &table_metas,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(ctx.get_opt_stat_manager()),
                                         K(ctx.get_session_info()));
-      } else if (table_meta->use_opt_stat() &&
+      } else if (table_meta->use_opt_stat() && 
                  OB_FAIL(ctx.get_opt_stat_manager()->get_column_stat(ctx.get_session_info()->get_effective_tenant_id(),
                                                                      table_meta->get_ref_table_id(),
                                                                      table_meta->get_stat_parts(),
@@ -2586,12 +2586,12 @@ int ObOptSelectivity::get_column_basic_info(const OptTableMetas &table_metas,
             }
           }
           break;
-        }
+        }   
       }
       if (OB_SUCC(ret) && cur_rowcnt > 0.0 && cur_rowcnt < row_count) {
         ndv = scale_distinct(cur_rowcnt, row_count, ndv);
       }
-
+      
       LOG_TRACE("show column basic info",
           K(row_count), K(cur_rowcnt), K(num_null), K(avg_len), K(ndv), K(est_type));
 
@@ -3131,7 +3131,7 @@ int ObOptSelectivity::calculate_table_ambient_cardinality(const OptTableMetas &t
       LOG_WARN("faile to get table ids", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); i ++) {
-      table_ambient_card *= std::max(1.0,
+      table_ambient_card *= std::max(1.0, 
         DistinctEstType::BASE == est_type ?
         table_metas.get_base_rows(table_ids.at(i)) :
         table_metas.get_rows(table_ids.at(i)));
@@ -3397,7 +3397,7 @@ int ObOptSelectivity::classify_exprs(const OptSelectivityCtx &ctx,
         LOG_WARN("failed to add expr to helper", K(ret));
       }
     }
-  } else if (expr->is_column_ref_expr()) {
+  } else if (expr->is_column_ref_expr()) { 
     if (OB_FAIL(add_expr_to_distinct_helper(helpers, expr->get_relation_ids(), expr))) {
       LOG_WARN("failed to add expr to helper", K(ret));
     }
@@ -3867,7 +3867,7 @@ int ObOptSelectivity::get_min_ndv_by_equal_set(const OptTableMetas &table_metas,
     LOG_WARN("unexpected null", K(ret));
   } else if (!col_expr->is_column_ref_expr()) {
     // do nothing
-  } else {
+  } else { 
     for (int64_t i = 0; OB_SUCC(ret) && !find && i < eq_sets->count(); i++) {
       const ObRawExprSet *equal_set = eq_sets->at(i);
       if (OB_ISNULL(equal_set)) {
@@ -3894,11 +3894,11 @@ int ObOptSelectivity::get_min_ndv_by_equal_set(const OptTableMetas &table_metas,
           } else if (!is_in) {
             //do nothing
           } else if (OB_FAIL(get_column_basic_info(table_metas,
-                                                   ctx,
+                                                   ctx, 
                                                    *equal_set->at(k),
-                                                   &tmp_ndv,
-                                                   NULL,
-                                                   NULL,
+                                                   &tmp_ndv, 
+                                                   NULL, 
+                                                   NULL, 
                                                    NULL,
                                                    DistinctEstType::CURRENT))) {
             LOG_WARN("failed to get var basic sel", K(ret));
@@ -4032,7 +4032,7 @@ int ObOptSelectivity::classify_quals_deprecated(const OptSelectivityCtx &ctx,
       column_id = column_expr->get_column_id();
       if (!qual->has_flag(CNT_DYNAMIC_PARAM) &&
           OB_FAIL(ObRangeSelEstimator::create_estimator(factory, ctx, *qual, range_estimator))) {
-        LOG_WARN("failed to create estimator", K(ret));
+        LOG_WARN("failed to create estimator", K(ret));  
       } else if (NULL != range_estimator &&
                  OB_FAIL(ObSelEstimator::append_estimators(range_estimators, range_estimator))) {
         LOG_WARN("failed to append estimators", K(ret));
@@ -4514,7 +4514,7 @@ double ObOptSelectivity::get_set_stmt_output_count(double count1, double count2,
   switch (set_type) {
     // Assuming there are no identical values in both branches.
     case ObSelectStmt::SetOperator::UNION:     output_count = count1 + count2; break;
-    // Assuming that all values appear as much as possible in both branches
+    // Assuming that all values appear as much as possible in both branches 
     case ObSelectStmt::SetOperator::INTERSECT: output_count = std::min(count1, count2); break;
     // Assuming that none of the values in the right branch appear in the left branch
     case ObSelectStmt::SetOperator::EXCEPT:    output_count = count1; break;
@@ -4855,7 +4855,7 @@ int ObOptSelectivity::calc_expr_min_max(const OptTableMetas &table_metas,
         case T_FUN_SYS_DAY_OF_MONTH:
         case T_FUN_SYS_DAY:             min_int_value = 1; max_int_value = 31;  break;
         case T_FUN_SYS_DAY_OF_YEAR:     min_int_value = 1; max_int_value = 366; break;
-        case T_FUN_SYS_WEEK_OF_YEAR:
+        case T_FUN_SYS_WEEK_OF_YEAR: 
         case T_FUN_SYS_WEEK:            min_int_value = 0; max_int_value = 53;  break;
         case T_FUN_SYS_WEEKDAY_OF_DATE: min_int_value = 0; max_int_value = 6;   break;
         case T_FUN_SYS_DAY_OF_WEEK:     min_int_value = 1; max_int_value = 7;   break;
@@ -4894,7 +4894,7 @@ int ObOptSelectivity::calc_expr_min_max(const OptTableMetas &table_metas,
   }
   if (OB_SUCC(ret)) {
     int cmp_result = 0;
-    bool can_cmp = min_value.can_compare(max_value);
+    bool can_cmp = min_value.can_compare(max_value); 
     if (min_value.is_min_value() || max_value.is_max_value()) {
       // do nothing
     } else if (can_cmp &&
@@ -5027,7 +5027,7 @@ int ObOptSelectivity::convert_obj_to_expr_type(const OptSelectivityCtx &ctx,
     } else {
       obj = tmp;
     }
-  }
+  }   
   return ret;
 }
 
@@ -5074,7 +5074,7 @@ double ObOptSelectivity::calc_equal_filter_sel(const OptSelectivityCtx &ctx,
       selectivity = left_nns * right_nns * (1 - 1/std::max(left_ndv, right_ndv));
     }
   }
-
+  
   return selectivity;
 }
 

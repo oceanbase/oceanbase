@@ -62,7 +62,7 @@ int ObExprPrivSTBestsrid::calc_result_typeN(ObExprResType& type,
   return ret;
 }
 
-int ObExprPrivSTBestsrid::get_geog_box(ObEvalCtx &ctx, lib::MemoryContext &mem_ctx, ObString wkb,
+int ObExprPrivSTBestsrid::get_geog_box(ObEvalCtx &ctx, lib::MemoryContext &mem_ctx, ObString wkb, 
                                       ObObjType input_type, bool &is_geo_empty, ObGeogBox *&geo_box)
 {
   int ret = OB_SUCCESS;
@@ -71,12 +71,12 @@ int ObExprPrivSTBestsrid::get_geog_box(ObEvalCtx &ctx, lib::MemoryContext &mem_c
   const ObSrsItem *srs = NULL;
   if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, wkb, srs))) {
     LOG_WARN("get srs failed", K(ret), K(wkb));
-  } else if (OB_FAIL(ObGeoExprUtils::build_geometry(mem_ctx->get_arena_allocator(), wkb, geo, srs, N_PRIV_ST_BESTSRID,
+  } else if (OB_FAIL(ObGeoExprUtils::build_geometry(mem_ctx->get_arena_allocator(), wkb, geo, srs, N_PRIV_ST_BESTSRID, 
                                                     GEO_ALLOW_3D | GEO_NOT_COPY_WKB))) {
     LOG_WARN("get geo failed", K(ret));
     if (ret != OB_ERR_SRS_NOT_FOUND && ret != OB_ERR_INVALID_GEOMETRY_TYPE) {
-      ret = OB_ERR_GIS_INVALID_DATA;
-      LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_BESTSRID);
+      ret = OB_ERR_GIS_INVALID_DATA;  
+      LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_BESTSRID);   
     }
   } else if (OB_FAIL(ObGeoExprUtils::check_empty(geo, is_geo_empty))) {
     LOG_WARN("check geo empty failed", K(ret));

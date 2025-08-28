@@ -50,11 +50,11 @@ union ObGeoNormalVal {
 class ObGeoEvalCtx
 {
 public:
-  ObGeoEvalCtx(lib::MemoryContext &mem_ctx) :
-    allocator_(&mem_ctx->get_arena_allocator()), srs_(NULL), g_arg_c_(0), v_arg_c_(0),
+  ObGeoEvalCtx(lib::MemoryContext &mem_ctx) : 
+    allocator_(&mem_ctx->get_arena_allocator()), srs_(NULL), g_arg_c_(0), v_arg_c_(0), 
     is_called_in_pg_expr_(false), mem_ctx_(mem_ctx) {};
-  ObGeoEvalCtx(lib::MemoryContext &mem_ctx, const common::ObSrsItem *srs_item) :
-    allocator_(&mem_ctx->get_arena_allocator()), srs_(srs_item), g_arg_c_(0), v_arg_c_(0),
+  ObGeoEvalCtx(lib::MemoryContext &mem_ctx, const common::ObSrsItem *srs_item) : 
+    allocator_(&mem_ctx->get_arena_allocator()), srs_(srs_item), g_arg_c_(0), v_arg_c_(0), 
     is_called_in_pg_expr_(false), mem_ctx_(mem_ctx) {};
   ~ObGeoEvalCtx() = default;
 
@@ -178,7 +178,7 @@ private:
   common::ObIAllocator *allocator_; // reserved for allocator
   const common::ObSrsItem *srs_; // get parsed srs or boost context
   int g_arg_c_; // num of geo arguments
-  int v_arg_c_; // num of other arguments, e.g. distance_sphere
+  int v_arg_c_; // num of other arguments, e.g. distance_sphere 
   const common::ObGeometry *gis_args_[MAX_ARG_COUNT]; // geo arguments
   ObGeoNormalVal val_args_[MAX_ARG_COUNT]; // other arguments
   bool is_called_in_pg_expr_; // distinguish pg/mysql expr call

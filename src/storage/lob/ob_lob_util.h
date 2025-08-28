@@ -177,7 +177,7 @@ public:
                                const int64_t timeout_ts);
 
   // lob_allocator is mainly used for outrow lob read and write memory allocation,
-  // that can be released after lob inset to avoid hold too many memory
+  // that can be released after lob inset to avoid hold too many memory 
   // and res_allocator is mainly used to alloc lob result datum memory in main table
   // should call iter.close outter
   static int insert_lob_column(ObIAllocator &res_allocator,

@@ -978,9 +978,9 @@ int ObBackupMacroBlockIndexMerger::prepare_prev_backup_set_index_iter_(
   } else if (OB_FALSE_IT(prev_backup_set_desc.backup_set_id_ = prev_backup_set_info.backup_set_id_)) {
   } else if (OB_FALSE_IT(prev_backup_set_desc.backup_type_ = prev_backup_set_info.backup_type_)) {
   } else if (OB_FALSE_IT(prev_tenant_index_turn_id = prev_backup_set_info.major_turn_id_)) {
-  } else if (OB_FAIL(get_prev_tenant_index_retry_id_(merge_param,
-                                                     prev_backup_set_desc,
-                                                     prev_tenant_index_turn_id,
+  } else if (OB_FAIL(get_prev_tenant_index_retry_id_(merge_param, 
+                                                     prev_backup_set_desc, 
+                                                     prev_tenant_index_turn_id, 
                                                      prev_tenant_index_retry_id))) {
     LOG_WARN("failed to get prev tenant index retry id", K(ret), K(merge_param), K(prev_backup_set_desc));
   } else if (OB_FAIL(tmp_iter->init(merge_param.task_id_,
@@ -1846,7 +1846,7 @@ int ObBackupUnorderdMacroBlockIndexMerger::prepare_merge_ctx_(
 }
 
 int ObBackupUnorderdMacroBlockIndexMerger::prepare_macro_block_iterators_(
-    const ObBackupIndexMergeParam &merge_param, const common::ObIArray<ObBackupRetryDesc> &retry_list,
+    const ObBackupIndexMergeParam &merge_param, const common::ObIArray<ObBackupRetryDesc> &retry_list, 
     common::ObISQLClient &sql_proxy, common::ObIArray<ObIMacroBlockIndexIterator *> &iterators)
 {
   int ret = OB_SUCCESS;
@@ -1972,9 +1972,9 @@ int ObBackupUnorderdMacroBlockIndexMerger::prepare_prev_backup_set_index_iter_(
   } else if (OB_FALSE_IT(prev_backup_set_desc.backup_set_id_ = prev_backup_set_info.backup_set_id_)) {
   } else if (OB_FALSE_IT(prev_backup_set_desc.backup_type_ = prev_backup_set_info.backup_type_)) {
   } else if (OB_FALSE_IT(prev_tenant_index_turn_id = prev_backup_set_info.major_turn_id_)) {
-  } else if (OB_FAIL(get_prev_tenant_index_retry_id_(merge_param,
-                                                     prev_backup_set_desc,
-                                                     prev_tenant_index_turn_id,
+  } else if (OB_FAIL(get_prev_tenant_index_retry_id_(merge_param, 
+                                                     prev_backup_set_desc, 
+                                                     prev_tenant_index_turn_id, 
                                                      prev_tenant_index_retry_id))) {
     LOG_WARN("failed to get prev tenant index retry id", K(ret), K(merge_param), K(prev_backup_set_desc));
   } else if (OB_FAIL(tmp_iter->init(merge_param.task_id_,
@@ -2053,7 +2053,7 @@ int ObBackupUnorderdMacroBlockIndexMerger::feed_iterator_to_external_sort_(ObIMa
         } else {
           LOG_WARN("failed to get next", K(ret));
         }
-      }
+      } 
     }
   }
   return ret;
@@ -2135,7 +2135,7 @@ int ObBackupUnorderdMacroBlockIndexMerger::write_macro_index_list_(const common:
 {
   int ret = OB_SUCCESS;
   const ObBackupBlockType block_type = BACKUP_BLOCK_MACRO_BLOCK_INDEX;
-  if (OB_SUCCESS != (ret =
+  if (OB_SUCCESS != (ret = 
           (write_index_list_<ObBackupMacroBlockIndex, ObBackupMacroBlockIndexIndex>(block_type, index_list)))) {
     LOG_WARN("failed to write index list", K(ret), K(block_type), K(index_list));
   } else {

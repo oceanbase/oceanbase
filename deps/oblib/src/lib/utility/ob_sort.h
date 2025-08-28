@@ -30,7 +30,7 @@ public:
   using pointer = value_type*;
   using reference = value_type&;
   using iterator_category = std::random_access_iterator_tag;
-
+  
   IteratorWrapper(Iterator iter, int64_t index, int64_t end)
     : iter_(iter), index_(index), end_(end)
   {}
@@ -108,7 +108,7 @@ public:
   {
     return (index_ <= rhs.index_);
   }
-
+  
 private:
   Iterator iter_;
   int64_t index_;

@@ -342,7 +342,7 @@ public:
   GET_RLS_SCHEMA(rls_context, ObRlsContextSchema);
 #undef GET_RLS_SCHEMA
 #endif
-
+  
   int get_sensitive_rule_schemas_by_table(
     const ObTableSchema &table_schema,
     ObIArray<ObSensitiveRuleSchema *> &schemas);
@@ -439,7 +439,7 @@ int get_table_id_and_table_name_in_tablegroup(
   // @param[out]:
   // - sequence_schema: return NULL if sequence not exist
   int get_sequence_schema(const uint64_t sequence_id,
-                          const ObSequenceSchema *&sequence_schema);
+                          const ObSequenceSchema *&sequence_schema); 
 
   /* -------------- interfaces with cache end ---------------*/
 private:

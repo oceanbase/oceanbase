@@ -82,3 +82,4 @@ inline bool ObJoinVecOp::need_right_join() const
 } // end namespace sql
 } // end namespace oceanbase
 #endif //OCEANBASE_SQL_ENGINE_JOIN_OB_JOIN_VEC_OP_
+

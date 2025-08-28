@@ -67,7 +67,7 @@ private:
                         const ObSimpleTableSchemaV2 *simple_table_schema,
                         table::ObTableTabletOpResult &tablet_result);
   int execute_tablet_query_and_mutate(const uint64_t table_id,
-                                      const table::ObTableTabletOp &tablet_op,
+                                      const table::ObTableTabletOp &tablet_op, 
                                       table::ObTableTabletOpResult&tablet_result);
   int execute_single_query_and_mutate(const uint64_t table_id,
                                       const common::ObTabletID tablet_id,
@@ -82,61 +82,61 @@ private:
 
   int try_process_tablegroup(table::ObTableLSOpResult &ls_result);
 
-  int init_batch_ctx(const table::ObTableTabletOp &tablet_op,
+  int init_batch_ctx(const table::ObTableTabletOp &tablet_op, 
                      ObIArray<table::ObTableOperation> &table_operations,
                      uint64_t table_id,
                      table::ObKvSchemaCacheGuard *shcema_cache_guard,
                      const ObSimpleTableSchemaV2 *table_schema,
                      table::ObTableTabletOpResult &tablet_result,
                      table::ObTableBatchCtx &batch_ctx);
-  int init_tb_ctx(const table::ObTableTabletOp &tablet_op,
+  int init_tb_ctx(const table::ObTableTabletOp &tablet_op, 
                   const table::ObTableOperation &table_operation,
                   table::ObKvSchemaCacheGuard *shcema_cache_guard,
                   const ObSimpleTableSchemaV2 *table_schema,
                   table::ObTableCtx &tb_ctx);
 
-  int add_dict_and_bm_to_result_entity(const table::ObTableTabletOp &tablet_op,
+  int add_dict_and_bm_to_result_entity(const table::ObTableTabletOp &tablet_op, 
                                        table::ObTableTabletOpResult &tablet_result);
   int execute_table_api_ls_op(table::ObTableLSOpResult &ls_result);
 
   int execute_htable_api_ls_op(table::ObTableLSOpResult &ls_result);
   // void record_aft_rtn_rows(const table::ObTableLSOpResult &ls_result);
 
-  int find_htable_get_info(ObString &arg_table_name,
-                           uint64_t &real_table_id,
-                           ObTabletID &real_tablet_id,
-                           bool &get_is_tablegroup,
-                           ObSEArray<const schema::ObSimpleTableSchemaV2*, 8> &table_schemas,
-                           HTableLSExecuteIter &htable_iter,
+  int find_htable_get_info(ObString &arg_table_name, 
+                           uint64_t &real_table_id, 
+                           ObTabletID &real_tablet_id, 
+                           bool &get_is_tablegroup, 
+                           ObSEArray<const schema::ObSimpleTableSchemaV2*, 8> &table_schemas, 
+                           HTableLSExecuteIter &htable_iter, 
                            const table::ObTableSingleOp &single_op);
 
-  int aggregate_htable_get_result(common::ObIAllocator &allocator,
-                                  table::ObTableQueryResultIterator *result_iterator,
+  int aggregate_htable_get_result(common::ObIAllocator &allocator, 
+                                  table::ObTableQueryResultIterator *result_iterator, 
                                   table::ObTableOperationResult &single_op_result);
   int64_t get_trans_timeout_ts();
   int init_query_info_tb_ctx(bool get_is_tablegroup, table::ObTableQueryAsyncCtx *query_ctx);
-  int execute_htable_get(table::ObTableQueryAsyncCtx *query_ctx,
-                         HTableLSExecuteIter &htable_ls_iter,
+  int execute_htable_get(table::ObTableQueryAsyncCtx *query_ctx, 
+                         HTableLSExecuteIter &htable_ls_iter, 
                          table::ObTableOperationResult &single_op_result);
-  int init_query_ctx(bool get_is_tablegroup,
-                     table::ObTableSingleOp &single_op,
-                     ObSEArray<const ObSimpleTableSchemaV2 *, 8> &table_schemas,
-                     uint64_t real_table_id,
-                     ObTabletID &real_tablet_id,
-                     table::ObTableQueryAsyncCtx *query_ctx,
+  int init_query_ctx(bool get_is_tablegroup, 
+                     table::ObTableSingleOp &single_op, 
+                     ObSEArray<const ObSimpleTableSchemaV2 *, 8> &table_schemas, 
+                     uint64_t real_table_id, 
+                     ObTabletID &real_tablet_id, 
+                     table::ObTableQueryAsyncCtx *query_ctx, 
                      ObIAllocator &allocator);
-  int aggregate_single_op_result(ObTableLSExecuteP::HTableLSExecuteIter &htable_ls_iter,
-                                 table::ObTableTabletOp &tablet_ops,
-                                 table::ObTableTabletOpResult &tmp_tablet_result,
+  int aggregate_single_op_result(ObTableLSExecuteP::HTableLSExecuteIter &htable_ls_iter, 
+                                 table::ObTableTabletOp &tablet_ops, 
+                                 table::ObTableTabletOpResult &tmp_tablet_result, 
                                  table::ObTableTabletOpResult &tablet_result);
-  int execute_htable_tablet_ops(table::ObTableTabletOp &tablet_ops,
-                                ObTableLSExecuteP::HTableLSExecuteIter &htable_ls_iter,
-                                table::ObTableTabletOpResult &tmp_tablet_result,
+  int execute_htable_tablet_ops(table::ObTableTabletOp &tablet_ops, 
+                                ObTableLSExecuteP::HTableLSExecuteIter &htable_ls_iter, 
+                                table::ObTableTabletOpResult &tmp_tablet_result, 
                                 table::ObTableTabletOpResult &tablet_result);
   int create_cb_result();
   int old_try_process();
   int new_try_process();
-  virtual bool is_new_try_process() override;
+  virtual bool is_new_try_process() override; 
 
 private:
   class LSExecuteIter {
@@ -164,14 +164,14 @@ private:
     int init_batch_ctx(uint64_t table_id,
                       table::ObTableSingleOp &single_op,
                       table::ObKvSchemaCacheGuard *shcema_cache_guard,
-                      const ObSimpleTableSchemaV2 *simple_table_schema,
+                      const ObSimpleTableSchemaV2 *simple_table_schema, 
                       table::ObTableBatchCtx &batch_ctx);
 
     int init_tb_ctx(table::ObTableSingleOp &single_op,
-                    table::ObKvSchemaCacheGuard *shcema_cache_guard,
+                    table::ObKvSchemaCacheGuard *shcema_cache_guard, 
                     const ObSimpleTableSchemaV2 *table_schema,
                     table::ObTableCtx &tb_ctx);
-
+    
   protected:
     common::ObArenaAllocator allocator_;
     ObTableLSExecuteP &outer_exectute_process_;
@@ -208,35 +208,35 @@ private:
     table::ObTableTabletOp &get_same_ctx_ops() { return same_ctx_ops_; }
 
     virtual int get_next_ctx(ObIArray<table::ObTableOperation> &table_operations,
-                             table::ObTableTabletOpResult &tablet_result,
+                             table::ObTableTabletOpResult &tablet_result, 
                              table::ObTableQueryBatchCtx *&ctx) override;
     int find_real_tablet_id(uint64_t arg_table_id, uint64_t real_table_id, ObTabletID &real_tablet_id);
 
   private:
     int find_real_table_id(const ObString &family_name, uint64_t &real_table_id);
-
+    
     int convert_batch_ctx(ObIArray<table::ObTableOperation> &table_operations,
-                          table::ObTableTabletOpResult &tablet_result,
+                          table::ObTableTabletOpResult &tablet_result, 
                           table::ObTableBatchCtx &ctx);
-    int construct_delete_family_op(const table::ObTableSingleOp &single_op,
+    int construct_delete_family_op(const table::ObTableSingleOp &single_op, 
                                   const ObTableHbaseMutationInfo &mutation_info);
-    int get_family_from_op(table::ObTableSingleOp &curr_single_op,
+    int get_family_from_op(table::ObTableSingleOp &curr_single_op, 
                           ObString &family);
-
+                                        
     int modify_htable_quailfier_and_timestamp(const table::ObTableSingleOp &curr_single_op,
-                                              table::ObTableOperationType::Type type,
+                                              table::ObTableOperationType::Type type, 
                                               int64_t now_ms);
     int modify_htable_timestamp(const table::ObTableSingleOp &curr_single_op,
                                 int64_t now_ms);
 
     int init_mutation_info(ObSEArray<const schema::ObSimpleTableSchemaV2*, 8> &table_schemas);
-    int init_tablegroup_batch_ctx(ObIArray<table::ObTableOperation> &table_operations,
-                                  table::ObTableTabletOpResult &tablet_result,
-                                  table::ObTableSingleOp &curr_single_op,
+    int init_tablegroup_batch_ctx(ObIArray<table::ObTableOperation> &table_operations, 
+                                  table::ObTableTabletOpResult &tablet_result, 
+                                  table::ObTableSingleOp &curr_single_op, 
                                   table::ObTableBatchCtx *&batch_ctx);
-    int init_table_batch_ctx(ObIArray<table::ObTableOperation> &table_operations,
-                             table::ObTableTabletOpResult &tablet_result,
-                             table::ObTableSingleOp &curr_single_op,
+    int init_table_batch_ctx(ObIArray<table::ObTableOperation> &table_operations, 
+                             table::ObTableTabletOpResult &tablet_result, 
+                             table::ObTableSingleOp &curr_single_op, 
                              table::ObTableBatchCtx *&batch_ctx);
   public:
     ObArray<int64_t> origin_delete_pos_;

@@ -20,12 +20,12 @@ namespace oceanbase
 {
 namespace sql
 {
-class ObModuleDataResolver : public ObSystemCmdResolver
-{
-public:
-  ObModuleDataResolver(ObResolverParams &params) : ObSystemCmdResolver(params) {}
-  virtual ~ObModuleDataResolver() {}
-  virtual int resolve(const ParseNode &parse_tree);
+class ObModuleDataResolver : public ObSystemCmdResolver 
+{ 
+public: 
+  ObModuleDataResolver(ObResolverParams &params) : ObSystemCmdResolver(params) {} 
+  virtual ~ObModuleDataResolver() {} 
+  virtual int resolve(const ParseNode &parse_tree); 
 
 private:
   static const int32_t CHILD_NUM = 4;

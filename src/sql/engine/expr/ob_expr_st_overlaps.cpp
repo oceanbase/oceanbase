@@ -140,7 +140,7 @@ int ObExprSTOverlaps::eval_st_overlaps(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret, N_ST_OVERLAPS);
   if (OB_FAIL(process_input_geometry(srs_guard, expr, ctx, temp_allocator, geo1, geo2, is_null_res, srs))) {
     LOG_WARN("fail to process input geometry", K(ret));
-  }
+  } 
   ObGeoBoostAllocGuard guard(tenant_id);
   lib::MemoryContext *mem_ctx = nullptr;
   if (OB_FAIL(ret) || is_null_res) {

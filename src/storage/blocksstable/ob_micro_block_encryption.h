@@ -37,7 +37,7 @@ public:
   int generate_iv(const int64_t macro_seq, const int64_t block_offset);
 private:
   //此密钥用于mysql模式下表加解密
-  int generate_key();
+  int generate_key();  
   //此密钥用于oracle模式下加解密
   int generate_key(char *master_key, const int64_t master_key_len, char *encrypt_key, const int64_t encrypt_key_len);
   bool need_encrypt();
@@ -51,9 +51,9 @@ private:
   int64_t encrypt_id_;
   int64_t raw_key_len_;
   char raw_key_[common::OB_MAX_ENCRYPTION_KEY_NAME_LENGTH];      // 真正用于数据加解密的密钥
-  char encrypt_key_[common::OB_MAX_ENCRYPTION_KEY_NAME_LENGTH];  // 密钥的密文
+  char encrypt_key_[common::OB_MAX_ENCRYPTION_KEY_NAME_LENGTH];  // 密钥的密文 
   char iv_[share::ObBlockCipher::OB_DEFAULT_IV_LENGTH];
-  int64_t encrypt_key_len_;                                      // 密钥的密文的长度
+  int64_t encrypt_key_len_;                                      // 密钥的密文的长度    
   int64_t master_key_id_;                                        // 主密钥版本
   int64_t iv_len_;
 #endif

@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef OB_LOG_OPTIMIZER_STAT_GATHERING_H_
 #define OB_LOG_OPTIMIZER_STAT_GATHERING_H_
 
@@ -101,7 +101,7 @@ public:
   void set_online_sample_percent(double sample_percent) { online_sample_percent_ = sample_percent; }
 private:
   int inner_get_table_schema(const ObTableSchema *&table_schema);
-  int inner_get_stat_part_cnt(const ObTableSchema *table_schema, uint64_t &part_num);
+  int inner_get_stat_part_cnt(const ObTableSchema *table_schema, uint64_t &part_num); 
   uint64_t table_id_;
   ObRawExpr *calc_part_id_expr_;
   share::schema::ObPartitionLevel part_level_;

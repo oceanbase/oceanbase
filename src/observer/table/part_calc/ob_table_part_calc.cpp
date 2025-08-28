@@ -119,9 +119,9 @@ int ObTablePartCalculator::eval(const ObIArray<ObExpr *> &new_row,
   } else {
     ObEvalCtx eval_ctx(tb_ctx_->get_exec_ctx());
     ObObjectID partition_id = OB_INVALID_ID;
-    if (OB_FAIL(ObExprCalcPartitionBase::calc_part_and_tablet_id(&part_id_expr,
+    if (OB_FAIL(ObExprCalcPartitionBase::calc_part_and_tablet_id(&part_id_expr, 
                                                                  eval_ctx,
-                                                                 partition_id,
+                                                                 partition_id, 
                                                                  tablet_id))) {
       LOG_WARN("calc part and tablet id by expr failed", K(ret));
     } else {
@@ -140,7 +140,7 @@ int ObTablePartCalculator::construct_series_entity(const ObITableEntity &entity,
   const ObObj *src_obj_ptr = src_rowkey.get_obj_ptr();
   const int64_t obj_cnt = src_rowkey.get_obj_cnt();
   ObObj *tmp_objs = reinterpret_cast<ObObj*>(allocator_.alloc(sizeof(ObObj) * obj_cnt));
-
+  
   if (OB_ISNULL(tmp_objs)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc tmp object", K(ret), K(obj_cnt));
@@ -277,7 +277,7 @@ int ObTablePartCalculator::calc(const ObTableSchema &table_schema,
       }
     }
   }
-  LOG_DEBUG("ObTablePartCalculator::calc", K(ret), K(table_id), K(part_level),
+  LOG_DEBUG("ObTablePartCalculator::calc", K(ret), K(table_id), K(part_level), 
           K(part_row), K(subpart_row), KP(tb_ctx_), K(tablet_id));
 
   return ret;
@@ -289,7 +289,7 @@ int ObTablePartCalculator::calc_partition_id(const ObPartitionLevel part_level,
                                              sql::ObDASTabletMapper &tablet_mapper,
                                              common::ObTabletID &tablet_id,
                                              ObObjectID &object_id,
-                                             const bool is_hash_like)
+                                             const bool is_hash_like) 
 {
   int ret = OB_SUCCESS;
   if (is_hash_like) {
@@ -301,16 +301,16 @@ int ObTablePartCalculator::calc_partition_id(const ObPartitionLevel part_level,
     } else if (OB_FAIL(get_hash_like_object(row.get_cell(0), hash_obj))) {
       LOG_WARN("fail to get hash like obj", K(row), K(hash_obj));
     } else if (FALSE_IT(hash_obj_row.assign(&hash_obj, 1))) {
-    } else if (OB_FAIL(tablet_mapper.get_tablet_and_object_id(part_level,
-                                                              part_id,
-                                                              hash_obj_row,
-                                                              tablet_id,
+    } else if (OB_FAIL(tablet_mapper.get_tablet_and_object_id(part_level, 
+                                                              part_id, 
+                                                              hash_obj_row, 
+                                                              tablet_id, 
                                                               object_id))) {
       LOG_WARN("fail to get partition id", K(ret), K(hash_obj), K(part_level));
     }
-  } else if (OB_FAIL(tablet_mapper.get_tablet_and_object_id(part_level,
-                                                            part_id, row,
-                                                            tablet_id,
+  } else if (OB_FAIL(tablet_mapper.get_tablet_and_object_id(part_level, 
+                                                            part_id, row, 
+                                                            tablet_id, 
                                                             object_id))) {
     LOG_WARN("fail to get partition id", K(ret), K(row));
   }
@@ -509,8 +509,8 @@ int ObTablePartCalculator::calc(uint64_t table_id,
   } else if (OB_FAIL(calc(*table_schema, entity, tablet_id))) {
     LOG_WARN("fail to calc part", K(ret), K(entity));
   }
-
-  LOG_DEBUG("ObTablePartCalculator::calc", K(ret), K(table_id), K(entity), K(tablet_id),
+  
+  LOG_DEBUG("ObTablePartCalculator::calc", K(ret), K(table_id), K(entity), K(tablet_id), 
               K(table_schema->is_partitioned_table()), K(table_schema->get_table_name()));
   return ret;
 }
@@ -1025,7 +1025,7 @@ int ObTablePartCalculator::calc(const ObTableSchema &table_schema,
   part_ids.set_attr(ObMemAttr(MTL_ID(), "PartIds"));
   subpart_ids.set_attr(ObMemAttr(MTL_ID(), "SubPartIds"));
   tmp_tablet_ids.set_attr(ObMemAttr(MTL_ID(), "TmpPartIds"));
-  // TODO: In HBase scenarios, each partition level has only one partition key,
+  // TODO: In HBase scenarios, each partition level has only one partition key, 
   // so we only need to check if start_key == end_key to determine if it's a single partition, no need to check border_flag
   // Later if table also goes through here, we need to push down the running mode here
   bool is_part_single = is_single_rowkey(part_range) && part_range.get_start_key().get_obj_cnt() == 1;
@@ -1047,7 +1047,7 @@ int ObTablePartCalculator::calc(const ObTableSchema &table_schema,
                                                             part_ids))) {
     LOG_WARN("fail to get first partition ids", K(ret), K(part_range));
   }
-
+  
   if (OB_FAIL(ret)) {
   } else if (ObPartitionLevel::PARTITION_LEVEL_ONE == part_level) {
     if (OB_FAIL(tablet_ids.assign(tmp_tablet_ids))) {

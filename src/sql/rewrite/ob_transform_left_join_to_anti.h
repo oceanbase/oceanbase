@@ -65,7 +65,7 @@ private:
                                     bool &is_valid);
   int clear_for_update(TableItem *table);
   int fill_not_null_context(ObIArray<JoinedTable*> &joined_tables,
-                            const JoinedTable *target_joined_table,
+                            const JoinedTable *target_joined_table, 
                             ObNotNullContext &not_null_context);
 };
 } /* namespace sql */

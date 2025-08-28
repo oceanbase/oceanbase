@@ -16,7 +16,7 @@
 #include "ob_hbase_cell_iter.h"
 
 namespace oceanbase
-{
+{   
 namespace table
 {
 

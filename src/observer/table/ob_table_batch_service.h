@@ -93,13 +93,13 @@ private:
   static int process_htable_put(const ObTableOperation &op,
                                 ObTableBatchCtx &ctx,
                                 common::ObIArray<ObTableOperationResult> &results);
-  static int init_table_ctx(ObTableCtx &tb_ctx,
+  static int init_table_ctx(ObTableCtx &tb_ctx, 
                             const ObTableOperation &op,
                             const ObTableBatchCtx &batch_ctx,
                             ObTabletID tablet_id);
   static int check_arg2(bool returning_rowkey,
                         bool returning_affected_entity);
-  static int adjust_entities(ObTableBatchCtx &ctx,
+  static int adjust_entities(ObTableBatchCtx &ctx, 
                              const common::ObIArray<ObTableOperation> &ops,
                              ObIArray<ObITableEntity*> &entities);
   static int check_legality(ObTableBatchCtx &ctx,

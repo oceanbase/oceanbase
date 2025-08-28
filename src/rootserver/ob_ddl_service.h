@@ -521,7 +521,7 @@ public:
       ObSchemaGetterGuard &schema_guard);
 
   /**
-   * This function is called by the DDL REBUILD INDEX TASK.
+   * This function is called by the DDL REBUILD INDEX TASK. 
    * This task will switch old vector index and new vector index name
    * Also will change old vector index status to INDEX_STATUS_UNAVAILABLE
    * All these index status and name will change in the same trans
@@ -542,9 +542,9 @@ public:
    */
   int swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter_table_arg);
   int swap_orig_and_hidden_table_partitions(obrpc::ObAlterTableArg &alter_table_arg);
-
+  
   /**
-   * The function is designed for the recover restore table ddl, which is to check whether the object
+   * The function is designed for the recover restore table ddl, which is to check whether the object 
    * in table schema is duplicated with others in the sample table space.
    * If the object is named by the default function of the system, then a new object name will be
    * generated to replace the old.
@@ -561,7 +561,7 @@ public:
       ObTableSchema &hidden_data_schema,
       common::ObIAllocator &allocator,
       ObDDLOperator &ddl_operator,
-      ObDDLSQLTransaction &trans);
+      ObDDLSQLTransaction &trans);  
   // The rule to recover foreign key,
   // 1. child table and parent table in the same database/user;
   // 2. child table and parent table all exist.
@@ -580,7 +580,7 @@ public:
       sql::ObSchemaChecker &schema_checker,
       const ObForeignKeyRefType &expected_cst_type);
   /**
-   * This function is called by the DDL RESTORE TABLE TASK.
+   * This function is called by the DDL RESTORE TABLE TASK. 
    * This task will create a hidden table, but will not be associated with the original table,
    * and any attribute of the origin table will not change to avoid cross-tenant transactions.
    * And the following function will make the hidden table and its' rebuilt indexes visible after data filling.
@@ -997,22 +997,22 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
       share::schema::ObSchemaGetterGuard &schema_guard);
   /**
    * NOTICE: The interface is designed for Offline DDL operation only.
-   * The caller can not obtain the schema via the hold_buf_src_tenant_schema_guard whose
+   * The caller can not obtain the schema via the hold_buf_src_tenant_schema_guard whose 
    * validity is limited by whether src_tenant_id and dst_tenant_id are the same.
-   *
+   * 
    * 1. This interface will provide the same tenant schema guard when src_tenant_id = dst_tenant_id,
    *    to avoid using two different versions of the guard caused by the parallel ddl under the tenant.
    * 2. This interface will provide corresponding tenant schema guard when src_tenant_id != dst_tenant_id.
-   *
+   * 
    * @param [in] src_tenant_id
    * @param [in] dst_tenant_id
    * @param [in] hold_buf_src_tenant_schema_guard: hold buf, invalid when src_tenant_id = dst_tenant_id.
    * @param [in] hold_buf_dst_tenant_schema_guard: hold buf.
-   * @param [out] src_tenant_schema_guard:
+   * @param [out] src_tenant_schema_guard: 
    *    pointer to the hold_buf_dst_tenant_schema_guard if src_tenant_id = dst_tenant_id,
    *    pointer to the hold_buf_src_tenant_schema_guard if src_tenant_id != dst_tenant_id,
    *    is always not nullptr if the interface return OB_SUCC.
-* @param [out] dst_tenant_schema_guard:
+* @param [out] dst_tenant_schema_guard: 
    *    pointer to the hold_buf_dst_tenant_schema_guard,
    *    is always not nullptr if the interface return OB_SUCC.
   */
@@ -1741,8 +1741,8 @@ int check_will_be_having_domain_index_operation(
       const share::ObColumnNameMap &col_name_map,
       const common::ObTimeZoneInfo &tz_info,
       common::ObIAllocator &allocator,
-      oceanbase::rootserver::ObDDLOperator &ddl_operator,
-      common::ObMySQLTransaction &trans,
+      oceanbase::rootserver::ObDDLOperator &ddl_operator, 
+      common::ObMySQLTransaction &trans, 
       common::ObSArray<share::schema::ObTableSchema> &new_table_schemas,
       common::ObSArray<uint64_t> &index_ids);
   int gen_hidden_index_schema_columns(
@@ -1938,8 +1938,8 @@ int check_will_be_having_domain_index_operation(
       const share::schema::ObColumnSchemaV2 &new_column,
       const share::schema::ObColumnSchemaV2 &orig_column);
   int alter_shadow_column_for_index(
-    const ObArray<ObTableSchema> &idx_schema_array,
-    const AlterColumnSchema *alter_column_schema,
+    const ObArray<ObTableSchema> &idx_schema_array, 
+    const AlterColumnSchema *alter_column_schema, 
     const ObColumnSchemaV2 &new_column_schema,
     ObDDLOperator &ddl_operator,
     common::ObMySQLTransaction &trans);
@@ -1983,7 +1983,7 @@ int check_will_be_having_domain_index_operation(
                                      share::schema::AlterColumnSchema &alter_column_schema,
                                      ObDDLOperator *ddl_operator,
                                      common::ObMySQLTransaction *trans);
-  int alter_table_update_cg_column(common::ObMySQLTransaction &trans,
+  int alter_table_update_cg_column(common::ObMySQLTransaction &trans, 
                                    ObDDLOperator &ddl_operator,
                                    share::schema::ObColumnSchemaV2 &new_column_schema,
                                    share::schema::ObTableSchema &new_table_schema);
@@ -2134,7 +2134,7 @@ public:
                                        common::ObString &object_name);
 
   int check_fts_index_conflict(const uint64_t tenant_id, const uint64_t table_id);
-
+  
   int check_vec_index_conflict(const uint64_t tenant_id, const uint64_t table_id);
 
 private:
@@ -2162,7 +2162,7 @@ private:
   int add_column_group(const obrpc::ObAlterTableArg &alter_table_arg,
                        const share::schema::ObTableSchema &ori_table_schema,
                        share::schema::ObTableSchema &new_table_schema);
-
+  
   int drop_column_group(const obrpc::ObAlterTableArg &alter_table_arg,
                         const share::schema::ObTableSchema &ori_table_schema,
                         share::schema::ObTableSchema &new_table_schema);
@@ -2182,7 +2182,7 @@ private:
                                    const ObTableSchema &orig_table_schema,
                                    obrpc::ObIndexArg *index_arg);
   int validate_rename_table_args(const ObTableSchema *table_schema);
-  int construct_rename_table_items_for_mview(uint64_t tenant_id,
+  int construct_rename_table_items_for_mview(uint64_t tenant_id,  
                                              const ObTableSchema *table_schema,
                                              bool is_oracle_mode,
                                              share::schema::ObSchemaGetterGuard &schema_guard,
@@ -2515,7 +2515,7 @@ private:
   int gen_inc_table_schema_for_trun_subpart(
       const share::schema::ObTableSchema &orig_table_schema,
       share::schema::AlterTableSchema &inc_table_schema,
-      share::schema::AlterTableSchema &del_table_schema);
+      share::schema::AlterTableSchema &del_table_schema); 
   int get_part_by_part_id(
       const share::schema::ObPartitionSchema &partition_schema,
       const int64_t part_id,

@@ -26,7 +26,7 @@ namespace oceanbase
 namespace sql
 {
 
-ObIExprSTGeomFromWKB::ObIExprSTGeomFromWKB(common::ObIAllocator &alloc, ObExprOperatorType type,
+ObIExprSTGeomFromWKB::ObIExprSTGeomFromWKB(common::ObIAllocator &alloc, ObExprOperatorType type, 
                                            const char *name, int32_t param_num, ObValidForGeneratedColFlag valid_for_generated_col, int32_t dimension)
   : ObFuncExprOperator(alloc, type, name, param_num, valid_for_generated_col, dimension)
 {
@@ -47,7 +47,7 @@ int ObIExprSTGeomFromWKB::calc_result_typeN(ObExprResType& type,
                                             int64_t param_num,
                                             ObExprTypeCtx& type_ctx) const
 {
-  UNUSED(type_ctx);
+  UNUSED(type_ctx); 
   UNUSED(types_stack);
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(param_num > 3)) {
@@ -83,7 +83,7 @@ int ObIExprSTGeomFromWKB::calc_result_typeN(ObExprResType& type,
     type.set_geometry();
     type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObGeometryType]).get_length());
   }
-
+  
   return ret;
 }
 
@@ -219,7 +219,7 @@ int ObIExprSTGeomFromWKB::eval_geom_wkb(const ObExpr &expr, ObEvalCtx &ctx, ObDa
   return ret;
 }
 
-int ObIExprSTGeomFromWKB::create_by_wkb_without_srid(ObIAllocator &allocator,
+int ObIExprSTGeomFromWKB::create_by_wkb_without_srid(ObIAllocator &allocator, 
                                                      const ObString &wkb,
                                                      const ObSrsItem *srs_item,
                                                      ObGeometry *&geo,

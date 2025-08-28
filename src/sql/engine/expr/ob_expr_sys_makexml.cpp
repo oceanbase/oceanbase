@@ -65,7 +65,7 @@ int ObExprSysMakeXML::calc_result_typeN(ObExprResType& type,
       types_stack[1].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
     }
   } else if (param_num == 4) {
-    // 1st param is schema oid, 2nd param is root propertyid,
+    // 1st param is schema oid, 2nd param is root propertyid, 
     // 3rd param is extra udt or 256, 4rd param is blob or xml udt
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("only binary xml without schema is supported", K(ret), K(param_num));
@@ -98,7 +98,7 @@ int ObExprSysMakeXML::eval_sys_makexml(const ObExpr &expr, ObEvalCtx &ctx, ObDat
    MultimodeAlloctor allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
   ObString full_xml_data;
   ObMulModeMemCtx* mem_ctx = nullptr;
-
+  
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&allocator, mem_ctx))) {
     LOG_WARN("fail to create tree memory context", K(ret));
@@ -158,7 +158,7 @@ int ObExprSysMakeXML::eval_sys_makexml(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     ObMulModeNodeType node_type;
     ObXmlBinaryType binary_head_type;
     ObString val = xml_datum->get_string();
-    if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator, ObObjType::ObLongTextType,
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator, ObObjType::ObLongTextType, 
                                                           CS_TYPE_UTF8MB4_BIN, true, val))) {
       LOG_WARN("fail to get real data", K(ret), K(val));
     } else if (val.length() == 0) { // do nothing

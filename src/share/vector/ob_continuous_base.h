@@ -33,7 +33,7 @@ public:
   inline const char *get_data() const { return data_; }
   inline void set_data(char *ptr) { data_ = ptr; }
   inline void from_continuous_vector(const bool has_null, const sql::ObBitVector &nulls,
-                                     uint32_t *offsets, const int64_t start_idx,
+                                     uint32_t *offsets, const int64_t start_idx, 
                                      const int64_t read_rows, char *data)
   {
     UNUSED(has_null);

@@ -157,7 +157,7 @@ public:
   int get_nested_mview_list_check_sql(const MViewDeps &target_mview_deps,
                                       ObSqlString &check_sql);
   int get_target_nested_mview_deps(const uint64_t mview_id,
-                                   MViewDeps &mview_deps);
+                                   MViewDeps &mview_deps); 
   int get_target_nested_mview_deps_in_lock(const uint64_t mview_id,
                                            MViewDeps &mview_deps);
   int gen_target_nested_mview_topo_order(const MViewDeps &target_mview_deps,

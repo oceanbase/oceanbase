@@ -65,7 +65,7 @@ struct ObAggGroupVec : public ObAggGroupBase
 {
 public:
   ObAggGroupVec();
-  ObAggGroupVec(ObColumnParam* col_param, sql::ObExpr* project_expr,
+  ObAggGroupVec(ObColumnParam* col_param, sql::ObExpr* project_expr, 
                  const int32_t col_offset, const int32_t col_index);
   virtual ~ObAggGroupVec();
   void reuse();
@@ -80,7 +80,7 @@ public:
   int agg_pushdown_decoder(
       blocksstable::ObIMicroBlockReader *reader,
       const int32_t col_offset, // column store is 0
-      const ObPushdownRowIdCtx &pd_row_id_ctx);
+      const ObPushdownRowIdCtx &pd_row_id_ctx); 
   int can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info, const int32_t col_index, bool &can_agg) override;
   int fill_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg) override;
   int collect_result();
@@ -112,9 +112,9 @@ public:
   OB_INLINE bool check_finished() const override { return false; }
   OB_INLINE bool is_agg_finish(const ObPushdownRowIdCtx &pd_row_id_ctx)
   {
-    return OB_INVALID_CS_ROW_ID != agg_row_id_
+    return OB_INVALID_CS_ROW_ID != agg_row_id_ 
         && OB_INVALID_CS_ROW_ID != pd_row_id_ctx.bound_row_id_
-        && ((!pd_row_id_ctx.is_reverse_ && agg_row_id_ >= pd_row_id_ctx.bound_row_id_ )
+        && ((!pd_row_id_ctx.is_reverse_ && agg_row_id_ >= pd_row_id_ctx.bound_row_id_ ) 
             || (pd_row_id_ctx.is_reverse_ && agg_row_id_ <= pd_row_id_ctx.bound_row_id_));
   }
   TO_STRING_KV(K_(col_offset), K_(col_index), K_(need_access_data),
@@ -159,15 +159,15 @@ public:
   int fill_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg) override;
   int collect_aggregated_result() override;
   int get_agg_group(const sql::ObExpr *expr, ObAggGroupVec *&agg_group);
-  INHERIT_TO_STRING_KV("ObVectorStore", ObVectorStore, K_(pd_agg_ctx), K_(agg_groups),
+  INHERIT_TO_STRING_KV("ObVectorStore", ObVectorStore, K_(pd_agg_ctx), K_(agg_groups), 
                         K_(need_access_data), K_(need_get_row_ids));
 private:
   void release_agg_group();
   int init_agg_groups(const ObTableAccessParam &param);
   int check_agg_store_valid();
   int do_aggregate(blocksstable::ObIMicroBlockReader *reader, const bool reserve_memory);
-  OB_INLINE void reset_after_aggregate()
-  {
+  OB_INLINE void reset_after_aggregate() 
+  { 
     count_ = 0;
     eval_ctx_.set_batch_idx(0);
   }

@@ -145,7 +145,7 @@ struct ObLockWaitNode: public common::SpHashNode
   void set_block_sessid(const uint32_t block_sessid) { block_sessid_ = block_sessid; }
   void advance_stat(RequestLockWaitStat::RequestStat new_stat) {
     request_stat_.advance_to(new_stat);
-  }
+  } 
 
   TO_STRING_KV(KP(this),
                K_(request_stat),

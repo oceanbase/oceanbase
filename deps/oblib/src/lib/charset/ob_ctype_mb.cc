@@ -157,7 +157,7 @@ int ob_wildcmp_mb_impl(const ObCharsetInfo *cs,
                        const char *wild_str,const char *wild_end,
                        int escape_char, int w_one, int w_many, int recurse_level)
 {
-  int result= -1;
+  int result= -1;      
   while (wild_str != wild_end) {
     while ((*wild_str == escape_char) || (*wild_str != w_many && *wild_str != w_one)) {
       int l;
@@ -170,7 +170,7 @@ int ob_wildcmp_mb_impl(const ObCharsetInfo *cs,
         str += l;
         wild_str += l;
       } else if (str == str_end || likeconv(cs,*wild_str++) != likeconv(cs,*str++)) {
-       return(1);
+       return(1);      
       }
       if (wild_str == wild_end) {
        return (str != str_end);
@@ -187,7 +187,7 @@ int ob_wildcmp_mb_impl(const ObCharsetInfo *cs,
       if (wild_end == wild_str)
         break;
     }
-    if (*wild_str == w_many) {
+    if (*wild_str == w_many) { 
       unsigned char cmp;
       const char* mb = wild_str;
       int mb_len=0;
@@ -312,7 +312,7 @@ unsigned int ob_instr_mb(const ObCharsetInfo *cs,
           if (nmatch > 1) {
             match[1].beg= match[0].end;
             match[1].end= match[0].end+s_length;
-            match[1].mb_len= 0;
+            match[1].mb_len= 0;   
           }
         }
         return 2;

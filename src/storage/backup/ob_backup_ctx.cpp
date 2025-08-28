@@ -836,7 +836,7 @@ int ObBackupDataCtx::flush_trailer_()
 /* ObBackupRecoveryRetryCtx */
 
 ObBackupRetryCtx::ObBackupRetryCtx()
-    : is_inited_(false),
+    : is_inited_(false), 
       param_(),
       backup_data_type_(),
       sql_proxy_(NULL),
@@ -977,7 +977,7 @@ int ObBackupRetryCtx::init_backup_meta_iterator_(
                  retry_desc.retry_id_,
                  true/*need_read_inner_table*/))) {
     LOG_WARN("failed to init meta index iterator", K(ret), K(retry_desc), K_(param));
-  }
+  } 
   return ret;
 }
 
@@ -1108,7 +1108,7 @@ int ObBackupRetryCtx::init_backup_macro_index_iterator_(
           retry_desc.turn_id_,
           retry_desc.retry_id_))) {
     LOG_WARN("failed to init iterator", K(ret), K_(param));
-  }
+  } 
   return ret;
 }
 
@@ -1156,7 +1156,7 @@ int ObBackupRetryCtx::inner_recover_need_reuse_macro_block_(
             LOG_WARN("failed to get backup physical id", K(ret), K(tmp_index));
           } else if (OB_FAIL(reused_pair_list_.push_back(id_pair))) {
             LOG_WARN("failed to push back", K(ret), K(id_pair));
-          }
+          } 
         }
       }
     }
@@ -1646,7 +1646,7 @@ int ObLSBackupCtx::prepare_mview_dep_tablet_set_(const ObLSBackupParam &param,
         LOG_WARN("failed to set refactored", K(ret), K(tablet_id), K(tablet_version));
       }
     }
-  }
+  } 
   return ret;
 }
 
@@ -1755,7 +1755,7 @@ int ObLSBackupCtx::get_next_tablet_(common::ObTabletID &tablet_id)
   } else if (task_idx_ >= list_ptr->count()) {
     ret = OB_ITER_END;
     LOG_WARN("meet end", K(ret), K(task_idx_));
-  } else {
+  } else { 
     tablet_id = list_ptr->at(task_idx_);
     LOG_INFO("get next tablet", K(tablet_id), K(task_idx_));
     task_idx_++;
@@ -1765,3 +1765,4 @@ int ObLSBackupCtx::get_next_tablet_(common::ObTabletID &tablet_id)
 
 }  // namespace backup
 }  // namespace oceanbase
+

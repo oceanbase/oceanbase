@@ -92,7 +92,7 @@ int ObDomainIndexBuilderUtil::prepare_aux_table(bool &task_submitted,
               status.task_id_ = res.ddl_task_id_;
               if (OB_FAIL(map.set_refactored(aux_table_id, status))) {
                   LOG_WARN("set dependent task map failed", K(ret), K(aux_table_id));
-              }
+              } 
             } else {
               LOG_WARN("get from dependent task map failed", K(ret));
             }

@@ -337,7 +337,7 @@ TEST(TestPaddingLogEntry, test_padding_log_entry)
   EXPECT_EQ(true, deserialize_group_entry.check_integrity());
   EXPECT_EQ(true, deserialize_group_entry.header_.is_padding_log());
   EXPECT_EQ(padding_group_entry.header_, deserialize_group_entry.header_);
-
+  
   // 验证反序列化LogEntry
   {
     int64_t pos = 0;
@@ -631,7 +631,7 @@ void bit_flip(uint8_t *ptr, int len, int bit_count)
   std::random_device rd;
   auto rng = std::default_random_engine { rd() };
   std::shuffle(numbers.begin(), numbers.end(), rng);  // 打乱顺序
-
+  
   for (int i = 0; i < bit_count; ++i) {
     int pos = numbers[i];
     uint8_t mask = (1 << (pos%8));

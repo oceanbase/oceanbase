@@ -40,9 +40,9 @@ public:
 private:
   static int cast_like_obj_if_needed(ObEvalCtx &ctx, const ObExpr &pattern_expr, ObDatum *pattern_datum,
                                     const ObExpr &dst_expr, ObDatum * &cast_datum);
-  // get prefix string (without wildcards) length of like pattern
-  static int get_pattern_prefix_len(const ObCollationType &cs_type,
-                                    const ObString &escape_str,
+  // get prefix string (without wildcards) length of like pattern 
+  static int get_pattern_prefix_len(const ObCollationType &cs_type, 
+                                    const ObString &escape_str, 
                                     const ObString &pattern_str,
                                     int32_t &pattern_prefix_len);
   DISALLOW_COPY_AND_ASSIGN(ObExprInnerDecodeLike) const;

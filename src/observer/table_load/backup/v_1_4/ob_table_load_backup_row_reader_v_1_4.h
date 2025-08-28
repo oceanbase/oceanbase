@@ -20,7 +20,7 @@ namespace oceanbase
 {
 namespace observer
 {
-
+  
 class ObTableLoadBackupMacroBlockMeta_V_1_4;
 
 struct ObTableLoadBackupColumnIndexItem_V_1_4
@@ -56,7 +56,7 @@ public:
   int64_t get_seq_read_column_count() const { return seq_read_column_count_; }
   const ObTableLoadBackupColumnIndexItem_V_1_4 *get_column_indexs() const { return column_indexs_; }
   bool is_read_full_rowkey() const { return read_full_rowkey_; }
-  TO_STRING_KV(K(request_count_), K(store_count_), K(rowkey_store_count_), K(seq_read_column_count_),
+  TO_STRING_KV(K(request_count_), K(store_count_), K(rowkey_store_count_), K(seq_read_column_count_), 
                K(ObArrayWrap<ObTableLoadBackupColumnIndexItem_V_1_4>(column_indexs_, request_count_)), K(read_full_rowkey_));
 private:
   int64_t request_count_; //请求列数
@@ -144,7 +144,7 @@ class ObTableLoadBackupRowReader_V_1_4
 public:
   struct ObStoreMeta
   {
-    ObStoreMeta(): type_(0), attr_(0)
+    ObStoreMeta(): type_(0), attr_(0) 
     {
     }
     TO_STRING_KV(K(type_), K(attr_));
@@ -202,9 +202,9 @@ private:
   int setup_row(const char *buf, const int64_t row_end_pos, const int64_t pos, const int64_t column_index_count);
   int read_column_no_meta(const common::ObObjMeta &src_meta, common::ObObj &obj);
   template<class T>
-  int read_sequence_columns(const ObIArray<int64_t> &column_ids,
-                            const T *items,
-                            const int64_t column_count,
+  int read_sequence_columns(const ObIArray<int64_t> &column_ids, 
+                            const T *items, 
+                            const int64_t column_count, 
                             common::ObNewRow &row);
   int read_column(const ObObjMeta &src_meta, ObObj &obj);
   int read_columns(const ObIArray<int64_t> &column_ids,

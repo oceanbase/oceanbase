@@ -199,7 +199,7 @@ void ob_gcvt_help2(int *width, int *len, char **dend, char **src,
 
   const int need_check_buf = (*dend - *dst) < MAX_DOUBLE_SIZE;
   if (need_check_buf) {
-
+    
     if (sign && dst_ptr < dend_ptr)
       *dst_ptr++= '-';
     if (dst_ptr < dend_ptr)
@@ -505,7 +505,7 @@ typedef union { double d; ULong L[2]; } U;
 #else
 #define Flt_Rounds 1
 #endif
-#endif
+#endif 
 
 #ifdef Honor_FLT_ROUNDS
 #define Rounding rounding
@@ -583,11 +583,11 @@ static Bigint *alloc_bigint(int k, ObStackAllocator *alloc)
 static void free_bigint(Bigint *v, ObStackAllocator *alloc)
 {
   if (v != NULL) {
-    char *gptr= (char*) v;
+    char *gptr= (char*) v;                       
     if (gptr < alloc->begin || gptr >= alloc->end) {
       free(gptr);
     } else if (v->k <= Kmax) {
-
+      
       v->p.next= alloc->freelist[v->k];
       alloc->freelist[v->k]= v;
     }
@@ -1537,7 +1537,7 @@ static double ob_strtod_int(const char *s00, char **se, int *error, char *buf, s
       bs2++;
 #endif
     j= bbe - scale;
-    i= j + bbbits - 1;
+    i= j + bbbits - 1;  
     if (i < Emin)  
       j+= P - Emin;
     else
@@ -1618,7 +1618,7 @@ static double ob_strtod_int(const char *s00, char **se, int *error, char *buf, s
         adj.d= 1.;
       if (adj.d <= 0x7ffffffe)
       {
-
+        
         y= adj.d;
         if (y != adj.d)
         {
@@ -1636,7 +1636,7 @@ static double ob_strtod_int(const char *s00, char **se, int *error, char *buf, s
         dval(&rv)-= adj.d;
       goto cont;
     }
-#endif
+#endif 
 
     if (i < 0)
     {
@@ -1835,7 +1835,7 @@ static double ob_strtod_int(const char *s00, char **se, int *error, char *buf, s
 #ifdef SET_INEXACT
   if (inexact && !(word0(&rv) & Exp_mask))
   {
-
+    
     dval(&rv0)= 1e-300;
     dval(&rv0)*= dval(&rv0);
   }

@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  * This file contains implementation for rb_contains.
  */
-
+ 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_rb_contains.h"
 #include "sql/engine/expr/ob_expr_rb_func_helper.h"
@@ -47,7 +47,7 @@ int ObExprRbContains::calc_result_type2(ObExprResType &type,
   } else if (!(type1.is_roaringbitmap() || type1.is_hex_string())) {
     ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
     LOG_WARN("invalid roaringbitmap data type provided.", K(ret), K(type1.get_type()), K(type1.get_collation_type()));
-  }
+  } 
   if (OB_FAIL(ret)) {
     // do nothing
   } else if(ob_is_null(type2.get_type())) {
@@ -137,16 +137,16 @@ int ObExprRbContains::eval_rb_contains(const ObExpr &expr,
   return ret;
 }
 
-int ObExprRbContains::eval_rb_contains_vector(const ObExpr &expr,
+int ObExprRbContains::eval_rb_contains_vector(const ObExpr &expr, 
                                               ObEvalCtx &ctx,
-                                              const ObBitVector &skip,
+                                              const ObBitVector &skip, 
                                               const EvalBound &bound)
 {
   INIT_SUCC(ret);
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
   lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObRbExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "ROARINGBITMAP"));
-
+  
   if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound)) || OB_FAIL(expr.args_[1]->eval_vector(ctx, skip, bound))) {
     LOG_WARN("fail to eval params", K(ret));
   } else {
@@ -207,7 +207,7 @@ int ObExprRbContains::eval_rb_contains_vector(const ObExpr &expr,
               } else {
                 offset = right_vec->get_uint(idx);
               }
-            }
+            }    
             if (!OB_SUCC(ret)) {
             } else if (OB_FAIL(rb_contains(tmp_allocator, rb_bin, rb_bin, is_contains, true, offset))) {
               LOG_WARN("failed to get roaringbitmap contains", K(ret));
@@ -280,7 +280,7 @@ int ObExprRbContains::rb_contains(ObIAllocator &allocator, ObString &rb1_bin, Ob
       } else is_contains = false;
       ObRbUtils::rb_destroy(rb1);
     }
-
+    
   } else {
     // rb_contains(roaringbitmap, roaringbitmap)
     uint64_t card_and = 0;

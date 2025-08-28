@@ -20,11 +20,11 @@ using namespace share;
 
 
 ObRestoreService::ObRestoreService()
-  : inited_(false),
+  : inited_(false), 
     schema_service_(NULL),
-    sql_proxy_(NULL),
+    sql_proxy_(NULL), 
     rpc_proxy_(NULL),
-    srv_rpc_proxy_(NULL),
+    srv_rpc_proxy_(NULL), 
     self_addr_(),
     tenant_id_(OB_INVALID_TENANT_ID),
     idle_time_us_(1),
@@ -92,8 +92,8 @@ int ObRestoreService::idle()
   } else if (!has_set_stop() && 0 < ATOMIC_LOAD(&wakeup_cnt_)) {
     ATOMIC_SET(&wakeup_cnt_, 0); // wake up immediately
   } else {
-    ObTenantThreadHelper::idle(idle_time_us_);
-    idle_time_us_ = GCONF._restore_idle_time;
+    ObTenantThreadHelper::idle(idle_time_us_);    
+    idle_time_us_ = GCONF._restore_idle_time; 
   }
   return ret;
 }

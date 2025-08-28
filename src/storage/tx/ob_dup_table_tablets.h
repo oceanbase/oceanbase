@@ -166,7 +166,7 @@ public:
   void set_logging() { is_logging = true; }
   void clean_logging() { is_logging = false; }
   bool check_logging() const { return is_logging; }
-
+  
   bool is_change_logging() const { return flag_ == DupTabletSetChangeFlag::CHANGE_LOGGING; }
   bool is_confirming() const { return flag_ == DupTabletSetChangeFlag::CONFIRMING; }
   bool can_be_confirmed_anytime() const
@@ -344,7 +344,7 @@ struct RelatedSetAttribute
   void set_related_common_header(const DupTabletSetCommonHeader &related_common_header) {
     related_common_header_.copy_tablet_set_common_header(related_common_header);
   }
-
+  
   TO_STRING_KV(K(related_change_status_), K(related_common_header_), K(related_set_type_));
 
   OB_UNIS_VERSION(1);
@@ -814,7 +814,7 @@ private:
   int get_free_tablet_set(DupTabletChangeMap *&free_set,
                           const bool force_alloc = false,
                           const uint64_t target_id = 0);
-
+  
   // If get a free tablet set, need set tablet set type and push into queue
   int get_target_tablet_set_(const DupTabletSetCommonHeader &target_common_header,
                              DupTabletChangeMap *&target_set,
@@ -876,7 +876,7 @@ private:
   const static int64_t MAX_FREE_SET_COUNT;
   const static int64_t MAX_GC_TABLET_COUNT;
 
-  static int64_t MAX_READABLE_SET_SER_INTERVAL;
+  static int64_t MAX_READABLE_SET_SER_INTERVAL; 
 
 public:
   TO_STRING_KV(K(free_set_pool_.get_size()),
@@ -905,7 +905,7 @@ private:
    *  2. use readable_set_in_gc_ point to readable set not finish gc in one round
    *  3. use gc_start_time_ mark gc one round start time one round
    */
-  DupTabletChangeMap *readable_set_in_gc_;
+  DupTabletChangeMap *readable_set_in_gc_;   
   int64_t gc_start_time_;
   int64_t last_no_free_set_time_;
   int64_t extra_free_set_alloc_count_;

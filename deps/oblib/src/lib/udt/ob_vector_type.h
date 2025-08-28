@@ -45,12 +45,12 @@ public:
   bool is_null(uint32_t idx) const { return false; }
   void set_scale(ObScale scale) { UNUSED(scale); }
   void set_data(T *data, uint32_t length) { data_ = data; this->length_ = length;}
-
+  
   uint32_t *get_offsets() const { return nullptr; }
   char *get_data() const { return reinterpret_cast<char*>(data_);}
   int32_t get_raw_binary_len()
-  {
-    return this->data_container_ == NULL ?
+  { 
+    return this->data_container_ == NULL ? 
       (this->length_ * sizeof(T)) : (sizeof(T) * this->data_container_->raw_data_.size());
   }
   int get_raw_binary(char *res_buf, int64_t buf_len);
@@ -67,7 +67,7 @@ public:
   int at(uint32_t idx, ObIArrayType &dest) const { return OB_NOT_SUPPORTED; }
   void clear();
   int flatten(ObArrayAttr *attrs, uint32_t attr_count, uint32_t &attr_idx);
-  int compare_at(uint32_t left_begin, uint32_t left_len, uint32_t right_begin, uint32_t right_len,
+  int compare_at(uint32_t left_begin, uint32_t left_len, uint32_t right_begin, uint32_t right_len,  
                  const ObIArrayType &right, int &cmp_ret) const;
   int compare(const ObIArrayType &right, int &cmp_ret) const;
   bool sort_cmp(uint32_t idx_l, uint32_t idx_r) const { return operator[](idx_l) < operator[](idx_r); }
@@ -96,8 +96,8 @@ public:
   int contains_all(const ObIArrayType &other, bool &bret) const;
   int overlaps(const ObIArrayType &other, bool &bret) const;
   int distinct(ObIAllocator &alloc, ObIArrayType *&output) const;
-  int push_not_in_set(const ObVectorData *arr_bin_ptr,
-          hash::ObHashSet<ObString> &elem_set,
+  int push_not_in_set(const ObVectorData *arr_bin_ptr, 
+          hash::ObHashSet<ObString> &elem_set, 
           bool &arr_contain_null,
           const bool &contain_null);
   int except(ObIAllocator &alloc, ObIArrayType *arr2, ObIArrayType *&output) const;
@@ -357,12 +357,12 @@ int ret = OB_SUCCESS;
 
 template <typename T>
 void ObVectorData<T>::clear()
-{
+{ 
   data_ = nullptr;
   this->length_ = 0;
   if (OB_NOT_NULL(this->data_container_)) {
     this->data_container_->clear();
-  }
+  } 
 }
 
 template <typename T>
@@ -388,7 +388,7 @@ int ObVectorData<T>::flatten(ObArrayAttr *attrs, uint32_t attr_count, uint32_t &
 }
 
 template <typename T>
-int ObVectorData<T>::compare_at(uint32_t left_begin, uint32_t left_len, uint32_t right_begin, uint32_t right_len,
+int ObVectorData<T>::compare_at(uint32_t left_begin, uint32_t left_len, uint32_t right_begin, uint32_t right_len,  
                              const ObIArrayType &right, int &cmp_ret) const
 {
   int ret = OB_SUCCESS;
@@ -407,7 +407,7 @@ int ObVectorData<T>::compare_at(uint32_t left_begin, uint32_t left_len, uint32_t
     uint32_t left_max = left_begin + cmp_len;
     uint32_t right_max = right_begin + cmp_len;
     cmp_ret = 0;
-
+    
     if (this->length_ < left_max || this->length_ < right_max) {
       ret = OB_INVALID_ARGUMENT;
       OB_LOG(WARN, "invalid argument", K(ret), K(left_begin), K(left_len), K(right_begin), K(right_len), K(this->length_));
@@ -501,7 +501,7 @@ int ObVectorData<T>::distinct(ObIAllocator &alloc, ObIArrayType *&output) const
               OB_LOG(WARN, "failed to add elemen", K(ret));
             } else if (OB_FAIL(elem_set.set_refactored(val))) {
               OB_LOG(WARN, "failed to add elemen into set", K(ret));
-            }
+            } 
           } else if (ret == OB_HASH_EXIST) {
             // duplicate element, do nothing
             ret = OB_SUCCESS;
@@ -569,11 +569,11 @@ int ObVectorData<T>::except(ObIAllocator &alloc, ObIArrayType *arr2, ObIArrayTyp
     OB_LOG(WARN, "clone empty failed", K(ret));
   } else if (this->size() == 0) {
     output = arr_ptr;
-  } else if (OB_ISNULL(arr_bin_ptr = dynamic_cast<ObVectorData *>(arr_ptr))
+  } else if (OB_ISNULL(arr_bin_ptr = dynamic_cast<ObVectorData *>(arr_ptr)) 
             || OB_ISNULL(arr2_bin_ptr)) {
     ret = OB_ERR_ARRAY_TYPE_MISMATCH;
     OB_LOG(WARN, "invalid array type", K(ret), K(arr_ptr->get_format()), K(arr2->get_format()));
-  } else if (OB_FAIL(elem_set.create(arr2_bin_ptr->length_ + this->length_,
+  } else if (OB_FAIL(elem_set.create(arr2_bin_ptr->length_ + this->length_, 
                                   ObMemAttr(common::OB_SERVER_TENANT_ID, "ArrayDistSet")))) {
     OB_LOG(WARN, "failed to create cellid set", K(ret), K(arr2_bin_ptr->length_ + this->length_));
   } else {
@@ -592,7 +592,7 @@ int ObVectorData<T>::except(ObIAllocator &alloc, ObIArrayType *arr2, ObIArrayTyp
         } else {
           OB_LOG(WARN, "failed to check element exist", K(ret));
         }
-      }
+      } 
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(arr_bin_ptr->push_not_in_set(this, elem_set, arr1_contain_null, arr2_contain_null))) {
@@ -611,14 +611,14 @@ int ObVectorData<T>::unionize(ObIAllocator &alloc, ObIArrayType **arr, uint32_t 
   bool arr_contain_null = false;
   hash::ObHashSet<ObString> elem_set;
   ObVectorData *arr_bin_ptr = NULL;
-
+  
   for (int64_t i = 0; i < arr_cnt && OB_SUCC(ret); ++i) {
     if (OB_ISNULL(arr_bin_ptr = dynamic_cast<ObVectorData *>(arr[i]))) {
       ret = OB_ERR_ARRAY_TYPE_MISMATCH;
       OB_LOG(WARN, "invalid array type", K(ret), K(arr[i]->get_format()));
     } else if (arr_bin_ptr->size() == 0) {
       // skip
-    } else if (!elem_set.created() && OB_FAIL(elem_set.create(arr_bin_ptr->length_,
+    } else if (!elem_set.created() && OB_FAIL(elem_set.create(arr_bin_ptr->length_, 
                                             ObMemAttr(common::OB_SERVER_TENANT_ID, "ArrayDistSet")))) {
       OB_LOG(WARN, "failed to create cellid set", K(ret));
     } else if (OB_FAIL(this->push_not_in_set(arr_bin_ptr, elem_set, arr_contain_null, false))) {
@@ -683,7 +683,7 @@ int ObVectorData<T>::intersect(ObIAllocator &alloc, ObIArrayType **arr, uint32_t
           } else if (OB_FAIL(elem_map.erase_refactored(val))) {
             OB_LOG(WARN, "failed to erase elemen from set", K(ret));
           }
-        }
+        }        
       } // end for
     }
   } // end for

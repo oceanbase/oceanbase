@@ -76,7 +76,7 @@ int ObDDLServerClient::create_hidden_table(
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(OB_DDL_HEART_BEAT_TASK_CONTAINER.set_register_task_id(res.task_id_, res.tenant_id_))) {
     LOG_WARN("failed to set register task id", K(ret), K(res));
-  }
+  } 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(wait_task_reach_pending(arg.get_tenant_id(), res.task_id_, snapshot_version, data_format_version, *GCTX.sql_proxy_, res.is_no_logging_))) {
       LOG_WARN("failed to wait table lock. remove register task id and abort redef table task.", K(ret), K(arg), K(res));
@@ -99,7 +99,7 @@ int ObDDLServerClient::create_hidden_table(
     }
   }
   char tenant_id_buffer[256];
-  snprintf(tenant_id_buffer, sizeof(tenant_id_buffer), "tenant_id:%ld, dest_tenant_id:%ld",
+  snprintf(tenant_id_buffer, sizeof(tenant_id_buffer), "tenant_id:%ld, dest_tenant_id:%ld", 
             arg.get_tenant_id(), arg.get_dest_tenant_id());
   SERVER_EVENT_ADD("ddl", "create hidden table",
     "tenant_id", tenant_id_buffer,
@@ -157,10 +157,10 @@ int ObDDLServerClient::start_redef_table(const obrpc::ObStartRedefTableArg &arg,
     // abort_redef_table() function last step must remove heart_beat task, so there is no need to call heart_beat_clear()
   }
   char tenant_id_buffer[256];
-  snprintf(tenant_id_buffer, sizeof(tenant_id_buffer), "orig_tenant_id:%ld, target_tenant_id:%ld",
+  snprintf(tenant_id_buffer, sizeof(tenant_id_buffer), "orig_tenant_id:%ld, target_tenant_id:%ld", 
             arg.orig_tenant_id_, arg.target_tenant_id_);
   char table_id_buffer[256];
-  snprintf(tenant_id_buffer, sizeof(tenant_id_buffer), "orig_table_id:%ld, target_table_id:%ld",
+  snprintf(tenant_id_buffer, sizeof(tenant_id_buffer), "orig_table_id:%ld, target_table_id:%ld", 
             arg.orig_table_id_, arg.target_table_id_);
 
   SERVER_EVENT_ADD("ddl", "start redef table",
@@ -176,7 +176,7 @@ int ObDDLServerClient::start_redef_table(const obrpc::ObStartRedefTableArg &arg,
 }
 
 int ObDDLServerClient::copy_table_dependents(
-    const obrpc::ObCopyTableDependentsArg &arg,
+    const obrpc::ObCopyTableDependentsArg &arg, 
     sql::ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
@@ -397,9 +397,9 @@ int ObDDLServerClient::build_ddl_single_replica_response(const obrpc::ObDDLBuild
 }
 
 int ObDDLServerClient::wait_task_reach_pending(
-    const uint64_t tenant_id,
-    const int64_t task_id,
-    int64_t &snapshot_version,
+    const uint64_t tenant_id, 
+    const int64_t task_id, 
+    int64_t &snapshot_version, 
     uint64_t &data_format_version,
     ObMySQLProxy &sql_proxy,
     bool &is_no_logging)
@@ -430,8 +430,8 @@ int ObDDLServerClient::wait_task_reach_pending(
             int64_t forward_user_msg_len = 0;
             ObDDLErrorMessageTableOperator::ObBuildDDLErrorMessage error_message;
             if (OB_SUCCESS == ObDDLErrorMessageTableOperator::get_ddl_error_message(
-                              tenant_id, task_id, -1 /*target_object_id*/,
-                              unused_addr, false/*is_ddl_retry_task*/,
+                              tenant_id, task_id, -1 /*target_object_id*/, 
+                              unused_addr, false/*is_ddl_retry_task*/, 
                               *GCTX.sql_proxy_, error_message, forward_user_msg_len)) {
               if (OB_SUCCESS != error_message.ret_code_) {
                 ret = error_message.ret_code_;
@@ -478,7 +478,7 @@ int ObDDLServerClient::check_need_stop(const uint64_t tenant_id)
       LOG_WARN("tenant is standby now, stop wait", K(ret), K(tenant_id));
     }
   }
-
+  
   if (OB_FAIL(ret)) {
   } else if (observer::ObServer::get_instance().is_stopped()) {
     ret = OB_TIMEOUT;

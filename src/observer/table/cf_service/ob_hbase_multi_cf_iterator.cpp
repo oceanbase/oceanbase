@@ -23,7 +23,7 @@ namespace oceanbase
 {
 namespace table
 {
-ObHbaseMultiCFIterator::ObHbaseMultiCFIterator(const ObHbaseQuery &hbase_query, ObTableExecCtx &exec_ctx)
+ObHbaseMultiCFIterator::ObHbaseMultiCFIterator(const ObHbaseQuery &hbase_query, ObTableExecCtx &exec_ctx) 
     : ObHbaseQueryResultIterator(hbase_query, exec_ctx),
       hbase_query_(hbase_query),
       exec_ctx_(exec_ctx),
@@ -97,7 +97,7 @@ int ObHbaseMultiCFIterator::init_cf_queries(ObTableExecCtx &exec_ctx, const ObHb
     }
   }
 
-  ObSEArray<std::pair<int64_t, int64_t>, 1> part_subpart_ids;
+  ObSEArray<std::pair<int64_t, int64_t>, 1> part_subpart_ids; 
   part_subpart_ids.set_attr(ObMemAttr(MTL_ID(), "HbasePartids"));
   if (OB_SUCC(ret)) {
     ObSchemaGetterGuard &schema_guard = exec_ctx.get_schema_guard();
@@ -108,7 +108,7 @@ int ObHbaseMultiCFIterator::init_cf_queries(ObTableExecCtx &exec_ctx, const ObHb
       if (OB_FAIL(ObTableUtils::get_part_idx_by_tablet_id(schema_guard,
                                                           first_table_id,
                                                           frist_tablet_ids.at(i),
-                                                          part_idx,
+                                                          part_idx, 
                                                           subpart_idx))) {
         LOG_WARN("fail to get part idx", K(ret), K(hbase_query.get_table_id()), K(hbase_query.get_tablet_id()));
       } else if (OB_FAIL(part_subpart_ids.push_back(std::make_pair(part_idx, subpart_idx)))) {
@@ -140,7 +140,7 @@ int ObHbaseMultiCFIterator::init_cf_queries(ObTableExecCtx &exec_ctx, const ObHb
 
     bool is_empty_family = family_addfamily_flag_pairs.empty();
     for (int i = 0; OB_SUCC(ret) && i < table_schemas.count(); ++i) {
-      const ObSimpleTableSchemaV2 *table_schema = table_schemas.at(i);
+      const ObSimpleTableSchemaV2 *table_schema = table_schemas.at(i); 
       bool is_found = true;
       ObHbaseCFQuery *cf_query = nullptr;
       std::pair<ObString, bool> is_add_family;

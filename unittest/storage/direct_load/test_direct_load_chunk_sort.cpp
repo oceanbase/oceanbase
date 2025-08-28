@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #include <gtest/gtest.h>
 #define private public
 #define protected public
@@ -31,7 +31,7 @@ namespace unittest
 {
 
 static ObSimpleMemLimitGetter getter;
-class RandomBase
+class RandomBase 
 {
 public:
   virtual int64_t generate() = 0;
@@ -46,7 +46,7 @@ private:
   int64_t start_;
 };
 
-class Random : public RandomBase
+class Random : public RandomBase 
 {
 public:
   Random(int64_t min, int64_t max) : min_(min), max_(max) {}
@@ -75,8 +75,8 @@ public:
   }
 
 private:
-    double alpha_;
-    int64_t x_min_;
+    double alpha_; 
+    int64_t x_min_;    
 };
 
 class RowGenerate
@@ -162,13 +162,13 @@ public:
   static void SetUpTestCase()
   {
     ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
-  }
+  } 
   static void TearDownTestCase()
   {
     ObTimerService::get_instance().stop();
     ObTimerService::get_instance().wait();
     ObTimerService::get_instance().destroy();
-  }
+  }  
   int init_tenant_mgr()
   {
     int ret = OB_SUCCESS;
@@ -269,10 +269,10 @@ int TestChunkSort::prepare_schecma(int64_t rowkey_count, int64_t column_num, int
       STORAGE_LOG(WARN, "fail to set column name", KR(ret));
     } else if (OB_FAIL(table_schema.add_column(column))) {
       STORAGE_LOG(WARN, "fail to add column", KR(ret));
-    }
+    }    
   }
-  return ret;
-}
+  return ret;  
+}                             
 
 int TestChunkSort::init_table_id_enc_params(const ObTableSchema &table_schema, ObArray<share::ObEncParam> &enc_params)
 {
@@ -520,7 +520,7 @@ TEST_F(TestChunkSort, test_seq)
   int64_t str_rowkey_count = 4;
   int64_t int_rowkey_count = 0;
   Sequence rand(0);
-
+  
   ObTableSchema table_schema;
   ObArenaAllocator allocator;
   ObStorageDatumUtils datum_util;
@@ -661,5 +661,5 @@ int main(int argc, char **argv)
   OB_LOGGER.set_file_name("test_direct_load_adaptive_aqs_sort.log", true, true);
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
+  return RUN_ALL_TESTS();  
 }

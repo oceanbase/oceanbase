@@ -109,7 +109,7 @@ public:
   int value_andnot(ObRoaringBitmap *rb);
   int value_and(ObRoaringBin *rb_bin);
   int value_and(ObRoaring64Bin *rb_bin);
-  int subset(ObRoaringBitmap *res_rb,
+  int subset(ObRoaringBitmap *res_rb, 
              uint64_t limit,
              uint64_t offset = 0,
              bool reverse = false,

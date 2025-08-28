@@ -60,20 +60,20 @@ namespace common
 namespace sqlclient
 {
 
-int sqlclient::ObDblinkErrorTrans::external_errno_to_ob_errno(bool is_oracle_err,
-                                                   int external_errno,
-                                                   const char *external_errmsg,
+int sqlclient::ObDblinkErrorTrans::external_errno_to_ob_errno(bool is_oracle_err, 
+                                                   int external_errno, 
+                                                   const char *external_errmsg, 
                                                    int &ob_errno) {
   int ret = OB_SUCCESS;
   external_errno = abs(external_errno);
   if (OB_SUCCESS != external_errno) {
     const char *oracle_msg_prefix = "ORA";
-    if (external_errno >= 2000 && // google "Client Error Message Reference"
+    if (external_errno >= 2000 && // google "Client Error Message Reference" 
         external_errno <= 2075 && // you will known errno in [2000, 2075] is client error at dev.mysql.com
-        (!is_oracle_err ||
-        (is_oracle_err &&
-        (OB_NOT_NULL(external_errmsg) && 0 != STRLEN(external_errmsg)) &&
-        0 != std::memcmp(oracle_msg_prefix, external_errmsg,
+        (!is_oracle_err ||  
+        (is_oracle_err && 
+        (OB_NOT_NULL(external_errmsg) && 0 != STRLEN(external_errmsg)) && 
+        0 != std::memcmp(oracle_msg_prefix, external_errmsg, 
         std::min(STRLEN(oracle_msg_prefix), STRLEN(external_errmsg)))))) {
       ob_errno = external_errno; // do not map, show user client errno directly.
     } else if (is_oracle_err
@@ -127,7 +127,7 @@ int ObTenantDblinkKeeper::clean_dblink_conn(uint32_t sessid, bool force_disconne
     while (OB_NOT_NULL(connection) && OB_SUCC(ret)) {
       common::sqlclient::ObISQLConnection *next = connection->get_next_conn();
       connection->dblink_wlock(); //prevent connection still in use
-      connection->set_reverse_link_creadentials(false);
+      connection->set_reverse_link_creadentials(false);  
       common::sqlclient::ObCommonServerConnectionPool * server_conn_pool = connection->get_common_server_pool();
       const bool need_disconnect = force_disconnect || !connection->usable();
       if (NULL == server_conn_pool) {

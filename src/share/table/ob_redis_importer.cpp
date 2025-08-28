@@ -191,8 +191,8 @@ int ObRedisImporter::check_basic_info(bool &need_import)
   if (OB_ISNULL(exec_ctx_.get_sql_proxy()) || OB_ISNULL(exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy and session must not null", K(ret), KP(exec_ctx_.get_sql_proxy()));
-  } else if (!lib::is_mysql_mode()
-      || GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_2_5_0
+  } else if (!lib::is_mysql_mode() 
+      || GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_2_5_0 
       || (CLUSTER_VERSION_4_3_0_0 <= GET_MIN_CLUSTER_VERSION() && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_1)) {
     const char *err_msg = "Redis running in oracle mode or ob version < 4.2.5.0 or between 4.3.0.0 and 4.3.5.1";
     ret = OB_NOT_SUPPORTED;

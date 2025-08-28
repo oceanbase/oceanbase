@@ -137,3 +137,4 @@ int ObExprVecIVFCenterID::calc_center_id(
 
 }  // namespace sql
 }  // namespace oceanbase
+

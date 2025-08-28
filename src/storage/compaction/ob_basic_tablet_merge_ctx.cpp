@@ -953,7 +953,7 @@ int ObBasicTabletMergeCtx::init_read_info()
   } else if (OB_FAIL(read_info_.init(mem_ctx_.get_allocator(), schema_stored_col_cnt, get_schema()->get_rowkey_column_num(),
             get_schema()->is_oracle_mode(), static_param_.multi_version_column_descs_))) {
     LOG_WARN("failed to init read info", KR(ret), KPC(this));
-  }
+  } 
   return ret;
 }
 
@@ -1006,7 +1006,7 @@ void ObBasicTabletMergeCtx::after_update_tablet_for_major()
       LOG_WARN_RET(tmp_ret, "failed to update tablet report status", K(ls_id), K(tablet_id));
     }
     if (OB_TMP_FAIL(MTL(ObTenantMediumChecker*)->add_tablet_ls(tablet_id, ls_id, get_merge_version()))) {
-      LOG_WARN_RET(tmp_ret, "failed to add tablet ls for check", K(ls_id),
+      LOG_WARN_RET(tmp_ret, "failed to add tablet ls for check", K(ls_id), 
           K(tablet_id), "merge_version", get_merge_version());
     }
   }
@@ -1105,7 +1105,7 @@ int ObBasicTabletMergeCtx::try_set_upper_trans_version(blocksstable::ObSSTable &
     int64_t new_upper_trans_version = INT64_MAX;
     int64_t new_rebuild_seq = 0;
     bool ls_is_migration = false;
-
+    
     if (INT64_MAX != sstable.get_upper_trans_version()) {
       // all row committed, has set as max_merged_trans_version
     } else if (OB_TMP_FAIL(ls->check_ls_migration_status(ls_is_migration, new_rebuild_seq))) {
@@ -1116,7 +1116,7 @@ int ObBasicTabletMergeCtx::try_set_upper_trans_version(blocksstable::ObSSTable &
       LOG_WARN("rebuild seq not same, need retry merge", K(ret), "ls_meta", ls->get_ls_meta(), K(new_rebuild_seq), K(rebuild_seq));
     } else if (OB_TMP_FAIL(ObGCUpperTransHelper::try_get_sstable_upper_trans_version(*ls, sstable, new_upper_trans_version))) {
       LOG_WARN("failed to get new upper_trans_version for sstable", K(tmp_ret), K(sstable));
-    } else if (INT64_MAX != new_upper_trans_version
+    } else if (INT64_MAX != new_upper_trans_version 
             && OB_TMP_FAIL(sstable.set_upper_trans_version(mem_ctx_.get_allocator(), new_upper_trans_version))) {
       LOG_WARN("failed to set upper trans version", K(tmp_ret), K(sstable));
     } else {
@@ -1266,8 +1266,8 @@ int ObBasicTabletMergeCtx::prepare_from_medium_compaction_info(const ObMediumCom
     ObStorageSchema *storage_schema = nullptr;
     if (OB_FAIL(ObStorageSchemaUtil::alloc_storage_schema(mem_ctx_.get_allocator(), storage_schema))) {
       LOG_WARN("failed to alloc storage schema", K(ret));
-    } else if (OB_FAIL(storage_schema->init(mem_ctx_.get_allocator(), medium_info->storage_schema_,
-                                            false /*skip_column_info*/, nullptr /*column_group_schema*/,
+    } else if (OB_FAIL(storage_schema->init(mem_ctx_.get_allocator(), medium_info->storage_schema_, 
+                                            false /*skip_column_info*/, nullptr /*column_group_schema*/, 
                                             medium_info->storage_schema_.is_row_store() && medium_info->storage_schema_.is_user_data_table() && static_param_.is_cs_replica_))) {
       LOG_WARN("failed to init storage schema from current medium info", K(ret), KPC(medium_info));
       ObStorageSchemaUtil::free_storage_schema(mem_ctx_.get_allocator(), storage_schema);
@@ -1401,7 +1401,7 @@ int ObBasicTabletMergeCtx::swap_tablet(ObGetMergeTablesResult &get_merge_table_r
       tables_handle.reset(); // clear tables array
       if (OB_FAIL(swap_tablet())) {
         LOG_WARN("failed to get alloc tablet handle", KR(ret));
-      } else if (GCTX.is_shared_storage_mode() &&
+      } else if (GCTX.is_shared_storage_mode() && 
                 OB_FAIL(ObTablet::check_transfer_seq_equal(*get_tablet(), get_merge_table_result.transfer_seq_))) {
         LOG_WARN("new tablet transfer seq not eq with old transfer seq in ss", K(ret),
             "new_tablet_meta", get_tablet()->get_tablet_meta(),
@@ -1552,12 +1552,12 @@ int ObBasicTabletMergeCtx::get_convert_compaction_info()
       generate_cs_replica_cg_array = true;
     }
   }
-
+    
   if (OB_FAIL(ret)) {
   } else if (FALSE_IT(generate_cs_replica_cg_array |= (schema_on_tablet->is_row_store() || schema_on_tablet->need_generate_cg_array()))) {
     // 1. storage schema is column store but simplifed, it should become not simplified before it can be used for merge
     // 2. if need generate cg array (column group cnt <= column cnt), need generate cg array from the latest column array
-  } else if (OB_FAIL(schema_for_merge->init(mem_ctx_.get_allocator(), *schema_on_tablet,
+  } else if (OB_FAIL(schema_for_merge->init(mem_ctx_.get_allocator(), *schema_on_tablet, 
                         false /*skip_column_info*/, nullptr /*column_group_schema*/, generate_cs_replica_cg_array,
                         param.is_valid() ? &param : nullptr))) {
     LOG_WARN("failed to init storage schema for convert co major merge", K(ret), K(tablet), KPC(schema_on_tablet));

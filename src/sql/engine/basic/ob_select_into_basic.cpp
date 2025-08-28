@@ -109,7 +109,7 @@ int ObStorageAppender::append(const char *buf, const int64_t size, int64_t &writ
   } else if (OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER == access_type_) {
     ObIOHandle io_handle;
     // The BUFFERED_MULTIPART_WRITER writes to the buffer first during upload,
-    // and only uploads when the buffer is full.
+    // and only uploads when the buffer is full. 
     // Therefore, the return value of io_handle.get_data_size() may be 0
     // or the total size of the buffer during upload.
     if (OB_FAIL(adapter.async_upload_data(*device_handle_, fd_, buf, offset_, size, io_handle))) {
@@ -126,7 +126,7 @@ int ObStorageAppender::append(const char *buf, const int64_t size, int64_t &writ
     LOG_WARN("access type is invalid, please check open status",
         KR(ret), KP_(device_handle), K_(fd), K_(access_type));
   }
-
+  
   if (OB_SUCC(ret)) {
     offset_ += size;
   }
@@ -164,7 +164,7 @@ int ObStorageAppender::close()
       LOG_WARN("access type is invalid, please check open status",
           KR(ret), KP_(device_handle), K_(fd), K_(access_type));
     }
-
+    
     if (OB_TMP_FAIL(adapter.close_device_and_fd(device_handle_, fd_))) {
       ret = OB_SUCC(ret) ? tmp_ret : ret;
       LOG_WARN("fail to close device and fd", KR(ret), KR(tmp_ret), K_(fd), KP_(device_handle));

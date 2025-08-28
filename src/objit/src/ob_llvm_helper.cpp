@@ -269,7 +269,7 @@ int ObLLVMValue::get_pointee_type(ObLLVMType &result)
     result.set_v(get_t());
   }
 #endif // CPP_STANDARD_20
-
+  
   return ret;
 }
 
@@ -749,7 +749,7 @@ int ObLLVMHelper::get_function_address(const ObString &name, uint64_t &addr)
     OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
     OZ (jit_->get_function_address(std::string(name.ptr(), name.length()), addr));
   }
-
+  
   return ret;
 }
 
@@ -1604,7 +1604,7 @@ int ObLLVMHelper::create_const_gep1_64(const ObString &name, ObLLVMValue &value,
 {
   int ret = OB_SUCCESS;
   ObLLVMType type;
-
+  
   if (OB_ISNULL(jc_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("jc is NULL", K(ret));
@@ -1826,7 +1826,7 @@ int ObLLVMHelper::set_insert_point(const ObLLVMBasicBlock &block)
   return ret;
 }
 
-int ObLLVMHelper::set_insert_point(ObLLVMValue &value)
+int ObLLVMHelper::set_insert_point(ObLLVMValue &value) 
 {
   int ret = OB_SUCCESS;
 
@@ -2157,7 +2157,7 @@ int ObLLVMHelper::check_struct_type(common::ObIArray<ObLLVMType> &elem_types)
       LOG_USER_WARN(OB_NOT_SUPPORTED, "struct fields exceed 65535 is");
     }
   }
-
+  
   return ret;
 }
 
@@ -2587,7 +2587,7 @@ int ObLLVMHelper::add_compiled_object(size_t length, const char *ptr)
   return ret;
 }
 
-const ObString& ObLLVMHelper::get_compiled_object()
+const ObString& ObLLVMHelper::get_compiled_object() 
 {
   return jit_->get_compiled_object();
 }

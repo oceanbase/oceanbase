@@ -30,7 +30,7 @@ public:
   virtual ~ObExprXmlSerialize();
   virtual int calc_result_typeN(ObExprResType& type,
                                 ObExprResType* types,
-                                int64_t param_num,
+                                int64_t param_num, 
                                 common::ObExprTypeCtx& type_ctx)
                                 const override;
   static int eval_xml_serialize(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
@@ -41,32 +41,32 @@ public:
 private:
   static bool is_supported_return_type(ObObjType val_type, ObCollationType cs_type);
 
-  static int get_xml_base_by_doc_type(ObMulModeMemCtx* mem_ctx,
-                                      bool is_xml_doc,
+  static int get_xml_base_by_doc_type(ObMulModeMemCtx* mem_ctx, 
+                                      bool is_xml_doc, 
                                       ObCollationType cs_type,
-                                      ObDatum *xml_datum,
+                                      ObDatum *xml_datum, 
                                       ObIMulModeBase *&node);
-  static int get_and_check_int_from_expr(const ObExpr *expr,
+  static int get_and_check_int_from_expr(const ObExpr *expr, 
                                          ObEvalCtx &ctx,
-                                         int64_t start,
-                                         int64_t end,
+                                         int64_t start, 
+                                         int64_t end, 
                                          int64_t &res);
   static int transform_to_dst_type(const ObExpr &expr, ObString &xml_format_str);
-  static int string_length_check_only(const ObLength max_length_char,
-                                      const ObCollationType cs_type,
+  static int string_length_check_only(const ObLength max_length_char, 
+                                      const ObCollationType cs_type, 
                                       const ObObj &obj);
-  static int get_and_check_encoding_spec(const ObExpr *expr,
-                                         ObEvalCtx &ctx,
-                                         ObObjType return_type,
+  static int get_and_check_encoding_spec(const ObExpr *expr, 
+                                         ObEvalCtx &ctx, 
+                                         ObObjType return_type, 
                                          ObCollationType return_cs_type,
                                          ObString &encoding_spec);
-  static int print_format_xml_text(ObIAllocator &allocator,
+  static int print_format_xml_text(ObIAllocator &allocator, 
                                    ObEvalCtx &ctx,
-                                   ObIMulModeBase *xml_doc,
-                                   bool with_encoding,
-                                   bool with_version,
-                                   uint32_t format_flag,
-                                   ObParameterPrint &print_params,
+                                   ObIMulModeBase *xml_doc, 
+                                   bool with_encoding, 
+                                   bool with_version, 
+                                   uint32_t format_flag, 
+                                   ObParameterPrint &print_params, 
                                    ObString &res);
 
 private:

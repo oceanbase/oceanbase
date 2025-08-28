@@ -465,13 +465,13 @@ public:
                               const bool check_task_exist, int64_t &idx);
 
 #ifdef OB_BUILD_CPP_ODPS
-  inline int get_odps_downloader(int64_t part_id, apsara::odps::sdk::IDownloadPtr &downloader) {
+  inline int get_odps_downloader(int64_t part_id, apsara::odps::sdk::IDownloadPtr &downloader) { 
     int ret = OB_SUCCESS;
     downloader = NULL;
     ret = odps_partition_downloader_mgr_.get_odps_downloader(part_id, downloader);
     return ret;
   }
-  inline ObOdpsPartitionDownloaderMgr::OdpsMgrMap& get_odps_map() {
+  inline ObOdpsPartitionDownloaderMgr::OdpsMgrMap& get_odps_map() { 
     return odps_partition_downloader_mgr_.get_odps_map();
   }
   inline bool is_odps_downloader_inited() {  return odps_partition_downloader_mgr_.is_download_mgr_inited(); }

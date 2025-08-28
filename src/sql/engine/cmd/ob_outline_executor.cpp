@@ -118,7 +118,7 @@ int ObOutlineExecutor::generate_outline_info1(ObExecContext &ctx,
     LOG_USER_ERROR(OB_INVALID_OUTLINE, "outline and sql concurrent limit can not be mixed");
     LOG_WARN("outline and sql concurrent limit can not be mixed",
     "outline_sql_text", outline_info.get_sql_text_str(), K(ret));
-  } else if (OB_UNLIKELY(max_concurrent > ObGlobalHint::UNSET_MAX_CONCURRENT && has_in_expr
+  } else if (OB_UNLIKELY(max_concurrent > ObGlobalHint::UNSET_MAX_CONCURRENT && has_in_expr 
                          && concurrent_param.fixed_param_store_.count() > 0 && outline_info.is_format())) {
     ret = OB_INVALID_OUTLINE;
     LOG_USER_ERROR(OB_INVALID_OUTLINE, "format outline with in expr not support concurrent limit, recommend to use normal outline");

@@ -206,7 +206,7 @@ restore_bitmap_null_base(ObBitmapNullVectorBase &vec, const int64_t batch_size, 
   if (OB_NOT_NULL(expr_)) {
     expr_->get_nulls(eval_ctx).deep_copy(*frame_nulls_, max_row_cnt_);
   }
-
+  
 }
 void ObVectorsResultHolder::ObColResultHolder::restore_fixed_base(ObFixedLengthBase &vec,
                                                                   const int64_t batch_size,
@@ -326,7 +326,7 @@ void ObVectorsResultHolder::ObColResultHolder::restore_discrete_base_single_row(
   }
 }
 // NOTE: continous format can't be restored single row because the value of elems[k] will affect the value of elems[k +1] ... elems[k + N] for var-len type
-// So we need convert the continous format to other format and then restore single row
+// So we need convert the continous format to other format and then restore single row 
 void ObVectorsResultHolder::ObColResultHolder::restore_continuous_base_single_row(ObExpr *expr, int64_t from_idx,
                                                                                   int64_t to_idx, VectorFormat dst_fmt, ObEvalCtx &eval_ctx) const
 {

@@ -37,7 +37,7 @@ int ObExprPassword::calc_result_type1(ObExprResType &type, ObExprResType &text,
                                       common::ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-
+    
   type.set_type(ObVarcharType);
   type.set_length(SHA_PASSWORD_CHAR_LENGTH);
   type.set_collation_type(type_ctx.get_coll_type());

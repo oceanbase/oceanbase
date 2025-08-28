@@ -3363,7 +3363,7 @@ int ObRelationalExprOperator::eval_min_max_compare(
   ObDatum *r_datum = NULL;
   OZ(expr.eval_param_value(ctx, l_datum, r_datum));
   if (OB_SUCC(ret)) {
-    if (l_datum->is_outrow() || l_datum->is_ext() ||
+    if (l_datum->is_outrow() || l_datum->is_ext() || 
         r_datum->is_outrow() || r_datum->is_ext()) {
       LOG_DEBUG("is min max comparison");
       if (l_datum->is_null() || r_datum->is_null()) {
@@ -3385,7 +3385,7 @@ int ObRelationalExprOperator::eval_min_max_compare(
           expr_datum.set_int(is_expected_cmp_ret(cmp_op, cmp_ret));
         }
       }
-      LOG_DEBUG("current compare object(ObDatum) min max status",
+      LOG_DEBUG("current compare object(ObDatum) min max status", 
           K(l_datum->is_outrow()),
           K(l_datum->is_ext()),
           K(r_datum->is_outrow()),
@@ -3419,9 +3419,9 @@ int ObRelationalExprOperator::eval_batch_min_max_compare(
   bool need_handle_ext = false;
 
   for (int64_t i = 0; i < batch_size; ++i) {
-    const ObDatum &l_datum = l_expr.is_batch_result() ?
+    const ObDatum &l_datum = l_expr.is_batch_result() ? 
       l_expr.locate_batch_datums(ctx)[i] :  l_expr.locate_expr_datum(ctx, 0);
-    const ObDatum &r_datum = r_expr.is_batch_result() ?
+    const ObDatum &r_datum = r_expr.is_batch_result() ? 
       r_expr.locate_batch_datums(ctx)[i] :  r_expr.locate_expr_datum(ctx, 0);
     if (skip.at(i) || eval_flags.at(i)) {
       continue;
@@ -3435,14 +3435,14 @@ int ObRelationalExprOperator::eval_batch_min_max_compare(
     LOG_DEBUG("is min max comparison");
     for (int i = 0; OB_SUCC(ret) && i < batch_size; i++) {
       int cmp_ret = 0;
-      const ObDatum &l_datum = l_expr.is_batch_result() ?
+      const ObDatum &l_datum = l_expr.is_batch_result() ? 
         l_expr.locate_batch_datums(ctx)[i] :  l_expr.locate_expr_datum(ctx, 0);
-      const ObDatum &r_datum = r_expr.is_batch_result() ?
+      const ObDatum &r_datum = r_expr.is_batch_result() ? 
         r_expr.locate_batch_datums(ctx)[i] :  r_expr.locate_expr_datum(ctx, 0);
 
       if (skip.at(i) || eval_flags.at(i)) {
         continue;
-      } else if (l_datum.is_outrow() || l_datum.is_ext() ||
+      } else if (l_datum.is_outrow() || l_datum.is_ext() || 
                  r_datum.is_outrow() || r_datum.is_ext() ) {
         if (l_datum.is_null() || r_datum.is_null()) {
           results[i].set_null();
@@ -3453,7 +3453,7 @@ int ObRelationalExprOperator::eval_batch_min_max_compare(
           results[i].set_int(is_expected_cmp_ret(get_cmp_op(expr.type_), cmp_ret));
           eval_flags.set(i);
         }
-        LOG_DEBUG("current compare object(ObDatum) min max status",
+        LOG_DEBUG("current compare object(ObDatum) min max status", 
           K(l_datum.is_outrow()),
           K(l_datum.is_ext()),
           K(r_datum.is_outrow()),
@@ -3502,13 +3502,13 @@ int ObRelationalExprOperator::eval_vector_min_max_compare(
    ret = OB_ERR_UNEXPECTED;
    LOG_WARN("fail to eval vector min max compare", KP(l_vec), K(r_vec));
   } else {
-    bool has_vec_uniform_const_type =
+    bool has_vec_uniform_const_type = 
       VEC_UNIFORM_CONST == l_vec->get_format() || VEC_UNIFORM_CONST == r_vec->get_format();
 
     if (has_vec_uniform_const_type) {
-      ObUniformBase *uniform_l_vec = VEC_UNIFORM_CONST == l_vec->get_format() ?
+      ObUniformBase *uniform_l_vec = VEC_UNIFORM_CONST == l_vec->get_format() ? 
         static_cast<ObUniformBase *>(l_vec) : nullptr;
-      ObUniformBase *uniform_r_vec = VEC_UNIFORM_CONST == r_vec->get_format() ?
+      ObUniformBase *uniform_r_vec = VEC_UNIFORM_CONST == r_vec->get_format() ? 
         static_cast<ObUniformBase *>(r_vec) : nullptr;
       const ObDatum *l_datums = nullptr == uniform_l_vec ? nullptr : uniform_l_vec->get_datums();
       const ObDatum *r_datums = nullptr == uniform_r_vec ? nullptr : uniform_r_vec->get_datums();
@@ -3533,13 +3533,13 @@ int ObRelationalExprOperator::eval_vector_min_max_compare(
           r_vec->get_payload(i, r_payload, r_len);
           ObDatum r_tmp_datum(r_payload, r_len, r_vec->is_null(i));
           // 2. datum from payload, to get is_outrow or is_ext.
-          const ObDatum &l_datum =
+          const ObDatum &l_datum = 
             VEC_UNIFORM_CONST == l_vec->get_format() ? l_datums[0] : l_tmp_datum;
-          const ObDatum &r_datum =
+          const ObDatum &r_datum = 
             VEC_UNIFORM_CONST == r_vec->get_format() ? r_datums[0] : r_tmp_datum;
           if (skip.at(i) || eval_flags.at(i)) {
             continue;
-          } else if (l_datum.is_outrow() || l_datum.is_ext() ||
+          } else if (l_datum.is_outrow() || l_datum.is_ext() || 
                     r_datum.is_outrow() || r_datum.is_ext() ) {
             if (l_datum.is_null() || r_datum.is_null()) {
               res_vec->set_null(i);
@@ -3550,7 +3550,7 @@ int ObRelationalExprOperator::eval_vector_min_max_compare(
               res_vec->set_int(i, is_expected_cmp_ret(get_cmp_op(expr.type_), cmp_ret));
               eval_flags.set(i);
             }
-            LOG_DEBUG("current compare object(ObDatum) min max status",
+            LOG_DEBUG("current compare object(ObDatum) min max status", 
               K(l_datum.is_outrow()), K(l_datum.is_ext()),
               K(r_datum.is_outrow()), K(r_datum.is_ext()));
           } else {
@@ -3572,7 +3572,7 @@ int ObRelationalExprOperator::eval_vector_min_max_compare(
       }
     } else {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected format, auto split filter should has one VEC_UNIFORM_CONST type",
+      LOG_WARN("unexpected format, auto split filter should has one VEC_UNIFORM_CONST type", 
         K(ret), K(l_vec->get_format()), K(r_vec->get_format()));
     }
   }
@@ -6652,7 +6652,7 @@ int ObMinMaxExprOperator::calc_with_cast(ObObj &result,
       cast_ctx.dest_collation_ = expr_ctx.my_session_->get_nls_collation_nation();
     } else if (lib::is_mysql_mode() && ob_is_json(result_type.get_calc_type())) {
       cast_ctx.dest_collation_ = CS_TYPE_UTF8MB4_BIN;
-    } //for
+    } //for 
       else if (lib::is_mysql_mode() && CS_TYPE_INVALID != result_type.get_collation_type()) {
       cast_ctx.dest_collation_ = result_type.get_collation_type();
     }
@@ -7012,7 +7012,7 @@ int ObLocationExprOperator::calc_(const ObExpr &expr, const ObExpr &sub_arg,
       LOG_WARN("eval arg 2 failed", K(ret));
     } else if (!pos->is_null()) {
       // TODO: 验证MySQL下uint64超过int64值域范围，隐式cast的结果
-      //
+      // 
       pos_int = pos->get_int();
     } else if (lib::is_oracle_mode()) {
       res_datum.set_int(0);
@@ -7084,9 +7084,9 @@ int ObLocationExprOperator::calc_(const ObExpr &expr, const ObExpr &sub_arg,
                                   sub_str_data.ptr(), sub_str_data.length(), pos_int);
         }
         if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
-          ret = (ori_str_iter.get_inner_ret() != OB_SUCCESS) ?
+          ret = (ori_str_iter.get_inner_ret() != OB_SUCCESS) ? 
                 ori_str_iter.get_inner_ret() : OB_INVALID_DATA;
-          LOG_WARN("iter state invalid", K(ret), K(state), K(ori_str_iter));
+          LOG_WARN("iter state invalid", K(ret), K(state), K(ori_str_iter)); 
         } else {
           if (idx != 0) {
             // need to add length accessed by get_next_block
@@ -7923,7 +7923,7 @@ int ObRelationalExprOperator::min_max_row_cmp(
     } else if (OB_FAIL(((DatumCmpFunc)expr.inner_functions_[i])(*left, *right, first_nonequal_cmp_ret))) {
       LOG_WARN("failed to cmp", K(ret));
     } else {
-      LOG_DEBUG("min max row cmp",
+      LOG_DEBUG("min max row cmp", 
         K(ret), K(left->is_ext()), K(left->is_outrow()), K(right->is_ext()), K(right->is_outrow()));
     }
     if (OB_SUCC(ret)) {

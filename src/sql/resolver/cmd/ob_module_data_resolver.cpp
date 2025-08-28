@@ -76,7 +76,7 @@ int ObModuleDataResolver::resolve_target_tenant_id(const ParseNode *node,
   if (login_tenant_id != OB_SYS_TENANT_ID) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "operation from regular user tenant");
-    LOG_WARN("non-sys tenant change tenant not allowed",
+    LOG_WARN("non-sys tenant change tenant not allowed", 
       K(ret), K(target_tenant_id), K(login_tenant_id));
   } else if (OB_FAIL(ObAlterSystemResolverUtil::resolve_tenant(node, tenant_name))) {
     LOG_WARN("resolve tenant_id failed", K(ret));
@@ -99,11 +99,11 @@ int ObModuleDataResolver::resolve_target_tenant_id(const ParseNode *node,
     LOG_WARN("operation from oracle tenant not allowed", K(ret), K(target_tenant_id), K(login_tenant_id));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(target_tenant_id, compat_version))) {
     LOG_WARN("fail to get data version", KR(ret), K(target_tenant_id));
-  } else if (compat_version < MOCK_DATA_VERSION_4_2_5_0
+  } else if (compat_version < MOCK_DATA_VERSION_4_2_5_0 
         || (DATA_VERSION_4_3_0_0 <= compat_version && compat_version < DATA_VERSION_4_3_5_1)) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "target tenant versions lower than 4.2.5.0 or between 4.3.0.0 and 4.3.5.1");
-    LOG_WARN("target tenant versions lower than 4.2.5.0 or between 4.3.0.0 and 4.3.5.1 not supported",
+    LOG_WARN("target tenant versions lower than 4.2.5.0 or between 4.3.0.0 and 4.3.5.1 not supported", 
       K(ret), K(target_tenant_id), K(compat_version));
   }
   return ret;
@@ -154,7 +154,7 @@ int ObModuleDataResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info should not be null", K(ret));
-  } else if (GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_2_5_0
+  } else if (GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_2_5_0 
       || (CLUSTER_VERSION_4_3_0_0 <= GET_MIN_CLUSTER_VERSION() && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_1)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("module_data is not supported under cluster version 4.2.5.0 or between 4.3.0.0 and 4.3.5.1", K(ret));
@@ -173,7 +173,7 @@ int ObModuleDataResolver::resolve(const ParseNode &parse_tree)
       LOG_WARN("fail to resolve file path", K(ret));
     } else if (OB_FAIL(GET_MIN_DATA_VERSION(arg.target_tenant_id_, compat_version))) {
       LOG_WARN("fail to get data version", KR(ret), K(arg));
-    } else if (compat_version < MOCK_DATA_VERSION_4_2_5_0
+    } else if (compat_version < MOCK_DATA_VERSION_4_2_5_0 
         || (DATA_VERSION_4_3_0_0 <= compat_version && compat_version < DATA_VERSION_4_3_5_1)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("module_data is not supported with tenant under version 4.2.5.0 or between 4.3.0.0 and 4.3.5.1", K(ret));

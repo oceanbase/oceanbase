@@ -69,7 +69,7 @@ public:
   {
     return ls_id_.is_valid() &&
            nullptr != tx_desc_ &&
-           nullptr != snapshot_ &&
+           nullptr != snapshot_ && 
            nullptr != vec_aux_ctdef_ &&
            nullptr != vec_aux_rtdef_;
   }
@@ -87,7 +87,7 @@ public:
   const ObDASScanCtDef *spiv_scan_ctdef_;
   ObDASScanRtDef *spiv_scan_rtdef_;
   const ObDASSortCtDef *sort_ctdef_;
-  ObDASSortRtDef *sort_rtdef_;
+  ObDASSortRtDef *sort_rtdef_;  
 };
 
 class ObDASSPIVMergeIter : public ObDASIter
@@ -96,7 +96,7 @@ public:
     ObDASSPIVMergeIter()
     : ObDASIter(ObDASIterType::DAS_ITER_SPIV_MERGE),
       mem_context_(nullptr),
-      allocator_(lib::ObMemAttr(MTL_ID(), "SPIVMergeIter"), OB_MALLOC_NORMAL_BLOCK_SIZE),
+      allocator_(lib::ObMemAttr(MTL_ID(), "SPIVMergeIter"), OB_MALLOC_NORMAL_BLOCK_SIZE), 
       ls_id_(),
       tx_desc_(nullptr),
       snapshot_(nullptr),
@@ -105,8 +105,8 @@ public:
       aux_data_iter_(nullptr),
       aux_data_tablet_id_(ObTabletID::INVALID_TABLET_ID),
       rowkey_docid_tablet_id_(ObTabletID::INVALID_TABLET_ID),
-      aux_data_scan_param_(),
-      rowkey_docid_scan_param_(),
+      aux_data_scan_param_(), 
+      rowkey_docid_scan_param_(), 
       aux_data_table_first_scan_(true),
       rowkey_docid_table_first_scan_(true),
       is_inited_(false),
@@ -123,7 +123,7 @@ public:
       distance_calc_(nullptr) {
         saved_rowkeys_.set_attr(ObMemAttr(MTL_ID(), "VecIdxKeyRanges"));
       }
-
+  
   virtual ~ObDASSPIVMergeIter() {}
 
   virtual int do_table_scan() override;
@@ -132,7 +132,7 @@ public:
 
   ObDASIter *get_inv_idx_scan_iter() { return inv_idx_scan_iter_; }
 
-  void set_related_tablet_ids(const ObDASRelatedTabletID &related_tablet_ids)
+  void set_related_tablet_ids(const ObDASRelatedTabletID &related_tablet_ids) 
   {
     rowkey_docid_tablet_id_ = related_tablet_ids.rowkey_doc_tablet_id_;
     aux_data_tablet_id_ = related_tablet_ids.lookup_tablet_id_;
@@ -147,7 +147,7 @@ public:
   }
   ObMapType* get_qvec() { return qvec_; };
   int set_iters(const ObIArray<ObDASIter *> &iters);
-  int push_iter_and_cursor(ObDASSPIVScanIter *iter) {
+  int push_iter_and_cursor(ObDASSPIVScanIter *iter) { 
     int ret = OB_SUCCESS;
     if (OB_FAIL(iters_.push_back(iter))) {
     } else if (OB_FAIL(cursors_.push_back(nullptr))){
@@ -172,7 +172,7 @@ private:
                               ObExpr *&search_vec,
                               ObExpr *&distance_calc);
   void set_algo();
-
+  
   int get_ob_sparse_drop_ratio_search(uint64_t &drop_ratio);
 
   int get_docid_from_rowkey_docid_table(ObString &docid);
@@ -182,7 +182,7 @@ private:
   int do_rowkey_docid_table_scan();
   int reuse_aux_data_iter() { return ObDasVecScanUtils::reuse_iter(ls_id_, aux_data_iter_, aux_data_scan_param_, aux_data_tablet_id_); }
   int reuse_rowkey_docid_iter() { return ObDasVecScanUtils::reuse_iter(ls_id_, rowkey_docid_iter_, rowkey_docid_scan_param_, rowkey_docid_tablet_id_); }
-
+  
   int get_rowkey_pre_filter(ObIAllocator &allocator, bool is_vectorized, int64_t batch_count);
   int get_rowkey_and_set_docids(ObIAllocator &allocator, bool is_vectorized, int64_t batch_count);
   int process(bool is_vectorized);
@@ -222,14 +222,14 @@ private:
   ObTabletID aux_data_tablet_id_;
   ObTabletID rowkey_docid_tablet_id_;
 
-  ObTableScanParam aux_data_scan_param_;
-  ObTableScanParam rowkey_docid_scan_param_;
+  ObTableScanParam aux_data_scan_param_; 
+  ObTableScanParam rowkey_docid_scan_param_; 
 
   bool aux_data_table_first_scan_;
   bool rowkey_docid_table_first_scan_;
   bool is_inited_;
   bool is_cursors_inited_;
-
+  
   const ObDASVecAuxScanCtDef *vec_aux_ctdef_;
   ObDASVecAuxScanRtDef *vec_aux_rtdef_;
   const ObDASSortCtDef *sort_ctdef_;
@@ -237,16 +237,16 @@ private:
   const ObDASScanCtDef *spiv_scan_ctdef_;
   ObDASScanRtDef *spiv_scan_rtdef_;
 
-  common::ObLimitParam limit_param_;
-
+  common::ObLimitParam limit_param_; 
+  
   ObExpr *qvec_expr_;
   ObMapType *qvec_;
-
+  
   common::ObSEArray<ObString, 16> result_docids_;
   int64_t result_docids_curr_iter_;
 
   common::hash::ObHashSet<ObString> valid_docid_set_;
-
+  
   ObDocidScoreItemCmp docid_score_cmp_;
   ObRowkeyScoreItemCmp rowkey_score_cmp_;
 
@@ -260,7 +260,7 @@ private:
   };
   SPIVAlgo algo_;
 
-  ObSEArray<ObSPIVItem *, OB_DEFAULT_SPIV_SCAN_ITER_CNT> cursors_;
+  ObSEArray<ObSPIVItem *, OB_DEFAULT_SPIV_SCAN_ITER_CNT> cursors_; 
   ObExprVectorDistance::ObVecDisType dis_type_;
   double selectivity_;
 };

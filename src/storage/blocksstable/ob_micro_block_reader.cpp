@@ -1019,7 +1019,7 @@ int ObMicroBlockReader::get_rows(
     LOG_WARN("Invalid argument", K(ret), KPC(header_), KPC_(read_info), K(row_cap), K(row_buf));
   } else if (OB_FAIL(row_buf.reserve(read_info_->get_request_count()))) {
     LOG_WARN("Failed to reserve row buf", K(ret), K(row_buf), KPC(read_info_));
-  } else if (0 == vector_offset) {
+  } else if (0 == vector_offset) { 
     if (need_init_vector) {
       if (OB_FAIL(init_exprs_new_format_header(cols_projector, exprs, eval_ctx))) {
         LOG_WARN("Failed to init vector header", K(ret), KPC_(read_info));
@@ -1027,7 +1027,7 @@ int ObMicroBlockReader::get_rows(
     } else {
       set_not_null_for_exprs(cols_projector, exprs, eval_ctx);
     }
-  }
+  } 
   if (OB_SUCC(ret)) {
     ObStorageDatum trans_datum;
     const int64_t trans_col_idx = header_->rowkey_column_count_ > 0 ? read_info_->get_schema_rowkey_count() : INT32_MIN;
@@ -1279,7 +1279,7 @@ int ObMicroBlockReader::get_aggregate_result(
             if (row_buf.storage_datums_[col_offset].is_nop()) {
             } else if (row_buf.storage_datums_[col_offset].is_null()) {
               tmp_datum.set_null();
-            } else if (agg_cells.at(i)->need_padding() &&
+            } else if (agg_cells.at(i)->need_padding() && 
                        OB_FAIL(pad_column(col_params->at(col_offset)->get_meta_type(), col_params->at(col_offset)->get_accuracy(),
                                           allocator_.get_inner_allocator(), row_buf.storage_datums_[col_offset]))) {
               LOG_WARN("Failed to pad column", K(ret), K(col_offset), K(row_buf.storage_datums_));

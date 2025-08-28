@@ -140,7 +140,7 @@ int ObCsvFileWriter::flush_shared_buf(const char *shared_buf, bool continue_use_
   if (get_curr_pos() > 0 && use_shared_buf_) {
     if (OB_FAIL(flush_data(shared_buf, get_curr_pos()))) {
     } else {
-      if (has_lob_) {
+      if (has_lob_) { 
         increase_curr_line_len();
       }
       set_curr_pos(0);

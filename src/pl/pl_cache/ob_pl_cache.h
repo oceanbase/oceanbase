@@ -67,7 +67,7 @@ struct ObPLTableColumnInfo
     type_info_(),
     is_invisible_col_()
     {}
-
+  
   bool operator==(const ObPLTableColumnInfo &other) const
   {
     bool is_same = true;
@@ -212,7 +212,7 @@ struct PCVPlSchemaObj
 struct ObPLObjectKey : public ObILibCacheKey
 {
   ObPLObjectKey()
-  : ObILibCacheKey(ObLibCacheNameSpace::NS_INVALID),
+  : ObILibCacheKey(ObLibCacheNameSpace::NS_INVALID), 
     db_id_(common::OB_INVALID_ID),
     key_id_(common::OB_INVALID_ID),
     sessid_(0),
@@ -312,7 +312,7 @@ public:
   int add_match_info(ObILibCacheCtx &ctx,
                       ObILibCacheKey *key,
                       const ObILibCacheObject &cache_obj);
-
+  
   bool match_params_info(const Ob2DArray<ObPlParamInfo,
                                 OB_MALLOC_BIG_BLOCK_SIZE,
                                 ObWrapperAllocator, false> &infos);
@@ -326,8 +326,8 @@ public:
                               bool &is_same) const;
 
   int match_params_info(const ParamStore *params,
-                                 bool &is_same);
-
+                                 bool &is_same);                             
+  
   int set_max_concurrent_num_for_add(ObPLCacheCtx &pc_ctx);
   int set_max_concurrent_num_for_get(ObPLCacheCtx &pc_ctx);
   int inner_set_max_concurrent_num(const ObOutlineInfo *outline_info);
@@ -425,7 +425,7 @@ public:
                                   ObILibCacheKey *key,
                                   ObILibCacheObject *cache_obj) override;
 
-  virtual int before_cache_evicted();
+  virtual int before_cache_evicted();                                
   void destroy();
 
   common::ObString &get_sql_id() { return sql_id_; }

@@ -96,7 +96,7 @@ int ObPartitionSplitQuery::get_tablet_split_range(
         } else if (compare_ret >= 0) {
           is_empty_range = true;
           if (compare_ret == 0) {
-            // when split start key == src end key, src range is only src end key
+            // when split start key == src end key, src range is only src end key 
             // when compare_ret is 0, split key column cnt must be equal to src key column cnt
             if (src_range.is_right_closed()) {
               src_range.set_start_key(split_start_key);
@@ -108,14 +108,14 @@ int ObPartitionSplitQuery::get_tablet_split_range(
         } else if (OB_FAIL(split_end_key.compare(src_start_key, datum_utils, compare_ret))) {
           LOG_WARN("fail to split range, compare error.", K(ret), K(split_info));
         } else if (compare_ret <= 0) {
-          /* split end key <= src start key, no need change src range,
+          /* split end key <= src start key, no need change src range, 
            * the result should be empty because split range is right bounder open.
            * like: src=[3,5], split=[1,3), result=[] */
-          is_empty_range = true;
+          is_empty_range = true; 
         } else {
           if (OB_FAIL(split_start_key.compare(src_start_key, datum_utils, compare_ret))) {
             LOG_WARN("fail to compare start key to src start key", K(ret), K(split_start_key), K(src_range));
-          } else if (compare_ret > 0) {
+          } else if (compare_ret > 0) { 
             // split start key > src start key, set src start key to split start key
             ObDatumRowkey new_key;
             const int64_t fill_cnt = std::max(rowkey_cnt, static_cast<int64_t>(src_start_key.get_datum_cnt()));
@@ -151,7 +151,7 @@ int ObPartitionSplitQuery::get_tablet_split_range(
               if (OB_SUCC(ret)) {
                 src_range.set_right_open();
               }
-            }
+            } 
           }
         }
       }
@@ -173,12 +173,12 @@ int ObPartitionSplitQuery::get_tablet_split_range(
 }
 
 int ObPartitionSplitQuery::copy_split_key(
-    const ObDatumRowkey &split_key,
+    const ObDatumRowkey &split_key, 
     const int64_t src_datum_cnt,
-    ObDatumRowkey &new_key,
+    ObDatumRowkey &new_key, 
     ObIAllocator &allocator)
 {
-  int ret = OB_SUCCESS;
+  int ret = OB_SUCCESS;      
   // copy column datum
   ObStorageDatum *datums = nullptr;
   if (OB_ISNULL(datums = (ObStorageDatum*) allocator.alloc(sizeof(ObStorageDatum) * src_datum_cnt))) {
@@ -218,7 +218,7 @@ int ObPartitionSplitQuery::get_tablet_split_ranges(
 
       const ObStorageDatumUtils &datum_utils =
         tablet.get_rowkey_read_info().get_datum_utils();
-      const ObColDescIArray &col_descs =
+      const ObColDescIArray &col_descs = 
         tablet.get_rowkey_read_info().get_columns_desc();
       bool is_empty_range = false;
 
@@ -302,7 +302,7 @@ int ObPartitionSplitQuery::split_multi_ranges_if_need(
   is_splited_range = false;
   ObTabletSplitTscInfo split_info;
   bool is_tablet_spliting = false;
-
+  
   if (!tablet_handle.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tablet_handle));
@@ -319,7 +319,7 @@ int ObPartitionSplitQuery::split_multi_ranges_if_need(
     if (OB_FAIL(set_split_info(split_info))) { // shadow copy
       LOG_WARN("fail to set split info", K(ret));
     } else if (OB_FAIL(get_tablet_split_ranges(*tablet_handle.get_obj(), src_ranges, new_ranges, allocator))) {
-      LOG_INFO("get tablet split new ranges err, maybe no spilitng is happening",
+      LOG_INFO("get tablet split new ranges err, maybe no spilitng is happening", 
         K(ret), K(src_ranges), K(new_ranges));
     } else {
       is_splited_range = true;
@@ -333,7 +333,7 @@ int ObPartitionSplitQuery::split_multi_ranges_if_need(
 
 int ObPartitionSplitQuery::check_rowkey_is_included(
     const ObTablet &tablet,
-    const ObDatumRowkey &target_rowkey,
+    const ObDatumRowkey &target_rowkey, 
     const blocksstable::ObStorageDatumUtils *datum_utils,
     bool &is_included)
 {
@@ -352,11 +352,11 @@ int ObPartitionSplitQuery::check_rowkey_is_included(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("split left key should smaller than split right key", K(ret), K(split_info_));
       } else if (OB_FAIL(target_rowkey.compare(split_start_key, *datum_utils, compare_ret))) {
-        LOG_WARN("fail to check rowkey included, compare error.",
+        LOG_WARN("fail to check rowkey included, compare error.", 
           K(ret), K(target_rowkey), K(split_start_key));
       } else if (compare_ret < 0) { // target rowkey less than split start key
         is_included = false;
-        LOG_DEBUG("target rowkey is less than split range start key, not include in split range",
+        LOG_DEBUG("target rowkey is less than split range start key, not include in split range", 
           K(ret), K(target_rowkey), K(split_start_key));
       } else if (OB_FAIL(target_rowkey.compare(split_end_key, *datum_utils, compare_ret))) {
         LOG_WARN("fail to check rowkey included, compare error.",
@@ -364,7 +364,7 @@ int ObPartitionSplitQuery::check_rowkey_is_included(
       } else if (compare_ret >= 0) { // target rowkey large than split end key, Attention: end key should not included in split range.
         is_included = false;
       } else {
-        LOG_DEBUG("rowkey is include in split range",
+        LOG_DEBUG("rowkey is include in split range", 
           K(ret), K(target_rowkey), K(split_start_key), K(split_end_key));
       }
     }
@@ -389,10 +389,10 @@ int ObPartitionSplitQuery::fill_auto_split_params(
   DEBUG_SYNC(BEFORE_FILL_AUTO_SPLIT_PARAMS);
 #endif
 
-  if (!tablet_id.is_valid() || !ls_id.is_valid()
+  if (!tablet_id.is_valid() || !ls_id.is_valid() 
       || OB_ISNULL(op) || OB_INVALID_ID == filter_type || OB_ISNULL(filter_params)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument",
+    LOG_WARN("invalid argument", 
       K(ret), K(tablet_id), K(ls_id), KP(op), K(filter_type), KP(filter_params));
   } else if (OB_FAIL(filter_params->count() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
@@ -433,7 +433,7 @@ int ObPartitionSplitQuery::fill_auto_split_params(
 /*
  * auto split range filter params order:
  * |-- passby --|-- lower1 --|-- lower2 --|..|-- upper1 --|-- upper2 --|...
- *
+ * 
  * if tablet is in spliting, fill param expr with actual value.
  * if tablet is not in spliting, only need to fill bypass expr with true.
 */
@@ -535,3 +535,4 @@ int ObPartitionSplitQuery::fill_range_filter_param(
   LOG_DEBUG("fill range filter param", K(ret), K(lower_bound), K(upper_bound));
   return ret;
 }
+

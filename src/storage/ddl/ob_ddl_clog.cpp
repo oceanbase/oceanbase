@@ -105,7 +105,7 @@ int ObDDLStartClogCb::on_success()
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_ISNULL(data_direct_load_mgr
+  } else if (OB_ISNULL(data_direct_load_mgr 
       = (direct_load_mgr_handle_.get_full_obj()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error", K(ret), K(table_key_));
@@ -186,7 +186,7 @@ int ObDDLMacroBlockClogCb::init(const share::ObLSID &ls_id,
     with_cs_replica_ = redo_info.with_cs_replica_;
     if (OB_FAIL(ddl_macro_block_.block_handle_.set_block_id(macro_block_id_))) {
       LOG_WARN("set macro block id failed", K(ret), K(macro_block_id_));
-    } else if (OB_FAIL(ddl_macro_block_.set_data_macro_meta(macro_block_id_,
+    } else if (OB_FAIL(ddl_macro_block_.set_data_macro_meta(macro_block_id_, 
                                                             redo_info.data_buffer_.ptr(),
                                                             redo_info.data_buffer_.length(),
                                                             redo_info.block_type_))) {
@@ -238,14 +238,14 @@ int ObDDLMacroBlockClogCb::on_success()
     } else {
       LOG_WARN("get tablet mgr failed", K(ret), "tablet_id", tablet->get_tablet_meta().tablet_id_);
     }
-  }
+  } 
 
   if (OB_FAIL(ret)) {
   } else if (with_cs_replica_ && ddl_macro_block_.table_key_ .is_column_store_sstable()) {
     LOG_INFO("[CS-Replica] skip replay cs replica redo clog in leader", K(ret), K_(with_cs_replica), K_(ddl_macro_block));
   } else if (FALSE_IT(ddl_macro_block_.scn_ = __get_scn())) {
   } else if (OB_FAIL(ObDDLKVPendingGuard::set_macro_block(
-      tablet, ddl_macro_block_, snapshot_version_,
+      tablet, ddl_macro_block_, snapshot_version_, 
       data_format_version_, direct_load_mgr_handle))) {
     LOG_WARN("set macro block into ddl kv failed", K(ret), KPC(tablet), K(ddl_macro_block_),
             K(snapshot_version_), K(data_format_version_));
@@ -305,7 +305,7 @@ int ObDDLCommitClogCb::on_success()
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_ISNULL(data_direct_load_mgr
+  } else if (OB_ISNULL(data_direct_load_mgr 
       = direct_load_mgr_handle_.get_full_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error", K(ret), K(tablet_id_));
@@ -398,8 +398,8 @@ ObDDLStartLog::ObDDLStartLog()
 }
 
 int ObDDLStartLog::init(
-    const ObITable::TableKey &table_key,
-    const uint64_t data_format_version,
+    const ObITable::TableKey &table_key, 
+    const uint64_t data_format_version, 
     const int64_t execution_id,
     const ObDirectLoadType direct_load_type,
     const ObTabletID &lob_meta_tablet_id)
@@ -510,14 +510,14 @@ int ObDDLFinishLog::assign(const storage::ObDDLFinishLogInfo &other)
 
 int ObDDLFinishLog::init(int64_t tenant_id,
                          const share::ObLSID ls_id,
-                         const ObITable::TableKey &table_key,
+                         const ObITable::TableKey &table_key, 
                          const char* buf,
                          const int64_t buf_len,
                          const blocksstable::MacroBlockId &macro_block_id,
                          const uint64_t data_format_version)
 {
   int ret = OB_SUCCESS;
-  if (OB_INVALID_TENANT_ID == tenant_id || !ls_id.is_valid() ||!table_key.is_valid() ||
+  if (OB_INVALID_TENANT_ID == tenant_id || !ls_id.is_valid() ||!table_key.is_valid() || 
        nullptr == buf || buf_len <= 0  || !macro_block_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(ls_id), K(table_key), KP(buf), K(buf_len), K(macro_block_id));
@@ -535,7 +535,7 @@ OB_SERIALIZE_MEMBER(ObDDLFinishLog, finish_info_);
 
 ObDDLFinishClogCb::ObDDLFinishClogCb():
 is_inited_(false), status_(), finish_log_()
-{
+{  
 }
 
 int ObDDLFinishClogCb::init(const ObDDLFinishLog &finish_log)
@@ -589,7 +589,7 @@ ObTabletSplitInfo::ObTabletSplitInfo()
   : rowkey_allocator_("SplitRangeClog"),
     table_id_(OB_INVALID_ID), lob_table_id_(OB_INVALID_ID),
     schema_version_(0), task_id_(0),
-    source_tablet_id_(), dest_tablets_id_(),
+    source_tablet_id_(), dest_tablets_id_(), 
     compaction_scn_(0), data_format_version_(0), consumer_group_id_(0),
     can_reuse_macro_block_(false),
     lob_col_idxs_(), parallel_datum_rowkey_list_()
@@ -625,7 +625,7 @@ int ObTabletSplitInfo::assign(const ObTabletSplitInfo &info)
 
 bool ObTabletSplitInfo::is_valid() const
 {
-  bool is_valid = OB_INVALID_ID != table_id_
+  bool is_valid = OB_INVALID_ID != table_id_ 
       && schema_version_ > 0 && task_id_ > 0
       && source_tablet_id_.is_valid() && dest_tablets_id_.count() > 0
       && compaction_scn_ > 0
@@ -676,8 +676,8 @@ int ObTabletFreezeLog::assign(const ObTabletFreezeLog &log)
 OB_DEF_SERIALIZE(ObTabletSplitInfo)
 {
   int ret = OB_SUCCESS;
-  LST_DO_CODE(OB_UNIS_ENCODE, table_id_, lob_table_id_, schema_version_,
-    task_id_, source_tablet_id_, dest_tablets_id_,
+  LST_DO_CODE(OB_UNIS_ENCODE, table_id_, lob_table_id_, schema_version_, 
+    task_id_, source_tablet_id_, dest_tablets_id_, 
     compaction_scn_, data_format_version_, consumer_group_id_,
     can_reuse_macro_block_, split_sstable_type_, lob_col_idxs_,
     parallel_datum_rowkey_list_);
@@ -687,8 +687,8 @@ OB_DEF_SERIALIZE(ObTabletSplitInfo)
 OB_DEF_DESERIALIZE(ObTabletSplitInfo)
 {
   int ret = OB_SUCCESS;
-  LST_DO_CODE(OB_UNIS_DECODE, table_id_, lob_table_id_, schema_version_,
-    task_id_, source_tablet_id_, dest_tablets_id_,
+  LST_DO_CODE(OB_UNIS_DECODE, table_id_, lob_table_id_, schema_version_, 
+    task_id_, source_tablet_id_, dest_tablets_id_, 
     compaction_scn_, data_format_version_, consumer_group_id_,
     can_reuse_macro_block_, split_sstable_type_, lob_col_idxs_);
   if (FAILEDx(ObSplitUtil::deserializ_parallel_datum_rowkey(
@@ -701,8 +701,8 @@ OB_DEF_DESERIALIZE(ObTabletSplitInfo)
 OB_DEF_SERIALIZE_SIZE(ObTabletSplitInfo)
 {
   int64_t len = 0;
-  LST_DO_CODE(OB_UNIS_ADD_LEN, table_id_, lob_table_id_, schema_version_,
-    task_id_, source_tablet_id_, dest_tablets_id_,
+  LST_DO_CODE(OB_UNIS_ADD_LEN, table_id_, lob_table_id_, schema_version_, 
+    task_id_, source_tablet_id_, dest_tablets_id_, 
     compaction_scn_, data_format_version_, consumer_group_id_,
     can_reuse_macro_block_, split_sstable_type_, lob_col_idxs_,
     parallel_datum_rowkey_list_);

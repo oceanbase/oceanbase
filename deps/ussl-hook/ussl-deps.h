@@ -31,7 +31,7 @@
 
 #ifndef ATOMIC_AAF
 #define ATOMIC_AAF(val, addv) __sync_add_and_fetch((val), (addv))
-#endif
+#endif 
 
 #ifndef ATOMIC_VCAS
 #define ATOMIC_VCAS(val, cmpv, newv) __sync_val_compare_and_swap((val), (cmpv), (newv))

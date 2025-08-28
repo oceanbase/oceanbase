@@ -817,7 +817,7 @@ if (ObMySQLDateTC == arg_tc) {\
   DISPATCH_WEEK_EXPR_VECTOR(mode_type, DateTime)\
 }
 
-int ObExprWeek::calc_week_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)
+int ObExprWeek::calc_week_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound) 
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {

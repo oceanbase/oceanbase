@@ -39,7 +39,7 @@ public:
       charsets4parser_(charsets4parser),
       sql_mode_(sql_mode)
   {}
-
+  
   int parse(const ObString &calendar_body, ObStmtNodeTree *& parser_tree);
 
 private:

@@ -777,7 +777,7 @@ int64_t ObConfigReadableIntParser::get(const char *str, bool &valid)
     } else if (value < 0) {
       valid = false;
     } else if ('\0' == *p_unit) {
-      //
+      // 
       // without any unit, do nothing
     } else if (0 == STRCASECMP("k", p_unit)) {
       value *= UNIT_K;
@@ -852,7 +852,7 @@ bool ObConfigSTScredentialChecker::check(const ObConfigItem &t) const
   bool flag = true;
   const char *tmp_credential = t.str();
   ObStsCredential key;
-  if (OB_ISNULL(tmp_credential) || OB_UNLIKELY(strlen(tmp_credential) <= 0
+  if (OB_ISNULL(tmp_credential) || OB_UNLIKELY(strlen(tmp_credential) <= 0 
       || strlen(tmp_credential) > OB_MAX_STS_CREDENTIAL_LENGTH)) {
     flag = false;
     OB_LOG(WARN, "invalid sts credential", KP(tmp_credential));

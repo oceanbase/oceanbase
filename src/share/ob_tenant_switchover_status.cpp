@@ -35,7 +35,7 @@ static const char* TENANT_SWITCHOVER_ARRAY[] =
 };
 
 OB_SERIALIZE_MEMBER(ObTenantSwitchoverStatus, value_);
-DEFINE_TO_YSON_KV(ObTenantSwitchoverStatus,
+DEFINE_TO_YSON_KV(ObTenantSwitchoverStatus, 
                   OB_ID(value), value_);
 
 const char* ObTenantSwitchoverStatus::to_str() const

@@ -39,7 +39,7 @@ bool is_part_storage_cache_policy_type_default(const ObStorageCachePolicyType &p
 }
 
 // get the storage cache policy type from the table storage cache policy string
-int get_storage_cache_policy_type_from_str(const common::ObString &storage_cache_policy_str,
+int get_storage_cache_policy_type_from_str(const common::ObString &storage_cache_policy_str, 
                                            ObStorageCachePolicyType &policy_type)
 {
   int ret = OB_SUCCESS;
@@ -79,7 +79,7 @@ int get_storage_cache_policy_type_from_str(const common::ObString &storage_cache
 }
 
 // get the storage cache policy type from the partition storage cache policy string
-int get_storage_cache_policy_type_from_part_str(const common::ObString &storage_cache_policy_part_str,
+int get_storage_cache_policy_type_from_part_str(const common::ObString &storage_cache_policy_part_str, 
                                                 ObStorageCachePolicyType &policy_type)
 {
   int ret = OB_SUCCESS;
@@ -274,11 +274,11 @@ void ObStorageCachePolicy::reset()
 
 bool ObStorageCachePolicy::is_time_policy() const
 {
-  return strlen(column_name_) > 0
+  return strlen(column_name_) > 0 
          && hot_retention_interval_ > 0
          && ObDateUnitType::DATE_UNIT_MAX != hot_retention_unit_;
 }
-
+  
 // check the validity of the table storage cache policy
 int ObStorageCachePolicy::check_table_cache_policy() const
 {
@@ -334,7 +334,7 @@ int ObStorageCachePolicy::load_from_string(const ObString &str)
   ObArenaAllocator allocator(OB_STORAGE_CACHE_POLICY_ALLOCATOR);
   json::Value *root = nullptr;
   json::Parser parser;
-
+  
   if (str.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("storage cache policy string is null", K(ret));
@@ -466,10 +466,10 @@ int ObStorageCachePolicy::set_hot_retention_unit(const ObDateUnitType unit)
   if (ObDateUnitType::DATE_UNIT_MAX == unit) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(unit));
-  } else if (!(ObDateUnitType::DATE_UNIT_YEAR == unit
+  } else if (!(ObDateUnitType::DATE_UNIT_YEAR == unit 
                || ObDateUnitType::DATE_UNIT_MONTH == unit
                || ObDateUnitType::DATE_UNIT_WEEK == unit
-               || ObDateUnitType::DATE_UNIT_DAY == unit
+               || ObDateUnitType::DATE_UNIT_DAY == unit 
                || ObDateUnitType::DATE_UNIT_HOUR == unit
                || ObDateUnitType::DATE_UNIT_MINUTE == unit
                || ObDateUnitType::DATE_UNIT_SECOND == unit)) {

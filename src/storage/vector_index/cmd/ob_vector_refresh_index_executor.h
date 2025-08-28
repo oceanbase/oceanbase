@@ -115,7 +115,7 @@ public:
 class ObVectorRefreshIndexExecutor {
 public:
   static const int MAX_REFRESH_RETRY_THRESHOLD = 3;
-
+  
   enum class VectorIndexAuxType : int8_t {
     DOMAIN_INDEX = 0,   // FARM COMPAT WHITELIST
     INDEX_ID_INDEX = 1,

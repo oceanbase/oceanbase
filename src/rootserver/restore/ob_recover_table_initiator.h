@@ -61,7 +61,7 @@ private:
   int check_before_initiate_(const obrpc::ObRecoverTableArg &arg);
   int fill_aux_tenant_name_(share::ObRecoverTableJob &job);
   int fill_aux_tenant_restore_info_(
-      const obrpc::ObRecoverTableArg &arg,
+      const obrpc::ObRecoverTableArg &arg, 
       share::ObRecoverTableJob &job,
       share::ObPhysicalRestoreJob &physical_restore_job);
   int fill_recover_table_arg_(
@@ -70,18 +70,18 @@ private:
   int fill_recover_database(const share::ObImportArg &import_arg, share::ObImportTableArg &import_table_arg);
   int fill_recover_table(const share::ObImportArg &import_arg, share::ObImportTableArg &import_table_arg);
   int fill_recover_partition(const share::ObImportArg &import_arg, share::ObImportTableArg &import_table_arg);
-  int fill_remap_database(const share::ObImportArg &import_arg,
+  int fill_remap_database(const share::ObImportArg &import_arg, 
       const share::ObImportTableArg &import_table_arg,
       share::ObImportRemapArg &import_remap_arg);
-  int fill_remap_table(const share::ObImportArg &import_arg,
+  int fill_remap_table(const share::ObImportArg &import_arg, 
       const share::ObImportTableArg &import_table_arg,
       share::ObImportRemapArg &import_remap_arg);
-  int fill_remap_partition(const share::ObImportArg &import_arg,
+  int fill_remap_partition(const share::ObImportArg &import_arg, 
       const share::ObImportTableArg &import_table_arg,
       share::ObImportRemapArg &import_remap_arg);
-  int fill_remap_tablespace(const share::ObImportArg &import_arg,
+  int fill_remap_tablespace(const share::ObImportArg &import_arg, 
       share::ObImportRemapArg &import_remap_arg);
-  int fill_remap_tablegroup(const share::ObImportArg &import_arg,
+  int fill_remap_tablegroup(const share::ObImportArg &import_arg, 
       share::ObImportRemapArg &import_remap_arg);
   int check_aux_tenant_restore_type_(const share::ObPhysicalRestoreJob &job);
 

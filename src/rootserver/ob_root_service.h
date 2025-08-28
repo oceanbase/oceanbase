@@ -433,7 +433,7 @@ public:
   share::status::ObRootServiceStatus get_status() const;
   bool in_debug() const { return debug_; }
   void set_debug() { debug_ = true; }
-  int reload_config();
+  int reload_config();  
   virtual bool check_config(const ObConfigItem &item, const char *&err_info);
   // misc get functions
   share::ObLSTableOperator &get_lst_operator() { return *lst_operator_; }

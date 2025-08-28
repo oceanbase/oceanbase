@@ -1343,7 +1343,7 @@ int ObTempBlockStore::dump_block(Block *blk, int64_t &dumped_size)
       LOG_WARN("write block to file failed", K(ret), K(bi));
     }
   }
-
+  
   if (OB_SUCC(ret)) {
     ++block_cnt_on_disk_;
     dumped_block_id_cnt_ += blk->cnt_;

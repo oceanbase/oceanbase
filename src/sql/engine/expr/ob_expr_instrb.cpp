@@ -108,7 +108,7 @@ static int calc_instrb_text(ObTextStringIter &haystack_iter,
       if (pos_int > 0) {
         haystack_iter.set_start_offset(pos_int - 1); // start char len
         pos_int = 1; // start pos is handled by lob mngr for out row lobs
-      } else {
+      } else {       
         haystack_iter.set_backward(); // search backward if pos < 0
       }
     }
@@ -137,9 +137,9 @@ static int calc_instrb_text(ObTextStringIter &haystack_iter,
       }
       if (OB_FAIL(ret)) {
       } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
-        ret = (haystack_iter.get_inner_ret() != OB_SUCCESS) ?
+        ret = (haystack_iter.get_inner_ret() != OB_SUCCESS) ? 
               haystack_iter.get_inner_ret() : OB_INVALID_DATA;
-        LOG_WARN("iter state invalid", K(ret), K(state), K(haystack_iter));
+        LOG_WARN("iter state invalid", K(ret), K(state), K(haystack_iter)); 
       } else {
         if (ret_idx != 0) { // add accessed length by get_next_block()
           ret_idx += haystack_iter.get_last_accessed_byte_len() + haystack_iter.get_start_offset();
@@ -153,7 +153,7 @@ static int calc_instrb_text(ObTextStringIter &haystack_iter,
       int64_t total_byte_len = 0;
       int64_t max_access_byte_len = 0;
       if (OB_FAIL(haystack_iter.get_byte_len(total_byte_len))) {
-        LOG_WARN("get haystack char len failed", K(ret), K(state));
+        LOG_WARN("get haystack char len failed", K(ret), K(state)); 
       } else if (haystack_iter.is_outrow_lob()) {
         max_access_byte_len = total_byte_len + pos_int + 1;
         haystack_iter.set_start_offset(-pos_int - 1); // start char len
@@ -184,9 +184,9 @@ static int calc_instrb_text(ObTextStringIter &haystack_iter,
       }
       if (OB_FAIL(ret)) {
       } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
-        ret = (haystack_iter.get_inner_ret() != OB_SUCCESS) ?
+        ret = (haystack_iter.get_inner_ret() != OB_SUCCESS) ? 
               haystack_iter.get_inner_ret() : OB_INVALID_DATA;
-        LOG_WARN("iter state invalid", K(ret), K(state), K(haystack_iter));
+        LOG_WARN("iter state invalid", K(ret), K(state), K(haystack_iter)); 
       } else {
         if (ret_idx != 0) { // add accessed length by get_next_block()
           ret_idx += (max_access_byte_len - static_cast<int64_t>(haystack_iter.get_accessed_byte_len()));

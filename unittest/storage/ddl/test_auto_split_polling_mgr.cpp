@@ -38,13 +38,13 @@ static const ObLSID ls_id{1};
 class TestSplitTaskScheduler : public ::testing::Test
 {
 public:
-  TestSplitTaskScheduler()
+  TestSplitTaskScheduler() 
     : rs_scheduler_(ObRsAutoSplitScheduler::get_instance()), polling_mgr_(rs_scheduler_.polling_mgr_), sys_tenant_(OB_SYS_TENANT_ID)
     {
       ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(TEST_TENANT_A_ID);
       ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(TEST_TENANT_B_ID);
       ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(TEST_TENANT_C_ID);
-      init();
+      init(); 
     }
   virtual void SetUp();
   void reset();
@@ -56,7 +56,7 @@ public:
   ObTenantBase sys_tenant_;
 };
 
-void pop(ObArray<ObAutoSplitTask> &task_array, ObAutoSplitTaskPollingMgr &polling_mgr)
+void pop(ObArray<ObAutoSplitTask> &task_array, ObAutoSplitTaskPollingMgr &polling_mgr) 
 {
   ObArray<ObArray<ObAutoSplitTask>> tenant_task_array;
   int64_t pop_nums = 1;
@@ -75,7 +75,7 @@ void pop(ObArray<ObAutoSplitTask> &task_array, ObAutoSplitTaskPollingMgr &pollin
 }
 
 void push(const ObArray<ObArray<ObAutoSplitTask>> &tenants_task_array, ObAutoSplitTaskPollingMgr &polling_mgr)
-{
+{ 
   for (int64_t i = 0; i < tenants_task_array.count(); ++i) {
     int ret = polling_mgr.push_tasks(tenants_task_array.at(i));
     ASSERT_OK(ret);
@@ -89,7 +89,7 @@ void TestSplitTaskScheduler::reset()
 
 void TestSplitTaskScheduler::SetUp()
 {
-  ObTenantEnv::set_tenant(&sys_tenant_);
+  ObTenantEnv::set_tenant(&sys_tenant_); 
 }
 
 TEST_F(TestSplitTaskScheduler, simple_push_and_pop)
@@ -110,8 +110,8 @@ TEST_F(TestSplitTaskScheduler, simple_push_and_pop)
   ASSERT_OK(task_array.push_back(task_b));
   ASSERT_OK(polling_mgr_.push_tasks(task_array));
   task_array.reuse();
-  // we expect the first tablet_id popped from mgr to be 2,
-  // because the tenant_cache A is at index 0 and the last_access_index is 0, and the tablet with id 2 has the hightest priority in that cache
+  // we expect the first tablet_id popped from mgr to be 2, 
+  // because the tenant_cache A is at index 0 and the last_access_index is 0, and the tablet with id 2 has the hightest priority in that cache 
   ObArray<ObArray<ObAutoSplitTask>> tenants_task_array;
   ASSERT_OK(polling_mgr_.pop_tasks(1, tenants_task_array));
   ASSERT_EQ(1, tenants_task_array.count());
@@ -119,7 +119,7 @@ TEST_F(TestSplitTaskScheduler, simple_push_and_pop)
   ObAutoSplitTask &task1 = tenants_task_array.at(0).at(0);
   ASSERT_OK(ids.push_back(task1.tablet_id_.id_));
   tenants_task_array.reuse();
-  // we expect the second tablet_id popped from mgr to be 2,
+  // we expect the second tablet_id popped from mgr to be 2, 
   // because the tenant_cache B is at index 1, and the last_access_index is 1, the tablet with id 3 has the hightest priority in that cache
   ASSERT_OK(polling_mgr_.pop_tasks(1, tenants_task_array));
   ASSERT_EQ(1, tenants_task_array.count());
@@ -127,7 +127,7 @@ TEST_F(TestSplitTaskScheduler, simple_push_and_pop)
   ObAutoSplitTask &task2 = tenants_task_array.at(0).at(0);
   ASSERT_OK(ids.push_back(task2.tablet_id_.id_));
   tenants_task_array.reuse();
-  // we expect the third tablet_id popped from mgr to be 2,
+  // we expect the third tablet_id popped from mgr to be 2, 
   // because the tenant_cache B is at index 1, and the last_access_index is 0, the tablet with id 3 has the hightest priority in that cache
   ASSERT_OK(polling_mgr_.pop_tasks(1, tenants_task_array));
   ASSERT_EQ(1, tenants_task_array.count());
@@ -142,7 +142,7 @@ TEST_F(TestSplitTaskScheduler, simple_push_and_pop)
   }
 }
 
-TEST_F(TestSplitTaskScheduler, test_reset)
+TEST_F(TestSplitTaskScheduler, test_reset) 
 {
   ObArray<ObAutoSplitTask> task_array;
   ObAutoSplitTask task_a(TEST_TENANT_A_ID, ls_id, 1/*tablet_id*/, 1/*auto_split_size*/, 2/*used_disk_size*/, 0);
@@ -156,7 +156,7 @@ TEST_F(TestSplitTaskScheduler, test_reset)
 
   reset();
   init();
-
+  
   task_array.push_back(task_a);
   ASSERT_OK(polling_mgr_.push_tasks(task_array));
   task_array.reuse();

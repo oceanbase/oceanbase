@@ -58,8 +58,8 @@ public:
   }
   ~ObTableLoadBackupMicroBlockHeader_V_1_4() {}
   bool is_valid() const {
-    return header_size_ > 0 && version_ >= PRE_MICRO_BLOCK_HEADER_VERSION &&
-           magic_ == ObTableLoadBackupMicroBlockRecordHeader_V_1_4::PRE_MICRO_BLOCK_RECORD_HEADER_MAGIC &&
+    return header_size_ > 0 && version_ >= PRE_MICRO_BLOCK_HEADER_VERSION &&  
+           magic_ == ObTableLoadBackupMicroBlockRecordHeader_V_1_4::PRE_MICRO_BLOCK_RECORD_HEADER_MAGIC && 
            attr_ >= 0 && column_count_ > 0 && row_index_offset_ > 0 && row_count_ > 0;
   }
   TO_STRING_KV(K(header_size_), K(version_), K(magic_), K(attr_), K(column_count_), K(row_index_offset_), K(row_count_));
@@ -85,8 +85,8 @@ public:
       cur_idx_(0),
       is_inited_(false) {}
   ~ObTableLoadBackupMicroBlockScanner_V_1_4() {}
-  int init(const char *buf,
-           const ObIArray<int64_t> *column_ids,
+  int init(const char *buf, 
+           const ObIArray<int64_t> *column_ids, 
            const ObTableLoadBackupColumnMap_V_1_4 *column_map);
   void reset();
   int get_next_row(ObNewRow &row);

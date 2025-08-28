@@ -20,8 +20,8 @@ using namespace oceanbase::common;
 
 namespace oceanbase {
 namespace tools {
-ObAdminTestIODeviceExecutor::ObAdminTestIODeviceExecutor()
-  : is_quiet_(false),
+ObAdminTestIODeviceExecutor::ObAdminTestIODeviceExecutor() 
+  : is_quiet_(false), 
     test_id_(1),
     allocator_()
 {
@@ -45,7 +45,7 @@ int ObAdminTestIODeviceExecutor::execute(int argc, char *argv[])
       STORAGE_LOG(WARN, "failed to create_and_add_tenant_allocator", K(ret));
     }
   }
-
+  
   if (FAILEDx(tenant_base->init())) {
     STORAGE_LOG(WARN, "failed to init tenant base", K(ret));
   } else if (FALSE_IT(ObTenantEnv::set_tenant(tenant_base))) {
@@ -182,7 +182,7 @@ int ObAdminTestIODeviceExecutor::test_backup_dest_connectivity_()
   ObBackupIoAdapter util;
   share::ObBackupStorageInfo storage_info;
   bool is_empty_directory = false;
-
+  
   if (OB_FAIL(storage_info.set(backup_path_, storage_info_))) {
     STORAGE_LOG_FILTER(ERROR, "failed to set storage info", K_(backup_path));
   } else if (OB_FAIL(util.is_empty_directory(backup_path_, &storage_info, is_empty_directory))) {
@@ -196,7 +196,7 @@ int ObAdminTestIODeviceExecutor::test_backup_dest_connectivity_()
 
     if (OB_FAIL(databuff_printf(check_file_dir, OB_MAX_URI_LENGTH,
                                 "%s%s%s", backup_path_, "/", check_file_dir_name))) {
-      STORAGE_LOG_FILTER(ERROR, "failed to databuff printf", K(ret));
+      STORAGE_LOG_FILTER(ERROR, "failed to databuff printf", K(ret));    
     } else if (OB_FAIL(util.mkdir(check_file_dir, &storage_info))) {
       STORAGE_LOG_FILTER(ERROR, "failed to make check file dir", K(ret), K(check_file_dir));
     } else if (OB_FAIL(test_normal_check_file_(check_file_dir))) {
@@ -227,7 +227,7 @@ int ObAdminTestIODeviceExecutor::test_normal_check_file_(const char* check_file_
     STORAGE_LOG_FILTER(ERROR, "failed to set storage info", K_(backup_path));
   } else if (OB_FAIL(databuff_printf(check_file_path, OB_MAX_URI_LENGTH,
                             "%s%s", check_file_dir, check_file_name))) {
-    STORAGE_LOG_FILTER(ERROR, "failed to databuff printf", K(ret));
+    STORAGE_LOG_FILTER(ERROR, "failed to databuff printf", K(ret));                     
   } else if (OB_FAIL(util.write_single_file(check_file_path, &storage_info, check_file_content,
                           real_len, ObStorageIdMod::get_default_id_mod()))) {
     STORAGE_LOG_FILTER(ERROR, "failed to write check file", K(ret), K(check_file_path));
@@ -250,7 +250,7 @@ int ObAdminTestIODeviceExecutor::test_normal_check_file_(const char* check_file_
   } else if (read_size != check_file_len) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG_FILTER(ERROR, "read check file length does not match real length",  K(ret), K(check_file_path), K(read_size), K(check_file_len));
-  }
+  } 
   return ret;
 }
 
@@ -272,26 +272,26 @@ int ObAdminTestIODeviceExecutor::test_appendable_check_file_(const char* check_f
   int64_t write_size = 0;
   int64_t read_size = 0;
   int64_t offset = 0;
-
+  
   if (OB_FAIL(storage_info.set(backup_path_, storage_info_))) {
     STORAGE_LOG_FILTER(ERROR, "failed to set storage info", K_(backup_path));
-  } else if (OB_FAIL(databuff_printf(appendable_check_file_path,
+  } else if (OB_FAIL(databuff_printf(appendable_check_file_path, 
               OB_MAX_URI_LENGTH, "%s%s", check_file_dir, appendable_check_file_name))) {
     STORAGE_LOG_FILTER(ERROR, "failed to databuff printf", K(ret));
-  } else if (OB_FAIL(util.open_with_access_type(device_handle, fd, &storage_info,
+  } else if (OB_FAIL(util.open_with_access_type(device_handle, fd, &storage_info, 
                 appendable_check_file_path, access_type,
                 ObStorageIdMod::get_default_id_mod()))) {
-    STORAGE_LOG_FILTER(ERROR, "failed to open device with access type", K(ret),
+    STORAGE_LOG_FILTER(ERROR, "failed to open device with access type", K(ret), 
                 K(appendable_check_file_path), K(access_type));
   } else if (OB_ISNULL(device_handle)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG_FILTER(ERROR, "device handle is NULL", K(ret), K(device_handle), K_(backup_path));
-  } else if (OB_FAIL(device_handle->pwrite(fd, offset, real_len,
+  } else if (OB_FAIL(device_handle->pwrite(fd, offset, real_len, 
                      appendable_check_file_content, write_size))) {
     STORAGE_LOG_FILTER(ERROR, "failed to pwrite appendable check file", K(ret), K(appendable_check_file_path),
                 K(appendable_check_file_content), K(real_len));
   } else if (FALSE_IT(offset += real_len)){
-  } else if (OB_FAIL(device_handle->pwrite(fd, offset, real_len,
+  } else if (OB_FAIL(device_handle->pwrite(fd, offset, real_len, 
                      appendable_check_file_content, write_size))) {
     STORAGE_LOG_FILTER(ERROR, "failed to repeat pwrite appendable check file", K(ret), K(appendable_check_file_path),
         K(appendable_check_file_content), K(real_len));
@@ -307,12 +307,12 @@ int ObAdminTestIODeviceExecutor::test_appendable_check_file_(const char* check_f
   } else if (!is_exist) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG_FILTER(ERROR, "appendable check file does not exist!", K(ret), K(appendable_check_file_path));
-  } else if (OB_FAIL(util.adaptively_get_file_length(appendable_check_file_path, &storage_info,
+  } else if (OB_FAIL(util.adaptively_get_file_length(appendable_check_file_path, &storage_info, 
                      check_file_len))) {
     STORAGE_LOG_FILTER(ERROR, "fail to get appendable check file length", K(ret), K(appendable_check_file_path));
   } else if (check_file_len != real_len) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG_FILTER(ERROR, "get appendable check file length does not match real length", K(ret), K(appendable_check_file_path),
+    STORAGE_LOG_FILTER(ERROR, "get appendable check file length does not match real length", K(ret), K(appendable_check_file_path), 
                 K(real_len), K(check_file_len));
   } else if (OB_ISNULL(read_file_buf = reinterpret_cast<char*>(allocator_.alloc(check_file_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -322,7 +322,7 @@ int ObAdminTestIODeviceExecutor::test_appendable_check_file_(const char* check_f
     STORAGE_LOG_FILTER(ERROR, "failed to read appendable check file",  K(ret), K(appendable_check_file_path), K(check_file_len));
   } else if (read_size != check_file_len) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG_FILTER(ERROR, "read appendable check file length does not match real length",  K(ret), K(appendable_check_file_path),
+    STORAGE_LOG_FILTER(ERROR, "read appendable check file length does not match real length",  K(ret), K(appendable_check_file_path), 
                 K(read_size), K(check_file_len));
   }
   return ret;
@@ -350,11 +350,11 @@ int ObAdminTestIODeviceExecutor::test_multipart_upload_check_file_(const char* c
     STORAGE_LOG_FILTER(ERROR, "failed to set storage info", K_(backup_path));
   } else if (OB_FAIL(databuff_printf(check_file_path, OB_MAX_URI_LENGTH,
                             "%s%s", check_file_dir, check_file_name))) {
-    STORAGE_LOG_FILTER(ERROR, "failed to databuff printf", K(ret));
-  } else if (OB_FAIL(util.open_with_access_type(device_handle, fd, &storage_info,
+    STORAGE_LOG_FILTER(ERROR, "failed to databuff printf", K(ret));                     
+  } else if (OB_FAIL(util.open_with_access_type(device_handle, fd, &storage_info, 
                 check_file_path, access_type,
                 ObStorageIdMod::get_default_id_mod()))) {
-    STORAGE_LOG_FILTER(ERROR, "failed to open device with access type", K(ret),
+    STORAGE_LOG_FILTER(ERROR, "failed to open device with access type", K(ret), 
                 K(check_file_path), K(access_type));
   } else if (OB_ISNULL(device_handle)) {
     ret = OB_ERR_UNEXPECTED;
@@ -363,7 +363,7 @@ int ObAdminTestIODeviceExecutor::test_multipart_upload_check_file_(const char* c
     STORAGE_LOG_FILTER(ERROR, "failed to write check file", K(ret), K(check_file_content), K(real_len));
   } else if (OB_FAIL(device_handle->complete(fd))) {
     STORAGE_LOG_FILTER(ERROR, "fail to complete multipart upload", K(ret), K(device_handle), K(fd));
-  }
+  } 
   if (OB_SUCCESS != ret) {
     if (OB_TMP_FAIL(device_handle->abort(fd))) {
       ret = COVER_SUCC(tmp_ret);
@@ -394,7 +394,7 @@ int ObAdminTestIODeviceExecutor::test_multipart_upload_check_file_(const char* c
     } else if (read_size != check_file_len) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG_FILTER(ERROR, "read check file length does not match real length",  K(ret), K(check_file_path), K(read_size), K(check_file_len));
-    }
+    } 
   }
   return ret;
 }
@@ -480,7 +480,7 @@ int ObAdminTestIODeviceExecutor::test_clean_backup_file_()
         STORAGE_LOG_FILTER(ERROR, "fail to clean", K(ret), K_(backup_path), K(storage_info));
       }
     }
-  }
+  } 
   return ret;
 }
 
@@ -508,7 +508,7 @@ int ObAdminTestIODeviceExecutor::test_backup_data_()
 
   if (OB_FAIL(storage_info.set(backup_path_, storage_info_))) {
     STORAGE_LOG_FILTER(ERROR, "failed to set storage info", K_(backup_path));
-  } else if (OB_FAIL(databuff_printf(meta_file_path, OB_MAX_URI_LENGTH, "%s%s%s%s",
+  } else if (OB_FAIL(databuff_printf(meta_file_path, OB_MAX_URI_LENGTH, "%s%s%s%s", 
               backup_path_, "/", meta_dir_name, meta_file_name))) {
     STORAGE_LOG_FILTER(ERROR, "failed to databuff printf", K(ret));
   } else if (OB_FAIL(util.mk_parent_dir(meta_file_path, &storage_info))) {
@@ -521,7 +521,7 @@ int ObAdminTestIODeviceExecutor::test_backup_data_()
     STORAGE_LOG_FILTER(ERROR, "failed to databuff printf", K(ret));
   } else if (OB_FAIL(util.open_with_access_type(device_handle, fd, &storage_info,
              data_file_path, access_type, ObStorageIdMod::get_default_id_mod()))) {
-    STORAGE_LOG_FILTER(ERROR, "failed to open device with access type", K(ret),
+    STORAGE_LOG_FILTER(ERROR, "failed to open device with access type", K(ret), 
                 K(data_file_path), K(access_type));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < UPLOAD_TIMES; ++i) {
@@ -529,7 +529,7 @@ int ObAdminTestIODeviceExecutor::test_backup_data_()
       const int64_t buf_size = static_cast<int64_t>(ObRandom::rand(MIN_PART_SIZE, MAX_PART_SIZE));
       if(OB_FAIL(generate_random_str_(buf, buf_size))) {
         STORAGE_LOG_FILTER(ERROR, "failed to generate random str", K(ret), K(buf_size));
-      } else if (OB_FAIL(device_handle->pwrite(fd, offset, buf_size,
+      } else if (OB_FAIL(device_handle->pwrite(fd, offset, buf_size, 
                          buf, write_size))) {
         STORAGE_LOG_FILTER(ERROR, "failed to upload part", K(ret), K(data_file_path), K(buf_size));
       } else if (write_size != buf_size) {
@@ -543,7 +543,7 @@ int ObAdminTestIODeviceExecutor::test_backup_data_()
     if (OB_SUCC(ret)) {
       if (OB_FAIL(device_handle->complete(fd))) {
         STORAGE_LOG_FILTER(ERROR, "fail to complete multipart upload", K(ret), K(tmp_ret), K(device_handle), K(fd));
-      }
+      } 
     } else {
       if (OB_TMP_FAIL(device_handle->abort(fd))) {
         ret = COVER_SUCC(tmp_ret);
@@ -607,7 +607,7 @@ int ObAdminTestIODeviceExecutor::test_archive_log_() {
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(storage_info.set(backup_path_, storage_info_))) {
     STORAGE_LOG_FILTER(ERROR, "failed to set storage info", K_(backup_path));
-  } else if (OB_FAIL(databuff_printf(meta_file_path, OB_MAX_URI_LENGTH, "%s%s%s%s",
+  } else if (OB_FAIL(databuff_printf(meta_file_path, OB_MAX_URI_LENGTH, "%s%s%s%s", 
               backup_path_, "/", meta_dir_name, meta_file_name))) {
     STORAGE_LOG_FILTER(ERROR, "failed to databuff printf", K(ret));
   } else if (OB_FAIL(util.mk_parent_dir(meta_file_path, &storage_info))) {
@@ -633,7 +633,7 @@ int ObAdminTestIODeviceExecutor::test_full_clog_file_()
   const char* full_log_file_name = "archive/logstream_1/log/1.obarc";
   const int64_t buf_size = CLOG_FILE_SIZE;
   int64_t file_size = 0;
-
+  
   if (OB_FAIL(storage_info.set(backup_path_, storage_info_))) {
     STORAGE_LOG_FILTER(ERROR, "failed to set storage info", K_(backup_path));
   } else if (OB_FAIL(databuff_printf(full_log_file_path, OB_MAX_URI_LENGTH, "%s%s%s",
@@ -652,7 +652,7 @@ int ObAdminTestIODeviceExecutor::test_full_clog_file_()
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG_FILTER(ERROR, "get full clog file length does not match real length", K(file_size), K(buf_size));
   }
-  return ret;
+  return ret; 
 }
 
 int ObAdminTestIODeviceExecutor::test_partial_clog_file_()
@@ -677,7 +677,7 @@ int ObAdminTestIODeviceExecutor::test_partial_clog_file_()
     STORAGE_LOG_FILTER(ERROR, "failed to databuff printf", K(ret));
   } else if (OB_FAIL(util.open_with_access_type(device_handle, fd, &storage_info,
             partial_log_file_path, access_type, ObStorageIdMod::get_default_id_mod()))) {
-    STORAGE_LOG_FILTER(ERROR, "failed to open device with access type", K(ret),
+    STORAGE_LOG_FILTER(ERROR, "failed to open device with access type", K(ret), 
                 K(partial_log_file_path), K(access_type));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < APPEND_TIMES; ++i) {
@@ -685,7 +685,7 @@ int ObAdminTestIODeviceExecutor::test_partial_clog_file_()
       const int64_t buf_size = static_cast<int64_t>(ObRandom::rand(MIN_APPEND_SIZE, MAX_APPEND_SIZE));
       if(OB_FAIL(generate_random_str_(buf, buf_size))) {
         STORAGE_LOG_FILTER(ERROR, "failed to generate random str", K(ret), K(buf_size));
-      } else if (OB_FAIL(device_handle->pwrite(fd, offset, buf_size,
+      } else if (OB_FAIL(device_handle->pwrite(fd, offset, buf_size, 
                         buf, write_size))) {
         STORAGE_LOG_FILTER(ERROR, "failed to append clog", K(ret), K(partial_log_file_path), K(offset), K(buf_size));
       } else if (write_size != buf_size) {
@@ -708,7 +708,7 @@ int ObAdminTestIODeviceExecutor::test_partial_clog_file_()
         STORAGE_LOG_FILTER(ERROR, "get appendable clog file length does not match real file length", K(ret), K(read_size), K(total_size));
       } else if (OB_FAIL(util.open_with_access_type(device_handle, fd, &storage_info,
                  partial_log_file_path, access_type, ObStorageIdMod::get_default_id_mod()))) {
-        STORAGE_LOG_FILTER(ERROR, "failed to open device with access type", K(ret),
+        STORAGE_LOG_FILTER(ERROR, "failed to open device with access type", K(ret), 
                   K(partial_log_file_path), K(access_type));
       } else if (FALSE_IT(remain_size = CLOG_FILE_SIZE - total_size)) {
       } else if (OB_FAIL(generate_random_str_(remain_buf, remain_size))) {
@@ -725,7 +725,7 @@ int ObAdminTestIODeviceExecutor::test_partial_clog_file_()
       } else if (read_size != total_size) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG_FILTER(ERROR, "get appendable clog file length does not match real file length", K(ret), K(read_size), K(total_size));
-      }
+      } 
     }
   }
   return ret;
@@ -736,7 +736,7 @@ int ObAdminTestIODeviceExecutor::test_consume_clog_file_()
   int ret = OB_SUCCESS;
   TestExecGuard guard("consume clog file", test_id_, ret);
   ObBackupIoAdapter util;
-  share::ObBackupStorageInfo storage_info;
+  share::ObBackupStorageInfo storage_info;  
   int64_t min_file_id = 0;
   int64_t max_file_id = 0;
   const char* ls_dir = "archive/logstream_1/log/";
@@ -754,7 +754,7 @@ int ObAdminTestIODeviceExecutor::test_consume_clog_file_()
   } else if (OB_FAIL(databuff_printf(ls_path, OB_MAX_URI_LENGTH, "%s%s%s",
              backup_path_, "/", ls_dir))) {
     STORAGE_LOG_FILTER(ERROR, "failed to databuff printf", K(ret));
-  } else if (OB_FAIL(archive::ObArchiveFileUtils::get_file_range(ls_path,
+  } else if (OB_FAIL(archive::ObArchiveFileUtils::get_file_range(ls_path, 
                      &storage_info, min_file_id, max_file_id))) {
     STORAGE_LOG_FILTER(ERROR, "failed to get clog file range", K(ret), K(ls_path));
   } else if (min_file_id != 1 || max_file_id != 2) {
@@ -768,7 +768,7 @@ int ObAdminTestIODeviceExecutor::test_consume_clog_file_()
     STORAGE_LOG_FILTER(ERROR, "failed to allocate memory", K(ret), K(buf_len));
   } else if (OB_FAIL(util.adaptively_read_part_file(full_clog_file_path, &storage_info, buf1,
              buf_len, offset, read_size, ObStorageIdMod::get_default_id_mod()))) {
-    STORAGE_LOG_FILTER(ERROR, "failed to read part from full clog file", K(ret), K(full_clog_file_path),
+    STORAGE_LOG_FILTER(ERROR, "failed to read part from full clog file", K(ret), K(full_clog_file_path), 
                 K(offset), K(buf_len));
   } else if (read_size != buf_len) {
     ret = OB_ERR_UNEXPECTED;
@@ -783,7 +783,7 @@ int ObAdminTestIODeviceExecutor::test_consume_clog_file_()
       STORAGE_LOG_FILTER(ERROR, "failed to allocate memory", K(ret), K(buf_len));
     } else if (OB_FAIL(util.adaptively_read_part_file(partial_clog_file_path, &storage_info, buf2,
                buf_len, offset, read_size, ObStorageIdMod::get_default_id_mod()))) {
-      STORAGE_LOG_FILTER(ERROR, "failed to read part from full clog file", K(ret), K(full_clog_file_path),
+      STORAGE_LOG_FILTER(ERROR, "failed to read part from full clog file", K(ret), K(full_clog_file_path), 
                   K(offset), K(buf_len));
     } else if (read_size != buf_len) {
       ret = OB_ERR_UNEXPECTED;
@@ -826,5 +826,5 @@ int ObAdminTestIODeviceExecutor::print_usage_()
   return ret;
 }
 
-}   //tools
+}   //tools 
 }   //oceanbase

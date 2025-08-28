@@ -93,7 +93,7 @@ public:
   int strict_check_special() const;
   // print all config to log file
   void print() const;
-
+  
   int add_extra_config(const char *config_str,
                        const int64_t version = 0,
                        const bool check_config = true);

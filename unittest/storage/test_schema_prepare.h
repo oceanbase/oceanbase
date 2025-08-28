@@ -34,7 +34,7 @@ public:
     const int64_t rowkey_column_cnt = TEST_ROWKEY_COLUMN_CNT,
     const int64_t column_cnt = TEST_COLUMN_CNT,
     const int64_t micro_block_size = DEFAULT_MICRO_BLOCK_SIZE);
-
+  
   static void add_all_and_each_column_group(
     ObIAllocator &allocator,
     share::schema::ObTableSchema &table_schema);

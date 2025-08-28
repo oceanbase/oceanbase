@@ -1626,14 +1626,14 @@ else()
 target_link_libraries(ob_sql_static
   PUBLIC ob_sql ob_sql_extra
   ob_sql_server_parser_static
-  ${DEP_DIR}/lib64/libprotobuf-v371.a
-  ${DEP_DIR}/lib64/libzstd.a
-  ${DEP_DIR}/lib64/libbrotlidec.a
-  ${DEP_DIR}/lib64/libbrotlienc.a
-  ${DEP_DIR}/lib64/libbrotlicommon.a
+  ${DEP_DIR}/lib64/libprotobuf-v371.a  
+  ${DEP_DIR}/lib64/libzstd.a   
+  ${DEP_DIR}/lib64/libbrotlidec.a  
+  ${DEP_DIR}/lib64/libbrotlienc.a  
+  ${DEP_DIR}/lib64/libbrotlicommon.a  
   ${DEP_DIR}/lib64/libbz2.a
-  ${DEP_DIR}/lib64/libodps_sdk_tunnel_static.a
-  ${DEP_DIR}/lib64/libodps_sdk_common_static.a
+  ${DEP_DIR}/lib64/libodps_sdk_tunnel_static.a  
+  ${DEP_DIR}/lib64/libodps_sdk_common_static.a  
   ${DEP_DIR}/lib64/libodps_sdk_core_static.a)
 endif()
 

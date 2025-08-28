@@ -187,7 +187,7 @@ int ObUserSqlService::drop_user_delete_role_grantee_map(
       }
       const int64_t is_deleted = 1;
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(insert_sql.append_fmt("(now(6), now(6), %lu, %lu, %lu, %ld, %ld, %lu, %lu)",
+      } else if (OB_FAIL(insert_sql.append_fmt("(now(6), now(6), %lu, %lu, %lu, %ld, %ld, %lu, %lu)", 
           ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id), 
           ObSchemaUtils::get_extract_schema_id(exec_tenant_id, is_role ? id : user_id), 
           ObSchemaUtils::get_extract_schema_id(exec_tenant_id, is_role ? user_id : id),
@@ -330,7 +330,7 @@ int ObUserSqlService::drop_user_delete_proxy_user_info(const uint64_t tenant_id,
             uint64_t role_id = proxy_info->get_role_id_by_idx(k);
             if (user.get_user_id() == proxy_info->get_role_id_by_idx(k)) {
               found = true;
-              OZ (drop_proxy_role_info(sql_client, tenant_id, grantee->get_user_id(),
+              OZ (drop_proxy_role_info(sql_client, tenant_id, grantee->get_user_id(), 
                                                   proxy_info->user_id_, user.get_user_id(), new_schema_version));
             }
             if (OB_SUCC(ret) && found) {
@@ -354,7 +354,7 @@ int ObUserSqlService::drop_user_delete_proxy_user_info(const uint64_t tenant_id,
       if (OB_ISNULL(proxy_info)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error", K(ret));
-      } else if (OB_FAIL(drop_proxy_info(sql_client, tenant_id, proxy_info->user_id_,
+      } else if (OB_FAIL(drop_proxy_info(sql_client, tenant_id, proxy_info->user_id_, 
                                                                 user.get_user_id(), new_schema_version))) {
         LOG_WARN("drop proxy info failed", K(ret));
       } else {
@@ -370,7 +370,7 @@ int ObUserSqlService::drop_user_delete_proxy_user_info(const uint64_t tenant_id,
           LOG_WARN("push back failed", K(ret));
         }
         for (int64_t j = 0; OB_SUCC(ret) && j < proxy_info->role_id_cnt_; j++) {
-          if (OB_FAIL(drop_proxy_role_info(sql_client, tenant_id, proxy_info->user_id_, user.get_user_id(),
+          if (OB_FAIL(drop_proxy_role_info(sql_client, tenant_id, proxy_info->user_id_, user.get_user_id(), 
                                                           proxy_info->get_role_id_by_idx(j), new_schema_version))) {
             LOG_WARN("drop proxy role info failed", K(ret));
           }
@@ -384,7 +384,7 @@ int ObUserSqlService::drop_user_delete_proxy_user_info(const uint64_t tenant_id,
         LOG_WARN("unexpected error", K(ret));
       } else if (user.get_user_id() == proxy_info->user_id_) {
         //alread dropped before
-      } else if (OB_FAIL(drop_proxy_info(sql_client, tenant_id, user.get_user_id(), proxy_info->user_id_,
+      } else if (OB_FAIL(drop_proxy_info(sql_client, tenant_id, user.get_user_id(), proxy_info->user_id_, 
                                                                  new_schema_version))) {
         LOG_WARN("drop proxy info failed", K(ret));
       } else {
@@ -400,7 +400,7 @@ int ObUserSqlService::drop_user_delete_proxy_user_info(const uint64_t tenant_id,
           LOG_WARN("push back failed", K(ret));
         }
         for (int64_t j = 0; OB_SUCC(ret) && j < proxy_info->role_id_cnt_; j++) {
-          if (OB_FAIL(drop_proxy_role_info(sql_client, tenant_id, user.get_user_id(), proxy_info->user_id_,
+          if (OB_FAIL(drop_proxy_role_info(sql_client, tenant_id, user.get_user_id(), proxy_info->user_id_, 
                                                             proxy_info->get_role_id_by_idx(j), new_schema_version))) {
             LOG_WARN("drop proxy role info failed", K(ret));
           }

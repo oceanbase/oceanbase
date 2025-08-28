@@ -13,7 +13,7 @@
 #define USING_LOG_PREFIX RS
 #include "ob_primary_ls_service.h"
 #include "src/storage/tx_storage/ob_ls_map.h"
-#include "rootserver/ob_tenant_info_loader.h"
+#include "rootserver/ob_tenant_info_loader.h" 
 #include "share/ob_rpc_struct.h"
 #include "rootserver/ob_common_ls_service.h"
 #include "share/ob_srv_rpc_proxy.h" // ObSrvRpcProxy
@@ -69,7 +69,7 @@ void ObPrimaryLSService::do_work()
     while (!has_set_stop()) {
       tenant_schema.reset();
       ObCurTraceId::init(GCONF.self_addr_);
-      DEBUG_SYNC(STOP_PRIMARY_LS_THREAD);
+      DEBUG_SYNC(STOP_PRIMARY_LS_THREAD); 
       if (OB_FAIL(get_tenant_schema(tenant_id_, tenant_schema))) {
         LOG_WARN("failed to get tenant schema", KR(ret), K(tenant_id_));
       } else {
@@ -84,7 +84,7 @@ void ObPrimaryLSService::do_work()
               K(tenant_id_));
         }
       }
-
+         
       LOG_INFO("[PRIMARY_LS_SERVICE] finish one round", KR(ret), K(tenant_schema));
       tenant_schema.reset();
       idle(idle_time_us);
@@ -126,7 +126,7 @@ int ObPrimaryLSService::process_all_ls(const share::schema::ObTenantSchema &tena
     }
   }
 
-  LOG_INFO("[PRIMARY_LS_SERVICE] finish process tenant",
+  LOG_INFO("[PRIMARY_LS_SERVICE] finish process tenant", 
       KR(ret), K(tenant_id), K(task_cnt), K(machine_array), K(tenant_schema));
   return ret;
 }
@@ -252,7 +252,7 @@ int ObPrimaryLSService::try_set_next_ls_status_(
           //in drop tenant, __all_ls will be deleted while status is creating
         } else {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("status info is invalid", KR(ret), K(machine));
+          LOG_WARN("status info is invalid", KR(ret), K(machine)); 
         }
       } else if (ls_info.ls_is_creating()) {
         if (status_info.ls_is_create_abort()) {
@@ -270,16 +270,16 @@ int ObPrimaryLSService::try_set_next_ls_status_(
             LOG_WARN("failed to update ls status", KR(ret), K(machine));
           }
         } else if (status_info.ls_is_creating()) {
-        } else {
+        } else { 
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("status info is invalid", KR(ret), K(machine));
+          LOG_WARN("status info is invalid", KR(ret), K(machine)); 
         }
       } else if (ls_info.ls_is_normal()) {
         if (status_info.ls_is_normal()) {
         } else if (status_info.ls_is_created()) {
         } else {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("status info is invalid", KR(ret), K(machine));
+          LOG_WARN("status info is invalid", KR(ret), K(machine)); 
         }
       } else if (ls_info.ls_is_dropping()) {
         if (!status_info.ls_is_dropping()) {
@@ -457,7 +457,7 @@ int ObPrimaryLSService::process_all_ls_status_to_steady_(const share::schema::Ob
     ObTenantLSInfo tenant_info(GCTX.sql_proxy_, &tenant_schema, tenant_id_);
     if (OB_FAIL(ObLSServiceHelper::process_status_to_steady(false, share::NORMAL_SWITCHOVER_STATUS, tenant_info))) {
       LOG_WARN("failed to process status to steady", KR(ret));
-    }
+    } 
   }
   LOG_INFO("[PRIMARY_LS_SERVICE] finish process all ls status to steady", KR(ret), K(tenant_id_));
   return ret;
@@ -583,7 +583,7 @@ int ObPrimaryLSService::create_all_user_ls_for_creating_tenant_(
         } else if (OB_FAIL(ls_recovery_operator.get_ls_recovery_stat(tenant_id, ls_id,
                 false /*need_for_update*/, recovery_stat, *GCTX.sql_proxy_))) {
           LOG_WARN("failed to get ls recovery stat", KR(ret), K(tenant_id));
-        } else if (OB_FAIL(ObCommonLSService::do_create_user_ls(tenant_schema, status_info,
+        } else if (OB_FAIL(ObCommonLSService::do_create_user_ls(tenant_schema, status_info, 
                 recovery_stat.get_create_scn(), false/*create_with_palf*/, palf_base_info,
                 OB_INVALID_TENANT_ID/*source_tenant_id*/))) {
           // create ls
@@ -714,7 +714,7 @@ int ObPrimaryLSService::create_duplicate_ls()
   } else if (OB_FAIL(ls_operator.insert_ls(
               new_ls, share::NORMAL_SWITCHOVER_STATUS))) {
     LOG_WARN("failed to insert new operation", KR(ret), K(new_ls));
-  }
+  } 
   LOG_INFO("[LS_MGR] create duplicate ls", KR(ret), K(new_ls));
   return ret;
 }

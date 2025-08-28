@@ -24,7 +24,7 @@ namespace sql
 {
 
 // for st_buffer_strategy and st_buffer
-enum class ObGeoBufferStrategyType
+enum class ObGeoBufferStrategyType 
 {
   INVALID = 0,
   END_ROUND = 1,
@@ -32,7 +32,7 @@ enum class ObGeoBufferStrategyType
   JOIN_ROUND = 3,
   JOIN_MITER = 4,
   POINT_CIRCLE = 5,
-  POINT_SQUARE = 6,
+  POINT_SQUARE = 6, 
 };
 
 class ObExprSTBufferStrategy : public ObFuncExprOperator
@@ -80,7 +80,7 @@ protected:
   static bool is_valid_distance(double distance);
   static int parse_binary_strategy(const common::ObString &str, common::ObGeoBufferStrategy &strategy);
   static int parse_text_strategy(common::ObString &str, common::ObGeoBufferStrategy &strategy);
-  static int init_buffer_strategy(const ObExpr &expr,
+  static int init_buffer_strategy(const ObExpr &expr, 
                                   ObEvalCtx &ctx,
                                   MultimodeAlloctor &allocator,
                                   common::ObGeoBufferStrategy &buf_strat,

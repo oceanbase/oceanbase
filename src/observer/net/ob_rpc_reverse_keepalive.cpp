@@ -107,7 +107,7 @@ int ObRpcReverseKeepAliveService::check_status(const int64_t send_time_us, const
   } else if (time_us > send_time_us) {
     ret = OB_HASH_NOT_EXIST;
     LOG_WARN("send_ts check failed, client has been restarted and the pkt_id is reused", K(time_us), K(send_time_us), K(pkt_id));
-  }
+  } 
   return ret;
 }
 void stream_rpc_register(const int64_t pkt_id, int64_t send_time_us)

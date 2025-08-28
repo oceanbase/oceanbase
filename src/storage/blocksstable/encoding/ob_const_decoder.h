@@ -85,7 +85,7 @@ public:
       const ObColumnDecoderCtx &ctx,
       const char **cell_datas,
       storage::ObGroupByCellBase &group_by_cell) const override;
-
+  
   virtual int read_reference(
       const ObColumnDecoderCtx &ctx,
       const int32_t *row_ids,

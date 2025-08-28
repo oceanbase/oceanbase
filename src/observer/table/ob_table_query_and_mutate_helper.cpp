@@ -201,7 +201,7 @@ int QueryAndMutateHelper::execute_htable_delete(const ObTableOperation &table_op
       spec->destroy_executor(executor);
     }
   }
-  OB_TABLE_END_AUDIT(ret_code, ret,
+  OB_TABLE_END_AUDIT(ret_code, ret, 
                      snapshot, get_tx_snapshot(),
                      stmt_type, StmtType::T_KV_DELETE);
   return ret;
@@ -242,7 +242,7 @@ int QueryAndMutateHelper::execute_htable_put(const ObTableOperation &table_opera
     }
   }
 
-  OB_TABLE_END_AUDIT(ret_code, ret,
+  OB_TABLE_END_AUDIT(ret_code, ret, 
                      snapshot, get_tx_snapshot(),
                      stmt_type, StmtType::T_KV_PUT);
   return ret;
@@ -553,7 +553,7 @@ int QueryAndMutateHelper::execute_htable_insert(const ObITableEntity &new_entity
     }
   }
 
-  OB_TABLE_END_AUDIT(ret_code, ret,
+  OB_TABLE_END_AUDIT(ret_code, ret, 
                      snapshot, get_tx_snapshot(),
                      stmt_type, StmtType::T_KV_INSERT);
   return ret;
@@ -574,7 +574,7 @@ int QueryAndMutateHelper::execute_htable_mutation(ObTableQueryResultIterator *re
   ObTableQueryResult *one_result = nullptr;
   // htable queryAndXXX only check one row
   ret = result_iterator->get_next_result(one_result);
-  OB_TABLE_END_AUDIT(ret_code, ret,
+  OB_TABLE_END_AUDIT(ret_code, ret, 
                     snapshot, get_tx_snapshot(),
                     stmt_type, StmtType::T_KV_QUERY,
                     return_rows, (OB_ISNULL(one_result) ? 0 : one_result->get_row_count()),
@@ -842,13 +842,13 @@ int QueryAndMutateHelper::execute_table_mutation(ObTableQueryResultIterator *res
           LOG_WARN("fail to get next result", K(ret));
         }
       }
-      OB_TABLE_END_AUDIT(ret_code, ret,
+      OB_TABLE_END_AUDIT(ret_code, ret, 
                          snapshot, get_tx_snapshot(),
                          stmt_type, StmtType::T_KV_QUERY,
                          return_rows, (OB_ISNULL(one_result) ? 0 : one_result->get_row_count()),
                          has_table_scan, true,
                          filter, (OB_ISNULL(result_iterator) ? nullptr : result_iterator->get_filter()));
-
+      
       if (OB_FAIL(ret)) {
         // do nothing
       } else if (OB_FAIL(execute_one_mutation(allocator_, *one_result, rowkey_column_names, affected_rows, end_in_advance))) {
@@ -967,7 +967,7 @@ int QueryAndMutateHelper::check_and_execute(ObTableQueryResultIterator *result_i
       LOG_WARN("fail to get next result", K(ret));
     }
   }
-  OB_TABLE_END_AUDIT(ret_code, ret,
+  OB_TABLE_END_AUDIT(ret_code, ret, 
                      snapshot, get_tx_snapshot(),
                      stmt_type, StmtType::T_KV_QUERY,
                      return_rows, (OB_ISNULL(one_result) ? 0 : one_result->get_row_count()),

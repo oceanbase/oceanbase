@@ -72,7 +72,7 @@ int ObMdsTableMergeTask::process()
 
 #ifdef ERRSIM
   if (OB_SUCCESS != EN_SKIP_MDS_MINI_MERGE) {
-    ret = OB_NO_NEED_MERGE;
+    ret = OB_NO_NEED_MERGE; 
     LOG_INFO("[ERRSIM] mds mini merge, skip", KR(ret), KPC_(mds_merge_dag));
     return ret;
   }
@@ -148,7 +148,7 @@ int ObMdsTableMergeTask::process()
       } else {
         // abort transaction may trigger an empty mds table dump to relase mem and clog scn
         // however, an uncommitted tablet for example create/transfer in/split dest, need to
-        // transform to empty shell accoring to the mds table rec scn (See
+        // transform to empty shell accoring to the mds table rec scn (See 
         // ObTabletEmptyShellHandler::check_tablet_from_aborted_tx_).
         // So here double check tablet status that only flush those committed tablet status.
         ret = OB_SUCCESS;
@@ -169,7 +169,7 @@ int ObMdsTableMergeTask::process()
         table_handle,
         flush_scn,
         new_tablet_handle))) {
-      LOG_WARN("failed to build new tablet from mds table", K(ret), K(ctx), K(ls_id), K(tablet_id),
+      LOG_WARN("failed to build new tablet from mds table", K(ret), K(ctx), K(ls_id), K(tablet_id), 
               K(flush_scn), KPC(mds_merge_dag_));
     }
 
@@ -233,7 +233,7 @@ int ObMdsTableMergeTask::check_tablet_status_for_empty_mds_table_(const ObTablet
       // rewrite ret to skip mds table on_flush
       ret = OB_NO_NEED_MERGE;
     }
-  }
+  } 
   return ret;
 }
 

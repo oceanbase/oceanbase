@@ -33,7 +33,7 @@ int ObDeviceConnectivityCheckManager::check_device_connectivity(const ObBackupDe
     LOG_WARN("storage_dest is invalid", KR(ret), K(storage_dest));
   } else if (OB_UNLIKELY(storage_dest.get_storage_type() == ObStorageType::OB_STORAGE_AZBLOB)) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("azblob is not supported as a storage destination in shared storage mode.", KR(ret), K(storage_dest));
+    LOG_WARN("azblob is not supported as a storage destination in shared storage mode.", KR(ret), K(storage_dest)); 
   } else if (OB_FAIL(check_file.check_io_permission(storage_dest))) {
     LOG_WARN("fail to check io permission", KR(ret), K(storage_dest));
   } else {

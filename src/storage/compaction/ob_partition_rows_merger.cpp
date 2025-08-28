@@ -519,7 +519,7 @@ int ObPartitionMajorRowsMerger::check_row_iters_purge(
     LOG_WARN("cur row of minor sstable row iter is unexpected null", K(ret), K(check_iter));
   } else if (curr_row->row_flag_.is_delete()) {
     // we cannot trust the dml flag
-    //
+    // 
 
     // TODO we need add first dml to optimize the purge cost
     //const ObDatumRow *tmp_row = nullptr;

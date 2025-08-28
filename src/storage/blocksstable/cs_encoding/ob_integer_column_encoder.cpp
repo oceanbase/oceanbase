@@ -48,7 +48,7 @@ int ObIntegerColumnEncoder::init(
       type_store_size_ = sizeof(int64_t);
       precision_width_size_ = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(column_type_.get_stored_precision());
     } else {
-      type_store_size_ = get_type_size_map()[column_type_.get_type()];
+      type_store_size_ = get_type_size_map()[column_type_.get_type()]; 
       precision_width_size_ = -1;
     }
 
@@ -87,7 +87,7 @@ int ObIntegerColumnEncoder::do_init_()
         0, 0, true/*is_replace_null*/, 0, precision_width_size_, is_force_raw_,
         ctx_->encoding_ctx_->major_working_cluster_version_, integer_range_))) {
       LOG_WARN("fail to build_signed_stream_meta", K(ret));
-    }
+    } 
   } else if (ObIntSC == store_class_ || ObDecimalIntSC == store_class_) {
     if (OB_FAIL(build_signed_stream_meta_())) {
       LOG_WARN("fail to build signed encoder ctx", K(ret));

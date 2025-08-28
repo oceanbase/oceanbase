@@ -250,7 +250,7 @@ int CommandOperator::build_complex_type_rowkey_entity(int64_t db, const ObString
   return ret;
 }
 
-int CommandOperator::build_complex_type_rowkey(int64_t db, const ObString &key,
+int CommandOperator::build_complex_type_rowkey(int64_t db, const ObString &key, 
                                            bool is_next_prefix, common::ObRowkey &rowkey)
 {
   int ret = OB_SUCCESS;
@@ -317,7 +317,7 @@ int CommandOperator::get_tablet_id_by_rowkey(ObTableCtx &tb_ctx, const ObRowkey 
     LOG_WARN("fail to get partition key", K(ret), K(rowkey));
   } else if (OB_FAIL(tb_ctx.get_tablet_by_rowkey(tmp_part_key, tablet_id))) {
     LOG_WARN("fail to get tablet by rowkey", K(ret), K(tb_ctx), K(tmp_part_key));
-  }
+  } 
   return ret;
 }
 
@@ -578,7 +578,7 @@ int CommandOperator::add_meta_select_columns(ObTableQuery &query)
     LOG_WARN("fail to add select column", K(ret));
   } else if (OB_FAIL(query.add_select_column(ObRedisUtil::INSERT_TS_PROPERTY_NAME))) {
     LOG_WARN("fail to add select column", K(ret));
-  }
+  } 
   if (model_ == ObRedisDataModel::LIST) {
     if (OB_FAIL(query.add_select_column(ObRedisUtil::IS_DATA_PROPERTY_NAME))) {
       LOG_WARN("fail to add select column", K(ret));
@@ -722,9 +722,9 @@ int CommandOperator::insup_meta(int64_t db, const ObString &key, ObRedisDataMode
 }
 
 int CommandOperator::check_and_insup_meta(
-  int64_t db,
-  const ObString &key,
-  ObRedisDataModel model,
+  int64_t db, 
+  const ObString &key, 
+  ObRedisDataModel model, 
   bool &do_insup,
   ObRedisMeta *&meta)
 {
@@ -787,8 +787,8 @@ int CommandOperator::build_string_rowkey_entity(int64_t db, const ObString &key,
   return ret;
 }
 
-int CommandOperator::get_varbinary_from_entity(const ObITableEntity &entity,
-                                               const ObString &col_name,
+int CommandOperator::get_varbinary_from_entity(const ObITableEntity &entity, 
+                                               const ObString &col_name, 
                                                ObString &value)
 {
   int ret = OB_SUCCESS;
@@ -914,8 +914,8 @@ int CommandOperator::build_del_query(int64_t db, const ObString &key, ObTableQue
 int CommandOperator::build_del_ops(ObRedisDataModel model,
                                    int db,
                                    const ObString &key,
-                                   const ObTableQuery &query,
-                                   ObTableBatchOperation &del_ops,
+                                   const ObTableQuery &query, 
+                                   ObTableBatchOperation &del_ops, 
                                    ObRedisMeta *meta /*= nullptr*/)
 {
   int ret = OB_SUCCESS;
@@ -956,9 +956,9 @@ int CommandOperator::build_del_ops(ObRedisDataModel model,
 }
 
 int CommandOperator::del_complex_key(
-    ObRedisDataModel model,
-    int64_t db,
-    const ObString &key,
+    ObRedisDataModel model, 
+    int64_t db, 
+    const ObString &key, 
     bool del_meta,
     bool &is_exist)
 {
@@ -1068,7 +1068,7 @@ int CommandOperator::get_complex_type_count(int64_t db, const common::ObString &
     LOG_WARN("fail to add hash set scan range", K(ret), K(db), K(key));
   } else if (OB_FAIL(process_table_query_count(op_temp_allocator_, query, nullptr, total_count))) {
     LOG_WARN("fail to process table query count", K(ret), K(db), K(key), K(query));
-  }
+  } 
   return ret;
 }
 
@@ -1145,7 +1145,7 @@ int CommandOperator::reply_batch_res(const ResultFixedArray &batch_res)
   ObRedisBatchCtx &group_ctx = reinterpret_cast<ObRedisBatchCtx &>(redis_ctx_);
   if (batch_res.count() != group_ctx.ops().count()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("batch res count should be equal to ops count",
+    LOG_WARN("batch res count should be equal to ops count", 
       K(ret), K(batch_res.count()), K(group_ctx.ops().count()));
   }
   for (int i = 0; OB_SUCC(ret) && i < batch_res.count(); ++i) {
@@ -1209,7 +1209,7 @@ int CommandOperator::get_group_metas(ObIAllocator &allocator,
       }
     }
   }
-
+  
   ResultFixedArray batch_res(allocator);
   if (OB_SUCC(ret)) {
     if (OB_FAIL(process_table_batch_op(
@@ -1320,7 +1320,7 @@ int CommandOperator::do_group_complex_type_set()
   } else if (metas.count() != result.get_results().count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected result count", K(ret), K(metas.count()), K(result.get_results().count()));
-  }
+  } 
 
   for (int64_t i = 0; OB_SUCC(ret) && i < result.get_results().count(); ++i) { // loop multi batch result
     int64_t insert_num = 0;
@@ -1378,8 +1378,8 @@ int CommandOperator::do_group_complex_type_subkey_exists(ObRedisDataModel model)
   return ret;
 }
 
-int CommandOperator::fill_set_batch_op(const ObRedisOp &op,
-                      ObIArray<ObTabletID> &tablet_ids,
+int CommandOperator::fill_set_batch_op(const ObRedisOp &op, 
+                      ObIArray<ObTabletID> &tablet_ids, 
                       ObTableBatchOperation &batch_op)
 {
   int ret = OB_NOT_SUPPORTED;

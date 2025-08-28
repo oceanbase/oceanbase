@@ -23,7 +23,7 @@ namespace common
 {
 
 // find rings_rtree in range [start, end)
-int ObRingsRtree::get_ring_strat_idx(int p_idx, int &start, int& end)
+int ObRingsRtree::get_ring_strat_idx(int p_idx, int &start, int& end) 
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -56,7 +56,7 @@ int ObCachedGeoPolygon::init()
   if (!is_inited()) {
     if (OB_FAIL(ObCachedGeomBase::init())) {
       LOG_WARN("cache geom base init failed", K(ret));
-    }
+    } 
   }
   return ret;
 }
@@ -192,10 +192,10 @@ int ObCachedGeoPolygon::init_rings_rtree()
   } else if (origin_geo_->type() == ObGeoType::POLYGON) {
     rings_rtree_.poly_count_ = 1;
     if (origin_geo_->crs() == ObGeoCRS::Cartesian) {
-      ret = polygon_init_rings_rtree<ObIWkbGeomPolygon, ObWkbGeomPolygon,
+      ret = polygon_init_rings_rtree<ObIWkbGeomPolygon, ObWkbGeomPolygon, 
       ObIWkbGeomLinearRing, ObWkbGeomLinearRing, ObWkbGeomPolygonInnerRings>(static_cast<ObIWkbGeomPolygon*>(origin_geo_));
     } else {
-      ret = polygon_init_rings_rtree<ObIWkbGeogPolygon, ObWkbGeogPolygon,
+      ret = polygon_init_rings_rtree<ObIWkbGeogPolygon, ObWkbGeogPolygon, 
       ObIWkbGeogLinearRing, ObWkbGeogLinearRing, ObWkbGeogPolygonInnerRings>(static_cast<ObIWkbGeogPolygon*>(origin_geo_));
     }
   } else {
@@ -292,7 +292,7 @@ int ObCachedGeoPolygon::eval_point_contains(ObGeometry& geo, bool &res, bool is_
           is_cover = true;
         } else if (poly_pos == ObPointLocation::BOUNDARY) {
           res_for_each_point = true;
-        }
+        } 
       }
       if (p_idx > rings_rtree_.poly_count_ && !res_for_each_point) {
         end_check = true;
@@ -322,7 +322,7 @@ int ObCachedGeoPolygon::get_point_position_in_polygon(int p_idx, const ObPoint2d
         LOG_WARN("rtree is null", K(ret), K(i));
       } else {
         ObPointLocationAnalyzer tmp_pAnalyzer(this, *rings_rtree_.rtrees_[i]);
-        if (i == start) {
+        if (i == start) { 
           // exterior ring
           if (OB_FAIL(tmp_pAnalyzer.calculate_point_position(test_point))) {
             LOG_WARN("calculate point position failed", K(ret), K(input_vertexes_[i]));
@@ -402,7 +402,7 @@ int ObCachedGeoPolygon::get_farthest_point_position(ObVertexes& vertexes, ObPoin
     for (uint32_t i = 0; i < vertexes.size() && OB_SUCC(ret) && (farthest_position != ObPointLocation::EXTERIOR); ++i) {
       if (OB_FAIL(pAnalyzer_->calculate_point_position(vertexes[i]))) {
         LOG_WARN("calculate point position failed", K(ret), K(vertexes[i]));
-      } else if (pAnalyzer_->get_position() == ObPointLocation::INVALID) {
+      } else if (pAnalyzer_->get_position() == ObPointLocation::INVALID) { 
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("wrong position.", K(i), K(ret));
       } else if (farthest_position == ObPointLocation::INVALID || farthest_position < pAnalyzer_->get_position()) {
@@ -435,7 +435,7 @@ bool ObCachedGeoPolygon::multi_polygons_has_inner_rings()
   return ret_bool;
 }
 
-bool ObCachedGeoPolygon::has_inner_rings()
+bool ObCachedGeoPolygon::has_inner_rings() 
 {
   bool ret_bool = true;
   if (origin_geo_->crs() == ObGeoCRS::Cartesian) {
@@ -472,12 +472,12 @@ int ObCachedGeoPolygon::inner_eval_contains(ObGeometry& geo, ObGeoEvalCtx& gis_c
     LOG_WARN("fail to get farthest point position.", K(ret));
   } else if (farthest_position == ObPointLocation::EXTERIOR) {
     res = false;
-  } else if (dim == ObGeoDimension::ZERO_DIMENSION) {
+  } else if (dim == ObGeoDimension::ZERO_DIMENSION) { 
     // 2. if points, make sure at least one point is interior
     res = eval_contains ? has_point_internal : true;
   } else if (OB_FAIL(init_line_analyzer())) { // dim of geo is 1 or 2
     LOG_WARN("fail to init_line_Analyzer", K(ret));
-  } else if (OB_FALSE_IT(lAnalyzer_->set_intersects_analyzer_type(true))) {
+  } else if (OB_FALSE_IT(lAnalyzer_->set_intersects_analyzer_type(true))) { 
   } else if (OB_FAIL(lAnalyzer_->segment_intersection_query(&geo))) { // 2. check ling segment intersection
     LOG_WARN("calculate segment intersection failed", K(ret));
   } else if ((dim == ObGeoDimension::TWO_DIMENSION || !has_inner_rings())
@@ -578,7 +578,7 @@ int ObCachedGeoPolygon::intersects(ObGeometry& geo, ObGeoEvalCtx& gis_context, b
   return ret;
 }
 
-int ObCachedGeoPolygon::check_valid(ObGeoEvalCtx& gis_context)
+int ObCachedGeoPolygon::check_valid(ObGeoEvalCtx& gis_context) 
 {
   int ret = OB_SUCCESS;
   if (!check_valid_) {

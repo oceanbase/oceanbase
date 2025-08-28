@@ -227,7 +227,7 @@ public:
   {
     // 本地盘的delete_palf操作要求palf目录下不为空
     SHARED_LOG_GLOBAL_UTILS.delete_blocks(tenant_id, ObLSID(palf_id), 0, MAX_BLOCK_ID);
-    return SHARED_LOG_GLOBAL_UTILS.delete_ls(tenant_id, ObLSID(palf_id));
+    return SHARED_LOG_GLOBAL_UTILS.delete_ls(tenant_id, ObLSID(palf_id));    
   }
 
 private:

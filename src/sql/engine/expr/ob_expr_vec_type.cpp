@@ -81,3 +81,4 @@ int ObExprVecType::cg_expr(
 
 }  // namespace sql
 }  // namespace oceanbase
+

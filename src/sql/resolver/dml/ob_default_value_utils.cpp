@@ -1005,7 +1005,7 @@ int ObDefaultValueUtils::build_accuracy_expr_static(ObRawExprFactory& expr_facto
 
 int ObDefaultValueUtils::build_type_expr_static(ObRawExprFactory& expr_factory, 
                                                 const ObSQLSessionInfo &session_info,
-                                                const ObColumnSchemaV2 &column_schema,
+                                                const ObColumnSchemaV2 &column_schema, 
                                                 ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;

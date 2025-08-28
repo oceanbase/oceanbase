@@ -460,7 +460,7 @@ protected:
   // 2. Define an INVALID value for each member, only for ObResourceResolver to mark when it's
   //    not specified by user. The resolver needs to invoke reset_all_invalid() to set all
   //    members to this invalid value.
-  // 3. Default constructor, reset() method will set these members as DEFAULT values,
+  // 3. Default constructor, reset() method will set these members as DEFAULT values, 
   //    reset_all_invalid() will set these members as INVALID values.
   int64_t data_disk_size_;                    // DEFAULT: 0,         INVALID: -1
   int64_t max_net_bandwidth_;                 // DEFAULT: INT64_MAX, INVALID: 0

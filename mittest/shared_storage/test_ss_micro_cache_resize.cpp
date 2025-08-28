@@ -54,10 +54,10 @@ public:
   };
 
 public:
-  class TestSSMicroCacheResizeThread : public Threads
+  class TestSSMicroCacheResizeThread : public Threads 
   {
   public:
-    enum class TestParallelType
+    enum class TestParallelType 
     {
       GET_MICRO_BLOCK_AND_RESIZE_LARGER,
     };
@@ -167,7 +167,7 @@ TEST_F(TestSSMicroCacheResize, test_basic_resize_cache_file)
   ASSERT_LT(ori_arc_limit, micro_meta_mgr.arc_info_.limit_);
 }
 
-/*
+/* 
   resize cache_file_szie between begin_free_space_for_prewarm() and finish_free_space_for_prewarm()
 */
 TEST_F(TestSSMicroCacheResize, test_resize_between_free_space_for_prewarm)

@@ -122,7 +122,7 @@ private:
   };
 
 #ifdef OB_BUILD_ARBITRATION
-  class GetElectionSilentFunctor
+  class GetElectionSilentFunctor 
   {
   public:
     GetElectionSilentFunctor(bool &is_election_silent) : is_election_silent_(is_election_silent) {}

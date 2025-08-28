@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef OB_SHARED_EXPR_RESOLVER_H
 #define OB_SHARED_EXPR_RESOLVER_H
 
@@ -27,10 +27,10 @@ struct ObQuestionmarkEqualCtx : public ObExprEqualCheckContext
   {
     override_const_compare_ = true;
   }
-
-  bool compare_const(const ObConstRawExpr &left,
+  
+  bool compare_const(const ObConstRawExpr &left, 
                      const ObConstRawExpr &right);
-
+  
   ObSEArray<ObPCParamEqualInfo, 4> equal_pairs_;
 
 private:
@@ -48,9 +48,9 @@ struct ObRawExprEntry
 
   bool compare(const ObRawExprEntry &node,
                ObQuestionmarkEqualCtx &cmp_ctx) const;
-
+  
   TO_STRING_KV(K_(hash_code), K_(expr));
-
+  
   ObRawExpr *expr_;
   uint64_t stmt_scope_;
   uint64_t hash_code_;
@@ -65,7 +65,7 @@ public:
       query_ctx_(query_ctx),
       disable_share_const_level_(0)
   {}
-
+  
   virtual ~ObSharedExprResolver();
 
   int get_shared_instance(ObRawExpr *expr,
@@ -74,13 +74,13 @@ public:
                           bool &disable_share_expr);
 
   int add_new_instance(ObRawExprEntry &entry);
-
+  
   uint64_t get_scope_id() const { return scope_id_; }
-
+  
   void set_new_scope() { scope_id_ ++; }
-
+  
   void revert_scope() { scope_id_ = 0; }
-
+  
   uint64_t hash_expr_tree(ObRawExpr *expr, uint64_t hash_code, const bool is_root = true);
 
 private:
@@ -101,8 +101,8 @@ private:
   }
   inline bool is_blacklist_share_child(const ObRawExpr &expr)
   {
-    return expr.is_aggr_expr()
-           || expr.is_win_func_expr()
+    return expr.is_aggr_expr() 
+           || expr.is_win_func_expr() 
            || T_OP_CASE == expr.get_expr_type()
            || T_OP_ROW == expr.get_expr_type();
   }
@@ -117,7 +117,7 @@ private:
   hash::ObHashMap<uint64_t, SharedExprs *> shared_expr_map_;
 
   uint64_t scope_id_;
-
+  
   ObQueryCtx *query_ctx_;
   int64_t disable_share_const_level_;
 };

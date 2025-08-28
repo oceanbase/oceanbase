@@ -146,7 +146,7 @@ public:
   bool is_valid() const;
   int assign(const ObStorageHAPerfDiagParams &params);
 
-  TO_STRING_KV(K_(dest_ls_id), K_(task_id), K_(task_type),
+  TO_STRING_KV(K_(dest_ls_id), K_(task_id), K_(task_type), 
       K_(item_type), K_(name), K_(tablet_id), K_(tablet_count));
 
   ObLSID dest_ls_id_;
@@ -180,7 +180,7 @@ public:
     K_(retry_id),
     K_(diag_type),
     K_(tablet_id));
-
+  
   uint64_t tenant_id_;
   int64_t task_id_;
   ObStorageHADiagModule module_;
@@ -301,12 +301,12 @@ public:
   int64_t retry_id_;
 };
 
-struct ObStorageHACostAccumItem : public ObIStorageHACostItem
+struct ObStorageHACostAccumItem : public ObIStorageHACostItem 
 {
 public:
   ObStorageHACostAccumItem();
   virtual ~ObStorageHACostAccumItem() { reset(); }
-  virtual int update(const ObIStorageHACostItem &item) override;
+  virtual int update(const ObIStorageHACostItem &item) override; 
   virtual int get_str(char *str, const int64_t size, int64_t &pos) const override;
   virtual int deep_copy(ObIAllocator &allocator, ObIStorageHACostItem *&item) const override;
   virtual uint32_t get_size() const override;
@@ -322,12 +322,12 @@ public:
   uint64_t cost_time_;
 };
 
-struct ObStorageHATimestampItem : public ObIStorageHACostItem
+struct ObStorageHATimestampItem : public ObIStorageHACostItem 
 {
 public:
   ObStorageHATimestampItem();
   virtual ~ObStorageHATimestampItem() { reset(); }
-  virtual int update(const ObIStorageHACostItem &item) override;
+  virtual int update(const ObIStorageHACostItem &item) override; 
   virtual int get_str(char *str, const int64_t size, int64_t &pos) const override;
   virtual int assign(const ObIStorageHACostItem &item) override;
   virtual int deep_copy(ObIAllocator &allocator, ObIStorageHACostItem *&item) const override;

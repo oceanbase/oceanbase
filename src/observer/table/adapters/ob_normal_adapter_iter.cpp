@@ -15,7 +15,7 @@
 #include "ob_normal_adapter_iter.h"
 
 namespace oceanbase
-{
+{   
 namespace table
 {
 
@@ -34,6 +34,7 @@ int ObHbaseNormalCellIter::get_next_cell(ObNewRow *&row)
   }
   return ret;
 }
-
+ 
 } // end of namespace table
 } // end of namespace oceanbase
+ 

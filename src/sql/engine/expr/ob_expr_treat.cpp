@@ -18,7 +18,7 @@
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/sys_package/ob_json_pl_utils.h"
 #include "pl/ob_pl_user_type.h"
-#endif
+#endif 
 namespace oceanbase
 {
 namespace sql
@@ -90,7 +90,7 @@ int ObExprTreat::cg_expr(ObExprCGCtx &expr_cg_ctx,
 
 #ifdef OB_BUILD_ORACLE_PL
 
-static int treat_as_json_udt(const ObExpr &expr, ObEvalCtx &ctx, common::ObIAllocator &temp_allocator,
+static int treat_as_json_udt(const ObExpr &expr, ObEvalCtx &ctx, common::ObIAllocator &temp_allocator, 
                                 pl::ObPLOpaque *opaque, ObDatum &res) {
   INIT_SUCC(ret);
   pl::ObPLJsonBaseType *jsontype = nullptr;
@@ -105,7 +105,7 @@ static int treat_as_json_udt(const ObExpr &expr, ObEvalCtx &ctx, common::ObIAllo
     res.set_null();
   } else {
     DISABLE_SQL_MEMLEAK_GUARD;
-    if (OB_FAIL(pl::ObPlJsonUtil::transform_JsonBase_2_PLJsonType(ctx.exec_ctx_,
+    if (OB_FAIL(pl::ObPlJsonUtil::transform_JsonBase_2_PLJsonType(ctx.exec_ctx_, 
       pl_json_node->get_data_node() ? pl_json_node->get_data_node() : pl_json_node->get_ref_node(),
       new_jsontype))) {
       LOG_WARN("failed to transfrom ObJsonNode to ObPLJsonBaseType", K(ret));
@@ -135,10 +135,10 @@ int ObExprTreat::eval_treat(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res) {
   ObString in_str;
   bool is_null = false;
 
-  if (OB_FAIL(expr.args_[0]->eval(ctx, child_res))) {
+  if (OB_FAIL(expr.args_[0]->eval(ctx, child_res))) { 
     LOG_WARN("eval arg failed", K(ret), K(ctx));
-  } else if (OB_ISNULL(child_res) || child_res->is_null()) {
-    res.set_null();
+  } else if (OB_ISNULL(child_res) || child_res->is_null()) { 
+    res.set_null(); 
   } else if (ob_is_extend(in_type)) {
   #ifdef OB_BUILD_ORACLE_PL
     pl::ObPLOpaque *opaque = reinterpret_cast<pl::ObPLOpaque *>(child_res->get_ext());
@@ -184,3 +184,4 @@ DEF_SET_LOCAL_SESSION_VARS(ObExprTreat, raw_expr) {
 
 } // sql
 } // oceanbase
+

@@ -714,7 +714,7 @@ int ObCDCLobDataMerger::handle_outrow_lob_locator_ext_info_log_(
     const ObLobData *pre_lob_data = lob_data_get_ctx.new_lob_data_;
 
     LOG_DEBUG("push lob merge task suscces", KPC(lob_common), KPC(lob_data), KPC(lob_data_out_row_ctx), KPC(pre_lob_data), K(lob_data_get_ctx), K(lob_data_out_row_ctx_list));
-
+  
     // check and set lob_data in ext info log
     if (OB_ISNULL(pre_lob_data)) {
       ret = OB_ERR_UNEXPECTED;

@@ -162,7 +162,7 @@ private:
                                                     const ObTenantCCLRuleId &tenant_ccl_rule_id);
   inline static bool equal_with_tenant_ccl_rule_id(const ObSimpleCCLRuleSchema *lhs,
                                                   const ObTenantCCLRuleId &tenant_ccl_rule_id);
-
+  
 private:
   static const char *CCL_RULE_MGR;
   bool is_inited_;

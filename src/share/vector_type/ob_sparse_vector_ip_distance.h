@@ -34,3 +34,4 @@ struct ObSparseVectorIpDistance
 }  // namespace common
 }  // namespace oceanbase
 #endif
+

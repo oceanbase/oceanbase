@@ -44,8 +44,8 @@ public:
   }
   common::ObAddr get_server() const
   {
-    return server_;
-  }
+    return server_; 
+  } 
   TO_STRING_KV(K_(server), K_(readable_scn));
 private:
   common::ObAddr server_;
@@ -75,18 +75,18 @@ public:
    * @param[in] ls_id: use to get ls_recovery_stat from ObLS
    * @param[in] timeout: Timeout period, with a default value of -1, which indicates no waiting.
    *                     The reference count will be incremented if possible without waiting in case of failure.
-   *                     The system will attempt to increase the reference count successfully within the timeout period.
+   *                     The system will attempt to increase the reference count successfully within the timeout period. 
    * @return : OB_SUCCESS: Reference increment successful.
    *           OB_EAGAIN:Wait for reference increment to fail within the timeout period due to other reference points not being successfully released.
    */
 
-  int init(const uint64_t tenant_id, const share::ObLSID &ls_id,
+  int init(const uint64_t tenant_id, const share::ObLSID &ls_id, 
       const int64_t &timeout = -1);
   //TODO 判断是否可以加减成员, meta or sys directly return success
   /*
    * @description: Used to check whether the readable_SCN of this member has surpassed the reported readable_SCN,
    * for the purpose of judging member changes and the addition of replicas during timeout.
-   * @param[in] server: target server
+   * @param[in] server: target server 
    * @param[in] timeout: Timeout period
    * */
   int check_can_add_member(const ObAddr &server, const int64_t timeout);
@@ -111,7 +111,7 @@ private:
 
 /**
   * @description:
-  *    ObLSRecoveryStatHandler exists on the LS of each observer and is responsible for
+  *    ObLSRecoveryStatHandler exists on the LS of each observer and is responsible for 
   *    the each LS recovery stat
   */
 class ObLSRecoveryStatHandler
@@ -132,7 +132,7 @@ public:
    * @description:
    *    get ls level recovery_stat by LS leader.
    *    If follower LS replica call this function, it will return OB_NOT_MASTER.
-   * @param[out] ls_recovery_stat
+   * @param[out] ls_recovery_stat 
    * @return return code
    */
   int get_ls_level_recovery_stat(share::ObLSRecoveryStat &ls_recovery_stat);
@@ -141,13 +141,13 @@ public:
   void reset_add_replica_server();
   /*
   * @description:
-  * get all ls replica readable and set to replicas_scn_;
+  * get all ls replica readable and set to replicas_scn_; 
   */
   int gather_replica_readable_scn();
   /*
    * @description:
    * Add a reference, which may be used for reporting or member list changes.
-   * @param[in] timeout : Add a reference within the timeout range; if unsuccessful, wait for 100ms.
+   * @param[in] timeout : Add a reference within the timeout range; if unsuccessful, wait for 100ms. 
    * */
   int inc_ref(const int64_t timeout);
   /*
@@ -177,23 +177,23 @@ public:
    *                 or the config_version has changed during the statistical process.
    * */
   int get_all_replica_min_readable_scn(share::SCN &readable_scn);
-  /*
+  /* 
    * @description: Used to check whether the readable_SCN of this member has surpassed the reported readable_SCN,
    * for the purpose of judging member changes and the addition of replicas during timeout.
-   * @param[in] server: target server
+   * @param[in] server: target server 
    * @param[in] timeout: Timeout period
-  * @return:
+  * @return: 
   */
   int wait_server_readable_scn(const common::ObAddr &server, const int64_t timeout);
-  /*
+  /* 
    * @description: Within the timeout period, determine whether the new member list can ensure that the readable_SCN does not regress.
    * @param[in] new_member_list : new_member_list
    * @param[in] paxos_replica_num : paxos_replica_num of new member_list
    * @param[in] timeout: Timeout period
-   * @return:
+   * @return: 
   */
   int wait_can_change_member_list(const ObMemberList &new_member_list,
-      const int64_t paxos_replica_num, const int64_t timeout);
+      const int64_t paxos_replica_num, const int64_t timeout); 
   TO_STRING_KV(K_(tenant_id), K_(ls), K(ref_cnt_));
   friend class TestLSRecoveryGuard;
   friend class ObLSRecoveryGuard;
@@ -204,7 +204,7 @@ private:
   /**
    * @description:
    *    increase LS readable_scn when replayable_scn is pushed forward in switchover
-   * @param[in/out] readable_scn
+   * @param[in/out] readable_scn 
    *                  in: actual readable_scn
    *                  out: increased readable_scn
    * @return return code
@@ -216,9 +216,9 @@ private:
   /**
    * @description:
    *    do not use this function.
-   *    Since PalfHandleGuard holds lock, it may cause deadlock with other palf operations,
+   *    Since PalfHandleGuard holds lock, it may cause deadlock with other palf operations, 
    *    so use a separate function to obtain palf_stat, please do not add new operations in this function
-   * @param[out] palf_stat
+   * @param[out] palf_stat 
    * @return return code
    */
   int get_palf_stat_(
@@ -226,11 +226,11 @@ private:
 
   /**
    * @description:
-   *    palf_stat get from  palf_handle_guard.stat can guarantee that <config_version, paxos_member_list, paxos_replica_num, degraded_list>
-   *    is a snapshot, but because it is a cache, it may be not latest, in order to ensure that
-   *    the latest palf_stat can be obtained, it is necessary to obtain the latest member list
+   *    palf_stat get from  palf_handle_guard.stat can guarantee that <config_version, paxos_member_list, paxos_replica_num, degraded_list> 
+   *    is a snapshot, but because it is a cache, it may be not latest, in order to ensure that 
+   *    the latest palf_stat can be obtained, it is necessary to obtain the latest member list 
    *    and compare with palf_stat. If they are same, the obtained palf_stat is considered to be latest.
-   * @param[out] palf_stat
+   * @param[out] palf_stat 
    * @return return code
    */
   int get_latest_palf_stat_(
@@ -242,12 +242,12 @@ private:
       const share::SCN &leader_readable_scn,
       share::SCN &majority_min_readable_scn);
   int do_get_majority_readable_scn_(
-      const ObIArray<common::ObAddr> &ob_member_list,
+      const ObIArray<common::ObAddr> &ob_member_list, 
       const share::SCN &leader_readable_scn,
       const int64_t need_query_member_cnt,
       share::SCN &majority_min_readable_scn);
   int do_get_majority_readable_scn_V2_(
-      const ObIArray<common::ObAddr> &ob_member_list,
+      const ObIArray<common::ObAddr> &ob_member_list, 
       const int64_t need_query_member_cnt,
       const palf::LogConfigVersion &config_version,
       share::SCN &majority_min_readable_scn);
@@ -262,10 +262,10 @@ private:
     ObArray<SCN> &readable_scn_list,
     share::SCN &majority_min_readable_scn);
   int construct_new_member_list_(
-      const common::ObMemberList &member_list_ori,
-      const common::GlobalLearnerList &degraded_list,
+      const common::ObMemberList &member_list_ori, 
+      const common::GlobalLearnerList &degraded_list, 
       const int64_t paxos_replica_number_ori,
-      ObIArray<common::ObAddr> &member_list_new,
+      ObIArray<common::ObAddr> &member_list_new, 
       int64_t &paxos_replica_number_new);
   int check_can_use_new_version_(bool &vaild_to_use);
   int construct_addr_list_(const palf::PalfStat &palf_stat,
@@ -278,7 +278,7 @@ private:
   int wait_func_with_timeout_(const int64_t timeout, Args &&... args);
   int check_member_change_valid_(const common::ObAddr &server, bool &is_valid);
   int check_member_change_valid_(const ObMemberList &new_member_list,
-      const int64_t paxos_replica_num, bool &is_valid);
+      const int64_t paxos_replica_num, bool &is_valid); 
   DISALLOW_COPY_AND_ASSIGN(ObLSRecoveryStatHandler);
 
 private:

@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef SRC_OBSERVER_SQL_PLAN_H_
 #define SRC_OBSERVER_SQL_PLAN_H_
 #include "sql/ob_sql_define.h"
@@ -89,9 +89,9 @@ struct PlanText
 {
 public:
   PlanText()
-    : buf_(NULL),
+    : buf_(NULL), 
       buf_len_(0),
-      pos_(0),
+      pos_(0), 
       is_oneline_(false),
       is_used_hint_(false),
       is_outline_data_(false),
@@ -129,21 +129,21 @@ public:
   int store_sql_plan(ObLogPlan* log_plan, ObPhysicalPlan* phy_plan);
 
   int store_sql_plan_for_explain(ObExecContext *ctx,
-                                 ObLogPlan* plan,
-                                 ExplainType type,
+                                 ObLogPlan* plan, 
+                                 ExplainType type, 
                                  const ObString& plan_table,
                                  const ObString& statement_id,
                                  const ObExplainDisplayOpt& option,
                                  ObIArray<common::ObString> &plan_strs);
 
   int print_sql_plan(ObLogicalOperator* plan_top,
-                     ExplainType type,
+                     ExplainType type, 
                      const ObExplainDisplayOpt& option,
                      ObIArray<common::ObString> &plan_strs);
 
 
   int format_sql_plan(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
-                      ExplainType type,
+                      ExplainType type, 
                       const ObExplainDisplayOpt& option,
                       PlanText &plan_text,
                       const bool alloc_buffer = true);
@@ -175,25 +175,25 @@ private:
                          ObIArray<ObSqlPlanItem*> &sql_plan_infos);
 
   int get_plan_tree_infos(PlanText &plan_text,
-                         ObLogicalOperator* op,
+                         ObLogicalOperator* op, 
                          ObIArray<ObSqlPlanItem*> &sql_plan_infos,
                          int depth,
                          int position,
                          bool is_last_child);
 
   int get_plan_used_hint_info(PlanText &plan_text,
-                              ObLogicalOperator* plan_top,
+                              ObLogicalOperator* plan_top, 
                               ObSqlPlanItem* sql_plan_item);
 
   static int get_plan_tree_used_hint(PlanText &plan_text,
                                      ObLogicalOperator* op);
 
   int get_qb_name_trace(PlanText &plan_text,
-                        ObLogPlan* plan,
+                        ObLogPlan* plan, 
                         ObSqlPlanItem* sql_plan_item);
 
   int get_plan_outline_info(PlanText &plan_text,
-                            ObLogicalOperator* plan_top,
+                            ObLogicalOperator* plan_top, 
                             ObSqlPlanItem* sql_plan_item);
 
   static int reset_plan_tree_outline_flag(ObLogicalOperator* op);
@@ -204,7 +204,7 @@ private:
   static int construct_outline_global_hint(ObLogPlan &plan, ObGlobalHint &outline_global_hint);
 
   int get_plan_other_info(PlanText &plan_text,
-                          ObLogPlan* plan,
+                          ObLogPlan* plan, 
                           ObSqlPlanItem* sql_plan_item);
 
   int get_constraint_info(char *buf,
@@ -227,19 +227,19 @@ private:
                             int64_t &pos,
                             const ObExprConstraint &info);
 
-  int get_plan_table_formatter(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
+  int get_plan_table_formatter(ObIArray<ObSqlPlanItem*> &sql_plan_infos, 
                                const ObExplainDisplayOpt& option,
                                PlanFormatHelper &format_helper);
 
-  int get_real_plan_table_formatter(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
+  int get_real_plan_table_formatter(ObIArray<ObSqlPlanItem*> &sql_plan_infos, 
                                     const ObExplainDisplayOpt& option,
                                     PlanFormatHelper &format_helper);
 
-  int get_operator_prefix(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
+  int get_operator_prefix(ObIArray<ObSqlPlanItem*> &sql_plan_infos, 
                           const ObExplainDisplayOpt& option,
                           PlanFormatHelper &format_helper);
 
-  int format_basic_plan_table(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
+  int format_basic_plan_table(ObIArray<ObSqlPlanItem*> &sql_plan_infos, 
                               const ObExplainDisplayOpt& option,
                               PlanText &plan_text);
 
@@ -248,7 +248,7 @@ private:
                         const ObExplainDisplayOpt& option,
                         PlanText &plan_text);
 
-  int format_real_plan_table(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
+  int format_real_plan_table(ObIArray<ObSqlPlanItem*> &sql_plan_infos, 
                             const ObExplainDisplayOpt& option,
                             PlanText &plan_text);
 
@@ -266,7 +266,7 @@ private:
 
   int format_plan_to_json(ObIArray<ObSqlPlanItem*> &sql_plan_infos, PlanText &plan_text);
 
-  int inner_format_plan_to_json(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
+  int inner_format_plan_to_json(ObIArray<ObSqlPlanItem*> &sql_plan_infos, 
                                 int64_t info_idx,
                                 json::Value *&ret_val);
 
@@ -283,7 +283,7 @@ private:
                                 transaction::ObTxDesc *&tx_desc,
                                 int64_t &nested_count,
                                 bool &need_restore);
-
+  
   int restore_session(ObSQLSessionInfo *session,
                       ObSQLSessionInfo::StmtSavedValue *&session_value,
                       transaction::ObTxDesc *tx_desc,

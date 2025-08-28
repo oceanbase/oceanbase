@@ -62,11 +62,11 @@ struct ObXmlBinAggKeyCompare {
   }
 };
 
-ObBinAggSerializer::ObBinAggSerializer(ObIAllocator* allocator,
-                                       ObBinAggType type,
-                                       uint8_t header_type,
-                                       bool need_merge_unparsed,
-                                       ObIAllocator* back_allocator,
+ObBinAggSerializer::ObBinAggSerializer(ObIAllocator* allocator, 
+                                       ObBinAggType type, 
+                                       uint8_t header_type, 
+                                       bool need_merge_unparsed, 
+                                       ObIAllocator* back_allocator, 
                                        ObIAllocator* arr_allocator)
   : value_(allocator),
     key_(allocator),
@@ -99,7 +99,7 @@ ObBinAggSerializer::ObBinAggSerializer(ObIAllocator* allocator,
   if (type_ == AGG_XML) {
     new (&doc_header_) ObXmlDocBinHeader(MEMBER_LAZY_SORTED);
   }
-
+  
 }
 
 // for json
@@ -122,7 +122,7 @@ int ObBinAggSerializer::append_key_and_value(ObString key, ObStringBuffer &value
     key_info->unparsed_ = false;
     key_info->type_ = static_cast<uint8_t>(json_val->json_type());
     key_info->value_offset_ = value_record;
-    key_info->offset_ = key_count == 0 ?
+    key_info->offset_ = key_count == 0 ? 
                         0 : key_info_.at(key_count-1)->offset_ + key_info_.at(key_count-1)->key_len_;
 
     if (OB_FAIL(json_val->get_total_value(value))) {
@@ -227,7 +227,7 @@ int ObBinAggSerializer::add_element_xml(ObXmlBin *xml_bin)
     key_info->unparsed_ = xml_bin->meta_.is_unparse_;
     key_info->origin_index_ = key_count;
     key_info->value_offset_ = value_record;
-    key_info->offset_ = current_count == 0 ?
+    key_info->offset_ = current_count == 0 ? 
                         0 : key_info_.at(current_count - 1)->offset_ + key_info_.at(current_count -1)->key_len_;
 
     if (OB_FAIL(key_info_.push_back(key_info))) {
@@ -236,7 +236,7 @@ int ObBinAggSerializer::add_element_xml(ObXmlBin *xml_bin)
       LOG_WARN("failed to append key into key_", K(ret), K(key));
     }
   }
-
+  
   return ret;
 }
 
@@ -248,7 +248,7 @@ int ObBinAggSerializer::add_single_leaf_xml(ObXmlBin *xml_bin)
   ObAggBinKeyInfo *key_info = nullptr;
   int32_t count = xml_bin->meta_.count_;
   int64_t key_count = key_info_.count();
-
+  
   ObMulModeNodeType type = xml_bin->type();
   ObStringBuffer xml_text(allocator_);
   if (last_is_text_node_ && !merge_text_ && OB_FAIL(deal_last_unparsed())) {
@@ -369,7 +369,7 @@ int ObBinAggSerializer::add_parsed_xml(ObXmlBin *xml_bin)
       key_info->unparsed_ = xml_bin->meta_.is_unparse_;
       key_info->origin_index_ = current_count;
       key_info->value_offset_ = bin_value_offset - bin_value_start + value_record;
-      key_info->offset_ = current_count == 0 ?
+      key_info->offset_ = current_count == 0 ? 
                           0 : key_info_.at(current_count - 1)->offset_ + key_info_.at(current_count -1)->key_len_;
 
       if (OB_FAIL(key_info_.push_back(key_info))) {
@@ -435,22 +435,22 @@ Estimated total length
 @param[in]  part length
 @return approximate size
 
-First estimate an estimate_smaller based on the existing length,
-then calculate the total size based on this estimate_smaller,
-then calculate the estimated block size based on the calculated total,
-and then compare the estimated block size with the initial estimate_smaller,
+First estimate an estimate_smaller based on the existing length, 
+then calculate the total size based on this estimate_smaller, 
+then calculate the estimated block size based on the calculated total, 
+and then compare the estimated block size with the initial estimate_smaller, 
 if it is not in the same order of magnitude, then Go up one order of magnitude
 
   K: key_len V: value_len C: count S(a): sizeof(a)
-  Roughly think:
+  Roughly think: 
       S(total) = ceil((log2 total)  / 8)
       S(total) = [1, 4]
       head = 0
-      FOR XML: S(C) * C
+      FOR XML: S(C) * C 
       header_: obj_var_offset_ + obj_var_size_
 K + V + (1 + S(total)) * C + 2 * S(total) * C + S(C) * C + header = total
 */
-int64_t ObBinAggSerializer::estimate_total(int64_t base_length, int64_t count,
+int64_t ObBinAggSerializer::estimate_total(int64_t base_length, int64_t count, 
                                             int32_t type, int64_t xml_header_size)
 {
   int64_t res = 0;
@@ -469,14 +469,14 @@ int64_t ObBinAggSerializer::estimate_total(int64_t base_length, int64_t count,
     uint64_t header_size = header_obj_var_offset + header_obj_var_size;
 
     // for total
-    int64_t total = base_length + (sizeof(uint8_t) + estimate_smaller) * count +
+    int64_t total = base_length + (sizeof(uint8_t) + estimate_smaller) * count + 
                     2 * estimate_smaller * count + header_size;
     if (type == AGG_XML) {
       total += count_size * count + xml_header_size;
     }
     estimated_size_type = ObMulModeVar::get_var_type(total);
     res = total;
-  } while (estimate_smaller_type < ObMulModeBinLenSize::MBL_UINT64
+  } while (estimate_smaller_type < ObMulModeBinLenSize::MBL_UINT64 
             && estimate_smaller_type++ < estimated_size_type);
   return res;
 }
@@ -522,11 +522,11 @@ int ObBinAggSerializer::construct_header()
     }
   }
 
-  int64_t total_size = ObBinAggSerializer::estimate_total(value_len_ + key_len_,
+  int64_t total_size = ObBinAggSerializer::estimate_total(value_len_ + key_len_, 
                                                           count_, type_, doc_header_buff.length());
-  ObMulBinHeaderSerializer header_serializer(&header_buff,
-                                              static_cast<ObMulModeNodeType>(header_type_),
-                                              total_size,
+  ObMulBinHeaderSerializer header_serializer(&header_buff, 
+                                              static_cast<ObMulModeNodeType>(header_type_), 
+                                              total_size, 
                                               count_);
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(header_serializer.serialize())) {
@@ -536,7 +536,7 @@ int ObBinAggSerializer::construct_header()
     LOG_WARN("buff reserver failed.", K(ret), K(total_size));
   } else if (OB_FAIL(buff_.append(header_str.ptr(), header_str.length(), 0))) {
     LOG_WARN("failed to append.", K(header_str));
-  } else if (doc_header_buff.length() != 0 &&
+  } else if (doc_header_buff.length() != 0 && 
               OB_FAIL(buff_.append(doc_header_buff.ptr(), doc_header_buff.length(), 0))) {
     LOG_WARN("failed to append.", K(doc_header_buff));
   } else {
@@ -628,13 +628,13 @@ int ObBinAggSerializer::construct_meta()
   index_entry_size_ = type_ == AGG_XML ? header_.get_count_var_size() : 0;
   key_entry_start_ = index_start_ + index_entry_size_ * count_;
   key_entry_size_ = value_entry_size_ = header_.get_entry_var_size();
-  value_entry_start_ = (type_ == ObBinAggType::AGG_JSON &&
-                        header_type_ == static_cast<uint8_t>(ObJsonNodeType::J_ARRAY)) ?
-                        key_entry_start_ :
+  value_entry_start_ = (type_ == ObBinAggType::AGG_JSON && 
+                        header_type_ == static_cast<uint8_t>(ObJsonNodeType::J_ARRAY)) ? 
+                        key_entry_start_ : 
                         key_entry_start_ + (key_entry_size_ * 2) * count_;
   key_start_ = value_entry_start_ + (sizeof(uint8_t) + value_entry_size_) * count_;
   int64_t value_start = key_start_ + key_len_;
-
+  
   if (key_start_ > header_.total_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("key start unexpected.", K(ret), K(key_start_));
@@ -660,13 +660,13 @@ int ObBinAggSerializer::construct_meta()
       } else if (!key_info->unparsed_) {
         if (header_type_ == static_cast<uint8_t>(ObJsonNodeType::J_OBJECT)) {
           set_key_entry(i_offset, key_start_ + key_offset, key_info->key_len_);
-        }
+        } 
         set_value_entry_for_json(i_offset, key_info->type_, value_offset + value_start);
         key_offset += key_info->key_len_;
         value_offset += key_info->value_len_;
         i_offset++;
       }
-
+      
     }
   }
 
@@ -682,8 +682,8 @@ int ObBinAggSerializer::text_serialize(ObString value, ObStringBuffer &res)
 
   if (OB_FAIL(res.reserve(ser_len + header_size + value.length()))) {
     LOG_WARN("failed to resoerve serialize size for text.", K(ret), K(ser_len));
-  } else if (OB_FAIL(ObMulModeVar::set_var(ObMulModeNodeType::M_TEXT,
-                                            ObMulModeBinLenSize::MBL_UINT8,
+  } else if (OB_FAIL(ObMulModeVar::set_var(ObMulModeNodeType::M_TEXT, 
+                                            ObMulModeBinLenSize::MBL_UINT8, 
                                             res.ptr() + res.length()))) {
     LOG_WARN("failed to set var.", K(ret));
   } else {
@@ -777,12 +777,12 @@ int ObBinAggSerializer::element_serialize(ObIAllocator* allocator, ObString valu
   return ret;
 }
 
-int ObBinAggSerializer::deal_last_unparsed()
+int ObBinAggSerializer::deal_last_unparsed() 
 {
   INIT_SUCC(ret);
   ObAggBinKeyInfo *key_info = nullptr;
   int64_t key_count = key_info_.count();
-
+  
   if (type_ != AGG_XML || key_count <= 0) {
     // do nothing
   } else {
@@ -790,7 +790,7 @@ int ObBinAggSerializer::deal_last_unparsed()
     ObStringBuffer text_buff(allocator_);
 
     ObAggBinKeyInfo *last_key_info = key_info_.at(key_count -1);
-    ObString value(value_.length() - last_key_info->value_offset_,
+    ObString value(value_.length() - last_key_info->value_offset_, 
                     value_.ptr() + last_key_info->value_offset_);
 
     if (last_is_unparsed_text_) {
@@ -854,8 +854,8 @@ int ObBinAggSerializer::construct_key_and_value()
   return ret;
 }
 
-int ObBinAggSerializer::copy_and_reset(ObIAllocator* new_allocator,
-                                       ObIAllocator* old_allocator,
+int ObBinAggSerializer::copy_and_reset(ObIAllocator* new_allocator, 
+                                       ObIAllocator* old_allocator, 
                                        ObStringBuffer &add_value)
 {
   INIT_SUCC(ret);
@@ -897,7 +897,7 @@ int ObBinAggSerializer::rewrite_total_size()
   int64_t calculate_total_size = header_.get_obj_size();
   if (calculate_total_size == actual_total_size) {
     // do nothing
-  } else if (ObMulModeVar::get_var_type(calculate_total_size) <
+  } else if (ObMulModeVar::get_var_type(calculate_total_size) < 
               ObMulModeVar::get_var_type(actual_total_size)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("header size invalided", K(ret));

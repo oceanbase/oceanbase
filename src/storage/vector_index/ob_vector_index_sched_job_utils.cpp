@@ -193,9 +193,9 @@ int ObVectorIndexSchedJobUtils::get_vector_index_job_info(common::ObISQLClient &
     LOG_ERROR("tenant schema is null", K(tenant_id)); // skip
   } else if (OB_FAIL(refresh_job_name.assign_fmt("%lu_refresh", vidx_table_id))) {
     LOG_WARN("failed to generate refresh job name", K(ret));
-  } else if (OB_FAIL(ObDBMSSchedJobUtils::get_dbms_sched_job_info(sql_client, tenant_id,
+  } else if (OB_FAIL(ObDBMSSchedJobUtils::get_dbms_sched_job_info(sql_client, tenant_id, 
                                                                   tenant_schema->is_oracle_tenant(),
-                                                                  refresh_job_name.string(),
+                                                                  refresh_job_name.string(), 
                                                                   allocator,
                                                                   job_info))) {
     LOG_WARN("fail to get dbms schedule info", K(ret), K(tenant_id), K(refresh_job_name));

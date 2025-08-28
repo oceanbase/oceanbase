@@ -519,7 +519,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
     CK(OB_NOT_NULL(type_ctx.get_session()));
     if (OB_SUCC(ret)) {
       // interval expr need NOT_NULL_FLAG
-      // bug:
+      // bug: 
       calc_result_flag2(type, type1, type2);
       if (CM_IS_ADD_ZEROFILL(cast_raw_expr->get_cast_mode())) {
         type.set_result_flag(ZEROFILL_FLAG);
@@ -750,7 +750,7 @@ int ObExprCast::adjust_udt_cast_type(const ObExprResType &src_type,
   ObExecContext *exec_ctx = OB_ISNULL(session) ? NULL : session->get_cur_exec_ctx();
   if (src_type.is_ext()) {
     if (dst_type.is_user_defined_sql_type() || dst_type.is_collection_sql_type()) {
-      // phy_plan_ctx_ may not exist during deduce,
+      // phy_plan_ctx_ may not exist during deduce, 
       // save subschema mapping on sql_ctx_ before phy_plan ready?
       const uint64_t udt_type_id = src_type.get_udt_id();
       uint16_t subschema_id = ObMaxSystemUDTSqlType;
@@ -759,7 +759,7 @@ int ObExprCast::adjust_udt_cast_type(const ObExprResType &src_type,
         subschema_id = 0;
       } else if (OB_ISNULL(exec_ctx)) {
         ret = OB_BAD_NULL_ERROR;
-        LOG_WARN("need ctx to get subschema mapping",
+        LOG_WARN("need ctx to get subschema mapping", 
                  K(ret), K(src_type), K(dst_type), KP(session), KP(exec_ctx));
       } else if (OB_FAIL(exec_ctx->get_subschema_id_by_udt_id(udt_type_id, subschema_id))) {
         LOG_WARN("failed to get subshcema_meta_info",
@@ -791,7 +791,7 @@ int ObExprCast::adjust_udt_cast_type(const ObExprResType &src_type,
                 && ObGeometryTypeCastUtil::is_sdo_geometry_udt(dst_udt_id)) {
         if (!ObGeometryTypeCastUtil::is_sdo_geometry_type_compatible(src_udt_id, dst_udt_id)) {
           ret = OB_ERR_EXPRESSION_WRONG_TYPE;
-          LOG_WARN("udt id mismatch", K(ret), K(src_type), K(dst_type),
+          LOG_WARN("udt id mismatch", K(ret), K(src_type), K(dst_type), 
               K(src_udt_id), K(dst_udt_id));
         }
       }
@@ -807,7 +807,7 @@ int ObExprCast::adjust_udt_cast_type(const ObExprResType &src_type,
         udt_id = T_OBJ_XML;
       } else if (OB_ISNULL(exec_ctx)) {
         ret = OB_BAD_NULL_ERROR;
-        LOG_WARN("need ctx to get subschema mapping",
+        LOG_WARN("need ctx to get subschema mapping", 
                  K(ret), K(src_type), K(dst_type), KP(session), KP(exec_ctx));
       } else if (OB_FAIL(exec_ctx->get_sqludt_meta_by_subschema_id(subschema_id, udt_meta))) {
         LOG_WARN("Failed to get subshcema_meta_info",
@@ -821,7 +821,7 @@ int ObExprCast::adjust_udt_cast_type(const ObExprResType &src_type,
         uint16_t dst_subschema_id = ObInvalidSqlType;
         if (!ObGeometryTypeCastUtil::is_sdo_geometry_type_compatible(src_udt_id, dst_udt_id)) {
           ret = OB_ERR_EXPRESSION_WRONG_TYPE;
-          LOG_WARN("udt id mismatch", K(ret), K(src_type), K(dst_type),
+          LOG_WARN("udt id mismatch", K(ret), K(src_type), K(dst_type), 
               K(src_udt_id), K(dst_udt_id));
         } else if (OB_FAIL(exec_ctx->get_subschema_id_by_udt_id(dst_udt_id, dst_subschema_id))) {
           LOG_WARN("unsupported udt id", K(ret), K(dst_subschema_id));
@@ -847,13 +847,13 @@ int ObExprCast::adjust_udt_cast_type(const ObExprResType &src_type,
       LOG_INFO("cast from sql udt to sql udt", K(src_type), K(dst_type), K(lbt()));
     }
   } else if ((src_type.is_null() || src_type.is_character_type())
-             && (dst_type.get_type() == ObUserDefinedSQLType
+             && (dst_type.get_type() == ObUserDefinedSQLType 
                  || dst_type.get_type() == ObCollectionSQLType)) {
     const uint64_t udt_type_id = dst_type.get_udt_id();
     uint16_t subschema_id = ObMaxSystemUDTSqlType;
 
     if (!ObObjUDTUtil::ob_is_supported_sql_udt(dst_type.get_udt_id())) {
-      // maybe is array type, check subschema id validity
+      // maybe is array type, check subschema id validity 
       subschema_id = dst_type.get_subschema_id();
       ObSubSchemaValue sub_meta;
       if (OB_ISNULL(exec_ctx)) {
@@ -866,7 +866,7 @@ int ObExprCast::adjust_udt_cast_type(const ObExprResType &src_type,
       subschema_id = 0;
     } else if (OB_ISNULL(exec_ctx)) {
       ret = OB_BAD_NULL_ERROR;
-      LOG_WARN("need ctx to get subschema mapping",
+      LOG_WARN("need ctx to get subschema mapping", 
                 K(ret), K(src_type), K(dst_type), KP(session), KP(exec_ctx));
     } else if (OB_FAIL(exec_ctx->get_subschema_id_by_udt_id(udt_type_id, subschema_id))) {
       LOG_WARN("failed to get subshcema_meta_info",
@@ -927,7 +927,7 @@ int ObExprCast::get_subquery_iter(const sql::ObExpr &expr,
         && iter->get_output().at(0)->datum_meta_.type_ != info->elem_type_.get_obj_type()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check type failed", K(ret), K(expr), KPC(iter->get_output().at(0)), K(info->elem_type_));
-  }
+  } 
   return ret;
 }
 
@@ -1068,7 +1068,7 @@ int ObExprCast::fill_element(const sql::ObExpr &expr,
           }
         }
       }
-
+      
       if (info->elem_type_.get_meta_type().is_ext() && !v.is_null()) {
         OZ (pl::ObUserDefinedType::deep_copy_obj(alloc,
                                                  v,

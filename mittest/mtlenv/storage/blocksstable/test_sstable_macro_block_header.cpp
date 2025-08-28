@@ -57,7 +57,7 @@ void TestSSTableMacroBlockHeader::SetUp()
   ObColDataStoreDesc &col_desc = desc.get_col_desc();
   data_desc.static_desc_ = &static_desc;
   data_desc.col_desc_ = &col_desc;
-
+  
   ObTabletID tablet_id(1);
   col_desc.allocator_.set_tenant_id(500);
   static_desc.ls_id_.id_ = 1;

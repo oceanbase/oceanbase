@@ -125,32 +125,32 @@ public:
     return *this;
   }
 
-  static int dispatch(const ObDirectLoadResourceOpRequest &request,
+  static int dispatch(const ObDirectLoadResourceOpRequest &request, 
                       ObDirectLoadResourceOpResult &result,
                       common::ObIAllocator &allocator);
 
   // apply_resource
   OB_DEFINE_TABLE_LOAD_RESOURCE_RPC(NORMAL_PRIO,
-                                    apply_resource,
+                                    apply_resource, 
                                     ObDirectLoadResourceCommandType::APPLY,
                                     ObDirectLoadResourceApplyExecutor,
                                     ObDirectLoadResourceApplyArg,
                                     ObDirectLoadResourceOpRes);
   // release_resource
   OB_DEFINE_TABLE_LOAD_RESOURCE_RPC(NORMAL_PRIO,
-                                    release_resource,
+                                    release_resource, 
                                     ObDirectLoadResourceCommandType::RELEASE,
                                     ObDirectLoadResourceReleaseExecutor,
                                     ObDirectLoadResourceReleaseArg);
   // update_resource
   OB_DEFINE_TABLE_LOAD_RESOURCE_RPC(NORMAL_PRIO,
-                                    update_resource,
+                                    update_resource, 
                                     ObDirectLoadResourceCommandType::UPDATE,
                                     ObDirectLoadResourceUpdateExecutor,
                                     ObDirectLoadResourceUpdateArg);
   // check_resource
   OB_DEFINE_TABLE_LOAD_RESOURCE_RPC(HIGH_PRIO,
-                                    check_resource,
+                                    check_resource, 
                                     ObDirectLoadResourceCommandType::CHECK,
                                     ObDirectLoadResourceCheckExecutor,
                                     ObDirectLoadResourceCheckArg,

@@ -291,7 +291,7 @@ int ObExprIsNot::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr, ObEx
       rt_expr.eval_func_ = ObExprIsNot::calc_collection_is_not_null;
     } else {
       rt_expr.eval_func_ = ObExprIsNot::calc_is_not_null;
-      // 4.1.0 & 4.0 observers may run in same cluster, plan with batch func from observer(version4.1.0) may serialized to
+      // 4.1.0 & 4.0 observers may run in same cluster, plan with batch func from observer(version4.1.0) may serialized to 
       // observer(version4.0.0) to execute, thus batch func is not null only if min_cluster_version>=4.1.0
       if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0) {
         rt_expr.eval_batch_func_ = ObExprIsNot::calc_batch_is_not_null;
@@ -407,7 +407,7 @@ static inline int def_calc_vector_is_null(const ObExpr &expr,
     LOG_WARN("fail to eval is/is_not null param", K(ret));
   } else {
     VectorFormat res_format = expr.get_format(ctx);
-    // The 'res_format' is expected to be Type 'IntegerFixedVec' under the regular circumstances.
+    // The 'res_format' is expected to be Type 'IntegerFixedVec' under the regular circumstances. 
     // So a condition is added to optimize performance accordingly.
     if (VEC_FIXED == res_format) {
       VectorFormat arg_format = expr.args_[0]->get_format(ctx);
@@ -431,7 +431,7 @@ int ObExprIs::calc_vector_is_null(const ObExpr &expr,
                                   const EvalBound &bound)
 {
   return def_calc_vector_is_null<true>(expr, ctx, skip, bound);
-}
+}   
 
 template <typename ArgVec, typename ResVec, typename DataType, bool ExprIs, bool IsTrue>
 static int eval_vector_is_true(const ObExpr &expr,
@@ -498,7 +498,7 @@ static inline int def_eval_vector_is_true(const ObExpr &expr,
 {
   int ret = OB_SUCCESS;
   VectorFormat res_format = expr.get_format(ctx);
-  // The 'res_format' is expected to be Type 'IntegerFixedVec' under the regular circumstances.
+  // The 'res_format' is expected to be Type 'IntegerFixedVec' under the regular circumstances. 
   // So a condition is added to optimize performance accordingly.
   if (VEC_FIXED == res_format) {
     VectorFormat arg_format = expr.args_[0]->get_format(ctx);
@@ -686,7 +686,7 @@ int ObExprIsNot::calc_vector_is_not_null(const ObExpr &expr,
                                          const EvalBound &bound)
 {
   return def_calc_vector_is_null<false>(expr, ctx, skip, bound);
-}
+}                       
 
 int ObExprIsNot::calc_vector_is_not_true(const ObExpr &expr,
                                          ObEvalCtx &ctx,

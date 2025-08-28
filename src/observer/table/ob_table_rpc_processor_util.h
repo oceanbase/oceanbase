@@ -90,7 +90,7 @@ public:
 
   OB_INLINE static bool need_do_move_response(const int err, const obrpc::ObRpcPacket &rpc_pkt)
   {
-    return is_require_rerouting_err(err)
+    return is_require_rerouting_err(err) 
       && ObKVFeatureModeUitl::is_rerouting_enable()
       && rpc_pkt.require_rerouting();
   }
@@ -148,7 +148,7 @@ public:
 
       // table query async
       RECORD_STAT_WITH_ROW(TABLE_API_TABLE_QUERY_ASYNC, TABLEAPI_QUERY, T_KV_QUERY)
-
+      
       // hbase query sync
       RECORD_STAT_WITH_ROW(TABLE_API_HBASE_QUERY_ASYNC, HBASEAPI_SCAN, T_HBASE_SCAN)
 

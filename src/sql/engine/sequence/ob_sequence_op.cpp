@@ -287,7 +287,7 @@ int ObRemoteSequenceExecutor::init_sequence_sql(ObExecContext &ctx)
       LOG_WARN("failed to append string", K(ret));
     } else if (!remote_db_name.empty() && OB_FAIL(sql.append_fmt(" %.*s.%.*s.NEXTVAL ",
                             remote_db_name.length(), remote_db_name.ptr(),
-                            seq_schemas_.at(i).get_sequence_name().length(),
+                            seq_schemas_.at(i).get_sequence_name().length(), 
                             seq_schemas_.at(i).get_sequence_name().ptr()))) {
       LOG_WARN("failed to append string", K(ret));
     } else if (i == seq_ids_.count() - 1) {
@@ -320,7 +320,7 @@ void ObRemoteSequenceExecutor::destroy()
 {
   int ret = OB_SUCCESS;
   #ifdef OB_BUILD_DBLINK
-  if (DBLINK_DRV_OCI == link_type_ &&
+  if (DBLINK_DRV_OCI == link_type_ && 
       NULL != dblink_conn_ &&
       OB_FAIL(static_cast<ObOciConnection *>(dblink_conn_)->free_oci_stmt())) {
     LOG_WARN("failed to close oci result", K(ret));
@@ -340,7 +340,7 @@ int ObRemoteSequenceExecutor::rescan()
 {
   int ret = OB_SUCCESS;
 #ifdef OB_BUILD_DBLINK
-  if (DBLINK_DRV_OCI == link_type_ &&
+  if (DBLINK_DRV_OCI == link_type_ && 
       NULL != dblink_conn_ &&
       OB_FAIL(static_cast<ObOciConnection *>(dblink_conn_)->free_oci_stmt())) {
     LOG_WARN("failed to close oci result", K(ret));

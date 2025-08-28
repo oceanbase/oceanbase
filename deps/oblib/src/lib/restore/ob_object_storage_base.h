@@ -48,7 +48,7 @@ public:
     timeout_us_ = (timeout_us < 0 ? OB_STORAGE_MAX_IO_TIMEOUT_US : timeout_us);
   }
   virtual int64_t current_time_us() const = 0;
-
+  
   bool should_retry(const RetType &outcome, const int64_t attempted_retries) const
   {
     bool bret = should_retry_impl_(outcome, attempted_retries);
@@ -140,7 +140,7 @@ FuncRetType<FuncType, Args...> execute_until_timeout(
       should_retry_flag = false;
     } else {
       // if should_retry, log the current error
-      uint32_t sleep_time_us = retry_strategy.calc_delay_time_us(func_ret, retries);
+      uint32_t sleep_time_us = retry_strategy.calc_delay_time_us(func_ret, retries);      
       retry_strategy.log_error(func_ret, retries);
       ::usleep(sleep_time_us);
     }
@@ -162,7 +162,7 @@ public:
 private:
   static thread_local uint64_t tl_tenant_id_;
   uint64_t old_tenant_id_;
-
+  
   static thread_local int64_t tl_timeout_us_;
   int64_t old_timeout_us_;
 };

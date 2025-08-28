@@ -20,9 +20,9 @@ namespace share
 
 // ObImportRemapArg
 OB_SERIALIZE_MEMBER(
-    ObImportRemapArg,
-    remap_database_array_,
-    remap_table_array_,
+    ObImportRemapArg, 
+    remap_database_array_, 
+    remap_table_array_, 
     remap_partition_array_,
     remap_tablegroup_array_,
     remap_tablespace_array_);
@@ -58,7 +58,7 @@ int ObImportRemapArg::assign(const ObImportRemapArg &other)
     LOG_WARN("failed to assign partition array", K(ret), "tablegroup array", other.get_remap_tablegroup_array());
   } else if (OB_FAIL(remap_tablespace_array_.assign(other.get_remap_tablespace_array()))) {
     LOG_WARN("failed to assign partition array", K(ret), "tablespace array", other.get_remap_tablespace_array());
-  }
+  } 
   return ret;
 }
 
@@ -223,7 +223,7 @@ int ObImportRemapArg::check_remap_table_dup(
     if (OB_ISNULL(dup_item_ptr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("dup item ptr must not be nullptr", K(ret));
-    } else if (OB_FAIL(dup_item.assign_fmt("remap duplicate src table, %.*s.%.*s",
+    } else if (OB_FAIL(dup_item.assign_fmt("remap duplicate src table, %.*s.%.*s", 
         item.src_.database_name_.length(), item.src_.database_name_.ptr(),
         item.src_.table_name_.length(), item.src_.table_name_.ptr()))) {
       LOG_WARN("failed to assign fmt", K(ret));
@@ -233,7 +233,7 @@ int ObImportRemapArg::check_remap_table_dup(
     if (OB_ISNULL(dup_item_ptr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("dup item ptr must not be nullptr", K(ret));
-    } else if (OB_FAIL(dup_item.assign_fmt("remap duplicate target table, %.*s.%.*s",
+    } else if (OB_FAIL(dup_item.assign_fmt("remap duplicate target table, %.*s.%.*s", 
         item.target_.database_name_.length(), item.target_.database_name_.ptr(),
         item.target_.table_name_.length(), item.target_.table_name_.ptr()))) {
       LOG_WARN("failed to assign fmt", K(ret));
@@ -253,7 +253,7 @@ int ObImportRemapArg::check_remap_partition_dup(
     if (OB_ISNULL(src_dup_item_ptr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("dup item ptr must not be nullptr", K(ret));
-    } else if (OB_FAIL(dup_item.assign_fmt("remap duplicate src partition, %.*s.%.*s:%.*s",
+    } else if (OB_FAIL(dup_item.assign_fmt("remap duplicate src partition, %.*s.%.*s:%.*s", 
         item.src_.database_name_.length(), item.src_.database_name_.ptr(),
         item.src_.table_name_.length(), item.src_.table_name_.ptr(),
         item.src_.partition_name_.length(), item.src_.partition_name_.ptr()))) {
@@ -264,7 +264,7 @@ int ObImportRemapArg::check_remap_partition_dup(
     if (OB_ISNULL(target_dup_item_ptr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("dup item ptr must not be nullptr", K(ret));
-    } else if (OB_FAIL(dup_item.assign_fmt("remap duplicate target table, %.*s.%.*s",
+    } else if (OB_FAIL(dup_item.assign_fmt("remap duplicate target table, %.*s.%.*s", 
         item.target_.database_name_.length(), item.target_.database_name_.ptr(),
         item.target_.table_name_.length(), item.target_.table_name_.ptr()))) {
       LOG_WARN("failed to assign fmt", K(ret));
@@ -389,7 +389,7 @@ int ObImportRemapArg::get_remap_tablespace(const ObImportTablespaceItem &src, Ob
 }
 
 int ObImportRemapArg::get_remap_db_list_format_str(
-    common::ObIAllocator &allocator,
+    common::ObIAllocator &allocator, 
     common::ObString &str) const
 {
   int ret = OB_SUCCESS;
@@ -400,7 +400,7 @@ int ObImportRemapArg::get_remap_db_list_format_str(
 }
 
 int ObImportRemapArg::get_remap_table_list_format_str(
-    common::ObIAllocator &allocator,
+    common::ObIAllocator &allocator, 
     common::ObString &str) const
 {
   int ret = OB_SUCCESS;
@@ -411,7 +411,7 @@ int ObImportRemapArg::get_remap_table_list_format_str(
 }
 
 int ObImportRemapArg::get_remap_partition_list_format_str(
-    common::ObIAllocator &allocator,
+    common::ObIAllocator &allocator, 
     common::ObString &str) const
 {
   int ret = OB_SUCCESS;
@@ -422,7 +422,7 @@ int ObImportRemapArg::get_remap_partition_list_format_str(
 }
 
 int ObImportRemapArg::get_remap_tablegroup_list_format_str(
-    common::ObIAllocator &allocator,
+    common::ObIAllocator &allocator, 
     common::ObString &str) const
 {
   int ret = OB_SUCCESS;
@@ -433,7 +433,7 @@ int ObImportRemapArg::get_remap_tablegroup_list_format_str(
 }
 
 int ObImportRemapArg::get_remap_tablespace_list_format_str(
-    common::ObIAllocator &allocator,
+    common::ObIAllocator &allocator, 
     common::ObString &str) const
 {
   int ret = OB_SUCCESS;
@@ -444,7 +444,7 @@ int ObImportRemapArg::get_remap_tablespace_list_format_str(
 }
 
 int ObImportRemapArg::get_remap_db_list_hex_format_str(
-    common::ObIAllocator &allocator,
+    common::ObIAllocator &allocator, 
     common::ObString &str) const
 {
   int ret = OB_SUCCESS;
@@ -455,7 +455,7 @@ int ObImportRemapArg::get_remap_db_list_hex_format_str(
 }
 
 int ObImportRemapArg::get_remap_table_list_hex_format_str(
-    common::ObIAllocator &allocator,
+    common::ObIAllocator &allocator, 
     common::ObString &str) const
 {
   int ret = OB_SUCCESS;
@@ -466,7 +466,7 @@ int ObImportRemapArg::get_remap_table_list_hex_format_str(
 }
 
 int ObImportRemapArg::get_remap_partition_list_hex_format_str(
-    common::ObIAllocator &allocator,
+    common::ObIAllocator &allocator, 
     common::ObString &str) const
 {
   int ret = OB_SUCCESS;
@@ -477,7 +477,7 @@ int ObImportRemapArg::get_remap_partition_list_hex_format_str(
 }
 
 int ObImportRemapArg::get_remap_tablegroup_list_hex_format_str(
-    common::ObIAllocator &allocator,
+    common::ObIAllocator &allocator, 
     common::ObString &str) const
 {
   int ret = OB_SUCCESS;
@@ -488,7 +488,7 @@ int ObImportRemapArg::get_remap_tablegroup_list_hex_format_str(
 }
 
 int ObImportRemapArg::get_remap_tablespace_list_hex_format_str(
-    common::ObIAllocator &allocator,
+    common::ObIAllocator &allocator, 
     common::ObString &str) const
 {
   int ret = OB_SUCCESS;

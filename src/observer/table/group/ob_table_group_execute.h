@@ -198,7 +198,7 @@ public:
   OB_INLINE virtual ObTabletID tablet_id() const override { return tablet_id_; }
   virtual void set_failed_result(int ret_code,
                                  ObTableEntity &result_entity,
-                                 ObTableOperationType::Type op_type) override
+                                 ObTableOperationType::Type op_type) override 
   {
     result_.generate_failed_result(ret_code, result_entity, op_type);
   }
@@ -228,8 +228,8 @@ public:
   {
     reset();
   }
-  virtual void reset_result()
-  {
+  virtual void reset_result() 
+  { 
     result_.reset();
     result_entity_.reset();
   }
@@ -303,7 +303,7 @@ public:
       batch_ctx_(nullptr),
       is_get_(false)
   {}
-  virtual ~ObTableOpProcessor()
+  virtual ~ObTableOpProcessor() 
   {
     if (OB_NOT_NULL(batch_ctx_)) {
       batch_ctx_->~ObTableBatchCtx();
@@ -312,8 +312,8 @@ public:
   virtual int init(ObTableGroupCtx &group_ctx, ObIArray<ObITableOp*> *ops);
   virtual int process() override;
 private:
-  int init_batch_params(ObTableBatchCtx &batch_ctx,
-                        ObIArray<ObTableOperation> &batch_ops,
+  int init_batch_params(ObTableBatchCtx &batch_ctx, 
+                        ObIArray<ObTableOperation> &batch_ops, 
                         ObIArray<ObTableOperationResult> &batch_result);
   int init_table_ctx(ObTableBatchCtx &batch_ctx);
   int execute_dml();
@@ -330,15 +330,15 @@ class ObTableGroupExecuteService final
 public:
   static const int64_t DEFAULT_TRANS_TIMEOUT = 3 * 1000 * 1000L; // 3s
   static int execute(ObTableGroup &group, bool add_fail_group);
-  static int process_result(int ret_code,
+  static int process_result(int ret_code, 
                             ObTableGroup &group,
-                            bool is_direct_execute,
+                            bool is_direct_execute, 
                             bool add_failed_group);
   static int response(ObTableGroup &group,
                       ObTableGroupFactory<ObTableGroup> &group_factory,
                       ObTableGroupOpFactory &op_factory);
-  static int response_failed_results(int ret_code,
-                                     ObTableGroup &group,
+  static int response_failed_results(int ret_code,  
+                                     ObTableGroup &group,                       
                                      ObTableGroupFactory<ObTableGroup> &group_factory,
                                      ObTableGroupOpFactory &op_factory);
   static int start_trans(ObTableBatchCtx &batch_ctx);

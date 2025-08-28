@@ -67,7 +67,7 @@ private:
   ObHbaseICellIter *cell_iter_;
 };
 
-class ObHbaseTabletMergeIterator : public ObHbaseICellIter
+class ObHbaseTabletMergeIterator : public ObHbaseICellIter 
 {
   using ResultMergeIterator = ObTableMergeRowIterator<common::ObNewRow, table::ObTableMergeFilterCompare, ObHbaseCellRowIter>;
 public:
@@ -101,7 +101,7 @@ class ObHbaseTSTabletMergeIter : public ObHbaseTabletMergeIterator
 {
 public:
   ObHbaseTSTabletMergeIter(ObTableExecCtx &exec_ctx, const ObTableQuery &query)
-  : ObHbaseTabletMergeIterator(exec_ctx, query)
+  : ObHbaseTabletMergeIterator(exec_ctx, query) 
   {}
   virtual ~ObHbaseTSTabletMergeIter() = default;
 private:

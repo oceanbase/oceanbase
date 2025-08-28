@@ -980,7 +980,7 @@ int ObTableScanOp::prepare_pushdown_limit_param()
     }
   } else if (tsc_rtdef_.has_lookup_limit() || (OB_NOT_NULL(scan_iter_) && scan_iter_->get_das_task_cnt() > 1)) {
     //for index back, need to final limit output rows in TableScan operator,
-    //please see me for the reason:
+    //please see me for the reason: 
     /* for multi-partition scanning, */
     /* the limit operation pushed down to the partition TSC needs to be adjusted */
     /* its rule: */
@@ -1285,7 +1285,7 @@ OB_INLINE int ObTableScanOp::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef
       das_rtdef.scan_flag_.scan_order_ = ObQueryFlag::KeepOrder;
     }
   }
-
+  
   if (is_lookup) {
     das_rtdef.scan_flag_.scan_order_ = ObQueryFlag::KeepOrder;
   }
@@ -1321,7 +1321,7 @@ OB_INLINE int ObTableScanOp::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef
       LOG_WARN("failed to set flashback query snapshot version", K(ret));
     } else if (share::is_oracle_mapping_real_virtual_table(MY_SPEC.ref_table_id_)
               && das_ctdef.ref_table_id_ < OB_MIN_SYS_TABLE_INDEX_ID) {
-      //not index scan, keep need_scn_
+      //not index scan, keep need_scn_ 
     } else if (MY_SPEC.ref_table_id_ != das_ctdef.ref_table_id_) {
       //only data table scan need to set row scn flag
       das_rtdef.need_scn_ = false;
@@ -1508,7 +1508,7 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx, bool need_sort)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table lock is null", K(ret));
     } else {
-      for (DASTabletLocListIter iter = tab_loc->tablet_locs_begin(); OB_SUCC(ret)
+      for (DASTabletLocListIter iter = tab_loc->tablet_locs_begin(); OB_SUCC(ret) 
              && iter != tab_loc->tablet_locs_end(); ++iter) {
         ret = partition_ids.push_back((*iter)->partition_id_);
       }
@@ -1962,11 +1962,11 @@ void ObTableScanOp::destroy()
   if (OB_NOT_NULL(iter_tree_)) {
     iter_tree_->release();
     iter_tree_ = nullptr;
-  }
+  } 
   if (OB_NOT_NULL(fold_iter_)) {
     fold_iter_->release();
     fold_iter_ = nullptr;
-  }
+  } 
   output_ = nullptr;
   scan_iter_ = nullptr;
   domain_index_.~ObDomainIndexCache();
@@ -2055,7 +2055,7 @@ int ObTableScanOp::fill_storage_feedback_info()
               "idx access row count", scan_param.idx_table_scan_stat_.access_row_cnt_,
               "main access row count", scan_param.main_table_scan_stat_.access_row_cnt_);
   }
-
+  
   return ret;
 }
 
@@ -2146,7 +2146,7 @@ int ObTableScanOp::close_and_reopen()
 
     // when not use global index, replace stmt allocator of lookup and attached table scan to index table scan
     // at each rescan to avoid memory expansion. The stmt allocator of index table scan is actually the das
-    // ref reuse alloc when rescan.
+    // ref reuse alloc when rescan. 
     // NOTE: global index lookup task will be handled in a different das ref, thus we can not replace its stmt
     // allocator.
     if (!MY_SPEC.is_index_global_) {
@@ -2294,7 +2294,7 @@ int ObTableScanOp::check_need_real_rescan(bool &bret)
     // partition-wise rescan with no dynamic range, disable batch rescan
     bret = true;
   } else {
-    // the above operator of tsc support batch group rescan
+    // the above operator of tsc support batch group rescan 
     if (group_rescan_cnt_ < ctx_.get_das_ctx().get_group_rescan_cnt()) {
       // need perform batch rescan, the output of tsc is changed to fold_iter_
       if (ctx_.get_das_ctx().get_skip_scan_group_id() > 0) {
@@ -2578,7 +2578,7 @@ int ObTableScanOp::inner_get_next_row_implement()
     if (OB_ITER_END != ret) {
       LOG_WARN("failed to get next row", K(ret));
     }
-  }
+  } 
   return ret;
 }
 int ObTableScanOp::inner_get_next_row_for_tsc()
@@ -2646,7 +2646,7 @@ int ObTableScanOp::inner_get_next_row_for_tsc()
       ObTableScanParam &scan_param = scan_op->get_scan_param();
       ObTableScanStat &table_scan_stat = GET_PHY_PLAN_CTX(ctx_)->get_table_scan_stat();
       fill_table_scan_stat(scan_param.main_table_scan_stat_, table_scan_stat);
-      LOG_DEBUG("[ROW_CACHE_ADJUST] fill cache stat for main table", K(&scan_param), K(scan_param.main_table_scan_stat_),
+      LOG_DEBUG("[ROW_CACHE_ADJUST] fill cache stat for main table", K(&scan_param), K(scan_param.main_table_scan_stat_), 
                                                     K(MY_SPEC.should_scan_index()), K(MY_SPEC.is_index_back()), K(MY_SPEC.is_index_global_),
                                                     K(scan_op->is_local_task()), K(table_scan_stat));
       if (MY_SPEC.is_index_back() && !MY_SPEC.is_index_global_ && scan_op->is_local_task()) {
@@ -2692,7 +2692,7 @@ int ObTableScanOp::inner_get_next_batch(const int64_t max_row_cnt)
     }
   }
 
-#ifdef ERRSIM
+#ifdef ERRSIM 
   if (OB_SUCC(ret)) {
     ret = EN_TABLE_SCAN_RETRY_WAIT_EVENT_ERRSIM ? : OB_SUCCESS;
     if (OB_FAIL(ret)) {
@@ -2781,7 +2781,7 @@ int ObTableScanOp::inner_get_next_batch_for_tsc(const int64_t max_row_cnt)
     ObTableScanParam &scan_param = scan_op->get_scan_param();
     ObTableScanStat &table_scan_stat = GET_PHY_PLAN_CTX(ctx_)->get_table_scan_stat();
     fill_table_scan_stat(scan_param.main_table_scan_stat_, table_scan_stat);
-    LOG_DEBUG("[ROW_CACHE_ADJUST] fill cache stat for main table", K(&scan_param), K(scan_param.main_table_scan_stat_),
+    LOG_DEBUG("[ROW_CACHE_ADJUST] fill cache stat for main table", K(&scan_param), K(scan_param.main_table_scan_stat_), 
                                                     K(MY_SPEC.should_scan_index()), K(MY_SPEC.is_index_back()), K(MY_SPEC.is_index_global_),
                                                     K(scan_op->is_local_task()), K(table_scan_stat));
     if (MY_SPEC.is_index_back() && !MY_SPEC.is_index_global_ && scan_op->is_local_task()) {
@@ -3170,15 +3170,15 @@ void ObTableScanOp::set_cache_stat(const ObPlanStat &plan_stat)
   if (try_use_cache && !plan_stat.enable_row_cache_) {
     query_flag.set_use_row_cache();
     const int64_t row_cache_access_cnt = plan_stat.row_cache_miss_cnt_ + plan_stat.row_cache_hit_cnt_;
-    tsc_rtdef_.scan_rtdef_.in_row_cache_threshold_ = row_cache_access_cnt > ObPlanStat::CACHE_ACCESS_THRESHOLD ?
+    tsc_rtdef_.scan_rtdef_.in_row_cache_threshold_ = row_cache_access_cnt > ObPlanStat::CACHE_ACCESS_THRESHOLD ? 
         (ObPlanStat::ROW_CACHE_GROWTH_SLOPE * plan_stat.row_cache_hit_cnt_ / row_cache_access_cnt) : plan_stat.in_row_cache_threshold_;
-    LOG_DEBUG("[ROW_CACHE_ADJUST] try use row cache, update row cache threshold", K(plan_stat.execute_times_), K(plan_stat.row_cache_hit_cnt_),
+    LOG_DEBUG("[ROW_CACHE_ADJUST] try use row cache, update row cache threshold", K(plan_stat.execute_times_), K(plan_stat.row_cache_hit_cnt_), 
                     K(plan_stat.row_cache_miss_cnt_), K(plan_stat.in_row_cache_threshold_), K(tsc_rtdef_.scan_rtdef_.in_row_cache_threshold_));
   } else {
     if (plan_stat.enable_row_cache_) {
       query_flag.set_use_row_cache();
       tsc_rtdef_.scan_rtdef_.in_row_cache_threshold_ = plan_stat.in_row_cache_threshold_;
-      LOG_DEBUG("[ROW_CACHE_ADJUST] update row cache threshold", K(plan_stat.cache_stat_update_times_), K(plan_stat.row_cache_hit_cnt_),
+      LOG_DEBUG("[ROW_CACHE_ADJUST] update row cache threshold", K(plan_stat.cache_stat_update_times_), K(plan_stat.row_cache_hit_cnt_), 
                                                                  K(plan_stat.row_cache_miss_cnt_), K(plan_stat.in_row_cache_threshold_));
     } else {
       query_flag.set_not_use_row_cache();
@@ -3466,7 +3466,7 @@ int ObTableScanOp::do_diagnosis(ObExecContext &exec_ctx, ObBitVector &skip)
   if (OB_FAIL(output_->get_diagnosis_info(&diagnosis_manager))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get diagnosis info", K(ret));
-  } else if (OB_FAIL(diagnosis_manager.do_diagnosis(skip,
+  } else if (OB_FAIL(diagnosis_manager.do_diagnosis(skip, 
                                             exec_ctx.get_my_session()->get_diagnosis_limit_num()))){
     LOG_WARN("fail to do diagnosis", K(ret));
   }
@@ -3612,7 +3612,7 @@ int ObTableScanOp::inner_get_next_row()
     }
   }
 
-#ifdef ERRSIM
+#ifdef ERRSIM 
   if (OB_SUCC(ret)) {
     ret = EN_TABLE_SCAN_RETRY_WAIT_EVENT_ERRSIM ? : OB_SUCCESS;
     if (OB_FAIL(ret)) {
@@ -3667,7 +3667,7 @@ int ObTableScanOp::init_multivalue_index_rows()
 int ObTableScanOp::extend_domain_obj_buffer(uint32_t size)
 {
   int ret = OB_SUCCESS;
-
+  
   if (domain_index_.record_count_ < size) {
     const ObExprPtrIArray &exprs = MY_SPEC.output_;
     uint32_t column_count = exprs.count() - 1;
@@ -3677,7 +3677,7 @@ int ObTableScanOp::extend_domain_obj_buffer(uint32_t size)
 
     void *row_buf = ctx_.get_allocator().alloc(sizeof(blocksstable::ObDatumRow) * size);
     void* docid_buf = ctx_.get_allocator().alloc(sizeof(ObDocId) * size);
-
+  
     if (OB_ISNULL(row_buf) || OB_ISNULL(docid_buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate spatial row store failed", K(ret), K(row_buf));
@@ -3708,15 +3708,15 @@ int ObTableScanOp::extend_domain_obj_buffer(uint32_t size)
 
 int ObTableScanOp::multivalue_get_pure_data(
   ObIAllocator& tmp_allocator,
-  const char*& data,
+  const char*& data, 
   int64_t& data_len,
   uint32_t& rowkey_start,
-  uint32_t& rowkey_end,
-  uint32_t& record_num,
+  uint32_t& rowkey_end, 
+  uint32_t& record_num, 
   bool& is_save_rowkey)
 {
   int ret = OB_SUCCESS;
-
+  
   const ObDASScanCtDef &scan_ctdef = MY_CTDEF.scan_ctdef_;
   const storage::ObTableReadInfo& read_info = scan_ctdef.table_param_.get_read_info();
   const ObExprPtrIArray &exprs = MY_SPEC.output_;
@@ -3727,7 +3727,7 @@ int ObTableScanOp::multivalue_get_pure_data(
   ObExpr *array_expr = exprs.at(column_count);
   ObDatum *json_datum = NULL;
   ObString json_arr_data;
-
+  
   if (OB_FAIL(array_expr->eval(eval_ctx_, json_datum))) {
     LOG_WARN("expression evaluate failed", K(ret));
   } else {
@@ -3735,13 +3735,13 @@ int ObTableScanOp::multivalue_get_pure_data(
     uint64_t tenant_id = my_session->get_effective_tenant_id();
 
     if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *json_datum,
-                                                          array_expr->datum_meta_,
-                                                          array_expr->obj_meta_.has_lob_header(),
+                                                          array_expr->datum_meta_, 
+                                                          array_expr->obj_meta_.has_lob_header(), 
                                                           json_arr_data))) {
       LOG_WARN("failed to get real geo data.", K(ret));
     } else {
       ObJsonBin bin(json_arr_data.ptr(), json_arr_data.length());
-
+      
       if (OB_FAIL(bin.reset_iter())) {
         LOG_WARN("failed to parse binary.", K(ret), K(json_arr_data));
       } else if (!ObJsonVerType::is_opaque_or_string(bin.json_type())) {
@@ -3762,7 +3762,7 @@ int ObTableScanOp::multivalue_get_pure_data(
       LOG_WARN("failed to extend obobj buffer.", K(ret));
     } else {
       ObObj tmp_objs[column_count];
-
+      
       for (uint32_t j = 0; OB_SUCC(ret) && j < rowkey_end; ++j) {
         tmp_objs[j].set_nop_value();
         ObDatum *datum = nullptr;
@@ -3812,7 +3812,7 @@ int ObTableScanOp::inner_get_next_multivalue_index_row()
         domain_index_.dom_rows_->reuse();
         domain_index_.domain_row_index_ = 0;
         domain_index_.alloc_.reset();
-
+        
         const char* data = nullptr;
         uint32_t record_num = 0;
         int64_t data_len = 0;
@@ -3820,11 +3820,11 @@ int ObTableScanOp::inner_get_next_multivalue_index_row()
 
         const ObDASScanCtDef &scan_ctdef = MY_CTDEF.scan_ctdef_;
         int64_t multivalue_idx = domain_index_.domain_column_idx_;
-
+        
 
         ObIndexType index_type = static_cast<ObIndexType>(scan_ctdef.multivalue_type_);
         bool is_unique_index = (index_type == ObIndexType::INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL);
-
+        
         const ObExprPtrIArray &exprs = MY_SPEC.output_;
         uint32_t column_count = exprs.count() - 1;
         uint32_t rowkey_start;
@@ -3845,7 +3845,7 @@ int ObTableScanOp::inner_get_next_multivalue_index_row()
           uint32_t data_rowkey_cnt = read_info.get_schema_rowkey_count();
           ObDocId *docid_arr = reinterpret_cast<ObDocId *>(domain_index_.docid_buffer_);
           int64_t pos = sizeof(uint32_t);
-
+          
           for (uint64_t i = 0; OB_SUCC(ret) && (i < record_num || !is_none_unique_done); i++) {
             domain_index_.rows_[i].reuse();
             for (uint32_t j = 0; OB_SUCC(ret) && j < column_count; ++j) {
@@ -3863,7 +3863,7 @@ int ObTableScanOp::inner_get_next_multivalue_index_row()
                   } else {
                     col_type.set_collation_level(CS_LEVEL_IMPLICIT);
                   }
-                  if (!tmp_obj.is_null()) {
+                  if (!tmp_obj.is_null()) { 
                     tmp_obj.set_meta_type(col_type);
                   }
                   if (OB_FAIL(domain_index_.rows_[i].storage_datums_[j].from_obj_enhance(tmp_obj))) {
@@ -4065,7 +4065,7 @@ int ObTableScanOp::init_spatial_index_rows()
   return ret;
 }
 
-int ObTableScanOp::fill_generated_cellid_mbr(const ObStorageDatum &cellid, const ObStorageDatum &mbr)
+int ObTableScanOp::fill_generated_cellid_mbr(const ObStorageDatum &cellid, const ObStorageDatum &mbr) 
 {
   int ret = OB_SUCCESS;
   const ObExprPtrIArray &exprs = MY_SPEC.output_;

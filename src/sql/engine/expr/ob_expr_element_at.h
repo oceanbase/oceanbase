@@ -12,7 +12,7 @@
  */
 
 #ifndef OCEANBASE_SQL_OB_EXPR_ELEMENT_AT
-#define OCEANBASE_SQL_OB_EXPR_ELEMENT_AT
+#define OCEANBASE_SQL_OB_EXPR_ELEMENT_AT 
 
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "lib/udt/ob_array_type.h"

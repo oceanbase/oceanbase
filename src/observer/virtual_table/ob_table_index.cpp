@@ -385,7 +385,7 @@ int ObTableIndex::add_rowkey_indexes(const ObTableSchema &table_schema,
     } else if (OB_ISNULL(real_table_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null schema", KR(ret), KP(real_table_schema));
-    } else if (OB_FAIL(get_rowkey_index_column(*real_table_schema, column_schema,
+    } else if (OB_FAIL(get_rowkey_index_column(*real_table_schema, column_schema, 
                                         is_column_visible, is_end))) {
       SERVER_LOG(WARN, "fail to get rowkey index column", K(ret));
     } else if (is_end) {
@@ -662,11 +662,11 @@ int ObTableIndex::add_normal_indexes(const ObTableSchema &table_schema,
                 } else if (vec_index_key_column_ids.count() <= vec_dep_col_idx_) {
                   is_sub_end = true;
                   vec_dep_col_idx_ = OB_INVALID_ID;
-                } else if (OB_FAIL(add_vec_index_column(database_name,
-                                                        table_schema,
-                                                        index_schema,
-                                                        cells,
-                                                        col_count,
+                } else if (OB_FAIL(add_vec_index_column(database_name, 
+                                                        table_schema, 
+                                                        index_schema, 
+                                                        cells, 
+                                                        col_count, 
                                                         vec_index_key_column_ids[vec_dep_col_idx_]))) {
                   ret = OB_ERR_UNEXPECTED;
                   SERVER_LOG(WARN, "fail to add normal index column", K(ret), K(col_count), K(vec_dep_col_idx_));
@@ -715,7 +715,7 @@ int ObTableIndex::get_normal_index_column(const ObTableSchema &table_schema,
     SERVER_LOG(WARN, "index_column_idx_ is wrong", K(ret));
   } else if (OB_FAIL(index_schema->get_store_column_ids(store_column_ids, true))) {
     SERVER_LOG(WARN, "get store columns fail", K(ret));
-  } else if (index_column_idx_ >=
+  } else if (index_column_idx_ >= 
              (is_compat ? index_schema->get_index_info().get_size() : store_column_ids.count())) {
     is_end = true;
     index_column_idx_ = OB_INVALID_ID;
@@ -724,7 +724,7 @@ int ObTableIndex::get_normal_index_column(const ObTableSchema &table_schema,
     is_column_visible = false;
     if (is_compat) {
       const ObRowkeyColumn *rowkey_column;
-      is_column_visible = true;
+      is_column_visible = true;   
       if (OB_ISNULL(rowkey_column = index_info.get_column(index_column_idx_))) {
         ret = OB_SCHEMA_ERROR;
         SERVER_LOG(WARN, "fail to get rowkey column", K(ret));
@@ -745,7 +745,7 @@ int ObTableIndex::get_normal_index_column(const ObTableSchema &table_schema,
       } else if (OB_ISNULL(column_schema = table_schema.get_column_schema(rowkey_column->column_id_))) { // 索引表的column_id跟数据表的对应列的column_id是相等的
         ret = OB_SCHEMA_ERROR;
         SERVER_LOG(WARN, "fail to get data table column schema", K(ret), K_(rowkey_column->column_id));
-      }
+      } 
     } else {
       const ObColDesc *column_desc;
       if (OB_ISNULL(column_desc = &store_column_ids.at(index_column_idx_))) {
@@ -787,7 +787,7 @@ int ObTableIndex::get_normal_index_column(const ObTableSchema &table_schema,
           ret = OB_SCHEMA_ERROR;
           SERVER_LOG(WARN, "fail to get data table column schema", K(ret), K(column_desc->col_id_));
         }
-      }
+      } 
     }
   }
   return ret;
@@ -838,7 +838,7 @@ int ObTableIndex::add_normal_index_column(const ObString &database_name,
     } else if (OB_ISNULL(real_table_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error", K(ret));
-    } else if (OB_FAIL(get_normal_index_column(*real_table_schema, index_schema, column_schema,
+    } else if (OB_FAIL(get_normal_index_column(*real_table_schema, index_schema, column_schema, 
                                         is_column_visible, is_end))) {
       SERVER_LOG(WARN, "fail to get normal index column", K(ret));
     } else if (is_end) {
@@ -1206,7 +1206,7 @@ int ObTableIndex::add_fulltext_index_column(const ObString &database_name,
           }
           // is_column_visible
           case OB_APP_MIN_COLUMN_ID + 18: {
-            cells[cell_idx].set_int(1); // TODO this value is set for SHOW EXTENDED INDEX
+            cells[cell_idx].set_int(1); // TODO this value is set for SHOW EXTENDED INDEX 
             break;
           }
           default: {
@@ -1393,7 +1393,7 @@ int ObTableIndex::add_vec_index_column(const ObString &database_name,
           }
           // is_column_visible
           case OB_APP_MIN_COLUMN_ID + 18: {
-            cells[cell_idx].set_int(1); // TODO this value is set for SHOW EXTENDED INDEX
+            cells[cell_idx].set_int(1); // TODO this value is set for SHOW EXTENDED INDEX 
             break;
           }
           default: {

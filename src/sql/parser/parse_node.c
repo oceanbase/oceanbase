@@ -556,7 +556,7 @@ void ob_parse_binary(const char *src, int64_t len, char *dest)
     } else {
       //for odd number, we have copy the first char,  so we should minus 2;
       const char *end = src + len - (is_odd ? 2 : 1);
-#if defined(__GNUC__) && defined(__x86_64__)
+#if defined(__GNUC__) && defined(__x86_64__) 
       ob_parse_binary_simd(&src, end, &dest);
 #endif
       for (; src <= end; src += 2)
@@ -904,7 +904,7 @@ ParseNode *push_back_child(void *malloc_pool, int *error_code, ParseNode *left_n
                            T_EXPR_LIST == left_node->type_ ||
                            T_SET_UNION == left_node->type_ ||
                            T_SET_UNION_ALL == left_node->type_ ||
-                           T_VALUE_VECTOR == left_node->type_ ||
+                           T_VALUE_VECTOR == left_node->type_ || 
                            T_VALUE_LIST == left_node->type_))) {
     *error_code = OB_PARSER_ERR_UNEXPECTED;
   } else {

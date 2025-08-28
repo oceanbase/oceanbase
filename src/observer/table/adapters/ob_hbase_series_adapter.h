@@ -17,11 +17,11 @@
 #include "ob_series_adapter_iter.h"
 
 namespace oceanbase
-{
+{   
 namespace table
 {
 
-struct QVUpdateOp
+struct QVUpdateOp 
 {
   ObString value;
   QVUpdateOp(ObString value) : value(value) {}
@@ -73,17 +73,17 @@ private:
   int construct_query(ObTableExecCtx &ctx, const ObITableEntity &entity, ObTableQuery &table_query);
   int del_and_insert(common::ObIAllocator &alloc,
                      ObJsonNode &json_node,
-                     ObTableCtx &del_ctx,
+                     ObTableCtx &del_ctx, 
                      ObTableCtx &ins_ctx,
                      ObNewRow &json_cell);
-  int get_query_iter(ObTableExecCtx &ctx,
+  int get_query_iter(ObTableExecCtx &ctx, 
                      const ObITableEntity &entity,
-                     ObTableCtx &scan_ctx,
+                     ObTableCtx &scan_ctx,  
                      ObTableApiRowIterator &tb_row_iter);
   int get_normal_rowkey(const ObITableEntity &normal_cell, ObObj &rowkey_obj, ObObj &qualifier_obj, ObObj &timestamp_obj);
   int add_series_rowkey(ObITableEntity &series_cell, ObObj &rowkey_obj, ObObj &timestamp_obj, ObObj &seq_obj);
   int release_map();
-
+  
 private:
   KTAggMap kt_agg_map_;
   ObTableQuery *table_query_;

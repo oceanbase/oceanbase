@@ -240,8 +240,8 @@ int ObGeometry3D::visit_wkb_inner(ObGeo3DVisitor &visitor)
         }
         break;
       }
-      case ObGeoType::MULTIPOINTZ:
-      case ObGeoType::MULTILINESTRINGZ:
+      case ObGeoType::MULTIPOINTZ: 
+      case ObGeoType::MULTILINESTRINGZ: 
       case ObGeoType::MULTIPOLYGONZ: {
         if (OB_FAIL(visit_multi_geomz(bo, geo_type, visitor))) {
           LOG_WARN("fail to visit multi geo", K(ret));
@@ -306,7 +306,7 @@ int ObGeometry3D::visit_linestringz(ObGeoWkbByteOrder bo, ObGeo3DVisitor &visito
     LOG_WARN("fail to read nums value", K(ret));
   } else if (OB_FAIL(visitor.visit_linestringz_start(this, nums, line_type))) {
     LOG_WARN("fail to visit linestring start", K(ret));
-  }
+  }   
   for (uint32_t i = 0; OB_SUCC(ret) && i < nums; i++) {
     if (OB_FAIL(visit_pointz(bo, visitor, true))) {
       LOG_WARN("fail to visit inner point", K(ret));
@@ -329,7 +329,7 @@ int ObGeometry3D::visit_polygonz(ObGeoWkbByteOrder bo, ObGeo3DVisitor &visitor)
     LOG_WARN("fail to read ring nums", K(ret));
   } else if (OB_FAIL(visitor.visit_polygonz_start(this, ring_nums))) {
     LOG_WARN("fail to visit polygonz start", K(ret));
-  }
+  } 
   for (uint32_t i = 0; OB_SUCC(ret) && i < ring_nums; i++) {
     if (OB_FAIL(visit_linestringz(bo, visitor, i == 0 ? ObLineType::ExterRing : ObLineType::InnerRing))) {
       LOG_WARN("fail to visit linestring", K(ret));
@@ -369,7 +369,7 @@ int ObGeometry3D::visit_multi_geomz(ObGeoWkbByteOrder bo, ObGeoType geo_type, Ob
     LOG_WARN("fail to read nums", K(ret), K(geo_type));
   } else if (OB_FAIL(visitor.visit_multi_geom_start(geo_type, this, geo_nums))) {
     LOG_WARN("fail to visit multi geom", K(ret));
-  }
+  }  
   for (uint32_t i = 0; i < geo_nums && OB_SUCC(ret); i++) {
     if (OB_FAIL(read_header(sub_bo, sub_geo_type))) {
       LOG_WARN("fail to read header", K(ret));
@@ -398,7 +398,7 @@ int ObGeometry3D::visit_collectionz(ObGeoWkbByteOrder bo, ObGeo3DVisitor &visito
     LOG_WARN("fail to read nums", K(ret));
   } else if (OB_FAIL(visitor.visit_collectionz_start(this, geo_nums))) {
     LOG_WARN("fail to visit geometrycollection start", K(ret));
-  }
+  } 
   for (uint32_t i = 0; OB_SUCC(ret) && i < geo_nums; i++) {
     if (OB_FAIL(SMART_CALL(visit_wkb_inner(visitor)))) {
       LOG_WARN("fail to convert geoms in collection", K(ret), K(i));
@@ -443,7 +443,7 @@ int ObGeometry3D::create_elevation_extent(ObGeoElevationExtent &extent)
   return ret;
 }
 
-int ObGeometry3D::normalize(const ObSrsItem *srs)
+int ObGeometry3D::normalize(const ObSrsItem *srs) 
 {
   int ret = OB_SUCCESS;
   ObGeo3DNormalizeVisitor visitor(srs);
@@ -515,7 +515,7 @@ int ObGeo3DVisitor::visit_header(ObGeoWkbByteOrder bo, ObGeoType geo_type, bool 
   return OB_SUCCESS;
 }
 
-int ObGeo3DVisitor::visit_pointz_start(ObGeometry3D *geo, bool is_inner)
+int ObGeo3DVisitor::visit_pointz_start(ObGeometry3D *geo, bool is_inner) 
 {
   UNUSED(geo);
   return OB_SUCCESS;
@@ -767,7 +767,7 @@ int ObGeo3DTo2DVisitor::visit_collectionz_start(ObGeometry3D *geo, uint32_t nums
 
 /**************************************ObGeo3DToWktVisitor**************************************/
 
-ObGeo3DToWktVisitor::ObGeo3DToWktVisitor(int64_t maxdecimaldigits/* = -1*/)
+ObGeo3DToWktVisitor::ObGeo3DToWktVisitor(int64_t maxdecimaldigits/* = -1*/) 
     : wkt_buf_(NULL), is_oracle_mode_(lib::is_oracle_mode()), is_mpt_visit_(false)
 {
   if (maxdecimaldigits >= 0 && maxdecimaldigits < ObGeoToWktVisitor::MAX_DIGITS_IN_DOUBLE) {
@@ -813,7 +813,7 @@ int ObGeo3DToWktVisitor::append_paren(bool is_left)
 
 int ObGeo3DToWktVisitor::visit_pointz_start(ObGeometry3D *geo, bool is_inner)
 {
-  bool ret = OB_SUCCESS;
+  bool ret = OB_SUCCESS;  
   if (is_mpt_visit_ || (!is_multi() && !is_inner)) {
     ret = append_paren(true);
   }
@@ -875,7 +875,7 @@ int ObGeo3DToWktVisitor::remove_comma()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("wkt_buf_ is NULL", K(ret));
   } else if (is_oracle_mode_) {
-    if (wkt_buf_->length() > 1 && wkt_buf_->ptr()[wkt_buf_->length() - 1] == ' '
+    if (wkt_buf_->length() > 1 && wkt_buf_->ptr()[wkt_buf_->length() - 1] == ' ' 
         && wkt_buf_->ptr()[wkt_buf_->length() - 2] == ',') {
       if (OB_FAIL(wkt_buf_->set_length(wkt_buf_->length() - 2))) {
         LOG_WARN("fail to set length", K(ret));
@@ -1072,7 +1072,7 @@ int ObGeo3DCoordinateRangeVisitor::visit_pointz_inner(double x, double y, double
   } else if (srs_->srs_type() == ObSrsType::PROJECTED_SRS) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("srs is projected type", K(srs_));
-  } else if (OB_FAIL(ObGeoCoordinateRangeVisitor::calculate_point_range(srs_, x, y,
+  } else if (OB_FAIL(ObGeoCoordinateRangeVisitor::calculate_point_range(srs_, x, y, 
           is_normalized_, result))){
     LOG_WARN("failed to calculate point range", K(ret), K(x), K(y));
   } else {
@@ -1154,7 +1154,7 @@ int ObGeo3DWkbToSdoGeoVisitor::visit_linestringz_start(ObGeometry3D *geo, uint32
   if (!is_multi_visit_ && !is_collection_visit_ && !is_inner_element_ && line_type == ObLineType::Line) {
     sdo_geo_->set_gtype(geo->type());
   }
-
+  
   uint64_t etype = line_type == ObLineType::Line ? 2 : (line_type == ObLineType::ExterRing ? 1003 : 2003);
   if (OB_FAIL(append_elem_info(sdo_geo_->get_ordinates().size() + 1, etype, 1))) {
     LOG_WARN("fail to append sdo_elem_info", K(ret), K(sdo_geo_->get_ordinates().size()));
@@ -1344,7 +1344,7 @@ int ObGeo3DWkbToJsonVisitor::visit_polygonz_end(ObGeometry3D *geo, uint32_t nums
   } else if (OB_FAIL(buffer_.append(" ]"))) {
     LOG_WARN("fail to append buffer_", K(ret));
   } else if ((inner_element_level_ <= 0  || in_colloction_visit()) && OB_FAIL(buffer_.append(" }"))) {
-    LOG_WARN("fail to append buffer_", K(ret));
+    LOG_WARN("fail to append buffer_", K(ret));      
   } else if ((inner_element_level_ > 0  || in_colloction_visit()) && OB_FAIL(buffer_.append(", "))) {
     LOG_WARN("fail to append buffer_", K(ret));
   }
@@ -1411,7 +1411,7 @@ int ObGeo3DWkbToJsonVisitor::appendDouble(double x)
     LOG_WARN("fail to append x val to buffer", K(ret));
   } else if (OB_FAIL(buffer_.set_length(buffer_.length() + len_x))) {
     LOG_WARN("fail to set buffer x len", K(ret), K(len_x));
-  }
+  } 
   return ret;
 }
 

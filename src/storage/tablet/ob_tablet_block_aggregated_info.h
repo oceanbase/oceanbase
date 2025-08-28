@@ -122,8 +122,8 @@ public:
   TabletMacroSet meta_block_info_set_; // MacroBlockID of small_sstable->addr, other_block & linked_block in normal sstable
   TabletMacroSet data_block_info_set_; // only data block of sstable, not include index_block and meta_block
   TabletMacroSet backup_block_info_set_;
-  TabletMacroSet shared_meta_block_info_set_; // MacroBlockID of
-                                              // (sstable [stable.serialize], sstable->addr[->block_id()],
+  TabletMacroSet shared_meta_block_info_set_; // MacroBlockID of 
+                                              // (sstable [stable.serialize], sstable->addr[->block_id()], 
                                               //  table_store, auto_inc_seq, storage_schema, dump_kvs, medium_info_list)
   TabletMacroMap clustered_data_block_info_map_; // map<macro_id, used_size (sum of nest_size, less than 2MB)>
                                                  // small_sstable->meta->macro_info_->nested_size
@@ -164,8 +164,8 @@ public:
   ~ObTabletMacroInfo();
   void reset();
   int init(
-    ObArenaAllocator &allocator,
-    const ObBlockInfoSet &id_set,
+    ObArenaAllocator &allocator, 
+    const ObBlockInfoSet &id_set, 
     ObLinkedMacroBlockItemWriter *linked_writer);
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(ObArenaAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);

@@ -145,7 +145,7 @@ TEST_F(ObLockTableBeforeRestartTest, test_lock_table_flush)
 
   ObSchemaGetterGuard guard;
   ASSERT_EQ(OB_SUCCESS, GCTX.schema_service_->get_tenant_schema_guard(RunCtx.tenant_id_, guard));
-
+  
   //lock table
   uint64_t table_id = 0;
   ASSERT_EQ(OB_SUCCESS,
@@ -154,7 +154,7 @@ TEST_F(ObLockTableBeforeRestartTest, test_lock_table_flush)
   ObTableLockService *table_lock_ser = MTL(ObTableLockService*);
   ASSERT_EQ(OB_SUCCESS, table_lock_ser->lock_table(table_id, EXCLUSIVE, owner_id, 0));
   usleep(1000 * 1000);
-
+  
   SCN rec_scn = lock_memtable->get_rec_scn();
   ASSERT_NE(rec_scn, SCN::max_scn());
   lock_scn = rec_scn;

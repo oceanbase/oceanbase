@@ -24,7 +24,7 @@ using namespace oceanbase::share::schema;
 using namespace oceanbase::rootserver;
 
 ObColumnRedefinitionTask::ObColumnRedefinitionTask()
-  : ObDDLRedefinitionTask(ObDDLType::DDL_COLUMN_REDEFINITION), has_rebuild_index_(false), has_rebuild_constraint_(false), has_rebuild_foreign_key_(false),
+  : ObDDLRedefinitionTask(ObDDLType::DDL_COLUMN_REDEFINITION), has_rebuild_index_(false), has_rebuild_constraint_(false), has_rebuild_foreign_key_(false), 
     allocator_(lib::ObLabel("RedefTask"))
 {
 }
@@ -35,18 +35,18 @@ ObColumnRedefinitionTask::~ObColumnRedefinitionTask()
 
 int ObColumnRedefinitionTask::init(const uint64_t tenant_id, const int64_t task_id, const share::ObDDLType &ddl_type,
     const int64_t data_table_id, const int64_t dest_table_id, const int64_t schema_version, const int64_t parallelism, const int64_t consumer_group_id,
-    const int32_t sub_task_trace_id, const obrpc::ObAlterTableArg &alter_table_arg,
+    const int32_t sub_task_trace_id, const obrpc::ObAlterTableArg &alter_table_arg, 
     const uint64_t tenant_data_version, const int64_t task_status, const int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObColumnRedefinitionTask has already been inited", K(ret));
-  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == data_table_id || OB_INVALID_ID == dest_table_id || schema_version <= 0
+  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == data_table_id || OB_INVALID_ID == dest_table_id || schema_version <= 0 
       || tenant_data_version <= 0 || task_status < ObDDLTaskStatus::PREPARE
       || task_status > ObDDLTaskStatus::SUCCESS || snapshot_version < 0 || (snapshot_version > 0 && task_status < ObDDLTaskStatus::WAIT_TRANS_END))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(task_id), K(data_table_id), K(dest_table_id), K(schema_version),
+    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(task_id), K(data_table_id), K(dest_table_id), K(schema_version), 
       K(tenant_data_version), K(task_status), K(snapshot_version));
     LOG_WARN("fail to init task table operator", K(ret));
   } else if (OB_FAIL(deep_copy_table_arg(allocator_, alter_table_arg, alter_table_arg_))) {
@@ -72,7 +72,7 @@ int ObColumnRedefinitionTask::init(const uint64_t tenant_id, const int64_t task_
     if (OB_FAIL(init_ddl_task_monitor_info(target_object_id_))) {
       LOG_WARN("init ddl task monitor info failed", K(ret));
     } else if (OB_FAIL(ObDDLUtil::get_no_logging_param(tenant_id_, is_no_logging_))) {
-      LOG_WARN("fail to get no logging param", K(ret), K(tenant_id_));
+      LOG_WARN("fail to get no logging param", K(ret), K(tenant_id_)); 
     } else {
       dst_tenant_id_ = tenant_id_;
       dst_schema_version_ = schema_version_;
@@ -513,7 +513,7 @@ int ObColumnRedefinitionTask::copy_table_dependent_objects(const ObDDLTaskStatus
       LOG_WARN("fail to copy table foreign keys", K(ret));
     }
   }
-
+  
   if (OB_FAIL(ret)) {
     state_finish = true;
   } else {
@@ -827,6 +827,6 @@ int ObColumnRedefinitionTask::collect_longops_stat(ObLongopsValue &value)
   } else if (OB_FAIL(copy_longops_stat(value))) {
     LOG_WARN("failed to collect common longops stat", K(ret));
   }
-
+    
   return ret;
 }

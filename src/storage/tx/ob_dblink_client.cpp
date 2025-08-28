@@ -280,13 +280,13 @@ int ObDBLinkClient::rm_xa_commit()
 // 1. if START, execute xa end first
 // 2. if END, execute xa rollback
 // 3. if RDONLY_PREPARED, return success directly
-// 4. if PREPARED, execute xa rollback
+// 4. if PREPARED, execute xa rollback 
 int ObDBLinkClient::rm_xa_rollback()
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(lock_);
 
-  // step 1, execute xa end if necessary
+  // step 1, execute xa end if necessary 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "dblink client is not inited", K(ret), K(*this));

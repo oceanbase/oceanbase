@@ -702,7 +702,7 @@ void ObSQLSessionInfo::destroy(bool skip_sys_var)
     }
 
     // 反序列化出来的 session 不应该做 end_trans 等清理工作
-    // bug:
+    // bug: 
     if (false == get_is_deserialized()) {
       if (false == ObSchemaService::g_liboblog_mode_) {
         //session断开时调用ObTransService::end_trans回滚事务，
@@ -1546,7 +1546,7 @@ ObDbmsCursorInfo *ObSQLSessionInfo::get_dbms_cursor(int64_t cursor_id)
   ObDbmsCursorInfo *dbms_cursor = NULL;
   OV (OB_NOT_NULL(cursor = get_cursor(cursor_id)),
       OB_INVALID_ARGUMENT, cursor_id);
-  OV (cursor->is_dbms_sql_cursor(),
+  OV (cursor->is_dbms_sql_cursor(), 
       OB_INVALID_ARGUMENT, cursor_id);
   OV (OB_NOT_NULL(dbms_cursor = dynamic_cast<ObDbmsCursorInfo *>(cursor)),
       OB_INVALID_ARGUMENT, cursor_id);
@@ -1714,7 +1714,7 @@ int ObSQLSessionInfo::init_cursor_cache()
   if (!pl_cursor_cache_.is_inited()) {
     // when select GV$OPEN_CURSOR, we will add get_thread_data_lock to fetch pl_cursor_map_
     // so we need get_thread_data_lock there
-    DISABLE_SQL_MEMLEAK_GUARD; //avoid false error report from sql_memleak_check
+    DISABLE_SQL_MEMLEAK_GUARD; //avoid false error report from sql_memleak_check 
     ObSQLSessionInfo::LockGuard lock_guard(get_thread_data_lock());
     OZ (pl_cursor_cache_.init(get_effective_tenant_id()),
                               get_effective_tenant_id(),
@@ -2594,7 +2594,7 @@ int ObSQLSessionInfo::set_package_variable(
     OZ (package_guard.init());
     if (OB_SUCC(ret)) {
       bool is_invalid = false;
-
+      
       if (key.prefix_match(pl::package_key_prefix_v2)) {
         bool is_oversize_value = false;
         OZ (name.decode_key(allocator, key));
@@ -3257,7 +3257,7 @@ static int write_str_reuse_buf(AllocatorT &allocator, const ObString &src, ObStr
     allocator.free(dst.ptr());
     if (OB_ISNULL(src.ptr()) || OB_UNLIKELY(0 >= src_len)) {
       dst.assign(NULL, 0);
-    } else if (NULL ==
+    } else if (NULL == 
                 (ptr = static_cast<char *>(allocator.alloc(src_len)))) {
       dst.assign(NULL, 0);
       ret = OB_ALLOCATE_MEMORY_FAILED;

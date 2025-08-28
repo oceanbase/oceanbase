@@ -22,7 +22,7 @@ int ObHbaseAdapterGuard::get_hbase_adapter(ObIHbaseAdapter *&hbase_adapter)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(hbase_adapter_)) {
-    if (OB_FAIL(ObHbaseAdapterFactory::alloc_hbase_adapter(allocator_,
+    if (OB_FAIL(ObHbaseAdapterFactory::alloc_hbase_adapter(allocator_, 
                                                            exec_ctx_,
                                                            hbase_adapter_))) {
       LOG_WARN("failed to alloc hbase adapter", K(ret));

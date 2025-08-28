@@ -122,7 +122,7 @@ int StringCommandOperator::is_key_exists(int64_t db, const ObString &key, bool &
     }
     if (OB_SUCC(ret)) {
       redis_ctx_.entity_factory_->free(entity);
-    }
+    }  
   }
   return ret;
 }
@@ -657,7 +657,7 @@ int StringCommandOperator::do_incr_by_float(int64_t db, const common::ObString &
   if (OB_SUCC(ret)) {
     long double new_val = old_val + incr;
     if (OB_FAIL(ObRedisHelper::long_double_to_string(op_temp_allocator_, new_val, res_val))) {
-      RECORD_REDIS_ERROR(fmt_redis_msg_, ObRedisErr::FLOAT_ERR);
+      RECORD_REDIS_ERROR(fmt_redis_msg_, ObRedisErr::FLOAT_ERR); 
       LOG_WARN("new_val_str is not a float", K(ret), K(res_val));
     } else if (OB_FAIL(build_key_value_expire_entity(db, key, res_val, expire_ts, entity))) {
       LOG_WARN("fail to build rowkey entity", K(ret), K(db), K(key));
@@ -1010,7 +1010,7 @@ int StringCommandOperator::do_group_get()
   }
   return ret;
 }
-
+ 
 int StringCommandOperator::do_group_set()
 {
   int ret = OB_SUCCESS;
@@ -1073,7 +1073,7 @@ int StringCommandOperator::do_group_incr()
     LOG_WARN("fail to do inner group get", K(ret));
   } else if (batch_res.count() != group_ctx.ops().count()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("batch res count should be equal to ops count",
+    LOG_WARN("batch res count should be equal to ops count", 
       K(ret), K(batch_res.count()), K(group_ctx.ops().count()));
   }
 
@@ -1156,7 +1156,7 @@ int StringCommandOperator::do_group_incr()
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(ret), K(size));
   }
-
+  
   int64_t idx = 0;
   for (KVMap::const_iterator i = kv_map.begin(); OB_SUCC(ret) && i != kv_map.end(); ++i, ++idx) {
     RedisKeyNode node = i->first;
@@ -1198,7 +1198,7 @@ int StringCommandOperator::do_group_incrbyfloat()
     LOG_WARN("fail to do inner group get", K(ret));
   } else if (batch_res.count() != group_ctx.ops().count()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("batch res count should be equal to ops count",
+    LOG_WARN("batch res count should be equal to ops count", 
       K(ret), K(batch_res.count()), K(group_ctx.ops().count()));
   }
 
@@ -1263,7 +1263,7 @@ int StringCommandOperator::do_group_incrbyfloat()
         if (OB_FAIL(kv_map.set_refactored(node, new_pair, 1 /*conver exists key*/))) {
           LOG_WARN("fail to do set refactored", K(ret), K(cmd->key()));
         } else if (OB_FAIL(ObRedisHelper::long_double_to_string(op_temp_allocator_, new_val, reply_str))) {
-          RECORD_REDIS_ERROR(fmt_redis_msg_, ObRedisErr::FLOAT_ERR);
+          RECORD_REDIS_ERROR(fmt_redis_msg_, ObRedisErr::FLOAT_ERR); 
           LOG_WARN("new_val_str is not a float", K(ret), K(reply_str));
         } else if (OB_FAIL(op->response().set_res_bulk_string(reply_str))) {
           LOG_WARN("fail to set bulk string", K(ret));
@@ -1288,7 +1288,7 @@ int StringCommandOperator::do_group_incrbyfloat()
     ObITableEntity *entity = nullptr;
     ObString val_str;
     if (OB_FAIL(ObRedisHelper::long_double_to_string(op_temp_allocator_, i->second.first, val_str))) {
-      RECORD_REDIS_ERROR(fmt_redis_msg_, ObRedisErr::FLOAT_ERR);
+      RECORD_REDIS_ERROR(fmt_redis_msg_, ObRedisErr::FLOAT_ERR); 
       LOG_WARN("new_val_str is not a float", K(ret), K(val_str));
     } else if (OB_FAIL(build_key_value_expire_entity(node.db_, node.key_, val_str, i->second.second, entity))) {
       LOG_WARN("fail to build rowkey entity", K(ret), K(node), K(val_str));
@@ -1338,12 +1338,12 @@ int StringCommandOperator::do_group_setnx()
     if (OB_FAIL(init_tablet_ids_by_ops(group_ctx.ops()))) {
       LOG_WARN("fail to init tablet ids by ops", K(ret));
     } else if (OB_FAIL(process_table_batch_op(
-            batch_op,
-            batch_res,
-            nullptr,
-            RedisOpFlags::BATCH_NOT_ATOMIC,
-            &op_temp_allocator_,
-            &op_entity_factory_,
+            batch_op, 
+            batch_res, 
+            nullptr, 
+            RedisOpFlags::BATCH_NOT_ATOMIC, 
+            &op_temp_allocator_, 
+            &op_entity_factory_, 
             &tablet_ids_))) {
       LOG_WARN("fail to process table batch op", K(ret));
     }
@@ -1567,7 +1567,7 @@ int StringCommandOperator::do_group_analyze(int (StringCommandOperator::*analyze
       LOG_WARN("fail to do inner group get", K(ret));
     } else if (batch_res.count() != group_ctx.ops().count()) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("batch res count should be equal to ops count",
+      LOG_WARN("batch res count should be equal to ops count", 
         K(ret), K(batch_res.count()), K(group_ctx.ops().count()));
     }
 

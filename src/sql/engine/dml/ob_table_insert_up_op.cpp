@@ -647,7 +647,7 @@ int ObTableInsertUpOp::try_insert_row(bool &is_skipped)
     // TODO(yikang): fix trigger related for heap table
     } else if (need_after_row_process(ins_ctdef) && OB_FAIL(dml_modify_rows_.push_back(modify_row))) {
       LOG_WARN("failed to push dml modify row to modified row list", K(ret));
-    }
+    } 
   }
   return ret;
 }

@@ -525,7 +525,7 @@ int ObDASRef::wait_tasks_and_process_response()
     LOG_WARN("fail to wait all executing tasks", K(ret));
   }
 
-
+  
   // it is possible that tasks that have already been executed need to be rollback,
   // and must clear async_cb_list_, when it is using reuse_alloc_ from das ref,
   // reuse_alloc_ will be released before async_cb_list_

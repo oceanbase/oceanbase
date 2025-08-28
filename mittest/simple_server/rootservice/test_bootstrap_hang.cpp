@@ -42,7 +42,7 @@ void wait_load_schema_rpc_send()
 {
   int64_t count = 0;
   int64_t start_ts = ObTimeUtility::current_time();
-  while (ObTimeUtility::current_time() - start_ts < 300_s
+  while (ObTimeUtility::current_time() - start_ts < 300_s 
       && (count = ObLoadInnerTableSchemaExecutor::get_need_hang_count()) != 0) {
     LOG_INFO("get_need_hang_count is not zero", K(count));
     ob_usleep(1_s);

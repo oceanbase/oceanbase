@@ -23,9 +23,9 @@ namespace oceanbase
 {
 namespace share
 {
-static const char* BALANCE_TASK_STATUS_ARRAY[] =
+static const char* BALANCE_TASK_STATUS_ARRAY[] = 
 {
-  "INIT", "CREATE_LS", "ALTER_LS", "SET_LS_MERGING", "TRANSFER", "DROP_LS", "COMPLETED", "CANCELED",
+  "INIT", "CREATE_LS", "ALTER_LS", "SET_LS_MERGING", "TRANSFER", "DROP_LS", "COMPLETED", "CANCELED", 
 };
 static const char *BALANCE_TASK_TYPE[] =
 {
@@ -61,7 +61,7 @@ ObBalanceTaskStatus::ObBalanceTaskStatus(const ObString &str)
   }
 }
 
-const char* ObBalanceTaskType::to_str() const
+const char* ObBalanceTaskType::to_str() const 
 {
   STATIC_ASSERT(
       ARRAYSIZEOF(BALANCE_TASK_TYPE) == BALANCE_TASK_MAX,
@@ -105,7 +105,7 @@ ObBalanceTaskStatus ObBalanceTask::get_next_status(const ObBalanceJobStatus &job
     if (task_status_.is_init()) {
       task_status = ObBalanceTaskStatus(ObBalanceTaskStatus::BALANCE_TASK_STATUS_CREATE_LS);
     } else if (task_status_.is_create_ls()) {
-      task_status = ObBalanceTaskStatus(ObBalanceTaskStatus::BALANCE_TASK_STATUS_TRANSFER);
+      task_status = ObBalanceTaskStatus(ObBalanceTaskStatus::BALANCE_TASK_STATUS_TRANSFER); 
     } else if (task_status_.is_transfer()) {
       task_status = ObBalanceTaskStatus(ObBalanceTaskStatus::BALANCE_TASK_STATUS_COMPLETED);
     } else {
@@ -123,7 +123,7 @@ ObBalanceTaskStatus ObBalanceTask::get_next_status(const ObBalanceJobStatus &job
     if (task_status_.is_init()) {
       task_status = ObBalanceTaskStatus(ObBalanceTaskStatus::BALANCE_TASK_STATUS_SET_LS_MERGING);
     } else if (task_status_.is_set_merge_ls()) {
-      task_status = ObBalanceTaskStatus(ObBalanceTaskStatus::BALANCE_TASK_STATUS_TRANSFER);
+      task_status = ObBalanceTaskStatus(ObBalanceTaskStatus::BALANCE_TASK_STATUS_TRANSFER); 
     } else if (task_status_.is_transfer()) {
       task_status = ObBalanceTaskStatus(ObBalanceTaskStatus::BALANCE_TASK_STATUS_DROP_LS);
     } else if (task_status_.is_drop_ls()) {
@@ -133,7 +133,7 @@ ObBalanceTaskStatus ObBalanceTask::get_next_status(const ObBalanceJobStatus &job
     }
   } else if (task_type_.is_transfer_task()) {
     if (task_status_.is_init()) {
-      task_status = ObBalanceTaskStatus(ObBalanceTaskStatus::BALANCE_TASK_STATUS_TRANSFER);
+      task_status = ObBalanceTaskStatus(ObBalanceTaskStatus::BALANCE_TASK_STATUS_TRANSFER); 
     } else if (task_status_.is_transfer()) {
       task_status = ObBalanceTaskStatus(ObBalanceTaskStatus::BALANCE_TASK_STATUS_COMPLETED);
     } else {
@@ -274,7 +274,7 @@ int ObBalanceTask::init(const uint64_t tenant_id,
     LOG_WARN("balance task is invalid", KR(ret), "this", *this);
   }
   return ret;
-}
+} 
 
 bool ObBalanceTask::is_valid() const
 {
@@ -359,7 +359,7 @@ int ObBalanceTaskTableOperator::insert_new_task(const ObBalanceTask &task,
   if (OB_UNLIKELY(!task.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("task is invalid", KR(ret), K(task));
-  } else if (OB_FAIL(fill_dml_spliter(dml, task))) {
+  } else if (OB_FAIL(fill_dml_spliter(dml, task))) { 
     LOG_WARN("failed to assign sql", KR(ret), K(task));
   } else if (OB_FAIL(exec.exec_insert(OB_ALL_BALANCE_TASK_TNAME,
                                              dml, affected_rows))) {
@@ -478,7 +478,7 @@ int ObBalanceTaskTableOperator::update_task_status(
     } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(length)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc buf", KR(ret), K(length));
-    } else if (OB_FAIL(ls_balance_task.init(task_op,
+    } else if (OB_FAIL(ls_balance_task.init(task_op, 
             balance_task.get_src_ls_id(), balance_task.get_dest_ls_id(),
             balance_task.get_ls_group_id()))) {
       LOG_WARN("failed to init balance task helper", KR(ret), K(tenant_id), K(balance_task));
@@ -866,7 +866,7 @@ int ObBalanceTaskTableOperator::get_job_cannot_execute_task(
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || !balance_job_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(balance_job_id));
-  } else if (OB_FAIL(sql.assign_fmt("select * from %s where job_id = %ld and "
+  } else if (OB_FAIL(sql.assign_fmt("select * from %s where job_id = %ld and " 
                                     "parent_list != '' and parent_list is not null",
                                     OB_ALL_BALANCE_TASK_TNAME, balance_job_id.id()))) {
     LOG_WARN("failed to assign sql", KR(ret), K(sql), K(balance_job_id));
@@ -1043,7 +1043,7 @@ int ObBalanceTaskTableOperator::update_task_part_list(const uint64_t tenant_id,
     LOG_WARN("expected single row", KR(ret), K(sql), K(affected_rows));
   }
 
-  return ret;
+  return ret; 
 }
 
 int ObBalanceTaskTableOperator::get_merge_task_dest_ls_by_src_ls(

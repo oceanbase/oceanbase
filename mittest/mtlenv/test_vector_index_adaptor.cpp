@@ -107,15 +107,15 @@ int test_knn_search(obvsag::VectorIndexPtr& index,
   int64_t hit_cnt = 0;
   for (int i = 0; OB_SUCC(ret) && i < num_vectors; ++i) {
     float *query_vecs = vecs + i * dim;
-    if (OB_FAIL(obvectorutil::knn_search(index,
-                                      query_vecs,
-                                      dim,
-                                      expect_cnt,
-                                      result_dist,
-                                      result_ids,
+    if (OB_FAIL(obvectorutil::knn_search(index, 
+                                      query_vecs, 
+                                      dim, 
+                                      expect_cnt, 
+                                      result_dist, 
+                                      result_ids, 
                                       extra_info_buf_ptr,
-                                      result_size,
-                                      ef_search,
+                                      result_size, 
+                                      ef_search, 
                                       bitmap))) {
       LOG_WARN("knn_search fail", K(ret));
     } else if (expect_cnt != result_size) {
@@ -151,15 +151,15 @@ TEST_F(TestVectorIndexAdaptor, vsag_add_duplicate)
   const char* const METRIC_L2 = "l2";
   const char* const DATATYPE_FLOAT32 = "float32";
 
-  ASSERT_EQ(obvectorutil::create_index(index_handler,
-                                      obvsag::HNSW_TYPE,
+  ASSERT_EQ(obvectorutil::create_index(index_handler, 
+                                      obvsag::HNSW_TYPE, 
                                       DATATYPE_FLOAT32,
-                                      METRIC_L2,
+                                      METRIC_L2, 
                                       dim,
                                       max_degree,
                                       ef_construction,
                                       ef_search), 0);
-
+  
   int num_vectors = 1000;
 
   int64_t *ids = new int64_t[num_vectors];
@@ -203,15 +203,15 @@ TEST_F(TestVectorIndexAdaptor, vsag_build_index)
   const char* const METRIC_L2 = "l2";
   const char* const DATATYPE_FLOAT32 = "float32";
 
-  ASSERT_EQ(obvectorutil::create_index(index_handler,
-                                      obvsag::HNSW_TYPE,
+  ASSERT_EQ(obvectorutil::create_index(index_handler, 
+                                      obvsag::HNSW_TYPE, 
                                       DATATYPE_FLOAT32,
-                                      METRIC_L2,
+                                      METRIC_L2, 
                                       dim,
                                       max_degree,
                                       ef_construction,
                                       ef_search), 0);
-
+  
   int num_vectors = 10000;
 
   int64_t *ids = new int64_t[num_vectors];
@@ -256,15 +256,15 @@ TEST_F(TestVectorIndexAdaptor, vsag_build_index)
 
   std::cout << "===================== Query Result ================" << std::endl;
 
-  ASSERT_EQ(0, obvectorutil::knn_search(index_handler,
-                                      query_vecs,
-                                      dim,
-                                      expect_cnt,
-                                      result_dist0,
-                                      result_ids0,
+  ASSERT_EQ(0, obvectorutil::knn_search(index_handler, 
+                                      query_vecs, 
+                                      dim, 
+                                      expect_cnt, 
+                                      result_dist0, 
+                                      result_ids0, 
                                       extra_info_buf_ptr,
-                                      result_size,
-                                      ef_search,
+                                      result_size, 
+                                      ef_search, 
                                       &test_filter));
   for (int64_t i = 0; i < result_size; ++i) {
     std::cout << i <<  " id: " << result_ids0[i] << " dis: " << result_dist0[i] << std::endl;
@@ -283,15 +283,15 @@ TEST_F(TestVectorIndexAdaptor, vsag_build_index)
 
   roaring64_bitmap_add(bitmap, 7055);
   roaring64_bitmap_add(bitmap, 2030);
-  ASSERT_EQ(0, obvectorutil::knn_search(index_handler,
-                                      query_vecs,
-                                      dim,
-                                      expect_cnt,
-                                      result_dist1,
-                                      result_ids1,
+  ASSERT_EQ(0, obvectorutil::knn_search(index_handler, 
+                                      query_vecs, 
+                                      dim, 
+                                      expect_cnt, 
+                                      result_dist1, 
+                                      result_ids1, 
                                       extra_info_buf_ptr,
-                                      result_size,
-                                      ef_search,
+                                      result_size, 
+                                      ef_search, 
                                       &test_filter));
 
   for (int64_t i = 0; i < result_size; ++i) {
@@ -325,15 +325,15 @@ TEST_F(TestVectorIndexAdaptor, vsag_add_index)
   const char* const METRIC_L2 = "l2";
   const char* const DATATYPE_FLOAT32 = "float32";
 
-  ASSERT_EQ(obvectorutil::create_index(index_handler,
-                                      obvsag::HNSW_TYPE,
+  ASSERT_EQ(obvectorutil::create_index(index_handler, 
+                                      obvsag::HNSW_TYPE, 
                                       DATATYPE_FLOAT32,
-                                      METRIC_L2,
+                                      METRIC_L2, 
                                       dim,
                                       max_degree,
                                       ef_construction,
                                       ef_search), 0);
-
+  
   int num_vectors = 10000;
 
   int64_t *ids = new int64_t[num_vectors];
@@ -381,15 +381,15 @@ TEST_F(TestVectorIndexAdaptor, vsag_add_index)
 
   std::cout << "===================== Query Result ================" << std::endl;
 
-  ASSERT_EQ(0, obvectorutil::knn_search(index_handler,
-                                      query_vecs,
-                                      dim,
-                                      expect_cnt,
-                                      result_dist0,
-                                      result_ids0,
+  ASSERT_EQ(0, obvectorutil::knn_search(index_handler, 
+                                      query_vecs, 
+                                      dim, 
+                                      expect_cnt, 
+                                      result_dist0, 
+                                      result_ids0, 
                                       extra_info_buf_ptr,
-                                      result_size,
-                                      ef_search,
+                                      result_size, 
+                                      ef_search, 
                                       &test_filter));
   for (int64_t i = 0; i < result_size; ++i) {
     std::cout << i <<  " id: " << result_ids0[i] << " dis: " << result_dist0[i] << std::endl;
@@ -408,15 +408,15 @@ TEST_F(TestVectorIndexAdaptor, vsag_add_index)
 
   roaring64_bitmap_add(bitmap, 545);
   roaring64_bitmap_add(bitmap, 3720);
-  ASSERT_EQ(0, obvectorutil::knn_search(index_handler,
-                                      query_vecs,
-                                      dim,
-                                      expect_cnt,
-                                      result_dist1,
-                                      result_ids1,
+  ASSERT_EQ(0, obvectorutil::knn_search(index_handler, 
+                                      query_vecs, 
+                                      dim, 
+                                      expect_cnt, 
+                                      result_dist1, 
+                                      result_ids1, 
                                       extra_info_buf_ptr,
-                                      result_size,
-                                      ef_search,
+                                      result_size, 
+                                      ef_search, 
                                       &test_filter));
 
   for (int64_t i = 0; i < result_size; ++i) {
@@ -447,15 +447,15 @@ TEST_F(TestVectorIndexAdaptor, test_insert)
   const char* const METRIC_L2 = "l2";
   const char* const DATATYPE_FLOAT32 = "float32";
 
-  ASSERT_EQ(obvectorutil::create_index(index_handler,
-                                      obvsag::HNSW_TYPE,
+  ASSERT_EQ(obvectorutil::create_index(index_handler, 
+                                      obvsag::HNSW_TYPE, 
                                       DATATYPE_FLOAT32,
-                                      METRIC_L2,
+                                      METRIC_L2, 
                                       dim,
                                       max_degree,
                                       ef_construction,
                                       ef_search), 0);
-
+  
   int num_vectors = 40;
 
   int64_t *ids = new int64_t[num_vectors];
@@ -503,15 +503,15 @@ TEST_F(TestVectorIndexAdaptor, test_insert)
 
   std::cout << "===================== Query Result ================" << std::endl;
 
-  ASSERT_EQ(0, obvectorutil::knn_search(index_handler,
-                                      query_vecs,
-                                      dim,
-                                      expect_cnt,
-                                      result_dist0,
-                                      result_ids0,
+  ASSERT_EQ(0, obvectorutil::knn_search(index_handler, 
+                                      query_vecs, 
+                                      dim, 
+                                      expect_cnt, 
+                                      result_dist0, 
+                                      result_ids0, 
                                       extra_info_buf_ptr,
-                                      result_size,
-                                      ef_search,
+                                      result_size, 
+                                      ef_search, 
                                       &test_filter));
   for (int64_t i = 0; i < result_size; ++i) {
     std::cout << i <<  " id: " << result_ids0[i] << " dis: " << result_dist0[i] << std::endl;
@@ -530,15 +530,15 @@ TEST_F(TestVectorIndexAdaptor, test_insert)
 
   roaring64_bitmap_add(bitmap, 3720);
     roaring64_bitmap_add(bitmap, 545);
-  ASSERT_EQ(0, obvectorutil::knn_search(index_handler,
-                                      query_vecs,
-                                      dim,
-                                      expect_cnt,
-                                      result_dist1,
-                                      result_ids1,
+  ASSERT_EQ(0, obvectorutil::knn_search(index_handler, 
+                                      query_vecs, 
+                                      dim, 
+                                      expect_cnt, 
+                                      result_dist1, 
+                                      result_ids1, 
                                       extra_info_buf_ptr,
-                                      result_size,
-                                      ef_search,
+                                      result_size, 
+                                      ef_search, 
                                       &test_filter));
 
   for (int64_t i = 0; i < result_size; ++i) {
@@ -643,10 +643,10 @@ TEST_F(TestVectorIndexAdaptor, test_ser_deser)
   int ef_construction = 100;
   const char* const METRIC_L2 = "l2";
   const char* const DATATYPE_FLOAT32 = "float32";
-  ASSERT_EQ(obvectorutil::create_index(index_handler,
-                                      obvsag::HNSW_TYPE,
+  ASSERT_EQ(obvectorutil::create_index(index_handler, 
+                                      obvsag::HNSW_TYPE, 
                                       DATATYPE_FLOAT32,
-                                      METRIC_L2,
+                                      METRIC_L2, 
                                       dim,
                                       max_degree,
                                       ef_construction,
@@ -695,10 +695,10 @@ TEST_F(TestVectorIndexAdaptor, test_ser_deser)
   des_param.size_ = ser_param.size_;
   des_param.cur_pos_ = 0;
   des_param.part_size_ = 10;
-  ASSERT_EQ(obvectorutil::create_index(des_index_handler,
-                                      obvsag::HNSW_TYPE,
+  ASSERT_EQ(obvectorutil::create_index(des_index_handler, 
+                                      obvsag::HNSW_TYPE, 
                                       DATATYPE_FLOAT32,
-                                      METRIC_L2,
+                                      METRIC_L2, 
                                       dim,
                                       max_degree,
                                       ef_construction,
@@ -754,7 +754,7 @@ void *VecIndexAlloctor::alloc(const int64_t size)
   int64_t actual_size = MEM_PTR_HEAD_SIZE + size;
   global_total_ += actual_size;
   used_ += actual_size;
-
+  
   void *ptr = nullptr;
   ptr = ob_malloc(actual_size, attr_);
   *(int64_t*)ptr = actual_size;
@@ -762,7 +762,7 @@ void *VecIndexAlloctor::alloc(const int64_t size)
 }
 
 void VecIndexAlloctor::free(void *ptr)
-{
+{ 
   void *size_ptr = (char*)ptr - sizeof(uint64_t);
   int64_t size = *(int64_t *)size_ptr;
   global_total_ -= size;
@@ -853,7 +853,7 @@ private:
 
 };
 
-int VsagMemContext::init()
+int VsagMemContext::init() 
 {
   INIT_SUCC(ret);
   lib::ContextParam param;
@@ -864,7 +864,7 @@ int VsagMemContext::init()
   if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
     //LOG_WARN("create memory entity failed", K(ret));
   } else {
-
+    
   }
   return ret;
 }
@@ -930,15 +930,15 @@ TEST_F(TestVectorIndexAdaptor, vsag_build_hnswsq_index)
   const char* const METRIC_L2 = "l2";
   const char* const DATATYPE_FLOAT32 = "float32";
 
-  ASSERT_EQ(obvectorutil::create_index(index_handler,
-                                      obvsag::HNSW_SQ_TYPE,
+  ASSERT_EQ(obvectorutil::create_index(index_handler, 
+                                      obvsag::HNSW_SQ_TYPE, 
                                       DATATYPE_FLOAT32,
-                                      METRIC_L2,
+                                      METRIC_L2, 
                                       dim,
                                       max_degree,
                                       ef_construction,
                                       ef_search), 0);
-
+  
   int num_vectors = 10000;
 
   int64_t *ids = new int64_t[num_vectors];
@@ -983,15 +983,15 @@ TEST_F(TestVectorIndexAdaptor, vsag_build_hnswsq_index)
 
   std::cout << "===================== Query Result ================" << std::endl;
 
-  ASSERT_EQ(0, obvectorutil::knn_search(index_handler,
-                                      query_vecs,
-                                      dim,
-                                      expect_cnt,
-                                      result_dist0,
-                                      result_ids0,
+  ASSERT_EQ(0, obvectorutil::knn_search(index_handler, 
+                                      query_vecs, 
+                                      dim, 
+                                      expect_cnt, 
+                                      result_dist0, 
+                                      result_ids0, 
                                       extra_info_buf_ptr,
-                                      result_size,
-                                      ef_search,
+                                      result_size, 
+                                      ef_search, 
                                       &test_filter));
   for (int64_t i = 0; i < result_size; ++i) {
     std::cout << i <<  " id: " << result_ids0[i] << " dis: " << result_dist0[i] << std::endl;
@@ -1010,15 +1010,15 @@ TEST_F(TestVectorIndexAdaptor, vsag_build_hnswsq_index)
 
   roaring64_bitmap_add(bitmap, 7055);
   roaring64_bitmap_add(bitmap, 2030);
-  ASSERT_EQ(0, obvectorutil::knn_search(index_handler,
-                                      query_vecs,
-                                      dim,
-                                      expect_cnt,
-                                      result_dist1,
-                                      result_ids1,
+  ASSERT_EQ(0, obvectorutil::knn_search(index_handler, 
+                                      query_vecs, 
+                                      dim, 
+                                      expect_cnt, 
+                                      result_dist1, 
+                                      result_ids1, 
                                       extra_info_buf_ptr,
-                                      result_size,
-                                      ef_search,
+                                      result_size, 
+                                      ef_search, 
                                       &test_filter));
 
   for (int64_t i = 0; i < result_size; ++i) {
@@ -1049,28 +1049,28 @@ TEST_F(TestVectorIndexAdaptor, vsag_build_hnswsq_index_query)
   const char* const METRIC_L2 = "l2";
   const char* const DATATYPE_FLOAT32 = "float32";
 
-  ASSERT_EQ(obvectorutil::create_index(index_handler_sq,
-                                      obvsag::HNSW_SQ_TYPE,
+  ASSERT_EQ(obvectorutil::create_index(index_handler_sq, 
+                                      obvsag::HNSW_SQ_TYPE, 
                                       DATATYPE_FLOAT32,
-                                      METRIC_L2,
+                                      METRIC_L2, 
                                       dim,
                                       max_degree,
                                       ef_construction,
                                       ef_search), 0);
 
-  ASSERT_EQ(obvectorutil::create_index(index_handler,
-                                      obvsag::HNSW_TYPE,
+  ASSERT_EQ(obvectorutil::create_index(index_handler, 
+                                      obvsag::HNSW_TYPE, 
                                       DATATYPE_FLOAT32,
-                                      METRIC_L2,
+                                      METRIC_L2, 
                                       dim,
                                       max_degree,
                                       ef_construction,
                                       ef_search), 0);
-
-  ASSERT_EQ(obvectorutil::create_index(index_handler_bq,
+  
+  ASSERT_EQ(obvectorutil::create_index(index_handler_bq, 
                                       obvsag::HNSW_BQ_TYPE,
                                       DATATYPE_FLOAT32,
-                                      METRIC_L2,
+                                      METRIC_L2, 
                                       dim,
                                       max_degree,
                                       ef_construction,
@@ -1130,35 +1130,35 @@ TEST_F(TestVectorIndexAdaptor, vsag_build_hnswsq_index_query)
 
   std::cout << "===================== Query Result ================" << std::endl;
 
-  ASSERT_EQ(0, obvectorutil::knn_search(index_handler_sq,
-                                      query_vecs,
-                                      dim,
-                                      expect_cnt,
-                                      result_dist0,
-                                      result_ids0,
+  ASSERT_EQ(0, obvectorutil::knn_search(index_handler_sq, 
+                                      query_vecs, 
+                                      dim, 
+                                      expect_cnt, 
+                                      result_dist0, 
+                                      result_ids0, 
                                       extra_info_buf_ptr,
-                                      result_size,
-                                      ef_search,
+                                      result_size, 
+                                      ef_search, 
                                       &test_filter));
-  ASSERT_EQ(0, obvectorutil::knn_search(index_handler,
-                                      query_vecs,
-                                      dim,
-                                      expect_cnt,
-                                      result_dist1,
-                                      result_ids1,
+  ASSERT_EQ(0, obvectorutil::knn_search(index_handler, 
+                                      query_vecs, 
+                                      dim, 
+                                      expect_cnt, 
+                                      result_dist1, 
+                                      result_ids1, 
                                       extra_info_buf_ptr,
-                                      result_size,
-                                      ef_search,
+                                      result_size, 
+                                      ef_search, 
                                       &test_filter));
-  ASSERT_EQ(0, obvectorutil::knn_search(index_handler_bq,
-                                      query_vecs,
-                                      dim,
-                                      expect_cnt,
-                                      result_dist_bq,
-                                      result_ids_bq,
+  ASSERT_EQ(0, obvectorutil::knn_search(index_handler_bq, 
+                                      query_vecs, 
+                                      dim, 
+                                      expect_cnt, 
+                                      result_dist_bq, 
+                                      result_ids_bq, 
                                       extra_info_buf_ptr,
-                                      result_size,
-                                      ef_search,
+                                      result_size, 
+                                      ef_search, 
                                       &test_filter));
   for (int64_t i = 0; i < result_size; ++i) {
     std::cout << i <<  " id: " << result_ids0[i] << " dis: " << result_dist0[i] << std::endl;
@@ -1200,15 +1200,15 @@ TEST_F(TestVectorIndexAdaptor, test_for_hnsw_insert_time)
   }
 
   std::time_t start_timestamp = std::time(nullptr);
-  ASSERT_EQ(obvectorutil::create_index(index_handler,
-                                      obvsag::HNSW_TYPE,
+  ASSERT_EQ(obvectorutil::create_index(index_handler, 
+                                      obvsag::HNSW_TYPE, 
                                       DATATYPE_FLOAT32,
-                                      METRIC_L2,
+                                      METRIC_L2, 
                                       dim,
                                       max_degree,
                                       ef_construction,
                                       ef_search), 0);
-
+  
 
   ASSERT_EQ(0, obvectorutil::build_index(index_handler, vecs, ids, dim, batch_cnt));
 
@@ -1246,15 +1246,15 @@ TEST_F(TestVectorIndexAdaptor, test_for_hnswsq_insert_time)
   }
 
   std::time_t start_timestamp = std::time(nullptr);
-  ASSERT_EQ(obvectorutil::create_index(index_handler,
-                                      obvsag::HNSW_SQ_TYPE,
+  ASSERT_EQ(obvectorutil::create_index(index_handler, 
+                                      obvsag::HNSW_SQ_TYPE, 
                                       DATATYPE_FLOAT32,
-                                      METRIC_L2,
+                                      METRIC_L2, 
                                       dim,
                                       max_degree,
                                       ef_construction,
                                       ef_search), 0);
-
+  
 
   ASSERT_EQ(0, obvectorutil::build_index(index_handler, vecs, ids, dim, batch_cnt));
 
@@ -1279,10 +1279,10 @@ TEST_F(TestVectorIndexAdaptor, vsag_build_hnswbq_index)
   const char* const METRIC_L2 = "l2";
   const char* const DATATYPE_FLOAT32 = "float32";
 
-  ASSERT_EQ(obvectorutil::create_index(index_handler,
+  ASSERT_EQ(obvectorutil::create_index(index_handler, 
                                       obvsag::HNSW_BQ_TYPE,
                                       DATATYPE_FLOAT32,
-                                      METRIC_L2,
+                                      METRIC_L2, 
                                       dim,
                                       max_degree,
                                       ef_construction,
@@ -1331,15 +1331,15 @@ TEST_F(TestVectorIndexAdaptor, vsag_build_hnswbq_index)
 
   std::cout << "===================== Query Result ================" << std::endl;
 
-  ASSERT_EQ(0, obvectorutil::knn_search(index_handler,
-                                      query_vecs,
-                                      dim,
-                                      expect_cnt,
-                                      result_dist0,
-                                      result_ids0,
+  ASSERT_EQ(0, obvectorutil::knn_search(index_handler, 
+                                      query_vecs, 
+                                      dim, 
+                                      expect_cnt, 
+                                      result_dist0, 
+                                      result_ids0, 
                                       extra_info_buf_ptr,
-                                      result_size,
-                                      ef_search,
+                                      result_size, 
+                                      ef_search, 
                                       &test_filter));
   for (int64_t i = 0; i < result_size; ++i) {
     std::cout << i <<  " id: " << result_ids0[i] << " dis: " << result_dist0[i] << std::endl;
@@ -1358,15 +1358,15 @@ TEST_F(TestVectorIndexAdaptor, vsag_build_hnswbq_index)
 
   roaring64_bitmap_add(bitmap, 7055);
   roaring64_bitmap_add(bitmap, 2030);
-  ASSERT_EQ(0, obvectorutil::knn_search(index_handler,
-                                      query_vecs,
-                                      dim,
-                                      expect_cnt,
-                                      result_dist1,
-                                      result_ids1,
+  ASSERT_EQ(0, obvectorutil::knn_search(index_handler, 
+                                      query_vecs, 
+                                      dim, 
+                                      expect_cnt, 
+                                      result_dist1, 
+                                      result_ids1, 
                                       extra_info_buf_ptr,
-                                      result_size,
-                                      ef_search,
+                                      result_size, 
+                                      ef_search, 
                                       &test_filter));
 
   for (int64_t i = 0; i < result_size; ++i) {

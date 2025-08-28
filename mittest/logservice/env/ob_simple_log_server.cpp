@@ -259,7 +259,7 @@ int ObSimpleLogServer::add_ls_to_ls_map_(const int64_t palf_id)
     ls->ls_meta_.ls_id_ = ObLSID(palf_id);
     if (OB_FAIL(ls_service_->add_ls_to_map_(ls))) {
       LOG_WARN("failed to add_ls_to_map_", K(ret));
-    }
+    } 
   }
   if (OB_FAIL(ret)) {
     LOG_WARN("failed to do", KR(ret));
@@ -407,7 +407,7 @@ int ObSimpleLogServer::init_io_(const std::string &cluster_name)
     iod_opt_array_[3].set("datafile_disk_percentage", storage_env.data_disk_percentage_);
     iod_opt_array_[4].set("datafile_size", storage_env.data_disk_size_);
     iod_opts_.opt_cnt_ = MAX_IOD_OPT_CNT;
-
+    
     if (OB_FAIL(io_device_->init(iod_opts_))) {
       SERVER_LOG(ERROR, "init io device fail", K(ret));
     } else if (OB_FAIL(log_block_pool_.init(storage_env.clog_dir_))) {
@@ -496,7 +496,7 @@ int ObSimpleLogServer::init_ls_service_(const bool is_bootstrap)
     } else {
       ls_service_->is_inited_ = true;
     }
-  }
+  } 
   auto func_iterate_palf = [this](const palf::PalfHandle &palf_handle) -> int {
     int ret = OB_SUCCESS;
     int64_t palf_id = INVALID_PALF_ID;
@@ -585,7 +585,7 @@ int ObSimpleLogServer::simple_close(const bool is_shutdown = false)
   if (OB_LOG_KV_CACHE.inited_) {
     OB_LOG_KV_CACHE.destroy();
   }
-
+  
 
   if (is_shutdown) {
     TG_STOP(batch_rpc_tg_id_);
@@ -1018,7 +1018,7 @@ int ObLogDeliver::handle_req_(rpc::ObRequest &req)
       PROCESS(LogNotifyFetchLogReqP)
     }
     case obrpc::OB_LOG_GET_LS_CKPT: {
-      ObFunction<int(const share::ObLSID &ls_id, share::SCN &scn, palf::LSN &lsn)> ckpt_functor =
+      ObFunction<int(const share::ObLSID &ls_id, share::SCN &scn, palf::LSN &lsn)> ckpt_functor = 
         [&](const share::ObLSID &ls_id, share::SCN &scn, palf::LSN &lsn) -> int {
         int ret = OB_SUCCESS;
         if (!ls_id.is_valid()) {

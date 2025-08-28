@@ -1171,7 +1171,7 @@ TEST_F(TestJsonBase, test_oracle_seek)
   ASSERT_EQ(OB_SUCCESS, j_bin->seek(j_path1, j_path1.path_node_cnt(), true, false, hit));
   ASSERT_EQ(hit.size(), 0);
   std::cout <<"seek_not_exist_member(tree & bin) success."<<std::endl;
-
+    
   // 2. seek_member
   common::ObString j_text2("{\"x\": \"Safari\", \"os\": \"Mac\", \"resolution\": \
       {\"x\": \"1920\", \"y\": \"1080\"}}");
@@ -1217,7 +1217,7 @@ TEST_F(TestJsonBase, test_oracle_seek)
   //ASSERT_EQ(6, hit[0]->get_uint());
   ASSERT_EQ(0, strncmp("6", hit[0]->get_data(), hit[0]->get_data_length()));
   std::cout <<"seek_member(tree & bin) in lax mode success."<<std::endl;
-
+  
 
   // 3. seek_member_wildcard1
   common::ObString j_text3("{\"x\": \"Safari\", \"os\": \"Mac\", \"resolution\": \
@@ -1501,7 +1501,7 @@ TEST_F(TestJsonBase, test_oracle_seek)
     ASSERT_EQ(OB_SUCCESS, hit[i]->print(j_buf, false));
     std::cout << i << ": " << j_buf.ptr() << std:: endl;
   }
-
+  
   // 10. seek_numeric_item_method (abs, floor, ceiling)
   common::ObString j_text10("[1.1, 2, 3, 4, 5]");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text10,
@@ -1775,7 +1775,7 @@ TEST_F(TestJsonBase, test_seek_func)
   std::cout <<"seek_double (bin)"<<std::endl;
   ASSERT_EQ(hit.size(), 1);
   ASSERT_EQ(1.1, hit[0]->get_double());
-
+  
   // 16. seek_number
   common::ObString j_text16("[\"1.1\"]");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text16,
@@ -1789,7 +1789,7 @@ TEST_F(TestJsonBase, test_seek_func)
   ASSERT_EQ(OB_SUCCESS, j_tree->seek(j_path16, j_path16.path_node_cnt(), true, false, hit));
   std::cout <<"seek_number (tree)"<<std::endl;
   ASSERT_EQ(hit.size(), 1);
-  ASSERT_EQ(1.1, hit[0]->get_double());
+  ASSERT_EQ(1.1, hit[0]->get_double()); 
   // bin
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::transform(&allocator, j_tree,
       ObJsonInType::JSON_BIN, j_bin));
@@ -1894,19 +1894,19 @@ TEST_F(TestJsonBase, test_seek_bad_filter)
 /*
   bad filter
   [\"a\", 2, 3, {\"resolution\" : {\"x\": 1920, \"y\": \"2015-4-15 11:12:00.123456\", \"z\": true}}, [5, 6]]
-    1. $?( @[3].resolution.x.number() == \"1920\")
-    2. $?( @[3].resolution.x.numberOnly() == \"1920\")
-    3. $?( @[3].resolution.x.length() == \"1920\")
-    4. $?( @[3].resolution.x.abs() == \"1920\")
+    1. $?( @[3].resolution.x.number() == \"1920\") 
+    2. $?( @[3].resolution.x.numberOnly() == \"1920\") 
+    3. $?( @[3].resolution.x.length() == \"1920\") 
+    4. $?( @[3].resolution.x.abs() == \"1920\") 
     5. $?( @[3].resolution.x.floor() == \"1920\")
     6. $?( @[3].resolution.x.ceiling() == \"1920\")
     7. $?( @[3].resolution.x.double() == \"1920\")
     8. $?( @[4].double() == \"1920\")
     9. $[4]?( @.double() == \"1920\")
-    10. $?(\"1920\" ==  @[3].resolution.x.number())
-    11. $?(\"1920\" ==   @[3].resolution.x.numberOnly())
-    12. $?(\"1920\" ==   @[3].resolution.x.length())
-    13. $?( \"1920\" ==  @[3].resolution.x.abs())
+    10. $?(\"1920\" ==  @[3].resolution.x.number()) 
+    11. $?(\"1920\" ==   @[3].resolution.x.numberOnly()) 
+    12. $?(\"1920\" ==   @[3].resolution.x.length()) 
+    13. $?( \"1920\" ==  @[3].resolution.x.abs()) 
     14. $?(\"1920\" ==   @[3].resolution.x.floor())
     15. $?(\"1920\" ==   @[3].resolution.x.ceiling())
     16. $?(\"1920\" ==   @[3].resolution.x.double() )
@@ -1934,8 +1934,8 @@ TEST_F(TestJsonBase, test_seek_bad_filter)
     38. $?( @[3].resolution.z.boolean() == \"falsee\")
     39. $?(true == null)
     40. $?(false == 1)
-    41. $?(\"1\" == 1)
-    42. $?(\"1\" == true)
+    41. $?(\"1\" == 1) 
+    42. $?(\"1\" == true) 
 */
   common::ObString j_text1("[\"a\", 2, 3, {\"resolution\" : {\"x\": 1920, \"y\": \"2015-4-15 11:12:00.123456\", \"z\": true}}, [5, 6]]");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text1,
@@ -1964,7 +1964,7 @@ TEST_F(TestJsonBase, test_seek_filter)
   ObJsonSeekResult hit;
   ObJsonBuffer j_buf(&allocator);
 
-  /*
+  /* 
   1.compare (scalar，scalar) :
     (number, number)
         1. $?(1 == 1)
@@ -1982,7 +1982,7 @@ TEST_F(TestJsonBase, test_seek_filter)
     (bool, bool/string)
         12. $?(true == true)
         13. $?(false == false)
-        14. $?(true == false)
+        14. $?(true == false)  
         15. $?( true ==  \"true\")
         16. $?( true ==  \"TrUe\")
         17. $?( \"false\" == false)
@@ -2037,7 +2037,7 @@ TEST_F(TestJsonBase, test_seek_filter)
     27. $?(\"1920\" == @[3].resolution.x.string())
     28. $?(@[3].resolution.z.boolean() == \"true\")
     29. $?(\"true\" == @[3].resolution.z.boolean())
-    30. $?(\"false\" != @[3].resolution.z.boolean())
+    30. $?(\"false\" != @[3].resolution.z.boolean()) 
     31. $?(@[3].resolution.z.boolean() == \"false\")  // change @.z = "false"
     32. $?( \"FaLsE\" ==@[3].resolution.z.boolean())
     33. $?(@[3].resolution.y.timestamp() == \"2015-4-15 11:12:00.123456\")
@@ -2067,14 +2067,14 @@ TEST_F(TestJsonBase, test_seek_filter)
     38. $?(@[1] == $v1)
     39. $?($v1 >= @[3].resolution.x)  // $v1 = 1930
     40. $?(@[3].resolution.x <= $v1 )
-    41. $?(@[3].resolution.x.number() != $v1)
+    41. $?(@[3].resolution.x.number() != $v1)   
     42. $?($v1 != @[3].resolution.x.number())
     43. $?(@[3].resolution.x.string() == $v1)    // $v1 = \"1920\"
     44. $?($v1 == @[3].resolution.x.string())
     45. $?(@[3].resolution.z.boolean() == $v1)  // $v1 = true
     46. $?($v1== @[3].resolution.z.boolean())
     47. $?($v1 != @[3].resolution.z.boolean())  // $v1 = false
-    48. $?(@[3].resolution.z.boolean() == $v1)  // change @.z = "false"
+    48. $?(@[3].resolution.z.boolean() == $v1)  // change @.z = "false" 
     49. $?( $v1 ==@[3].resolution.z.boolean()) // $v1 = fAlse
     50. $?(@[3].resolution.y.timestamp() ==$v1)  // $v1 =  \"2015-4-15 11:12:00.123456\"
     51. $?($v1 == @[3].resolution.y.timestamp())
@@ -2232,7 +2232,7 @@ TEST_F(TestJsonBase, test_seek_filter)
 /*
 7. cond
     103. $?(2 == @[1] && @[3].resolution.x >  \"1930\") ——> false
-    104. $?(2 == @[1] && @[3].resolution.x <  \"1930\")
+    104. $?(2 == @[1] && @[3].resolution.x <  \"1930\") 
     105. $?(2 == @[1] || @[3].resolution.x >  \"1930\")
     106. $?(2 != @[1] || @[3].resolution.x >  \"1930\") ——> false
     107. $?(!(2 == @[1])) ——> false
@@ -2242,8 +2242,8 @@ TEST_F(TestJsonBase, test_seek_filter)
     111. $?(!(2 == @[1] ) ||  @[3].resolution.x <  \"1930\")
     112. $?(!(2 == @[1] ) || !( @[3].resolution.x <  \"1930\")) ——> false
     113. $?(!(2 == @[1] ) || ( @[3].resolution.x >  \"1930\"))  ——> false
-    114. $?(!(2 == @[1] ) || 2 == @[1] && @[3].resolution.x  <  \"1930\")
-    115. $?((!(2 != @[1] ) || 2 != @[1] ) && @[3].resolution.x  <  \"1930\")
+    114. $?(!(2 == @[1] ) || 2 == @[1] && @[3].resolution.x  <  \"1930\") 
+    115. $?((!(2 != @[1] ) || 2 != @[1] ) && @[3].resolution.x  <  \"1930\") 
 */
   common::ObString path_text7("$?((!(2 != @[1] ) || 2 != @[1] ) && @[3].resolution.x  <  \"1930\") ");
   ObJsonPath j_path7(path_text7, &allocator);

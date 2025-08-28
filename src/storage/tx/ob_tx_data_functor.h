@@ -150,7 +150,7 @@ public:
 };
 
 // fetch the state of txn DATA_TRANS_ID when replaying to SCN
-// the requirement can be seen from
+// the requirement can be seen from 
 // return the txn state and commit version if committed, INT64_MAX if running
 // and 0 if rollbacked when replaying to LOG_ID
 class GetTxStateWithSCNFunctor : public ObITxDataCheckFunctor

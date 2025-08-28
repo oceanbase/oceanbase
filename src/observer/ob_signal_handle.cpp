@@ -87,7 +87,7 @@ int ObSignalHandle::add_signums_to_set(sigset_t &sig_set)
     LOG_ERROR("Empty signal set error", K(ret));
   } else {
     int rc = 0;
-    int signals[] = {SIGPIPE, SIGTERM, SIGUSR1,
+    int signals[] = {SIGPIPE, SIGTERM, SIGUSR1, 
                      40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
                      50, 51, 52, 53, 55, 56, 57, 59, 60, 62,
                      63, 64};

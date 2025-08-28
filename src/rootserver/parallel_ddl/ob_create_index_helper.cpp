@@ -246,7 +246,7 @@ int ObCreateIndexHelper::check_table_legitimacy_()
     ret = OB_OP_NOT_ALLOW;
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "execute ddl while table is executing offline ddl");
     LOG_WARN("offline ddl is being executed, other ddl operations are not allowed", KR(ret), KPC(orig_data_table_schema_));
-  } else if (OB_UNLIKELY(orig_data_table_schema_->get_index_tid_count() >= OB_MAX_AUX_TABLE_PER_MAIN_TABLE
+  } else if (OB_UNLIKELY(orig_data_table_schema_->get_index_tid_count() >= OB_MAX_AUX_TABLE_PER_MAIN_TABLE 
                          || orig_data_table_schema_->get_index_count() >= OB_MAX_INDEX_PER_TABLE)) {
     ret = OB_ERR_TOO_MANY_KEYS;
     LOG_USER_ERROR(OB_ERR_TOO_MANY_KEYS, OB_MAX_INDEX_PER_TABLE);

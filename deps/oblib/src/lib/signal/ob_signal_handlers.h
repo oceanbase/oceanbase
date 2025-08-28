@@ -28,7 +28,7 @@ public:
   ObSigFaststack& operator=(const ObSigFaststack &) = delete;
   static ObSigFaststack &get_instance();
   inline int64_t get_min_interval() const { return min_interval_; }
-  inline void set_min_interval(int64_t interval) { min_interval_ = interval; }
+  inline void set_min_interval(int64_t interval) { min_interval_ = interval; } 
 private:
   ObSigFaststack();
   ~ObSigFaststack();

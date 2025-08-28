@@ -532,7 +532,7 @@ int ObUpdateLogPlan::prepare_table_dml_info_special(const ObDmlTableInfo& table_
   } else if (OB_ISNULL(index_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get table schema", K(table_info), K(ret));
-  } else if (!update_stmt->has_instead_of_trigger() &&
+  } else if (!update_stmt->has_instead_of_trigger() && 
              OB_FAIL(check_update_primary_key(index_schema, table_dml_info))) {
     LOG_WARN("failed to check update unique key", K(ret));
   } else if (!table_info.is_link_table_ &&

@@ -87,7 +87,7 @@ TEST_F(TestDiskSpaceManager, basic_test)
   int64_t new_macro_ratio = 38;
   bool succ_adjust = false;
   int64_t ori_micro_cache_reserved_size = 0;
-  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->update_cache_disk_ratio(new_micro_ratio, new_macro_ratio, succ_adjust,
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->update_cache_disk_ratio(new_micro_ratio, new_macro_ratio, succ_adjust, 
             ori_micro_cache_reserved_size));
   ASSERT_EQ(false, succ_adjust);
 

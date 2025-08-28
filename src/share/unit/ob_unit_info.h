@@ -109,7 +109,7 @@ public:
   status_ = other.status_;
   return OB_SUCCESS;
  }
- bool is_active() const
+ bool is_active() const 
  { return ObUnit::UNIT_STATUS_ACTIVE == status_; }
  uint64_t get_unit_group_id() const { return unit_group_id_; }
  ObUnit::Status get_status() const  { return status_; }
@@ -117,7 +117,7 @@ public:
  bool operator<(const ObSimpleUnitGroup &that) { return unit_group_id_ < that.unit_group_id_; }
 private:
   uint64_t unit_group_id_;
-  ObUnit::Status status_;
+  ObUnit::Status status_; 
 };
 
 class ObTenantServers
@@ -126,9 +126,9 @@ public:
   ObTenantServers();
   virtual ~ObTenantServers();
   /*
-    If ObTenantServers is invalid, initialize it with tenant_id,
-    and insert both server and a valid migrate_server to server_.
-    If ObTenantServers is valid and the server to be inserted belongs to the same tenant,
+    If ObTenantServers is invalid, initialize it with tenant_id, 
+    and insert both server and a valid migrate_server to server_. 
+    If ObTenantServers is valid and the server to be inserted belongs to the same tenant, 
     perform only the insertion operation without changing the tenant_id.
 
     @param[in] tenant_id        The server belongs to which tenant，
@@ -141,7 +141,7 @@ public:
       - OB_CONFLICT_VALUE       Already initialized; tenant mismatch
   */
   virtual int init_or_insert_server(
-      const uint64_t tenant_id,
+      const uint64_t tenant_id, 
       const common::ObAddr &server,
       const common::ObAddr &migrate_server,
       const int64_t renew_time);
@@ -154,7 +154,7 @@ public:
   TO_STRING_KV(K_(tenant_id), K_(servers), K_(renew_time));
 private:
   /*
-    The input server will be inserted into the server_ of ObTenantServers.
+    The input server will be inserted into the server_ of ObTenantServers. 
     If the server already exists in server_, it will not be inserted.
   */
   virtual int insert_server_(const common::ObAddr &server);

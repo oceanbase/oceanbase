@@ -73,10 +73,10 @@ struct TableInfoEraserByTenant
 struct TableInfoEraserByDatabase
 {
   uint64_t database_id_;
-
+  
   explicit TableInfoEraserByDatabase(const uint64_t database_id)
     : database_id_(database_id) {}
-
+  
   bool operator()(const TableID &table_id_key, uint64_t &val);
 };
 

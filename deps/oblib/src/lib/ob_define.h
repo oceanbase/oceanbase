@@ -312,7 +312,7 @@ const int64_t OB_MAX_QB_NAME_LENGTH = 20;  // Compatible with Oracle, hint speci
 const int64_t OB_MAX_SEQUENCE_NAME_LENGTH = 128; // Compatible with Oracle, error is reported when the logic is greater than
 const int64_t OB_MAX_KEYSTORE_NAME_LENGTH = 128;
 const int64_t OB_MAX_DATABASE_NAME_LENGTH = 128; // Not compatible with mysql (mysql is 64), the logic is greater than when an error is reported
-const int64_t OB_MAX_DATABASE_NAME_BINARY_LENGTH = 2048; // Should be OB_MAX_DATABASE_NAME_LENGTH * 4(max char bytes),
+const int64_t OB_MAX_DATABASE_NAME_BINARY_LENGTH = 2048; // Should be OB_MAX_DATABASE_NAME_LENGTH * 4(max char bytes), 
                                                          // reserve some bytes thus OB_MAX_DATABASE_NAME_LENGTH changes will probably not influence it
                                                          // it is defined in primary key, and can not change randomly.
 const int64_t OB_MAX_DATABASE_NAME_BUF_LENGTH = OB_MAX_DATABASE_NAME_LENGTH + 1;
@@ -2237,7 +2237,7 @@ const int64_t OB_MAX_TRACEPOINT_DESCRIBE_LEN = 4096;
 // in ob_share_util.cpp when adding new replica_type.
 enum ObReplicaType
 {
-  // Invalid replica_type, value of which is -1.
+  // Invalid replica_type, value of which is -1. 
   // Attention: Please DO use REPLICA_TYPE_INVALID as initial value. DO NOT use REPLICA_TYPE_MAX.
   REPLICA_TYPE_INVALID = -1,
   // Fully functional copy: is a member of paxos; has ssstore; has memstore

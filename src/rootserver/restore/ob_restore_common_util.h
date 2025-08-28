@@ -85,7 +85,7 @@ public:
                                 const uint64_t tenant_id,
                                 const ObString &tde_method,
                                 const ObString &kms_info);
-  static int rebuild_master_key_version(obrpc::ObCommonRpcProxy *rpc_proxy,
+  static int rebuild_master_key_version(obrpc::ObCommonRpcProxy *rpc_proxy, 
                                         const uint64_t tenant_id,
                                         bool need_wait = true);
 

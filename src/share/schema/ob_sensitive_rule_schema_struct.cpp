@@ -20,7 +20,7 @@ namespace schema
 {
 ObSensitiveRuleSchema::ObSensitiveRuleSchema() : ObSchema()
 {
-  reset();
+  reset(); 
 }
 
 ObSensitiveRuleSchema::ObSensitiveRuleSchema(const ObSensitiveRuleSchema &src_schema) : ObSchema()
@@ -230,7 +230,7 @@ int64_t ObSensitiveRulePriv::get_convert_size() const
   return convert_size;
 }
 
-OB_SERIALIZE_MEMBER((ObSensitiveRulePriv, ObPriv),
+OB_SERIALIZE_MEMBER((ObSensitiveRulePriv, ObPriv), 
                     sensitive_rule_);
 
 }

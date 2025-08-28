@@ -215,7 +215,7 @@ int ObAllVirtualStorageCacheTask::process_curr_tenant(common::ObNewRow *&row)
     }
   }
 #endif
-  return ret;
+  return ret; 
 }
 
 #ifdef OB_BUILD_SHARED_STORAGE

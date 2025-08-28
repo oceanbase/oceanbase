@@ -35,7 +35,7 @@ public:
       slogger_() {}
   ObTenantStorageMetaPersister(const ObTenantStorageMetaPersister &) = delete;
   ObTenantStorageMetaPersister &operator=(const ObTenantStorageMetaPersister &) = delete;
-
+      
   int init(const bool is_share_storage,
            ObStorageLogger &slogger,
            ObTenantCheckpointSlogHandler &ckpt_slog_handler);
@@ -57,7 +57,7 @@ public:
     const share::ObLSID &ls_id, const int64_t ls_epoch,
     const common::ObTabletID &tablet_id, const ObMetaDiskAddr &disk_addr);
   int write_active_tablet_array(ObLS *ls);
-
+  
   int write_empty_shell_tablet(ObTablet *tablet, ObMetaDiskAddr &tablet_addr);
   int remove_tablet(
       const share::ObLSID &ls_id, const int64_t ls_epoch,
@@ -66,13 +66,13 @@ public:
       const share::ObLSID &ls_id, const int64_t ls_epoch,
       const ObIArray<common::ObTabletID> &tablet_id_arr, const ObIArray<ObMetaDiskAddr> &tablet_addr_arr);
 
-  int get_items_from_pending_free_tablet_array(
-      const ObLSID &ls_id,
+  int get_items_from_pending_free_tablet_array( 
+      const ObLSID &ls_id, 
       const int64_t ls_epoch,
       ObIArray<ObPendingFreeTabletItem> &items);
   int delete_items_from_pending_free_tablet_array(
-      const ObLSID &ls_id,
-      const int64_t ls_epoch,
+      const ObLSID &ls_id, 
+      const int64_t ls_epoch, 
       const ObIArray<ObPendingFreeTabletItem> &items);
 #ifdef OB_BUILD_SHARED_STORAGE
   // recover pending_free_tablet_arr_map during reboot
@@ -88,9 +88,9 @@ public:
     const uint64_t ls_epoch)
   { return ss_delete_tablet_current_version_(tablet_id, ls_id, ls_epoch); }
   int ss_batch_remove_ls_tablets(
-    const share::ObLSID &ls_id,
+    const share::ObLSID &ls_id, 
     const int64_t ls_epoch,
-    const ObIArray<common::ObTabletID> &tablet_id_arr,
+    const ObIArray<common::ObTabletID> &tablet_id_arr, 
     const ObIArray<ObMetaDiskAddr> &tablet_addr_arr,
     const bool delete_current_version);
   int ss_check_and_delete_tablet_current_version(
@@ -152,7 +152,7 @@ private:
     const ObTabletID &tablet_id,
     const ObLSID &ls_id,
     const uint64_t ls_epoch);
-#endif
+#endif 
 
 private:
   struct PendingFreeTabletArrayKey
@@ -213,11 +213,11 @@ private:
   common::ObConcurrentFIFOAllocator allocator_;
   lib::ObMutex super_block_lock_; // protect tenant super block
   ObTenantCheckpointSlogHandler *ckpt_slog_handler_;
-
+  
   lib::ObMutex peding_free_map_lock_; // pending_free_tablet_arr_map_
 
   PendingFreeTabletArrayMap pending_free_tablet_arr_map_;
-
+  
 };
 
 } // namespace storage

@@ -226,14 +226,14 @@ function build
       xenable_obj_leak_check)
         do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_DEBUG_LOG=ON -DENABLE_OBJ_LEAK_CHECK=ON -DOB_USE_LLD=$LLD_OPTION
         ;;
-      xrpm)
+      xrpm) 
         build_package "$@" -DCMAKE_BUILD_RPM=ON
         ;;
-      xdeb)
+      xdeb) 
         build_package "$@" -DCMAKE_BUILD_DEB=ON
         ;;
-      xpackage)
-        # automatic determination of packaging type
+      xpackage) 
+        # automatic determination of packaging type 
         build_package "$@"
         ;;
       xenable_smart_var_check)

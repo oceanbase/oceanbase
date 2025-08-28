@@ -44,7 +44,7 @@ int ObImportResult::set_result(const int err_code, const share::ObTaskId &trace_
   } else if (OB_FAIL(addr.ip_port_to_string(addr_buf, OB_MAX_SERVER_ADDR_SIZE))) {
     LOG_WARN("failed to convert addr to string", K(ret), K(addr));
   } else if (OB_FAIL(databuff_printf(comment_.ptr(), comment_.capacity(), "%s(%d), addr:%s, trace_id:%s",
-                                     ob_error_name(err_code), err_code,
+                                     ob_error_name(err_code), err_code, 
                                      addr_buf, trace_id_buf))) {
     LOG_WARN("failed to databuff printf", K(ret), K(err_code), K(trace_id), K(addr));
   } else {
@@ -174,7 +174,7 @@ ObImportTableTaskStatus ObImportTableTaskStatus::get_next_status(const int err_c
 }
 
 
-
+     
 #define PARSE_INT_VALUE(COLUMN_NAME)                                    \
   if (OB_SUCC(ret)) {                                                   \
     int64_t value = 0;                                                  \
@@ -191,7 +191,7 @@ ObImportTableTaskStatus ObImportTableTaskStatus::get_next_status(const int err_c
     if (OB_SUCC(ret)) {                                                 \
       set_##COLUMN_NAME(value);                                         \
     }                                                                   \
-  }
+  }     
 
 #define PARSE_STR_VALUE(COLUMN_NAME)    \
   if (OB_SUCC(ret)) {                        \
@@ -433,7 +433,7 @@ int ObImportTableTask::parse_from(common::sqlclient::ObMySQLResult &result)
   return ret;
 }
 
-int ObImportTableTask::fill_dml(share::ObDMLSqlSplicer &dml) const
+int ObImportTableTask::fill_dml(share::ObDMLSqlSplicer &dml) const 
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(fill_pkey_dml(dml))) {
@@ -782,7 +782,7 @@ int ObImportTableJob::fill_dml(share::ObDMLSqlSplicer &dml) const
     LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_COMMENT, ObHexEscapeSqlStr(result_.get_comment())))) {
     LOG_WARN("failed to add column", K(ret));
-  }
+  } 
   FILL_INT_COLUMN(initiator_tenant_id)
   FILL_INT_COLUMN(initiator_job_id)
   FILL_INT_COLUMN(start_ts)
@@ -796,7 +796,7 @@ int ObImportTableJob::fill_dml(share::ObDMLSqlSplicer &dml) const
   FILL_INT_COLUMN(finished_bytes)
   FILL_INT_COLUMN(failed_bytes)
   FILL_STR_COLUMN(description)
-
+  
   if (OB_SUCC(ret) && status_.is_finish()) {
     if (OB_FAIL(dml.add_column(OB_STR_RESULT, result_.get_tables_import_result_str()))) {
       LOG_WARN("failed to add column", K(ret));
@@ -1170,7 +1170,7 @@ int ObRecoverTableJob::parse_from(common::sqlclient::ObMySQLResult &result)
 
   if (OB_SUCC(ret)) {
     uint64_t restore_scn = 0;
-    EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_RESTORE_SCN, restore_scn, uint64_t);
+    EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_RESTORE_SCN, restore_scn, uint64_t);  
     if (FAILEDx(restore_scn_.convert_for_inner_table_field(restore_scn))) {
       LOG_WARN("failed to conver for inner table", K(ret), K(restore_scn));
     }
@@ -1452,3 +1452,4 @@ int ObRecoverTableJob::fill_dml(share::ObDMLSqlSplicer &dml) const
 #undef FILL_UINT_COLUMN
 #undef FILL_STR_COLUMN
 #undef FILL_HEX_STR_COLUMN
+

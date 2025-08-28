@@ -175,7 +175,7 @@ struct ObDoArithBatchEval
         }
       }
     }
-
+    
     // ~BatchInfoScopeGuard and free memory
     if (batch_info_guard) {
       batch_info_guard->~BatchInfoScopeGuard();
@@ -1002,9 +1002,9 @@ struct ObNestedVectorArithOpFunc : public Base
     } else if (OB_FAIL(Base::construct_res_obj(tmp_allocator, ctx, res_meta_id, res_obj))) {
       SQL_ENG_LOG(WARN, "get array failed", K(ret));
     } else if (OB_FAIL(Base()(*res_obj, *left_obj, *right_obj))) {
-      SQL_ENG_LOG(WARN, "exec calculate func failed", K(ret));
+      SQL_ENG_LOG(WARN, "exec calculate func failed", K(ret)); 
     } else if (OB_FAIL(res_obj->init())) {
-      SQL_ENG_LOG(WARN, "init nested obj failed", K(ret));
+      SQL_ENG_LOG(WARN, "init nested obj failed", K(ret)); 
     } else if (OB_FAIL(Base::get_res_batch(ctx, res_obj, expr, idx, &res_vec))) {
       SQL_ENG_LOG(WARN, "get array binary string failed", K(ret));
     }
@@ -1038,7 +1038,7 @@ struct ObNestedArithOpWrap : public Base
                                           left, right, left_obj, right_obj, res_obj))) {
       SQL_ENG_LOG(WARN, "get array failed", K(ret));
     } else if (OB_FAIL(Base()(*res_obj, *left_obj, *right_obj))) {
-      SQL_ENG_LOG(WARN, "exec calculate func failed", K(ret));
+      SQL_ENG_LOG(WARN, "exec calculate func failed", K(ret)); 
     } else if (OB_FAIL(Base::get_res(ctx, res_obj, expr, res_str))) {
       SQL_ENG_LOG(WARN, "get array binary string failed", K(ret));
     } else {

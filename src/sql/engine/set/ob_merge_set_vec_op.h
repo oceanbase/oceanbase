@@ -80,14 +80,14 @@ protected:
                          const common::ObIArray<ObExpr*> &compare_expr,
                          const int64_t compare_idx,
                          ObBatchRows &result_brs);
-
+  
   template<typename InputVec, bool ALL_ROWS_ACTIVE, bool FIRST_COL, bool HAS_NULL>
   int compare_in_column(InputVec * vec, int64_t first_no_skip_idx, const ObBatchRows *child_brs,
                         int64_t &last_idx, const sql::ObExpr &col_expr, ObBatchRows &result_brs);
 
-  template<typename InputVec>
-  int compare_in_column_with_format(InputVec *vec, const ObBatchRows *child_brs, int64_t first_no_skip_idx,
-                                    int64_t col_idx, int64_t &last_idx, const sql::ObExpr &col_expr,
+  template<typename InputVec> 
+  int compare_in_column_with_format(InputVec *vec, const ObBatchRows *child_brs, int64_t first_no_skip_idx, 
+                                    int64_t col_idx, int64_t &last_idx, const sql::ObExpr &col_expr, 
                                     ObBatchRows &result_brs);
 
   typedef ObFixedLengthVector<int64_t, VectorBasicOp<VEC_TC_INTEGER>> FixedLengthVectorBigInt;

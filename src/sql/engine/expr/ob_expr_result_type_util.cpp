@@ -813,7 +813,7 @@ int ObExprResultTypeUtil::deduce_max_string_length_oracle(const ObDataTypeCastPa
         int64_t mbminlen = ObCharset::get_charset(target_type.get_collation_type())->mbminlen;
         length = OB_MAX_VARCHAR_LENGTH_KEY / mbminlen;
       } else {
-        length = OB_MAX_VARCHAR_LENGTH_KEY; // issue 49536718: CREATE INDEX index ON table (UPPER(c1));
+        length = OB_MAX_VARCHAR_LENGTH_KEY; // issue 49536718: CREATE INDEX index ON table (UPPER(c1)); 
       }
     } else {
       int64_t ascii_bytes = 0;
@@ -929,7 +929,7 @@ int ObExprResultTypeUtil::get_array_calc_type(ObExecContext *exec_ctx,
     coll_calc_type = type2;
   } else if (ob_is_null(type2)) {
     coll_calc_type = type1;
-  }
+  } 
   elem_data.meta_.set_type(coll_calc_type);
   elem_data.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[coll_calc_type]);
   if (type1 == ObVarcharType || type2 == ObVarcharType) {
@@ -1039,9 +1039,9 @@ int ObExprResultTypeUtil::get_collection_calc_type(ObExecContext *exec_ctx,
   } else if (!l_coll_info->has_same_super_type(*r_coll_info)) {
     ret = OB_ERR_ARRAY_TYPE_MISMATCH;
     LOG_WARN("nested type is mismatch", K(ret));
-  } else if (l_coll_info->collection_meta_->type_id_ == ObNestedType::OB_MAP_TYPE
+  } else if (l_coll_info->collection_meta_->type_id_ == ObNestedType::OB_MAP_TYPE 
              || r_coll_info->collection_meta_->type_id_ == ObNestedType::OB_MAP_TYPE
-             || l_coll_info->collection_meta_->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE
+             || l_coll_info->collection_meta_->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE 
              || r_coll_info->collection_meta_->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE) {
     uint16_t subschema_id;
     ObObjMeta key_meta;

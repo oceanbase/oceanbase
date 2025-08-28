@@ -241,7 +241,7 @@ int ObSingleKmeansExecutor::init(
       LOG_WARN("invalid kmeans algorithm type", K(ret), K(algo_type));
     }
   }
-
+  
   if (FAILEDx(algo_->init(ctx_))) {
     LOG_WARN("fail to init kmeans algo", K(ret), K(ctx_));
   } else {
@@ -362,7 +362,7 @@ int ObMultiKmeansExecutor::init(
       }
     }
   }
-
+  
   if (OB_SUCC(ret)) {
     is_inited_ = true;
   }
@@ -763,7 +763,7 @@ int ObElkanKmeansAlgo::init_centers(const ObIArray<float*> &input_vectors)
       } else {
         lower_bounds_.at(i)[center_idx] = distance;
         // is_finish means no need to add new center, only update lower_bounds_
-        if (!is_finish) {
+        if (!is_finish) { 
           distance *= distance;
           if (distance < weight_[i]) {
             weight_[i] = distance;
@@ -772,7 +772,7 @@ int ObElkanKmeansAlgo::init_centers(const ObIArray<float*> &input_vectors)
         }
       }
     }
-
+    
     if (OB_SUCC(ret)) {
       if (is_finish) {
         float min_distance;
@@ -813,7 +813,7 @@ int ObElkanKmeansAlgo::init_centers(const ObIArray<float*> &input_vectors)
           SHARE_LOG(TRACE, "success to init center", K(ret), K(center_count));
         }
       }
-    }
+    } 
   }
   return ret;
 }
@@ -873,7 +873,7 @@ int ObElkanKmeansAlgo::do_kmeans(const ObIArray<float*> &input_vectors)
       // 1. calc distance between each two centers
       for (int64_t i = 0; OB_SUCC(ret) && i < kmeans_ctx_->lists_; ++i) {
         for (int64_t j = i + 1; OB_SUCC(ret) && j < kmeans_ctx_->lists_; ++j) {
-          if (OB_FAIL(calc_kmeans_distance(centers_[cur_idx_].at(i),
+          if (OB_FAIL(calc_kmeans_distance(centers_[cur_idx_].at(i), 
               centers_[cur_idx_].at(j), kmeans_ctx_->dim_, distance))) {
             SHARE_LOG(WARN, "failed to calc kmeans distance between centers", K(ret));
           } else {
@@ -919,7 +919,7 @@ int ObElkanKmeansAlgo::do_kmeans(const ObIArray<float*> &input_vectors)
               // 3.4. if D(x, c1) <= 0.5 * D(c1, c2), then D(x, c1) < D(x, c2)
               // c1 is closer, do nothing
             } else {
-
+              
               // all variables describe the relationship between data and clusters,
               // but the actual cluster center is updated in each iteration,
               // we need to calc the real distance
@@ -982,7 +982,7 @@ int ObElkanKmeansAlgo::do_kmeans(const ObIArray<float*> &input_vectors)
         if (OB_SUCC(ret)) {
           if (OB_FAIL(kmeans_ctx_->try_normalize(
               kmeans_ctx_->dim_,
-              centers_[next_idx()].at(i),
+              centers_[next_idx()].at(i), 
               centers_[next_idx()].at(i)))) {
             LOG_WARN("failed to normalize vector", K(ret));
           } else if (OB_FAIL(calc_kmeans_distance(centers_[next_idx()].at(i), centers_[cur_idx_].at(i),
@@ -1050,9 +1050,9 @@ int ObIvfBuildHelper::init(ObString &init_str, lib::MemoryContext &parent_mem_ct
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(init_str, ObVectorIndexType::VIT_IVF_INDEX, param_))) {
     LOG_WARN("failed to parse params.", K(ret));
-  } else if (OB_ISNULL(ivf_build_mem_ctx_ = OB_NEWx(ObIvfMemContext, get_allocator(), all_vsag_use_mem))) {
+  } else if (OB_ISNULL(ivf_build_mem_ctx_ = OB_NEWx(ObIvfMemContext, get_allocator(), all_vsag_use_mem))) { 
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to create ivf_build_mem_ctx", K(ret));
+    LOG_WARN("failed to create ivf_build_mem_ctx", K(ret)); 
   } else if (OB_FAIL(ivf_build_mem_ctx_->init(parent_mem_ctx, all_vsag_use_mem, tenant_id_, ObIvfMemContext::IVF_BUILD_LABEL))) {
     LOG_WARN("failed to init memory context", K(ret));
     get_allocator()->free(ivf_build_mem_ctx_);
@@ -1117,7 +1117,7 @@ int ObIvfFlatBuildHelper::init_kmeans_ctx(const int64_t dim)
   } else if (0 >= param_.nlist_ || 0 >= param_.sample_per_nlist_ || 0 >= dim || VIDA_MAX <= param_.dist_algorithm_) {
     ret = OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "invalid argument", K(ret), K(dim), K(param_));
-  } else if ((VIDA_IP == param_.dist_algorithm_ || VIDA_COS == param_.dist_algorithm_) &&
+  } else if ((VIDA_IP == param_.dist_algorithm_ || VIDA_COS == param_.dist_algorithm_) && 
               FALSE_IT(norm_info = &norm_info_)) { // IP和COS算法需要归一化
   } else if (OB_ISNULL(ivf_build_mem_ctx_)) {
     ret = OB_NOT_INIT;
@@ -1281,12 +1281,12 @@ int ObIvfPqBuildHelper::init_ctx(const int64_t dim)
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc tmp_buf", K(ret), K(ivf_build_mem_ctx_->get_all_vsag_use_mem_byte()));
     } else if (OB_FALSE_IT(executor_ = new (tmp_buf) ObMultiKmeansExecutor(*ivf_build_mem_ctx_))) {
-    } else if (OB_FAIL(executor_->init(ObKmeansAlgoType::KAT_ELKAN,
-                                  tenant_id_,
-                                  pqnlist,
-                                  param_.sample_per_nlist_,
-                                  dim,
-                                  param_.dist_algorithm_,
+    } else if (OB_FAIL(executor_->init(ObKmeansAlgoType::KAT_ELKAN, 
+                                  tenant_id_, 
+                                  pqnlist, 
+                                  param_.sample_per_nlist_, 
+                                  dim, 
+                                  param_.dist_algorithm_, 
                                   nullptr, // pq center kmenas no need normlize, Reference faiss
                                   param_.m_))) {
       LOG_WARN("failed to init kmeans ctx", K(ret), K(param_), K(pqnlist));

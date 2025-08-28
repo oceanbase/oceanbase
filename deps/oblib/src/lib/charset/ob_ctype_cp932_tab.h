@@ -27,4 +27,4 @@ extern  uint16_t unicode_to_cp932[65536];
 #define iscp932tail(c) \
   ((0x40 <= (c) && (c) <= 0x7e) || (0x80 <= (c) && (c) <= 0xfc))
 
-#endif  // CHARSET_CP932_TAB_H_
+#endif  // CHARSET_CP932_TAB_H_ 

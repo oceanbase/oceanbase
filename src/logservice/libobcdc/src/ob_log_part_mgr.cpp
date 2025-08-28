@@ -2277,7 +2277,7 @@ int ObLogPartMgr::table_match_(ObDictTenantInfo *tenant_info,
 int ObLogPartMgr::matching_based_table_matcher_(const char *tenant_name,
     const char *database_name,
     const char *table_name,
-    bool &chosen)
+    bool &chosen) 
 {
   int ret = OB_SUCCESS;
   IObLogTableMatcher *tb_matcher = TCTX.tb_matcher_;

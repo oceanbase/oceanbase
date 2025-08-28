@@ -180,7 +180,7 @@ public:
                             schema::ObSchemaGetterGuard &schema_guard,
                             const ObPLDependencyTable &dep_schema_objs,
                             bool& exist,
-                            ObSQLSessionInfo &session_info);
+                            ObSQLSessionInfo &session_info);                  
 
   static int delete_dll_from_disk(common::ObISQLClient &trans,
                                   uint64_t tenant_id,
@@ -191,7 +191,7 @@ public:
   static int encode_stack_sizes(char *buf, const int64_t len, int64_t &pos, const ObPLCompileUnit &unit);
   static int decode_stack_sizes(ObPLCompileUnit &unit, char *buf, const int64_t len, int64_t &pos);
 
-  static int encode_pl_extra_info(char *buf,
+  static int encode_pl_extra_info(char *buf, 
                                const int64_t len,
                                int64_t &pos,
                                const sql::DependenyTableStore &dep_table);
@@ -200,11 +200,11 @@ public:
                                          const int64_t len,
                                          const ObPLDependencyTable &dep_table,
                                          bool &match);
-
-  template<typename DependencyTable>
-  static int get_pl_extra_info(const DependencyTable &dep_table,
-                               ObPLExtraInfo& extra_info);
-
+                                       
+  template<typename DependencyTable>                                     
+  static int get_pl_extra_info(const DependencyTable &dep_table, 
+                               ObPLExtraInfo& extra_info);                                   
+  
 private:
   uint64_t tenant_id_;
   uint64_t database_id_;

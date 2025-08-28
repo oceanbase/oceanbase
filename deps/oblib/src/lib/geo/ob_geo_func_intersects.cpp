@@ -42,7 +42,7 @@ int eval_intersects_by_disjoint(const ObGeometry *g1, const ObGeometry *g2, cons
 }
 
 template <typename GeoType1, typename GeoType2>
-int eval_intersects_without_strategy(const ObGeometry *g1, const ObGeometry *g2, bool &result)
+int eval_intersects_without_strategy(const ObGeometry *g1, const ObGeometry *g2, bool &result) 
 {
   const GeoType1 *geo1 = nullptr;
   const GeoType2 *geo2 = nullptr;
@@ -58,10 +58,10 @@ int eval_intersects_without_strategy(const ObGeometry *g1, const ObGeometry *g2,
 }
 
 template <typename GeoType1, typename GeoType2>
-int eval_intersects_with_point_strategy(const ObGeometry *g1,
+int eval_intersects_with_point_strategy(const ObGeometry *g1, 
                                         const ObGeometry *g2,
                                         const ObGeoEvalCtx &context,
-                                        bool &result)
+                                        bool &result) 
 {
   INIT_SUCC(ret);
   const ObSrsItem *srs = context.get_srs();
@@ -86,7 +86,7 @@ template <typename GeoType1, typename GeoType2>
 int eval_intersects_with_nonpoint_strategy(const ObGeometry *g1,
                                           const ObGeometry *g2,
                                           const ObGeoEvalCtx &context,
-                                          bool &result)
+                                          bool &result) 
 {
   INIT_SUCC(ret);
   const ObSrsItem *srs = context.get_srs();
@@ -119,14 +119,14 @@ public:
   OB_GEO_TREE_UNARY_FUNC_DEFAULT(bool, OB_ERR_GIS_INVALID_DATA);
   OB_GEO_CART_TREE_FUNC_DEFAULT(bool, OB_ERR_NOT_IMPLEMENTED_FOR_CARTESIAN_SRS);
   OB_GEO_GEOG_TREE_FUNC_DEFAULT(bool, OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS);
-
+  
   // template for binary
   // default cases for cartesian
   template <typename GeoType1, typename GeoType2>
   struct EvalWkbBi
   {
     static int eval(const ObGeometry *g1, const ObGeometry *g2, const ObGeoEvalCtx &context, bool &result)
-    {
+    { 
       UNUSED(context);
       return eval_intersects_without_strategy<GeoType1, GeoType2>(g1, g2, result);
     }
@@ -145,9 +145,9 @@ public:
 private:
   // geometry collection
   template <typename CollectonType>
-  static int eval_intersects_geometry_collection(const ObGeometry *g1,
-                                                 const ObGeometry *g2,
-                                                 const ObGeoEvalCtx &context,
+  static int eval_intersects_geometry_collection(const ObGeometry *g1, 
+                                                 const ObGeometry *g2, 
+                                                 const ObGeoEvalCtx &context, 
                                                  bool &result)
   {
     INIT_SUCC(ret);
@@ -209,12 +209,12 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectsImpl, ObWkbGeomCollection, ObWk
   return eval_intersects_geometry_collection<ObWkbGeomCollection>(g1, g2, context, result);
 } OB_GEO_FUNC_END;
 
-OB_GEO_CART_BINARY_FUNC_GEO2_BEGIN(ObGeoFuncIntersectsImpl, ObWkbGeomCollection, bool)
+OB_GEO_CART_BINARY_FUNC_GEO2_BEGIN(ObGeoFuncIntersectsImpl, ObWkbGeomCollection, bool)  
 {
   return eval_intersects_geometry_collection<ObWkbGeomCollection>(g1, g2, context, result);
 } OB_GEO_FUNC_END;
 
-OB_GEO_CART_BINARY_FUNC_GEO1_BEGIN(ObGeoFuncIntersectsImpl, ObWkbGeomCollection, bool)
+OB_GEO_CART_BINARY_FUNC_GEO1_BEGIN(ObGeoFuncIntersectsImpl, ObWkbGeomCollection, bool) 
 {
   return eval_intersects_geometry_collection<ObWkbGeomCollection>(g1, g2, context, result);
 } OB_GEO_FUNC_END;
@@ -247,12 +247,12 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncIntersectsImpl, ObWkbGeogCollection, ObWk
   return eval_intersects_geometry_collection<ObWkbGeogCollection>(g1, g2, context, result);
 } OB_GEO_FUNC_END;
 
-OB_GEO_GEOG_BINARY_FUNC_GEO2_BEGIN(ObGeoFuncIntersectsImpl, ObWkbGeogCollection, bool)
+OB_GEO_GEOG_BINARY_FUNC_GEO2_BEGIN(ObGeoFuncIntersectsImpl, ObWkbGeogCollection, bool)  
 {
   return eval_intersects_geometry_collection<ObWkbGeogCollection>(g1, g2, context, result);
 } OB_GEO_FUNC_END;
 
-OB_GEO_GEOG_BINARY_FUNC_GEO1_BEGIN(ObGeoFuncIntersectsImpl, ObWkbGeogCollection, bool)
+OB_GEO_GEOG_BINARY_FUNC_GEO1_BEGIN(ObGeoFuncIntersectsImpl, ObWkbGeogCollection, bool)  
 {
   return eval_intersects_geometry_collection<ObWkbGeogCollection>(g1, g2, context, result);
 } OB_GEO_FUNC_END;
@@ -304,12 +304,12 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncIntersectsImpl, ObWkbGeogMultiPoint, ObWk
 } OB_GEO_FUNC_END;
 
 // geograpyic cases using point strategy (point and nonpoint types)
-OB_GEO_GEOG_BINARY_FUNC_GEO2_BEGIN(ObGeoFuncIntersectsImpl, ObWkbGeogPoint, bool)
+OB_GEO_GEOG_BINARY_FUNC_GEO2_BEGIN(ObGeoFuncIntersectsImpl, ObWkbGeogPoint, bool)  
 {
   return eval_intersects_with_point_strategy<GeoType1, ObWkbGeogPoint>(g1, g2, context, result);
 } OB_GEO_FUNC_END;
 
-OB_GEO_GEOG_BINARY_FUNC_GEO1_BEGIN(ObGeoFuncIntersectsImpl, ObWkbGeogPoint, bool)
+OB_GEO_GEOG_BINARY_FUNC_GEO1_BEGIN(ObGeoFuncIntersectsImpl, ObWkbGeogPoint, bool) 
 {
   return eval_intersects_with_point_strategy<ObWkbGeogPoint, GeoType2>(g1, g2, context, result);
 } OB_GEO_FUNC_END;

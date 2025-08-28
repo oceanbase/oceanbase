@@ -65,20 +65,20 @@ public:
       const share::schema::ObTableSchema *first_table_schema,
       const share::schema::ObTableSchema &orig_table_schema,
       share::schema::ObTableSchema &new_table_schema);
-
+      
   int modify_sharding_type(const obrpc::ObAlterTablegroupArg &arg,
                            const ObTablegroupSchema &tablegroup_schema,
                            common::ObMySQLTransaction &trans,
-                           ObSchemaGetterGuard &schema_guard);
+                           ObSchemaGetterGuard &schema_guard); 
 
 private:
 
-  int check_table_partition_option(const ObTableSchema *table_schema,
-                                   const ObTableSchema *first_table_schema,
+  int check_table_partition_option(const ObTableSchema *table_schema, 
+                                   const ObTableSchema *first_table_schema, 
                                    ObSchemaGetterGuard &schema_guard,
                                    bool check_subpart,
                                    bool &is_matched);
-  int check_all_table_partition_option(const ObTablegroupSchema &tablegroup_schema,
+  int check_all_table_partition_option(const ObTablegroupSchema &tablegroup_schema, 
                                        ObSchemaGetterGuard &schema_guard,
                                        bool check_subpart,
                                        bool &is_matched);

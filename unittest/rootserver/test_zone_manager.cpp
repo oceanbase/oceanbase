@@ -340,7 +340,7 @@ TEST_F(TestZoneManager, global_merge_status)
   ASSERT_EQ(ObZoneInfo::MERGE_STATUS_IDLE, zone_mgr_.global_info_.merge_status_);
 }
 
-// BUG:
+// BUG: 
 // increase all_merged_version before last_merged_version increased fail.
 TEST_F(TestZoneManager, finish_zone_merge_bug)
 {

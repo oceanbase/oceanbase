@@ -26,7 +26,7 @@ struct ObColumnChecksumErrorInfo
 {
 public:
   ObColumnChecksumErrorInfo() 
-    : tenant_id_(OB_INVALID_TENANT_ID), frozen_scn_(), is_global_index_(false),
+    : tenant_id_(OB_INVALID_TENANT_ID), frozen_scn_(), is_global_index_(false), 
       data_table_id_(OB_INVALID_ID), index_table_id_(OB_INVALID_ID), data_tablet_id_(),
       index_tablet_id_(), column_id_(OB_INVALID_ID), data_column_checksum_(-1),
       index_column_checksum_(-1) {}
@@ -73,7 +73,7 @@ public:
       const SCN &min_frozen_scn);
   // delete records whose 'frozen_scn' = compaction_scn
   static int delete_column_checksum_err_info_by_scn(
-      common::ObISQLClient &sql_client,
+      common::ObISQLClient &sql_client, 
       const uint64_t tenant_id,
       const int64_t compaction_scn);
   static int check_exist_ckm_error_table(const uint64_t tenant_id,

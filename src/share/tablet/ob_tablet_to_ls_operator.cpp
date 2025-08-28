@@ -457,10 +457,10 @@ int ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id 
       || 0 > old_transfer_seq
-      || 0 > new_transfer_seq
-      || old_transfer_seq == new_transfer_seq
+      || 0 > new_transfer_seq 
+      || old_transfer_seq == new_transfer_seq 
       || !tablet_id.is_valid()
       || !old_ls_id.is_valid()
       || !new_ls_id.is_valid()
@@ -471,12 +471,12 @@ int ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
         K(tablet_id), K(old_transfer_seq), K(new_transfer_seq), K(old_ls_id), K(new_ls_id), K(group_id));
   } else if (OB_FAIL(sql.append_fmt(
       "UPDATE %s SET transfer_seq = %ld, ls_id = %ld "
-      "WHERE tablet_id = %lu AND transfer_seq = %ld AND ls_id = %ld",
-      OB_ALL_TABLET_TO_LS_TNAME,
-      new_transfer_seq,
-      new_ls_id.id(),
-      tablet_id.id(),
-      old_transfer_seq,
+      "WHERE tablet_id = %lu AND transfer_seq = %ld AND ls_id = %ld", 
+      OB_ALL_TABLET_TO_LS_TNAME, 
+      new_transfer_seq, 
+      new_ls_id.id(), 
+      tablet_id.id(), 
+      old_transfer_seq, 
       old_ls_id.id()))) {
     LOG_WARN("fail to assign sql", KR(ret), K(sql), K(tenant_id),
         K(tablet_id), K(old_ls_id), K(new_ls_id), K(old_transfer_seq), K(new_transfer_seq));
@@ -488,17 +488,17 @@ int ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
       ret = OB_ENTRY_NOT_EXIST;
       LOG_WARN("no affected rows, the reason might be the tablet is not in the old ls, "
           "or old_transfer_seq does not match the transfer sequence value "
-          "in table __all_tablet_to_ls.",
-          KR(ret), K(sql), K(tenant_id), K(affected_rows), K(tablet_id),
+          "in table __all_tablet_to_ls.", 
+          KR(ret), K(sql), K(tenant_id), K(affected_rows), K(tablet_id), 
           K(old_ls_id), K(new_ls_id), K(old_transfer_seq), K(new_transfer_seq));
     } else if (OB_UNLIKELY(1 != affected_rows)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("The error should not occur",  KR(ret), K(sql),
-          K(tenant_id), K(affected_rows), K(tablet_id),
+      LOG_WARN("The error should not occur",  KR(ret), K(sql), 
+          K(tenant_id), K(affected_rows), K(tablet_id), 
           K(old_ls_id), K(new_ls_id), K(old_transfer_seq), K(new_transfer_seq));
     } else {
-      LOG_TRACE("update ls_id and transfer_seq in table __all_tablet_to_ls successfully",
-          KR(ret), K(sql), K(tenant_id), K(affected_rows), K(tablet_id),
+      LOG_TRACE("update ls_id and transfer_seq in table __all_tablet_to_ls successfully", 
+          KR(ret), K(sql), K(tenant_id), K(affected_rows), K(tablet_id), 
           K(old_ls_id), K(new_ls_id), K(old_transfer_seq), K(new_transfer_seq));
     }
   }

@@ -720,7 +720,7 @@ int ObPLListValueNode::deep_copy(
           } else if (OB_FAIL(list_node->vies_.push_back(vie))) {
             LOG_WARN("failed to push back vie");
           }
-        }
+        } 
       }
     }
   }
@@ -1407,7 +1407,7 @@ int ObTableLocation::init(
       }
       if (OB_SUCC(ret) && !is_dbms_stats_partition) {
         bool is_in_range_optimization_enabled = false;
-        bool use_new_query_range = (session_info->is_enable_new_query_range()
+        bool use_new_query_range = (session_info->is_enable_new_query_range() 
                               && ObSQLUtils::is_opt_feature_version_ge_425_or_435(stmt.get_query_ctx()->optimizer_features_enable_version_)
                               && ObSQLUtils::is_min_cluster_version_ge_425_or_435());
         if (OB_FAIL(ObOptimizerUtil::is_in_range_optimization_enabled(stmt.get_query_ctx()->get_global_hint(),
@@ -1478,7 +1478,7 @@ int ObTableLocation::get_is_weak_read(const ObDMLStmt &dml_stmt,
              dml_stmt.get_query_ctx()->is_contain_select_for_update_ ||
              (!ERRSIM_WEAK_READ_INNER_TABLE && dml_stmt.get_query_ctx()->is_contain_inner_table_)) {
     is_weak_read = false;
-  } else if (share::ObTenantEnv::get_tenant() == nullptr) { //table api can't invoke MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID
+  } else if (share::ObTenantEnv::get_tenant() == nullptr) { //table api can't invoke MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID 
     is_weak_read = false;
   } else if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
     is_weak_read = true;
@@ -1523,7 +1523,7 @@ int ObTableLocation::get_is_weak_read(const ObDMLStmt &dml_stmt,
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "when route policy is COLUMN_STORE_ONLY, weak read request");
       }
-    }
+    } 
   }
   return ret;
 }
@@ -1949,8 +1949,8 @@ int ObTableLocation::calculate_tablet_ids(ObExecContext &exec_ctx,
                                                                  default_tablet_id,
                                                                  default_partition_id))) {
         LOG_WARN("get default tablet and object id failed", K(ret), K(part_hint_ids_));
-      }
-
+      } 
+      
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(partition_ids.push_back(default_partition_id))) {
         LOG_WARN("store default partition id failed", K(ret));
@@ -2805,7 +2805,7 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
   }
   if (OB_SUCC(ret) && !is_get &&
       GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0 &&
-      ((PARTITION_LEVEL_ONE == part_level && is_column_list_part(part_type_, is_col_part_expr_)) ||
+      ((PARTITION_LEVEL_ONE == part_level && is_column_list_part(part_type_, is_col_part_expr_)) || 
        (PARTITION_LEVEL_TWO == part_level && is_column_list_part(subpart_type_, is_col_subpart_expr_)))) {
     ObPartLocCalcNode *list_value_node = NULL;
     bool list_value_always_true = false;
@@ -3986,7 +3986,7 @@ int ObTableLocation::calc_partition_ids_by_ranges(ObExecContext &exec_ctx,
           if (NULL != se_gen_col_expr) {
             ObObj gen_col_val;
             if (OB_SUCCESS != se_gen_col_expr->eval(exec_ctx, input_row, gen_col_val)) {
-              // If a generated column encounters a calculation error,
+              // If a generated column encounters a calculation error, 
               // suppress the error code and quit partition pruning.
               all_part = true;
             } else {
@@ -6221,7 +6221,7 @@ int ObTableLocation::get_list_value_node(const ObPartitionLevel part_level,
                  ) {
         /*对于int类型分区键，OB内部存储的分区定义值是用INT64保存的，因此这里需要把column expr也mock成int64的，
           否则表达式计算时会出现column的预期类型与实际类型不符的问题*/
-        need_replace_column = true;
+        need_replace_column = true;     
         ObRawExpr *new_expr = nullptr;
         if (OB_FAIL(expr_copier.copy(cur_col_expr, new_expr))) {
           LOG_WARN("failed to copy column expr", K(ret));
@@ -6255,8 +6255,8 @@ int ObTableLocation::get_list_value_node(const ObPartitionLevel part_level,
         } else if (OB_FAIL(ori_exprs.push_back(cur_col_expr))) {
           LOG_WARN("failed to push back origen column expr");
         } else if (OB_FALSE_IT(cur_col_expr = static_cast<ObColumnRefRawExpr*>(new_expr))) {
-        } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(expr_factory,
-                                                                          partition_columns.at(i).expr_,
+        } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(expr_factory, 
+                                                                          partition_columns.at(i).expr_, 
                                                                           new_expr, session_info))) {
           LOG_WARN("failed to add cast for replace", K(ret));
         } else if (OB_FAIL(new_exprs.push_back(new_expr))) {
@@ -6278,7 +6278,7 @@ int ObTableLocation::get_list_value_node(const ObPartitionLevel part_level,
         LOG_WARN("failed to add replace pair", K(ret));
       }
     }
-
+    
     ObSEArray<ObRawExpr*, 4> part_filters;
     for (int64_t i = 0; OB_SUCC(ret) && i < filter_exprs.count(); ++i) {
       ObSEArray<ObRawExpr*, 4> expr_columns;
@@ -6347,7 +6347,7 @@ int ObTableLocation::get_list_value_node(const ObPartitionLevel part_level,
         }
       }
     }
-
+    
     if (OB_SUCC(ret)) {
       if (vies.empty()) {
         always_true = true;

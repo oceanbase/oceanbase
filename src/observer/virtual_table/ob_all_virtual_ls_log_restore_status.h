@@ -27,7 +27,7 @@ public:
   virtual ~ObVirtualLSLogRestoreStatus();
   int init(omt::ObMultiTenant *omt);
   virtual int inner_get_next_row(common::ObNewRow *&row);
-  void destroy();
+  void destroy(); 
 private:
  int insert_ls_restore_status_info_(logservice::RestoreStatusInfo &restore_status_info);
 private:

@@ -26,16 +26,16 @@ public:
   static const int64_t RETRY_INTERVAL = 5 * 1000 * 1000; // 5s
   ObTableLoadBackupFileUtil() {}
   ~ObTableLoadBackupFileUtil() {}
-  static int list_directories(const common::ObString &path,
+  static int list_directories(const common::ObString &path, 
                               const share::ObBackupStorageInfo *storage_info,
                               ObIArray<ObString> &part_list_,
                               ObIAllocator &allocator);
-  static int get_file_length(const common::ObString &path,
-                             const share::ObBackupStorageInfo *storage_info,
+  static int get_file_length(const common::ObString &path, 
+                             const share::ObBackupStorageInfo *storage_info, 
                              int64_t &file_length);
-  static int read_single_file(const common::ObString &path,
-                              const share::ObBackupStorageInfo *storage_info,
-                              char *buf,
+  static int read_single_file(const common::ObString &path, 
+                              const share::ObBackupStorageInfo *storage_info, 
+                              char *buf, 
                               const int64_t buf_size,
                               int64_t &read_size);
 };

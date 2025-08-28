@@ -499,7 +499,7 @@ public:
   void set_database_id(uint64_t database_id) { op_info_.database_id_ = database_id; }
 
   const char *get_sql_id() { return op_info_.sql_id_; };
-  void set_sql_id(const char *sql_id) {
+  void set_sql_id(const char *sql_id) { 
     if (OB_ISNULL(sql_id)) {
       op_info_.sql_id_[0] = '\0';
     } else {
@@ -518,7 +518,7 @@ public:
   void set_input_width(int64_t input_width) { op_info_.input_width_ = input_width; }
 
   bool get_disable_auto_mem_mgr() { return op_info_.disable_auto_mem_mgr_; }
-  void set_disable_auto_mem_mgr(bool disable_auto_mem_mgr)
+  void set_disable_auto_mem_mgr(bool disable_auto_mem_mgr) 
   {
     op_info_.disable_auto_mem_mgr_ = disable_auto_mem_mgr;
   }

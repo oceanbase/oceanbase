@@ -175,7 +175,7 @@ int ObSplitPartitionHelper::check_allow_split(
     LOG_WARN("not support spliting of a table in a group with multiple tables", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "spliting of a table in a group with multiple tables");
   }
-
+  
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(GCTX.is_shared_storage_mode())) {
     ret = OB_NOT_SUPPORTED;
@@ -376,7 +376,7 @@ int ObSplitPartitionHelper::prepare_start_args_(
     LOG_WARN("failed to get all tablet ids", KR(ret));
   } else if (OB_FAIL(ObDDLUtil::batch_check_tablet_checksum(MTL_ID(), 0/*start index of tablet_arr*/, src_tablet_ids.count(), src_tablet_ids))) {
     LOG_WARN("verify tablet checksum error", K(ret), K(src_tablet_ids), K(tenant_id));
-  }
+  } 
 
   // lock and get ls_id
   if (OB_FAIL(ret)) {
@@ -421,7 +421,7 @@ int ObSplitPartitionHelper::prepare_start_args_(
                                                   ls_id,
                                                   true,
                                                   leader_addr))) {
-    LOG_WARN("get leader failed", KR(ret), K(tenant_id), K(ls_id));
+    LOG_WARN("get leader failed", KR(ret), K(tenant_id), K(ls_id)); 
   }
   return ret;
 }
@@ -457,7 +457,7 @@ int ObSplitPartitionHelper::prepare_dst_tablet_creator_(
       LOG_WARN("failed to init tablet creator", K(ret));
     }
   }
-
+   
   // fetch split src tablet size and create_commit_versions
   if (OB_SUCC(ret)) {
     // FIXME: timeout ctx
@@ -491,7 +491,7 @@ int ObSplitPartitionHelper::prepare_dst_tablet_creator_(
         ret = OB_TOO_MANY_PARTITIONS_ERROR;
         LOG_WARN("doesn't support splitting the tablet, when the number of tablets of the table is greater than the limit", K(ret), K(tablets_limit_per_table));
       } else if ((!is_auto_split(split_type))) {
-        //manual split skip checking
+        //manual split skip checking 
       } else if (OB_FALSE_IT(cur_ratio = static_cast<double>(cur_part_num) / tablets_limit_per_table)) {
       } else if (OB_FAIL(ObServerAutoSplitScheduler::cal_real_auto_split_size(0.5/*base_ratio*/, cur_ratio, auto_split_size, real_auto_split_size))) {
         LOG_WARN("failed to calculate tablet limit penalty", K(ret), K(cur_ratio));
@@ -501,7 +501,7 @@ int ObSplitPartitionHelper::prepare_dst_tablet_creator_(
       }
     }
   }
-
+  
   if (OB_SUCC(ret)) {
     const ObTableSchema &data_table_schema = *inc_table_schemas.at(0);
     const int64_t split_cnt = dst_tablet_ids.at(0).count();
@@ -750,7 +750,7 @@ int ObSplitPartitionHelper::create_ddl_task_(
                                &split_arg,
                                0/*parent_task_id*/,
                                task_id);
-    param.tenant_data_version_ = tenant_data_version;
+    param.tenant_data_version_ = tenant_data_version;                           
     if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {
       LOG_WARN("submit ddl task failed", KR(ret));
     }
@@ -1023,7 +1023,7 @@ int ObSplitPartitionHelper::start_dst_(
 
 int ObSplitPartitionHelper::check_mem_usage_for_split_(
     const uint64_t tenant_id,
-    const int64_t dst_tablets_number)
+    const int64_t dst_tablets_number) 
 {
   int ret = OB_SUCCESS;
   share::ObUnitTableOperator unit_op;
@@ -1050,7 +1050,7 @@ int ObSplitPartitionHelper::check_mem_usage_for_split_(
     const share::ObResourcePool &pool = pools.at(i);
     if OB_FAIL(unit_config_ids.push_back(pool.unit_config_id_)) {
       LOG_WARN("failed to push back into unit_config_ids");
-    }
+    } 
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(unit_op.get_unit_configs(unit_config_ids, unit_configs))) {
@@ -1058,7 +1058,7 @@ int ObSplitPartitionHelper::check_mem_usage_for_split_(
   } else if (unit_configs.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unit_configs should not be empty", K(ret));
-  }
+  } 
   for (int64_t i = 0; OB_SUCC(ret) && i < unit_configs.count(); ++i) {
     ObUnitConfig & u_config = unit_configs.at(i);
     const double percent_mem_for_split = 0.2;
@@ -1071,7 +1071,7 @@ int ObSplitPartitionHelper::check_mem_usage_for_split_(
     if (u_config.memory_size() * percent_mem_for_split < (dst_tablets_number * MEMORY_USAGE_SPLIT_PER_DST)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("the memory usage of split greater than the memory limit for split", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "the memory usage of split greater than memory limit for split is");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "the memory usage of split greater than memory limit for split is");  
     }
   }
   return ret;

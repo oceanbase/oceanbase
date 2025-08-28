@@ -488,7 +488,7 @@ public:
   static int resolve_external_file_location(ObResolverParams &params,
                                             ObTableSchema &table_schema,
                                             common::ObString table_location);
-
+                                            
   static int mask_properties_sensitive_info(const ParseNode *node,
                                             ObString &ddl_sql,
                                             ObIAllocator *allocator,
@@ -621,9 +621,9 @@ protected:
       const uint64_t cg_id,
       share::schema::ObColumnGroupSchema &column_group);
   int parse_cg_node(const ParseNode &cg_node, obrpc::ObCreateIndexArg &create_index_arg) const;
-  int parse_column_group(const ParseNode *cg_node,
-                         const share::schema::ObTableSchema &table_schema,
-                         share::schema::ObTableSchema &dst_table_schema,
+  int parse_column_group(const ParseNode *cg_node, 
+                         const share::schema::ObTableSchema &table_schema, 
+                         share::schema::ObTableSchema &dst_table_schema, 
                          const bool is_alter_column_group_delayed = false);
   int resolve_index_column_group(const ParseNode *node, obrpc::ObCreateIndexArg &create_index_arg);
   bool need_column_group(const ObTableSchema &table_schema);
@@ -757,9 +757,9 @@ protected:
   int try_set_auto_partition_by_config(const ParseNode *node,
                                        common::ObIArray<obrpc::ObCreateIndexArg> &index_arg_list,
                                        ObTableSchema &table_schema);
-  int check_only_modify_auto_partition_attr(ObPartitionedStmt *stmt, ParseNode *node,
+  int check_only_modify_auto_partition_attr(ObPartitionedStmt *stmt, ParseNode *node, 
                                             ObTableSchema &table_schema, bool &is_only_modify_auto_part_attr);
-
+  
   static int resolve_interval_node(
       ObResolverParams &params,
       ParseNode *interval_node,
@@ -1059,7 +1059,7 @@ protected:
                                     bool is_subpart);
   int check_and_set_individual_subpartition_names(ObPartitionedStmt *stmt,
                                                   share::schema::ObTableSchema &table_schema);
-  int set_partition_name_in_hashset(const share::schema::ObPartitionNameHashWrapper &partition_name_key,
+  int set_partition_name_in_hashset(const share::schema::ObPartitionNameHashWrapper &partition_name_key, 
                                     ObPartitionNameSet &partition_name_set);
   int deep_copy_string_in_part_expr(ObPartitionedStmt* stmt);
   int deep_copy_column_expr_name(common::ObIAllocator &allocator, ObIArray<ObRawExpr*> &exprs);

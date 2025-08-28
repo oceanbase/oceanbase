@@ -167,7 +167,7 @@ struct ObCurTraceId
     {
       return id_.inner_sql_id_;
     }
-
+  
     inline void set_sub_id(const int32_t sub_id)
     {
       id_.sub_task_ = sub_id & ((1 << 8) - 1);

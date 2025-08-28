@@ -92,7 +92,7 @@ public:
   }
   virtual void *alloc_align(const int64_t size, const int64_t align, const ObMemAttr &attr) final
   {
-    return ObAllocAlign::alloc_align(size, align,
+    return ObAllocAlign::alloc_align(size, align, 
         [this](const int64_t size, const ObMemAttr &attr) { return this->alloc(size, attr); }, attr);
   }
   virtual void free_align(void *ptr) final

@@ -75,10 +75,10 @@ public:
   int visit(ObIWkbGeogPoint *geo);
   int visit(ObIWkbGeomPoint *geo);
   int visit(ObIWkbGeogLineString *geo);
-  int visit(ObIWkbGeomLineString *geo);
+  int visit(ObIWkbGeomLineString *geo);  
   int visit(ObIWkbGeogPolygon *geo);
   int visit(ObIWkbGeomPolygon *geo);
-
+ 
   bool is_end(ObIWkbGeogLineString *geo) { UNUSED(geo); return true; }
   bool is_end(ObIWkbGeomLineString *geo) { UNUSED(geo); return true; }
   bool is_end(ObIWkbGeogLinearRing *geo) { UNUSED(geo); return true; }
@@ -91,8 +91,8 @@ public:
   int finish(ObIWkbGeogMultiPolygon *geo) { UNUSED(geo); return OB_SUCCESS; }
   int finish(ObIWkbGeomMultiPolygon *geo) { UNUSED(geo); return OB_SUCCESS; }
   int finish(ObIWkbGeogCollection *geo) { UNUSED(geo); return OB_SUCCESS; }
-  int finish(ObIWkbGeomCollection *geo) { UNUSED(geo); return OB_SUCCESS; }
-
+  int finish(ObIWkbGeomCollection *geo) { UNUSED(geo); return OB_SUCCESS; }  
+  
   int64_t get_cellids(ObS2Cellids &cells, bool is_query, bool need_buffer, S1Angle distance);
   int64_t get_cellids_and_unrepeated_ancestors(ObS2Cellids &cells, ObS2Cellids &ancestors, bool need_buffer, S1Angle distance);
   int64_t get_inner_cover_cellids(ObS2Cellids &cells);

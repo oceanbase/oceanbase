@@ -448,7 +448,7 @@ enum ObTSCIRScanType : uint16_t
   OB_VEC_IVF_CID_VEC_SCAN,    // for pq is pq code table
   OB_VEC_IVF_ROWKEY_CID_SCAN, // for pq is pq ROWKEY_CID_TABLE
   OB_VEC_IVF_SPECIAL_AUX_SCAN,// for pq is pq id, for sq is sq meta
-  OB_VEC_SPIV_INDEX_SCAN,
+  OB_VEC_SPIV_INDEX_SCAN, 
   // OB_VEC_SPIV_INDEX_AGG,
 };
 

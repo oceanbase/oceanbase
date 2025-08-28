@@ -155,8 +155,8 @@ int ObBackupServerMgr::get_server_status(
     if (OB_FAIL(update_server_())) {
       LOG_WARN("failed to update server", K(ret));
     }
-  }
-
+  } 
+  
   if (OB_FAIL(ret)) {
   } else {
     ObMutexGuard guard(mtx_);
@@ -189,7 +189,7 @@ int ObBackupServerMgr::is_server_exist(const common::ObAddr &server, const bool 
       LOG_WARN("failed update server", K(ret));
     }
   }
-
+  
   if (OB_FAIL(ret)) {
   } else {
     ObMutexGuard guard(mtx_);

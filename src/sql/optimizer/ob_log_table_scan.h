@@ -51,12 +51,12 @@ struct ObTextRetrievalInfo
   { }
   ~ObTextRetrievalInfo() {}
 
-  TO_STRING_KV(K_(match_expr), K_(pushdown_match_filter), K_(sort_key), K_(topk_limit_expr),
-               K_(topk_offset_expr), K_(with_ties), K_(need_calc_relevance), K_(inv_idx_tid),
+  TO_STRING_KV(K_(match_expr), K_(pushdown_match_filter), K_(sort_key), K_(topk_limit_expr), 
+               K_(topk_offset_expr), K_(with_ties), K_(need_calc_relevance), K_(inv_idx_tid), 
                K_(fwd_idx_tid), K_(doc_id_idx_tid));
 
   bool need_sort() const { return sort_key_.expr_ != nullptr; }
-
+  
   ObMatchFunRawExpr *match_expr_;
   ObRawExpr *pushdown_match_filter_;
   OrderItem sort_key_;  // for pushdown topk, only support match expr as sort expr
@@ -81,7 +81,7 @@ struct ObTextRetrievalInfo
 
 struct ObRawFilterMonotonicity
 {
-  ObRawFilterMonotonicity() : filter_expr_(NULL),
+  ObRawFilterMonotonicity() : filter_expr_(NULL), 
                               col_expr_(NULL),
                               mono_(PushdownFilterMonotonicity::MON_NON),
                               assist_exprs_() {}
@@ -232,7 +232,7 @@ struct ObVecIndexInfo
   ~ObVecIndexInfo() {}
 
   TO_STRING_KV(K_(sort_key), KPC_(topk_limit_expr), KPC_(topk_offset_expr), KPC_(target_vec_column),
-              KPC_(vec_id_column), K_(aux_table_column), K_(aux_table_id), K_(main_table_tid),
+              KPC_(vec_id_column), K_(aux_table_column), K_(aux_table_id), K_(main_table_tid), 
               K_(vec_type), K_(vector_index_param), K_(query_param), K_(vec_index_name));
   bool need_sort() const { return sort_key_.expr_ != nullptr; }
   inline void set_vec_algorithm_type(ObVectorIndexAlgorithmType type) { vector_index_param_.type_ = type; }
@@ -242,7 +242,7 @@ struct ObVecIndexInfo
   ObVectorIndexParam get_vector_index_param() const {return vector_index_param_;}
   bool is_vec_aux_table_id(uint64_t tid) const;
   inline bool is_hnsw_vec_scan() const
-  {
+  { 
     return vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW ||
            vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_SQ ||
            vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_HGRAPH ||
@@ -259,12 +259,12 @@ struct ObVecIndexInfo
   inline bool is_ivf_sq_scan() const { return vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_IVF_SQ8; }
   inline bool is_ivf_pq_scan() const { return vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_IVF_PQ; }
   inline bool is_hnsw_bq_scan() const { return vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ; }
-  inline bool vec_index_with_filter() const { return vec_type_ == ObVecIndexType::VEC_INDEX_PRE
+  inline bool vec_index_with_filter() const { return vec_type_ == ObVecIndexType::VEC_INDEX_PRE 
                                                     || ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER == vec_type_
                                                     || ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN == vec_type_; }
   inline bool vec_index_without_filter() const { return vec_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER; }
   inline bool vec_index_pre_filter() const { return vec_type_ == ObVecIndexType::VEC_INDEX_PRE; }
-  inline bool vec_index_post_filter() const { return vec_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER
+  inline bool vec_index_post_filter() const { return vec_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER 
                                                   || ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER == vec_type_; }
   inline bool is_vec_adaptive_scan() const { return vec_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN; }
   inline bool is_vec_adaptive_iter_scan() const { return is_vec_adaptive_scan() && adaptive_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER; }
@@ -422,12 +422,12 @@ public:
   inline bool use_das() const
   { return use_das_; }
 
-  inline void set_use_column_store(bool use_column_store)
+  inline void set_use_column_store(bool use_column_store) 
   { use_column_store_ = use_column_store; }
 
-  inline bool use_column_store() const
+  inline bool use_column_store() const 
   { return use_column_store_; }
-
+  
   /**
    *  Get index table id
    */
@@ -685,8 +685,8 @@ public:
   void set_skip_scan(bool is_skip_scan) { is_skip_scan_ = is_skip_scan; }
   bool is_skip_scan() const { return is_skip_scan_; }
   virtual bool is_table_scan() const override { return true; }
-  bool is_whole_range_scan() const
-  {
+  bool is_whole_range_scan() const 
+  { 
     return (NULL == pre_query_range_ && NULL == pre_range_graph_) ||
            (1 == ranges_.count() && ranges_.at(0).is_whole_range());
   }
@@ -705,7 +705,7 @@ public:
   inline ObRawExpr *get_limit_expr() { return limit_count_expr_; }
   inline ObRawExpr *get_offset_expr() { return limit_offset_expr_; }
   int set_limit_offset(ObRawExpr *limit, ObRawExpr *offset);
-  inline int64_t get_table_row_count() const
+  inline int64_t get_table_row_count() const 
   { return est_cost_info_ == NULL || est_cost_info_->table_meta_info_ == NULL ? 0.0 : est_cost_info_->table_meta_info_->table_row_count_; }
   inline double get_output_row_count() const { return est_cost_info_ == NULL ? 0.0 : est_cost_info_->output_row_count_; }
   inline double get_phy_query_range_row_count() const { return est_cost_info_ == NULL ? 0.0 : est_cost_info_->phy_query_range_row_count_; }
@@ -986,7 +986,7 @@ public:
                               PushdownFilterMonotonicity &mono,
                               ObIArray<ObRawExpr *> &assist_exprs) const;
   void set_mr_mv_scan(const uint64_t mr_mv_flags)
-  {
+  { 
     if (mr_mv_flags & ObQueryFlag::MRMVScanMode::RefreshMode) {
       mr_mv_scan_ = ObQueryFlag::MRMVScanMode::RefreshMode;
     } else if (mr_mv_flags & ObQueryFlag::MRMVScanMode::RealTimeMode) {
@@ -1155,7 +1155,7 @@ protected: // memeber variables
   ObRawExpr *limit_offset_expr_;
   // 记录该表是否采样、采样方式、比例等信息
   SampleInfo sample_info_;
-  ObCostTableScanInfo *est_cost_info_;
+  ObCostTableScanInfo *est_cost_info_; 
   ObCostTableScanSimpleInfo est_cost_simple_info_;
   BaseTableOptInfo *table_opt_info_;
   common::ObSEArray<common::ObEstRowCountRecord, 4, common::ModulePageAllocator, true> est_records_;
@@ -1219,7 +1219,7 @@ protected: // memeber variables
   // begin for table scan with doc id
   bool is_tsc_with_doc_id_;
   uint64_t rowkey_doc_tid_;
-
+  
   common::ObSEArray<std::pair<ObRowkeyIdExprType, ObRawExpr*>, 4, common::ModulePageAllocator, true> rowkey_id_exprs_;
   uint64_t multivalue_col_idx_;
   int32_t multivalue_type_;

@@ -64,11 +64,11 @@ private:
   int inner_remove_stmt_group_by(ObSelectStmt *select_stmt, bool &trans_happened);
   int remove_group_by_duplicates(ObDMLStmt *&stmt, bool &trans_happened);
   int remove_redundant_aggr(ObDMLStmt *stmt, bool &trans_happened);
-  int inner_remove_redundant_aggr(ObSelectStmt &select_stmt,
-                                  ObIArray<ObRawExpr *> &aggrs_to_remove,
+  int inner_remove_redundant_aggr(ObSelectStmt &select_stmt, 
+                                  ObIArray<ObRawExpr *> &aggrs_to_remove, 
                                   ObIArray<ObRawExpr *> &new_exprs,
                                   bool &trans_happened);
-  int check_can_remove_redundant_aggr(ObSelectStmt &select_stmt,
+  int check_can_remove_redundant_aggr(ObSelectStmt &select_stmt, 
                                       ObAggFunRawExpr &aggr_expr,
                                       bool &can_remove);
   int simplify_redundant_aggr(ObSelectStmt &select_stmt,

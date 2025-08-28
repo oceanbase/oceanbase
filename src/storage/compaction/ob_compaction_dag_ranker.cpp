@@ -380,7 +380,7 @@ int ObCompactionDagRanker::init(
       ObDagPrio::DAG_PRIO_COMPACTION_MID != priority &&
       ObDagPrio::DAG_PRIO_COMPACTION_LOW != priority) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid argument", K(ret), K(priority));
+    LOG_WARN("get invalid argument", K(ret), K(priority));    
   } else if (ObDagPrio::DAG_PRIO_COMPACTION_HIGH == priority) {
     if (OB_FAIL(create_rank_helper<ObMiniCompactionRankHelper>(rank_time, rank_helper_))) {
       LOG_WARN("failed to create rank helper", K(ret), K(priority));

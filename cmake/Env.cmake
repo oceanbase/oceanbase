@@ -265,7 +265,7 @@ endif()
 if (OB_BUILD_SYS_VEC_IDX)
  add_definitions(-DOB_BUILD_SYS_VEC_IDX)
 endif()
-
+ 
 # should not use initial-exec for tls-model if building OBCDC.
 if(BUILD_CDC_ONLY)
   add_definitions(-DOB_BUILD_CDC_DISABLE_VSAG)
@@ -307,7 +307,7 @@ if (OB_USE_CLANG)
     if(CLANG_VERSION VERSION_LESS "17.0.0")
       message(FATAL_ERROR "Clang version must be at least 17.0.0 if CPP_STANDARD_20 is ON, Please run the cmake process with '-DCPP_STANDARD_20=ON --init'")
     endif()
-  endif()
+  endif()  
 
   if (OB_CXX)
     message(STATUS "Using OB_CXX compiler: ${OB_CXX}")

@@ -18,7 +18,7 @@ namespace oceanbase
 namespace storage
 {
 #define REORDER_FILTER_INTERVAL 32
-ObWhereOptimizer::ObWhereOptimizer()
+ObWhereOptimizer::ObWhereOptimizer() 
   : iter_param_(nullptr)
   , filter_(nullptr)
   , filter_iters_(nullptr)

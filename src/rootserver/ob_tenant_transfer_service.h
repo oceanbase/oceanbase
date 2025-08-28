@@ -64,7 +64,7 @@ public:
    * @param [in] dest_ls:         destination log stream
    * @param [in] part_list:       partition list for transfer
    * @param [in] balance_task_id: parenet balance task id
-   * @param [out] task:        transfer task
+   * @param [out] task:        transfer task 
    * @return
    * - OB_SUCCESS:                generate task successfully
    * - other:                     generate task failed

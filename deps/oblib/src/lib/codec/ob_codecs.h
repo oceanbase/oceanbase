@@ -80,7 +80,7 @@ namespace common
   }
 
 
-class ObCodec
+class ObCodec 
 {
 public:
   enum PFoRPackingType : uint8_t
@@ -201,7 +201,7 @@ protected:
   common::ObIAllocator *allocator_;
 };
 
-class ObJustCopy : public ObCodec
+class ObJustCopy : public ObCodec 
 {
 public:
   enum
@@ -244,7 +244,7 @@ public:
   virtual const char *name() const override { return "ObJustCopy"; }
 };
 
-class ObSimpleBitPacking : public ObCodec
+class ObSimpleBitPacking : public ObCodec 
 {
 public:
   ObSimpleBitPacking() : uint_packing_bits_(0)

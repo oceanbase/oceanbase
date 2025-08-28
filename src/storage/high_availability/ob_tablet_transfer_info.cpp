@@ -81,3 +81,4 @@ void ObTabletTransferInfo::reset_transfer_table()
 }
 
 OB_SERIALIZE_MEMBER(ObTabletTransferInfo, ls_id_, transfer_start_scn_, transfer_seq_, has_transfer_table_);
+

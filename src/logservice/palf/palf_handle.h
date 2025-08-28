@@ -94,7 +94,7 @@ public:
                 const void *buffer,
                 const int64_t nbytes);
 
-  // @brief: read up to 'nbytes' from palf at offset of 'lsn' into the 'read_buf', and
+  // @brief: read up to 'nbytes' from palf at offset of 'lsn' into the 'read_buf', and 
   //         there are alignment restrictions on the length and address of user-space buffers
   //         and the file offset.
   //
@@ -111,7 +111,7 @@ public:
   // OB_ERR_OUT_OF_UPPER_BOUND, the lsn is out of upper bound.
   // OB_NEED_RETRY, there is a flashback operation during raw_read.
   // others.
-  //
+  // 
   // 1. use oceanbase::share::mtl_malloc_align or oceanbase::common::ob_malloc_align
   //    with LOG_DIO_ALIGN_SIZE to allocate aligned buffer.
   // 2. use oceanbase::common::lower_align or oceanbase::common::upper_align with

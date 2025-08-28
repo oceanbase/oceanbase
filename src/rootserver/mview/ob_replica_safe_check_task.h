@@ -122,7 +122,7 @@ private:
       bool &is_empty);
   static int get_transfer_task_id(
     share::ObTransferTaskID &max_transfer_task_id);
-
+  
   static int register_mds_in_trans(
       const transaction::ObTxDataSourceType type,
       const ObUpdateMergeScnArg &arg,

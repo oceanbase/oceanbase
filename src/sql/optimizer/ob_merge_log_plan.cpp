@@ -407,7 +407,7 @@ int ObMergeLogPlan::check_need_multi_partition_dml(ObLogicalOperator &top,
   if (OB_ISNULL(merge_stmt = get_stmt()) ||
       OB_UNLIKELY(index_dml_infos_.empty()) || OB_ISNULL(index_dml_infos_.at(0))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected params", K(ret), K(merge_stmt), K(index_dml_infos_));
+    LOG_WARN("unexpected params", K(ret), K(merge_stmt), K(index_dml_infos_)); 
   } else if (force_multi_part) {
     is_multi_part_dml = true;
   } else if (OB_FAIL(check_stmt_need_multi_partition_dml(*merge_stmt, index_dml_infos_, is_multi_part_dml))) {
@@ -451,7 +451,7 @@ int ObMergeLogPlan::get_best_merge_dist_method(ObLogicalOperator &top,
   dist_method = 0;
   if (OB_ISNULL(merge_stmt = get_stmt()) || OB_ISNULL(local_sharding)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected params", K(ret), K(merge_stmt), K(local_sharding));
+    LOG_WARN("unexpected params", K(ret), K(merge_stmt), K(local_sharding)); 
   } else if (OB_FAIL(check_need_multi_partition_dml(top,
                                                     force_multi_part,
                                                     is_multi_part_dml,
@@ -470,7 +470,7 @@ int ObMergeLogPlan::get_best_merge_dist_method(ObLogicalOperator &top,
     } else if (OB_FAIL(check_basic_sharding_for_dml_stmt(*update_sharding,
                                                          top,
                                                          is_basic))) {
-      LOG_WARN("failed to check basic sharding for dml stmt", K(ret));
+      LOG_WARN("failed to check basic sharding for dml stmt", K(ret));                                                      
     } else if (is_basic) {
       dist_method = DIST_BASIC_METHOD;
       OPT_TRACE("merge into plan without insert will use basic method");
@@ -501,7 +501,7 @@ int ObMergeLogPlan::get_best_merge_dist_method(ObLogicalOperator &top,
     } else if (OB_FAIL(check_basic_sharding_for_dml_stmt(*insert_sharding,
                                                          top,
                                                          is_basic))) {
-      LOG_WARN("failed to check basic sharding for dml stmt", K(ret));
+      LOG_WARN("failed to check basic sharding for dml stmt", K(ret));                                                      
     } else if (is_basic) {
       dist_method = DIST_BASIC_METHOD;
       OPT_TRACE("single part merge into plan without update will use basic method");
@@ -521,7 +521,7 @@ int ObMergeLogPlan::get_best_merge_dist_method(ObLogicalOperator &top,
     } else if (OB_FAIL(check_basic_sharding_for_dml_stmt(*local_sharding,
                                                   top,
                                                   is_basic))) {
-      LOG_WARN("failed to check basic sharding for dml stmt", K(ret));
+      LOG_WARN("failed to check basic sharding for dml stmt", K(ret));                                                      
     } else if (is_basic) {
       dist_method = DIST_BASIC_METHOD;
       OPT_TRACE("distributed merge into plan will use basic method");
@@ -685,7 +685,7 @@ int ObMergeLogPlan::has_equal_values(const ObIArray<ObRawExpr*> &l_const_exprs,
           LOG_WARN("failed to push back", K(ret));
         } else {
           has_equal = true;
-        }
+        } 
       }
     }
   }
@@ -970,7 +970,7 @@ int ObMergeLogPlan::prepare_table_dml_info_update(const ObMergeTableInfo& merge_
       } else if (!merge_info.is_link_table_ &&
                  OB_FAIL(check_update_part_key(index_schema, index_dml_info))) {
         LOG_WARN("faield to check update part key", K(ret));
-      } else if (!merge_info.is_link_table_ &&
+      } else if (!merge_info.is_link_table_ && 
                  OB_FAIL(check_update_primary_key(index_schema, index_dml_info))) {
         LOG_WARN("fail to check update primary key", K(ret), KPC(index_dml_info));
       } else if (OB_FAIL(index_dml_infos.push_back(index_dml_info))) {

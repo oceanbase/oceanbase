@@ -550,7 +550,7 @@ bool ObGvSqlAudit::is_perf_event_dep_field(uint64_t col_id) {
     case INDEX_BLOCK_CACHE_HIT:
     case BLOCKSCAN_BLOCK_CNT:
     case BLOCKSCAN_ROW_CNT:
-    case PUSHDOWN_STORAGE_FILTER_ROW_CNT:
+    case PUSHDOWN_STORAGE_FILTER_ROW_CNT: 
     case NETWORK_WAIT_TIME: {
       is_contain = true;
       break;
@@ -558,7 +558,7 @@ bool ObGvSqlAudit::is_perf_event_dep_field(uint64_t col_id) {
     default: {
       is_contain = false;
       break;
-    }
+    }   
   }
   return is_contain;
 }

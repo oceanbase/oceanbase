@@ -2318,7 +2318,7 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
     CtxLockGuard guard(lock_, CtxLockGuard::MODE::CTX);
     try_submit_next_log_(false);
   }
-
+  
   if (retry_submit_mds) {
     CtxLockGuard guard(lock_, CtxLockGuard::MODE::CTX);
     if (OB_TMP_FAIL(submit_log_impl_(ObTxLogType::TX_MULTI_DATA_SOURCE_LOG))) {
@@ -4482,8 +4482,8 @@ int ObPartTransCtx::submit_log_impl_(const ObTxLogType log_type)
         break;
       }
       case ObTxLogType::TX_PREPARE_LOG: {
-	// try generate prepare verison
-	ret = generate_prepare_version_();
+      	// try generate prepare verison
+      	ret = generate_prepare_version_();
         if (get_upstream_state() < ObTxState::PREPARE) {
           if (OB_FAIL(drive_self_2pc_phase(ObTxState::PREPARE))) {
             TRANS_LOG(WARN, "drive 2pc prepare phase failed", K(ret), K(*this));
@@ -4499,21 +4499,21 @@ int ObPartTransCtx::submit_log_impl_(const ObTxLogType log_type)
             get_upstream_state() == ObTxState::PREPARE &&
             get_downstream_state() < ObTxState::PREPARE &&
             !is_2pc_logging()) {
-	  ret = submit_prepare_log_();
-	}
+      	  ret = submit_prepare_log_();
+      	}
         break;
       }
       case ObTxLogType::TX_COMMIT_LOG: {
-	if (!mt_ctx_.is_prepared()) {
-	  if (!is_local_tx_()) {
+      	if (!mt_ctx_.is_prepared()) {
+      	  if (!is_local_tx_()) {
             int tmp_ret = OB_ERR_UNEXPECTED;
-	    TRANS_LOG(ERROR, "not set prepare verison into mt_ctx, unexpected error", "ret", tmp_ret, K(*this));
-	    print_trace_log_();
-	  } else {
-	    // try generate commit version
-	    ret = generate_commit_version_();
-	  }
-	}
+      	    TRANS_LOG(ERROR, "not set prepare verison into mt_ctx, unexpected error", "ret", tmp_ret, K(*this));
+      	    print_trace_log_();
+      	  } else {
+      	    // try generate commit version
+      	    ret = generate_commit_version_();
+      	  }
+      	}
         if (OB_SWITCHING_TO_FOLLOWER_GRACEFULLY == ERRSIM_DELAY_TX_SUBMIT_LOG && 1002 == MTL_ID() && 1001 == ls_id_.id()) {
           ret = ERRSIM_DELAY_TX_SUBMIT_LOG;
         } else if (ERRSIM_DELAY_TX_SUBMIT_LOG < int(-9999)) {
@@ -4523,9 +4523,9 @@ int ObPartTransCtx::submit_log_impl_(const ObTxLogType log_type)
           TRANS_LOG(INFO, "reject delay tx submit log when submit commit log",
                     K(ret), K(ERRSIM_DELAY_TX_SUBMIT_LOG));
         }
-	if (OB_SUCC(ret) && mt_ctx_.is_prepared()) {
-	  ret = submit_commit_log_();
-	}
+      	if (OB_SUCC(ret) && mt_ctx_.is_prepared()) {
+      	  ret = submit_commit_log_();
+      	}
         break;
       }
       case ObTxLogType::TX_ABORT_LOG: {
@@ -6402,9 +6402,9 @@ int ObPartTransCtx::switch_to_leader(const SCN &start_working_ts)
     const bool contain_mds_tablet_split = is_contain_mds_type_(ObTxDataSourceType::TABLET_SPLIT);
     const bool contain_mds_tablet_transfer_in = is_contain_mds_type_(ObTxDataSourceType::TRANSFER_IN_ABORTED)
                            || is_contain_mds_type_(ObTxDataSourceType::FINISH_TRANSFER_IN);
-    const bool need_kill_tx = contain_mds_table_lock
-                           || contain_mds_transfer_out
-                           || contain_mds_tablet_split
+    const bool need_kill_tx = contain_mds_table_lock 
+                           || contain_mds_transfer_out 
+                           || contain_mds_tablet_split 
                            || contain_mds_tablet_transfer_in;
     bool kill_by_append_mode_initial_scn = false;
     if (append_mode_initial_scn.is_valid()) {
@@ -6427,7 +6427,7 @@ int ObPartTransCtx::switch_to_leader(const SCN &start_working_ts)
 
             TRANS_LOG(WARN, "abort self instantly with a tx_commit request",
                       K(contain_mds_table_lock), K(contain_mds_transfer_out), K(contain_mds_tablet_split),
-                      K(contain_mds_tablet_transfer_in), K(need_kill_tx), K(kill_by_append_mode_initial_scn),
+                      K(contain_mds_tablet_transfer_in), K(need_kill_tx), K(kill_by_append_mode_initial_scn), 
                       K(append_mode_initial_scn), KPC(this));
             if (OB_FAIL(do_local_tx_end_(TxEndAction::ABORT_TX))) {
               //Temporary fix:
@@ -8652,7 +8652,7 @@ int ObPartTransCtx::check_pending_log_overflow(const int64_t stmt_timeout)
   int ret = OB_SUCCESS;
   const int64_t MAX_LOCAL_RETRY_US = 1 * 1000 * 1000; // 1s
   const int64_t LOCAL_RETRY_INTERVAL_US = 50 * 1000;  // 50ms
-
+                                                      
   if (OB_SUCC(ret) && ATOMIC_LOAD(&has_extra_log_cb_group_)) {
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
     const int64_t trx_max_log_cb_limit =
@@ -8679,9 +8679,9 @@ int ObPartTransCtx::check_pending_log_overflow(const int64_t stmt_timeout)
             ret = OB_SUCCESS;
           }
         }
-
+  
         cur_us = ObTimeUtility::current_time();
-
+  
         if (cur_us >= stmt_timeout) {
           TRANS_LOG(INFO, "retry to wait log cb until stmt timeout", K(ret), K(stmt_timeout),
                     K(busy_cb_cnt), K(extra_cb_group_cnt), K(start_wait_us), KPC(this));
@@ -8702,7 +8702,7 @@ int ObPartTransCtx::check_pending_log_overflow(const int64_t stmt_timeout)
       }
     }
   }
-
+  
   return ret;
 }
 

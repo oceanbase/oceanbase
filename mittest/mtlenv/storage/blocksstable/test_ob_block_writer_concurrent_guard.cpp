@@ -83,8 +83,8 @@ void prepare_data_desc(ObWholeDataStoreDesc &data_desc,ObTableSchema *table_sche
   ObSSTableIndexBuilder *sstable_builder)
 {
   int ret = OB_SUCCESS;
-  ret = data_desc.init(false/*is_ddl*/, *table_schema, ObLSID(1), ObTabletID(1), MAJOR_MERGE,
-  ObTimeUtility::fast_current_time()/*snapshot_version*/, DATA_CURRENT_VERSION,
+  ret = data_desc.init(false/*is_ddl*/, *table_schema, ObLSID(1), ObTabletID(1), MAJOR_MERGE, 
+  ObTimeUtility::fast_current_time()/*snapshot_version*/, DATA_CURRENT_VERSION, 
   table_schema->get_micro_index_clustered(), 0/*transfer_seq*/);
   data_desc.get_desc().sstable_index_builder_ = sstable_builder;
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -97,8 +97,8 @@ void prepare_index_builder(ObWholeDataStoreDesc &data_desc, ObTableSchema *table
   ret = sstable_builder.init(data_desc.get_desc());
   ASSERT_EQ(OB_SUCCESS, ret);
 }
-
-
+  
+    
 class TestConcurrencyDefenses : public ::testing::Test
 {
 public:
@@ -195,7 +195,7 @@ void TestConcurrencyDefenses::SetUp()
   table_key_.table_type_ = ObITable::TableType::MINOR_SSTABLE;
   table_key_.version_range_.snapshot_version_ = share::OB_MAX_SCN_TS_NS - 1;
   ASSERT_TRUE(table_key_.is_valid());
-
+  
 }
 void TestConcurrencyDefenses::TearDown()
 {
@@ -437,7 +437,7 @@ private:
 };
 
 TestConcurrencyDefensesStressIndexBuilder::TestConcurrencyDefensesStressIndexBuilder()
-  : tenant_id_(0), thread_cnt_(0), row_count_(0), allocator_(), row_generate_(NULL), table_schema_(nullptr), data_store_desc_(NULL),
+  : tenant_id_(0), thread_cnt_(0), row_count_(0), allocator_(), row_generate_(NULL), table_schema_(nullptr), data_store_desc_(NULL), 
     lob_iter_(NULL), index_writer_(NULL), sstable_builder_(NULL), lock_(), tenant_base_(500)
 {
 }
@@ -515,8 +515,8 @@ TEST_F(TestConcurrencyDefenses, test_index_builder_concurrency_defense)
   ObSSTableIndexBuilder sstable_builder(false /* not need writer buffer*/);
 
   ObWholeDataStoreDesc data_desc;
-  ret = data_desc.init(false/*is_ddl*/, table_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE,
-  ObTimeUtility::fast_current_time()/*snapshot_version*/, DATA_CURRENT_VERSION,
+  ret = data_desc.init(false/*is_ddl*/, table_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE, 
+  ObTimeUtility::fast_current_time()/*snapshot_version*/, DATA_CURRENT_VERSION, 
   table_schema_.get_micro_index_clustered(), 0/*transfer_seq*/);
   ASSERT_EQ(OB_SUCCESS, ret);
   data_desc.get_desc().sstable_index_builder_ = &sstable_builder;
@@ -532,7 +532,7 @@ TEST_F(TestConcurrencyDefenses, test_index_builder_concurrency_defense)
   ObSSTableMergeRes res;
   ret = sstable_builder.close(res);
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   LOG_INFO("FINISH TestConcurrencyDefenses.test_index_builder_concurrency_defense");
 }
 
@@ -540,11 +540,11 @@ TEST_F(TestConcurrencyDefenses, test_concurrency_defense_effect)
 {
   LOG_INFO("BEGIN TestConcurrencyDefenses.test_concurrency_defense_effect");
   int ret = OB_SUCCESS;
-
+  
   ObWholeDataStoreDesc data_desc;
   ObSSTableIndexBuilder sstable_builder(false /* not need writer buffer*/);
   prepare_index_builder(data_desc, &table_schema_, sstable_builder);
-
+  
   ObDmlFlag dml = DF_INSERT;
 
   ObMacroBlockWriter data_writer;

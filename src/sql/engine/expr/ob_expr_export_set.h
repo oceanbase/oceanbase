@@ -26,7 +26,7 @@ public:
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int eval_export_set(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   DECLARE_SET_LOCAL_SESSION_VARS;
-
+  
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprExportSet);

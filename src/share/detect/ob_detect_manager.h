@@ -84,7 +84,7 @@ public:
   int assign(const ObDMCallbackDList &src);
 };
 
-// design doc:
+// design doc: 
 class ObDetectManager
 {
 private:

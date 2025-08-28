@@ -35,13 +35,13 @@ public:
       is_shared_storage_(false) {}
   ObTenantStorageMetaReplayer(const ObTenantStorageMetaReplayer &) = delete;
   ObTenantStorageMetaReplayer &operator=(const ObTenantStorageMetaReplayer &) = delete;
-
+      
   int init(const bool is_share_storage,
            ObTenantStorageMetaPersister &persister,
            ObTenantCheckpointSlogHandler &ckpt_slog_handler);
   void destroy();
   int start_replay(const ObTenantSuperBlock &super_block);
-
+  
 private:
 #ifdef OB_BUILD_SHARED_STORAGE
   int ss_start_replay_(const ObTenantSuperBlock &super_block);
@@ -50,7 +50,7 @@ private:
   int ss_replay_ls_tablets_(ObArenaAllocator &allocator, const ObLSItem &item);
   int ss_replay_ls_tablets_for_trans_info_tmp_(ObArenaAllocator &allocator, const ObLSItem &item);
   int ss_recover_ls_pending_free_list_(ObArenaAllocator &allocator, const ObLSItem &item);
-#endif
+#endif 
 
 private:
   bool is_inited_;

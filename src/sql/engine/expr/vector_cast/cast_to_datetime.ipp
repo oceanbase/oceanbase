@@ -223,9 +223,9 @@ struct ToDatetimeCastImpl
     return ret;
   }
 
-
+  
   // 1. date * USECS_PER_DAY
-  // 2. calc timezone offset
+  // 2. calc timezone offset 
   static int date_datetime(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)
   {
     EVAL_COMMON_ARG()

@@ -321,7 +321,7 @@ DEF_TO_STRING(ObTableScanParam)
 }
 
 int ScanResumePoint::add_range(const ObITableReadInfo& read_info, const blocksstable::ObDatumRange& datum_range)
-{
+{  
   INIT_SUCC(ret);
   ObObjMeta* obj_metas;
   ObDatumRange tmp_range;

@@ -56,7 +56,7 @@ struct TestObjectStorageInterfaceContext
   char upload_file_path_[OB_MAX_URI_LENGTH];
 };
 
-class TestExecGuard
+class TestExecGuard 
 {
 public:
   TestExecGuard(const char *title, int64_t &test_id, int &ret);

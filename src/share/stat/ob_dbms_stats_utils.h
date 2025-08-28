@@ -154,7 +154,7 @@ public:
   static int truncate_string_for_opt_stats(ObObj &obj, ObIAllocator &allocator);
 
   static int64_t get_truncated_str_len(const ObString &str, const ObCollationType cs_type);
-
+  
   static int remove_stat_gather_param_partition_info(int64_t reserved_partition_id,
                                                      ObOptStatGatherParam &param);
 

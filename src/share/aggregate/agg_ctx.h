@@ -262,7 +262,7 @@ struct RuntimeContext
   {
     return get_extra_stores(agg_col_id, agg_cell)->data_store;
   }
-
+ 
   inline TopFreHistVecExtraResult *&get_extra_top_fre_hist_store(const int64_t agg_col_id,
                                                                  const char *agg_cell)
   {

@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 str_t* sfl(dlink_t* l) { return (str_t*)(l+1); }
 int64_t cidfl(dlink_t* l) {return  *((int64_t*)l-1); }
 static int iov_from_blist(struct iovec* iov, int64_t limit, dlink_t* head) {

@@ -146,7 +146,7 @@ protected:
 
 private:
   static const int64_t RETRY_INTERVAL = 30 * 60 * 1000 * 1000l; // 30min
-  static const int64_t PER_TASK_DEL_ROWS = 1024l;
+  static const int64_t PER_TASK_DEL_ROWS = 1024l; 
   static const int64_t ONE_TASK_TIMEOUT = 1 * 60 * 1000 * 1000l; // 1min
 private:
   int process_one();

@@ -436,7 +436,7 @@ void ObIOBenchRunner::run1()
       } else {
         io_info.fd_.first_id_ = block_handles_[block_idx].get_macro_id().first_id();
         io_info.fd_.second_id_ = block_handles_[block_idx].get_macro_id().second_id();
-      }
+      } 
 #else
       io_info.fd_.first_id_ = block_handles_[block_idx].get_macro_id().first_id();
       io_info.fd_.second_id_ = block_handles_[block_idx].get_macro_id().second_id();
@@ -520,7 +520,7 @@ void ObIOBenchController::run1()
   start_ts_ = ObTimeUtility::fast_current_time();
   finish_ts_ = 0;
   ret_code_ = OB_SUCCESS;
-
+  
   // prepare io bench runner
   const double MIN_FREE_SPACE_PERCENTAGE = 0.1; // if auto extend is on, _datafile_usage_upper_bound_percentage maybe less than (1 - 0.1 = 0.9), may cause OB_SERVER_OUTOF_DISK_SPACE
   const int64_t MIN_CALIBRATION_BLOCK_COUNT = 1024L * 1024L * 1024L / OB_DEFAULT_MACRO_BLOCK_SIZE;
@@ -561,10 +561,10 @@ void ObIOBenchController::run1()
   const int64_t bench_thread_count = 16;
   ObIOAbility io_ability;
   // The target file is pre-allocated using fallocate. Due to the initial presence of file holes
-  // in ext4 and xfs file systems, read operations are optimized by the system to immediately return
+  // in ext4 and xfs file systems, read operations are optimized by the system to immediately return 
   // with no content. This optimization leads to unrepresentative read performance metrics.
   // To ensure the validity of our performance testing, the sequence of operations has been adjusted
-  // to perform write operations first, thereby filling the file. This adjustment allows for the
+  // to perform write operations first, thereby filling the file. This adjustment allows for the 
   // acquisition of more accurate read and write performance metrics.
   for (int64_t i = static_cast<int64_t>(ObIOMode::MAX_MODE) - 1; OB_SUCC(ret) && !has_set_stop() && i >= 0; --i) {
     for (int64_t size = bench_start_size; OB_SUCC(ret) && !has_set_stop() && size <= OB_DEFAULT_MACRO_BLOCK_SIZE; size *= 2) {

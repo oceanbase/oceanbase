@@ -184,7 +184,7 @@ int ObTableTTLDeleteTask::init_kv_schema_guard(ObKvSchemaCacheGuard &schema_cach
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_FAIL(schema_cache_guard.init(credential_.tenant_id_,
-                                             simple_table_schema_->get_table_id(),
+                                             simple_table_schema_->get_table_id(), 
                                              simple_table_schema_->get_schema_version(),
                                              schema_guard_))) {
     LOG_WARN("fail to init schema cache guard", K(ret), K_(credential_.tenant_id));
@@ -326,7 +326,7 @@ int ObTableTTLDeleteTask::process_one()
           row_iter = ttl_row_iter;
         }
       }
-
+      
       ObTableApiExecutor *executor = nullptr;
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(scan_spec->create_executor(scan_ctx, executor))) {
@@ -356,7 +356,7 @@ int ObTableTTLDeleteTask::process_one()
     }
   }
 
-  if (OB_NOT_NULL(trans_param.trans_state_ptr_)
+  if (OB_NOT_NULL(trans_param.trans_state_ptr_) 
       && trans_param.trans_state_ptr_->is_start_trans_executed()
       && trans_param.trans_state_ptr_->is_start_trans_success()) {
     int tmp_ret = ret;
@@ -368,7 +368,7 @@ int ObTableTTLDeleteTask::process_one()
   }
 
   info_.scan_cnt_ += result.get_scan_row();
-  info_.err_code_ = ret;
+  info_.err_code_ = ret; 
   info_.row_key_ = result.get_end_rowkey();
   if (OB_SUCC(ret)) {
     info_.max_version_del_cnt_ += result.get_max_version_del_row();
@@ -376,7 +376,7 @@ int ObTableTTLDeleteTask::process_one()
     if (result.get_del_row() < PER_TASK_DEL_ROWS
         && result.get_end_ts() > ObTimeUtility::current_time()) {
       ret = OB_ITER_END; // finsh task
-      info_.err_code_ = ret;
+      info_.err_code_ = ret; 
       LOG_DEBUG("finish delete", KR(ret), K_(info));
     }
   }
@@ -657,10 +657,10 @@ int ObTableTTLDag::fill_info_param(compaction::ObIBasicInfoParam *&out_param, Ob
   if (OB_UNLIKELY(IS_NOT_INIT)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableTTLDag has not been initialized", KR(ret));
-  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
+  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(), 
                                 static_cast<int64_t>(info_.tenant_id_),
                                 static_cast<int64_t>(info_.ls_id_.id()),
-                                static_cast<int64_t>(info_.table_id_),
+                                static_cast<int64_t>(info_.table_id_), 
                                 static_cast<int64_t>(info_.tablet_id_.id())))) {
     LOG_WARN("fail to fill info param", KR(ret), K_(info));
   }
@@ -683,7 +683,7 @@ ObTableTTLDeleteRowIterator::ObTableTTLDeleteRowIterator()
 {
 }
 
-int ObTableTTLDeleteRowIterator::init(const schema::ObTableSchema &table_schema,
+int ObTableTTLDeleteRowIterator::init(const schema::ObTableSchema &table_schema, 
                                       const ObTableTTLOperation &ttl_operation)
 {
   int ret = OB_SUCCESS;
@@ -728,7 +728,7 @@ int ObTableTTLDeleteRowIterator::get_next_row(ObNewRow*& row)
   int ret = OB_SUCCESS;
   row = nullptr;
   if (cur_del_rows_ >= limit_del_rows_) {
-    ret = OB_ITER_END;
+    ret = OB_ITER_END; 
     LOG_DEBUG("finish get next row", KR(ret), K(cur_del_rows_), K(limit_del_rows_));
   } else {
     bool is_expired = false;
@@ -744,8 +744,8 @@ int ObTableTTLDeleteRowIterator::get_next_row(ObNewRow*& row)
         last_row_ = nullptr;
       } else {
         last_row_ = row;
-        // NOTE: For hbase table, the row expired if and only if
-        // 1. The row's version exceed maxversion
+        // NOTE: For hbase table, the row expired if and only if  
+        // 1. The row's version exceed maxversion  
         // 2. The row's expired time(cell_ts + ttl) exceed current time
         if (is_hbase_table_) {
           scan_cnt_++;
@@ -902,7 +902,7 @@ int ObTableTTLDeleteTask::execute_ttl_delete(ObKvSchemaCacheGuard &schema_cache_
           }
 
           if (OB_SUCC(ret)) {
-            rowkey_.assign(rowkey_buf, rowkey_cnt);
+            rowkey_.assign(rowkey_buf, rowkey_cnt); 
             hbase_cur_version_ = ttl_row_iter.cur_version_;
           }
         }
@@ -928,7 +928,7 @@ int ObTableTTLDeleteTask::execute_ttl_delete(ObKvSchemaCacheGuard &schema_cache_
           hbase_rowkey_objs[ObHTableConstants::COL_IDX_K] = raw_obj_ptr[ObHTableConstants::COL_IDX_K];
           hbase_rowkey_objs[ObHTableConstants::COL_IDX_Q] = raw_obj_ptr[ObHTableConstants::COL_IDX_Q];
           hbase_rowkey_objs[ObHTableConstants::COL_IDX_T].set_min_value();
-          saved_rowkey.assign(hbase_rowkey_objs, hbase_rowkey_size);
+          saved_rowkey.assign(hbase_rowkey_objs, hbase_rowkey_size); 
         }
       }
 
@@ -964,7 +964,7 @@ int ObTableTTLDeleteTask::get_scan_ranges(ObIArray<ObNewRange> &ranges, const Ob
       range.border_flag_.set_inclusive_start();
     }
   }
-  range.start_key_ = real_start_key;
+  range.start_key_ = real_start_key; 
 
   if (OB_FAIL(ranges.push_back(range))) {
     LOG_WARN("fail to add scan range", K(ret), K(range));

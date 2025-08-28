@@ -112,7 +112,7 @@ private:
   int64_t unsubmitted_size_;
   ObTxBufferNodeList mds_list_;
   ObTxBufferNodeList::iterator submitted_iterator_;
-  ObTxBufferNodeArray final_notify_array_;
+  ObTxBufferNodeArray final_notify_array_; 
 
 #ifdef ENABLE_DEBUG_LOG
   int64_t tenant_id_;

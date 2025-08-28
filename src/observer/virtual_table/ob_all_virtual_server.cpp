@@ -69,7 +69,7 @@ int ObAllVirtualServer::inner_get_next_row(ObNewRow *&row)
   } else if (OB_FAIL(ObIOManager::get_instance().get_device_health_status(dhs,
       data_disk_abnormal_time))) {
     SERVER_LOG(WARN, "get device health status fail", KR(ret));
-  } else {
+  } else {    
     const int64_t col_count = output_column_ids_.count();
     const double hard_limit = GCONF.resource_hard_limit;
     const int64_t data_disk_allocated =

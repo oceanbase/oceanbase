@@ -1018,7 +1018,7 @@ int ObOptimizerUtil::get_expr_monotonicity_recursively(const ObRawExpr* expr,
       monotonicity = Monotonicity::ASC;
       is_strict = true;
     }
-  } else {
+  } else { 
     // The following is a classification discussion for composite cases.
     // Only one branch will be chosen for entry. Before entering, the monotonicity is none.
     Monotonicity mono = Monotonicity::NONE_MONO;
@@ -1063,9 +1063,9 @@ int ObOptimizerUtil::get_expr_monotonicity_recursively(const ObRawExpr* expr,
           is_strict = false;
         }
       } else if (!is_oracle_mode()
-                 && param_expr->get_result_type().is_datetime()
+                 && param_expr->get_result_type().is_datetime()  
                  && expr->get_result_type().is_string_type()) {
-        if (OB_FAIL(SMART_CALL(get_expr_monotonicity_recursively(param_expr, var, ctx,
+        if (OB_FAIL(SMART_CALL(get_expr_monotonicity_recursively(param_expr, var, ctx, 
                                                                  mono, is_strict_inner,
                                                                  param_store, const_param_info)))) {
           LOG_WARN("get data time param", K(ret));
@@ -1074,9 +1074,9 @@ int ObOptimizerUtil::get_expr_monotonicity_recursively(const ObRawExpr* expr,
           is_strict = is_strict_inner;
         }
       }
-    } else if (expr->get_expr_type() == T_FUN_SYS_LEFT) {
+    } else if (expr->get_expr_type() == T_FUN_SYS_LEFT) { 
       const ObRawExpr *param_expr_str = expr->get_param_expr(0);
-      const ObRawExpr *param_expr_num = expr->get_param_expr(1);
+      const ObRawExpr *param_expr_num = expr->get_param_expr(1); 
       if (OB_ISNULL(param_expr_str) || OB_ISNULL(param_expr_num)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected exprssion input is null error", K(ret));
@@ -1084,7 +1084,7 @@ int ObOptimizerUtil::get_expr_monotonicity_recursively(const ObRawExpr* expr,
                   CS_TYPE_UTF8MB4_GENERAL_CI == param_expr_str->get_result_type().get_collation_type()) &&
                  param_expr_num->is_const_raw_expr() &&
                  !param_expr_num->get_result_type().is_null()) {
-        if (OB_FAIL(SMART_CALL(get_expr_monotonicity_recursively(param_expr_str, var, ctx,
+        if (OB_FAIL(SMART_CALL(get_expr_monotonicity_recursively(param_expr_str, var, ctx, 
                                                                  mono, is_strict_inner,
                                                                  param_store, const_param_info)))) {
           LOG_WARN("get string param monotonicity failed", K(ret));
@@ -1164,7 +1164,7 @@ int ObOptimizerUtil::get_expr_monotonicity_recursively(const ObRawExpr* expr,
                    || (l_expr->get_result_type().is_float() || r_expr->get_result_type().is_float())
                    || (l_expr->get_result_type().is_double()|| r_expr->get_result_type().is_double())) {
           // 字符串类型是不正确的 abc < abcd 但是abcz > abcdz, 而且字符串没有减法
-          // explain select distinct(t0.c2)  from t0 where upper(t0.c2) + "ZHU" = "QINGZHU";
+          // explain select distinct(t0.c2)  from t0 where upper(t0.c2) + "ZHU" = "QINGZHU"; 
           // 日期类型 日期加减有时候会是正确的。
           monotonicity = Monotonicity::NONE_MONO;
         } else if (OB_FAIL(SMART_CALL(get_expr_monotonicity_recursively(l_expr, var, ctx,
@@ -1196,7 +1196,7 @@ int ObOptimizerUtil::get_expr_monotonicity_recursively(const ObRawExpr* expr,
       monotonicity = Monotonicity::NONE_MONO;
     }
   }
-
+  
   return ret;
 }
 
@@ -3863,7 +3863,7 @@ int ObOptimizerUtil::convert_subplan_scan_fd_item_sets(ObFdItemFactory &fd_facto
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -4445,14 +4445,14 @@ int ObOptimizerUtil::convert_rownum_filter_as_offset(ObRawExprFactory &expr_fact
                                                      ObTransformerCtx *ctx)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(const_expr) || OB_ISNULL(session_info) || OB_ISNULL(ctx) || OB_ISNULL(zero_expr)
+  if (OB_ISNULL(const_expr) || OB_ISNULL(session_info) || OB_ISNULL(ctx) || OB_ISNULL(zero_expr) 
       || OB_UNLIKELY(filter_type != T_OP_GE && filter_type != T_OP_GT)
       || OB_UNLIKELY(!const_expr->get_result_type().is_integer_type()
                      && !const_expr->get_result_type().is_number())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(const_expr), K(session_info), K(filter_type));
   } else if (T_OP_GT == filter_type) {
-    if (OB_FAIL(ObTransformUtils::compare_const_expr_result(ctx, const_expr, T_OP_GE,
+    if (OB_FAIL(ObTransformUtils::compare_const_expr_result(ctx, const_expr, T_OP_GE, 
                                                                     0, offset_is_not_neg))) {
       LOG_WARN("offset value is negative calc failed", K(ret));
     } else if (!offset_is_not_neg) {
@@ -4468,7 +4468,7 @@ int ObOptimizerUtil::convert_rownum_filter_as_offset(ObRawExprFactory &expr_fact
     } else if (offset_is_zero) {
       offset_int_expr = zero_expr;
       offset_is_not_neg = true;
-    } else if (OB_FAIL(ObTransformUtils::compare_const_expr_result(ctx, const_expr, T_OP_GT,
+    } else if (OB_FAIL(ObTransformUtils::compare_const_expr_result(ctx, const_expr, T_OP_GT, 
                                                                     0, offset_is_not_neg))) {
       LOG_WARN("offset value is negative calc failed", K(ret));
     } else if (!offset_is_not_neg) {
@@ -4737,7 +4737,7 @@ int ObOptimizerUtil::check_push_down_expr(const ObRelIds &table_ids,
           // do nothing
         } else if (!table_ids.is_superset(cur_and_expr->get_relation_ids())) {
           //do nothing
-        } else if (cur_and_expr->get_relation_ids().is_empty() &&
+        } else if (cur_and_expr->get_relation_ids().is_empty() && 
                   !cur_and_expr->is_const_expr()) {
           //do nothing
         } else if (OB_FAIL(sub_exprs.at(i).push_back(cur_and_expr))) {
@@ -4756,7 +4756,7 @@ int ObOptimizerUtil::check_push_down_expr(const ObRelIds &table_ids,
       all_contain = false;
     } else if (!table_ids.is_superset(cur_expr->get_relation_ids())) {
       all_contain = false;
-    } else if (cur_expr->get_relation_ids().is_empty() &&
+    } else if (cur_expr->get_relation_ids().is_empty() && 
               !cur_expr->is_const_expr()) {
       all_contain = false;
     } else if (OB_FAIL(sub_exprs.at(i).push_back(cur_expr))) {
@@ -5193,7 +5193,7 @@ int ObOptimizerUtil::get_subplan_const_column(const ObDMLStmt &parent_stmt,
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -5486,7 +5486,7 @@ int ObOptimizerUtil::compute_stmt_interesting_order(const ObIArray<OrderItem> &o
         match_info |= OrderingFlag::GROUP_MATCH;
         LOG_TRACE("ordering is math group by", K(max_prefix_count), K(prefix_count));
       }
-      // the ordering of groupby output must be the subset of the input
+      // the ordering of groupby output must be the subset of the input 
       check_next = false;
     }
 
@@ -5513,7 +5513,7 @@ int ObOptimizerUtil::compute_stmt_interesting_order(const ObIArray<OrderItem> &o
         match_info |= OrderingFlag::DISTINCT_MATCH;
         LOG_TRACE("ordering is math distinct", K(max_prefix_count), K(prefix_count));
       }
-      // the ordering of distinct output must be the subset of the input
+      // the ordering of distinct output must be the subset of the input 
       check_next = false;
     }
 
@@ -6169,7 +6169,7 @@ bool ObOptimizerUtil::is_lossless_type_conv(const ObRawExprResType &child_type, 
       // varchar, varbinnary
     } else if (ObCharType == child_type.get_type() || ObVarcharType == child_type.get_type()) {
       //in mysql c1 varchar(x) as (func(y)) can not insert data makes length(fun(y)) > x
-      if (child_type.get_type() == dst_type.get_type() &&
+      if (child_type.get_type() == dst_type.get_type() && 
             dst_type.get_obj_meta().get_collation_type() == child_type.get_obj_meta().get_collation_type()) {
         is_lossless = true;
       }
@@ -6410,7 +6410,7 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr,
               child_type.get_accuracy().get_precision()) {
             is_lossless = true;
           }
-        }
+        } 
       }
     }
     if (OB_FAIL(ret)) {
@@ -6579,7 +6579,7 @@ int ObOptimizerUtil::gen_set_target_list(ObIAllocator *allocator,
                    OB_UNLIKELY(!new_select_item.expr_->is_set_op_expr())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("expr is null or is not set op expr", "set op", PC(new_select_item.expr_));
-        }
+        }       
       }
     }
   }
@@ -6853,7 +6853,7 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
         } else if (OB_FAIL(types.push_back(left_type)) || OB_FAIL(types.push_back(right_type))) {
           LOG_WARN("failed to push back", K(ret));
         } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(res_type, &types.at(0), 2,
-                                                                    is_oracle_mode, type_ctx,
+                                                                    is_oracle_mode, type_ctx, 
                                                                     need_merge_type))) {
           LOG_WARN("failed to aggregate result type for merge", K(ret));
         }
@@ -6944,10 +6944,10 @@ int ObOptimizerUtil::add_cast_to_set_list(ObSQLSessionInfo *session_info,
   ObRawExpr *new_expr = NULL;
   int64_t column_cnt = 0;
   if (OB_ISNULL(session_info) || OB_ISNULL(expr_factory) ||
-      OB_UNLIKELY(exprs.empty()
-                  || row_cnt <= 0
-                  || column_idx < 0
-                  || exprs.count() % row_cnt != 0
+      OB_UNLIKELY(exprs.empty() 
+                  || row_cnt <= 0 
+                  || column_idx < 0 
+                  || exprs.count() % row_cnt != 0 
                   || exprs.count() / row_cnt <= column_idx
                   || cast_row_cnt < 0)) {
     ret = OB_ERR_UNEXPECTED;
@@ -7302,7 +7302,7 @@ int ObOptimizerUtil::remove_special_exprs(ObIArray<ObRawExpr*> &pushdown_filters
       LOG_WARN("failed to push back expr", K(ret));
     }
   }
-  if (OB_SUCC(ret) &&
+  if (OB_SUCC(ret) && 
       OB_FAIL(pushdown_filters.assign(normal_filters))) {
     LOG_WARN("failed to assign filters", K(ret));
   }
@@ -7419,7 +7419,7 @@ int ObOptimizerUtil::check_pushdown_filter_for_set(const ObSelectStmt &parent_st
     } else {
       pushed = true;
     }
-    if (OB_SUCC(ret) && !pushed &&
+    if (OB_SUCC(ret) && !pushed && 
         OB_FAIL(remain_filters.push_back(pred))) {
       LOG_WARN("failed to push back expr", K(ret));
     }
@@ -7491,12 +7491,12 @@ int ObOptimizerUtil::check_pushdown_filter_for_subquery(const ObDMLStmt &parent_
 
         if (OB_SUCC(ret) && !common_exprs.empty() && !pushed_select_exprs.empty()) {
           //When common_exprs is empty, it indicates that there are neither window functions nor group by clauses in view.
-          //When common_exprs is not empty, it is necessary to be able to compute the result of the pushdown predicate based on them,
+          //When common_exprs is not empty, it is necessary to be able to compute the result of the pushdown predicate based on them, 
           //so that it can be further pushed down into the where clause.
           bool is_calculable = false;
           for (int64_t j = 0; OB_SUCC(ret) && can_push_through_winfunc_gby && j < pushed_select_exprs.count(); ++j) {
-            if (OB_FAIL(ObOptimizerUtil::expr_calculable_by_exprs(pushed_select_exprs.at(j),
-                                                                  common_exprs, true, true,
+            if (OB_FAIL(ObOptimizerUtil::expr_calculable_by_exprs(pushed_select_exprs.at(j), 
+                                                                  common_exprs, true, true, 
                                                                   is_calculable))) {
               LOG_WARN("failed to check expr calculable", K(ret));
             } else if (!is_calculable) {
@@ -7619,7 +7619,7 @@ int ObOptimizerUtil::rename_set_op_pushdown_filter(const ObSelectStmt &parent_st
   } else if (OB_FAIL(parent_stmt.get_pure_set_exprs(parent_set_exprs))) {
     LOG_WARN("failed to get expr in cast", K(ret));
   } else if (OB_FAIL(copier.add_replaced_expr(parent_set_exprs, child_select_list))) {
-    LOG_WARN("failed to add exprs", K(ret));
+    LOG_WARN("failed to add exprs", K(ret));  
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < candi_filters.count(); ++i) {
     ObRawExpr *pred = candi_filters.at(i);
@@ -8222,7 +8222,7 @@ int ObOptimizerUtil::compute_basic_sharding_info(const ObAddr &local_addr,
         } else {
           if (OB_FAIL(ObOptimizerUtil::intersect(valid_addrs, intersect_addrs, candidate_addrs))) {
             LOG_WARN("failed to intersect addrs", K(ret));
-          } else if (OB_FALSE_IT(is_replicas_same = is_replicas_same &&
+          } else if (OB_FALSE_IT(is_replicas_same = is_replicas_same && 
                                                     valid_addrs.count() == candidate_addrs.count() &&
                                                     valid_addrs.count() == intersect_addrs.count())) {
             // do nothing
@@ -8290,7 +8290,7 @@ int ObOptimizerUtil::compute_basic_sharding_info(const ObAddr &local_addr,
                                                                                intersect_addrs,
                                                                                result_sharding))) {
             LOG_WARN("failed to compute duplicate table sharding", K(ret));
-          } else if (NULL != result_sharding) {
+          } else if (NULL != result_sharding) { 
              inherit_sharding_index = i;
           }
         }
@@ -8328,7 +8328,7 @@ int ObOptimizerUtil::compute_duplicate_table_sharding(const ObAddr &local_addr,
                                                       ObIAllocator &allocator,
                                                       ObShardingInfo &src_sharding,
                                                       ObIArray<ObAddr> &valid_addrs,
-                                                      ObShardingInfo *&target_sharding)
+                                                      ObShardingInfo *&target_sharding) 
 {
   int ret = OB_SUCCESS;
   ObCandiTableLoc *phy_table_loc = NULL;
@@ -8384,10 +8384,10 @@ int ObOptimizerUtil::generate_duplicate_table_replicas(ObIAllocator &allocator,
   int ret = OB_SUCCESS;
   if (OB_ISNULL(source_table_loc)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
+    LOG_WARN("get unexpected null", K(ret)); 
   } else if (OB_UNLIKELY(1 != source_table_loc->get_partition_cnt())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected partition count", K(ret),
+    LOG_WARN("get unexpected partition count", K(ret), 
              K(source_table_loc->get_partition_cnt()));
   } else if (OB_ISNULL(target_table_loc = static_cast<ObCandiTableLoc*>(
                        allocator.alloc(sizeof(ObCandiTableLoc))))) {
@@ -8515,7 +8515,7 @@ ObPQDistributeMethod::Type ObOptimizerUtil::get_left_dist_method(const ObShardin
                                                                  const DistAlgo dist_algo)
 {
   ObPQDistributeMethod::Type dist_method = ObPQDistributeMethod::NONE;
-  if (DistAlgo::DIST_HASH_HASH == dist_algo ||
+  if (DistAlgo::DIST_HASH_HASH == dist_algo || 
       DistAlgo::DIST_HASH_HASH_LOCAL == dist_algo ||
       DistAlgo::DIST_HASH_LOCAL_PARTITION == dist_algo) {
     dist_method = ObPQDistributeMethod::HASH;
@@ -8548,7 +8548,7 @@ ObPQDistributeMethod::Type ObOptimizerUtil::get_right_dist_method(const ObShardi
                                                                   const DistAlgo dist_algo)
 {
   ObPQDistributeMethod::Type dist_method = ObPQDistributeMethod::NONE;
-  if (DistAlgo::DIST_HASH_HASH == dist_algo ||
+  if (DistAlgo::DIST_HASH_HASH == dist_algo || 
       DistAlgo::DIST_HASH_HASH_LOCAL == dist_algo ||
       DistAlgo::DIST_PARTITION_HASH_LOCAL == dist_algo) {
     dist_method = ObPQDistributeMethod::HASH;
@@ -8563,7 +8563,7 @@ ObPQDistributeMethod::Type ObOptimizerUtil::get_right_dist_method(const ObShardi
   } else if (DistAlgo::DIST_HASH_LOCAL_PARTITION == dist_algo) {
     dist_method = ObPQDistributeMethod::PARTITION_HASH;
   } else if (DistAlgo::DIST_NONE_HASH == dist_algo) {
-    dist_method = ObPQDistributeMethod::HASH;
+    dist_method = ObPQDistributeMethod::HASH;  
   } else if (DistAlgo::DIST_PULL_TO_LOCAL == dist_algo && sharding.is_sharding()) {
     dist_method = ObPQDistributeMethod::LOCAL;
   } else {
@@ -9641,7 +9641,7 @@ int ObOptimizerUtil::pushdown_and_rename_filter_into_subquery(const ObDMLStmt &p
   return ret;
 }
 
-/**
+/** 
  * If the filter is an or predicate,
  * we try to push part of it into the subquery
  * e.g.
@@ -9721,7 +9721,7 @@ int ObOptimizerUtil::split_or_filter_into_subquery(const ObDMLStmt &parent_stmt,
       if (OB_NOT_NULL(or_filter_params.at(i))) {
         or_filter_params.at(i)->~ObIArray();
       }
-    }
+    } 
   }
   return ret;
 }
@@ -9747,7 +9747,7 @@ int ObOptimizerUtil::split_or_filter_into_subquery(ObIArray<const ObDMLStmt *> &
       OB_UNLIKELY(table_ids.count() != or_filter_params.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected param count", K(ret));
-  }
+  } 
   for (int64_t i = 0; OB_SUCC(ret) && have_push_filter && i < or_filter_params.count(); ++i) {
     ObSEArray<ObRawExpr*, 4> push_filters;
     ObSEArray<ObRawExpr*, 4> remain_filters;
@@ -9757,7 +9757,7 @@ int ObOptimizerUtil::split_or_filter_into_subquery(ObIArray<const ObDMLStmt *> &
         OB_ISNULL(or_filter_params.at(i)) ||
         OB_UNLIKELY(or_filter_params.at(i)->empty())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null stmt", K(ret));
+      LOG_WARN("unexpected null stmt", K(ret));   
     } else if (OB_FAIL(pushdown_filter_into_subquery(*parent_stmts.at(i),
                                                      *subqueries.at(i),
                                                      opt_ctx,
@@ -9819,8 +9819,8 @@ int ObOptimizerUtil::split_or_filter_into_subquery(ObIArray<const ObDMLStmt *> &
   return ret;
 }
 
-/**
- * If every appearance of cte is accompanied by some filter,
+/** 
+ * If every appearance of cte is accompanied by some filter, 
  * We can combine these filters to reduce the data materialized by cte.
  * We try to push these filters to where condition.
  * If all filters can be push to where condition, nonwhere_filter will be NULL.
@@ -9861,7 +9861,7 @@ int ObOptimizerUtil::try_push_down_temp_table_filter(ObOptimizerContext &opt_ctx
       LOG_WARN("failed to push back", K(ret));
     } else if (OB_FAIL(table_ids.push_back(table->table_id_))) {
       LOG_WARN("failed to push back", K(ret));
-    }
+    } 
   }
 
   if (OB_SUCC(ret) && have_filter) {
@@ -10582,7 +10582,7 @@ int ObOptimizerUtil::is_implicit_collation_range_valid(ObItemType cmp_type,
   } else {
     LOG_TRACE("unsupport implicit collation range", K(l_collation), K(r_collation));
   }
-  return ret;
+  return ret;  
 }
 
 bool ObOptimizerUtil::is_type_for_extact_implicit_cast_range(const ObRawExprResType &res_type)
@@ -10591,7 +10591,7 @@ bool ObOptimizerUtil::is_type_for_extact_implicit_cast_range(const ObRawExprResT
          ObUIntTC == res_type.get_type_class() ||
          ObNumberTC == res_type.get_type_class() ||
          ObYearTC == res_type.get_type_class() ||
-         (res_type.is_string_type() &&
+         (res_type.is_string_type() && 
           (CS_TYPE_UTF8MB4_GENERAL_CI == res_type.get_collation_type() ||
            CS_TYPE_UTF16_GENERAL_CI == res_type.get_collation_type() ||
            CS_TYPE_UTF16LE_GENERAL_CI == res_type.get_collation_type() ||
@@ -10600,8 +10600,8 @@ bool ObOptimizerUtil::is_type_for_extact_implicit_cast_range(const ObRawExprResT
          );
 }
 
-int ObOptimizerUtil::eliminate_implicit_cast_for_range(ObRawExpr *&left,
-                                                       ObRawExpr *&right,
+int ObOptimizerUtil::eliminate_implicit_cast_for_range(ObRawExpr *&left, 
+                                                       ObRawExpr *&right, 
                                                        ObItemType cmp_type)
 {
   int ret = OB_SUCCESS;

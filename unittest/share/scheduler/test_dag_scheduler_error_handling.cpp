@@ -283,8 +283,8 @@ public:
   void set_id(int64_t id) { id_ = id; }
   AtomicOperator &get_op() { return op_; }
   void set_running() { running_ = true; }
-  virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param,
-      ObIAllocator &allocator) const override
+  virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, 
+      ObIAllocator &allocator) const override 
   {
     int ret = OB_SUCCESS;
     if (!is_inited_) {
@@ -301,8 +301,8 @@ public:
   }
   virtual lib::Worker::CompatMode get_compat_mode() const override
   { return lib::Worker::CompatMode::MYSQL; }
-  virtual uint64_t get_consumer_group_id() const override
-  { return consumer_group_id_; }
+  virtual uint64_t get_consumer_group_id() const override 
+  { return consumer_group_id_; }  
   virtual bool is_ha_dag() const override { return false; }
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, K_(is_inited), K_(type), K_(id), K(task_list_.get_size()));
 protected:

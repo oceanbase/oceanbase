@@ -36,10 +36,10 @@ namespace storage
 struct ObMLogPurgeParam
 {
 public:
-  ObMLogPurgeParam()
-    : tenant_id_(OB_INVALID_TENANT_ID),
+  ObMLogPurgeParam() 
+    : tenant_id_(OB_INVALID_TENANT_ID), 
       master_table_id_(OB_INVALID_ID),
-      purge_log_parallel_(0)
+      purge_log_parallel_(0) 
   {
   }
   bool is_valid() const

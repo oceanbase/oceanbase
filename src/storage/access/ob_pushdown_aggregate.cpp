@@ -3306,7 +3306,7 @@ int ObGroupByCell::pad_column_in_group_by(const int64_t row_cap)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGroupByCell is not inited", K(ret), K_(is_inited));
-  } else if (nullptr != group_by_col_param_ &&
+  } else if (nullptr != group_by_col_param_ && 
       group_by_col_param_->get_meta_type().is_fixed_len_char_type() &&
       OB_FAIL(storage::pad_on_datums(
               group_by_col_param_->get_accuracy(),
@@ -3314,7 +3314,7 @@ int ObGroupByCell::pad_column_in_group_by(const int64_t row_cap)
               padding_allocator_,
               row_cap,
               sql_result_datums))) {
-    LOG_WARN("Failed to pad group by column", K(ret), K(row_cap), KPC_(group_by_col_param));
+    LOG_WARN("Failed to pad group by column", K(ret), K(row_cap), KPC_(group_by_col_param));    
   }
   return ret;
 }
@@ -3365,7 +3365,7 @@ int ObGroupByCell::assign_agg_cells(const sql::ObExpr *col_expr, common::ObIArra
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGroupByCell is not inited", K(ret), K_(is_inited));
-  } else
+  } else 
   for (int64_t i = 0; OB_SUCC(ret) && i < agg_cells_.count(); ++i) {
     ObAggCell *agg_cell = agg_cells_.at(i);
     if (agg_cell->is_assigned_to_group_by_processor()) {

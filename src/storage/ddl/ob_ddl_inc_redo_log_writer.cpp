@@ -72,12 +72,12 @@ int ObDDLIncLogHandle::wait(const int64_t timeout)
       }
     }
   }
-
+  
   return ret;
 }
 
 ObDDLIncRedoLogWriter::ObDDLIncRedoLogWriter()
-  : is_inited_(false), remote_write_(false),
+  : is_inited_(false), remote_write_(false), 
     ls_id_(), tablet_id_(), ddl_inc_log_handle_(), leader_addr_(), leader_ls_id_(), buffer_(nullptr)
 {
 }
@@ -125,7 +125,7 @@ bool ObDDLIncRedoLogWriter::need_retry(int ret_code, bool allow_remote_write)
 }
 
 int ObDDLIncRedoLogWriter::write_inc_start_log(
-    const ObTabletID &lob_meta_tablet_id,
+    const ObTabletID &lob_meta_tablet_id, 
     transaction::ObTxDesc *tx_desc,
     SCN &start_scn)
 {
@@ -181,7 +181,7 @@ int ObDDLIncRedoLogWriter::write_inc_commit_log(
     transaction::ObTxDesc *tx_desc)
 {
   int ret = OB_SUCCESS;
-
+  
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
@@ -208,7 +208,7 @@ int ObDDLIncRedoLogWriter::write_inc_commit_log(
   if (OB_SUCC(ret) && remote_write_) {
     if (OB_FAIL(retry_remote_write_inc_commit_log(lob_meta_tablet_id, tx_desc))) {
       LOG_WARN("remote write inc commit log fail", K(ret), K(tablet_id_));
-    }
+    } 
   }
 
   return ret;
@@ -233,12 +233,12 @@ int ObDDLIncRedoLogWriter::wait_inc_redo_log_finish()
     }
   }
   ddl_inc_log_handle_.reset();
-
+  
   return ret;
 }
 
 int ObDDLIncRedoLogWriter::write_inc_start_log_with_retry(
-    const ObTabletID &lob_meta_tablet_id,
+    const ObTabletID &lob_meta_tablet_id, 
     transaction::ObTxDesc *tx_desc,
     share::SCN &start_scn)
 {
@@ -349,9 +349,9 @@ int ObDDLIncRedoLogWriter::get_write_store_ctx_guard(
     dml_param.snapshot_.init_none_read();
     dml_param.spec_seq_no_ = ObTxSEQ(1, 1);
     if (OB_FAIL(ls->get_write_store_ctx(*tx_desc,
-                                        dml_param.snapshot_,
-                                        dml_param.write_flag_,
-                                        ctx_guard.get_store_ctx(),
+                                        dml_param.snapshot_, 
+                                        dml_param.write_flag_, 
+                                        ctx_guard.get_store_ctx(), 
                                         dml_param.spec_seq_no_))) {
       LOG_WARN("can not get write store ctx", K(ret), K(ls_id_), K(*tx_desc));
     }
@@ -450,7 +450,7 @@ int ObDDLIncRedoLogWriter::local_write_inc_start_log(
       ob_delete(cb);
     }
   }
-
+  
   return ret;
 }
 
@@ -490,7 +490,7 @@ int ObDDLIncRedoLogWriter::local_write_inc_redo_log(
     buffer_size = log.get_serialize_size();
     if (OB_TMP_FAIL(ObDDLCtrlSpeedHandle::get_instance().limit_and_sleep(MTL_ID(), ls_id_, buffer_size, task_id, checker, real_sleep_us))) {
       LOG_WARN("fail to limit and sleep", K(tmp_ret), K(MTL_ID()), K(task_id), K(ls_id_), K(buffer_size), K(real_sleep_us));
-    }
+    } 
   }
 
   if (OB_FAIL(ret)) {
@@ -520,13 +520,13 @@ int ObDDLIncRedoLogWriter::local_write_inc_redo_log(
       cb = nullptr;
       ddl_inc_log_handle_.scn_ = scn;
     }
-  }
+  } 
   if (OB_FAIL(ret)) {
     if (nullptr != cb) {
       ob_delete(cb);
     }
   }
-
+  
   return ret;
 }
 
@@ -591,7 +591,7 @@ int ObDDLIncRedoLogWriter::local_write_inc_commit_log(
       ob_delete(cb);
     }
   }
-
+  
   return ret;
 }
 
@@ -601,7 +601,7 @@ int ObDDLIncRedoLogWriter::retry_remote_write_inc_commit_log(
 {
   int ret = OB_SUCCESS;
   int retry_cnt = 0;
-  const int64_t MAX_REMOTE_WRITE_RETRY_CNT = 800;
+  const int64_t MAX_REMOTE_WRITE_RETRY_CNT = 800; 
   while (OB_SUCC(ret)) {
     if (OB_FAIL(switch_to_remote_write())) {
       LOG_WARN("flush ls leader location failed", K(ret));
@@ -626,7 +626,7 @@ int ObDDLIncRedoLogWriter::remote_write_inc_commit_log(
 {
   int ret = OB_SUCCESS;
   ObSrvRpcProxy *srv_rpc_proxy = GCTX.srv_rpc_proxy_;
-
+  
   if (OB_ISNULL(srv_rpc_proxy)) {
     ret = OB_ERR_SYS;
     LOG_WARN("srv rpc proxy or location service is null", K(ret), KP(srv_rpc_proxy));
@@ -648,9 +648,9 @@ int ObDDLIncRedoLogWriter::remote_write_inc_commit_log(
 ObDDLIncRedoLogWriterCallback::ObDDLIncRedoLogWriterCallback()
   : is_inited_(false),
     redo_info_(),
-    macro_block_id_(),
+    macro_block_id_(), 
     block_type_(ObDDLMacroBlockType::DDL_MB_INVALID_TYPE),
-    table_key_(),
+    table_key_(), 
     task_id_(0),
     data_format_version_(0),
     direct_load_type_(DIRECT_LOAD_INVALID),
@@ -686,12 +686,12 @@ int ObDDLIncRedoLogWriterCallback::init(
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("inited twice", K(ret));
-  } else if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || block_type == DDL_MB_INVALID_TYPE ||
-                         !table_key.is_valid() || task_id == 0 || data_format_version < 0 ||
+  } else if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || block_type == DDL_MB_INVALID_TYPE || 
+                         !table_key.is_valid() || task_id == 0 || data_format_version < 0 || 
                          !is_valid_direct_load(direct_load_type) || OB_ISNULL(tx_desc) || !trans_id.is_valid() ||
                          !seq_no.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(ls_id), K(tablet_id), K(block_type), K(table_key), K(task_id), K(data_format_version),
+    LOG_WARN("invalid arguments", K(ret), K(ls_id), K(tablet_id), K(block_type), K(table_key), K(task_id), K(data_format_version), 
         K(direct_load_type), KP(tx_desc), K(trans_id), K(seq_no));
   } else if (OB_FAIL(ddl_inc_writer_.init(ls_id, tablet_id))) {
     LOG_WARN("fail to init ddl_inc_writer_", K(ret), K(ls_id), K(tablet_id));

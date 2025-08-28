@@ -96,7 +96,7 @@ int ObTenantSrs::init()
       infinite_plane_.maxX_ = INT32_MAX;
       infinite_plane_.maxY_ = INT32_MAX;
     }
-  }
+  } 
   return ret;
 }
 
@@ -161,7 +161,7 @@ int ObTenantSrs::get_srs_bounds(uint64_t srid, const ObSrsItem *srs_item, const 
     LOG_ERROR("srs item is null", K(ret));
   } else {
     const ObSrsBoundsItem *tmp_bounds = srs_item->get_bounds();
-    if (isnan(tmp_bounds->minX_) || isnan(tmp_bounds->minY_)
+    if (isnan(tmp_bounds->minX_) || isnan(tmp_bounds->minY_) 
         || isnan(tmp_bounds->maxX_) || isnan(tmp_bounds->maxY_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid bounds info", K(ret), K(srid), K(srs_item->get_srid()), K(*tmp_bounds));
@@ -271,7 +271,7 @@ int ObTenantSrs::refresh_srs(bool is_sys)
     last_snapshot = srs;
     local_version = srs->get_srs_version();
     LOG_INFO("fetch srs cache snapshot success", K(local_version), K(remote_version),
-             K(srs->get_srs_count()), K(srs_old_snapshots_.size()), K(tenant_id), K(is_sys));
+             K(srs->get_srs_count()), K(srs_old_snapshots_.size()), K(tenant_id), K(is_sys));     
   }
   return ret;
 }
@@ -397,12 +397,12 @@ void ObTenantSrs::TenantSrsUpdatePeriodicTask::runTimerTask()
     }
     if (is_user_overdue) {
       // to do:user srs refresh
-    }
+    } 
     if (old_snapshot_size > 0) {
       tenant_srs_->recycle_old_snapshots();
     }
   }
-  // timer task, ignore error code
+  // timer task, ignore error code 
   if (OB_FAIL(TG_SCHEDULE(MTL(omt::ObSharedTimer*)->get_tg_id(), *this, delay, false))) {
     LOG_WARN("schedule srs update task failed", K(ret));
   }
@@ -505,7 +505,7 @@ int ObTenantSrs::fetch_all_srs(ObSrsCacheSnapShot *&srs_snapshot, bool is_sys_sr
             result->print_info();
           }
         }
-
+        
         if (ret == OB_ITER_END) { // ob_success
           if (res_count == 0) { // empty result
             ret = OB_ERR_EMPTY_QUERY;
@@ -587,9 +587,9 @@ int ObSrsCacheSnapShot::parse_srs_item(ObMySQLResult *result, const ObSrsItem *&
   } else if (OB_FAIL(extract_bounds_numberic(result, "minY", min_y))) {
     LOG_WARN("failed to extract miny value", K(ret));
   } else if (OB_FAIL(extract_bounds_numberic(result, "maxX", max_x))) {
-    LOG_WARN("failed to extract maxx value", K(ret));
+    LOG_WARN("failed to extract maxx value", K(ret));    
   } else if (OB_FAIL(extract_bounds_numberic(result, "maxY", max_y))) {
-    LOG_WARN("failed to extract maxy value", K(ret));
+    LOG_WARN("failed to extract maxy value", K(ret));    
   } else if (OB_FAIL(ObSrsWktParser::parse_srs_wkt(allocator_, srs_id, definition, srs_info))) {
     LOG_WARN("failed to parse srs wkt from definition", K(ret), K(definition));
   } else {
@@ -648,7 +648,7 @@ int ObTenantSrs::generate_pg_reserved_srs(ObSrsCacheSnapShot *&srs_snapshot)
   } else if (OB_FAIL(srs_snapshot->add_pg_reserved_srs_item(NORTH_LAMBERT_WKT, SRID_NORTH_LAMBERT_PG))) {
     LOG_WARN("failed to parse pg reserved srs item", K(ret), K(SRID_NORTH_LAMBERT_PG));
   }
-
+ 
   // "+proj=utm +zone=%d +south +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
   for (int id = SRID_SOUTH_UTM_START_PG; id <= SRID_SOUTH_UTM_END_PG && OB_SUCC(ret); id++) {
     memset(wkt_buf, 0, MAX_WKT_LEN);
@@ -687,7 +687,7 @@ int ObTenantSrs::generate_pg_reserved_srs(ObSrsCacheSnapShot *&srs_snapshot)
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid pg srid", K(ret), K(id), K(xzone), K(yzone));
     }
-
+    
     if (OB_SUCC(ret)) {
       while (lon_0 > 180) {
         lon_0 -= 360;

@@ -73,8 +73,8 @@ int ObLocationAdapter::get_leader(const int64_t id, common::ObAddr &leader)
   return ret;
 }
 
-int ObLocationAdapter::get_leader(const uint64_t tenant_id,
-                                  const int64_t id,
+int ObLocationAdapter::get_leader(const uint64_t tenant_id, 
+                                  const int64_t id, 
                                   const bool force_renew,
                                   common::ObAddr &leader)
 {
@@ -88,7 +88,7 @@ int ObLocationAdapter::get_leader(const uint64_t tenant_id,
                                                    ls_id, force_renew, leader))) {
     if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
       CLOG_LOG(WARN, "location_service get_leader failed", K(ret), K(cluster_id), K(tenant_id), K(ls_id));
-    }
+    }  
   }
   return ret;
 }

@@ -112,7 +112,7 @@ private:
 #define DEF_VAL_FOR_SQL      \
   int ret = OB_SUCCESS;      \
   ObSqlString sql;           \
-  int64_t affected_rows = 0;
+  int64_t affected_rows = 0; 
 
 static int64_t VAL = 0;
 
@@ -191,7 +191,7 @@ void ObTxDataTableTest::check_start_tx_scn(ObTxDataTable *tx_data_table)
   // ::sleep(10);
   // MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
   // guard.switch_to(RunCtx.tenant_id_);
-
+  
   SCN pre_start_tx_scn = SCN::min_scn();
   while (!ATOMIC_LOAD(&stop)) {
     SCN start_tx_scn = SCN::min_scn();
@@ -202,7 +202,7 @@ void ObTxDataTableTest::check_start_tx_scn(ObTxDataTable *tx_data_table)
     ASSERT_LE(start_tx_scn, recycle_scn);
     pre_start_tx_scn = start_tx_scn;
     OB_LOG(INFO, "check start tx scn : ", K(start_tx_scn), K(recycle_scn));
-
+    
   //   ::sleep(1);
   }
 }
@@ -339,7 +339,7 @@ void ObTxDataTableTest::check_minor_merge()
   sqlclient::ObISQLConnection *sys_conn = nullptr;
   ASSERT_EQ(OB_SUCCESS, sys_proxy.acquire(sys_conn));
   ASSERT_NE(nullptr, sys_conn);
-
+  
   HEAP_VAR(ObMySQLProxy::MySQLResult, res)
   {
     int64_t retry_times = 10;
@@ -382,7 +382,7 @@ void ObTxDataTableTest::check_minor_merge()
       } else {
         sleep(1);
       }
-    }
+    } 
     ASSERT_EQ(0, cnt);
   }
 

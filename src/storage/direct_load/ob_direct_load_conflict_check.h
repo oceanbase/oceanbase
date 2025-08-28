@@ -33,7 +33,7 @@ public:
   TO_STRING_KV(K_(tablet_id),
                K_(table_data_desc),
                KP_(origin_table),
-               KPC_(range),
+               KPC_(range), 
                KP_(col_descs),
                KP_(datum_utils),
                KP_(dml_row_handler));
@@ -54,7 +54,7 @@ public:
   ObDirectLoadConflictCheck();
   virtual ~ObDirectLoadConflictCheck();
   int init(
-      const ObDirectLoadConflictCheckParam &param,
+      const ObDirectLoadConflictCheckParam &param, 
       ObDirectLoadIStoreRowIterator *load_iter);
   int get_next_row(const ObDirectLoadDatumRow *&datum_row);
 private:
@@ -63,7 +63,7 @@ private:
       const ObDirectLoadDatumRow *&datum_row);
   int compare(
       const ObDirectLoadDatumRow &first_row,
-      const ObDirectLoadDatumRow &second_row,
+      const ObDirectLoadDatumRow &second_row, 
       int &cmp_ret);
   int reopen_origin_scanner(const ObDirectLoadDatumRow *datum_row);
 private:
@@ -98,7 +98,7 @@ public:
   ObDirectLoadMultipleSSTableConflictCheck();
   virtual ~ObDirectLoadMultipleSSTableConflictCheck();
   int init(
-      const ObDirectLoadConflictCheckParam &param,
+      const ObDirectLoadConflictCheckParam &param, 
       const ObDirectLoadTableHandleArray &sstable_array);
   int get_next_row(const ObDirectLoadDatumRow *&datum_row) override;
 private:

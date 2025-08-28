@@ -48,7 +48,7 @@ public:
 
   static int obdal_operator_put_object_tagging(const opendal_operator *op, const char *path, const opendal_object_tagging *tagging);
   static int obdal_operator_get_object_tagging(const opendal_operator *op, const char *path, opendal_object_tagging *&tagging);
-
+    
   // tagging
   static int obdal_object_tagging_new(opendal_object_tagging *&tagging);
   static int obdal_object_tagging_set(opendal_object_tagging *tagging, const char *key, const char *value);

@@ -117,8 +117,8 @@ public:
       const uint64_t tenant_id,
       common::ObIArray<share::SCN> &compaction_scn_arr);
   static int is_first_tablet_in_sys_ls_exist(
-      common::ObISQLClient &sql_client,
-      const uint64_t tenant_id,
+      common::ObISQLClient &sql_client, 
+      const uint64_t tenant_id, 
       const SCN &compaction_scn,
       bool &is_exist);
   static int is_all_tablet_checksum_sync(

@@ -136,7 +136,7 @@ uint64_t ObLogJoin::hash(uint64_t seed) const
   seed = do_hash(join_type_, seed);
   seed = do_hash(join_algo_, seed);
   seed = do_hash(join_dist_algo_, seed);
-  if (is_nlj_without_param_down() &&
+  if (is_nlj_without_param_down() && 
       OB_NOT_NULL(get_plan()) && OB_NOT_NULL(get_plan()->get_stmt()) &&
       OB_NOT_NULL(query_ctx = get_plan()->get_stmt()->get_query_ctx()) &&
       query_ctx->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP4, COMPAT_VERSION_4_3_0,
@@ -157,7 +157,7 @@ int ObLogJoin::get_explain_name_internal(char *buf,
     ret = BUF_PRINTF("NESTED-LOOP ");
   } else if (MERGE_JOIN == join_algo_) {
     ret = BUF_PRINTF("MERGE ");
-  } else if (HASH_JOIN == join_algo_ &&
+  } else if (HASH_JOIN == join_algo_ && 
              DIST_BC2HOST_NONE == join_dist_algo_) {
     ret = BUF_PRINTF("SHARED HASH ");
   } else {
@@ -171,9 +171,9 @@ int ObLogJoin::get_explain_name_internal(char *buf,
   if(OB_SUCC(ret) && is_cartesian()) {
     ret = BUF_PRINTF("CARTESIAN ");
   }
-  if (OB_SUCC(ret) &&
-      nullptr != join_path_ &&
-      HASH_JOIN == join_algo_ &&
+  if (OB_SUCC(ret) && 
+      nullptr != join_path_ && 
+      HASH_JOIN == join_algo_ && 
       join_path_->is_naaj_) {
     if (join_path_->is_sna_) {
       ret = BUF_PRINTF("SNA");
@@ -184,7 +184,7 @@ int ObLogJoin::get_explain_name_internal(char *buf,
   return ret;
 }
 
-int ObLogJoin::get_plan_item_info(PlanText &plan_text,
+int ObLogJoin::get_plan_item_info(PlanText &plan_text, 
                                   ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
@@ -197,7 +197,7 @@ int ObLogJoin::get_plan_item_info(PlanText &plan_text,
     } else {
       END_BUF_PRINT(plan_item.operation_, plan_item.operation_len_);
     }
-  }
+  } 
   if (OB_SUCC(ret)) {
     BEGIN_BUF_PRINT;
     if (NESTED_LOOP_JOIN == get_join_algo()) {
@@ -435,13 +435,13 @@ int ObLogJoin::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_
                                               right_cost)))) {
     LOG_WARN("failed to re estimate cost", K(ret));
   } else if (OB_FAIL(join_path_->re_estimate_rows(param.join_filter_infos_,
-                                                  left_output_rows,
-                                                  right_output_rows,
+                                                  left_output_rows, 
+                                                  right_output_rows, 
                                                   card))) {
     LOG_WARN("failed to re estimate rows", K(ret));
   } else if (NESTED_LOOP_JOIN == join_algo_) {
     if (OB_FAIL(join_path_->cost_nest_loop_join(parallel,
-                                                left_output_rows,
+                                                left_output_rows, 
                                                 left_cost, 
                                                 right_output_rows, 
                                                 right_cost,
@@ -452,7 +452,7 @@ int ObLogJoin::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_
     }
   } else if(MERGE_JOIN == join_algo_) {
     if (OB_FAIL(join_path_->cost_merge_join(parallel,
-                                            left_output_rows,
+                                            left_output_rows, 
                                             left_cost, 
                                             right_output_rows, 
                                             right_cost, 
@@ -463,7 +463,7 @@ int ObLogJoin::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_
     }
   } else if(HASH_JOIN == join_algo_) {
     if (OB_FAIL(join_path_->cost_hash_join(parallel,
-                                            left_output_rows,
+                                            left_output_rows, 
                                             left_cost, 
                                             right_output_rows, 
                                             right_cost, 
@@ -507,7 +507,7 @@ int ObLogJoin::print_outline_data(PlanText &plan_text)
   if (is_late_mat()) {
     // need not print outline for late material join
   } else {
-   if (OB_ISNULL(get_plan())
+   if (OB_ISNULL(get_plan()) 
        || OB_ISNULL(stmt = get_plan()->get_stmt())
        || OB_ISNULL(left_child = get_child(first_child))
        || OB_ISNULL(right_child = get_child(second_child))
@@ -863,8 +863,8 @@ int ObLogJoin::print_join_hint_outline(const ObDMLStmt &stmt,
     LOG_WARN("fail to print join tables", K(ret));
   } else if (NULL != algo_str && OB_FAIL(BUF_PRINTF(" %s", algo_str))) {
     LOG_WARN("fail to print distribute method", K(ret));
-  } else if (NULL != algo_str &&
-             opt_ctx->is_use_auto_dop() &&
+  } else if (NULL != algo_str && 
+             opt_ctx->is_use_auto_dop() && 
              OB_FAIL(BUF_PRINTF(" %ld", parallel_))) {
     LOG_WARN("fail to print join prallel", K(ret));
   } else if (OB_FAIL(BUF_PRINTF(")"))) {
@@ -896,7 +896,7 @@ int ObLogJoin::print_join_filter_hint_outline(const ObDMLStmt &stmt,
   } else if (OB_FAIL(print_join_tables_in_hint(stmt, plan_text, left_table_set))) {
     LOG_WARN("fail to print join tables", K(ret));
   } else if (filter_table_id != child_table_id &&
-             (OB_FAIL(BUF_PRINTF(" ") ||
+             (OB_FAIL(BUF_PRINTF(" ") || 
               OB_FAIL(child_table_hint.print_table_in_hint(plan_text))))) {
     LOG_WARN("fail to print pushdown table hint", K(ret));
   }else if (OB_FAIL(BUF_PRINTF(")"))) {

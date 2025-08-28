@@ -39,7 +39,7 @@ const char* ObLogForUpdate::get_name() const
   return ret;
 }
 
-int ObLogForUpdate::get_plan_item_info(PlanText &plan_text,
+int ObLogForUpdate::get_plan_item_info(PlanText &plan_text, 
                                        ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;

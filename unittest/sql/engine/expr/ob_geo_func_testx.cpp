@@ -52,7 +52,7 @@ public:
   template <typename GeometyType1, typename GeometyType2>
   struct EvalWkbBi {
     static int eval(const ObGeometry *g1, const ObGeometry *g2, const ObGeoEvalCtx &context, int &result)
-    {
+    { 
       UNUSED(context);
       result = 0;
       result += static_cast<int>(g1->type());
@@ -64,7 +64,7 @@ public:
   template <typename GeometyType1, typename GeometyType2>
   struct EvalWkbBiGeog {
     static int eval(const ObGeometry *g1, const ObGeometry *g2, const ObGeoEvalCtx &context, int &result)
-    {
+    { 
       UNUSED(context);
       result = 0;
       result += static_cast<int>(g1->type());
@@ -72,9 +72,9 @@ public:
       return OB_SUCCESS;
     }
   };
-
+  
   OB_GEO_CART_TREE_FUNC_DEFAULT(int, OB_ERR_NOT_IMPLEMENTED_FOR_CARTESIAN_SRS);
-  OB_GEO_GEOG_TREE_FUNC_DEFAULT(int, OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS);
+  OB_GEO_GEOG_TREE_FUNC_DEFAULT(int, OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS);  
 
   // unary specialization for geographic geometrycollection
   template <>
@@ -107,7 +107,7 @@ public:
     {
       UNUSEDx(context, g1, g2);
       lib::MemoryContext mem_context;
-      CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+      CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, 
           lib::ContextParam().set_label("GIS_UT"));
       ObGeoEvalCtx gis_context(mem_context, context.get_srs());
       ObString dumy_wkb(4, 4, "dumy");

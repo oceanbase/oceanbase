@@ -67,7 +67,7 @@ int ObExprArrayRange::calc_result_typeN(ObExprResType& type,
       types_stack[i].set_calc_type(ObIntType);
     }
   } // end for
-
+  
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(exec_ctx->get_subschema_id_by_type_string(res_type_info, subschema_id))) {
     LOG_WARN("failed get subschema id", K(ret), K(res_type_info));

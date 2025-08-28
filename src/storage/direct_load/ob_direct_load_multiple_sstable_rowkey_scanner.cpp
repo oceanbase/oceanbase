@@ -169,3 +169,4 @@ int ObDirectLoadSSTableRowkeyScanner::get_next_rowkey(const ObDatumRowkey *&rowk
 
 } // namespace storage
 } // namespace oceanbase
+

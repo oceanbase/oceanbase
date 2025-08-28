@@ -24,7 +24,7 @@ class ObExprSTContains : public ObFuncExprOperator
 {
 public:
   explicit ObExprSTContains(common::ObIAllocator &alloc);
-  virtual ~ObExprSTContains();
+  virtual ~ObExprSTContains(); 
   virtual int calc_result_type2(ObExprResType &type,
                                 ObExprResType &type1,
                                 ObExprResType &type2,

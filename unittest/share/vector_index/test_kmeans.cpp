@@ -74,7 +74,7 @@ struct KmeansDataSet
   int load_dataset_test();
 
   bool need_norm();
-
+  
   using FuncPtrType = int (*)(const float* a, const float* b, const int64_t len, double& distance);
   static FuncPtrType distance_funcs[];
 
@@ -111,31 +111,31 @@ const int64_t KmeansDataSet::DIM[TYPE_MAX] =
   25,
 };
 
-const int64_t KmeansDataSet::TRAIN_COUNT[] =
+const int64_t KmeansDataSet::TRAIN_COUNT[] = 
 {
   60000L,
   1183514L,
 };
 
-const int64_t KmeansDataSet::TEST_COUNT[] =
+const int64_t KmeansDataSet::TEST_COUNT[] = 
 {
   10000L,
   10000L,
 };
 
-const char* KmeansDataSet::TRAIN_CSV_PATH[] =
+const char* KmeansDataSet::TRAIN_CSV_PATH[] = 
 {
   "./data/fashion_mnist_train.csv",
   "./data/glove_25_train.csv",
 };
 
-const char* KmeansDataSet::TEST_CSV_PATH[] =
+const char* KmeansDataSet::TEST_CSV_PATH[] = 
 {
   "./data/fashion_mnist_test.csv",
   "./data/glove_25_test.csv",
 };
 
-const char* KmeansDataSet::DISTANCES_CSV_PATH[] =
+const char* KmeansDataSet::DISTANCES_CSV_PATH[] = 
 {
   "./data/fashion_mnist_distances.csv",
   "./data/glove_25_distances.csv",
@@ -152,7 +152,7 @@ int KmeansDataSet::init(DataSetType type)
     train_count_ = TRAIN_COUNT[type];
     test_count_ = TEST_COUNT[type];
     dim_ = DIM[type];
-
+    
     if (OB_FAIL(dataset_distances_.allocate_array(allocator_, test_count_))) {
       LOG_WARN("failed to allocate array", K(ret));
     } else if (OB_FAIL(dataset_train_.allocate_array(allocator_, train_count_))) {
@@ -344,7 +344,7 @@ public:
 
   int init(KmeansDataSet *dataset, ObSingleKmeansExecutor *ctx, const int64_t list, share::ObVectorNormalizeInfo *norm_info = nullptr);
   void destroy()
-  {
+  { 
     allocator_.reset();
     tmp_allocator_.reset();
     is_inited_ = false;
@@ -430,7 +430,7 @@ int ObTestAnnSearchHelper::inner_ann_search(const int64_t idx, float *vector, co
       LOG_WARN("failed to normalize vector", K(ret));
     }
   }
-
+  
   // get the nearest nprobe centers
   float *data = norm_vector == nullptr ? vector : norm_vector;
   // get centers
@@ -554,7 +554,7 @@ int ObTestAnnSearchHelper::get_recall_value(const int64_t topk)
 //   }
 //   // build
 //   ASSERT_EQ(OB_SUCCESS, kmeans_ctx.build());
-
+  
 //   ObTestAnnSearchHelper helper;
 //   ASSERT_EQ(OB_SUCCESS, helper.init(&dataset, &kmeans_ctx, 60/*lists*/));
 //   // test top 10
@@ -589,7 +589,7 @@ int ObTestAnnSearchHelper::get_recall_value(const int64_t topk)
 //   }
 //   // build
 //   ASSERT_EQ(OB_SUCCESS, kmeans_ctx.build());
-
+  
 //   ObTestAnnSearchHelper helper;
 //   ASSERT_EQ(OB_SUCCESS, helper.init(&dataset, &kmeans_ctx, 1000/*lists*/, &norm_info));
 //   // test top 10

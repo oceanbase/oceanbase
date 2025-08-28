@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 
 #ifndef OB_EXTERNAL_TABLE_ACCESS_SERVICE_H_
 #define OB_EXTERNAL_TABLE_ACCESS_SERVICE_H_
@@ -91,7 +91,7 @@ public:
    */
   int read(char *buf, int64_t buf_len, int64_t &read_size);
   bool eof();
-
+  
   common::ObStorageType get_storage_type() { return data_access_driver_.get_storage_type(); }
 
   ObExternalDataAccessDriver &get_data_access_driver() { return data_access_driver_; }
@@ -113,7 +113,7 @@ private:
   bool    is_file_end_ = true;
   int64_t file_offset_ = 0;
   int64_t file_size_   = 0;
-
+  
   ObDecompressor *decompressor_ = nullptr;
   char *  compressed_data_      = nullptr; /// compressed data buffer
   int64_t compress_data_size_   = 0;       /// the valid data size in compressed data buffer

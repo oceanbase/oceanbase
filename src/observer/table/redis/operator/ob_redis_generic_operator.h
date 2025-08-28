@@ -50,10 +50,10 @@ private:
   int del_key(int64_t db, const ObString &key, ObRedisDataModel model, bool &exists);
   int do_expire_at_us(int64_t db, const ObString &key, int64_t expire_ts);
   int get_subkey_count_by_meta(
-    int64_t db,
-    const ObString &key,
-    const ObRedisMeta *meta,
-    ObRedisDataModel model,
+    int64_t db, 
+    const ObString &key, 
+    const ObRedisMeta *meta, 
+    ObRedisDataModel model, 
     int64_t &row_cnt);
   DISALLOW_COPY_AND_ASSIGN(GenericCommandOperator);
 };

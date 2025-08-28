@@ -274,7 +274,7 @@ int ObArchiveSchedulerService::process_(ObArchiveRoundState &round_state)
     LOG_WARN("failed to init tenant archive scheduler", K(ret), K(tenant_id));
   } else if (OB_TMP_FAIL(tenant_scheduler.checkpoint())) {
     LOG_WARN("failed to checkpoint", K(tmp_ret), K(tenant_id));
-  }
+  } 
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(archive_op.init(tenant_id))) {
@@ -305,7 +305,7 @@ int ObArchiveSchedulerService::process_(ObArchiveRoundState &round_state)
     }
   } else {
     round_state = round.state_;
-  }
+  } 
 
   if (OB_FAIL(ret)) {
   } else if (no_dest) {
@@ -314,7 +314,7 @@ int ObArchiveSchedulerService::process_(ObArchiveRoundState &round_state)
     } else if (OB_FAIL(tenant_scheduler.disable_archive(dest_no))) {
       LOG_WARN("failed to disable archive", K(ret), K(tenant_id), K(dest_no), K(dest_state));
     } else {
-      round_state.set_stopping();
+      round_state.set_stopping(); 
     }
   } else if (dest_state.is_defer()) {
     if (no_round || round.state_.is_stop() || round.state_.is_suspend() || round.state_.is_suspending()) {
@@ -393,14 +393,14 @@ void ObArchiveSchedulerService::set_checkpoint_interval_(const int64_t interval_
       idle_time_us = max_idle_us;
     }
   }
-
+  
   if (idle_time_us > FAST_IDLE_INTERVAL_US
-    && (round_state.is_prepare()
-      || round_state.is_beginning()
+    && (round_state.is_prepare() 
+      || round_state.is_beginning() 
       || round_state.is_suspending()
       || round_state.is_stopping())) {
     idle_time_us = FAST_IDLE_INTERVAL_US;
-  }
+  } 
 
   if (idle_time_us != get_idle_time()) {
     FLOG_INFO("change idle_time_us", "idle_time_ts_", get_idle_time(), K(idle_time_us));

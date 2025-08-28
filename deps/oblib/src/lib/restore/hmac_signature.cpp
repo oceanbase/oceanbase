@@ -216,8 +216,8 @@ struct Compare
 };
 
 int sign_request(
-    ObArray<std::pair<const char *, const char *>> params,
-    const char *method, char *signature,
+    ObArray<std::pair<const char *, const char *>> params, 
+    const char *method, char *signature, 
     const int64_t signature_buf_len)
 {
   int ret = OB_SUCCESS;
@@ -256,9 +256,9 @@ int sign_request(
       if (OB_ISNULL(first) || OB_ISNULL(second)) {
         ret = OB_INVALID_ARGUMENT;
         OB_LOG(WARN, "params is not allowed to be nullptr", K(ret), K(first), KP(second), K(i));
-      } else if (MEMCMP(first, "ObSignature", strlen(first)) == 0
+      } else if (MEMCMP(first, "ObSignature", strlen(first)) == 0 
                  || MEMCMP(first, "ObSignatureKey", strlen(first)) == 0
-                 || MEMCMP(first, "ObSignatureSecret", strlen(first)) == 0
+                 || MEMCMP(first, "ObSignatureSecret", strlen(first)) == 0 
                  || MEMCMP(first, "UID", strlen(first)) == 0
                  || MEMCMP(first, "OpSource", strlen(first)) == 0) {
         if (MEMCMP(first, "ObSignatureSecret", strlen(first)) == 0) {

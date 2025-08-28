@@ -106,11 +106,11 @@ public:
   {}
   virtual ~CommandOperator() {}
 
-  int process_table_batch_op(const ObTableBatchOperation &req_ops,
+  int process_table_batch_op(const ObTableBatchOperation &req_ops, 
                              ResultFixedArray &results,
-                             ObRedisMeta *meta = nullptr,
+                             ObRedisMeta *meta = nullptr, 
                              uint8_t flags = RedisOpFlags::NONE,
-                             common::ObIAllocator *allocator = nullptr,
+                             common::ObIAllocator *allocator = nullptr, 
                              ObITableEntityFactory* entity_factory = nullptr,
                              ObIArray<ObTabletID> *tablet_ids = nullptr);
   int process_table_multi_batch_op(const ObTableMultiBatchRequest &req,
@@ -194,17 +194,17 @@ protected:
       ObString &subkey);
   int get_insert_ts_from_entity(const ObITableEntity &entity, int64_t &insert_ts);
   int del_complex_key(
-      ObRedisDataModel model,
-      int64_t db,
-      const common::ObString &key,
-      bool del_meta,
+      ObRedisDataModel model, 
+      int64_t db, 
+      const common::ObString &key, 
+      bool del_meta, 
       bool& is_exist);
   int build_del_query(int64_t db, const ObString &key, ObTableQuery &query);
   int build_del_ops(ObRedisDataModel model,
                     int db,
                     const ObString &key,
-                    const ObTableQuery &query,
-                    ObTableBatchOperation &del_ops,
+                    const ObTableQuery &query, 
+                    ObTableBatchOperation &del_ops, 
                     ObRedisMeta *meta = nullptr);
   int delete_results(const ResultFixedArray &results,
                      const ObArray<ObRowkey> &rowkeys,
@@ -225,14 +225,14 @@ protected:
   int reply_batch_res(const ResultFixedArray &batch_res);
   // for group service
   int get_group_metas(ObIAllocator &allocator, ObRedisDataModel model, ObIArray<ObRedisMeta *> &metas);
-  virtual int fill_set_batch_op(const ObRedisOp &op,
-                                ObIArray<ObTabletID> &tablet_ids,
+  virtual int fill_set_batch_op(const ObRedisOp &op, 
+                                ObIArray<ObTabletID> &tablet_ids, 
                                 ObTableBatchOperation &batch_op);
   int group_get_complex_type_data(const ObString &property_name, ResultFixedArray &batch_res);
   ObTableOperation put_or_insup(const ObITableEntity &entity);
   int put_or_insup(const ObITableEntity &entity, ObTableBatchOperation& batch_op);
   bool can_use_put(const ObITableEntity &entity);
-
+  
 protected:
   static const ObString COUNT_STAR_PROPERTY;  // count(*)
   ObRedisCtx &redis_ctx_;

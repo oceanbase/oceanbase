@@ -185,7 +185,7 @@ protected:
   int encode_index_to_buffer_(const common::ObIArray<IndexType> &index_list, blocksstable::ObBufferWriter &buffer_writer);
   template <class IndexType, class IndexIndexType>
   int write_index_list_(const ObBackupBlockType &block_type, const common::ObIArray<IndexType> &index_list);
-  template <class IndexType>
+  template <class IndexType> 
   int write_compressed_data_(const common::ObIArray<IndexType> &index_list, const ObCompressorType &compressor_type,
       blocksstable::ObSelfBufferWriter &buffer_writer, int64_t &data_length, int64_t &data_zlength);
   int write_backup_file_header_(const ObBackupFileType &file_type);
@@ -306,7 +306,7 @@ private:
 // 5. Building Multi-Level Tree: Construct a multi-level tree structure using the flushed macro block indexes as leaf nodes. This tree will allow for quick retrieval of specific macro blocks during incremental backups when reusing existing blocks is necessary.
 // By following these steps, we can achieve a totally ordered list of macro block indexes across all backup data files and efficiently access them when needed for incremental backups.
 
-// TODO(yanfeng): comments need include an estimated space calculation method and examples actual sizes.
+// TODO(yanfeng): comments need include an estimated space calculation method and examples actual sizes. 
 
 class ObBackupUnorderdMacroBlockIndexMerger : public ObIBackupIndexMerger
 {
@@ -333,7 +333,7 @@ private:
   int prepare_merge_ctx_(const ObBackupIndexMergeParam &merge_param, common::ObISQLClient &sql_proxy,
       common::ObInOutBandwidthThrottle &bandwidth_throttle, common::ObIArray<ObIMacroBlockIndexIterator *> &merge_iters);
   virtual int prepare_macro_block_iterators_(
-      const ObBackupIndexMergeParam &merge_param, const common::ObIArray<ObBackupRetryDesc> &retry_list,
+      const ObBackupIndexMergeParam &merge_param, const common::ObIArray<ObBackupRetryDesc> &retry_list, 
       common::ObISQLClient &sql_proxy, common::ObIArray<ObIMacroBlockIndexIterator *> &iterators);
   int prepare_prev_backup_set_index_iter_(
       const ObBackupIndexMergeParam &merge_param, common::ObISQLClient &sql_proxy, ObIMacroBlockIndexIterator *&iter);

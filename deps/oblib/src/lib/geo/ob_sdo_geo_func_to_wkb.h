@@ -38,7 +38,7 @@ public:
   explicit ObSdoGeoToWkb(ObIAllocator *allocator, ObSrsType srs_type = ObSrsType::PROJECTED_SRS,
                          bool normalize = true, bool oracle_3d_format = false, bool is_deduce_dim = false)
       : buffer_(allocator), is_multi_visit_(false), allocator_(allocator),
-        srs_type_(srs_type), need_normalize_(normalize), is_3d_geo_(false),
+        srs_type_(srs_type), need_normalize_(normalize), is_3d_geo_(false), 
         oracle_3d_format_(oracle_3d_format), is_deduce_dim_(is_deduce_dim)
   {}
   ~ObSdoGeoToWkb()
@@ -61,7 +61,7 @@ private:
   int append_num_with_endian(T data, uint64_t len);
   int normalize_point(double &lon, double &lat);
   int append_collection(ObSdoGeoObject *geo);
-  int inner_append_rectangle(double lower_left_x, double lower_left_y, double upper_right_x,
+  int inner_append_rectangle(double lower_left_x, double lower_left_y, double upper_right_x, 
                             double upper_right_y, uint64_t sdo_etype, bool is_ccw, double fix_z = NAN, int swap_idx = 2);
   int append_3D_rectangle(double x1, double y1, double x2, double y2, double fix_z, uint64_t sdo_etype, int fix_idx);
   ObGeoStringBuffer buffer_;

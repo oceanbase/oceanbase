@@ -90,7 +90,7 @@ public:
   int32_t dec(Node* node) { return ATOMIC_AAF(&node->uref_, -1); }
 };
 
-// Doc:
+// Doc: 
 // class Key must implement compare() and hash() function.
 // class Value must derived from LinkHashValue<Key>
 template<typename Key, typename Value, typename AllocHandle=AllocHandle<Key, Value>, typename RefHandle=RefHandle, int64_t SHRINK_THRESHOLD = 8>

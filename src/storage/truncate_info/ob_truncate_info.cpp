@@ -994,7 +994,7 @@ int ObTruncateInfo::deep_copy(
 }
 
 int ObTruncateInfo::shallow_copy(ObTruncateInfo &dest)
-{
+{  
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_INVALID_DATA;

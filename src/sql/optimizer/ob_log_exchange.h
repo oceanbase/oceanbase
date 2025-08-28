@@ -183,15 +183,15 @@ public:
 
   void set_random_expr(ObRawExpr *expr) { random_expr_ = expr; }
   ObRawExpr *get_random_expr() const { return random_expr_; }
-  virtual int get_plan_item_info(PlanText &plan_text,
+  virtual int get_plan_item_info(PlanText &plan_text, 
                                 ObSqlPlanItem &plan_item) override;
-  int get_plan_special_expr_info(PlanText &plan_text,
+  int get_plan_special_expr_info(PlanText &plan_text, 
                                  ObSqlPlanItem &plan_item);
-  int get_plan_distribution(PlanText &plan_text,
+  int get_plan_distribution(PlanText &plan_text, 
                             ObSqlPlanItem &plan_item);
-  int print_annotation_keys(char *buf,
-                            int64_t &buf_len,
-                            int64_t &pos,
+  int print_annotation_keys(char *buf, 
+                            int64_t &buf_len, 
+                            int64_t &pos, 
                             ExplainType type,
                             const ObIArray<ObRawExpr *> &keys);
   inline void set_in_server_cnt(int64_t in_server_cnt) {  in_server_cnt_ = in_server_cnt;  }

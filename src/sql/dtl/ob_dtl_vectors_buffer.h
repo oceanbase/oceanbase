@@ -37,8 +37,8 @@ struct ObVectorSegment
                                       nulls_(nullptr) {}
   static const int32_t MAX_ROW_CNT = 512;
   static int64_t get_bit_vector_size()
-  {
-    return ObBitVector::memory_size(MAX_ROW_CNT);
+  { 
+    return ObBitVector::memory_size(MAX_ROW_CNT); 
   }
   int append_col_in_one_row(const ObExpr &expr,
                             const bool is_fixed_len,
@@ -195,7 +195,7 @@ public:
   int32_t get_read_rows() const { return read_rows_; }
   int32_t get_remain_rows() const { return get_row_cnt() - read_rows_; }
   void inc_read_rows(int32_t read_rows) { read_rows_ += read_rows; }
-  void update_row_cnt(int64_t row_cnt) { *row_cnt_ = row_cnt; }
+  void update_row_cnt(int64_t row_cnt) { *row_cnt_ = row_cnt; } 
 private:
   char *buf_;
   int32_t *magic_;

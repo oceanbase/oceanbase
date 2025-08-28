@@ -82,12 +82,12 @@ public:
 
   // for diagnose
   int add_diagnose_tablet(
-      const share::ObLSID &ls_id,
-      const ObTabletID &tablet_id,
+      const share::ObLSID &ls_id, 
+      const ObTabletID &tablet_id, 
       const share::ObDiagnoseTabletType type);
   int get_diagnose_tablets(ObIArray<ObDiagnoseTablet> &diagnose_tablets);
   int delete_diagnose_tablet(
-      const share::ObLSID &ls_id,
+      const share::ObLSID &ls_id, 
       const ObTabletID &tablet_id,
       const share::ObDiagnoseTabletType type);
   void remove_diagnose_tablets(

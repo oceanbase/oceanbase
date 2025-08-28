@@ -335,16 +335,16 @@ public:
       uint32_t &lock_tid);
   static const int64_t DEFAULT_RETRY_TIMEOUT_US = 60L * 1000L * 1000L; // 1min
   static bool need_retry(int ret_code);
-  static int  write_block_to_disk(const storage::ObDDLMacroBlockRedoInfo &redo_info,
+  static int  write_block_to_disk(const storage::ObDDLMacroBlockRedoInfo &redo_info, 
                                   const share::ObLSID &ls_id,
-                                  blocksstable::ObMacroBlockHandle &macro_handle,
+                                  blocksstable::ObMacroBlockHandle &macro_handle, 
                                   blocksstable::MacroBlockId &block_id);
   const share::ObLSID &get_ls_id() const { return ls_id_; }
   const ObTabletID &get_tablet_id() const { return tablet_id_; }
 
 #ifdef OB_BUILD_SHARED_STORAGE
   static int write_gc_flag(ObTabletHandle &tablet_handle,
-                           const ObITable::TableKey &table_key,
+                           const ObITable::TableKey &table_key, 
                            const int64_t parallel_cnt,
                            const int64_t cg_cnt);
   int write_finish_log_with_retry(
@@ -353,12 +353,12 @@ public:
       bool &is_remote_write);
 
   int write_finish_log(
-      const bool allow_remote_write,
+      const bool allow_remote_write, 
       const ObDDLFinishLog &log,
       bool &is_remote_write);
   int wait_finish_log(
-      const share::ObLSID &ls_id,
-      const ObITable::TableKey &table_key,
+      const share::ObLSID &ls_id, 
+      const ObITable::TableKey &table_key, 
       const uint64_t data_format_version);
 #endif
 private:
@@ -414,7 +414,7 @@ private:
   int remote_write_ddl_finish_log(
       const obrpc::ObRpcRemoteWriteDDLFinishLogArg &arg);
   /* TODO @zhuoran.zzr wait to upload & update tablet meta in one func, use deep copy to avoid lock problem*/
-  int upload_tablet(const ObDDLFinishLog &finish_log, ObTablet &shared_tablet,
+  int upload_tablet(const ObDDLFinishLog &finish_log, ObTablet &shared_tablet, 
                     ObArenaAllocator &allocator, const bool is_remote_write);
 #endif
 private:
@@ -469,7 +469,7 @@ private:
   bool is_column_group_info_valid() const;
   int inner_write(const ObDDLMacroBlockRedoInfo &redo_info);
   int write_redo_info_array();
-  int retry(const int64_t timeout_us,
+  int retry(const int64_t timeout_us, 
             const ObDDLMacroBlockRedoInfo &redo_info,
             const blocksstable::MacroBlockId &macro_block_id);
 private:

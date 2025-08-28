@@ -188,7 +188,7 @@ bool ObMemberListInfo::check_exist(const common::ObAddr &addr)
 }
 
 int ObCompactionLocalityCache::refresh_by_zone(
-    const share::ObLSInfo &ls_info,
+    const share::ObLSInfo &ls_info, 
     const ObIArray<common::ObZone> &zone_list)
 {
   int ret = OB_SUCCESS;

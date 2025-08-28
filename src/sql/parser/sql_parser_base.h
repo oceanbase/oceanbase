@@ -1047,7 +1047,7 @@ int STORE_PARAM_NODE_NEED_PARAMETERIZE(ParamList *param,
     }                                                                       \
   } while (0);
 
-// bugfix:
+// bugfix: 
 // convert '%' to '%%' for printf's format string.
 #define ESCAPE_PERCENT(result, src, dst)\
 do {\

@@ -298,7 +298,7 @@ int ObDropFTSIndexTask::check_switch_succ()
 
     // 主表存在，并且fts,multivalue索引不存在了，doc-id列从主表中移除
     // 否则可能出现小概率的dml的时候，schema没有刷新，导致cg阶段多了doc-id列
-    if (tmp_ret == OB_SUCCESS
+    if (tmp_ret == OB_SUCCESS 
         && OB_ISNULL(data_table_schema)
         && doc_id_col_id != OB_INVALID_ID) {
       // do nothing

@@ -626,7 +626,7 @@ int ObTableLoadInstance::wait_begin_finish()
 {
   int ret = OB_SUCCESS;
   ObTableLoadCoordinator coordinator(table_ctx_);
-
+ 
   if (OB_FAIL(coordinator.init())) {
     LOG_WARN("fail to init coordinator", KR(ret));
   } else {

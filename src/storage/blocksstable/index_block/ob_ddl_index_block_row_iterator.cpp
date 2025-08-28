@@ -170,7 +170,7 @@ int ObDDLIndexBlockRowIterator::locate_range(const ObDatumRange &range,
     is_iter_start_ = true;
     is_iter_finish_ = false;
   }
-  LOG_TRACE("Locate range in ddl block by range", K(ret), K(range), KPC(this));
+  LOG_TRACE("Locate range in ddl block by range", K(ret), K(range), KPC(this));  
   return ret;
 }
 
@@ -617,7 +617,7 @@ int ObDDLSStableAllRangeIterator::locate_range(const ObDatumRange &range,
     is_iter_start_ = true;
     is_iter_finish_ = false;
   }
-  LOG_TRACE("Locate range in ddl merge sstable", K(ret), K(range), KPC(this));
+  LOG_TRACE("Locate range in ddl merge sstable", K(ret), K(range), KPC(this));  
   return ret;
 }
 
@@ -719,7 +719,7 @@ int ObDDLSStableAllRangeIterator::get_index_row_count(const ObDatumRange &range,
     ObMicroIndexRowItem tmp_index_item;
     int64_t tmp_row_offset = 0;
     ObArenaAllocator idx_row_allocator("DDL_Row_Cnt", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-    while (OB_SUCC(ret)) {
+    while (OB_SUCC(ret)) {      
       if (OB_FAIL(tmp_index_macro_iter.get_next_idx_row(idx_row_allocator, tmp_index_item, tmp_row_offset, tmp_reach_cursor_end))) {
         if (OB_ITER_END != ret) {
         LOG_WARN("fail to get next idx info", K(ret), K(tmp_index_item), K(tmp_reach_cursor_end), K(tmp_index_macro_iter));
@@ -1650,7 +1650,7 @@ int ObDDLMergeBlockRowIterator::supply_consume()
       }
     }
   }
-
+  
   if (OB_SUCC(ret)) {
     // if no new items pushed, the rebuild will quickly exit
     if (OB_FAIL(endkey_merger_->rebuild())) {
@@ -1736,7 +1736,7 @@ int ObDDLMergeBlockRowIterator::inner_get_next(const ObIndexBlockRowHeader *&idx
               skip_iter = true;
             }
           }
-
+          
           if (OB_SUCC(ret) && !is_reverse_scan_) { // not_reverse_scan can quit early
             int tmp_cmp_ret = 0;
             if (OB_FAIL(endkey.compare(query_range_.get_end_key(), *datum_utils_, tmp_cmp_ret))) {
@@ -1969,7 +1969,7 @@ int ObDDLMergeBlockRowIterator::locate_first_endkey()
                   if (tmp_cmp_ret == 0) {
                     find = true;
                   }
-
+                            
                   ObIndexBlockRowIterator *cur_iter = iters_.at(top_item->iter_idx_);
                   bool tmp_is_iter_end = false;
                   if (OB_ISNULL(cur_iter)) {

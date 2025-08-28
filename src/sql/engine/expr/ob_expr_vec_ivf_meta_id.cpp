@@ -80,3 +80,4 @@ int ObExprVecIVFMetaID::generate_meta_id(
 
 }  // namespace sql
 }  // namespace oceanbase
+

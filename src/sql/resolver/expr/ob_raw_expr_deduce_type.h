@@ -128,7 +128,7 @@ private:
                                   bool &need_add_cast);
   int set_agg_regr_result_type(ObAggFunRawExpr &expr, ObExprResType &result_type);
   int set_xmlagg_result_type(ObAggFunRawExpr &expr, ObExprResType& result_type);
-
+  
   int set_agg_xmlagg_result_type(ObAggFunRawExpr &expr, ObExprResType& result_type);
   int set_array_agg_result_type(ObAggFunRawExpr &expr, ObExprResType& result_type);
 

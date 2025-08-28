@@ -118,15 +118,15 @@ struct Data2Compare
     oracle.reset();
   }
   TO_STRING_KV(K(ret), K(sys), K(meta), K(mysql), K(oracle));
-  bool operator == (const Data2Compare &data) const
+  bool operator == (const Data2Compare &data) const 
   {
-    return ret == data.ret && sys == data.sys && meta == data.meta && mysql == data.mysql
+    return ret == data.ret && sys == data.sys && meta == data.meta && mysql == data.mysql 
       && oracle == data.oracle;
   }
 };
 OB_SERIALIZE_MEMBER(Data2Compare, ret, sys, meta, mysql, oracle);
 Data2Compare parallel_data;
-#define ALL_CORE_TABLE_SQL "select * from oceanbase.%s where table_name in ('__all_table', '__all_column') and column_name not in ('schema_version', 'gmt_create', 'gmt_modified') order by table_name, row_id, column_name"
+#define ALL_CORE_TABLE_SQL "select * from oceanbase.%s where table_name in ('__all_table', '__all_column') and column_name not in ('schema_version', 'gmt_create', 'gmt_modified') order by table_name, row_id, column_name" 
 #define TABLE_SQL "select * from oceanbase.%s where table_id < 500000 and schema_version < (select column_value from oceanbase.__all_core_table where column_name='baseline_schema_version') "
 #define ALL_TABLE_SQL TABLE_SQL "order by table_id"
 #define ALL_COLUMN_SQL TABLE_SQL "order by table_id, column_id"
@@ -151,7 +151,7 @@ public:
   int dump_data(Data2Compare &data);
   int run(const bool enable_parallel_tenant_creation, Data2Compare &data);
 };
-int ObCreateTenantCompareTest::start_observer(bool enable_parallel_tenant_creation)
+int ObCreateTenantCompareTest::start_observer(bool enable_parallel_tenant_creation) 
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(cluster_.get()));
@@ -235,7 +235,7 @@ int ObCreateTenantCompareTest::dump_data(Data2Compare &data)
   uint64_t mysql_tenant_id = OB_INVALID_TENANT_ID;
   uint64_t oracle_tenant_id = OB_INVALID_TENANT_ID;
   data.reset();
-  OZ (get_curr_simple_server().init_sql_proxy2("sys", "oceanbase", false/*oracle_mode*/,
+  OZ (get_curr_simple_server().init_sql_proxy2("sys", "oceanbase", false/*oracle_mode*/, 
         ObMySQLConnection::OCEANBASE_MODE));
   OZ (dump_tenant_data(OB_SYS_TENANT_ID, data.sys, data.allocator));
   OZ (create_tenant("mysql", "2G", "2G"));
@@ -278,7 +278,7 @@ TEST_F(ObCreateTenantCompareTest, compare_tables)
 }
 
 // load parallel_data from PARALLEL_DATA_FILE
-void run_as_parent()
+void run_as_parent() 
 {
   int64_t buf_size = 0;
   int ret = 0;
@@ -365,7 +365,7 @@ int main(int argc, char *argv[])
       run_as_parent();
       ::testing::InitGoogleTest(&argc, argv);
       return RUN_ALL_TESTS();
-    }
+    } 
   }
   return 0;
 }

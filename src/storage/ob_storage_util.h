@@ -355,8 +355,8 @@ inline static common::ObDatumCmpFuncType get_datum_cmp_func(const common::ObObjM
 struct ObDatumComparator
 {
 public:
-  ObDatumComparator(const ObDatumCmpFuncType cmp_func, int &ret, bool &equal, bool reverse=false)
-    : cmp_func_(cmp_func),
+  ObDatumComparator(const ObDatumCmpFuncType cmp_func, int &ret, bool &equal, bool reverse=false) 
+    : cmp_func_(cmp_func), 
       ret_(ret),
       equal_(equal),
       reverse_(reverse)
@@ -392,13 +392,13 @@ enum class ObFilterInCmpType {
 };
 
 inline ObFilterInCmpType get_filter_in_cmp_type(
-  const int64_t row_count,
+  const int64_t row_count, 
   const int64_t param_count,
   const bool is_sorted_dict)
 {
   // BINARY_HASH_THRESHOLD: means the threshold to choose BINARY_SEARCH or HASH_SEARCH
   // When the dictionary is unordered, the only variable available for iteration is param_count.
-  // Testing has shown that when the data size is small, the overhead of binary search is
+  // Testing has shown that when the data size is small, the overhead of binary search is 
   // lower than the overhead of computing hashes.
   // Therefore, this threshold is temporarily set to a small value(8).
   static constexpr int64_t BINARY_HASH_THRESHOLD = 8;

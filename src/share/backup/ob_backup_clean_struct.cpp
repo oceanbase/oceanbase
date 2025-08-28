@@ -425,7 +425,7 @@ bool ObBackupCleanTaskAttr::is_valid() const
   } else if (!status_.is_valid()) {
     is_valid = false;
   } else if (0 == backup_path_.size()) {
-    is_valid = false;
+    is_valid = false; 
   } else {
     is_valid = ObBackupCleanTaskType::is_valid(task_type_)
         && job_id_ >= 0
@@ -625,4 +625,4 @@ int ObDeletePolicyAttr::assign(const ObDeletePolicyAttr &other)
 bool ObDeletePolicyAttr::is_valid() const
 {
   return OB_INVALID_TENANT_ID != tenant_id_ && 0 != strlen(policy_name_);
-}
+} 

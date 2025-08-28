@@ -19,17 +19,17 @@ using namespace sql;
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
 
-int ObLogUpdate::get_plan_item_info(PlanText &plan_text,
+int ObLogUpdate::get_plan_item_info(PlanText &plan_text, 
                                     ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObLogDelUpd::get_plan_item_info(plan_text, plan_item))) {
     LOG_WARN("failed to get plan item info", K(ret));
   } else {
-    BEGIN_BUF_PRINT;
+    BEGIN_BUF_PRINT; 
     if (OB_FAIL(print_table_infos(ObString::make_string("table_columns"),
-                                  buf,
-                                  buf_len,
+                                  buf, 
+                                  buf_len, 
                                   pos,
                                   type))) {
       LOG_WARN("failed to print table infos", K(ret));
@@ -73,7 +73,7 @@ int ObLogUpdate::get_plan_item_info(PlanText &plan_text,
     if (OB_SUCC(ret) && get_das_dop() > 0) {
       ret = BUF_PRINTF(", das_dop=%ld", this->get_das_dop());
     }
-    END_BUF_PRINT(plan_item.special_predicates_,
+    END_BUF_PRINT(plan_item.special_predicates_, 
                   plan_item. special_predicates_len_);
   }
   return ret;

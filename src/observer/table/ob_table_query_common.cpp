@@ -182,7 +182,7 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
       if (tb_ctx.is_ttl_table()) {
         normal_result_iter->set_limit(query.get_limit());
         normal_result_iter->set_offset(query.get_offset());
-      }
+      } 
       // set aggregate params
       if (query.is_aggregate_query()) {
         normal_result_iter->init_aggregation();
@@ -340,8 +340,8 @@ int ObTableQueryUtils::get_table_schemas(ObSchemaGetterGuard& schema_guard,
     } else if (OB_FAIL(schema_guard.get_table_schemas_in_tablegroup(arg_tenant_id, tablegroup_id, table_schemas))) {
       LOG_WARN("Failed to get table schemas from table group", K(ret), K(arg_tenant_id), K(tablegroup_id));
     } else {
-      // Proceed to initialize multi_cf_infos_ with the tables in the table group
-      // The table_schemas array now contains the schemas of all tables in the table group
+      // Proceed to initialize multi_cf_infos_ with the tables in the table group  
+      // The table_schemas array now contains the schemas of all tables in the table group  
     }
   } else { // handle table name case
     const schema::ObSimpleTableSchemaV2* simple_table_schema = nullptr;
@@ -349,7 +349,7 @@ int ObTableQueryUtils::get_table_schemas(ObSchemaGetterGuard& schema_guard,
                                                       arg_database_id,
                                                       arg_table_name,
                                                       false, /* is_index */
-                                                      simple_table_schema))) {
+                                                      simple_table_schema))) {  
       LOG_WARN("Failed to get simple table schema", K(ret), K(arg_tenant_id),
                 K(arg_database_id), K(arg_table_name));
     } else if (OB_ISNULL(simple_table_schema) || simple_table_schema->get_table_id() == OB_INVALID_ID) {

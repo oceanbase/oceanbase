@@ -166,7 +166,7 @@ int ObExprPrivSTCovers::eval_st_covers_common(const ObExpr &expr, ObEvalCtx &ctx
         if (OB_NOT_NULL(const_param_cache)) {
           if (gis_arg1->is_static_const_) {
             cache_geo = const_param_cache->get_cached_geo(0);
-            if (cache_geo == NULL
+            if (cache_geo == NULL 
               && OB_FAIL(ObGeoTypeUtil::create_cached_geometry(*const_param_cache->get_allocator(),
                                                                 temp_allocator,
                                                                 const_param_cache->get_const_param_cache(0),

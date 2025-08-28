@@ -599,11 +599,11 @@ int ObSrvNetworkFrame::reload_ssl_config()
         if (!use_bkmi && !use_sm &&OB_FAIL(extract_expired_time(OB_SSL_CERT_FILE, ssl_key_expired_time))) {
           OB_LOG(WARN, "extract_expired_time intl failed", K(ret), K(use_bkmi));
         }
-        #ifdef OB_USE_BABASSL
+        #ifdef OB_USE_BABASSL 
           else if (!use_bkmi && use_sm && OB_FAIL(extract_expired_time(OB_SSL_SM_ENC_CERT_FILE, ssl_key_expired_time))) {
           OB_LOG(WARN, "extract_expired_time sm failed", K(ret), K(use_bkmi));
         }
-        #endif
+        #endif 
          else if (OB_FAIL(net_.load_ssl_config(use_bkmi, use_sm, ca_cert,
             public_cert, private_key, enc_cert, enc_private_key))) {
           OB_LOG(WARN, "load_ssl_config failed", K(ret), K(use_bkmi), K(use_sm));
@@ -635,7 +635,7 @@ int ObSrvNetworkFrame::reload_ssl_config()
             }
             if (OB_SUCC(ret)) {
               const int OB_EASY_RPC_SSL_CTX_ID = 0;
-              if (OB_FAIL(create_ssl_ctx(OB_EASY_RPC_SSL_CTX_ID, !use_bkmi, use_sm,
+              if (OB_FAIL(create_ssl_ctx(OB_EASY_RPC_SSL_CTX_ID, !use_bkmi, use_sm, 
                                           ca_cert, public_cert, private_key, NULL, NULL))) {
                 LOG_ERROR("create ssl ctx failed", K(OB_EASY_RPC_SSL_CTX_ID), K(ret));
               } else if (OB_FAIL(ob_add_client_CA_list_from_sys_table(ussl_get_server_ctx(OB_EASY_RPC_SSL_CTX_ID)))) {
@@ -743,7 +743,7 @@ void ObSrvNetworkFrame::set_ratelimit_enable(int ratelimit_enabled)
   rpc_transport_->set_ratelimit_enable(ratelimit_enabled);
   batch_rpc_transport_->set_ratelimit_enable(ratelimit_enabled);
 }
-
+	
 void ObSrvNetworkFrame::sql_nio_stop()
 {
   if (NULL != obmysql::global_sql_nio_server) {

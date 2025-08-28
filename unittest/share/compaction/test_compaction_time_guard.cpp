@@ -31,9 +31,9 @@ public:
   virtual ~TestCompactionTimeGuard() {}
 };
 
-TEST_F(TestCompactionTimeGuard, basic_time_guard)
+TEST_F(TestCompactionTimeGuard, basic_time_guard) 
 {
-  const uint16_t CAPACITY = ObCompactionTimeGuard::CAPACITY;
+  const uint16_t CAPACITY = ObCompactionTimeGuard::CAPACITY; 
   const uint64_t current_time = common::ObTimeUtility::current_time();
   ObCompactionTimeGuard time_guard;
   // construction
@@ -83,7 +83,7 @@ TEST_F(TestCompactionTimeGuard, basic_time_guard)
     ASSERT_EQ(summary_guard.event_times_[i], time_guard.event_times_[i] * 4 * CAPACITY);
     ASSERT_EQ(summary_guard.event_times_[i], other_guard.event_times_[i] *  4 * CAPACITY);
   }
-
+  
   // reuse
   ObCompactionTimeGuard* guards[3] = {&time_guard, &other_guard, &summary_guard};
   for (int i = 0; i < 3; i++) {
@@ -134,7 +134,7 @@ TEST_F(TestCompactionTimeGuard, time_guard_to_string)
   ASSERT_EQ(ObRSCompactionTimeGuard::COMPACTION_EVENT_MAX, rs_guard.size_);
   rs_guard.event_times_[ObRSCompactionTimeGuard::CKM_VERIFICATION] += 2 * ObCompactionTimeGuard::WARN_THRESHOLD;
   STORAGE_LOG(INFO, "rs guard is", K(rs_guard));
-
+  
   ObCompactionScheduleTimeGuard schedule_guard;
   for (uint16_t i = 0; i < ObCompactionScheduleTimeGuard::COMPACTION_EVENT_MAX; i++) {
     schedule_guard.click(i);

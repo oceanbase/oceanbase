@@ -701,7 +701,7 @@ TEST_F(TestIndexBlockAggregator, min_max_agg_from_encoder)
 
   // cs encoder min_max
   aggregator.reuse();
-  reset_min_max_row();
+  reset_min_max_row();  
   const ObSkipIndexAggResult *agg_row = nullptr;
   ObDatumRow generate_row;
   ASSERT_EQ(OB_SUCCESS, generate_row.init(full_column_count_));
@@ -840,7 +840,7 @@ TEST_F(TestIndexBlockAggregator, min_max_agg_calc_with_prefix)
 
   {
     // same datum
-    auto verify = [] (const ObDatum &l_datum, const ObDatum &r_datum, ObColMinAggregator &min_agg, ObColMaxAggregator &max_agg)
+    auto verify = [] (const ObDatum &l_datum, const ObDatum &r_datum, ObColMinAggregator &min_agg, ObColMaxAggregator &max_agg) 
     {
       int cmp_ret = 0;
       // min
@@ -878,7 +878,7 @@ TEST_F(TestIndexBlockAggregator, min_max_agg_calc_with_prefix)
 
   {
     // different length
-    auto verify = [] (const ObDatum &l_datum, const ObDatum &r_datum, ObColMinAggregator &min_agg, ObColMaxAggregator &max_agg)
+    auto verify = [] (const ObDatum &l_datum, const ObDatum &r_datum, ObColMinAggregator &min_agg, ObColMaxAggregator &max_agg) 
     {
       int cmp_ret = 0;
       // min
@@ -917,7 +917,7 @@ TEST_F(TestIndexBlockAggregator, min_max_agg_calc_with_prefix)
 
   {
     // different length with same prefix
-    auto verify = [] (const ObDatum &l_datum, const ObDatum &r_datum, ObColMinAggregator &min_agg, ObColMaxAggregator &max_agg)
+    auto verify = [] (const ObDatum &l_datum, const ObDatum &r_datum, ObColMinAggregator &min_agg, ObColMaxAggregator &max_agg) 
     {
       int cmp_ret = 0;
       // min

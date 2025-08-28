@@ -90,7 +90,7 @@ int ObTabletCreatorArg::init(
 {
   int ret = OB_SUCCESS;
   bool is_valid = ls_key.is_valid() && table_schemas.count() > 0
-                  && table_schemas.count() == tablet_ids.count()
+                  && table_schemas.count() == tablet_ids.count() 
                   && tenant_data_version > 0
                   && need_create_empty_majors.count() == table_schemas.count();
   for (int64_t i = 0; i < tablet_ids.count() && is_valid; i++) {
@@ -123,7 +123,7 @@ int ObTabletCreatorArg::init(
 DEF_TO_STRING(ObTabletCreatorArg)
 {
   int64_t pos = 0;
-  J_KV(K_(compat_mode), K_(tablet_ids), K_(data_tablet_id), K_(ls_key), K_(table_schemas), K_(is_create_bind_hidden_tablets),
+  J_KV(K_(compat_mode), K_(tablet_ids), K_(data_tablet_id), K_(ls_key), K_(table_schemas), K_(is_create_bind_hidden_tablets), 
     K_(tenant_data_version), K_(need_create_empty_majors), K_(create_commit_versions), K_(has_cs_replica));
   return pos;
 }
@@ -131,7 +131,7 @@ DEF_TO_STRING(ObTabletCreatorArg)
 /////////////////////////////////////////////////////////
 
 int ObBatchCreateTabletHelper::init(
-  const share::ObLSID &ls_key,
+  const share::ObLSID &ls_key, 
   const int64_t tenant_id,
   const SCN &major_frozen_scn,
   const bool need_check_tablet_cnt)
@@ -216,7 +216,7 @@ int ObBatchCreateTabletHelper::add_table_schema_(
      * so the `__pk_increment` cg will be the FIRST cg when compaction, which cause data inconsistency.
      *
      * So we need to sort column array by column id for heap table when creating tablet.
-     *
+     * 
      * testcases:
      * - tools/deploy/mysql_test/test_suite/column_store_replica/t/drop_heap_table_primary_key.test
      * - tools/deploy/mysql_test/test_suite/column_store_replica/t/drop_heap_table_primary_key_oracle.test
@@ -253,8 +253,8 @@ int ObBatchCreateTabletHelper::add_table_schema_(
       LOG_WARN("failed to push back table schema", KR(ret), K(table_schema));
     } else if (tenant_data_version >= DATA_VERSION_4_3_5_0 && OB_FAIL(ObSplitPartitionHelper::get_split_src_tablet_id_if_any(table_schema, split_src_tablet_id))) {
       LOG_WARN("failed to get split src tablet id", K(ret), K(table_schema));
-    } else if (OB_FAIL(create_tablet_extr_info.init(tenant_data_version,
-                                                    need_create_empty_major,
+    } else if (OB_FAIL(create_tablet_extr_info.init(tenant_data_version, 
+                                                    need_create_empty_major, 
                                                     table_schema.get_micro_index_clustered(),
                                                     split_src_tablet_id))) {
       LOG_WARN("init create table extra info failed", K(ret), K(tenant_data_version), K(need_create_empty_major), K(table_schema));
@@ -269,7 +269,7 @@ int ObBatchCreateTabletHelper::add_table_schema_(
 }
 
 int ObBatchCreateTabletHelper::try_add_table_schema(
-    const share::schema::ObTableSchema *table_schema,
+    const share::schema::ObTableSchema *table_schema, 
     const uint64_t tenant_data_version,
     const bool need_create_empty_major,
     int64_t &index,

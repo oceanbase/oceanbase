@@ -38,7 +38,7 @@ int ObBasicStatsEstimator::estimate(const ObOptStatGatherParam &param,
   ObArenaAllocator allocator("ObBasicStatsEst", OB_MALLOC_NORMAL_BLOCK_SIZE, param.tenant_id_);
   ObSqlString raw_sql;
   int64_t duration_time = -1;
-  bool use_plan_cache = dst_opt_stats.count() == 1 && !param.partition_infos_.empty() &&
+  bool use_plan_cache = dst_opt_stats.count() == 1 && !param.partition_infos_.empty() && 
                         !param.sample_info_.is_specify_sample();
   // Note that there are dependences between different kinds of statistics
   //            1. RowCount should be added at the first
@@ -794,7 +794,7 @@ int ObBasicStatsEstimator::estimate_stale_partition(ObExecContext &ctx,
             LOG_WARN("failed to push back part ids occurred in monitor_modified", K(ret));
           } else if (OB_FAIL(add_var_to_array_no_dup(monitor_modified_part_ids, cur_part_id))) {
             LOG_WARN("failed to push back part ids occurred in monitor_modified", K(ret));
-          // cacl inc_mod_count in order
+          // cacl inc_mod_count in order 
           } else if (ObDbmsStatsUtils::is_subpart_id(partition_infos, dst_partition, dst_part_id)) {
             has_subpart_invalid_inc |= inc_mod_count < 0;
             if (cur_part_id == dst_part_id) {
@@ -1446,9 +1446,9 @@ int ObBasicStatsEstimator::get_async_gather_stats_tables(ObExecContext &ctx,
                                                          ObIArray<AsyncStatTable> &stat_tables)
 {
   int ret = OB_SUCCESS;
-  //  avoid too many index tablet-id,
+  //  avoid too many index tablet-id, 
   // set 11*10^12 as max_tablet_id from experiments
-  const int64_t MAX_TABLE_TABLET_ID = 110000000000000000 ;
+  const int64_t MAX_TABLE_TABLET_ID = 110000000000000000 ; 
   ObSqlString select_sql;
   if (OB_FAIL(select_sql.append_fmt(
           "SELECT table_id, tablet_id, avg(changed_ratio) over (partition by table_id)  ratio from "\
@@ -1524,7 +1524,7 @@ int ObBasicStatsEstimator::get_async_gather_stats_tables(ObExecContext &ctx,
         }
       }
     }
-
+    
     LOG_TRACE("succeed to get async gather stats tables", K(ret), K(stat_tables));
   }
   return ret;
@@ -1561,14 +1561,14 @@ int ObBasicStatsEstimator::fill_partition_info(ObIAllocator &allocator,
     ObSqlString raw_sql_str;
     const int64_t buf_len = 512;
     char buf[buf_len];
-
+    
     if (param.stat_level_ == PARTITION_LEVEL) {
       if (OB_FAIL(raw_sql_str.append("WHERE "))) {
         LOG_WARN("failed to append fmt", K(ret));
       } else if (OB_FAIL(raw_sql_str.append_fmt(fmt_str, param.tab_name_.length(), param.tab_name_.ptr(),
                                                 4, "PART", part_info.part_id_))) {
         LOG_WARN("failed to append fmt", K(ret));
-      }
+      } 
       LOG_TRACE("Succeed to fill partition condition info", K(raw_sql_str));
     } else if (param.stat_level_ == SUBPARTITION_LEVEL) {
       if (OB_FAIL(raw_sql_str.append("WHERE "))) {
@@ -1724,7 +1724,7 @@ int ObBasicStatsEstimator::estimate_skip_rate(ObExecContext &ctx,
         LOG_TRACE("OPT:basic id_skip_rate_map", K(partition_id), K(skip_rate_stat->cg_skip_rate_arr_));
       }
     }
-
+    
     // process global skip rate
     if (OB_SUCC(ret) && (param.part_level_ == share::schema::PARTITION_LEVEL_ONE ||
                          param.part_level_ == share::schema::PARTITION_LEVEL_TWO)) {

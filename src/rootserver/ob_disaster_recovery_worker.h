@@ -860,7 +860,7 @@ private:
       const DRServerStatInfo &server_stat_info,
       const DRUnitStatInfo &unit_stat_info,
       const DRUnitStatInfo &unit_in_group_stat_info,
-      const ObReplicaMember &dst_member,
+      const ObReplicaMember &dst_member, 
       DRLSInfo &dr_ls_info,
       int64_t &acc_dr_task);
 

@@ -123,9 +123,9 @@ int HashTable<Bucket, Prober>::set(
     }
     collisions++;
   }
-  LOG_DEBUG("insert row", KP(row_ptr), KP(bucket), K(pos), K(hash_val), K(salt),
+  LOG_DEBUG("insert row", KP(row_ptr), KP(bucket), K(pos), K(hash_val), K(salt), 
         "row", ToStrCompactRow(ctx.build_row_meta_, *row_ptr, ctx.build_output_),
-        "row_meta", ctx.build_row_meta_);
+        "row_meta", ctx.build_row_meta_); 
   return ret;
 }
 
@@ -424,7 +424,7 @@ template <typename Bucket, typename Prober>
 void HashTable<Bucket, Prober>::find_batch(
     JoinTableCtx &ctx, uint16_t &unmatched_cnt, bool is_del_matched)
 {
-  // to find batch rows in buckets where salt is matched.
+  // to find batch rows in buckets where salt is matched. 
   Bucket *bucket = NULL;
   uint64_t pos;
   uint64_t *hash_vals = ctx.probe_batch_rows_->hash_vals_;
@@ -452,7 +452,7 @@ void HashTable<Bucket, Prober>::find_batch(
     }
   }
   unmatched_cnt = unmatched_idx;
-
+   
   if (std::is_same<Bucket, GenericBucket>::value || std::is_same<Bucket, RobinBucket>::value) {
     for (int64 i = 0; i < unmatched_cnt; i++) {
       __builtin_prefetch(&ctx.unmatched_rows_[i], 0, 3);
@@ -870,7 +870,7 @@ int GenericSharedHashTable::insert_batch(JoinTableCtx &ctx,
                         1 , 3);
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
-    ret = atomic_set(ctx,
+    ret = atomic_set(ctx, 
                     stored_rows[i]->get_hash_value(row_meta),
                      row_meta,
                      stored_rows[i],
@@ -925,9 +925,9 @@ inline int GenericSharedHashTable::atomic_set(JoinTableCtx &ctx, const uint64_t 
     }
     collisions++;
   }
-  LOG_DEBUG("insert row", KP(row_ptr), KP(bucket), K(pos), K(hash_val), K(salt), K(added),
+  LOG_DEBUG("insert row", KP(row_ptr), KP(bucket), K(pos), K(hash_val), K(salt), K(added), 
         "row", ToStrCompactRow(ctx.build_row_meta_, *row_ptr, ctx.build_output_),
-        "row_meta", ctx.build_row_meta_);
+        "row_meta", ctx.build_row_meta_); 
 
   return ret;
 }
@@ -1001,9 +1001,9 @@ inline int NormalizedSharedHashTable<T>::atomic_set(JoinTableCtx &ctx, const uin
     }
     collisions++;
   }
-  LOG_DEBUG("insert row", KP(row_ptr), KP(bucket), K(pos), K(hash_val), K(salt), K(added),
+  LOG_DEBUG("insert row", KP(row_ptr), KP(bucket), K(pos), K(hash_val), K(salt), K(added), 
         "row", ToStrCompactRow(ctx.build_row_meta_, *row_ptr, ctx.build_output_),
-        "row_meta", ctx.build_row_meta_);
+        "row_meta", ctx.build_row_meta_); 
 
   return ret;
 }

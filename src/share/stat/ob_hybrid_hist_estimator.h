@@ -65,7 +65,7 @@ public:
   int64_t get_num_distinct() { return num_distinct_; }
   int64_t get_pop_count() { return pop_count_; }
   int64_t get_pop_freq() { return pop_freq_; }
-  void set_total_count(int64_t total_count)
+  void set_total_count(int64_t total_count) 
   {
     total_count_ = total_count;
   }

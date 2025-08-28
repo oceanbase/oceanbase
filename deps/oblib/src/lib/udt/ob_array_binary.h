@@ -39,13 +39,13 @@ public :
   int print_element_at(ObStringBuffer &format_str, uint32_t idx) const;
 
   int32_t get_data_binary_len()
-  {
+  { 
     int32_t len = 0;
     if (this->data_container_ == NULL) {
       if (this->length_ > 0) {
         uint32_t last_idx = this->length_ - 1;
         len = this->length_ * sizeof(uint8_t) + this->length_ * sizeof(uint32_t) + this->offsets_[last_idx];
-      }
+      } 
     } else {
       len = sizeof(uint8_t) * data_container_->null_bitmaps_.size()
                                         + sizeof(uint32_t) * data_container_->offsets_.size()
@@ -69,7 +69,7 @@ public :
   void clear();
   int flatten(ObArrayAttr *attrs, uint32_t attr_count, uint32_t &attr_idx);
   int compare(const ObIArrayType &right, int &cmp_ret) const;
-  int compare_at(uint32_t left_begin, uint32_t left_len, uint32_t right_begin, uint32_t right_len,
+  int compare_at(uint32_t left_begin, uint32_t left_len, uint32_t right_begin, uint32_t right_len,  
                  const ObIArrayType &right, int &cmp_ret) const;
   bool sort_cmp(uint32_t idx_l, uint32_t idx_r) const;
   template<typename T>
@@ -95,8 +95,8 @@ public :
   int overlaps(const ObIArrayType &other, bool &bret) const;
   int clone_empty(ObIAllocator &alloc, ObIArrayType *&output, bool read_only = true) const;
   int distinct(ObIAllocator &alloc, ObIArrayType *&output) const;
-  int push_not_in_set(const ObArrayBinary *arr_bin_ptr,
-          hash::ObHashSet<ObString> &elem_set,
+  int push_not_in_set(const ObArrayBinary *arr_bin_ptr, 
+          hash::ObHashSet<ObString> &elem_set, 
           bool &arr_contain_null,
           const bool &contain_null);
   int except(ObIAllocator &alloc, ObIArrayType *arr2, ObIArrayType *&output) const;
@@ -128,11 +128,11 @@ public :
           if (this->is_null(i)) {
             // do nothing
           } else if (OB_FAIL(arr_data->push_back((*this)[i]))) {
-            OB_LOG(WARN, "push null failed", K(ret));
+            OB_LOG(WARN, "push null failed", K(ret)); 
           }
         } else if (this->is_null(i)) {
           if (OB_FAIL(arr_data->push_null())) {
-            OB_LOG(WARN, "push null failed", K(ret));
+            OB_LOG(WARN, "push null failed", K(ret)); 
           }
         } else if ((*this)[i] != *str && OB_FAIL(arr_data->push_back((*this)[i]))) {
           OB_LOG(WARN, "failed to add element", K(ret));

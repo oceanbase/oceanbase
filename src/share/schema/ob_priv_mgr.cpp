@@ -73,7 +73,7 @@ const char *ObPrivMgr::priv_names_[] = {
     "TRIGGER",
     "LOCK TABLES",                // index 45
     "ENCRYPT",                    // index 46
-    "DECRYPT",                    // index 47
+    "DECRYPT",                    // index 47  
     "PROXY",                      // index 48
     "EVENT",                      // index 49
     "CREATE CATALOG",             // index 50
@@ -816,13 +816,13 @@ int ObPrivMgr::add_column_priv(const ObColumnPriv &column_priv)
                                                       ObColumnPriv::cmp_by_id,
                                                       ObColumnPriv::equal_by_id,
                                                       replaced_column_priv))) {
-    LOG_WARN("Failed to put column_priv into column_priv_sort_by_id vector", K(ret));
+    LOG_WARN("Failed to put column_priv into column_priv_sort_by_id vector", K(ret));  
   } else if (OB_FAIL(column_privs_sort_by_name_.replace(new_column_priv,
                                           iter,
                                           ObColumnPriv::cmp_by_sort_key,
                                           ObColumnPriv::equal_by_sort_key,
                                           replaced_column_priv))) {
-    LOG_WARN("Failed to put column_priv into column_priv vector", K(ret));
+    LOG_WARN("Failed to put column_priv into column_priv vector", K(ret));                                
   }
 
   // ignore ret
@@ -868,7 +868,7 @@ int ObPrivMgr::del_column_priv(const ObColumnPrivIdKey &column_priv_key)
   int ret = OB_SUCCESS;
 
   ObColumnPriv *column_priv = NULL;
-  if (OB_FAIL(column_privs_sort_by_id_.remove_if(column_priv_key,
+  if (OB_FAIL(column_privs_sort_by_id_.remove_if(column_priv_key, 
                                                  ObColumnPriv::cmp_by_id_key,
                                                  ObColumnPriv::equal_by_id_key,
                                                  column_priv))) {
@@ -888,7 +888,7 @@ int ObPrivMgr::del_column_priv(const ObColumnPrivIdKey &column_priv_key)
              "column_priv", column_priv_key.priv_id_,
              K(ret));
   }
-
+  
   ObColumnPriv *column_priv_from_name_vec = NULL;
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(column_priv)) {
@@ -1340,7 +1340,7 @@ int ObPrivMgr::get_column_priv_by_id(const uint64_t tenant_id,
         //do nothing
       } else {
         column_priv = col_priv;
-      }
+      } 
     }
   }
   return ret;
@@ -1355,7 +1355,7 @@ int ObPrivMgr::get_column_priv_id(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   column_priv_id = OB_INVALID_ID;
-  if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == user_id
+  if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == user_id 
       || db.length() == 0 || table.length() == 0 || column.length() == 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument exist", K(tenant_id), K(user_id), K(db), K(table), K(column), K(ret));

@@ -21,7 +21,7 @@ namespace sql
 {
 //This expression is used to extract double to int range.
 //inner_double_to_int(val)
-//for example: inner_double_to_int(9.223372036854776e+18) = 9223372036854775296
+//for example: inner_double_to_int(9.223372036854776e+18) = 9223372036854775296 
 //             inner_double_to_int(9.223372036854776e+18) = INT64_MAX
 class ObExprInnerDoubleToInt : public ObFuncExprOperator
 {

@@ -22,7 +22,7 @@ namespace oceanbase
 {
 namespace sql
 {
-class
+class 
 ObExprPrivSTDWithin : public ObFuncExprOperator
 {
 public:

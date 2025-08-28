@@ -51,7 +51,7 @@ int ObExprVecIVFPQCenterVector::calc_result_typeN(ObExprResType &type,
     LOG_WARN("failed to get collection subschema id", K(ret));
   } else {
     type.set_collection(subschema_id);
-  }
+  } 
   return ret;
 }
 
@@ -149,3 +149,4 @@ int ObExprVecIVFPQCenterVector::generate_pq_center_vector(
 
 }  // namespace sql
 }  // namespace oceanbase
+

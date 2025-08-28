@@ -33,7 +33,7 @@ namespace pl
  * @param result
  * @return
  *
- * precreate_time:
+ * precreate_time: 
  *   Use the max value between specified precreate_time and table precreate_time for partition precreation.
  *   NULL means use table precreate_time.
  *
@@ -170,7 +170,7 @@ int ObDBMSPartition::get_and_check_params_(
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid precreate time", KR(ret), K(precreate_time_num));
       }
-    }
+    }    
 
     // get and check time_unit
     if (OB_SUCC(ret) && !params.at(1).is_null()) {

@@ -23,7 +23,7 @@ namespace common {
 const double NOSCI_MIN_DOUBLE = 1E-8;
 const double NOSCI_MAX_DOUBLE = 1E15;
 
-int ObGeoToWktVisitor::append_double_with_prec(char *buff,
+int ObGeoToWktVisitor::append_double_with_prec(char *buff, 
                                                const int32_t buff_size,
                                                uint64_t &out_len,
                                                double value,
@@ -32,7 +32,7 @@ int ObGeoToWktVisitor::append_double_with_prec(char *buff,
   const int64_t number_str_size = 256;
   const int64_t number_val_size = number::ObNumber::MAX_BYTE_LEN;
   const int64_t expr_max_size = 10; // 6 is enough, e-323 or e+308
-
+  
   int ret = OB_SUCCESS;
   char number_str[number_str_size] = {0};
   char expr_str[expr_max_size] = {0};
@@ -42,7 +42,7 @@ int ObGeoToWktVisitor::append_double_with_prec(char *buff,
   // set force scientific notation
   bool force_sci = (abs_value < NOSCI_MIN_DOUBLE) || (abs_value > NOSCI_MAX_DOUBLE);
 
-  out_len = ob_gcvt_strict(value, ob_gcvt_arg_type::OB_GCVT_ARG_DOUBLE, number_str_size,
+  out_len = ob_gcvt_strict(value, ob_gcvt_arg_type::OB_GCVT_ARG_DOUBLE, number_str_size, 
                            number_str, NULL, FALSE, TRUE, force_sci);
   int64_t expr_pos = 0; // expr start pos;
   if (out_len > 0) {
@@ -74,7 +74,7 @@ int ObGeoToWktVisitor::append_double_with_prec(char *buff,
     LOG_WARN("error expr length", K(ret), K(out_len), K(expr_pos), K(expr_len), K(decimal_len));
   } else if (OB_FAIL(number_value.from(number_str, decimal_len, tmp_allocator))) {
     LOG_WARN("number from str failed", K(ret));
-  } else if (OB_FAIL(number_value.format(number_str,
+  } else if (OB_FAIL(number_value.format(number_str, 
                                          number_str_size,
                                          new_decimal_len,
                                          scale))) {
@@ -117,7 +117,7 @@ int ObGeoToWktVisitor::append_double_with_prec(char *buff,
 }
 
 // need to reserve buff before
-int ObGeoToWktVisitor::convert_double_to_str(char* buff, uint64_t buff_size, double val, bool has_scale,
+int ObGeoToWktVisitor::convert_double_to_str(char* buff, uint64_t buff_size, double val, bool has_scale, 
                                         int16_t scale, bool is_oracle_mode, uint64_t &out_len)
 {
   int ret = OB_SUCCESS;
@@ -235,7 +235,7 @@ int ObGeoToWktVisitor::appendLine(T_IBIN *geo)
   return ret;
 }
 
-// Assume that each number has a length of PREPARE_DIGITS_IN_DOUBLE
+// Assume that each number has a length of PREPARE_DIGITS_IN_DOUBLE 
 //  to estimate polygon wkt lenth, not true length
 template<typename T_IBIN, typename T_BIN,
          typename T_BIN_RING, typename T_BIN_INNER_RING>
@@ -713,7 +713,7 @@ int ObGeoToWktVisitor::appendTypeNameWithMode(T_IBIN *geo) {
   return ret;
 }
 
-int ObGeoToWktVisitor::append_double_oracle(char *buff,
+int ObGeoToWktVisitor::append_double_oracle(char *buff, 
                                             const int32_t buff_size,
                                             uint64_t &out_len,
                                             double value)

@@ -792,7 +792,7 @@ int ObCreateTableHelper::generate_table_schema_()
     LOG_WARN("fail to generate schema, not support enable_macro_block_bloom_filter for this version",
              KR(ret), K(tenant_id_), K(compat_version), K(arg_));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "this version not support enable_macro_block_bloom_filter");
-  } else if (compat_version < DATA_VERSION_4_3_5_2 &&
+  } else if (compat_version < DATA_VERSION_4_3_5_2 && 
             !is_storage_cache_policy_default(arg_.schema_.get_storage_cache_policy())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("fail to generate schema, not support storage_cache_policy for this version",
@@ -993,7 +993,7 @@ int ObCreateTableHelper::generate_aux_table_schemas_()
 {
   int ret = OB_SUCCESS;
   HEAP_VAR(ObTableSchema, index_schema) {
-
+    
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_UNLIKELY(new_tables_.count() <= 0)) {
@@ -2073,8 +2073,8 @@ int ObCreateTableHelper::create_tables_()
       } else if (OB_FAIL(schema_service_impl->get_table_sql_service().insert_temp_table_info(
                  get_trans_(), new_table))) {
         LOG_WARN("insert_temp_table_info failed", KR(ret), K(new_table));
-      } else if (new_table.is_vec_delta_buffer_type() &&
-                 OB_FAIL(ObVectorIndexUtil::add_dbms_vector_jobs(get_trans_(), new_table.get_tenant_id(),
+      } else if (new_table.is_vec_delta_buffer_type() && 
+                 OB_FAIL(ObVectorIndexUtil::add_dbms_vector_jobs(get_trans_(), new_table.get_tenant_id(), 
                                                                  new_table.get_table_id(),
                                                                  new_table.get_exec_env()))) {
         LOG_WARN("failed to add dbms_vector jobs", K(ret), K(new_table.get_tenant_id()), K(new_table));
@@ -2205,9 +2205,9 @@ int ObCreateTableHelper::create_tablets_()
                    tenant_id_,
                    frozen_scn,
                    get_trans_());
-
-    // use the external_trans as sql_proxy if not null,
-    // to ensure that changes in the current DDL transaction can be queried
+    
+    // use the external_trans as sql_proxy if not null, 
+    // to ensure that changes in the current DDL transaction can be queried 
     common::ObISQLClient *sql_proxy = get_external_trans_();
     if (sql_proxy == NULL) {
       sql_proxy = sql_proxy_;
@@ -2282,9 +2282,9 @@ int ObCreateTableHelper::create_tablets_()
       if (OB_FAIL(ret)) {
       } else if (schemas.count() > 0) {
         const ObTableSchema &data_table = new_tables_.at(0);
-        if (OB_FAIL(new_table_tablet_allocator.prepare(get_trans_(),
-                                                       data_table,
-                                                       data_tablegroup_schema,
+        if (OB_FAIL(new_table_tablet_allocator.prepare(get_trans_(), 
+                                                       data_table, 
+                                                       data_tablegroup_schema, 
                                                        false,  /* is_add_partition */
                                                        get_external_trans_() == NULL ? NULL : &latest_schema_guard_))) {
           LOG_WARN("fail to prepare ls for data table", KR(ret));

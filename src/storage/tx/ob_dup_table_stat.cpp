@@ -11,7 +11,7 @@
 #include "ob_dup_table_stat.h"
 #include "storage/tx/ob_dup_table_tablets.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
 namespace transaction
 {
@@ -87,7 +87,7 @@ void ObDupTableLSTabletSetStat::set_from_change_status(
       default:
         set_state(TabletSetState::INVALID);
     }
-
+    
     set_trx_ref(tmp_status->trx_ref_);
     set_change_scn(tmp_status->tablet_change_scn_);
     set_readable_scn(tmp_status->readable_version_);
@@ -154,3 +154,4 @@ const ObString &get_dup_tablet_set_state_str(const TabletSetState state)
 
 } // namespace transaction
 } // namespace oceanbase
+

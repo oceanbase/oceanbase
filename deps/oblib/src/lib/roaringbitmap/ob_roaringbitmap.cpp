@@ -471,7 +471,7 @@ int ObRoaringBitmap::subset(ObRoaringBitmap *res_rb,
   return ret;
 }
 
-int ObRoaringBitmap::optimize()
+int ObRoaringBitmap::optimize() 
 {
   int ret = OB_SUCCESS;
   uint64_t cardinality = get_cardinality();

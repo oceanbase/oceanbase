@@ -38,7 +38,7 @@ public:
     GIS,
     MAX_MOD
   };
-  ObModuleDataArg() :
+  ObModuleDataArg() : 
     op_(ObInfoOpType::INVALID_OP),
     target_tenant_id_(OB_INVALID_TENANT_ID),
     module_(ObExecModule::INVALID_MOD),

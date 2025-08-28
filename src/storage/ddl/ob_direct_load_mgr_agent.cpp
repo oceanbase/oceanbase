@@ -47,8 +47,8 @@ int ObDirectLoadMgrAgent::init(
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_UNLIKELY(context_id <= 0
-      || !ls_id.is_valid()
+  } else if (OB_UNLIKELY(context_id <= 0 
+      || !ls_id.is_valid() 
       || !tablet_id.is_valid())
       || !is_valid_direct_load(type)) {
     ret = OB_INVALID_ARGUMENT;
@@ -256,7 +256,7 @@ int ObDirectLoadMgrAgent::fill_sstable_slice_for_sn(
       (void) ATOMIC_AAF(&insert_monitor->scanned_row_cnt_, affected_rows % 100);
       (void) ATOMIC_AAF(&insert_monitor->inserted_row_cnt_, affected_rows % 100);
       (void) ATOMIC_AAF(&insert_monitor->inserted_cg_row_cnt_, cgs_count_ * (affected_rows % 100));
-    }
+    } 
   }
   return ret;
 }
@@ -493,7 +493,7 @@ int ObDirectLoadMgrAgent::fill_lob_meta_sstable_slice_for_ss(
 }
 
 int ObDirectLoadMgrAgent::close_sstable_slice(
-    const ObDirectLoadSliceInfo &slice_info,
+    const ObDirectLoadSliceInfo &slice_info, 
     ObInsertMonitor *insert_monitor,
     blocksstable::ObMacroDataSeq &next_seq)
 {
@@ -515,7 +515,7 @@ int ObDirectLoadMgrAgent::close_sstable_slice(
 }
 
 int ObDirectLoadMgrAgent::close_sstable_slice_for_sn(
-    const ObDirectLoadSliceInfo &slice_info,
+    const ObDirectLoadSliceInfo &slice_info, 
     ObInsertMonitor *insert_monitor,
     blocksstable::ObMacroDataSeq &next_seq)
 {
@@ -530,7 +530,7 @@ int ObDirectLoadMgrAgent::close_sstable_slice_for_sn(
 }
 
 int ObDirectLoadMgrAgent::close_sstable_slice_for_ss(
-    const ObDirectLoadSliceInfo &slice_info,
+    const ObDirectLoadSliceInfo &slice_info, 
     ObInsertMonitor *insert_monitor,
     blocksstable::ObMacroDataSeq &next_seq)
 {
@@ -624,3 +624,5 @@ int ObDirectLoadMgrAgent::update_max_lob_id(const int64_t lob_id)
   }
   return ret;
 }
+
+

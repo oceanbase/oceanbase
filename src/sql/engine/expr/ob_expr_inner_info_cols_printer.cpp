@@ -280,7 +280,7 @@ int ObExprInnerInfoColsCharNamePrinter::eval_column_char_name(const ObExpr &expr
   } else {
     ObCharsetType charset = ObCharset::charset_type_by_coll(static_cast<ObCollationType> (collation_type->get_int()));
     if(ob_is_varchar_char_type(static_cast<ObObjType> (data_type->get_int()),
-                               static_cast<ObCollationType> (collation_type->get_int()))
+                               static_cast<ObCollationType> (collation_type->get_int())) 
       || ob_is_enum_or_set_type(static_cast<ObObjType> (data_type->get_int()))
       || ob_is_text(static_cast<ObObjType> (data_type->get_int()),
                     static_cast<ObCollationType> (collation_type->get_int()))) {
@@ -290,7 +290,7 @@ int ObExprInnerInfoColsCharNamePrinter::eval_column_char_name(const ObExpr &expr
         OZ(deep_copy_ob_string(res_alloc, expr_datum.get_string(), res));
         expr_datum.set_string(res);
     } else {
-      expr_datum.set_null();
+      expr_datum.set_null();           
     }
   }
   return ret;
@@ -355,7 +355,7 @@ int ObExprInnerInfoColsCollNamePrinter::eval_column_collation_name(const ObExpr 
   } else {
     ObCharsetType charset = ObCharset::charset_type_by_coll(static_cast<ObCollationType> (collation_type->get_int()));
     if(ob_is_varchar_char_type(static_cast<ObObjType> (data_type->get_int()),
-                               static_cast<ObCollationType> (collation_type->get_int()))
+                               static_cast<ObCollationType> (collation_type->get_int())) 
       || ob_is_enum_or_set_type(static_cast<ObObjType> (data_type->get_int()))
       || ob_is_text(static_cast<ObObjType> (data_type->get_int()),
                     static_cast<ObCollationType> (collation_type->get_int()))) {
@@ -365,7 +365,7 @@ int ObExprInnerInfoColsCollNamePrinter::eval_column_collation_name(const ObExpr 
         OZ(deep_copy_ob_string(res_alloc, expr_datum.get_string(), res));
         expr_datum.set_string(res);
     } else {
-      expr_datum.set_null();
+      expr_datum.set_null();           
     }
   }
   return ret;
@@ -482,8 +482,8 @@ int ObExprInnerInfoColsPrivPrinter::eval_column_priv(const ObExpr &expr, ObEvalC
 int ObExprInnerInfoColsPrivPrinter::fill_col_privs(share::schema::ObSchemaGetterGuard &schema_guard,
                                                    const ObSessionPrivInfo &session_priv,
                                                    const common::ObIArray<uint64_t> &enable_role_id_array,
-                                                   ObNeedPriv &need_priv,
-                                                   ObPrivSet priv_set,
+                                                   ObNeedPriv &need_priv, 
+                                                   ObPrivSet priv_set, 
                                                    const char *priv_str,
                                                    char* buf,
                                                    const int64_t buf_len,

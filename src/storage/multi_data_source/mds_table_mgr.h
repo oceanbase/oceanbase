@@ -119,7 +119,7 @@ public: // getter and setter
   int64_t get_ref() { return ATOMIC_LOAD(&ref_cnt_); }
 
   struct ObFlushOp {
-  public:
+  public:      
     ObFlushOp(int64_t trace_id,
       share::SCN &do_flush_limit_scn,
       int64_t &scan_mds_table_cnt)
@@ -127,9 +127,9 @@ public: // getter and setter
         do_flush_limit_scn_(do_flush_limit_scn),
         scan_mds_table_cnt_(scan_mds_table_cnt)
     {}
-    ObFlushOp& operator=(const ObFlushOp&) = delete;
+    ObFlushOp& operator=(const ObFlushOp&) = delete; 
     bool operator()(const common::ObTabletID &tablet_id, MdsTableBase *&mds_table) const;
-  private:
+  private:         
     int64_t trace_id_;
     share::SCN &do_flush_limit_scn_;
     int64_t &scan_mds_table_cnt_;

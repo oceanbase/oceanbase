@@ -250,7 +250,7 @@ public:
   JVMFunctionHelper& operator=(const JVMFunctionHelper&) = delete;
 
   // Sometimes observer don't need the jni env, so will use a mock jvm symbol
-  // for compiling. But may execute jni methods, so we need to check and stop it
+  // for compiling. But may execute jni methods, so we need to check and stop it 
   // before really executing.
   int check_valid_env();
   // Set a api to init or reinit jni env
@@ -330,7 +330,7 @@ private:
   ObHdfsEnvContext hdfs_env_ctx_;
 
   // Handle the runtime shared library
-  void* jvm_lib_handle_ = nullptr;
+  void* jvm_lib_handle_ = nullptr;                  
   void* hdfs_lib_handle_ = nullptr;
 
 private:
@@ -380,7 +380,7 @@ private:
 };
 
 // A Class object created from the ClassLoader that can be accessed by multiple threads
-class JVMClass
+class JVMClass 
 {
 public:
   JVMClass(jobject clazz) : clazz_(clazz) {}

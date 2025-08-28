@@ -27,7 +27,7 @@ class ObExprArrayContains : public ObFuncExprOperator
 {
 public:
   explicit ObExprArrayContains(common::ObIAllocator &alloc);
-  explicit ObExprArrayContains(common::ObIAllocator &alloc, ObExprOperatorType type,
+  explicit ObExprArrayContains(common::ObIAllocator &alloc, ObExprOperatorType type, 
                                 const char *name, int32_t param_num, int32_t dimension);
   virtual ~ObExprArrayContains();
   virtual int calc_result_type2(ObExprResType &type,
@@ -53,7 +53,7 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
 private:
-
+  
   DISALLOW_COPY_AND_ASSIGN(ObExprArrayContains);
 };
 

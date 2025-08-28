@@ -51,7 +51,7 @@ int ObUnionAllMVPrinter::gen_real_time_view(ObSelectStmt *&sel_stmt)
   sel_stmt = NULL;
   return OB_NOT_SUPPORTED;
 }
-
+    
 int ObUnionAllMVPrinter::gen_child_refresh_dmls(const ObMVRefreshableType refresh_type,
                                                 const ObSelectStmt &child_sel_stmt,
                                                 ObIArray<ObDMLStmt*> &dml_stmts)

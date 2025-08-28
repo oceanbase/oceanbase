@@ -81,7 +81,7 @@ int ObTransformViewMerge::transform_one_stmt_with_outline(ObIArray<ObParentDMLSt
       LOG_WARN("failed to add transform hint", K(ret));
     }
   }
-
+  
   return ret;
 }
 
@@ -157,7 +157,7 @@ int ObTransformViewMerge::check_hint_allowed_merge(ObDMLStmt &stmt,
   } else if (query_hint->has_outline_data()) {
     // outline data allowed merge
     if (myhint != NULL &&
-        query_hint->is_valid_outline_transform(ctx_->trans_list_loc_, myhint) &&
+        query_hint->is_valid_outline_transform(ctx_->trans_list_loc_, myhint) && 
         myhint->enable_view_merge(ctx_->src_qb_name_)) {
       force_merge = true;
     } else {
@@ -613,7 +613,7 @@ int ObTransformViewMerge::check_can_be_merged(ObDMLStmt *parent_stmt,
   } else if (OB_FAIL(check_basic_validity(parent_stmt, child_stmt, in_joined_table, can_be))) {
     LOG_WARN("failed to check", K(ret));
   } else if (can_be) {
-    has_rollup = parent_stmt->is_select_stmt() &&
+    has_rollup = parent_stmt->is_select_stmt() && 
                  static_cast<ObSelectStmt *>(parent_stmt)->has_rollup();
     //select expr不能包含subquery
     for (int64_t i = 0; OB_SUCC(ret) && can_be && i < child_stmt->get_select_item_size(); i++) {
@@ -684,9 +684,9 @@ int ObTransformViewMerge::check_can_be_merged(ObDMLStmt *parent_stmt,
   //Check if the left join right view expansion will increase the plan space. 
   if (OB_SUCC(ret) && can_be && NULL != helper.parent_table) {
     if ((LEFT_OUTER_JOIN == helper.parent_table->joined_type_ && helper.parent_table->right_table_ == helper.trans_table) ||
-        (RIGHT_OUTER_JOIN == helper.parent_table->joined_type_ && helper.parent_table->left_table_ == helper.trans_table)) {
+        (RIGHT_OUTER_JOIN == helper.parent_table->joined_type_ && helper.parent_table->left_table_ == helper.trans_table)) {  
       if (OB_FAIL(check_left_join_right_view_need_merge(parent_stmt,
-                                                        child_stmt,
+                                                        child_stmt, 
                                                         helper.trans_table,
                                                         helper.parent_table,
                                                         can_be))) {

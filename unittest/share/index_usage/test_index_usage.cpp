@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #define private public  // 获取私有成员
 #include "share/index_usage/ob_index_usage_info_mgr.h"
 #include "mtlenv/mock_tenant_module_env.h"
@@ -79,7 +79,7 @@ TEST_F(TestIndexUsageInfo, test_init)
 
   ASSERT_EQ(nullptr, mgr.report_task_.get_mgr());
   ASSERT_EQ(nullptr, mgr.report_task_.get_sql_proxy());
-
+  
   ASSERT_TRUE(mgr_.is_inited_);
   ASSERT_TRUE(mgr_.report_task_.get_is_inited());
   ASSERT_TRUE(mgr_.refresh_conf_task_.get_is_inited());

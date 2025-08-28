@@ -157,7 +157,7 @@ public:
   }
 
 private:
-  int insert(const ObFormatSQLIDCCLRuleKey &key,
+  int insert(const ObFormatSQLIDCCLRuleKey &key, 
              int max_concurrency,
              ObCCLRuleConcurrencyValueWrapper *&p_concurrency);
 
@@ -172,7 +172,7 @@ class ObCCLRuleIncRefAtomicOp
 {
 public:
   ObCCLRuleIncRefAtomicOp(): value_(nullptr) {}
-
+  
   void operator()(common::hash::HashMapPair<ObFormatSQLIDCCLRuleKey, ObCCLRuleConcurrencyValueWrapper*> &entry);
 
   bool try_inc_ref_count(ObCCLRuleConcurrencyValueWrapper *&value);
@@ -188,7 +188,7 @@ class ObCCLRuleDelAtomicOp
 public:
   ObCCLRuleDelAtomicOp() = default;
   ~ObCCLRuleDelAtomicOp() = default;
-
+  
   bool operator()(common::hash::HashMapPair<ObFormatSQLIDCCLRuleKey, ObCCLRuleConcurrencyValueWrapper*> &entry);
 };
 
@@ -254,7 +254,7 @@ public:
   }
 
 private:
-  int match_keywords_in_sql(const ObString &sql,
+  int match_keywords_in_sql(const ObString &sql, 
                             const ObIArray<ObString> &ccl_keywords_array, bool &match, bool case_sensitive = true) const;
   int init_whitelist();
   inline int

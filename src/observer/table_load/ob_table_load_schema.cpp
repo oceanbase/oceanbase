@@ -304,7 +304,7 @@ int ObTableLoadSchema::check_is_heap_table_with_single_unique_index(
                        index_table_schema->get_index_type() ||
                      share::schema::ObIndexType::INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL ==
                        index_table_schema->get_index_type() ||
-                     share::schema::ObIndexType::INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY ==
+                     share::schema::ObIndexType::INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY == 
                        index_table_schema->get_index_type()) {
             unique_index_count++;
           } else {

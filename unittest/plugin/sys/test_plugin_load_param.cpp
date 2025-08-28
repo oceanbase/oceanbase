@@ -73,10 +73,10 @@ TEST(TestObPluginLoadOption, test_load_option)
 TEST(TestObPluginLoadParam, test_load_param)
 {
   ObArray<void *> test_cases;
-
+  
   ObString libname1("libexample.so");
   ObString libname2("libexample2.so");
-
+  
   ObArray<ObPluginLoadParam> test_result;
   Item item1;
   item1.test_case = "";
@@ -141,7 +141,7 @@ TEST(TestObPluginLoadParam, test_load_param)
   ASSERT_EQ(OB_SUCCESS, item8.expected_result.push_back(param));
 
   test_cases.push_back(&item8);
-
+  
   Item item9;
   item9.test_case = "libexample.so:off,libexample2.so,";
   param.library_name = libname1;

@@ -446,7 +446,7 @@ int ObTenantStorageCheckpointWriter::copy_tablet(
   ObMetaDiskAddr old_addr;
   int64_t transfer_seq = 0; // useless in shared_nothing
   const ObTabletPersisterParam param(tablet_key.ls_id_, 0, tablet_key.tablet_id_, transfer_seq);
-
+  
   if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->get_tablet_with_allocator(WashTabletPriority::WTP_LOW, tablet_key, allocator, tablet_handle))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       LOG_INFO("skip writing snapshot for this tablet", K(tablet_key));
@@ -654,7 +654,7 @@ int ObTenantStorageCheckpointWriter::rollback()
           allocator.reuse();
           if (OB_FAIL(MTL(ObTenantStorageMetaService*)->read_from_disk(
               addr_info.new_addr_,
-              0, /* ls_epoch for share storage */
+              0, /* ls_epoch for share storage */ 
               allocator,
               buf,
               buf_len))) {

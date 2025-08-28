@@ -70,7 +70,7 @@ public:
     reset();
   }
   void set_name(ObString &name)
-  {
+  { 
     udt_name_ = name.ptr();
     udt_name_len_ = name.length();
   }

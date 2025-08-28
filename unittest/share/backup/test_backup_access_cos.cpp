@@ -26,8 +26,8 @@ void init()
   // ObDeviceManager will init env in first call
   // init_cos_env();
 
-  ASSERT_EQ(OB_SUCCESS,
-            databuff_printf(account, sizeof(account),
+  ASSERT_EQ(OB_SUCCESS, 
+            databuff_printf(account, sizeof(account), 
             "host=%s&access_id=%s&access_key=%s&appid=%s",
             endpoint, secretid, secretkey, appid));
   //build cos_base
@@ -84,7 +84,7 @@ TEST_F(TestBackupIOAdapterAccessCos, test_basic_rw)
     ObBackupIoAdapter adapter;
     const char *tmp_dir = "test_basic_rw";
     const int64_t ts = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld", 
         bucket, dir_name, tmp_dir, ts));
 
     // write
@@ -141,7 +141,7 @@ TEST_F(TestBackupIOAdapterAccessCos, test_util)
     ObBackupIoAdapter adapter;
     const char *tmp_dir = "test_util";
     const int64_t ts = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld", 
         bucket, dir_name, tmp_dir, ts));
     ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/0", dir_uri));
 
@@ -173,7 +173,7 @@ TEST_F(TestBackupIOAdapterAccessCos, test_list_files)
     ObBackupIoAdapter adapter;
     const char *tmp_dir = "test_list_files";
     const int64_t ts = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld", 
         bucket, dir_name, tmp_dir, ts));
 
     int64_t file_num = 1001;
@@ -182,7 +182,7 @@ TEST_F(TestBackupIOAdapterAccessCos, test_list_files)
     for (int64_t file_idx = 0; file_idx < file_num; file_idx++) {
       ASSERT_EQ(OB_SUCCESS,
           databuff_printf(uri, sizeof(uri), format, dir_uri, object_prefix_len, file_idx, file_idx));
-      ASSERT_EQ(OB_SUCCESS,
+      ASSERT_EQ(OB_SUCCESS, 
           adapter.write_single_file(uri, &cos_base, write_content, strlen(write_content),
                                     ObStorageIdMod::get_default_id_mod()));
     }
@@ -211,7 +211,7 @@ TEST_F(TestBackupIOAdapterAccessCos, test_list_directories)
     ObBackupIoAdapter adapter;
     const char *tmp_dir = "test_list_directories";
     const int64_t ts = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld", 
         bucket, dir_name, tmp_dir, ts));
 
     int64_t file_num = 1001;
@@ -248,7 +248,7 @@ TEST_F(TestBackupIOAdapterAccessCos, test_is_tagging)
     ObBackupIoAdapter adapter;
     const char *tmp_util_dir = "test_util_is_tagging";
     const int64_t ts = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld", 
       bucket, dir_name, tmp_util_dir, ts));
 
     bool is_tagging = true;
@@ -257,23 +257,23 @@ TEST_F(TestBackupIOAdapterAccessCos, test_is_tagging)
     const char *write_content = "123456789ABCDEF";
 
     // wrong tag mode
-    ASSERT_EQ(OB_SUCCESS,
-              databuff_printf(tmp_account, sizeof(tmp_account),
+    ASSERT_EQ(OB_SUCCESS, 
+              databuff_printf(tmp_account, sizeof(tmp_account), 
               "host=%s&access_id=%s&access_key=%s&appid=%s&delete_mode=tag",
               endpoint, secretid, secretkey, appid));
     ASSERT_EQ(OB_INVALID_ARGUMENT, tmp_cos_base.set(ObStorageType::OB_STORAGE_COS, tmp_account));
     tmp_cos_base.reset();
 
-    ASSERT_EQ(OB_SUCCESS,
-              databuff_printf(tmp_account, sizeof(tmp_account),
+    ASSERT_EQ(OB_SUCCESS, 
+              databuff_printf(tmp_account, sizeof(tmp_account), 
               "host=%s&access_id=%s&access_key=%s&appid=%s&delete_mode=delete_delete",
               endpoint, secretid, secretkey, appid));
     ASSERT_EQ(OB_INVALID_ARGUMENT, tmp_cos_base.set(ObStorageType::OB_STORAGE_COS, tmp_account));
     tmp_cos_base.reset();
 
     // delete mode
-    ASSERT_EQ(OB_SUCCESS,
-              databuff_printf(tmp_account, sizeof(tmp_account),
+    ASSERT_EQ(OB_SUCCESS, 
+              databuff_printf(tmp_account, sizeof(tmp_account), 
               "host=%s&access_id=%s&access_key=%s&appid=%s&delete_mode=delete",
               endpoint, secretid, secretkey, appid));
     ASSERT_EQ(OB_SUCCESS, tmp_cos_base.set(ObStorageType::OB_STORAGE_COS, tmp_account));
@@ -288,35 +288,35 @@ TEST_F(TestBackupIOAdapterAccessCos, test_is_tagging)
     ASSERT_EQ(OB_SUCCESS, adapter.del_file(uri, &tmp_cos_base));
     ASSERT_EQ(OB_OBJECT_NOT_EXIST, adapter.is_tagging(uri, &tmp_cos_base, is_tagging));
     tmp_cos_base.reset();
-
+    
     // tagging mode
-    ASSERT_EQ(OB_SUCCESS,
-              databuff_printf(tmp_account, sizeof(tmp_account),
+    ASSERT_EQ(OB_SUCCESS, 
+              databuff_printf(tmp_account, sizeof(tmp_account), 
               "host=%s&access_id=%s&access_key=%s&appid=%s&delete_mode=tagging",
               endpoint, secretid, secretkey, appid));
     ASSERT_EQ(OB_SUCCESS, tmp_cos_base.set(ObStorageType::OB_STORAGE_COS, tmp_account));
-
+    
     ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/tagging_mode", dir_uri));
     ASSERT_EQ(OB_SUCCESS,
         adapter.write_single_file(uri, &tmp_cos_base, write_content, strlen(write_content),
                                   ObStorageIdMod::get_default_id_mod()));
-
+    
     is_tagging = true;
     ASSERT_EQ(OB_SUCCESS, adapter.is_tagging(uri, &tmp_cos_base, is_tagging));
     ASSERT_FALSE(is_tagging);
-
+    
     ASSERT_EQ(OB_SUCCESS, adapter.del_file(uri, &tmp_cos_base));
     ASSERT_EQ(OB_SUCCESS, adapter.is_tagging(uri, &tmp_cos_base, is_tagging));
     ASSERT_TRUE(is_tagging);
     tmp_cos_base.reset();
 
     // clean
-    ASSERT_EQ(OB_SUCCESS,
-              databuff_printf(tmp_account, sizeof(tmp_account),
+    ASSERT_EQ(OB_SUCCESS, 
+              databuff_printf(tmp_account, sizeof(tmp_account), 
               "host=%s&access_id=%s&access_key=%s&appid=%s",
               endpoint, secretid, secretkey, appid));
     ASSERT_EQ(OB_SUCCESS, tmp_cos_base.set(ObStorageType::OB_STORAGE_COS, tmp_account));
-
+    
     ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/tagging_mode", dir_uri));
     ASSERT_EQ(OB_SUCCESS, adapter.del_file(uri, &tmp_cos_base));
     ASSERT_EQ(OB_OBJECT_NOT_EXIST, adapter.is_tagging(uri, &tmp_cos_base, is_tagging));

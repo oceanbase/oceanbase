@@ -12,8 +12,8 @@
 
 int g_ussl_client_auth_methods = USSL_AUTH_NONE;
 // all methods are supported by default
-int g_ussl_server_auth_methods = USSL_AUTH_NONE |
-                                 USSL_AUTH_SSL_HANDSHAKE |
+int g_ussl_server_auth_methods = USSL_AUTH_NONE | 
+                                 USSL_AUTH_SSL_HANDSHAKE | 
                                  USSL_AUTH_SSL_IO;
 int g_ussl_enable_bypass_flag = 0;
 
@@ -55,4 +55,6 @@ int ussl_get_auth_bypass_flag()
 {
   return g_ussl_enable_bypass_flag;
 }
+
+
 

@@ -732,7 +732,7 @@ int ObDefaultCGGroupByScanner::fill_group_by_col_lob_locator()
   int ret = OB_SUCCESS;
   const share::schema::ObColumnParam *col_param = group_by_cell_->get_group_by_col_param();
   if (iter_param_->has_lob_column_out() && nullptr != col_param && col_param->get_meta_type().is_lob_storage()) {
-    if (OB_FAIL(fill_datums_lob_locator(*iter_param_, *access_ctx_, *col_param,
+    if (OB_FAIL(fill_datums_lob_locator(*iter_param_, *access_ctx_, *col_param, 
           group_by_cell_->get_distinct_cnt(), group_by_cell_->get_group_by_col_datums_to_fill(), false))) {
       LOG_WARN("Failed to fill lob locator", K(ret), K(col_param), KPC(group_by_cell_), KPC(iter_param_));
     }

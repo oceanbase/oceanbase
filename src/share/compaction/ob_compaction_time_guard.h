@@ -20,7 +20,7 @@ namespace compaction
  * ObCompactionTimeGuard refers to the implementation of from ObOccamTimeGuard.
  * For example, you have 3 enum events {e0, e1, e2}
  * If you want to record the time cost of event e1, you can use click(e1), then event_times_[1] will accumulate the time cost of e1.
- *
+ * 
  * ObCompactionTimeGuard
  * -- ObRSCompactionTimeGuard
  * -- ObScheduleCompactionTimeGuard
@@ -42,7 +42,7 @@ public:
   const static uint64_t WARN_THRESHOLD = 30L * 1000 * 1000; // 30s
   const static uint16_t CAPACITY = 16;
   ObCompactionTimeGuard(const ObCompactionTimeGuardType gurad_type = BASE_COMPACT_TIME_GUARD,
-                        const uint64_t warn_threshold = WARN_THRESHOLD,
+                        const uint64_t warn_threshold = WARN_THRESHOLD, 
                         const char *mod = "")
     : guard_type_(gurad_type),
       warn_threshold_(warn_threshold),
@@ -69,7 +69,7 @@ public:
   OB_INLINE uint32_t get_specified_cost_time(const int64_t event) const {
     uint32_t ret_val = 0;
     if (OB_LIKELY(event < size_)) {
-      ret_val = event_times_[event];
+      ret_val = event_times_[event]; 
     }
     return ret_val;
   }

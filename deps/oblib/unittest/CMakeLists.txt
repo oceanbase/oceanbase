@@ -23,7 +23,7 @@ function(oblib_addtest_simd mainfile)
   if (${ARCHITECTURE} STREQUAL "x86_64")
 	  target_compile_options(${testname}
 	    PRIVATE
-      -mbmi2
+      -mbmi2 
 	  )
   endif()
 endfunction()

@@ -299,7 +299,7 @@ int ObComplementDataParam::split_task_ranges(
                                                           ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US,
                                                           ranges,
                                                           min(min(max(expected_task_count, 1), hint_parallelism), ObMacroDataSeq::MAX_PARALLEL_IDX + 1),
-                                                          allocator_,
+                                                          allocator_, 
                                                           multi_range_split_array))) {
       LOG_WARN("split multi ranges failed", K(ret));
       if (OB_REPLICA_NOT_READABLE == ret) {
@@ -400,7 +400,7 @@ int ObComplementDataParam::split_task_ranges_remote(
       if (OB_ISNULL(location_service = GCTX.location_service_)) {
         ret = OB_ERR_SYS;
         LOG_WARN("location_cache is null", K(ret), KP(location_service));
-      } else if (OB_FAIL(location_service->get_leader_with_retry_until_timeout(GCONF.cluster_id,
+      } else if (OB_FAIL(location_service->get_leader_with_retry_until_timeout(GCONF.cluster_id, 
         src_tenant_id, src_ls_id, src_leader_addr, rpc_timeout, retry_interval_us))) {
         LOG_WARN("fail to get ls locaiton leader", K(ret), K(src_tenant_id), K(src_ls_id));
       }
@@ -431,7 +431,7 @@ int ObComplementDataParam::split_task_ranges_remote(
 }
 
 int ObComplementDataContext::init(
-    const ObComplementDataParam &param,
+    const ObComplementDataParam &param, 
     const share::schema::ObTableSchema &hidden_table_schema)
 {
   int ret = OB_SUCCESS;
@@ -484,7 +484,7 @@ int ObComplementDataContext::init(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected err", K(ret));
     } else if (OB_FAIL(tenant_direct_load_mgr->alloc_execution_context_id(context_id_))) {
-      LOG_WARN("alloc execution context id failed", K(ret));
+      LOG_WARN("alloc execution context id failed", K(ret)); 
     } else if (OB_FAIL(tenant_direct_load_mgr->create_tablet_direct_load(context_id_, param.execution_id_, direct_load_param))) {
       LOG_WARN("create tablet manager failed", K(ret));
     }
@@ -623,7 +623,7 @@ int ObComplementDataDag::init(const ObDDLBuildSingleReplicaRequestArg &arg)
   return ret;
 }
 
-int ObComplementDataDag::calc_total_row_count()
+int ObComplementDataDag::calc_total_row_count() 
 {
   int ret = OB_SUCCESS;
 
@@ -860,7 +860,7 @@ bool ObComplementDataDag::operator==(const ObIDag &other) const
 }
 
 // build reponse here rather deconstruction of DAG, to avoid temporary dead lock of RS RPC queue.
-//
+// 
 int ObComplementDataDag::report_replica_build_status()
 {
   int ret = OB_SUCCESS;
@@ -920,7 +920,7 @@ int ObComplementDataDag::fill_info_param(compaction::ObIBasicInfoParam *&out_par
   } else if (OB_UNLIKELY(!param_.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid param", K(ret), K(param_));
-  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
+  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(), 
                                 param_.orig_ls_id_.id(),
                                 static_cast<int64_t>(param_.orig_tablet_id_.id()),
                                 static_cast<int64_t>(param_.dest_tablet_id_.id()),
@@ -1011,7 +1011,7 @@ int ObComplementPrepareTask::process()
     context_->complement_data_ret_ = ret;
     ret = OB_SUCCESS;
   }
-
+  
   add_ddl_event(param_, "complement prepare task");
   return ret;
 }
@@ -1031,7 +1031,7 @@ ObComplementWriteTask::~ObComplementWriteTask()
 }
 
 int ObComplementWriteTask::init(
-    const int64_t task_id,
+    const int64_t task_id, 
     ObComplementDataParam &param,
     ObComplementDataContext &context)
 {
@@ -1186,11 +1186,11 @@ int ObComplementWriteTask::generate_col_param()
             if (!data_column_schema->is_xmltype()) {
               ret = OB_NOT_SUPPORTED;
               LOG_WARN("The udt type is not adapted", K(ret), K(*data_column_schema));
-            } else if (OB_FAIL(ObTableSchema::get_xml_hidden_column_id(data_table_schema,
-                                                                       data_column_schema,
+            } else if (OB_FAIL(ObTableSchema::get_xml_hidden_column_id(data_table_schema, 
+                                                                       data_column_schema, 
                                                                        column_id))) {
               LOG_WARN("failed to get xml hidden column id.", K(ret));
-            } else if (OB_FAIL(ObTableSchema::find_xml_hidden_column_index(hidden_table_schema,
+            } else if (OB_FAIL(ObTableSchema::find_xml_hidden_column_index(hidden_table_schema, 
                                                                            hidden_column_schema,
                                                                            tmp_col_ids,
                                                                            index_col))) {
@@ -1226,13 +1226,13 @@ int ObComplementWriteTask::generate_col_param()
               ObColumnSchemaV2 *parent_hidden_column_schema = nullptr;
               // data parent
               ObColumnSchemaV2 *parent_data_column_schema = nullptr;
-              if (OB_ISNULL(parent_hidden_column_schema =
+              if (OB_ISNULL(parent_hidden_column_schema = 
                             hidden_table_schema->get_xml_hidden_column_parent_col_schema(hidden_column_schema->get_column_id(),
                                                                                          hidden_column_schema->get_udt_set_id()))) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("get hidden column parent is null", K(ret), K(*hidden_column_schema), K(*hidden_table_schema));
-              } else if (OB_ISNULL(parent_data_column_schema =
-                                   data_table_schema->get_xml_hidden_column_parent_col_schema(data_column_schema->get_column_id(),
+              } else if (OB_ISNULL(parent_data_column_schema = 
+                                   data_table_schema->get_xml_hidden_column_parent_col_schema(data_column_schema->get_column_id(), 
                                                                                               data_column_schema->get_udt_set_id()))) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("get data_ column parent is null", K(ret), K(*data_column_schema), K(*data_table_schema));
@@ -1268,7 +1268,7 @@ int ObComplementWriteTask::local_scan_by_range()
   int ret = OB_SUCCESS;
   int64_t start_time = ObTimeUtility::current_time();
   int64_t concurrent_cnt = 0;
-  if (OB_UNLIKELY(OB_ISNULL(param_) || OB_ISNULL(context_) || !param_->is_valid()
+  if (OB_UNLIKELY(OB_ISNULL(param_) || OB_ISNULL(context_) || !param_->is_valid() 
                   || !param_->has_generated_task_ranges())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KPC(param_), KPC(context_));
@@ -2094,7 +2094,7 @@ int ObLocalScan::construct_access_param(
       }
     }
   }
-
+  
   /*construct cg_idx*/
   if (OB_FAIL(ret)) {
   } else if(OB_FAIL(data_table_schema.has_all_column_group(has_all_cg))) {
@@ -2271,9 +2271,9 @@ int ObLocalScan::get_origin_table_checksum(
             LOG_WARN("The udt type is not adapted", K(ret), K(*data_col_schema));
           } else if (OB_FAIL(ObTableSchema::get_xml_hidden_column_id(data_table_schema, data_col_schema, column_id))) {
             LOG_WARN("failed to get xml hidden column id.", K(ret));
-          } else if (OB_FAIL(ObTableSchema::find_xml_hidden_column_index(hidden_table_schema,
-                                                                         hidden_col_schema,
-                                                                         tmp_col_ids,
+          } else if (OB_FAIL(ObTableSchema::find_xml_hidden_column_index(hidden_table_schema, 
+                                                                         hidden_col_schema, 
+                                                                         tmp_col_ids, 
                                                                          index_col))) {
             LOG_WARN("failed to find xml hidden column index.", K(ret));
           } else if (!exist_column_mapping_.test(index_col)) {

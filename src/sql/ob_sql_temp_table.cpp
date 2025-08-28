@@ -98,7 +98,7 @@ int ObSqlTempTableInfo::collect_temp_tables(ObIAllocator &allocator,
         temp_table_info->temp_table_id_ = table->ref_id_;
         temp_table_info->table_name_ = table->table_name_;
         temp_table_info->table_query_ = table->ref_query_;
-
+        
         TableInfo table_info;
         table_info.upper_stmt_ = &stmt;
         table_info.table_item_ = table;
@@ -138,7 +138,7 @@ int ObSqlTempTableInfo::collect_specified_temp_table(ObIAllocator &allocator,
     for (int64_t i = 0; OB_SUCC(ret) && all_has_filter && i < upper_stmts.count(); i ++) {
       TableItem *table = table_items.at(i);
       ObDMLStmt *stmt = upper_stmts.at(i);
-      if (OB_ISNULL(stmt) || OB_ISNULL(table) ||
+      if (OB_ISNULL(stmt) || OB_ISNULL(table) || 
           OB_UNLIKELY(specified_query != table->ref_query_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected params", K(table_items), K(upper_stmts));

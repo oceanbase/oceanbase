@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef SRC_OBSERVER_VIRTUAL_SQL_PLAN_H_
 #define SRC_OBSERVER_VIRTUAL_SQL_PLAN_H_
 

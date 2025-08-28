@@ -275,8 +275,8 @@ public:
     return OB_TBL_LOCATION_UNINITIALIZED == location_type_;
   }
   void set_can_reselect_replica(const bool b) { can_reselect_replica_ = b; }
-  inline bool get_can_reselect_replica() const
-  {
+  inline bool get_can_reselect_replica() const 
+  { 
     bool ret = false;
     if (!can_reselect_replica_) {
       ret = false;

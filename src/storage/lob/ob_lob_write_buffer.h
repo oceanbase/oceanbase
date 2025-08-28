@@ -146,7 +146,7 @@ public:
   int64_t char_len_;
   int64_t max_bytes_in_char_;
 
-  TO_STRING_KV(K_(coll_type), K_(max_byte_len), K_(use_buffer), K_(is_full), K_(inner_buffer), K_(is_store_char_len),
+  TO_STRING_KV(K_(coll_type), K_(max_byte_len), K_(use_buffer), K_(is_full), K_(inner_buffer), K_(is_store_char_len), 
        K_(is_char_len_valid), K_(char_len));
 };
 

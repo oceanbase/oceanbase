@@ -1133,7 +1133,7 @@ const unsigned char *skip_trailing_space_utf16(const struct ObCharsetInfo *  __a
   const unsigned char *end= ptr + len;
   while (end - 1 > ptr && end[-2] == 0x00 && end[-1] == 0x20)
     end-=2;
-
+  
   return (end);
 }
 
@@ -1142,7 +1142,7 @@ const unsigned char *skip_trailing_space_utf16le(const struct ObCharsetInfo *  _
   const unsigned char *end= ptr + len;
   while (end - 1 > ptr && end[-2] == 0x20 && end[-1] == 0x00)
     end-=2;
-
+  
   return (end);
 }
 
@@ -1220,8 +1220,8 @@ ObCharsetInfo ob_charset_utf16_bin=
   NULL,                
   NULL,                
   NULL,                
-  NULL,
-  NULL,
+  NULL,               
+  NULL,               
   &ob_unicase_default, 
   NULL,                
   NULL,                
@@ -1232,7 +1232,7 @@ ObCharsetInfo ob_charset_utf16_bin=
   4,                   
   1,
   0,                   
-  0x10FFFF,
+  0x10FFFF,              
   ' ',                 
   0,                   
   1,                   
@@ -1256,8 +1256,8 @@ ObCharsetInfo ob_charset_utf16_general_ci=
   NULL,                
   NULL,                
   NULL,
-  NULL,
-  NULL,
+  NULL,               
+  NULL,               
   &ob_unicase_default, 
   NULL,                
   NULL,                
@@ -1268,7 +1268,7 @@ ObCharsetInfo ob_charset_utf16_general_ci=
   4,                   
   1,
   0,                   
-  0x10FFFF,
+  0x10FFFF,              
   ' ',                 
   0,                   
   1,                   
@@ -1306,7 +1306,7 @@ ob_utf16le_uni(const ObCharsetInfo *cs __attribute__((unused)),
   if ((*pwc = uint2korr(str)) < OB_UTF16_SURROGATE_HIGH_FIRST ||
       (*pwc > OB_UTF16_SURROGATE_LOW_LAST))
     return 2; /* [0000-D7FF,E000-FFFF] */
-
+  
   if (*pwc >= OB_UTF16_SURROGATE_LOW_FIRST)
     return OB_CS_ILSEQ; /* [DC00-DFFF] Low surrogate part without high part */
 
@@ -1314,10 +1314,10 @@ ob_utf16le_uni(const ObCharsetInfo *cs __attribute__((unused)),
 
   str += 2;
 
-  if ((lo = uint2korr(str)) < OB_UTF16_SURROGATE_LOW_FIRST ||
+  if ((lo = uint2korr(str)) < OB_UTF16_SURROGATE_LOW_FIRST || 
       lo > OB_UTF16_SURROGATE_LOW_LAST)
     return OB_CS_ILSEQ; /* Expected low surrogate part, got something else */
-
+  
   *pwc = 0x10000 + (((*pwc & 0x3FF) << 10) | (lo & 0x3FF));
   return 4;
 }
@@ -1374,35 +1374,35 @@ ObCharsetInfo ob_charset_utf16le_general_ci=
 {
   56,
   0,
-  0,
+  0,              
   OB_CS_COMPILED|OB_CS_PRIMARY|OB_CS_STRNXFRM|OB_CS_UNICODE|OB_CS_NONASCII,
-  OB_UTF16LE,
-  OB_UTF16LE_GENERAL_CI,
-  "UTF-16LE Unicode",
+  OB_UTF16LE,             
+  OB_UTF16LE_GENERAL_CI,  
+  "UTF-16LE Unicode",    
+  NULL,                
+  NULL,                
+  NULL,                
+  NULL,                
+  NULL,                
+  NULL,                
   NULL,
-  NULL,
-  NULL,
-  NULL,
-  NULL,
-  NULL,
-  NULL,
-  NULL,
-  NULL,
-  &ob_unicase_default,
-  NULL,
-  NULL,
-  1,
-  1,
-  1,
-  2,
+  NULL,               
+  NULL,   
+  &ob_unicase_default, 
+  NULL,                
+  NULL,                
+  1,                   
+  1,                   
+  1,                   
+  2,                   
   4,
   1,      /* mbmaxlenlen */
-  0,
-  0x10FFFF,
-  ' ',
-  0,
-  1,
-  1,
+  0,                   
+  0x10FFFF,              
+  ' ',                 
+  0,                   
+  1,                   
+  1,                   
   &ob_charset_utf16le_handler,
   &ob_collation_utf16_general_ci_handler,
   PAD_SPACE
@@ -1412,11 +1412,11 @@ ObCharsetInfo ob_charset_utf16le_bin=
 {
   62,
   0,
-  0,
+  0,              
   OB_CS_COMPILED|OB_CS_BINSORT|OB_CS_STRNXFRM|OB_CS_UNICODE|OB_CS_NONASCII,
-  OB_UTF16LE,
-  OB_UTF16LE_BIN,
-  "UTF-16LE Unicode",
+  OB_UTF16LE,             
+  OB_UTF16LE_BIN,         
+  "UTF-16LE Unicode",    
   NULL,
   NULL,
   NULL,
@@ -1426,21 +1426,21 @@ ObCharsetInfo ob_charset_utf16le_bin=
   NULL,
   NULL,
   NULL,
-  &ob_unicase_default,
-  NULL,
-  NULL,
-  1,
-  1,
-  1,
-  2,
+  &ob_unicase_default, 
+  NULL,                
+  NULL,                
+  1,                   
+  1,                   
+  1,                   
+  2,                   
   4,
   1,      /* mbmaxlenlen */
-  0,
-  0xFFFF,
-  ' ',
-  0,
-  1,
-  1,
+  0,                   
+  0xFFFF,              
+  ' ',                 
+  0,                   
+  1,                   
+  1,                   
   &ob_charset_utf16le_handler,
   &ob_collation_utf16_bin_handler,
   PAD_SPACE

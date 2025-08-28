@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #include "mds_table_handler.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
@@ -51,7 +51,7 @@ int ObMdsTableHandler::get_mds_table_handle(mds::MdsTableHandle &handle,
     CLICK();
     try_get_handle_directly(handle);
   }
-
+  
   if (OB_LIKELY(handle.is_valid())) {
     // do nothing
   } else if (OB_LIKELY(!handle.is_valid() && !not_exist_create)) {// mds_table is released and no need create new one

@@ -361,7 +361,7 @@ int ObTableCkmItems::build_column_ckm_sum_array(
         // Why the first ckm_item can be selected as the based one?
         // Any partition alter operation will result in an increase in tablet_id, and ckm_items_ is generated order by the tablet_id.
         // The smallest tablet_id means that the schema held by this partition is older.
-        if (OB_FAIL(check_tail_column_checksums_legal(is_data_table,
+        if (OB_FAIL(check_tail_column_checksums_legal(is_data_table, 
             ckm_items_.at(0).column_meta_.column_checksums_, cur_item->column_meta_.column_checksums_))) {
           LOG_WARN("check tail column checksum legal failed", K(ret), K(column_checksums_cnt), K(cur_item), "base_item", ckm_items_.at(0));
         }
@@ -687,7 +687,7 @@ int ObTableCkmItems::check_schema_change_after_major_freeze(
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("get_all_part_num returned unexpected value", KR(ret), K(old_part_num), K(data_ckm));
     } else if (old_part_num != data_ckm.tablet_pairs_.count()) {
-      FLOG_INFO("[IGNORE CHECKSUM_ERROR] partition num changed in data table", KR(ret),
+      FLOG_INFO("[IGNORE CHECKSUM_ERROR] partition num changed in data table", KR(ret), 
         "old_partition_num", old_part_num,
         "new_partition_num", data_ckm.tablet_pairs_.count(),
         K(data_ckm));

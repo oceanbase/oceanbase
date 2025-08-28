@@ -355,7 +355,7 @@ struct ObPCPrivInfo
   }
   inline bool operator==(const ObPCPrivInfo &other) const
   {
-    return sys_priv_ == other.sys_priv_
+    return sys_priv_ == other.sys_priv_ 
            && sensitive_rule_id_ == other.sensitive_rule_id_
            && has_privilege_ == other.has_privilege_;
   }
@@ -1097,12 +1097,12 @@ public:
   // used for getting plan
   // In this interface, we will first verify whether all tables were marked select_leader.
   // If confirmed, the fast path will be activated to directly select leader replicas for each table
-  // and add them to das ctx, without the need to construct candi table locs.
+  // and add them to das ctx, without the need to construct candi table locs. 
   // Otherwise, fallback to the original path and add candi table locs to das ctx manually.
   static int get_phy_locations(const ObIArray<ObTableLocation> &table_locations,
                                const ObPlanCacheCtx &pc_ctx,
                                ObIArray<ObCandiTableLoc> &phy_location_infos);
-
+  
   // used for matching plan
   static int get_phy_locations(const ObIArray<ObTableLocation> &table_locations,
                                const ObPlanCacheCtx &pc_ctx,

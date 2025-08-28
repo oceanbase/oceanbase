@@ -32,7 +32,7 @@ namespace sql
 // remove_const(1), remove_const(2) will be overwrite when subquery is empty
 // instead of const value: 1, 2
 //
-// see:
+// see: 
 //
 class ObExprRemoveConst : public ObFuncExprOperator
 {

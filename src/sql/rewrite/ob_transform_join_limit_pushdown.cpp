@@ -774,8 +774,8 @@ int ObTransformJoinLimitPushDown::do_transform(ObSelectStmt *select_stmt,
     if (OB_FAIL(build_lazy_left_join(select_stmt, helper))) {
       LOG_WARN("failed to build lazy left join table", K(ret));
     }
-  }
-
+  } 
+  
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObTransformUtils::create_inline_view(ctx_,
                                                           select_stmt,

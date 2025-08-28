@@ -571,7 +571,7 @@ struct ObRelationalExtraFunc
       } else if (OB_FAIL(r_instr_iter.get_full_data(r_data))) {
         COMMON_LOG(WARN, "Lob: get right text str iter full data failed ", K(ret), K(cs_type), K(r_instr_iter));
       } else {
-        int cmp_ret = ObCharset::strcmpsp(cs_type, l_data.ptr(), l_data.length(),
+        int cmp_ret = ObCharset::strcmpsp(cs_type, l_data.ptr(), l_data.length(), 
                                           r_data.ptr(), r_data.length(), with_end_space);
         res.set_int(get_cmp_ret<CMP_OP>(cmp_ret > 0 ? 1 : (cmp_ret < 0 ? -1 : 0)));
       }
@@ -606,7 +606,7 @@ struct ObRelationalExtraFunc
       } else if (OB_FAIL(l_instr_iter.get_full_data(l_data))) {
         COMMON_LOG(WARN, "Lob: get left text str iter full data failed ", K(ret), K(cs_type), K(l_instr_iter));
       } else {
-        int cmp_ret = ObCharset::strcmpsp(cs_type, l_data.ptr(), l_data.length(),
+        int cmp_ret = ObCharset::strcmpsp(cs_type, l_data.ptr(), l_data.length(), 
                                           r.ptr_, r.len_, with_end_space);
         res.set_int(get_cmp_ret<CMP_OP>(cmp_ret > 0 ? 1 : (cmp_ret < 0 ? -1 : 0)));
       }
@@ -641,7 +641,7 @@ struct ObRelationalExtraFunc
       } else if (OB_FAIL(r_instr_iter.get_full_data(r_data))) {
         COMMON_LOG(WARN, "Lob: get right text str iter full data failed ", K(ret), K(cs_type), K(r_instr_iter));
       } else {
-        int cmp_ret = ObCharset::strcmpsp(cs_type, l.ptr_, l.len_,
+        int cmp_ret = ObCharset::strcmpsp(cs_type, l.ptr_, l.len_, 
                                           r_data.ptr(), r_data.length(), with_end_space);
         res.set_int(get_cmp_ret<CMP_OP>(cmp_ret > 0 ? 1 : (cmp_ret < 0 ? -1 : 0)));
       }

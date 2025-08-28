@@ -90,7 +90,7 @@ private:
   int build_type_expr(const ColumnItem *column, ObRawExpr *&expr);
   static int build_type_expr_static(ObRawExprFactory& expr_factory, 
                                     const ObSQLSessionInfo &session_info,
-                                    const ObColumnSchemaV2 &column_schema,
+                                    const ObColumnSchemaV2 &column_schema, 
                                     ObRawExpr *&expr);
   static int build_collation_expr_static(ObRawExprFactory& expr_factory, 
                                          const common::ObCollationType coll_type, 

@@ -36,7 +36,7 @@ int ObExprIsJson::calc_result_typeN(ObExprResType& type,
                                     int64_t param_num,
                                     ObExprTypeCtx& type_ctx) const
 {
-  UNUSED(type_ctx);
+  UNUSED(type_ctx); 
   INIT_SUCC(ret);
   if (OB_UNLIKELY(param_num != 5)) {
     ret = OB_ERR_PARAM_SIZE;
@@ -106,10 +106,10 @@ int ObExprIsJson::check_is_json(const ObExpr &expr, ObEvalCtx &ctx,
       ADD_FLAG_IF_NEED(strict_opt != OB_JSON_MODE_STRICT, parse_flag, ObJsonParser::JSN_RELAXED_FLAG);
       ADD_FLAG_IF_NEED(unique_opt == OB_JSON_MODE_UNIQUE_KEYS, parse_flag, ObJsonParser::JSN_UNIQUE_FLAG);
 
-      if (OB_FAIL(ObJsonParser::check_json_syntax(j_str, &allocator, parse_flag,
+      if (OB_FAIL(ObJsonParser::check_json_syntax(j_str, &allocator, parse_flag, 
                                                   ObJsonExprHelper::get_json_max_depth_config()))) {
         LOG_WARN("fail to check json syntax", K(ret), K(type), K(j_str));
-      }
+      } 
     }
   }
 
@@ -253,7 +253,7 @@ int ObExprIsJson::eval_is_json(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
       LOG_WARN("input scalar option error", K(ret));
     }
   }
-  // get unique_opt
+  // get unique_opt 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(get_is_json_option(expr, ctx, 4, unique_opt))) {
       LOG_WARN("input unique option error", K(ret));
@@ -270,7 +270,7 @@ int ObExprIsJson::eval_is_json(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
     ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
     uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
     MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
-    if (OB_FAIL(check_is_json(expr, ctx, *json_datum,
+    if (OB_FAIL(check_is_json(expr, ctx, *json_datum, 
                               json_arg->datum_meta_.type_,
                               cs_type, temp_allocator,
                               strict_opt, scalar_opt, unique_opt,

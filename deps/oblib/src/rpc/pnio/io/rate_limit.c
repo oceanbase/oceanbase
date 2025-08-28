@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 extern int pktc_sk_handle_event(pktc_sk_t* s);
 extern int pkts_sk_handle_event(pkts_sk_t* s);
 extern int pktc_sk_consume(pktc_sk_t* s, int64_t time_limit, int64_t* avail_bytes);

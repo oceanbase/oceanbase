@@ -36,7 +36,7 @@ ObRoundStartDesc::ObRoundStartDesc()
 
 bool ObRoundStartDesc::is_valid() const
 {
-  return 0 <= dest_id_ && 0 < round_id_ && start_scn_.is_valid() && 0 < base_piece_id_
+  return 0 <= dest_id_ && 0 < round_id_ && start_scn_.is_valid() && 0 < base_piece_id_ 
          && 0 < piece_switch_interval_;
 }
 
@@ -59,7 +59,7 @@ ObRoundEndDesc::ObRoundEndDesc()
 
 bool ObRoundEndDesc::is_valid() const
 {
-  return 0 <= dest_id_ && 0 < round_id_ && start_scn_.is_valid() && start_scn_ <= checkpoint_scn_ && 0 < base_piece_id_
+  return 0 <= dest_id_ && 0 < round_id_ && start_scn_.is_valid() && start_scn_ <= checkpoint_scn_ && 0 < base_piece_id_ 
          && 0 < piece_switch_interval_;
 }
 
@@ -878,15 +878,15 @@ int ObArchiveStore::read_piece_checkpoint(const int64_t dest_id, const int64_t r
       LOG_WARN("failed to set checkpoint scn", K(ret), K(max_checkpoint_scn));
     } else if (OB_FAIL(desc.max_scn_.convert_for_inner_table_field(max_checkpoint_scn))) {
       LOG_WARN("failed to set max scn", K(ret), K(max_checkpoint_scn));
-    }
+    } 
     if (OB_SUCC(ret)) {
-      FLOG_INFO("succeed to read checkpoint desc.", K(desc));
+      FLOG_INFO("succeed to read checkpoint desc.", K(desc));  
     }
   }
   return ret;
 }
 
-int ObArchiveStore::write_piece_checkpoint(const int64_t dest_id, const int64_t round_id, const int64_t piece_id,
+int ObArchiveStore::write_piece_checkpoint(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, 
     const int64_t file_id, const share::SCN &old_checkpoint_scn, const ObPieceCheckpointDesc &desc) const
 {
   int ret = OB_SUCCESS;
@@ -914,10 +914,10 @@ int ObArchiveStore::write_piece_checkpoint(const int64_t dest_id, const int64_t 
       LOG_WARN("failed to get piece checkpoint dir path", K(ret), K(dest), K(dest_id), K(round_id), K(piece_id));
     } else if (OB_FAIL(mgr.init(dir_path, OB_STR_CHECKPOINT_FILE_NAME, ObBackupFileSuffix::ARCHIVE, get_storage_info()))) {
       LOG_WARN("failed to init ObArchiveCheckPointMgr", K(ret), K(dir_path));
-    } else if (OB_FAIL(mgr.write(old_checkpoint_scn.get_val_for_inner_table_field(),
+    } else if (OB_FAIL(mgr.write(old_checkpoint_scn.get_val_for_inner_table_field(), 
                                desc.checkpoint_scn_.get_val_for_inner_table_field()))) {
       LOG_WARN("failed to write checkpoint info", K(ret), K(desc));
-    }
+    } 
   }
   return ret;
 }
@@ -937,7 +937,7 @@ int ObArchiveStore::delete_piece_his_checkpoint(const int64_t dest_id, const int
     LOG_WARN("failed to init ObArchiveCheckPointMgr", K(ret), K(dir_path));
   } else if (OB_FAIL(mgr.del_history_files(checkpoint_scn))) {
     LOG_WARN("fail to delete all checkpoint files", K(ret));
-  }
+  } 
   return ret;
 }
 
@@ -969,16 +969,16 @@ int ObArchiveStore::read_piece_checkpoint(ObPieceCheckpointDesc &desc) const
       LOG_WARN("failed to set checkpoint scn", K(ret), K(max_checkpoint_scn));
     } else if (OB_FAIL(desc.max_scn_.convert_for_inner_table_field(max_checkpoint_scn))) {
       LOG_WARN("failed to set max scn", K(ret), K(max_checkpoint_scn));
-    }
+    } 
     if (OB_SUCC(ret)) {
-      FLOG_INFO("succeed to read checkpoint desc.", K(desc));
+      FLOG_INFO("succeed to read checkpoint desc.", K(desc));  
     }
   }
   return ret;
 }
 
 // oss://archive/d[dest_id]r[round_id]p[piece_id]/piece_d[dest_id]r[round_id]p[piece_id]_20220601T120000_20220602T120000.obarc
-int ObArchiveStore::is_piece_inner_placeholder_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const SCN &start_scn,
+int ObArchiveStore::is_piece_inner_placeholder_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const SCN &start_scn, 
     const SCN &end_scn, bool &is_exist) const
 {
   int ret = OB_SUCCESS;
@@ -1085,10 +1085,10 @@ int ObArchiveStore::write_single_ls_info(const int64_t dest_id, const int64_t ro
 
 // oss://archive/d[dest_id]r[round_id]p[piece_id]/[ls_id]/[file_id].obarc
 int ObArchiveStore::seal_file(
-  const int64_t dest_id,
-  const int64_t round_id,
-  const int64_t piece_id,
-  const ObLSID &ls_id,
+  const int64_t dest_id, 
+  const int64_t round_id, 
+  const int64_t piece_id, 
+  const ObLSID &ls_id, 
   const int64_t file_id) const
 {
   int ret = OB_SUCCESS;
@@ -1108,7 +1108,7 @@ int ObArchiveStore::seal_file(
   } else if (is_normal_file) {
     //if file exists, it is a normal file. a normal file do not need seal
   } else {
-    if (OB_FAIL(util.seal_file(full_path.get_ptr(), storage_info,
+    if (OB_FAIL(util.seal_file(full_path.get_ptr(), storage_info, 
                    common::ObStorageIdMod(dest_id, common::ObStorageUsedMod::STORAGE_USED_ARCHIVE)))) {
       LOG_WARN("failed to seal file", K(ret), K(full_path), K(storage_info));
     }
@@ -1253,7 +1253,7 @@ int ObArchiveStore::is_tenant_archive_piece_infos_file_exist(bool &is_exist) con
   return ret;
 }
 
-int ObArchiveStore::is_archive_log_file_exist(const int64_t dest_id, const int64_t round_id,
+int ObArchiveStore::is_archive_log_file_exist(const int64_t dest_id, const int64_t round_id, 
   const int64_t piece_id, const ObLSID &ls_id, const int64_t file_id, bool &is_exist) const
 {
   int ret = OB_SUCCESS;
@@ -1611,10 +1611,10 @@ int ObArchiveStore::get_file_range_in_piece(const int64_t dest_id, const int64_t
   int ret = OB_SUCCESS;
   ObArray<ObSingleLSInfoDesc::OneFile> filelist;
   if (OB_FAIL(get_file_list_in_piece(
-              dest_id,
-              round_id,
-              piece_id,
-              ls_id,
+              dest_id, 
+              round_id, 
+              piece_id, 
+              ls_id, 
               filelist))) {
     LOG_WARN("failed to get file list", K(ret), K(dest_id), K(round_id), K(piece_id), K(ls_id));
   } else if (filelist.empty()) {
@@ -1629,7 +1629,7 @@ int ObArchiveStore::get_file_range_in_piece(const int64_t dest_id, const int64_t
   return ret;
 }
 
-int ObArchiveStore::get_file_list_in_piece(const int64_t dest_id, const int64_t round_id,
+int ObArchiveStore::get_file_list_in_piece(const int64_t dest_id, const int64_t round_id, 
     const int64_t piece_id, const ObLSID &ls_id, ObIArray<ObSingleLSInfoDesc::OneFile> &filelist) const
 {
   int ret = OB_SUCCESS;
@@ -1765,7 +1765,7 @@ static int is_piece_start_file_name_(ObString &file_name, bool &is_piece_start)
     LOG_WARN("empty file name", K(ret), K(file_name));
   } else if (len <= 0) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("file name without a unified suffix", K(ret), K(file_name.length()), K(len));
+    LOG_WARN("file name without a unified suffix", K(ret), K(file_name.length()), K(len)); 
   } else if (OB_FAIL(databuff_printf(tmp_str, sizeof(tmp_str), "%.*s", len, file_name.ptr()))) {
     LOG_WARN("fail to save tmp file name", K(ret), K(file_name));
   } else {
@@ -1871,7 +1871,7 @@ static int is_round_start_file_name_(ObString &file_name, bool &is_round_start)
   ObString tmp;
   if (p <= 0) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("file name without a unified suffix", K(ret), K(p));
+    LOG_WARN("file name without a unified suffix", K(ret), K(p)); 
   } else if (!file_name.prefix_match(PREFIX)) {
     is_round_start = false;
   } else if (file_name.length() < suffix_len) {
@@ -2146,7 +2146,7 @@ int ObArchiveStore::ObLSFileListOp::func(const dirent *entry)
   ObSingleLSInfoDesc::OneFile one_file;
   char *endptr = NULL;
   const char *filename = NULL;
-
+  
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLSFileListOp not init", K(ret));

@@ -146,7 +146,7 @@ int ObExprLowerUpper::calc(ObObj &result, const ObString &text,
     // Need calc buff, user AreanaAllocator instead, for cannot find the caller of this function
     common::ObArenaAllocator temp_allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     // not found caller of this func, need text src obj to judge whether has lob header
-    ObTextStringIter src_iter(text_type, cs_type, text, has_lob_header);
+    ObTextStringIter src_iter(text_type, cs_type, text, has_lob_header); 
     char *buf = NULL; // res buffer
     int64_t src_byte_len = 0;
     int64_t buf_size = 0;
@@ -162,7 +162,7 @@ int ObExprLowerUpper::calc(ObObj &result, const ObString &text,
       if (OB_FAIL(output_result.init(buf_len))) {
         LOG_WARN("init stringtext result failed", K(ret), K(output_result), K(buf_len));
       } else if (buf_len == 0) {
-        str_result.reset();
+        str_result.reset(); 
       } else if (OB_FAIL(output_result.get_reserved_buffer(buf, buf_size))) {
         LOG_WARN("get empty buffer failed", K(ret), K(buf_len));
       } else if (OB_ISNULL(buf)) {
@@ -173,7 +173,7 @@ int ObExprLowerUpper::calc(ObObj &result, const ObString &text,
         ObTextStringIterState state;
         ObString src_block_data;
 
-        while (OB_SUCC(ret)
+        while (OB_SUCC(ret) 
                && buf_size > 0
                && (state = src_iter.get_next_block(src_block_data)) == TEXTSTRING_ITER_NEXT) {
           // binary collation的casedn什么都没做，所以需要copy
@@ -341,7 +341,7 @@ int ObExprUpper::cg_expr(ObExprCGCtx &op_cg_ctx,
 }
 
 static inline int32_t calc_common_inner(char *buf,
-                                        const int32_t &buf_len,
+                                        const int32_t &buf_len, 
                                         const ObString &m_text,
                                         const ObCollationType &cs_type,
                                         const bool &is_lower)
@@ -424,7 +424,7 @@ int ObExprLowerUpper::calc_common(const ObExpr &expr, ObEvalCtx &ctx,
         ObTextStringIterState state;
         ObString src_block_data;
 
-        while (OB_SUCC(ret)
+        while (OB_SUCC(ret) 
                && buf_size > 0
                && (state = src_iter.get_next_block(src_block_data)) == TEXTSTRING_ITER_NEXT) {
           int32_t out_len = calc_common_inner(buf,
@@ -440,9 +440,9 @@ int ObExprLowerUpper::calc_common(const ObExpr &expr, ObEvalCtx &ctx,
         }
         if (OB_FAIL(ret)) {
         } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
-          ret = (src_iter.get_inner_ret() != OB_SUCCESS) ?
+          ret = (src_iter.get_inner_ret() != OB_SUCCESS) ? 
                 src_iter.get_inner_ret() : OB_INVALID_DATA;
-          LOG_WARN("iter state invalid", K(ret), K(state), K(src_iter));
+          LOG_WARN("iter state invalid", K(ret), K(state), K(src_iter)); 
         } else {
           output_result.get_result_buffer(str_result);
         }

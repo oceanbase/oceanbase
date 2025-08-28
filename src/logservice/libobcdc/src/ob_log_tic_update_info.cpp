@@ -42,27 +42,27 @@ const char *TICUpdateInfo::print_tic_update_reason(const TICUpdateReason reason)
     case INVALID_REASON:
       reason_str = "INVALID";
       break;
-
+    
     case DROP_TABLE:
       reason_str = "DROP_TABLE";
       break;
-
+    
     case CREATE_TABLE:
       reason_str = "CREATE_TABLE";
       break;
-
+    
     case RENAME_TABLE_ADD:
       reason_str = "RENAME_TABLE_ADD";
       break;
-
+    
     case RENAME_TABLE_REMOVE:
       reason_str = "RENAME_TABLE_REMOVE";
       break;
-
+    
     case DROP_DATABASE:
       reason_str = "DROP_DATABASE";
       break;
-
+    
     default:
       reason_str = "INVALID";
       break;

@@ -19,7 +19,7 @@
 #include "lib/xml/ob_xml_tree.h"
 #include "lib/xml/ob_xpath.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
 
 namespace sql
@@ -53,7 +53,7 @@ typedef ObXmlUpdateNodeInfo* ObXmlUpdateNodeInfoArray[ObUpdateMaxType];
 
 class ObExprUpdateXml : public ObFuncExprOperator
 {
-public:
+public: 
   explicit ObExprUpdateXml(common::ObIAllocator &alloc);
   virtual ~ObExprUpdateXml();
   virtual int calc_result_typeN(ObExprResType &type,
@@ -62,30 +62,30 @@ public:
                                 common::ObExprTypeCtx &type_ctx) const override;
   static int eval_update_xml(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   static int eval_mysql_update_xml(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
-  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
-                      const ObRawExpr &raw_expr,
-                      ObExpr &rt_expr)
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, 
+                      const ObRawExpr &raw_expr, 
+                      ObExpr &rt_expr) 
                       const override;
 private:
-  static int update_xml_tree_mysql(ObMulModeMemCtx* xml_mem_ctx,
+  static int update_xml_tree_mysql(ObMulModeMemCtx* xml_mem_ctx, 
                                    ObString xml_target,
                                    ObEvalCtx &ctx,
                                    ObString &xpath_str,
                                    ObIMulModeBase *&xml_tree,
                                    ObUpdateXMLRetType &res_origin);
   static int update_xml_child_text(ObXmlNode *old_node, ObXmlNode *text_node);
-  static int update_xml_tree(ObMulModeMemCtx* xml_mem_ctx,
-                             const ObExpr *expr,
-                             ObEvalCtx &ctx,
-                             ObString &xpath_str,
-                             ObString &default_ns,
+  static int update_xml_tree(ObMulModeMemCtx* xml_mem_ctx, 
+                             const ObExpr *expr, 
+                             ObEvalCtx &ctx,  
+                             ObString &xpath_str, 
+                             ObString &default_ns, 
                              ObPathVarObject *prefix_ns,
                              ObIMulModeBase *xml_tree);
   static int update_xml_node(ObMulModeMemCtx* xml_mem_ctx, const ObExpr *expr, ObEvalCtx &ctx, ObXmlUpdateNodeInfoArray &update_info, ObIMulModeBase *node);
   // for text node and attribute
-  static int update_text_or_attribute_node(ObMulModeMemCtx* xml_mem_ctx,
-                                           ObXmlNode *xml_node,
-                                           const ObExpr *expr,
+  static int update_text_or_attribute_node(ObMulModeMemCtx* xml_mem_ctx, 
+                                           ObXmlNode *xml_node, 
+                                           const ObExpr *expr, 
                                            ObEvalCtx &ctx,
                                            bool is_text,
                                            ObXmlUpdateNodeInfo *&update_info);
@@ -108,25 +108,25 @@ private:
   static int remove_and_insert_element_node(ObXmlElement *ele_node, ObXmlNode *update_node, int64_t pos, bool is_remove);
   // for pi node
   static int update_pi_node(ObMulModeMemCtx* xml_mem_ctx, ObXmlNode *xml_node, const ObExpr *expr, ObEvalCtx &ctx, ObXmlUpdateNodeInfo *&update_info);
-  static int pack_long_text_res(const ObExpr &expr,
-                                ObEvalCtx &ctx,
-                                ObDatum &res,
+  static int pack_long_text_res(const ObExpr &expr, 
+                                ObEvalCtx &ctx, 
+                                ObDatum &res, 
                                 ObIAllocator &allocator,
                                 ObString input_res);
 
-  static int get_update_str_info(ObMulModeMemCtx* xml_mem_ctx,
+  static int get_update_str_info(ObMulModeMemCtx* xml_mem_ctx, 
                                  const ObExpr *expr,
-                                 ObEvalCtx &ctx,
+                                 ObEvalCtx &ctx, 
                                  ObXmlUpdateNodeInfo *&update_info);
 
-  static int get_update_xml_info(ObMulModeMemCtx* xml_mem_ctx,
+  static int get_update_xml_info(ObMulModeMemCtx* xml_mem_ctx, 
                                  const ObExpr *expr,
-                                 ObEvalCtx &ctx,
+                                 ObEvalCtx &ctx, 
                                  ObXmlUpdateNodeInfo *&update_info);
 
-  static int get_update_parse_str_info(ObMulModeMemCtx* xml_mem_ctx,
+  static int get_update_parse_str_info(ObMulModeMemCtx* xml_mem_ctx, 
                                        const ObExpr *expr,
-                                       ObEvalCtx &ctx,
+                                       ObEvalCtx &ctx, 
                                        ObXmlUpdateNodeInfo *&update_info);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprUpdateXml);

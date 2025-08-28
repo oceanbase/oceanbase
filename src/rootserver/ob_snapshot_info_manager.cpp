@@ -78,7 +78,7 @@ int ObSnapshotInfoManager::batch_acquire_snapshot_in_trans(
       LOG_WARN("fail to end trans", K(tmp_ret), K(need_commit));
     }
     ret = OB_SUCC(ret) ? tmp_ret : ret;
-  }
+  }  
   return ret;
 }
 

@@ -618,7 +618,7 @@ private:
     bool force_hash_sort_;
     bool force_no_pushdown_;  // hint force pushdown, at least pushdown one window function
     bool force_pushdown_;  // hint force pushdown, at least pushdown one window function
-
+    
     int64_t part_cnt_;
     int64_t win_op_idx_;
     ObOpPseudoColumnRawExpr *wf_aggr_status_expr_;

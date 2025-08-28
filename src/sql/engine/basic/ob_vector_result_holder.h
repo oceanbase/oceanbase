@@ -99,7 +99,7 @@ private:
     void restore_vector_base(ObVectorBase &vec) const;
     void restore_bitmap_null_base(ObBitmapNullVectorBase &vec, const int64_t batch_size, ObEvalCtx &eval_ctx) const;
 
-
+    
     void restore_fixed_base(ObFixedLengthBase &vec, const int64_t batch_size, ObEvalCtx &eval_ctx) const;
     void restore_discrete_base(ObDiscreteBase &vec, const int64_t batch_size, ObEvalCtx &eval_ctx) const;
     void restore_continuous_base(ObContinuousBase &vec, const int64_t batch_size, ObEvalCtx &eval_ctx) const;
@@ -108,7 +108,7 @@ private:
                               const int64_t batch_size) const;
     int save(ObIAllocator &alloc, const int64_t batch_size, ObEvalCtx *eval_ctx);
     int restore(const int64_t saved_size, ObEvalCtx *eval_ctx);
-
+    
     void restore_bitmap_null_base_single_row(ObBitmapNullVectorBase &vec, int64_t from_idx, int64_t to_idx, ObEvalCtx &eval_ctx) const;
     void restore_base_single_row(ObVectorBase &vec, int64_t from_idx, int64_t to_idx, ObEvalCtx &eval_ctx) const;
     void restore_fixed_base_single_row(ObFixedLengthBase &vec, int64_t from_idx, int64_t to_idx, ObEvalCtx &eval_ctx) const;
@@ -120,7 +120,7 @@ private:
                                   int64_t from_idx, int64_t to_idx) const;
     int extend_nested_rows(const ObExpr &expr, ObEvalCtx &eval_ctx, const VectorFormat extend_format,
                                  int64_t from_idx, int64_t start_dst_idx, int64_t size) const;
-
+    
     void extend_fixed_base_vector(ObFixedLengthBase &vec, int64_t from_idx, int64_t start_dst_idx, int64_t size, ObEvalCtx &eval_ctx) const;
 
     void extend_discrete_base_vector(ObDiscreteBase &vec, int64_t from_idx, int64_t start_dst_idx, int64_t size, ObEvalCtx &eval_ctx) const;

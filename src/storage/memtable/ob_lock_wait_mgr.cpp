@@ -159,7 +159,7 @@ void RowHolderMapper::reset_hash_holder(const ObTabletID &tablet_id,
     }
   }
 }
-
+	
 int RowHolderMapper::get_rowkey_holder(const ObTabletID &tablet_id,
                                        const memtable::ObMemtableKey &key,
                                        transaction::ObTransID &holder)
@@ -443,7 +443,7 @@ ObLink* ObLockWaitMgr::check_timeout()
   const int64_t MAX_WAIT_TIME_US = 10 * 1000 * 1000;
   DeadlockedSessionArray *deadlocked_session = NULL;
   fetch_deadlocked_sessions_(deadlocked_session);
-  // FIX:
+  // FIX: 
   // lower down session idle check frequency to 10s
   int64_t curr_ts = ObClockGenerator::getClock();
   if (curr_ts - last_check_session_idle_ts_ > MAX_WAIT_TIME_US) {

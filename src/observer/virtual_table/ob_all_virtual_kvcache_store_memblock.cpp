@@ -9,21 +9,21 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #include "observer/virtual_table/ob_all_virtual_kvcache_store_memblock.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace observer
+namespace observer 
 {
 
-ObAllVirtualKVCacheStoreMemblock::ObAllVirtualKVCacheStoreMemblock()
+ObAllVirtualKVCacheStoreMemblock::ObAllVirtualKVCacheStoreMemblock() 
   : ObVirtualTableScannerIterator(),
     memblock_iter_(0),
     addr_(nullptr),
     ipstr_(),
-    port_(0),
-    memblock_infos_(),
+    port_(0), 
+    memblock_infos_(), 
     str_buf_()
 {
 }
@@ -59,7 +59,7 @@ int ObAllVirtualKVCacheStoreMemblock::inner_get_next_row(ObNewRow *&row)
   } else {
     row = &cur_row_;
   }
-
+  
   return ret;
 }
 

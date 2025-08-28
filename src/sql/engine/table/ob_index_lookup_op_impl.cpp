@@ -232,3 +232,4 @@ int ObIndexLookupOpImpl::build_trans_datum(ObExpr *expr,
 
 } // end namespace sql
 } // end namespace oceanbase
+

@@ -53,7 +53,7 @@ public :
                K_(failure_times), K_(is_dirty), K_(need_refresh), K_(in_queue));
 
 public:
-  common::ObArenaAllocator  rowkey_cp_allcoator_; // for rowkey copy in ObTTLTaskInfo
+  common::ObArenaAllocator  rowkey_cp_allcoator_; // for rowkey copy in ObTTLTaskInfo    
   ObTTLTaskInfo    task_info_;
   common::ObTTLTaskStatus task_status_;
   table::ObTTLTaskParam   ttl_para_;
@@ -69,9 +69,9 @@ public:
   bool                    in_queue_; // whether in dag queue or not
 };
 
-class ObTabletTTLScheduler;
+class ObTabletTTLScheduler; 
 class OBTTLTimerPeriodicTask : public common::ObTimerTask {
-public:
+public: 
   OBTTLTimerPeriodicTask(ObTabletTTLScheduler &tablet_ttl_mgr)
   : tablet_ttl_mgr_(tablet_ttl_mgr)
   {
@@ -130,10 +130,10 @@ public:
 
   int reload_tenant_task();
   void on_schema_changed(uint64_t schema_changed_tenant_id);
-
+  
   // timer handle function
   virtual int check_and_generate_tablet_tasks();
-  int check_and_handle_event();
+  int check_and_handle_event(); 
   int check_tenant_memory();
   int check_inner_stat();
   void inc_dag_ref() { ATOMIC_INC(&dag_ref_cnt_); }
@@ -156,7 +156,7 @@ public:
 
 public:
   virtual int try_schedule_task(ObTTLTaskCtx* ctx);
-  virtual int report_task_status(ObTTLTaskInfo& task_info,
+  virtual int report_task_status(ObTTLTaskInfo& task_info, 
                                  table::ObTTLTaskParam& task_para,
                                  bool& is_stop,
                                  bool need_copy_task = true);
@@ -220,7 +220,7 @@ private:
 
   public:
       TabletTaskMap                     tablet_task_map_;
-      common::ObArenaAllocator          allocator_;
+      common::ObArenaAllocator          allocator_;                
       uint64_t                          tenant_id_;
       int64_t                           task_id_;
       bool                              is_usr_trigger_;
@@ -267,7 +267,7 @@ protected:
   void mark_tenant_checked();
   int refresh_tablet_task(ObTTLTaskCtx &ttl_task, bool refresh_status, bool refresh_retcode = false);
   int check_schema_version();
-  OB_INLINE bool need_skip_run() { return ATOMIC_LOAD(&need_do_for_switch_); }
+  OB_INLINE bool need_skip_run() { return ATOMIC_LOAD(&need_do_for_switch_); } 
 protected:
   void mark_ttl_ctx_dirty(ObTTLTenantInfo& tenant_info, ObTTLTaskCtx& ctx);
   int deep_copy_task(ObTTLTaskCtx* ctx, table::ObTTLTaskInfo& task_info, const table::ObTTLTaskParam &task_param, bool with_rowkey_copy = true);
@@ -293,11 +293,11 @@ protected:
   OBTTLTimerPeriodicTask periodic_task_;
   storage::ObLS *ls_;
   int tg_id_;
-  ObArray<share::ObTabletTablePair> tablet_table_pairs_;
+  ObArray<share::ObTabletTablePair> tablet_table_pairs_;    
   int64_t local_schema_version_;
   bool has_start_;
   bool is_leader_; // current tenant ttl mgr is in leader ls or not
-  volatile int64_t dag_ref_cnt_; // ttl dag ref count for current ls
+  volatile int64_t dag_ref_cnt_; // ttl dag ref count for current ls 
   // after leader switch, need wait and reset status
   bool need_do_for_switch_;
 };
@@ -307,7 +307,7 @@ class ObTabletHRowkeyTTLScheduler : public ObTabletTTLScheduler
 {
 public:
   const static int64_t MAX_HROWKEY_NUM_PER_TASK = 100;
-  ObTabletHRowkeyTTLScheduler()
+  ObTabletHRowkeyTTLScheduler() 
   : hrowkey_queue_()
   {}
   ~ObTabletHRowkeyTTLScheduler()
@@ -315,7 +315,7 @@ public:
 public:
   int init(storage::ObLS *ls);
   virtual int try_schedule_task(ObTTLTaskCtx* ctx) override;
-  virtual int report_task_status(ObTTLTaskInfo& task_info,
+  virtual int report_task_status(ObTTLTaskInfo& task_info, 
                                  table::ObTTLTaskParam& task_para,
                                  bool& is_stop,
                                  bool need_copy_task = true) override;
@@ -383,17 +383,17 @@ private:
 
   struct TraverseArgs
   {
-    TraverseArgs(common::ObIArray<ObString> &rowkeys)
+    TraverseArgs(common::ObIArray<ObString> &rowkeys) 
       : rowkeys_(rowkeys)
       {}
     ObIArray<ObString> &rowkeys_;
-  };
+  }; 
   static HRowkeyNode *traverse_rowkey_set(HRowkeyDedupMap::HRowkeySet *tree,
                                           HRowkeyNode *cur_node,
                                           void *args);
   struct FreeHRowkeyArgs
   {
-    FreeHRowkeyArgs(HRowkeyQueue &queue)
+    FreeHRowkeyArgs(HRowkeyQueue &queue) 
       : hrowkey_owner_(queue)
       {}
     HRowkeyQueue &hrowkey_owner_;
@@ -474,7 +474,7 @@ public:
     UNUSED(buf_size);
     UNUSED(lsn);
     UNUSED(scn);
-    return OB_SUCCESS;
+    return OB_SUCCESS; 
   }
 
   int flush(share::SCN &rec_scn) override

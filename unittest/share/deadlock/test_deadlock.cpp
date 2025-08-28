@@ -438,7 +438,7 @@ TEST_F(TestObDeadLockDetector, small_cycle_in_big_cycle_bad_case) {
 //   DETECT_LOG(INFO, "DEBUG", K(retry_info));
 //   ASSERT_EQ(retry_info.need_print(), true);
 //   for (int i = 0; i < 9; ++i) {
-//     retry_info.on_conflict();
+//     retry_info.on_conflict(); 
 //   }
 //   ASSERT_EQ(retry_info.need_print(), true);
 // }

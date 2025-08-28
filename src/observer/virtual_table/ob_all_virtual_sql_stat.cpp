@@ -162,7 +162,7 @@ int ObAllVirtualSqlStat::fill_row(
         break;
       }
       case PARSING_DB_NAME: {
-        cells[cell_idx].set_varchar(sql_stat_record->get_sql_stat_info().get_parsing_db_name(),
+        cells[cell_idx].set_varchar(sql_stat_record->get_sql_stat_info().get_parsing_db_name(), 
                static_cast<ObString::obstr_size_t>(STRLEN(sql_stat_record->get_sql_stat_info().get_parsing_db_name())));
         cells[cell_idx].set_collation_type(
           ObCharset::get_default_collation(ObCharset::get_default_charset()));
@@ -355,7 +355,7 @@ int ObAllVirtualSqlStat::fill_row(
           cells[cell_idx].set_collation_type(
             ObCharset::get_default_collation(ObCharset::get_default_charset()));
         }
-
+        
         break;
       }
       case SOURCE_PORT: {
@@ -480,7 +480,7 @@ int ObAllVirtualSqlStat::process_curr_tenant(common::ObNewRow *&row)
           }
         }
       } // end while
-
+      
 
       if (OB_SUCC(ret)) {
         if (sql_stat_record->get_key().is_valid()) {
@@ -539,11 +539,11 @@ bool ObAllVirtualSqlStat::operator()(sql::ObSQLSessionMgr::Key key, ObSQLSession
     // do nothing
   } else if (sess_info->get_effective_tenant_id() == MTL_ID()) {
     // WARNNIGN!!!
-    // Access to things like cur_sql_ctx_ and cur_plan is forbidden,
+    // Access to things like cur_sql_ctx_ and cur_plan is forbidden, 
     // these pointers are not guaranteed to be thread-safe and risk CORE!
     ObSqlStatRecordKey key;
     sess_info->get_cur_sql_id(key.sql_id_, sizeof(key.sql_id_));
-    key.set_plan_hash(sess_info->get_current_plan_hash());
+    key.set_plan_hash(sess_info->get_current_plan_hash()); 
 
     ObExecutingSqlStatRecord &executing_sql_stat_record = sess_info->get_executing_sql_stat_record();
     ObExecutedSqlStatRecord *value = nullptr;
@@ -619,18 +619,18 @@ int ObAllVirtualSqlStat::get_next_sql_stat (sql::ObExecutedSqlStatRecord &sql_st
         const ObExecutedSqlStatRecord *tmp_sql_stat_value = nullptr;
         if (ObLibCacheNameSpace::NS_SQLSTAT == guard.get_cache_obj()->get_ns()) {
           ObSqlStatRecordObj *cache_obj = static_cast<ObSqlStatRecordObj *>(guard.get_cache_obj());
-          if (OB_NOT_NULL(cache_obj) && OB_NOT_NULL(cache_obj->get_record_value()) &&
+          if (OB_NOT_NULL(cache_obj) && OB_NOT_NULL(cache_obj->get_record_value()) && 
               cache_obj->get_record_value()->get_key().is_valid()) {
             tmp_sql_stat_value = cache_obj->get_record_value();
             is_succ_get_stat_value = true;
-          }
+          } 
         } else if (ObLibCacheNameSpace::NS_CRSR == guard.get_cache_obj()->get_ns()) {
           ObPhysicalPlan *plan = static_cast<ObPhysicalPlan *>(guard.get_cache_obj());
           if (OB_NOT_NULL(plan) && plan->sql_stat_record_value_.get_key().is_valid()) {
             tmp_sql_stat_value = &(plan->sql_stat_record_value_);
             is_succ_get_stat_value = true;
-          }
-        }
+          } 
+        } 
         if (OB_SUCC(ret) && is_succ_get_stat_value) {
           if (OB_ISNULL(tmp_sql_stat_value)) {
             // continue, do nothing
@@ -676,3 +676,4 @@ int ObAllVirtualSqlStat::get_next_sql_stat (sql::ObExecutedSqlStatRecord &sql_st
   }
   return ret;
 }
+

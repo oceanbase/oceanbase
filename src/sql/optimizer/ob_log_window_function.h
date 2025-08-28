@@ -108,7 +108,7 @@ namespace sql
     bool get_use_topn_sort() const { return use_topn_sort_; }
     void set_origin_sort_card(double origin_sort_card) { origin_sort_card_ = origin_sort_card; }
     double get_origin_sort_card() { return origin_sort_card_; }
-    virtual int get_plan_item_info(PlanText &plan_text,
+    virtual int get_plan_item_info(PlanText &plan_text, 
                                 ObSqlPlanItem &plan_item) override;
     virtual int print_outline_data(PlanText &plan_text) override;
     virtual int print_used_hint(PlanText &plan_text) override;
@@ -148,7 +148,7 @@ namespace sql
     // 3. Only the following functions supported: rank,dense_rank,sum,count,min,max
     bool range_dist_parallel_;
 
-    //
+    // 
     WindowFunctionRoleType role_type_;
 
     // sort keys needed for window function

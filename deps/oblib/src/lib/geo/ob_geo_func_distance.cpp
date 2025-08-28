@@ -25,7 +25,7 @@ namespace common
 namespace bg = boost::geometry;
 
 template <typename GeoType1, typename GeoType2>
-int eval_distance_without_strategy(const ObGeometry *g1, const ObGeometry *g2, double &result)
+int eval_distance_without_strategy(const ObGeometry *g1, const ObGeometry *g2, double &result) 
 {
   const GeoType1 *geo1 = reinterpret_cast<const GeoType1 *>(g1->val());
   const GeoType2 *geo2 = reinterpret_cast<const GeoType2 *>(g2->val());
@@ -34,10 +34,10 @@ int eval_distance_without_strategy(const ObGeometry *g1, const ObGeometry *g2, d
 }
 
 template <typename GeoType1, typename GeoType2>
-int eval_distance_with_point_strategy(const ObGeometry *g1,
+int eval_distance_with_point_strategy(const ObGeometry *g1, 
                                       const ObGeometry *g2,
                                       const ObGeoEvalCtx &context,
-                                      double &result)
+                                      double &result) 
 {
   INIT_SUCC(ret);
   const ObSrsItem *srs = context.get_srs();
@@ -54,7 +54,7 @@ int eval_distance_with_point_strategy(const ObGeometry *g1,
     } else {
       bg::strategy::distance::geographic<bg::strategy::vincenty> vincenty_strategy;
       result = bg::distance(*geo1, *geo2, vincenty_strategy);
-    }
+    }    
   }
   return ret;
 }
@@ -63,7 +63,7 @@ template <typename GeoType1, typename GeoType2>
 int eval_distance_with_nonpoint_strategy(const ObGeometry *g1,
                                          const ObGeometry *g2,
                                          const ObGeoEvalCtx &context,
-                                         double &result)
+                                         double &result) 
 {
   INIT_SUCC(ret);
   const ObSrsItem *srs = context.get_srs();
@@ -95,14 +95,14 @@ public:
   OB_GEO_TREE_UNARY_FUNC_DEFAULT(double, OB_ERR_GIS_INVALID_DATA);;
   OB_GEO_CART_TREE_FUNC_DEFAULT(double, OB_ERR_NOT_IMPLEMENTED_FOR_CARTESIAN_SRS);
   OB_GEO_GEOG_TREE_FUNC_DEFAULT(double, OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS);
-
+  
   // template for binary
   // default cases for cartesian
   template <typename GeoType1, typename GeoType2>
   struct EvalWkbBi
   {
     static int eval(const ObGeometry *g1, const ObGeometry *g2, const ObGeoEvalCtx &context, double &result)
-    {
+    { 
       UNUSED(context);
       return eval_distance_without_strategy<GeoType1, GeoType2>(g1, g2, result);
     }
@@ -121,9 +121,9 @@ public:
 private:
   // geometry collection, distance to collection is the min distance to elements in collection
   template <typename CollectonType>
-  static int eval_distance_geometry_collection(const ObGeometry *g1,
-                                               const ObGeometry *g2,
-                                               const ObGeoEvalCtx &context,
+  static int eval_distance_geometry_collection(const ObGeometry *g1, 
+                                               const ObGeometry *g2, 
+                                               const ObGeoEvalCtx &context, 
                                                double &result)
   {
     INIT_SUCC(ret);
@@ -204,7 +204,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncDistanceImpl, ObWkbGeomCollection, ObWkbG
   return eval_distance_geometry_collection<ObWkbGeomCollection>(g1, g2, context, result);
 } OB_GEO_FUNC_END;
 
- // geography geometrycollection
+ // geography geometrycollection 
 OB_GEO_GEOG_BINARY_FUNC_GEO2_BEGIN(ObGeoFuncDistanceImpl, ObWkbGeogCollection, double)
 {
   return eval_distance_geometry_collection<ObWkbGeogCollection>(g1, g2, context, result);

@@ -647,7 +647,7 @@ int ObExprInnerTypeToEnumSet::calc_result_type2(ObExprResType &type,
   return ret;
 }
 
-int ObExprInnerTypeToEnumSet::cg_expr(ObExprCGCtx &op_cg_ctx,
+int ObExprInnerTypeToEnumSet::cg_expr(ObExprCGCtx &op_cg_ctx, 
                                  const ObRawExpr &raw_expr,
                                  ObExpr &rt_expr) const
 {

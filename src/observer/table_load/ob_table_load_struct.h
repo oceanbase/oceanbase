@@ -31,7 +31,7 @@ namespace observer
 struct ObTableLoadUniqueKey
 {
   OB_UNIS_VERSION(1);
-
+  
 public:
   ObTableLoadUniqueKey() : table_id_(common::OB_INVALID_ID), task_id_(0) {}
   ObTableLoadUniqueKey(uint64_t table_id, int64_t task_id) : table_id_(table_id), task_id_(task_id)

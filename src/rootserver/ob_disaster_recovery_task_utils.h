@@ -42,7 +42,7 @@ public:
 
   static int wakeup_tenant_service(
     const obrpc::ObNotifyTenantThreadArg &arg);
-
+  
   static int wakeup_tenant_dr_service(
     const uint64_t tenant_id);
 

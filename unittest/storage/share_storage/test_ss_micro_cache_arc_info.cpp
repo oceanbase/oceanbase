@@ -17,14 +17,14 @@
 
 #include "storage/shared_storage/micro_cache/ob_ss_arc_info.h"
 #include "storage/shared_storage/micro_cache/ob_ss_micro_cache_stat.h"
-namespace oceanbase
+namespace oceanbase 
 {
-namespace storage
+namespace storage 
 {
 using namespace oceanbase::common;
 using namespace oceanbase::blocksstable;
 
-class TestSSMicroCacheArcInfo : public ::testing::Test
+class TestSSMicroCacheArcInfo : public ::testing::Test 
 {
 public:
   TestSSMicroCacheArcInfo();
@@ -70,7 +70,7 @@ TEST_F(TestSSMicroCacheArcInfo, arc_seg_op_info)
     seg_op.inc_obtained_cnt();
   }
   ASSERT_EQ(false, seg_op.need_obtain_more());
-
+  
   ObSSARCSegOpInfo seg_op_cp = seg_op;
   ASSERT_EQ(false, seg_op_cp.to_delete_);
   ASSERT_EQ(20, seg_op_cp.op_cnt_);
@@ -234,7 +234,7 @@ TEST_F(TestSSMicroCacheArcInfo, arc_info)
   arc_info.seg_info_arr_[ARC_B2].cnt_ = 500;
   arc_info.seg_info_arr_[ARC_B2].size_ = micro_size * 500;
   ASSERT_EQ(true, arc_info.trigger_eviction());
-
+  
   ObSSARCIterInfo arc_iter_info;
   ASSERT_EQ(OB_SUCCESS, arc_iter_info.init(1));
 
@@ -493,7 +493,7 @@ TEST_F(TestSSMicroCacheArcInfo, arc_state_machine)
   ASSERT_EQ((max_micro_cnt - 400) * micro_size, arc_info.seg_info_arr_[ARC_T1].size());
   ASSERT_EQ(SS_MAX_ARC_HANDLE_OP_CNT, arc_info.seg_info_arr_[ARC_T2].count());
   ASSERT_EQ(SS_MAX_ARC_HANDLE_OP_CNT * micro_size, arc_info.seg_info_arr_[ARC_T2].size());
-
+  
   ASSERT_EQ(true, arc_info.trigger_eviction());
   arc_info.calc_arc_iter_info(arc_iter_info, ARC_T1);
   ASSERT_EQ(100, arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.op_cnt_);

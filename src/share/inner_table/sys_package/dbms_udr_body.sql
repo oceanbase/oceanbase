@@ -2,7 +2,7 @@
 #author: luofan.zp
 
 CREATE OR REPLACE PACKAGE BODY DBMS_UDR AS
-
+  
   PROCEDURE CREATE_RULE (
     rule_name          IN VARCHAR,
     pattern            IN CLOB,

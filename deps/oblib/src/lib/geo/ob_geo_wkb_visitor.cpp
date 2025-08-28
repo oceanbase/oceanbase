@@ -39,7 +39,7 @@ int ObGeoWkbVisitor::write_cartesian_point(double x, double y)
   } else if (OB_FAIL(write_to_buffer(y, sizeof(double)))) {
     LOG_WARN("failed to write y value", K(ret), K(y));
   }
-  return ret;
+  return ret;  
 }
 
 int ObGeoWkbVisitor::write_geograph_point(double x, double y)
@@ -121,7 +121,7 @@ int ObGeoWkbVisitor::visit(ObGeographPolygon *geo)
     const ObGeographLinearring& ring = geo->exterior_ring();
     if (OB_FAIL(write_to_buffer(ring.size(), sizeof(uint32_t)))) {
       LOG_WARN("failed to write num value", K(ret));
-    }
+    }    
     for (uint32_t i = 0; i < ring.size() && OB_SUCC(ret); i++) {
       if (OB_FAIL(write_geograph_point(ring[i].get<0>(), ring[i].get<1>()))) {
         LOG_WARN("failed to geograph point value", K(ret), K(i));
@@ -165,7 +165,7 @@ int ObGeoWkbVisitor::visit(ObCartesianPolygon *geo)
       for (uint32_t j = 0; j < inner_ring.size() && OB_SUCC(ret); j++) {
         if (OB_FAIL(write_cartesian_point(inner_ring[j].get<0>(), inner_ring[j].get<1>()))) {
           LOG_WARN("failed to cartesian point value", K(ret), K(i), K(j));
-        }
+        } 
       }
     }
   }

@@ -23,7 +23,7 @@ char* charset_upper(const struct ObCharsetInfo* src_cs,
                     void *malloc_pool)
 {
   char *buf = NULL;
-
+  
   if (OB_ISNULL(src_ptr)) {
   } else if (OB_ISNULL(src_cs)) {
   } else if (OB_ISNULL(src_cs->cset)) {
@@ -45,7 +45,7 @@ char* charset_upper(const struct ObCharsetInfo* src_cs,
     } else {
     }
   }
-
+  
   return buf;
 }
 

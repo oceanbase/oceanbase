@@ -61,7 +61,7 @@ int ObDropDbLinkResolver::resolve(const ParseNode &parse_tree)
     uint64_t tenant_id = session_info_->get_effective_tenant_id();
     if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
       LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
-    } else if (compat_version < DATA_VERSION_4_2_0_0) {
+    } else if (compat_version < DATA_VERSION_4_2_0_0) { 
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("mysql dblink is not supported when MIN_DATA_VERSION is below DATA_VERSION_4_2_0_0", K(ret));
     } else if (NULL != node->children_[IF_EXIST]) {

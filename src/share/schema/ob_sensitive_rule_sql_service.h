@@ -31,7 +31,7 @@ class ObSensitiveRuleSchema;
 class ObSensitiveRuleSqlService : public ObDDLSqlService
 {
 public:
-  explicit ObSensitiveRuleSqlService(ObSchemaService &schema_service)
+  explicit ObSensitiveRuleSqlService(ObSchemaService &schema_service) 
     : ObDDLSqlService(schema_service) {}
   virtual ~ObSensitiveRuleSqlService() {}
 
@@ -48,8 +48,8 @@ private:
   int add_schema(ObISQLClient &sql_client, const ObSensitiveRuleSchema &schema);
   int drop_schema(ObISQLClient &sql_client, const ObSensitiveRuleSchema &schema);
   int alter_schema(ObISQLClient &sql_client, const ObSensitiveRuleSchema &schema);
-  int gen_insert_sql(common::ObSqlString &sql,
-                     common::ObSqlString &values,
+  int gen_insert_sql(common::ObSqlString &sql, 
+                     common::ObSqlString &values, 
                      const ObSensitiveRuleSchema &schema);
   int add_column_schema(ObISQLClient &sql_client, const ObSensitiveRuleSchema &schema);
   int drop_column_schema(ObISQLClient &sql_client, const ObSensitiveRuleSchema &schema);

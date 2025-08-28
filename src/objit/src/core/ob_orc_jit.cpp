@@ -285,11 +285,11 @@ void ObNotifyLoaded::deregisterDebugInfoFromGdb(ObObjectKey Key)
       LOG_WARN("failed to erase jit entry from hashmap", K(ret));
     }
   }
-
+  
   LOG_DEBUG("finished deregisterDebugInfoFromGdb", K(ret), K(Key), K(entry), K(AllGdbReg.second.size()));
 }
 
-int ObOrcJit::add_compiled_object(size_t length, const char *ptr)
+int ObOrcJit::add_compiled_object(size_t length, const char *ptr) 
 {
   int ret = OB_SUCCESS;
 

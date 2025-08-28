@@ -128,7 +128,7 @@ int ObTableQueryAsyncP::init_tb_ctx(ObIAllocator* allocator,
   ObObjectID tmp_object_id = OB_INVALID_ID;
   ObObjectID tmp_first_level_part_id = OB_INVALID_ID;
   ObTabletID real_tablet_id;
-  if (tablegroup_req) {
+  if (tablegroup_req) { 
     if (query_ctx.part_idx_ == OB_INVALID_INDEX && query_ctx.subpart_idx_ == OB_INVALID_INDEX) { // 非分区表
       real_tablet_id = query_info.simple_schema_->get_tablet_id();
     } else if (OB_FAIL(query_info.simple_schema_->get_part_id_and_tablet_id_by_idx(query_ctx.part_idx_,
@@ -140,7 +140,7 @@ int ObTableQueryAsyncP::init_tb_ctx(ObIAllocator* allocator,
     }
   } else {
     // for table and hbase single cf：
-    // use tablet_id pass by client as query tablet and
+    // use tablet_id pass by client as query tablet and 
     // especially for global index query: its tablet is global index tablet
     real_tablet_id = query_ctx.index_tablet_id_;
   }
@@ -316,7 +316,7 @@ int ObTableQueryAsyncP::get_inner_htable_result_iterator(ObIAllocator *allocator
         LOG_WARN("fail to process table info", K(ret));
       }
     }
-
+    
     ObTableCtx &tb_ctx = table_info->tb_ctx_;
     if (OB_FAIL(ret)) {
       // do nothing
@@ -333,14 +333,14 @@ int ObTableQueryAsyncP::get_inner_htable_result_iterator(ObIAllocator *allocator
     } else {
       ObTableQueryResultIterator *result_iter = nullptr;
       // If it is a multi-CF scenario, the arg_table_name here must be the table group name
-      // In the case of multiple column families (multi-CF), we need to use
-      // ObTableQueryIterableResult from the table_info to store intermediate results.
-      // However, in the case of a single column family (single CF), we directly
-      // write the results to 'result'. If this is an internal call, this 'result'
+      // In the case of multiple column families (multi-CF), we need to use   
+      // ObTableQueryIterableResult from the table_info to store intermediate results.  
+      // However, in the case of a single column family (single CF), we directly   
+      // write the results to 'result'. If this is an internal call, this 'result'   
       // is generally 'ObTableQueryResult'.
-      //
-      // There are exceptions, such as during BatchGet operations, where even
-      // for single CF, the results will be placed in ObTableQueryIterableResult.
+      //   
+      // There are exceptions, such as during BatchGet operations, where even   
+      // for single CF, the results will be placed in ObTableQueryIterableResult.  
       bool is_tablegroup_req = ObHTableUtils::is_tablegroup_req(arg_table_name, entity_type);
       if (!is_tablegroup_req && OB_FAIL(ObTableQueryUtils::generate_htable_result_iterator(*allocator,
                                                                     table_info->query_,
@@ -436,7 +436,7 @@ int ObTableQueryAsyncP::update_table_info_columns(ObTableSingleQueryInfo* table_
     }
   }
   return ret;
-}
+}  
 
 int ObTableQueryAsyncP::check_family_existence_with_base_name(const ObString& table_name,
                         const ObString& base_tablegroup_name,
@@ -593,8 +593,8 @@ int ObTableQueryAsyncP::execute_query() {
 
   // check if need compress the result
   int tmp_ret = OB_SUCCESS;
-  if (OB_SUCC(ret) &&
-      OB_NOT_NULL(one_result) &&
+  if (OB_SUCC(ret) && 
+      OB_NOT_NULL(one_result) && 
       OB_TMP_FAIL(ObKVConfigUtil::get_compress_type(MTL_ID(),
                   one_result->get_result_size(),
                   compressor_type))) {
@@ -625,7 +625,7 @@ int ObTableQueryAsyncP::init_read_trans(const ObTableConsistencyLevel consistenc
     LOG_WARN("fail to init trans param", K(ret));
   } else if (OB_FAIL(ObTableTransUtils::init_read_trans(trans_param_))) {
     LOG_WARN("fail to start trans", K(ret), K_(trans_param));
-  }
+  } 
   return ret;
 }
 
@@ -657,7 +657,7 @@ int ObTableQueryAsyncP::init_read_trans(const ObTableConsistencyLevel consistenc
       LOG_WARN("unexpected null table schema", K(ret), K(table_id));
     } else if (OB_FAIL((OB_FAIL(GCTX.location_service_->get(tenant_id, tablet_id, 0,
                                                             is_cache_hit, ls_id))))) {
-      LOG_WARN("fail to get ls id", K(ret), K(tenant_id), K(tablet_id));
+      LOG_WARN("fail to get ls id", K(ret), K(tenant_id), K(tablet_id));                                                             
     } else {
       need_global_sp = table_schema->is_global_index_table();
     }
@@ -673,7 +673,7 @@ int ObTableQueryAsyncP::init_read_trans(const ObTableConsistencyLevel consistenc
     LOG_WARN("fail to init trans param", K(ret));
   } else if (OB_FAIL(ObTableTransUtils::init_read_trans(trans_param))) {
     LOG_WARN("fail to start trans", K(ret), K(trans_param));
-  }
+  } 
   return ret;
 }
 
@@ -684,7 +684,7 @@ int ObTableQueryAsyncP::query_scan_with_init(ObIAllocator *allocator, ObTableQue
   if (OB_ISNULL(allocator)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Allocator is NULL", K(ret));
-  } else if (OB_FAIL(arg_.query_.deep_copy(*allocator, query))) {  // 存储的 key range 是引用，所以这里需要深拷贝
+  } else if (OB_FAIL(arg_.query_.deep_copy(*allocator, query))) {  // 存储的 key range 是引用，所以这里需要深拷贝  
     LOG_WARN("fail to deep copy query", K(ret), K(arg_.query_));
   } else {
     query_session_->set_req_start_time(common::ObTimeUtility::current_monotonic_time());
@@ -798,15 +798,15 @@ int ObTableQueryAsyncP::query_scan_without_init(ObTableCtx &tb_ctx)
 
     // check if need compress the result
     int tmp_ret = OB_SUCCESS;
-    if (OB_SUCC(ret) &&
-        OB_NOT_NULL(query_result) &&
+    if (OB_SUCC(ret) && 
+        OB_NOT_NULL(query_result) && 
         OB_TMP_FAIL(ObKVConfigUtil::get_compress_type(MTL_ID(), query_result->get_result_size(), compressor_type))) {
       LOG_WARN("fail to check compress config", K(tmp_ret), K(compressor_type));
     }
     this->set_result_compress_type(compressor_type);
   }
 
-  OB_TABLE_END_AUDIT(ret_code, ret,
+  OB_TABLE_END_AUDIT(ret_code, ret, 
                      snapshot, get_tx_snapshot(),
                      stmt_type, StmtType::T_KV_QUERY,
                      return_rows, result_.get_row_count(),
@@ -879,7 +879,7 @@ int ObTableQueryAsyncP::generate_table_query_info(ObIAllocator *allocator,
     } else {
       tmp_info->set_table_id(table_schema->get_table_id());
       tmp_info->set_schema_version(table_schema->get_schema_version());
-
+      
       int64_t part_idx = OB_INVALID_INDEX;
       int64_t subpart_idx = OB_INVALID_INDEX;
       if (arg_table_id == table_schema->get_table_id() &&
@@ -889,16 +889,16 @@ int ObTableQueryAsyncP::generate_table_query_info(ObIAllocator *allocator,
         LOG_WARN("Failed to get partition index by tablet", K(ret));
       } else if (OB_FAIL(arg_query.deep_copy(*allocator, tmp_info->query_))) {
         LOG_WARN("Failed to copy query to query_info", K(ret));
-      } else {
-        if (part_idx != OB_INVALID_INDEX) {
-          query_ctx->part_idx_ = part_idx;
-          query_ctx->subpart_idx_ = subpart_idx;
-        }
-        // Set the correct table_id for each scan range
-        ObIArray<common::ObNewRange>& ranges = tmp_info->query_.get_scan_ranges();
-        for (int64_t j = 0; j < ranges.count(); ++j) {
-          ObNewRange& range = ranges.at(j);
-          range.table_id_ = tmp_info->get_table_id();
+      } else {  
+        if (part_idx != OB_INVALID_INDEX) {  
+          query_ctx->part_idx_ = part_idx;  
+          query_ctx->subpart_idx_ = subpart_idx;  
+        }  
+        // Set the correct table_id for each scan range  
+        ObIArray<common::ObNewRange>& ranges = tmp_info->query_.get_scan_ranges();  
+        for (int64_t j = 0; j < ranges.count(); ++j) {  
+          ObNewRange& range = ranges.at(j);  
+          range.table_id_ = tmp_info->get_table_id();  
         }
       }
     }
@@ -951,7 +951,7 @@ int ObTableQueryAsyncP::process_query_start()
         return lhs->get_table_name() < rhs->get_table_name();
       });
     }
-  }
+  } 
   if (OB_FAIL(ret)){
   } else if (OB_FAIL(init_query_async_ctx(query_session_->get_allocator(),
                                           arg_.query_,
@@ -988,7 +988,7 @@ int ObTableQueryAsyncP::process_query_start()
     LOG_DEBUG("finish query start", K(ret), K(query_session_id_));
   }
 
-  OB_TABLE_END_AUDIT(ret_code, ret,
+  OB_TABLE_END_AUDIT(ret_code, ret, 
                      snapshot, get_tx_snapshot(),
                      stmt_type, StmtType::T_KV_QUERY,
                      return_rows, result_.get_row_count(),
@@ -1031,7 +1031,7 @@ int ObTableQueryAsyncP::before_process()
 int ObTableQueryAsyncP::process_query_end()
 {
   int ret = OB_SUCCESS;
-  result_.is_end_ = true;
+  result_.is_end_ = true; 
   return ret;
 }
 
@@ -1192,7 +1192,7 @@ int ObTableQueryAsyncP::new_try_process()
   return ret;
 }
 
-bool ObTableQueryAsyncP::is_new_try_process()
+bool ObTableQueryAsyncP::is_new_try_process() 
 {
   return arg_.entity_type_ == ObTableEntityType::ET_HKV &&
          !arg_.tablet_id_.is_valid() &&

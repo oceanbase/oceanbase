@@ -379,7 +379,7 @@ int ObMicroBlockRowGetter::inner_get_row(
       }
     } else {
       row = &row_;
-      if (OB_UNLIKELY(!sstable_->is_major_sstable() &&
+      if (OB_UNLIKELY(!sstable_->is_major_sstable() && 
                       IF_NEED_CHECK_BASE_VERSION_FILTER(context_) &&
                       OB_FAIL(context_->check_filtered_by_base_version(row_)))) {
         TRANS_LOG(WARN, "check base version filter fail", K(ret));

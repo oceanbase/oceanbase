@@ -16,7 +16,7 @@
 // and will jam when asan turned on
 // it can be solved by introducing <iostream> header file currently
 // TODO: it is clang bug and the specific reason to be further located
-// issue:
+// issue: 
 #include <iostream>
 
 #include "ob_errno.h"

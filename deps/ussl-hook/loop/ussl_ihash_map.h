@@ -19,3 +19,4 @@ extern ussl_link_t* ussl_ihash_insert(ussl_hash_t* map, ussl_link_t* k);
 extern ussl_link_t* ussl_ihash_del(ussl_hash_t* map, uint64_t k);
 extern ussl_link_t* ussl_ihash_get(ussl_hash_t* map, uint64_t k);
 extern void ussl_hash_init(ussl_hash_t* h, int64_t capacity);
+

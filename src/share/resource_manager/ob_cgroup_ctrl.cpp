@@ -103,7 +103,7 @@ bool ObGroupIOInfo::is_valid() const
 {
   return min_percent_ >= 0 && min_percent_ <= 100 &&
          max_percent_ >= min_percent_ &&
-         max_percent_ >= 0 && max_percent_ <= 100 &&
+         max_percent_ >= 0 && max_percent_ <= 100 && 
          weight_percent_ >= 0 && weight_percent_ <= 100 &&
          max_net_bandwidth_percent_ >= 0 && max_net_bandwidth_percent_ <= 100 &&
          net_bandwidth_weight_percent_ >= 0 && net_bandwidth_weight_percent_ <= 100;
@@ -594,7 +594,7 @@ int ObCgroupCtrl::set_cpu_shares_(
     _LOG_INFO("set cpu shares success, "
               "group_path=%s, cpu=%.2f, "
               "cpu_shares_value=%s, tenant_id=%lu",
-              group_path, cpu,
+              group_path, cpu, 
               cpu_shares_value, tenant_id);
   }
   return ret;

@@ -76,7 +76,7 @@ int ObLSRestoreTaskMgr::init(ObILSRestoreState *state_handler, const share::ObLS
   } else {
     restore_state_handler_ = state_handler;
     ls_id_ = ls_id;
-    is_follower_restore_from_leader_ = GCTX.is_shared_storage_mode()
+    is_follower_restore_from_leader_ = GCTX.is_shared_storage_mode() 
                                        && state_handler->get_restore_status().is_restore_major_data();
     is_inited_ = true;
   }
@@ -215,11 +215,11 @@ int ObLSRestoreTaskMgr::remove_restored_tablets(ObIArray<common::ObTabletID> &re
           } else if (!is_sys_tablets_restored) {
             restore_state_handler_->set_retry_flag();
           }
-        } else if (OB_FAIL(handle_task_finish_(ls,
-                                               restored_tg,
-                                               restored_tablets,
-                                               high_pri_tablet_need_redo,
-                                               wait_tablet_need_redo,
+        } else if (OB_FAIL(handle_task_finish_(ls, 
+                                               restored_tg, 
+                                               restored_tablets, 
+                                               high_pri_tablet_need_redo, 
+                                               wait_tablet_need_redo, 
                                                finished_tablet_cnt))) {
           LOG_WARN("fail to handle finish task", K(ret), "task_id", iter->first);
         }
@@ -358,7 +358,7 @@ int ObLSRestoreTaskMgr::schedule_ls_restore(
 }
 
 int ObLSRestoreTaskMgr::schedule_tablet_group_restore(
-    const share::ObTaskId &task_id,
+    const share::ObTaskId &task_id, 
     const ToRestoreTabletGroup &to_restore_tg,
     bool &reach_dag_limit)
 {
@@ -458,7 +458,7 @@ int ObLSRestoreTaskMgr::cancel_task()
           LOG_WARN("fail to check task exist", K(ret), "task_id", iter->first);
         } else if (is_exist && REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
           ret = OB_EAGAIN; // dag may hold ls lock. return OB_EAGAIN , ls offline can retry in next time.
-          LOG_WARN("[RESTORE]cancel dag task cost too much time", K(ret), "task_id", iter->first,
+          LOG_WARN("[RESTORE]cancel dag task cost too much time", K(ret), "task_id", iter->first, 
               "cost_time", ObTimeUtil::current_time() - start_ts);
         }
       } while (is_exist && OB_SUCC(ret));
@@ -586,9 +586,9 @@ void ObLSRestoreTaskMgr::clear_all()
   tablet_map_.reuse();
 }
 
-bool ObLSRestoreTaskMgr::is_restore_completed() const
+bool ObLSRestoreTaskMgr::is_restore_completed() const 
 {
-  return has_no_tablets_to_restore() && has_no_tablets_restoring() && final_reload_;
+  return has_no_tablets_to_restore() && has_no_tablets_restoring() && final_reload_; 
 }
 
 int ObLSRestoreTaskMgr::reload_tablets_()
@@ -680,13 +680,13 @@ int ObLSRestoreTaskMgr::reload_tablets_()
       } else if (OB_FAIL(restore_state_handler_->report_unfinished_bytes(unfinished_bytes))) {
         LOG_WARN("fail to report unfinished bytes", K(ret), K_(ls_id), K(unfinished_tablet_cnt));
       }
-
+      
     }
   }
 
   if (OB_SUCC(ret)) {
     // If no tablets to restore are found, mark 'final_reload_' true.
-    if (has_no_tablets_to_restore()
+    if (has_no_tablets_to_restore() 
         && (!is_follower || !is_follower_restore_from_leader_ || has_checked_leader_done_)) {
       final_reload_ = true;
       LOG_INFO("no tablets to restore are found, set final reload", K_(ls_id));
@@ -698,7 +698,7 @@ int ObLSRestoreTaskMgr::reload_tablets_()
     final_reload_ = false;
   }
 
-  LOG_INFO("reload tablets", K(ret), K_(ls_id),
+  LOG_INFO("reload tablets", K(ret), K_(ls_id), 
     "wait_tablet_set size", wait_tablet_set_.size(),
     "high_pri_wait_tablet_set size", high_pri_wait_tablet_set_.size(),
     "schedule_tablet_set size", schedule_tablet_set_.size(),
@@ -714,8 +714,8 @@ int ObLSRestoreTaskMgr::check_need_reload_tablets_(bool &reload)
   ObLSRestoreStatus ls_restore_status = restore_state_handler_->get_restore_status();
   reload = false;
   // Reload tablets is only allowed if restore status is RESTORE_TABLETS_META, QUICK_RESTORE, or RESTORE_MAJOR_DATA
-  if (!ls_restore_status.is_restore_tablets_meta()
-      && !ls_restore_status.is_quick_restore()
+  if (!ls_restore_status.is_restore_tablets_meta() 
+      && !ls_restore_status.is_quick_restore() 
       && !ls_restore_status.is_restore_major_data()) {
     LOG_DEBUG("no need reload", K_(ls_id), K(ls_restore_status), "is_follower", is_follower_());
   } else if (ATOMIC_LOAD(&force_reload_)) {
@@ -896,11 +896,11 @@ int ObLSRestoreTaskMgr::choose_tablets_from_wait_set_(
   ObLSRestoreStatus ls_restore_status = restore_state_handler_->get_restore_status();
   const ObBackupSetFileDesc::Compatible backup_compat = restore_state_handler_->get_restore_arg()->backup_compatible_;
   ObRestoreCompatibilityUtil compat_util(backup_compat);
-
+  
   tablet_group.action_ = compat_util.get_restore_action(ls_id_, ls_restore_status);
   tablet_group.from_q_type_ = ToRestoreFromQType::FROM_WAIT_TABLETS_Q;
   tablet_group.task_type_ = TaskType::TABLET_GROUP_RESTORE_TASK;
-
+  
   FOREACH_X(iter, wait_tablet_set_, OB_SUCC(ret)) {
     const ObTabletID &tablet_id = iter->first;
     if (OB_FAIL(check_tablet_is_restoring_(tablet_id, is_restoring))) {
@@ -1084,7 +1084,7 @@ bool ObLSRestoreTaskMgr::has_no_tablets_restoring() const
 }
 
 int ObLSRestoreTaskMgr::check_tablet_is_restoring_(
-    const common::ObTabletID &tablet_id,
+    const common::ObTabletID &tablet_id, 
     bool &is_restoring) const
 {
   int ret = OB_SUCCESS;
@@ -1154,7 +1154,7 @@ int ObLSRestoreTaskMgr::handle_task_finish_(
       LOG_INFO("this tablet need redo", K_(ls_id), K(tablet_id), K(restore_status));
     }
   }
-
+  
   return ret;
 }
 

@@ -90,3 +90,4 @@ int ObExecFeedbackInfo::assign(const ObExecFeedbackInfo &other)
   OZ(nodes_.assign(other.get_feedback_nodes()));
   return ret;
 }
+

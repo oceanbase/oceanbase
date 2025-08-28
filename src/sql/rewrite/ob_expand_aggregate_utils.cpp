@@ -2156,7 +2156,7 @@ int ObExpandAggregateUtils::expand_stddev_samp_expr(ObAggFunRawExpr *aggr_expr,
               LOG_WARN("failed to build the case when expr", K(ret));
             } else if (OB_FAIL(sqrt_expr->set_param_expr(case_when_expr))) {
               LOG_WARN("set param expr to sqrt expr failed", K(ret));
-            }
+            } 
           }
         }
         if (OB_SUCC(ret)) {
@@ -2225,14 +2225,14 @@ int ObExpandAggregateUtils::expand_rb_cardinality_expr(ObAggFunRawExpr *aggr_exp
       OB_ISNULL(parma_expr = aggr_expr->get_real_param_exprs().at(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(aggr_expr));
-  } else if (aggr_expr->get_expr_type() == T_FUN_SYS_RB_AND_CARDINALITY_AGG &&
+  } else if (aggr_expr->get_expr_type() == T_FUN_SYS_RB_AND_CARDINALITY_AGG && 
              OB_FAIL(ObRawExprUtils::build_common_aggr_expr(expr_factory_,
                                                             session_info_,
                                                             T_FUN_SYS_RB_AND_AGG,
                                                             parma_expr,
                                                             calc_expr))) {
     LOG_WARN("failed to build common aggr expr", K(ret));
-  } else if (aggr_expr->get_expr_type() == T_FUN_SYS_RB_OR_CARDINALITY_AGG &&
+  } else if (aggr_expr->get_expr_type() == T_FUN_SYS_RB_OR_CARDINALITY_AGG && 
              OB_FAIL(ObRawExprUtils::build_common_aggr_expr(expr_factory_,
                                                             session_info_,
                                                             T_FUN_SYS_RB_OR_AGG,

@@ -24,7 +24,7 @@ enum class ObHardCodeInnerTableSchemaVersion : int64_t { //FARM COMPAT WHITELIST
 };
 int64_t get_hard_code_schema_count()
 {
-  return static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::MAX_HARD_CODE_SCHEMA_VERSION) -
+  return static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::MAX_HARD_CODE_SCHEMA_VERSION) - 
     static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::HARD_CODE_SCHEMA_VERSION_BEGIN) - 1;
 }
 

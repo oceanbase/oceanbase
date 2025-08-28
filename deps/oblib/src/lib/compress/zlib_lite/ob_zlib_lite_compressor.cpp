@@ -21,7 +21,7 @@ namespace common
 {
 namespace ZLIB_LITE
 {
-/*zlib_lite supports two algorithms. On the platform that supports qpl, the qpl compression algorithm will be used,
+/*zlib_lite supports two algorithms. On the platform that supports qpl, the qpl compression algorithm will be used, 
 otherwise the zlib algorithm will be used.*/
 
 ObZlibLiteCompressor::ObZlibLiteCompressor() : adaptor_(NULL)

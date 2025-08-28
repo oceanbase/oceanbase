@@ -52,7 +52,7 @@ public:
                              const common::ObString *ddl_stmt_str = NULL);
   static bool is_formatoutline_compat(uint64_t compat_version) {
     return compat_version < DATA_VERSION_4_3_0_0 || compat_version >= DATA_VERSION_4_3_4_0;
-  }
+  } 
 private:
   int add_outline(common::ObISQLClient &sql_client, const ObOutlineInfo &outline_info,
                   const bool only_history = false);

@@ -45,7 +45,7 @@ int ObRsEventHistoryTableOperator::async_delete()
     ret = OB_NOT_INIT;
     SHARE_LOG(WARN, "not init", KR(ret));
   } else if (OB_FAIL(default_async_delete())) {
-    SHARE_LOG(WARN, "failed to default async delete", KR(ret));
+    SHARE_LOG(WARN, "failed to default async delete", KR(ret)); 
   }
   return ret;
 }

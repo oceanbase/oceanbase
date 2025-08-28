@@ -22,12 +22,12 @@ class ObTableFtsExprCgService
 {
 public:
   static int fill_doc_id_expr_param(ObTableCtx &ctx, ObRawExpr *&doc_id_expr);
-  static bool need_calc_doc_id(ObTableCtx &ctx);
+  static bool need_calc_doc_id(ObTableCtx &ctx);  
   static int generate_text_retrieval_dep_exprs(ObTableCtx &ctx, common::ObIAllocator &allocator);
   static int add_all_text_retrieval_scan_dep_exprs(ObTableCtx &ctx);
 private:
-  static int generate_match_against_exprs(ObTableCtx &ctx,
-                                          ObMatchFunRawExpr *&match_expr,
+  static int generate_match_against_exprs(ObTableCtx &ctx, 
+                                          ObMatchFunRawExpr *&match_expr, 
                                           ObRawExpr *&pushdown_match_filter);
   static int generate_topn_related_params(ObTableCtx &ctx, ObTextRetrievalInfo &tr_info);
 private:
@@ -46,8 +46,8 @@ public:
                                             const uint64_t table_id,
                                             ObDASDMLBaseCtDef &das_dml_ctdef);
 private:
-  static int generate_rowkey_doc_ctdef(ObTableCtx &ctx,
-                                       ObIAllocator &allocator,
+  static int generate_rowkey_doc_ctdef(ObTableCtx &ctx, 
+                                       ObIAllocator &allocator, 
                                        ObDASAttachSpec &attach_spec,
                                        ObDASScanCtDef *&rowkey_doc_scan_ctdef);
   static int generate_rowkey_doc_das_ctdef(ObTableCtx &ctx, ObDASScanCtDef &rowkey_doc_scan_ctdef);
@@ -60,25 +60,25 @@ class ObTableFtsTscCgService
 public:
   ObTableFtsTscCgService() {}
   virtual ~ObTableFtsTscCgService() {}
-  static int extract_rowkey_doc_exprs(const ObTableCtx &ctx,
+  static int extract_rowkey_doc_exprs(const ObTableCtx &ctx, 
                                          common::ObIArray<ObRawExpr*> &rowkey_doc_exprs);
-  static int extract_doc_rowkey_exprs(const ObTableCtx &ctx,
+  static int extract_doc_rowkey_exprs(const ObTableCtx &ctx, 
                                       common::ObIArray<ObRawExpr*> &doc_rowkey_exprs);
   static int extract_text_ir_das_output_column_ids(const ObTableCtx &ctx,
                                                    ObDASScanCtDef &scan_ctdef,
                                                    ObIArray<uint64_t> &tsc_out_cols);
-  static int generate_das_scan_ctdef_with_doc_id(ObIAllocator &alloc,
+  static int generate_das_scan_ctdef_with_doc_id(ObIAllocator &alloc, 
                                                  const ObTableCtx &ctx,
                                                  ObTableApiScanCtDef &tsc_ctdef,
-                                                 ObDASScanCtDef *scan_ctdef,
+                                                 ObDASScanCtDef *scan_ctdef, 
                                                  ObDASDomainIdMergeCtDef *&doc_id_merge_ctdef);
   static int get_fts_schema(const ObTableCtx &ctx, uint64_t table_id, const ObTableSchema *&index_schema);
-  static int extract_text_ir_access_columns(const ObTableCtx &ctx,
-                                            ObDASScanCtDef &scan_ctdef,
+  static int extract_text_ir_access_columns(const ObTableCtx &ctx, 
+                                            ObDASScanCtDef &scan_ctdef, 
                                             ObIArray<ObRawExpr *> &access_expr);
   static int generate_text_ir_pushdown_expr_ctdef(const ObTableCtx &ctx, ObDASScanCtDef &scan_ctdef);
-  static int generate_text_ir_ctdef(const ObTableCtx &ctx,
-                                    ObIAllocator &allocator,
+  static int generate_text_ir_ctdef(const ObTableCtx &ctx, 
+                                    ObIAllocator &allocator, 
                                     ObTableApiScanCtDef &tsc_ctdef,
                                     ObDASBaseCtDef *&root_ctdef);
 private:
@@ -96,7 +96,7 @@ private:
                                           ObDASIRAuxLookupCtDef *&aux_lookup_ctdef);
   static int append_fts_relavence_project_col(ObDASIRAuxLookupCtDef *aux_lookup_ctdef,
                                               ObDASIRScanCtDef *ir_scan_ctdef);
-  static int generate_rowkey_doc_ctdef(ObIAllocator &alloc,
+  static int generate_rowkey_doc_ctdef(ObIAllocator &alloc, 
                                        const ObTableCtx &ctx,
                                        ObTableApiScanCtDef &tsc_ctdef,
                                        ObDASScanCtDef *&rowkey_doc_scan_ctdef);

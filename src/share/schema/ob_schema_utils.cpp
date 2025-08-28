@@ -116,7 +116,7 @@ int ObSchemaUtils::cascaded_generated_column(ObTableSchema &table_schema,
       } else if (T_FUN_SYS_VEC_IVF_CENTER_VECTOR == root_expr_type ||
                  T_FUN_SYS_VEC_IVF_PQ_CENTER_VECTOR == root_expr_type) {
         column.add_column_flag(GENERATED_VEC_IVF_CENTER_VECTOR_COLUMN_FLAG);
-      } else if (T_FUN_SYS_VEC_IVF_FLAT_DATA_VECTOR == root_expr_type ||
+      } else if (T_FUN_SYS_VEC_IVF_FLAT_DATA_VECTOR == root_expr_type || 
                  T_FUN_SYS_VEC_IVF_SQ8_DATA_VECTOR == root_expr_type) {
         column.add_column_flag(GENERATED_VEC_IVF_DATA_VECTOR_COLUMN_FLAG);
       } else if (T_FUN_SYS_VEC_IVF_META_ID == root_expr_type) {
@@ -759,7 +759,7 @@ int ObSchemaUtils::push_inner_table_schema_(
 // for virtual table with index, we should make index schema version less than virtual table schema version
 // otherwise, schema service cannot bind index schema to virtual table schema
 // system table index is no need to do this because system table indexes are hard code
-// see also:
+// see also: 
 // the algorithm:
 // 1. For the input array, construct a map from table_id to table pointer.
 // 2. Traverse the array in reverse order. For virtual table index, first insert the corresponding virtual table into the table_id array, then insert its own table_id; for other system tables, insert them directly into table_id array. Ensure that the virtual table appears in the array before its index. At this point, the schema_version in the table_id array that ranks higher is larger.
@@ -814,7 +814,7 @@ int ObSchemaUtils::generate_hard_code_schema_version(ObIArray<ObTableSchema> &ta
         current_schema_version -= ObSchemaVersionGenerator::SCHEMA_VERSION_INC_STEP;
       }
     }
-    if (OB_SUCC(ret) && current_schema_version != HARD_CODE_SCHEMA_VERSION_BEGIN *
+    if (OB_SUCC(ret) && current_schema_version != HARD_CODE_SCHEMA_VERSION_BEGIN * 
         ObSchemaVersionGenerator::SCHEMA_VERSION_INC_STEP) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("schema count not match", KR(ret), K(current_schema_version), K(HARD_CODE_SCHEMA_VERSION_BEGIN));

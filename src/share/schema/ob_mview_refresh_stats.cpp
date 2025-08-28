@@ -458,7 +458,7 @@ int ObMViewRefreshStats::gen_insert_refresh_stats_dml(uint64_t exec_tenant_id,
 int ObMViewRefreshStats::insert_refresh_stats(const ObMViewRefreshStats &refresh_stat)
 {
   int ret = OB_SUCCESS;
-  const uint64_t tenant_id = refresh_stat.get_tenant_id();
+  const uint64_t tenant_id = refresh_stat.get_tenant_id(); 
   ObMySQLTransaction trans;
   if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;

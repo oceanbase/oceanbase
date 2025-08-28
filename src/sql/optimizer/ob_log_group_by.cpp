@@ -178,7 +178,7 @@ uint64_t ObLogGroupBy::hash(uint64_t seed) const
   return hash_value;
 }
 
-int ObLogGroupBy::get_plan_item_info(PlanText &plan_text,
+int ObLogGroupBy::get_plan_item_info(PlanText &plan_text, 
                                      ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
@@ -190,7 +190,7 @@ int ObLogGroupBy::get_plan_item_info(PlanText &plan_text,
       LOG_WARN("failed to get explain name", K(ret));
     }
     END_BUF_PRINT(plan_item.operation_, plan_item.operation_len_);
-  }
+  } 
   if (OB_SUCC(ret)) {
     BEGIN_BUF_PRINT;
     const ObIArray<ObRawExpr *> &group = get_group_by_exprs();
@@ -233,13 +233,13 @@ int ObLogGroupBy::est_cost()
     LOG_WARN("failed to get chidl est info", K(ret));
   } else if (OB_FAIL(inner_est_cost(get_parallel(),
                                     child_card,
-                                    child_ndv,
+                                    child_ndv, 
                                     group_cost))) {
     LOG_WARN("failed to est group by cost", K(ret));
   } else if (need_re_est_child_cost() &&
              OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
     LOG_WARN("failed to re est child cost", K(ret));
-  } else if (!need_re_est_child_cost() &&
+  } else if (!need_re_est_child_cost() && 
              OB_FALSE_IT(child_cost=child->get_cost())) {
   } else {
     set_card(child_ndv * selectivity);
@@ -300,8 +300,8 @@ int ObLogGroupBy::do_re_est_cost(EstimateCostInfo &param, double &card, double &
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(inner_est_cost(parallel,
-                                      child_card,
-                                      need_ndv,
+                                      child_card, 
+                                      need_ndv, 
                                       op_cost))) {
       LOG_WARN("failed to est distinct cost", K(ret));
     } else {
@@ -366,7 +366,7 @@ int ObLogGroupBy::inner_est_cost(const int64_t parallel, double child_card, doub
                                               get_aggr_funcs().count(),
                                               opt_ctx);
     }
-
+    
     child_ndv = std::min(child_card, per_dop_ndv * parallel);
     if (SCALAR_AGGREGATE == algo_) {
       child_ndv = std::max(1.0, child_ndv);
@@ -943,7 +943,7 @@ int ObLogGroupBy::check_use_child_ordering(bool &used, int64_t &inherit_child_or
   if (HASH_AGGREGATE == get_algo()) {
     inherit_child_ordering_index = -1;
     used = false;
-  } else if (get_group_by_exprs().empty() &&
+  } else if (get_group_by_exprs().empty() && 
              get_rollup_exprs().empty()) {
     used = false;
   }

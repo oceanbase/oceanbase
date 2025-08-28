@@ -48,7 +48,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObSchemaStatusUpdater);
 };
 
-// dodge the bug :
+// dodge the bug : 
 // all operation of __all_core_table must be single partition transaction
 class ObSchemaStatusProxy
 {

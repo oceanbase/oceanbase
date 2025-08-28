@@ -33,7 +33,7 @@ public:
                       ObExpr &rt_expr) const override;
 
   static int eval_password(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &datum);
-
+  
   DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprPassword);

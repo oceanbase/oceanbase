@@ -996,7 +996,7 @@ int ObAsyncGatherSampleSizePrefs::check_pref_value_validity(ObTableStatParam *pa
       ret = OB_ERR_DBMS_STATS_PL;
       LOG_WARN("Illegal async gather sample size", K(ret), K(sample_size));
     } else if (param != NULL) {
-
+      
     } else {/*do nothing*/}
     if (OB_FAIL(ret)) {
       ret = OB_ERR_DBMS_STATS_PL;
@@ -1123,7 +1123,7 @@ int ObGatherStatBatchSizePrefs::check_pref_value_validity(ObTableStatParam *para
     src_obj.set_string(ObVarcharType, pvalue_);
     ObArenaAllocator calc_buf("AutoBatchSize");
     ObCastCtx cast_ctx(&calc_buf, NULL, CM_NONE, ObCharset::get_system_collation());
-    int64_t batch_part_size = 0;
+    int64_t batch_part_size = 0; 
     int64_t int_part = 0;
     if (OB_FAIL(ObObjCaster::to_type(ObNumberType, cast_ctx, src_obj, dest_obj))) {
       LOG_WARN("failed to type", K(ret), K(src_obj));
@@ -1279,7 +1279,7 @@ int ObOnlineEstimatePercentPrefs::check_pref_value_validity(ObTableStatParam *pa
     if (OB_FAIL(ret)) {
       ret = OB_ERR_DBMS_STATS_PL;
       LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Illegal online sample percent: must be in the range [1,100]");
-    }
+    } 
   }
   return ret;
 }

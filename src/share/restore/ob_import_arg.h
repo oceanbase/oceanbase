@@ -25,14 +25,14 @@ class ObImportArg final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObImportArg() : import_table_arg_(), remap_table_arg_()
+  ObImportArg() : import_table_arg_(), remap_table_arg_() 
   {}
 
   const ObImportTableArg &get_import_table_arg() const { return import_table_arg_; }
   const ObImportRemapArg &get_remap_table_arg() const { return remap_table_arg_; }
   ObImportTableArg &get_import_table_arg() { return import_table_arg_; }
   ObImportRemapArg &get_remap_table_arg() { return remap_table_arg_; }
-
+  
   const ObImportDatabaseArray &get_import_database_array() const;
   const ObImportTableArray &get_import_table_array() const;
   const ObImportPartitionArray &get_import_partition_array() const;

@@ -394,7 +394,7 @@ int ObBasicSysVar::session_update(ObExecContext &ctx,
     }
   } else if (set_var.var_name_ == OB_SV__ENABLE_PARALLEL_QUERY) {
       should_update_extra_var = true;
-    //
+    // 
     // 实现 Oracle 兼容行为方式如下：有变量 enable 和 parallel
     //  alter session enable parallel query 时 enable = true, parallel = 1   => 走 manual table dop 规则
     //  alter session disable parallel query 时 enable = false, parallel = 1  => 走 no parallel 规则
@@ -2039,7 +2039,7 @@ int ObSysVarOnCheckFuncs::check_and_convert_collation_not_null(ObExecContext &ct
         ObCollationType cstype = static_cast<ObCollationType>(out_val.get_int());
         if (!ObCharset::is_valid_collation(cstype)) {
           ret = OB_ERR_UNKNOWN_CHARSET;
-          LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, in_val.get_string().length(), in_val.get_string().ptr());
+          LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, in_val.get_string().length(), in_val.get_string().ptr()); 
         } else if(ObCharset::get_charset(cstype)->mbminlen > 1) {
           ret = OB_ERR_WRONG_VALUE_FOR_VAR;
           LOG_USER_ERROR(OB_ERR_WRONG_VALUE_FOR_VAR,
@@ -2310,7 +2310,7 @@ int ObSysVarOnCheckFuncs::check_default_lob_inrow_threshold(sql::ObExecContext &
   } else {
     out_val = in_val;
   }
-  return ret;
+  return ret; 
 }
 
 bool ObSysVarOnCheckFuncs::can_set_trans_var(ObSetVar::SetScopeType scope,
@@ -2350,8 +2350,8 @@ bool ObSysVarOnCheckFuncs::can_set_trans_var(ObSetVar::SetScopeType scope,
      *     because SET_SCOPE_SESSION and SET_SCOPE_NEXT_TRANS have same behavior in this
      *     function.
      * see:
-     *
-     *
+     * 
+     * 
      */
     ret = !session.is_in_transaction() || session.is_txn_free_route_temp();
   } else if (lib::is_mysql_mode()) {
@@ -2930,7 +2930,7 @@ int ObSysVarOnUpdateFuncs::update_tx_read_only_no_scope(ObExecContext &ctx,
     } else if (lib::is_oracle_mode()) {
       // READ ONLY will use SERIALIZABLE implicitly,
       // READ WRITE need use default value in session, so set UNKNOWN.
-      //
+      // 
       // if read only, set tx isolation level to serializable
       // otherwise, use the value in session
       if (read_only) {
@@ -3516,7 +3516,7 @@ int ObPreProcessSysVars::change_initial_value()
     LOG_WARN("fail to change initial value", K(OB_SV_PORT),
              K(ObSpecialSysVarValues::server_port_int_str_));
   // OB_SV_SOCKET
-  } else
+  } else 
    if (OB_FAIL(ObSysVariables::set_value(OB_SV_SOCKET,
                                                ObSpecialSysVarValues::server_socket_file_str_))) {
     LOG_WARN("fail to change initial value", K(OB_SV_SOCKET),

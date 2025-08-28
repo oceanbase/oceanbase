@@ -21,7 +21,7 @@ namespace observer
 class ObTableLoadBackupTable_V_1_4 : public ObTableLoadBackupTable
 {
 public:
-  ObTableLoadBackupTable_V_1_4()
+  ObTableLoadBackupTable_V_1_4() 
     : allocator_("TLD_BT_V_1_4"),
       is_inited_(false)
   {

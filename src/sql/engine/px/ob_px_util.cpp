@@ -225,11 +225,11 @@ int ObPXServerAddrUtil::get_external_table_loc(
     //   LOG_WARN("Has dynamic params in external table or empty range is not supported", K(ret),
     //            K(pre_query_range.has_exec_param()), K(pre_query_range.get_column_count()));
     ObSEArray<int64_t, 16> part_ids;
-    for (DASTabletLocListIter iter = table_loc->tablet_locs_begin(); OB_SUCC(ret)
+    for (DASTabletLocListIter iter = table_loc->tablet_locs_begin(); OB_SUCC(ret) 
                && iter != table_loc->tablet_locs_end(); ++iter) {
       ret = part_ids.push_back((*iter)->partition_id_);
     }
-
+    
     OZ (ObSQLUtils::extract_pre_query_range(pre_query_range, ctx.get_allocator(), ctx, ranges,
                                     ObBasicSessionInfo::create_dtc_params(ctx.get_my_session())));
 
@@ -246,7 +246,7 @@ int ObPXServerAddrUtil::get_external_table_loc(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("empty scan_ops", K(ret));
       } else if (OB_FAIL(ObExternalTableFileManager::get_instance().get_mocked_external_table_files(
-                                                            tenant_id, part_ids, ctx,
+                                                            tenant_id, part_ids, ctx, 
                                                             scan_ops.at(0)->tsc_ctdef_.scan_ctdef_,
                                                             ext_file_urls))) {
         LOG_WARN("fail to get mocked external table files", K(ret));
@@ -310,11 +310,11 @@ int ObPXServerAddrUtil::get_external_table_loc(
       } else if (scan_ops.count() == 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("empty scan_ops", K(ret));
-      } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(scan_ops.at(0)->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_,
+      } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(scan_ops.at(0)->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_, 
                                                             is_odps_external_table))) {
         LOG_WARN("failed to check is odps external table or not", K(ret));
-      } else if (FALSE_IT(expected_location_cnt = std::min(dfo.get_dop(),
-                                      ((!ext_file_urls.empty() && is_odps_external_table) ?
+      } else if (FALSE_IT(expected_location_cnt = std::min(dfo.get_dop(), 
+                                      ((!ext_file_urls.empty() && is_odps_external_table) ? 
                                         all_locations.count() : dfo.get_external_table_files().count())))) {
 
       } else if (1 == expected_location_cnt) {
@@ -388,7 +388,7 @@ int ObPXServerAddrUtil::assign_external_files_to_sqc(
     } else if (scan_ops.count() == 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("empty scan_ops", K(ret));
-    } else if (OB_FAIL(ObSQLUtils::get_odps_api_mode(scan_ops.at(0)->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_,
+    } else if (OB_FAIL(ObSQLUtils::get_odps_api_mode(scan_ops.at(0)->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_, 
                                                      is_odps_external_table,
                                                      odps_api_mode))) {
       LOG_WARN("failed to check is odps external table or not", K(ret));
@@ -935,7 +935,7 @@ int ObPXServerAddrUtil::alloc_by_random_distribution(ObExecContext &exec_ctx,
     const ObDfo &child, ObDfo &parent, ObPxNodePool &px_node_pool)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(exec_ctx.get_physical_plan_ctx()) ||
+  if (OB_ISNULL(exec_ctx.get_physical_plan_ctx()) || 
       OB_ISNULL(exec_ctx.get_physical_plan_ctx()->get_phy_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL phy plan ctx", K(ret), K(exec_ctx.get_physical_plan_ctx()));
@@ -1159,7 +1159,7 @@ int ObPXServerAddrUtil::find_reference_child(ObDfo &parent, ObDfo *&reference_ch
     } else if (OB_ISNULL(candi_child)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null child", K(ret));
-    } else if (ObPQDistributeMethod::HASH == candi_child->get_dist_method() &&
+    } else if (ObPQDistributeMethod::HASH == candi_child->get_dist_method() && 
                candi_child->is_out_slave_mapping()) {
       reference_child = candi_child;
     }
@@ -2307,8 +2307,8 @@ int64_t ObPxTreeSerializer::get_serialize_expr_frame_info_size(
 
 /* Previously, QC set sqc.is_fulltree_ and serialize it.
  * QC find all dfos which contain QC and mark sqcs in this and all descedant dfos as fulltree.
- * The problem is that all child dfos of the dfo containing QC will be marked as full tree, including
- * dfos that are not below this nested QC.
+ * The problem is that all child dfos of the dfo containing QC will be marked as full tree, including 
+ * dfos that are not below this nested QC. 
  * Now we ignore sqc.is_fulltree_ and set is_fulltree = true when meet a QC.
 */
 int ObPxTreeSerializer::serialize_tree(char *buf,
@@ -4126,7 +4126,7 @@ int ObDtlChannelUtil::get_sm_transmit_dtl_channel_set(
   int64_t transmit_task_cnt = ch_total_info.transmit_exec_server_.total_task_cnt_;
   if (OB_UNLIKELY(1 != ch_total_info.receive_exec_server_.exec_addrs_.count()
                   || 1 != ch_total_info.transmit_exec_server_.exec_addrs_.count()
-                  || ch_total_info.receive_exec_server_.exec_addrs_.at(0) !=
+                  || ch_total_info.receive_exec_server_.exec_addrs_.at(0) != 
                       ch_total_info.transmit_exec_server_.exec_addrs_.at(0)
                   || ch_total_info.receive_exec_server_.exec_addrs_.at(0) != GCONF.self_addr_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -4600,7 +4600,7 @@ int ObPXServerAddrUtil::inner_get_zone_servers(const ObAddrSet &data_addr_set,
     }
   }
   if (OB_SUCC(ret) && !tenant_addr_set.empty()) {
-    ObGetServersOfZonesCall get_servers_call(addrs,
+    ObGetServersOfZonesCall get_servers_call(addrs, 
               zone_set, data_addr_set, tenant_addr_set);
     if (OB_FAIL(SVR_TRACER.for_each_server_info(get_servers_call))) {
       LOG_WARN("Failed to for_each_server_info", K(ret));
@@ -4634,7 +4634,7 @@ int ObPXServerAddrUtil::get_zone_servers(ObExecContext &exec_ctx,
 }
 
 int ObPXServerAddrUtil::get_tenant_server_set(const int64_t &tenant_id,
-                                              ObAddrSet &tenant_server_set)
+                                              ObAddrSet &tenant_server_set) 
 {
   int ret = OB_SUCCESS;
   ObUnitTableOperator unit_op;
@@ -4668,7 +4668,7 @@ int ObPXServerAddrUtil::get_tenant_server_set(const int64_t &tenant_id,
 }
 
 int ObPXServerAddrUtil::get_tenant_servers(const int64_t &tenant_id,
-                                          ObIArray<ObAddr> &tenant_servers)
+                                          ObIArray<ObAddr> &tenant_servers) 
 {
   int ret = OB_SUCCESS;
   int64_t renew_time = 0;
@@ -4686,7 +4686,7 @@ int ObPXServerAddrUtil::get_cluster_servers(ObExecContext &exec_ctx,
                                             sql::ObTMArray<ObAddr> &addrs,
                                             bool &is_empty,
                                             int64_t &data_node_cnt)
-{
+{ 
   int ret = OB_SUCCESS;
   addrs.reset();
   ObAddrSet addr_set;
@@ -4736,7 +4736,7 @@ int ObPXServerAddrUtil::get_specified_servers(ObExecContext &exec_ctx,
   int ret = OB_SUCCESS;
   addrs.reset();
   ObAddrSet tenant_addr_set;
-  const common::ObFixedArray<common::ObAddr, common::ObIAllocator> &px_node_addrs =
+  const common::ObFixedArray<common::ObAddr, common::ObIAllocator> &px_node_addrs = 
             exec_ctx.get_physical_plan_ctx()->get_phy_plan()->get_px_node_addrs();
   if (OB_FAIL(ObPXServerAddrUtil::get_tenant_server_set(MTL_ID(), tenant_addr_set))) {
     LOG_WARN("Fail to get tenant server set", K(ret));

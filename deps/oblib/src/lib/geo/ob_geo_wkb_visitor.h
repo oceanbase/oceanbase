@@ -43,7 +43,7 @@ public:
   int visit(ObGeographPolygon *geo) override;
   int visit(ObCartesianPolygon *geo) override;
 
-  int visit(ObGeometrycollection *geo) override;
+  int visit(ObGeometrycollection *geo) override;  
 
   bool is_end(ObCartesianLineString *geo) override { UNUSED(geo); return true; }
   bool is_end(ObGeographLineString *geo) override { UNUSED(geo); return true; }

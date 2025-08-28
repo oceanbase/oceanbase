@@ -107,7 +107,7 @@ private:
                                   const ObDASScanCtDef *scan_ctdef,
                                   ObDASScanRtDef *scan_rtdef,
                                   ObDASScanIter *&iter_tree);
-
+  
   static int create_das_scan_with_merge_iter(storage::ObTableScanParam &scan_param,
                                              common::ObIAllocator &alloc,
                                              const ObDASBaseCtDef *input_ctdef,
@@ -143,7 +143,7 @@ private:
                                           ObDASIter *index_table_sub_tree,
                                           ObDASIter *&iter_tree,
                                           const int64_t batch_row_count = ObDASLookupIterParam::LOCAL_LOOKUP_ITER_DEFAULT_BATCH_ROW_COUNT);
-
+                                        
   static int create_local_lookup_tree(ObTableScanParam &scan_param,
                                       common::ObIAllocator &alloc,
                                       const ObDASScanCtDef *scan_ctdef,
@@ -223,7 +223,7 @@ private:
                                            transaction::ObTxReadSnapshot *snapshot,
                                            ObDASIter *doc_id_iter,
                                            ObDASIter *&domain_lookup_result);
-
+  
   static int create_mvi_lookup_tree(ObTableScanParam &scan_param,
                                     common::ObIAllocator &alloc,
                                     const ObDASBaseCtDef *attach_ctdef,
@@ -394,18 +394,18 @@ private:
     return ret;
   }
 
-  static void init_scan_iter_param(ObDASScanIterParam &param,
-                                   const ObDASScanCtDef *scan_ctdef,
+  static void init_scan_iter_param(ObDASScanIterParam &param, 
+                                   const ObDASScanCtDef *scan_ctdef, 
                                    ObDASBaseRtDef *scan_rtdef);
-  static void init_spatial_scan_iter_param(ObDASSpatialScanIterParam &param,
-                                           const ObDASScanCtDef *scan_ctdef,
+  static void init_spatial_scan_iter_param(ObDASSpatialScanIterParam &param, 
+                                           const ObDASScanCtDef *scan_ctdef, 
                                            ObDASScanRtDef *scan_rtdef);
 
   static int create_das_spatial_scan_iter(ObIAllocator &alloc, ObDASSpatialScanIterParam &param, ObDASSpatialScanIter *&result);
   static int create_das_ivf_scan_iter(
-    ObVectorIndexAlgorithmType type,
-    ObIAllocator &alloc,
-    ObDASIvfScanIterParam &param,
+    ObVectorIndexAlgorithmType type, 
+    ObIAllocator &alloc, 
+    ObDASIvfScanIterParam &param, 
     ObDASIvfBaseScanIter *&result);
   ObDASIterUtils() = delete;
   ~ObDASIterUtils() = delete;

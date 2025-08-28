@@ -295,7 +295,7 @@ int ObExprConvertOracle::calc_convert_oracle_expr(const ObExpr &expr,
         } else {
           ObTextStringIterState state;
           ObString src_block_data;
-          while (OB_SUCC(ret)
+          while (OB_SUCC(ret) 
                 && buf_size > 0
                 && (state = src_iter.get_next_block(src_block_data)) == TEXTSTRING_ITER_NEXT) {
             ObDataBuffer data_buf(res_buf, buf_size);

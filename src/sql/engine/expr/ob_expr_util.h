@@ -99,7 +99,7 @@ public:
   {
     return trunc_num2int64(common::number::ObNumber(datum.get_number()), v);
   }
-
+  
   static int round_decint2int64(const ObDecimalInt *decint, const int32_t int_bytes, const ObScale scale, int64_t &v);
   // round the decimal part, round to INT64_MAX/INT64_MIN too if out of range.
   static int round_num2int64(const common::number::ObNumber &nmb, int64_t &v);
@@ -257,7 +257,7 @@ public:
     local_tz_wrap_(NULL)
   {
   }
-  virtual ~ObSolidifiedVarsContext()
+  virtual ~ObSolidifiedVarsContext() 
   {
     if (NULL != local_tz_wrap_ && NULL != alloc_) {
       local_tz_wrap_->~ObTimeZoneInfoWrap();

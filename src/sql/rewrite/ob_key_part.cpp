@@ -414,7 +414,7 @@ int ObKeyPart::intersect_in(ObKeyPart *other)
     LOG_WARN("get unexpected null", K(ret), K(*other));
   } else if (OB_UNLIKELY(!in_keypart_->find_param(other->pos_.offset_, param_meta))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to find param", K(ret), K(*other), K(*this));
+    LOG_WARN("failed to find param", K(ret), K(*other), K(*this));            
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < param_meta->vals_.count(); ++i) {
       const ObObj &s1 = param_meta->vals_.at(i);
@@ -645,14 +645,14 @@ ObKeyPart *ObKeyPart::cut_general_or_next()
 }
 
 /**
- * @brief
+ * @brief 
  * (A1 or A2 or A3) and B    (A1 and B) or (A2 and B) or (A3 and B)
  * graph:                     link gt:
  *      or    or                      or     or
  *    A1---->A2---->A3            A1---->A2---->A3
  *and |                        and | and | and |
  *    B                            B     B     B
- * @param and_next
+ * @param and_next 
  */
 void ObKeyPart::link_gt(ObKeyPart *and_next)
 {
@@ -1006,7 +1006,7 @@ int ObKeyPart::union_in_dup_vals(ObKeyPart *other, bool &is_unioned)
       if (OB_SUCC(ret) && is_all_same) {
         is_unioned = true;
         if (idx < other_in_param_cnt) {
-          // c1 in or (c1, c2) in
+          // c1 in or (c1, c2) in 
           if (OB_FAIL(other->remove_in_params_vals(other_dup_val_idx))) {
             LOG_WARN("failed to remove in param values", K(ret));
           } else if (other->is_always_false()) {

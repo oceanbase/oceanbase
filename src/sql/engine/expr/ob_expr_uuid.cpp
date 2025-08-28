@@ -529,7 +529,7 @@ int ObExprUuid2bin::uuid2bin(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_d
     char *res_buf = expr.get_str_res_mem(ctx, UuidCommon::BYTE_LENGTH);
     const char *text_ptr = uuid_text.ptr();
     bool is_valid = true;
-
+    
     if (OB_ISNULL(res_buf)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret), K(res_buf));
@@ -728,7 +728,7 @@ int ObExprIsUuid::is_uuid_batch(const ObExpr &expr,
       eval_flags.set(i);
     }
   }
-  return ret;
+  return ret;            
 }
 
 ObExprBin2uuid::ObExprBin2uuid(ObIAllocator &alloc)

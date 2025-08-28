@@ -110,7 +110,7 @@ int ElectionImpl::init_and_start(const int64_t id,
     } else {
       if (inner_priority_seed_ & static_cast<uint64_t>(PRIORITY_SEED_BIT::SEED_NOT_NORMOL_REPLICA_BIT)) {
         event_recorder_.set_need_report(false);
-      }
+      } 
       is_inited_ = true;
       is_running_ = true;
       LOG_INIT(INFO, "election init and start");

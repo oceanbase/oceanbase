@@ -79,7 +79,7 @@ public:
 private:
   static constexpr double MAX_NUMBER_ORACLE = 1e+126;
   static constexpr double MIN_NUMBER_ORACLE = 1e-130;
-
+  
   template<typename T_IBIN>
   int append_point(T_IBIN *geo);
   template<typename T_IBIN, typename T_BIN>

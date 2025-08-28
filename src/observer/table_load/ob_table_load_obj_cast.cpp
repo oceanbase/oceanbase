@@ -62,8 +62,8 @@ static int pad_obj(ObTableLoadCastObjCtx &cast_obj_ctx, const ObColumnSchemaV2 *
             MEMSET(buf + obj.val_len_, padding_char, fixed_len - obj.val_len_);
           } else {
             for (int i = 0; i < fixed_len - obj.val_len_; i += 2) {
-              *(buf + obj.val_len_ + i) = '\0';
-              *(buf + obj.val_len_ + i + 1) = padding_char;
+              *(buf + obj.val_len_ + i) = '\0'; 
+              *(buf + obj.val_len_ + i + 1) = padding_char; 
             }
           }
           obj.v_.ptr_ = buf;
@@ -150,7 +150,7 @@ int ObTableLoadObjCaster::cast_obj(ObTableLoadCastObjCtx &cast_obj_ctx,
     }
   }
   if (OB_SUCC(ret) && convert_src_obj != nullptr) {
-    if (column_schema->is_collection() &&
+    if (column_schema->is_collection() && 
         OB_FAIL(handle_string_to_collection(cast_obj_ctx, column_schema, src, dst))) {
       LOG_WARN("fail to get subschema for collection", KR(ret), K(src), K(dst));
     }

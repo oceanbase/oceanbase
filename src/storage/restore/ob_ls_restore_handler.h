@@ -34,11 +34,11 @@ class ObLSRestoreHandler;
 class ObLSRestoreStat final
 {
 public:
-  ObLSRestoreStat()
+  ObLSRestoreStat() 
     : is_inited_(false),
       ls_key_(),
-      total_tablet_cnt_(0),
-      unfinished_tablet_cnt_(0),
+      total_tablet_cnt_(0), 
+      unfinished_tablet_cnt_(0), 
       total_bytes_(0),
       unfinished_bytes_(0),
       last_report_ts_(0) {}
@@ -58,10 +58,10 @@ public:
   int report_unfinished_bytes(const int64_t bytes);
   void reset();
 
-  TO_STRING_KV(K_(is_inited),
-               K_(ls_key),
-               K_(total_tablet_cnt),
-               K_(unfinished_tablet_cnt),
+  TO_STRING_KV(K_(is_inited), 
+               K_(ls_key), 
+               K_(total_tablet_cnt), 
+               K_(unfinished_tablet_cnt), 
                K_(last_report_ts));
 
 private:
@@ -139,7 +139,7 @@ public:
       const ObIArray<common::ObTabletID> &restore_failed_tablets, const share::ObLSID &ls_id, const int &result);
   // when follower received rpc, call this
   int handle_pull_tablet(const ObIArray<common::ObTabletID> &tablet_ids, 
-      const share::ObLSRestoreStatus &leader_restore_status, const int64_t leader_proposal_id);
+      const share::ObLSRestoreStatus &leader_restore_status, const int64_t leader_proposal_id); 
   void wakeup();
   void stop() { ATOMIC_STORE(&is_stop_, true); } // when remove ls, set this
   int safe_to_destroy(bool &is_safe);
@@ -201,8 +201,8 @@ public:
   const ObTenantRestoreCtx *get_restore_arg() const { return ls_restore_arg_; }
 
   // Check if log has been recovered to restore_scn.
-  virtual int check_recover_finish(bool &is_finish) const
-  {
+  virtual int check_recover_finish(bool &is_finish) const  
+  { 
     is_finish = false;
     return OB_SUCCESS;
   }
@@ -228,7 +228,7 @@ protected:
   int check_follower_restore_finish(const share::ObLSRestoreStatus &leader_status, 
       const share::ObLSRestoreStatus &follower_status, bool &is_finish);
   bool check_leader_restore_finish_(
-      const share::ObLSRestoreStatus &leader_status,
+      const share::ObLSRestoreStatus &leader_status, 
       const share::ObLSRestoreStatus &follower_status) const;
 
   int update_role_();
@@ -266,7 +266,7 @@ protected:
   int check_new_election_(bool &is_changed) const;
 
   int check_replay_to_target_scn_(
-      const share::SCN &target_scn,
+      const share::SCN &target_scn, 
       bool &replayed) const;
   bool need_notify_rs_restore_finish_(const ObLSRestoreStatus &ls_restore_status);
 
@@ -355,7 +355,7 @@ public:
   int check_recover_to_consistent_scn_finish(bool &is_finish) const;
 
 private:
-  // Set restore status to EMPTY for those committed tablets whose restore status is FULL,
+  // Set restore status to EMPTY for those committed tablets whose restore status is FULL, 
   // but transfer table is not replaced.
   int set_empty_for_transfer_tablets_();
   int report_total_tablet_cnt_();
@@ -398,8 +398,8 @@ public:
   virtual int do_restore() override;
 
   // Check if log has been recovered to restore_scn.
-  virtual int check_recover_finish(bool &is_finish) const override
-  {
+  virtual int check_recover_finish(bool &is_finish) const override 
+  { 
     is_finish = true;
     return OB_SUCCESS;
   }
@@ -417,7 +417,7 @@ public:
   virtual int do_restore() override;
 
   // Check if log has been recovered to restore_scn.
-  virtual int check_recover_finish(bool &is_finish) const override
+  virtual int check_recover_finish(bool &is_finish) const override 
   {
     is_finish = true;
     return OB_SUCCESS;
@@ -441,7 +441,7 @@ class ObLSRestoreFinishState final : public ObILSRestoreState
     virtual int do_restore() override;
 
   // Check if log has been recovered to restore_scn.
-  virtual int check_recover_finish(bool &is_finish) const override
+  virtual int check_recover_finish(bool &is_finish) const override 
   {
     is_finish = true;
     return OB_SUCCESS;
@@ -503,7 +503,7 @@ public:
   virtual ~ObLSWaitRestoreConsistentScnState() {}
 
   // Check if log has been recovered to restore_scn.
-  virtual int check_recover_finish(bool &is_finish) const override
+  virtual int check_recover_finish(bool &is_finish) const override 
   {
     is_finish = false;
     return OB_SUCCESS;
@@ -511,7 +511,7 @@ public:
 
 protected:
   int check_can_advance_status_(bool &can) const override;
-
+  
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSWaitRestoreConsistentScnState);
 };
@@ -525,13 +525,13 @@ public:
   virtual ~ObLSRestoreWaitQuickRestoreState() {}
 
   // Check if log has been recovered to restore_scn.
-  virtual int check_recover_finish(bool &is_finish) const override
+  virtual int check_recover_finish(bool &is_finish) const override 
   {
     is_finish = true;
     return OB_SUCCESS;
   }
 protected:
-  int check_can_advance_status_(bool &can) const override;
+  int check_can_advance_status_(bool &can) const override;  
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSRestoreWaitQuickRestoreState);
 };
@@ -544,7 +544,7 @@ public:
   virtual ~ObLSRestoreWaitRestoreMajorDataState() {}
 
   // Check if log has been recovered to restore_scn.
-  virtual int check_recover_finish(bool &is_finish) const override
+  virtual int check_recover_finish(bool &is_finish) const override 
   {
     is_finish = true;
     return OB_SUCCESS;

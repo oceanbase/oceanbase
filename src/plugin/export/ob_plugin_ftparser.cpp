@@ -51,7 +51,7 @@ OBP_PUBLIC_API const char * obp_ftparser_fulltext(ObPluginFTParserParamPtr param
   }
   return fulltext;
 }
-
+  
 OBP_PUBLIC_API int64_t obp_ftparser_fulltext_length(ObPluginFTParserParamPtr param)
 {
   int64_t length = 0;
@@ -60,7 +60,7 @@ OBP_PUBLIC_API int64_t obp_ftparser_fulltext_length(ObPluginFTParserParamPtr par
   }
   return length;
 }
-
+  
 OBP_PUBLIC_API ObPluginCharsetInfoPtr obp_ftparser_charset_info(ObPluginFTParserParamPtr param)
 {
   ObPluginCharsetInfoPtr cs = nullptr;

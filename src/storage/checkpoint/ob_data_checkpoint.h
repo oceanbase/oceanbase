@@ -96,16 +96,16 @@ public:
   {
     ObCheckpointDList *ret = NULL;
     switch (location) {
-      case LS_FROZEN:
+      case LS_FROZEN: 
         ret = &ls_frozen_list_;
         break;
-      case NEW_CREATE:
+      case NEW_CREATE: 
         ret = &new_create_list_;
         break;
-      case ACTIVE:
+      case ACTIVE: 
         ret = &active_list_;
         break;
-      case PREPARE:
+      case PREPARE: 
         ret = &prepare_list_;
         break;
       default:
@@ -209,7 +209,7 @@ private:
   // used when new_create_list_ -> active_list and active_list -> frozen_list
   ObCheckpointDList ls_frozen_list_;
 
-  struct ObCheckpointLock
+  struct ObCheckpointLock 
   {
     common::SpinRWLock ls_frozen_list_lock_;
     common::SpinRWLock new_create_list_lock_;
@@ -235,10 +235,10 @@ public:
   ObCheckpointLockGuard(ObDataCheckpoint &data_checkpoint,
       uint8_t flag,
       const char *owner = "unknown",
-      const int64_t warn_threshold = 50 * 1000 /* 50 ms */)
+      const int64_t warn_threshold = 50 * 1000 /* 50 ms */) 
   : time_guard_(owner, warn_threshold),
     lock_(data_checkpoint.lock_),
-    flag_(flag)
+    flag_(flag) 
   {
     if (0 != (flag & LS_FROZEN)) {
       lock(flag, lock_.ls_frozen_list_lock_);
@@ -254,7 +254,7 @@ public:
     }
   }
 
-  ~ObCheckpointLockGuard()
+  ~ObCheckpointLockGuard() 
   {
     if (0 != (flag_ & PREPARE)) {
       unlock(flag_, lock_.prepare_list_lock_);
@@ -269,7 +269,7 @@ public:
       unlock(flag_, lock_.ls_frozen_list_lock_);
     }
   }
-
+  
   static void lock(uint8_t flag, common::SpinRWLock &lock)
   {
     int ret = OB_SUCCESS;

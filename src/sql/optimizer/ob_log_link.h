@@ -48,7 +48,7 @@ public:
   inline bool get_reverse_link() { return is_reverse_link_; }
   int mark_exec_params(ObDMLStmt *stmt);
 protected:
-  virtual int get_plan_item_info(PlanText &plan_text,
+  virtual int get_plan_item_info(PlanText &plan_text, 
                                 ObSqlPlanItem &plan_item) override;
 private:
   int print_link_stmt(char *buf, int64_t buf_len);

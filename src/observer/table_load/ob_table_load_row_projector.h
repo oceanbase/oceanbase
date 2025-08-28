@@ -81,7 +81,7 @@ protected:
                   const int64_t row_idx,
                   const int64_t src_rowkey_column_num,
                   storage::ObDirectLoadDatumRow &dest_datum_row) const;
-
+  
   int check_index_lob_inrow(storage::ObDirectLoadDatumRow &dest_datum_row) const;
 
 protected:

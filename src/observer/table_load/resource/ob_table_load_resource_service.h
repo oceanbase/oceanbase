@@ -29,13 +29,13 @@ namespace observer
 class ObTableLoadResourceManager;
 
 class ObTableLoadResourceService : public logservice::ObIReplaySubHandler,
-						 public logservice::ObICheckpointSubHandler,
+                             	 		 public logservice::ObICheckpointSubHandler,
                                    public logservice::ObIRoleChangeSubHandler
 {
 public:
   static const int64_t GET_LEADER_RETRY_TIMEOUT = 1 * 1000LL * 1000LL; // 1s
-public:
-	ObTableLoadResourceService()
+public:	
+	ObTableLoadResourceService() 
     : resource_manager_(nullptr),
       tenant_id_(common::OB_INVALID_ID),
       is_inited_(false)
@@ -50,7 +50,7 @@ public:
   void destroy();
 
 	// for replay, do nothing
-	int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const share::SCN &scn)
+	int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const share::SCN &scn) 
   {
     UNUSED(buffer);
     UNUSED(nbytes);

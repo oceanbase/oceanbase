@@ -208,10 +208,10 @@ int ObAlterUserProxyResolver::resolve(const ParseNode &parse_tree)
                                 static_cast<int32_t>(role->str_len_));
             // check roles exists
             const ObUserInfo *role_info = NULL;
-            if (OB_FAIL(params_.schema_checker_->get_user_info(tenant_id,
-                                        role_name,
+            if (OB_FAIL(params_.schema_checker_->get_user_info(tenant_id, 
+                                        role_name, 
                                         // role has fixed host_name '%'
-                                        ObString::make_string(OB_DEFAULT_HOST_NAME),
+                                        ObString::make_string(OB_DEFAULT_HOST_NAME), 
                                         role_info))) {
               LOG_WARN("get user role info failed", K(ret));
             } else if (OB_ISNULL(role_info) || OB_UNLIKELY(!role_info->is_role())) {
@@ -235,7 +235,7 @@ int ObAlterUserProxyResolver::resolve(const ParseNode &parse_tree)
                 if (OB_SUCC(ret) && !found) {
                   ret = OB_ERR_ROLE_NOT_GRANTED_OR_DOES_NOT_EXIST;
                   LOG_WARN("role not granted", K(ret));
-                  LOG_USER_ERROR(OB_ERR_ROLE_NOT_GRANTED_OR_DOES_NOT_EXIST,
+                  LOG_USER_ERROR(OB_ERR_ROLE_NOT_GRANTED_OR_DOES_NOT_EXIST, 
                           role_info->get_user_name_str().length(), role_info->get_user_name_str().ptr());
                 }
               }

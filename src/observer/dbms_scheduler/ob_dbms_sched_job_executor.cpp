@@ -169,7 +169,7 @@ int ObDBMSSchedJobExecutor::init_env(ObDBMSSchedJobInfo &job_info, ObSQLSessionI
       CK (OB_NOT_NULL(user_info = user_infos.at(0)));
     } else if (job_info.get_user_id() != OB_INVALID_ID) {
       OZ (schema_guard.get_user_info(
-        job_info.get_tenant_id(), job_info.get_user_id(), user_info));
+        job_info.get_tenant_id(), job_info.get_user_id(), user_info));      
     } else {
       ObString user = job_info.get_powner();
       if (OB_SUCC(ret)) {
@@ -283,10 +283,10 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
             job_info.get_what().length(), job_info.get_what().ptr()));
       } else if (job_info.is_olap_async_job()){
         OZ (what.append_fmt("%.*s",
-            job_info.get_what().length(), job_info.get_what().ptr()));
+            job_info.get_what().length(), job_info.get_what().ptr()));        
       } else if (job_info.is_mysql_event_job()) { //mysql event
         OZ (what.append_fmt("%.*s",
-              job_info.get_what().length(), job_info.get_what().ptr()));
+              job_info.get_what().length(), job_info.get_what().ptr()));          
       } else {
         //mysql mode not support anonymous block
         OZ (what.append_fmt("CALL %.*s;",

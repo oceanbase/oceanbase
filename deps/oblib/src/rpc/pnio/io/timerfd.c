@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 int timerfd_set_interval(timerfd_t* s, int64_t interval) {
   rk_info("set interval: %ld", interval);
   struct itimerspec it = {{interval/1000000, 1000 * (interval % 1000000)}, {0, 1}};

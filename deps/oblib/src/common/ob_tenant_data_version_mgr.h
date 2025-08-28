@@ -18,9 +18,9 @@
 #include "common/ob_version_def.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace common
+namespace common 
 {
 /**
  * ObTenantDataVersionMgr maintains the data_version of all tenants by a
@@ -47,7 +47,7 @@ namespace common
  * therefore the overhead of the get operation is relatively small.
  *
  */
-class ObTenantDataVersionMgr
+class ObTenantDataVersionMgr 
 {
 public:
   ObTenantDataVersionMgr()
@@ -66,34 +66,34 @@ public:
   int set(const uint64_t tenant_id, const uint64_t data_version);
   int remove(const uint64_t tenant_id);
   int load_from_file();
-  bool is_enable_compatible_monotonic()
+  bool is_enable_compatible_monotonic() 
   {
     return ATOMIC_LOAD(&enable_compatible_monotonic_);
   }
-  void set_enable_compatible_monotonic(bool enable)
+  void set_enable_compatible_monotonic(bool enable) 
   {
     ATOMIC_STORE(&enable_compatible_monotonic_, enable);
   }
-  bool get_file_exists_when_loading()
+  bool get_file_exists_when_loading() 
   {
     return ATOMIC_LOAD(&file_exists_when_loading_);
   }
-  static bool need_set_for_rpc(obrpc::ObRpcPacketCode pcode)
+  static bool need_set_for_rpc(obrpc::ObRpcPacketCode pcode) 
   {
     // these RPC are used when adding a server to the cluster. we can't ensure the correct status
     // of the new server, so we should not sync its data_version to the cluster in case of
-    // data_version corruption.
+    // data_version corruption. 
     // TODO: add the new RPC of shared-storage mode later.
-    return pcode != obrpc::OB_PREPARE_SERVER_FOR_ADDING_SERVER &&
+    return pcode != obrpc::OB_PREPARE_SERVER_FOR_ADDING_SERVER && 
            pcode != obrpc::OB_CHECK_SERVER_EMPTY;
   }
   // for unittest
-  void set_mock_data_version(const uint64_t data_version)
+  void set_mock_data_version(const uint64_t data_version) 
   {
     ATOMIC_STORE(&mock_data_version_, data_version);
   }
 private:
-  struct ObTenantDataVersion
+  struct ObTenantDataVersion 
   {
     ObTenantDataVersion(uint64_t version)
         : removed_(false), remove_timestamp_(0), version_(version) {}
@@ -108,26 +108,26 @@ private:
     // tenant_id(20) + version_str(OB_SERVER_VERSION_LENGTH) + version_val(20) +
     // removed(1) + remove_timestamp(20) + spaces_and_others(10)
     static constexpr int64_t MAX_DUMP_BUF_SIZE = 20 + OB_SERVER_VERSION_LENGTH + 20 + 1 + 20 + 10;
-    bool is_removed() const
-    {
-      return ATOMIC_LOAD(&removed_);
+    bool is_removed() const 
+    { 
+      return ATOMIC_LOAD(&removed_); 
     }
-    uint64_t get_remove_timestamp() const
-    {
-      return ATOMIC_LOAD(&remove_timestamp_);
+    uint64_t get_remove_timestamp() const 
+    { 
+      return ATOMIC_LOAD(&remove_timestamp_); 
     }
-    void set_removed(bool removed, uint64_t remove_ts)
+    void set_removed(bool removed, uint64_t remove_ts) 
     {
       ATOMIC_STORE(&removed_, removed);
       ATOMIC_STORE(&remove_timestamp_, remove_ts);
     }
-    uint64_t get_version() const
-    {
-      return ATOMIC_LOAD(&version_);
+    uint64_t get_version() const 
+    { 
+      return ATOMIC_LOAD(&version_); 
     }
-    void set_version(uint64_t version)
-    {
-      ATOMIC_STORE(&version_, version);
+    void set_version(uint64_t version) 
+    { 
+      ATOMIC_STORE(&version_, version); 
     }
     TO_STRING_KV(K_(removed), K_(remove_timestamp), K_(version));
   private:
@@ -146,12 +146,12 @@ private:
                          const uint64_t data_version);
   int load_data_version_(char *buf, int64_t &pos);
   int write_to_file_(char *buf, int64_t buf_length, int64_t data_length);
-  void set_file_exists_when_loading_()
+  void set_file_exists_when_loading_() 
   {
     ATOMIC_STORE(&file_exists_when_loading_, true);
   }
 private:
-  // we use NoPthreadDefendMode here, so the hashmap will not lock buckets before get/set.
+  // we use NoPthreadDefendMode here, so the hashmap will not lock buckets before get/set. 
   // to ensure thread safety, we have several promises:
   // 1. we only insert new entry into the hashmap, never delete or overwrite existing entry
   // 2. before insert new entry, we acquire a global lock in ObTenantDataVersionMgr

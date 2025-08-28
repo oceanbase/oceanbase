@@ -210,7 +210,7 @@ int ObRedisHelper::init_str2d(ObIAllocator &allocator, double d, char *&buf, siz
     } else if (isnan(d)) {
       length = 3;
       MEMCPY(buf, "nan", length);
-    }
+    } 
   }
   return ret;
 }
@@ -225,7 +225,7 @@ int ObRedisHelper::double_to_string(ObIAllocator &allocator, double d, ObString 
   } else if (length == 0) {
     if (d == 0) {
       if (1.0 / d < 0) {
-        length = 2;
+        length = 2; 
         MEMCPY(buf, "-0", length);
       } else {
         length = 1;
@@ -293,7 +293,7 @@ int ObRedisHelper::long_double_to_string(ObIAllocator &allocator, long double ld
         ret = OB_SIZE_OVERFLOW;
         LOG_WARN("fail to convert double to string", K(ret));
       } else {
-        // remove last '0' and '.'
+        // remove last '0' and '.' 
         if (OB_NOT_NULL(strchr(buf, '.'))) {
           char *p = buf + length - 1;
           while (*p == '0') {
@@ -319,8 +319,8 @@ int ObRedisHelper::long_double_to_string(ObIAllocator &allocator, long double ld
   return ret;
 }
 
-int ObRedisHelper::gen_meta_scan_range(ObIAllocator &allocator,
-                                       const ObTableCtx &tb_ctx,
+int ObRedisHelper::gen_meta_scan_range(ObIAllocator &allocator, 
+                                       const ObTableCtx &tb_ctx, 
                                        ObIArray<ObNewRange> &scan_ranges)
 {
   int ret = OB_SUCCESS;
@@ -333,7 +333,7 @@ int ObRedisHelper::gen_meta_scan_range(ObIAllocator &allocator,
     int64_t start_obj_cnt = data_range.start_key_.get_obj_cnt();
     int64_t end_obj_cnt = data_range.end_key_.get_obj_cnt();
     ObRedisDataModel model = tb_ctx.redis_ttl_ctx()->get_model();
-    int64_t expected_cnt = (model == ObRedisDataModel::LIST) ?
+    int64_t expected_cnt = (model == ObRedisDataModel::LIST) ? 
                             ObRedisUtil::LIST_ROWKEY_NUM : ObRedisUtil::COMPLEX_ROWKEY_NUM;
     // copy first range and replace is_data with false
     if (start_obj_cnt == 1 || end_obj_cnt == 1) {
@@ -352,7 +352,7 @@ int ObRedisHelper::gen_meta_scan_range(ObIAllocator &allocator,
       } else if (db != last_db || rkey != last_rkey) {
         last_db = db;
         last_rkey = rkey;
-        if (OB_FAIL(ObRedisMetaUtil::build_meta_rowkey_by_model(allocator,
+        if (OB_FAIL(ObRedisMetaUtil::build_meta_rowkey_by_model(allocator, 
           tb_ctx.redis_ttl_ctx()->get_model(), db, rkey, meta_range.start_key_))) {
           LOG_WARN("fail to build meta rowkey by model", K(ret));
         } else if (OB_FALSE_IT(meta_range.end_key_.assign(
@@ -397,7 +397,7 @@ int ObRedisRequest::decode()
     db_ = reinterpret_cast<const ObRedisRpcRequest &>(request_).redis_db_;
   } else {
     ObObj prop_value;
-    const ObITableEntity &entity =
+    const ObITableEntity &entity = 
       reinterpret_cast<const ObTableOperationRequest &>(request_).table_operation_.entity();
     const ObRowkey &row_key = entity.get_rowkey();
     const ObObj *obj_ptr = row_key.get_obj_ptr();
@@ -410,7 +410,7 @@ int ObRedisRequest::decode()
       LOG_WARN("invalid rowkey", K(ret), K(row_key));
     } else if (OB_FAIL(obj_ptr[0].get_int(db_))) {
       LOG_WARN("fail to get db num", K(ret), K(row_key));
-    }
+    } 
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObRedisParser::decode(cmd_buffer, cmd_name_, args_))) {

@@ -64,12 +64,12 @@ public:
   int append_sample_vector(float* vector);
   bool is_empty() { return sample_vectors_.empty(); }
 
-  TO_STRING_KV(K(is_inited_),
-               K(dim_),
-               K(lists_),
-               K(tenant_id_),
-               K(max_sample_count_),
-               K(total_scan_count_),
+  TO_STRING_KV(K(is_inited_), 
+               K(dim_), 
+               K(lists_), 
+               K(tenant_id_), 
+               K(max_sample_count_), 
+               K(total_scan_count_), 
                K(dist_algo_));
 
 public:
@@ -111,10 +111,10 @@ public:
   int64_t next_idx() { return 1L - cur_idx_; }
   ObCentersBuffer<float> &get_cur_centers() { return centers_[cur_idx_]; }
 
-  VIRTUAL_TO_STRING_KV(K(is_inited_),
-               KPC(kmeans_ctx_),
-               K(cur_idx_),
-               KP(weight_),
+  VIRTUAL_TO_STRING_KV(K(is_inited_), 
+               KPC(kmeans_ctx_), 
+               K(cur_idx_), 
+               KP(weight_), 
                K(status_));
 
   virtual int inner_build(const ObIArray<float*> &input_vectors) = 0;
@@ -136,7 +136,7 @@ protected:
   ObIvfMemContext &ivf_build_mem_ctx_; // from ObIvfBuildHelper, used for alloc memory for kmeans build process
 };
 
-// elkan kmeans
+// elkan kmeans 
 // distance must satisfy triangle inequality // l2 or angular distance
 // cuz D(x, c1) + D(x, c2) > D(c1, c2), so D(x, c2) > D(c1, c2) - D(x, c1)
 // if 2D(x, c1) <= D(c1, c2), then D(x, c2) > D(c1, c2) - D(x, c1) >= D(x, c1) -> D(x, c2) > D(x, c1)
@@ -154,7 +154,7 @@ public:
   }
   virtual void destroy() override;
 
-  TO_STRING_KV(KP(upper_bounds_),
+  TO_STRING_KV(KP(upper_bounds_), 
                KP(nearest_centers_));
 
 protected:
@@ -192,7 +192,7 @@ public:
   OB_INLINE int64_t get_max_sample_count() { return ctx_.max_sample_count_; }
   bool is_empty() { return ctx_.is_empty(); }
 
-  TO_STRING_KV(K(is_inited_),
+  TO_STRING_KV(K(is_inited_), 
                K(ctx_));
 
 protected:
@@ -227,8 +227,8 @@ public:
   int64_t get_centers_dim() const;
   int get_center(const int64_t pos, float *&center_vector) override;
 
-  TO_STRING_KV(K(is_inited_),
-               K(ctx_),
+  TO_STRING_KV(K(is_inited_), 
+               K(ctx_), 
                K(algo_));
 
 private:
@@ -262,7 +262,7 @@ public:
   int64_t get_centers_dim() const;
   int get_center(const int64_t pos, float *&center_vector) override;
 
-  TO_STRING_KV(K(is_inited_),
+  TO_STRING_KV(K(is_inited_), 
                K(ctx_));
 
 private:
@@ -402,7 +402,7 @@ public:
   bool is_valid() { return helper_ != nullptr; }
   ObIvfBuildHelper* get_helper() { return helper_; }
   int set_helper(ObIvfBuildHelper *helper)
-  {
+  { 
     int ret = OB_SUCCESS;
     if (is_valid()) {
       ret = OB_ERR_UNEXPECTED;
@@ -505,7 +505,7 @@ public:
   constexpr static const float THREAD_FACTOR = 0.6;
   // 1s
   const static int64_t WAIT_RETRY_PUSH_TASK_TIME = 1 * 1000 * 1000; // us
-  // push task max wait time: 1s * 5 * 60 = 5 min
+  // push task max wait time: 1s * 5 * 60 = 5 min 
   const static int64_t MAX_RETRY_PUSH_TASK_CNT = 5 * 60;
   static const int64_t INVALID_TG_ID = -1;
   static const int64_t MIN_THREAD_COUNT = 1;

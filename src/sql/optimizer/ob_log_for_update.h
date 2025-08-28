@@ -49,7 +49,7 @@ public:
   bool is_gi_above() const { return gi_charged_; }
   void set_gi_above(bool gi_above) { gi_charged_ = gi_above; }
   virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
-  virtual int get_plan_item_info(PlanText &plan_text,
+  virtual int get_plan_item_info(PlanText &plan_text, 
                                 ObSqlPlanItem &plan_item) override;
 protected:
   int generate_multi_part_partition_id_expr();

@@ -69,7 +69,7 @@ public:
   {
     // Attention!!!
     // If you want to add new status, please be sure to add the corresponding string
-    // in ObTenantCloneStatus::TENANT_CLONE_STATUS_ARRAY[]
+    // in ObTenantCloneStatus::TENANT_CLONE_STATUS_ARRAY[] 
     CLONE_SYS_LOCK = 0,
     CLONE_SYS_CREATE_INNER_RESOURCE_POOL,
     CLONE_SYS_CREATE_SNAPSHOT, // only for fork tenant job

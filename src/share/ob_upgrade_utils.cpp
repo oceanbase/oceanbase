@@ -1803,7 +1803,7 @@ int ObUpgradeFor4350Processor::add_spm_stats_scheduler_job()
                                                                                   lib::Worker::CompatMode::ORACLE == compat_mode))) {
     LOG_WARN("failed to get spm stats upgrade jobs sql");
   }
-
+  
   return ret;
 }
 

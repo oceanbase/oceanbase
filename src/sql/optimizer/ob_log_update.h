@@ -36,7 +36,7 @@ public:
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
   virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
   virtual const char *get_name() const override;
-  virtual int get_plan_item_info(PlanText &plan_text,
+  virtual int get_plan_item_info(PlanText &plan_text, 
                                 ObSqlPlanItem &plan_item) override;
   virtual int op_is_update_pk_with_dop(bool &is_update) override;
 private:

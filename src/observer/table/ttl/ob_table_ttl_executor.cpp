@@ -132,7 +132,7 @@ int ObTableApiTTLExecutor::refresh_exprs_frame(const ObTableEntity *entity)
     LOG_WARN("ttl ctdefs count is less than 1", K(ret));
   } else if (OB_ISNULL(ttl_ctdef = ttl_spec_.get_ctdefs().at(0))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ttl ctdef is NULL", K(ret));
+    LOG_WARN("ttl ctdef is NULL", K(ret));  
   } else if (OB_FAIL(ObTableExprCgService::refresh_ttl_exprs_frame(tb_ctx_,
                                                                    ttl_ctdef->ins_ctdef_.new_row_,
                                                                    *entity))) {
@@ -224,12 +224,12 @@ int ObTableApiTTLExecutor::do_delete()
     } else {
       bool is_primary_table = (i == 0);
       const ObTableDelCtDef &del_ctdef = ttl_ctdef->del_ctdef_;
-      ObExpr *calc_part_id_expr = is_primary_table ? conflict_checker_.checker_ctdef_.calc_part_id_expr_
-                                                    : del_ctdef.old_part_id_expr_;
-      if (OB_FAIL(delete_row_to_das(is_primary_table,
+      ObExpr *calc_part_id_expr = is_primary_table ? conflict_checker_.checker_ctdef_.calc_part_id_expr_ 
+                                                    : del_ctdef.old_part_id_expr_;      
+      if (OB_FAIL(delete_row_to_das(is_primary_table, 
                                     calc_part_id_expr,
-                                    conflict_checker_.checker_ctdef_.part_id_dep_exprs_,
-                                    del_ctdef,
+                                    conflict_checker_.checker_ctdef_.part_id_dep_exprs_, 
+                                    del_ctdef, 
                                     del_rtdef))) {
         LOG_WARN("fail to delete row to das", K(ret), K(del_ctdef), K(del_rtdef), K(i));
       }
@@ -299,17 +299,17 @@ int ObTableApiTTLExecutor::update_row_to_conflict_checker()
   return ret;
 }
 
-// create table t(c1 int primary key, c2 int, c3 int,
+// create table t(c1 int primary key, c2 int, c3 int, 
 //                unique key idx0(c2), unique key idx1(c3));
 // insert into t values(1, 1, 1),(2, 2, 2),(3, 3, 3);
 // insert into t values(3,1,2) ON DUPLICATE KEY UPDATE c1=4;
 // 执行insert后map中有3个元素：
-//  1->(base:1, 1, 1 curr:1, 1, 1),
-//  2->(base:2, 2, 2 curr:2, 2, 2),
+//  1->(base:1, 1, 1 curr:1, 1, 1), 
+//  2->(base:2, 2, 2 curr:2, 2, 2), 
 //  3->(base:3, 3, 3 curr:3, 3, 3);
 // 执行conflict_checker_.update_row后:
-//  1->(base:1, 1, 1 curr:nul),
-//  2->(base:2, 2, 2 curr:nul),
+//  1->(base:1, 1, 1 curr:nul), 
+//  2->(base:2, 2, 2 curr:nul), 
 //  3->(base:3, 3, 3 curr:4, 3, 3);
 // delete->base:3, 3, 3, insert->curr:4, 3, 3
 // result:
@@ -345,7 +345,7 @@ int ObTableApiTTLExecutor::update_row_to_das()
                                       get_primary_table_upd_old_row(),
                                       eval_ctx_))) {
           LOG_WARN("fail to load row to old row exprs", K(ret), KPC(constraint_value.baseline_datum_row_));
-        } else if (OB_FAIL(to_expr_skip_old(*constraint_value.current_datum_row_,
+        } else if (OB_FAIL(to_expr_skip_old(*constraint_value.current_datum_row_, 
                                             ttl_spec_.get_ctdefs().at(0)->upd_ctdef_))) {
           LOG_WARN("fail to load row to new row exprs", K(ret), KPC(constraint_value.current_datum_row_));
         } else {
@@ -461,7 +461,7 @@ int ObTableApiTTLExecutor::process_expire()
         } else if (is_expired_) { // 过期，删除旧行，写入新行
           LOG_DEBUG("row is expired", K(ret));
           // Notice: here need to clear the evaluated flag, cause the new_row used in try_insert is the same as old_row in do_delete
-          //  and if we don't clear the evaluated flag, the generated columns in old_row won't refresh and will use the new_row result
+          //  and if we don't clear the evaluated flag, the generated columns in old_row won't refresh and will use the new_row result 
           //  which will cause 4377 when do_delete
           clear_evaluated_flag();
           if (OB_FAIL(do_delete())) {

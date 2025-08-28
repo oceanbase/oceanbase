@@ -201,7 +201,7 @@ int ObSortVecOp::process_sort_batch()
       ret = OB_SUCCESS;
     }
     op_monitor_info_.otherstat_7_id_ = ObSqlMonitorStatIds::ROW_COUNT;
-    op_monitor_info_.otherstat_7_value_ = sort_row_count_;
+    op_monitor_info_.otherstat_7_value_ = sort_row_count_; 
     OZ(sort_op_provider_.sort());
     sort_op_provider_.collect_memory_dump_info(op_monitor_info_);
   }
@@ -339,7 +339,7 @@ int ObSortVecOp::scan_all_then_sort_batch()
       ret = OB_SUCCESS;
     }
     op_monitor_info_.otherstat_7_id_ = ObSqlMonitorStatIds::ROW_COUNT;
-    op_monitor_info_.otherstat_7_value_ = sort_row_count_;
+    op_monitor_info_.otherstat_7_value_ = sort_row_count_; 
     if (OB_SUCC(ret)) {
       if (OB_FAIL(finish_add_prescan_store())) {
         LOG_WARN("failed to finish add prescan store", K(ret));

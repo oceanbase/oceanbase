@@ -119,7 +119,7 @@ int ObSSTableWrapper::get_merge_row_cnt(const ObTableIterParam &iter_param, int6
       int64_t index_row_count = 0;
       int64_t data_row_count = 0;
 
-
+      
       blocksstable::ObSSTable *cur_sstable = nullptr;
       ObUnitedSliceRowIterator ddl_merge_iter;
       if (OB_FAIL(get_loaded_column_store_sstable(cur_sstable))) {
@@ -1009,3 +1009,4 @@ int64_t ObCOSSTableV2::get_data_checksum() const
 
 } /* storage */
 } /* oceanbase */
+

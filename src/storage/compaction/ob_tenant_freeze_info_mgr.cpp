@@ -404,7 +404,7 @@ void ObTenantFreezeInfoMgr::check_tenant_in_restore_with_mv_(
     ObSchemaGetterGuard &schema_guard,
     const ObSimpleTenantSchema *&tenant_schema)
 {
-  need_check_mview = false;
+  need_check_mview = false; 
   int ret = OB_SUCCESS;
   if (MTL_TENANT_ROLE_CACHE_IS_RESTORE() || MTL_TENANT_ROLE_CACHE_IS_INVALID()) {
     need_check_mview = true;
@@ -429,7 +429,7 @@ void ObTenantFreezeInfoMgr::check_tenant_in_restore_with_mv_(
       LOG_WARN("tenant schema is null, need check mview", K(ret),
                 K(tenant_id), K(need_check_mview), KP(tenant_schema));
     } else if (tenant_schema->is_restore()) {
-      need_check_mview = true;
+      need_check_mview = true; 
     }
   }
 }
@@ -622,7 +622,7 @@ int ObTenantFreezeInfoMgr::try_update_info()
   ObSEArray<ObFreezeInfo, 4> freeze_infos;
   share::SCN new_snapshot_gc_scn;
   share::ObSnapshotTableProxy snapshot_proxy;
-
+  
   if (OB_FAIL(ObFreezeInfoManager::fetch_new_freeze_info(
         MTL_ID(), share::SCN::base_scn(), *GCTX.sql_proxy_, freeze_infos, new_snapshot_gc_scn))) {
     STORAGE_LOG(WARN, "failed to load updated info", K(ret));

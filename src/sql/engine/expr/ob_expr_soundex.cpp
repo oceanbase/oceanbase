@@ -183,7 +183,7 @@ int ObExprSoundex::convert_str_to_soundex(const ObString &input,
     bool fix_min_len;
     const int64_t len;
     int8_t soundex_code = 0;
-
+    
     int operator() (const ObString &encoding, ob_wc_t wchar) {
       int ret = OB_SUCCESS;
       if (fix_min_len && pos >= MIN_RESULT_LENGTH) {
@@ -229,7 +229,7 @@ int ObExprSoundex::convert_str_to_soundex(const ObString &input,
   Functor temp_handler(input, buf, pos, is_first, pre_code, use_original_algo, fix_min_len, len);
   ObCharsetType input_charset_type = ObCharset::charset_type_by_coll(input_cs_type);
   OZ(ObFastStringScanner::foreach_char(input, input_charset_type, temp_handler));
-
+  
   if (OB_ITER_END == ret) {
     ret = OB_SUCCESS;
   }
@@ -323,7 +323,7 @@ int ObExprSoundex::calc_text(const ObDatum &input_datum,
     ObString input_data;
     ObString block_out;
     char *block_buf = NULL;
-    while (OB_SUCC(ret)
+    while (OB_SUCC(ret) 
             && buf_size > 0
             && (state = input_iter.get_next_block(input_data)) == TEXTSTRING_ITER_NEXT) {
       ObDataBuffer buf_alloc(buf, buf_size);

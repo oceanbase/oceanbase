@@ -310,7 +310,7 @@ int ObLobAccessParam::update_handle_data_size(const ObLobMetaInfo *old_info, con
     if (nullptr != new_info) {
       *char_len_ptr = *char_len_ptr + new_info->char_len_;
     }
-
+    
     if (*char_len_ptr < 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("char_len is invalid after inc", K(ret), K(*char_len_ptr), KPC(this), KPC(old_info), KPC(new_info));
@@ -517,18 +517,18 @@ int ObLobAccessParam::set_tx_read_snapshot(ObLobLocatorV2 &locator)
   transaction::ObTxReadSnapshot read_snapshot;
   if (OB_FAIL(get_tx_read_snapshot(locator, read_snapshot))) {
     LOG_WARN("get tx read snapshot fail", K(ret), KPC(this), K(locator));
-
+  
   // 1. if tx_desc is null , use read snapshot in locator
   // 2. if tx_id in tx_desc is equal to tx_id in locator read snapshot, use read snapshot in locator
   // 3. if tx_id in locator read snapshot is zero and snapshot version is valid, use read snapshot in locator
-  } else if (OB_ISNULL(this->tx_desc_)
+  } else if (OB_ISNULL(this->tx_desc_) 
       || this->tx_desc_->get_tx_id() == read_snapshot.tx_id()  // read in same tx
       || read_snapshot.is_not_in_tx_snapshot()) { // read not in tx
     if (OB_FAIL(this->snapshot_.assign(read_snapshot))) {
       LOG_WARN("assign snapshot fail", K(ret), K(read_snapshot));
     }
   } else {
-    // if tx_desc is not null
+    // if tx_desc is not null 
     //    and tx_id in tx_desc is not equal to tx_id in locator read snapshot
     //    and tx_id in locator read snapshot is not zero,
     // that means lob locator is old but tx_id in tx_desc is zero, that means transaction mab be commited.
@@ -536,10 +536,10 @@ int ObLobAccessParam::set_tx_read_snapshot(ObLobLocatorV2 &locator)
     // and this situation happens in jdbc read wirte with lob locator
     // for example:
     //      begin;
-    //      select lob_col into lob_var from test for update;  // will return lob locator to lob_var
+    //      select lob_col into lob_var from test for update;  // will return lob locator to lob_var 
     //      call dbms_lob.write(lob_var, new_data);
     //      commit;                                            // reset tx_desc and tx_id in tx_desc is zero
-    //      call dbms_lob.read(lob_var);                       // should return updated data
+    //      call dbms_lob.read(lob_var);                       // should return updated data 
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("it is not support for reading lob after tranaction commit", K(ret), K(locator), K(read_snapshot), KPC(this));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "it is not support for reading lob after tranaction commit, please re-select lob locator");

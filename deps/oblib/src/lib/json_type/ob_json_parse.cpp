@@ -468,8 +468,8 @@ bool ObRapidJsonHandler::String(const char *str, rapidjson::SizeType length, boo
   void *buf = alloc(sizeof(ObJsonString));
   if (OB_ISNULL(buf)) {
     LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc memory for string json node", K(OB_ALLOCATE_MEMORY_FAILED));
-  } else if (is_schema_ && OB_NOT_NULL(str) && length > 0
-        && next_state_ == ObJsonExpectNextState::EXPECT_OBJECT_VALUE
+  } else if (is_schema_ && OB_NOT_NULL(str) && length > 0 
+        && next_state_ == ObJsonExpectNextState::EXPECT_OBJECT_VALUE 
         && key_.compare("$ref") == 0 && *str != '#') {
     err_code_ = OB_ERR_UNSUPPROTED_REF_IN_JSON_SCHEMA;
     LOG_WARN_RET(OB_ERR_UNSUPPROTED_REF_IN_JSON_SCHEMA, "unsupported ref in json schema", K(OB_ERR_UNSUPPROTED_REF_IN_JSON_SCHEMA));
@@ -491,7 +491,7 @@ bool ObRapidJsonHandler::String(const char *str, rapidjson::SizeType length, boo
   } else {
     ObJsonString *node = new (buf) ObJsonString(str, length);
     is_continue = seeing_value(node);
-  }
+  } 
 
   return is_continue;
 }

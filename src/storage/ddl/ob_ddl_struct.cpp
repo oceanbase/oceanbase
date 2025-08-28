@@ -149,7 +149,7 @@ int ObDDLMacroBlock::set_data_macro_meta(const MacroBlockId &macro_id, const cha
     } else if (OB_FAIL(ObIndexBlockRebuilder::get_macro_meta(macro_block_buf, size, macro_id, allocator_, data_macro_meta_))) {
       LOG_WARN("failed to set macro meta", K(ret),  K(macro_id), KP(macro_block_buf), K(size));
     }
-
+  
     /* shared nothing need buf*/
     void *tmp_buf = nullptr;
     if (OB_FAIL(ret)) {
@@ -283,8 +283,8 @@ void ObDDLKVHandle::reset()
 }
 
 ObDDLKVPendingGuard::ObDDLKVPendingGuard(
-    ObTablet *tablet,
-    const SCN &scn,
+    ObTablet *tablet, 
+    const SCN &scn, 
     const SCN &start_scn,
     const int64_t snapshot_version, // used for shared-storage mode.
     const uint64_t data_format_version, // used for shared-storage mode.
@@ -294,7 +294,7 @@ ObDDLKVPendingGuard::ObDDLKVPendingGuard(
   int ret = OB_SUCCESS;
   ObDDLKV *curr_kv = nullptr;
   ObDDLKvMgrHandle ddl_kv_mgr_handle;
-  if (OB_UNLIKELY(nullptr == tablet
+  if (OB_UNLIKELY(nullptr == tablet 
       || !scn.is_valid_and_not_min()
       || !start_scn.is_valid_and_not_min()
       || snapshot_version <= 0
@@ -359,7 +359,7 @@ ObDDLKVPendingGuard::~ObDDLKVPendingGuard()
 }
 
 int ObDDLKVPendingGuard::set_macro_block(
-    ObTablet *tablet,
+    ObTablet *tablet, 
     const ObDDLMacroBlock &macro_block,
     const int64_t snapshot_version,
     const uint64_t data_format_version,
@@ -374,7 +374,7 @@ int ObDDLKVPendingGuard::set_macro_block(
     int64_t try_count = 0;
     while ((OB_SUCCESS == ret || OB_EAGAIN == ret) && try_count < MAX_RETRY_COUNT) {
       ObDDLKV *ddl_kv = nullptr;
-      ObDDLKVPendingGuard guard(tablet, macro_block.scn_, macro_block.ddl_start_scn_,
+      ObDDLKVPendingGuard guard(tablet, macro_block.scn_, macro_block.ddl_start_scn_, 
           snapshot_version, data_format_version, direct_load_mgr_handle);
       if (OB_FAIL(guard.get_ddl_kv(ddl_kv))) {
         LOG_WARN("get ddl kv failed", K(ret));
@@ -440,8 +440,8 @@ bool ObDDLMacroBlockRedoInfo::is_valid() const
               && type_ >= ObDirectLoadType::DIRECT_LOAD_INVALID && type_ < ObDirectLoadType::DIRECT_LOAD_MAX;
   if (ret && is_incremental_direct_load(type_)) {
     ret = logic_id_.is_valid() && trans_id_.is_valid();
-  }
-
+  } 
+  
   if (ret && ObDDLMacroBlockType::DDL_MB_SS_EMPTY_DATA_TYPE != block_type_){
     /* when in ss empty type, nullptr is allowded*/
     ret = ret && !((data_buffer_.ptr() == nullptr || data_buffer_.length() == 0));
@@ -449,7 +449,7 @@ bool ObDDLMacroBlockRedoInfo::is_valid() const
 
   if (ret && !GCTX.is_shared_storage_mode()) {  /* for shared nothing */
     ret = logic_id_.is_valid();
-  #ifdef OB_BUILD_SHARED_STORAGE
+  #ifdef OB_BUILD_SHARED_STORAGE  
   } else if (ret && GCTX.is_shared_storage_mode()) { /* for shared storage*/
     ret = ret && (parallel_cnt_ > 0 && cg_cnt_ >0);
   #endif
@@ -571,7 +571,7 @@ ObDDLFinishLogInfo::ObDDLFinishLogInfo()
 {
 }
 
-bool ObDDLFinishLogInfo::is_valid() const
+bool ObDDLFinishLogInfo::is_valid() const 
 {
   return ls_id_.is_valid() && table_key_.is_valid() && data_buffer_.ptr() != nullptr
          &&  macro_block_id_.is_valid() && data_format_version_ >= 0 ;
@@ -588,7 +588,7 @@ void ObDDLFinishLogInfo::reset()
 
 int ObDDLFinishLogInfo::assign(const ObDDLFinishLogInfo &other)
 {
-  int ret = OB_SUCCESS;
+  int ret = OB_SUCCESS; 
   if (!other.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(other));

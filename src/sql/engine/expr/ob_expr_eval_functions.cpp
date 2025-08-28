@@ -425,7 +425,7 @@
 #include "ob_expr_demote_cast.h"
 #include "ob_expr_array_sum.h"
 #include "ob_expr_array_length.h"
-#include "ob_expr_array_position.h"
+#include "ob_expr_array_position.h" 
 #include "ob_expr_array_slice.h"
 #include "ob_expr_vec_ivf_center_id.h"
 #include "ob_expr_vec_ivf_center_vector.h"
@@ -1401,7 +1401,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprInnerInfoColsColumnKeyPrinter::eval_column_column_key,         /* 848 */
   NULL, // ObExprCheckLocationAccess::eval_check_location_access,      /* 849 */
   NULL, // ObExprUDF::eval_external_udf,                               /* 850 */
-  NULL, // ObExprStartUpMode::eval_startup_mode,                       /* 851 */
+  NULL, // ObExprStartUpMode::eval_startup_mode,                       /* 851 */ 
   ObExprVectorL2Squared::calc_l2_squared,                              /* 852 */
   #if defined(ENABLE_DEBUG_LOG) || !defined(NDEBUG)                      // add placeholder from master
     NULL, // ObExprTmpFileOpen::eval_tmp_file_open,                     /* 853 */

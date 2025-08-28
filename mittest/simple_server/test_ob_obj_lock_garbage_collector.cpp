@@ -1,4 +1,4 @@
-// owner: yichang.yyf
+// owner: yichang.yyf 
 // owner group: transaction
 
 /**
@@ -35,7 +35,7 @@ static const char *RESTART_CASE_NAME = "ObOBJLockGCAfterRestartTest";
 
 namespace oceanbase
 {
-namespace transaction
+namespace transaction 
 {
 namespace tablelock
 {
@@ -603,8 +603,8 @@ TEST_F(ObOBJLockGCAfterRestartTest, obj_lock_gc_after_restart)
   // mode from the log file. It means that the gc
   // thread start successfully before leader comes
   // back to work.
-  // (The gc thread will compact table lock ops in
-  // force mode only when it's called during the
+  // (The gc thread will compact table lock ops in 
+  // force mode only when it's called during the 
   // period when a follower is switching to leader)
   LOG_INFO("ObOBJLockGCAfterRestartTest::obj_lock_gc_after_restart");
   uint64_t table_id;

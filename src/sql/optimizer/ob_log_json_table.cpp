@@ -70,7 +70,7 @@ int ObLogJsonTable::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
 {
   int ret = OB_SUCCESS;
   const ObDMLStmt *stmt = get_stmt();
-
+  
   if (OB_FAIL(generate_access_exprs())) {
     LOG_WARN("failed to generate access exprs", K(ret));
   } else if (OB_FAIL(append(all_exprs, access_exprs_))) {
@@ -92,8 +92,8 @@ int ObLogJsonTable::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
         LOG_WARN("push empty expr to array failed", K(ret));
       }
     }
-  }
-
+  } 
+  
   if (OB_SUCC(ret) && OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
     LOG_WARN("failed to get op exprs", K(ret));
   }
@@ -101,7 +101,7 @@ int ObLogJsonTable::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
   return ret;
 }
 
-int ObLogJsonTable::get_plan_item_info(PlanText &plan_text,
+int ObLogJsonTable::get_plan_item_info(PlanText &plan_text, 
                                        ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
@@ -119,9 +119,9 @@ int ObLogJsonTable::get_plan_item_info(PlanText &plan_text,
   }
   if (OB_SUCC(ret)) {
     const ObString &name = get_table_name();
-    BUF_PRINT_OB_STR(name.ptr(),
-                     name.length(),
-                     plan_item.object_alias_,
+    BUF_PRINT_OB_STR(name.ptr(), 
+                     name.length(), 
+                     plan_item.object_alias_, 
                      plan_item.object_alias_len_);
     BUF_PRINT_STR("JSON_TABLE",
                   plan_item.object_type_,

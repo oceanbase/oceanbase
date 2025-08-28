@@ -52,7 +52,7 @@ public:
   static void TearDownTestCase();
 
 public:
-  FakeObGetReadTables() :
+  FakeObGetReadTables() : 
     snapshot_version_(0),
     allow_not_ready_(false),
     split_type_(ObTabletSplitType::MAX_TYPE)
@@ -114,7 +114,7 @@ void FakeObGetReadTables::TearDownTestCase()
 }
 
 // return tables count
-int64_t FakeObGetReadTables::get_read_tables_count(ObTabletID &src_tablet_id)
+int64_t FakeObGetReadTables::get_read_tables_count(ObTabletID &src_tablet_id) 
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
@@ -127,9 +127,9 @@ int64_t FakeObGetReadTables::get_read_tables_count(ObTabletID &src_tablet_id)
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "ls is null", K(ret), K(ls_handle));
   } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_read_tables(
-      src_tablet_id,
-      snapshot_version_,
-      iterator_,
+      src_tablet_id, 
+      snapshot_version_, 
+      iterator_, 
       allow_not_ready_,
       true /* get split src table if need */))) {
     STORAGE_LOG(WARN, "fail to get tablet tables", K(ret), K(src_tablet_id));

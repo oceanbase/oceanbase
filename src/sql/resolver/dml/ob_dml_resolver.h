@@ -272,20 +272,20 @@ public:
   int check_column_json_type(ParseNode *tab_col, bool &is_json_cst, bool &is_json_type, ObColumnRefRawExpr *&column_expr, int8_t only_is_json = 1);
   int check_size_obj_access_ref(ParseNode *node);
   /* json object resolve star */
-  int get_target_column_list(ObSEArray<ColumnItem, 4> &target_list, ObString &tab_name, bool all_tab,
+  int get_target_column_list(ObSEArray<ColumnItem, 4> &target_list, ObString &tab_name, bool all_tab, 
                             bool &tab_has_alias, TableItem *&tab_item, bool is_col = false);
   int pre_process_json_expr_constraint(ParseNode *node, common::ObIAllocator &allocator);
   int process_json_object_array_node(ParseNode *node, common::ObIAllocator &allocator);
-  int process_dot_notation_in_json_object(ParseNode*& expr_node,
+  int process_dot_notation_in_json_object(ParseNode*& expr_node, 
                                           ParseNode* cur_node,
                                           common::ObIAllocator &allocator,
                                           int& pos);
   int process_json_agg_node(ParseNode*& node, common::ObIAllocator &allocator);
   int pre_check_dot_notation(ParseNode &node, int8_t& depth, bool& exist_fun, ObJsonBuffer& sql_str, bool &is_scalar);
-  int check_is_json_constraint(common::ObIAllocator &allocator,
-                               ParseNode *col_node,
-                               bool& is_json_cst,
-                               bool& is_json_type,
+  int check_is_json_constraint(common::ObIAllocator &allocator, 
+                               ParseNode *col_node, 
+                               bool& is_json_cst, 
+                               bool& is_json_type, 
                                int8_t only_is_json = 0); // 1 is json & json type ; 0 is json; 2 json type
   bool is_array_json_expr(ParseNode *node);
   bool is_object_json_expr(ParseNode *node);
@@ -340,7 +340,7 @@ public:
                                          const ObResolverUtils::PureFunctionCheckStatus
                                                check_status);
 
-  void set_query_ref_exec_params(ObIArray<ObExecParamRawExpr*> *query_ref_exec_params)
+  void set_query_ref_exec_params(ObIArray<ObExecParamRawExpr*> *query_ref_exec_params) 
   {
     query_ref_exec_params_ = query_ref_exec_params;
   }
@@ -746,7 +746,7 @@ protected:
   int check_json_table_column_constrain(ObDmlJtColDef *col_def);
   bool check_generated_column_has_json_constraint(const ObSelectStmt *stmt,
                                                   const ObColumnRefRawExpr *col_expr);
-
+   
   int resolve_json_table_check_dup_path(ObIArray<ObDmlJtColDef*>& columns,
                                             const ObString& column_name);
   int resolve_json_table_check_dup_name(const ObJsonTableDef* table_def,
@@ -1085,9 +1085,9 @@ private:
   int resolve_match_index(const ColumnReferenceSet &match_column_set,
                           const ObTableSchema &table_schema,
                           ObMatchFunRawExpr &match_against);
-  int build_and_check_true_expr(ObRawExpr *const_expr,
-                                ObItemType compare_op,
-                                bool &is_true,
+  int build_and_check_true_expr(ObRawExpr *const_expr, 
+                                ObItemType compare_op, 
+                                bool &is_true, 
                                 ObIArray<ObExprConstraint> &constraints);
   int add_udt_dependency(const pl::ObUserDefinedType &udt_type);
   int add_obj_to_llc_bitmap(const ObObj &obj, char *llc_bitmap, double &num_null);
@@ -1106,7 +1106,7 @@ private:
                                   ObTableSchema &table_schema,
                                   common::ObIAllocator &allocator,
                                   uint64_t new_table_id);
-  int build_column_schemas(ObTableSchema& table_schema,
+  int build_column_schemas(ObTableSchema& table_schema, 
                                       ObExternalFileFormat &format,
                                       uint64_t new_table_id,
                                       common::ObString table_location,
@@ -1156,12 +1156,12 @@ protected:
       bool &need_column_ref_expr,
       const ObColumnSchemaV2 *col_schema);
   int check_need_fill_ivf_vec_expr_param(const ObDMLStmt &stmt,
-                                         const ObColumnSchemaV2 &column_schema,
+                                         const ObColumnSchemaV2 &column_schema, 
                                          ObRawExpr *ref_expr,
-                                         bool &need_fill,
+                                         bool &need_fill, 
                                          bool &need_dist_algo_expr);
   int get_ivf_index_type_if_ddl(
-      const ObDMLStmt &stmt,
+      const ObDMLStmt &stmt, 
       bool &is_ddl,
       ObIndexType &index_type);
 protected:

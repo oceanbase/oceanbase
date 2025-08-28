@@ -206,3 +206,4 @@ int ObSemiStructColumnDecoder::pushdown_operator(
 
 }
 }
+

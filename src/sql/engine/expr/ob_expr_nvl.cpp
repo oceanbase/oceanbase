@@ -81,7 +81,7 @@ int ObExprNvlUtil::calc_result_type(ObExprResType &type,
     ObExprResType &udt_type = !type1.is_null() ? type1 : type2;
     if (type1.is_xml_sql_type() || type2.is_xml_sql_type()) {
       type.set_subschema_id(ObXMLSqlType);
-    } else if ((is_one_type_null || type1.get_udt_id() == type2.get_udt_id())
+    } else if ((is_one_type_null || type1.get_udt_id() == type2.get_udt_id()) 
                 && udt_type.get_udt_id() != OB_INVALID_ID) {
       type.set_subschema_id(udt_type.get_subschema_id());
       type.set_udt_id(udt_type.get_udt_id());
@@ -311,7 +311,7 @@ int ObExprOracleNvl::calc_nvl_oralce_result_type(ObExprResType &type,
     } else if (type.is_temporal_type()) {
       type.set_scale(0);
     } else if (type.is_user_defined_sql_type()) {
-      // only two situations:
+      // only two situations: 
       // 1. both type1 and type2 are UDT, and have same udt_id
       // 2. one of type1 and type2 is null, need to set accuracy for udt_id_
       ObExprResType &null_type = type1.is_null() ? type1 : type2;
@@ -320,7 +320,7 @@ int ObExprOracleNvl::calc_nvl_oralce_result_type(ObExprResType &type,
       }
     }
     /*
-     *
+     * 
      * select nvl(0, 'hello') from dual;
      * the sql above will return error: ORA-01722: invalid number.
      * we must execute necessary cast operation before we determine which obj should be returned,

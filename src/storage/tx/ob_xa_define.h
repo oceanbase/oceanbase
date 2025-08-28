@@ -103,7 +103,7 @@ public:
 class ObXAFlag
 {
 public:
-  enum
+  enum 
   {
     OBTMNOFLAGS = 0,
     // non-standard xa protocol, to denote a readonly xa trans
@@ -189,7 +189,7 @@ public:
       g_hv_ = murmurhash(gtrid_str_.ptr(), gtrid_str_.length(), 0) % HASH_SIZE;
       b_hv_ = murmurhash(bqual_str_.ptr(), bqual_str_.length(), 0) % HASH_SIZE;
     }
-    return (g_hv_ + b_hv_) / 11;
+    return (g_hv_ + b_hv_) / 11; 
   }
   bool empty() const;
   // empty xid is also valid

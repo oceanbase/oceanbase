@@ -305,7 +305,7 @@ int ObTenantCompactionProgressMgr::get_pos_(const int64_t major_snapshot_version
     if (array_[pos].merge_version_ == major_snapshot_version) {
       break;
     } else if (array_[pos].merge_version_ > major_snapshot_version) {
-      LOG_DEBUG("merge_version is larger than major_snapshot_version", K(pos),
+      LOG_DEBUG("merge_version is larger than major_snapshot_version", K(pos), 
         "merge_version", array_[pos].merge_version_,
         K(major_snapshot_version));
       pos = pos == 0 ? max_cnt_ - 1 : pos - 1;
@@ -374,7 +374,7 @@ int ObTenantCompactionProgressMgr::update_progress(
           array_[pos].unfinished_data_size_ = 0;
         }
       }
-
+      
       array_[pos].estimated_finish_time_ = MAX(array_[pos].estimated_finish_time_, estimate_finish_time);
       if (REACH_TIME_INTERVAL(FINISH_TIME_UPDATE_FROM_SCHEDULER_INTERVAL)) {
         const int64_t current_time = ObTimeUtility::fast_current_time();

@@ -256,7 +256,7 @@ int64_t ObTabletTableUpdater::cal_thread_count_()
     } else if (OB_TMP_FAIL(omt->get_tenant_cpu(tenant_id_, min_cpu, max_cpu))) {
       LOG_WARN_RET(tmp_ret, "fail to get tenant cpu", K(tmp_ret), K(min_cpu), K(max_cpu));
     } else {
-      thread_cnt = std::max(MIN_UPDATE_TASK_THREAD_CNT,
+      thread_cnt = std::max(MIN_UPDATE_TASK_THREAD_CNT, 
           lround(MIN_UPDATE_TASK_THREAD_CNT * UPDATE_TASK_THREAD_RATIO * max_cpu));
       thread_cnt = std::min(thread_cnt, MAX_UPDATE_TASK_THREAD_CNT);
     }
@@ -330,7 +330,7 @@ int ObTabletTableUpdater::add_task_(
       STORAGE_LOG(INFO, "ERRSIM EN_COMPACTION_REPORT_ADD_TASK_FAILED", K(ret));
     }
   }
-#endif
+#endif 
   if (FAILEDx(update_queue_.add(task))){
     // TODO: deal with barrier-tasks when execute
     if (OB_EAGAIN == ret) {
@@ -428,8 +428,8 @@ int ObTabletTableUpdater::set_thread_count()
 }
 
 int ObTabletTableUpdater::check_exist(
-    const share::ObLSID &ls_id,
-    const ObTabletID &tablet_id,
+    const share::ObLSID &ls_id, 
+    const ObTabletID &tablet_id, 
     bool &exist)
 {
   int ret = OB_SUCCESS;
@@ -447,8 +447,8 @@ int ObTabletTableUpdater::check_exist(
 }
 
 int ObTabletTableUpdater::check_processing_exist(
-    const share::ObLSID &ls_id,
-    const ObTabletID &tablet_id,
+    const share::ObLSID &ls_id, 
+    const ObTabletID &tablet_id, 
     bool &exist)
 {
   int ret = OB_SUCCESS;

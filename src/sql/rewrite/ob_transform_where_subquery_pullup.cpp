@@ -312,7 +312,7 @@ int ObWhereSubQueryPullup::check_transform_validity(ObDMLStmt *stmt,
     /*do nothing*/
   } else if (OB_FAIL(ObTransformUtils::check_correlated_exprs_can_pullup(
                        trans_param.subquery_expr_->get_exec_params(),
-                       *trans_param.subquery_,
+                       *trans_param.subquery_, 
                        trans_param.can_be_transform_))) {
     LOG_WARN("failed to check can unnest with spj", K(ret));
   } else if (!trans_param.can_be_transform_) {
@@ -373,16 +373,16 @@ int ObWhereSubQueryPullup::check_basic_validity(ObDMLStmt *stmt,
       ObIArray<ObSelectStmt*> &set_queries = subquery->get_set_query();
       for (int64_t i = 0; is_valid && OB_SUCC(ret) && i < set_queries.count(); ++i) {
         if (OB_FAIL(check_subquery_validity(trans_param.subquery_expr_,
-                                            set_queries.at(i),
+                                            set_queries.at(i), 
                                             trans_param.is_correlated_, 
                                             is_valid))) {
           LOG_WARN("failed to check subquery valid", K(ret));
         }
       }
     }
-  } else if (OB_FAIL(check_subquery_validity(trans_param.subquery_expr_,
+  } else if (OB_FAIL(check_subquery_validity(trans_param.subquery_expr_, 
                                              subquery,
-                                             trans_param.is_correlated_,
+                                             trans_param.is_correlated_, 
                                              is_valid))) {
     LOG_WARN("failed to check subquery valid", K(ret));
   }
@@ -391,7 +391,7 @@ int ObWhereSubQueryPullup::check_basic_validity(ObDMLStmt *stmt,
 
 int ObWhereSubQueryPullup::check_subquery_validity(ObQueryRefRawExpr *query_ref,
                                                    ObSelectStmt *subquery,
-                                                   bool is_correlated,
+                                                   bool is_correlated, 
                                                    bool &is_valid)
 {
   int ret = OB_SUCCESS;
@@ -483,7 +483,7 @@ int ObWhereSubQueryPullup::do_transform_pullup_subquery(ObDMLStmt *stmt,
     bool skip_const_in_select = T_OP_EXISTS == expr->get_expr_type() ||
                                 T_OP_NOT_EXISTS == expr->get_expr_type();
     if (OB_FAIL(ObTransformUtils::create_spj_and_pullup_correlated_exprs(query_ref->get_exec_params(),
-                                                                         subquery,
+                                                                         subquery, 
                                                                          ctx_,
                                                                          skip_const_in_select))) {
       LOG_WARN("failed to create spj and pullup correlated exprs", K(ret));
@@ -572,7 +572,7 @@ int ObWhereSubQueryPullup::pullup_correlated_subquery_as_view(ObDMLStmt *stmt,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected expr type", K(ret), K(expr->get_expr_type()));
     }
-
+    
     if (OB_FAIL(ret)) {
       // do nothing
     } else if (OB_FAIL(check_can_split(subquery, candi_semi_conds, join_type, split_helper))) {
@@ -613,7 +613,7 @@ int ObWhereSubQueryPullup::pullup_correlated_subquery_as_view(ObDMLStmt *stmt,
     } else if (OB_FAIL(ObTransformUtils::do_split_cartesian_tables(ctx_, stmt, subquery, candi_semi_conds,
                                                   split_helper.connected_tables_, right_tables, semi_conds))) {
       LOG_WARN("fail to split cartesian tables", K(ret));
-    }
+    } 
     if (OB_FAIL(ret)) {
       // do nothing
     } else if (OB_UNLIKELY(right_tables.count() != semi_conds.count())) {
@@ -974,7 +974,7 @@ int ObWhereSubQueryPullup::generate_conditions(ObDMLStmt *stmt,
       if (OB_SUCC(ret)) {
         if (OB_FAIL(cmp_expr->formalize(ctx_->session_info_))) {
           LOG_WARN("failed to formalize expr", K(ret));
-        } else if (left_hand->is_const_expr() &&
+        } else if (left_hand->is_const_expr() && 
                    !right_vector->has_flag(CNT_DYNAMIC_PARAM)) {
           if (OB_FAIL(right_conds.push_back(cmp_expr))) {
             LOG_WARN("failed to push back right table conditions", K(ret));
@@ -1225,7 +1225,7 @@ int ObWhereSubQueryPullup::transform_single_set_query(ObDMLStmt *stmt,
         LOG_WARN("get unexpected null", K(ret));
       } else if (OB_FAIL(ObTransformUtils::check_subquery_match_index(ctx_, query_expr, subquery, subq_match_idx))) {
         LOG_WARN("fail to check subquery match index", K(ret));
-      } else if (queries.at(j).use_outer_join_ && subq_match_idx && subquery->get_table_items().count() > 1 &&
+      } else if (queries.at(j).use_outer_join_ && subq_match_idx && subquery->get_table_items().count() > 1 && 
                  !subquery->get_stmt_hint().has_enable_hint(T_UNNEST) && !ctx_->force_subquery_unnest_) {
         // do nothing
       } else if (is_select_expr && !subquery->get_stmt_hint().has_enable_hint(T_UNNEST)) {
@@ -1325,7 +1325,7 @@ int ObWhereSubQueryPullup::check_subquery_validity(ObDMLStmt &stmt,
   SingleSetParam param;
   bool is_valid = true;
   OPT_TRACE("try to pullup single set subquery:", query_ref);
-  if (OB_ISNULL(root_expr) || OB_ISNULL(query_ref) ||
+  if (OB_ISNULL(root_expr) || OB_ISNULL(query_ref) || 
       OB_ISNULL(subquery = query_ref->get_ref_stmt()) ||
       OB_ISNULL(stmt.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1355,7 +1355,7 @@ int ObWhereSubQueryPullup::check_subquery_validity(ObDMLStmt &stmt,
       LOG_WARN("failed to push back const column", K(ret));
     }
   }
-
+  
   //1.检查是否是single set query
   if (OB_SUCC(ret) && is_valid) {
     if (OB_FAIL(ObTransformUtils::check_stmt_unique(subquery, ctx_->session_info_,
@@ -1369,8 +1369,8 @@ int ObWhereSubQueryPullup::check_subquery_validity(ObDMLStmt &stmt,
   //2.check from item correlated
   if (OB_SUCC(ret) && is_valid) {
     bool is_correlated = false;
-    if (OB_FAIL(ObTransformUtils::is_from_item_correlated(query_ref->get_exec_params(),
-                                                          *subquery,
+    if (OB_FAIL(ObTransformUtils::is_from_item_correlated(query_ref->get_exec_params(), 
+                                                          *subquery, 
                                                           is_correlated))) {
       LOG_WARN("failed to check if from item contains correlated subquery", K(ret));
     } else if (is_correlated) {
@@ -1810,7 +1810,7 @@ int ObWhereSubQueryPullup::construct_transform_hint(ObDMLStmt &stmt, void *trans
  *   2. subquery should not contains having;
  *   3. subquery should not contains subquery;
  *   4. join type is SEMI JOIN (ANTI JOIN can be support later).
- *
+ * 
  *  Besides, pre split subquery and check the subquery can be split into
  *  more than ONE view tables.
  */
@@ -1852,7 +1852,7 @@ int ObWhereSubQueryPullup::check_can_split(ObSelectStmt *subquery,
   } else if (is_contain) {
     can_split = false;
     OPT_TRACE("can not split cartesian tables, contain correlated derived table");
-  } else if (OB_FAIL(ObTransformUtils::cartesian_tables_pre_split(subquery,
+  } else if (OB_FAIL(ObTransformUtils::cartesian_tables_pre_split(subquery, 
                                     semi_conditions, helper.connected_tables_))){
     LOG_WARN("fail to pre split cartesian tables", K(ret));
   } else if (helper.connected_tables_.count() <= 1) {

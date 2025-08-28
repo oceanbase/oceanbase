@@ -200,7 +200,7 @@ public:
   int process() override
   {
     int ret = OB_SUCCESS;
-    if (OB_FAIL(ctx_->store_ctx_->start_merge())) {
+    if (OB_FAIL(ctx_->store_ctx_->start_merge())) { 
       LOG_WARN("fail to start merge", KR(ret));
     }
     return ret;

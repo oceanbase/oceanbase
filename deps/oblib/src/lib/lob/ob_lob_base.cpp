@@ -327,7 +327,7 @@ int ObILobCursor::move_data(int64_t dst_offset, int64_t src_offset, int64_t move
     LOG_WARN("get src ptr fail", K(ret), K(src_offset), K(move_len), K(total_len));
   } else if (OB_FAIL(set(dst_offset, src_ptr, move_len, true))) {
     LOG_WARN("set src_data fail", K(ret), K(dst_offset), K(src_offset), K(move_len), K(total_len), KP(src_ptr));
-  }
+  }  
   return ret;
 }
 

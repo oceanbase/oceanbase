@@ -29,20 +29,20 @@ int init_min_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
 int init_max_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                        ObIAllocator &allocator, IAggregate *&agg);
 int init_sum_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
-                       ObIAllocator &allocator, IAggregate *&agg,
+                       ObIAllocator &allocator, IAggregate *&agg, 
                        int32 *tmp_res_size = NULL);
 int init_approx_count_distinct_synopsis_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                                                   ObIAllocator &allocator, IAggregate *&agg);
 // TODO@fengshang, need to support sum_opnsize vec 2.0
 int init_sum_opnsize_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                                ObIAllocator &allocator, IAggregate *&agg);
-int init_rb_build_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+int init_rb_build_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id, 
                             ObIAllocator &allocator, IAggregate *&agg);
 int init_string_prefix_max_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                                      ObIAllocator &allocator, IAggregate *&agg);
-int init_rb_or_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+int init_rb_or_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id, 
                          ObIAllocator &allocator, IAggregate *&agg);
-int init_rb_and_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+int init_rb_and_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id, 
                           ObIAllocator &allocator, IAggregate *&agg);
 }
 }
@@ -192,7 +192,7 @@ int ObAggCellVec::eval(
     LOG_WARN("Failed to pad column", K(ret), KPC(this));
   } else {
     char *agg_cell = basic_info_.agg_ctx_.row_meta().locate_cell_payload(agg_idx_, row);
-    if (OB_FAIL(aggregate_->add_one_row(basic_info_.agg_ctx_, 0, 1, datum.is_null(),
+    if (OB_FAIL(aggregate_->add_one_row(basic_info_.agg_ctx_, 0, 1, datum.is_null(), 
                                       datum.ptr_, datum.len_, agg_idx_, agg_cell))) {
       LOG_WARN("Failed to add one row in aggregate", K(ret), K_(agg_idx), K(datum), KP(agg_cell));
     }
@@ -231,7 +231,7 @@ int ObAggCellVec::eval_batch(
       LOG_WARN("Failed to add batch rows in max cell", K(ret), KP(agg_cell));
     }
   }
-  LOG_DEBUG("[PD_AGGREGATE] aggregate batch rows", K(ret), K(row_count), K(row_offset), K(agg_row_idx),
+  LOG_DEBUG("[PD_AGGREGATE] aggregate batch rows", K(ret), K(row_count), K(row_offset), K(agg_row_idx), 
                 K(reader), K(col_offset), K(row_ids), K(brs), KPC(this));
   return ret;
 }
@@ -313,9 +313,9 @@ int ObAggCellVec::eval_batch_in_group_by(
         }
       } else if (OB_FAIL(eval_batch(nullptr, basic_info_.col_offset_, nullptr, 1, i, distinct_ref))) {
         LOG_WARN("Failed to eval one row in group by", K(ret), K(i), K(distinct_ref));
-      }
+      } 
     }
-    LOG_DEBUG("[GROUP BY PUSHDOWN] eval batch rows in group by pushdown", K(ret), K(datums), K(refs),
+    LOG_DEBUG("[GROUP BY PUSHDOWN] eval batch rows in group by pushdown", K(ret), K(datums), K(refs), 
                 K(count), K(distinct_cnt), K(is_group_by_col), K(is_default_datum), KPC(this));
   }
   return ret;
@@ -338,15 +338,15 @@ int ObAggCellVec::collect_result(
   } else if (OB_UNLIKELY(nullptr == rows || nullptr == agg_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Invalid arguments to collect aggregate result", K(ret), KP(rows), KP(agg_expr));
-  } else if (OB_FAIL(aggregate_->collect_batch_group_results(basic_info_.agg_ctx_, agg_idx_,
+  } else if (OB_FAIL(aggregate_->collect_batch_group_results(basic_info_.agg_ctx_, agg_idx_, 
                 output_start_idx, batch_size, rows, basic_info_.row_meta_, row_start_idx, false))) {
     LOG_WARN("Failed to collect results", K(ret));
   } else {
     sql::ObEvalCtx &eval_ctx = basic_info_.agg_ctx_.eval_ctx_;
     sql::ObExpr *output_expr = agg_info.param_exprs_.count() > 0 ? agg_info.param_exprs_.at(0) : nullptr;
-    if (fill_output && output_expr != nullptr
+    if (fill_output && output_expr != nullptr 
         && OB_FAIL(fill_output_expr_if_need(output_expr, group_by_col_expr, eval_ctx, batch_size))) {
-      LOG_WARN("Failed to fill output expr", K(ret), K(fill_output), K(group_by_col_expr), K(output_expr), K(batch_size));
+      LOG_WARN("Failed to fill output expr", K(ret), K(fill_output), K(group_by_col_expr), K(output_expr), K(batch_size)); 
     } else {
       sql::ObEvalInfo &eval_info = agg_info.expr_->get_eval_info(eval_ctx);
       eval_info.evaluated_ = true;
@@ -356,7 +356,7 @@ int ObAggCellVec::collect_result(
       }
     }
   }
-  LOG_DEBUG("[PD_AGGREGATE] collect result", K(ret), K(fill_output), K(group_by_col_expr),
+  LOG_DEBUG("[PD_AGGREGATE] collect result", K(ret), K(fill_output), K(group_by_col_expr), 
               K(output_start_idx), K(row_start_idx), K(batch_size), KPC(this));
   return ret;
 }
@@ -369,7 +369,7 @@ int ObAggCellVec::fill_output_expr_if_need(
 {
   int ret = OB_SUCCESS;
   if (nullptr == group_by_col_expr || output_expr != group_by_col_expr) {
-    if (OB_FAIL(storage::init_expr_vector_header(*output_expr, eval_ctx,
+    if (OB_FAIL(storage::init_expr_vector_header(*output_expr, eval_ctx, 
               eval_ctx.max_batch_size_, output_expr->get_default_res_format()))) {
       LOG_WARN("Failed to init vector header", K(ret), KPC(output_expr), K_(eval_ctx.max_batch_size));
     } else {
@@ -393,20 +393,20 @@ int ObAggCellVec::copy_output_rows(const int32_t start_offset, const int32_t end
       LOG_WARN("Failed to eval one row", K(ret), K(i));
     }
   }
-  if (OB_SUCC(ret) && OB_FAIL(collect_result(false/*fill_output*/,
+  if (OB_SUCC(ret) && OB_FAIL(collect_result(false/*fill_output*/, 
                                              nullptr/*group_by_col_expr*/,
                                              start_offset,
                                              start_offset,
                                              end_offset - start_offset))) {
     LOG_WARN("Failed to collect result", K(ret), K(start_offset), K(end_offset));
   }
-  LOG_DEBUG("[GROUP BY PUSHDOWN] copy rows in group by pushdown", K(ret), K(start_offset), K(end_offset), KPC(this));
+  LOG_DEBUG("[GROUP BY PUSHDOWN] copy rows in group by pushdown", K(ret), K(start_offset), K(end_offset), KPC(this)); 
   return ret;
 }
 
 int ObAggCellVec::can_use_index_info(
     const blocksstable::ObMicroIndexInfo &index_info,
-    const int32_t col_index,
+    const int32_t col_index, 
     bool &can_agg)
 {
   int ret = OB_SUCCESS;
@@ -423,7 +423,7 @@ int ObAggCellVec::can_use_index_info(
     } else {
       can_agg = false;
     }
-  }
+  } 
   return ret;
 }
 
@@ -491,8 +491,8 @@ OB_INLINE int ObAggCellVec::pad_column_if_need(blocksstable::ObStorageDatum &dat
   if (!basic_info_.need_padding()) {
   } else {
     padding_allocator_.reuse();
-    if (OB_FAIL(pad_column(basic_info_.col_param_->get_meta_type(),
-                                  basic_info_.col_param_->get_accuracy(),
+    if (OB_FAIL(pad_column(basic_info_.col_param_->get_meta_type(), 
+                                  basic_info_.col_param_->get_accuracy(), 
                                   padding_allocator_, datum))) {
       LOG_WARN("Fail to pad column", K(ret), K_(basic_info), KPC(this));
     }
@@ -563,7 +563,7 @@ int ObCountAggCellVec::init()
     } else {
       row_id_buffer_ = reinterpret_cast<int32_t *>(buf);
     }
-  }
+  } 
   return ret;
 }
 
@@ -630,7 +630,7 @@ int ObCountAggCellVec::eval_batch(
         data += valid_row_count;
       }
     }
-    LOG_DEBUG("[PD_COUNT_AGGREGATE] aggregate eval batch rows", K(ret), K(col_offset), K(row_count),
+    LOG_DEBUG("[PD_COUNT_AGGREGATE] aggregate eval batch rows", K(ret), K(col_offset), K(row_count), 
                 K(row_offset), K(agg_row_idx), K(data), K(reader), K(row_ids), KPC(this));
   }
   return ret;
@@ -703,7 +703,7 @@ int ObCountAggCellVec::agg_pushdown_decoder(
     if (OB_SUCC(ret)) {
       agg_row_id_ = pd_row_id_ctx.bound_row_id_;
     }
-    LOG_DEBUG("[PD_COUNT_AGGREGATE] aggregate pushdown to decoder", K(ret),
+    LOG_DEBUG("[PD_COUNT_AGGREGATE] aggregate pushdown to decoder", K(ret), 
       K(data), K(col_offset), K(pd_row_id_ctx), K(reader), KPC(this));
   }
   return ret;
@@ -719,10 +719,10 @@ int ObCountAggCellVec::eval_index_info(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObCountAggCellVec not inited", K(ret));
-  } else if (OB_ISNULL(row) || OB_UNLIKELY(!is_cg && (!index_info.can_blockscan() ||
+  } else if (OB_ISNULL(row) || OB_UNLIKELY(!is_cg && (!index_info.can_blockscan() || 
                                                       index_info.is_left_border() || index_info.is_right_border()))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected, row must not be null or the micro index info must can blockscan and not border",
+    LOG_WARN("Unexpected, row must not be null or the micro index info must can blockscan and not border", 
                 K(ret), K(row), K(is_cg), K(index_info));
   } else {
     char *agg_cell = basic_info_.agg_ctx_.row_meta().locate_cell_payload(agg_idx_, row);
@@ -735,7 +735,7 @@ int ObCountAggCellVec::eval_index_info(
     } else {
       data += index_info.get_row_count() - skip_index_datum_.get_int();
     }
-    LOG_DEBUG("[PD_COUNT_AGGREGATE] aggregate index info", K(ret), K(data), K(is_cg), K(agg_row_idx),
+    LOG_DEBUG("[PD_COUNT_AGGREGATE] aggregate index info", K(ret), K(data), K(is_cg), K(agg_row_idx), 
                 K(index_info.get_row_count()), K(skip_index_datum_.get_int()), KPC(this));
   }
   return ret;
@@ -841,7 +841,7 @@ int ObCountAggCellVec::copy_output_rows(const int32_t start_offset, const int32_
 
 int ObCountAggCellVec::can_use_index_info(
     const blocksstable::ObMicroIndexInfo &index_info,
-    const int32_t col_index,
+    const int32_t col_index, 
     bool &can_agg)
 {
   int ret = OB_SUCCESS;
@@ -860,7 +860,7 @@ int ObCountAggCellVec::can_use_index_info(
     } else {
       can_agg = false;
     }
-  }
+  } 
   return ret;
 }
 
@@ -1016,7 +1016,7 @@ int ObSumOpNSizeAggCellVec::set_op_nsize()
 {
   int ret = OB_SUCCESS;
   ObObjDatumMapType type = OBJ_DATUM_MAPPING_MAX;
-  const sql::ObExpr *proj_expr = get_project_expr();
+  const sql::ObExpr *proj_expr = get_project_expr(); 
   if (OB_ISNULL(proj_expr) || OB_UNLIKELY(T_REF_COLUMN != proj_expr->type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("arg is null", K(ret), KPC(proj_expr));
@@ -1114,7 +1114,7 @@ int ObSumOpNSizeAggCellVec::eval_batch(
         data += (row_count - valid_row_count) * sizeof(ObDatum) + valid_row_count * op_nsize_;
       }
     }
-    LOG_DEBUG("[PD_SUMOPNSIZE_AGGREGATE] aggregate eval batch rows", K(ret), K(col_offset), K(row_count),
+    LOG_DEBUG("[PD_SUMOPNSIZE_AGGREGATE] aggregate eval batch rows", K(ret), K(col_offset), K(row_count), 
                 K(row_offset), K(agg_row_idx), K(data), K(reader), K(row_ids), KPC(this));
   }
   return ret;
@@ -1133,7 +1133,7 @@ int ObSumOpNSizeAggCellVec::eval_index_info(
   } else if (OB_ISNULL(row) || OB_UNLIKELY(!is_cg && (!index_info.can_blockscan() ||
                                                       index_info.is_left_border() || index_info.is_right_border()))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected, row must not be null or the micro index info must can blockscan and not border",
+    LOG_WARN("Unexpected, row must not be null or the micro index info must can blockscan and not border", 
              K(ret), K(row), K(is_cg), K(index_info));
   } else {
     char *agg_cell = basic_info_.agg_ctx_.row_meta().locate_cell_payload(agg_idx_, row);
@@ -1144,10 +1144,10 @@ int ObSumOpNSizeAggCellVec::eval_index_info(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected null skip index datum", K(ret), K(index_info));
     } else {
-      const int64_t null_count = skip_index_datum_.get_int();
+      const int64_t null_count = skip_index_datum_.get_int(); 
       data += (index_info.get_row_count() - null_count) * op_nsize_ + null_count * sizeof(ObDatum);
     }
-    LOG_DEBUG("[PD_SUMOPNSIZE_AGGREGATE] aggregate index info", K(ret), K(data), K(is_cg), K(agg_row_idx),
+    LOG_DEBUG("[PD_SUMOPNSIZE_AGGREGATE] aggregate index info", K(ret), K(data), K(is_cg), K(agg_row_idx), 
                 K(index_info.get_row_count()), K(skip_index_datum_.get_int()), KPC(this));
   }
   return ret;
@@ -1366,7 +1366,7 @@ void ObPDAggVecFactory::release(common::ObIArray<ObAggCellVec *> &agg_cells)
 ObGroupByCellVec::ObGroupByCellVec(
     const int64_t batch_size,
     sql::ObEvalCtx &eval_ctx,
-    sql::ObBitVector *skip_bit,
+    sql::ObBitVector *skip_bit, 
     common::ObIAllocator &allocator)
     : ObGroupByCellBase(batch_size, allocator),
       pd_agg_ctx_(batch_size, eval_ctx, skip_bit, allocator),
@@ -1471,7 +1471,7 @@ int ObGroupByCellVec::init_vector_header(
 {
   int ret = OB_SUCCESS;
   if (init_group_by_col) {
-    if (OB_FAIL(storage::init_expr_vector_header(*group_by_col_expr_, eval_ctx_,
+    if (OB_FAIL(storage::init_expr_vector_header(*group_by_col_expr_, eval_ctx_, 
                 eval_ctx_.max_batch_size_, group_by_col_expr_->get_default_res_format()))) {
       LOG_WARN("Failed to init vector for group by column output expr", KPC_(group_by_col_expr), K(eval_ctx_.max_batch_size_));
     }
@@ -1504,7 +1504,7 @@ int ObGroupByCellVec::eval_batch(
   } else if (OB_FAIL(agg_cells_.at(sorted_agg_idx)->eval_batch_in_group_by(
       datums, count, refs_buf_ + ref_offset, distinct_cnt_, is_group_by_col, is_default_datum))) {
     LOG_WARN("Failed to eval batch with in group by", K(ret));
-  }
+  } 
   return ret;
 }
 
@@ -1515,7 +1515,7 @@ int ObGroupByCellVec::copy_output_row(const int64_t batch_idx, const ObTableIter
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGroupByCellVec is not inited", K(ret), K_(is_inited));
-  } else if (batch_idx == 1 && OB_FAIL(init_exprs_uniform_header(iter_param.aggregate_exprs_,
+  } else if (batch_idx == 1 && OB_FAIL(init_exprs_uniform_header(iter_param.aggregate_exprs_, 
                                             eval_ctx_, eval_ctx_.max_batch_size_))) {
     LOG_WARN("Failed to init uniform vector", K(ret), K(iter_param));
   }
@@ -1682,7 +1682,7 @@ int ObGroupByCellVec::pad_column_in_group_by(const int64_t row_cap)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGroupByCellVec is not inited", K(ret), K_(is_inited));
-  } else if (nullptr != group_by_col_param_ &&
+  } else if (nullptr != group_by_col_param_ && 
       group_by_col_param_->get_meta_type().is_fixed_len_char_type() &&
       OB_FAIL(storage::pad_on_rich_format_columns(
               group_by_col_param_->get_accuracy(),

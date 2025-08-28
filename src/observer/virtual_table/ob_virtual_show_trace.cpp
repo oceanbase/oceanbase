@@ -199,7 +199,7 @@ int ObVirtualShowTrace::read_show_trace_rec_from_result(sqlclient::ObMySQLResult
 
     // tags
     if (OB_FAIL(ret)) {
-      // do nothing
+      // do nothing 
     } else {
       MEMSET(tag_buf, 0x00, OB_MAX_SPAN_TAG_LENGTH);
       EXTRACT_STRBUF_FIELD_MYSQL(mysql_result, "tags", tag_buf, OB_MAX_SPAN_TAG_LENGTH, tag_len);
@@ -263,12 +263,12 @@ int ObVirtualShowTrace::generate_span_info_tree()
       if (OB_ISNULL(show_trace_arr_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "record ptr is null", K(i));
-      } else if (session_->get_last_flt_span_id().empty() &&
+      } else if (session_->get_last_flt_span_id().empty() && 
             show_trace_arr_.at(i)->data_.parent_span_id_ == "00000000-0000-0000-0000-000000000000") {
         found_root = true;
         show_trace_arr_.at(i)->formatter_.level_ = depth;
         OZ(root_arr.push_back(show_trace_arr_.at(i)));
-      } else if (!session_->get_last_flt_span_id().empty() &&
+      } else if (!session_->get_last_flt_span_id().empty() && 
           show_trace_arr_.at(i)->data_.parent_span_id_.compare(session_->get_last_flt_span_id()) == 0) {
         found_root = true;
         show_trace_arr_.at(i)->formatter_.level_ = depth;
@@ -345,7 +345,7 @@ int ObVirtualShowTrace::merge_span_info() {
         SERVER_LOG(WARN, "record ptr is null", K(l));
       } else {
         ObString l_span_id = show_trace_arr_.at(l)->data_.span_id_;
-        while (OB_SUCC(ret) &&
+        while (OB_SUCC(ret) && 
                 r+1 < show_trace_arr_.count() &&
                 OB_NOT_NULL(show_trace_arr_.at(r+1)) &&
                 l_span_id == show_trace_arr_.at(r+1)->data_.span_id_) {
@@ -587,7 +587,7 @@ int ObVirtualShowTrace::find_child_span_info(sql::ObFLTShowTraceRec::trace_forma
       for (int64_t j = 0; OB_SUCC(ret) && j < depth-1; j++) {
         rec.formatter_.tree_line_[j].line_type_ = parent_type[j].line_type_;
       }
-      sql::ObFLTShowTraceRec::trace_formatter::LineType line_type
+      sql::ObFLTShowTraceRec::trace_formatter::LineType line_type 
                                     = rec.formatter_.tree_line_[depth-2].line_type_;
       if (line_type == sql::ObFLTShowTraceRec::trace_formatter::LineType::LT_NODE) {
         rec.formatter_.tree_line_[depth-2].line_type_
@@ -649,7 +649,7 @@ int ObVirtualShowTrace::find_child_span_info(sql::ObFLTShowTraceRec::trace_forma
         }
       }
     }
-
+    
     if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(tmp_arr.at(i))) {
       ret = OB_ERR_UNEXPECTED;

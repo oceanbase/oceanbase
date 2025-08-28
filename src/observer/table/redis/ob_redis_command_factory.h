@@ -118,7 +118,7 @@ public:
 private:
   static RedisCommandGenFunc *G_REDIS_COMMAND_GEN_FUNCS_;
   static CmdStrTypeMap *G_CMD_STR_TYPE_MAP_;
-
+  
 };
 
 }  // namespace table

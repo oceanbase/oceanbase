@@ -68,7 +68,7 @@ int ObExprPrivSTSetSRID::calc_result_type2(ObExprResType &type,
       type.set_geometry();
       type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObGeometryType]).get_length());
   }
-
+  
   return ret;
 }
 

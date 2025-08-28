@@ -162,7 +162,7 @@ TEST_F(TestFtsParser, create_node_test)
   ASSERT_TRUE(parant_node->child_nodes_.at(1)->leaf_node_);
   ASSERT_EQ(1, parant_node->child_nodes_.at(1)->postion_);
   ASSERT_EQ(oceanbase::sql::ObFtsEvalNode::NOT, parant_node->child_flags_.at(1));
-
+  
   ASSERT_TRUE(parant_node->child_nodes_.at(2)->leaf_node_);
   ASSERT_EQ(2, parant_node->child_nodes_.at(2)->postion_);
   ASSERT_EQ(oceanbase::sql::ObFtsEvalNode::NO_OPERATOR, parant_node->child_flags_.at(2));
@@ -172,7 +172,7 @@ TEST_F(TestFtsParser, create_node_test)
 
   ASSERT_TRUE(parant_node->child_nodes_.at(3)->child_nodes_.at(0)->child_nodes_.at(0)->leaf_node_);
   ASSERT_EQ(3, parant_node->child_nodes_.at(3)->child_nodes_.at(0)->child_nodes_.at(0)->postion_);
-  ASSERT_EQ(oceanbase::sql::ObFtsEvalNode::NO_OPERATOR, parant_node->child_nodes_.at(3)->child_nodes_.at(0)->child_flags_.at(0));
+  ASSERT_EQ(oceanbase::sql::ObFtsEvalNode::NO_OPERATOR, parant_node->child_nodes_.at(3)->child_nodes_.at(0)->child_flags_.at(0)); 
 
   ASSERT_TRUE(parant_node->child_nodes_.at(3)->child_nodes_.at(0)->child_nodes_.at(1)->leaf_node_);
   ASSERT_EQ(2, parant_node->child_nodes_.at(3)->child_nodes_.at(0)->child_nodes_.at(1)->postion_);
@@ -188,7 +188,7 @@ TEST_F(TestFtsParser, create_node_test)
   relevences[0] = 1;
   relevences[1] = 0;
   relevences[2] = 0;
-  relevences[3] = 1.1;
+  relevences[3] = 1.1;  
   double result = 0;
   ret = ObFtsEvalNode::fts_boolean_eval(parant_node, relevences, result);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -197,7 +197,7 @@ TEST_F(TestFtsParser, create_node_test)
   relevences[0] = 1;
   relevences[1] = 0;
   relevences[2] = 2.2;
-  relevences[3] = 1.1;
+  relevences[3] = 1.1;  
   result = 0;
   ret = ObFtsEvalNode::fts_boolean_eval(parant_node, relevences, result);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -206,7 +206,7 @@ TEST_F(TestFtsParser, create_node_test)
   relevences[0] = 1;
   relevences[1] = 1.4;
   relevences[2] = 0;
-  relevences[3] = 1;
+  relevences[3] = 1;  
   result = 0;
   ret = ObFtsEvalNode::fts_boolean_eval(parant_node, relevences, result);
   ASSERT_EQ(OB_SUCCESS, ret);

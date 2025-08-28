@@ -31,7 +31,7 @@ class ObLS;
 class ObDDLEmptyShellChecker
 {
 public:
-  ObDDLEmptyShellChecker()
+  ObDDLEmptyShellChecker() 
     : ls_(nullptr),
       last_check_normal_time_(),
       delayed_gc_tablet_infos_(),
@@ -41,9 +41,9 @@ public:
   void reset();
   int init(storage::ObLS *ls);
   int check_split_src_deleted_tablet(
-      const ObTablet &tablet,
-      const ObTabletCreateDeleteMdsUserData &user_data,
-      bool &can_become_empty_shell,
+      const ObTablet &tablet, 
+      const ObTabletCreateDeleteMdsUserData &user_data, 
+      bool &can_become_empty_shell, 
       bool &need_retry);
   int erase_tablet_record(
       const ObTabletID &tablet_id);

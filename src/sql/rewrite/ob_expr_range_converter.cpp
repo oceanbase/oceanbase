@@ -42,7 +42,7 @@ static const int64_t RANGE_EXPR_OTHER = 1 << 6;
 /**
  * TODO list:
  *  spatial_expr use new query range
- * */
+ * */ 
 
 int ObExprRangeConverter::convert_expr_to_range_node(const ObRawExpr *expr,
                                                      ObRangeNode *&range_node,
@@ -115,7 +115,7 @@ int ObExprRangeConverter::convert_expr_to_range_node(const ObRawExpr *expr,
       LOG_WARN("failed to generate always true node", KPC(expr));
     }
   }
-
+  
   if (OB_SUCC(ret)) {
     is_precise = ctx_.cur_is_precise_;
     LOG_TRACE("succeed to convert one expr to range node", KPC(expr), KPC(range_node));
@@ -156,7 +156,7 @@ int ObExprRangeConverter::generate_always_true_or_false_node(bool is_true,
   } else if (is_true) {
     range_node->always_true_ = true;
     for (int64_t i = 0; i < ctx_.column_cnt_; ++i) {
-      range_node->start_keys_[i] = OB_RANGE_MIN_VALUE;
+      range_node->start_keys_[i] = OB_RANGE_MIN_VALUE; 
       range_node->end_keys_[i] = OB_RANGE_MAX_VALUE;
     }
   } else {
@@ -194,7 +194,7 @@ int ObExprRangeConverter::convert_const_expr(const ObRawExpr *expr,
     range_node->always_false_ = false;
     range_node->always_true_ = false;
     for (int64_t i = 0; i < ctx_.column_cnt_; ++i) {
-      range_node->start_keys_[i] = start_val;
+      range_node->start_keys_[i] = start_val; 
       range_node->end_keys_[i] = end_val;
     }
     ctx_.cur_is_precise_ = true;
@@ -304,21 +304,21 @@ int ObExprRangeConverter::get_basic_range_node(const ObRawExpr *l_expr,
     const ObRawExprResType &calc_type = l_expr->has_flag(CNT_COLUMN) ?
                                         l_expr->get_result_type() : r_expr->get_result_type();
 
-    if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(l_expr,
-                                                                l_expr,
+    if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(l_expr, 
+                                                                l_expr, 
                                                                 use_implicit_cast_feature))) {
       LOG_WARN("failed to get expr without lossless cast", K(ret));
-    } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(r_expr,
-                                                                       r_expr,
+    } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(r_expr, 
+                                                                       r_expr, 
                                                                        use_implicit_cast_feature))) {
       LOG_WARN("failed to get expr without lossless cast", K(ret));
     } else if ((l_expr->has_flag(IS_COLUMN) && r_expr->is_const_expr()) ||
                (l_expr->is_const_expr() && r_expr->has_flag(IS_COLUMN))) {
-      if (OB_FAIL(gen_column_cmp_node(*l_expr,
-                                      *r_expr,
-                                      cmp_type,
+      if (OB_FAIL(gen_column_cmp_node(*l_expr, 
+                                      *r_expr, 
+                                      cmp_type, 
                                       calc_type,
-                                      expr_depth,
+                                      expr_depth, 
                                       T_OP_NSEQ == cmp_type,
                                       range_node))) {
         LOG_WARN("get column key part failed.", K(ret));
@@ -374,7 +374,7 @@ int ObExprRangeConverter::get_basic_range_node(const ObRawExpr *l_expr,
   } else if (OB_FAIL(get_row_cmp_node(*l_expr, *r_expr, cmp_type, expr_depth, range_node))) {
     LOG_WARN("get row key part failed.", K(ret));
   }
-
+  
   return ret;
 }
 
@@ -609,9 +609,9 @@ int ObExprRangeConverter::gen_row_column_cmp_node(const ObIArray<const ObColumnR
                    OB_FAIL(check_decimal_int_range_cmp_valid(r_const_exprs.at(i+1), is_valid_decimal_int_range_cmp))) {
           LOG_WARN("fail to check can use ori cmp type", K(ret));
         } else {
-          bool is_lt_with_lob = (cmp_type == T_OP_LT || cmp_type == T_OP_LE) &&
-                                (ctx_.final_exprs_flag_.at(const_val)
-                                     & OB_FINAL_EXPR_WITH_LOB_TRUNCATE)
+          bool is_lt_with_lob = (cmp_type == T_OP_LT || cmp_type == T_OP_LE) &&  
+                                (ctx_.final_exprs_flag_.at(const_val) 
+                                     & OB_FINAL_EXPR_WITH_LOB_TRUNCATE) 
                                      == OB_FINAL_EXPR_WITH_LOB_TRUNCATE;
           last_key_idx = key_idx;
           check_next = !is_lt_with_lob && is_valid_decimal_int_range_cmp;
@@ -779,7 +779,7 @@ int ObExprRangeConverter::gen_is_not_null_range_node(const ObRawExpr *l_expr, in
 /**
  * convert `c1 between :0 and :1` to range node
 */
-int ObExprRangeConverter::convert_between_expr(const ObRawExpr *expr,
+int ObExprRangeConverter::convert_between_expr(const ObRawExpr *expr, 
                                                int64_t expr_depth,
                                                ObRangeNode *&range_node)
 {
@@ -817,7 +817,7 @@ int ObExprRangeConverter::convert_between_expr(const ObRawExpr *expr,
   return ret;
 }
 
-int ObExprRangeConverter::convert_not_between_expr(const ObRawExpr *expr,
+int ObExprRangeConverter::convert_not_between_expr(const ObRawExpr *expr, 
                                                    int64_t expr_depth,
                                                    ObRangeNode *&range_node)
 {
@@ -1141,12 +1141,12 @@ int ObExprRangeConverter::convert_in_expr(const ObRawExpr *expr, int64_t expr_de
              (l_expr->get_expr_type() == T_FUN_SYS_SET_COLLATION ||
               (l_expr->get_expr_type() == T_FUN_SYS_CAST &&
                l_expr->get_result_type().is_string_type()))) {
-    if (OB_FAIL(get_implicit_set_collation_in_range(l_expr, r_expr, expr->get_param_expr(0)->get_result_type(),
+    if (OB_FAIL(get_implicit_set_collation_in_range(l_expr, r_expr, expr->get_param_expr(0)->get_result_type(), 
                                                     expr_depth, range_node))) {
       LOG_WARN("failed to get implicit set collation range", K(ret));
     }
   }
-
+  
   if (OB_SUCC(ret) && nullptr == range_node) {
     if (OB_FAIL(generate_always_true_or_false_node(true, range_node))) {
       LOG_WARN("failed to generate always true or fasle node");
@@ -1215,7 +1215,7 @@ int ObExprRangeConverter::get_single_in_range_node(const ObColumnRefRawExpr *col
       }
     }
   }
-
+  
   if (OB_SUCC(ret) && !always_true) {
     InParam *in_param = nullptr;
     int64_t param_idx;
@@ -1275,7 +1275,7 @@ int ObExprRangeConverter::get_row_in_range_ndoe(const ObRawExpr &l_expr,
       if (!is_range_key(column_expr->get_column_id(), key_idx)) {
         // do nothing
       } else if (ObOptimizerUtil::find_item(key_idxs, key_idx)) {
-        // this key already exist. e.g. (c1,c1,c2) in ((:1,:2,:3), (:4,:5,:6))
+        // this key already exist. e.g. (c1,c1,c2) in ((:1,:2,:3), (:4,:5,:6)) 
         // will be trated as (c1,c2) in ((:1,:3), (:4,:6))
       } else if (OB_ISNULL(column_meta = get_column_meta(key_idx))) {
         ret = OB_ERR_UNEXPECTED;
@@ -1539,7 +1539,7 @@ int ObExprRangeConverter::get_single_rowid_in_range_node(const ObRawExpr &rowid_
         }
       }
     }
-
+    
     for (int64_t i = 0; OB_SUCC(ret) && !always_true && i < row_expr.get_param_count(); ++i) {
       const ObRawExpr *const_expr = row_expr.get_param_expr(i);
       bool is_valid = false;
@@ -1609,7 +1609,7 @@ int ObExprRangeConverter::get_single_rowid_in_range_node(const ObRawExpr &rowid_
       if (OB_UNLIKELY(pk_column_items.count() != 1)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpect pk count for no pk table", K(pk_column_items));
-      } else if (ctx_.range_column_map_.count() != 1 ||
+      } else if (ctx_.range_column_map_.count() != 1 || 
                 !is_range_key(pk_column_items.at(0)->get_column_id(), key_idx)) {
         // only extract physical rowid range for primary index
         always_true = true;
@@ -1663,7 +1663,7 @@ int ObExprRangeConverter::get_single_rowid_in_range_node(const ObRawExpr &rowid_
       }
     }
   }
-
+  
   if (OB_SUCC(ret) && range_node == nullptr) {
     ctx_.cur_is_precise_ = false;
     if (OB_FAIL(generate_always_true_or_false_node(true, range_node))) {
@@ -1737,8 +1737,8 @@ int ObExprRangeConverter::convert_not_in_expr(const ObRawExpr *expr, int64_t exp
         ctx_.cur_is_precise_ = is_precise;
       }
     }
-  }
-
+  } 
+  
   if (OB_SUCC(ret) && nullptr == range_node) {
     if (OB_FAIL(generate_always_true_or_false_node(true, range_node))) {
       LOG_WARN("failed to generate always true or fasle node");
@@ -1767,7 +1767,7 @@ int ObExprRangeConverter::get_single_not_in_range_node(const ObColumnRefRawExpr 
     LOG_WARN("get unexpected param", KPC(column_expr), KPC(r_expr));
   } else if (!is_range_key(column_expr->get_column_id(), key_idx)) {
     // do nothing
-  } else if ((ctx_.column_flags_[key_idx] & (RANGE_EXPR_EQUAL |
+  } else if ((ctx_.column_flags_[key_idx] & (RANGE_EXPR_EQUAL | 
                                              RANGE_EXPR_IN |
                                              RANGE_EXPR_NOT_IN)) != 0) {
     // do nothing
@@ -1956,15 +1956,15 @@ int ObExprRangeConverter::fill_range_node_for_basic_cmp(ObItemType cmp_type,
       if (need_set_flag) {
         range_node.include_start_ = false;
         range_node.include_end_ = (T_OP_LE == cmp_type ||
-                                   (ctx_.final_exprs_flag_.at(val_idx)
-                                     & OB_FINAL_EXPR_WITH_LOB_TRUNCATE)
+                                   (ctx_.final_exprs_flag_.at(val_idx) 
+                                     & OB_FINAL_EXPR_WITH_LOB_TRUNCATE) 
                                      == OB_FINAL_EXPR_WITH_LOB_TRUNCATE);
       } else {
         for (int64_t i = key_idx + 1; i < ctx_.column_cnt_; ++i) {
           range_node.start_keys_[i] = lib::is_oracle_mode() ? OB_RANGE_MIN_VALUE : OB_RANGE_MAX_VALUE;
           range_node.end_keys_[i] = (T_OP_LE == cmp_type ||
-                                     (ctx_.final_exprs_flag_.at(val_idx)
-                                     & OB_FINAL_EXPR_WITH_LOB_TRUNCATE)
+                                     (ctx_.final_exprs_flag_.at(val_idx) 
+                                     & OB_FINAL_EXPR_WITH_LOB_TRUNCATE) 
                                      == OB_FINAL_EXPR_WITH_LOB_TRUNCATE) ? OB_RANGE_MAX_VALUE : OB_RANGE_MIN_VALUE;
         }
       }
@@ -2070,7 +2070,7 @@ int ObExprRangeConverter::fill_range_node_for_basic_row_cmp(ObItemType cmp_type,
            * (min, min, min; 10, 10, max)
            * mysql 非精确
            * (null, max, max, 10, 10, max)
-           *
+           * 
            * (c1,c2) < (10, 10)
            * oracle 精确
            * (min, min, min; 10, 10, min)
@@ -2093,8 +2093,8 @@ int ObExprRangeConverter::fill_range_node_for_basic_row_cmp(ObItemType cmp_type,
           }
           range_node.end_keys_[key_idx] = val_idx;
           if (key_idxs.count() - 1 == i) {
-            need_include_end = (ctx_.final_exprs_flag_.at(val_idx)
-                                 & OB_FINAL_EXPR_WITH_LOB_TRUNCATE)
+            need_include_end = (ctx_.final_exprs_flag_.at(val_idx) 
+                                 & OB_FINAL_EXPR_WITH_LOB_TRUNCATE) 
                                   == OB_FINAL_EXPR_WITH_LOB_TRUNCATE;
             for (int64_t j = key_idx + 1; j < ctx_.column_cnt_; ++j) {
               range_node.start_keys_[j] = lib::is_oracle_mode() ? OB_RANGE_MIN_VALUE : OB_RANGE_MAX_VALUE;
@@ -2119,7 +2119,7 @@ int ObExprRangeConverter::fill_range_node_for_basic_row_cmp(ObItemType cmp_type,
            * (10, 10, min; null, min, min)
            * mysql 精确
            * (10, 10, min; max, max, max)
-           *
+           * 
            * (c1,c2) > (10, 10)
            * oracle 非精确
            * (10, 10, max; null, min, min)
@@ -2273,7 +2273,7 @@ int ObExprRangeConverter::get_rowid_node(const ObRawExpr &l_expr,
     const_expr = &l_expr;
     cmp_type = get_opposite_compare_type(cmp_type);
   }
-
+  
   if (OB_FAIL(get_extract_rowid_range_infos(*rowid_expr, pk_column_items,
                                             is_physical_rowid, part_column_id))) {
     LOG_WARN("failed to get extract rowid range infos");
@@ -2340,9 +2340,9 @@ int ObExprRangeConverter::get_rowid_node(const ObRawExpr &l_expr,
         } else if (OB_FAIL(ctx_.rowid_idxs_.push_back(std::pair<int64_t, int64_t>(const_idx, i)))) {
           LOG_WARN("failed to push back rowid idxs", K(const_idx), K(i));
         } else {
-          bool is_lt_with_lob = (cmp_type == T_OP_LT || cmp_type == T_OP_LE) &&
-                                (ctx_.final_exprs_flag_.at(const_idx)
-                                     & OB_FINAL_EXPR_WITH_LOB_TRUNCATE)
+          bool is_lt_with_lob = (cmp_type == T_OP_LT || cmp_type == T_OP_LE) &&  
+                                (ctx_.final_exprs_flag_.at(const_idx) 
+                                     & OB_FINAL_EXPR_WITH_LOB_TRUNCATE) 
                                      == OB_FINAL_EXPR_WITH_LOB_TRUNCATE;
           check_next = !is_lt_with_lob;
           last_key_idx = key_idx;
@@ -2367,7 +2367,7 @@ int ObExprRangeConverter::get_rowid_node(const ObRawExpr &l_expr,
       if (OB_UNLIKELY(pk_column_items.count() != 1)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpect pk count for no pk table", K(pk_column_items));
-      } else if (ctx_.range_column_map_.count() != 1 ||
+      } else if (ctx_.range_column_map_.count() != 1 || 
                 !is_range_key(pk_column_items.at(0)->get_column_id(), key_idx)) {
         // only extract physical rowid range for primary index
         always_true = true;
@@ -2449,12 +2449,12 @@ int ObExprRangeConverter::get_extract_rowid_range_infos(const ObRawExpr &calc_ur
   }
   LOG_TRACE("get extract rowid range infos", K(is_physical_rowid), K(part_column_id),
                                              K(pk_columns), K(calc_urowid_expr));
-
+  
   return ret;
 }
 
 // final info start
-int ObExprRangeConverter::get_final_expr_idx(const ObRawExpr *expr,
+int ObExprRangeConverter::get_final_expr_idx(const ObRawExpr *expr, 
                                              const ObRangeColumnMeta *column_meta,
                                              int64_t &idx)
 {
@@ -2470,7 +2470,7 @@ int ObExprRangeConverter::get_final_expr_idx(const ObRawExpr *expr,
     LOG_WARN("failed to wrap lob with substr", K(ret));
   } else if (OB_FAIL(ctx_.final_exprs_.push_back(wrap_const_expr))) {
     LOG_WARN("failed to push back final expr");
-  } else if (OB_FAIL(ctx_.final_exprs_flag_.push_back(expr == wrap_const_expr ? 0
+  } else if (OB_FAIL(ctx_.final_exprs_flag_.push_back(expr == wrap_const_expr ? 0 
                                                       : OB_FINAL_EXPR_WITH_LOB_TRUNCATE))) {
     LOG_WARN("failed to push back final expr flag");
   }
@@ -2575,7 +2575,7 @@ int ObExprRangeConverter::get_nvl_cmp_node(const ObRawExpr &l_expr,
     LOG_WARN("failed to get expr without lossless cast", K(ret));
   } else if (!nvl_first_expr->is_column_ref_expr()) {
     // do nothing
-  } else if (OB_FAIL(gen_column_cmp_node(*nvl_first_expr,
+  } else if (OB_FAIL(gen_column_cmp_node(*nvl_first_expr, 
                                          *const_expr,
                                          cmp_type,
                                          result_type,
@@ -2600,7 +2600,7 @@ int ObExprRangeConverter::get_nvl_cmp_node(const ObRawExpr &l_expr,
                                                 second_is_precise))) {
     LOG_WARN("failed to convert expr to range node", K(ret));
   } else if (OB_FALSE_IT(is_precise &= second_is_precise)) {
-  } else if (OB_FAIL(gen_is_null_range_node(nvl_first_expr,
+  } else if (OB_FAIL(gen_is_null_range_node(nvl_first_expr, 
                                             expr_depth + 1,
                                             is_null_node))) {
     LOG_WARN("failed to gen is null expr", K(ret));
@@ -2609,8 +2609,8 @@ int ObExprRangeConverter::get_nvl_cmp_node(const ObRawExpr &l_expr,
     LOG_WARN("failed to push back or range nodes", K(ret));
   } else if (OB_FAIL(range_nodes.push_back(is_null_node))) {
     LOG_WARN("failed to push back or range nodes", K(ret));
-  } else if (OB_FAIL(ObRangeGraphGenerator::and_range_nodes(range_nodes,
-                                                            ctx_,
+  } else if (OB_FAIL(ObRangeGraphGenerator::and_range_nodes(range_nodes, 
+                                                            ctx_, 
                                                             null_and_node))) {
     LOG_WARN("failed to and range nodes");
   } else if (OB_FALSE_IT(range_nodes.reuse())) {
@@ -2618,16 +2618,16 @@ int ObExprRangeConverter::get_nvl_cmp_node(const ObRawExpr &l_expr,
     LOG_WARN("failed to push back range nodes", K(ret));
   } else if (OB_FAIL(range_nodes.push_back(null_and_node))) {
     LOG_WARN("failed to push back range nodes", K(ret));
-  } else if (OB_FAIL(ObRangeGraphGenerator::or_range_nodes(*this,
-                                                           range_nodes,
-                                                           ctx_.column_cnt_,
+  } else if (OB_FAIL(ObRangeGraphGenerator::or_range_nodes(*this, 
+                                                           range_nodes, 
+                                                           ctx_.column_cnt_, 
                                                            range_node))) {
     LOG_WARN("failed to or range nodes");
   } else {
     ctx_.cur_is_precise_ = is_precise;
     ctx_.refresh_max_offset_ = true;
   }
-
+  
   if (OB_SUCC(ret) && nullptr == range_node) {
     ctx_.cur_is_precise_ = false;
     if (OB_FAIL(generate_always_true_or_false_node(always_true, range_node))) {
@@ -2667,7 +2667,7 @@ int64_t ObExprRangeConverter::get_expr_category(ObItemType type)
 
 struct RangeExprCategoryCmp
 {
-
+  
   inline bool operator()(ObRawExpr *left, ObRawExpr *right)
   {
     bool bret = false;
@@ -2726,7 +2726,7 @@ int ObExprRangeConverter::try_wrap_lob_with_substr(const ObRawExpr *expr,
   } else if (OB_ISNULL(substr_expr)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate expr", K(substr_expr));
-  } else if (OB_FALSE_IT(truncated_str_len =
+  } else if (OB_FALSE_IT(truncated_str_len = 
                          column_meta->column_type_.get_accuracy().get_length() + 1)) {
   } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*ctx_.expr_factory_,
                                                           ObIntType,
@@ -2765,12 +2765,12 @@ int ObExprRangeConverter::set_column_flags(int64_t key_idx, ObItemType type)
 }
 
 int ObExprRangeConverter::get_domain_extra_item(const common::ObDomainOpType op_type,
-                                                const ObRawExpr *expr,
+                                                const ObRawExpr *expr, 
                                                 const ObConstRawExpr *&extra_item)
 {
   int ret = OB_SUCCESS;
   extra_item = NULL;
-  if (op_type == ObDomainOpType::T_GEO_DWITHIN ||
+  if (op_type == ObDomainOpType::T_GEO_DWITHIN || 
       op_type == ObDomainOpType::T_GEO_RELATE) {
     if (expr->get_param_count() != 3) {
       ret = OB_INVALID_ARGUMENT;
@@ -2812,7 +2812,7 @@ int ObExprRangeConverter::fill_range_node_for_geo_node(const int64_t key_idx,
 
   range_node.start_keys_[key_idx] = start_val_idx;
   range_node.end_keys_[key_idx] = end_val_idx;
-
+  
   for (int64_t i = key_idx + 1; i < ctx_.column_cnt_; ++i) {
     range_node.start_keys_[i] = OB_RANGE_MIN_VALUE;
     range_node.end_keys_[i] = OB_RANGE_MAX_VALUE;
@@ -2820,8 +2820,8 @@ int ObExprRangeConverter::fill_range_node_for_geo_node(const int64_t key_idx,
   return ret;
 }
 
-int ObExprRangeConverter::convert_geo_expr(const ObRawExpr *geo_expr,
-                                           int64_t expr_depth,
+int ObExprRangeConverter::convert_geo_expr(const ObRawExpr *geo_expr, 
+                                           int64_t expr_depth, 
                                            ObRangeNode *&range_node)
 {
   int ret = OB_SUCCESS;
@@ -2910,7 +2910,7 @@ int ObExprRangeConverter::get_geo_range_node(const ObColumnRefRawExpr *column_ex
       if (OB_ISNULL(ctx_.geo_column_id_map_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ctx_.geo_column_id_map_));
-      } else if (OB_FAIL(ctx_.geo_column_id_map_->get_refactored(column_expr->get_column_id(),
+      } else if (OB_FAIL(ctx_.geo_column_id_map_->get_refactored(column_expr->get_column_id(), 
                                                           column_info))) {
         if (OB_NOT_INIT == ret || OB_HASH_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
@@ -2918,13 +2918,13 @@ int ObExprRangeConverter::get_geo_range_node(const ObColumnRefRawExpr *column_ex
           LOG_WARN("failed to get from geo column id map", K(ret));
         }
       } else {
-        is_cellid_col = true;
+        is_cellid_col = true; 
       }
     } else {
       column_info.srid_ = 0;
       column_info.cellid_columnId_ = column_expr->get_column_id();
     }
-
+    
     if (OB_SUCC(ret)) {
       uint64_t column_id = is_cellid_col ? column_info.cellid_columnId_ : column_expr->get_column_id();
       bool can_extract_range = false;
@@ -3003,10 +3003,10 @@ int ObExprRangeConverter::get_implicit_cast_range(const ObRawExpr &l_expr,
   if (OB_SUCC(ret) && OB_NOT_NULL(inner_expr)) {
     if (!inner_expr->has_flag(IS_COLUMN)) {
       // do nothing
-    } else if (!is_range_key(static_cast<const ObColumnRefRawExpr*>(inner_expr)->get_column_id(),
+    } else if (!is_range_key(static_cast<const ObColumnRefRawExpr*>(inner_expr)->get_column_id(), 
                              key_idx)) {
       // do nothing
-    } else if (OB_FAIL(can_extract_implicit_cast_range(cmp_type,
+    } else if (OB_FAIL(can_extract_implicit_cast_range(cmp_type, 
                                                        *static_cast<const ObColumnRefRawExpr*>(inner_expr),
                                                        *const_expr,
                                                        can_extract))) {
@@ -3047,7 +3047,7 @@ int ObExprRangeConverter::gen_implicit_cast_range(const ObColumnRefRawExpr *colu
     LOG_WARN("get unexptected null", K(ret), K(column_expr), K(const_expr));
   } else if ((column_expr->get_result_type().get_type() ==
               const_expr->get_result_type().get_type()) &&
-             column_expr->get_result_type().is_string_type()) {
+             column_expr->get_result_type().is_string_type()) { 
     if (OB_FAIL(get_basic_range_node(column_expr,
                                      const_expr,
                                      cmp_type,
@@ -3148,7 +3148,7 @@ int ObExprRangeConverter::build_double_to_int_expr(const ObRawExpr *double_expr,
   if (OB_ISNULL(double_expr) || OB_ISNULL(ctx_.expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(double_expr), K(ctx_.expr_factory_));
-  } else if (OB_FAIL(ctx_.expr_factory_->create_raw_expr(T_FUN_SYS_INNER_DOUBLE_TO_INT,
+  } else if (OB_FAIL(ctx_.expr_factory_->create_raw_expr(T_FUN_SYS_INNER_DOUBLE_TO_INT, 
                                                          inner_double_to_int))) {
     LOG_WARN("failed to create a new expr", K(ret));
   } else if (OB_ISNULL(inner_double_to_int)) {
@@ -3337,8 +3337,8 @@ int ObExprRangeConverter::get_row_cmp_node(const ObRawExpr &l_expr,
                                               range_node))) {
         LOG_WARN("failed to get row real to int range", K(ret));
       }
-    }
-  }
+    } 
+  } 
   return ret;
 }
 
@@ -3572,7 +3572,7 @@ int ObExprRangeConverter::build_decimal_to_year_expr(const ObRawExpr *decimal_ex
   if (OB_ISNULL(decimal_expr) || OB_ISNULL(ctx_.expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(decimal_expr), K(ctx_.expr_factory_));
-  } else if (OB_FAIL(ctx_.expr_factory_->create_raw_expr(T_FUN_SYS_INNER_DECIMAL_TO_YEAR,
+  } else if (OB_FAIL(ctx_.expr_factory_->create_raw_expr(T_FUN_SYS_INNER_DECIMAL_TO_YEAR, 
                                                          inner_decimal_to_year))) {
     LOG_WARN("failed to create a new expr", K(ret));
   } else if (OB_ISNULL(inner_decimal_to_year)) {
@@ -3736,8 +3736,8 @@ int ObExprRangeConverter::set_extract_implicit_is_precise(const ObColumnRefRawEx
   return ret;
 }
 
-int ObExprRangeConverter::convert_domain_expr(const ObRawExpr *domain_expr,
-                                              int64_t expr_depth,
+int ObExprRangeConverter::convert_domain_expr(const ObRawExpr *domain_expr, 
+                                              int64_t expr_depth, 
                                               ObRangeNode *&range_node)
 {
   int ret = OB_SUCCESS;
@@ -3752,7 +3752,7 @@ int ObExprRangeConverter::convert_domain_expr(const ObRawExpr *domain_expr,
   } else if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(need_extract_domain_range(*static_cast<const ObOpRawExpr*>(expr),
+  } else if (OB_FAIL(need_extract_domain_range(*static_cast<const ObOpRawExpr*>(expr), 
                                                need_extract))) {
     LOG_WARN("failed to check need extract domain range", K(ret));
   } else if (!need_extract) {
@@ -3785,9 +3785,9 @@ int ObExprRangeConverter::convert_domain_expr(const ObRawExpr *domain_expr,
       } else if (OB_ISNULL(column_meta = get_column_meta(key_idx))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get null column meta");
-      } else if (!ObQueryRange::can_domain_be_extract_range(op_type, column_meta->column_type_,
+      } else if (!ObQueryRange::can_domain_be_extract_range(op_type, column_meta->column_type_, 
                                                             column_param->get_result_type().get_obj_meta(),
-                                                            const_param->get_result_type().get_type(),
+                                                            const_param->get_result_type().get_type(), 
                                                             always_true)) {
         // do nothing
       } else if (OB_FAIL(get_geo_range_node(column_param,
@@ -3800,7 +3800,7 @@ int ObExprRangeConverter::convert_domain_expr(const ObRawExpr *domain_expr,
         ctx_.cur_is_precise_ = op_type == ObDomainOpType::T_JSON_MEMBER_OF;
       }
     }
-  }
+  } 
 
   if (OB_SUCC(ret) && nullptr == range_node) {
     ctx_.cur_is_precise_ = false;
@@ -3811,7 +3811,7 @@ int ObExprRangeConverter::convert_domain_expr(const ObRawExpr *domain_expr,
   return ret;
 }
 
-int ObExprRangeConverter::need_extract_domain_range(const ObOpRawExpr &domain_expr,
+int ObExprRangeConverter::need_extract_domain_range(const ObOpRawExpr &domain_expr, 
                                                     bool& need_extract)
 {
   int ret = OB_SUCCESS;
@@ -3891,8 +3891,8 @@ int ObExprRangeConverter::get_implicit_set_collation_range(const ObRawExpr &l_ex
   if (OB_SUCC(ret) && OB_NOT_NULL(collation_expr) &&
       OB_NOT_NULL(const_expr)) {
     if (OB_FAIL(check_can_extract_implicit_collation_range(cmp_type,
-                                                           collation_expr,
-                                                           inner_expr,
+                                                           collation_expr, 
+                                                           inner_expr, 
                                                            can_extract))) {
       LOG_WARN("failed to check can extract implicit collation range", K(ret));
     } else if (!can_extract) {
@@ -3941,7 +3941,7 @@ int ObExprRangeConverter::check_can_extract_implicit_collation_range(
       LOG_WARN("get unexpected null", K(ret), KPC(l_expr));
     } else if (!collation_expr->is_const_expr()) {
       // do nothing
-    } else if (OB_FAIL(get_calculable_expr_val(collation_expr,
+    } else if (OB_FAIL(get_calculable_expr_val(collation_expr, 
                                               collation_val,
                                               is_valid))) {
       LOG_WARN("failed to get calculable expr");
@@ -3960,7 +3960,7 @@ int ObExprRangeConverter::check_can_extract_implicit_collation_range(
     if (OB_ISNULL(real_expr = l_expr->get_param_expr(0))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), KPC(l_expr));
-    } else if (real_expr->get_result_type().get_type() !=
+    } else if (real_expr->get_result_type().get_type() != 
                  l_expr->get_result_type().get_type() ||
                !real_expr->get_result_type().is_string_type()) {
       // do nothing
@@ -3986,9 +3986,9 @@ int ObExprRangeConverter::get_implicit_set_collation_in_range(
   const ObRawExpr *inner_expr = nullptr;
   bool can_extract = false;
   bool use_implicit_cast_feature = true;
-  if (OB_FAIL(check_can_extract_implicit_collation_range(T_OP_IN,
-                                                         l_expr,
-                                                         inner_expr,
+  if (OB_FAIL(check_can_extract_implicit_collation_range(T_OP_IN, 
+                                                         l_expr, 
+                                                         inner_expr, 
                                                          can_extract))) {
     LOG_WARN("failed to check can extract implicit collation range", K(ret));
   } else if (!can_extract) {
@@ -3996,14 +3996,14 @@ int ObExprRangeConverter::get_implicit_set_collation_in_range(
   } else if (OB_ISNULL(inner_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(inner_expr,
-                                                                     inner_expr,
+  } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(inner_expr, 
+                                                                     inner_expr, 
                                                                      use_implicit_cast_feature))) {
     LOG_WARN("failed to get expr without lossless cast", K(ret));
   } else if (!inner_expr->is_column_ref_expr()) {
     // do nothing
-  } else if (OB_FAIL(get_single_in_range_node(static_cast<const ObColumnRefRawExpr *>(inner_expr),
-                                              r_expr,
+  } else if (OB_FAIL(get_single_in_range_node(static_cast<const ObColumnRefRawExpr *>(inner_expr), 
+                                              r_expr, 
                                               result_type,
                                               expr_depth + 1,
                                               range_node))) {
@@ -4041,8 +4041,8 @@ int ObExprRangeConverter::can_be_extract_orcl_spatial_range(
   return ret;
 }
 
-int ObExprRangeConverter::get_orcl_spatial_relationship(const ObRawExpr *const_expr,
-                                                        bool &can_extract,
+int ObExprRangeConverter::get_orcl_spatial_relationship(const ObRawExpr *const_expr, 
+                                                        bool &can_extract, 
                                                         ObDomainOpType& real_op_type)
 {
   int ret = OB_SUCCESS;
@@ -4063,7 +4063,7 @@ int ObExprRangeConverter::get_orcl_spatial_relationship(const ObRawExpr *const_e
     // do nothing
   } else if (OB_FAIL(ObCharset::toupper(const_expr->get_collation_type(),
                                         const_val.get_string(),
-                                        upper_str,
+                                        upper_str, 
                                         temp_allocator))) {
     LOG_WARN("failed to get upper string", K(ret));
   } else if (OB_ISNULL(cmp_str = static_cast<char*>(temp_allocator.alloc(upper_str.length() + 1)))) {
@@ -4103,7 +4103,7 @@ int ObExprRangeConverter::get_orcl_spatial_range_node(const ObRawExpr &l_expr,
     inner_expr = &r_expr;
     const_expr = &l_expr;
   }
-
+  
   if (OB_FAIL(can_be_extract_orcl_spatial_range(const_expr, can_extract))) {
     LOG_WARN("failed to check can be extract orcl spatial range", K(ret));
   } else if (!can_extract) {
@@ -4135,10 +4135,10 @@ int ObExprRangeConverter::add_string_equal_expr_constraint(const ObRawExpr *cons
              OB_ISNULL(ctx_.expr_constraints_)) {
     // do nothing
   } else if (OB_FALSE_IT(const_expr = ObRawExprUtils::skip_inner_added_expr(const_expr))) {
-  } else if (OB_FAIL(ObRawExprUtils::build_const_string_expr(*ctx_.constraints_expr_factory_,
-                                                             const_expr->get_result_meta().get_type(),
+  } else if (OB_FAIL(ObRawExprUtils::build_const_string_expr(*ctx_.constraints_expr_factory_, 
+                                                             const_expr->get_result_meta().get_type(), 
                                                              val,
-                                                             const_expr->get_result_meta().get_collation_type(),
+                                                             const_expr->get_result_meta().get_collation_type(), 
                                                              val_expr))) {
     LOG_WARN("fail to build type expr", K(ret));
   } else if (OB_FAIL(ObRawExprUtils::create_equal_expr(*ctx_.constraints_expr_factory_,

@@ -13,7 +13,7 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_log_restore_proxy.h"
-#include "observer/ob_server_struct.h"
+#include "observer/ob_server_struct.h"  
 #include "share/oracle_errno.h"
 #include "share/backup/ob_log_restore_struct.h"
 
@@ -340,7 +340,7 @@ int ObLogRestoreProxyUtil::try_init(const uint64_t tenant_id,
   const char *db_name = nullptr;
   ObLogRestoreMySQLProvider tmp_server_prover;
   common::ObArray<common::ObAddr> fixed_server_list;
-
+  
   if (OB_FAIL(fixed_server_list.assign(server_list))) {
     LOG_WARN("fail to assign fixed server list", K(tenant_id), K(server_list));
   } else if (OB_FAIL(tmp_server_prover.init(server_list))) {
@@ -434,7 +434,7 @@ int ObLogRestoreProxyUtil::check_different_cluster_with_same_cluster_id(
   } else if (GCONF.cluster_id == source_cluster_id) {
     // get one machine ip from the source cluster, then check if that machine is in current
     // cluster's __all_server table
-    SMART_VAR(ObMySQLProxy::MySQLResult, result) {
+    SMART_VAR(ObMySQLProxy::MySQLResult, result) { 
       ObSqlString sql;
       char svr_ip_buf[common::OB_IP_STR_BUFF] = {0};
       common::ObAddr primary_server;
@@ -872,7 +872,7 @@ int ObLogRestoreProxyUtil::detect_tenant_mode_(common::sqlclient::ObMySQLServerP
       }
       if (fixed_server_list->count() <= 0) {
         ret = OB_CONNECT_ERROR;
-        LOG_WARN("[RESTORE PROXY] all servers are unreachable", K_(tenant_id), K(ret));
+        LOG_WARN("[RESTORE PROXY] all servers are unreachable", K_(tenant_id), K(ret)); 
       }
     }
   }

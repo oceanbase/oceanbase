@@ -72,16 +72,16 @@ private:
   mds::MdsRLockGuard row_guard_;
 };
 
-/* About Filter:
+/* About Filter: 
  * Initializing the iterator with a filter causes get_next() to return only specified nodes.
  * The filter's input is an MDS node in the specified unit,
  * and a 'need_skip' flag to indicate whether this node should be skipped when calling get_next().
  * If the filter returns a value other than OB_SUCCESS, the iterator will propagate the error and will not advance.
- *
+ * 
  * Cautions:
  * 0. All nodes on the MDS table will be iterated over, regardless of their state.
  *    (Aborted nodes are not visible due to the immediate deletion principle.)
- * 1. get_next() provides a key (value semantic) and a p_node (pointer to a real node).
+ * 1. get_next() provides a key (value semantic) and a p_node (pointer to a real node). 
  *    You may access this node until:
  *    a. The next call to get_next(), **or**
  *    b. The iterator is destroyed.
@@ -94,7 +94,7 @@ private:
  * 4. A filter may return OB_EAGAIN, which causes the iterator to release the current row lock and retry the same row.
  *    (e.g., when reading with snapshot requirements, and the state of a BEFORE_PREPARE node cannot be compared.)
  * 5. Due to point 4, a node may be processed by the filter multiple times, and its state may change between iterations.
- * 6. If a filter returns OB_EAGAIN, it **must** provide a valid `timeout_us`.
+ * 6. If a filter returns OB_EAGAIN, it **must** provide a valid `timeout_us`. 
  *    If retries exceed the timeout, the iterator returns OB_TIMEOUT.
  */
 template <typename UnitKey, typename UnitValue>

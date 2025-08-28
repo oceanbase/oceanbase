@@ -204,9 +204,9 @@ struct GetNextBatchVisitor : public boost::static_visitor<int>
   GetNextBatchVisitor(const ObCompactRow **rows,
                       const int64_t max_rows,
                       int64_t &read_rows,
-                      common::ObArray<std::pair<const ObCompactRow *, int32_t>>
+                      common::ObArray<std::pair<const ObCompactRow *, int32_t>> 
                         &popular_array_temp,
-                      uint64_t &total_load_rows,
+                      uint64_t &total_load_rows, 
                       bool get_top_n_item) : rows_(rows), max_rows_(max_rows),
                                             read_rows_(read_rows),
                                             popular_array_temp_(popular_array_temp),
@@ -239,7 +239,7 @@ struct ProcessPopularValueBatchVisitor : public boost::static_visitor<int>
                                   int64_t &agg_group_cnt,
                                   char **batch_old_rows,
                                   char **batch_new_rows,
-                                  common::hash::ObHashMap<uint64_t, uint64_t,
+                                  common::hash::ObHashMap<uint64_t, uint64_t, 
                                   hash::NoPthreadDefendMode> *popular_map)
                                   : result_brs_(result_brs),
                                     exprs_(exprs),
@@ -257,7 +257,7 @@ struct ProcessPopularValueBatchVisitor : public boost::static_visitor<int>
   int operator() (T &t)
   {
     return t->process_popular_value_batch(result_brs_, exprs_, lengths_, hash_vals_, dop_,
-       by_pass_rows_, check_valid_threshold_, agg_row_cnt_, agg_group_cnt_, batch_old_rows_,
+       by_pass_rows_, check_valid_threshold_, agg_row_cnt_, agg_group_cnt_, batch_old_rows_, 
       batch_new_rows_, popular_map_);
   }
   ObBatchRows *result_brs_;
@@ -426,7 +426,7 @@ public:
     INVALID = -1,
     INLINE,
     OUTLINE,
-    MAX
+    MAX 
   };
   ObAggrHashTableWapper() : hash_table_ptr_(), real_ptr_(nullptr), outline_ptr_(nullptr), inline_ptr_(nullptr), type_(Type::INVALID), inited_(false) {}
   int prepare_hash_table(const int64_t item_size, const uint64_t tenant_id, common::ObIAllocator &alloc);
@@ -456,11 +456,11 @@ public:
   {
     InitVisitor visitor(allocator, mem_attr, gby_exprs,
                         hash_expr_cnt, eval_ctx, max_batch_size,
-                        nullable, all_int64, op_id,
+                        nullable, all_int64, op_id, 
                         use_sstr_aggr, aggr_row_size, initial_size);
     return boost::apply_visitor(visitor, hash_table_ptr_);
   }
-
+  
   bool is_inited() const
   {
     bool res = false;
@@ -476,7 +476,7 @@ public:
     GetBktNumVisitor visitor;
     return boost::apply_visitor(visitor, hash_table_ptr_);
   }
-
+  
   int64_t get_bucket_size() const
   {
     GetBktSizeVisitor visitor;
@@ -561,10 +561,10 @@ public:
   }
 
   int get_next_batch(const ObCompactRow **rows, const int64_t max_rows, int64_t &read_rows,
-    common::ObArray<std::pair<const ObCompactRow *, int32_t>> &popular_array_temp,
+    common::ObArray<std::pair<const ObCompactRow *, int32_t>> &popular_array_temp, 
     uint64_t &total_load_rows, bool get_top_n_item)
   {
-    GetNextBatchVisitor visitor(rows, max_rows, read_rows, popular_array_temp,
+    GetNextBatchVisitor visitor(rows, max_rows, read_rows, popular_array_temp, 
       total_load_rows, get_top_n_item);
     return boost::apply_visitor(visitor, hash_table_ptr_);
   }
@@ -580,11 +580,11 @@ public:
                                   int64_t &agg_group_cnt,
                                   char **batch_old_rows,
                                   char **batch_new_rows,
-                                  common::hash::ObHashMap<uint64_t, uint64_t,
+                                  common::hash::ObHashMap<uint64_t, uint64_t, 
                                   hash::NoPthreadDefendMode> *popular_map)
   {
-    ProcessPopularValueBatchVisitor visitor(result_brs, exprs, lengths, hash_vals, dop, by_pass_rows,
-      check_valid_threshold, agg_row_cnt, agg_group_cnt, batch_old_rows,
+    ProcessPopularValueBatchVisitor visitor(result_brs, exprs, lengths, hash_vals, dop, by_pass_rows, 
+      check_valid_threshold, agg_row_cnt, agg_group_cnt, batch_old_rows, 
       batch_new_rows, popular_map);
     return boost::apply_visitor(visitor, hash_table_ptr_);
   }

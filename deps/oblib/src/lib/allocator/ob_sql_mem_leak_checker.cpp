@@ -20,7 +20,7 @@ namespace common
 ObSqlMemoryLeakChecker &ObSqlMemoryLeakChecker::get_instance()
 {
   static ObSqlMemoryLeakChecker instance;
-  return instance;
+  return instance; 
 }
 
 void ObSqlMemoryLeakChecker::add(ObMemVersionNode &node)

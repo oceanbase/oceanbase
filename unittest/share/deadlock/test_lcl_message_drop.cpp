@@ -44,7 +44,7 @@ TEST_F(TestLCLMsgDrop, always_keep) {// the first 2048 will always success
   mock_lcl_label.addr_ = ObAddr(ObAddr::VER::IPV4, "127.0.0.1", 1);
   ASSERT_EQ(OB_SUCCESS, mock_self_key.set_user_key(transaction::ObTransID(1)));
   ASSERT_EQ(OB_SUCCESS, mock_dest_key.set_user_key(transaction::ObTransID(1)));
-
+  
   for (int i = 0; i < LCL_MSG_CACHE_LIMIT / 2; ++i) {
     mock_addr.set_port(i + 1);
     ASSERT_EQ(OB_SUCCESS, mock_message.set_args(mock_addr,

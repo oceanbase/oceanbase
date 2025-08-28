@@ -151,7 +151,7 @@ void ObCheckpointExecutor::add_server_event_history_for_update_clog_checkpoint(
       const uint64_t tenant_id = MTL_ID();
       const int64_t ls_id = ls_->get_ls_id().id();
       last_add_server_history_time_ = cur_time;
-      SERVER_EVENT_ADD("checkpoint", "update_clog_checkpoint", K(tenant_id), K(ls_id), K(checkpoint_scn), K(service_type), K_(update_clog_checkpoint_times));
+      SERVER_EVENT_ADD("checkpoint", "update_clog_checkpoint", K(tenant_id), K(ls_id), K(checkpoint_scn), K(service_type), K_(update_clog_checkpoint_times)); 
       update_clog_checkpoint_times_ = 0;
     }
   }
@@ -284,7 +284,7 @@ int ObCheckpointExecutor::advance_checkpoint_by_flush(const share::SCN input_rec
  *       max_decided_scn
  *
  * CASE 3 : If : max_decided_scn < expected_recycle_scn; Then : use max_decided_scn to advance checkpoint *
-
+ 
  *       │            │                        │
  *       ▼            ▼                        ▼
  *       ┌───────────────────────────────────────────────────────────────────────────────────┐

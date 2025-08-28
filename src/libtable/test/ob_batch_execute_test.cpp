@@ -2362,7 +2362,7 @@ TEST_F(TestBatchExecute, htable_scan_basic)
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
           //ObCStringHelper helper;
-          //fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //fprintf(stderr, "(%s,%s,%s,%s)\n", 
           //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
@@ -7868,7 +7868,7 @@ TEST_F(TestBatchExecute, complex_batch_execute)
           ASSERT_EQ(400+i, value.get_int());
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
           // verify the semantic of PUT
-          //
+          // 
           ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
           ASSERT_TRUE(str == c3_value);
           break;
@@ -8887,7 +8887,7 @@ TEST_F(TestBatchExecute, htable_increment_multi_thread)
   ObTableEntityFactory<ObTableEntity> entity_factory;
   ObTableBatchOperation batch_operation;
   ObITableEntity *entity = NULL;
-
+  
   // 1. execute delete first
   const char* rowkey = "row2";
   const char *qualifier = "cq1";
@@ -8907,7 +8907,7 @@ TEST_F(TestBatchExecute, htable_increment_multi_thread)
   ////////////////////////////////////////////////////////////////
   // 2. fill query and mutations
   // query: query with row0 and htable filter for column cq0
-  // mutation: row2, cq1, 1, 1
+  // mutation: row2, cq1, 1, 1 
   ObTableQueryAndMutate query_and_mutate;
   ObTableQuery &query = query_and_mutate.get_query();
   ObTableBatchOperation &mutations = query_and_mutate.get_mutations();
@@ -8951,7 +8951,7 @@ TEST_F(TestBatchExecute, htable_increment_multi_thread)
     threads.at(i).join();
   }
   printf("time elapsed during query process: %lfs\n", double(time(NULL) - start_time));
-
+  
   // 4. execute query and verify result
   htable_filter.clear_columns();
   ObTableEntityIterator *iter = nullptr;
@@ -10087,7 +10087,7 @@ TEST_F(TestBatchExecute, table_query_with_filter)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C4, v4));
       // ObCStringHelper helper;
-      // fprintf(stderr, "(%ld,%ld,%.2f,%s)\n",
+      // fprintf(stderr, "(%ld,%ld,%.2f,%s)\n", 
       //    v1.get_int(), v2.get_int(), v4.get_double(), helper.convert(v3));
     }
     ASSERT_EQ(OB_ITER_END, ret);
@@ -12174,7 +12174,7 @@ TEST_F(TestBatchExecute, htable_check_and_put_multi_thread)
     threads.at(i).join();
   }
   printf("time elapsed during checkAndPut process: %lfs\n", double(time(NULL) - start_time));
-
+  
   // 4. execute query and verify result
   htable_filter.reset();
   htable_filter.add_column(ObString::make_string(qualifier));
@@ -12279,7 +12279,7 @@ TEST_F(TestBatchExecute, htable_check_and_put_put)
     threads.at(i).join();
   }
   printf("time elapsed during checkAndPut process: %lfs\n", double(time(NULL) - start_time));
-
+  
   // 4. execute query and verify result
   htable_filter.reset();
   htable_filter.add_column(ObString::make_string(qualifier));

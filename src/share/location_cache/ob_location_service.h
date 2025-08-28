@@ -150,25 +150,25 @@ public:
   int nonblock_renew(
       const uint64_t tenant_id,
       const ObTabletID &tablet_id);
-
+  
   /**
   Renew the location cache for tablets based on the provided error_code.
-
+  
   The default value of `expire_renew_time` is `INT64_MAX`, which triggers a full cache refresh.
   If `expire_renew_time` is set to a different value, an on-demand refresh will be triggered.
-
+  
   Two scenarios that initiate an on-demand synchronous refresh:
   1. The `location_cache` does not contain the required entry.
   2. The refresh time in `location_cache` is older than `expire_renew_time`.
-
+  
   Note: The module must handle potential errors caused by values exceeding `expire_renew_time`.
   If error handling is not feasible, use a full refresh by setting `expire_renew_time` to `INT64_MAX`.
-
+  
   @param [in] tenant_id          Target tenant that the tablets belong to.
   @param [in] tablet_list        List of target tablet IDs (may contain duplicates).
   @param [in] error_code         SQL error code that requires retry.
   @param [in] is_nonblock        Specifies whether the location refresh is synchronous or asynchronous.
-  @param [in] expire_renew_time  `INT64_MAX` for a full refresh of `tablet_list`;
+  @param [in] expire_renew_time  `INT64_MAX` for a full refresh of `tablet_list`; 
                                   otherwise, triggers on-demand refresh. Default is `INT64_MAX`.
   @return OB_GET_LOCATION_TIME_OUT          if `inner_sql` times out during a synchronous refresh.
  */

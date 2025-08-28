@@ -88,7 +88,7 @@ int ObTempColumnStore::ColumnBlock::vector_to_buf(const ObIVector *vec,
       break;
     case VEC_UNIFORM_CONST:
       ret = to_buf<true>(static_cast<const ObUniformBase*>(vec), selector, size, length, head, pos);
-      break;
+      break;        
     default:
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected vector format", KR(ret), K(format));
@@ -616,7 +616,7 @@ int ObTempColumnStore::init_vectors(const ObIArray<ObColumnSchemaItem> &col_arra
     }
   }
   return ret;
-}
+} 
 
 int ObTempColumnStore::init_batch_ctx(const ObExprPtrIArray &exprs)
 {

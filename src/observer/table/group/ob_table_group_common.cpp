@@ -188,10 +188,10 @@ int ObTableFailedGroups::init() {
     group_info_.gmt_modified_ = group_info_.gmt_created_;
     is_inited_ = true;
   }
-
+  
   return ret;
 }
-
+  
 int ObTableFailedGroups::add(ObTableGroup *group)
 {
   int ret = OB_SUCCESS;
@@ -221,7 +221,7 @@ ObTableGroup* ObTableFailedGroups::get()
     group_info_.gmt_modified_ = ObClockGenerator::getClock();
   }
   return group;
-}
+}  
 
 int ObTableFailedGroups::construct_trigger_requests(ObIAllocator &request_allocator,
                                                     ObIArray<ObTableGroupTriggerRequest*> &requests)
@@ -483,3 +483,4 @@ bool ObTableGroupUtils::is_group_commit_enable(ObTableOperationType::Type op_typ
 
 } // end namespace table
 } // end namespace oceanbase
+

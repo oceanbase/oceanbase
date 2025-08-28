@@ -90,8 +90,8 @@ struct dblink_param_ctx{
   set_transaction_isolation_cstr_(NULL),
   ob_query_timeout_(0)
   { }
-  TO_STRING_KV(K_(charset_id),
-               K_(ncharset_id),
+  TO_STRING_KV(K_(charset_id), 
+               K_(ncharset_id), 
                K_(pool_type),
                K_(link_type),
                K_(sessid),

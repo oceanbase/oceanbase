@@ -929,7 +929,7 @@ int ObTableSqlService::drop_table(const ObTableSchema &table_schema,
     } else {
       if (is_force_drop_lonely_lob_aux_table) {
         // Due to some bugs, the lob aux table was not deleted along with the main table。
-        // which would affect some features, such as load balancing.
+        // which would affect some features, such as load balancing. 
         // Therefore, a way needs to be provided to force the deletion of the lob aux table.
         // However, since the main table corresponding to the lob aux table has already been deleted
         // the schema_version of the main table cannot be updated. Thus, this step needs to be skipped.
@@ -1414,12 +1414,12 @@ int ObTableSqlService::add_columns_for_not_core(ObISQLClient &sql_client,
     stash_desc2->add_row_cnt(table.get_column_count());
     if (OB_FAIL(trans->do_stash_query_batch())) {
       LOG_WARN("do_stash_query fail", K(ret));
-    } else if (table.is_index_table() && is_virtual_table(table.get_data_table_id())
+    } else if (table.is_index_table() && is_virtual_table(table.get_data_table_id()) 
         && OB_FAIL(trans->do_stash_query())) {
       // for virtual table index who need to sync schema version, it will try to get data table schema from inner table
       // the sql to insert into __all_column may not be executed if stash query is enabled, and get table schema will fail
       LOG_WARN("failed to do stash query for virtual table index", K(ret),
-          "table_name", table.get_table_name(), "table_id", table.get_table_id(),
+          "table_name", table.get_table_name(), "table_id", table.get_table_id(), 
           "data_table_id", table.get_data_table_id());
     }
   } else if (OB_FAIL(sql_client.write(exec_tenant_id, column_sql.ptr(), affected_rows))) {
@@ -3174,7 +3174,7 @@ int ObTableSqlService::gen_table_dml_without_check(
       OB_DEFAULT_STORAGE_CACHE_POLICY_STR : table.get_storage_cache_policy().ptr();
   ObString index_params = table.get_index_params().empty() ? empty_str : table.get_index_params();
   const ObString parser_properties = table.get_parser_property_str().empty() ? empty_str : table.get_parser_property_str();
-  const char *dynamic_partition_policy = table.get_dynamic_partition_policy().empty() ?
+  const char *dynamic_partition_policy = table.get_dynamic_partition_policy().empty() ? 
       "" : table.get_dynamic_partition_policy().ptr();
   ObString local_session_var;
   ObArenaAllocator allocator(ObModIds::OB_SCHEMA_OB_SCHEMA_ARENA);
@@ -3388,10 +3388,10 @@ int ObTableSqlService::gen_table_dml(
     LOG_WARN("ttl definition and kv attributes is not supported in version less than 4.2.1",
         "ttl_definition", table.get_ttl_definition().empty(),
         "kv_attributes", table.get_kv_attributes().empty());
-  } else if (data_version < DATA_VERSION_4_3_5_2 &&
+  } else if (data_version < DATA_VERSION_4_3_5_2 && 
             !is_storage_cache_policy_default(table.get_storage_cache_policy())) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("storage cache policy is not supported in version less than 4.3.5.2",
+    LOG_WARN("storage cache policy is not supported in version less than 4.3.5.2", 
         "storage_cache_policy", table.get_storage_cache_policy());
   } else if (data_version < DATA_VERSION_4_3_5_2 && table.get_semistruct_encoding_flags() != 0) {
     ret = OB_NOT_SUPPORTED;
@@ -4936,7 +4936,7 @@ int ObTableSqlService::insert_temp_table_info(ObISQLClient &sql_client, const Ob
                 ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id)))
         || OB_FAIL(dml.add_pk_column("table_id", table_id))
         || OB_FAIL(dml.add_column("create_host", table_schema.get_create_host_str()))
-        || OB_FAIL(data_version >= DATA_VERSION_4_3_5_4
+        || OB_FAIL(data_version >= DATA_VERSION_4_3_5_4 
                    && dml.add_column("table_session_id", table_schema.get_session_id()))) {
       LOG_WARN("fail to add dml", KR(ret));
     } else if (OB_FAIL(exec.exec_insert(OB_ALL_TEMP_TABLE_TNAME, dml, affected_rows))) {

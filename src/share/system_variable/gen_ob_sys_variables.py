@@ -883,7 +883,7 @@ void ObSysVarFactory::destroy()
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(store_)) {
     for (int64_t i = 0; i < ALL_SYS_VARS_COUNT; ++i) {
-      if (OB_NOT_NULL(store_[i])) {
+      if (OB_NOT_NULL(store_[i])) {  
         store_[i]->~ObBasicSysVar();
         store_[i] = nullptr;
       }

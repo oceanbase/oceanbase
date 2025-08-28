@@ -368,7 +368,7 @@ int TestCompactionPolicy::mock_column_sstable(
   } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable(param, allocator, table_handle))) {
     LOG_WARN("failed to create sstable", K(ret), K(param));
   }
-
+  
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(table_handle.get_sstable(sstable))) {
     LOG_WARN("failed to get table", K(ret), K(table_handle));
@@ -402,7 +402,7 @@ int TestCompactionPolicy::mock_co_sstable(
   ObCOSSTableV2 *co_sstable = nullptr;
   ObSEArray<ObTableHandleV2, 4> cg_handles;
   ObSEArray<ObITable *, 4> cg_sstables;
-  if (OB_FAIL(TestCompactionPolicy::mock_column_sstable(allocator, ObITable::COLUMN_ORIENTED_SSTABLE, ObCOSSTableBaseType::ROWKEY_CG_TYPE,
+  if (OB_FAIL(TestCompactionPolicy::mock_column_sstable(allocator, ObITable::COLUMN_ORIENTED_SSTABLE, ObCOSSTableBaseType::ROWKEY_CG_TYPE, 
       base_version, snapshot_version, max_merged_trans_version, upper_trans_version, column_group_cnt, table_handle))) {
     LOG_WARN("failed to mock co sstable", K(ret));
   } else if (OB_ISNULL(co_table = table_handle.get_table()) || !co_table->is_co_sstable() || OB_ISNULL(co_sstable = static_cast<ObCOSSTableV2 *>(co_table))) {
@@ -414,7 +414,7 @@ int TestCompactionPolicy::mock_co_sstable(
       ObITable *cg_sstable = nullptr;
       if (OB_FAIL(cg_handles.push_back(ObTableHandleV2()))) {
         LOG_WARN("failed to push back cg handle", K(ret));
-      } else if (OB_FAIL(TestCompactionPolicy::mock_column_sstable(allocator, ObITable::NORMAL_COLUMN_GROUP_SSTABLE, ObCOSSTableBaseType::MAX_TYPE,
+      } else if (OB_FAIL(TestCompactionPolicy::mock_column_sstable(allocator, ObITable::NORMAL_COLUMN_GROUP_SSTABLE, ObCOSSTableBaseType::MAX_TYPE, 
           base_version, snapshot_version, max_merged_trans_version, upper_trans_version, column_group_cnt, cg_handles[idx]))) {
         LOG_WARN("failed to mock cg sstable", K(ret));
       } else if (OB_ISNULL(cg_sstable = cg_handles[idx].get_table()) || !cg_sstable->is_cg_sstable()) {
@@ -484,7 +484,7 @@ int TestCompactionPolicy::mock_memtable(
 
   if (OB_FAIL(tablet.get_protected_memtable_mgr_handle(protected_handle))) {
     LOG_WARN("failed to get_protected_memtable_mgr_handle", K(ret), K(tablet));
-  }
+  } 
   // if memtable_mgr not exist, create it
   else if (OB_FAIL(protected_handle->create_tablet_memtable_mgr_(
           tablet.get_tablet_meta().ls_id_, tablet.get_tablet_meta().tablet_id_, lib::Worker::CompatMode::MYSQL))) {
@@ -1416,7 +1416,7 @@ TEST_F(TestCompactionPolicy, test_co_convert_replace_old_major)
   ObSEArray<ObITable *, 4> major_tables;
   ObSEArray<ObITable *, 4> new_sstables;
   ObTableHandleV2 co_table_handle;
-  ret = mock_co_sstable(allocator_, ObCOSSTableBaseType::ROWKEY_CG_TYPE, 0 /*base_version*/, 1 /*snapshot_version*/,
+  ret = mock_co_sstable(allocator_, ObCOSSTableBaseType::ROWKEY_CG_TYPE, 0 /*base_version*/, 1 /*snapshot_version*/, 
             1 /*max_merged_trans_version*/, 1 /*upper_trans_version*/, 4 /*column_group_cnt*/, co_table_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObITable *co_sstable = co_table_handle.get_table();
@@ -1442,21 +1442,21 @@ TEST_F(TestCompactionPolicy, test_co_convert_replace_old_major_rebuild)
 
   ObSEArray<ObITable *, 4> hybrid_major_tables;
   ObTableHandleV2 co_table_handle0;
-  ret = mock_co_sstable(allocator_, ObCOSSTableBaseType::ROWKEY_CG_TYPE, 0 /*base_version*/, 1 /*snapshot_version*/,
+  ret = mock_co_sstable(allocator_, ObCOSSTableBaseType::ROWKEY_CG_TYPE, 0 /*base_version*/, 1 /*snapshot_version*/, 
           1 /*max_merged_trans_version*/, 1 /*upper_trans_version*/, 4 /*column_group_cnt*/, co_table_handle0);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_NE(nullptr, co_table_handle0.get_table());
   ASSERT_EQ(OB_SUCCESS, hybrid_major_tables.push_back(co_table_handle0.get_table()));
 
   ObTableHandleV2 table_handle0;
-  ret = mock_sstable(allocator_, ObITable::MAJOR_SSTABLE, 0 /*base_version*/, 100 /*snapshot_version*/,
+  ret = mock_sstable(allocator_, ObITable::MAJOR_SSTABLE, 0 /*base_version*/, 100 /*snapshot_version*/, 
           100 /*max_merged_trans_version*/, 100 /*upper_trans_version*/, table_handle0);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_NE(nullptr, table_handle0.get_table());
   ASSERT_EQ(OB_SUCCESS, hybrid_major_tables.push_back(table_handle0.get_table()));
 
   ObTableHandleV2 table_handle1;
-  ret = mock_sstable(allocator_, ObITable::MAJOR_SSTABLE, 0 /*base_version*/, 200 /*snapshot_version*/,
+  ret = mock_sstable(allocator_, ObITable::MAJOR_SSTABLE, 0 /*base_version*/, 200 /*snapshot_version*/, 
           200 /*max_merged_trans_version*/, 200 /*upper_trans_version*/, table_handle1);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_NE(nullptr, table_handle1.get_table());
@@ -1468,7 +1468,7 @@ TEST_F(TestCompactionPolicy, test_co_convert_replace_old_major_rebuild)
   ObSEArray<ObITable *, 4> major_tables;
   ObSEArray<ObITable *, 4> new_sstables;
   ObTableHandleV2 co_table_handle;
-  ret = mock_co_sstable(allocator_, ObCOSSTableBaseType::ROWKEY_CG_TYPE, 0 /*base_version*/, 200 /*snapshot_version*/,
+  ret = mock_co_sstable(allocator_, ObCOSSTableBaseType::ROWKEY_CG_TYPE, 0 /*base_version*/, 200 /*snapshot_version*/, 
             200 /*max_merged_trans_version*/, 200 /*upper_trans_version*/, 4 /*column_group_cnt*/, co_table_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObITable *co_sstable = co_table_handle.get_table();
@@ -1486,35 +1486,35 @@ TEST_F(TestCompactionPolicy, test_build_tablet_for_hybrid_store)
   ObSEArray<ObITable *, 4> hybrid_major_tables;
   ObTablesHandleArray hybrid_major_handle_array;
   ObTableHandleV2 co_table_handle0;
-  ret = mock_co_sstable(allocator_, ObCOSSTableBaseType::ROWKEY_CG_TYPE, 0 /*base_version*/, 1 /*snapshot_version*/,
+  ret = mock_co_sstable(allocator_, ObCOSSTableBaseType::ROWKEY_CG_TYPE, 0 /*base_version*/, 1 /*snapshot_version*/, 
           1 /*max_merged_trans_version*/, 1 /*upper_trans_version*/, 4 /*column_group_cnt*/, co_table_handle0);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_NE(nullptr, co_table_handle0.get_table());
   ASSERT_EQ(OB_SUCCESS, hybrid_major_tables.push_back(co_table_handle0.get_table()));
 
   ObTableHandleV2 table_handle0;
-  ret = mock_sstable(allocator_, ObITable::MAJOR_SSTABLE, 0 /*base_version*/, 100 /*snapshot_version*/,
+  ret = mock_sstable(allocator_, ObITable::MAJOR_SSTABLE, 0 /*base_version*/, 100 /*snapshot_version*/, 
           100 /*max_merged_trans_version*/, 100 /*upper_trans_version*/, table_handle0);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_NE(nullptr, table_handle0.get_table());
   ASSERT_EQ(OB_SUCCESS, hybrid_major_tables.push_back(table_handle0.get_table()));
 
   ObTableHandleV2 table_handle1;
-  ret = mock_sstable(allocator_, ObITable::MAJOR_SSTABLE, 0 /*base_version*/, 200 /*snapshot_version*/,
+  ret = mock_sstable(allocator_, ObITable::MAJOR_SSTABLE, 0 /*base_version*/, 200 /*snapshot_version*/, 
           200 /*max_merged_trans_version*/, 200 /*upper_trans_version*/, table_handle1);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_NE(nullptr, table_handle1.get_table());
   ASSERT_EQ(OB_SUCCESS, hybrid_major_tables.push_back(table_handle1.get_table()));
 
   ObTableHandleV2 co_table_handle1;
-  ret = mock_co_sstable(allocator_, ObCOSSTableBaseType::ROWKEY_CG_TYPE, 0 /*base_version*/, 300 /*snapshot_version*/,
+  ret = mock_co_sstable(allocator_, ObCOSSTableBaseType::ROWKEY_CG_TYPE, 0 /*base_version*/, 300 /*snapshot_version*/, 
           300 /*max_merged_trans_version*/, 300 /*upper_trans_version*/, 4 /*column_group_cnt*/, co_table_handle1);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_NE(nullptr, co_table_handle1.get_table());
   ASSERT_EQ(OB_SUCCESS, hybrid_major_tables.push_back(co_table_handle1.get_table()));
 
   ObTableHandleV2 table_handle2;
-  ret = mock_sstable(allocator_, ObITable::MAJOR_SSTABLE, 0 /*base_version*/, 400 /*snapshot_version*/,
+  ret = mock_sstable(allocator_, ObITable::MAJOR_SSTABLE, 0 /*base_version*/, 400 /*snapshot_version*/, 
           400 /*max_merged_trans_version*/, 400 /*upper_trans_version*/, table_handle2);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_NE(nullptr, table_handle2.get_table());
@@ -1546,7 +1546,7 @@ TEST_F(TestCompactionPolicy, test_build_tablet_for_hybrid_store)
   ret = ObStorageHATabletBuilderUtil::build_tablet_for_row_store_(ls, tablet_id, hybrid_major_handle_array, major_sstables_param, extra_batch_param);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ObTabletHandle tablet_handle;
+  ObTabletHandle tablet_handle; 
   ASSERT_EQ(OB_SUCCESS, ls->get_tablet(tablet_id, tablet_handle));
   ASSERT_TRUE(tablet_handle.is_valid());
   ObTablet *tablet = tablet_handle.get_obj();

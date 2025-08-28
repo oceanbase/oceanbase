@@ -395,9 +395,9 @@ public:
   ObSelectStmt();
   virtual ~ObSelectStmt();
   int assign(const ObSelectStmt &other);
-
+  
   virtual int iterate_stmt_expr(ObStmtExprVisitor &vistor) override;
-
+  
   int iterate_group_items(ObIArray<ObGroupbyExpr> &group_items,
                           ObStmtExprVisitor &visitor);
   int iterate_rollup_items(ObIArray<ObRollupItem> &rollup_items, ObStmtExprVisitor &visitor);
@@ -773,7 +773,7 @@ private:
   //denote if the query option 'STRAIGHT_JOIN' has been specified
   bool is_select_straight_join_;
   // denote if the duplicate value of this stmt will not change the query result
-  // optimizer can assign or remove DISTINCT for this stmt
+  // optimizer can assign or remove DISTINCT for this stmt 
   bool is_implicit_distinct_;
   bool is_oracle_compat_groupby_; // true if has rollup/cube/grouping sets in mysql mode
   bool is_recursive_union_branch_; // true if the stmt is a branch of a recursive union

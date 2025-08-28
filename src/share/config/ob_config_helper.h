@@ -1005,7 +1005,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigKvGroupCommitRWModeChecker);
 };
 
-class ObConfigRegexpEngineChecker
+class ObConfigRegexpEngineChecker 
   : public ObConfigChecker
 {
 public:
@@ -1046,7 +1046,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigDegradationPolicyChecker);
 };
 
-class ObConfigServerFullSchemaRefreshParallelismChecker
+class ObConfigServerFullSchemaRefreshParallelismChecker 
   : public ObConfigChecker
 {
 public:

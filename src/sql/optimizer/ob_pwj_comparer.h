@@ -89,7 +89,7 @@ struct GroupPWJTabletIdInfo {
   OB_UNIS_VERSION(1);
 public:
   TO_STRING_KV(K_(group_id), K_(tablet_id_array));
-  /*
+  /* 
     for union all non strict partition wise join, there may be several partition wise join groups,
     for example:
                           union all
@@ -130,7 +130,7 @@ public:
   inline bool get_is_strict() { return is_strict_; }
 
   inline common::ObIArray<PwjTable> &get_pwj_tables() { return pwj_tables_; }
-
+  
   /**
    * 向ObPwjComparer中添加一个PwjTable，会以第一个添加的PwjTable为基准与后续添加的PwjTable进行比较
    * 其中严格比较会生成tablet_id的映射。
@@ -385,7 +385,7 @@ public:
   int is_match_non_strict_partition_wise(PwjTable &l_table,
                                          PwjTable &r_table,
                                          bool &is_match_nonstrict_pw);
-private:
+private:  
   DISALLOW_COPY_AND_ASSIGN(ObNonStrictPwjComparer);
 };
 }

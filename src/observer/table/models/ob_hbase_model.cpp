@@ -353,9 +353,9 @@ int ObHBaseModel::prepare(ObTableExecCtx &ctx,
       }
     } else if (is_mix_batch && OB_FAIL(alloc_and_init_request_result_for_mix_batch(ctx, req, res))) {
       LOG_WARN("fail to alloc and init request and result for hyper batch", K(ret), K(ctx), K(req), K(res));
-    }
+    } 
   }
-
+  
   if (OB_FAIL(ret)) {
   } else if (!is_batch_get && OB_FAIL(lock_rows(ctx, req))) {
     LOG_WARN("fail to lock rows", K(ret), K(req));
@@ -381,7 +381,7 @@ int ObHBaseModel::init_put_request_result(ObTableExecCtx &ctx,
   if (OB_FAIL(calc_single_op_tablet_id(ctx, calculator, single_op , tablet_id))) {
     LOG_WARN("fail to calcat tablet id", K(ret), K(single_op));
   } else if (OB_FAIL(GCTX.location_service_->get(MTL_ID(),
-                                                tablet_id,
+                                                tablet_id, 
                                                 0, /* expire_renew_time */
                                                 is_cache_hit,
                                                 ls_id))) {
@@ -399,9 +399,9 @@ int ObHBaseModel::init_put_request_result(ObTableExecCtx &ctx,
       ObSEArray<ObString, 8> all_prop_name;
       if (OB_FAIL(ctx.get_schema_cache_guard().get_all_column_name(all_prop_name))) {
         LOG_WARN("fail to get all column name", K(ret));
-      } else if (OB_FAIL(res.assign_properties_names(all_prop_name))) {
+      } else if (OB_FAIL(res.assign_properties_names(all_prop_name))) { 
         LOG_WARN("fail to assign property names to result", K(ret));
-      }
+      } 
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(new_results_.push_back(&res))) {
@@ -451,9 +451,9 @@ int ObHBaseModel::check_is_same_part_key(ObTableExecCtx &ctx,
   return ret;
 }
 
-bool ObHBaseModel::compare_part_key(ObITableEntity &first_entity,
-                                    ObITableEntity &second_entity,
-                                    bool is_secondary_part)
+bool ObHBaseModel::compare_part_key(ObITableEntity &first_entity, 
+                                    ObITableEntity &second_entity, 
+                                    bool is_secondary_part) 
 {
   ObHTableCellEntity3 first_cell(&first_entity);
   ObHTableCellEntity3 second_cell(&second_entity);
@@ -492,7 +492,7 @@ int ObHBaseModel::prepare(ObTableExecCtx &ctx,
                           ObTableQueryAndMutateResult &res)
 {
   int ret = OB_SUCCESS;
-
+  
   if (OB_FAIL(check_mode_defense(ctx))) {
     LOG_WARN("fail to check mode defense", K(ret), K(ctx));
   } else if (OB_FAIL(replace_timestamp(ctx, const_cast<ObTableQueryAndMutateRequest&>(req)))) {
@@ -607,7 +607,7 @@ int ObHBaseModel::work(ObTableExecCtx &ctx, const ObTableLSOpRequest &req, ObTab
         }
       }
     }
-
+    
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(process_ls_op_result(ctx, ls_op, res))) {
       LOG_WARN("failed to process ls op result", K(ret), K(ctx), K(ls_op));
@@ -668,14 +668,14 @@ int ObHBaseModel::work(ObTableExecCtx &ctx,
         LOG_WARN("unsupported mutation type", K(ret), K(op_type));
     }
   }
-
+  
   return ret;
 }
 
 int ObHBaseModel::after_work(ObTableExecCtx &ctx, const ObTableLSOpRequest &req, ObTableLSOpResult &res)
 {
   int ret = OB_SUCCESS;
-  UNUSED(ctx);
+  UNUSED(ctx); 
   if (is_alloc_req_res_) {
     if (OB_FAIL(prepare_allocate_and_init_result(ctx, req, res))) {
       LOG_WARN("fail to prepare allocate and init result", K(ret));
@@ -690,7 +690,7 @@ int ObHBaseModel::after_work(ObTableExecCtx &ctx, const ObTableLSOpRequest &req,
 
 int ObHBaseModel::before_response(ObTableExecCtx &ctx, const ObTableLSOpRequest &req, ObTableLSOpResult &res)
 {
-  UNUSEDx(ctx, req, res);
+  UNUSEDx(ctx, req, res);  
   int ret = OB_SUCCESS;
   if (is_alloc_req_res_) {
     free_requests_and_results(ctx);
@@ -709,7 +709,7 @@ int ObHBaseModel::sync_query(ObTableExecCtx &ctx,
 {
   int ret = OB_SUCCESS;
   ObHbaseQueryResultIterator *iter = nullptr;
-
+  
   if (OB_ISNULL(query) || OB_ISNULL(cf_service)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(query), KP(cf_service));
@@ -845,7 +845,7 @@ int ObHBaseModel::process_ls_op_result(ObTableExecCtx &ctx, const ObTableLSOp &l
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -1040,7 +1040,7 @@ int ObHBaseModel::process_query_and_mutate_group(ObTableExecCtx &ctx,
           if (OB_NOT_NULL(hbase_result_iter)) {
             hbase_result_iter->close();
             OB_DELETEx(ObHbaseQueryResultIterator, &ctx.get_allocator(), hbase_result_iter);
-          }
+          }          
         }
       }
     }
@@ -1160,14 +1160,14 @@ int ObHBaseModel::process_scan_group(ObTableExecCtx &ctx,
       } else {
         if (ObHTableUtils::is_get_all_qualifier(query->get_query().get_htable_filter().get_columns())) {
           query->set_use_wildcard_column_tracker(true);
-        }
+        } 
         if (OB_FAIL(queries.push_back(query))) {
           query->~ObHbaseQuery();
           ctx.get_allocator().free(query);
           LOG_WARN("failed to add query", K(ret), KP(query), K(queries));
         }
       }
-
+        
     }
   }
 
@@ -1264,8 +1264,8 @@ int ObHBaseModel::aggregate_scan_result(ObTableExecCtx &ctx,
 
 //----------------------------------- Batch Operation Helper -----------------------------------
 
-int ObHBaseModel::construct_del_query(ObHbaseTableCells &table_cells,
-                                      ObTableExecCtx &exec_ctx,
+int ObHBaseModel::construct_del_query(ObHbaseTableCells &table_cells, 
+                                      ObTableExecCtx &exec_ctx, 
                                       ObHbaseColumnFamilyService &cf_service,
                                       ObHbaseQuery &query)
 {
@@ -1273,9 +1273,9 @@ int ObHBaseModel::construct_del_query(ObHbaseTableCells &table_cells,
   const ObIArray<ObHbaseTabletCells *> &tablet_cells_arr = table_cells.get_tablet_cells_array();
   ObTableQuery &table_query = query.get_query();
   ObTablePartClipType clip_type = table_query.is_hot_only() ? ObTablePartClipType::HOT_ONLY : ObTablePartClipType::NONE;
-  ObTablePartCalculator calculator(exec_ctx.get_allocator(),
-                                   exec_ctx.get_sess_guard(),
-                                   exec_ctx.get_schema_cache_guard(),
+  ObTablePartCalculator calculator(exec_ctx.get_allocator(), 
+                                   exec_ctx.get_sess_guard(), 
+                                   exec_ctx.get_schema_cache_guard(), 
                                    exec_ctx.get_schema_guard(),
                                    exec_ctx.get_table_schema(),
                                    clip_type);
@@ -1299,7 +1299,7 @@ int ObHBaseModel::construct_del_query(ObHbaseTableCells &table_cells,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("scan ranges is empty", K(ret));
         } else if (OB_FAIL(calculator.calc(table_id,
-                                           table_query.get_scan_ranges().at(0),
+                                           table_query.get_scan_ranges().at(0), 
                                            table_query.get_tablet_ids()))) {
           LOG_WARN("failed to calc tablet id", K(ret));
         }
@@ -1332,7 +1332,7 @@ int ObHBaseModel::process_batch_mutation_group(ObTableExecCtx &ctx,
       }
     }
   }
-
+  
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (OB_FAIL(table_cells.get_tablet_cells_array().push_back(tablet_cell))) {
@@ -1376,7 +1376,7 @@ int ObHBaseModel::process_increment_append(ObTableExecCtx &ctx,
                                            ObHbaseColumnFamilyService &cf_service)
 {
   int ret = OB_SUCCESS;
-  ObHbaseQuery query(req.table_id_, req.tablet_id_,
+  ObHbaseQuery query(req.table_id_, req.tablet_id_, 
                     const_cast<ObTableQuery&>(req.query_and_mutate_.get_query()));
   ObHbaseQueryResultIterator *query_result_iter = nullptr;
   ObTableQueryResult wide_rows;
@@ -1411,9 +1411,9 @@ int ObHBaseModel::process_increment_append(ObTableExecCtx &ctx,
       LOG_WARN("failed to generate new incr append table cells", K(ret));
     } else {
       // calc tablet ids
-      ObTablePartCalculator calculator(ctx.get_allocator(),
-                                       ctx.get_sess_guard(),
-                                       ctx.get_schema_cache_guard(),
+      ObTablePartCalculator calculator(ctx.get_allocator(), 
+                                       ctx.get_sess_guard(), 
+                                       ctx.get_schema_cache_guard(), 
                                        ctx.get_schema_guard(),
                                        ctx.get_table_schema());
       ObTabletID tablet_id(ObTabletID::INVALID_TABLET_ID);
@@ -1455,7 +1455,7 @@ int ObHBaseModel::process_check_and_mutate(ObTableExecCtx &ctx,
                                            ObHbaseColumnFamilyService &cf_service)
 {
   int ret = OB_SUCCESS;
-  ObHbaseQuery query(req.table_id_, req.tablet_id_,
+  ObHbaseQuery query(req.table_id_, req.tablet_id_, 
                     const_cast<ObTableQuery&>(req.query_and_mutate_.get_query()));
   ObHbaseQueryResultIterator *query_result_iter = nullptr;
   ObTableQueryResult wide_rows;
@@ -1635,7 +1635,7 @@ int ObHBaseModel::sort_qualifier(common::ObIArray<std::pair<common::ObString, in
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -1830,7 +1830,7 @@ int ObHBaseModel::check_result_value_is_null(ObTableExecCtx &ctx, ObTableQueryRe
   if (OB_ISNULL(wide_rows)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("null wide rows", K(ret));
-  } else if (FALSE_IT(wide_rows->rewind())) {
+  } else if (FALSE_IT(wide_rows->rewind())) { 
   } else if (OB_FAIL(wide_rows->get_next_entity(entity))) {
     LOG_WARN("failed to get next entity", K(ret));
   } else {
@@ -1881,7 +1881,7 @@ int ObHBaseModel::add_query_columns(ObTableExecCtx &ctx, ObTableQueryResult &res
 int ObHBaseModel::prepare(ObTableExecCtx &ctx, const ObTableQueryRequest &req, ObTableQueryResult &res)
 {
   int ret = OB_SUCCESS;
-
+  
   if (OB_FAIL(check_mode_defense(ctx, req))) {
     LOG_WARN("fail to check mode defense", K(ret), K(ctx));
   } else if (OB_FAIL(ObIModel::prepare(ctx, req, res))) {
@@ -1954,4 +1954,4 @@ int ObHBaseModel::add_dict_and_bm_to_result_entity(const ObTableLSOp &ls_op,
     }
   }
   return ret;
-}
+} 

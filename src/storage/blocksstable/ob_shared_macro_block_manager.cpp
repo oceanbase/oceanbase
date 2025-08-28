@@ -578,8 +578,8 @@ int ObSharedMacroBlockMgr::update_tablet(
       if (OB_FAIL(tablet_handle.get_obj()->load_storage_schema(tmp_arena, storage_schema))) {
         LOG_WARN("fail to get storage schema");
       } else if (storage_schema->is_column_info_simplified()) {
-        /* column info simplified, cannot calculate column checksum while ObSSTableIndexBuilder::merge_index_tree
-           in ObSSTableIndexBuilder::close operation later. Therefore, the defragmentation action is deferred
+        /* column info simplified, cannot calculate column checksum while ObSSTableIndexBuilder::merge_index_tree 
+           in ObSSTableIndexBuilder::close operation later. Therefore, the defragmentation action is deferred 
            until a complete storage schema is available. */
         ret = OB_EAGAIN;
       } else if (OB_UNLIKELY(1 != data_block_count)) {

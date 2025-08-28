@@ -33,7 +33,7 @@ public:
   {}
 
 private:
-  ObArenaAllocator allocator_;
+  ObArenaAllocator allocator_; 
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestMapMeta);
 };
@@ -47,7 +47,7 @@ public:
   {}
 
 private:
-  ObArenaAllocator allocator_;
+  ObArenaAllocator allocator_; 
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestSparseVectorMeta);
 };

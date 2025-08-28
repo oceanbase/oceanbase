@@ -43,7 +43,7 @@ private:
   static int split_geo_to_basic_type(
       ObGeometry &in_geo, ObIAllocator &allocator, ObGeoType basic_type, ObGeometry *&split_geo);
   static int affine_to_tile_space(ObGeometry *&geo, const ObGeogBox *bounds, int32_t extent);
-  static int process_input_geometry(const ObExpr &expr, ObEvalCtx &ctx, MultimodeAlloctor &allocator,
+  static int process_input_geometry(const ObExpr &expr, ObEvalCtx &ctx, MultimodeAlloctor &allocator, 
     bool &is_null_res, ObGeometry *&geo1, ObGeometry *&geo2, int32_t &extent, int32_t &buffer, bool &clip_geom);
   static int get_bounds(lib::MemoryContext &mem_ctx, ObGeometry &geo, ObGeogBox *&bounds);
   DISALLOW_COPY_AND_ASSIGN(ObExprPrivSTAsMVTGeom);

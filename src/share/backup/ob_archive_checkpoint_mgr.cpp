@@ -15,8 +15,8 @@ using namespace share;
 
 bool ObGetMaxCheckpointOp::is_valid() const
 {
-  return max_checkpoint_scn_ >= 0
-      && file_name_ != nullptr
+  return max_checkpoint_scn_ >= 0 
+      && file_name_ != nullptr 
       && type_ <= ObBackupFileSuffix::BACKUP
       && type_ >= ObBackupFileSuffix::NONE;
 }
@@ -43,9 +43,9 @@ int ObGetMaxCheckpointOp::func(const dirent *entry)
 
 bool ObDelHisCheckpointFileOp::is_valid() const
 {
-  return checkpoint_scn_ >= 0
-      && !path_.is_empty()
-      && file_name_ != nullptr
+  return checkpoint_scn_ >= 0 
+      && !path_.is_empty() 
+      && file_name_ != nullptr 
       && type_ <= ObBackupFileSuffix::BACKUP
       && type_ >= ObBackupFileSuffix::NONE
       && storage_info_ != nullptr;
@@ -75,10 +75,10 @@ int ObDelHisCheckpointFileOp::func(const dirent *entry)
     } else if (checkpoint_scn >= checkpoint_scn_ || 0 == checkpoint_scn) {
       //do nothing
     } else if (OB_FAIL(full_path.join_checkpoint_info_file(file_name_, checkpoint_scn, type_))) {
-      OB_LOG(WARN, "failed to set full path for del file",
+      OB_LOG(WARN, "failed to set full path for del file", 
           K(ret), K(checkpoint_scn), KP(file_name_), K(type_));
     } else if (OB_FAIL(io_util.del_file(full_path.get_ptr(), storage_info_))) {
-      OB_LOG(WARN, "failed to delete file", K(ret), K(full_path));
+      OB_LOG(WARN, "failed to delete file", K(ret), K(full_path)); 
     }
   }
   return ret;
@@ -119,7 +119,7 @@ bool ObArchiveCheckpointMgr::is_valid() const
   return !path_.is_empty()
       && type_ <= ObBackupFileSuffix::BACKUP
       && type_ >= ObBackupFileSuffix::NONE
-      && file_name_ != nullptr
+      && file_name_ != nullptr 
       && storage_info_ != nullptr;
 }
 
@@ -159,9 +159,9 @@ int ObArchiveCheckpointMgr::write(const uint64_t old_checkpoint_scn, const uint6
   } else if (checkpoint_scn <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument!", K(ret), K(checkpoint_scn));
-  } else if (old_checkpoint_scn >= checkpoint_scn) { //do nothing
+  } else if (old_checkpoint_scn >= checkpoint_scn) { //do nothing    
   } else if (OB_FAIL(full_path.join_checkpoint_info_file(file_name_, checkpoint_scn, type_))) {
-    LOG_WARN("failed to get piece checkpoint file path",
+    LOG_WARN("failed to get piece checkpoint file path", 
         K(ret), K(checkpoint_scn), KP(file_name_), K(full_path), K(type_));
   } else if (OB_FAIL(write_checkpoint_file_(full_path))) {
     LOG_WARN("failed to write checkpoint file", K(ret), K(full_path));
@@ -192,7 +192,7 @@ int ObArchiveCheckpointMgr::read(uint64_t &max_checkpoint_scn) const
 }
 
 int ObArchiveCheckpointMgr::get_max_checkpoint_scn_(
-    const ObBackupPath &path,
+    const ObBackupPath &path, 
     uint64_t &max_checkpoint_scn) const
 {
   int ret = OB_SUCCESS;
@@ -206,7 +206,7 @@ int ObArchiveCheckpointMgr::get_max_checkpoint_scn_(
 }
 
 int ObArchiveCheckpointMgr::del_last_ckpt_file_(
-    const ObBackupPath &dir_path,
+    const ObBackupPath &dir_path, 
     const uint64_t old_checkpoint_scn) const
 {
   int ret = OB_SUCCESS;
@@ -226,7 +226,7 @@ int ObArchiveCheckpointMgr::del_last_ckpt_file_(
     LOG_WARN("fail to join checkpoint info file", K(ret), K(old_checkpoint_scn));
   } else if (OB_FAIL(io_util.del_file(file_path.get_obstr(), storage_info_))) {
     LOG_WARN("fail to delete file", K(ret), K(file_path));
-  }
+  } 
   return ret;
 }
 
@@ -241,7 +241,7 @@ int ObArchiveCheckpointMgr::del_history_files(
   } else {
     ObDelHisCheckpointFileOp del_his_file_op(write_checkpoint_scn, path_, file_name_, type_, storage_info_);
     if (OB_FAIL(io_util.list_files(path_.get_ptr(), storage_info_, del_his_file_op))) {
-      LOG_WARN("failed to del history checkpoint file",
+      LOG_WARN("failed to del history checkpoint file", 
           K(ret), K(path_), K(write_checkpoint_scn), K(path_), KP(file_name_), K(type_));
     }
   }
@@ -262,7 +262,7 @@ int ObArchiveCheckpointMgr::write_checkpoint_file_(const ObBackupPath &path) con
     LOG_WARN("failed to write single file.", K(ret), K(path));
   } else {
     if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
-      FLOG_INFO("succeed to write checkpoint file.", K(path));
+      FLOG_INFO("succeed to write checkpoint file.", K(path));  
     }
   }
   return ret;

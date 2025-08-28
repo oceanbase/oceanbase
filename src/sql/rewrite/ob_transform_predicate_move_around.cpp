@@ -50,9 +50,9 @@ int ObTransformPredicateMoveAround::transform_one_stmt(
   } else if (transed_stmts_.empty() || !trans_happened) {
   // transform not happened actually
   } else if (OB_FAIL(adjust_transed_stmts())) {
-    LOG_WARN("sort sort transed stmts failed", K(ret));
+    LOG_WARN("sort sort transed stmts failed", K(ret));  
   } else if (OB_FAIL(add_transform_hint(*stmt, &transed_stmts_))) {
-    LOG_WARN("add transform hint failed", K(ret));
+    LOG_WARN("add transform hint failed", K(ret));  
   } else if (OB_FAIL(ObTransformUtils::add_param_null_constraint(*ctx_, null_constraints_))) {
     LOG_WARN("add param null constraint failed", K(ret));
   } else if (OB_FAIL(ObTransformUtils::add_param_not_null_constraint(*ctx_, not_null_constraints_))) {
@@ -288,7 +288,7 @@ int ObTransformPredicateMoveAround::transform_one_stmt_with_outline(
   } else if (transed_stmts_.empty() || !trans_happened) {
     LOG_TRACE("outline data trans not happened");
   } else if (OB_FAIL(adjust_transed_stmts())) {
-    LOG_WARN("sort sort transed stmts failed", K(ret));
+    LOG_WARN("sort sort transed stmts failed", K(ret));  
   } else if (OB_FAIL(add_transform_hint(*stmt, &transed_stmts_))) {
     LOG_WARN("add transform hint failed", K(ret));
   } else if (OB_FAIL(ObTransformUtils::add_param_null_constraint(*ctx_, null_constraints_))) {
@@ -336,7 +336,7 @@ int ObTransformPredicateMoveAround::get_stmt_to_trans(ObDMLStmt *stmt, ObIArray<
   return ret;
 }
 
-int ObTransformPredicateMoveAround::pullup_predicates_from_set_stmt(ObDMLStmt *stmt,
+int ObTransformPredicateMoveAround::pullup_predicates_from_set_stmt(ObDMLStmt *stmt, 
                                                      ObIArray<int64_t> &sel_ids,
                                                      ObIArray<ObRawExpr *> &output_pullup_preds)
 {
@@ -478,7 +478,7 @@ int ObTransformPredicateMoveAround::pullup_predicates_from_view(
   return ret;
 }
 
-int ObTransformPredicateMoveAround::update_current_property(ObDMLStmt &stmt,
+int ObTransformPredicateMoveAround::update_current_property(ObDMLStmt &stmt, 
                                                     ObIArray<ObRawExpr *> &exprs,
                                                     ObIArray<ObRawExpr *> &preds_for_subquery)
 {
@@ -521,7 +521,7 @@ int ObTransformPredicateMoveAround::update_subquery_pullup_preds(ObIArray<ObQuer
   return ret;
 }
 
-int ObTransformPredicateMoveAround::generate_pullup_predicates_for_subquery(ObDMLStmt &stmt,
+int ObTransformPredicateMoveAround::generate_pullup_predicates_for_subquery(ObDMLStmt &stmt, 
                                                                     ObIArray<ObRawExpr *> &pullup_preds)
 {
   int ret = OB_SUCCESS;
@@ -531,7 +531,7 @@ int ObTransformPredicateMoveAround::generate_pullup_predicates_for_subquery(ObDM
   if (OB_FAIL(append(current_property, pullup_preds))) {
     LOG_WARN("append failed", K(ret));
   } else {
-      // where condition
+      // where condition 
     if (OB_FAIL(update_current_property(stmt, stmt.get_condition_exprs(), current_property))) {
       LOG_WARN("get scope preds failed", K(ret));
     } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(stmt.get_condition_exprs(),
@@ -547,7 +547,7 @@ int ObTransformPredicateMoveAround::generate_pullup_predicates_for_subquery(ObDM
 
     if (OB_SUCC(ret) && stmt.is_select_stmt()) {
       ObSelectStmt &sel_stmt = static_cast<ObSelectStmt &>(stmt);
-      // group by
+      // group by 
       subquery_exprs.reset();
       if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(sel_stmt.get_group_exprs(),
                                                                   subquery_exprs, /*with_nest*/false))) {
@@ -559,11 +559,11 @@ int ObTransformPredicateMoveAround::generate_pullup_predicates_for_subquery(ObDM
       } else if (OB_FAIL(append_array_no_dup(processed_subquery, subquery_exprs))) {
         LOG_WARN("add var no dup failed", K(ret));
       }
-
-      // having
+      
+      // having 
       if (OB_FAIL(ret)) {
       } else if (OB_FALSE_IT(subquery_exprs.reset())) {
-      } else if (OB_FAIL(update_current_property(stmt, sel_stmt.get_having_exprs(),
+      } else if (OB_FAIL(update_current_property(stmt, sel_stmt.get_having_exprs(), 
                                                             current_property))) {
         LOG_WARN("get scope preds failed", K(ret));
       } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(sel_stmt.get_having_exprs(),
@@ -578,7 +578,7 @@ int ObTransformPredicateMoveAround::generate_pullup_predicates_for_subquery(ObDM
       }
 
 
-      //select
+      //select 
       ObSEArray<ObRawExpr *, 4> select_exprs;
       if (OB_FAIL(ret)) {
       } else if (OB_FALSE_IT(subquery_exprs.reset())) {
@@ -612,7 +612,7 @@ int ObTransformPredicateMoveAround::generate_pullup_predicates_for_subquery(ObDM
         LOG_WARN("add var no dup failed", K(ret));
       }
     }
-
+    
     ObArray<int64_t> dummy_sels;
     ObArray<ObRawExpr *> dummy_expr;
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_subquery_exprs().count(); i++) {
@@ -624,7 +624,7 @@ int ObTransformPredicateMoveAround::generate_pullup_predicates_for_subquery(ObDM
         LOG_WARN("pull up preds failed", K(ret));
       }
     }
-
+      
   }
   return ret;
 }
@@ -663,7 +663,7 @@ int ObTransformPredicateMoveAround::generate_basic_table_pullup_preds(ObDMLStmt 
             //do nothing
           } else if (OB_FAIL(preds.push_back(check_constraint_expr))) {
             LOG_WARN("push back failed", K(ret));
-          }
+          }   
         }
       }
     }
@@ -678,7 +678,7 @@ int ObTransformPredicateMoveAround::choose_and_rename_predicates_for_subquery(Ob
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 4> exec_params;
   ObSEArray<ObRawExpr *, 4> subquery_columns;
-  if (OB_ISNULL(subquery) || OB_ISNULL(ctx_) ||
+  if (OB_ISNULL(subquery) || OB_ISNULL(ctx_) || 
       OB_ISNULL(subquery->get_ref_stmt()) || OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sub query is null", K(ret));
@@ -713,7 +713,7 @@ int ObTransformPredicateMoveAround::choose_and_rename_predicates_for_subquery(Ob
         LOG_WARN("failed to pull relation id and levels", K(ret));
       } else if (OB_FAIL(renamed_preds.push_back(new_pred))) {
         LOG_WARN("push back failed", K(ret));
-      }
+      } 
     }
     LOG_TRACE("show renamed preds", K(preds), K(renamed_preds));
   }
@@ -1124,7 +1124,7 @@ int ObTransformPredicateMoveAround::recursive_check_expr_pullup_validity(
       state = ObOptimizerUtil::find_item(pullup_list, expr) ? 1 : -1;
     }
   } else if (expr->is_generalized_column()) {
-    state = -1;
+    state = -1; 
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && state >= 0 && i < expr->get_param_count(); ++i) {
       if (OB_FAIL(parent_exprs.push_back(expr))) {
@@ -1362,7 +1362,7 @@ int ObTransformPredicateMoveAround::pushdown_predicates(
       }
     }
     if (OB_SUCC(ret)) {
-      typedef ObSEArray<ObSEArray<ObRawExpr*, 16>, 4> PredsArray;
+      typedef ObSEArray<ObSEArray<ObRawExpr*, 16>, 4> PredsArray;    
       SMART_VAR(PredsArray, all_old_preds) {
         ObIArray<FromItem> &from_items = stmt->get_from_items();
         ObIArray<SemiInfo*> &semi_infos = stmt->get_semi_infos();
@@ -1390,7 +1390,7 @@ int ObTransformPredicateMoveAround::pushdown_predicates(
           }
         }
         for (int64_t i = 0; OB_SUCC(ret) && i < semi_infos.count(); ++i) {
-          if (OB_FAIL(pushdown_into_semi_info(stmt, semi_infos.at(i), *pullup_preds,
+          if (OB_FAIL(pushdown_into_semi_info(stmt, semi_infos.at(i), *pullup_preds, 
                                               stmt->get_condition_exprs()))) {
             LOG_WARN("failed to push down into semi info", K(ret));
           }
@@ -1465,7 +1465,7 @@ int ObTransformPredicateMoveAround::pushdown_into_joined_table_skip_current_leve
   if (OB_ISNULL(table_item)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(table_item));
-  } else if (table_item->is_generated_table() ||
+  } else if (table_item->is_generated_table() || 
              table_item->is_lateral_table()) {
     ObArray<ObRawExpr *> dummy_preds;
     if (OB_FAIL(SMART_CALL(pushdown_predicates(table_item->ref_query_, dummy_preds)))) {
@@ -2086,7 +2086,7 @@ int ObTransformPredicateMoveAround::pushdown_into_having(
   } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(sel_stmt, pullup_preds,
                                                            table_set, input_preds))) {
     LOG_WARN("failed to get related pullup preds", K(ret));
-  } else if (OB_FAIL(get_exprs_cnt_exec(sel_stmt, pullup_preds, input_preds))) { //exec param stored in pullup is useful certainly.
+  } else if (OB_FAIL(get_exprs_cnt_exec(sel_stmt, pullup_preds, input_preds))) { //exec param stored in pullup is useful certainly. 
     LOG_WARN("get exec expr failed", K(ret));
   } else if (OB_FAIL(append(input_preds, pushdown_preds))) {
     LOG_WARN("failed to append push down predicates", K(ret));
@@ -2938,7 +2938,7 @@ int ObTransformPredicateMoveAround::get_pushdown_predicates(ObDMLStmt &stmt,
       // do nothing
     } else if (OB_FAIL(table_filters.push_back(preds.at(i)))) {
       LOG_WARN("failed to push back predicate", K(ret));
-    } else if (NULL != pred_conditions &&
+    } else if (NULL != pred_conditions && 
                OB_UNLIKELY(i >= pred_conditions->count() || NULL == pred_conditions->at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected pred conditions", K(ret), KPC(pred_conditions));
@@ -3036,7 +3036,7 @@ int ObTransformPredicateMoveAround::extract_semi_right_table_filter(ObDMLStmt *s
   } else if (OB_FAIL(stmt->get_table_rel_ids(semi_info->right_table_id_,
                                              right_table_set))) {
     LOG_WARN("failed to get right table set", K(ret));
-  }
+  } 
   for (int64_t i = 0; OB_SUCC(ret) && i < semi_info->semi_conditions_.count(); ++i) {
     ObRawExpr *expr = semi_info->semi_conditions_.at(i);
     bool has = false;
@@ -3264,7 +3264,7 @@ int ObTransformPredicateMoveAround::pushdown_into_table(ObDMLStmt *stmt,
     }
   }
   if (OB_SUCC(ret) && (table_item->is_generated_table() ||
-                       table_item->is_lateral_table() ||
+                       table_item->is_lateral_table() || 
                        table_item->is_joined_table())) {
     // remove a pred from preds if it is pushed into a joined table or a generated table
     for (int64_t i = 0; OB_SUCC(ret) && i < rename_preds.count(); ++i) {
@@ -3428,7 +3428,7 @@ int ObTransformPredicateMoveAround::transform_predicates(
       if (OB_FAIL(deducer.deduce_simple_predicates(*ctx_, simple_preds))) {
         LOG_WARN("failed to deduce predicates for target", K(ret));
       } else if (OB_FAIL(deducer.deduce_general_predicates(
-                           *ctx_, target_exprs, invalid_preds,
+                           *ctx_, target_exprs, invalid_preds, 
                            lossless_cast_preds, general_preds))) {
         LOG_WARN("failed to deduce special predicates", K(ret));
       } else if (!is_pullup) {
@@ -3561,7 +3561,7 @@ int ObTransformPredicateMoveAround::accept_outjoin_predicates(ObDMLStmt &stmt,
   return ret;
 }
 
-int ObTransformPredicateMoveAround::extract_generalized_column(ObRawExpr *expr,
+int ObTransformPredicateMoveAround::extract_generalized_column(ObRawExpr *expr, 
                                                                ObIArray<ObRawExpr *> &output)
 {
   int ret = OB_SUCCESS;
@@ -3739,7 +3739,7 @@ int ObTransformPredicateMoveAround::create_equal_exprs_for_insert(ObDelUpdStmt *
         }
       }
     }
-
+    
     // 1. check a target expr is a partition expr
     // 2. check the comparison meta between target and source expr
     // 3. mock equal expr between target and source
@@ -4017,8 +4017,8 @@ int ObTransformPredicateMoveAround::construct_transform_hint(ObDMLStmt &stmt, vo
   return ret;
 }
 
-int ObTransformPredicateMoveAround::remove_simple_op_null_condition(ObSelectStmt &stmt,
-                                                                  ObIArray<ObRawExpr *> &pullup_preds)
+int ObTransformPredicateMoveAround::remove_simple_op_null_condition(ObSelectStmt &stmt, 
+                                                                  ObIArray<ObRawExpr *> &pullup_preds) 
 {
   int ret = OB_SUCCESS;
   ObNotNullContext not_null_context(*ctx_, &stmt);
@@ -4069,7 +4069,7 @@ int ObTransformPredicateMoveAround::is_column_expr_null(ObDMLStmt *stmt,
   int ret = OB_SUCCESS;
   const TableItem *table = NULL;
   is_null = false;
-
+  
   if (OB_ISNULL(stmt) || OB_ISNULL(expr) || OB_ISNULL(table = stmt->get_table_item_by_id(expr->get_table_id()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(stmt), K(expr), K(table));
@@ -4114,19 +4114,19 @@ int ObTransformPredicateMoveAround::is_column_expr_null(ObDMLStmt *stmt,
         LOG_WARN("failed to append conditions", K(ret));
       } else if (OB_FAIL(append(filter_preds, child_stmt->get_having_exprs()))) {
         LOG_WARN("failed to append having conditions", K(ret));
-      }
+      } 
       for (int i = 0; OB_SUCC(ret) && !is_null && i < filter_preds.count(); ++i) {
         if (OB_ISNULL(filter_preds.at(i))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null", K(ret), K(filter_preds.at(i)));
-        } else if (T_OP_IS == filter_preds.at(i)->get_expr_type() &&
+        } else if (T_OP_IS == filter_preds.at(i)->get_expr_type() && 
                    child_expr == filter_preds.at(i)->get_param_expr(0)) {
           is_null = true;
         }
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -4139,7 +4139,7 @@ int ObTransformPredicateMoveAround::extract_filter_column_exprs_for_insert(ObDel
   ObSEArray<ObDmlTableInfo*, 2> dml_table_infos;
   ObSEArray<ObRawExpr *, 4> tmp_exprs;
   if (!((del_upd_stmt.is_insert_stmt() &&
-        static_cast<ObInsertStmt&>(del_upd_stmt).value_from_select()) ||
+        static_cast<ObInsertStmt&>(del_upd_stmt).value_from_select()) || 
         del_upd_stmt.is_merge_stmt())) {
     // do nothing
   } else if (OB_FAIL(del_upd_stmt.get_value_exprs(source_exprs))) {
@@ -4320,7 +4320,7 @@ int ObTransformPredicateMoveAround::inner_push_down_cte_filter(ObSqlTempTableInf
         LOG_WARN("failed to remove condition", K(ret));
       } else {
         OPT_TRACE("succeed to remove filter in upper stmt : ", table_filters.at(j));
-      }
+      } 
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(add_var_to_array_no_dup(transed_stmts_, info.table_infos_.at(i).upper_stmt_))) {
@@ -4358,7 +4358,7 @@ bool ObTempTableColumnCheckContext::compare_column(const ObColumnRefRawExpr &lef
   return bret;
 }
 
-int ObTransformPredicateMoveAround::filter_lateral_correlated_preds(TableItem &table_item,
+int ObTransformPredicateMoveAround::filter_lateral_correlated_preds(TableItem &table_item, 
                                                                     ObIArray<ObRawExpr*> &preds)
 {
   int ret = OB_SUCCESS;

@@ -343,11 +343,11 @@ int ObLSBackupOperator::check_tablet_skipped_by_reorganize(common::ObISQLClient 
     HEAP_VAR(ObMySQLProxy::ReadResult, res) {
       common::sqlclient::ObMySQLResult *result = NULL;
       if (OB_FAIL(sql.assign_fmt(
-        "select * from %s where tenant_id = %lu and tablet_id = %ld and skipped_type = '%s'",
+        "select * from %s where tenant_id = %lu and tablet_id = %ld and skipped_type = '%s'", 
         OB_ALL_BACKUP_SKIPPED_TABLET_TNAME, tenant_id, tablet_id.id(), skipped_type.str()))) {
-        LOG_WARN("failed to assign sql", K(ret), K(sql), K(tenant_id), K(tablet_id));
+        LOG_WARN("failed to assign sql", K(ret), K(sql), K(tenant_id), K(tablet_id));  
       } else if (OB_FAIL(sql_proxy.read(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
-        LOG_WARN("failed to exec sql", K(ret), K(tenant_id), K(sql));
+        LOG_WARN("failed to exec sql", K(ret), K(tenant_id), K(sql)); 
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("result is null", K(ret), K(sql));

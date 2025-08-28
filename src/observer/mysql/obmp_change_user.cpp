@@ -250,14 +250,14 @@ int ObMPChangeUser::process()
   //send packet to client
   if (OB_SUCC(ret)) {
     /*
-     In order to be compatible with the behavior of mysql change user,
+     In order to be compatible with the behavior of mysql change user, 
      an AuthSwitchRequest request will be sent every time to the external client.
 
      If we're dealing with an older client we can't just send a change plugin
      packet to re-initiate the authentication handshake, because the client
      won't understand it. The good thing is that we don't need to : the old
      client expects us to just check the user credentials here, which we can do
-     by just reading the cached data that are placed there by change user's
+     by just reading the cached data that are placed there by change user's 
      passwd field.
      * */
     if (need_send_auth_switch) {
@@ -303,7 +303,7 @@ int ObMPChangeUser::process()
 
     // 3 piece
     if (OB_SUCC(ret) && NULL != session->get_piece_cache()) {
-      observer::ObPieceCache* piece_cache =
+      observer::ObPieceCache* piece_cache = 
         static_cast<observer::ObPieceCache*>(session->get_piece_cache());
       if (OB_FAIL(piece_cache->close_all(*session))) {
         LOG_WARN("failed to close all piece", K(ret));
@@ -314,7 +314,7 @@ int ObMPChangeUser::process()
     }
 
     if (OB_SUCC(ret)) {
-      // 4 ps session info
+      // 4 ps session info 
       session->reset_ps_session_info();
 
       // 5 ps name

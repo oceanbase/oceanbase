@@ -69,9 +69,9 @@ private:
   ObGtsResponseRpc rpc_;
   // last timestamp retrieved from gts leader，updated periodically, nanosecond
   int64_t last_gts_;
-  // the time of last request，updated periodically, nanosecond
+  // the time of last request，updated periodically, nanosecond 
   int64_t last_request_ts_;
-  // the lock of checking the gts service's advancing speed, used in get_timestamp to avoid
+  // the lock of checking the gts service's advancing speed, used in get_timestamp to avoid 
   // concurrent threads all pushing the gts ahead
   int64_t check_gts_speed_lock_;
   int handle_local_request_(const ObGtsRequest &request, obrpc::ObGtsRpcResult &result);

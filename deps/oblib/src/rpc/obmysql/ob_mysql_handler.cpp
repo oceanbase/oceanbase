@@ -168,8 +168,8 @@ int ObMySQLHandler::process(easy_request_t *r)
             if (OB_FAIL(parse_head_comment(pkt.get_cdata(), pkt.get_clen()))) {
               LOG_WARN("failed to parse head comment", K(ObString(pkt.get_clen(), pkt.get_cdata())), K(ret));
             } else {
-              // to resolve dead lock triggled by nested sql between ob cluster
-              req->set_sql_request_level(get_sql_req_level_from_kv());
+              // to resolve dead lock triggled by nested sql between ob cluster 
+              req->set_sql_request_level(get_sql_req_level_from_kv()); 
               LOG_DEBUG("set sql req level", K(req->get_sql_request_level()));
             }
           }
@@ -365,7 +365,7 @@ int ObMySQLHandler::parse_head_comment(const char *raw_sql, int64_t raw_sql_len)
   } else {
     const char *trim_sql = raw_sql;
     int64_t trim_sql_len = raw_sql_len;
-    while (' ' == *trim_sql) {
+    while (' ' == *trim_sql) { 
       ++trim_sql;
       --trim_sql_len;
     }
@@ -374,7 +374,7 @@ int ObMySQLHandler::parse_head_comment(const char *raw_sql, int64_t raw_sql_len)
       const int64_t kv_info_len = trim_sql_len - comment_header_len_;
       int64_t idx = 0;
       format_valid = false;
-      int64_t expect_element = 0;
+      int64_t expect_element = 0; 
       /**
        * expect_element
        * 0 expect key string

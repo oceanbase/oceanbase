@@ -269,9 +269,9 @@ public:
       const bool force_alloc_new = false);
 
   int get_current_version_for_tablet(
-      const share::ObLSID &ls_id,
-      const ObTabletID &tablet_id,
-      int64_t &tablet_version,
+      const share::ObLSID &ls_id, 
+      const ObTabletID &tablet_id, 
+      int64_t &tablet_version, 
       int64_t &tablet_transfer_seq,
       bool &allow_tablet_version_gc);
   int check_allow_tablet_gc(const ObTabletID &tablet_id, const int64_t transfer_seq, bool &allow);

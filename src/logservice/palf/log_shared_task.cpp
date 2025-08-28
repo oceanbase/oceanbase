@@ -71,7 +71,7 @@ int LogHandleSubmitTask::do_task(IPalfEnvImpl *palf_env_impl)
 }
 
 // ================================================= LogFillCacheTask =================================
-LogFillCacheTask::LogFillCacheTask(const int64_t palf_id, const int64_t palf_epoch)
+LogFillCacheTask::LogFillCacheTask(const int64_t palf_id, const int64_t palf_epoch) 
   : LogSharedTask(palf_id, palf_epoch), is_inited_(false), begin_lsn_(LOG_INVALID_LSN_VAL), size_(0)
 {}
 

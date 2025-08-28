@@ -28,7 +28,7 @@ ObRestoreCompatibilityUtil::ObRestoreCompatibilityUtil(const ObBackupSetFileDesc
 int ObRestoreCompatibilityUtil::is_tablet_restore_phase_done(
     const ObLSID &ls_id,
     const ObLSRestoreStatus &ls_restore_status,
-    const ObTabletHandle &tablet_handle,
+    const ObTabletHandle &tablet_handle, 
     bool &is_finish) const
 {
   int ret = OB_SUCCESS;
@@ -47,7 +47,7 @@ int ObRestoreCompatibilityUtil::is_tablet_restore_phase_done(
 }
 
 ObTabletRestoreAction::ACTION ObRestoreCompatibilityUtil::get_restore_action(
-    const ObLSID &ls_id,
+    const ObLSID &ls_id, 
     const ObLSRestoreStatus &ls_restore_status) const
 {
   ObTabletRestoreAction::ACTION action = ObTabletRestoreAction::RESTORE_NONE;
@@ -63,7 +63,7 @@ ObTabletRestoreAction::ACTION ObRestoreCompatibilityUtil::get_restore_action(
 int ObRestoreCompatibilityUtil::is_tablet_restore_phase_done_(
     const ObLSID &ls_id,
     const ObLSRestoreStatus &ls_restore_status,
-    const ObTabletHandle &tablet_handle,
+    const ObTabletHandle &tablet_handle, 
     bool &is_finish) const
 {
   int ret = OB_SUCCESS;
@@ -77,10 +77,10 @@ int ObRestoreCompatibilityUtil::is_tablet_restore_phase_done_(
       break;
     }
 
-    case ObLSRestoreStatus::RESTORE_TO_CONSISTENT_SCN :
+    case ObLSRestoreStatus::RESTORE_TO_CONSISTENT_SCN : 
     case ObLSRestoreStatus::WAIT_RESTORE_TO_CONSISTENT_SCN : {
       // FULL tablets whose has_transfer_table flag is true must not be exist after log has been
-      // recovered to consistent scn. As the data of table store cannot be at the transfer source tablets,
+      // recovered to consistent scn. As the data of table store cannot be at the transfer source tablets, 
       // but rather in backup sets.
       is_finish = !(ha_status.is_restore_status_full() && tablet_meta.has_transfer_table());
       break;
@@ -153,7 +153,7 @@ int ObRestoreCompatibilityUtil::is_tablet_restore_phase_done_(
 int ObRestoreCompatibilityUtil::is_tablet_restore_phase_done_prev_v4_(
     const ObLSID &ls_id,
     const ObLSRestoreStatus &ls_restore_status,
-    const ObTabletHandle &tablet_handle,
+    const ObTabletHandle &tablet_handle, 
     bool &is_finish) const
 {
   int ret = OB_SUCCESS;
@@ -167,10 +167,10 @@ int ObRestoreCompatibilityUtil::is_tablet_restore_phase_done_prev_v4_(
       break;
     }
 
-    case ObLSRestoreStatus::RESTORE_TO_CONSISTENT_SCN :
+    case ObLSRestoreStatus::RESTORE_TO_CONSISTENT_SCN : 
     case ObLSRestoreStatus::WAIT_RESTORE_TO_CONSISTENT_SCN : {
       // FULL tablets whose has_transfer_table flag is true must not be exist after log has been
-      // recovered to consistent scn. As the data of table store cannot be at the transfer source tablets,
+      // recovered to consistent scn. As the data of table store cannot be at the transfer source tablets, 
       // but rather in backup sets.
       is_finish = !(ha_status.is_restore_status_full() && tablet_meta.has_transfer_table());
       break;
@@ -215,7 +215,7 @@ int ObRestoreCompatibilityUtil::is_tablet_restore_phase_done_prev_v4_(
           LOG_WARN("failed to check tablet is deleted", K(ret), K(tablet_meta));
         } else {
           is_finish = is_deleted;
-          LOG_INFO("skip tablet restore major when it has been deleted", K(tablet_meta), K(is_deleted));
+          LOG_INFO("skip tablet restore major when it has been deleted", K(tablet_meta), K(is_deleted));          
         }
       }
       break;
@@ -250,7 +250,7 @@ int ObRestoreCompatibilityUtil::is_tablet_restore_phase_done_prev_v4_(
 }
 
 ObTabletRestoreAction::ACTION ObRestoreCompatibilityUtil::get_restore_action_(
-    const ObLSID &ls_id,
+    const ObLSID &ls_id, 
     const ObLSRestoreStatus &ls_restore_status) const
 {
   ObTabletRestoreAction::ACTION action = ObTabletRestoreAction::RESTORE_NONE;
@@ -259,7 +259,7 @@ ObTabletRestoreAction::ACTION ObRestoreCompatibilityUtil::get_restore_action_(
       action = ObTabletRestoreAction::RESTORE_TABLET_META;
       break;
     }
-
+    
     case ObLSRestoreStatus::QUICK_RESTORE: {
       if (ls_id.is_sys_ls()) {
         action = ObTabletRestoreAction::RESTORE_ALL;
@@ -286,7 +286,7 @@ ObTabletRestoreAction::ACTION ObRestoreCompatibilityUtil::get_restore_action_(
 }
 
 ObTabletRestoreAction::ACTION ObRestoreCompatibilityUtil::get_restore_action_prev_v4_(
-    const ObLSID &ls_id,
+    const ObLSID &ls_id, 
     const ObLSRestoreStatus &ls_restore_status) const
 {
   ObTabletRestoreAction::ACTION action = ObTabletRestoreAction::RESTORE_NONE;

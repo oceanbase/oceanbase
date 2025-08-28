@@ -203,7 +203,7 @@ int ObArchiveRoundHandler::enable_archive(const int64_t dest_no, ObTenantArchive
     } else {
       LOG_WARN("failed to get last round", K(ret), K(dest_no));
     }
-  }
+  } 
 
   if (OB_FAIL(ret)) {
   } else if (old_round_exist && round.state_.is_suspend()) {

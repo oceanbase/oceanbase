@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 extern inline void link_init(link_t* n);
 extern inline bool link_is_empty(link_t* n);
 extern inline link_t* link_insert(link_t* prev, link_t* t);

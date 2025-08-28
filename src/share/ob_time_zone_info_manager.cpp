@@ -253,7 +253,7 @@ int ObTimeZoneInfoManager::fetch_time_zone_info_from_tenant_table(const int64_t 
               tz_info_map_buf_.~ObTZInfoMap();
               // Use destroyed ObTZInfoMap will lead to a crash.
               // According to current design, upgrade timezone is not supported,
-              // so ObTZInfoMap will not be used again. This is a defense code.
+              // so ObTZInfoMap will not be used again. This is a defense code. 
               new (&tz_info_map_buf_) ObTZInfoMap();
               inited_ = false;
               LOG_INFO("reset tz info map buf", K(tenant_id_), K(ret));

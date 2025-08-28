@@ -159,7 +159,7 @@ public:
   inline ObTransformerCtx *get_trans_ctx() { return ctx_; }
   int set_transformation_parameters(ObQueryCtx *query_ctx);
 private:
-
+  
   int collect_trans_stat(const ObTransformRule &rule);
   int get_stmt_trans_info(ObDMLStmt *stmt, bool is_root);
   void print_trans_stat();
@@ -187,7 +187,7 @@ private:
                              ObQueryCtx *query_ctx,
                              uint64_t need_types,
                              int iter_count);
-
+                             
   static int get_random_order_array(uint64_t need_types,
                                     ObQueryCtx *query_ctx,
                                     ObArray<uint64_t> &need_types_array);
@@ -210,7 +210,7 @@ int ObTransformerImpl::transform_one_rule(ObDMLStmt *&stmt,
   if (OB_ISNULL(rule_name) || OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null param", K(ret));
-  } else if (is_type_needed(needed_types & needed_transform_types_,
+  } else if (is_type_needed(needed_types & needed_transform_types_, 
                             type)) {
     SMART_VAR(T, trans, ctx_) {
       trans.set_transformer_type(type);
@@ -225,7 +225,7 @@ int ObTransformerImpl::transform_one_rule(ObDMLStmt *&stmt,
         trans_happened |= trans.get_trans_happened();
         OPT_TRACE_TIME_USED;
         OPT_TRACE_MEM_USED;
-        LOG_TRACE("succeed to transform a rewrite rule", "class",
+        LOG_TRACE("succeed to transform a rewrite rule", "class", 
                   rule_name, K(trans.get_trans_happened()), K(ret));
       }
     }

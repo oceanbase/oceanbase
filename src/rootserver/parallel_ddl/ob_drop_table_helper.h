@@ -58,7 +58,7 @@ private:
   virtual int construct_and_adjust_result_(int &return_ret) override;
 
   int pre_check_();
-
+  
   int lock_tables_();
   int check_legitimacy_();
   int gen_mock_fk_parent_table_schemas_();

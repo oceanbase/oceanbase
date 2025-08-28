@@ -104,10 +104,10 @@ public:
   virtual int encode_meta_value(ObIAllocator &allocator, ObObj &meta_value_obj) const;
 
 protected:
-  explicit ObRedisMeta() :
-    ttl_(INT_MAX64),
-    has_meta_value_(false),
-    meta_col_name_(),
+  explicit ObRedisMeta() : 
+    ttl_(INT_MAX64), 
+    has_meta_value_(false), 
+    meta_col_name_(), 
     insert_ts_(ObTimeUtility::fast_current_time()),
     is_exists_(true)
   {}

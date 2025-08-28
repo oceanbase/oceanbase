@@ -102,7 +102,7 @@ int ObAllLatch::process_curr_tenant(common::ObNewRow *&row)
 
       for (int64_t cell_idx = 0;
           OB_SUCC(ret) &&  OB_NOT_NULL(p_latch_stat) && cell_idx < output_column_ids_.count();
-          ++cell_idx) {
+          ++cell_idx) {  
         const ObLatchStat& latch_stat = *p_latch_stat;
         const uint64_t column_id = output_column_ids_.at(cell_idx);
         switch(column_id) {

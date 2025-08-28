@@ -384,7 +384,7 @@ int ObIDASTaskOp::end_das_task()
     }
     ret = COVER_SUCC(tmp_ret);
   }
-
+  
   task_started_ = false;
   errcode_ = OB_SUCCESS;
   return ret;

@@ -202,8 +202,8 @@ int ObTransformJoinElimination::check_eliminate_join_self_key_valid(ObDMLStmt *s
   } else if (!tmp_valid) {
     /*do nothing*/
     OPT_TRACE("hint disable transform");
-  } else if ((stmt->is_delete_stmt() ||
-              stmt->is_update_stmt() ||
+  } else if ((stmt->is_delete_stmt() || 
+              stmt->is_update_stmt() || 
               stmt->is_merge_stmt()) &&
              OB_FAIL(check_eliminate_delupd_table_valid(static_cast<ObDelUpdStmt *> (stmt),
                                                         target_table->table_id_,
@@ -752,8 +752,8 @@ int ObTransformJoinElimination::check_transform_validity_outer_join(
   return ret;
 }
 
-int ObTransformJoinElimination::compute_table_expr_ref_count(const ObSqlBitSet<> &rel_ids,
-                                                             const ObIArray<ObRawExpr *> &exprs,
+int ObTransformJoinElimination::compute_table_expr_ref_count(const ObSqlBitSet<> &rel_ids, 
+                                                             const ObIArray<ObRawExpr *> &exprs, 
                                                              int64_t &total_ref_count)
 {
   int ret = OB_SUCCESS;
@@ -761,7 +761,7 @@ int ObTransformJoinElimination::compute_table_expr_ref_count(const ObSqlBitSet<>
     if (OB_FAIL(compute_table_expr_ref_count(rel_ids, exprs.at(i), total_ref_count))) {
       LOG_WARN("failed to compute table expr ref count", K(ret));
     }
-  }
+  } 
   return ret;
 }
 
@@ -798,8 +798,8 @@ int ObTransformJoinElimination::compute_table_expr_ref_count(const ObSqlBitSet<>
       ++ total_ref_count;
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-        if (OB_FAIL(compute_table_expr_ref_count(rel_ids,
-                                                 expr->get_param_expr(i),
+        if (OB_FAIL(compute_table_expr_ref_count(rel_ids, 
+                                                 expr->get_param_expr(i), 
                                                  total_ref_count))) {
           LOG_WARN("failed to compute table expr ref count", K(ret));
         }
@@ -2007,7 +2007,7 @@ int ObTransformJoinElimination::adjust_source_table(ObDMLStmt *source_stmt,
         } else if (OB_FAIL(column_ids_for_copy.push_back(column_id))) {
           LOG_WARN("failed to push back uint64_t", K(ret));
         }
-      } else if (OB_FAIL(expr_copier.add_replaced_expr(target_col->get_expr(),
+      } else if (OB_FAIL(expr_copier.add_replaced_expr(target_col->get_expr(), 
                                                        source_col->get_expr()))) {
         // reuse the existing column mapping for copying the dependant expr of generated column
         LOG_WARN("failed to add replaced expr", K(ret));
@@ -2326,7 +2326,7 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
         /**
           * cross semi join with filters can not be elimated
           * e.g.
-          *   select * from t1 A semi join (select * from t1 B where B.c2 = 1) on 1 = 1 where A.c2 = 2;
+          *   select * from t1 A semi join (select * from t1 B where B.c2 = 1) on 1 = 1 where A.c2 = 2; 
           */
         OPT_TRACE("cross semi join with filters can not be elimated");
       } else if (OB_FAIL(ObTransformUtils::check_exprs_unique_on_table_items(stmt,
@@ -2464,7 +2464,7 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
             /**
               * cross semi join with filters can not be elimated
               * e.g.
-              *   select * from t1 A semi join (select * from t1 B where B.c2 = 1) on 1 = 1 where A.c2 = 2;
+              *   select * from t1 A semi join (select * from t1 B where B.c2 = 1) on 1 = 1 where A.c2 = 2; 
               */
             OPT_TRACE("cross semi join with filters can not be elimated");
           } else if (OB_FAIL(ObTransformUtils::check_exprs_unique_on_table_items(stmt,
@@ -2596,7 +2596,7 @@ int ObTransformJoinElimination::check_semi_join_condition(ObDMLStmt *stmt,
         select * from (t2 left join t1 on t2.c1 = t1.c1) semi join t1 t;
         --> following rewriting is wrong when t1 is a empty table.
         select * from t2 left join t1 on t2.c1 = t1.c1;
-
+        
         The following logic can be processed more finely：
         if source table is on null side, but where_condition or on_condition has null reject property，can also do this optimization.
 
@@ -3498,7 +3498,7 @@ int ObTransformJoinElimination::eliminate_join_in_joined_table(ObDMLStmt *stmt,
       /* do nothing */
     } else if (OB_FAIL(ObTransformUtils::adjust_single_table_ids(joined_table))) {
       LOG_WARN("failed to construct single table ids.", K(ret));
-    } else if (joined_table->is_left_join() &&
+    } else if (joined_table->is_left_join() && 
                (OB_FAIL(append(trans_conditions, left_trans_conditions))
                 || OB_FAIL(append(joined_table->join_conditions_, right_trans_conditions)))) {
       LOG_WARN("failed to append trans conditions to left join", K(ret));

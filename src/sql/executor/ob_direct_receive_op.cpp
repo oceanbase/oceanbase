@@ -217,7 +217,7 @@ int ObDirectReceiveOp::setup_next_scanner()
              * ObRemoteTaskExecutor::execute() has called merge_result() before here, that is a
              * better place to call merge_result(), especially when any operation failed between
              * there and here.
-             * see
+             * see 
              */
           } else if (OB_FAIL(plan_ctx->merge_implicit_cursors(scanner->get_implicit_cursors()))) {
             LOG_WARN("merge implicit cursors failed", K(ret), K(scanner->get_implicit_cursors()));

@@ -36,7 +36,7 @@ public:
   void wait();
   int reload_config();
   int start();
-
+  
 public:
   int add_task(const ObStorageHADiagTaskKey &key);
   static ObStorageHADiagService &instance();
@@ -44,31 +44,31 @@ public:
 private:
   typedef ObArray<ObStorageHADiagTaskKey> TaskKeyArray;
   typedef hash::ObHashMap<ObStorageHADiagTaskKey, int64_t, hash::NoPthreadDefendMode> TaskKeyMap;
-  static const int64_t ONCE_REPORT_KEY_MAX_NUM = 100;
+  static const int64_t ONCE_REPORT_KEY_MAX_NUM = 100; 
   static const int64_t REPORT_KEY_MAX_NUM = 1000;
 
 private:
   int do_clean_history_(const ObStorageHADiagModule module, int64_t &end_timestamp);
   int do_report_();
   int get_info_from_type_(const ObStorageHADiagTaskKey &key, ObStorageHADiagInfo *&info,
-                          ObTransferErrorDiagInfo &transfer_err_diag,
+                          ObTransferErrorDiagInfo &transfer_err_diag, 
                           ObTransferPerfDiagInfo &transfer_perf_diag,
                           ObIAllocator &alloc);
   int insert_inner_table_(
-      ObMySQLTransaction &trans,
-      ObStorageHADiagMgr *mgr,
-      const ObStorageHADiagTaskKey &task_key,
+      ObMySQLTransaction &trans, 
+      ObStorageHADiagMgr *mgr, 
+      const ObStorageHADiagTaskKey &task_key, 
       ObStorageHADiagInfo &info);
   int deep_copy_keys_(TaskKeyArray &do_report_keys) const;
   int report_process_(const TaskKeyArray &task_keys);
-  int add_keys_(
+  int add_keys_( 
       const int64_t index,
       const TaskKeyArray &task_keys,
       TaskKeyArray &new_task_keys) const;
-  int clean_task_key_without_lock_(const ObStorageHADiagTaskKey &task_key);
+  int clean_task_key_without_lock_(const ObStorageHADiagTaskKey &task_key);  
   int report_to_inner_table_(
       ObMySQLTransaction &trans,
-      ObStorageHADiagMgr *mgr,
+      ObStorageHADiagMgr *mgr, 
       const ObStorageHADiagTaskKey &task_key);
   int remove_oldest_without_lock_();
   int get_oldest_key_without_lock_(ObStorageHADiagTaskKey &key) const;

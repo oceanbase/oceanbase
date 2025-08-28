@@ -312,9 +312,9 @@ private:
   int do_init(const ObMicroBlockData &block_data);
   int init_decoders();
   int add_decoder(
-      const int64_t store_idx,
-      const ObObjMeta &obj_meta,
-      const ObColumnParam *col_param,
+      const int64_t store_idx, 
+      const ObObjMeta &obj_meta, 
+      const ObColumnParam *col_param, 
       int64_t &decoders_buf_pos,
       ObColumnCSDecoder &dest);
   int init_semistruct_decoder(const ObIColumnCSDecoder *decoder, ObColumnCSDecoderCtx &decoder_ctx);

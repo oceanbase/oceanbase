@@ -98,7 +98,7 @@ namespace storage
 class ObProtectedMemtableMgrHandle
 {
 public:
-  ObProtectedMemtableMgrHandle()
+  ObProtectedMemtableMgrHandle() 
     : memtable_mgr_handle_(),
       memtable_mgr_handle_lock_() {}
   ObProtectedMemtableMgrHandle(const ObMemtableMgrHandle &memtable_mgr_handle)
@@ -110,12 +110,12 @@ public:
     memtable_mgr_handle_ = r.memtable_mgr_handle_;
     return *this;
   }
-  int reset();
+  int reset(); 
   TO_STRING_KV(K(memtable_mgr_handle_));
 
   int release_memtables_and_try_reset_memtable_mgr_handle(const ObTabletID &tablet_id,
       const share::SCN &scn);
-  bool has_active_memtable()
+  bool has_active_memtable() 
   {
     bool ret = false;
     SpinRLockGuard guard(memtable_mgr_handle_lock_);

@@ -169,9 +169,9 @@ int ObMySQLResultImpl::next()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null ptr", K(errmsg), K(tmp_ret), K(ret));
       } else if (OB_INVALID_ID != conn->get_dblink_id()) {
-        LOG_WARN("dblink connection error", K(ret),
+        LOG_WARN("dblink connection error", K(ret), 
                                             KP(conn),
-                                            K(conn->get_dblink_id()),
+                                            K(conn->get_dblink_id()), 
                                             K(conn->get_sessid()),
                                             K(conn->usable()),
                                             K(conn->ping()));
@@ -809,7 +809,7 @@ int ObMySQLResultImpl::get_type(const int64_t col_idx, ObObjMeta &type) const
   } else if (col_idx < 0 || col_idx >= result_column_count_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid column idx", K(col_idx), K_(result_column_count));
-  } else if (OB_FAIL(get_ob_type(ob_type, static_cast<obmysql::EMySQLFieldType>(fields_[col_idx].type),
+  } else if (OB_FAIL(get_ob_type(ob_type, static_cast<obmysql::EMySQLFieldType>(fields_[col_idx].type), 
                                  fields_[col_idx].flags & UNSIGNED_FLAG))) {
     LOG_WARN("failed to get ob type", K(ret), "mysql_type", fields_[col_idx].type);
   } else {
@@ -846,7 +846,7 @@ int ObMySQLResultImpl::get_col_meta(const int64_t col_idx, bool old_max_length,
     data_type.meta_.set_collation_type(static_cast<ObCollationType>(fields_[col_idx].charsetnr));
     //data_type.meta_.set_autoincrement(fields_[col_idx].flags & AUTO_INCREMENT_FLAG);
     data_type.set_zero_fill(fields_[col_idx].flags & ZEROFILL_FLAG);
-    format_precision_scale_length(precision, scale, length,
+    format_precision_scale_length(precision, scale, length, 
                                   ob_type, data_type.meta_.get_collation_type(),
                                   DBLINK_DRV_OB, old_max_length);
     data_type.set_precision(precision);
@@ -1090,7 +1090,7 @@ int ObMySQLResultImpl::get_obj(const int64_t col_idx, ObObj &obj,
       }
       case ObBitType: {
         /*
-        if (OB_SUCC(get_uint(col_idx, obj_value.uint64_)))//ailing to do
+        if (OB_SUCC(get_uint(col_idx, obj_value.uint64_)))//ailing to do 
         {
           obj.set_bit(obj_value.uint64_);
         }*/

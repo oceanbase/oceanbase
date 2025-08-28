@@ -1148,7 +1148,7 @@ bool LogStateMgr::is_allow_vote() const
 
 bool LogStateMgr::is_allow_vote_persisted() const
 {
-
+  
   return ATOMIC_LOAD(&allow_vote_persisted_);
 }
 

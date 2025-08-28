@@ -415,7 +415,7 @@ int ObOptimizerStatsGatheringOp::calc_table_stats(int64_t &row_len, bool is_samp
   return ret;
 }
 
-int ObOptimizerStatsGatheringOp::calc_stats()
+int ObOptimizerStatsGatheringOp::calc_stats() 
 {
   int ret = OB_SUCCESS;
   int64_t row_len = 0;
@@ -443,7 +443,7 @@ int ObOptimizerStatsGatheringOp::merge_tab_stat(ObOptTableStat *src_tab_stat)
     if (OB_FAIL(table_stats_map_.get_refactored(stat_key, tab_stat))) {
       void *ptr = NULL;
       if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
-        LOG_WARN("failed to find in hashmap", K(ret));
+        LOG_WARN("failed to find in hashmap", K(ret)); 
       } else {
         ret = OB_SUCCESS;
         if (OB_ISNULL(ptr = arena_.alloc(sizeof(ObOptTableStat)))) {
@@ -462,7 +462,7 @@ int ObOptimizerStatsGatheringOp::merge_tab_stat(ObOptTableStat *src_tab_stat)
       if (OB_FAIL(tab_stat->merge_table_stat(*src_tab_stat))) {
         LOG_WARN("fail to merge two table stats", K(ret), K(tab_stat), K(src_tab_stat));
       }
-    }
+    } 
   }
   return ret;
 }

@@ -19,7 +19,7 @@
 
 using namespace oceanbase::common;
 
-namespace oceanbase
+namespace oceanbase 
 {
 namespace sql
 {
@@ -40,7 +40,7 @@ int ObExprXmlSequence::ObSequenceExtraInfo::deep_copy(common::ObIAllocator &allo
   return ret;
 }
 
-ObExprXmlSequence::ObExprXmlSequence(common::ObIAllocator &alloc)
+ObExprXmlSequence::ObExprXmlSequence(common::ObIAllocator &alloc) 
   : ObFuncExprOperator(alloc, T_FUN_SYS_XMLSEQUENCE, N_XMLSEQUENCE, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
@@ -144,7 +144,7 @@ int ObExprXmlSequence::eval_xml_sequence(const ObExpr &expr, ObEvalCtx &ctx, ObD
                                          ns,
                                          *coll,
                                          xml_tree->size()));
-
+    
     if (OB_SUCC(ret)) {
       int64_t array_count = 0;
       for (int64_t i = 0; OB_SUCC(ret) && i < xml_tree->count(); i++) {

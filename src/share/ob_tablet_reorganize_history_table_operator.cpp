@@ -39,11 +39,11 @@ int ObTabletReorganizeHistoryTableOperator::check_tablet_has_reorganized(
       sqlclient::ObMySQLResult *result = NULL;
       const uint64_t zero_tenant_id = 0;
       if (OB_FAIL(sql.assign_fmt(
-        "select * from %s where tenant_id = %lu and src_tablet_id = %ld",
+        "select * from %s where tenant_id = %lu and src_tablet_id = %ld", 
         OB_ALL_TABLET_REORGANIZE_HISTORY_TNAME, zero_tenant_id, tablet_id.id()))) {
-        LOG_WARN("failed to assign sql", K(ret), K(sql), K(tablet_id));
+        LOG_WARN("failed to assign sql", K(ret), K(sql), K(tablet_id));  
       } else if (OB_FAIL(proxy.read(res, tenant_id, sql.ptr()))) {
-        LOG_WARN("failed to exec sql", K(ret), K(tenant_id), K(sql));
+        LOG_WARN("failed to exec sql", K(ret), K(tenant_id), K(sql)); 
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("result is null", K(ret), K(sql));
@@ -134,7 +134,7 @@ int ObTabletReorganizeHistoryTableOperator::get_split_tablet_pairs_by_src(
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       sqlclient::ObMySQLResult *result = NULL;
-      const uint64_t zero_tenant_id = 0;
+      const uint64_t zero_tenant_id = 0; 
       if (OB_FAIL(sql_string.assign_fmt("SELECT src_tablet_id, dest_tablet_id FROM %s WHERE "
               " tenant_id = %lu and ls_id = %ld and src_tablet_id = %ld", OB_ALL_TABLET_REORGANIZE_HISTORY_TNAME, zero_tenant_id, ls_id.id(), tablet_id.id()))) {
         LOG_WARN("assign sql string failed", K(ret), K(tenant_id), K(ls_id));
@@ -187,11 +187,11 @@ int ObTabletReorganizeHistoryTableOperator::get_split_tablet_pairs_by_dest(
       sqlclient::ObMySQLResult *result = NULL;
       const uint64_t zero_tenant_id = 0;
       if (OB_FAIL(sql.assign_fmt(
-        "select * from %s where tenant_id = %lu and dest_tablet_id = %ld",
+        "select * from %s where tenant_id = %lu and dest_tablet_id = %ld", 
         OB_ALL_TABLET_REORGANIZE_HISTORY_TNAME, zero_tenant_id, tablet_id.id()))) {
-        LOG_WARN("failed to assign sql", K(ret), K(sql), K(tablet_id));
+        LOG_WARN("failed to assign sql", K(ret), K(sql), K(tablet_id));  
       } else if (OB_FAIL(sql_proxy.read(res, tenant_id, sql.ptr()))) {
-        LOG_WARN("failed to exec sql", K(ret), K(tenant_id), K(sql));
+        LOG_WARN("failed to exec sql", K(ret), K(tenant_id), K(sql)); 
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("result is null", K(ret), K(sql));
@@ -224,22 +224,22 @@ int ObTabletReorganizeHistoryTableOperator::insert_(
     LOG_WARN("invalid argument", K(ret), K(dest_tablet_ids));
   } else {
     common::ObSqlString insert_sql;
-    ObTabletReorganizeRecord complete_record(incomplete_record.tenant_id_,
-                                             incomplete_record.ls_id_,
-                                             incomplete_record.src_tablet_id_,
-                                             incomplete_record.dest_tablet_id_,
-                                             incomplete_record.type_,
-                                             incomplete_record.create_time_,
+    ObTabletReorganizeRecord complete_record(incomplete_record.tenant_id_, 
+                                             incomplete_record.ls_id_, 
+                                             incomplete_record.src_tablet_id_, 
+                                             incomplete_record.dest_tablet_id_, 
+                                             incomplete_record.type_, 
+                                             incomplete_record.create_time_, 
                                              incomplete_record.finish_time_);
     if (OB_FAIL(insert_sql.assign_fmt("INSERT INTO %s (tenant_id, ls_id, src_tablet_id, dest_tablet_id, "
         "type, create_time, finish_time) VALUES ", OB_ALL_TABLET_REORGANIZE_HISTORY_TNAME))) {
       LOG_WARN("failed to assign fmt", K(ret));
-    }
+    } 
     int64_t affected_rows = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < dest_tablet_ids.count(); ++i) {
       complete_record.dest_tablet_id_ = dest_tablet_ids.at(i);
-      if (OB_FAIL(insert_sql.append_fmt("(%lu, %ld, %ld, %ld, %ld, usec_to_time(%lu), usec_to_time(%lu))",
-          ObSchemaUtils::get_extract_tenant_id(complete_record.tenant_id_, complete_record.tenant_id_), complete_record.ls_id_.id(), complete_record.src_tablet_id_.id(),
+      if (OB_FAIL(insert_sql.append_fmt("(%lu, %ld, %ld, %ld, %ld, usec_to_time(%lu), usec_to_time(%lu))", 
+          ObSchemaUtils::get_extract_tenant_id(complete_record.tenant_id_, complete_record.tenant_id_), complete_record.ls_id_.id(), complete_record.src_tablet_id_.id(), 
           complete_record.dest_tablet_id_.id(), int64_t(complete_record.type_), complete_record.create_time_, complete_record.finish_time_))) {
         LOG_WARN("failed to append fmt", K(ret), K(complete_record));
       } else if ((i%ObDDLUtil::MAX_BATCH_COUNT) == ObDDLUtil::MAX_BATCH_COUNT - 1 || i == dest_tablet_ids.count() - 1) {
@@ -253,19 +253,19 @@ int ObTabletReorganizeHistoryTableOperator::insert_(
           if (OB_FAIL(insert_sql.assign_fmt("INSERT INTO %s (tenant_id, ls_id, src_tablet_id, dest_tablet_id, "
               "type, create_time, finish_time) VALUES ", OB_ALL_TABLET_REORGANIZE_HISTORY_TNAME))) {
             LOG_WARN("failed to assign fmt", K(ret));
-          }
+          } 
         }
       } else if (OB_FAIL(insert_sql.append(", "))) {
         LOG_WARN("failed to append insert_sql", K(ret), K(insert_sql));
       }
     }
   }
-  return ret;
+  return ret;  
 }
 
 int ObTabletReorganizeHistoryTableOperator::insert(
       ObISQLClient &sql_proxy,
-      const ObTabletReorganizeRecord &record)
+      const ObTabletReorganizeRecord &record) 
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObTabletID, 1> dest_tablet_id;
@@ -359,7 +359,7 @@ int ObTabletReorganizeHistoryTableOperator::inner_batch_insert_(
                                                                         ObTabletReorganizeType::SPLIT,
                                                                         start_time/*create_time*/,
                                                                         finish_time/*finish_time*/);
-
+  
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(insert_(sql_proxy, incomplete_record, dest_tablet_ids))) {
     LOG_WARN("failed to insert record", K(ret), K(records));

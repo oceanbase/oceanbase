@@ -98,9 +98,9 @@ public:
   bool operator != (const ObBalanceJobType &other) const { return val_ != other.val_; }
 
   // ObBalanceJobStatus attribute interface
-  bool is_balance_ls() const { return BALANCE_JOB_LS == val_; }
-  bool is_balance_partition() const { return BALANCE_JOB_PARTITION == val_; }
-  bool is_transfer_partition() const { return BALANCE_JOB_TRANSFER_PARTITION == val_; }
+  bool is_balance_ls() const { return BALANCE_JOB_LS == val_; } 
+  bool is_balance_partition() const { return BALANCE_JOB_PARTITION == val_; } 
+  bool is_transfer_partition() const { return BALANCE_JOB_TRANSFER_PARTITION == val_; } 
 private:
   int64_t val_;
 };
@@ -149,7 +149,7 @@ public:
   const ObSqlString& get_balance_strategy() const
   {
     return balance_strategy_;
-  }
+  } 
 private:
   ObSqlString comment_;
   ObSqlString balance_strategy_;
@@ -161,7 +161,7 @@ public:
   /**
    * @description: insert new job to __all_balance_job
    * @param[in] job : a valid balance job include tenant_id
-   * @param[in] client: sql client or trans
+   * @param[in] client: sql client or trans 
    * @return OB_SUCCESS if success, otherwise failed
    */
   static int insert_new_job(const ObBalanceJob &job,
@@ -193,7 +193,7 @@ public:
    * @param[in] update_comment : weather to update comment
    * @param[in] comment : reason to change job status(only for abort);
    * @param[in] client: sql client or trans
-   * @return :
+   * @return : 
    * OB_SUCCESS : update job status success
    * OB_STATE_NOT_MATCH : current job status not match, can not update
    * OTHER : fail
@@ -212,7 +212,7 @@ public:
    * OB_SUCCESS : clean job success
    * OB_OP_NOT_ALLOW : job is in progress or init
    * OB_STATE_NOT_MATCH /OB_ENTRY_NOT_EXIST : current job has beed clean
-   * OTHER : fail
+   * OTHER : fail 
    */
   static int clean_job(const uint64_t tenant_id,
                        const ObBalanceJobID job_id,

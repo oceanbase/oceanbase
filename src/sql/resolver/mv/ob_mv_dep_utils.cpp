@@ -327,7 +327,7 @@ int ObMVDepUtils::get_table_ids_only_referenced_by_given_fast_lsm_mv(
               " (select p_obj from %s dep, %s mv where dep.mview_id = mv.mview_id and "
               "mv.refresh_mode in (%ld) group by p_obj having count(*) = 1) a,"
               " (select p_obj from %s dep, %s mv where dep.mview_id = mv.mview_id and "
-              "mv.refresh_mode in (%ld) and dep.tenant_id = %lu and dep.mview_id = %lu) b "
+              "mv.refresh_mode in (%ld) and dep.tenant_id = %lu and dep.mview_id = %lu) b " 
               "where a.p_obj = b.p_obj",
               OB_ALL_MVIEW_DEP_TNAME, OB_ALL_MVIEW_TNAME,
               ObMVRefreshMode::MAJOR_COMPACTION,

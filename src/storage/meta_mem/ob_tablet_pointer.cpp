@@ -121,14 +121,14 @@ void ObTabletPointer::reset_obj()
 }
 
 bool ObTabletPointer::need_push_to_flying_() const
-{
-  return (is_in_memory() && obj_.ptr_->get_ref() > 1) ||
+{ 
+  return (is_in_memory() && obj_.ptr_->get_ref() > 1) || 
           OB_NOT_NULL(old_version_chain_);
 }
 
-bool ObTabletPointer::need_remove_from_flying_() const
-{
-  return is_flying() && is_old_version_chain_empty();
+bool ObTabletPointer::need_remove_from_flying_() const 
+{ 
+  return is_flying() && is_old_version_chain_empty(); 
 }
 
 
@@ -155,7 +155,7 @@ int ObTabletPointer::read_from_disk(
   } else {
     addr = phy_addr_;
   }
-
+  
   return ret;
 }
 
@@ -426,7 +426,7 @@ void ObTabletPointer::set_initial_state(const bool initial_state)
 }
 
 int ObTabletPointer::create_ddl_kv_mgr(
-    const share::ObLSID &ls_id,
+    const share::ObLSID &ls_id, 
     const ObTabletID &tablet_id,
     ObDDLKvMgrHandle &ddl_kv_mgr_handle)
 {
@@ -794,3 +794,4 @@ int ScanAllVersionTabletsOp::GetMaxMdsCkptScnOp::operator()(ObTablet &tablet)
 
 } // namespace storage
 } // namespace oceanbase
+

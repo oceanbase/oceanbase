@@ -407,7 +407,7 @@ bool ObSqlParameterization::is_text_mode(SQL_EXECUTION_MODE mode)
   return TEXT_MODE == mode;
 }
 
-/* fix:
+/* fix: 
 * decide if a number param can ignore scale check when choosing plancache.
 * if current node type is expr list or number,
 * and parent node is point, st_point, json array, or ctx.ignore_scale_check_ is true, return true,
@@ -416,10 +416,10 @@ bool ObSqlParameterization::is_text_mode(SQL_EXECUTION_MODE mode)
 *   'select point(1.1, 1.1)' and 'select point(1.1111, 1.1111)' could share a same plancache,
 *   scale check about number literal in them are ignored
 * example2 scale check cannot ignore:
-*   'select point(cast(1.11 as double), 1.1)' and 'select point(cast(1.1111 as double), 1.1111)'
-*   because 1.11 and 1.1111 in cast expr have different scales,
+*   'select point(cast(1.11 as double), 1.1)' and 'select point(cast(1.1111 as double), 1.1111)' 
+*   because 1.11 and 1.1111 in cast expr have different scales, 
 *   scale check will prevent them to share a same plancache
-*/
+*/ 
 bool ObSqlParameterization::is_ignore_scale_check(TransformTreeCtx &ctx, const ParseNode *parent)
 {
   bool ret_bool = false;
@@ -1271,7 +1271,7 @@ int ObSqlParameterization::gen_ps_not_param_var(const ObIArray<int64_t> &offsets
         LOG_WARN("fail to push item to array", K(ret));
       } else if (OB_FAIL(pc_ctx.not_param_index_.add_member(offset))) {
         LOG_WARN("add member failed", K(ret), K(offset));
-      }
+      } 
     }
   }
   return ret;
@@ -1558,7 +1558,7 @@ bool ObSqlParameterization::is_in_expr_prefix(char c) {
   return c == ' ' || c == '\n' || c == '\r' || c == '\t';
 }
 
-int ObSqlParameterization::search_in_expr_pos(const char* buf, const int64_t buf_len, int64_t& pos, bool& found)
+int ObSqlParameterization::search_in_expr_pos(const char* buf, const int64_t buf_len, int64_t& pos, bool& found) 
 {
   int ret = OB_SUCCESS;
   found = false;
@@ -1600,7 +1600,7 @@ int ObSqlParameterization::search_vector(const char* buf,
         if (vec_level > 0 && vec_level <= 2) {
           if (buf[i] == ')') {
             vec_level--;
-            if (vec_level == 0) {
+            if (vec_level == 0) { 
               vec_end = i + 1;
               need_break = true;
               is_valid = true;
@@ -1725,9 +1725,9 @@ int ObSqlParameterization::formalize_fast_parameter_sql(ObIAllocator &allocator,
       LOG_WARN("fast parse error", K(param_num),
               K(ObString(format_sql_len, format_sql_ptr)), K(src_sql));
     } else if (OB_ISNULL(p_list)) {
-      dest_sql.assign_ptr(format_sql_ptr, format_sql_len);
+      dest_sql.assign_ptr(format_sql_ptr, format_sql_len); 
     } else {
-      dest_sql.assign_ptr(format_sql_ptr, format_sql_len);
+      dest_sql.assign_ptr(format_sql_ptr, format_sql_len); 
       if (OB_SUCC(ret)) {
         if (param_num > 0) {
           ObPCParam *pc_param = NULL;
@@ -1784,9 +1784,9 @@ int ObSqlParameterization::formalize_sql_filter_hint(ObIAllocator &allocator,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid param_num", K(param_num), K(raw_params.count()));
     } else if (OB_ISNULL(p_list)) {
-      dest_sql.assign_ptr(format_sql_ptr, format_sql_len);
+      dest_sql.assign_ptr(format_sql_ptr, format_sql_len); 
     } else {
-      dest_sql.assign_ptr(format_sql_ptr, format_sql_len);
+      dest_sql.assign_ptr(format_sql_ptr, format_sql_len); 
       if (OB_SUCC(ret)) {
         if (param_num > 0) {
           for (int64_t i = 0; OB_SUCC(ret) && i < param_num && NULL != p_list; i++) {
@@ -2008,7 +2008,7 @@ int ObSqlParameterization::add_not_param_flag(const ParseNode *node, SqlInfo &sq
   } else if (T_CAST_ARGUMENT == node->type_        //如果是cast类型，则需要添加N个cast节点对应的常数, 因为正常parse不识别为常量, 但fast parse时会识别为常量
              || T_COLLATION == node->type_
              || T_NULLX_CLAUSE == node->type_ // deal null clause on json expr
-             || T_WEIGHT_STRING_LEVEL_PARAM == node->type_) {
+             || T_WEIGHT_STRING_LEVEL_PARAM == node->type_) { 
     for (int i = 0; OB_SUCC(ret) && i < node->param_num_; ++i) {
       if (OB_FAIL(sql_info.not_param_index_.add_member(sql_info.total_++))) {
         SQL_PC_LOG(WARN, "failed to add member", K(sql_info.total_));
@@ -2260,7 +2260,7 @@ int ObSqlParameterization::mark_tree(TransformTreeCtx &ctx, ParseNode *tree ,Sql
   } else if(T_FUN_SYS_JSON_OBJECT == tree->type_) {
     if (5 != tree->num_child_) {
       ret = OB_INVALID_ARGUMENT;
-      SQL_PC_LOG(WARN, "invalid json object expr argument", K(ret), K(tree->num_child_));
+      SQL_PC_LOG(WARN, "invalid json object expr argument", K(ret), K(tree->num_child_)); 
     } else {
       const int64_t ARGS_NUMBER_FIVE = 5;
       bool mark_arr[ARGS_NUMBER_FIVE] = {1, 1, 1, 1, 1};
@@ -2271,7 +2271,7 @@ int ObSqlParameterization::mark_tree(TransformTreeCtx &ctx, ParseNode *tree ,Sql
   } else if(T_FUN_SYS_IS_JSON == tree->type_) {
     if (5 != tree->num_child_) {
       ret = OB_INVALID_ARGUMENT;
-      SQL_PC_LOG(WARN, "invalid argument num for IS json", K(ret), K(tree->num_child_));
+      SQL_PC_LOG(WARN, "invalid argument num for IS json", K(ret), K(tree->num_child_)); 
     } else {
       const int64_t ARGS_NUMBER_FIVE = 5;
       bool mark_arr[ARGS_NUMBER_FIVE] = {0, 1, 1, 1, 1};
@@ -2282,7 +2282,7 @@ int ObSqlParameterization::mark_tree(TransformTreeCtx &ctx, ParseNode *tree ,Sql
   } else if(T_FUN_SYS_JSON_QUERY == tree->type_) {
     if (13 != tree->num_child_) {
       ret = OB_INVALID_ARGUMENT;
-      SQL_PC_LOG(WARN, "invalid json query expr argument", K(ret), K(tree->num_child_));
+      SQL_PC_LOG(WARN, "invalid json query expr argument", K(ret), K(tree->num_child_)); 
     } else {
       const int64_t ARGS_NUMBER_THIRTEEN = 13;
       bool mark_arr[ARGS_NUMBER_THIRTEEN] = {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};   // json doc type will affect returning type,
@@ -2293,7 +2293,7 @@ int ObSqlParameterization::mark_tree(TransformTreeCtx &ctx, ParseNode *tree ,Sql
   } else if(T_FUN_SYS_JSON_EXISTS == tree->type_) {
     if (5 != tree->num_child_) {
       ret = OB_INVALID_ARGUMENT;
-      SQL_PC_LOG(WARN, "invalid argument num for json_exists", K(ret), K(tree->num_child_));
+      SQL_PC_LOG(WARN, "invalid argument num for json_exists", K(ret), K(tree->num_child_)); 
     } else {
       const int64_t ARGS_NUMBER_FIVE = 5;
       bool mark_arr[ARGS_NUMBER_FIVE] = {0, 1, 1, 1, 1};
@@ -2304,7 +2304,7 @@ int ObSqlParameterization::mark_tree(TransformTreeCtx &ctx, ParseNode *tree ,Sql
   } else if(T_FUN_SYS_JSON_EQUAL == tree->type_) {
     if (3 < tree->num_child_) {
       ret = OB_INVALID_ARGUMENT;
-      SQL_PC_LOG(WARN, "invalid json query expr argument", K(ret), K(tree->num_child_));
+      SQL_PC_LOG(WARN, "invalid json query expr argument", K(ret), K(tree->num_child_)); 
     } else {
       const int64_t ARGS_NUMBER_THREE = 3;
       bool mark_arr[ARGS_NUMBER_THREE] = {0, 0, 1};
@@ -2315,7 +2315,7 @@ int ObSqlParameterization::mark_tree(TransformTreeCtx &ctx, ParseNode *tree ,Sql
   } else if(T_FUN_SYS_JSON_ARRAY == tree->type_) {
     if (4 != tree->num_child_) {
       ret = OB_INVALID_ARGUMENT;
-      SQL_PC_LOG(WARN, "invalid json array expr argument", K(ret), K(tree->num_child_));
+      SQL_PC_LOG(WARN, "invalid json array expr argument", K(ret), K(tree->num_child_)); 
     } else {
       const int64_t ARGS_NUMBER_FOUR = 4;
       bool mark_arr[ARGS_NUMBER_FOUR] = {0, 1, 1, 1};
@@ -2326,7 +2326,7 @@ int ObSqlParameterization::mark_tree(TransformTreeCtx &ctx, ParseNode *tree ,Sql
   } else if(T_FUN_SYS_JSON_MERGE_PATCH == tree->type_) {
     if (7 != tree->num_child_) {
       ret = OB_INVALID_ARGUMENT;
-      SQL_PC_LOG(WARN, "invalid json mergepatch expr argument", K(ret), K(tree->num_child_));
+      SQL_PC_LOG(WARN, "invalid json mergepatch expr argument", K(ret), K(tree->num_child_)); 
     } else {
       const int64_t ARGS_NUMBER_SEVEN = 7;
       bool mark_arr[ARGS_NUMBER_SEVEN] = {0, 0, 1, 1, 1, 1, 1};
@@ -2337,7 +2337,7 @@ int ObSqlParameterization::mark_tree(TransformTreeCtx &ctx, ParseNode *tree ,Sql
   } else if (T_JSON_TABLE_EXPRESSION == tree->type_) {
     if (5 != tree->num_child_) {
       ret = OB_INVALID_ARGUMENT;
-      SQL_PC_LOG(WARN, "invalid json table expr argument", K(ret), K(tree->num_child_));
+      SQL_PC_LOG(WARN, "invalid json table expr argument", K(ret), K(tree->num_child_)); 
     } else {
       const int64_t ARGS_NUMBER_FIVE = 5;
       bool mark_arr[ARGS_NUMBER_FIVE] = {0, 1, 1, 1, 1};
@@ -2348,7 +2348,7 @@ int ObSqlParameterization::mark_tree(TransformTreeCtx &ctx, ParseNode *tree ,Sql
   } else if (T_XML_TABLE_EXPRESSION == tree->type_) {
     if (6 != tree->num_child_) {
       ret = OB_INVALID_ARGUMENT;
-      SQL_PC_LOG(WARN, "invalid xml table expr argument", K(ret), K(tree->num_child_));
+      SQL_PC_LOG(WARN, "invalid xml table expr argument", K(ret), K(tree->num_child_)); 
     } else {
       const int64_t ARGS_NUMBER_SIX = 6;
       bool mark_arr[ARGS_NUMBER_SIX] = {1, 1, 0, 1, 1, 1}; // because of namespace deal in resolve, so can not parameter
@@ -2359,7 +2359,7 @@ int ObSqlParameterization::mark_tree(TransformTreeCtx &ctx, ParseNode *tree ,Sql
   } else if (T_FUN_SYS_TREAT == tree->type_) {
     if (2 != tree->num_child_) {
       ret = OB_INVALID_ARGUMENT;
-      SQL_PC_LOG(WARN, "invalid treat expr argument", K(ret), K(tree->num_child_));
+      SQL_PC_LOG(WARN, "invalid treat expr argument", K(ret), K(tree->num_child_)); 
     } else {
       const int64_t ARGS_NUMBER_TWO = 2;
       bool mark_arr[ARGS_NUMBER_TWO] = {1, 0};
@@ -2792,7 +2792,7 @@ int ObSqlParameterization::find_leftest_const_node(ParseNode &cur_node, ParseNod
   return ret;
 }
 
-int ObSqlParameterization::formalize_sql_text(ObIAllocator &allocator, const ObString &src_sql,
+int ObSqlParameterization::formalize_sql_text(ObIAllocator &allocator, const ObString &src_sql, 
                                               ObString &fmt_sql, const SqlInfo &sql_info,
                                               const FPContext &fp_ctx)
 {
@@ -2843,7 +2843,7 @@ bool ObSqlParameterization::is_vector_index_query(const ParseNode *tree)
           curr = curr->children_[0]; // sort key is sys func
           if (curr->type_ == T_IDENT && OB_NOT_NULL(curr->str_value_)) {
             ObString func_name(curr->str_len_, curr->str_value_);
-            bret = func_name.case_compare("l2_distance") == 0
+            bret = func_name.case_compare("l2_distance") == 0 
                    || func_name.case_compare("negative_inner_product") == 0
                    || func_name.case_compare("cosine_distance") == 0;
           }

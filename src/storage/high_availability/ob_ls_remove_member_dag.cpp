@@ -129,7 +129,7 @@ int ObLSRemoveMemberDag::fill_info_param(compaction::ObIBasicInfoParam *&out_par
     LOG_WARN("ls remove member dag do not init", K(ret));
   } else {
     ObCStringHelper helper;
-    if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
+    if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(), 
         ctx_.arg_.ls_id_.id(),
         "remove_member", helper.convert(ctx_.arg_.remove_member_.get_server())))) {
       LOG_WARN("failed to fill info param", K(ret));

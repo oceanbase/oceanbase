@@ -20,7 +20,7 @@ namespace storage
 
 int ObGCUpperTransHelper::try_get_sstable_upper_trans_version(
     ObLS &ls,
-    const blocksstable::ObSSTable &sstable,
+    const blocksstable::ObSSTable &sstable, 
     int64_t &new_upper_trans_version)
 {
   int ret = OB_SUCCESS;
@@ -76,7 +76,7 @@ int ObGCUpperTransHelper::check_need_gc_or_update_upper_trans_version(
     ObTableStoreIterator iter(false/*is_reverse*/, true/*need_load_sstable*/);
     if (OB_FAIL(table_store_wrapper.get_member()->get_mini_minor_sstables(iter))) {
       LOG_WARN("fail to get mini minor sstable", K(ret), K(table_store_wrapper));
-    }
+    } 
     while (OB_SUCC(ret) && OB_SUCC(iter.get_next(table))) {
       if (OB_ISNULL(table) || OB_UNLIKELY(!table->is_sstable())) {
         ret = OB_ERR_UNEXPECTED;
@@ -95,7 +95,7 @@ int ObGCUpperTransHelper::check_need_gc_or_update_upper_trans_version(
         if (OB_FAIL(new_upper_trans->push_back(new_upper_trans_version))) {
           LOG_WARN("failed to push back new upper_trans_version", K(ret), K(new_upper_trans_version), KPC(sstable));
         }
-      }
+      } 
     }
     if (OB_ITER_END == ret) {
       ret = OB_SUCCESS;
@@ -107,7 +107,7 @@ int ObGCUpperTransHelper::check_need_gc_or_update_upper_trans_version(
     LOG_WARN("failed to get multi version start", K(ret), K(tablet_id));
   } else if (FALSE_IT(multi_version_start = snapshot_info.snapshot_)) {
   } else if (need_update) {
-    // need to update table store so skip checking gc status
+    // need to update table store so skip checking gc status 
   } else if (OB_FAIL(table_store_wrapper.get_member()->need_remove_old_table(multi_version_start, need_update))) {
     LOG_WARN("failed to check need rebuild table store", K(ret), K(multi_version_start));
   } else {

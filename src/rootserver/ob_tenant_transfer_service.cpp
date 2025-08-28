@@ -143,7 +143,7 @@ void ObTenantTransferService::do_work()
                 K(current_failed_task_id), K(last_failed_task_id), K(thread_idx), K(idle_time_us));
           }
         }
-        TTS_INFO("finish one round", KR(ret), K(all_tasks_count), K(thread_task_count), K(thread_idx),
+        TTS_INFO("finish one round", KR(ret), K(all_tasks_count), K(thread_task_count), K(thread_idx), 
             K(idle_time_us), K(current_failed_task_id), K(last_failed_task_id), K(retry_count));
         idle(idle_time_us);
       }// end while
@@ -154,7 +154,7 @@ void ObTenantTransferService::do_work()
 int64_t ObTenantTransferService::calc_transfer_retry_interval_(
     const ObTransferTaskID &current_failed_task_id,
     int64_t &retry_count,
-    ObTransferTaskID &last_failed_task_id)
+    ObTransferTaskID &last_failed_task_id) 
 {
   int64_t retry_interval = 0;
   if (!current_failed_task_id.is_valid() || current_failed_task_id != last_failed_task_id) {

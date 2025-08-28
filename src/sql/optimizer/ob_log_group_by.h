@@ -24,7 +24,7 @@ namespace sql
 class ObLogSort;
 struct ObThreeStageAggrInfo
 {
-  ObThreeStageAggrInfo() :
+  ObThreeStageAggrInfo() : 
     aggr_stage_(ObThreeStageAggrStage::NONE_STAGE),
     distinct_aggr_count_(-1),
     aggr_code_idx_(-1),
@@ -167,7 +167,7 @@ public:
   virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
   int inner_est_cost(const int64_t parallel,
                      double child_card,
-                     double &child_ndv,
+                     double &child_ndv, 
                      double &op_cost);
   int get_child_est_info(const int64_t parallel, double &child_card, double &child_ndv, double &selectivity);
   int get_gby_output_exprs(ObIArray<ObRawExpr *> &output_exprs);
@@ -241,7 +241,7 @@ public:
     use_part_sort_ = use_part_sort;
     gby_dop_ = dop;
   }
-  virtual int get_plan_item_info(PlanText &plan_text,
+  virtual int get_plan_item_info(PlanText &plan_text, 
                                 ObSqlPlanItem &plan_item) override;
 
   virtual int compute_sharding_info() override;
@@ -252,7 +252,7 @@ public:
   void set_pushdown_scalar_aggr() { is_pushdown_scalar_aggr_ = true; }
   bool is_pushdown_scalar_aggr() { return is_pushdown_scalar_aggr_; }
 
-  VIRTUAL_TO_STRING_KV(K_(group_exprs), K_(rollup_exprs), K_(aggr_exprs), K_(algo),
+  VIRTUAL_TO_STRING_KV(K_(group_exprs), K_(rollup_exprs), K_(aggr_exprs), K_(algo), 
       K_(is_push_down));
   virtual int get_card_without_filter(double &card) override;
 

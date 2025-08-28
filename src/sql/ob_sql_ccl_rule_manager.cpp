@@ -15,14 +15,14 @@
 #include "lib/rc/ob_rc.h"
 #include "src/sql/ob_sql_ccl_rule_manager.h"
 #include "src/share/schema/ob_multi_version_schema_service.h"
-#include "src/share/schema/ob_schema_getter_guard.h"
-#include "src/share/ob_server_struct.h"
+#include "src/share/schema/ob_schema_getter_guard.h"     
+#include "src/share/ob_server_struct.h"    
 #include "src/share/schema/ob_ccl_rule_mgr.h"
 #include "src/sql/engine/expr/ob_expr_like.h"
 #include "src/sql/ob_sql_utils.h"
 #include "src/sql/ob_sql_context.h"
 #include "observer/ob_server_utils.h"
-#include <type_traits>
+#include <type_traits>           
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -140,9 +140,9 @@ bool ObCCLRuleDelAtomicOp::operator()(common::hash::HashMapPair<ObFormatSQLIDCCL
 }
 
 
-int ObSQLCCLRuleLevelConcurrencyMapWrapper::insert(const ObFormatSQLIDCCLRuleKey &key,
+int ObSQLCCLRuleLevelConcurrencyMapWrapper::insert(const ObFormatSQLIDCCLRuleKey &key, 
                                                    int max_concurrency,
-                                                   ObCCLRuleConcurrencyValueWrapper *&p_concurrency) {
+                                                   ObCCLRuleConcurrencyValueWrapper *&p_concurrency) {                                          
   int ret = OB_SUCCESS;
   if (NULL == (p_concurrency = static_cast<ObCCLRuleConcurrencyValueWrapper*>(alloc_.alloc(sizeof(ObCCLRuleConcurrencyValueWrapper))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -179,7 +179,7 @@ int ObSQLCCLRuleLevelConcurrencyMapWrapper::insert(const ObFormatSQLIDCCLRuleKey
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -301,8 +301,8 @@ int ObSQLCCLRuleManager::match_keywords_in_sql(const ObString &sql,
     const char *text_ptr = sql.ptr();
     uint32_t text_len = sql.length();
     for (size_t i = 0; match && i < ccl_keywords_array.count(); i++) {
-      char *new_text = static_cast<char*>(MEMMEM(text_ptr, text_len,
-                                               ccl_keywords_array.at(i).ptr(),
+      char *new_text = static_cast<char*>(MEMMEM(text_ptr, text_len, 
+                                               ccl_keywords_array.at(i).ptr(), 
                                                ccl_keywords_array.at(i).length()));
       text_len -= new_text != NULL ? new_text - text_ptr + ccl_keywords_array.at(i).length() : 0;
       if (OB_UNLIKELY(text_len < 0)) {

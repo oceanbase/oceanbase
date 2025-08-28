@@ -100,7 +100,7 @@ struct ObPxNodePool {
   inline ObPxNodePolicy get_px_node_policy() const { return px_node_policy_; }
   inline void set_px_node_policy(ObPxNodePolicy px_node_policy) { px_node_policy_ = px_node_policy; }
   inline ObPxNodeSelectionMode get_px_node_selection_mode() const { return px_node_selection_mode_; }
-  inline void set_px_node_selection_mode(ObPxNodeSelectionMode selection_mode)
+  inline void set_px_node_selection_mode(ObPxNodeSelectionMode selection_mode) 
   {
     px_node_selection_mode_ = selection_mode;
   }
@@ -114,7 +114,7 @@ struct ObPxNodePool {
   // and reducing network overhead.
   ObAddrFixedArray candidate_node_pool_;
   // Represents the total number of data-related nodes involved in the SQL.
-  // 0 indicates that the node pool is empty
+  // 0 indicates that the node pool is empty 
   // and a fallback to child_distribution is required.
   int64_t data_node_cnt_;
   ObPxNodePolicy px_node_policy_;

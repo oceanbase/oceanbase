@@ -1,4 +1,4 @@
-// owner: msy164651
+// owner: msy164651 
 // owner group: rs
 
 /**
@@ -211,7 +211,7 @@ TEST_F(TestLSStatusOperator, LSLifeAgent)
   ASSERT_EQ(OB_NEED_RETRY, ret);
 
   //更新__all_ls_status表中1001日志流的状态
-  ret = status_operator.update_ls_status(tenant_id_, ls_id, share::OB_LS_EMPTY, share::OB_LS_DROPPING, share::NORMAL_SWITCHOVER_STATUS,
+  ret = status_operator.update_ls_status(tenant_id_, ls_id, share::OB_LS_EMPTY, share::OB_LS_DROPPING, share::NORMAL_SWITCHOVER_STATUS, 
       get_curr_simple_server().get_observer().get_mysql_proxy());
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   ret = status_operator.update_ls_status(tenant_id_, ls_id, share::OB_LS_CREATING, share::OB_LS_EMPTY, share::NORMAL_SWITCHOVER_STATUS,
@@ -256,7 +256,7 @@ TEST_F(TestLSStatusOperator, LSLifeAgent)
   scn.convert_for_logservice(100);
   share::SCN recovery_scn;
   recovery_scn.convert_for_logservice(98);
-  //readable scn 大于sync_scn
+  //readable scn 大于sync_scn 
   ret = recovery_stat.init_only_recovery_stat(tenant_id_, ls_id, scn, recovery_scn,config_version);
   ASSERT_EQ(OB_SUCCESS, ret);
   //recovery_stat的取最大值

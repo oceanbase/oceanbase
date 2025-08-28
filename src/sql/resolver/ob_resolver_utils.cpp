@@ -108,7 +108,7 @@ int ObResolverUtils::get_all_function_table_column_names(const TableItem &table_
       && !coll_type->get_element_type().is_obj_type()
       && !coll_type->get_element_type().is_record_type()
       && !coll_type->get_element_type().is_collection_type()
-      && !(coll_type->get_element_type().is_opaque_type()
+      && !(coll_type->get_element_type().is_opaque_type() 
             && coll_type->get_element_type().get_user_type_id() == T_OBJ_XML)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not suppoert type in table function", K(ret), KPC(coll_type));
@@ -117,7 +117,7 @@ int ObResolverUtils::get_all_function_table_column_names(const TableItem &table_
     err.write(" collation type in table function\0", sizeof(" collation type in table function\0"));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, err.ptr());
   }
-  if (OB_SUCC(ret) && (coll_type->get_element_type().is_obj_type()
+  if (OB_SUCC(ret) && (coll_type->get_element_type().is_obj_type() 
                       || coll_type->get_element_type().is_opaque_type()
                       || coll_type->get_element_type().is_collection_type())) {
     OZ (column_names.push_back(ObString("COLUMN_VALUE")));
@@ -411,7 +411,7 @@ int ObResolverUtils::resolve_collection_type_info(const uint64_t tenant_data_ver
 
 int ObResolverUtils::resolve_basic_type_info(const ParseNode &type_node, ObStringBuffer &buf)
 {
-  int ret = OB_SUCCESS;
+  int ret = OB_SUCCESS; 
   const int MAX_LEN = 128;
   char tmp[MAX_LEN] = {0};
   if (!is_collection_support_type(static_cast<ObObjType>(type_node.type_))) {
@@ -475,7 +475,7 @@ int ObResolverUtils::resolve_array_type_info(const uint64_t tenant_data_version,
     // currently not support nested map
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("the map value cannot be collection type", K(ret));
-  } else if (type_node.children_[0]->type_ == T_COLLECTION
+  } else if (type_node.children_[0]->type_ == T_COLLECTION 
              && OB_FAIL(resolve_collection_type_info(tenant_data_version, *type_node.children_[0], buf, depth))) {
       LOG_WARN("failed to resolve collection type info", K(ret));
   } else if (type_node.children_[0]->type_ != T_COLLECTION
@@ -558,7 +558,7 @@ int ObResolverUtils::resolve_map_type_info(const uint64_t tenant_data_version, c
     // currently not support nested map
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("the map value cannot be collection type", K(ret), K(type_node.children_[1]->type_));
-  } else if (type_node.children_[1]->type_ == T_COLLECTION
+  } else if (type_node.children_[1]->type_ == T_COLLECTION 
              && OB_FAIL(resolve_collection_type_info(tenant_data_version, *type_node.children_[1], buf, depth))) {
       LOG_WARN("failed to resolve collection type info", K(ret));
   } else if (type_node.children_[1]->type_ != T_COLLECTION
@@ -1253,16 +1253,16 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
     }
   // Case3: 处理TypeClass不同的情形
   } else {
-    // xmltype can not cast with varchar,
+    // xmltype can not cast with varchar, 
     if ((ObExtendTC == ob_obj_type_class(src_type)
-          && !(ObUserDefinedSQLTC == ob_obj_type_class(dst_type)
+          && !(ObUserDefinedSQLTC == ob_obj_type_class(dst_type) 
                 || ObExtendTC == ob_obj_type_class(dst_type)))
         || (ObUserDefinedSQLTC == ob_obj_type_class(src_type)
-          && !(ObUserDefinedSQLTC == ob_obj_type_class(dst_type)
+          && !(ObUserDefinedSQLTC == ob_obj_type_class(dst_type) 
                 || ObExtendTC == ob_obj_type_class(dst_type)))
         || ((ObUserDefinedSQLTC == ob_obj_type_class(dst_type)
-            || ObExtendTC == ob_obj_type_class(dst_type))
-          && !(ObUserDefinedSQLTC == ob_obj_type_class(src_type)
+            || ObExtendTC == ob_obj_type_class(dst_type)) 
+          && !(ObUserDefinedSQLTC == ob_obj_type_class(src_type) 
                 || ObExtendTC == ob_obj_type_class(src_type)
                 || ObGeometryTC == ob_obj_type_class(src_type)))
         || (ObGeometryTC == ob_obj_type_class(src_type) && lib::is_oracle_mode()
@@ -1659,7 +1659,7 @@ int ObResolverUtils::pick_routine(ObIArray<ObRoutineMatchInfo> &match_infos,
 
 // 从多个同名的routine中寻找一个最佳匹配
 int ObResolverUtils::pick_routine(const pl::ObPLResolveCtx &resolve_ctx,
-                                  const common::ObIArray<ObRawExpr *> &expr_params,
+                                  const common::ObIArray<ObRawExpr *> &expr_params, 
                                   const common::ObIArray<const ObIRoutineInfo *> &routine_infos,
                                   const ObIRoutineInfo *&routine_info)
 {
@@ -1786,7 +1786,7 @@ int ObResolverUtils::get_routine(pl::ObPLPackageGuard &package_guard,
         * 1. Only `db_name.empty()` is true , this is not possible;
         * 2. Only `package_name.empty()` is true, user call statement is `call test.p101_syn(1)`;
         * 3. `(db_name.empty() && package_name.empty()` is true,  user call statement is `call p101_syn(1)`;
-        * 4. `db_name.empty()` is false and `package_name.empty()` is false,
+        * 4. `db_name.empty()` is false and `package_name.empty()` is false, 
         *     user call statement is `call test.pkg100_syn.p1(1)`
         */
 
@@ -1794,7 +1794,7 @@ int ObResolverUtils::get_routine(pl::ObPLPackageGuard &package_guard,
         uint64_t database_id = OB_INVALID_ID;
         uint64_t object_db_id = OB_INVALID_ID;
         bool exist = false;
-        ObString object_name;
+        ObString object_name;      
         ObSchemaChecker schema_checker;
         ObSynonymChecker synonym_checker;
         bool routine_name_is_synonym = package_name.empty();
@@ -1837,7 +1837,7 @@ int ObResolverUtils::get_routine(pl::ObPLPackageGuard &package_guard,
                 COPY_DBLINK_ROUTINE(dblink_routine_info);
               }
             }
-          }
+          } 
         }
         if (OB_SUCC(ret) && !exist) {
           ret = OB_ERR_SP_DOES_NOT_EXIST;
@@ -2629,7 +2629,7 @@ int ObResolverUtils::resolve_stmt_type(const ParseResult &result, stmt::StmtType
 }
 
 int ObResolverUtils::set_string_val_charset(ObIAllocator &allocator,
-                                            ObObjParam &val, ObString &charset, ObObj &result_val,
+                                            ObObjParam &val, ObString &charset, ObObj &result_val, 
                                             bool is_strict_mode,
                                             bool return_ret)
 {
@@ -2845,7 +2845,7 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
             ret = OB_ERR_UNEXPECTED;
           }
           if (OB_FAIL(ret)) {
-          } else if (node->value_ == -1) {
+          } else if (node->value_ == -1) { 
             // process u'string': connection_char->unicode->target_char
             if (OB_UNLIKELY(node->type_ != T_NCHAR)) {
               ret = OB_INVALID_ARGUMENT;
@@ -2853,7 +2853,7 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
             } else if (OB_ISNULL(buf = static_cast<char*>(allocator.alloc(buf_len)))) {
               ret = OB_ALLOCATE_MEMORY_FAILED;
               LOG_ERROR("alloc memory failed", K(ret), K(buf_len));
-            } else if (OB_FAIL(ObExprUnistr::calc_unistr(str, connection_collation, target_collation, buf, buf_len,
+            } else if (OB_FAIL(ObExprUnistr::calc_unistr(str, connection_collation, target_collation, buf, buf_len, 
                                                                                 (int32_t &)(result_len)))) {
               LOG_WARN("calc unistr failed", K(ret));
             } else {
@@ -3750,16 +3750,16 @@ bool ObResolverUtils::is_valid_oracle_partition_data_type(const ObObjType data_t
 
 bool ObResolverUtils::is_partition_range_column_type(const ObObjType type)
 {
-  // true means if the partition column(s) contain the type, then it's
+  // true means if the partition column(s) contain the type, then it's 
   // part_func_type must be PARTITION_FUNC_TYPE_RANGE_COLUMNS
-  return ob_is_float_tc(type) ||
+  return ob_is_float_tc(type) || 
          ob_is_double_tc(type) ||
          ob_is_decimal_int_tc(type) ||
          ob_is_datetime_or_mysql_datetime_tc(type) ||
          ob_is_string_tc(type) ||
          ob_is_date_or_mysql_date(type) ||
          ob_is_time_tc(type) ||
-         ob_is_number_tc(type);
+         ob_is_number_tc(type);   
 }
 
 bool ObResolverUtils::is_valid_partition_column_type(const ObObjType type,
@@ -3815,7 +3815,7 @@ bool ObResolverUtils::is_valid_partition_column_type(const ObObjType type,
                  is_partition_range_column_type(type)) {
         /*
           if the cluster version is greater than 4_3_0_1, we then make
-          other columns types such as timestamp, float, double, decimal available to range columns
+          other columns types such as timestamp, float, double, decimal available to range columns  
           not compatible with MySql, relaied by size partition
         */
         bret = true;
@@ -3987,7 +3987,7 @@ int ObResolverUtils::check_part_value_result_type(const ObPartitionFuncType part
       }
     } else {
       /* 处理mysql的date，datetime数据类型。
-
+          
           create table t1_date(c1 date,c2 int) partition by range columns(c1) (partition p0 values less than (date '2020-10-10'));
           create table t1_date(c1 datetime,c2 int) partition by range columns(c1) (partition p0 values less than (time '10:10:00'));
           create table t1_date(c1 datetime,c2 int) partition by range columns(c1) (partition p0 values less than (date '2020-10-10'));
@@ -4061,7 +4061,7 @@ int ObResolverUtils::deduce_expect_value_tc(const ObObjType part_column_expr_typ
     case ObSmallIntType:
     case ObMediumIntType:
     case ObInt32Type:
-    case ObIntType:
+    case ObIntType: 
     case ObYearType: {
       expect_value_tc = ObIntTC;
       need_cs_check = false;
@@ -5075,8 +5075,8 @@ ObRawExpr *ObResolverUtils::find_file_column_expr(ObIArray<ObRawExpr *> &pseudo_
   ObRawExpr *expr = nullptr;
   for (int i = 0; i < pseudo_exprs.count(); ++i) {
     ObPseudoColumnRawExpr *pseudo_expr = static_cast<ObPseudoColumnRawExpr *>(pseudo_exprs.at(i));
-    if (pseudo_expr->get_table_id() == table_id
-        && pseudo_expr->get_column_idx() == column_idx
+    if (pseudo_expr->get_table_id() == table_id 
+        && pseudo_expr->get_column_idx() == column_idx 
         && pseudo_expr->get_expr_name().prefix_match_ci(expr_name)) {
       expr = pseudo_expr;
       break;
@@ -5437,7 +5437,7 @@ int ObResolverUtils::build_file_column_expr_for_csv(ObRawExprFactory &expr_facto
     file_column_expr->set_table_id(table_id);
     file_column_expr->set_explicited_reference();
     file_column_expr->set_column_idx(column_idx);
-
+    
     file_column_expr->set_data_type(ObVarcharType);
     file_column_expr->set_collation_type(ObCharset::get_default_collation(format.csv_format_.cs_type_));
     file_column_expr->set_collation_level(CS_LEVEL_IMPLICIT);
@@ -5526,7 +5526,7 @@ int ObResolverUtils::build_file_column_expr_for_file_url(
     file_column_expr->set_table_id(table_id);
     file_column_expr->set_explicited_reference();
     file_column_expr->set_column_idx(UINT64_MAX);
-
+    
     file_column_expr->set_data_type(ObVarcharType);
     file_column_expr->set_collation_type(CS_TYPE_UTF8MB4_BIN);
     file_column_expr->set_collation_level(CS_LEVEL_IMPLICIT);
@@ -5544,7 +5544,7 @@ int ObResolverUtils::build_file_column_expr_for_file_url(
   return ret;
 }
 
-int ObResolverUtils::generate_subschema_id(ObSQLSessionInfo &session_info,
+int ObResolverUtils::generate_subschema_id(ObSQLSessionInfo &session_info, 
                                            const common::ObIArray<common::ObString> &extended_type_info,
                                            uint16_t &subschema_id)
 {
@@ -5649,7 +5649,7 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
           LOG_WARN("Define a blob column in generated column def is not supported", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "blob column in generated column definition");
         } else if (lib::is_mysql_mode() && col_schema->is_autoincrement()) {
-          ret = OB_NOT_SUPPORTED;
+          ret = OB_NOT_SUPPORTED; 
           LOG_WARN("generated column cannot refer to auto-increment column", K(ret), K(*expr));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "generated column refer to auto-increment column");
         } else if (OB_FAIL(ObRawExprUtils::init_column_expr(*col_schema, session_info, *q_name.ref_expr_))) {
@@ -5749,7 +5749,7 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
       // generated_column是用户定义的生成列，其长度以及长度语义(按照字符计算长度还是字节计算长度)依赖于SQL语句的定义
       // expr是用于生成generated_column数据的表达式。expr计算结果的长度不能大于generated_column定义的长度
       // 需要注意的是在进行长度比较时要考虑二者的长度语义，这里统一使用LS_BYTE语义来进行长度的比较
-      //
+      // 
       int64_t generated_column_length_in_byte = 0;
       int64_t expr_length_in_byte = 0;
       common::ObCollationType cs_type = generated_column.get_collation_type();
@@ -5819,7 +5819,7 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
         } else {
           cast_dst_type.set_subschema_id(subschema_id);
         }
-      }
+      } 
       //only formalize once
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObRawExprUtils::erase_operand_implicit_cast(expr, expr))) {
@@ -6365,14 +6365,14 @@ int ObResolverUtils::resolve_check_constraint_expr(
   } else {
     if (expr->get_expr_type() == T_FUN_SYS_IS_JSON) {
       ObObjType in_type = column_schema->get_data_type();
-      if (!(in_type == ObVarcharType
-            || in_type == ObNVarchar2Type
-            || in_type == ObLongTextType
+      if (!(in_type == ObVarcharType 
+            || in_type == ObNVarchar2Type 
+            || in_type == ObLongTextType 
             || in_type == ObJsonType
             || in_type == ObNVarchar2Type
             || in_type == ObRawType)) {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
-        LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "-", ob_obj_type_str(in_type));
+        LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "-", ob_obj_type_str(in_type));                            
       }
     }
   }
@@ -7015,7 +7015,7 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
         LOG_DEBUG("check data type after resolve", K(ret), K(data_type));
       } else if (!is_oracle_mode && ObCharType == data_type.get_obj_type()
                                 && OB_MAX_CHAR_LENGTH < length) {
-        // varchar length check , TODO:
+        // varchar length check , TODO: 
         ret = OB_ERR_TOO_LONG_COLUMN_LENGTH;
         LOG_WARN("column data length is invalid", K(ret), K(length), K(data_type));
         LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, ident_name.ptr(),
@@ -7067,7 +7067,7 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
         data_type.set_length(length);
         data_type.set_scale(default_accuracy.get_scale());
         data_type.set_charset_type(CHARSET_BINARY);
-        data_type.set_collation_type(CS_TYPE_BINARY);
+        data_type.set_collation_type(CS_TYPE_BINARY);        
       }
       break;
     }
@@ -7187,7 +7187,7 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
         data_type.set_length(length);
         data_type.set_scale(default_accuracy.get_scale());
         data_type.set_charset_type(CHARSET_BINARY);
-        data_type.set_collation_type(CS_TYPE_INVALID);
+        data_type.set_collation_type(CS_TYPE_INVALID);     
       }
       break;
     }
@@ -7202,7 +7202,7 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
         data_type.set_length(length);
         data_type.set_scale(default_accuracy.get_scale());
         data_type.set_charset_type(CHARSET_BINARY);
-        data_type.set_collation_type(CS_TYPE_BINARY);
+        data_type.set_collation_type(CS_TYPE_BINARY);        
       }
       break;
     }
@@ -7480,7 +7480,7 @@ int ObResolverUtils::foreign_key_column_match_index_column(const ObTableSchema &
                          tenant_version < DATA_VERSION_4_3_0_0));
   }
 
-  // 优先match pk, uk, 如果两者都没有再match non-unique index.
+  // 优先match pk, uk, 如果两者都没有再match non-unique index. 
   // match pk, uk的话fk_ref_type会是PRIMARY_KEY或UNIQUE，match non-unique index的话是NON_UNIQUE。
   // 行为：match的non-unique index如果多个，那么选择最后一个。match的pk，uk如果多个，那么选择第一个。
   bool is_pk_uk_match = false;
@@ -7516,7 +7516,7 @@ int ObResolverUtils::foreign_key_column_match_index_column(const ObTableSchema &
     } else {
       if (OB_FAIL(check_partial_match_columns(parent_columns, pk_columns, tmp_is_match))) {
         LOG_WARN("Failed to check_partial_match_columns", K(ret));
-      }
+      } 
     }
     if (OB_FAIL(ret)) {
       // do nothing
@@ -7585,7 +7585,7 @@ int ObResolverUtils::foreign_key_column_match_index_column(const ObTableSchema &
                 }
                 // RS 端会在 ObDDLService::get_uk_cst_id_for_self_ref / ObDDLService::get_index_cst_id_for_self_ref
                 // 填上 arg.ref_cst_id_
-              }
+              }  
             }
           }
         }
@@ -7646,7 +7646,7 @@ int ObResolverUtils::foreign_key_column_match_index_column(const ObTableSchema &
                 fk_ref_type = FK_REF_TYPE_NON_UNIQUE_KEY;
               }
               ref_cst_id = index_table_schema->get_table_id();
-            }
+            }  
           }
         }
       }
@@ -7684,7 +7684,7 @@ int ObResolverUtils::check_foreign_key_set_null_satisfy(
   int ret = OB_SUCCESS;
   if (arg.delete_action_ == ACTION_SET_NULL || arg.update_action_ == ACTION_SET_NULL) {
     // To compatible with oracle and mysql, check if set null ref action is valid
-    // More detail can be found in:
+    // More detail can be found in: 
     for (int64_t i = 0; OB_SUCC(ret) && i < arg.child_columns_.count(); ++i) {
       const ObString &fk_col_name = arg.child_columns_.at(i);
       const ObColumnSchemaV2 *fk_col_schema = child_table_schema.get_column_schema(fk_col_name);
@@ -7871,7 +7871,7 @@ int ObResolverUtils::check_partial_match_columns(const ObIArray<ObString> &paren
       for (int64_t j = 0; !has_col && j < parent_columns.count(); j++) {
         if (ObColumnSchemaHashWrapper(key_columns.at(i)) == ObColumnSchemaHashWrapper(parent_columns.at(j))) {
           has_col = true;
-        }
+        }  
       }
       if (!has_col) {
         is_tmp_match = false;
@@ -8060,7 +8060,7 @@ int ObResolverUtils::check_foreign_key_columns_type(const bool is_mysql_compat_m
             LOG_WARN("The collation types are different", K(ret),
                 K(child_col->get_collation_type()),
                 K(parent_col->get_collation_type()));
-          } else if (is_mysql_compat_mode &&
+          } else if (is_mysql_compat_mode && 
                     (child_col->get_data_length() < parent_col->get_data_length())) {
             ret = OB_ERR_INVALID_CHILD_COLUMN_LENGTH_FK;
             LOG_USER_ERROR(OB_ERR_INVALID_CHILD_COLUMN_LENGTH_FK,
@@ -8313,7 +8313,7 @@ int ObResolverUtils::resolve_opt_one_phase(const ParseNode *node, int64_t & flag
 
 // judge whether pdml stmt contain udf can parallel execute or not has two stage:
 // stage1:check has dml write stmt or read/write package var info in this funciton;
-// stage2:record udf has select stmt info, and when optimize this stmt,
+// stage2:record udf has select stmt info, and when optimize this stmt, 
 // according outer stmt type to determine, if udf has select stmt:
 // case1: if outer stmt is select, can paralllel
 // case2: if outer stmt is dml write stmt, forbid parallel
@@ -9112,7 +9112,7 @@ int ObResolverUtils::get_select_into_node(const ParseNode &node, ParseNode* &int
           LOG_WARN("failed to get select into node", K(ret));
         } else if (NULL != child_into_node) {
           if (top_level && i == node.children_[PARSE_SELECT_SET]->num_child_ - 1) {
-            // select into is only allow to in last branch of set
+            // select into is only allow to in last branch of set 
             into_node = child_into_node;
           } else {
             ret = OB_ERR_SET_USAGE;
@@ -9214,7 +9214,7 @@ int ObResolverUtils::check_duplicated_column(ObSelectStmt &select_stmt,
    /*oracle模式允许sel/upd/del stmt中的generated table含有重复列，只要外层没有引用到重复列就行，同时对于外层引用
   * 到的列是否为重复列会在检查column时进行检测，eg: select 1 from (select c1,c1 from t1);
   * 因此对于oracle模式下sel/upd/del stmt进行检测时，检测到重复列时只需skip，但是仍然需要添加相关plan cache约束
-  *
+  * 
    */
   if (!can_skip) {
     for (int64_t i = 1; OB_SUCC(ret) && i < select_stmt.get_select_item_size(); i++) {
@@ -9231,7 +9231,7 @@ int ObResolverUtils::check_duplicated_column(ObSelectStmt &select_stmt,
                   static_cast<ObColumnRefRawExpr *>(select_stmt.get_select_item(j).expr_)
                                                       ->is_joined_dup_column())){
              } else if (select_stmt.get_select_item(i).expr_->is_aggr_expr()) {
-               // bugfix:
+               // bugfix: 
                // aggr_expr in cte shouldn't raise error.
              } else {
                ret = OB_NON_UNIQ_ERROR;
@@ -9335,9 +9335,9 @@ int ObResolverUtils::check_secure_path(const common::ObString &secure_file_priv,
 {
   int ret = OB_SUCCESS;
 
-  const char *access_denied_notice_message =
+  const char *access_denied_notice_message = 
     "Access denied, please set suitable variable 'secure-file-priv' first, such as: SET GLOBAL secure_file_priv = '/'";
-
+  
   if (secure_file_priv.empty() || 0 == secure_file_priv.case_compare(N_NULL)) {
     ret = OB_ERR_NO_PRIVILEGE;
   } else if (OB_UNLIKELY(secure_file_priv.length() >= DEFAULT_BUF_LENGTH)) {
@@ -9568,7 +9568,7 @@ int ObResolverUtils::check_whether_assigned(const ObDMLStmt *stmt,
   return ret;
 }
 
-// relevant issue :
+// relevant issue : 
 int ObResolverUtils::prune_check_constraints(const ObIArray<ObAssignment> &assignments,
                                              ObIArray<ObRawExpr*> &check_exprs)
 {
@@ -9740,11 +9740,11 @@ int ObResolverUtils::resolve_varchar_file_size(const ParseNode *child, int64_t &
   } else if (OB_FAIL(buf.append(child->str_value_, child->str_len_))) {
     LOG_WARN("failed to assign child str", K(ret), K(child->str_value_), K(child->str_len_));
   } else {
-    parse_int_value = common::ObConfigCapacityParser::get(buf.ptr(), valid, false, true);
+    parse_int_value = common::ObConfigCapacityParser::get(buf.ptr(), valid, false, true);  
     if (!valid) {
       ret = OB_ERR_PARSE_SQL;
       LOG_WARN("failed to parse file size varchar value to int", K(ret), K(buf));
-    }
+    } 
   }
   return ret;
 }
@@ -11042,7 +11042,7 @@ int ObResolverUtils::create_values_table_query(ObSQLSessionInfo *session_info,
   return ret;
 }
 
-int64_t ObResolverUtils::get_mysql_max_partition_num(const uint64_t tenant_id)
+int64_t ObResolverUtils::get_mysql_max_partition_num(const uint64_t tenant_id) 
 {
   int64_t max_partition_num = OB_MAX_PARTITION_NUM_MYSQL;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
@@ -11176,7 +11176,7 @@ int ObResolverUtils::check_whether_assigned_for_before_update_trigger(ObResolver
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get tenant config", K(ret));
   } else if (tenant_config->_update_all_columns_for_trigger || params.is_prepare_stage_) {
-    need = true;
+    need = true; 
   } else {
     need = false;
     ObPLPackageGuard *package_guard = params.package_guard_;
@@ -11218,7 +11218,7 @@ int ObResolverUtils::check_whether_assigned_for_before_update_trigger(ObResolver
     }
   }
 
-  return ret;
+  return ret; 
 }
 
 }  // namespace sql

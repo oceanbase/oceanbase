@@ -41,7 +41,7 @@ int ObRedisGroupOpProcessor::set_group_need_dist_das(ObRedisBatchCtx &batch_ctx)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(is_valid())) {
-    LOG_WARN("invalid processor", K(ret));
+    LOG_WARN("invalid processor", K(ret)); 
   } else {
     bool in_same_ls = true;
     ObLSID last_ls_id(ObLSID::INVALID_LS_ID);
@@ -89,8 +89,8 @@ int ObRedisGroupOpProcessor::init_batch_ctx(ObRedisBatchCtx &batch_ctx)
   return ret;
 }
 
-int ObRedisGroupOpProcessor::end_trans(ObRedisBatchCtx &redis_ctx,
-                                       bool need_snapshot,
+int ObRedisGroupOpProcessor::end_trans(ObRedisBatchCtx &redis_ctx, 
+                                       bool need_snapshot, 
                                        bool is_rollback)
 {
   int ret = OB_SUCCESS;
@@ -160,7 +160,7 @@ int ObRedisGroupOpProcessor::process()
     } else if (OB_FAIL(ObRedisService::start_trans(batch_ctx, redis_cmd->need_snapshot()))) {
       LOG_WARN("fail to start trans", K(ret), K(batch_ctx));
     }
-
+    
     if (OB_SUCC(ret)) {
       switch(redis_cmd->cmd_type()) {
         // hash

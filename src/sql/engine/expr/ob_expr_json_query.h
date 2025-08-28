@@ -29,15 +29,15 @@ namespace oceanbase
 
 namespace sql
 {
-class
-ObExprJsonQuery : public ObFuncExprOperator
+class 
+ObExprJsonQuery : public ObFuncExprOperator 
 {
 public:
     explicit ObExprJsonQuery(common::ObIAllocator &alloc);
     virtual ~ObExprJsonQuery();
     virtual int calc_result_typeN(ObExprResType& type,
                               ObExprResType* types,
-                              int64_t param_num,
+                              int64_t param_num, 
                               common::ObExprTypeCtx& type_ctx)
                               const override;
     static int eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
@@ -52,24 +52,24 @@ private:
                                   ObExprResType& dst_type,
                                   common::ObIAllocator *allocator,
                                   bool is_json_input);
-  static bool try_set_error_val(common::ObIAllocator *allocator, ObEvalCtx &ctx,
+  static bool try_set_error_val(common::ObIAllocator *allocator, ObEvalCtx &ctx, 
                                 ObJsonExprParam* json_param,
                                 const ObExpr &expr, ObDatum &res, int &ret);
   static int set_result(ObJsonExprParam* json_param,
-                        ObIJsonBase *jb_res,
-                        common::ObIAllocator *allocator,
-                        ObEvalCtx &ctx,
-                        const ObExpr &expr,
+                        ObIJsonBase *jb_res, 
+                        common::ObIAllocator *allocator, 
+                        ObEvalCtx &ctx, 
+                        const ObExpr &expr, 
                         ObDatum &res);
   static int get_dest_type(const ObExpr &expr,
                           int32_t &dst_len,
                           ObEvalCtx& ctx,
                           ObObjType &dest_type,
                           bool &is_cover_by_error);
-  static int set_multivalue_result(bool is_array,
-                                   ObEvalCtx& ctx,
-                                   ObIAllocator& allocator,
-                                   ObIJsonBase* json_base,
+  static int set_multivalue_result(bool is_array, 
+                                   ObEvalCtx& ctx, 
+                                   ObIAllocator& allocator, 
+                                   ObIJsonBase* json_base, 
                                    const ObExpr &expr,
                                    uint8_t opt_error,
                                    ObCollationType in_coll_type,
@@ -97,7 +97,7 @@ private:
   */
   static int get_ora_json_path(const ObExpr &expr, ObEvalCtx &ctx,
                           common::ObArenaAllocator &allocator, ObJsonPath*& j_path,
-                          uint16_t index, bool &is_null, bool &is_cover_by_error,
+                          uint16_t index, bool &is_null, bool &is_cover_by_error, 
                           ObDatum*& json_datum);
 
     /*
@@ -118,14 +118,14 @@ private:
                            ObObjType dst_type,
                           bool &is_null, bool &is_cover_by_error);
 
-  static int get_clause_pre_asc_sca_opt(const ObExpr &expr, ObEvalCtx &ctx,
+  static int get_clause_pre_asc_sca_opt(const ObExpr &expr, ObEvalCtx &ctx, 
                                         bool &is_cover_by_error, uint8_t &pretty_type,
                                         uint8_t &ascii_type, uint8_t &scalars_type);
   static int check_enable_cast_index_array(ObIJsonBase* json_base, bool disable_container, ObObjType dest_type);
 
 public:
-  static int get_empty_option(bool &is_cover_by_error,
-                            int8_t empty_type, bool &is_null_result,
+  static int get_empty_option(bool &is_cover_by_error, 
+                            int8_t empty_type, bool &is_null_result, 
                             bool &is_json_arr, bool &is_json_obj);
   static int get_single_obj_wrapper(int8_t wrapper_type, int8_t &use_wrapper, ObJsonNodeType in_type, int8_t scalars_type);
   static int get_multi_scalars_wrapper_type(int8_t wrapper_type, int8_t &use_wrapper);

@@ -125,7 +125,7 @@ public:
     ready_to_work_ = true;
   }
   int update_slide_window_info(const int64_t filtered_rows_count, const int64_t total_rows_count);
-  inline void reset_for_rescan() {
+  inline void reset_for_rescan() { 
     dynamic_disable_ = false;
     next_check_start_pos_ = 0;
     window_cnt_ = 0;
@@ -571,7 +571,7 @@ public:
     const ObExprResType *types,
     int64_t param_num,
     common::ObExprTypeCtx &type_ctx);
-  //skip_null for expr COALESCE
+  //skip_null for expr COALESCE 
   static int aggregate_result_type_for_merge(
     ObExprResType &type,
     const ObExprResType *types,
@@ -652,7 +652,7 @@ public:
   static int aggregate_extend_accuracy_for_merge(ObExprResType &type,
                                                  const ObExprResType *types,
                                                  int64_t param_num);
-
+  
   static int aggregate_user_defined_sql_type(
       ObExprResType &type,
       const ObExprResType *types,
@@ -721,7 +721,7 @@ private:
 
   int OB_INLINE cast_operand_type(common::ObObj &param, const ObFuncInputType &type,
       common::ObExprCtx &expr_ctx) const;
-
+  
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprOperator);
   // types and constants
@@ -1287,7 +1287,7 @@ public:
    template <bool IS_LEFT>
    static int try_get_inner_row_cmp_ret(const int ret_code, int &cmp_ret);
 
-
+   
 
   OB_INLINE static int get_comparator_operands(
                          const ObExpr &expr,

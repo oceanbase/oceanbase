@@ -85,7 +85,7 @@ public:
   ObCollectionTypeBase *value_type_;
 };
 
-class ObCollectionBasicType : public ObCollectionTypeBase
+class ObCollectionBasicType : public ObCollectionTypeBase 
 {
 public:
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
@@ -110,7 +110,7 @@ public:
     : ObSqlCollectionInfo(*allocator) {}
    virtual ~ObSqlCollectionInfo() {}
   void set_name(const ObString &name)
-  {
+  { 
     name_def_ = name.ptr();
     name_len_ = name.length();
   }
@@ -139,8 +139,8 @@ public:
   int parse_collection_info(std::string type_info, ObCollectionTypeBase *&meta_info, uint8_t &arr_depth);
   int parse_element_info(std::string type_info, ObCollectionTypeBase *&meta_info, bool is_root = false);
   int parse_vec_element_info(std::string type_info, ObCollectionTypeBase *&meta_info, uint32_t &dim);
-
-  int parse_map_element_info(std::string type_info,
+  
+  int parse_map_element_info(std::string type_info, 
                              ObCollectionTypeBase *&key_meta_info,
                              ObCollectionTypeBase *&value_meta_info,
                              uint8_t &arr_depth);

@@ -90,7 +90,7 @@ struct ObTableColumnInfo
   OB_INLINE int64_t get_column_flags() const { return column_flags_; }
   OB_INLINE bool is_virtual_generated_column() const { return column_flags_ & VIRTUAL_GENERATED_COLUMN_FLAG; }
   OB_INLINE bool is_stored_generated_column() const { return column_flags_ & STORED_GENERATED_COLUMN_FLAG; }
-  OB_INLINE bool is_generated_column() const { return (is_virtual_generated_column() || is_stored_generated_column()); }
+  OB_INLINE bool is_generated_column() const { return (is_virtual_generated_column() || is_stored_generated_column()); }     
   OB_INLINE bool is_fulltext_column() const { return ObSchemaUtils::is_fulltext_column(column_flags_); }
   OB_INLINE bool is_doc_id_column() const { return ObSchemaUtils::is_doc_id_column(column_flags_); }
   OB_INLINE bool is_word_segment_column() const { return ObSchemaUtils::is_word_segment_column(column_flags_); }
@@ -121,11 +121,11 @@ struct ObTableColumnInfo
   common::ObFixedArray<uint64_t, common::ObIAllocator> cascaded_column_ids_;
 };
 
-struct ObTableRowkeyInfo
+struct ObTableRowkeyInfo 
 {
   ObTableRowkeyInfo() : column_id_(common::OB_INVALID_ID) {}
 
-  void reset()
+  void reset() 
   {
     column_id_ = common::OB_INVALID_ID;
   }
@@ -158,7 +158,7 @@ struct ObKvSchemaCacheKey: public sql::ObILibCacheKey
   ObKvSchemaCacheKey()
     : ObILibCacheKey(sql::ObLibCacheNameSpace::NS_KV_SCHEMA),
       table_id_(common::OB_INVALID_ID),
-      schema_version_(-1)
+      schema_version_(-1) 
   {}
   void reset();
   virtual int deep_copy(common::ObIAllocator &allocator, const ObILibCacheKey &other);
@@ -192,8 +192,8 @@ class ObKvSchemaCacheObj: public sql::ObILibCacheObject
 {
 public:
 	ObKvSchemaCacheObj(lib::MemoryContext &mem_context)
-      : ObILibCacheObject(sql::ObLibCacheNameSpace::NS_KV_SCHEMA, mem_context),
-        bucket_allocator_wrapper_(allocator_),
+      : ObILibCacheObject(sql::ObLibCacheNameSpace::NS_KV_SCHEMA, mem_context), 
+        bucket_allocator_wrapper_(allocator_),  
         name_idx_allocator_(OB_MALLOC_NORMAL_BLOCK_SIZE, bucket_allocator_wrapper_),
         colid_idx_allocator_(OB_MALLOC_NORMAL_BLOCK_SIZE, bucket_allocator_wrapper_),
         table_name_(),
@@ -301,8 +301,8 @@ public:
   void reset();
   OB_INLINE bool is_use_cache() { return is_use_cache_; }
   OB_INLINE bool is_inited() { return is_init_; }
-  OB_INLINE const common::ObString &get_table_name_str()
-  {
+  OB_INLINE const common::ObString &get_table_name_str() 
+  { 
     return static_cast<ObKvSchemaCacheObj *>(cache_guard_.get_cache_obj())->get_table_name_str();
   }
   OB_INLINE const ObIArray<ObTableColumnInfo *>& get_column_info_array()

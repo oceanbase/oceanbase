@@ -56,7 +56,7 @@ private:
   
   int set_basic_infos(const share::schema::ObTableSchema &data_schema,
                       share::schema::ObTableSchema &aux_lob_meta_schema);
-
+  
   int set_lob_table_column_store_if_need(share::schema::ObTableSchema &table_schema);
 private:
   static const uint64_t LOB_SEQ_ID_LENGHT = 8 * 1024; // 8K

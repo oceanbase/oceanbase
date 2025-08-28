@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #define USING_LOG_PREFIX SQL_RESV
 #include "ob_stmt_expr_visitor.h"
 #include "sql/rewrite/ob_transform_utils.h"

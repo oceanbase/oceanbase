@@ -45,17 +45,17 @@ uint64_t get_max_dblink_conn_per_observer()
   return tenant_config.is_valid() ? tenant_config->_max_dblink_conn_per_observer : 256;
 }
 
-uint64_t get_current_tenant_id_for_dblink()
-{
-  return MTL_ID();
+uint64_t get_current_tenant_id_for_dblink() 
+{ 
+  return MTL_ID(); 
 }
 
-oceanbase::common::sqlclient::ObTenantOciEnvs * ObDblinkService::get_tenant_oci_envs()
-{
-  return MTL(oceanbase::common::sqlclient::ObTenantOciEnvs*);
+oceanbase::common::sqlclient::ObTenantOciEnvs * ObDblinkService::get_tenant_oci_envs() 
+{ 
+  return MTL(oceanbase::common::sqlclient::ObTenantOciEnvs*); 
 }
 
-int ObDblinkService::init_oci_envs_func_ptr()
+int ObDblinkService::init_oci_envs_func_ptr() 
 {
   int ret = common::OB_SUCCESS;
   OciEnvironment::get_tenant_oci_envs_ = get_tenant_oci_envs;
@@ -83,7 +83,7 @@ const char * ObDblinkService::SET_RESULTS_CHARSET_GBK = "SET CHARACTER_SET_RESUL
 const char * ObDblinkService::SET_RESULTS_CHARSET_BINARY = "SET CHARACTER_SET_RESULTS = BINARY";
 
 int ObDblinkService::get_charset_id(ObSQLSessionInfo *session_info,
-                             uint16_t &charset_id,
+                             uint16_t &charset_id, 
                              uint16_t &ncharset_id)
 {
   int ret = OB_SUCCESS;
@@ -217,8 +217,8 @@ int ObDblinkService::get_set_sql_mode_cstr(sql::ObSQLSessionInfo *session_info, 
     LOG_WARN("failed to get SYS_VAR_SET_REVERSE_DBLINK_INFOS", K(sql_mode_int_obj), K(ret));
   } else if (OB_FAIL(ob_sql_mode_to_str(sql_mode_int_obj, sql_mode_str_obj, &allocator))) {
     LOG_WARN("failed sql mode to str", K(sql_mode_int_obj), K(ret));
-  } else if (OB_FAIL(set_sql_mode_sql.append_fmt(set_sql_mode_fmt,
-                                                 sql_mode_str_obj.val_len_,
+  } else if (OB_FAIL(set_sql_mode_sql.append_fmt(set_sql_mode_fmt, 
+                                                 sql_mode_str_obj.val_len_, 
                                                  sql_mode_str_obj.v_.string_))) {
     LOG_WARN("append sql failed", K(ret), K(sql_mode_str_obj));
   } else if (FALSE_IT([&]{ copy_len = set_sql_mode_sql.length(); }())) {
@@ -234,7 +234,7 @@ int ObDblinkService::get_set_sql_mode_cstr(sql::ObSQLSessionInfo *session_info, 
   return ret;
 }
 
-int ObDblinkService::get_set_transaction_isolation_cstr(sql::ObSQLSessionInfo *session_info,
+int ObDblinkService::get_set_transaction_isolation_cstr(sql::ObSQLSessionInfo *session_info, 
                                                         const char *&set_isolation_level)
 {
   int ret = OB_SUCCESS;
@@ -293,23 +293,23 @@ int ObDblinkService::get_local_session_vars(sql::ObSQLSessionInfo *session_info,
   int ret = OB_SUCCESS;
   if (lib::is_mysql_mode() && OB_FAIL(get_set_sql_mode_cstr(session_info, param_ctx.set_sql_mode_cstr_, allocator))) {
     LOG_WARN("failed to get set_sql_mode_cstr", K(ret));
-  } else if (OB_FAIL(get_set_transaction_isolation_cstr(session_info,
+  } else if (OB_FAIL(get_set_transaction_isolation_cstr(session_info, 
                                                         param_ctx.set_transaction_isolation_cstr_))) {
-    LOG_WARN("failed to get set_transaction_isolation_cstr", K(ret));
+    LOG_WARN("failed to get set_transaction_isolation_cstr", K(ret));                                                 
   } else if (OB_FAIL(get_set_names_charset_type(session_info, param_ctx.set_conn_charset_type_))) {
     LOG_WARN("failed to get set_names_cstr", K(ret));
   } else if (OB_FAIL(get_ob_query_timeout_value(session_info, param_ctx.ob_query_timeout_))) {
     LOG_WARN("failed to get ob_query_timeout sys var", K(ret));
   } else {
-    LOG_TRACE("succ to get local session vars", K(param_ctx.set_conn_charset_type_),
-                                                K(param_ctx.set_sql_mode_cstr_),
-                                                K(param_ctx.dblink_id_),
+    LOG_TRACE("succ to get local session vars", K(param_ctx.set_conn_charset_type_), 
+                                                K(param_ctx.set_sql_mode_cstr_), 
+                                                K(param_ctx.dblink_id_), 
                                                 K(ret));
   }
   return ret;
 }
 
-int ObDblinkService::get_spell_collation_type(ObSQLSessionInfo *session, ObCollationType &spell_coll)
+int ObDblinkService::get_spell_collation_type(ObSQLSessionInfo *session, ObCollationType &spell_coll) 
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(session)) {
@@ -518,7 +518,7 @@ int ObReverseLink::ping()
     LOG_WARN("reverse link connection is closed", K(ret));
   } else if (OB_FAIL(reverse_conn_.ping())) {
     LOG_WARN("faild to ping reverse link connection", K(ret));
-  }
+  } 
   return ret;
 }
 
@@ -533,7 +533,7 @@ int ObReverseLink::close()
   return ret;
 }
 
-int ObDblinkUtils::has_reverse_link_or_any_dblink(const ObDMLStmt *stmt, bool &has, bool enable_check_any_dblink)
+int ObDblinkUtils::has_reverse_link_or_any_dblink(const ObDMLStmt *stmt, bool &has, bool enable_check_any_dblink) 
 {
   int ret = OB_SUCCESS;
   ObArray<ObSelectStmt*> child_stmts;
@@ -635,8 +635,8 @@ int ObDblinkUtils::gather_dblink_id(const ObDMLStmt *stmt, ObIArray<int64_t> &db
     } else {
       ObSequenceRawExpr *seq_expr = static_cast<ObSequenceRawExpr*>(expr);
       int64_t dblink_id = seq_expr->get_dblink_id();
-      if (OB_INVALID_ID != dblink_id &&
-          0 != dblink_id &&
+      if (OB_INVALID_ID != dblink_id && 
+          0 != dblink_id && 
           OB_FAIL(add_var_to_array_no_dup(dblink_id_array, dblink_id))) {
         LOG_WARN("failed to add dblink id to array", K(ret), K(dblink_id));
       }
@@ -839,11 +839,11 @@ int ObDblinkCtxInSession::get_reverse_link(ObReverseLink *&reverse_dblink)
   } else if (NULL == reverse_dblink_ || 0 != last_reverse_info_values_.compare(value)) {
     if (!value.empty()){ // get a new valid REVERSE_DBLINK_INFOS, need create or update ObReverseLink
       int64_t sys_var_length = value.length();
-      if (OB_ISNULL(reverse_dblink_buf_) &&
+      if (OB_ISNULL(reverse_dblink_buf_) && 
                 OB_ISNULL(reverse_dblink_buf_ = arena_alloc_.alloc(sizeof(ObReverseLink)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc memory", K(ret), K(sizeof(ObReverseLink)));
-      } else if (sys_var_length > sys_var_reverse_info_buf_size_ &&
+      } else if (sys_var_length > sys_var_reverse_info_buf_size_ && 
           OB_ISNULL(sys_var_reverse_info_buf_ = arena_alloc_.alloc(2 * sys_var_length))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc memory", K(ret), K(2 * sys_var_length));

@@ -35,11 +35,11 @@ int ObSensitiveRuleDDLOperator::handle_sensitive_rule_function(ObSensitiveRuleSc
   uint64_t sensitive_rule_id = OB_INVALID_ID;
   const ObSensitiveRuleSchema *exist_schema = NULL;
   ObSensitiveRuleSchema new_schema;
-  if (OB_FAIL(schema_guard.get_sensitive_rule_schema_by_name(tenant_id,
+  if (OB_FAIL(schema_guard.get_sensitive_rule_schema_by_name(tenant_id, 
                                                              schema.get_sensitive_rule_name_str(),
                                                              exist_schema))) {
     LOG_WARN("failed to check if schema exists", K(ret));
-  } else if (OB_FAIL(handle_sensitive_rule_function_inner(schema, exist_schema, trans, ddl_type,
+  } else if (OB_FAIL(handle_sensitive_rule_function_inner(schema, exist_schema, trans, ddl_type, 
                                                           ddl_stmt_str, tenant_id, new_schema))) {
     LOG_WARN("failed to handle sensitive rule function inner", K(ret));
   } else if (OB_FAIL(grant_or_revoke_after_ddl(new_schema, trans, ddl_type, schema_guard, user_id))) {
@@ -95,7 +95,7 @@ int ObSensitiveRuleDDLOperator::handle_sensitive_rule_function_inner(ObSensitive
         }
         // set new schema properties according to ddl type
         if (OB_SUCC(ret)) {
-          if (OB_DDL_ALTER_SENSITIVE_RULE_ENABLE == ddl_type
+          if (OB_DDL_ALTER_SENSITIVE_RULE_ENABLE == ddl_type 
               || OB_DDL_ALTER_SENSITIVE_RULE_DISABLE == ddl_type) {
             new_schema.set_enabled(ddl_type == OB_DDL_ALTER_SENSITIVE_RULE_ENABLE);
           }
@@ -198,7 +198,7 @@ int ObSensitiveRuleDDLOperator::grant_revoke_sensitive_rule(const ObSensitiveRul
       if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
         LOG_WARN("failed to gen new schema_version", K(ret), K(tenant_id));
       } else if (OB_FAIL(schema_sql_service->get_sensitive_rule_sql_service()
-                              .grant_revoke_sensitive_rule(sensitive_rule_priv_key,
+                              .grant_revoke_sensitive_rule(sensitive_rule_priv_key, 
                                                            new_priv,
                                                            new_schema_version,
                                                            ddl_stmt_str, trans))) {
@@ -226,17 +226,17 @@ int ObSensitiveRuleDDLOperator::drop_sensitive_column_cascades(const ObTableSche
   for (int64_t i = 0; OB_SUCC(ret) && i < sensitive_rules.count(); i++) {
     const ObSensitiveRuleSchema *sensitive_rule = sensitive_rules.at(i);
     ObSensitiveRuleSchema drop_schema;
-    if (OB_FAIL(build_drop_sensitive_column_schema(sensitive_rule, table_schema,
+    if (OB_FAIL(build_drop_sensitive_column_schema(sensitive_rule, table_schema, 
                                                    drop_column_ids, drop_schema))) {
       LOG_WARN("build drop sensitive column schema failed", KR(ret), K(i));
-    } else if(OB_FAIL(handle_sensitive_rule_function(drop_schema, trans,
+    } else if(OB_FAIL(handle_sensitive_rule_function(drop_schema, trans, 
                                                      OB_DDL_ALTER_SENSITIVE_RULE_DROP_COLUMN,
-                                                     empty_str, tenant_id,
+                                                     empty_str, tenant_id, 
                                                      schema_guard, OB_INVALID_ID))) {
       LOG_WARN("failed to drop sensitive column cascades", KR(ret), K(drop_schema));
     }
   }
-
+  
   return ret;
 }
 
@@ -274,10 +274,10 @@ int ObSensitiveRuleDDLOperator::drop_sensitive_column_in_drop_table(const ObTabl
   for (int64_t i = 0; OB_SUCC(ret) && i < sensitive_rules.count(); i++) {
     const ObSensitiveRuleSchema *sensitive_rule = sensitive_rules.at(i);
     ObSensitiveRuleSchema drop_schema;
-    if (OB_FAIL(build_drop_sensitive_column_schema(sensitive_rule, table_schema,
+    if (OB_FAIL(build_drop_sensitive_column_schema(sensitive_rule, table_schema, 
                                                    drop_column_ids, drop_schema))) {
       LOG_WARN("build drop sensitive column schema failed", KR(ret), K(i));
-    } else if (OB_FAIL(handle_sensitive_rule_function_inner(drop_schema, sensitive_rule, trans,
+    } else if (OB_FAIL(handle_sensitive_rule_function_inner(drop_schema, sensitive_rule, trans, 
                                                             OB_DDL_ALTER_SENSITIVE_RULE_DROP_COLUMN,
                                                             empty_str, tenant_id, new_schema))) {
       LOG_WARN("failed to drop sensitive column in drop table", KR(ret), K(drop_schema));
@@ -302,7 +302,7 @@ int ObSensitiveRuleDDLOperator::build_drop_sensitive_column_schema(
   }
   for (int64_t j = 0; OB_SUCC(ret) && j < drop_column_ids.count(); ++j) {
     ObSensitiveFieldItem drop_item(table_schema.get_table_id(), drop_column_ids.at(j));
-    if (!has_exist_in_array(sensitive_rule->get_sensitive_field_items(), drop_item)) {
+    if (!has_exist_in_array(sensitive_rule->get_sensitive_field_items(), drop_item)) { 
     } else if (OB_FAIL(drop_schema.add_sensitive_field_item(drop_item))) {
       LOG_WARN("remove sensitive field item failed", KR(ret), K(drop_item));
     }

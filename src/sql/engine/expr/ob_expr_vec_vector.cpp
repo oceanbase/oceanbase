@@ -51,7 +51,7 @@ int ObExprVecVector::calc_result_typeN(ObExprResType &type,
     type.is_null();
   } else {
     type.set_collection(types[0].get_subschema_id());
-  }
+  }  
   return ret;
 }
 
@@ -149,3 +149,4 @@ int ObExprVecVector::cg_expr(
 
 }  // namespace sql
 }  // namespace oceanbase
+

@@ -445,10 +445,10 @@ bool ObCommitVersionsArray::is_valid()
 {
   bool bool_ret = true;
   for (int i = 0; i < array_.count() - 1; i++) {
-    if (!array_.at(i).start_scn_.is_valid() ||
+    if (!array_.at(i).start_scn_.is_valid() || 
         !array_.at(i).commit_version_.is_valid() ||
         array_.at(i).commit_version_.is_max() ||
-        array_.at(i).start_scn_ > array_.at(i + 1).start_scn_ ||
+        array_.at(i).start_scn_ > array_.at(i + 1).start_scn_ || 
         array_.at(i).start_scn_ > array_.at(i).commit_version_) {
       bool_ret = false;
       STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "this commit version array is invalid", K(array_.at(i)),

@@ -25,7 +25,7 @@ ObDriverRowBuffer::ObDriverRowBuffer()
   :op_(nullptr), left_(nullptr), left_brs_(), spec_(nullptr), ctx_(nullptr), eval_ctx_(nullptr),
    rescan_params_(nullptr), left_store_(), left_store_iter_(), mem_context_(),
    cur_group_idx_(-1), group_rescan_cnt_(0), group_params_(), last_batch_(),
-   max_group_size_(0), group_scan_size_(0), left_store_read_(0), flags_(0)
+   max_group_size_(0), group_scan_size_(0), left_store_read_(0), flags_(0) 
 {
 
 }

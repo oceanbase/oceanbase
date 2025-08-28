@@ -597,7 +597,7 @@ int ObMPUtils::add_session_info_on_connect(OMPKOK &okp, sql::ObSQLSessionInfo &s
 }
 
 // response _min_cluster_version on connect,
-// design doc:
+// design doc: 
 int ObMPUtils::add_min_cluster_version(OMPKOK &okp, sql::ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;

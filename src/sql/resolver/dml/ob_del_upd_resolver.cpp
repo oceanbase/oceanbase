@@ -613,7 +613,7 @@ int ObDelUpdResolver::check_update_vector_col_with_vector_index(const ObTableSch
       if (has_exist_in_array(part_key_col_ids, as.column_expr_->get_column_id())) {
         update_with_vector_index = true;
       }
-    }
+    } 
     if (OB_SUCC(ret) && has_extra_info && !update_with_vector_index && !row_key_col_ids.empty()) {
       // check if has extra_info, update with row key should also update vid
       if (has_exist_in_array(row_key_col_ids, as.column_expr_->get_column_id())) {
@@ -684,9 +684,9 @@ int ObDelUpdResolver::resolve_additional_assignments(ObIArray<ObTableAssignment>
                                                  *column_schema,
                                                  need_assigned))) {
           LOG_WARN("fail to check assignment exist", KPC(table_item), K(column_id));
-        } else if (FALSE_IT(need_assigned = need_assigned ||
+        } else if (FALSE_IT(need_assigned = need_assigned || 
                                             ((column_schema->is_vec_hnsw_vid_column() ||
-                                              column_schema->is_vec_ivf_center_id_column()) &&
+                                              column_schema->is_vec_ivf_center_id_column()) && 
                                              (update_with_vector_index || T_INSERT_SCOPE == scope)))) {
         } else if (need_assigned) {
           // for insert scope, on duplicate key update column list already
@@ -1828,9 +1828,9 @@ int ObDelUpdResolver::gen_rowid_expr_for_returning(ObSysFunRawExpr *&rowid_expr)
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FALSE_IT(part_expr = del_upd_stmt->get_part_expr(tables_info.at(0)->loc_table_id_,
+  } else if (OB_FALSE_IT(part_expr = del_upd_stmt->get_part_expr(tables_info.at(0)->loc_table_id_, 
                                                                  tables_info.at(0)->ref_table_id_))) {
-  } else if (OB_FALSE_IT(subpart_expr = del_upd_stmt->get_subpart_expr(tables_info.at(0)->loc_table_id_,
+  } else if (OB_FALSE_IT(subpart_expr = del_upd_stmt->get_subpart_expr(tables_info.at(0)->loc_table_id_, 
                                                                        tables_info.at(0)->ref_table_id_))) {
   } else if (OB_FAIL(get_exprs_serialize_to_rowid(del_upd_stmt,
                                                   table_schema,
@@ -2456,9 +2456,9 @@ int ObDelUpdResolver::view_pullup_special_column_exprs()
                                            basic_column_item->expr_->get_dependant_expr(),
                                            ref_expr))) {
                 LOG_WARN("failed to copy dependant expr", K(ret));
-              } else if (OB_FAIL(view_pullup_column_ref_exprs_recursively(ref_expr,
+              } else if (OB_FAIL(view_pullup_column_ref_exprs_recursively(ref_expr, 
                                                                           view_column_item->table_id_,
-                                                                          tid,
+                                                                          tid, 
                                                                           dml_stmt))){
                 LOG_WARN("view pull up generated column exprs recursively failed", K(ret));
               } else {
@@ -2680,9 +2680,9 @@ int ObDelUpdResolver::resolve_check_constraints(const TableItem* table_item,
       if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("check constraint expr is null", K(ret));
-      } else if (OB_FAIL(view_pullup_column_ref_exprs_recursively(expr,
+      } else if (OB_FAIL(view_pullup_column_ref_exprs_recursively(expr, 
                                                                   table_item->table_id_,
-                                                                  table_item->get_base_table_item().ref_id_,
+                                                                  table_item->get_base_table_item().ref_id_, 
                                                                   dml_stmt))) {
         LOG_WARN("view pullup column_ref_exprs recursively failed", K(ret));
       } else if (expr->get_expr_type() == T_FUN_SYS_IS_JSON &&
@@ -2821,8 +2821,8 @@ int ObDelUpdResolver::view_pullup_column_ref_exprs_recursively(ObRawExpr *&expr,
   } else {
     for (int i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
       ObRawExpr *&t_expr = expr->get_param_expr(i);
-      if (OB_FAIL(SMART_CALL(view_pullup_column_ref_exprs_recursively(t_expr,
-                                                                      view_table_id,
+      if (OB_FAIL(SMART_CALL(view_pullup_column_ref_exprs_recursively(t_expr, 
+                                                                      view_table_id, 
                                                                       base_table_id,
                                                                       stmt)))) {
         LOG_WARN("generated column expr pull up failed", K(ret));

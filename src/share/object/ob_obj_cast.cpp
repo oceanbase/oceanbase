@@ -1636,7 +1636,7 @@ static int common_get_srs_item(omt::ObSrsCacheGuard &srs_guard,
     // do nothing
   } else if (OB_FAIL(OTSRS_MGR->get_tenant_srs_guard(srs_guard))) {
     LOG_WARN("fail to get srs guard", K(ret), K(tenant_id));
-  } else if (OB_FAIL(srs_guard.get_srs_item(srid, srs))) {
+  } else if (OB_FAIL(srs_guard.get_srs_item(srid, srs))) {    
     LOG_WARN("fail to get srs", K(ret), K(srid));
   }
   return ret;
@@ -6055,7 +6055,7 @@ int common_string_unsigned_integer(const ObCastMode &cast_mode,
   return ret;
 }
 
-// 与MySQL有不兼容行为:
+// 与MySQL有不兼容行为: 
 int common_string_integer(const ObCastMode &cast_mode,
                                  const ObObjType &in_type,
                                  const ObCollationType &in_cs_type,
@@ -6246,7 +6246,7 @@ static int string_double(const ObObjType expect_type, ObObjCastParams &params,
                                           str_utf8.ptr(), endptr, str_utf8.length(), err, in.get_collation_type()))) {
             LOG_WARN("failed to check_convert_str_err", K(ret), K(str_utf8), K(value), K(err), K(in.get_collation_type()));
             if (lib::is_mysql_mode() && CM_IS_COLUMN_CONVERT(cast_mode) && ret == OB_ERR_DATA_TRUNCATED) {
-              // do nothing, compatible mysql, retain OB_ERR_DATA_TRUNCATED error code in column_convert.
+              // do nothing, compatible mysql, retain OB_ERR_DATA_TRUNCATED error code in column_convert. 
             } else {
               ret = OB_ERR_DOUBLE_TRUNCATED;
             }
@@ -7179,7 +7179,7 @@ static int string_text(const ObObjType expect_type, ObObjCastParams &params,
     }
   } else if (OB_FAIL(in.get_string(res_str))) {
     LOG_WARN("Failed to get string from in obj", K(ret), K(tmp_out));
-  } else { /* do nothing */ }
+  } else { /* do nothing */ } 
 
   if (OB_FAIL(ret)) {
   } else if (is_null_result) {
@@ -7243,7 +7243,7 @@ static int string_json(const ObObjType expect_type, ObObjCastParams &params,
     uint32_t parse_flag = ObJsonParser::JSN_RELAXED_FLAG;
     bool is_oracle = lib::is_oracle_mode();
     ObObjType in_type = in.get_type();
-    bool is_convert_jstr_type = (in_type == ObTinyTextType
+    bool is_convert_jstr_type = (in_type == ObTinyTextType 
                                  || in_type == ObTextType
                                  || in_type == ObMediumTextType
                                  || in_type == ObLongTextType);
@@ -7255,9 +7255,9 @@ static int string_json(const ObObjType expect_type, ObObjCastParams &params,
       j_base = &j_opaque;
     } else if (!is_oracle  && (
                 (CM_IS_SQL_AS_JSON_SCALAR(cast_mode) && ob_is_string_type(in_type))
-                || (CM_IS_IMPLICIT_CAST(cast_mode)
+                || (CM_IS_IMPLICIT_CAST(cast_mode) 
                     && !CM_IS_COLUMN_CONVERT(cast_mode)
-                    && !CM_IS_JSON_VALUE(cast_mode)
+                    && !CM_IS_JSON_VALUE(cast_mode) 
                     && is_convert_jstr_type))) {
       // consistent with mysql: TINYTEXT, TEXT, MEDIUMTEXT, and LONGTEXT. We want to treat them like strings
       ret = OB_SUCCESS;
@@ -7265,10 +7265,10 @@ static int string_json(const ObObjType expect_type, ObObjCastParams &params,
       if ((CM_IS_SQL_AS_JSON_SCALAR(cast_mode) && ob_is_string_type(in_type)) && j_text.compare("null") == 0) {
         j_base = &j_null;
       }
-    } else if (OB_FAIL(ObJsonParser::get_tree(params.allocator_v2_, j_text,
-                                              j_tree, parse_flag,
+    } else if (OB_FAIL(ObJsonParser::get_tree(params.allocator_v2_, j_text, 
+                                              j_tree, parse_flag, 
                                               sql::ObJsonExprHelper::get_json_max_depth_config()))) {
-      if (!is_oracle && CM_IS_IMPLICIT_CAST(cast_mode)
+      if (!is_oracle && CM_IS_IMPLICIT_CAST(cast_mode) 
                      && !CM_IS_COLUMN_CONVERT(cast_mode)
                      && is_convert_jstr_type) {
         ret = OB_SUCCESS;
@@ -10258,14 +10258,14 @@ static int json_raw(const ObObjType expect_type, ObObjCastParams &params,
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
     } else {
       // get in cs type
-      bool need_charset_convert = ((CS_TYPE_BINARY == params.dest_collation_) ||
-                                   (ObCharset::charset_type_by_coll(in.get_collation_type()) !=
+      bool need_charset_convert = ((CS_TYPE_BINARY == params.dest_collation_) || 
+                                   (ObCharset::charset_type_by_coll(in.get_collation_type()) != 
                                     ObCharset::charset_type_by_coll(params.dest_collation_)));
       ObString temp_str_val(j_buf.length(), j_buf.ptr());
 
-      /* this function maybe called in json generated column
+      /* this function maybe called in json generated column 
       * and the generated column may has limitaion constrain the string length */
-      uint64_t accuracy_max_len = 0;
+      uint64_t accuracy_max_len = 0; 
       if (params.res_accuracy_ && params.res_accuracy_->get_length()) {
         accuracy_max_len = params.res_accuracy_->get_length();
       }
@@ -10330,14 +10330,14 @@ static int json_string(const ObObjType expect_type, ObObjCastParams &params,
         LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
       } else {
         // get in cs type
-        bool need_charset_convert = ((CS_TYPE_BINARY == params.dest_collation_) ||
-                                    (ObCharset::charset_type_by_coll(in.get_collation_type()) !=
+        bool need_charset_convert = ((CS_TYPE_BINARY == params.dest_collation_) || 
+                                    (ObCharset::charset_type_by_coll(in.get_collation_type()) != 
                                       ObCharset::charset_type_by_coll(params.dest_collation_)));
         ObString temp_str_val(j_buf.length(), j_buf.ptr());
 
-        /* this function maybe called in json generated column
+        /* this function maybe called in json generated column 
         * and the generated column may has limitaion constrain the string length */
-        uint64_t accuracy_max_len = 0;
+        uint64_t accuracy_max_len = 0; 
         if (params.res_accuracy_ && params.res_accuracy_->get_length()) {
           accuracy_max_len = params.res_accuracy_->get_length();
         }
@@ -10381,7 +10381,7 @@ static int common_json_string(const ObObjType expect_type,
     LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
   } else if(OB_UNLIKELY(params.allocator_v2_ == NULL)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid allocator in json cast to other type", K(ret), K(params.allocator_v2_));
+    LOG_WARN("invalid allocator in json cast to other type", K(ret), K(params.allocator_v2_)); 
   } else {
     ObJsonBuffer j_buf(params.allocator_v2_);
     ObString j_bin_str = in.get_string();
@@ -10410,8 +10410,8 @@ static int common_json_string(const ObObjType expect_type,
         }
 
         bool need_charset_convert = ((CS_TYPE_BINARY != params.dest_collation_) &&
-                                    (ObCharset::charset_type_by_coll(in.get_collation_type()) !=
-                                      ObCharset::charset_type_by_coll(params.dest_collation_)));
+                                    (ObCharset::charset_type_by_coll(in.get_collation_type()) != 
+                                      ObCharset::charset_type_by_coll(params.dest_collation_)));      
         if (!need_charset_convert) {
           res_str = j_str;
         } else {
@@ -10459,7 +10459,7 @@ static int json_bit(const ObObjType expect_type, ObObjCastParams &params,
   uint64_t value;
   int32_t bit_len = 0;
 
-  if (OB_UNLIKELY(ObJsonType != in.get_type()
+  if (OB_UNLIKELY(ObJsonType != in.get_type() 
       || ObBitTC != ob_obj_type_class(expect_type))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
@@ -10499,7 +10499,7 @@ static int json_otimestamp(const ObObjType expect_type, ObObjCastParams &params,
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
   } else if (OB_FAIL(json_datetime(ObDateTimeType, params, in, datetime_obj, cast_mode))) {
-    LOG_WARN("json to datatime convert failed in json to otimestamp convert",
+    LOG_WARN("json to datatime convert failed in json to otimestamp convert", 
              K(ret), K(cast_mode));
   } else if (OB_FAIL(datetime_otimestamp(expect_type, params, datetime_obj, out, cast_mode))) {
     LOG_WARN("datatime to otimestamp convert failed in json to otimestamp convert",
@@ -11061,7 +11061,7 @@ static int sql_udt_pl_extend(const ObObjType expect_type, ObObjCastParams &param
     } else {
       const uint16_t subschema_id = in.get_meta().get_subschema_id();
       ObSqlUDTMeta udt_meta;
-      // Notice: udt_type_id (accuray) does not exist in output obj meta,
+      // Notice: udt_type_id (accuray) does not exist in output obj meta, 
       // should set subschema_id on input obj_meta in code generation
       if (OB_FAIL(sql::ObSqlUdtUtils::get_sqludt_meta_by_subschema_id(params.exec_ctx_,
                                                                       subschema_id,
@@ -11296,7 +11296,7 @@ static int string_collection(const ObObjType expect_type, ObObjCastParams &param
           LOG_WARN("construct array obj failed", K(ret), K(dst_coll_info));
         } else if (OB_FAIL(ObArrayCastUtils::string_cast_vector(temp_allocator, in_str, arr_dst, dst_arr_type, is_binary))) {
           LOG_WARN("array element cast failed", K(ret), K(dst_coll_info));
-        }
+        } 
       } else if (dst_coll_info->collection_meta_->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
         if (cs_type != CS_TYPE_BINARY) {
           if (OB_FAIL(ObArrayCastUtils::string_cast(temp_allocator, in_str, arr_dst, dst_arr_type->element_type_))) {
@@ -11306,7 +11306,7 @@ static int string_collection(const ObObjType expect_type, ObObjCastParams &param
           if (OB_FAIL(ObArrayCastUtils::string_cast_array(in_str, arr_dst, dst_arr_type->element_type_))) {
             LOG_WARN("array element cast failed", K(ret), K(dst_coll_info));
           }
-        }
+        } 
       } else if (dst_coll_info->collection_meta_->type_id_ == ObNestedType::OB_MAP_TYPE
                  || dst_coll_info->collection_meta_->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE) {
         bool is_sparse_vector = dst_coll_info->collection_meta_->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE;
@@ -11317,7 +11317,7 @@ static int string_collection(const ObObjType expect_type, ObObjCastParams &param
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected coll type", K(ret), K(dst_coll_info->collection_meta_->type_id_));
       }
-
+        
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(arr_dst->check_validity(*dst_arr_type, *arr_dst))) {
         LOG_WARN("check array validty failed", K(ret), K(dst_coll_info));
@@ -17400,7 +17400,7 @@ int ObObjCaster::to_type(const ObExpectType &expect_type,
   return ret;
 }
 
-const ObJsonZeroVal OB_JSON_ZERO = ObJsonZeroVal(); // binary json null
+const ObJsonZeroVal OB_JSON_ZERO = ObJsonZeroVal(); // binary json null 
 
 int ObObjCaster::get_zero_value(const ObObjType expect_type, ObCollationType expect_cs_type, ObObj &zero_obj)
 {
@@ -17649,7 +17649,7 @@ int ObObjCaster::is_const_consistent(const ObObjMeta &const_mt,
 
 /* make sure that you have read the doc before you call these functions !
  *
- * doc:
+ * doc:  
  */
 
 int ObObjCaster::is_order_consistent(const ObObjMeta &from,

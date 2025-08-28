@@ -107,15 +107,15 @@ private:
 
   int count_(const ObTenantArchiveRoundAttr &old_round_info, const ObDestRoundSummary &summary, Counter &counter) const;
   int calc_next_checkpoint_scn_(
-      const ObTenantArchiveRoundAttr &old_round_info,
-      const ObDestRoundSummary &summary,
-      const Counter &counter,
+      const ObTenantArchiveRoundAttr &old_round_info, 
+      const ObDestRoundSummary &summary, 
+      const Counter &counter, 
       SCN &next_checkpoint_scn) const;
   int gen_new_round_info_(
-      const ObTenantArchiveRoundAttr &old_round_info,
-      const ObDestRoundSummary &summary,
-      const Counter &counter,
-      ObTenantArchiveRoundAttr &new_round_info,
+      const ObTenantArchiveRoundAttr &old_round_info, 
+      const ObDestRoundSummary &summary, 
+      const Counter &counter, 
+      ObTenantArchiveRoundAttr &new_round_info, 
       bool &need_checkpoint) const;
 
   // do checkpoint to checkpoint_ts.

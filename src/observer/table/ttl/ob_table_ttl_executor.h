@@ -26,7 +26,7 @@ public:
   ObTableApiTTLSpec(common::ObIAllocator &alloc, const ObTableExecutorType type)
       : ObTableApiModifySpec(alloc, type),
         ttl_ctdefs_(),
-	conflict_checker_ctdef_(alloc)
+      	conflict_checker_ctdef_(alloc)
   {
   }
   int init_ctdefs_array(int64_t size);

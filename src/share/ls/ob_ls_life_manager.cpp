@@ -175,7 +175,7 @@ int ObLSLifeAgentManager::set_ls_offline_in_trans(const uint64_t &tenant_id,
     if (OB_ISNULL(agents_[i])) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("agent is null", KR(ret), K(i));
-    } else if (OB_FAIL(agents_[i]->set_ls_offline(tenant_id, ls_id,
+    } else if (OB_FAIL(agents_[i]->set_ls_offline(tenant_id, ls_id, 
             ls_status, drop_scn, working_sw_status, trans))) {
       LOG_WARN("failed to create new ls", KR(ret), K(i), K(tenant_id), K(ls_id),
           K(ls_status), K(drop_scn));

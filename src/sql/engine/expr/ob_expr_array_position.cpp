@@ -28,17 +28,17 @@ namespace oceanbase
 namespace sql
 {
 ObExprArrayPosition::ObExprArrayPosition(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc,
-        T_FUNC_SYS_ARRAY_POSITION,
-        N_ARRAY_POSITION,
+    : ObFuncExprOperator(alloc, 
+        T_FUNC_SYS_ARRAY_POSITION, 
+        N_ARRAY_POSITION, 
         2,
-        VALID_FOR_GENERATED_COL,
+        VALID_FOR_GENERATED_COL, 
         NOT_ROW_DIMENSION)
 {
 }
 ObExprArrayPosition::~ObExprArrayPosition() {}
 
-int ObExprArrayPosition::calc_result_type2(ObExprResType &type,
+int ObExprArrayPosition::calc_result_type2(ObExprResType &type, 
                             ObExprResType &type1,
                             ObExprResType &type2,
                             common::ObExprTypeCtx &type_ctx) const
@@ -61,13 +61,13 @@ int ObExprArrayPosition::calc_result_type2(ObExprResType &type,
     // do nothing
   } else if (!ob_is_collection_sql_type(type1.get_type())) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
-    LOG_USER_WARN(OB_ERR_INVALID_TYPE_FOR_OP,
+    LOG_USER_WARN(OB_ERR_INVALID_TYPE_FOR_OP, 
         ob_obj_type_str(type1.get_type()),
         ob_obj_type_str(type2.get_type()));
   } else if (OB_FAIL(ObArrayExprUtils::deduce_array_type(exec_ctx, type1, type2, subschema_id))) {
     LOG_WARN("failed to get result array type subschema id", K(ret));
-  }
-
+  } 
+  
   if (OB_SUCC(ret)) {
     type.set_int();
     type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].scale_);
@@ -94,10 +94,10 @@ int ObExprArrayPosition::eval_array_position(const ObExpr &expr, ObEvalCtx &ctx,
     LOG_WARN("failed to eval args", K(ret));
   } else if (arr_datum->is_null()) {
     res.set_null();
-  } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator,
-                                          ctx,
+  } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, 
+                                          ctx, 
                                           subschema_id,
-                                          arr_datum->get_string(),
+                                          arr_datum->get_string(), 
                                           src_arr))) {
     LOG_WARN("construct array obj failed", K(ret));
   } else if (elem_datum->is_null()) {
@@ -124,7 +124,7 @@ int ObExprArrayPosition::eval_array_position(const ObExpr &expr, ObEvalCtx &ctx,
   return ret;
 }
 
-int ObExprArrayPosition::eval_array_position_batch(const ObExpr &expr,
+int ObExprArrayPosition::eval_array_position_batch(const ObExpr &expr, 
                             ObEvalCtx &ctx,
                             const ObBitVector &skip,
                             const int64_t batch_size)
@@ -153,10 +153,10 @@ int ObExprArrayPosition::eval_array_position_batch(const ObExpr &expr,
       eval_flags.set(j);
       if (arr_array.at(j)->is_null()) {
         res_datum.at(j)->set_null();
-      } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator,
-                                              ctx,
+      } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, 
+                                              ctx, 
                                               subschema_id,
-                                              arr_array.at(j)->get_string(),
+                                              arr_array.at(j)->get_string(), 
                                               src_arr))) {
         LOG_WARN("construct array obj failed", K(ret));
       } else if (elem_array.at(j)->is_null()) {
@@ -186,9 +186,9 @@ int ObExprArrayPosition::eval_array_position_batch(const ObExpr &expr,
   return ret;
 }
 
-int ObExprArrayPosition::eval_array_position_vector(const ObExpr &expr,
+int ObExprArrayPosition::eval_array_position_vector(const ObExpr &expr, 
                             ObEvalCtx &ctx,
-                            const ObBitVector &skip,
+                            const ObBitVector &skip, 
                             const EvalBound &bound)
 {
   int ret = OB_SUCCESS;
@@ -219,10 +219,10 @@ int ObExprArrayPosition::eval_array_position_vector(const ObExpr &expr,
         is_null_res = true;
       } else {
         ObString arr_string = arr_vec->get_string(j);
-        if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator,
-                                            ctx,
+        if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator, 
+                                            ctx, 
                                             subschema_id,
-                                            arr_string,
+                                            arr_string, 
                                             src_arr))) {
           LOG_WARN("construct array obj failed", K(ret));
         }
@@ -257,11 +257,11 @@ int ObExprArrayPosition::eval_array_position_vector(const ObExpr &expr,
   return ret;
 }
 
-int ObExprArrayPosition::array_position(const ObExpr &expr,
-                            ObIAllocator &alloc,
+int ObExprArrayPosition::array_position(const ObExpr &expr, 
+                            ObIAllocator &alloc, 
                             ObEvalCtx &ctx,
                             ObIArrayType *src_arr,
-                            ObDatum *val_datum,
+                            ObDatum *val_datum, 
                             int &idx)
 {
   int ret = OB_SUCCESS;
@@ -300,9 +300,9 @@ int ObExprArrayPosition::array_position(const ObExpr &expr,
   case ObCollectionSQLTC: {
     const uint16_t val_subshemaid = expr.args_[1]->obj_meta_.get_subschema_id();
     ObIArrayType *val = NULL;
-    if (OB_FAIL(ObArrayExprUtils::get_array_obj(alloc,
-                                      ctx,
-                                      val_subshemaid,
+    if (OB_FAIL(ObArrayExprUtils::get_array_obj(alloc, 
+                                      ctx, 
+                                      val_subshemaid, 
                                       val_datum->get_string(),
                                       val))) {
       LOG_WARN("construct array obj failed", K(ret));
@@ -320,12 +320,12 @@ int ObExprArrayPosition::array_position(const ObExpr &expr,
   return ret;
 }
 
-int ObExprArrayPosition::array_position_vector(const ObExpr &expr,
+int ObExprArrayPosition::array_position_vector(const ObExpr &expr, 
                             ObIAllocator &alloc,
-                            ObEvalCtx &ctx,
+                            ObEvalCtx &ctx, 
                             ObIArrayType *src_arr,
-                            ObIVector *val_vec,
-                            int vec_idx,
+                            ObIVector *val_vec, 
+                            int vec_idx, 
                             int &idx)
 {
   int ret = OB_SUCCESS;
@@ -365,10 +365,10 @@ int ObExprArrayPosition::array_position_vector(const ObExpr &expr,
     const uint16_t val_subshemaid = expr.args_[1]->obj_meta_.get_subschema_id();
     ObIArrayType *val = NULL;
     ObString arr_str = val_vec->get_string(vec_idx);
-    if (OB_FAIL(ObNestedVectorFunc::construct_param(alloc,
-                                        ctx,
+    if (OB_FAIL(ObNestedVectorFunc::construct_param(alloc, 
+                                        ctx, 
                                         val_subshemaid,
-                                        arr_str,
+                                        arr_str, 
                                         val))) {
       LOG_WARN("construct array obj failed", K(ret));
     } else if (OB_FAIL(ObArrayUtil::position(*src_arr, *val, idx))) {

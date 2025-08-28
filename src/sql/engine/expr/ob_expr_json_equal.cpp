@@ -71,7 +71,7 @@ bool ObExprJsonEqual::is_json_scalar(ObIJsonBase *ptr)
   bool ret_bool = false;
   if (!OB_ISNULL(ptr)) {
     ObJsonNodeType json_type = ptr->json_type();
-    if (json_type < ObJsonNodeType::J_MAX_TYPE
+    if (json_type < ObJsonNodeType::J_MAX_TYPE 
         && (json_type != ObJsonNodeType::J_OBJECT && json_type != ObJsonNodeType::J_ARRAY)) {
       ret_bool = true;
     }
@@ -127,7 +127,7 @@ int ObExprJsonEqual::eval_json_equal(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     ObDatum *json_datum = NULL;
     tmp_ret = ret;
     ret = OB_SUCCESS;
-
+    
     val_type = json_arg->datum_meta_.type_;
     if (OB_FAIL(temp_allocator.eval_arg(json_arg, ctx, json_datum))) {
       LOG_WARN("eval json arg failed", K(ret));

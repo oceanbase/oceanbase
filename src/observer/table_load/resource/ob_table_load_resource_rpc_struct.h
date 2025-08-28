@@ -32,16 +32,16 @@ enum class ObDirectLoadResourceCommandType
   MAX_TYPE
 };
 
-class ObDirectLoadResourceUnit
+class ObDirectLoadResourceUnit 
 {
   OB_UNIS_VERSION(1);
-
+  
 public:
-  ObDirectLoadResourceUnit()
-    : thread_count_(0), memory_size_(0)
+  ObDirectLoadResourceUnit() 
+    : thread_count_(0), memory_size_(0) 
   {
   }
-  ObDirectLoadResourceUnit(const ObDirectLoadResourceUnit &unit)
+  ObDirectLoadResourceUnit(const ObDirectLoadResourceUnit &unit) 
     : addr_(unit.addr_), thread_count_(unit.thread_count_), memory_size_(unit.memory_size_)
   {
   }
@@ -57,8 +57,8 @@ class ObDirectLoadResourceOpRequest
   OB_UNIS_VERSION(1);
 
 public:
-  ObDirectLoadResourceOpRequest()
-    : command_type_(observer::ObDirectLoadResourceCommandType::MAX_TYPE)
+  ObDirectLoadResourceOpRequest() 
+    : command_type_(observer::ObDirectLoadResourceCommandType::MAX_TYPE) 
   {
   }
   template <class Arg>
@@ -104,8 +104,8 @@ class ObDirectLoadResourceOpResult
   OB_UNIS_VERSION(1);
 
 public:
-  ObDirectLoadResourceOpResult()
-    : allocator_(nullptr), command_type_(observer::ObDirectLoadResourceCommandType::MAX_TYPE)
+  ObDirectLoadResourceOpResult() 
+    : allocator_(nullptr), command_type_(observer::ObDirectLoadResourceCommandType::MAX_TYPE) 
   {
   }
   template <class Res>
@@ -139,7 +139,7 @@ public:
     } else if (OB_FAIL(res.deserialize(res_content_.ptr(), res_content_.length(), pos))) {
       SERVER_LOG(WARN, "fail to deserialize res content", KR(ret), KPC(this));
     }
-
+    
     return ret;
   }
   TO_STRING_KV(K_(command_type), "res_content", common::ObHexStringWrap(res_content_));
@@ -156,7 +156,7 @@ class ObDirectLoadResourceApplyArg final
   OB_UNIS_VERSION(1);
 
 public:
-  ObDirectLoadResourceApplyArg()
+  ObDirectLoadResourceApplyArg() 
     : tenant_id_(common::OB_INVALID_ID)
   {
   }
@@ -182,19 +182,19 @@ public:
 class ObDirectLoadResourceReleaseArg final
 {
   OB_UNIS_VERSION(1);
-
+  
 public:
-  ObDirectLoadResourceReleaseArg()
-    : tenant_id_(common::OB_INVALID_ID)
+  ObDirectLoadResourceReleaseArg() 
+    : tenant_id_(common::OB_INVALID_ID) 
   {
   }
   ObDirectLoadResourceReleaseArg(const ObDirectLoadResourceReleaseArg &arg)
     : tenant_id_(arg.tenant_id_), task_key_(arg.task_key_)
   {
   }
-  bool is_valid()
-  {
-    return tenant_id_ != common::OB_INVALID_ID && task_key_.is_valid();
+  bool is_valid() 
+  { 
+    return tenant_id_ != common::OB_INVALID_ID && task_key_.is_valid(); 
   }
   TO_STRING_KV(K_(tenant_id), K_(task_key));
 public:
@@ -205,7 +205,7 @@ public:
 class ObDirectLoadResourceUpdateArg final
 {
   OB_UNIS_VERSION(1);
-
+  
 public:
   ObDirectLoadResourceUpdateArg()
    : tenant_id_(common::OB_INVALID_ID), thread_count_(0), memory_size_(0)
@@ -218,9 +218,9 @@ public:
       addrs_(arg.addrs_)
   {
   }
-  bool is_valid()
-  {
-    return tenant_id_ != common::OB_INVALID_ID && thread_count_ >= 0 && memory_size_ >= 0;
+  bool is_valid() 
+  { 
+    return tenant_id_ != common::OB_INVALID_ID && thread_count_ >= 0 && memory_size_ >= 0; 
   }
   TO_STRING_KV(K_(tenant_id), K_(thread_count), K_(memory_size), K_(addrs));
 public:
@@ -233,21 +233,21 @@ public:
 class ObDirectLoadResourceCheckArg final
 {
   OB_UNIS_VERSION(1);
-
+  
 public:
-  ObDirectLoadResourceCheckArg()
+  ObDirectLoadResourceCheckArg() 
     : tenant_id_(common::OB_INVALID_ID), avail_memory_(0), first_check_(false)
   {
   }
   ObDirectLoadResourceCheckArg(const ObDirectLoadResourceCheckArg &arg)
-    : tenant_id_(arg.tenant_id_),
-      avail_memory_(arg.avail_memory_),
+    : tenant_id_(arg.tenant_id_), 
+      avail_memory_(arg.avail_memory_), 
       first_check_(arg.first_check_)
   {
   }
   bool is_valid()
-  {
-    return tenant_id_ != common::OB_INVALID_ID;
+  { 
+    return tenant_id_ != common::OB_INVALID_ID; 
   }
   TO_STRING_KV(K_(tenant_id), K_(avail_memory));
 public:
@@ -259,15 +259,15 @@ public:
 class ObDirectLoadResourceOpRes final
 {
   OB_UNIS_VERSION(1);
-
+  
 public:
-  ObDirectLoadResourceOpRes()
-    : error_code_(common::OB_SUCCESS),
+  ObDirectLoadResourceOpRes() 
+    : error_code_(common::OB_SUCCESS), 
       avail_memory_(0)
   {
   }
-  ObDirectLoadResourceOpRes(const ObDirectLoadResourceOpRes &res)
-    : error_code_(res.error_code_),
+  ObDirectLoadResourceOpRes(const ObDirectLoadResourceOpRes &res) 
+    : error_code_(res.error_code_), 
       avail_memory_(res.avail_memory_),
       assigned_array_(res.assigned_array_)
   {

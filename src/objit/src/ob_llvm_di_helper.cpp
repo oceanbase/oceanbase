@@ -29,7 +29,7 @@ uint64_t ObLLVMDIType::get_size_bits()
 {
   return OB_ISNULL(v_) ? 0 : v_->getSizeInBits();
 }
-
+  
 uint64_t ObLLVMDIType::get_align_bits()
 {
   return OB_ISNULL(v_) ? 0 : v_->getAlignInBits();

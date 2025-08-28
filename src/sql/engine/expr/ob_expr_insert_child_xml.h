@@ -18,14 +18,14 @@
 #include "lib/xml/ob_xpath.h"
 #include "sql/engine/expr/ob_expr_multi_mode_func_helper.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
 
 namespace sql
 {
 class ObExprInsertChildXml : public ObFuncExprOperator
 {
-public:
+public: 
   explicit ObExprInsertChildXml(common::ObIAllocator &alloc);
   virtual ~ObExprInsertChildXml();
   virtual int calc_result_typeN(ObExprResType &type,
@@ -34,9 +34,9 @@ public:
                                 common::ObExprTypeCtx &type_ctx) const override;
 
   static int eval_insert_child_xml(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
-  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
-                      const ObRawExpr &raw_expr,
-                      ObExpr &rt_expr)
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, 
+                      const ObRawExpr &raw_expr, 
+                      ObExpr &rt_expr) 
                       const override;
 private:
   static int insert_child_xml(const ObExpr &expr,
@@ -48,10 +48,10 @@ private:
                               ObString value_str,
                               bool is_insert_attributes);
 
-  static int check_child_expr(const ObExpr &expr,
+  static int check_child_expr(const ObExpr &expr, 
                               ObEvalCtx &ctx,
                               ObIAllocator &allocator,
-                              ObMulModeMemCtx* mem_ctx,
+                              ObMulModeMemCtx* mem_ctx, 
                               ObString &child_str,
                               ObString &value_str,
                               bool &is_insert_attributes);
@@ -59,8 +59,8 @@ private:
 
   static int insert_element_node(ObIAllocator &allocator, ObIMulModeBase *insert_node, ObIMulModeBase *value_node);
 
-  static int insert_attributes_node(ObString key_str,
-                                    ObString value_str,
+  static int insert_attributes_node(ObString key_str, 
+                                    ObString value_str, 
                                     ObIMulModeBase *insert_node);
 
 private:

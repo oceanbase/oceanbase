@@ -106,7 +106,7 @@ int ObMdsTableMergeDag::create_first_task()
       }
 #endif
 
-  if (!need_create_task) {
+  if (!need_create_task) { 
     FLOG_INFO("skip create mds table merge dag first task");
   } else if (OB_FAIL(create_task(nullptr/*parent*/, task))) {
     STORAGE_LOG(WARN, "fail to alloc mds merge task", K(ret));

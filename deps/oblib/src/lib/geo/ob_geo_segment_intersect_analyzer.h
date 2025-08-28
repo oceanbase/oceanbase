@@ -27,7 +27,7 @@ public:
     : cache_geo_(cache_geo),
       rtree_index_(rtree_index),
       flags_(0) {}
-
+    
   virtual ~ObLineIntersectionAnalyzer() {}
   int segment_intersection_query(ObGeometry *geo);
   bool is_intersects() { return is_intersect_; }

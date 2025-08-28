@@ -18,7 +18,7 @@
 using namespace oceanbase;
 using namespace share;
 ObRecoverTablePersistHelper::ObRecoverTablePersistHelper()
-  : is_inited_(false), tenant_id_()
+  : is_inited_(false), tenant_id_() 
 {
 }
 
@@ -69,8 +69,8 @@ int ObRecoverTablePersistHelper::get_recover_table_job(
 }
 
 int ObRecoverTablePersistHelper::is_recover_table_job_exist(
-    common::ObISQLClient &proxy,
-    const uint64_t target_tenant_id,
+    common::ObISQLClient &proxy, 
+    const uint64_t target_tenant_id, 
     bool &is_exist) const
 {
   int ret = OB_SUCCESS;
@@ -98,10 +98,10 @@ int ObRecoverTablePersistHelper::is_recover_table_job_exist(
       }
     }
   }
-
+  
   return ret;
 }
-
+  
 int ObRecoverTablePersistHelper::advance_status(
     common::ObISQLClient &proxy, const ObRecoverTableJob &job, const ObRecoverTableStatus &next_status) const
 {
@@ -199,7 +199,7 @@ int ObRecoverTablePersistHelper::get_all_recover_table_job(
   return ret;
 }
 
-int ObRecoverTablePersistHelper::get_recover_table_job_by_initiator(common::ObISQLClient &proxy,
+int ObRecoverTablePersistHelper::get_recover_table_job_by_initiator(common::ObISQLClient &proxy, 
     const ObRecoverTableJob &initiator_job, ObRecoverTableJob &target_job) const
 {
   int ret = OB_SUCCESS;
@@ -272,7 +272,7 @@ int ObRecoverTablePersistHelper::insert_recover_table_job_history(
   return ret;
 }
 
-int ObRecoverTablePersistHelper::get_recover_table_job_history_by_initiator(common::ObISQLClient &proxy,
+int ObRecoverTablePersistHelper::get_recover_table_job_history_by_initiator(common::ObISQLClient &proxy, 
     const ObRecoverTableJob &initiator_job, ObRecoverTableJob &target_job) const
 {
   int ret = OB_SUCCESS;

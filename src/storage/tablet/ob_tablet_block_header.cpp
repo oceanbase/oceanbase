@@ -30,7 +30,7 @@ int ObTabletBlockHeader::init(const int32_t inline_meta_count)
     LOG_WARN("inline meta count is too large", K(ret), K(inline_meta_count));
   } else {
     version_ = TABLET_VERSION_V3;
-    inline_meta_count_ = inline_meta_count;
+    inline_meta_count_ = inline_meta_count; 
     is_inited_ = true;
   }
   return ret;

@@ -16,7 +16,7 @@
 #include "ob_i_model.h"
 
 namespace oceanbase
-{
+{   
 namespace table
 {
 

@@ -119,7 +119,7 @@ public:
   Property_declare_var(ObTransferTaskID, transfer_task_id)
   Property_declare_var(ObTransferPartitionTaskStatus, task_status)
 
-#undef Property_declare_var
+#undef Property_declare_var 
 public:
   const ObSqlString& get_comment() const
   {
@@ -141,7 +141,7 @@ public:
    * for add task by sql
    * @description: insert new task to __all_transfer_partition_task
    * @param[in] task : a valid transfer partition task include tenant_id
-   * @param[in] trans: trans
+   * @param[in] trans: trans 
    * @return OB_SUCCESS if success, otherwise failed
    */
   static int insert_new_task(
@@ -154,9 +154,9 @@ public:
                    and smaller than max_task_id
    * @param[in] tenant_id : user_tenant_id
    * @param[in] max_task_id : max_task_id
-   * @param[in] for_update
+   * @param[in] for_update  
    * @param[in] trans: trans
-   * @param[out] task_array: transfer_partition_task
+   * @param[out] task_array: transfer_partition_task 
    * */
   static int load_all_wait_task_in_part_info_order(const uint64_t tenant_id,
       const bool for_update,
@@ -167,7 +167,7 @@ public:
    * @description: get all transfer partition task from __all_transfer_partition_task
    * @param[in] tenant_id : user_tenant_id
    * @param[in] trans: sql trans or trans
-   * @param[out] task_array: transfer_partition_task
+   * @param[out] task_array: transfer_partition_task 
    * */
   static int load_all_task(const uint64_t tenant_id,
       ObIArray<ObTransferPartitionTask> &task_array,
@@ -177,7 +177,7 @@ public:
    * @param[in] tenant_id : user_tenant_id
    * @param[in] job_id : the corelative balance job id
    * @param[in] trans: sql trans or trans
-   * @param[out] task_array: transfer_partition_task
+   * @param[out] task_array: transfer_partition_task 
    * */
   static int load_all_balance_job_task(const uint64_t tenant_id,
       const share::ObBalanceJobID &job_id,
@@ -207,7 +207,7 @@ public:
    *               rollback task from doing to waiting, and clean balance_job and transfer_task_id
    *  @param[in] tenant_id : user_tenant_id
    *  @param[in] job_id : the corelative balance job id
-   *  @param[in] trans: must in trans
+   *  @param[in] trans: must in trans 
    * */
   static int rollback_all_to_waitting(const uint64_t tenant_id,
                            const ObBalanceJobID &job_id,
@@ -218,34 +218,34 @@ public:
    * @param[in] tenant_id : user_tenant_id
    * @param[in] job_id : the corelative balance job id
    * @param[in] part_list : part_info start transfer
-   * @param[in] transfer_task_id : the corelative transfer task id
+   * @param[in] transfer_task_id : the corelative transfer task id 
    * @param[in] trans: must in trans
    * */
   static int start_transfer_task(const uint64_t tenant_id,
                          const ObBalanceJobID &job_id,
                          const ObTransferPartList &part_list,
                          const ObTransferTaskID &transfer_task_id,
-                         ObMySQLTransaction &trans);
+                         ObMySQLTransaction &trans); 
 
   /*
    * 任务在执行时发现分区不在需要失败掉,调用点在finish_task_from_init和生成balance_job的过程中
    * transfer任务在执行成功的时候，需要结束掉，调用点在finish_task里面
    * canceled这个状态这一次不做
-   * @description: task maybe CANCELED, FAILED, COMPLETE
+   * @description: task maybe CANCELED, FAILED, COMPLETE 
    *               and insert into __all_transfer_partition_task_history
    * @param[in] tenant_id : user_tenant_id
    * @param[in] part_list : part_info need finish
    * @param[in] status : must be CANCELED, FAILED, COMPLETE, must be finish
    * @param[in] max_task_id: max_task_id
    * @param[in] comment : task comment
-   * @param[in] trans: must in trans
+   * @param[in] trans: must in trans 
    * */
   static int finish_task(const uint64_t tenant_id,
                          const ObTransferPartList &part_list,
-                         const ObTransferPartitionTaskID &max_task_id,
+                         const ObTransferPartitionTaskID &max_task_id, 
                          const ObTransferPartitionTaskStatus &status,
                          const ObString &comment,
-                         ObMySQLTransaction &trans);
+                         ObMySQLTransaction &trans); 
   /*
    * transfer任务在结束时可能会存在一批not_exist的分区，但是这一部分分区可能
    * 不是真的not_exist，可能是由于前置统计的源端日志流不正确导致的，需要回滚掉
@@ -253,16 +253,16 @@ public:
    * @param[in] tenant_id : user_tenant_id
    * @param[in] job_id : the corelative balance job id
    * @param[in] part_list : part_info start transfer
-   * @param[in] transfer_task_id : the corelative transfer task id
+   * @param[in] transfer_task_id : the corelative transfer task id 
    * @param[in] comment : reason of rollback
    * @param[in] trans: must in trans
    * */
-
+ 
   static int rollback_from_doing_to_waiting(const uint64_t tenant_id,
                          const ObBalanceJobID &job_id,
                          const ObTransferPartList &part_list,
                          const ObString &comment,
-                         ObMySQLTransaction &trans);
+                         ObMySQLTransaction &trans); 
 
   /*
   * 获取一批part_list的任务信息，part_list可能不存在表里。
@@ -271,7 +271,7 @@ public:
    * @param[in] part_list : part_info
    * @param[in] job_id : the corelative balance job id
    * @param[out] dest_ls : dest_ls of part_info
-   * @param[in] trans: must in trans
+   * @param[in] trans: must in trans  
   */
   static int load_part_list_task(const uint64_t tenant_id,
                          const ObBalanceJobID &job_id,

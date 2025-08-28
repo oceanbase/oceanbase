@@ -693,7 +693,7 @@ TEST_F(TestSSReaderWriter, private_macro_write_less_read_more)
   macro_id.set_second_id(tablet_id); // tablet_id
   macro_id.set_third_id(900); // seq_id
   macro_id.set_macro_transfer_seq(0); // transfer_seq
-  macro_id.set_tenant_seq(server_id);  //tenant_seq
+  macro_id.set_tenant_seq(server_id);  //tenant_seq 
   ASSERT_TRUE(macro_id.is_valid());
   ObStorageObjectHandle write_object_handle;
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
@@ -863,7 +863,7 @@ TEST_F(TestSSReaderWriter, IOFaultDetector)
   ObSSPhysicalBlockHandle phy_block_handle;
   phy_block_handle.set_ptr(&phy_block);
   ASSERT_EQ(OB_SUCCESS, io_info.phy_block_handle_.assign(phy_block_handle));
-
+  
   ObIOResult result;
   ObIORequest req;
   req.inc_ref();
@@ -871,7 +871,7 @@ TEST_F(TestSSReaderWriter, IOFaultDetector)
   ASSERT_EQ(OB_SUCCESS, result.basic_init());
   ASSERT_EQ(OB_SUCCESS, result.init(io_info));
   ASSERT_EQ(OB_SUCCESS, req.init(io_info, &result));
-
+  
   detector.reset_device_health();
   ASSERT_EQ(OB_SUCCESS, detector.get_device_health_status(dhs, disk_abnormal_time));
   ASSERT_TRUE(DEVICE_HEALTH_NORMAL == dhs);
@@ -879,7 +879,7 @@ TEST_F(TestSSReaderWriter, IOFaultDetector)
   result.flag_.set_mode(ObIOMode::READ);
   io_config.data_storage_warning_tolerance_time_ = 1000L * 1000L;
   io_config.data_storage_error_tolerance_time_ = 3000L * 1000L;
-
+ 
   detector.record_io_error(result, req);
   usleep(2000L * 1000L);
   ASSERT_FALSE(detector.is_device_warning_);

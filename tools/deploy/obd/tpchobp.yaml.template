@@ -1,7 +1,7 @@
 oceanbase-ce:
 {{%% SERVERS %%}}
   tag: latest
-  global:
+  global: 
     memory_limit: "56G"
     log_disk_size: "48G"
     system_memory: "10G"

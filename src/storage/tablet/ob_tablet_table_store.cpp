@@ -1787,7 +1787,7 @@ int ObTabletTableStore::inner_process_minor_tables(
       inc_pos = 0; //in ha status do not recycle minor sstable
       LOG_INFO("tablet in ha status, no need recycle minor sstable", K(ha_status));
     } else {
-      /*
+      /* 
       * if the upper trans version of the ith sstable can't be calculated, the sstables with bigger end_scn can't be calculated either.
       * new_upper_trans means the latest value of upper_trans_version for minor_tables.
       *
@@ -2493,7 +2493,7 @@ int ObTabletTableStore::check_new_sstable_can_be_accepted_(
           K(ret), KPC(new_table), K(old_tables));
     }
   }
-
+  
   return ret;
 }
 
@@ -2716,9 +2716,9 @@ int ObTabletTableStore::replace_ha_remote_minor_tables_(
   const int64_t inc_pos = 0;
   if (OB_FAIL(old_store.minor_tables_.get_all_tables(old_minor_tables))) {
     LOG_WARN("failed to get old minor tables", K(ret), K(old_store));
-  } else if (OB_FAIL(replace_ha_remote_sstables_(old_minor_tables,
-                                                 param.tables_handle_,
-                                                 check_continue,
+  } else if (OB_FAIL(replace_ha_remote_sstables_(old_minor_tables, 
+                                                 param.tables_handle_, 
+                                                 check_continue, 
                                                  new_minor_tables))) {
     LOG_WARN("failed to replace remote minor tables", K(ret), K(old_store), K(param));
   } else if (new_minor_tables.empty()) {
@@ -2863,9 +2863,9 @@ int ObTabletTableStore::replace_ha_remote_ddl_tables_(
     LOG_INFO("major table exist, no need replace", K(old_store));
   } else if (OB_FAIL(old_store.ddl_sstables_.get_all_tables(old_ddl_tables))) {
     LOG_WARN("failed to get old ddl tables", K(ret), K(old_store));
-  } else if (OB_FAIL(replace_ha_remote_sstables_(old_ddl_tables,
-                                                 param.tables_handle_,
-                                                 check_continue,
+  } else if (OB_FAIL(replace_ha_remote_sstables_(old_ddl_tables, 
+                                                 param.tables_handle_, 
+                                                 check_continue, 
                                                  new_ddl_tables))) {
     LOG_WARN("failed to replace remote ddl tables", K(ret), K(old_store), K(param));
   } else if (new_ddl_tables.empty()) {
@@ -2957,9 +2957,9 @@ int ObTabletTableStore::replace_ha_remote_mds_tables_(
 
   if (OB_FAIL(old_store.mds_sstables_.get_all_tables(old_mds_tables))) {
     LOG_WARN("failed to get old minor tables", K(ret), K(old_store));
-  } else if (OB_FAIL(replace_ha_remote_sstables_(old_mds_tables,
-                                                 param.tables_handle_,
-                                                 check_continue,
+  } else if (OB_FAIL(replace_ha_remote_sstables_(old_mds_tables, 
+                                                 param.tables_handle_, 
+                                                 check_continue, 
                                                  new_mds_tables))) {
     LOG_WARN("failed to replace remote mds tables", K(ret), K(old_store), K(param));
   } else if (new_mds_tables.empty()) {
@@ -3536,7 +3536,7 @@ int ObTabletTableStore::build_split_minor_tables_(
       const SCN &biggest_end_scn_in_old_store = old_store.minor_tables_.at(old_store.minor_tables_.count() - 1)->get_end_scn();
       const SCN &smallest_start_scn_in_new_input = minor_tables.at(0)->get_start_scn();
       const SCN &biggest_end_scn_in_new_input = minor_tables.at(minor_tables.count() - 1)->get_end_scn();
-      if (OB_LIKELY(smallest_start_scn_in_old_store <= smallest_start_scn_in_new_input
+      if (OB_LIKELY(smallest_start_scn_in_old_store <= smallest_start_scn_in_new_input 
         && biggest_end_scn_in_old_store >= biggest_end_scn_in_new_input)) {
         // update batch split-minors to the table store repeatedly again.
         LOG_INFO("update split minors repeatedly, ignore to add again", K(minor_tables), K(old_store.minor_tables_));
@@ -3560,7 +3560,7 @@ int ObTabletTableStore::build_split_minor_tables_(
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(inner_process_minor_tables(allocator,
+    } else if (OB_FAIL(inner_process_minor_tables(allocator, 
         old_store, minor_tables, inc_base_snapshot_version, ha_status, unused_param, false/*is_mds*/))) {
       LOG_WARN("inner process minor tables failed", K(ret));
     }

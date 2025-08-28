@@ -45,7 +45,7 @@ public:
   inline common::ObString &get_table_name() { return table_name_; }
   inline const common::ObString &get_table_name() const { return table_name_; }
   inline void set_table_name(const common::ObString &table_name) { table_name_ = table_name; }
-  virtual int get_plan_item_info(PlanText &plan_text,
+  virtual int get_plan_item_info(PlanText &plan_text, 
                                 ObSqlPlanItem &plan_item) override;
 private:
   uint64_t table_id_;

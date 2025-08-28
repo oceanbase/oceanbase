@@ -140,7 +140,7 @@ int ObDBMSUpgrade::flush_dll_ncomp(sql::ObExecContext &ctx, sql::ParamStore &par
       OZ (ctx.get_sql_proxy()->read(res, tenant_id, query_sql.ptr()));
       CK (OB_NOT_NULL(mysql_result = res.get_result()));
       if (OB_SUCC(ret)) {
-        int64_t key_id;
+        int64_t key_id; 
         while (OB_SUCC(mysql_result->next())) {
           EXTRACT_INT_FIELD_MYSQL(*mysql_result, "key_id", key_id, int64_t);
           OZ (key_ids.push_back(key_id));
@@ -159,11 +159,11 @@ int ObDBMSUpgrade::flush_dll_ncomp(sql::ObExecContext &ctx, sql::ParamStore &par
       for (int64_t i = 0; OB_SUCC(ret) && i < round; ++i) {
         const int floor = i * iter_num;
         const int ceil = i == round - 1 ? key_ids.count() : (i+1)*iter_num;
-        OZ (query_sql.assign_fmt("INSERT INTO %s (recompile_obj_id, ref_obj_name, schema_version, fail_count) VALUES ",
+        OZ (query_sql.assign_fmt("INSERT INTO %s (recompile_obj_id, ref_obj_name, schema_version, fail_count) VALUES ", 
                   OB_ALL_PL_RECOMPILE_OBJINFO_TNAME));
         for (int64_t j = floor; OB_SUCC(ret) && j < ceil ; ++j) { // [floor, ceil)
-          OZ (query_sql.append_fmt("( %ld, '', 0 , 0 ) %s ",
-                    key_ids.at(j), j < ceil - 1  ? " , " : " "));
+          OZ (query_sql.append_fmt("( %ld, '', 0 , 0 ) %s ", 
+                    key_ids.at(j), j < ceil - 1  ? " , " : " "));        
         }
         OZ (query_sql.append_fmt("ON DUPLICATE KEY UPDATE"
                                   " recompile_obj_id = VALUES(recompile_obj_id), "

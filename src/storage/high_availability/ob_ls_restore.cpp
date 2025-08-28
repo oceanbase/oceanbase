@@ -232,12 +232,12 @@ int ObLSRestoreDagNet::init_by_param(const ObIDagInitParam *param)
       LOG_WARN("failed to init meta index store", K(ret), KPC(init_param));
     } else if (backup_set_file_desc.backup_set_file_.is_backup_set_not_support_quick_restore()
             && OB_FAIL(second_meta_index_store_.init(
-                       mode,
+                       mode, 
                        index_store_param,
                        init_param->arg_.restore_base_info_.backup_dest_,
-                       backup_set_file_desc.backup_set_file_,
-                       true/*is_sec_meta*/,
-                       true/*init sys tablet index store*/,
+                       backup_set_file_desc.backup_set_file_, 
+                       true/*is_sec_meta*/, 
+                       true/*init sys tablet index store*/, 
                        OB_BACKUP_INDEX_CACHE))) {
       LOG_WARN("failed to init macro index store", K(ret), K(backup_set_file_desc), KPC(init_param));
     }

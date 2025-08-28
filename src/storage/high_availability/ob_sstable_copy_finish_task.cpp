@@ -61,12 +61,12 @@ ObPhysicalCopyTaskInitParam::~ObPhysicalCopyTaskInitParam()
 bool ObPhysicalCopyTaskInitParam::is_valid() const
 {
   bool bool_ret = false;
-  bool_ret = tenant_id_ != OB_INVALID_ID
-             && ls_id_.is_valid()
-             && tablet_id_.is_valid()
+  bool_ret = tenant_id_ != OB_INVALID_ID 
+             && ls_id_.is_valid() 
+             && tablet_id_.is_valid() 
              && OB_NOT_NULL(sstable_param_)
              && sstable_macro_range_info_.is_valid()
-             && OB_NOT_NULL(tablet_copy_finish_task_)
+             && OB_NOT_NULL(tablet_copy_finish_task_) 
              && OB_NOT_NULL(ls_)
              && ((need_check_seq_ && ls_rebuild_seq_ >= 0) || !need_check_seq_);
 
@@ -136,7 +136,7 @@ int ObCopiedSSTableCreatorImpl::init(
              || OB_ISNULL(allocator)
              || OB_ISNULL(finish_task)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid argument", K(ret), K(ls_id), K(tablet_id), KP(src_sstable_param),
+    LOG_WARN("get invalid argument", K(ret), K(ls_id), K(tablet_id), KP(src_sstable_param), 
       KP(sstable_index_builder), KP(allocator), KP(finish_task));
   } else if (OB_FAIL(check_sstable_param_for_init_(src_sstable_param))) {
     LOG_WARN("failed to check sstable param", K(ret));
@@ -163,7 +163,7 @@ int ObCopiedSSTableCreatorImpl::init_create_sstable_param_(ObTabletCreateSSTable
 }
 
 int ObCopiedSSTableCreatorImpl::init_create_sstable_param_(
-    const blocksstable::ObSSTableMergeRes &res,
+    const blocksstable::ObSSTableMergeRes &res, 
     ObTabletCreateSSTableParam &param) const
 {
   int ret = OB_SUCCESS;
@@ -174,19 +174,19 @@ int ObCopiedSSTableCreatorImpl::init_create_sstable_param_(
 }
 
 int ObCopiedSSTableCreatorImpl::do_create_sstable_(
-    const ObTabletCreateSSTableParam &param,
+    const ObTabletCreateSSTableParam &param, 
     ObTableHandleV2 &table_handle) const
 {
   int ret = OB_SUCCESS;
   if (param.table_key().is_co_sstable()) {
     if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable<ObCOSSTableV2>(param,
-                                                                          *allocator_,
+                                                                          *allocator_, 
                                                                           table_handle))) {
       LOG_WARN("failed to create co sstable", K(ret), K(param));
     }
   } else {
     if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable(param,
-                                                           *allocator_,
+                                                           *allocator_, 
                                                            table_handle))) {
       LOG_WARN("failed to create sstable", K(ret), K(param));
     }
@@ -310,10 +310,10 @@ int ObRestoredSharedSSTableCreator::create_sstable()
     meta_block_seq.set_index_block();
     pre_warm_param.init(ls_id_, tablet_id_);
     SMART_VAR(ObTabletCreateSSTableParam, param) {
-      if (OB_FAIL(sstable_index_builder_->close_with_macro_seq(res,
-                                                               meta_block_seq.macro_data_seq_,
-                                                               OB_DEFAULT_MACRO_BLOCK_SIZE /*nested_size*/,
-                                                               0 /*nested_offset*/,
+      if (OB_FAIL(sstable_index_builder_->close_with_macro_seq(res, 
+                                                               meta_block_seq.macro_data_seq_, 
+                                                               OB_DEFAULT_MACRO_BLOCK_SIZE /*nested_size*/, 
+                                                               0 /*nested_offset*/, 
                                                                pre_warm_param))) {
         LOG_WARN("failed to close sstable index builder", K(ret), K(tablet_id_), KPC(src_sstable_param_));
       } else if (OB_FAIL(init_create_sstable_param_(res, param))) {
@@ -668,7 +668,7 @@ int ObSSTableCopyFinishTask::process()
     if (GCONF.errsim_migration_tablet_id == copy_ctx_.tablet_id_.id()
       && ObITable::is_major_sstable(copy_ctx_.table_key_.table_type_)
     ) {
-      // inject error when finish copying 3rd major sstable
+      // inject error when finish copying 3rd major sstable 
       if (3 == copy_ctx_.extra_info_->get_major_count()) {
         ret = SSTABLE_COPY_FINISH_TASK_FAILED ? : OB_SUCCESS;
         LOG_ERROR("fake SSTABLE_COPY_FINISH_TASK_FAILED", K(ret), K(copy_ctx_));
@@ -738,7 +738,7 @@ int ObSSTableCopyFinishTask::update_major_sstable_reuse_info_()
     } else {
       LOG_INFO("succeed update major sstable reuse info", K(ret), K(copy_ctx_), K(reuse_info_count));
     }
-
+    
     // if build or count reuse map failed, reset reuse map
     if (OB_FAIL(ret)) {
       copy_ctx_.macro_block_reuse_mgr_->reset();
@@ -757,10 +757,10 @@ int ObSSTableCopyFinishTask::update_copy_tablet_record_extra_info_()
   } else {
     copy_ctx_.extra_info_->add_macro_count(copy_ctx_.total_macro_count_);
     copy_ctx_.extra_info_->add_reuse_macro_count(copy_ctx_.reuse_macro_count_);
-
+    
     if (!ObITable::is_major_sstable(copy_ctx_.table_key_.table_type_)) {
       // skip
-    } else if (OB_NOT_NULL(copy_ctx_.macro_block_reuse_mgr_) &&
+    } else if (OB_NOT_NULL(copy_ctx_.macro_block_reuse_mgr_) && 
          OB_FAIL(copy_ctx_.extra_info_->update_max_reuse_mgr_size(copy_ctx_.macro_block_reuse_mgr_))) {
       LOG_WARN("failed to update max reuse mgr size", K(ret), K(copy_ctx_));
     } else {
@@ -791,9 +791,9 @@ int ObSSTableCopyFinishTask::prepare_data_store_desc_(
   ObTabletHandle tablet_handle;
   const uint64_t tenant_id = MTL_ID();
 
-  if (OB_UNLIKELY(!tablet_id.is_valid()
+  if (OB_UNLIKELY(!tablet_id.is_valid() 
                   || cluster_version < 0
-                  || NULL == sstable_param
+                  || NULL == sstable_param 
                   || NULL == tablet_copy_finish_task_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("prepare sstable index builder get invalid argument", K(ret), K(tablet_id), K(cluster_version), KP(sstable_param));
@@ -848,8 +848,8 @@ int ObSSTableCopyFinishTask::prepare_data_store_desc_(
         sstable_param->table_key_.get_end_scn(),
         cg_schema,
         cg_idx,
-        sstable_param->basic_meta_.table_shared_flag_.is_shared_sstable()
-          ? compaction::ObExecMode::EXEC_MODE_OUTPUT
+        sstable_param->basic_meta_.table_shared_flag_.is_shared_sstable() 
+          ? compaction::ObExecMode::EXEC_MODE_OUTPUT 
           : compaction::ObExecMode::EXEC_MODE_LOCAL))) {
       LOG_WARN("failed to init index store desc for column store table", K(ret), K(cg_idx), KPC(sstable_param), K(cg_schema));
     } else {
@@ -893,14 +893,14 @@ bool ObSSTableCopyFinishTask::is_sstable_should_rebuild_index_(const ObMigration
 {
   // Non-empty SSTable whose macro blocks should be copied needs rebuild index after
   // macros are copied.
-  return !sstable_param->is_empty_sstable()
+  return !sstable_param->is_empty_sstable() 
          && !is_shared_sstable_without_copy_(sstable_param);
 }
 
 bool ObSSTableCopyFinishTask::is_shared_sstable_without_copy_(const ObMigrationSSTableParam *sstable_param) const
 {
   // Shared SSTable is the SSTable whose macro blocks, including data and index blocks,
-  // are all in shared storage or backup storage. During migration or follower restore,
+  // are all in shared storage or backup storage. During migration or follower restore, 
   // macro blocks are no need to be copied.
   return !copy_ctx_.is_leader_restore_ && sstable_param->is_shared_sstable();
 }
@@ -1006,9 +1006,9 @@ int ObSSTableCopyFinishTask::build_restore_macro_block_id_mgr_(
       LOG_WARN("failed to get tablet", K(ret), K(init_param));
     } else if (OB_FAIL(restore_macro_block_id_mgr->init(init_param.tablet_id_,
                                                         tablet_handle,
-                                                        init_param.sstable_macro_range_info_.copy_table_key_,
+                                                        init_param.sstable_macro_range_info_.copy_table_key_, 
                                                         *init_param.restore_base_info_,
-                                                        *init_param.meta_index_store_,
+                                                        *init_param.meta_index_store_, 
                                                         *init_param.second_meta_index_store_))) {
       LOG_WARN("failed to init restore macro block id mgr", K(ret), K(init_param));
     } else {
@@ -1053,7 +1053,7 @@ int ObSSTableCopyFinishTask::check_sstable_valid_()
   } else if (OB_FAIL(sstable->get_meta(sst_meta_hdl))) {
     LOG_WARN("failed to get sstable meta handle", K(ret));
   } else if (OB_FAIL(check_sstable_meta_(*sstable_param_, sst_meta_hdl.get_sstable_meta()))) {
-    LOG_WARN("failed to check sstable meta", K(ret), K(table_key), KPC(sstable_param_),
+    LOG_WARN("failed to check sstable meta", K(ret), K(table_key), KPC(sstable_param_), 
       K(sst_meta_hdl.get_sstable_meta()));
   }
   return ret;
@@ -1148,7 +1148,7 @@ void ObSSTableCopyFinishTask::free_sstable_creator_(ObCopiedSSTableCreatorImpl *
 }
 
 int ObSSTableCopyFinishTask::get_space_optimization_mode_(
-    const ObMigrationSSTableParam *sstable_param,
+    const ObMigrationSSTableParam *sstable_param, 
     ObSSTableIndexBuilder::ObSpaceOptimizationMode &mode)
 {
   int ret = OB_SUCCESS;

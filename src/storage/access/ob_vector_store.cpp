@@ -150,7 +150,7 @@ int ObVectorStore::init(const ObTableAccessParam &param, common::hash::ObHashSet
               default_datum.set_string(out);
             }
           }
-
+          
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(col_params_.push_back(col_param))) {
             LOG_WARN("failed to push back col param", K(ret), K(col_params_.count()));
@@ -200,7 +200,7 @@ int ObVectorStore::check_agg_mask(
 int ObVectorStore::check_need_group_by(const ObTableAccessParam &param)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(nullptr == param.output_exprs_ ||
+  if (OB_UNLIKELY(nullptr == param.output_exprs_ || 
                   nullptr == param.iter_param_.group_by_cols_project_ ||
                   0 == param.iter_param_.group_by_cols_project_->count())) {
     ret = OB_INVALID_ARGUMENT;
@@ -508,7 +508,7 @@ int ObVectorStore::fill_group_by_col_lob_locator(const bool has_lob_out_row)
   const share::schema::ObColumnParam *col_param = group_by_cell_->get_group_by_col_param();
   if (iter_param_->has_lob_column_out() && has_lob_out_row
     && nullptr != col_param && col_param->get_meta_type().is_lob_storage()) {
-    if (OB_FAIL(fill_datums_lob_locator(*iter_param_, context_, *col_param,
+    if (OB_FAIL(fill_datums_lob_locator(*iter_param_, context_, *col_param, 
           group_by_cell_->get_distinct_cnt(), group_by_cell_->get_group_by_col_datums_to_fill(), false))) {
       LOG_WARN("Failed to fill lob locator", K(ret), K(has_lob_out_row), K(col_param), KPC(group_by_cell_), KPC(iter_param_));
     }
@@ -531,7 +531,7 @@ int ObVectorStore::do_group_by(
   if (nullptr != context_.lob_locator_helper_) {
     context_.lob_locator_helper_->reuse();
   }
-  if (OB_FAIL(decoder->read_distinct(group_by_col_offset, nullptr == cell_data ? cell_data_ptrs_ : cell_data,
+  if (OB_FAIL(decoder->read_distinct(group_by_col_offset, nullptr == cell_data ? cell_data_ptrs_ : cell_data, 
       is_pad_char_to_full_length(context_.sql_mode_), *group_by_cell_))) {
     LOG_WARN("Failed to read distinct", K(ret));
   } else if (OB_FAIL(fill_group_by_col_lob_locator(reader->has_lob_out_row()))) {

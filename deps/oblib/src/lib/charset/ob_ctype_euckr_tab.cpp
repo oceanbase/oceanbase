@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #include "lib/charset/ob_ctype_euckr_tab.h"
 
 
@@ -9242,7 +9242,7 @@ int func_ksc5601_uni_onechar(int code) {
     0,      0,      0,      0,      0,      0,      0,      0,      0,
     0,      0,      0,      0,      0,      0,      0,      0xA1CB, 0xA1CC,
     0xA1FE, 0xA3FE, 0,      0xA1CD, 0xA3DC};
-
+    
 int func_uni_ksc5601_onechar(int code) {
   if ((code >= 0x00A1) && (code <= 0x0167))
     return (tab_uni_ksc56010[code - 0x00A1]);

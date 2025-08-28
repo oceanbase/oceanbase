@@ -366,7 +366,7 @@
   INTERFACE_DEF(INTERFACE_DBMS_STATS_SET_SYSTEM_STATS, "SET_SYSTEM_STATS", (ObDbmsStats::set_system_stats))
   INTERFACE_DEF(INTERFACE_DBMS_STATS_ASYNC_GATHER_STATS_JOB_PROC, "ASYNC_GATHER_STATS_JOB_PROC", (ObDbmsStats::async_gather_stats_job_proc))
   //end of dbms_stat
-
+  
   //start of dbms xplan
   INTERFACE_DEF(INTERFACE_DBMS_XPLAN_ENABLE_OPT_TRACE, "ENABLE_OPT_TRACE", (ObDbmsXplan::enable_opt_trace))
   INTERFACE_DEF(INTERFACE_DBMS_XPLAN_DISABLE_OPT_TRACE, "DISABLE_OPT_TRACE", (ObDbmsXplan::disable_opt_trace))
@@ -747,7 +747,7 @@
   INTERFACE_DEF(INTERFACE_JSON_OBJECT_RENAME_KEY, "JSON_OBJECT_RENAME_KEY", (ObPlJsonObject::rename_key))
   INTERFACE_DEF(INTERFACE_JSON_OBJECT_CLONE, "JSON_OBJECT_CLONE", (ObPlJsonObject::clone))
   // end of json_object_t
-
+  
   // start of json_array_t
   INTERFACE_DEF(INTERFACE_JSON_ARRAY_ON_ERROR, "JSON_ARRAY_ON_ERROR", (ObPlJsonArray::set_on_error))
   INTERFACE_DEF(INTERFACE_JSON_ARRAY_PARSE, "JSON_ARRAY_PARSE", (ObPlJsonArray::parse))

@@ -30,7 +30,7 @@ using namespace storage;
 using namespace table;
 
 
-ObTableLoadPreSortWriter::ObTableLoadPreSortWriter()
+ObTableLoadPreSortWriter::ObTableLoadPreSortWriter() 
   : pre_sorter_(nullptr),
     store_writer_(nullptr),
     error_row_handler_(nullptr),
@@ -97,7 +97,7 @@ int ObTableLoadPreSortWriter::write(int32_t session_id,
         LOG_WARN("datum row is nullptr", KR(ret));
       } else if (OB_FAIL(append_row(row.tablet_id_, *datum_row))) {
         LOG_WARN("fail to append row", KR(ret));
-      }
+      } 
     } // for
     if (OB_SUCC(ret)) {
       ATOMIC_AAF(&pre_sorter_->ctx_->job_stat_->store_.processed_rows_, row_array.count());

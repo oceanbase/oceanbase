@@ -284,7 +284,7 @@ protected:
       ObTabletHandle &tablet_handle,
       ObStoreCtxGuard &ctx_guard);
   static int check_mlog_safe_(
-      const ObTablet &tablet,
+      const ObTablet &tablet, 
       const ObTableScanParam &scan_param);
 
   static OB_INLINE int64_t get_lock_wait_timeout_(const int64_t abs_lock_timeout, const int64_t stmt_timeout)

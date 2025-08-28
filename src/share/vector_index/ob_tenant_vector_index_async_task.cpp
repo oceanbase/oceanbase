@@ -42,7 +42,7 @@ void ObVectorIndexHistoryTask::do_work()
     ret = OB_NOT_INIT;
     LOG_WARN("vector index history task is not init", KR(ret));
   } else if (is_paused_) {
-    // timer paused or not leader, do nothing
+    // timer paused or not leader, do nothing 
   } else if (!ObVecIndexAsyncTaskUtil::check_can_do_work()) { // skip
   } else if (!ObTTLUtil::check_can_process_tenant_tasks(tenant_id_)) { // skip
   } else if (OB_FAIL(move_task_to_history_table())) {
@@ -105,7 +105,7 @@ int ObVectorIndexHistoryTask::move_task_to_history_table()
       } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id_))) {
         LOG_WARN("fail start transaction", KR(ret), K_(tenant_id));
       } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::move_task_to_history_table(tenant_id_, batch_size, trans, move_rows))) {
-        LOG_WARN("fail to move task to history table", KR(ret), K(tenant_id_));
+        LOG_WARN("fail to move task to history table", KR(ret), K(tenant_id_));                                      
       }
       if (trans.is_started()) {
         int tmp_ret = OB_SUCCESS;

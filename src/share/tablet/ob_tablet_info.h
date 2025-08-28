@@ -35,7 +35,7 @@ enum class ObDataChecksumType : uint8_t
 
 inline bool is_valid_data_checksum_type(const ObDataChecksumType &type)
 {
-  return type >= ObDataChecksumType::DATA_CHECKSUM_NORMAL
+  return type >= ObDataChecksumType::DATA_CHECKSUM_NORMAL 
       && type < ObDataChecksumType::DATA_CHECKSUM_MAX;
 }
 

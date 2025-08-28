@@ -145,9 +145,9 @@ enum class ObGeoType
   MULTIPOLYGON = 6,
   GEOMETRYCOLLECTION = 7,
   GEOTYPEMAX = 31, // 5 bit for geometry type in column schema,set max 31
-  // 3d geotype is not supported to define as subtype yet,
-  // only use for inner type
-  POINTZ = 1001,
+  // 3d geotype is not supported to define as subtype yet, 
+  // only use for inner type    
+  POINTZ = 1001, 
   LINESTRINGZ = 1002,
   POLYGONZ = 1003,
   MULTIPOINTZ = 1004,
@@ -1323,7 +1323,7 @@ OB_INLINE bool ob_is_int_uint(ObObjTypeClass left_tc, ObObjTypeClass right_tc)
   return (ObIntTC == left_tc && ObUIntTC == right_tc) || (ObIntTC == right_tc && ObUIntTC == left_tc);
 }
 
-OB_INLINE bool ob_is_int_less_than_64(ObObjType type)
+OB_INLINE bool ob_is_int_less_than_64(ObObjType type) 
 {
   return (ObTinyIntType <= type && type <= ObInt32Type)
          || (ObUTinyIntType <= type && type <= ObUInt32Type);
@@ -1608,7 +1608,7 @@ inline bool ob_is_var_len_type(const ObObjType type) {
       || ob_is_lob_locator(type);
 }
 inline bool ob_is_collection_sql_type(const ObObjType type) { return ObCollectionSQLType == type; }
-inline bool is_lob_storage(const ObObjType type) { return ob_is_large_text(type)
+inline bool is_lob_storage(const ObObjType type) { return ob_is_large_text(type) 
                                                           || ob_is_json_tc(type)
                                                           || ob_is_geometry_tc(type)
                                                           || ob_is_collection_sql_type(type)
@@ -1625,7 +1625,7 @@ inline bool is_decimal_int_accuracy_valid(const int16_t precision, const int16_t
 inline bool ob_is_user_defined_sql_type(const ObObjType type) { return ObUserDefinedSQLType == type; }
 inline bool ob_is_user_defined_pl_type(const ObObjType type) { return ObExtendType == type; }
 inline bool ob_is_user_defined_type(const ObObjType type) {
-  return ob_is_user_defined_sql_type(type) || ob_is_user_defined_pl_type(type);
+  return ob_is_user_defined_sql_type(type) || ob_is_user_defined_pl_type(type); 
 }
 // xml type without schema
 inline bool ob_is_xml_sql_type(const ObObjType type, const uint16_t sub_schema_id) {

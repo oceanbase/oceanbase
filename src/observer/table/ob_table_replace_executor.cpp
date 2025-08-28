@@ -185,12 +185,12 @@ int ObTableApiReplaceExecutor::delete_row_to_das()
     } else {
       const ObTableDelCtDef &del_ctdef = replace_ctdef->del_ctdef_;
       bool is_primary_table = (i == 0);
-      ObExpr *calc_part_id_expr = is_primary_table ? conflict_checker_.checker_ctdef_.calc_part_id_expr_
+      ObExpr *calc_part_id_expr = is_primary_table ? conflict_checker_.checker_ctdef_.calc_part_id_expr_ 
                                                     : del_ctdef.old_part_id_expr_;
-      if (OB_FAIL(ObTableApiModifyExecutor::delete_row_to_das(is_primary_table,
+      if (OB_FAIL(ObTableApiModifyExecutor::delete_row_to_das(is_primary_table, 
                                                               calc_part_id_expr,
-                                                              conflict_checker_.checker_ctdef_.part_id_dep_exprs_,
-                                                              del_ctdef,
+                                                              conflict_checker_.checker_ctdef_.part_id_dep_exprs_, 
+                                                              del_ctdef, 
                                                               del_rtdef))) {
         LOG_WARN("fail to delete row to das", K(ret), K(del_ctdef), K(del_rtdef), K(i));
       }
@@ -340,7 +340,7 @@ int ObTableApiReplaceExecutor::prepare_final_replace_task()
   OZ(conflict_checker_.get_primary_table_map(primary_map));
   CK(OB_NOT_NULL(primary_map));
   // Notice: here need to clear the evaluated flag, cause the new_row used in try_insert is the same as old_row in do_delete
-  // and if we don't clear the evaluated flag, the generated columns in old_row won't refresh and will use the new_row result
+  // and if we don't clear the evaluated flag, the generated columns in old_row won't refresh and will use the new_row result 
   // which will cause 4377 when do_delete
   clear_evaluated_flag();
   OZ(do_delete(primary_map));
@@ -456,7 +456,7 @@ int ObTableApiReplaceExecutor::close()
     }
     // close dml das tasks
     close_ret = ObTableApiModifyExecutor::close();
-    // reset the new_row expr datum ptr:
+    // reset the new_row expr datum ptr: 
     // each replace use the same spec in multi_replace and the new_row expr datum will
     // be set to a temporally ObChunkDatumStore when meet conflict row, which will be release after current replace
     // done, so need to reset the datum to its origin reserved buffer.Ohterwise, it may cause use after free in next replace

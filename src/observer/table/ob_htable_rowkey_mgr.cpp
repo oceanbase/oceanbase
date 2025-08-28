@@ -47,11 +47,11 @@ int ObHTableRowkeyMgr::init()
 
 void ObHTableRowkeyMgr::destroy()
 {
-  rowkey_queue_map_.destroy();
+  rowkey_queue_map_.destroy();  
   is_inited_ = false;
 }
 
-void ObHTableRowkeyMgr::record_htable_rowkey(const ObLSID &ls_id, int64_t table_id,
+void ObHTableRowkeyMgr::record_htable_rowkey(const ObLSID &ls_id, int64_t table_id, 
                                              ObTabletID tablet_id, const ObString &rowkey)
 {
   if (ObTTLUtil::is_enable_ttl(MTL_ID())) {
@@ -74,7 +74,7 @@ void ObHTableRowkeyMgr::record_htable_rowkey(const ObLSID &ls_id, int64_t table_
   }
 }
 
-void ObHTableRowkeyMgr::record_htable_rowkey(const ObLSID &ls_id, int64_t table_id,
+void ObHTableRowkeyMgr::record_htable_rowkey(const ObLSID &ls_id, int64_t table_id, 
                                              const ObIArray<ObTabletID> &tablet_ids,
                                              const ObString &rowkey)
 {
@@ -193,7 +193,7 @@ int HRowkeyQueue::push(HRowkeyQueueNode *node)
   return ret;
 }
 
-// return OB_ENTRY_NOT_EXIST if queue is empty
+// return OB_ENTRY_NOT_EXIST if queue is empty  
 int HRowkeyQueue::pop(HRowkeyQueueNode *&node)
 {
   int ret = OB_SUCCESS;

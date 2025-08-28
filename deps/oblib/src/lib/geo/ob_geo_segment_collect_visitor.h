@@ -33,7 +33,7 @@ public:
     is_collect_mono_(false) {}
 
   virtual ~ObGeoSegmentCollectVisitor() {}
-  bool prepare(ObGeometry *geo);
+  bool prepare(ObGeometry *geo);  
   int visit(ObIWkbGeomLineString *geo);
   int visit(ObIWkbGeogLineString *geo);
   int visit(ObIWkbGeomLinearRing *geo);

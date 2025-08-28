@@ -36,11 +36,11 @@ bool IPalfHandleImplGuard::is_valid() const
 }
 
 void IPalfHandleImplGuard::reset()
-{
+{ 
   if (NULL != palf_handle_impl_ && NULL != palf_env_impl_) {
-    palf_env_impl_->revert_palf_handle_impl(palf_handle_impl_);
-  }
-  palf_handle_impl_ = NULL;
+    palf_env_impl_->revert_palf_handle_impl(palf_handle_impl_); 
+  } 
+  palf_handle_impl_ = NULL;  
   palf_env_impl_ = NULL;
   palf_id_ = -1;
 };

@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/expr/ob_shared_expr_resolver.h"
 #include "sql/rewrite/ob_transform_utils.h"
@@ -18,7 +18,7 @@ using namespace oceanbase;
 using namespace oceanbase::sql;
 using namespace oceanbase::lib;
 
-bool ObQuestionmarkEqualCtx::compare_const(const ObConstRawExpr &left,
+bool ObQuestionmarkEqualCtx::compare_const(const ObConstRawExpr &left, 
                                            const ObConstRawExpr &right)
 {
   int &ret = err_code_;
@@ -58,7 +58,7 @@ bool ObRawExprEntry::compare(const ObRawExprEntry &node,
       stmt_scope_ == node.stmt_scope_) {
     bret = (expr_ == node.expr_) ||
            (expr_->same_as(*node.expr_, &cmp_ctx));
-    LOG_TRACE("compare expr entry",
+    LOG_TRACE("compare expr entry", 
               KPNAME(*expr_), KPNAME(*node.expr_), K(bret));
   }
   return bret;
@@ -76,7 +76,7 @@ uint64_t ObSharedExprResolver::hash_expr_tree(ObRawExpr *expr, uint64_t hash_cod
     } else if (expr->get_expr_type() == T_FUN_SYS_CAST) {
       hash_code = hash_expr_tree(expr->get_param_expr(0), hash_code, false);
     } else if (!is_root) {
-      hash_code = common::do_hash((uintptr_t) (expr), hash_code);
+      hash_code = common::do_hash((uintptr_t) (expr), hash_code); 
     } else {
       for (int64_t i = 0; i < expr->get_param_count(); ++i) {
         ObRawExpr *param = expr->get_param_expr(i);
@@ -183,7 +183,7 @@ int ObSharedExprResolver::get_shared_instance(ObRawExpr *expr,
         has_new_param = has_new_param || is_param_new;
         disable_share_expr |= disable_share_child;
       }
-    }
+    }   
   }
   if (OB_SUCC(ret)) {
     if (is_blacklist_share_expr(*expr) || disable_share_expr) {
@@ -191,7 +191,7 @@ int ObSharedExprResolver::get_shared_instance(ObRawExpr *expr,
     } else {
       ObRawExprEntry entry(expr, get_scope_id(), hash_expr_tree(expr, get_scope_id()));
       ObRawExpr *new_expr = NULL;
-      if (!has_new_param &&
+      if (!has_new_param && 
           OB_FAIL(inner_get_shared_expr(entry, new_expr))) {
         LOG_WARN("failed to get shared expr entry", K(ret));
       } else if (NULL != new_expr) {

@@ -94,7 +94,7 @@ int ObServerLogBlockMgr::init(const char *log_disk_base_path)
     CLOG_LOG(ERROR, "do_load_ failed", K(ret), KPC(this), K(log_disk_base_path));
   } else {
     get_tenants_log_disk_size_func_ = [this](int64_t &log_disk_size) -> int
-    {
+    { 
       log_disk_size = 0;
       return get_all_tenants_log_disk_size_(log_disk_size);
     };
@@ -316,7 +316,7 @@ int ObServerLogBlockMgr::create_tenant(const int64_t log_disk_size)
     int64_t tmp_log_disk_size = min_log_disk_size_for_all_tenants_;
     if ((tmp_log_disk_size += log_disk_size) > get_total_size_guarded_by_lock_()) {
       ret = OB_MACHINE_RESOURCE_NOT_ENOUGH;
-      CLOG_LOG(ERROR, "ObServerLogBlockMGR can not hold any new tenants",
+      CLOG_LOG(ERROR, "ObServerLogBlockMGR can not hold any new tenants", 
           K(ret), KPC(this), K(log_disk_size));
     } else {
       min_log_disk_size_for_all_tenants_ = tmp_log_disk_size;
@@ -333,7 +333,7 @@ void ObServerLogBlockMgr::abort_create_tenant(const int64_t log_disk_size)
   } else {
     ObSpinLockGuard guard(resize_lock_);
     min_log_disk_size_for_all_tenants_ -= log_disk_size;
-    OB_ASSERT(min_log_disk_size_for_all_tenants_ >= 0
+    OB_ASSERT(min_log_disk_size_for_all_tenants_ >= 0 
         && min_log_disk_size_for_all_tenants_ <= get_total_size_guarded_by_lock_());
     CLOG_LOG(INFO, "ObServerLogBlockMGR abort_create_tenant success", KPC(this), K(log_disk_size));
   }
@@ -380,7 +380,7 @@ int ObServerLogBlockMgr::update_tenant(const int64_t old_log_disk_size,
     //      two scenarios:
     //      1. if 'palf_log_disk_size' which get from palf is 100G, we think palf is still in shrinking status. and we will
     //         construct 'new_unit' with 100G because 'palf_log_disk_size' is greater than new log disk size(80G). but udpate
-    //         palf with 80G
+    //         palf with 80G 
     //      2. if 'palf_log_disk_size' which get from palf is 50G, we think palf has been in normal status. and we will
     //         construct 'new_unit' with 80G because 'palf_log_disk_size' is smaller than new log disk size(80G), but udpate
     //         palf with 80G.
@@ -390,9 +390,9 @@ int ObServerLogBlockMgr::update_tenant(const int64_t old_log_disk_size,
     //     for ObTenantNodeBalancer, and min_log_disk_size_for_all_tenants_ can not be reduce.
   } else if (FALSE_IT(can_update_log_disk_size_with_expected_log_disk =
                       (new_log_disk_size >= palf_log_disk_size || 0 == new_log_disk_size))) {
-    // For expanding log disk, we can update 'allowed_new_log_disk_size' to 'new_log_disk_size' directlly.
+    // For expanding log disk, we can update 'allowed_new_log_disk_size' to 'new_log_disk_size' directlly. 
   } else if (can_update_log_disk_size_with_expected_log_disk && FALSE_IT(allowed_new_log_disk_size = new_log_disk_size)) {
-    // For shrinking log disk, we still update log disk size of 'new_unit' to 'old_log_disk_size'.
+    // For shrinking log disk, we still update log disk size of 'new_unit' to 'old_log_disk_size'. 
   } else if (!can_update_log_disk_size_with_expected_log_disk && FALSE_IT(allowed_new_log_disk_size = old_log_disk_size)) {
   } else if ((tmp_log_disk_size += allowed_new_log_disk_size) > get_total_size_guarded_by_lock_()) {
     ret = OB_MACHINE_RESOURCE_NOT_ENOUGH;
@@ -400,7 +400,7 @@ int ObServerLogBlockMgr::update_tenant(const int64_t old_log_disk_size,
              K(new_log_disk_size), K(allowed_new_log_disk_size), K(tmp_log_disk_size));
     // case 1: for shrinking log disk, shrinking log disk from 100G to 50G.
     //         - At T1 timestamp, 'new_log_disk_size' is 50G, 'old_log_disk_size' is 100G, 'allowed_new_log_disk_size' is 100G.
-    //           the log disk size record in slog is 100G, and we will update log disk size used for palf to 50G, but not update log
+    //           the log disk size record in slog is 100G, and we will update log disk size used for palf to 50G, but not update log 
     //           disk which has assigned in ObServerLogBlockMGR.
     //         - At T2 timestamp, 'new_log_disk_size' is still 50G, 'old_log_disk_size' is still 100G, however, 'allowed_new_log_disk_size'
     //           is 50G because of shrinking log disk has been successfully, the log disk record in slog is 50G, and then we will update log disk
@@ -408,12 +408,12 @@ int ObServerLogBlockMgr::update_tenant(const int64_t old_log_disk_size,
     //
     // case 2: for expanding log disk, expanding log disk from 100G to 150G.
     //         - At T1 timestamp, 'new_log_disk_size' is 150G, 'old_log_disk_size' is 100G, 'allowed_new_log_disk_size' is 150G.
-    //           the log disk size record in slog is 150G, and then, we will update log disk size used for palf to 150G, the log disk
+    //           the log disk size record in slog is 150G, and then, we will update log disk size used for palf to 150G, the log disk 
     //           which has assigned in ObServerLogBlockMGR updaet to 150G(assume there is only one tenant).
     //
     // case 3: for shrinking log disk, shrinking log disk from 100G to 50G, and then shrinking log disk from 50G to 25G.
     //         - At T1 timestamp, 'new_log_disk_size' is 50G, 'old_log_disk_size' is 100G, 'allowed_new_log_disk_size' is 100G.
-    //           the log disk size record in slog is 100G, and we will update log disk size used for palf to 50G, but not update log
+    //           the log disk size record in slog is 100G, and we will update log disk size used for palf to 50G, but not update log 
     //           disk which has assigned in ObServerLogBlockMGR.
     //         - At T2 timestamp, 'new_log_disk_size' is 25G, 'old_log_disk_size' is still 100G, however, there are two possibility value for
     //           'allowed_new_log_disk_size':
@@ -428,7 +428,7 @@ int ObServerLogBlockMgr::update_tenant(const int64_t old_log_disk_size,
     //
     // case 4: for shrinking log disk, shrinking log disk from 100G to 50G, and then expanding log disk from 50G to 80G.
     //         - At T1 timestamp, 'new_log_disk_size' is 50G, 'old_log_disk_size' is 100G, 'allowed_new_log_disk_size' is 100G.
-    //           the log disk size record in slog is 100G, and we will update log disk size used for palf to 50G, but not update log
+    //           the log disk size record in slog is 100G, and we will update log disk size used for palf to 50G, but not update log 
     //           disk which has assigned in ObServerLogBlockMGR.
     //         - At T2 timestamp, 'new_log_disk_size' is 80G, 'old_log_disk_size' is still 100G, however, there are two possibility value for
     //           'allowed_new_log_disk_size':
@@ -449,7 +449,7 @@ int ObServerLogBlockMgr::update_tenant(const int64_t old_log_disk_size,
     CLOG_LOG(INFO, "update_tenant success", KPC(this), K(new_log_disk_size), K(old_log_disk_size),
              K(allowed_new_log_disk_size));
   }
-
+  
   return ret;
 }
 
@@ -463,7 +463,7 @@ int ObServerLogBlockMgr::remove_tenant(const int64_t log_disk_size)
     ObSpinLockGuard guard(resize_lock_);
     if (min_log_disk_size_for_all_tenants_ - log_disk_size < 0) {
       ret = OB_ERR_UNEXPECTED;
-      CLOG_LOG(ERROR, "unexpected error, min_log_disk_size_for_all_tenants_ is small than zero",
+      CLOG_LOG(ERROR, "unexpected error, min_log_disk_size_for_all_tenants_ is small than zero", 
           K(ret), KPC(this), K(log_disk_size));
     } else {
       min_log_disk_size_for_all_tenants_ -= log_disk_size;

@@ -46,7 +46,7 @@ public:
   virtual ~ObPLCGMallocCallback() {}
   virtual void operator()(const ObMemAttr &attr, int64_t add_size) override
   {
-    if ((ObLabel(GET_PL_MOD_STRING(pl::OB_PL_JIT)) == attr.label_
+    if ((ObLabel(GET_PL_MOD_STRING(pl::OB_PL_JIT)) == attr.label_ 
         || ObLabel(GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN)) == attr.label_)
         && attr.ctx_id_ == ObCtxIds::GLIBC) {
       mem_used_ += add_size;
@@ -107,7 +107,7 @@ public:
   static int update_schema_object_dep_info(ObIArray<ObSchemaObjVersion> &dp_tbl,
                                            uint64_t tenant_id,
                                            uint64_t owner_id,
-                                           uint64_t dep_obj_id,
+                                           uint64_t dep_obj_id, 
                                            uint64_t schema_version,
                                            share::schema::ObObjectType dep_obj_type);
   static int init_function(share::schema::ObSchemaGetterGuard &schema_guard,
@@ -164,7 +164,7 @@ public:
                        ObPLCompileUnitAST &compile_unit,
                        int &ret,
                        const ObPLBlockNS *prarent_ns = nullptr);
-
+  
   ObPLCompilerEnvGuard(const ObRoutineInfo &info,
                        ObSQLSessionInfo &session_info,
                        share::schema::ObSchemaGetterGuard &schema_guard,

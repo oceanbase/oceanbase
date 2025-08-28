@@ -103,7 +103,7 @@ int ObCreateStandbyTenantResolver::resolve(const ParseNode &parse_tree)
       }
     }
   }
-
+  
   return ret;
 }
 

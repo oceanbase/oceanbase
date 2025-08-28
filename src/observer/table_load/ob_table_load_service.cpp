@@ -548,7 +548,7 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
                                                                       compat_version))) {
       LOG_WARN("fail to check support direct load for partition level", KR(ret));
     }
-    // check insert overwrite
+    // check insert overwrite 
     else if (ObDirectLoadMode::is_insert_overwrite(load_mode)
              && compat_version < DATA_VERSION_4_3_2_0) {
       ret = OB_NOT_SUPPORTED;
@@ -855,7 +855,7 @@ int ObTableLoadService::remove_ctx(ObTableLoadTableCtx *table_ctx)
           LOG_WARN("fail to recycle_memory", KR(tmp_ret), K(release_arg.task_key_));
         }
         table_ctx->reset_assigned_memory();
-      }
+      } 
       if (table_ctx->is_assigned_resource()) {
         if (OB_TMP_FAIL(ObTableLoadService::delete_assigned_task(release_arg))) {
           LOG_WARN("fail to delete assigned task", KR(tmp_ret), K(release_arg));

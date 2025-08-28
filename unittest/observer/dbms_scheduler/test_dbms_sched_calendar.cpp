@@ -427,7 +427,7 @@ TEST_F(ObDBMSSchedCalendarTest, test_freq_yearly)
       ASSERT_EQ(next_tm.tm_mon, 0);
       ASSERT_EQ(next_tm.tm_year, current_tm.tm_year + 2);
     }
-
+    
     {
       snprintf(calendar_expr_buf, 256, "FREQ=YEARLY; INTERVAL=2; BYYEARDAY=1,2; BYHOUR=0,1; BYMINUTE=0,1; BYSECOND=0,1");
       ASSERT_EQ(OB_SUCCESS, util.calc_repeat_interval_next_date(calendar_expr_buf, 0, next_date));
@@ -462,7 +462,7 @@ TEST_F(ObDBMSSchedCalendarTest, test_freq_only)
   time_t current_time = time(NULL);
   struct tm current_tm = *localtime(&current_time);
   char calendar_expr_buf[256];
-
+  
   // 测试只有 FREQ=YEARLY 的情况
   {
     snprintf(calendar_expr_buf, 256, "FREQ=YEARLY");
@@ -795,3 +795,4 @@ int main(int argc, char **argv)
   ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }
+

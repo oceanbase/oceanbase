@@ -38,7 +38,7 @@ static int pipefd_handle_event(pipefd_t *s)
                        client_fd_info.client_fd, client_fd_info.client_gid, errno);
         if (client_fd_info.client_fd >= 0) {
           shutdown(client_fd_info.client_fd, SHUT_WR);
-          if (0 != libc_epoll_ctl(client_fd_info.org_epfd, EPOLL_CTL_ADD,
+          if (0 != libc_epoll_ctl(client_fd_info.org_epfd, EPOLL_CTL_ADD, 
                                   client_fd_info.client_fd, &client_fd_info.event)) {
             ussl_log_error("give back fd to origin epoll failed, fd:%d, errno:%d",
                            client_fd_info.client_fd, errno);
@@ -54,7 +54,7 @@ static int pipefd_handle_event(pipefd_t *s)
                          client_fd_info.client_fd, client_fd_info.client_gid, errno);
           if (client_fd_info.client_fd >= 0) {
             shutdown(client_fd_info.client_fd, SHUT_WR);
-            if (0 != libc_epoll_ctl(client_fd_info.org_epfd, EPOLL_CTL_ADD,
+            if (0 != libc_epoll_ctl(client_fd_info.org_epfd, EPOLL_CTL_ADD, 
                                     client_fd_info.client_fd, &client_fd_info.event)) {
               ussl_log_warn("give back fd to origin epoll failed, fd:%d, errno:%d",
                              client_fd_info.client_fd, errno);

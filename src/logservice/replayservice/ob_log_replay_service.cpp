@@ -123,7 +123,7 @@ void ReplayProcessStat::runTimerTask()
   } else if (OB_FAIL(rp_sv_->stat_all_ls_replay_process(submitted_log_size, unsubmitted_log_size,
                                                         replayed_log_size, unreplayed_log_size))) {
     CLOG_LOG(WARN, "stat_all_ls_replay_process failed", K(ret));
-  } else if (0 > submitted_log_size || 0 > unsubmitted_log_size
+  } else if (0 > submitted_log_size || 0 > unsubmitted_log_size 
             || 0 > replayed_log_size || 0 > unreplayed_log_size) {
     CLOG_LOG(WARN, "stat_all_ls_replay_process failed", K(ret));
   } else if (-1 == last_replayed_log_size_) {

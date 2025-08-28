@@ -50,14 +50,14 @@ int ObTimestampService::mtl_init(ObTimestampService *&timestamp_service)
 
 // The interface for getting gts timestamp, actually a wrapper of ObIDService::get_number.
 //
-// For most cases, the gts service uses the machine clock's time as gts timestamp, which means
-// the gts service advances as fast as the machine clock. Howerver, when the gts service switches
-// leader, the new leader will pre-allocate a range of timestamps, and this can lead to the gts
-// timestamp becoming larger than the machine clock's time. Then the gts service will slow down to
+// For most cases, the gts service uses the machine clock's time as gts timestamp, which means 
+// the gts service advances as fast as the machine clock. Howerver, when the gts service switches 
+// leader, the new leader will pre-allocate a range of timestamps, and this can lead to the gts 
+// timestamp becoming larger than the machine clock's time. Then the gts service will slow down to 
 // wait the machine clock. But we don't want the gts service to advance too slowly(when the request
-// rate is low), since the observer may wait too long before the gts timestamp crosses log SCN.
-// So we periodically check the gts service's advancing speed, and if it's far slower than the
-// machine clock, we manually push the gts ahead.
+// rate is low), since the observer may wait too long before the gts timestamp crosses log SCN. 
+// So we periodically check the gts service's advancing speed, and if it's far slower than the 
+// machine clock, we manually push the gts ahead. 
 int ObTimestampService::get_timestamp(int64_t &gts)
 {
   int ret = OB_SUCCESS;
@@ -107,7 +107,7 @@ int ObTimestampService::get_timestamp(int64_t &gts)
       ATOMIC_STORE(&check_gts_speed_lock_, 0);
     }
   }
-
+  
   return ret;
 }
 
@@ -262,11 +262,11 @@ int ObTimestampService::switch_to_leader()
       const int64_t tmp_last_id = ATOMIC_LOAD(&tmp_last_id_);
       if ((tmp_last_id != 0 && standby_last_id > tmp_last_id)
            || (tmp_last_id == 0 && standby_last_id > ATOMIC_LOAD(&last_id_))) {
-        TRANS_LOG(ERROR, "snapshot rolls back", K(standby_last_id), K(tmp_last_id), "limit_id", ATOMIC_LOAD(&limited_id_),
+        TRANS_LOG(ERROR, "snapshot rolls back", K(standby_last_id), K(tmp_last_id), "limit_id", ATOMIC_LOAD(&limited_id_), 
                          "last_id", ATOMIC_LOAD(&last_id_), K(version));
       }
       MTL(ObTimestampAccess *)->set_service_type(ObTimestampAccess::ServiceType::GTS_LEADER);
-      TRANS_LOG(INFO, "ObTimestampService switch to leader success", K(ret), K(version), K(last_id_), K(limited_id_),
+      TRANS_LOG(INFO, "ObTimestampService switch to leader success", K(ret), K(version), K(last_id_), K(limited_id_), 
                       "service_type", MTL(ObTimestampAccess *)->get_service_type());
     }
   }

@@ -335,9 +335,9 @@ private:
       ObCOMergeBatchExeDag *&dag,
       common::ObIArray<ObCOMergeBatchExeDag *> &exe_dag_array);
   int inner_create_column_store_dag(
-      ObIDag *parent_dag,
+      ObIDag *parent_dag, 
       int64_t &allowed_schedule_dag_count,
-      const int64_t &max_cg_idx,
+      const int64_t &max_cg_idx, 
       ObCOMergeBatchExeDag *&dag,
       common::ObIArray<ObCOMergeBatchExeDag *> &exe_dag_array);
   int inner_add_exe_dags_into_scheduler(

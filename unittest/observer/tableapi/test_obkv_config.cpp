@@ -19,9 +19,9 @@ using namespace share;
 namespace common
 {
 ObConfigContainer l_container;
-static ObConfigContainer *local_container()
-{
-  return &l_container;
+static ObConfigContainer *local_container() 
+{   
+  return &l_container; 
 }
 class TestObKvConfig : public ::testing::Test
 {

@@ -1250,7 +1250,7 @@ int ObLSLocationService::check_ls_needing_renew(
         || ls_loc.get_renew_time() <= expire_renew_time) {
       // ignore ret
       ret = OB_SUCCESS;
-      need_renew = true;
+      need_renew = true; 
     } else {
       need_renew = false;
     }

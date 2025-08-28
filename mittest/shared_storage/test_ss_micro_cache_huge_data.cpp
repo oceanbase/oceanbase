@@ -67,7 +67,7 @@ public:
       K_(arc_limit));
   };
 
-  class TestSSMicroCacheHugeDataThread : public Threads
+  class TestSSMicroCacheHugeDataThread : public Threads 
   {
   public:
     TestSSMicroCacheHugeDataThread(ObTenantBase *tenant_base, TestSSMicroCacheHugeDataCtx &ctx)
@@ -233,7 +233,7 @@ TEST_F(TestSSMicroCacheHugeData, test_add_huge_micro_data)
          && (ObTimeUtility::current_time() - start_us <= CASE_TIMEOUT_US)) {
     ob_usleep(1000 * 1000);
   }
-
+  
   ASSERT_GT(cache_stat.mem_blk_stat().mem_blk_fg_max_cnt_, cache_stat.mem_blk_stat().mem_blk_fg_used_cnt_);
   ASSERT_GT(cache_stat.mem_blk_stat().mem_blk_bg_max_cnt_, cache_stat.mem_blk_stat().mem_blk_bg_used_cnt_);
   int64_t max_result_val = arc_info.limit_ * 105 / 100;
@@ -241,7 +241,7 @@ TEST_F(TestSSMicroCacheHugeData, test_add_huge_micro_data)
   ASSERT_LT(min_result_val, cache_stat.micro_stat().valid_micro_size_);
   ASSERT_GT(max_result_val, cache_stat.micro_stat().valid_micro_size_);
   const int64_t ori_valid_size = arc_info.get_valid_size();
-
+  
   LOG_INFO("TEST: start update arc", K(cache_stat), K(arc_info));
   micro_ckpt_task.ckpt_op_.enable_update_arc_limit_ = false;
   ob_usleep(1000);
@@ -252,7 +252,7 @@ TEST_F(TestSSMicroCacheHugeData, test_add_huge_micro_data)
   ob_usleep(10 * 1000 * 1000);
   LOG_INFO("TEST: finish update arc", K(cache_stat), K(arc_info));
   ASSERT_LT(arc_info.get_valid_size(), ori_valid_size);
-
+  
 }
 
 } // namespace storage

@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 //int xxx_sk_do_flush(xxx_sk_t* s, int64_t* remain);
 
 /* errors

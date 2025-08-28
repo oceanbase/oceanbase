@@ -478,7 +478,7 @@ public:
   virtual ~ObLSBackupDataTask();
   int init(const int64_t task_id, const share::ObBackupDataType &backup_data_type,
       const common::ObIArray<ObBackupProviderItem> &backup_items, const ObLSBackupDataParam &param,
-      const ObBackupReportCtx &report_ctx, ObLSBackupCtx &ls_backup_ctx, ObIBackupTabletProvider &provider,
+      const ObBackupReportCtx &report_ctx, ObLSBackupCtx &ls_backup_ctx, ObIBackupTabletProvider &provider, 
       ObBackupMacroBlockTaskMgr &task_mgr, ObBackupIndexKVCache &kv_cache, share::ObIDag *index_rebuild_dag);
   virtual int process() override;
 
@@ -563,7 +563,7 @@ private:
   int setup_io_storage_info_(const share::ObBackupDest &backup_dest, char *buf, const int64_t len, common::ObIODOpts *iod_opts);
   int setup_io_device_opts_(const int64_t task_id, const ObBackupIntermediateTreeType &tree_type, common::ObIODOpts *iod_opts);
   int get_index_block_rebuilder_ptr_(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key,
-      ObIndexBlockRebuilder *&index_block_rebuilder);
+      ObIndexBlockRebuilder *&index_block_rebuilder); 
   int prepare_index_block_rebuilder_if_need_(const ObBackupProviderItem &item, const int64_t *task_idx);
   int append_macro_row_to_rebuilder_(const ObBackupProviderItem &item,
       const blocksstable::ObBufferReader &buffer_reader, const ObBackupDeviceMacroBlockId &physical_id);
@@ -663,3 +663,4 @@ private:
 }  // namespace oceanbase
 
 #endif
+

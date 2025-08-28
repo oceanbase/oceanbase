@@ -18,7 +18,7 @@
 
 namespace oceanbase
 {
-namespace backup
+namespace backup 
 {
 
 class ObInitialBackupTabletGroupFuseTask : public share::ObITask
@@ -102,7 +102,7 @@ private:
       const common::ObTabletID &tablet_id,
       bool &tablet_reoragnized);
   int fetch_tablet_meta_in_user_data_(
-      const ObBackupMetaIndex &meta_index,
+      const ObBackupMetaIndex &meta_index, 
       ObMigrationTabletParam &tablet_param);
   int fuse_tablet_item_(
       const ObBackupTabletFuseItem &fuse_item,

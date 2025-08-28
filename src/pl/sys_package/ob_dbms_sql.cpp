@@ -420,7 +420,7 @@ int ObDbmsInfo::column_value(sql::ObSQLSessionInfo *session,
     ObObjParam src;
     if (OB_FAIL(ob_write_obj(*allocator, src_obj, src))) {
       LOG_WARN("write obj failed", K(ret), K(src_obj));
-    } else if (OB_INVALID_SIZE != column_size
+    } else if (OB_INVALID_SIZE != column_size 
         && !ob_is_accuracy_length_valid_tc(result_type.get_type())) {
       ret = OB_ERR_BIND_TYPE_NOT_MATCH_COLUMN;
       LOG_WARN("define column type and column value type are not match",
@@ -470,7 +470,7 @@ int ObDbmsInfo::column_value(sql::ObSQLSessionInfo *session,
           }
           LOG_DEBUG("column add key ", K(col_idx), K(index), K(desc->cur_idx_), K(desc->lower_bnd_), K(key.get_int32()), K(table->get_key(index-1)->get_int32()));
           OX (++desc->cur_idx_);
-        }
+        }    
         LOG_DEBUG("column value set last and first", K(desc->lower_bnd_), K(table->get_first()), K(table->get_actual_count()), K(table->get_last()));
       } else {
         ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
@@ -675,11 +675,11 @@ int ObDbmsCursorInfo::column_value(sql::ObSQLSessionInfo *session,
     // do nothing;
   } else if (col_idx >= get_current_row().get_count()) {
     ret = OB_ERROR_OUT_OF_RANGE;
-    LOG_WARN("column column idx out of range", K(ret), K(col_idx),
+    LOG_WARN("column column idx out of range", K(ret), K(col_idx), 
       K(get_current_row().get_count()));
   } else {
-    ret = ObDbmsInfo::column_value(session, allocator, col_idx,
-                                    get_current_row().get_cell(col_idx),
+    ret = ObDbmsInfo::column_value(session, allocator, col_idx, 
+                                    get_current_row().get_cell(col_idx), 
                                     result_type, result);
   }
   return ret;
@@ -859,9 +859,9 @@ int ObPLDbmsSql::do_parse(ObExecContext &exec_ctx,
     CK (OB_NOT_NULL(exec_ctx.get_my_session()));
     OZ (sql_str.append(sql_cs));
     OX (cursor->get_field_columns().set_allocator(&cursor->get_dbms_entity()->get_arena_allocator()));
-    OZ (ObSPIService::prepare_dynamic(&pl_ctx,
+    OZ (ObSPIService::prepare_dynamic(&pl_ctx, 
                                       cursor->get_dbms_entity()->get_arena_allocator(),
-                                      false/*is_returning*/,
+                                      false/*is_returning*/, 
                                       true,
                                       cursor->get_param_name_count(),
                                       sql_str,
@@ -1189,8 +1189,8 @@ int ObPLDbmsSql::fetch_rows(ObExecContext &exec_ctx, ParamStore &params, ObObj &
   return ret;
 }
 
-int ObPLDbmsSql::do_fetch(ObExecContext &exec_ctx,
-                          ParamStore &params,
+int ObPLDbmsSql::do_fetch(ObExecContext &exec_ctx, 
+                          ParamStore &params, 
                           ObObj &result,
                           ObDbmsCursorInfo &cursor) {
   int ret = OB_SUCCESS;
@@ -1559,7 +1559,7 @@ int ObPLDbmsSql::execute_and_fetch(ObExecContext &exec_ctx, ParamStore &params, 
     }
   }
   // todo : when dbms_cursor support stream cursor need change here
-  if (OB_SUCC(ret) && (!cursor->isopen()
+  if (OB_SUCC(ret) && (!cursor->isopen() 
                         || (cursor->isopen() && cursor->get_rowcount() == cursor->get_spi_cursor()->cur_))) {
     bool flag = false;
     OZ (check_stmt_need_to_be_executed_when_parsing(*cursor, flag));
@@ -1594,7 +1594,7 @@ int ObPLDbmsSql::execute_and_fetch(ObExecContext &exec_ctx, ParamStore &params, 
   }
   if (!has_open || (OB_NOT_NULL(cursor) && !cursor->get_fetched())) {
     OZ (do_fetch(exec_ctx, params, result, *cursor));
-  } else {
+  } else { 
     OZ (fetch_cnt.from(static_cast<int64_t>(1), exec_ctx.get_allocator()));
     OX (result.set_number(fetch_cnt));
   }
@@ -1607,16 +1607,16 @@ int ObPLDbmsSql::execute_and_fetch(ObExecContext &exec_ctx, ParamStore &params, 
  *  1. fill cursor field
  *  2. fill spi_cursor. (which result row_store include)
  *  3. close old cursor
- *
+ * 
  * orig cursor maybe two part
  *  1. stream cursor
  *      use fill_cursor to fill dbms cursor
  *  2. unstream cursor
  *      fetch row store to fill dbms cursor
- *
- */
-int ObPLDbmsSql::fill_dbms_cursor(ObSQLSessionInfo *session,
-                                  ObPLCursorInfo *cursor,
+ * 
+ */ 
+int ObPLDbmsSql::fill_dbms_cursor(ObSQLSessionInfo *session, 
+                                  ObPLCursorInfo *cursor, 
                                   ObDbmsCursorInfo *new_cursor)
 {
   int ret = OB_SUCCESS;
@@ -1630,7 +1630,7 @@ int ObPLDbmsSql::fill_dbms_cursor(ObSQLSessionInfo *session,
         : OB_NOT_NULL(cursor->get_spi_cursor()));
   OZ (ObDbmsInfo::deep_copy_field_columns(
                   new_cursor->get_dbms_entity()->get_arena_allocator(),
-                  cursor->is_streaming()
+                  cursor->is_streaming()  
                     ? cursor->get_cursor_handler()->get_result_set()->get_field_columns()
                     : &(cursor->get_spi_cursor()->fields_),
                   new_cursor->get_field_columns()));
@@ -1643,7 +1643,7 @@ int ObPLDbmsSql::fill_dbms_cursor(ObSQLSessionInfo *session,
                                 false,
                                 session));
   OV (OB_NOT_NULL(spi_cursor));
-
+  
   if OB_FAIL(ret) {
     // do nothing
   } else {
@@ -1658,7 +1658,7 @@ int ObPLDbmsSql::fill_dbms_cursor(ObSQLSessionInfo *session,
         type.set_meta_type(orig_spi_cursor->fields_.at(i).type_.get_meta());
         type.set_accuracy(orig_spi_cursor->fields_.at(i).accuracy_);
         if (OB_FAIL(spi_cursor->row_desc_.push_back(type))) {
-          LOG_WARN("push back error", K(i), K(orig_spi_cursor->fields_.at(i).type_),
+          LOG_WARN("push back error", K(i), K(orig_spi_cursor->fields_.at(i).type_), 
             K(orig_spi_cursor->fields_.at(i).accuracy_), K(ret));
         }
       }
@@ -1687,18 +1687,18 @@ int ObPLDbmsSql::to_cursor_number(ObExecContext &exec_ctx, ParamStore &params, O
 {
   int ret = OB_SUCCESS;
   /* TODO : to_cursor_number param type check
-   * oracle :
+   * oracle : 
    *  1. NULL type report OB_ERR_EXP_NOT_ASSIGNABLE
    *  2. wrong type report OB_ERR_CALL_WRONG_ARG
    *  3. cursor type but cursor not init or be set to null report OB_ERR_INVALID_CURSOR
-   * OB :
+   * OB : 
    *  1. in out param not support const value, to_cursor_number(NULL) report -5592
    *  2. wrong type will report -5555 when pick_routine
    *  3. oracle report OB_ERR_INVALID_CURSOR when cursor type be set to null, other ext type will report OB_ERR_CALL_WRONG_ARG .
    *    IN OB, when a ext type be set to null, get_extend_type() will be set to a invalid type. we can't distinguish them by get_extend_type(),
    *    we will all report OB_ERR_CALL_WRONG_ARG now.
-   */
-  if (params.at(0).is_ext() && (params.at(0).get_meta().get_extend_type() == PL_CURSOR_TYPE
+   */ 
+  if (params.at(0).is_ext() && (params.at(0).get_meta().get_extend_type() == PL_CURSOR_TYPE 
         || params.at(0).get_meta().get_extend_type() == PL_REF_CURSOR_TYPE)) {
     ObPLCursorInfo *cursor = reinterpret_cast<ObPLCursorInfo *>(params.at(0).get_ext());
     if (NULL != cursor) {
@@ -1754,7 +1754,7 @@ int ObPLDbmsSql::to_refcursor(ObExecContext &exec_ctx, ParamStore &params, ObObj
   }
   OZ (get_cursor(exec_ctx, params, cursor));
   CK (OB_NOT_NULL(cursor));
-  if (OB_SUCC(ret) && (cursor->get_sql_stmt().empty()
+  if (OB_SUCC(ret) && (cursor->get_sql_stmt().empty() 
                       || !ObStmt::is_select_stmt(cursor->get_stmt_type())
                       || !cursor->isopen()
                       || (cursor->get_fetched() && !cursor->get_fetched_with_row()))) {
@@ -1767,7 +1767,7 @@ int ObPLDbmsSql::to_refcursor(ObExecContext &exec_ctx, ParamStore &params, ObObj
     if (!cursor_info->is_streaming()) {
       ObSPICursor* spi_cursor = cursor_info->get_spi_cursor();
       CK (OB_NOT_NULL(spi_cursor));
-      OZ (ObDbmsInfo::deep_copy_field_columns(*cursor->get_allocator(),
+      OZ (ObDbmsInfo::deep_copy_field_columns(*cursor->get_allocator(), 
                                               cursor->get_field_columns(),
                                               spi_cursor->fields_));
     }

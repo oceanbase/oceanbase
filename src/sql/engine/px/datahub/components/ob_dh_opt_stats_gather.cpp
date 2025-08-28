@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_dh_opt_stats_gather.h"
 #include "sql/engine/opt_statistics/ob_optimizer_stats_gathering_op.h"
@@ -54,7 +54,7 @@ OB_DEF_DESERIALIZE(ObOptStatsGatherPieceMsg)
         LOG_WARN("push back datum store failed", K(ret), K(i));
       }
     }
-    size = 0;
+    size = 0;  
     OB_UNIS_DECODE(size)
     for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
       int col_stat_size = 0;
@@ -111,7 +111,7 @@ int ObOptStatsGatherPieceMsgListener::on_message(
     if (OB_ISNULL(kit) || OB_ISNULL(kit->op_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null op kit", K(ret), K(kit));
-    } else if (OB_UNLIKELY(PHY_OPTIMIZER_STATS_GATHERING != kit->op_->get_spec().type_)) {
+    } else if (OB_UNLIKELY(PHY_OPTIMIZER_STATS_GATHERING != kit->op_->get_spec().type_)) { 
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected op", K(ret), K(kit->op_->get_spec().type_));
     } else {
@@ -150,3 +150,4 @@ int ObOptStatsGatherPieceMsgCtx::alloc_piece_msg_ctx(const ObOptStatsGatherPiece
 
   return ret;
 }
+

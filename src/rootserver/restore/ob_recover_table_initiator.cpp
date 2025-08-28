@@ -33,7 +33,7 @@ int ObRecoverTableInitiator::init(
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
-    LOG_WARN("ObRecoverTableInitiator init twice", K(ret));
+    LOG_WARN("ObRecoverTableInitiator init twice", K(ret)); 
   } else if (OB_ISNULL(schema_service) || OB_ISNULL(schema_service)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("schema service and sql prxoy must not be null", K(ret));
@@ -54,7 +54,7 @@ int ObRecoverTableInitiator::initiate_recover_table(const obrpc::ObRecoverTableA
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid ObRecoverTableArg", K(ret), K(arg));
-  } else if (OB_FAIL(check_before_initiate_(arg))) {
+  } else if (OB_FAIL(check_before_initiate_(arg))) { 
     LOG_WARN("failed to check before initiate", K(ret));
   } else if (obrpc::ObRecoverTableArg::Action::INITIATE == arg.action_) {
     if (OB_FAIL(start_recover_table_(arg))) {
@@ -89,7 +89,7 @@ int ObRecoverTableInitiator::is_recover_job_exist(const uint64_t target_tenant_i
 int ObRecoverTableInitiator::start_recover_table_(const obrpc::ObRecoverTableArg &arg)
 {
   int ret = OB_SUCCESS;
-  share::ObRecoverTableJob job;
+  share::ObRecoverTableJob job;  
   ObPhysicalRestoreJob physical_restore_job;
   if (OB_FALSE_IT(job.set_status(share::ObRecoverTableStatus::PREPARE))) {
   } else if (OB_FAIL(job.set_target_tenant_name(arg.tenant_name_))) {
@@ -109,7 +109,7 @@ int ObRecoverTableInitiator::start_recover_table_(const obrpc::ObRecoverTableArg
     LOG_WARN("failed to insert sys recover table job", K(ret));
   } else {
     LOG_INFO("initiate recover table succeed", K(ret), K(job));
-  }
+  } 
   uint64_t tenant_id = arg.tenant_id_;
   int64_t job_id = job.get_job_id();
   share::ObTaskId trace_id(*ObCurTraceId::get_trace_id());
@@ -140,7 +140,7 @@ int ObRecoverTableInitiator::cancel_recover_table_(const obrpc::ObRecoverTableAr
       ret = OB_SUCC(ret) ? tmp_ret : ret;
       LOG_WARN("failed to end trans", K(ret));
     }
-  }
+  } 
 
   ROOTSERVICE_EVENT_ADD("recover_table", "cancel_recover_table", "tenant_id", arg.tenant_id_, "result", ret);
   return ret;
@@ -159,7 +159,7 @@ int ObRecoverTableInitiator::insert_sys_job_(
     if (OB_FAIL(ObLSBackupInfoOperator::get_next_job_id(trans, OB_SYS_TENANT_ID, job_id))) {
       LOG_WARN("failed to get next job_id", K(ret));
     } else if (OB_FALSE_IT(job.set_tenant_id(OB_SYS_TENANT_ID))) {
-    } else if (OB_FALSE_IT(job.set_initiator_tenant_id(OB_SYS_TENANT_ID))) {
+    } else if (OB_FALSE_IT(job.set_initiator_tenant_id(OB_SYS_TENANT_ID))) { 
     } else if (OB_FALSE_IT(job.set_job_id(job_id))) {
     } else if (OB_FALSE_IT(job.set_initiator_job_id(0/*sys job default value*/))) {
     } else if (OB_FALSE_IT(job.set_start_ts(ObTimeUtility::current_time()))) {
@@ -213,7 +213,7 @@ int ObRecoverTableInitiator::check_before_initiate_(const obrpc::ObRecoverTableA
   return ret;
 }
 
-int ObRecoverTableInitiator::fill_aux_tenant_name_(share::ObRecoverTableJob &job)
+int ObRecoverTableInitiator::fill_aux_tenant_name_(share::ObRecoverTableJob &job) 
 {
   int ret = OB_SUCCESS;
   char aux_tenant_name[OB_MAX_TENANT_NAME_LENGTH] = "";
@@ -254,7 +254,7 @@ int ObRecoverTableInitiator::fill_aux_tenant_restore_info_(
 }
 
 int ObRecoverTableInitiator::fill_recover_database(
-    const share::ObImportArg &import_arg,
+    const share::ObImportArg &import_arg, 
     share::ObImportTableArg &import_table_arg)
 {
   //TODO(zeyong) move duplicate item checking logic to ObImportArg internal later.
@@ -262,7 +262,7 @@ int ObRecoverTableInitiator::fill_recover_database(
   const share::ObImportDatabaseArray &db_array = import_arg.get_import_database_array();
   ARRAY_FOREACH(db_array.get_items(), i) {
     const share::ObImportDatabaseItem db_item = db_array.get_items().at(i);
-    if (OB_FAIL(import_table_arg.add_database(db_item))) {
+    if (OB_FAIL(import_table_arg.add_database(db_item))) {        
       LOG_WARN("failed to add database", K(ret));
     }
   }
@@ -273,7 +273,7 @@ int ObRecoverTableInitiator::fill_recover_database(
 }
 
 int ObRecoverTableInitiator::fill_recover_table(
-    const share::ObImportArg &import_arg,
+    const share::ObImportArg &import_arg, 
     share::ObImportTableArg &import_table_arg)
 {
   int ret = OB_SUCCESS;
@@ -289,9 +289,9 @@ int ObRecoverTableInitiator::fill_recover_table(
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("duplicate database", K(table_item));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, dup_item_str.ptr());
-    } else if (OB_FAIL(import_table_arg.add_table(table_item))) {
+    } else if (OB_FAIL(import_table_arg.add_table(table_item))) {        
       LOG_WARN("failed to add table", K(ret));
-    }
+    } 
   }
   if (OB_SUCC(ret)) {
     LOG_INFO("succeed fill recover table", K(import_arg), K(table_array), K(import_table_arg.get_import_table_array()));
@@ -300,7 +300,7 @@ int ObRecoverTableInitiator::fill_recover_table(
 }
 
 int ObRecoverTableInitiator::fill_recover_partition(
-    const share::ObImportArg &import_arg,
+    const share::ObImportArg &import_arg, 
     share::ObImportTableArg &import_table_arg)
 {
   int ret = OB_SUCCESS;
@@ -309,13 +309,13 @@ int ObRecoverTableInitiator::fill_recover_partition(
   const share::ObImportPartitionArray &partition_array = import_arg.get_import_partition_array();
   ARRAY_FOREACH(partition_array.get_items(), i) {
     const share::ObImportPartitionItem partition_item = partition_array.get_items().at(i);
-    share::ObImportDatabaseItem db_item(partition_item.mode_,
-                                                partition_item.database_name_.ptr(),
+    share::ObImportDatabaseItem db_item(partition_item.mode_, 
+                                                partition_item.database_name_.ptr(), 
                                                 partition_item.database_name_.length());
-    share::ObImportTableItem table_item(partition_item.mode_,
-                                                partition_item.database_name_.ptr(),
+    share::ObImportTableItem table_item(partition_item.mode_, 
+                                                partition_item.database_name_.ptr(), 
                                                 partition_item.database_name_.length(),
-                                                partition_item.table_name_.ptr(),
+                                                partition_item.table_name_.ptr(), 
                                                 partition_item.table_name_.length());
     if (OB_FAIL(import_table_arg.check_database_dup(db_item, is_dup, dup_item_str))) {
       LOG_WARN("failed to check database dup", K(ret));
@@ -329,7 +329,7 @@ int ObRecoverTableInitiator::fill_recover_partition(
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("duplicate table", K(table_item));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, dup_item_str.ptr());
-    } else if (OB_FAIL(import_table_arg.add_partition(partition_item))) {
+    } else if (OB_FAIL(import_table_arg.add_partition(partition_item))) {        
       LOG_WARN("failed to add partition", K(ret));
     }
   }
@@ -340,7 +340,7 @@ int ObRecoverTableInitiator::fill_recover_partition(
 }
 
 int ObRecoverTableInitiator::fill_remap_database(
-    const share::ObImportArg &import_arg,
+    const share::ObImportArg &import_arg, 
     const share::ObImportTableArg &import_table_arg,
     share::ObImportRemapArg &import_remap_arg)
 {
@@ -368,9 +368,9 @@ int ObRecoverTableInitiator::fill_remap_database(
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("remap exist database", K(src_db_item));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, dup_item_str.ptr());
-    } else if (OB_FAIL(import_remap_arg.add_remap_database(remap_db_item))) {
+    } else if (OB_FAIL(import_remap_arg.add_remap_database(remap_db_item))) {        
       LOG_WARN("failed to add database", K(ret));
-    }
+    } 
   }
   if (OB_SUCC(ret)) {
     LOG_INFO("succeed fill remap database", K(import_arg), K(remap_db_array), K(import_remap_arg.get_remap_database_array()));
@@ -379,7 +379,7 @@ int ObRecoverTableInitiator::fill_remap_database(
 }
 
 int ObRecoverTableInitiator::fill_remap_table(
-    const share::ObImportArg &import_arg,
+    const share::ObImportArg &import_arg, 
     const share::ObImportTableArg &import_table_arg,
     share::ObImportRemapArg &import_remap_arg)
 {
@@ -410,9 +410,9 @@ int ObRecoverTableInitiator::fill_remap_table(
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("remap exist table", K(target_table_item));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, dup_item_str.ptr());
-    } else if (OB_FAIL(import_remap_arg.add_remap_table(remap_table_item))) {
+    } else if (OB_FAIL(import_remap_arg.add_remap_table(remap_table_item))) {        
       LOG_WARN("failed to add remap table", K(ret));
-    }
+    } 
   }
   if (OB_SUCC(ret)) {
     LOG_INFO("succeed fill remap table", K(import_arg), K(remap_table_array), K(import_remap_arg.get_remap_table_array()));
@@ -421,7 +421,7 @@ int ObRecoverTableInitiator::fill_remap_table(
 }
 
 int ObRecoverTableInitiator::fill_remap_partition(
-    const share::ObImportArg &import_arg,
+    const share::ObImportArg &import_arg, 
     const share::ObImportTableArg &import_table_arg,
     share::ObImportRemapArg &import_remap_arg)
 {
@@ -455,39 +455,39 @@ int ObRecoverTableInitiator::fill_remap_partition(
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("remap exist partition", K(target_table_item));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, dup_item_str.ptr());
-    } else if (OB_FAIL(import_remap_arg.add_remap_parition(remap_part_item))) {
+    } else if (OB_FAIL(import_remap_arg.add_remap_parition(remap_part_item))) {        
       LOG_WARN("failed to add remap partition", K(ret));
-    }
+    } 
   }
   return ret;
 }
 
 int ObRecoverTableInitiator::fill_remap_tablespace(
-    const share::ObImportArg &import_arg,
+    const share::ObImportArg &import_arg, 
     share::ObImportRemapArg &import_remap_arg)
 {
   int ret = OB_SUCCESS;
   const share::ObRemapTablespaceArray &remap_tablespace_array = import_arg.get_remap_tablespace_array();
   ARRAY_FOREACH(remap_tablespace_array.get_remap_items(), i) {
     const share::ObRemapTablespaceItem remap_tablespace_item = remap_tablespace_array.get_remap_items().at(i);
-    if (OB_FAIL(import_remap_arg.add_remap_tablespace(remap_tablespace_item))) {
+    if (OB_FAIL(import_remap_arg.add_remap_tablespace(remap_tablespace_item))) {        
       LOG_WARN("failed to add tablespace", K(ret));
-    }
+    } 
   }
   return ret;
 }
 
 int ObRecoverTableInitiator::fill_remap_tablegroup(
-    const share::ObImportArg &import_arg,
+    const share::ObImportArg &import_arg, 
     share::ObImportRemapArg &import_remap_arg)
 {
   int ret = OB_SUCCESS;
   const share::ObRemapTablegroupArray &remap_tablegroup_array = import_arg.get_remap_tablegroup_array();
   ARRAY_FOREACH(remap_tablegroup_array.get_remap_items(), i) {
     const share::ObRemapTablegroupItem remap_tablegroup_item = remap_tablegroup_array.get_remap_items().at(i);
-    if (OB_FAIL(import_remap_arg.add_remap_tablegroup(remap_tablegroup_item))) {
+    if (OB_FAIL(import_remap_arg.add_remap_tablegroup(remap_tablegroup_item))) {        
       LOG_WARN("failed to add tablespace", K(ret));
-    }
+    } 
   }
   return ret;
 }
@@ -518,7 +518,7 @@ int ObRecoverTableInitiator::fill_recover_table_arg_(
     LOG_WARN("failed to remap tablespace", K(ret), K(arg.import_arg_));
   } else if (OB_FAIL(fill_remap_tablegroup(arg.import_arg_, import_remap_arg))) {
     LOG_WARN("failed to remap tablegroup", K(ret), K(arg.import_arg_));
-  }
+  } 
   return ret;
 }
 

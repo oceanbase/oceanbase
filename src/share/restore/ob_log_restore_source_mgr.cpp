@@ -150,7 +150,7 @@ int ObLogRestoreSourceMgr::add_rawpath_source(const SCN &recovery_until_scn, con
       } else if (0 == i) {
         if (OB_FAIL(rawpath_value.assign(dest_buf))) {
           LOG_WARN("fail to assign rawpath", K(ret), K(dest_buf));
-        }
+        } 
       } else if (OB_FAIL(rawpath_value.append(","))) {
         LOG_WARN("fail to append rawpath", K(ret));
       } else if (OB_FAIL(rawpath_value.append(dest_buf))) {

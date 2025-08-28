@@ -39,7 +39,7 @@ private:
   common::ObAddr addr_;
 };
 
-struct GenerateTraceRow
+struct GenerateTraceRow 
 {
 public:
   GenerateTraceRow() = delete;

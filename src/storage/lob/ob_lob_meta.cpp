@@ -173,7 +173,7 @@ int ObLobMetaScanIter::get_next_row_local(ObLobMetaScanResult &result)
                 result.len_ -= result.st_;
               }
             }
-
+            
           }
         }
       // }
@@ -291,7 +291,7 @@ int ObLobMetaUtil::transform_seq_id(const blocksstable::ObDatumRow* row, ObLobMe
 int ObLobMetaUtil::transform_byte_len(const blocksstable::ObDatumRow* row, ObLobMetaInfo &info, bool with_extra_rowkey)
 {
   int idx = (with_extra_rowkey) ?
-    ObLobMetaUtil::BYTE_LEN_COL_ID + SKIP_INVALID_COLUMN :
+    ObLobMetaUtil::BYTE_LEN_COL_ID + SKIP_INVALID_COLUMN : 
     ObLobMetaUtil::BYTE_LEN_COL_ID;
   info.byte_len_ = row->storage_datums_[idx].get_uint32();
   return OB_SUCCESS;
@@ -300,10 +300,10 @@ int ObLobMetaUtil::transform_byte_len(const blocksstable::ObDatumRow* row, ObLob
 int ObLobMetaUtil::transform_char_len(const blocksstable::ObDatumRow* row, ObLobMetaInfo &info, bool with_extra_rowkey)
 {
   int idx = (with_extra_rowkey) ?
-    ObLobMetaUtil::CHAR_LEN_COL_ID + SKIP_INVALID_COLUMN :
+    ObLobMetaUtil::CHAR_LEN_COL_ID + SKIP_INVALID_COLUMN : 
     ObLobMetaUtil::CHAR_LEN_COL_ID;
-  info.char_len_ = row->storage_datums_[idx].get_uint32();
-  return OB_SUCCESS;
+  info.char_len_ = row->storage_datums_[idx].get_uint32(); 
+  return OB_SUCCESS; 
 }
 
 int ObLobMetaUtil::transform_piece_id(const blocksstable::ObDatumRow *row, ObLobMetaInfo &info, bool with_extra_rowkey)
@@ -314,7 +314,7 @@ int ObLobMetaUtil::transform_piece_id(const blocksstable::ObDatumRow *row, ObLob
     LOG_WARN("row is nullptr", K(ret));
   } else {
     int idx = (with_extra_rowkey) ?
-      ObLobMetaUtil::PIECE_ID_COL_ID + SKIP_INVALID_COLUMN :
+      ObLobMetaUtil::PIECE_ID_COL_ID + SKIP_INVALID_COLUMN : 
       ObLobMetaUtil::PIECE_ID_COL_ID;
     info.piece_id_ = row->storage_datums_[idx].get_uint64();
   }
@@ -332,7 +332,7 @@ int ObLobMetaUtil::transform_lob_data(const blocksstable::ObDatumRow *row, ObLob
   } else {
     info.lob_data_.reset();
     int idx = (with_extra_rowkey) ?
-          ObLobMetaUtil::LOB_DATA_COL_ID + SKIP_INVALID_COLUMN :
+          ObLobMetaUtil::LOB_DATA_COL_ID + SKIP_INVALID_COLUMN : 
           ObLobMetaUtil::LOB_DATA_COL_ID;
     info.lob_data_ = row->storage_datums_[idx].get_string();
   }
@@ -343,7 +343,7 @@ int ObLobMetaUtil::transform_from_row_to_info(const blocksstable::ObDatumRow *ro
 {
   int ret = OB_SUCCESS;
   int expcect_row_cnt = (with_extra_rowkey) ?
-                        LOB_META_COLUMN_CNT + SKIP_INVALID_COLUMN :
+                        LOB_META_COLUMN_CNT + SKIP_INVALID_COLUMN : 
                         LOB_META_COLUMN_CNT;
   if (OB_ISNULL(row)) {
     ret = OB_ERR_UNEXPECTED;
@@ -402,7 +402,7 @@ int ObLobMetaUtil::transform_byte_len(ObLobMetaInfo &info, blocksstable::ObDatum
     LOG_WARN("row is NULL", K(ret));
   } else {
     int idx = (with_extra_rowkey) ?
-              ObLobMetaUtil::BYTE_LEN_COL_ID + SKIP_INVALID_COLUMN :
+              ObLobMetaUtil::BYTE_LEN_COL_ID + SKIP_INVALID_COLUMN : 
               ObLobMetaUtil::BYTE_LEN_COL_ID;
     row->storage_datums_[idx].set_uint32(info.byte_len_);
   }
@@ -417,7 +417,7 @@ int ObLobMetaUtil::transform_char_len(ObLobMetaInfo &info, blocksstable::ObDatum
     LOG_WARN("row is NULL", K(ret));
   } else {
     int idx = (with_extra_rowkey) ?
-              ObLobMetaUtil::CHAR_LEN_COL_ID + SKIP_INVALID_COLUMN :
+              ObLobMetaUtil::CHAR_LEN_COL_ID + SKIP_INVALID_COLUMN : 
               ObLobMetaUtil::CHAR_LEN_COL_ID;
     row->storage_datums_[idx].set_uint32(info.char_len_);
   }
@@ -432,7 +432,7 @@ int ObLobMetaUtil::transform_piece_id(ObLobMetaInfo &info, blocksstable::ObDatum
     LOG_WARN("row is NULL", K(ret));
   } else {
     int idx = (with_extra_rowkey) ?
-              ObLobMetaUtil::PIECE_ID_COL_ID + SKIP_INVALID_COLUMN :
+              ObLobMetaUtil::PIECE_ID_COL_ID + SKIP_INVALID_COLUMN : 
               ObLobMetaUtil::PIECE_ID_COL_ID;
     row->storage_datums_[idx].set_uint(info.piece_id_);
   }
@@ -447,7 +447,7 @@ int ObLobMetaUtil::transform_lob_data(ObLobMetaInfo &info, blocksstable::ObDatum
     LOG_WARN("row is NULL", K(ret));
   } else {
     int idx = (with_extra_rowkey) ?
-              ObLobMetaUtil::LOB_DATA_COL_ID + SKIP_INVALID_COLUMN :
+              ObLobMetaUtil::LOB_DATA_COL_ID + SKIP_INVALID_COLUMN : 
               ObLobMetaUtil::LOB_DATA_COL_ID;
     row->storage_datums_[idx].set_string(info.lob_data_);
   }
@@ -458,7 +458,7 @@ int ObLobMetaUtil::transform_from_info_to_row(ObLobMetaInfo &info, blocksstable:
 {
   int ret = OB_SUCCESS;
   int expcect_row_cnt = (with_extra_rowkey) ?
-                        LOB_META_COLUMN_CNT + SKIP_INVALID_COLUMN :
+                        LOB_META_COLUMN_CNT + SKIP_INVALID_COLUMN : 
                         LOB_META_COLUMN_CNT;
   if (OB_ISNULL(row)) {
     ret = OB_ERR_UNEXPECTED;
@@ -538,7 +538,7 @@ bool ObLobMetaScanIter::is_range_over(const ObLobMetaInfo& info)
 }
 
 ObLobMetaWriteIter::ObLobMetaWriteIter(
-    ObIAllocator* allocator,
+    ObIAllocator* allocator, 
     uint32_t piece_block_size
     ) : seq_id_(allocator),
     lob_id_(),
@@ -660,7 +660,7 @@ int ObLobMetaWriteIter::open(ObLobAccessParam &param,
 
 int ObLobMetaWriteIter::open(ObLobAccessParam &param,
                              void *iter, // ObLobQueryIter for data
-                             ObString &read_buf, // ObLobQueryIter read buffer
+                             ObString &read_buf, // ObLobQueryIter read buffer 
                              uint64_t padding_size,
                              ObString &post_data,
                              ObString &remain_buf,
@@ -952,7 +952,7 @@ int ObLobMetaWriteIter::get_next_row(ObLobMetaWriteResult &row)
       if (OB_FAIL(write_buffer.to_lob_meta_info(row.info_))) {
         LOG_WARN("to_lob_meta_info fail", K(ret));
       } else if (row.info_.lob_data_.length() == 0
-          || row.info_.lob_data_.length() > piece_block_size_
+          || row.info_.lob_data_.length() > piece_block_size_ 
           || row.info_.lob_data_.length() != row.info_.byte_len_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("result data over piece_block_size", K(ret), K(piece_block_size_), K(row.info_), K(row.is_update_));

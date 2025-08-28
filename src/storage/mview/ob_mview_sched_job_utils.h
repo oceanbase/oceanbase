@@ -119,7 +119,7 @@ public:
                                            int64_t &timestamp);
   static int calc_date_expression(dbms_scheduler::ObDBMSSchedJobInfo &job_info,
                                   int64_t &next_date_ts);
-
+  
   static int resolve_date_expr_to_timestamp(sql::ObResolverParams &params,
                                             sql::ObSQLSessionInfo &session,
                                             const ParseNode &node,
@@ -135,7 +135,7 @@ public:
                                     const common::ObString &db_name,
                                     const common::ObString &table_name,
                                     const common::ObString &exec_env);
-
+  
   static int disable_and_stop_job(const uint64_t tenant_id,
                                   const uint64_t mview_id);
 

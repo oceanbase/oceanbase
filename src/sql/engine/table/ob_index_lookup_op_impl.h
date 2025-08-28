@@ -31,7 +31,7 @@ protected:
   enum LookupType : int32_t
   {
     LOCAL_INDEX = 0,
-    GLOBAL_INDEX
+    GLOBAL_INDEX 
   };
   enum LookupState : int32_t
   {

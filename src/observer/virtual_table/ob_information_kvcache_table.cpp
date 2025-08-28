@@ -82,7 +82,7 @@ int ObInfoSchemaKvCacheTable::process_curr_tenant(common::ObNewRow *&row)
       first_enter_ = false;
     }
   }
-
+  
   if (OB_SUCC(ret)) {
     row = nullptr;
     ObKVCacheInst * inst = nullptr;
@@ -131,7 +131,7 @@ int ObInfoSchemaKvCacheTable::inner_open()
   inst_handles_.reuse();
   if (OB_FAIL(set_ip())) {
     SERVER_LOG(WARN, "Fail to set ip from addr", K(ret), K(addr_));
-  }
+  } 
   return ret;
 }
 

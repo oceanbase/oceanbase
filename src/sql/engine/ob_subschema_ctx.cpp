@@ -424,7 +424,7 @@ int ObSubSchemaCtx::set_subschema(uint16_t subschema_id, ObSubSchemaValue &value
     } else if (value.type_ == ObSubSchemaType::OB_SUBSCHEMA_COLLECTION_TYPE) {
       ObSqlCollectionInfo *meta_info = static_cast<ObSqlCollectionInfo *>(value.value_);
       rev_key.str_signature_ = meta_info->get_def_string();
-    }
+    } 
     if (OB_HASH_NOT_EXIST == ret) {
       // not exist
       ret = OB_SUCCESS;

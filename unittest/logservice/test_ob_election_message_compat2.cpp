@@ -308,7 +308,7 @@ public:
   LogConfigVersion get_membership_version() const;
   ElectionMsgDebugTs get_request_debug_ts() const;
   #define BASE "BASE", *(static_cast<const ElectionMsgBase*>(this))
-  TO_STRING_KV(BASE, K_(lease_started_ts_on_proposer), K_(lease_interval),
+  TO_STRING_KV(BASE, K_(lease_started_ts_on_proposer), K_(lease_interval), 
                KTIMERANGE_(process_request_ts, MINUTE, USECOND), K_(accepted),
                K_(is_buffer_valid), K_(responsed_membership_version), K_(inner_priority_seed),
                K_(membership_version), K_(request_debug_ts));
@@ -325,7 +325,7 @@ protected:
   ElectionMsgDebugTs request_debug_ts_;
   unsigned char priority_buffer_[PRIORITY_BUFFER_SIZE];
 };
-OB_SERIALIZE_MEMBER_TEMP(inline, (ElectionAcceptResponseMsgMiddle, ElectionMsgBase),
+OB_SERIALIZE_MEMBER_TEMP(inline, (ElectionAcceptResponseMsgMiddle, ElectionMsgBase), 
                          lease_started_ts_on_proposer_, lease_interval_, process_request_ts_,
                          accepted_, is_buffer_valid_, responsed_membership_version_, membership_version_,
                          request_debug_ts_, priority_buffer_, inner_priority_seed_);
@@ -570,7 +570,7 @@ int ElectionPrepareRequestMsgMiddle::set(const ElectionPriority *priority,
 bool ElectionPrepareRequestMsgMiddle::is_buffer_valid() const { return is_buffer_valid_; }
 
 const char *ElectionPrepareRequestMsgMiddle::get_priority_buffer() const { return (char*)priority_buffer_; }
-
+  
 common::ObRole ElectionPrepareRequestMsgMiddle::get_role() const { return static_cast<common::ObRole>(role_); }
 
 LogConfigVersion ElectionPrepareRequestMsgMiddle::get_membership_version() const { return membership_version_; }

@@ -91,10 +91,10 @@ int ObODPSGeneralFormat::encrypt_str(common::ObString &src, common::ObString &ds
     char hex_buff[common::OB_MAX_ENCRYPTED_EXTERNAL_TABLE_PROPERTIES_ITEM_LENGTH + 1] = {0}; // +1 to reserve space for \0
     int64_t encrypt_len = -1;
     if (OB_FAIL(oceanbase::share::ObEncryptionUtil::encrypt_sys_data(tenant_id,
-                                                   src.ptr(),
-                                                   src.length(),
-                                                   encrypted_string,
-                                                   common::OB_MAX_ENCRYPTED_EXTERNAL_TABLE_PROPERTIES_ITEM_LENGTH,
+                                                   src.ptr(), 
+                                                   src.length(), 
+                                                   encrypted_string, 
+                                                   common::OB_MAX_ENCRYPTED_EXTERNAL_TABLE_PROPERTIES_ITEM_LENGTH, 
                                                    encrypt_len))) {
 
       LOG_WARN("fail to encrypt_sys_data", KR(ret), K(src));
@@ -381,7 +381,7 @@ int ObODPSGeneralFormat::load_from_json_data(json::Pair *&node, ObIAllocator &al
     node = node->get_next();
   } else {
     // if there is no this option, use tunnel api old version has no this option
-    api_mode_ = ApiMode::TUNNEL_API;
+    api_mode_ = ApiMode::TUNNEL_API; 
   }
   return ret;
 }
@@ -448,7 +448,7 @@ int ObCSVGeneralParser::init_opt_variables()
     opt_param_.max_term_ = std::max(static_cast<unsigned> (opt_param_.field_term_c_),
                                     static_cast<unsigned> (opt_param_.line_term_c_));
     opt_param_.min_term_ = std::min(static_cast<unsigned> (opt_param_.field_term_c_),
-                                    static_cast<unsigned> (opt_param_.line_term_c_));
+                                    static_cast<unsigned> (opt_param_.line_term_c_));                               
     opt_param_.is_filling_zero_to_empty_field_ = lib::is_mysql_mode();
     opt_param_.is_line_term_by_counting_field_ =
         0 == format_.line_term_str_.compare(format_.field_term_str_);
@@ -655,8 +655,8 @@ int ObCSVGeneralFormat::load_from_json_data(json::Pair *&node, ObIAllocator &all
         && OB_FAIL(null_if_.allocate_array(allocator, it_array.get_size()))) {
       LOG_WARN("allocate array failed", K(ret));
     }
-    for (auto it_tmp = it_array.get_first();
-         OB_SUCC(ret) && it_tmp != it_array.get_header() && it_tmp != NULL;
+    for (auto it_tmp = it_array.get_first();                                   
+         OB_SUCC(ret) && it_tmp != it_array.get_header() && it_tmp != NULL; 
          it_tmp = it_tmp->get_next()) {
       if (OB_UNLIKELY(json::JT_STRING != it_tmp->get_type())) {
         ret = OB_ERR_UNEXPECTED;

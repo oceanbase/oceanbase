@@ -221,7 +221,7 @@ TEST_F(TestGeoFuncBox, geom_point)
   p.set_data(data.string());
 
   lib::MemoryContext mem_context;
-  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, 
       lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
   ObGeoEvalCtx gis_context(mem_context);
   gis_context.ut_set_geo_count(1);
@@ -248,7 +248,7 @@ TEST_F(TestGeoFuncBox, geom_linestring)
   line.set_data(data.string());
 
   lib::MemoryContext mem_context;
-  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, 
       lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
   ObGeoEvalCtx gis_context(mem_context);
   gis_context.ut_set_geo_count(1);
@@ -278,7 +278,7 @@ TEST_F(TestGeoFuncBox, geom_polygon)
   poly.set_data(data.string());
 
   lib::MemoryContext mem_context;
-  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, 
       lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
   ObGeoEvalCtx gis_context(mem_context);
   gis_context.ut_set_geo_count(1);
@@ -307,7 +307,7 @@ TEST_F(TestGeoFuncBox, geom_multipoint)
   multi_point.set_data(data1.string());
 
   lib::MemoryContext mem_context;
-  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, 
       lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
   ObGeoEvalCtx gis_context(mem_context);
   gis_context.ut_set_geo_count(1);
@@ -339,7 +339,7 @@ TEST_F(TestGeoFuncBox, geom_multilinestring)
   multi_line.set_data(data1.string());
 
   lib::MemoryContext mem_context;
-  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, 
       lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
   ObGeoEvalCtx gis_context(mem_context);
   gis_context.ut_set_geo_count(1);
@@ -375,7 +375,7 @@ TEST_F(TestGeoFuncBox, geom_multipolygon)
   multi_poly.set_data(data1.string());
 
   lib::MemoryContext mem_context;
-  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, 
       lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
   ObGeoEvalCtx gis_context(mem_context);
   gis_context.ut_set_geo_count(1);
@@ -445,7 +445,7 @@ TEST_F(TestGeoFuncBox, geom_collection)
   collection.set_data(data.string());
 
   lib::MemoryContext mem_context;
-  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, 
       lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
   ObGeoEvalCtx gis_context(mem_context);
   gis_context.ut_set_geo_count(1);

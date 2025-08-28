@@ -25,7 +25,7 @@ struct ReadBuf
   ReadBuf(const ReadBuf &rhs);
   bool operator==(const ReadBuf &rhs) const;
   bool operator!=(const ReadBuf &rhs) const;
-
+  
   ReadBuf &operator=(const ReadBuf &rhs);
   ~ReadBuf();
   void reset();

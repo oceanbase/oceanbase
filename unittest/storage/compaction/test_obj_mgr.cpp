@@ -95,7 +95,7 @@ TEST_F(TestObjMgr, test_tablet_compaction_state_op)
   ObTabletCompactionState state;
   state.compaction_scn_ = 100;
   ASSERT_EQ(OB_SUCCESS, svr_ls_status_obj.update_tablet_state(tablet_id, state));
-
+  
   ObTabletCompactionState tmp_state;
   ASSERT_EQ(OB_SUCCESS, svr_ls_status_obj.get_tablet_state(tablet_id, tmp_state));
   ASSERT_EQ(tmp_state, state);

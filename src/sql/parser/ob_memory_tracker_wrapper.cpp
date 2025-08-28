@@ -22,3 +22,5 @@ int try_check_mem_status(int64_t check_try_times)
 {
   return oceanbase::lib::ObMemTrackerGuard::try_check_status(check_try_times);
 }
+
+

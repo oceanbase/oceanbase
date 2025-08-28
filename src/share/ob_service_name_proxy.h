@@ -192,7 +192,7 @@ private:
       const int64_t tenant_id,
       ObIArray<ObServiceName> &all_service_names);
   static int select_service_name_sql_helper_(
-      common::ObISQLClient &sql_proxy,
+      common::ObISQLClient &sql_proxy, 
       const int64_t tenant_id,
       const bool extract_epoch,
       ObSqlString &sql,

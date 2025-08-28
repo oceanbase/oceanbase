@@ -255,7 +255,7 @@ TEST_F(TestSeriesConvert, htable_normal_convert_series)
     ASSERT_EQ(OB_SUCCESS, entity->set_property(V, value));
     ASSERT_EQ(OB_SUCCESS, entities.push_back(entity));
   }  // end for
-
+  
   ASSERT_EQ(OB_SUCCESS, adapter->convert_normal_to_series(entities, series_entities, real_tablet_ids));
   ASSERT_EQ(1, series_entities.count());
   ASSERT_EQ(1, real_tablet_ids.count());

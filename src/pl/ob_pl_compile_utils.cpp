@@ -164,11 +164,11 @@ int ObPLCompilerUtils::compile_routine(ObExecContext &ctx,
         OX (routine->get_stat_for_update().type_ = pl::ObPLCacheObjectType::STANDALONE_ROUTINE_TYPE);
         OZ (ctx.get_pl_engine()->add_pl_lib_cache(routine, pc_ctx));
       }
-      OZ (pl::ObPLCompiler::update_schema_object_dep_info(routine->get_dependency_table(),
+      OZ (pl::ObPLCompiler::update_schema_object_dep_info(routine->get_dependency_table(), 
                                                           routine->get_tenant_id(),
                                                           routine->get_owner(),
                                                           routine_info->get_routine_id(),
-                                                          routine_info->get_schema_version(),
+                                                          routine_info->get_schema_version(), 
                                                           routine_info->get_object_type()));
     }
   }
@@ -237,12 +237,12 @@ int ObPLCompilerUtils::compile_trigger(ObExecContext &ctx,
   CK (OB_NOT_NULL(ctx.get_sql_proxy()));
   CK (OB_NOT_NULL(ctx.get_sql_ctx()->schema_guard_));
   OZ (ctx.get_sql_ctx()->schema_guard_->get_trigger_info(tenant_id, database_id, trigger_name, trigger_info));
-
+  
   if (OB_SUCC(ret) && OB_ISNULL(trigger_info)) {
     ret = OB_ERR_TRIGGER_NOT_EXIST;
     LOG_WARN("trigger not exist", K(ret), K(database_id), K(trigger_name));
   }
-
+  
   CK (OB_NOT_NULL(ctx.get_pl_engine()));
   CK (OB_NOT_NULL(package_spec_info = &trigger_info->get_package_spec_info()));
   if (OB_SUCC(ret)
@@ -301,7 +301,7 @@ int ObPLCompilerUtils::compile_udt(ObExecContext &ctx,
                                    package_guard,
                                    *ctx.get_sql_proxy(),
                                    false, false, false, NULL, NULL, TgTimingEvent::TG_TIMING_EVENT_INVALID,
-                                   false, is_recompile ? false : true);
+                                   false, is_recompile ? false : true);                              
     OZ (package_guard.init());
     OZ (ctx.get_sql_ctx()->schema_guard_->get_udt_info(tenant_id, database_id, OB_INVALID_ID, udt_name, udt_info));
     CK (OB_NOT_NULL(udt_info));

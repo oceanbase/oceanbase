@@ -166,7 +166,7 @@ public:
       ref_mem_ctx_ = &mem_ctx;
     }
     allocator_.set_ctx_id(ref_mem_ctx_->get_ctx_id());
-  }
+  }  
   void unbind_mem_ctx() { ref_mem_ctx_ = nullptr; }
   common::ObArenaAllocator &get_arena_allocator() { return allocator_; }
 

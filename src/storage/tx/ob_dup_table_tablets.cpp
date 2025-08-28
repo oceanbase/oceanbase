@@ -927,7 +927,7 @@ bool ObLSDupTabletsMgr::is_busy_in_readable_change_()
 {
   bool is_busy =
       // in gc
-      (!removing_old_set_->empty())
+      (!removing_old_set_->empty()) 
       || removing_old_set_->get_related_common_header().is_valid();
   return is_busy;
 }
@@ -1573,7 +1573,7 @@ int ObLSDupTabletsMgr::tablet_log_synced(const bool sync_result,
       }
     } else if (OB_FALSE_IT(logging_tablet_set->clean_logging())) {
 
-    } else if (logging_common_header.is_readable_set()) {
+    } else if (logging_common_header.is_readable_set()) { 
       contain_readable_set = true;
       // try return empty readable set
       bool need_remove = false;

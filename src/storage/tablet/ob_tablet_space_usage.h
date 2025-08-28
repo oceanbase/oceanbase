@@ -23,10 +23,10 @@ struct ObTabletSpaceUsage final
 {
 public:
   ObTabletSpaceUsage()
-    : all_sstable_data_occupy_size_(0),
-      all_sstable_data_required_size_(0),
-      all_sstable_meta_size_(0),
-      ss_public_sstable_occupy_size_(0),
+    : all_sstable_data_occupy_size_(0), 
+      all_sstable_data_required_size_(0), 
+      all_sstable_meta_size_(0), 
+      ss_public_sstable_occupy_size_(0), 
       tablet_clustered_meta_size_(0),
       tablet_clustered_sstable_data_size_(0),
       backup_bytes_(0)
@@ -46,9 +46,9 @@ public:
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(const char *buf, const int64_t data_len, int64_t &pos);
   int32_t get_serialize_size() const;
-  bool is_valid() const
+  bool is_valid() const 
   {
-    return (OB_INVALID_SIZE != all_sstable_data_occupy_size_)
+    return (OB_INVALID_SIZE != all_sstable_data_occupy_size_) 
         && (OB_INVALID_SIZE != all_sstable_data_required_size_)
         && (OB_INVALID_SIZE != all_sstable_meta_size_)
         && (OB_INVALID_SIZE != ss_public_sstable_occupy_size_)

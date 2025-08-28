@@ -777,7 +777,7 @@ public:
   static ObUnmanagedMemoryStat &get_instance()
   {
     static ObUnmanagedMemoryStat instance;
-    return instance;
+    return instance; 
   }
   static bool is_disabled()
   {

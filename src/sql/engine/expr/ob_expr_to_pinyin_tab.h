@@ -28,7 +28,7 @@ struct PinyinPair{
 };
 extern PinyinPair PINYIN_TABLE[PINYIN_COUNT];
 const uint64_t OptionCnt = 7;
-const char* const OptionStr[OptionCnt] = {"Full", "Cap", "First_Cap", "All_Cap",
+const char* const OptionStr[OptionCnt] = {"Full", "Cap", "First_Cap", "All_Cap", 
                                           "Initial", "Cap_Initial", "All_Cap_Initial"};
 enum ModeOption {
   Full = 0,

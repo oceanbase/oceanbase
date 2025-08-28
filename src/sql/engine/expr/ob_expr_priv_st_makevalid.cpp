@@ -68,7 +68,7 @@ int ObExprPrivSTMakeValid::eval_priv_st_makevalid(const ObExpr &expr, ObEvalCtx 
   ObGeometry *geo = NULL;
   if (OB_FAIL(tmp_allocator.eval_arg(expr.args_[0], ctx, gis_datum1))) {
     LOG_WARN("eval geo args failed", K(ret));
-  }
+  } 
   ObGeoBoostAllocGuard guard(tenant_id);
   lib::MemoryContext *mem_ctx = nullptr;
   if (OB_FAIL(ret)) {
@@ -118,7 +118,7 @@ int ObExprPrivSTMakeValid::eval_priv_st_makevalid(const ObExpr &expr, ObEvalCtx 
         ret = OB_ERR_GIS_INVALID_DATA;
         LOG_WARN("invalid result geo", K(ret), K(reason.int64_));
       }
-    }
+    } 
     if (OB_SUCC(ret)) {
       ObString res_wkb;
       if (OB_FAIL(ObGeoExprUtils::geo_to_wkb(*geo, expr, ctx, srs, res_wkb))){
@@ -131,7 +131,7 @@ int ObExprPrivSTMakeValid::eval_priv_st_makevalid(const ObExpr &expr, ObEvalCtx 
   if (mem_ctx != nullptr) {
     tmp_allocator.add_ext_used((*mem_ctx)->arena_used());
   }
-
+  
   return ret;
 }
 

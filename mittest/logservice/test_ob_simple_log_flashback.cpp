@@ -455,7 +455,7 @@ TEST_F(TestObSimpleLogClusterFlashback, flashback_log_cache)
 
   PalfHandleImplGuard leader;
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
-
+  
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id, MAX_LOG_BODY_SIZE));
   const LSN max_lsn = leader.get_palf_handle_impl()->get_max_lsn();
   EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, max_lsn));
@@ -468,7 +468,7 @@ TEST_F(TestObSimpleLogClusterFlashback, flashback_log_cache)
 
   PALF_LOG(INFO, "start to hit cache");
   EXPECT_EQ(OB_ITER_END, read_log(leader));
-
+  
   int64_t miss_cnt = leader.get_palf_handle_impl()->log_cache_.cold_cache_.log_cache_stat_.miss_cnt_;
   EXPECT_NE(0, miss_cnt);
   PALF_LOG(INFO, "miss cnt", K(miss_cnt));

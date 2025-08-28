@@ -222,7 +222,7 @@ int ObIntegerStreamEncoderCtx::try_use_previous_encoding(bool &use_previous)
 {
   int ret = OB_SUCCESS;
   use_previous = false;
-  const ObPreviousColumnEncoding *previous = info_.previous_encoding_;
+  const ObPreviousColumnEncoding *previous = info_.previous_encoding_; 
   if (nullptr == previous) {
     // previous_encoding is not set
   } else if (previous->is_stream_encoding_type_valid_ && !previous->stream_need_redetect_) {
@@ -296,7 +296,7 @@ int ObStringStreamEncoderCtx::build_string_stream_meta(const int64_t fixed_len,
   } else if (use_zero_length_as_null) {
     meta_.set_use_zero_len_as_null();
   }
-  meta_.uncompressed_len_ = uncompress_len;
+  meta_.uncompressed_len_ = uncompress_len; 
   return ret;
 }
 
@@ -310,7 +310,7 @@ int ObStringStreamEncoderCtx::build_string_stream_encoder_info(
         ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
-  info_.compressor_type_ = compressor_type;
+  info_.compressor_type_ = compressor_type; 
   info_.raw_encoding_str_offset_ = raw_encoding_str_offset;
   info_.encoding_opt_ = encoding_opt;
   info_.previous_encoding_ = previous_encoding;

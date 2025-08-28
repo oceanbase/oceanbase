@@ -47,7 +47,7 @@ void ObStorageHADiagOperator::reset()
 }
 
 int ObStorageHADiagOperator::get_batch_row_keys(
-        common::ObISQLClient &sql_proxy,
+        common::ObISQLClient &sql_proxy, 
         const uint64_t tenant_id,
         const ObStorageHADiagModule &module,
         const int64_t last_end_timestamp,
@@ -106,7 +106,7 @@ int ObStorageHADiagOperator::get_batch_row_keys(
 }
 
 int ObStorageHADiagOperator::do_batch_delete(
-        common::ObISQLClient &sql_proxy,
+        common::ObISQLClient &sql_proxy, 
         const uint64_t tenant_id,
         const ObStorageHADiagModule &module,
         const ObIArray<int64_t> &timestamp_array,
@@ -162,14 +162,14 @@ int ObStorageHADiagOperator::insert_row(
     const uint64_t tenant_id,
     const uint64_t report_tenant_id,
     const ObStorageHADiagInfo &info,
-    const ObStorageHADiagModule &module)
+    const ObStorageHADiagModule &module) 
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
-      || !info.is_valid()
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) 
+      || !info.is_valid() 
       || ObStorageHADiagModule::MAX_MODULE == module)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(info));
@@ -211,7 +211,7 @@ int ObStorageHADiagOperator::get_table_name_(const ObStorageHADiagModule &module
       break;
     default:
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid module", K(ret), K(module));
+      LOG_WARN("invalid module", K(ret), K(module));  
       break;
   }
   return ret;
@@ -233,10 +233,10 @@ int ObStorageHADiagOperator::gen_event_ts_(int64_t &event_ts)
 }
 
 int ObStorageHADiagOperator::fill_dml_(
-    const uint64_t tenant_id,
+    const uint64_t tenant_id, 
     const uint64_t report_tenant_id,
-    const ObStorageHADiagInfo &input_info,
-    ObDMLSqlSplicer &dml)
+    const ObStorageHADiagInfo &input_info, 
+    ObDMLSqlSplicer &dml) 
 {
   int ret = OB_SUCCESS;
   char diagnose_info[common::OB_DIAGNOSE_INFO_LENGTH] = { 0 };
@@ -299,7 +299,7 @@ int ObStorageHADiagOperator::fill_dml_(
       }
       default: {
         ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("unknow module", K(ret), K(input_info.module_));
+        LOG_WARN("unknow module", K(ret), K(input_info.module_));  
         break;
       }
     }
@@ -321,7 +321,7 @@ int ObStorageHADiagOperator::parse_result_(
 }
 
 int ObStorageHADiagOperator::check_transfer_task_exist(
-    common::ObISQLClient &sql_proxy,
+    common::ObISQLClient &sql_proxy, 
     const uint64_t tenant_id,
     const share::ObTransferTaskID &task_id,
     int64_t &result_count) const
@@ -371,3 +371,4 @@ int ObStorageHADiagOperator::check_transfer_task_exist(
 
 } // end namespace share
 } // end namespace oceanbase
+

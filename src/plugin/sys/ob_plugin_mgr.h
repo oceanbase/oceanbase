@@ -96,7 +96,7 @@ public:
                   ObPluginEntryHandle *&entry_handle);
 
   int register_plugin(const ObPluginEntry &plugin_entry);
-
+  
   /**
    * load all builtin plugins
    * @note the observer will fail to start if builtin plugins load fail

@@ -1,14 +1,14 @@
-/**
- * Copyright (c) 2023 OceanBase
- * OceanBase CE is licensed under Mulan PubL v2.
- * You can use this software according to the terms and conditions of the Mulan PubL v2.
- * You may obtain a copy of Mulan PubL v2 at:
- *          http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+/** 
+ * Copyright (c) 2023 OceanBase 
+ * OceanBase CE is licensed under Mulan PubL v2. 
+ * You can use this software according to the terms and conditions of the Mulan PubL v2. 
+ * You may obtain a copy of Mulan PubL v2 at: 
+ *          http://license.coscl.org.cn/MulanPubL-2.0 
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, 
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, 
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE. 
  * See the Mulan PubL v2 for more details.
- */
+ */ 
 
 #include "observer/virtual_table/ob_tenant_show_restore_preview.h"
 #include "rootserver/restore/ob_restore_util.h"
@@ -83,7 +83,7 @@ int ObTenantShowRestorePreview::init()
     SHARE_LOG(WARN, "failed to get user passwd", K(ret));
   } else if (OB_FAIL(passwd.get_varchar(backup_passwd))) {
     SHARE_LOG(WARN, "failed to parser passwd", K(ret));
-  }
+  } 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(parse_restore_scn_from_session_(backup_passwd, tenant_path_array))) {
     SHARE_LOG(WARN, "failed to parse restore timestamp from session", KR(ret));
@@ -151,24 +151,24 @@ int ObTenantShowRestorePreview::inner_get_next_row(common::ObNewRow *&row)
     if (OB_ITER_END != ret) {
       SERVER_LOG(WARN, "failed to get next row", KR(ret), K(cur_row_));
     } else {
-      if (session_->user_variable_exists(OB_RESTORE_PREVIEW_BACKUP_DEST_SESSION_STR)
+      if (session_->user_variable_exists(OB_RESTORE_PREVIEW_BACKUP_DEST_SESSION_STR) 
           && OB_TMP_FAIL(session_->remove_user_variable(OB_RESTORE_PREVIEW_BACKUP_DEST_SESSION_STR))) {
         ret = tmp_ret;
         SHARE_LOG(WARN, "fail to remove session variable OB_RESTORE_PREVIEW_BACKUP_DEST_SESSION_STR", K(tmp_ret), KPC(session_));
-      }
-
-      if (session_->user_variable_exists(OB_RESTORE_PREVIEW_SCN_SESSION_STR)
+      } 
+      
+      if (session_->user_variable_exists(OB_RESTORE_PREVIEW_SCN_SESSION_STR) 
                 && OB_TMP_FAIL(session_->remove_user_variable(OB_RESTORE_PREVIEW_SCN_SESSION_STR))) {
         ret = tmp_ret;
         SHARE_LOG(WARN, "fail to remove session variable OB_RESTORE_PREVIEW_SCN_SESSION_STR", K(tmp_ret), KPC(session_));
       }
-
-      if (session_->user_variable_exists(OB_RESTORE_PREVIEW_TIMESTAMP_SESSION_STR)
+      
+      if (session_->user_variable_exists(OB_RESTORE_PREVIEW_TIMESTAMP_SESSION_STR) 
                 && OB_TMP_FAIL(session_->remove_user_variable(OB_RESTORE_PREVIEW_TIMESTAMP_SESSION_STR))) {
         ret = tmp_ret;
         SHARE_LOG(WARN, "fail to remove session variable OB_RESTORE_PREVIEW_TIMESTAMP_SESSION_STR", K(tmp_ret), KPC(session_));
-      }
-
+      } 
+      
       if (session_->user_variable_exists(OB_BACKUP_DECRYPTION_PASSWD_ARRAY_SESSION_STR)
                 && OB_TMP_FAIL(session_->remove_user_variable(OB_BACKUP_DECRYPTION_PASSWD_ARRAY_SESSION_STR))) {
         ret = tmp_ret;
@@ -245,7 +245,7 @@ int ObTenantShowRestorePreview::inner_get_next_row_()
     }
     if (OB_SUCC(ret)) {
       SHARE_LOG(WARN, "curr idx in show restore preview", K(idx_), K(cur_row_));
-      ++idx_;
+      ++idx_;      
     }
   }
   return ret;

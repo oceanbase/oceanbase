@@ -62,7 +62,7 @@ private:
   // has write access immediately when it starts. Thus, FreezeInfoDetector can not renew
   // snapshot_gc_scn immediately. Therefore, let FreezeInfoDetector to check snapshot_gc_scn
   // after it has started for a period of time (e.g., 10 min).
-  //
+  // 
   bool need_check_snapshot_gc_scn(const int64_t start_time_us);
 
 private:

@@ -333,7 +333,7 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
       LOG_WARN("failed to evaluate cost for the transformed stmt", K(ret));
     } else if ((!check_original_plan && stmt_cost_ >= 0) || !is_expected) {
       trans_happened = is_expected && (ignore_cost || trans_stmt_cost < stmt_cost_);
-    } else if (OB_FAIL(evaluate_cost(eval_parent_stmts, stmt, false, stmt_cost_, is_original_expected,
+    } else if (OB_FAIL(evaluate_cost(eval_parent_stmts, stmt, false, stmt_cost_, is_original_expected, 
                                      check_original_plan ? check_ctx : NULL))) {
       LOG_WARN("failed to evaluate cost for the origin stmt", K(ret));
     } else if (!is_original_expected) {
@@ -456,7 +456,7 @@ int ObTransformRule::evaluate_cost(common::ObIArray<ObParentDMLStmt> &parent_stm
         }
         if (OB_SUCC(ret)) {
           if (OB_FAIL(eval_cost_helper.recover_context(*ctx_->exec_ctx_->get_physical_plan_ctx(),
-                                                      *ctx_->exec_ctx_->get_stmt_factory()->get_query_ctx(),
+                                                      *ctx_->exec_ctx_->get_stmt_factory()->get_query_ctx(), 
                                                       *ctx_))) {
             LOG_WARN("failed to recover context", K(ret));
           } else if (OB_FAIL(ObTransformUtils::free_stmt(*ctx_->stmt_factory_, root_stmt))) {
@@ -469,8 +469,8 @@ int ObTransformRule::evaluate_cost(common::ObIArray<ObParentDMLStmt> &parent_stm
   return ret;
 }
 
-// This function primarily handles scenarios where cost-based rewrites are applied to temporary table queries.
-// Since `PredicateMoveAround` within the temp table query tree cannot push down external common filters,
+// This function primarily handles scenarios where cost-based rewrites are applied to temporary table queries. 
+// Since `PredicateMoveAround` within the temp table query tree cannot push down external common filters, 
 // an additional push-down step is performed here.
 int ObTransformRule::prepare_root_stmt_with_temp_table_filter(ObDMLStmt &root_stmt, ObDMLStmt *&root_stmt_with_filter)
 {
@@ -1012,8 +1012,8 @@ int ObTryTransHelper::recover(ObQueryCtx *query_ctx)
   return ret;
 }
 
-int ObTryTransHelper::finish(bool trans_happened,
-                             ObQueryCtx *query_ctx,
+int ObTryTransHelper::finish(bool trans_happened, 
+                             ObQueryCtx *query_ctx, 
                              ObTransformerCtx *trans_ctx) {
   int ret = OB_SUCCESS;
   if (NULL == query_ctx || NULL == trans_ctx) {

@@ -50,7 +50,7 @@ class GlobalConf():
     def __init__(self):
         # 输入参数文件路径
         self.origin_parameter_path = ""
-        # 输入变量文件路径
+        # 输入变量文件路径 
         self.origin_variable_path = ""
         self.param_flag = True
         self.varia_flag = True
@@ -86,7 +86,7 @@ def parse_arg():
                     print("[merge_extra][ERROR] 输入路径[%s]不是绝对路径或者不存在" % arg)
                     exit(ERROR_CODE.COMMON_ERROR)
                 GLOBAL_CONF.origin_variable_path = arg
-
+            
     except getopt.GetoptError as ex:
         print("[merge_extra][ERROR] getopt.GetoptError 解析参数失败，请合法输入, %s" % ex)
         exit(ERROR_CODE.COMMON_ERROR)
@@ -151,9 +151,9 @@ def check_data_and_format(data, var):
             outer_ordered_dict['variables'] = common_ordered_dict
         else:
             outer_ordered_dict['parameters'] = common_ordered_dict
-
+        
         formatted_list.append(outer_ordered_dict)
-
+    
     return formatted_list
 
 def load_json(file_name, var):
@@ -214,7 +214,7 @@ def merge_scenario(default_scenario, extra_scenario, var):
         default_params = default_scenario.get('parameters', {})
         extra_params = extra_scenario.get('parameters', {})
     merged_params = {}
-
+    
     # 处理cluster和tenant的合并
     for param_type in default_params:
         default_list = default_params.get(param_type, [])
@@ -240,11 +240,11 @@ def merge_configs(default_data, extra_data, var):
     extra_order = [item['scenario'] for item in extra_data if item['scenario'] not in default_order]
     # 构建合并后的顺序：先保留default顺序，再追加extra中的新场景
     merged_order = default_order + extra_order
-
+    
     # 生成场景字典加速查询
     default_dict = {item['scenario']: item for item in default_data}
     extra_dict = {item['scenario']: item for item in extra_data}
-
+    
     # 按顺序合并场景
     merged_data = []
     for scenario in merged_order:
@@ -344,7 +344,7 @@ def main():
     if not GLOBAL_CONF.param_flag or not GLOBAL_CONF.varia_flag:
         print("[merge_extra][ERROR] 缺少必要的合并文件, 请检查合并文件是否存在")
         exit(ERROR_CODE.COMMON_ERROR)
-
+    
 
 if __name__ == '__main__':
     '''

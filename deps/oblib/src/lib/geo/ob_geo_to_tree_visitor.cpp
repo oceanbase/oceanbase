@@ -97,8 +97,8 @@ int ObGeoToTreeVisitor::create_geo_multi_point(T_TREE *&geo, T_IBIN *geo_ibin)
   if (OB_SUCC(ret)) {
     if (OB_FAIL(update_root_and_parent(geo))) {
       LOG_WARN("failed to update parent", K(ret));
-    }
-  }
+    }    
+  } 
   return ret;
 }
 
@@ -115,7 +115,7 @@ int ObGeoToTreeVisitor::point_visit(T_IBIN *geo)
     point->y(geo->y());
     if (OB_FAIL(update_root_and_parent(point))) {
       LOG_WARN("failed to update parent", K(ret));
-    }
+    } 
   }
   return ret;
 }
@@ -176,7 +176,7 @@ int ObGeoToTreeVisitor::visit(ObIWkbGeomMultiLineString *geo)
   return create_geo_tree_collection<ObCartesianMultilinestring>(geo);
 }
 
-template<typename P_TYPE, typename P_BIN_TYPE, typename L_TYPE, typename L_BIN_TYPE,
+template<typename P_TYPE, typename P_BIN_TYPE, typename L_TYPE, typename L_BIN_TYPE, 
          typename POINT_TYPE, typename RINGS_TYPE, typename p_ibin_type>
 int ObGeoToTreeVisitor::polygon_visit(p_ibin_type *geo)
 {
@@ -221,7 +221,7 @@ int ObGeoToTreeVisitor::polygon_visit(p_ibin_type *geo)
               POINT_TYPE p(point_iter->template get<0>(), point_iter->template get<1>());
               if (OB_FAIL(tree_linearring.push_back(p))) {
                 LOG_WARN("failed to push point to ring", K(ret));
-              }
+              }       
             }
             if (OB_SUCC(ret) && OB_FAIL(polygon->push_back(tree_linearring))) {
               LOG_WARN("failed to push ring to polygon", K(ret));
@@ -234,7 +234,7 @@ int ObGeoToTreeVisitor::polygon_visit(p_ibin_type *geo)
   if (OB_SUCC(ret)) {
     if (OB_FAIL(update_root_and_parent(polygon))) {
       LOG_WARN("failed to update parent", K(ret));
-    }
+    } 
   }
   return ret;
 }

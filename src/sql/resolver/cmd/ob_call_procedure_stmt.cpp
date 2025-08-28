@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #define USING_LOG_PREFIX SQL_RESV
 
 #include "ob_call_procedure_stmt.h"
@@ -150,7 +150,7 @@ int ObCallProcedureInfo::check_need_add_cache_obj_stat(ObILibCacheCtx &ctx, bool
 
 void ObCallProcedureInfo::dump_deleted_log_info(const bool is_debug_log /* = true */) const
 {
-
+  
 }
 
 }

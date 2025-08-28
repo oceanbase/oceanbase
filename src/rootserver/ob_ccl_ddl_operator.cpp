@@ -13,7 +13,7 @@
 #define USING_LOG_PREFIX RS
 #include "rootserver/ob_ccl_ddl_operator.h"
 #include "share/schema/ob_ccl_rule_sql_service.h"
-
+ 
 namespace oceanbase
 {
 namespace rootserver

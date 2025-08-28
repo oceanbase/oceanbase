@@ -246,7 +246,7 @@ int ObBackupTabletMetaFuser::prepare_external_sort_()
   }
   return ret;
 }
-
+  
 int ObBackupTabletMetaFuser::prepare_fuse_ctx_()
 {
   int ret = OB_SUCCESS;

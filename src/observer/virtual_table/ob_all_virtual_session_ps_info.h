@@ -76,7 +76,7 @@ public:
       void reset() {
         reuse();
       }
-
+      
     private:
       ObPsStmtId inner_stmt_id_;
       stmt::StmtType stmt_type_;
@@ -86,9 +86,9 @@ public:
       common::ObArray<obmysql::EMySQLFieldType> param_types_;
       int error_code_;
   };
-
+  
   ObAllVirtualSessionPsInfo()
-      : ObAllPlanCacheBase(),
+      : ObAllPlanCacheBase(), 
         fetcher_(),
         tenant_session_id_map_(),
         all_sql_session_iterator_(tenant_session_id_map_),

@@ -94,7 +94,7 @@ struct ObLSRecoveryStat
   const palf::LogConfigVersion &get_config_version() const
   {
     return config_version_;
-  }
+  } 
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(sync_scn), K_(readable_scn),
                K_(create_scn), K_(drop_scn), K(config_version_));
 
@@ -235,9 +235,9 @@ public:
   /**
    * @description:
    *    get tenant min user ls create scn
-   * @param[in] tenant_id
-   * @param[in] client
-   * @param[out] min_user_ls_create_scn
+   * @param[in] tenant_id 
+   * @param[in] client 
+   * @param[out] min_user_ls_create_scn 
    * @return return code
    */
   int get_tenant_min_user_ls_create_scn(const uint64_t tenant_id,
@@ -266,7 +266,7 @@ public:
   /*
   * description: update ls config_version and return current readable_scn
   * @param[in] tenant_id
-  * @param[in] ls_id
+  * @param[in] ls_id 
   * @param[in] config_version : If the new and old config_version are equal, no update is performed, and it directly returns success.
   *                             If the new config_version is greater than the old config_version, update it to the internal table.
   *                             If the new config_version is less than the old config_version, report an error.

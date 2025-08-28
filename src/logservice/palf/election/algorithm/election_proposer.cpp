@@ -600,7 +600,7 @@ void ElectionProposer::on_accept_response(const ElectionAcceptResponseMsg &accep
       } else if (highest_priority_cache_.cached_msg_.get_sender() == accept_res.get_sender()) {// 缓存的最高优先级的消息的副本第二次响应Leader时触发切主
         if (CLICK_FAIL(prepare_change_leader_to_(highest_priority_cache_.cached_msg_.get_sender(),
                                                  higher_than_leader_reason))) {
-          LOG_CHANGE_LEADER(WARN, "fail to prepare change leader", K(highest_priority_cache_), K(higher_than_leader_reason));
+          LOG_CHANGE_LEADER(WARN, "fail to prepare change leader", K(highest_priority_cache_), K(higher_than_leader_reason));                           
         }
       }
     }

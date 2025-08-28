@@ -492,8 +492,8 @@ public:
   {
     return is_multi_version_table(table_type) || is_meta_major_sstable(table_type);
   }
-  // row store sstable and corresponding column store sstable
-  static bool is_twin_major_sstable(const TableKey &rs_key, const TableKey &cs_key)
+  // row store sstable and corresponding column store sstable 
+  static bool is_twin_major_sstable(const TableKey &rs_key, const TableKey &cs_key) 
   {
     return rs_key.is_true_major_sstable()
         && cs_key.is_true_major_sstable()

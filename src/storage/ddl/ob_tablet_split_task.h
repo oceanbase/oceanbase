@@ -59,8 +59,8 @@ public:
   int init(const ObTabletSplitParam &param);
   int init(const obrpc::ObDDLBuildSingleReplicaRequestArg &arg);
   int init(const obrpc::ObTabletSplitArg &arg);
-  TO_STRING_KV(K_(is_inited), K_(tenant_id), K_(ls_id), K_(table_id), K_(schema_version),
-               K_(task_id), K_(source_tablet_id), K_(dest_tablets_id), K_(compaction_scn), K_(user_parallelism),
+  TO_STRING_KV(K_(is_inited), K_(tenant_id), K_(ls_id), K_(table_id), K_(schema_version), 
+               K_(task_id), K_(source_tablet_id), K_(dest_tablets_id), K_(compaction_scn), K_(user_parallelism), 
                K_(compat_mode), K_(data_format_version), K_(consumer_group_id),
                K_(can_reuse_macro_block), K_(split_sstable_type), K_(parallel_datum_rowkey_list),
                K_(min_split_start_scn));
@@ -94,7 +94,7 @@ public:
   ~ObTabletSplitCtx();
   int init(const ObTabletSplitParam &param);
   bool is_valid() const;
-  TO_STRING_KV(K_(is_inited), K_(data_split_ranges), K_(complement_data_ret),
+  TO_STRING_KV(K_(is_inited), K_(data_split_ranges), K_(complement_data_ret), 
     K_(row_inserted), K_(physical_row_count), K_(skipped_split_major_keys),
     K(ls_rebuild_seq_));
 
@@ -105,7 +105,7 @@ private:
   public:
     GetMapItemKeyFn() : map_keys_(), ret_code_(OB_SUCCESS) {}
     ~GetMapItemKeyFn() = default;
-    int operator() (common::hash::HashMapPair<KEY, VALUE> &entry)
+    int operator() (common::hash::HashMapPair<KEY, VALUE> &entry) 
     {
       int ret = ret_code_; // for LOG_WARN
       if (OB_LIKELY(OB_SUCCESS == ret_code_) && OB_SUCCESS != (ret_code_ = map_keys_.push_back(entry.first))) {
@@ -165,7 +165,7 @@ public:
   int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override
   { return param_.compat_mode_; }
-  virtual uint64_t get_consumer_group_id() const override
+  virtual uint64_t get_consumer_group_id() const override 
   { return consumer_group_id_; }
   virtual bool is_ha_dag() const override { return false; }
   int report_replica_build_status();
@@ -200,7 +200,7 @@ class ObTabletSplitWriteTask final : public share::ObITask
 public:
   ObTabletSplitWriteTask();
   virtual ~ObTabletSplitWriteTask();
-  int init(const int64_t task_id,
+  int init(const int64_t task_id, 
     ObTabletSplitParam &param, ObTabletSplitCtx &ctx, storage::ObITable *table);
   virtual int process() override;
 private:
@@ -313,8 +313,8 @@ public:
     storage_schema_(&storage_schema)
   { }
   ~ObSplitScanParam() = default;
-  bool is_valid() const {
-    return table_id_ > 0 && src_tablet_.is_valid() && nullptr != query_range_
+  bool is_valid() const { 
+    return table_id_ > 0 && src_tablet_.is_valid() && nullptr != query_range_ 
         && (nullptr != storage_schema_ && storage_schema_->is_valid());
   }
   TO_STRING_KV(K_(table_id), K_(src_tablet), KPC_(query_range), KPC_(storage_schema));
@@ -334,13 +334,13 @@ public:
   int init(
       const ObSplitScanParam &param,
       ObSSTable &sstable);
-
+  
   // to scan the specified whole macro block.
   int init(
       const ObSplitScanParam &param,
       const blocksstable::ObMacroBlockDesc &macro_desc,
       ObSSTable &sstable);
-
+  
   virtual int get_next_row(const blocksstable::ObDatumRow *&tmp_row) override;
 
   const ObITableReadInfo *get_rowkey_read_info() const { return rowkey_read_info_; }
@@ -452,7 +452,7 @@ public:
       ObIAllocator &allocator,
       const ObIArray<blocksstable::ObDatumRowkey> &parallel_datum_rowkey_list,
       ObIArray<ObDatumRange> &datum_ranges_array);
-
+  
   // only used for table recovery to build parallel tasks cross tenants.
   static int convert_datum_rowkey_to_range(
       ObIAllocator &allocator,
@@ -478,8 +478,8 @@ public:
       obrpc::ObCheckMediumCompactionInfoListResult &result);
   static int check_tablet_restore_status(
       const ObIArray<ObTabletID> &dest_tablets_id,
-      const ObLSHandle &ls_handle,
-      const ObTabletHandle &source_tablet_handle,
+      const ObLSHandle &ls_handle, 
+      const ObTabletHandle &source_tablet_handle, 
       bool &is_tablet_status_need_to_split);
   static int build_mds_sstable(
       common::ObArenaAllocator &allocator,

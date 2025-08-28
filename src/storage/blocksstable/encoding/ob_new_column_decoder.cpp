@@ -22,8 +22,8 @@ namespace blocksstable
 using namespace common;
 
 int ObNewColumnCommonDecoder::decode(
-    const ObColumnParam *col_param,
-    common::ObIAllocator *allocator,
+    const ObColumnParam *col_param, 
+    common::ObIAllocator *allocator, 
     common::ObDatum &datum) const
 {
   int ret = OB_SUCCESS;
@@ -48,7 +48,7 @@ int ObNewColumnCommonDecoder::decode(
 
 int ObNewColumnCommonDecoder::batch_decode(
     const ObColumnParam *col_param,
-    common::ObIAllocator *allocator,
+    common::ObIAllocator *allocator, 
     const int64_t row_cap,
     common::ObDatum *datums) const
 {
@@ -146,7 +146,7 @@ int ObNewColumnCommonDecoder::read_distinct(
   }
   LOG_DEBUG("[NEW_COLUMN_DECODE] read distinct", K(group_by_cell.get_group_by_col_offset()), KPC(datums), K(lbt()));
   return ret;
-}
+}    
 
 int ObNewColumnCommonDecoder::read_reference(
     const int64_t row_cap,

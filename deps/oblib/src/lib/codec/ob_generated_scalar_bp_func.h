@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 
 #ifndef OB_GENERATED_SCALAR_BP_FUNC_H_
 #define OB_GENERATED_SCALAR_BP_FUNC_H_
@@ -44,7 +44,8 @@ void scalar_fastunpack_32(const uint32_t*__restrict__ in, uint32_t *__restrict__
 void scalar_fastpackwithoutmask_64(const uint64_t *__restrict__ in, uint64_t *__restrict__ out, const uint32_t bit);
 void scalar_fastunpack_64(const uint64_t*__restrict__ in, uint64_t *__restrict__ out, const uint32_t bit);
 
-
+  
 } // end namespace common
 } // end namespace oceanbase
 #endif /* OB_GENERATED_SCALAR_BP_FUNC_H_ */
+  

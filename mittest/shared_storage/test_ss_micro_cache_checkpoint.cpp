@@ -22,13 +22,13 @@
 #include "storage/shared_storage/micro_cache/ckpt/ob_ss_linked_phy_block_writer.h"
 #include "storage/shared_storage/micro_cache/ckpt/ob_ss_linked_phy_block_reader.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace storage
+namespace storage 
 {
 using namespace oceanbase::common;
 
-class TestSSMicroCacheCheckpoint : public ::testing::Test
+class TestSSMicroCacheCheckpoint : public ::testing::Test 
 {
 public:
   TestSSMicroCacheCheckpoint() {}

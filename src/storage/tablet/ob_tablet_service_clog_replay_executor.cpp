@@ -48,7 +48,7 @@ int ObTabletServiceClogReplayExecutor::init(
     pos_ = pos;
     scn_ = scn;
     is_inited_ = true;
-  }
+  } 
 
   return ret;
 }

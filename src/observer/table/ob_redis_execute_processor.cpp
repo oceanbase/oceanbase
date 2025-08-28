@@ -73,7 +73,7 @@ int ObRedisExecuteP::init_redis_ctx()
   if (!tablet_id_.is_valid()) {
     tablet_id_ = simple_table_schema_->get_tablet_id();
   }
-
+  
   redis_ctx_.entity_factory_ = &default_entity_factory_;
   redis_ctx_.table_id_ = arg_.table_id_;
   redis_ctx_.tablet_id_ = tablet_id_;
@@ -135,7 +135,7 @@ void ObRedisExecuteP::init_redis_common(table::ObRedisCtx &ctx)
 int ObRedisExecuteP::check_tenant_version()
 {
   int ret = OB_SUCCESS;
-  if (GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_2_5_0
+  if (GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_2_5_0 
       || (CLUSTER_VERSION_4_3_0_0 <= GET_MIN_CLUSTER_VERSION() && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_1)) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "min cluster version is less than 4.2.5 or between 4.3.0.0 and 4.3.5.1, redis is");
@@ -166,7 +166,7 @@ int ObRedisExecuteP::try_process()
     LOG_WARN("fail to init schema info", K(ret), K(arg_));
   } else if (simple_table_schema_->get_table_id() != table_id_) {
     ret = OB_SCHEMA_ERROR;
-    LOG_WARN("info from request is not up to date, need to refresh schema info",
+    LOG_WARN("info from request is not up to date, need to refresh schema info", 
               K(ret), K(table_id_), K(tablet_id_));
   } else if (OB_FAIL(init_redis_ctx())) {
     LOG_WARN("faild init redis ctx", K(ret));
@@ -197,7 +197,7 @@ int ObRedisExecuteP::try_process()
 #endif
   // NOTE(xiongliyao): Prevent redundant audit records during the execution of Redis commands
   audit_ctx_.need_audit_ = true;
-  OB_TABLE_END_AUDIT(ret_code, ret,
+  OB_TABLE_END_AUDIT(ret_code, ret, 
                      snapshot, get_tx_snapshot(),
                      stmt_type, sql::stmt::StmtType::T_REDIS);
   return ret;

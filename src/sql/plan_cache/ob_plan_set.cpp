@@ -275,7 +275,7 @@ int ObPlanSet::match_param_info(const ObParamInfo &param_info,
         is_same = false;
       } else {
         uint64_t udt_id_param = param.get_accuracy().get_accuracy();
-        uint64_t udt_id_info = static_cast<uint64_t>(param_info.ext_real_type_) << 32
+        uint64_t udt_id_info = static_cast<uint64_t>(param_info.ext_real_type_) << 32 
                              | static_cast<uint32_t>(param_info.col_type_);
         is_same = (udt_id_info == udt_id_param) ? true : false;
       }
@@ -302,7 +302,7 @@ int ObPlanSet::match_param_info(const ObParamInfo &param_info,
         // do nothing
       } else {
         uint64_t udt_id_param = param.get_accuracy().get_accuracy();
-        uint64_t udt_id_info = static_cast<uint64_t>(param_info.ext_real_type_) << 32
+        uint64_t udt_id_info = static_cast<uint64_t>(param_info.ext_real_type_) << 32 
                              | static_cast<uint32_t>(param_info.col_type_);
         is_same = (udt_id_info == udt_id_param) ? true : false;
       }
@@ -454,16 +454,16 @@ int ObPlanSet::match_priv_cons(ObPlanCacheCtx &pc_ctx, bool &is_matched)
       ObArenaAllocator tmp_alloc;
       ObStmtNeedPrivs stmt_need_privs(tmp_alloc);
       const share::schema::ObSensitiveRuleSchema *rule_schema = NULL;
-      if (OB_FAIL(schema_guard->get_sensitive_rule_schema_by_id(tenant_id,
-                                                                priv_info.sensitive_rule_id_,
+      if (OB_FAIL(schema_guard->get_sensitive_rule_schema_by_id(tenant_id, 
+                                                                priv_info.sensitive_rule_id_, 
                                                                 rule_schema))) {
-        LOG_WARN("fail to get sensitive rule schema", K(ret), K(tenant_id),
+        LOG_WARN("fail to get sensitive rule schema", K(ret), K(tenant_id), 
                                                       K(priv_info.sensitive_rule_id_));
       } else if (OB_ISNULL(rule_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("rule schema is null", K(ret));
-      } else if (OB_FAIL(ObPrivilegeCheck::check_sensitive_rule_plainaccess_priv(rule_schema,
-                                                                                 *session_info,
+      } else if (OB_FAIL(ObPrivilegeCheck::check_sensitive_rule_plainaccess_priv(rule_schema, 
+                                                                                 *session_info, 
                                                                                  stmt_need_privs))) {
         if (OB_ERR_NO_PRIVILEGE == ret) {
           ret = OB_SUCCESS;
@@ -847,7 +847,7 @@ int ObPlanSet::init_new_set(const ObPlanCacheCtx &pc_ctx,
       can_skip_params_match_ = can_skip_params_match();
       can_delay_init_datum_store_ = can_delay_init_datum_store();
     }
-
+    
     if (OB_SUCC(ret) && pc_ctx.params_constraint_.count() > 0) {
       OZ(params_constraint_.reserve(pc_ctx.params_constraint_.count()));
       for (int i = 0; OB_SUCC(ret) && i < pc_ctx.params_constraint_.count(); ++i) {
@@ -985,7 +985,7 @@ int ObPlanSet::set_priv_constraint(common::ObIArray<ObPCPrivInfo> &priv_constrai
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < priv_constraint.count(); ++i) {
     const ObPCPrivInfo &priv_info = priv_constraint.at(i);
-    if (OB_UNLIKELY(!(priv_info.sys_priv_ > PRIV_ID_NONE && priv_info.sys_priv_ < PRIV_ID_MAX)
+    if (OB_UNLIKELY(!(priv_info.sys_priv_ > PRIV_ID_NONE && priv_info.sys_priv_ < PRIV_ID_MAX) 
                     && priv_info.sensitive_rule_id_ == OB_INVALID_ID )) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid priv type", K(priv_info), K(ret));
@@ -1944,7 +1944,7 @@ int ObSqlPlanSet::try_get_evolution_plan(ObPlanCacheCtx &pc_ctx,
   plan = NULL;
   get_next = false;
   if (pc_ctx.try_get_plan_) {
-    get_next = true;
+    get_next = true; 
   } else if (OB_FAIL(try_get_local_evolution_plan(pc_ctx, plan, get_next))) {
     LOG_WARN("failed to try get local evolution plan", K(ret));
   } else if (get_next && OB_FAIL(try_get_dist_evolution_plan(pc_ctx, plan, get_next))) {
@@ -2460,7 +2460,7 @@ int ObSqlPlanSet::get_plan_type(const ObIArray<ObTableLocation> &table_locations
     LOG_WARN("failed to calcute physical plan type", K(ret));
   } else {
     // Lookup算子支持压到远程去执行:
-    //
+    //   
     // Select的sql如果包含uncertain算子，不能将类型改为分布式计划
     if (is_contain_uncertain_op && plan_type != OB_PHY_PLAN_LOCAL
         && stmt::T_SELECT != stmt_type_) {

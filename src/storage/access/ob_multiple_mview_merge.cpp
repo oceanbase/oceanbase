@@ -180,7 +180,7 @@ int ObMviewIncrMerge::get_incr_row(
   }
   if (FAILEDx(set_old_new_row_flag(param, context, row))) {
     LOG_WARN("Failed to set old new row flag", K(ret));
-  }
+  } 
   LOG_DEBUG("[MVIEW QUERY]: get next row", K(ret), K(row), K(version_include_base), K_(scan_old_row));
   return ret;
 }
@@ -304,7 +304,7 @@ int ObMviewIncrMerge::set_old_new_row_flag(
     const ObTableAccessParam &param,
     const ObTableAccessContext &context,
     blocksstable::ObDatumRow &row) const
-{
+{  
   int ret = OB_SUCCESS;
   const int64_t old_new_idx = param.iter_param_.get_mview_old_new_col_index();
   if (OB_UNLIKELY(OB_INVALID_INDEX == old_new_idx)) {

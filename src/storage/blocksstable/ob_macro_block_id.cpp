@@ -54,7 +54,7 @@ MacroBlockId::MacroBlockId(const MacroBlockId &id)
   third_id_ = id.third_id_;
   fourth_id_ = id.fourth_id_;
 }
-void MacroBlockId::first_id_to_string(char *buf, const int64_t buf_len, int64_t &pos) const
+void MacroBlockId::first_id_to_string(char *buf, const int64_t buf_len, int64_t &pos) const 
 {
   switch ((ObMacroBlockIdMode)id_mode_) {
   case ObMacroBlockIdMode::ID_MODE_LOCAL:
@@ -97,7 +97,7 @@ bool MacroBlockId::is_valid() const
     is_valid &= MACRO_BLOCK_ID_VERSION_V2 == version_ && id_mode_ < (uint64_t)ObMacroBlockIdMode::ID_MODE_MAX;
     if (is_private_data_or_meta()) {
       is_valid &= meta_transfer_seq() != -1 &&  meta_version_id() != ObStorageObjectOpt::INVALID_TABLET_VERSION;
-            //                   -1                       : INVLAID_TABLET_TRANSFER_SEQ;
+            //                   -1                       : INVLAID_TABLET_TRANSFER_SEQ; 
             // ObStorageObjectOpt::INVALID_TABLET_VERSION : macro_seq / tablet_meta_version
     } else if (is_shared_data_or_meta()) {
       is_valid &= third_id_ != -1; // macro_seq != -1
@@ -204,7 +204,7 @@ bool MacroBlockId::is_id_mode_share() const
 
 bool MacroBlockId::is_shared_data_or_meta() const
 {
-  return is_id_mode_share() &&
+  return is_id_mode_share() && 
   (
     static_cast<uint64_t>(ObStorageObjectType::SHARED_MICRO_DATA_MACRO) == storage_object_type_ ||
     static_cast<uint64_t>(ObStorageObjectType::SHARED_MICRO_META_MACRO) == storage_object_type_ ||
@@ -220,7 +220,7 @@ bool MacroBlockId::is_shared_data_or_meta() const
 
 bool MacroBlockId::is_private_data_or_meta() const
 {
-  return is_id_mode_share() &&
+  return is_id_mode_share() && 
   (
     static_cast<uint64_t>(ObStorageObjectType::PRIVATE_DATA_MACRO) == storage_object_type_ ||
     static_cast<uint64_t>(ObStorageObjectType::PRIVATE_META_MACRO) == storage_object_type_ ||

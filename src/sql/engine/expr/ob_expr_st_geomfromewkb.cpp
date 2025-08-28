@@ -38,7 +38,7 @@ int ObExprPrivSTGeomFromEWKB::calc_result_typeN(ObExprResType& type,
                                             int64_t param_num,
                                             ObExprTypeCtx& type_ctx) const
 {
-  UNUSED(type_ctx);
+  UNUSED(type_ctx); 
   UNUSED(types_stack);
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(param_num != 1 && param_num != 2)) {
@@ -57,7 +57,7 @@ int ObExprPrivSTGeomFromEWKB::calc_result_typeN(ObExprResType& type,
     type.set_geometry();
     type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObGeometryType]).get_length());
   }
-
+  
   return ret;
 }
 
@@ -262,7 +262,7 @@ int ObExprPrivSTGeomFromEWKB::create_geo_by_ewkb(ObIAllocator &allocator,
       crs = (srs->srs_type() == ObSrsType::PROJECTED_SRS)
           ? ObGeoCRS::Cartesian : ObGeoCRS::Geographic;
     }
-
+    
     if (OB_FAIL(ret)) {
       // do nothing
     } else if (OB_FAIL(ObGeoTypeUtil::create_geo_by_type(allocator, header.type_,

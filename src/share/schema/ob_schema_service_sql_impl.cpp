@@ -197,7 +197,7 @@ int ObSchemaServiceSQLImpl::retrieve_schema_version(T &result, int64_t &schema_v
   } else {
     EXTRACT_INT_FIELD_MYSQL_SKIP_RET(result, "version", schema_version, uint64_t);
     // for debug purpose:
-    //
+    // 
     int32_t myport = 0;
     char svr_ip[OB_IP_STR_BUFF] = "";
     int64_t tmp_real_str_len = 0;
@@ -5046,7 +5046,7 @@ int ObSchemaServiceSQLImpl::fetch_proxy_user_info(
         } else if (OB_ISNULL(user_info)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected error", K(user_id), K(ret));
-        } else if (user_info->is_role()) {
+        } else if (user_info->is_role()) { 
           //do nothing
         } else if (user_info->get_proxy_activated_flag() == ObProxyActivatedFlag::PROXY_NERVER_BEEN_ACTIVATED) {
           //skip
@@ -5078,11 +5078,11 @@ int ObSchemaServiceSQLImpl::fetch_proxy_user_info(
         }
       }
     }
-
+    
     if (OB_SUCC(ret) && !sql.empty()) {
       if (OB_FAIL(sql.append_fmt(" AND SCHEMA_VERSION <= %ld", schema_version))) {
         LOG_WARN("append failed", K(ret));
-      } else if (OB_FAIL(sql.append(is_fetch_proxy ?
+      } else if (OB_FAIL(sql.append(is_fetch_proxy ? 
                                     " ORDER BY TENANT_ID DESC, PROXY_USER_ID DESC, CLIENT_USER_ID DESC, SCHEMA_VERSION DESC" :
                                     " ORDER BY TENANT_ID DESC, CLIENT_USER_ID DESC, PROXY_USER_ID DESC, SCHEMA_VERSION DESC"))) {
         LOG_WARN("sql append failed", K(ret));
@@ -5148,7 +5148,7 @@ int ObSchemaServiceSQLImpl::fetch_proxy_role_info(
         } else if (OB_ISNULL(user_info)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected error", K(user_id), K(ret));
-        } else if (user_info->is_role()) {
+        } else if (user_info->is_role()) { 
           //do nothing
         } else if (user_info->get_proxy_activated_flag() == ObProxyActivatedFlag::PROXY_NERVER_BEEN_ACTIVATED) {
           //skip
@@ -5184,7 +5184,7 @@ int ObSchemaServiceSQLImpl::fetch_proxy_role_info(
     if (OB_SUCC(ret) && !sql.empty()) {
       if (OB_FAIL(sql.append_fmt(" AND SCHEMA_VERSION <= %ld", schema_version))) {
         LOG_WARN("append failed", K(ret));
-      } else if (OB_FAIL(sql.append(is_fetch_proxy ?
+      } else if (OB_FAIL(sql.append(is_fetch_proxy ? 
                                     " ORDER BY TENANT_ID DESC, PROXY_USER_ID DESC, CLIENT_USER_ID DESC, ROLE_ID DESC, SCHEMA_VERSION DESC" :
                                     " ORDER BY TENANT_ID DESC, CLIENT_USER_ID DESC, PROXY_USER_ID DESC, ROLE_ID DESC, SCHEMA_VERSION DESC"))) {
         LOG_WARN("sql append failed", K(ret));
@@ -5747,7 +5747,7 @@ int ObSchemaServiceSQLImpl::fetch_sensitive_rules(
     ObISQLClient &sql_client, const ObRefreshSchemaStatus &schema_status,
     const int64_t schema_version, const uint64_t tenant_id,
     ObIArray<ObSensitiveRuleSchema> &schema_array, const SchemaKey *schema_keys,
-    const int64_t schema_key_size)
+    const int64_t schema_key_size) 
 {
   int ret = OB_SUCCESS;
   const int64_t orig_cnt = schema_array.count();
@@ -5774,7 +5774,7 @@ int ObSchemaServiceSQLImpl::fetch_sensitive_rules(
     if (OB_SUCC(ret)) {
       DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
       if (OB_FAIL(sql.append(" ORDER BY tenant_id desc, sensitive_rule_id desc,"
-                             " schema_version desc"))) {
+                             " schema_version desc"))) {                                                  
         LOG_WARN("sql append failed", K(ret));
       } else if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
         LOG_WARN("execute sql failed", K(ret), K(tenant_id), K(sql));
@@ -5799,9 +5799,9 @@ int ObSchemaServiceSQLImpl::fetch_sensitive_rules(
       }
     }
     if (OB_SUCC(ret) && sensitive_rule_ids.count() > 0) {
-      if (OB_FAIL(fetch_sensitive_columns_for_sensitive_rules(schema_status, schema_version,
+      if (OB_FAIL(fetch_sensitive_columns_for_sensitive_rules(schema_status, schema_version, 
                                                               tenant_id, sql_client,
-                                                              sensitive_rules, &sensitive_rule_ids.at(0),
+                                                              sensitive_rules, &sensitive_rule_ids.at(0), 
                                                               sensitive_rule_ids.count()))) {
         LOG_WARN("failed to fetch sensitive columns", K(ret));
       }
@@ -5856,7 +5856,7 @@ int ObSchemaServiceSQLImpl::fetch_sensitive_columns_for_sensitive_rules(
         if (OB_FAIL(ObSchemaRetrieveUtils::find_sensitive_rule_schema(
                                            sens_col_schema.get_sensitive_rule_id(),
                                            sensitive_rule_array, sensitive_rule_schema_ptr))) {
-          LOG_WARN("failed to find sensitive_rule schema",
+          LOG_WARN("failed to find sensitive_rule schema", 
                    K(tenant_id), K(sens_col_schema.get_sensitive_rule_id()), K(ret));
         } else if (OB_ISNULL(sensitive_rule_schema_ptr)) {
           ret = OB_ERR_UNEXPECTED;
@@ -5949,14 +5949,14 @@ int ObSchemaServiceSQLImpl::fetch_sensitive_columns(
     if (OB_SUCC(ret)) {
       DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
       if (OB_FAIL(sql.append(" ORDER BY tenant_id desc, sensitive_rule_id desc,"
-                             " schema_version desc"))) {
+                             " schema_version desc"))) {                                                  
         LOG_WARN("sql append failed", K(ret));
       } else if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
         LOG_WARN("execute sql failed", K(ret), K(tenant_id), K(sql));
       } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to get result. ", K(ret));
-      } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_sensitive_column_schema(tenant_id, *result,
+      } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_sensitive_column_schema(tenant_id, *result, 
                                                                                  schema_array))) {
         LOG_WARN("failed to retrieve sensitive column schema", K(ret));
       } else {
@@ -9063,7 +9063,7 @@ int ObSchemaServiceSQLImpl::fetch_all_ccl_rule_info(
         }
         LOG_TRACE("[CCL] after retrieve: ", K(schema));
       }
-
+      
     }
   }
   return ret;
@@ -11406,7 +11406,7 @@ int ObSchemaServiceSQLImpl::get_table_schemas_in_tablegroup(
   ObMySQLResult *result = NULL;
   if (OB_FAIL(sql.assign_fmt("select * from %s where tenant_id = 0 AND tablegroup_id = %lu",
                     OB_ALL_TABLE_TNAME, tablegroup_id))) {
-    LOG_WARN("failed to append sql", K(ret), K(sql));
+    LOG_WARN("failed to append sql", K(ret), K(sql));                      
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
@@ -11502,7 +11502,7 @@ int ObSchemaServiceSQLImpl::get_table_id_and_table_name_in_tablegroup(
   ObMySQLResult *result = NULL;
   if (OB_FAIL(sql.assign_fmt("select table_id, table_name from %s where tenant_id = 0 AND tablegroup_id = %lu",
                     OB_ALL_TABLE_TNAME, tablegroup_id))) {
-    LOG_WARN("failed to append sql", K(ret), K(sql));
+    LOG_WARN("failed to append sql", K(ret), K(sql));                      
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {

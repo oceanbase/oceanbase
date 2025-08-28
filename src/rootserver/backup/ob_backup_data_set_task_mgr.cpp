@@ -320,7 +320,7 @@ int ObBackupSetTaskMgr::sync_wait_backup_user_ls_scn_(const share::ObBackupLSTas
   ObBackupLSMetaInfo ls_meta;
   int64_t sys_ls_turn_id = 1;
   int64_t dest_id = 0;
-  if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_, job_attr_->tenant_id_,
+  if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_, job_attr_->tenant_id_, 
     job_attr_->backup_path_, backup_dest))) {
     LOG_WARN("fail to get backup dest", K(ret), KPC(job_attr_));
   } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(*sql_proxy_, job_attr_->tenant_id_, backup_dest, dest_id))) {
@@ -396,7 +396,7 @@ int ObBackupSetTaskMgr::generate_ls_tasks_(
       } else if (OB_FAIL(type.get_backup_data_type(backup_data_type))) {
         LOG_WARN("failed to get backup data type", K(ret), K(type));
       } else if (OB_FAIL(ObLSBackupOperator::insert_ls_backup_task_info(new_ls_attr.tenant_id_,
-          new_ls_attr.task_id_, new_ls_attr.turn_id_, new_ls_attr.retry_id_, new_ls_attr.ls_id_,
+          new_ls_attr.task_id_, new_ls_attr.turn_id_, new_ls_attr.retry_id_, new_ls_attr.ls_id_, 
           new_ls_attr.backup_set_id_, backup_data_type, trans_))) {
         LOG_WARN("failed to insert ls backup task info", K(ret), K(new_ls_attr), K(backup_data_type));
       } 
@@ -410,7 +410,7 @@ int ObBackupSetTaskMgr::calc_task_turn_(const ObBackupDataTaskType &type, int64_
   int ret = OB_SUCCESS;
   turn_id = 0;
   switch(set_task_attr_.status_) {
-    case ObBackupStatus::INIT:
+    case ObBackupStatus::INIT: 
     case ObBackupStatus::BACKUP_SYS_META: {
       if (type.is_backup_meta()) {
         turn_id = 1;
@@ -489,7 +489,7 @@ int ObBackupSetTaskMgr::backup_sys_meta_()
           LOG_WARN("fail to commit trans", KR(ret));
         } else {
           set_task_attr_.status_ = next_status;
-          ROOTSERVICE_EVENT_ADD("backup_data", "backup sys ls meta succeed", "tenant_id",
+          ROOTSERVICE_EVENT_ADD("backup_data", "backup sys ls meta succeed", "tenant_id", 
             job_attr_->tenant_id_, "job_id", job_attr_->job_id_, "task_id", set_task_attr_.task_id_);
           LOG_INFO("succeed to backup sys ls meta", K(ret), KPC(job_attr_));
           backup_service_->wakeup();
@@ -521,7 +521,7 @@ int ObBackupSetTaskMgr::backup_user_meta_()
   } else if (OB_FAIL(do_backup_root_key_())) {
     LOG_WARN("[DATA_BACKUP]failed to do backup root key", K(ret));
   } else if (ls_task.count() == finish_cnt) {
-    ROOTSERVICE_EVENT_ADD("backup_data",
+    ROOTSERVICE_EVENT_ADD("backup_data", 
                           "before_backup_data",
                           "tenant_id",
                           job_attr_->tenant_id_,
@@ -641,7 +641,7 @@ int ObBackupSetTaskMgr::inner_calculate_consistent_scn_(ObIArray<share::ObBackup
 }
 
 int ObBackupSetTaskMgr::check_need_change_meta_turn_(ObIArray<share::ObBackupLSTaskAttr> &ls_tasks, bool &need_change_turn)
-{
+{  
   // if deleting ls when backup user meta, the deleted ls may not has ls meta backup.
   // if ls included in ls_attr has no ls meta, restore scheduler will create ls failed.
   // so when deleting ls happended, we need to change meta turn and backup ls_attr and ls_meta in new turn
@@ -676,7 +676,7 @@ int ObBackupSetTaskMgr::change_meta_turn_(const share::ObBackupLSTaskAttr &sys_l
           set_task_attr_.job_id_);
     } else if (OB_FAIL(generate_ls_tasks_(ls_ids, type))) {
       LOG_WARN("failed to generate log stream tasks", K(ret), KPC(job_attr_), K(ls_ids));
-    } else if (OB_FAIL(ObBackupTaskOperator::update_turn_id(trans_, set_task_attr_.status_, set_task_attr_.task_id_,
+    } else if (OB_FAIL(ObBackupTaskOperator::update_turn_id(trans_, set_task_attr_.status_, set_task_attr_.task_id_, 
         set_task_attr_.tenant_id_, next_meta_turn_id))) {
       LOG_WARN("failed to update meta turn id", K(ret), K(set_task_attr_));
     }
@@ -872,7 +872,7 @@ int ObBackupSetTaskMgr::get_tablet_list_by_snapshot(
         } else if (OB_FAIL(backup_service_->check_leader())) {
           LOG_WARN("failed to check leader", K(ret));
         }
-      }
+      } 
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(fill_map_with_sys_tablets_(latest_ls_tablet_map))) {
         LOG_WARN("failed to fill map with sys ls tablets", K(ret));
@@ -958,10 +958,10 @@ int ObBackupSetTaskMgr::fill_map_with_sys_tablets_(
 }
 
 //read backup set file from inner table OB_ALL_BACKUP_SET_FILES
-//if consistent scn is min, calculate consistent scn by inner_calculate_consistent_scn_, and update it in inner table
+//if consistent scn is min, calculate consistent scn by inner_calculate_consistent_scn_, and update it in inner table 
 //return consistent scn
 int ObBackupSetTaskMgr::calculate_backup_consistent_scn_(
-  ObIArray<share::ObBackupLSTaskAttr> &ls_tasks,
+  ObIArray<share::ObBackupLSTaskAttr> &ls_tasks, 
   share::SCN &consistent_scn)
 {
   int ret = OB_SUCCESS;
@@ -969,15 +969,15 @@ int ObBackupSetTaskMgr::calculate_backup_consistent_scn_(
   ObBackupSetFileDesc backup_set_file;
   ObBackupDest backup_dest;
   ObMySQLTransaction trans;
-  if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_,
+  if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_, 
                  job_attr_->tenant_id_, set_task_attr_.backup_path_, backup_dest))) {
-    LOG_WARN("fail to get backup dest", K(ret), KPC(job_attr_));
+    LOG_WARN("fail to get backup dest", K(ret), KPC(job_attr_)); 
   } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(*sql_proxy_, job_attr_->tenant_id_, backup_dest, dest_id))) {
     LOG_WARN("failed to get dest id", K(ret), KPC(job_attr_));
   } else if (OB_FAIL(trans.start(sql_proxy_, meta_tenant_id_))) {
     LOG_WARN("failed to start trans", K(ret));
   } else {
-    if (OB_FAIL(ObBackupSetFileOperator::get_backup_set_file(trans, true/*for update*/, job_attr_->backup_set_id_,
+    if (OB_FAIL(ObBackupSetFileOperator::get_backup_set_file(trans, true/*for update*/, job_attr_->backup_set_id_, 
         job_attr_->incarnation_id_, job_attr_->tenant_id_, dest_id, backup_set_file))) {
       LOG_WARN("failed to get backup set", K(ret), KPC(job_attr_));
     } else if (backup_set_file.consistent_scn_.is_valid_and_not_min()) {
@@ -1013,7 +1013,7 @@ int ObBackupSetTaskMgr::get_extern_tablet_info_(
   ObBackupDest backup_dest;
   storage::ObLSMetaPackage ls_meta_package;
   if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_, job_attr_->tenant_id_, set_task_attr_.backup_path_, backup_dest))) {
-    LOG_WARN("fail to get backup dest", K(ret), KPC(job_attr_));
+    LOG_WARN("fail to get backup dest", K(ret), KPC(job_attr_)); 
   } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(*sql_proxy_, job_attr_->tenant_id_, backup_dest, dest_id))) {
     LOG_WARN("failed to get dest id", K(ret), KPC(job_attr_));
   } else if (OB_FAIL(store_.read_base_tablet_list(ls_id, dest_id, user_tablet_ids))) {
@@ -1025,7 +1025,7 @@ int ObBackupSetTaskMgr::get_extern_tablet_info_(
     LOG_WARN("invalid ls meta", K(ret));
   } else {
     backup_scn = ls_meta_package.ls_meta_.get_clog_checkpoint_scn();
-  }
+  } 
   return ret;
 }
 
@@ -1175,7 +1175,7 @@ int ObBackupSetTaskMgr::get_backup_end_scn_(share::SCN &end_scn) const
       } else if (OB_FAIL(backup_service_->check_leader())) {
         LOG_WARN("failed to check leader", K(ret));
       }
-    }
+    } 
   }
   return ret;
 }
@@ -1240,7 +1240,7 @@ int ObBackupSetTaskMgr::full_tablet_checksum_verification_()
 }
 
 int ObBackupSetTaskMgr::backup_data_finish_(
-    const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks,
+    const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks, 
     const ObBackupLSTaskAttr &build_index_attr)
 {
   int ret = OB_SUCCESS;
@@ -1262,10 +1262,10 @@ int ObBackupSetTaskMgr::backup_data_finish_(
     LOG_WARN("fail to get next status", K(set_task_attr_.status_), K(next_status));
   } else if (OB_FAIL(convert_task_type_(ls_tasks))) {
     LOG_WARN("[DATA_BACKUP]failed to update task type to PLUS_ARCHIVE_LOG", K(ret), K(ls_tasks));
-  }
+  } 
   if (FAILEDx(advance_status_(trans_, next_status, OB_SUCCESS, end_scn))) {
     LOG_WARN("[DATA_BACKUP]failed to update set task status to COMPLETEING", K(ret), K(set_task_attr_));
-  }
+  } 
   if (trans_.is_started()) {
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(trans_.end(OB_SUCC(ret)))) {
@@ -1277,7 +1277,7 @@ int ObBackupSetTaskMgr::backup_data_finish_(
       set_task_attr_.status_ = next_status;
       LOG_INFO("backup data succeed, advance status to backup fuse tablet meta", "tenant_id", job_attr_->tenant_id_,
         "job_id", job_attr_->job_id_, "task_id", set_task_attr_.task_id_);
-      ROOTSERVICE_EVENT_ADD("backup_data", "backup data succeed", "tenant_id",
+      ROOTSERVICE_EVENT_ADD("backup_data", "backup data succeed", "tenant_id", 
         job_attr_->tenant_id_, "job_id", job_attr_->job_id_, "task_id", set_task_attr_.task_id_);
       backup_service_->wakeup();
     }
@@ -1286,7 +1286,7 @@ int ObBackupSetTaskMgr::backup_data_finish_(
 }
 
 int ObBackupSetTaskMgr::change_turn_(
-    const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks,
+    const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks, 
     const ObBackupLSTaskAttr &build_index_attr,
     ObIArray<storage::ObBackupDataTabletToLSInfo> &tablets_to_ls)
 {
@@ -1398,10 +1398,10 @@ int ObBackupSetTaskMgr::change_task_turn_(
     LOG_WARN("[DATA_BACKUP]failed to get change turn id and ls when change turn", K(ret), K(ls_task), K(tablets_to_ls));
   } else if (OB_FAIL(update_inner_task_(new_ls_array, need_change_turn_ls_tasks))) {
     LOG_WARN("[DATA_BACKUP]failed to update inner task when change turn", K(ret), K(need_change_turn_ls_tasks));
-  }
-  ROOTSERVICE_EVENT_ADD("backup_data", "after_change_backup_turn_id",
-                        "tenant_id", job_attr_->tenant_id_,
-                        "backup_status", set_task_attr_.status_,
+  } 
+  ROOTSERVICE_EVENT_ADD("backup_data", "after_change_backup_turn_id", 
+                        "tenant_id", job_attr_->tenant_id_, 
+                        "backup_status", set_task_attr_.status_, 
                         "new_turn_id", set_task_attr_.major_turn_id_);
   DEBUG_SYNC(AFTER_CHANGE_BACKUP_TURN_ID);
   return ret;
@@ -1419,7 +1419,7 @@ int ObBackupSetTaskMgr::filter_new_ls_from_tablet_info_(
     LOG_WARN("[DATA_BACKUP]failed to create set", K(ret));
   } else if (OB_FAIL(construct_cur_ls_set_(ls_tasks, ls_id_set))) {
     LOG_WARN("[DATA_BACKUP]failed to get last turn ls ids", K(ret), K(set_task_attr_));
-  }
+  } 
 
   ARRAY_FOREACH(tablets_to_ls, i) {
     const ObLSID ls_id =tablets_to_ls.at(i).ls_id_;
@@ -1475,10 +1475,10 @@ int ObBackupSetTaskMgr::update_inner_task_(
     // change backup task turn.
     turn_id = set_task_attr_.major_turn_id_;
     if (OB_FAIL(ObBackupTaskOperator::update_turn_id(
-                trans_,
-                set_task_attr_.status_,
-                set_task_attr_.task_id_,
-                set_task_attr_.tenant_id_,
+                trans_, 
+                set_task_attr_.status_, 
+                set_task_attr_.task_id_, 
+                set_task_attr_.tenant_id_, 
                 turn_id))) {
       LOG_WARN("[DATA_BACKUP]failed to update backup task turn id", K(ret), K_(set_task_attr), K(turn_id));
     }
@@ -1511,7 +1511,7 @@ int ObBackupSetTaskMgr::write_or_update_tablet_to_ls_(ObIArray<storage::ObBackup
     }
   }
   // tablet_to_ls may be different because of transfer,
-  // and tablet_to_ls_info can't be overwrote becuase of WORM,
+  // and tablet_to_ls_info can't be overwrote becuase of WORM, 
   // so write the target turn tablet to ls info only once.
   if (FAILEDx(store_.read_tablet_to_ls_info(turn_id, data_type, tablet_to_ls_desc))) {
     if (OB_OBJECT_NOT_EXIST == ret) {
@@ -1556,7 +1556,7 @@ int ObBackupSetTaskMgr::build_index_(ObBackupLSTaskAttr *build_index_attr, bool 
     build_index_task.max_tablet_checkpoint_scn_.set_min();
     if (OB_FAIL(calc_task_turn_(build_index_task.task_type_, build_index_task.turn_id_))) {
       LOG_WARN("failed to calc ls task turn", K(ret));
-    } else if (OB_FAIL(ObBackupUtils::convert_timestamp_to_date(build_index_task.start_ts_, build_index_task.backup_date_))) {
+    } else if (OB_FAIL(ObBackupUtils::convert_timestamp_to_date(build_index_task.start_ts_, build_index_task.backup_date_))) { 
       LOG_WARN("[DATA_BACKUP]failed to get date", K(ret), K(build_index_task));
     } else if (OB_FAIL(ObBackupLSTaskOperator::insert_build_index_task(*sql_proxy_, build_index_task))) {
       LOG_WARN("[DATA_BACKUP]failed to insert build index task", K(ret), K(build_index_task));
@@ -1633,7 +1633,7 @@ int ObBackupSetTaskMgr::get_tablets_of_deleted_ls_(
       continue;
     } else if (OB_FAIL(store_.read_tablet_list(type, ls_task.turn_id_, ls_task.ls_id_, tablet_ids))) {
       LOG_WARN("failed to read tablet list", K(ret));
-    }
+    } 
 
     ARRAY_FOREACH(tablet_ids, i) {
       if (tablet_ids.at(i).is_inner_tablet()) {
@@ -1654,7 +1654,7 @@ int ObBackupSetTaskMgr::get_tablets_of_deleted_ls_(
 int ObBackupSetTaskMgr::do_get_change_turn_tablets_(
     const ObIArray<ObBackupLSTaskAttr> &ls_tasks,
     const common::hash::ObHashSet<ObBackupSkipTabletAttr> &skipped_tablets,
-    ObIArray<storage::ObBackupDataTabletToLSInfo> &tablet_to_ls)
+    ObIArray<storage::ObBackupDataTabletToLSInfo> &tablet_to_ls) 
 {
   int ret = OB_SUCCESS;
   // if tablet can't be found in __all_tablet_to_ls, it need't to change turn
@@ -1702,7 +1702,7 @@ int ObBackupSetTaskMgr::do_get_change_turn_tablets_(
           }
         } else if (OB_FAIL(tablet_ids->push_back(skip_tablet.tablet_id_))) {
           LOG_WARN("fail to append tablet ids", K(ret));
-        }
+        } 
 
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(ls_id_set.exist_refactored(final_ls_id))) {
@@ -1850,7 +1850,7 @@ int ObBackupSetTaskMgr::construct_cur_ls_set_(
   return ret;
 }
 
-int ObBackupSetTaskMgr::convert_task_type_(const ObIArray<ObBackupLSTaskAttr> &ls_tasks)
+int ObBackupSetTaskMgr::convert_task_type_(const ObIArray<ObBackupLSTaskAttr> &ls_tasks) 
 {
   int ret = OB_SUCCESS;
   ObBackupDataTaskType type;
@@ -1898,7 +1898,7 @@ int ObBackupSetTaskMgr::convert_task_type_(const ObIArray<ObBackupLSTaskAttr> &l
       new_ls_task.task_trace_id_.reset();
       // backup meta finish need reuse the turn id and retry id to merge tablet infos
       // so that the turn id and retry id of backup meta finish
-      // is the same as the turn id and retry id of backup meta
+      // is the same as the turn id and retry id of backup meta 
       if (ObBackupDataTaskType::Type::BACKUP_META_FINISH != type.type_) {
         new_ls_task.retry_id_ = 0;
         new_ls_task.turn_id_ = 1;
@@ -1912,10 +1912,10 @@ int ObBackupSetTaskMgr::convert_task_type_(const ObIArray<ObBackupLSTaskAttr> &l
         if (OB_FAIL(type.get_backup_data_type(backup_data_type))) {
           LOG_WARN("failed to get backup data type", K(ret), K(type));
         } else if (OB_FAIL(ObLSBackupOperator::insert_ls_backup_task_info(new_ls_task.tenant_id_,
-            new_ls_task.task_id_, new_ls_task.turn_id_, new_ls_task.retry_id_, new_ls_task.ls_id_,
+            new_ls_task.task_id_, new_ls_task.turn_id_, new_ls_task.retry_id_, new_ls_task.ls_id_, 
             new_ls_task.backup_set_id_, backup_data_type, trans_))) {
           LOG_WARN("failed to insert ls backup task info", K(ret), K(new_ls_task), K(backup_data_type));
-        }
+        } 
       }
 
       if (OB_SUCC(ret)) {
@@ -1955,7 +1955,7 @@ int ObBackupSetTaskMgr::deal_failed_set_task(ObMySQLTransaction &trans)
       set_task_attr_.end_ts_ = job_attr_->end_ts_;
       if (OB_FAIL(set_backup_set_files_failed_(trans))) {
         LOG_WARN("fail to set backup set files failed", K(ret));
-      } else if (OB_FAIL(advance_status_(trans, set_task_attr_.status_, job_attr_->result_, set_task_attr_.end_scn_,
+      } else if (OB_FAIL(advance_status_(trans, set_task_attr_.status_, job_attr_->result_, set_task_attr_.end_scn_, 
           job_attr_->end_ts_))) {
         LOG_WARN("[DATA_BACKUP]failed to advance set task status to FAILED", K(ret), K(set_task_attr_), 
         "failed job result", job_attr_->result_);
@@ -1999,7 +1999,7 @@ int ObBackupSetTaskMgr::backup_fuse_tablet_meta_()
   } else if (OB_FAIL(do_backup_fuse_tablet_meta_(ls_task, finish_cnt))) {
     LOG_WARN("[DATA_BACKUP]failed to do backup ls task", K(ret), K(set_task_attr_), K(ls_task));
   }
-
+  
   if (OB_SUCC(ret) && ls_task.count() == finish_cnt) {
     ObBackupStatus next_status = ObBackupStatus::PREPARE_BACKUP_LOG;
     set_task_attr_.end_ts_ = ObTimeUtility::current_time();
@@ -2010,13 +2010,13 @@ int ObBackupSetTaskMgr::backup_fuse_tablet_meta_()
         LOG_WARN("[DATA_BACKUP]fail to update task type to backup data", K(ret));
       } else if (OB_FAIL(advance_status_(trans_, next_status, OB_SUCCESS, set_task_attr_.end_scn_, set_task_attr_.end_ts_))) {
         LOG_WARN("fail to advance status to backup log", K(ret), K(set_task_attr_));
-      }
+      } 
       if (OB_SUCC(ret)) {
         if (OB_FAIL(trans_.end(true))) {
           LOG_WARN("fail to commit trans", KR(ret));
         } else {
           set_task_attr_.status_ = next_status;
-          ROOTSERVICE_EVENT_ADD("backup_data", "backup fuse tablet meta succeed", "tenant_id",
+          ROOTSERVICE_EVENT_ADD("backup_data", "backup fuse tablet meta succeed", "tenant_id", 
             job_attr_->tenant_id_, "job_id", job_attr_->job_id_, "task_id", set_task_attr_.task_id_);
           LOG_INFO("backup fuse tablet meta succeed", "tenant_id", job_attr_->tenant_id_, "job_id", job_attr_->job_id_,
               "task_id", set_task_attr_.task_id_);
@@ -2077,7 +2077,7 @@ int ObBackupSetTaskMgr::prepare_backup_log_()
       LOG_WARN("[DATA_BACKUP]invalid round attr", K(ret));
     } else if (round_attr.checkpoint_scn_ < set_task_attr_.end_scn_) {
       if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
-        LOG_WARN("[DATA_BACKUP]log archive checkpoint is less than task's end scn, try later", "checkpoint_scn", round_attr.checkpoint_scn_,
+        LOG_WARN("[DATA_BACKUP]log archive checkpoint is less than task's end scn, try later", "checkpoint_scn", round_attr.checkpoint_scn_, 
           "end_scn", set_task_attr_.end_scn_);
       }
     } else {
@@ -2192,7 +2192,7 @@ int ObBackupSetTaskMgr::inner_prepare_backup_log_()
         LOG_WARN("fail to commit trans", K(ret));
       } else {
         set_task_attr_.status_ = next_status;
-        ROOTSERVICE_EVENT_ADD("backup_data", "prepare backup completing log succeed", "tenant_id",
+        ROOTSERVICE_EVENT_ADD("backup_data", "prepare backup completing log succeed", "tenant_id", 
           job_attr_->tenant_id_, "job_id", job_attr_->job_id_, "task_id", set_task_attr_.task_id_);
         backup_service_->wakeup();
       }
@@ -2254,7 +2254,7 @@ int ObBackupSetTaskMgr::before_backup_log_()
           LOG_WARN("fail to commit trans", K(ret));
         } else {
           set_task_attr_.status_ = next_status;
-          ROOTSERVICE_EVENT_ADD("backup_data", "before backup completing log succeed", "tenant_id",
+          ROOTSERVICE_EVENT_ADD("backup_data", "before backup completing log succeed", "tenant_id", 
             job_attr_->tenant_id_, "job_id", job_attr_->job_id_, "task_id", set_task_attr_.task_id_);
           backup_service_->wakeup();
         }
@@ -2314,11 +2314,11 @@ int ObBackupSetTaskMgr::backup_completing_log_()
   } else if (job_attr_->plus_archivelog_) {
     if (OB_FAIL(do_backup_completing_log_(ls_task, finish_cnt))) {
       LOG_WARN("[DATA_BACKUP]failed to do backup ls task", K(ret), K(set_task_attr_), K(ls_task));
-    }
+    } 
   } else {
     finish_cnt = ls_task.count();
   }
-
+  
   if (OB_SUCC(ret) && ls_task.count() == finish_cnt) {
     ObBackupStatus next_status = ObBackupStatus::COMPLETED;
     if (OB_FAIL(write_extern_infos_())) {
@@ -2439,7 +2439,7 @@ int ObBackupSetTaskMgr::do_cancel_()
       } else if (OB_FAIL(advance_status_(
           trans_, next_status, OB_CANCELED, set_task_attr_.end_scn_, set_task_attr_.end_ts_))) {
         LOG_WARN("[DATA_BACKUP]failed to advance set task status to CANCELED", K(ret), K(set_task_attr_));
-      }
+      } 
       if (OB_SUCC(ret)) {
         if (OB_FAIL(trans_.end(true))) {
           LOG_WARN("fail to commit trans", KR(ret));
@@ -2482,12 +2482,12 @@ int ObBackupSetTaskMgr::write_extern_infos_()
       LOG_WARN("[DATA_BACKUP]failed to write extern tenant diagnose info", K(ret), KPC(job_attr_));
     } else if (OB_FAIL(write_backup_set_placeholder_(false/*finish job*/))) {
       LOG_WARN("[DATA_BACKUP]failed to write backup set finish placeholder", K(ret), KPC(job_attr_));
-    }
+    } 
   }
   return ret;
 }
 
-int ObBackupSetTaskMgr::write_log_format_file_()
+int ObBackupSetTaskMgr::write_log_format_file_() 
 {
   int ret = OB_SUCCESS;
   share::ObBackupFormatDesc format_desc;
@@ -2502,7 +2502,7 @@ int ObBackupSetTaskMgr::write_log_format_file_()
   int64_t dest_id = 0;
   bool is_exist = false;
 
-  if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_, job_attr_->tenant_id_, job_attr_->backup_path_,
+  if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_, job_attr_->tenant_id_, job_attr_->backup_path_, 
                                                            backup_dest))) {
     LOG_WARN("failed to get backup dest", K(ret), KPC(job_attr_));
   } else if (OB_FAIL(ObBackupPathUtil::construct_backup_complement_log_dest(backup_dest, desc, new_backup_dest))) {
@@ -2553,7 +2553,7 @@ int ObBackupSetTaskMgr::write_table_list_(const share::SCN &end_scn)
   desc.backup_set_id_ = job_attr_->backup_set_id_;
   desc.backup_type_ = job_attr_->backup_type_;
 
-  if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_, job_attr_->tenant_id_,
+  if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_, job_attr_->tenant_id_, 
       set_task_attr_.backup_path_, backup_tenant_dest))) {
     LOG_WARN("fail to get backup dest", K(ret), K_(job_attr));
   } else if (OB_FAIL(ObBackupPathUtil::construct_backup_set_dest(backup_tenant_dest, desc, backup_set_dest))) {
@@ -2562,7 +2562,7 @@ int ObBackupSetTaskMgr::write_table_list_(const share::SCN &end_scn)
     LOG_WARN("fail to init table_list_mgr", KPC(job_attr_));
   } else if (OB_FAIL(table_list_mgr.backup_table_list())) {
     LOG_WARN("fail to backup table list", K(ret),  KPC(job_attr_));
-  }
+  } 
 
   if (OB_FAIL(ret)) {
     LOG_WARN("[DATA_BACKUP]fail to write table list", K(ret), K(end_scn));
@@ -2573,7 +2573,7 @@ int ObBackupSetTaskMgr::write_table_list_(const share::SCN &end_scn)
 }
 
 int ObBackupSetTaskMgr::write_backup_set_info_(
-    ObBackupSetTaskAttr &set_task_attr,
+    ObBackupSetTaskAttr &set_task_attr, 
     ObExternBackupSetInfoDesc &backup_set_info)
 {
   int ret = OB_SUCCESS;
@@ -2588,7 +2588,7 @@ int ObBackupSetTaskMgr::write_backup_set_info_(
   } else if (OB_FAIL(ObShareUtil::fetch_current_cluster_version(*sql_proxy_, cur_cluster_version))) {
     LOG_WARN("failed to get cluster version", K(ret));
   } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_, job_attr_->tenant_id_, set_task_attr.backup_path_, backup_dest))) {
-    LOG_WARN("[DATA_BACKUP]fail to get backup dest", K(ret), KPC(job_attr_));
+    LOG_WARN("[DATA_BACKUP]fail to get backup dest", K(ret), KPC(job_attr_)); 
   } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(*sql_proxy_, job_attr_->tenant_id_, backup_dest, dest_id))) {
     LOG_WARN("[DATA_BACKUP]failed to get dest id", K(ret), KPC(job_attr_));
   } else if (OB_FAIL(ObBackupSetFileOperator::get_backup_set_file(*sql_proxy_, false/*for update*/, job_attr_->backup_set_id_, job_attr_->incarnation_id_, 
@@ -2597,8 +2597,8 @@ int ObBackupSetTaskMgr::write_backup_set_info_(
   } else if (cur_data_version != backup_set_file.tenant_compatible_ || cur_cluster_version != backup_set_file.cluster_version_) {
     ret = OB_VERSION_NOT_MATCH;
 
-    LOG_WARN("cluster version or tenant data version are not match", K(ret),
-        K(cur_data_version),
+    LOG_WARN("cluster version or tenant data version are not match", K(ret), 
+        K(cur_data_version), 
         "backup_data_version", backup_set_file.tenant_compatible_,
         K(cur_cluster_version),
         "backup_cluster_version", backup_set_file.cluster_version_);
@@ -2682,8 +2682,8 @@ int ObBackupSetTaskMgr::write_extern_locality_info_(ObExternTenantLocalityInfoDe
     LOG_WARN("[DATA_BACKUP]failed to assign primary zone", K(ret), K(tenant_info));
   } else if (OB_FAIL(locality_info.cluster_name_.assign(GCONF.cluster))) {
     LOG_WARN("fail to assign cluster name", K(ret));
-  } else if (OB_FAIL(ObBackupUtils::get_tenant_sys_time_zone_wrap(set_task_attr_.tenant_id_,
-                                                                  locality_info.sys_time_zone_,
+  } else if (OB_FAIL(ObBackupUtils::get_tenant_sys_time_zone_wrap(set_task_attr_.tenant_id_, 
+                                                                  locality_info.sys_time_zone_, 
                                                                   locality_info.sys_time_zone_wrap_))) {
     LOG_WARN("failed to get tenant sys time zone wrap", K(ret));
   } else if(OB_FAIL(get_resource_pool_infos_(locality_info.resource_pool_infos_))) {
@@ -2740,7 +2740,7 @@ int ObBackupSetTaskMgr::write_extern_diagnose_info_(
   return ret;
 }
 
-int ObBackupSetTaskMgr::write_backup_set_placeholder_(const bool is_start)
+int ObBackupSetTaskMgr::write_backup_set_placeholder_(const bool is_start) 
 {
   int ret = OB_SUCCESS;
   SCN start_replay_scn = job_attr_->plus_archivelog_ ? set_task_attr_.end_scn_ : set_task_attr_.start_scn_;
@@ -2782,7 +2782,7 @@ int ObBackupSetTaskMgr::set_backup_set_files_failed_(ObMySQLTransaction &trans)
   ObBackupSetFileDesc backup_set_file;
   ObBackupDest backup_dest;
   if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(trans, job_attr_->tenant_id_, set_task_attr_.backup_path_, backup_dest))) {
-    LOG_WARN("fail to get backup dest", K(ret), KPC(job_attr_));
+    LOG_WARN("fail to get backup dest", K(ret), KPC(job_attr_)); 
   } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(trans, job_attr_->tenant_id_, backup_dest, dest_id))) {
     LOG_WARN("failed to get dest id", K(ret), KPC(job_attr_));
   } else if (OB_FAIL(ObBackupSetFileOperator::get_backup_set_file(trans, true/*for update*/, job_attr_->backup_set_id_, job_attr_->incarnation_id_, 

@@ -30,7 +30,7 @@ void __attribute__((weak)) request_finish_callback();
 bool ObTableLoginP::can_use_redis_v2()
 {
   uint64_t min_ver = GET_MIN_CLUSTER_VERSION();
-  return (min_ver >= MOCK_CLUSTER_VERSION_4_2_5_2 && min_ver < CLUSTER_VERSION_4_3_0_0)
+  return (min_ver >= MOCK_CLUSTER_VERSION_4_2_5_2 && min_ver < CLUSTER_VERSION_4_3_0_0) 
     || (min_ver >= CLUSTER_VERSION_4_3_5_1);
 }
 
@@ -127,7 +127,7 @@ int ObTableLoginP::process()
   if (OB_SUCCESS != (tmp_ret = ObTableConnectionMgr::get_instance().update_table_connection(req_, result_.tenant_id_,
                 result_.database_id_, result_.user_id_))) {
     LOG_WARN("fail to update table connection", K_(req), K_(result_.tenant_id),
-              K_(result_.database_id), K_(result_.user_id), K(tmp_ret), K(ret));
+              K_(result_.database_id), K_(result_.user_id), K(tmp_ret), K(ret));                  
   }
   EVENT_INC(TABLEAPI_LOGIN_COUNT);
   return ret;
@@ -140,7 +140,7 @@ void ObTableLoginP::sync_capacity(uint8_t client_type)
   if (type == ObTableClientType::JAVA_HTABLE_CLIENT &&
       TABLEAPI_OBJECT_POOL_MGR->is_support_distributed_execute()) {
     server_capabilities |= ObTableServerCapacity::DISTRIBUTED_EXECUTE;
-  }
+  } 
   result_.server_capabilities_ = server_capabilities;
 }
 
@@ -329,15 +329,15 @@ int ObTableApiProcessorBase::init_schema_info(uint64_t table_id,
   } else if (check_match && !arg_table_name.empty()
       && arg_table_name.case_compare(simple_table_schema_->get_table_name()) != 0) {
     ret = OB_SCHEMA_ERROR;
-    LOG_WARN("arg table name is not match with schema table name", K(ret), K(arg_table_name),
+    LOG_WARN("arg table name is not match with schema table name", K(ret), K(arg_table_name), 
             K(simple_table_schema_->get_table_name()));
   } else if (simple_table_schema_->is_in_recyclebin()) {
     ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
     LOG_USER_ERROR(OB_ERR_OPERATION_ON_RECYCLE_OBJECT);
-    LOG_WARN("table is in recycle bin, not allow to do operation", K(ret), K(credential_.tenant_id_),
+    LOG_WARN("table is in recycle bin, not allow to do operation", K(ret), K(credential_.tenant_id_), 
                 K(credential_.database_id_), K(table_id));
-  } else if (OB_FAIL(schema_cache_guard_.init(credential_.tenant_id_,
-                                              simple_table_schema_->get_table_id(),
+  } else if (OB_FAIL(schema_cache_guard_.init(credential_.tenant_id_, 
+                                              simple_table_schema_->get_table_id(), 
                                               simple_table_schema_->get_schema_version(),
                                               schema_guard_))) {
     LOG_WARN("fail to init schema cache guard", K(ret));
@@ -379,15 +379,15 @@ int ObTableApiProcessorBase::init_table_schema_info(uint64_t table_id,
   } else if (check_match && !arg_table_name.empty()
       && arg_table_name.case_compare(table_schema_->get_table_name()) != 0) {
     ret = OB_SCHEMA_ERROR;
-    LOG_WARN("arg table name is not match with schema table name", K(ret), K(arg_table_name),
+    LOG_WARN("arg table name is not match with schema table name", K(ret), K(arg_table_name), 
             K(table_schema_->get_table_name()));
   } else if (table_schema_->is_in_recyclebin()) {
     ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
     LOG_USER_ERROR(OB_ERR_OPERATION_ON_RECYCLE_OBJECT);
-    LOG_WARN("table is in recycle bin, not allow to do operation", K(ret), K(credential_.tenant_id_),
+    LOG_WARN("table is in recycle bin, not allow to do operation", K(ret), K(credential_.tenant_id_), 
                 K(credential_.database_id_), K(table_id));
-  } else if (OB_FAIL(schema_cache_guard_.init(credential_.tenant_id_,
-                                              table_schema_->get_table_id(),
+  } else if (OB_FAIL(schema_cache_guard_.init(credential_.tenant_id_, 
+                                              table_schema_->get_table_id(), 
                                               table_schema_->get_schema_version(),
                                               schema_guard_))) {
     LOG_WARN("fail to init schema cache guard", K(ret));
@@ -476,7 +476,7 @@ int ObTableApiProcessorBase::init_session()
 
   // ensure allocator is constructed before session to
   // avoid coredump at observer exit
-  //
+  // 
   ObArenaAllocator *allocator = &session_alloc();
   oceanbase::sql::ObSQLSessionInfo &sess = session();
 
@@ -575,7 +575,7 @@ int ObTableApiProcessorBase::start_trans(bool is_readonly,
     LOG_WARN("fail to init trans param", K(ret));
   } else if (OB_FAIL(ObTableTransUtils::start_trans(trans_param_))) {
     LOG_WARN("fail to start trans", K(ret), K_(trans_param));
-  }
+  } 
   return ret;
 }
 
@@ -731,7 +731,7 @@ int ObTableRpcProcessor<T>::before_process()
       IGNORE_RETURN audit_ctx_.generate_request_string(RpcProcessor::arg_);
     }
   }
-
+  
   user_client_addr_ = RPC_REQ_OP.get_peer(RpcProcessor::req_);
   return RpcProcessor::before_process();
 }

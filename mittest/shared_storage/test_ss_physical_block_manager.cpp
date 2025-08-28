@@ -18,13 +18,13 @@
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "mittest/shared_storage/clean_residual_data.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace storage
+namespace storage 
 {
 using namespace oceanbase::common;
 
-class TestSSPhysicalBlockManager : public ::testing::Test
+class TestSSPhysicalBlockManager : public ::testing::Test 
 {
 public:
   TestSSPhysicalBlockManager() {}
@@ -41,7 +41,7 @@ public:
 public:
   class TestSSPhyBlockMgrThread : public Threads {
   public:
-    enum class TestParallelType
+    enum class TestParallelType 
     {
       TEST_PARALLEL_ALLOCATE_BLOCK,
       TEST_PARALLEL_ALLOCATE_BLOCK_AND_CHECK_REUSE_VERSION,
@@ -252,8 +252,8 @@ void TestSSPhysicalBlockManager::TearDown()
 }
 
 int TestSSPhysicalBlockManager::serialize_super_block(
-    char *buf,
-    const int64_t buf_size,
+    char *buf, 
+    const int64_t buf_size, 
     const ObSSMicroCacheSuperBlock &super_block)
 {
   int ret = OB_SUCCESS;
@@ -280,8 +280,8 @@ int TestSSPhysicalBlockManager::serialize_super_block(
 }
 
 int TestSSPhysicalBlockManager::deserialize_super_block(
-    char *buf,
-    const int64_t buf_size,
+    char *buf, 
+    const int64_t buf_size, 
     ObSSMicroCacheSuperBlock &super_block)
 {
   int ret = OB_SUCCESS;
@@ -313,7 +313,7 @@ int TestSSPhysicalBlockManager::deserialize_super_block(
 }
 
 void TestSSPhysicalBlockManager::check_super_block_identical(
-    const ObSSMicroCacheSuperBlock &super_block1,
+    const ObSSMicroCacheSuperBlock &super_block1, 
     const ObSSMicroCacheSuperBlock &super_block2)
 {
   ASSERT_EQ(super_block1.micro_ckpt_time_us_, super_block2.micro_ckpt_time_us_);
@@ -351,8 +351,8 @@ TEST_F(TestSSPhysicalBlockManager, physical_block)
   ASSERT_EQ(true, blk_cnt_info.is_valid());
 
   ASSERT_LT(0, blk_cnt_info.total_blk_cnt_);
-  ASSERT_EQ(blk_cnt_info.total_blk_cnt_, blk_cnt_info.super_blk_cnt_ +
-                                         blk_cnt_info.shared_blk_cnt_ +
+  ASSERT_EQ(blk_cnt_info.total_blk_cnt_, blk_cnt_info.super_blk_cnt_ + 
+                                         blk_cnt_info.shared_blk_cnt_ + 
                                          blk_cnt_info.phy_ckpt_blk_cnt_);
   const int64_t data_blk_min_cnt =
       MAX(blk_cnt_info.reorgan_blk_cnt_, blk_cnt_info.shared_blk_cnt_ * MIN_CACHE_DATA_BLOCK_CNT_PCT / 100);
@@ -482,7 +482,7 @@ TEST_F(TestSSPhysicalBlockManager, physical_block_manager)
     ASSERT_EQ(OB_EAGAIN, phy_blk_mgr.alloc_block(block_idx, phy_blk_handle, ObSSPhyBlockType::SS_PHY_BLOCK_CKPT_BLK));
   }
 
-  // 4. free all phy_block_ckpt_block
+  // 4. free all phy_block_ckpt_block 
   succ_free = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < phy_ckpt_blk_cnt; i++) {
     succ_free = false;
@@ -520,7 +520,7 @@ TEST_F(TestSSPhysicalBlockManager, physical_block_manager)
     ASSERT_EQ(OB_EAGAIN, phy_blk_mgr.alloc_block(block_idx, phy_blk_handle, ObSSPhyBlockType::SS_MICRO_META_CKPT_BLK));
   }
 
-  // 6. free all micro_meta_blockckpt_block
+  // 6. free all micro_meta_blockckpt_block 
   succ_free = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < micro_ckpt_blk_cnt; i++) {
     succ_free = false;
@@ -615,7 +615,7 @@ TEST_F(TestSSPhysicalBlockManager, resize_file_size)
 {
   int ret = OB_SUCCESS;
   const static uint32_t BLOCK_SIZE = (1 << 21);
-
+  
   // 1. total_block count is less than count of a sub_arr
   int64_t total_block_cnt = ObSSPhysicalBlockManager::PHY_BLOCK_SUB_ARR_SIZE / sizeof(ObSSPhysicalBlock) - 1;
   int64_t file_size = BLOCK_SIZE * total_block_cnt;
@@ -754,7 +754,7 @@ TEST_F(TestSSPhysicalBlockManager, test_parallel_allocate_block)
   const int64_t max_data_blk_cnt = blk_cnt_info.shared_blk_cnt_ * (MIN_CACHE_DATA_BLOCK_CNT_PCT + 5) / 100 - max_reorgan_blk_cnt;    // 85%
   const int64_t max_micro_ckpt_cnt = blk_cnt_info.shared_blk_cnt_ * (MIN_CACHE_META_BLOCK_CNT_PCT + 5) / 100;  // 9%
   const int64_t data_blk_thread_num = 5;
-  const int64_t micro_ckpt_blk_thread_num = 5;
+  const int64_t micro_ckpt_blk_thread_num = 5; 
   const int64_t phy_ckpt_blk_thread_num = 1;
   const int64_t reorgan_blk_thread_num = 1;
 
@@ -871,10 +871,10 @@ TEST_F(TestSSPhysicalBlockManager, test_parallel_allocate_block_and_resize)
   ASSERT_EQ(0, threads.get_fail_cnt());
 }
 
-/*
+/* 
   Test two scenarios:
     1: Both super_blocks are correct, read the latest one
-    2: One of the super_blocks is correct and the other is incorrect, read the correct one
+    2: One of the super_blocks is correct and the other is incorrect, read the correct one 
 */
 TEST_F(TestSSPhysicalBlockManager, test_double_write_super_blk)
 {
@@ -902,7 +902,7 @@ TEST_F(TestSSPhysicalBlockManager, test_double_write_super_blk)
   ObSSMicroCacheSuperBlock super_blk;
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.read_ss_super_block(super_blk));
   check_super_block_identical(phy_blk_mgr.super_block_, new_super_blk);
-
+  
   // Scenario 2
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.update_ss_super_block(new_super_blk));
 
@@ -913,7 +913,7 @@ TEST_F(TestSSPhysicalBlockManager, test_double_write_super_blk)
   buf[fake_super_blk.get_serialize_size() - 3] = '#'; // simulate data error
   ObSSMicroCacheSuperBlock tmp_super_block;
   ASSERT_NE(OB_SUCCESS, deserialize_super_block(buf, align_size, tmp_super_block));
-
+  
   write_size = 0;
   ASSERT_EQ(OB_SUCCESS, tnt_file_mgr->pwrite_cache_block(0, align_size, buf, write_size));
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.read_ss_super_block(super_blk));
@@ -1060,7 +1060,7 @@ TEST_F(TestSSPhysicalBlockManager, alloc_all_phy_block)
     ASSERT_EQ(0, alloc_blk_handles.at(i).get_ptr()->is_free_);
     ASSERT_EQ(1, alloc_blk_handles.at(i).get_ptr()->is_sealed_);
   }
-
+  
   {
     int64_t blk_idx = -1;
     ObSSPhysicalBlockHandle phy_blk_handle;

@@ -33,7 +33,7 @@ public:
   void destroy();
   ObServerStorageMetaPersister &get_persister() { return persister_; }
   bool is_started() const { return ATOMIC_LOAD(&is_started_); }
-
+  
   int get_meta_block_list(ObIArray<blocksstable::MacroBlockId> &meta_block_list);
   ObStorageLoggerManager &get_slogger_manager() { return slogger_mgr_; }
   int get_reserved_size(int64_t &reserved_size) const;

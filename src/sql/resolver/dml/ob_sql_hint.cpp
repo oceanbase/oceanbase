@@ -1952,7 +1952,7 @@ int ObLogPlanHint::check_use_column_store(uint64_t table_id, bool &force_column_
   return ret;
 }
 
-int ObLogPlanHint::check_use_skip_scan(uint64_t table_id,
+int ObLogPlanHint::check_use_skip_scan(uint64_t table_id, 
                                        uint64_t index_id,
                                        bool &force_skip_scan,
                                        bool &force_no_skip_scan) const
@@ -2691,7 +2691,7 @@ int LogTableHint::init_index_hints(const ObDMLStmt &stmt, ObSqlSchemaGuard &sche
         if (OB_SUCC(ret) && union_merge_hint_ != nullptr) {
           for (int64_t i = 0; OB_SUCC(ret) && i < union_merge_hint_->get_index_name_list().count(); ++i) {
             if (0 != union_merge_hint_->get_index_name_list().at(i).case_compare(index_name)) {
-              /* do nothing */
+              /* do nothing */ 
             } else {
               union_merge_list.at(i) = index_id;
               ++union_merge_hint_match_cnt;
@@ -2881,7 +2881,7 @@ int JoinFilterPushdownHintInfo::check_use_join_filter(const ObDMLStmt &stmt,
                                                       const ObJoinFilterHint *&force_hint) const
 {
   int ret = OB_SUCCESS;
-  const ObIArray<const ObJoinFilterHint*> &join_filters = part_join_filter ? part_join_filter_hints_ :
+  const ObIArray<const ObJoinFilterHint*> &join_filters = part_join_filter ? part_join_filter_hints_ : 
                                                                              join_filter_hints_;
   const TableItem* table_item;
   const ObJoinFilterHint* current_hint = NULL;

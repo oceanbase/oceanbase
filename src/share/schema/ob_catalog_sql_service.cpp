@@ -245,7 +245,7 @@ int ObCatalogSqlService::gen_catalog_priv_dml(const uint64_t exec_tenant_id,
       || OB_FAIL(dml.add_column("priv_set", priv_set))
       || OB_FAIL(dml.add_gmt_modified())) {
     LOG_WARN("add column failed", K(ret));
-  }
+  } 
   return ret;
 }
 

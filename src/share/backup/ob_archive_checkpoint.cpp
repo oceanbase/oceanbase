@@ -109,8 +109,8 @@ int ObDestRoundCheckpointer::checkpoint(const ObTenantArchiveRoundAttr &round_in
 }
 
 int ObDestRoundCheckpointer::count_(
-    const ObTenantArchiveRoundAttr &old_round_info,
-    const ObDestRoundSummary &summary,
+    const ObTenantArchiveRoundAttr &old_round_info, 
+    const ObDestRoundSummary &summary, 
     ObDestRoundCheckpointer::Counter &counter) const
 {
   int ret = OB_SUCCESS;
@@ -176,9 +176,9 @@ int ObDestRoundCheckpointer::count_(
 }
 
 int ObDestRoundCheckpointer::calc_next_checkpoint_scn_(
-    const ObTenantArchiveRoundAttr &old_round_info,
-    const ObDestRoundSummary &summary,
-    const Counter &counter,
+    const ObTenantArchiveRoundAttr &old_round_info, 
+    const ObDestRoundSummary &summary, 
+    const Counter &counter, 
     SCN &next_checkpoint_scn) const
 {
   int ret = OB_SUCCESS;
@@ -188,26 +188,26 @@ int ObDestRoundCheckpointer::calc_next_checkpoint_scn_(
   // The next checkpoint scn can not exceed the max_checkpoint_scn_ which takes the GTS.
   next_checkpoint_scn = MIN(max_checkpoint_scn_, counter.checkpoint_scn_);
   if (OB_FAIL(ObTenantArchiveMgr::decide_piece_id(
-              old_round_info.start_scn_,
-              old_round_info.base_piece_id_,
-              old_round_info.piece_switch_interval_,
-              next_checkpoint_scn,
+              old_round_info.start_scn_, 
+              old_round_info.base_piece_id_, 
+              old_round_info.piece_switch_interval_, 
+              next_checkpoint_scn, 
               max_avail_piece_id))) {
     LOG_WARN("failed to calc max available piece id", K(ret), K(old_round_info), K(next_checkpoint_scn));
   } else if (OB_FAIL(ObTenantArchiveMgr::decide_piece_start_scn(
-                     old_round_info.start_scn_,
-                     old_round_info.base_piece_id_,
-                     old_round_info.piece_switch_interval_,
-                     max_avail_piece_id,
+                     old_round_info.start_scn_, 
+                     old_round_info.base_piece_id_, 
+                     old_round_info.piece_switch_interval_, 
+                     max_avail_piece_id, 
                      max_avail_piece_start_scn))) {
     LOG_WARN("failed to calc max available piece start scn", K(ret), K(old_round_info), K(max_avail_piece_id));
-  }
+  } 
 
   // Consider 2 log streams, the log groups info are as following :
   // 1001: [500, 600], [700, 1200]
   // 1002: [500, 900]
-  // Then the reasonable next round checkpoint scn is 900. However, suppose the piece switch end scn is 1000,
-  // if we specify to restore until 800, the result is that it will return and cannot be recovered. As the
+  // Then the reasonable next round checkpoint scn is 900. However, suppose the piece switch end scn is 1000, 
+  // if we specify to restore until 800, the result is that it will return and cannot be recovered. As the 
   // log with range [700, 800] is in next piece, but the file status is BACKUP_FILE_INCOMPLETE which we will
   // ignore during restore. In this case, the next round checkpoint scn will be adjust to 600, instead of 900.
   max_avail_piece_checkpoint_scn = SCN::max_scn();
@@ -224,9 +224,9 @@ int ObDestRoundCheckpointer::calc_next_checkpoint_scn_(
       if (OB_FAIL(ls_round.check_is_last_piece_for_deleted_ls(max_avail_piece_id, last_piece))) {
         LOG_WARN("failed to check is last piece for deleted ls", K(ret));
       } else if (last_piece) {
-        // If the ls is deleted, and this is the last piece. It should not
+        // If the ls is deleted, and this is the last piece. It should not 
         // affect the checkpoint_scn.
-        // Mark the last piece deleted for deleted ls. For example, piece 10 and 11 is found of
+        // Mark the last piece deleted for deleted ls. For example, piece 10 and 11 is found of 
         // a deleted ls for current checkpoint, piece 10 is not marked with deleted, but piece 11
         // is marked with deleted.
         // do nothing.
@@ -245,10 +245,10 @@ int ObDestRoundCheckpointer::calc_next_checkpoint_scn_(
 }
 
 int ObDestRoundCheckpointer::gen_new_round_info_(
-    const ObTenantArchiveRoundAttr &old_round_info,
-    const ObDestRoundSummary &summary,
+    const ObTenantArchiveRoundAttr &old_round_info, 
+    const ObDestRoundSummary &summary, 
     const ObDestRoundCheckpointer::Counter &counter,
-    ObTenantArchiveRoundAttr &new_round_info,
+    ObTenantArchiveRoundAttr &new_round_info, 
     bool &need_checkpoint) const
 {
   int ret = OB_SUCCESS;
@@ -268,7 +268,7 @@ int ObDestRoundCheckpointer::gen_new_round_info_(
     LOG_WARN("failed to calc next checkpoint scn", K(ret), K(old_round_info), K(summary), K(counter));
   }
 
-
+  
   if (OB_FAIL(ret)) {
   } else if (old_round_info.state_.is_beginning()) {
     bool is_no_logging = false;
@@ -283,7 +283,7 @@ int ObDestRoundCheckpointer::gen_new_round_info_(
         if (OB_FAIL(comment.append_fmt("tenant %lu no logging is open", old_round_info.key_.tenant_id_))) {
           LOG_WARN("failed to append interrupted log stream comment", K(ret), K(is_no_logging));
         }
-        ROOTSERVICE_EVENT_ADD("log_archive", "change_status",
+        ROOTSERVICE_EVENT_ADD("log_archive", "change_status", 
                               "tenant_id", old_round_info.key_.tenant_id_,
                               "dest_no", new_round_info.key_.dest_no_,
                               "old_status", old_round_info.state_.to_status_str(),
@@ -293,7 +293,7 @@ int ObDestRoundCheckpointer::gen_new_round_info_(
           LOG_WARN("failed to append interrupted log stream comment", K(ret), K(new_round_info), K(counter));
         }
       }
-
+      
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(new_round_info.comment_.assign(comment.ptr()))) {
         LOG_WARN("failed to assign comment", K(ret), K(new_round_info), K(counter), K(comment));
@@ -323,7 +323,7 @@ int ObDestRoundCheckpointer::gen_new_round_info_(
         if (OB_FAIL(comment.append_fmt("tenant %lu no logging is open", old_round_info.key_.tenant_id_))) {
           LOG_WARN("failed to append interrupted log stream comment", K(ret), K(is_no_logging));
         }
-        ROOTSERVICE_EVENT_ADD("log_archive", "change_status",
+        ROOTSERVICE_EVENT_ADD("log_archive", "change_status", 
                               "tenant_id", old_round_info.key_.tenant_id_,
                               "dest_no", new_round_info.key_.dest_no_,
                               "old_status", old_round_info.state_.to_status_str(),
@@ -332,7 +332,7 @@ int ObDestRoundCheckpointer::gen_new_round_info_(
         if (OB_FAIL(comment.append_fmt("log stream %ld interrupted", counter.interrupted_ls_id_.id()))) {
           LOG_WARN("failed to append interrupted log stream comment", K(ret), K(new_round_info), K(counter));
         }
-      }
+      }  
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(new_round_info.comment_.assign(comment.ptr()))) {
         LOG_WARN("failed to assign comment", K(ret), K(new_round_info), K(counter), K(is_no_logging), K(comment));
@@ -402,7 +402,7 @@ int ObDestRoundCheckpointer::checkpoint_(const ObTenantArchiveRoundAttr &old_rou
       LOG_WARN("failed to call round_checkpoint_cb", K(ret), K(old_round_info), K(summary), K(result));
     }
   }
-
+  
   if (FAILEDx(fill_generated_pieces_(result, pieces))){
     LOG_WARN("failed to fill generated pieces", K(ret), K(old_round_info), K(summary), K(result));
   } else if (OB_FAIL(round_handler_->checkpoint_to(old_round_info, result.new_round_info_, pieces))) {
@@ -444,8 +444,8 @@ int ObDestRoundCheckpointer::generate_pieces_(const ObTenantArchiveRoundAttr &ol
         } else {
           LOG_WARN("call piece_generated_cb_ failed", K(ret), K(old_round_info), K(piece));
         }
-      }
-
+      } 
+      
       if (FAILEDx(result.piece_list_.push_back(piece))) {
         LOG_WARN("failed to push back piece", K(ret), K(result), K(piece));
       } else if (piece.piece_info_.status_.is_frozen()) {
@@ -493,7 +493,7 @@ int ObDestRoundCheckpointer::generate_one_piece_(const ObTenantArchiveRoundAttr 
     LOG_WARN("failed to calc piece end ts", K(ret), K(new_round_info), K(piece_id));
   } else if (OB_FAIL(piece.piece_info_.set_path(new_round_info.path_))) {
     LOG_WARN("failed to set path", K(ret), K(piece), K(new_round_info));
-  }
+  } 
 
   // stat data amount and checkpoint ts for current piece.
   const ObArray<ObLSDestRoundSummary> &ls_round_list = summary.ls_round_list_;
@@ -525,9 +525,9 @@ int ObDestRoundCheckpointer::generate_one_piece_(const ObTenantArchiveRoundAttr 
       if (OB_FAIL(ls_round.check_is_last_piece_for_deleted_ls(piece_id, last_piece))) {
         LOG_WARN("failed to check is last piece for deleted ls", K(ret));
       } else if (last_piece) {
-        // If the ls is deleted, and this is the last piece. It should not
+        // If the ls is deleted, and this is the last piece. It should not 
         // affect the checkpoint_scn.
-        // Mark the last piece deleted for deleted ls. For example, piece 10 and 11 is found of
+        // Mark the last piece deleted for deleted ls. For example, piece 10 and 11 is found of 
         // a deleted ls for current checkpoint, piece 10 is not marked with deleted, but piece 11
         // is marked with deleted.
         gen_ls_piece.is_ls_deleted_ = true;
@@ -535,11 +535,11 @@ int ObDestRoundCheckpointer::generate_one_piece_(const ObTenantArchiveRoundAttr 
         // checkpoint scn may be smaller than start scn for empty piece.
         piece.piece_info_.checkpoint_scn_ = MAX(piece.piece_info_.start_scn_, MIN(piece.piece_info_.checkpoint_scn_, ls_piece.checkpoint_scn_));
       }
-
+      
       piece.piece_info_.max_scn_ = MAX(piece.piece_info_.max_scn_, ls_piece.checkpoint_scn_);
       piece.piece_info_.input_bytes_ += ls_piece.input_bytes_;
       piece.piece_info_.output_bytes_ += ls_piece.output_bytes_;
-
+      
       if (FAILEDx(piece.ls_piece_list_.push_back(gen_ls_piece))) {
         LOG_WARN("failed to push back ls piece", K(ret), K(piece), K(gen_ls_piece));
       }
@@ -553,10 +553,10 @@ int ObDestRoundCheckpointer::generate_one_piece_(const ObTenantArchiveRoundAttr 
   } else if (piece_id == max_active_piece_id) {
     piece.piece_info_.checkpoint_scn_ = MIN(new_round_info.checkpoint_scn_, piece.piece_info_.checkpoint_scn_);
     piece.piece_info_.status_.set_active();
-    if (piece.piece_info_.checkpoint_scn_ > new_round_info.start_scn_
+    if (piece.piece_info_.checkpoint_scn_ > new_round_info.start_scn_ 
         && piece.piece_info_.checkpoint_scn_ >= piece.piece_info_.start_scn_) {
       // As the scn of one log group is the max log scn among the log entries. If checkpoint_scn_
-      // is equal to start_scn_, the piece is not empty, and may be used for restore. For example,
+      // is equal to start_scn_, the piece is not empty, and may be used for restore. For example, 
       // Piece#1 : <2022-06-01 06:00:00, 2022-06-02 05:00:00, 2022-06-02 06:00:00>
       // Piece#2 : <2022-06-02 06:00:00, 2022-06-02 06:00:00, 2022-06-03 06:00:00>
       // And the first log group in Piece#2 with scn range [2022-06-02 05:30:00, 2022-06-02 06:00:00], this piece

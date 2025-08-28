@@ -59,27 +59,27 @@ public:
                           ObEvalCtx &ctx,
                           ObIMulModeBase *&xml_doc,
                           ObGetXmlBaseType base_flag);
-  static int get_xml_base(ObMulModeMemCtx* mem_ctx, ObDatum *xml_datum, ObCollationType cs_type,
+  static int get_xml_base(ObMulModeMemCtx* mem_ctx, ObDatum *xml_datum, ObCollationType cs_type, 
                           ObNodeMemType expect_type, ObIMulModeBase *&node);
-  static int get_xml_base(ObMulModeMemCtx* mem_ctx, ObDatum *xml_datum, ObCollationType cs_type,
-                          ObNodeMemType expect_type, ObIMulModeBase *&node, ObMulModeNodeType &node_type,
+  static int get_xml_base(ObMulModeMemCtx* mem_ctx, ObDatum *xml_datum, ObCollationType cs_type, 
+                          ObNodeMemType expect_type, ObIMulModeBase *&node, ObMulModeNodeType &node_type, 
                           ObGetXmlBaseType base_flag = ObGetXmlBaseType::OB_MAX);
-  static int try_to_parse_unparse_binary(ObMulModeMemCtx* mem_ctx, ObCollationType cs_type,
-                                         ObIMulModeBase *input_node, ObNodeMemType expect_type,
+  static int try_to_parse_unparse_binary(ObMulModeMemCtx* mem_ctx, ObCollationType cs_type, 
+                                         ObIMulModeBase *input_node, ObNodeMemType expect_type, 
                                          ObIMulModeBase *&res_node);
-  static int pack_binary_res(const ObExpr &expr, ObEvalCtx &ctx,
+  static int pack_binary_res(const ObExpr &expr, ObEvalCtx &ctx, 
                               ObString binary_str, ObString &blob_locator);
   static int pack_xml_res(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res, ObXmlDocument* doc,
                           ObMulModeMemCtx* mem_ctx, ObMulModeNodeType node_type,
                           ObString &plain_text);
   // for namespace
-  static int construct_namespace_params(ObString &namespace_str,
+  static int construct_namespace_params(ObString &namespace_str, 
                                         ObString &default_ns,
-                                        ObPathVarObject &prefix_ns,
+                                        ObPathVarObject &prefix_ns, 
                                         ObIAllocator &allocator);
-  static int construct_namespace_params(ObIArray<ObString> &namespace_arr,
+  static int construct_namespace_params(ObIArray<ObString> &namespace_arr, 
                                         ObString &default_ns,
-                                        void *&prefix_ns,
+                                        void *&prefix_ns, 
                                         ObIAllocator &allocator);
   static int get_xpath_result(ObPathExprIter &xpath_iter, ObIMulModeBase *&xml_res, ObMulModeMemCtx *mem_ctx, bool add_ns = false);
   static int check_xpath_valid(ObPathExprIter &xpath_iter, bool is_root);
@@ -88,27 +88,27 @@ public:
   // set string result
   static int set_string_result(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res, ObString &res_str);
   // get xmltype str from input expr
-  static int get_xmltype_from_expr(const ObExpr *expr,
-                                   ObEvalCtx &ctx,
+  static int get_xmltype_from_expr(const ObExpr *expr, 
+                                   ObEvalCtx &ctx, 
                                    ObDatum *&xml_datum);
-  static int get_xmltype_from_expr(const ObExpr *expr,
-                                   ObEvalCtx &ctx,
+  static int get_xmltype_from_expr(const ObExpr *expr, 
+                                   ObEvalCtx &ctx, 
                                    ObDatum *&xml_datum,
                                    MultimodeAlloctor &allocator);
-  static int mem_ctx_add_baseline(const ObExpr *expr,
-                                  ObEvalCtx &ctx,
+  static int mem_ctx_add_baseline(const ObExpr *expr, 
+                                  ObEvalCtx &ctx, 
                                   ObMulModeMemCtx *&mem_ctx,
                                   uint32_t multiple = 1);
   static int get_str_from_expr(const ObExpr *expr,
                                ObEvalCtx &ctx,
                                ObString &res,
-                               ObIAllocator &allocator);
+                               ObIAllocator &allocator);                                      
   static int parse_xml_str(ObMulModeMemCtx *ctx, const ObString &xml_text, ObXmlDocument *&xml_doc);
   static int get_xml_base_from_expr(const ObExpr *expr,
                                     ObMulModeMemCtx *mem_ctx,
                                     ObEvalCtx &ctx,
                                     ObIMulModeBase *&node);
-  static int binary_agg_xpath_result(ObPathExprIter &xpath_iter,
+  static int binary_agg_xpath_result(ObPathExprIter &xpath_iter, 
                                      ObMulModeNodeType &node_type,
                                      ObMulModeMemCtx* mem_ctx,
                                      ObStringBuffer &res,
@@ -148,54 +148,54 @@ public:
   static int set_ns_recrusively(ObXmlNode *update_node, ObXmlAttribute *ns);
 
   static int construct_doc(
-      ObMulModeMemCtx* mem_ctx,
-      const ObString &name_tag,
+      ObMulModeMemCtx* mem_ctx, 
+      const ObString &name_tag, 
       ObVector<ObObj, ElementObjCacheStatArena> &value_vec,
       const ObIJsonBase *attr_json,
       bool has_attribute,
       ObXmlDocument *&res_doc);
   static int construct_element(
-      ObMulModeMemCtx* mem_ctx,
-      const ObString &name,
+      ObMulModeMemCtx* mem_ctx, 
+      const ObString &name, 
       ObVector<ObObj, ElementObjCacheStatArena> &value_vec,
       const ObIJsonBase *attr,
       ObXmlElement *&element,
       bool &validity);
   static int construct_attribute(
-      ObMulModeMemCtx* mem_ctx,
-      const ObIJsonBase *attr,
+      ObMulModeMemCtx* mem_ctx, 
+      const ObIJsonBase *attr, 
       ObXmlElement *&element);
   static int construct_element_children(
-      ObMulModeMemCtx* mem_ctx,
-      ObVector<ObObj, ElementObjCacheStatArena> &value_vec,
+      ObMulModeMemCtx* mem_ctx, 
+      ObVector<ObObj, ElementObjCacheStatArena> &value_vec, 
       ObXmlElement *&element,
       ObXmlElement *valid_ele);
   static int construct_element_value(
-      ObIAllocator &allocator,
+      ObIAllocator &allocator, 
       ObExpr *xml_arg,
       ObDatum *datum,
       bool need_escape,
       ObVector<ObObj, ElementObjCacheStatArena> &value_vec);
   static int construct_value_array(
-      ObIAllocator &allocator,
-      const ObString &value,
+      ObIAllocator &allocator, 
+      const ObString &value, 
       ObVector<ObObj, ElementObjCacheStatArena> &res_value);
 
   static int concat_xml_type_nodes(
-      ObMulModeMemCtx* mem_ctx,
-      ObVector<ObString> &xml_bin_str_vec,
+      ObMulModeMemCtx* mem_ctx, 
+      ObVector<ObString> &xml_bin_str_vec, 
       ObString &res_bin_str);
 
   static int concat_xpath_result(
       ObMulModeMemCtx* mem_ctx,
-      ObPathExprIter &xpath_iter,
+      ObPathExprIter &xpath_iter, 
       ObString &bin_str,
       bool &is_null_res);
 
 private:
-  static int add_ns_to_container_node(ObPathVarObject &container,
-                                      ObString &prefix,
-                                      ObString &uri,
+  static int add_ns_to_container_node(ObPathVarObject &container, 
+                                      ObString &prefix, 
+                                      ObString &uri, 
                                       ObIAllocator &allocator);
 };
 } // sql

@@ -58,11 +58,11 @@ bool PalfHandleImplGuard::is_valid() const
 }
 
 void PalfHandleImplGuard::reset()
-{
+{ 
   if (NULL != palf_handle_impl_ && NULL != palf_env_impl_) {
-    palf_env_impl_->revert_palf_handle_impl(palf_handle_impl_);
-  }
-  palf_handle_impl_ = NULL;
+    palf_env_impl_->revert_palf_handle_impl(palf_handle_impl_); 
+  } 
+  palf_handle_impl_ = NULL;  
   palf_env_impl_ = NULL;
   palf_id_ = -1;
 };
@@ -84,11 +84,11 @@ bool PalfHandleLiteGuard::is_valid() const
 }
 
 void PalfHandleLiteGuard::reset()
-{
+{ 
   if (NULL != palf_handle_lite_ && NULL != palf_env_lite_) {
-    palf_env_lite_->revert_palf_handle_impl(palf_handle_lite_);
-  }
-  palf_handle_lite_ = NULL;
+    palf_env_lite_->revert_palf_handle_impl(palf_handle_lite_); 
+  } 
+  palf_handle_lite_ = NULL;  
   palf_env_lite_ = NULL;
   palf_id_ = -1;
 };
@@ -282,7 +282,7 @@ int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id,
           }
         }
         handle->set_location_cache_cb(loc_cb);
-	handle->set_locality_cb(get_cluster()[0]->get_locality_manager());
+      	handle->set_locality_cb(get_cluster()[0]->get_locality_manager());
         const ObMemberList &member_list = get_member_list();
         GlobalLearnerList learner_list;
         handle->set_initial_member_list(member_list, member_list.get_member_number(), learner_list);
@@ -371,7 +371,7 @@ int ObSimpleLogClusterTestEnv::create_paxos_group_with_arb(
   for (int i = 0; i < get_cluster().size(); i++) {
     auto svr = get_cluster()[i];
     if (svr->is_arb_server()) {
-      arb_replica_idx = i;
+      arb_replica_idx = i; 
     }
   }
   if (-1 == arb_replica_idx) {
@@ -496,7 +496,7 @@ int ObSimpleLogClusterTestEnv::update_disk_options(const int64_t log_block_num)
   int ret = OB_SUCCESS;
   auto cluster = get_cluster();
   for (int64_t server_id = 0; server_id < cluster.size(); server_id++) {
-    ret = update_disk_options(server_id, log_block_num);
+    ret = update_disk_options(server_id, log_block_num); 
   }
   return ret;
 }
@@ -890,12 +890,12 @@ void ObSimpleLogClusterTestEnv::reset_rpc_loss(const int64_t id1, const int64_t 
 int ObSimpleLogClusterTestEnv::submit_log_with_expected_size(PalfHandleImplGuard &leader, int id, int64_t block_count)
 {
   int ret = OB_SUCCESS;
-  int64_t remained_size = block_count * palf::PALF_BLOCK_SIZE;
+  int64_t remained_size = block_count * palf::PALF_BLOCK_SIZE; 
   srandom(ObTimeUtility::current_time());
   int64_t step = MAX_LOG_BUFFER_SIZE;
   while (remained_size > 0 && OB_SUCC(ret)) {
-    const int64_t tmp_size = random() % MAX_LOG_BODY_SIZE + 1;
-    const int64_t log_count = step / tmp_size + 1;
+    const int64_t tmp_size = random() % MAX_LOG_BODY_SIZE + 1; 
+    const int64_t log_count = step / tmp_size + 1; 
     if (OB_FAIL(submit_log(leader, log_count, id, tmp_size))) {
       SERVER_LOG(WARN, "submit log failed", K(id), K(tmp_size), K(log_count));
     } else {
@@ -1401,7 +1401,7 @@ int ObSimpleLogClusterTestEnv::get_middle_scn(const int64_t log_num, PalfHandleI
     if (OB_SUCCESS == ret) {
       log_entry_header = entry.get_header();
     }
-	PALF_LOG(INFO, "runlin trace entry", K(i), K(log_num), K(entry));
+  	PALF_LOG(INFO, "runlin trace entry", K(i), K(log_num), K(entry));
 	}
 	return ret;
 }

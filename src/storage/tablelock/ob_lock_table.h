@@ -162,7 +162,7 @@ public:
   int switch_to_leader() override;
   int switch_to_follower_gracefully() override;
   int resume_leader() override { return OB_SUCCESS; }
-  // flush lock_memtable that flush had been failed
+  // flush lock_memtable that flush had been failed                     
   int traversal_flush();
   int table_lock_split(const common::ObTabletID &src_tablet_id,
                        const ObSArray<common::ObTabletID> &dst_tablet_ids,

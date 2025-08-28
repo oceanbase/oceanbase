@@ -374,7 +374,7 @@ int ObRebuildTabletDagNet::fill_comment(char *buf, const int64_t buf_len) const
   } else if (OB_FAIL(databuff_print_obj(task_id_str, MAX_TRACE_ID_LENGTH, pos, ctx_->task_id_))) {
     LOG_WARN("failed to trace task id to string", K(ret), K(*ctx_));
   } else {
-  }
+  } 
   return ret;
 }
 
@@ -778,7 +778,7 @@ int ObInitialRebuildTabletTask::check_tablet_status_()
         LOG_WARN("failed to init logic tablet id", K(ret), K(tablet_id), KPC(tablet));
       } else if (OB_FAIL(tablet_id_array_.push_back(logic_tablet_id))) {
         LOG_WARN("failed to push logic id into array", K(ret), K(logic_tablet_id));
-      }
+      } 
     }
   }
   return ret;
@@ -847,7 +847,7 @@ int ObStartRebuildTabletDag::fill_dag_key(char *buf, const int64_t buf_len) cons
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("rebuild tablet ctx should not be NULL", K(ret), KP(ctx));
   } else {
-  }
+  } 
   return ret;
 }
 
@@ -1114,7 +1114,7 @@ int ObTabletRebuildMajorDag::fill_dag_key(char *buf, const int64_t buf_len) cons
   int ret = OB_SUCCESS;
   ObRebuildTabletCtx *ctx = nullptr;
   UNUSED(buf);
-  UNUSED(buf_len);
+  UNUSED(buf_len);  
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1123,7 +1123,7 @@ int ObTabletRebuildMajorDag::fill_dag_key(char *buf, const int64_t buf_len) cons
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("rebuild ctx should not be NULL", K(ret), KP(ctx));
   } else {
-  }
+  } 
   return ret;
 }
 
@@ -1850,7 +1850,7 @@ int ObFinishRebuildTabletDag::fill_dag_key(char *buf, const int64_t buf_len) con
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("migration ctx should not be NULL", K(ret), KP(ctx));
   } else {
-  }
+  } 
   return ret;
 }
 

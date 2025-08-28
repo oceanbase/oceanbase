@@ -149,7 +149,7 @@ bool ObServerResourceInfo::operator!=(const ObServerResourceInfo &other) const
 int ObServerResourceInfo::assign(const ObServerResourceInfo& other)
 {
   int ret = OB_SUCCESS;
-
+  
   cpu_ = other.cpu_;
   mem_in_use_ = other.mem_in_use_;
   mem_total_ = other.mem_total_;
@@ -162,7 +162,7 @@ int ObServerResourceInfo::assign(const ObServerResourceInfo& other)
   report_cpu_assigned_ = other.report_cpu_assigned_;
   report_cpu_max_assigned_ = other.report_cpu_max_assigned_;
   report_mem_assigned_ = other.report_mem_assigned_;
-
+  
   return ret;
 }
 
@@ -209,7 +209,7 @@ DEF_TO_STRING(ObServerResourceInfo)
       (double)report_log_disk_assigned_/1024/1024/1024,
       (double)log_disk_in_use_/1024/1024/1024,
       (double)data_disk_total_/1024/1024/1024,
-      report_data_disk_assigned_ < 0 ? report_data_disk_assigned_
+      report_data_disk_assigned_ < 0 ? report_data_disk_assigned_ 
         : (double)report_data_disk_assigned_/1024/1024/1024,
       (double)data_disk_in_use_/1024/1024/1024);
   J_OBJ_END();

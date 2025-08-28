@@ -776,7 +776,7 @@ int ObLatestSchemaGuard::get_tablegroup_schema(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablegroup_id is invalid", KR(ret), K_(tenant_id), K(tablegroup_id));
   } else if (OB_NOT_NULL(sql_client_)) {
-    // 'sql_client_ not null' means a transcation (ddl transaction is child class of ObISQLClient) is passed in
+    // 'sql_client_ not null' means a transcation (ddl transaction is child class of ObISQLClient) is passed in 
     // and we should use this sql_client to get visible tablegroup schema in current transaction
     if (OB_FAIL(get_tablegroup_schema_(*sql_client_, tablegroup_id, tablegroup_schema))) {
       LOG_WARN("fail to get tablegroup", KR(ret), K(tablegroup_id));
@@ -784,7 +784,7 @@ int ObLatestSchemaGuard::get_tablegroup_schema(
   } else if (OB_FAIL(get_schema_(TABLEGROUP_SCHEMA,
              tenant_id_, tablegroup_id, tablegroup_schema))) {
     LOG_WARN("fail to get tablegroup", KR(ret), K_(tenant_id), K(tablegroup_id));
-  }
+  } 
 
   if (OB_SUCC(ret) && OB_ISNULL(tablegroup_schema)) {
     LOG_INFO("tablegroup not exist", KR(ret), K_(tenant_id), K(tablegroup_id));
@@ -1029,9 +1029,9 @@ int ObLatestSchemaGuard::get_sensitive_rule_schemas_by_table(
   }
   if (OB_FAIL(ret)) {
   } else if (sensitive_column_schema_keys.count() == 0) {
-  } else if (FAILEDx(schema_service_impl->get_batch_sensitive_columns(schema_status,
+  } else if (FAILEDx(schema_service_impl->get_batch_sensitive_columns(schema_status, 
                                                                       *sql_client,
-                                                                      schema_version,
+                                                                      schema_version, 
                                                                       sensitive_column_schema_keys,
                                                                       sensitive_column_schema_array))) {
     LOG_WARN("fail to get batch sensitive column", KR(ret), K(schema_status), K(sensitive_column_schema_keys));
@@ -1047,10 +1047,10 @@ int ObLatestSchemaGuard::get_sensitive_rule_schemas_by_table(
   }
   if (OB_FAIL(ret)) {
   } else if (sensitive_rule_schema_keys.count() == 0) { // no sensitive rule, do nothing
-  } else if (FAILEDx(schema_service_impl->get_batch_sensitive_rules(schema_status,
+  } else if (FAILEDx(schema_service_impl->get_batch_sensitive_rules(schema_status, 
                                                                     *sql_client,
-                                                                    schema_version,
-                                                                    sensitive_rule_schema_keys,
+                                                                    schema_version, 
+                                                                    sensitive_rule_schema_keys, 
                                                                     sensitive_rule_schema_array))) {
     LOG_WARN("fail to get batch sensitive rule", KR(ret), K(schema_status), K(sensitive_rule_schema_keys));
   }

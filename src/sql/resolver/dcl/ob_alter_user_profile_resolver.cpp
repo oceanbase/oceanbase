@@ -67,7 +67,7 @@ int ObAlterUserProfileResolver::resolve_set_role(const ParseNode &parse_tree)
       obrpc::ObAlterUserProfileArg &arg = stmt->get_ddl_arg();
       arg.tenant_id_ = params_.session_info_->get_effective_tenant_id();
       stmt->set_set_role_flag(ObAlterUserProfileStmt::SET_ROLE);
-
+      
       ObSEArray<uint64_t, 8> role_id_array = user_info->get_role_id_array();
       if (params_.session_info_->get_proxy_user_id() != OB_INVALID_ID) {
         for (int64_t i = 0; OB_SUCC(ret) && i < user_info->get_proxied_user_info_cnt(); i++) {
@@ -80,7 +80,7 @@ int ObAlterUserProfileResolver::resolve_set_role(const ParseNode &parse_tree)
             ObArray<uint64_t> res_role_id_option_array;
             if (OB_FAIL(ObSQLUtils::get_proxy_can_activate_role(user_info->get_role_id_array(),
                                                                 user_info->get_role_id_option_array(),
-                                                                *proxy_info,
+                                                                *proxy_info, 
                                                                 res_role_id_array,
                                                                 res_role_id_option_array))) {
               LOG_WARN("get proxy can activate role failed", K(ret));
@@ -201,7 +201,7 @@ int ObAlterUserProfileResolver::resolve_role_list(
                 LOG_WARN("role not granted to user", K(ret), K(role_name));
               } else {
                 ret = OB_ERR_ROLE_NOT_GRANTED_OR_DOES_NOT_EXIST;
-                LOG_USER_ERROR(OB_ERR_ROLE_NOT_GRANTED_OR_DOES_NOT_EXIST,
+                LOG_USER_ERROR(OB_ERR_ROLE_NOT_GRANTED_OR_DOES_NOT_EXIST, 
                               role_name.length(), role_name.ptr());
                 LOG_WARN("role not granted or does not exists", K(ret), K(role_name));
               }
@@ -440,7 +440,7 @@ int ObAlterUserProfileResolver::resolve_default_role(const ParseNode &parse_tree
           arg.user_id_ = user_info->get_user_id();
         }
       }
-
+      
     } else {
       ParseNode *user_list_node = parse_tree.children_[0];
       for (int i = 0; OB_SUCC(ret) && i < user_list_node->num_child_; i++) {

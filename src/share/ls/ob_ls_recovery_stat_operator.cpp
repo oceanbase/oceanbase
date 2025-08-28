@@ -419,7 +419,7 @@ int ObLSRecoveryStatOperator::fill_cell(common::sqlclient::ObMySQLResult*result,
   return ret;
 }
 
-
+ 
 int ObLSRecoveryStatOperator::construct_status_sql_(common::ObSqlString &sql)
 {
   int ret = OB_SUCCESS;
@@ -454,8 +454,8 @@ int ObLSRecoveryStatOperator::get_tenant_recovery_stat(const uint64_t tenant_id,
     //  It is guaranteed that once LS enters the delete state, sync_scn will be greater than drop_scn.
     //
     //readable_scn indicates the readable site, it will lag behind sync_scn, and need to consider the LS entering the deletion state.
-    //Specifically, two types of LS need to be referred to when calculating readable_scn:
-    //  1) LS that has not entered the deletion state;
+    //Specifically, two types of LS need to be referred to when calculating readable_scn: 
+    //  1) LS that has not entered the deletion state; 
     //  2) LS that has entered the deletion state, but drop_scn > readable_scn, that is, the deletion site of the LS is greater than the readable site scenario
     if (OB_FAIL(construct_status_sql_(status_sql))) {
       LOG_WARN("failed to get sync scn sql", KR(ret));

@@ -283,7 +283,7 @@ public:
   };
   ObIMicroBlockReader()
     : ObIMicroBlockReaderInfo()
-  {
+  { 
     reader_type_ = MaxReaderType;
   }
   virtual ~ObIMicroBlockReader() {}

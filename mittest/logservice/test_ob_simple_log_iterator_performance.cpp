@@ -125,7 +125,7 @@ int init_log_shared_storage(const uint64_t dst_tenant_id)
     PALF_LOG(ERROR, "invalid ak/sk", KP(access_id), KP(access_key));
     return ret;
   }
-  std::string access_info_str = std::string("access_mode=access_by_id&access_id=") + access_id + "&access_key=" + access_key;
+  std::string access_info_str = std::string("access_mode=access_by_id&access_id=") + access_id + "&access_key=" + access_key; 
   MEMCPY(device_config->path_, root_path.c_str(), root_path.size());
   MEMCPY(device_config->used_for_, used_for, strlen(used_for));
   device_config->sub_op_id_ = 1;
@@ -197,7 +197,7 @@ int upload_blocks(const uint64_t dst_tenant_id,
   LogReader log_reader;
   LogIOAdapter io_adapter;
   if (NULL == read_buf_ptr) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
+    ret = OB_ALLOCATE_MEMORY_FAILED;  
   } else if (OB_FAIL(io_adapter.init(dst_tenant_id, LOG_IO_DEVICE_WRAPPER.get_local_device(), &G_RES_MGR, &OB_IO_MANAGER))) {
     PALF_LOG(WARN, "init io_adapter failed", K(dst_tenant_id), K(ret));
   } else if (OB_FAIL(log_reader.init(src_dir, PALF_PHY_BLOCK_SIZE, &io_adapter))) {
@@ -221,7 +221,7 @@ int upload_blocks(const uint64_t dst_tenant_id,
         curr_block_id++;
         PALF_LOG(INFO, "upload success", K(curr_block_id));
       }
-    }
+    } 
     if (OB_FAIL(ret)) {
       PALF_LOG(ERROR, "upload failed", K(curr_block_id));
     } else {

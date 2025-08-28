@@ -28,10 +28,10 @@ public:
   // for abstract class
   virtual bool prepare(ObGeometry *geo) = 0;
   virtual bool prepare(ObCurve *geo) = 0;
-  virtual bool prepare(ObSurface *geo) = 0;
+  virtual bool prepare(ObSurface *geo) = 0;  
   virtual bool prepare(ObLineString *geo) = 0;
   virtual bool prepare(ObLinearring *geo) = 0;
-  virtual bool prepare(ObPolygon *geo) = 0;
+  virtual bool prepare(ObPolygon *geo) = 0;  
   virtual bool prepare(ObGeometrycollection *geo) = 0;
   virtual bool prepare(ObMultipoint *geo) = 0;
   virtual bool prepare(ObMulticurve *geo) = 0;
@@ -44,10 +44,10 @@ public:
   virtual int visit(ObGeometry *geo) = 0;
   virtual int visit(ObPoint *geo) = 0;
   virtual int visit(ObCurve *geo) = 0;
-  virtual int visit(ObSurface *geo) = 0;
+  virtual int visit(ObSurface *geo) = 0;  
   virtual int visit(ObLineString *geo) = 0;
   virtual int visit(ObLinearring *geo) = 0;
-  virtual int visit(ObPolygon *geo) = 0;
+  virtual int visit(ObPolygon *geo) = 0;  
   virtual int visit(ObGeometrycollection *geo) = 0;
   virtual int visit(ObMultipoint *geo) = 0;
   virtual int visit(ObMulticurve *geo) = 0;
@@ -62,10 +62,10 @@ public:
   virtual bool is_end(ObGeometry *geo) = 0;
   virtual bool is_end(ObPoint *geo) = 0;
   virtual bool is_end(ObCurve *geo) = 0;
-  virtual bool is_end(ObSurface *geo) = 0;
+  virtual bool is_end(ObSurface *geo) = 0;  
   virtual bool is_end(ObLineString *geo) = 0;
   virtual bool is_end(ObLinearring *geo) = 0;
-  virtual bool is_end(ObPolygon *geo) = 0;
+  virtual bool is_end(ObPolygon *geo) = 0;  
   virtual bool is_end(ObGeometrycollection *geo) = 0;
   virtual bool is_end(ObMultipoint *geo) = 0;
   virtual bool is_end(ObMulticurve *geo) = 0;
@@ -74,7 +74,7 @@ public:
   virtual bool is_end(ObMultipolygon *geo) = 0;
 
   virtual bool is_end(ObIWkbGeometry *geo) = 0;
-
+  
   // for geo tree
   virtual bool prepare(ObCartesianMultipoint *geo) = 0;
   virtual bool prepare(ObGeographMultipoint *geo) = 0;
@@ -197,7 +197,7 @@ public:
   virtual int finish(ObIWkbGeogMultiPolygon *geo) = 0;
   virtual int finish(ObIWkbGeomMultiPolygon *geo) = 0;
   virtual int finish(ObIWkbGeogCollection *geo) = 0;
-  virtual int finish(ObIWkbGeomCollection *geo) = 0;
+  virtual int finish(ObIWkbGeomCollection *geo) = 0;  
 
   virtual bool set_after_visitor() = 0;
 };
@@ -207,7 +207,7 @@ class ObEmptyGeoVisitor : public ObIGeoVisitor
 public:
   ObEmptyGeoVisitor() = default;
   virtual ~ObEmptyGeoVisitor() = default;
-
+  
   virtual bool prepare(ObGeometry *geo) override { UNUSED(geo); return false; }
   virtual bool prepare(ObCurve *geo) override { return prepare(static_cast<ObGeometry *>(geo)); }
   virtual bool prepare(ObSurface *geo) override { return prepare(static_cast<ObGeometry *>(geo)); }
@@ -216,8 +216,8 @@ public:
   virtual bool prepare(ObPolygon *geo) override { return prepare(static_cast<ObSurface *>(geo)); }
   virtual bool prepare(ObGeometrycollection *geo) override { return prepare(static_cast<ObGeometry *>(geo)); }
   virtual bool prepare(ObMultipoint *geo) override { return prepare(static_cast<ObGeometrycollection *>(geo)); }
-  virtual bool prepare(ObMulticurve *geo) override { return prepare(static_cast<ObGeometrycollection *>(geo)); }
-  virtual bool prepare(ObMultisurface *geo) override { return prepare(static_cast<ObGeometrycollection *>(geo)); }
+  virtual bool prepare(ObMulticurve *geo) override { return prepare(static_cast<ObGeometrycollection *>(geo)); } 
+  virtual bool prepare(ObMultisurface *geo) override { return prepare(static_cast<ObGeometrycollection *>(geo)); } 
   virtual bool prepare(ObMultilinestring *geo) override { return prepare(static_cast<ObMulticurve *>(geo)); }
   virtual bool prepare(ObMultipolygon *geo) override { return prepare(static_cast<ObMultisurface *>(geo)); }
 
@@ -232,8 +232,8 @@ public:
   virtual int visit(ObPolygon *geo) override { return visit(static_cast<ObSurface *>(geo)); }
   virtual int visit(ObGeometrycollection *geo) override { return visit(static_cast<ObGeometry *>(geo)); }
   virtual int visit(ObMultipoint *geo) override { return visit(static_cast<ObGeometrycollection *>(geo)); }
-  virtual int visit(ObMulticurve *geo) override { return visit(static_cast<ObGeometrycollection *>(geo)); }
-  virtual int visit(ObMultisurface *geo) override { return visit(static_cast<ObGeometrycollection *>(geo)); }
+  virtual int visit(ObMulticurve *geo) override { return visit(static_cast<ObGeometrycollection *>(geo)); } 
+  virtual int visit(ObMultisurface *geo) override { return visit(static_cast<ObGeometrycollection *>(geo)); } 
   virtual int visit(ObMultilinestring *geo) override { return visit(static_cast<ObMulticurve *>(geo)); }
   virtual int visit(ObMultipolygon *geo) override { return visit(static_cast<ObMultisurface *>(geo)); }
 
@@ -249,11 +249,11 @@ public:
   virtual bool is_end(ObPolygon *geo) override { return is_end(static_cast<ObSurface *>(geo)); }
   virtual bool is_end(ObGeometrycollection *geo) override { return is_end(static_cast<ObGeometry *>(geo)); }
   virtual bool is_end(ObMultipoint *geo) override { return is_end(static_cast<ObGeometrycollection *>(geo)); }
-  virtual bool is_end(ObMulticurve *geo) override { return is_end(static_cast<ObGeometrycollection *>(geo)); }
-  virtual bool is_end(ObMultisurface *geo) override { return is_end(static_cast<ObGeometrycollection *>(geo)); }
+  virtual bool is_end(ObMulticurve *geo) override { return is_end(static_cast<ObGeometrycollection *>(geo)); } 
+  virtual bool is_end(ObMultisurface *geo) override { return is_end(static_cast<ObGeometrycollection *>(geo)); } 
   virtual bool is_end(ObMultilinestring *geo) override { return is_end(static_cast<ObMulticurve *>(geo)); }
   virtual bool is_end(ObMultipolygon *geo) override { return is_end(static_cast<ObMultisurface *>(geo)); }
-
+ 
   virtual bool is_end(ObIWkbGeometry *geo) override { return is_end(static_cast<ObGeometry *>(geo)); }
 
   // for geo tree
@@ -377,7 +377,7 @@ public:
   virtual int finish(ObIWkbGeogMultiPolygon *geo) override { return finish(static_cast<ObIWkbGeometry *>(geo)); }
   virtual int finish(ObIWkbGeomMultiPolygon *geo) override { return finish(static_cast<ObIWkbGeometry *>(geo)); }
   virtual int finish(ObIWkbGeogCollection *geo) override { return finish(static_cast<ObIWkbGeometry *>(geo)); }
-  virtual int finish(ObIWkbGeomCollection *geo) override { return finish(static_cast<ObIWkbGeometry *>(geo)); }
+  virtual int finish(ObIWkbGeomCollection *geo) override { return finish(static_cast<ObIWkbGeometry *>(geo)); } 
   // set true if the value of a point might be modified during linestring_do_visitor
   virtual bool set_after_visitor() override { return true; }
 };
@@ -392,14 +392,14 @@ public:
 
   template<typename T_IBIN, typename T_BIN, typename T_IRING, typename T_RING, typename T_INNER_RING>
   static int polygon_do_visitor(T_IBIN *geo, ObIGeoVisitor &visitor);
-
+  
   template<typename T_IBIN, typename T_BIN, typename T_IITEM, typename T_ITEM>
   static int collection_do_visitor(T_IBIN *geo, ObIGeoVisitor &visitor);
 
 };
 
 template<typename T_IBIN, typename T_BIN, typename T_IPOINT, typename T_POINT>
-int ObIWkbVisitorImplement::linestring_do_visitor(T_IBIN *geo, ObIGeoVisitor &visitor)
+int ObIWkbVisitorImplement::linestring_do_visitor(T_IBIN *geo, ObIGeoVisitor &visitor) 
 {
   INIT_SUCC(ret);
   if (visitor.prepare(geo)) {
@@ -427,7 +427,7 @@ int ObIWkbVisitorImplement::linestring_do_visitor(T_IBIN *geo, ObIGeoVisitor &vi
           iter->template set<0>(point.x());
           iter->template set<1>(point.y());
         }
-      }
+      } 
     }
   }
   if (OB_SUCC(ret)) {
@@ -439,7 +439,7 @@ int ObIWkbVisitorImplement::linestring_do_visitor(T_IBIN *geo, ObIGeoVisitor &vi
 }
 
 template<typename T_IBIN, typename T_BIN, typename T_IPOINT, typename T_POINT>
-int ObIWkbVisitorImplement::multipoint_do_visitor(T_IBIN *geo, ObIGeoVisitor &visitor)
+int ObIWkbVisitorImplement::multipoint_do_visitor(T_IBIN *geo, ObIGeoVisitor &visitor) 
 {
   INIT_SUCC(ret);
   if (visitor.prepare(geo)) {
@@ -457,7 +457,7 @@ int ObIWkbVisitorImplement::multipoint_do_visitor(T_IBIN *geo, ObIGeoVisitor &vi
         if (OB_FAIL(point.do_visit(visitor))) {
           OB_LOG(WARN,"failed to do point visit", K(ret));
         }
-      }
+      } 
     }
   }
   if (OB_SUCC(ret)) {
@@ -492,7 +492,7 @@ int ObIWkbVisitorImplement::polygon_do_visitor(T_IBIN *geo, ObIGeoVisitor &visit
           ring.set_data(data);
           if (OB_FAIL(ring.do_visit(visitor))) {
             OB_LOG(WARN,"failed to do geog polygon inner ring visit", K(ret));
-          }
+          } 
         }
       }
     }
@@ -519,7 +519,7 @@ int ObIWkbVisitorImplement::collection_do_visitor(T_IBIN *geo, ObIGeoVisitor &vi
         if (OB_FAIL(item.do_visit(visitor))) {
           OB_LOG(WARN,"failed to do wkb item visit", K(ret));
         }
-      }
+      } 
     }
   }
   if (OB_SUCC(ret)) {
@@ -528,7 +528,7 @@ int ObIWkbVisitorImplement::collection_do_visitor(T_IBIN *geo, ObIGeoVisitor &vi
     }
   }
 
-  return ret;
+  return ret;  
 }
 
 } // namespace common

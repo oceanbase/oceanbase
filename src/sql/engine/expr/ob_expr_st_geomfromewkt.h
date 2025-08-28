@@ -23,7 +23,7 @@ namespace oceanbase
 {
 namespace sql
 {
-class
+class 
 ObExprPrivSTGeomFromEwkt : public ObFuncExprOperator
 {
 public:

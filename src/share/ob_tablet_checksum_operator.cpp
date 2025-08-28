@@ -78,7 +78,7 @@ int ObTabletChecksumItem::verify_tablet_column_checksum(const ObTabletReplicaChe
 {
   int ret = OB_SUCCESS;
 
-  if ((tablet_id_ != replica_item.tablet_id_)
+  if ((tablet_id_ != replica_item.tablet_id_) 
       || (ls_id_ != replica_item.ls_id_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(replica_item), K(*this));
@@ -326,7 +326,7 @@ int ObTabletChecksumOperator::construct_load_sql_str_(
         LOG_WARN("fail to assign sql string", KR(ret), K(tenant_id), K(batch_cnt), K(compaction_scn));
       }
     } else { // compaction_scn == 0: get records with all compaction_scn
-      if (OB_FAIL(sql.append_fmt("SELECT * FROM %s WHERE tenant_id = '%lu' and tablet_id > '%lu' ",
+      if (OB_FAIL(sql.append_fmt("SELECT * FROM %s WHERE tenant_id = '%lu' and tablet_id > '%lu' ", 
           OB_ALL_TABLET_CHECKSUM_TNAME, extract_tenant_id, start_pair.get_tablet_id().id()))) {
         LOG_WARN("fail to assign sql", KR(ret), K(tenant_id), K(start_pair), K(compaction_scn));
       } else if (OB_FAIL(sql.append_fmt(" ORDER BY tenant_id, tablet_id, compaction_scn limit %ld",
@@ -506,7 +506,7 @@ int ObTabletChecksumOperator::delete_tablet_checksum_items(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(gc_compaction_scn));
   } else if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE tenant_id = '%lu' AND compaction_scn <= %lu"
-    " AND NOT (tablet_id=%ld AND ls_id=%ld) limit %ld", OB_ALL_TABLET_CHECKSUM_TNAME, extract_tenant_id,
+    " AND NOT (tablet_id=%ld AND ls_id=%ld) limit %ld", OB_ALL_TABLET_CHECKSUM_TNAME, extract_tenant_id, 
     gc_scn_val, ObTabletID::MIN_VALID_TABLET_ID, ObLSID::SYS_LS_ID, limit_cnt))) {
     LOG_WARN("fail to assign sql", KR(ret), K(tenant_id), K(gc_compaction_scn), K(limit_cnt));
   } else if (OB_FAIL(sql_client.write(tenant_id, sql.ptr(), affected_rows))) {

@@ -216,7 +216,7 @@ int PalfEnvImpl::init(
     ret = OB_INIT_TWICE;
     PALF_LOG(ERROR, "PalfEnvImpl is inited twiced", K(ret));
   } else if (OB_ISNULL(base_dir) || !self.is_valid() || NULL == transport || NULL == batch_rpc
-             || OB_ISNULL(log_alloc_mgr) || OB_ISNULL(log_block_pool) || OB_ISNULL(monitor)
+             || OB_ISNULL(log_alloc_mgr) || OB_ISNULL(log_block_pool) || OB_ISNULL(monitor) 
              || OB_ISNULL(log_local_device) || OB_ISNULL(resource_manager) || OB_ISNULL(io_manager)) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "invalid arguments", K(ret), KP(transport), KP(batch_rpc), K(base_dir), K(self), KP(transport),
@@ -936,7 +936,7 @@ int PalfEnvImpl::update_options(const PalfOptions &options)
     PALF_LOG(WARN, "update_disk_options failed", K(ret), K(options));
   } else {
     enable_log_cache_ = options.enable_log_cache_;
-    PALF_LOG(INFO, "update_options successs", K(options), KPC(this));
+    PALF_LOG(INFO, "update_options successs", K(options), KPC(this)); 
   }
   return ret;
 }

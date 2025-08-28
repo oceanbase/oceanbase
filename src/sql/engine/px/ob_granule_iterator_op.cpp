@@ -1507,7 +1507,7 @@ int ObGranuleIteratorOp::do_dynamic_partition_pruning(const common::ObIArray<ObG
        * In the union all scenario,
        * There is no logical correspondence between the pair of partitions
        * so it is necessary to calculate whether all partitions can be cropped.
-       * bug:
+       * bug: 
        * */
       bool single_table_partition_pruning = false;
       for (int i = 0; i < gi_task_infos.count() && OB_SUCC(ret); ++i) {

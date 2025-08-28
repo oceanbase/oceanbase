@@ -25,7 +25,7 @@ namespace observer
 class ObDirectLoadResourceP : public obrpc::ObRpcProcessor<obrpc::ObSrvRpcProxy::ObRpc<obrpc::OB_DIRECT_LOAD_RESOURCE>>
 {
 public:
-  ObDirectLoadResourceP(const ObGlobalContext &gctx)
+  ObDirectLoadResourceP(const ObGlobalContext &gctx) 
     : gctx_(gctx), allocator_("TLD_RpcP")
   {
     allocator_.set_tenant_id(MTL_ID());

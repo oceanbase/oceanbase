@@ -61,7 +61,7 @@ public:
   const share::ObTransferPartitionTask* get_task() const
   {
     return task_;
-  }
+  } 
   TO_STRING_KV(KPC_(task), K_(tablet_id), K_(src_ls));
 private:
   share::ObTransferPartitionTask* task_;
@@ -73,7 +73,7 @@ class ObTransferPartitionHelper
 {
 public:
   ObTransferPartitionHelper(const uint64_t tenant_id,
-      common::ObMySQLProxy *sql_proxy) :
+      common::ObMySQLProxy *sql_proxy) : 
     is_inited_(false), tenant_id_(tenant_id), sql_proxy_(sql_proxy),
     allocator_("TRANFER_PART", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id),
     task_array_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_, "TrPTaskArray")),
@@ -123,7 +123,7 @@ private:
   //no need check is_inited_, after rebuild, is_inited_ = true
   int check_inner_stat_();
   int try_process_dest_not_exist_task_(
-      const share::ObLSStatusInfoIArray &status_info_array,
+      const share::ObLSStatusInfoIArray &status_info_array,	
       int64_t& task_cnt);
   int try_process_object_not_exist_task_();
   int set_task_src_ls_();

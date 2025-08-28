@@ -245,7 +245,7 @@ int ObStmtResolver::resolve_dblink_name(const ParseNode *table_node, uint64_t te
       uint64_t compat_version = 0;
       if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
         LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
-      } else if (compat_version < DATA_VERSION_4_2_0_0) {
+      } else if (compat_version < DATA_VERSION_4_2_0_0) { 
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("mysql dblink is not supported when MIN_DATA_VERSION is below DATA_VERSION_4_2_0_0", K(ret));
       }

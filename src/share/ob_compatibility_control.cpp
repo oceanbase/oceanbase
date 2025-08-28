@@ -27,7 +27,7 @@ const ObCompatInfo<ARGS_NUM(args)> ObCompatControl::COMPAT_##type = \
 #include "share/ob_compatibility_security_feature_def.h"
 #undef DEF_COMPAT_CONTROL_FEATURE
 
-const ObICompatInfo* ObCompatControl::infos_[] =
+const ObICompatInfo* ObCompatControl::infos_[] = 
 {
 #define DEF_COMPAT_CONTROL_FEATURE(type, args...)                       \
   &COMPAT_##type,

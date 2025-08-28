@@ -37,8 +37,8 @@ int ObDASSpatialScanIter::inner_init(ObDASIterParam &param)
   return ret;
 }
 
-void ObDASSpatialScanIter::set_scan_param(storage::ObTableScanParam &scan_param)
-{
+void ObDASSpatialScanIter::set_scan_param(storage::ObTableScanParam &scan_param) 
+{ 
   mbr_filters_ = &scan_param.mbr_filters_;
   for (int64_t i = 0; i < scan_param.key_ranges_.count(); i++) {
     if (scan_param.key_ranges_.at(i).is_whole_range()) {
@@ -49,7 +49,7 @@ void ObDASSpatialScanIter::set_scan_param(storage::ObTableScanParam &scan_param)
 
   ObDASScanIter::set_scan_param(scan_param);
 }
-
+  
 
 int ObDASSpatialScanIter::inner_get_next_row()
 {
@@ -63,7 +63,7 @@ int ObDASSpatialScanIter::inner_get_next_row()
       LOG_WARN("failed to process data table rowkey", K(ret));
     }
   } while (OB_SUCC(ret) && !got_row);
-
+  
   return ret;
 }
 
@@ -99,9 +99,9 @@ int ObDASSpatialScanIter::filter_by_mbr(bool &got_row)
       if (OB_FAIL(col_datum.to_obj(obj_ptr_[i], expr->obj_meta_, expr->obj_datum_map_))) {
         LOG_WARN("convert datum to obj failed", K(ret));
       }
-    }
+    }    
   }
-
+  
   if (OB_SUCC(ret)) {
     ObRowkey table_rowkey(obj_ptr_, rowkey_cnt);
     bool pass_through = true;

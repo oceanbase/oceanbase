@@ -46,7 +46,7 @@ class ObTxTable
   struct RecycleRecord
   {
     share::SCN last_recycle_scn_;
-    int64_t last_recycle_ts_;
+    int64_t last_recycle_ts_;    
 
     RecycleRecord() { reset(); }
 
@@ -207,7 +207,7 @@ public:
 
   /**
    * @brief fetch the state of txn DATA_TRANS_ID when replaying to LOG_TS the requirement can be seen from
-   *
+   * 
    *
    * @param[in] data_trans_id
    * @param[in] scn
@@ -299,7 +299,7 @@ public:
    * situation)
    *
    * This scn can be simply interpreted as the end_scn of the oldest transaction in tx data sstables. For more details,
-   * see
+   * see 
    *
    * @param[out] start_tx_scn
    */
@@ -320,14 +320,14 @@ public:
 
   /**
    * @brief call this function to record some info to avoid frequently recycle tx data
-   *
+   * 
    * @param recycle_scn used to recycle tx data
    */
   void recycle_tx_data_finish(const share::SCN recycle_scn);
 
   /**
    * @brief The tx data table may receive freeze request but don't really do freeze because of MIN_FREEZE_TX_DATA_INTERVAL. So TenantFreezer will check if there are some freeze requests which are not executed and retry freeze after a while.
-   *
+   * 
    * @return true do freeze again
    * @return false do not need freeze
    */

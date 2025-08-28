@@ -27,7 +27,7 @@ uint64_t ObMultiModeExprHelper::get_tenant_id(ObSQLSessionInfo *session)
 {
   uint64_t tenant_id = 0;
   if (OB_ISNULL(session)) {
-    // If the session is not obtained, 500 tenant memory will be temporarily used,
+    // If the session is not obtained, 500 tenant memory will be temporarily used, 
     // but it will not affect subsequent execution.
     tenant_id = OB_SERVER_TENANT_ID;
     int ret = OB_ERR_UNEXPECTED;
@@ -89,7 +89,7 @@ MultimodeAlloctor::MultimodeAlloctor(ObArenaAllocator &arena, uint64_t type, int
   }
 }
 
-MultimodeAlloctor::~MultimodeAlloctor()
+MultimodeAlloctor::~MultimodeAlloctor() 
 {
   if (ret_ == OB_SUCCESS && check_level_ > 0 && has_reached_threshold()) {
     INIT_SUCC(ret);
@@ -112,10 +112,10 @@ void MultimodeAlloctor::set_baseline_size_and_flag(uint64_t baseline_size)
   }
 }
 
-void MultimodeAlloctor::add_baseline_size(uint64_t add_size)
-{
-  baseline_size_ += add_size;
-  expect_threshold_ = baseline_size_ * get_expected_multiple(type_);
+void MultimodeAlloctor::add_baseline_size(uint64_t add_size) 
+{ 
+  baseline_size_ += add_size; 
+  expect_threshold_ = baseline_size_ * get_expected_multiple(type_); 
 }
 
 int MultimodeAlloctor::add_baseline_size(ObDatum *datum, bool has_lob_header, uint32_t multiple)
@@ -332,7 +332,7 @@ uint64_t MultimodeAlloctor::get_expected_multiple(uint64_t type)
     case T_FUN_SYS_PRIV_ST_ASEWKT:
       expected_multiple = ObMultiModeSingleMagnification;
       break;
-
+    
     default:
       expected_multiple = ObMultiModeDefaultMagnification;
   }
@@ -340,7 +340,7 @@ uint64_t MultimodeAlloctor::get_expected_multiple(uint64_t type)
   return expected_multiple;
 }
 
-const double MultimodeAlloctor::MEM_THRESHOLD_LEVEL[LEVEL_NUMBERS][LEVEL_CLASS] =
+const double MultimodeAlloctor::MEM_THRESHOLD_LEVEL[LEVEL_NUMBERS][LEVEL_CLASS] = 
 {
   // level = 0
   {
@@ -400,7 +400,7 @@ void MultimodeAlloctor::memory_usage_check()
 
 void *MultimodeAlloctor::alloc(const int64_t sz)
 {
-  void* ptr = arena_.alloc(sz);
+  void* ptr = arena_.alloc(sz); 
   memory_usage_check_if_need();
   return ptr;
 }

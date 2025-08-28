@@ -298,7 +298,7 @@ int ObMPStmtPrexecute::before_process()
             PS_DEFENSE_CHECK(4) // exec_mode
             {
               ObMySQLUtil::get_uint4(pos, exec_mode_);
-              //
+              // 
               // is_commit_on_success_ is not use yet
               // other exec_mode set use ==
               is_commit_on_success_ = exec_mode_ & OB_OCI_COMMIT_ON_SUCCESS;
@@ -390,7 +390,7 @@ int ObMPStmtPrexecute::before_process()
 }
 
 int ObMPStmtPrexecute::clean_ps_stmt(ObSQLSessionInfo &session,
-                                     const bool is_local_retry,
+                                     const bool is_local_retry, 
                                      const bool is_batch)
 {
   int ret = OB_SUCCESS;
@@ -400,10 +400,10 @@ int ObMPStmtPrexecute::clean_ps_stmt(ObSQLSessionInfo &session,
     /* 清理 ps stmt 的时机
      * 1. 第一次执行时，也就是在 before_process 中执行 prepare 生成 stmt 时
      * 2. 第一次执行且 非batch 模式， 非 local retry 的报错都需要清理
-     * 3. 第一次执行且 batch 模式， 参考 try_batch_multi_stmt_optimization 的实现，
+     * 3. 第一次执行且 batch 模式， 参考 try_batch_multi_stmt_optimization 的实现， 
      *    只有 THIS_WORKER.need_retry() 的时候队列重试需要清理，
      *    其他时候都退化成了 local 重试，不需要清理
-     */
+     */ 
     get_ctx().cur_sql_ = sql_;
     get_ctx().raw_sql_ = sql_;
     if (OB_FAIL(session.close_ps_stmt(stmt_id_))) {
@@ -593,15 +593,15 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
       if (OB_NOT_NULL(cursor) && OB_FAIL(session.close_cursor(cursor->get_id()))) {
         LOG_WARN("close cursor failed.", K(ret), K(stmt_id_));
       }
-      if (OB_FAIL(clean_ps_stmt(session,
-                                RETRY_TYPE_LOCAL == retry_ctrl.get_retry_type(),
+      if (OB_FAIL(clean_ps_stmt(session, 
+                                RETRY_TYPE_LOCAL == retry_ctrl.get_retry_type(), 
                                 ctx.multi_stmt_item_.is_batched_multi_stmt()))) {
         LOG_WARN("close cursor failed.", K(ret), K(stmt_id_));
       }
       ret = tmp_ret;
       LOG_WARN("execute server cursor failed.", K(ret));
     }
-  } else if (OB_FAIL(gctx_.sql_engine_->stmt_execute(stmt_id_,
+  } else if (OB_FAIL(gctx_.sql_engine_->stmt_execute(stmt_id_, 
                                                      stmt_type_,
                                                      params,
                                                      ctx,
@@ -660,8 +660,8 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
       LOG_WARN("fail to close result", K(close_ret));
     }
 
-    int tmp_ret = clean_ps_stmt(session,
-                                RETRY_TYPE_LOCAL == retry_ctrl.get_retry_type(),
+    int tmp_ret = clean_ps_stmt(session, 
+                                RETRY_TYPE_LOCAL == retry_ctrl.get_retry_type(), 
                                 ctx.multi_stmt_item_.is_batched_multi_stmt());
     if (OB_SUCCESS != tmp_ret) {
       LOG_WARN("prexecute clean ps stmt fail. ", K(ret), K(tmp_ret));
@@ -689,8 +689,8 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
                 K(ret), "timeout_timestamp", plan_ctx->get_timeout_timestamp());
       }
 
-      int tmp_ret = clean_ps_stmt(session,
-                                  RETRY_TYPE_LOCAL == retry_ctrl.get_retry_type(),
+      int tmp_ret = clean_ps_stmt(session, 
+                                  RETRY_TYPE_LOCAL == retry_ctrl.get_retry_type(), 
                                   ctx.multi_stmt_item_.is_batched_multi_stmt());
       if (OB_SUCCESS != tmp_ret) {
         LOG_WARN("prexecute clean ps stmt fail. ", K(ret), K(tmp_ret));
@@ -773,7 +773,7 @@ int ObMPStmtPrexecute::response_query_header(ObSQLSessionInfo &session,
        * 1. arraybinding 带结果集的语句类型 包含了 DML 语句 + 匿名块 + CALL
        * 1. returning_params_field 不为空 且语句类型满足 1 的情况，认为 arraybinding 有结果集返回
        * 2. param 的个数包含了 returning 的个数
-       */
+       */ 
       returning_params_cnt = returning_params_field->count();
       params_cnt = params_cnt + returning_params_cnt;
       has_arraybinding_result = returning_params_cnt > 0 ? true : false;
@@ -783,12 +783,12 @@ int ObMPStmtPrexecute::response_query_header(ObSQLSessionInfo &session,
     if (((0 != iteration_count_ || stmt::T_ANONYMOUS_BLOCK == stmt_type_) && fields_count > 0)
         || (OB_OCI_EXACT_FETCH == exec_mode_ && stmt::T_SELECT == stmt_type_)) {
 
-      /* has result 的几种情况：
-       * 1. 预取且有结果集： iteration_count_ > 0 & fields_count > 0
-       * 2. 匿名块且有结果集 ： T_ANONYMOUS_BLOCK == stmt_type_ && fields_count > 0.
+      /* has result 的几种情况： 
+       * 1. 预取且有结果集： iteration_count_ > 0 & fields_count > 0 
+       * 2. 匿名块且有结果集 ： T_ANONYMOUS_BLOCK == stmt_type_ && fields_count > 0. 
        *                     匿名块情况下无论 iteration_count_ 是多少，是否有预取， 都需要设置 has_result
        * 3. exact_fetch 模式 ： OB_OCI_EXACT_FETCH == exec_mode_ && stmt::T_SELECT == stmt_type_
-       */
+       */ 
 
       has_result = 1;
     }
@@ -1333,7 +1333,7 @@ int ObMPStmtPrexecute::send_eof_packet(ObSQLSessionInfo &session,
       if(OB_FAIL(response_packet(eofp, &session))) {
         LOG_WARN("response packet fail", K(ret));
       } else {
-        LOG_DEBUG("send eof packet in prepare-execute protocol.", K(warning_count),
+        LOG_DEBUG("send eof packet in prepare-execute protocol.", K(warning_count), 
           K(has_result), K(cursor_exist), K(last_row), K(ps_out));
       }
     }

@@ -52,7 +52,7 @@ public:
                               bool &is_opt_stat_valid);
 
   int check_system_stat_validity(sql::ObExecContext *ctx,
-                                 const uint64_t tenant_id,
+                                 const uint64_t tenant_id, 
                                  bool &is_valid);
 
   int check_opt_stat_validity(sql::ObExecContext &ctx,

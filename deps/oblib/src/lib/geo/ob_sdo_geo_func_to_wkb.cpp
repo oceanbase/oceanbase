@@ -19,7 +19,7 @@ namespace common
 {
 int ObSdoGeoToWkb::normalize_point(double &lon, double &lat)
 {
-  // If the value entered is outside LONG/LAT range,
+  // If the value entered is outside LONG/LAT range, 
   // the value is wrapped around to fit into the range
   INIT_SUCC(ret);
   double lat_right_margin = 90;
@@ -33,7 +33,7 @@ int ObSdoGeoToWkb::normalize_point(double &lon, double &lat)
     quad %= 4;
     double pole = (lat > 0) ? 90.0 : -90.0;
     double offset = fmod(lat, lat_right_margin);
-    switch(quad)
+    switch(quad) 
     {
       case 0: {
         lat = offset;
@@ -92,11 +92,11 @@ int ObSdoGeoToWkb::append_num_with_endian(T data, uint64_t len)
   if (iorder_ == static_cast<uint8_t>(ObGeoWkbByteOrder::BigEndian)) {
     for(uint64_t i = 0; i < len / 2; i++) {
       char tmp = p[i];
-      p[i] = p[len - 1 - i];
+      p[i] = p[len - 1 - i]; 
       p[len - 1 - i] = tmp;
     }
   }
-
+  
   if (OB_FAIL(buffer_.append(p, len))) {
     ret = OB_BUF_NOT_ENOUGH;
     LOG_WARN("failed to write buffer", K(ret), K(len));
@@ -201,7 +201,7 @@ int ObSdoGeoToWkb::append_point(ObSdoGeoObject *geo, int64_t idx)
 }
 
 // ccw: Counter ClockWise
-int ObSdoGeoToWkb::inner_append_rectangle(double lower_left_x, double lower_left_y, double upper_right_x,
+int ObSdoGeoToWkb::inner_append_rectangle(double lower_left_x, double lower_left_y, double upper_right_x, 
                                           double upper_right_y, uint64_t sdo_etype, bool is_ccw, double fix_z, int swap_idx)
 {
   int ret = OB_SUCCESS;
@@ -234,7 +234,7 @@ int ObSdoGeoToWkb::inner_append_rectangle(double lower_left_x, double lower_left
   return ret;
 }
 
-int ObSdoGeoToWkb::append_3D_rectangle(double x1, double y1, double x2, double y2, double fix_z,
+int ObSdoGeoToWkb::append_3D_rectangle(double x1, double y1, double x2, double y2, double fix_z, 
                                       uint64_t sdo_etype, int fix_idx)
 {
   int ret = OB_SUCCESS;
@@ -251,7 +251,7 @@ int ObSdoGeoToWkb::append_3D_rectangle(double x1, double y1, double x2, double y
     is_ccw = (fix_idx == 1) ? !is_ccw : is_ccw;
     if (OB_FAIL(inner_append_rectangle(x1, y1, x2, y2, sdo_etype, is_ccw, fix_z, fix_idx))) {
       LOG_WARN("fail to do inner append rectangle", K(ret), K(x1), K(y1), K(x2), K(y2));
-    }
+    } 
   }
   return ret;
 }
@@ -281,15 +281,15 @@ int ObSdoGeoToWkb::append_rectangle(ObSdoGeoObject *geo, size_t idx, uint64_t sd
         LOG_WARN("failed to normalize point in GEOGRAPHIC_SRS", K(ret), K(x1), K(y1), K(srs_type_));
       } else if (OB_FAIL(normalize_point(x2, y2))) {
         LOG_WARN("failed to normalize point in GEOGRAPHIC_SRS", K(ret), K(x2), K(y2), K(srs_type_));
-      }
-    }
+      } 
+    } 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(buffer_.reserve(reserve_len))) {
       LOG_WARN("fail to reserve memory for buffer_", K(ret), K(reserve_len));
     } else if (OB_FAIL(append_num_with_endian(RECTANGLE_POINT_NUM, WKB_GEO_ELEMENT_NUM_SIZE))) {
       LOG_WARN("fail to append point num buffer_", K(ret));
     } else if (is_3d_geo_) {
-      // a legal 3D rectangle should have only one same axis
+      // a legal 3D rectangle should have only one same axis 
       double z1 = ori[idx + 2];
       double z2 = ori[idx + step + 2];
       int32_t same_axis_num = x1 == x2 ? 1 : 0;
@@ -306,7 +306,7 @@ int ObSdoGeoToWkb::append_rectangle(ObSdoGeoObject *geo, size_t idx, uint64_t sd
         LOG_WARN("fail to append 3D rectangle", K(ret));
       } else if (z1 == z2 && OB_FAIL(append_3D_rectangle(x1, y1, x2, y2, z1, sdo_etype, 2))) {
         LOG_WARN("fail to append 3D rectangle", K(ret));
-      }
+      } 
     } else {
       if (OB_FAIL(inner_append_rectangle(x1, y1, x2, y2, sdo_etype, sdo_etype == EXTRING_ETYPE))) {
         LOG_WARN("fail to do inner append rectangle", K(ret), K(x1), K(y1), K(x2), K(y2));
@@ -475,7 +475,7 @@ int ObSdoGeoToWkb::append_multi_point(ObSdoGeoObject *geo, size_t elem_begin, si
         K(ret),
         K(geo->get_ordinates().size()));
   } else if (num_points == 1 && is_deduce_dim_) {
-    // bugfix:
+    // bugfix: 
     if (geo->get_ordinates().size() > step) {
       ret = OB_ERR_INVALID_DATA_IN_SDO_ELEM_INFO_ARRAY;
       LOG_WARN("Invalid data in the SDO_ELEM_INFO_ARRAY in SDO_GEOMETRY object", K(ret), K(step), K(geo->get_ordinates().size()));
@@ -724,7 +724,7 @@ int ObSdoGeoToWkb::translate(
       uint64_t ori_size = geo->get_ordinates().size();
       if (elem_sz >= 3 && ori_size > 0) {
         // use elem_info and sdo_ordinate
-        if (geo->get_elem_info()[2] > 1 ||
+        if (geo->get_elem_info()[2] > 1 || 
             (geo->get_gtype() == ObGeoType::POINT && ori_size != 2) ||
             (geo->get_gtype() == ObGeoType::POINTZ && ori_size != 3)) {
           ret = OB_ERR_INVALID_DATA_IN_SDO_ELEM_INFO_ARRAY;

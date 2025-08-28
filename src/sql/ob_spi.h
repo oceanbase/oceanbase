@@ -555,7 +555,7 @@ public:
                                    bool is_bulk = false,
                                    bool is_returning = false,
                                    bool is_type_record = false);
-
+  
   static int check_dynamic_sql_legal(pl::ObPLExecCtx *ctx,
                                      ObIAllocator &alloc,
                                      ObSqlString &sql_str,
@@ -591,7 +591,7 @@ public:
                                     ParamStore *&exec_params);
 
   static int convert_ext_null_params(ParamStore &params, ObSQLSessionInfo *session);
-
+  
   static int inner_open(pl::ObPLExecCtx *ctx,
                         ObIAllocator &param_allocator, //用于拷贝执行期参数
                         const ObString &sql,

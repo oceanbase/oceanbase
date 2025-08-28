@@ -518,7 +518,7 @@ void ObAdminDumpsstExecutor::dump_storage_schema(const ObDumpMacroBlockContext &
 
 #ifdef OB_BUILD_SHARED_STORAGE
 int ObAdminDumpsstExecutor::do_dump_prewarm_index(
-    const char *path,
+    const char *path, 
     storage::ObHotTabletInfoIndex &index)
 {
   int ret = OB_SUCCESS;

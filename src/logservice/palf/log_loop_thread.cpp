@@ -140,7 +140,7 @@ void LogLoopThread::log_loop_()
     if (OB_SUCCESS != (tmp_ret = palf_env_impl_->for_each(try_freeze_log_func))) {
       PALF_LOG_RET(WARN, tmp_ret, "for_each try_freeze_log_func failed", K(tmp_ret));
     }
-
+    
     palf_env_impl_->period_calc_disk_usage();
 
     const int64_t round_cost_time = ObTimeUtility::current_time() - start_ts;

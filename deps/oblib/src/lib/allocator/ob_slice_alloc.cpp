@@ -32,7 +32,7 @@ void ObBlockSlicer::print_leak_slice() {
   }
 
   LIB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "", K(limit), K(slice_size), K(isize), K(total), KP(istart));
-
+  
   for (int32_t i = 0; i < total; i++) {
     Item *item = (Item *)(istart + i * isize);
     void *slice = (void *)(item + 1);

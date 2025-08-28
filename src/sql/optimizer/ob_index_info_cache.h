@@ -266,7 +266,7 @@ public:
 private:
   uint64_t table_id_;
   uint64_t base_table_id_;
-  int64_t entry_count_;
+  int64_t entry_count_;  
   IndexInfoEntry *index_entrys_[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1]; //including table and index table
   DISALLOW_COPY_AND_ASSIGN(ObIndexInfoCache);
 };

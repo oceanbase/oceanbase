@@ -67,8 +67,8 @@ int ObFreezeExecutor::execute(ObExecContext &ctx, ObFreezeStmt &stmt)
   } else {
     if (!stmt.is_major_freeze()) {
       const uint64_t local_tenant_id = MTL_ID();
-      bool freeze_all = (stmt.is_freeze_all() ||
-                         stmt.is_freeze_all_user() ||
+      bool freeze_all = (stmt.is_freeze_all() || 
+                         stmt.is_freeze_all_user() || 
                          stmt.is_freeze_all_meta());
       ObRootMinorFreezeArg arg;
       if (OB_FAIL(arg.tenant_ids_.assign(stmt.get_tenant_ids()))) {
@@ -87,13 +87,13 @@ int ObFreezeExecutor::execute(ObExecContext &ctx, ObFreezeStmt &stmt)
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("invalid GCTX", KR(ret));
           } else {
-            // if min_cluster_version < 4.2.1.0，disable all_user/all_meta,
+            // if min_cluster_version < 4.2.1.0，disable all_user/all_meta, 
             // and make tenant=all effective for all tenants.
             if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_1_0) {
               if (stmt.is_freeze_all_user() || stmt.is_freeze_all_meta()) {
                 ret = OB_NOT_SUPPORTED;
                 LOG_WARN("all_user/all_meta are not supported when min_cluster_version is less than 4.2.1.0",
-                         KR(ret), "freeze_all_user", stmt.is_freeze_all_user(),
+                         KR(ret), "freeze_all_user", stmt.is_freeze_all_user(), 
                          "freeze_all_meta", stmt.is_freeze_all_meta());
               } else if (stmt.is_freeze_all()) {
                 if (OB_FAIL(GCTX.schema_service_->get_tenant_ids(arg.tenant_ids_))) {
@@ -107,7 +107,7 @@ int ObFreezeExecutor::execute(ObExecContext &ctx, ObFreezeStmt &stmt)
               } else {
                 using FUNC_TYPE = bool (*) (const uint64_t);
                 FUNC_TYPE func = nullptr;
-                // caller guarantees that at most one of
+                // caller guarantees that at most one of 
                 // freeze_all/freeze_all_user/freeze_all_meta is true.
                 if (stmt.is_freeze_all() || stmt.is_freeze_all_user()) {
                   func = is_user_tenant;
@@ -125,7 +125,7 @@ int ObFreezeExecutor::execute(ObExecContext &ctx, ObFreezeStmt &stmt)
                 }
               }
             }
-          }
+          }    
         // get local tenant to freeze if there is no any parameter except server_list
         } else if (arg.tenant_ids_.empty() &&
                    arg.zone_.is_empty() &&
@@ -1198,11 +1198,11 @@ int ObAdminMergeExecutor::execute(ObExecContext &ctx, ObAdminMergeStmt &stmt)
   } else if (OB_ISNULL(common_rpc = task_exec_ctx->get_common_rpc())) {
     ret = OB_NOT_INIT;
     LOG_WARN("get common rpc proxy failed", K(task_exec_ctx));
-  } else if ((GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_1_0) &&
+  } else if ((GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_1_0) && 
              (arg.affect_all_user_ || arg.affect_all_meta_)) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("all_user/all_meta are not supported when min_cluster_version is less than 4.2.1.0",
-             KR(ret), "affect_all_user", arg.affect_all_user_,
+    LOG_WARN("all_user/all_meta are not supported when min_cluster_version is less than 4.2.1.0", 
+             KR(ret), "affect_all_user", arg.affect_all_user_, 
              "affect_all_meta", arg.affect_all_meta_);
   } else if (OB_FAIL(common_rpc->admin_merge(arg))) {
     LOG_WARN("admin merge rpc failed", K(ret), "rpc_arg", arg);
@@ -1329,7 +1329,7 @@ int ObSetConfigExecutor::execute(ObExecContext &ctx, ObSetConfigStmt &stmt)
     FOREACH_X(item, stmt.get_rpc_arg().items_, OB_SUCCESS == ret) {
       if (item->tenant_name_ == all_user || item->tenant_name_ == all_meta) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("all_user/all_meta are not supported when min_cluster_version is less than 4.2.1.0",
+        LOG_WARN("all_user/all_meta are not supported when min_cluster_version is less than 4.2.1.0", 
                  KR(ret), "tenant_name", item->tenant_name_);
       }
     }
@@ -1347,7 +1347,7 @@ int ObSetConfigExecutor::execute(ObExecContext &ctx, ObSetConfigStmt &stmt)
       LOG_WARN("set backup config rpc failed", K(ret));
     } else {
       LOG_WARN("set config rpc failed", K(ret), "rpc_arg", stmt.get_rpc_arg());
-    }
+    }    
   }
   return ret;
 }
@@ -1414,7 +1414,7 @@ int ObMigrateUnitExecutor::execute(ObExecContext &ctx, ObMigrateUnitStmt &stmt)
 	return ret;
 }
 
-int ObAlterLSReplicaExecutor::execute(ObExecContext &ctx, ObAlterLSReplicaStmt &stmt)
+int ObAlterLSReplicaExecutor::execute(ObExecContext &ctx, ObAlterLSReplicaStmt &stmt) 
 {
   int ret = OB_SUCCESS;
   ObTaskExecutorCtx *task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx);
@@ -1650,8 +1650,8 @@ int ObClearMergeErrorExecutor::execute(ObExecContext &ctx, ObClearMergeErrorStmt
 		LOG_WARN("get common rpc proxy failed", K(task_exec_ctx));
 	} else if ((GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_1_0) && (arg.affect_all_user_ || arg.affect_all_meta_)) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("all_user/all_meta are not supported when min_cluster_version is less than 4.2.1.0",
-             KR(ret), "affect_all_user", arg.affect_all_user_,
+    LOG_WARN("all_user/all_meta are not supported when min_cluster_version is less than 4.2.1.0", 
+             KR(ret), "affect_all_user", arg.affect_all_user_, 
              "affect_all_meta", arg.affect_all_meta_);
   } else if (OB_FAIL(common_rpc->admin_clear_merge_error(arg))) {
 		LOG_WARN("clear merge error rpc failed", K(ret), "rpc_arg", arg);
@@ -2084,7 +2084,7 @@ int ObClearBalanceTaskExecutor::execute(ObExecContext &ctx, ObClearBalanceTaskSt
  * 2. session is not in trans.
  * 3. login user has oceanbase db's access privilege.
  * 4. ObServer has target tenant's resource.
- *
+ * 
  */
 int ObChangeTenantExecutor::execute(ObExecContext &ctx, ObChangeTenantStmt &stmt)
 {
@@ -2185,7 +2185,7 @@ int ObChangeTenantExecutor::execute(ObExecContext &ctx, ObChangeTenantStmt &stmt
         LOG_WARN("fail to set default database", KR(ret), K(database_name));
       } else if (OB_FAIL(session_info->update_sys_variable(
                  share::SYS_VAR_OB_LAST_SCHEMA_VERSION, received_schema_version))) {
-        // bugfix:
+        // bugfix: 
         LOG_WARN("fail to set session variable for last_schema_version", KR(ret),
                  K(effective_tenant_id), K(pre_effective_tenant_id), K(received_schema_version));
       } else if (OB_FAIL(pc->set_mem_conf(pc_mem_conf))) {
@@ -2201,7 +2201,7 @@ int ObChangeTenantExecutor::execute(ObExecContext &ctx, ObChangeTenantStmt &stmt
           // have a higher priority than sqls from user. Otherwise, it may cause an unstable cluster status
           // while cluster/tenant is lack of rpc resource. Here, we use special tenant' rpc resource to
           // deal with remote sqls accross cluster to avoid the influence of user's sql.
-          // bugfix:
+          // bugfix: 
           const ObString &user_name = session_info->get_user_name();
           if (0 == user_name.case_compare(OB_STANDBY_USER_NAME)) {
             // TODO: (yanmu.ztl) should use a independent special tenant
@@ -2888,7 +2888,7 @@ int ObTableTTLExecutor::execute(ObExecContext& ctx, ObTableTTLStmt& stmt)
   int ret = OB_SUCCESS;
   ObTaskExecutorCtx* task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx);
   obrpc::ObCommonRpcProxy* common_rpc_proxy = NULL;
-
+ 
   if (OB_ISNULL(task_exec_ctx)) {
     ret = OB_NOT_INIT;
     LOG_WARN("get task executor context failed");
@@ -3136,7 +3136,7 @@ int ObLoadLicenseExecutor::execute(ObExecContext &ctx, ObLoadLicenseStmt &stmt) 
   } else if (OB_FAIL(ObLicenseUtils::load_license(stmt.get_path()))) {
     LOG_WARN("fail to load license", KR(ret), K(stmt));
   }
-
+  
   return ret;
 }
 

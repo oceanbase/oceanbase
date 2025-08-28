@@ -401,7 +401,7 @@ private:
   bool is_async_ls_freeze_task_existing_;
   bool throttle_is_skipping_;
   bool tenant_replay_is_pending_;
-  common::hash::ObHashSet<AsyncFreezeTabletInfo> async_freeze_tablets_;
+  common::hash::ObHashSet<AsyncFreezeTabletInfo> async_freeze_tablets_; 
 };
 
 } // namespace storage

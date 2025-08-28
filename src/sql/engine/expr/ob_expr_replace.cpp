@@ -170,7 +170,7 @@ int ObExprReplace::replace(ObString &ret_str,
         //do nothing
       }
     }
-
+    
     int64_t tot_length = 0;
     if (OB_FAIL(ret)) {
       ret_str.reset();
@@ -206,7 +206,7 @@ int ObExprReplace::replace(ObString &ret_str,
       }
       ret_str.assign_ptr(buf, static_cast<int32_t>(tot_length));
     }
-  }
+  } 
   return ret;
 }
 
@@ -271,7 +271,7 @@ int ObExprReplace::eval_replace(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &exp
     }
   } else if (is_clob && (0 == text->len_)) {
     expr_datum.set_datum(*text);
-  } else if (!is_lob_res) { // non text tc inputs
+  } else if (!is_lob_res) { // non text tc inputs 
     if (OB_FAIL(replace(res,
                         expr.datum_meta_.cs_type_,
                         text->get_string(),
@@ -296,16 +296,16 @@ int ObExprReplace::eval_replace(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &exp
     common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
     if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *text,
                 expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), text_data))) {
-      LOG_WARN("failed to get string data", K(ret), K(expr.args_[0]->datum_meta_));
+      LOG_WARN("failed to get string data", K(ret), K(expr.args_[0]->datum_meta_));   
     } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *from,
                        expr.args_[1]->datum_meta_, expr.args_[1]->obj_meta_.has_lob_header(), from_data))) {
-      LOG_WARN("failed to get string data", K(ret), K(expr.args_[1]->datum_meta_));
+      LOG_WARN("failed to get string data", K(ret), K(expr.args_[1]->datum_meta_));   
     } else if (NULL == to) {
       to_data.reset();
     } else if (OB_FALSE_IT(to_data = to->get_string())) {
     } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *to,
                        expr.args_[2]->datum_meta_, expr.args_[2]->obj_meta_.has_lob_header(), to_data))) {
-      LOG_WARN("failed to get string data", K(ret), K(expr.args_[2]->datum_meta_));
+      LOG_WARN("failed to get string data", K(ret), K(expr.args_[2]->datum_meta_));   
     }
     if (OB_SUCC(ret)) {
       int64_t max_len = ObAccuracy::DDL_DEFAULT_ACCURACY[expr.datum_meta_.get_type()].get_length();
@@ -315,7 +315,7 @@ int ObExprReplace::eval_replace(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &exp
       } else if (OB_FAIL(ObTextStringHelper::string_to_templob_result(expr, ctx, expr_datum, res))) {
         LOG_WARN("set lob result failed", K(ret));
       }
-    }
+    } 
   }
   return ret;
 }

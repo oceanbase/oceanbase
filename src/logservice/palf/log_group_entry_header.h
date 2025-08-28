@@ -87,7 +87,7 @@ public:
                const int64_t data_len,
                const share::SCN &cut_scn,
                const int64_t pre_accum_checksum);
-
+  
   bool check_compatibility() const;
   NEED_SERIALIZE_AND_DESERIALIZE;
 

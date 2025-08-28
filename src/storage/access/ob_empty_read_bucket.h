@@ -57,8 +57,8 @@ struct ObEmptyReadCell
         cur_cnt = 1;
       }
     } else {
-      count_ += inc_val;
-      cur_cnt = count_;
+      count_ += inc_val; 
+      cur_cnt = count_; 
     }
     return ret;
   }
@@ -66,7 +66,7 @@ struct ObEmptyReadCell
       const uint64_t hashcode,
       uint64_t &cur_cnt)
   {
-    return inc_and_fetch(hashcode, 1, cur_cnt);
+    return inc_and_fetch(hashcode, 1, cur_cnt); 
   }
   bool check_timeout()
   {

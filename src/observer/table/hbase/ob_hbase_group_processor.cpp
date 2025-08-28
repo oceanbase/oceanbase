@@ -83,7 +83,7 @@ int ObHbaseOpProcessor::init_table_ctx(const ObTableSingleOp &single_op, ObTable
 int ObHbaseOpProcessor::init_multi_batch_ctx()
 {
   int ret = OB_SUCCESS;
-
+  
   if (ops_->count() == 0 || OB_ISNULL(ops_->at(0)) ||
       ops_->at(0)->type() != ObTableGroupType::TYPE_HBASE_GROUP) {
     ret = OB_INVALID_ARGUMENT;

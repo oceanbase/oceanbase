@@ -153,10 +153,10 @@ int ObTableCreator::add_create_tablets_of_tables_arg(
                     const bool ignore_cs_replica /*=false*/)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(tenant_data_version <= 0
+  if (OB_UNLIKELY(tenant_data_version <= 0 
     || schemas.count() != need_create_empty_majors.count())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(tenant_data_version), "count_schemas", schemas.count(),
+    LOG_WARN("invalid args", K(ret), K(tenant_data_version), "count_schemas", schemas.count(), 
       "count_need_create_empty_majors", need_create_empty_majors.count());
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < schemas.count(); ++i) {
@@ -277,7 +277,7 @@ int ObTableCreator::add_create_tablets_of_tables_arg_(
     } else if (OB_TMP_FAIL(cs_replica_mgr.try_init(tenant_id_, ls_id_array_))) {
       LOG_WARN("fail to init cs_replica_mgr", KR(tmp_ret));
     }
-
+    
     if (FAILEDx(data_table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
       LOG_WARN("fail to check oracle mode", KR(ret), KPC(data_table_schema));
     } else {
@@ -377,7 +377,7 @@ int ObTableCreator::add_create_tablets_of_tables_arg_(
                          trans_, tenant_id_, schema_version, pairs))) {
         LOG_WARN("fail to create tablet to table history",
                  KR(ret), K_(tenant_id), K(schema_version));
-      }
+      } 
       int64_t end_time = ObTimeUtility::current_time();
       LOG_INFO("finish create_tablet_to_table_history", KR(ret), K(table_schema.get_tenant_id()), K(ignore_cs_replica),
                                                         K(table_schema.get_table_id()), "cost_ts", end_time - start_time);

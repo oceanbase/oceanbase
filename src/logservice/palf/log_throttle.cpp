@@ -50,7 +50,7 @@ int LogWritingThrottle::update_throttling_options(IPalfEnvImpl *palf_env_impl)
     LOG_WARN("palf_env_impl is NULL", KPC(this));
   } else {
     bool unused_has_freed_up_space = false;
-    if (check_need_update_throtting_options_guarded_by_lock_()
+    if (check_need_update_throtting_options_guarded_by_lock_() 
         && OB_FAIL(update_throtting_options_guarded_by_lock_(palf_env_impl, unused_has_freed_up_space))) {
       LOG_WARN("failed to update_throttling_info", KPC(this));
     }

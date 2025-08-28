@@ -26,7 +26,7 @@
 #include "storage/lob/ob_lob_meta.h"
 #include "lib/number/ob_number_v2.h"
 #include "share/schema/ob_column_schema.h"
-#include "share/ob_ls_id.h"
+#include "share/ob_ls_id.h"  
 #include "mtlenv/mock_tenant_module_env.h"
 
 namespace oceanbase
@@ -47,8 +47,8 @@ public:
                           const transaction::ObTransID &trans_id,
                           const int64_t trans_version,
                           const int64_t sql_no,
-                          const bool has_lob_header,
-                          const int64_t read_snapshot,
+                          const bool has_lob_header, 
+                          const int64_t read_snapshot, 
                           const ObCollationType collation_type,
                           blocksstable::ObStorageDatum &datum);
   int build_lob_data(ObObj &obj, std::string &st, common::ObArenaAllocator &allocator);
@@ -70,8 +70,8 @@ int TestLobMetaIterator::fill_lob_sstable_slice_mock(
                           const transaction::ObTransID &trans_id,
                           const int64_t trans_version,
                           const int64_t sql_no,
-                          const bool has_lob_header,
-                          const int64_t read_snapshot,
+                          const bool has_lob_header, 
+                          const int64_t read_snapshot, 
                           const ObCollationType collation_type,
                           blocksstable::ObStorageDatum &datum)
 {
@@ -122,7 +122,7 @@ int TestLobMetaIterator::build_lob_data(ObObj &obj, std::string &st, common::ObA
     int64_t byte_size = 1000000;
     value->in_row_ = 1;
     MEMCPY(value->buffer_, st.c_str(), st.length());
-
+    
     obj.meta_.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
     obj.meta_.set_collation_level(CS_LEVEL_IMPLICIT);
     obj.set_type(ObMediumTextType);

@@ -1019,7 +1019,7 @@ int ObBackupCleanLSTaskOperator::fill_dml_with_ls_task_(
     LOG_WARN("failed to add column", K(ret));
   } else {
     if (ls_attr.is_delete_backup_set_task() || ls_attr.is_delete_backup_complement_task()) {
-    // A complement log belongs to a backup set, so for a task to delete a complement log, we need to specify the backup set ID
+    // A complement log belongs to a backup set, so for a task to delete a complement log, we need to specify the backup set ID 
       if (OB_FAIL(dml.add_column(OB_STR_ID, ls_attr.backup_set_id_))) {
         LOG_WARN("failed to add column", K(ret));
       }

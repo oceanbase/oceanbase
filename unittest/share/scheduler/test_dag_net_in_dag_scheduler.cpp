@@ -171,9 +171,9 @@ public:
     }
     return bret;
   }
-  virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param,
-      ObIAllocator &allocator) const override
-  {
+  virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, 
+      ObIAllocator &allocator) const override 
+  { 
     int ret = OB_SUCCESS;
     if (!is_inited_) {
       ret = OB_NOT_INIT;
@@ -185,8 +185,8 @@ public:
   virtual int fill_dag_key(char *buf,const int64_t size) const override { UNUSEDx(buf, size); return OB_SUCCESS; }
   virtual lib::Worker::CompatMode get_compat_mode() const override
   { return lib::Worker::CompatMode::MYSQL; }
-  virtual uint64_t get_consumer_group_id() const override
-  { return consumer_group_id_; }
+  virtual uint64_t get_consumer_group_id() const override 
+  { return consumer_group_id_; }  
   virtual bool is_ha_dag() const override { return false; }
 
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, K_(is_inited), K_(type), K_(id), K(task_list_.get_size()), K_(dag_ret));
@@ -827,7 +827,7 @@ public:
     int ret = OB_SUCCESS;
     int tmp_ret = OB_SUCCESS;
     ObTenantDagWorker *worker = ObTenantDagWorker::self();
-
+    
     if (worker != nullptr) {
       ObITask * task = worker->get_task();
       ObTenantDagWorker::DagWorkerStatus status = worker->get_status();
@@ -842,7 +842,7 @@ public:
     } else {
       COMMON_LOG(WARN, "worker in this thread is nullptr");
     }
-
+    
     return ret;
   }
 private:
@@ -1700,7 +1700,7 @@ public:
   ObCancelWaitingDagInDagNet()
   : ObCancelDagNet(),
     target_dag_cnt_(4),
-    first_dag_(nullptr)
+    first_dag_(nullptr) 
   {}
 
   virtual int start_running() override
@@ -1709,9 +1709,9 @@ public:
     ObCancelDag *dag = nullptr;
     ObCancelDag *last_dag = nullptr;
     // Dag1 -> Dag2/Dag3
-    // Dag2
+    // Dag2     
     // Dag3 -> Dag2/Dag4
-    // Dag4 -> Dag2
+    // Dag4 -> Dag2     
     for (int64_t i = 0; i < target_dag_cnt_ && OB_SUCC(ret); i++) {
       if (OB_FAIL(MTL(ObTenantDagScheduler*)->alloc_dag(dag))) {
         COMMON_LOG(WARN, "Fail to create dag", K(ret));

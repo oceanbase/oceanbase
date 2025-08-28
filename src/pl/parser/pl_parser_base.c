@@ -123,10 +123,10 @@ int check_cursor_node(
         } else if (T_SP_CPARAM_LIST == tree->type_) {
           if (stack_top != NULL) {
             ret = OB_PARSER_ERR_PARSE_SQL;
-            (void)fprintf(stderr, "ERROR parameter argument\n");
+            (void)fprintf(stderr, "ERROR parameter argument\n"); 
           } else if (!can_has_paramlist) {
             ret = OB_PARSER_ERR_PARSE_SQL;
-            (void)fprintf(stderr, "ERROR should has null parameters\n");
+            (void)fprintf(stderr, "ERROR should has null parameters\n"); 
           } else {
             *param = tree;
           }

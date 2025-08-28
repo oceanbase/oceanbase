@@ -178,7 +178,7 @@ int ObLobOutRowQueryIter::get_next_row(ObString& buffer)
         last_data_ = block_data;
       }
     }
-    // if is OB_ITER_END, means no next row from meta_iter_
+    // if is OB_ITER_END, means no next row from meta_iter_ 
     // if data.length() is larger than st_len, that means last_data_ may be not empty
     // so can not return OB_ITER_END
     if (ret == OB_ITER_END && buffer.length() > st_len) {
@@ -219,7 +219,7 @@ int ObLobPartialUpdateRowIter::open(ObLobAccessParam &param, ObLobLocatorV2 &del
   } else if (OB_FAIL(partial_data_.sort_index())) {
     LOG_WARN("sort_index fail", K(ret), K(data_len), K(partial_data_));
   }
-  return ret;
+  return ret;  
 }
 
 int ObLobPartialUpdateRowIter::get_next_row(int64_t &offset, ObLobMetaInfo *&old_info, ObLobMetaInfo *&new_info)

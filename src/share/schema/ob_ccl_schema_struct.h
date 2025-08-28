@@ -192,9 +192,9 @@ public:
   /**
    * @brief 将合并后的关键字字符串按照指定的分隔符和转义符进行分割。
    *        ccl_keywords_ -> ccl_keywords_array_
-   * example1:
+   * example1: 
    *        c1;c2 = abc;asd -> [c1, c2 = abc, asd]
-   * example2:
+   * example2: 
    *        t\\\;1\;;c1 = -> [t\;1;, c1 =]
    *
    * @param separator 用于拼接字符串的分隔符: ';'

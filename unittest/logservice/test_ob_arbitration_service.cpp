@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #include <gtest/gtest.h>
 #define private public
 #include "logservice/ob_arbitration_service.h"
@@ -30,14 +30,14 @@ using namespace common;
 using namespace logservice;
 using namespace palf;
 
-class MockNetKeepAliveAdapter : public logservice::IObNetKeepAliveAdapter
+class MockNetKeepAliveAdapter : public logservice::IObNetKeepAliveAdapter 
 {
 public:
   MockNetKeepAliveAdapter() {}
   ~MockNetKeepAliveAdapter() { }
-  bool in_black_or_stopped(const common::ObAddr &server) override final {return false;}
+  bool in_black_or_stopped(const common::ObAddr &server) override final {return false;} 
   bool is_server_stopped(const common::ObAddr &server) override final {return false;}
-  bool in_black(const common::ObAddr &server) override final {return false;}
+  bool in_black(const common::ObAddr &server) override final {return false;} 
   int get_last_resp_ts(const common::ObAddr &server, int64_t &last_resp_ts) { return OB_SUCCESS; }
 };
 

@@ -138,7 +138,7 @@ if (OB_USE_CLANG)
     -Wno-invalid-offsetof -Wno-unevaluated-expression -Wno-constant-logical-operand>
     $<$<COMPILE_LANGUAGE:C>:-Wno-unused-parameter>)
   if (CPP_STANDARD_20)
-    set(OBLIB_COMPILE_DEFINITIONS ${OBLIB_COMPILE_DEFINITIONS}
+    set(OBLIB_COMPILE_DEFINITIONS ${OBLIB_COMPILE_DEFINITIONS} 
         -Wno-unused-but-set-variable -Wno-null-pointer-subtraction -Wno-compound-token-split-by-macro
         -Wno-packed-non-pod -Wno-format -Wno-shorten-64-to-32 -Wno-unused-but-set-parameter -Wno-single-bit-bitfield-constant-conversion
         -Wno-enum-constexpr-conversion -Wno-covered-switch-default
@@ -216,7 +216,7 @@ endif()
 
 target_compile_features(oblib_base INTERFACE cxx_std_11)
 
-set(OBLIB_ABSEIL_LIST
+set(OBLIB_ABSEIL_LIST   
     ${DEP_DIR}/lib64/libabsl_base.a
     ${DEP_DIR}/lib64/libabsl_city.a
     ${DEP_DIR}/lib64/libabsl_debugging_internal.a

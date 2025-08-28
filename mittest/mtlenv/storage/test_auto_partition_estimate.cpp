@@ -142,8 +142,8 @@ void FakeObTabletEstimate::TearDown()
 }
 
 int FakeObTabletEstimate::set_tablet_split_info(
-    ObTabletID &src_tablet_id,
-    ObTabletID &origin_tablet_id,
+    ObTabletID &src_tablet_id, 
+    ObTabletID &origin_tablet_id, 
     ObLSID &ls_id,
     ObTabletSplitType split_type,
     const int64_t split_count)
@@ -279,8 +279,8 @@ int FakeObTabletEstimate::insert_data()
 }
 
 int FakeObTabletEstimate::estimate_block_count_and_row_count(
-    ObTabletID &tablet_id,
-    int64_t &macro_block_count,
+    ObTabletID &tablet_id, 
+    int64_t &macro_block_count, 
     int64_t &micro_block_count,
     int64_t &sstable_row_count,
     int64_t &memtable_row_count)
@@ -358,7 +358,7 @@ TEST_F(FakeObTabletEstimate, test_split_tablet_estimate)
 {
 // =================================== not set split info ===============================================
   int ret = OB_SUCCESS;
-
+  
   int64_t macro_block_cnt = 0;
   int64_t micro_block_cnt = 0;
   int64_t sstable_row_cnt = 0;
@@ -366,11 +366,11 @@ TEST_F(FakeObTabletEstimate, test_split_tablet_estimate)
   int64_t logical_row_count = 0;
   int64_t physical_row_count = 0;
   int64_t  split_cnt = 1;
-
+  
   // 1. do not set split info
   ObTabletID src_tablet_id(TestDmlCommon::TEST_DATA_TABLE_ID);
   ObTabletID ori_tablet_id(TestDmlCommon::TEST_DATA_TABLE_ID);
-
+  
   ObLSID ls_id(TestDmlCommon::TEST_LS_ID);
   ASSERT_EQ(OB_SUCCESS, prepare_scan_range());
   ret = estimate_row_count(logical_row_count, physical_row_count);
@@ -394,8 +394,8 @@ TEST_F(FakeObTabletEstimate, test_split_tablet_estimate)
   ret = estimate_block_count_and_row_count(src_tablet_id, macro_block_cnt, micro_block_cnt, sstable_row_cnt, memtable_row_cnt);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(OB_SUCCESS, reset_scan_range());
-
-  /* local index table */
+  
+  /* local index table */ 
   ret = set_tablet_split_info(src_tablet_id, ori_tablet_id, wrong_ls_id, ObTabletSplitType::NONE_RANGE, split_cnt);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(OB_SUCCESS, prepare_scan_range());
@@ -408,7 +408,7 @@ TEST_F(FakeObTabletEstimate, test_split_tablet_estimate)
 
   // 3. wrong ori tablet_id;
   ObTabletID wrong_ori_tablet_id(222);
-  /* main table */
+  /* main table */ 
   ret = set_tablet_split_info(src_tablet_id, wrong_ori_tablet_id, ls_id, ObTabletSplitType::RANGE, split_cnt);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(OB_SUCCESS, prepare_scan_range());
@@ -451,7 +451,7 @@ TEST_F(FakeObTabletEstimate, test_split_tablet_estimate)
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(12, logical_row_count);
   ret = estimate_block_count_and_row_count(src_tablet_id, macro_block_cnt, micro_block_cnt, sstable_row_cnt, memtable_row_cnt);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_SUCCESS, ret); 
   ASSERT_EQ(OB_SUCCESS, reset_scan_range());
 
   // // ==================================== test_estimate_row_right_set_split_info ======================================
@@ -492,8 +492,8 @@ TEST_F(FakeObTabletEstimate, test_split_tablet_estimate)
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = gen_datum_rowkey(end_val, key_cnt, get_end_key());
   ASSERT_EQ(OB_SUCCESS, ret);
-
-  /* main table */
+  
+  /* main table */ 
   ret = set_tablet_split_info(src_tablet_id, ori_tablet_id, ls_id, ObTabletSplitType::RANGE, split_cnt);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(OB_SUCCESS, prepare_scan_range());  // cut scan range using split info
@@ -537,7 +537,7 @@ TEST_F(FakeObTabletEstimate, test_split_tablet_estimate)
   ret = estimate_block_count_and_row_count(src_tablet_id, macro_block_cnt, micro_block_cnt, sstable_row_cnt, memtable_row_cnt);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(OB_SUCCESS, reset_scan_range());
-
+  
   /* local index table */
   ret = set_tablet_split_info(src_tablet_id, ori_tablet_id, ls_id, ObTabletSplitType::NONE_RANGE, split_cnt);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -548,7 +548,7 @@ TEST_F(FakeObTabletEstimate, test_split_tablet_estimate)
   ret = estimate_block_count_and_row_count(src_tablet_id, macro_block_cnt, micro_block_cnt, sstable_row_cnt, memtable_row_cnt);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ASSERT_EQ(OB_SUCCESS, reset_scan_range());
+  ASSERT_EQ(OB_SUCCESS, reset_scan_range()); 
   // ### because estimate block is calculate block metas count, has no relation with range
 }
 

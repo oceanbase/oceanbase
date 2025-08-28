@@ -150,8 +150,8 @@ int ObDMLRunningCtx::prepare_relative_table(
   } else if (OB_FAIL(tablet_handle.get_obj()->check_is_delete_insert_table(is_delete_insert_table_))) {
     LOG_WARN("fail to check is delete insert table", K(ret));
   } else if (OB_FAIL(relative_table_.tablet_iter_.refresh_read_tables_from_tablet(
-      read_snapshot.get_val_for_tx(),
-      relative_table_.allow_not_ready(),
+      read_snapshot.get_val_for_tx(), 
+      relative_table_.allow_not_ready(), 
       false/*major_sstable_only*/,
       true/*need_split_src_table*/,
       false/*need_split_dst_table*/))) {
@@ -193,7 +193,7 @@ int ObDMLRunningCtx::prepare_column_info(const common::ObIArray<uint64_t> &colum
           const ObColumnParam *column = dml_param_.table_param_->get_data_table().get_column(col_descs_->at(i).col_id_);
           if (OB_ISNULL(column)) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("column is null", K(ret), K(i), KP(column), K(col_descs_->at(i)));
+            LOG_WARN("column is null", K(ret), K(i), KP(column), K(col_descs_->at(i)));  
           } else if (OB_FAIL(main_table_rowkey_col_flag_.push_back(column->is_data_table_rowkey()))) {
             LOG_WARN("fail to push back", K(ret), K(i), KPC(column));
           }
@@ -217,7 +217,7 @@ int ObDMLRunningCtx::check_need_old_row_legitimacy()
     is_need_check_old_row_ = true;
     if ((relative_table_.is_index_table() && !relative_table_.can_read_index())
         || dml_param_.is_main_table_in_fts_ddl_ ) {
-      // We should not check old row because domain row may be generated instead of scanned
+      // We should not check old row because domain row may be generated instead of scanned 
       // from domain table when:
       // 1) index can not be read during building index
       // 2) or schema shows index ready, but fts ddl is on going when dml start snapshot
@@ -232,7 +232,7 @@ int ObDMLRunningCtx::check_need_old_row_legitimacy()
 
 int ObDMLRunningCtx::init_cmp_funcs()
 {
-  int ret = OB_SUCCESS;
+  int ret = OB_SUCCESS; 
   const common::ObIArray<share::schema::ObColDesc> &col_descs = dml_param_.table_param_->get_col_descs();
   int64_t column_cnt = col_descs.count();
   if (OB_UNLIKELY(column_cnt < 0 || column_cnt > OB_ROW_MAX_COLUMNS_COUNT)) {

@@ -141,6 +141,6 @@ select abs(-55), max(c2), 3 + 2, 5 from t9;
 select 5, max(c2), c1 from t9;
 select c1, min(c2), 233333 from t9;
 
-#bug
+#bug 
 select * from (select c1 as col from t1) as L where col = (select max(c1) from t1 where L.col > 5);
 select * from (select a.acctnbr as l1, a.timeuniqueextn as l2  from cb_loan_acctacctstathist_11 a left join cb_loan_acctloaninfotemp_11 b on a.acctnbr = b.acctnbr where a.acctstatcd not in ('CLS', 'DENI') and b.acctnbr is null) as l where l.l2 = (select max(a2.timeuniqueextn) from cb_loan_acctacctstathist_11 a2 where a2.acctnbr = l.l1 and a2.postdate <= '2018-11-10');

@@ -96,7 +96,7 @@ int PriorityV1::get_scn_(const share::ObLSID &ls_id, SCN &scn)
   } else if (CLICK_FAIL(palf_handle_guard.get_palf_handle()->get_access_mode(access_mode))) {
     COORDINATOR_LOG_(WARN, "get_access_mode failed");
   } else if (false == is_cluster_already_4200) {
-    // Note: A(PZ, 4.1), B(4.1), and C(4.2).
+    // Note: A(PZ, 4.1), B(4.1), and C(4.2). 
     // C's scn is SCN::MAX_SCN, and A's scn is meaningful scn, therefore, A will change
     // leadership to C; After the leadership has been transfered to C, C regards the SCN::MAX_SCN
     // and a meaningful scn as the same value, further, A is in the primary zone, therefore, C

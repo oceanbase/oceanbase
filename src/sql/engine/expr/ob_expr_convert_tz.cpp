@@ -84,11 +84,11 @@ int ObExprConvertTZ::calc_convert_tz(int64_t timestamp_data,
   return ret;
 }
 
-int ObExprConvertTZ::calc_convert_tz_timestamp(const ObExpr &expr,
-                                               ObEvalCtx &ctx,
-                                               int64_t &timestamp_data,
-                                               const ObString &tz_str_s,
-                                               const ObString &tz_str_d,
+int ObExprConvertTZ::calc_convert_tz_timestamp(const ObExpr &expr, 
+                                               ObEvalCtx &ctx, 
+                                               int64_t &timestamp_data, 
+                                               const ObString &tz_str_s, 
+                                               const ObString &tz_str_d, 
                                                ObSQLSessionInfo *session) {
   int ret = OB_SUCCESS;
   ObExecContext *exec_ctx = &ctx.exec_ctx_;
@@ -100,7 +100,7 @@ int ObExprConvertTZ::calc_convert_tz_timestamp(const ObExpr &expr,
   }
 
   cvrt_ctx = static_cast<ObExprConvertTZCtx*>(exec_ctx->get_expr_op_ctx(expr.expr_ctx_id_));
-
+  
   // for batched_multi_stmt, expr_op_ctx may be shared, so we need get tz_info each time
   if (!is_batched_multi_stmt && OB_NOT_NULL(cvrt_ctx)) {
     // reuse existing expr_op_ctx
@@ -212,7 +212,7 @@ int ObExprConvertTZ::get_offset_by_couple_tz(int64_t timestamp_data, int32_t &of
     if (OB_ERR_UNKNOWN_TIME_ZONE != ret && OB_FAIL(ret)) {
       LOG_WARN("get offset by couple tz failed", K(ret), K(tz_str_s), K(tz_str_d));
     }
-  }
+  } 
   return ret;
 }
 

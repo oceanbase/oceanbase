@@ -39,7 +39,7 @@ struct ObStandbyUpgrade
   {
     return data_version_;
   }
-
+  
   TO_STRING_KV(K_(data_version));
 private:
   uint64_t data_version_;

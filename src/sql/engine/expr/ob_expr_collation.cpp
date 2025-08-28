@@ -284,7 +284,7 @@ int ObExprSetCollation::calc_result_type2(ObExprResType &type,
     type1.set_calc_type(ObVarcharType);
     if (!type1.is_string_type()) {
       type1.set_calc_collation_type(type2.get_collation_type());
-    }
+    } 
     type2.set_calc_type(ObIntType);
   }
   return ret;

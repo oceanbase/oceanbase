@@ -289,7 +289,7 @@ TEST_F(TestObSimpleLogDiskMgr, update_disk_options_restart)
     // 后台线程会完成缩容操作，最终本地持久化的变为16*PALF_PHY_BLOCK_SIZE
     usleep(2*1000*1000+ObLooper::INTERVAL_US*2);
     EXPECT_EQ(OB_SUCCESS, get_disk_options(leader_idx, opts));
-    EXPECT_EQ(opts.log_disk_usage_limit_size_, 16*PALF_PHY_BLOCK_SIZE);
+    EXPECT_EQ(opts.log_disk_usage_limit_size_, 16*PALF_PHY_BLOCK_SIZE); 
   }
 }
 
@@ -453,7 +453,7 @@ TEST_F(TestObSimpleLogDiskMgr, test_big_log)
   while(LSN(10*log_entry_size) > log_storage->log_tail_) {
     usleep(500);
   }
-
+  
   max_lsn = leader.palf_handle_impl_->get_max_lsn();
   wait_lsn_until_flushed(max_lsn, leader);
   PALF_LOG(INFO, "test_big_log max_lsn after writing small log", K(max_lsn));

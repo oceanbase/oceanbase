@@ -76,37 +76,37 @@ public:
 
   /**
   * Sequential grouper groups operations sequentially by type, creating new groups when operation type changes.
-  *
+  * 
   * @param index  The sequence index of the operation in original request
   * @param op     The operation to be grouped
   * @return       OB_SUCCESS if successfully added to group, error code otherwise
-  *
+  *  
   * Grouping rules:
   * 1. Operations are batched together while they share the same type
   * 2. New group is created when operation type changes from previous
   * 3. Strictly preserves original operation sequence in grouping
   * 4. Groups may contain mixed indexes/tablets but maintain request order
-  *
+  * 
   * Example:
   * LSOP request
   * TabletOp1: [PUT1, PUT2, GET1, PUT3]
   * TabletOp2: [PUT1, GET1, PUT2, DEL1, GET2, PUT3]
-  *
+  * 
   * add operation result:
   * Group1: PUT (Tablet1.PUT1, Tablet1.PUT2)
   * Group2: GET (Tablet1.GET1)
   * Group3: PUT (Tablet1.PUT3, Tablet2.PUT1) // cross tablet
   * Group4: GET (Tablet2.GET1)
   * Group5: PUT (Tablet2.PUT2)
-  * Group6: DEL (Tablet2.DEL1)
+  * Group6: DEL (Tablet2.DEL1)  
   * Group7: GET (Tablet2.GET2)
   * Group8: PUT (Tablet2.PUT3)
   * process order:
   * Group1 → Group2 → Group3 → Group4 → Group5 → Group6 → Group7 → Group8
-  *
+  * 
   * Batch request
   * TableOperations: [PUT1, PUT2, DEL1, PUT3, PUT4, DEL2, PUT5, DEL3, PUT6]
-  *
+  * 
   * add operation result:
   * Group1: PUT (PUT1, PUT2)
   * Group2: DEL (DEL1)

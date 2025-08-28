@@ -33,20 +33,20 @@ class ObITableGroupValue;
 struct ObITableOp : public common::ObDLinkBase<ObITableOp>
 {
 public:
-  ObITableOp()
-    : type_(ObTableGroupType::TYPE_INVALID),
+  ObITableOp() 
+    : type_(ObTableGroupType::TYPE_INVALID), 
       req_(nullptr),
       timeout_ts_(0),
       timeout_(0)
   {}
 
-  ObITableOp(ObTableGroupType op_type)
-    : type_(op_type),
+  ObITableOp(ObTableGroupType op_type) 
+    : type_(op_type), 
       req_(nullptr),
       timeout_ts_(0),
       timeout_(0)
   {}
-
+  
   VIRTUAL_TO_STRING_KV(K_(type),
                        KPC_(req),
                        K_(timeout_ts),
@@ -77,12 +77,12 @@ public:
 
 struct ObITableGroupKey
 {
-  ObITableGroupKey()
-    : type_(ObTableGroupType::TYPE_INVALID)
+  ObITableGroupKey() 
+    : type_(ObTableGroupType::TYPE_INVALID) 
   {}
-
-  ObITableGroupKey(ObTableGroupType op_type)
-    : type_(op_type)
+    
+  ObITableGroupKey(ObTableGroupType op_type) 
+    : type_(op_type) 
   {}
 
   VIRTUAL_TO_STRING_KV(K_(type));
@@ -117,7 +117,7 @@ public:
     INVALID
   };
 public:
-  ObTableGroupInfo()
+  ObTableGroupInfo() 
     : client_addr_(),
       tenant_id_(OB_INVALID_TENANT_ID),
       table_id_(OB_INVALID_ID),
@@ -165,12 +165,12 @@ public:
     : type_(ObTableGroupType::TYPE_INVALID),
       group_info_()
   {}
-
+  
   ObITableGroupValue(ObTableGroupType op_type)
     : type_(op_type),
       group_info_()
   {}
-
+  
   virtual ~ObITableGroupValue() {}
 
   VIRTUAL_TO_STRING_KV(K_(type), K_(group_info));
@@ -211,8 +211,8 @@ public:
       ops_(nullptr),
       functor_(nullptr)
   {}
-  ObITableOpProcessor(ObTableGroupType op_type,
-                      ObTableGroupCtx *group_ctx,
+  ObITableOpProcessor(ObTableGroupType op_type, 
+                      ObTableGroupCtx *group_ctx, 
                       ObIArray<ObITableOp*> *ops,
                       ObTableCreateCbFunctor *functor)
     : is_inited_(false),

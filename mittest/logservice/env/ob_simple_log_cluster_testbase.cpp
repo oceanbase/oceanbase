@@ -123,7 +123,7 @@ int ObSimpleLogClusterTestBase::init_log_shared_storage_()
     GCTX.startup_mode_ = ObServerMode::SHARED_STORAGE_MODE;
     SERVER_LOG(INFO, "init_log_shared_storage_ success", K(tenant_uri));
   }
-
+  
   return ret;
 }
 

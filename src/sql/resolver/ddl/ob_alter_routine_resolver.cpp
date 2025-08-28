@@ -147,7 +147,7 @@ int ObAlterRoutineResolver::resolve_clause_list(
           /* Currently, ob only support SQL SECURITY and LANGUAGE SQL opt clause,
              other clauses have no real meaning, they are advisory only.
              MYSQL server does not use them to constrain what kinds of statements
-             a routine is permitted to execute. */
+             a routine is permitted to execute. */ 
         }
       }
     }
@@ -463,7 +463,7 @@ int ObAlterRoutineResolver::resolve_routine(
   return ret;
 }
 
-int ObAlterRoutineResolver::register_debug_info(const share::schema::ObRoutineInfo &routine_info)
+int ObAlterRoutineResolver::register_debug_info(const share::schema::ObRoutineInfo &routine_info) 
 {
   int ret = OB_SUCCESS;
 
@@ -521,7 +521,7 @@ int ObAlterRoutineResolver::register_debug_info(const share::schema::ObRoutineIn
       } else {
         routine = static_cast<pl::ObPLFunction*>(cacheobj_guard.get_cache_obj());
       }
-
+      
       if (OB_FAIL(ret)) {
         // do nothing
       } else if (OB_ISNULL(routine)) {

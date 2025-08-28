@@ -70,11 +70,11 @@ int ObAllVirtualTabletCompactionHistory::process_curr_tenant(ObNewRow *&row)
       STORAGE_LOG(WARN, "fail to open ObTenantSSTableMergeInfoMgr::Iterator", K(ret));
     }
   }
-
+  
   if (OB_SUCC(ret)) {
     if (FALSE_IT(MEMSET(comment_, '\0', sizeof(comment_)))) {
     } else if (FALSE_IT(MEMSET(other_info_, '\0', sizeof(other_info_)))) {
-    } else if (OB_FAIL(ObTenantSSTableMergeInfoMgr::get_next_info(major_merge_info_iter_,
+    } else if (OB_FAIL(ObTenantSSTableMergeInfoMgr::get_next_info(major_merge_info_iter_, 
                 minor_merge_info_iter_,
                 merge_history_, other_info_, sizeof(other_info_)))) {
       if (OB_ITER_END != ret) {

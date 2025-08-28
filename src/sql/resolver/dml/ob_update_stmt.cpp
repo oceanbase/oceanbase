@@ -272,7 +272,7 @@ int ObUpdateStmt::remove_invalid_assignment()
       }
     }
   }
-
+  
   return ret;
 }
 

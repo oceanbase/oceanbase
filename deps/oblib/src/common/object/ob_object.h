@@ -715,7 +715,7 @@ struct ObLobCommon
     return s;
   }
   void reset();
-  OB_INLINE bool is_valid() const
+  OB_INLINE bool is_valid() const 
   {
     bool bret = (version_ == LOB_DATA_VERSION) && (reserve_ == 0);
     if (!in_row_) {
@@ -817,7 +817,7 @@ struct ObMemLobCommon
   static const uint8_t MEM_LOB_LOCATOR_VERSION = 2;
   static const uint32_t MAGIC_CODE2 = 0x7F7FABCD; // LOB magic for debug
 
-  ObMemLobCommon(ObMemLobType type, bool is_simple) :
+  ObMemLobCommon(ObMemLobType type, bool is_simple) : 
     lob_common_(), version_(MEM_LOB_LOCATOR_VERSION), type_(type), read_only_(0),
     has_inrow_data_(1), is_open_(0), is_simple_(is_simple), has_extern_(0), is_freed_(0), reserved_(0)
   { lob_common_.is_mem_loc_ = 1; }
@@ -841,7 +841,7 @@ struct ObMemLobCommon
 
   OB_INLINE bool has_rowkey_addr() { return has_extern(); } // Notice: rowkey maybe empty string
 
-  OB_INLINE bool is_valid() const
+  OB_INLINE bool is_valid() const 
   {
     bool bret = (lob_common_.is_valid() && lob_common_.is_mem_loc_ == 1)
                 && (version_ == MEM_LOB_LOCATOR_VERSION)
@@ -887,7 +887,7 @@ struct ObMemLobExternFlags
 
   ObMemLobExternFlags(bool enable) :
     has_tx_info_(0), has_location_info_(enable), has_retry_info_(enable), has_read_snapshot_(enable), reserved_(0)
-  {}
+  {} 
 
   ObMemLobExternFlags(const ObMemLobExternFlags &flags) { *this = flags; }
 
@@ -915,16 +915,16 @@ struct ObMemLobExternFlags
 // 32 bytes
 struct ObMemLobExternHeader
 {
-  ObMemLobExternHeader(const ObMemLobExternFlags &flags, uint16_t rowkey_size) :
-    reserved_(0), table_id_(0), column_idx_(0), flags_(flags),
-    rowkey_size_(rowkey_size), payload_offset_(0), payload_size_(0)
+  ObMemLobExternHeader(const ObMemLobExternFlags &flags, uint16_t rowkey_size) : 
+    reserved_(0), table_id_(0), column_idx_(0), flags_(flags), 
+    rowkey_size_(rowkey_size), payload_offset_(0), payload_size_(0) 
   {}
 
   ObMemLobExternHeader(uint64_t table_id, uint32_t column_idx, uint16_t rowkey_size,
-                       uint32_t payload_offset, uint32_t payload_size) :
-    reserved_(0), table_id_(table_id), column_idx_(column_idx), flags_(),
+                       uint32_t payload_offset, uint32_t payload_size) : 
+    reserved_(0), table_id_(table_id), column_idx_(column_idx), flags_(), 
     rowkey_size_(rowkey_size),
-    payload_offset_(payload_offset), payload_size_(payload_size)
+    payload_offset_(payload_offset), payload_size_(payload_size) 
   {}
 
   TO_STRING_KV(K_(reserved), K_(table_id), K_(column_idx), K_(flags), K_(rowkey_size),
@@ -947,7 +947,7 @@ struct ObMemLobExternHeader
   char data_[0];
 };
 
-// Memory Locator V2, Extern Body Structs
+// Memory Locator V2, Extern Body Structs 
 struct ObMemLobTxInfo
 {
   ObMemLobTxInfo(){}
@@ -965,7 +965,7 @@ struct ObMemLobTxInfo
 struct ObMemLobReadSnapshot
 {
   ObMemLobReadSnapshot(): version_(0), size_(0) {}
-
+  
   TO_STRING_KV(K_(version), K_(size));
   uint32_t version_ : 4;
   uint32_t size_ : 28;
@@ -1027,7 +1027,7 @@ public:
   static const int64_t DISK_LOB_OUTROW_FULL_SIZE = sizeof(ObLobCommon) + sizeof(ObLobData) + sizeof(ObLobDataOutRowCtx) + sizeof(uint64_t);
 
   ObLobLocatorV2() : ptr_(NULL), size_(0), has_lob_header_(true) {}
-  ObLobLocatorV2(char *loc_ptr, uint32_t loc_size, bool has_lob_header = true) :
+  ObLobLocatorV2(char *loc_ptr, uint32_t loc_size, bool has_lob_header = true) : 
     ptr_(loc_ptr), size_(loc_size), has_lob_header_(has_lob_header)
   {
     if (loc_ptr == NULL || loc_size == 0) {
@@ -1252,7 +1252,7 @@ public:
 
   OB_INLINE bool has_lob_header() const { return has_lob_header_; }
 
-  char *ptr_; // if has_lob_header ptr_ is ObMemLobCommon, else it is data content
+  char *ptr_; // if has_lob_header ptr_ is ObMemLobCommon, else it is data content 
   uint32_t size_; // full MemLobLocator size;
   bool has_lob_header_; // for observer 4.0 compatibility
 };
@@ -1382,10 +1382,10 @@ struct ObObjPrintParams
   /**
    * MySQL only
    * The limit expr may no longer be a constant number after transformer.
-   * So, set exec_ctx_ if the stmt is rewritten.
+   * So, set exec_ctx_ if the stmt is rewritten. 
    * If exec_ctx_ is not null, Printer will calculate the value of limit expr and output.
-   *  e.g. "limit (1 + 1)" will be output as "limit 2"
-   *
+   *  e.g. "limit (1 + 1)" will be output as "limit 2" 
+   * 
   */
   sql::ObExecContext *exec_ctx_;
   ObObjType ob_obj_type_;

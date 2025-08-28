@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #pragma once
 #define BARRIER() asm volatile(""::: "memory")
 #define MBARRIER() __sync_synchronize()

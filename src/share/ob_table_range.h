@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef OCEANBASE_SHARE_OB_TABLE_RANGE_H_
 #define OCEANBASE_SHARE_OB_TABLE_RANGE_H_
 

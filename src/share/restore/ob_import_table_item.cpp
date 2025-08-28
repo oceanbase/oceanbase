@@ -29,8 +29,8 @@ void ObImportTableItem::reset()
 
 bool ObImportTableItem::is_valid() const
 {
-  return common::OB_NAME_CASE_INVALID != mode_
-         && !database_name_.empty()
+  return common::OB_NAME_CASE_INVALID != mode_ 
+         && !database_name_.empty() 
          && !table_name_.empty();
 }
 
@@ -58,8 +58,8 @@ int64_t ObImportTableItem::get_format_serialize_size() const
 }
 
 int ObImportTableItem::format_serialize(
-    char *buf,
-    const int64_t buf_len,
+    char *buf, 
+    const int64_t buf_len, 
     int64_t &pos) const
 {
   // For example, database name is SH, and table name is SALES.
@@ -112,7 +112,7 @@ int ObImportTableItem::deep_copy(common::ObIAllocator &allocator, const ObIImpor
       mode_ = other.mode_;
     }
   }
-
+  
   return ret;
 }
 

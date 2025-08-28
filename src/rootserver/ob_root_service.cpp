@@ -1657,7 +1657,7 @@ int ObRootService::schedule_alter_log_external_table_task()
 }
 
 int ObRootService::schedule_load_all_sys_package_task()
-{
+{  
   int ret = OB_SUCCESS;
   const bool did_repeat = false;
   // sleep 3s to avoid ddl in sys package using ddl thread which will block create tenant
@@ -2063,7 +2063,7 @@ int ObRootService::execute_bootstrap(const obrpc::ObBootstrapArg &arg)
       LOG_WARN("fail to get baseline schema version", KR(ret));
     } else if (OB_FAIL(set_config_after_bootstrap_())) {
       LOG_WARN("failed to set config for bootstrap", KR(ret));
-    }
+    } 
     if (OB_SUCC(ret)) {
       LOG_DBA_INFO_V2(OB_BOOTSTRAP_WAIT_ALL_ROOTSERVICE_BEGIN,
           DBA_STEP_INC_INFO(bootstrap),
@@ -2089,7 +2089,7 @@ int ObRootService::execute_bootstrap(const obrpc::ObBootstrapArg &arg)
                       "bootstrap wait sys package begin.");
       if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF._ob_ddl_timeout))) {
         LOG_WARN("failed to set default timeout", KR(ret));
-      } else if (!GCONF._enable_async_load_sys_package &&
+      } else if (!GCONF._enable_async_load_sys_package && 
           OB_FAIL(ObLoadSysPackageTask::wait_sys_package_ready(sql_proxy_, ctx, ObCompatibilityMode::MYSQL_MODE))) {
         LOG_WARN("failed to wait mysql sys package ready", KR(ret), K(ctx));
       } else {
@@ -2894,7 +2894,7 @@ int ObRootService::create_tenant(const ObCreateTenantArg &arg, ObCreateTenantSch
 }
 
 int ObRootService::parallel_create_normal_tenant(obrpc::ObParallelCreateNormalTenantArg &arg)
-{
+{  
   int ret = OB_SUCCESS;
   if (!inited_) {
     ret = OB_NOT_INIT;
@@ -3451,7 +3451,7 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "MySQL compatible temporary table");
           LOG_WARN("not support to create mysql tmp table", KR(ret), K(compat_version));
         }
-      }
+      } 
       if (table_schema.is_external_table() && table_schema.is_partitioned_table()) {
         uint64_t compat_version = 0;
         if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema.get_tenant_id(), compat_version))) {
@@ -3713,7 +3713,7 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
             // get parent table schema.
             // TODO: is it necessory to determine whether it is case sensitive by check sys variable
             // check whether it belongs to self reference, if so, the parent schema is child schema.
-
+            
             if (0 == foreign_key_arg.parent_table_.case_compare(table_schema.get_table_name_str())
                   && 0 == foreign_key_arg.parent_database_.case_compare(arg.db_name_)) {
               parent_schema = &table_schema;
@@ -5134,14 +5134,14 @@ int ObRootService::drop_table(const obrpc::ObDropTableArg &arg, obrpc::ObDDLRes 
 }
 
 int ObRootService::parallel_drop_table(const ObDropTableArg &arg, ObDropTableRes &res)
-{
+{ 
   int ret = OB_SUCCESS;
 
   LOG_TRACE("receive parallel drop table arg", K(arg));
   int64_t begin_time = ObTimeUtility::current_time();
   const uint64_t tenant_id = arg.exec_tenant_id_;
   uint64_t data_version = 0;
-
+  
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
@@ -11563,7 +11563,7 @@ int ObRootService::clean_global_context()
 
 int ObRootService::admin_set_backup_config(const obrpc::ObAdminSetConfigArg &arg)
 {
-  int ret = OB_SUCCESS;
+  int ret = OB_SUCCESS;  
   if (!arg.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid backup config arg", K(ret));

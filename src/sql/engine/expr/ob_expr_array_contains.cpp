@@ -34,8 +34,8 @@ ObExprArrayContains::ObExprArrayContains(ObIAllocator &alloc)
 ObExprArrayContains::ObExprArrayContains(ObIAllocator &alloc,
                          ObExprOperatorType type,
                          const char *name,
-                         int32_t param_num,
-                         int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension)
+                         int32_t param_num, 
+                         int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension) 
 {
 }
 
@@ -77,14 +77,14 @@ int ObExprArrayContains::calc_result_type2(ObExprResType &type,
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, ob_obj_type_str(type1_ptr->get_type()), ob_obj_type_str(type2_ptr->get_type()));
   } else if (OB_FAIL(ObArrayExprUtils::deduce_array_type(exec_ctx, *type1_ptr, *type2_ptr, subschema_id))) {
     LOG_WARN("failed to get result array type subschema id", K(ret));
-  }
-
+  } 
+  
   if (OB_SUCC(ret)) {
     type.set_int32();
     type.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].scale_);
     type.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].precision_);
   }
-
+  
   return ret;
 }
 
@@ -133,7 +133,7 @@ int ObExprArrayContains::eval_array_contains_array(const ObExpr &expr, ObEvalCtx
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
   uint32_t p0 = expr.extra_ == 1 ? 1 : 0;
-  uint32_t p1 = expr.extra_ == 1 ? 0 : 1;
+  uint32_t p1 = expr.extra_ == 1 ? 0 : 1; 
   const uint16_t l_meta_id = expr.args_[p0]->obj_meta_.get_subschema_id();
   const uint16_t r_meta_id = expr.args_[p1]->obj_meta_.get_subschema_id();
   ObIArrayType *arr_obj = NULL;
@@ -397,7 +397,7 @@ int ObExprArrayContains::cg_expr(ObExprCGCtx &expr_cg_ctx,
     rt_expr.extra_ = raw_expr.get_reverse_param_order();
     uint32_t p1 = rt_expr.extra_ == 1 ? 0 : 1;
     uint32_t p0 = rt_expr.extra_ == 1 ? 1 : 0;
-    const ObObjType right_type = rt_expr.args_[p1]->datum_meta_.type_;
+    const ObObjType right_type = rt_expr.args_[p1]->datum_meta_.type_;  
     ObObjTypeClass right_tc = ob_obj_type_class(right_type);
     if (right_tc == ObNullTC) {
       // use array element type

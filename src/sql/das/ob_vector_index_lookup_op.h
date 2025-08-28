@@ -23,7 +23,7 @@ enum ObVidAdaLookupStatus
 {
   STATES_INIT,
   QUERY_INDEX_ID_TBL,
-  QUERY_SNAPSHOT_TBL,
+  QUERY_SNAPSHOT_TBL, 
   QUERY_ROWKEY_VEC,
   STATES_END,
   STATES_ERROR
@@ -79,10 +79,10 @@ public:
   {
     aux_lookup_iter_ = aux_lookup_iter;
   }
-  void set_aux_table_id(ObTabletID delta_buf_tablet_id,
-                        ObTabletID index_id_tablet_id,
-                        ObTabletID snapshot_tablet_id,
-                        ObTabletID com_aux_vec_tablet_id)
+  void set_aux_table_id(ObTabletID delta_buf_tablet_id, 
+                        ObTabletID index_id_tablet_id, 
+                        ObTabletID snapshot_tablet_id, 
+                        ObTabletID com_aux_vec_tablet_id) 
   {
     delta_buf_tablet_id_ = delta_buf_tablet_id;
     index_id_tablet_id_ = index_id_tablet_id;
@@ -110,8 +110,8 @@ protected:
   virtual int get_aux_table_rowkey() override;
   virtual int get_aux_table_rowkeys(const int64_t lookup_row_cnt) override;
 private:
-  int init_delta_buffer_scan_param();
-  int init_index_id_scan_param();
+  int init_delta_buffer_scan_param(); 
+  int init_index_id_scan_param(); 
   int init_snapshot_scan_param();
   int init_vid_rowkey_scan_param();
   int init_com_aux_vec_scan_param();
@@ -120,8 +120,8 @@ private:
   int call_pva_interface(const ObVidAdaLookupStatus& cur_state,
                         ObVectorQueryAdaptorResultContext& ada_ctx,
                         ObPluginVectorIndexAdaptor &adaptor);
-  int next_state(ObVidAdaLookupStatus& cur_states,
-                  ObVectorQueryAdaptorResultContext& ada_ctx,
+  int next_state(ObVidAdaLookupStatus& cur_states, 
+                  ObVectorQueryAdaptorResultContext& ada_ctx, 
                   bool& is_continue);
   int set_lookup_vid_key();
   int set_lookup_vid_key(ObRowkey& doc_id_rowkey);
@@ -172,7 +172,7 @@ private:
   const ObDASScanCtDef *com_aux_vec_ctdef_;
   ObDASScanRtDef *com_aux_vec_rtdef_;
   ObEvalCtx *vec_eval_ctx_;
-  common::ObLimitParam limit_param_;
+  common::ObLimitParam limit_param_; 
   const ObDASSortCtDef *sort_ctdef_;
   ObDASSortRtDef *sort_rtdef_;
   // init

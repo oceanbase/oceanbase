@@ -35,7 +35,7 @@ public:
   int decompress(const char *in, const int64_t in_size, const int64_t uncomp_size,
       const char *&out, int64_t &out_size);
 
-private:
+private: 
   bool is_inited_;
   bool is_none_;
   int64_t block_size_;

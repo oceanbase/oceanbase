@@ -150,7 +150,7 @@ int ObLogValuesTableAccess::allocate_expr_post(ObAllocExprContext &ctx)
   return ret;
 }
 
-int ObLogValuesTableAccess::get_plan_item_info(PlanText &plan_text,
+int ObLogValuesTableAccess::get_plan_item_info(PlanText &plan_text, 
                                         ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
@@ -168,7 +168,7 @@ int ObLogValuesTableAccess::get_plan_item_info(PlanText &plan_text,
                        name.length(),
                        plan_item.object_alias_,
                        plan_item.object_alias_len_);
-      BUF_PRINT_STR("VALUES TABLE", plan_item.object_type_, plan_item.object_type_len_);
+      BUF_PRINT_STR("VALUES TABLE", plan_item.object_type_, plan_item.object_type_len_); 
     }
   }
   return ret;

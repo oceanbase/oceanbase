@@ -61,7 +61,7 @@ int ObMergeResolver::resolve(const ParseNode &parse_tree)
       update_idx = UPDATE_CLAUSE_NODE;
     }
   }
-
+  
   if (OB_FAIL(ret)){
 
   } else if (OB_FAIL(resolve_target_relation(parse_tree.children_[TARGET_NODE]))) {

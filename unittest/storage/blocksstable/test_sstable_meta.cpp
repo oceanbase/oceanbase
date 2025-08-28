@@ -42,7 +42,7 @@ public:
   {
     int ret = ObTimerService::get_instance().start();
     ASSERT_TRUE(OB_SUCCESS == ret || OB_INIT_TWICE == ret);
-  }
+  } 
   static void TearDownTestCase()
   {
     ObTimerService::get_instance().stop();
@@ -627,7 +627,7 @@ TEST_F(TestSSTableMeta, test_common_sstable_persister_linked_block)
   int64_t macro_start_seq = 100;
   int64_t snapshot_version = 0;
   int64_t block_cnt_threshold = blocksstable::ObSSTableMacroInfo::BLOCK_CNT_THRESHOLD;
-  construct_sstable(tablet_id, sstable, allocator_,
+  construct_sstable(tablet_id, sstable, allocator_, 
       block_cnt_threshold - 5000 /*data_block_count*/,
       1 /*other_block_count*/);
   ASSERT_EQ(OB_SUCCESS, sstable.get_meta(meta_handle));
@@ -715,7 +715,7 @@ TEST_F(TestSSTableMeta, test_huge_sstable_persister_linked_block)
   int64_t macro_start_seq = 100;
   int64_t snapshot_version = 0;
   int64_t block_cnt_threshold = blocksstable::ObSSTableMacroInfo::BLOCK_CNT_THRESHOLD;
-  construct_sstable(tablet_id, sstable, allocator_,
+  construct_sstable(tablet_id, sstable, allocator_, 
       block_cnt_threshold /*data_block_count*/,
       1 /*other_block_count*/);
   ASSERT_EQ(OB_SUCCESS, sstable.get_meta(meta_handle));

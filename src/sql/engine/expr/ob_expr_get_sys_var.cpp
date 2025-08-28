@@ -83,7 +83,7 @@ int ObExprGetSysVar::calc_result_type2(ObExprResType &type,
                sys_var_val_length = OB_MAX_TCP_INVITED_NODES_LENGTH;
               }
             }
-
+ 
             if (OB_SUCC(ret)) {
               type.set_length(sys_var_val_length);
               if (is_oracle_mode()) {

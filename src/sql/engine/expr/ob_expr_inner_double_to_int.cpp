@@ -34,20 +34,20 @@ const double MIN_DOUBLE_TO_UINT64 = 0.;
 const double MAX_DOUBLE_TO_UINT64 = 1.8446744073709552e+19;
 const int MAX_DOUBLE_PRINT_SIZE = 512;
 ObExprInnerDoubleToInt::ObExprInnerDoubleToInt(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_INNER_DOUBLE_TO_INT, N_INNER_DOUBLE_TO_INT, 1,
+    : ObFuncExprOperator(alloc, T_FUN_SYS_INNER_DOUBLE_TO_INT, N_INNER_DOUBLE_TO_INT, 1, 
                          NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE)
 {
 }
 /**
- * The function convert_double_to_int64_range is used to convert a double with potential precision
+ * The function convert_double_to_int64_range is used to convert a double with potential precision 
  * loss into the corresponding upper and lower bounds of an int64.
- * For example, the number 9.223372036854776e+18, after being processed by this function,
- * would be converted to start=9223372036854775296 and end=INT64_MAX.
- * The conversion logic here cannot directly call ceil or floor because for large integers (greater than 2^53 + 1)
+ * For example, the number 9.223372036854776e+18, after being processed by this function, 
+ * would be converted to start=9223372036854775296 and end=INT64_MAX. 
+ * The conversion logic here cannot directly call ceil or floor because for large integers (greater than 2^53 + 1) 
  * both would return the same value.
  */
-int ObExprInnerDoubleToInt::convert_double_to_int64_range(double d, int64_t &start, int64_t &end)
+int ObExprInnerDoubleToInt::convert_double_to_int64_range(double d, int64_t &start, int64_t &end) 
 {
   int64_t v = static_cast<int64_t>(d);
   if (v >= MIN_PRECISE_DOUBLE_INT64 && v <= MAX_PRECISE_DOUBLE_INT64) {
@@ -92,7 +92,7 @@ int ObExprInnerDoubleToInt::convert_double_to_int64_range(double d, int64_t &sta
 }
 
 /**
- * This function is used to convert a double to the upper and lower bounds of a uint64.
+ * This function is used to convert a double to the upper and lower bounds of a uint64. 
  * The conversion logic is similar to convert_double_to_int64_range, but with a different range of values.
  */
 int ObExprInnerDoubleToInt::convert_double_to_uint64_range(double d, uint64_t &start, uint64_t &end)
@@ -134,19 +134,19 @@ int ObExprInnerDoubleToInt::convert_double_to_uint64_range(double d, uint64_t &s
 }
 
 /**
- * This function's purpose is to generate a double value out_d that is guaranteed to be greater than the original input value d.
+ * This function's purpose is to generate a double value out_d that is guaranteed to be greater than the original input value d. 
  * The algorithm achieves this by adding 1 to the least significant digit of the double's mantissa; if this causes an overflow, then 1 is added to the exponent part instead.
- *
+ * 
  * To illustrate the effect of this function with an example, suppose the input value is 3.14. After being processed by the function, the resulting value would be 3.1400000000000006.
- *
- * Why do we need this auxiliary function?
- * When converting a double to a decimal, because a decimal has a fractional part and the precision can vary,
- * it's not possible to obtain an exact value as with converting to an integer. Therefore, we need to generate an imprecise range that ensures the produced range is a superset of the original one.
+ * 
+ * Why do we need this auxiliary function? 
+ * When converting a double to a decimal, because a decimal has a fractional part and the precision can vary, 
+ * it's not possible to obtain an exact value as with converting to an integer. Therefore, we need to generate an imprecise range that ensures the produced range is a superset of the original one. 
  * For instance, for c1 = 3.14, the resulting range would be [3.1399999999999997; 3.1400000000000006].
- *
- * Why doesn't the conversion function simply add 1?
- * For numbers smaller than 2^53, adding 1 is not an issue,
- * but for large integers, directly adding 1 doesn't cause any change to the double value.
+ * 
+ * Why doesn't the conversion function simply add 1? 
+ * For numbers smaller than 2^53, adding 1 is not an issue, 
+ * but for large integers, directly adding 1 doesn't cause any change to the double value. 
  * For example, 9.223372036854776e+18 + 1 is equal to 9.223372036854776e+18, showing no change.
 */
 int ObExprInnerDoubleToInt::add_double_bit_1(double d, double &out_d)
@@ -169,7 +169,7 @@ int ObExprInnerDoubleToInt::add_double_bit_1(double d, double &out_d)
 }
 
 /**
- * This function serves the opposite purpose to add_double_bit_1, yielding a double that is smaller than the input number,
+ * This function serves the opposite purpose to add_double_bit_1, yielding a double that is smaller than the input number, 
  * effectively subtracting 1 from the least significant digit of the double's precision.
  */
 int ObExprInnerDoubleToInt::sub_double_bit_1(double d, double &out_d)
@@ -349,7 +349,7 @@ int ObExprInnerDoubleToInt::eval_inner_double_to_int(const ObExpr &expr, ObEvalC
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -379,7 +379,7 @@ int ObExprInnerDoubleToInt::calc_result_type1(ObExprResType &type,
   return ret;
 }
 
-int ObExprInnerDoubleToInt::cg_expr(ObExprCGCtx &expr_cg_ctx,
+int ObExprInnerDoubleToInt::cg_expr(ObExprCGCtx &expr_cg_ctx, 
                                     const ObRawExpr &raw_expr,
                                     ObExpr &rt_expr) const
 {

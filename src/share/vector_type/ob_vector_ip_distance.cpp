@@ -23,7 +23,7 @@ int ObVectorIpDistance<float>::ip_distance_func(const float *a, const float *b, 
 #if OB_USE_MULTITARGET_CODE
   // if (common::is_arch_supported(ObTargetArch::AVX512)) {
   //   ret = common::specific::avx512::ip_distance(a, b, len, distance);
-  // } else
+  // } else 
   if (common::is_arch_supported(ObTargetArch::AVX2)) {
     ret = common::specific::avx2::ip_distance(a, b, len, distance);
   } else if (common::is_arch_supported(ObTargetArch::AVX)) {
@@ -33,7 +33,7 @@ int ObVectorIpDistance<float>::ip_distance_func(const float *a, const float *b, 
   } else {
     ret = common::specific::normal::ip_distance(a, b, len, distance);
   }
-#elif defined(__aarch64__)
+#elif defined(__aarch64__) 
   if (common::is_arch_supported(ObTargetArch::NEON)) {
     ret = ip_distance_neon(a, b, len, distance);
   } else {

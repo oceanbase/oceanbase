@@ -11,7 +11,7 @@
 
 #include "share/ob_define.h"
 #include "ob_fast_parser.h"
-#if defined(__GNUC__) && defined(__x86_64__)
+#if defined(__GNUC__) && defined(__x86_64__) 
 #include "share/vector_type/ob_vector_op_common.h"
 #endif
 
@@ -20,7 +20,7 @@ namespace oceanbase
 namespace common
 {
 
-#if defined(__GNUC__) && defined(__x86_64__)
+#if defined(__GNUC__) && defined(__x86_64__) 
 OB_DECLARE_AVX512_SPECIFIC_CODE (
 inline static void get_first_non_hex_char_avx512(oceanbase::sql::ObRawSql& raw_sql)
 {
@@ -37,12 +37,12 @@ inline static void get_first_non_hex_char_avx512(oceanbase::sql::ObRawSql& raw_s
     __mmask64 mask = (_mm512_cmpge_epu8_mask(chars, zero) & _mm512_cmple_epu8_mask(chars, nine)) |
                     (_mm512_cmpge_epu8_mask(chars, a) & _mm512_cmple_epu8_mask(chars, f)) |
                     (_mm512_cmpge_epu8_mask(chars, A) & _mm512_cmple_epu8_mask(chars, F));
-
+    
     if (mask != 0xFFFFFFFFFFFFFFFF) {
       raw_sql.cur_pos_ = hex_pos + _tzcnt_u64(~mask);
       return;
     }
-
+    
     hex_pos += 64;
   }
 
@@ -74,15 +74,15 @@ inline static void get_first_non_hex_char_avx2(oceanbase::sql::ObRawSql& raw_sql
   int64_t hex_pos = raw_sql.cur_pos_;
   while (hex_pos + 32 <= raw_sql.raw_sql_len_) {
     __m256i chars = _mm256_loadu_si256((__m256i *)(raw_sql.raw_sql_ + hex_pos));
-    __m256i num_mask1 = _mm256_and_si256(_mm256_cmpgt_epi8(chars, zero), _mm256_cmpgt_epi8(nine, chars));
-    __m256i num_mask2 = _mm256_and_si256(_mm256_cmpgt_epi8(chars, a), _mm256_cmpgt_epi8(f, chars));
-    __m256i num_mask3 = _mm256_and_si256(_mm256_cmpgt_epi8(chars, A), _mm256_cmpgt_epi8(F, chars));
+    __m256i num_mask1 = _mm256_and_si256(_mm256_cmpgt_epi8(chars, zero), _mm256_cmpgt_epi8(nine, chars));	    
+    __m256i num_mask2 = _mm256_and_si256(_mm256_cmpgt_epi8(chars, a), _mm256_cmpgt_epi8(f, chars));	    
+    __m256i num_mask3 = _mm256_and_si256(_mm256_cmpgt_epi8(chars, A), _mm256_cmpgt_epi8(F, chars));	    
     int32_t mask = _mm256_movemask_epi8(_mm256_or_si256(_mm256_or_si256(num_mask1, num_mask2), num_mask3));
     if (mask != 0xFFFFFFFFFFFFFFFF) {
       raw_sql.cur_pos_ = hex_pos + _tzcnt_u32(~mask);
       return;
     }
-
+    
     hex_pos += 32;
   }
 
@@ -125,10 +125,10 @@ inline static void process_binary_avx512(const char **src, const char *end, char
   __m512i low_mask = _mm512_set1_epi16(0x00FF);
   __m512i high_mask = _mm512_set1_epi16(0xFF00);
   __m512i low_nibble_mask = _mm512_set1_epi8(0x0F);
-
+  
   for (; *src + 64 <= end; *src += 64, *dest += 32) {
     __m512i input = _mm512_loadu_si512((__m512i*)*src);
-    __m512i rawbytes = _mm512_add_epi64(_mm512_and_si512(input, low_nibble_mask),
+    __m512i rawbytes = _mm512_add_epi64(_mm512_and_si512(input, low_nibble_mask), 
                                         _mm512_maskz_loadu_epi8(~(_mm512_cmpge_epu8_mask(input, zero) & _mm512_cmple_epu8_mask(input, nine)), &extra));
     __m512i low_bytes = _mm512_slli_epi16(_mm512_and_si512(rawbytes, low_mask), 4);
     __m512i high_bytes = _mm512_srli_epi16(_mm512_and_si512(rawbytes, high_mask), 8);
@@ -144,7 +144,7 @@ inline static __m256i char_nibble(const __m256i value) {
   __m256i _15 = _mm256_set1_epi16(0xf);
   __m256i and15 = _mm256_and_si256(value, _15);
   __m256i sr6 = _mm256_srai_epi16(value, 6);
-  __m256i mul = _mm256_maddubs_epi16(sr6, _9);
+  __m256i mul = _mm256_maddubs_epi16(sr6, _9); 
   __m256i add = _mm256_add_epi16(mul, and15);
   return add;
 }
@@ -165,7 +165,7 @@ inline static void process_binary_avx2(const char **src, const char *end, char *
   while (len >= 32) {
     __m256i av1 = _mm256_lddqu_si256(src_256++); // 32 nibbles, 16 bytes
     __m256i av2 = _mm256_lddqu_si256(src_256++);
-
+    
     // Separate high and low nibbles and extend into 16-bit elements
     __m256i a1 = _mm256_shuffle_epi8(av1, A_MASK);
     __m256i b1 = _mm256_shuffle_epi8(av1, B_MASK);

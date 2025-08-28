@@ -16,15 +16,15 @@
 #include "lib/ob_define.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace sql
+namespace sql 
 {
 
 class ObAlterMviewUtils
 {
 public:
-  static int resolve_mv_options(const ParseNode &node,
+  static int resolve_mv_options(const ParseNode &node, 
                                 ObSQLSessionInfo *session_info,
                                 ObAlterTableStmt *alter_table_stmt,
                                 const share::schema::ObTableSchema *table_schema,
@@ -37,9 +37,9 @@ public:
                                   ObAlterTableStmt *alter_table_stmt,
                                   common::ObIAllocator *allocator,
                                   ObResolverParams &resolver_params);
-  static int check_column_option_for_mlog_master(const ObTableSchema &table_schema,
+  static int check_column_option_for_mlog_master(const ObTableSchema &table_schema, 
                                                  const ObItemType type);
-  static int check_action_node_for_mlog_master(const ObTableSchema &table_schema,
+  static int check_action_node_for_mlog_master(const ObTableSchema &table_schema, 
                                                const ObItemType type);
 private:
   template<typename T>

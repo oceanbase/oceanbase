@@ -55,7 +55,7 @@ public:
   FakeObTableScanRange();
   ~FakeObTableScanRange()
   {}
-
+  
   virtual void SetUp();
   virtual void TearDown();
   static void SetUpTestCase();
@@ -167,7 +167,7 @@ void FakeObTableScanRange::TearDown()
   datum_utils_.reset();
 }
 
-FakeObTableScanRange::FakeObTableScanRange()
+FakeObTableScanRange::FakeObTableScanRange() 
 {
 }
 
@@ -179,13 +179,13 @@ int FakeObTableScanRange::do_split_datum_range(int64_t split_start_val, int64_t 
   if (need_set_split_start_key_) {
     if (OB_FAIL(gen_datum_rowkey(split_start_val, key_cnt, split_info_.start_partkey_))) {
       STORAGE_LOG(WARN, "fail to gen start rowkey", K(ret));
-    }
+    } 
   }
 
   if (OB_SUCC(ret) && need_set_split_end_key_) {
     if (OB_FAIL(gen_datum_rowkey(split_end_val, key_cnt, split_info_.end_partkey_))) {
       STORAGE_LOG(WARN, "fail to gen end rowkey", K(ret));
-    }
+    } 
   }
 
   if (OB_SUCC(ret)) {
@@ -201,7 +201,7 @@ int FakeObTableScanRange::do_split_datum_range(int64_t split_start_val, int64_t 
 int FakeObTableScanRange::init_table_col_descs()
 {
   int ret = OB_SUCCESS;
-
+  
   share::schema::ObColDesc col_desc;
   for (int64_t i = 0; i < 2; i++) { // two columns
     col_desc.col_type_.set_int32();
@@ -295,13 +295,13 @@ int FakeObTableScanRange::set_datum_key(const bool is_left, const bool is_right,
     datum_range_.set_start_key(datum_key);
   } else if (is_right) {
     datum_range_.set_end_key(datum_key);
-  }
+  } 
   return ret;
 }
 
 int FakeObTableScanRange::check_datum_range_result(
-    int64_t expected_left_val,
-    int64_t expected_right_val,
+    int64_t expected_left_val, 
+    int64_t expected_right_val, 
     bool is_left_closed,  // 1:  close; 0:  open
     bool is_right_closed,
     bool &is_equal)
@@ -321,7 +321,7 @@ int FakeObTableScanRange::check_datum_range_result(
   } else {
     const blocksstable::ObDatumRowkey &range_start_rowkey = datum_range_.get_start_key();
     const blocksstable::ObDatumRowkey &range_end_rowkey = datum_range_.get_end_key();
-
+    
     if (OB_FAIL(range_start_rowkey.equal(datum_start_key, datum_utils_, is_equal))) {
       STORAGE_LOG(WARN, "Failed to compare start key", K(ret));
     } else if (is_left_closed != datum_range_.is_left_closed()) {
@@ -336,10 +336,10 @@ int FakeObTableScanRange::check_datum_range_result(
 }
 
 int FakeObTableScanRange::check_datum_min_column(
-    const int64_t src_datum_cnt,
-    const int64_t split_datum_cnt,
-    const int64_t expected_left_val,
-    const int64_t expected_right_val,
+    const int64_t src_datum_cnt, 
+    const int64_t split_datum_cnt, 
+    const int64_t expected_left_val, 
+    const int64_t expected_right_val, 
     int check_type)
 {
   int ret = OB_SUCCESS;
@@ -400,7 +400,7 @@ int FakeObTableScanRange::check_datum_min_column(
 TEST_F(FakeObTableScanRange, test_empty_origin_range)
 {
   int ret = OB_SUCCESS;
-  set_need_set_split_start_key(true);    // set valid split start key
+  set_need_set_split_start_key(true);    // set valid split start key 
   set_need_set_split_end_key(true);      // set valid split end key
   set_need_set_src_range(false);         // set empty origin range
   set_split_type(ObTabletSplitType::RANGE);
@@ -423,7 +423,7 @@ TEST_F(FakeObTableScanRange, test_empty_origin_range)
 TEST_F(FakeObTableScanRange, test_empty_split_range)
 {
   int ret = OB_SUCCESS;
-  set_need_set_split_start_key(false);    // set empty split start key
+  set_need_set_split_start_key(false);    // set empty split start key 
   set_need_set_split_end_key(false);      // set empty split end key
   set_need_set_src_range(true);           // set valid origin range
   set_split_type(ObTabletSplitType::RANGE);
@@ -433,7 +433,7 @@ TEST_F(FakeObTableScanRange, test_empty_split_range)
   int64_t split_start_val = 2;
   int64_t split_end_val = 4;
   int64_t origin_key_cnt = 1;
-
+  
   ret = gen_datum_range(origin_start_val, origin_end_val, origin_key_cnt);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = do_split_datum_range(split_start_val, split_end_val);
@@ -445,7 +445,7 @@ TEST_F(FakeObTableScanRange, test_empty_split_range)
 TEST_F(FakeObTableScanRange, test_only_set_split_start_key)
 {
   int ret = OB_SUCCESS;
-  set_need_set_split_start_key(true);     // set valid split start key
+  set_need_set_split_start_key(true);     // set valid split start key 
   set_need_set_split_end_key(false);      // set valid split end key
   set_need_set_src_range(true);           // set empty origin range
   set_split_type(ObTabletSplitType::RANGE);
@@ -467,7 +467,7 @@ TEST_F(FakeObTableScanRange, test_only_set_split_start_key)
 TEST_F(FakeObTableScanRange, test_only_set_split_end_key)
 {
   int ret = OB_SUCCESS;
-  set_need_set_split_start_key(false);    // set empty split start key
+  set_need_set_split_start_key(false);    // set empty split start key 
   set_need_set_split_end_key(false);      // set empty split end key
   set_need_set_src_range(true);           // set valid origin range
   set_split_type(ObTabletSplitType::RANGE);
@@ -480,9 +480,9 @@ TEST_F(FakeObTableScanRange, test_only_set_split_end_key)
   // datum range
   ret = gen_datum_range(origin_start_val, origin_end_val, origin_key_cnt);
   ASSERT_EQ(OB_SUCCESS, ret);
-  // error
+  // error 
   ret = do_split_datum_range(split_start_val, split_end_val);
-  ASSERT_NE(OB_SUCCESS, ret);
+  ASSERT_NE(OB_SUCCESS, ret);  
 }
 
 // origin range = (1,5)
@@ -491,7 +491,7 @@ TEST_F(FakeObTableScanRange, test_only_set_split_end_key)
 TEST_F(FakeObTableScanRange, test_origin_range_outside_split_range)
 {
   int ret = OB_SUCCESS;
-  set_need_set_split_start_key(true);    // set split start key
+  set_need_set_split_start_key(true);    // set split start key 
   set_need_set_split_end_key(true);      // set split end key
   set_need_set_src_range(true);          // set valid origin range
   set_split_type(ObTabletSplitType::RANGE);
@@ -501,7 +501,7 @@ TEST_F(FakeObTableScanRange, test_origin_range_outside_split_range)
   int64_t split_start_val = 2;
   int64_t split_end_val = 4;
   int64_t origin_key_cnt = 1;
-
+  
   // datum range
   ret = gen_datum_range(origin_start_val, origin_end_val, origin_key_cnt);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -512,14 +512,14 @@ TEST_F(FakeObTableScanRange, test_origin_range_outside_split_range)
   ret = do_split_datum_range(split_start_val, split_end_val);
   ASSERT_EQ(OB_SUCCESS, ret);
   // check result
-
+  
   // [2,4)
   int64_t expected_left_val = 2;
   int64_t expected_right_val = 4;
   bool is_left_closed = true;
   bool is_right_closed = false;
   bool is_equal = false;
-
+  
   ret = check_datum_range_result(expected_left_val, expected_right_val, is_left_closed, is_right_closed, is_equal);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(true, is_equal);
@@ -531,7 +531,7 @@ TEST_F(FakeObTableScanRange, test_origin_range_outside_split_range)
 TEST_F(FakeObTableScanRange, test_origin_range_inside_split_range_01)
 {
   int ret = OB_SUCCESS;
-  set_need_set_split_start_key(true);    // set split start key
+  set_need_set_split_start_key(true);    // set split start key 
   set_need_set_split_end_key(true);      // set split end key
   set_need_set_src_range(true);          // set valid origin range
   set_split_type(ObTabletSplitType::RANGE);
@@ -541,7 +541,7 @@ TEST_F(FakeObTableScanRange, test_origin_range_inside_split_range_01)
   int64_t split_start_val = 1;
   int64_t split_end_val = 5;
   int64_t origin_key_cnt = 1;
-
+  
   // datum range
   ret = gen_datum_range(origin_start_val, origin_end_val, origin_key_cnt);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -570,7 +570,7 @@ TEST_F(FakeObTableScanRange, test_origin_range_inside_split_range_01)
 TEST_F(FakeObTableScanRange, test_origin_range_inside_split_range_02)
 {
   int ret = OB_SUCCESS;
-  set_need_set_split_start_key(true);    // set split start key
+  set_need_set_split_start_key(true);    // set split start key 
   set_need_set_split_end_key(true);      // set split end key
   set_need_set_src_range(true);          // set valid origin range
   set_split_type(ObTabletSplitType::RANGE);
@@ -580,7 +580,7 @@ TEST_F(FakeObTableScanRange, test_origin_range_inside_split_range_02)
   int64_t split_start_val = 1;
   int64_t split_end_val = 5;
   int64_t origin_key_cnt = 1;
-
+  
   // datum range
   ret = gen_datum_range(origin_start_val, origin_end_val, origin_key_cnt);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -590,7 +590,7 @@ TEST_F(FakeObTableScanRange, test_origin_range_inside_split_range_02)
 
   ret = do_split_datum_range(split_start_val, split_end_val);
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // [2,4]
   int64_t expected_start_val = 2;
   int64_t expected_end_val = 4;
@@ -609,7 +609,7 @@ TEST_F(FakeObTableScanRange, test_origin_range_inside_split_range_02)
 TEST_F(FakeObTableScanRange, test_origin_range_include_split_end_key_01)
 {
   int ret = OB_SUCCESS;
-  set_need_set_split_start_key(true);    // set split start key
+  set_need_set_split_start_key(true);    // set split start key 
   set_need_set_split_end_key(true);      // set split end key
   set_need_set_src_range(true);          // set valid origin range
   set_split_type(ObTabletSplitType::RANGE);
@@ -646,7 +646,7 @@ TEST_F(FakeObTableScanRange, test_origin_range_include_split_end_key_01)
 TEST_F(FakeObTableScanRange, test_origin_range_include_split_end_key_02)
 {
   int ret = OB_SUCCESS;
-  set_need_set_split_start_key(true);    // set split start key
+  set_need_set_split_start_key(true);    // set split start key 
   set_need_set_split_end_key(true);      // set split end key
   set_need_set_src_range(true);          // set valid origin range
   set_split_type(ObTabletSplitType::RANGE);
@@ -683,7 +683,7 @@ TEST_F(FakeObTableScanRange, test_origin_range_include_split_end_key_02)
 TEST_F(FakeObTableScanRange, test_origin_range_include_split_start_key_01)
 {
   int ret = OB_SUCCESS;
-  set_need_set_split_start_key(true);    // set split start key
+  set_need_set_split_start_key(true);    // set split start key 
   set_need_set_split_end_key(true);      // set split end key
   set_need_set_src_range(true);          // set valid origin range
   set_split_type(ObTabletSplitType::RANGE);
@@ -693,7 +693,7 @@ TEST_F(FakeObTableScanRange, test_origin_range_include_split_start_key_01)
   int64_t split_start_val = 2;
   int64_t split_end_val = 4;
   int64_t origin_key_cnt = 1;
-
+  
   // datum range
   ret = gen_datum_range(origin_start_val, origin_end_val, origin_key_cnt);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -709,7 +709,7 @@ TEST_F(FakeObTableScanRange, test_origin_range_include_split_start_key_01)
   bool is_left_closed = true;
   bool is_right_closed = false;
   bool is_equal = false;
-
+  
   ret = check_datum_range_result(expected_start_val, expected_end_val, is_left_closed, is_right_closed, is_equal);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(true, is_equal);
@@ -721,7 +721,7 @@ TEST_F(FakeObTableScanRange, test_origin_range_include_split_start_key_01)
 TEST_F(FakeObTableScanRange, test_origin_range_include_split_start_key_02)
 {
   int ret = OB_SUCCESS;
-  set_need_set_split_start_key(true);    // set split start key
+  set_need_set_split_start_key(true);    // set split start key 
   set_need_set_split_end_key(true);      // set split end key
   set_need_set_src_range(true);          // set valid origin range
   set_split_type(ObTabletSplitType::RANGE);
@@ -731,7 +731,7 @@ TEST_F(FakeObTableScanRange, test_origin_range_include_split_start_key_02)
   int64_t split_start_val = 2;
   int64_t split_end_val = 4;
   int64_t origin_key_cnt = 1;
-
+  
   // datum range
   ret = gen_datum_range(origin_start_val, origin_end_val, origin_key_cnt);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -748,7 +748,7 @@ TEST_F(FakeObTableScanRange, test_origin_range_include_split_start_key_02)
   bool is_left_closed = true;
   bool is_right_closed = true;
   bool is_equal = false;
-
+  
   ret = check_datum_range_result(expected_start_val, expected_end_val, is_left_closed, is_right_closed, is_equal);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(true, is_equal);
@@ -760,7 +760,7 @@ TEST_F(FakeObTableScanRange, test_origin_range_include_split_start_key_02)
 TEST_F(FakeObTableScanRange, test_split_range_result_only_left_key)
 {
   int ret = OB_SUCCESS;
-  set_need_set_split_start_key(true);    // set split start key
+  set_need_set_split_start_key(true);    // set split start key 
   set_need_set_split_end_key(true);      // set split end key
   set_need_set_src_range(true);          // set valid origin range
   set_split_type(ObTabletSplitType::RANGE);
@@ -798,7 +798,7 @@ TEST_F(FakeObTableScanRange, test_split_range_result_only_left_key)
 TEST_F(FakeObTableScanRange, test_split_range_result_only_right_key)
 {
   int ret = OB_SUCCESS;
-  set_need_set_split_start_key(true);    // set split start key
+  set_need_set_split_start_key(true);    // set split start key 
   set_need_set_split_end_key(true);      // set split end key
   set_need_set_src_range(true);          // set valid origin range
   set_split_type(ObTabletSplitType::RANGE);
@@ -834,7 +834,7 @@ TEST_F(FakeObTableScanRange, test_split_range_result_only_right_key)
 TEST_F(FakeObTableScanRange, test_split_range_empty_case_01)
 {
   int ret = OB_SUCCESS;
-  set_need_set_split_start_key(true);    // set split start key
+  set_need_set_split_start_key(true);    // set split start key 
   set_need_set_split_end_key(true);      // set split end key
   set_need_set_src_range(true);          // set valid origin range
   set_split_type(ObTabletSplitType::RANGE);
@@ -870,7 +870,7 @@ TEST_F(FakeObTableScanRange, test_split_range_empty_case_01)
 TEST_F(FakeObTableScanRange, test_split_range_empty_case_02)
 {
   int ret = OB_SUCCESS;
-  set_need_set_split_start_key(true);    // set split start key
+  set_need_set_split_start_key(true);    // set split start key 
   set_need_set_split_end_key(true);      // set split end key
   set_need_set_src_range(true);          // set valid origin range
   set_split_type(ObTabletSplitType::RANGE);
@@ -906,7 +906,7 @@ TEST_F(FakeObTableScanRange, test_split_range_empty_case_02)
 TEST_F(FakeObTableScanRange, test_split_range_empty_case_03)
 {
   int ret = OB_SUCCESS;
-  set_need_set_split_start_key(true);    // set split start key
+  set_need_set_split_start_key(true);    // set split start key 
   set_need_set_split_end_key(true);      // set split end key
   set_need_set_src_range(true);          // set valid origin range
   set_split_type(ObTabletSplitType::RANGE);
@@ -918,10 +918,10 @@ TEST_F(FakeObTableScanRange, test_split_range_empty_case_03)
   int64_t origin_key_cnt = 1;
   // datum range
   ret = gen_datum_range(origin_start_val, origin_end_val, origin_key_cnt);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_SUCCESS, ret); 
 
-  // attention !!! because ObNewRange need start key not equal to end key in (] case
-  // here modify start key to 2
+  // attention !!! because ObNewRange need start key not equal to end key in (] case 
+  // here modify start key to 2 
   ret = set_datum_key(true, false, 2);
   ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -948,7 +948,7 @@ TEST_F(FakeObTableScanRange, test_split_range_empty_case_03)
 TEST_F(FakeObTableScanRange, test_split_column_cnt_not_match_with_rowkey_cnt_both_min)
 {
   int ret = OB_SUCCESS;
-  set_need_set_split_start_key(true);    // set split start key
+  set_need_set_split_start_key(true);    // set split start key 
   set_need_set_split_end_key(true);      // set split end key
   set_need_set_src_range(true);          // set valid origin range
   set_split_type(ObTabletSplitType::RANGE);
@@ -960,7 +960,7 @@ TEST_F(FakeObTableScanRange, test_split_column_cnt_not_match_with_rowkey_cnt_bot
   int64_t origin_key_cnt = 2;
   // datum range
   ret = gen_datum_range(origin_start_val, origin_end_val, origin_key_cnt);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_SUCCESS, ret); 
 
   set_left_closed();
   set_right_closed();
@@ -979,7 +979,7 @@ TEST_F(FakeObTableScanRange, test_split_column_cnt_not_match_with_rowkey_cnt_bot
 TEST_F(FakeObTableScanRange, test_split_column_cnt_not_match_with_rowkey_cnt_left_min)
 {
   int ret = OB_SUCCESS;
-  set_need_set_split_start_key(true);    // set split start key
+  set_need_set_split_start_key(true);    // set split start key 
   set_need_set_split_end_key(true);      // set split end key
   set_need_set_src_range(true);          // set valid origin range
   set_split_type(ObTabletSplitType::RANGE);
@@ -991,7 +991,7 @@ TEST_F(FakeObTableScanRange, test_split_column_cnt_not_match_with_rowkey_cnt_lef
   int64_t origin_key_cnt = 2;
   // datum range
   ret = gen_datum_range(origin_start_val, origin_end_val, origin_key_cnt);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_SUCCESS, ret); 
 
   set_left_closed();
   set_right_closed();
@@ -1009,7 +1009,7 @@ TEST_F(FakeObTableScanRange, test_split_column_cnt_not_match_with_rowkey_cnt_lef
 TEST_F(FakeObTableScanRange, test_split_column_cnt_not_match_with_rowkey_right_min)
 {
   int ret = OB_SUCCESS;
-  set_need_set_split_start_key(true);    // set split start key
+  set_need_set_split_start_key(true);    // set split start key 
   set_need_set_split_end_key(true);      // set split end key
   set_need_set_src_range(true);          // set valid origin range
   set_split_type(ObTabletSplitType::RANGE);
@@ -1021,7 +1021,7 @@ TEST_F(FakeObTableScanRange, test_split_column_cnt_not_match_with_rowkey_right_m
   int64_t origin_key_cnt = 2;
   // datum range
   ret = gen_datum_range(origin_start_val, origin_end_val, origin_key_cnt);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_SUCCESS, ret); 
 
   set_left_closed();
   set_right_closed();

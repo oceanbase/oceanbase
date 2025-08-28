@@ -211,7 +211,7 @@ public:
     int ret = OB_SUCCESS;
     ObEvalCtx::TempAllocGuard alloc_guard(agg_ctx.eval_ctx_);
     ObIArray<ObExpr *> &param_exprs = agg_ctx.aggr_infos_.at(agg_col_id).param_exprs_;
-
+    
     int64_t skip_size = ObBitVector::memory_size(agg_ctx.eval_ctx_.max_batch_size_);
 
     char *skip_buf = nullptr;

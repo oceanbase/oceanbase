@@ -40,7 +40,7 @@ int ObAllVirtualStorageHAErrorDiagnose::get_info_from_type_(ObStorageHADiagInfo 
   ObStorageHADiagTaskKey key;
   if (OB_FAIL(iter_.get_cur_key(key))) {
     if (ret != OB_ITER_END) {
-      SERVER_LOG(WARN, "failed to get cur key", K(ret), K(iter_));
+      SERVER_LOG(WARN, "failed to get cur key", K(ret), K(iter_));  
     }
   } else {
     switch(key.module_) {
@@ -54,12 +54,12 @@ int ObAllVirtualStorageHAErrorDiagnose::get_info_from_type_(ObStorageHADiagInfo 
         break;
       default: {
         ret = OB_INVALID_ARGUMENT;
-        SERVER_LOG(WARN, "invalid module", K(ret), K(key.module_));
+        SERVER_LOG(WARN, "invalid module", K(ret), K(key.module_));  
         break;
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -83,7 +83,7 @@ void ObAllVirtualStorageHAErrorDiagnose::release_last_tenant()
 
 bool ObAllVirtualStorageHAErrorDiagnose::is_need_process(uint64_t tenant_id)
 {
-  if (!is_virtual_tenant_id(tenant_id)
+  if (!is_virtual_tenant_id(tenant_id) 
       && (is_sys_tenant(effective_tenant_id_) || tenant_id == effective_tenant_id_)) {
     return true;
   }

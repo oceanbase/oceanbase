@@ -79,7 +79,7 @@ int ObDASUtils::check_nested_sql_mutating(ObTableID ref_table_id, ObExecContext 
     LOG_DEBUG("check nested sql mutating", K(cur_parent_ctx), K(parent_das_ctx), K(ref_table_id));
     FOREACH_X(node, parent_das_ctx.get_table_loc_list(), OB_SUCC(ret)) {
       ObDASTableLoc *table_loc = *node;
-      if (table_loc->loc_meta_->ref_table_id_ == ref_table_id
+      if (table_loc->loc_meta_->ref_table_id_ == ref_table_id 
           && (table_loc->is_writing_ || (!is_reading && lib::is_mysql_mode()))
           && !table_loc->is_fk_check_ ) {
         ObSchemaGetterGuard schema_guard;

@@ -19,7 +19,7 @@ namespace oceanbase
 {
 namespace sql
 {
-
+  
 class ObTriggerStorageCacheResolver : public ObCMDResolver
 {
 public:

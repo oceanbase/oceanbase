@@ -34,7 +34,7 @@ class ObBackupLinkedBlockWriter final
 public:
   ObBackupLinkedBlockWriter();
   ~ObBackupLinkedBlockWriter();
-
+  
   int init(const ObBackupLinkedBlockAddr &entry_block_addr,
       ObBackupFileWriteCtx &file_write_ctx, int64_t &file_offset);
   int write_block(const blocksstable::ObBufferReader &buffer_reader,
@@ -44,7 +44,7 @@ public:
 private:
   int flush_block_to_dest_(const blocksstable::ObBufferReader &buffer_reader);
   int calc_next_block_addr_();
-
+  
 private:
   bool is_inited_;
   int64_t *file_offset_;

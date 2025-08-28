@@ -31,7 +31,7 @@ public:
         schema_version_(OB_INVALID_VERSION),
         op_type_(ObTableOperationType::Type::INVALID)
   {}
-
+  
   ObHbaseGroupKey(share::ObLSID ls_id,
                   ObTableID table_id,
                   int64_t schema_version,

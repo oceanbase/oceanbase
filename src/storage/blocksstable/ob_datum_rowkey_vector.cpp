@@ -198,7 +198,7 @@ typedef int (ObColumnVector::*locate_key_func)(
     const ObStorageDatum &key,
     const ObStorageDatumCmpFunc &cmp_func,
     const bool is_oracle_mode) const;
-static locate_key_func LOCATE_KEY_FUNCS[(int8_t)ObColumnVectorType::MAX_TYPE] =
+static locate_key_func LOCATE_KEY_FUNCS[(int8_t)ObColumnVectorType::MAX_TYPE] = 
 {
   &ObColumnVector::inner_locate_key<ObStorageDatum>,
   &ObColumnVector::inner_locate_key<int64_t>,
@@ -613,7 +613,7 @@ typedef int (*compare_column_key_func) (
     const ObStorageDatumCmpFunc &cmp_func,
     const bool is_oracle_mode,
     int &cmp_ret);
-static compare_column_key_func COMPARE_COLUMN_KEY_FUNCS[(int8_t)ObColumnVectorType::MAX_TYPE] =
+static compare_column_key_func COMPARE_COLUMN_KEY_FUNCS[(int8_t)ObColumnVectorType::MAX_TYPE] = 
 { compare_column_key<ObStorageDatum>, compare_column_key<int64_t>, compare_column_key<uint64_t> };
 
 int ObRowkeyVector::compare_rowkey(
@@ -772,7 +772,7 @@ typedef int (*compare_column_value_func) (
     const ObStorageDatumCmpFunc &cmp_func,
     const bool is_oracle_mode,
     int &cmp_ret);
-static compare_column_value_func COMPARE_COLUMN_VALUE_FUNCS[(int8_t)ObColumnVectorType::MAX_TYPE + 1] =
+static compare_column_value_func COMPARE_COLUMN_VALUE_FUNCS[(int8_t)ObColumnVectorType::MAX_TYPE + 1] = 
 { compare_column_row_idx<ObStorageDatum>, compare_column_row_idx<int64_t>, compare_column_row_idx<uint64_t> };
 
 typedef int (*compare_column_value_datum_func) (
@@ -851,7 +851,7 @@ void extract_datum_value<ObStorageDatum>(ObColumnVector &vector, const int64_t r
 }
 
 typedef void (*extract_datum_value_func) (ObColumnVector &vector, const int64_t row_idx, ObStorageDatum &datum);
-static extract_datum_value_func EXTRACT_DATUM_VALUE_FUNCS[(int8_t)ObColumnVectorType::MAX_TYPE] =
+static extract_datum_value_func EXTRACT_DATUM_VALUE_FUNCS[(int8_t)ObColumnVectorType::MAX_TYPE] = 
 { extract_datum_value<ObStorageDatum>, extract_datum_value<int64_t>, extract_datum_value<int64_t> };
 
 int ObRowkeyVector::get_rowkey(const int64_t row_idx, ObDatumRowkey &rowkey) const

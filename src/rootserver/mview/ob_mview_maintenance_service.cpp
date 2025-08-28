@@ -453,7 +453,7 @@ int ObMViewMaintenanceService::get_mview_last_refresh_info_sql_(
                                 CAST(REFRESH_MODE AS UNSIGNED) AS REFRESH_MODE \
                                 FROM `%s`.`%s`", OB_SYS_DATABASE_NAME, OB_ALL_MVIEW_TNAME))){
       LOG_WARN("fail to assign sql", K(ret));
-    }
+    } 
   }
   // append as of snapshot and filter info
   if (OB_FAIL(ret)) {
@@ -613,7 +613,7 @@ int ObMViewMaintenanceService::get_all_mview_deps()
       if (OB_FAIL(mview_deps_.set_refactored(pre_mview_id, dep_ids, 1/*overwrite*/))) {
         LOG_WARN("fail to update mview deps", K(ret));
       } else if (OB_FAIL(update_set.set_refactored(pre_mview_id))) {
-        LOG_WARN("fail to insert update set", K(ret));
+        LOG_WARN("fail to insert update set", K(ret)); 
       }
     }
     // clean not existed mviewid in cache
@@ -716,7 +716,7 @@ int ObMViewMaintenanceService::get_target_nested_mview_deps(
         } else {
           EXTRACT_BOOL_FIELD_MYSQL(*result, "RES", check_res);
         }
-        LOG_INFO("recehck cache", K(ret), K(check_res), K(check_sql));
+        LOG_INFO("recehck cache", K(ret), K(check_res), K(check_sql)); 
       }
     }
     if (OB_SUCC(ret) && !check_res) {
@@ -826,7 +826,7 @@ int ObMViewMaintenanceService::gen_target_nested_mview_topo_order(
                                  reverse_dep_ids, 1/*overwrite*/))) {
                 LOG_WARN("fail to set refactored", K(ret), K(dep_id));
               }
-            }
+            } 
           }
         }
       }
@@ -843,7 +843,7 @@ int ObMViewMaintenanceService::gen_target_nested_mview_topo_order(
           }
         }
       }
-    }
+    }  
     LOG_INFO("gen mview degree and target map", K(ret), K(mview_degrees.size()),
              K(mview_reverse_deps.size()));
   }
@@ -992,7 +992,7 @@ int ObMViewMaintenanceService::CheckMVMdsExistFunctor::
   int ret = OB_SUCCESS;
   exist_ = false;
   if (mv_mds_kv.second.mview_op_type_ == storage::MVIEW_OP_TYPE::NESTED_SYNC_REFRESH) {
-    LOG_DEBUG("check nested mview mds exists", K(ret), K(mv_mds_kv.second));
+    LOG_DEBUG("check nested mview mds exists", K(ret), K(mv_mds_kv.second)); 
     if (mv_mds_kv.second.refresh_id_ == refresh_id_) {
       if (!target_data_sync_scn_.is_valid()) {
         exist_ = true;

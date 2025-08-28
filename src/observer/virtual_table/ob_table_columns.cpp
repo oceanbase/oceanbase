@@ -121,7 +121,7 @@ int ObTableColumns::inner_get_next_row(ObNewRow *&row)
             need_priv.table_ = table_schema->get_table_name_str();
             if (OB_FAIL(stmt_need_privs.need_privs_.push_back(need_priv))) {
               LOG_WARN("push back failed", K(ret));
-            }
+            } 
           }
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(schema_guard_->check_priv_or(session_priv, enable_role_id_array, stmt_need_privs))) {
@@ -172,7 +172,7 @@ int ObTableColumns::inner_get_next_row(ObNewRow *&row)
             LOG_WARN("select_stmt is NULL", K(ret));
           } else if (OB_ISNULL(real_stmt = select_stmt->get_real_stmt())) {
             // case : view definition is set_op
-            // Bug :
+            // Bug : 
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("real stmt is NULL", K(ret));
           } else {
@@ -685,12 +685,12 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
                              buf, buf_len, pos));
           
         } else {
-          ObNeedPriv need_priv(db_schema->get_database_name(),
+          ObNeedPriv need_priv(db_schema->get_database_name(), 
                       table_schema.get_table_name(),
                       OB_PRIV_TABLE_LEVEL, OB_PRIV_SELECT, false);
 
           need_priv.priv_set_ = OB_PRIV_SELECT;
-          if (0 != (col_priv_set & OB_PRIV_SELECT)
+          if (0 != (col_priv_set & OB_PRIV_SELECT) 
               || OB_SUCCESS == schema_guard_->check_single_table_priv(session_priv, enable_role_id_array, need_priv)) {
             ret = databuff_printf(buf, buf_len, pos, "SELECT,");
           }
@@ -913,7 +913,7 @@ int ObTableColumns::deduce_column_attributes(
   ObRawExpr *&item_expr = const_cast<SelectItem &>(select_item).expr_;
   // In static engine the scale not idempotent in type deducing,
   // because the implicit cast is added, see:
-  //
+  // 
   //
   // We erase the added implicit cast and do formalize again for workaround.
   OZ(ObRawExprUtils::erase_operand_implicit_cast(item_expr, item_expr));
@@ -1000,7 +1000,7 @@ int ObTableColumns::deduce_column_attributes(
     } else if (result_type.is_user_defined_sql_type()) {
       sub_type = result_type.get_subschema_id();
     } else if ((result_type.get_udt_id() == T_OBJ_XML) || (result_type.get_udt_id() == T_OBJ_SDO_GEOMETRY)) {
-      sub_type = result_type.get_udt_id();
+      sub_type = result_type.get_udt_id(); 
     } else if (result_type.is_enum_or_set() || result_type.is_collection_sql_type()) {
       if (OB_FAIL(ObRawExprUtils::extract_extended_type_info(select_item.expr_,
                                                              session,
@@ -1042,22 +1042,22 @@ int ObTableColumns::deduce_column_attributes(
       } else if (table_schema.get_database_id() == OB_INVALID_ID) {
         ret = OB_ERR_BAD_DATABASE;
         LOG_WARN("db name not found", K(ret));
-      } else if (OB_FAIL(schema_guard->get_database_schema(table_schema.get_tenant_id(),
-                                                           table_schema.get_database_id(),
+      } else if (OB_FAIL(schema_guard->get_database_schema(table_schema.get_tenant_id(), 
+                                                           table_schema.get_database_id(), 
                                                            db_schema))) {
         LOG_WARN("get database schema failed", K(ret));
       } else if (OB_ISNULL(db_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("db schema is null", K(ret));
-      } else if (OB_FAIL(schema_guard->get_column_priv(ObColumnPrivSortKey(session_priv.tenant_id_,
-                                                                           session_priv.user_id_,
-                                                                           db_schema->get_database_name_str(),
-                                                                           table_schema.get_table_name_str(),
-                                                                           select_item.alias_name_),
+      } else if (OB_FAIL(schema_guard->get_column_priv(ObColumnPrivSortKey(session_priv.tenant_id_, 
+                                                                           session_priv.user_id_, 
+                                                                           db_schema->get_database_name_str(), 
+                                                                           table_schema.get_table_name_str(), 
+                                                                           select_item.alias_name_), 
                                                      column_priv))) {
         LOG_WARN("get column priv failed", K(ret));
       } else {
-        ObNeedPriv need_priv(db_schema->get_database_name(),
+        ObNeedPriv need_priv(db_schema->get_database_name(), 
                     table_schema.get_table_name(),
                     OB_PRIV_TABLE_LEVEL, OB_PRIV_SELECT, false);
         ObPrivSet col_priv_set = 0;

@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "src/sql/engine/dml/ob_link_op.h"
@@ -134,10 +134,10 @@ int ObLinkOp::init_dblink()
   } else if (OB_FAIL(my_session->get_dblink_context().get_dblink_conn(dblink_id_, dblink_conn, tm_sessid_))) {
     LOG_WARN("failed to get dblink connection from session", K(my_session), K(sessid_), K(ret));
   } else {
-    if (OB_FAIL(ObDblinkService::init_dblink_param_ctx(dblink_param_ctx_,
-                                                        my_session,
+    if (OB_FAIL(ObDblinkService::init_dblink_param_ctx(dblink_param_ctx_, 
+                                                        my_session, 
                                                         allocator_, // useless in oracle mode
-                                                        dblink_id_,
+                                                        dblink_id_, 
                                                         link_type_))) {
       LOG_WARN("failed to init dblink param ctx", K(ret), K(dblink_param_ctx_), K(dblink_id_), K(link_type_));
     } else if (NULL == dblink_conn) { // nothing about transaction
@@ -178,8 +178,8 @@ int ObLinkOp::execute_link_stmt(const ObString &link_stmt_fmt,
                        ObReverseLink *reverse_link)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(combine_link_stmt(link_stmt_fmt,
-                                param_infos,
+  if (OB_FAIL(combine_link_stmt(link_stmt_fmt, 
+                                param_infos, 
                                 param_store,
                                 reverse_link))) {
     LOG_WARN("failed to gen link stmt", K(ret), K(link_stmt_fmt));
@@ -196,7 +196,7 @@ int ObLinkOp::combine_link_stmt(const ObString &link_stmt_fmt,
 {
   // combine link_stmt_fmt and parameter strings to final link stmt.
   int ret = OB_SUCCESS;
-  // reserve head_comment_length_ byte length for head comment
+  // reserve head_comment_length_ byte length for head comment 
   int64_t link_stmt_pos = head_comment_length_;
   int64_t reserve_proxy_route_space = 0;
   int64_t next_param = 0;
@@ -254,7 +254,7 @@ int ObLinkOp::combine_link_stmt(const ObString &link_stmt_fmt,
              OB_FAIL(extend_stmt_buf())) {
           LOG_WARN("failed to extend stmt buf", K(ret));
         }
-        //Previously, the format parameter of the print sql literal function was NULL.
+        //Previously, the format parameter of the print sql literal function was NULL. 
         //In the procedure scenario, when dblink reverse spell trunc(date type), it will treat the date type as a string,
         //so correct formatting parameter obj_print_params need to be given.
         if (OB_FAIL(ret)) {
@@ -301,11 +301,11 @@ int ObLinkOp::combine_link_stmt(const ObString &link_stmt_fmt,
       snprintf(stmt_buf_, head_comment_length_, head_comment_fmt_, next_sql_req_level_);
       // after snprint only head_comment_length_ - 1 byte was printed by head comment
       // pos of head_comment_length_ - 1 is '\0', need filled as ' '
-      stmt_buf_[head_comment_length_ - 1] = ' ';
+      stmt_buf_[head_comment_length_ - 1] = ' '; 
       if (OB_NOT_NULL(reverse_link)) {
-        snprintf(stmt_buf_ + head_comment_length_,
+        snprintf(stmt_buf_ + head_comment_length_, 
                  reserve_proxy_route_space,
-                 proxy_route_info_fmt_,
+                 proxy_route_info_fmt_, 
                  proxy_route_ip_port_str);
         stmt_buf_[head_comment_length_ + reserve_proxy_route_space - 1] = ' ';
         LOG_DEBUG("succ to combine link sql", K(stmt_buf_), K(link_stmt_pos), K(proxy_route_ip_port_str));

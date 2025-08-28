@@ -239,13 +239,13 @@ private: // hide constructor
   public:
     ObSSTablePersistCtx(ObBlockInfoSet &block_info_set,
                                  ObIArray<ObSharedObjectsWriteCtx> &sstable_meta_write_ctxs):
-      is_inited_(false), total_tablet_meta_size_(0), cg_sstable_cnt_(0), large_co_sstable_cnt_(0), small_co_sstable_cnt_(0),
+      is_inited_(false), total_tablet_meta_size_(0), cg_sstable_cnt_(0), large_co_sstable_cnt_(0), small_co_sstable_cnt_(0), 
       normal_sstable_cnt_(0), block_info_set_(block_info_set), sstable_meta_write_ctxs_(sstable_meta_write_ctxs)
       {}
     ~ObSSTablePersistCtx() = default;
     int init(const int64_t ctx_id);
     bool is_inited() const { return is_inited_; };
-    TO_STRING_KV(K_(is_inited), K_(total_tablet_meta_size), K_(cg_sstable_cnt), K_(large_co_sstable_cnt), K_(small_co_sstable_cnt),
+    TO_STRING_KV(K_(is_inited), K_(total_tablet_meta_size), K_(cg_sstable_cnt), K_(large_co_sstable_cnt), K_(small_co_sstable_cnt), 
       K_(normal_sstable_cnt), K_(tables), K_(write_infos), K_(sstable_meta_write_ctxs));
     bool is_inited_;
     int64_t total_tablet_meta_size_;
@@ -257,7 +257,7 @@ private: // hide constructor
     common::ObSArray<ObITable *> tables_;
     common::ObSArray<ObSharedObjectWriteInfo> write_infos_;
     ObBlockInfoSet &block_info_set_;
-    ObIArray<ObSharedObjectsWriteCtx> &sstable_meta_write_ctxs_;
+    ObIArray<ObSharedObjectsWriteCtx> &sstable_meta_write_ctxs_;    
     DISALLOW_COPY_AND_ASSIGN(ObSSTablePersistCtx);
   };
 public:

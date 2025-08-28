@@ -281,14 +281,14 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
           str_iter = nullptr;
           allocator->reuse();
         } else {
-          ret = (str_iter->get_inner_ret() != OB_SUCCESS) ?
+          ret = (str_iter->get_inner_ret() != OB_SUCCESS) ? 
                 str_iter->get_inner_ret() : OB_INVALID_DATA;
           LOG_WARN("iter state invalid", K(ret), K(state), KPC(str_iter));
           // return error, release current str iter
           str_iter->~ObTextStringIter();
           allocator->free(str_iter);
           str_iter = nullptr;
-          allocator->reuse();
+          allocator->reuse();      
         }
       }
       if (OB_SUCC(ret) && OB_ISNULL(str_iter)) {

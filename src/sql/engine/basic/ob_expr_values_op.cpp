@@ -397,7 +397,7 @@ int ObExprValuesOp::eval_values_op_dynamic_cast_to_lob(ObExpr &real_src_expr,
 {
   int ret = OB_SUCCESS;
   ObDatum *datum = NULL;
-  // large string types to temp lob needs lots of memory,
+  // large string types to temp lob needs lots of memory, 
   // for example char type from send long/piece data which is 40M, cast to longtext
   // 1. char to longtext 40M (only used to add lob header if cs type is the same)
   // 2. deep copy use another 40M
@@ -430,7 +430,7 @@ int ObExprValuesOp::eval_values_op_dynamic_cast_to_lob(ObExpr &real_src_expr,
                                       dst_expr->obj_meta_,
                                       eval_ctx_.exec_ctx_.get_eval_tmp_allocator()))) {
         LOG_WARN("adjust lob datum failed",
-                K(ret), K(*datum), K(src_obj_meta), K(dst_expr->obj_meta_));
+                K(ret), K(*datum), K(src_obj_meta), K(dst_expr->obj_meta_)); 
       } else if (OB_FAIL(dst_datum.deep_copy(*datum, res_alloc))) {
         LOG_WARN("fail to deep copy datum from cast res datum", K(ret), K(*datum));
       }
@@ -496,7 +496,7 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
       ObDatumMeta src_meta = src_expr->datum_meta_;
       bool is_strict_json = my_spec.get_is_strict_json_desc_count() == 0 ? false :
                             my_spec.is_strict_json_desc_.at(node_idx_ % my_spec.get_is_strict_json_desc_count());
-
+       
       ObObjMeta src_obj_meta = src_expr->obj_meta_;
       if (my_spec.contain_ab_param_) {
         if (OB_FAIL(get_real_batch_obj_type(src_meta, src_obj_meta, src_expr, group_idx))) {
@@ -535,7 +535,7 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
          && ObDatumCast::need_scale_decimalint(src_meta.scale_, src_meta.precision_,
                                                dst_expr->datum_meta_.scale_,
                                                dst_expr->datum_meta_.precision_));
-      bool need_cast_collection_element =
+      bool need_cast_collection_element = 
         (src_meta.type_ == ObCollectionSQLType && dst_expr->datum_meta_.type_ == ObCollectionSQLType
          && src_expr->obj_meta_.get_subschema_id() != dst_expr->obj_meta_.get_subschema_id());
       if (OB_FAIL(ret)) {

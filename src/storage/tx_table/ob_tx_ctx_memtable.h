@@ -35,8 +35,8 @@ namespace storage
 // 2, Adaptation is required for a management insituation like LSM mgr[2] as a
 // design prototype, the goal is a unified abstraction of the merge module.
 //
-// [1]:
-// [2]:
+// [1]: 
+// [2]: 
 class ObTxCtxMemtable : public ObIMemtable, public checkpoint::ObCommonCheckpoint
 {
 public:

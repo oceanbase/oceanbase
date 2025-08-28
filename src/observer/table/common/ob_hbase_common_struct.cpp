@@ -13,7 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 #include "ob_hbase_common_struct.h"
 #include "observer/table/utils/ob_htable_utils.h"
-
+ 
 namespace oceanbase
 {
 namespace table

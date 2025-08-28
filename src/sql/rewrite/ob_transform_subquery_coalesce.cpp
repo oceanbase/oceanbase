@@ -87,11 +87,11 @@ int ObTransformSubqueryCoalesce::transform_one_stmt(common::ObIArray<ObParentDML
         LOG_WARN("failed to append equal infos", K(ret));
       } else if (OB_ISNULL(trans_stmt)) {
         // do nothing
-      } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*ctx_, parent_stmts,
-                                                                            stmt, false,
+      } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*ctx_, parent_stmts, 
+                                                                            stmt, false, 
                                                                             partial_cost_check))) {
         LOG_WARN("failed to check partial cost eval validity", K(ret));
-      } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt, rule_based_trans_happened, false,
+      } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt, rule_based_trans_happened, false, 
                                           is_happened, partial_cost_check))) {
         LOG_WARN("failed to accept transform", K(ret), KPC(trans_stmt));
       } else if (!is_happened) {
@@ -520,14 +520,14 @@ int ObTransformSubqueryCoalesce::transform_diff_exprs(
     } else if (stmt->is_select_stmt() && OB_ISNULL(select_stmt = static_cast<ObSelectStmt*>(stmt))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("params have null", K(ret), K(stmt), K(select_stmt));
-    } else if (OB_FAIL(check_conditions_validity(stmt,
-                                                stmt->get_condition_exprs(),
-                                                where_params,
+    } else if (OB_FAIL(check_conditions_validity(stmt, 
+                                                stmt->get_condition_exprs(), 
+                                                where_params, 
                                                 where_is_false,
                                                 hint_force_trans))) {
       LOG_WARN("failed to check condition validity", K(ret));
     } else if (OB_NOT_NULL(select_stmt) &&
-              OB_FAIL(check_conditions_validity(stmt,
+              OB_FAIL(check_conditions_validity(stmt, 
                                                 select_stmt->get_having_exprs(),
                                                 having_params,
                                                 having_is_false,
@@ -540,7 +540,7 @@ int ObTransformSubqueryCoalesce::transform_diff_exprs(
     } else if ((where_is_false || where_params.empty()) &&
               (having_is_false || having_params.empty())) {
       // do nothing
-    } else if (!hint_force_trans &&
+    } else if (!hint_force_trans && 
               OB_FAIL(ObTransformUtils::copy_stmt(*ctx_->stmt_factory_, stmt, trans_stmt))) {
       LOG_WARN("failed to copy stmt", K(ret));
     } else if (hint_force_trans &&
@@ -736,7 +736,7 @@ int ObTransformSubqueryCoalesce::check_conditions_validity(ObDMLStmt *stmt,
   return ret;
 }
 
-/* do coalesce:
+/* do coalesce: 
  * (1). in (query_1) and not in (query_2), query_1 equals to query_2
  * (2). in (query_1) and not in (query_2), query_1 is subset of query_2
 */
@@ -807,7 +807,7 @@ int ObTransformSubqueryCoalesce::compare_any_all_subqueries(ObDMLStmt *stmt,
     // is_used = true;
     // if (OB_FAIL(trans_params.push_back(param))) {
     //   LOG_WARN("failed to push back transform param", K(ret));
-    // } else if (OB_FAIL(add_coalesce_stmt(first_query_ref->get_ref_stmt(),
+    // } else if (OB_FAIL(add_coalesce_stmt(first_query_ref->get_ref_stmt(), 
     //                                      second_query_ref->get_ref_stmt()))) {
     //   LOG_WARN("failed to add coalesce stmts", K(ret));
     // } else {
@@ -1574,7 +1574,7 @@ int ObTransformSubqueryCoalesce::check_expr_can_be_coalesce(ObDMLStmt *stmt,
 }
 
 int ObTransformSubqueryCoalesce::check_subquery_validity(ObQueryRefRawExpr *query_ref,
-                                                         ObSelectStmt *subquery,
+                                                         ObSelectStmt *subquery, 
                                                          bool &valid)
 {
   int ret = OB_SUCCESS;
@@ -1599,8 +1599,8 @@ int ObTransformSubqueryCoalesce::check_subquery_validity(ObQueryRefRawExpr *quer
     LOG_WARN("select item contain subquery, can not be coalesced");
   } else if (!query_ref->has_exec_param()) {
     valid = true;
-  } else if (OB_FAIL(ObTransformUtils::check_correlated_exprs_can_pullup(query_ref->get_exec_params(),
-                                                                         *subquery,
+  } else if (OB_FAIL(ObTransformUtils::check_correlated_exprs_can_pullup(query_ref->get_exec_params(), 
+                                                                         *subquery, 
                                                                          valid))) {
     LOG_WARN("failed to check correlated expr can be pullup", K(ret));
   } else if (!valid) {
@@ -1942,7 +1942,7 @@ int ObTransformSubqueryCoalesce::inner_coalesce_subquery(ObSelectStmt *subquery,
   //column items in subquery trans to column items in coalesce query
   ObSEArray<ObRawExpr*, 16> new_column_list;
   ObSEArray<ColumnItem, 16> new_column_items;
-
+  
   // if the select items have same udf, need check if they are deterministic
   // eg: select func(c1), func(c1) from t1;
   bool need_check_deterministic = true;
@@ -1952,7 +1952,7 @@ int ObTransformSubqueryCoalesce::inner_coalesce_subquery(ObSelectStmt *subquery,
             map_info,
             &query_ctx->calculable_items_,
             need_check_deterministic) {
-    if (OB_ISNULL(subquery) || OB_ISNULL(coalesce_query) ||
+    if (OB_ISNULL(subquery) || OB_ISNULL(coalesce_query) || 
         OB_ISNULL(ctx_) || OB_ISNULL(ctx_->allocator_) ||
         OB_ISNULL(query_ctx)) {
       ret = OB_ERR_UNEXPECTED;
@@ -2071,7 +2071,7 @@ int ObTransformSubqueryCoalesce::inner_coalesce_subquery(ObSelectStmt *subquery,
     if (OB_SUCC(ret)) {
       if (OB_FAIL(coalesce_query->adjust_subquery_list())) {
         LOG_WARN("failed to adjust subquery list", K(ret));
-      } else if (OB_FAIL(append(query_ctx->all_equal_param_constraints_,
+      } else if (OB_FAIL(append(query_ctx->all_equal_param_constraints_, 
                                 context.equal_param_info_))) {
         LOG_WARN("failed to append equal param constraints", K(ret));
       }
@@ -2163,8 +2163,8 @@ int ObTransformSubqueryCoalesce::adjust_assign_exprs(ObUpdateStmt *upd_stmt,
           } else if (!assign.expr_->has_flag(CNT_ALIAS) &&
                     !assign.expr_->has_flag(CNT_SUB_QUERY)) {
             // do nothing
-          } else if (OB_FAIL(ObTransformUtils::replace_expr(old_exprs,
-                                                            new_exprs,
+          } else if (OB_FAIL(ObTransformUtils::replace_expr(old_exprs, 
+                                                            new_exprs, 
                                                             assign.expr_))) {
             LOG_WARN("failed to replace expr", K(ret));
           } else if (OB_FAIL(assign.expr_->formalize(ctx_->session_info_))) {
@@ -2375,7 +2375,7 @@ int ObTransformSubqueryCoalesce::construct_transform_hint(ObDMLStmt &stmt, void 
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(hint->add_qb_name_list(qb_names))) {
         LOG_WARN("failed to add qb names", K(ret));
-      } else if (NULL != myhint && (myhint->get_qb_name_list().count() == 0 ||
+      } else if (NULL != myhint && (myhint->get_qb_name_list().count() == 0 || 
                                     myhint->enable_coalesce_sq(qb_names.qb_names_))) {
         use_hint = true;
       }
@@ -2441,7 +2441,7 @@ int ObTransformSubqueryCoalesce::check_hint_valid(const ObDMLStmt &stmt,
     LOG_WARN("unexpected null", K(ret), K(query_hint));
   } else {
     const ObCoalesceSqHint *myhint = static_cast<const ObCoalesceSqHint*>(get_hint(stmt.get_stmt_hint()));
-    force_trans = NULL != myhint && (myhint->get_qb_name_list().count() == 0 ||
+    force_trans = NULL != myhint && (myhint->get_qb_name_list().count() == 0 || 
                                      myhint->enable_coalesce_sq(qb_names));
     force_no_trans = !force_trans && query_hint->has_outline_data();
   }

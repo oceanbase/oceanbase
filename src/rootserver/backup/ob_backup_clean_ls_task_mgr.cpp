@@ -182,7 +182,7 @@ int ObBackupCleanLSTaskMgr::finish_(int64_t &finish_cnt)
 }
 
 int ObBackupCleanLSTaskMgr::statistic_info(
-    ObBackupCleanService &backup_service,
+    ObBackupCleanService &backup_service, 
     common::ObISQLClient &sql_proxy, 
     const ObBackupCleanLSTaskAttr &ls_attr)
 {

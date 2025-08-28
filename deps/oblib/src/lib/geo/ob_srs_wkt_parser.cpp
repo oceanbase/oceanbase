@@ -29,9 +29,9 @@ BOOST_FUSION_ADAPT_STRUCT(ObGeographicRs,
                           (ObRsAuthority, authority))
 
 BOOST_FUSION_ADAPT_STRUCT(ObRsDatum,
-                          (ObString, name)
-                          (ObSpheroid, spheroid)
-                          (ObTowgs84, towgs84)
+                          (ObString, name) 
+                          (ObSpheroid, spheroid) 
+                          (ObTowgs84, towgs84) 
                           (ObRsAuthority, authority))
 
 BOOST_FUSION_ADAPT_STRUCT(ObSpheroid,
@@ -165,7 +165,7 @@ struct SrsWktGrammar : qi::grammar<Iterator, ObGeoRs(), Skipper>
     datum_lit_ = qi::no_case[qi::lit("DATUM")];
     spher_lit_ = qi::no_case[qi::lit("SPHEROID")];
     towgs_lit_ = qi::no_case[qi::lit("TOWGS84")];
-    auth_lit_= qi::no_case[qi::lit("AUTHORITY")];
+    auth_lit_= qi::no_case[qi::lit("AUTHORITY")]; 
     prim_lit_ = qi::no_case[qi::lit("PRIMEM")];
     unit_lit_= qi::no_case[qi::lit("UNIT")];
     axis_lit_ = qi::no_case[qi::lit("AXIS")];
@@ -211,10 +211,10 @@ struct SrsWktGrammar : qi::grammar<Iterator, ObGeoRs(), Skipper>
              double_ >> comma_ >>
              double_ >> r_brac_;
 
-    spher_ = spher_lit_ >> l_brac_ >> q_obstr_ >>
+    spher_ = spher_lit_ >> l_brac_ >> q_obstr_ >> 
              comma_ >> double_ >>
              comma_ >> double_ >>
-             -(comma_ >> auth_) >> r_brac;
+             -(comma_ >> auth_) >> r_brac; 
 
     prim_ = prim_lit_ >> l_brac_ >>
             q_obstr_ >> comma_ >>
@@ -232,7 +232,7 @@ struct SrsWktGrammar : qi::grammar<Iterator, ObGeoRs(), Skipper>
     axis_ = axis_lit_ >> l_brac_ >>
             q_obstr_ >> comma_ >>
             direct_ >> r_brac_;
-
+            
     axis_pair_ = axis_ >> comma_ >> axis_;
 
     geog_rs_ = geog_lit_ >> l_brac_ >>
@@ -240,7 +240,7 @@ struct SrsWktGrammar : qi::grammar<Iterator, ObGeoRs(), Skipper>
                datum_ >> comma_ >>
                prim_ >> comma_ >>
                unit_ >> comma_ >>
-               axis_pair_ >> -(comma_ >> auth_) >> r_brac_;
+               axis_pair_ >> -(comma_ >> auth_) >> r_brac_; 
 
     proj_ = proj_lit_ >> l_brac_ >>
             q_obstr_ >> -(comma_ >> auth_) >> r_brac_;
@@ -268,7 +268,7 @@ struct SrsWktGrammar : qi::grammar<Iterator, ObGeoRs(), Skipper>
   qi::rule<Iterator> geog_lit_;
   qi::rule<Iterator> datum_lit_;
   qi::rule<Iterator> spher_lit_;
-  qi::rule<Iterator> auth_lit_;
+  qi::rule<Iterator> auth_lit_; 
   qi::rule<Iterator> prim_lit_;
   qi::rule<Iterator> unit_lit_;
   qi::rule<Iterator> axis_lit_;
@@ -276,7 +276,7 @@ struct SrsWktGrammar : qi::grammar<Iterator, ObGeoRs(), Skipper>
   qi::rule<Iterator> proj_lit_;
   qi::rule<Iterator> proj_pram_lit_;
   qi::rule<Iterator> proj_rs_lit_;
-  qi::rule<Iterator, ObQiString()> q_str_;
+  qi::rule<Iterator, ObQiString()> q_str_; 
   qi::rule<Iterator, ObString()> q_obstr_;
   qi::symbols<char,  ObAxisDirection> direct_symbol_;
   qi::rule<Iterator, ObAxisDirection> direct_;
@@ -302,7 +302,7 @@ struct SrsWktGrammar : qi::grammar<Iterator, ObGeoRs(), Skipper>
 static int parse_coordinate_system(common::ObIAllocator &allocator, const common::ObString &srs_str, ObGeoRs &rs)
 {
   int ret = OB_SUCCESS;
-  common::ObArenaAllocator tmp_alloc;
+  common::ObArenaAllocator tmp_alloc; 
   int last = srs_str.length() - 1;
   while (isspace(srs_str[last])) {
     last--;
@@ -319,7 +319,7 @@ static int parse_coordinate_system(common::ObIAllocator &allocator, const common
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("alloc SrsWktGrammar failed", K(ret));
     } else {
-      SrsWktGrammar<decltype(begin), boost::spirit::ascii::space_type> *parser =
+      SrsWktGrammar<decltype(begin), boost::spirit::ascii::space_type> *parser = 
         new (buf) SrsWktGrammar<decltype(begin), boost::spirit::ascii::space_type>(l_brac, r_brac, allocator);
       bool bret = qi::phrase_parse(begin, end, *parser, boost::spirit::ascii::space, rs);
       if (!bret) {
@@ -342,9 +342,9 @@ int ObSrsWktParser::parse_srs_wkt(common::ObIAllocator &allocator, uint64_t srid
                                   const common::ObString &srs_str,
                                   ObSpatialReferenceSystemBase *&srs) {
   int ret = OB_SUCCESS;
-  ObGeoRs geo_rs;
+  ObGeoRs geo_rs; 
   ObSpatialReferenceSystemBase *tmp_result;
-  ObGeographicRs *geog_rs = NULL;
+  ObGeographicRs *geog_rs = NULL; 
   ObProjectionRs *proj_rs = NULL;
 
   if (srs_str.empty()) {
@@ -374,8 +374,8 @@ int ObSrsWktParser::parse_srs_wkt(common::ObIAllocator &allocator, uint64_t srid
 
 int ObSrsWktParser::parse_geog_srs_wkt(common::ObIAllocator& allocator, const common::ObString &srs_str, ObGeographicRs &result) {
   int ret = OB_SUCCESS;
-  ObGeoRs geo_rs;
-  ObGeographicRs *geog_rs;
+  ObGeoRs geo_rs; 
+  ObGeographicRs *geog_rs; 
   if (OB_FAIL(parse_coordinate_system(allocator, srs_str, geo_rs))) {
     LOG_WARN("failed to parse srs wkt", K(ret));
   } else if (OB_ISNULL(geog_rs = boost::get<ObGeographicRs>(&geo_rs))) {
@@ -389,8 +389,8 @@ int ObSrsWktParser::parse_geog_srs_wkt(common::ObIAllocator& allocator, const co
 
 int ObSrsWktParser::parse_proj_srs_wkt(common::ObIAllocator& allocator, const common::ObString &srs_str, ObProjectionRs &result) {
   int ret = OB_SUCCESS;
-  ObGeoRs geo_rs;
-  ObProjectionRs *proj_rs;
+  ObGeoRs geo_rs; 
+  ObProjectionRs *proj_rs; 
   if (OB_FAIL(parse_coordinate_system(allocator, srs_str, geo_rs))) {
     LOG_WARN("failed to parse srs wkt", K(ret));
   } else if (OB_ISNULL(proj_rs = boost::get<ObProjectionRs>(&geo_rs))) {

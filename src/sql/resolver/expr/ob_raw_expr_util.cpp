@@ -128,7 +128,7 @@ int ObRawExprUtils::resolve_op_expr_implicit_cast(ObRawExprFactory &expr_factory
       // oracle 模式下不支持 lob 进行条件比较
       // oracle 模式 不支持json类型的比较
       if (IS_COMPARISON_OP(op_type)
-          && sub_expr1->is_called_in_sql() && sub_expr2->is_called_in_sql()) {
+          && sub_expr1->is_called_in_sql() && sub_expr2->is_called_in_sql()) { 
         if (ObLongTextType == r_type1 || ObLongTextType == r_type2) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
           LOG_WARN("can't calculate with lob type in oracle mode",
@@ -1101,12 +1101,12 @@ int ObRawExprUtils::resolve_udf_param_exprs(ObResolverParams &params,
     }
     if (OB_SUCC(ret)) {
 #ifdef OB_BUILD_ORACLE_PL
-      if (iparam->is_nocopy_param()
+      if (iparam->is_nocopy_param() 
           && pl::ObPLRoutineParamMode::PL_PARAM_INOUT == mode
           && OB_NOT_NULL(udf_raw_expr->get_param_expr(i))
           && pl::ObPlJsonUtil::is_pl_jsontype(udf_raw_expr->get_param_expr(i)->get_udt_id())) {
         OZ (udf_raw_expr->add_param_desc(ObUDFParamDesc()));
-      } else
+      } else 
 #endif
       if (pl::ObPLRoutineParamMode::PL_PARAM_OUT == mode
           || pl::ObPLRoutineParamMode::PL_PARAM_INOUT == mode) {
@@ -1220,8 +1220,8 @@ do {                                                                            
               } else {
                 param_type = iparam->get_pl_data_type();
               }
-              OZ (pl::ObPLResolver::set_question_mark_type( iexpr,
-                                                            params.secondary_namespace_,
+              OZ (pl::ObPLResolver::set_question_mark_type( iexpr, 
+                                                            params.secondary_namespace_, 
                                                             &param_type,
                                                             *(params.session_info_)));
             }
@@ -1919,8 +1919,8 @@ int ObRawExprUtils::resolve_sequence_object(const ObQualifiedName &q_name,
     ObStmtScope current_scope = NULL != dml_resolver && !is_generated_column
                                   ? dml_resolver->get_current_scope()
                                   : T_FIELD_LIST_SCOPE;
-    if (OB_FAIL(sequence_namespace_checker.check_sequence_namespace(q_name,
-                                                                    syn_checker,
+    if (OB_FAIL(sequence_namespace_checker.check_sequence_namespace(q_name, 
+                                                                    syn_checker, 
                                                                     sequence_id,
                                                                     &dblink_id))) {
       // Except for table creation, sequence_not_exist error can be ignored in the resolver phase
@@ -2621,7 +2621,7 @@ int ObRawExprUtils::try_modify_udt_col_expr_for_gen_col_recursively(const ObSQLS
   } else if (is_stack_overflow) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("too deep recursive", K(ret));
-  } else if (expr->is_column_ref_expr() &&
+  } else if (expr->is_column_ref_expr() && 
              static_cast<ObColumnRefRawExpr *>(expr)->is_xml_column()) {
     ObColumnSchemaV2 *hidden_col = table_schema.get_xml_hidden_column_schema(static_cast<ObColumnRefRawExpr *>(expr)->get_column_id(),
                                                                              static_cast<ObColumnRefRawExpr *>(expr)->get_udt_set_id());
@@ -2634,7 +2634,7 @@ int ObRawExprUtils::try_modify_udt_col_expr_for_gen_col_recursively(const ObSQLS
           hidden_col = resolved_cols.at(i);
       }
     }
-
+    
     if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(hidden_col)) {
       ret = OB_ERR_UNEXPECTED;
@@ -3527,7 +3527,7 @@ int ObRawExprUtils::extract_set_op_exprs(const ObRawExpr *raw_expr,
   } else {
     int64_t N = raw_expr->get_param_count();
     for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
-      if (OB_FAIL(SMART_CALL(extract_set_op_exprs(raw_expr->get_param_expr(i),
+      if (OB_FAIL(SMART_CALL(extract_set_op_exprs(raw_expr->get_param_expr(i), 
                                                   set_op_exprs)))) {
         LOG_WARN("failed to extract set op exprs", K(ret));
       }
@@ -5091,8 +5091,8 @@ bool ObRawExprUtils::need_column_conv(const ObRawExprResType &expected_type,
   // the precision of the data stored in datum may exceed that of inferenced type, so column_convert must be added.
   // e.g. 1/3 requires storing data with precision beyond inference to ensure that 1/3 * 3 equals 1 and not 0.9999
   if (!bret && strict_type_check) {
-    if ((expected_type.get_type() == ObNumberType ||
-         expected_type.get_type() == ObNumberFloatType) &&
+    if ((expected_type.get_type() == ObNumberType || 
+         expected_type.get_type() == ObNumberFloatType) && 
          expected_type.get_scale() == NUMBER_SCALE_UNKNOWN_YET &&
          expected_type.get_precision() == PRECISION_UNKNOWN_YET) {
       // do nothing
@@ -5129,8 +5129,8 @@ int ObRawExprUtils::build_column_conv_expr(ObRawExprFactory &expr_factory,
   CK(OB_NOT_NULL(session_info));
   CK(OB_NOT_NULL(column_schema));
   if (OB_SUCC(ret)) {
-    if (column_schema->is_fulltext_column()
-        || column_schema->is_spatial_generated_column()
+    if (column_schema->is_fulltext_column() 
+        || column_schema->is_spatial_generated_column() 
         || column_schema->is_multivalue_generated_column()
         || column_schema->is_multivalue_generated_array_column()) {
       //全文列不会破坏约束性，且数据不会存储，跳过强转
@@ -5216,8 +5216,8 @@ int ObRawExprUtils::build_column_conv_expr(ObRawExprFactory &expr_factory,
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (col_ref.is_fulltext_column() ||
-        col_ref.is_spatial_generated_column() ||
+    } else if (col_ref.is_fulltext_column() || 
+        col_ref.is_spatial_generated_column() || 
         col_ref.is_multivalue_generated_column() ||
         col_ref.is_multivalue_generated_array_column() ||
         col_ref.is_vec_index_column()) {
@@ -6192,8 +6192,8 @@ int ObRawExprUtils::build_nvl_expr(ObRawExprFactory &expr_factory, const ColumnI
   return ret;
 }
 
-int ObRawExprUtils::build_nvl_expr(ObRawExprFactory &expr_factory,
-                                   ObRawExpr *param_expr1,
+int ObRawExprUtils::build_nvl_expr(ObRawExprFactory &expr_factory, 
+                                   ObRawExpr *param_expr1, 
                                    ObRawExpr *param_expr2,
                                    ObRawExpr *&expr)
 {
@@ -7733,7 +7733,7 @@ int ObRawExprUtils::check_composite_cast(ObRawExpr *&expr, ObSchemaChecker &sche
       }
     }
   }
-
+  
   return ret;
 }
 /*
@@ -7973,7 +7973,7 @@ int ObCollectionAttrBuilder::visit(const ObCollectionArrayType &coll_meta)
     LOG_WARN("failed to create offset attr expr", K(ret));
   } else if (OB_FAIL(expr_set_.append(attr_expr))) {
     LOG_WARN("failed to add attr expr", K(ret));
-  }
+  } 
   return ret;
 }
 
@@ -8963,7 +8963,7 @@ int ObRawExprUtils::process_window_complex_agg_expr(ObSQLSessionInfo *session_in
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("error argument.", K(ret));
       } else if (OB_FAIL(SMART_CALL(process_window_complex_agg_expr(session_info,
-                                                                    expr_factory,
+                                                                    expr_factory, 
                                                                     sub_expr->get_expr_type(),
                                                                     win_func, sub_expr, win_exprs)))) {
         LOG_WARN("failed to process window complex agg node.", K(ret));
@@ -9563,15 +9563,15 @@ int ObRawExprUtils::extract_params(const common::ObIArray<ObRawExpr*> &exprs,
   return ret;
 }
 
-int ObRawExprUtils::extract_dynamic_params(ObRawExpr* expr,
-                                           common::ObIArray<ObRawExpr*> &params,
+int ObRawExprUtils::extract_dynamic_params(ObRawExpr* expr, 
+                                           common::ObIArray<ObRawExpr*> &params, 
                                            const bool without_const_expr)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("expr passed in is NULL", K(ret));
-  } else if (expr->is_param_expr() &&
+  } else if (expr->is_param_expr() && 
              expr->has_flag(CNT_DYNAMIC_PARAM) &&
              !expr->has_flag(CNT_ONETIME)) {
     if (OB_FAIL(params.push_back(expr))) {
@@ -9583,12 +9583,12 @@ int ObRawExprUtils::extract_dynamic_params(ObRawExpr* expr,
       if (OB_ISNULL(param_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("param expr is null", K(ret));
-      } else if ((expr->get_expr_type() == T_OP_OR ||
-                  expr->get_expr_type() == T_OP_AND) &&
-                  without_const_expr &&
+      } else if ((expr->get_expr_type() == T_OP_OR || 
+                  expr->get_expr_type() == T_OP_AND) && 
+                  without_const_expr && 
                   param_expr->is_const_expr()) {
         //do nothing
-      } else if (OB_FAIL(SMART_CALL(extract_dynamic_params(expr->get_param_expr(i),
+      } else if (OB_FAIL(SMART_CALL(extract_dynamic_params(expr->get_param_expr(i), 
                                                     params,
                                                     without_const_expr)))) {
         LOG_WARN("failed to extract dynamic params", K(ret));
@@ -9610,8 +9610,8 @@ int ObRawExprUtils::extract_dynamic_params(const common::ObIArray<ObRawExpr*> &e
       LOG_WARN("expr is null", K(ret));
     } else if (expr->is_const_expr() && without_const_expr) {
       // do nothing
-    } else if (OB_FAIL(extract_dynamic_params(expr,
-                                              params,
+    } else if (OB_FAIL(extract_dynamic_params(expr, 
+                                              params, 
                                               without_const_expr))) {
       LOG_WARN("failed to extract dynamic params", K(ret));
     }
@@ -9968,7 +9968,7 @@ int ObRawExprUtils::extract_match_against_filters(const ObIArray<ObRawExpr *> &f
   return ret;
 }
 
-int ObRawExprUtils::extract_match_exprs(ObRawExpr *expr,
+int ObRawExprUtils::extract_match_exprs(ObRawExpr *expr, 
                                         ObIArray<ObMatchFunRawExpr*> &match_exprs)
 {
   int ret = OB_SUCCESS;

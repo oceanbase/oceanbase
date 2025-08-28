@@ -61,9 +61,9 @@ private:
 class ObTenantVecAsyncTaskScheduler
 {
 public:
-  static const int64_t VEC_INDEX_OPT_TASK_PERIOD = 10 * 1000L * 1000L; // 10s
+  static const int64_t VEC_INDEX_OPT_TASK_PERIOD = 10 * 1000L * 1000L; // 10s 
   static const int64_t VEC_INDEX_CLEAR_TASK_PERIOD = 10 * 1000L * 1000L; // 60s
-  explicit ObTenantVecAsyncTaskScheduler()
+  explicit ObTenantVecAsyncTaskScheduler() 
     : is_inited_(false),
       tenant_id_(OB_INVALID_TENANT_ID),
       tg_id_(-1),

@@ -45,7 +45,7 @@ int ObExprXmlForest::calc_result_typeN(
     int64_t param_num,
     ObExprTypeCtx& type_ctx) const
 {
-  UNUSED(type_ctx);
+  UNUSED(type_ctx); 
   INIT_SUCC(ret);
   if (OB_UNLIKELY(param_num % 3 != 0)) {
     ret = OB_ERR_PARAM_SIZE;
@@ -146,7 +146,7 @@ int ObExprXmlForest::eval_xml_forest(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     } else if(expr.args_[i * 3 + 1]->datum_meta_.type_ == ObNumberType) {
       ret = OB_ERR_INVALID_XML_DATATYPE;
       LOG_USER_ERROR(OB_ERR_INVALID_XML_DATATYPE, "Character", "-");
-      LOG_WARN("Unsupport for string type with binary charset input.", K(ret), K(expr.args_[i * 3 + 1]->datum_meta_.type_));
+      LOG_WARN("Unsupport for string type with binary charset input.", K(ret), K(expr.args_[i * 3 + 1]->datum_meta_.type_)); 
     } else if (OB_FAIL(ObTextStringHelper::get_string(expr, allocator, i * 3 + 1, tag_datum, name_tag))) {
       LOG_WARN("get xml plain text failed", K(ret));
     }
@@ -165,7 +165,7 @@ int ObExprXmlForest::eval_xml_forest(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   }
 
   lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
-  OZ(ObXMLExprHelper::concat_xml_type_nodes(mem_ctx, xml_bin_str_vec, res_bin_str));
+  OZ(ObXMLExprHelper::concat_xml_type_nodes(mem_ctx, xml_bin_str_vec, res_bin_str)); 
   OZ(ObXMLExprHelper::pack_binary_res(expr, ctx, res_bin_str, blob_locator));
   OX(res.set_string(blob_locator.ptr(), blob_locator.length()));
 

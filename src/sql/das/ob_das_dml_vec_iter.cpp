@@ -149,7 +149,7 @@ int ObVecIndexDMLIterator::generate_vec_delta_buff_row(common::ObIAllocator &all
   // [part keys][vid(doc id)][type(char)][vector]
   // static int64_t VEC_DELTA_BUFF_COL_CNT = 3;
   bool is_update = (das_ctdef_->op_type_ == ObDASOpType::DAS_OP_TABLE_UPDATE);
-  const IntFixedArray* row_projector = is_update ?
+  const IntFixedArray* row_projector = is_update ? 
                                        (is_old_row_ ? &das_ctdef_->old_row_projector_ : &das_ctdef_->new_row_projector_) :
                                        row_projector_;
   blocksstable::ObDatumRow *row = nullptr;
@@ -281,9 +281,9 @@ int ObSparseVecIndexDMLIterator::generate_domain_rows(const ObChunkDatumStore::S
 }
 
 int ObSparseVecIndexDMLIterator::get_sparse_vector_index_column_idxs(
-    int64_t &sparse_vec_idx,
-    int64_t &dim_idx,
-    int64_t &docid_idx,
+    int64_t &sparse_vec_idx, 
+    int64_t &dim_idx, 
+    int64_t &docid_idx, 
     int64_t &value_idx)
 {
   int ret = OB_SUCCESS;
@@ -309,7 +309,7 @@ int ObSparseVecIndexDMLIterator::get_sparse_vector_index_column_idxs(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("not get sparse vector index column idxs", K(ret), K(sparse_vec_idx), K(dim_idx), K(docid_idx), K(value_idx));
   }
-
+  
   return ret;
 }
 
@@ -328,7 +328,7 @@ int ObSparseVecIndexDMLIterator::get_sparse_vec_data(
   } else {
     docid = store_row->cells()[row_projector_->at(docid_idx)].get_string();
     sparse_vec = store_row->cells()[row_projector_->at(sparse_vec_idx)].get_string();
-
+    
     if (OB_UNLIKELY(docid.length() != sizeof(ObDocId)) || OB_ISNULL(docid.ptr())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid binary document id", K(ret), K(docid));
@@ -374,7 +374,7 @@ int ObSparseVecIndexDMLIterator::get_sparse_vec_data_for_update(
                                                           true,
                                                           sparse_vec))) {
       LOG_WARN("fail to get real data.", K(ret), K(sparse_vec));
-    }
+    }  
   }
 
   return ret;
@@ -411,14 +411,14 @@ int ObSparseVecIndexDMLIterator::generate_sparse_vec_index_row(
   } else {
     ObArrayFixedSize<uint32_t> *keys = static_cast<ObArrayFixedSize<uint32_t> *>(sparse_vec_ptr->get_key_array());
     ObArrayFixedSize<float> *values = static_cast<ObArrayFixedSize<float> *>(sparse_vec_ptr->get_value_array());
-
+    
     void *rows_buf = nullptr;
     if (OB_ISNULL(rows_buf = reinterpret_cast<char *>(allocator.alloc(dim_count * sizeof(blocksstable::ObDatumRow))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory for sparse vec index rows buffer", K(ret));
     } else {
       blocksstable::ObDatumRow *rows = new (rows_buf) blocksstable::ObDatumRow[dim_count];
-
+      
       for (int64_t i = 0; OB_SUCC(ret) && i < dim_count; ++i) {
         uint32_t dim = (*keys)[i];
         float value = (*values)[i];

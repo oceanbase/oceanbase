@@ -76,9 +76,9 @@ protected:
   int candi_allocate_select_into_for_insert();
   int allocate_select_into_as_top_for_insert(ObLogicalOperator *&old_top);
 
-  int get_osg_type(bool is_multi_part_dml,
-                   ObShardingInfo *insert_table_sharding,
-                   int64_t distributed_method,
+  int get_osg_type(bool is_multi_part_dml, 
+                   ObShardingInfo *insert_table_sharding, 
+                   int64_t distributed_method, 
                    OSG_TYPE &type);
 
   virtual int get_best_insert_dist_method(ObLogicalOperator &top,

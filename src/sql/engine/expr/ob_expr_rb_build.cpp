@@ -109,7 +109,7 @@ int ObExprRbBuild::eval_rb_build(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
     LOG_WARN("failed to eval source array arg", K(ret));
   } else if (arr_datum->is_null()) {
     is_null_res = true;
-  } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_datum->get_string(), arr_obj))) {
+  } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_datum->get_string(), arr_obj))) { 
     LOG_WARN("construct array obj failed", K(ret));
   } else if (OB_ISNULL(rb = OB_NEWx(ObRoaringBitmap, &tmp_allocator, (&tmp_allocator)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;

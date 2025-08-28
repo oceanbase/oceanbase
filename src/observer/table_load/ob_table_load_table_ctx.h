@@ -63,7 +63,7 @@ public:
   TO_STRING_KV(K_(param),
                KP_(coordinator_ctx),
                KP_(store_ctx),
-               "ref_count", get_ref_count(),
+               "ref_count", get_ref_count(), 
                K_(is_in_map),
                K_(is_assigned_resource),
                K_(is_assigned_memory),

@@ -34,7 +34,7 @@ struct ObFileReadParam
 public:
   ObFileReadParam();
   TO_STRING_KV(K_(file_location), K_(filename), K_(timeout_ts));
-
+  
 public:
   ObLoadFileLocation file_location_;
   ObString filename_;
@@ -134,7 +134,7 @@ public:
   bool eof() const override { return eof_; }
 
   int open(const ObString &filename);
-
+  
 private:
   ObString             filename_;
   common::ObFileReader file_reader_;
@@ -149,13 +149,13 @@ public:
   ObRandomOSSReader(ObIAllocator &allocator);
   virtual ~ObRandomOSSReader();
   int open(const share::ObBackupStorageInfo &storage_info, const ObString &filename);
-
+  
   int read(char *buf, int64_t count, int64_t &read_size) override;
   int seek(int64_t offset) override;
   int get_file_size(int64_t &file_size) override;
   int64_t get_offset() const override { return offset_; }
   bool eof() const override { return eof_; }
-
+  
 private:
   ObIODevice *device_handle_;
   ObIOFd      fd_;
@@ -177,7 +177,7 @@ class ObPacketStreamFileReader : public ObStreamFileReader
 public:
   ObPacketStreamFileReader(ObIAllocator &allocator);
   virtual ~ObPacketStreamFileReader();
-
+  
   int open(const ObString &filename,
            observer::ObIMPPacketSender &packet_handle,
            ObSQLSessionInfo *session,
@@ -193,22 +193,22 @@ private:
   /// The packet read from NIO is cached, so we must release it explicitly
   /// and then we can reuse the resource
   int release_packet();
-
+  
   bool is_timeout() const;
   bool is_killed() const;
-
+  
 private:
   observer::ObIMPPacketSender *packet_handle_; // We use this handle to read packet from client
   ObSQLSessionInfo *session_;
   int64_t timeout_ts_; // The deadline of job
-
+  
   // As we read a packet from client, the NIO store the data into the NIO buffer
   // and allocate an ObPacket by an allocator(arena_allocator_). The ObPacket(cached_packet_)
   // is cached in the memory of allocator.
   // NOTE: arena_allocator only ccache the size is smaller than it's page_size(8K,16K, etc)
   ObArenaAllocator arena_allocator_;
   obmysql::ObMySQLRawPacket *cached_packet_;
-
+  
   int64_t received_size_;  // All data received in bytes
   int64_t read_size_;      // All data has been read in bytes
   bool    eof_;

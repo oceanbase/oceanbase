@@ -128,7 +128,7 @@ typedef uint64_t ObCastMode;
 #define CM_IS_TO_COLUMN_CS_LEVEL(mode)        ((CM_TO_COLUMN_CS_LEVEL & (mode)) != 0)
 // for json type cast
 #define CM_IS_SQL_AS_JSON_SCALAR(mode)        ((CM_SQL_TO_JSON_SCALAR & (mode)) != 0)
-#define CM_SET_SQL_AS_JSON_SCALAR(mode)       (CM_SQL_TO_JSON_SCALAR | (mode))
+#define CM_SET_SQL_AS_JSON_SCALAR(mode)       (CM_SQL_TO_JSON_SCALAR | (mode))   
 // for geomerty type cast
 #define CM_IS_GEOMETRY_GEOMETRY(mode)             ((((mode) >> 12) & 0x1F) == 0)
 #define CM_IS_GEOMETRY_POINT(mode)                ((((mode) >> 12) & 0x1F) == 1)

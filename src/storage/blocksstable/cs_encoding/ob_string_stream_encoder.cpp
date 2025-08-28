@@ -33,7 +33,7 @@ int ObStringStreamEncoder::encode(
   } else {
     ctx_ = &ctx;
     writer_ = &writer;
-    all_string_writer_ = all_string_writer;
+    all_string_writer_ = all_string_writer; 
     int64_t orig_pos = writer.length();
     if (OB_FAIL(convert_datum_to_stream_(iter))) {
       LOG_WARN("fail to convert to stream", KR(ret));

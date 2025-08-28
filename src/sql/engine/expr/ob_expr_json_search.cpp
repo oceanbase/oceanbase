@@ -274,9 +274,9 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       ObString target_str = json_datum->get_string();
       if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(json_arg, ctx, temp_allocator, target_str, is_null))) {
         LOG_WARN("fail to get real data.", K(ret), K(target_str));
-      } else if (json_arg->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN &&
+      } else if (json_arg->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN && 
         OB_FAIL(ObJsonExprHelper::convert_string_collation_type(json_arg->datum_meta_.cs_type_,
-                                                                CS_TYPE_UTF8MB4_BIN,
+                                                                CS_TYPE_UTF8MB4_BIN, 
                                                                 &temp_allocator,
                                                                 target_str,
                                                                 target_str))) {
@@ -309,9 +309,9 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       bool is_null_str = false;
       if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(json_arg, ctx, temp_allocator, escape, is_null_str))) {
         LOG_WARN("fail to get real data.", K(ret), K(escape));
-      } else if (json_arg->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN &&
+      } else if (json_arg->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN && 
         OB_FAIL(ObJsonExprHelper::convert_string_collation_type(json_arg->datum_meta_.cs_type_,
-                                                                CS_TYPE_UTF8MB4_BIN,
+                                                                CS_TYPE_UTF8MB4_BIN, 
                                                                 &temp_allocator,
                                                                 escape,
                                                                 escape))) {
@@ -345,9 +345,9 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       LOG_WARN("input type error", K(val_type));
     } else if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(json_arg, ctx, temp_allocator, target, is_null))) {
       LOG_WARN("fail to get real data.", K(ret), K(target));
-    } else if (json_arg->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN &&
+    } else if (json_arg->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN && 
       OB_FAIL(ObJsonExprHelper::convert_string_collation_type(json_arg->datum_meta_.cs_type_,
-                                                              CS_TYPE_UTF8MB4_BIN,
+                                                              CS_TYPE_UTF8MB4_BIN, 
                                                               &temp_allocator,
                                                               target,
                                                               target))) {
@@ -391,9 +391,9 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
             LOG_WARN("fail to get real data.", K(ret), K(j_path_text));
           } else if (j_path_text.length() == 0) {
             is_null = true;
-          } else if (json_arg->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN &&
+          } else if (json_arg->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN && 
             OB_FAIL(ObJsonExprHelper::convert_string_collation_type(json_arg->datum_meta_.cs_type_,
-                                                                    CS_TYPE_UTF8MB4_BIN,
+                                                                    CS_TYPE_UTF8MB4_BIN, 
                                                                     &temp_allocator,
                                                                     j_path_text,
                                                                     j_path_text))) {

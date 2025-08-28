@@ -18,7 +18,7 @@
 #include "observer/table/tableapi/ob_table_api_service.h"
 
 namespace oceanbase
-{
+{   
 namespace table
 {
 
@@ -34,7 +34,7 @@ public:
 
   void reset()
   {
-    scan_range_.reset();
+    scan_range_.reset(); 
     limit_ = -1;
   }
   common::ObNewRange &get_scan_range() { return scan_range_; }
@@ -43,7 +43,7 @@ public:
   void set_limit(int32_t limit) { limit_ = limit; }
 
 private:
-  common::ObNewRange scan_range_;
+  common::ObNewRange scan_range_; 
   int32_t limit_;
 };
 

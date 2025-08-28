@@ -110,10 +110,10 @@ int ObExprPLAssocIndex::do_eval_assoc_index(int64_t &assoc_idx,
                                             pl::ObPLAssocArray &assoc_array_ref,
                                             const common::ObObj &key)
 {
-  return do_eval_assoc_index(assoc_idx,
-                             exec_ctx.get_my_session(),
-                             info,
-                             assoc_array_ref,
+  return do_eval_assoc_index(assoc_idx, 
+                             exec_ctx.get_my_session(), 
+                             info, 
+                             assoc_array_ref, 
                              key,
                              exec_ctx.get_allocator());
 }
@@ -294,7 +294,7 @@ int ObExprPLAssocIndex::eval_assoc_idx(const ObExpr &expr,
     } else {
       assoc_array = reinterpret_cast<pl::ObPLAssocArray *>(array->extend_obj_->get_ext());
     }
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(ret)) { 
     } else if (OB_ISNULL(assoc_array)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected assoc array", K(ret));

@@ -40,7 +40,7 @@ public:
 private:
   struct ObCostBasedLateMaterializationCtx {
     ObCostBasedLateMaterializationCtx()
-      : late_material_indexs_(),
+      : late_material_indexs_(), 
         check_sort_indexs_(),
         late_table_id_(common::OB_INVALID_ID),
         base_index_(common::OB_INVALID_ID),
@@ -61,7 +61,7 @@ private:
   struct ObLateMaterializationInfo
   {
     ObLateMaterializationInfo()
-      :
+      : 
         candi_index_names_(),
         candi_indexs_(),
         project_col_in_view_(),

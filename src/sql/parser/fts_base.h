@@ -88,10 +88,10 @@ typedef struct {
 /********************************************************************
 Create an AST expr list node */
 extern int fts_create_node_list(
-    void *arg,
+    void *arg,          
     FtsNode *expr,
     FtsNode **node);
-
+  
 int fts_string_create(FtsParserResult *arg, const char *str, uint32_t len, FtsString **ast_str);
 
 extern int fts_create_node_term(void *arg, const FtsString *term, FtsNode **node);

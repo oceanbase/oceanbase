@@ -51,23 +51,23 @@ LogIOTask::LogIOTask(const int64_t palf_id, const int64_t palf_epoch)
   submit_seq_ = 0;
 }
 
-LogIOTask::~LogIOTask()
+LogIOTask::~LogIOTask() 
 {
 	reset();
 }
 
 void LogIOTask::reset()
 {
-	palf_id_ = INVALID_PALF_ID;
+	palf_id_ = INVALID_PALF_ID;	
 	palf_epoch_ = -1;
 	init_task_ts_ = OB_INVALID_TIMESTAMP;
   push_cb_into_cb_pool_ts_ = OB_INVALID_TIMESTAMP;
   submit_seq_ = 0;
 }
 
-// NB: if do_task failed, the caller(LogIOWorker) is responsible for freeing LogIOTask.
-int LogIOTask::do_task(int tg_id, IPalfEnvImpl *palf_env_impl)
-{
+// NB: if do_task failed, the caller(LogIOWorker) is responsible for freeing LogIOTask. 
+int LogIOTask::do_task(int tg_id, IPalfEnvImpl *palf_env_impl) 
+{ 
 	int ret = OB_SUCCESS;
 	int64_t do_task_ts = ObTimeUtility::current_time();
   const int64_t delay_ts = do_task_ts - init_task_ts_;
@@ -91,8 +91,8 @@ int LogIOTask::do_task(int tg_id, IPalfEnvImpl *palf_env_impl)
 }
 
 // NB: after after_consume, the caller(LogIOCb) needs free LogIOTask.
-int LogIOTask::after_consume(IPalfEnvImpl *palf_env_impl)
-{
+int LogIOTask::after_consume(IPalfEnvImpl *palf_env_impl) 
+{ 
 	int ret = OB_SUCCESS;
 	int64_t after_consume_ts = ObTimeUtility::current_time();
   const int64_t delay_ts = after_consume_ts - push_cb_into_cb_pool_ts_;
@@ -228,7 +228,7 @@ int64_t LogIOFlushLogTask::get_io_size_() const
   return write_buf_.get_total_size();
 }
 
-LogIOTruncateLogTask::LogIOTruncateLogTask(const int64_t palf_id, const int64_t palf_epoch)
+LogIOTruncateLogTask::LogIOTruncateLogTask(const int64_t palf_id, const int64_t palf_epoch) 
 	: LogIOTask(palf_id, palf_epoch), truncate_log_cb_ctx_(), is_inited_(false)
 {}
 
@@ -293,7 +293,7 @@ void LogIOTruncateLogTask::free_this_(IPalfEnvImpl *palf_env_impl)
   palf_env_impl->get_log_allocator()->free_log_io_truncate_log_task(this);
 }
 
-LogIOFlushMetaTask::LogIOFlushMetaTask(const int64_t palf_id, const int64_t palf_epoch) :
+LogIOFlushMetaTask::LogIOFlushMetaTask(const int64_t palf_id, const int64_t palf_epoch) : 
 	LogIOTask(palf_id, palf_epoch),
 	flush_meta_cb_ctx_(),
   buf_(NULL),
@@ -521,7 +521,7 @@ int BatchLogIOFlushLogTask::push_back(LogIOFlushLogTask *task)
   } else if (palf_id_ != INVALID_PALF_ID && palf_id != palf_id_) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "only same palf id can be batched", K(ret), KPC(task), K(palf_id));
-  } else if (accum_size_ > SINGLE_TASK_MAX_SIZE) {
+  } else if (accum_size_ > SINGLE_TASK_MAX_SIZE) { 
     ret = OB_SIZE_OVERFLOW;
   } else if (OB_FAIL(io_task_array_.push_back(task))) {
     PALF_LOG(WARN, "push failed", K(ret));

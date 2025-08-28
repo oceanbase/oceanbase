@@ -264,7 +264,7 @@ void errsim_set_prallel_cnt(const int64_t parallel_merge_cnt, int64_t &concurren
     concurrent_cnt = MIN(-ret, parallel_merge_cnt);
     ret = OB_SUCCESS;
     STORAGE_LOG(INFO, "ERRSIM EN_FORCE_PARALLEL_MINI_MERGE, force set parallel degree for mini merge", K(concurrent_cnt));
-  }
+  }    
 }
 #endif
 

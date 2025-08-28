@@ -444,7 +444,7 @@ int uint_to_bit(const uint64_t bit_uint, ObStringBuffer &bit_str)
 }
 
 int todigit(char c)
-{
+{ 
   return c - '0';
 }
 

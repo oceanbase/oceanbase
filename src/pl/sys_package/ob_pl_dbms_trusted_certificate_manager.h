@@ -15,7 +15,7 @@
 
 #include "sql/engine/ob_exec_context.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
 namespace pl
 {

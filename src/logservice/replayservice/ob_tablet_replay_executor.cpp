@@ -120,7 +120,7 @@ int ObTabletReplayExecutor::execute(const share::SCN &scn, const share::ObLSID &
       } else {
         CLOG_LOG(WARN, "failed to replay", K(ret), K(ls_id), K(scn));
       }
-    }
+    } 
 
 #ifdef ERRSIM
       if (OB_SUCC(ret)) {
@@ -139,7 +139,7 @@ int ObTabletReplayExecutor::execute(const share::SCN &scn, const share::ObLSID &
             if (OB_FAIL(ret)) {
               STORAGE_LOG(ERROR, "fake EN_REPLAY_FATAL_ERROR", K(ret));
             }
-          }
+          }       
         }
 
       }

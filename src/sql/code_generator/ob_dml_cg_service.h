@@ -354,37 +354,37 @@ private:
                       ObRawExpr* fk_part_id_expr,
                       share::schema::ObSchemaGetterGuard &schema_guard,
                       ObDMLBaseCtDef &dml_ctdef);
-
+  
   int get_fk_check_scan_table_id(const uint64_t parent_table_id,
                                  const common::ObIArray<uint64_t> &name_column_ids,
                                  share::schema::ObSchemaGetterGuard &schema_guard,
                                  uint64_t &index_table_id);
-
+  
   int generate_fk_check_ctdef(const ObLogDelUpd &op,
                               uint64_t name_table_id,
                               ObRawExpr* fk_part_id_expr,
                               const common::ObIArray<uint64_t> &name_column_ids,
                               share::schema::ObSchemaGetterGuard &schema_guard,
                               ObForeignKeyCheckerCtdef &fk_chk_ctdef);
-
+  
   int generate_fk_scan_ctdef(share::schema::ObSchemaGetterGuard &schema_guard,
                              const uint64_t index_tid,
                              ObDASScanCtDef &scan_ctdef);
-
+  
   int generate_fk_scan_part_id_expr(ObLogDelUpd &op,
                                     uint64_t parent_table_id,
                                     uint64_t index_tid,
                                     ObForeignKeyCheckerCtdef &fk_ctdef);
-
+  
   int generate_fk_table_loc_info(uint64_t index_table_id,
                                  ObDASTableLocMeta &loc_meta,
                                  ObTabletID &tablet_id,
                                  bool &is_part_table_);
-
+  
   int generate_rowkey_idx_for_foreign_key(const common::ObIArray<uint64_t> &name_column_ids,
                              const ObTableSchema *parent_table,
                              ObIArray<int64_t> &rowkey_ids_);
-
+  
   int convert_foreign_keys(ObLogDelUpd &op,
                            const IndexDMLInfo &index_dml_info,
                            ObDMLBaseCtDef &dml_ctdef);

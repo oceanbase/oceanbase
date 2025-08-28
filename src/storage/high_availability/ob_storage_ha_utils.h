@@ -42,7 +42,7 @@ public:
       const share::ObLSID &ls_id,
       bool &is_deleted);
   static int check_tablet_is_deleted(
-      const ObTabletHandle &tablet_handle,
+      const ObTabletHandle &tablet_handle, 
       bool &is_deleted);
 
   // When the src_ls of the transfer does not exist, it is necessary to check whether the dest_ls can be rebuilt
@@ -92,7 +92,7 @@ private:
   struct TableKeySnapshotVersionComparator final
   {
     bool operator()(const ObITable::TableKey &lhs, const ObITable::TableKey &rhs) {
-      return lhs.get_snapshot_version() < rhs.get_snapshot_version();
+      return lhs.get_snapshot_version() < rhs.get_snapshot_version();  
     }
   };
   static int check_merge_error_(const uint64_t tenant_id, common::ObISQLClient &sql_client);
@@ -103,14 +103,14 @@ private:
       const share::ObLSID &ls_id, const share::SCN &compaction_scn, common::ObISQLClient &sql_client);
   static int get_readable_scn_(share::SCN &readable_scn);
   static int get_latest_major_sstable_array_(
-      ObTableHandleV2 &latest_major,
+      ObTableHandleV2 &latest_major, 
       common::ObArray<ObSSTableWrapper> &major_sstables);
   static int build_reuse_info_(
-      const common::ObArray<ObSSTableWrapper> &major_sstabls,
+      const common::ObArray<ObSSTableWrapper> &major_sstabls, 
       const ObTabletHandle &tablet_handle,
       ObMacroBlockReuseMgr &macro_block_reuse_mgr);
   static int get_latest_available_major_(
-      storage::ObTableStoreIterator &major_sstables_iter,
+      storage::ObTableStoreIterator &major_sstables_iter, 
       ObTableHandleV2 &latest_major);
 };
 
@@ -137,8 +137,8 @@ public:
       ObTimeoutCtx &timeout_ctx,
       common::ObIArray<ObAddr> &finished_addr_list);
   static void add_transfer_error_diagnose_in_replay(
-      const share::ObTransferTaskID &task_id,
-      const share::ObLSID &dest_ls_id,
+      const share::ObTransferTaskID &task_id, 
+      const share::ObLSID &dest_ls_id, 
       const int result_code,
       const bool clean_related_info,
       const share::ObStorageHADiagTaskType type,
@@ -151,7 +151,7 @@ public:
       const share::ObStorageHACostItemName result_msg);
   static void set_transfer_related_info(
       const share::ObLSID &dest_ls_id,
-      const share::ObTransferTaskID &task_id,
+      const share::ObTransferTaskID &task_id, 
       const share::SCN &start_scn);
   static void reset_related_info(const share::ObLSID &dest_ls_id);
 
@@ -203,22 +203,22 @@ public:
               const int64_t start_ts,
               const bool is_report);
   static void transfer_tablet_restore_stat(
-      const uint64_t tenant_id,
-      const share::ObLSID &src_ls_id,
+      const uint64_t tenant_id, 
+      const share::ObLSID &src_ls_id, 
       const share::ObLSID &dest_ls_id);
   static bool enable_transfer_dml_ctrl(const uint64_t data_version);
 private:
   static int get_ls_(
       ObLSHandle &ls_handle,
-      const share::ObLSID &dest_ls_id,
+      const share::ObLSID &dest_ls_id, 
       ObLS *&ls);
   static int get_transfer_handler_(
       ObLSHandle &ls_handle,
-      const share::ObLSID &dest_ls_id,
+      const share::ObLSID &dest_ls_id, 
       ObTransferHandler *&transfer_handler);
   static int get_ls_migrate_status_(
       ObLSHandle &ls_handle,
-      const share::ObLSID &dest_ls_id,
+      const share::ObLSID &dest_ls_id, 
       ObMigrationStatus &migration_status);
 
   static void construct_perf_diag_replay_params_(

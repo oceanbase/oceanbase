@@ -261,7 +261,7 @@ int ObDropVecIVFIndexTask::serialize_params_to_message(char *buf, const int64_t 
     LOG_WARN("fail to serialize pq_code_ table info", K(ret), K(pq_code_));
   } else if (OB_FAIL(drop_index_arg_.serialize(buf, buf_size, pos))) {
     LOG_WARN("serialize failed", K(ret));
-  }
+  } 
   return ret;
 }
 
@@ -354,7 +354,7 @@ int ObDropVecIVFIndexTask::check_switch_succ()
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
-  bool is_centroid_exist = false; //
+  bool is_centroid_exist = false; // 
   bool is_cid_vector_exist = false;
   bool is_rowkey_cid_exist = false;
   bool is_sq_meta_exist = false;
@@ -371,16 +371,16 @@ int ObDropVecIVFIndexTask::check_switch_succ()
     LOG_WARN("refresh schema version failed", K(ret));
   } else if (OB_FAIL(root_service_->get_schema_service().get_tenant_schema_guard(tenant_id_, schema_guard))) {
     LOG_WARN("fail to get tenant schema", K(ret), K(tenant_id_));
-  } else if (centroid_.is_valid()
+  } else if (centroid_.is_valid() 
           && OB_FAIL(schema_guard.check_table_exist(tenant_id_, centroid_.table_id_, is_centroid_exist))) {
     LOG_WARN("fail to check table exist", K(ret), K(tenant_id_), K(centroid_));
   } else if (cid_vector_.is_valid()
           && OB_FAIL(schema_guard.check_table_exist(tenant_id_, cid_vector_.table_id_, is_cid_vector_exist))) {
     LOG_WARN("fail to check table exist", K(ret), K(tenant_id_), K(cid_vector_));
-  } else if (rowkey_cid_.is_valid()
+  } else if (rowkey_cid_.is_valid() 
           && OB_FAIL(schema_guard.check_table_exist(tenant_id_, rowkey_cid_.table_id_, is_rowkey_cid_exist))) {
     LOG_WARN("fail to check table exist", K(ret), K(tenant_id_), K(rowkey_cid_));
-  } else if (sq_meta_.is_valid()
+  } else if (sq_meta_.is_valid() 
           && OB_FAIL(schema_guard.check_table_exist(tenant_id_, sq_meta_.table_id_, is_sq_meta_exist))) {
     LOG_WARN("fail to check table exist", K(ret), K(tenant_id_), K(sq_meta_));
   } else if (pq_centroid_.is_valid()
@@ -397,9 +397,9 @@ int ObDropVecIVFIndexTask::check_switch_succ()
     is_pq_centroid_exist = pq_centroid_.is_valid() ? is_pq_centroid_exist : false;
     is_pq_code_exist = pq_code_.is_valid() ? is_pq_code_exist : false;
 
-    if (!is_centroid_exist &&
-        !is_cid_vector_exist &&
-        !is_rowkey_cid_exist &&
+    if (!is_centroid_exist && 
+        !is_cid_vector_exist && 
+        !is_rowkey_cid_exist && 
         !is_sq_meta_exist &&
         !is_pq_centroid_exist &&
         !is_pq_code_exist) {
@@ -410,7 +410,7 @@ int ObDropVecIVFIndexTask::check_switch_succ()
 }
 
 /*
-  create drop share vector index table task and wait task
+  create drop share vector index table task and wait task 
 */
 int ObDropVecIVFIndexTask::prepare(const share::ObDDLTaskStatus &new_status)
 {
@@ -511,7 +511,7 @@ int ObDropVecIVFIndexTask::drop_aux_ivfsq8_index_table(const share::ObDDLTaskSta
   } else if (0 == rowkey_cid_.task_id_ && rowkey_cid_.is_valid()
       && OB_FAIL(create_drop_index_task(schema_guard, rowkey_cid_.table_id_, rowkey_cid_.index_name_, rowkey_cid_.task_id_))) {
     LOG_WARN("fail to create drop index task", K(ret), K(rowkey_cid_));
-  } else if (0 == sq_meta_.task_id_ && sq_meta_.is_valid()
+  } else if (0 == sq_meta_.task_id_ && sq_meta_.is_valid() 
       && OB_FAIL(create_drop_index_task(schema_guard, sq_meta_.table_id_, sq_meta_.index_name_, sq_meta_.task_id_))) {
      LOG_WARN("fail to create drop index task", K(ret), K(sq_meta_));
   } else if (OB_FAIL(update_task_message())) {
@@ -539,7 +539,7 @@ int ObDropVecIVFIndexTask::drop_aux_ivfpq_index_table(const share::ObDDLTaskStat
   } else if (0 == pq_centroid_.task_id_  && pq_centroid_.is_valid()
       && OB_FAIL(create_drop_index_task(schema_guard, pq_centroid_.table_id_, pq_centroid_.index_name_, pq_centroid_.task_id_))) {
     LOG_WARN("fail to create drop index task", K(ret), K(pq_centroid_));
-  } else if (0 == pq_code_.task_id_ && pq_code_.is_valid()
+  } else if (0 == pq_code_.task_id_ && pq_code_.is_valid() 
       && OB_FAIL(create_drop_index_task(schema_guard, pq_code_.table_id_, pq_code_.index_name_, pq_code_.task_id_))) {
      LOG_WARN("fail to create drop index task", K(ret), K(pq_code_));
   } else if (0 == rowkey_cid_.task_id_ && rowkey_cid_.is_valid()
@@ -547,7 +547,7 @@ int ObDropVecIVFIndexTask::drop_aux_ivfpq_index_table(const share::ObDDLTaskStat
     LOG_WARN("fail to create drop index task", K(ret), K(rowkey_cid_));
   } else if (OB_FAIL(update_task_message())) {
     LOG_WARN("fail to update task message to __all_ddl_task_status", K(ret), K(centroid_), K(pq_centroid_), K(rowkey_cid_), K(pq_code_));
-  }
+  } 
   return ret;
 }
 
@@ -584,7 +584,7 @@ int ObDropVecIVFIndexTask::wait_drop_task_finish(const share::ObDDLTaskStatus &n
       LOG_WARN("fail to push back ivfpq pq_code task", K(ret));
     } else if (rowkey_cid_.is_valid() && OB_FAIL(vec_child_tasks.push_back(rowkey_cid_))) {
       LOG_WARN("fail to push back ivfpq rowkey_cid task", K(ret));
-    }
+    } 
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(wait_child_task_finish(vec_child_tasks, has_finished))) {

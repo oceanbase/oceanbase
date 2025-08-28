@@ -53,7 +53,7 @@ void ObPartitionPreSplit::get_split_num(
     int64_t &split_num)
 {
   int ret = OB_SUCCESS;
-  int64_t tablet_limit_penalty = 0;
+  int64_t tablet_limit_penalty = 0; 
   int64_t real_split_size = split_size;
   split_num = 0;
   if (tablet_size < 0 || split_size < 0) {
@@ -67,11 +67,11 @@ void ObPartitionPreSplit::get_split_num(
       LOG_WARN("failed to check tablet creation limit", K(ret));
     }
   } else if (real_split_size > 0 && tablet_size > real_split_size) {
-    split_num = (tablet_size % real_split_size) == 0 ?
-          (tablet_size / real_split_size) :
+    split_num = (tablet_size % real_split_size) == 0 ? 
+          (tablet_size / real_split_size) : 
           (tablet_size / real_split_size + 1);
-    split_num = split_num < MAX_SPLIT_RANGE_NUM ?
-          split_num :
+    split_num = split_num < MAX_SPLIT_RANGE_NUM ? 
+          split_num : 
           MAX_SPLIT_RANGE_NUM;
   }
   LOG_DEBUG("[PRE_SPLIT] get tablet split num", K(split_num));
@@ -84,8 +84,8 @@ void ObPartitionPreSplit::get_split_num(
     3. alter main none partition table
 */
 int ObPartitionPreSplit::build_new_partition_table_schema(
-    const ObTableSchema &ori_table_schema,
-    ObTableSchema &inc_partition_schema,
+    const ObTableSchema &ori_table_schema, 
+    ObTableSchema &inc_partition_schema, 
     ObTableSchema &new_table_schema)
 {
   int ret = OB_SUCCESS;
@@ -97,12 +97,12 @@ int ObPartitionPreSplit::build_new_partition_table_schema(
   } else if (OB_FAIL(ddl_service_->fill_part_name(ori_table_schema, inc_partition_schema))) {
     LOG_WARN("[PRE_SPLIT] fail to build split table schema", K(ret), K(inc_partition_schema));
   } else if (OB_FAIL(build_new_table_schema(
-      ori_table_schema,
-      inc_partition_schema,
+      ori_table_schema, 
+      inc_partition_schema, 
       new_table_schema))) {
     LOG_WARN("[PRE_SPLIT] fail to build new table schema", K(ret), K(inc_partition_schema));
   } else {
-    LOG_DEBUG("success to build new partition table schema",
+    LOG_DEBUG("success to build new partition table schema", 
       K(ret), K(inc_partition_schema), K(ori_table_schema), K(new_table_schema));
   }
   return ret;
@@ -120,20 +120,20 @@ int ObPartitionPreSplit::rebuild_partition_table_schema(
     if (inc_partition_schema.get_partition_num()<= 0) {
       // no new parts, skip.
     } else if (OB_FAIL(generate_all_partition_schema( // gen part idx
-        split_tablet_ids,
+        split_tablet_ids, 
         ori_table_schema,
         inc_partition_schema,
         all_partition_schema))) {
-      LOG_WARN("[PRE_SPLIT] fail to fill full tablet partition schema",
+      LOG_WARN("[PRE_SPLIT] fail to fill full tablet partition schema", 
         K(ret), K(ori_table_schema), K(inc_partition_schema));
     } else if (OB_FAIL(build_new_table_schema(
-        ori_table_schema,
-        all_partition_schema,
+        ori_table_schema, 
+        all_partition_schema, 
         table_schema))) {
       LOG_WARN("[PRE_SPLIT] fail to build new table schema", K(ret), K(all_partition_schema));
     } else {
-      LOG_DEBUG("success to rebuild partition table schema",
-        K(ret), K(split_tablet_ids), K(inc_partition_schema),
+      LOG_DEBUG("success to rebuild partition table schema", 
+        K(ret), K(split_tablet_ids), K(inc_partition_schema), 
         K(all_partition_schema), K(table_schema));
     }
   }
@@ -144,9 +144,9 @@ int ObPartitionPreSplit::rebuild_partition_table_schema(
  * get table column ids.
 */
 int ObPartitionPreSplit::extract_table_columns_id(
-    const ObTableSchema &table_schema,
+    const ObTableSchema &table_schema, 
     ObIArray<uint64_t> &column_ids)
-{
+{ 
   int ret = OB_SUCCESS;
   column_ids.reset();
   ObTableSchema::const_column_iterator col_iter = table_schema.column_begin();
@@ -165,7 +165,7 @@ int ObPartitionPreSplit::extract_table_columns_id(
 
 // not support pre-split global index table in none partition main table.
 int ObPartitionPreSplit::get_data_table_part_ids(
-    const ObTableSchema &data_table_schema,
+    const ObTableSchema &data_table_schema, 
     ObIArray<int64_t> &part_ids)
 {
   int ret = OB_SUCCESS;
@@ -197,17 +197,17 @@ int ObPartitionPreSplit::get_data_table_part_ids(
 
 // only for global index
 int ObPartitionPreSplit::get_estimated_table_size(
-    const ObTableSchema &data_table_schema,
-    const ObTableSchema &index_table_schema,
+    const ObTableSchema &data_table_schema, 
+    const ObTableSchema &index_table_schema, 
     int64_t &table_size)
-{
+{ 
   int ret = OB_SUCCESS;
 
   ObSEArray<uint64_t, 4> column_ids;
   ObSEArray<uint64_t, 1> part_sizes;
   ObSEArray<int64_t, 1> part_ids;
   table_size = 0; // reset
-
+  
   if (OB_FAIL(index_table_schema.get_column_ids(column_ids))) {
     LOG_WARN("[PRE_SPLIT] fail to get mapping column ids.", K(ret));
   } else if (OB_FAIL(get_data_table_part_ids(data_table_schema, part_ids))) {
@@ -228,7 +228,7 @@ int ObPartitionPreSplit::get_estimated_table_size(
     } else if (OB_FAIL(ObDbmsSpace::estimate_index_table_size(
         sql_proxy,
         &data_table_schema,
-        cost_info,
+        cost_info, 
         part_sizes))) {
       LOG_WARN("[PRE_SPLIT] fail to estimate index table size", K(ret), K(cost_info));
     } else if (part_sizes.count() != part_ids.count()) {
@@ -245,10 +245,10 @@ int ObPartitionPreSplit::get_estimated_table_size(
 /*
  description:
    1. exist main table
-   2. exist global table
+   2. exist global table 
 */
 int ObPartitionPreSplit::get_exist_table_size(
-    const ObTableSchema &table_schema,
+    const ObTableSchema &table_schema, 
     ObIArray<TabletIDSize> &tablet_size)
 {
   int ret = OB_SUCCESS;
@@ -267,14 +267,14 @@ int ObPartitionPreSplit::get_exist_table_size(
 }
 
 int ObPartitionPreSplit::get_exist_table_size(
-    const ObTableSchema &table_schema,
-    int64_t &table_size)
+    const ObTableSchema &table_schema, 
+    int64_t &table_size) 
 {
   int ret = OB_SUCCESS;
   table_size = 0;
   if (OB_UNLIKELY(!table_schema.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid table schema", K(ret), K(table_schema));
+    LOG_WARN("invalid table schema", K(ret), K(table_schema));  
   } else {
     uint64_t tenant_id = table_schema.get_tenant_id();
     uint64_t table_id = table_schema.get_table_id();
@@ -312,7 +312,7 @@ int ObPartitionPreSplit::get_exist_table_size(
 }
 
 int ObPartitionPreSplit::get_global_index_pre_split_schema_if_need(
-    const int64_t tenant_id,
+    const int64_t tenant_id, 
     const int64_t session_id,
     const ObString &database_name,
     const ObString &table_name,
@@ -336,7 +336,7 @@ int ObPartitionPreSplit::get_global_index_pre_split_schema_if_need(
     LOG_WARN("[PRE_SPLIT] fail to get tenant schema guard", K(ret), K(tenant_id));
   } else if (OB_FALSE_IT(schema_guard.set_session_id(session_id))) {
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, database_name, table_name, false/*is_index*/, data_table_schema))) {
-    LOG_WARN("[PRE_SPLIT] fail to get table schema", K(ret), K(tenant_id), K(database_name), K(table_name));
+    LOG_WARN("[PRE_SPLIT] fail to get table schema", K(ret), K(tenant_id), K(database_name), K(table_name));                 
   } else if (OB_ISNULL(data_table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("[PRE_SPLIT] table not exist", K(ret), KP(data_table_schema));
@@ -384,7 +384,7 @@ int ObPartitionPreSplit::get_global_index_pre_split_schema_if_need(
 */
 int ObPartitionPreSplit::do_table_pre_split_if_need(
     const ObString &db_name,
-    const ObDDLType ddl_type,
+    const ObDDLType ddl_type, 
     const bool is_building_global_index,
     const ObTableSchema &data_table_schema,
     const ObTableSchema &ori_table_schema,
@@ -472,24 +472,24 @@ int ObPartitionPreSplit::do_pre_split_global_index(
   } else if (OB_FAIL(get_exist_table_size(data_table_schema, data_table_physical_size))) {  // get data table size
     LOG_WARN("[PRE_SPLIT] fail to get data table size", K(ret), K(data_table_schema));
   }
-  LOG_DEBUG("[PRE_SPLIT] size for create global index",
+  LOG_DEBUG("[PRE_SPLIT] size for create global index", 
     K(ret), K(split_size), K(data_table_physical_size), K(physical_size), K(tablets_size_array));
   if (OB_FAIL(ret)) {
   } else if (FALSE_IT(get_split_num(physical_size, split_size, split_num))) {
   } else if (split_num < 2) {
     // do nothing
-    LOG_DEBUG("[PRE_SPLIT] tablet physical size no reach split limited, no need to split",
+    LOG_DEBUG("[PRE_SPLIT] tablet physical size no reach split limited, no need to split", 
       K(physical_size), K(split_size), K(split_num), K(tablets_size_array));
   } else if (OB_FAIL(build_global_index_pre_split_ranges( // none partition table, partition key should be rowkey
-      tenant_id,
+      tenant_id, 
       data_table_physical_size,
       split_num,
       db_name,
       new_index_schema,
       data_table_schema))) {
-    LOG_WARN("[PRE_SPLIT] fail to build pre split ranges",
+    LOG_WARN("[PRE_SPLIT] fail to build pre split ranges",  
       K(ret), K(source_tablet_id), K(tenant_id), K(physical_size));
-  }
+  } 
   if(OB_FAIL(ret)) {
   } else if (OB_FAIL(build_split_tablet_partition_schema(
       tenant_id,
@@ -498,8 +498,8 @@ int ObPartitionPreSplit::do_pre_split_global_index(
       inc_partition_schema))) {
     LOG_WARN("[PRE_SPLIT] fail to build one split tablet part schema", K(ret), K(tenant_id), K(source_tablet_id));
   } else if (OB_FAIL(build_new_table_schema(
-      ori_index_schema,
-      inc_partition_schema,
+      ori_index_schema, 
+      inc_partition_schema, 
       new_index_schema))) {
     LOG_WARN("[PRE_SPLIT] fail to build new table schema", K(ret), K(inc_partition_schema));
   }
@@ -525,10 +525,10 @@ int ObPartitionPreSplit::do_pre_split_main_table(
   if (OB_FAIL(build_table_pre_split_schema(
       tenant_id,
       split_size,
-      db_name,
+      db_name, 
       ori_table_schema,
       new_table_schema))) {
-    LOG_WARN("[PRE_SPLIT] fail to build split table schema", K(ret),
+    LOG_WARN("[PRE_SPLIT] fail to build split table schema", K(ret), 
       K(tenant_id), K(ori_table_schema), K(new_table_schema));
   }
   LOG_DEBUG("[PRE_SPLIT] finish do pre split", K(ret), K(ori_table_schema), K(new_table_schema));
@@ -537,7 +537,7 @@ int ObPartitionPreSplit::do_pre_split_main_table(
 
 /*
   function description:
-    constraint check:
+    constraint check: 
     1. should be range partition and partition level > 0, or table is auto split partition table (auto split partition table / auto split none partition table)
     2. not support interval partition
     3. not support none user table/global index
@@ -550,7 +550,7 @@ int ObPartitionPreSplit::check_table_can_do_pre_split(
   int ret = OB_SUCCESS;
   const ObPartitionOption &part_option = table_schema.get_part_option();
   const bool is_user_table = table_schema.is_user_table();
-  const bool is_global_index_table =
+  const bool is_global_index_table = 
     table_schema.is_global_normal_index_table() || table_schema.is_global_unique_index_table();
 
   if (OB_UNLIKELY(table_schema.is_table_without_pk())) {
@@ -572,7 +572,7 @@ int ObPartitionPreSplit::check_table_can_do_pre_split(
   } else if (!part_option.is_range_part()) { // partiton by range/range columns type
     // part_option.get_part_func_expr_str().empty() makes sure the user doesn't specify the part func expr
     if (is_global_index_table && part_option.is_hash_part() && part_option.get_part_func_expr_str().empty()) {
-      /* case: create index idx1 on t1(c1), default partition type is hash */
+      /* case: create index idx1 on t1(c1), default partition type is hash */ 
       LOG_INFO("[pre_split] support global index table without partition by", K(part_option));
     } else {
       ret = OB_NOT_SUPPORTED;
@@ -584,15 +584,15 @@ int ObPartitionPreSplit::check_table_can_do_pre_split(
     // like:
     //    1. alter table xxx partition by range(xxx) size(), partition key should be include in rowkey
     //    2. alter table xxx partition by range() size(), partition key is rowkey by default.
-    // For these two scenarios of altering automatic partition properties, the preceding RS has already performed the verification,
+    // For these two scenarios of altering automatic partition properties, the preceding RS has already performed the verification, 
     // so it's unnecessary to check the primary key prefix again here.
     // but the following case should be checked, like:
     //    3. alter table t1 partition by range(xxx) (partitions...)
     //    4. alter table t1 add index idx1(xxx) partition by range(xxx) (partitions...)
-    // For scenarios involving modifying the main table partition or creating an index table partition,
+    // For scenarios involving modifying the main table partition or creating an index table partition, 
     // it is necessary to verify whether the partition key is a prefix of the primary key.
     bool is_prefix = true;
-    if (table_schema.is_partitioned_table() &&
+    if (table_schema.is_partitioned_table() && 
         OB_FAIL(table_schema.is_partition_key_match_rowkey_prefix(is_prefix))) {
       LOG_WARN("[PRE_SPLIT] fail to check partition key match prefix rowkey", K(ret));
     } else if (!is_prefix) {
@@ -663,21 +663,21 @@ int ObPartitionPreSplit::build_table_pre_split_schema(
 
       if (FALSE_IT(get_split_num(data_table_phycical_size, split_size, split_num))) {
       } else if (split_num < 2) {
-        LOG_DEBUG("[PRE_SPLIT] tablet physical size no reach split limited, no need to split",
+        LOG_DEBUG("[PRE_SPLIT] tablet physical size no reach split limited, no need to split", 
             K(data_table_phycical_size), K(split_size), K(split_num));
       } else if (OB_FAIL(get_partition_columns_name(table_schema, part_columns_name))) {
         LOG_WARN("[PRE_SPLIT] fail to get partition columns name", K(ret));
       } else if (OB_FAIL(get_partition_columns_range(table_schema, part_columns_name.count(), part_columns_range))) {
         LOG_WARN("[PRE_SPLIT] fail to get partition ranges", K(ret));
-      } else if (OB_FAIL(range_builder.query_ranges(tenant_id, db_name, ori_table_schema,
-          part_columns_name,
+      } else if (OB_FAIL(range_builder.query_ranges(tenant_id, db_name, ori_table_schema, 
+          part_columns_name, 
           part_columns_range,
           split_num,
-          data_table_phycical_size,
-          allocator_,
+          data_table_phycical_size, 
+          allocator_, 
           tmp_ranges))) {
         LOG_WARN("[PRE_SPLIT] fail to query ranges", K(ret), K(part_columns_name), K(part_columns_range));
-      } else if (OB_FAIL(get_table_partition_bounder(table_schema, part_columns_name.size(),
+      } else if (OB_FAIL(get_table_partition_bounder(table_schema, part_columns_name.size(), 
           src_l_bound_val, src_h_bound_val, obj_l_buf, obj_h_buf))) {
       } else if (OB_FAIL(check_and_get_split_range(
           src_l_bound_val, src_h_bound_val, part_columns_name.size(), tmp_ranges))) {
@@ -689,17 +689,17 @@ int ObPartitionPreSplit::build_table_pre_split_schema(
           inc_partition_schema))) {
         LOG_WARN("[PRE_SPLIT] fail to build one split tablet part schema",  K(ret), K(tenant_id));
       }
-      LOG_DEBUG("[PRE_SPLIT] pre split info",
+      LOG_DEBUG("[PRE_SPLIT] pre split info", 
         K(ret), K(data_table_phycical_size), K(split_size), K(split_num), K(tmp_ranges));
     } else {
       const bool need_generate_part_name = false;
-      // 2. pre split every single tablet
+      // 2. pre split every single tablet 
       for (int64_t i = 0; OB_SUCC(ret) && i < tablet_size_array.count(); ++i) {
         const ObTabletID &tablet_id = tablet_size_array[i].first;
         const uint64_t physical_size = tablet_size_array[i].second;
         if (FALSE_IT(get_split_num(physical_size, split_size, split_num))) {
         } else if (split_num < 2) { // do nothing
-          LOG_DEBUG("[PRE_SPLIT] tablet physical size no reach split limited, no need to split",
+          LOG_DEBUG("[PRE_SPLIT] tablet physical size no reach split limited, no need to split", 
             K(tablet_id), K(physical_size), K(split_num));
         } else if (!tablet_id.is_valid()) {
           ret = OB_ERR_UNEXPECTED;
@@ -712,7 +712,7 @@ int ObPartitionPreSplit::build_table_pre_split_schema(
             db_name,
             ori_table_schema,
             table_schema))) {
-          LOG_WARN("[PRE_SPLIT] fail to build pre split ranges",
+          LOG_WARN("[PRE_SPLIT] fail to build pre split ranges", 
             K(ret), K(tablet_id), K(tenant_id), K(physical_size));
         } else if (OB_FAIL(build_split_tablet_partition_schema(
             tenant_id,
@@ -723,7 +723,7 @@ int ObPartitionPreSplit::build_table_pre_split_schema(
         } else if (split_ranges_.count() > 0 && OB_FAIL(split_tablet_ids.push_back(tablet_id))) {
           LOG_WARN("[PRE_SPLIT] fail to push split tablet id to array", K(ret), K(tablet_id));
         } else {
-          LOG_DEBUG("[PRE_SPLIT] pre split info",
+          LOG_DEBUG("[PRE_SPLIT] pre split info", 
             K(ret), K(tablet_id), K(physical_size), K(split_size), K(split_num), K(split_ranges_), K(inc_partition_schema));
         }
       }
@@ -733,21 +733,21 @@ int ObPartitionPreSplit::build_table_pre_split_schema(
       if (!ori_table_schema.is_partitioned_table() || has_modify_partition_rule) {
          // 1. alter main none partition table or rebuild global index none partition table
          // 2. modify partition rule, we have to rebuild all partition schema
-        if (OB_FAIL(build_new_partition_table_schema(
-            ori_table_schema,
-            inc_partition_schema,
+        if (OB_FAIL(build_new_partition_table_schema( 
+            ori_table_schema, 
+            inc_partition_schema, 
             table_schema))) {
           LOG_WARN("[PRE_SPLIT] fail to build new index table schema.", K(ret), K(table_schema));
         }
       } else {
-        if (OB_FAIL(rebuild_partition_table_schema(
+        if (OB_FAIL(rebuild_partition_table_schema( 
             // 1. alter main partition table or rebuild global index partition table
-            split_tablet_ids,
+            split_tablet_ids, 
             ori_table_schema,
             inc_partition_schema,
             all_partition_schema,
             table_schema))) {
-          LOG_WARN("[PRE_SPLIT] fail to fill full tablet partition schema",
+          LOG_WARN("[PRE_SPLIT] fail to fill full tablet partition schema", 
             K(ret), K(ori_table_schema), K(inc_partition_schema));
         }
       }
@@ -769,10 +769,10 @@ ATTENTION!!
   part idx 1 low bound and so on :
 
   |-- part idx0 --|---part idx 1 --|-- part idx 2 --|
-  low0       high0/low1       high1/low2        high2
-
-  so part idx should be keep in order even thought there are have be splited.
-  for example, if we have three partitions like partition a/b/c, part idx is 1/2/3，if partition b split into
+  low0       high0/low1       high1/low2        high2      
+    
+  so part idx should be keep in order even thought there are have be splited. 
+  for example, if we have three partitions like partition a/b/c, part idx is 1/2/3，if partition b split into 
   two partition like b1 and b2，and b1 range is smaller than b2, than the part idx after pre-split
   should be like : a->1, b1->2, b2->3, c->4
 */
@@ -796,7 +796,7 @@ int ObPartitionPreSplit::generate_all_partition_schema(
     LOG_WARN("[PRE_SPLIT] part array is null", K(ret), K(ori_table_schema), K(inc_partition_schema));
   } else {
     int64_t cur_part_idx = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && i < ori_part_num && cur_part_idx < all_part_num; ++i) { // origin
+    for (int64_t i = 0; OB_SUCC(ret) && i < ori_part_num && cur_part_idx < all_part_num; ++i) { // origin 
       ObPartition *ori_part = ori_part_array[i];
       if (OB_ISNULL(ori_part)) {
         ret = OB_ERR_UNEXPECTED;
@@ -805,7 +805,7 @@ int ObPartitionPreSplit::generate_all_partition_schema(
         const ObTabletID &source_tablet_id = ori_part->get_tablet_id();
         // check this partition is in spliting
         PartLowBound low_bound_array;
-        for (int64_t j = 0; OB_SUCC(ret) && j < inc_part_num; ++j) { // find split part of source_tablet_id
+        for (int64_t j = 0; OB_SUCC(ret) && j < inc_part_num; ++j) { // find split part of source_tablet_id  
           ObPartition *inc_part = inc_part_array[j];
           if (OB_ISNULL(inc_part)) {
             ret = OB_ERR_UNEXPECTED;
@@ -818,7 +818,7 @@ int ObPartitionPreSplit::generate_all_partition_schema(
           }
         }
         if (OB_SUCC(ret)) {
-          if (low_bound_array.count() > 0) { // ori_part have been split
+          if (low_bound_array.count() > 0) { // ori_part have been split 
             lib::ob_sort(low_bound_array.begin(), low_bound_array.end(), PartRangeCmpFunc()); // sort part
             for (int64_t k = 0; OB_SUCC(ret) && k < low_bound_array.count(); ++k) {
               ObPartition *part = low_bound_array.at(k).second; // inc partition
@@ -848,11 +848,11 @@ int ObPartitionPreSplit::generate_all_partition_schema(
     if (OB_SUCC(ret)) {
       if (cur_part_idx != all_part_num) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("[PRE_SPLIT] fail to gen part idx, max part idx not equal to all part num",
+        LOG_WARN("[PRE_SPLIT] fail to gen part idx, max part idx not equal to all part num", 
           K(ret), K(cur_part_idx), K(all_part_num), K(all_partition_schema));
       } else if (all_part_num != all_partition_schema.get_partition_num()) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("[PRE_SPLIT] fail to gen part idx, partition num not match",
+        LOG_WARN("[PRE_SPLIT] fail to gen part idx, partition num not match", 
           K(ret), K(all_part_num), K(all_partition_schema));
       }
     }
@@ -863,16 +863,16 @@ int ObPartitionPreSplit::generate_all_partition_schema(
         LOG_WARN("[PRE_SPLIT] invalid ddl service", K(ret), KP(ddl_service_));
       } else if (OB_FAIL(ddl_service_->fill_part_name(ori_table_schema, all_partition_schema))) {
         LOG_WARN("[PRE_SPLIT] fail to build split table schema", K(ret), K(all_partition_schema));
-      }
+      } 
     }
   }
-
+  
   return ret;
 }
 
 int ObPartitionPreSplit::get_and_set_part_column_info(
-    ObTableSchema &table_schema,
-    char *rowkey_column_buf,
+    ObTableSchema &table_schema, 
+    char *rowkey_column_buf, 
     int64_t &buf_pos,
     int64_t &column_cnt)
 {
@@ -949,26 +949,26 @@ int ObPartitionPreSplit::build_new_table_schema(
       if (!part_option.get_part_func_expr_str().empty()) {
         // skip // part func expr is ready
       } else { // extract partition func expr from new table
-        ObString part_func_expr_str;
+        ObString part_func_expr_str; 
         char *rowkey_column_buf = nullptr;
         int64_t rowkey_str_buf_len = 0;
         int64_t actual_rowkey_column_cnt = 0; // rowkey column cnt expect duplicate main table rowkey
         if (OB_ISNULL(rowkey_column_buf = static_cast<char *>(allocator_.alloc(OB_MAX_SQL_LENGTH)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("[PRE_SPLIT] fail to alloc new_part_func_expr", K(ret));
-        } else if (OB_FAIL(get_and_set_part_column_info(new_table_schema,
-            rowkey_column_buf,
+        } else if (OB_FAIL(get_and_set_part_column_info(new_table_schema, 
+            rowkey_column_buf, 
             rowkey_str_buf_len,
             actual_rowkey_column_cnt))) {
           LOG_WARN("[PRE_SPLIT] fail to get rowkey column buf.", K(ret));
         } else if (FALSE_IT(part_func_expr_str.assign_ptr(
-          rowkey_column_buf,
+          rowkey_column_buf, 
           static_cast<int32_t>(rowkey_str_buf_len)))) {
         } else if (OB_FAIL(part_option.set_part_expr(part_func_expr_str))) {
           LOG_WARN("[PRE_SPLIT] set part expr failed", K(ret), K(part_func_expr_str));
         } else {
-          ObPartitionFuncType part_type = actual_rowkey_column_cnt > 1 ?
-            PARTITION_FUNC_TYPE_RANGE_COLUMNS :
+          ObPartitionFuncType part_type = actual_rowkey_column_cnt > 1 ? 
+            PARTITION_FUNC_TYPE_RANGE_COLUMNS : 
             PARTITION_FUNC_TYPE_RANGE;
           part_option.set_part_func_type(part_type);
         }
@@ -985,7 +985,7 @@ int ObPartitionPreSplit::build_new_table_schema(
       LOG_WARN("[PRE_SPLIT] fail to assign partition schema", K(ret), K(partition_schema));
     } else if (OB_FAIL(modify_partition_func_type_if_need(new_table_schema))) {
       LOG_WARN("[PRE_SPLIT] fail to modify partition type", K(ret), K(new_table_schema));
-    }
+    } 
     LOG_DEBUG("[PRE_SPLIT] build new schema finish", K(ori_table_schema), K(new_table_schema));
   }
   return ret;
@@ -994,7 +994,7 @@ int ObPartitionPreSplit::build_new_table_schema(
 /*
   如果分区键包含double等类型，需要把分区类型改成range column
 */
-int ObPartitionPreSplit::modify_partition_func_type_if_need(ObTableSchema &new_table_schema)
+int ObPartitionPreSplit::modify_partition_func_type_if_need(ObTableSchema &new_table_schema) 
 {
   int ret = OB_SUCCESS;
   if (!new_table_schema.is_partitioned_table()) {
@@ -1007,10 +1007,10 @@ int ObPartitionPreSplit::modify_partition_func_type_if_need(ObTableSchema &new_t
       LOG_WARN("fail to get column ids from partition keys", K(ret));
     } else {
       const ObColumnSchemaV2 *column_schema = NULL;
-      ObPartitionFuncType part_type = part_key_ids.count() > 1 ?
-        PARTITION_FUNC_TYPE_RANGE_COLUMNS :
+      ObPartitionFuncType part_type = part_key_ids.count() > 1 ? 
+        PARTITION_FUNC_TYPE_RANGE_COLUMNS : 
         PARTITION_FUNC_TYPE_RANGE;
-      for (int64_t i = 0; OB_SUCC(ret) && part_type != PARTITION_FUNC_TYPE_RANGE_COLUMNS
+      for (int64_t i = 0; OB_SUCC(ret) && part_type != PARTITION_FUNC_TYPE_RANGE_COLUMNS 
           && i < part_key_ids.count(); ++i) {
         uint64_t part_key_id = part_key_ids.at(i);
         if (part_key_id >= OB_MIN_SHADOW_COLUMN_ID || part_key_id < OB_APP_MIN_COLUMN_ID) {
@@ -1068,7 +1068,7 @@ int ObPartitionPreSplit::build_split_tablet_partition_schema(
       } else {
         new_partition.set_is_empty_partition_name(true); // generate new part name for split part
         new_partition.set_tenant_id(tenant_id);
-        new_partition.set_split_source_tablet_id(source_tablet_id);
+        new_partition.set_split_source_tablet_id(source_tablet_id); 
         new_partition.set_partition_type(PartitionType::PARTITION_TYPE_NORMAL);
         new_partition.set_part_idx(idx); // change later
         if (need_generate_part_name) {
@@ -1090,7 +1090,7 @@ int ObPartitionPreSplit::build_split_tablet_partition_schema(
   return ret;
 }
 /*
-  description:
+  description: 
     1. build index split range
   Attention:
     index_schema should be old index schema, because new index schema
@@ -1106,16 +1106,16 @@ int ObPartitionPreSplit::build_global_index_pre_split_ranges(
 {
   int ret = OB_SUCCESS;
   split_ranges_.reset(); // reset range
-  if (OB_UNLIKELY(tenant_id == OB_INVALID_TENANT_ID
-      || data_table_phycical_size <= 0
-      || split_num <= 0
+  if (OB_UNLIKELY(tenant_id == OB_INVALID_TENANT_ID 
+      || data_table_phycical_size <= 0 
+      || split_num <= 0 
       || db_name.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("[PRE_SPLIT] invalid argument.",
+    LOG_WARN("[PRE_SPLIT] invalid argument.", 
       K(ret), K(tenant_id), K(data_table_phycical_size), K(split_num), K(db_name));
   } else if (index_schema.get_data_table_id() != table_schema.get_table_id()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("[PRE_SPLIT] table id not equal.",
+    LOG_WARN("[PRE_SPLIT] table id not equal.", 
       K(ret), K(index_schema.get_data_table_id()), K(table_schema.get_table_id()));
   } else {
     ObSplitSampler range_builder;
@@ -1130,16 +1130,16 @@ int ObPartitionPreSplit::build_global_index_pre_split_ranges(
       LOG_WARN("[PRE_SPLIT] fail to get partition columns range", K(ret));
     } else if (OB_FAIL(get_partition_columns_range(index_schema, part_columns_name.count(), part_columns_range))) {
       LOG_WARN("[PRE_SPLIT] fail to get partition ranges", K(ret));
-    } else if (OB_FAIL(range_builder.query_ranges(tenant_id, db_name, table_schema,
-        part_columns_name,
+    } else if (OB_FAIL(range_builder.query_ranges(tenant_id, db_name, table_schema, 
+        part_columns_name, 
         part_columns_range,
         split_num,
-        data_table_phycical_size,
-        allocator_,
+        data_table_phycical_size, 
+        allocator_, 
         tmp_ranges))) {
     } else if (tmp_ranges.count() <= 0) {
       // empty range, do nothing
-    } else if (OB_FAIL(get_table_partition_bounder(index_schema, part_columns_name.count(),
+    } else if (OB_FAIL(get_table_partition_bounder(index_schema, part_columns_name.count(), 
         src_l_bound_val, src_h_bound_val, obj_l_buf, obj_h_buf))) {
       LOG_WARN("[PRE_SPLIT] fail ti get table partition bounder", K(ret), K(table_schema));
     } else if (OB_FAIL(check_and_get_split_range(
@@ -1161,7 +1161,7 @@ int ObPartitionPreSplit::get_partition_columns_range(
 {
   int ret = OB_SUCCESS;
   ObArray<ObNewRange> orig_part_range;
-  if (table_schema.is_partitioned_table()
+  if (table_schema.is_partitioned_table() 
       && OB_FAIL(get_partition_ranges(table_schema, orig_part_range))) {
     LOG_WARN("fail to get partition ranges", K(ret), K(table_schema));
   } else if (orig_part_range.count() < 0) {
@@ -1204,7 +1204,7 @@ int ObPartitionPreSplit::get_partition_columns_range(
 
 int ObPartitionPreSplit::get_partition_ranges(
     const ObTableSchema &table_schema,
-    ObIArray<ObNewRange> &part_range)
+    ObIArray<ObNewRange> &part_range) 
 {
   int ret = OB_SUCCESS;
   ObPartition **part_array = table_schema.get_part_array();
@@ -1213,7 +1213,7 @@ int ObPartitionPreSplit::get_partition_ranges(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[PRE_SPLIT] part array is null, not expected", K(ret), K(table_schema));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < partition_num; ++i) { // find split part of source_tablet_id
+    for (int64_t i = 0; OB_SUCC(ret) && i < partition_num; ++i) { // find split part of source_tablet_id  
       ObPartition *partition = part_array[i];
       if (OB_ISNULL(partition)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1235,7 +1235,7 @@ description
   1. if partition column is double or float, dont not support yet
 */
 int ObPartitionPreSplit::get_partition_columns_name(
-    const ObTableSchema &table_schema,
+    const ObTableSchema &table_schema, 
     ObIArray<ObString> &part_columns)
 {
   int ret = OB_SUCCESS;
@@ -1248,14 +1248,14 @@ int ObPartitionPreSplit::get_partition_columns_name(
     for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); ++i) {
       if (OB_FAIL(rowkey_info.get_column_id(i, rowkey_col_id))) {
         LOG_WARN("[PRE_SPLIT] failed to column id");
-      } else if (rowkey_col_id >= OB_MIN_SHADOW_COLUMN_ID
+      } else if (rowkey_col_id >= OB_MIN_SHADOW_COLUMN_ID 
           || rowkey_col_id < OB_APP_MIN_COLUMN_ID) {
         continue;
       } else if (OB_ISNULL(column_schema = table_schema.get_column_schema(rowkey_col_id))) {
         ret = OB_ENTRY_NOT_EXIST;
         LOG_WARN("[PRE_SPLIT] column schema not exist", K(ret), K(table_schema), K(rowkey_col_id));
       } else if (table_schema.is_index_table() && column_schema->get_index_position() <= 0) {
-        // if table is index table, ignore duplicate rowkey from main table rowkey column
+        // if table is index table, ignore duplicate rowkey from main table rowkey column 
       } else if (OB_FAIL(part_columns.push_back(column_schema->get_column_name_str()))) {
         LOG_WARN("[PRE_SPLIT] failed to add string", K(ret));
       }
@@ -1280,9 +1280,9 @@ int ObPartitionPreSplit::get_partition_columns_name(
   获取分区表的特定tablet的边界，需要保证预分裂时原表的分区规则没发生变更的情况下，才需要走这个函数。
 */
 int ObPartitionPreSplit::get_partition_table_tablet_bounder(
-    const ObTableSchema &table_schema,
-    const ObTabletID &source_tablet_id,
-    ObRowkey &l_bound_val,
+    const ObTableSchema &table_schema, 
+    const ObTabletID &source_tablet_id, 
+    ObRowkey &l_bound_val, 
     ObRowkey &h_bound_val)
 {
   int ret = OB_SUCCESS;
@@ -1292,7 +1292,7 @@ int ObPartitionPreSplit::get_partition_table_tablet_bounder(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[PRE_SPLIT] part array is null, not expected", K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < partition_num; ++i) { // find split part of source_tablet_id
+    for (int64_t i = 0; OB_SUCC(ret) && i < partition_num; ++i) { // find split part of source_tablet_id  
       ObPartition *partition = part_array[i];
       if (OB_ISNULL(partition)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1324,7 +1324,7 @@ int ObPartitionPreSplit::get_partition_table_tablet_bounder(
 }
 
 /*
-  if ddl is modifing partition rules, we will redefinition partition based on the low and high limited user had set.
+  if ddl is modifing partition rules, we will redefinition partition based on the low and high limited user had set. 
   but the finial partition rules may be diff from user setting after pre-split
 */
 int ObPartitionPreSplit::check_is_modify_partition_rule(
@@ -1342,7 +1342,7 @@ int ObPartitionPreSplit::check_is_modify_partition_rule(
   if (!new_table_schema.is_partitioned_table()) {
     // skip, only partition table should be check, new table is not partition table means not modifing partition rule
   } else if (!old_table_schema.is_partitioned_table()) {
-    // ori table is auto split none partition table, and new table is auto split partition table,
+    // ori table is auto split none partition table, and new table is auto split partition table, 
     // so is must be modified partition rule
     has_modify_partition_rule = true;
   } else if (OB_FAIL(get_partition_columns_name(new_table_schema, new_part_names))) {
@@ -1368,8 +1368,8 @@ int ObPartitionPreSplit::check_is_modify_partition_rule(
         }
       }
     }
-    LOG_DEBUG("[PRE_SPLIT] check partition rule changed",
-      K(ret), K(has_modify_partition_rule),
+    LOG_DEBUG("[PRE_SPLIT] check partition rule changed", 
+      K(ret), K(has_modify_partition_rule), 
       K(old_part_names), K(new_part_names), K(old_part_ranges), K(new_part_ranges));
   }
   return ret;
@@ -1399,17 +1399,17 @@ int ObPartitionPreSplit::build_tablet_pre_split_ranges(
   ObArray<ObNewRange> tmp_ranges;
   ObArray<ObString> part_columns_name;
   if (OB_UNLIKELY(tenant_id == OB_INVALID_TENANT_ID || tablet_phycical_size <= 0
-      || split_num <= 0
+      || split_num <= 0 
       || !source_tablet_id.is_valid()
       || db_name.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("[PRE_SPLIT] invalid argument.",  K(ret), K(tenant_id),
+    LOG_WARN("[PRE_SPLIT] invalid argument.",  K(ret), K(tenant_id), 
       K(source_tablet_id), K(split_num), K(db_name), K(tablet_phycical_size));
-  } else if (OB_FAIL(range_builder.query_ranges(tenant_id, db_name, old_table_schema,
-      source_tablet_id,
+  } else if (OB_FAIL(range_builder.query_ranges(tenant_id, db_name, old_table_schema, 
+      source_tablet_id, 
       split_num,
-      tablet_phycical_size,
-      allocator_,
+      tablet_phycical_size, 
+      allocator_, 
       tmp_ranges))) {
     LOG_WARN("[PRE_SPLIT] fail to get query ranges.", K(ret), K(tenant_id), K(source_tablet_id), K(old_table_schema));
   } else if (tmp_ranges.count() <= 0) {
@@ -1423,14 +1423,14 @@ int ObPartitionPreSplit::build_tablet_pre_split_ranges(
     ObRowkey src_h_bound_val;
     ObObj obj_l_buf[OB_MAX_ROWKEY_COLUMN_NUMBER];
     ObObj obj_h_buf[OB_MAX_ROWKEY_COLUMN_NUMBER];
-    if (old_table_schema.is_partitioned_table()) {
-      if (OB_FAIL(get_partition_table_tablet_bounder(old_table_schema, source_tablet_id,
-          src_l_bound_val,
+    if (old_table_schema.is_partitioned_table()) {  
+      if (OB_FAIL(get_partition_table_tablet_bounder(old_table_schema, source_tablet_id, 
+          src_l_bound_val, 
           src_h_bound_val))) {
         LOG_WARN("[PRE_SPLIT] fail to get partition table tablet bounder", K(ret), K(source_tablet_id));
       }
     } else {
-      if (OB_FAIL(get_table_partition_bounder(new_table_schema, part_columns_name.count(),
+      if (OB_FAIL(get_table_partition_bounder(new_table_schema, part_columns_name.count(), 
         src_l_bound_val, src_h_bound_val, obj_l_buf, obj_h_buf))) {
         LOG_WARN("[PRE_SPLIT] fail to get partition bounder", K(ret), K(new_table_schema));
       }
@@ -1438,7 +1438,7 @@ int ObPartitionPreSplit::build_tablet_pre_split_ranges(
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(check_and_get_split_range(
         src_l_bound_val, src_h_bound_val, part_columns_name.count(), tmp_ranges))) {
-      LOG_WARN("[PRE_SPLIT] fail to check and get split range.",
+      LOG_WARN("[PRE_SPLIT] fail to check and get split range.", 
         K(ret), K(tmp_ranges), K(src_l_bound_val), K(src_h_bound_val));
     }
   }
@@ -1461,7 +1461,7 @@ int ObPartitionPreSplit::get_table_partition_bounder(
   if (OB_ISNULL(obj_l_buf) || OB_ISNULL(obj_h_buf)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[PRE_SPLIT] invalid argument", K(ret), KP(obj_l_buf), KP(obj_h_buf));
-  } else if (table_schema.is_partitioned_table() &&
+  } else if (table_schema.is_partitioned_table() && 
       OB_FAIL(get_partition_ranges(table_schema, partition_ranges))) {
     LOG_WARN("[PRE_SPLIT] fail to get partition ranges", K(ret), K(table_schema));
   } else if (partition_ranges.count() > 0) {
@@ -1487,28 +1487,28 @@ int ObPartitionPreSplit::get_table_partition_bounder(
   2. 需要确认每个range是否只有一个high bound val，如果这种场景则需要保证tmp_split_ranges的range是有序递增的。
 */
 int ObPartitionPreSplit::check_and_get_split_range(
-    const ObRowkey &src_l_bound_val,
+    const ObRowkey &src_l_bound_val, 
     const ObRowkey &src_h_bound_val,
     const int64_t part_key_length,
     ObIArray<ObNewRange> &tmp_split_ranges)
 {
   int ret = OB_SUCCESS;
   split_ranges_.reset(); // reset range
-
+ 
   for (int64_t idx = 0; OB_SUCC(ret) && idx < tmp_split_ranges.count(); ++idx) {
     ObNewRange &tmp_range = tmp_split_ranges.at(idx);
     const ObRowkey& l_bound_val = tmp_range.get_start_key();
     const ObRowkey& h_bound_val = tmp_range.get_end_key();
     if (l_bound_val > h_bound_val) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("[PRE_SPLIT] fail to check and get split range, invalid split range",
+      LOG_WARN("[PRE_SPLIT] fail to check and get split range, invalid split range", 
         K(ret), K(l_bound_val), K(h_bound_val));
     } else if ((l_bound_val.is_valid() && src_l_bound_val.is_valid() && l_bound_val < src_l_bound_val)
             || (h_bound_val.is_valid() && src_h_bound_val.is_valid() && h_bound_val > src_h_bound_val)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("[PRE_SPLIT] fail to check and get split range, out of source range.",
-        K(ret),
-        K(l_bound_val), K(h_bound_val),
+      LOG_WARN("[PRE_SPLIT] fail to check and get split range, out of source range.", 
+        K(ret), 
+        K(l_bound_val), K(h_bound_val), 
         K(src_l_bound_val), K(src_h_bound_val));
     } else {
       // ensure that there is no intersection between the two ranges except the beginning and the end
@@ -1520,8 +1520,8 @@ int ObPartitionPreSplit::check_and_get_split_range(
           continue; // is vaild range
         }
         ret = OB_ERR_UNEXPECTED; // invalid range
-        LOG_WARN("[PRE_SPLIT] fail to check split range, ranges is illegal", K(ret),
-          K(l_bound_val), K(h_bound_val),
+        LOG_WARN("[PRE_SPLIT] fail to check split range, ranges is illegal", K(ret), 
+          K(l_bound_val), K(h_bound_val), 
           K(next_l_bound_val), K(next_h_bound_val));
       }
       if (OB_SUCC(ret)) {

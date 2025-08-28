@@ -70,10 +70,10 @@ int ObTenantArchiveMgr::is_archive_running(
 
 // piece op
 int ObTenantArchiveMgr::decide_piece_id(
-    const SCN &piece_start_scn,
+    const SCN &piece_start_scn, 
     const int64_t start_piece_id, 
     const int64_t piece_switch_interval, 
-    const SCN &scn,
+    const SCN &scn, 
     int64_t &piece_id)
 {
   int ret = OB_SUCCESS;
@@ -96,7 +96,7 @@ int ObTenantArchiveMgr::decide_piece_id(
 }
 
 int ObTenantArchiveMgr::decide_piece_start_scn(
-    const SCN &piece_start_scn,
+    const SCN &piece_start_scn, 
     const int64_t start_piece_id, 
     const int64_t piece_switch_interval, 
     const int64_t piece_id, 
@@ -122,7 +122,7 @@ int ObTenantArchiveMgr::decide_piece_start_scn(
 }
 
 int ObTenantArchiveMgr::decide_piece_end_scn(
-    const SCN &piece_start_scn,
+    const SCN &piece_start_scn, 
     const int64_t start_piece_id, 
     const int64_t piece_switch_interval, 
     const int64_t piece_id, 

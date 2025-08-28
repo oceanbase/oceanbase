@@ -71,10 +71,10 @@ public:
   };
 
 public:
-  class TestSSMicroCacheThread : public Threads
+  class TestSSMicroCacheThread : public Threads 
   {
   public:
-    enum class TestParallelType
+    enum class TestParallelType 
     {
       TEST_PARALLEL_GET_MICRO_BLOCK,
       TEST_PARALLEL_ADD_MICRO_BLOCK,
@@ -218,7 +218,7 @@ int TestSSMicroCache::TestSSMicroCacheThread::parallel_add_micro_block(int64_t i
               LOG_WARN("fail to add micro_block into cache", KR(ret), K(idx), K(micro_key));
             }
           } else {
-            struct UpdateOp
+            struct UpdateOp 
             {
               void operator()(HashMapPair<ObSSMicroBlockCacheKey, int64_t> &pair) { pair.second++; }
             };
@@ -274,7 +274,7 @@ TEST_F(TestSSMicroCache, test_get_micro_block)
   }
   ASSERT_EQ(micro_cnt, cache_stat.micro_stat().total_micro_cnt_);
   ASSERT_EQ(micro_cnt, cache_stat.hit_stat().add_cnt_);
-
+  
   // 3. wait some time for persist_task
   ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
 
@@ -294,7 +294,7 @@ TEST_F(TestSSMicroCache, test_get_micro_block)
     TestSSCommonUtil::MicroBlockInfo &cur_info = micro_block_info_arr.at(i);
     ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(cur_info.macro_id_, cur_info.offset_, cur_info.size_);
     ObSSCacheHitType hit_type;
-    ASSERT_EQ(OB_SUCCESS, micro_cache->inner_get_micro_block_handle(micro_key, micro_info, micro_meta_handle, mem_blk_handle,
+    ASSERT_EQ(OB_SUCCESS, micro_cache->inner_get_micro_block_handle(micro_key, micro_info, micro_meta_handle, mem_blk_handle, 
               phy_blk_handle, hit_type, true));
     if (hit_type == ObSSCacheHitType::SS_CACHE_HIT_DISK) {
       persist_idx = i;
@@ -333,7 +333,7 @@ TEST_F(TestSSMicroCache, test_get_micro_block)
   allocator.clear();
 }
 
-/*
+/* 
   Multiple threads read micro blocks in parallel, read req may hit object storage, disk or memory.
 */
 TEST_F(TestSSMicroCache, test_parallel_get_micro_block)
@@ -343,7 +343,7 @@ TEST_F(TestSSMicroCache, test_parallel_get_micro_block)
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
   ObSSReleaseCacheTask &arc_task = micro_cache->task_runner_.release_cache_task_;
   arc_task.is_inited_ = false;
-
+  
   TestSSMicroCacheCtx ctx;
   const int64_t total_macro_blk_cnt = 40;
   ASSERT_EQ(OB_SUCCESS,
@@ -502,8 +502,8 @@ TEST_F(TestSSMicroCache, test_get_micro_block_cache)
   obj_handle.reset();
 }
 
-/*
-  Test five scenarios:
+/* 
+  Test five scenarios: 
     1. add micro_block for the first time.
     2. add micro_block which has been added into T1.
     3. micro_block is evicted to ghost and added again.
@@ -532,7 +532,7 @@ TEST_F(TestSSMicroCache, test_add_micro_block_cache)
   ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_block_meta_handle(micro_key, micro_meta_handle, false));
   ASSERT_EQ(true, micro_meta_handle()->is_in_l1());
   ASSERT_EQ(false, micro_meta_handle()->is_in_ghost());
-
+  
   // Scenario 2
   micro_meta_handle.reset();
   ASSERT_EQ(OB_SUCCESS, micro_cache->add_micro_block_cache(
@@ -540,7 +540,7 @@ TEST_F(TestSSMicroCache, test_add_micro_block_cache)
   ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_block_meta_handle(micro_key, micro_meta_handle, false));
   ASSERT_EQ(false, micro_meta_handle()->is_in_l1());
   ASSERT_EQ(false, micro_meta_handle()->is_in_ghost());
-
+  
   // Scenario 3
   micro_meta_handle()->mark_invalid();
   micro_meta_handle()->is_in_ghost_ = true;
@@ -592,7 +592,7 @@ TEST_F(TestSSMicroCache, test_parallel_add_micro_block_randomly)
 }
 
 /*
-  Test two scenarios:
+  Test two scenarios: 
     1. add micro_block with transfer_seg = false.
     2. add micro_block with transfer_seg = true.
 */
@@ -631,7 +631,7 @@ TEST_F(TestSSMicroCache, test_add_micro_block_cache_for_prewarm)
 }
 
 /*
-  key0 in T, key1 in B, key2 in memory, key3 has never been cached.
+  key0 in T, key1 in B, key2 in memory, key3 has never been cached. 
   key1 and key 3 will be choosen when call get_not_exist_micro_blocks().
 */
 TEST_F(TestSSMicroCache, test_get_not_exist_micro_blocks)
@@ -680,7 +680,7 @@ TEST_F(TestSSMicroCache, test_get_not_exist_micro_blocks)
   ASSERT_EQ(true, micro_meta_handle()->is_persisted());
   ASSERT_EQ(false, micro_meta_handle()->is_in_ghost());
   ASSERT_EQ(true, micro_meta_handle()->is_in_l1());
-
+  
   // key1
   micro_meta_handle.reset();
   ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_block_meta_handle(micro_key1, micro_meta_handle, false));
@@ -709,8 +709,8 @@ TEST_F(TestSSMicroCache, test_get_not_exist_micro_blocks)
   ASSERT_EQ(micro_key3, out_arr[1].micro_key_);
 }
 
-/*
-  Test the effect of update_micro_block_heat when set transfer_seg, update_access_time true/false
+/* 
+  Test the effect of update_micro_block_heat when set transfer_seg, update_access_time true/false 
 */
 TEST_F(TestSSMicroCache, test_update_micro_block_heat)
 {
@@ -739,7 +739,7 @@ TEST_F(TestSSMicroCache, test_update_micro_block_heat)
   ASSERT_EQ(OB_SUCCESS, micro_cache->update_micro_block_heat(micro_keys, false/*transfer_seg*/, false/*update_access_time*/, 0));
   ASSERT_EQ(old_heat, micro_meta_handle()->get_heat_val());
   ASSERT_EQ(true, micro_meta_handle()->is_in_l1());
-
+  
   ASSERT_EQ(OB_SUCCESS, micro_cache->update_micro_block_heat(micro_keys, false/*transfer_seg*/, true/*update_access_time*/, 0));
   ASSERT_LT(old_heat, micro_meta_handle()->get_heat_val());
   ASSERT_EQ(true, micro_meta_handle()->is_in_l1());
@@ -781,7 +781,7 @@ TEST_F(TestSSMicroCache, test_free_space_for_prewarm)
   ASSERT_EQ(work_limit, arc_info.work_limit_);
   micro_cache->begin_free_space_for_prewarm();
   ASSERT_EQ(work_limit, arc_info.work_limit_);
-
+  
   micro_cache->finish_free_space_for_prewarm();
   ASSERT_EQ(limit, arc_info.work_limit_);
   micro_cache->finish_free_space_for_prewarm();
@@ -830,8 +830,8 @@ TEST_F(TestSSMicroCache, test_get_batch_la_micro_keys)
   ASSERT_EQ(key_cnt / 3 * 2, micro_cache->latest_access_micro_key_mgr_.latest_access_micro_key_set_.size());
 }
 
-/*
-  Test three scenarios:
+/* 
+  Test three scenarios: 
     1. used_data_block_cnt % split_cnt == 0
     2. used_data_block_cnt % split_cnt != 0
     3. used_data_block_cnt < split_cnt
@@ -1037,7 +1037,7 @@ TEST_F(TestSSMicroCache, test_disable_micro_cache)
   ASSERT_NE(nullptr, micro_data);
   MEMSET(micro_data, 'c', size);
   micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, size);
-
+  
   // fail to add micro_block into cache if disable cache
   micro_cache->disable_cache();
   micro_handle.reset();
@@ -1115,7 +1115,7 @@ TEST_F(TestSSMicroCache, test_disable_micro_cache)
   micro_handle.reset();
   ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_block_meta_handle(micro_key, micro_handle, true));
   const int64_t old_heat_val = micro_handle.get_ptr()->get_heat_val();
-
+  
   // fail to update heat_val if disable cache
   micro_cache->disable_cache();
   ASSERT_EQ(OB_SS_MICRO_CACHE_DISABLED, micro_cache->update_micro_block_heat(micro_keys_arr, true, true, time_delta_s));
@@ -1234,7 +1234,7 @@ TEST_F(TestSSMicroCache, test_clear_micro_cache)
   ASSERT_EQ(0, micro_cache->cache_stat_.phy_blk_stat().reusable_blk_cnt_);
   ASSERT_EQ(0, micro_cache->cache_stat_.phy_blk_stat().phy_ckpt_blk_used_cnt_);
   ASSERT_EQ(0, micro_cache->cache_stat_.phy_blk_stat().meta_blk_used_cnt_);
-  ASSERT_EQ(phy_blk_mgr.blk_cnt_info_.data_blk_.free_blk_cnt(), micro_cache->cache_stat_.phy_blk_stat().data_blk_cnt_ -
+  ASSERT_EQ(phy_blk_mgr.blk_cnt_info_.data_blk_.free_blk_cnt(), micro_cache->cache_stat_.phy_blk_stat().data_blk_cnt_ - 
                                                                 micro_cache->cache_stat_.phy_blk_stat().data_blk_used_cnt_);
 
   // check CacheHitStat

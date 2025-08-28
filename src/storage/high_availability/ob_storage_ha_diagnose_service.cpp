@@ -60,7 +60,7 @@ int ObStorageHADiagService::init(common::ObMySQLProxy *sql_proxy)
       is_inited_ = true;
     }
   }
-
+  
   return ret;
 }
 
@@ -162,17 +162,17 @@ void ObStorageHADiagService::run1()
     } else if (!((data_version >= DATA_VERSION_4_2_2_0 && data_version < DATA_VERSION_4_3_0_0)
         || data_version >= DATA_VERSION_4_3_1_0)) { /* [4.2.2, 4.3.0) && [4.3.1, ~) */
       //do nothing
-    } else if (OB_FAIL(do_clean_history_(ObStorageHADiagModule::TRANSFER_ERROR_DIAGNOSE,
+    } else if (OB_FAIL(do_clean_history_(ObStorageHADiagModule::TRANSFER_ERROR_DIAGNOSE, 
         err_diag_end_timestamp_))) {
       LOG_WARN("failed to do clean error diagnose info", K(ret), K(err_diag_end_timestamp_));
-    } else if (OB_FAIL(do_clean_history_(ObStorageHADiagModule::TRANSFER_PERF_DIAGNOSE,
+    } else if (OB_FAIL(do_clean_history_(ObStorageHADiagModule::TRANSFER_PERF_DIAGNOSE, 
         perf_diag_end_timestamp_))) {
       LOG_WARN("failed to do clean perf diagnose info", K(ret), K(perf_diag_end_timestamp_));
     } else if (OB_FAIL(do_report_())) {
       LOG_WARN("failed to do report", K(ret));
     } else if (OB_FAIL(do_clean_transfer_related_info_())) {
       LOG_WARN("failed to do clean transfer related info", K(ret));
-    }
+    } 
 
     ObThreadCondGuard guard(thread_cond_);
     if (has_set_stop() || wakeup_cnt_ > 0) {
@@ -191,7 +191,7 @@ ObStorageHADiagService &ObStorageHADiagService::instance()
 }
 
 int ObStorageHADiagService::get_info_from_type_(const ObStorageHADiagTaskKey &key, ObStorageHADiagInfo *&info,
-                                                ObTransferErrorDiagInfo &transfer_err_diag,
+                                                ObTransferErrorDiagInfo &transfer_err_diag, 
                                                 ObTransferPerfDiagInfo &transfer_perf_diag,
                                                 ObIAllocator &alloc)
 {
@@ -213,15 +213,15 @@ int ObStorageHADiagService::get_info_from_type_(const ObStorageHADiagTaskKey &ke
       }
       default: {
         ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid module", K(ret), K(key.module_));
+        LOG_WARN("invalid module", K(ret), K(key.module_)); 
         break;
-      }
+      } 
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error", K(ret), K(key));
+    LOG_WARN("unexpected error", K(ret), K(key)); 
   }
-
+  
   return ret;
 }
 
@@ -241,7 +241,7 @@ int ObStorageHADiagService::add_task(const ObStorageHADiagTaskKey &key)
       if (OB_FAIL(remove_oldest_without_lock_())) {
         LOG_WARN("failed to remove first", K(ret), K(task_keys_.size()));
       }
-    }
+    } 
     if (OB_FAIL(ret)) {
       // do nothing
     } else if (OB_FAIL(task_keys_.set_refactored(key, now))) {
@@ -333,7 +333,7 @@ int ObStorageHADiagService::do_clean_history_(const ObStorageHADiagModule module
 #endif
 
 
-    if (OB_FAIL(op_.get_batch_row_keys(*sql_proxy_, OB_SYS_TENANT_ID,
+    if (OB_FAIL(op_.get_batch_row_keys(*sql_proxy_, OB_SYS_TENANT_ID, 
         module, end_timestamp, timestamp_array))) {
       LOG_WARN("failed to get row keys", K(ret), K(end_timestamp), K(timestamp_array));
     } else if (0 == timestamp_array.count()) {
@@ -342,7 +342,7 @@ int ObStorageHADiagService::do_clean_history_(const ObStorageHADiagModule module
     } else if (timestamp_array.at(0) > delete_timestamp) {
       break;
       LOG_INFO("have not item need to clean ", K(ret), K(delete_timestamp), K(timestamp_array.at(0)));
-    } else if (OB_FAIL(op_.do_batch_delete(*sql_proxy_, OB_SYS_TENANT_ID,
+    } else if (OB_FAIL(op_.do_batch_delete(*sql_proxy_, OB_SYS_TENANT_ID, 
         module, timestamp_array, delete_timestamp, delete_index))) {
       LOG_WARN("failed to delete batch row", K(ret), K(timestamp_array), K(delete_timestamp));
     } else {
@@ -350,13 +350,13 @@ int ObStorageHADiagService::do_clean_history_(const ObStorageHADiagModule module
     }
   }
   end_timestamp = 0;
-  return ret;
+  return ret; 
 }
 
 int ObStorageHADiagService::insert_inner_table_(
     ObMySQLTransaction &trans,
-    ObStorageHADiagMgr *mgr,
-    const ObStorageHADiagTaskKey &task_key,
+    ObStorageHADiagMgr *mgr, 
+    const ObStorageHADiagTaskKey &task_key, 
     ObStorageHADiagInfo &info)
 {
   int ret = OB_SUCCESS;
@@ -405,7 +405,7 @@ int ObStorageHADiagService::clean_task_key_without_lock_(const ObStorageHADiagTa
 
 int ObStorageHADiagService::report_to_inner_table_(
     ObMySQLTransaction &trans,
-    ObStorageHADiagMgr *mgr,
+    ObStorageHADiagMgr *mgr, 
     const ObStorageHADiagTaskKey &task_key)
 {
   int ret = OB_SUCCESS;
@@ -456,7 +456,7 @@ int ObStorageHADiagService::commit_trans_(
   } else if (OB_FAIL(trans.end(OB_SUCCESS == result))) {
     LOG_WARN("end transaction failed", K(ret));
   }
-
+  
   return ret;
 }
 
@@ -585,7 +585,7 @@ int ObStorageHADiagService::do_report_()
     }
   }
 
-  return ret;
+  return ret; 
 }
 
 int ObStorageHADiagService::do_clean_related_info_(ObLSService *ls_service, const share::ObLSID &ls_id, const uint64_t tenant_id)

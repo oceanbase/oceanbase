@@ -37,10 +37,10 @@ public:
                       ObExpr &rt_expr) const override;
 
   static int eval_treat(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
-
+  
   DECLARE_SET_LOCAL_SESSION_VARS;
 
-private:
+private:  
     DISALLOW_COPY_AND_ASSIGN(ObExprTreat);
 };
 

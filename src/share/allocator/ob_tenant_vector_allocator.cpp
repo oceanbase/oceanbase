@@ -124,12 +124,12 @@ void ObTenantVectorAllocator::destroy()
 }
 
 int64_t ObTenantVectorAllocator::hold()
-{
+{ 
   return lib::get_tenant_memory_hold(MTL_ID(), ObCtxIds::VECTOR_CTX_ID) + get_rb_mem_used();
 }
 
 int64_t ObTenantVectorAllocator::get_rb_mem_used()
-{
+{ 
   ObRbMemMgr *rb_mgr = MTL(ObRbMemMgr *);
   return rb_mgr != nullptr ? rb_mgr->get_vec_idx_used() : 0;
 }
@@ -154,7 +154,7 @@ void *ObTenantVectorAllocator::alloc(const int64_t size, const int64_t abs_expir
 // !!!!! NOTICE
 // This function will throw an exception when memory allocation fails,
 // so it can only be called within vsag and cannot be used elsewhere
-void *ObVsagMemContext::Allocate(size_t size)
+void *ObVsagMemContext::Allocate(size_t size) 
 {
   void *ret_ptr = nullptr;
   int ret = OB_SUCCESS;
@@ -163,7 +163,7 @@ void *ObVsagMemContext::Allocate(size_t size)
     void *ptr = ObVectorMemContext::alloc(actual_size);
     if (OB_NOT_NULL(ptr)) {
       ATOMIC_AAF(all_vsag_use_mem_, actual_size);
-
+    
       *(int64_t*)ptr = actual_size;
       ret_ptr = (char*)ptr + MEM_PTR_HEAD_SIZE;
     } else {
@@ -174,7 +174,7 @@ void *ObVsagMemContext::Allocate(size_t size)
       throw std::bad_alloc();
     }
   }
-
+  
   return ret_ptr;
 }
 
@@ -217,9 +217,9 @@ void *ObVsagMemContext::Reallocate(void* p, size_t size)
   return new_ptr;
 }
 
-int ObVsagMemContext::init(lib::MemoryContext &parent_mem_context,
+int ObVsagMemContext::init(lib::MemoryContext &parent_mem_context, 
                            uint64_t *all_vsag_use_mem,
-                           uint64_t tenant_id)
+                           uint64_t tenant_id) 
 {
   INIT_SUCC(ret);
   lib::ContextParam param;
@@ -312,7 +312,7 @@ int ObIvfMemContext::init(lib::MemoryContext &parent_mem_context, uint64_t *all_
   return ret;
 }
 
-void *ObIvfMemContext::Allocate(size_t size)
+void *ObIvfMemContext::Allocate(size_t size) 
 {
   void *ret_ptr = nullptr;
   int ret = OB_SUCCESS;
@@ -321,12 +321,12 @@ void *ObIvfMemContext::Allocate(size_t size)
     void *ptr = ObVectorMemContext::alloc(actual_size);
     if (OB_NOT_NULL(ptr)) {
       ATOMIC_AAF(all_vsag_use_mem_, actual_size);
-
+    
       *(int64_t*)ptr = actual_size;
       ret_ptr = (char*)ptr + MEM_PTR_HEAD_SIZE;
     }
   }
-
+  
   return ret_ptr;
 }
 

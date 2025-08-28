@@ -95,7 +95,7 @@ OB_DEF_SERIALIZE_SIZE(obrpc::ObInnerSQLTransmitArg)
     consumer_group_id_);
   return len;
 }
-//
+// 
 // OB_SERIALIZE_MEMBER(obrpc::ObInnerSQLTransmitResult, res_code_, conn_id_, affected_rows_, stmt_type_, scanner_, field_columns_);
 OB_DEF_SERIALIZE(obrpc::ObInnerSQLTransmitResult)
 {

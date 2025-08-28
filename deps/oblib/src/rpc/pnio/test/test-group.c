@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 const char* usage = "./usage:\n"
                     "./test-multi all\n"
                     "dest=127.0.0.1 stress_thread=1 ./test-multi client\n"

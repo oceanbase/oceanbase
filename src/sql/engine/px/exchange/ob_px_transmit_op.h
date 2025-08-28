@@ -789,7 +789,7 @@ int ObPxTransmitOp::broadcast_rows(ObSliceIdxCalc &slice_calc)
     } else if (dfc_.all_ch_drained()) {
       LOG_DEBUG("all channel has been drained");
       break;
-    } else if (OB_FAIL(try_wait_channel())) {
+    } else if (OB_FAIL(try_wait_channel())) {		
       LOG_WARN("failed to wait channel", K(ret));
     } else if (USE_VEC) {
       ObPxNewRow px_row(get_spec().output_, OB_INVALID_ID, data_msg_type_);

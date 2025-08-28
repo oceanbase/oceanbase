@@ -172,10 +172,10 @@ public:
       if (common::ObNullType != value.get_type()
           && common::ObExtendType != value.get_type()
           && schema_meta.get_type() != value.get_type()
-          && !(lib::is_mysql_mode()
-            && (common::is_match_alter_integer_column_online_ddl_rules(schema_meta, value.get_meta())
+          && !(lib::is_mysql_mode() 
+            && (common::is_match_alter_integer_column_online_ddl_rules(schema_meta, value.get_meta()) 
               || common::is_match_alter_integer_column_online_ddl_rules(value.get_meta(), schema_meta))) // small integer -> big integer; mysql mode;
-          && !(lib::is_oracle_mode()
+          && !(lib::is_oracle_mode() 
             && ((common::ObNumberType == schema_meta.get_type() && common::ObNumberFloatType == value.get_type())
               || (common::ObNumberType == value.get_type() && common::ObNumberFloatType == schema_meta.get_type())))) { // number -> float; oracle mode;
         TRANS_LOG(WARN, "data/schema type does not match",
@@ -219,10 +219,10 @@ public:
       if (common::ObNullType != value.get_type()
           && common::ObExtendType != value.get_type()
           && schema_meta.get_type() != value.get_type()
-          && !(lib::is_mysql_mode()
-            && (common::is_match_alter_integer_column_online_ddl_rules(schema_meta, value.get_meta())
+          && !(lib::is_mysql_mode() 
+            && (common::is_match_alter_integer_column_online_ddl_rules(schema_meta, value.get_meta()) 
               || common::is_match_alter_integer_column_online_ddl_rules(value.get_meta(), schema_meta))) // small integer -> big integer; mysql mode;
-          && !(lib::is_oracle_mode()
+          && !(lib::is_oracle_mode() 
             && ((common::ObNumberType == schema_meta.get_type() && common::ObNumberFloatType == value.get_type())
               || (common::ObNumberType == value.get_type() && common::ObNumberFloatType == schema_meta.get_type())))) { // number -> float; oracle mode;
         TRANS_LOG(WARN, "data/schema type does not match",
@@ -317,9 +317,9 @@ public:
   using ObMemtableKeyBuffer = common::ObSEArray<ObMemtableKey, 16>;
 public:
   ObMemtableKeyGenerator(
-    const int64_t rowkey_cnt,
+    const int64_t rowkey_cnt, 
     const common::ObIArray<share::schema::ObColDesc> &columns,
-    ObMemtableKeyBuffer *memtable_key_buffer = nullptr)
+    ObMemtableKeyBuffer *memtable_key_buffer = nullptr) 
     : allocator_(common::ObMemAttr(MTL_ID(), "ObMemtableKey")),
       rowkey_cnt_(rowkey_cnt),
       columns_(columns),

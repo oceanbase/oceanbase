@@ -135,7 +135,7 @@ static int eval_uncompress_length(const ObExpr &expr,
                                   ObEvalCtx &ctx,
                                   ObDatum &expr_datum,
                                   const ObString &str_val,
-                                  uint64_t &orig_len,
+                                  uint64_t &orig_len, 
                                   bool &not_final)
 {
   int ret = OB_SUCCESS;

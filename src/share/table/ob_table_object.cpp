@@ -88,7 +88,7 @@ static int64_t get_serialize_type_val_size(const ObObj &obj)
 template<>
 int ObTableObjFunc<ObTableNullType>::deserialize(const char *buf, const int64_t data_len, int64_t &pos, ObObj &obj)
 {
-  DEF_TABLE_OBJ_DESERIALIZE_FUNC(ObNullType, null);
+  DEF_TABLE_OBJ_DESERIALIZE_FUNC(ObNullType, null); 
 }
 
 template<>
@@ -108,7 +108,7 @@ int64_t ObTableObjFunc<ObTableNullType>::get_serialize_size(const ObObj &obj)
 template<>
 int ObTableObjFunc<ObTableTinyIntType>::deserialize(const char *buf, const int64_t data_len, int64_t &pos, ObObj &obj)
 {
-  DEF_TABLE_OBJ_DESERIALIZE_FUNC(ObTinyIntType, tinyint);
+  DEF_TABLE_OBJ_DESERIALIZE_FUNC(ObTinyIntType, tinyint); 
 }
 
 template<>
@@ -421,7 +421,7 @@ int64_t ObTableObjFunc<ObTableMaxType>::get_serialize_size(const ObObj &obj)
 template<>
 int ObTableObjFunc<ObTableUTinyIntType>::deserialize(const char *buf, const int64_t data_len, int64_t &pos, ObObj &obj)
 {
-  DEF_TABLE_OBJ_DESERIALIZE_FUNC(ObUTinyIntType, utinyint);
+  DEF_TABLE_OBJ_DESERIALIZE_FUNC(ObUTinyIntType, utinyint); 
 }
 
 template<>
@@ -753,7 +753,7 @@ struct ObTableObjTypeFuncs
     ObTableObjFunc<TABLE_OBJ_TYPE>::get_serialize_size,          \
   }
 
-static const ObTableObjTypeFuncs OB_TABLE_OBJ_FUNCS[ObTableObjTypeMax] =
+static const ObTableObjTypeFuncs OB_TABLE_OBJ_FUNCS[ObTableObjTypeMax] = 
 {
   DEF_TABLE_OBJ_FUNC_ENTRY(ObTableNullType),      // 0
   DEF_TABLE_OBJ_FUNC_ENTRY(ObTableTinyIntType),   // 1
@@ -782,7 +782,7 @@ static const ObTableObjTypeFuncs OB_TABLE_OBJ_FUNCS[ObTableObjTypeMax] =
   DEF_TABLE_OBJ_FUNC_ENTRY(ObTableLongBlobType),   // 24
   DEF_TABLE_OBJ_FUNC_ENTRY(ObTableCharType),       // 25
 };
-
+ 
 #define OBJ_TABLE_TYPE_CASE(x, y) \
   case (x) : { \
     table_type = y; \
@@ -809,8 +809,8 @@ static const ObTableObjTypeFuncs OB_TABLE_OBJ_FUNCS[ObTableObjTypeMax] =
 
 static int convert_from_obj_type(const ObObj &obj, ObTableObjType &table_type)
 {
-  int ret = OB_SUCCESS;
-  const ObObjType obj_type = obj.get_type();
+  int ret = OB_SUCCESS;    
+  const ObObjType obj_type = obj.get_type(); 
   const ObCollationType cs_type = obj.get_collation_type();
   switch(obj_type) {
     LST_DO(OBJ_TABLE_TYPE_MAP, (), OBJ_TABLE_TYPE_PAIRS)
@@ -878,7 +878,7 @@ static int convert_from_obj_type(const ObObj &obj, ObTableObjType &table_type)
 int ObTableSerialUtil::deserialize(const char *buf, const int64_t data_len, int64_t &pos, ObObj &obj)
 {
   int ret = OB_SUCCESS;
-  uint8_t type = uint8_t();
+  uint8_t type = uint8_t(); 
   OB_UNIS_DECODE(type);
   if (OB_SUCC(ret)) {
     ObTableObjType table_type = static_cast<ObTableObjType>(type);

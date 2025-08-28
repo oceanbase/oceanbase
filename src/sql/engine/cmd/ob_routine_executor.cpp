@@ -166,7 +166,7 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
             } else if (ob_is_xml_sql_type(param.get_type(), param.get_udt_subschema_id())) {
               // convert call procedure input sql udt types to pl extend (only xmltype supported currently)
               bool is_strict = is_strict_mode(ctx.get_my_session()->get_sql_mode());
-              const ObDataTypeCastParams dtc_params =
+              const ObDataTypeCastParams dtc_params = 
                 ObBasicSessionInfo::create_dtc_params(ctx.get_my_session());
               ObCastMode cast_mode = CM_NONE;
               ObRawExprResType result_type;
@@ -179,7 +179,7 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
               result_type.set_udt_id(T_OBJ_XML);
               ObObj tmp;
               if (OB_FAIL(ret)) {
-              } else if (OB_FAIL(ObExprColumnConv::convert_with_null_check(tmp, param, result_type,
+              } else if (OB_FAIL(ObExprColumnConv::convert_with_null_check(tmp, param, result_type, 
                                                                            is_strict, cast_ctx, NULL))) {
                 LOG_WARN("Cast sql udt to pl extend failed",
                         K(ret), K(param), K(result_type), K(is_strict), K(i));
@@ -187,7 +187,7 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
                 param = tmp;
                 param.set_udt_id(T_OBJ_XML);
                 param.set_param_meta();
-              }
+              } 
             }
             if (OB_FAIL(ret)) {
             } else if (OB_FAIL(params.push_back(param))) {
@@ -453,10 +453,10 @@ int ObAlterRoutineExecutor::execute(ObExecContext &ctx, ObAlterRoutineStmt &stmt
                                     routine_info->get_routine_id(),
                                     new_schema_version,
                                     routine_info->get_object_type()));
-    OZ (ObDependencyInfo::insert_dependency_infos(trans, dep_infos, tenant_id,
+    OZ (ObDependencyInfo::insert_dependency_infos(trans, dep_infos, tenant_id, 
                               routine_info->get_routine_id(),
                               routine_info->get_schema_version(),
-                              routine_info->get_owner_id()));
+                              routine_info->get_owner_id()));                     
     if (trans.is_started()) {
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCCESS == ret))) {
@@ -468,7 +468,7 @@ int ObAlterRoutineExecutor::execute(ObExecContext &ctx, ObAlterRoutineStmt &stmt
         && !has_error
         && ((GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_2_3_0
             && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0)
-          || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_2_0)
+          || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_2_0) 
         && tenant_config.is_valid()
         && tenant_config->plsql_v2_compatibility) {
       CK (OB_NOT_NULL(ctx.get_sql_ctx()->schema_guard_));

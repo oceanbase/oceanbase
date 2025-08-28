@@ -73,7 +73,7 @@ void ObLogBaseHeader::set_compressed()
   flag_ = flag_ | PAYLOAD_IS_COMPRESSED;
 }
 
-bool ObLogBaseHeader::is_compressed() const
+bool ObLogBaseHeader::is_compressed() const 
 {
   return flag_ & PAYLOAD_IS_COMPRESSED;
 }

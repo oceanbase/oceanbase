@@ -37,7 +37,7 @@ public:
   static void SetUpTestCase()
   {
     ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
-  }
+  } 
   static void TearDownTestCase()
   {
     ObTimerService::get_instance().stop();
@@ -281,7 +281,7 @@ TEST_F(TestRefCnt, test_1_0_1)
   tmp_block_handle.reset();
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(1, block_info.ref_cnt_);
-
+  
   ret = OB_SERVER_BLOCK_MGR.dec_ref(macro_id);
   ASSERT_NE(OB_SUCCESS, OB_SERVER_BLOCK_MGR.inc_ref(macro_id));
 }

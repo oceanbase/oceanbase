@@ -185,7 +185,7 @@ int ObCSVTableRowIterator::open_next_file()
   int ret = OB_SUCCESS;
   ObString location = scan_param_->external_file_location_;
   int64_t file_size = 0;
-
+    
   file_reader_.close();
   do {
     ObString file_url;
@@ -403,8 +403,8 @@ int ObCSVTableRowIterator::get_next_row()
             const ExprFixedArray &file_column_exprs,
             ObEvalCtx &eval_ctx,
             bool is_oracle_mode,
-            int64_t &returned_row_cnt) :
-            csv_iter_(csv_iter), file_column_exprs_(file_column_exprs), eval_ctx_(eval_ctx),
+            int64_t &returned_row_cnt) : 
+            csv_iter_(csv_iter), file_column_exprs_(file_column_exprs), eval_ctx_(eval_ctx), 
             is_oracle_mode_(is_oracle_mode), returned_row_cnt_(returned_row_cnt)
     {}
     ObCSVTableRowIterator *csv_iter_;
@@ -539,8 +539,8 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
             const ExprFixedArray &file_column_exprs,
             ObEvalCtx &eval_ctx,
             bool is_oracle_mode,
-            int64_t &returned_row_cnt) :
-            csv_iter_(csv_iter), file_column_exprs_(file_column_exprs), eval_ctx_(eval_ctx),
+            int64_t &returned_row_cnt) : 
+            csv_iter_(csv_iter), file_column_exprs_(file_column_exprs), eval_ctx_(eval_ctx), 
             is_oracle_mode_(is_oracle_mode), returned_row_cnt_(returned_row_cnt)
     {}
     ObCSVTableRowIterator *csv_iter_;

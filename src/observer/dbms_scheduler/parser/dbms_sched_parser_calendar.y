@@ -1,14 +1,14 @@
-/**
- * Copyright (c) 2021 OceanBase
- * OceanBase CE is licensed under Mulan PubL v2.
- * You can use this software according to the terms and conditions of the Mulan PubL v2.
- * You may obtain a copy of Mulan PubL v2 at:
- *          http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+/** 
+ * Copyright (c) 2021 OceanBase 
+ * OceanBase CE is licensed under Mulan PubL v2. 
+ * You can use this software according to the terms and conditions of the Mulan PubL v2. 
+ * You may obtain a copy of Mulan PubL v2 at: 
+ *          http://license.coscl.org.cn/MulanPubL-2.0 
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, 
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, 
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE. 
  * See the Mulan PubL v2 for more details.
- */
+ */ 
 
 //first: declare
 %define api.pure
@@ -148,7 +148,7 @@ sched_frequency_clause:
   FREQ '=' sched_predefined_frequency
   {
     $$ = $3;
-  }
+  } 
 ;
 
 sched_interval_clause:
@@ -167,7 +167,7 @@ sched_by_clause:
 ;
 
 sched_bylist:
-  sched_by_node
+  sched_by_node 
   {
     $$ = $1;
   }
@@ -195,16 +195,16 @@ sched_by_node:
   {
     $$ = $1; //type = 5
   }
-  | sched_byday_clause
+  | sched_byday_clause 
   {
     $$ = $1; //type = 6
   }
   // sched_bytime_clause type = 7
-  | sched_byhour_clause
+  | sched_byhour_clause 
   {
     $$ = $1; //type = 8
   }
-  | sched_byminute_clause
+  | sched_byminute_clause 
   {
     $$ = $1; //type = 9
   }
@@ -298,7 +298,7 @@ sched_by_int_list:
 sched_by_int_node:
   INTNUM
   {
-    malloc_terminal_node($$, parse_ctx->mem_pool_, T_SCHED_CALENDAR_BY);
+    malloc_terminal_node($$, parse_ctx->mem_pool_, T_SCHED_CALENDAR_BY); 
     $$->value_ = $1->value_;
   }
 ;
@@ -358,7 +358,7 @@ sched_predefined_frequency:
   | DAILY    { malloc_terminal_node($$, parse_ctx->mem_pool_, T_SCHED_CALENDAR_FREQ); $$->value_ = 4; }
   | DAYLY    { malloc_terminal_node($$, parse_ctx->mem_pool_, T_SCHED_CALENDAR_FREQ); $$->value_ = 4; }
   | HOURLY   { malloc_terminal_node($$, parse_ctx->mem_pool_, T_SCHED_CALENDAR_FREQ); $$->value_ = 5; }
-  | MINUTELY { malloc_terminal_node($$, parse_ctx->mem_pool_, T_SCHED_CALENDAR_FREQ); $$->value_ = 6; }
+  | MINUTELY { malloc_terminal_node($$, parse_ctx->mem_pool_, T_SCHED_CALENDAR_FREQ); $$->value_ = 6; } 
   | SECONDLY { malloc_terminal_node($$, parse_ctx->mem_pool_, T_SCHED_CALENDAR_FREQ); $$->value_ = 7; }
 ;
 
@@ -385,3 +385,4 @@ void ob_dbms_sched_calendar_yyerror(YYLTYPE *yylloc, ObParseCtx *parse_ctx, char
     }
   }
 }
+

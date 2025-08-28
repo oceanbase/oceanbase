@@ -40,7 +40,7 @@ private:
   int update_zone_();
   int update_server_();
 private:
-  bool is_inited_;
+  bool is_inited_; 
   lib::ObMutex mtx_;
 
   uint64_t tenant_id_;

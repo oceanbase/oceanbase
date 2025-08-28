@@ -121,7 +121,7 @@ int ObTrivalSampleFilterExecutor::apply_sample_filter(
   return ret;
 }
 int ObTrivalSampleFilterExecutor::apply_sample_filter(
-    const ObCSRange &range,
+    const ObCSRange &range, 
     common::ObBitmap &result_bitmap)
 {
   int ret = OB_SUCCESS;
@@ -199,12 +199,12 @@ void ObHybridSampleFilterExecutor::reuse()
   filter_state_ = false;
   boundary_point_ = -1;
   if (nullptr != index_row_id_handle_) {
-    const int64_t index_handle_max_cnt =
+    const int64_t index_handle_max_cnt = 
       ObIndexTreeMultiPassPrefetcher<>::MAX_INDEX_PREFETCH_DEPTH * ObIndexTreeMultiPassPrefetcher<>::MAX_INDEX_TREE_HEIGHT;
     MEMSET(static_cast<void *>(index_row_id_handle_), 0, sizeof(ObIndexRowIdHandle) * index_handle_max_cnt);
   }
   if (nullptr != data_row_id_handle_) {
-    const int64_t data_handle_max_cnt =
+    const int64_t data_handle_max_cnt = 
       ObIndexTreeMultiPassPrefetcher<>::MAX_DATA_PREFETCH_DEPTH;
     MEMSET(static_cast<void *>(data_row_id_handle_), 0, sizeof(int64_t) * data_handle_max_cnt);
   }
@@ -282,8 +282,8 @@ int ObHybridSampleFilterExecutor::init_sample_segment_length(const double percen
   return ret;
 }
 int ObHybridSampleFilterExecutor::build_row_id_handle(
-    const int16_t height,
-    const int32_t index_handle_cnt,
+    const int16_t height, 
+    const int32_t index_handle_cnt, 
     const int32_t data_handle_cnt)
 {
   int ret = OB_SUCCESS;
@@ -313,7 +313,7 @@ int ObHybridSampleFilterExecutor::build_row_id_handle(
     index_tree_height_ = height;
     index_prefetch_depth_ = index_handle_cnt;
     data_prefetch_depth_ = data_handle_cnt;
-    LOG_DEBUG("wenye debug, build row id handle", K_(index_tree_height), K_(index_prefetch_depth), K_(data_prefetch_depth),
+    LOG_DEBUG("wenye debug, build row id handle", K_(index_tree_height), K_(index_prefetch_depth), K_(data_prefetch_depth), 
                                                   K(index_handle_max_cnt), K(data_handle_max_cnt));
   }
   if (OB_FAIL(ret)) {
@@ -374,7 +374,7 @@ int ObHybridSampleFilterExecutor::check_single_row_filtered(const int64_t row_nu
   } else if (row_num > boundary_point_) {
     ObSampleIntervalParser interval_parser(percent_, seed_);
     // [left, right] is the row num range to be sampled.
-    // In order to reduce hash and modulo calculations,
+    // In order to reduce hash and modulo calculations, 
     // record the boundary of sampling and non-sampling row num to reuse it for future checks.
     if (OB_FAIL(parse_interval_info(row_num, interval_parser))) {
       LOG_WARN("Failed to parse interval info", K(ret), K(row_num), K(interval_parser));
@@ -411,9 +411,9 @@ int ObHybridSampleFilterExecutor::check_filtered_after_fuse(bool &filtered)
   return ret;
 }
 int ObHybridSampleFilterExecutor::parse_interval_info(
-    const int64_t row_num,
+    const int64_t row_num, 
     ObSampleIntervalParser &interval_parser) const
-{
+{ 
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(row_num < 0)) {
     ret = OB_ERR_UNEXPECTED;
@@ -449,7 +449,7 @@ int ObHybridSampleFilterExecutor::check_sample_block(
       start_row_id = data_row_id_handle_[child_prefetch_idx % data_prefetch_depth_];
     } else {
       start_row_id = index_row_id_handle_[level * index_prefetch_depth_ + child_prefetch_idx % index_prefetch_depth_].start_;
-    }
+    } 
     if (OB_UNLIKELY(start_row_id < pd_row_range_.begin())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("The first row id is invalid when apply sample filter", K(ret), K_(pd_row_range), K(start_row_id));
@@ -468,7 +468,7 @@ int ObHybridSampleFilterExecutor::check_sample_block(
   return ret;
 }
 int64_t ObHybridSampleFilterExecutor::get_range_sample_count(
-    const int64_t start_row_num,
+    const int64_t start_row_num, 
     const int64_t end_row_num,
     int64_t &sample_count) const
 {
@@ -534,7 +534,7 @@ int ObHybridSampleFilterExecutor::check_range_filtered(
   return ret;
 }
 int ObHybridSampleFilterExecutor::set_sample_bitmap(
-    const int64_t start_row_num,
+    const int64_t start_row_num, 
     const int64_t row_count,
     ObBitmap &result_bitmap)
 {
@@ -560,13 +560,13 @@ int ObHybridSampleFilterExecutor::set_sample_bitmap(
           start_index = result_bitmap.size() - 1 - end_index;
           end_index = result_bitmap.size() - 1 - tmp_index;
         }
-        LOG_DEBUG("set sample bitmap batch", K(start_row_num), K(start_index), K(row_count),
-                                            K(interval_parser), K(row_index), K(end_index),
+        LOG_DEBUG("set sample bitmap batch", K(start_row_num), K(start_index), K(row_count), 
+                                            K(interval_parser), K(row_index), K(end_index),  
                                             K(result_bitmap), K_(pd_row_range), K_(row_num));
       }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(result_bitmap.set_bitmap_batch(start_index, end_index - start_index + 1, true))) {
-        LOG_WARN("Failed to set bitmap batch", K(ret), K(start_index), K(end_index), K(result_bitmap),
+        LOG_WARN("Failed to set bitmap batch", K(ret), K(start_index), K(end_index), K(result_bitmap), 
                                                K(interval_parser), K(start_row_num + row_index));
       } else {
         row_index = interval_parser.next_interval() - start_row_num;
@@ -578,7 +578,7 @@ int ObHybridSampleFilterExecutor::set_sample_bitmap(
 int ObHybridSampleFilterExecutor::apply_sample_filter(
     sql::PushdownFilterInfo &filter_info,
     const bool is_major,
-    common::ObBitmap &result_bitmap)
+    common::ObBitmap &result_bitmap) 
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -602,7 +602,7 @@ int ObHybridSampleFilterExecutor::apply_sample_filter(
   return ret;
 }
 int ObHybridSampleFilterExecutor::apply_sample_filter(
-    const ObCSRange &range,
+    const ObCSRange &range, 
     common::ObBitmap &result_bitmap)
 {
   int ret = OB_SUCCESS;
@@ -616,7 +616,7 @@ int ObHybridSampleFilterExecutor::apply_sample_filter(
   } else if (OB_FAIL(update_pd_row_range(range.begin(), range.end(), true))) {
     LOG_WARN("Failed to update read status", K(ret), K(range));
   } else if (OB_UNLIKELY(!pd_row_range_.is_valid()
-                          || (is_reverse_scan_ && range.end() > pd_row_range_.end())
+                          || (is_reverse_scan_ && range.end() > pd_row_range_.end()) 
                           || (!is_reverse_scan_ && range.begin() < pd_row_range_.begin()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("The first row id is invalid when apply sample filter in cg", K(ret), K_(is_reverse_scan), K_(pd_row_range), K(range));
@@ -640,18 +640,18 @@ int ObHybridSampleFilterExecutor::update_row_id_handle(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("The ObHybridSampleFilter has not been inited", K(ret));
-  } else if (OB_UNLIKELY(level <= 0 || level > index_tree_height_
-                          || parent_fetch_idx < 0 || child_prefetch_idx < 0
+  } else if (OB_UNLIKELY(level <= 0 || level > index_tree_height_ 
+                          || parent_fetch_idx < 0 || child_prefetch_idx < 0 
                           || row_count < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument to update row id hanle", K(ret), K(level), K(parent_fetch_idx),
+    LOG_WARN("Invalid argument to update row id hanle", K(ret), K(level), K(parent_fetch_idx), 
                                                         K(child_prefetch_idx), K_(index_tree_height), K(row_count));
   } else {
     parent_fetch_idx %= index_prefetch_depth_;
     parent_start = index_row_id_handle_[(level - 1) * index_prefetch_depth_ + parent_fetch_idx].start_;
     parent_offset = index_row_id_handle_[(level - 1) * index_prefetch_depth_ + parent_fetch_idx].offset_;
     if (level < index_tree_height_) {
-      child_prefetch_idx %= index_prefetch_depth_;
+      child_prefetch_idx %= index_prefetch_depth_; 
       index_row_id_handle_[level * index_prefetch_depth_ + child_prefetch_idx].start_ = parent_start + parent_offset;
       index_row_id_handle_[level * index_prefetch_depth_ + child_prefetch_idx].offset_ = 0;
     } else { // level == index_tree_height_ means prefetching micro data block
@@ -659,7 +659,7 @@ int ObHybridSampleFilterExecutor::update_row_id_handle(
       data_row_id_handle_[child_prefetch_idx] = parent_start + parent_offset;
     }
     index_row_id_handle_[(level - 1) * index_prefetch_depth_ + parent_fetch_idx].offset_ = parent_offset + row_count;
-    LOG_DEBUG("wenye debug: update row id handle", K(level), K(parent_fetch_idx), K(child_prefetch_idx),
+    LOG_DEBUG("wenye debug: update row id handle", K(level), K(parent_fetch_idx), K(child_prefetch_idx), 
                                                     K(row_count), K(parent_start), K(parent_offset));
   }
   return ret;
@@ -731,7 +731,7 @@ int ObRowSampleFilter::init(
     } else {
       allocator_ = allocator;
       is_inited_ = true;
-    }
+    } 
   }
   return ret;
 }

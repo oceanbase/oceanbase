@@ -282,7 +282,7 @@ struct AsyncStatTable
     partition_ids_(),
     tablet_ids_()
   {}
-
+  
   AsyncStatTable(int64_t table_id) :
     table_id_(table_id),
     partition_ids_(),
@@ -521,14 +521,14 @@ struct PrefixColumnPair {
   PrefixColumnPair(const PrefixColumnPair &other) {
     *this = other;
   }
-
+  
   void operator = (const PrefixColumnPair &other) {
     prefix_column_id_ = other.prefix_column_id_;
     related_column_id_ = other.related_column_id_;
     prefix_length_ = other.prefix_length_;
     related_column_meta_ = other.related_column_meta_;
   }
-
+  
   TO_STRING_KV(K(prefix_column_id_),
                K(related_column_id_),
                K(prefix_length_));
@@ -1094,7 +1094,7 @@ public:
                K(delete_row_count_));
 };
 
-enum OSG_TYPE
+enum OSG_TYPE 
 {
   NORMAL_OSG = 0,
   GATHER_OSG = 1,
@@ -1111,12 +1111,12 @@ public:
 };
 typedef common::hash::ObHashMap<ObObjectID, OSGPartInfo, common::hash::NoPthreadDefendMode> OSGPartMap;
 
-class AuditBaseItem
+class AuditBaseItem 
 {
 public:
   AuditBaseItem() {}
   virtual ~AuditBaseItem() {}
-
+  
   virtual int64_t get_cost_time() const = 0;
 
   DECLARE_PURE_VIRTUAL_TO_STRING;
@@ -1129,15 +1129,15 @@ public:
 public:
   ObOptStatGatherAudit(ObIAllocator &allocator)
     : audit_items_(OB_MALLOC_NORMAL_BLOCK_SIZE, allocator),
-      failed_refine_parts_(OB_MALLOC_NORMAL_BLOCK_SIZE, allocator),
+      failed_refine_parts_(OB_MALLOC_NORMAL_BLOCK_SIZE, allocator), 
       allocator_(allocator) {}
   ~ObOptStatGatherAudit();
 
-  int add_failed_refine_parts(uint64_t part_id)
-  {
-    return failed_refine_parts_.push_back(part_id);
+  int add_failed_refine_parts(uint64_t part_id) 
+  { 
+    return failed_refine_parts_.push_back(part_id); 
   }
-
+  
   bool need_audit(int64_t cost_time) { return cost_time >= MINIMAL_AUDIT_TIME; }
 
   int add_basic_estimate_audit(const ObIArray<PartInfo> & parts, bool is_index, int64_t cost_time);

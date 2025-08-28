@@ -84,8 +84,8 @@ int ObITableMetaHandler::check_upperbound_legality_and_trim(ObString &upperbound
 }
 
 int ObITableMetaHandler::get_tablet_boundary_internal(ObIAllocator &allocator,
-                                                      const ObSimpleTableSchemaV2 &table_schema,
-                                                      const ObIArray<ObTabletID> &tablet_ids,
+                                                      const ObSimpleTableSchemaV2 &table_schema, 
+                                                      const ObIArray<ObTabletID> &tablet_ids, 
                                                       ObIArray<ObString> &upperbound_trims)
 {
   int ret = OB_SUCCESS;
@@ -529,9 +529,9 @@ int ObHTableRegionLocatorHandler::get_tablet_boundary(ObTableExecCtx &ctx)
         int64_t table_id = table_schemas_[i]->get_table_id();
         if (OB_FAIL(upperbound_trims.reserve(tablet_ids.count()))) {
           LOG_WARN("failed to reserver for upperbound_trims", K(ret));
-        } else if (OB_FAIL(get_tablet_boundary_internal(allocator_,
-                                                        *table_schemas_.at(i),
-                                                        tablet_ids,
+        } else if (OB_FAIL(get_tablet_boundary_internal(allocator_, 
+                                                        *table_schemas_.at(i), 
+                                                        tablet_ids, 
                                                         upperbound_trims))) {
           LOG_WARN("failed to get upperbound", K(ret));
         } else if (tablet_ids.count() != upperbound_trims.count()) {
@@ -1013,7 +1013,7 @@ int ObHTableRegionMetricsHandler::parse(const ObTableMetaRequest &request)
   return ret;
 }
 
-int ObHTableRegionMetricsHandler::check_metrics_legality(const ObTableRegionMetricsResult &table_metrics)
+int ObHTableRegionMetricsHandler::check_metrics_legality(const ObTableRegionMetricsResult &table_metrics) 
 {
   int ret = OB_SUCCESS;
   if (table_metrics.table_id_ == OB_INVALID_ID) {
@@ -1026,7 +1026,7 @@ int ObHTableRegionMetricsHandler::check_metrics_legality(const ObTableRegionMetr
              || table_metrics.mem_tablet_sizes_.count() != table_metrics.ss_tablet_sizes_.count()
              || table_metrics.ss_tablet_sizes_.count() != table_metrics.boundarys_.count()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet ids, memtable size, sstable size and boundary size are not the same", K(ret), K(table_metrics.table_id_),
+    LOG_WARN("tablet ids, memtable size, sstable size and boundary size are not the same", K(ret), K(table_metrics.table_id_), 
                                                                                            K(table_metrics.tablet_ids_.count()), K(table_metrics.mem_tablet_sizes_.count()),
                                                                                            K(table_metrics.ss_tablet_sizes_.count()), K(table_metrics.boundarys_.count()));
   }
@@ -1142,12 +1142,12 @@ int ObHTableRegionMetricsHandler::construct_response(const ObTableRegionMetricsR
           LOG_WARN("failed to serialize root builder", K(ret));
         }
       }
-    }
+    } 
   }
   return ret;
 }
 
-int ObHTableRegionMetricsHandler::ObTableRegionMetricsResult::init(const ObIArray<ObTabletID> &tablet_ids, uint64_t table_id)
+int ObHTableRegionMetricsHandler::ObTableRegionMetricsResult::init(const ObIArray<ObTabletID> &tablet_ids, uint64_t table_id) 
 {
   int ret = OB_SUCCESS;
   table_id_ = table_id;
@@ -1260,7 +1260,7 @@ int ObHTableExistsHandler::handle(ObTableExecCtx &ctx, ObTableMetaResponse &resp
   }
   // get response
   if (OB_SUCC(ret) || ret == OB_KV_HBASE_TABLE_NOT_FOUND) {
-    ObString res = OB_SUCC(ret) ? ObString::make_string("{\"exists\":true}")
+    ObString res = OB_SUCC(ret) ? ObString::make_string("{\"exists\":true}") 
                                   : ObString::make_string("{\"exists\":false}");
     ret = OB_SUCCESS;
     if (OB_FAIL(ob_write_string(allocator_, res, response.data_, true))) {

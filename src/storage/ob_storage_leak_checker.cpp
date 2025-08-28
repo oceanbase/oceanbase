@@ -139,7 +139,7 @@ OB_NOINLINE void ObStorageLeakChecker::inner_handle_hold(
     } else {
       handle->is_traced_ = true;
     }
-  }
+  } 
   COMMON_LOG(DEBUG, "[STORAGE-CHECKER] handle hold details", K(ret), K(check_id),
              KP(handle), K(check_id), K(key), K(value));
 }
@@ -167,11 +167,11 @@ int ObStorageLeakChecker::get_aggregate_bt_info(hash::ObHashMap<ObStorageChecker
 {
   INIT_SUCC(ret);
   bt_info.reuse();
-  for (hash::ObHashMap<ObStorageCheckerKey, ObStorageCheckerValue>::bucket_iterator bucket_iter = checker_info_.bucket_begin() ;
+  for (hash::ObHashMap<ObStorageCheckerKey, ObStorageCheckerValue>::bucket_iterator bucket_iter = checker_info_.bucket_begin() ; 
       OB_SUCC(ret) && bucket_iter != checker_info_.bucket_end() ; ++bucket_iter) {
     hash::ObHashMap<ObStorageCheckerKey, ObStorageCheckerValue>::hashtable::bucket_lock_cond blk(*bucket_iter);
     hash::ObHashMap<ObStorageCheckerKey, ObStorageCheckerValue>::hashtable::readlocker locker(blk.lock());
-    for (hash::ObHashMap<ObStorageCheckerKey, ObStorageCheckerValue>::hashtable::hashbucket::const_iterator node_iter = bucket_iter->node_begin() ;
+    for (hash::ObHashMap<ObStorageCheckerKey, ObStorageCheckerValue>::hashtable::hashbucket::const_iterator node_iter = bucket_iter->node_begin() ; 
         OB_SUCC(ret) && node_iter != bucket_iter->node_end() ; ++node_iter) {
       int64_t bt_count = 0;
       if (OB_FAIL(bt_info.get_refactored(node_iter->second, bt_count))) {

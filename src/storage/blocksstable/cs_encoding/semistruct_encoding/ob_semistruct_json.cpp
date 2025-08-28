@@ -413,7 +413,7 @@ int ObJsonDataFlatter::add_spare_col(const ObFlatJson &flat_json, const ObSemiSt
       decimal_node.set_value(datum.get_number());
       decimal_node.set_precision(flat_json.get_precision());
       decimal_node.set_scale(flat_json.get_scale());
-    }
+    } 
   } else if (OB_FAIL(datum_to_json(*node, flat_json.get_value()))) {
     LOG_WARN("set datum to json node fail", K(ret), K(flat_json));
   }
@@ -1106,7 +1106,7 @@ int ObSimpleSubSchema::build_key_dict(ObSemiStructSubSchema& sub_schema, const i
       int start = i++;
       while (i < array.count() && json_key_cmp.compare(key, array.at(i)) == 0) { ++i; }
       if (i > new_cnt && i < array.count()) {
-        array.at(new_cnt) = array.at(i);
+        array.at(new_cnt) = array.at(i); 
       }
     }
     if (array.count() > new_cnt) {
@@ -1207,7 +1207,7 @@ int ObSimpleSubSchema::merge(ObSimpleSubSchema &other)
       ++left_iter;
     } else if (left_sub_column.get_obj_type() != ObNullType
         && right_sub_column.get_obj_type()!= ObNullType
-        && (left_sub_column.get_obj_type() != right_sub_column.get_obj_type()
+        && (left_sub_column.get_obj_type() != right_sub_column.get_obj_type() 
             || (left_sub_column.get_obj_type() == ObNumberType && is_different_number_type(*left_sub_column.col_, *right_sub_column.col_)))) {
       LOG_DEBUG("same sub column path, but type is not same", K(left_sub_column), K(right_sub_column));
       left_sub_column.col_->set_obj_type(ObJsonType);
@@ -1483,7 +1483,7 @@ int ObSemiStructScalar::init(const ObSemiStructSubColumn& sub_column)
   } else if (ObJsonNodeType::J_DECIMAL == json_type_) {
     ObJsonDecimal& decimal = static_cast<ObJsonDecimal&>(*json_node_);
     decimal.set_precision(sub_column.get_precision());
-    decimal.set_scale(sub_column.get_scale());
+    decimal.set_scale(sub_column.get_scale()); 
   }
   return ret;
 }
@@ -2169,7 +2169,7 @@ int ObJsonBinVisitor::deserialize_bin_header()
   } else if (OB_FALSE_IT(offset += sizeof(ObJsonBinHeader))) {
   } else if (OB_FAIL(ObJsonVar::read_var(ptr_ + offset, header->count_size_, &element_count))) {
     LOG_WARN("read element_count_ fail", K(ret), KPC(header));
-  } else if (OB_FALSE_IT(offset += ObJsonVar::get_var_size(header->count_size_))) {
+  } else if (OB_FALSE_IT(offset += ObJsonVar::get_var_size(header->count_size_))) {  
   } else if (OB_FAIL(ObJsonVar::read_var(ptr_ + offset, header->obj_size_size_, &obj_size))) {
     LOG_WARN("read obj_size_ fail", K(ret), KPC(header));
   } else {
@@ -2209,7 +2209,7 @@ int ObJsonBinVisitor::get_key_entry(const ObJsonBinMeta &meta, const char* buf_p
 }
 
 int ObJsonBinVisitor::get_value_entry(
-    const ObJsonBinMeta &meta, const char* buf_ptr,
+    const ObJsonBinMeta &meta, const char* buf_ptr, 
     int index, uint64_t &value_offset, uint8_t &value_type)
 {
   int ret = OB_SUCCESS;
@@ -2234,14 +2234,14 @@ int ObJsonBinVisitor::deserialize()
       meta_.bytes_ = meta_.is_inline_vertype() ? 0 : 1;
       break;
     }
-    case ObJsonNodeType::J_DECIMAL:
+    case ObJsonNodeType::J_DECIMAL: 
     case ObJsonNodeType::J_ODECIMAL: {
       if (OB_FAIL(deserialize_decimal())) {
         LOG_WARN("fail to deserialize decimal", K(ret), KP(ptr_), K(len_), K(pos_));
       }
       break;
     }
-    case ObJsonNodeType::J_INT:
+    case ObJsonNodeType::J_INT: 
     case ObJsonNodeType::J_OINT: {
       if (OB_FAIL(deserialize_int())) {
         LOG_WARN("decode int val failed.", K(ret));
@@ -2353,7 +2353,7 @@ int ObJsonBinVisitor::deserialize()
 }
 
 int ObJsonBinVisitor::to_bin(ObJsonBin &bin)
-{
+{ 
   return bin.reset(meta_.type_, ObString(len_, ptr_), pos_, meta_.entry_var_type(), nullptr);
 }
 

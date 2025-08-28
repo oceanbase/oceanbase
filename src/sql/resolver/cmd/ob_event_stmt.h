@@ -100,7 +100,7 @@ public:
                K(repeat_interval_),
                K(event_body_),
                K(event_comment_),
-               K(event_rename_));
+               K(event_rename_));  
 
 private:
   // data members

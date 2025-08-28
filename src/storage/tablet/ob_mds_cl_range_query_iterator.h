@@ -47,15 +47,15 @@ public:
       const ObTabletHandle &tablet_handle,
       const ObTabletHandle &src_tablet_handle);
   int get_next_mds_kv(
-      common::ObIAllocator &allocator,
+      common::ObIAllocator &allocator, 
       mds::MdsDumpKV *&kv);
   void free_mds_kv(
       common::ObIAllocator &allocator,
       mds::MdsDumpKV *&kv);
 private:
   int advance_iter(
-    ObSingleTabletMdsRangeQueryIterator<K, T> &iter,
-    bool &is_finished_,
+    ObSingleTabletMdsRangeQueryIterator<K, T> &iter, 
+    bool &is_finished_, 
     mds::MdsDumpKV *&kv);
 private:
   bool is_inited_;
@@ -118,7 +118,7 @@ int ObMdsRangeQueryIterator<K, T>::init(
     src_finished_ = true;
   } else if (OB_NOT_NULL(src_tablet_handle.get_obj())) {
     src_finished_ = false;
-
+    
     ObTableScanParam *src_scan_param = nullptr;
     char *buf = nullptr;
     ObLSID ls_id;
@@ -150,15 +150,15 @@ int ObMdsRangeQueryIterator<K, T>::init(
 
 template <typename K, typename T>
 int ObMdsRangeQueryIterator<K, T>::advance_iter(
-    ObSingleTabletMdsRangeQueryIterator<K, T> &iter,
-    bool &is_finished_,
+    ObSingleTabletMdsRangeQueryIterator<K, T> &iter, 
+    bool &is_finished_, 
     mds::MdsDumpKV *&kv)
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(kv)) {
     // only one pending_kv for each iter(cur & src) in memory
     allocator_.free(kv);
-  }
+  } 
   kv = nullptr;
   if (OB_FAIL(iter.get_next_mds_kv(allocator_, kv))) {
     if (OB_ITER_END == ret) {
@@ -220,8 +220,8 @@ int ObMdsRangeQueryIterator<K, T>::get_next_mds_kv(
     MDS_LOG(WARN, "unexpected error, both mds table key and mds sstable key should be valid",
         K(ret), KPC(src_kv_), KPC(cur_kv_));
   } else if (OB_FAIL(mds::compare_mds_serialized_buffer(
-      src_kv_->k_.key_.ptr(), src_kv_->k_.key_.size(),
-      cur_kv_->k_.key_.ptr(), cur_kv_->k_.key_.size(),
+      src_kv_->k_.key_.ptr(), src_kv_->k_.key_.size(), 
+      cur_kv_->k_.key_.ptr(), cur_kv_->k_.key_.size(), 
       compare_result))) {
     MDS_LOG(WARN, "fail to compare binary key", K(ret));
   } else if (compare_result < 0) {

@@ -114,7 +114,7 @@ public:
   int get_left_batch_size() { return left_brs_ == nullptr ? 0 : left_brs_->size_; }
 
   int init(ObOperator *op, const int64_t op_group_scan_size,
-          const common::ObIArray<ObDynamicParamSetter> *rescan_params,
+          const common::ObIArray<ObDynamicParamSetter> *rescan_params, 
           bool is_group_rescan, bool need_backup_left);
   void destroy();
 
@@ -142,7 +142,7 @@ private:
   ObExecContext *ctx_;
 };
 
-} // end namespace sql
+} // end namespace sql 
 } // end namespace oceanbase
 
 #endif // OCEANBASE_BASIC_OB_GROUP_JOIN_BUFFER_V2_H_

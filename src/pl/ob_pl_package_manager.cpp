@@ -758,7 +758,7 @@ int ObPLPackageManager::get_package_expr(const ObPLResolveCtx &resolve_ctx,
     const uint64_t tenant_id = package_spec_info->get_tenant_id();
     uint64_t db_id = package_spec_info->get_database_id();
     const ObDatabaseSchema *db_schema = NULL;
-
+    
     HEAP_VARS_2((ObPLPackageAST, package_spec_ast, local_alloc),
                 (ObPLPackageAST, package_body_ast, local_alloc)) {
 
@@ -1120,7 +1120,7 @@ int ObPLPackageManager::update_special_package_status(const ObPLResolveCtx &reso
 
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (get_tenant_id_by_object_id(package_id) == OB_SYS_TENANT_ID &&
+  } else if (get_tenant_id_by_object_id(package_id) == OB_SYS_TENANT_ID && 
                0 == package_spec->get_name().compare("DBMS_PROFILER")) {
 #ifdef OB_BUILD_ORACLE_PL
     OZ (ObDBMSProfiler::notify_package_variable_change(resolve_ctx.session_info_, var, old_val, new_val));
@@ -1593,7 +1593,7 @@ int ObPLPackageManager::get_package_item_state(const ObPLResolveCtx &resolve_ctx
         OX (need_destruct_package_state = false);
         if (OB_SUCC(ret)) {
           // TODO bin.lb: how about the memory?
-          //
+          // 
           OZ(package.get_frame_info().pre_alloc_exec_memory(exec_ctx));
         }
         int tmp_ret = OB_SUCCESS;
@@ -1618,7 +1618,7 @@ int ObPLPackageManager::get_package_item_state(const ObPLResolveCtx &resolve_ctx
           package_state->set_has_instantiated(true);
         }
         if (package.get_expr_op_size() > 0) {
-          //Memory leak
+          //Memory leak 
           //Must be reset before free expr_op_ctx!
           exec_ctx.reset_expr_op();
           exec_ctx.get_allocator().free(exec_ctx.get_expr_op_ctx_store());

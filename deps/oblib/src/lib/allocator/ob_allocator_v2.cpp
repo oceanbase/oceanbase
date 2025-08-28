@@ -45,7 +45,7 @@ void *ObAllocator::alloc(const int64_t size, const ObMemAttr &attr)
                                                                             inner_attr.numa_id_);
       ptr = ObTenantCtxAllocator::common_realloc(NULL, size, inner_attr, *(ta.ref_allocator()), nos_);
     }
-
+    
   }
   return ptr;
 }

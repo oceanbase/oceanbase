@@ -381,7 +381,7 @@ int ObStaticEngineCG::postorder_generate_op(ObLogicalOperator &op,
       LOG_WARN("assign exprs failed", K(ret));
     }
   }
-
+  
   if (OB_SUCC(ret) && log_op_def::LOG_TABLE_SCAN == op.get_type()
       && static_cast<ObLogTableScan *>(&op)->get_table_type() == share::schema::EXTERNAL_TABLE) {
     ObDASScanCtDef &scan_ctdef = static_cast<ObTableScanSpec*>(spec)->tsc_ctdef_.scan_ctdef_;
@@ -3158,7 +3158,7 @@ int ObStaticEngineCG::generate_insert_with_das(ObLogInsert &op, ObTableInsertSpe
       LOG_WARN("generate ab stmt id expr failed", K(ret));
     }
   }
-
+  
   if (OB_SUCC(ret)) {
     if (OB_FAIL(spec.ins_ctdefs_.allocate_array(phy_plan_->get_allocator(), 1))) {
       LOG_WARN("allocate insert ctdef array failed", K(ret), K(1));
@@ -3599,10 +3599,10 @@ int ObStaticEngineCG::generate_update_with_das(ObLogUpdate &op, ObTableUpdateSpe
     for (int64_t i = 0; OB_SUCC(ret) && i < table_list.count(); ++i) {
       ObTableUpdateSpec::UpdCtDefArray &ctdefs = spec.upd_ctdefs_.at(i);
       ObUpdCtDef &upd_ctdef = *ctdefs.at(0);
-      upd_ctdef.need_check_table_cycle_ = is_dup;
-    }
+      upd_ctdef.need_check_table_cycle_ = is_dup; 
+    }  
   }
-
+  
   return ret;
 }
 
@@ -6170,7 +6170,7 @@ int ObStaticEngineCG::generate_spec(ObLogJoin &op,
           CK(OB_NOT_NULL(null_last_cmp));
           if (OB_SUCC(ret)) {
             equal_cond_info.ns_cmp_func_ = lib::is_oracle_mode() ? null_last_cmp : null_first_cmp;
-          }
+          } 
         }
         OZ(spec.equal_cond_infos_.push_back(equal_cond_info));
         int64_t l_idx = 0;
@@ -10440,7 +10440,7 @@ int ObStaticEngineCG::init_encrypt_table_meta(
       // 在这种情况下, 我们认为这里是合理的, 缓存中可以不保存主密钥内容
       // cg阶段获取主密钥的任何失败我们可以接受
       // 兜底是执行期再次获取, 再次获取成功了则继续往下走, 失败了则报错出来.
-      // 见bug
+      // 见bug 
       ret = OB_SUCCESS;
     } else if (OB_FAIL(meta_cache.meta_.master_key_.set_content(
                                                         ObString(master_key_length, master_key)))) {
@@ -10948,7 +10948,7 @@ int ObStaticEngineCG::generate_spec(ObLogExpand &op, ObExpandVecSpec &spec, cons
   if (OB_ISNULL(phy_plan_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid null physical plan", K(ret));
-  } else if (OB_ISNULL(hash_rollup_info=op.get_hash_rollup_info()) ||
+  } else if (OB_ISNULL(hash_rollup_info=op.get_hash_rollup_info()) || 
              OB_ISNULL(hash_rollup_info->rollup_grouping_id_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid null hash rollup info", K(ret));

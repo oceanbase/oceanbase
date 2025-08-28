@@ -107,7 +107,7 @@ int ObMemtableSingleRowReader::init_a_new_range(const ObDatumRange &new_range_to
     TRANS_LOG(WARN, "start key build fail", K(param_->table_id_), K(real_range));
   } else if (OB_FAIL(ObMemtableKey::build(end_key,
                                           *out_cols,
-                                          &real_range.get_end_key().get_store_rowkey(),
+                                          &real_range.get_end_key().get_store_rowkey(), 
                                           *context_->get_range_allocator()))) {
     TRANS_LOG(WARN, "end key build fail", K(param_->table_id_), K(real_range));
   } else {
@@ -190,7 +190,7 @@ int ObMemtableSingleRowReader::get_real_range_(const ObDatumRange &range, ObDatu
 
 /**
  * @brief for the simple read operation, like normal scan or get.
- *
+ * 
  */
 int ObMemtableSingleRowReader::get_next_row(const ObDatumRow *&row)
 {
@@ -231,9 +231,9 @@ int ObMemtableSingleRowReader::fill_in_next_row(ObDatumRow &next_row)
 }
 
 /**
- * @brief the delete-insert read need to know both delete row and insert row.
+ * @brief the delete-insert read need to know both delete row and insert row. 
  * NOTICE : only Delete-Insert case would fill in the second param &delete_row
- *
+ * 
  */
 int ObMemtableSingleRowReader::fill_in_next_delete_insert_row(ObDatumRow &next_row,
                                                               ObDatumRow &delete_row,

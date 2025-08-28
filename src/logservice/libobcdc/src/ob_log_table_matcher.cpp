@@ -136,7 +136,7 @@ int ObLogTableMatcher::database_match_pattern_(const bool is_black,
     OBLOG_LOG(ERROR, "invalid arguments", KR(ret), K(tenant_name), K(db_name));
   } else {
     PatternArray *ptns = is_black ? &black_patterns_ : &patterns_;
-
+    
     matched = false;
 
     for (int64_t idx = 0, cnt = ptns->count(); OB_SUCCESS == ret && !matched && idx < cnt; ++idx) {
@@ -335,7 +335,7 @@ int ObLogTableMatcher::tenant_match(const char* tenant_name,
 
   // Tenant matching is only considered for whitelisting, as tenants may be duplicated
   // The tenant blacklist matching mechanism is supported
-  // Aone:
+  // Aone: 
   if (OB_FAIL(tenant_match_pattern_(false, tenant_name, white_matched, fnmatch_flags))) {
     OBLOG_LOG(ERROR, "match white pattern fail", KR(ret), K(tenant_name), K(white_matched),
         K(fnmatch_flags));

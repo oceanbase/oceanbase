@@ -27,20 +27,20 @@ using namespace sql;
 namespace share
 {
 
-bool ObIndexBuilderUtil::is_do_create_dense_vec_index(const ObIndexType index_type)
+bool ObIndexBuilderUtil::is_do_create_dense_vec_index(const ObIndexType index_type) 
 {
   return share::schema::is_vec_index(index_type) && !share::schema::is_built_in_vec_spiv_index(index_type);
 }
 
 void ObIndexBuilderUtil::del_column_flags_and_default_value(ObColumnSchemaV2 &column)
 {
-  if ((column.is_generated_column() &&
+  if ((column.is_generated_column() && 
        !column.is_fulltext_column() &&
        !column.is_vec_index_column() &&
-       !column.is_spatial_generated_column() &&
+       !column.is_spatial_generated_column() && 
        !column.is_multivalue_generated_column() &&
        !column.is_multivalue_generated_array_column() &&
-       !column.is_vec_index_column())
+       !column.is_vec_index_column()) 
       || column.is_identity_column()) {
     if (column.is_virtual_generated_column()) {
       column.del_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
@@ -190,8 +190,8 @@ int ObIndexBuilderUtil::set_shadow_column_info(
   shadow_column_schema.set_is_hidden(true);
   if (OB_FAIL(shadow_column_schema.set_column_name(src_column_name))) {
     LOG_WARN("set_column_name failed", K(src_column_name), K(ret));
-  }
-  return ret;
+  } 
+  return ret; 
 }
 int ObIndexBuilderUtil::add_shadow_pks(
     const ObTableSchema &data_schema,
@@ -413,7 +413,7 @@ int ObIndexBuilderUtil::set_index_table_columns(
       }
     } else if (is_multivalue_index(arg.index_type_)) {
       if (OB_FAIL(ObMulValueIndexBuilderUtil::set_multivalue_index_table_columns(arg,
-                                                                                 data_schema,
+                                                                                 data_schema, 
                                                                                  index_schema))) {
         LOG_WARN("failed to set multivalue index table", K(ret));
       }
@@ -461,7 +461,7 @@ int ObIndexBuilderUtil::set_index_table_columns(
                   "table_name", data_schema.get_table_name(),
                   "column name", sort_item.column_name_,
                   "column length", sort_item.prefix_len_, K(ret));
-        } else if (data_column->is_xmltype()) {
+        } else if (data_column->is_xmltype()) { 
           ret = OB_ERR_XML_INDEX;
           LOG_USER_ERROR(OB_ERR_XML_INDEX, sort_item.column_name_.length(), sort_item.column_name_.ptr());
           LOG_WARN("Index column should not be udt type", "tenant_id", data_schema.get_tenant_id(),
@@ -655,7 +655,7 @@ int ObIndexBuilderUtil::set_index_table_columns(
                 "tenant_id", data_schema.get_tenant_id(),
                 "database_id", data_schema.get_database_id(), "table_name",
                 data_schema.get_table_name(), "column name", arg.hidden_store_columns_.at(i), K(ret));
-          } else if (ob_is_extend(data_column->get_data_type())
+          } else if (ob_is_extend(data_column->get_data_type()) 
                      || ob_is_user_defined_sql_type(data_column->get_data_type())) {
             ret = OB_ERR_WRONG_KEY_COLUMN;
             LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, arg.hidden_store_columns_.at(i).length(),

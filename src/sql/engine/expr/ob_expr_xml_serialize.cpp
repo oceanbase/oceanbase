@@ -1,15 +1,15 @@
-/**
- * Copyright (c) 2021 OceanBase
- * OceanBase CE is licensed under Mulan PubL v2.
- * You can use this software according to the terms and conditions of the Mulan PubL v2.
- * You may obtain a copy of Mulan PubL v2 at:
- *          http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+/** 
+ * Copyright (c) 2021 OceanBase 
+ * OceanBase CE is licensed under Mulan PubL v2. 
+ * You can use this software according to the terms and conditions of the Mulan PubL v2. 
+ * You may obtain a copy of Mulan PubL v2 at: 
+ *          http://license.coscl.org.cn/MulanPubL-2.0 
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, 
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, 
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE. 
  * See the Mulan PubL v2 for more details.
  * This file is for func xmlserialize.
- */
+ */ 
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_xml_serialize.h"
@@ -98,7 +98,7 @@ int ObExprXmlSerialize::get_dest_type(const ObExprResType as_type, ObExprResType
     dst_type.set_collation_type(cs_type);
     if (ob_is_varchar_type(dst_type.get_type(), dst_type.get_collation_type()) || ob_is_nvarchar2(obj_type)) {
       dst_type.set_full_length(parse_node.int32_values_[1], as_type.get_accuracy().get_length_semantics());
-    } else if (ob_is_clob(dst_type.get_type(), dst_type.get_collation_type()) ||
+    } else if (ob_is_clob(dst_type.get_type(), dst_type.get_collation_type()) || 
                ob_is_blob(dst_type.get_type(), dst_type.get_collation_type())) {
       int64_t text_length = parse_node.int32_values_[1];
       dst_type.set_length(text_length < 0 ? ObAccuracy::DDL_DEFAULT_ACCURACY[obj_type].get_length() : text_length);
@@ -146,7 +146,7 @@ int ObExprXmlSerialize::eval_xml_serialize(const ObExpr &expr, ObEvalCtx &ctx, O
     LOG_WARN("invalid return datatype", K(ret), K(return_type), K(return_cs_type));
   } else if (OB_FAIL(get_and_check_int_from_expr(expr.args_[3], ctx, 0, 1, opt_encoding_type))) {
     LOG_WARN("fail to get indent size", K(ret));
-  } else if (opt_encoding_type == 1 &&
+  } else if (opt_encoding_type == 1 && 
              OB_FAIL(get_and_check_encoding_spec(expr.args_[4], ctx, return_type, return_cs_type, opt_encoding_spec))) {
     LOG_WARN("fail to get encoding spec", K(ret));
   } else if (OB_FAIL(get_and_check_int_from_expr(expr.args_[5], ctx, 0, 1, opt_version_type))) {
@@ -156,7 +156,7 @@ int ObExprXmlSerialize::eval_xml_serialize(const ObExpr &expr, ObEvalCtx &ctx, O
     LOG_WARN("fail to get version", K(ret));
   } else if (OB_FAIL(get_and_check_int_from_expr(expr.args_[7], ctx, OB_XML_NO_INDENT, OB_XML_INDENT_IMPLICT, opt_indent_type))) {
     LOG_WARN("fail to get indent size", K(ret));
-  } else if (opt_indent_type != OB_XML_INDENT_IMPLICT &&
+  } else if (opt_indent_type != OB_XML_INDENT_IMPLICT && 
              OB_FAIL(get_and_check_int_from_expr(expr.args_[8], ctx, OB_XML_INDENT_MIN, 255, opt_indent_size))) {
     LOG_WARN("fail to get indent size", K(ret));
   } else if (OB_FAIL(get_and_check_int_from_expr(expr.args_[9], ctx, OB_XML_DEFAULTS_IMPLICIT, OB_XML_SHOW_DEFAULTS, opt_defaults))) {
@@ -172,11 +172,11 @@ int ObExprXmlSerialize::eval_xml_serialize(const ObExpr &expr, ObEvalCtx &ctx, O
     bool is_xml_doc = xml_doc_type == OB_XML_DOCUMENT;
     bool with_encoding = opt_encoding_type == 1;
     bool with_version = opt_version_type == 1;
-    bool is_format = is_xml_doc || opt_indent_type != OB_XML_INDENT_IMPLICT ||
-                     with_encoding ||
-                     with_version ||
+    bool is_format = is_xml_doc || opt_indent_type != OB_XML_INDENT_IMPLICT || 
+                     with_encoding || 
+                     with_version || 
                      opt_defaults == OB_XML_SHOW_DEFAULTS;
-
+    
     ObParameterPrint print_params;
     print_params.encode = opt_encoding_spec;
     print_params.version = opt_version_str;
@@ -197,15 +197,15 @@ int ObExprXmlSerialize::eval_xml_serialize(const ObExpr &expr, ObEvalCtx &ctx, O
       } else if (OB_FAIL(print_format_xml_text(allocator,
                                                ctx,
                                                xml_node,
-                                               with_encoding,
-                                               with_version,
-                                               xml_format_type,
-                                               print_params,
+                                               with_encoding, 
+                                               with_version, 
+                                               xml_format_type, 
+                                               print_params, 
                                                xml_serialize_str))) {
         LOG_WARN("fail to print format xml text", K(ret));
       } else if (ob_is_blob(return_type, return_cs_type)) {
         ObCollationType new_cs_type = with_encoding ? ObCharset::get_default_collation_oracle(charset_type) : cs_type;
-        if (new_cs_type != CS_TYPE_UTF8MB4_BIN &&
+        if (new_cs_type != CS_TYPE_UTF8MB4_BIN && 
             OB_FAIL(ObCharset::charset_convert(allocator, xml_serialize_str, CS_TYPE_UTF8MB4_BIN, new_cs_type, xml_serialize_str))) {
           LOG_WARN("charset convertion failed", K(ret), K(xml_serialize_str), K(cs_type), K(new_cs_type));
         }
@@ -224,19 +224,19 @@ int ObExprXmlSerialize::eval_xml_serialize(const ObExpr &expr, ObEvalCtx &ctx, O
 
 bool ObExprXmlSerialize::is_supported_return_type(ObObjType val_type, ObCollationType cs_type)
 {
-  return ob_is_varchar_type(val_type, cs_type) ||
-         ob_is_blob(val_type, cs_type) ||
+  return ob_is_varchar_type(val_type, cs_type) || 
+         ob_is_blob(val_type, cs_type) || 
          ob_is_clob(val_type, cs_type) ||
          ob_is_nvarchar2(val_type);
 }
 
-int ObExprXmlSerialize::print_format_xml_text(ObIAllocator &allocator,
+int ObExprXmlSerialize::print_format_xml_text(ObIAllocator &allocator, 
                                               ObEvalCtx &ctx,
-                                              ObIMulModeBase *xml_node,
-                                              bool with_encoding,
-                                              bool with_version,
-                                              uint32_t format_flag,
-                                              ObParameterPrint &print_params,
+                                              ObIMulModeBase *xml_node, 
+                                              bool with_encoding, 
+                                              bool with_version, 
+                                              uint32_t format_flag, 
+                                              ObParameterPrint &print_params, 
                                               ObString &res)
 {
   int ret = OB_SUCCESS;
@@ -249,7 +249,7 @@ int ObExprXmlSerialize::print_format_xml_text(ObIAllocator &allocator,
     // if has encoding or vesion clause, do not show standalone attribute
     xml_node->set_standalone(0);
   }
-
+  
   with_version = with_version && !print_params.version.empty();
   // set output prolog
   if (with_encoding && with_version) {
@@ -289,10 +289,10 @@ int ObExprXmlSerialize::print_format_xml_text(ObIAllocator &allocator,
   return ret;
 }
 
-int ObExprXmlSerialize::get_and_check_int_from_expr(const ObExpr *expr,
+int ObExprXmlSerialize::get_and_check_int_from_expr(const ObExpr *expr, 
                                                     ObEvalCtx &ctx,
-                                                    int64_t start,
-                                                    int64_t end,
+                                                    int64_t start, 
+                                                    int64_t end, 
                                                     int64_t &res)
 {
   int ret = OB_SUCCESS;
@@ -311,14 +311,14 @@ int ObExprXmlSerialize::get_and_check_int_from_expr(const ObExpr *expr,
     } else {
       res = value;
     }
-  }
-
+  } 
+  
   return ret;
 }
 
-int ObExprXmlSerialize::get_and_check_encoding_spec(const ObExpr *expr,
-                                                    ObEvalCtx &ctx,
-                                                    ObObjType return_type,
+int ObExprXmlSerialize::get_and_check_encoding_spec(const ObExpr *expr, 
+                                                    ObEvalCtx &ctx, 
+                                                    ObObjType return_type, 
                                                     ObCollationType return_cs_type,
                                                     ObString &encoding_spec)
 {
@@ -336,7 +336,7 @@ int ObExprXmlSerialize::get_and_check_encoding_spec(const ObExpr *expr,
   } else {
     encoding_spec = datum->get_string();
     char *ptr = str_toupper(encoding_spec.ptr(), encoding_spec.length());
-  }
+  } 
   return ret;
 }
 
@@ -362,8 +362,8 @@ int ObExprXmlSerialize::transform_to_dst_type(const ObExpr &expr, ObString &xml_
   return ret;
 }
 
-int ObExprXmlSerialize::string_length_check_only(const ObLength max_len_char,
-                                                 const ObCollationType cs_type,
+int ObExprXmlSerialize::string_length_check_only(const ObLength max_len_char, 
+                                                 const ObCollationType cs_type, 
                                                  const ObObj &obj)
 {
   int ret = OB_SUCCESS;
@@ -382,14 +382,14 @@ int ObExprXmlSerialize::string_length_check_only(const ObLength max_len_char,
   return ret;
 }
 
-int ObExprXmlSerialize::get_xml_base_by_doc_type(ObMulModeMemCtx* mem_ctx,
-                                                 bool is_xml_doc,
+int ObExprXmlSerialize::get_xml_base_by_doc_type(ObMulModeMemCtx* mem_ctx, 
+                                                 bool is_xml_doc, 
                                                  ObCollationType cs_type,
-                                                 ObDatum *xml_datum,
+                                                 ObDatum *xml_datum, 
                                                  ObIMulModeBase *&node)
 {
   int ret = OB_SUCCESS;
-  // temporary use for xml clob
+  // temporary use for xml clob 
   ObString xml_text;
   ObDatumMeta xml_meta;
   xml_meta.type_ = ObLongTextType;
@@ -430,7 +430,7 @@ int ObExprXmlSerialize::get_xml_base_by_doc_type(ObMulModeMemCtx* mem_ctx,
           ret = OB_ERR_XML_FRAMENT_CONVERT;
           LOG_USER_ERROR(OB_ERR_XML_FRAMENT_CONVERT);
         }
-        LOG_WARN("fail to parse xml doc", K(check_xml), K(ret));
+        LOG_WARN("fail to parse xml doc", K(check_xml), K(ret));  
     } else if (node->type() == M_CONTENT) {
       // fix issue-49263291
       // case like select xmlserialize(DOCUMENT xmlparse(CONTENT '<?xml-stylesheet type="text/css" ?><a>aaa</a>') ) as res from dual;
@@ -439,7 +439,7 @@ int ObExprXmlSerialize::get_xml_base_by_doc_type(ObMulModeMemCtx* mem_ctx,
         LOG_USER_ERROR(OB_ERR_XML_FRAMENT_CONVERT);
       }
     }
-  }
+  } 
   return ret;
 }
 

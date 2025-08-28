@@ -85,11 +85,11 @@ public:
     Node& operator*()
     {
       return *curr_;
-    }
+    } 
     Node* operator->()
     {
       return curr_;
-    }
+    } 
     bool operator==(const Iterator& other) const
     {
       return curr_ == other.curr_;
@@ -140,7 +140,7 @@ public:
 
     Node* prev_;
   };
-
+  
   SList<>() : head_(nullptr), tail_(nullptr), size_(0)
   {}
   SList<Node>(Node* head) : head_(head), size_(0)
@@ -415,7 +415,7 @@ void SList<Node>::push_front_ts(Node* node)
 {
   while(!try_push_front_ts(node)) {
     PAUSE();
-  }
+  } 
 }
 
 

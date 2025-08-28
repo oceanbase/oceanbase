@@ -18,7 +18,7 @@
 
 namespace oceanbase
 {
-namespace blocksstable
+namespace blocksstable 
 {
   class ObMicroBlockBufferHandle;
 }

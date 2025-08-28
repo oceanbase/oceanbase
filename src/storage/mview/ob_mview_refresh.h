@@ -71,7 +71,7 @@ private:
   int fetch_based_infos(share::schema::ObSchemaGetterGuard &schema_guard);
   int check_fast_refreshable_(const ObIArray<share::schema::ObDependencyInfo> &previous_dependency_infos,
                               share::schema::ObSchemaGetterGuard &schema_guard);
-  int complete_refresh();
+  int complete_refresh(); 
   int fast_refresh();
   int set_session_dml_dop_(const uint64_t tenant_id, const uint64_t data_version,
                           sql::ObSQLSessionInfo *exec_session_info, ObMViewTransaction &trans,

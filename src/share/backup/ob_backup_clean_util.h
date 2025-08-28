@@ -73,7 +73,7 @@ public:
   char filter_str_[common::MAX_PATH_SIZE];
   const share::ObBackupStorageInfo *storage_info_;
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObBackupPrefixDeleteFileOp);
+  DISALLOW_COPY_AND_ASSIGN(ObBackupPrefixDeleteFileOp); 
 };
 
 class ObBackupCleanUtil

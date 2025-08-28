@@ -395,7 +395,7 @@ int ObPxTenantTargetMonitor::apply_target(hash::ObHashMap<ObAddr, int64_t> &work
   if (OB_SUCC(ret)) {
     // read lock to avoid reset map.
     SpinRLockGuard rlock_guard(spin_lock_); // Just for avoid multiple SQL applications at the same time
-    // for pmas
+    // for pmas 
     int64_t target = session_target;
     uint64_t version = version_;
     bool is_first_query = true;
@@ -571,7 +571,7 @@ uint64_t ObPxTenantTargetMonitor::get_server_index(uint64_t version) {
 
 int ObPxTargetCond::wait(const int64_t wait_time_us)
 {
-  int ret = OB_SUCCESS;
+  int ret = OB_SUCCESS; 
   if (wait_time_us < 0) {
     TRANS_LOG(WARN, "invalid argument", K(wait_time_us));
     ret = OB_INVALID_ARGUMENT;

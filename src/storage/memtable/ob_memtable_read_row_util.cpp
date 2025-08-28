@@ -263,8 +263,8 @@ int ObReadRow::iterate_delete_insert_row(const ObITableReadInfo &read_info,
 }
 
 /**
- * @brief only for delete insert read.
- *
+ * @brief only for delete insert read. 
+ * 
  * @param[in] value_iter to iterate tx nodes on one row
  * @param[out] latest_tx_node the latest modification on this row
  * @param[out] earliest_tx_node the earliest modification on this row(folded by major snapshot)

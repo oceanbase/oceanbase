@@ -1025,7 +1025,7 @@ int ObStmtComparer::compute_conditions_map(const ObDMLStmt *first,
     LOG_WARN("failed to compute unmatched conditions", K(ret));
   }
 
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret)) { 
   } else if (first_unmatched_conds.count() == 0
              && second_unmatched_conds.count() == 0) {
     relation = QUERY_EQUAL;
@@ -1422,13 +1422,13 @@ int ObStmtComparer::compare_basic_table_item(const TableItem *first_table,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("param has null", K(first_table), K(second_table));
   } else if ((first_table->is_basic_table() || first_table->is_link_table())
-             && (second_table->is_basic_table() || second_table->is_link_table())
+             && (second_table->is_basic_table() || second_table->is_link_table()) 
              && first_table->ref_id_ == second_table->ref_id_
              && first_table->flashback_query_type_ == second_table->flashback_query_type_
              && (first_table->flashback_query_expr_ == second_table->flashback_query_expr_
                  || first_table->flashback_query_expr_->same_as(*second_table->flashback_query_expr_))
-             && ((first_table->sample_info_ == NULL &&  second_table->sample_info_ == NULL)
-                 || (first_table->sample_info_ != NULL &&  second_table->sample_info_ != NULL
+             && ((first_table->sample_info_ == NULL &&  second_table->sample_info_ == NULL) 
+                 || (first_table->sample_info_ != NULL &&  second_table->sample_info_ != NULL 
                      && first_table->sample_info_->same_as(*second_table->sample_info_)))) {
                 // if sample info is not null the seed != 1 && seed is same then sample info is same
     if (OB_LIKELY(first_table->access_all_part() && second_table->access_all_part())) {
@@ -1591,10 +1591,10 @@ int ObStmtComparer::compare_table_item(const ObDMLStmt *first,
     } else {
       relation = QueryRelation::QUERY_UNCOMPARABLE;
     }
-  } else if ((first_table->is_basic_table() || first_table->is_link_table()) &&
+  } else if ((first_table->is_basic_table() || first_table->is_link_table()) && 
             (second_table->is_basic_table() || second_table->is_link_table())) {
-    if (OB_FAIL(compare_basic_table_item(first_table,
-                                         second_table,
+    if (OB_FAIL(compare_basic_table_item(first_table, 
+                                         second_table, 
                                          relation))) {
       LOG_WARN("compare table part failed",K(ret), K(first_table), K(second_table));
     } else if (QueryRelation::QUERY_UNCOMPARABLE != relation) {

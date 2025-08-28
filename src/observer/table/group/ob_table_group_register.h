@@ -78,7 +78,7 @@ class ObTableGroupRegister
 {
 public:
   static void register_group_objs();
-  static ObTableGroupType get_op_type_by_name(const ObString &name);
+  static ObTableGroupType get_op_type_by_name(const ObString &name); 
 
 public:
   static OPAllocFunc OP_ALLOC[TYPE_MAX];

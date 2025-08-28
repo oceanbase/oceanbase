@@ -29,22 +29,22 @@ namespace backup
 
 TEST(ObBackupDeviceMacroBlockId, basic) {
   ObBackupDeviceMacroBlockId id;
-
+  
   // Test default constructor
   id = ObBackupDeviceMacroBlockId();
   EXPECT_FALSE(id.is_valid());
-
+  
   // Test set() and getters
   int64_t backup_set_id = 1;
   int64_t ls_id = 2;
-  int64_t data_type = 3;
+  int64_t data_type = 3; 
   int64_t turn_id = 4;
   int64_t retry_id = 5;
   int64_t file_id = 6;
   int64_t offset = 4096;
   int64_t length = 4096;
 
-  EXPECT_EQ(OB_SUCCESS,
+  EXPECT_EQ(OB_SUCCESS, 
     id.set(backup_set_id, ls_id, data_type, turn_id, retry_id, file_id, offset, length, ObBackupDeviceMacroBlockId::INDEX_TREE_BLOCK));
 
   EXPECT_EQ(backup_set_id, id.get_backupset_id());
@@ -95,7 +95,7 @@ TEST(ObBackupDeviceMacroBlockId, basic) {
   EXPECT_EQ(offset_1, -995655680);
   const int64_t offset_2 = macro_id_1.offset_ * DIO_READ_ALIGN_SIZE;
   EXPECT_EQ(offset_2, 3299311616);
-}
+}  
 
 }
 }

@@ -1482,7 +1482,7 @@ int ObPLExternalNS::resolve_synonym(uint64_t object_db_id,
                        resolve_ctx_.session_info_.get_effective_tenant_id();
   ObSchemaGetterGuard &schema_guard = resolve_ctx_.schema_guard_;
   int64_t compatible_mode = lib::is_oracle_mode() ? COMPATIBLE_ORACLE_MODE
-                                                  : COMPATIBLE_MYSQL_MODE;
+                                                  : COMPATIBLE_MYSQL_MODE; 
   common::ObString database_name;
   const ObDatabaseSchema *db_schema = nullptr;
   ObSchemaChecker schema_checker;
@@ -1687,8 +1687,8 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
           db_id = parent_id;
         } else if (OB_FAIL(session_info.get_database_id(db_id))) {
           LOG_WARN("failed to get session database id", K(ret), K(db_id));
-        }
-
+        } 
+        
         if (OB_SUCC(ret)) {
           // db_id == OB_INVALID_ID, search in sys tenant
           // db_id != OB_INVALID_ID, search in user tenant first, then sys tenant
@@ -2146,7 +2146,7 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
     break;
   }
   if (OB_FAIL(ret) && !resolve_ctx_.is_sql_scope_) {
-    // only reset in pl
+    // only reset in pl 
     // udf in sql do not reset this error
     ObWarningBuffer *buf = common::ob_get_tsi_warning_buffer();
     if (NULL != buf) {
@@ -3373,7 +3373,7 @@ int ObPLBlockNS::resolve_routine(const ObPLResolveCtx &resolve_ctx,
             external_ns_->get_resolve_ctx().params_.secondary_namespace_ != resolve_ctx.params_.secondary_namespace_) {
           need_restore = true;
           second_ns = external_ns_->get_resolve_ctx().params_.secondary_namespace_;
-          (const_cast<ObPLResolveCtx &>(external_ns_->get_resolve_ctx())).params_.secondary_namespace_
+          (const_cast<ObPLResolveCtx &>(external_ns_->get_resolve_ctx())).params_.secondary_namespace_ 
           = resolve_ctx.params_.secondary_namespace_;
         }
         if (OB_FAIL(SMART_CALL(external_ns_->resolve_external_routine(
@@ -4526,10 +4526,10 @@ int ObPLStmt::set_label_idx(int64_t idx)
 
 int ObPLFetchStmt::replace_questionmark_variable_type(ObPLFunctionAST &func,
                                                       ObPLStmtBlock *&current_block,
-                                                      common::ObIAllocator* allocator,
+                                                      common::ObIAllocator* allocator, 
                                                       int64_t questionmark_idx, // index in symbol table
                                                       int32_t into_nums,        // into node nums
-                                                      int64_t cur_idx) const
+                                                      int64_t cur_idx) const 
 {
   int ret = OB_SUCCESS;
   const ObRecordType *return_type = NULL;
@@ -4577,7 +4577,7 @@ int ObPLFetchStmt::replace_questionmark_variable_type(ObPLFunctionAST &func,
       CK (OB_NOT_NULL(left_coll_type = static_cast<const ObCollectionType *>(left_type)));
       if (OB_FAIL(ret)) {
       } else if (return_type->get_record_member_count() == into_nums) {
-        // use original type and will check compatibility later
+        // use original type and will check compatibility later 
         OX (is_type_match = true);
         OX (const_cast<ObPLVar*>(var)->set_type(*left_coll_type));
       } else if (need_build_record) {
@@ -4615,7 +4615,7 @@ int ObPLFetchStmt::replace_questionmark_variable_type(ObPLFunctionAST &func,
       CK (OB_NOT_NULL(return_type->get_record_member_type(cur_idx)));
       OX (nested_type->set_element_type(*return_type->get_record_member_type(cur_idx)));
     } else if (need_build_record) {
-      // cursor return type is record
+      // cursor return type is record 
       OX (nested_type->set_element_type(*return_type));
     } else if (return_type->get_record_member_count() != into_nums) {
       ret = OB_ERR_WRONG_FETCH_INTO_NUM;
@@ -4629,7 +4629,7 @@ int ObPLFetchStmt::replace_questionmark_variable_type(ObPLFunctionAST &func,
 #endif
   }
   return ret;
-}
+} 
 
 ObPLCompileUnitAST::~ObPLCompileUnitAST()
 {
@@ -5273,7 +5273,7 @@ int ObPLStmtFactory::allocate(ObPLStmtType type, const ObPLStmtBlock *block, ObP
     if (NULL != stmt) {
       stmt = new(stmt)ObPLCaseStmt(allocator_);
     }
-  }
+  } 
     break;
   default:{
     ret = OB_ERR_UNEXPECTED;

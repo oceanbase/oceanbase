@@ -30,13 +30,13 @@ struct ObDDLDiagnoseValue final
 {
 public:
   ObDDLDiagnoseValue()
-    :tenant_id_(0), object_id_(0), ddl_task_id_(0), execution_id_(-1), start_time_(0), finish_time_(0)
+    :tenant_id_(0), object_id_(0), ddl_task_id_(0), execution_id_(-1), start_time_(0), finish_time_(0) 
   {
-    op_name_[0] = '\0';
+    op_name_[0] = '\0'; 
   }
   ~ObDDLDiagnoseValue() = default;
   TO_STRING_KV(K_(tenant_id), K_(object_id), K_(ddl_task_id), K_(start_time), K_(finish_time), K_(op_name));
-  void reset()
+  void reset() 
   {
     tenant_id_ = 0;
     object_id_ = 0;
@@ -46,7 +46,7 @@ public:
     finish_time_ = 0;
     op_name_[0] = '\0';
   }
-  bool inline is_valid()
+  bool inline is_valid() 
   {
     return op_name_ != nullptr && ddl_task_id_ > 0 && tenant_id_ != OB_INVALID_ID;
   }
@@ -65,8 +65,8 @@ public:
 class ObAllVirtualDDLDiagnoseInfo : public common::ObVirtualTableScannerIterator
 {
 public:
-  ObAllVirtualDDLDiagnoseInfo()
-    : is_inited_(false), sql_proxy_(nullptr), ddl_scan_result_(), ddl_scan_idx_(0), diagnose_info_(),
+  ObAllVirtualDDLDiagnoseInfo() 
+    : is_inited_(false), sql_proxy_(nullptr), ddl_scan_result_(), ddl_scan_idx_(0), diagnose_info_(), 
       sql_monitor_stats_collector_(), diagnose_values_(), idx_(0), value_(), pos_(0)
   {}
   virtual ~ObAllVirtualDDLDiagnoseInfo() = default;
@@ -108,7 +108,7 @@ private:
   char message_[common::OB_DIAGNOSE_INFO_LENGTH];
   int64_t pos_;
 };
-
+   
 class ObAllVirtualDDLDiagnoseInfoI1 : public ObAllVirtualDDLDiagnoseInfo, public ObAllVirtualDiagIndexScan
 {
 public:

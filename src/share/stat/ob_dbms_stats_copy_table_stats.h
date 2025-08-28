@@ -127,7 +127,7 @@ public:
                                const CopyTableStatHelper &helper,
                                const ObTableStatParam &table_stat_param,
                                ObCopyLevel &copy_level);
-
+  
   static int extract_partition_column_ids(CopyTableStatHelper &copy_stat_helper,
                                           const ObTableSchema *table_schema);
 

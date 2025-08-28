@@ -167,7 +167,7 @@ int ObGroupByCellBase::check_distinct_and_ref_valid()
 ObPushdownAggContext::ObPushdownAggContext(
   const int64_t batch_size,
   sql::ObEvalCtx &eval_ctx,
-  sql::ObBitVector *skip_bit,
+  sql::ObBitVector *skip_bit, 
   common::ObIAllocator &allocator)
   : agg_infos_(allocator),
     cols_offset_map_(allocator),
@@ -311,7 +311,7 @@ int ObPushdownAggContext::prepare_aggregate_rows(const int64_t count)
       share::aggregate::AggrRowPtr agg_row = (char *)rows_[i]->get_extra_payload(row_meta_);
       setup_agg_row(agg_row, agg_ctx_.row_meta().row_size_);
     }
-  }
+  } 
   return ret;
 }
 
@@ -409,7 +409,7 @@ int ObAggDatumBuf::new_agg_datum_buf(
       datum_buf->set_size(size);
       datum_buf->reuse();
     }
-  }
+  } 
   if (OB_SUCC(ret) && nullptr == datum_buf) {
     void *buf = nullptr;
     if (OB_ISNULL(buf = allocator.alloc(sizeof(ObAggDatumBuf)))) {

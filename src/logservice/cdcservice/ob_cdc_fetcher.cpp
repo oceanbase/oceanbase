@@ -180,7 +180,7 @@ int ObCdcFetcher::fetch_missing_log(const obrpc::ObCdcLSFetchMissLogReq &req,
 
     if (OB_FAIL(host_->get_or_create_client_ls_ctx(req.get_client_id(),
         req.get_tenant_id(), ls_id, req.get_flag(),
-        req.get_progress(), ObCdcFetchLogProtocolType::UnknownProto,
+        req.get_progress(), ObCdcFetchLogProtocolType::UnknownProto, 
         obrpc::ObCdcClientType::CLIENT_TYPE_CDC, ls_ctx))) {
       LOG_ERROR("get_or_create_client_ls_ctx failed", KR(ret), K(req));
     } else if (OB_ISNULL(ls_ctx)) {

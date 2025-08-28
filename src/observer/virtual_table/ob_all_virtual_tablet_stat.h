@@ -54,7 +54,7 @@ private:
   virtual int process_curr_tenant(common::ObNewRow *&row) override;
 private:
   char ip_buf_[common::OB_IP_STR_BUFF];
-  // each tenant has a maximum 20000 of stats, and each stat occupies 88bytes memory, so the maximum memory usage is around 2.75MB.
+  // each tenant has a maximum 20000 of stats, and each stat occupies 88bytes memory, so the maximum memory usage is around 2.75MB. 
   common::ObSEArray<storage::ObTabletStat, 128> tablet_stats_;
   ObTabletStat cur_stat_;
   int64_t cur_idx_;

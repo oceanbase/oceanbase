@@ -537,7 +537,7 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, test_arb_degrade_probe)
     unblock_net(leader_idx, e_idx);
     sleep(2);
     EXPECT_EQ(2, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.degraded_learnerlist_.get_member_number());
-
+    
     // CASE 5. D unblock_net and unblock_pcode, upgrade E
     unblock_pcode(d_idx, ObRpcPacketCode::OB_LOG_ARB_PROBE_MSG);
     EXPECT_UNTIL_EQ(false, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.degraded_learnerlist_.contains(d_addr));
@@ -677,7 +677,7 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, test_2f1a_degrade_migrate)
     // 1. degrade B
     block_net(leader_idx, b_idx);
     EXPECT_TRUE(is_degraded(leader, b_idx));
-
+    
     // 2. migrate B to D
     common::ObMember b_member = common::ObMember(b_addr, 1);
     common::ObMember migrating_d = common::ObMember(d_addr, 1);

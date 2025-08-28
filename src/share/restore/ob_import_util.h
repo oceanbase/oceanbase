@@ -24,9 +24,9 @@ public:
 static bool can_retrieable_err(const int err_code);
 static int get_tenant_schema_guard(share::schema::ObMultiVersionSchemaService &schema_service, uint64_t tenant_id,
     share::schema::ObSchemaGetterGuard &guard);
-static int check_database_schema_exist(share::schema::ObMultiVersionSchemaService &schema_service,
+static int check_database_schema_exist(share::schema::ObMultiVersionSchemaService &schema_service, 
     uint64_t tenant_id, const ObString &db_name, bool &is_exist);
-static int check_table_schema_exist(share::schema::ObMultiVersionSchemaService &schema_service,
+static int check_table_schema_exist(share::schema::ObMultiVersionSchemaService &schema_service, 
     uint64_t tenant_id, const ObString &db_name, const ObString &table_name, bool &is_exist);
 static int check_tablegroup_exist(share::schema::ObMultiVersionSchemaService &schema_service,
     uint64_t tenant_id, const ObString &tablegroup, bool &is_exist);

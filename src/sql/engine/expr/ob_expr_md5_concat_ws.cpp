@@ -195,7 +195,7 @@ int ObExprMd5ConcatWs::vector_md5_concat_ws(
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("vec is null", K(ret), KP(tmp_vec));
         } else {
-          bool is_null = tmp_vec->is_null(bound_idx);
+          bool is_null = tmp_vec->is_null(bound_idx); 
           if (!is_null && OB_FAIL(words.push_back(tmp_vec->get_string(bound_idx)))) {
             LOG_WARN("push back string failed", K(ret), K(bound_idx), K(arg_idx));
           } else if (is_null && OB_FAIL(words.push_back(replace_null_string))) {
@@ -261,7 +261,7 @@ int ObExprMd5ConcatWs::concat_and_calc_md5(
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("md5 res is null", K(ret), K(res));
         } else if (OB_FAIL(to_hex_cstr(md5_raw_res_buf, md5_raw_res_len,
-                                        md5_hex_res_buf, md5_hex_res_len))) {
+                                        md5_hex_res_buf, md5_hex_res_len))) { 
           res.assign(NULL, 0);
           LOG_WARN("to hex cstr error", K(ret));
         } else {

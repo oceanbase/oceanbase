@@ -27,11 +27,11 @@ public:
                     ObExprOperatorType type,
                     const char *name);
   virtual ~ObExprEnhancedAes() {}
-  static int eval_param(const ObExpr &expr,
-                        ObEvalCtx &ctx,
-                        const ObString &func_name,
-                        share::ObCipherOpMode &op_mode,
-                        ObDatum *&src,
+  static int eval_param(const ObExpr &expr, 
+                        ObEvalCtx &ctx, 
+                        const ObString &func_name, 
+                        share::ObCipherOpMode &op_mode, 
+                        ObDatum *&src, 
                         ObString &iv_str);
   virtual int calc_result_typeN(ObExprResType &type,
                                 ObExprResType *types,
@@ -53,7 +53,7 @@ public:
                                 ObExprResType *types,
                                 int64_t param_num,
                                 common::ObExprTypeCtx &type_ctx) const override;
-  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, 
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
 private:
@@ -70,7 +70,7 @@ public:
                                 ObExprResType *types,
                                 int64_t param_num,
                                 common::ObExprTypeCtx &type_ctx) const override;
-  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, 
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
 private:

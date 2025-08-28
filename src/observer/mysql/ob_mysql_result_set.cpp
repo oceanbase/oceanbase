@@ -49,12 +49,12 @@ int ObMySQLResultSet::to_mysql_field(const ObField &field, ObMySQLField &mfield)
 
     mfield.type_owner_ = field.type_owner_;
     mfield.type_name_ = field.type_name_;
-   //  In this scenario, the precsion and scale of number are undefined,
-   //  and the internal implementation of ob is represented by an illegal value (-1, -85).
-   //  However, oracle is represented by 0. In order to be compatible with
+   //  In this scenario, the precsion and scale of number are undefined, 
+   //  and the internal implementation of ob is represented by an illegal value (-1, -85). 
+   //  However, oracle is represented by 0. In order to be compatible with 
    //  the behavior of oracle, it is corrected to 0 here.
-    if ((ObNumberType == field.type_.get_type()
-          || ObUNumberType == field.type_.get_type())
+    if ((ObNumberType == field.type_.get_type() 
+          || ObUNumberType == field.type_.get_type()) 
         && lib::is_oracle_mode()) { // was decimal
       decimals = (decimals==NUMBER_SCALE_UNKNOWN_YET ? 0:decimals);
       pre = (pre==PRECISION_UNKNOWN_YET ? 0:pre);
@@ -125,11 +125,11 @@ int ObMySQLResultSet::to_oracle_field(const ObField &field, ObMySQLField &mfield
     LOG_DEBUG("debug to oracle field in middle", K(ret), K(mfield), K(field), K(mfield.length_), K(mfield.accuracy_));
     mfield.type_owner_ = field.type_owner_;
     mfield.type_name_ = field.type_name_;
-   //  In this scenario, the precsion and scale of number are undefined,
-   //  and the internal implementation of ob is represented by an illegal value (-1, -85).
-   //  However, oracle is represented by 0. In order to be compatible with
+   //  In this scenario, the precsion and scale of number are undefined, 
+   //  and the internal implementation of ob is represented by an illegal value (-1, -85). 
+   //  However, oracle is represented by 0. In order to be compatible with 
    //  the behavior of oracle, it is corrected to 0 here.
-    if ((ObNumberType == field.type_.get_type()
+    if ((ObNumberType == field.type_.get_type() 
           || ObUNumberType == field.type_.get_type())) { // was decimal
       decimals = (decimals==NUMBER_SCALE_UNKNOWN_YET ? 0:decimals);
       pre = (pre==PRECISION_UNKNOWN_YET ? 0:pre);

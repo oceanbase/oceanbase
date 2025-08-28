@@ -156,7 +156,7 @@ public:
   /**
    * @description: insert new ls_task to __all_ls_balance_task_operator
    * @param[in] ls_balance_task : a valid ls balance task
-   * @param[in] client: sql client or trans
+   * @param[in] client: sql client or trans 
    * @return OB_SUCCESS if success, otherwise failed
    */
   static int insert_ls_balance_task(const ObBalanceTaskHelper &ls_balance_task,
@@ -191,10 +191,10 @@ public:
   static int fill_dml_spliter(share::ObDMLSqlSplicer &dml,
                               const ObBalanceTaskHelper &ls_balance_task);
  /**
-   * @description: get transfer end task while has transfer begin
+   * @description: get transfer end task while has transfer begin 
    * @param[in] tenant_id : user_tenant_id
-   * @param[in] op_scn : transfer begin operation scn, transfer end 's scn is larger than this
-   * @param[in] src_ls : transfer_begin's source ls
+   * @param[in] op_scn : transfer begin operation scn, transfer end 's scn is larger than this 
+   * @param[in] src_ls : transfer_begin's source ls 
    * @param[in] desc_ls : transfer_begin's destination ls
    * @param[in] client : sql client or trans
    * @param[out] ls_balance_task : ls_balance_task of min operation_scn

@@ -666,7 +666,7 @@ int ObTabletMemtableMgr::unset_logging_blocked_for_active_memtable(ObITabletMemt
 }
 
 int ObTabletMemtableMgr::set_is_tablet_freeze_for_active_memtable(
-    ObTableHandleV2 &handle,
+    ObTableHandleV2 &handle, 
     const int64_t trace_id)
 {
   handle.reset();

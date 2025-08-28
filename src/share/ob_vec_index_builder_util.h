@@ -117,8 +117,8 @@ public:
       ObTableSchema &new_table_schema,
       ObTableSchema &new_index_schema,
       common::ObIAllocator &allocator,
-      oceanbase::rootserver::ObDDLOperator &ddl_operator,
-      common::ObMySQLTransaction &trans,
+      oceanbase::rootserver::ObDDLOperator &ddl_operator, 
+      common::ObMySQLTransaction &trans, 
       ObSEArray<obrpc::ObColumnSortItem, 2> &domain_index_columns,
       ObSEArray<ObString, 1> &domain_store_columns);
   static int vec_set_index_arg_index_schema(
@@ -126,9 +126,9 @@ public:
       ObSchemaGetterGuard &schema_guard,
       const ObTableSchema &data_table_schema,
       const ObTableSchema &index_table_schema);
-
+      
   static int set_vec_aux_table_columns(
-      const ObCreateIndexArg &arg,
+      const ObCreateIndexArg &arg, 
       const ObTableSchema &data_schema,
       ObTableSchema &index_schema);
   static int construct_ivf_col_name(
@@ -239,25 +239,25 @@ private:
       ObIAllocator &allocator,
       const ObIArray<const ObColumnSchemaV2 *> &vec_cols);
   static int get_spiv_column_cnt(
-      const ObIndexType index_type,
+      const ObIndexType index_type, 
       const int64_t main_table_rowkey_size,
-      int64_t &total_column_cnt,
+      int64_t &total_column_cnt, 
       int64_t &index_column_cnt);
   static int get_ivf_column_cnt(
-      const ObIndexType index_type,
+      const ObIndexType index_type, 
       const int64_t main_table_rowkey_size,
-      int64_t &total_column_cnt,
+      int64_t &total_column_cnt, 
       int64_t &index_column_cnt);
   static int push_back_rowkey_col(
       ObIArray<const ObColumnSchemaV2 *> &cols,
       const ObTableSchema &data_schema,
       int64_t &rowkey_size);
   static int construct_ivf_partial_column_info(
-      char *vec_expr_def,
-      const VecColType col_type,
-      int64_t &def_pos,
-      ObCollationType &collation_type,
-      ObObjType &obj_type,
+      char *vec_expr_def, 
+      const VecColType col_type, 
+      int64_t &def_pos, 
+      ObCollationType &collation_type, 
+      ObObjType &obj_type, 
       int64_t &col_flag);
   static int construct_ivf_col_name(
       const obrpc::ObCreateIndexArg *index_arg,

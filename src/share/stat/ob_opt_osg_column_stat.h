@@ -130,7 +130,7 @@ public:
     sample_step_(100) {}
 
   ~ObOptOSGSampleHelper() {}
-
+  
   OB_INLINE uint64_t gcd(uint64_t a, uint64_t b)
   {
     uint64_t c = 0;
@@ -142,7 +142,7 @@ public:
     return a;
  }
 
-  OB_INLINE void init(double sample_rate)
+  OB_INLINE void init(double sample_rate) 
   {
     const static uint64_t RATE_BASE = 100000;
     const static uint64_t RATE_BASE100 = 10000000;
@@ -175,10 +175,10 @@ public:
     if (++k_ > sample_step_) {
       k_ = 1;
     }
-
+    
     return ret;
   }
-
+  
   OB_INLINE void reset()
   {
     sample_value_ = 0;

@@ -27,7 +27,7 @@ select * from t1 order by c2 limit 1, 10;
 
 ## with no-column predicate
 # TODO shengle, core in pre calc expr, mysqltest not core, may unitest problem
-#
+# 
 # select * from (select * from t1 order by c2 desc) a where 1=1 limit 1, 10;
 select * from t1 order by c2 limit 1, 10;
 
@@ -35,7 +35,7 @@ select * from t1 order by c2 limit 1, 10;
 
 ## with no-column predicate
 # TODO shengle, core in pre calc expr, mysqltest not core, may unitest problem
-#
+# 
 # select * from (select * from t1 order by c2 desc) a where (1=1) and (0=0) limit 1, 10;
 select * from t1 order by c2 limit 1, 10;
 

@@ -73,3 +73,4 @@ public:
 } // end namespace oceanbase
 
 #endif // OCEANBASE_ENGINE_OB_BATCH_ROWS_H_
+

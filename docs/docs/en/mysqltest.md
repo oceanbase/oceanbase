@@ -15,7 +15,7 @@ mysqltest is a test in the OceanBase database access test. Simply put, it takes 
 When running the mysqltest test, it is divided into different modes according to the selected nodes. The common mysqltest modes are as follows.
 
 * c mode: Connect to the server where the Primary Zone is located to run mysqltest. For example, use the configuration file distributed.yaml to deploy the cluster and then connect to server1 to run the test.
-
+  
   ```shell
   ./obd.sh mysqltest -n <name> --suite acs --test-server=server1
   ```
@@ -43,21 +43,21 @@ Please refer to [build-and-run](./build-and-run.md) to compile the OceanBase dat
 You can choose to test in full or specify a `case` or `suite` for testing. For the specific meaning of parameters used when executing the obd.sh script, please refer to [Appendix](#Appendix).
 
 * Full test, that is, run all suites in the `mysql_test/test_suite` directory, please refer to the following command.
-
+  
   ```shell
   [admin@obtest ~]$ cd oceanbase/tools/deploy
   [admin@obtest deploy]$ ./obd.sh mysqltest -n test --all
   ```
 
 * Specify case for testing, for example, specify `mysql_test/test_suite/alter/t/alter_log_archive_option.test`. Please refer to the following command.
-
+  
   ```shell
   [admin@obtest ~]$ cd oceanbase/tools/deploy
   [admin@obtest deploy]$ ./obd.sh mysqltest -n test --test-dir ./mysql_test/test_suite/alter/t --result-dir ./mysql_test/test_suite/alter/r --test-set alter_log_archive_option
   ```
 
 * To specify a suite test, for example, to execute a test on a specified suite in the `mysql_test/test_suite` directory, please refer to the following command.
-
+  
   ```shell
   [admin@obtest ~]$ cd oceanbase/tools/deploy
   [admin@obtest deploy]$ ./obd.sh mysqltest -n test --suite acs

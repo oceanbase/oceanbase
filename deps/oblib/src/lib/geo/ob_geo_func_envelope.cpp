@@ -50,7 +50,7 @@ private:
 
 
   static int eval_envelope_collection(const ObGeometry *g,
-                                      const ObGeoEvalCtx &context,
+                                      const ObGeoEvalCtx &context, 
                                       ObCartesianBox & result)
   {
     INIT_SUCC(ret);

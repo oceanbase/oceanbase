@@ -246,7 +246,7 @@ TEST_F(TestObBlackList, black_list_parallel_2)
       rand = std::rand() % 1000 + 1;
       ObLSID ls_id(std::rand() % loop_cnt + 1);
       EXPECT_EQ(OB_SUCCESS, key.init(addr, 1006, ls_id));
-
+      
       if (rand <= 300) {
         bl_service.add(key);
       } else if (rand <= 600) {

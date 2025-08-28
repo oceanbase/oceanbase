@@ -763,7 +763,7 @@ private:
   ObBitVector &eval_flags_;
   const int16_t in_scale_;
   const int16_t out_scale_;
-  const int16_t round_scale_;
+  const int16_t round_scale_; 
   T in_round_scale_factor_;
   T out_round_scale_factor_;
   T in_out_scale_factor_;

@@ -24,7 +24,7 @@ namespace table
 class ObHbaseOpProcessor : public ObITableOpProcessor
 {
 public:
-  ObHbaseOpProcessor()
+  ObHbaseOpProcessor() 
     : ObITableOpProcessor(),
       allocator_("HbasePror", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       default_entity_factory_("HbaseEntFac", MTL_ID()),

@@ -556,7 +556,7 @@ int ObTxDataMemtable::merge_cur_and_past_commit_verisons_(const SCN recycle_scn,
 
   // here we merge the past commit versions and current commit versions. To keep merged array correct, the node in past
   // array whose start_scn is larger than the minimum start_scn in current array will be dropped. The reason is in this
-  // issue:
+  // issue: 
   SCN cur_min_start_scn = cur_arr.count() > 0 ? cur_arr.at(0).start_scn_ : SCN::max_scn();
   SCN max_commit_version = SCN::min_scn();
   if (OB_FAIL(merge_pre_process_node_(
@@ -957,7 +957,7 @@ int ObTxDataMemtable::flush(const int64_t trace_id)
       STORAGE_LOG(WARN, "failed to schedule tablet merge dag", K(ret));
     }
   } else {
-    REPORT_CHECKPOINT_DIAGNOSE_INFO(update_schedule_dag_info, this, get_rec_scn(),
+    REPORT_CHECKPOINT_DIAGNOSE_INFO(update_schedule_dag_info, this, get_rec_scn(), 
         get_start_scn(), get_end_scn());
     stat_change_ts_.create_flush_dag_time_ = ObTimeUtil::fast_current_time();
     STORAGE_LOG(INFO,

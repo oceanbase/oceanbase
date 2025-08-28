@@ -64,21 +64,21 @@ class ObDASScanRtDef;
 
 /**
  * Func Lookup Iter:
- *              Func Lookup Iter
- *                /        \
+ *              Func Lookup Iter                             
+ *                /        \                          
  *             /              \
  *          /                    \
- *       /                          \
+ *       /                          \                           
  *  INDEX_ITER                  DATA_ITER = FTS_MERGE_ITER
  * (ROWKEY_DOCID)
- *
+ * 
  * Func Lookup:
  *            Local Lookup Iter
  *             /              \
  *            /                \
  *           /                  \
  * Local Lookup/Das Scan    Func Lookup Iter
- **/
+ **/ 
 
 /*
  * In ObDASFuncLookupIter, the data iter is a fts merge iter which is just
@@ -102,7 +102,7 @@ public:
       if (T_PSEUDO_GROUP_ID == exprs->at(i)->type_) {
         group_id = exprs->at(i)->locate_expr_datum(*eval_ctx_).get_int();
       }
-    }
+    } 
     return group_id;
   }
   virtual void clear_evaluated_flag() override;

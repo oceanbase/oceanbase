@@ -122,7 +122,7 @@ int ObExprVecIVFPQCenterIds::calc_pq_center_ids(
       ObString res_str;
       res_str.assign_ptr(vb_buf, res_len);
       expr_datum.set_string(res_str);
-    }
+    } 
   } else if (OB_UNLIKELY(8 != expr.arg_cnt_) || OB_ISNULL(expr.args_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(expr), KP(expr.args_));
@@ -141,14 +141,14 @@ int ObExprVecIVFPQCenterIds::calc_pq_center_ids(
     char *vb_buf = nullptr;
     int64_t res_len = 0;
     int64_t buf_pos = 0;
-    if (OB_ISNULL(calc_vector_expr) || OB_ISNULL(calc_distance_algo_expr)
+    if (OB_ISNULL(calc_vector_expr) || OB_ISNULL(calc_distance_algo_expr) 
       || OB_ISNULL(calc_centroid_table_id_expr) || OB_ISNULL(calc_centroid_part_id_expr)
-      || OB_ISNULL(calc_pq_centroid_table_id_expr) || OB_ISNULL(calc_pq_centroid_part_id_expr)
+      || OB_ISNULL(calc_pq_centroid_table_id_expr) || OB_ISNULL(calc_pq_centroid_part_id_expr) 
       || OB_ISNULL(calc_pq_m_expr) || OB_ISNULL(calc_nbits_expr)) {
       ret = OB_ERR_NULL_VALUE;
-      LOG_WARN("invalid null exprs", K(ret),
-                                     KP(calc_vector_expr),
-                                     KP(calc_distance_algo_expr),
+      LOG_WARN("invalid null exprs", K(ret), 
+                                     KP(calc_vector_expr), 
+                                     KP(calc_distance_algo_expr), 
                                      KP(calc_centroid_table_id_expr),
                                      KP(calc_centroid_part_id_expr),
                                      KP(calc_pq_centroid_table_id_expr),
@@ -159,7 +159,7 @@ int ObExprVecIVFPQCenterIds::calc_pq_center_ids(
 
     // 1. eval cur vector, pq m and pq tablet location
     ObIArrayType *arr = NULL;
-    // is_empty_pq_ids = true means that the cluster center has not been generated or the current input vector is null.
+    // is_empty_pq_ids = true means that the cluster center has not been generated or the current input vector is null. 
     // In this case, all pq ids is set to 1.
     bool is_empty_pq_ids = false;
     uint64_t pq_m = 0;
@@ -185,12 +185,12 @@ int ObExprVecIVFPQCenterIds::calc_pq_center_ids(
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc res buf", K(ret), K(res_len), K(expr));
     } else if (OB_FAIL(ObVectorIndexUtil::calc_location_ids(
-          eval_ctx,
-          calc_pq_centroid_table_id_expr,
-          calc_pq_centroid_part_id_expr,
-          pq_cent_table_id,
+          eval_ctx, 
+          calc_pq_centroid_table_id_expr, 
+          calc_pq_centroid_part_id_expr, 
+          pq_cent_table_id, 
           pq_cent_tablet_id))) {
-      LOG_WARN("fail to calc location ids",
+      LOG_WARN("fail to calc location ids", 
                 K(ret), K(pq_cent_table_id), K(pq_cent_tablet_id), KP(calc_pq_centroid_table_id_expr), KP(calc_pq_centroid_part_id_expr));
     } else if (is_empty_pq_ids) {
       if (OB_FAIL(generate_empty_pq_ids(vb_buf, pq_m, nbits, pq_cent_tablet_id.id()))) {
@@ -228,10 +228,10 @@ int ObExprVecIVFPQCenterIds::calc_pq_center_ids(
     ObVectorIndexUtil::get_ivf_pq_center_id_cache_ctx(expr.expr_ctx_id_, &eval_ctx.exec_ctx_, cache, pq_cache);
     if (OB_FAIL(ret) || is_empty_pq_ids) {
     } else if (OB_FAIL(ObVectorIndexUtil::calc_location_ids(
-          eval_ctx,
-          calc_centroid_table_id_expr,
-          calc_centroid_part_id_expr,
-          cent_table_id,
+          eval_ctx, 
+          calc_centroid_table_id_expr, 
+          calc_centroid_part_id_expr, 
+          cent_table_id, 
           cent_tablet_id))) {
       LOG_WARN("fail to calc location ids", K(ret), K(cent_table_id), K(cent_tablet_id), KP(calc_centroid_table_id_expr), KP(calc_centroid_part_id_expr));
     } else {
@@ -244,14 +244,14 @@ int ObExprVecIVFPQCenterIds::calc_pq_center_ids(
           LOG_WARN("fail to gen empty pq ids", K(ret), K(pq_m), K(pq_cent_tablet_id));
         }
       } else if (OB_FAIL(ObVectorIndexUtil::calc_residual_vector(
-          tmp_allocator, arr->size(), centers, reinterpret_cast<float*>(arr->get_data()),
+          tmp_allocator, arr->size(), centers, reinterpret_cast<float*>(arr->get_data()), 
           VIDA_COS != dis_algo ? nullptr: &norm_info, residual_vec))) { // cos need norm
         LOG_WARN("fail to calc residual vector", K(ret), K(dis_algo));
       } else if (OB_FAIL(splited_residual.reserve(pq_m))) {
         LOG_WARN("fail to init splited residual array", K(ret), K(pq_m));
       } else if (OB_FAIL(ObVectorIndexUtil::split_vector(tmp_allocator, pq_m, arr->size(), residual_vec, splited_residual))) {
         LOG_WARN("fail to split vector", K(ret), K(pq_m), K(arr->size()), KP(residual_vec));
-      }
+      } 
     }
 
     // 4. calc pq cent id
@@ -264,7 +264,7 @@ int ObExprVecIVFPQCenterIds::calc_pq_center_ids(
       } else if (pq_centers.count() == 0 || pq_centers.count() % pq_m != 0) {
         ret = OB_INVALID_ARGUMENT;
         SQL_RESV_LOG(ERROR, "invalid size of pq centers", K(ret), K(pq_centers.count()), K(pq_m));
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT,
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, 
           "size of pq centers, should be greater than zero and able to devide m exactly");
       } else {
         center_size_per_m = pq_centers.count() / pq_m;
@@ -312,3 +312,4 @@ int ObExprVecIVFPQCenterIds::calc_pq_center_ids(
 
 }  // namespace sql
 }  // namespace oceanbase
+

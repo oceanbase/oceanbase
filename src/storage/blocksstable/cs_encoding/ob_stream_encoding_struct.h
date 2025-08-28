@@ -165,7 +165,7 @@ struct ObIntegerStreamMeta
   OB_INLINE void set_precision_width_tag(const uint8_t width)
   {
     set_is_decimal_int();
-    decimal_precision_width_ = width;
+    decimal_precision_width_ = width; 
   }
   OB_INLINE uint8_t precision_width_tag() const { return decimal_precision_width_; }
 
@@ -313,7 +313,7 @@ struct ObIntegerStreamEncoderCtx
   }
   int build_signed_stream_meta(const int64_t min, const int64_t max,
       const bool is_replace_null, const int64_t replace_value,
-      const int64_t precision_width_size,
+      const int64_t precision_width_size, 
       const bool force_raw,
       const int64_t major_working_cluster_version,
       uint64_t &range);
@@ -378,7 +378,7 @@ struct ObStringStreamMeta
 
   uint8_t version_;
   uint8_t attr_;
-  uint32_t uncompressed_len_;
+  uint32_t uncompressed_len_; 
   uint32_t fixed_str_len_;
 };
 

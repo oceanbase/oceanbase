@@ -241,7 +241,7 @@ int ObMVProvider::print_mv_operators(ObMVPrinterCtx &mv_printer_ctx,
     }
     case OB_MV_FAST_REFRESH_UNION_ALL: {
       ObUnionAllMVPrinter printer(mv_printer_ctx, mv_schema, mv_container_schema,
-                                  mv_def_stmt,
+                                  mv_def_stmt, 
                                   checker.get_union_all_marker_idx(),
                                   checker.get_child_refresh_types(),
                                   checker.get_mlog_tables(),
@@ -400,7 +400,7 @@ int ObMVProvider::check_mv_column_type(const ObTableSchema *mv_schema,
       } else if (select_items.at(i).expr_->is_const_expr()) {
         /* do nothing */
       } else if (OB_FAIL(ObCreateViewResolver::fill_column_meta_infos(*select_items.at(i).expr_,
-                                                                      mv_schema->get_charset_type(),
+                                                                      mv_schema->get_charset_type(), 
                                                                       mv_schema->get_table_id(),
                                                                       session,
                                                                       cur_column))) {
@@ -741,7 +741,7 @@ int ObMVProvider::get_trans_rule_set(const ObDMLStmt *mv_def_stmt,
   return ret;
 }
 
-int ObMVProvider::get_columns_referenced_by_mv(const uint64_t tenant_id,
+int ObMVProvider::get_columns_referenced_by_mv(const uint64_t tenant_id, 
                                                const uint64_t mview_id,
                                                const uint64_t table_id,
                                                ObSQLSessionInfo *session_info,
@@ -750,7 +750,7 @@ int ObMVProvider::get_columns_referenced_by_mv(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   ObTableReferencedColumnsInfo table_referenced_columns_info;
-
+  
   if (OB_FAIL(table_referenced_columns_info.init())) {
     LOG_WARN("failed to init table referenced columns info", KR(ret));
   } else if (OB_FAIL(init_mv_provider(session_info, schema_guard, NULL, true, &table_referenced_columns_info))) {

@@ -414,7 +414,7 @@ int ObSSTableRowScanner<PrefetchType>::fetch_row(ObSSTableReadHandle &read_handl
           LOG_WARN("Fail to get next row", K(ret));
         } else if (prefetcher_.cur_micro_data_fetch_idx_ >= read_handle.micro_end_idx_) {
           ret = OB_ITER_END;
-          if (ObStoreRowIterator::IteratorRowLockAndDuplicationCheck == type_ ||
+          if (ObStoreRowIterator::IteratorRowLockAndDuplicationCheck == type_ || 
               ObStoreRowIterator::IteratorRowLockCheck == type_) {
             ObMicroBlockRowLockChecker *checker = static_cast<ObMicroBlockRowLockChecker *>(micro_scanner_);
             checker->inc_empty_read(read_handle);

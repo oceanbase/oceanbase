@@ -134,8 +134,8 @@ int ObDbLinkSqlService::add_normal_columns(const ObDbLinkBaseInfo &dblink_info,
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("mysql dblink is not supported when MIN_DATA_VERSION is below DATA_VERSION_4_2_0_0", K(ret));
   } else {
-    support_domin_name = compat_version >= DATA_VERSION_4_3_4_0 ||
-                         (compat_version >= MOCK_DATA_VERSION_4_2_1_8 && compat_version < DATA_VERSION_4_2_2_0) ||
+    support_domin_name = compat_version >= DATA_VERSION_4_3_4_0 || 
+                         (compat_version >= MOCK_DATA_VERSION_4_2_1_8 && compat_version < DATA_VERSION_4_2_2_0) || 
                          (compat_version >= MOCK_DATA_VERSION_4_2_5_0 && compat_version < DATA_VERSION_4_3_0_0);
   }
   if (OB_FAIL(ret)) {
@@ -206,7 +206,7 @@ int ObDbLinkSqlService::add_normal_columns(const ObDbLinkBaseInfo &dblink_info,
           !reverse_user_name.empty() ||
           !reverse_password.empty()) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("some column of dblink_info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_1_0_0", K(ret),
+        LOG_WARN("some column of dblink_info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_1_0_0", K(ret), 
                                                                                       K(encrypted_password),
                                                                                       K(reverse_host_port),
                                                                                       K(reverse_cluster_name),
@@ -308,10 +308,10 @@ int ObDbLinkSqlService::get_link_table_schema(const ObDbLinkSchema *dblink_schem
   }
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (OB_FAIL(ObDblinkService::init_dblink_param_ctx(param_ctx,
-                                                     session_info,
+  } else if (OB_FAIL(ObDblinkService::init_dblink_param_ctx(param_ctx, 
+                                                     session_info, 
                                                      alloctor, //useless in oracle mode
-                                                     dblink_id,
+                                                     dblink_id, 
                                                      link_type,
                                                      DblinkPoolType::DBLINK_POOL_SCHEMA))) {
     LOG_WARN("failed to init dblink param ctx", K(ret), K(param_ctx), K(dblink_id));
@@ -339,13 +339,13 @@ int ObDbLinkSqlService::get_link_table_schema(const ObDbLinkSchema *dblink_schem
                                                 dblink_schema->get_cluster_name()))) {
     LOG_WARN("create dblink pool failed", K(ret), K(param_ctx));
   } else if (OB_FAIL(fetch_link_table_info(param_ctx,
-                                           conn_type,
-                                           database_name,
+                                           conn_type, 
+                                           database_name, 
                                            table_name,
-                                           alloctor,
-                                           tmp_schema,
-                                           session_info,
-                                           dblink_name_for_meta,
+                                           alloctor, 
+                                           tmp_schema, 
+                                           session_info, 
+                                           dblink_name_for_meta, 
                                            reverse_link,
                                            current_scn))) {
     LOG_WARN("fetch link table info failed", K(ret), K(dblink_schema), K(database_name), K(table_name));
@@ -412,8 +412,8 @@ int ObDbLinkSqlService::fetch_link_table_info(dblink_param_ctx &param_ctx,
     } else if (OB_FAIL(convert_idenfitier_charset(allocator, dblink_name,
                       session_info, nls_dblink_name))) {
       LOG_WARN("convert charset of dblink name failed", K(ret));
-    } else if (OB_FAIL(sql.append_fmt(lib::is_oracle_mode() ?
-                                      sql_str_fmt_array[sql_request_level - 1] :
+    } else if (OB_FAIL(sql.append_fmt(lib::is_oracle_mode() ? 
+                                      sql_str_fmt_array[sql_request_level - 1] : 
                                       sql_str_fmt_array_mysql_mode[sql_request_level - 1],
                                       nls_database_name.length(), nls_database_name.ptr(),
                                       nls_table_name.length(), nls_table_name.ptr(),
@@ -448,12 +448,12 @@ int ObDbLinkSqlService::fetch_link_table_info(dblink_param_ctx &param_ctx,
       LOG_WARN("failed to set expected charset id", K(ret));
     } else if (OB_FAIL(generate_link_table_schema(param_ctx,
                                                   conn_type,
-                                                  database_name,
-                                                  table_name,
+                                                  database_name, 
+                                                  table_name, 
                                                   allocator,
-                                                  table_schema,
+                                                  table_schema, 
                                                   session_info,
-                                                  dblink_conn,
+                                                  dblink_conn, 
                                                   result))) {
       LOG_WARN("generate link table schema failed", K(ret));
     } else if (OB_ISNULL(table_schema)) {
@@ -469,7 +469,7 @@ int ObDbLinkSqlService::fetch_link_table_info(dblink_param_ctx &param_ctx,
                                          conn_type,
                                          allocator,
                                          dblink_conn,
-                                         reverse_link,
+                                         reverse_link, 
                                          *current_scn))) {
         LOG_WARN("fetch link current scn failed", K(ret));
       }
@@ -513,8 +513,8 @@ int ObDbLinkSqlService::generate_link_table_schema(const dblink_param_ctx &param
   const char * desc_sql_str_fmt = "/*$BEFPARSEdblink_req_level=1*/ desc \"%.*s\".\"%.*s\"";
   ObSqlString desc_sql;
   int64_t desc_res_row_idx = -1;
-  bool need_desc = param_ctx.sql_request_level_ == 1 &&
-                   DBLINK_DRV_OB == param_ctx.link_type_ &&
+  bool need_desc = param_ctx.sql_request_level_ == 1 && 
+                   DBLINK_DRV_OB == param_ctx.link_type_ && 
                    sql::DblinkGetConnType::TEMP_CONN != conn_type;
   ObMySQLResult *desc_result = NULL;
   CK(OB_NOT_NULL(session_info));

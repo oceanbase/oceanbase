@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #include <gtest/gtest.h>
 #define private public
 #define protected public
@@ -464,7 +464,7 @@ TEST_F(TestGeoSrsParser, parse_srs4236_wkt)
   ASSERT_EQ(srs_item->angular_unit(), 0.017453292519943278);
   ASSERT_EQ(srs_item->semi_major_axis(), 6378137);
   ASSERT_TRUE(std::abs(srs_item->semi_minor_axis() - 6356752.314245) < 0.001);
-
+  
   double orig_long = 15;
   double orig_lat = 15;
   double to_res = 0.0;
@@ -473,7 +473,7 @@ TEST_F(TestGeoSrsParser, parse_srs4236_wkt)
   ASSERT_EQ(OB_SUCCESS, srs_item->longtitude_convert_to_radians(orig_long, to_res));
   ASSERT_EQ(OB_SUCCESS, srs_item->longtitude_convert_from_radians(to_res, from_res));
   ASSERT_EQ(from_res, orig_long);
-
+  
   ASSERT_EQ(OB_SUCCESS, srs_item->latitude_convert_to_radians(orig_lat, to_res));
   ASSERT_EQ(OB_SUCCESS, srs_item->latitude_convert_from_radians(to_res, from_res));
   ASSERT_EQ(from_res, orig_lat);
@@ -500,7 +500,7 @@ TEST_F(TestGeoSrsParser, parse_srs7037_wkt)
   ASSERT_EQ(srs_item->angular_unit(), 0.017453292519943278);
   ASSERT_EQ(srs_item->semi_major_axis(), 6378137);
   ASSERT_TRUE(std::abs(srs_item->semi_minor_axis() - 6356752.31424518) < 0.001);
-
+  
   double orig_long = 15;
   double orig_lat = 15;
   double to_res = 0.0;
@@ -509,7 +509,7 @@ TEST_F(TestGeoSrsParser, parse_srs7037_wkt)
   ASSERT_EQ(OB_SUCCESS, srs_item->longtitude_convert_to_radians(orig_long, to_res));
   ASSERT_EQ(OB_SUCCESS, srs_item->longtitude_convert_from_radians(to_res, from_res));
   ASSERT_EQ(from_res, orig_long);
-
+  
   ASSERT_EQ(OB_SUCCESS, srs_item->latitude_convert_to_radians(orig_lat, to_res));
   ASSERT_EQ(OB_SUCCESS, srs_item->latitude_convert_from_radians(to_res, from_res));
   ASSERT_EQ(from_res, orig_lat);
@@ -544,13 +544,13 @@ TEST_F(TestGeoSrsParser, parse_srs3857_wkt)
   ASSERT_EQ(srs_item->angular_unit(), 0.017453292519943278);
   ASSERT_EQ(srs_item->semi_major_axis(), 0.0);
   ASSERT_EQ(srs_item->semi_minor_axis(), 0.0);
-
+  
   double input = 15;
   double res = 0.0;
 
   ASSERT_EQ(OB_ERR_UNEXPECTED, srs_item->longtitude_convert_to_radians(input, res));
   ASSERT_EQ(OB_ERR_UNEXPECTED, srs_item->longtitude_convert_from_radians(input, res));
-
+  
   ASSERT_EQ(OB_ERR_UNEXPECTED, srs_item->latitude_convert_to_radians(input, res));
   ASSERT_EQ(OB_ERR_UNEXPECTED, srs_item->latitude_convert_from_radians(input, res));
 }
@@ -591,13 +591,13 @@ TEST_F(TestGeoSrsParser, parse_srs32644_wkt)
   ASSERT_EQ(srs_item->angular_unit(), 0.017453292519943278);
   ASSERT_EQ(srs_item->semi_major_axis(), 0);
   ASSERT_EQ(srs_item->semi_minor_axis(), 0);
-
+  
   double input = 15;
   double res = 0.0;
 
   ASSERT_EQ(OB_ERR_UNEXPECTED, srs_item->longtitude_convert_to_radians(input, res));
   ASSERT_EQ(OB_ERR_UNEXPECTED, srs_item->longtitude_convert_from_radians(input, res));
-
+  
   ASSERT_EQ(OB_ERR_UNEXPECTED, srs_item->latitude_convert_to_radians(input, res));
   ASSERT_EQ(OB_ERR_UNEXPECTED, srs_item->latitude_convert_from_radians(input, res));
 }
@@ -612,7 +612,7 @@ TEST_F(TestGeoSrsParser, parse_pg_wkt)
   // '+proj=stere +lat_0=90 +lat_ts=71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs'
   ObString NORTH_STEREO = R"(PROJCS["unknown",GEOGCS["unknown", DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.017453292519943278,AUTHORITY["EPSG","9122"]],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]],PROJECTION["Polar Stereopraphic",AUTHORITY["EPSG","9829"]],PARAMETER["Latitude of standard parallel",71,AUTHORITY["EPSG","8832"]],PARAMETER["Longitude of origin",0,AUTHORITY["EPSG","8833"]],PARAMETER["False easting",0,AUTHORITY["EPSG","8806"]],PARAMETER["False northing",0,AUTHORITY["EPSG","8807"]],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["E",SOUTH],AXIS["N",SOUTH],AUTHORITY["EPSG","9122"]])";
   ASSERT_EQ(OB_SUCCESS, ObSrsWktParser::parse_srs_wkt(allocator, 32644, NORTH_STEREO, srs_info));
-
+  
   // +proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs
   ObString WORLD_MERCATOR = R"(PROJCS["unknown",GEOGCS["unknown", DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.017453292519943278,AUTHORITY["EPSG","9122"]],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]],PROJECTION["Mercator",AUTHORITY["EPSG","9804"]],PARAMETER["Latitude of natural origin",0,AUTHORITY["EPSG","8801"]],PARAMETER["Longitude of natural origin",0,AUTHORITY["EPSG","8802"]],PARAMETER["Scale factor at natural origin",1,AUTHORITY["EPSG","8805"]],PARAMETER["False easting",0,AUTHORITY["EPSG","8806"]],PARAMETER["False northing",0,AUTHORITY["EPSG","8807"]],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["E",EAST],AXIS["N",NORTH],AUTHORITY["EPSG","9122"]])";
   ASSERT_EQ(OB_SUCCESS, ObSrsWktParser::parse_srs_wkt(allocator, 32644, WORLD_MERCATOR, srs_info));
@@ -652,7 +652,7 @@ TEST_F(TestGeoSrsParser, parse_pg_wkt)
 
   int LAEA_START = 999163;
   int LAEA_END = 999283;
-
+  
   for (int id = LAEA_START; id <= LAEA_END; id++) {
     int zone = id - LAEA_START;
     int xzone = zone % 20;
@@ -669,7 +669,7 @@ TEST_F(TestGeoSrsParser, parse_pg_wkt)
       lon_0 = 90.0 * (xzone - 2) + 45.0;
     else
       std::cout << "Unknown yzone encountered!" << std::endl;
-
+    
     while (lon_0 > 180) {
       lon_0 -= 360;
     }

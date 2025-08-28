@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 void chunk_cache_init(chunk_cache_t* cache, int chunk_bytes, int mod)
 {
   fixed_stack_init(&cache->free_list);

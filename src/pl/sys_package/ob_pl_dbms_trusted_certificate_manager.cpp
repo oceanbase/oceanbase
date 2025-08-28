@@ -29,7 +29,7 @@ int ObPlDBMSTrustedCertificateManager::check_data_version_and_privilege(ObExecCo
   } else if (!is_sys_tenant(session->get_effective_tenant_id())) {
     ret = OB_ERR_NO_PRIVILEGE;
     LOG_WARN("only sys tenant can operate", K(ret));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(session->get_effective_tenant_id(),
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(session->get_effective_tenant_id(), 
               data_version))) {
     LOG_WARN("fail to get tenant data version", KR(ret));
   } else if (data_version < DATA_VERSION_4_3_0_0) {
@@ -226,3 +226,4 @@ int ObPlDBMSTrustedCertificateManager::update_trusted_certificate(
   }
   return ret;
 }
+

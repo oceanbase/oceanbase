@@ -62,7 +62,7 @@ int ObDASMVILookupIter::inner_get_next_row()
         } else {
           data_table_iter_->clear_evaluated_flag();
           if (OB_FAIL(data_table_iter_->get_next_row())) {
-            LOG_WARN("failed to get next row from data table", K(ret));
+            LOG_WARN("failed to get next row from data table", K(ret));  
           }
         }
 
@@ -91,10 +91,10 @@ int ObDASMVILookupIter::save_rowkey()
 
   const ObDASScanCtDef *index_table_ctdef = static_cast<const ObDASScanCtDef*>(index_ctdef_);
   const ObDASScanCtDef *data_table_ctdef = static_cast<const ObDASScanCtDef*>(lookup_ctdef_);
-
+  
   ObDASScanIter *scan_iter = static_cast<ObDASScanIter *>(data_table_iter_);
-  ObTableScanParam &scan_param = scan_iter->get_scan_param();
-
+  ObTableScanParam &scan_param = scan_iter->get_scan_param(); 
+  
   int64_t rowkey_cnt = index_table_ctdef->rowkey_exprs_.count();
   ObExpr *doc_id_expr = index_table_ctdef->result_output_.at(rowkey_cnt);
   ObDatum &doc_id_datum = doc_id_expr->locate_expr_datum(*lookup_rtdef_->eval_ctx_);
@@ -161,7 +161,7 @@ bool ObDASMVILookupIter::check_has_rowkey()
   const ObDASScanCtDef *data_table_ctdef = static_cast<const ObDASScanCtDef*>(lookup_ctdef_);
   int64_t rowkey_col_cnt = index_table_ctdef->rowkey_exprs_.count();
   int64_t rowkey_null_col_cnt = 0;
-
+  
   for (int64_t i = 0; i < rowkey_col_cnt; ++i) {
     ObExpr *expr = index_table_ctdef->result_output_.at(i);
     if (T_PSEUDO_GROUP_ID == expr->type_) {

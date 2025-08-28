@@ -21,7 +21,7 @@ namespace observer
 {
 using namespace common;
 
-int ObTableLoadResourceRpcProxy::dispatch(const ObDirectLoadResourceOpRequest &request,
+int ObTableLoadResourceRpcProxy::dispatch(const ObDirectLoadResourceOpRequest &request, 
                                           ObDirectLoadResourceOpResult &result,
                                           common::ObIAllocator &allocator)
 {

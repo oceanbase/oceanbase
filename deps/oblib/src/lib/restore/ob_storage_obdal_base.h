@@ -32,7 +32,7 @@ namespace common
 int init_obdal_env();
 void fin_obdal_env();
 
-static constexpr int POOL_MAX_IDLE_PER_HOST = 32;         // the max idle http client count
+static constexpr int POOL_MAX_IDLE_PER_HOST = 32;         // the max idle http client count 
 static constexpr int POOL_MAX_IDLE_TIME_S = 45;          // the max time of idle http client (unit s)
 
 static constexpr int MAX_OBDAL_REGION_LENGTH = 128;
@@ -46,15 +46,15 @@ class ObDalMemoryManager
 {
 public:
   static ObDalMemoryManager &get_instance();
-  int init();
+  int init(); 
   void *allocate(std::size_t size, std::size_t align);
   void free(void *ptr);
-
+  
 
 private:
   ObDalMemoryManager();
   ~ObDalMemoryManager();
-
+  
 private:
   static constexpr int64_t N_WAY = 32;
   static constexpr int64_t DEFAULT_BLOCK_SIZE = 128 * 1024; // 128KB
@@ -86,7 +86,7 @@ public:
   virtual bool is_valid() const override { return is_valid_; }
   virtual int assign(const ObObjectStorageInfo *storage_info) override;
   INHERIT_TO_STRING_KV("ObStorageAccount", ObStorageAccount, K(region_), K(addressing_model_));
-
+  
   char region_[MAX_OBDAL_REGION_LENGTH];
   ObStorageAddressingModel addressing_model_;
 };
@@ -225,7 +225,7 @@ public:
   virtual int open(const ObString &uri, ObObjectStorageInfo *storage_info) override;
   virtual int write(const char *buf, const int64_t size) override;
   virtual int pwrite(const char *buf, const int64_t size, const int64_t offset) override;
-  virtual int abort() override;
+  virtual int abort() override; 
   virtual int complete() override;
   virtual int close() override;
   virtual int64_t get_length() const override { return file_length_; };
@@ -265,3 +265,4 @@ private:
 } // oceanbase
 
 #endif
+

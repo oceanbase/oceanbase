@@ -30,7 +30,7 @@
       if (VECTOR_MODEL == opt_ctx.get_cost_model_type()) {      \
         model = &vector_model;                                  \
       }                                                         \
-
+      
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -60,7 +60,7 @@ int ObOptEstCost::cost_mergejoin(const ObCostMergeJoinInfo &est_cost_info,
 {
   int ret = OB_SUCCESS;
   GET_COST_MODEL();
-  if (OB_FAIL(model->cost_mergejoin(est_cost_info,
+  if (OB_FAIL(model->cost_mergejoin(est_cost_info, 
                                    cost))) {
     LOG_WARN("failed to est cost for merge join", K(ret));
   }
@@ -73,7 +73,7 @@ int ObOptEstCost::cost_hashjoin(const ObCostHashJoinInfo &est_cost_info,
 {
   int ret = OB_SUCCESS;
   GET_COST_MODEL();
-  if (OB_FAIL(model->cost_hashjoin(est_cost_info,
+  if (OB_FAIL(model->cost_hashjoin(est_cost_info, 
                                    cost))) {
     LOG_WARN("failed to est cost for hash join", K(ret));
   }
@@ -125,7 +125,7 @@ int ObOptEstCost::cost_sort(const ObSortCostInfo &cost_info,
 {
   int ret = OB_SUCCESS;
   GET_COST_MODEL();
-  if (OB_FAIL(model->cost_sort(cost_info,
+  if (OB_FAIL(model->cost_sort(cost_info, 
                               cost))) {
     LOG_WARN("failed to est cost for sort", K(ret));
   }
@@ -138,7 +138,7 @@ int ObOptEstCost::cost_exchange(const ObExchCostInfo &cost_info,
 {
   int ret = OB_SUCCESS;
   GET_COST_MODEL();
-  if (OB_FAIL(model->cost_exchange(cost_info,
+  if (OB_FAIL(model->cost_exchange(cost_info, 
                                   cost))) {
     LOG_WARN("failed to est cost for exchange", K(ret));
   }
@@ -151,7 +151,7 @@ int ObOptEstCost::cost_exchange_in(const ObExchInCostInfo &cost_info,
 {
   int ret = OB_SUCCESS;
   GET_COST_MODEL();
-  if (OB_FAIL(model->cost_exchange_in(cost_info,
+  if (OB_FAIL(model->cost_exchange_in(cost_info, 
                                      cost))) {
     LOG_WARN("failed to est cost for exchange in", K(ret));
   }
@@ -164,7 +164,7 @@ int ObOptEstCost::cost_exchange_out(const ObExchOutCostInfo &cost_info,
 {
   int ret = OB_SUCCESS;
   GET_COST_MODEL();
-  if (OB_FAIL(model->cost_exchange_out(cost_info,
+  if (OB_FAIL(model->cost_exchange_out(cost_info, 
                                       cost))) {
     LOG_WARN("failed to est cost for exchange out", K(ret));
   }
@@ -206,7 +206,7 @@ double ObOptEstCost::cost_scalar_group(double rows,
                                        const ObOptimizerContext &opt_ctx)
 {
   GET_COST_MODEL();
-  return model->cost_scalar_group(rows,
+  return model->cost_scalar_group(rows, 
                                   agg_col_count);
 }
 
@@ -241,7 +241,7 @@ double ObOptEstCost::cost_sequence(double rows,
                                    const ObOptimizerContext &opt_ctx)
 {
   GET_COST_MODEL();
-  return model->cost_sequence(rows,
+  return model->cost_sequence(rows, 
                               uniq_sequence_cnt);
 }
 
@@ -262,7 +262,7 @@ double ObOptEstCost::cost_material(const double rows,
                                    const ObOptimizerContext &opt_ctx)
 {
   GET_COST_MODEL();
-  return model->cost_material(rows,
+  return model->cost_material(rows, 
                               average_row_size);
 }
 
@@ -271,7 +271,7 @@ double ObOptEstCost::cost_filter_rows(double rows,
                                       const ObOptimizerContext &opt_ctx)
 {
   GET_COST_MODEL();
-  return model->cost_filter_rows(rows,
+  return model->cost_filter_rows(rows, 
                                  filters);
 }
 
@@ -293,7 +293,7 @@ int ObOptEstCost::cost_union_all(const ObCostMergeSetInfo &info,
 {
   int ret = OB_SUCCESS;
   GET_COST_MODEL();
-  if (OB_FAIL(model->cost_union_all(info,
+  if (OB_FAIL(model->cost_union_all(info, 
                                    cost))) {
     LOG_WARN("failed to est cost for union all", K(ret));
   }
@@ -306,7 +306,7 @@ int ObOptEstCost::cost_merge_set(const ObCostMergeSetInfo &info,
 {
   int ret = OB_SUCCESS;
   GET_COST_MODEL();
-  if (OB_FAIL(model->cost_merge_set(info,
+  if (OB_FAIL(model->cost_merge_set(info, 
                                    cost))) {
     LOG_WARN("failed to est cost for merge set", K(ret));
   }
@@ -319,7 +319,7 @@ int ObOptEstCost::cost_hash_set(const ObCostHashSetInfo &info,
 {
   int ret = OB_SUCCESS;
   GET_COST_MODEL();
-  if (OB_FAIL(model->cost_hash_set(info,
+  if (OB_FAIL(model->cost_hash_set(info, 
                                   cost))) {
     LOG_WARN("failed to est cost for hash set", K(ret));
   }
@@ -490,10 +490,10 @@ int ObOptEstCost::cost_delete(ObDelUpCostInfo& cost_info,
   return ret;
 }
 
-int ObOptEstCost::calc_range_cost(const ObTableMetaInfo& table_meta_info,
+int ObOptEstCost::calc_range_cost(const ObTableMetaInfo& table_meta_info, 
                                   const ObIArray<ObRawExpr *> &filters,
-                                  int64_t index_column_count,
-                                  int64_t range_count,
+                                  int64_t index_column_count, 
+                                  int64_t range_count, 
                                   double range_sel,
                                   double &cost,
                                   const ObOptimizerContext &opt_ctx)

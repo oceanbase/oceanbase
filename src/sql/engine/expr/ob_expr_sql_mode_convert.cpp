@@ -70,7 +70,7 @@ int ObExprSqlModeConvert::sql_mode_convert(const ObExpr &expr,
   return ret;
 }
 
-int ObExprSqlModeConvert::cg_expr(ObExprCGCtx &op_cg_ctx,
+int ObExprSqlModeConvert::cg_expr(ObExprCGCtx &op_cg_ctx, 
                                   const ObRawExpr &raw_expr,
                                   ObExpr &rt_expr) const
 {

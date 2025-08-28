@@ -360,7 +360,7 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
   col_idxs_[0] = 1;
   col_idxs_[1] = 0;
   build_truncate_info(ObTruncatePartition::RANGE_COLUMNS_PART, row_scn, range_columns_min_begin_rowkey, range_columns_end_rowkey, 2, range_columns_truncate_info1);
-
+  
   ObTruncatePartitionFilter truncate_range_columns_part_filter1;
   get_index_table_cols_param(true);
   build_filter(range_columns_truncate_info1, truncate_range_columns_part_filter1);
@@ -394,7 +394,7 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
 
   ObTruncateInfo range_columns_truncate_info2;
   build_truncate_info(ObTruncatePartition::RANGE_COLUMNS_PART, row_scn, range_columns_begin_rowkey, range_columns_end_rowkey, 2, range_columns_truncate_info2);
-
+  
   ObTruncatePartitionFilter truncate_range_columns_part_filter2;
   get_index_table_cols_param(false);
   build_filter(range_columns_truncate_info2, truncate_range_columns_part_filter2);
@@ -416,7 +416,7 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
 
   ObTruncateInfo range_columns_truncate_info3;
   build_truncate_info(ObTruncatePartition::RANGE_COLUMNS_PART, row_scn, range_columns_begin_rowkey, range_columns_max_end_rowkey, 2, range_columns_truncate_info3);
-
+  
   ObTruncatePartitionFilter truncate_range_columns_part_filter3;
   get_index_table_cols_param(true);
   build_filter(range_columns_truncate_info3, truncate_range_columns_part_filter3);
@@ -436,7 +436,7 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
 
   ObTruncateInfo range_columns_truncate_info4;
   build_truncate_info(ObTruncatePartition::RANGE_COLUMNS_PART, row_scn, range_columns_begin_rowkey, range_columns_max_end_rowkey, 2, range_columns_truncate_info4);
-
+  
   ObTruncatePartitionFilter truncate_range_columns_part_filter4;
   build_filter(range_columns_truncate_info4, truncate_range_columns_part_filter4);
 
@@ -480,7 +480,7 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
   // get_index_table_cols_desc(conn, "t_list");
 
   row_scn = 1000;
-
+  
   ObObj list_obj1;
   ObNewRow list_row1;
   list_row1.assign(&list_obj1, 1);
@@ -494,7 +494,7 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
   ObTruncateInfo list_truncate_info1;
   col_idxs_[0] = 0;
   build_truncate_info(ObTruncatePartition::LIST_PART, row_scn, list_row_values, 1, list_truncate_info1);
-
+  
   ObTruncatePartitionFilter truncate_list_part_filter1;
   get_index_table_cols_param(false);
   build_filter(list_truncate_info1, truncate_list_part_filter1);
@@ -514,11 +514,11 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
   CHECK_LIST_ROW(900, 0, truncate_list_part_filter1, FALSE);
   CHECK_LIST_ROW(900, 2, truncate_list_part_filter1, FALSE);
 
-  // ---- middle partition ((2),(3))
+  // ---- middle partition ((2),(3))  
   ObObj list_obj2;
   ObNewRow list_row2;
   list_row2.assign(&list_obj2, 1);
-
+  
   ObListRowValues list_row_values2;
   ASSERT_EQ(OB_SUCCESS, list_row_values2.push_back(list_row1));
   ASSERT_EQ(OB_SUCCESS, list_row_values2.push_back(list_row2));
@@ -528,7 +528,7 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
 
   ObTruncateInfo list_truncate_info2;
   build_truncate_info(ObTruncatePartition::LIST_PART, row_scn, list_row_values2, 1, list_truncate_info2);
-
+  
   ObTruncatePartitionFilter truncate_list_part_filter2;
   get_index_table_cols_param(true);
   build_filter(list_truncate_info2, truncate_list_part_filter2);
@@ -554,7 +554,7 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
 
   ObTruncateInfo list_truncate_info3;
   build_truncate_info(ObTruncatePartition::LIST_PART, row_scn, list_row_values3, 1, list_truncate_info3, ObTruncatePartition::EXCEPT);
-
+  
   ObTruncatePartitionFilter truncate_list_part_filter3;
   get_index_table_cols_param(false);
   build_filter(list_truncate_info3, truncate_list_part_filter3);
@@ -595,7 +595,7 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
   ObListRowValues list_row_values4;
   ObTruncateInfo list_truncate_info4;
   build_truncate_info(ObTruncatePartition::LIST_PART, row_scn, list_row_values4, 1, list_truncate_info4, ObTruncatePartition::ALL);
-
+  
   ObTruncatePartitionFilter truncate_list_part_filter4;
   get_index_table_cols_param(true);
   build_filter(list_truncate_info4, truncate_list_part_filter4);
@@ -621,7 +621,7 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
   // get_index_table_cols_desc(conn, "t_list_columns");
 
   row_scn = 1000;
-
+  
   ObObj list_columns_objs1[2];
   ObObj list_columns_objs2[2];
   ObNewRow list_columns_row1;
@@ -640,7 +640,7 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
   col_idxs_[0] = 1;
   col_idxs_[1] = 0;
   build_truncate_info(ObTruncatePartition::LIST_COLUMNS_PART, row_scn, list_columns_row_values1, 2, list_columns_truncate_info1);
-
+  
   ObTruncatePartitionFilter truncate_list_columns_part_filter1;
   get_index_table_cols_param(true);
   build_filter(list_columns_truncate_info1, truncate_list_columns_part_filter1);
@@ -673,7 +673,7 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
 
   ObTruncateInfo list_columns_truncate_info2;
   build_truncate_info(ObTruncatePartition::LIST_COLUMNS_PART, row_scn, list_columns_row_values2, 2, list_columns_truncate_info2);
-
+  
   ObTruncatePartitionFilter truncate_list_columns_part_filter2;
   get_index_table_cols_param(false);
   build_filter(list_columns_truncate_info2, truncate_list_columns_part_filter2);
@@ -701,7 +701,7 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
 
   ObTruncateInfo list_columns_truncate_info3;
   build_truncate_info(ObTruncatePartition::LIST_COLUMNS_PART, row_scn, list_columns_row_values3, 2, list_columns_truncate_info3);
-
+  
   ObTruncatePartitionFilter truncate_list_columns_part_filter3;
   get_index_table_cols_param(true);
   build_filter(list_columns_truncate_info3, truncate_list_columns_part_filter3);
@@ -785,7 +785,7 @@ TEST_F(ObTruncatePartitionFitlerTest, subpart_filter)
       list_row_values,
       1,
       range_list_truncate_info1);
-
+  
   ObTruncatePartitionFilter truncate_range_list_part_filter1;
   get_index_table_cols_param(false);
   build_filter(range_list_truncate_info1, truncate_range_list_part_filter1);
@@ -808,7 +808,7 @@ TEST_F(ObTruncatePartitionFitlerTest, subpart_filter)
       range_list_truncate_info2,
       ObTruncatePartition::INCLUDE,
       ObTruncatePartition::EXCEPT);
-
+  
   ObTruncatePartitionFilter truncate_range_list_part_filter2;
   get_index_table_cols_param(true);
   build_filter(range_list_truncate_info2, truncate_range_list_part_filter2);
@@ -846,7 +846,7 @@ TEST_F(ObTruncatePartitionFitlerTest, subpart_filter)
   CHECK_SUB_PART_ROW(800, 10,3, truncate_range_list_part_filter3, FALSE);
   CHECK_SUB_PART_ROW(1001, 5,0, truncate_range_list_part_filter3, FALSE);
   CHECK_SUB_PART_ROW(1001, 5,1, truncate_range_list_part_filter3, FALSE);
-
+  
   // truncate_range_list_part_filter3 rescan partition level one [10 : 100)
   ObTruncateInfo rescan_range_list_truncate_info3;
   row_scn = 2000;

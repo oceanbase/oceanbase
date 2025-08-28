@@ -29,7 +29,7 @@ namespace oceanbase
 namespace sql
 {
 
-ObJavaEnv &ObJavaEnv::getInstance()
+ObJavaEnv &ObJavaEnv::getInstance() 
 {
   static ObJavaEnv java_env;
   return java_env;

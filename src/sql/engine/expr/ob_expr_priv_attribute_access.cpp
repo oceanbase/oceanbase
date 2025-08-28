@@ -63,7 +63,7 @@ int ObExprUDTAttributeAccess::calc_result_typeN(ObExprResType &type,
       type.set_scale(acc.get_scale());
       type.set_precision(acc.get_precision());
     }
-  } else if (!types[0].is_null()
+  } else if (!types[0].is_null() 
              && !types[0].is_expectd_udt_type(subschema_id) // subschema id of types[0] is already deduced
              && types[0].get_udt_id() != udt_id_) {
     ret = OB_ERR_CALL_WRONG_ARG;
@@ -93,7 +93,7 @@ int ObExprUDTAttributeAccess::cg_expr(ObExprCGCtx &op_cg_ctx,
     rt_expr.extra_info_ = info;
   }
   rt_expr.eval_func_ = eval_attr_access;
-
+ 
   return ret;
 }
 
@@ -139,7 +139,7 @@ int ObExprUDTAttributeAccess::eval_attr_access(const ObExpr &expr, ObEvalCtx &ct
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("extra info is null", K(ret));
     } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&temp_allocator, ObLongTextType,
-                                                                 CS_TYPE_BINARY, true,
+                                                                 CS_TYPE_BINARY, true, 
                                                                  raw_data))) {
       LOG_WARN("failed to get udt raw data", K(ret), K(info->udt_id_));
     } else if (FALSE_IT(temp_allocator.set_baseline_size(raw_data.length()))) {

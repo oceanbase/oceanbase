@@ -95,7 +95,7 @@ public:
   virtual int rescan() override;
   virtual int inner_rescan() override;
 
-
+  
   virtual int inner_get_next_row() override;
   virtual void destroy() override
   {

@@ -74,7 +74,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObRedisUtil);
 };
 
-class ObRedisFmt
+class ObRedisFmt 
 {
 public:
   static const char *MINUS_ONE;
@@ -88,7 +88,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObRedisFmt);
 };
 
-// The sequence of RedisCommandType is associated with that of ObTableProccessType.
+// The sequence of RedisCommandType is associated with that of ObTableProccessType. 
 // If you want to change it, you need to change ObTableProccessType simultaneously
 enum RedisCommandType {
   REDIS_COMMAND_INVALID = 0,

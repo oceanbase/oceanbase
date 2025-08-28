@@ -260,7 +260,7 @@ void SmallHashSetTest::performance_test()
       }
     }
     double error_rate = double(error_count) / double(total_count);
-    cout << "Probe:: the false positive rate is: " << error_rate
+    cout << "Probe:: the false positive rate is: " << error_rate 
          << ", error_count: " << error_count
          << ", total_count: " << total_count << endl;
   }
@@ -387,7 +387,7 @@ void OpenHashSetforKeyTest::exist_performance(int build_cnt, int probe_count) {
 TEST_F(OpenHashSetforKeyTest, test_small_hash_set_exist_performance) {
     int64_t tenant_id = 1;
     int max_build_cnt = 1000000;
-
+    
     const int build_counts[] = {10000, 100000, 1000000};
     const int probe_counts[] = {10000, 100000, 1000000, 10000000};
     open_set_.init(max_build_cnt * 2, tenant_id);

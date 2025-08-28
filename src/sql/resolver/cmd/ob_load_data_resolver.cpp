@@ -782,15 +782,15 @@ int ObLoadDataResolver::resolve_filename(ObLoadDataStmt *load_stmt, ParseNode *n
                 if (OB_ISNULL(path = static_cast<char *>(allocator_->alloc(MAX_PATH_SIZE)))) {
                   ret = OB_ALLOCATE_MEMORY_FAILED;
                   LOG_WARN("fail to allocate memory", K(ret));
-                } else if (OB_FAIL(databuff_printf(path, MAX_PATH_SIZE, path_len, "%.*s",
+                } else if (OB_FAIL(databuff_printf(path, MAX_PATH_SIZE, path_len, "%.*s", 
                                                    dir_path.length(), dir_path.ptr()))) {
                   LOG_WARN("fail to fill path", K(ret), K(path_len));
                 } else if (!exist_wildcard(pattern)) {
                   if (OB_FAIL(file_list.push_back(pattern))) {
                     LOG_WARN("fail to push back", K(ret));
-                  }
+                  } 
                 } else if (OB_FAIL(adapter.list_files(ObString(path_len, path), &load_args.access_info_, op))) {
-                  LOG_WARN("fail to list files", K(ret));
+                  LOG_WARN("fail to list files", K(ret));                       
                 }
               }
             }
@@ -800,7 +800,7 @@ int ObLoadDataResolver::resolve_filename(ObLoadDataStmt *load_stmt, ParseNode *n
               } else if (matched) {
                 ObString match_file;
                 int64_t pos = path_len;
-                if (OB_FAIL(databuff_printf(path, MAX_PATH_SIZE, pos, "%.*s",
+                if (OB_FAIL(databuff_printf(path, MAX_PATH_SIZE, pos, "%.*s", 
                                             file_list[i].length(), file_list[i].ptr()))) {
                   LOG_WARN("fail to fill path", K(ret));
                 } else if (OB_FAIL(ob_write_string(*allocator_, ObString(pos, path), match_file, true))) {
@@ -830,7 +830,7 @@ int ObLoadDataResolver::resolve_filename(ObLoadDataStmt *load_stmt, ParseNode *n
           }
         }
       }
-    }
+    } 
   }
 
   return ret;
@@ -1671,11 +1671,11 @@ int ObLoadDataResolver::check_trigger_constraint(const ObTableSchema *table_sche
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(table_schema)
-      || OB_ISNULL(schema_checker_)
+      || OB_ISNULL(schema_checker_) 
       || OB_ISNULL(session_info_)
       || OB_ISNULL(schema_checker_->get_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("object is null", K(ret), K(table_schema), K(schema_checker_),
+    LOG_WARN("object is null", K(ret), K(table_schema), K(schema_checker_), 
              K(session_info_), K(schema_checker_->get_schema_guard()));
   } else {
     uint64_t tenant_id = session_info_->get_effective_tenant_id();
@@ -1703,7 +1703,7 @@ int ObLoadDataResolver::check_trigger_constraint(const ObTableSchema *table_sche
   return ret;
 }
 
-int ObLoadDataResolver::resolve_partitions(const ParseNode &node, ObLoadDataStmt &load_stmt)
+int ObLoadDataResolver::resolve_partitions(const ParseNode &node, ObLoadDataStmt &load_stmt) 
 {
   int ret = OB_SUCCESS;
   uint64_t table_id = load_stmt.get_load_arguments().table_id_;
@@ -1762,11 +1762,11 @@ int ObLoadDataResolver::check_collection_sql_type(const ObTableSchema *table_sch
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(table_schema)
-      || OB_ISNULL(schema_checker_)
+      || OB_ISNULL(schema_checker_) 
       || OB_ISNULL(session_info_)
       || OB_ISNULL(schema_checker_->get_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("object is null", K(ret), K(table_schema), K(schema_checker_),
+    LOG_WARN("object is null", K(ret), K(table_schema), K(schema_checker_), 
              K(session_info_), K(schema_checker_->get_schema_guard()));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < table_schema->get_column_count(); i++) {

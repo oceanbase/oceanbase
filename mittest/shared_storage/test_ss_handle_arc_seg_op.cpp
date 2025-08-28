@@ -19,12 +19,12 @@
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "test_ss_common_util.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace storage
+namespace storage 
 {
 using namespace oceanbase::common;
-class TestSSHandleArcSegOp : public ::testing::Test
+class TestSSHandleArcSegOp : public ::testing::Test 
 {
 public:
   TestSSHandleArcSegOp() {}
@@ -76,7 +76,7 @@ TEST_F(TestSSHandleArcSegOp, test_arc_evict_delete)
   arc_cache_task.interval_us_ = 3600 * 1000 * 1000L;
   arc_cache_task.is_inited_ = false;
   usleep(1000 * 1000);
-
+  
   ObSSMemDataManager *mem_data_mgr = &(micro_cache->mem_data_mgr_);
   ASSERT_NE(nullptr, mem_data_mgr);
   ObSSMicroMetaManager *micro_meta_mgr = &(micro_cache->micro_meta_mgr_);

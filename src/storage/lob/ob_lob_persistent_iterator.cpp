@@ -207,7 +207,7 @@ int ObLobMetaIterator::get_next_row(ObLobMetaInfo &row)
 {
   int ret = OB_SUCCESS;
   blocksstable::ObDatumRow* datum_row = nullptr;
-  ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(row_iter_);
+  ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(row_iter_); 
   if (OB_ISNULL(row_iter_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lob meta scan iter is null", K(ret), KPC(this));
@@ -273,7 +273,7 @@ int ObLobMetaSingleGetter::get_next_row(ObString &seq_id, ObLobMetaInfo &info)
   } else if (OB_FAIL(scan(*param_, true /*is_get*/, param_->allocator_, param_->allocator_))) {
     LOG_WARN("scan fali", K(ret), K(range), KPC(this));
   }
-
+    
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(table_scan_iter = static_cast<ObTableScanIterator *>(row_iter_))) {
     ret = OB_ERR_UNEXPECTED;
@@ -487,7 +487,7 @@ int ObLobPersistDeleteIter::get_next_row(blocksstable::ObDatumRow *&row)
   } else if (FALSE_IT(result_.info_.char_len_ = meta_iter_->get_cur_info().char_len_)) { // get ori char len
   } else if (OB_FAIL(update_seq_no())) {
     LOG_WARN("update_seq_no fail", K(ret));
-  // TODO aozeliu.azl old_info is null, may be incorrect
+  // TODO aozeliu.azl old_info is null, may be incorrect 
   } else if (OB_FAIL(param_->update_out_row_ctx(nullptr/*old_info*/, result_.info_/*new_info*/))) { // new row
     LOG_WARN("failed update checksum.", K(ret));
   } else if (OB_FAIL(param_->update_handle_data_size(&result_.info_/*old_info*/, nullptr/*old_info*/))) {

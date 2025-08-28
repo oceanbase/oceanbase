@@ -246,7 +246,7 @@ public:
                             sql::ObSQLSessionInfo *session_info,
                             const common::ObString &dblink_name,
                             bool is_reverse_link);
-  int set_link_table_schema(uint64_t dblink_id,
+  int set_link_table_schema(uint64_t dblink_id, 
                             const common::ObString &database_name,
                             share::schema::ObTableSchema *table_schema);
   int get_simple_table_schema(const uint64_t tenant_id,
@@ -451,9 +451,9 @@ public:
                                               ObString &policy_name);
   int add_fake_cte_schema(share::schema::ObTableSchema* tbl_schema);
   int find_fake_cte_schema(common::ObString tblname, ObNameCaseMode mode, bool& exist);
-  int adjust_fake_cte_column_type(uint64_t table_id,
-                                  uint64_t column_id,
-                                  const common::ColumnType &type,
+  int adjust_fake_cte_column_type(uint64_t table_id, 
+                                  uint64_t column_id, 
+                                  const common::ColumnType &type, 
                                   const common::ObAccuracy &accuracy);
   int get_schema_version(const uint64_t tenant_id, uint64_t table_id, share::schema::ObSchemaType schema_type, int64_t &schema_version);
   share::schema::ObSchemaGetterGuard *get_schema_mgr() { return schema_mgr_; }

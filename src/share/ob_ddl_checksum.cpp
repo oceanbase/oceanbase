@@ -344,7 +344,7 @@ int ObDDLChecksumOperator::get_tablet_latest_execution_id(
 }
 
 int ObDDLChecksumOperator::get_tablet_checksum_status(
-    const ObSqlString &sql,
+    const ObSqlString &sql, 
     const uint64_t tenant_id,
     ObIArray<uint64_t> &batch_tablet_array,
     common::ObMySQLProxy &sql_proxy,
@@ -377,7 +377,7 @@ int ObDDLChecksumOperator::get_tablet_checksum_status(
           int64_t task_id = 0;
           // EXTRACT_INT_FIELD_MYSQL(*result, "column_id", column_id, int64_t);
           EXTRACT_INT_FIELD_MYSQL(*result, "task_id", task_id, int64_t);
-          if (OB_SUCC(ret)
+          if (OB_SUCC(ret) 
               && OB_FAIL(tablet_checksum_status_map.set_refactored(task_id, true, force_update))) {
             LOG_WARN("fail to set tablet column map", K(ret), K(task_id));
           }
@@ -400,20 +400,20 @@ int ObDDLChecksumOperator::get_tablet_checksum_record(
   int ret = OB_SUCCESS;
   ObSqlString sql;
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-
-  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == execution_id ||
-                  OB_INVALID_ID == table_id || OB_INVALID_ID == ddl_task_id ||
+  
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == execution_id || 
+                  OB_INVALID_ID == table_id || OB_INVALID_ID == ddl_task_id || 
                   tablet_ids.count() <= 0 || !tablet_checksum_status_map.created())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument",
-      K(ret), K(tenant_id), K(execution_id), K(table_id), K(ddl_task_id),
+    LOG_WARN("invalid argument", 
+      K(ret), K(tenant_id), K(execution_id), K(table_id), K(ddl_task_id), 
       K(tablet_checksum_status_map.created()));
   } else if (OB_FAIL(DDL_SIM(tenant_id, ddl_task_id, GET_TABLET_COLUMN_CHECKSUM_FAILED))) {
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(ddl_task_id));
   } else {
     int64_t batch_size = 100;
     ObArray<uint64_t> batch_tablet_array;
-
+   
     // check every tablet column checksum, task_id is equal to tablet_id
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
       const uint64_t last_tablet_id_id = tablet_ids.at(i).id();
@@ -424,12 +424,12 @@ int ObDDLChecksumOperator::get_tablet_checksum_record(
           if (OB_FAIL(sql.assign_fmt(
               "SELECT task_id FROM %s "
               "WHERE execution_id = %ld AND tenant_id = %ld AND table_id = %ld AND ddl_task_id = %ld AND task_id >= %ld and task_id <= %ld "
-              "GROUP BY task_id",
+              "GROUP BY task_id", 
               OB_ALL_DDL_CHECKSUM_TNAME,
-              execution_id,
+              execution_id, 
               ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
-              ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id),
-              ddl_task_id,
+              ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id), 
+              ddl_task_id, 
               batch_tablet_array.at(0), // first tablet_id in one batch
               last_tablet_id_id))) {    // last  tablet id in one batch
             LOG_WARN("fail to assign fmt", K(ret), K(tenant_id), K(execution_id), K(ddl_task_id));
@@ -441,7 +441,7 @@ int ObDDLChecksumOperator::get_tablet_checksum_record(
           } else {
             batch_tablet_array.reset();
           }
-        }
+        } 
       }
     }
   }
@@ -709,7 +709,7 @@ int ObDDLChecksumOperator::delete_checksum(
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(execution_id), K(source_table_id), K(dest_table_id));
   } else if (OB_FAIL(DDL_SIM(tenant_id, ddl_task_id, DELETE_DDL_CHECKSUM_FAILED))) {
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(ddl_task_id));
-  } else if (OB_INVALID_INDEX != tablet_task_id
+  } else if (OB_INVALID_INDEX != tablet_task_id 
     && OB_FAIL(remove_tablet_chksum_sql.assign_fmt("AND (task_id >> %ld) = %ld ", ObDDLChecksumItem::PX_SQC_ID_OFFSET, tablet_task_id))) {
     LOG_WARN("assign fmt failed", K(ret), K(tablet_task_id), K(remove_tablet_chksum_sql));
   } else if (OB_FAIL(sql.assign_fmt(

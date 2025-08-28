@@ -180,7 +180,7 @@ int ObTransformQueryPushDown::need_transform(const common::ObIArray<ObParentDMLS
       } else if (!need_trans) {
         OPT_TRACE("hint reject transform");
       }
-    } else if (OB_FALSE_IT(myhint =
+    } else if (OB_FALSE_IT(myhint = 
                            static_cast<const ObViewMergeHint*>(get_hint(table->ref_query_->get_stmt_hint())))) {
       // do nothing
     } else if (myhint != NULL &&
@@ -651,14 +651,14 @@ int ObTransformQueryPushDown::check_select_item_subquery(ObSelectStmt &select_st
       LOG_WARN("unexpect null expr", K(ret));
     } else if (!expr->has_flag(CNT_SUB_QUERY)) {
       /* do nothing */
-    } else if (expr->has_flag(IS_WITH_ANY) || expr->has_flag(IS_WITH_ALL) ||
+    } else if (expr->has_flag(IS_WITH_ANY) || expr->has_flag(IS_WITH_ALL) || 
                expr->get_expr_type() == T_OP_EXISTS || expr->get_expr_type() == T_OP_NOT_EXISTS) {
       /*
       * Disable query pushdown when a select item of view is `any/all/exists subquery` form.
-      * As for the query below, after pushing down, v.c2 will be used for both projection and filtering,
+      * As for the query below, after pushing down, v.c2 will be used for both projection and filtering, 
       * which may result in an incorrect stmt status in the subsequent rewrite loop.
-      * e.g. select * from
-      * (select t1.c1, (exists(select 1 from t2 where (t1.c1 = t2.c1))) as c2 from t1) v
+      * e.g. select * from 
+      * (select t1.c1, (exists(select 1 from t2 where (t1.c1 = t2.c1))) as c2 from t1) v 
       * where v.c2 is true;
       */
       can_be = false;
@@ -686,7 +686,7 @@ int ObTransformQueryPushDown::check_select_item_subquery(ObSelectStmt &select_st
       }
     }
   }
-
+  
   // check query ref exprs of upper select stmt
   if (OB_FAIL(ret) || !can_be) {
   } else if (column_exprs_from_subquery.empty()) {

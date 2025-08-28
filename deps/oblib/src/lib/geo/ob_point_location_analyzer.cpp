@@ -30,7 +30,7 @@ int ObPointLocationAnalyzer::calculate_point_position(const ObPoint2d &test_poin
     } else if (OB_FAIL(rtree_index_.construct_rtree_index(*(cache_geo_->get_segments())))) {
       LOG_WARN("construct rtree index failed", K(ret));
     }
-  }
+  } 
   if (OB_SUCC(ret)) {
     clear_result();
     std::vector<RtreeNodeValue> res;

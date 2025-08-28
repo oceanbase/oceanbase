@@ -122,8 +122,8 @@ int ObExprArrayDifference::calc_difference(ObIArrayType *src_arr, ObIArrayType *
     } else if (ob_is_int_uint_tc(obj_type)) {
       ObArrayFixedSize<int64_t> *array_obj = static_cast<ObArrayFixedSize<int64_t> *>(res_arr);
       if (OB_FAIL(ObArrayExprUtils::raw_check_minus<int64_t>(
-                      this_elem.get_int() - last_elem.get_int(),
-                      this_elem.get_int(),
+                      this_elem.get_int() - last_elem.get_int(), 
+                      this_elem.get_int(), 
                       last_elem.get_int()))) {
         LOG_WARN("array_difference overflow", K(ret));
       } else if (OB_FAIL(array_obj->push_back(this_elem.get_int() - last_elem.get_int()))) {
@@ -132,8 +132,8 @@ int ObExprArrayDifference::calc_difference(ObIArrayType *src_arr, ObIArrayType *
     } else if (ob_is_float_tc(obj_type)) {
       ObArrayFixedSize<float> *array_obj = static_cast<ObArrayFixedSize<float> *>(res_arr);
       if (OB_FAIL(ObArrayExprUtils::raw_check_minus<float>(
-                      this_elem.get_float() - last_elem.get_float(),
-                      this_elem.get_float(),
+                      this_elem.get_float() - last_elem.get_float(), 
+                      this_elem.get_float(), 
                       last_elem.get_float()))) {
         LOG_WARN("array_difference overflow", K(ret));
       } else if (OB_FAIL(array_obj->push_back(this_elem.get_float() - last_elem.get_float()))) {
@@ -143,7 +143,7 @@ int ObExprArrayDifference::calc_difference(ObIArrayType *src_arr, ObIArrayType *
       ObArrayFixedSize<double> *array_obj = static_cast<ObArrayFixedSize<double> *>(res_arr);
       if (OB_FAIL(ObArrayExprUtils::raw_check_minus<double>(
                       this_elem.get_double() - last_elem.get_double(),
-                      this_elem.get_double(),
+                      this_elem.get_double(), 
                       last_elem.get_double()))) {
         LOG_WARN("array_difference overflow", K(ret));
       } else if (OB_FAIL(array_obj->push_back(this_elem.get_double() - last_elem.get_double()))) {
@@ -171,7 +171,7 @@ int ObExprArrayDifference::eval_array_difference(const ObExpr &expr, ObEvalCtx &
     LOG_WARN("failed to eval source array arg", K(ret));
   } else if (arr_datum->is_null()) {
     res.set_null();
-  } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_datum->get_string(), src_arr))) {
+  } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_datum->get_string(), src_arr))) { 
     LOG_WARN("construct array obj failed", K(ret));
   } else if (src_arr->contain_null()) {
     ret = OB_NOT_SUPPORTED;
@@ -186,7 +186,7 @@ int ObExprArrayDifference::eval_array_difference(const ObExpr &expr, ObEvalCtx &
       LOG_WARN("get array binary string failed", K(ret));
     } else {
       res.set_string(res_str);
-    }
+    } 
   }
   return ret;
 }
@@ -215,7 +215,7 @@ int ObExprArrayDifference::eval_array_difference_batch(const ObExpr &expr, ObEva
       eval_flags.set(j);
       if (arr_array.at(j)->is_null()) {
         res_datum.at(j)->set_null();
-      } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_array.at(j)->get_string(), src_arr))) {
+      } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_array.at(j)->get_string(), src_arr))) { 
         LOG_WARN("construct array obj failed", K(ret));
       } else if (src_arr->contain_null()) {
         ret = OB_NOT_SUPPORTED;
@@ -320,7 +320,7 @@ int ObExprArrayDifference::cg_expr(ObExprCGCtx &expr_cg_ctx,
   UNUSED(raw_expr);
   rt_expr.eval_func_ = eval_array_difference;
   rt_expr.eval_batch_func_ = eval_array_difference_batch;
-  rt_expr.eval_vector_func_ = eval_array_difference_vector;
+  rt_expr.eval_vector_func_ = eval_array_difference_vector; 
   return OB_SUCCESS;
 }
 

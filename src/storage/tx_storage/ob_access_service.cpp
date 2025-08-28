@@ -748,7 +748,7 @@ int ObAccessService::check_read_allowed_(
       } else {
         LOG_WARN("failed to check replica allow to read", K(ret), K(tablet_id), "timeout", scan_param.timeout_);
       }
-    } else if (OB_FAIL(check_mlog_safe_(*tablet_handle.get_obj(), scan_param))) {
+    } else if (OB_FAIL(check_mlog_safe_(*tablet_handle.get_obj(), scan_param))) { 
       LOG_WARN("failed to check_mlog_safe", KR(ret), K(tablet_id), K(scan_param));
     }
   }
@@ -1451,7 +1451,7 @@ int ObAccessService::split_multi_ranges(
 }
 
 int ObAccessService::check_mlog_safe_(
-    const ObTablet &tablet,
+    const ObTablet &tablet, 
     const ObTableScanParam &scan_param)
 {
   int ret = OB_SUCCESS;

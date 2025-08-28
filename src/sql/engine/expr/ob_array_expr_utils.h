@@ -51,7 +51,7 @@ struct ObCollectionExprCell
   ObCollectionExprCell(int32_t row_idx, ObExpr *expr, ObEvalCtx *eval_ctx) :
     format_(0), row_idx_(row_idx), expr_(expr), eval_ctx_(eval_ctx)
   {}
-  uint32_t format_;  // 0: arr_vec_foramt(data in attrs_expr), > 0: arr_compact_foramt(lob)
+  uint32_t format_;  // 0: arr_vec_foramt(data in attrs_expr), > 0: arr_compact_foramt(lob) 
   int32_t row_idx_;
   ObExpr *expr_;
   ObEvalCtx *eval_ctx_;
@@ -161,10 +161,10 @@ public:
   static int calc_cast_type2(const ObExprOperatorType &expr_type, ObExprResType &type1, ObExprResType &type2, common::ObExprTypeCtx &type_ctx, uint16_t &res_subschema_id,
                              const bool only_vector = false);
   static int collect_vector_cast_info(ObExprResType &type, ObExecContext &exec_ctx, ObVectorCastInfo &info);
-  static bool is_sparse_vector_supported(const ObExprOperatorType &type) {
-    return type == T_FUN_SYS_INNER_PRODUCT ||
+  static bool is_sparse_vector_supported(const ObExprOperatorType &type) { 
+    return type == T_FUN_SYS_INNER_PRODUCT || 
            type == T_FUN_SYS_NEGATIVE_INNER_PRODUCT ||
-           type == T_FUN_SYS_VECTOR_DIMS;
+           type == T_FUN_SYS_VECTOR_DIMS; 
   };
 
   // update inplace
@@ -189,7 +189,7 @@ private:
   static int get_collection_raw_data(ObIAllocator &allocator, const ObObjMeta &meta, const void *data, ObLength len, ObString &bin_str);
 };
 
-struct ObVectorArithFunc
+struct ObVectorArithFunc 
 {
   enum ArithType
   {
@@ -202,7 +202,7 @@ struct ObVectorArithFunc
 
 struct ObVectorVectorArithFunc : public ObVectorArithFunc
 {
-
+  
   int operator()(ObDatum &res, const ObDatum &l, const ObDatum &r, const ObExpr &expr, ObEvalCtx &ctx, ArithType type) const;
 };
 

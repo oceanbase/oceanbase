@@ -147,15 +147,15 @@ int ObBackupConfigParserGenerator::set(const ObBackupConfigType &type, const uin
   return ret;
 }
 
-/*
-As LOG_RESTORE_SOURCE supports two kind of type now, this function is to figure out
+/* 
+As LOG_RESTORE_SOURCE supports two kind of type now, this function is to figure out 
 whether the LOG_RESTORE_SOURCE is SERVICE or LOCATION.
-If the value is "SERVICE=127.0.0.1:1000;127.0.0.1:1001;127.0.0.1:1002 USER=ziqi_user@ziqi_tenant PASSWORD=123",
+If the value is "SERVICE=127.0.0.1:1000;127.0.0.1:1001;127.0.0.1:1002 USER=ziqi_user@ziqi_tenant PASSWORD=123", 
 the restore_source_type_ will be parsed into SERVICE type.
 If the value is "LOCATION=file:///data/1/zhaoyongheng.zyh/archivelog";
 the restore_source_type_ will be parsed into LOCATION type.
-*/
-int ObBackupConfigParserGenerator::set_restore_source_type_(const common::ObSqlString &value)
+*/ 
+int ObBackupConfigParserGenerator::set_restore_source_type_(const common::ObSqlString &value) 
 {
   int ret = OB_SUCCESS;
   char tmp_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
@@ -165,7 +165,7 @@ int ObBackupConfigParserGenerator::set_restore_source_type_(const common::ObSqlS
   char *tmp_saveptr = nullptr;
   bool is_location = false;
   bool is_service = false;
-
+  
   if (value.empty()) {
     restore_source_type_ = share::ObLogRestoreSourceType::LOCATION;
   } else if (OB_FAIL(databuff_printf(tmp_str, sizeof(tmp_str), "%.*s", static_cast<int>(value.length()), value.ptr()))) {
@@ -447,7 +447,7 @@ int ObDataBackupDestConfigParser::check_before_update_inner_config(obrpc::ObSrvR
       LOG_WARN("fail to init dest manager", K(ret), K_(tenant_id), K(backup_dest));
     } else if (OB_FAIL(dest_mgr.check_dest_validity(rpc_proxy, false/*need_format_file*/))) {
       if (OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM == ret) {
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT,
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, 
                           "set backup dest: parameter enable_worm=true is required for bucket with worm.");
       }
       LOG_WARN("fail to check dest validity", K(ret), K_(tenant_id), K(backup_dest));
@@ -668,13 +668,13 @@ int ObLogArchiveDestConfigParser::check_before_update_inner_config(obrpc::ObSrvR
       ret = OB_OP_NOT_ALLOW;
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "archive_lag_target is smaller than 60s, set log_archive_dest to S3 is");
     } else if (OB_FAIL(dest_mgr.init(tenant_id_, dest_type, backup_dest_, trans))) {
-      LOG_WARN("fail to update archive dest config", K(ret), K_(tenant_id));
+      LOG_WARN("fail to update archive dest config", K(ret), K_(tenant_id)); 
     } else if (OB_FAIL(dest_mgr.check_dest_validity(rpc_proxy, false/*need_format_file*/))) {
       if (OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM == ret) {
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT,
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, 
                           "set backup dest: parameter enable_worm=true is required for bucket with worm.");
       }
-      LOG_WARN("fail to update archive dest config", K(ret), K_(tenant_id));
+      LOG_WARN("fail to update archive dest config", K(ret), K_(tenant_id)); 
     }
   }
   return ret;
@@ -845,11 +845,11 @@ int ObLogArchiveDestStateConfigParser::check_before_update_inner_config(obrpc::O
   return ret;
 }
 
-int ObIBackupConfigItemParser::set_default_checksum_type(share::ObBackupPathString &backup_dest)
+int ObIBackupConfigItemParser::set_default_checksum_type(share::ObBackupPathString &backup_dest) 
 {
   int ret = OB_SUCCESS;
   char tmp_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
-
+  
   if (backup_dest.is_empty() || OB_MAX_BACKUP_DEST_LENGTH < backup_dest.size()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("backup dest is empty or too long", K(ret), "str_size", backup_dest.size());
@@ -861,19 +861,19 @@ int ObIBackupConfigItemParser::set_default_checksum_type(share::ObBackupPathStri
         LOG_WARN("fail to set tmp backup dest", K(ret));
       } else if (is_object_storage_type(tmp_dest.get_storage_info()->get_type())) {
         int64_t pos = 0;
-        if (OB_FAIL(databuff_printf(tmp_str, OB_MAX_BACKUP_DEST_LENGTH, pos, "%s%s%s%s",
+        if (OB_FAIL(databuff_printf(tmp_str, OB_MAX_BACKUP_DEST_LENGTH, pos, "%s%s%s%s", 
                                     backup_dest.ptr(), "&", CHECKSUM_TYPE, CHECKSUM_TYPE_MD5))) {
           LOG_WARN("fail to databuff printf", K(ret));
         } else if (OB_FAIL(backup_dest.assign(tmp_str))) {
           LOG_WARN("fail to assign backup dest", K(ret));
         }
-      }
+      } 
     }
   }
   return ret;
 }
 
-int ObIBackupConfigItemParser::set_default_checksum_type(ObBackupDest &backup_dest)
+int ObIBackupConfigItemParser::set_default_checksum_type(ObBackupDest &backup_dest) 
 {
   int ret = OB_SUCCESS;
   if (!backup_dest.is_valid()) {
@@ -918,7 +918,7 @@ void ChangeExternalStorageDestMgr::reset()
 }
 
 int ChangeExternalStorageDestMgr::init(
-    const uint64_t tenant_id,
+    const uint64_t tenant_id, 
     const common::ObFixedLengthString<common::OB_MAX_CONFIG_VALUE_LEN> &path,
     common::ObISQLClient &sql_proxy)
 {
@@ -1014,7 +1014,7 @@ int ChangeExternalStorageDestMgr::update_backup_parameter_(common::ObISQLClient 
   int ret = OB_SUCCESS;
   ObBackupHelper backup_helper;
   ObBackupPathString backup_dest_str;
-  ObBackupDest dest;
+  ObBackupDest dest; 
   bool is_equal = false;
 
   if (OB_FAIL(backup_helper.init(tenant_id_, trans))) {

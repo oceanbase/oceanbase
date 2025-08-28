@@ -80,7 +80,7 @@ void MockObTableRequestSender::run1()
 {
   CONS_FAKE_REQUEST(req, client_addr_);
   for(int64_t i = 0; i < request_times_; i++) {
-    ASSERT_EQ(OB_SUCCESS, ObTableConnectionMgr::get_instance().update_table_connection(&req, tenant_id_, database_id_, user_id_));
+    ASSERT_EQ(OB_SUCCESS, ObTableConnectionMgr::get_instance().update_table_connection(&req, tenant_id_, database_id_, user_id_)); 
   }
 }
 
@@ -103,7 +103,7 @@ private:
 void MockObTableConnCloser::run1()
 {
   CONS_FAKE_EZ_CONN(ez_conn, client_addr_)
-  ObTableConnectionMgr::get_instance().on_conn_close(&ez_conn);
+  ObTableConnectionMgr::get_instance().on_conn_close(&ez_conn); 
 }
 
 // test correctness of table connection init
@@ -112,7 +112,7 @@ TEST_F(TestTableConnection, test_table_connection)
   // fake connection
   ObTableConnection conn;
   ObAddr addr(2130706433, 6001);
-  int64_t tenant_id = 1001;
+  int64_t tenant_id = 1001; 
   int64_t database_id = 99999;
   int64_t user_id = 99999;
   ASSERT_EQ(OB_SUCCESS, conn.init(addr, tenant_id, database_id, user_id));
@@ -132,68 +132,68 @@ TEST_F(TestTableConnection, test_table_connection)
   ASSERT_EQ(OB_INVALID_ARGUMENT, conn.init(invalid_addr, tenant_id, database_id, user_id));
 }
 
-// test basic interface correctness in connection mgr
+// test basic interface correctness in connection mgr 
 TEST_F(TestTableConnection, test_connection_mgr)
 {
   ObAddr addr(2130706433, 6001);
-  int64_t tenant_id = 1001;
+  int64_t tenant_id = 1001; 
   int64_t database_id = 99999;
   int64_t user_id = 99999;
   CONS_FAKE_REQUEST(req, addr);
   ASSERT_EQ(OB_SUCCESS, ObTableConnectionMgr::get_instance().update_table_connection(&req, tenant_id, database_id, user_id));
-  ASSERT_EQ(1, ObTableConnectionMgr::get_instance().connection_map_.size());
+  ASSERT_EQ(1, ObTableConnectionMgr::get_instance().connection_map_.size()); 
   CONS_FAKE_EZ_CONN(ez_conn, addr);
   ObTableConnectionMgr::get_instance().on_conn_close(&ez_conn);
-  ASSERT_EQ(0, ObTableConnectionMgr::get_instance().connection_map_.size());
+  ASSERT_EQ(0, ObTableConnectionMgr::get_instance().connection_map_.size()); 
 }
 
 // send mutliply request using single connection concurrently
-// the size of connection map should be equal to the size of req_sender
+// the size of connection map should be equal to the size of req_sender 
 // after closer execute, the size of connection map should be equal to 0
 TEST_F(TestTableConnection, test_multi_request)
 {
   const int64_t start = ObTimeUtility::current_time();
   const int64_t thread_cnt = 100;
-  int64_t tenant_id = 1001;
+  int64_t tenant_id = 1001; 
   int64_t database_id = 99999;
   int64_t user_id = 99999;
   int64_t request_times  = 100;
   const ObAddr addr(2130706433, 1);
-  MockObTableRequestSender req_sender(addr, thread_cnt, tenant_id, database_id, user_id, request_times);
+  MockObTableRequestSender req_sender(addr, thread_cnt, tenant_id, database_id, user_id, request_times);   
   ASSERT_EQ(OB_SUCCESS, req_sender.start());
   req_sender.wait();
-  ASSERT_EQ(1, ObTableConnectionMgr::get_instance().connection_map_.size());
+  ASSERT_EQ(1, ObTableConnectionMgr::get_instance().connection_map_.size()); 
   MockObTableConnCloser closer(addr);
   ASSERT_EQ(OB_SUCCESS, closer.start());
   closer.wait();
-  ASSERT_EQ(0, ObTableConnectionMgr::get_instance().connection_map_.size());
+  ASSERT_EQ(0, ObTableConnectionMgr::get_instance().connection_map_.size()); 
   const int64_t duration = ObTimeUtility::current_time() - start;
   printf("time elapsed: %ldms\n", duration/1000);
 }
 
 // send mutliply request using different connection concurrently
-// the size of connection map should be equal to the size of req_sender
+// the size of connection map should be equal to the size of req_sender 
 // after closer execute, the size of connection map should be equal to 0
 TEST_F(TestTableConnection, test_multi_connection)
 {
   const int64_t start = ObTimeUtility::current_time();
   ObArenaAllocator alloc;
   const int64_t thread_cnt = 8;
-  int64_t tenant_id = 1001;
+  int64_t tenant_id = 1001; 
   int64_t database_id = 99999;
   int64_t user_id = 99999;
   int64_t request_times  = 100;
   int64_t conn_cnt = 200;
-  const int32_t ip = 2130706433;
+  const int32_t ip = 2130706433; 
   ObArray<MockObTableRequestSender *> senders;
   ObArray<MockObTableConnCloser *> closers;
   for (int64_t i = 1; i <= conn_cnt; i++) {
     MockObTableRequestSender *sender = OB_NEWx(MockObTableRequestSender, (&alloc), ObAddr(ip, i), thread_cnt,
-                                               tenant_id, database_id, user_id, request_times);
+                                               tenant_id, database_id, user_id, request_times); 
     ASSERT_NE(nullptr, sender);
     ASSERT_EQ(OB_SUCCESS, senders.push_back(sender));
 
-    MockObTableConnCloser *closer = OB_NEWx(MockObTableConnCloser, (&alloc), ObAddr(ip, i));
+    MockObTableConnCloser *closer = OB_NEWx(MockObTableConnCloser, (&alloc), ObAddr(ip, i)); 
     ASSERT_NE(nullptr, closer);
     ASSERT_EQ(OB_SUCCESS, closers.push_back(closer));
   }
@@ -207,7 +207,7 @@ TEST_F(TestTableConnection, test_multi_connection)
   for (int i = 0; i < conn_cnt; i++) {
     senders.at(i)->wait();
   }
-  ASSERT_EQ(conn_cnt, ObTableConnectionMgr::get_instance().connection_map_.size());
+  ASSERT_EQ(conn_cnt, ObTableConnectionMgr::get_instance().connection_map_.size()); 
 
   curr_mem = ObMallocAllocator::get_instance()->get_tenant_hold(OB_SERVER_TENANT_ID);
   printf("current server tenant mem after sending request: %ld\n", curr_mem);
@@ -218,7 +218,7 @@ TEST_F(TestTableConnection, test_multi_connection)
   for (int i = 0; i < conn_cnt; i++) {
     closers.at(i)->wait();
   }
-  ASSERT_EQ(0, ObTableConnectionMgr::get_instance().connection_map_.size());
+  ASSERT_EQ(0, ObTableConnectionMgr::get_instance().connection_map_.size()); 
 
   const int64_t end = ObTimeUtility::current_time();
   printf("request time elapsed: %ldms\n", (end - req_start)/1000);

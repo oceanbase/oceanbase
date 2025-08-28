@@ -425,7 +425,7 @@ private:
   int last_query_retry_err_;
   // this value include local retry & packet retry
   int64_t retry_cnt_;
-  // for fast fail,
+  // for fast fail, 
   int64_t query_switch_leader_retry_timeout_ts_;
   ObQueryRetryAshInfo query_retry_ash_info_;
 private:
@@ -454,7 +454,7 @@ public:
                        sql::ObSQLSessionInfo *session_info,
                        const ObString &dblink_name,
                        bool is_reverse_link);
-  int set_link_table_schema(uint64_t dblink_id,
+  int set_link_table_schema(uint64_t dblink_id, 
                             const common::ObString &database_name,
                             share::schema::ObTableSchema *table_schema);
   int get_table_schema(uint64_t table_id,
@@ -690,7 +690,7 @@ public:
     return enable_user_defined_rewrite_;
   }
   // release dynamic allocated memory
-  //
+  // 
   void clear();
 
 public:

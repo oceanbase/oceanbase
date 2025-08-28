@@ -13,12 +13,12 @@
  #ifndef OCEANBASE_SQL_RESOLVER_MV_OB_UNION_ALL_MV_PRINTER_H_
  #define OCEANBASE_SQL_RESOLVER_MV_OB_UNION_ALL_MV_PRINTER_H_
  #include "sql/resolver/mv/ob_mv_printer.h"
-
+ 
  namespace oceanbase
  {
  namespace sql
  {
-
+ 
  class ObUnionAllMVPrinter : public ObMVPrinter
  {
  public:

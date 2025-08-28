@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 enum { MSG_LIMIT = 64 * 1024};
 typedef struct msg_t
 {
@@ -21,3 +21,4 @@ inline msg_t* msg_init(msg_t* m, const char* b, int64_t s) {
   memcpy(m->b, b, s);
   return m;
 }
+

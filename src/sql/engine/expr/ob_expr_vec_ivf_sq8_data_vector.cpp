@@ -52,7 +52,7 @@ int ObExprVecIVFSQ8DataVector::calc_result_typeN(ObExprResType &type,
     LOG_WARN("failed to get collection subschema id", K(ret));
   } else {
     type.set_collection(subschema_id);
-  }
+  } 
   return ret;
 }
 
@@ -173,7 +173,7 @@ int ObExprVecIVFSQ8DataVector::generate_data_vector(
         LOG_WARN("fail to get min vector from meta", K(ret));
       } else if (OB_FAIL(cal_u8_data_vector(tmp_allocator, arr->size(), min_vec, step_vec, data_vec, res_vec))) {
         LOG_WARN("fail to cal u8 data vector", K(ret), K(arr->size()));
-      }
+      } 
 
 
       if (OB_SUCC(ret)) {
@@ -192,10 +192,11 @@ int ObExprVecIVFSQ8DataVector::generate_data_vector(
       }
     }
   }
-
+  
   return ret;
 }
 
 
 }  // namespace sql
 }  // namespace oceanbase
+

@@ -79,7 +79,7 @@ int ObExprRegexContext::init(ObExprStringBuf &string_buf,
       }
     } else {
       //because uregex_open returns error if u_pattern_length is 0 or u_pattern is null,
-      //use ".{0}" to represent an empty pattern when the valid length of the pattern is 0,
+      //use ".{0}" to represent an empty pattern when the valid length of the pattern is 0, 
       //for example: regexp_count(convert(t1.c1, 'utf8'),'a')
       ObString const_pattern(".{0}");
       if (OB_FAIL(ObExprUtil::convert_string_collation(const_pattern,
@@ -1252,10 +1252,10 @@ int ObExprHsRegexCtx::replace(ObExprStringBuf &string_buf,
     LOG_WARN("hs regexp context not inited", K(ret), K(inited_), K(hs_scratch_), K(hs_db_));
   } else if (0 == text_string.length() || text_string.length() <= start) {
     result = text_string;
-  } else if (FALSE_IT(start_pos = ObCharset::charpos(cs_type, text_string.ptr(), text_string.length(), start))) {
+  } else if (FALSE_IT(start_pos = ObCharset::charpos(cs_type, text_string.ptr(), text_string.length(), start))) {    
   } else if (OB_UNLIKELY(start_pos >= text_string.length())) {
     result = text_string;
-  } else {
+  } else {    
     MatchChain match_infos;
     hs_scratch_t *scratch = hs_scratch_;
     hs_error_t status;

@@ -102,7 +102,7 @@ int ObGeometryTypeCastUtil::check_latitude(double val_radian,
       LOG_WARN("fail to convert latitude from radians", K(ret));
     } else {
       ret = OB_ERR_LATITUDE_OUT_OF_RANGE;
-      LOG_WARN("latitude value is out of range", K(ret), K(val), K(val_radian));
+      LOG_WARN("latitude value is out of range", K(ret), K(val), K(val_radian)); 
     }
   }
 
@@ -194,7 +194,7 @@ bool ObGeometryTypeCastUtil::is_sdo_geometry_type_compatible(uint64_t src_udt_id
   if (!is_sdo_geometry_varray_type(src_udt_id) || !is_sdo_geometry_varray_type(dst_udt_id)) {
     // only allow varray (elem_info/ordiante_array) cast to each other
     bret = false;
-  }
+  } 
   return bret;
 }
 
@@ -276,14 +276,14 @@ int ObGeometryTypeCastFactory::alloc(ObIAllocator &alloc,
       }
       break;
     }
-
+    
     default: {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid geometry type for cast", K(ret), K(geo_type));
       break;
     }
   }
-  return ret;
+  return ret; 
 }
 
 template<typename P, typename MPT, typename GC>
@@ -338,7 +338,7 @@ int ObPointTypeCast::cast(const ObGeometry &src,
         break;
       }
 
-      // MULTIPOINT -> POINT
+      // MULTIPOINT -> POINT 
       case ObGeoType::MULTIPOINT: {
         const MPT &mp = *static_cast<const MPT *>(&src);
         if (mp.size() != 1) {
@@ -350,7 +350,7 @@ int ObPointTypeCast::cast(const ObGeometry &src,
         break;
       }
 
-      // GEOMETRYCOLLECTION -> POINT
+      // GEOMETRYCOLLECTION -> POINT 
       case ObGeoType::GEOMETRYCOLLECTION: {
         const GC &gc = *static_cast<const GC *>(&src);
         if (gc.size() != 1) {
@@ -405,7 +405,7 @@ int ObLineStringTypeCast::cast(const ObGeometry &src,
         break;
       }
 
-      // POLYGON -> LINESTRING
+      // POLYGON -> LINESTRING 
       case ObGeoType::POLYGON: {
         const PL &poly = *static_cast<const PL *>(&src);
         if (poly.size() != 1) {
@@ -424,7 +424,7 @@ int ObLineStringTypeCast::cast(const ObGeometry &src,
         break;
       }
 
-      // MULTIPOINT -> LINESTRING
+      // MULTIPOINT -> LINESTRING 
       case ObGeoType::MULTIPOINT: {
         const MPT &mp = *static_cast<const MPT *>(&src);
         if (mp.size() < 2) {
@@ -441,7 +441,7 @@ int ObLineStringTypeCast::cast(const ObGeometry &src,
         break;
       }
 
-      // MULTILINESTRING -> LINESTRING
+      // MULTILINESTRING -> LINESTRING 
       case ObGeoType::MULTILINESTRING: {
         const ML &ml = *static_cast<const ML *>(&src);
         if (ml.size() != 1) {
@@ -453,7 +453,7 @@ int ObLineStringTypeCast::cast(const ObGeometry &src,
         break;
       }
 
-      // GEOMETRYCOLLECTION -> LINESTRING
+      // GEOMETRYCOLLECTION -> LINESTRING 
       case ObGeoType::GEOMETRYCOLLECTION: {
         const GC &gc = *static_cast<const GC *>(&src);
         if (gc.size() != 1) {
@@ -535,14 +535,14 @@ int ObPolygonTypeCast::cast(const ObGeometry &src,
         break;
       }
 
-      // POLYGON -> POLYGON
+      // POLYGON -> POLYGON 
       case ObGeoType::POLYGON: {
         const PL &poly = *static_cast<const PL *>(&src);
         res = poly;
         break;
       }
 
-      // MULTILINESTRING -> POLYGON
+      // MULTILINESTRING -> POLYGON 
       case ObGeoType::MULTILINESTRING: {
         void *buf = NULL;
         const ML &ml = *static_cast<const ML *>(&src);
@@ -600,7 +600,7 @@ int ObPolygonTypeCast::cast(const ObGeometry &src,
         break;
       }
 
-      // GEOMETRYCOLLECTION -> POLYGON
+      // GEOMETRYCOLLECTION -> POLYGON 
       case ObGeoType::GEOMETRYCOLLECTION: {
         const GC &gc = *static_cast<const GC *>(&src);
         if (gc.size() != 1) {
@@ -679,7 +679,7 @@ int ObMultiPointTypeCast::cast(const ObGeometry &src,
         break;
       }
 
-      // GEOMETRYCOLLECTION -> MULTIPOINT
+      // GEOMETRYCOLLECTION -> MULTIPOINT 
       case ObGeoType::GEOMETRYCOLLECTION: {
         const GC &gc = *static_cast<const GC *>(&src);
         if (gc.is_empty()) {
@@ -746,7 +746,7 @@ int ObMultiLineStringTypeCast::cast(const ObGeometry &src,
         break;
       }
 
-      // POLYGON -> MULTILINESTRING
+      // POLYGON -> MULTILINESTRING 
       case ObGeoType::POLYGON: {
         void *buf = NULL;
         const PL &poly = *static_cast<const PL *>(&src);
@@ -775,7 +775,7 @@ int ObMultiLineStringTypeCast::cast(const ObGeometry &src,
         break;
       }
 
-      // MULTILINESTRING -> MULTILINESTRING
+      // MULTILINESTRING -> MULTILINESTRING 
       case ObGeoType::MULTILINESTRING: {
         const ML &ml = *static_cast<const ML *>(&src);
         for (int32_t i = 0; OB_SUCC(ret) && i < ml.size(); i++) {
@@ -786,7 +786,7 @@ int ObMultiLineStringTypeCast::cast(const ObGeometry &src,
         break;
       }
 
-      // MULTIPOLYGON -> MULTILINESTRING
+      // MULTIPOLYGON -> MULTILINESTRING 
       case ObGeoType::MULTIPOLYGON: {
         const MPL &mpoly = *static_cast<const MPL *>(&src);
         for (int32_t i = 0; OB_SUCC(ret) && i < mpoly.size(); i++) {
@@ -814,7 +814,7 @@ int ObMultiLineStringTypeCast::cast(const ObGeometry &src,
         break;
       }
 
-      // GEOMETRYCOLLECTION -> MULTILINESTRING
+      // GEOMETRYCOLLECTION -> MULTILINESTRING 
       case ObGeoType::GEOMETRYCOLLECTION: {
         const GC &gc = *static_cast<const GC *>(&src);
         if (gc.is_empty()) {
@@ -880,7 +880,7 @@ int ObMultiPolygonTypeCast::cast(const ObGeometry &src,
         break;
       }
 
-      // MULTILINESTRING -> MULTIPOLYGON
+      // MULTILINESTRING -> MULTIPOLYGON 
       case ObGeoType::MULTILINESTRING: {
         void *la_buf = NULL;
         void *poly_buf = NULL;
@@ -936,7 +936,7 @@ int ObMultiPolygonTypeCast::cast(const ObGeometry &src,
         break;
       }
 
-      // MULTIPOLYGON -> MULTIPOLYGON
+      // MULTIPOLYGON -> MULTIPOLYGON 
       case ObGeoType::MULTIPOLYGON: {
         const MPL &mpoly = *static_cast<const MPL *>(&src);
         for (int32_t i = 0; OB_SUCC(ret) && i < mpoly.size(); i++) {
@@ -947,7 +947,7 @@ int ObMultiPolygonTypeCast::cast(const ObGeometry &src,
         break;
       }
 
-      // GEOMETRYCOLLECTION -> MULTIPOLYGON
+      // GEOMETRYCOLLECTION -> MULTIPOLYGON 
       case ObGeoType::GEOMETRYCOLLECTION: {
         const GC &gc = *static_cast<const GC *>(&src);
         if (gc.is_empty()) {

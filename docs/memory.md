@@ -128,7 +128,7 @@ SMART_VAR(Type, Name, Args...) {
 
 It allocate from the stack when the following conditions are met, otherwise allocate from the heap
 ```cpp
-sizeof(T) < 8K || (stack_used < 256K && stack_free > sizeof(T) + 64K)
+sizeof(T) < 8K || (stack_used < 256K && stack_free > sizeof(T) + 64K) 
 ```
 
 > SMART_VAR was created to solve historical problems. It try to reduce the amount of stack memory occupied by large memory objects.

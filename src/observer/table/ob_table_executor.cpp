@@ -67,8 +67,8 @@ void ObTableApiExecutor::set_child(ObTableApiExecutor *child)
 
 void ObTableApiExecutor::clear_evaluated_flag()
 {
-  if (tb_ctx_.has_generated_column() ||
-      tb_ctx_.is_inc_or_append() ||
+  if (tb_ctx_.has_generated_column() || 
+      tb_ctx_.is_inc_or_append() || 
       tb_ctx_.has_global_index() ||
       tb_ctx_.is_global_index_back()) {
     ObExprFrameInfo *expr_info = const_cast<ObExprFrameInfo *>(tb_ctx_.get_expr_frame_info());

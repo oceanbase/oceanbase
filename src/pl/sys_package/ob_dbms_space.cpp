@@ -45,8 +45,8 @@ namespace pl
  * @param ctx
  * @param params
  *      0. ddl            VARCHAR2, // the create index sql
- *      1. used_bytes     NUMBER,   // the real size
- *      2. alloc_bytes    NUMBER,   // the store size.
+ *      1. used_bytes     NUMBER,   // the real size 
+ *      2. alloc_bytes    NUMBER,   // the store size. 
  *      3. plan_table     VARCHAR2, // the data table, default NULL
  * @param result
  * @return
@@ -137,7 +137,7 @@ int ObDbmsSpace::parse_ddl_sql(ObExecContext &ctx,
             SQL_ENG_LOG(WARN, "result tree is null", K(ret));
           } else if (OB_FAIL(resolver.resolve(*tree))) {
             SQL_ENG_LOG(WARN, "fail to resove parse tree", K(ret));
-          } else {
+          } else {         
             stmt = resolver.get_create_index_stmt();
           }
         }
@@ -224,7 +224,7 @@ int ObDbmsSpace::get_index_column_ids(const share::schema::ObTableSchema *table_
       }
     }
   }
-
+  
   if (OB_SUCC(ret)) {
     SQL_ENG_LOG(TRACE, "DBMS_SPACE: final column ids are", K(column_ids));
   }
@@ -259,12 +259,12 @@ int ObDbmsSpace::get_optimizer_stats(const IndexCostInfo &info,
 
 
 int ObDbmsSpace::get_compressed_ratio(ObExecContext &ctx,
-                                      IndexCostInfo &info)
+                                      IndexCostInfo &info) 
 {
   int ret = OB_SUCCESS;
   ObMySQLProxy *sql_proxy = nullptr;
   ObSQLSessionInfo *session = nullptr;
-
+  
   if (OB_ISNULL(sql_proxy = ctx.get_sql_proxy()) || OB_ISNULL(session = ctx.get_my_session())) {
     ret = OB_INVALID_ARGUMENT;
     SQL_ENG_LOG(WARN, "the args is null", K(ret), KP(sql_proxy), KP(session));
@@ -467,7 +467,7 @@ int ObDbmsSpace::fill_tablet_infos(const ObTableSchema *table_schema,
       // for partitioned table, we need an item to indicate the global information. The item's tablet_id is 0 and part_id is -1
       // this item is redundant for non-part table.
       if (OB_FAIL(tablet_infos.push_back(TabletInfo(ObTabletID(0), -1)))) {
-        SQL_ENG_LOG(WARN, "fail to push back to tablet info", K(ret));
+        SQL_ENG_LOG(WARN, "fail to push back to tablet info", K(ret)); 
       }
     }
   }
@@ -638,7 +638,7 @@ int ObDbmsSpace::extract_tablet_size(const sqlclient::ObMySQLResult *result,
     }
   } else if (OB_FAIL(tmp_tablet_size.cast_to_int64(tmp_tablet_size_int))) {
     SQL_ENG_LOG(WARN, "fail to cast number to int", K(ret));
-  }
+  } 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(tablet_size.push_back(std::pair<ObTabletID, uint64_t>(ObTabletID(tablet_id), tmp_tablet_size_int)))) {
       SQL_ENG_LOG(WARN, "fail to push back  tablet size", K(ret));
@@ -709,7 +709,7 @@ int ObDbmsSpace::set_tablet_info_by_tablet_id(const ObTabletID tablet_id,
                                               TabletInfoList &tablet_infos)
 {
   int ret = OB_SUCCESS;
-
+  
   TabletInfo *tablet_info = nullptr;
   if (row_len < 0 || compression_ratio < 0) {
     ret = OB_INVALID_ARGUMENT;
@@ -762,7 +762,7 @@ int ObDbmsSpace::estimate_index_table_size(ObMySQLProxy *sql_proxy,
     }
   } else {
     ret = OB_NOT_SUPPORTED;
-    SQL_ENG_LOG(WARN, "not supported to estimate the size of the index table without optimizer stats", K(ret), "main table schema", *table_schema,
+    SQL_ENG_LOG(WARN, "not supported to estimate the size of the index table without optimizer stats", K(ret), "main table schema", *table_schema, 
         K(info));
   }
 
@@ -771,7 +771,7 @@ int ObDbmsSpace::estimate_index_table_size(ObMySQLProxy *sql_proxy,
   }
 
   return ret;
-}
+} 
 
 int ObDbmsSpace::check_stats_valid(const OptStats &opt_stats, bool &is_valid)
 {
@@ -805,7 +805,7 @@ int ObDbmsSpace::estimate_index_table_size_by_opt_stats(ObMySQLProxy *sql_proxy,
 {
   int ret = OB_SUCCESS;
   table_size.reset();
-
+  
   if (OB_ISNULL(sql_proxy) || OB_ISNULL(table_schema)) {
     ret = OB_INVALID_ARGUMENT;
     SQL_ENG_LOG(WARN, "the args is null", K(ret), KP(sql_proxy), KP(table_schema));
@@ -975,7 +975,7 @@ int ObDbmsSpace::get_svr_info_from_schema(const ObTableSchema *table_schema,
   tenant_id = OB_INVALID_TENANT_ID;
   addr_list.reset();
   tablet_list.reset();
-
+  
   tablet_list.reset();
   if (OB_ISNULL(table_schema)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1010,7 +1010,7 @@ int ObDbmsSpace::get_svr_info_from_schema(const ObTableSchema *table_schema,
   return ret;
 }
 
-
+  
 int ObDbmsSpace::generate_part_key_str(ObSqlString &target_str,
                                        const ObIArray<ObAddr> &addr_list)
 {

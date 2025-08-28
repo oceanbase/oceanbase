@@ -81,11 +81,11 @@ public:
   bool is_drop_dense_vec_index_task(const obrpc::ObDropIndexArg &arg, const share::schema::ObTableSchema &index_schema);
   bool is_drop_with_docid_index_task(const obrpc::ObDropIndexArg &arg, const share::schema::ObTableSchema &index_schema);
   int check_drop_with_docid_indexs_ith_valid(
-      const obrpc::ObDropIndexArg &arg,
-      const share::schema::ObTableSchema &index_schema,
-      const int64_t schema_count,
-      int64_t &aux_rowkey_doc_ith,
-      int64_t &aux_doc_rowkey_ith,
+      const obrpc::ObDropIndexArg &arg, 
+      const share::schema::ObTableSchema &index_schema, 
+      const int64_t schema_count, 
+      int64_t &aux_rowkey_doc_ith, 
+      int64_t &aux_doc_rowkey_ith, 
       int64_t &aux_doc_word_ith);
   int submit_drop_index_task(
       common::ObMySQLTransaction &trans,
@@ -143,11 +143,11 @@ private:
       const common::ObIArray<share::schema::ObTableSchema> &index_schemas,
       const bool is_vec_inner_drop,
       int64_t &index_ith,
-      int64_t &centroid_ith,
-      int64_t &cid_vector_ith,
-      int64_t &rowkey_cid_ith,
-      int64_t &sq_meta_ith,
-      int64_t &pq_centroid_ith,
+      int64_t &centroid_ith, 
+      int64_t &cid_vector_ith, 
+      int64_t &rowkey_cid_ith, 
+      int64_t &sq_meta_ith, 
+      int64_t &pq_centroid_ith, 
       int64_t &pq_code_ith);
   int recognize_fts_or_multivalue_index_schemas(
       const common::ObIArray<share::schema::ObTableSchema> &index_schemas,
@@ -192,7 +192,7 @@ private:
   int create_index_column_group(const obrpc::ObCreateIndexArg &arg,
                                 share::schema::ObTableSchema &index_table_schema);
 
-  static int get_rebuild_drop_index_id_and_name(share::schema::ObSchemaGetterGuard &schema_guard,
+  static int get_rebuild_drop_index_id_and_name(share::schema::ObSchemaGetterGuard &schema_guard, 
                                                 obrpc::ObDropIndexArg &arg);
   int check_index_for_if_not_exist_(const uint64_t tenant_id,
                                     const ObString database_name,

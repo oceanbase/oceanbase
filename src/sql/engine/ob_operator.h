@@ -239,7 +239,7 @@ public:
   int create_operator(ObExecContext &exec_ctx, ObOperator *&op) const;
   int create_op_input(ObExecContext &exec_ctx) const;
   // 将算子注册到 datahub，用于并行计算场景
-  //
+  // 
   virtual int register_to_datahub(ObExecContext &exec_ctx) const
     { UNUSED(exec_ctx); return common::OB_SUCCESS; }
   // register init channel msg to sqc_ctx, used for px
@@ -799,7 +799,7 @@ inline int ObOperator::try_push_stash_rows(const int64_t max_row_cnt)
   if (OB_UNLIKELY(brs_.size_ > max_row_cnt)) {
     // When the number of unskipped rows in brs_ exceeds max_row_cnt,
     // stash brs_.skip index to ensure emitted rows to the upper operator comply with the max_row_cnt limit.
-    int64_t output_row_cnt = brs_.size_ - brs_.skip_->accumulate_bit_cnt(brs_.size_);
+    int64_t output_row_cnt = brs_.size_ - brs_.skip_->accumulate_bit_cnt(brs_.size_); 
     if (output_row_cnt > max_row_cnt && OB_FAIL(push_stash_rows(max_row_cnt, output_row_cnt))) {
       SQL_ENG_LOG(WARN, "try push stash rows failed", K(ret));
     }

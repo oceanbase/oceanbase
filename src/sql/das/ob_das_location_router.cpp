@@ -1047,7 +1047,7 @@ int ObDASLocationRouter::get_tablet_loc(const ObDASTableLocMeta &loc_meta,
       //if this statement is retried because of OB_NOT_MASTER, we will choose the leader directly
       ret = nonblock_get_leader(tenant_id, tablet_id, tablet_loc);
     } else {
-      ret = nonblock_get_readable_replica(tenant_id, tablet_id, tablet_loc,
+      ret = nonblock_get_readable_replica(tenant_id, tablet_id, tablet_loc, 
                                           static_cast<ObRoutePolicyType>(loc_meta.route_policy_));
     }
   }
@@ -1651,7 +1651,7 @@ int ObDASTabletMapper::get_tablet_and_subpart_id_for_list_part(const ObTableSche
     const bool fill_tablet_id = true;
     if (FAILEDx(ObPartitionUtils::fill_tablet_and_object_ids(fill_tablet_id,
                                                              part_idx,
-                                                             partition_indexes,
+                                                             partition_indexes, 
                                                              table_schema,
                                                              related_table,
                                                              tablet_ids,

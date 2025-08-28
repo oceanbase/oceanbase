@@ -180,7 +180,7 @@ int ObRowkey::equal(const ObRowkey &rhs, bool &is_equal) const
           } else {
             ret = OB_ERR_UNEXPECTED;
             COMMON_LOG(ERROR, "not supported mode", K(ret));
-
+            
           }
           break;
         }

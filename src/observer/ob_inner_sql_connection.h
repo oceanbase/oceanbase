@@ -159,7 +159,7 @@ public:
                            common::ObISQLClient::ReadResult &res, bool is_user_sql = false,
                            const common::ObAddr *sql_exec_addr = nullptr/* ddl inner sql execution addr */) override;
   virtual int execute_write(const uint64_t tenant_id, const ObString &sql,
-                            int64_t &affected_rows, bool is_user_sql = false,
+                            int64_t &affected_rows, bool is_user_sql = false, 
                             const common::ObAddr *sql_exec_addr = nullptr) override;
   virtual int execute_proc(const uint64_t tenant_id,
                           ObIAllocator &allocator,
@@ -431,7 +431,7 @@ private:
 
   // ask the inner sql connection to use external session instead of internal one
   // this enables show session / kill session using sql query command
-  bool use_external_session_;
+  bool use_external_session_; 
   int32_t group_id_;
   //support set user timeout of stream rpc but not depend on internal_sql_execute_timeout
   int64_t user_timeout_;

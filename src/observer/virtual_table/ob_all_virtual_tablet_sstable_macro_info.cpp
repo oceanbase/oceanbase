@@ -602,17 +602,17 @@ int ObAllVirtualTabletSSTableMacroInfo::get_next_tablet()
     } else {
       bool need_ignore = check_tablet_need_ignore(tablet_handle_.get_obj()->get_tablet_meta());
       if (!need_ignore) {
-	  const ObIArray<ObColDesc> &cols_desc = tablet_handle_.get_obj()->get_rowkey_read_info().get_columns_desc();
+    	  const ObIArray<ObColDesc> &cols_desc = tablet_handle_.get_obj()->get_rowkey_read_info().get_columns_desc();
 
-	  cols_desc_.reuse();
-	  if (OB_FAIL(cols_desc_.assign(cols_desc))) {
+    	  cols_desc_.reuse();
+    	  if (OB_FAIL(cols_desc_.assign(cols_desc))) {
           SERVER_LOG(WARN, "fail to assign rowkey col desc, ", K(ret));
-	  } else if (OB_FAIL(ObMultiVersionRowkeyHelpper::add_extra_rowkey_cols(cols_desc_))) {
-	    SERVER_LOG(WARN, "fail to add extra rowkey info, ", K(ret));
-	  } else {
+    	  } else if (OB_FAIL(ObMultiVersionRowkeyHelpper::add_extra_rowkey_cols(cols_desc_))) {
+    	    SERVER_LOG(WARN, "fail to add extra rowkey info, ", K(ret));
+    	  } else {
           ls_id_ = tablet_handle_.get_obj()->get_tablet_meta().ls_id_.id();
-	    break;
-	  }
+    	    break;
+    	  }
       }
     }
   }

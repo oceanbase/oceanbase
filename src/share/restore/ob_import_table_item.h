@@ -24,7 +24,7 @@ struct ObImportTableItem final : public ObIImportSchemaItem
 {
   OB_UNIS_VERSION(1);
 public:
-  ObImportTableItem() :
+  ObImportTableItem() : 
       ObIImportSchemaItem(ItemType::TABLE),
       database_name_(),
       table_name_()
@@ -43,12 +43,12 @@ public:
   // ignore case
   virtual int64_t get_format_serialize_size() const override;
   virtual int format_serialize(
-      char *buf,
-      const int64_t buf_len,
+      char *buf, 
+      const int64_t buf_len, 
       int64_t &pos) const override;
 
   virtual int deep_copy(common::ObIAllocator &allocator, const ObIImportItem &src) override;
-
+  
   using ObIImportSchemaItem::format_serialize;
   int assign(const ObImportTableItem &other);
   bool is_database_equal(const ObImportDatabaseItem &other) const;

@@ -13,15 +13,15 @@
 
  #ifndef _OB_TABLE_OLD_MERGE_FILTERS_H
  #define _OB_TABLE_OLD_MERGE_FILTERS_H 1
-
-
+ 
+ 
  #include "ob_table_filter.h"
-
+ 
  namespace oceanbase
  {
  namespace table
  {
-
+ 
  template <typename Row, typename Compare>
  class ObOldMergeTableQueryResultIterator : public ObTableQueryResultIterator
  {
@@ -42,21 +42,21 @@
      }
      allocator_.reset();
    }
-
+ 
    int init(Compare* compare);
    virtual int get_next_result(ObTableQueryResult *&one_result) override;
    virtual int get_next_result(ObTableQueryIterableResult *&one_result) override;
    virtual bool has_more_result() const override { return binary_heap_.count() != 0; }
-
+ 
    virtual void set_query(const ObTableQuery *query) override { query_ = query; };
-
+ 
    virtual void set_one_result(ObTableQueryResult *result) { serlize_result_ = result; }
-
+ 
    int seek(const ObString& key);
    common::ObIArray<ObTableQueryResultIterator *>& get_inner_result_iterators() { return inner_result_iters_; }
-
+ 
    ObIAllocator& get_allocator() { return allocator_; }
-
+ 
  private:
    virtual void set_scan_result(table::ObTableApiScanRowIterator* scan_result) override { UNUSED(scan_result); }
    virtual ObTableQueryResult *get_one_result() { return nullptr; }
@@ -65,7 +65,7 @@
    virtual hfilter::Filter *get_filter() const override { return nullptr; }
  private:
    int build_heap(const common::ObIArray<ObTableQueryResultIterator*>& result_iters);
-
+ 
  private:
    struct ObRowCacheIterator
    {
@@ -74,7 +74,7 @@
          row_(),
          iterable_result_(nullptr),
          result_iter_(nullptr) {}
-
+ 
      ~ObRowCacheIterator()
      {
        if (OB_NOT_NULL(iterable_result_)) {
@@ -89,7 +89,7 @@
      int init(ObTableQueryResultIterator *result_iter);
      int get_next_row(Row &row);
      TO_STRING_KV(KP_(iterable_result), KP_(result_iter));
-
+ 
      ObArenaAllocator allocator_;
      // current row
      Row row_;
@@ -109,18 +109,18 @@
  private:
    ObArenaAllocator allocator_;
    HeapCompare compare_;
-
+ 
    table::ObTableQueryResult* serlize_result_;
    table::ObTableQueryIterableResult* iterable_result_;
-
-
+ 
+ 
    common::ObBinaryHeap<ObRowCacheIterator*, HeapCompare, 64> binary_heap_;
    common::ObSEArray<ObTableQueryResultIterator *, 8> inner_result_iters_;
-
+ 
    bool is_inited_;
    int64_t row_count_;
  };
-
+ 
  template <typename Row, typename Compare>
  ObOldMergeTableQueryResultIterator<Row, Compare>::ObOldMergeTableQueryResultIterator(const ObTableQuery& query,
                                                                                table::ObTableQueryResult &one_result)
@@ -133,7 +133,7 @@
  {
    inner_result_iters_.set_attr(ObMemAttr(MTL_ID(), "MergeInnerIters"));
  }
-
+ 
  template <typename Row, typename Compare>
  ObOldMergeTableQueryResultIterator<Row, Compare>::ObOldMergeTableQueryResultIterator(const ObTableQuery& query,
                                                                                table::ObTableQueryIterableResult &one_result)
@@ -147,7 +147,7 @@
  {
    inner_result_iters_.set_attr(ObMemAttr(MTL_ID(), "MergeInnerIters"));
  }
-
+ 
  template <typename Row, typename Compare>
  bool ObOldMergeTableQueryResultIterator<Row, Compare>::HeapCompare::operator()(const ObRowCacheIterator *lhs,
                                                                              const ObRowCacheIterator *rhs)
@@ -167,7 +167,7 @@
    }
    return bret;
  }
-
+ 
  template <typename Row, typename Compare>
  int ObOldMergeTableQueryResultIterator<Row, Compare>::init(Compare* compare)
  {
@@ -186,7 +186,7 @@
    }
    return ret;
  }
-
+ 
  template <typename Row, typename Compare>
  int ObOldMergeTableQueryResultIterator<Row, Compare>::build_heap(const ObIArray<ObTableQueryResultIterator*>& result_iters)
  {
@@ -209,7 +209,7 @@
      } else if (OB_FAIL(compare_.get_error_code())) {
        SERVER_LOG(WARN, "fail to compare items", K(ret));
      }
-
+ 
      if (in_heap == false && OB_NOT_NULL(cache_iterator)) {
        cache_iterator->~ObRowCacheIterator();
        allocator_.free(cache_iterator);
@@ -217,8 +217,8 @@
    }
    return ret;
  }
-
-
+ 
+ 
  template <typename Row, typename Compare>
  int ObOldMergeTableQueryResultIterator<Row, Compare>::get_next_result(ObTableQueryResult *&one_result)
  {
@@ -227,7 +227,7 @@
    if (binary_heap_.empty()) {
      ret = OB_ITER_END;
    } else {
-     int limit = query_->get_batch() <= 0 ?
+     int limit = query_->get_batch() <= 0 ? 
                  static_cast<int64_t>(ObTableQueryResult::get_max_packet_buffer_length() - 1024)
                  : query_->get_batch();
      while (!binary_heap_.empty() && serlize_result_->get_row_count() < limit) {
@@ -275,7 +275,7 @@
    }
    return ret;
  }
-
+ 
  template <typename Row, typename Compare>
  int ObOldMergeTableQueryResultIterator<Row, Compare>::get_next_result(ObTableQueryIterableResult *&one_result)
  {
@@ -284,7 +284,7 @@
    if (binary_heap_.empty()) {
      ret = OB_ITER_END;
    } else {
-     int limit = query_->get_batch() <= 0 ?
+     int limit = query_->get_batch() <= 0 ? 
                  static_cast<int64_t>(ObTableQueryResult::get_max_packet_buffer_length() - 1024)
                  : query_->get_batch();
      while (!binary_heap_.empty() && iterable_result_->get_row_count() < limit) {
@@ -332,12 +332,12 @@
    }
    return ret;
  }
-
+ 
  template <typename Row, typename Compare>
  int ObOldMergeTableQueryResultIterator<Row, Compare>::ObRowCacheIterator::init(ObTableQueryResultIterator* iter)
  {
    int ret = OB_SUCCESS;
-
+ 
    ObTableQueryIterableResult* iterable_result = nullptr;
    Row first_row;
    if (OB_ISNULL(iter)) {
@@ -352,7 +352,7 @@
    } else if (OB_FAIL(iterable_result->get_row(first_row))) {
      if (ret == OB_ARRAY_OUT_OF_RANGE) {
        ret = OB_ITER_END;
-     } else {
+     } else {  
        SERVER_LOG(WARN, "fail to get_next_entity", K(ret));
      }
    } else {
@@ -364,43 +364,43 @@
    }
    return ret;
  }
-
-
+ 
+ 
  template <typename Row, typename Compare>
  int ObOldMergeTableQueryResultIterator<Row, Compare>::ObRowCacheIterator::ObRowCacheIterator::get_next_row(Row& row)
  {
-  int ret = OB_SUCCESS;
+  int ret = OB_SUCCESS;  
    Row new_row;
-   if (OB_FAIL(iterable_result_->get_row(new_row))) {
+   if (OB_FAIL(iterable_result_->get_row(new_row))) {  
      if (ret == OB_ARRAY_OUT_OF_RANGE) { // The buffer is exhausted; need to fetch more from the iterator
-       if (OB_FAIL(result_iter_->get_next_result(iterable_result_))) {
+       if (OB_FAIL(result_iter_->get_next_result(iterable_result_))) {  
          if (OB_ITER_END == ret) {
            // No more results available
            SERVER_LOG(DEBUG, "No more results available", K(ret));
          } else {
            SERVER_LOG(WARN, "fail to get_next_result", K(ret));
          }
-       } else {
+       } else {  
          if (OB_FAIL(iterable_result_->get_row(new_row))) {
            if (ret == OB_ARRAY_OUT_OF_RANGE) {
              SERVER_LOG(WARN, "fail to get_row after refreshing iterable_result_ OB_ITER_END", K(ret));
              ret = OB_ITER_END;
-           } else {
+           } else {  
              SERVER_LOG(WARN, "fail to get_row after refreshing iterable_result_", K(ret));
            }
          } else {
            row = new_row;
          }
-       }
-     } else {
-       SERVER_LOG(WARN, "unexpect error ", K(ret));
-     }
+       }  
+     } else {  
+       SERVER_LOG(WARN, "unexpect error ", K(ret));  
+     }  
    } else {
-     row = new_row;
-   }
+     row = new_row;  
+   }  
    return ret;
  }
-
+ 
  template <typename Row, typename Compare>
  int ObOldMergeTableQueryResultIterator<Row, Compare>::seek(const ObString& key)
  {
@@ -413,7 +413,7 @@
      } else if (OB_FAIL(compare_.get_error_code())) {
        SERVER_LOG(WARN, "fail to compare items", K(ret));
      }
-
+ 
      Row &current_row = cache_iter->row_;
      while (OB_SUCC(ret) && current_row.get_cell(0).get_string().compare(key) < 0) {
        Row next_row;
@@ -440,11 +440,12 @@
        SERVER_LOG(WARN, "fail to compare items", K(ret));
      }
    }
-
-   return ret;
+ 
+   return ret;  
  }
 
 } // end namespace table
 } // end namespace oceanbase
-
+ 
  #endif /* _OB_TABLE_OLD_MERGE_FILTERS_H */
+ 

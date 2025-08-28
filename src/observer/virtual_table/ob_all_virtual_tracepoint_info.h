@@ -54,3 +54,4 @@ private:
 } // namespace observer
 } // namespace oceanbase
 #endif // OCEANBASE_OBSERVER_VIRTUAL_TABLE_ALL_TRACEPOINT_INFO_
+

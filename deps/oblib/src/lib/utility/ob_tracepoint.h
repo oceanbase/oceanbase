@@ -110,9 +110,9 @@ private:
   #name, SELECT(1, ##__VA_ARGS__, ""),                    \
   oceanbase::common::EventTable::global_item_list());
 
-// latest doc:
+// latest doc: 
 
-// doc:
+// doc: 
 
 // to check if a certain tracepoint is set
 // example: if (E(50) OB_SUCCESS) {...}

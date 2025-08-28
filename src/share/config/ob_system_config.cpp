@@ -362,7 +362,7 @@ int ObSystemConfig::read_config(
         } else if (value_updated && new_data_version <= old_data_version) {
           // do nothing
           SHARE_LOG(INFO, "[COMPATIBLE] [DATA_VERSION] no need to update", K(tenant_id),
-                    "old_data_version", DVP(old_data_version),
+                    "old_data_version", DVP(old_data_version), 
                     "new_data_version", DVP(new_data_version));
         } else {
           if (!item.set_dump_value(pvalue->value())) {

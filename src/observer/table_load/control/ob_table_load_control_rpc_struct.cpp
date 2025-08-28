@@ -170,7 +170,7 @@ OB_DEF_DESERIALIZE(ObDirectLoadControlPreBeginArg)
               compressor_type_,
               online_sample_percent_,
               exec_ctx_serialized_str_);
-
+  
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ob_write_string(allocator_, exec_ctx_serialized_str_, exec_ctx_serialized_str_))) {
       LOG_WARN("fail to copy string", KR(ret));

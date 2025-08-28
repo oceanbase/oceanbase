@@ -627,7 +627,7 @@ int ObClusteredIndexBlockWriter::make_clustered_index_micro_block_with_reuse(
           idx_row_header->is_major_node() ? 0 : index_info.minor_meta_info_->max_merged_trans_version_;
       clustered_row_desc.row_count_delta_ =
           idx_row_header->is_major_node() ? 0 : index_info.minor_meta_info_->row_count_delta_;
-
+      
       // Append clustered row to clustered writer.
       clustered_row_desc.set_for_clustered_index();
       if (OB_FAIL(ret)) {

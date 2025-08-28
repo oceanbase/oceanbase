@@ -26,7 +26,7 @@ namespace oceanbase
 namespace sql
 {
 
-ObExprExistsNodeXml::ObExprExistsNodeXml(common::ObIAllocator &alloc)
+ObExprExistsNodeXml::ObExprExistsNodeXml(common::ObIAllocator &alloc) 
   : ObFuncExprOperator(
       alloc,
       T_FUN_SYS_XML_EXISTSNODE,
@@ -78,7 +78,7 @@ int ObExprExistsNodeXml::calc_result_typeN(
         LOG_WARN("invalid xpath expression", K(ret));
       }
     }
-
+    
     if (OB_SUCC(ret)) {
       type.set_int32();
     }

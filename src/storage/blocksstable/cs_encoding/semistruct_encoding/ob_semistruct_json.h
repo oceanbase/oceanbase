@@ -104,7 +104,7 @@ public:
   ObObjType get_obj_type() const { return obj_type_; }
   void set_obj_type(const ObObjType type) { obj_type_ = type; }
   void set_precision_and_scale(const ObPrecision prec, const ObScale scale)
-  {
+  { 
     prec_ = prec;
     scale_ = scale;
   }
@@ -231,7 +231,7 @@ private:
 class ObSemiStructSubSchema
 {
 public:
-  friend class ObSimpleSubSchema;
+  friend class ObSimpleSubSchema; 
   static const int64_t SCHEMA_VERSION = 1;
 
   ObSemiStructSubSchema():

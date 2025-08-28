@@ -22,7 +22,7 @@ enum MysqlSetOptEnum {
   MYSQL_OPTION_MULTI_STATEMENTS_ON = 0,
   MYSQL_OPTION_MULTI_STATEMENTS_OFF = 1
 };
-
+  
 namespace observer
 {
 class ObMPSetOption

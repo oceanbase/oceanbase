@@ -174,8 +174,8 @@ bool ObTenantFreezer::exist_ls_freezing()
 
     if (ret == OB_ITER_END) {
       ret = OB_SUCCESS;
-    }
-
+    } 
+    
     if (OB_FAIL(ret)) {
       LOG_WARN("[TenantFreezer] iter ls failed", K(ret));
     }
@@ -738,7 +738,7 @@ int ObTenantFreezer::get_ls_tx_data_memory_info_(ObLS *ls,
   return ret;
 }
 
-// design document :
+// design document : 
 int ObTenantFreezer::check_and_freeze_mds_table_()
 {
   int ret = OB_SUCCESS;

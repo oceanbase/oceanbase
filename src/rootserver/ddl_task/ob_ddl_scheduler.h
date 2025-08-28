@@ -82,7 +82,7 @@ public:
   int update_task_ret_code(const ObDDLTaskID &task_id, const int ret_code);
   int abort_task(const ObDDLTaskID &task_id);
   int64_t get_task_cnt() const { return task_list_.get_size(); }
-  int get_split_task_cnt(int64_t &task_cnt);
+  int get_split_task_cnt(int64_t &task_cnt); 
   void destroy();
 private:
   typedef common::ObDList<ObDDLTask> TaskList;
@@ -321,7 +321,7 @@ public:
       const ObDDLTaskKey &task_key,
       const uint64_t autoinc_val,
       const int ret_code);
-  int get_task_record(const ObDDLTaskID &task_id,
+  int get_task_record(const ObDDLTaskID &task_id, 
                       ObISQLClient &trans,
                       ObDDLTaskRecord &task_record,
                       common::ObIAllocator &allocator);
@@ -340,7 +340,7 @@ public:
   int prepare_alter_table_arg(const ObPrepareAlterTableArgParam &param,
                               const ObTableSchema *target_table_schema,
                               obrpc::ObAlterTableArg &alter_table_arg);
-  int cache_auto_split_task(const obrpc::ObAutoSplitTabletBatchArg &arg,
+  int cache_auto_split_task(const obrpc::ObAutoSplitTabletBatchArg &arg,  
                             obrpc::ObAutoSplitTabletBatchRes &res);
   int schedule_auto_split_task();
   inline share::ObDDLReplicaBuilder &get_ddl_builder() { return ddl_builder_; }
@@ -533,7 +533,7 @@ private:
       const obrpc::ObAlterTableArg *alter_table_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
-
+  
   int create_rebuild_index_task(
       common::ObISQLClient &proxy,
       const share::ObDDLType &ddl_type,
@@ -570,7 +570,7 @@ private:
       const obrpc::ObDropIndexArg *drop_index_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
-
+  
   int create_drop_vec_ivf_index_task(
       common::ObISQLClient &proxy,
       const share::schema::ObTableSchema *index_schema,
@@ -631,7 +631,7 @@ int create_partition_split_task(
     const uint64_t tenant_data_version,
     ObIAllocator &allocator,
     ObDDLTaskRecord &task_record);
-
+  
   int create_recover_restore_table_task(
       common::ObISQLClient &proxy,
       const share::ObDDLType &type,

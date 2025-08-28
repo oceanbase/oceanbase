@@ -407,7 +407,7 @@ int ObLobLocatorV2::fill(ObMemLobType type,
       || (type <= INVALID_LOB || type >= MAX_LOB_TYPE)
       || size_ < MEM_LOB_COMMON_HEADER_LEN) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "Lob: invalid argument",
+    COMMON_LOG(WARN, "Lob: invalid argument", 
       K(ret), K(type), KP(ptr_), K(size_), KP(disk_loc), K(disk_lob_full_size), K(is_simple));
   } else {
     uint32_t offset = 0;
@@ -505,7 +505,7 @@ int ObLobLocatorV2::fill(ObMemLobType type,
           if (offset + disk_loc_header_size > size_ || disk_lob_full_size < disk_loc_header_size) {
             ret = OB_INVALID_ARGUMENT;
             COMMON_LOG(WARN, "Lob: invalid disk locator",
-              K(ret), K(type), K(offset), K(size_), K(flags), K(disk_lob_header_size),
+              K(ret), K(type), K(offset), K(size_), K(flags), K(disk_lob_header_size), 
               K(disk_loc_header_size), K(disk_lob_full_size), K(*disk_loc));
           } else {
             offset += disk_loc_header_size;
@@ -683,7 +683,7 @@ int ObLobLocatorV2::get_inrow_data(ObString &inrow_data) const
     // Compatible with null string without header (old impliemnt of orale empty lob)
     // refer to mysqltest regula_expression_sqlqa.regular_replace_mysql
     inrow_data.assign_ptr(NULL, 0);
-  }
+  } 
   return ret;
 }
 
@@ -827,7 +827,7 @@ int ObLobLocatorV2::get_read_snapshot_data(ObString &read_snapshot_data) const
     if (extern_header->flags_.has_retry_info_) {
       cur_pos += MEM_LOB_EXTERN_RETRYINFO_LEN;
     }
-
+    
     if (extern_header->flags_.has_read_snapshot_) {
       ObMemLobReadSnapshot *read_snapshot = reinterpret_cast<ObMemLobReadSnapshot *>(cur_pos);
       if (read_snapshot->size_ > 0) {
@@ -1031,7 +1031,7 @@ int ObLobLocatorV2::set_read_snapshot_data(const ObString &read_snapshot_data)
     if (extern_header->flags_.has_retry_info_) {
       cur_pos += MEM_LOB_EXTERN_RETRYINFO_LEN;
     }
-
+    
     if (extern_header->flags_.has_read_snapshot_) {
       ObMemLobReadSnapshot *read_snapshot = reinterpret_cast<ObMemLobReadSnapshot *>(cur_pos);
       read_snapshot->size_ = read_snapshot_data.length();
@@ -2941,7 +2941,7 @@ int ObObjUDTUtil::ob_udt_obj_value_serialize(const ObObj &obj, char* buf, const 
   } else {
     ret = OBJ_FUNCS[obj.get_meta().get_type()].serialize(obj, buf, buf_len, pos);
   }
-  return ret;
+  return ret; 
 }
 
 int ObObjUDTUtil::ob_udt_obj_value_deserialize(ObObj &obj, const char* buf, const int64_t data_len, int64_t& pos)
@@ -3052,3 +3052,4 @@ int ObObjCharacterUtil::print_safe_hex_represent(const ObObj &obj, char* buf, co
   return ret;
 }
 
+ 

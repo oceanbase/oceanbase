@@ -29,7 +29,7 @@ const char *ObLogDistinct::get_name() const
   return MERGE_AGGREGATE == algo_ ? "MERGE DISTINCT" : "HASH DISTINCT";
 }
 
-int ObLogDistinct::get_plan_item_info(PlanText &plan_text,
+int ObLogDistinct::get_plan_item_info(PlanText &plan_text, 
                                       ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
@@ -137,7 +137,7 @@ int ObLogDistinct::est_cost()
   } else if (need_re_est_child_cost() &&
              OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
     LOG_WARN("failed to re est child cost", K(ret));
-  } else if (!need_re_est_child_cost() &&
+  } else if (!need_re_est_child_cost() && 
              OB_FALSE_IT(child_cost=child->get_cost())) {
   } else {
     set_op_cost(distinct_cost);
@@ -338,14 +338,14 @@ int ObLogDistinct::print_outline_data(PlanText &plan_text)
              OB_FAIL(BUF_PRINTF("%s%s(@\"%.*s\")",
                                 ObQueryHint::get_outline_indent(plan_text.is_oneline_),
                                 ObHint::get_hint_name(T_DISTINCT_PUSHDOWN),
-                                qb_name.length(),
+                                qb_name.length(), 
                                 qb_name.ptr()))) {
     LOG_WARN("fail to print buffer", K(ret), K(buf), K(buf_len), K(pos));
   } else if (HASH_AGGREGATE == algo_ &&
              OB_FAIL(BUF_PRINTF("%s%s(@\"%.*s\")",
                                 ObQueryHint::get_outline_indent(plan_text.is_oneline_),
                                 ObHint::get_hint_name(T_USE_HASH_DISTINCT),
-                                qb_name.length(),
+                                qb_name.length(), 
                                 qb_name.ptr()))) {
     LOG_WARN("fail to print buffer", K(ret), K(buf), K(buf_len), K(pos));
   } else if (DIST_BASIC_METHOD != get_dist_method()) {

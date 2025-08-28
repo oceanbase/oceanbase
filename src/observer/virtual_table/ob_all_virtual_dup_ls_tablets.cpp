@@ -25,7 +25,7 @@ void ObAllVirtualDupLSTablets::reset()
   memset(ip_buffer_, 0, sizeof(ip_buffer_));
 
   ObVirtualTableScannerIterator::reset();
-  dup_ls_tablets_iter_.reset();
+  dup_ls_tablets_iter_.reset(); 
   all_tenants_.reset();
   self_addr_.reset();
   init_ = false;
@@ -60,7 +60,7 @@ int ObAllVirtualDupLSTablets::prepare_start_to_read_()
       }
     }
   }
-
+  
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(dup_ls_tablets_iter_.set_ready())) { // set ready for the first count
     SERVER_LOG(WARN, "Iterator set ready error", KR(ret));
@@ -167,7 +167,7 @@ int ObAllVirtualDupLSTablets::inner_get_next_row(ObNewRow *&row)
           if (is_valid_timestamp_(tablet_stat.get_refresh_schema_ts())) {
             cur_row_.cells_[i].set_timestamp(tablet_stat.get_refresh_schema_ts());
           }
-          break;
+          break; 
         default:
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid coloum_id", K(ret), K(col_id));

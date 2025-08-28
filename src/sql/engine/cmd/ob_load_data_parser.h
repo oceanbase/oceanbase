@@ -143,7 +143,7 @@ struct ObCSVGeneralFormat {
     "FIELD_OPTIONALLY_ENCLOSED_BY",
     "ENCODING",
     "SKIP_HEADER",
-    "SKIP_BLANK_LINES",
+    "SKIP_BLANK_LINES", 
     "TRIM_SPACE",
     "NULL_IF_EXETERNAL",
     "EMPTY_FIELD_AS_NULL",
@@ -348,7 +348,7 @@ public:
     bool is_same_escape_enclosed_;
     bool is_simple_format_;
     unsigned max_term_;
-    unsigned min_term_;
+    unsigned min_term_; 
   };
 public:
   ObCSVGeneralParser() {}
@@ -401,7 +401,7 @@ public:
     }
     return ret;
   }
-
+  
   template<typename handle_func, bool HAS_ESCAPE, bool USE_HANDLE_BATCH_LINES, bool HAS_LINE_START>
   OB_INLINE int dispatch_scan_utf8_l2(bool SKIP_BLANK_LINES,
                             bool NO_FIELD,
@@ -420,7 +420,7 @@ public:
                                                                 escaped_buf_end, handle_one_line,
                                                                 errors, is_end_file);
     } else {
-      ret = dispatch_scan_utf8_l3<handle_func, HAS_ESCAPE, USE_HANDLE_BATCH_LINES, HAS_LINE_START, false> (NO_FIELD,
+      ret = dispatch_scan_utf8_l3<handle_func, HAS_ESCAPE, USE_HANDLE_BATCH_LINES, HAS_LINE_START, false> (NO_FIELD, 
                                                                 IGNORE_LAST_EMPTY_COLUMN, str, end,
                                                                 nrows, escape_buf,
                                                                 escaped_buf_end, handle_one_line,
@@ -657,13 +657,13 @@ public:
   common::ObIArray<FieldValue>& get_fields_per_line() { return fields_per_line_; }
 
   struct HandleOneLineParam {
-    HandleOneLineParam(common::ObIArray<FieldValue> &fields, int field_cnt)
+    HandleOneLineParam(common::ObIArray<FieldValue> &fields, int field_cnt) 
       : fields_(fields), field_cnt_(field_cnt) {}
     common::ObIArray<FieldValue> &fields_;
     int field_cnt_;
   };
   struct HandleBatchLinesParam {
-    HandleBatchLinesParam(common::ObIArray<FieldValue> &fields, int field_cnt, int batch_size)
+    HandleBatchLinesParam(common::ObIArray<FieldValue> &fields, int field_cnt, int batch_size) 
       : fields_(fields), field_cnt_(field_cnt), batch_size_(batch_size) {}
     common::ObIArray<FieldValue> &fields_;
     int field_cnt_;
@@ -892,7 +892,7 @@ int ObCSVGeneralParser::scan_proto(const char *&str,
             field_end = escape_buf_pos;
           }
         }
-        if (is_field_term || ori_field_end > ori_field_begin ||
+        if (is_field_term || ori_field_end > ori_field_begin || 
             (field_idx < format_.file_column_nums_
             && !format_.skip_blank_lines_
             && !format_.ignore_last_empty_col_)
@@ -989,7 +989,7 @@ int ObCSVGeneralParser::scan_utf8_ex(const char *&str,
       if (!is_line_start_found) {
         if (IS_END_FILE) {
           line_begin = end;
-        } else {
+        } else { 
           line_begin = str;
         }
         break;

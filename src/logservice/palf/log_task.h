@@ -149,9 +149,9 @@ public:
   int64_t get_flushed_ts() const { return ATOMIC_LOAD(&(flushed_ts_)); }
   PushLogType get_push_log_type() const { return ATOMIC_LOAD(&push_log_type_);}
   bool is_fetch_log_type() const;
-  TO_STRING_KV(K_(header), K_(state_map), K_(ref_cnt),
+  TO_STRING_KV(K_(header), K_(state_map), K_(ref_cnt), 
       K_(gen_ts), K_(freeze_ts), K_(submit_ts), K_(flushed_ts),
-      "gen_to_freeze cost time", freeze_ts_ - gen_ts_,
+      "gen_to_freeze cost time", freeze_ts_ - gen_ts_, 
       "gen_to_submit cost time", submit_ts_ - gen_ts_,
       "submit_to_flush cost time", ((flushed_ts_ - submit_ts_) < 0 ? 0 : (flushed_ts_ - submit_ts_))
   );

@@ -218,7 +218,7 @@ int ObTransformUdtUtils::replace_udt_assignment_exprs(ObTransformerCtx *ctx, ObD
       } else {
         udt_conv_expr = assign.expr_;
       }
-
+      
       if (OB_FAIL(ret)) {
         // do nothing
       } else if (udt_conv_expr->get_expr_type() != T_FUN_COLUMN_CONV) {
@@ -241,7 +241,7 @@ int ObTransformUdtUtils::replace_udt_assignment_exprs(ObTransformerCtx *ctx, ObD
           } else if (param_store.at(param_idx).is_xml_sql_type()
                      || param_store.at(param_idx).is_extend_xml_type()){
             // do nothing
-          } else if (ob_is_decimal_int_tc(param_store.at(param_idx).get_type())
+          } else if (ob_is_decimal_int_tc(param_store.at(param_idx).get_type()) 
                     || ob_is_number_tc(param_store.at(param_idx).get_type())) {
             ret = OB_ERR_INVALID_TYPE_FOR_OP;
             LOG_WARN("old_expr_type invalid ObLongTextType type", K(ret), K(param_store.at(param_idx).get_type()));
@@ -253,7 +253,7 @@ int ObTransformUdtUtils::replace_udt_assignment_exprs(ObTransformerCtx *ctx, ObD
           }
         }
       }
-    }
+    } 
     if (OB_SUCC(ret) && assign.column_expr_->is_xml_column()) {
       ObRawExpr *new_value_expr = NULL;
       ObRawExpr *old_column_expr = assign.column_expr_;
@@ -304,7 +304,7 @@ int ObTransformUdtUtils::replace_udt_assignment_exprs(ObTransformerCtx *ctx, ObD
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -409,7 +409,7 @@ int ObTransformUdtUtils::set_hidd_col_not_null_attr(const ObColumnRefRawExpr &ud
   bool found = false;
   for (int64_t j = 0; OB_SUCC(ret) && !found && j < column_exprs.count(); ++j) {
     ObColumnRefRawExpr *col_hidden = column_exprs.at(j);
-    if (col_hidden->get_udt_set_id() == udt_col.get_udt_set_id() &&
+    if (col_hidden->get_udt_set_id() == udt_col.get_udt_set_id() && 
         udt_col.get_column_id() != col_hidden->get_column_id()) {
       found = true;
       if (udt_col.get_result_type().has_result_flag(HAS_NOT_NULL_VALIDATE_CONSTRAINT_FLAG)) {
@@ -443,7 +443,7 @@ int ObTransformUdtUtils::get_dml_view_col_exprs(const ObDMLStmt *stmt, ObIArray<
         if (OB_ISNULL(assign.column_expr_) || OB_ISNULL(assign.expr_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("assgin expr is null", K(ret));
-        } else if (assign.column_expr_->is_xml_column() &&
+        } else if (assign.column_expr_->is_xml_column() && 
                   OB_FAIL(add_var_to_array_no_dup(assign_col_exprs, assign.column_expr_))) {
           LOG_WARN("failed to push back column expr", K(ret));
         }
@@ -511,12 +511,12 @@ int ObTransformUdtUtils::create_udt_hidden_columns(ObTransformerCtx *ctx,
         ObSelectStmt *real_stmt = NULL;
         if (OB_ISNULL(real_stmt = table->ref_query_->get_real_stmt())) {
           // case : view definition is set_op
-          // Bug :
+          // Bug : 
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("real stmt is NULL", K(ret));
         } else {
           SelectItem &t_col = real_stmt->get_select_item((udt_expr.get_column_id() - OB_APP_MIN_COLUMN_ID));
-
+          
           if (t_col.expr_->get_expr_type() == T_FUN_SYS_MAKEXML) { // xmltype special case
             if (t_col.expr_->get_param_count() != 2) {
               ret = OB_ERR_UNEXPECTED;
@@ -550,7 +550,7 @@ int ObTransformUdtUtils::create_udt_hidden_columns(ObTransformerCtx *ctx,
               }
               if (OB_SUCC(ret) && OB_FAIL(col_exprs.push_back(col_expr))) {
                 LOG_WARN("add column ref to array failed", K(ret));
-              }
+              } 
             }
           } else if (t_col.expr_->get_expr_type() == T_REF_COLUMN) {
             int64_t col_id = dynamic_cast<ObColumnRefRawExpr*>(t_col.expr_)->get_column_id();
@@ -579,7 +579,7 @@ int ObTransformUdtUtils::create_udt_hidden_columns(ObTransformerCtx *ctx,
       // xmltype only 1 hidden column currently
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("hidden cols count is not expected", K(table->ref_id_), K(hidden_cols.count()));
-    }
+    } 
     if (OB_SUCC(ret) && !from_xml) {
       for (uint32_t i = 0; i < hidden_cols.count() && OB_SUCC(ret); i++) {
         ObColumnRefRawExpr* col_expr = NULL;
@@ -622,7 +622,7 @@ int ObTransformUdtUtils::create_udt_hidden_columns(ObTransformerCtx *ctx,
           LOG_WARN("add column ref to array failed", K(ret));
         }
       }
-    }
+    } 
   }
   return ret;
 }
@@ -711,9 +711,9 @@ int ObTransformUdtUtils::check_skip_child_select_view(const ObIArray<ObParentDML
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get table item", K(ret));
     } else if (basic_table_item->is_basic_table() && view_table_item->is_generated_table()) {
-      if (OB_NOT_NULL(view_table_item->ref_query_) &&
+      if (OB_NOT_NULL(view_table_item->ref_query_) && 
           view_table_item->ref_query_->get_table_size() > 0 &&
-          OB_NOT_NULL(view_table_item->ref_query_->get_table_item(0)) &&
+          OB_NOT_NULL(view_table_item->ref_query_->get_table_item(0)) && 
           basic_table_item->table_id_ == view_table_item->ref_query_->get_table_item(0)->table_id_) {
         skip_for_view_table = true;
       }
@@ -738,7 +738,7 @@ int ObTransformUdtUtils::transform_query_udt_columns_exprs(ObTransformerCtx *ctx
   ObSEArray<ObRawExpr*, 4> to_col_exprs;
   ObSEArray<ObColumnRefRawExpr*, 8> parent_assign_xml_col_exprs;
   bool skip_for_view_table = false;
-
+  
   if (OB_FAIL(get_update_generated_udt_in_parent_stmt(parent_stmts, stmt, parent_assign_xml_col_exprs))) {
     LOG_WARN("Fail to get update generated column array.", K(ret));
   } else if (OB_FAIL(check_skip_child_select_view(parent_stmts, stmt, skip_for_view_table))) {
@@ -747,7 +747,7 @@ int ObTransformUdtUtils::transform_query_udt_columns_exprs(ObTransformerCtx *ctx
     // do nothing
   } else {
     FastUdtExprChecker expr_checker(replace_exprs);
-    if (OB_FAIL(scopes.push_back(SCOPE_DML_COLUMN)) ||
+    if (OB_FAIL(scopes.push_back(SCOPE_DML_COLUMN)) || 
         (stmt->get_stmt_type() != stmt::T_MERGE && stmt->get_stmt_type() != stmt::T_UPDATE &&
          OB_FAIL(scopes.push_back(SCOPE_DML_VALUE))) ||
         OB_FAIL(scopes.push_back(SCOPE_DML_CONSTRAINT)) ||
@@ -755,7 +755,7 @@ int ObTransformUdtUtils::transform_query_udt_columns_exprs(ObTransformerCtx *ctx
         OB_FAIL(scopes.push_back(SCOPE_BASIC_TABLE)) ||
         OB_FAIL(scopes.push_back(SCOPE_DICT_FIELDS)) ||
         OB_FAIL(scopes.push_back(SCOPE_SHADOW_COLUMN)) ||
-        ((stmt->get_stmt_type() == stmt::T_INSERT || stmt->get_stmt_type() == stmt::T_UPDATE) &&
+        ((stmt->get_stmt_type() == stmt::T_INSERT || stmt->get_stmt_type() == stmt::T_UPDATE) && 
           OB_FAIL(scopes.push_back(SCOPE_RETURNING))) ||
         (stmt->get_stmt_type() != stmt::T_MERGE && OB_FAIL(scopes.push_back(SCOPE_INSERT_VECTOR)))) {
       LOG_WARN("Fail to create scope array.", K(ret));
@@ -791,7 +791,7 @@ int ObTransformUdtUtils::transform_query_udt_columns_exprs(ObTransformerCtx *ctx
           LOG_WARN("failed to push back udt hidden exprs", K(ret));
         }
       }
-
+    
       //do replace
       if (OB_SUCC(ret) && !from_col_exprs.empty()) {
         ObStmtExprReplacer replacer;
@@ -857,7 +857,7 @@ int ObTransformUdtUtils::transform_udt_columns_constraint_exprs(ObTransformerCtx
       }
     }
   }
-
+  
   //do replace
   if (OB_SUCC(ret) && !from_col_exprs.empty()) {
     ObStmtExprReplacer replacer;
@@ -942,13 +942,13 @@ int ObTransformUdtUtils::transform_returning_exprs(ObTransformerCtx *ctx, ObDelU
             is_found = true;
             xml_col_idxs.push_back(std::make_pair(i, j));
           }
-        } // end for
+        } // end for 
         if (!is_found) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to find hidden column", K(ret), K(i));
         }
       }
-    } // end for
+    } // end for 
 
     CK(column_convert.count() == table_columns.count());
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_returning_exprs().count(); i++) {
@@ -1076,7 +1076,7 @@ int ObTransformUdtUtils::transform_udt_dml_stmt(ObTransformerCtx *ctx, ObDMLStmt
     if (OB_SUCC(ret) && OB_FAIL(transform_returning_exprs(ctx, static_cast<ObDelUpdStmt*>(stmt), table_info))) {
       LOG_WARN("failed to transform returning exprs", K(ret));
     }
-  }
+  }  
   return ret;
 }
 

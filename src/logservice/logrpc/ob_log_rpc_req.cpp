@@ -177,31 +177,31 @@ bool LogConfigChangeCmd::is_valid() const
 
 bool LogConfigChangeCmd::is_remove_member_list() const
 {
-  return REMOVE_MEMBER_CMD == cmd_type_
+  return REMOVE_MEMBER_CMD == cmd_type_ 
 #ifdef OB_BUILD_ARBITRATION
-         || REMOVE_ARB_MEMBER_CMD == cmd_type_
+         || REMOVE_ARB_MEMBER_CMD == cmd_type_ 
 #endif
-         || REPLACE_MEMBER_CMD == cmd_type_
+         || REPLACE_MEMBER_CMD == cmd_type_ 
          || SWITCH_TO_LEARNER_CMD == cmd_type_
          || REPLACE_MEMBER_WITH_LEARNER_CMD == cmd_type_;
 }
 
 bool LogConfigChangeCmd::is_add_member_list() const
 {
-  return ADD_MEMBER_CMD == cmd_type_
+  return ADD_MEMBER_CMD == cmd_type_  
 #ifdef OB_BUILD_ARBITRATION
-        || ADD_ARB_MEMBER_CMD == cmd_type_
+        || ADD_ARB_MEMBER_CMD == cmd_type_ 
 #endif
-        || REPLACE_MEMBER_CMD == cmd_type_
+        || REPLACE_MEMBER_CMD == cmd_type_ 
         || SWITCH_TO_ACCEPTOR_CMD == cmd_type_
         || REPLACE_MEMBER_WITH_LEARNER_CMD == cmd_type_;
 }
 
 bool LogConfigChangeCmd::is_set_new_replica_num() const
 {
-  return ADD_MEMBER_CMD == cmd_type_
-        || REMOVE_MEMBER_CMD == cmd_type_
-        || SWITCH_TO_LEARNER_CMD == cmd_type_
+  return ADD_MEMBER_CMD == cmd_type_  
+        || REMOVE_MEMBER_CMD == cmd_type_ 
+        || SWITCH_TO_LEARNER_CMD == cmd_type_ 
         || SWITCH_TO_ACCEPTOR_CMD == cmd_type_
         || FORCE_SET_MEMBER_LIST_CMD == cmd_type_;
 }
@@ -316,7 +316,7 @@ LogServerProbeMsg::LogServerProbeMsg()
 
 
 LogServerProbeMsg::LogServerProbeMsg(
-    const common::ObAddr &src,
+    const common::ObAddr &src, 
     const int64_t palf_id,
     const int64_t req_id,
     const LogServerProbeType msg_type,
@@ -384,7 +384,7 @@ void LogChangeAccessModeCmd::reset()
   src_.reset();
   ls_id_ = -1;
   mode_version_ = palf::INVALID_PROPOSAL_ID;
-  access_mode_ = palf::AccessMode::INVALID_ACCESS_MODE;
+  access_mode_ = palf::AccessMode::INVALID_ACCESS_MODE; 
   ref_scn_.reset();
 }
 
@@ -461,7 +461,7 @@ bool LogProbeRsResp::is_valid() const
   return OB_MAX_ERROR_CODE != ret_;
 }
 
-void LogProbeRsResp::reset()
+void LogProbeRsResp::reset() 
 {
   ret_ = OB_MAX_ERROR_CODE;
 }

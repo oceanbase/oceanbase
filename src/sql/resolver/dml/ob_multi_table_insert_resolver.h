@@ -31,7 +31,7 @@ namespace sql
    *   (https://docs.oracle.com/cd/B19306_01/server.102/b14200/statements_9014.htm)
    *
    * 实现review:
-   *
+   *   
    *
    *   INSERT [ALL | FIRST ]
    *   [WHEN CONDITIONS THEN] INTO tbl_name [VALUES],INTO tbl_name [VALUES],....

@@ -85,7 +85,7 @@ int ObInsertLogPlan::generate_normal_raw_plan()
         LOG_WARN("failed to prepare dml infos", K(ret));
       } else if (OB_FAIL(compute_dml_parallel())) {
         LOG_WARN("failed to compute dml parallel", K(ret));
-      }
+      } 
       if (OB_SUCC(ret)) {
         bool tmp_need_osg = false;
         if (OB_FAIL(check_need_online_stats_gather(tmp_need_osg))) {
@@ -125,7 +125,7 @@ int ObInsertLogPlan::generate_normal_raw_plan()
           LOG_WARN("failed to allocate select into op", K(ret));
         } else {
           LOG_TRACE("succeed to allocate select into clause", K(candidates_.candidate_plans_.count()));
-        }
+        } 
       } else if (use_pdml()) {
         if (OB_FAIL(candi_allocate_pdml_insert(osg_info))) {
           LOG_WARN("failed to allocate pdml insert", K(ret));
@@ -425,7 +425,7 @@ int ObInsertLogPlan::check_need_online_stats_gather(bool &need_osg)
       need_osg = true;
     } else if (!online_sys_var) {
       need_osg = false;
-    } else if (use_pdml() ||
+    } else if (use_pdml() || 
                get_optimizer_context().get_query_ctx()->get_global_hint().should_generate_osg_operator()) {
       need_osg = true;
     } else {
@@ -555,9 +555,9 @@ int ObInsertLogPlan::build_lock_row_flag_expr(ObConstRawExpr *&lock_row_flag_exp
   return ret;
 }
 
-int ObInsertLogPlan::get_osg_type(bool is_multi_part_dml,
-                                  ObShardingInfo *insert_table_sharding,
-                                  int64_t distributed_method,
+int ObInsertLogPlan::get_osg_type(bool is_multi_part_dml, 
+                                  ObShardingInfo *insert_table_sharding, 
+                                  int64_t distributed_method, 
                                   OSG_TYPE &type)
 {
   int ret = OB_SUCCESS;
@@ -616,10 +616,10 @@ int ObInsertLogPlan::create_insert_plans(ObIArray<CandidatePlan> &candi_plans,
       LOG_WARN("failed to get best insert plan method", K(ret));
     } else if (0 == distributed_methods) {
       /*do nothing*/
-    } else if (osg_info != NULL &&
-               OB_FAIL(get_osg_type(is_multi_part_dml,
-                                    insert_table_sharding,
-                                    distributed_methods,
+    } else if (osg_info != NULL && 
+               OB_FAIL(get_osg_type(is_multi_part_dml, 
+                                    insert_table_sharding, 
+                                    distributed_methods, 
                                     osg_type))) {
       LOG_WARN("failed to get osg type", K(ret));
     } else if (osg_info != NULL &&
@@ -636,8 +636,8 @@ int ObInsertLogPlan::create_insert_plans(ObIArray<CandidatePlan> &candi_plans,
     } else if (DIST_BASIC_METHOD == distributed_methods) {
       if (OB_FAIL(input_shardings.push_back(candi_plan.plan_tree_->get_strong_sharding()))) {
         LOG_WARN("failed to push back sharding", K(ret));
-      } else if (OB_FAIL(input_shardings.push_back(is_multi_part_dml ?
-                                                    get_optimizer_context().get_local_sharding() :
+      } else if (OB_FAIL(input_shardings.push_back(is_multi_part_dml ? 
+                                                    get_optimizer_context().get_local_sharding() : 
                                                     insert_table_sharding))) {
         LOG_WARN("failed to push back sharding", K(ret));
       } else if (OB_FAIL(ObOptimizerUtil::compute_basic_sharding_info(
@@ -783,7 +783,7 @@ int ObInsertLogPlan::get_best_insert_dist_method(ObLogicalOperator &top,
     if (OB_FAIL(check_basic_sharding_for_dml_stmt(*local_sharding,
                                                   top,
                                                   is_basic))) {
-      LOG_WARN("failed to check basic sharding for insert stmt", K(ret));
+      LOG_WARN("failed to check basic sharding for insert stmt", K(ret));                                                      
     } else if (is_basic) {
       distributed_methods = DIST_BASIC_METHOD;
       OPT_TRACE("insert plan will use basic method");
@@ -805,18 +805,18 @@ int ObInsertLogPlan::get_best_insert_dist_method(ObLogicalOperator &top,
   } else if (OB_FAIL(check_basic_sharding_for_dml_stmt(*insert_table_sharding,
                                                        top,
                                                        is_basic))) {
-    LOG_WARN("failed to check basic sharding for insert stmt", K(ret));
+    LOG_WARN("failed to check basic sharding for insert stmt", K(ret));                                                      
   } else if (is_basic) {
     distributed_methods = DIST_BASIC_METHOD;
     OPT_TRACE("insert plan will use basic method");
-  } else if (!insert_table_sharding->is_local() &&
+  } else if (!insert_table_sharding->is_local() && 
              OB_FALSE_IT(is_multi_part_dml=true)) {
     //insert into remote table, force use multi part dml
   } else if (is_multi_part_dml &&
              OB_FAIL(check_basic_sharding_for_dml_stmt(*local_sharding,
                                                        top,
                                                        is_basic))) {
-    LOG_WARN("failed to check basic sharding for insert stmt", K(ret));
+    LOG_WARN("failed to check basic sharding for insert stmt", K(ret));                                                      
   } else if (is_basic) {
     distributed_methods = DIST_BASIC_METHOD;
     OPT_TRACE("insert partition table force use multi part dml");
@@ -862,7 +862,7 @@ int ObInsertLogPlan::check_insert_plan_need_multi_partition_dml(ObTablePartition
   } else if (use_parallel_das_dml_) {
     is_multi_part_dml = true;
     OPT_TRACE("insert table use parallel das dml, force use multi part dml");
-  } else if (insert_stmt->has_instead_of_trigger() ||
+  } else if (insert_stmt->has_instead_of_trigger() || 
              index_dml_infos_.count() > 1 ||
              get_optimizer_context().is_batched_multi_stmt() ||
              //ddl sql can produce a PDML plan with PL UDF,
@@ -882,8 +882,8 @@ int ObInsertLogPlan::check_insert_plan_need_multi_partition_dml(ObTablePartition
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FALSE_IT(is_one_part_table = ObSQLUtils::is_one_part_table_can_skip_part_calc(*table_schema))) {
-  } else if (insert_table_sharding->is_single() &&
-             !is_one_part_table &&
+  } else if (insert_table_sharding->is_single() && 
+             !is_one_part_table && 
              insert_table_part->get_table_location().is_part_or_subpart_all_partition()) {
     is_multi_part_dml = true;
     OPT_TRACE("insert table has only one partition in partition level, force use multi part dml");
@@ -1420,7 +1420,7 @@ int ObInsertLogPlan::prepare_table_dml_info_for_ddl(const ObInsertTableInfo& tab
       } else if (OB_FAIL(get_all_columns_for_ddl(table_info, index_schema, index_dml_info->column_exprs_))) {
         LOG_WARN("failed to get all columns for ddl" , K(ret));
       } else if (index_schema->is_index_local_storage() &&
-                 index_schema->need_partition_key_for_build_local_index(*data_table_schema) &&
+                 index_schema->need_partition_key_for_build_local_index(*data_table_schema) && 
                  OB_FAIL(get_all_part_columns_for_ddl(table_info, data_table_schema, index_dml_info->column_exprs_))) {
         LOG_WARN("failed to get all part columns for ddl" , K(ret));
       } else {
@@ -1696,7 +1696,7 @@ int ObInsertLogPlan::candi_allocate_optimizer_stats_merge(OSGShareInfo *osg_info
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
       } else if (best_candidates.at(i).plan_tree_->need_osg_merge()) {
-        if (best_candidates.at(i).plan_tree_->is_sharding() &&
+        if (best_candidates.at(i).plan_tree_->is_sharding() && 
             OB_FAIL(allocate_exchange_as_top(best_candidates.at(i).plan_tree_, exch_info))) {
           LOG_WARN("failed to allocate exchange as top", K(ret));
         } else if (OB_FAIL(allocate_optimizer_stats_gathering_as_top(

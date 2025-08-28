@@ -22,7 +22,7 @@ namespace oceanbase {
 namespace observer {
 
 ObRSTUtility::ObRSTUtility():base_(0)
-{
+{  
   max_dec_value_ = MILLION;
   for(int i= 0; OB_QRT_POSITIVE_LENGTH > i; ++i) {
     max_dec_value_ *= 10;
@@ -40,7 +40,7 @@ int ObRSTUtility::setup(uint32_t base)
     ret = OB_INVALID_ARGUMENT;
   } else if (base != base_) {
     base_= base;
-
+    
     uint64_t value = MILLION;
     negative_count_= 0;
     while (value > 0) {
@@ -160,7 +160,7 @@ int ObRespTimeInfoCollector::collect(const sql::stmt::StmtType sql_type, const b
         break;
       }
       case sql::stmt::T_KV_GET :
-      case sql::stmt::T_KV_QUERY :
+      case sql::stmt::T_KV_QUERY : 
       case sql::stmt::T_KV_MULTI_GET : {
         if (OB_FAIL(tableapi_select_sql_info_.collect(pos, resp_time))) {
           LOG_WARN("tableapi select sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
@@ -169,7 +169,7 @@ int ObRespTimeInfoCollector::collect(const sql::stmt::StmtType sql_type, const b
       }
       case sql::stmt::T_KV_INSERT_OR_UPDATE :
       case sql::stmt::T_KV_MULTI_INSERT_OR_UPDATE :
-      case sql::stmt::T_KV_INSERT :
+      case sql::stmt::T_KV_INSERT : 
       case sql::stmt::T_KV_MULTI_INSERT :
       case sql::stmt::T_KV_PUT :
       case sql::stmt::T_KV_MULTI_PUT : {
@@ -178,25 +178,25 @@ int ObRespTimeInfoCollector::collect(const sql::stmt::StmtType sql_type, const b
         }
         break;
       }
-      case sql::stmt::T_KV_DELETE :
+      case sql::stmt::T_KV_DELETE : 
       case sql::stmt::T_KV_MULTI_DELETE : {
         if (OB_FAIL(tableapi_delete_sql_info_.collect(pos, resp_time))) {
           LOG_WARN("tableapi delete sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
         }
         break;
       }
-      case sql::stmt::T_KV_UPDATE :
+      case sql::stmt::T_KV_UPDATE : 
       case sql::stmt::T_KV_APPEND :
-      case sql::stmt::T_KV_INCREMENT :
-      case sql::stmt::T_KV_MULTI_UPDATE :
-      case sql::stmt::T_KV_MULTI_INCREMENT :
+      case sql::stmt::T_KV_INCREMENT : 
+      case sql::stmt::T_KV_MULTI_UPDATE : 
+      case sql::stmt::T_KV_MULTI_INCREMENT : 
       case sql::stmt::T_KV_MULTI_APPEND : {
         if (OB_FAIL(tableapi_update_sql_info_.collect(pos, resp_time))) {
           LOG_WARN("tableapi update sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
         }
         break;
       }
-      case sql::stmt::T_KV_REPLACE :
+      case sql::stmt::T_KV_REPLACE : 
       case sql::stmt::T_KV_MULTI_REPLACE : {
         if (OB_FAIL(tableapi_replace_sql_info_.collect(pos, resp_time))) {
           LOG_WARN("tableapi replace sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
@@ -837,7 +837,7 @@ int ObRespTimeInfoCollector::collect(const ObTableHistogramType table_his_type, 
   } else {
     switch (table_his_type.sql_type_) {
       case sql::stmt::T_KV_GET :
-      case sql::stmt::T_KV_QUERY :
+      case sql::stmt::T_KV_QUERY : 
       case sql::stmt::T_KV_MULTI_GET : {
         if (OB_FAIL(tableapi_select_sql_info_.collect(pos, resp_time))) {
           LOG_WARN("tableapi select sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
@@ -846,7 +846,7 @@ int ObRespTimeInfoCollector::collect(const ObTableHistogramType table_his_type, 
       }
       case sql::stmt::T_KV_INSERT_OR_UPDATE :
       case sql::stmt::T_KV_MULTI_INSERT_OR_UPDATE :
-      case sql::stmt::T_KV_INSERT :
+      case sql::stmt::T_KV_INSERT : 
       case sql::stmt::T_KV_MULTI_INSERT :
       case sql::stmt::T_KV_PUT :
       case sql::stmt::T_KV_MULTI_PUT : {
@@ -855,25 +855,25 @@ int ObRespTimeInfoCollector::collect(const ObTableHistogramType table_his_type, 
         }
         break;
       }
-      case sql::stmt::T_KV_DELETE :
+      case sql::stmt::T_KV_DELETE : 
       case sql::stmt::T_KV_MULTI_DELETE : {
         if (OB_FAIL(tableapi_delete_sql_info_.collect(pos, resp_time))) {
           LOG_WARN("tableapi delete sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
         }
         break;
       }
-      case sql::stmt::T_KV_UPDATE :
+      case sql::stmt::T_KV_UPDATE : 
       case sql::stmt::T_KV_APPEND :
-      case sql::stmt::T_KV_INCREMENT :
-      case sql::stmt::T_KV_MULTI_UPDATE :
-      case sql::stmt::T_KV_MULTI_INCREMENT :
+      case sql::stmt::T_KV_INCREMENT : 
+      case sql::stmt::T_KV_MULTI_UPDATE : 
+      case sql::stmt::T_KV_MULTI_INCREMENT : 
       case sql::stmt::T_KV_MULTI_APPEND : {
         if (OB_FAIL(tableapi_update_sql_info_.collect(pos, resp_time))) {
           LOG_WARN("tableapi update sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
         }
         break;
       }
-      case sql::stmt::T_KV_REPLACE :
+      case sql::stmt::T_KV_REPLACE : 
       case sql::stmt::T_KV_MULTI_REPLACE : {
         if (OB_FAIL(tableapi_replace_sql_info_.collect(pos, resp_time))) {
           LOG_WARN("tableapi replace sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
@@ -965,7 +965,7 @@ int ObRespTimeInfoCollector::flush(int64_t base /*=OB_INVALID_ID*/)
       LOG_WARN("failed to setup utility", K(ret));
     }
   }
-
+  
   for (int i = 0; OB_SUCC(ret) && i < OB_QRT_OVERALL_COUNT + 1; i++) {
 #define DEF_RESP_TIME_SQL_TYPE(name)           \
   ATOMIC_SET(&name##_info_.count_[i], 0);      \
@@ -1005,7 +1005,7 @@ int ObRespTimeInfoCollector::get_count_val(
 }
 
 int ObRespTimeInfoCollector::get_total_time_val(
-  const RespTimeSqlType resp_time_sql_type,
+  const RespTimeSqlType resp_time_sql_type, 
   const int32_t pos,
   int64_t &val)
 {
@@ -1117,7 +1117,7 @@ int ObTenantQueryRespTimeCollector::get_sum_value(ObRespTimeInfoCollector &total
     LOG_WARN("failed to flush total collector", K(ret), K(MTL_ID()));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < multi_ways_count_; i++) {
-      for (int64_t j = 0; OB_SUCC(ret) && j < total_collector.utility().bound_count(); j++) {
+      for (int64_t j = 0; OB_SUCC(ret) && j < total_collector.utility().bound_count(); j++) {   
 #define DEF_RESP_TIME_SQL_TYPE(name)           \
         total_collector.name##_info_.count_[j] +=  \
                 multi_collector_.at(i).name##_info_.get_count_val(j); \
@@ -1126,7 +1126,7 @@ int ObTenantQueryRespTimeCollector::get_sum_value(ObRespTimeInfoCollector &total
 #include "observer/mysql/ob_query_response_time.h"
 #undef DEF_RESP_TIME_SQL_TYPE
       }
-
+      
     }
   }
   return ret;

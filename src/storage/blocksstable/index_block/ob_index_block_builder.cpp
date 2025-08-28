@@ -3970,8 +3970,8 @@ bool ObIndexBlockRebuilder::use_absolute_offset(const ObITable::TableKey &table_
     && !table_key.slice_range_.is_merge_slice(); // not ddl merge slice
 }
 
-int ObIndexBlockRebuilder::get_tablet_transfer_seq (int64_t &tablet_transfer_seq) const
-{
+int ObIndexBlockRebuilder::get_tablet_transfer_seq (int64_t &tablet_transfer_seq) const 
+{ 
   int ret = OB_SUCCESS;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -3980,7 +3980,7 @@ int ObIndexBlockRebuilder::get_tablet_transfer_seq (int64_t &tablet_transfer_seq
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sstable_builder_ shoulde not be nullptr", K(ret), KP(sstable_builder_));
   } else {
-    tablet_transfer_seq = sstable_builder_->get_tablet_transfer_seq();
+    tablet_transfer_seq = sstable_builder_->get_tablet_transfer_seq(); 
   }
   return ret;
 }

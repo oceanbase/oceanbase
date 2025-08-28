@@ -124,7 +124,7 @@ public:
     return constraint_infos_;
   }
   virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
-  virtual int get_plan_item_info(PlanText &plan_text,
+  virtual int get_plan_item_info(PlanText &plan_text, 
                                 ObSqlPlanItem &plan_item) override;
   int is_plain_insert(bool &is_plain_insert);
   int is_insertup_or_replace_values(bool &is);

@@ -1006,7 +1006,7 @@ private:
 
   //ATTENTION : Add a new variable need consider ObMigrationTabletParam
   // and tablet meta init interface for migration.
-  // yuque :
+  // yuque : 
   ObTablet *next_tablet_; // used in old_version_chain and tablet_gc_queue
                                                              // size: 8B, alignment: 8B
   ObTabletStatusCache tablet_status_cache_;                  // size: 24B, alignment: 8B

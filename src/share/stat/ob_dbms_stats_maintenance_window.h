@@ -60,7 +60,7 @@ public:
 
   static int get_async_gather_stats_job_for_upgrade(common::ObMySQLProxy *sql_proxy,
                                                     const uint64_t tenant_id);
-
+  
   static int check_job_exists(common::ObMySQLProxy *sql_proxy,
                               const uint64_t tenant_id,
                               const char* job_name,
@@ -70,7 +70,7 @@ public:
                                             const ObSysVariableSchema &sys_variable,
                                             const uint64_t tenant_id,
                                             const bool is_oracle_mode);
-
+                                            
   static int get_time_zone_offset(const share::schema::ObSysVariableSchema &sys_variable,
                                   const uint64_t tenant_id,
                                   int32_t &offset_sec);

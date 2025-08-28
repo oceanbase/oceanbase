@@ -14,13 +14,13 @@
 #define _OB_HBASE_NORMAL_ADAPTER_H
 
 #include "ob_i_adapter.h"
-
+ 
 namespace oceanbase
-{
+{   
 namespace table
 {
 
-class ObHNormalAdapter : public ObIHbaseAdapter
+class ObHNormalAdapter : public ObIHbaseAdapter 
 {
 public:
   ObHNormalAdapter() = default;

@@ -407,3 +407,4 @@ int main(int argc, char **argv)
 {
   RUN_SIMPLE_LOG_CLUSTER_TEST(TEST_NAME);
 }
+

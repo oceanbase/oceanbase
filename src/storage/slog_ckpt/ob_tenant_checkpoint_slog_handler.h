@@ -47,7 +47,7 @@ public:
   ~ObLSCkptMember();
   DISALLOW_COPY_AND_ASSIGN(ObLSCkptMember);
   void reset();
-
+  
   bool is_valid() const;
   int serialize(char *buf, const int64_t len, int64_t &pos) const;
   int deserialize(
@@ -99,7 +99,7 @@ public:
   private:
     DISALLOW_COPY_AND_ASSIGN(ObCkptSlogROptLockGuard);
   };
-
+  
   ObTenantCheckpointSlogHandler();
   ~ObTenantCheckpointSlogHandler() = default;
   ObTenantCheckpointSlogHandler(const ObTenantCheckpointSlogHandler &) = delete;
@@ -111,7 +111,7 @@ public:
   void wait();
   void destroy();
   int start_replay(const ObTenantSuperBlock &super_block);
-
+  
   int add_macro_blocks(
       const common::ObIArray<blocksstable::MacroBlockId> &ls_block_list,
       const common::ObIArray<blocksstable::MacroBlockId> &tablet_block_list);
@@ -146,13 +146,13 @@ private:
   int replay_ls_meta(const ObMetaDiskAddr &addr, const char *buf, const int64_t buf_len);
   int replay_tablet(const ObMetaDiskAddr &addr, const char *buf, const int64_t buf_len);
   int replay_snapshot_ls(
-      const ObMetaDiskAddr &addr,
-      const char *buf,
+      const ObMetaDiskAddr &addr, 
+      const char *buf, 
       const int64_t buf_len);
   int replay_new_ls(
-      const ObMetaDiskAddr &addr,
-      const char *buf,
-      const int64_t buf_len,
+      const ObMetaDiskAddr &addr, 
+      const char *buf, 
+      const int64_t buf_len, 
       ObIArray<blocksstable::MacroBlockId> &tablet_block_list);
   int replay_new_tablet(const ObMetaDiskAddr &addr, const char *buf, const int64_t buf_len);
   int update_tablet_meta_addr_and_block_list(ObTenantStorageCheckpointWriter &ckpt_writer);

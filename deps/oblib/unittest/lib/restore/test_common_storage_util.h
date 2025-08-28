@@ -41,10 +41,10 @@ public:
 };
 
 int TestCommonStorageUtil::build_object_storage_info(
-    const char *bucket,
+    const char *bucket, 
     const char *endpoint,
-    const char *ak,
-    const char *sk,
+    const char *ak, 
+    const char *sk, 
     const char *region,
     const char *appid,
     const char *checksum_type,
@@ -73,7 +73,7 @@ int TestCommonStorageUtil::build_object_storage_info(
           && OB_FAIL(databuff_printf(account, sizeof(account), pos,
                                      "&checksum_type=%s", checksum_type))) {
         OB_LOG(WARN, "fail to databuff printf", K(ret), K(checksum_type));
-      } else if (ObStorageType::OB_STORAGE_COS == storage_type &&
+      } else if (ObStorageType::OB_STORAGE_COS == storage_type && 
                  databuff_printf(account, sizeof(account), pos, "&appid=%s", appid)) {
         OB_LOG(WARN, "fail to databuff printf", K(ret), K(appid));
       } else if (ObStorageType::OB_STORAGE_S3 == storage_type &&
@@ -103,8 +103,8 @@ int TestCommonStorageUtil::build_fs_storage_info(
 int TestCommonStorageUtil::gen_object_uri(
     char *obj_uri,
     const int64_t uri_buf_len,
-    const char *bucket,
-    const char *raw_dir_path,
+    const char *bucket, 
+    const char *raw_dir_path, 
     const char *obj_name)
 {
   int ret = OB_SUCCESS;
@@ -113,7 +113,7 @@ int TestCommonStorageUtil::gen_object_uri(
   if (OB_ISNULL(obj_uri) || OB_ISNULL(bucket) || OB_ISNULL(raw_dir_path)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", K(ret), KP(obj_uri), KP(bucket), KP(raw_dir_path));
-  } else if (exist_obj && OB_FAIL(databuff_printf(obj_uri, uri_buf_len, pos, "%s/%s/%s",
+  } else if (exist_obj && OB_FAIL(databuff_printf(obj_uri, uri_buf_len, pos, "%s/%s/%s", 
              bucket, raw_dir_path, obj_name))) {
     OB_LOG(WARN, "fail to databuff printf", K(ret), K(bucket), K(raw_dir_path), K(obj_name), K(uri_buf_len));
   } else if (!exist_obj && OB_FAIL(databuff_printf(obj_uri, uri_buf_len, pos, "%s/%s/", bucket, raw_dir_path))) {
@@ -126,7 +126,7 @@ int TestCommonStorageUtil::gen_fs_uri(
     char *fs_uri,
     const int64_t uri_buf_len,
     const char *pwd_path,
-    const char *raw_dir_path,
+    const char *raw_dir_path, 
     const char *file_name)
 {
   int ret = OB_SUCCESS;
@@ -135,10 +135,10 @@ int TestCommonStorageUtil::gen_fs_uri(
   if (OB_ISNULL(fs_uri) || OB_ISNULL(pwd_path) || OB_ISNULL(raw_dir_path)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", K(ret), KP(fs_uri), KP(pwd_path), KP(raw_dir_path));
-  } else if (exist_file && OB_FAIL(databuff_printf(fs_uri, uri_buf_len, pos, "%s%s/%s/%s", "file://",
+  } else if (exist_file && OB_FAIL(databuff_printf(fs_uri, uri_buf_len, pos, "%s%s/%s/%s", "file://", 
              pwd_path, raw_dir_path, file_name))) {
     OB_LOG(WARN, "fail to databuff printf", K(ret), K(pwd_path), K(raw_dir_path), K(file_name), K(uri_buf_len));
-  } else if (!exist_file && OB_FAIL(databuff_printf(fs_uri, uri_buf_len, pos, "%s%s/%s/", "file://",
+  } else if (!exist_file && OB_FAIL(databuff_printf(fs_uri, uri_buf_len, pos, "%s%s/%s/", "file://", 
              pwd_path, raw_dir_path))) {
     OB_LOG(WARN, "fail to databuff printf", K(ret), K(pwd_path), K(raw_dir_path), K(uri_buf_len));
   }

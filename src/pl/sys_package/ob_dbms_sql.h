@@ -103,7 +103,7 @@ public:
                    ObIAllocator *allocator,
                    int64_t col_idx,
                    const ObObjParam src_obj,
-                   sql::ObRawExprResType &result_type,
+                   sql::ObRawExprResType &result_type, 
                    ObObjParam &result);
   int variable_value(sql::ObSQLSessionInfo *session,
                      ObIAllocator *allocator,
@@ -205,9 +205,9 @@ public:
    * ref cursor : always start with CANDIDATE_CURSOR_ID, user can't get ref cursor id by SQL
    *              only client and server use the id when interacting
    * dbms sql cursor : always start with CANDIDATE_CURSOR_ID, user can get cursor id by SQL
-   *              CANDIDATE_CURSOR_ID may be out of precision.
+   *              CANDIDATE_CURSOR_ID may be out of precision. 
    *              so we should use get_dbms_id and convert_to_dbms_cursor_id to provide a vaild id for user
-   */
+   */ 
   static const int64_t CANDIDATE_CURSOR_ID = 1LL << 31;
 
 public:
@@ -314,25 +314,25 @@ public:
   static int describe_columns3(sql::ObExecContext &exec_ctx,
                                 ParamStore &params,
                                 ObObj &result);
-  static int is_open(sql::ObExecContext &exec_ctx,
-                     ParamStore &params,
+  static int is_open(sql::ObExecContext &exec_ctx, 
+                     ParamStore &params, 
                      ObObj &result);
-  static int execute_and_fetch(sql::ObExecContext &exec_ctx,
-                               ParamStore &params,
+  static int execute_and_fetch(sql::ObExecContext &exec_ctx, 
+                               ParamStore &params, 
                                ObObj &result);
-  static int to_cursor_number(sql::ObExecContext &exec_ctx,
-                              ParamStore &params,
+  static int to_cursor_number(sql::ObExecContext &exec_ctx, 
+                              ParamStore &params, 
                               ObObj &result);
 
   static int to_refcursor(sql::ObExecContext &exec_ctx,
                           ParamStore &params,
                           ObObj &result);
 
-  static int define_column_long(sql::ObExecContext &exec_ctx,
-                                ParamStore &params,
+  static int define_column_long(sql::ObExecContext &exec_ctx, 
+                                ParamStore &params, 
                                 ObObj &result);
-  static int column_value_long(sql::ObExecContext &exec_ctx,
-                               ParamStore &params,
+  static int column_value_long(sql::ObExecContext &exec_ctx, 
+                               ParamStore &params, 
                                ObObj &result);
   static int last_error_position(sql::ObExecContext &exec_ctx,
                               ParamStore &params,
@@ -345,8 +345,8 @@ private:
                         ObDbmsCursorInfo &cursor,
                         ParamStore &params,
                         common::ObObj &result);
-  static int do_fetch(sql::ObExecContext &exec_ctx,
-                      ParamStore &params,
+  static int do_fetch(sql::ObExecContext &exec_ctx, 
+                      ParamStore &params, 
                       common::ObObj &result,
                       ObDbmsCursorInfo &cursor);
   static int get_cursor(sql::ObExecContext &exec_ctx,
@@ -361,15 +361,15 @@ private:
   };
 
   static int do_describe(sql::ObExecContext &exec_ctx, ParamStore &params, DescribeType type);
-  static int do_parse(sql::ObExecContext &exec_ctx,
+  static int do_parse(sql::ObExecContext &exec_ctx, 
                       ObDbmsCursorInfo *cursor,
                       common::ObString &sql_stmt,
                       ObCollationType coll_type);
   static int parse_6p(sql::ObExecContext &exec_ctx,
                    ParamStore &params,
                    common::ObObj &result);
-  static int fill_dbms_cursor(sql::ObSQLSessionInfo *session,
-                       ObPLCursorInfo *cursor,
+  static int fill_dbms_cursor(sql::ObSQLSessionInfo *session, 
+                       ObPLCursorInfo *cursor, 
                        ObDbmsCursorInfo *new_cursor);
 };
 #endif

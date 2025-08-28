@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/px/ob_px_util.h"
 #include "sql/engine/px/datahub/components/ob_dh_init_channel.h"
@@ -83,7 +83,7 @@ int ObInitChannelPieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta> &sqcs
   int ret = OB_SUCCESS;
   // get child transmit op's id.
   // in current impl. the paired transmit op id = receive op id + 1
-  //TODO :
+  //TODO : 
   whole_msg_.op_id_ = op_id_ + 1;
   ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
     dtl::ObDtlChannel *ch = sqcs.at(idx).get_qc_channel();

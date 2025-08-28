@@ -141,3 +141,4 @@ DEF_VECTOR_IMPLICIT_CAST_FUNC(VEC_TC_STRING, VEC_TC_DOUBLE)
 
 } // end sql
 } // namespace oceanbase
+

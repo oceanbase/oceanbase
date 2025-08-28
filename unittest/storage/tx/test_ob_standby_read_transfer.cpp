@@ -197,7 +197,7 @@ public :
     if (state_info_array_.empty() && OB_FAIL(set_state_info_array_())) {
       TRANS_LOG(WARN, "merge participants fail", K(ret));
     }
-
+  
     TRANS_LOG(INFO, "build and post collect state", K(ret), K(state_info_array_), K(lastest_snapshot_));
   }
 };
@@ -266,7 +266,7 @@ TEST_F(TestObStandbyReadTransfer, trans_check_for_standby_transfer)
   ObCollectStateRespMsg collect_state_resp;
   collect_state_req.check_info_ = coord.state_info_array_.at(0).check_info_;
   collect_state_resp.sender_ = coord_ls;
-  ASSERT_EQ(OB_SUCCESS, coord.handle_trans_collect_state(collect_state_resp, collect_state_req));
+  ASSERT_EQ(OB_SUCCESS, coord.handle_trans_collect_state(collect_state_resp, collect_state_req)); 
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_collect_state_resp(collect_state_resp));
   ASSERT_EQ(4, coord.state_info_array_.count());
   collect_state_resp.transfer_parts_.reset();
@@ -280,7 +280,7 @@ TEST_F(TestObStandbyReadTransfer, trans_check_for_standby_transfer)
 
   collect_state_req.check_info_ = coord.state_info_array_.at(2).check_info_;
   collect_state_resp.sender_ = part2_ls;
-  ASSERT_EQ(OB_SUCCESS, part2.handle_trans_collect_state(collect_state_resp, collect_state_req));
+  ASSERT_EQ(OB_SUCCESS, part2.handle_trans_collect_state(collect_state_resp, collect_state_req)); 
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_collect_state_resp(collect_state_resp));
   ASSERT_EQ(5, coord.state_info_array_.count());
 
@@ -290,13 +290,13 @@ TEST_F(TestObStandbyReadTransfer, trans_check_for_standby_transfer)
 
   collect_state_req.check_info_ = coord.state_info_array_.at(3).check_info_;
   collect_state_resp.sender_ = part3_ls;
-  ASSERT_EQ(OB_SUCCESS, part3.handle_trans_collect_state(collect_state_resp, collect_state_req));
+  ASSERT_EQ(OB_SUCCESS, part3.handle_trans_collect_state(collect_state_resp, collect_state_req)); 
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_collect_state_resp(collect_state_resp));
   ASSERT_EQ(5, coord.state_info_array_.count());
 
   collect_state_req.check_info_ = coord.state_info_array_.at(4).check_info_;
   collect_state_resp.sender_ = part_transfer_ls;
-  ASSERT_EQ(OB_SUCCESS, transfer_part.handle_trans_collect_state(collect_state_resp, collect_state_req));
+  ASSERT_EQ(OB_SUCCESS, transfer_part.handle_trans_collect_state(collect_state_resp, collect_state_req)); 
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_collect_state_resp(collect_state_resp));
   ASSERT_EQ(5, coord.state_info_array_.count());
 
@@ -365,7 +365,7 @@ TEST_F(TestObStandbyReadTransfer, trans_init_state)
   transfer_part.set_downstream_state(ObTxState::PREPARE);
   transfer_part.exec_info_.prepare_version_.convert_for_tx(50);
   transfer_part.handle_trans_ask_state(snapshot, resp, snapshot);
-
+  
   ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, transfer_part.check_for_standby(snapshot, can_read, trans_version));
   ASSERT_EQ(false, can_read);
 

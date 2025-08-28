@@ -873,7 +873,7 @@ public:
               const uint64_t tenant_id,
               const uint64_t tablegroup_id,
               bool &exists);
-
+    
   virtual int get_table_id_and_table_name_in_tablegroup(
               common::ObIAllocator &allocator,
               common::ObISQLClient &sql_client,

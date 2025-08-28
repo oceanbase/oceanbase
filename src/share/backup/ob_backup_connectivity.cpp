@@ -198,7 +198,7 @@ int ObBackupConnectivityCheckManager::check_backup_dest_connectivity(
   } else if (OB_FAIL(set_connectivity_check_path_(backup_dest, path))) {
     LOG_WARN("failed to get check file", K(ret), K_(tenant_id), K(backup_dest));
   // TODO(mingqiao) in 4.3, support check connectivity
-  //} else if (OB_FAIL(schedule_connectivity_check_(backup_dest, path))) {
+  //} else if (OB_FAIL(schedule_connectivity_check_(backup_dest, path))) { 
   //  LOG_WARN("failed to schedule connectivity check", K(ret), K_(tenant_id));
   } else if (OB_FAIL(set_last_check_time_(backup_dest))) {
     LOG_WARN("failed to set last check time", K(ret), K_(tenant_id), K(backup_dest));
@@ -493,7 +493,7 @@ int ObBackupCheckFile::get_permission_check_file_path_(
   int ret = OB_SUCCESS;
   int64_t check_time_s = ObTimeUtility::current_time() / 1000/ 1000;
   char buff[OB_BACKUP_MAX_TIME_STR_LEN] = { 0 };
-  const char *prefix = nullptr;
+  const char *prefix = nullptr; 
   int64_t pos = 0;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -505,7 +505,7 @@ int ObBackupCheckFile::get_permission_check_file_path_(
   } else if (OB_FAIL(get_check_file_path(backup_dest, path))) {
     LOG_WARN("failed to get check file path", K(ret), K(backup_dest));
   } else if (OB_FAIL(backup_time_to_strftime(check_time_s, buff, sizeof(buff), pos, 'T'/* concat */))) {
-    LOG_WARN("failed to convert time", K(ret), K(backup_dest));
+    LOG_WARN("failed to convert time", K(ret), K(backup_dest)); 
   } else if (OB_FAIL(databuff_printf(permission_file_name_, sizeof(permission_file_name_),
       "%lu_%s_%s_%s_%s%s", tenant_id_, prefix, "permission", "file", buff, OB_BACKUP_SUFFIX))) {
     LOG_WARN("failed to set permission file name", K(ret), K(buff));
@@ -552,7 +552,7 @@ int ObBackupCheckFile::check_appender_permission_(const ObBackupDest &backup_des
     LOG_WARN("fail to set data", K(ret), K(path.get_ptr()));
   } else if (OB_FAIL(device_handle->pwrite(fd, 0, strlen(data), data, write_size))) {
     LOG_WARN("fail to write file", K(ret), K(path.get_ptr()), K(data));
-  } else if (!backup_dest.is_enable_worm()
+  } else if (!backup_dest.is_enable_worm() 
                 && OB_FAIL(util.adaptively_del_file(path.get_obstr(), backup_dest.get_storage_info()))) {
     LOG_WARN("failed to del file", K(ret), K(path));
   }
@@ -582,7 +582,7 @@ int ObBackupCheckFile::check_multipart_upload_permission_(const ObBackupDest &ba
     ret = OB_NOT_INIT;
     LOG_WARN("backup check file not init", K(ret));
   } else if (OB_FAIL(get_permission_check_file_path_(backup_dest, access_type, path))) {
-    LOG_WARN("failed to get permission check file path", K(ret), K_(tenant_id), K(backup_dest));
+    LOG_WARN("failed to get permission check file path", K(ret), K_(tenant_id), K(backup_dest)); 
   } else if (OB_FAIL(util.open_with_access_type(device_handle, fd, backup_dest.get_storage_info(),
              path.get_obstr(), access_type, ObStorageIdMod::get_default_id_mod()))) {
     LOG_WARN("fail to open device or fd", K(ret), K(backup_dest), K(path));
@@ -592,7 +592,7 @@ int ObBackupCheckFile::check_multipart_upload_permission_(const ObBackupDest &ba
     LOG_WARN("fail to write file", K(ret), K(path.get_ptr()), K(data));
   } else if (OB_FAIL(device_handle->complete(fd))) {
     STORAGE_LOG(WARN, "fail to complete multipart upload", K(ret), K(device_handle), K(fd));
-  } else if (!backup_dest.is_enable_worm()
+  } else if (!backup_dest.is_enable_worm() 
                 && OB_FAIL(util.del_file(path.get_obstr(), backup_dest.get_storage_info()))) {
     LOG_WARN("failed to del file", K(ret));
   }
@@ -674,7 +674,7 @@ int ObBackupCheckFile::check_io_permission(const ObBackupDest &backup_dest)
     }
     LOG_WARN("failed to read single file", K(ret));
   }
-  if (write_ok && !backup_dest.is_enable_worm()
+  if (write_ok && !backup_dest.is_enable_worm() 
           && OB_TMP_FAIL(util.adaptively_del_file(path.get_obstr(), backup_dest.get_storage_info()))) {
     if (is_permission_error_(tmp_ret)) {
       tmp_ret = OB_BACKUP_PERMISSION_DENIED;
@@ -688,14 +688,14 @@ int ObBackupCheckFile::check_io_permission(const ObBackupDest &backup_dest)
   } else if (OB_FAIL(check_appender_permission_(backup_dest))){
     if (is_permission_error_(ret)) {
       ret = OB_BACKUP_PERMISSION_DENIED;
-      ROOTSERVICE_EVENT_ADD("connectivity_check", "permission check",
+      ROOTSERVICE_EVENT_ADD("connectivity_check", "permission check", 
           "tenant_id", tenant_id_, "error_code", ret, "comment", "appender write");
     }
     LOG_WARN("failed to appender permission", K(ret));
   } else if (OB_FAIL(check_multipart_upload_permission_(backup_dest))) {
     if (is_permission_error_(ret)) {
       ret = OB_BACKUP_PERMISSION_DENIED;
-      ROOTSERVICE_EVENT_ADD("connectivity_check", "permission check",
+      ROOTSERVICE_EVENT_ADD("connectivity_check", "permission check", 
           "tenant_id", tenant_id_, "error_code", ret, "comment", "multipart upload write");
     }
     LOG_WARN("failed to check multipart permission", K(ret), K(backup_dest));

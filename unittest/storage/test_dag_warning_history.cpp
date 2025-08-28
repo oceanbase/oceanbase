@@ -108,9 +108,9 @@ public:
     }
     return bret;
   }
-  virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param,
-      ObIAllocator &allocator) const override
-  {
+  virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, 
+      ObIAllocator &allocator) const override 
+  { 
     int ret = OB_SUCCESS;
     if (!is_inited_) {
       ret = OB_NOT_INIT;
@@ -122,7 +122,7 @@ public:
   virtual int fill_dag_key(char *buf,const int64_t size) const override { UNUSEDx(buf, size); return OB_SUCCESS; }
   virtual lib::Worker::CompatMode get_compat_mode() const override
   { return lib::Worker::CompatMode::MYSQL; }
-  virtual uint64_t get_consumer_group_id() const override
+  virtual uint64_t get_consumer_group_id() const override 
   { return consumer_group_id_; }
   virtual bool is_ha_dag() const override { return false; }
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, K_(is_inited), K_(type), K(task_list_.get_size()), K_(dag_ret));
@@ -234,7 +234,7 @@ TEST_F(TestDagWarningHistory, simple_del)
   // delete_info only delete info from map, there is still 2 info in list
   ASSERT_EQ(2, MTL(ObDagWarningHistoryManager *)->size());
   ASSERT_EQ(OB_ITER_END, iterator.get_next(&ret_info, nullptr, 0));
-
+  
   allocator.reuse();
   ret = MTL(ObDagWarningHistoryManager *)->get_with_param(ObBasicDag::KEY_START, ret_info, allocator);
   ASSERT_EQ(OB_HASH_NOT_EXIST, ret);
@@ -259,7 +259,7 @@ TEST_F(TestDagWarningHistory, simple_loop_get)
   }
 
   ASSERT_EQ(max_cnt, MTL(ObDagWarningHistoryManager *)->size());
-
+  
   compaction::ObIDiagnoseInfoMgr::Iterator iterator;
   ret = MTL(ObDagWarningHistoryManager *)->open_iter(iterator);
   ASSERT_EQ(OB_SUCCESS, ret);

@@ -69,7 +69,7 @@ int ObMPDisconnect::run()
       ObSMConnection conn;
       conn.sessid_ = ctx_.sessid_;
       conn.is_need_clear_sessid_ = true;
-      // bugfix:
+      // bugfix: 
       (void) kill_unfinished_session(ctx_.sessid_); // ignore ret
       if (OB_FAIL(GCTX.session_mgr_->free_session(ctx_))) {
         LOG_WARN("free session fail", K(ctx_));

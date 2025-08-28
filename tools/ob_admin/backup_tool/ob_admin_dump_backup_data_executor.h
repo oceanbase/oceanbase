@@ -208,11 +208,11 @@ private:
   int get_tenant_backup_set_infos_path_(const share::ObBackupSetDesc &backup_set_dir_name, 
       share::ObBackupPath &target_path);
   int get_backup_set_placeholder_dir_path(share::ObBackupPath &path);
-  int filter_backup_set_(const storage::ObTenantBackupSetInfosDesc &tenant_backup_set_infos,
+  int filter_backup_set_(const storage::ObTenantBackupSetInfosDesc &tenant_backup_set_infos, 
       const ObSArray<share::ObBackupSetDesc> &placeholder_infos,
       ObIArray<share::ObBackupSetFileDesc> &target_backup_set);
-  int read_locality_info_file(const char *tenant_backup_path,
-      share::ObBackupSetDesc latest_backup_set_desc,
+  int read_locality_info_file(const char *tenant_backup_path, 
+      share::ObBackupSetDesc latest_backup_set_desc, 
       storage::ObExternTenantLocalityInfoDesc &locality_info);
 private:
   char backup_path_[common::OB_MAX_URI_LENGTH];

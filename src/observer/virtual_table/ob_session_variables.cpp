@@ -59,7 +59,7 @@ int ObSessionVariables::inner_get_next_row(ObNewRow *&row)
       ObString sys_var_show_str;
       for (int64_t i = 0; OB_SUCC(ret) && i < session_->get_sys_var_count(); ++i) {
         const ObBasicSysVar *sys_var = NULL;
-
+          
         if (OB_UNLIKELY(NULL == (sys_var = session_->get_sys_var(i)))) {
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "sys var is NULL", K(ret), K(i));

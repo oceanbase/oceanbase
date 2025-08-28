@@ -116,7 +116,7 @@ int ObPxMultiPartSSTableInsertOp::inner_open()
   } else {
     const int64_t ddl_table_id = MY_SPEC.plan_->get_ddl_table_id();
     if (OB_FAIL(ctx_.get_sqc_handler()->get_sub_coord().get_participants(
-          ctx_.get_sqc_handler()->get_sqc_init_arg().sqc_,
+          ctx_.get_sqc_handler()->get_sqc_init_arg().sqc_, 
           ddl_table_id,
           participants_))) {
       LOG_WARN("get participants failed", K(ret));
@@ -234,13 +234,13 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
     bool is_partition_table  = true;
     common::hash::ObHashMap<int64_t, int64_t> tablet_slice_cnt_map;
     if (OB_FAIL(ret)) {
-    } else if (!is_shared_storage_dempotent_mode(ddl_ctrl.direct_load_type_)) {
+    } else if (!is_shared_storage_dempotent_mode(ddl_ctrl.direct_load_type_)) { 
     } else if (OB_FAIL(tablet_slice_cnt_map.create(participants_.count(), "SliceInfoM",
                                                         ObModIds::OB_HASH_NODE, tenant_id))) {
       LOG_WARN("fail to create hash table", K(ret));
     } else if (OB_FAIL(ObDDLUtil::get_task_tablet_slice_count(MTL_ID(), ddl_task_id, is_partition_table, tablet_slice_cnt_map))) {
       LOG_WARN("failed to get tablet slice count", K(ret), K(ddl_task_id), K(MTL_ID()));
-    }
+    } 
     if (OB_SUCC(ret) && is_vec_data_complement_) {
       op_monitor_info_.otherstat_8_id_ = ObSqlMonitorStatIds::VECTOR_INDEX_TASK_THREAD_POOL_COUNT;
       op_monitor_info_.otherstat_8_value_ = 0;
@@ -252,7 +252,7 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
       insert_monitor.vec_index_task_total_cnt_ = &op_monitor_info_.otherstat_9_value_;
       insert_monitor.vec_index_task_finish_cnt_ = &op_monitor_info_.otherstat_10_value_;
     }
-
+    
     for (notify_idx = 0; OB_SUCC(ret) && notify_idx < participants_.count();) {
       clear_evaluated_flag();
       bool is_current_slice_empty = false;
@@ -269,7 +269,7 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
       ObTabletSliceParam tablet_slice_param;
       bool is_tablet_finish = false;
       const ObTabletCacheInterval *curr_tablet_seq_cache =
-        count_rows_finish_ && curr_tablet_idx_ < tablet_seq_caches_.count() && curr_tablet_idx_ >= 0 ?
+        count_rows_finish_ && curr_tablet_idx_ < tablet_seq_caches_.count() && curr_tablet_idx_ >= 0 ? 
           &tablet_seq_caches_.at(curr_tablet_idx_) : nullptr;
       ObDirectLoadMgrAgent ddl_agent;
 
@@ -300,7 +300,7 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
       slice_info.slice_idx_ = parallel_idx;
       FLOG_INFO("update ddl parallel id", K(ret), K(notify_tablet_id), K(slice_info), K(parallel_idx), K(tablet_slice_param), K(ctx_.get_px_task_id()), K(is_current_slice_empty),
           K(row_tablet_id), K(is_all_partition_finished_), K(count_rows_finish_), K(curr_tablet_idx_), K(tablet_seq_caches_.count()), KPC(curr_tablet_seq_cache));
-
+      
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObDDLUtil::init_macro_block_seq(parallel_idx, block_start_seq))) {
         LOG_WARN("set parallel index failed", K(ret), K(parallel_idx));

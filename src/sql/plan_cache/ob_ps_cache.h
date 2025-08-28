@@ -140,7 +140,7 @@ private:
   int add_stmt_info(const ObPsStmtItem &ps_item,
                     const ObPsStmtInfo &ps_info,
                     ObPsStmtInfo *&ref_ps_info);
-
+  
   inline ObPsStmtId gen_new_ps_stmt_id() { return __sync_add_and_fetch(&next_ps_stmt_id_, 1); }
 
   int64_t get_mem_limit() const

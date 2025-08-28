@@ -352,7 +352,7 @@ static int start_mysql_queue(QueueThread *&qthread)
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
   if (is_sys_tenant(tenant_id) || is_user_tenant(tenant_id)) {
-    qthread = OB_NEW(QueueThread, ObMemAttr(tenant_id, ObModIds::OB_RPC),
+    qthread = OB_NEW(QueueThread, ObMemAttr(tenant_id, ObModIds::OB_RPC), 
                       "MysqlQueueTh", tenant_id, share::OBCG_MYSQL_LOGIN);
     if (OB_ISNULL(qthread)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -595,7 +595,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, rootserver::ObDDLServiceLauncher::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, rootserver::ObDDLScheduler::mtl_init, nullptr, rootserver::ObDDLScheduler::mtl_stop, rootserver::ObDDLScheduler::mtl_wait, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObSessionTmpTableCleaner::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
-
+    
     MTL_BIND2(ObSQLCCLRuleManager::mtl_new, ObSQLCCLRuleManager::mtl_init, nullptr, nullptr, nullptr, ObSQLCCLRuleManager::mtl_destroy);
   }
 
@@ -1487,7 +1487,7 @@ int ObMultiTenant::update_safe_time_config()
   if (OB_ISNULL(public_block_gc_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("public_block_gc_service should not be null", K(ret));
-  } else if(OB_FAIL(public_block_gc_service->update_safe_time_config(gc_tablet_safe_time_val,
+  } else if(OB_FAIL(public_block_gc_service->update_safe_time_config(gc_tablet_safe_time_val, 
           gc_tablet_meta_safe_time_val))) {
     LOG_WARN("failed to update_max_trace_info_size", K(ret), K(gc_tablet_safe_time_val), K(gc_tablet_meta_safe_time_val));
   }

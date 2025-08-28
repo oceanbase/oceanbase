@@ -113,7 +113,7 @@ int ObLobDiskLocatorWrapper::check_for_dml(ObLobDiskLocatorWrapper &other) const
     LOG_WARN("lob char len is not match", K(ret), K(other), KPC(this));
   // if op is sql, means not register ext info log callback
   // so seq no shuold be same
-  } else if (ObLobDataOutRowCtx::OpType::SQL == outrow_ctx_->op_ && outrow_ctx_->op_ == other.outrow_ctx_->op_ &&
+  } else if (ObLobDataOutRowCtx::OpType::SQL == outrow_ctx_->op_ && outrow_ctx_->op_ == other.outrow_ctx_->op_ && 
       (outrow_ctx_->seq_no_st_ != other.outrow_ctx_->seq_no_st_ || outrow_ctx_->seq_no_cnt_ != other.outrow_ctx_->seq_no_cnt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("seq no is not match", K(ret), K(other), KPC(this));
@@ -136,7 +136,7 @@ int ObLobDiskLocatorBuilder::init(ObIAllocator &allocator)
     lob_common_->in_row_ = 0;
     lob_common_->is_init_ = 1;
     lob_data_ = new(lob_common_->buffer_)ObLobData();
-    outrow_ctx_ = new(lob_data_->buffer_)ObLobDataOutRowCtx();
+    outrow_ctx_ = new(lob_data_->buffer_)ObLobDataOutRowCtx();    
     outrow_ctx_->is_full_ = 1;
     char_len_ptr_ = reinterpret_cast<uint64_t*>(outrow_ctx_ + 1);
     *char_len_ptr_ = 0;

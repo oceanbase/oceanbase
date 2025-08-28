@@ -84,8 +84,8 @@ int ObTableOpWrapper::process_affected_entity(ObTableCtx &tb_ctx,
 {
   int ret = OB_SUCCESS;
   ObITableEntity *result_entity = nullptr;
-  if (TABLE_API_EXEC_UPDATE != spec.get_type() &&
-      TABLE_API_EXEC_INSERT != spec.get_type() &&
+  if (TABLE_API_EXEC_UPDATE != spec.get_type() && 
+      TABLE_API_EXEC_INSERT != spec.get_type() && 
       TABLE_API_EXEC_TTL != spec.get_type()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid spec type", K(ret), K(spec.get_type()));
@@ -321,7 +321,7 @@ int ObTableOpWrapper::process_insert_up_op(ObTableCtx &tb_ctx, ObTableOperationR
 int ObTableOpWrapper::process_incr_or_append_op(ObTableCtx &tb_ctx, ObTableOperationResult &op_result)
 {
   int ret = OB_SUCCESS;
-  // 1.do update first;
+  // 1.do update first; 
   tb_ctx.set_inc_append_stage(ObTableIncAppendStage::TABLE_INCR_APPEND_UPDATE);
   if (OB_FAIL(process_op<TABLE_API_EXEC_UPDATE>(tb_ctx, op_result))) {
     if (tb_ctx.is_inc() && ret == OB_ERR_TRUNCATED_WRONG_VALUE) {
@@ -329,7 +329,7 @@ int ObTableOpWrapper::process_incr_or_append_op(ObTableCtx &tb_ctx, ObTableOpera
     }
     LOG_WARN("fail to process update operation", K(ret));
   } else if (op_result.get_affected_rows() == 0) {
-    // 2.if return empty result, do insert;
+    // 2.if return empty result, do insert; 
     op_result.reset();
     if (OB_FAIL(tb_ctx.init_insert_when_inc_append())) {
       LOG_WARN("fail to int insert when do increment/append", K(ret), K(tb_ctx.get_opertion_type()));
@@ -455,7 +455,7 @@ int ObHTableDeleteExecutor::get_next_row_by_entity()
     } else if (OB_FAIL(query_and_delete(query))) {
       LOG_WARN("fail to query and delete", K(ret), K(query));
     }
-
+    
   }
   return ret;
 }
@@ -554,7 +554,7 @@ int ObHTableDeleteExecutor::query_and_delete(const ObTableQuery &query)
     }
   }
 
-  OB_TABLE_END_AUDIT(ret_code, ret,
+  OB_TABLE_END_AUDIT(ret_code, ret, 
                      snapshot, tb_ctx_.get_exec_ctx().get_das_ctx().get_snapshot(),
                      stmt_type, StmtType::T_KV_QUERY,
                      return_rows, tmp_result.get_row_count(),
@@ -598,7 +598,7 @@ int ObHTableDeleteExecutor::delete_rows(ObTableQueryResult &result)
     } else {
       affected_rows_++;
     }
-    OB_TABLE_END_AUDIT(ret_code, ret,
+    OB_TABLE_END_AUDIT(ret_code, ret, 
                        snapshot, tb_ctx_.get_exec_ctx().get_das_ctx().get_snapshot(),
                        stmt_type, StmtType::T_KV_DELETE);
   }

@@ -22,7 +22,7 @@ namespace storage
 namespace mds
 {
 
-struct MdsTLocalInfo
+struct MdsTLocalInfo 
 {
   MdsTLocalInfo() : notify_type_(transaction::NotifyType::UNKNOWN) {}
   void reset() { new (this) MdsTLocalInfo(); }

@@ -115,7 +115,7 @@ private:
   ObLobMetaInfo old_meta_info_;
   ObLobMetaInfo new_meta_info_;
 
-  // updated lob
+  // updated lob 
   ObLobAccessParam *param_;
   int32_t seq_id_tmp_;
 

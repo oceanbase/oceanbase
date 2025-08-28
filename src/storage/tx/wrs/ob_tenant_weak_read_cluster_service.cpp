@@ -1010,7 +1010,7 @@ int ObTenantWeakReadClusterService::update_server_version(const common::ObAddr &
   int64_t rdlock_wait_time = PROCESS_CLUSTER_HEARTBEAT_RPC_RDLOCK_TIMEOUT + ObTimeUtility::current_time();
 
   // rpc worker can not hang, overtime should be set
-  // bug:
+  // bug: 
   if (OB_FAIL(rwlock_.rdlock(rdlock_wait_time))) {
     ISTAT("try rdlock conflict when tenant weak read service update server version, need retry",
         KR(ret), "tenant_id", MTL_ID(), K(addr), K(version), K(valid_part_count),

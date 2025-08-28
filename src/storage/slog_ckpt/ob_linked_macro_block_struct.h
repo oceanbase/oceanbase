@@ -139,14 +139,14 @@ public:
     }
     return ret;
   }
-  int init(blocksstable::ObIMacroBlockFlushCallback *ddl_redo_cb)
+  int init(blocksstable::ObIMacroBlockFlushCallback *ddl_redo_cb) 
   {
     int ret = OB_SUCCESS;
     ddl_redo_callback_ = ddl_redo_cb;
     written_macro_cnt_ = 0;
     return ret;
   }
-  void reset_written_macro_cnt()
+  void reset_written_macro_cnt() 
   {
     written_macro_cnt_ = 0;
   }

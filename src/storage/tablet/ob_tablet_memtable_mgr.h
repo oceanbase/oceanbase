@@ -144,11 +144,11 @@ public:
     }
     return ret;
   }
-  void release(ObTabletMemtableMgr *mgr)
+  void release(ObTabletMemtableMgr *mgr) 
   {
     OB_ASSERT(OB_NOT_NULL(mgr));
     mgr->~ObTabletMemtableMgr();
-    allocator_.free(static_cast<void*>(mgr));
+    allocator_.free(static_cast<void*>(mgr)); 
     ATOMIC_DEC(&count_);
   }
 

@@ -71,7 +71,7 @@ public:
               ret = OB_ERR_UNEXPECTED;
               SHARE_LOG(WARN, "ret can not be success", KR(ret));
             }
-          }  // end heap var
+          }  // end heap var 
         }
       }//end else
     }

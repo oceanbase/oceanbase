@@ -72,7 +72,7 @@ public:
   virtual void reset();
   virtual void reuse();
   virtual int init();
-  virtual int eval(blocksstable::ObStorageDatum &datum,
+  virtual int eval(blocksstable::ObStorageDatum &datum, 
                    const int64_t row_count = 1,
                    int64_t agg_row_idx = 0);
   virtual int eval_batch(blocksstable::ObIMicroBlockReader *reader,
@@ -124,16 +124,16 @@ public:
     const sql::ObAggrInfo &agg_info = basic_info_.agg_ctx_.aggr_infos_.at(agg_idx_);
     return agg_info.expr_->args_[0];
   }
-  OB_INLINE ObObjType get_obj_type() const
-  {
+  OB_INLINE ObObjType get_obj_type() const 
+  { 
     const sql::ObAggrInfo &agg_info = basic_info_.agg_ctx_.aggr_infos_.at(agg_idx_);
-    return agg_info.expr_->obj_meta_.get_type();
+    return agg_info.expr_->obj_meta_.get_type(); 
   }
   OB_INLINE bool is_agg_finish(const ObPushdownRowIdCtx &pd_row_id_ctx)
   {
     return OB_INVALID_CS_ROW_ID != agg_row_id_
         && OB_INVALID_CS_ROW_ID != pd_row_id_ctx.bound_row_id_
-        && ((!pd_row_id_ctx.is_reverse_ && agg_row_id_ >= pd_row_id_ctx.bound_row_id_ )
+        && ((!pd_row_id_ctx.is_reverse_ && agg_row_id_ >= pd_row_id_ctx.bound_row_id_ ) 
             || (pd_row_id_ctx.is_reverse_ && agg_row_id_ <= pd_row_id_ctx.bound_row_id_));
   }
   int get_def_datum(const blocksstable::ObStorageDatum *&default_datum);
@@ -148,7 +148,7 @@ protected:
                                const int32_t batch_size);
   OB_INLINE virtual bool can_use_index_info() const { return true; }
   OB_INLINE virtual bool is_skip_index_valid() const { return !skip_index_datum_.is_null() && !skip_index_datum_is_prefix_; }
-  OB_INLINE bool is_lob_col()
+  OB_INLINE bool is_lob_col() 
   {
     bool bret = false;
     // "nullptr == col_param_" means COUNT(*), COUNT(*) ignore log judgement, return false.
@@ -165,7 +165,7 @@ protected:
   blocksstable::ObStorageDatum default_datum_;
   int64_t agg_row_id_;
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObAggCellVec);
+  DISALLOW_COPY_AND_ASSIGN(ObAggCellVec); 
 };
 
 class ObCountAggCellVec final : public ObAggCellVec
@@ -177,9 +177,9 @@ public:
                     const bool exclude_null);
   void reset() override;
   int init() override;
-  int eval(blocksstable::ObStorageDatum &datum,
+  int eval(blocksstable::ObStorageDatum &datum, 
            const int64_t row_count = 1,
-           const int64_t agg_row_idx = 0) override;
+           const int64_t agg_row_idx = 0) override; 
   int eval_batch(blocksstable::ObIMicroBlockReader *reader,
                  const int32_t col_offset,
                  const int32_t *row_ids,
@@ -280,9 +280,9 @@ public:
                         common::ObIAllocator &allocator,
                         const bool exclude_null);
   int init() override;
-  int eval(blocksstable::ObStorageDatum &datum,
+  int eval(blocksstable::ObStorageDatum &datum, 
            const int64_t row_count = 1,
-           const int64_t agg_row_idx = 0) override;
+           const int64_t agg_row_idx = 0) override; 
   int eval_batch(blocksstable::ObIMicroBlockReader *reader,
                  const int32_t col_offset,
                  const int32_t *row_ids,
@@ -389,8 +389,8 @@ class ObGroupByCellVec : public ObGroupByCellBase
 public:
   ObGroupByCellVec(
       const int64_t batch_size,
-      sql::ObEvalCtx &eval_ctx,
-      sql::ObBitVector *skip_bit,
+      sql::ObEvalCtx &eval_ctx, 
+      sql::ObBitVector *skip_bit, 
       common::ObIAllocator &allocator);
   virtual ~ObGroupByCellVec();
   void reset() override;
@@ -430,18 +430,18 @@ public:
   }
   int init_vector_header(const sql::ObExprPtrIArray *agg_exprs, const bool init_group_by_col);
 
-  INHERIT_TO_STRING_KV("ObGroupByCellBase", ObGroupByCellBase,
+  INHERIT_TO_STRING_KV("ObGroupByCellBase", ObGroupByCellBase, 
                        K_(pd_agg_ctx),
-                       K_(group_by_col_datum_buf),
-                       K_(tmp_group_by_datum_buf),
+                       K_(group_by_col_datum_buf), 
+                       K_(tmp_group_by_datum_buf), 
                        K_(agg_cells));
 protected:
   int prepare_tmp_group_by_buf(const int64_t size) override;
   int reserve_group_by_buf(const int64_t size) override;
 private:
-  int init_agg_cells(const ObTableAccessParam &param,
+  int init_agg_cells(const ObTableAccessParam &param, 
                      const ObTableAccessContext &context,
-                     sql::ObEvalCtx &eval_ctx,
+                     sql::ObEvalCtx &eval_ctx, 
                      const bool is_for_single_row);
   ObPushdownAggContext pd_agg_ctx_;
   ObAggDatumBuf *group_by_col_datum_buf_;

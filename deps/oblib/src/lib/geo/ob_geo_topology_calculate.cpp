@@ -55,7 +55,7 @@ PointPosition ObGeoTopology::calculate_point_position(const ObPoint2d &start, co
   double detsum;
   double const detleft = (start.x - target.x) * (end.y - target.y);
   double const detright = (start.y - target.y) * (end.x - target.x);
-  double const det = detleft - detright;
+  double const det = detleft - detright; 
 
   if(detleft > 0.0) {
     if(detright <= 0.0) {
@@ -144,7 +144,7 @@ int ObGeoTopology::calculate_segment_intersect(const ObPoint2d &start0, const Ob
       } else if (p0_start_pos == PointPosition::ON || p0_end_pos == PointPosition::ON
                  || p1_end_pos == PointPosition::ON || p1_start_pos == PointPosition::ON) {
         // at least exist a point on another line
-        // needed in contains
+        // needed in contains 
         res = LineIntersect::END_POINT_INTERSECT;
       } else {
         res = LineIntersect::POINT_INTERSECT;

@@ -209,7 +209,7 @@ ObSqlCtx::ObSqlCtx()
     ccl_rule_id_(0),
     ccl_match_time_(0),
     reroute_info_(nullptr)
-
+    
 {
   sql_id_[0] = '\0';
   sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
@@ -346,15 +346,15 @@ int ObSqlSchemaGuard::get_dblink_schema(const uint64_t tenant_id,
   if (OB_ISNULL(schema_guard_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null schema guard", K(ret));
-  } else if (OB_FAIL(schema_guard_->get_dblink_schema(tenant_id,
-                                                      dblink_id,
+  } else if (OB_FAIL(schema_guard_->get_dblink_schema(tenant_id, 
+                                                      dblink_id, 
                                                       dblink_schema))) {
     LOG_WARN("failed to get dblink schema", K(ret));
   }
   return ret;
 }
 
-int ObSqlSchemaGuard::set_link_table_schema(uint64_t dblink_id,
+int ObSqlSchemaGuard::set_link_table_schema(uint64_t dblink_id, 
                                             const common::ObString &database_name,
                                             share::schema::ObTableSchema *table_schema)
 {
@@ -404,7 +404,7 @@ int ObSqlSchemaGuard::get_table_schema(uint64_t dblink_id,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("session info is null", K(ret));
       } else {
-         bool use_scn = (session_info->is_in_transaction() &&
+         bool use_scn = (session_info->is_in_transaction() && 
           transaction::ObTxIsolationLevel::RC == session_info->get_tx_desc()->get_isolation_level())
           || !session_info->is_in_transaction();
         if (use_scn && OB_FAIL(get_link_current_scn(dblink_id, tenant_id, session_info, current_scn))) {
@@ -1159,7 +1159,7 @@ int ObQueryCtx::add_local_session_vars(ObIAllocator *alloc, const ObLocalSession
   return ret;
 }
 
-int ObQueryCtx::get_local_session_vars(const int64_t idx, const ObLocalSessionVar *&local_session_var) const
+int ObQueryCtx::get_local_session_vars(const int64_t idx, const ObLocalSessionVar *&local_session_var) const 
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(idx < 0 || idx >= all_local_session_vars_.count())) {

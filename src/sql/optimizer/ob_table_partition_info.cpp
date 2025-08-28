@@ -115,7 +115,7 @@ int ObTablePartitionInfo::calc_phy_table_loc_and_select_leader(ObExecContext &ex
     LOG_WARN("fail to calculate phy table location info", K(ret));
   } else if (OB_FAIL(candi_table_loc_.all_select_leader(is_on_same_server, same_server))) {
     LOG_WARN("fail to all select leader", K(ret), K(candi_table_loc_));
-    //
+    // 
     //
     // 考虑没有 leader 的场景下，all_select_leader 一定会失败
     // 导致 optimize 失败。optimize 失败后，不会进入执行期，进而

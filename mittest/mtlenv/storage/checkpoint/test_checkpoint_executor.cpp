@@ -281,7 +281,7 @@ TEST_F(TestCheckpointExecutor, calculate_checkpoint)
   ASSERT_EQ(OB_SUCCESS, checkpoint_executor2->init(ls2, &mock_log_handler_));
   checkpoint_executor2->start();
 
-
+  
   ASSERT_EQ(OB_SUCCESS, checkpoint_executor2->update_clog_checkpoint());
   tmp.val_ = 5;
   ASSERT_EQ(tmp, ls2->get_ls_meta().get_clog_checkpoint_scn());

@@ -1,14 +1,14 @@
-/**
- * Copyright (c) 2024 OceanBase
- * OceanBase CE is licensed under Mulan PubL v2.
- * You can use this software according to the terms and conditions of the Mulan PubL v2.
- * You may obtain a copy of Mulan PubL v2 at:
- *          http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+/** 
+ * Copyright (c) 2024 OceanBase 
+ * OceanBase CE is licensed under Mulan PubL v2. 
+ * You can use this software according to the terms and conditions of the Mulan PubL v2. 
+ * You may obtain a copy of Mulan PubL v2 at: 
+ *          http://license.coscl.org.cn/MulanPubL-2.0 
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, 
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, 
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE. 
  * See the Mulan PubL v2 for more details.
- */
+ */ 
 
 #ifndef OB_TABLE_CLIENT_INFO_MGR_H_
 #define OB_TABLE_CLIENT_INFO_MGR_H_
@@ -85,7 +85,7 @@ class ObTableClientInfoUpdateOp final
 {
 public:
   typedef common::hash::HashMapPair<uint64_t, ObTableClientInfo*> MapKV;
-  explicit ObTableClientInfoUpdateOp(ObIAllocator &allocator, const ObString &cli_info_str)
+  explicit ObTableClientInfoUpdateOp(ObIAllocator &allocator, const ObString &cli_info_str) 
     : allocator_(allocator),
       cli_info_str_(cli_info_str)
   {}
@@ -97,7 +97,7 @@ private:
 };
 
 struct ObTableClientInfoEraseOp final
-{
+{  
   typedef common::hash::HashMapPair<uint64_t, ObTableClientInfo*> MapKV;
   explicit ObTableClientInfoEraseOp(int64_t max_alive_ts)
     : max_alive_ts_(max_alive_ts)
@@ -148,7 +148,7 @@ public:
   class ObTableClientInfoRetireTask : public common::ObTimerTask
   {
   public:
-    ObTableClientInfoRetireTask(ObTableClientInfoMgr &mgr)
+    ObTableClientInfoRetireTask(ObTableClientInfoMgr &mgr) 
       : is_inited_(false),
         mgr_(mgr)
     {}
@@ -168,9 +168,9 @@ public:
   ObTableClientInfoMap& get_cli_info_map() { return client_infos_; }
 private:
   int parse_cli_info_json(const ObString &cli_info_str, uint64_t &cli_id);
-  int init_client_info(const ObTableLoginRequest &login_req,
-                       uint64_t cli_id,
-                       const common::ObAddr &cli_addr,
+  int init_client_info(const ObTableLoginRequest &login_req, 
+                       uint64_t cli_id, 
+                       const common::ObAddr &cli_addr, 
                        ObTableClientInfo *&cli_info);
 private:
   bool is_inited_;

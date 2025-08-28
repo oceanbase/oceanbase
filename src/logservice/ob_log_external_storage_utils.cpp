@@ -62,7 +62,7 @@ int convert_to_storage_access_type(const OPEN_FLAG &open_flag,
 {
   int ret = OB_SUCCESS;
   if (OPEN_FLAG::READ_FLAG == open_flag) {
-    storage_access_type = ObStorageAccessType::OB_STORAGE_ACCESS_ADAPTIVE_READER;
+    storage_access_type = ObStorageAccessType::OB_STORAGE_ACCESS_ADAPTIVE_READER;     
   } else if (OPEN_FLAG::MULTI_UPLOAD_FLAG == open_flag) {
     storage_access_type = ObStorageAccessType::OB_STORAGE_ACCESS_DIRECT_MULTIPART_WRITER;
   } else {

@@ -225,7 +225,7 @@ public:
                    contain_ns_equal_(false), is_ns_equal_cond_(NULL), join_conds_(NULL), build_output_(NULL), probe_output_(NULL),
                    calc_exprs_(NULL), probe_opt_(false), build_keys_(NULL), probe_keys_(NULL),
                    build_key_proj_(NULL), probe_key_proj_(NULL), cur_bkid_(-1),
-                   cur_tuple_(reinterpret_cast<void *>(END_ROW_PTR)), max_output_cnt_(NULL),
+                   cur_tuple_(reinterpret_cast<void *>(END_ROW_PTR)), max_output_cnt_(NULL),                   
                    scan_chain_rows_(NULL), unmatched_sel_(NULL), unmatched_rows_(NULL), unmatched_bkts_(NULL),
                    cmp_ret_map_(NULL), cmp_ret_for_one_col_(NULL), unmatched_pos_(NULL), eval_skip_(NULL), join_cond_matched_(NULL),
                    del_bkts_(NULL), del_pre_rows_(NULL), del_matched_pre_rows_(NULL), del_matched_bkts_(NULL),
@@ -309,7 +309,7 @@ public:
   // notice: if conds is null safe, cols_have_null is false
   ObBitVector *build_cols_have_null_;
   ObBitVector *probe_cols_have_null_;
-
+  
   //template buffer for build table
   const ObHJStoredRow **stored_rows_;
   int64_t max_batch_size_;

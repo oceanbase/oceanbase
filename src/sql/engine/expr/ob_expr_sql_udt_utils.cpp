@@ -150,7 +150,7 @@ int ObSqlUdtUtils::ob_udt_flattern_record(const ObObj **flattern_objs,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Unexpected record element type", K(ret), K(element_type));
         } else if (ob_is_user_defined_sql_type(element_type) || // nested udt type
-                   ob_is_collection_sql_type(element_type)) {
+                   ob_is_collection_sql_type(element_type)) { 
           const uint16_t subschema_id = attrs[i].type_info_.get_subschema_id();
           ObSqlUDTMeta udt_meta;
           ObSqlUDT sql_udt;
@@ -288,7 +288,7 @@ int ObSqlUdtUtils::ob_udt_calc_sql_varray_length(const ObObj *cur_obj,
 
     // null bitmap length
     varray_len += ObSqlUDT::get_offset_array_len(count);
-
+    
     // offset array length
     varray_len += ObSqlUDT::get_null_bitmap_len(count);
 
@@ -325,7 +325,7 @@ int ObSqlUdtUtils::ob_udt_calc_sql_varray_length(const ObObj *cur_obj,
     }
   }
 #endif
-  return ret;
+  return ret;  
 }
 
 int ObSqlUdtUtils::ob_udt_calc_total_len(const ObObj **sorted_objs,
@@ -378,7 +378,7 @@ int ObSqlUdtUtils::ob_udt_calc_total_len(const ObObj **sorted_objs,
 int ObSqlUdtUtils::ob_udt_convert_pl_varray_to_sql_varray(const ObObj *cur_obj,
                                                           char *buf,
                                                           const int64_t buf_len,
-                                                          int64_t &pos,
+                                                          int64_t &pos, 
                                                           bool with_lob_header)
 {
   int ret = OB_SUCCESS;
@@ -460,14 +460,14 @@ int ObSqlUdtUtils::ob_udt_convert_pl_varray_to_sql_varray(const ObObj *cur_obj,
     }
   }
 #endif
-  return ret;
+  return ret;  
 }
 
 // convert pl extend to sql udt by type
 int ObSqlUdtUtils::ob_udt_convert_sorted_objs_array_to_udf_format(const ObObj **sorted_objs,
                                                                   char *buf,
                                                                   const int64_t buf_len,
-                                                                  int64_t &pos,
+                                                                  int64_t &pos, 
                                                                   ObSqlUDT &sql_udt)
 {
   int ret = OB_SUCCESS;
@@ -613,7 +613,7 @@ int ObSqlUdtUtils::covert_sql_udt_varray_to_string(ObStringBuffer &buf,
         }
       }
     }
-
+  
     if (OB_SUCC(ret) && OB_FAIL(buf.append(")"))) {
       LOG_WARN("fail to print )", K(ret));
     }
@@ -653,9 +653,9 @@ int ObSqlUdtUtils::convert_sql_udt_attributes_to_string(ObStringBuffer &buf,
         bool is_udt_null = false;
         if (OB_FAIL(exec_context->get_sqludt_meta_by_subschema_id(subschema_id, udt_meta))) {
           LOG_WARN("failed to get udt meta", K(ret), K(subschema_id));
-        } else if (nested_udt_bitmap.is_valid()
+        } else if (nested_udt_bitmap.is_valid() 
                    && OB_FAIL(nested_udt_bitmap.check_current_bitmap_pos(is_udt_null))) {
-           LOG_WARN("failed to get nested udt null bit", K(ret), K(nested_udt_bitmap));
+           LOG_WARN("failed to get nested udt null bit", K(ret), K(nested_udt_bitmap));                                           
         } else if (is_udt_null) {
           if (OB_FAIL(buf.append("NULL"))) {
             LOG_WARN("fail to print empty value", K(ret));
@@ -674,7 +674,7 @@ int ObSqlUdtUtils::convert_sql_udt_attributes_to_string(ObStringBuffer &buf,
         } else if (udt_meta.pl_type_ == pl::PL_RECORD_TYPE) {
           if (OB_FAIL(convert_sql_udt_attributes_to_string(buf,
                                                            attrs,
-                                                           pos,
+                                                           pos, 
                                                            exec_context,
                                                            udt_meta,
                                                            nested_udt_bitmap))) {
@@ -806,7 +806,7 @@ int ObSqlUdtUtils::rearrange_sql_udt_record(ObString &sql_udt_data,
   return ret;
 }
 
-int ObSqlUdtUtils::convert_sql_udt_to_string(ObObj &sql_udt_obj,
+int ObSqlUdtUtils::convert_sql_udt_to_string(ObObj &sql_udt_obj, 
                                              common::ObIAllocator *allocator,
                                              sql::ObExecContext *exec_context,
                                              ObSqlUDT &sql_udt,
@@ -836,7 +836,7 @@ int ObSqlUdtUtils::convert_sql_udt_to_string(ObObj &sql_udt_obj,
     if (OB_FAIL(rearrange_sql_udt_record(udt_data,
                                          udt_meta,
                                          &lob_allocator,
-                                         nested_udt_bitmap,
+                                         nested_udt_bitmap, 
                                          attrs,
                                          is_null_record))) {
       LOG_WARN("failed to rearrange sql udt record", K(ret));
@@ -893,13 +893,13 @@ int ObSqlUdtUtils::convert_collection_to_string(ObObj &coll_obj, const ObSqlColl
       res_str.assign_ptr(buf.ptr(), buf.length());
     }
   }
-
+  
   return ret;
 }
 
 int ObSqlUdtUtils::cast_pl_varray_to_sql_varray(common::ObIAllocator &res_allocator,
                                                 ObString &res,
-                                                const ObObj root_obj,
+                                                const ObObj root_obj, 
                                                 bool with_lob_header)
 {
   int ret = OB_SUCCESS;
@@ -941,9 +941,9 @@ int ObSqlUdtUtils::cast_pl_record_to_sql_record(common::ObIAllocator &tmp_alloca
   int64_t sql_udt_total_len = 0;
 
   char * bitmap_buffer = reinterpret_cast<char *>(tmp_allocator.alloc(nested_udt_bitmap_len));
-  const ObObj **flattern_objs =
+  const ObObj **flattern_objs = 
     reinterpret_cast<const ObObj **>(tmp_allocator.alloc(sizeof(ObObj *) * (leaf_attr_count)));
-  const ObObj **sorted_objs =
+  const ObObj **sorted_objs = 
     reinterpret_cast<const ObObj **>(tmp_allocator.alloc(sizeof(ObObj *) * (leaf_attr_count)));
 
   if (OB_ISNULL(flattern_objs) || OB_ISNULL(sorted_objs) || OB_ISNULL(bitmap_buffer)) {
@@ -959,20 +959,20 @@ int ObSqlUdtUtils::cast_pl_record_to_sql_record(common::ObIAllocator &tmp_alloca
   int32_t pos = 1;
   int32_t reorder_start_pos = 1;
 
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret)) { 
   } else if (OB_FAIL(ob_udt_flattern_pl_extend(flattern_objs, leaf_attr_count, pos,
                                                nested_udt_bitmap, &root_obj,
                                                *exec_ctx, sql_udt))) {
-    LOG_WARN("failed to flattern pl extend", K(ret), K(root_obj), K(leaf_attr_count));
+    LOG_WARN("failed to flattern pl extend", K(ret), K(root_obj), K(leaf_attr_count));                    
   } else if (OB_FAIL(ob_udt_reordering_leaf_objects(&flattern_objs[reorder_start_pos],
                                                     &sorted_objs[reorder_start_pos],
                                                     leaf_attr_count - reorder_start_pos,
                                                     sql_udt))) {
-    LOG_WARN("failed to reorder pl extend", K(ret), K(root_obj), K(leaf_attr_count));
+    LOG_WARN("failed to reorder pl extend", K(ret), K(root_obj), K(leaf_attr_count)); 
   } else if (OB_FAIL(ob_udt_build_nested_udt_bitmap_obj(nested_udt_bitmap_obj,
                                                         nested_udt_bitmap))) {
-    LOG_WARN("failed to build nested udt bitmap object", K(ret), K(root_obj), K(leaf_attr_count));
-  } else if (FALSE_IT(sorted_objs[0] = &nested_udt_bitmap_obj)) {
+    LOG_WARN("failed to build nested udt bitmap object", K(ret), K(root_obj), K(leaf_attr_count)); 
+  } else if (FALSE_IT(sorted_objs[0] = &nested_udt_bitmap_obj)) { 
   } else if (OB_FAIL(ob_udt_calc_total_len(sorted_objs,leaf_attr_count,
                                            sql_udt_total_len, sql_udt))) {
     LOG_WARN("failed to calc total sql udt len", K(ret), K(root_obj), K(leaf_attr_count));
@@ -983,7 +983,7 @@ int ObSqlUdtUtils::cast_pl_record_to_sql_record(common::ObIAllocator &tmp_alloca
     char *buf = NULL;
     int64_t buf_len = 0;
     int64_t buf_pos = 0;
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(ret)) { 
     } else if (OB_FAIL(blob_res.init(sql_udt_total_len))) {
       LOG_WARN("failed to alloc temp lob", K(ret), K(sql_udt_total_len));
     } else if (OB_FAIL(blob_res.get_reserved_buffer(buf, buf_len))) {
@@ -1162,7 +1162,7 @@ int ObSqlUdtUtils::cast_sql_udt_attributes_to_pl_record(sql::ObExecContext *exec
     ObIAllocator &allocator = exec_ctx->get_allocator();
     // null root is handled by the caller
     uint32_t top_level_attr_count = udt_meta.child_attr_cnt_;
-    pl::ObPLRecord *record =
+    pl::ObPLRecord *record = 
       static_cast<pl::ObPLRecord*>(allocator.alloc(pl::ObRecordType::get_init_size(top_level_attr_count)));
     if (OB_ISNULL(record)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1174,7 +1174,7 @@ int ObSqlUdtUtils::cast_sql_udt_attributes_to_pl_record(sql::ObExecContext *exec
     ObObj obj;
     for (int64_t i = 0; OB_SUCC(ret) && i < top_level_attr_count; i++) {
       obj.reset();
-      obj.set_meta_type(udt_meta.child_attrs_meta_[i].type_info_);
+      obj.set_meta_type(udt_meta.child_attrs_meta_[i].type_info_); 
       ObObjType type = obj.get_type();
       bool is_udt_null = false;
       bool is_nested_record = false;
@@ -1200,7 +1200,7 @@ int ObSqlUdtUtils::cast_sql_udt_attributes_to_pl_record(sql::ObExecContext *exec
         } else if (sub_udt_meta.pl_type_ == pl::PL_RECORD_TYPE) {
           if (is_udt_null) {
             if (OB_FAIL(build_empty_record(exec_ctx, obj, sub_udt_meta.udt_id_))) {
-              LOG_WARN("failed to create empty nested udt record", K(ret));
+              LOG_WARN("failed to create empty nested udt record", K(ret));  
             } else {
               pl::ObPLRecord *child_null_record = reinterpret_cast<pl::ObPLRecord *>(obj.get_ext());
               child_null_record->set_null();
@@ -1292,7 +1292,7 @@ int ObSqlUdtUtils::cast_sql_record_to_pl_record(sql::ObExecContext *exec_ctx,
     if (OB_FAIL(rearrange_sql_udt_record(udt_data,
                                          udt_meta,
                                          &lob_allocator,
-                                         nested_udt_bitmap,
+                                         nested_udt_bitmap, 
                                          attrs,
                                          is_null_record))) {
       LOG_WARN("failed to rearrange sql udt record", K(ret));
@@ -1359,7 +1359,7 @@ int ObSqlUdtMetaUtils::get_udt_meta_attr_info(ObSchemaGetterGuard *schema_guard,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("udt info not found", K(ret), K(tenant_id), K(udt_id));
         } else if (OB_FAIL(get_udt_meta_attr_info(schema_guard,
-                                                  tenant_id,
+                                                  tenant_id, 
                                                   attr_udt_info,
                                                   nested_udt_number,
                                                   leaf_attr_meta))) {
@@ -1602,7 +1602,7 @@ int ObSqlUdtMetaUtils::generate_udt_meta_from_schema(ObSchemaGetterGuard *schema
                                                    child_attrs_meta,
                                                    child_attrs_cnt,
                                                    false))) { // record type
-          LOG_WARN("failed to fill udt meta attr info", K(ret), K(child_attrs_cnt), K(*root_udt_info));
+          LOG_WARN("failed to fill udt meta attr info", K(ret), K(child_attrs_cnt), K(*root_udt_info));                                      
         } else {
           udt_meta.child_attrs_meta_ = child_attrs_meta;
         }
@@ -1623,7 +1623,7 @@ int ObSqlUdtMetaUtils::generate_udt_meta_from_schema(ObSchemaGetterGuard *schema
                                                    leaf_attrs_cnt,
                                                    true))) {
           LOG_WARN("failed to fill udt meta attr info",
-                   K(ret), K(leaf_attrs_cnt), K(temp_leaf_attr_meta));
+                   K(ret), K(leaf_attrs_cnt), K(temp_leaf_attr_meta));                                      
         } else {
           udt_meta.leaf_attrs_meta_ = leaf_attrs_meta;
         }

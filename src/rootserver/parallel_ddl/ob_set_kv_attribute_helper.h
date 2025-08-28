@@ -31,7 +31,7 @@ namespace rootserver
 class ObSetKvAttributeHelper : public ObDDLHelper
 {
 private:
-  static const char* ALTER_KV_ATTRIBUTE_FORMAT_STR;
+  static const char* ALTER_KV_ATTRIBUTE_FORMAT_STR; 
 public:
   ObSetKvAttributeHelper(
     share::schema::ObMultiVersionSchemaService *schema_service,
@@ -57,8 +57,8 @@ private:
   virtual int construct_and_adjust_result_(int &return_ret) override;
   virtual int operation_before_commit_() override;
   virtual int clean_on_fail_commit_() override;
-  int construct_ddl_stmt_(const ObString &table_name,
-                         const ObString &kv_attr_str,
+  int construct_ddl_stmt_(const ObString &table_name, 
+                         const ObString &kv_attr_str, 
                          ObString &ddl_stmt_str);
   const table::ObSetKvAttributeParam& get_params_() const { return static_cast<table::ObSetKvAttributeParam&>(*arg_.ddl_param_); }
 private:

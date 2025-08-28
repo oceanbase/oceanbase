@@ -41,7 +41,7 @@ int ObServerStorageMetaService::init(const bool is_shared_storage)
     LOG_WARN("has inited", K(ret));
   } else if (!is_shared_storage) {
     if (OB_FAIL(slogger_mgr_.init(
-        OB_FILE_SYSTEM_ROUTER.get_slog_dir(),
+        OB_FILE_SYSTEM_ROUTER.get_slog_dir(), 
 	OB_FILE_SYSTEM_ROUTER.get_sstable_dir(),
 	ObLogConstants::MAX_LOG_FILE_SIZE,
         OB_FILE_SYSTEM_ROUTER.get_slog_file_spec()))) {
@@ -58,7 +58,7 @@ int ObServerStorageMetaService::init(const bool is_shared_storage)
   } else if (OB_FAIL(replayer_.init(is_shared_storage, persister_, ckpt_slog_handler_))) {
     LOG_WARN("fail to init replayer", K(ret));
   } else {
-    is_shared_storage_ = is_shared_storage;
+    is_shared_storage_ = is_shared_storage; 
     is_inited_ = true;
   }
   return ret;

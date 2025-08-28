@@ -121,7 +121,7 @@ int ObArrayTypeObjFactory::construct(common::ObIAllocator &alloc, const ObCollec
     if (OB_SUCC(ret)) {
       arr_obj->set_array_type(arr_type);
     }
-  } else if (array_meta.type_id_ == ObNestedType::OB_MAP_TYPE
+  } else if (array_meta.type_id_ == ObNestedType::OB_MAP_TYPE 
              || array_meta.type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE) {
     const ObCollectionMapType *map_type = static_cast<const ObCollectionMapType *>(&array_meta);
     void *buf = alloc.alloc(sizeof(ObMapType));

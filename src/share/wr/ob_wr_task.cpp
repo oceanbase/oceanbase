@@ -1001,7 +1001,7 @@ int WorkloadRepositoryTask::fetch_retention_usec_from_wr_control(int64_t &retent
       LOG_WARN("fail to get mysql result", KR(ret), K(tenant_id), K(sql));
     } else if (OB_FAIL(result->next())) {
       if (OB_ITER_END == ret) {
-        // no record in __wr_control table.
+        // no record in __wr_control table. 
         ret = OB_SUCCESS;
         // retention in us
         retention = WorkloadRepositoryTask::DEFAULT_SNAPSHOT_RETENTION * 60 * 1000L * 1000L;
@@ -1052,7 +1052,7 @@ int WorkloadRepositoryTask::fetch_interval_num_from_wr_control(int64_t &interval
       LOG_WARN("fail to get mysql result", KR(ret), K(tenant_id), K(sql));
     } else if (OB_FAIL(result->next())) {
       if (OB_ITER_END == ret) {
-        // no record in __wr_control table.
+        // no record in __wr_control table. 
         ret = OB_SUCCESS;
         // interval in second
         interval = WorkloadRepositoryTask::DEFAULT_SNAPSHOT_INTERVAL * 60;
@@ -1109,18 +1109,18 @@ int WorkloadRepositoryTask::get_init_wr_control_sql_string(
   int64_t default_snap_retention_mins = WorkloadRepositoryTask::DEFAULT_SNAPSHOT_RETENTION;
   char default_retention_char[OB_MAX_TIME_STR_LENGTH] = "";
   int64_t default_topnsql = 30;
-  if (OB_FAIL(WorkloadRepositoryTask::mins_to_duration(default_snap_interval_mins,
+  if (OB_FAIL(WorkloadRepositoryTask::mins_to_duration(default_snap_interval_mins, 
                                                        default_interval_char))) {
     LOG_WARN("failed to transform mins to duration string",K(ret), K(default_snap_interval_mins));
-  } else if (OB_FAIL(WorkloadRepositoryTask::mins_to_duration(default_snap_retention_mins,
+  } else if (OB_FAIL(WorkloadRepositoryTask::mins_to_duration(default_snap_retention_mins, 
                                                               default_retention_char))) {
     LOG_WARN("failed to transform mins to duration string",K(ret), K(default_snap_retention_mins));
   } else if (OB_FAIL(sql.assign_fmt("INSERT IGNORE /*+ WORKLOAD_REPOSITORY use_plan_cache(none) */ INTO %s (tenant_id,  "
       "snap_interval, snapint_num, retention, retention_num, topnsql) VALUES",
         OB_WR_CONTROL_TNAME))) {
     LOG_WARN("sql append failed", K(ret));
-  } else if (OB_FAIL(sql.append_fmt("(%ld, '%s', %ld, '%s', %ld, %ld)", tenant_id,
-                                      default_interval_char, default_snap_interval_mins*60L,
+  } else if (OB_FAIL(sql.append_fmt("(%ld, '%s', %ld, '%s', %ld, %ld)", tenant_id, 
+                                      default_interval_char, default_snap_interval_mins*60L, 
                                       default_retention_char, default_snap_retention_mins*60L,
                                       default_topnsql))) {
     LOG_WARN("sql append failed", K(ret));

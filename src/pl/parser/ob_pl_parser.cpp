@@ -116,7 +116,7 @@ int ObPLParser::fast_parse(const ObString &query,
                 K(ret), K(buf_remain_len), K(copy_len));
       } else {
         memmove(parse_ctx.no_param_sql_ + parse_ctx.no_param_sql_len_,
-                      parse_ctx.stmt_str_ + parse_ctx.copied_pos_,
+                      parse_ctx.stmt_str_ + parse_ctx.copied_pos_, 
                       copy_len);
         parse_ctx.no_param_sql_len_ += copy_len;
         parse_result.no_param_sql_ = parse_ctx.no_param_sql_;

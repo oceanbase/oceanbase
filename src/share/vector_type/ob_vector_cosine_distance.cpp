@@ -51,7 +51,7 @@ int ObVectorCosineDistance<float>::cosine_similarity_func(const float *a, const 
   #if OB_USE_MULTITARGET_CODE
     // if (common::is_arch_supported(ObTargetArch::AVX512)) {
     //   ret = common::specific::avx512::cosine_similarity(a, b, len, similarity);
-    // } else
+    // } else 
     if (common::is_arch_supported(ObTargetArch::AVX2)) {
       ret = common::specific::avx2::cosine_similarity(a, b, len, similarity);
     } else if (common::is_arch_supported(ObTargetArch::AVX)) {

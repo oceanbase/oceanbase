@@ -82,7 +82,7 @@ int ObStoredRowGenerate::get_stored_row(StoredRow **&sr)
           MEMCPY((void*)&datum_ptr->ptr_, &data_ptr, 8);
           *data_ptr = 1;
         } else {
-          // wont't go here
+          // wont't go here 
           // generate var data
           int64_t datum_offset = sizeof(ObDatum) * j;
           int64_t data_offset = COLUMN_CNT * sizeof(ObDatum) + 8 * j + sizeof(StoredRow);
@@ -160,7 +160,7 @@ public:
   static void SetUpTestCase()
   {
     ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
-  }
+  } 
   static void TearDownTestCase()
   {
     ObTimerService::get_instance().stop();
@@ -278,10 +278,10 @@ TEST_F(TestCompactChunk, test_read_writer_compact)
     }
   }
   cs_chunk.set_meta(&row_meta);
-
-
+  
+  
   StoredRow **sr;
-  ret = row_generate_.get_stored_row(sr);
+  ret = row_generate_.get_stored_row(sr); 
   ASSERT_EQ(ret, OB_SUCCESS);
 
   char *buf = reinterpret_cast<char*>(sr);
@@ -334,7 +334,7 @@ TEST_F(TestCompactChunk, test_read_writer_compact_vardata)
     }
   }
   cs_chunk.set_meta(&row_meta);
-
+  
   StoredRow **sr;
   ret = row_generate_.get_stored_row(sr);
   ASSERT_EQ(ret, OB_SUCCESS);

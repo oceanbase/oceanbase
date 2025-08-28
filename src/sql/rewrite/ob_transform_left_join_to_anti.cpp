@@ -219,7 +219,7 @@ int ObTransformLeftJoinToAnti::trans_stmt_to_anti(ObDMLStmt *stmt, JoinedTable *
       OB_ISNULL(ctx_->session_info_) || OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(ctx_));
-  } else if (OB_ISNULL(joined_table) ||
+  } else if (OB_ISNULL(joined_table) || 
              OB_ISNULL(left_table = joined_table->left_table_) ||
              OB_ISNULL(right_table = joined_table->right_table_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -246,7 +246,7 @@ int ObTransformLeftJoinToAnti::trans_stmt_to_anti(ObDMLStmt *stmt, JoinedTable *
   } else {
     right_table = view_table;
   }
-
+  
   if (OB_SUCC(ret)) {
     semi_info->join_type_ = LEFT_ANTI_JOIN;
     semi_info->right_table_id_ = right_table->table_id_;
@@ -383,12 +383,12 @@ int ObTransformLeftJoinToAnti::get_column_ref_in_is_null_condition(const ObRawEx
 }
 
 int ObTransformLeftJoinToAnti::fill_not_null_context(ObIArray<JoinedTable*> &joined_tables,
-                                                     const JoinedTable *target_joined_table,
+                                                     const JoinedTable *target_joined_table, 
                                                      ObNotNullContext &not_null_context)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(target_joined_table)
-      || OB_ISNULL(target_joined_table->left_table_)
+  if (OB_ISNULL(target_joined_table) 
+      || OB_ISNULL(target_joined_table->left_table_) 
       ||OB_ISNULL(target_joined_table->right_table_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -406,7 +406,7 @@ int ObTransformLeftJoinToAnti::fill_not_null_context(ObIArray<JoinedTable*> &joi
       LOG_WARN("failed to add joined table to not-null context", K(ret));
     }
   }
-  // process target_joined_table.
+  // process target_joined_table. 
   // 1. if its left table or right table is a joined table, add null-side tables of them into not-null-context
   // 2. add null reject join conditions into not-null-context
   if (OB_SUCC(ret) && target_joined_table->left_table_->is_joined_table()) {
@@ -446,11 +446,11 @@ int ObTransformLeftJoinToAnti::check_condition_expr_validity(const ObRawExpr *ex
     ObNotNullContext not_null_context(*ctx_, stmt);
     ObArray<ObRawExpr *> tmp_constraints;
     ObIArray<JoinedTable*> &joined_tables = stmt->get_joined_tables();
-    /* a condition `expr IS NULL` is valid to transform a left join to anti join
+    /* a condition `expr IS NULL` is valid to transform a left join to anti join 
        if all the following conditions are met:
-       1. The `expr` contains column(s) in right table,
+       1. The `expr` contains column(s) in right table, 
        2. The `expr` is null-propagate-able.
-       3. The `expr` is NOT NULL, unless the column(s) in right table are filled
+       3. The `expr` is NOT NULL, unless the column(s) in right table are filled 
           as NULL for a non-matched join row, and propagate the NULL result to the `expr`.
     */
     if (OB_FAIL(ret)) {
@@ -586,7 +586,7 @@ int ObTransformLeftJoinToAnti::check_can_be_trans(ObDMLStmt *stmt,
     }
   }
   // ObQueryRefRawExpr not support copy on replace in copier, disable this condition
-  for (int64_t i = 0; OB_SUCC(ret) && is_table_valid &&
+  for (int64_t i = 0; OB_SUCC(ret) && is_table_valid && 
                       i < joined_table->get_join_conditions().count(); ++i) {
     if (OB_ISNULL(joined_table->get_join_conditions().at(i))) {
       ret = OB_ERR_UNEXPECTED;

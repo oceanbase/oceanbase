@@ -32,8 +32,8 @@ ObExprSTGeomFromText::ObExprSTGeomFromText(ObIAllocator &alloc)
 ObExprSTGeomFromText::ObExprSTGeomFromText(ObIAllocator &alloc,
                                            ObExprOperatorType type,
                                            const char *name,
-                                           int32_t param_num,
-                                           int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension)
+                                           int32_t param_num, 
+                                           int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension) 
 {
 }
 
@@ -46,7 +46,7 @@ int ObExprSTGeomFromText::calc_result_typeN(ObExprResType& type,
                                             int64_t param_num,
                                             ObExprTypeCtx& type_ctx) const
 {
-  UNUSED(type_ctx);
+  UNUSED(type_ctx); 
   UNUSED(types_stack);
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(param_num > 3)) {
@@ -72,7 +72,7 @@ int ObExprSTGeomFromText::calc_result_typeN(ObExprResType& type,
     type.set_geometry();
     type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObGeometryType]).get_length());
   }
-
+  
   return ret;
 }
 
@@ -118,7 +118,7 @@ int ObExprSTGeomFromText::eval_st_geomfromtext_common(const ObExpr &expr,
         expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), wkt))) {
       LOG_WARN("fail to get real string data", K(ret), K(wkt));
     } else if (FALSE_IT(tmp_allocator.set_baseline_size(wkt.length()))) {
-    }
+    } 
   }
   // get srid
   if (!is_null_result && OB_SUCC(ret) && num_args > 1) {
@@ -179,7 +179,7 @@ int ObExprSTGeomFromText::eval_st_geomfromtext_common(const ObExpr &expr,
       }
     }
   }
-
+    
   if (!is_null_result && OB_SUCC(ret)) {
     if (OB_FAIL(ObWktParser::parse_wkt(tmp_allocator, wkt, geo, true, is_geog))) {
       ret = OB_ERR_GIS_INVALID_DATA;

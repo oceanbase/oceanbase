@@ -190,7 +190,7 @@ int ObServerZoneOpService::precheck_server_empty_and_get_zone_(const ObAddr &ser
       if (OB_FAIL(rpc_proxy_->to(server)
             .timeout(timeout)
             .check_server_empty_with_result(rpc_arg, rpc_result))) {
-        // do not rewrite errcode, make rs retry if failed to send rpc
+        // do not rewrite errcode, make rs retry if failed to send rpc 
         LOG_WARN("failed to check server empty", KR(ret), K(server), K(timeout), K(rpc_arg));
       } else if (OB_FAIL(zone_checking_for_adding_server_(rpc_result.get_zone(), picked_zone))) {
         LOG_WARN("failed to get picked_zone from rpc result", KR(ret));
@@ -201,7 +201,7 @@ int ObServerZoneOpService::precheck_server_empty_and_get_zone_(const ObAddr &ser
       if (OB_FAIL(rpc_proxy_->to(server)
             .timeout(timeout)
             .check_server_empty(rpc_arg, is_empty))) {
-        // do not rewrite errcode, make rs retry if failed to send rpc
+        // do not rewrite errcode, make rs retry if failed to send rpc 
         LOG_WARN("failed to check server empty", KR(ret), K(server), K(timeout), K(rpc_arg));
       } else {}
     }
@@ -238,7 +238,7 @@ int ObServerZoneOpService::prepare_server_for_adding_server_(const ObAddr &serve
     LOG_WARN("server is invalid", KR(ret), K(server));
 #ifdef OB_BUILD_SHARED_STORAGE
   } else if (GCTX.is_shared_storage_mode() && picked_zone.is_empty()) {
-    // in shared storage mode, zone is set in check_server_empty_and_get_zone_
+    // in shared storage mode, zone is set in check_server_empty_and_get_zone_ 
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("zone is empty in shared storage mode", KR(ret), K(picked_zone), K(GCTX.is_shared_storage_mode()));
 #endif

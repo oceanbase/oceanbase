@@ -440,10 +440,10 @@ int ObIndexBlockRowBuilder::append_header_and_meta(const ObIndexBlockRowDesc &de
     header_->all_lob_in_row_ = !desc.has_lob_out_row_;
     header_->is_pre_aggregated_ = nullptr != desc.aggregated_row_;
     header_->is_deleted_ = desc.is_deleted_;
-    if (desc.shared_data_macro_id_.is_valid() && !desc.is_data_block_) {
-      header_->set_shared_data_macro_id(desc.shared_data_macro_id_);
-    } else {
-      header_->set_logic_micro_id_and_checksum(desc.logic_micro_id_, desc.data_checksum_);
+    if (desc.shared_data_macro_id_.is_valid() && !desc.is_data_block_) { 
+      header_->set_shared_data_macro_id(desc.shared_data_macro_id_); 
+    } else { 
+      header_->set_logic_micro_id_and_checksum(desc.logic_micro_id_, desc.data_checksum_); 
     }
     header_->block_offset_ = desc.block_offset_;
     header_->block_size_ = desc.block_size_;

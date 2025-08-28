@@ -114,12 +114,12 @@ int ObExprSTIntersects::eval_st_intersects(const ObExpr &expr, ObEvalCtx &ctx, O
       ret = OB_ERR_GIS_DIFFERENT_SRIDS;
     } else if (OB_ISNULL(session)) {
       ret = OB_ERR_UNEXPECTED;
-
+      
       LOG_WARN("failed to get session", K(ret));
     } else if (!is_geo1_cached && !is_geo2_cached && OB_FAIL(ObGeoExprUtils::get_srs_item(session->get_effective_tenant_id(), srs_guard, srid1, srs))) {
       LOG_WARN("fail to get srs item", K(ret), K(srid1));
     } else if (!is_geo1_cached && OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb1, geo1, nullptr, N_ST_INTERSECTS, ObGeoBuildFlag::GEO_ALLOW_3D_CARTESIAN))) {
-      LOG_WARN("get first geo by wkb failed", K(ret));
+      LOG_WARN("get first geo by wkb failed", K(ret));   
     } else if (!is_geo2_cached && OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb2, geo2, nullptr, N_ST_INTERSECTS, ObGeoBuildFlag::GEO_ALLOW_3D_CARTESIAN))) {
       LOG_WARN("get second geo by wkb failed", K(ret));
     } else if (FALSE_IT(temp_allocator.set_baseline_size(geo1->length() + geo2->length()))) {
@@ -163,8 +163,8 @@ int ObExprSTIntersects::eval_st_intersects(const ObExpr &expr, ObEvalCtx &ctx, O
       }
 
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObGeoExprUtils::get_intersects_res(*geo1, *geo2, gis_arg1, gis_arg2,
-                                                            const_param_cache, srs,
+      } else if (OB_FAIL(ObGeoExprUtils::get_intersects_res(*geo1, *geo2, gis_arg1, gis_arg2, 
+                                                            const_param_cache, srs, 
                                                             mem_ctx, inter_result))) {
         LOG_WARN("fail to get intersects res", K(ret));
       } else {

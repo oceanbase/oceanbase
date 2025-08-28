@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #define USING_LOG_PREFIX SQL
 #include "ob_optimizer_trace_impl.h"
 #include "share/ob_version.h"
@@ -29,14 +29,14 @@ LogFileAppender::LogFileAppender()
   identifier_(""),
   log_file_name_("OPT_TRACE")
 {
-
+  
 }
 
 int LogFileAppender::open()
 {
   int ret = OB_SUCCESS;
   bool is_full = false;
-  if (log_file_name_.empty() &&
+  if (log_file_name_.empty() && 
       OB_FAIL(generate_log_file_name())) {
     LOG_WARN("failed to generate log file", K(ret));
   } else if (OB_FAIL(open_log_file())) {
@@ -120,10 +120,10 @@ int LogFileAppender::generate_log_file_name()
       LOG_WARN("failed to apend str", K(ret));
     } else if (OB_FAIL(log_file_name_.append(buf, file_id_len))) {
       LOG_WARN("failed to apend str", K(ret));
-    } else if (!identifier_.empty() &&
+    } else if (!identifier_.empty() && 
               OB_FAIL(log_file_name_.append("_"))) {
       LOG_WARN("failed to apend str", K(ret));
-    } else if (!identifier_.empty() &&
+    } else if (!identifier_.empty() && 
               OB_FAIL(log_file_name_.append(identifier_))) {
       LOG_WARN("failed to apend str", K(ret));
     } else if (OB_FAIL(log_file_name_.append(".trac"))) {
@@ -146,9 +146,9 @@ int LogFileAppender::open_log_file()
 {
   int ret = OB_SUCCESS;
   close();
-  if (OB_FAIL(log_handle_.open(ObString(log_file_name_.length(),
-                                        log_file_name_.ptr()),
-                                        false,
+  if (OB_FAIL(log_handle_.open(ObString(log_file_name_.length(), 
+                                        log_file_name_.ptr()), 
+                                        false, 
                                         true))) {
     LOG_WARN("fail to open file", K(log_file_name_), K(ret));
   }
@@ -176,7 +176,7 @@ ObOptimizerTraceImpl::~ObOptimizerTraceImpl()
   log_handle_.close();
 }
 
-int ObOptimizerTraceImpl::enable_trace(const common::ObString &identifier,
+int ObOptimizerTraceImpl::enable_trace(const common::ObString &identifier, 
                                       const common::ObString &sql_id,
                                       const int trace_level)
 {
@@ -195,7 +195,7 @@ int ObOptimizerTraceImpl::enable_trace(const common::ObString &identifier,
   return ret;
 }
 
-int ObOptimizerTraceImpl::set_parameters(const common::ObString &identifier,
+int ObOptimizerTraceImpl::set_parameters(const common::ObString &identifier, 
                                         const common::ObString &sql_id,
                                         const int trace_level)
 {
@@ -374,25 +374,25 @@ int ObOptimizerTraceImpl::append(const OpParallelRule& rule)
 {
   int ret = OB_SUCCESS;
   switch(rule) {
-    case OP_GLOBAL_DOP:
+    case OP_GLOBAL_DOP: 
       ret = append("global dop");
       break;
-    case OP_DAS_DOP:
+    case OP_DAS_DOP: 
       ret = append("das");
       break;
-    case OP_HINT_DOP:
+    case OP_HINT_DOP: 
       ret = append("hint");
       break;
-    case OP_TABLE_DOP:
+    case OP_TABLE_DOP: 
       ret = append("table dop");
       break;
-    case OP_AUTO_DOP:
+    case OP_AUTO_DOP: 
       ret = append("auto dop");
       break;
-    case OP_INHERIT_DOP:
+    case OP_INHERIT_DOP: 
       ret = append("inherit");
       break;
-    case OP_DOP_RULE_MAX:
+    case OP_DOP_RULE_MAX: 
       ret = append("max rule");
       break;
   }
@@ -403,19 +403,19 @@ int ObOptimizerTraceImpl::append(const ObTableLocationType& type)
 {
   int ret = OB_SUCCESS;
   switch(type) {
-    case OB_TBL_LOCATION_UNINITIALIZED:
+    case OB_TBL_LOCATION_UNINITIALIZED: 
       ret = append("uninitialized");
       break;
-    case OB_TBL_LOCATION_LOCAL:
+    case OB_TBL_LOCATION_LOCAL: 
       ret = append("local");
       break;
-    case OB_TBL_LOCATION_REMOTE:
+    case OB_TBL_LOCATION_REMOTE: 
       ret = append("remote");
       break;
-    case OB_TBL_LOCATION_DISTRIBUTED:
+    case OB_TBL_LOCATION_DISTRIBUTED: 
       ret = append("distribute");
       break;
-    case OB_TBL_LOCATION_ALL:
+    case OB_TBL_LOCATION_ALL: 
       ret = append("match all");
       break;
   }
@@ -426,19 +426,19 @@ int ObOptimizerTraceImpl::append(const ObPhyPlanType& type)
 {
   int ret = OB_SUCCESS;
   switch(type) {
-    case OB_PHY_PLAN_UNINITIALIZED:
+    case OB_PHY_PLAN_UNINITIALIZED: 
       ret = append("uninitialized");
       break;
-    case OB_PHY_PLAN_LOCAL:
+    case OB_PHY_PLAN_LOCAL: 
       ret = append("local");
       break;
-    case OB_PHY_PLAN_REMOTE:
+    case OB_PHY_PLAN_REMOTE: 
       ret = append("remote");
       break;
-    case OB_PHY_PLAN_DISTRIBUTED:
+    case OB_PHY_PLAN_DISTRIBUTED: 
       ret = append("distribute");
       break;
-    case OB_PHY_PLAN_UNCERTAIN:
+    case OB_PHY_PLAN_UNCERTAIN: 
       ret = append("uncertain");
       break;
   }
@@ -484,7 +484,7 @@ int ObOptimizerTraceImpl::append(const ObLogPlan *log_plan)
                                         EXPLAIN_EXTENDED,
                                         option,
                                         plan_strs))) {
-      LOG_WARN("failed to store sql plan", K(ret));
+      LOG_WARN("failed to store sql plan", K(ret));                                      
     }
     OPT_TRACE_TITLE("Query Plan");
     for (int64_t i = 0; OB_SUCC(ret) && i < plan_strs.count(); ++i) {
@@ -510,7 +510,7 @@ int ObOptimizerTraceImpl::append(const ObLogicalOperator *plan_top)
                                         EXPLAIN_PLAN_TABLE,
                                         option,
                                         plan_strs))) {
-      LOG_WARN("failed to store sql plan", K(ret));
+      LOG_WARN("failed to store sql plan", K(ret));                                      
     }
     OPT_TRACE_TITLE("Query Plan");
     new_line();
@@ -531,7 +531,7 @@ int ObOptimizerTraceImpl::append(const ObJoinOrder *join_order)
   int ret = OB_SUCCESS;
   ObSEArray<int64_t, 4> array;
   const ObLogPlan *plan = NULL;
-  if (OB_ISNULL(join_order) || OB_ISNULL(plan=join_order->get_plan()) ||
+  if (OB_ISNULL(join_order) || OB_ISNULL(plan=join_order->get_plan()) || 
       OB_ISNULL(plan->get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null param", K(ret));
@@ -567,7 +567,7 @@ int ObOptimizerTraceImpl::append(const Path *path)
     append("tables:", path->parent_);
     if (path->is_access_path()) {
       new_line();
-      const AccessPath& ap = static_cast<const AccessPath&>(*path);
+      const AccessPath& ap = static_cast<const AccessPath&>(*path); 
       const ObIndexMetaInfo &index_info = ap.est_cost_info_.index_meta_info_;
       if (ap.is_index_merge_path()) {
         const IndexMergePath& index_merge_path = static_cast<const IndexMergePath&>(ap);
@@ -601,7 +601,7 @@ int ObOptimizerTraceImpl::append(const Path *path)
       append("output row count before revising:", ap.get_output_row_count());
     }
     new_line();
-    append("cost:", path->cost_, ",card:", path->parent_->get_output_rows(),
+    append("cost:", path->cost_, ",card:", path->parent_->get_output_rows(), 
           ",width:", path->parent_->get_output_row_size());
     new_line();
     append("parallel:", path->parallel_, ", parallel rule:", path->op_parallel_rule_);
@@ -622,15 +622,15 @@ int ObOptimizerTraceImpl::append(const JoinPath* join_path)
     append_ptr(join_path);
     new_line();
     if (HASH_JOIN == join_path->join_algo_) {
-      append("dist algo:", ob_dist_algo_str(join_path->join_dist_algo_),
+      append("dist algo:", ob_dist_algo_str(join_path->join_dist_algo_), 
             ",can use join filter:", !join_path->join_filter_infos_.empty(),
             ",is naaj:", join_path->is_naaj_, ",is sna:", join_path->is_sna_);
     } else if (NESTED_LOOP_JOIN == join_path->join_algo_) {
-      append("dist algo:", ob_dist_algo_str(join_path->join_dist_algo_),
+      append("dist algo:", ob_dist_algo_str(join_path->join_dist_algo_), 
             ",right need materia:", join_path->need_mat_,
             ",use batch nlj:", join_path->can_use_batch_nlj_);
     } else {
-      append("dist algo:", ob_dist_algo_str(join_path->join_dist_algo_),
+      append("dist algo:", ob_dist_algo_str(join_path->join_dist_algo_), 
             ",left need sort:", join_path->left_need_sort_, ",left prefix pos:", join_path->left_prefix_pos_,
             ",right need sort:", join_path->right_need_sort_, ",right prefix pos:", join_path->right_prefix_pos_);
     }
@@ -646,7 +646,7 @@ int ObOptimizerTraceImpl::append(const JoinPath* join_path)
       new_line();
       append_ptr(join_path->left_path_);
       new_line();
-      append("cost:", join_path->left_path_->cost_, ",card:", join_path->left_path_->parent_->get_output_rows(),
+      append("cost:", join_path->left_path_->cost_, ",card:", join_path->left_path_->parent_->get_output_rows(), 
             ",width:", join_path->left_path_->parent_->get_output_row_size());
       new_line();
       append("parallel:", join_path->left_path_->parallel_, ",server count:", join_path->left_path_->server_cnt_);
@@ -669,7 +669,7 @@ int ObOptimizerTraceImpl::append(const JoinPath* join_path)
         new_line();
         append_ptr(join_path->right_path_);
         new_line();
-        append("cost:", join_path->right_path_->cost_, ",card:", join_path->right_path_->parent_->get_output_rows(),
+        append("cost:", join_path->right_path_->cost_, ",card:", join_path->right_path_->parent_->get_output_rows(), 
               ",width:", join_path->right_path_->parent_->get_output_row_size());
         new_line();
         append("parallel:", join_path->right_path_->parallel_, ",server count:", join_path->right_path_->server_cnt_);
@@ -712,7 +712,7 @@ int ObOptimizerTraceImpl::append(const TableItem *table)
     } else if (OB_FAIL(SMART_CALL(append(joined_table->left_table_,
                                         ob_join_type_str(joined_table->joined_type_),
                                         joined_table->right_table_)))) {
-      LOG_WARN("failed to append msg", K(ret));
+      LOG_WARN("failed to append msg", K(ret));                        
     } else if (OB_FAIL(append(")"))) {
       LOG_WARN("failed to append msg", K(ret));
     }
@@ -743,10 +743,10 @@ int ObOptimizerTraceImpl::append(const CandidatePlan &plan)
     new_line();
     append_ptr(plan.plan_tree_);
     new_line();
-    append("cost:", plan.plan_tree_->get_cost(), ",card:", plan.plan_tree_->get_card(),
+    append("cost:", plan.plan_tree_->get_cost(), ",card:", plan.plan_tree_->get_card(), 
           ",width:", plan.plan_tree_->get_width());
     new_line();
-    append("partition wise", plan.plan_tree_->is_partition_wise(), ", plan type:", plan.plan_tree_->get_phy_plan_type(),
+    append("partition wise", plan.plan_tree_->is_partition_wise(), ", plan type:", plan.plan_tree_->get_phy_plan_type(), 
     ", location type:", plan.plan_tree_->get_location_type());
     new_line();
     append("parallel:", plan.plan_tree_->get_parallel(), ", parallel rule:", plan.plan_tree_->get_op_parallel_rule());
@@ -780,37 +780,37 @@ int ObOptimizerTraceImpl::append(const ObDSResultItem &ds_result)
   } else if (OB_FALSE_IT(increase_section())) {
   } else if (OB_FAIL(new_line())) {
     LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_FAIL(append("rows:",
+  } else if (OB_FAIL(append("rows:", 
                             stat->get_rowcount()))) {
     LOG_WARN("failed to append msg", K(ret));
   } else if (OB_FAIL(new_line())) {
     LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_FAIL(append("macro_block_num:",
+  } else if (OB_FAIL(append("macro_block_num:", 
                             stat->get_macro_block_num()))) {
     LOG_WARN("failed to append msg", K(ret));
   } else if (OB_FAIL(new_line())) {
     LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_FAIL(append("micro_block_num:",
+  } else if (OB_FAIL(append("micro_block_num:", 
                             stat->get_micro_block_num()))) {
     LOG_WARN("failed to append msg", K(ret));
   } else if (OB_FAIL(new_line())) {
     LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_FAIL(append("sample_block_ratio:",
+  } else if (OB_FAIL(append("sample_block_ratio:", 
                             stat->get_sample_block_ratio()))) {
     LOG_WARN("failed to append msg", K(ret));
   } else if (OB_FAIL(new_line())) {
     LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_FAIL(append("ds_level:",
+  } else if (OB_FAIL(append("ds_level:", 
                             stat->get_ds_level()))) {
     LOG_WARN("failed to append msg", K(ret));
   } else if (OB_FAIL(new_line())) {
     LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_FAIL(append("dml_cnt:",
+  } else if (OB_FAIL(append("dml_cnt:", 
                             stat->get_dml_cnt()))) {
     LOG_WARN("failed to append msg", K(ret));
   } else if (OB_FAIL(new_line())) {
     LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_FAIL(append("ds_degree:",
+  } else if (OB_FAIL(append("ds_degree:", 
                             stat->get_ds_degree()))) {
     LOG_WARN("failed to append msg", K(ret));
   } else {
@@ -1099,7 +1099,7 @@ int ObOptimizerTraceImpl::trace_static(const ObDMLStmt *stmt, OptTableMetas &tab
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_table_items().count(); ++i) {
       table = stmt->get_table_item(i);
       column_items.reuse();
-      if (OB_ISNULL(table) ||
+      if (OB_ISNULL(table) || 
           OB_ISNULL(table_meta = table_metas.get_table_meta_by_table_id(table->table_id_))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null table item", K(ret));
@@ -1112,11 +1112,11 @@ int ObOptimizerTraceImpl::trace_static(const ObDMLStmt *stmt, OptTableMetas &tab
       } else if (OB_FALSE_IT(increase_section())) {
       } else if (OB_FAIL(new_line())) {
         LOG_WARN("failed to append msg", K(ret));
-      } else if (OB_FAIL(append("rows:",
-                                table_meta->get_rows(),
+      } else if (OB_FAIL(append("rows:", 
+                                table_meta->get_rows(), 
                                 "base rows:",
                                 table_meta->get_base_rows(),
-                                "statis type:",
+                                "statis type:", 
                                 table_meta->use_default_stat() ? "DEFAULT" : "OPTIMIZER",
                                 "version:",
                                 table_meta->get_version()))) {
@@ -1218,7 +1218,7 @@ int ObOptimizerTraceImpl::trace_time_used()
 int ObOptimizerTraceImpl::trace_mem_used()
 {
   int ret = OB_SUCCESS;
-  if (enable_trace_mem_used() &&
+  if (enable_trace_mem_used() && 
       OB_NOT_NULL(session_info_)) {
     int64_t total = 0;
     if (OB_NOT_NULL(session_info_->get_cur_exec_ctx())) {

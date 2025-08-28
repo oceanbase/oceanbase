@@ -456,7 +456,7 @@ int ObMLogBuilder::create_or_replace_mlog(share::schema::ObSchemaGetterGuard &sc
     } else {
       base_table_schema = container_table_schema;
     }
-  }
+  } 
 
   if (OB_FAIL(ret)) {
   } else {
@@ -693,9 +693,9 @@ int ObMLogBuilder::replace_mlog(ObSchemaGetterGuard &schema_guard,
     rebuild_index_arg.database_name_ = database_schema->get_database_name_str();
     rebuild_index_arg.create_mlog_arg_.assign(create_mlog_arg);
     rebuild_index_arg.rebuild_index_type_ = obrpc::ObRebuildIndexArg::RebuildIndexType::REBUILD_INDEX_TYPE_MLOG;
-    ObCreateDDLTaskParam param(orig_mlog_schema->get_tenant_id(),
+    ObCreateDDLTaskParam param(orig_mlog_schema->get_tenant_id(), 
                                ObDDLType::DDL_REPLACE_MLOG,
-                               orig_mlog_schema,
+                               orig_mlog_schema, 
                                nullptr,
                                0 /*object_id*/,
                                orig_mlog_schema->get_schema_version(),
@@ -876,7 +876,7 @@ int ObMLogBuilder::set_table_columns(
     HEAP_VAR(ObRowDesc, row_desc) {
       // There are 4 types of tables in OB: heap organized table with pk, heap organized table without pk,
       // index organized table with pk, index organized table without pk. heap organized table with pk can have
-      // rowid and primary key option, index organized table without pk and heap organized table without pk only enables rowid option,
+      // rowid and primary key option, index organized table without pk and heap organized table without pk only enables rowid option, 
       // and index organized table with pk only enables primary key option.
       if (!is_table_with_logic_pk) {
         if (create_mlog_arg.with_primary_key_) {

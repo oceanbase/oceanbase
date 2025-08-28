@@ -15,7 +15,7 @@
 #include "lib/charset/ob_ctype_gb2312_tab.h"
 
 extern "C" {
-
+  
 static unsigned ismbchar_gb2312(const ObCharsetInfo *cs [[maybe_unused]],
                                 const char *p, const char *e) {
   return (isgb2312head(*(p)) && (e) - (p) > 1 && isgb2312tail(*((p) + 1)) ? 2

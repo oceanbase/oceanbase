@@ -192,7 +192,7 @@ int ObRawExprUniqueSet::append(const ObIArray<RawExprType *> &exprs)
   return ret;
 }
 
-class ObCollectionTypeVisitor
+class ObCollectionTypeVisitor 
 {
 public:
   ObCollectionTypeVisitor() {}
@@ -522,7 +522,7 @@ public:
   static int implict_cast_pl_udt_to_sql_udt(ObRawExprFactory *expr_factory,
                                             const ObSQLSessionInfo *session,
                                             ObRawExpr* &real_ref_expr);
-
+                                            
   static int implict_cast_sql_udt_to_pl_udt(ObRawExprFactory *expr_factory,
                                             const ObSQLSessionInfo *session,
                                             ObRawExpr* &real_ref_expr);
@@ -540,7 +540,7 @@ public:
 #define USING_LOG_PREFIX SQL_RESV
 #endif
   template<typename RawExprType>
-  static int create_attr_expr(ObRawExprFactory *expr_factory,
+  static int create_attr_expr(ObRawExprFactory *expr_factory, 
                               const ObSQLSessionInfo *session,
                               ObItemType expr_type,
                               ArrayAttr attr_type,
@@ -622,7 +622,7 @@ public:
                                      const ObSQLSessionInfo *session_info,
                                      bool is_type_to_str,
                                      ObObjType dst_type = ObMaxType);
-
+  
   static int wrap_enum_set_for_stmt(ObRawExprFactory &expr_factory,
                                     ObSelectStmt *stmt,
                                     ObSQLSessionInfo *session_info);
@@ -635,7 +635,7 @@ public:
                                  ObQueryRefRawExpr *query_ref,
                                  ObRawExpr *correlated_expr,
                                  ObRawExpr *&exec_param);
-
+  
   static int get_exec_param_expr(ObRawExprFactory &expr_factory,
                                  ObIArray<ObExecParamRawExpr*> *query_ref_exec_params,
                                  ObRawExpr *correlated_expr,
@@ -663,8 +663,8 @@ public:
                             const sql::ObSQLSessionInfo *session_info,
                             const ObLocalSessionVar *local_vars = NULL,
                             int64_t local_var_id = OB_INVALID_INDEX_INT64);
-  static bool need_column_conv(const ObRawExprResType &expected_type,
-                               const ObRawExpr &expr,
+  static bool need_column_conv(const ObRawExprResType &expected_type, 
+                               const ObRawExpr &expr, 
                                bool strict_type_check);
   static bool check_exprs_type_collation_accuracy_equal(const ObRawExpr *expr1, const ObRawExpr *expr2);
   // 此方法请谨慎使用,会丢失enum类型的 enum_set_values
@@ -1261,14 +1261,14 @@ public:
   static int extract_params(const common::ObIArray<ObRawExpr*> &exprs,
                             common::ObIArray<ObRawExpr*> &params);
 
-  static int extract_dynamic_params(ObRawExpr* expr,
-                                    common::ObIArray<ObRawExpr*> &params,
+  static int extract_dynamic_params(ObRawExpr* expr, 
+                                    common::ObIArray<ObRawExpr*> &params, 
                                     const bool without_const_expr = false);
 
   static int extract_dynamic_params(const common::ObIArray<ObRawExpr*> &exprs,
-                                    common::ObIArray<ObRawExpr*> &params,
-                                    const bool without_const_expr = false);
-
+                                    common::ObIArray<ObRawExpr*> &params, 
+                                    const bool without_const_expr = false);  
+                                                        
   static int is_contain_params(const common::ObIArray<ObRawExpr*> &exprs, bool &is_contain);
   static int is_contain_params(const ObRawExpr *expr, bool &is_contain);
   static int get_col_ref_expr_recursively(ObRawExpr *expr,
@@ -1337,7 +1337,7 @@ public:
                                          ObRawExpr *left_expr,
                                          ObRawExpr *right_expr,
                                          ObRawExpr *&expr);
-
+  
   static int wrap_cm_warn_on_fail_if_need(const ObRawExpr *src_expr,
                                           const ObRawExprResType &dst_type,
                                           const ObSQLSessionInfo *session,

@@ -967,7 +967,7 @@ int ObBackupMacroBlockIndexStore::get_macro_block_index_(const blocksstable::ObL
   }
 #ifdef ERRSIM
   if (macro_id.tablet_id_ == GCONF.errsim_backup_tablet_id) {
-    SERVER_EVENT_SYNC_ADD("backup_errsim", "get_macro_block_index",
+    SERVER_EVENT_SYNC_ADD("backup_errsim", "get_macro_block_index", 
                          "logic_id", macro_id,
                          "range_index", range_index,
                          "macro_index", macro_index,
@@ -1164,7 +1164,7 @@ int ObBackupMetaIndexStoreWrapper::decide_wrapper_(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   wrapper = NULL;
-  lib::ObMemAttr attr(tenant_id, ObModIds::BACKUP);
+  lib::ObMemAttr attr(tenant_id, ObModIds::BACKUP); 
   if (tenant_compatible <= DATA_VERSION_4_2_0_0) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("do not support restore from data version less than 4.2.0", K(ret), K(tenant_compatible));
@@ -1220,12 +1220,12 @@ int ObBackupMetaIndexStoreWrapper::inner_init_(const ObBackupRestoreMode &mode, 
       } else {
         share_param.backup_data_type_ = backup_data_type;
         share_param.is_tenant_level_ = backup_data_type.is_sys_backup() ? false : true;
-        if (OB_FAIL(store->init(mode,
-                                share_param,
-                                backup_dest,
-                                backup_set_desc,
-                                is_sec_meta,
-                                backup_set_info.tenant_compatible_,
+        if (OB_FAIL(store->init(mode, 
+                                share_param, 
+                                backup_dest, 
+                                backup_set_desc, 
+                                is_sec_meta, 
+                                backup_set_info.tenant_compatible_, 
                                 index_kv_cache))) {
           LOG_WARN("failed to init store", K(ret), K(i), K(share_param));
         }
@@ -1344,11 +1344,11 @@ int ObBackupTenantIndexRetryIDGetter::get_max_retry_id_v_4_1_x(int64_t &retry_id
     LOG_WARN("retry id getter not init", K(ret));
   } else if (OB_FAIL(get_tenant_index_file_name_(file_name_prefix))) {
     LOG_WARN("failed to get tenant index file name", K(ret));
-  } else if (is_restore_ &&
-      OB_FAIL(share::ObBackupPathUtilV_4_1::get_ls_info_data_info_dir_path(backup_dest_,
-                                                                              turn_id_,
+  } else if (is_restore_ && 
+      OB_FAIL(share::ObBackupPathUtilV_4_1::get_ls_info_data_info_dir_path(backup_dest_, 
+                                                                              turn_id_, 
                                                                               backup_path))) {
-    LOG_WARN("failed to get ls info data info dir path",
+    LOG_WARN("failed to get ls info data info dir path", 
              K(ret), K_(backup_dest), K_(backup_data_type), K_(backup_set_desc), K_(turn_id));
   } else if (OB_FAIL(list_files_(backup_path, backup_dest_.get_storage_info(), file_name_prefix, id_list))) {
     LOG_WARN("failed to list files", K(ret), K(backup_path), K(backup_dest_), K(file_name_prefix));
@@ -1372,13 +1372,13 @@ int ObBackupTenantIndexRetryIDGetter::get_ls_info_data_info_dir_path_(ObBackupPa
   if (is_restore_) {
     if (OB_FAIL(share::ObBackupPathUtil::get_ls_info_data_info_dir_path(
         backup_dest_, backup_data_type, turn_id_, backup_path))) {
-      LOG_WARN("failed to get ls info data info dir path",
+      LOG_WARN("failed to get ls info data info dir path", 
           K(ret), K_(backup_dest), K_(backup_data_type), K_(backup_set_desc), K_(turn_id));
     }
   } else {
     if (OB_FAIL(share::ObBackupPathUtil::get_ls_info_data_info_dir_path(
         backup_dest_, backup_set_desc_, backup_data_type, turn_id_, backup_path))) {
-      LOG_WARN("failed to get ls info data info dir path",
+      LOG_WARN("failed to get ls info data info dir path", 
           K(ret), K_(backup_dest), K_(backup_set_desc), K_(backup_data_type), K_(turn_id));
     }
   }
@@ -1546,7 +1546,7 @@ int ObBackupOrderedMacroBlockIndexStore::get_macro_block_index(
       index_header.reset();
       int64_t data_length = 0;
       int64_t data_zlength = 0;
-      ObCompressorType compressor_type = ObCompressorType::INVALID_COMPRESSOR;
+      ObCompressorType compressor_type = ObCompressorType::INVALID_COMPRESSOR; 
       if (OB_FAIL(fetch_block_(backup_file_type, offset, length, allocator, handle, buffer_reader))) {
         LOG_WARN("failed to fetch block", K(ret), K_(trailer));
       } else if (OB_FAIL(decode_headers_(buffer_reader, common_header,

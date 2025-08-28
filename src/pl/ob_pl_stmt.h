@@ -2274,7 +2274,7 @@ public:
       bulk_(false),
       is_type_record_(false) {}
   virtual ~ObPLInto() {}
-
+                           
   inline const common::ObIArray<int64_t> &get_into() const { return into_; }
   inline common::ObIArray<int64_t> &get_into() { return into_; }
   inline int64_t get_into(int64_t i) const { return into_.at(i); }
@@ -2314,7 +2314,7 @@ public:
                                   common::ObIAllocator* allocator,
                                   int64_t questionmark_idx,
                                   int32_t into_nums,
-                                  int64_t cur_idx) const { return OB_SUCCESS; }
+                                  int64_t cur_idx) const { return OB_SUCCESS; } 
 
   TO_STRING_KV(K_(into), K_(not_null_flags), K_(pl_integer_ranges), K_(data_type), K_(bulk));
 

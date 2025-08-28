@@ -71,8 +71,8 @@ int ObTenantStorageCheckpointReader::iter_read_meta_item(
 }
 
 int ObTenantStorageCheckpointReader::read_tablet_checkpoint_by_addr(
-  const ObIArray<MacroBlockId> &block_list,
-  const ObMetaDiskAddr &addr,
+  const ObIArray<MacroBlockId> &block_list, 
+  const ObMetaDiskAddr &addr, 
   char *item_buf,
   int64_t &item_buf_len)
 {

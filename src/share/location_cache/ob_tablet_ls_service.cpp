@@ -315,7 +315,7 @@ int ObTabletLSService::nonblock_get_by_expire_renew_time_(
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
       || !is_valid_key_(tenant_id, tablet_id))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("the input parameters are invalid", KR(ret),
+    LOG_WARN("the input parameters are invalid", KR(ret), 
         K(tenant_id), K(tablet_id));
   } else {
     ret = get_from_cache_(tenant_id, tablet_id, tablet_ls_cache);
@@ -468,7 +468,7 @@ bool ObTabletLSService::is_valid_key_(
   return tablet_id.is_valid_with_tenant(tenant_id) && !tablet_id.is_reserved_tablet();
 }
 
-ERRSIM_POINT_DEF(ERRSIM_REFRESH_TABLET_LS_CACHE_TIME_OUT_ERROR,
+ERRSIM_POINT_DEF(ERRSIM_REFRESH_TABLET_LS_CACHE_TIME_OUT_ERROR, 
     "Refreshing the tablet_to_ls cache failed due to OB_GET_LOCATION_TIME_OUT");
 
 int ObTabletLSService::batch_renew_tablet_ls_cache(
@@ -506,7 +506,7 @@ int ObTabletLSService::batch_renew_tablet_ls_cache(
           LOG_WARN("failed to nonblock_get_by_expire_renew_time_", KR(ret), K(tenant_id),
               "tablet_id", *tablet_id, K(expire_renew_time));
         }
-      }
+      } 
       if (OB_FAIL(ret)) {
       } else if (cache.is_valid()) {
         if (OB_FAIL(tablet_ls_caches.push_back(cache))) {

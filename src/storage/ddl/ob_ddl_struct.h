@@ -62,8 +62,8 @@ public:
   const blocksstable::MacroBlockId &get_block_id() const { return block_handle_.get_block_id(); }
   int deep_copy(ObDDLMacroBlock &dst_block, common::ObIAllocator &allocator) const;
   int set_data_macro_meta(const blocksstable::MacroBlockId &macro_id,
-                          const char* macor_block_buf,
-                          const int64_t size,
+                          const char* macor_block_buf, 
+                          const int64_t size, 
                           const ObDDLMacroBlockType &block_type,
                           const bool force_set_macro_meta = false);
   bool is_valid() const;
@@ -127,15 +127,15 @@ class ObDDLKVPendingGuard final
 {
 public:
   static int set_macro_block(
-    ObTablet *tablet,
-    const ObDDLMacroBlock &macro_block,
+    ObTablet *tablet, 
+    const ObDDLMacroBlock &macro_block, 
     const int64_t snapshot_version,
     const uint64_t data_format_version,
     ObTabletDirectLoadMgrHandle &direct_load_mgr_handle);
 public:
   ObDDLKVPendingGuard(
-    ObTablet *tablet,
-    const share::SCN &scn,
+    ObTablet *tablet, 
+    const share::SCN &scn, 
     const share::SCN &start_scn,
     const int64_t snapshot_version, // used for shared-storage mode.
     const uint64_t data_format_version, // used for shared-storage mode.
@@ -183,7 +183,7 @@ static inline bool is_full_direct_load(const ObDirectLoadType &type)
 {
   return ObDirectLoadType::DIRECT_LOAD_DDL == type
       || ObDirectLoadType::DIRECT_LOAD_LOAD_DATA == type
-      || ObDirectLoadType::DIRECT_LOAD_DDL_V2 == type
+      || ObDirectLoadType::DIRECT_LOAD_DDL_V2 == type 
       || ObDirectLoadType::DIRECT_LOAD_LOAD_DATA_V2 == type;
 }
 
@@ -212,11 +212,11 @@ public:
   ~ObDDLMacroBlockRedoInfo() = default;
   bool is_valid() const;
   bool is_column_group_info_valid() const;
-  /*
-   * For tow conditions:
+  /* 
+   * For tow conditions: 
    *   1. column store table, unnessasery to generate double redo clog.
    *   2. row store table, but unnessasery to process cs replica.
-   *     (a) cs replica not exist, may not be created or is creating.
+   *     (a) cs replica not exist, may not be created or is creating. 
    *     (b) table is not user data table.
    */
   bool is_not_compat_cs_replica() const;
@@ -281,7 +281,7 @@ private:
 };
 
 #ifdef OB_BUILD_SHARED_STORAGE
-struct ObDDLFinishLogInfo
+struct ObDDLFinishLogInfo 
 {
   OB_UNIS_VERSION(1);
 public:
@@ -300,7 +300,7 @@ public:
 };
 #endif
 
-class ObIDirectLoadRowIterator : public ObIStoreRowIterator
+class ObIDirectLoadRowIterator : public ObIStoreRowIterator 
 {
 public:
   ObIDirectLoadRowIterator() {}

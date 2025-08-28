@@ -563,7 +563,7 @@ int ObBreadthFirstSearchBulkOp::get_next_nocycle_bulk(
 {
   int ret = OB_SUCCESS;
   int rows_cnt = search_results_.count();
-
+  
   if (OB_SUCC(ret) && need_sort) {
     if (rows_cnt > max_buffer_cnt_) {
       if (OB_NOT_NULL(result_output_buffer_)) {
@@ -813,7 +813,7 @@ int ObBreadthFirstSearchBulkOp::init_mem_context()
 }
 
 //RCTE operator may encounter -4013 memory problem when it want to allocate a very large memory for a new round of iteration data
-//at that time, memory is stored in input_rows_, so we have to free them before reset allocator
+//at that time, memory is stored in input_rows_, so we have to free them before reset allocator 
 void ObBreadthFirstSearchBulkOp::free_input_rows_mem()
 {
   if (OB_ISNULL(malloc_allocator_)) {

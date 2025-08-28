@@ -141,7 +141,7 @@ void ObAshRefreshTask::runTimerTask()
         last_scheduled_snapshot_time_ = last_snapshot_end_time;
       }
       bool need_do_ash_take_ahead = require_snapshot_ahead();
-      LOG_INFO("start do ash refresh task", K(prev_write_pos_), K(prev_sched_time_),
+      LOG_INFO("start do ash refresh task", K(prev_write_pos_), K(prev_sched_time_), 
                                       K(ObActiveSessHistList::get_instance().write_pos()),
                                       K(ObActiveSessHistList::get_instance().free_slots_num()),
                                       K(last_scheduled_snapshot_time_),

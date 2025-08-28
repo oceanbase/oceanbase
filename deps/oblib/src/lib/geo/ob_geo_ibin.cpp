@@ -109,7 +109,7 @@ int ObIWkbGeomCollection::get_sub(ObIAllocator *allocator, uint32_t idx, ObGeome
     iter += idx;
     const char* ptr = iter.operator->();
     uint64_t size = g->get_sub_size(ptr);
-    // TODO  use create_obj_by_type
+    // TODO  use create_obj_by_type 
     switch (g->get_sub_type(ptr)) {
       case ObGeoType::POINT: {
         geo = OB_NEWx(ObIWkbGeomPoint, allocator, srid_);
@@ -209,7 +209,7 @@ int ObIWkbGeogCollection::get_sub(ObIAllocator *allocator, uint32_t idx, ObGeome
     iter += idx;
     const char* ptr = iter.operator->();
     uint64_t size = g->get_sub_size(ptr);
-    // TODO  use create_obj_by_type
+    // TODO  use create_obj_by_type 
     switch (g->get_sub_type(ptr)) {
       case ObGeoType::POINT: {
         geo = OB_NEWx(ObIWkbGeomPoint, allocator, srid_);
@@ -388,7 +388,7 @@ int ObIWkbGeogCollection::do_visit(ObIGeoVisitor &visitor)
               break;
             }
           }
-        }
+        } 
       }
     }
   }
@@ -402,7 +402,7 @@ int ObIWkbGeogCollection::do_visit(ObIGeoVisitor &visitor)
 
 
 int ObIWkbGeomPoint::do_visit(ObIGeoVisitor &visitor)
-{
+{ 
   return visitor.visit(this);
 }
 
@@ -554,8 +554,8 @@ int ObIWkbGeomCollection::do_visit(ObIGeoVisitor &visitor)
             }
           }
         }
-      }
-    }
+      } 
+    }    
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(visitor.finish(this))) {

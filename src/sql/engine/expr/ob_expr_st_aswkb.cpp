@@ -23,7 +23,7 @@ namespace oceanbase
 namespace sql
 {
 ObExprGeomWkb::ObExprGeomWkb(common::ObIAllocator &alloc,
-                             ObExprOperatorType type,
+                             ObExprOperatorType type, 
                              const char *name,
                              int32_t param_num,
                              int32_t dimension)
@@ -137,7 +137,7 @@ int ObExprGeomWkb::eval_geom_wkb(const ObExpr &expr,
   if (OB_SUCC(ret) && !is_null_result && arg_num == 2) {
     ObDatum *option_datum = NULL;
     ObString option_str;
-    if (OB_FAIL(tmp_allocator.eval_arg(expr.args_[1], ctx, option_datum))) {
+    if (OB_FAIL(tmp_allocator.eval_arg(expr.args_[1], ctx, option_datum))) { 
       LOG_WARN("fail to eval option datum", K(ret));
     } else if (option_datum->is_null()){
       is_null_result = true;

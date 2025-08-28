@@ -118,7 +118,7 @@ public:
       K_(module), K_(action), K_(client_id), K_(plan_id), K_(top_level_sql_id),
       K_(plsql_entry_object_id), K_(plsql_entry_subprogram_id), K_(plsql_entry_subprogram_name),
       K_(plsql_object_id), K_(plsql_subprogram_id), K_(plsql_subprogram_name), K_(plan_hash),
-      K_(thread_id), K_(stmt_type), K_(tablet_id), K_(blocking_session_id), K_(proxy_sid),
+      K_(thread_id), K_(stmt_type), K_(tablet_id), K_(blocking_session_id), K_(proxy_sid), 
       K_(delta_read_io_requests), K_(delta_read_io_bytes), K_(delta_write_io_requests), K_(delta_write_io_bytes));
   char svr_ip_[OB_IP_STR_BUFF];
   int64_t svr_port_;

@@ -61,7 +61,7 @@ protected:
     int64_t line_idx_;
     int64_t udt_object_type_idx_;
     common::ObArray<common::ObString> lines_;
-
+    
     SourceIterState() : current_type_(SOURCE_PACKAGE), object_idx_(0), line_idx_(0), udt_object_type_idx_(0) {}
     void reset() {
       current_type_ = SOURCE_PACKAGE;
@@ -74,25 +74,25 @@ protected:
 
   virtual int get_next_source_line(common::ObNewRow *&row);
   int split_text_into_lines(const common::ObString &text, common::ObArray<common::ObString> &lines);
-  int fill_row_from_package(const share::schema::ObPackageInfo *package_info,
-                           const common::ObString &line_text,
+  int fill_row_from_package(const share::schema::ObPackageInfo *package_info, 
+                           const common::ObString &line_text, 
                            int64_t line_num);
-  int fill_row_from_routine(const share::schema::ObRoutineInfo *routine_info,
-                           const common::ObString &line_text,
+  int fill_row_from_routine(const share::schema::ObRoutineInfo *routine_info, 
+                           const common::ObString &line_text, 
                            int64_t line_num);
-  int fill_row_from_trigger(const share::schema::ObTriggerInfo *trigger_info,
-                           const common::ObString &line_text,
+  int fill_row_from_trigger(const share::schema::ObTriggerInfo *trigger_info, 
+                           const common::ObString &line_text, 
                            int64_t line_num);
   int fill_row_from_udt(const share::schema::ObUDTTypeInfo *udt_info,
                        const share::schema::ObUDTObjectType *object_type_info,
-                       const common::ObString &line_text,
+                       const common::ObString &line_text, 
                        int64_t line_num);
-
+  
   int get_package_arrays();
   int get_routine_arrays();
   int get_trigger_arrays();
   int get_udt_arrays();
-
+  
   int get_system_package_arrays();
   int get_system_routine_arrays();
   int get_system_trigger_arrays();
@@ -104,7 +104,7 @@ protected:
 
   uint64_t tenant_id_;
   SourceIterState iter_state_;
-
+  
   common::ObArray<const share::schema::ObPackageInfo *> package_array_;
   common::ObArray<const share::schema::ObRoutineInfo *> routine_array_;
   common::ObArray<const share::schema::ObTriggerInfo *> trigger_array_;

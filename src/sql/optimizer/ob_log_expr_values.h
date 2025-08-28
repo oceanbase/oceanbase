@@ -74,8 +74,8 @@ class ObLogExprValues : public ObLogicalOperator
     int mark_probably_local_exprs();
     int allocate_dummy_output();
     virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
-
-    virtual int get_plan_item_info(PlanText &plan_text,
+        
+    virtual int get_plan_item_info(PlanText &plan_text, 
                                 ObSqlPlanItem &plan_item) override;
     int get_array_param_group_id(int64_t &group_id, bool &find);
     void set_is_values_table(bool is_values_table) { is_values_table_ = is_values_table; }

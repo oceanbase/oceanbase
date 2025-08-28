@@ -57,7 +57,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupTabletFuseDagNet);
 };
 
-class ObBackupTabletGroupFuseDag : public share::ObIDag
+class ObBackupTabletGroupFuseDag : public share::ObIDag 
 {
 public:
   explicit ObBackupTabletGroupFuseDag(const share::ObDagType::ObDagTypeEnum &dag_type);

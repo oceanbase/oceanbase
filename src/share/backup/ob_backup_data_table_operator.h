@@ -38,7 +38,7 @@ public:
       common::hash::ObHashMap<ObLSID, ObArray<ObTabletID>> &tablet_to_ls);
   static int get_ls_of_tablet(common::ObISQLClient &proxy, const uint64_t tenant_id, const ObTabletID &tablet_id, ObLSID &ls_id, int64_t &transfer_seq);
 private:
-  static int group_tablets_by_ls_(const ObIArray<share::ObTabletLSPair> &tablet_ls_pairs,
+  static int group_tablets_by_ls_(const ObIArray<share::ObTabletLSPair> &tablet_ls_pairs, 
       common::hash::ObHashMap<ObLSID, ObArray<ObTabletID>> &tablet_to_ls, ObTabletID &max_tablet_id);
   static int range_get_tablet_(common::ObISQLClient &sql_proxy, const uint64_t tenant_id, const share::SCN &snapshot,
       const oceanbase::common::ObTabletID &start_tablet_id, const int64_t range_size, common::ObIArray<ObTabletLSPair> &tablet_ls_pairs);
@@ -49,7 +49,7 @@ class ObBackupSkippedTabletOperator : public ObBackupBaseTableOperator
 public:
   static int batch_move_skip_tablet(common::ObMySQLProxy &proxy, const uint64_t tenant_id, const int64_t task_id);
   static int get_skip_tablet(common::ObISQLClient &proxy, const bool need_lock, const uint64_t tenant_id, 
-                             const int64_t task_id, const share::ObBackupSkippedType skipped_type,
+                             const int64_t task_id, const share::ObBackupSkippedType skipped_type, 
                              common::hash::ObHashSet<ObBackupSkipTabletAttr> &skip_tablets);
   static int move_skip_tablet_to_his(common::ObISQLClient &proxy, const uint64_t tenant_id, const int64_t task_id);
 private:  
@@ -135,7 +135,7 @@ class ObBackupTaskOperator : public ObBackupBaseTableOperator
 {
 public:
   static int insert_backup_task(common::ObISQLClient &proxy, const ObBackupSetTaskAttr &backup_set_task);
-  static int update_turn_id(common::ObISQLClient &proxy, share::ObBackupStatus &backup_status, const int64_t task_id,
+  static int update_turn_id(common::ObISQLClient &proxy, share::ObBackupStatus &backup_status, const int64_t task_id, 
       const uint64_t tenant_id, const int64_t turn_id);
   static int get_backup_task(common::ObISQLClient &proxy, const int64_t job_id, const uint64_t tenant_id, 
       const bool for_update, ObBackupSetTaskAttr &set_task_attr);

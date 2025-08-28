@@ -570,8 +570,8 @@ public:
   {
     bool operator()(const SchemaKey &a, const SchemaKey &b) const
     {
-      return a.tenant_id_ == b.tenant_id_
-             && a.user_id_ == b.user_id_
+      return a.tenant_id_ == b.tenant_id_ 
+             && a.user_id_ == b.user_id_ 
              && a.sensitive_rule_name_ == b.sensitive_rule_name_;
     }
   };

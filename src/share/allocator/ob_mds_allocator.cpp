@@ -212,7 +212,7 @@ ObMdsThrottleGuard::~ObMdsThrottleGuard()
       if (module_ti_guard.is_valid()) {
         module_ti_guard.throttle_info()->reset();
       }
-    }
+    } 
 
     // reset mds throttled alloc size
     share::mds_throttled_alloc() = 0;

@@ -58,15 +58,15 @@ int ObExprEnhancedAes::calc_result_typeN(ObExprResType &type,
   return ret;
 }
 
-ObExprEnhancedAesEncrypt::ObExprEnhancedAesEncrypt(ObIAllocator &alloc)
+ObExprEnhancedAesEncrypt::ObExprEnhancedAesEncrypt(ObIAllocator &alloc) 
   : ObExprEnhancedAes(alloc, T_FUN_SYS_ENHANCED_AES_ENCRYPT, N_ENHANCED_AES_ENCRYPT)
 {}
 
-int ObExprEnhancedAes::eval_param(const ObExpr &expr,
-                                  ObEvalCtx &ctx,
-                                  const ObString &func_name,
-                                  ObCipherOpMode &op_mode,
-                                  ObDatum *&src,
+int ObExprEnhancedAes::eval_param(const ObExpr &expr, 
+                                  ObEvalCtx &ctx, 
+                                  const ObString &func_name, 
+                                  ObCipherOpMode &op_mode, 
+                                  ObDatum *&src, 
                                   ObString &iv_str)
 {
   int ret = OB_SUCCESS;
@@ -129,10 +129,10 @@ int ObExprEnhancedAesEncrypt::eval_aes_encrypt(const ObExpr &expr, ObEvalCtx &ct
     LOG_WARN("failed to eval params", K(ret));
   } else if (src->is_null()) {
     res.set_null();
-  } else if (OB_FAIL(ObMasterKeyGetter::get_active_master_key(session->get_effective_tenant_id(),
-                                                              master_key,
-                                                              OB_MAX_MASTER_KEY_LENGTH,
-                                                              master_key_len,
+  } else if (OB_FAIL(ObMasterKeyGetter::get_active_master_key(session->get_effective_tenant_id(), 
+                                                              master_key, 
+                                                              OB_MAX_MASTER_KEY_LENGTH, 
+                                                              master_key_len, 
                                                               master_key_id))) {
     LOG_WARN("failed to get active master key", K(ret));
   } else {
@@ -153,10 +153,10 @@ int ObExprEnhancedAesEncrypt::eval_aes_encrypt(const ObExpr &expr, ObEvalCtx &ct
       if (OB_ISNULL(buf = static_cast<char *>(alloc_guard.get_allocator().alloc(buf_len)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memory", K(ret), K(buf_len));
-      } else if (OB_FAIL(ObBlockCipher::encrypt(master_key, master_key_len,
-                                                src_str.ptr(), src_str.length(), buf_len,
-                                                iv_str.ptr(), iv_str.length(),
-                                                NULL, 0, 0,
+      } else if (OB_FAIL(ObBlockCipher::encrypt(master_key, master_key_len, 
+                                                src_str.ptr(), src_str.length(), buf_len, 
+                                                iv_str.ptr(), iv_str.length(), 
+                                                NULL, 0, 0, 
                                                 op_mode, buf, enc_len, NULL))) {
         LOG_WARN("failed to encrypt", K(ret));
       // store master key id ahead of ciphertext
@@ -167,7 +167,7 @@ int ObExprEnhancedAesEncrypt::eval_aes_encrypt(const ObExpr &expr, ObEvalCtx &ct
         MEMCPY(res_buf, &master_key_id, KEY_ID_LENGTH);
         MEMCPY(res_buf + KEY_ID_LENGTH, buf, enc_len);
         res.set_string(res_buf, enc_len + KEY_ID_LENGTH);
-      }
+      }   
     } else {
       // sensitive rule scenario, encrypt data with ObEncryptionUtil::encrypt_data
       // - the master key id will NOT be stored in the ciphertext
@@ -177,7 +177,7 @@ int ObExprEnhancedAesEncrypt::eval_aes_encrypt(const ObExpr &expr, ObEvalCtx &ct
       if (OB_ISNULL(buf = static_cast<char *>(alloc_guard.get_allocator().alloc(buf_len)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memory", K(ret), K(buf_len));
-      } else if (OB_FAIL(ObEncryptionUtil::encrypt_data(master_key, master_key_len, op_mode,
+      } else if (OB_FAIL(ObEncryptionUtil::encrypt_data(master_key, master_key_len, op_mode, 
                                                         src_str.ptr(), src_str.length(),
                                                         buf, buf_len, enc_len))) {
         LOG_WARN("failed to encrypt", K(ret));
@@ -214,7 +214,7 @@ int ObExprEnhancedAesEncrypt::calc_result_typeN(ObExprResType &type,
       mode = static_cast<ObCipherOpMode>(encryption_mode);
     }
   }
-  if (mode == ob_invalid_mode
+  if (mode == ob_invalid_mode 
       && OB_FAIL(ObEncryptionUtil::get_cipher_op_mode(mode, type_ctx.get_session()))) {
     LOG_WARN("failed to get cipher op mode", K(ret));
   } else if (OB_FAIL(ObExprEnhancedAes::calc_result_typeN(type, types, param_num, type_ctx))) {
@@ -227,7 +227,7 @@ int ObExprEnhancedAesEncrypt::calc_result_typeN(ObExprResType &type,
   return ret;
 }
 
-int ObExprEnhancedAesEncrypt::cg_expr(ObExprCGCtx &expr_cg_ctx,
+int ObExprEnhancedAesEncrypt::cg_expr(ObExprCGCtx &expr_cg_ctx, 
                                       const ObRawExpr &raw_expr,
                                       ObExpr &rt_expr) const
 {
@@ -241,7 +241,7 @@ int ObExprEnhancedAesEncrypt::cg_expr(ObExprCGCtx &expr_cg_ctx,
   return ret;
 }
 
-ObExprEnhancedAesDecrypt::ObExprEnhancedAesDecrypt(ObIAllocator &alloc)
+ObExprEnhancedAesDecrypt::ObExprEnhancedAesDecrypt(ObIAllocator &alloc) 
   : ObExprEnhancedAes(alloc, T_FUN_SYS_ENHANCED_AES_DECRYPT, N_ENHANCED_AES_DECRYPT)
 {}
 
@@ -271,9 +271,9 @@ int ObExprEnhancedAesDecrypt::eval_aes_decrypt(const ObExpr &expr, ObEvalCtx &ct
     ret = OB_ERR_INVALID_INPUT_STRING;
     LOG_WARN("input string is too short", K(ret), K(src_str));
   } else if (FALSE_IT(MEMCPY(&master_key_id, src_str.ptr(), KEY_ID_LENGTH))){
-  } else if (OB_FAIL(ObMasterKeyGetter::get_master_key(session->get_effective_tenant_id(),
-                                                       master_key_id,
-                                                       master_key,
+  } else if (OB_FAIL(ObMasterKeyGetter::get_master_key(session->get_effective_tenant_id(), 
+                                                       master_key_id, 
+                                                       master_key, 
                                                        OB_MAX_MASTER_KEY_LENGTH,
                                                        master_key_len))) {
     LOG_WARN("failed to get master key", K(ret), K(master_key_id));
@@ -286,10 +286,10 @@ int ObExprEnhancedAesDecrypt::eval_aes_decrypt(const ObExpr &expr, ObEvalCtx &ct
     if (OB_ISNULL(buf = static_cast<char *>(alloc_guard.get_allocator().alloc(buf_len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory", K(ret), K(buf_len));
-    } else if (OB_FAIL(ObBlockCipher::decrypt(master_key, master_key_len,
+    } else if (OB_FAIL(ObBlockCipher::decrypt(master_key, master_key_len, 
                                               src_str.ptr(), src_str.length(), src_str.length(),
-                                              iv_str.ptr(), iv_str.length(),
-                                              NULL, 0, NULL, 0,
+                                              iv_str.ptr(), iv_str.length(), 
+                                              NULL, 0, NULL, 0, 
                                               op_mode, buf, dec_len))) {
       LOG_WARN("failed to decrypt", K(ret));
       if (OB_ERR_AES_DECRYPT == ret) {
@@ -339,7 +339,7 @@ int ObExprEnhancedAesDecrypt::calc_result_typeN(ObExprResType &type,
   return ret;
 }
 
-int ObExprEnhancedAesDecrypt::cg_expr(ObExprCGCtx &expr_cg_ctx,
+int ObExprEnhancedAesDecrypt::cg_expr(ObExprCGCtx &expr_cg_ctx, 
                                       const ObRawExpr &raw_expr,
                                       ObExpr &rt_expr) const
 {

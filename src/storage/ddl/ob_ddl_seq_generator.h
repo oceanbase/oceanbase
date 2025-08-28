@@ -25,7 +25,7 @@ namespace storage
 // the sequence generator for ddl
 // for example: start = 10, interal = 5, step = 100
 // the sequence generated like:
-// 10, 11, 12, 13, 14,
+// 10, 11, 12, 13, 14, 
 // 110, 111, 112, 113, 114,
 // 210, 211, 212, 213, 214,
 // ...

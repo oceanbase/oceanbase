@@ -68,9 +68,9 @@ int ObHSeriesAdapter::multi_put(ObTableExecCtx &ctx, const ObIArray<ObITableEnti
       } else if (FALSE_IT(tb_ctx.set_batch_tablet_ids(&real_tablet_ids))) {
         LOG_WARN("fail to set batch tablet ids", K(ret));
       } else if (OB_FAIL(ObTableApiService::multi_insert(tb_ctx, series_cells))) {        // lob can not use put
-        LOG_WARN("fail to multi insert in hbase series adapter", K(ret),
-                                                                 K(series_cells),
-                                                                 KPC(tb_ctx.get_batch_tablet_ids()),
+        LOG_WARN("fail to multi insert in hbase series adapter", K(ret), 
+                                                                 K(series_cells), 
+                                                                 KPC(tb_ctx.get_batch_tablet_ids()), 
                                                                  K(real_tablet_ids));
       } else {
         LOG_DEBUG("multi put success", K(ret), K(ctx.get_table_name()), KPC(tb_ctx.get_batch_tablet_ids()));
@@ -127,7 +127,7 @@ int ObHSeriesAdapter::construct_query(ObTableExecCtx &ctx,
 
 int ObHSeriesAdapter::get_query_iter(ObTableExecCtx &ctx,
                                      const ObITableEntity &entity,
-                                     ObTableCtx &scan_ctx,
+                                     ObTableCtx &scan_ctx, 
                                      ObTableApiRowIterator &tb_row_iter)
 {
   int ret = OB_SUCCESS;
@@ -153,7 +153,7 @@ int ObHSeriesAdapter::get_query_iter(ObTableExecCtx &ctx,
 
 int ObHSeriesAdapter::del_and_insert(ObIAllocator &alloc,
                                      ObJsonNode &json_node,
-                                     ObTableCtx &del_ctx,
+                                     ObTableCtx &del_ctx, 
                                      ObTableCtx &ins_ctx,
                                      ObNewRow &json_cell)
 {
@@ -391,7 +391,7 @@ int ObHSeriesAdapter::get_normal_rowkey(const ObITableEntity &normal_cell,
     LOG_WARN("failed to get qualifier", K(ret));
   } else if (OB_FAIL(normal_cell.get_rowkey_value(ObHTableConstants::COL_IDX_T, timestamp_obj))) {
     LOG_WARN("failed to get timestamp", K(ret));
-  }
+  } 
   return ret;
 }
 
@@ -449,8 +449,8 @@ int ObHSeriesAdapter::convert_normal_to_series(const ObITableEntity &cell,
   return ret;
 }
 
-int ObHSeriesAdapter::convert_normal_to_series(const ObIArray<ObITableEntity *> &cells,
-                                               ObIArray<ObITableEntity *> &series_cells,
+int ObHSeriesAdapter::convert_normal_to_series(const ObIArray<ObITableEntity *> &cells, 
+                                               ObIArray<ObITableEntity *> &series_cells, 
                                                ObIArray<common::ObTabletID> &real_tablet_ids)
 {
   int ret = OB_SUCCESS;
@@ -576,10 +576,10 @@ int ObHSeriesAdapter::construct_series_value(ObIAllocator &allocator, ObJsonNode
     LOG_WARN("serialize json binary fail", K(ret));
   } else if (OB_FAIL(json_buf.get_result_string(str_out))) {
     LOG_WARN("get_result_string fail", K(ret), K(json_buf));
-  } else if (OB_FALSE_IT(json_data.assign_ptr(str_out.ptr() + sizeof(ObLobCommon),
+  } else if (OB_FALSE_IT(json_data.assign_ptr(str_out.ptr() + sizeof(ObLobCommon), 
                                               str_out.length() - sizeof(ObLobCommon)))) {
-  } else if (OB_FAIL(ObJsonBin::set_doc_header_v0(json_data,
-                                                  json_data.length(),
+  } else if (OB_FAIL(ObJsonBin::set_doc_header_v0(json_data, 
+                                                  json_data.length(), 
                                                   json_obj.use_lexicographical_order()))) {
     LOG_WARN("set_doc_header_v0 fail", K(ret));
   } else {
@@ -610,7 +610,7 @@ int ObHSeriesAdapter::release_map()
 /**
  * ---------------------------------------- KTNode ----------------------------------------
  */
-
+ 
 int KTNode::hash(uint64_t &res) const
 {
   res = 0;

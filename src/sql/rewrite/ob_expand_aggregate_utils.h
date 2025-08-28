@@ -27,7 +27,7 @@ class ObExpandAggregateUtils
 {
 public:
   ObExpandAggregateUtils(ObRawExprFactory &expr_factory,
-                         ObSQLSessionInfo *session_info):
+                         ObSQLSessionInfo *session_info): 
     expr_factory_(expr_factory),
     session_info_(session_info),
     expand_for_mv_(false) {}
@@ -148,7 +148,7 @@ private:
     return aggr_type == T_FUN_AVG || aggr_type == T_FUN_STDDEV ||
            aggr_type == T_FUN_VARIANCE || aggr_type == T_FUN_STDDEV_POP ||
            aggr_type == T_FUN_STDDEV_SAMP ||
-           aggr_type == T_FUN_APPROX_COUNT_DISTINCT ||
+           aggr_type == T_FUN_APPROX_COUNT_DISTINCT || 
            aggr_type == T_FUN_SYS_RB_AND_CARDINALITY_AGG ||
            aggr_type == T_FUN_SYS_RB_OR_CARDINALITY_AGG;
   }

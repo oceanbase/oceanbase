@@ -118,7 +118,7 @@ int ObExprSTContains::eval_st_contains(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     } else if (!is_geo1_cached && OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb1, geo1, nullptr, N_ST_CONTAINS, ObGeoBuildFlag::GEO_ALLOW_3D_CARTESIAN))) {
       LOG_WARN("get first geo by wkb failed", K(ret));
     } else if (!is_geo2_cached && OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb2, geo2, nullptr, N_ST_CONTAINS, ObGeoBuildFlag::GEO_ALLOW_3D_CARTESIAN))) {
-      LOG_WARN("get second geo by wkb failed", K(ret));
+      LOG_WARN("get second geo by wkb failed", K(ret));   
     } else if (FALSE_IT(temp_allocator.set_baseline_size(geo1->length() + geo2->length()))) {
     } else if ((!is_geo1_cached && OB_FAIL(ObGeoExprUtils::check_empty(geo1, is_geo1_empty)))
         || (!is_geo2_cached && OB_FAIL(ObGeoExprUtils::check_empty(geo2, is_geo2_empty)))) {
@@ -142,7 +142,7 @@ int ObExprSTContains::eval_st_contains(const ObExpr &expr, ObEvalCtx &ctx, ObDat
           LOG_WARN("add geo2 to const cache failed", K(ret));
         }
       }
-
+      
       ObGeoEvalCtx gis_context(*mem_ctx);
       bool result = false;
       if (OB_FAIL(ret)) {
@@ -154,7 +154,7 @@ int ObExprSTContains::eval_st_contains(const ObExpr &expr, ObEvalCtx &ctx, ObDat
         if (OB_NOT_NULL(const_param_cache)) {
           if (gis_arg1->is_static_const_) {
             cache_geo = const_param_cache->get_cached_geo(0);
-            if (cache_geo == NULL
+            if (cache_geo == NULL 
               && OB_FAIL(ObGeoTypeUtil::create_cached_geometry(*const_param_cache->get_allocator(),
                                                                 temp_allocator,
                                                                 const_param_cache->get_const_param_cache(0),
@@ -165,7 +165,7 @@ int ObExprSTContains::eval_st_contains(const ObExpr &expr, ObEvalCtx &ctx, ObDat
               geo = geo2;
               const_param_cache->add_cached_geo(0, cache_geo);
             }
-          }
+          } 
         }
 
         if (OB_FAIL(ret)) {

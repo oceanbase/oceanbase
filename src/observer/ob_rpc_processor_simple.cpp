@@ -2184,7 +2184,7 @@ int ObForceSetServerListP::process()
   } else if (OB_FAIL(gctx_.ob_service_->force_set_server_list(arg_, result_))) {
     COMMON_LOG(WARN, "force_set_server_list failed", KR(ret), K(arg_));
   }
-
+  
   return ret;
 }
 
@@ -4358,7 +4358,7 @@ int ObCheckNestedMViewMdsP::process()
         LOG_WARN("not leader", K(ret), K(arg_), K(role), K(proposal_id));
       } else if (arg_.refresh_id_ != OB_INVALID_ID &&
                  OB_FAIL(mview_maintenance_service->
-                 check_nested_mview_mds_exists(arg_.refresh_id_,
+                 check_nested_mview_mds_exists(arg_.refresh_id_, 
                  arg_.target_data_sync_scn_))) {
         LOG_WARN("fail to check nested mview mds exists", K(ret), K(arg_));
       } else if (arg_.refresh_id_ == OB_INVALID_ID &&

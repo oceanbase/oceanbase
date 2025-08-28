@@ -122,7 +122,7 @@ int EventRecorder::report_decentralized_to_be_leader_event(const MemberListWithS
     if (member_list_with_states.p_impl_->accept_ok_promise_not_vote_before_local_ts_[idx] > 0) {
       int64_t lease_end_time = TimeSpanWrapper(member_list_with_states.p_impl_->accept_ok_promise_not_vote_before_local_ts_[idx]).get_current_ts_likely();
       if (!last_print_flag) {
-        DO_IF_SUCC({ret = databuff_printf(info, INFO_MAX_LEN, pos,
+        DO_IF_SUCC({ret = databuff_printf(info, INFO_MAX_LEN, pos, 
                         member_list_with_states.p_impl_->member_list_.get_addr_list()[idx]);
                     OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, "|");
                     OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, "%s",
@@ -131,7 +131,7 @@ int EventRecorder::report_decentralized_to_be_leader_event(const MemberListWithS
         last_print_flag = true;
       } else {
         DO_IF_SUCC({ret = databuff_printf(info, INFO_MAX_LEN, pos, ",");
-                    OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos,
+                    OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, 
                         member_list_with_states.p_impl_->member_list_.get_addr_list()[idx]);
                     OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, "|");
                     OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, "%s",
@@ -277,7 +277,7 @@ int EventRecorder::report_member_list_changed_event(const MemberList &old_list, 
         last_print_flag = true;
       } else {
         DO_IF_SUCC({ret = databuff_printf(info, INFO_MAX_LEN, pos, ", ");
-                    OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos,
+                    OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, 
                         new_list.get_addr_list()[idx]);
                     ret;});
       }
@@ -305,7 +305,7 @@ int EventRecorder::report_acceptor_lease_expired_event(const Lease &lease)
   bool last_print_flag = false;
   DO_IF_SUCC({ret = databuff_printf(info, INFO_MAX_LEN, pos, "owner:");
               OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, lease.get_owner());
-              OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos,
+              OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, 
                   ", expired time:%s, ballot number:%ld",
                   common::ObTime2Str::ob_timestamp_str_range<HOUR, USECOND>(TimeSpanWrapper(lease.get_lease_end_ts()).get_current_ts_likely()),
                   lease.get_ballot_number());

@@ -985,7 +985,7 @@ int ObPartitionMergePolicy::refine_minor_merge_result(
         }
       }
     }
-#ifdef ERRSIM
+#ifdef ERRSIM 
 if (OB_SUCC(ret)) {
   int tmp_ret = OB_E(EventTable::EN_MV_LARGE_SSTABLE_THRESHOLD) OB_SUCCESS;
   if (tmp_ret) {
@@ -1084,7 +1084,7 @@ int ObPartitionMergePolicy::get_multi_version_start(
     // Minor Merge need read medium list to decide boundary snapshot and multi version start.
     // Bug when ls is migrating, data is not complete and mds data can not be read.
     // So if the sstable cnt is unsafe, a emergency minor should be scheduled.
-    const bool need_emergency_minor = OB_EAGAIN == ret && is_minor_merge_type(merge_type)
+    const bool need_emergency_minor = OB_EAGAIN == ret && is_minor_merge_type(merge_type) 
                                    && !tablet.get_tablet_meta().ha_status_.is_data_status_complete()
                                    && (tablet.get_major_table_count() + tablet.get_minor_table_count()) > OB_UNSAFE_TABLE_CNT;
     if (is_mini_merge(merge_type) || OB_TENANT_NOT_EXIST == ret || need_emergency_minor) {
@@ -1861,7 +1861,7 @@ int ObAdaptiveMergePolicy::check_adaptive_merge_reason(
   if (AdaptiveMergeReason::NONE == reason && OB_TMP_FAIL(check_inc_sstable_row_cnt_percentage(tablet, reason))) {
     LOG_WARN("failed to check sstable data situation", K(tmp_ret), K(ls_id), K(tablet_id), K(tablet_analyzer));
   }
-
+  
   return ret;
 }
 
@@ -1881,7 +1881,7 @@ int ObAdaptiveMergePolicy::check_adaptive_merge_reason_for_event(
   mode = ObTableModeFlag::TABLE_MODE_NORMAL;
   reason = AdaptiveMergeReason::NONE;
   ObTabletStatAnalyzer tablet_analyzer;
-
+  
   if (OB_UNLIKELY(!need_schedule_meta(event))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid compaction event", K(ret), K(event));
@@ -1900,7 +1900,7 @@ int ObAdaptiveMergePolicy::check_adaptive_merge_reason_for_event(
     // backgroud meta only scheduled for extreme table
   } else {
     const ObTableQueuingModeCfg &queuing_cfg = ObTableQueuingModeCfg::get_basic_config(mode);
-    const int64_t adaptive_threshold = TOMBSTONE_ROW_COUNT_THRESHOLD * queuing_cfg.queuing_factor_;
+    const int64_t adaptive_threshold = TOMBSTONE_ROW_COUNT_THRESHOLD * queuing_cfg.queuing_factor_; 
     if ((update_row_cnt + delete_row_cnt) >= adaptive_threshold  || delete_row_cnt > queuing_cfg.total_delete_row_cnt_) {
       reason = AdaptiveMergeReason::TOMBSTONE_SCENE;
     } else if (queuing_cfg.is_queuing_mode()) {
@@ -1909,7 +1909,7 @@ int ObAdaptiveMergePolicy::check_adaptive_merge_reason_for_event(
       }
     }
   }
-  return ret;
+  return ret; 
 }
 
 /*************************************** ObCOMajorMergePolicy ***************************************/
@@ -1969,7 +1969,7 @@ int ObCOMajorMergePolicy::decide_co_major_sstable_status(
 }
 
 bool ObCOMajorMergePolicy::whether_to_build_row_store(
-    const int64_t &estimate_row_cnt,
+    const int64_t &estimate_row_cnt, 
     const int64_t &column_cnt)
 {
   return column_cnt < COL_CNT_THRESHOLD_BUILD_ROW_STORE || estimate_row_cnt < ROW_CNT_THRESHOLD_BUILD_ROW_STORE;
@@ -1977,7 +1977,7 @@ bool ObCOMajorMergePolicy::whether_to_build_row_store(
 
 bool ObCOMajorMergePolicy::whether_to_rebuild_column_store(
     const ObCOMajorSSTableStatus &major_sstable_status,
-    const int64_t &estimate_row_cnt,
+    const int64_t &estimate_row_cnt, 
     const int64_t &column_cnt)
 {
   bool bret = false;
@@ -2040,13 +2040,13 @@ int ObCOMajorMergePolicy::decide_co_major_merge_type(
   const ObTabletID &tablet_id = co_sstable.get_key().tablet_id_;
 
   if (OB_FAIL(decide_co_major_sstable_status(co_sstable, storage_schema, major_sstable_status))) {
-    LOG_WARN("failed to decide co major sstable status");
+    LOG_WARN("failed to decide co major sstable status");    
   } else if (OB_UNLIKELY(EN_COMPACTION_DISABLE_ROW_COL_SWITCH)) {
     major_merge_type = is_major_sstable_match_schema(major_sstable_status) ? BUILD_COLUMN_STORE_MERGE : USE_RS_BUILD_SCHEMA_MATCH_MERGE;
     LOG_INFO("[RowColSwitch] disable row col switch, only allow co major merge", K(tablet_id), K(co_sstable), K(tables), K(major_sstable_status), K(major_merge_type));
     SERVER_EVENT_SYNC_ADD("row_col_switch", "disable_row_col_switch", "tablet_id", tablet_id);
   } else if (OB_FAIL(accumulate_physical_row_cnt(tables, physical_row_cnt))) {
-    // if accumulate row cnt failed, make major sstable match schema
+    // if accumulate row cnt failed, make major sstable match schema 
     major_merge_type = is_major_sstable_match_schema(major_sstable_status) ? BUILD_COLUMN_STORE_MERGE : USE_RS_BUILD_SCHEMA_MATCH_MERGE;
     LOG_WARN("failed to accumulate row count for co major merge, build column store by default", "accumulate_ret", ret, K(major_sstable_status), K(major_merge_type));
     ret = OB_SUCCESS;

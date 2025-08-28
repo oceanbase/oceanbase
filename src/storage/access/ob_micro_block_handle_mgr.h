@@ -120,13 +120,13 @@ public:
   }
   OB_INLINE bool reach_hold_limit() const { return (this->*reach_hold_limit_func)(); }
   OB_INLINE void update_data_block_io_size(
-      const int64_t block_size,
+      const int64_t block_size, 
       const bool is_data_block,
       const bool use_cache)
   {
     return (this->*update_data_block_io_size_func)(block_size, is_data_block, use_cache);
-  }
-  TO_STRING_KV(K_(update_limit_count),
+  } 
+  TO_STRING_KV(K_(update_limit_count), 
                 K_(data_block_submit_io_size), K_(data_block_use_cache_limit),
                 K_(hold_limit), K_(current_hold_size), K_(use_data_block_cache));
 private:
@@ -137,7 +137,7 @@ private:
       ObFIFOAllocator &block_io_allocator) { return false; }
   OB_INLINE bool reach_hold_limit_nlimit() const { return false; }
   OB_INLINE void update_data_block_io_size_nlimit(
-      const int64_t block_size,
+      const int64_t block_size, 
       const bool is_data_block,
       const bool use_cache) {}
 private:
@@ -148,7 +148,7 @@ private:
       ObFIFOAllocator &block_io_allocator);
   OB_INLINE bool reach_hold_limit_limit() const;
   OB_INLINE void update_data_block_io_size_limit(
-      const int64_t block_size,
+      const int64_t block_size, 
       const bool is_data_block,
       const bool use_cache);
   int update_limit(const ObQueryFlag &query_flag);
@@ -194,8 +194,8 @@ public:
       const ObMultiBlockIOParam &multi_io_params);
 
   int submit_async_io(
-      blocksstable::ObIMicroBlockCache *cache,
-      const uint64_t tenant_id,
+      blocksstable::ObIMicroBlockCache *cache, 
+      const uint64_t tenant_id, 
       const blocksstable::ObMicroIndexInfo &index_block_info,
       const bool is_data_block,
       const bool use_multi_block_prefetch,
@@ -204,7 +204,7 @@ public:
   bool reach_hold_limit() const;
   OB_INLINE bool is_valid() const { return is_inited_; }
   void add_block_io_wait_time_us(const uint64_t block_io_wait_time_us);
-  TO_STRING_KV(K_(is_inited), KP_(table_store_stat), KPC_(query_flag),
+  TO_STRING_KV(K_(is_inited), KP_(table_store_stat), KPC_(query_flag), 
                K_(cache_mem_ctrl), KP_(data_block_cache), KP_(index_block_cache));
 private:
   blocksstable::ObDataMicroBlockCache *data_block_cache_;

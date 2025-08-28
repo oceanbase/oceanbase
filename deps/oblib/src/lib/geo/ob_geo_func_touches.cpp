@@ -584,7 +584,7 @@ private:
       ObIAllocator *allocator = context.get_allocator();
       ObGeoToTreeVisitor tree_visitor(allocator);
       bool is_part_joint = false;
-      bool is_part_touches = false;
+      bool is_part_touches = false;  
       bool point_intersects = false;
       if (OB_FAIL(geo1->do_visit(tree_visitor))) {
         LOG_WARN("failed to transform gc to tree", K(ret));
@@ -595,7 +595,7 @@ private:
       } else if (OB_ISNULL(mpt1) || OB_ISNULL(mls1) || OB_ISNULL(mpy1)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null geometry collection split", K(ret));
-      } else if (!mpt1->is_empty() &&
+      } else if (!mpt1->is_empty() && 
                 (g2->type() == ObGeoType::POINT || g2->type() == ObGeoType::MULTIPOINT)) {
         ObGeometry *mpt_bin = NULL;
         if (OB_FAIL(ObGeoTypeUtil::tree_to_bin(
@@ -655,7 +655,7 @@ private:
       ObIAllocator *allocator = context.get_allocator();
       ObGeoToTreeVisitor tree_visitor(allocator);
       bool is_part_joint = false;
-      bool is_part_touches = false;
+      bool is_part_touches = false;  
       bool point_intersects = false;
       if (OB_FAIL(geo1->do_visit(tree_visitor))) {
         LOG_WARN("failed to transform gc to tree", K(ret));
@@ -666,7 +666,7 @@ private:
       } else if (OB_ISNULL(mpt1) || OB_ISNULL(mls1) || OB_ISNULL(mpy1)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null geometry collection split", K(ret));
-      } else if (!mpt1->is_empty() &&
+      } else if (!mpt1->is_empty() && 
                 (g2->type() == ObGeoType::POINT || g2->type() == ObGeoType::MULTIPOINT)) {
         ObGeometry *mpt_bin = NULL;
         if (OB_FAIL(ObGeoTypeUtil::tree_to_bin(
@@ -689,7 +689,7 @@ private:
         LOG_WARN("fail to do gc union", K(ret));
       } else {
         // Check that at least one part of g1 touches at least one part of g2.
-        bool is_part_touches = false;
+        bool is_part_touches = false;  
         if (OB_FAIL((is_part_touches_gc_other<GcTreeType>(
                 mpt1, mls1, mpy1, g2, context, is_part_touches)))) {
           LOG_WARN("fail to do is part touches gc other", K(ret));
@@ -736,7 +736,7 @@ private:
         typename GcTreeType::sub_mp_type *mpy2 = NULL;
         ObGeometry *geo2 = const_cast<ObGeometry *>(reinterpret_cast<const ObGeometry *>(g2));
         // Check that at least one part of g1 touches at least one part of g2.
-        bool is_part_touches = false;
+        bool is_part_touches = false;  
         bool is_part_joint = false;  // Check that the interiors of g1 and g2 are disjoint.
         if (OB_FAIL(ObGeoFuncUtils::ob_gc_prepare<GcTreeType>(context, geo2, mpt2, mls2, mpy2))) {
           LOG_WARN("failed to prepare gc", K(ret));

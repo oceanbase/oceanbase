@@ -73,7 +73,7 @@ struct ObLobTextIterCtx
 {
   static const uint32_t OB_LOB_ITER_DEFAULT_BUFFER_LEN = 2 * 1024 * 1024; // 2M bytes
 
-  ObLobTextIterCtx(ObLobLocatorV2 &locator, const sql::ObBasicSessionInfo *session,
+  ObLobTextIterCtx(ObLobLocatorV2 &locator, const sql::ObBasicSessionInfo *session, 
                    ObIAllocator *allocator = NULL, uint32_t buffer_len = OB_LOB_ITER_DEFAULT_BUFFER_LEN) :
     alloc_(allocator), session_(session), buff_(NULL), buff_byte_len_(buffer_len), start_offset_(0),
     total_access_len_(0), total_byte_len_(0), content_byte_len_(0), content_len_(0),
@@ -83,7 +83,7 @@ struct ObLobTextIterCtx
   {}
 
   TO_STRING_KV(KP_(alloc), KP_(session), KP_(buff), K_(buff_byte_len), K_(start_offset), K_(total_access_len),
-               K_(content_byte_len), K_(content_len), K_(reserved_byte_len), K_(reserved_len),
+               K_(content_byte_len), K_(content_len), K_(reserved_byte_len), K_(reserved_len), 
                K_(accessed_byte_len), K_(accessed_len),
                K_(last_accessed_byte_len), K_(last_accessed_len), K_(iter_count),
                K_(is_cloned_temporary), K_(is_backward), K_(locator), KP_(lob_query_iter));
@@ -104,7 +104,7 @@ struct ObLobTextIterCtx
   // avaliable content length start from buff_;
   uint32_t content_byte_len_; // content byte length
   uint32_t content_len_; // content char length
-
+  
   // reserved len from buff_, when calling get next block, tail of last content will be reserved
   // in buff to reserved_byte_len, new content will be put from buff + reserved_byte_len_ to end of buffer
   uint32_t reserved_byte_len_; // reserved byte length from header
@@ -133,7 +133,7 @@ class ObTextStringIter
 public:
   static const uint32_t DEAFULT_LOB_PREFIX_CHAR_LEN = 1000;
   static const uint32_t MAX_CHAR_MULTIPLIER = 4;
-  ObTextStringIter(ObObjType type, ObCollationType cs_type, const ObString &datum_str,
+  ObTextStringIter(ObObjType type, ObCollationType cs_type, const ObString &datum_str, 
                    bool has_lob_header) :
     type_(type), cs_type_(cs_type), is_init_(false), is_lob_(false), is_outrow_(false),
     has_lob_header_(has_lob_header), state_(TEXTSTRING_ITER_INVALID), datum_str_(datum_str),
@@ -161,7 +161,7 @@ public:
     K_(state), K(datum_str_), KP_(ctx), K_(err_ret));
 
   int init(uint32_t buffer_len,
-           const sql::ObBasicSessionInfo *session = NULL,
+           const sql::ObBasicSessionInfo *session = NULL, 
            ObIAllocator *res_allocator = NULL,
            ObIAllocator *tmp_allocator = NULL,
            storage::ObLobAccessCtx *lob_access_ctx = NULL);
@@ -245,11 +245,11 @@ public:
   {
     if (is_lob_storage(type)) {
       validate_has_lob_header(has_lob_header_);
-    }
+    } 
   }
   ~ObTextStringResult(){};
 
-  TO_STRING_KV(K_(type), KP_(buffer), K_(buff_len), K_(pos), K_(is_outrow_templob),
+  TO_STRING_KV(K_(type), KP_(buffer), K_(buff_len), K_(pos), K_(is_outrow_templob), 
                K_(has_lob_header), K_(is_init), KP_(alloc));
 
   static const uint32_t MAX_TMP_LOB_HEADER_LEN = 1 * 1024;
@@ -258,7 +258,7 @@ public:
   // inrow lobs: create medmory buffer with expr.get_str_res_mem, or allocator in cast params;
   // outrow lobs: create memory for locator, and tmp file for outrow data (not implemented)
   // support user assigned allocator
-  // Notice:
+  // Notice: 
   // 1. all lobs created by this class should be temp lobs
   // 2. if has_lob_header_ is false, the text result should be 4.0 compatible
   virtual int init(const int64_t res_len, ObIAllocator *allocator = NULL);
@@ -366,7 +366,7 @@ public:
   virtual int serialize_lob_diffs(char* buf, const int64_t buf_len, storage::ObLobDiffHeader *diff_header) const = 0;
 
   int deserialize(const ObLobLocatorV2 &delta_lob);
-  virtual int deserialize_partial_data(storage::ObLobDiffHeader *diff_header) = 0;
+  virtual int deserialize_partial_data(storage::ObLobDiffHeader *diff_header) = 0;  
   virtual int deserialize_lob_diffs(char* buf, const int64_t buf_len, storage::ObLobDiffHeader *diff_header) = 0;
 };
 

@@ -93,7 +93,7 @@ int ObAllVirtualKvConnection::FillScanner::operator()(hash::HashMapPair<ObAddr, 
                K(conn));
   } else if (FALSE_IT(tenant_id = conn->get_tenant_id())) {
   } else if (!is_sys_tenant(effective_tenant_id_) && effective_tenant_id_ != tenant_id) {
-    // do nothing
+    // do nothing 
   } else if (OB_UNLIKELY(cur_row_->count_ < output_column_ids_.count())) {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN,
@@ -200,7 +200,7 @@ int ObAllVirtualKvConnection::FillScanner::init(ObIAllocator *allocator,
     allocator_ = allocator;
     scanner_ = scanner;
     cur_row_ = cur_row;
-    svr_port_ = ObServer::get_instance().get_self().get_port();
+    svr_port_ = ObServer::get_instance().get_self().get_port(); 
     effective_tenant_id_ = tenant_id;
   }
   return ret;

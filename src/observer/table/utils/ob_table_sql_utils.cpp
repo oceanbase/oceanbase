@@ -406,7 +406,7 @@ int ObTableSqlUtils::disable_table(ObIAllocator &allocator,
     exec_ctx.set_sql_ctx(&sql_ctx);
     exec_ctx.get_task_exec_ctx().schema_service_ = GCTX.schema_service_;
     exec_ctx.set_my_session(&session);
-    if (OB_FAIL(execute_set_kv_attribute(allocator, exec_ctx,
+    if (OB_FAIL(execute_set_kv_attribute(allocator, exec_ctx, 
         timeout, database, tablegroup, true/* is_disable */))) {
       LOG_WARN("fail to disable table", K(ret), K(timeout), K(database), K(tablegroup));
     }
@@ -430,7 +430,7 @@ int ObTableSqlUtils::enable_table(ObIAllocator &allocator,
     exec_ctx.set_sql_ctx(&sql_ctx);
     exec_ctx.get_task_exec_ctx().schema_service_ = GCTX.schema_service_;
     exec_ctx.set_my_session(&session);
-    if (OB_FAIL(execute_set_kv_attribute(allocator, exec_ctx,
+    if (OB_FAIL(execute_set_kv_attribute(allocator, exec_ctx, 
           timeout, database, tablegroup, false/* is_disable */))) {
       LOG_WARN("fail to enable table", K(ret), K(timeout), K(database), K(tablegroup));
     }
@@ -460,7 +460,7 @@ int ObTableSqlUtils::execute_set_kv_attribute(ObIAllocator &allocator,
     param.is_disable_ = false;
   }
   arg.ddl_param_ = &param;
-
+  
   if (OB_ISNULL(my_session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
@@ -573,7 +573,7 @@ int ObTableRsExecutor::execute(ObExecContext &ctx, obrpc::ObHTableDDLArg &arg, o
       ret = tmp_ret;
     }
   }
-
+  
   return ret;
 }
 

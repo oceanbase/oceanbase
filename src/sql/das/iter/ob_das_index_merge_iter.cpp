@@ -193,7 +193,7 @@ int ObDASIndexMergeIter::inner_init(ObDASIterParam &param)
     tx_desc_ = index_merge_param.tx_desc_;
     snapshot_ = index_merge_param.snapshot_;
     is_reverse_ = index_merge_param.is_reverse_;
-
+    
     lib::ContextParam context_param;
     context_param.set_mem_attr(MTL_ID(), "DASIndexMerge", ObCtxIds::DEFAULT_CTX_ID)
         .set_properties(lib::USE_TL_PAGE_OPTIONAL);
@@ -362,7 +362,7 @@ void ObDASIndexMergeIter::reset_datum_ptr(const common::ObIArray<ObExpr*> *exprs
   }
 }
 
-int ObDASIndexMergeIter::extract_match_against_exprs(const common::ObIArray<ObExpr*> &exprs,
+int ObDASIndexMergeIter::extract_match_against_exprs(const common::ObIArray<ObExpr*> &exprs, 
                                                      common::ObIArray<ObExpr*> &match_against_exprs)
 {
   int ret = OB_SUCCESS;
@@ -922,7 +922,7 @@ int ObDASIndexMergeIter::union_get_next_rows(int64_t &count, int64_t capacity)
             LOG_WARN("index merge failed to compare row", K(i), K(output_idx), K(ret));
           } else if (cmp_ret == 0) {
             if (OB_FAIL(child_stores_.at(i).to_expr())) {
-              LOG_WARN("failed to convert store row to expr", K(ret));
+              LOG_WARN("failed to convert store row to expr", K(ret));  
             }
           } else {
             // this child does not have a corresponding rowkey

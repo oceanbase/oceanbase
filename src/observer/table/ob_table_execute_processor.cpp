@@ -478,7 +478,7 @@ int ObTableApiExecuteP::try_process()
   LOG_TRACE("[TABLE] execute operation", K(ret), K_(result),
               "receive_ts", get_receive_timestamp(), K_(retry_count));
 #endif
-  OB_TABLE_END_AUDIT(ret_code, ret,
+  OB_TABLE_END_AUDIT(ret_code, ret, 
                      snapshot, get_tx_snapshot(),
                      stmt_type, ObTableAuditUtils::get_stmt_type(table_operation.type()));
   return ret;
@@ -506,7 +506,7 @@ int ObTableApiExecuteP::response(const int retcode)
       // @note modify the value of timestamp to be positive
       ret = ObTableRpcProcessorUtil::negate_htable_timestamp(result_entity_);
     }
-
+    
     // return the package even if negate_htable_timestamp fails
     const ObRpcPacket *rpc_pkt = &reinterpret_cast<const ObRpcPacket&>(req_->get_packet());
     if (ObTableRpcProcessorUtil::need_do_move_response(retcode, *rpc_pkt)) {
@@ -615,7 +615,7 @@ int ObTableApiExecuteP::before_response(int error_code)
 {
   // NOTE: when check_timeout failed, the result.entity_ is null, and serialize result cause coredump
   if (!had_do_response() && OB_ISNULL(result_.get_entity())) {
-    result_.set_entity(result_entity_);
+    result_.set_entity(result_entity_); 
   }
   if (error_code != OB_SUCCESS) {
     if (OB_NOT_NULL(group_single_op_)) {

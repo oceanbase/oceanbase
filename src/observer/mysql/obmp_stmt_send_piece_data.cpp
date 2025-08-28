@@ -87,7 +87,7 @@ int ObMPStmtSendPieceData::before_process()
     {
       buffer_.assign_ptr(pos, static_cast<ObString::obstr_size_t>(buffer_len_));
       pos += buffer_len_;
-      LOG_INFO("resolve send_piece protocol packet successfully",
+      LOG_INFO("resolve send_piece protocol packet successfully", 
                K(ret), K(stmt_id_), K(param_id_), K(buffer_len_));
       LOG_DEBUG("send_piece packet content", K(buffer_));
     }
@@ -434,7 +434,7 @@ int ObPieceCache::init_piece_cache(ObSQLSessionInfo &session)
 }
 
 int ObPieceCache::make_piece(int32_t stmt_id, 
-                             uint16_t param_id,
+                             uint16_t param_id, 
                              ObPiece *&piece, 
                              ObSQLSessionInfo &session)
 {
@@ -631,19 +631,19 @@ int ObPieceCache::get_piece_buffer(int32_t stmt_id,
 // for execute
 // buf needs to allocate memory in the outer layer ！！！
 int ObPieceCache::get_buffer(int32_t stmt_id, 
-                             uint16_t param_id,
+                             uint16_t param_id, 
                              uint64_t count,
                              uint64_t &length, 
                              common::ObFixedArray<ObSqlString, ObIAllocator> &str_buf,
                              char *is_null_map) {
-  int ret = lib::is_oracle_mode()
+  int ret = lib::is_oracle_mode() 
     ? get_oracle_buffer(stmt_id, param_id, count, length, str_buf, is_null_map)
     : get_mysql_buffer(stmt_id, param_id, length, str_buf.at(0));
   return ret;
 }
 
 int ObPieceCache::get_oracle_buffer(int32_t stmt_id, 
-                                    uint16_t param_id,
+                                    uint16_t param_id, 
                                     uint64_t count,
                                     uint64_t &length, 
                                     common::ObFixedArray<ObSqlString, ObIAllocator> &str_buf,
@@ -677,7 +677,7 @@ int ObPieceCache::get_oracle_buffer(int32_t stmt_id,
 }
 
 int ObPieceCache::get_mysql_buffer(int32_t stmt_id, 
-                                  uint16_t param_id,
+                                  uint16_t param_id, 
                                   uint64_t &length, 
                                   ObSqlString &str_buf)
 {
@@ -804,7 +804,7 @@ static int pre_extend_str(ObPiece *piece,
   const int32_t pre_extend_thres = 4194304;
   if (!is_enable) {
   } else if (first_piece_size < pre_extend_thres) {
-    // just disable pre extend
+    // just disable pre extend 
     is_enable = false;
   } else {
     int64_t index_pre = piece->get_position() - 1;

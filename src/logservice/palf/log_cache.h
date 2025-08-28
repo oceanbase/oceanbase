@@ -157,7 +157,7 @@ public:
   int put_log(const LogKVCacheKey &key, const LogKVCacheValue &value);
 };
 
-struct FillBuf
+struct FillBuf 
 {
 public:
   FillBuf();
@@ -183,8 +183,8 @@ class LogColdCache
 public:
   LogColdCache();
   ~LogColdCache();
-  int init(const int64_t palf_id,
-           IPalfEnvImpl *palf_env_impl,
+  int init(const int64_t palf_id, 
+           IPalfEnvImpl *palf_env_impl, 
            LogStorage *log_storage);
   void destroy();
   // @brief: read logs from cold cache. If miss cold cache, read logs from the disk and fill cold cache
@@ -225,21 +225,21 @@ private:
                       int64_t &out_read_size,
                       LogIteratorInfo *iterator_info);
   int get_cache_lines_(const LSN &lsn,
-                       const int64_t flashback_version,
-                       const int64_t in_read_size,
+                       const int64_t flashback_version, 
+                       const int64_t in_read_size, 
                        char *buf,
                        int64_t &out_read_size,
                        LogIteratorInfo *iterator_info);
   int get_cache_line_(const LSN &cache_read_lsn,
-                      const int64_t flashback_version,
-                      const int64_t in_read_size,
+                      const int64_t flashback_version, 
+                      const int64_t in_read_size, 
                       const int64_t read_pos,
                       char *buf,
                       int64_t &out_read_size);
   int fill_cache_lines_(const int64_t flashback_version,
                         const LSN &lsn,
-                        const int64_t fill_size,
-                        char *buf);
+                        const int64_t fill_size, 
+                        char *buf);   
   int fill_cache_line_(const int64_t flashback_version,
                        const LSN &fill_lsn,
                        const int64_t fill_size,
@@ -250,7 +250,7 @@ private:
                       ReadBuf &read_buf,
                       int64_t &out_read_size,
                       LogIOContext &io_ctx);
-  offset_t get_phy_offset_(const LSN &lsn) const;
+  offset_t get_phy_offset_(const LSN &lsn) const;                      
 private:
   class LogCacheStat
   {
@@ -293,11 +293,11 @@ public:
   LogCache();
   ~LogCache();
   void destroy();
-  int init(const int64_t palf_id,
-           IPalfHandleImpl *palf_handle_impl,
+  int init(const int64_t palf_id, 
+           IPalfHandleImpl *palf_handle_impl, 
            IPalfEnvImpl *palf_env_impl,
            LogStorage *log_storage);
-  bool is_inited() const;
+  bool is_inited() const;           
   int read(const int64_t flashback_version,
            const LSN &lsn,
            const int64_t in_read_size,
@@ -318,12 +318,12 @@ private:
                        const int64_t in_read_size,
                        ReadBuf &read_buf,
                        int64_t &out_read_size,
-                       LogIOContext &io_ctx);
-  int try_update_fill_buf_(const int64_t flashback_version,
+                       LogIOContext &io_ctx);                  
+  int try_update_fill_buf_(const int64_t flashback_version, 
                            LSN &fill_lsn,
-                           int64_t &fill_size);
-  int update_fill_buf_(const int64_t flashback_version,
-                       LSN &fill_lsn);
+                           int64_t &fill_size);   
+  int update_fill_buf_(const int64_t flashback_version, 
+                       LSN &fill_lsn);                                            
   int64_t cal_in_read_size_(const int64_t fill_size);
 private:
   int64_t palf_id_;

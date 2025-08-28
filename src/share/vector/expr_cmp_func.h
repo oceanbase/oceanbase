@@ -31,7 +31,7 @@ struct VectorCmpExprFuncsHelper
 {
   static void get_cmp_set(const sql::ObDatumMeta &l_meta, const sql::ObDatumMeta &r_meta,
                           sql::NullSafeRowCmpFunc &null_first_cmp, sql::NullSafeRowCmpFunc &null_last_cmp);
-
+  
   static sql::RowCmpFunc get_row_cmp_func(const sql::ObDatumMeta &l_meta,
                                           const sql::ObDatumMeta &r_meta);
 

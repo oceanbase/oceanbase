@@ -25,7 +25,7 @@ namespace storage
 // identify and manage them. When you add a new freeze call, be sure to add the
 // flag in the ObFreezeSourceFlag here.
 // Additionally, please remember to maintain this information in the document at
-//
+// 
 // future learners and maintainers.
 enum class ObFreezeSourceFlag : int64_t
 {

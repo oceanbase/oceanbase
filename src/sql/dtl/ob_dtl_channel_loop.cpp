@@ -371,12 +371,12 @@ int ObDtlChannelLoop::process_channels(ObIDltChannelLoopPred *pred, int64_t &nth
     if (first_data_get_) {
       // 第一次命中后的miss计数
       // ObSqlMonitorStatIds::DTL_LOOP_TOTAL_MISS_AFTER_DATA;
-      // The statistics of otherstat_6_value_ will affect all statistics of other operators that use otherstat_6_value_.
+      // The statistics of otherstat_6_value_ will affect all statistics of other operators that use otherstat_6_value_. 
       // For now, comment out the DTL.
       // ++op_monitor_info_.otherstat_5_value_;
     }
     // ObSqlMonitorStatIds::DTL_LOOP_TOTAL_MISS;
-    // The statistics of otherstat_6_value_ will affect all statistics of other operators that use otherstat_6_value_.
+    // The statistics of otherstat_6_value_ will affect all statistics of other operators that use otherstat_6_value_. 
     // For now, comment out the DTL.
     // ++op_monitor_info_.otherstat_6_value_;
   }

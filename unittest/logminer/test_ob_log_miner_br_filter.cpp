@@ -118,7 +118,7 @@ TEST(ob_log_miner_br_filter, ColumnBRFilterPlugin)
   destroy_miner_br(br);
   br = build_logminer_br(new_buf, old_buf, EUPDATE, lib::Worker::CompatMode::MYSQL,
       "tenant1.db1", "table2", 8, "col2", "val3", "val3",
-      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING),
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING), 
       "col1", nullptr, "val1", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(true, need_filter);
@@ -389,7 +389,7 @@ TEST(ob_log_miner_br_filter, OperationBRFilterPlugin)
 
   EXPECT_EQ(OB_SUCCESS, op_filter.init("insert"));
 
-  br = build_logminer_br(new_buf, old_buf, EBEGIN, lib::Worker::CompatMode::MYSQL,
+  br = build_logminer_br(new_buf, old_buf, EBEGIN, lib::Worker::CompatMode::MYSQL, 
       "tenant1.db1", "table1", 0);
   EXPECT_EQ(OB_SUCCESS, op_filter.filter(*br, need_filter));
   EXPECT_EQ(false, need_filter);

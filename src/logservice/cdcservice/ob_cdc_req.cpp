@@ -246,7 +246,7 @@ OB_DEF_DESERIALIZE(ObCdcReqStartLSNByTsResp)
  * Fetch Group LogEntry
  *
  */
-OB_SERIALIZE_MEMBER(ObCdcLSFetchLogReq, rpc_ver_, ls_id_, start_lsn_, upper_limit_ts_, client_pid_,
+OB_SERIALIZE_MEMBER(ObCdcLSFetchLogReq, rpc_ver_, ls_id_, start_lsn_, upper_limit_ts_, client_pid_, 
                     client_id_, progress_, flag_, compressor_type_, tenant_id_, client_type_);
 OB_SERIALIZE_MEMBER(ObCdcFetchStatus,
                     is_reach_max_lsn_,

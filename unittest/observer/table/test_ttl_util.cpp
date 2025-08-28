@@ -81,7 +81,7 @@ int ret = OB_SUCCESS;
   ObKVAttr kv_attr;
   ObString json_str;
   kv_attr.type_ = ObKVAttr::ObTTLTableType::HBASE;
-
+  
   // Case 1: Both ttl and max_version are 0
   kv_attr.ttl_ = 0;
   kv_attr.max_version_ = 0;
@@ -89,7 +89,7 @@ int ret = OB_SUCCESS;
   ret = ObTTLUtil::format_kv_attributes_to_json_str(allocator, kv_attr, json_str);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_STREQ("{\"Hbase\": {\"State\": \"enable\"}}", json_str.ptr());
-
+  
   // Case 2: Only ttl
   kv_attr.ttl_ = 86400;
   kv_attr.max_version_ = 0;

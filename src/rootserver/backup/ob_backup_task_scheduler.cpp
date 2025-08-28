@@ -16,7 +16,7 @@
 #include "share/ob_zone_table_operation.h"
 #include "share/backup/ob_backup_server_mgr.h"
 
-namespace oceanbase
+namespace oceanbase 
 
 {
 using namespace common;
@@ -476,7 +476,7 @@ int ObBackupTaskSchedulerQueue::get_zone_list_from_region_(const common::ObRegio
     LOG_WARN("region is empty", K(region), K(ret));
   } else if (OB_FAIL(get_tenant_zone_list_(task_scheduler_->get_exec_tenant_id(), tmp_zone_list))) {
     LOG_WARN("fail to get zone list of tenant", K(ret), "tenant_id", task_scheduler_->get_exec_tenant_id());
-  }
+  } 
   SMART_VAR(share::ObZoneInfo, info) {
     ARRAY_FOREACH_X(tmp_zone_list, i, cur, OB_SUCC(ret)) {
       const common::ObZone &zone = tmp_zone_list.at(i);
@@ -1158,19 +1158,19 @@ void ObBackupTaskScheduler::destroy()
   schema_service_ = nullptr;
   is_inited_ = false;
   ObBackupBaseService::destroy();
-}
+} 
 
 int ObBackupTaskScheduler::switch_to_leader()
 {
   reuse();
   return ObBackupBaseService::switch_to_leader();
-}
+} 
 
 void ObBackupTaskScheduler::switch_to_follower_forcedly()
 {
   ObBackupBaseService::switch_to_follower_forcedly();
   reuse();
-}
+} 
 
 int ObBackupTaskScheduler::switch_to_follower_gracefully()
 {
@@ -1236,7 +1236,7 @@ void ObBackupTaskScheduler::run2()
       idle();
     }
     LOG_INFO("backup task scheduler stop");
-  }
+  } 
 }
 
 int ObBackupTaskScheduler::check_tenant_status_normal_(bool &is_normal)
@@ -1398,7 +1398,7 @@ int ObBackupTaskScheduler::check_alive_(int64_t &last_check_task_on_server_ts, b
       if (!is_exist || is_task_keep_alive_timeout) {
         LOG_INFO("task not on server, need remove", KPC(task), K(is_exist), K(is_task_keep_alive_timeout));
         const int rc = OB_REBALANCE_TASK_NOT_IN_PROGRESS;
-        ObHAResultInfo result_info(ObHAResultInfo::ROOT_SERVICE,
+        ObHAResultInfo result_info(ObHAResultInfo::ROOT_SERVICE, 
                                    task->get_dst(),
                                    task->get_trace_id(),
                                    rc);
@@ -1431,7 +1431,7 @@ int ObBackupTaskScheduler::execute_task_(const ObBackupScheduleTask &task)
   }
   if (OB_FAIL(ret)) {
     int tmp_ret = OB_SUCCESS;
-    ObHAResultInfo result_info(ObHAResultInfo::ROOT_SERVICE,
+    ObHAResultInfo result_info(ObHAResultInfo::ROOT_SERVICE, 
                                task.get_dst(),
                                task.get_trace_id(),
                                ret);
@@ -1581,7 +1581,7 @@ int ObBackupTaskScheduler::get_backup_job(const BackupJobType &type, ObIBackupJo
       } else {
         break;
       }
-    }
+    } 
   }
 
   if (OB_FAIL(ret)) {

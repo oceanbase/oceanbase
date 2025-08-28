@@ -325,7 +325,7 @@ int ObTxDataMemtableMgr::calc_new_memtable_buckets_cnt_(const double load_factor
   int64_t buckets_size_limit = remain_memory >> 4; /* remain_memory * (1/16) */
 
   int64_t expect_buckets_cnt = old_buckets_cnt;
-  if (load_factory > ObTxDataHashMap::LOAD_FACTORY_MAX_LIMIT &&
+  if (load_factory > ObTxDataHashMap::LOAD_FACTORY_MAX_LIMIT && 
       expect_buckets_cnt < ObTxDataHashMap::MAX_BUCKETS_CNT) {
     expect_buckets_cnt <<= 1;
   } else if (load_factory < ObTxDataHashMap::LOAD_FACTORY_MIN_LIMIT &&

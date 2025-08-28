@@ -21,7 +21,7 @@ namespace tools
 {
 //=========================== OSDQScene ================================
 OSDQScene::OSDQScene()
-    : is_inited_(false),
+    : is_inited_(false), 
       run_time_s_(0),
       metric_(nullptr),
       base_uri_(nullptr),
@@ -43,8 +43,8 @@ int OSDQScene::loop_send_task()
     OB_LOG(WARN, "scene not init", KR(ret), K(is_inited_));
   } else {
     const int64_t start_time_us = ObTimeUtility::current_time();
-    int64_t current_time_us = start_time_us;
-    while (current_time_us - start_time_us < run_time_s_ * 1000000
+    int64_t current_time_us = start_time_us; 
+    while (current_time_us - start_time_us < run_time_s_ * 1000000 
       && (ret == OB_SUCCESS || ret == OB_EAGAIN)) {
       OSDQTask *task = nullptr;
       if (OB_FAIL(task_handler_.gen_task(task))) {
@@ -115,13 +115,13 @@ OSDQTask::~OSDQTask()
   }
 }
 
-bool OSDQTask::is_valid() const
+bool OSDQTask::is_valid() const 
 {
   bool valid = true;
   if (OB_UNLIKELY(op_type_ == MAX_OPERATE_TYPE) || OB_ISNULL(uri_)) {
     valid = false;
   } else if (op_type_ == WRITE_SINGLE_FILE || op_type_ == APPEND_WRITE || op_type_ == MULTIPART_WRITE) {
-    if (OB_UNLIKELY(object_id_ <= 0)
+    if (OB_UNLIKELY(object_id_ <= 0) 
         || OB_UNLIKELY(buf_len_ > 0 && buf_ == nullptr)
         || OB_UNLIKELY(buf_len_ < 0)) {
       valid = false;
@@ -193,7 +193,7 @@ bool OSDQHybridTestScene::param_valid(const OSDQParameters *param) {
     is_valid = false;
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", KR(ret), K(storage_info_), KPC(param));
-  }
+  } 
   return is_valid;
 }
 
@@ -206,7 +206,7 @@ int OSDQHybridTestScene::execute()
   } else if (OB_FAIL(task_handler_.start())) {
     OB_LOG(WARN, "failed start task handler", KR(ret));
   } else if (OB_FAIL(loop_send_task())) {
-    OB_LOG(WARN, "failed exec loop_send_task", KR(ret));
+    OB_LOG(WARN, "failed exec loop_send_task", KR(ret)); 
   }
   task_handler_.destroy();
 
@@ -214,7 +214,7 @@ int OSDQHybridTestScene::execute()
 }
 
 //==================== OSDQResourceLimitedScene ====================
-OSDQResourceLimitedScene::OSDQResourceLimitedScene()
+OSDQResourceLimitedScene::OSDQResourceLimitedScene() 
   : OSDQScene(),
     resource_limited_type_(MAX_RESOURCE_LIMITED_TYPE),
     limit_run_time_s_(0),
@@ -259,8 +259,8 @@ bool OSDQResourceLimitedScene::param_valid(const OSDQParameters *param) {
   } else if (OB_FAIL(storage_info_.set(param->base_path_, param->storage_info_str_))) {
     is_valid = false;
     OB_LOG(WARN, "failed to set storage info", KR(ret), KPC(param));
-  } else if (OB_UNLIKELY(!storage_info_.is_valid() || param->run_time_s_ <= 0
-                         || param->resource_limited_type_ < 0
+  } else if (OB_UNLIKELY(!storage_info_.is_valid() || param->run_time_s_ <= 0 
+                         || param->resource_limited_type_ < 0 
                          || param->resource_limited_type_ >= MAX_RESOURCE_LIMITED_TYPE
                          || param->limit_run_time_s_ <= 0)) {
     is_valid = false;
@@ -279,7 +279,7 @@ bool OSDQResourceLimitedScene::param_valid(const OSDQParameters *param) {
       is_valid = false;
       ret = OB_INVALID_ARGUMENT;
       OB_LOG(WARN, "invalid argument", KR(ret), K(param->limit_cpu_));
-      OSDQLogEntry::print_log("INVALID ARGUMENT", "the resource limit run time should be at least 5s larger than run time when limited type is cpu limit", RED_COLOR_PREFIX);
+      OSDQLogEntry::print_log("INVALID ARGUMENT", "the resource limit run time should be at least 5s larger than run time when limited type is cpu limit", RED_COLOR_PREFIX); 
     }
   }
   return is_valid;
@@ -319,12 +319,12 @@ int OSDQResourceLimitedScene::execute()
       OB_LOG(WARN, "failed exec resource limited test", KR(ret), K(resource_limited_type_));
     }
     task_handler_.destroy();
-  }
+  } 
   return ret;
 }
 
 void OSDQResourceLimitedScene::inner_disrupt_network_(
-    const int64_t sleep_time_s,
+    const int64_t sleep_time_s, 
     const char *class_handle,
     std::mutex &mtx,
     std::condition_variable &cv,
@@ -334,7 +334,7 @@ void OSDQResourceLimitedScene::inner_disrupt_network_(
   /*
    *                  1:        root qdisc
    *                /   \
-   *              1:1   1:2     child class
+   *              1:1   1:2     child class  
    *               |     |
    *              10:   20:       qdisc
    */
@@ -345,7 +345,7 @@ void OSDQResourceLimitedScene::inner_disrupt_network_(
   system("tc qdisc add dev eth0 parent 1:1 handle 10: netem loss 100%");
   system("tc qdisc add dev eth0 parent 1:2 handle 20: sfq perturb 10");
   system("cgcreate -g net_cls:/ob_admin_osdq_cgroup");
-  std::string bind_str = std::string("echo ") + std::string(class_handle) +
+  std::string bind_str = std::string("echo ") + std::string(class_handle) + 
                          " | tee /sys/fs/cgroup/net_cls/ob_admin_osdq_cgroup/net_cls.classid > /dev/null";
   system(bind_str.c_str());
   const int pid = getpid();
@@ -362,7 +362,7 @@ void OSDQResourceLimitedScene::inner_disrupt_network_(
     OB_LOG(WARN, "failed init log", KR(ret));
   }
   OSDQLogEntry::print_log("DISRUPT_NETWORK", "THE NETWORK RESTRICTED ENVIRONMENT IS READY");
-  OSDQLogEntry::print_log("DISRUPT_NETWORK",
+  OSDQLogEntry::print_log("DISRUPT_NETWORK", 
                           std::string("bind qdisc ") + std::string(class_handle) + std::string(" success"));
 
   std::this_thread::sleep_for(std::chrono::seconds(sleep_time_s));
@@ -385,15 +385,15 @@ int OSDQResourceLimitedScene::test_network_packet_loss_limit_()
   while (!ready) {
     cv.wait(lock);
   }
-  ret = loop_send_task();
+  ret = loop_send_task(); 
   t.join();
   task_handler_.stop();
-
+  
   if (OB_SUCC(ret)) {
     for (auto req_ret : task_handler_.req_results_) {
-      if (req_ret != OB_SUCCESS
+      if (req_ret != OB_SUCCESS 
           && req_ret != OB_OBJECT_STORAGE_IO_ERROR
-          && req_ret != OB_IO_TIMEOUT
+          && req_ret != OB_IO_TIMEOUT 
           && req_ret != OB_TIMEOUT) {
         ret = req_ret;
         break;
@@ -401,7 +401,7 @@ int OSDQResourceLimitedScene::test_network_packet_loss_limit_()
     }
   }
 
-  return ret;
+  return ret;  
 }
 
 int OSDQResourceLimitedScene::test_network_bandwidth_limit_()
@@ -430,11 +430,11 @@ int OSDQResourceLimitedScene::test_network_bandwidth_limit_()
     }
   }
 
-  return ret;
+  return ret;  
 }
 
 void OSDQResourceLimitedScene::inner_limit_memory_(
-    const int64_t sleep_time_s,
+    const int64_t sleep_time_s, 
     const int64_t limit_memory_size_mb,
     std::mutex &mtx,
     std::condition_variable &cv,
@@ -442,7 +442,7 @@ void OSDQResourceLimitedScene::inner_limit_memory_(
 {
   int ret = OB_SUCCESS;
   ObRefHolder<ObTenantIOManager> tenant_holder;
-  const int64_t limit_memory_size = limit_memory_size_mb * 1024 * 1024;
+  const int64_t limit_memory_size = limit_memory_size_mb * 1024 * 1024; 
   if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(OB_SERVER_TENANT_ID, tenant_holder))) {
     OB_LOG(WARN, "failed get tenant io manager", KR(ret));
   } else if (OB_FAIL(tenant_holder.get_ptr()->update_memory_pool(limit_memory_size))) {
@@ -460,7 +460,7 @@ void OSDQResourceLimitedScene::inner_limit_memory_(
       std::unique_lock<std::mutex> lock(mtx);
       ready = true;
     }
-
+    
     cv.notify_all();
     OSDQLogEntry log;
     if (OB_FAIL(log.init("LIMIT MEMORY"))) {
@@ -483,7 +483,7 @@ void OSDQResourceLimitedScene::inner_limit_memory_(
         OSDQLogEntry::print_log("LIMIT MEMORY", "failed to restore memory", RED_COLOR_PREFIX);
       }
     }
-  }
+  } 
 
   if (OB_SUCC(ret)) {
     OSDQLogEntry::print_log("LIMIT MEMORY", "THE MEMORY RESTRICETED ENVIRONMENT IS REMOVED", GREEN_COLOR_PREFIX);
@@ -497,7 +497,7 @@ int OSDQResourceLimitedScene::test_memory_limit_()
   std::mutex mtx;
   std::condition_variable cv;
   bool ready = false;
-  std::thread t(inner_limit_memory_, limit_run_time_s_, limit_memory_mb_,
+  std::thread t(inner_limit_memory_, limit_run_time_s_, limit_memory_mb_, 
                 std::ref(mtx), std::ref(cv), std::ref(ready));
   std::unique_lock<std::mutex> lock(mtx);
   while (!ready) {
@@ -509,7 +509,7 @@ int OSDQResourceLimitedScene::test_memory_limit_()
 
   if (OB_SUCC(ret)) {
     for (auto req_ret : task_handler_.req_results_) {
-      if (req_ret != OB_SUCCESS
+      if (req_ret != OB_SUCCESS 
           && req_ret != OB_HASH_NOT_EXIST
           && req_ret != OB_ALLOCATE_MEMORY_FAILED) {
         ret = req_ret;
@@ -518,11 +518,11 @@ int OSDQResourceLimitedScene::test_memory_limit_()
     }
   }
 
-  return ret;
+  return ret;  
 }
 
 void OSDQResourceLimitedScene::inner_limit_cpu_(
-    const int64_t sleep_time_s,
+    const int64_t sleep_time_s, 
     const double cpu_rate,
     std::mutex &mtx,
     std::condition_variable &cv,
@@ -568,16 +568,16 @@ int OSDQResourceLimitedScene::test_cpu_limit_()
   std::condition_variable cv;
   bool ready = false;
   std::thread t(inner_limit_cpu_, limit_run_time_s_, limit_cpu_,
-                std::ref(mtx), std::ref(cv),
+                std::ref(mtx), std::ref(cv), 
                 std::ref(ready));
   std::unique_lock<std::mutex> lock(mtx);
   while (!ready) {
     cv.wait(lock);
   }
-  ret = loop_send_task();
+  ret = loop_send_task(); 
   t.join();
   task_handler_.stop();
-
+  
   if (OB_SUCC(ret)) {
     for (auto req_ret : task_handler_.req_results_) {
       if (req_ret != OB_SUCCESS) {

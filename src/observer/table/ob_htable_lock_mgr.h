@@ -24,7 +24,7 @@ namespace table
 
 enum ObHTableLockMode
 {
-  SHARED, // for put, delete,
+  SHARED, // for put, delete, 
   EXCLUSIVE // for check_and_mutate, increment, append
 };
 
@@ -70,10 +70,10 @@ public:
   ~ObHTableLockNode() {}
   TO_STRING_KV(K_(lock_mode), KPC_(lock_key), KPC_(next));
   void set_lock_key(ObHTableLockKey *lock_key) { lock_key_ = lock_key; }
-  void set_lock_mode(ObHTableLockMode lock_mode) { lock_mode_ = lock_mode; }
+  void set_lock_mode(ObHTableLockMode lock_mode) { lock_mode_ = lock_mode; } 
   ObHTableLockKey *get_lock_key() { return lock_key_; }
   ObHTableLockMode get_lock_mode() { return lock_mode_; }
-
+  
 private:
   ObHTableLockMode lock_mode_;
   ObHTableLockKey *lock_key_;
@@ -89,7 +89,7 @@ public:
   ObHTableLockHandle() : tx_id_(0), lock_nodes_(nullptr) {}
 
   ObHTableLockHandle(const transaction::ObTransID &tx_id) : tx_id_(tx_id), lock_nodes_(nullptr) {}
-
+  
   ~ObHTableLockHandle()
   {
     tx_id_.reset();
@@ -116,7 +116,7 @@ public:
   /* try_rdlock - try to add read lock
    *
    * for read lock, ObHTableLock only record ref count, ObHTableHandle record all locks it holds
-   *
+   * 
    * return:
    * OB_SUCCESS - OK
    * OB_TRY_LOCK_ROW_CONFLICT - if lock conflict
@@ -181,10 +181,10 @@ public:
   /**
    * lock_row - lock the row in htable model
    *
-   * @table_id:   the table(column family) where the row is to be locked
+   * @table_id:   the table(column family) where the row is to be locked 
    * @key:        the target htable rowkey
    * @mode:       share or exclusive lock mode
-   * @handle:     the target htable lock handle
+   * @handle:     the target htable lock handle 
    *
    * Return:
    * OB_SUCCESS - OK
@@ -193,12 +193,12 @@ public:
   int lock_row(const uint64_t table_id, const common::ObString& key, ObHTableLockMode mode, ObHTableLockHandle &handle);
 
   /**
-   * release_handle - release the htable lock handle
-   *
+   * release_handle - release the htable lock handle 
+   * 
    * this is the end of lifecycle of htable lock inside a transaction
    * the HTableLockHandle object should not been access anymore after release.
-   *
-   * @handle:     the target htable lock handle
+   * 
+   * @handle:     the target htable lock handle 
    *
    * Returns:
    * OB_SUCCESS - OK

@@ -560,7 +560,7 @@ int ObUniqTaskQueue<Task, Process>::diagnose_processing_task(ObIArray<Task> &tas
     common::ObThreadCondGuard guard(cond_);
     FOREACH_X(iter, processing_task_set_, add_cnt < MAX_DIAGNOSE_NUM) {
       const Task &task = iter->first;
-      if (task.need_diagnose()
+      if (task.need_diagnose() 
           && DIAGNOSE_PROCESSING_TIME < ObTimeUtility::current_time() - task.get_start_timestamp()) {
         if (OB_TMP_FAIL(tasks.push_back(task))) {
           SERVER_LOG(WARN, "fail to push back array", K(tmp_ret));

@@ -36,8 +36,8 @@ public:
   int visit(ObIWkbGeogPoint *geo);
   int visit(ObIWkbGeomPoint *geo);
   int visit(ObIWkbGeogLineString *geo);
-  int visit(ObIWkbGeomLineString *geo);
-  int visit(ObIWkbGeogMultiPoint *geo);
+  int visit(ObIWkbGeomLineString *geo);  
+  int visit(ObIWkbGeogMultiPoint *geo);  
   int visit(ObIWkbGeomMultiPoint *geo);
   int visit(ObIWkbGeogMultiLineString *geo);
   int visit(ObIWkbGeomMultiLineString *geo);
@@ -78,7 +78,7 @@ private:
       typename T_ILINE,
       typename T_IMULTILINE,
       typename T_IPOLY,
-      typename T_IMULTIPOLY,
+      typename T_IMULTIPOLY, 
       typename T_ICOLLC,
       typename T_POINT,
       typename T_MULTIPOINT,

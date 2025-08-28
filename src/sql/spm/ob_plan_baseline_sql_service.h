@@ -129,7 +129,7 @@ public:
                                 const ObCollationType input_collation,
                                 const ObString &input_str,
                                 ObString &output_str);
-
+                                
   static OB_INLINE ObString truncate_sql_string(const ObString &input_str)
   {
     int64_t length = input_str.length() > OB_SHORT_SQL_LENGTH ? OB_SHORT_SQL_LENGTH : input_str.length();
@@ -146,7 +146,7 @@ public:
                                            const uint64_t& plan_hash,
                                            const ObEvolutionStat &evo_stat,
                                            int64_t& affected_rows);
-
+  
   int insert_new_baseline(ObIAllocator& allocator,
                           const uint64_t tenant_id,
                           const ObBaselineKey& key,
@@ -157,7 +157,7 @@ public:
                                const uint64_t tenant_id,
                                const ObBaselineKey& key,
                                const ObPlanBaselineItem& baseline_item);
-
+  
   int import_plan_baseline(ObIAllocator& allocator,
                            const uint64_t tenant_id,
                            const uint64_t baseline_db_id,

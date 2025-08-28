@@ -400,7 +400,7 @@ public:
       root_path.node_ = root_;
       if (OB_FAIL(path.push_back(root_path))) {
         OB_LOG(WARN, "fail to add node", K(ret));
-      }
+      } 
       int64_t nodep_idx = 0;
       for (pathp = path.begin(); OB_SUCC(ret) && OB_NOT_NULL(pathp->node_); pathp++) {
         cmp = pathp->cmp_ = compare_.compare(node, pathp->node_);

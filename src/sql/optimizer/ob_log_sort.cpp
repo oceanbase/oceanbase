@@ -100,7 +100,7 @@ int ObLogSort::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
     LOG_WARN("failed to check encode sortkey expr", K(ret));
   } else if (NULL != topn_expr_ && FALSE_IT(can_sort_opt = false)) {
     // do nothing
-  } else if ((is_prefix_sort() ? get_prefix_pos() : get_part_cnt() == sort_keys_.count()) &&
+  } else if ((is_prefix_sort() ? get_prefix_pos() : get_part_cnt() == sort_keys_.count()) && 
         FALSE_IT(can_sort_opt = false)) {
     // do nothing
   } else if (can_sort_opt && OB_FAIL(create_encode_sortkey_expr(sort_keys_))) {
@@ -150,7 +150,7 @@ uint64_t ObLogSort::hash(uint64_t seed) const
   return seed;
 }
 
-int ObLogSort::get_plan_item_info(PlanText &plan_text,
+int ObLogSort::get_plan_item_info(PlanText &plan_text, 
                                 ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
@@ -589,7 +589,7 @@ int ObLogSort::try_allocate_pushdown_topn_runtime_filter()
     // otherwise if most of the date of c1 is unique, the topn runtime filter
     // can filter on c3.
     // Since we can't distinguish these two scene accurately, topn runtime filter
-    // is forbidden in the prefix sort scene. Enable it by judging condition
+    // is forbidden in the prefix sort scene. Enable it by judging condition 
     // prefix_pos_ < effective_sk_cnt.
     can_allocate = false;
     OPT_TRACE("[TopN Filter] can not pushdown when prefix sort ", prefix_pos_, sort_keys_.count());

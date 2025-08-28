@@ -43,7 +43,7 @@ public:
        dump_tenant_info_interval_(DUMP_TENANT_INFO_INTERVAL),
        ora_rowscn_(0),
        is_data_version_crossed_(false),
-       finish_data_version_(0)
+       finish_data_version_(0) 
   {
     data_version_barrier_scn_.set_min();
   }
@@ -184,7 +184,7 @@ public:
   * @description:
   *    get tenant's local replayable_scn.
   *       for SYS/META tenant: there isn't replayable_scn
-  *       for user tenant: get replayable_scn for current machine, which may be smaller than the
+  *       for user tenant: get replayable_scn for current machine, which may be smaller than the 
   *                        global replayable_scn if current machine's data version has been synced
   *    by using this interface, we can ensure the log stream will never replay new version log in
   *    old data version
@@ -280,10 +280,10 @@ private:
  bool is_sys_ls_leader_();
  void broadcast_tenant_info_content_();
  void dump_tenant_info_(
-      const int64_t sql_update_cost_time,
-      const bool is_sys_ls_leader,
-      const int64_t broadcast_cost_time,
-      const int64_t end_time_us,
+      const int64_t sql_update_cost_time, 
+      const bool is_sys_ls_leader, 
+      const int64_t broadcast_cost_time, 
+      const int64_t end_time_us, 
       int64_t &last_dump_time_us);
  bool act_as_standby_();
 

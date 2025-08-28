@@ -50,3 +50,4 @@ void ObTruncateTableStmt::set_table_name(const common::ObString &table_name)
 
 } //namespace sql
 } //namespace oceanbase
+

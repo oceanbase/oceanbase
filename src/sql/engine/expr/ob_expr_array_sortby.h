@@ -26,13 +26,13 @@ class ObExprArraySortby : public ObExprArrayMapCommon
 {
 public:
   explicit ObExprArraySortby(common::ObIAllocator &alloc);
-  explicit ObExprArraySortby(common::ObIAllocator &alloc, ObExprOperatorType type,
+  explicit ObExprArraySortby(common::ObIAllocator &alloc, ObExprOperatorType type, 
                            const char *name, int32_t param_num, int32_t dimension);
   virtual ~ObExprArraySortby();
-
+  
   virtual int calc_result_typeN(ObExprResType& type,
                                 ObExprResType* types,
-                                int64_t param_num,
+                                int64_t param_num, 
                                 common::ObExprTypeCtx& type_ctx) const override;
   static int eval_array_sortby(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   static int index_sort(common::ObArenaAllocator &allocator, ObIArrayType *lambda_arr, uint32_t *&sort_idx);

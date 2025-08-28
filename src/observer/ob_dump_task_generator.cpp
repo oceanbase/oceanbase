@@ -151,7 +151,7 @@ void ObDumpTaskGenerator::dump_memory_leak()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("create new file failed", K(strerror(errno)));
   } else {
-    ObMemAttr attr(common::OB_SERVER_TENANT_ID, "dumpLeak", ObCtxIds::DEFAULT_CTX_ID,
+    ObMemAttr attr(common::OB_SERVER_TENANT_ID, "dumpLeak", ObCtxIds::DEFAULT_CTX_ID,		
                    lib::OB_HIGH_ALLOC);
     const int buf_len = 1L << 20;
     char *buf = (char*)ob_malloc(buf_len, attr);

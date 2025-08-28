@@ -130,3 +130,4 @@ int ObVirtualTableTabletIter::get_next_tablet()
 
   return ret;
 }
+

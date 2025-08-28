@@ -615,7 +615,7 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_abort_response(const int64_t particip
     // receive the abort response even we commit successfully.
     //
     // If you are interested in the similar problem, take a look at
-    //
+    // 
     case ObTxState::ABORT: {
       if (OB_FAIL(handle_2pc_ack_response_impl_(participant))) {
         TRANS_LOG(WARN, "retransmit msg failed", K(ret), K(*this));

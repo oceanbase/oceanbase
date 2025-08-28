@@ -45,7 +45,7 @@ using namespace oceanbase::storage;
 #define DEF_VAL_FOR_SQL      \
   int ret = OB_SUCCESS;      \
   ObSqlString sql;           \
-  int64_t affected_rows = 0;
+  int64_t affected_rows = 0; 
 
 class TestRunCtx
 {
@@ -149,7 +149,7 @@ void ObTxDataMinorTest::check_minor_result()
     }
 
     ASSERT_GT(minor_cnt, 3);
-
+    
     int64_t mb_reuse_percentage = total_multiplexed_mb_cnt * 100 / total_mb_cnt;
     ASSERT_GT(mb_reuse_percentage, 50);
   }
@@ -178,12 +178,12 @@ TEST_F(ObTxDataMinorTest, create_table)
   OB_LOG(INFO, "create_table succ");
 }
 
-TEST_F(ObTxDataMinorTest, insert_and_freeze)
+TEST_F(ObTxDataMinorTest, insert_and_freeze) 
 {
   insert_and_freeze();
 }
 
-TEST_F(ObTxDataMinorTest, check_minor_result)
+TEST_F(ObTxDataMinorTest, check_minor_result) 
 {
   check_minor_result();
 }

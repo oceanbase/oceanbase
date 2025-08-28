@@ -116,9 +116,9 @@ void ServerSuperBlockBody::reset()
   tenant_cnt_ = 0;
 }
 
-OB_UNIS_SERIALIZE(ServerSuperBlockBody);
-OB_UNIS_DESERIALIZE(ServerSuperBlockBody);
-OB_UNIS_SERIALIZE_SIZE(ServerSuperBlockBody);
+OB_UNIS_SERIALIZE(ServerSuperBlockBody);                                         
+OB_UNIS_DESERIALIZE(ServerSuperBlockBody);          
+OB_UNIS_SERIALIZE_SIZE(ServerSuperBlockBody);           
 int ServerSuperBlockBody::serialize_(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
@@ -557,17 +557,17 @@ int64_t ObTenantSuperBlock::get_serialize_size_(void) const
 
 OB_SERIALIZE_MEMBER(ObActiveTabletItem, tablet_id_,  union_id_);
 
-ObActiveTabletItem::ObActiveTabletItem() :
-  tablet_id_(ObTabletID::INVALID_TABLET_ID),
+ObActiveTabletItem::ObActiveTabletItem() : 
+  tablet_id_(ObTabletID::INVALID_TABLET_ID), 
   union_id_(0)
 {}
 ObActiveTabletItem::ObActiveTabletItem(const common::ObTabletID tablet_id, const int64_t union_id)
   : tablet_id_(tablet_id), union_id_(union_id) {}
 
-bool ObActiveTabletItem::is_valid() const {
-  return tablet_id_.is_valid()
-      && get_transfer_seq() != share::OB_INVALID_TRANSFER_SEQ
-      && get_tablet_meta_version() != blocksstable::ObStorageObjectOpt::INVALID_TABLET_VERSION;
+bool ObActiveTabletItem::is_valid() const { 
+  return tablet_id_.is_valid() 
+      && get_transfer_seq() != share::OB_INVALID_TRANSFER_SEQ 
+      && get_tablet_meta_version() != blocksstable::ObStorageObjectOpt::INVALID_TABLET_VERSION; 
 }
 
 

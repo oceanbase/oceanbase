@@ -20,12 +20,12 @@
 
 using namespace oceanbase::common;
 
-namespace oceanbase
+namespace oceanbase 
 {
 namespace sql
 {
 
-ObExprInsertChildXml::ObExprInsertChildXml(common::ObIAllocator &alloc)
+ObExprInsertChildXml::ObExprInsertChildXml(common::ObIAllocator &alloc) 
   : ObFuncExprOperator(alloc, T_FUN_SYS_INSERTCHILDXML, N_INSERTCHILDXML, MORE_THAN_ONE, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
@@ -66,7 +66,7 @@ int ObExprInsertChildXml::calc_result_typeN(ObExprResType &type,
     } else if (!types[2].is_string_type()) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("inconsistent datatypes", K(ret), K(types[2].get_type()));
-    } else if (!ob_is_string_tc(types[3].get_type()) &&
+    } else if (!ob_is_string_tc(types[3].get_type()) && 
                !ob_is_xml_sql_type(types[3].get_type(), types[3].get_subschema_id())) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("inconsistent datatypes", K(ret), K(types[3].get_type()));
@@ -253,19 +253,19 @@ int ObExprInsertChildXml::insert_child_xml(const ObExpr &expr,
       }
     }
   }
-
+   
   if (OB_SUCC(ret) && OB_FAIL(xpath_iter.open())) {
     LOG_WARN("fail to open xpath iterator", K(ret));
     ObXMLExprHelper::replace_xpath_ret_code(ret);
   }
-
+  
   while (OB_SUCC(ret)) {
     if (OB_FAIL(xpath_iter.get_next_node(node))) {
       if (ret != OB_ITER_END) {
         LOG_WARN("fail to get next xml node", K(ret));
       }
-    } else if (node->type() != ObMulModeNodeType::M_ELEMENT &&
-               node->type() != ObMulModeNodeType::M_CONTENT &&
+    } else if (node->type() != ObMulModeNodeType::M_ELEMENT && 
+               node->type() != ObMulModeNodeType::M_CONTENT && 
                node->type() != ObMulModeNodeType::M_DOCUMENT) {
       // do nothing
     } else if (OB_FAIL(res_array.push_back(node))) {
@@ -278,7 +278,7 @@ int ObExprInsertChildXml::insert_child_xml(const ObExpr &expr,
   }
 
   if (OB_FAIL(ret)) {
-  } else if (type == ObUserDefinedSQLType) {
+  } else if (type == ObUserDefinedSQLType) { 
     if (OB_FAIL(allocator.add_baseline_size(value_datum, true, res_array.size()))) {
       LOG_WARN("failed to add base line size", K(ret));
     }
@@ -337,7 +337,7 @@ int ObExprInsertChildXml::insert_element_node(ObIAllocator &allocator,
     ObXmlElement *insert = NULL;
     if (OB_ISNULL(insert = static_cast<ObXmlElement*>(insert_node))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get insert node null", K(ret));
+      LOG_WARN("get insert node null", K(ret));      
     } else if (OB_FAIL(ObXMLExprHelper::update_new_nodes_ns(allocator, insert, value_ele))) {
       LOG_WARN("fail to update new node ns", K(ret));
     } else if (OB_FAIL(insert->add_element(value_ele))) {
@@ -359,8 +359,8 @@ int ObExprInsertChildXml::insert_element_node(ObIAllocator &allocator,
   return ret;
 }
 
-int ObExprInsertChildXml::insert_attributes_node(ObString key_str,
-                                                 ObString value_str,
+int ObExprInsertChildXml::insert_attributes_node(ObString key_str, 
+                                                 ObString value_str, 
                                                  ObIMulModeBase *insert_node)
 {
   int ret = OB_SUCCESS;
@@ -398,10 +398,10 @@ int ObExprInsertChildXml::insert_attributes_node(ObString key_str,
   return ret;
 }
 
-int ObExprInsertChildXml::check_child_expr(const ObExpr &expr,
+int ObExprInsertChildXml::check_child_expr(const ObExpr &expr, 
                                            ObEvalCtx &ctx,
                                            ObIAllocator &allocator,
-                                           ObMulModeMemCtx* mem_ctx,
+                                           ObMulModeMemCtx* mem_ctx, 
                                            ObString &child_str,
                                            ObString &value_str,
                                            bool &is_insert_attributes)

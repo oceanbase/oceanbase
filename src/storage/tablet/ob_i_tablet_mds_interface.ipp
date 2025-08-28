@@ -518,7 +518,7 @@ int ObITabletMdsInterface::get_latest_committed(OP &&read_op) const
   } else if (!is_data_complete) {
     ret = OB_EAGAIN;
     MDS_LOG(INFO, "mds_data is not complete, try again later", K(ret), K(get_tablet_meta_().ha_status_));
-  } else if (OB_ISNULL(get_tablet_pointer_())) {
+  } else if (OB_ISNULL(get_tablet_pointer_())) {    
     ret = OB_BAD_NULL_ERROR;
     MDS_LOG(ERROR, "pointer on tablet should not be null");
   } else {
@@ -743,9 +743,9 @@ int ObITabletMdsInterface::fill_virtual_info_from_mds_sstable(ObIArray<mds::MdsN
         }
         user_mds_node.user_data_.reset();
         kv.reset();
-      }
-
-
+      } 
+      
+      
       if (OB_ITER_END == ret) {
         ret = OB_SUCCESS;
         MDS_LOG(INFO, "tablet mds scan reach the end ", K(ret));
@@ -965,11 +965,11 @@ int ObITabletMdsInterface::cross_ls_get_snapshot(
 }
 
 template <class T, typename std::enable_if<!OB_TRAIT_IS_SAME_CLASS(T, ObTabletCreateDeleteMdsUserData), bool>::type>
-int ObITabletMdsInterface::check_mds_data_complete_(bool &is_complete) const
+int ObITabletMdsInterface::check_mds_data_complete_(bool &is_complete) const 
 {
   int ret = OB_SUCCESS;
-  // For multi-source data (excluding tablet_status), during the migration of LS,
-  // reading is only permitted once the data is complete;
+  // For multi-source data (excluding tablet_status), during the migration of LS, 
+  // reading is only permitted once the data is complete; 
   // otherwise, the data read will be incomplete.
   is_complete = get_tablet_meta_().ha_status_.is_data_status_complete();
   return ret;

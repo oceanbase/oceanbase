@@ -500,7 +500,7 @@ int HashCommandOperator::do_hincrby(int64_t db, const ObString &key, const ObStr
       LOG_WARN("fail to check hash expire", K(ret), K(db), K(key));
     }
   }
-
+  
   if (OB_FAIL(ret)) {
   } else if (!is_meta_exists) {
     // insert both meta and data
@@ -569,7 +569,7 @@ int HashCommandOperator::do_hincrbyfloat(int64_t db, const ObString &key, const 
       LOG_WARN("fail to check hash expire", K(ret), K(db), K(key));
     }
   }
-
+  
   if (OB_FAIL(ret)) {
   } else if (!is_meta_exists) {
     // insert both meta and data
@@ -624,8 +624,8 @@ int HashCommandOperator::do_hincrbyfloat(int64_t db, const ObString &key, const 
   return ret;
 }
 
-int HashCommandOperator::fill_set_batch_op(const ObRedisOp &op,
-                                           ObIArray<ObTabletID> &tablet_ids,
+int HashCommandOperator::fill_set_batch_op(const ObRedisOp &op, 
+                                           ObIArray<ObTabletID> &tablet_ids, 
                                            ObTableBatchOperation &batch_op)
 {
   int ret = OB_SUCCESS;
@@ -678,7 +678,7 @@ int HashCommandOperator::do_group_hsetnx()
   if (OB_FAIL(get_group_metas(op_temp_allocator_, model_, metas))) {
     LOG_WARN("fail to get group metas", K(ret));
   }
-
+  
   // 2. try get data if meta exists
   ObTableBatchOperation batch_ops;
   tablet_ids_.reuse();
@@ -707,7 +707,7 @@ int HashCommandOperator::do_group_hsetnx()
   } else if (OB_FAIL(process_table_batch_op(
           batch_ops, batch_get_res, nullptr, RedisOpFlags::NONE, &op_temp_allocator_, &op_entity_factory_, &tablet_ids_))) {
     LOG_WARN("fail to process table batch op", K(ret));
-  }
+  } 
 
   // 3. insup and reply
   int batch_get_pos = 0;
@@ -730,7 +730,7 @@ int HashCommandOperator::do_group_hsetnx()
     bool data_exists = false;
     if (OB_TMP_FAIL(kv_set.set_refactored(node, 0/* conver if exists*/))) {
       if (tmp_ret == OB_HASH_EXIST) {
-        data_exists = true;
+        data_exists = true;    
       } else {
         ret = tmp_ret;
         LOG_WARN("fail to do set_refactored", K(ret));
@@ -778,7 +778,7 @@ int HashCommandOperator::do_group_hsetnx()
   } else if (OB_FAIL(process_table_batch_op(
           batch_ops, batch_insup_res, nullptr, RedisOpFlags::NONE, &op_temp_allocator_, &op_entity_factory_, &tablet_ids_))) {
     LOG_WARN("fail to process table batch op", K(ret));
-  }
+  } 
 
   return ret;
 }

@@ -39,13 +39,13 @@ int ObBalanceTaskExecuteService::init()
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("has inited", KR(ret));
-  } else if (OB_FAIL(ObTenantThreadHelper::create("BalanceExec",
+  } else if (OB_FAIL(ObTenantThreadHelper::create("BalanceExec", 
           lib::TGDefIDs::SimpleLSService, *this))) {
     LOG_WARN("failed to create thread", KR(ret));
   } else if (OB_FAIL(ObTenantThreadHelper::start())) {
     LOG_WARN("fail to start thread", KR(ret));
   } else {
-    sql_proxy_ = GCTX.sql_proxy_;
+    sql_proxy_ = GCTX.sql_proxy_; 
     task_comment_.reset();
     tenant_id_ = MTL_ID();
     task_array_.reset();
@@ -72,7 +72,7 @@ int ObBalanceTaskExecuteService::wait_tenant_ready_()
     LOG_WARN("not init", KR(ret));
   } else if (OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema ptr is null", KR(ret), KP(GCTX.schema_service_));
+    LOG_WARN("schema ptr is null", KR(ret), KP(GCTX.schema_service_)); 
   } else {
     bool is_ready = false;
     while (!is_ready && !has_set_stop()) {
@@ -333,7 +333,7 @@ int ObBalanceTaskExecuteService::execute_task_()
       if (EN_SET_TASK_EXECUTE_TIMEOUT) {
         LOG_INFO("set task execute timout", K(balance_task_execute_timeout));
         balance_task_execute_timeout = 10 * 1000 * 1000;
-      }
+      } 
       DEBUG_SYNC(BEFORE_EXECUTE_BALANCE_TASK);
       if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(timeout_ctx, balance_task_execute_timeout))) {
         LOG_WARN("failed to get rs default timeout ctx", KR(ret));
@@ -527,7 +527,7 @@ int ObBalanceTaskExecuteService::cancel_other_init_task_(
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < task_array.count(); ++i) {
       comment.reset();
-      const ObBalanceTask &other_task = task_array.at(i);
+      const ObBalanceTask &other_task = task_array.at(i); 
       if (!other_task.get_task_status().is_init()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("task parent not empty, must be init", KR(ret), K(other_task));
@@ -784,7 +784,7 @@ int ObBalanceTaskExecuteService::execute_transfer_in_trans_(
       if (job.get_job_type().is_transfer_partition()) {
         if (OB_FAIL(try_start_transfer_partition_task_(job, transfer_task.get_part_list(),
                 transfer_task.get_task_id(), task.get_dest_ls_id(), trans))) {
-          LOG_WARN("failed to start transfer partition task", KR(ret),
+          LOG_WARN("failed to start transfer partition task", KR(ret), 
            K(to_do_part_list), K(task), K(job), K(transfer_task));
         }
       }
@@ -976,7 +976,7 @@ int ObBalanceTaskExecuteService::finish_transfer_partition_task_(
     LOG_WARN("invalid argument", KR(ret), K(transfer_task), K(job));
   }
   const ObTransferPartList &not_exist_list = transfer_task.get_not_exist_part_list();
-  const ObTransferPartList &finish_list = transfer_task.get_part_list();
+  const ObTransferPartList &finish_list = transfer_task.get_part_list(); 
 
   if (OB_SUCC(ret) && not_exist_list.count() > 0) {
     //这里的分区不存在不一定是分区真的不存在，可能仅是不在源端日志流上
@@ -1009,7 +1009,7 @@ int ObBalanceTaskExecuteService::finish_transfer_partition_task_(
           K(task_dest_ls), K(transfer_task));
     } else if (OB_FAIL(ObTransferPartitionTaskTableOperator::finish_task(
             tenant_id_, new_finish_list, max_task_id, status, comment, trans))) {
-      LOG_WARN("failed to finish task", KR(ret), K(tenant_id_),
+      LOG_WARN("failed to finish task", KR(ret), K(tenant_id_), 
           K(new_finish_list), K(max_task_id));
     }
   } else {
@@ -1161,7 +1161,7 @@ int ObBalanceTaskExecuteService::load_finish_transfer_part_tasks_(
   max_task_id.reset();
   dest_ls.reset();
   ObArray<ObTransferPartitionTask> task_array;
-  const ObTransferPartList &finish_list = transfer_task.get_part_list();
+  const ObTransferPartList &finish_list = transfer_task.get_part_list(); 
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));

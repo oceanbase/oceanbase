@@ -109,7 +109,7 @@ int ObTMService::tm_rm_start(ObExecContext &exec_ctx,
         ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
         my_session->get_tx_desc() = NULL;
       }
-      if (OB_FAIL(xa_service->xa_start_for_tm(0, timeout_seconds, my_session->get_server_sid(),
+      if (OB_FAIL(xa_service->xa_start_for_tm(0, timeout_seconds, my_session->get_server_sid(), 
               my_session->get_sid(), tx_param, tx_desc, xid, my_session->get_data_version()))) {
         LOG_WARN("xa start for dblink failed", K(ret), K(tx_param));
         // TODO, reset

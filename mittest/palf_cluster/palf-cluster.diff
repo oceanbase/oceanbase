@@ -20,7 +20,7 @@ diff --git a/deps/oblib/src/rpc/obrpc/ob_rpc_packet_list.h b/deps/oblib/src/rpc/
 +PCODE_DEF(OB_LOG_CREATE_REPLICA_CMD, 0x1524)
 +PCODE_DEF(OB_LOG_SUBMIT_LOG_CMD, 0x1525)
 +PCODE_DEF(OB_LOG_SUBMIT_LOG_CMD_RESP, 0x1526)
-
+ 
  // 1531-1550 for obesi
  // PCODE_DEF(OB_ESI_IS_EXIST, 0x1531)
 diff --git a/src/logservice/applyservice/ob_log_apply_service.cpp b/src/logservice/applyservice/ob_log_apply_service.cpp
@@ -98,7 +98,7 @@ diff --git a/src/logservice/ob_append_callback.h b/src/logservice/ob_append_call
    int64_t cb_first_handle_ts_; //cb第一次被处理的时刻,不一定调用on_success
 +  int64_t log_size_;
  };
-
+ 
  } // end namespace logservice
 diff --git a/src/logservice/ob_log_handler.cpp b/src/logservice/ob_log_handler.cpp
 --- a/src/logservice/ob_log_handler.cpp
@@ -117,7 +117,7 @@ diff --git a/src/logservice/palf/log_block_handler.cpp b/src/logservice/palf/log
 @@ -437,12 +437,26 @@ int LogBlockHandler::inner_writev_once_(const offset_t offset,
    return ret;
  }
-
+ 
 +int64_t p_io_cnt = 0;
 +int64_t p_log_size = 0;
 +
@@ -174,8 +174,8 @@ diff --git a/src/logservice/palf/log_io_task.cpp b/src/logservice/palf/log_io_ta
 +    for (int64_t i = 0; i < count && OB_SUCC(ret); i++) {
 +      io_task_array_[i] = NULL;
      }
-	}
-	return ret;
+ 	}
+ 	return ret;
 diff --git a/src/logservice/palf/log_sliding_window.cpp b/src/logservice/palf/log_sliding_window.cpp
 --- a/src/logservice/palf/log_sliding_window.cpp
 +++ b/src/logservice/palf/log_sliding_window.cpp
@@ -188,7 +188,7 @@ diff --git a/src/logservice/palf/log_sliding_window.cpp b/src/logservice/palf/lo
 +    avg_log_batch_cnt_(0),
      is_inited_(false)
  {}
-
+ 
 @@ -448,6 +449,7 @@ int LogSlidingWindow::submit_log(const char *buf,
    const int64_t start_log_id = get_start_id();
    const int64_t log_id_upper_bound = start_log_id + PALF_MAX_LEADER_SUBMIT_LOG_COUNT - 1;

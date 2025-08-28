@@ -483,7 +483,7 @@ int ObAdminClearMergeError::execute(const obrpc::ObAdminMergeArg &arg)
           (true == arg.affect_all_user_ && true == arg.affect_all_meta_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("only one of affect_all,affect_all_user,affect_all_meta can be true",
-                 KR(ret), "affect_all", arg.affect_all_, "affect_all_user",
+                 KR(ret), "affect_all", arg.affect_all_, "affect_all_user", 
                  arg.affect_all_user_, "affect_all_meta", arg.affect_all_meta_);
       } else {
         if (arg.affect_all_) {
@@ -564,7 +564,7 @@ int ObAdminMerge::execute(const obrpc::ObAdminMergeArg &arg)
               (true == arg.affect_all_user_ && true == arg.affect_all_meta_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("only one of affect_all,affect_all_user,affect_all_meta can be true",
-                     KR(ret), "affect_all", arg.affect_all_, "affect_all_user",
+                     KR(ret), "affect_all", arg.affect_all_, "affect_all_user", 
                      arg.affect_all_user_, "affect_all_meta", arg.affect_all_meta_);
           } else {
             if (arg.affect_all_) {
@@ -592,7 +592,7 @@ int ObAdminMerge::execute(const obrpc::ObAdminMergeArg &arg)
               (true == arg.affect_all_user_ && true == arg.affect_all_meta_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("only one of affect_all,affect_all_user,affect_all_meta can be true",
-                     KR(ret), "affect_all", arg.affect_all_, "affect_all_user",
+                     KR(ret), "affect_all", arg.affect_all_, "affect_all_user", 
                      arg.affect_all_user_, "affect_all_meta", arg.affect_all_meta_);
           } else {
             if (arg.affect_all_) {
@@ -816,16 +816,16 @@ int ObAdminSetConfig::verify_config(obrpc::ObAdminSetConfigArg &arg)
                 using FUNC_TYPE = bool (*) (const uint64_t);
                 FUNC_TYPE condition_func = nullptr;
                 if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_1_0) {
-                  if (0 == item->tenant_name_.str().case_compare(NAME_ALL_USER) ||
+                  if (0 == item->tenant_name_.str().case_compare(NAME_ALL_USER) || 
                       0 == item->tenant_name_.str().case_compare(NAME_ALL_META)) {
                     ret = OB_NOT_SUPPORTED;
-                    LOG_WARN("all_user/all_meta are not supported when min_cluster_version is less than 4.2.1.0",
+                    LOG_WARN("all_user/all_meta are not supported when min_cluster_version is less than 4.2.1.0", 
                              KR(ret), "tenant_name", item->tenant_name_);
                   } else {
                     condition_func = is_not_virtual_tenant_id;
                   }
                 } else {
-                  if (0 == item->tenant_name_.str().case_compare(NAME_ALL) ||
+                  if (0 == item->tenant_name_.str().case_compare(NAME_ALL) || 
                       0 == item->tenant_name_.str().case_compare(NAME_ALL_USER)) {
                     condition_func = is_user_tenant;
                   } else {
@@ -875,7 +875,7 @@ int ObAdminSetConfig::verify_config(obrpc::ObAdminSetConfigArg &arg)
               } else if (OB_ISNULL(tenant_schema)) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("tenant_schema is null", KR(ret), K(tenant_id));
-              } else if ((is_default_table_organization_config ?
+              } else if ((is_default_table_organization_config ? 
                           !tenant_schema->is_oracle_tenant() && OB_SYS_TENANT_ID != tenant_id
                           : true) && OB_FAIL(item->tenant_ids_.push_back(tenant_id))) {
                 LOG_WARN("add tenant_id failed", K(tenant_id), KR(ret));
@@ -1557,7 +1557,7 @@ int ObAdminSetConfig::inner_update_tenant_config_for_compatible_(
             LOG_WARN("parse version failed", KR(ret), K(item->value_.ptr()));
           } else if (new_compatible_val <= old_compatible_val) {
             need_to_update = false;
-            LOG_INFO("[COMPATIBLE] [DATA_VERSION] no need to update", K(tenant_id),
+            LOG_INFO("[COMPATIBLE] [DATA_VERSION] no need to update", K(tenant_id), 
                      "old_data_version", DVP(old_compatible_val),
                      "new_data_version", DVP(new_compatible_val));
           }
@@ -1926,7 +1926,7 @@ int ObAdminUpgradeVirtualSchema::batch_upgrade_(const uint64_t tenant_id,
 }
 
 int ObAdminUpgradeVirtualSchema::batch_upgrade_inner_tables_(
-    ObDDLSQLTransaction &trans,
+    ObDDLSQLTransaction &trans, 
     const uint64_t &tenant_id,
     share::schema::ObSchemaGetterGuard &schema_guard,
     ObIArray<share::schema::ObTableSchema> &hard_code_tables,

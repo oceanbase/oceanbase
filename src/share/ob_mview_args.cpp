@@ -326,7 +326,7 @@ int ObAlterMViewArg::assign(const ObAlterMViewArg &other)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObAlterMViewArg,
+OB_SERIALIZE_MEMBER(ObAlterMViewArg, 
                     exec_env_,
                     is_alter_on_query_computation_,
                     enable_on_query_computation_,

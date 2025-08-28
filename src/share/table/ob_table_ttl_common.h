@@ -45,13 +45,13 @@ public:
     return tenant_id_ != OB_INVALID_ID &&
            user_id_ != OB_INVALID_ID &&
            database_id_ != OB_INVALID_ID &&
-           table_id_ != OB_INVALID_ID;
+           table_id_ != OB_INVALID_ID;  
   }
 
   bool operator==(const ObTTLTaskParam& param) const
-  {
+  { 
     return ttl_ == param.ttl_ &&
-           max_version_ == param.max_version_ &&
+           max_version_ == param.max_version_ && 
            is_htable_ == param.is_htable_ &&
            tenant_id_ == param.tenant_id_ &&
            database_id_ == param.database_id_ &&
@@ -86,7 +86,7 @@ public:
 class ObTTLHRowkeyTaskParam : public ObTTLTaskParam
 {
 public:
-  explicit ObTTLHRowkeyTaskParam(ObTTLTaskParam &task_param, common::ObIArray<common::ObString> &rowkeys)
+  explicit ObTTLHRowkeyTaskParam(ObTTLTaskParam &task_param, common::ObIArray<common::ObString> &rowkeys) 
     : ObTTLTaskParam(task_param),
       rowkeys_(rowkeys)
   {}
@@ -117,9 +117,9 @@ public:
 
   bool is_valid() const
   {
-    return common::OB_INVALID_ID != task_id_;
+    return common::OB_INVALID_ID != task_id_; 
   }
-  const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
+  const common::ObTabletID &get_tablet_id() const { return tablet_id_; } 
 
   bool operator==(const ObTTLTaskInfo& other) const
   {
@@ -145,11 +145,11 @@ public:
   common::ObTabletID       tablet_id_;
   uint64_t         table_id_;
   bool             is_user_trigger_;
-  common::ObString row_key_;
+  common::ObString row_key_; 
   int64_t          ttl_del_cnt_;
   int64_t          max_version_del_cnt_;
   int64_t          scan_cnt_;
-  int64_t          err_code_;
+  int64_t          err_code_;  
   int64_t          tenant_id_;
   share::ObLSID    ls_id_;
   int64_t          consumer_group_id_;

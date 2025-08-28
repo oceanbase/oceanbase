@@ -24,8 +24,8 @@ TestStorageS3Common() {}
 
 void init()
 {
-  ASSERT_EQ(OB_SUCCESS,
-            databuff_printf(account, sizeof(account),
+  ASSERT_EQ(OB_SUCCESS, 
+            databuff_printf(account, sizeof(account), 
             "s3_region=%s&host=%s&access_id=%s&access_key=%s",
             region, endpoint, secretid, secretkey));
   //build s3_base
@@ -46,7 +46,7 @@ protected:
 };
 
 class TestStorageS3: public ::testing::Test, public TestStorageS3Common
-{
+{ 
 public:
   TestStorageS3() : enable_test_(enable_test) {}
   virtual ~TestStorageS3(){}
@@ -139,7 +139,7 @@ TEST_F(TestStorageS3, test_basic_rw)
       // rw empty object
       const int64_t ts = ObTimeUtility::current_time();
       WRITE_SINGLE_FILE(ts, "");
-
+      
       ASSERT_EQ(OB_SUCCESS, reader.open(uri, &s3_base));
       ASSERT_EQ(strlen(write_content), reader.get_length());
       ASSERT_EQ(OB_SUCCESS, reader.close());
@@ -164,7 +164,7 @@ TEST_F(TestStorageS3, test_basic_rw)
 
       ASSERT_EQ(OB_SUCCESS, util.del_file(uri));
     }
-
+    
     {
       // ObStorageWriter writer;
       const int64_t ts = ObTimeUtility::current_time();
@@ -223,12 +223,12 @@ TEST_F(TestStorageS3, test_util)
     ObStorageUtil util;
     const char *tmp_util_dir = "test_util";
     const int64_t ts = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld/",
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld/", 
       bucket, dir_name, tmp_util_dir, ts));
     ASSERT_EQ(OB_SUCCESS, util.open(&s3_base));
 
     ObStorageWriter writer;
-    {
+    { 
       WRITE_SINGLE_FILE(1L, "123456789ABC");
 
       bool is_obj_exist = false;
@@ -239,7 +239,7 @@ TEST_F(TestStorageS3, test_util)
       ASSERT_EQ(OB_SUCCESS, util.is_exist(uri, is_obj_exist));
       ASSERT_FALSE(is_obj_exist);
     }
-    {
+    { 
       WRITE_SINGLE_FILE(2L, "123456789ABCDEF");
 
       int64_t file_length = 0;
@@ -264,7 +264,7 @@ TEST_F(TestStorageS3, test_util_is_tagging)
     ObStorageUtil util;
     const char *tmp_util_dir = "test_util_is_tagging";
     const int64_t ts = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld", 
       bucket, dir_name, tmp_util_dir, ts));
 
     bool is_tagging = true;
@@ -273,14 +273,14 @@ TEST_F(TestStorageS3, test_util_is_tagging)
     const char *write_content = "123456789ABCDEF";
 
     // wrong tag mode
-    ASSERT_EQ(OB_SUCCESS,
+    ASSERT_EQ(OB_SUCCESS, 
               databuff_printf(tmp_account, sizeof(tmp_account),
               "s3_region=%s&host=%s&access_id=%s&access_key=%s&delete_mode=tag",
               region, endpoint, secretid, secretkey));
     ASSERT_EQ(OB_INVALID_ARGUMENT, tmp_s3_base.set(ObStorageType::OB_STORAGE_S3, tmp_account));
     tmp_s3_base.reset();
 
-    ASSERT_EQ(OB_SUCCESS,
+    ASSERT_EQ(OB_SUCCESS, 
               databuff_printf(tmp_account, sizeof(tmp_account),
               "s3_region=%s&host=%s&access_id=%s&access_key=%s&delete_mode=delete_delete",
               region, endpoint, secretid, secretkey));
@@ -288,7 +288,7 @@ TEST_F(TestStorageS3, test_util_is_tagging)
     tmp_s3_base.reset();
 
     // delete mode
-    ASSERT_EQ(OB_SUCCESS,
+    ASSERT_EQ(OB_SUCCESS, 
               databuff_printf(tmp_account, sizeof(tmp_account),
               "s3_region=%s&host=%s&access_id=%s&access_key=%s&delete_mode=delete",
               region, endpoint, secretid, secretkey));
@@ -305,22 +305,22 @@ TEST_F(TestStorageS3, test_util_is_tagging)
     ASSERT_EQ(OB_OBJECT_NOT_EXIST, util.is_tagging(uri, is_tagging));
     tmp_s3_base.reset();
     util.close();
-
+    
     // tagging mode
-    ASSERT_EQ(OB_SUCCESS,
+    ASSERT_EQ(OB_SUCCESS, 
               databuff_printf(tmp_account, sizeof(tmp_account),
               "s3_region=%s&host=%s&access_id=%s&access_key=%s&delete_mode=tagging",
               region, endpoint, secretid, secretkey));
     ASSERT_EQ(OB_SUCCESS, tmp_s3_base.set(ObStorageType::OB_STORAGE_S3, tmp_account));
-
+    
     ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/tagging_mode", dir_uri));
     ASSERT_EQ(OB_SUCCESS, util.open(&tmp_s3_base));
     ASSERT_EQ(OB_SUCCESS, util.write_single_file(uri, write_content, strlen(write_content)));
-
+    
     is_tagging = true;
     ASSERT_EQ(OB_SUCCESS, util.is_tagging(uri, is_tagging));
     ASSERT_FALSE(is_tagging);
-
+    
     ASSERT_EQ(OB_SUCCESS, util.del_file(uri));
     ASSERT_EQ(OB_SUCCESS, util.is_tagging(uri, is_tagging));
     ASSERT_TRUE(is_tagging);
@@ -328,12 +328,12 @@ TEST_F(TestStorageS3, test_util_is_tagging)
     util.close();
 
     // clean
-    ASSERT_EQ(OB_SUCCESS,
+    ASSERT_EQ(OB_SUCCESS, 
               databuff_printf(tmp_account, sizeof(tmp_account),
               "s3_region=%s&host=%s&access_id=%s&access_key=%s",
               region, endpoint, secretid, secretkey));
     ASSERT_EQ(OB_SUCCESS, tmp_s3_base.set(ObStorageType::OB_STORAGE_S3, tmp_account));
-
+    
     ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/tagging_mode", dir_uri));
     ASSERT_EQ(OB_SUCCESS, util.open(&tmp_s3_base));
     ASSERT_EQ(OB_SUCCESS, util.del_file(uri));
@@ -391,7 +391,7 @@ TEST_F(TestStorageS3, test_util_list_files)
     ObStorageUtil util;
     const char *tmp_util_dir = "test_util_list_files";
     const int64_t ts = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld", 
       bucket, dir_name, tmp_util_dir, ts));
     ASSERT_EQ(OB_SUCCESS, util.open(&s3_base));
 
@@ -401,7 +401,7 @@ TEST_F(TestStorageS3, test_util_list_files)
       TestS3ListOp op;
       ASSERT_EQ(OB_INVALID_BACKUP_DEST, util.list_files(uri, op));
     }
-
+    
     int64_t file_num = 11;
     const char *write_content = "0123456789";
 
@@ -443,7 +443,7 @@ TEST_F(TestStorageS3, test_util_list_files)
     TestS3ListOp list_empty_op;
     ASSERT_EQ(OB_SUCCESS, util.list_files(dir_uri, list_empty_op));
     ASSERT_EQ(0, list_empty_op.object_names_.size());
-
+    
     util.close();
   }
 }
@@ -455,7 +455,7 @@ TEST_F(TestStorageS3, test_util_list_directories)
     ObStorageUtil util;
     const char *tmp_util_dir = "test_util_list_directories";
     const int64_t ts = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld", 
         bucket, dir_name, tmp_util_dir, ts));
     ASSERT_EQ(OB_SUCCESS, util.open(&s3_base));
 
@@ -465,7 +465,7 @@ TEST_F(TestStorageS3, test_util_list_directories)
       TestS3ListOp op;
       ASSERT_EQ(OB_INVALID_ARGUMENT, util.list_directories(uri, op));
     }
-
+    
     int64_t file_num = 11;
     const char *write_content = "0123456789";
 
@@ -500,7 +500,7 @@ TEST_F(TestStorageS3, test_util_list_directories)
       ASSERT_EQ(0, op.object_names_.size());
       UTIL_DELETE_FILES(format, object_prefix_len, file_num);
     }
-
+    
     util.close();
   }
 }
@@ -512,10 +512,10 @@ TEST_F(TestStorageS3, test_util_list_directories)
 //     ObStorageUtil util;
 //     const char *tmp_util_dir = "test_util_list_adaptive_files";
 //     const int64_t ts = ObTimeUtility::current_time();
-//     ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
+//     ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld", 
 //       bucket, dir_name, tmp_util_dir, ts));
 //     ASSERT_EQ(OB_SUCCESS, util.open(&s3_base));
-
+    
 //     int64_t file_num = 11;
 //     const char *write_content = "0123456789";
 
@@ -545,7 +545,7 @@ TEST_F(TestStorageS3, test_util_list_directories)
 //     TestS3ListOp list_empty_op;
 //     ASSERT_EQ(OB_SUCCESS, util.list_files(dir_uri, list_empty_op));
 //     ASSERT_EQ(0, list_empty_op.object_names_.size());
-
+    
 //     util.close();
 //   }
 // }
@@ -581,16 +581,16 @@ TEST_F(TestStorageS3, test_append_rw)
     ASSERT_EQ(OB_SUCCESS, util.open(&s3_base));
     const char *tmp_append_dir = "test_append";
     const int64_t ts = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld", 
         bucket, dir_name, tmp_append_dir, ts));
-
+    
     {
       ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/test_append_file_%ld.back",
                                             dir_uri, ObTimeUtility::current_time()));
 
       ObStorageAppender appender;
       ASSERT_EQ(OB_SUCCESS, appender.open(uri, &s3_base));
-
+    
       const int64_t content_length = 100;
       char content[content_length] = { 0 };
       for (int64_t i = 0; i < content_length; i++) {
@@ -600,7 +600,7 @@ TEST_F(TestStorageS3, test_append_rw)
       // "0-3",  "0-3", "0-1", "1-2", "2-3",               // covered "0-3"
       // "7-8", "8-9", "9-10", "10-11", "11-12", "12-20",  // no gap
       // "22-25" & "21-24" are covered by "15-25", and there is a gap from "15-25" to "26-30"
-      // "15-25", "22-25", "21-24", "26-30", "30-100", "28-100"
+      // "15-25", "22-25", "21-24", "26-30", "30-100", "28-100" 
       int64_t fragment_start[] = {1,2,3,4,1,1,1,0,0,0,1,2,7,8,9,10,11,12,15,22,21,26,30,28};
       int64_t fragment_end[] = {7,5,6,7,7,7,5,3,3,1,2,3,8,9,10,11,12,20,25,25,24,30,100,100};
       ASSERT_EQ(sizeof(fragment_start), sizeof(fragment_end));
@@ -620,13 +620,13 @@ TEST_F(TestStorageS3, test_append_rw)
       ASSERT_EQ(sizeof(read_start), sizeof(read_end));
       test_read_appendable_object(content, content_length,
           sizeof(read_start) / sizeof(int64_t), read_start, read_end, reader);
-
+    
       char buf[content_length];
       int64_t read_size = -1;
       ASSERT_EQ(OB_ERR_UNEXPECTED,
           reader.pread(buf, content_length, 0, read_size));
       ASSERT_EQ(content_length, reader.get_length());
-
+    
       OB_LOG(INFO, "-=-=-=-=-===========-=-=====-=-=-=-=-=-=-=-=-=-=-=-=");
       ASSERT_EQ(OB_SUCCESS, appender.close());
       // open before close, read after close
@@ -669,7 +669,7 @@ TEST_F(TestStorageS3, test_append_rw)
 
       ObStorageAppender appender;
       ASSERT_EQ(OB_SUCCESS, appender.open(uri, &s3_base));
-
+    
       const int64_t content_length = 100;
       char content[content_length] = { 0 };
       for (int64_t i = 0; i < content_length; i++) {
@@ -679,7 +679,7 @@ TEST_F(TestStorageS3, test_append_rw)
       // "0-3",  "0-3", "0-1", "1-2", "2-3",               // covered "0-3"
       // "7-8", "8-9", "9-10", "10-11", "11-12", "12-20",  // no gap
       // "22-25" & "21-24" are covered by "15-25", and there is a gap from "15-25" to "26-30"
-      // "15-25", "22-25", "21-24", "26-30", "30-100", "28-100"
+      // "15-25", "22-25", "21-24", "26-30", "30-100", "28-100" 
       int64_t fragment_start[] = {1,2,3,4,1,1,1,0,0,0,1,2,7,8,9,10,11,12,15,22,21,26,30,28};
       int64_t fragment_end[] = {7,5,6,7,7,7,5,3,3,1,2,3,8,9,10,11,12,20,25,25,24,30,100,100};
       ASSERT_EQ(sizeof(fragment_start), sizeof(fragment_end));
@@ -694,7 +694,7 @@ TEST_F(TestStorageS3, test_append_rw)
       ObStorageAdaptiveReader reader;
       ASSERT_EQ(OB_SUCCESS, reader.open(uri, &s3_base));
       ASSERT_EQ(content_length, reader.get_length());
-
+    
       char buf[content_length];
       int64_t read_size = -1;
       ASSERT_EQ(OB_ERR_UNEXPECTED,
@@ -706,7 +706,7 @@ TEST_F(TestStorageS3, test_append_rw)
       // ASSERT_EQ(OB_SUCCESS, writer.open(uri, &s3_base));
       // ASSERT_EQ(OB_SUCCESS, writer.write(content, content_length));
       // ASSERT_EQ(OB_SUCCESS, writer.close());
-
+      
       // now gap is filled
       ASSERT_EQ(OB_SUCCESS, reader.open(uri, &s3_base));
       ASSERT_EQ(content_length, reader.get_length());
@@ -723,7 +723,7 @@ TEST_F(TestStorageS3, test_append_rw)
       ASSERT_EQ(0, appendable_obj_meta.fragment_metas_[0].start_);
       ASSERT_EQ(9223372036854775807, appendable_obj_meta.fragment_metas_[0].end_);
       ASSERT_EQ(content_length, appendable_obj_meta.length_);
-
+    
       ASSERT_EQ(OB_SUCCESS, appender.close());
       ASSERT_EQ(OB_SUCCESS, reader.open(uri, &s3_base));
       // open before close, read after close
@@ -771,7 +771,7 @@ TEST_F(TestStorageS3, test_append_rw)
       ASSERT_EQ(OB_SUCCESS, appender_a.open(uri, &s3_base));
       ASSERT_EQ(OB_SUCCESS, appender_b.open(uri, &s3_base));
       ASSERT_EQ(OB_SUCCESS, appender_c.open(uri, &s3_base));
-
+    
       const int64_t content_length = 100;
       char content[content_length] = { 0 };
       for (int64_t i = 0; i < content_length; i++) {
@@ -781,7 +781,7 @@ TEST_F(TestStorageS3, test_append_rw)
       // "0-3",  "0-3", "0-1", "1-2", "2-3",               // covered "0-3"
       // "7-8", "8-9", "9-10", "10-11", "11-12", "12-20",  // no gap
       // "22-25" & "21-24" are covered by "15-25"
-      // "15-25", "22-25", "21-24", "25-30", "30-100", "28-100"
+      // "15-25", "22-25", "21-24", "25-30", "30-100", "28-100" 
       int64_t fragment_start[] = {1,2,3,4,1,1,1,0,0,0,1,2,7,8,9,10,11,12,15,22,21,25,30,28};
       int64_t fragment_end[] = {7,5,6,7,7,7,5,3,3,1,2,3,8,9,10,11,12,20,25,25,24,30,100,100};
       ASSERT_EQ(sizeof(fragment_start), sizeof(fragment_end));
@@ -813,7 +813,7 @@ TEST_F(TestStorageS3, test_append_rw)
       read_thread_a.join();
       read_thread_b.join();
       ASSERT_EQ(content_length, reader.get_length());
-
+    
       // open before close, read after close
       ASSERT_EQ(OB_SUCCESS, appender_a.close());
       ASSERT_EQ(OB_SUCCESS, appender_b.close());
@@ -942,7 +942,7 @@ TEST_F(TestStorageS3, test_appendable_object_util)
         fragments, n_fragments,
         n_remained_fragments, expected_start, expected_end,
         expected_file_length, appendable_obj_meta);
-
+      
       ObArray<ObAppendableFragmentMeta> fragments_need_to_read;
       ASSERT_EQ(OB_INVALID_ARGUMENT,
           appendable_obj_meta.get_needed_fragments(-1, 1, fragments_need_to_read));
@@ -967,7 +967,7 @@ TEST_F(TestStorageS3, test_appendable_object_util)
         fragments, n_fragments,
         n_remained_fragments, expected_start, expected_end,
         expected_file_length, appendable_obj_meta);
-
+      
       ObArray<ObAppendableFragmentMeta> fragments_need_to_read;
       ASSERT_EQ(OB_ERR_UNEXPECTED,
           appendable_obj_meta.get_needed_fragments(5, 8, fragments_need_to_read));
@@ -977,7 +977,7 @@ TEST_F(TestStorageS3, test_appendable_object_util)
           appendable_obj_meta.get_needed_fragments(5, 15, fragments_need_to_read));
       ASSERT_EQ(OB_INVALID_ARGUMENT,
           appendable_obj_meta.get_needed_fragments(11, 11, fragments_need_to_read));
-
+      
       {
         int64_t start = 10;
         int64_t end = 18;
@@ -1024,7 +1024,7 @@ TEST_F(TestStorageS3, test_appendable_object_util)
             n_expected_fragments, expected_start, expected_end, appendable_obj_meta);
       }
     }
-
+    
     {
       // valid fragment name
       const char *valid_fragments[] = {
@@ -1033,7 +1033,7 @@ TEST_F(TestStorageS3, test_appendable_object_util)
           "0-3", "0-3", "0-1", "1-2", "2-3",                  // covered "0-3"
           "7-8", "8-9", "9-10", "10-11", "11-12", "12-20",    // no gap
           // "22-25" & "21-24" are covered by "15-25", and there is a gap from "15-25" to "26-30"
-          "15-25", "22-25", "21-24", "26-30",
+          "15-25", "22-25", "21-24", "26-30",   
           "30-1234567", "10000-1234567", "28-1234566"
       };
       int64_t n_fragments = sizeof(valid_fragments) / sizeof(char *);
@@ -1046,7 +1046,7 @@ TEST_F(TestStorageS3, test_appendable_object_util)
           valid_fragments, n_fragments,
           n_remained_fragments, expected_start, expected_end,
           expected_file_length, appendable_obj_meta);
-
+      
       {
         int64_t start = 0;
         int64_t end = 3;
@@ -1077,7 +1077,7 @@ TEST_F(TestStorageS3, test_appendable_object_util)
       {
         ObArray<ObAppendableFragmentMeta> fragments_need_to_read;
         ASSERT_EQ(OB_ERR_UNEXPECTED,
-          appendable_obj_meta.get_needed_fragments(15, 30, fragments_need_to_read));
+          appendable_obj_meta.get_needed_fragments(15, 30, fragments_need_to_read));      
       }
       {
         int64_t start = 28;

@@ -987,7 +987,7 @@ ObIOSender::ObIOSender(ObIAllocator &allocator)
     tg_id_(-1),
     is_inited_(false),
     stop_submit_(false),
-    is_retry_sender_(false),
+    is_retry_sender_(false), 
     allocator_(allocator),
     io_queue_(nullptr),
     queue_cond_()
@@ -2475,7 +2475,7 @@ int ObSyncIOChannel::submit(ObIORequest &req)
 {
   int ret = OB_SUCCESS;
   const int64_t current_ts = ObTimeUtility::current_time();
-  const int64_t io_depth = get_io_depth(min(max(GMEMCONF.get_server_memory_limit() / 10, 500 * 1024L * 1024L), 4 * 1024L * 1024L * 1024L));
+  const int64_t io_depth = get_io_depth(min(max(GMEMCONF.get_server_memory_limit() / 10, 500 * 1024L * 1024L), 4 * 1024L * 1024L * 1024L)); 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
@@ -2542,7 +2542,7 @@ int ObSyncIOChannel::do_sync_io(ObIORequest &req)
   int64_t io_offset = -1;
   ObIODevice *device_handle = req.fd_.device_handle_;
 
-  const int64_t timeout_us = MIN(req.get_remained_io_timeout_us(),
+  const int64_t timeout_us = MIN(req.get_remained_io_timeout_us(), 
       OB_IO_MANAGER.get_object_storage_io_timeout_ms(req.tenant_id_) * 1000LL);
   ObObjectStorageTenantGuard guard(req.tenant_id_, timeout_us);
 
@@ -3196,7 +3196,7 @@ int ObIOCallbackManager::enqueue_callback(ObIORequest &req)
     LOG_WARN("Not init", K(ret));
   } else if (OB_UNLIKELY(current_ts > req.timeout_ts())) {
     ret = OB_TIMEOUT;
-    LOG_WARN("io timeout because current time is larger than timeout timestamp", K(ret), K(current_ts), K(req));
+    LOG_WARN("io timeout because current time is larger than timeout timestamp", K(ret), K(current_ts), K(req));  
   } else if (OB_NOT_NULL(req.io_result_)) {
     ObThreadCondGuard guard(req.io_result_->get_cond());
     if (OB_FAIL(guard.get_ret())) {
@@ -3259,7 +3259,7 @@ void ObIOCallbackManager::try_release_thread()
           break;
         }
       }
-    }
+    }    
   }
 }
 

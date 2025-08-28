@@ -60,7 +60,7 @@ public:
   virtual int read_distinct(
     const ObColumnCSDecoderCtx &ctx,
     storage::ObGroupByCellBase &group_by_cell) const;
-
+  
   virtual int read_reference(
     const ObColumnCSDecoderCtx &ctx,
     const int32_t *row_ids,
@@ -450,7 +450,7 @@ public:
   typedef std::random_access_iterator_tag iterator_category;
 public:
   ObDictValueIterator()
-    : ctx_(nullptr), index_(0), cell_(), is_padding_mode_(false),
+    : ctx_(nullptr), index_(0), cell_(), is_padding_mode_(false), 
       decode_by_ref_func_(nullptr) {}
   ObDictValueIterator(const ObDictColumnDecoderCtx *ctx, const int64_t index, const bool is_padding_mode)
       : ctx_(ctx), index_(index), cell_(), is_padding_mode_(is_padding_mode)

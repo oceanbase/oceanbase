@@ -23,7 +23,7 @@ namespace rootserver
 {
 
 int ObMviewAlterService::alter_mview_or_mlog_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
-                                                      obrpc::ObAlterTableRes &res,
+                                                      obrpc::ObAlterTableRes &res, 
                                                       ObSchemaGetterGuard &schema_guard,
                                                       share::schema::ObMultiVersionSchemaService *schema_service,
                                                       common::ObMySQLProxy *sql_proxy,
@@ -78,7 +78,7 @@ int ObMviewAlterService::alter_mview_or_mlog_in_trans(obrpc::ObAlterTableArg &al
 int ObMviewAlterService::alter_mview_attributes(
     const uint64_t tenant_id,
     const ObTableSchema *orig_table_schema,
-    obrpc::ObAlterTableArg &alter_table_arg,
+    obrpc::ObAlterTableArg &alter_table_arg, 
     ObDDLOperator &ddl_operator,
     ObSchemaGetterGuard &schema_guard,
     ObDDLSQLTransaction &trans)

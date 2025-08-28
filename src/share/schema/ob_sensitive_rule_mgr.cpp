@@ -166,8 +166,8 @@ int ObSensitiveRuleMgr::erase_from_column_map(const uint64_t sensitive_rule_id)
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < schema->get_sensitive_field_items().count(); ++i) {
       ObSensitiveFieldItem item = schema->get_sensitive_field_items().at(i);
-      if (OB_FAIL(column_map_.erase_refactored(ObSensitiveColumnHashKey(schema->get_tenant_id(),
-                                                                        item.table_id_,
+      if (OB_FAIL(column_map_.erase_refactored(ObSensitiveColumnHashKey(schema->get_tenant_id(), 
+                                                                        item.table_id_, 
                                                                         item.column_id_)))) {
         LOG_WARN("erase sensitive_col hash map failed", K(ret));
       }
@@ -312,7 +312,7 @@ int ObSensitiveRuleMgr::get_schema_by_name(const uint64_t tenant_id,
   return ret;
 }
 
-int ObSensitiveRuleMgr::get_schema_by_column(const uint64_t tenant_id,
+int ObSensitiveRuleMgr::get_schema_by_column(const uint64_t tenant_id, 
                                              const uint64_t table_id,
                                              const uint64_t column_id,
                                              const ObSensitiveRuleSchema *&schema) const

@@ -162,7 +162,7 @@ int ObUpgradeCurrentDataVersionProcessorExecutor::run_upgrade_processor(share::O
   return ret;
 }
 
-int ObUpgradeBeginDataVersionProcessorExecutor::get_data_version(uint64_t &data_version)
+int ObUpgradeBeginDataVersionProcessorExecutor::get_data_version(uint64_t &data_version) 
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat_())) {
@@ -874,7 +874,7 @@ int ObUpgradeExecutor::run_upgrade_begin_action_(
         } else if (OB_FAIL(proxy.update_upgrade_begin_data_version(target_data_version))) {
           LOG_WARN("failed to set upgrade begin data version for tenant less than 4351", KR(ret), K(tenant_id));
         } else {
-          upgrade_begin_data_version = target_data_version;
+          upgrade_begin_data_version = target_data_version;  
           LOG_INFO("upgrade_begin_data_version is initialized", K(tenant_id), KDV(upgrade_begin_data_version));
         }
       } else {

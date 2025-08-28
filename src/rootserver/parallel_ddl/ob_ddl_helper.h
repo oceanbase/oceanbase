@@ -43,23 +43,23 @@ public:
                                              const uint64_t tenant_id,
                                              const uint64_t schema_version_cnt,
                                              int64_t &task_id);
-  static int write_1503_ddl_operation(share::schema::ObMultiVersionSchemaService *schema_service,
+  static int write_1503_ddl_operation(share::schema::ObMultiVersionSchemaService *schema_service, 
                                       const uint64_t tenant_id,
                                       ObDDLSQLTransaction &trans);
-  static int wait_ddl_trans(share::schema::ObDDLTransController *controller,
-                            const uint64_t tenant_id,
+  static int wait_ddl_trans(share::schema::ObDDLTransController *controller, 
+                            const uint64_t tenant_id, 
                             const int64_t task_id);
   static int end_ddl_trans(share::schema::ObMultiVersionSchemaService *schema_service,
                            share::schema::ObDDLTransController *ddl_trans_controller,
-                           const uint64_t tenant_id,
-                           const int return_ret,
-                           const int64_t task_id,
+                           const uint64_t tenant_id, 
+                           const int return_ret, 
+                           const int64_t task_id, 
                            ObDDLSQLTransaction &trans);
   static int wait_and_end_ddl_trans(const int return_ret,
                                     share::schema::ObMultiVersionSchemaService *schema_service,
-                                    share::schema::ObDDLTransController *ddl_trans_controller,
-                                    const uint64_t tenant_id,
-                                    const int64_t task_id,
+                                    share::schema::ObDDLTransController *ddl_trans_controller, 
+                                    const uint64_t tenant_id, 
+                                    const int64_t task_id, 
                                     ObDDLSQLTransaction &trans,
                                     bool &need_clean_failed);
   static int check_schema_version();
@@ -147,7 +147,7 @@ protected:
       const ObString &database_name,
       const transaction::tablelock::ObTableLockMode lock_mode);
   int lock_databases_by_name_();
-
+  
   /*--------------------------------*/
   // lock object name
   // MySQL temporary tables introduce parallel scenarios with objects of the same name,

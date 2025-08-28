@@ -284,7 +284,7 @@ public:
     }
     return overflow;
   }
-  OB_INLINE static bool is_uint_uint_mul_out_of_range(uint64_t val1, uint64_t val2)
+  OB_INLINE static bool is_uint_uint_mul_out_of_range(uint64_t val1, uint64_t val2) 
   {
     int overflow = false;
     unsigned long long res;

@@ -55,9 +55,9 @@ struct PtrKey
 
 /**
  * @brief ObTransformMVRewrite
- *
+ * 
  * Rewrite query with materialized view(s)
- *
+ * 
  * e.g.
  * create materialized view mv as
  * select * from t_info join t_item on t_info.item_id = t_item.item_id;
@@ -156,7 +156,7 @@ private:
 
     MvRewriteCheckCtx(MvRewriteHelper &helper, bool can_use_equal_sets)
       : ObExprEqualCheckContext(),
-        helper_(helper)
+        helper_(helper) 
     {
       init_override_params();
     }
@@ -167,11 +167,11 @@ private:
       override_const_compare_ = true;
       override_query_compare_ = true;
     }
-
+    
     bool compare_column(const ObColumnRefRawExpr &inner, const ObColumnRefRawExpr &outer) override;
     bool compare_const(const ObConstRawExpr &left, const ObConstRawExpr &right) override;
     bool compare_query(const ObQueryRefRawExpr &first, const ObQueryRefRawExpr &second) override;
-
+    
     int append_constraint_info(const MvRewriteCheckCtx &other);
 
     MvRewriteHelper &helper_;

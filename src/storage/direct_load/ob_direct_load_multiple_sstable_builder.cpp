@@ -361,7 +361,7 @@ int ObDirectLoadMultipleSSTableBuilder::get_tables(ObDirectLoadTableHandleArray 
       ObDirectLoadMultipleSSTable *sstable = nullptr;
       if (OB_FAIL(table_manager->alloc_multiple_sstable(sstable_handle))) {
         LOG_WARN("fail to alloc sstable", KR(ret));
-      } else if (FALSE_IT(sstable = static_cast<ObDirectLoadMultipleSSTable*>(sstable_handle.get_table()))) {
+      } else if (FALSE_IT(sstable = static_cast<ObDirectLoadMultipleSSTable*>(sstable_handle.get_table()))) {        
       } else if (OB_FAIL(sstable->init(create_param))) {
         LOG_WARN("fail to init sstable", KR(ret), K(create_param));
       } else if (OB_FAIL(table_array.add(sstable_handle))) {

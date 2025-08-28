@@ -424,7 +424,7 @@ public:
   RETRIEVE_SCHEMA_FUNC_DECLARE(table_priv);
   RETRIEVE_SCHEMA_FUNC_DECLARE(routine_priv);
   RETRIEVE_SCHEMA_FUNC_DECLARE(sensitive_rule_priv);
-
+  
   RETRIEVE_SCHEMA_FUNC_DECLARE(column_priv);
   RETRIEVE_SCHEMA_FUNC_DECLARE(package);
   RETRIEVE_SCHEMA_FUNC_DECLARE(routine);
@@ -614,8 +614,8 @@ public:
                              ObConstraint &constraint, bool &is_deleted);
 
   template<typename T>
-  static int fill_column_group_info(const bool check_deleted, T &result,
-                                    ObColumnGroupSchema &column_group,
+  static int fill_column_group_info(const bool check_deleted, T &result, 
+                                    ObColumnGroupSchema &column_group, 
                                     uint64_t &table_id, bool &is_deleted);
 
   template<typename T>

@@ -34,7 +34,7 @@ public:
     EXPECT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
     SERVER_STORAGE_META_SERVICE.is_started_ = true;
   }
-
+  
   static void TearDownTestCase()
   {
     MockTenantModuleEnv::get_instance().destroy();

@@ -47,8 +47,8 @@ public:
   int visit(ObIWkbGeogPoint *geo);
   int visit(ObIWkbGeomPoint *geo);
   int visit(ObIWkbGeogLineString *geo);
-  int visit(ObIWkbGeomLineString *geo);
-  int visit(ObIWkbGeogMultiPoint *geo);
+  int visit(ObIWkbGeomLineString *geo);  
+  int visit(ObIWkbGeogMultiPoint *geo);  
   int visit(ObIWkbGeomMultiPoint *geo);
   int visit(ObIWkbGeogMultiLineString *geo);
   int visit(ObIWkbGeomMultiLineString *geo);
@@ -58,7 +58,7 @@ public:
   int visit(ObIWkbGeomMultiPolygon *geo);
   int visit(ObIWkbGeogCollection *geo);
   int visit(ObIWkbGeomCollection *geo);
-
+ 
   bool is_end(ObIWkbGeogLineString *geo) { UNUSED(geo); return true; }
   bool is_end(ObIWkbGeomLineString *geo) { UNUSED(geo); return true; }
   bool is_end(ObIWkbGeogLinearRing *geo) { UNUSED(geo); return true; }

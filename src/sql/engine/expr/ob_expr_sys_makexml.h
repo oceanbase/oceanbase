@@ -28,10 +28,10 @@ class ObExprSysMakeXML : public ObFuncExprOperator
 public:
   explicit ObExprSysMakeXML(common::ObIAllocator &alloc);
   virtual ~ObExprSysMakeXML();
-
+  
   virtual int calc_result_typeN(ObExprResType& type,
                                 ObExprResType* types,
-                                int64_t param_num,
+                                int64_t param_num, 
                                 common::ObExprTypeCtx& type_ctx) const override;
   static int eval_sys_makexml(const ObExpr &expr, ObEvalCtx &ctx,  ObDatum &res);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,

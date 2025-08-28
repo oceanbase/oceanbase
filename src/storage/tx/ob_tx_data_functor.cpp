@@ -185,7 +185,7 @@ int GetTxStateWithSCNFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_
 
   // return the transaction state_ according to the merge log ts.
   // the detailed document is available as follows.
-  //
+  // 
   if (ObTxData::RUNNING == state || ObTxData::ELR_COMMIT == state) {
     // Case 1: data is during execution, so we return the running state with
     // INT64_MAX as version

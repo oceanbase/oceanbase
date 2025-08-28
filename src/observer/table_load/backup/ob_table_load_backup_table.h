@@ -33,8 +33,8 @@ enum class ObTableLoadBackupVersion
 class ObTableLoadBackupTable
 {
 public:
-  static int get_table(ObTableLoadBackupVersion version,
-                       ObTableLoadBackupTable *&table,
+  static int get_table(ObTableLoadBackupVersion version, 
+                       ObTableLoadBackupTable *&table, 
                        ObIAllocator &allocator);
   ObTableLoadBackupTable() {}
   virtual ~ObTableLoadBackupTable() {}

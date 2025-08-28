@@ -190,7 +190,7 @@ struct DeducedExprInfo {
   bool is_precise_;
   common::ObSEArray<ObPCConstParamInfo, 2, common::ModulePageAllocator, true> const_param_constraints_;
 
-  int assign(const DeducedExprInfo& other)
+  int assign(const DeducedExprInfo& other) 
   {
     int ret = OB_SUCCESS;
     deduced_expr_ = other.deduced_expr_;
@@ -455,7 +455,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     }
     return 1 == enable_batch_opt_;
   }
-
+       
   double enable_px_batch_rescan()
   {
     if (-1 == enable_px_batch_rescan_) {
@@ -483,7 +483,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   static const int BATCH_RESCAN_BIT_CONTAINS_SUBQUERY = 8;
   static const int BATCH_RESCAN_BIT_NON_BASIC_SCAN = 9;
   static const int BATCH_RESCAN_BIT_STARTUP_FILTER = 10;
-
+ 
   // whether batch rescan can be enabled depends on two factors:
   // 1. current version must support corresponding batch rescan scenario
   // 2. corresponding batch rescan configuration must be enabled
@@ -800,7 +800,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline ObPxNodePolicy get_px_node_policy() const { return px_node_policy_; }
   inline void set_px_node_policy(ObPxNodePolicy px_node_policy) { px_node_policy_ = px_node_policy; }
   inline ObPxNodeSelectionMode get_px_node_selection_mode() const { return px_node_selection_mode_; }
-  inline void set_px_node_selection_mode(ObPxNodeSelectionMode selection_mode)
+  inline void set_px_node_selection_mode(ObPxNodeSelectionMode selection_mode) 
   {
     px_node_selection_mode_ = selection_mode;
   }
@@ -851,7 +851,7 @@ private:
       int64_t enable_nlj_batch_rescan_  : 1;         // enable nestloop inner path batch rescan
       int64_t enable_spf_batch_rescan_  : 1;         // enable subplan filter batch rescan
       int64_t enable_425_opt_batch_rescan_  : 1;     // enable optimizer batch rescan behaviors supported in 4.2.5
-      int64_t enable_425_exec_batch_rescan_ : 1;     // enable exec batch rescan behaviors supported in 4.2.5
+      int64_t enable_425_exec_batch_rescan_ : 1;     // enable exec batch rescan behaviors supported in 4.2.5 
       int64_t enable_global_index_filter_ : 1;       // enable batch rescan when has global index filter
       int64_t enable_spf_semi_anti_left_child_ : 1;  // enable batch rescan when as spf/semi-anti join left child
       int64_t enable_spf_semi_anti_child_ : 1;       // enable batch rescan when as spf/semi-anti join child
@@ -915,7 +915,7 @@ private:
   OptSystemStat system_stat_;
   bool storage_estimation_enabled_;
   bool das_keep_order_enabled_;
-
+  
   bool generate_random_plan_;
   int64_t optimizer_index_cost_adj_;
   bool is_skip_scan_enabled_;

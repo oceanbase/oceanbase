@@ -20,14 +20,14 @@
 #include "storage/shared_storage/micro_cache/task/op/ob_ss_reorganize_micro_op.h"
 #include "storage/shared_storage/micro_cache/ob_ss_micro_cache_stat.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace storage
+namespace storage 
 {
 using namespace oceanbase::common;
 using namespace oceanbase::blocksstable;
 
-class TestSSMicroCacheCommonMeta : public ::testing::Test
+class TestSSMicroCacheCommonMeta : public ::testing::Test 
 {
 public:
   TestSSMicroCacheCommonMeta();
@@ -86,16 +86,16 @@ public:
   int64_t a_;
   int64_t b_;
 
-  TestSSLinkedPhyBlockHeader()
+  TestSSLinkedPhyBlockHeader() 
     : magic_(12345), item_count_(0), payload_size_(0), payload_checksum_(0),
-      previous_phy_block_id_(-1), a_(-1), b_(-1)
+      previous_phy_block_id_(-1), a_(-1), b_(-1) 
   {}
 
   static const int64_t TEST_SS_LINKED_PHY_BLOCK_HEADER_VERSION = 1;
   OB_UNIS_VERSION(TEST_SS_LINKED_PHY_BLOCK_HEADER_VERSION);
 };
 
-OB_SERIALIZE_MEMBER(TestSSLinkedPhyBlockHeader, magic_, item_count_, payload_size_,
+OB_SERIALIZE_MEMBER(TestSSLinkedPhyBlockHeader, magic_, item_count_, payload_size_, 
   payload_checksum_, previous_phy_block_id_, a_, b_);
 
 TEST_F(TestSSMicroCacheCommonMeta, physical_block)
@@ -119,7 +119,7 @@ TEST_F(TestSSMicroCacheCommonMeta, physical_block)
   phy_block.is_sealed_ = false;
   phy_block.alloc_time_us_ = ObTimeUtility::current_time() - PHY_BLK_MAX_REUSE_TIME - 10000000;
   ASSERT_EQ(true, phy_block.can_reuse());
-
+  
   phy_block.set_reuse_info(SS_MAX_REUSE_VERSION/*reuse_version*/, 1/*gc_reuse_version*/);
   ObSSPhyBlockReuseInfo reuse_info;
   phy_block.get_reuse_info(reuse_info);
@@ -393,7 +393,7 @@ TEST_F(TestSSMicroCacheCommonMeta, super_block)
   ObSSMicroCacheSuperBlock tmp_super_block;
   ASSERT_EQ(OB_SUCCESS, tmp_super_block.blk_ckpt_entry_list_.push_back(6));
   ASSERT_EQ(OB_SUCCESS, tmp_super_block.micro_ckpt_entry_list_.push_back(36));
-
+  
   ASSERT_EQ(OB_SUCCESS, tmp_super_block.assign(super_block));
   ASSERT_EQ(true, tmp_super_block.is_valid());
   ASSERT_EQ(3, tmp_super_block.blk_ckpt_entry_list_.count());
@@ -424,7 +424,7 @@ TEST_F(TestSSMicroCacheCommonMeta, super_block)
   tmp_super_block.clear_ckpt_entry_list();
   ASSERT_EQ(0, tmp_super_block.blk_ckpt_entry_list_.count());
   ASSERT_EQ(0, tmp_super_block.micro_ckpt_entry_list_.count());
-
+  
 }
 
 TEST_F(TestSSMicroCacheCommonMeta, micro_cache_key)
@@ -432,7 +432,7 @@ TEST_F(TestSSMicroCacheCommonMeta, micro_cache_key)
   const int64_t buf_size = 1024;
   char buf[buf_size];
   int64_t pos = 0;
-
+  
   // 1. serialize and deserialize logic_macro_id
   ObLogicMacroBlockId logic_macro_id(32, 200, 300);
   ASSERT_EQ(true, logic_macro_id.is_valid());
@@ -525,7 +525,7 @@ TEST_F(TestSSMicroCacheCommonMeta, physical_block_range)
   const int64_t buf_size = 1024;
   char buf[buf_size];
   int64_t pos = 0;
-
+  
   ObLogicMacroBlockId logic_macro_id(32, 200, 300);
   ObLogicMicroBlockId logic_micro_id;
   logic_micro_id.logic_macro_id_ = logic_macro_id;
@@ -638,7 +638,7 @@ TEST_F(TestSSMicroCacheCommonMeta, mem_block_base_info)
   MacroBlockId macro_id(0, 100, 0);
   macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
   macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::SHARED_MAJOR_DATA_MACRO);
-
+  
   ObArenaAllocator allocator;
   ObSSMicroCacheStat cache_stat;
   ObSSMemBlockPool mem_blk_pool(cache_stat);
@@ -739,7 +739,7 @@ TEST_F(TestSSMicroCacheCommonMeta, ssmicro_cache_key)
   const int64_t buf_size = 1024;
   char buf[buf_size];
   int64_t pos = 0;
-
+  
   // 1. serialize and deserialize logic_macro_id
   ObLogicMacroBlockId logic_macro_id(32, 200, 300);
   ASSERT_EQ(OB_SUCCESS, logic_macro_id.serialize(buf, buf_size, pos));
@@ -825,7 +825,7 @@ TEST_F(TestSSMicroCacheCommonMeta, micro_map)
   ASSERT_EQ(11, micro_meta.ref_cnt_);
 }
 
-// When mem_block_pool destroy free_list, if the ref_cnt of mem_block exceeds 1,
+// When mem_block_pool destroy free_list, if the ref_cnt of mem_block exceeds 1, 
 // it will retry until ref_cnt = 1 and then destroy mem_block.*/
 TEST_F(TestSSMicroCacheCommonMeta, mem_pool_destroy_free_list)
 {

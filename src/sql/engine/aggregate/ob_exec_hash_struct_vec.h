@@ -66,7 +66,7 @@ struct BatchAggrRowsTable
                          max_batch_size_(0) {}
   int init(int64_t max_batch_size, ObIAllocator &alloc/*arena allocator*/);
   void reuse()
-  {
+  { 
     if (is_valid_) {
       if (nullptr != selectors_item_cnt_) {
         memset(selectors_item_cnt_, 0, sizeof(uint16_t) * MAX_REORDER_GROUPS);
@@ -106,7 +106,7 @@ enum BucketState {
 |        |extra: aggr row    |       |
                compat row
 */
-class ObGroupRowItemVec : public ObCompactRow
+class ObGroupRowItemVec : public ObCompactRow 
 {
 public:
   ObGroupRowItemVec() : ObCompactRow() {}
@@ -518,7 +518,7 @@ public:
                                             uint64_t *hash_values);
 private:
   ObIAllocator *alloc_;
-  bool inited_;
+  bool inited_; 
   bool is_valid_;
   int64_t array_size_;
   int64_t groupby_cnt_;
@@ -634,7 +634,7 @@ public:
         } else {
           iter_end_ = true;
         }
-      }
+      } 
       if (OB_SUCC(ret)) {
         for (int64_t i = read_idx; !iter_end_ && i < max_rows; ++i) {
           do {
@@ -686,7 +686,7 @@ public:
       return ret;
     }
     int get_next_batch_from_store(const ObCompactRow **rows, const int64_t max_rows, int64_t &read_rows,
-        common::ObArray<std::pair<const ObCompactRow *, int32_t>> &popular_array_temp,
+        common::ObArray<std::pair<const ObCompactRow *, int32_t>> &popular_array_temp, 
       uint64_t &total_load_rows, int64_t probe_cnt)
     {
       int ret = OB_SUCCESS;
@@ -726,7 +726,7 @@ public:
                   }
                 } else {
                   if (cnt > popular_array_temp.at(0).second) {
-                    std::pop_heap(popular_array_temp.begin(), popular_array_temp.end(),
+                    std::pop_heap(popular_array_temp.begin(), popular_array_temp.end(), 
                                   group_row_items_greater);
                     popular_array_temp.at(SKEW_HEAP_SIZE - 1) = std::make_pair(const_cast<ObCompactRow*>(rows[i]), cnt);
                     std::push_heap(popular_array_temp.begin(), popular_array_temp.end(),
@@ -753,9 +753,9 @@ public:
     bool iter_end_;
   };
   friend class ObExtendHashTableVec::Iterator;
-  static int calc_extra_size(int64_t aggr_row_size) { return aggr_row_size; }
+  static int calc_extra_size(int64_t aggr_row_size) { return aggr_row_size; } 
   bool is_inited() const { return sstr_aggr_.is_valid() || NULL != buckets_; }
-
+  
   int init(ObIAllocator *allocator,
           lib::ObMemAttr &mem_attr,
           const common::ObIArray<ObExpr *> &gby_exprs,
@@ -839,7 +839,7 @@ public:
   static bool group_row_items_greater(const std::pair<const ObCompactRow*, int32_t> &a,
                                       const std::pair<const ObCompactRow*, int32_t> &b);
 
-  int process_popular_value_batch(ObBatchRows *result_brs,
+  int process_popular_value_batch(ObBatchRows *result_brs, 
                                   const common::ObIArray<ObExpr *> &exprs,
                                   const common::ObIArray<int64_t> &lengths,
                                   uint64_t *hash_vals,
@@ -850,13 +850,13 @@ public:
                                   int64_t &agg_group_cnt,
                                   char **batch_old_rows,
                                   char **batch_new_rows,
-                                  common::hash::ObHashMap<uint64_t, uint64_t,
+                                  common::hash::ObHashMap<uint64_t, uint64_t, 
                                   hash::NoPthreadDefendMode> *popular_map);
 
   int check_popular_values_validity(uint64_t &by_pass_rows,
                                     const uint64_t check_valid_threshold,
                                     int64_t dop,
-                                    common::hash::ObHashMap<uint64_t, uint64_t,
+                                    common::hash::ObHashMap<uint64_t, uint64_t, 
                                     hash::NoPthreadDefendMode> *popular_map);
   void prefetch(const ObBatchRows &brs, uint64_t *hash_vals) const;
   // Link item to hash table, extend buckets if needed.
@@ -1017,9 +1017,9 @@ public:
           uint64_t hash_val,
           const RowItemType *&item);
   typedef int (ObExtendHashTableVec::*CMP_FUNC)(const RowMeta &row_meta, const ObCompactRow &left, const int64_t right_idx, bool &result) const;
-  int likely_equal_nullable(const RowMeta &row_meta,
-                            const ObCompactRow &left,
-                            const int64_t right_idx,
+  int likely_equal_nullable(const RowMeta &row_meta, 
+                            const ObCompactRow &left, 
+                            const int64_t right_idx, 
                             bool &result) const;
   int extend(const int64_t new_bucket_num);
   const BucketArray *get_buckets() const { return buckets_; }
@@ -1564,7 +1564,7 @@ int ObExtendHashTableVec<GroupRowBucket>::process_popular_value_batch(ObBatchRow
                                       int64_t &agg_group_cnt,
                                       char **batch_old_rows,
                                       char **batch_new_rows,
-                                      common::hash::ObHashMap<uint64_t, uint64_t,
+                                      common::hash::ObHashMap<uint64_t, uint64_t, 
                                       hash::NoPthreadDefendMode> *popular_map)
 {
   int ret = OB_SUCCESS;
@@ -1597,7 +1597,7 @@ int ObExtendHashTableVec<GroupRowBucket>::process_popular_value_batch(ObBatchRow
       vector_ptrs_.at(i) = exprs.at(i)->get_vector(*eval_ctx_);
     }
   }
-
+  
   for (int64_t i=0; OB_SUCC(ret) && i < result_brs->size_; i++) {
     if (result_brs->skip_->at(i)) {
       continue;
@@ -1616,7 +1616,7 @@ int ObExtendHashTableVec<GroupRowBucket>::process_popular_value_batch(ObBatchRow
         int64_t curr_pos = -1;
         find_bkt = false;
         while (OB_SUCC(ret) && !find_bkt) {
-          now_bucket = const_cast<GroupRowBucket *> (&locate_next_bucket(*buckets_,
+          now_bucket = const_cast<GroupRowBucket *> (&locate_next_bucket(*buckets_, 
                                                       hash_vals[i], curr_pos));
           if (OB_UNLIKELY(now_bucket->is_occupyed())) {
             ret = OB_ERR_UNEXPECTED;
@@ -1626,7 +1626,7 @@ int ObExtendHashTableVec<GroupRowBucket>::process_popular_value_batch(ObBatchRow
             can_add_row = true;
           } else {
             RowItemType *it = &(now_bucket->get_item());
-            if (OB_FAIL(likely_equal_nullable(group_store_.get_row_meta(),
+            if (OB_FAIL(likely_equal_nullable(group_store_.get_row_meta(), 
                                     static_cast<ObCompactRow&>(*it), i, result))) {
               LOG_WARN("failed to cmp", K(ret));
             } else if (result) {
@@ -1648,7 +1648,7 @@ int ObExtendHashTableVec<GroupRowBucket>::process_popular_value_batch(ObBatchRow
           // new row, add item
           size_++;
           ++probe_cnt_;
-          ++agg_row_cnt;
+          ++agg_row_cnt;          
           new_row_selector_cnt_ = 0;
           new_row_selector_.at(new_row_selector_cnt_++) = i;
           if (OB_FAIL(group_store_.add_batch(vector_ptrs_, &new_row_selector_.at(0),
@@ -1670,10 +1670,10 @@ int ObExtendHashTableVec<GroupRowBucket>::process_popular_value_batch(ObBatchRow
 
     if (OB_FAIL(ret)) {
     } else if (0 != (by_pass_rows % (check_valid_threshold))) {
-    } else if (popular_map->size() > 0 &&
-      OB_FAIL(check_popular_values_validity(by_pass_rows,
+    } else if (popular_map->size() > 0 && 
+      OB_FAIL(check_popular_values_validity(by_pass_rows, 
       check_valid_threshold, dop, popular_map))) {
-      LOG_WARN("check popular values validity failed", K(ret), K(by_pass_rows),
+      LOG_WARN("check popular values validity failed", K(ret), K(by_pass_rows), 
         K(check_valid_threshold), K(dop));
     }
   }
@@ -1683,7 +1683,7 @@ int ObExtendHashTableVec<GroupRowBucket>::process_popular_value_batch(ObBatchRow
 template <typename GroupRowBucket>
 int ObExtendHashTableVec<GroupRowBucket>::check_popular_values_validity(uint64_t &by_pass_rows,
                                     const uint64_t check_valid_threshold, int64_t dop,
-                                    common::hash::ObHashMap<uint64_t, uint64_t,
+                                    common::hash::ObHashMap<uint64_t, uint64_t, 
                                     hash::NoPthreadDefendMode> *popular_map)
 {
   int ret = OB_SUCCESS;
@@ -1708,7 +1708,7 @@ int ObExtendHashTableVec<GroupRowBucket>::check_popular_values_validity(uint64_t
     LOG_DEBUG("no has_valid_popular_value, reuse popular_map!", K(has_valid_popular_value), K(popular_map->size()));
   }
   return ret;
-}
+}                                    
 
 template <typename GroupRowBucket>
 template <bool ALL_ROWS_ACTIVE>
@@ -2353,7 +2353,7 @@ int ObExtendHashTableVec<GroupRowBucket>::inner_process_batch(const RowMeta &row
       && old_row_selector_cnt_ > 0) {
       for (int64_t i = 0; OB_SUCC(ret) && !need_fallback && i < hash_expr_cnt_; ++i) {
         col_has_null_.at(i) |= gby_exprs_->at(i)->get_vector(*eval_ctx_)->has_null();
-        if (col_has_null_.at(i) ?
+        if (col_has_null_.at(i) ? 
             OB_FAIL(inner_process_column(*gby_exprs_, row_meta, i, need_fallback))
             : OB_FAIL(inner_process_column_not_null(*gby_exprs_, row_meta, i, need_fallback))) {
           LOG_WARN("failed to process column", K(ret), K(i));

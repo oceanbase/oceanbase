@@ -28,7 +28,7 @@ public:
   ~ObDDLRedoLogRowIterator();
   int init(const ObString &data_buffer);
   void reset();
-  int get_next_row(const blocksstable::ObDatumRow *&row,
+  int get_next_row(const blocksstable::ObDatumRow *&row, 
                    const ObStoreRowkey *&rowkey,
                    transaction::ObTxSEQ &seq_no,
                    blocksstable::ObDmlRowFlag &row_flag);

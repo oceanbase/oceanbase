@@ -81,7 +81,7 @@ bool TestIndexDumper::is_equal(ObMicroBlockDesc &l, ObMicroBlockDesc &r)
       || l.header_->data_checksum_ != r.header_->data_checksum_){
         res = false;
   }
-
+  
   if (!res) {
   } else if (l.header_->has_column_checksum_) {
     for (int64_t i = 0; i < l.header_->column_count_; ++i) {
@@ -94,7 +94,7 @@ bool TestIndexDumper::is_equal(ObMicroBlockDesc &l, ObMicroBlockDesc &r)
 
   if (!res) {
   } else if (0 != MEMCMP(l.buf_, r.buf_, l.buf_size_)) {
-    res = false;
+    res = false; 
     OB_LOG(INFO, "buf mismatch", K(*l.header_), K(*r.header_));
   }
 

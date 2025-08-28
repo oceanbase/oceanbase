@@ -84,10 +84,10 @@ int ObConnectByOpBFSPump::sort_sibling_rows()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected sort in connect by", K(ret));
   }
-
+  
   // Since there is an external sort operator, the sort function here is actually no longer used.
   // It is only used to reverse the order of the data in sort_stack and store it in pump_stack.
-
+  
   //add siblings to pump stack
   while(OB_SUCC(ret) && false == sort_stack_.empty()) {
     pump_node.reset();
@@ -176,7 +176,7 @@ int ObConnectByOpBFSPump::free_path_stack()
 int ObConnectByOpBFSPump::free_pump_node(PumpNode &node)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(node.pump_row_)
+  if (OB_ISNULL(node.pump_row_) 
       || OB_ISNULL(node.output_row_)
       || OB_ISNULL(node.path_node_.prior_exprs_result_)) {
     ret = OB_ERR_UNEXPECTED;

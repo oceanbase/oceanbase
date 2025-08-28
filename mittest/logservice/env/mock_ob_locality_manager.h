@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #include "storage/ob_locality_manager.h"
 #include "lib/hash/ob_hashmap.h"                // ObHashMap
 #include "logservice/palf/palf_callback.h"

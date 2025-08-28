@@ -567,7 +567,7 @@ int ObUDTTypeInfo::transform_to_pl_type(common::ObIAllocator &allocator,
       if (is_varray()) {
         table_type = static_cast<pl::ObCollectionType*>(new(ptr)pl::ObVArrayType());
         pl::ObVArrayType *vt = static_cast<pl::ObVArrayType*> (ptr);
-        //
+        // 
         vt->set_capacity(coll_info_->get_upper_bound());
       } else {
         table_type = static_cast<pl::ObCollectionType*>(new(ptr)pl::ObNestedTableType());

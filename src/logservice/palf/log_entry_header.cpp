@@ -12,7 +12,7 @@
 
 #include "log_entry_header.h"
 #include "lib/checksum/ob_parity_check.h"   // parity_check
-#include "share/ob_cluster_version.h"       // GET_MIN_DATA_VERSION
+#include "share/ob_cluster_version.h"       // GET_MIN_DATA_VERSION 
 #include "share/rc/ob_tenant_base.h"        // MTL_ID
 #include "logservice/ob_log_base_header.h"  // ObLogBaseHeader
 
@@ -135,7 +135,7 @@ bool LogEntryHeader::check_header_checksum_() const
     const uint16_t saved_header_checksum = (flag_ & mask);
     bool_ret = (header_checksum == saved_header_checksum);
     if (false == bool_ret) {
-      PALF_LOG_RET(ERROR, OB_INVALID_DATA, "check_header_checksum_ failed", K(saved_header_checksum), K(header_checksum), KPC(this));
+      PALF_LOG_RET(ERROR, OB_INVALID_DATA, "check_header_checksum_ failed", K(saved_header_checksum), K(header_checksum), KPC(this)); 
     }
   }
   return bool_ret;

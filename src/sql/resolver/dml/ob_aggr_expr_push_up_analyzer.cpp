@@ -107,7 +107,7 @@ int ObAggrExprPushUpAnalyzer::analyze_aggr_param_expr(ObRawExpr *&param_expr,
     LOG_WARN("param expr in aggregate is null");
   } else if (!is_root) {
     if (!is_child_stmt) {
-      if (param_expr->is_column_ref_expr() ||
+      if (param_expr->is_column_ref_expr() || 
           T_REF_ALIAS_COLUMN == param_expr->get_expr_type()) {
         has_cur_layer_column_ = true;
       }
@@ -139,7 +139,7 @@ int ObAggrExprPushUpAnalyzer::analyze_aggr_param_expr(ObRawExpr *&param_expr,
       LOG_WARN("aggregate nested in the same level", K(*param_expr));
     }
   }
-
+  
   for (int64_t i = 0; OB_SUCC(ret) && i < param_expr->get_param_count(); ++i) {
     ObRawExpr *&param = param_expr->get_param_expr(i);
     if (OB_ISNULL(param)) {
@@ -202,7 +202,7 @@ int ObAggrExprPushUpAnalyzer::get_min_level_resolver(ObSelectResolver *&resolver
   bool is_field_list_scope = (T_FIELD_LIST_SCOPE == cur_resolver_.get_current_scope());
   ObArray<ObExecParamRawExpr *> my_exec_params;
   resolver = &cur_resolver_;
-
+  
   while (OB_SUCC(ret) && !has_column && NULL != resolver) {
     if (NULL != resolver->get_parent_namespace_resolver() &&
         resolver->get_parent_namespace_resolver()->is_select_resolver()) {
@@ -219,7 +219,7 @@ int ObAggrExprPushUpAnalyzer::get_min_level_resolver(ObSelectResolver *&resolver
           OB_ISNULL(ref_expr = my_exec_params.at(i)->get_ref_expr())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("exec param is null", K(ret), K(my_exec_params.at(i)), K(ref_expr));
-      } else if (ref_expr->is_column_ref_expr() ||
+      } else if (ref_expr->is_column_ref_expr() || 
                  (!is_field_list_scope && ref_expr->is_alias_ref_expr())) {
         has_column = true;
       }
@@ -249,22 +249,22 @@ ObSelectResolver *ObAggrExprPushUpAnalyzer::fetch_final_aggr_resolver(ObDMLResol
         && (lib::is_mysql_mode()
             || T_HAVING_SCOPE == cur_resolver->get_parent_namespace_resolver()->get_current_scope())) {
       /*
-        * bug fix:
+        * bug fix: 
         *
         * For mysql, aggr func belongs to the upper level, whether there is a "union" or not.
-        *
+        * 
         * For oracle, aggr func not in "HAVING" belongs to the subquery, does not need to
         * push up.
-        *
+        * 
         * SELECT (SELECT COUNT(t1.a) FROM dual) FROM t1 GROUP BY t1.a;
         *                  *
         * SELECT (SELECT COUNT(t1.a) union select 1 where 1>2) FROM t1 GROUP BY t1.a;
         *                  *
         * SELECT 1 FROM t1 HAVING 1 in (SELECT MAX(t1.n1) FROM dual);
         *                                       *
-        * Here, for oracle mode, COUNT belongs to the subquery, but MAX belongs to the
-        * upper query.
-        */
+        * Here, for oracle mode, COUNT belongs to the subquery, but MAX belongs to the 
+        * upper query. 
+        */ 
       ObDMLResolver *next_resolver = cur_resolver->get_parent_namespace_resolver();
       final_resolver = fetch_final_aggr_resolver(next_resolver, min_level_resolver);
     }
@@ -273,7 +273,7 @@ ObSelectResolver *ObAggrExprPushUpAnalyzer::fetch_final_aggr_resolver(ObDMLResol
       if (select_resolver->can_produce_aggr()) {
         final_resolver = select_resolver;
       } else if (lib::is_mysql_mode() && min_level_resolver == NULL) {
-        /* bugfix:
+        /* bugfix: 
         * in mysql, a const aggr_expr(e.g., count(const_expr)), belongs to the nearest legal level.
         * 
         * select 1 from t1 where  (select 1 from t1 group by pk having  (select 1 from t1 where count(1)));
@@ -431,8 +431,8 @@ int ObAggrExprPushUpAnalyzer::remove_alias_exprs(ObRawExpr* &expr)
   return ret;
 }
 
-int ObAggrExprPushUpAnalyzer::get_exec_params(ObDMLResolver *resolver,
-                                              ObIArray<ObExecParamRawExpr *> &all_exec_params,
+int ObAggrExprPushUpAnalyzer::get_exec_params(ObDMLResolver *resolver, 
+                                              ObIArray<ObExecParamRawExpr *> &all_exec_params, 
                                               ObIArray<ObExecParamRawExpr *> &my_exec_params)
 {
   int ret = OB_SUCCESS;

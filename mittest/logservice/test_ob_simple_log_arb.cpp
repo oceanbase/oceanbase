@@ -571,7 +571,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_multi_meta_block)
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
   sleep(2);
   ObSimpleArbServer *arb_server = dynamic_cast<ObSimpleArbServer*>(get_cluster()[arb_replica_idx]);
-  IPalfHandleImplGuard arb_guard;
+  IPalfHandleImplGuard arb_guard; 
   ASSERT_EQ(OB_SUCCESS, get_palf_handle_lite(ObISimpleLogServer::DEFAULT_TENANT_ID, id, arb_server, arb_guard));
   PalfHandleLite *arb_palf = dynamic_cast<PalfHandleLite *>(arb_guard.palf_handle_impl_);
   LogEngine *log_engine = &arb_palf->log_engine_;
@@ -597,7 +597,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_multi_meta_block)
     PalfHandleImplGuard leader;
     EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
-    IPalfHandleImplGuard arb_guard;
+    IPalfHandleImplGuard arb_guard; 
     ASSERT_EQ(OB_SUCCESS, get_palf_handle_lite(ObISimpleLogServer::DEFAULT_TENANT_ID, id, arb_server, arb_guard));
     PalfHandleLite *arb_palf = dynamic_cast<PalfHandleLite *>(arb_guard.palf_handle_impl_);
     LogEngine *log_engine = &arb_palf->log_engine_;
@@ -612,7 +612,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_multi_meta_block)
     PalfHandleImplGuard leader;
     EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
-    IPalfHandleImplGuard arb_guard;
+    IPalfHandleImplGuard arb_guard; 
     ASSERT_EQ(OB_SUCCESS, get_palf_handle_lite(ObISimpleLogServer::DEFAULT_TENANT_ID, id, arb_server, arb_guard));
     PalfHandleLite *arb_palf = dynamic_cast<PalfHandleLite *>(arb_guard.palf_handle_impl_);
     LogEngine *log_engine = &arb_palf->log_engine_;
@@ -632,7 +632,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_multi_meta_block)
     PalfHandleImplGuard leader;
     EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 4000, id));
-    IPalfHandleImplGuard arb_guard;
+    IPalfHandleImplGuard arb_guard; 
     ASSERT_EQ(OB_SUCCESS, get_palf_handle_lite(ObISimpleLogServer::DEFAULT_TENANT_ID, id, arb_server, arb_guard));
     PalfHandleLite *arb_palf = dynamic_cast<PalfHandleLite *>(arb_guard.palf_handle_impl_);
     LogEngine *log_engine = &arb_palf->log_engine_;
@@ -910,7 +910,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_4f1a_force_set_member_list)
   while (leader.palf_handle_impl_->state_mgr_.role_ == common::ObRole::LEADER) {
     sleep(1);
   }
-
+  
   common::ObMemberList new_member_list;
   new_member_list.add_member(ObMember(get_cluster()[another_f1_idx]->get_addr(), 1));
   new_member_list.add_member(ObMember(get_cluster()[another_f2_idx]->get_addr(), 1));
@@ -932,7 +932,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_4f1a_force_set_member_list)
   EXPECT_EQ(new_replica_num, curr_replica_num);
   EXPECT_EQ(OB_SUCCESS, submit_log(new_leader, 100, id));
   EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(new_leader, new_leader.palf_handle_impl_->get_max_lsn()));
-
+  
   {
     // test restart after setting member list forcely
     revert_cluster_palf_handle_guard(palf_list);

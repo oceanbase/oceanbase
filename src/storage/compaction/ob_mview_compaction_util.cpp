@@ -169,7 +169,7 @@ int ObMviewCompactionHelper::get_mview_id_from_container_table(const uint64_t co
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
   ObSqlString sql;
-  if (OB_FAIL(sql.assign_fmt("SELECT table_id FROM %s WHERE data_table_id = %ld AND table_type = %d",
+  if (OB_FAIL(sql.assign_fmt("SELECT table_id FROM %s WHERE data_table_id = %ld AND table_type = %d", 
                               OB_ALL_TABLE_TNAME, container_table_id, MATERIALIZED_VIEW))) {
     LOG_WARN("Failed to assign sql", K(ret));
   } else {

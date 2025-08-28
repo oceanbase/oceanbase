@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 extern inline void skset(sock_t* s, uint32_t m);
 extern inline void skclear(sock_t* s, uint32_t m);
 extern inline bool sktest(sock_t* s, uint32_t m);

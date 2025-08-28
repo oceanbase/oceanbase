@@ -280,7 +280,7 @@ int ObRedisMeta::get_meta_from_entity(const ObITableEntity &meta_entity)
       LOG_WARN("fail to get meta value", K(ret), K(meta_entity));
     } else if (OB_FAIL(decode_meta_value(meta_value_obj))) {
       LOG_WARN("fail to decode meta value", K(ret), K(meta_value_obj));
-    }
+    } 
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(meta_entity.get_property(ObRedisUtil::INSERT_TS_PROPERTY_NAME, insert_tm_obj))) {
@@ -302,8 +302,8 @@ int ObRedisMeta::get_meta_from_entity(const ObITableEntity &meta_entity)
 /* ObRedisMetaUtil */
 /*******************/
 
-int ObRedisMetaUtil::create_redis_meta_by_model(ObIAllocator &allocator,
-                                          ObRedisDataModel model,
+int ObRedisMetaUtil::create_redis_meta_by_model(ObIAllocator &allocator, 
+                                          ObRedisDataModel model, 
                                           ObRedisMeta *&meta)
 {
   int ret = OB_SUCCESS;

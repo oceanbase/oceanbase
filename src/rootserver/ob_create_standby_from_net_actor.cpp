@@ -28,7 +28,7 @@ using namespace common;
 namespace rootserver
 {
 
-int ObCreateStandbyFromNetActor::set_idle_interval_us_(const int64_t idle_time)
+int ObCreateStandbyFromNetActor::set_idle_interval_us_(const int64_t idle_time) 
 {
   int ret = OB_SUCCESS;
   if (idle_time <= 0 || idle_time > MAX_IDLE_TIME) {
@@ -174,7 +174,7 @@ int ObCreateStandbyFromNetActor::finish_restore_if_possible_()
         WSTAT("failed to get readable_scn", KR(ret));
       } else if (readable_scn >= min_user_ls_create_scn) {
         retry_cnt_after_sync_user_ls++;
-        ISTAT("tenant readable scn can read inner table", K(readable_scn), K(min_user_ls_create_scn),
+        ISTAT("tenant readable scn can read inner table", K(readable_scn), K(min_user_ls_create_scn), 
                                                           K(retry_cnt_after_sync_user_ls));
 
         bool is_refreshed = false;
@@ -182,11 +182,11 @@ int ObCreateStandbyFromNetActor::finish_restore_if_possible_()
           LOG_WARN("fail to check tenant schema has been refreshed", KR(ret), K_(tenant_id), K(retry_cnt_after_sync_user_ls));
         } else if (!is_refreshed || !schema_broadcasted_) {
           if (50 < retry_cnt_after_sync_user_ls) {
-            WSTAT("schema has not refreshed", KR(ret), KR(tmp_ret), K(is_refreshed),
+            WSTAT("schema has not refreshed", KR(ret), KR(tmp_ret), K(is_refreshed), 
                                         K_(schema_broadcasted), K(retry_cnt_after_sync_user_ls));
           }
           if (OB_TMP_FAIL(refresh_schema_())) {
-            WSTAT("failed to refresh schema", KR(ret), KR(tmp_ret), K(is_refreshed), K_(schema_broadcasted),
+            WSTAT("failed to refresh schema", KR(ret), KR(tmp_ret), K(is_refreshed), K_(schema_broadcasted), 
                                               K(retry_cnt_after_sync_user_ls));
           }
         } else if (OB_FAIL(rs_rpc_proxy->create_tenant_end(arg))) {
@@ -194,8 +194,8 @@ int ObCreateStandbyFromNetActor::finish_restore_if_possible_()
         } else {
           ISTAT("execute create_tenant_end", KR(ret), K_(tenant_id), K(arg), K(retry_cnt_after_sync_user_ls));
           break;
-        }
-      }
+        } 
+      } 
       usleep(1000 * 1000); // 1s
     }
   }

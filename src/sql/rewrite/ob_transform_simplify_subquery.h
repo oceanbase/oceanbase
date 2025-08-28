@@ -33,7 +33,7 @@ public:
                                  bool &trans_happened) override;
   virtual int check_rule_bypass(const ObDMLStmt &stmt, bool &reject) override;
 private:
-  int transform_subquery_as_expr(ObDMLStmt *stmt, bool &trans_happened);
+  int transform_subquery_as_expr(ObDMLStmt *stmt, bool &trans_happened);                                               
   int try_trans_subquery_in_expr(ObDMLStmt *stmt,
                                  ObRawExpr *&expr,
                                  bool &trans_happened);
@@ -192,14 +192,14 @@ private:
                                JoinedTable *join_table,
                                ObIArray<ObRawExpr *> &join_conds,
                                ObIArray<ObRawExpr *> &push_down_conds);
-  int try_trans_any_all_as_exists(ObDMLStmt *stmt,
-                                  ObRawExpr *&expr,
-                                  ObNotNullContext *not_null_ctx,
+  int try_trans_any_all_as_exists(ObDMLStmt *stmt, 
+                                  ObRawExpr *&expr, 
+                                  ObNotNullContext *not_null_ctx, 
                                   bool used_as_condition,
                                   bool &trans_happened);
   int add_limit_for_any_all_subquery(ObRawExpr *stmt,bool &trans_happened);
   int transform_any_all_as_exists(ObDMLStmt *stmt, bool &trans_happened);
-  int transform_any_all_as_exists_joined_table(ObDMLStmt* stmt,
+  int transform_any_all_as_exists_joined_table(ObDMLStmt* stmt, 
                                                TableItem *table,
                                                bool &trans_happened);
   int try_trans_any_all_as_exists(ObDMLStmt *stmt,

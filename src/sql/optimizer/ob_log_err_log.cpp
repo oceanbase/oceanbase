@@ -44,7 +44,7 @@ int ObLogErrLog::est_cost()
   return ret;
 }
 
-int ObLogErrLog::get_plan_item_info(PlanText &plan_text,
+int ObLogErrLog::get_plan_item_info(PlanText &plan_text, 
                                     ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
@@ -52,9 +52,9 @@ int ObLogErrLog::get_plan_item_info(PlanText &plan_text,
     LOG_WARN("failed to get base plan item info", K(ret));
   } else {
     ObString &name = get_err_log_define().err_log_table_name_;
-    BUF_PRINT_OB_STR(name.ptr(),
-                     name.length(),
-                     plan_item.object_alias_,
+    BUF_PRINT_OB_STR(name.ptr(), 
+                     name.length(), 
+                     plan_item.object_alias_, 
                      plan_item.object_alias_len_);
   }
   return ret;

@@ -368,7 +368,7 @@ outer_stmt:
   | drop_package_stmt { $$ = $1; }
   | submit_job_stmt { $$ = $1; }
   | cancel_job_stmt { $$ = $1; }
-  | create_event_stmt { $$ = $1; }
+  | create_event_stmt { $$ = $1; }  
   | alter_event_stmt { $$ = $1; }
   | drop_event_stmt { $$ = $1; }
   | sql_stmt { $$ = $1; }
@@ -761,9 +761,9 @@ sp_call_name:
 ;
 
 ident:
-    IDENT
-    {
-      $$ = $1;
+    IDENT 
+    { 
+      $$ = $1; 
       $$->pl_str_off_ = @1.first_column;
     }
   | unreserved_keyword
@@ -1477,28 +1477,28 @@ sp_create_chistic:
 
 sp_chistic:
     COMMENT STRING
-  {
+  { 
     malloc_terminal_node($$, parse_ctx->mem_pool_, T_COMMENT);
     $$->str_value_ = $2->str_value_;
     $$->str_len_ = $2->str_len_;
   }
   | LANGUAGE SQL { /* Just parse it, we only have one language for now. */ $$ = NULL; }
-  | NO SQL
+  | NO SQL 
   {
     malloc_terminal_node($$, parse_ctx->mem_pool_, T_SP_DATA_ACCESS);
     $$->value_ = SP_NO_SQL;
   }
-  | CONTAINS SQL
+  | CONTAINS SQL 
   {
     malloc_terminal_node($$, parse_ctx->mem_pool_, T_SP_DATA_ACCESS);
     $$->value_ = SP_CONTAINS_SQL;
   }
-  | READS SQL DATA
-  {
+  | READS SQL DATA 
+  { 
     malloc_terminal_node($$, parse_ctx->mem_pool_, T_SP_DATA_ACCESS);
     $$->value_ = SP_READS_SQL_DATA;
   }
-  | MODIFIES SQL DATA
+  | MODIFIES SQL DATA 
   {
     malloc_terminal_node($$, parse_ctx->mem_pool_, T_SP_DATA_ACCESS);
     $$->value_ = SP_MODIFIES_SQL_DATA;
@@ -3148,7 +3148,7 @@ scond_info_item_name:
 submit_job_stmt:
     SUBMIT JOB sql_stmt
     {
-      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_OLAP_ASYNC_JOB_SUBMIT, 1, $3);
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_OLAP_ASYNC_JOB_SUBMIT, 1, $3);  
       const char *stmt_str = parse_ctx->stmt_str_ + @3.first_column;
       int32_t str_len = @3.last_column - @3.first_column + 1;
       $$->str_value_ = parse_strndup(stmt_str, str_len, parse_ctx->mem_pool_);
@@ -3160,7 +3160,7 @@ submit_job_stmt:
 cancel_job_stmt:
     CANCEL JOB STRING
     {
-      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_OLAP_ASYNC_JOB_CANCEL, 1, $3);
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_OLAP_ASYNC_JOB_CANCEL, 1, $3); 
     }
 ;
 

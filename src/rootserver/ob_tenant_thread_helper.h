@@ -66,7 +66,7 @@ public:
   void wakeup();
 public:
   virtual void switch_to_follower_forcedly() override;
-
+  
   virtual int switch_to_leader() override;
   virtual int switch_to_follower_gracefully() override
   {

@@ -53,9 +53,9 @@ private:
   // static int to_ora_date_str(ObString str, ObJsonBuffer &j_buf);
   static int to_str(sql::ObExecContext &ctx, sql::ParamStore &params,
                     common::ObObj &result, ObPlJsonUtil::PL_JSN_STRING_TYPE type = ObPlJsonUtil::PL_DEFAULT_STR_TYPE);
-  static int to_lob_proc(sql::ObExecContext &ctx, sql::ParamStore &params,
+  static int to_lob_proc(sql::ObExecContext &ctx, sql::ParamStore &params, 
                          common::ObObj &result, ObPlJsonUtil::PL_JSN_STRING_TYPE type = ObPlJsonUtil::PL_DEFAULT_STR_TYPE);
-
+  
 };
 } // end pl
 } // end oceanbase

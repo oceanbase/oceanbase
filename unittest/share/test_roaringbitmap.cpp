@@ -9,14 +9,14 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #include <gtest/gtest.h>
 #define private public
 #include "lib/roaringbitmap/ob_rb_utils.h"
 
 #undef private
 
-
+ 
 namespace oceanbase {
 namespace common {
 
@@ -176,7 +176,7 @@ TEST_F(TestRoaringBitmap, optimize)
   ObArenaAllocator allocator(ObModIds::TEST);
   ModulePageAllocator page_allocator_(allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR);
   ObRoaringBitmap *rb = OB_NEWx(ObRoaringBitmap, &allocator, (&allocator));
-
+  
   // add 33 value, remain 33 value
   for (int i = 0; i < MAX_BITMAP_SET_VALUES + 1; i++) {
     ASSERT_EQ(OB_SUCCESS, rb->value_add(300 + i));

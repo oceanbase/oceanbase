@@ -523,7 +523,7 @@ int ObTransformSimplifySubquery::push_down_outer_join_condition(ObDMLStmt *stmt,
 
 int ObTransformSimplifySubquery::get_push_down_conditions(ObDMLStmt *stmt,
                                                           JoinedTable *join_table,
-                                                          ObIArray<ObRawExpr *> &join_conds,
+                                                          ObIArray<ObRawExpr *> &join_conds, 
                                                           ObIArray<ObRawExpr *> &push_down_conds) {
   int ret = OB_SUCCESS;
   ObSqlBitSet<> right_table_ids;
@@ -1173,7 +1173,7 @@ int ObTransformSimplifySubquery::transform_exists_query(ObDMLStmt *stmt, bool &t
 }
 
 int ObTransformSimplifySubquery::try_eliminate_subquery(ObDMLStmt *stmt, ObRawExpr *&expr, bool &trans_happened)
-{
+{ 
   int ret = OB_SUCCESS;
   trans_happened = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(expr)) {
@@ -1207,7 +1207,7 @@ int ObTransformSimplifySubquery::recursive_eliminate_subquery(ObDMLStmt *stmt,
       if (OB_FAIL(SMART_CALL(recursive_eliminate_subquery(stmt, expr->get_param_expr(i),
                                                           trans_happened)))) {
         LOG_WARN("failed to recursive eliminate subquery", K(ret));
-      }
+      }  
     }
     if (OB_SUCC(ret) && OB_FAIL(eliminate_subquery(stmt, expr, trans_happened))) {
       LOG_WARN("failed to eliminate subquery", K(ret));
@@ -1320,7 +1320,7 @@ int ObTransformSimplifySubquery::subquery_can_be_eliminated_in_exists(const ObIt
   } else if (stmt->is_set_stmt()) {
     if (ObSelectStmt::UNION == stmt->get_set_op() && !stmt->is_recursive_union()) {
       const ObIArray<ObSelectStmt*> &child_stmts = stmt->get_set_query();
-      //loop child stmts and if one of them can be eliminated, then eliminate the whole set_stmt
+      //loop child stmts and if one of them can be eliminated, then eliminate the whole set_stmt 
       for (int64_t i = 0; OB_SUCC(ret) && !can_be_eliminated && i < child_stmts.count(); ++i) {
         ObSelectStmt *child = child_stmts.at(i);
         if (OB_FAIL(SMART_CALL(subquery_can_be_eliminated_in_exists(op_type, child, can_be_eliminated)))) {
@@ -1365,15 +1365,15 @@ bool ObTransformSimplifySubquery::is_subquery_not_empty(const ObSelectStmt &stmt
 int ObTransformSimplifySubquery::select_items_can_be_simplified(const ObItemType op_type,
                                                                 const ObSelectStmt *stmt,
                                                                 bool &can_be_simplified) const
-{
+{ 
   /*
   * 1. calculate max_select_item_size
-  *    1.1 for set stmt, it depends on its child stmt, so only consider its child stmt
+  *    1.1 for set stmt, it depends on its child stmt, so only consider its child stmt 
   * 2. decide whether need to simplify select_item
-  *    2.1 for set stmt, if all child stmt can be simplied, then the union set stmt
+  *    2.1 for set stmt, if all child stmt can be simplied, then the union set stmt 
   *        get max_select_item_size = 1(max_select_item_size will never be updated)
   *    2.2 any of one child stmt can be simplifed , the whole union set stmt can be simplified
-  *
+  *    
   */
   int ret = OB_SUCCESS;
   bool has_limit = false;
@@ -1585,7 +1585,7 @@ int ObTransformSimplifySubquery::simplify_select_items(ObDMLStmt *stmt,
               OB_FAIL(ObTransformUtils::add_compare_int_constraint(ctx_, subquery->get_limit_expr(), T_OP_GE, 1))) {
       LOG_WARN("failed to add const param constraints", K(ret));
     } else if (!has_limit) {
-      subquery->assign_set_all();
+      subquery->assign_set_all();          
     }
   } else {
     // Add single select item with const int 1
@@ -1599,7 +1599,7 @@ int ObTransformSimplifySubquery::simplify_select_items(ObDMLStmt *stmt,
       LOG_WARN("failed to get aggr items", K(ret));
     } else if (OB_FAIL(append_array_no_dup(subquery->get_aggr_items(),aggr_items_in_having))) {
       LOG_WARN("failed to remove item", K(ret));
-    }
+    } 
     // Clear distinct flag
     subquery->assign_all();
     //reset window function
@@ -1698,7 +1698,7 @@ int ObTransformSimplifySubquery::eliminate_groupby_distinct_in_any_all(ObRawExpr
              || OB_UNLIKELY(!expr->get_param_expr(1)->is_query_ref_expr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected expr", K(ret), KPC(expr));
-  } else if (OB_ISNULL(subq_expr = static_cast<ObQueryRefRawExpr *>(expr->get_param_expr(1))) ||
+  } else if (OB_ISNULL(subq_expr = static_cast<ObQueryRefRawExpr *>(expr->get_param_expr(1))) || 
              OB_ISNULL(static_cast<ObRawExpr *>(expr->get_param_expr(0)))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Subquery or left_hand expr is NULL", K(ret));
@@ -1888,30 +1888,30 @@ int ObTransformSimplifySubquery::check_const_select(const ObSelectStmt &stmt,
   return ret;
 }
 
-int ObTransformSimplifySubquery::try_trans_any_all_as_exists(ObDMLStmt *stmt,
-                                                             ObRawExpr *&expr,
-                                                             ObNotNullContext *not_null_ctx,
+int ObTransformSimplifySubquery::try_trans_any_all_as_exists(ObDMLStmt *stmt, 
+                                                             ObRawExpr *&expr, 
+                                                             ObNotNullContext *not_null_ctx, 
                                                              bool used_as_condition,
                                                              bool &trans_happened)
 {
   int ret = OB_SUCCESS;
-  bool is_valid = false;
+  bool is_valid = false; 
   bool is_happened = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params have null", K(ret), K(stmt), K(expr));
   } else if (IS_SUBQUERY_COMPARISON_OP(expr->get_expr_type())) {
-    if (OB_FAIL(ObTransformUtils::check_can_trans_any_all_as_exists(ctx_,
-                                                                    expr,
-                                                                    used_as_condition,
-                                                                    true,
+    if (OB_FAIL(ObTransformUtils::check_can_trans_any_all_as_exists(ctx_, 
+                                                                    expr, 
+                                                                    used_as_condition, 
+                                                                    true, 
                                                                     is_valid))) {
       LOG_WARN("failed to check in can tras as exists", K(ret));
     } else if (!is_valid) {
       // do nothing
     } else if (OB_FAIL(ObTransformUtils::do_trans_any_all_as_exists(ctx_,
-                                                                    expr,
-                                                                    not_null_ctx,
+                                                                    expr, 
+                                                                    not_null_ctx, 
                                                                     is_happened))) {
       LOG_WARN("failed to do trans any all as exists", K(ret));
     } else {
@@ -1922,9 +1922,9 @@ int ObTransformSimplifySubquery::try_trans_any_all_as_exists(ObDMLStmt *stmt,
   } else if (expr->get_expr_type() == T_OP_CASE) {
     ObCaseOpRawExpr* case_expr = static_cast<ObCaseOpRawExpr*>(expr);
     for (int64_t i = 0; OB_SUCC(ret) && i < case_expr->get_when_expr_size(); ++i) {
-      if (OB_FAIL(SMART_CALL(try_trans_any_all_as_exists(stmt,
-                                                         case_expr->get_when_param_expr(i),
-                                                         not_null_ctx,
+      if (OB_FAIL(SMART_CALL(try_trans_any_all_as_exists(stmt, 
+                                                         case_expr->get_when_param_expr(i), 
+                                                         not_null_ctx, 
                                                          true,
                                                          is_happened)))) {
         LOG_WARN("failed to try_transform_any_all for param", K(ret));
@@ -1933,9 +1933,9 @@ int ObTransformSimplifySubquery::try_trans_any_all_as_exists(ObDMLStmt *stmt,
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < case_expr->get_then_expr_size(); ++i) {
-      if (OB_FAIL(SMART_CALL(try_trans_any_all_as_exists(stmt,
-                                                         case_expr->get_then_param_expr(i),
-                                                         not_null_ctx,
+      if (OB_FAIL(SMART_CALL(try_trans_any_all_as_exists(stmt, 
+                                                         case_expr->get_then_param_expr(i), 
+                                                         not_null_ctx, 
                                                          false,
                                                          is_happened)))) {
         LOG_WARN("failed to try_transform_any_all for param", K(ret));
@@ -1946,9 +1946,9 @@ int ObTransformSimplifySubquery::try_trans_any_all_as_exists(ObDMLStmt *stmt,
     if (OB_FAIL(ret)) {
     } else if (OB_NOT_NULL(case_expr->get_default_param_expr()) &&
                OB_FAIL(SMART_CALL(try_trans_any_all_as_exists(
-                                  stmt,
-                                  case_expr->get_default_param_expr(),
-                                  not_null_ctx,
+                                  stmt, 
+                                  case_expr->get_default_param_expr(), 
+                                  not_null_ctx, 
                                   false,
                                   is_happened)))) {
       LOG_WARN("failed to try_transform_any_all for param", K(ret));
@@ -1956,9 +1956,9 @@ int ObTransformSimplifySubquery::try_trans_any_all_as_exists(ObDMLStmt *stmt,
       //do nothing
     } else if (OB_NOT_NULL(case_expr->get_arg_param_expr()) &&
                OB_FAIL(SMART_CALL(try_trans_any_all_as_exists(
-                                  stmt,
-                                  case_expr->get_arg_param_expr(),
-                                  not_null_ctx,
+                                  stmt, 
+                                  case_expr->get_arg_param_expr(), 
+                                  not_null_ctx, 
                                   false,
                                   is_happened)))) {
       LOG_WARN("failed to try_transform_any_all for param", K(ret));
@@ -1972,8 +1972,8 @@ int ObTransformSimplifySubquery::try_trans_any_all_as_exists(ObDMLStmt *stmt,
                          expr->get_expr_type() == T_OP_BOOL) ? used_as_condition : false;
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       if (OB_FAIL(SMART_CALL(try_trans_any_all_as_exists(stmt,
-                                                         expr->get_param_expr(i),
-                                                         not_null_ctx,
+                                                         expr->get_param_expr(i), 
+                                                         not_null_ctx, 
                                                          used_as_condition,
                                                          is_happened)))) {
         LOG_WARN("failed to try_transform_any_all for param", K(ret));
@@ -1998,15 +1998,15 @@ int ObTransformSimplifySubquery::transform_any_all_as_exists(ObDMLStmt *stmt, bo
     ObNotNullContext not_null_ctx(*ctx_, stmt);
 
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_joined_tables().count(); ++i) {
-      if (OB_FAIL(transform_any_all_as_exists_joined_table(stmt,
+      if (OB_FAIL(transform_any_all_as_exists_joined_table(stmt, 
                                                            stmt->get_joined_tables().at(i),
                                                            is_happened))) {
         LOG_WARN("failed to flatten join condition exprs", K(ret));
       } else {
         trans_happened |= is_happened;
       }
-    }
-
+    }   
+    
     if (OB_FAIL(ret)) {
     } else if (OB_FALSE_IT(not_null_ctx.reset())) {
     } else if (OB_FAIL(not_null_ctx.generate_stmt_context(NULLABLE_SCOPE::NS_WHERE))) {
@@ -2039,7 +2039,7 @@ int ObTransformSimplifySubquery::transform_any_all_as_exists(ObDMLStmt *stmt, bo
         if (OB_ISNULL(select_stmt->get_select_items().at(i).expr_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret));
-        } else if (OB_FAIL(try_trans_any_all_as_exists(stmt,
+        } else if (OB_FAIL(try_trans_any_all_as_exists(stmt, 
                                                        select_stmt->get_select_items().at(i).expr_,
                                                        &not_null_ctx,
                                                        false,
@@ -2073,7 +2073,7 @@ int ObTransformSimplifySubquery::transform_any_all_as_exists_joined_table(
   } else if (!table->is_joined_table()) {
     /*do nothing*/
   } else if (OB_ISNULL(join_table = static_cast<JoinedTable*>(table)) ||
-             OB_ISNULL(left_table = join_table->left_table_) ||
+             OB_ISNULL(left_table = join_table->left_table_) || 
              OB_ISNULL(right_table = join_table->right_table_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(join_table));
@@ -2101,7 +2101,7 @@ int ObTransformSimplifySubquery::transform_any_all_as_exists_joined_table(
     } else {
       trans_happened = cur_happened | left_happened | right_happened;
     }
-  }
+  } 
   return ret;
 }
 
@@ -2115,7 +2115,7 @@ int ObTransformSimplifySubquery::try_trans_any_all_as_exists(
   int ret = OB_SUCCESS;
   bool is_happened = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
-    if (OB_FAIL(try_trans_any_all_as_exists(stmt,
+    if (OB_FAIL(try_trans_any_all_as_exists(stmt, 
                                             exprs.at(i),
                                             not_null_cxt,
                                             used_as_condition,
@@ -2175,7 +2175,7 @@ int ObTransformSimplifySubquery::empty_table_subquery_can_be_eliminated_in_exist
   }
   return ret;
 }
-
+  
 int ObTransformSimplifySubquery::do_trans_empty_table_subquery_as_expr(ObRawExpr *&expr,
                                                                        bool &trans_happened)
 {

@@ -196,12 +196,12 @@ private:
     int64_t flag_;
     struct {
       int64_t mode_ : IO_MODE_BIT;
-      uint8_t func_type_ : IO_FUNC_TYPE_BIT;
+      uint8_t func_type_ : IO_FUNC_TYPE_BIT; 
       int64_t wait_event_id_ : IO_WAIT_EVENT_BIT;
       bool is_sync_ : IO_SYNC_FLAG_BIT;
       bool is_unlimited_ : IO_UNLIMITED_FLAG_BIT;
       bool is_detect_ : IO_DETECT_FLAG_BIT;
-      bool is_write_through_ : IO_WRITE_THROUGH_BIT;
+      bool is_write_through_ : IO_WRITE_THROUGH_BIT; 
       bool is_sealed_ : IO_SEALED_FLAG_BIT;
       bool is_time_detect_ : IO_TIME_DETECT_FLAG_BIT;
       bool need_close_dev_and_fd_ : IO_CLOSE_DEV_AND_FD_BIT;

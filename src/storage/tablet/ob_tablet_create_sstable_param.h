@@ -57,7 +57,7 @@ public:
   bool is_valid() const;
   bool is_block_meta_valid(const ObMetaDiskAddr &addr,
                            const blocksstable::ObMicroBlockData &data) const;
-
+  
   // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
   int init_for_empty_major_sstable(const ObTabletID &tablet_id,
                                    const ObStorageSchema &storage_schema,
@@ -134,14 +134,14 @@ public:
                                             const share::SCN &start_scn,
                                             const share::SCN &end_scn,
                                             const ObStorageSchema &table_schema);
-
+  
   // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
   int init_for_remote(const blocksstable::ObMigrationSSTableParam &migration_param);
 
   int init_for_mds(const compaction::ObBasicTabletMergeCtx &ctx,
                    const blocksstable::ObSSTableMergeRes &res,
                    const ObStorageSchema &mds_schema);
-
+  
   inline const ObITable::TableKey& table_key() const { return table_key_; }
   inline bool is_ready_for_read() const { return is_ready_for_read_; }
   inline int64_t data_blocks_cnt() const { return data_blocks_cnt_; }
@@ -235,7 +235,7 @@ private:
   int64_t use_old_macro_block_count_;
   int64_t row_count_;
   int64_t column_group_cnt_; // only used for column_store
-  int32_t co_base_type_; // used for co sstable
+  int32_t co_base_type_; // used for co sstable 
   int64_t rowkey_column_cnt_;
   int64_t column_cnt_;
   int64_t full_column_cnt_;

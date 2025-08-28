@@ -23,7 +23,7 @@ namespace storage
 struct ObTabletCOConvertCtx
 {
 public:
-  enum class Status
+  enum class Status 
   {
     UNKNOWN         = 0,  // intial state, need take tablet_id and storage schema into consideration
     PROGRESSING     = 1,  // need convert and to be check result
@@ -56,7 +56,7 @@ public:
   ObTabletID tablet_id_;
   share::ObDagId co_dag_net_id_;
   Status status_;
-  int64_t retry_cnt_;
+  int64_t retry_cnt_; 
   int64_t eagain_cnt_;
   bool is_inited_;
 };
@@ -99,7 +99,7 @@ public:
   int64_t finish_check_cnt_;
   int64_t retry_exhausted_cnt_;
   TabletConvertCtxIndexMap idx_map_;
-  ObArray<ObTabletCOConvertCtx> convert_ctxs_;
+  ObArray<ObTabletCOConvertCtx> convert_ctxs_;  
   DISALLOW_COPY_AND_ASSIGN(ObHATabletGroupCOConvertCtx);
 };
 

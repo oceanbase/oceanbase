@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 static idm_item_t* idm_locate(idm_t* idm, uint64_t id) { return idm->table + (id % idm->capacity); }
 static void idm_item_recycle(idm_item_t* item, uint64_t capacity) {
   item->data = NULL;

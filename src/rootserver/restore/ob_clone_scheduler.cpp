@@ -1740,7 +1740,7 @@ int ObCloneScheduler::wait_all_ls_created_(
   int ret = OB_SUCCESS;
   const uint64_t source_tenant_id = job.get_source_tenant_id();
   const ObTenantSnapshotID &tenant_snapshot_id = job.get_tenant_snapshot_id();
-
+  
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", KR(ret));

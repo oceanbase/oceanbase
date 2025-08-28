@@ -276,7 +276,7 @@ public:
   OB_INLINE const common::ObList<ObITableGroupValue *, common::ObIAllocator>& get_expired_groups() const { return expired_groups_; }
   OB_INLINE const common::ObList<ObITableGroupValue *, common::ObIAllocator>& get_clean_groups() const { return clean_groups_; }
   int construct_trigger_requests(common::ObIAllocator &request_allocator,
-                                common::ObIArray<ObTableGroupTriggerRequest*> &requests);
+                                common::ObIArray<ObTableGroupTriggerRequest*> &requests); 
 private:
   bool is_inited_;
   common::ObSpinLock lock_;
@@ -397,7 +397,7 @@ public:
   OB_INLINE int64_t get_write_ops() const { return ATOMIC_LOAD(&write_ops_); }
   OB_INLINE int64_t get_other_ops() const { return ATOMIC_LOAD(&other_ops_); }
   OB_INLINE void reset_ops()
-  {
+  { 
     ATOMIC_STORE(&read_ops_, 0);
     ATOMIC_STORE(&write_ops_, 0);
     ATOMIC_STORE(&other_ops_, 0);

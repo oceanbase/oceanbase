@@ -1,4 +1,4 @@
-// owner: linqiucen.lqc
+// owner: linqiucen.lqc 
 // owner group: rs
 
 /**
@@ -65,96 +65,96 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
   ls_infos.push_back(info);
   ASSERT_EQ(3, ls_infos.count());
   ret = ObTabletToLSTableOperator::batch_update(
-      get_curr_simple_server().get_observer().get_mysql_proxy(),
-      OB_SYS_TENANT_ID,
+      get_curr_simple_server().get_observer().get_mysql_proxy(), 
+      OB_SYS_TENANT_ID, 
       ls_infos);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   // test OB_INVALID_ARGUMENT: invalid tenant_id
   ret = ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
       get_curr_simple_server().get_observer().get_mysql_proxy(),
-      OB_INVALID_TENANT_ID,
-      t1,
-      old_transfer_seq,
-      ls1,
-      new_transfer_seq,
+      OB_INVALID_TENANT_ID, 
+      t1, 
+      old_transfer_seq, 
+      ls1, 
+      new_transfer_seq, 
       ls2,
       group_id);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   // test OB_INVALID_ARGUMENT: invalid old_transfer_seq
   ret = ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
       get_curr_simple_server().get_observer().get_mysql_proxy(),
-      OB_SYS_TENANT_ID,
-      t1,
-      -1,
-      ls1,
-      new_transfer_seq,
+      OB_SYS_TENANT_ID, 
+      t1, 
+      -1, 
+      ls1, 
+      new_transfer_seq, 
       ls2,
       group_id);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   // test OB_INVALID_ARGUMENT: invalid new_transfer_seq
   ret = ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
       get_curr_simple_server().get_observer().get_mysql_proxy(),
-      OB_SYS_TENANT_ID,
-      t1,
-      old_transfer_seq,
-      ls1,
-      -1,
+      OB_SYS_TENANT_ID, 
+      t1, 
+      old_transfer_seq, 
+      ls1, 
+      -1, 
       ls2,
       group_id);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
-  // test OB_INVALID_ARGUMENT: old_transfer_seq == new_transfer_seq
+  // test OB_INVALID_ARGUMENT: old_transfer_seq == new_transfer_seq 
   ret = ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
       get_curr_simple_server().get_observer().get_mysql_proxy(),
-      OB_SYS_TENANT_ID,
-      t1,
-      old_transfer_seq,
-      ls1,
-      old_transfer_seq,
+      OB_SYS_TENANT_ID, 
+      t1, 
+      old_transfer_seq, 
+      ls1, 
+      old_transfer_seq, 
       ls2,
       group_id);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   // test OB_INVALID_ARGUMENT: invalid tablet_id
   ret = ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
       get_curr_simple_server().get_observer().get_mysql_proxy(),
-      OB_SYS_TENANT_ID,
-      ObTabletID(),
-      old_transfer_seq,
-      ls1,
-      new_transfer_seq,
+      OB_SYS_TENANT_ID, 
+      ObTabletID(), 
+      old_transfer_seq, 
+      ls1, 
+      new_transfer_seq, 
       ls2,
       group_id);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   // test OB_INVALID_ARGUMENT: invalid old_ls_id
   ret = ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
       get_curr_simple_server().get_observer().get_mysql_proxy(),
-      OB_SYS_TENANT_ID,
-      t1,
-      old_transfer_seq,
-      ObLSID(),
-      new_transfer_seq,
+      OB_SYS_TENANT_ID, 
+      t1, 
+      old_transfer_seq, 
+      ObLSID(), 
+      new_transfer_seq, 
       ls2,
       group_id);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   // test OB_INVALID_ARGUMENT: invalid new_ls_id
   ret = ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
       get_curr_simple_server().get_observer().get_mysql_proxy(),
-      OB_SYS_TENANT_ID,
-      t1,
-      old_transfer_seq,
-      ls1,
-      new_transfer_seq,
+      OB_SYS_TENANT_ID, 
+      t1, 
+      old_transfer_seq, 
+      ls1, 
+      new_transfer_seq, 
       ObLSID(),
       group_id);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   // test OB_INVALID_ARGUMENT: old_ls_id == new_ls_id
   ret = ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
       get_curr_simple_server().get_observer().get_mysql_proxy(),
-      OB_SYS_TENANT_ID,
-      t1,
-      old_transfer_seq,
-      ls1,
-      new_transfer_seq,
+      OB_SYS_TENANT_ID, 
+      t1, 
+      old_transfer_seq, 
+      ls1, 
+      new_transfer_seq, 
       ls1,
       group_id);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
@@ -162,11 +162,11 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
   // test OB_ENTRY_NOT_EXIST: t1 is not in ls3
   ret = ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
       get_curr_simple_server().get_observer().get_mysql_proxy(),
-      OB_SYS_TENANT_ID,
-      t1,
-      old_transfer_seq,
-      ls3,
-      new_transfer_seq,
+      OB_SYS_TENANT_ID, 
+      t1, 
+      old_transfer_seq, 
+      ls3, 
+      new_transfer_seq, 
       ls2,
       group_id);
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, ret);
@@ -174,11 +174,11 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
   old_transfer_seq = 3;
   ret = ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
       get_curr_simple_server().get_observer().get_mysql_proxy(),
-      OB_SYS_TENANT_ID,
-      t1,
-      old_transfer_seq,
-      ls1,
-      new_transfer_seq,
+      OB_SYS_TENANT_ID, 
+      t1, 
+      old_transfer_seq, 
+      ls1, 
+      new_transfer_seq, 
       ls2,
       group_id);
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, ret);
@@ -187,22 +187,22 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
   old_transfer_seq = 0;
   ret = ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
       get_curr_simple_server().get_observer().get_mysql_proxy(),
-      OB_SYS_TENANT_ID,
-      t1,
-      old_transfer_seq,
-      ls1,
-      new_transfer_seq,
+      OB_SYS_TENANT_ID, 
+      t1, 
+      old_transfer_seq, 
+      ls1, 
+      new_transfer_seq, 
       ls2,
       group_id);
   ASSERT_EQ(OB_SUCCESS, ret);
   // test OB_ENTRY_NOT_EXIST: t1 is not in ls1
   ret = ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
       get_curr_simple_server().get_observer().get_mysql_proxy(),
-      OB_SYS_TENANT_ID,
-      t1,
-      old_transfer_seq,
-      ls1,
-      new_transfer_seq,
+      OB_SYS_TENANT_ID, 
+      t1, 
+      old_transfer_seq, 
+      ls1, 
+      new_transfer_seq, 
       ls2,
       group_id);
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, ret);
@@ -211,11 +211,11 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
   new_transfer_seq = new_transfer_seq + 1;
   ret = ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
       get_curr_simple_server().get_observer().get_mysql_proxy(),
-      OB_SYS_TENANT_ID,
-      t1,
-      old_transfer_seq,
-      ls2,
-      new_transfer_seq,
+      OB_SYS_TENANT_ID, 
+      t1, 
+      old_transfer_seq, 
+      ls2, 
+      new_transfer_seq, 
       ls3,
       group_id);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -224,22 +224,22 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
   new_transfer_seq = 1;
   ret = ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
       get_curr_simple_server().get_observer().get_mysql_proxy(),
-      OB_SYS_TENANT_ID,
-      t2,
-      old_transfer_seq,
-      ls2,
-      new_transfer_seq,
+      OB_SYS_TENANT_ID, 
+      t2, 
+      old_transfer_seq, 
+      ls2, 
+      new_transfer_seq, 
       ls1,
       group_id);
   ASSERT_EQ(OB_SUCCESS, ret);
   // test OB_ENTRY_NOT_EXIST: t2 is not in ls2
   ret = ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
       get_curr_simple_server().get_observer().get_mysql_proxy(),
-      OB_SYS_TENANT_ID,
-      t2,
-      old_transfer_seq,
-      ls2,
-      new_transfer_seq,
+      OB_SYS_TENANT_ID, 
+      t2, 
+      old_transfer_seq, 
+      ls2, 
+      new_transfer_seq, 
       ls1,
       group_id);
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, ret);
@@ -248,11 +248,11 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
   new_transfer_seq = new_transfer_seq + 1;
   ret = ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
       get_curr_simple_server().get_observer().get_mysql_proxy(),
-      OB_SYS_TENANT_ID,
-      t2,
-      old_transfer_seq,
-      ls1,
-      new_transfer_seq,
+      OB_SYS_TENANT_ID, 
+      t2, 
+      old_transfer_seq, 
+      ls1, 
+      new_transfer_seq, 
       ls2,
       group_id);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -261,22 +261,22 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
   new_transfer_seq = 1;
   ret = ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
       get_curr_simple_server().get_observer().get_mysql_proxy(),
-      OB_SYS_TENANT_ID,
-      t3,
-      old_transfer_seq,
-      ls3,
-      new_transfer_seq,
+      OB_SYS_TENANT_ID, 
+      t3, 
+      old_transfer_seq, 
+      ls3, 
+      new_transfer_seq, 
       ls1,
       group_id);
   ASSERT_EQ(OB_SUCCESS, ret);
   // test OB_ENTRY_NOT_EXIST: t3 is not in ls3
   ret = ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
       get_curr_simple_server().get_observer().get_mysql_proxy(),
-      OB_SYS_TENANT_ID,
-      t3,
-      old_transfer_seq,
-      ls3,
-      new_transfer_seq,
+      OB_SYS_TENANT_ID, 
+      t3, 
+      old_transfer_seq, 
+      ls3, 
+      new_transfer_seq, 
       ls1,
       group_id);
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, ret);
@@ -289,7 +289,7 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
         OB_ALL_TABLET_TO_LS_TID);
     ObSqlString sql;
     // t1 should be in ls3 and its transfer_seq should be 2
-    ret = sql.append_fmt("SELECT ls_id, transfer_seq FROM %s WHERE tablet_id=1",
+    ret = sql.append_fmt("SELECT ls_id, transfer_seq FROM %s WHERE tablet_id=1", 
         OB_ALL_TABLET_TO_LS_TNAME);
     ASSERT_EQ(OB_SUCCESS, ret);
     ret = sql_client_retry_weak.read(result, OB_SYS_TENANT_ID, sql.ptr());
@@ -302,7 +302,7 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
     ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_EQ(2, transfer_seq);
     // t2 should be in ls2 and its transfer_seq should be 2
-    ret = sql.append_fmt("SELECT ls_id, transfer_seq FROM %s WHERE tablet_id=2",
+    ret = sql.append_fmt("SELECT ls_id, transfer_seq FROM %s WHERE tablet_id=2", 
         OB_ALL_TABLET_TO_LS_TNAME);
     ASSERT_EQ(OB_SUCCESS, ret);
     ret = sql_client_retry_weak.read(result, OB_SYS_TENANT_ID, sql.ptr());
@@ -317,7 +317,7 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
     ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_EQ(2, transfer_seq);
     // t3 should be in ls1 and its transfer_seq should be 1
-    ret = sql.append_fmt("SELECT ls_id, transfer_seq FROM %s WHERE tablet_id=3",
+    ret = sql.append_fmt("SELECT ls_id, transfer_seq FROM %s WHERE tablet_id=3", 
         OB_ALL_TABLET_TO_LS_TNAME);
     ASSERT_EQ(OB_SUCCESS, ret);
     ret = sql_client_retry_weak.read(result, OB_SYS_TENANT_ID, sql.ptr());
@@ -351,7 +351,7 @@ TEST_F(TestTabletToLSOperatorBatchGet, test_batch_get)
   ASSERT_EQ(OB_SUCCESS, infos.push_back(info2));
   ObMySQLProxy &sql_proxy = get_curr_simple_server().get_observer().get_mysql_proxy();
   ASSERT_EQ(OB_SUCCESS, ObTabletToLSTableOperator::batch_update(sql_proxy, tenant_id, infos));
-
+  
   ObArray<ObTabletID> tablet_ids;
   ObArray<ObTabletToLSInfo> res_infos;
   ObArray<ObLSID> ls_ids;
@@ -372,7 +372,7 @@ TEST_F(TestTabletToLSOperatorBatchGet, test_batch_get)
   ASSERT_EQ(OB_SUCCESS, tablet_ids.push_back(ObTabletID()));
   ASSERT_EQ(OB_ITEM_NOT_MATCH, ObTabletToLSTableOperator::batch_get(sql_proxy, tenant_id, tablet_ids, res_infos));
   ASSERT_EQ(OB_ITEM_NOT_MATCH, ObTabletToLSTableOperator::batch_get_ls(sql_proxy, tenant_id, tablet_ids, ls_ids));
-
+  
   // exist duplicate tablet_ids
   tablet_ids.reset();
   ls_ids.reset();

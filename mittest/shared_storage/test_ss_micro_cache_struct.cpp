@@ -20,14 +20,14 @@
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "mittest/shared_storage/clean_residual_data.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace storage
+namespace storage 
 {
 using namespace oceanbase::common;
 using namespace oceanbase::blocksstable;
 
-class TestSSMicroCacheStruct : public ::testing::Test
+class TestSSMicroCacheStruct : public ::testing::Test 
 {
 public:
   TestSSMicroCacheStruct() = default;
@@ -235,7 +235,7 @@ TEST_F(TestSSMicroCacheStruct, micro_meta_handle)
   ObSSMicroBlockMetaHandle micro_meta_handle;
   micro_meta_handle.set_ptr(micro_meta_ptr);
   ASSERT_EQ(ori_micro_ref_cnt + 1, micro_meta_ptr->ref_cnt_);
-
+  
   ObSSMicroBlockMetaHandle tmp_micro_handle1(micro_meta_handle);
   ASSERT_EQ(ori_micro_ref_cnt + 2, micro_meta_ptr->ref_cnt_);
 
@@ -268,7 +268,7 @@ TEST_F(TestSSMicroCacheStruct, micro_handle_hash_map)
 
   ASSERT_EQ(OB_SUCCESS, micro_handle_map.set_refactored(1, micro_meta_handle));
   ASSERT_EQ(ori_micro_ref_cnt + 2, micro_meta_ptr->ref_cnt_);
-
+  
   ObSSMicroBlockMetaHandle tmp_micro_handle;
   ASSERT_EQ(OB_SUCCESS, micro_handle_map.get_refactored(1, tmp_micro_handle));
   ASSERT_EQ(ori_micro_ref_cnt + 3, micro_meta_ptr->ref_cnt_);
@@ -320,7 +320,7 @@ TEST_F(TestSSMicroCacheStruct, mem_block1)
   MacroBlockId macro_id(0, 100, 0);
   macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
   macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::SHARED_MAJOR_DATA_MACRO);
-
+  
   ObArenaAllocator allocator;
   ObSSMicroCacheStat &cache_stat = MTL(ObSSMicroCache *)->cache_stat_;
   ObSSMemBlockPool &mem_blk_pool = MTL(ObSSMicroCache *)->mem_data_mgr_.mem_block_pool_;
@@ -704,7 +704,7 @@ TEST_F(TestSSMicroCacheStruct, arc_iter_info)
     blocksstable::MacroBlockId macro_id(0, 8000 + i, 0);
     int64_t offset = i;
     ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
-
+    
     micro_meta->first_val_ = 100;
     micro_meta->length_ = micro_size;
     micro_meta->micro_key_ = micro_key;
@@ -760,7 +760,7 @@ TEST_F(TestSSMicroCacheStruct, arc_iter_info)
       ASSERT_EQ(OB_SUCCESS, arc_iter_info.finish_handle_cold_micro(i));
     }
   }
-
+  
   arc_iter_info.destroy();
   micro_meta_handle.reset();
   ASSERT_EQ(0, SSMicroCacheStat.micro_stat().get_micro_pool_alloc_cnt());
@@ -797,7 +797,7 @@ TEST_F(TestSSMicroCacheStruct, reorgan_entry)
     int32_t offset = 40;
     ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
     micro_meta->micro_key_ = micro_key;
-
+    
     ASSERT_EQ(true, entry.is_valid());
     ASSERT_EQ(OB_SUCCESS, entry_arr.push_back(entry));
     ASSERT_EQ(ori_micro_ref_cnt + 2, micro_meta->ref_cnt_);

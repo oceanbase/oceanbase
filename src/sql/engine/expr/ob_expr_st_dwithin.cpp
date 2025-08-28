@@ -93,7 +93,7 @@ int ObExprPrivSTDWithin::eval_st_dwithin_common(ObEvalCtx &ctx,
     LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_DWITHIN);
     LOG_WARN("Tolerance cannot be less than zero", K(ret), K(distance_tolerance));
   } else if (OB_FAIL(ObGeoTypeUtil::get_type_srid_from_wkb(wkb1, type1, srid1))) {
-    LOG_WARN("get type and srid from wkb failed", K(wkb1), K(ret));
+    LOG_WARN("get type and srid from wkb failed", K(wkb1), K(ret));      
     if (ret == OB_ERR_GIS_INVALID_DATA) {
       LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_DWITHIN);
     }
@@ -107,20 +107,20 @@ int ObExprPrivSTDWithin::eval_st_dwithin_common(ObEvalCtx &ctx,
     LOG_WARN("srid not the same", K(srid1), K(srid2), K(ret));
   } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, wkb1, srs))) {
     LOG_WARN("fail to get srs item", K(ret), K(wkb1));
-  } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb1, geo1, srs, N_PRIV_ST_TRANSFORM,
+  } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb1, geo1, srs, N_PRIV_ST_TRANSFORM, 
                                                     ObGeoBuildFlag::GEO_ALLOW_3D | GEO_NOT_COPY_WKB))) {
     LOG_WARN("get first geo by wkb failed", K(ret));
     if (ret != OB_ERR_SRS_NOT_FOUND && ret != OB_ERR_INVALID_GEOMETRY_TYPE) {
-      ret = OB_ERR_GIS_INVALID_DATA;
-      LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_DWITHIN);
-    }
-  } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb2, geo2, srs, N_PRIV_ST_TRANSFORM,
+      ret = OB_ERR_GIS_INVALID_DATA;  
+      LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_DWITHIN);        
+    }           
+  } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb2, geo2, srs, N_PRIV_ST_TRANSFORM, 
                                                     ObGeoBuildFlag::GEO_ALLOW_3D | GEO_NOT_COPY_WKB))) {
     LOG_WARN("get second geo by wkb failed", K(ret));
     if (ret != OB_ERR_SRS_NOT_FOUND && ret != OB_ERR_INVALID_GEOMETRY_TYPE) {
-      ret = OB_ERR_GIS_INVALID_DATA;
-      LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_DWITHIN);
-    }
+      ret = OB_ERR_GIS_INVALID_DATA;  
+      LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_DWITHIN);        
+    }           
   } else if (OB_FAIL(ObGeoExprUtils::check_empty(geo1, is_geo1_empty))
       || OB_FAIL(ObGeoExprUtils::check_empty(geo2, is_geo2_empty))) {
     LOG_WARN("check geo empty failed", K(ret));

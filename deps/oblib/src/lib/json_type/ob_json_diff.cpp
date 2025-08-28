@@ -123,7 +123,7 @@ int ObJsonDiff::print(ObStringBuffer &buffer)
       LOG_WARN("json binary to string failed in mysql mode", K(ret), K(*j_base));
     }
   }
-
+    
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(buffer.append("}"))) {
     LOG_WARN("buffer append fail", K(ret));
@@ -194,7 +194,7 @@ int ObJsonBinUpdateCtx::record_binary_diff(int64_t offset, int64_t len)
   if (OB_FAIL(binary_diffs_.push_back(binary_diff))) {
     LOG_WARN("push_back json diff fail", K(ret), K(binary_diff));
   }
-  return ret;
+  return ret; 
 }
 
 

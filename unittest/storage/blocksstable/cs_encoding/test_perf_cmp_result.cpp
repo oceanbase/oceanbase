@@ -23,7 +23,7 @@ namespace oceanbase
 namespace storage
 {
 
-// just for test, skip to use
+// just for test, skip to use 
 int ObCompactionBufferWriter::ensure_space(const int64_t size)
 {
   int ret = OB_SUCCESS;
@@ -222,35 +222,35 @@ void TestPerfCmpResult::TearDown()
 
 // TEST_F(TestPerfCmpResult, test_dict_decoder_010)
 // {
-//   ASSERT_EQ(OB_SUCCESS, prepare(false/*is_raw_*/, false/*need_compress*/, true/*need_decode*/,
+//   ASSERT_EQ(OB_SUCCESS, prepare(false/*is_raw_*/, false/*need_compress*/, true/*need_decode*/, 
 //     false/*need_cs_full_transform*/));
 //   TEST_FILTER_DECODE_ALL_OP();
 // }
 
 // TEST_F(TestPerfCmpResult, test_dict_decoder_011)
 // {
-//   ASSERT_EQ(OB_SUCCESS, prepare(false/*is_raw_*/, false/*need_compress*/, true/*need_decode*/,
+//   ASSERT_EQ(OB_SUCCESS, prepare(false/*is_raw_*/, false/*need_compress*/, true/*need_decode*/, 
 //     true/*need_cs_full_transform*/));
 //   TEST_FILTER_DECODE_ALL_OP();
 // }
 
 // TEST_F(TestPerfCmpResult, test_dict_decoder_111)
 // {
-//   ASSERT_EQ(OB_SUCCESS, prepare(false/*is_raw_*/, true/*need_compress*/, true/*need_decode*/,
+//   ASSERT_EQ(OB_SUCCESS, prepare(false/*is_raw_*/, true/*need_compress*/, true/*need_decode*/, 
 //     true/*need_cs_full_transform*/));
 //   TEST_FILTER_DECODE_ALL_OP();
 // }
 
 // TEST_F(TestPerfCmpResult, test_dict_decoder_1110)
 // {
-//   ASSERT_EQ(OB_SUCCESS, prepare(false/*is_raw_*/, true/*need_compress*/, true/*need_decode*/,
+//   ASSERT_EQ(OB_SUCCESS, prepare(false/*is_raw_*/, true/*need_compress*/, true/*need_decode*/, 
 //     true/*need_cs_full_transform*/, false/*is_bit_packing*/));
 //   TEST_FILTER_DECODE_ALL_OP();
 // }
 
 // TEST_F(TestPerfCmpResult, test_dict_decoder_1111)
 // {
-//   ASSERT_EQ(OB_SUCCESS, prepare(false/*is_raw_*/, true/*need_compress*/, true/*need_decode*/,
+//   ASSERT_EQ(OB_SUCCESS, prepare(false/*is_raw_*/, true/*need_compress*/, true/*need_decode*/, 
 //     true/*need_cs_full_transform*/, true/*is_bit_packing*/));
 //   TEST_FILTER_DECODE_ALL_OP();
 // }

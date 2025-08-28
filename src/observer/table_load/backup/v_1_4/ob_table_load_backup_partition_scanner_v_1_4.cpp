@@ -22,7 +22,7 @@ namespace observer
 using namespace common;
 using namespace share;
 
-int ObTableLoadBackupPartScanner_V_1_4::init(const ObBackupStorageInfo &storage_info,
+int ObTableLoadBackupPartScanner_V_1_4::init(const ObBackupStorageInfo &storage_info, 
                                              const ObIArray<int64_t> &column_ids,
                                              const ObString &data_path,
                                              const ObString &meta_path,
@@ -33,7 +33,7 @@ int ObTableLoadBackupPartScanner_V_1_4::init(const ObBackupStorageInfo &storage_
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("already init", KR(ret));
-  } else if (OB_UNLIKELY(!storage_info.is_valid() || column_ids.empty() || data_path.empty() ||
+  } else if (OB_UNLIKELY(!storage_info.is_valid() || column_ids.empty() || data_path.empty() || 
                          meta_path.empty() || subpart_count <= 0 || subpart_idx < 0 || subpart_idx >= subpart_count)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(storage_info), K(column_ids), K(data_path), K(meta_path), K(subpart_count), K(subpart_idx));
@@ -115,11 +115,11 @@ int ObTableLoadBackupPartScanner_V_1_4::init_macro_block_list(const ObString &me
   int64_t pos = 0;
   char buf[OB_MAX_URI_LENGTH];
   int64_t file_length = 0;
-  if (OB_FAIL(databuff_printf(buf, OB_MAX_URI_LENGTH, pos, "%.*spart_list",
+  if (OB_FAIL(databuff_printf(buf, OB_MAX_URI_LENGTH, pos, "%.*spart_list", 
                               meta_path.length(), meta_path.ptr()))) {
     LOG_WARN("fail to fill buf", KR(ret), K(buf));
-  } else if (OB_FAIL(ObTableLoadBackupFileUtil::get_file_length(ObString(pos, buf),
-                                                                &storage_info_,
+  } else if (OB_FAIL(ObTableLoadBackupFileUtil::get_file_length(ObString(pos, buf), 
+                                                                &storage_info_, 
                                                                 file_length))) {
     LOG_WARN("fail to get_file_length", K(ret), K(file_length), K(ObString(pos, buf)));
   } else if (file_length > 0) {
@@ -128,9 +128,9 @@ int ObTableLoadBackupPartScanner_V_1_4::init_macro_block_list(const ObString &me
     if (OB_ISNULL(file_buf = static_cast<char*>(allocator_.alloc(file_length)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc memory", KR(ret), K(file_length));
-    } else if (OB_FAIL(ObTableLoadBackupFileUtil::read_single_file(ObString(pos, buf),
-                                                                   &storage_info_,
-                                                                   file_buf,
+    } else if (OB_FAIL(ObTableLoadBackupFileUtil::read_single_file(ObString(pos, buf), 
+                                                                   &storage_info_, 
+                                                                   file_buf, 
                                                                    file_length,
                                                                    read_size))) {
       LOG_WARN("fail to read_single_file", KR(ret), K(file_length), K(ObString(pos, buf)));
@@ -146,7 +146,7 @@ int ObTableLoadBackupPartScanner_V_1_4::init_macro_block_list(const ObString &me
           macro_block_id = file_str;
         }
         if (!macro_block_id.empty() && OB_FAIL(macro_block_list_.push_back(macro_block_id))) {
-          LOG_WARN("fail to push back", KR(ret));
+          LOG_WARN("fail to push back", KR(ret)); 
         }
       } while (OB_SUCC(ret) && OB_NOT_NULL(p));
     }
@@ -155,7 +155,7 @@ int ObTableLoadBackupPartScanner_V_1_4::init_macro_block_list(const ObString &me
       file_buf = nullptr;
     }
   }
-
+  
   return ret;
 }
 
@@ -224,10 +224,10 @@ int ObTableLoadBackupPartScanner_V_1_4::init_macro_block_scanner()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), KP(this));
-  } else if (OB_FAIL(databuff_printf(buf, OB_MAX_URI_LENGTH, pos, "%.*s%.*s",
+  } else if (OB_FAIL(databuff_printf(buf, OB_MAX_URI_LENGTH, pos, "%.*s%.*s", 
                                      data_path_.length(),
                                      data_path_.ptr(),
-                                     macro_block_list_[block_idx_].length(),
+                                     macro_block_list_[block_idx_].length(), 
                                      macro_block_list_[block_idx_].ptr()))) {
     LOG_WARN("fail to fill buf", KR(ret));
   } else if (OB_FAIL(ObTableLoadBackupFileUtil::read_single_file(ObString(pos, buf),
@@ -242,7 +242,7 @@ int ObTableLoadBackupPartScanner_V_1_4::init_macro_block_scanner()
       LOG_WARN("fail to init scanner_", KR(ret), K(block_idx_));
     }
   }
-
+  
   return ret;
 }
 

@@ -121,7 +121,7 @@ int ObXml::xslt_apply_style_sheet(const xmlDocPtr input_xml_ptr,
 }
 
 int ObXml::xslt_save_to_string(ObIAllocator *allocator,
-                               const xmlDocPtr result,
+                               const xmlDocPtr result, 
                                const xsltStylesheetPtr xslt_ptr,
                                ObString &output)
 {

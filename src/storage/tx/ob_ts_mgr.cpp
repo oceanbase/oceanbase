@@ -132,7 +132,7 @@ int ObTsSyncGetTsCbTask::gts_callback_interrupted(const int errcode, const share
   return ret;
 }
 
-int ObTsSyncGetTsCbTask::get_gts_callback(const MonotonicTs srr, const share::SCN &gts,
+int ObTsSyncGetTsCbTask::get_gts_callback(const MonotonicTs srr, const share::SCN &gts, 
     const MonotonicTs receive_gts_ts)
 {
   int ret = OB_SUCCESS;
@@ -221,7 +221,7 @@ int ObTsSyncGetTsCbTask::config(MonotonicTs stc, uint64_t tenant_id) {
     stc_ = stc;
     tenant_id_ = tenant_id;
   }
-
+  
   return ret;
 }
 
@@ -247,7 +247,7 @@ int ObTsSyncGetTsCbTaskPool::init() {
   return ret;
 }
 
-int ObTsSyncGetTsCbTaskPool::get_task(MonotonicTs stc, uint64_t tenant_id,
+int ObTsSyncGetTsCbTaskPool::get_task(MonotonicTs stc, uint64_t tenant_id, 
     ObTsSyncGetTsCbTask *&task) {
   int ret = OB_SUCCESS;
 
@@ -279,13 +279,13 @@ int ObTsSyncGetTsCbTaskPool::get_task(MonotonicTs stc, uint64_t tenant_id,
       }
     }
   }
-
+  
   return ret;
 }
 
 int ObTsSyncGetTsCbTaskPool::recycle_task(ObTsSyncGetTsCbTask *task) {
   int ret = OB_SUCCESS;
-
+  
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", K(ret));

@@ -137,7 +137,7 @@ int ObTableApiLockExecutor::lock_row_to_das()
   int64_t lock_ctdef_count = lock_spec_.get_ctdefs().count();
   if (OB_UNLIKELY(lock_ctdef_count != lock_rtdefs_.count())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("count of insup ctdef is not equal to rtdef", K(ret), K(lock_ctdef_count),
+    LOG_WARN("count of insup ctdef is not equal to rtdef", K(ret), K(lock_ctdef_count), 
               K(lock_rtdefs_.count()));
   }
   for (int64_t i = 0; i < lock_rtdefs_.count() && OB_SUCC(ret); i++) {

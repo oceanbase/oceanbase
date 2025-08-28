@@ -386,7 +386,7 @@ int ObICSEncodeBlockReader::alloc_decoders_buf(int64_t &decoders_buf_pos)
   }
   if (OB_SUCC(ret)) {
     ctxs_ = reinterpret_cast<ObColumnCSDecoderCtx*>(allocated_decoders_buf_);
-    decoders_buf_pos += sizeof(ObColumnCSDecoderCtx) * decoder_ctx_cnt;
+    decoders_buf_pos += sizeof(ObColumnCSDecoderCtx) * decoder_ctx_cnt; 
   }
   return ret;
 }
@@ -763,7 +763,7 @@ int ObMicroBlockCSDecoder::alloc_decoders_buf(const bool by_read_info, int64_t &
   } else {
     size += request_cnt_ * sizeof(ObColumnCSDecoder); // for decoders_
 
-    int64_t decoder_ctx_cnt = nullptr == read_info_ ? column_count_ : MAX(column_count_,
+    int64_t decoder_ctx_cnt = nullptr == read_info_ ? column_count_ : MAX(column_count_, 
         read_info_->get_schema_column_count() + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt());
 
     size += sizeof(ObColumnCSDecoderCtx) * decoder_ctx_cnt;  // for decoder ctxs
@@ -801,7 +801,7 @@ int ObMicroBlockCSDecoder::alloc_decoders_buf(const bool by_read_info, int64_t &
       decoders_buf_pos += request_cnt_ * sizeof(ObColumnCSDecoder);
 
       ctxs_ = reinterpret_cast<ObColumnCSDecoderCtx*>(allocated_decoders_buf_ + decoders_buf_pos);
-      decoders_buf_pos += sizeof(ObColumnCSDecoderCtx) * decoder_ctx_cnt;
+      decoders_buf_pos += sizeof(ObColumnCSDecoderCtx) * decoder_ctx_cnt; 
     }
   }
   return ret;
@@ -873,9 +873,9 @@ int ObMicroBlockCSDecoder::init_decoders()
 }
 
 int ObMicroBlockCSDecoder::add_decoder(
-    const int64_t store_idx,
-    const ObObjMeta &obj_meta,
-    const ObColumnParam *col_param,
+    const int64_t store_idx, 
+    const ObObjMeta &obj_meta, 
+    const ObColumnParam *col_param, 
     int64_t &decoders_buf_pos,
     ObColumnCSDecoder &dest)
 {
@@ -1762,7 +1762,7 @@ bool ObMicroBlockCSDecoder::can_pushdown_decoder(
         bret = false;
       }
     }
-    LOG_DEBUG("can pushdown decoder", K(bret), K(agg_type), K(column_decoder->ctx_->type_),
+    LOG_DEBUG("can pushdown decoder", K(bret), K(agg_type), K(column_decoder->ctx_->type_), 
               KP(row_ids), K(is_consecutive), K(row_cap), K(can_convert));
   }
   return bret;

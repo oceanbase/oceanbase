@@ -44,10 +44,10 @@ int ObSelectStmtPrinter::do_print()
       LOG_WARN("column_list size should be equal select_item size", K(ret),
           K(column_list_->count()), K(select_stmt->get_select_item_size()));
     } else {
-      expr_printer_.init(buf_,
-                        buf_len_,
-                        pos_,
-                        schema_guard_,
+      expr_printer_.init(buf_, 
+                        buf_len_, 
+                        pos_, 
+                        schema_guard_, 
                         print_params_,
                         param_store_);
       if (OB_FAIL(SMART_CALL(print()))) {
@@ -119,11 +119,11 @@ int ObSelectStmtPrinter::print_set_op_stmt()
         std::swap(child_stmts.at(0), child_stmts.at(1));
       }
       DATA_PRINTF("(");
-      ObSelectStmtPrinter stmt_printer(buf_,
-                                       buf_len_,
-                                       pos_,
-                                       child_stmts.at(0),
-                                       schema_guard_,
+      ObSelectStmtPrinter stmt_printer(buf_, 
+                                       buf_len_, 
+                                       pos_, 
+                                       child_stmts.at(0), 
+                                       schema_guard_, 
                                        print_params_,
                                        param_store_,
                                        /*force_col_alias*/true,
@@ -191,7 +191,7 @@ int ObSelectStmtPrinter::print_recursive_union_stmt()
       LOG_WARN("unexpect null table item", K(ret));
     } else  {
       DATA_PRINTF(is_oracle_mode() ? "WITH " : "WITH RECURSIVE ");
-      DATA_PRINTF("%.*s", LEN_AND_PTR(table->table_name_));
+      DATA_PRINTF("%.*s", LEN_AND_PTR(table->table_name_)); 
       if (OB_FAIL(print_cte_define_title(select_stmt))) {
         LOG_WARN("failed to printf cte title", K(ret));
       } else {
@@ -324,7 +324,7 @@ int ObSelectStmtPrinter::print_select()
               alias_string = select_item.expr_name_;
             }
             /* oracle模式下，由于部分函数的别名可能出现双引号“”，将导致二次解析出错，因此需要将这些双引号去掉
-            *
+            *  
             */
             ObArenaAllocator arena_alloc;
             if (is_oracle_mode && OB_FAIL(remove_double_quotation_for_string(alias_string,
@@ -698,7 +698,7 @@ int ObSelectStmtPrinter::print_order_by()
           if (FAILEDx(print_expr_except_const_number(order_item.expr_, T_ORDER_SCOPE))) {
             LOG_WARN("fail to print order by expr", K(ret));
           }
-        }
+        } 
         if (OB_SUCC(ret)) {
           if (lib::is_mysql_mode()) {
             if (is_descending_direction(order_item.order_type_)) {
@@ -839,7 +839,7 @@ int ObSelectStmtPrinter::find_recursive_cte_table(const ObSelectStmt* stmt, Tabl
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null stmt", K(ret));
-  } else if (!stmt->is_recursive_union() ||
+  } else if (!stmt->is_recursive_union() || 
              OB_ISNULL(set_query=stmt->get_set_query(1))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expect recurisve cte stmt", K(ret));

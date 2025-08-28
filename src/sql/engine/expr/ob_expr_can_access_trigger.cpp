@@ -91,7 +91,7 @@ int ObExprCanAccessTrigger::can_access_trigger(const ObExpr &expr,
   return ret;
 }
 
-int ObExprCanAccessTrigger::cg_expr(ObExprCGCtx &op_cg_ctx,
+int ObExprCanAccessTrigger::cg_expr(ObExprCGCtx &op_cg_ctx, 
                                   const ObRawExpr &raw_expr,
                                   ObExpr &rt_expr) const
 {

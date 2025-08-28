@@ -1774,7 +1774,7 @@ int ObXAService::xa_rollback_for_pending_trans_(const ObXATransID &xid,
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -2038,7 +2038,7 @@ int ObXAService::handle_terminate_for_xa_branch(const ObXATransID &xid, ObTxDesc
       // send the terminate request to the original scheduler no matter whether the rollback succeeds
       if (is_first_terminate && xa_ctx->get_original_sche_addr() != self) {
         // original scheduler is in remote
-        // send terminate to original scheduler
+        // send terminate to original scheduler 
         if (OB_SUCCESS != (tmp_ret = terminate_to_original_(xid, tx_id,
                 xa_ctx->get_original_sche_addr(), timeout_us))) {
           TRANS_LOG(WARN, "terminate remote original scheduler failed", K(tmp_ret), K(xid),
@@ -2075,7 +2075,7 @@ int ObXAService::handle_terminate_for_xa_branch(const ObXATransID &xid, ObTxDesc
         }
         if (is_first_terminate && xa_ctx->get_original_sche_addr() != self) {
           // original scheduler is in remote
-          // send terminate to original scheduler
+          // send terminate to original scheduler 
           if (OB_SUCCESS != (tmp_ret = terminate_to_original_(xid, tx_id,
                   xa_ctx->get_original_sche_addr(), timeout_us))) {
             TRANS_LOG(WARN, "terminate remote original scheduler failed", K(tmp_ret), K(xid),

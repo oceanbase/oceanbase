@@ -115,7 +115,7 @@ int ObExprSTWithin::eval_st_within(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     } else if (!is_geo1_cached && !is_geo2_cached && OB_FAIL(ObGeoExprUtils::get_srs_item(session->get_effective_tenant_id(), srs_guard, srid1, srs))) {
       LOG_WARN("fail to get srs item", K(ret), K(srid1));
     } else if (!is_geo1_cached && OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb1, geo1, nullptr, N_ST_WITHIN, ObGeoBuildFlag::GEO_ALLOW_3D_CARTESIAN))) {
-      LOG_WARN("get first geo by wkb failed", K(ret));
+      LOG_WARN("get first geo by wkb failed", K(ret));        
     } else if (!is_geo2_cached && OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb2, geo2, nullptr, N_ST_WITHIN, ObGeoBuildFlag::GEO_ALLOW_3D_CARTESIAN))) {
       LOG_WARN("get second geo by wkb failed", K(ret));
     } else if (FALSE_IT(temp_allocator.set_baseline_size(geo1->length() + geo2->length()))) {
@@ -153,7 +153,7 @@ int ObExprSTWithin::eval_st_within(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
         if (OB_NOT_NULL(const_param_cache)) {
           if (gis_arg2->is_static_const_) {
             cache_geo = const_param_cache->get_cached_geo(1);
-            if (cache_geo == NULL
+            if (cache_geo == NULL 
               && OB_FAIL(ObGeoTypeUtil::create_cached_geometry(*const_param_cache->get_allocator(),
                                                                 temp_allocator,
                                                                 const_param_cache->get_const_param_cache(1),

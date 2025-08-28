@@ -31,7 +31,7 @@ int ObSqlNioServer::start(int port, rpc::frame::ObReqDeliver* deliver, int n_thr
   return ret;
 }
 
-int ObSqlNioServer::set_thread_count(const int thread_num)
+int ObSqlNioServer::set_thread_count(const int thread_num) 
 {
   int ret = OB_SUCCESS;
   if(thread_num != get_nio()->get_thread_count()){

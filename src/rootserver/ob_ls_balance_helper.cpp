@@ -28,9 +28,9 @@ void ObUnitGroupBalanceInfo::reset()
 {
   primary_zone_count_ = OB_INVALID_COUNT;
   unit_group_.reset();
-  redundant_ls_array_.reset();
-  normal_ls_array_.reset();
-}
+  redundant_ls_array_.reset();  
+  normal_ls_array_.reset(); 
+} 
 
 int ObUnitGroupBalanceInfo::add_ls_status_info(const ObLSStatusInfo &ls_info)
 {
@@ -248,7 +248,7 @@ int ObLSBalanceTaskHelper::generate_ls_balance_task()
         LOG_WARN("failed to generate migrate task", KR(ret));
       }
     } else if (0 == job_.get_balance_strategy().string().compare(share::LS_BALANCE_BY_EXPAND)) {
-    //2. try expand
+    //2. try expand 
       if (OB_FAIL(generate_expand_task_())) {
         LOG_WARN("failed to generate expand task", KR(ret));
       }
@@ -346,8 +346,8 @@ int ObLSBalanceTaskHelper::generate_alter_task_()
   } else {
     uint64_t ls_group_id = OB_INVALID_ID;
     for (int64_t i = 0; OB_SUCC(ret) && i < unit_group_balance_array_.count(); ++i) {
-      ObUnitGroupBalanceInfo &balance_info = unit_group_balance_array_.at(i);
-      ls_group_id = OB_INVALID_ID;
+      ObUnitGroupBalanceInfo &balance_info = unit_group_balance_array_.at(i); 
+      ls_group_id = OB_INVALID_ID; 
       for (int64_t j = 0; OB_SUCC(ret) && j < balance_info.get_normal_ls_array().count(); ++j) {
         const ObLSStatusInfo &ls_status_info = balance_info.get_normal_ls_array().at(j);
         if (OB_INVALID_ID == ls_group_id) {
@@ -361,7 +361,7 @@ int ObLSBalanceTaskHelper::generate_alter_task_()
       }
     }
   }
-  return ret;
+  return ret; 
 }
 
 int ObLSBalanceTaskHelper::generate_migrate_task_()
@@ -374,14 +374,14 @@ int ObLSBalanceTaskHelper::generate_migrate_task_()
     //get a redundant ls, and found one unit group less ls
     bool new_task = true;
     for (int64_t i = 0; OB_SUCC(ret) && i < unit_group_balance_array_.count() && new_task; ++i) {
-      ObUnitGroupBalanceInfo &balance_info = unit_group_balance_array_.at(i);
+      ObUnitGroupBalanceInfo &balance_info = unit_group_balance_array_.at(i); 
       for (int64_t j = balance_info.get_redundant_ls_array().count() - 1; OB_SUCC(ret) && j >= 0 && new_task; --j) {
         //get one unit group, which less than primary_zone_unit_num
         const ObLSStatusInfo &ls_status = balance_info.get_redundant_ls_array().at(j);
         new_task = false;
         //一个ls_status只能生成一个ls_alter任务，在生成任务后，要跳出循环
         for (int64_t k = 0; OB_SUCC(ret) && k < unit_group_balance_array_.count() && !new_task; ++k) {
-          ObUnitGroupBalanceInfo &dest_balance_info = unit_group_balance_array_.at(k);
+          ObUnitGroupBalanceInfo &dest_balance_info = unit_group_balance_array_.at(k);  
           if (dest_balance_info.get_lack_ls_count() > 0) {
             new_task = true;
             if (balance_info.get_unit_group_id() == dest_balance_info.get_unit_group_id()) {
@@ -543,7 +543,7 @@ int ObLSBalanceTaskHelper::generate_shrink_task_()
           K(unit_group_balance_array_), K(dup_ls_stat_array_));
     }
   }
-  return ret;
+  return ret; 
 }
 
 int ObLSBalanceTaskHelper::generate_task_for_shrink_(
@@ -713,7 +713,7 @@ int ObLSBalanceTaskHelper::construct_shrink_src_param_(const int64_t target_coun
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(target_count), K(src_ls));
   } else {
-    const double each_ls_target_factor = double(src_ls.count()) / (target_count);
+    const double each_ls_target_factor = double(src_ls.count()) / (target_count); 
     if (each_ls_target_factor <= OB_DOUBLE_EPSINON) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("too many ls", KR(ret), K(each_ls_target_factor), K(target_count), K(src_ls));
@@ -881,7 +881,7 @@ int ObLSBalanceTaskHelper::construct_ls_alter_task_(const share::ObLSID &ls_id, 
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_UNLIKELY(!job_.is_valid() || !ls_id.is_valid()
+  } else if (OB_UNLIKELY(!job_.is_valid() || !ls_id.is_valid() 
                          || OB_INVALID_ID == ls_group_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(job_), K(ls_id), K(ls_group_id));
@@ -904,7 +904,7 @@ int ObLSBalanceTaskHelper::construct_ls_merge_task_(
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_UNLIKELY(!job_.is_valid() || !src_ls_id.is_valid()
+  } else if (OB_UNLIKELY(!job_.is_valid() || !src_ls_id.is_valid() 
                          || OB_INVALID_ID == ls_group_id
                          || !dest_ls_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;

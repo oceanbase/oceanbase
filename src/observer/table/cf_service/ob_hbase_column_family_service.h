@@ -41,7 +41,7 @@ protected:
 };
 
 class ObHbaseMultiCFService : public ObHbaseColumnFamilyService
-{
+{  
 public:
   virtual int put(const ObHbaseTableCells &table_cells, ObTableExecCtx &exec_ctx) override;
   virtual int del(const ObHbaseTableCells &table_cells, ObTableExecCtx &exec_ctx) override;
@@ -53,14 +53,14 @@ private:
                         ObTableExecCtx &exec_ctx, const uint64_t table_id, const ObTabletID &tablet_id);
 private:
   static int find_real_table_tablet_id(ObTableExecCtx &exec_ctx,
-                                       const uint64_t arg_table_id,
-                                       const ObTabletID arg_tablet_id,
+                                       const uint64_t arg_table_id, 
+                                       const ObTabletID arg_tablet_id, 
                                        const ObString &family_name,
                                        uint64_t &real_table_id,
                                        ObTabletID &real_tablet_id);
   static int find_real_table_tablet_id(ObTableExecCtx &exec_ctx,
-                                       const uint64_t arg_table_id,
-                                       const ObTabletID &arg_tablet_id,
+                                       const uint64_t arg_table_id, 
+                                       const ObTabletID &arg_tablet_id, 
                                        const ObSimpleTableSchemaV2 &real_simple_schema,
                                        uint64_t &real_table_id,
                                        ObTabletID &real_tablet_id);
@@ -77,7 +77,7 @@ private:
 class ObHbaseCfServiceGuard
 {
 public:
-  ObHbaseCfServiceGuard(common::ObIAllocator &allocator, bool is_multi_cf_req)
+  ObHbaseCfServiceGuard(common::ObIAllocator &allocator, bool is_multi_cf_req) 
     : allocator_(allocator), is_multi_cf_req_(is_multi_cf_req), cf_service_(nullptr) {}
   ~ObHbaseCfServiceGuard();
   int get_cf_service(ObHbaseColumnFamilyService *&cf_service);

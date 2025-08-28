@@ -41,7 +41,7 @@ public:
                                         const int64_t batch_size);
   virtual bool need_rt_ctx() const override { return true; }
   DECLARE_SET_LOCAL_SESSION_VARS;
-
+  
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSubstringIndex);
 };

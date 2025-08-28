@@ -774,7 +774,7 @@ TEST_F(TestAshIndex, reverse_index)
 
   // empty list
   auto iter = ObActiveSessHistList::get_instance().create_forward_iterator_no_lock();
-
+  
   ASSERT_EQ(false, iter.has_next());
   push_back_sample_time(1);
   ASSERT_EQ(false, iter.has_next());

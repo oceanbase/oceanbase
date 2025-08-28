@@ -26,7 +26,7 @@ namespace sql
 class ObExprMapComponents : public ObFuncExprOperator
 {
 public:
-  explicit ObExprMapComponents(common::ObIAllocator &alloc, ObExprOperatorType type,
+  explicit ObExprMapComponents(common::ObIAllocator &alloc, ObExprOperatorType type, 
                                 const char *name, int32_t param_num, int32_t dimension);
   virtual ~ObExprMapComponents();
   static int calc_map_components_result_type(ObExprResType &type,
@@ -38,16 +38,16 @@ public:
                                           const ObBitVector &skip, const EvalBound &bound, bool is_key = true);
   static  int get_map_components_arr(ObIAllocator &tmp_allocator,
                                 ObEvalCtx &ctx,
-                                ObString &map_blob,
-                                ObIArrayType *&arr_res,
+                                ObString &map_blob, 
+                                ObIArrayType *&arr_res, 
                                 uint16_t &res_subschema_id,
                                 uint16_t &subschema_id,
                                 bool is_key = true);
-  static int get_map_components_arr_vector(ObIAllocator &tmp_allocator,
-                                  ObEvalCtx &ctx,
+  static int get_map_components_arr_vector(ObIAllocator &tmp_allocator, 
+                                  ObEvalCtx &ctx, 
                                   ObExpr &param_expr,
-                                  const uint16_t subschema_id,
-                                  int64_t row_idx,
+                                  const uint16_t subschema_id, 
+                                  int64_t row_idx, 
                                   ObIArrayType *&arr_res,
                                   bool is_key = true);
 

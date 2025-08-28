@@ -162,7 +162,7 @@ int ObTableApiUpdateExecutor::upd_rows_post_proc()
 int ObTableApiUpdateExecutor::get_next_row()
 {
   int ret = OB_SUCCESS;
-
+  
   bool has_row_changed = false;
   while (OB_SUCC(ret)) {
     // wether this row changed
@@ -185,7 +185,7 @@ int ObTableApiUpdateExecutor::get_next_row()
     ret = OB_SUCC(tmp_ret) ? ret : tmp_ret;
     cur_idx_++;
   }
-
+  
   if (has_row_changed && OB_ITER_END == ret) {
     if (OB_FAIL(upd_rows_post_proc())) {
       LOG_WARN("fail to do update rows post process", K(ret));

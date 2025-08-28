@@ -677,8 +677,8 @@ int ObSSTableMacroInfo::init_macro_info(
     common::ObArenaAllocator &allocator,
     const storage::ObTabletCreateSSTableParam &param)
 {
-  // NOTE:
-  //  If the allocator were not ObArenaAllocator any more,
+  // NOTE: 
+  //  If the allocator were not ObArenaAllocator any more, 
   //  other_block_ids_ and data_block_ids_ need be free manually, such as persist_block_ids(...)
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!param.is_valid())) {
@@ -824,12 +824,12 @@ int ObSSTableMacroInfo::persist_block_ids(
     LOG_WARN("fail to save linked block ids", K(ret));
   } else {
     ObMetaDiskAddr addr;
-    addr.set_block_addr(ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK,
+    addr.set_block_addr(ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK, 
                         0, /*offset*/
-                        1, /*size*/
+                        1, /*size*/ 
                         ObMetaDiskAddr::DiskType::BLOCK); // unused;
     linked_block_write_ctx.set_addr(addr);
-    for (int64_t i = 0;
+    for (int64_t i = 0; 
          OB_SUCC(ret) && i < block_writer.get_meta_block_list().count();
          i++) {
       if (OB_FAIL(linked_block_write_ctx.add_object_id(block_writer.get_meta_block_list().at(i)))) {
@@ -842,7 +842,7 @@ int ObSSTableMacroInfo::persist_block_ids(
       other_block_ids_ = nullptr;
     }
   }
-
+  
   if (OB_FAIL(ret)) {
     int tmp_ret = OB_SUCCESS;
     if (!block_writer.is_closed() && OB_TMP_FAIL(block_writer.close())) {
@@ -1155,7 +1155,7 @@ int ObSSTableMacroInfo::write_block_ids(
 {
   int ret = OB_SUCCESS;
   ObMemAttr mem_attr(MTL_ID(), "SSTableBlockId");
-  if (OB_UNLIKELY(0 == data_block_count_ && 0 == other_block_count_) ||
+  if (OB_UNLIKELY(0 == data_block_count_ && 0 == other_block_count_) || 
       OB_UNLIKELY((0 != data_block_count_ && OB_ISNULL(data_block_ids_)) ||
       OB_UNLIKELY((0 != other_block_count_ && OB_ISNULL(other_block_ids_)))) ||
       OB_UNLIKELY(OB_ISNULL(link_write_info))) {

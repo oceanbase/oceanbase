@@ -103,7 +103,7 @@ struct ObLSBackupParam {
   int convert_to(const ObBackupIndexLevel &index_level, const share::ObBackupDataType &backup_data_type,
       ObBackupIndexMergeParam &merge_param);
   int assign(const ObBackupIndexMergeParam &param);
-  TO_STRING_KV(K_(job_id), K_(task_id), K_(backup_dest), K_(tenant_id), K_(dest_id), K_(backup_set_desc), K_(ls_id),
+  TO_STRING_KV(K_(job_id), K_(task_id), K_(backup_dest), K_(tenant_id), K_(dest_id), K_(backup_set_desc), K_(ls_id), 
       K_(turn_id), K_(retry_id));
   int64_t job_id_;
   int64_t task_id_;
@@ -275,7 +275,7 @@ public:
 };
 
 struct ObBackupDeviceMacroBlockId;
-typedef ObBackupDeviceMacroBlockId ObBackupLinkedBlockAddr;
+typedef ObBackupDeviceMacroBlockId ObBackupLinkedBlockAddr; 
 
 struct ObBackupMacroBlockIndex {
   OB_UNIS_VERSION(1);
@@ -468,7 +468,7 @@ public:
   enum BlockType
   {
     DATA_BLOCK = 0,
-    INDEX_TREE_BLOCK = 1,
+    INDEX_TREE_BLOCK = 1, 
     META_TREE_BLOCK = 2,
     BLOCK_TYPE_MAX
   };
@@ -557,7 +557,7 @@ public:
       uint64_t backup_set_id_ : BACKUP_SET_ID_BIT;
       uint64_t data_type_     : BACKUP_DATA_TYPE_BIT;
       uint64_t retry_id_      : BACKUP_RETRY_ID_BIT;
-      uint64_t file_id_       : BACKUP_FILE_ID_BIT;
+      uint64_t file_id_       : BACKUP_FILE_ID_BIT; 
       uint64_t block_type_    : BACKUP_BLOCK_TYPE_BIT;
       uint64_t reserved_      : BACKUP_RESERVED_BIT;
     };
@@ -852,7 +852,7 @@ struct ObBackupSkippedTablet {
   share::ObLSID ls_id_;
   int64_t backup_set_id_;
   share::ObBackupSkippedType skipped_type_;
-  share::ObBackupDataType data_type_;
+  share::ObBackupDataType data_type_;  
 };
 
 struct ObBackupReportCtx final {
@@ -861,7 +861,7 @@ struct ObBackupReportCtx final {
   bool is_valid() const;
   TO_STRING_KV(KP_(location_service), KP_(sql_proxy), KP_(rpc_proxy));
 
-  share::ObLocationService *location_service_;
+  share::ObLocationService *location_service_; 
   common::ObMySQLProxy *sql_proxy_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;
 };

@@ -79,7 +79,7 @@ public:
       } else {
         *new_dml_stat = *dml_stat;
       }
-    }
+    }    
     return ret;
   }
   TO_STRING_KV(K_(dml_stat_array));

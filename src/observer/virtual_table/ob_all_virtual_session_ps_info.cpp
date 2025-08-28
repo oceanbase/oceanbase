@@ -66,7 +66,7 @@ int ObAllVirtualSessionPsInfo::inner_open()
   int ret = OB_SUCCESS;
   ps_client_stmt_ids_.set_tenant_id(effective_tenant_id_);
   fetcher_.set_tenant_id(effective_tenant_id_);
-
+  
   ObMemAttr attr(effective_tenant_id_, lib::ObLabel("BucketAlloc"));
   if (OB_FAIL(tenant_session_id_map_.create(BUCKET_COUNT,
                                          attr,

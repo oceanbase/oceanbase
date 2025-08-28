@@ -117,7 +117,7 @@ public:
                            ObPhysicalRestoreJob &job_info);
   int get_job_by_restore_tenant_name(const ObString &tenant_name,
                            ObPhysicalRestoreJob &job_info);
-
+  
   /*
    * description: check all ls has restored to target_status
    * @param[out] return true while restore has finished.
@@ -125,10 +125,10 @@ public:
    * */
   int check_finish_restore_to_target_status(
       const ObLSRestoreStatus &sys_ls_target_status,
-      const ObLSRestoreStatus &user_ls_target_status,
-      bool &is_finished,
+      const ObLSRestoreStatus &user_ls_target_status, 
+      bool &is_finished, 
       bool &is_success);
-
+  
     /*
    * description: check all ls has finished quick restore
    * @param[out] return true if has finished quick restore.

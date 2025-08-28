@@ -148,7 +148,7 @@ int ObIndexBlockDataTransformer::transform(
     pos += sizeof(ObIndexBlockDataHeader);
     ObStorageDatum *index_datum_array = new (block_buf + pos) ObStorageDatum [row_cnt];
     pos += sizeof(ObStorageDatum) * row_cnt;
-    // The ps_node_arr undergoes atomic operations during usage and thus requires alignment to
+    // The ps_node_arr undergoes atomic operations during usage and thus requires alignment to 
     // ObMicroBlockData::ALIGN_SIZE bytes on ARM architecture for proper functioning.
     const int64_t align_inc = common::upper_align(reinterpret_cast<uint64_t>(block_buf + pos), ObMicroBlockData::ALIGN_SIZE) - reinterpret_cast<uint64_t>(block_buf + pos);
     pos += align_inc;

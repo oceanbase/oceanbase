@@ -447,7 +447,7 @@ ObRootInspection::ObRootInspection()
   : inited_(false), stopped_(false), zone_passed_(false),
     sys_param_passed_(false), sys_stat_passed_(false),
     sys_table_schema_passed_(false), data_version_passed_(false),
-    all_checked_(false), all_passed_(false),
+    all_checked_(false), all_passed_(false), 
     sql_proxy_(NULL), rpc_proxy_(NULL), schema_service_(NULL),
     zone_mgr_(NULL)
 {

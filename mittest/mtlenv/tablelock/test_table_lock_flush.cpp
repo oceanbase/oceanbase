@@ -411,7 +411,7 @@ TEST_F(TestTableLockFlush, restore_tx_ctx)
   transaction::ObLSTxCtxIterator ls_tx_ctx_iter_;
   ASSERT_EQ(OB_SUCCESS, ls_tx_ctx_iter_.set_ready(ls_tx_ctx_mgr));
   ASSERT_EQ(OB_SUCCESS, ls_tx_ctx_iter_.get_next_tx_ctx(tx_ctx));
-  tx_ctx->exec_info_.max_applying_log_ts_ = 1;
+  tx_ctx->exec_info_.max_applying_log_ts_ = 1; 
   ASSERT_EQ(OB_SUCCESS, tx_ctx->get_tx_ctx_table_info(ctx_info));
   ASSERT_EQ(1, ctx_info.table_lock_info_.table_lock_ops_.count());
   ASSERT_EQ(share::SCN::plus(share::SCN::min_scn(), 10),

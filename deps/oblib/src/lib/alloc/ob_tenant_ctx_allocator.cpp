@@ -495,7 +495,7 @@ void ObTenantCtxAllocator::on_free(AObject& obj, ABlock& block)
   SANITY_POISON(obj.data_, obj.alloc_bytes_);
   get_mem_leak_checker().on_free(obj);
 
-  IBlockMgr *blk_mgr = OB_LIKELY(block.is_malloc_v2_) ? block.obj_set_v2_->get_block_mgr() :
+  IBlockMgr *blk_mgr = OB_LIKELY(block.is_malloc_v2_) ? block.obj_set_v2_->get_block_mgr() : 
       block.obj_set_->get_block_mgr();
   abort_unless(NULL != blk_mgr);
 
@@ -528,6 +528,6 @@ void ObTenantCtxAllocator::common_free(void *ptr)
     abort_unless(NULL != block->obj_set_);
     OB_LIKELY(block->is_malloc_v2_) ? block->obj_set_v2_->free_object(obj, block) :
         block->obj_set_->free_object(obj);
-
+        
   }
 }

@@ -890,7 +890,7 @@ int ObRestoreMacroBlockIdMgr::inner_init_v2_(
     }
     if (OB_SUCC(ret)) {
       const uint64_t tenant_id = MTL_ID();
-      const ObITable::TableKey &table_key = sstable_metas.at(index).sstable_meta_.table_key_;
+      const ObITable::TableKey &table_key = sstable_metas.at(index).sstable_meta_.table_key_; 
       ObArenaAllocator allocator;
       backup::ObBackupSSTableSecMetaIterator *iterator = NULL;
       if (OB_FAIL(ObRestoreUtils::create_backup_sstable_sec_meta_iterator(tenant_id,

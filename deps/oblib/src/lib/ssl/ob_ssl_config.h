@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef OB_SSL_CONFIG_H_
 #define OB_SSL_CONFIG_H_
 
@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace common {
 
 typedef struct ObSSLConfig {
-  ObSSLConfig(int is_from_file, int is_sm, const char* ca_cert, const char* sign_cert,
+  ObSSLConfig(int is_from_file, int is_sm, const char* ca_cert, const char* sign_cert, 
               const char* sign_private_key, const char* enc_cert, const char* enc_private_key):
               is_from_file_(is_from_file), is_sm_(is_sm), ca_cert_(ca_cert), sign_cert_(sign_cert),
               sign_private_key_(sign_private_key), enc_cert_(enc_cert), enc_private_key_(enc_cert) {}

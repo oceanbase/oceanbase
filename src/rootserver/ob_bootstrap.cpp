@@ -990,7 +990,7 @@ int ObBootstrap::add_sys_table_lob_aux_table(
 int ObBootstrap::construct_all_schema(ObSArray<ObTableSchema> &table_schemas, ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  ObArray<uint64_t> table_ids_to_construct; // empty means construct all
+  ObArray<uint64_t> table_ids_to_construct; // empty means construct all 
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat failed", KR(ret));
   } else if (OB_FAIL(ObSchemaUtils::construct_inner_table_schemas(OB_SYS_TENANT_ID,

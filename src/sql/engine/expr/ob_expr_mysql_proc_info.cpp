@@ -75,7 +75,7 @@ int ObExprMysqlProcInfo::set_return_result(const ObExpr &expr,
   return ret;
 }
 
-int ObExprMysqlProcInfo::extract_create_node_from_routine_info(ObIAllocator &alloc, const ObRoutineInfo &routine_info, const sql::ObExecEnv &exec_env, ParseNode *&create_node)
+int ObExprMysqlProcInfo::extract_create_node_from_routine_info(ObIAllocator &alloc, const ObRoutineInfo &routine_info, const sql::ObExecEnv &exec_env, ParseNode *&create_node) 
 {
   int ret = OB_SUCCESS;
 
@@ -121,7 +121,7 @@ int ObExprMysqlProcInfo::extract_create_node_from_routine_info(ObIAllocator &all
   return ret;
 }
 
-int ObExprMysqlProcInfo::extract_create_node_from_routine_info(ObIAllocator &alloc, const ObString &routine_body, const sql::ObExecEnv &exec_env, ParseNode *&create_node)
+int ObExprMysqlProcInfo::extract_create_node_from_routine_info(ObIAllocator &alloc, const ObString &routine_body, const sql::ObExecEnv &exec_env, ParseNode *&create_node) 
 {
   int ret = OB_SUCCESS;
 
@@ -179,7 +179,7 @@ int ObExprMysqlProcInfo::get_routine_info(ObSQLSessionInfo *session,
   OX (tenant_id = pl::get_tenant_id_by_object_id(routine_id));
   OZ (GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard));
   OZ (schema_guard.get_routine_info(tenant_id, routine_id, routine_info));
-
+  
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(OB_ISNULL(routine_info))) { //refresh schema try again
     OZ (ObSPIService::force_refresh_schema(tenant_id));
@@ -257,11 +257,11 @@ int ObExprMysqlProcInfo::get_param_list_info(const ObExpr &expr,
                                                                    OB_MAX_VARCHAR_LENGTH,
                                                                    pos,
                                                                    TZ_INFO(session)))) {
-        LOG_WARN("failed to print routine definition param", K(ret));
+        LOG_WARN("failed to print routine definition param", K(ret));                                                      
       } else {
         ObString value_str(static_cast<int32_t>(pos), static_cast<int32_t>(pos), param_list_buf);
         OZ (set_return_result(expr, ctx, expr_datum, value_str));
-      }
+      }       
     }
   }
 
@@ -343,11 +343,11 @@ int ObExprMysqlProcInfo::get_param_list_info(const ObExpr &expr,
                                                                     OB_MAX_VARCHAR_LENGTH,
                                                                     pos,
                                                                     TZ_INFO(session)))) {
-          LOG_WARN("failed to print routine definition param", K(ret));
+          LOG_WARN("failed to print routine definition param", K(ret));                                                      
         } else {
           ObString value_str(static_cast<int32_t>(pos), static_cast<int32_t>(pos), param_list_buf);
           OZ (set_return_result(expr, ctx, expr_datum, value_str));
-        }
+        }       
       }
     }
   }
@@ -365,7 +365,7 @@ int ObExprMysqlProcInfo::get_returns_info(const ObExpr &expr,
   int64_t pos = 0;
   const ObRoutineInfo *routine_info = NULL;
   ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
-
+  
   ObEvalCtx::TempAllocGuard alloc_guard(ctx);
   ObIAllocator &calc_alloc = alloc_guard.get_allocator();
 
@@ -417,7 +417,7 @@ int ObExprMysqlProcInfo::get_returns_info(const ObExpr &expr,
   char *returns_buf = NULL;
   int64_t pos = 0;
   ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
-
+  
   ObEvalCtx::TempAllocGuard alloc_guard(ctx);
   ObIAllocator &calc_alloc = alloc_guard.get_allocator();
   ObSEArray<common::ObString, 4> extended_type_info;
@@ -485,7 +485,7 @@ int ObExprMysqlProcInfo::get_body_info(const ObExpr &expr,
   int ret = OB_SUCCESS;
   const ObRoutineInfo *routine_info = NULL;
   ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
-
+  
   sql::ObExecEnv exec_env;
   ParseNode *create_node = nullptr;
   ObEvalCtx::TempAllocGuard alloc_guard(ctx);
@@ -541,7 +541,7 @@ int ObExprMysqlProcInfo::get_body_info(const ObExpr &expr,
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
-
+  
   sql::ObExecEnv exec_env;
   ParseNode *create_node = nullptr;
   ObEvalCtx::TempAllocGuard alloc_guard(ctx);
@@ -596,7 +596,7 @@ int ObExprMysqlProcInfo::get_info_by_field_id(const ObExpr &expr,
   int ret = OB_SUCCESS;
   const ObRoutineInfo *routine_info = NULL;
   ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
-
+  
   sql::ObExecEnv exec_env;
 
   OZ (get_routine_info(session, routine_id, routine_info));
@@ -651,7 +651,7 @@ int ObExprMysqlProcInfo::get_sys_package_name_info(const ObExpr &expr,
   const ObPackageInfo *package_info = NULL;
   ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
   ObSchemaGetterGuard *schema_guard = NULL;
-
+  
   CK (OB_NOT_NULL(ctx.exec_ctx_.get_sql_ctx()));
   CK (OB_NOT_NULL(schema_guard = ctx.exec_ctx_.get_sql_ctx()->schema_guard_));
   CK (OB_NOT_NULL(session));
@@ -677,7 +677,7 @@ int ObExprMysqlProcInfo::get_info_by_field_id(const ObExpr &expr,
   int ret = OB_SUCCESS;
   const ObRoutineInfo *routine_info = NULL;
   ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
-
+  
   sql::ObExecEnv exec_env;
   OZ (exec_env.init(exec_env_str));
 
@@ -730,7 +730,7 @@ int ObExprMysqlProcInfo::calc_mysql_proc_info_arg_cnt_2(const ObExpr &expr,
   ObDatum  *arg2 = NULL;
   uint64_t routine_id;
   ObString info_name;
-
+  
   if (OB_FAIL(expr.args_[0]->eval(ctx, arg1))) {
     LOG_WARN("eval arg1 failed", K(ret));
   } else if (arg1->is_null()) {
@@ -814,7 +814,7 @@ int ObExprMysqlProcInfo::calc_mysql_proc_info_arg_cnt_9(const ObExpr &expr,
   int64_t param_scale;
   int64_t param_coll_type;
   ObObj   obj_routine_body;
-
+  
   if (OB_FAIL(expr.args_[0]->eval(ctx, arg0))) {
     LOG_WARN("eval arg0 failed", K(ret));
   } else if (arg0->is_null()) {
@@ -942,7 +942,7 @@ int ObExprMysqlProcInfo::eval_mysql_proc_info(const ObExpr &expr,
   return ret;
 }
 
-int ObExprMysqlProcInfo::cg_expr(ObExprCGCtx &op_cg_ctx,
+int ObExprMysqlProcInfo::cg_expr(ObExprCGCtx &op_cg_ctx, 
                                    const ObRawExpr &raw_expr,
                                    ObExpr &rt_expr) const
 {

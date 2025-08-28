@@ -535,10 +535,10 @@ int ObHisRestoreJobPersistInfo::fill_dml(ObDMLSqlSplicer &dml) const
   ADD_COMMON_COLUMN_DML(restore_tenant_id);
   ADD_COMMON_COLUMN_DML(backup_tenant_id);
   ADD_LONG_STR_COLUMN_DML(backup_dest);
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(dml.add_uint64_column("restore_scn", restore_scn_.get_val_for_inner_table_field()))) {
-      LOG_WARN("failed to add column", K(ret));
-    }
+  if (OB_SUCC(ret)) { 
+    if (OB_FAIL(dml.add_uint64_column("restore_scn", restore_scn_.get_val_for_inner_table_field()))) { 
+      LOG_WARN("failed to add column", K(ret)); 
+    } 
   }
   ADD_LONG_STR_COLUMN_DML(restore_option);
 
@@ -1163,7 +1163,7 @@ int ObRestorePersistHelper::get_ls_finish_tablet_cnt(
 }
 
 int ObRestorePersistHelper::inc_total_tablet_count_by_one(
-    common::ObISQLClient &proxy,
+    common::ObISQLClient &proxy, 
     const ObLSRestoreJobPersistKey &ls_key) const
 {
   int ret = OB_SUCCESS;
@@ -1183,7 +1183,7 @@ int ObRestorePersistHelper::inc_total_tablet_count_by_one(
 }
 
 int ObRestorePersistHelper::dec_total_tablet_count_by_one(
-    common::ObISQLClient &proxy,
+    common::ObISQLClient &proxy, 
     const ObLSRestoreJobPersistKey &ls_key) const
 {
   int ret = OB_SUCCESS;
@@ -1203,7 +1203,7 @@ int ObRestorePersistHelper::dec_total_tablet_count_by_one(
 }
 
 int ObRestorePersistHelper::transfer_tablet(
-    common::ObMySQLTransaction &trans,
+    common::ObMySQLTransaction &trans, 
     const ObLSRestoreJobPersistKey &src_ls_key,
     const ObLSRestoreJobPersistKey &dest_ls_key) const
 {
@@ -1212,7 +1212,7 @@ int ObRestorePersistHelper::transfer_tablet(
   ObInnerTableOperator ls_restore_progress_table_operator;
   int64_t total_tablet_cnt = 0;
   int64_t finish_tablet_cnt = 0;
-
+  
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObRestorePersistHelper not init", K(ret));
@@ -1225,10 +1225,10 @@ int ObRestorePersistHelper::transfer_tablet(
   } else if (total_tablet_cnt == finish_tablet_cnt && finish_tablet_cnt > 0) {
     if (OB_FAIL(ls_restore_progress_table_operator.decrease_column_by_one(trans, src_ls_key, OB_STR_FINISH_TABLET_COUNT, affected_rows))) {
       LOG_WARN("failed to decrease finish tablet count in ls restore progress table", K(ret), K(src_ls_key));
-#ifdef ERRSIM
+#ifdef ERRSIM      
     } else {
       LOG_INFO("correct restore progress after transfer backfill", K(src_ls_key), K(dest_ls_key));
-#endif
+#endif      
     }
   }
   if (FAILEDx(ls_restore_progress_table_operator.decrease_column_by_one(trans, src_ls_key, OB_STR_TABLET_COUNT, affected_rows))) {
@@ -1242,7 +1242,7 @@ int ObRestorePersistHelper::transfer_tablet(
 
 
 int ObRestorePersistHelper::force_correct_restore_stat(
-    common::ObISQLClient &proxy,
+    common::ObISQLClient &proxy, 
     const ObLSRestoreJobPersistKey &ls_key) const
 {
   int ret = OB_SUCCESS;
@@ -1307,13 +1307,13 @@ int ObRestorePersistHelper::record_restore_info(common::ObMySQLTransaction &tran
     LOG_WARN("failed to append fmt", K(ret));
   } else if (OB_FAIL(trans.write(gen_meta_tenant_id(tenant_id_), sql.ptr(), group_id_, affected_rows))) {
     LOG_WARN("fail to exec sql", K(ret), K(sql));
-  }
+  } 
   return ret;
 }
 
 int ObRestorePersistHelper::get_backup_dest_list_from_restore_info(
-    common::ObISQLClient &proxy,
-    int64_t &job_id,
+    common::ObISQLClient &proxy, 
+    int64_t &job_id, 
     ObPhysicalRestoreBackupDestList &backup_dest_list) const
 {
   int ret = OB_SUCCESS;
@@ -1323,7 +1323,7 @@ int ObRestorePersistHelper::get_backup_dest_list_from_restore_info(
     LOG_WARN("ObRestorePersistHelper not init", K(ret));
   } else if (OB_FAIL(sql.assign_fmt("select name, value from %s", OB_ALL_RESTORE_INFO_TNAME))) {
     LOG_WARN("fail to assign sql", K(ret));
-  } else if (OB_FAIL(sql.append_fmt(" where name in ('%s', '%s', '%s', '%s', '%s')",
+  } else if (OB_FAIL(sql.append_fmt(" where name in ('%s', '%s', '%s', '%s', '%s')", 
                      OB_STR_JOB_ID,
                      OB_STR_BACKUP_SET_LIST,
                      OB_STR_BACKUP_SET_DESC_LIST,
@@ -1376,7 +1376,7 @@ int ObRestorePersistHelper::get_backup_dest_list_from_restore_info(
               EXTRACT_VARCHAR_FIELD_MYSQL(*result, "value", str);
               if (FAILEDx(backup_dest_list.backup_set_desc_list_assign_with_format_str(str))) {
                 LOG_WARN("fail to assign backup set desc list", KR(ret), K(str));
-              }
+              } 
             }
           }
 
@@ -1477,8 +1477,8 @@ int ObRestorePersistHelper::set_ls_finish_bytes(
 }
 
 int ObRestorePersistHelper::increase_ls_finish_bytes_by(
-    common::ObISQLClient &proxy,
-    const ObLSRestoreJobPersistKey &ls_key,
+    common::ObISQLClient &proxy, 
+    const ObLSRestoreJobPersistKey &ls_key, 
     const int64_t finish_bytes) const
 {
   int ret = OB_SUCCESS;

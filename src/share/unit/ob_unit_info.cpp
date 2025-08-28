@@ -179,11 +179,11 @@ int ObTenantServers::init_or_insert_server(
     const int64_t renew_time)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) 
       || !server.is_valid()
       || renew_time <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid input parameter", KR(ret),
+    LOG_WARN("invalid input parameter", KR(ret), 
         K(tenant_id), K(server), K(renew_time));
   } else if (!is_valid()) {
     tenant_id_ = tenant_id;
@@ -195,7 +195,7 @@ int ObTenantServers::init_or_insert_server(
         "tenant already inserted", tenant_id_);
   }
 
-  // insert_server will ensure that
+  // insert_server will ensure that 
   // there are no duplicates in the servers of tenant_servers
   if (FAILEDx(insert_server_(server))) {
     LOG_WARN("failed to insert server to tenant_servers", KR(ret), K(server));

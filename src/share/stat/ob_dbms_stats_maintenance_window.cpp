@@ -296,7 +296,7 @@ int ObDbmsStatsMaintenanceWindow::get_spm_stats_job_info(const bool is_oracle_mo
    * FRIDAY_WINDOW                freq=daily;byday=FRI;byhour=22;          4 hours
    * SATURDAY_WINDOW              freq=daily;byday=SAT;byhour=6;           20 hours
    * SUNDAY_WINDOW                freq=daily;byday=SUN;byhour=6;           20 hours
-   *
+   * 
    */
 int ObDbmsStatsMaintenanceWindow::get_window_job_info(const int64_t current_time,
                                                       const int64_t nth_window,

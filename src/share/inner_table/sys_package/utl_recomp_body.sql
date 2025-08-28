@@ -22,9 +22,9 @@ create or replace package body utl_recomp AS
   idx_sorted_table_ddl varchar2(500) := 'create index sys.idx_utl_recomp_sorted_1 on sys.utl_recomp_sorted(obj#,depth)';
   compiled_table_ddl varchar2(500) := 'create table sys.utl_recomp_compiled (
                                         obj# number not null enable,
-                                        batch# number,
-                                        compiled_at timestamp (6),
-                                        completed_at timestamp (6),
+                                        batch# number, 
+                                        compiled_at timestamp (6), 
+                                        completed_at timestamp (6), 
                                         compiled_by varchar2(64))';
   idx_compiled_table_ddl varchar2(500) := 'create index sys.idx_utl_recomp_compiled_1 on sys.utl_recomp_compiled(obj#)';
   errors_table_ddl varchar2(500) := 'create table sys.utl_recomp_errors(
@@ -94,7 +94,7 @@ create or replace package body utl_recomp AS
           dynamic_execute(idx_errors_table_ddl);
         end if;
       else
-        RAISE_APPLICATION_ERROR(-20001,
+        RAISE_APPLICATION_ERROR(-20001, 
           'table ' || table_name ||' exists, parameter FLAGS must be set to 512 to continue using the table, or set to 1024 to automatically drop and recreate the table');
       end if;
     else
@@ -111,7 +111,7 @@ create or replace package body utl_recomp AS
 
 
   PROCEDURE truncate_utl_recomp_skip_list(flags PLS_INTEGER := 0) as
-    is_exist boolean := false;
+    is_exist boolean := false; 
   begin
     check_table_exist(skip_list_table, is_exist);
     if is_exist then
@@ -121,7 +121,7 @@ create or replace package body utl_recomp AS
         dynamic_execute('drop table sys.utl_recomp_skip_list');
         dynamic_execute(skip_list_table_ddl);
       else
-        RAISE_APPLICATION_ERROR(-20001,
+        RAISE_APPLICATION_ERROR(-20001, 
           'table UTL_RECOMP_SKIP_LIST exists, parameter FLAGS must be set to 512 to continue using the table, or set to 1024 to automatically drop and recreate the table');
       end if;
     else
@@ -143,7 +143,7 @@ create or replace package body utl_recomp AS
                         (select OBJ# from sys.utl_recomp_compiled
                         union all select OBJ# from sys.utl_recomp_skip_list)
                       and o.object_type in (''PACKAGE'', ''PROCEDURE'', ''FUNCTION'', ''TYPE'', ''TRIGGER'')';
-
+    
     dynamic_execute(dml_str);
   end;
 
@@ -163,7 +163,7 @@ create or replace package body utl_recomp AS
   begin
     execute immediate 'select o.object_id, o.owner, o.object_name, o.object_type, null, null, null
                         from sys.all_objects o
-                        join sys.utl_recomp_sorted s on o.object_id = s.obj# and s.batch# = :1
+                        join sys.utl_recomp_sorted s on o.object_id = s.obj# and s.batch# = :1 
                         where o.object_type in (''PACKAGE'', ''PROCEDURE'', ''FUNCTION'', ''TYPE'', ''TRIGGER'')'
             bulk collect into compile_arr using batch_no;
     for i in 1 .. compile_arr.count() loop
@@ -187,7 +187,7 @@ create or replace package body utl_recomp AS
             using 0, systimestamp, error_msg;
       commit;
   end;
-
+    
 
   procedure drop_jobs is
     job_names str_array;
@@ -224,7 +224,7 @@ create or replace package body utl_recomp AS
   begin
     num_threads := threads;
     if (num_threads is null or num_threads <= 0) then
-      select (select nvl(min(TO_NUMBER(value)), 1) from  SYS.GV$OB_PARAMETERS where name = 'cpu_count')
+      select (select nvl(min(TO_NUMBER(value)), 1) from  SYS.GV$OB_PARAMETERS where name = 'cpu_count') 
             * (select nvl(min(TO_NUMBER(value)), 1) from SYS.GV$OB_PARAMETERS where name = 'cpu_quota_concurrency') num
       into num_threads from dual;
       if (num_threads is null or num_threads <= 0) then
@@ -240,14 +240,14 @@ create or replace package body utl_recomp AS
     insert_str varchar(2000) :=
       'insert into sys.utl_recomp_sorted (obj#, owner, objname, edition_name, namespace)
         select o.object_id, o.owner, o.object_name, o.edition_name, o.namespace
-          from sys.all_objects o
-          where o.object_id not in
+          from sys.all_objects o 
+          where o.object_id not in 
               (select c.OBJ# from sys.utl_recomp_compiled c
                 union all
                 select l.OBJ# from sys.utl_recomp_skip_list l)
             and o.object_type in (''PACKAGE'', ''PROCEDURE'', ''FUNCTION'', ''TYPE'', ''TRIGGER'')
             and o.object_id > 500000 ';
-
+    
     update_depth_str varchar2(2000) :=
         'update sys.utl_recomp_sorted o set depth = :1
             where depth is null and
@@ -266,7 +266,7 @@ create or replace package body utl_recomp AS
       execute immediate insert_str || 'and owner = :1' using schema;
     end if;
     commit;
-
+    
     loop
       execute immediate update_depth_str using current_depth;
       current_depth := current_depth + 1;
@@ -276,7 +276,7 @@ create or replace package body utl_recomp AS
     execute immediate 'update sys.utl_recomp_sorted set depth = :1 where depth is null' using current_depth;
     commit;
 
-    execute immediate 'select count(obj#), depth from sys.utl_recomp_sorted group by depth order by depth'
+    execute immediate 'select count(obj#), depth from sys.utl_recomp_sorted group by depth order by depth' 
         bulk collect into obj_gs;
     num_batch := 0;
     for i in 1 .. obj_gs.count() loop

@@ -55,7 +55,7 @@ int ObDDLSqlService::log_operation(
     LOG_WARN("schema_operation is invalid", K(schema_operation), K(ret));
   } else if (OB_ISNULL(tsi_oper)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Failed to get TSILatOper", KR(ret), K(schema_operation));
+    LOG_WARN("Failed to get TSILatOper", KR(ret), K(schema_operation)); 
   } else if (OB_ISNULL(tsi_value)) {
     int tmp_ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Failed to get TSIDDLVar", K(tmp_ret), K(schema_operation));
@@ -72,7 +72,7 @@ int ObDDLSqlService::log_operation(
     tsi_oper->last_operation_tenant_id_ = sql_tenant_id;
     tsi_oper->last_operation_schema_version_ = schema_operation.schema_version_;
   }
-
+  
   if (OB_SUCC(ret)) {
     int64_t affected_rows = 0;
     if (OB_FAIL(sql_string->append_fmt("INSERT INTO %s (SCHEMA_VERSION, TENANT_ID, EXEC_TENANT_ID, USER_ID, DATABASE_ID, "

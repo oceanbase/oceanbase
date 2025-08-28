@@ -26,10 +26,10 @@ namespace oceanbase
 namespace table
 {
 
-class ObTableUtils
+class ObTableUtils 
 {
 public:
-  static const ObString &get_kv_normal_trace_info() { return KV_NORMAL_TRACE_INFO; }
+  static const ObString &get_kv_normal_trace_info() { return KV_NORMAL_TRACE_INFO; } 
   static const ObString &get_kv_ttl_trace_info() { return KV_TTL_TRACE_INFO; }
   static bool is_kv_trace_info(const ObString &trace_info);
   static bool has_exist_in_columns(const ObIArray<ObString> &columns, const ObString &name);

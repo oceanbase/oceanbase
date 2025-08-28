@@ -159,7 +159,7 @@ private:
 			binlogBuf *new_cols,
 			const unsigned int new_col_cnt,
 			ITableMeta *tbl_meta);
-
+	
 	int build_insert_stmt_(ObStringBuffer &stmt,
 			binlogBuf *new_cols,
 			const unsigned int new_col_cnt,
@@ -192,7 +192,7 @@ private:
 		ITableMeta *tbl_meta,
 		bool &has_lob_null,
 		bool &has_unsupport_type_compare);
-
+	
 	int build_key_conds_(ObStringBuffer &stmt,
 		binlogBuf *cols,
 		const unsigned int col_cnt,
@@ -200,7 +200,7 @@ private:
 		const KeyArray &key,
 		bool &has_lob_null,
 		bool &has_unsupport_type_compare);
-
+	
 	int build_cond_(ObStringBuffer &stmt,
 		binlogBuf *cols,
 		const unsigned int col_idx,
@@ -208,7 +208,7 @@ private:
 		IColMeta *col_meta,
 		bool &has_lob_null,
 		bool &has_unsupport_type_compare);
-
+	
 	int build_lob_cond_(ObStringBuffer &stmt,
 		binlogBuf *cols,
 		const unsigned int col_idx,
@@ -216,14 +216,14 @@ private:
 		IColMeta *col_meta,
 		bool &has_lob_null,
 		bool &has_unsupport_type_compare);
-
+	
 	int build_func_cond_(ObStringBuffer &stmt,
 		binlogBuf *cols,
 		const unsigned int col_idx,
 		ITableMeta *tbl_meta,
 		IColMeta *col_meta,
 		const char *func_name);
-
+	
 	int build_normal_cond_(ObStringBuffer &stmt,
 		binlogBuf *cols,
 		const unsigned int col_idx,

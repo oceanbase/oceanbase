@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #define USING_LOG_PREFIX SQL_REWRITE
 #include "sql/rewrite/ob_transform_dblink.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
@@ -98,7 +98,7 @@ int ObTransformDBlink::check_dml_link_valid(ObDMLStmt *stmt, uint64_t target_dbl
     ObSEArray<ObAssignment, 4> table_assigns;
     ObDelUpdStmt *dml_stmt = static_cast<ObDelUpdStmt*>(stmt);
     //check returning
-    if (!dml_stmt->get_returning_exprs().empty() ||
+    if (!dml_stmt->get_returning_exprs().empty() || 
         !dml_stmt->get_returning_into_exprs().empty()) {
       ret = OB_ERR_RETURNING_CLAUSE;
       LOG_WARN("return in dblink not supported", K(ret));
@@ -108,7 +108,7 @@ int ObTransformDBlink::check_dml_link_valid(ObDMLStmt *stmt, uint64_t target_dbl
     } else if (!link_oracle) {
       //do nothing
     } else if (stmt->is_insert_stmt() &&
-              !static_cast<ObInsertStmt*>(stmt)->value_from_select() &&
+              !static_cast<ObInsertStmt*>(stmt)->value_from_select() && 
               static_cast<ObInsertStmt*>(stmt)->get_insert_row_count() > 1) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("insert multi values not support in dblink", K(ret));
@@ -191,7 +191,7 @@ int ObTransformDBlink::check_has_default_value(ObIArray<ObAssignment> &assigns, 
       LOG_WARN("unexpect null expr param", K(ret));
     } else if (T_FUN_SYS_DEFAULT == assign.expr_->get_param_expr(4)->get_expr_type()) {
       has_default = true;
-    }
+    } 
   }
   return ret;
 }
@@ -253,7 +253,7 @@ int ObTransformDBlink::recursive_get_target_dblink_id(ObSelectStmt *stmt, uint64
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("multi dblink table dml not support", K(ret));
       }
-    } else if (target_table->is_generated_table() ||
+    } else if (target_table->is_generated_table() || 
                target_table->is_temp_table()) {
       uint64_t id = OB_INVALID_ID;
       if (OB_FAIL(SMART_CALL(recursive_get_target_dblink_id(target_table->ref_query_, id)))) {
@@ -329,15 +329,15 @@ int ObTransformDBlink::reverse_one_link_table(TableItem *table, uint64_t target_
   } else if (table->is_link_type()) {
     if (table->dblink_id_ == target_dblink_id) {
       table->type_ = TableItem::BASE_TABLE;
-      if (OB_FAIL(ob_write_string(*ctx_->allocator_,
-                                  table->link_database_name_,
+      if (OB_FAIL(ob_write_string(*ctx_->allocator_, 
+                                  table->link_database_name_, 
                                   table->database_name_))) {
         LOG_WARN("failed to write string", K(ret));
       }
     } else {
       table->is_reverse_link_ = true;
-      if (OB_FAIL(ob_write_string(*ctx_->allocator_,
-                                  table->link_database_name_,
+      if (OB_FAIL(ob_write_string(*ctx_->allocator_, 
+                                  table->link_database_name_, 
                                   table->database_name_))) {
         LOG_WARN("failed to write string", K(ret));
       }
@@ -347,8 +347,8 @@ int ObTransformDBlink::reverse_one_link_table(TableItem *table, uint64_t target_
   } else if (table->is_basic_table()) {
     table->type_ = TableItem::LINK_TABLE;
     table->is_reverse_link_ = true;
-    if (OB_FAIL(ob_write_string(*ctx_->allocator_,
-                                table->database_name_,
+    if (OB_FAIL(ob_write_string(*ctx_->allocator_, 
+                                table->database_name_, 
                                 table->link_database_name_))) {
       LOG_WARN("failed to write string", K(ret));
     }
@@ -459,7 +459,7 @@ int ObTransformDBlink::reverse_link_table_for_temp_table(ObDMLStmt *root_stmt, u
     LOG_WARN("failed to collect temp table infos", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < temp_table_infos.count(); ++i) {
-    if (OB_FAIL(inner_reverse_link_table(temp_table_infos.at(i).temp_table_query_,
+    if (OB_FAIL(inner_reverse_link_table(temp_table_infos.at(i).temp_table_query_, 
                                          target_dblink_id))) {
       LOG_WARN("failed to reverse link table", K(ret));
     }
@@ -480,15 +480,15 @@ int ObTransformDBlink::pack_link_table(ObDMLStmt *stmt, bool &trans_happened)
     LOG_WARN("unexpect null stmt", K(ret));
   } else if (OB_FAIL(add_flashback_query_for_dblink(stmt))) {
     LOG_WARN("add flashback query for dblink failed", K(ret));
-  } else if (OB_FAIL(collect_link_table(stmt,
-                                        helpers,
+  } else if (OB_FAIL(collect_link_table(stmt, 
+                                        helpers, 
                                         dblink_id,
                                         is_reverse_link,
                                         all_table_from_one_dblink))) {
     LOG_WARN("failed to collect link table", K(ret));
   } else if (all_table_from_one_dblink) {
     if (OB_FAIL(reverse_link_tables(stmt->get_table_items(),
-                                    is_reverse_link ? 0 : dblink_id))) {
+                                    is_reverse_link ? 0 : dblink_id))) { 
       LOG_WARN("failed to reverse link table", K(ret));
     } else if (OB_FAIL(reverse_link_sequence(*stmt, is_reverse_link ? 0 : dblink_id))) {
       LOG_WARN("failed to reverse link sequence", K(ret));
@@ -605,8 +605,8 @@ int ObTransformDBlink::check_link_expr_valid(ObRawExpr *expr, bool &is_valid)
   return ret;
 }
 
-int ObTransformDBlink::collect_link_table(ObDMLStmt *stmt,
-                                          ObIArray<LinkTableHelper> &helpers,
+int ObTransformDBlink::collect_link_table(ObDMLStmt *stmt, 
+                                          ObIArray<LinkTableHelper> &helpers, 
                                           uint64_t &dblink_id,
                                           bool &is_reverse_link,
                                           bool &all_table_from_one_dblink)
@@ -676,8 +676,8 @@ int ObTransformDBlink::collect_link_table(ObDMLStmt *stmt,
       LOG_WARN("failed to get table", K(ret), K(item));
     } else if (OB_FAIL(stmt->get_table_rel_ids(*table, rel_ids))) {
       LOG_WARN("failed to get table rel ids", K(ret));
-    } else if (OB_FAIL(inner_collect_link_table(table,
-                                                NULL,
+    } else if (OB_FAIL(inner_collect_link_table(table, 
+                                                NULL, 
                                                 helpers,
                                                 all_table_from_one_dblink))) {
       LOG_WARN("failed to collect link table", K(ret));
@@ -768,44 +768,44 @@ int ObTransformDBlink::inner_collect_link_table(TableItem *table,
     LOG_WARN("unexpect null table item", K(ret));
   } else if (table->is_joined_table()) {
     JoinedTable *joined_table = static_cast<JoinedTable*>(table);
-    if (OB_FAIL(check_is_link_table(table,
-                                    dblink_id,
+    if (OB_FAIL(check_is_link_table(table, 
+                                    dblink_id, 
                                     is_link_table,
                                     is_reverse_link))) {
       LOG_WARN("failed to check pis link table", K(ret));
     } else if (is_link_table) {
-      if (OB_FAIL(add_link_table(table,
-                                  dblink_id,
+      if (OB_FAIL(add_link_table(table, 
+                                  dblink_id, 
                                   is_reverse_link,
-                                  parent_table,
+                                  parent_table, 
                                   NULL,
                                   helpers))) {
         LOG_WARN("failed to add link table", K(ret));
       }
     } else {
-      if (OB_FAIL(SMART_CALL(inner_collect_link_table(joined_table->left_table_,
-                                                      joined_table,
-                                                      helpers,
+      if (OB_FAIL(SMART_CALL(inner_collect_link_table(joined_table->left_table_, 
+                                                      joined_table, 
+                                                      helpers, 
                                                       all_table_from_one_dblink)))) {
         LOG_WARN("failed to collect link table", K(ret));
-      } else if (OB_FAIL(SMART_CALL(inner_collect_link_table(joined_table->right_table_,
-                                                            joined_table,
-                                                            helpers,
+      } else if (OB_FAIL(SMART_CALL(inner_collect_link_table(joined_table->right_table_, 
+                                                            joined_table, 
+                                                            helpers, 
                                                             all_table_from_one_dblink)))) {
         LOG_WARN("failed to collect link table", K(ret));
       }
     }
   } else {
-    if (OB_FAIL(check_is_link_table(table,
-                                    dblink_id,
+    if (OB_FAIL(check_is_link_table(table, 
+                                    dblink_id, 
                                     is_link_table,
                                     is_reverse_link))) {
       LOG_WARN("failed to check is link table", K(ret));
     } else if (is_link_table) {
-      if (OB_FAIL(add_link_table(table,
-                                  dblink_id,
+      if (OB_FAIL(add_link_table(table, 
+                                  dblink_id, 
                                   is_reverse_link,
-                                  parent_table,
+                                  parent_table, 
                                   NULL,
                                   helpers))) {
         LOG_WARN("failed to add link table", K(ret));
@@ -853,22 +853,22 @@ int ObTransformDBlink::check_is_link_table(TableItem *table,
     bool right_is_reverse_link = false;
     if (CONNECT_BY_JOIN == joined_table->joined_type_) {
       is_link_table = false;
-    } else if (OB_FAIL(SMART_CALL(check_is_link_table(joined_table->left_table_,
-                                              left_dblink_id,
+    } else if (OB_FAIL(SMART_CALL(check_is_link_table(joined_table->left_table_, 
+                                              left_dblink_id, 
                                               left_is_link_table,
                                               left_is_reverse_link)))) {
       LOG_WARN("failed to check is link table", K(ret));
-    } else if (OB_FAIL(SMART_CALL(check_is_link_table(joined_table->right_table_,
-                                                      right_dblink_id,
+    } else if (OB_FAIL(SMART_CALL(check_is_link_table(joined_table->right_table_, 
+                                                      right_dblink_id, 
                                                       right_is_link_table,
                                                       right_is_reverse_link)))) {
       LOG_WARN("failed to check is link table", K(ret));
-    } else if (left_is_link_table &&
+    } else if (left_is_link_table && 
                right_is_link_table &&
                (left_dblink_id == right_dblink_id ||
                 (left_is_reverse_link && right_is_reverse_link))) {
       bool has_special_expr = false;
-      if (OB_FAIL(has_none_pushdown_expr(joined_table->join_conditions_,
+      if (OB_FAIL(has_none_pushdown_expr(joined_table->join_conditions_, 
                                         left_dblink_id,
                                         has_special_expr))) {
         LOG_WARN("failed to check has none pushdown expr", K(ret));
@@ -898,15 +898,15 @@ int ObTransformDBlink::check_is_link_semi_info(ObDMLStmt &stmt,
   if (OB_ISNULL(right_table = stmt.get_table_item_by_id(semi_info.right_table_id_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null table item", K(ret));
-  } else if (OB_FAIL(check_is_link_table(right_table,
-                                         dblink_id,
+  } else if (OB_FAIL(check_is_link_table(right_table, 
+                                         dblink_id, 
                                          right_is_link_table,
                                          is_reverse_link))) {
     LOG_WARN("failed to check is link table", K(ret));
   } else if (right_is_link_table) {
     is_link_semi_info = true;
     if (OB_FAIL(ObTransformUtils::get_rel_ids_from_tables(&stmt,
-                                                          semi_info.left_table_ids_,
+                                                          semi_info.left_table_ids_, 
                                                           semi_tables))) {
       LOG_WARN("failed to get rel ids", K(ret));
     }
@@ -929,12 +929,12 @@ int ObTransformDBlink::check_is_link_semi_info(ObDMLStmt &stmt,
         LOG_WARN("failed to get table rel ids", K(ret));
       } else if (!semi_tables.overlap(from_rel_ids)) {
         // skip
-      } else if (OB_FAIL(check_is_link_table(left_table,
-                                             left_dblink_id,
+      } else if (OB_FAIL(check_is_link_table(left_table, 
+                                             left_dblink_id, 
                                              left_is_link_table,
                                              left_is_reverse_link))) {
         LOG_WARN("failed to check is link table", K(ret));
-      } else if (left_is_link_table &&
+      } else if (left_is_link_table && 
                  right_is_link_table &&
                  (left_dblink_id == dblink_id ||
                  (left_is_reverse_link && is_reverse_link))) {
@@ -948,7 +948,7 @@ int ObTransformDBlink::check_is_link_semi_info(ObDMLStmt &stmt,
   }
   bool has_special_expr = false;
   if (OB_FAIL(ret) || !is_link_semi_info) {
-  } else if (OB_FAIL(has_none_pushdown_expr(semi_info.semi_conditions_,
+  } else if (OB_FAIL(has_none_pushdown_expr(semi_info.semi_conditions_, 
                                             dblink_id,
                                             has_special_expr))) {
     LOG_WARN("failed to check has none pushdown expr", K(ret));
@@ -973,25 +973,25 @@ int ObTransformDBlink::inner_collect_link_table(ObDMLStmt *stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null table item", K(ret));
   } else if (OB_FAIL(check_is_link_semi_info(*stmt,
-                                             *semi_info,
-                                             dblink_id,
+                                             *semi_info, 
+                                             dblink_id, 
                                              is_link_semi_info,
                                              right_is_link_table,
                                              is_reverse_link))) {
     LOG_WARN("failed to check is link table", K(ret));
   } else if (is_link_semi_info) {
     if (OB_FAIL(add_link_semi_info(semi_info,
-                                   dblink_id,
+                                   dblink_id, 
                                    is_reverse_link,
                                    helpers))) {
       LOG_WARN("failed to add link semi info", K(ret));
     }
   } else if (right_is_link_table) {
     TableItem *table = stmt->get_table_item_by_id(semi_info->right_table_id_);
-    if (OB_FAIL(add_link_table(table,
-                               dblink_id,
+    if (OB_FAIL(add_link_table(table, 
+                               dblink_id, 
                                is_reverse_link,
-                               NULL,
+                               NULL, 
                                semi_info,
                                helpers))) {
       LOG_WARN("failed to add link table", K(ret));
@@ -1103,11 +1103,11 @@ int ObTransformDBlink::split_link_table_info(ObDMLStmt *stmt, ObIArray<LinkTable
   int ret = OB_SUCCESS;
   ObSEArray<LinkTableHelper, 4> new_helpers;
   ObSEArray<LinkTableHelper, 4> temp_helpers;
-  //split table items with cross product
+  //split table items with cross product 
   for (int64_t i = 0; OB_SUCC(ret) && i < helpers.count(); ++i) {
     if (helpers.at(i).table_items_.count() != 1) {
-      if (OB_FAIL(inner_split_link_table_info(stmt,
-                                              helpers.at(i),
+      if (OB_FAIL(inner_split_link_table_info(stmt, 
+                                              helpers.at(i), 
                                               temp_helpers))) {
         LOG_WARN("failed to add helper", K(ret));
       }
@@ -1132,15 +1132,15 @@ int ObTransformDBlink::split_link_table_info(ObDMLStmt *stmt, ObIArray<LinkTable
       LOG_WARN("failed to add helper", K(ret));
     }
   }
-  if (OB_SUCC(ret) &&
+  if (OB_SUCC(ret) && 
       OB_FAIL(helpers.assign(new_helpers))) {
     LOG_WARN("failed to assign helpers", K(ret));
   }
   return ret;
 }
 
-int ObTransformDBlink::inner_split_link_table_info(ObDMLStmt *stmt,
-                                                  LinkTableHelper &helper,
+int ObTransformDBlink::inner_split_link_table_info(ObDMLStmt *stmt, 
+                                                  LinkTableHelper &helper, 
                                                   ObIArray<LinkTableHelper> &new_helpers)
 {
   int ret = OB_SUCCESS;
@@ -1149,7 +1149,7 @@ int ObTransformDBlink::inner_split_link_table_info(ObDMLStmt *stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null stmt", K(ret));
   } else if (OB_FAIL(ObTransformUtils::get_rel_ids_from_tables(stmt,
-                                                               helper.table_items_,
+                                                               helper.table_items_, 
                                                                table_ids))) {
     LOG_WARN("failed to get table ids", K(ret));
   } else {
@@ -1164,7 +1164,7 @@ int ObTransformDBlink::inner_split_link_table_info(ObDMLStmt *stmt,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null expr", K(ret));
       } else if (!expr->has_flag(IS_JOIN_COND)) {
-        //do nothing
+        //do nothing           
       } else if (OB_FAIL(connect_table(stmt, expr, uf))) {
         LOG_WARN("failed to connect table", K(ret));
       }
@@ -1185,8 +1185,8 @@ int ObTransformDBlink::inner_split_link_table_info(ObDMLStmt *stmt,
             OB_ISNULL(right_table=temp_helpers.at(j).table_items_.at(0))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpect empty table items", K(ret));
-        } else if (OB_FAIL(uf.is_connected(stmt->get_from_item_idx(table->table_id_),
-                                           stmt->get_from_item_idx(right_table->table_id_),
+        } else if (OB_FAIL(uf.is_connected(stmt->get_from_item_idx(table->table_id_), 
+                                           stmt->get_from_item_idx(right_table->table_id_), 
                                            find))) {
           LOG_WARN("failed to check is connect", K(ret));
         } else if (!find) {
@@ -1219,7 +1219,7 @@ int ObTransformDBlink::inner_split_link_table_info(ObDMLStmt *stmt,
       for (int64_t j = 0; OB_SUCC(ret) && j < temp_helpers.count(); ++j) {
         table_ids.reuse();
         if (OB_FAIL(ObTransformUtils::get_rel_ids_from_tables(stmt,
-                                                              temp_helpers.at(j).table_items_,
+                                                              temp_helpers.at(j).table_items_, 
                                                               table_ids))) {
           LOG_WARN("failed to get table ids", K(ret));
         } else if (!table_ids.is_superset(expr->get_relation_ids())) {
@@ -1237,7 +1237,7 @@ int ObTransformDBlink::inner_split_link_table_info(ObDMLStmt *stmt,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null semi info", K(ret));
       } else if (OB_FAIL(ObTransformUtils::get_rel_ids_from_tables(stmt,
-                                                                   semi_info->left_table_ids_,
+                                                                   semi_info->left_table_ids_, 
                                                                    semi_tables))) {
       LOG_WARN("failed to get rel ids", K(ret));
       }
@@ -1245,7 +1245,7 @@ int ObTransformDBlink::inner_split_link_table_info(ObDMLStmt *stmt,
       for (int64_t j = 0; OB_SUCC(ret) && !find && j < temp_helpers.count(); ++j) {
         table_ids.reuse();
         if (OB_FAIL(ObTransformUtils::get_rel_ids_from_tables(stmt,
-                                                              temp_helpers.at(j).table_items_,
+                                                              temp_helpers.at(j).table_items_, 
                                                               table_ids))) {
           LOG_WARN("failed to get table ids", K(ret));
         } else if (!table_ids.is_superset(semi_tables)) {
@@ -1277,8 +1277,8 @@ int ObTransformDBlink::inner_split_link_table_info(ObDMLStmt *stmt,
   return ret;
 }
 
-int ObTransformDBlink::connect_table(ObDMLStmt *stmt,
-                                     ObRawExpr *expr,
+int ObTransformDBlink::connect_table(ObDMLStmt *stmt, 
+                                     ObRawExpr *expr, 
                                      UnionFind &uf)
 {
   int ret = OB_SUCCESS;
@@ -1297,8 +1297,8 @@ int ObTransformDBlink::connect_table(ObDMLStmt *stmt,
   return ret;
 }
 
-int ObTransformDBlink::get_from_item_idx(ObDMLStmt *stmt,
-                                         ObRawExpr *expr,
+int ObTransformDBlink::get_from_item_idx(ObDMLStmt *stmt, 
+                                         ObRawExpr *expr, 
                                          ObIArray<int64_t> &idxs)
 {
   int ret = OB_SUCCESS;
@@ -1310,8 +1310,8 @@ int ObTransformDBlink::get_from_item_idx(ObDMLStmt *stmt,
   for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_from_item_size(); ++i) {
     table_ids.reuse();
     if (OB_FAIL(ObTransformUtils::get_rel_ids_from_table(
-                        stmt,
-                        stmt->get_table_item(stmt->get_from_item(i)),
+                        stmt, 
+                        stmt->get_table_item(stmt->get_from_item(i)), 
                         table_ids))) {
       LOG_WARN("failed to get rel ids", K(ret));
     } else if (!table_ids.overlap(expr->get_relation_ids())) {
@@ -1359,7 +1359,7 @@ int ObTransformDBlink::collect_pushdown_conditions(ObDMLStmt *stmt, ObIArray<Lin
     } else if (!can_push) {
       // do nothing
     } else if (OB_FAIL(ObTransformUtils::get_rel_ids_from_tables(stmt,
-                                                                 helpers.at(i).table_items_,
+                                                                 helpers.at(i).table_items_, 
                                                                  table_ids))) {
       LOG_WARN("failed to get rel ids", K(ret));
     } else {
@@ -1370,8 +1370,8 @@ int ObTransformDBlink::collect_pushdown_conditions(ObDMLStmt *stmt, ObIArray<Lin
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpect null expr", K(ret));
         } else if (!expr->get_relation_ids().is_subset(table_ids)) {
-          //do nothing
-        } else if (OB_FAIL(has_none_pushdown_expr(expr,
+          //do nothing           
+        } else if (OB_FAIL(has_none_pushdown_expr(expr, 
                                                   helpers.at(i).dblink_id_,
                                                   has_special_expr))) {
           LOG_WARN("failed to check has none push down expr", K(ret));
@@ -1386,7 +1386,7 @@ int ObTransformDBlink::collect_pushdown_conditions(ObDMLStmt *stmt, ObIArray<Lin
   return ret;
 }
 
-int ObTransformDBlink::has_none_pushdown_expr(ObIArray<ObRawExpr*> &exprs,
+int ObTransformDBlink::has_none_pushdown_expr(ObIArray<ObRawExpr*> &exprs,  
                                               uint64_t dblink_id,
                                               bool &has)
 {
@@ -1400,8 +1400,8 @@ int ObTransformDBlink::has_none_pushdown_expr(ObIArray<ObRawExpr*> &exprs,
   return ret;
 }
 
-int ObTransformDBlink::has_none_pushdown_expr(ObRawExpr* expr,
-                                              uint64_t dblink_id,
+int ObTransformDBlink::has_none_pushdown_expr(ObRawExpr* expr, 
+                                              uint64_t dblink_id, 
                                               bool &has)
 {
   int ret = OB_SUCCESS;
@@ -1427,8 +1427,8 @@ int ObTransformDBlink::has_none_pushdown_expr(ObRawExpr* expr,
     }
   } else if (expr->has_flag(CNT_SUB_QUERY)) {
     for (int64_t i = 0; OB_SUCC(ret) && !has && i < expr->get_param_count(); ++i) {
-      if (OB_FAIL(SMART_CALL(has_none_pushdown_expr(expr->get_param_expr(i),
-                                                    dblink_id,
+      if (OB_FAIL(SMART_CALL(has_none_pushdown_expr(expr->get_param_expr(i), 
+                                                    dblink_id, 
                                                     has)))) {
         LOG_WARN("failed to check expr can pushdown", K(ret));
       }
@@ -1506,7 +1506,7 @@ int ObTransformDBlink::extract_limit(ObDMLStmt *stmt, ObDMLStmt *&dblink_stmt)
             || stmt->is_fetch_with_ties()
             || NULL != stmt->get_limit_percent_expr()) {
     dblink_stmt = stmt;
-  } else if (OB_FAIL(ObTransformUtils::pack_stmt(ctx_, static_cast<ObSelectStmt *>(stmt),
+  } else if (OB_FAIL(ObTransformUtils::pack_stmt(ctx_, static_cast<ObSelectStmt *>(stmt), 
                                                  false, &child_stmt))) {
     LOG_WARN("failed to pack the stmt", K(ret));
   } else {
@@ -1538,12 +1538,12 @@ int ObTransformDBlink::formalize_table_name(ObDMLStmt *stmt)
       }
     }
     if (find || table->get_table_name().empty()) {
-      if (OB_FAIL(stmt->generate_view_name(*ctx_->allocator_,
+      if (OB_FAIL(stmt->generate_view_name(*ctx_->allocator_, 
                                            table->alias_name_))) {
         LOG_WARN("failed to generate view name", K(ret));
       }
     } else if (table->is_link_type() && table->alias_name_.empty()) {
-      if (OB_FAIL(stmt->generate_view_name(*ctx_->allocator_,
+      if (OB_FAIL(stmt->generate_view_name(*ctx_->allocator_, 
                                            table->alias_name_))) {
         LOG_WARN("failed to generate view name", K(ret));
       }
@@ -1568,7 +1568,7 @@ int ObTransformDBlink::formalize_column_item(ObDMLStmt *stmt)
       ObColumnRefRawExpr *col = column_items.at(i).expr_;
       TableItem *table = NULL;
       ObString alias_name;
-      if (OB_ISNULL(col) ||
+      if (OB_ISNULL(col) || 
           OB_ISNULL(table=stmt->get_table_item_by_id(col->get_table_id()))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null column expr", K(ret));
@@ -1576,8 +1576,8 @@ int ObTransformDBlink::formalize_column_item(ObDMLStmt *stmt)
       } else if (OB_FALSE_IT(col->set_database_name(table->database_name_))) {
       } else if (table->is_generated_table() || table->is_temp_table()) {
         int64_t sel_idx = col->get_column_id() - OB_APP_MIN_COLUMN_ID;
-        if (OB_FAIL(ObTransformUtils::get_real_alias_name(table->ref_query_,
-                                                          sel_idx,
+        if (OB_FAIL(ObTransformUtils::get_real_alias_name(table->ref_query_, 
+                                                          sel_idx, 
                                                           alias_name))) {
           LOG_WARN("failed to get real alias name", K(ret));
         } else {
@@ -1678,7 +1678,7 @@ int ObTransformDBlink::check_link_oracle(int64_t dblink_id, bool &link_oracle)
 {
   int ret = OB_SUCCESS;
   link_oracle = false;
-  if (OB_ISNULL(ctx_) ||
+  if (OB_ISNULL(ctx_) || 
       OB_ISNULL(ctx_->sql_schema_guard_) ||
       OB_ISNULL(ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1686,8 +1686,8 @@ int ObTransformDBlink::check_link_oracle(int64_t dblink_id, bool &link_oracle)
   } else {
     int64_t tenant_id = ctx_->session_info_->get_effective_tenant_id();
     const ObDbLinkSchema *dblink_schema = NULL;
-    if (OB_FAIL(ctx_->sql_schema_guard_->get_dblink_schema(tenant_id,
-                                                           dblink_id,
+    if (OB_FAIL(ctx_->sql_schema_guard_->get_dblink_schema(tenant_id, 
+                                                           dblink_id, 
                                                            dblink_schema))) {
       LOG_WARN("failed to get dblink schema", K(ret));
     } else if (OB_ISNULL(dblink_schema)) {
@@ -1709,7 +1709,7 @@ int ObTransformDBlink::add_flashback_query_for_dblink(ObDMLStmt *stmt)
   uint64_t current_scn = OB_INVALID_ID;
   bool need_add = false;
   uint64_t tenant_id = OB_INVALID_ID;
-  if (OB_ISNULL(ctx_) ||
+  if (OB_ISNULL(ctx_) || 
       OB_ISNULL(ctx_->sql_schema_guard_) ||
       OB_ISNULL(ctx_->session_info_) ||
       OB_ISNULL(stmt)) {
@@ -1725,7 +1725,7 @@ int ObTransformDBlink::add_flashback_query_for_dblink(ObDMLStmt *stmt)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null param", K(ret));
       } else if (!table_item->is_link_table()
-                 || TableItem::NOT_USING != table_item->flashback_query_type_
+                 || TableItem::NOT_USING != table_item->flashback_query_type_ 
                  || table_item->has_for_update()) {
       // do nothing if not dblink table or already have flashback query or table has for update
       } else if (FALSE_IT(dblink_id = table_item->dblink_id_)) {

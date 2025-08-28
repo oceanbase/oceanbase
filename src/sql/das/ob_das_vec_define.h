@@ -47,7 +47,7 @@ public:
       is_multi_value_index_(false),
       is_spatial_index_(false),
       can_extract_range_(false) {}
-
+  
   inline bool is_pre_filter() const { return ObVecIndexType::VEC_INDEX_PRE == vec_type_;  }
   inline bool is_vec_adaptive_scan() const { return ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN == vec_type_ && ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN != adaptive_try_path_; }
   inline bool is_post_filter() const { return ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER == vec_type_ || ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER == vec_type_; }
@@ -81,7 +81,7 @@ public:
   int64_t get_spiv_scan_idx() const { return ObVecAuxTableIdx::FIRST_VEC_AUX_TBL_IDX; }
   int64_t get_spiv_rowkey_docid_tbl_idx() const { return ObVecAuxTableIdx::SECOND_VEC_AUX_TBL_IDX; }
   int64_t get_spiv_aux_data_tbl_idx() const { return ObVecAuxTableIdx::THIRD_VEC_AUX_TBL_IDX; }
-
+  
 
   const ObDASBaseCtDef *get_inv_idx_scan_ctdef() const
   {
@@ -105,8 +105,8 @@ public:
   }
 
   INHERIT_TO_STRING_KV("ObDASBaseCtDef", ObDASBaseCtDef,
-                       KPC_(inv_scan_vec_id_col), K_(vec_index_param), K_(dim),
-                       K_(vec_type), K_(algorithm_type), K_(selectivity), K_(row_count),
+                       KPC_(inv_scan_vec_id_col), K_(vec_index_param), K_(dim), 
+                       K_(vec_type), K_(algorithm_type), K_(selectivity), K_(row_count), 
                        K_(extra_column_count), K_(vector_index_param), K_(vec_query_param), K_(adaptive_try_path), K_(can_extract_range));
 
   ObExpr *inv_scan_vec_id_col_;

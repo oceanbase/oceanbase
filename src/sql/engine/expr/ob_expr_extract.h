@@ -34,8 +34,8 @@ public:
   static int calc_oracle(
       const ObSQLSessionInfo *session,
       ObEvalCtx &ctx,
-      const ObObjType obj_type,
-      const ObDatum &date,
+      const ObObjType obj_type, 
+      const ObDatum &date, 
       const ObDateUnitType &extract_unit,
       ObIAllocator *allocator,
       bool &is_null,

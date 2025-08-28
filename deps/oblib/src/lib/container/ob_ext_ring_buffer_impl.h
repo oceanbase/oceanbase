@@ -613,7 +613,7 @@ private:
         WLockGuard guard(sn_dir_lock_);
         set_dir_(new_dir); // Replace. It's caller's duty to retire Dir & Segment.
         // Ensure atomicity of updating begin_sn_ & Dir
-        //
+        // 
         update_begin_sn_(ctrl_sn+1);
       }
       esunlock_();

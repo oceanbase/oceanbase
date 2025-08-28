@@ -128,7 +128,7 @@ public:
   double get_micro_block_rnd_cost(const OptSystemStat& stat) const;
   double get_project_column_cost(const OptSystemStat& stat,
                                  int64_t type,
-                                 bool is_rnd,
+                                 bool is_rnd,        
                                  bool use_column_store) const;
   double get_fetch_row_rnd_cost(const OptSystemStat& stat) const;
   double get_cmp_spatial_cost(const OptSystemStat& stat) const;

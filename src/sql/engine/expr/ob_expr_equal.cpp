@@ -40,8 +40,8 @@ int ObExprEqual::calc_result_type2(ObExprResType &type,
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, ob_obj_type_str(type1.get_type()),
                     ob_obj_type_str(type2.get_type()));
-  } else if (is_called_in_sql()
-              && lib::is_oracle_mode()
+  } else if (is_called_in_sql() 
+              && lib::is_oracle_mode() 
               && (type1.is_json() || type2.is_json())) {
     ret = OB_ERR_INVALID_CMP_OP;
     LOG_USER_ERROR(OB_ERR_INVALID_CMP_OP);

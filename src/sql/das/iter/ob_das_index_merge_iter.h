@@ -121,7 +121,7 @@ public:
   };
 
   /* shared exprs may cause the results on the frame to be overwritten by get_next_rows() of child iters,
-   * thus we use a result buffer to temporarily store a batch of result rows and @to_expr() at the end of
+   * thus we use a result buffer to temporarily store a batch of result rows and @to_expr() at the end of 
    * each iteration.
    */
   struct MergeResultBuffer
@@ -212,7 +212,7 @@ private:
   // now child_scan_rtdefs.count() == child_iters.count(), and so do child_scan_params and
   // child_tablet_ids
   // TODO: eliminate those we actually don't need, include index merge child and fts child.
-
+  
   common::ObFixedArray<ObDASScanRtDef*, common::ObIAllocator> child_scan_rtdefs_;
   common::ObFixedArray<ObTableScanParam*, common::ObIAllocator> child_scan_params_;
   common::ObFixedArray<ObTabletID, common::ObIAllocator> child_tablet_ids_;

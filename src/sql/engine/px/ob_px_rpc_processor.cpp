@@ -115,7 +115,7 @@ int ObInitSqcP::process()
       unregister_interrupt_ = false;
     }
 
-    //
+    // 
     if (is_schema_error(ret)) {
       ObInterruptUtil::update_schema_error_code(&(sqc_handler->get_exec_ctx()), ret);
     }
@@ -427,7 +427,7 @@ int ObInitFastSqcP::process()
     }
   }
 
-  //
+  // 
   if (OB_SUCCESS != ret && is_schema_error(ret) && OB_NOT_NULL(sqc_handler)) {
     ObInterruptUtil::update_schema_error_code(&(sqc_handler->get_exec_ctx()), ret);
   }
@@ -494,7 +494,7 @@ void ObFastInitSqcCB::log_warn_sqc_fail(int ret)
 
 int ObFastInitSqcCB::process()
 {
-  //
+  // 
   int ret = rcode_.rcode_;
   if (OB_FAIL(ret)) {
     int64_t cur_timestamp = ::oceanbase::common::ObTimeUtility::current_time();

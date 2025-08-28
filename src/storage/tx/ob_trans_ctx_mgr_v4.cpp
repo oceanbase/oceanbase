@@ -913,7 +913,7 @@ int ObLSTxCtxMgr::switch_to_follower_gracefully()
       timeguard.click();
     }
   }
-
+  
   if (OB_TMP_FAIL(log_cb_pool_mgr_.clear_log_cb_pool(false /*for_replay*/))) {
     TRANS_LOG(WARN, "clear log cb pool failed", K(ret), K(tmp_ret), K(ls_id_), K(log_cb_pool_mgr_));
   }

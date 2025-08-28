@@ -40,8 +40,8 @@ public:
   };
 
 public:
-  explicit ObIImportItem(ItemType item_type)
-      : item_type_(item_type)
+  explicit ObIImportItem(ItemType item_type) 
+      : item_type_(item_type) 
   {}
   virtual ~ObIImportItem() {}
   virtual void reset() = 0;
@@ -60,12 +60,12 @@ private:
 
 struct ObIImportSchemaItem : public ObIImportItem
 {
-  ObIImportSchemaItem(ItemType item_type) :
+  ObIImportSchemaItem(ItemType item_type) : 
       ObIImportItem(item_type),
       mode_(common::OB_NAME_CASE_INVALID)
   {}
 
-  ObIImportSchemaItem(ItemType item_type, common::ObNameCaseMode mode) :
+  ObIImportSchemaItem(ItemType item_type, common::ObNameCaseMode mode) : 
       ObIImportItem(item_type),
       mode_(mode)
   {}
@@ -87,7 +87,7 @@ struct ObImportSimpleSchemaItem final : public ObIImportSchemaItem
 {
   OB_UNIS_VERSION(1);
 public:
-  ObImportSimpleSchemaItem() :
+  ObImportSimpleSchemaItem() : 
       ObIImportSchemaItem(ITEM_TYPE),
       name_()
   {}
@@ -102,8 +102,8 @@ public:
   virtual bool case_mode_equal(const ObIImportItem &other) const override;
   virtual int64_t get_format_serialize_size() const override;
   virtual int format_serialize(
-      char *buf,
-      const int64_t buf_len,
+      char *buf, 
+      const int64_t buf_len, 
       int64_t &pos) const override;
 
   virtual int deep_copy(common::ObIAllocator &allocator, const ObIImportItem &src);

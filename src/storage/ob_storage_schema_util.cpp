@@ -53,8 +53,8 @@ int ObStorageSchemaUtil::update_tablet_storage_schema(
     const ObStorageSchema *input_schema = tablet_schema_stored_col_cnt > param_schema_stored_col_cnt
                         ? &old_schema_on_tablet
                         : &param_schema;
-    const ObStorageSchema *other_schema = input_schema == &old_schema_on_tablet
-                        ? &param_schema
+    const ObStorageSchema *other_schema = input_schema == &old_schema_on_tablet 
+                        ? &param_schema 
                         : &old_schema_on_tablet;
     const int64_t result_schema_column_cnt = MAX(old_schema_on_tablet.get_column_count(), param_schema.get_column_count());
     const bool column_info_simplified = input_schema->get_store_column_schemas().count() != result_schema_column_cnt;

@@ -138,7 +138,7 @@ int ObPLDbLinkGuard::get_routine_infos_with_synonym(sql::ObSQLSessionInfo &sessi
             if (OB_SUCC(ret)) {
               if (coll_type->get_element_type().is_record_type()) {
                 const pl::ObUserDefinedType *udt2 = NULL;
-                OZ (get_dblink_type_by_id(extract_package_id(coll_type->get_element_type().get_user_type_id()),
+                OZ (get_dblink_type_by_id(extract_package_id(coll_type->get_element_type().get_user_type_id()), 
                                           coll_type->get_element_type().get_user_type_id(), udt2));
                 OV (OB_NOT_NULL(udt2));
                 CHECK_RECORD_TYPE(udt2);
@@ -251,7 +251,7 @@ int ObPLDbLinkGuard::get_dblink_type_with_synonym(sql::ObSQLSessionInfo &session
                 // do nothing
               } else if (elem_type.is_record_type()) {
                 const pl::ObUserDefinedType *udt2 = NULL;
-                OZ (get_dblink_type_by_id(extract_package_id(elem_type.get_user_type_id()),
+                OZ (get_dblink_type_by_id(extract_package_id(elem_type.get_user_type_id()), 
                                           elem_type.get_user_type_id(), udt2));
                 if (OB_SUCC(ret)) {
                   record_type = static_cast<const ObRecordType *>(udt2);
@@ -437,7 +437,7 @@ int ObPLDbLinkGuard::dblink_name_resolve(common::ObDbLinkProxy *dblink_proxy,
     memset(part1, 0, ident_size);
     memset(part2, 0, ident_size);
     memset(dblink, 0, ident_size);
-    bool is_oracle = (DblinkDriverProto::DBLINK_DRV_OCI
+    bool is_oracle = (DblinkDriverProto::DBLINK_DRV_OCI 
                       == static_cast<DblinkDriverProto>(dblink_schema->get_driver_proto()));
 #define BIND_BASIC_BY_POS(param_pos, param, param_size, param_type, is_out_param)         \
     if (FAILEDx(dblink_proxy->dblink_bind_basic_type_by_pos(dblink_conn,    \
@@ -590,7 +590,7 @@ int ObPLDbLinkGuard::get_dblink_type_by_name(const uint64_t dblink_id,
   ret = OB_NOT_SUPPORTED;
   LOG_USER_ERROR(OB_NOT_SUPPORTED, "PL dblink");
 #else
-  const ObPLDbLinkInfo *dblink_info = NULL;
+  const ObPLDbLinkInfo *dblink_info = NULL; 
   for (int64_t i = 0; OB_SUCC(ret) && i < dblink_infos_.count(); i++) {
     if (OB_ISNULL(dblink_infos_.at(i))) {
       ret = OB_ERR_UNEXPECTED;
@@ -731,7 +731,7 @@ int ObPLDbLinkGuard::check_remote_version(common::ObDbLinkProxy &dblink_proxy,
       if (not_support) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not support dblink", K(ret), K(part1), K(part2), K(part3));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, 
           "oceanbase PL dblink oceanbase PL oracle mode, remote database version less then 4.2.4.0");
       } else {
         remote_version = ObPLDbLinkInfo::gen_remote_version(static_cast<uint32_t>(part1),

@@ -297,8 +297,8 @@ int ObRawExprPrinter::print(ObConstRawExpr *expr)
     int64_t idx = expr->get_value().get_unknown();
     if (OB_NOT_NULL(param_store_) && 0 <= idx && idx < param_store_->count()) {
       OZ (param_store_->at(idx).print_sql_literal(buf_, buf_len_, *pos_, print_params_));
-    } else if (OB_FAIL(ObLinkStmtParam::write(buf_, buf_len_, *pos_,
-                                              expr->get_value().get_unknown(),
+    } else if (OB_FAIL(ObLinkStmtParam::write(buf_, buf_len_, *pos_, 
+                                              expr->get_value().get_unknown(), 
                                               expr->get_data_type()))) {
       LOG_WARN("fail to write param to buf", K(expr->get_value().get_unknown()), K(expr->get_expr_obj_meta()), K(ret));
     }
@@ -412,7 +412,7 @@ int ObRawExprPrinter::print(ObQueryRefRawExpr *expr)
                                            print_params_,
                                            param_store_);
           if (print_cte_) {
-            stmt_printer.enable_print_temp_table_as_cte();
+            stmt_printer.enable_print_temp_table_as_cte(); 
           }
           if (OB_FAIL(stmt_printer.do_print())) {
             LOG_WARN("fail to print ref query", K(ret));
@@ -560,7 +560,7 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
     }
     case T_OP_AND:
       SET_SYMBOL_IF_EMPTY("and");
-    case T_OP_XOR:
+    case T_OP_XOR: 
       if (lib::is_mysql_mode()) {
         SET_SYMBOL_IF_EMPTY("xor");
       } else {
@@ -1059,7 +1059,7 @@ int ObRawExprPrinter::print_ora_json_arrayagg(ObAggFunRawExpr *expr)
     DATA_PRINTF("json_arrayagg(");
     PRINT_EXPR(expr->get_param_expr(0));
     // format json
-    if (OB_SUCC(ret)
+    if (OB_SUCC(ret) 
         && static_cast<ObConstRawExpr *>(expr->get_param_expr(1))->get_value().get_int() == 1) {
       DATA_PRINTF(" format json");
     }
@@ -1095,7 +1095,7 @@ int ObRawExprPrinter::print_ora_json_arrayagg(ObAggFunRawExpr *expr)
       }
     }
     // on null
-    if (OB_SUCC(ret)
+    if (OB_SUCC(ret) 
         && static_cast<ObConstRawExpr *>(expr->get_param_expr(2))->get_value().get_int() == 2) {
       DATA_PRINTF(" null on null");
     }
@@ -1106,7 +1106,7 @@ int ObRawExprPrinter::print_ora_json_arrayagg(ObAggFunRawExpr *expr)
       }
     }
     // strict
-    if (OB_SUCC(ret)
+    if (OB_SUCC(ret) 
         && static_cast<ObConstRawExpr *>(expr->get_param_expr(4))->get_value().get_int() == 1) {
       DATA_PRINTF(" strict");
     }
@@ -1588,7 +1588,7 @@ int ObRawExprPrinter::print_ora_json_objectagg(ObAggFunRawExpr *expr)
       }
     }
   }
-
+  
   if (OB_SUCC(ret)) {
     if (OB_FAIL(print_json_return_type(expr->get_param_expr(4)))) {
       LOG_WARN("fail to print cast_type", K(ret));
@@ -1755,7 +1755,7 @@ int ObRawExprPrinter::print_json_return_type(ObRawExpr *expr)
   if (OB_ISNULL(buf_) || OB_ISNULL(pos_) || OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt_ is NULL of buf_ is NULL or pos_ is NULL or expr is NULL", K(ret));
-  } else if (scale == 1) { // scale == 1 is default returning
+  } else if (scale == 1) { // scale == 1 is default returning 
   } else if (ObRawExpr::EXPR_CONST != expr->get_expr_class()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr class should be EXPR_CONST ", K(ret), K(expr->get_expr_class()));
@@ -1838,7 +1838,7 @@ int ObRawExprPrinter::print_json_mergepatch(ObSysFunRawExpr *expr)
 {
   INIT_SUCC(ret);
   DATA_PRINTF("JSON_MERGEPATCH(");
-
+  
   PRINT_EXPR(expr->get_param_expr(0));
   DATA_PRINTF(" ,");
   PRINT_EXPR(expr->get_param_expr(1));
@@ -2082,7 +2082,7 @@ int ObRawExprPrinter::print_json_value(ObSysFunRawExpr *expr)
             DATA_PRINTF(" null on empty");
           }
           break;
-
+        
         case JsnValueType::JSN_VALUE_IMPLICIT:
           break;
         case JsnValueType::JSN_VALUE_DEFAULT:
@@ -2439,7 +2439,7 @@ int ObRawExprPrinter::print_json_query(ObSysFunRawExpr *expr)
       }
     }
   }
-
+  
   if (OB_SUCC(ret)) {
     if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(11))->get_value().is_int()) {
       ret = OB_ERR_UNEXPECTED;
@@ -2494,7 +2494,7 @@ int ObRawExprPrinter::print_json_query(ObSysFunRawExpr *expr)
 int ObRawExprPrinter::print_json_exists(ObSysFunRawExpr *expr)
 {
   INIT_SUCC(ret);
-
+  
   uint32_t param_num = expr->get_param_count();
   if (param_num > 5) {
     uint32_t passing_end = param_num - 3;
@@ -2592,7 +2592,7 @@ int ObRawExprPrinter::print_is_json(ObSysFunRawExpr *expr)
         LOG_WARN("unexpected param value", K(ret), KPC(expr), K(is_json_type));
       }
     }
-
+    
     // lax or strict
     if (OB_SUCC(ret)) {
       if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(2))->get_value().is_int()) {
@@ -2662,9 +2662,9 @@ int ObRawExprPrinter::print_is_json(ObSysFunRawExpr *expr)
             LOG_WARN("invalid type value.", K(type));
             break;
         }
-      }
+      } 
     }
-
+    
   }
   return ret;
 }
@@ -2741,8 +2741,8 @@ int ObRawExprPrinter::print_json_expr(ObSysFunRawExpr *expr)
           PRINT_EXPR(expr->get_param_expr(1));
           if (OB_SUCC(ret)) {
             if (expr->get_param_expr(2)->get_expr_type() == T_NULL) {
-              // do nothing
-            } else if (OB_FAIL(print_json_return_type(expr->get_param_expr(2)))) {
+              // do nothing 
+            } else if (OB_FAIL(print_json_return_type(expr->get_param_expr(2)))) { 
               LOG_WARN("fail to print cast_type", K(ret));
             }
           }
@@ -2822,7 +2822,7 @@ int ObRawExprPrinter::print_json_expr(ObSysFunRawExpr *expr)
   return ret;
 }
 
-int ObRawExprPrinter::print_json_equal(ObSysFunRawExpr *expr)
+int ObRawExprPrinter::print_json_equal(ObSysFunRawExpr *expr) 
 {
   INIT_SUCC(ret);
   if (OB_UNLIKELY(expr->get_param_count() > 3) || OB_UNLIKELY(expr->get_param_count() < 2)) {
@@ -2859,7 +2859,7 @@ int ObRawExprPrinter::print_json_equal(ObSysFunRawExpr *expr)
         }
       }
     }
-    DATA_PRINTF(")");
+    DATA_PRINTF(")");   
   }
   return ret;
 }
@@ -3464,8 +3464,8 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         break;
       }
       case T_FUN_SYS_IS_JSON:
-      case T_FUN_SYS_JSON_VALUE:
-      case T_FUN_SYS_JSON_QUERY:
+      case T_FUN_SYS_JSON_VALUE: 
+      case T_FUN_SYS_JSON_QUERY: 
       case T_FUN_SYS_JSON_OBJECT:
       case T_FUN_SYS_JSON_EQUAL:
       case T_FUN_SYS_JSON_ARRAY:
@@ -3474,8 +3474,8 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         if (lib::is_mysql_mode() && (expr_type == T_FUN_SYS_JSON_ARRAY || expr_type == T_FUN_SYS_JSON_MERGE_PATCH)) {
           DATA_PRINTF("%.*s", LEN_AND_PTR(func_name));
           OZ(inner_print_fun_params(*expr));
-        } else if (lib::is_oracle_mode()
-                  ||  T_FUN_SYS_JSON_QUERY == expr_type
+        } else if (lib::is_oracle_mode() 
+                  ||  T_FUN_SYS_JSON_QUERY == expr_type 
                   || T_FUN_SYS_JSON_VALUE == expr_type) {
           if (OB_FAIL(print_json_expr(expr))) {
             LOG_WARN("fail to print json expr", K(ret), K(*expr));
@@ -3594,7 +3594,7 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
       }
       case T_FUN_SYS_ORA_DECODE: {
         //同一个函数 在Oracle下名为decode， 在MySQL下名为ora_decode
-        // for
+        // for 
         // 保证SQL反拼不会出错
         if (lib::is_oracle_mode()) {
           DATA_PRINTF("decode");
@@ -4610,7 +4610,7 @@ int ObRawExprPrinter::print_type(const ObRawExprResType &dst_type)
   ObConstRawExpr *type_expr = NULL;
   ObArenaAllocator allocator("PrintType");
   ObRawExprFactory expr_factory(allocator);
-
+  
 
   if (OB_FAIL(ObRawExprUtils::create_type_expr(expr_factory, type_expr,
                                                dst_type, /*avoid_zero_len*/true))) {
@@ -5160,7 +5160,7 @@ int ObRawExprPrinter::print_xml_element_expr(ObSysFunRawExpr *expr)
         int64_t cur_pos = *pos_;
         PRINT_EXPR(expr->get_param_expr(2));
         int64_t new_pos = *pos_;
-
+        
         if (OB_SUCC(ret) && format_type == 0) {
           if (buf_[cur_pos] == '\'') {
              buf_[cur_pos] = '"';
@@ -5369,7 +5369,7 @@ int ObRawExprPrinter::print_xml_attributes_expr(ObSysFunRawExpr *expr)
             DATA_PRINTF(" as evalname ");
             PRINT_EXPR(expr->get_param_expr(i + 1));
           } else if (!attr_key_obj.get_string().empty()) {
-            // While the result obtained during anti-spelling has been parsed,
+            // While the result obtained during anti-spelling has been parsed, 
             // so adding all double quotes can achieve the desired result
             DATA_PRINTF(" as \"%.*s\"", LEN_AND_PTR(attr_key_obj.get_string()));
           }

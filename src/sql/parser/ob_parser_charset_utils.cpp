@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #include "ob_parser_charset_utils.h"
 #include "lib/charset/ob_charset.h"
 
@@ -34,7 +34,7 @@ int obcharset_is_gb_charset_of_collation(ObCollationType collation_type, bool *i
          collation_type <= CS_TYPE_GB18030_2022_STROKE_CS)) {
         *is_gb = true;
     }
-    return ret;
+    return ret; 
 }
 
 int obcharset_is_single_byte_charset_of_collation(ObCollationType collation_type, bool *is_single_byte) {
@@ -64,7 +64,7 @@ int obcharset_is_single_byte_charset_of_collation(ObCollationType collation_type
         collation_type == CS_TYPE_SWE7_BIN) {
         *is_single_byte = true;
     }
-    return ret;
+    return ret; 
 }
 
 int obcharset_is_utf8_charset_of_collation(ObCollationType collation_type, bool *is_utf8) {

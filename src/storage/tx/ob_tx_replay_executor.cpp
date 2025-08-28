@@ -217,7 +217,7 @@ int ObTxReplayExecutor::replay_tx_log_(const ObTxLogType log_type)
   case ObTxLogType::TX_DIRECT_LOAD_INC_LOG: {
     ObTxDirectLoadIncLog::ReplayArg replay_arg;
     replay_arg.part_log_no_ = tx_part_log_no_;
-    replay_arg.ddl_log_handler_ptr_ = ls_->get_ddl_log_handler();
+    replay_arg.ddl_log_handler_ptr_ = ls_->get_ddl_log_handler(); 
     ObTxDirectLoadIncLog::TempRef temp_ref;
     ObTxDirectLoadIncLog::ConstructArg  construct_arg(temp_ref);
     ObTxCtxLogOperator<ObTxDirectLoadIncLog> dli_log_op(ctx_, &log_block_, &construct_arg, replay_arg, log_ts_ns_, lsn_);
@@ -763,7 +763,7 @@ int ObTxReplayExecutor::replay_one_row_in_memtable_(ObMutatorRowHeader &row_head
       break;
     }
     case MutatorType::MUTATOR_ROW_EXT_INFO: {
-      TRANS_LOG(DEBUG, "[Replay Tx] ignore replay row ext info", K(row_head));
+      TRANS_LOG(DEBUG, "[Replay Tx] ignore replay row ext info", K(row_head));      
       break;
     }
     default: {

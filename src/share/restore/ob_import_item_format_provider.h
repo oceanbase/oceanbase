@@ -40,7 +40,7 @@ class ObIImportItemHexFormatProvider
 {
 public:
   virtual int64_t get_hex_format_serialize_size() const = 0;
-
+  
   virtual int hex_format_serialize(char *buf, const int64_t buf_len, int64_t &pos) const = 0;
 
   virtual int hex_format_deserialize(const char *buf, const int64_t data_len, int64_t &pos) = 0;

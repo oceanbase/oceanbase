@@ -158,7 +158,7 @@ void ObMViewTrimMLogTask::runTimerTask()
   ObMViewUtils::release_inner_session(free_session_ctx, session);
 }
 
-int ObMViewTrimMLogTask::trim_mlog_impl(const uint64_t mlog_id,
+int ObMViewTrimMLogTask::trim_mlog_impl(const uint64_t mlog_id, 
                                         ObSchemaGetterGuard &schema_guard,
                                         common::ObISQLClient *sql_proxy,
                                         sql::ObSQLSessionInfo *session)
@@ -274,7 +274,7 @@ int ObMViewTrimMLogTask::replace_mlog(const ObIArray<uint64_t> &relevent_mviews,
       LOG_WARN("failed to get referenced columns", KR(ret), K(tenant_id_), K(mview_id));
     }
   }
-  // iterate through all columns in mlog, if any column is not referenced by any mv, then replace
+  // iterate through all columns in mlog, if any column is not referenced by any mv, then replace 
   // the mlog to trim unused columns
   if (OB_SUCC(ret)) {
     if (OB_FAIL(mlog_schema->get_column_ids(orig_column_ids))) {
@@ -359,7 +359,7 @@ int ObMViewTrimMLogTask::get_relevent_mviews(common::ObISQLClient *sql_proxy,
   int ret = OB_SUCCESS;
   ObSEArray<ObDependencyInfo, 16> dependency_infos;
 
-  if (OB_ISNULL(sql_proxy)) {
+  if (OB_ISNULL(sql_proxy)) { 
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("sql_proxy is null", KR(ret));
   } else if (OB_FAIL(ObDependencyInfo::collect_dep_infos(tenant_id_, base_table_id, *sql_proxy, dependency_infos))) {

@@ -165,9 +165,9 @@ class OrcMemoryPool : public ::orc::MemoryPool
 
   // class ObOrcRandomAccess : public :orc::InputStream {
   //   public:
-  //     ObOrcRandomAccess(oceanbase::sql::ObExternalDataAccessDriver &file_reader, const char* file_name, orc::MemoryPool *pool)
+  //     ObOrcRandomAccess(oceanbase::sql::ObExternalDataAccessDriver &file_reader, const char* file_name, orc::MemoryPool *pool) 
   //     : file_reader_(file_reader), file_name_(file_name), pool_(pool) {
-
+      
   //     }
 
   //     uint64_t getLength() const override {
@@ -343,7 +343,7 @@ void read_orc_file() {
         // }
       }
       std::cout<<"\n";
-
+      
     }
   }
 }
@@ -480,8 +480,8 @@ void generate_orc_file(const bool output_null) {
   // ->addStructField("name", orc::createPrimitiveType(orc::TypeKind::Varchar))
   // ->addStructField("comment", orc::createPrimitiveType(orc::TypeKind::String));
   // std::unique_ptr<Type> schema(Type::buildTypeFromString("
-  // struct<name:varchar(100), age:int,
-  // sex:char(1), comment:string, in_date:date, job_time:timestamp,
+  // struct<name:varchar(100), age:int, 
+  // sex:char(1), comment:string, in_date:date, job_time:timestamp, 
   // language:binary, has_house:boolean, money:bigint,
   // height:decimal(5, 2), weight:double, width:float>"));
   // std::unique_ptr<orc::Type> sub_schema = orc::createStructType();

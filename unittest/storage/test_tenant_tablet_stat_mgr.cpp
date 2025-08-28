@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #include <gmock/gmock.h>
 
 #define USING_LOG_PREFIX STORAGE
@@ -454,7 +454,7 @@ TEST_F(TestTenantTabletStatMgr, bacth_clear_tablet_stat)
   int64_t report_num = 100;
   batch_report_stat(report_num);
   stat_mgr_->process_stats();
-
+  
   ObLSID ls_id(1);
   ObSEArray<ObTabletID, 100> tablet_ids;
   for (int64_t i = 0; i < report_num; i++) {

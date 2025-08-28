@@ -26,7 +26,7 @@ int ObResourceMappingRuleManager::init()
   int ret = OB_SUCCESS;
   int rule_bucket_size = 4096;
   int group_bucket_size = 512;
-  if (user_rule_map_.created() || group_id_name_map_.created() ||
+  if (user_rule_map_.created() || group_id_name_map_.created() || 
       function_rule_map_.created() || group_name_id_map_.created()) {
     ret = OB_INIT_TWICE;
     LOG_WARN("mapping rule manager should not init multiple times", K(ret));
@@ -71,7 +71,7 @@ int ObResourceMappingRuleManager::refresh_group_mapping_rule(const uint64_t tena
       }
       if (OB_SUCC(ret)) {
         if (OB_FAIL(group_name_id_map_.set_refactored(
-                          share::ObTenantGroupKey(rule.tenant_id_, rule.group_name_),
+                          share::ObTenantGroupKey(rule.tenant_id_, rule.group_name_), 
                           rule.group_id_,
                           1 /* overwrite */))) {
           LOG_WARN("fail set group name mapping to group id", K(rule), K(ret));
@@ -134,7 +134,7 @@ int ObResourceMappingRuleManager::clear_deleted_group(
             } else if (OB_FAIL(
                           group_name_id_map_.erase_refactored(share::ObTenantGroupKey(tenant_id, deleted_group_name)))) {
               LOG_WARN("fail erase group name mapping from group id", K(deleted_group_name), K(ret));
-            }
+            }         
           }
         }
       }

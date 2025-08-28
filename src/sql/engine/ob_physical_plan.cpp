@@ -1427,7 +1427,7 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
       }
     }
     if (OB_SUCC(ret)) {
-      // Update last_active_time_ last, because last_active_time_ is used to
+      // Update last_active_time_ last, because last_active_time_ is used to 
       // indicate whether the cache stat has been updated.
       stat_.last_active_time_ = stat_.gen_time_;
     }

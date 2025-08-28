@@ -90,7 +90,7 @@ private:
   static const uint64_t DEFAULT_LOCK_ARR_SIZE = 2000;
   static const uint64_t QUERY_SESSION_MAX_SIZE = 1000;
   static const uint64_t MIN_QUERY_SESSION_CLEAN_DELAY = 1 * 1000 * 1000;  // 1s
-
+  
 
 private:
   common::ObFIFOAllocator allocator_;

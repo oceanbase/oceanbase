@@ -27,7 +27,7 @@ public:
   bool prepare(ObGeometry *geo) { return (OB_NOT_NULL(geo)); }
   int visit(ObIWkbPoint *geo) { return check_empty(geo); }
   int visit(ObPoint *geo) { return check_empty(geo); }
-  int visit(ObGeometry *geo) { UNUSED(geo); return OB_SUCCESS; }
+  int visit(ObGeometry *geo) { UNUSED(geo); return OB_SUCCESS; } 
   // stop when found first non-empty point
   bool is_end(ObGeometry *geo) { UNUSED(geo); return (is_empty_ == false); }
   bool get_result() { return is_empty_; };
@@ -39,7 +39,7 @@ private:
 
 private:
   bool is_empty_;
-
+  
   DISALLOW_COPY_AND_ASSIGN(ObGeoCheckEmptyVisitor);
 };
 

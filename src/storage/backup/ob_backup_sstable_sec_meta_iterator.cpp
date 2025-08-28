@@ -138,7 +138,7 @@ int ObBackupSSTableSecMetaIterator::inner_init_(
       LOG_WARN("failed to init sstable sec meta iter", K(ret), K(tablet_id));
     } else {
       is_inited_ = true;
-    }
+    } 
   }
   return ret;
 }
@@ -239,9 +239,9 @@ int ObBackupSSTableSecMetaIterator::read_backup_sstable_metas_(
     common::ObIArray<ObBackupSSTableMeta> &sstable_meta_array)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObLSBackupRestoreUtil::read_sstable_metas(backup_path.get_obstr(),
-                                                        backup_dest.get_storage_info(),
-                                                        mod,
+  if (OB_FAIL(ObLSBackupRestoreUtil::read_sstable_metas(backup_path.get_obstr(), 
+                                                        backup_dest.get_storage_info(), 
+                                                        mod, 
                                                         meta_index,
                                                         &OB_BACKUP_META_CACHE,
                                                         sstable_meta_array))) {
@@ -288,7 +288,7 @@ int ObBackupSSTableSecMetaIterator::build_create_sstable_param_(
     if (OB_FAIL(build_create_empty_sstable_param_(backup_sstable_meta, param))) {
       LOG_WARN("failed to build create empty sstable param", K(ret));
     }
-  }
+  } 
   return ret;
 }
 

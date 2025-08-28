@@ -202,7 +202,7 @@ int ObPxSqcAsyncProxy::wait_all() {
           if (cb_result.rc_ == OB_ERR_INSUFFICIENT_PX_WORKER) {
             // 没有获得足够的px worker，不需要再做内部SQC的重试，防止死锁
             // SQC如果没有获得足够的worker，外层直接进行query级别的重试
-            //
+            // 
             LOG_INFO("can't get enough worker resource, and not retry",
                 K(cb_result.rc_), K(sqcs_.at(idx)));
           }

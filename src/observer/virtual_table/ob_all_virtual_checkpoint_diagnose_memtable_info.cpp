@@ -82,8 +82,8 @@ int ObAllVirtualCheckpointDiagnoseMemtableInfo::get_primary_key_()
   return ret;
 }
 
-int GenerateMemtableRow::operator()(const storage::checkpoint::ObTraceInfo &trace_info,
-    const ObCheckpointDiagnoseKey &key,
+int GenerateMemtableRow::operator()(const storage::checkpoint::ObTraceInfo &trace_info, 
+    const ObCheckpointDiagnoseKey &key, 
     const ObMemtableDiagnoseInfo &memtable_diagnose_info) const
 {
   int ret = OB_SUCCESS;
@@ -237,8 +237,8 @@ int ObAllVirtualCheckpointDiagnoseMemtableInfo::inner_get_next_row(common::ObNew
   return ret;
 }
 
-int GenerateCheckpointUnitRow::operator()(const storage::checkpoint::ObTraceInfo &trace_info,
-    const storage::checkpoint::ObCheckpointDiagnoseKey &key,
+int GenerateCheckpointUnitRow::operator()(const storage::checkpoint::ObTraceInfo &trace_info, 
+    const storage::checkpoint::ObCheckpointDiagnoseKey &key, 
     const storage::checkpoint::ObCheckpointUnitDiagnoseInfo &checkpoint_unit_diagnose_info) const
 {
   int ret = OB_SUCCESS;

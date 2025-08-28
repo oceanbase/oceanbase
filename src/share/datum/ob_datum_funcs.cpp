@@ -213,7 +213,7 @@ ObExprBasicFuncs* ObDatumFuncs::get_basic_func(const ObObjType type,
     } else if (ob_is_geometry(type)) {
       res = &EXPR_BASIC_GEO_FUNCS[has_lob_locator];
     } else if (ob_is_user_defined_sql_type(type)) {
-      res = &EXPR_BASIC_UDT_FUNCS[0];
+      res = &EXPR_BASIC_UDT_FUNCS[0]; 
     } else if (ob_is_collection_sql_type(type)) {
       res = &EXPR_BASIC_COLLECTION_FUNCS[has_lob_locator];
     } else if (ob_is_roaringbitmap(type)) {
@@ -455,7 +455,7 @@ bool split_basic_func_for_ser(void)
   for (int64_t i = 0; i < sizeof(EXPR_BASIC_ROARINGBITMAP_FUNCS)/sizeof(ObExprBasicFuncs); i++) {
     EXPR_BASIC_ROARINGBITMAP_FUNCS_PART1[i].from(EXPR_BASIC_ROARINGBITMAP_FUNCS[i]);
     EXPR_BASIC_ROARINGBITMAP_FUNCS_PART2[i].from(EXPR_BASIC_ROARINGBITMAP_FUNCS[i]);
-  }
+  } 
   return true;
 }
 bool g_split_basic_func_for_ser = split_basic_func_for_ser();

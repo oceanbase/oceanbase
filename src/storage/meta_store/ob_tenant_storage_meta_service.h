@@ -68,10 +68,10 @@ public:
 
 #ifdef OB_BUILD_SHARED_STORAGE
   int get_private_blocks_for_tablet(
-      const share::ObLSID &id,
-      const int64_t ls_epoch,
-      const ObTabletID &tablet_id,
-      const int64_t tablet_version,
+      const share::ObLSID &id, 
+      const int64_t ls_epoch, 
+      const ObTabletID &tablet_id, 
+      const int64_t tablet_version, 
       const int64_t tablet_transfer_seq,
       ObIArray<blocksstable::MacroBlockId> &block_ids);
   int get_shared_blocks_for_tablet(
@@ -148,7 +148,7 @@ private:
   ObTenantStorageMetaReplayer replayer_;
   ObSharedObjectReaderWriter shared_object_rwriter_;
   ObSharedObjectReaderWriter shared_object_raw_rwriter_;
-
+  
 };
 
 #define TENANT_STORAGE_META_PERSISTER (MTL(ObTenantStorageMetaService*)->get_persister())

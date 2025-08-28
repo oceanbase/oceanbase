@@ -1678,7 +1678,7 @@ int ObCSMicroBlockTransformHelper::build_semistruct_column_decoder_ctx_(
       block_data_.get_buf() + transform_desc_.column_meta_pos_arr_[col_idx].offset_,
       ctx.semistruct_header_->header_len_, pos))) {
     LOG_WARN("deserialize semistruct meta fail", K(ret), K(col_idx), K(col_header));
-  } else {
+  } else { 
     ctx.sub_col_headers_ = semistrcut_meta_desc.sub_col_headers_;
     ctx.sub_schema_data_ptr_ = semistrcut_meta_desc.sub_schema_data_ptr_;
     const int32_t col_cnt =  header_->column_count_;

@@ -31,8 +31,8 @@ ObExprSTSRID::ObExprSTSRID(ObIAllocator &alloc)
 ObExprSTSRID::ObExprSTSRID(ObIAllocator &alloc,
                            ObExprOperatorType type,
                            const char *name,
-                           int32_t param_num,
-                           int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension)
+                           int32_t param_num, 
+                           int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension) 
 {
 }
 
@@ -70,7 +70,7 @@ int ObExprSTSRID::calc_result_typeN(ObExprResType& type,
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -100,7 +100,7 @@ int ObExprSTSRID::eval_st_srid_common(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
   // get srid
   if (num_args > 1) {
     if (expr.args_[1]->is_boolean_ && T_FUN_SYS_PRIV_ST_SETSRID == expr.type_) {
-      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;   
       LOG_WARN("invalid type", K(ret));
     } else if (OB_FAIL(tmp_allocator.eval_arg(expr.args_[1], ctx, datum))) {
       LOG_WARN("failed to eval second argument", K(ret));
@@ -139,7 +139,7 @@ int ObExprSTSRID::eval_st_srid_common(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
           LOG_WARN("fail to get srs item", K(ret), K(wkb));
           if (OB_ERR_SRS_NOT_FOUND == ret) {
             ret = OB_SUCCESS; // adapt mysql, treat unknown srid as cartesian
-          }
+          } 
         }
         if (OB_FAIL(ret)) {
           // do nothing
@@ -157,7 +157,7 @@ int ObExprSTSRID::eval_st_srid_common(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
         } else if (OB_FAIL(ObGeoExprUtils::geo_to_wkb(*geo, expr, ctx, srs, res_wkb))) {
           LOG_WARN("failed to write geometry to wkb", K(ret));
         }
-      }
+      } 
     }
   }
 

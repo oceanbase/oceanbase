@@ -369,7 +369,7 @@ private:
 #ifdef OB_BUILD_SHARED_STORAGE
   int warmup_index_block(const ObDDLMacroBlock &macro_block);
 #endif
-
+  
   int create_ddl_memtable(ObTablet &tablet, const ObITable::TableKey &table_key, ObDDLMemtable *&ddl_memtable);
 private:
   static const int64_t TOTAL_LIMIT = 10 * 1024 * 1024 * 1024L;
@@ -388,7 +388,7 @@ private:
   transaction::ObTxSEQ seq_no_; // for incremental direct load only
   int64_t data_schema_version_;
   int64_t column_count_;
-
+  
   // freeze related
   share::SCN min_scn_; // the min log ts of macro blocks
   share::SCN max_scn_; // the max log ts of macro blocks

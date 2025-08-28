@@ -132,7 +132,7 @@ public:
     inline int64_t begin() const { return block_id_; }
     inline int64_t end() const { return block_id_ + cnt_; }
     inline int64_t payload_size() const { return raw_size_ - sizeof(Block); }
-    // We put the buffer at the end of the block. This is only used in dtl scenarios
+    // We put the buffer at the end of the block. This is only used in dtl scenarios 
     // to support the self-explanatory ability of the block.
     inline static char *buffer_position(void *mem, const int64_t size)
     {
@@ -284,7 +284,7 @@ public:
                     try_free_list_(NULL), blk_holder_ptr_(NULL), read_io_handle_(NULL),
                     is_async_(true), aio_buf_idx_(0), aio_blk_(nullptr) {}
     virtual ~BlockReader() {
-      reset();
+      reset(); 
     }
 
     int init(ObTempBlockStore *store, const bool async = true);

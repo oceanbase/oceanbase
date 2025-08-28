@@ -107,7 +107,7 @@ int ObExprToNumber::calc_tonumber_expr(const ObExpr &expr, ObEvalCtx &ctx,
   } else if (OB_UNLIKELY(expr.arg_cnt_ == 2 && fmt->get_string().length() >= MAX_FMT_STR_LEN)) {
     ret = OB_ERR_INVALID_NUMBER_FORMAT_MODEL;
   } else if (ori->is_null()) {
-    // bug here:
+    // bug here: 
     res_datum.set_null();
   } else {
     const ObObjType &ori_type = expr.args_[0]->datum_meta_.type_;

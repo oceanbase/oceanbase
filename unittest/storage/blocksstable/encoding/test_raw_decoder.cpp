@@ -1452,7 +1452,7 @@ TEST_F(TestRawDecoder, test_range_truncate_filter_pushdown)
     range_truncate_info1.truncate_part_.part_type_ = ObTruncatePartition::RANGE_PART;
     range_truncate_info1.truncate_part_.part_op_ = ObTruncatePartition::INCLUDE;
     int64_t col_idxs[1] = {i};
-
+    
     ObObj range_begin_obj, range_end_obj;
     setup_obj(range_begin_obj, i, seed1);
     setup_obj(range_end_obj, i, seed3);
@@ -1564,7 +1564,7 @@ TEST_F(TestRawDecoder, test_list_truncate_filter_pushdown)
     list_truncate_info.truncate_part_.part_op_ = ObTruncatePartition::INCLUDE;
     ASSERT_EQ(OB_SUCCESS, list_truncate_info.truncate_part_.list_row_values_.init(allocator_, list_row_values1.get_values()));
     ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::mock_part_key_idxs(allocator_, 1, col_idxs, list_truncate_info.truncate_part_));
-
+    
     ObBitmap result_bitmap(allocator_);
     result_bitmap.init(ROW_CNT);
     ASSERT_EQ(0, result_bitmap.popcnt());

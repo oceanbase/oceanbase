@@ -184,7 +184,7 @@ int ObHashUnionVecOp::inner_get_next_batch(const int64_t max_row_cnt)
       brs_.skip_->deep_copy(*output_vec, read_rows);
     }
   }
-
+  
 
   if (OB_ITER_END == ret) {
     ret = OB_SUCCESS;
@@ -196,3 +196,4 @@ int ObHashUnionVecOp::inner_get_next_batch(const int64_t max_row_cnt)
 
 } // end namespace sql
 } // end namespace oceanbase
+

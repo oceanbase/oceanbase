@@ -50,15 +50,15 @@ public:
                                            ObRowkey &table_rowkey,
                                            SeRowkeyDistCtx *rowkey_dist_ctx,
                                            bool &is_dist);
-
+  
   static int create_rowkey_check_hashset(int64_t estimate_row,
                                            ObExecContext *root_ctx,
                                            SeRowkeyDistCtx *&rowkey_dist_ctx);
-
-  static int check_table_cycle(const DASTableIdList* parent_table_set,
+  
+  static int check_table_cycle(const DASTableIdList* parent_table_set, 
                                const uint64_t table_id, bool &exist);
   static int delete_table_id_from_parent_table_set(ObDMLRtCtx &dml_rtctx, const ObDMLBaseCtDef &dml_ctdef);
-  static int check_lob_column_changed(ObEvalCtx &eval_ctx,
+  static int check_lob_column_changed(ObEvalCtx &eval_ctx, 
               const ObExpr& old_expr, ObDatum& old_datum,
               const ObExpr& new_expr, ObDatum& new_datum,
               int64_t& result);

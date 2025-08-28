@@ -16,7 +16,7 @@
 #include "observer/ob_sql_client_decorator.h"
 #include "observer/ob_server.h"
 #include "share/resource_manager/ob_resource_manager_proxy.h"
-#include "share/resource_manager/ob_resource_manager.h"
+#include "share/resource_manager/ob_resource_manager.h" 
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::sqlclient;
@@ -178,7 +178,7 @@ int ObResourceManagerProxy::allocate_consumer_group_id(
     if (OB_FAIL(sql.assign_fmt(
                 "SELECT /* ALLOC_MAX_GROUP_ID */ COALESCE(MAX(CONSUMER_GROUP_ID) + 1, %lu) AS NEXT_GROUP_ID FROM %s "
                 "WHERE TENANT_ID = %ld",
-                USER_RESOURCE_GROUP_START_ID,
+                USER_RESOURCE_GROUP_START_ID, 
                 tname, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)))) {
       LOG_WARN("fail format sql", K(ret));
     } else if (OB_FAIL(sql_client_retry_weak.read(res, tenant_id, sql.ptr()))) {
@@ -313,7 +313,7 @@ int ObResourceManagerProxy::delete_consumer_group(
         trans.reset_last_error();
         LOG_WARN("fail to execute sql", K(sql), K(ret));
       }
-    }
+    }    
   }
   return ret;
 }
@@ -414,7 +414,7 @@ int ObResourceManagerProxy::create_plan_directive(
         SQL_COL_APPEND_VALUE(sql, values, v, "UTILIZATION_LIMIT", "%ld");
       }
       uint64_t tenant_data_version = 0;
-      ObSEArray<ObPlanDirective, 8> directives;
+      ObSEArray<ObPlanDirective, 8> directives; 
       if (OB_FAIL(ret)) {
         // do nothing
       } else if (OB_FAIL(get_all_plan_directives(tenant_id, plan, directives))) {
@@ -461,14 +461,14 @@ int ObResourceManagerProxy::create_plan_directive(
           if (OB_FAIL(get_percentage("MAX_NET_BANDWIDTH", max_net_bandwidth, v))) {
             LOG_WARN("fail get max net bandwidth", K(ret));
           } else {
-            SQL_COL_APPEND_VALUE(sql, values, v, "MAX_NET_BANDWIDTH", "%ld");
+            SQL_COL_APPEND_VALUE(sql, values, v, "MAX_NET_BANDWIDTH", "%ld"); 
           }
         }
         if (OB_SUCC(ret)) {
           if (OB_FAIL(get_percentage("NET_BANDWIDTH_WEIGHT", net_bandwidth_weight, v))) {
             LOG_WARN("fail get net bandwidth weight", K(ret));
           } else {
-            SQL_COL_APPEND_VALUE(sql, values, v, "NET_BANDWIDTH_WEIGHT", "%ld");
+            SQL_COL_APPEND_VALUE(sql, values, v, "NET_BANDWIDTH_WEIGHT", "%ld"); 
           }
         }
       }
@@ -799,11 +799,11 @@ int ObResourceManagerProxy::get_percentage(const char *name, const ObObj &obj, i
 }
 
 int ObResourceManagerProxy::check_iops_validity(
-    const uint64_t tenant_id,
+    const uint64_t tenant_id, 
     const common::ObString &plan_name,
     const common::ObString &group,
-    const int64_t iops_minimum,
-    const int64_t iops_maximum,
+    const int64_t iops_minimum, 
+    const int64_t iops_maximum, 
     bool &valid,
     ObIArray<ObPlanDirective> &directives)
 {
@@ -851,7 +851,7 @@ int ObResourceManagerProxy::check_iops_validity(
           } else {
             ObIOBenchResult item;
             ObString mode_string;
-            EXTRACT_INT_FIELD_MYSQL(*result, "iops", iops_16k, int64_t);
+            EXTRACT_INT_FIELD_MYSQL(*result, "iops", iops_16k, int64_t);            
           }
         }
       }
@@ -888,7 +888,7 @@ int ObResourceManagerProxy::check_iops_validity(
         } else if ((0 == group.compare(cur_directive.group_name_.get_value()))) {
           //skip cur group
         } else {
-          total_min += cur_directive.min_iops_;
+          total_min += cur_directive.min_iops_;      
         }
       }
       if(OB_SUCC(ret)) {
@@ -935,7 +935,7 @@ int ObResourceManagerProxy::get_user_mapping_info(
                     "WHERE a.`value` = b.user_name "
                     "AND a.TENANT_ID = %ld AND b.tenant_id = %ld "
                     "AND a.attribute = 'USER' AND a.`value` = '%.*s'",
-                    t_a_res_name, t_b_user_name,
+                    t_a_res_name, t_b_user_name, 
                     sql_tenant_id, sql_tenant_id, user.length(), user.ptr()))) {
           LOG_WARN("fail format sql", K(ret));
         } else if (OB_FAIL(sql_client_retry_weak.read(res, tenant_id, sql.ptr()))) {
@@ -1215,7 +1215,7 @@ int ObResourceManagerProxy::get_all_plan_directives(
             EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(*result, group_or_subplan, directive);
             EXTRACT_INT_FIELD_TO_CLASS_MYSQL(*result, mgmt_p1, directive, int64_t);
             EXTRACT_INT_FIELD_TO_CLASS_MYSQL(*result, utilization_limit, directive, int64_t);
-            bool skip_null_error = false;
+            bool skip_null_error = false;  
             bool skip_column_error = true;
             EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "min_iops", directive.min_iops_, int64_t, skip_null_error, skip_column_error, 0);
             EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "max_iops", directive.max_iops_, int64_t, skip_null_error, skip_column_error, 100);
@@ -1237,7 +1237,7 @@ int ObResourceManagerProxy::get_all_plan_directives(
           } else {
             LOG_WARN("fail get next row", K(ret), K(tname), K(tenant_id));
           }
-        }
+        }          
       }
     }
   }
@@ -1304,7 +1304,7 @@ int ObResourceManagerProxy::replace_user_mapping_rule(ObMySQLTransaction &trans,
   uint64_t user_id = 0;
   if (OB_SUCC(ret)) {
     // if user not exists, do nothing, do not throw error
-    //
+    // 
     if (OB_FAIL(check_if_user_exist(tenant_id,
                                     value,
                                     user_exist))) {

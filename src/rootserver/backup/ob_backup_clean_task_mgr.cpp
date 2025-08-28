@@ -397,7 +397,7 @@ int ObBackupCleanTaskMgr::persist_ls_tasks_()
         LOG_WARN("failed to check leader", K(ret));
       } else if (OB_FAIL(ObBackupCleanLSTaskOperator::insert_ls_task(trans, new_ls_attr))) {
         LOG_WARN("failed to insert backup delete complement log task", K(ret), K(new_ls_attr));
-      }
+      } 
     }
 
     if (OB_FAIL(ret)) {
@@ -707,7 +707,7 @@ int ObBackupCleanTaskMgr::delete_major_compaction_mview_dep_tablet_list_()
     LOG_WARN("failed to get major compaction mview dep tablet list path", K(ret));
   }  else if (OB_FAIL(share::ObBackupCleanUtil::delete_backup_file(path, backup_dest_.get_storage_info()))) {
     LOG_WARN("failed to delete backup file", K(ret), K(task_attr_), K(path));
-  }
+  } 
   return ret;
 }
 
@@ -737,7 +737,7 @@ int ObBackupCleanTaskMgr::delete_major_data_info_dir_()
   if (OB_FAIL(delete_data_info_dir_(backup_data_type, max_turn_id))) {
     LOG_WARN("failed to delete major data info dirs", K(ret), K(max_turn_id));
   }
-  return ret;
+  return ret; 
 }
 
 // file:///obbackup/backup_set_1_full/infos/minor_data_info_turn_X/
@@ -750,7 +750,7 @@ int ObBackupCleanTaskMgr::delete_minor_data_info_dir_()
   if (OB_FAIL(delete_data_info_dir_(backup_data_type, max_turn_id))) {
     LOG_WARN("failed to delete minor data info dirs", K(ret), K(max_turn_id));
   }
-  return ret;
+  return ret; 
 }
 
 // file:///obbackup/backup_set_1_full/infos/user_data_info_turn_X/
@@ -763,7 +763,7 @@ int ObBackupCleanTaskMgr::delete_user_data_info_dir_()
   if (OB_FAIL(delete_data_info_dir_(backup_data_type, max_turn_id))) {
     LOG_WARN("failed to delete user data info dirs", K(ret), K(max_turn_id));
   }
-  return ret;
+  return ret; 
 }
 
 int ObBackupCleanTaskMgr::delete_data_info_dir_(const ObBackupDataType &backup_data_type, int64_t max_turn_id)
@@ -792,15 +792,15 @@ int ObBackupCleanTaskMgr::delete_table_list_dir_()
 {
   int ret = OB_SUCCESS;
   ObBackupPath path;
-  ObBackupSetDesc desc;
+  ObBackupSetDesc desc; 
   desc.backup_set_id_ = backup_set_info_.backup_set_id_;
   desc.backup_type_ = backup_set_info_.backup_type_;
   if (OB_FAIL(ObBackupPathUtil::get_table_list_dir_path(backup_dest_, desc, path))) {
     LOG_WARN("failed to get table list dir path", K(ret));
   } else if (OB_FAIL(share::ObBackupCleanUtil::delete_backup_dir_files(path, backup_dest_.get_storage_info()))) {
     LOG_WARN("failed to delete backup file", K(ret), K(task_attr_), K(path));
-  }
-  return ret;
+  } 
+  return ret; 
 }
 
 // file:///obbackup/backup_set_1_full/single_backup_set_info.obbak
@@ -1015,10 +1015,10 @@ int ObBackupCleanTaskMgr::delete_tenant_archive_piece_infos()
   ObBackupPath path;
   if (OB_FAIL(ObArchivePathUtil::get_tenant_archive_piece_infos_file_path(backup_dest_, backup_piece_info_.key_.dest_id_,
       backup_piece_info_.key_.round_id_, backup_piece_info_.key_.piece_id_, path))) {
-    LOG_WARN("failed to get tenant archive piece infos path", K(ret));
+    LOG_WARN("failed to get tenant archive piece infos path", K(ret)); 
   } else if (OB_FAIL(share::ObBackupCleanUtil::delete_backup_file(path, backup_dest_.get_storage_info()))) {
     LOG_WARN("failed to delete backup file", K(ret), K(task_attr_), K(path));
-  }
+  } 
   return ret;
 }
 
@@ -1073,13 +1073,13 @@ int ObBackupCleanTaskMgr::delete_backup_piece_meta_info_files_()
   ObBackupPath path;
   if (!backup_piece_info_.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("backup piece info is valid", K(ret));
+    LOG_WARN("backup piece info is valid", K(ret)); 
   } else if (OB_FAIL(delete_single_piece_info_())) {
-    LOG_WARN("failed to delete single piece info file", K(ret), K(backup_piece_info_));
+    LOG_WARN("failed to delete single piece info file", K(ret), K(backup_piece_info_)); 
   } else if (OB_FAIL(delete_piece_info_file_())) {
     LOG_WARN("failed to delete info file", K(ret), K(backup_piece_info_));
   } else if (OB_FAIL(delete_tenant_archive_piece_infos())) {
-    LOG_WARN("failed to delete info file", K(ret), K(backup_piece_info_));
+    LOG_WARN("failed to delete info file", K(ret), K(backup_piece_info_)); 
   } else if (OB_FAIL(delete_piece_inner_placeholder_file_())) {
     LOG_WARN("failed to delete piece inner placeholder file", K(ret), K(backup_piece_info_));
   } else if (OB_FAIL(delete_piece_checkpoint_file_())) {

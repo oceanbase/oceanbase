@@ -334,7 +334,7 @@ int ObWkbToJsonBinVisitor::appendLine(const T_BIN *line, ObJsonBin &bin, uint64_
   } else {
     val_idx++;
   }
-
+  
   return ret;
 }
 
@@ -509,7 +509,7 @@ template<typename T_IPOINT,
           typename T_ILINE,
           typename T_IMULTILINE,
           typename T_IPOLY,
-          typename T_IMULTIPOLY,
+          typename T_IMULTIPOLY, 
           typename T_ICOLLC,
           typename T_POINT,
           typename T_MULTIPOINT,
@@ -773,7 +773,7 @@ int ObWkbToJsonBinVisitor::appendJsonCommon(
   }
   // append obj meta
   if (OB_FAIL(ret)) {
-  } else if (!is_appendCrs && srid_ != 0
+  } else if (!is_appendCrs && srid_ != 0 
         && ((flag_ & ObGeoJsonFormat::SHORT_SRID) || (flag_ & ObGeoJsonFormat::LONG_SRID))) {
     key_count++;
   }
@@ -785,7 +785,7 @@ int ObWkbToJsonBinVisitor::appendJsonCommon(
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(appendMeta(bin, start_pos, 0, key_count))) {
     LOG_WARN("fail to appendMeta", K(ret), K(start_pos), K(key_count));
-  } else if (!is_appendCrs && srid_ != 0
+  } else if (!is_appendCrs && srid_ != 0 
                 && ((flag_ & ObGeoJsonFormat::SHORT_SRID) || (flag_ & ObGeoJsonFormat::LONG_SRID))
                 && OB_FAIL(appendObjKey(key_name_table[KeyNameMap::crs], bin, start_pos, key_idx))) {
     LOG_WARN("fail to appendObjKey", K(ret), K(key_name_table[KeyNameMap::crs]), K(start_pos), K(key_idx));
@@ -862,7 +862,7 @@ int ObWkbToJsonBinVisitor::fillHeaderSize(ObJsonBin &bin, uint64_t start_pos)
   INIT_SUCC(ret);
   uint64_t real_obj_size = static_cast<uint64_t>(json_buf_.length() - start_pos);
   if (OB_FAIL(bin.set_obj_size(real_obj_size))) {
-    LOG_WARN("fail to set_obj_size", K(ret), K(real_obj_size));
+    LOG_WARN("fail to set_obj_size", K(ret), K(real_obj_size)); 
   }
   return ret;
 }
@@ -943,7 +943,7 @@ int ObWkbToJsonBinVisitor::appendCrsProp(
     } else if (OB_FAIL(prop_value_buf.get_result_string(prop_value))) {
       LOG_WARN("fail to get prop_value stringd", K(ret));
     }
-
+  
     // append object
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(appendMeta(prop_bin, prop_pos, 0, 1, 0))) {
@@ -1051,7 +1051,7 @@ int ObWkbToJsonBinVisitor::appendDouble(double value, ObJsonBin &bin, uint64_t s
   uint8_t value_type = static_cast<uint8_t>(ObJsonNodeType::J_DOUBLE);
   if (OB_FAIL(bin.set_value_entry(val_idx, value_offset, value_type, false))) {
     LOG_WARN("fail to set value entry", K(ret), K(value_offset), K(value_type));
-  } else if (max_dec_digits_ < INT_MAX32
+  } else if (max_dec_digits_ < INT_MAX32 
               && OB_FALSE_IT(dec_value = ObGeoTypeUtil::round_double(value, max_dec_digits_, false))) {
   } else if (OB_FAIL(ObJsonBinSerializer::serialize_json_double(dec_value, json_buf_))) {
     LOG_WARN("failed to append double to json_buf_", K(ret), K(dec_value), K(value));
@@ -1082,8 +1082,8 @@ int ObWkbToJsonBinVisitor::appendArrayHeader(
   return ret;
 }
 
-void ObWkbToJsonBinVisitor::reset()
-{
+void ObWkbToJsonBinVisitor::reset() 
+{ 
   json_buf_.reset();
   flag_ = 0;
   srid_ = 0;

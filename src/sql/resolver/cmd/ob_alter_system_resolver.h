@@ -190,9 +190,9 @@ DEF_SIMPLE_CMD_RESOLVER(ObCheckpointSlogResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObServiceNameResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObLoadLicenseResolver);
 
-int resolve_restore_until(const ParseNode &time_node,
-                          const ObSQLSessionInfo *session_info,
-                          share::SCN &recovery_until_scn,
+int resolve_restore_until(const ParseNode &time_node, 
+                          const ObSQLSessionInfo *session_info, 
+                          share::SCN &recovery_until_scn, 
                           bool &with_restore_scn);
 
 class ObPhysicalRestoreTenantResolver : public ObSystemCmdResolver
@@ -314,12 +314,12 @@ DEF_SIMPLE_CMD_RESOLVER(ObSetRegionBandwidthResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObCancelRestoreResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObCancelRecoverTableResolver);
 
-class ObRecoverTableResolver : public ObSystemCmdResolver
-{
-public:
-  ObRecoverTableResolver(ObResolverParams &params) : ObSystemCmdResolver(params) {}
-  virtual ~ObRecoverTableResolver() {}
-  virtual int resolve(const ParseNode &parse_tree);
+class ObRecoverTableResolver : public ObSystemCmdResolver 
+{ 
+public: 
+  ObRecoverTableResolver(ObResolverParams &params) : ObSystemCmdResolver(params) {} 
+  virtual ~ObRecoverTableResolver() {} 
+  virtual int resolve(const ParseNode &parse_tree); 
 
 private:
   int resolve_tenant_(const ParseNode *node, uint64_t &tenant_id, common::ObString &tenant_name,

@@ -560,7 +560,7 @@ public:
   virtual int64_t hash() const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual int create_first_task() override;
-
+  
   int init(share::ObIDagNet *dag_net);
   INHERIT_TO_STRING_KV("ObMigrationDag", ObMigrationDag, KP(this));
 protected:

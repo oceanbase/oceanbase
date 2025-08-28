@@ -538,7 +538,7 @@ struct ObCreateTenantSchemaResult
 {
   OB_UNIS_VERSION(1);
 public:
-  ObCreateTenantSchemaResult() :
+  ObCreateTenantSchemaResult() : 
     tenant_exist_(false), user_tenant_id_(OB_INVALID_TENANT_ID) {}
   ~ObCreateTenantSchemaResult() {}
   int assign(const ObCreateTenantSchemaResult &other);
@@ -579,7 +579,7 @@ struct ObParallelCreateNormalTenantArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
 public:
-  explicit ObParallelCreateNormalTenantArg()
+  explicit ObParallelCreateNormalTenantArg() 
     : create_tenant_arg_(), tenant_id_(OB_INVALID_TENANT_ID) {}
   ~ObParallelCreateNormalTenantArg() {}
   int init(const ObCreateTenantArg &create_tenant_arg,
@@ -1585,7 +1585,7 @@ public:
     REBUILD_INDEX_TYPE_VEC = 0,
     REBUILD_INDEX_TYPE_MLOG = 1
   };
-  ObRebuildIndexArg() : ObIndexArg(),
+  ObRebuildIndexArg() : ObIndexArg(), 
     vidx_refresh_info_()
   {
     index_action_type_ = REBUILD_INDEX;
@@ -2379,8 +2379,8 @@ public:
   }
   bool is_only_alter_column() const {
     return is_alter_columns_ && foreign_key_checks_
-            && !is_alter_indexs_ && !is_alter_options_ && !is_alter_partitions_
-            && !is_inner_ && !is_update_global_indexes_ && !is_convert_to_character_
+            && !is_alter_indexs_ && !is_alter_options_ && !is_alter_partitions_ 
+            && !is_inner_ && !is_update_global_indexes_ && !is_convert_to_character_ 
             && !skip_sys_table_check_ && !need_rebuild_trigger_ && !is_add_to_scheduler_;
   }
   ObAlterTableArg &operator=(const ObAlterTableArg &other) = delete;
@@ -2403,7 +2403,7 @@ public:
                                                   nls_timestamp_tz_format};
     return set_nls_formats(tmp_str);
   }
-
+  
   void set_part_storage_cache_policy(const common::ObString &part_storage_cache_policy)
   {
     part_storage_cache_policy_ = part_storage_cache_policy;
@@ -8254,7 +8254,7 @@ public:
 struct ObForceSetServerListResult
 {
   OB_UNIS_VERSION(1);
-public:
+public:  
   ObForceSetServerListResult() : ret_(OB_SUCCESS), result_list_() {}
   ~ObForceSetServerListResult() {}
   int init();
@@ -8265,7 +8265,7 @@ public:
     OB_UNIS_VERSION(1);
   public:
     LSFailedInfo() : ls_id_(), failed_ret_code_(OB_SUCCESS), failed_reason_() {}
-    LSFailedInfo(const share::ObLSID &ls_id,
+    LSFailedInfo(const share::ObLSID &ls_id, 
                  const int failed_ret_code,
                  const common::ObString failed_reason)
         : ls_id_(ls_id), failed_ret_code_(failed_ret_code), failed_reason_(failed_reason) {}
@@ -8275,7 +8275,7 @@ public:
     int failed_ret_code_;
     common::ObString failed_reason_;
   };
-  struct ResultInfo
+  struct ResultInfo 
   {
     OB_UNIS_VERSION(1);
   public:
@@ -11657,7 +11657,7 @@ public:
   {}
   bool is_valid() const
   {
-    return (OB_INVALID_TENANT_ID != tenant_id_) &&
+    return (OB_INVALID_TENANT_ID != tenant_id_) && 
            (micro_cache_size_ratio_ > 0 && micro_cache_size_ratio_ < 100) &&
            (macro_cache_size_ratio_ > 0 && macro_cache_size_ratio_ < 100);
   }
@@ -13749,9 +13749,9 @@ public:
   };
   ObTriggerStorageCacheArg() : op_(MAX_OP), tenant_id_(OB_INVALID_TENANT_ID) {}
   ~ObTriggerStorageCacheArg() {}
-  bool is_valid() const
-  {
-    return op_ < MAX_OP && is_valid_tenant_id(tenant_id_);
+  bool is_valid() const 
+  { 
+    return op_ < MAX_OP && is_valid_tenant_id(tenant_id_); 
   }
   ObStorageCacheOp get_op() const { return op_; }
   int get_tenant_id() const { return tenant_id_; }
@@ -13982,7 +13982,7 @@ public:
     SENSITIVE_PROTECTION_POLICY_MAX
   };
 
-  ObSensitiveRuleDDLArg():
+  ObSensitiveRuleDDLArg(): 
     ObDDLArg(),
     ddl_type_(OB_INVALID_DDL_OP),
     schema_(),
@@ -13993,7 +13993,7 @@ public:
 
   TO_STRING_KV(K_(ddl_type), K_(schema), K_(user_id));
 
-  void reset()
+  void reset() 
   {
     ObDDLArg::reset();
     ddl_type_ = OB_INVALID_DDL_OP;

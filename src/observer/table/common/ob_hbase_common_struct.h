@@ -38,7 +38,7 @@ public:
     cells_(other.cells_)
   {
   }
-
+  
 
   OB_INLINE const common::ObTabletID get_tablet_id() const { return tablet_id_; }
   OB_INLINE const common::ObIArray<table::ObITableEntity *> &get_cells() const { return cells_; }
@@ -71,7 +71,7 @@ public:
 private:
   uint64_t table_id_;
   ObSEArray<table::ObHbaseTabletCells *, 4> tablet_cells_;
-  ObString table_name_;
+  ObString table_name_; 
 };
 
 struct ObHbaseTabletCellResults
@@ -127,7 +127,7 @@ private:
   ObString table_name_;
   bool qualifier_with_family_; // e.g., cf1.c1
   // note: when it is enable, force to use wildcard_column_tracker_ which will get all qualify
-  bool use_wildcard_column_tracker_;
+  bool use_wildcard_column_tracker_; 
 };
 
 class ObTableMergeFilterCompare
@@ -146,8 +146,8 @@ protected:
   int result_code_ = OB_SUCCESS;
 };
 
-class ObHbaseQueryResultIterator : public ObTableQueryIResultIterator
-{
+class ObHbaseQueryResultIterator : public ObTableQueryIResultIterator 
+{	
 public:
   ObHbaseQueryResultIterator(const ObHbaseQuery &query, const ObTableExecCtx &exec_ctx) {}
 
@@ -192,14 +192,14 @@ public:
   LimitFields(): batch_(-1), size_(-1), time_(-1), size_scope_(LimitScope::Scope::BETWEEN_ROWS), time_scope_(LimitScope::Scope::BETWEEN_ROWS) {}
   LimitFields(int32_t batch, int64_t size, int64_t time, LimitScope limit_scope) { set_fields(batch, size, time, limit_scope); }
   void set_fields(int64_t size, int64_t time, LimitScope limit_scope) {
-    set_size_scope(limit_scope);
+    set_size_scope(limit_scope); 
     set_time_scope(limit_scope);
     set_size(size);
     set_time(time);
   }
   void set_fields(int64_t batch_size, int64_t size, int64_t time, LimitScope limit_scope) {
     set_batch(batch_size);
-    set_size_scope(limit_scope);
+    set_size_scope(limit_scope); 
     set_time_scope(limit_scope);
     set_size(size);
     set_time(time);
@@ -335,7 +335,7 @@ public:
   ObHbaseRowKeyForwardCompare() = default;
   virtual ~ObHbaseRowKeyForwardCompare() override = default;
   virtual int compare(const common::ObNewRow &lhs, const common::ObNewRow &rhs, int &cmp_ret) const override;
-};
+};  
 
 class ObHbaseRowKeyReverseCompare final : public ObHbaseMergeCompare
 {
@@ -343,7 +343,7 @@ public:
   ObHbaseRowKeyReverseCompare() = default;
   virtual ~ObHbaseRowKeyReverseCompare() override = default;
   virtual int compare(const common::ObNewRow &lhs, const common::ObNewRow &rhs, int &cmp_ret) const override;
-};
+};  
 
 } // end of namespace table
 } // end of namespace oceanbase

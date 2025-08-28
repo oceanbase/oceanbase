@@ -73,7 +73,7 @@ int ObGeoExprUtils::get_srs_item(ObEvalCtx &ctx,
     }
   } else if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb, srid))) {
     LOG_WARN("fail to get srid", K(ret), K(wkb));
-  }
+  } 
 
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(session)) {
@@ -149,7 +149,7 @@ int ObGeoExprUtils::construct_geometry(ObIAllocator &allocator,
       LOG_WARN("fail to get srs", K(ret), K(srid));
     }
   }
-
+  
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (OB_FAIL(ObGeoTypeUtil::construct_geometry(allocator, wkb, srs, geo, has_srid, with_copy))) {
@@ -352,10 +352,10 @@ int ObGeoExprUtils::parse_axis_order(const ObString option_str,
       }
       if (OB_FAIL(ret)) {
         strncpy(err_str, axis_order_key.ptr(), axis_order_key.length() < (STR_LEN_MAX - 1) ? axis_order_key.length() : (STR_LEN_MAX - 1));
-        char val_err_str[STR_LEN_MAX] = {0}; // cstyle err string
+        char val_err_str[STR_LEN_MAX] = {0}; // cstyle err string 
         strncpy(val_err_str, axis_order_val.ptr(), axis_order_val.length() < (STR_LEN_MAX - 1) ? axis_order_val.length() : (STR_LEN_MAX - 1));
         LOG_USER_ERROR(OB_ERR_INVALID_OPTION_VALUE, val_err_str, err_str, func_name);
-      }
+      } 
     } else if (ret == OB_INVALID_OPTION) {
       ret = OB_ERR_INVALID_OPTION_KEY_VALUE_PAIR;
       strncpy(err_str, option_str.ptr(), option_str.length() < (STR_LEN_MAX - 1) ? option_str.length() : (STR_LEN_MAX - 1));
@@ -558,7 +558,7 @@ int ObGeoExprUtils::normalize_wkb(const ObSrsItem *srs,
 {
   int ret = OB_SUCCESS;
 
-  if (OB_NOT_NULL(srs)
+  if (OB_NOT_NULL(srs) 
       && (srs->is_geographical_srs() || srs->is_lat_long_order())) {
     // points in geom need to be normalized
     ObGeoNormalizeVisitor normalize_visitor(srs);
@@ -766,7 +766,7 @@ int ObGeoExprUtils::zoom_in_geos_for_relation(const ObSrsItem *srs, ObGeometry &
       zoom_in_value1 = zoom_in_visitor.get_zoom_in_value();
       zoom_in_visitor.set_zoom_in_value(0);
     }
-
+    
     if (OB_FAIL(ret) || is_geo2_cached) { // do nothing
     } else if (OB_FAIL(geo2.do_visit(zoom_in_visitor))) {
       LOG_WARN("failed to zoom in visit", K(ret));
@@ -860,7 +860,7 @@ int ObGeoExprUtils::ob_geo_find_unit(const ObGeoUnit *units, const ObString &nam
   return ret;
 }
 
-int ObGeoExprUtils::length_unit_conversion(const ObString &unit_str, const ObSrsItem *srs,
+int ObGeoExprUtils::length_unit_conversion(const ObString &unit_str, const ObSrsItem *srs, 
                                           double in_num, double &out_num)
 {
   int ret = OB_SUCCESS;
@@ -954,7 +954,7 @@ int ObGeoExprUtils::make_valid_polygon(ObGeometry *poly, lib::MemoryContext &mem
     if (OB_FAIL(make_valid_polygon_inner(static_cast<ObCartesianPolygon&>(*poly),
                                                         mem_ctx, valid_poly))) {
       LOG_WARN("make polygon valid failed", K(ret));
-    }
+    } 
   } else {
     ObCartesianMultipolygon &mpy = *reinterpret_cast<ObCartesianMultipolygon *>(poly);
     for (uint32_t i = 0; OB_SUCC(ret) && i < mpy.size(); ++i) {
@@ -1088,7 +1088,7 @@ ObGeoConstParamCache* ObGeoExprUtils::get_geo_constParam_cache(const uint64_t& i
   INIT_SUCC(ret);
   ObGeoConstParamCache* cache_ctx = NULL;
   uint64_t data_version = 0;
-  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_1_2
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_1_2 
   || (GET_MIN_CLUSTER_VERSION() >=  CLUSTER_VERSION_4_2_2_0 && GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_2_3_0)
   || (GET_MIN_CLUSTER_VERSION() > CLUSTER_VERSION_4_3_0_0 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_2_0)) {
     // geo para cache not available, return null
@@ -1129,7 +1129,7 @@ int ObGeoExprUtils::expr_prepare_build_geometry(MultimodeAlloctor &allocator, co
     LOG_WARN("fail to get real string data", K(ret), K(wkb));
   } else if (OB_FAIL(ObGeoTypeUtil::get_type_srid_from_wkb(wkb, type, srid))) {
     LOG_WARN("get type and srid from wkb failed", K(wkb), K(ret));
-  }
+  } 
   return ret;
 }
 
@@ -1142,9 +1142,9 @@ void ObGeoExprUtils::init_box_by_cache(ObGeogBox *&box_ptr, ObGeogBox& box, ObCa
   }
 }
 
-void ObGeoExprUtils::init_boxes_by_cache(ObGeogBox *&box_ptr1, ObGeogBox& box1,
-                                        ObGeogBox *&box_ptr2, ObGeogBox& box2,
-                                        ObGeoConstParamCache* const_param_cache,
+void ObGeoExprUtils::init_boxes_by_cache(ObGeogBox *&box_ptr1, ObGeogBox& box1, 
+                                        ObGeogBox *&box_ptr2, ObGeogBox& box2, 
+                                        ObGeoConstParamCache* const_param_cache, 
                                         bool is_geo1_cached, bool is_geo2_cached)
 {
   if (OB_NOT_NULL(const_param_cache) && (is_geo1_cached || is_geo2_cached)) {
@@ -1176,8 +1176,8 @@ int ObGeoExprUtils::init_box_by_geo(ObGeometry &geo, lib::MemoryContext& ctx, Ob
   return ret;
 }
 
-int ObGeoExprUtils::check_box_intersects(ObGeometry &geo1, ObGeometry &geo2, lib::MemoryContext& ctx,
-                                          ObGeoConstParamCache* const_param_cache,
+int ObGeoExprUtils::check_box_intersects(ObGeometry &geo1, ObGeometry &geo2, lib::MemoryContext& ctx, 
+                                          ObGeoConstParamCache* const_param_cache, 
                                           bool is_geo1_cached, bool is_geo2_cached, bool& box_intersects)
 {
   int ret = OB_SUCCESS;
@@ -1187,7 +1187,7 @@ int ObGeoExprUtils::check_box_intersects(ObGeometry &geo1, ObGeometry &geo2, lib
   ObGeogBox box1;
   ObGeogBox box2;
   init_boxes_by_cache(box_ptr1, box1, box_ptr2, box2, const_param_cache, is_geo1_cached, is_geo2_cached);
-
+  
   if ((OB_ISNULL(box_ptr1) && OB_FAIL(init_box_by_geo(geo1, ctx, box_ptr1)))
     || (OB_ISNULL(box_ptr2) && OB_FAIL(init_box_by_geo(geo2, ctx, box_ptr2)))) {
     LOG_WARN("get failed", K(ret));
@@ -1305,9 +1305,9 @@ void ObGeoConstParamCache::add_cached_geo(int arg_idx, common::ObCachedGeom *cac
   }
 }
 
-int ObGeoExprUtils::get_intersects_res(ObGeometry &geo1, ObGeometry &geo2,
+int ObGeoExprUtils::get_intersects_res(ObGeometry &geo1, ObGeometry &geo2, 
                                       ObExpr *gis_arg1, ObExpr *gis_arg2,
-                                      ObGeoConstParamCache* const_param_cache,
+                                      ObGeoConstParamCache* const_param_cache, 
                                       const ObSrsItem *srs,
                                       lib::MemoryContext *mem_ctx, bool& res)
 {
@@ -1323,7 +1323,7 @@ int ObGeoExprUtils::get_intersects_res(ObGeometry &geo1, ObGeometry &geo2,
     if (OB_NOT_NULL(const_param_cache)) {
       if (gis_arg1->is_static_const_) {
         cache_geo = const_param_cache->get_cached_geo(0);
-        if (cache_geo == NULL
+        if (cache_geo == NULL 
           && OB_FAIL(ObGeoTypeUtil::create_cached_geometry(*const_param_cache->get_allocator(),
                                                             temp_allocator,
                                                             const_param_cache->get_const_param_cache(0),
@@ -1336,7 +1336,7 @@ int ObGeoExprUtils::get_intersects_res(ObGeometry &geo1, ObGeometry &geo2,
         }
       } else if (gis_arg2->is_static_const_) {
         cache_geo = const_param_cache->get_cached_geo(1);
-        if (cache_geo == NULL
+        if (cache_geo == NULL 
           && OB_FAIL(ObGeoTypeUtil::create_cached_geometry(*const_param_cache->get_allocator(),
                                                             temp_allocator,
                                                             const_param_cache->get_const_param_cache(1),
@@ -1370,7 +1370,7 @@ int ObGeoExprUtils::get_intersects_res(ObGeometry &geo1, ObGeometry &geo2,
                     && result == true
                     && OB_FAIL(ObGeoTypeUtil::eval_point_box_intersects(srs, &geo1, &geo2, result))) {
       LOG_WARN("eval box intersection failed", K(ret));
-    }
+    } 
     if (OB_FAIL(ret)) {
     } else {
       res = result;

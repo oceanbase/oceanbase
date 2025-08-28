@@ -60,3 +60,4 @@ CREATE OR REPLACE PACKAGE dbms_resource_manager AUTHID CURRENT_USER
   );
 
 END dbms_resource_manager;
+

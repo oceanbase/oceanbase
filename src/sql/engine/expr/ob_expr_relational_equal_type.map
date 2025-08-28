@@ -2,7 +2,7 @@
  * the following array is used to determine whether the equal compare is transitive in optimizer
  */
 static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType] =
-{
+{ 
   ObMaxType,            /* NullType             */
   ObIntType,            /* TinyIntType          */
   ObIntType,            /* SmallIntType         */
@@ -61,7 +61,7 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType] =
 };
 
 static constexpr ObObjType ORACLE_RELATIONAL_EQUAL_TYPE[ObMaxType] =
-{
+{       
   ObMaxType,            /* NullType             */
   ObIntType,            /* TinyIntType          */
   ObIntType,            /* SmallIntType         */

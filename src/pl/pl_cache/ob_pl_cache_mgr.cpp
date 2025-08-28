@@ -284,7 +284,7 @@ int ObPLCacheMgr::flush_pl_cache_by_sql(
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard tenant_schema_guard;
   const ObSimpleTenantSchema *tenant = NULL;
-
+  
   ObString db_name;
   ObString tenant_name;
   //get tenant name
@@ -322,7 +322,7 @@ int ObPLCacheMgr::flush_pl_cache_by_sql(
   } else if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected sql proxy", K(ret));
-  } else if (OB_FAIL(sql.assign_fmt("alter system flush pl cache schema_id = %lu databases = \"%.*s\" TENANT = \"%.*s\" global", key_id,
+  } else if (OB_FAIL(sql.assign_fmt("alter system flush pl cache schema_id = %lu databases = \"%.*s\" TENANT = \"%.*s\" global", key_id, 
                                       db_name.length(), db_name.ptr(), tenant_name.length(), tenant_name.ptr()))) {
     LOG_WARN("alter system flush pl cache failed.", K(ret), K(key_id));
   } else {
@@ -334,7 +334,7 @@ int ObPLCacheMgr::flush_pl_cache_by_sql(
     }
   }
   return ret;
-}
+}  
 
 // delete all pl cache obj
 int ObPLCacheMgr::cache_evict_all_pl(ObPlanCache *lib_cache)

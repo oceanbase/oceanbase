@@ -284,8 +284,8 @@ protected:
                                          ObTableLSOpResult &src_res,
                                         ObIArray<ObTableLSOpRequest*> &new_reqs,
                                         ObIArray<ObTableLSOpResult*> &new_results);
-  int calc_single_op_tablet_id(ObTableExecCtx &ctx,
-                               ObTablePartCalculator &calculator,
+  int calc_single_op_tablet_id(ObTableExecCtx &ctx, 
+                               ObTablePartCalculator &calculator, 
                                ObTableSingleOp &single_op,
                                ObTabletID &tablet_id);
   int prepare_allocate_result(const ObTableLSOpRequest &req,

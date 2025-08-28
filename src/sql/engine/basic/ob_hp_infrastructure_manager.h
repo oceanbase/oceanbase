@@ -69,7 +69,7 @@ private:
   struct _func_traits : public _func_traits<decltype(&F::operator())> {};
   template<typename F>
   struct func_traits : public _func_traits<typename std::decay<F>::type> {};
-
+  
   static const int64_t MAX_HP_INFRAS_CNT = 16;
   int alloc_hp_infras(HashPartInfras *&hp_infras);
   template<typename F,
@@ -176,7 +176,7 @@ public:
   { return enable_sql_dumped_; }
   OB_INLINE int64_t get_max_batch_size() const
   { return eval_ctx_->max_batch_size_; }
-
+  
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObHashPartInfrastructureMgr);

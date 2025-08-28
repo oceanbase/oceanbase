@@ -471,7 +471,7 @@ public:
   static int gather_database_stats_job_proc(sql::ObExecContext &ctx,
                                             sql::ParamStore &params,
                                             common::ObObj &result);
-
+  
   static int gather_database_table_stats(sql::ObExecContext &ctx,
                                          const int64_t duration_time,
                                          int64_t &succeed_cnt,
@@ -532,7 +532,7 @@ public:
 
   static int init_column_group_stat_param(const share::schema::ObTableSchema &table_schema,
                                           ObIArray<ObColumnGroupStatParam> &column_group_params);
-
+                                          
   static int gather_system_stats(sql::ObExecContext &ctx,
                                 sql::ParamStore &params,
                                 common::ObObj &result);
@@ -544,7 +544,7 @@ public:
   static int set_system_stats(sql::ObExecContext &ctx,
                               sql::ParamStore &params,
                               common::ObObj &result);
-
+  
   static int update_system_stats_cache(const uint64_t rpc_tenant_id,
                                       const uint64_t tenant_id);
 
@@ -556,7 +556,7 @@ public:
                                       const common::ObDataTypeCastParams &dtc_params,
                                       ObString &ident_name,
                                       bool need_extra_conv = false);
-
+                                      
 private:
   static int check_statistic_table_writeable(sql::ObExecContext &ctx);
 
@@ -656,14 +656,14 @@ private:
   static int adjust_async_gather_stat_option(ObExecContext &ctx,
                                              const ObIArray<int64_t> &async_partition_ids,
                                              ObTableStatParam &param);
-  static int adjust_index_column_params(ObExecContext &ctx,
+  static int adjust_index_column_params(ObExecContext &ctx, 
                                         ObTableStatParam &index_param,
                                         ObIArray<uint64_t> &filter_column_ids);
 
   static int get_no_deduce_basic_stats_column_ids(const ObTableStatParam &param, ObIArray<uint64_t> &column_ids);
 
   static int adjust_text_column_basic_stats(ObExecContext &ctx,
-                                            const share::schema::ObTableSchema &schema,
+                                            const share::schema::ObTableSchema &schema, 
                                             ObTableStatParam &param);
 
   static int determine_auto_sample_table(ObExecContext &ctx,
@@ -672,7 +672,7 @@ private:
   static int update_analyze_failed_count(const ObTableStatParam &stat_param,
                                          const ObSEArray<int64_t, 4> &failed_part_ids,
                                          const StatTable &stat_table);
-
+  
   static int gather_table_stats_by_parts(ObExecContext &ctx,
                                          const int64_t task_start_time,
                                          const int64_t duration_time,

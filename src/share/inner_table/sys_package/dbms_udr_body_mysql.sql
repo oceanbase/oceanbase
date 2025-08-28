@@ -26,5 +26,5 @@ CREATE OR REPLACE PACKAGE BODY DBMS_UDR
     rule_name          VARCHAR(256)
   );
   PRAGMA INTERFACE(c, DISABLE_RULE);
-
+  
 END dbms_udr;

@@ -1022,7 +1022,7 @@ int ObTabletMergeFinishTask::report_checkpoint_diagnose_info(ObTabletMergeCtx &c
         ObMemtable *memtable = nullptr;
         memtable = static_cast<ObMemtable*>(table);
         memtable->report_memtable_diagnose_info(ObMemtable::UpdateMergeInfoForMemtable(
-              merge_history.running_info_.merge_start_time_, merge_history.running_info_.merge_finish_time_,
+              merge_history.running_info_.merge_start_time_, merge_history.running_info_.merge_finish_time_, 
               merge_history.block_info_.occupy_size_, merge_history.static_info_.concurrent_cnt_));
       } else {
         storage::ObIMemtable *memtable = nullptr;

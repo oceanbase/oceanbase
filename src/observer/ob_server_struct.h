@@ -19,7 +19,7 @@
 #include "share/ob_rpc_struct.h"
 #include "share/ob_server_struct.h"
 
-// This file is replaced by share/ob_server_struct.h,
+// This file is replaced by share/ob_server_struct.h, 
 // PLEASE include "share/ob_server_struct.h" instead
 namespace oceanbase
 {

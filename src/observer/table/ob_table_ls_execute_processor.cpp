@@ -27,7 +27,7 @@ using namespace oceanbase::share::schema;
  * ---------------------------------------- ObTableHbaseMutationInfo ----------------------------------------
  */
 
-int ObTableHbaseMutationInfo::init(const ObSimpleTableSchemaV2 *table_schema,
+int ObTableHbaseMutationInfo::init(const ObSimpleTableSchemaV2 *table_schema, 
                                    ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
@@ -38,9 +38,9 @@ int ObTableHbaseMutationInfo::init(const ObSimpleTableSchemaV2 *table_schema,
     simple_schema_ = table_schema;
     table_id_ = table_schema->get_table_id();
     real_table_name_ = table_schema->get_table_name_str();
-    if (OB_FAIL(schema_cache_guard_.init(MTL_ID(),
-                                         table_schema->get_table_id(),
-                                         table_schema->get_schema_version(),
+    if (OB_FAIL(schema_cache_guard_.init(MTL_ID(), 
+                                         table_schema->get_table_id(), 
+                                         table_schema->get_schema_version(), 
                                          schema_guard))) {
       LOG_WARN("fail to init shcema_cache_guard", K(ret));
     }
@@ -63,7 +63,7 @@ ObTableLSExecuteP::LSExecuteIter::LSExecuteIter(ObTableLSExecuteP &outer_exectut
       ops_timestamp_(-ObHTableUtils::current_time_millis())
 {}
 
-ObTableLSExecuteP::LSExecuteIter::~LSExecuteIter()
+ObTableLSExecuteP::LSExecuteIter::~LSExecuteIter() 
 {
   for (int i = 0; i < batch_ctxs_.count(); ++i) {
     table::ObTableBatchCtx *batch_ctx = batch_ctxs_.at(i).second;
@@ -84,7 +84,7 @@ int ObTableLSExecuteP::LSExecuteIter::init()
 }
 
 int ObTableLSExecuteP::LSExecuteIter::init_tb_ctx(ObTableSingleOp &single_op,
-                                                  ObKvSchemaCacheGuard *shcema_cache_guard,
+                                                  ObKvSchemaCacheGuard *shcema_cache_guard, 
                                                   const ObSimpleTableSchemaV2 *table_schema,
                                                   ObTableCtx &tb_ctx)
 {
@@ -176,7 +176,7 @@ int ObTableLSExecuteP::LSExecuteIter::init_tb_ctx(ObTableSingleOp &single_op,
     // do nothing
   } else if (OB_FAIL(tb_ctx.init_exec_ctx())) {
     LOG_WARN("fail to init exec ctx", K(ret), K(tb_ctx));
-  } else if (OB_FAIL(tb_ctx.init_trans(outer_exectute_process_.get_trans_desc(),
+  } else if (OB_FAIL(tb_ctx.init_trans(outer_exectute_process_.get_trans_desc(), 
                                        outer_exectute_process_.get_tx_snapshot()))) {
     LOG_WARN("fail to init trans", K(ret));
   }
@@ -184,10 +184,10 @@ int ObTableLSExecuteP::LSExecuteIter::init_tb_ctx(ObTableSingleOp &single_op,
   return ret;
 }
 
-int ObTableLSExecuteP::LSExecuteIter::init_batch_ctx(uint64_t table_id,
+int ObTableLSExecuteP::LSExecuteIter::init_batch_ctx(uint64_t table_id, 
                                                      ObTableSingleOp &single_op,
                                                      ObKvSchemaCacheGuard *shcema_cache_guard,
-                                                     const ObSimpleTableSchemaV2 *simple_table_schema,
+                                                     const ObSimpleTableSchemaV2 *simple_table_schema, 
                                                      ObTableBatchCtx &batch_ctx)
 {
   int ret = OB_SUCCESS;
@@ -214,7 +214,7 @@ int ObTableLSExecuteP::LSExecuteIter::init_batch_ctx(uint64_t table_id,
  */
 
 ObTableLSExecuteP::HTableLSExecuteIter::HTableLSExecuteIter(ObTableLSExecuteP &outer_exectute_process)
-    : LSExecuteIter(outer_exectute_process),
+    : LSExecuteIter(outer_exectute_process), 
       curr_op_index_(0)
 {}
 
@@ -291,7 +291,7 @@ void ObTableLSExecuteP::HTableLSExecuteIter::reuse() {
 }
 
 int ObTableLSExecuteP::HTableLSExecuteIter::modify_htable_quailfier_and_timestamp(const ObTableSingleOp &curr_single_op,
-                                                                                  ObTableOperationType::Type type,
+                                                                                  ObTableOperationType::Type type, 
                                                                                   int64_t now_ms)
 {
   int ret = OB_SUCCESS;
@@ -339,8 +339,8 @@ int ObTableLSExecuteP::HTableLSExecuteIter::modify_htable_quailfier_and_timestam
   return ret;
 }
 
-int ObTableLSExecuteP::HTableLSExecuteIter::modify_htable_timestamp(const ObTableSingleOp &curr_single_op,
-                                                                    int64_t now_ms)
+int ObTableLSExecuteP::HTableLSExecuteIter::modify_htable_timestamp(const ObTableSingleOp &curr_single_op, 
+                                                                    int64_t now_ms) 
 {
   int ret = OB_SUCCESS;
   if (curr_single_op.get_entities().count() == 0) {
@@ -375,8 +375,8 @@ int ObTableLSExecuteP::HTableLSExecuteIter::modify_htable_timestamp(const ObTabl
   return ret;
 }
 
-int ObTableLSExecuteP::HTableLSExecuteIter::convert_batch_ctx(ObIArray<table::ObTableOperation> &table_operations,
-                                                              table::ObTableTabletOpResult &tablet_result,
+int ObTableLSExecuteP::HTableLSExecuteIter::convert_batch_ctx(ObIArray<table::ObTableOperation> &table_operations, 
+                                                              table::ObTableTabletOpResult &tablet_result, 
                                                               ObTableBatchCtx &batch_ctx)
 {
   int ret = OB_SUCCESS;
@@ -403,8 +403,8 @@ int ObTableLSExecuteP::HTableLSExecuteIter::convert_batch_ctx(ObIArray<table::Ob
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObTableBatchService::prepare_results(table_operations,
-                                                            outer_exectute_process_.cb_->get_entity_factory(),
+    } else if (OB_FAIL(ObTableBatchService::prepare_results(table_operations, 
+                                                            outer_exectute_process_.cb_->get_entity_factory(), 
                                                             tablet_result))) {
       LOG_WARN("fail to prepare results", K(ret), K(table_operations));
     } else if (hbase_infos_.count() == 1) {
@@ -459,7 +459,7 @@ int ObTableLSExecuteP::HTableLSExecuteIter::find_real_table_id(const ObString &f
   return ret;
 }
 
-int ObTableLSExecuteP::HTableLSExecuteIter::get_family_from_op(ObTableSingleOp &curr_single_op,
+int ObTableLSExecuteP::HTableLSExecuteIter::get_family_from_op(ObTableSingleOp &curr_single_op, 
                                                               ObString &family)
 {
   int ret = OB_SUCCESS;
@@ -470,7 +470,7 @@ int ObTableLSExecuteP::HTableLSExecuteIter::get_family_from_op(ObTableSingleOp &
       LOG_WARN("fail to get qualifier value", K(ret));
     } else if (OB_NOT_NULL(qualifier.get_string().find('.'))) {
       family = qualifier.get_string().split_on('.');
-    }
+    } 
   }
   return ret;
 }
@@ -563,8 +563,8 @@ int ObTableLSExecuteP::HTableLSExecuteIter::set_tablet_ops(ObTableTabletOp &tabl
   return ret;
 }
 
-int ObTableLSExecuteP::HTableLSExecuteIter::find_real_tablet_id(uint64_t arg_table_id,
-                                                                uint64_t real_table_id,
+int ObTableLSExecuteP::HTableLSExecuteIter::find_real_tablet_id(uint64_t arg_table_id, 
+                                                                uint64_t real_table_id, 
                                                                 ObTabletID &real_tablet_id)
 {
   int ret = OB_SUCCESS;
@@ -573,14 +573,14 @@ int ObTableLSExecuteP::HTableLSExecuteIter::find_real_tablet_id(uint64_t arg_tab
   if (OB_ISNULL(tablet_ops_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid null tablet ops", K(ret));
-  } else if (OB_FAIL(outer_exectute_process_.get_idx_by_table_tablet_id(arg_table_id,
-                                                                tablet_ops_->get_tablet_id(),
-                                                                part_idx,
+  } else if (OB_FAIL(outer_exectute_process_.get_idx_by_table_tablet_id(arg_table_id, 
+                                                                tablet_ops_->get_tablet_id(), 
+                                                                part_idx, 
                                                                 subpart_idx))) {
     LOG_WARN("fail to get part idx", K(ret), K(arg_table_id), K(tablet_ops_->get_tablet_id()));
-  } else if (OB_FAIL(outer_exectute_process_.get_tablet_by_idx(real_table_id,
-                                                              part_idx,
-                                                              subpart_idx,
+  } else if (OB_FAIL(outer_exectute_process_.get_tablet_by_idx(real_table_id, 
+                                                              part_idx, 
+                                                              subpart_idx, 
                                                               real_tablet_id))) {
     LOG_WARN("failed to get tablet id by part idx", K(ret), K(real_table_id), K(real_tablet_id));
   }
@@ -588,10 +588,10 @@ int ObTableLSExecuteP::HTableLSExecuteIter::find_real_tablet_id(uint64_t arg_tab
 }
 
 /*
-Get query or batch context according to tablet_ops_
+Get query or batch context according to tablet_ops_ 
 */
 int ObTableLSExecuteP::HTableLSExecuteIter::get_next_ctx(ObIArray<table::ObTableOperation> &table_operations,
-                                                         ObTableTabletOpResult &tablet_result,
+                                                         ObTableTabletOpResult &tablet_result, 
                                                          table::ObTableQueryBatchCtx *&ctx)
 {
   int ret = OB_SUCCESS;
@@ -607,13 +607,13 @@ int ObTableLSExecuteP::HTableLSExecuteIter::get_next_ctx(ObIArray<table::ObTable
   } else {
     ObTableSingleOp &curr_single_op = tablet_ops_->at(curr_op_index_++);
     ObTableOperationType::Type first_op_type = curr_single_op.get_op_type();
-    if (first_op_type == ObTableOperationType::INSERT_OR_UPDATE ||
+    if (first_op_type == ObTableOperationType::INSERT_OR_UPDATE || 
         first_op_type == ObTableOperationType::DEL) {
       if (outer_exectute_process_.is_tablegroup_req_) { // multi cf put and delete
         ObTableBatchCtx *batch_ctx = nullptr;
-        if (OB_FAIL(init_tablegroup_batch_ctx(table_operations,
-                                              tablet_result,
-                                              curr_single_op,
+        if (OB_FAIL(init_tablegroup_batch_ctx(table_operations, 
+                                              tablet_result, 
+                                              curr_single_op, 
                                               batch_ctx))) {
           LOG_WARN("fail to init tablegroup batch ctx", K(ret));
         } else {
@@ -621,9 +621,9 @@ int ObTableLSExecuteP::HTableLSExecuteIter::get_next_ctx(ObIArray<table::ObTable
         }
       } else {  // single cf put and delete
         ObTableBatchCtx *batch_ctx = nullptr;
-        if (OB_FAIL(init_table_batch_ctx(table_operations,
-                                         tablet_result,
-                                         curr_single_op,
+        if (OB_FAIL(init_table_batch_ctx(table_operations, 
+                                         tablet_result, 
+                                         curr_single_op, 
                                          batch_ctx))) {
           LOG_WARN("fail to init table batch ctx", K(ret));
         } else {
@@ -670,9 +670,9 @@ int ObTableLSExecuteP::HTableLSExecuteIter::get_next_ctx(ObIArray<table::ObTable
   return ret;
 }
 
-int ObTableLSExecuteP::HTableLSExecuteIter::init_tablegroup_batch_ctx(ObIArray<table::ObTableOperation> &table_operations,
-                                                                      ObTableTabletOpResult &tablet_result,
-                                                                      ObTableSingleOp &curr_single_op,
+int ObTableLSExecuteP::HTableLSExecuteIter::init_tablegroup_batch_ctx(ObIArray<table::ObTableOperation> &table_operations, 
+                                                                      ObTableTabletOpResult &tablet_result, 
+                                                                      ObTableSingleOp &curr_single_op, 
                                                                       ObTableBatchCtx *&batch_ctx)
 {
   int ret = OB_SUCCESS;
@@ -694,8 +694,8 @@ int ObTableLSExecuteP::HTableLSExecuteIter::init_tablegroup_batch_ctx(ObIArray<t
     LOG_WARN("fail to add single op", K(ret));
   } else if (OB_FAIL(find_real_table_id(first_op_family, real_table_id))) {
     LOG_WARN("fail to find real table id", K(ret), K(first_op_family), K(real_table_id));
-  } else if (OB_FAIL(find_real_tablet_id(outer_exectute_process_.arg_.ls_op_->get_table_id(),
-                                        real_table_id,
+  } else if (OB_FAIL(find_real_tablet_id(outer_exectute_process_.arg_.ls_op_->get_table_id(), 
+                                        real_table_id, 
                                         real_tablet_id))) {
     LOG_WARN("failed to find tablet id", K(ret), K(real_table_id), K(curr_single_op));
   } else if (FALSE_IT(tablet_id_ = real_tablet_id)) {
@@ -716,9 +716,9 @@ int ObTableLSExecuteP::HTableLSExecuteIter::init_tablegroup_batch_ctx(ObIArray<t
       if (OB_ISNULL(info)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("mutation info is NULL", K(ret));
-      } else if (OB_ISNULL(tmp_batch_ctx = OB_NEWx(ObTableBatchCtx,
-                                              &allocator_,
-                                              allocator_,
+      } else if (OB_ISNULL(tmp_batch_ctx = OB_NEWx(ObTableBatchCtx, 
+                                              &allocator_, 
+                                              allocator_, 
                                               outer_exectute_process_.audit_ctx_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc memroy for batch_ctx", K(ret));
@@ -769,9 +769,9 @@ int ObTableLSExecuteP::HTableLSExecuteIter::init_tablegroup_batch_ctx(ObIArray<t
   return ret;
 }
 
-int ObTableLSExecuteP::HTableLSExecuteIter::init_table_batch_ctx(ObIArray<table::ObTableOperation> &table_operations,
-                                                                 ObTableTabletOpResult &tablet_result,
-                                                                 ObTableSingleOp &curr_single_op,
+int ObTableLSExecuteP::HTableLSExecuteIter::init_table_batch_ctx(ObIArray<table::ObTableOperation> &table_operations, 
+                                                                 ObTableTabletOpResult &tablet_result, 
+                                                                 ObTableSingleOp &curr_single_op, 
                                                                  ObTableBatchCtx *&batch_ctx)
 {
   int ret = OB_SUCCESS;
@@ -804,9 +804,9 @@ int ObTableLSExecuteP::HTableLSExecuteIter::init_table_batch_ctx(ObIArray<table:
       if (OB_ISNULL(info)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null hbase mutation info", K(ret));
-      } else if (OB_ISNULL(tmp_batch_ctx = OB_NEWx(ObTableBatchCtx,
-                                            &allocator_,
-                                            allocator_,
+      } else if (OB_ISNULL(tmp_batch_ctx = OB_NEWx(ObTableBatchCtx, 
+                                            &allocator_, 
+                                            allocator_, 
                                             outer_exectute_process_.audit_ctx_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc memroy for batch_ctx", K(ret));
@@ -861,7 +861,7 @@ ObTableLSExecuteP::HTableLSExecuteIter::~HTableLSExecuteIter()
  */
 
 ObTableLSExecuteP::ObTableLSExecuteP(const ObGlobalContext &gctx)
-    : ObTableRpcProcessor(gctx),
+    : ObTableRpcProcessor(gctx), 
       cb_(nullptr)
 {
   allocator_.set_attr(ObMemAttr(MTL_ID(), "TbLSExecuteP", ObCtxIds::DEFAULT_CTX_ID));
@@ -967,7 +967,7 @@ uint64_t ObTableLSExecuteP::get_request_checksum()
         single_op_checksum = ls_op->at(i).at(j).get_checksum();
         checksum = ob_crc64(checksum, &single_op_checksum, sizeof(single_op_checksum));
       }
-    }
+    } 
   }
   return checksum;
 }
@@ -1048,7 +1048,7 @@ int ObTableLSExecuteP::old_try_process()
   table_id_ = table_id;  // init move response need
   ObTableLSOpResult *cb_result = nullptr;
   observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
-  bool is_hkv = ObTableEntityType::ET_HKV == arg_.entity_type_;
+  bool is_hkv = ObTableEntityType::ET_HKV == arg_.entity_type_; 
   if (OB_FAIL(create_cb_result())) {
     LOG_WARN("fail to create cb result", K(ret));
   } else if (OB_ISNULL(cb_)) {
@@ -1208,7 +1208,7 @@ int ObTableLSExecuteP::new_try_process()
 int ObTableLSExecuteP::try_process()
 {
   int ret = OB_SUCCESS;
-
+  
   // statis
   if (OB_ISNULL(arg_.ls_op_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1291,14 +1291,14 @@ int ObTableLSExecuteP::execute_htable_api_ls_op(ObTableLSOpResult &ls_result)
   return ret;
 }
 
-int ObTableLSExecuteP::execute_htable_tablet_ops(ObTableTabletOp &tablet_ops,
-                                                 ObTableLSExecuteP::HTableLSExecuteIter &htable_ls_iter,
-                                                 table::ObTableTabletOpResult &tmp_tablet_result,
+int ObTableLSExecuteP::execute_htable_tablet_ops(ObTableTabletOp &tablet_ops, 
+                                                 ObTableLSExecuteP::HTableLSExecuteIter &htable_ls_iter, 
+                                                 table::ObTableTabletOpResult &tmp_tablet_result, 
                                                  ObTableTabletOpResult &tablet_result)
 {
   int ret = OB_SUCCESS;
   ObTableOperationType::Type first_op_type = tablet_ops.at(0).get_op_type();
-  bool is_same_type_batch_ops = (first_op_type == ObTableOperationType::INSERT_OR_UPDATE
+  bool is_same_type_batch_ops = (first_op_type == ObTableOperationType::INSERT_OR_UPDATE 
                             || first_op_type == ObTableOperationType::DEL) && !is_tablegroup_req_;
   // TODO: this is a bypassing path to keep the same logic as the original,
   // need to optimize and use HTableLSExecuteIter directly
@@ -1347,7 +1347,7 @@ int ObTableLSExecuteP::execute_htable_tablet_ops(ObTableTabletOp &tablet_ops,
             }
           }
         } else if (OB_NOT_NULL(query_ctx = dynamic_cast<ObTableQueryAsyncCtx*>(ctx))) {
-          ObTableOperationResult single_op_result;
+          ObTableOperationResult single_op_result;                
           if (OB_FAIL(execute_htable_get(query_ctx, htable_ls_iter, single_op_result))) {
             LOG_WARN("fail to execute htable get", K(ret));
           } else if (OB_FAIL(same_type_tablet_op_result.push_back(single_op_result))) {
@@ -1373,9 +1373,9 @@ int ObTableLSExecuteP::execute_htable_tablet_ops(ObTableTabletOp &tablet_ops,
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(aggregate_single_op_result(htable_ls_iter,
-                                            tablet_ops,
-                                            tmp_tablet_result,
+      if (OB_FAIL(aggregate_single_op_result(htable_ls_iter, 
+                                            tablet_ops, 
+                                            tmp_tablet_result, 
                                             tablet_result))) {
         LOG_WARN("fail to aggregate single op result", K(ret));
       }
@@ -1387,9 +1387,9 @@ int ObTableLSExecuteP::execute_htable_tablet_ops(ObTableTabletOp &tablet_ops,
   return ret;
 }
 
-int ObTableLSExecuteP::aggregate_single_op_result(ObTableLSExecuteP::HTableLSExecuteIter &htable_ls_iter,
-                                                  ObTableTabletOp &tablet_ops,
-                                                  ObTableTabletOpResult &tmp_tablet_result,
+int ObTableLSExecuteP::aggregate_single_op_result(ObTableLSExecuteP::HTableLSExecuteIter &htable_ls_iter, 
+                                                  ObTableTabletOp &tablet_ops, 
+                                                  ObTableTabletOpResult &tmp_tablet_result, 
                                                   ObTableTabletOpResult &tablet_result)
 {
   int ret = OB_SUCCESS;
@@ -1400,7 +1400,7 @@ int ObTableLSExecuteP::aggregate_single_op_result(ObTableLSExecuteP::HTableLSExe
       if (tmp_idx >= tmp_tablet_result.count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error occurs when aggregate delete tablet result", K(ret));
-      } else if (del_idx < htable_ls_iter.origin_delete_pos_.count()
+      } else if (del_idx < htable_ls_iter.origin_delete_pos_.count() 
           && j == htable_ls_iter.origin_delete_pos_.at(del_idx)) {
         if (OB_FAIL(tablet_result.push_back(tmp_tablet_result.at(tmp_idx)))) {
           LOG_WARN("fail to add sinlge op result", K(ret));
@@ -1420,8 +1420,8 @@ int ObTableLSExecuteP::aggregate_single_op_result(ObTableLSExecuteP::HTableLSExe
   return ret;
 }
 
-int ObTableLSExecuteP::execute_htable_get(ObTableQueryAsyncCtx *query_ctx,
-                                          HTableLSExecuteIter &htable_ls_iter,
+int ObTableLSExecuteP::execute_htable_get(ObTableQueryAsyncCtx *query_ctx, 
+                                          HTableLSExecuteIter &htable_ls_iter, 
                                           table::ObTableOperationResult &single_op_result)
 {
   int ret = OB_SUCCESS;
@@ -1479,12 +1479,12 @@ int ObTableLSExecuteP::execute_htable_get(ObTableQueryAsyncCtx *query_ctx,
   return ret;
 }
 
-int ObTableLSExecuteP::init_query_ctx(bool get_is_tablegroup,
-                                      ObTableSingleOp &single_op,
-                                      ObSEArray<const ObSimpleTableSchemaV2 *, 8> &table_schemas,
-                                      uint64_t real_table_id,
-                                      ObTabletID &real_tablet_id,
-                                      ObTableQueryAsyncCtx *query_ctx,
+int ObTableLSExecuteP::init_query_ctx(bool get_is_tablegroup, 
+                                      ObTableSingleOp &single_op, 
+                                      ObSEArray<const ObSimpleTableSchemaV2 *, 8> &table_schemas, 
+                                      uint64_t real_table_id, 
+                                      ObTabletID &real_tablet_id, 
+                                      ObTableQueryAsyncCtx *query_ctx, 
                                       ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
@@ -1538,7 +1538,7 @@ int ObTableLSExecuteP::execute_table_api_ls_op(ObTableLSOpResult &ls_result)
       }
     }
     if (OB_SUCC(ret)) {
-      ObTableSingleOpResult &single_op_res = tablet_result.at(0);
+      ObTableSingleOpResult &single_op_res = tablet_result.at(0); 
       single_op_res.set_affected_rows(affected_rows);
     }
   } else {
@@ -1557,7 +1557,7 @@ int ObTableLSExecuteP::execute_table_api_ls_op(ObTableLSOpResult &ls_result)
   return ret;
 }
 
-int ObTableLSExecuteP::execute_tablet_op(const ObTableTabletOp &tablet_op,
+int ObTableLSExecuteP::execute_tablet_op(const ObTableTabletOp &tablet_op, 
                                         uint64_t table_id,
                                         ObKvSchemaCacheGuard *schema_cache_guard,
                                         const ObSimpleTableSchemaV2 *simple_table_schema,
@@ -1596,8 +1596,8 @@ int ObTableLSExecuteP::execute_tablet_op(const ObTableTabletOp &tablet_op,
   return ret;
 }
 
-int ObTableLSExecuteP::execute_tablet_query_and_mutate(const uint64_t table_id,
-                                                       const ObTableTabletOp &tablet_op,
+int ObTableLSExecuteP::execute_tablet_query_and_mutate(const uint64_t table_id, 
+                                                       const ObTableTabletOp &tablet_op, 
                                                        ObTableTabletOpResult &tablet_result)
 {
   int ret = OB_SUCCESS;
@@ -1676,7 +1676,7 @@ int ObTableLSExecuteP::execute_tablet_batch_ops(const ObTableTabletOp &tablet_op
   return ret;
 }
 
-int ObTableLSExecuteP::init_batch_ctx(const table::ObTableTabletOp &tablet_op,
+int ObTableLSExecuteP::init_batch_ctx(const table::ObTableTabletOp &tablet_op, 
                                       ObIArray<table::ObTableOperation> &table_operations,
                                       uint64_t table_id,
                                       ObKvSchemaCacheGuard *shcema_cache_guard,
@@ -1756,7 +1756,7 @@ int ObTableLSExecuteP::init_query_info_tb_ctx(bool get_is_tablegroup, ObTableQue
   return ret;
 }
 
-int ObTableLSExecuteP::init_tb_ctx(const table::ObTableTabletOp &tablet_op,
+int ObTableLSExecuteP::init_tb_ctx(const table::ObTableTabletOp &tablet_op, 
                                    const table::ObTableOperation &table_operation,
                                    ObKvSchemaCacheGuard *shcema_cache_guard,
                                    const ObSimpleTableSchemaV2 *table_schema,
@@ -1852,7 +1852,7 @@ int ObTableLSExecuteP::init_tb_ctx(const table::ObTableTabletOp &tablet_op,
   return ret;
 }
 
-int ObTableLSExecuteP::add_dict_and_bm_to_result_entity(const ObTableTabletOp &tablet_op,
+int ObTableLSExecuteP::add_dict_and_bm_to_result_entity(const ObTableTabletOp &tablet_op, 
                                                         ObTableTabletOpResult &tablet_result)
 {
   int ret = OB_SUCCESS;
@@ -2055,9 +2055,9 @@ int64_t ObTableLSExecuteP::get_trans_timeout_ts()
   return get_timeout_ts();
 }
 
-int ObTableLSExecuteP::execute_single_query_and_mutate(const uint64_t table_id,
-                                                       const common::ObTabletID tablet_id,
-                                                       const ObTableSingleOp &single_op,
+int ObTableLSExecuteP::execute_single_query_and_mutate(const uint64_t table_id, 
+                                                       const common::ObTabletID tablet_id, 
+                                                       const ObTableSingleOp &single_op, 
                                                        ObTableSingleOpResult &result)
 {
   int ret = OB_SUCCESS;
@@ -2069,7 +2069,7 @@ int ObTableLSExecuteP::execute_single_query_and_mutate(const uint64_t table_id,
     ObTableSingleOpQAM query_and_mutate(*query,
                                         true/*is_check_and_execute*/,
                                         single_op.is_check_no_exists(),
-                                        single_op.rollback_when_check_failed());
+                                        single_op.rollback_when_check_failed()); 
     if (OB_FAIL(query_and_mutate.set_mutations(single_op))) {
       LOG_WARN("fail to set mutations", K(ret), "single_op", single_op);
     } else {

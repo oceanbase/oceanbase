@@ -917,7 +917,7 @@ int ObCOMergeBatchExeTask::errsim_before_merge_partition()
   if (OB_SUCC(ret)) {
     int tmp_ret = EN_COMPACTION_BATCH_EXE_ALLOC_MEM_FAILED;
     if (OB_TMP_FAIL(tmp_ret)) {
-      if (11 == exe_dag->get_start_cg_idx() && (exe_dag->get_end_cg_idx() - exe_dag->get_start_cg_idx() >= DEFAULT_CG_MERGE_BATCH_SIZE)
+      if (11 == exe_dag->get_start_cg_idx() && (exe_dag->get_end_cg_idx() - exe_dag->get_start_cg_idx() >= DEFAULT_CG_MERGE_BATCH_SIZE) 
         && 0 == exe_dag->get_running_times()) {
         // make the batch not including rowkey cg failed for the first time, and dec batch size
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1299,7 +1299,7 @@ int ObCOMergeDagNet::init_cg_schedule_status_for_row_store()
 {
   int ret = OB_SUCCESS;
   const int64_t max_cg_idx = co_merge_ctx_->get_schema()->get_column_group_count();
-
+  
   if (!co_merge_ctx_->is_build_row_store()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid co merge type", KPC_(co_merge_ctx));
@@ -1364,7 +1364,7 @@ void ObCOMergeDagNet::try_update_merge_batch_size(const int64_t column_group_cnt
       K(mem_allow_used), K(batch_mem_allow_per_thread), K(mem_allow_batch_size), K(merge_batch_size_));
 }
 
-/*
+/* 
  *  3 ways to call this func
  * 1）schedule_rest_dag by dag net loop after PREPARE_FINISHED
  * 2) schedule task
@@ -1451,7 +1451,7 @@ int ObCOMergeDagNet::inner_create_row_store_dag(
     common::ObIArray<ObCOMergeBatchExeDag *> &exe_dag_array)
 {
   int ret = OB_SUCCESS;
-  LOG_DEBUG("build row store in this compaction", "co_major_merge_type_",
+  LOG_DEBUG("build row store in this compaction", "co_major_merge_type_", 
     ObCOMajorMergePolicy::co_major_merge_type_to_str(co_merge_ctx_->static_param_.co_major_merge_type_));
 
   dag = nullptr;
@@ -1470,7 +1470,7 @@ int ObCOMergeDagNet::inner_create_row_store_dag(
 }
 
 int ObCOMergeDagNet::inner_create_column_store_dag(
-    ObIDag *parent_dag,
+    ObIDag *parent_dag, 
     int64_t &allowed_schedule_dag_count,
     const int64_t &max_cg_idx,
     ObCOMergeBatchExeDag *&dag,
@@ -1481,7 +1481,7 @@ int ObCOMergeDagNet::inner_create_column_store_dag(
   const int64_t start_schedule_cg_idx = co_merge_ctx_->start_schedule_cg_idx_;
   int64_t start_cg_idx = start_schedule_cg_idx;
   int64_t end_cg_idx = start_schedule_cg_idx;
-
+  
   const ObCOTabletMergeCtx::CGScheduleStatus *schedule_status_array = co_merge_ctx_->cg_schedule_status_array_;
   while (OB_SUCC(ret) && end_cg_idx < max_cg_idx && allowed_schedule_dag_count > 0) {
     start_cg_idx = end_cg_idx;

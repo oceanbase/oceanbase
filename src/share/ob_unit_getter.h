@@ -121,7 +121,7 @@ public:
     //      (Mainly for compatibility. actual_data_disk_size_ from low version is default value 0)
     //   For sys tenant, config_.data_disk_size() can not be 0, and actual_data_disk_size_ is always 0.
     // In SN mode, actual_data_disk_size_ is always 0.
-    int64_t actual_data_disk_size_;
+    int64_t actual_data_disk_size_;  
   };
 
   struct ObServerConfig

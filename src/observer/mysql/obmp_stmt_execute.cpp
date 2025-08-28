@@ -732,8 +732,8 @@ int ObMPStmtExecute::parse_request_type(const char* &pos,
         } else if (EMySQLFieldType::MYSQL_TYPE_COMPLEX != type) {
           int16_t unsigned_flag = 128;
           ObObjType ob_elem_type;
-          if (OB_FAIL(ObSMUtils::get_ob_type(ob_elem_type,
-                                    static_cast<EMySQLFieldType>(type),
+          if (OB_FAIL(ObSMUtils::get_ob_type(ob_elem_type, 
+                                    static_cast<EMySQLFieldType>(type), 
                                     flag & unsigned_flag ? true : false))) {
             LOG_WARN("get ob type fail. ", K(type));
           } else {
@@ -752,7 +752,7 @@ int ObMPStmtExecute::parse_request_type(const char* &pos,
     }
 
     if (OB_SUCC(ret)) {
-
+      
       uint8_t elem_type = 0;
       if (EMySQLFieldType::MYSQL_TYPE_COMPLEX == type) {
         type_name_info.is_basic_type_ = false;
@@ -1629,7 +1629,7 @@ int ObMPStmtExecute::response_result(
       // NOTE: sql_end_cb必须在drv.response_result()之前初始化好
       ObSqlEndTransCb &sql_end_cb = session.get_mysql_end_trans_cb();
       if (OB_FAIL(sql_end_cb.init(packet_sender_, &session,
-                                    stmt_id_, params_num_,
+                                    stmt_id_, params_num_, 
                                     is_prexecute() ? packet_sender_.get_comp_seq() : 0))) {
         LOG_WARN("failed to init sql end callback", K(ret));
       } else if (OB_FAIL(drv.response_result(result))) {
@@ -1921,16 +1921,16 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
         }
       }
       // 释放数组内存避免内存泄漏
-
+      
       OZ (response_result_for_arraybinding(session, exception_array));
     } else {
       need_response_error = false;
       if (OB_FAIL(do_process_single(session, params_, has_more_result, force_sync_resp, async_resp_used))) {
         LOG_WARN("fail to do process", K(ret), K(ctx_.cur_sql_));
       }
-
-      /* Function setup_user_resource_group cause performance regression.
-          No need to setup group_id here,
+      
+      /* Function setup_user_resource_group cause performance regression. 
+          No need to setup group_id here, 
           Only setup group_id in MPConnect
       */
       if (is_conn_valid()) {
@@ -2772,7 +2772,7 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
         OX (param.set_extend(reinterpret_cast<int64_t>(cursor), PL_CURSOR_TYPE));
       }
     } else {
-      bool is_unsigned = NULL == type_info || !type_info->elem_type_.get_meta_type().is_unsigned_integer() ? false : true;
+      bool is_unsigned = NULL == type_info || !type_info->elem_type_.get_meta_type().is_unsigned_integer() ? false : true; 
       if (OB_FAIL(parse_basic_param_value(allocator, type, session, charset, ncharset, cs_type, ncs_type,
                                           data, tz_info, param, false, &analysis_checker_, is_unsigned))) {
         LOG_WARN("failed to parse basic param value", K(ret));
@@ -2912,7 +2912,7 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
             && MYSQL_TYPE_VAR_STRING != type
             && MYSQL_TYPE_OB_NCHAR != type) {
           param.set_length_semantics(LS_BYTE);
-        } else {
+        } else {     
           param.set_length_semantics(LS_CHAR);
         }
       }
@@ -2988,7 +2988,7 @@ int ObMPStmtExecute::parse_integer_value(const uint32_t type,
                                          ObIAllocator &allocator,
                                          bool is_complex_element,
                                          ObPSAnalysisChecker *checker,
-                                         bool is_unsigned) // oracle unsigned need
+                                         bool is_unsigned) // oracle unsigned need 
 {
   int ret = OB_SUCCESS;
   bool cast_to_number = !(lib::is_mysql_mode() || is_complex_element || MYSQL_TYPE_TINY == type);
@@ -3372,7 +3372,7 @@ void ObMPStmtExecute::record_stat(const stmt::StmtType type, const int64_t end_t
           }
         }
         break;
-
+        
         default: {
           EVENT_ADD(SQL_OTHER_TIME, time_cost);
           if (!session.get_is_in_retry()) {

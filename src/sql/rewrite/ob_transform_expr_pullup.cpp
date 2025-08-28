@@ -537,7 +537,7 @@ int ObTransformExprPullup::search_expr_cannot_pullup(ObRawExpr *expr,
     }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
-      if (OB_FAIL(SMART_CALL(search_expr_cannot_pullup(expr->get_param_expr(i),
+      if (OB_FAIL(SMART_CALL(search_expr_cannot_pullup(expr->get_param_expr(i), 
                                                        expr_map,
                                                        expr_cannot_pullup)))) {
         LOG_WARN("fail to preorder search expr", K(ret));
@@ -691,8 +691,8 @@ int ObTransformExprPullup::pullup_expr_from_view(TableItem *view,
         }
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); ++i) {
-        if (OB_FAIL(search_expr_cannot_pullup(select_exprs.at(i),
-                                              child_select_map,
+        if (OB_FAIL(search_expr_cannot_pullup(select_exprs.at(i), 
+                                              child_select_map, 
                                               expr_cannot_pullup))) {
           LOG_WARN("fail to get relation exprs", K(ret));
         }

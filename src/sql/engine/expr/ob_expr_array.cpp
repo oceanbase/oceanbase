@@ -33,8 +33,8 @@ ObExprArray::ObExprArray(ObIAllocator &alloc)
 ObExprArray::ObExprArray(ObIAllocator &alloc,
                          ObExprOperatorType type,
                          const char *name,
-                         int32_t param_num,
-                         int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension)
+                         int32_t param_num, 
+                         int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension) 
 {
 }
 
@@ -75,7 +75,7 @@ int ObExprArray::calc_result_typeN(ObExprResType& type,
   }
   if (OB_SUCC(ret)) {
     type.set_collection(subschema_id);
-  }
+  }  
   return ret;
 }
 
@@ -173,7 +173,7 @@ int ObExprArray::add_elem_to_nested_array(ObIAllocator &tmp_allocator, ObEvalCtx
       LOG_WARN("failed to init array", K(ret));
     } else if (OB_FAIL(nest_array->push_back(*arr_obj))) {
       LOG_WARN("failed to push back array", K(ret));
-    }
+    } 
   }
   return ret;
 }

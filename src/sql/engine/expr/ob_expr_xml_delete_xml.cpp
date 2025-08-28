@@ -19,12 +19,12 @@
 
 using namespace oceanbase::common;
 
-namespace oceanbase
+namespace oceanbase 
 {
 namespace sql
 {
 
-ObExprDeleteXml::ObExprDeleteXml(common::ObIAllocator &alloc)
+ObExprDeleteXml::ObExprDeleteXml(common::ObIAllocator &alloc) 
   : ObFuncExprOperator(alloc, T_FUN_SYS_DELETEXML, N_DELETEXML, MORE_THAN_ONE, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
@@ -145,7 +145,7 @@ int ObExprDeleteXml::eval_delete_xml(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
       if (OB_ISNULL(child_node)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("xml tree child null", K(ret), K(i));
-      } else if (ObMulModeNodeType::M_TEXT == child_node->type() ||
+      } else if (ObMulModeNodeType::M_TEXT == child_node->type() || 
                  ObMulModeNodeType::M_CDATA == child_node->type()) {
         text_count++;
       } else if (ObMulModeNodeType::M_ELEMENT == child_node->type()) {
@@ -175,10 +175,10 @@ int ObExprDeleteXml::eval_delete_xml(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
       if (OB_FAIL(xml_doc->print(buff, ObXmlFormatType::NO_FORMAT))) {
         LOG_WARN("fail to print xml tree", K(ret));
       } else if (OB_FALSE_IT(plain_text.assign_ptr(buff.ptr(), buff.length()))) {
-      } else if (node_type == ObMulModeNodeType::M_DOCUMENT &&
+      } else if (node_type == ObMulModeNodeType::M_DOCUMENT && 
                  OB_FAIL(ObXmlParserUtils::parse_document_text(mem_ctx, plain_text, xml_doc))) {
-        if (ret == OB_ERR_PARSER_SYNTAX) {
-          ret = OB_ERR_XML_PARSE;
+        if (ret == OB_ERR_PARSER_SYNTAX) { 
+          ret = OB_ERR_XML_PARSE; 
         }
         LOG_WARN("parsing document failed", K(ret), K(plain_text));
       } else if (node_type != ObMulModeNodeType::M_DOCUMENT &&
@@ -210,7 +210,7 @@ int ObExprDeleteXml::delete_xml(ObPathExprIter &xpath_iter, bool &should_reparse
   INIT_SUCC(ret);
   ObIMulModeBase *node = NULL;
   ObArray<ObIMulModeBase*> res_array;
-
+   
   if (OB_FAIL(xpath_iter.open())) {
     LOG_WARN("fail to open xpath iterator", K(ret));
     ObXMLExprHelper::replace_xpath_ret_code(ret);

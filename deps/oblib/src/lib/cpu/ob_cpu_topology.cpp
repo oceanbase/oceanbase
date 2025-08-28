@@ -163,7 +163,7 @@ bool cpu_have_avx2()
 {
 #if defined(__x86_64__)
   int regs[4];
-  get_cpuid(regs, 0x7);
+  get_cpuid(regs, 0x7); 
   return cpu_have_avx() && (regs[1] >> 5 & 1);
 #else
   return false;
@@ -173,7 +173,7 @@ bool cpu_have_avx512f()
 {
 #if defined(__x86_64__)
   int regs[4];
-  get_cpuid(regs, 0x7);
+  get_cpuid(regs, 0x7); 
   return regs[1] >> 16 & 1;
 #else
   return false;
@@ -183,7 +183,7 @@ bool cpu_have_avx512bw()
 {
 #if defined(__x86_64__)
   int regs[4];
-  get_cpuid(regs, 0x7);
+  get_cpuid(regs, 0x7); 
   return cpu_have_avx512f() && (regs[1] >> 30 & 1);
 #else
   return false;

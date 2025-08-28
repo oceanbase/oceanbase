@@ -272,8 +272,8 @@ bool ObVectorSegment::can_append_col(int32_t real_data_size, int32_t fixed_len) 
 int32_t ObVectorSegment::calc_alloc_size(int32_t data_size, int32_t fixed_len)
 {
   int32_t min_seg_size = data_size + ObVectorSegment::get_bit_vector_size()
-                          + sizeof(uint32_t) /*for continuous*/
-                          + fixed_len
+                          + sizeof(uint32_t) /*for continuous*/ 
+                          + fixed_len 
                           + sizeof(ObVectorSegment);
   int32_t alloc_size = std::max(static_cast<int32_t> (ObDtlVectorsBuffer::DEFAULT_BLOCK_SIZE),
                                 min_seg_size);
@@ -424,7 +424,7 @@ int ObDtlVectors::append_row(const common::ObIArray<ObExpr*> &exprs, const int32
       } else if (exprs.at(i)->get_format(ctx) == VEC_UNIFORM
                 && nullptr == static_cast<ObUniformBase *>
                                 (exprs.at(i)->get_vector(ctx))->get_datums()[batch_idx].ptr_) {
-        // TODO : to be remove
+        // TODO : to be remove 
       } else {
         memcpy(get_data(i) + infos_[i].fixed_len_ * (*row_cnt_), exprs.at(i)->get_vector(ctx)->get_payload(batch_idx), infos_[i].fixed_len_);
       }

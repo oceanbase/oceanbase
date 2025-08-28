@@ -759,8 +759,8 @@ int ObSqlTransControl::dblink_xa_prepare(ObExecContext &exec_ctx)
           LOG_WARN("failed to get dblink connection from session", K(dblink_id), K(sessid), K(ret));
         } else if (OB_NOT_NULL(dblink_conn)) {
           if (OB_FAIL(ObTMService::tm_rm_start(exec_ctx, // some conn get from session may not in xa trasaction, use tm_rm_start make sure it in xa
-                                              static_cast<common::sqlclient::DblinkDriverProto>(dblink_schema->get_driver_proto()),
-                                              dblink_conn,
+                                              static_cast<common::sqlclient::DblinkDriverProto>(dblink_schema->get_driver_proto()), 
+                                              dblink_conn, 
                                               session->get_dblink_context().get_tx_id()))) {
             LOG_WARN("failed to tm_rm_start", K(ret), K(dblink_id), K(dblink_conn), K(sessid));
           } else {
@@ -769,10 +769,10 @@ int ObSqlTransControl::dblink_xa_prepare(ObExecContext &exec_ctx)
           ObDblinkCtxInSession::revert_dblink_conn(dblink_conn); // release rlock locked by get_dblink_conn
         } else {
           common::sqlclient::dblink_param_ctx dblink_param_ctx;
-          if (OB_FAIL(ObDblinkService::init_dblink_param_ctx(dblink_param_ctx,
-                                                             session,
+          if (OB_FAIL(ObDblinkService::init_dblink_param_ctx(dblink_param_ctx, 
+                                                             session, 
                                                              allocator, //useless in oracle mode
-                                                             dblink_id,
+                                                             dblink_id, 
                                                              static_cast<common::sqlclient::DblinkDriverProto>(dblink_schema->get_driver_proto())))) {
             LOG_WARN("failed to init dblink param ctx", K(ret), K(dblink_param_ctx), K(dblink_id));
           } else if (OB_FAIL(dblink_proxy->create_dblink_pool(dblink_param_ctx,
@@ -792,8 +792,8 @@ int ObSqlTransControl::dblink_xa_prepare(ObExecContext &exec_ctx)
           } else if (OB_FAIL(session->get_dblink_context().set_dblink_conn(dblink_conn))) {
             LOG_WARN("failed to set dblink connection to session", K(session), K(sessid), K(ret));
           } else if (OB_FAIL(ObTMService::tm_rm_start(exec_ctx,
-                                                      static_cast<common::sqlclient::DblinkDriverProto>(dblink_schema->get_driver_proto()),
-                                                      dblink_conn,
+                                                      static_cast<common::sqlclient::DblinkDriverProto>(dblink_schema->get_driver_proto()), 
+                                                      dblink_conn, 
                                                       session->get_dblink_context().get_tx_id()))) {
             LOG_WARN("failed to tm_rm_start", K(ret), K(dblink_id), K(dblink_conn), K(sessid), K(static_cast<common::sqlclient::DblinkDriverProto>(dblink_schema->get_driver_proto())));
           } else {
@@ -881,7 +881,7 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
       int64_t stale_time = session->get_ob_max_read_stale_time();
       int64_t refresh_interval = GCONF.weak_read_version_refresh_interval;
       if (stale_time > 0 && refresh_interval > stale_time) {
-        TRANS_LOG(WARN, "weak_read_version_refresh_interval is larger than ob_max_read_stale_time ",
+        TRANS_LOG(WARN, "weak_read_version_refresh_interval is larger than ob_max_read_stale_time ", 
                   K(refresh_interval), K(stale_time), KPC(txs));
       }
     } else {
@@ -1263,7 +1263,7 @@ int ObSqlTransControl::start_hook_if_need_(ObSQLSessionInfo &session,
                                            bool &start_hook)
 {
   int ret = OB_SUCCESS;
-  if (!session.get_tx_desc()->is_shadow() && !session.has_start_stmt() &&
+  if (!session.get_tx_desc()->is_shadow() && !session.has_start_stmt() && 
       OB_SUCC(txs->sql_stmt_start_hook(session.get_xid(), *session.get_tx_desc(), session.get_server_sid(), get_real_session_id(session)))) {
     start_hook = true;
   }
@@ -1618,7 +1618,7 @@ int ObSqlTransControl::get_trans_result(ObExecContext &exec_ctx)
   return get_trans_result(exec_ctx, exec_ctx.get_my_session()->get_trans_result());
 }
 
-int ObSqlTransControl::reset_session_tx_state(ObBasicSessionInfo *session,
+int ObSqlTransControl::reset_session_tx_state(ObBasicSessionInfo *session, 
                                               bool reuse_tx_desc,
                                               bool reset_trans_variable,
                                               const uint64_t data_version)
@@ -1663,7 +1663,7 @@ int ObSqlTransControl::reset_session_tx_state(ObSQLSessionInfo *session, bool re
       LOG_WARN_RET(temp_ret, "trx level temporary table clean failed", KR(temp_ret));
     }
   }
-  int ret = reset_session_tx_state(static_cast<ObBasicSessionInfo*>(session), reuse_tx_desc,
+  int ret = reset_session_tx_state(static_cast<ObBasicSessionInfo*>(session), reuse_tx_desc, 
       reset_trans_variable, session->get_data_version());
   return COVER_SUCC(temp_ret);
 }

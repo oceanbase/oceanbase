@@ -110,7 +110,7 @@ int ObZoneMergeTableOperator::update_partial_zone_merge_info(
                 LOG_WARN("fail to add scn column", KR(ret), K(tenant_id), K(info), K(*it));
               } else if (0 == STRCMP(it->name_, "all_merged_scn")) {
                 // do not add extra condition for all_merged_scn
-                //
+                // 
               } else if (dml.get_extra_condition().empty()) {
                 if (OB_FAIL(dml.get_extra_condition().assign_fmt("%s < %ld", it->name_, it->get_scn_val()))) {
                   LOG_WARN("fail to assign extra_condition", KR(ret), K(tenant_id));

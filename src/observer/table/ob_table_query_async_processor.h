@@ -40,7 +40,7 @@ namespace observer
  */
  struct ObHTableLSGetCtx
  {
-  ObHTableLSGetCtx(table::ObTableQuery &query, ObString &arg_table_name, table::ObTableApiCredential &credential)
+  ObHTableLSGetCtx(table::ObTableQuery &query, ObString &arg_table_name, table::ObTableApiCredential &credential) 
       : query_(query),
         arg_table_name_(arg_table_name),
         outer_credential_(credential)
@@ -178,7 +178,7 @@ private:
   static int process_columns(const ObIArray<ObString>& columns,
                              ObArray<std::pair<ObString, bool>>& familys,
                              ObArray<ObString>& real_columns);
-
+  
   static int update_table_info_columns(table::ObTableSingleQueryInfo* table_info,
                             const ObArray<std::pair<ObString, bool>>& family_addfamily_flag_pairs,
                             const ObArray<ObString>& real_columns,

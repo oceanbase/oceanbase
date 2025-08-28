@@ -87,7 +87,7 @@ private:
 
 public:
    ObString &result_;
-
+  
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLobQueryDataHandler);
 };
@@ -107,7 +107,7 @@ protected:
 
 public:
   uint64_t result_;
-
+  
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLobQueryLengthHandler);
 

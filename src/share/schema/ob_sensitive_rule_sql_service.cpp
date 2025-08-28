@@ -201,7 +201,7 @@ int ObSensitiveRuleSqlService::alter_schema(ObISQLClient &sql_client,
     LOG_WARN("invalid input argument", K(ret), K(schema));
   }
   for (int64_t i = THE_SYS_TABLE_IDX; OB_SUCC(ret) && i < ARRAYSIZEOF(tname); ++i) {
-    if (OB_FAIL(sql.assign_fmt("%s INTO %s(",
+    if (OB_FAIL(sql.assign_fmt("%s INTO %s(", 
                                THE_SYS_TABLE_IDX == i ? "REPLACE" : "INSERT",
                                tname[i]))) {
       LOG_WARN("fail to assign sql format", K(ret));
@@ -236,17 +236,17 @@ int ObSensitiveRuleSqlService::gen_insert_sql(common::ObSqlString &sql,
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
   SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, schema.get_tenant_id()),
                        "tenant_id", "%lu");
-  SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_schema_id(exec_tenant_id, schema.get_sensitive_rule_id()),
+  SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_schema_id(exec_tenant_id, schema.get_sensitive_rule_id()), 
                        "sensitive_rule_id", "%lu");
   SQL_COL_APPEND_VALUE(sql, values, schema.get_protection_policy(), "protection_policy", "%lu");
   SQL_COL_APPEND_VALUE(sql, values, schema.get_enabled(), "enabled", "%u");
-  SQL_COL_APPEND_ESCAPE_STR_VALUE(sql, values,
+  SQL_COL_APPEND_ESCAPE_STR_VALUE(sql, values, 
                                   schema.get_sensitive_rule_name_str().ptr(),
-                                  schema.get_sensitive_rule_name_str().length(),
+                                  schema.get_sensitive_rule_name_str().length(), 
                                   "sensitive_rule_name");
-  SQL_COL_APPEND_ESCAPE_STR_VALUE(sql, values,
+  SQL_COL_APPEND_ESCAPE_STR_VALUE(sql, values, 
                                   schema.get_method_str().ptr(),
-                                  schema.get_method_str().length(),
+                                  schema.get_method_str().length(), 
                                   "method");
   return ret;
 }
@@ -272,9 +272,9 @@ int ObSensitiveRuleSqlService::add_column_schema(ObISQLClient &sql_client,
       if (OB_FAIL(sql.assign_fmt("INSERT INTO %s(", tname[i]))) {
         LOG_WARN("fail to assign sql format", K(ret));
       } else {
-        SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+        SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id), 
                              "tenant_id", "%lu");
-        SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_schema_id(exec_tenant_id, schema.get_sensitive_rule_id()),
+        SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_schema_id(exec_tenant_id, schema.get_sensitive_rule_id()), 
                              "sensitive_rule_id", "%lu");
         SQL_COL_APPEND_VALUE(sql, values, item.table_id_, "table_id", "%lu");
         SQL_COL_APPEND_VALUE(sql, values, item.column_id_, "column_id", "%lu");
@@ -319,8 +319,8 @@ int ObSensitiveRuleSqlService::drop_column_schema(ObISQLClient &sql_client,
     ObSensitiveFieldItem item = schema.get_sensitive_field_items().at(i);
     if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE tenant_id = %lu "
                                "AND sensitive_rule_id = %lu AND table_id = %lu AND column_id = %lu",
-                               OB_ALL_SENSITIVE_COLUMN_TNAME,
-                               ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+                               OB_ALL_SENSITIVE_COLUMN_TNAME, 
+                               ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id), 
                                ObSchemaUtils::get_extract_schema_id(exec_tenant_id, schema.get_sensitive_rule_id()),
                                item.table_id_, item.column_id_))) {
       LOG_WARN("fail to assign sql format", K(ret));
@@ -335,9 +335,9 @@ int ObSensitiveRuleSqlService::drop_column_schema(ObISQLClient &sql_client,
     } else if (OB_FAIL(sql.assign_fmt("INSERT INTO %s(", OB_ALL_SENSITIVE_COLUMN_HISTORY_TNAME))) {
       LOG_WARN("fail to assign sql format", K(ret));
     } else {
-      SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+      SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id), 
                            "tenant_id", "%lu");
-      SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_schema_id(exec_tenant_id, schema.get_sensitive_rule_id()),
+      SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_schema_id(exec_tenant_id, schema.get_sensitive_rule_id()), 
                           "sensitive_rule_id", "%lu");
       SQL_COL_APPEND_VALUE(sql, values, item.table_id_, "table_id", "%lu");
       SQL_COL_APPEND_VALUE(sql, values, item.column_id_, "column_id", "%lu");

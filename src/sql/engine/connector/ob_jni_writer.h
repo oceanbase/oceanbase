@@ -89,7 +89,7 @@ private:
   common::hash::ObHashMap<ObString, ObString> writer_params_;
   common::ObSEArray<OdpsType, 32> column_types_;
 
-
+  
   DISALLOW_COPY_AND_ASSIGN(JniWriter);
 };
 

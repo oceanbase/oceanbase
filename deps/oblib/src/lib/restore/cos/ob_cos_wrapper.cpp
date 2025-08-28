@@ -222,7 +222,7 @@ public:
   {
     int ret = OB_SUCCESS;
     if (OB_NOT_NULL(write_content_buffer)) {
-      // Using origin_write_content_list_ to
+      // Using origin_write_content_list_ to 
       // record the head and tail nodes of the data nodes in write_content_buffer.
       // During retries, these data nodes are re-linked to write_content_buffer,
       // ensuring data consistency during the retry process.
@@ -286,17 +286,17 @@ protected:
     if (OB_NOT_NULL(ref_headers_)
         && OB_FAIL(ob_copy_apr_tables(*ref_headers_, origin_headers_))) {
       // Note: We cannot directly set *ref_headers_ = origin_headers_.
-      // For example, in the function:
+      // For example, in the function: 
       // cos_put_object_from_buffer(const cos_request_options_t *options,
       //                            const cos_string_t *bucket,
-      //                            const cos_string_t *object,
-      //                            coss_list_t *buffer,
-      //                            cos_table_t *headers,
+      //                            const cos_string_t *object, 
+      //                            coss_list_t *buffer, 
+      //                            cos_table_t *headers, 
       //                            cos_table_t **resp_headers)
       //
       // The 'headers' parameter in the SDK points to a memory address.
       // When we do *ref_headers_ points to the same memory location.
-      // However, if we set *ref_headers_ = origin_headers_, *ref_headers_ will point to
+      // However, if we set *ref_headers_ = origin_headers_, *ref_headers_ will point to 
       // a new memory allocation, but the 'headers' parameter
       // in the oss_put_object_from_buffer function will still refer to the old memory address.
       cos_warn_log("[COS]fail to reset headers, ret=%d, ref_headers=%p, origin_headers=%p\n",
@@ -495,7 +495,7 @@ int ObCosEnv::init(apr_abortfunc_t abort_fn)
           ret, apr_ret, COS_GLOBAL_APR_ALLOCATOR);
     } else if (APR_SUCCESS != (apr_ret = apr_pool_create_ex(&COS_GLOBAL_APR_POOL,
                                                             nullptr/*parent*/,
-                                                            // It is OK to pass a null pointer. If a null pointer is passed,
+                                                            // It is OK to pass a null pointer. If a null pointer is passed, 
                                                             // COS_GLOBAL_APR_POOL will automatically use the global_pool's abort_fn in the APR library.
                                                             abort_fn,
                                                             COS_GLOBAL_APR_ALLOCATOR))
@@ -521,7 +521,7 @@ int ObCosEnv::init(apr_abortfunc_t abort_fn)
       // if the initialization succeeds.
       // Therefore, if an error occurs during initialization,
       // destroying COS_GLOBAL_APR_POOL won't automatically free COS_GLOBAL_APR_ALLOCATOR.
-      // apr_thread_mutex_t allocates memory based on apr_allocator_t.
+      // apr_thread_mutex_t allocates memory based on apr_allocator_t. 
       // When the corresponding allocator is destroyed,
       // the memory allocated for the mutex is automatically released.
       if (nullptr != COS_GLOBAL_APR_POOL) {
@@ -561,8 +561,8 @@ struct CosContext
   cos_request_options_t *options;
   OB_COS_customMem custom_mem;
 
-  CosContext(OB_COS_customMem &mem)
-    : mem_pool(NULL), options(NULL)
+  CosContext(OB_COS_customMem &mem) 
+    : mem_pool(NULL), options(NULL) 
   {
     custom_mem.customAlloc = mem.customAlloc;
     custom_mem.customFree = mem.customFree;
@@ -692,10 +692,10 @@ void ObCosWrapper::destroy_cos_handle(
 
 
 int ObCosWrapper::put(
-    Handle *h,
+    Handle *h, 
     const CosStringBuffer &bucket_name,
     const CosStringBuffer &object_name,
-    const char *buf,
+    const char *buf, 
     const int64_t buf_size)
 {
   int ret = OB_SUCCESS;
@@ -810,7 +810,7 @@ int ObCosWrapper::append(
         ret = OB_OBJECT_STORAGE_IO_ERROR;
         cos_warn_log("[COS]fail to add content md5, ret=%d, tmp_ret=%d\n", ret, tmp_ret);
       // append interface, do not retry
-      } else if (nullptr == (cos_ret = cos_append_object_from_buffer(ctx->options, &bucket, &object,
+      } else if (nullptr == (cos_ret = cos_append_object_from_buffer(ctx->options, &bucket, &object, 
          offset, &buffer, headers, &resp_headers)) || !cos_status_is_ok(cos_ret)) {
         convert_io_error(cos_ret, ret);
         cos_warn_log("[COS]fail to append object from buffer to cos, ret=%d\n", ret);
@@ -871,7 +871,7 @@ int ObCosWrapper::head_object_meta(
         log_status(cos_ret, ret);
       }
     }
-
+    
     if (OB_SUCCESS == ret && is_exist) {
       char *object_type = (char*)(apr_table_get(resp_headers, COS_OBJECT_TYPE));
       if (NULL != object_type) {
@@ -1111,8 +1111,8 @@ int ObCosWrapper::del_objects_in_dir(
     const CosStringBuffer &dir_name,
     int64_t &deleted_cnt)
 {
-  // There is no ability to delete those objects that have a common prefix
-  // directly which sdk supports. Otherwise, we need list these objects then
+  // There is no ability to delete those objects that have a common prefix 
+  // directly which sdk supports. Otherwise, we need list these objects then 
   // delete them.
   int ret = OB_SUCCESS;
 
@@ -1137,7 +1137,7 @@ int ObCosWrapper::del_objects_in_dir(
   } else {
     cos_status_t *cos_ret = NULL;
     cos_list_object_params_t *params = NULL;
-
+    
     if (NULL == (params = cos_create_list_object_params(ctx->mem_pool))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       cos_warn_log("[COS]fail to create list object params, ret=%d\n", ret);
@@ -1273,7 +1273,7 @@ int ObCosWrapper::update_object_modified_ts(
       cos_warn_log("[COS]fail to allocate copy object param memory, ret=%d\n", ret);
     } else {
       // In Cos, things are different. We cannot refresh the object's latest modified
-      // time by updating ACL just like what we do for OSS. Instead, we use "PUT Object - Copy".
+      // time by updating ACL just like what we do for OSS. Instead, we use "PUT Object - Copy". 
       // See https://cloud.tencent.com/document/product/436/10881.
 
       // Let copied object replace the source meta, default is copy.
@@ -1395,7 +1395,7 @@ int ObCosWrapper::pread(
             memcpy(buf + buf_pos, content->pos, (size_t)needed_size);
             buf_pos += needed_size;
             read_size += needed_size;
-
+            
             if (buf_pos >= buf_size) {
               break;
             }
@@ -1405,7 +1405,7 @@ int ObCosWrapper::pread(
         if (OB_FAIL(ret)) {
         } else if (has_meta && OB_UNLIKELY(read_size != buf_size)) {
           ret = OB_OBJECT_STORAGE_IO_ERROR;
-          cos_warn_log("[COS]unexpected error, read_size not equal to expected size, ret=%d, buf_size=%ld, read_size=%ld, offset=%ld, req_id=%s.\n",
+          cos_warn_log("[COS]unexpected error, read_size not equal to expected size, ret=%d, buf_size=%ld, read_size=%ld, offset=%ld, req_id=%s.\n", 
               ret, buf_size, read_size, offset, cos_ret->req_id);
           log_status(cos_ret, ret);
         }
@@ -1564,7 +1564,7 @@ static int do_list_(
       cos_list_init(&params->object_list);
       cos_list_init(&params->common_prefix_list);
     }
-
+    
 
     if (OB_SUCCESS == ret) {
       params->max_ret = cos_list_args.max_ret_;
@@ -1618,14 +1618,14 @@ int ObCosWrapper::list_objects(
     cos_list_object_params_t *params = NULL;
     cos_list_object_content_t *content = NULL;
     cos_table_t *resp_headers = NULL;
-
+    
     CosListObjPara para;
     para.arg_ = arg;
     para.type_ = CosListObjPara::CosListType::COS_LIST_CB_ARG;
 
     do {
       if (OB_SUCCESS != (ret = do_list_(cos_list_args, params, &resp_headers))) {
-        cos_warn_log("[COS]fail to do list, bucket=%s, path=%s, next_marker=%s, ret=%d\n",
+        cos_warn_log("[COS]fail to do list, bucket=%s, path=%s, next_marker=%s, ret=%d\n", 
             bucket_name.data_, full_dir_path.data_, cos_list_args.next_marker_, ret);
       } else {
         char *request_id = (char*)apr_table_get(resp_headers, "x-cos-request-id");
@@ -1638,7 +1638,7 @@ int ObCosWrapper::list_objects(
             cos_warn_log("[COS]returned object key is invalid, dir=%s, requestid=%s, ret=%d\n", full_dir_path.data_, request_id, ret);
           } else if (false == full_dir_path.is_prefix_of(content->key.data, content->key.len)) {
             ret = OB_OBJECT_STORAGE_IO_ERROR;
-            cos_warn_log("[COS]returned object prefix not match, dir=%s, object=%s, requestid=%s, ret=%d\n",
+            cos_warn_log("[COS]returned object prefix not match, dir=%s, object=%s, requestid=%s, ret=%d\n", 
                 full_dir_path.data_, content->key.data, request_id, ret);
           } else if (content->key.len == full_dir_path_len) {
             // skip
@@ -1707,7 +1707,7 @@ int ObCosWrapper::list_part_objects(
     para.type_ = CosListObjPara::CosListType::COS_PART_LIST_CTX;
 
     if (OB_SUCCESS != (ret = do_list_(cos_list_args, params, &resp_headers))) {
-      cos_warn_log("[COS]fail to do list, bucket=%s, path=%s, next_marker=%s, ret=%d\n",
+      cos_warn_log("[COS]fail to do list, bucket=%s, path=%s, next_marker=%s, ret=%d\n", 
           bucket_name.data_, full_dir_path.data_, cos_list_args.next_marker_, ret);
     } else {
       char *request_id = (char*)apr_table_get(resp_headers, "x-cos-request-id");
@@ -1721,7 +1721,7 @@ int ObCosWrapper::list_part_objects(
                 full_dir_path.data_, request_id, ret);
         } else if (false == full_dir_path.is_prefix_of(content->key.data, content->key.len)) {
           ret = OB_OBJECT_STORAGE_IO_ERROR;
-          cos_warn_log("[COS]returned object prefix not match, dir=%s, object=%s, requestid=%s, ret=%d\n",
+          cos_warn_log("[COS]returned object prefix not match, dir=%s, object=%s, requestid=%s, ret=%d\n", 
               full_dir_path.data_, content->key.data, request_id, ret);
         } else if (content->key.len == full_dir_path_len) {
           // skip
@@ -1794,7 +1794,7 @@ int ObCosWrapper::list_directories(
 
     do {
       if (OB_SUCCESS != (ret = do_list_(cos_list_args, params, &resp_headers))) {
-        cos_warn_log("[COS]fail to do list, bucket=%s, path=%s, next_marker=%s, ret=%d\n",
+        cos_warn_log("[COS]fail to do list, bucket=%s, path=%s, next_marker=%s, ret=%d\n", 
             bucket_name.data_, dir_name.data_, cos_list_args.next_marker_, ret);
       } else {
         char *request_id = (char*)apr_table_get(resp_headers, "x-cos-request-id");
@@ -1880,7 +1880,7 @@ int ObCosWrapper::is_empty_directory(
     cos_table_t *resp_headers = NULL;
 
     if (OB_SUCCESS != (ret = do_list_(cos_list_args, params, &resp_headers))) {
-      cos_warn_log("[COS]fail to do list, bucket=%s, path=%s, next_marker=%s, ret=%d\n",
+      cos_warn_log("[COS]fail to do list, bucket=%s, path=%s, next_marker=%s, ret=%d\n", 
           bucket_name.data_, dir_name.data_, cos_list_args.next_marker_, ret);
     } else {
       is_empty_dir = static_cast<bool>(cos_list_empty(&params->object_list));
@@ -2021,7 +2021,7 @@ int ObCosWrapper::upload_part_from_buffer(
     cos_warn_log("[COS]upload_id is null, ret=%d\n", ret);
   } else if (NULL == buf || buf_size < 1 || part_num < 1 || part_num > MAX_COS_PART_NUM) {
     ret = OB_INVALID_ARGUMENT;
-    cos_warn_log("[COS]invalid buf/buf_size/part_num, ret=%d, buf_size=%d, part_num=%d\n",
+    cos_warn_log("[COS]invalid buf/buf_size/part_num, ret=%d, buf_size=%d, part_num=%d\n", 
                  ret, buf_size, part_num);
   } else {
     cos_string_t bucket;
@@ -2047,7 +2047,7 @@ int ObCosWrapper::upload_part_from_buffer(
             ret, bucket_name.data_, object_name.data_, upload_id_str.data_);
       } else if (OB_ISNULL(cos_ret = execute_until_timeout(
               strategy, cos_upload_part_from_buffer,
-              ctx->options, &bucket, &object, &upload_id, part_num, &buffer, &resp_headers))
+              ctx->options, &bucket, &object, &upload_id, part_num, &buffer, &resp_headers)) 
           || !cos_status_is_ok(cos_ret)) {
         convert_io_error(cos_ret, ret);
         cos_warn_log("[COS]fail to upload part to cos, ret=%d, part_num=%d\n", ret, part_num);
@@ -2112,7 +2112,7 @@ int ObCosWrapper::complete_multipart_upload(
     // complete interface, do not retry
     } else if (nullptr == (cos_ret = cos_complete_multipart_upload(
             ctx->options, &bucket, &object, &upload_id, complete_part_list,
-            nullptr, &resp_headers))
+            nullptr, &resp_headers)) 
         || !cos_status_is_ok(cos_ret)) {
       convert_io_error(cos_ret, ret);
       cos_warn_log("[COS]fail to complete multipart upload, ret=%d\n", ret);
@@ -2156,7 +2156,7 @@ int ObCosWrapper::abort_multipart_upload(
     cos_table_t *resp_headers = nullptr;
     if (nullptr == (cos_ret = execute_until_timeout(
             strategy, cos_abort_multipart_upload,
-            ctx->options, &bucket, &object, &upload_id, &resp_headers))
+            ctx->options, &bucket, &object, &upload_id, &resp_headers)) 
         || !cos_status_is_ok(cos_ret)) {
       convert_io_error(cos_ret, ret);
       if (OB_OBJECT_NOT_EXIST == ret) {
@@ -2206,7 +2206,7 @@ int ObCosWrapper::del_unmerged_parts(
     cos_list_multipart_upload_content_t *content = NULL;
     cos_table_t *resp_headers = NULL;
     cos_status_t *cos_ret = NULL;
-
+    
     do {
       // There is a bug in the 'cos_list_multipart_upload'
       // when parsing the response data to retrieve the upload id of multipart uploads

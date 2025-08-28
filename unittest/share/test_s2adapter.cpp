@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #include <gtest/gtest.h>
 #define private public
 #include "lib/json_type/ob_json_common.h"
@@ -364,7 +364,7 @@ TEST_F(TestS2Adapter, multiPoint)
 {
   ObArenaAllocator allocator(ObModIds::TEST);
   ObJsonBuffer data(&allocator);
-
+  
   std::vector<double> xv{1,3};
   std::vector<double> yv{5,4};
   append_multi_point(data, xv, yv);
@@ -443,7 +443,7 @@ TEST_F(TestS2Adapter, multiPolygon)
 }
 
 TEST_F(TestS2Adapter, collection)
-{
+{ 
   ObArenaAllocator allocator(ObModIds::TEST);
   ObJsonBuffer data(&allocator);
   ASSERT_EQ(OB_SUCCESS, append_srid(data, 0));
@@ -496,7 +496,7 @@ TEST_F(TestS2Adapter, collection)
   // geometry
   ASSERT_EQ(OB_SUCCESS, append_bo(data));
   ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::GEOMETRYCOLLECTION));
-  ASSERT_EQ(OB_SUCCESS, append_uint32(data, 0));
+  ASSERT_EQ(OB_SUCCESS, append_uint32(data, 0)); 
   ObString wkb(data.length(), data.ptr());
   ObS2Adapter s2object(&allocator, true);
   ObS2Cellids cells;

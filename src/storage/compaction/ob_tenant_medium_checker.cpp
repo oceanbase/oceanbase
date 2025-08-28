@@ -26,7 +26,7 @@ namespace compaction
  * */
 bool ObTabletCheckInfo::is_valid() const
 {
-  return tablet_id_.is_valid() && ls_id_.is_valid() &&
+  return tablet_id_.is_valid() && ls_id_.is_valid() && 
     check_medium_scn_ != 0;
 }
 

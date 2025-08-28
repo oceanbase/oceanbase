@@ -59,7 +59,7 @@ void TestStorageLogReplay::SetUp()
   log_file_spec_.retry_write_policy_ = "normal";
   log_file_spec_.log_create_policy_ = "normal";
   log_file_spec_.log_write_policy_ = "truncate";
-
+ 
   TestDataFilePrepare::SetUp();
   static ObTenantBase tenant_base(TEST_TENANT_ID);
   ObTenantEnv::set_tenant(&tenant_base);
@@ -67,7 +67,7 @@ void TestStorageLogReplay::SetUp()
   EXPECT_EQ(OB_SUCCESS, ObTenantIOManager::mtl_new(io_service));
   EXPECT_EQ(OB_SUCCESS, ObTenantIOManager::mtl_init(io_service));
   EXPECT_EQ(OB_SUCCESS, io_service->start());
-  tenant_base.set(io_service);
+  tenant_base.set(io_service); 
   ObTenantEnv::set_tenant(&tenant_base);
 }
 

@@ -360,7 +360,7 @@ void read_column_schema() {
   std::cout<< "create file reader : " << std::endl;
   std::unique_ptr<parquet::ParquetFileReader> parquet_reader =
       parquet::ParquetFileReader::Open(reader, read_props);
-
+  
     // Get the File MetaData
   std::shared_ptr<parquet::FileMetaData> file_metadata = parquet_reader->metadata();
 
@@ -384,7 +384,7 @@ void read_column_schema() {
       parquet::Type::type col_type = file_metadata->RowGroup(i)->ColumnChunk(j)->type();
       std::cout<<"ColumnType="<<col_type<<std::endl;
     }
-
+    
   }
 
 
@@ -426,7 +426,7 @@ void read_column_schema() {
       std::cout << "read values_read: " << values_read << std::endl;
     }
   }
-
+  
 }
 
 using parquet::ConvertedType;

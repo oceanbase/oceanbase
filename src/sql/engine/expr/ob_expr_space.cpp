@@ -57,7 +57,7 @@ inline int ObExprSpace::calc_result_type1(
     // this makes the input type not literal in the second type inference, resulting in an inference to longtext
     // this in turn causes multiple implicit cast to be added to the same expr
     // so need to make a special judgment here
-    // eg :
+    // eg : 
     //      create table space_t1(c1 char(181) default (space( '1')));
     //      select c1 from space_t1;
     const ObConstRawExpr *const_expr =

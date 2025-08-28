@@ -31,7 +31,7 @@ int ObPCUnixTimestampParamConstraint::build(const common::ParamStore &params, vo
 }
 
 int ObPCUnixTimestampParamConstraint::deep_copy(ObIAllocator &allocator, ObPCParamConstraint *&to)
-{
+{ 
   int ret = OB_SUCCESS;
   void *buf = allocator.alloc(sizeof(ObPCUnixTimestampParamConstraint));
   if (OB_ISNULL(buf)) {
@@ -40,7 +40,7 @@ int ObPCUnixTimestampParamConstraint::deep_copy(ObIAllocator &allocator, ObPCPar
   } else {
     to = new(buf)ObPCUnixTimestampParamConstraint(param_idx_, type_, precision_, scale_);
   }
-  return ret;
+  return ret; 
 }
 
 int ObPCUnixTimestampParamConstraint::deduce_result_type(const common::ParamStore &params,

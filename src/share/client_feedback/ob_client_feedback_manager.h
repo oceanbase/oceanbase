@@ -59,7 +59,7 @@ public:
 };
 
 // C/S feedback protocol:
-//
+// 
 class ObFeedbackManager
 {
 public:

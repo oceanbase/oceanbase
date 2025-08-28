@@ -312,7 +312,7 @@ int ObBuildMViewTask::cleanup_impl()
   return ret;
 }
 
-// when creating a fast-refresh mview, automatically build mlogs for base tables
+// when creating a fast-refresh mview, automatically build mlogs for base tables 
 int ObBuildMViewTask::build_mlog()
 {
   int ret = OB_SUCCESS;
@@ -346,7 +346,7 @@ int ObBuildMViewTask::build_mlog()
         has_build_mlog_ = true;
       }
     }
-
+    
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(check_build_mlog_finished(is_build_mlog_finished))) {
       LOG_WARN("failed to check build mlog status", KR(ret));
@@ -691,7 +691,7 @@ int ObBuildMViewTask::on_child_task_prepare(const int64_t task_id)
     LOG_INFO("mview refresh task prepare", K(task_id));
     if (OB_FAIL(set_mview_complete_refresh_task_id(task_id))) {
       LOG_WARN("fail to set mview refresh task id", KR(ret));
-    }
+    } 
   } else if (task_id != mview_complete_refresh_task_id_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("mview_complete_refresh_task_id_ must = task_id", KR(ret), K(mview_complete_refresh_task_id_), K(task_id));

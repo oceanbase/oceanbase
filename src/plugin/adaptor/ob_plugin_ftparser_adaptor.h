@@ -56,7 +56,7 @@ public:
 
   virtual int init(ObPluginParam *param) override;
   virtual int deinit(ObPluginParam *param) override;
-
+  
   virtual int segment(ObFTParserParam *param, ObITokenIterator *&iter) const override;
   virtual void free_token_iter(ObFTParserParam *param, ObITokenIterator *&iter) const override;
   virtual int get_add_word_flag(storage::ObAddWordFlag &flag) const override;

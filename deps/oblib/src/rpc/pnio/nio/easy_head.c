@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 extern  void eh_set(easy_head_t* h, uint32_t len, uint32_t pkt_id);
 extern uint64_t eh_packet_id(const char* b);
 extern int64_t eh_decode(char* b, int64_t s);

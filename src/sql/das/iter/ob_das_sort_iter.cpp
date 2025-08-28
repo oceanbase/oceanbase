@@ -104,11 +104,11 @@ int ObDASSortIter::init_sort_impl()
         LOG_WARN("fail to allocate ObUniqueSortImpl memory", K(ret), KP(buf));
       } else {
         ObUniqueSortImpl *sort_impl = new (buf) ObUniqueSortImpl();
-        sort_impl_ = static_cast<ObSortOpImpl *>(sort_impl);
+        sort_impl_ = static_cast<ObSortOpImpl *>(sort_impl);  
       }
     }
 
-
+    
     if (OB_SUCC(ret)) {
       const bool top_k_overflow = INT64_MAX - limit_param_.offset_ < limit_param_.limit_;
       const int64_t top_k = (limit_param_.is_valid() && !top_k_overflow)

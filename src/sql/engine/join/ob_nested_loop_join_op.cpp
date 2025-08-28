@@ -206,7 +206,7 @@ int ObNestedLoopJoinOp::do_drain_exch_multi_lvel_bnlj()
     // the drain request is triggered by current NLJ operator, and current NLJ is a multi level Batch NLJ
     // It will block rescan request for it's child operator, if the drain request is passed to it's child operator
     // The child operators will be marked as iter-end_, and will not get any row if rescan is blocked
-    // So we block the drain request here; Only set current operator to end;
+    // So we block the drain request here; Only set current operator to end; 
     int tmp_ret = inner_drain_exch();
     exch_drained_ = true;
     brs_.end_ = true;
@@ -883,7 +883,7 @@ int ObNestedLoopJoinOp::rescan_right_op()
   ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
   // Note:
   // Overwrite batch_size in the beginning of the loop as eval_ctx_.batch_size
-  // would be modified when processing right child.
+  // would be modified when processing right child. 
   // Adding separated guards for left/right children can also solve the problem,
   // we don't choose that way due to performance reason.
   batch_info_guard.set_batch_size(left_brs_->size_);
@@ -927,7 +927,7 @@ int ObNestedLoopJoinOp::process_right_batch()
   const ObIArray<ObExpr *> &conds = get_spec().other_join_conds_;
   clear_evaluated_flag();
   DASGroupScanMarkGuard mark_guard(ctx_.get_das_ctx(), MY_SPEC.group_rescan_);
-  if (OB_FAIL(get_next_batch_from_right(right_brs))) {
+  if (OB_FAIL(get_next_batch_from_right(right_brs))) { 
     LOG_WARN("fail to get next right batch", K(ret), K(MY_SPEC));
   } else if (0 == right_brs->size_ && right_brs->end_) {
     match_right_batch_end_ = true;

@@ -56,7 +56,7 @@ private:
   int sensitive_field_validation_check(const ObSensitiveRuleSchema &schema,
                                    ObSchemaGetterGuard &schema_guard,
                                    bool should_exist);
-
+  
   ObDDLService *ddl_service_;
 };
 } // end namespace rootserver

@@ -124,7 +124,7 @@ int ObOptStatManager::get_column_stat(const uint64_t tenant_id,
     ObArenaAllocator arena("ObGetColStat", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
     ObSEArray<ObOptColumnStatHandle, 4> tmp_handles;
     ObSEArray<const ObOptColumnStat::Key*, 4> keys;
-    for (int64_t i = 0; OB_SUCC(ret) && i < part_ids.count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < part_ids.count(); ++i) {  
       for (int64_t j = 0; OB_SUCC(ret) && j < column_ids.count(); ++j) {
         void *ptr = NULL;
         if (OB_ISNULL(ptr = arena.alloc(sizeof(ObOptColumnStat::Key)))) {
@@ -615,7 +615,7 @@ int ObOptStatManager::check_opt_stat_validity(sql::ObExecContext &ctx,
 }
 
 int ObOptStatManager::check_system_stat_validity(sql::ObExecContext *ctx,
-                                                 const uint64_t tenant_id,
+                                                 const uint64_t tenant_id, 
                                                  bool &is_valid)
 {
   int ret = OB_SUCCESS;
@@ -866,9 +866,9 @@ int ObOptStatManager::update_all_eval_to_stats(
       }
       opt_stats.add_cg_blk_cnt(col_all_evals->cg_blk_eval_.get_cg_macro_blk_cnt() * scale_ratio,
                                col_all_evals->cg_blk_eval_.get_cg_micro_blk_cnt() * scale_ratio);
-      if ((col_all_evals->cg_skip_rate_eval_.cg_micro_blk_cnt_ != 0) &&
+      if ((col_all_evals->cg_skip_rate_eval_.cg_micro_blk_cnt_ != 0) && 
           (col_all_evals->cg_skip_rate_eval_.cg_skip_rate_ != 0)) {
-        opt_stats.cg_skip_rate_ = col_all_evals->cg_skip_rate_eval_.cg_skip_rate_ /
+        opt_stats.cg_skip_rate_ = col_all_evals->cg_skip_rate_eval_.cg_skip_rate_ / 
                                     col_all_evals->cg_skip_rate_eval_.cg_micro_blk_cnt_;
       }
       if (col_all_evals->min_eval_.is_valid() &&

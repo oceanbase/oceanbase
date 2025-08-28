@@ -38,7 +38,7 @@ public:
                                  bool &is_precise);
   int generate_always_true_or_false_node(bool is_true, ObRangeNode *&range_node);
   int convert_const_expr(const ObRawExpr *expr, ObRangeNode *&range_node);
-  int convert_basic_cmp_expr(const ObRawExpr *expr,
+  int convert_basic_cmp_expr(const ObRawExpr *expr, 
                              int64_t expr_depth,
                              ObRangeNode *&range_node);
   int get_basic_range_node(const ObRawExpr *l_expr,
@@ -70,7 +70,7 @@ public:
                                ObRangeNode &range_node) const;
   int fill_range_node_for_is_not_null(const int64_t key_idx,
                                    ObRangeNode &range_node) const;
-
+  
   int check_expr_precise(const ObRawExpr &const_expr,
                          const ObObjMeta &calc_type,
                          const ObRawExprResType &column_res_type);
@@ -143,7 +143,7 @@ private:
   int check_calculable_expr_valid(const ObRawExpr *expr, bool &is_valid, const bool ignore_error = true);
   int add_precise_constraint(const ObRawExpr *expr, bool is_precise);
   int add_prefix_pattern_constraint(const ObRawExpr *expr);
-  int get_final_expr_idx(const ObRawExpr *expr,
+  int get_final_expr_idx(const ObRawExpr *expr, 
                          const ObRangeColumnMeta *column_meta,
                          int64_t &idx);
   int get_final_in_array_idx(InParam *&in_param, int64_t &idx);
@@ -153,8 +153,8 @@ private:
                                const ObRangeColumnMeta *column_meta,
                                const ObRawExpr *&out_expr);
   int set_column_flags(int64_t key_idx, ObItemType type);
-  static int get_domain_extra_item(const common::ObDomainOpType op_type,
-                                   const ObRawExpr *expr,
+  static int get_domain_extra_item(const common::ObDomainOpType op_type, 
+                                   const ObRawExpr *expr, 
                                    const ObConstRawExpr *&extra_item);
   int convert_geo_expr(const ObRawExpr *expr, int64_t expr_depth, ObRangeNode *&range_node);
   int get_geo_range_node(const ObColumnRefRawExpr *column_expr,
@@ -230,7 +230,7 @@ private:
                                                  const ObRawExpr *l_expr,
                                                  const ObRawExpr *&real_expr,
                                                  bool &can_extract);
-
+  
   int get_implicit_set_collation_in_range(const ObRawExpr *l_expr,
                                           const ObRawExpr *r_expr,
                                           const ObExprResType &result_type,
@@ -242,8 +242,8 @@ private:
                                   const ObRawExpr &r_expr,
                                   int64_t expr_depth,
                                   ObRangeNode *&range_node);
-  int get_orcl_spatial_relationship(const ObRawExpr *const_expr,
-                                    bool &can_extract,
+  int get_orcl_spatial_relationship(const ObRawExpr *const_expr, 
+                                    bool &can_extract, 
                                     ObDomainOpType& real_op_type);
   int add_string_equal_expr_constraint(const ObRawExpr *const_expr,
                                        const ObString &val);

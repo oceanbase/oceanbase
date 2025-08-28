@@ -737,10 +737,10 @@ int ObGranulePump::init_external_odps_table_downloader(ObGranulePumpArgs &args)
   if (scan_ops.count() == 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("empty scan_ops", K(ret));
-  } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(scan_ops.at(0)->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_,
+  } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(scan_ops.at(0)->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_, 
                                                    is_odps_external_table))) {
     LOG_WARN("failed to check is odps external table or not", K(ret));
-  } else if (!args.external_table_files_.empty() &&
+  } else if (!args.external_table_files_.empty() && 
       is_odps_external_table) {
     if (scan_ops.empty()) {
       ret = OB_ERR_UNEXPECTED;
@@ -757,7 +757,7 @@ int ObGranulePump::init_external_odps_table_downloader(ObGranulePumpArgs &args)
         } else {
           LOG_TRACE("succ to init odps table partition downloader", K(ret), K(is_odps_downloader_inited()));
         }
-#else
+#else   
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not support odps cpp external table", K(ret));
 #endif
@@ -949,7 +949,7 @@ int ObGranuleSplitter::split_gi_task(ObGranulePumpArgs &args,
                                                    K(taskset_idxs),
                                                    K(random_type));
     } else {
-
+      
     }
   }
   return ret;
@@ -1356,7 +1356,7 @@ int ObAffinitizeGranuleSplitter::split_tasks_affinity(ObExecContext &ctx,
         }
       }
       if (OB_SUCC(ret)) {
-        // see issue
+        // see issue 
         // for virtual table, we can directly mock a tablet id
         // function build_tablet_idx_map will mock a idx map whose key
         // varies from 1 to table_schema->get_all_part_num(), and the value = key + 1
@@ -1383,7 +1383,7 @@ int ObAffinitizeGranuleSplitter::split_tasks_affinity(ObExecContext &ctx,
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(affinitize_rule.do_random(!partitions_info_.empty(),
+  } else if (OB_FAIL(affinitize_rule.do_random(!partitions_info_.empty(), 
                                                my_session->get_effective_tenant_id()))) {
     LOG_WARN("failed to do random", K(ret));
   } else {
@@ -2064,7 +2064,7 @@ int ObGranulePumpArgs::assign(const ObGranulePumpArgs &rhs)
     LOG_WARN("Failed to assign external_table_files", K(ret));
   } else if (OB_FAIL(query_range_by_runtime_filter_.assign(rhs.query_range_by_runtime_filter_))) {
     LOG_WARN("Failed to assign query_range_by_runtime_filter", K(ret));
-  }
+  } 
   return ret;
 }
 

@@ -35,7 +35,7 @@ public:
   bool prepare(ObGeometry *geo) override;
   // wkb
   int visit(ObCartesianPoint *geo) override;
-  int visit(ObCartesianLineString *geo) override;
+  int visit(ObCartesianLineString *geo) override;  
   int visit(ObCartesianPolygon *geo) override;
   int visit(ObCartesianMultipoint *geo) override;
   int visit(ObCartesianMultilinestring *geo) override;
@@ -49,7 +49,7 @@ public:
   bool is_end(ObCartesianMultipolygon *geo) override { UNUSED(geo); return true; }
   bool is_end(ObCartesianGeometrycollection *geo) override { UNUSED(geo); return true; }
 
-  int finish(ObGeometry *geo) override;
+  int finish(ObGeometry *geo) override;  
 private:
   static const uint32_t RING_MIN_POINT = 4;
   static const uint32_t LINESTRING_MIN_POINT = 2;

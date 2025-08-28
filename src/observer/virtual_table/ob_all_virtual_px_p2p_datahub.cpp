@@ -178,3 +178,4 @@ int ObAllPxP2PDatahubTable::inner_get_next_row(ObNewRow *&row)
 
 }/* ns observer*/
 }/* ns oceanbase */
+

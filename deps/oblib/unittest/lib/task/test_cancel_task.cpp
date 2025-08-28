@@ -72,7 +72,7 @@ public:
     ::usleep(20000); // 20ms
     if (OB_FAIL(timer_.schedule(*this, 0, false))) {  // repeate = false
       fprintf(stderr, "[%s: %d] call schedule failed, ret=%d\n", __FUNCTION__, __LINE__, ret);
-    } else if (OB_FAIL(timer_.cancel_task(*this))) { // both cancel the running one
+    } else if (OB_FAIL(timer_.cancel_task(*this))) { // both cancel the running one 
                                                      // and the re-scheduled one
       fprintf(stderr, "[%s: %d] call cancel_task failed, ret=%d\n", __FUNCTION__, __LINE__, ret);
     }
@@ -85,12 +85,12 @@ public:
 
 class TestCancelTask : public testing::Test
 {
-protected:
+protected:  
   static void SetUpTestCase()
   {
     ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
-  }
-
+  } 
+ 
   static void TearDownTestCase()
   {
     ObTimerService::get_instance().stop();
@@ -180,7 +180,7 @@ TEST_F(TestCancelTask, cancel_self)
   ASSERT_EQ(OB_SUCCESS, timer.start());
   ASSERT_EQ(OB_SUCCESS, timer.schedule(task, 10000, true)); // repeate = true
   timer.wait_task(task);
-  // when canceling a running task, it can't be stopped immediately,
+  // when canceling a running task, it can't be stopped immediately, 
   // but has to wait until the end of the current round.
   ASSERT_EQ(1, task.task_run_count_);
   timer.destroy();

@@ -467,12 +467,12 @@ int ObOptColumnStat::merge_column_stat(const ObOptColumnStat &other)
 }
 
 /**
- * @brief
- *
- * @param cur
- * @param other
+ * @brief 
+ * 
+ * @param cur 
+ * @param other 
  * @param is_cmp_min true: merge min, false: merge max
- * @return int
+ * @return int 
  */
 int ObOptColumnStat::merge_min_max(ObObj &cur, const ObObj &other, bool is_cmp_min)
 {
@@ -529,7 +529,7 @@ OB_DEF_SERIALIZE(ObOptColumnStat) {
     pos += llc_bitmap_size_;
   }
   OB_UNIS_ENCODE(total_col_len_);
-  return ret;
+  return ret; 
 }
 
 OB_DEF_SERIALIZE_SIZE(ObOptColumnStat) {
@@ -547,9 +547,9 @@ OB_DEF_SERIALIZE_SIZE(ObOptColumnStat) {
               avg_length_,
               object_type_);
   if (llc_bitmap_size_ !=0)
-    len += llc_bitmap_size_;
+    len += llc_bitmap_size_; 
   OB_UNIS_ADD_LEN(total_col_len_);
-  return len;
+  return len; 
 }
 
 OB_DEF_DESERIALIZE(ObOptColumnStat) {
@@ -576,7 +576,7 @@ OB_DEF_DESERIALIZE(ObOptColumnStat) {
     }
   }
   OB_UNIS_DECODE(total_col_len_);
-  return ret;
+  return ret; 
 }
 
 }

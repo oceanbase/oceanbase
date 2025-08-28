@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef OB_DBMS_XPLAN_H
 #define OB_DBMS_XPLAN_H
 
@@ -38,11 +38,11 @@ public:
   static int enable_opt_trace(sql::ObExecContext &ctx,
                               sql::ParamStore &params,
                               common::ObObj &result);
-
+  
   static int disable_opt_trace(sql::ObExecContext &ctx,
                               sql::ParamStore &params,
                               common::ObObj &result);
-
+  
   static int set_opt_trace_parameter(sql::ObExecContext &ctx,
                                     sql::ParamStore &params,
                                     common::ObObj &result);
@@ -82,7 +82,7 @@ private:
                                           common::ObObj &result);
 
   static int get_plan_format(const ObString &format,
-                             ExplainType &type,
+                             ExplainType &type, 
                              ObExplainDisplayOpt& option);
 
   static int get_plan_info_by_plan_table(sql::ObExecContext &ctx,
@@ -97,7 +97,7 @@ private:
                                   int64_t svr_port,
                                   uint64_t plan_id,
                                   const ObString &sql_handle,
-                                  uint64_t plan_hash,
+                                  uint64_t plan_hash, 
                                   ObIArray<ObSqlPlanItem*> &plan_infos);
 
   static int get_baseline_plan_info(sql::ObExecContext &ctx,
@@ -105,12 +105,12 @@ private:
                                     const ObString &svr_ip,
                                     int64_t svr_port,
                                     const ObString &sql_handle,
-                                    uint64_t plan_hash,
+                                    uint64_t plan_hash, 
                                     ObIArray<ObSqlPlanItem*> &plan_infos);
 
   static int get_baseline_plan_detail(sql::ObExecContext &ctx,
-                                      const ObString& sql_handle,
-                                      const ObString& plan_name,
+                                      const ObString& sql_handle, 
+                                      const ObString& plan_name, 
                                       int64_t tenant_id,
                                       PlanText &plan_text,
                                       bool from_plan_cache);
@@ -121,7 +121,7 @@ private:
                                             bool from_plan_cache);
 
   static int format_baseline_plan_detail(sql::ObExecContext &ctx,
-                                        sqlclient::ObMySQLResult& mysql_result,
+                                        sqlclient::ObMySQLResult& mysql_result, 
                                         PlanText &plan_text,
                                         bool from_plan_cache);
 
@@ -132,17 +132,17 @@ private:
                                         int64_t tenant_id,
                                         ObIArray<ObSqlPlanItem*> &plan_infos);
 
-  static int inner_get_plan_info(sql::ObExecContext &ctx,
-                                const ObSqlString& sql,
+  static int inner_get_plan_info(sql::ObExecContext &ctx, 
+                                const ObSqlString& sql, 
                                 ObIArray<ObSqlPlanItem*> &plan_infos,
                                 const bool is_from_wr=false);
 
-  static int inner_get_plan_info_use_current_session(sql::ObExecContext &ctx,
-                                                    const ObSqlString& sql,
+  static int inner_get_plan_info_use_current_session(sql::ObExecContext &ctx, 
+                                                    const ObSqlString& sql, 
                                                     ObIArray<ObSqlPlanItem*> &plan_infos);
 
   static int read_plan_info_from_result(sql::ObExecContext &ctx,
-                                        sqlclient::ObMySQLResult& mysql_result,
+                                        sqlclient::ObMySQLResult& mysql_result, 
                                         ObSqlPlanItem &plan_info,
                                         const bool is_from_wr=false);
 

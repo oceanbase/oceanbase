@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_format_pico_time.h"
 
@@ -49,7 +49,7 @@ int ObExprFormatPicoTime::eval_format_pico_time(const ObExpr &expr, ObEvalCtx &c
   if (OB_FAIL(expr.args_[0]->eval(ctx, datum))) {
     LOG_WARN("eval arg0 failed", K(ret));
   } else {
-    if (OB_FAIL(eval_format_pico_time_util(expr, res_datum, datum, ctx,
+    if (OB_FAIL(eval_format_pico_time_util(expr, res_datum, datum, ctx, 
                                            expr.is_batch_result() ? ctx.get_batch_idx() : 0))){
       LOG_WARN("eval format_pico_time unexpect error", K(ret));
     } else {

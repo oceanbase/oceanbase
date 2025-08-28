@@ -98,7 +98,7 @@ void ObTableLoadStoreCtx::destroy()
   if (OB_NOT_NULL(task_scheduler_)) {
     task_scheduler_->wait();
   }
-  // 按顺序析构对象, 被依赖的最后析构
+  // 按顺序析构对象, 被依赖的最后析构 
   if (nullptr != write_ctx_.pre_sorter_) {
     write_ctx_.pre_sorter_->~ObTableLoadPreSorter();
     allocator_.free(write_ctx_.pre_sorter_);
@@ -178,7 +178,7 @@ int ObTableLoadStoreCtx::init(
   } else if (OB_UNLIKELY(partition_id_array.empty() || target_partition_id_array.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(partition_id_array), K(target_partition_id_array));
-  }
+  } 
   // init trans_allocator_
   else if (OB_FAIL(trans_allocator_.init("TLD_STransPool", ctx_->param_.tenant_id_))) {
     LOG_WARN("fail to init trans allocator", KR(ret));
@@ -501,7 +501,7 @@ int ObTableLoadStoreCtx::init_write_ctx()
   } else {
     static const int64_t MACRO_BLOCK_WRITER_MEM_SIZE = 10 * 1024LL * 1024LL;
     static const int64_t cg_chunk_mem_limit = 64 * 1024L; // 64K
-    write_ctx_.schema_ = data_store_table_ctx_->schema_;
+    write_ctx_.schema_ = data_store_table_ctx_->schema_; 
     // table_data_desc_
     write_ctx_.table_data_desc_ = basic_table_data_desc_;
     write_ctx_.table_data_desc_.rowkey_column_num_ =

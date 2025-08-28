@@ -307,13 +307,13 @@ int ObSelectIntoOp::init_odps_jni_tunnel()
       LOG_WARN("failed to setup java env", K(ret));
     }
   }
-
+  
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (is_in_px) {
     int task_id = input->task_id_;
     block_id_ = task_id;
-    ObOdpsJniUploaderMgr &odps_jni_mgr
+    ObOdpsJniUploaderMgr &odps_jni_mgr 
       = ctx_.get_sqc_handler()->get_sqc_ctx().gi_pump_.get_odps_jni_uploader_mgr();
     if (OB_FAIL(odps_jni_mgr.get_odps_uploader_in_px(task_id, MY_SPEC.select_exprs_, uploader_))) {
       LOG_WARN("failed to get odps writer from global config", K(ret));
@@ -417,7 +417,7 @@ int ObSelectIntoOp::init_env_common()
   } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0
              && MY_SPEC.select_exprs_.count() != MY_SPEC.alias_names_.strs_.count()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected column count", K(MY_SPEC.select_exprs_.count()),
+    LOG_WARN("get unexpected column count", K(MY_SPEC.select_exprs_.count()), 
               K(MY_SPEC.alias_names_.strs_.count()), K(ret));
   }
   return ret;
@@ -741,7 +741,7 @@ int ObSelectIntoOp::get_row_str(const int64_t buf_len,
   char closed_cht = char_enclose_;
   //before 4_1 use output
   //after 4_1 use select exprs
-  const ObIArray<ObExpr*> &select_exprs = (MY_SPEC.select_exprs_.empty()) ?
+  const ObIArray<ObExpr*> &select_exprs = (MY_SPEC.select_exprs_.empty()) ? 
                                            MY_SPEC.output_ : MY_SPEC.select_exprs_;
   if (!is_first_row && line_str_.is_varying_len_char_type()) { // lines terminated by "a"
     ret = databuff_printf(buf, buf_len, pos, "%.*s", line_str_.get_varchar().length(),
@@ -1130,7 +1130,7 @@ int ObSelectIntoOp::print_str_or_json_with_escape(const ObObj &obj, ObCsvFileWri
       } else {
         print_params_.coll_meta_ = reinterpret_cast<ObSqlCollectionInfo *>(sub_meta.value_);
       }
-    }
+    } 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(print_json_to_json_buf(inrow_obj, buf, buf_len, pos, data_writer))) {
       LOG_WARN("failed to print normal obj without escape", K(ret));
@@ -1400,7 +1400,7 @@ int ObSelectIntoOp::write_single_char_to_file(const char *wchar, ObCsvFileWriter
       data_writer.set_curr_pos(pos + 1);
     } else if (OB_FAIL(use_shared_buf(data_writer, buf, buf_len, pos))) {
       LOG_WARN("failed to use shared buffer", K(ret));
-    }
+    } 
   }
   if (OB_SUCC(ret) && use_shared_buf_) {
     if (pos < buf_len) {
@@ -1861,7 +1861,7 @@ int ObSelectIntoOp::set_odps_column_value_mysql(apsara::odps::sdk::ODPSTableReco
           } else {
             LOG_DEBUG("set json value", K(datum_meta.cs_type_), K(ObString(jbuf.length(), jbuf.ptr())));
             table_record.SetJsonValue(col_idx, jbuf.ptr(), static_cast<uint32_t>(jbuf.length()));
-          }
+          } 
           break;
         }
         case apsara::odps::sdk::ODPS_TIMESTAMP:
@@ -1932,9 +1932,9 @@ int ObSelectIntoOp::set_odps_column_value_mysql(apsara::odps::sdk::ODPSTableReco
             LOG_WARN("get unexpected null", K(array_helper));
           } else {
             array_helper->array_->clear();
-            shared_ptr<apsara::odps::sdk::ODPSArray> odps_array =
+            shared_ptr<apsara::odps::sdk::ODPSArray> odps_array = 
                         std::make_shared<apsara::odps::sdk::ODPSArray>(table_record.GetSchema()->GetTableColumn(col_idx).GetTypeInfo());
-            if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator, datum, datum_meta,
+            if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator, datum, datum_meta, 
                                                                   obj_meta.has_lob_header(),
                                                                   array_bin_string, &ctx_))) {
               LOG_WARN("failed to read string", K(ret));
@@ -2000,7 +2000,7 @@ int ObSelectIntoOp::recursive_fill_list_record(shared_ptr<apsara::odps::sdk::ODP
       LOG_WARN("get unexpected null", K(array_helper->child_helper_), KP(child_array));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < nested_array->size(); ++i) {
-        shared_ptr<apsara::odps::sdk::ODPSArray> child_odps_array =
+        shared_ptr<apsara::odps::sdk::ODPSArray> child_odps_array = 
                         std::make_shared<apsara::odps::sdk::ODPSArray>(odps_array->GetTypeInfo().mSubTypes.at(0));
         child_array->clear();
         if (nested_array->is_null(i)) {
@@ -2363,7 +2363,7 @@ int ObSelectIntoOp::set_odps_column_value_oracle(apsara::odps::sdk::ODPSTableRec
             LOG_WARN("data out of range", K(odps_type), K(jbuf.length()), K(ret));
           } else {
             table_record.SetJsonValue(col_idx, jbuf.ptr(), static_cast<uint32_t>(jbuf.length()));
-          }
+          } 
           break;
         }
         case apsara::odps::sdk::ODPS_TIMESTAMP:
@@ -2430,7 +2430,7 @@ int ObSelectIntoOp::create_odps_schema()
   const ObIArray<ObExpr *> &select_exprs = MY_SPEC.select_exprs_;
   const ObIArray<ObJniConnector::OdpsType> &col_type_from_odps = uploader_.writer_ptr->get_schema_from_odps();
   intptr_t export_schema_ptr = uploader_.writer_ptr->get_export_schema_ptr();
-
+  
   if (export_schema_ptr == 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("export schema ptr is null", K(ret));
@@ -2468,7 +2468,7 @@ template<typename T>
 inline T arrow_get(ObIVector& expr_vector, int64_t idx)
 {
   static_assert(sizeof(T) <= sizeof(int64_t), "invalid type");
-  return *reinterpret_cast<const T *>(expr_vector.get_payload(idx));
+  return *reinterpret_cast<const T *>(expr_vector.get_payload(idx));    
 }
 
 #define PUT_DATUM_INTO_ARROW_BUILDER(BUILDER_TYPE, GET_FUNC)                 \
@@ -3067,7 +3067,7 @@ int ObSelectIntoOp::set_odps_column_value_oracle_jni(arrow::ArrayBuilder *builde
         }
       }
     }
-
+  
   return ret;
 }
 
@@ -3218,7 +3218,7 @@ int vectorize_fill_int_mysql(arrow::ArrayBuilder *builder, const ObBatchRows &br
         }
       }
     }
-  }
+  } 
   return ret;
 }
 
@@ -3231,7 +3231,7 @@ int vectorize_fill_int_oracle(arrow::ArrayBuilder *builder, const ObBatchRows &b
     ret = OB_ERR_TYPE_MISMATCH;
     LOG_WARN("builder is unexpected null", K(ret));
   } else if (is_oracle_mode()){
-    // oracle mode
+    // oracle mode 
     for (int64_t i = 0; OB_SUCC(ret) && i < brs.size_; ++i) {
       if (brs.skip_->contain(i)) {
         // do nothing
@@ -3264,7 +3264,7 @@ int vectorize_fill_int_oracle(arrow::ArrayBuilder *builder, const ObBatchRows &b
             ret = OB_ERR_TYPE_MISMATCH;
             LOG_WARN("type mismatch in odps table and oracle mode table", K(ret), K(datum_meta));
           }
-
+          
           if (OB_FAIL(ret)) {
             // do nothing
           } else if (OB_UNLIKELY(int_value > std::numeric_limits<ObType>::max() || int_value < std::numeric_limits<ObType>::min())) {
@@ -3324,7 +3324,7 @@ int vectorize_fill_bool_oracle(arrow::ArrayBuilder *builder, const ObBatchRows &
     ret = OB_ERR_TYPE_MISMATCH;
     LOG_WARN("builder is unexpected null", K(ret));
   } else if (is_oracle_mode()){
-    // oracle mode
+    // oracle mode 
     for (int64_t i = 0; OB_SUCC(ret) && i < brs.size_; ++i) {
       if (brs.skip_->contain(i)) {
         // do nothing
@@ -3357,7 +3357,7 @@ int vectorize_fill_bool_oracle(arrow::ArrayBuilder *builder, const ObBatchRows &
             ret = OB_ERR_TYPE_MISMATCH;
             LOG_WARN("type mismatch in odps table and oracle mode table", K(ret), K(datum_meta));
           }
-
+          
           if (OB_FAIL(ret)) {
             // do nothing
           } else {
@@ -3541,7 +3541,7 @@ bool ObSelectIntoOp::day_number_checker(int32_t days) { return days > ODPS_DATE_
 
 int ObSelectIntoOp::into_odps_jni_batch_one_col(int64_t col_idx, ObJniConnector::OdpsType odps_type,
     arrow::Field &arrow_field, ObDatumMeta &meta, ObObjMeta &obj_meta, ObIVector &expr_vector,
-    arrow::ArrayBuilder *builder, const ObBatchRows &brs, int &act_cnt, ObIAllocator &alloc,
+    arrow::ArrayBuilder *builder, const ObBatchRows &brs, int &act_cnt, ObIAllocator &alloc, 
     const bool is_strict_mode, const ObDateSqlMode date_sql_mode)
 {
   int ret = OB_SUCCESS;
@@ -3879,7 +3879,7 @@ int ObSelectIntoOp::into_odps_jni_batch_one_col(int64_t col_idx, ObJniConnector:
             ++act_cnt;
             array_helper->array_->clear();
             ObString array_bin_string;
-            if (OB_FAIL(ObTextStringHelper::read_real_string_data(alloc, &expr_vector, meta,
+            if (OB_FAIL(ObTextStringHelper::read_real_string_data(alloc, &expr_vector, meta, 
                                                                   obj_meta.has_lob_header(),
                                                                   array_bin_string, i))) {
               LOG_WARN("failed to read string", K(ret));
@@ -4303,7 +4303,7 @@ int ObSelectIntoOp::into_odps_jni_batch(const ObBatchRows &brs)
         } else {
           bool is_in_px = (NULL != ctx_.get_sqc_handler());
           if (is_in_px) {
-            ObOdpsJniUploaderMgr &odps_jni_mgr
+            ObOdpsJniUploaderMgr &odps_jni_mgr 
               = ctx_.get_sqc_handler()->get_sqc_ctx().gi_pump_.get_odps_jni_uploader_mgr();
             if (OB_FAIL(odps_jni_mgr.append_block_id(block_id_))) {
               LOG_WARN("failed to append block id", K(ret));
@@ -4612,7 +4612,7 @@ int ObSelectIntoOp::create_orc_schema(std::unique_ptr<orc::Type> &schema)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema is not null", K(ret));
   }
-
+  
   for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); i++) {
     ObString alias_name = MY_SPEC.alias_names_.strs_.at(i);
     std::string column_name(alias_name.ptr(), alias_name.length());
@@ -5066,7 +5066,7 @@ int ObSelectIntoOp::build_orc_cell(const ObDatumMeta &datum_meta,
             expr_vector->get_mysql_datetime(row_idx), out_usec, date_sql_mode))) {
         LOG_WARN("mdatetime_to_datetime fail", K(ret));
       } else {
-        timestamp_vector_batch->data[row_offset] = out_usec / USECS_PER_SEC;
+        timestamp_vector_batch->data[row_offset] = out_usec / USECS_PER_SEC; 
         timestamp_vector_batch->nanoseconds[row_offset] = (out_usec % USECS_PER_SEC) * NSECS_PER_USEC; //  usec to nanosecond
       }
     }
@@ -5495,7 +5495,7 @@ int ObSelectIntoOp::into_varlist()
   int ret = OB_SUCCESS;
   //before 4_1 use output
   //after 4_1 use select exprs
-  const ObIArray<ObExpr*> &select_exprs = (MY_SPEC.select_exprs_.empty()) ?
+  const ObIArray<ObExpr*> &select_exprs = (MY_SPEC.select_exprs_.empty()) ? 
                                            MY_SPEC.output_ : MY_SPEC.select_exprs_;
   const ObIArray<ObString> &user_vars = MY_SPEC.user_vars_;
   ObArenaAllocator lob_tmp_allocator("LobTmp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
@@ -5579,7 +5579,7 @@ int ObSelectIntoOp::prepare_escape_printer()
     LOG_WARN("failed to allocate buffer", K(ret), K(buf_len));
   }
   if (has_enclose_) {
-    OZ(print_wchar_to_buf(buf, buf_len, pos, wchar_enclose, escape_printer_.enclose_, cs_type_));
+    OZ(print_wchar_to_buf(buf, buf_len, pos, wchar_enclose, escape_printer_.enclose_, cs_type_)); 
   }
   if (has_escape_) {
     OZ(print_wchar_to_buf(buf, buf_len, pos, wchar_escape, escape_printer_.escape_, cs_type_));
@@ -5847,7 +5847,7 @@ int ObSelectIntoOp::odps_jni_commit_upload()
   int ret = OB_SUCCESS;
   bool is_in_px = (NULL != ctx_.get_sqc_handler());
   if (is_in_px) {
-    ObOdpsJniUploaderMgr &odps_jni_mgr
+    ObOdpsJniUploaderMgr &odps_jni_mgr 
               = ctx_.get_sqc_handler()->get_sqc_ctx().gi_pump_.get_odps_jni_uploader_mgr();
     if (!need_commit_) {
       odps_jni_mgr.set_fail();

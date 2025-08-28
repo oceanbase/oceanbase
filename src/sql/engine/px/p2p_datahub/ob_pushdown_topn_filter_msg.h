@@ -147,7 +147,7 @@ public:
                                        ObRuntimeFilterParams &params, bool &is_update);
 
   inline int64_t get_current_data_version() { return ATOMIC_LOAD_ACQ(&data_version_); }
-  inline bool is_null_first(int64_t col_idx) {
+  inline bool is_null_first(int64_t col_idx) { 
     return (ObCmpNullPos::NULL_FIRST == compares_.at(col_idx).null_pos_);
   }
 

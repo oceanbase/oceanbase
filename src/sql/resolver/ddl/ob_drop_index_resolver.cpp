@@ -48,7 +48,7 @@ int ObDropIndexResolver::resolve(const ParseNode &parse_tree)
     LOG_WARN("invalid parse tree type or invalid children number", K(parse_tree.type_),
              K(parse_tree.num_child_), K(parse_tree.children_), K(ret));
   }
-
+  
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(session_info_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -58,7 +58,7 @@ int ObDropIndexResolver::resolve(const ParseNode &parse_tree)
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop index in catalog is");
     }
   }
-
+  
   if (OB_SUCC(ret)) {
     ObDropIndexStmt *drop_index_stmt = NULL;
     if (OB_UNLIKELY(NULL == (drop_index_stmt = create_stmt<ObDropIndexStmt>()))) {
@@ -126,7 +126,7 @@ int ObDropIndexResolver::resolve(const ParseNode &parse_tree)
                    index_table_schema->get_data_table_id(), data_table_schema))) {
           LOG_WARN("fail to get data table schema", K(ret), K(index_name));
         } else {
-          ObString table_name; // related issue :
+          ObString table_name; // related issue : 
           if (OB_FAIL(deep_copy_str(data_table_schema->get_table_name_str(), table_name))) {
             LOG_WARN("failed to deep copy new_db_name", K(ret));
           } else {

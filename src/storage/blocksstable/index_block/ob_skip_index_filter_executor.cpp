@@ -106,7 +106,7 @@ int ObSkipIndexFilterExecutor::falsifiable_pushdown_filter(
             LOG_WARN("Failed to filter on min_max for dynamic filter", K(ret), K(col_idx));
           }
         } else if (filter.is_filter_white_node()) {
-          sql::ObWhiteFilterExecutor &white_filter =
+          sql::ObWhiteFilterExecutor &white_filter = 
             static_cast<sql::ObWhiteFilterExecutor &>(filter);
           if (OB_FAIL(filter_on_min_max(col_idx, index_info.get_row_count(),
               obj_meta, white_filter, allocator))) {
@@ -534,7 +534,7 @@ int ObSkipIndexFilterExecutor::in_operator(const sql::ObWhiteFilterExecutor &fil
 {
   int ret = OB_SUCCESS;
   const common::ObIArray<common::ObDatum> &datums = filter.get_datums();
-  const sql::ObExpr *col_expr = filter.get_filter_node().expr_;
+  const sql::ObExpr *col_expr = filter.get_filter_node().expr_; 
   if (OB_UNLIKELY(nullptr == col_expr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument for falsifiable IN operator", K(ret), K(filter));
@@ -667,9 +667,9 @@ int ObSkipIndexFilterExecutor::black_filter_on_min_max(
                                                   nullptr, /*result_bitmap*/
                                                   fal_desc))) {
       LOG_WARN("Failed to check can skip by monotonicity", K(ret), K(min_datum), K(max_datum), K(has_null), K(filter));
-    }
+    } 
   }
-  LOG_DEBUG("Utilize skip index judge black filter", K(ret), K(fal_desc), K(min_datum), K(max_datum),
+  LOG_DEBUG("Utilize skip index judge black filter", K(ret), K(fal_desc), K(min_datum), K(max_datum), 
                                                      K(null_count), K(row_count), K(filter));
   return ret;
 }

@@ -32,12 +32,12 @@ public:
   // tablets number in one dag net for high priority tablets.
   static const int64_t HIGH_PRI_TABLETS_BATCH_NUM = 1024;
 
-  // There are 2 kinds of types during restore. One is log stream restore
-  // task at phase RESTORE_SYS_TABLETS, which does not have any tablets in
-  // ToRestoreTabletGroup. The other is tablet group restore task at phase
-  // RESTORE_TABLETS_META, RESTORE_TO_CONSISTENT_SCN, QUICK_RESTORE,
+  // There are 2 kinds of types during restore. One is log stream restore 
+  // task at phase RESTORE_SYS_TABLETS, which does not have any tablets in 
+  // ToRestoreTabletGroup. The other is tablet group restore task at phase 
+  // RESTORE_TABLETS_META, RESTORE_TO_CONSISTENT_SCN, QUICK_RESTORE, 
   // or RESTORE_MAJOR_DATA.
-  enum TaskType
+  enum TaskType 
   {
     TABLET_GROUP_RESTORE_TASK = 0,
     LS_RESTORE_TASK
@@ -56,9 +56,9 @@ public:
     friend class ObLSRestoreTaskMgr;
 
   public:
-    ToRestoreTabletGroup() :
-        tablet_list_(),
-        action_(ObTabletRestoreAction::MAX),
+    ToRestoreTabletGroup() : 
+        tablet_list_(), 
+        action_(ObTabletRestoreAction::MAX), 
         from_q_type_(ToRestoreFromQType::FROM_NONE),
         need_redo_failed_tablets_(true),
         task_type_(TaskType::TABLET_GROUP_RESTORE_TASK) {}
@@ -110,7 +110,7 @@ public:
 
   // schedule the pre choosed tablets to restore.
   int schedule_tablet_group_restore(
-      const share::ObTaskId &task_id,
+      const share::ObTaskId &task_id, 
       const ToRestoreTabletGroup &to_restore_tg,
       bool &reach_dag_limit);
   
@@ -124,7 +124,7 @@ public:
       ObIArray<common::ObTabletID> &unfinished_tablets) const;
   int cancel_task();
   bool is_restore_completed() const;
-
+  
   void set_force_reload();
 
   void clear_tablets_to_restore();
@@ -145,9 +145,9 @@ private:
   int choose_tablets_from_high_pri_tablet_set_(storage::ObLS &ls, ToRestoreTabletGroup &tablet_group);
   int check_task_exist_(const share::ObTaskId &task_id, bool &is_exist);
   int check_tablet_status_(
-      storage::ObLS &ls,
-      const common::ObTabletID &tablet_id,
-      bool &is_exist,
+      storage::ObLS &ls, 
+      const common::ObTabletID &tablet_id, 
+      bool &is_exist, 
       bool &is_restored,
       ObTabletRestoreStatus::STATUS &restore_status) const;
 
@@ -176,22 +176,22 @@ private:
     bool &is_deleted) const;
 
   // At phase QUICK_RESTORE, for tablets created by transfer, the initial status
-  // is FULL. Its next status may be EMPTY if source tablet is UNDEFINED. Therefore,
-  // the transfer table can only be restored from backup, rather than be replaced by
-  // the table from source tablet. That is to say, for FULL tablet with transfer
+  // is FULL. Its next status may be EMPTY if source tablet is UNDEFINED. Therefore, 
+  // the transfer table can only be restored from backup, rather than be replaced by 
+  // the table from source tablet. That is to say, for FULL tablet with transfer 
   // table, there are two ways to replace it with actual table. One is from source tablet,
-  // the other is from backup. We should ensure which way to use. So, when we find a FULL
+  // the other is from backup. We should ensure which way to use. So, when we find a FULL 
   // tablet with transfer table during reload, the transfer table is first considered to be
   // replaced by table from backup. But can only be schedulered to restore before turn into EMPTY.
-
-  // If the transfer in commit scn is smaller than the specified restore scn, the transfer table of
+  
+  // If the transfer in commit scn is smaller than the specified restore scn, the transfer table of 
   // the tablet is no need to be replaced during QUICK_RESTORE.
   int check_need_discard_uncommit_transfer_tablet_(
       bool &discard) const;
   bool is_follower_() const;
   ObTabletRestoreAction::ACTION get_common_restore_action_(
       const share::ObLSRestoreStatus &ls_restore_status) const;
-
+  
   int reload_tablets_();
   int handle_task_finish_(
       ObLS *ls,
@@ -228,10 +228,10 @@ private:
   ObILSRestoreState *restore_state_handler_;
   // Force reload tablets before choose tablets to restore.
   bool force_reload_;
-  // 'final_reload_' is marked as True when no tablets to restore are found after reload. Then,
+  // 'final_reload_' is marked as True when no tablets to restore are found after reload. Then, 
   // reload is forbidden while no tablets in wait or doing set.
   bool final_reload_;
-  // Follower can reload tablets only if leader has been restored. This is
+  // Follower can reload tablets only if leader has been restored. This is 
   // true for restore status RESTORE_MAJOR_DATA for shared storage.
   bool has_checked_leader_done_;
   bool is_follower_restore_from_leader_;

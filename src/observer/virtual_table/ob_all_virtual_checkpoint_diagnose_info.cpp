@@ -117,7 +117,7 @@ int ObAllVirtualCheckpointDiagnoseInfo::process_curr_tenant(common::ObNewRow *&r
   } else {
     row = &cur_row_;
   }
-
+  
   return ret;
 }
 

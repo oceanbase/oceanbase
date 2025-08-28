@@ -40,12 +40,12 @@ public:
 
 #ifdef OB_BUILD_ORACLE_PL
   static int eval_xml_sequence(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
-#else
+#else 
   static int eval_xml_sequence(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res) { return OB_NOT_SUPPORTED; }
 #endif
-  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
-                      const ObRawExpr &raw_expr,
-                      ObExpr &rt_expr)
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, 
+                      const ObRawExpr &raw_expr, 
+                      ObExpr &rt_expr) 
                       const override;
   struct ObSequenceExtraInfo : public ObIExprExtraInfo
   {

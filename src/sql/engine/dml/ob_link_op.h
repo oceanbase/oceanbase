@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef OCEANBASE_SQL_ENGINE_LINK_OP_H_
 #define OCEANBASE_SQL_ENGINE_LINK_OP_H_
 

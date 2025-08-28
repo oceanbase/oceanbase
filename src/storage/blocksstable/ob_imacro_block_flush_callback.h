@@ -37,7 +37,7 @@ public:
                     const int64_t buf_len,
                     const int64_t row_count) = 0;
   virtual int do_write_io() { return OB_SUCCESS;}
-
+  
   virtual int wait() = 0;
   virtual int64_t get_ddl_start_row_offset() const { return -1; };
 };

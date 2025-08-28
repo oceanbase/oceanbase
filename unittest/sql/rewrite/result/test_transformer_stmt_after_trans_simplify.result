@@ -2465,7 +2465,7 @@ SQL: select distinct a,d,g from pjt1,pjt2,pjt3,pjt4;
   "is_hierarchical_query":false
 }
 ***************   Case 5   ***************
-SQL: select distinct c from pjt1,pjt2,pjt3,pjt4 where a=e;
+SQL: select distinct c from pjt1,pjt2,pjt3,pjt4 where a=e; 
 {
   "stmt_type":1,
   "transpose_item":null,
@@ -2989,7 +2989,7 @@ SQL: select distinct c from pjt1,pjt2,pjt3,pjt4 where a=e;
   "is_hierarchical_query":false
 }
 ***************   Case 6   ***************
-SQL: select * from pjt1, (select distinct c from pjt2,pjt3) where a=c;
+SQL: select * from pjt1, (select distinct c from pjt2,pjt3) where a=c; 
 {
   "stmt_type":1,
   "transpose_item":null,
@@ -5586,7 +5586,7 @@ SQL: select distinct a,g from pjt1,pjt2,pjt3,pjt4 where b=d;
   "is_hierarchical_query":false
 }
 ***************   Case 8   ***************
-SQL: select distinct a from pjt1, (select distinct c from pjt2,pjt3,pjt4 where d=g) where a=1;
+SQL: select distinct a from pjt1, (select distinct c from pjt2,pjt3,pjt4 where d=g) where a=1; 
 {
   "stmt_type":1,
   "transpose_item":null,
@@ -32433,7 +32433,7 @@ SQL: select avg(distinct c) from pjt1,pjt2,pjt3,pjt4 where a=e;
   "is_hierarchical_query":false
 }
 ***************   Case 16   ***************
-SQL: select sum(distinct a) from pjt1,pjt2,pjt3 where b=d;
+SQL: select sum(distinct a) from pjt1,pjt2,pjt3 where b=d; 
 {
   "stmt_type":1,
   "transpose_item":null,
@@ -59343,7 +59343,7 @@ SQL: select distinct a from pjt1,pjt2,pjt3 where c=e;
   "is_hierarchical_query":false
 }
 ***************   Case 31   ***************
-SQL: select distinct a from pjt1,pjt2,pjt3 where c=e;
+SQL: select distinct a from pjt1,pjt2,pjt3 where c=e; 
 {
   "stmt_type":1,
   "transpose_item":null,
@@ -67624,7 +67624,7 @@ SQL: select uniq_c2, sum(uniq_c2) from pullup1 group by uniq_c2, pk;
   "is_hierarchical_query":false
 }
 ***************   Case 40   ***************
-SQL: select uniq_c2, sum(uniq_c2) from pullup1 group by uniq_c2, pk;
+SQL: select uniq_c2, sum(uniq_c2) from pullup1 group by uniq_c2, pk; 
 {
   "stmt_type":1,
   "transpose_item":null,

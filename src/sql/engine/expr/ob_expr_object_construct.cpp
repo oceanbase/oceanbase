@@ -224,7 +224,7 @@ int ObExprObjectConstruct::eval_object_construct(const ObExpr &expr, ObEvalCtx &
           // use _is_null to distinguish the following two situations:
           // SDO_GEOMETRY(2003, 4000, SDO_POINT_TYPE(NULL,NULL,NULL), NULL, NULL)
           // SDO_GEOMETRY(2003, 4000, NULL, NULL, NULL)
-          pl::ObPLRecord *child_null_record =
+          pl::ObPLRecord *child_null_record = 
             reinterpret_cast<pl::ObPLRecord *>(record->get_element()[i].get_ext());
           child_null_record->set_null();
         }

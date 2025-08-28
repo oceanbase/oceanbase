@@ -88,7 +88,7 @@ int ObDASCacheLookupIter::IndexProjRowStore::to_expr(int64_t size)
              OB_UNLIKELY(size + cur_idx_ > saved_size_) ||
              OB_ISNULL(store_rows_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error for convert store rows", K(size), K(max_size_), K(store_rows_), K(ret));
+    LOG_WARN("unexpected error for convert store rows", K(size), K(max_size_), K(store_rows_), K(ret));  
   } else {
     ObEvalCtx::BatchInfoScopeGuard batch_info_guard(*eval_ctx_);
     batch_info_guard.set_batch_size(size);
@@ -142,7 +142,7 @@ int ObDASCacheLookupIter::inner_init(ObDASIterParam &param)
     LOG_WARN("failed to init das lookup iter", K(ret));
   } else if (lookup_param.index_scan_proj_exprs_.count() > 0 &&
              OB_FAIL(index_proj_rows_.init(store_allocator_,
-                                           lookup_param.index_scan_proj_exprs_,
+                                           lookup_param.index_scan_proj_exprs_, 
                                            lookup_param.eval_ctx_,
                                            lookup_param.default_batch_row_count_))) {
     LOG_WARN("failed to init index proj rows", K(ret));
@@ -301,7 +301,7 @@ int ObDASCacheLookupIter::inner_get_next_rows(int64_t &count, int64_t capacity)
               LOG_WARN("save index proj rows failed", K(ret));
             } else {
               lookup_rowkey_cnt_ += storage_count;
-            }
+            } 
           }
         }
 

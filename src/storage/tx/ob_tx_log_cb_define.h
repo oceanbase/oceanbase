@@ -145,7 +145,7 @@ public:
 
   bool all_log_group_idle()
   {
-    return ATOMIC_LOAD(&stat_.occupying_count_) + ATOMIC_LOAD(&stat_.barrier_occupying_count_) == 0;
+    return ATOMIC_LOAD(&stat_.occupying_count_) + ATOMIC_LOAD(&stat_.barrier_occupying_count_) == 0; 
   }
 
   int64_t get_tmp_ref() { return ATOMIC_LOAD(&tmp_ref_); }

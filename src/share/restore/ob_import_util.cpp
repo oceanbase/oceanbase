@@ -16,7 +16,7 @@
 using namespace oceanbase;
 using namespace share;
 
-bool ObImportTableUtil::can_retrieable_err(const int err_code)
+bool ObImportTableUtil::can_retrieable_err(const int err_code) 
 {
   bool bret = true;
   switch(err_code) {
@@ -92,10 +92,10 @@ int ObImportTableUtil::check_table_schema_exist(share::schema::ObMultiVersionSch
   if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id, guard))) {
     LOG_WARN("faield to get tenant schema guard", K(ret));
   } else if (OB_FAIL(guard.get_database_id(tenant_id, db_name, database_id))) {
-    LOG_WARN("failed to get database id", K(ret), K(tenant_id));
+    LOG_WARN("failed to get database id", K(ret), K(tenant_id)); 
   } else if (OB_INVALID_ID == database_id) {
     LOG_WARN("database not exist", K(tenant_id), K(db_name));
-  } else if (OB_FAIL(guard.check_table_exist(tenant_id, database_id, table_name, false,
+  } else if (OB_FAIL(guard.check_table_exist(tenant_id, database_id, table_name, false, 
       schema::ObSchemaGetterGuard::CheckTableType::ALL_NON_HIDDEN_TYPES, is_exist))) {
     LOG_WARN("failed to check table exist", K(ret));
   }
@@ -112,7 +112,7 @@ int ObImportTableUtil::check_tablegroup_exist(share::schema::ObMultiVersionSchem
   if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id, guard))) {
     LOG_WARN("faield to get tenant schema guard", K(ret));
   } else if (OB_FAIL(guard.get_tablegroup_id(tenant_id, tablegroup, table_group_id))) {
-    LOG_WARN("failed to get tablegroup id", K(ret), K(tenant_id));
+    LOG_WARN("failed to get tablegroup id", K(ret), K(tenant_id)); 
   } else if (OB_INVALID_ID == table_group_id) {
     LOG_INFO("tablegroup not exist", K(tenant_id), K(tablegroup));
   } else {
@@ -131,7 +131,7 @@ int ObImportTableUtil::check_tablespace_exist(share::schema::ObMultiVersionSchem
   if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id, guard))) {
     LOG_WARN("faield to get tenant schema guard", K(ret));
   } else if (OB_FAIL(guard.get_tablespace_schema_with_name(tenant_id, tablespace, schema))) {
-    LOG_WARN("failed to get tablespace id", K(ret), K(tenant_id));
+    LOG_WARN("failed to get tablespace id", K(ret), K(tenant_id)); 
   } else if (OB_ISNULL(schema)) {
     LOG_INFO("tablespace not exist", K(tenant_id), K(tablespace));
   } else {
@@ -156,13 +156,13 @@ int ObImportTableUtil::get_tenant_name_case_mode(const uint64_t tenant_id, ObNam
     LOG_WARN("wait schema refreshed", K(ret), K(tenant_id));
   } else if (OB_FAIL(schema_service->get_tenant_name_case_mode(tenant_id, name_case_mode))) {
     LOG_WARN("faield to get tenant schema guard", K(ret), K(tenant_id));
-  }
+  } 
   return ret;
 }
 
 int ObImportTableUtil::check_is_recover_table_aux_tenant(
-    share::schema::ObMultiVersionSchemaService &schema_service,
-    const uint64_t tenant_id,
+    share::schema::ObMultiVersionSchemaService &schema_service, 
+    const uint64_t tenant_id, 
     bool &is_recover_table_aux_tenant)
 {
   int ret = OB_SUCCESS;
@@ -180,7 +180,7 @@ int ObImportTableUtil::check_is_recover_table_aux_tenant(
   } else if (OB_ISNULL(tenant_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tenant schema must not be nullptr", K(ret));
-  } else if (OB_FAIL(check_is_recover_table_aux_tenant_name(tenant_schema->get_tenant_name_str(),
+  } else if (OB_FAIL(check_is_recover_table_aux_tenant_name(tenant_schema->get_tenant_name_str(), 
                                                             is_recover_table_aux_tenant))) {
     LOG_WARN("failed to check is recover table aux tenant name", K(ret));
   }
@@ -188,7 +188,7 @@ int ObImportTableUtil::check_is_recover_table_aux_tenant(
 }
 
 int ObImportTableUtil::check_is_recover_table_aux_tenant_name(
-    const ObString &tenant_name,
+    const ObString &tenant_name, 
     bool &is_recover_table_aux_tenant)
 {
   int ret = OB_SUCCESS;
@@ -208,3 +208,4 @@ int ObImportTableUtil::check_is_recover_table_aux_tenant_name(
   }
   return ret;
 }
+

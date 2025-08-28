@@ -505,7 +505,7 @@ int ObLogMinerRecord::build_dml_stmt_(ICDCRecord &cdc_rec)
             }
           }
           if (OB_SUCC(ret)) {
-            if (OB_FAIL(build_insert_stmt_(undo_stmt_, old_cols,
+            if (OB_FAIL(build_insert_stmt_(undo_stmt_, old_cols, 
                 old_col_cnt, tbl_meta, has_unreliable_null))) {
               LOG_ERROR("build delete undo stmt failed", KPC(this));
             } else {

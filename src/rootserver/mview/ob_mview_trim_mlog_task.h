@@ -36,7 +36,7 @@ public:
   void runTimerTask() override;
   static const int64_t MVIEW_TRIM_MLOG_INTERVAL = 5LL * 1000 * 1000; // 5s
 private:
-  int trim_mlog_impl(const uint64_t mlog_id,
+  int trim_mlog_impl(const uint64_t mlog_id, 
                      share::schema::ObSchemaGetterGuard &schema_guard,
                      common::ObISQLClient *sql_proxy,
                      sql::ObSQLSessionInfo *session);

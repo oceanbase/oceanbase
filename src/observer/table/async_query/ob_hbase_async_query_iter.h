@@ -28,7 +28,7 @@ public:
   ObHbaseAsyncQueryIter();
   virtual ~ObHbaseAsyncQueryIter();
   virtual int start(const ObTableQueryAsyncRequest &req, ObTableExecCtx &exec_ctx, ObTableQueryAsyncResult &result) override;
-  virtual int next(ObTableExecCtx &exec_ctx, ObTableQueryAsyncResult &result) override;
+  virtual int next(ObTableExecCtx &exec_ctx, ObTableQueryAsyncResult &result) override; 
   virtual int renew(ObTableQueryAsyncResult &result) override;
   virtual int end(ObTableQueryAsyncResult &result) override;
   virtual uint64_t get_session_time_out_ts() const override;

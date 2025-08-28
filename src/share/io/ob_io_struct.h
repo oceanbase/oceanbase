@@ -167,7 +167,7 @@ struct ObIODelayArr
   int64_t prepare_delay_us_;
   int64_t schedule_delay_us_;
   int64_t submit_delay_us_;
-  int64_t device_delay_us_;
+  int64_t device_delay_us_; 
   int64_t total_delay_us_;
   void inc(const int prepare_delay, const int64_t schedule_delay, const int64_t submit_delay,
       const int64_t device_delay, const int64_t total_delay)

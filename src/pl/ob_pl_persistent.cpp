@@ -358,7 +358,7 @@ int ObRoutinePersistentInfo::has_same_name_dependency_with_public_synonym(
   OZ (schema_checker.init(schema_guard, session_info.get_sessid_for_table()));
   for (int64_t i = 0; !exist && OB_SUCC(ret) && i < dep_schema_objs.count(); ++i) {
     obj_id = dep_schema_objs.at(i).object_id_;
-    if (dep_schema_objs.at(i).is_db_explicit() &&
+    if (dep_schema_objs.at(i).is_db_explicit() && 
        (SYNONYM_SCHEMA != dep_schema_objs.at(i).get_schema_type())) {
       continue;
     }
@@ -371,7 +371,7 @@ int ObRoutinePersistentInfo::has_same_name_dependency_with_public_synonym(
       case SEQUENCE_SCHEMA:
         {
           const ObSequenceSchema *sequence_schema = NULL;
-          if (OB_FAIL(schema_guard.get_sequence_schema(tenant_id,
+          if (OB_FAIL(schema_guard.get_sequence_schema(tenant_id, 
                                                         obj_id, sequence_schema))) {
             LOG_WARN("failed to get sequence schema", K(ret), K(obj_id));
           } else if (nullptr == sequence_schema) {
@@ -384,7 +384,7 @@ int ObRoutinePersistentInfo::has_same_name_dependency_with_public_synonym(
       case ROUTINE_SCHEMA:
         {
           const ObRoutineInfo *routine_schema = NULL;
-          if (OB_FAIL(schema_guard.get_routine_info(tenant_id,
+          if (OB_FAIL(schema_guard.get_routine_info(tenant_id, 
                                                         obj_id, routine_schema))) {
             LOG_WARN("failed to get routine_schema", K(ret), K(obj_id));
           } else if (nullptr == routine_schema) {
@@ -397,7 +397,7 @@ int ObRoutinePersistentInfo::has_same_name_dependency_with_public_synonym(
       case PACKAGE_SCHEMA:
         {
           const ObPackageInfo *package_info = NULL;
-          if (OB_FAIL(schema_guard.get_package_info(tenant_id,
+          if (OB_FAIL(schema_guard.get_package_info(tenant_id, 
                                                         obj_id, package_info))) {
             LOG_WARN("failed to get package_info", K(ret), K(obj_id));
           } else if (nullptr == package_info) {
@@ -410,7 +410,7 @@ int ObRoutinePersistentInfo::has_same_name_dependency_with_public_synonym(
       case UDT_SCHEMA:
         {
           const ObUDTTypeInfo *udt_info = NULL;
-          if (OB_FAIL(schema_guard.get_udt_info(tenant_id,
+          if (OB_FAIL(schema_guard.get_udt_info(tenant_id, 
                                                         obj_id, udt_info))) {
             LOG_WARN("failed to get udt_info", K(ret), K(obj_id));
           } else if (nullptr == udt_info) {
@@ -610,15 +610,15 @@ int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
                 } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_4 || data_version < DATA_VERSION_4_3_5_4) {
                   // do nothing
                 } else if (match) {
-                  // need check extra_info
+                  // need check extra_info 
                   ObString extra_info;
-                  EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result.get_result(),
+                  EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result.get_result(), 
                               "extra_info", extra_info, true, false, "");
                   if (extra_info.empty()) {
                     // do nothing
-                  } else if (OB_FAIL(decode_and_check_extra_info(extra_info.ptr(),
-                                                                 extra_info.length(),
-                                                                 unit_ast.get_dependency_table(),
+                  } else if (OB_FAIL(decode_and_check_extra_info(extra_info.ptr(), 
+                                                                 extra_info.length(), 
+                                                                 unit_ast.get_dependency_table(), 
                                                                  match))) {
                     LOG_WARN("failed to decode_stack_sizes", K(ret));
                   }
@@ -679,8 +679,8 @@ int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
   return ret;
 }
 
-int ObRoutinePersistentInfo::encode_pl_extra_info(char *buf,
-                                               const int64_t len,
+int ObRoutinePersistentInfo::encode_pl_extra_info(char *buf, 
+                                               const int64_t len, 
                                                int64_t &pos,
                                                const sql::DependenyTableStore &dep_table)
 {
@@ -735,7 +735,7 @@ int ObRoutinePersistentInfo::decode_and_check_extra_info(char *buf,
 }
 
 template<typename DependencyTable>
-int ObRoutinePersistentInfo::get_pl_extra_info(const DependencyTable &dep_table,
+int ObRoutinePersistentInfo::get_pl_extra_info(const DependencyTable &dep_table, 
                                                ObPLExtraInfo& extra_info)
 {
   int ret = OB_SUCCESS;
@@ -800,7 +800,7 @@ int ObRoutinePersistentInfo::insert_or_update_dll_to_disk(schema::ObSchemaGetter
         LOG_WARN("affected_rows unexpected to be one", K(affected_rows), K(ret), K(op), K(key_id_));
       }
     }
-    // ignore duplicate key error
+    // ignore duplicate key error 
     if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
       LOG_TRACE("has a duplicate key error", K(ret), K(op), K(key_id_));
       ret = OB_SUCCESS;

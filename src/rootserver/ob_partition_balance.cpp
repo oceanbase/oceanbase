@@ -173,7 +173,7 @@ int ObPartitionBalance::prepare_ls_()
         } else {
           dup_ls_id_ = ls_stat.get_ls_id();
         }
-        // ls_desc_array_ is used to balance partition groups on all user ls.
+        // ls_desc_array_ is used to balance partition groups on all user ls. 
         // Paritions on dup ls can not be balanced together.
       } else if (OB_FAIL(ls_desc_array_.push_back(ls_desc))) {
         LOG_WARN("push_back ls_desc to array fail", KR(ret), K(ls_desc->get_ls_id()));

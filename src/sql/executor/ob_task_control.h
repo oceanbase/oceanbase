@@ -92,7 +92,7 @@ private:
   // 用于底层scan_task的发送
   // 计划中一定不包含insert update delete等数据修改操作
   // 仅仅是select/select for update。这种情况下可以考虑做分区级重试
-  //
+  // 
   bool is_select_plan_;
 };
 }

@@ -77,7 +77,7 @@ enum TX_CTX_SSTABLE_COL_IDX : int64_t
  * └────────────┴──────────────┴─────────────┴────────────┴──────────────────────────────────┘
  *
  * This iterator will execute twice sorting and once reading from old tx data sstable.
- * For more details, see
+ * For more details, see 
  *
  */
 
@@ -94,7 +94,7 @@ private:
     int generate_next_now(const blocksstable::ObDatumRow *&row);
     TO_STRING_KV(KP_(serialize_buffer), K_(buffer_len), KPC_(tx_data),
                  K_(generate_size), K_(datum_row));
-  private:
+  private: 
     void alloc_serialize_buffer_(const int64_t serialize_size);
   private:
     static const int64_t DEFAULT_BUFFER_LEN = common::OB_MAX_VARCHAR_LENGTH;

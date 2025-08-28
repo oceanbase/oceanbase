@@ -500,7 +500,7 @@ int ObMediumCompactionScheduleFunc::check_frequency(
         const bool medium_is_cooling_down = last_major_snapshot_version  + cooling_down_interval > ObTimeUtility::current_time_ns();
         if (max_reserved_cooling_down && medium_is_cooling_down) {
           ret = OB_NO_NEED_MERGE;
-          LOG_DEBUG("schedule queuing medium frequently", K(ret), KPC(tablet), K(medium_snapshot), K(time_interval), K(queuing_cfg),
+          LOG_DEBUG("schedule queuing medium frequently", K(ret), KPC(tablet), K(medium_snapshot), K(time_interval), K(queuing_cfg), 
                     K(cooling_down_interval), K(max_reserved_cooling_down), K(medium_is_cooling_down));
         }
       } else {
@@ -699,7 +699,7 @@ int ObMediumCompactionScheduleFunc::errsim_choose_medium_snapshot(
     } else if (medium_info.medium_snapshot_ <= max_sync_medium_scn
         || medium_info.medium_snapshot_ < max_reserved_snapshot) {
       ret = OB_NO_NEED_MERGE;
-    } else if (OB_FAIL(ObPartitionMergePolicy::get_result_by_snapshot(tablet, medium_info.medium_snapshot_, result, false/*need_check_tablet*/))) {
+    } else if (OB_FAIL(ObPartitionMergePolicy::get_result_by_snapshot(tablet, medium_info.medium_snapshot_, result, false/*need_check_tablet*/))) { 
       LOG_WARN("failed to get result by snapshot", K(ret), K(medium_info), KPC(this));
     } else {
       FLOG_INFO("ERRSIM EN_SCHEDULE_MEDIUM_COMPACTION", KPC(this));
@@ -932,7 +932,7 @@ int ObMediumCompactionScheduleFunc::init_co_major_merge_type(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("first sstable in tables handle is null or not co sstable", K(ret), K(result.handle_));
   } else if (ObAdaptiveMergePolicy::REBUILD_COLUMN_GROUP == merge_reason_ || !first_sstable->is_co_sstable()) {
-    // REBUILD_COLUMN_GROUP is requested by user or implicitly required by delayed column group transform
+    // REBUILD_COLUMN_GROUP is requested by user or implicitly required by delayed column group transform 
     // only use row store to build column store
     medium_info.co_major_merge_type_ = ObCOMajorMergePolicy::USE_RS_BUILD_SCHEMA_MATCH_MERGE;
     LOG_INFO("use row store to build column store", K(ret), K(merge_reason_), K(result.handle_), KPC(first_sstable));
@@ -944,12 +944,12 @@ int ObMediumCompactionScheduleFunc::init_co_major_merge_type(
   } else if (OB_FAIL(ObCOMajorMergePolicy::decide_co_major_merge_type(
           *co_sstable,
           tables,
-          medium_info.storage_schema_,
+          medium_info.storage_schema_, 
           major_merge_type))) {
     LOG_WARN("failed to decide co major merge type", K(ret));
   } else {
     medium_info.co_major_merge_type_ = major_merge_type;
-    LOG_INFO("success to init co major merge type",
+    LOG_INFO("success to init co major merge type", 
             "merge_type", ObCOMajorMergePolicy::co_major_merge_type_to_str(major_merge_type));
   }
   return ret;
@@ -1275,7 +1275,7 @@ int ObMediumCompactionScheduleFunc::check_medium_meta_table(
         if (OB_TMP_FAIL(ls_info_map.get_refactored(ls_id, ls_info))) {
           LOG_WARN("failed to get map", K(tmp_ret), K(ls_id));
           unfinish_cnt++;
-        } else if (OB_ENTRY_NOT_EXIST ==
+        } else if (OB_ENTRY_NOT_EXIST == 
             (tmp_ret = ls_info.find(replica.get_server(), ls_replica))) {
             filter_cnt++;
             LOG_TRACE("filter by ls locality", K(tmp_ret), K(replica), K(ls_info));
@@ -1388,7 +1388,7 @@ int ObMediumCompactionScheduleFunc::check_replica_checksum_items(
     int64_t affected_rows = 0;
     const int64_t count = checksum_items.count();
     int64_t start_idx = 0;
-    int64_t end_idx = 0;
+    int64_t end_idx = 0; 
     ObTabletID tablet_id = checksum_items.at(0).tablet_id_;
     ObLSID ls_id = checksum_items.at(0).ls_id_;
     ObSEArray<ObCkmErrorTabletLSInfo, 64> error_pairs;
@@ -1513,7 +1513,7 @@ int ObMediumCompactionScheduleFunc::decide_standy_tenant_schedule(
           schedule_flag = true;
         }
       } else {
-        schedule_flag = true;
+        schedule_flag = true; 
       }
     } else {
       // does not read valid medium info, wait for next round scheduler loop

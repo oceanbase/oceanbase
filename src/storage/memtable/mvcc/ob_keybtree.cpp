@@ -1342,7 +1342,7 @@ int BtreeRawIterator<BtreeKey, BtreeVal>::split_range(int64_t top_level,
            iter_node_count++) {
         if (OB_FAIL(iter_->next_on_level(level, key, val))) {
           if (OB_ITER_END == ret) {
-            // It is not atomic between find_split_range_level and split_range,
+            // It is not atomic between find_split_range_level and split_range, 
             // so split_range need retry if iterate end on the specific level
             ret = OB_EAGAIN;
           } else {

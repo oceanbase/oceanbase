@@ -137,7 +137,7 @@ int ObDupTableLSLeaseMgr::prepare_serialize(int64_t &max_ser_size,
           req_handler.clear_ser_content();
         }
 
-        if (req_handler.get_error_ret() != OB_SUCCESS) {
+        if (req_handler.get_error_ret() != OB_SUCCESS) { 
           req_handler.clear_ser_content();
           ret = req_handler.get_error_ret();
         } else {

@@ -84,7 +84,7 @@ int ObShardingInfo::init_partition_info(ObOptimizerContext &ctx,
         LOG_WARN("There is no part expr in stmt", K(table_id), K(ret));
       } else if (OB_FAIL(part_func_exprs_.push_back(part_expr))) {
       	LOG_WARN("Failed to push back to part expr");
-	} else if (OB_FAIL(get_partition_key(part_expr, part_func_type_, partition_keys_))) {
+    	} else if (OB_FAIL(get_partition_key(part_expr, part_func_type_, partition_keys_))) {
         LOG_WARN("Failed to set partition key", K(ret), K(table_id), K(ref_table_id));
       } else if (PARTITION_LEVEL_TWO == part_level_) {
         subpart_func_type_ = table_schema->get_sub_part_option().get_part_func_type();
@@ -136,8 +136,8 @@ int ObShardingInfo::get_all_partition_key(ObOptimizerContext &ctx,
     ret = OB_SCHEMA_ERROR;
     LOG_WARN("failed to get table schema", K(ref_table_id));
   } else if (OB_FAIL(schema_guard->get_table_schema(table_id, ref_table_id, &stmt, table_schema))) {
-	ret = OB_SCHEMA_ERROR;
-	LOG_WARN("failed to get table schema", K(ref_table_id));
+  	ret = OB_SCHEMA_ERROR;
+  	LOG_WARN("failed to get table schema", K(ref_table_id));
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_SCHEMA_ERROR;
     LOG_WARN("failed to get table schema", K(ref_table_id));
@@ -414,7 +414,7 @@ bool ObShardingInfo::is_part_func_scale_sensitive(
   //    EXCHANGE HASH(#key = c1)
   //      SUB_PLAN1
   //
-  // It's a extended partition wise join, part_func_type is PARTITION_FUNC_TYPE_MAX.
+  // It's a extended partition wise join, part_func_type is PARTITION_FUNC_TYPE_MAX. 
   // Partitions hashed by `deptno` must be same with partitions hashed by `cast(c.deptno, DECIMAL_INT(5, 2))`
   if (PARTITION_FUNC_TYPE_HASH == part_func_type || PARTITION_FUNC_TYPE_KEY == part_func_type
       || PARTITION_FUNC_TYPE_KEY_IMPLICIT == part_func_type

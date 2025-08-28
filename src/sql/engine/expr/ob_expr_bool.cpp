@@ -279,7 +279,7 @@ static inline int def_eval_vector_bool_expr(const ObExpr &expr,
 {
   int ret = OB_SUCCESS;
   VectorFormat res_format = expr.get_format(ctx);
-  // The 'res_format' is expected to be Type 'IntegerFixedVec' under the regular circumstances.
+  // The 'res_format' is expected to be Type 'IntegerFixedVec' under the regular circumstances. 
   // So a condition is added to optimize performance accordingly.
   if (VEC_FIXED == res_format) {
     VectorFormat arg_format = expr.args_[0]->get_format(ctx);

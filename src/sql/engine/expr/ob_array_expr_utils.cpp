@@ -165,7 +165,7 @@ int ObArrayExprUtils::calc_cast_type(
       const ObSqlCollectionInfo *coll_info = NULL;
       coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(value.value_);
       if (coll_info->collection_meta_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
-        // do nothing
+        // do nothing   
       } else if (coll_info->collection_meta_->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
         ObCollectionArrayType *arr_type = static_cast<ObCollectionArrayType *>(coll_info->collection_meta_);
         if (only_vector) {
@@ -184,7 +184,7 @@ int ObArrayExprUtils::calc_cast_type(
         if (!is_sparse_vector_supported(expr_type)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid argument", K(ret), K(type));
-        }
+        }    
       } else {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid argument", K(ret), K(type));
@@ -207,7 +207,7 @@ int ObArrayExprUtils::calc_cast_type(
       type.set_calc_subschema_id(dst_subschema_id);
     }
   }
-
+   
   return ret;
 }
 
@@ -226,7 +226,7 @@ int ObArrayExprUtils::collect_vector_cast_info(ObExprResType &type, ObExecContex
       const ObSqlCollectionInfo *coll_info = NULL;
       coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(value.value_);
       if (coll_info->collection_meta_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
-        ObCollectionArrayType *arr_type = static_cast<ObCollectionArrayType *>(coll_info->collection_meta_);
+        ObCollectionArrayType *arr_type = static_cast<ObCollectionArrayType *>(coll_info->collection_meta_); 
         info.is_vector_ = true;
         info.dim_cnt_ = arr_type->dim_cnt_;
       } else if (coll_info->collection_meta_->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
@@ -403,7 +403,7 @@ int ObArrayExprUtils::set_array_res(ObIArrayType *arr_obj, const int32_t res_siz
     MEMCPY(res_buf, data, res_size);
   } else if (nullptr != arr_obj && OB_FAIL(arr_obj->get_raw_binary(res_buf, res_buf_len))) {
     LOG_WARN("get array raw binary failed", K(ret), K(res_buf_len), K(res_size));
-  }
+  } 
   if (FAILEDx(str_result.lseek(res_size, 0))) {
     LOG_WARN("failed to lseek res.", K(ret), K(str_result), K(res_size));
   } else {
@@ -575,7 +575,7 @@ int ObArrayExprUtils::deduce_array_element_type(ObExecContext *exec_ctx, ObExprR
       is_first_elem = false;
     }
   }
-
+  
   // set params calculate type
   if (last_subschema_id == ObInvalidSqlType) {
     for (int64_t i = 0; i < param_num && OB_SUCC(ret); i++) {
@@ -729,8 +729,8 @@ int ObVectorVectorArithFunc::operator()(ObDatum &res, const ObDatum &l, const Ob
                                                        res_str))) {
       LOG_WARN("get array binary string failed", K(ret), K(*coll_info));
     //   FIXME huhaosheng.hhs: maybe set batch_idx_ before in order to use frame res_buf
-    // } else if (OB_FAIL(ObArrayExprUtils::set_array_res(arr_res, expr, ctx, res_str))) {
-
+    // } else if (OB_FAIL(ObArrayExprUtils::set_array_res(arr_res, expr, ctx, res_str))) { 
+    
     //   LOG_WARN("get array binary string failed", K(ret), K(*coll_info));
     } else {
       res.set_string(res_str);
@@ -1035,7 +1035,7 @@ int ObArrayExprUtils::get_collection_payload(ObIAllocator &allocator, ObEvalCtx 
     }
 
   }
-
+  
   return ret;
 }
 
@@ -1311,7 +1311,7 @@ int ObArrayExprUtils::nested_expr_to_row(const ObExpr &expr, ObEvalCtx &ctx, cha
       vec->get_payload(row_idx, payload, payload_len);
       if (OB_FAIL(blob_res.append(payload, payload_len))) {
         LOG_WARN("failed to append realdata", K(ret), K(payload_len));
-      }
+      } 
     } else {
       for (uint32_t i = 0; i < expr.attrs_cnt_ && OB_SUCC(ret); ++i) {
         const char *payload = NULL;
@@ -1327,7 +1327,7 @@ int ObArrayExprUtils::nested_expr_to_row(const ObExpr &expr, ObEvalCtx &ctx, cha
         }
         if (OB_FAIL(blob_res.append(payload, payload_len))) {
           LOG_WARN("failed to append realdata", K(ret), K(payload_len));
-        }
+        } 
       }
     }
     if (OB_SUCC(ret)) {
@@ -1427,7 +1427,7 @@ int ObArrayExprUtils::add_elem_to_nested_array(ObIAllocator &tmp_allocator, ObEv
       LOG_WARN("failed to init array", K(ret));
     } else if (OB_FAIL(nest_array->push_back(*arr_obj))) {
       LOG_WARN("failed to push back array", K(ret));
-    }
+    } 
   }
   return ret;
 }
@@ -1675,7 +1675,7 @@ int ObArrayExprUtils::calc_array_sum_by_type(uint32_t data_len, uint32_t len, co
   } else {
     T1 *data = reinterpret_cast<T1 *>(const_cast<char *>(data_ptr));
     for (uint32_t i = 0; i < len; ++i) {
-      if (null_bitmaps != nullptr && null_bitmaps[i] > 0) {
+      if (null_bitmaps != nullptr && null_bitmaps[i] > 0) { 
         /* do nothing */
       } else if (OB_FAIL(raw_check_add<T>(sum + data[i], static_cast<T>(data[i]), sum))) {
         LOG_WARN("array_sum overflow", K(ret), K(sum), K(data[i]));
@@ -1757,10 +1757,10 @@ int ObArrayExprUtils::calc_array_sum(uint32_t len, uint8_t *nullbitmaps, const c
 }
 
 int ObArrayExprUtils::get_array_data(ObString &data_str,
-                        ObCollectionArrayType *arr_type,
+                        ObCollectionArrayType *arr_type, 
                         uint32_t &len,
                         uint8_t *&null_bitmaps,
-                        const char *&data,
+                        const char *&data, 
                         uint32_t &data_len)
 {
   int ret = OB_SUCCESS;
@@ -1793,14 +1793,14 @@ int ObArrayExprUtils::get_array_data(ObString &data_str,
   return ret;
 }
 
-int ObArrayExprUtils::get_array_data(ObIVector *len_vec,
+int ObArrayExprUtils::get_array_data(ObIVector *len_vec, 
                                    ObIVector *nullbitmap_vec,
-                                   ObIVector *data_vec,
+                                   ObIVector *data_vec, 
                                    int64_t idx,
-                                   ObCollectionArrayType *arr_type,
+                                   ObCollectionArrayType *arr_type, 
                                    uint32_t &len,
-                                   uint8_t *&null_bitmaps,
-                                   const char *&data,
+                                   uint8_t *&null_bitmaps, 
+                                   const char *&data, 
                                    uint32_t &data_len)
 {
   int ret = OB_SUCCESS;

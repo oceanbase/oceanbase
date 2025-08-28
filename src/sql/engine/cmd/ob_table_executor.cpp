@@ -118,17 +118,17 @@ int ObCreateTableExecutor::ObInsSQLPrinter::inner_print(char *buf, int64_t buf_l
           LOG_WARN("fail to print direct load hint", K(ret), K(direct_load_hint));
         }
       }
-    }
+    } 
     if (OB_FAIL(ret)) {
 
-    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos1,
-                                       "%s /*+ ENABLE_PARALLEL_DML %s %s %s %s */ into %c%.*s%c.%c%.*s%c",
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos1, 
+                                       "%s /*+ ENABLE_PARALLEL_DML %s %s %s %s */ into %c%.*s%c.%c%.*s%c", 
                                        insert_str,
                                        parallel_str,
-                                       osg_str,
-                                       append_str,
+                                       osg_str, 
+                                       append_str, 
                                        direct_str,
-                                       sep_char,
+                                       sep_char, 
                                        stmt_->get_database_name().length(),
                                        stmt_->get_database_name().ptr(),
                                        sep_char,
@@ -464,7 +464,7 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
             if (OB_NOT_NULL(conn)) {
               user_sql_proxy->close(conn, true);
             }
-          }
+          } 
         }
 
         DEBUG_SYNC(BEFORE_EXECUTE_CTAS_CLEAR_SESSION_ID);
@@ -522,7 +522,7 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
       }
       if (OB_NOT_NULL(common_rpc_proxy)) {
         char table_info_buffer[256];
-        snprintf(table_info_buffer, sizeof(table_info_buffer), "table_id:%ld, hidden_table_id:%ld",
+        snprintf(table_info_buffer, sizeof(table_info_buffer), "table_id:%ld, hidden_table_id:%ld", 
                   alter_table_arg.table_id_, alter_table_arg.hidden_table_id_);
         SERVER_EVENT_ADD("ddl", "create table as select execute finish",
           "tenant_id", MTL_ID(),
@@ -672,11 +672,11 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
           }
         }
       }
-
+      
       if (OB_SUCC(ret) && table_schema.is_external_table() && !table_schema.is_user_specified_partition_for_external_table()) {
         //auto refresh after create external table
         ObArray<uint64_t> updated_part_ids; //not used
-        bool has_partition_changed = false; //not used
+        bool has_partition_changed = false; //not used 
         const uint64_t part_id = -1;
         bool collect_statistics_on_create = false;
         bool is_odps_external_table = false;
@@ -855,8 +855,8 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
       LOG_WARN("fail to populate based schema obj info", KR(ret));
     } else if (OB_FAIL(pre_split.get_global_index_pre_split_schema_if_need(alter_table_schema.get_tenant_id(),
                                                             alter_table_arg.session_id_,
-                                                            alter_table_schema.get_origin_database_name(),
-                                                            alter_table_schema.get_origin_table_name(),
+                                                            alter_table_schema.get_origin_database_name(), 
+                                                            alter_table_schema.get_origin_table_name(), 
                                                             alter_table_arg.index_arg_list_))) {
       LOG_WARN("fail to get global index pre split schema if need", K(ret), K(alter_table_arg));
       //overwrite ret code
@@ -1032,7 +1032,7 @@ int ObAlterTableExecutor::execute_alter_external_table(ObExecContext &ctx, ObAlt
                   arg.alter_table_schema_.get_table_id(),
                   arg.alter_table_schema_.get_external_file_location(),
                   arg.alter_table_schema_.get_external_file_location_access_info(),
-                  arg.alter_table_schema_.get_external_file_pattern(),
+                  arg.alter_table_schema_.get_external_file_pattern(), 
                   arg.alter_table_schema_.get_external_properties(),
                   arg.alter_table_schema_.is_partitioned_table(),
                   regexp_vars, ctx.get_allocator(),
@@ -1208,7 +1208,7 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("unexpected error", K(ret));
               }
-            } else if (alter_table_arg.alter_part_type_ == ObAlterTableArg::DROP_PARTITION) {
+            } else if (alter_table_arg.alter_part_type_ == ObAlterTableArg::DROP_PARTITION) { 
               if (res.res_arg_array_.size() > 0) {
                 int64_t part_id = res.res_arg_array_.at(0).part_object_id_;
                 ObSEArray<ObAddr, 8> all_servers;
@@ -1271,7 +1271,7 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
       }
     }
     char table_info_buffer[256];
-    snprintf(table_info_buffer, sizeof(table_info_buffer), "table_id:%ld, hidden_table_id:%ld",
+    snprintf(table_info_buffer, sizeof(table_info_buffer), "table_id:%ld, hidden_table_id:%ld", 
               alter_table_arg.table_id_, alter_table_arg.hidden_table_id_);
 
     SERVER_EVENT_ADD("ddl", "alter table execute finish",
@@ -2202,7 +2202,7 @@ int ObDropTableExecutor::execute(ObExecContext &ctx, ObDropTableStmt &stmt)
           SQL_ENG_LOG(INFO, "finish drop table execute.", KR(ret), "ddl_event_info", ObDDLEventInfo());
         }
       }
-    }
+    }    
   }
 
   return ret;

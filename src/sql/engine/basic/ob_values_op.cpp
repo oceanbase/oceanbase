@@ -84,7 +84,7 @@ int ObValuesOp::inner_get_next_row()
       } else if (is_lob_storage(cell.get_type()) &&
                  OB_FAIL(ob_adjust_lob_datum(cell, expr->obj_meta_, expr->obj_datum_map_,
                                              get_exec_ctx().get_allocator(), datum))) {
-        LOG_WARN("adjust lob datum failed", K(ret), K(cell.get_meta()), K(expr->obj_meta_));
+        LOG_WARN("adjust lob datum failed", K(ret), K(cell.get_meta()), K(expr->obj_meta_));                                   
       } else {
         expr->set_evaluated_projected(eval_ctx_);
       }

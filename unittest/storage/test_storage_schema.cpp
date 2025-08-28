@@ -374,10 +374,10 @@ TEST_F(TestStorageSchema, test_clipped_schema_for_tablet_split)
 
     ObStorageSchema storage_schema2; // clipped storage schema.
     ObUpdateCSReplicaSchemaParam update_param;
-    ASSERT_EQ(OB_SUCCESS, update_param.init(src_tablet_id,
+    ASSERT_EQ(OB_SUCCESS, update_param.init(src_tablet_id, 
           i + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()/*major_column_cnt*/,
           ObUpdateCSReplicaSchemaParam::UpdateType::TRUNCATE_COLUMN_ARRAY));
-    ASSERT_EQ(OB_SUCCESS, storage_schema2.init(allocator_,
+    ASSERT_EQ(OB_SUCCESS, storage_schema2.init(allocator_, 
             storage_schema1/*old_schema*/,
             false/*skip_column_info*/,
             nullptr/*column_group_schema*/,

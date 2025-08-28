@@ -39,7 +39,7 @@ class ObVectorIndexSchedJobUtils : public ObMViewSchedJobUtils {
 public:
   static constexpr int64_t DEFAULT_REFRESH_INTERVAL_TS =
       10L * 60 * 1000000; // 10min
-  static constexpr int64_t DEFAULT_REBUILD_INTERVAL_TS =
+  static constexpr int64_t DEFAULT_REBUILD_INTERVAL_TS = 
       24L * 60 * 60 * 1000000; // 24H
   static constexpr int64_t DEFAULT_REFRESH_TRIGGER_THRESHOLD = 10000;
   static constexpr double DEFAULT_REBUILD_TRIGGER_THRESHOLD = 0.2;

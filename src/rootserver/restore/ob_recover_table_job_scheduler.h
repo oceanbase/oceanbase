@@ -47,13 +47,13 @@ class ObRecoverTableJobScheduler final
 {
 public:
   ObRecoverTableJobScheduler()
-    : is_inited_(false), schema_service_(nullptr), sql_proxy_(nullptr), rs_rpc_proxy_(nullptr),
+    : is_inited_(false), schema_service_(nullptr), sql_proxy_(nullptr), rs_rpc_proxy_(nullptr), 
       srv_rpc_proxy_(nullptr), helper_() {}
   virtual ~ObRecoverTableJobScheduler() {}
   void reset();
-  int init(share::schema::ObMultiVersionSchemaService &schema_service,
-      common::ObMySQLProxy &sql_proxy,
-      obrpc::ObCommonRpcProxy &rs_rpc_proxy,
+  int init(share::schema::ObMultiVersionSchemaService &schema_service, 
+      common::ObMySQLProxy &sql_proxy, 
+      obrpc::ObCommonRpcProxy &rs_rpc_proxy, 
       obrpc::ObSrvRpcProxy &srv_rpc_proxy);
   void do_work();
 
@@ -65,7 +65,7 @@ private:
   int sys_prepare_(share::ObRecoverTableJob &job);
   int lock_recover_table_(const uint64_t tenant_id, ObMySQLTransaction &trans);
   int insert_user_job_(
-      const share::ObRecoverTableJob &job,
+      const share::ObRecoverTableJob &job, 
       ObMySQLTransaction &trans,
       share::ObRecoverTablePersistHelper &helper);
   int recovering_(share::ObRecoverTableJob &job);
@@ -80,11 +80,11 @@ private:
   int active_aux_tenant_(share::ObRecoverTableJob &job);
   int ban_multi_version_recycling_(share::ObRecoverTableJob &job, const uint64_t aux_tenant_id);
   int check_tenant_compatibility(
-      share::schema::ObSchemaGetterGuard &aux_tenant_guard,
+      share::schema::ObSchemaGetterGuard &aux_tenant_guard, 
       share::schema::ObSchemaGetterGuard &recover_tenant_guard,
       bool &is_compatible);
-  int check_case_sensitive_compatibility(
-      share::schema::ObSchemaGetterGuard &aux_tenant_guard,
+  int check_case_sensitive_compatibility(      
+      share::schema::ObSchemaGetterGuard &aux_tenant_guard, 
       share::schema::ObSchemaGetterGuard &recover_tenant_guard,
       bool &is_compatible);
 

@@ -962,7 +962,7 @@ Select distinct 1, 1 + (@var:=1) from t7;
 # A(remote) + B(remote) on same server, generate remote plan
 select t1.c2 + t2.c1 from t1, t2 where t1.c1 = t2.c2 and t1.c1 and t1.c1 = 1 and t2.c1 = 1;
 
-# UNION and onetime expr related bug fix:
+# UNION and onetime expr related bug fix: 
 (select 'b') union select cast((select 'a') as char(20));
 select cast((select 'a' from dual order by 1 limit 100) as char(20)) union (select 'b') union select cast((select 'a' from dual order by 1 limit 100) as char(20));
 (select (select b from t12) from t3) union (select c3 from t3);
@@ -977,7 +977,7 @@ select (select 'a') as c1;
 select avg(c1) as a from t1 union select sum(c1) as b from t1;
 select * from t1 group by 1>(select count(*) from t2);
 
-##bug:
+##bug: 
 (select count(*) from t1) UNION (select count(*) from t1);
 select min(1) from t1;
 select max(1) from t1;

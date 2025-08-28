@@ -85,7 +85,7 @@ public:
 
   /**
    * @brief fetch the state of txn DATA_TRANS_ID when replaying to LOG_TS the requirement can be seen from
-   *
+   * 
    *
    * @param[in] data_trans_id
    * @param[in] scn

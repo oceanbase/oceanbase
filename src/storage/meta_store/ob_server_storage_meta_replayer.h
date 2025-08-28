@@ -32,13 +32,13 @@ public:
       ckpt_slog_handler_(nullptr) {}
   ObServerStorageMetaReplayer(const ObServerStorageMetaReplayer &) = delete;
   ObServerStorageMetaReplayer &operator=(const ObServerStorageMetaReplayer &) = delete;
-
+      
   int init(const bool is_share_storage,
            ObServerStorageMetaPersister &persister,
            ObServerCheckpointSlogHandler &ckpt_slog_handler);
   int start_replay();
   void destroy();
-
+  
 private:
   typedef common::hash::ObHashMap<uint64_t, omt::ObTenantMeta> TENANT_META_MAP;
   int apply_replay_result_(const TENANT_META_MAP &tenant_meta_map);
@@ -52,7 +52,7 @@ private:
   int ss_start_replay_(TENANT_META_MAP &tenant_meta_map) const;
   int ss_read_tenant_super_block_(ObArenaAllocator &allocator, const ObTenantItem &item, ObTenantSuperBlock &super_block) const;
   int ss_read_tenant_unit_(ObArenaAllocator &allocator, const ObTenantItem &item, share::ObUnitInfoGetter::ObTenantConfig &unit) const;
-#endif
+#endif 
 
 private:
   bool is_inited_;

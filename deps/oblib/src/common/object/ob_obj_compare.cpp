@@ -789,7 +789,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
 
 
 // stringtc vs texttc temporarily
-// Notice:
+// Notice: 
 // 1. ObObj compare only support inrow lobs, because lob manager cannot be reached from here.
 //    Need to convert outrow lobs inrow before comparation
 // 2. ObObj::get_string(Obstring &) only gets inrow lob data

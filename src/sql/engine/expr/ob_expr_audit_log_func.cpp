@@ -170,7 +170,7 @@ int ObExprAuditLogFunc::parse_user_name(const ObString &str,
       is_valid = false;
       error_info = "Invalid character in the user name";
       LOG_WARN("invalid user name", K(user_name));
-    }
+    } 
   }
   if (OB_SUCC(ret) && is_valid) {
     if (host.empty()) {

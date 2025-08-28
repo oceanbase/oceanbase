@@ -140,7 +140,7 @@ void ObStorageCachePolicyPrewarmerTest::wait_major_finish()
     LOG_INFO("major result", K(scn), K(new_major_scn));
     ob_usleep(100 * 1000); // 100_ms
   } while (0 != scn || old_major_scn == new_major_scn);
-
+  
   old_major_scn = new_major_scn;
   LOG_INFO("major finished", K(new_major_scn));
 }
@@ -285,7 +285,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, basic)
 
   task->dec_ref_count();
   LOG_INFO("Finish basic");
-
+  
   // test clean history
   ObStorageCachePolicyService *policy_service = MTL(ObStorageCachePolicyService *);
   ASSERT_NE(nullptr, policy_service);

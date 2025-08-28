@@ -49,14 +49,14 @@ TEST(ObGlobalInterruptManager, init_manager)
   ObAddr local(ObAddr::IPV4, "127.0.0.1", 10086);
   ObAddr dst = g_service.get_dst();
 
-  // prepare mocked ObInterruptibleTaskID, ObInterruptCode,
+  // prepare mocked ObInterruptibleTaskID, ObInterruptCode, 
   ObInterruptibleTaskID interrupt_id(1, 1);
   ObInterruptStackInfo interrupt_stack_info;
   interrupt_stack_info.set_info(1 /*from tid*/, local /*from_svr_addr*/,
                                 "mock error" /*extra_msg*/);
   ObInterruptCode interrupt_code(OB_RPC_CONNECT_ERROR, interrupt_stack_info);
   ObInterruptChecker *checker = nullptr;
-
+  
   // Singleton acquisition
   g_manager = ObGlobalInterruptManager::getInstance();
   ASSERT_EQ(false, nullptr == g_manager);
@@ -93,7 +93,7 @@ TEST(ObGlobalInterruptManager, register_and_unregister)
   ObAddr local(ObAddr::IPV4, "127.0.0.1", 10086);
   ObAddr dst = g_service.get_dst();
 
-  // prepare mocked ObInterruptibleTaskID, ObInterruptCode,
+  // prepare mocked ObInterruptibleTaskID, ObInterruptCode, 
   ObInterruptibleTaskID interrupt_id(1, 1);
   ObInterruptStackInfo interrupt_stack_info;
   interrupt_stack_info.set_info(1 /*from tid*/, local /*from_svr_addr*/,
@@ -160,7 +160,7 @@ TEST(ObGlobalInterruptManager, interrupt)
   ObAddr local(ObAddr::IPV4, "127.0.0.1", 10086);
   ObAddr dst = g_service.get_dst();
 
-  // prepare mocked ObInterruptibleTaskID, ObInterruptCode,
+  // prepare mocked ObInterruptibleTaskID, ObInterruptCode, 
   ObInterruptibleTaskID interrupt_id(1, 1);
   ObInterruptStackInfo interrupt_stack_info;
   interrupt_stack_info.set_info(1 /*from tid*/, local /*from_svr_addr*/,
@@ -236,7 +236,7 @@ TEST(ObGlobalInterruptManager, interrupt)
 
 enum RegMode
 {
-  ManagerInterface = 0,
+  ManagerInterface = 0, 
   CheckerInterface = 1,
   Guard = 2,
   SetInterruptable = 3,

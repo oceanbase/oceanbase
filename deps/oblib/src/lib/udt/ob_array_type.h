@@ -120,7 +120,7 @@ public:
   virtual int set_offsets(uint32_t *offsets, int64_t length) = 0;
   virtual int compare(const ObIArrayType &right, int &cmp_ret) const = 0;
   virtual int compare_at(uint32_t left_begin, uint32_t left_len,
-                         uint32_t right_begin, uint32_t right_len,
+                         uint32_t right_begin, uint32_t right_len,  
                          const ObIArrayType &right, int &cmp_ret) const = 0;
   virtual bool sort_cmp(uint32_t idx_l, uint32_t idx_r) const = 0;
   virtual int contains_all(const ObIArrayType &other, bool &bret) const = 0;
@@ -179,7 +179,7 @@ public :
       } else {
         uint8_t *cur_null_bitmap = data_container_->null_bitmaps_.get_data() + curr_pos;
         MEMCPY(cur_null_bitmap, nulls, length * sizeof(uint8_t));
-      }
+      }      
     }
     return ret;
   }

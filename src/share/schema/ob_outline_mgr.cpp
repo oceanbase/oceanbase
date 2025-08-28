@@ -395,7 +395,7 @@ int ObOutlineMgr::add_outline(const ObSimpleOutlineSchema &outline_schema)
       } else {
         ObOutlineSqlIdHashWrapper outline_sql_id_wrapper(new_outline_schema->get_tenant_id(),
                                                                 new_outline_schema->get_database_id(),
-                                                                new_outline_schema->is_format() ? new_outline_schema->get_format_sql_id_str()
+                                                                new_outline_schema->is_format() ? new_outline_schema->get_format_sql_id_str() 
                                                                                                 : new_outline_schema->get_sql_id_str(),
                                                                 new_outline_schema->is_format());
         hash_ret = sql_id_map_.set_refactored(outline_sql_id_wrapper,
@@ -513,7 +513,7 @@ int ObOutlineMgr::del_outline(const ObTenantOutlineId &outline)
       } else {
         ObOutlineSqlIdHashWrapper outline_sql_id_wrapper(schema_to_del->get_tenant_id(),
                                                          schema_to_del->get_database_id(),
-                                                         schema_to_del->is_format() ? schema_to_del->get_format_sql_id_str()
+                                                         schema_to_del->is_format() ? schema_to_del->get_format_sql_id_str() 
                                                                                     : schema_to_del->get_sql_id_str(),
                                                          schema_to_del->is_format());
         hash_ret = sql_id_map_.erase_refactored(outline_sql_id_wrapper);
@@ -872,7 +872,7 @@ int ObOutlineMgr::rebuild_outline_hashmap()
 
             ObOutlineSqlIdHashWrapper outline_signature_wrapper(outline_schema->get_tenant_id(),
                                                                     outline_schema->get_database_id(),
-                                                                    outline_schema->is_format() ? outline_schema->get_format_sql_id_str()
+                                                                    outline_schema->is_format() ? outline_schema->get_format_sql_id_str() 
                                                                                                 : outline_schema->get_sql_id_str(),
                                                                     outline_schema->is_format());
             hash_ret = sql_id_map_.set_refactored(outline_signature_wrapper,

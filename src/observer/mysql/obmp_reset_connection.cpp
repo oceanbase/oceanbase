@@ -96,7 +96,7 @@ int ObMPResetConnection::process()
      *  1. Rolls back any active transactions and resets autocommit mode.
      *  2. Releases all table locks. (OB use row lock, do not need do this)
      *  3. Closes (and drops) all TEMPORARY tables.
-     *  4. Reinitializes session system variables to the values of the corresponding global system variables,
+     *  4. Reinitializes session system variables to the values of the corresponding global system variables, 
      *       including system variables that are set implicitly by statements such as SET NAMES.
      *  5. Loses user-defined variable settings.
      *  6. Releases prepared statements. (include ps stmt, ps cursor, piece)
@@ -120,7 +120,7 @@ int ObMPResetConnection::process()
       }
     }
 
-    // 3. Closes (and drops) all TEMPORARY tables.
+    // 3. Closes (and drops) all TEMPORARY tables. 
     if (OB_SUCC(ret)) {
       if (OB_UNLIKELY(OB_FAIL(session->drop_temp_tables(false, false, true)))) {
         LOG_WARN("fail to drop temp tables", K(ret));
@@ -157,7 +157,7 @@ int ObMPResetConnection::process()
 
       // 6.3 piece
       if (OB_SUCC(ret) && NULL != session->get_piece_cache()) {
-        observer::ObPieceCache* piece_cache =
+        observer::ObPieceCache* piece_cache = 
           static_cast<observer::ObPieceCache*>(session->get_piece_cache());
         if (OB_FAIL(piece_cache->close_all(*session))) {
           LOG_WARN("failed to close all piece", K(ret));
@@ -168,7 +168,7 @@ int ObMPResetConnection::process()
       }
 
       if (OB_SUCC(ret)) {
-        // 6.4 ps session info
+        // 6.4 ps session info 
         session->reset_ps_session_info();
 
         // 6.5 ps name
@@ -270,7 +270,7 @@ int ObMPResetConnection::process()
   if (OB_NOT_NULL(session)) {
     tmp_ret = do_after_process(*session, false/*async_resp_used*/);
   }
-
+  
   THIS_WORKER.set_session(NULL);
   if (session != NULL) {
     revert_session(session);

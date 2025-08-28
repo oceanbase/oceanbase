@@ -483,37 +483,37 @@ int ob_geometry_sub_type_str(char *buff, int64_t buff_length, int64_t &pos, cons
   int ret = OB_SUCCESS;
   switch (geo_type) {
     case common::ObGeoType::POINT: {
-      ret = databuff_printf(buff, buff_length, pos, "point");
+      ret = databuff_printf(buff, buff_length, pos, "point"); 
       break;
     }
 
     case common::ObGeoType::LINESTRING: {
-      ret = databuff_printf(buff, buff_length, pos, "linestring");
+      ret = databuff_printf(buff, buff_length, pos, "linestring"); 
       break;
     }
 
     case common::ObGeoType::POLYGON: {
-      ret = databuff_printf(buff, buff_length, pos, "polygon");
+      ret = databuff_printf(buff, buff_length, pos, "polygon"); 
       break;
     }
 
     case common::ObGeoType::MULTIPOINT: {
-      ret = databuff_printf(buff, buff_length, pos, "multipoint");
+      ret = databuff_printf(buff, buff_length, pos, "multipoint"); 
       break;
     }
 
     case common::ObGeoType::MULTILINESTRING: {
-      ret = databuff_printf(buff, buff_length, pos, "multilinestring");
+      ret = databuff_printf(buff, buff_length, pos, "multilinestring"); 
       break;
     }
 
     case common::ObGeoType::MULTIPOLYGON: {
-      ret = databuff_printf(buff, buff_length, pos, "multipolygon");
+      ret = databuff_printf(buff, buff_length, pos, "multipolygon"); 
       break;
     }
 
     case common::ObGeoType::GEOMETRYCOLLECTION: {
-      ret = databuff_printf(buff, buff_length, pos, "geomcollection");
+      ret = databuff_printf(buff, buff_length, pos, "geomcollection"); 
       break;
     }
 
@@ -534,9 +534,9 @@ int ob_udt_sub_type_str(char *buff,
 {
   int ret = OB_SUCCESS;
   if (is_sql_type && sub_type == ObXMLSqlType) {
-    ret = databuff_printf(buff, buff_length, pos, "XMLTYPE");
+    ret = databuff_printf(buff, buff_length, pos, "XMLTYPE"); 
   } else if (sub_type == T_OBJ_XML) {
-    ret = databuff_printf(buff, buff_length, pos, "XMLTYPE");
+    ret = databuff_printf(buff, buff_length, pos, "XMLTYPE"); 
   } else if (sub_type == T_OBJ_SDO_GEOMETRY) {
     ret = databuff_printf(buff, buff_length, pos, "SDO_GEOMETRY");
   } else if (type_info.empty()) {
@@ -681,7 +681,7 @@ bool is_match_alter_integer_column_online_ddl_rules(const common::ObObjMeta& src
   if ((((src_meta.is_signed_integer() && dst_meta.is_signed_integer())
         || (src_meta.is_unsigned_integer() && dst_meta.is_unsigned_integer())) // both are singed or unsigned integer
         && src_meta.get_type() <= dst_meta.get_type())) { // (unsigned) integer can be changed into larger by online ddl
-    is_online_ddl = true;
+    is_online_ddl = true; 
   }
   return is_online_ddl;
 }
@@ -700,12 +700,12 @@ bool is_match_alter_string_column_online_ddl_rules(const common::ObObjMeta& src_
           || (src_meta.is_varchar()   && dst_meta.is_text() && ObTinyTextType == dst_meta.get_type())     // varchar   -> tinytext;   depended by generated column
           || (dst_meta.is_varbinary() && src_meta.is_blob() && ObTinyTextType == src_meta.get_type())     // tinyblob  -> varbinary;  depended by generated column
           || (dst_meta.is_varchar()   && src_meta.is_text() && ObTinyTextType == src_meta.get_type())) {  // tinytext  -> varchar;    depended by generated column
-    // support online ddl with generated column depended:
+    // support online ddl with generated column depended: 
     // varbinary -> tinyblob, varchar -> tinytext, tinyblob -> varbinary and tinytext -> varchar in version 4.3
     is_online_ddl = true;
   } else if (((src_meta.is_blob() && ObTinyTextType != src_meta.get_type() && dst_meta.is_blob() && ObTinyTextType != dst_meta.get_type())      // tinyblob -x-> blob ---> mediumblob ---> logblob
            || (src_meta.is_text() && ObTinyTextType != src_meta.get_type() && dst_meta.is_text() && ObTinyTextType != dst_meta.get_type()))) {  // tinytext -x-> text ---> mediumtext ---> longtext
-    // support online ddl with generated column depended:
+    // support online ddl with generated column depended: 
     // smaller lob -> larger lob;
     is_online_ddl = true;
   }

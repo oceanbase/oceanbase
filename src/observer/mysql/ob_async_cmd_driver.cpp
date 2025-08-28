@@ -52,7 +52,7 @@ int ObAsyncCmdDriver::response_result(ObMySQLResultSet &result)
   if (OB_ISNULL(cur_trace_id = ObCurTraceId::get_trace_id())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("current trace id is NULL", K(ret));
-  } else if (is_prexecute_
+  } else if (is_prexecute_ 
     && OB_FAIL(response_query_header(result, false, false, true))) {
     LOG_WARN("flush buffer fail before send async ok packet.", K(ret));
   } else if (OB_FAIL(sql_end_cb.set_packet_param(pkt_param.fill(result, session_, *cur_trace_id)))) {

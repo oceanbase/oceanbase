@@ -91,11 +91,11 @@ public:
       obrpc::ObCreateIndexArg &arg,
       ObIAllocator *allocator);
   static int check_need_to_load_dic(
-      const uint64_t tenant_id,
-      const ObString &parser_name,
+      const uint64_t tenant_id, 
+      const ObString &parser_name, 
       bool &need_to_load_dic);
   static int try_load_and_lock_dictionary_tables(
-      const ObTableSchema &index_schema,
+      const ObTableSchema &index_schema, 
       ObMySQLTransaction &trans);
   static int try_load_dictionary_for_all_tenants();
   static int check_supportability_for_loader_key(
@@ -106,8 +106,8 @@ public:
         const ObTableSchema *data_schema,
         const obrpc::ObCreateIndexArg *index_arg);
   static int get_fts_multivalue_index_column_name(
-      const ObTableSchema &data_table_schema,
-      const ObTableSchema &index_table_schema,
+      const ObTableSchema &data_table_schema, 
+      const ObTableSchema &index_table_schema, 
       ObIArray<ObString> &col_names);
   static int generate_fts_mtv_index_aux_columns(
       const ObTableSchema &orig_table_schema,
@@ -115,8 +115,8 @@ public:
       ObTableSchema &new_table_schema,
       ObTableSchema &new_index_schema,
       common::ObIAllocator &allocator,
-      oceanbase::rootserver::ObDDLOperator &ddl_operator,
-      common::ObMySQLTransaction &trans,
+      oceanbase::rootserver::ObDDLOperator &ddl_operator, 
+      common::ObMySQLTransaction &trans, 
       ObSEArray<obrpc::ObColumnSortItem, 2> &domain_index_columns,
       ObSEArray<ObString, 1> &domain_store_columns);
   static int generate_doc_id_column(
@@ -131,7 +131,7 @@ public:
 private:
   static int get_multivalue_index_column_name(
       const ObTableSchema &data_table_schema,
-      const ObTableSchema &index_table_schema,
+      const ObTableSchema &index_table_schema, 
       ObIArray<ObString> &col_names);
   static bool compare_index_column(const std::pair<int64_t, ObString> &lhs, const std::pair<int64_t, ObString> &rhs) { return lhs.first < rhs.first; }
   static int check_ft_cols(

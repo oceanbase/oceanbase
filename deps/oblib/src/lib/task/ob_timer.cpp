@@ -93,7 +93,7 @@ void ObTimer::wait()
   } else {}
 }
 
-void ObTimer::destroy()
+void ObTimer::destroy() 
 {
   if (is_inited_) {
     is_stopped_ = true;

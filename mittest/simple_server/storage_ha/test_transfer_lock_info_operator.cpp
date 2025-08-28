@@ -103,7 +103,7 @@ TEST_F(TestTransferLockInfoOperator, TransferLockInfo)
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, ObTransferLockInfoOperator::get(src_row_key, task_id_, start_status, false, group_id, new_start_dest_lock_info, sql_proxy));
 }
 
-} // namespace
+} // namespace 
 } // namespace oceanbase
 
 int main(int argc, char **argv)

@@ -59,14 +59,14 @@ int ObAllVirtualDupLSLeaseMgr::prepare_start_to_read_()
           if (OB_NOT_INIT == ret ) {
             ret = OB_SUCCESS;
           } else {
-            SERVER_LOG(WARN, "collect dup ls lease mgr failed", K(ret), K(cur_tenant_id));
+            SERVER_LOG(WARN, "collect dup ls lease mgr failed", K(ret), K(cur_tenant_id)); 
           }
         }
       }
     }
   }
   if (OB_FAIL(ret)) {
-
+    
   } else if (OB_FAIL(dup_ls_lease_mgr_stat_iter_.set_ready())) { // set ready for the first count
     SERVER_LOG(WARN, "dup_ls_iter set ready error", K(ret));
   } else {
@@ -138,7 +138,7 @@ int ObAllVirtualDupLSLeaseMgr::inner_get_next_row(ObNewRow *&row)
   } else if (OB_FAIL(dup_ls_lease_mgr_stat_iter_.get_next(lease_mgr_stat))) {
     if (OB_ITER_END != ret) {
       SERVER_LOG(WARN, "ObAllVirtualDupLSLeaseMgr iter end", K(ret));
-    }
+    } 
   } else {
     const int64_t col_count = output_column_ids_.count();
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
@@ -184,13 +184,13 @@ int ObAllVirtualDupLSLeaseMgr::inner_get_next_row(ObNewRow *&row)
           break;
         case GRANT_REQ_TS:
           cur_row_.cells_[i].set_int(lease_mgr_stat.get_grant_req_ts());
-          break;
+          break; 
         case CACHED_REQ_TS:
           cur_row_.cells_[i].set_int(lease_mgr_stat.get_cached_req_ts());
           break;
         case LEASE_INTERVAL_US:
           cur_row_.cells_[i].set_int(lease_mgr_stat.get_lease_interval());
-          break;
+          break; 
         case MAX_REPLAYED_LOG_SCN:
           cur_row_.cells_[i].set_int(lease_mgr_stat.get_max_replayed_scn().convert_to_ts(true /* ignore invalid */));
           break;
@@ -199,7 +199,7 @@ int ObAllVirtualDupLSLeaseMgr::inner_get_next_row(ObNewRow *&row)
           break;
         case MAX_COMMIT_VERSION:
           cur_row_.cells_[i].set_int(lease_mgr_stat.get_max_commit_version());
-          break;
+          break; 
         default:
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid coloum_id", K(ret), K(col_id));

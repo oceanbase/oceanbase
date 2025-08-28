@@ -94,7 +94,7 @@ private:
   {
     const int64_t old_new_idx = param.iter_param_.get_mview_old_new_col_index();
     const int64_t group_idx = param.iter_param_.get_group_idx_col_index();
-    return 0 == nop_pos.count() ||
+    return 0 == nop_pos.count() || 
            (1 == nop_pos.count() && nop_pos.nops_[0] == old_new_idx) ||
            (2 == nop_pos.count() && ((nop_pos.nops_[0] == old_new_idx && nop_pos.nops_[1] == group_idx) ||
                                      (nop_pos.nops_[0] == group_idx && nop_pos.nops_[1] == old_new_idx)));
@@ -173,7 +173,7 @@ public:
   int switch_param(
       ObTableAccessParam &param,
       ObTableAccessContext &context,
-      ObGetTableParam &get_table_param);
+      ObGetTableParam &get_table_param); 
   static int alloc_mview_merge(
       ObTableAccessParam &param,
       ObTableAccessContext &context,
@@ -191,7 +191,7 @@ private:
   ObMviewMerge *merges_[T_MAX_ITER_TYPE];
 };
 
-}
+} 
 }
 
 #endif

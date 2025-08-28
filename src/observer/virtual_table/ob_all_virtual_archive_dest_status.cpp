@@ -16,15 +16,15 @@
 #include "observer/ob_sql_client_decorator.h"
 #include "logservice/archiveservice/ob_archive_service.h"
 
-using namespace oceanbase::share;
+using namespace oceanbase::share; 
 using namespace oceanbase::common::sqlclient;
 
 namespace oceanbase
-{
+{  
 namespace observer
 {
 
-ObVirtualArchiveDestStatus::ObVirtualArchiveDestStatus() :
+ObVirtualArchiveDestStatus::ObVirtualArchiveDestStatus() : 
   is_inited_(false),
   ls_end_map_inited_(false),
   ls_checkpoint_map_inited_(false),
@@ -40,7 +40,7 @@ ObVirtualArchiveDestStatus::~ObVirtualArchiveDestStatus()
   destroy();
 }
 
-ObVirtualArchiveDestStatus::ObArchiveDestStatusInfo::ObArchiveDestStatusInfo()
+ObVirtualArchiveDestStatus::ObArchiveDestStatusInfo::ObArchiveDestStatusInfo() 
 {
   reset();
 }
@@ -77,7 +77,7 @@ int ObVirtualArchiveDestStatus::init(ObMySQLProxy *sql_proxy)
   } else if (OB_ISNULL(schema_guard_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_guard is null", K(ret));
-  } else if (OB_FAIL(schema_guard_->get_table_schema(effective_tenant_id_,
+  } else if (OB_FAIL(schema_guard_->get_table_schema(effective_tenant_id_, 
     OB_ALL_VIRTUAL_ARCHIVE_DEST_STATUS_TID, table_schema_))) {
     SERVER_LOG(WARN, "failed to get table schema", K(ret));
   } else if (OB_ISNULL(table_schema_)) {
@@ -101,7 +101,7 @@ int ObVirtualArchiveDestStatus::init(ObMySQLProxy *sql_proxy)
 int ObVirtualArchiveDestStatus::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-
+  
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "not inited" , K(ret));
@@ -109,7 +109,7 @@ int ObVirtualArchiveDestStatus::inner_get_next_row(common::ObNewRow *&row)
     if (OB_FAIL(get_all_tenant_())) {
       SERVER_LOG(WARN, "get all tenant failed", K(ret));
     } else if (OB_UNLIKELY(tenant_array_.size() == 0)) {
-      ret = OB_ITER_END;
+      ret = OB_ITER_END;  
       SERVER_LOG(WARN, "tenant array is empty", K(ret));
     } else {
       for (int64_t tenant_idx = 0; OB_SUCC(ret) && tenant_idx < tenant_array_.count(); tenant_idx++) {
@@ -119,7 +119,7 @@ int ObVirtualArchiveDestStatus::inner_get_next_row(common::ObNewRow *&row)
 
         // reset ls_array_ for each tenant
         if (ls_array_.count() != 0 ) {
-          ls_array_.reset();
+          ls_array_.reset(); 
         }
 
         if (OB_FAIL(get_all_tenant_ls_(curr_tenant))) {
@@ -147,7 +147,7 @@ int ObVirtualArchiveDestStatus::inner_get_next_row(common::ObNewRow *&row)
               } else {
                 if (ls_end_map_inited_ && ls_end_map_.size() != 0) {
                   ls_end_map_.reset();
-                }
+                } 
                 // get ls max scn via tenant_id
                 if (OB_FAIL(get_ls_max_scn_(curr_tenant))) {
                   SERVER_LOG(WARN, "get ls max scn failed", K(curr_tenant), K(ret));
@@ -199,7 +199,7 @@ int ObVirtualArchiveDestStatus::inner_get_next_row(common::ObNewRow *&row)
     } else {
       row = &cur_row_;
     }
-  }
+  }  
 
   return ret;
 }
@@ -214,12 +214,12 @@ void ObVirtualArchiveDestStatus::destroy()
   }
 }
 
-void ObVirtualArchiveDestStatus::ObArchiveSCNValue::get(uint64_t &scn)
+void ObVirtualArchiveDestStatus::ObArchiveSCNValue::get(uint64_t &scn) 
 {
   scn = scn_;
 }
 
-int ObVirtualArchiveDestStatus::ObArchiveSCNValue::set(const uint64_t scn)
+int ObVirtualArchiveDestStatus::ObArchiveSCNValue::set(const uint64_t scn) 
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(scn == OB_INVALID_SCN_VAL)) {
@@ -232,8 +232,8 @@ int ObVirtualArchiveDestStatus::ObArchiveSCNValue::set(const uint64_t scn)
 }
 
 int ObVirtualArchiveDestStatus::get_all_tenant_()
-{
-
+{ 
+  
   int ret = OB_SUCCESS;
   ObSQLClientRetryWeak sql_client_retry_weak(sql_proxy_);
   ObArray<uint64_t> all_tenant_array_;
@@ -254,16 +254,16 @@ int ObVirtualArchiveDestStatus::get_all_tenant_()
       SERVER_LOG(WARN, "failed to push back", K(effective_tenant_id_), K(ret));
     }
   }
-
+  
   SERVER_LOG(INFO, "get all tenant success", K(tenant_array_));
   return ret;
 }
 
-int ObVirtualArchiveDestStatus::get_all_tenant_ls_(const uint64_t tenant_id)
+int ObVirtualArchiveDestStatus::get_all_tenant_ls_(const uint64_t tenant_id) 
 {
   int ret = OB_SUCCESS;
   ObSQLClientRetryWeak sql_client_retry_weak(sql_proxy_);
-
+  
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
     common::sqlclient::ObMySQLResult *result = NULL;
     ObSqlString sql;
@@ -272,7 +272,7 @@ int ObVirtualArchiveDestStatus::get_all_tenant_ls_(const uint64_t tenant_id)
     "('CREATING', 'CREATED', 'TENANT_DROPPING', 'CREATE_ABORT', 'PRE_TENANT_DROPPING')";
     if (OB_FAIL(sql.append_fmt(SELECT_ALL_LS, OB_ALL_VIRTUAL_LS_STATUS_TNAME, tenant_id))){
       SERVER_LOG(WARN, "failed to append table name", K(ret));
-    } else if (OB_FAIL(sql_client_retry_weak.read(res, sql.ptr()))) {
+    } else if (OB_FAIL(sql_client_retry_weak.read(res, sql.ptr()))) { 
       SERVER_LOG(WARN, "failed to execute sql", K(sql), K(ret));
     } else if (OB_ISNULL(result = res.get_result())) {
       ret = OB_ERR_UNEXPECTED;
@@ -281,7 +281,7 @@ int ObVirtualArchiveDestStatus::get_all_tenant_ls_(const uint64_t tenant_id)
       while (OB_SUCC(ret) && OB_SUCC(result->next())) {
         int64_t ls_id;
         EXTRACT_INT_FIELD_MYSQL(*result, "ls_id", ls_id, int64_t);
-
+        
         if (OB_SUCC(ret)) {
           if (OB_FAIL(ls_array_.push_back(ls_id))) {
             SERVER_LOG(WARN, "failed to push back ls_id", K(ls_id), K(ret));
@@ -303,10 +303,10 @@ int ObVirtualArchiveDestStatus::get_ls_max_scn_(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   ObSQLClientRetryWeak sql_client_retry_weak(sql_proxy_);
-
-  if (OB_UNLIKELY(!is_inited_)) {
+  
+  if (OB_UNLIKELY(!is_inited_)) { 
     ret = OB_NOT_INIT;
-    SERVER_LOG(WARN, "not inited", K(ret));
+    SERVER_LOG(WARN, "not inited", K(ret));  
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       common::sqlclient::ObMySQLResult *result = NULL;
@@ -315,7 +315,7 @@ int ObVirtualArchiveDestStatus::get_ls_max_scn_(const uint64_t tenant_id)
       const static char *SELECT_LS_BY_TENANT = "SELECT ls_id, max_scn FROM %s WHERE tenant_id=%ld and role='LEADER'";
       if (OB_FAIL(sql.append_fmt(SELECT_LS_BY_TENANT, OB_ALL_VIRTUAL_LOG_STAT_TNAME, tenant_id))) {
         SERVER_LOG(WARN, "failed to append table name", K(ret));
-      } else if (OB_FAIL(sql_client_retry_weak.read(res, sql.ptr()))) {
+      } else if (OB_FAIL(sql_client_retry_weak.read(res, sql.ptr()))) { 
         SERVER_LOG(WARN, "failed to execute sql", K(sql), K(ret));
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
@@ -328,7 +328,7 @@ int ObVirtualArchiveDestStatus::get_ls_max_scn_(const uint64_t tenant_id)
 
           EXTRACT_INT_FIELD_MYSQL(*result, "ls_id", ls_id, int64_t);
           EXTRACT_UINT_FIELD_MYSQL(*result, "max_scn", max_scn, uint64_t);
-
+    
           if (OB_SUCC(ret)) {
             if (OB_FAIL(ls_end_map_.alloc_value(scn_value))) {
               SERVER_LOG(WARN, "alloc_value fail", K(ret), K(ls_id), K(max_scn));
@@ -349,7 +349,7 @@ int ObVirtualArchiveDestStatus::get_ls_max_scn_(const uint64_t tenant_id)
               ls_end_map_.del(ObLSID(ls_id));
               ls_end_map_.free_value(scn_value);
               scn_value = NULL;
-            }
+            } 
           }
         }
         if (OB_ITER_END != ret) {
@@ -368,9 +368,9 @@ int ObVirtualArchiveDestStatus::get_ls_checkpoint_scn_(const uint64_t tenant_id,
   int ret = OB_SUCCESS;
   ObSQLClientRetryWeak sql_client_retry_weak(sql_proxy_);
 
-  if (OB_UNLIKELY(!is_inited_)) {
+  if (OB_UNLIKELY(!is_inited_)) { 
     ret = OB_NOT_INIT;
-    SERVER_LOG(WARN, "not inited", K(ret));
+    SERVER_LOG(WARN, "not inited", K(ret));  
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       common::sqlclient::ObMySQLResult *result = NULL;
@@ -378,7 +378,7 @@ int ObVirtualArchiveDestStatus::get_ls_checkpoint_scn_(const uint64_t tenant_id,
 
       const static char *SELECT_LS_CHECKPOINT = "select ls_id, max(checkpoint_scn) as checkpoint_scn from %s "
       "where ls_id in (select ls_id from %s where tenant_id=%ld) and dest_id=%ld and tenant_id=%ld group by ls_id";
-      if (OB_FAIL(sql.append_fmt(SELECT_LS_CHECKPOINT, OB_ALL_VIRTUAL_LS_LOG_ARCHIVE_PROGRESS_TNAME,
+      if (OB_FAIL(sql.append_fmt(SELECT_LS_CHECKPOINT, OB_ALL_VIRTUAL_LS_LOG_ARCHIVE_PROGRESS_TNAME, 
                                  OB_ALL_VIRTUAL_LS_STATUS_TNAME, tenant_id, dest_id, tenant_id))) {
         SERVER_LOG(WARN, "failed to append table name", K(ret));
       } else if (OB_FAIL(sql_client_retry_weak.read(res, sql.ptr()))) {
@@ -415,7 +415,7 @@ int ObVirtualArchiveDestStatus::get_ls_checkpoint_scn_(const uint64_t tenant_id,
               ls_checkpoint_map_.del(ObLSID(ls_id));
               ls_checkpoint_map_.free_value(scn_value);
               scn_value = NULL;
-            }
+            } 
           }
         }
         if (OB_ITER_END != ret) {
@@ -453,16 +453,16 @@ int ObVirtualArchiveDestStatus::get_full_row_(const share::schema::ObTableSchema
   return ret;
 }
 
-int ObVirtualArchiveDestStatus::get_status_info_(const uint64_t tenant_id,
-                                                 const int64_t dest_id,
+int ObVirtualArchiveDestStatus::get_status_info_(const uint64_t tenant_id, 
+                                                 const int64_t dest_id, 
                                                  ObArchiveDestStatusInfo &dest_status_info)
 {
   int ret = OB_SUCCESS;
   ObSQLClientRetryWeak sql_client_retry_weak(sql_proxy_);
 
-  if (OB_UNLIKELY(!is_inited_)) {
+  if (OB_UNLIKELY(!is_inited_)) { 
     ret = OB_NOT_INIT;
-    SERVER_LOG(WARN, "not inited", K(ret));
+    SERVER_LOG(WARN, "not inited", K(ret));  
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       common::sqlclient::ObMySQLResult *result = NULL;
@@ -506,7 +506,7 @@ int ObVirtualArchiveDestStatus::get_status_info_(const uint64_t tenant_id,
             SERVER_LOG(INFO, "success to assign default synchronized NO");
           }
         }
-        if (OB_ITER_END != ret) {
+        if (OB_ITER_END != ret) { 
           SERVER_LOG(WARN, "failed to get dest status info", K(ret));
         } else {
           ret = OB_SUCCESS;
@@ -541,7 +541,7 @@ int ObVirtualArchiveDestStatus::compare_scn_map_()
         ls_checkpoint_map_.revert(ckpt_scn_val);
         max_scn_val->get(max_scn);
         ckpt_scn_val->get(ckpt_scn);
-
+      
         if (max_scn > ckpt_scn) {
           is_synced_ = false;
           break;
@@ -561,9 +561,9 @@ int ObVirtualArchiveDestStatus::check_if_switch_piece_(const uint64_t tenant_id,
   int64_t used_piece_id = OB_BACKUP_INVALID_PIECE_ID;
 
   if (OB_UNLIKELY(!is_inited_)) {
-    SERVER_LOG(WARN, "not inited", K(ret));
+    SERVER_LOG(WARN, "not inited", K(ret));  
   } else if (OB_FAIL(get_log_archive_used_piece_id_(tenant_id, dest_id, used_piece_id))){
-    SERVER_LOG(WARN, "get log archive used piece id failed", K(ret));
+    SERVER_LOG(WARN, "get log archive used piece id failed", K(ret)); 
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       common::sqlclient::ObMySQLResult *result = NULL;
@@ -609,7 +609,7 @@ int ObVirtualArchiveDestStatus::get_log_archive_used_piece_id_(const uint64_t te
   ObSQLClientRetryWeak sql_client_retry_weak(sql_proxy_);
 
   if (OB_UNLIKELY(!is_inited_)) {
-    SERVER_LOG(WARN, "not inited", K(ret));
+    SERVER_LOG(WARN, "not inited", K(ret));  
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       common::sqlclient::ObMySQLResult *result = NULL;

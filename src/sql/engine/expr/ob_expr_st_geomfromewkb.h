@@ -21,7 +21,7 @@ namespace oceanbase
 {
 namespace sql
 {
-class
+class 
 ObExprPrivSTGeomFromEWKB : public ObFuncExprOperator
 {
 public:
@@ -29,7 +29,7 @@ public:
   virtual ~ObExprPrivSTGeomFromEWKB();
   virtual int calc_result_typeN(ObExprResType& type,
                                 ObExprResType* types,
-                                int64_t param_num,
+                                int64_t param_num, 
                                 common::ObExprTypeCtx& type_ctx)
                                 const override;
   static int eval_st_geomfromewkb(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);

@@ -62,7 +62,7 @@ int ObExprKeyValue::calc_result_typeN(ObExprResType &type,
         types[i].set_calc_type(ObVarcharType);
         types[i].set_calc_collation_type(type.get_collation_type());
         types[i].set_calc_collation_level(type.get_collation_level());
-      }
+      }       
     }
   } else {
     ObLengthSemantics length_semantic = type.get_length_semantics();

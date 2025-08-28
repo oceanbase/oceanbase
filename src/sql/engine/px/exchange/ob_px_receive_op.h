@@ -185,7 +185,7 @@ protected:
   int64_t bf_ctx_idx_; // the idx of bloom_filter_id_array_ in spec
   int64_t bf_send_idx_; // the idx of bf_send_ctx_array_ in sqc proxy
   // each_group_size_ only used in ObPxMsgProc::mark_rpc_filter()(this func will calc group_size, then each_group_size_ keep it for next use)
-  // means how many node(sqc level) in this group
+  // means how many node(sqc level) in this group 
   int64_t each_group_size_;
 };
 

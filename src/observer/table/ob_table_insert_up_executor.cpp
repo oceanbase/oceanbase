@@ -350,11 +350,11 @@ int ObTableApiInsertUpExecutor::prepare_final_insert_up_task()
       info:
         conflict_map_array count: 2
         conflict_map_array[0]:
-          {key: 1, value: {base: old, current: NULL, new_row_source: INSERT}}
+          {key: 1, value: {base: old, current: NULL, new_row_source: INSERT}} 
           {key: 2, value: {base: NULL, current: new, new_row_source: UPDATE}}
         conflict_map_array[1]:
           {key: 1, value: {base: old, current: NULL, new_row_source: UPDATE}}
-
+      
       NOTE:
         the struct of conflict_map_array after do_insertup_cache() has been shown above.
         do_insert() will delete the old_row and do_update() will insert the new row.
@@ -383,7 +383,7 @@ int ObTableApiInsertUpExecutor::delete_upd_old_row_to_das()
     if (OB_ISNULL(insup_ctdef = insert_up_spec_.get_ctdefs().at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("insup ctdef is NULL", K(ret), K(i));
-    } else if (OB_FAIL(ObTableApiModifyExecutor::delete_upd_old_row_to_das(insup_ctdef->upd_ctdef_,
+    } else if (OB_FAIL(ObTableApiModifyExecutor::delete_upd_old_row_to_das(insup_ctdef->upd_ctdef_, 
             upd_rtdef, upd_rtctx_))) {
       LOG_WARN("fail to delete old row to das", K(ret), K(i));
     }
@@ -398,7 +398,7 @@ int ObTableApiInsertUpExecutor::insert_upd_new_row_to_das()
   int64_t insup_ctdef_count = insert_up_spec_.get_ctdefs().count();
   if (OB_UNLIKELY(insup_ctdef_count != insert_up_rtdefs_.count())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("count of insup ctdef is not equal to rtdef", K(ret), K(insup_ctdef_count),
+    LOG_WARN("count of insup ctdef is not equal to rtdef", K(ret), K(insup_ctdef_count), 
               K(insert_up_rtdefs_.count()));
   }
   for (int64_t i = 0; i < insert_up_rtdefs_.count(); i++) {
@@ -407,7 +407,7 @@ int ObTableApiInsertUpExecutor::insert_upd_new_row_to_das()
     if (OB_ISNULL(insup_ctdef = insert_up_spec_.get_ctdefs().at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("insup ctdef is NULL", K(ret), K(i));
-    } else if (OB_FAIL(ObTableApiModifyExecutor::insert_upd_new_row_to_das(insup_ctdef->upd_ctdef_,
+    } else if (OB_FAIL(ObTableApiModifyExecutor::insert_upd_new_row_to_das(insup_ctdef->upd_ctdef_, 
               upd_rtdef, upd_rtctx_))) {
       LOG_WARN("fail to insert row to das", K(ret), K(i));
     }
@@ -428,7 +428,7 @@ int ObTableApiInsertUpExecutor::do_update(const ObConflictValue &constraint_valu
                                       get_primary_table_upd_old_row(),
                                       eval_ctx_))) {
         LOG_WARN("fail to load row to old row exprs", K(ret), KPC(constraint_value.baseline_datum_row_));
-      } else if (OB_FAIL(to_expr_skip_old(*constraint_value.current_datum_row_,
+      } else if (OB_FAIL(to_expr_skip_old(*constraint_value.current_datum_row_, 
                                           insert_up_spec_.get_ctdefs().at(0)->upd_ctdef_))) {
         LOG_WARN("fail to load row to new row exprs", K(ret), KPC(constraint_value.current_datum_row_));
       } else {

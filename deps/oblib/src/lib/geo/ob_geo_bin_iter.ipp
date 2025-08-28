@@ -35,7 +35,7 @@ ObWkbConstIterator<T, O>::ObWkbConstIterator(index_type idx, const owner_t* owne
 // TODO: do vector copy?
 template<typename T, typename O>
 ObWkbConstIterator<T, O>::ObWkbConstIterator(self& iter, bool do_array_assign)
-  : idx_(iter.idx_),
+  : idx_(iter.idx_), 
     owner_(iter.owner_), diff_info_(iter.diff_info_),
     offsets_ptr_(nullptr)
 {

@@ -161,7 +161,7 @@ private:
   int check_and_expand_mav_aggrs(const ObSelectStmt &stmt,
                                  ObIArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>> &expand_aggrs,
                                  bool &is_valid);
-  int check_and_expand_mav_aggr(const ObSelectStmt &stmt,
+  int check_and_expand_mav_aggr(const ObSelectStmt &stmt, 
                                 ObAggFunRawExpr *aggr,
                                 ObIArray<ObAggFunRawExpr*> &all_aggrs,
                                 ObIArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>> &expand_aggrs,

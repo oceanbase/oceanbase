@@ -1227,7 +1227,7 @@ int ObExprLike::match_text_batch(BATCH_EVAL_FUNC_ARG_DECL,
         if (!(skip.at(i) || eval_flags.at(i))) {
           if (NullCheck && text_datums[i].is_null()) {
             res_datums[i].set_null();
-          } else if (!ob_is_text_tc(text_type)) {
+          } else if (!ob_is_text_tc(text_type)) { 
             if (UseInstrMode) {
             int64_t res = ALL_PERCENT_SIGN == InstrMode ? 1
                 : match_with_instr_mode<PERCENT_SIGN_START(InstrMode), PERCENT_SIGN_END(InstrMode)>

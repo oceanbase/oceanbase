@@ -25,8 +25,8 @@ namespace table
 struct ObTableFtsCtx
 {
 public:
-  ObTableFtsCtx() {
-    reset();
+  ObTableFtsCtx() { 
+    reset(); 
   }
   ~ObTableFtsCtx() {}
   void reset() {
@@ -46,7 +46,7 @@ public:
                KP_(doc_rowkey_schema),
                K_(is_text_retrieval_scan),
                K_(search_text));
-
+  
   OB_INLINE bool is_tsc_with_doc_id() const { return need_tsc_with_doc_id_; }
   OB_INLINE uint64_t get_rowkey_doc_tid() const { return rowkey_doc_tid_; }
   OB_INLINE uint64_t get_doc_rowkey_tid() const { return doc_rowkey_tid_; }

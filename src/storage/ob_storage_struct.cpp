@@ -411,7 +411,7 @@ ObHATableStoreParam::ObHATableStoreParam(
     need_check_transfer_seq_(need_check_transfer_seq),
     need_replace_remote_sstable_(need_replace_remote_sstable),
     is_only_replace_major_(is_only_replace_major)
-
+   
 {}
 
 bool ObHATableStoreParam::is_valid() const
@@ -748,7 +748,7 @@ ObTabletSplitTscInfo::ObTabletSplitTscInfo()
 
 bool ObTabletSplitTscInfo::is_split_dst_with_partkey() const
 {
-  return start_partkey_.is_valid()
+  return start_partkey_.is_valid() 
       && end_partkey_.is_valid()
       && is_split_dst_
       && split_type_ < ObTabletSplitType::MAX_TYPE;

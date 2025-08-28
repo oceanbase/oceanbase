@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 typedef struct sc_queue_t {
   link_t head RK_CACHE_ALIGNED;
   link_t* tail RK_CACHE_ALIGNED;

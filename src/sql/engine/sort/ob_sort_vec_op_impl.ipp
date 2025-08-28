@@ -720,8 +720,8 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::adjust_topn_heap_with_ties(
       SQL_ENG_LOG(DEBUG, "in memory topn sort with ties clear ties array", KPC(new_row),
                   KPC(copy_pre_heap_top_row));
       if (0 != ties_array_.count()) {
-        for (int64_t i = 0; i < ties_array_.count(); ++i) {
-          store_row_factory_.free_row_store(ties_array_[i]);
+        for (int64_t i = 0; i < ties_array_.count(); ++i) { 
+          store_row_factory_.free_row_store(ties_array_[i]); 
         }
       }
       ties_array_.reset();
@@ -1082,7 +1082,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::add_heap_sort_batch(
   if (OB_FAIL(update_max_available_mem_size_periodically())) {
     SQL_ENG_LOG(WARN, "failed to update max available mem size periodically", K(ret));
   } else if (need_load_data && OB_FAIL(load_data_to_comp(input_brs))) {
-    SQL_ENG_LOG(WARN, "failed to load data", K(ret));
+    SQL_ENG_LOG(WARN, "failed to load data", K(ret));     
   } else {
     for (int64_t i = start_pos; OB_SUCC(ret) && i < input_brs.size_; i++) {
       if (input_brs.skip_->exist(i)) {
@@ -1843,7 +1843,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::build_ems_heap(int64_t &merg
       max_ways += 1;
       c = c->get_next();
     }
-
+  
     if (nullptr == ems_heap_) {
       if (OB_ISNULL(ems_heap_ = OB_NEWx(EMSHeap, (&mem_context_->get_malloc_allocator()), comp_,
                                         &mem_context_->get_malloc_allocator()))) {

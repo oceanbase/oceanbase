@@ -81,7 +81,7 @@ int ObBackupPrefixDeleteFileOp::init(
   return ret;
 }
 
-int ObBackupPrefixDeleteFileOp::func(const dirent *entry)
+int ObBackupPrefixDeleteFileOp::func(const dirent *entry) 
 {
   int ret = OB_SUCCESS;
   ObBackupIoAdapter util;
@@ -97,7 +97,7 @@ int ObBackupPrefixDeleteFileOp::func(const dirent *entry)
   } else if (0 != STRNCMP(entry->d_name, filter_str_, STRLEN(filter_str_))) {
     // do nothing
   } else if (OB_FAIL(tmp_path.init(path_.get_ptr()))) {
-    LOG_WARN("failed to init tmp_path", K(ret), K(path_));
+    LOG_WARN("failed to init tmp_path", K(ret), K(path_)); 
   } else if (OB_FAIL(tmp_path.join(entry->d_name, ObBackupFileSuffix::NONE))) {
     LOG_WARN("failed to join file name", K(ret));
   } else if (OB_FAIL(util.del_file(tmp_path.get_ptr(), storage_info_))) {
@@ -107,9 +107,9 @@ int ObBackupPrefixDeleteFileOp::func(const dirent *entry)
       ret = OB_SUCCESS;
     } else {
       LOG_WARN("failed to delete file", K(ret), K(tmp_path));
-    }
+    } 
   } else {
-    LOG_INFO("success to delete file", K(ret), K(tmp_path));
+    LOG_INFO("success to delete file", K(ret), K(tmp_path)); 
   }
 
 

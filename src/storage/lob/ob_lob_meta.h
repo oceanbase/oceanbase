@@ -96,7 +96,7 @@ public:
   int open_local(ObLobAccessParam &param, ObPersistentLobApator* lob_adapter);
   int open_remote(ObLobAccessParam &param);
 
-  // interface for read only
+  // interface for read only 
   int get_next_row(ObString &block_data);
 
   // interface for partial update
@@ -243,7 +243,7 @@ private:
 };
 
 OB_INLINE int64_t ob_lob_writer_length_validation(const common::ObCollationType &coll_type,
-                                                  const int64_t &data_len,
+                                                  const int64_t &data_len, 
                                                   const int64_t &write_len,
                                                   int64_t &write_char_len)
 {

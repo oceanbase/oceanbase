@@ -427,7 +427,7 @@ int ObOptimizer::check_parallel_das_dml_enabled(const ObDMLStmt &stmt,
 int ObOptimizer::check_pdml_enabled(const ObDMLStmt &stmt,
                                     const ObSQLSessionInfo &session)
 {
-  //
+  // 
   // 1. decided by enable_parallel_dml and disable_parallel_dml hint
   // 2. decided by auto dop (by parallel(auto) hint or session variable parallel_degree_policy)
   // 3. decided by session variable: _enable_parallel_dml is true or _force_parallel_dml_dop > 1;
@@ -515,8 +515,8 @@ int ObOptimizer::check_direct_load_enabled(const ObDMLStmt &stmt, const ObSQLSes
       ObDirectLoadOptimizerCtx &direct_load_optimize_ctx = ctx_.get_direct_load_optimizer_ctx();
       if (OB_FAIL(direct_load_optimize_ctx.init_direct_load_ctx(insert_stmt, ctx_))) {
         LOG_WARN("fail to init direct load ctx", K(ret));
-      }
-    }
+      } 
+    } 
   }
   return ret;
 }
@@ -559,7 +559,7 @@ int ObOptimizer::check_pdml_supported_feature(const ObDelUpdStmt &pdml_stmt,
     is_use_pdml = false;
     ctx_.add_plan_note(PDML_DISABLED_BY_NESTED_SQL);
   } else if (stmt::T_DELETE == pdml_stmt.get_stmt_type()) {
-    //
+    // 
     // if no trigger, no foreign key, delete can do pdml, even if with local unique index
     if (!table_infos.at(0)->part_ids_.empty()) {
       is_use_pdml = false;
@@ -608,7 +608,7 @@ int ObOptimizer::check_pdml_supported_feature(const ObDelUpdStmt &pdml_stmt,
 /*
  * 1. insert into heap table.
  * 2. exist gis/string/lob/array/generated column.
- * 3. exist unique or global or fulltext/spatial/vector/multivalue index
+ * 3. exist unique or global or fulltext/spatial/vector/multivalue index 
  * 4. update unique key when conflict
 */
 int ObOptimizer::check_pdml_insert_up_enabled(const ObDelUpdStmt &pdml_stmt,
@@ -671,7 +671,7 @@ int ObOptimizer::check_pdml_insert_up_enabled(const ObDelUpdStmt &pdml_stmt,
                                                       ref_table_id, index_schema))) {
         LOG_WARN("get unique index ids failed", K(ret), K(ref_table_id));;
       } else {
-        // 3. exist unique or global or fulltext/spatial/vector/multivalue index
+        // 3. exist unique or global or fulltext/spatial/vector/multivalue index 
         for (int64_t i = 0; i < index_schema.count() && OB_SUCC(ret); i++) {
           const ObSimpleTableSchemaV2 *index = NULL;
           if (OB_ISNULL(index = index_schema.at(i))) {
@@ -867,8 +867,8 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     LOG_WARN("failed to get push join predicate variable", K(ret));
   } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::_PUSH_JOIN_PREDICATE, push_join_pred_into_view_enabled))) {
     LOG_WARN("failed to get push join predicate opt param value", K(ret));
-  } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::PARTITION_WISE_PLAN_ENABLED,
-                                                   partition_wise_plan_enabled,
+  } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::PARTITION_WISE_PLAN_ENABLED, 
+                                                   partition_wise_plan_enabled, 
                                                    exists_partition_wise_plan_enabled_hint))) {
     LOG_WARN("failed to check partition wise plan enabled", K(ret));
   } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ENABLE_PX_ORDERED_COORD, enable_px_ordered_coord))) {
@@ -919,7 +919,7 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     if (!session.is_inner() && stmt.get_query_ctx()->get_injected_random_status()) {
       ctx_.set_generate_random_plan(true);
     }
-    if (session.is_enable_new_query_range() &&
+    if (session.is_enable_new_query_range() && 
         ObSQLUtils::is_min_cluster_version_ge_425_or_435() &&
         ObSQLUtils::is_opt_feature_version_ge_425_or_435(query_ctx->optimizer_features_enable_version_)) {
       ctx_.set_enable_new_query_range(true);
@@ -1242,7 +1242,7 @@ int ObOptimizer::calc_link_stmt_count(const ObDMLStmt &stmt, int64_t &count)
   if (stmt.is_dblink_stmt()) {
     count += 1;
   } else {
-    ObSEArray<ObSelectStmt *, 4> child_stmts;
+    ObSEArray<ObSelectStmt *, 4> child_stmts;  
     if (OB_FAIL(stmt.get_child_stmts(child_stmts))) {
       LOG_WARN("failed to get child stmts", K(ret));
     }

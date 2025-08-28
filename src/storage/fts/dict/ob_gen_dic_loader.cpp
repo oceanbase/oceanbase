@@ -26,8 +26,8 @@ namespace storage
  * -----------------------------------ObDicLoaderID-----------------------------------
  */
 int ObGenDicLoader::ObGenDicLoaderKey::init(
-    const uint64_t tenant_id,
-    const ObString &parser_name,
+    const uint64_t tenant_id, 
+    const ObString &parser_name, 
     const ObCharsetType charset)
 {
   int ret = OB_SUCCESS;
@@ -114,7 +114,7 @@ int ObGenDicLoader::ObNeedDeleteDicLoadersFn::operator() (hash::HashMapPair<ObGe
     if (OB_ISNULL(GCTX.root_service_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("root service is null", K(ret));
-    } else if (OB_FAIL(GCTX.root_service_->get_schema_service().get_tenant_schema_guard(OB_SYS_TENANT_ID,
+    } else if (OB_FAIL(GCTX.root_service_->get_schema_service().get_tenant_schema_guard(OB_SYS_TENANT_ID, 
                                                                                         schema_guard))) {
       LOG_WARN("get tenant schema guard failed", K(ret));
     } else if (OB_FAIL(schema_guard.get_available_tenant_ids(all_tenant_ids))) {
@@ -145,19 +145,19 @@ int ObGenDicLoader::init()
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("gen dic loader initialize twice", K(ret));
-  } else if (!dic_loader_map_.created()
+  } else if (!dic_loader_map_.created() 
       && OB_FAIL(dic_loader_map_.create(cap, ObMemAttr(OB_SERVER_TENANT_ID, "dic_loader_map")))) {
     LOG_WARN("fail to create dic loader map", K(ret), K(cap));
   } else {
     is_inited_ = true;
   }
-
+  
   return ret;
 }
 
-int ObGenDicLoader::get_dic_loader(const uint64_t tenant_id,
-                                   const ObString &parser_name,
-                                   const ObCharsetType charset,
+int ObGenDicLoader::get_dic_loader(const uint64_t tenant_id, 
+                                   const ObString &parser_name, 
+                                   const ObCharsetType charset, 
                                    ObTenantDicLoaderHandle &loader_handle)
 {
   int ret = OB_SUCCESS;
@@ -166,8 +166,8 @@ int ObGenDicLoader::get_dic_loader(const uint64_t tenant_id,
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("gen dic loader is not inited", K(ret));
-  } else if (!is_valid_tenant_id(tenant_id)
-             || parser_name.empty()
+  } else if (!is_valid_tenant_id(tenant_id) 
+             || parser_name.empty() 
              || charset == CHARSET_INVALID) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(parser_name), K(charset));
@@ -235,7 +235,7 @@ int ObGenDicLoader::destroy_dic_loader_for_tenant()
 }
 
 int ObGenDicLoader::gen_dic_loader(
-    const ObGenDicLoaderKey &dic_loader_key,
+    const ObGenDicLoaderKey &dic_loader_key, 
     ObTenantDicLoader *&dic_loader)
 {
   int ret = OB_SUCCESS;
@@ -255,7 +255,7 @@ int ObGenDicLoader::gen_dic_loader(
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to allocate memory for the loader", K(ret), K(dic_loader_key));
         } else if (OB_FAIL(dic_loader->init())) {
-          LOG_WARN("fail to init the dic loader", K(ret), K(dic_loader_key));
+          LOG_WARN("fail to init the dic loader", K(ret), K(dic_loader_key));  
         }
         break;
       }

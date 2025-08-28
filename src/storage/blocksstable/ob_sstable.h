@@ -127,7 +127,7 @@ public:
   virtual int64_t get_ref() const override;
 
   virtual int init(
-      const ObTabletCreateSSTableParam &param,
+      const ObTabletCreateSSTableParam &param, 
       common::ObArenaAllocator *allocator);
   static int copy_from_old_sstable(const ObSSTable &old_sstable, common::ObArenaAllocator &allocator, ObSSTable *&sstable);
   void reset();
@@ -354,7 +354,7 @@ protected:
   int add_used_size() const;
   int dec_used_size() const;
     int init_sstable_meta(
-        const ObTabletCreateSSTableParam &param,
+        const ObTabletCreateSSTableParam &param, 
         common::ObArenaAllocator *allocator);
   int get_last_rowkey(const ObDatumRowkey *&sstable_endkey);
   int serialize_fixed_struct(char *buf, const int64_t buf_len, int64_t &pos) const;

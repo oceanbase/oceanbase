@@ -294,7 +294,7 @@ do
 	target_name="default"
         temp=$(echo "$line" | grep -Eo "target=(\S*)")
         [[ "$temp" != "" ]] && target_name=${temp#*=}
-
+  
   if [[ "$pkg" == *"obdevtools-llvm"* || "$pkg" == *"obdevtools-gcc"* ]]; then
     if [[ "$line" =~ cpp_standard=([0-9]+) ]]; then
       cpp_standard="${BASH_REMATCH[1]}"

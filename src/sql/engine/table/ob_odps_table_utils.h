@@ -44,7 +44,7 @@ struct ObODPSArrayHelper {
   }
   TO_STRING_KV(K(element_type_), K(element_precision_), K(element_scale_),
                K(element_collation_), K(element_length_));
-
+  
   ObIAllocator &allocator_;
   // used to hold child element
   ObIArrayType *array_;

@@ -80,24 +80,24 @@ int ObExprInitcapCommon::initcap_string(const ObString &text,
     if (OB_ISNULL(buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc memory failed", K(text.length()), K(case_multiply), K(cs_type), K(ret));
-    } else {
+    } else {      
       bool has_first_letter = last_has_first_letter;
-
+      
       if (1 == case_multiply) {
         MEMCPY(buf, text.ptr(), text.length());
       }
-
+      
       struct Functor {
-
+        
         Functor(char* buffer, int64_t& position, int multiply, bool& first_letter, ObCollationType charset_type)
             : buf(buffer), pos(position), case_multiply(multiply), has_first_letter(first_letter), cs_type(charset_type) {}
-
+            
         char* buf;
         int64_t& pos;
         int case_multiply;
         bool& has_first_letter;
         const ObCollationType cs_type;
-
+        
         int operator()(const ObString &cur_letter, ob_wc_t wchar) {
           int ret = OB_SUCCESS;
           bool is_alphanumeric =
@@ -122,7 +122,7 @@ int ObExprInitcapCommon::initcap_string(const ObString &text,
           }
           return ret;
         };
-
+        
       };
       struct Functor temp_handle(buf, pos, case_multiply, has_first_letter, cs_type);
       ObCharsetType charset_type = ObCharset::charset_type_by_coll(cs_type);
@@ -190,7 +190,7 @@ int calc_initcap_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
         ObTextStringIterState state;
         ObString input_data;
         bool last_has_first_letter = false;
-        while (OB_SUCC(ret)
+        while (OB_SUCC(ret) 
               && buf_size > 0
               && (state = input_iter.get_next_block(input_data)) == TEXTSTRING_ITER_NEXT) {
           ObDataBuffer buf_alloc(res_buf, buf_size);
@@ -334,7 +334,7 @@ int ObExprNlsInitCap::calc_nls_initcap_expr(const ObExpr &expr, ObEvalCtx &ctx, 
         ret = OB_ERR_INVALID_NLS_PARAMETER_STRING;
         LOG_WARN("invalid nls parameter", K(ret), K(m_param));
       } else {
-        // Should set cs_type here, but for now, we do nothing
+        // Should set cs_type here, but for now, we do nothing 
         // since nls parameter only support BINARY
       }
     }
@@ -414,7 +414,7 @@ int ObExprNlsInitCap::calc_nls_initcap_batch(const ObExpr &expr, ObEvalCtx &ctx,
             is_result_all_null = true;
           }
         } else {
-          // Should set cs_type here, but for now, we do nothing
+          // Should set cs_type here, but for now, we do nothing 
           // since nls parameter only support BINARY=
         }
       }

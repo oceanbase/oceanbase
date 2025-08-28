@@ -28,11 +28,11 @@ class TestBlockGCHandler : public ::testing::Test,
                            public storage::ObBlockGCHandler
 {
 public:
-  TestBlockGCHandler()
-  : storage::ObBlockGCHandler(ObTabletID(1))
+  TestBlockGCHandler() 
+  : storage::ObBlockGCHandler(ObTabletID(1)) 
   {}
   virtual ~TestBlockGCHandler() {}
-
+  
   virtual int list_tablet_meta_version(
     ObIArray<int64_t> &tablet_versions)
   {
@@ -75,7 +75,7 @@ public:
   }
 
   int64_t to_string(
-      char* buf,
+      char* buf, 
       const int64_t buf_len) const
   { return OB_SUCCESS; }
 
@@ -100,7 +100,7 @@ public:
 TEST_F(TestBlockGCHandler, test_block_gc)
 {
   ObArray<int64_t> tablet_versions;
-  blocksstable::MacroBlockId test_array[3][3] =
+  blocksstable::MacroBlockId test_array[3][3] = 
   {
     { blocksstable::MacroBlockId(0, 1, 0, 0), blocksstable::MacroBlockId(0, 2, 0, 0), blocksstable::MacroBlockId(0, 3, 0, 0) },
     { blocksstable::MacroBlockId(0, 4, 0, 0), blocksstable::MacroBlockId(0, 5, 0, 0), blocksstable::MacroBlockId(0, 3, 0, 0) },
@@ -114,7 +114,7 @@ TEST_F(TestBlockGCHandler, test_block_gc)
   ASSERT_EQ(OB_SUCCESS, gc_tablet_meta_versions(tablet_versions, 2));
   ASSERT_EQ(gc_blocks_.count(), 3);
   for (int i = 0; i < gc_blocks_.count(); i++) {
-    if (1 == gc_blocks_.at(i).second_id_
+    if (1 == gc_blocks_.at(i).second_id_ 
         || 2 == gc_blocks_.at(i).second_id_ || 5 == gc_blocks_.at(i).second_id_) {
     } else {
       abort();
@@ -126,10 +126,10 @@ TEST_F(TestBlockGCHandler, test_block_gc)
   ASSERT_EQ(OB_SUCCESS, gc_tablet(tablet_versions));
   ASSERT_EQ(gc_blocks_.count(), 6);
   for (int i = 0; i < gc_blocks_.count(); i++) {
-    if (1 == gc_blocks_.at(i).second_id_
-        || 2 == gc_blocks_.at(i).second_id_
-        || 3 == gc_blocks_.at(i).second_id_
-        || 4 == gc_blocks_.at(i).second_id_
+    if (1 == gc_blocks_.at(i).second_id_ 
+        || 2 == gc_blocks_.at(i).second_id_ 
+        || 3 == gc_blocks_.at(i).second_id_ 
+        || 4 == gc_blocks_.at(i).second_id_ 
         || 5 == gc_blocks_.at(i).second_id_
         || 6 == gc_blocks_.at(i).second_id_) {
     } else {
@@ -142,7 +142,7 @@ class TestPublicBlockGCHandler : public ::testing::Test,
                                  public storage::ObPublicBlockGCHandler
 {
 public:
-  TestPublicBlockGCHandler()
+  TestPublicBlockGCHandler() 
   : storage::ObPublicBlockGCHandler(ObTabletID(1))
   {
     for (int i = 0; i < 1000; i++) {
@@ -169,7 +169,7 @@ public:
   }
   virtual ~TestPublicBlockGCHandler() {}
 
-  TO_STRING_KV(K(macro_block_ids_[0]),
+  TO_STRING_KV(K(macro_block_ids_[0]), 
       K(macro_block_ids_[500]),
       K(macro_block_ids_[1000]),
       K(macro_block_ids_[1500]),
@@ -179,8 +179,8 @@ public:
       K(macro_block_ids_[3500]));
 
   int is_exist_macro_block_(
-      const blocksstable::MacroBlockId &block_id,
-      bool &is_exist)
+      const blocksstable::MacroBlockId &block_id, 
+      bool &is_exist) 
   {
     is_exist = false;
     if (1 == macro_block_ids_[block_id.third_id_].first_id_) {
@@ -190,7 +190,7 @@ public:
   }
 
   int delete_macro_blocks(
-        ObIArray<blocksstable::MacroBlockId> &block_ids)
+        ObIArray<blocksstable::MacroBlockId> &block_ids) 
   {
     int ret = OB_SUCCESS;
     for (int64_t i = 0; i < block_ids.count(); i++) {
@@ -198,7 +198,7 @@ public:
     }
     return ret;
   }
-
+  
   blocksstable::MacroBlockId macro_block_ids_[4000];
 };
 
@@ -221,7 +221,7 @@ class TestPrivateBlockGCHandler : public ::testing::Test,
                                   public storage::ObPrivateBlockGCHandler
 {
 public:
-  TestPrivateBlockGCHandler()
+  TestPrivateBlockGCHandler() 
   : storage::ObPrivateBlockGCHandler(share::ObLSID(1), 1, ObTabletID(1), 1, 1, 10, 20)
   {
     for (int i = 0; i < 30; i++) {
@@ -263,7 +263,7 @@ public:
     return OB_SUCCESS;
   }
   int delete_macro_blocks(
-        ObIArray<blocksstable::MacroBlockId> &block_ids)
+        ObIArray<blocksstable::MacroBlockId> &block_ids) 
   {
     int ret = OB_SUCCESS;
     for (int64_t i = 0; i < block_ids.count(); i++) {
@@ -271,7 +271,7 @@ public:
     }
     return ret;
   }
-
+  
   blocksstable::MacroBlockId macro_block_ids_[30];
 };
 

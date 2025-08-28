@@ -177,7 +177,7 @@ TEST_F(ImportTableTest, test_remap_database)
   ObImportDatabaseItem target_db2(OB_ORIGIN_AND_SENSITIVE, "db2_bak", strlen("db2_bak"));
   ObImportDatabaseItem src_db3(OB_ORIGIN_AND_SENSITIVE, "db3", strlen("db3"));
   ObImportDatabaseItem target_db3(OB_ORIGIN_AND_SENSITIVE, "db3_bak", strlen("db3_bak"));
-
+  
   ObRemapDatabaseItem remap_db1;
   remap_db1.src_ = src_db1;
   remap_db1.target_ = target_db1;
@@ -237,7 +237,7 @@ TEST_F(ImportTableTest, test_remap_table)
   ObImportTableItem target_tb2(OB_ORIGIN_AND_SENSITIVE, "db2_bak", strlen("db2_bak"), "tb1_bak", strlen("tb1_bak"));
   ObImportTableItem src_tb3(OB_ORIGIN_AND_SENSITIVE, "db3", strlen("db3"), "tb1,", strlen("tb1,"));
   ObImportTableItem target_tb3(OB_ORIGIN_AND_SENSITIVE, "db3_bak", strlen("db3_bak"), "tb1,_bak", strlen("tb1,_bak"));
-
+  
   ObRemapTableItem remap_tb1;
   remap_tb1.src_ = src_tb1;
   remap_tb1.target_ = target_tb1;
@@ -298,7 +298,7 @@ TEST_F(ImportTableTest, test_remap_partition)
   ObImportTableItem target_tb2(OB_ORIGIN_AND_SENSITIVE, "db2_bak", strlen("db2_bak"), "tb1_p1", strlen("tb1_p1"));
   ObImportPartitionItem src_part3(OB_ORIGIN_AND_SENSITIVE, "db3", strlen("db3"), "tb1,", strlen("tb1,"), "p1", strlen("p1"));
   ObImportTableItem target_tb3(OB_ORIGIN_AND_SENSITIVE, "db3_bak", strlen("db3_bak"), "tb1,_p1", strlen("tb1,_p1"));
-
+  
   ObRemapPartitionItem remap_p1;
   remap_p1.src_ = src_part1;
   remap_p1.target_ = target_tb1;
@@ -377,7 +377,7 @@ TEST_F(ImportTableTest, test_remap_conflict)
   ObImportDatabaseItem target_db3(OB_ORIGIN_AND_SENSITIVE, "db3_bak", strlen("db3_bak"));
   ObImportDatabaseItem src_db4(OB_ORIGIN_AND_SENSITIVE, "db4", strlen("db4"));
   ObImportDatabaseItem target_db4(OB_ORIGIN_AND_SENSITIVE, "db2_bak", strlen("db2_bak"));
-
+  
   ObRemapDatabaseItem remap_db1;
   remap_db1.src_ = src_db1;
   remap_db1.target_ = target_db1;
@@ -406,7 +406,7 @@ TEST_F(ImportTableTest, test_remap_conflict)
   ObImportTableItem target_tb2(OB_ORIGIN_AND_SENSITIVE, "db2_bak", strlen("db2_bak"), "tb1_bak", strlen("tb1_bak"));
   ObImportTableItem src_tb3(OB_ORIGIN_AND_SENSITIVE, "db3", strlen("db3"), "tb1", strlen("tb1"));
   ObImportTableItem target_tb3(OB_ORIGIN_AND_SENSITIVE, "db1_bak", strlen("db1_bak"), "tb1_bak", strlen("tb1_bak"));
-
+  
   ObRemapTableItem remap_tb1;
   remap_tb1.src_ = src_tb1;
   remap_tb1.target_ = target_tb1;
@@ -443,7 +443,7 @@ TEST_F(ImportTableTest, test_namecase_mode)
   ObImportDatabaseItem target_db1(OB_LOWERCASE_AND_INSENSITIVE, "db1_bak", strlen("db1_bak"));
   ObImportDatabaseItem src_db2(OB_LOWERCASE_AND_INSENSITIVE, "db1", strlen("db1"));
   ObImportDatabaseItem target_db2(OB_LOWERCASE_AND_INSENSITIVE, "db1_Bak", strlen("db1_Bak"));
-
+  
   ObRemapDatabaseItem remap_db1;
   remap_db1.src_ = src_db1;
   remap_db1.target_ = target_db1;

@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef OCEANBASE_LIB_GUARD_OB_LIGHT_SHARED_GUARD_H
 #define OCEANBASE_LIB_GUARD_OB_LIGHT_SHARED_GUARD_H
 #include "lib/allocator/ob_malloc.h"
@@ -53,7 +53,7 @@ struct LightDataBlock : public IData
   }
   int64_t to_string(char *buf, const int64_t buf_len) const override {
     return ((T *)data_)->to_string(buf, buf_len);
-  }
+  } 
   char data_[sizeof(T)];
 };
 template <typename T>

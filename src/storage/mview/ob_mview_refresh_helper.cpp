@@ -520,7 +520,7 @@ int ObMViewRefreshHelper::check_dep_mviews_satisfy_target_scn(
       }
     }
     LOG_INFO("check satified", K(tenant_id), K(target_data_sync_scn), K(satisfy));
-  }
+  } 
   return ret;
 }
 
@@ -583,7 +583,7 @@ int ObMViewRefreshHelper::replace_all_snapshot_zero(
     int64_t value_pos = pos + search.size();
     if (value_pos >= output.size()) break;
 
-    if (output[value_pos] == '0' &&
+    if (output[value_pos] == '0' && 
         (value_pos + 1 == output.size() || !isdigit(output[value_pos + 1]))) {
       int64_t value_end = value_pos;
       while (value_end < output.size() && isdigit(output[value_end])) {

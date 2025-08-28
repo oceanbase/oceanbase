@@ -86,10 +86,10 @@ TEST_F(TestXmlBin, serialize_bin_header)
   {
     ObStringBuffer buffer(&allocator);
     ObMulBinHeaderSerializer serializer1(&buffer,
-                                        doc->type(),
-                                        doc->get_serialize_size(),
+                                        doc->type(), 
+                                        doc->get_serialize_size(), 
                                         doc->size());
-
+    
     // serialize meta info check
     ASSERT_EQ(serializer1.get_obj_var_size(), sizeof(uint16_t));
     ASSERT_EQ(serializer1.get_entry_var_size(), sizeof(uint16_t));
@@ -99,13 +99,13 @@ TEST_F(TestXmlBin, serialize_bin_header)
     ASSERT_EQ(serializer1.get_entry_var_size_type(), ObMulModeBinLenSize::MBL_UINT16);
     ASSERT_EQ(serializer1.get_count_var_size_type(), ObMulModeBinLenSize::MBL_UINT8);
     ASSERT_EQ(serializer1.header_size(), 5);
-
+    
 
     ASSERT_EQ(serializer1.count_, doc->size());
     ASSERT_EQ(doc->type(), M_DOCUMENT);
     ASSERT_EQ(serializer1.start(), buffer.length());
 
-
+    
     ASSERT_EQ(serializer1.obj_var_offset_, 3);
     ASSERT_EQ(serializer1.count_var_offset_, 2);
 
@@ -129,14 +129,14 @@ TEST_F(TestXmlBin, serialize_bin_header)
     ASSERT_EQ(serializer2.total_, doc->get_serialize_size());
     ASSERT_EQ(serializer2.total_, serializer1.total_);
   }
-
+  
 
   {
     ObStringBuffer buffer(&allocator);
     int64_t count = 128;
     int64_t total = 127;
     ObMulBinHeaderSerializer serializer1(&buffer, M_DOCUMENT, total, count);
-
+    
     // serialize meta info check
     ASSERT_EQ(serializer1.get_obj_var_size(), sizeof(uint8_t));
     ASSERT_EQ(serializer1.get_entry_var_size(), sizeof(uint8_t));
@@ -150,7 +150,7 @@ TEST_F(TestXmlBin, serialize_bin_header)
     ASSERT_EQ(serializer1.type(), M_DOCUMENT);
     ASSERT_EQ(serializer1.start(), buffer.length());
 
-
+    
     ASSERT_EQ(serializer1.obj_var_offset_, 4);
     ASSERT_EQ(serializer1.count_var_offset_, 2);
     ASSERT_EQ(5, serializer1.header_size());
@@ -179,7 +179,7 @@ TEST_F(TestXmlBin, serialize_bin_header)
     int64_t count = 1100;
     int64_t total = 66536;
     ObMulBinHeaderSerializer serializer1(&buffer, M_DOCUMENT, total, count);
-
+    
     // serialize meta info check
     ASSERT_EQ(serializer1.get_obj_var_size(), sizeof(uint32_t));
     ASSERT_EQ(serializer1.get_entry_var_size(), sizeof(uint32_t));
@@ -193,7 +193,7 @@ TEST_F(TestXmlBin, serialize_bin_header)
     ASSERT_EQ(serializer1.type(), M_DOCUMENT);
     ASSERT_EQ(serializer1.start(), buffer.length());
 
-
+    
     ASSERT_EQ(serializer1.obj_var_offset_, 4);
     ASSERT_EQ(serializer1.count_var_offset_, 2);
 
@@ -243,8 +243,8 @@ TEST_F(TestXmlBin, serialize_element_header)
     ASSERT_EQ(serializer1.attr_count_, 1);
     ASSERT_EQ(serializer1.header_.header_size(), 5);
     ASSERT_EQ(serializer1.ele_header_.header_size(), 15);
-    cout << "index start = " << serializer1.index_start_
-          << " type start = " << (int)serializer1.index_entry_size_ << endl;
+    cout << "index start = " << serializer1.index_start_ 
+          << " type start = " << (int)serializer1.index_entry_size_ << endl; 
     ASSERT_EQ(serializer1.index_start_, 20);
     ASSERT_EQ(serializer1.index_entry_size_, 1);
     ASSERT_EQ(serializer1.key_entry_start_, 23);
@@ -282,7 +282,7 @@ TEST_F(TestXmlBin, serialize_document_header)
 
   get_xml_document_1(ctx, doc);
   ASSERT_EQ(doc->size(), 1);
-
+  
   {
     ObStringBuffer buffer(&allocator);
     doc->set_standalone(1);
@@ -327,7 +327,7 @@ TEST_F(TestXmlBin, serialize_text)
     ObString value;
     ASSERT_EQ(text->get_value(value), 0);
     ASSERT_EQ(value.compare("John Smith"), 0);
-
+    
     ObXmlTextSerializer serializer1(text, buffer);
     ASSERT_EQ(serializer1.header_size(), 1);
     ASSERT_EQ(serializer1.serialize(), 0);
@@ -369,7 +369,7 @@ TEST_F(TestXmlBin, serialize_attribute)
   {
     attr->set_prefix(prefix);
     ObStringBuffer buffer(&allocator);
-
+    
     ObXmlAttributeSerializer serializer1(attr, buffer);
     ASSERT_EQ(serializer1.header_.header_size(), 16);
     ASSERT_EQ(serializer1.serialize(), 0);
@@ -378,7 +378,7 @@ TEST_F(TestXmlBin, serialize_attribute)
     ASSERT_EQ(serializer1.header_.prefix_len_, 13);
     ASSERT_EQ(serializer1.header_.prefix_len_size_, 1);
     ASSERT_EQ(buffer.length(), 16 + 1 + 6);
-
+    
 
     ObXmlAttributeSerializer serializer2(buffer.ptr(), buffer.length(), ctx);
     ObIMulModeBase* handle;
@@ -418,7 +418,7 @@ TEST_F(TestXmlBin, serialize_base)
   ObXmlElementSerializer serializer(doc, &buffer);
   ret = serializer.serialize(0);
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   ObIMulModeBase* handle = nullptr;
   ObXmlElementSerializer deserializer(buffer.ptr(), buffer.length(), ctx);
   ret = deserializer.deserialize(handle);
@@ -431,7 +431,7 @@ TEST_F(TestXmlBin, serialize_base)
     ASSERT_EQ(tmp_doc->get_encoding().compare("UTF-8"), 0);
 
     ASSERT_EQ(tmp_elem->get_key().compare("shiporder"), 0);
-
+    
     ObXmlAttribute* tmp_attr = nullptr;
 
     ret = tmp_elem->get_attribute(tmp_attr, 0);
@@ -486,7 +486,7 @@ TEST_F(TestXmlBin, parse_meta)
   ObXmlBinMetaParser meta_parser(buffer.ptr(), buffer.length());
 
   ASSERT_EQ(meta_parser.parser(), OB_SUCCESS);
-
+  
   ASSERT_EQ(serializer.header_.entry_var_size_, meta_parser.value_entry_size_);
   ASSERT_EQ(serializer.header_.count_, meta_parser.count_);
   ASSERT_EQ(serializer.key_entry_start_, meta_parser.key_entry_);
@@ -531,7 +531,7 @@ TEST_F(TestXmlBin, set_at)
 
   ObString version = rbin.get_version();
   ObString encoding = rbin.get_encoding();
-
+  
   ASSERT_EQ(std::string("1.0"), std::string(version.ptr(), version.length()));
   ASSERT_EQ(std::string("UTF-8"), std::string(encoding.ptr(), encoding.length()));
   ASSERT_EQ(2, rbin.get_standalone());
@@ -557,7 +557,7 @@ TEST_F(TestXmlBin, set_at)
 
   ASSERT_EQ(rbin.get_key(key_str), OB_SUCCESS);
   ASSERT_EQ(rbin.get_value(value_str), OB_SUCCESS);
-
+  
   ASSERT_EQ(std::string("orderid"), std::string(key_str.ptr(), key_str.length()));
   ASSERT_EQ(std::string("889923"), std::string(value_str.ptr(), value_str.length()));
 
@@ -565,7 +565,7 @@ TEST_F(TestXmlBin, set_at)
 
   ret = rbin.set_at(1);
   ASSERT_EQ(ret, OB_SUCCESS);
-
+  
   ASSERT_EQ(rbin.get_key(key_str), OB_SUCCESS);
   ASSERT_EQ(std::string("orderperson"), std::string(key_str.ptr(), key_str.length()));
 
@@ -593,7 +593,7 @@ TEST_F(TestXmlBin, set_at)
     ASSERT_EQ(ret, OB_SUCCESS);
     ASSERT_EQ(tmp.get_key(key_str), OB_SUCCESS);
     ASSERT_EQ(std::string("name"), std::string(key_str.ptr(), key_str.length()));
-
+    
     ret = tmp.set_at(0);
     ASSERT_EQ(ret, OB_SUCCESS);
     ASSERT_EQ(tmp.get_value(value_str), OB_SUCCESS);
@@ -605,7 +605,7 @@ TEST_F(TestXmlBin, set_at)
     ASSERT_EQ(ret, OB_SUCCESS);
     ASSERT_EQ(tmp.get_key(key_str), OB_SUCCESS);
     ASSERT_EQ(std::string("address"), std::string(key_str.ptr(), key_str.length()));
-
+    
     ret = tmp.set_at(0);
     ASSERT_EQ(ret, OB_SUCCESS);
     ASSERT_EQ(tmp.get_value(value_str), OB_SUCCESS);
@@ -616,7 +616,7 @@ TEST_F(TestXmlBin, set_at)
     ASSERT_EQ(ret, OB_SUCCESS);
     ASSERT_EQ(tmp.get_key(key_str), OB_SUCCESS);
     ASSERT_EQ(std::string("city"), std::string(key_str.ptr(), key_str.length()));
-
+    
     ret = tmp.set_at(0);
     ASSERT_EQ(ret, OB_SUCCESS);
     ASSERT_EQ(tmp.get_value(value_str), OB_SUCCESS);
@@ -627,12 +627,12 @@ TEST_F(TestXmlBin, set_at)
     ASSERT_EQ(ret, OB_SUCCESS);
     ASSERT_EQ(tmp.get_key(key_str), OB_SUCCESS);
     ASSERT_EQ(std::string("country"), std::string(key_str.ptr(), key_str.length()));
-
+    
     ret = tmp.set_at(0);
     ASSERT_EQ(ret, OB_SUCCESS);
     ASSERT_EQ(tmp.get_value(value_str), OB_SUCCESS);
     ASSERT_EQ(std::string("Norway"), std::string(value_str.ptr(), value_str.length()));
-  }
+  }  
 }
 
 TEST_F(TestXmlBin, iterator_base)
@@ -675,7 +675,7 @@ TEST_F(TestXmlBin, iterator_base)
   ASSERT_EQ(iter != end, true);
   ASSERT_EQ(iter <= end, true);
   ASSERT_EQ(iter < end, true);
-
+  
   ObXmlBin* root_ele = *iter;
   ASSERT_EQ(root_ele->parse(), OB_SUCCESS);
   ASSERT_EQ(root_ele->size(), 2);
@@ -700,7 +700,7 @@ TEST_F(TestXmlBin, iterator_base)
   {
     ASSERT_EQ(iter1.is_valid(), true);
     ASSERT_EQ(iter1.end(), false);
-    ASSERT_EQ(iter1 < end1, true);
+    ASSERT_EQ(iter1 < end1, true);    
   }
 
   ASSERT_EQ(iter1 < end1, true);
@@ -708,12 +708,12 @@ TEST_F(TestXmlBin, iterator_base)
   ASSERT_NE(child1, nullptr);
 
   ASSERT_EQ(child1->type(), M_ATTRIBUTE);
-
+  
   ObString attr_key1;
   ASSERT_EQ(child1->get_key(attr_key1), 0);
   ObString attr_val1;
   ASSERT_EQ(child1->get_value(attr_val1), 0);
-
+  
   ASSERT_EQ(std::string(attr_key1.ptr(), attr_key1.length()), std::string("orderid"));
   ASSERT_EQ(std::string(attr_val1.ptr(), attr_val1.length()), std::string("889923"));
 
@@ -742,7 +742,7 @@ TEST_F(TestXmlBin, iterator_base)
 
     ObXmlBin* text1 = *sub_iter1;
     ASSERT_NE(text1, nullptr);
-
+    
     ObString text_val;
     ASSERT_EQ(text1->get_value(text_val), OB_SUCCESS);
     ASSERT_EQ(text1->type(), M_TEXT);
@@ -774,7 +774,7 @@ TEST_F(TestXmlBin, iterator_base)
 
     ObXmlBin* sub_ele1 = *sub_iter2;
     ASSERT_NE(sub_ele1, nullptr);
-
+    
     ObString ele_key1;
     ASSERT_EQ(sub_ele1->get_key(ele_key1), OB_SUCCESS);
     ASSERT_EQ(sub_ele1->type(), M_ELEMENT);
@@ -950,7 +950,7 @@ TEST_F(TestXmlBin, reader)
   ObXmlElement sub5_3(ObMulModeNodeType::M_DOCUMENT, ctx);
   sub5_3.set_xml_key(key5_3);
   sub5_3.set_prefix(value5_3);
-
+  
   ASSERT_EQ(sub5.add_element(&sub5_1), OB_SUCCESS);
   ASSERT_EQ(sub5.add_element(&sub5_2), OB_SUCCESS);
   ASSERT_EQ(sub5.add_element(&sub5_3), OB_SUCCESS);
@@ -977,9 +977,9 @@ TEST_F(TestXmlBin, reader)
 
     ObPathSeekInfo seek_info;
     seek_info.type_ = SimpleSeekType::ALL_KEY_TYPE;
-
+  
     ObMulModeReader reader(&xbin, seek_info);
-
+    
     ObIMulModeBase* node = nullptr;
     ObString key;
 
@@ -1023,7 +1023,7 @@ TEST_F(TestXmlBin, reader)
     ObPathSeekInfo seek_info;
     seek_info.type_ = SimpleSeekType::KEY_TYPE;
     seek_info.key_ = key3;
-
+  
     ObMulModeReader reader(&xbin, seek_info);
     ObIMulModeBase* node = nullptr;
     ObString key;
@@ -1062,7 +1062,7 @@ TEST_F(TestXmlBin, reader)
    *             | key5 | key5_1 ("value5_1")
    *             | key5 | key5_2 ("value5_2")
    *             | key5 | key5_3 ("value5_3")
-   *
+   * 
   */
 
   {
@@ -1072,7 +1072,7 @@ TEST_F(TestXmlBin, reader)
     ObPathSeekInfo seek_info;
     seek_info.type_ = SimpleSeekType::KEY_TYPE;
     seek_info.key_ = key1;
-
+  
     ObMulModeReader reader(&xbin, seek_info);
     ObIMulModeBase* node = nullptr;
     ObString key;
@@ -1088,7 +1088,7 @@ TEST_F(TestXmlBin, reader)
       ObPathSeekInfo seek_info;
       seek_info.type_ = SimpleSeekType::ALL_KEY_TYPE;
       seek_info.key_ = ObString("");
-
+    
       ObMulModeReader reader(node, seek_info);
       ObString key;
       ObString prefix;
@@ -1113,7 +1113,7 @@ TEST_F(TestXmlBin, reader)
 
       ASSERT_EQ(reader.next(node), OB_ITER_END);
     }
-
+    
   }
 }
 
@@ -1401,7 +1401,7 @@ TEST_F(TestXmlBin, test_print_xml_node_with_pretty)
   ret = ObXmlParserUtils::parse_document_text(ctx, xml_text, doc);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObStringBuffer buf_str(&allocator);
-
+  
   ObXmlBin bin(ctx);
   ObIMulModeBase* tree = doc;
   ASSERT_EQ(bin.parse_tree(tree), OB_SUCCESS);
@@ -1481,13 +1481,13 @@ TEST_F(TestXmlBin, test_print_unparse)
   ObMulModeMemCtx* ctx = nullptr;
 
   ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
-
+  
   ObIMulModeBase *xml_base = nullptr;
   ASSERT_EQ(ObMulModeFactory::get_xml_base(ctx,
-                                          xml_text,
+                                          xml_text, 
                                           ObNodeMemType::TREE_TYPE,
                                           ObNodeMemType::BINARY_TYPE,
-                                          xml_base,
+                                          xml_base, 
                                           M_UNPARSED),   0);
 
 
@@ -1535,13 +1535,13 @@ TEST_F(TestXmlBin, test_print_document)
   ObMulModeMemCtx* ctx = nullptr;
 
   ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
-
+  
   ObIMulModeBase *xml_base = nullptr;
   ASSERT_EQ(ObMulModeFactory::get_xml_base(ctx,
-                                          xml_text,
+                                          xml_text, 
                                           ObNodeMemType::TREE_TYPE,
                                           ObNodeMemType::BINARY_TYPE,
-                                          xml_base,
+                                          xml_base, 
                                           M_UNPARSED),   0);
 
 
@@ -1575,7 +1575,7 @@ TEST_F(TestXmlBin, read_by_key)
   ObMulModeMemCtx* ctx = nullptr;
   ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
   ret = ObXmlParserUtils::parse_document_text(ctx, xml_text, doc);
-
+  
   {
     ObXmlBin xbin(ctx);
     ObArray<ObIMulModeBase*> result1;
@@ -1583,9 +1583,9 @@ TEST_F(TestXmlBin, read_by_key)
     ASSERT_EQ(xbin.set_child_at(0), 0);
 
     std::string tmp_str(xbin.meta_.key_ptr_, xbin.meta_.key_len_);
-    cout << "key = " << tmp_str
+    cout << "key = " << tmp_str 
           << " attr size = " << xbin.attribute_size()
-          << " child size =  " << xbin.size()
+          << " child size =  " << xbin.size() 
           << endl;
 
     ASSERT_EQ(xbin.get_children("b", result1, nullptr), 0);
@@ -1605,8 +1605,8 @@ TEST_F(TestXmlBin, test_add_extend)
       "<f:b b1=\"b1\" b2=\"b2\">"
         "<c>"
           "<h:d>"
-            "<f:e></f:e>"
-          "</h:d>"
+            "<f:e></f:e>" 
+          "</h:d>" 
         "</c>"
       "</f:b>"
       "<h:b1>"
@@ -1650,7 +1650,7 @@ TEST_F(TestXmlBin, test_add_extend)
   res->print(buf, true);
 
   ObXmlBin* bin_res = static_cast<ObXmlBin*>(res);
-
+  
   // ns_element
   // element
   ObXmlElement element_ns(ObMulModeNodeType::M_ELEMENT, ctx);
@@ -1689,8 +1689,8 @@ TEST_F(TestXmlBin, test_merge_extend)
       "<f:b b1=\"b1\" b2=\"b2\">"
         "<c>"
           "<h:d>"
-            "<f:e></f:e>"
-          "</h:d>"
+            "<f:e></f:e>" 
+          "</h:d>" 
         "</c>"
       "</f:b>"
       "<h:b1>"
@@ -1734,7 +1734,7 @@ TEST_F(TestXmlBin, test_merge_extend)
   res->print(buf, true);
 
   ObXmlBin* bin_res = static_cast<ObXmlBin*>(res);
-
+  
   // ns_element
   // element
   ObXmlElement element_ns(ObMulModeNodeType::M_ELEMENT, ctx);
@@ -1781,7 +1781,7 @@ TEST_F(TestXmlBin, print_empty_element)
   );
 
   ObArenaAllocator allocator(ObModIds::TEST);
-
+  
   ObMulModeMemCtx* ctx = nullptr;
   ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
   ObXmlDocument root(M_UNPARSED, ctx);

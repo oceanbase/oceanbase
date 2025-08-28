@@ -131,7 +131,7 @@ public:
       : column_size_(column_size),
         columns_(columns),
         flags_(0)
-    {
+    { 
       merge_columns_ = merge_columns;
     }
     AshColumnHeader(int64_t column_size, AshColumnItem *columns, const int64_t column_widths[], bool merge_columns = false)

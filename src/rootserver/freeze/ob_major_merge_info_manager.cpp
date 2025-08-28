@@ -198,7 +198,7 @@ int ObMajorMergeInfoManager::generate_frozen_scn(
   } else if (max_frozen_status.frozen_scn_ != local_max_frozen_scn) {
     // after new leader updates epoch and reloads freeze_info, old leader generates one new
     // frozen_scn and can add it into __all_freeze_info (cuz not checking epoch)
-    //
+    // 
     if (local_max_frozen_scn < max_frozen_status.frozen_scn_) {
       ret = OB_EAGAIN;
       LOG_WARN("max frozen_scn in cache is smaller than max frozen_scn in table, will try again",

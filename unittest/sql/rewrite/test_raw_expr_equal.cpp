@@ -149,7 +149,7 @@ int ObExprResTypeIterator::update_type_idx()
 {
   int ret = OB_SUCCESS;
   ++sub_type_idx_;
-  if ((ob_is_string_or_lob_type(type_) && !ob_is_nstring(type_)
+  if ((ob_is_string_or_lob_type(type_) && !ob_is_nstring(type_) 
        && sub_type_idx_ < 1) ||
       (ob_is_double_type(type_) && sub_type_idx_ < 1)) {
     // do nothing
@@ -233,7 +233,7 @@ TEST_F(ObRawExprEqualTest, type_comparable)
       LOG_WARN("failed to iter type A", K(ret));
       break;
     }
-    while (OB_SUCC(ret))
+    while (OB_SUCC(ret)) 
     {
       can_compare = true;
       if (OB_FAIL(iter2.next(expr2->result_type_))) {

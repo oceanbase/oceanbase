@@ -221,7 +221,7 @@ public:
   static int get_json_doc(const ObExpr &expr, ObEvalCtx &ctx,
                           MultimodeAlloctor &allocator,
                           uint16_t index, ObIJsonBase*& j_base,
-                          bool &is_null, bool need_to_tree=true,
+                          bool &is_null, bool need_to_tree=true, 
                           bool relax = true, bool preserve_dup = false);
   static int get_json_schema(const ObExpr &expr, ObEvalCtx &ctx,
                             MultimodeAlloctor &allocator,
@@ -240,7 +240,7 @@ public:
   static int get_partial_json_bin(
       ObIAllocator &allocator,
       ObILobCursor *cursor,
-      ObJsonBinUpdateCtx *update_ctx,
+      ObJsonBinUpdateCtx *update_ctx, 
       ObIJsonBase *&j_base);
   static int get_json_for_partial_update_with_curosr(
       const ObExpr &expr,
@@ -251,8 +251,8 @@ public:
       ObIJsonBase *&j_base);
 
 
-  static int cast_to_json_tree(ObString &text,
-                               common::ObIAllocator *allocator,
+  static int cast_to_json_tree(ObString &text, 
+                               common::ObIAllocator *allocator, 
                                uint32_t parse_flag = 0,
                                uint32_t max_depth_config = JSON_DOCUMENT_MAX_DEPTH);
   /*
@@ -267,9 +267,9 @@ public:
   */
   static int get_json_val(const ObExpr &expr, ObEvalCtx &ctx,
                           common::ObIAllocator *allocator, uint16_t index,
-                          ObIJsonBase*& j_base, bool to_bin = false, bool format_json = false,
+                          ObIJsonBase*& j_base, bool to_bin = false, bool format_json = false, 
                           uint32_t parse_flag = ObJsonParser::JSN_RELAXED_FLAG);
-  static int get_const_json_schema(const common::ObObj &data, const char* func_name,
+  static int get_const_json_schema(const common::ObObj &data, const char* func_name, 
                                    common::ObIAllocator *allocator, ObIJsonBase*& j_schema);
 
   /*
@@ -289,7 +289,7 @@ public:
                           const common::ObObj &data, ObExecContext *ctx,
                           bool is_bool, common::ObIAllocator *allocator,
                           ObIJsonBase*& j_base, bool to_bin = false);
-  static int get_json_val(const common::ObDatum &data,
+  static int get_json_val(const common::ObDatum &data, 
                           ObExecContext &ctx,
                           ObExpr* expr,
                           common::ObIAllocator *allocator,
@@ -299,7 +299,7 @@ public:
   static int oracle_datum2_json_val(const ObDatum *json_datum,  ObObjMeta& data_meta, common::ObIAllocator *allocator,
                                     ObBasicSessionInfo *session, ObIJsonBase*& j_base, bool is_bool_data_type,
                                     bool format_json = false, bool is_strict = false, bool is_bin = false);
-
+  
   static int eval_oracle_json_val(ObExpr *expr, ObEvalCtx &ctx, MultimodeAlloctor *allocator,
                                 ObIJsonBase*& j_base, bool format_json = false, bool is_strict = false, bool is_bin = false, bool is_absent_null = false);
  
@@ -314,7 +314,7 @@ public:
                                ObIJsonBase *&json_doc);
 
   static int find_and_add_cache(ObJsonPathCache* path_cache, ObJsonPath*& res_path,
-                                ObString& path_str, int arg_idx, bool enable_wildcard,
+                                ObString& path_str, int arg_idx, bool enable_wildcard, 
                                 bool is_const = false);
   static int find_and_add_schema_cache(ObJsonSchemaCache* schema_cache, ObIJsonBase*& j_schema,
                                       ObString& schema_str, int arg_idx, const ObJsonInType& in_type);
@@ -327,8 +327,8 @@ public:
   static int is_json_true(const ObString& data, int& result);
 
   static int get_sql_scalar_type(ObEvalCtx& ctx,
-                                 int64_t origin,
-                                 ObObjType& scalar_type,
+                                 int64_t origin, 
+                                 ObObjType& scalar_type, 
                                  int32_t& scalar_len,
                                  int32_t& precision,
                                  int32_t& scale,
@@ -390,16 +390,16 @@ public:
   static void set_type_for_value(ObExprResType* types_stack, uint32_t index);
   static int ensure_collation(ObObjType type, ObCollationType cs_type);
   static ObJsonInType get_json_internal_type(ObObjType type);
-  static int convert_string_collation_type(ObCollationType in,
+  static int convert_string_collation_type(ObCollationType in, 
                                            ObCollationType dst,
                                            ObIAllocator* allocator,
                                            ObString& in_str,
                                            ObString &out_str);
   template <typename T>
-  static int pack_json_str_res(const ObExpr &expr,
-                               ObEvalCtx &ctx,
+  static int pack_json_str_res(const ObExpr &expr, 
+                               ObEvalCtx &ctx, 
                                ObDatum &res,
-                               T &str,
+                               T &str, 
                                common::ObIAllocator *allocator = nullptr)
   {
     int ret = OB_SUCCESS;
@@ -415,25 +415,25 @@ public:
   }
 
   static int pack_json_res(
-      const ObExpr &expr,
+      const ObExpr &expr, 
       ObEvalCtx &ctx,
       ObIAllocator &temp_allocator,
       ObIJsonBase *json_doc,
       ObDatum &res);
 
   /**
-   * the following 3 functions is used for json_query and json_mergepatch
+   * the following 3 functions is used for json_query and json_mergepatch 
    * as the returning type is the same
-   *
-   *  get_cast_type
-   *  set_dest_type
+   * 
+   *  get_cast_type 
+   *  set_dest_type 
    *  get_cast_string_len
    *
   */
   static int get_cast_type(const ObExprResType param_type2, ObExprResType &dst_type, ObExprTypeCtx &type_ctx);
   // check item function and returning type
   static int check_item_func_with_return(ObJsonPathNodeType path_type, ObObjType dst_type, common::ObCollationType dst_coll_type, int8_t JSON_EXPR_FLAG);
-  static int set_dest_type(ObExprResType &type1, ObExprResType &type,
+  static int set_dest_type(ObExprResType &type1, ObExprResType &type, 
                            ObExprResType &dst_type, ObExprTypeCtx &type_ctx);
   static int get_expr_option_value(const ObExprResType param_type2, int8_t &dst_type);
   static int calc_asciistr_in_expr(const ObString &src,
@@ -443,7 +443,7 @@ public:
   static int get_dest_type(const ObExpr &expr, int64_t pos,
                           ObEvalCtx& ctx,
                           ObObjType &dest_type, int64_t &dst_len);
-
+  
   static int get_cast_inttc_len(ObExprResType &type1,
                                 ObExprResType &type2,
                                 common::ObExprTypeCtx &type_ctx,
@@ -467,23 +467,23 @@ public:
                               ObExprTypeCtx& type_ctx);
   static int pre_default_value_check(ObObjType dst_type, ObString val_str, ObObjType val_type, size_t length);
 
-  static int character2_ascii_string(common::ObIAllocator *allocator,
+  static int character2_ascii_string(common::ObIAllocator *allocator, 
                                      const ObExpr &expr,
                                      ObEvalCtx &ctx,
                                      ObString& result,
                                      int32_t reserve_len = 0);
-  static int cast_to_res(ObIAllocator &allocator,
-                          ObDatum &src_datum,
-                          const ObExpr &expr,
-                          const ObExpr &default_expr,
-                          ObEvalCtx &ctx,
-                          ObDatum &res,
+  static int cast_to_res(ObIAllocator &allocator, 
+                          ObDatum &src_datum, 
+                          const ObExpr &expr, 
+                          const ObExpr &default_expr, 
+                          ObEvalCtx &ctx, 
+                          ObDatum &res, 
                           bool xt_need_acc_check);
   static void get_accuracy_from_expr(const ObExpr &expr, ObAccuracy &accuracy);
   static int get_clause_opt(ObExpr *expr,
                             ObEvalCtx &ctx,
                             int8_t &type);
-  static bool is_json_depth_exceed_limit(uint32_t depth)
+  static bool is_json_depth_exceed_limit(uint32_t depth) 
   {
     return depth > JSON_DOCUMENT_MAX_DEPTH && depth > get_json_max_depth_config();
   }
@@ -507,14 +507,14 @@ public:
   static int init_json_expr_extra_info(
       ObIAllocator *allocator,
       const ObRawExpr &raw_expr,
-      const ObExprOperatorType type,
+      const ObExprOperatorType type, 
       ObExpr &rt_expr);
 
   static int get_session_query_timeout_ts(ObEvalCtx &ctx, int64_t &timeout_ts);
   static bool is_json_special_same_as_expr(ObItemType type, int64_t index);
-  static bool check_json_inner_same_as(const ObSysFunRawExpr *expr1,
-                                       const ObSysFunRawExpr *expr2,
-                                       int64_t index,
+  static bool check_json_inner_same_as(const ObSysFunRawExpr *expr1, 
+                                       const ObSysFunRawExpr *expr2, 
+                                       int64_t index, 
                                        ObExprEqualCheckContext *check_context);
   static bool check_json_path_can_pushdown(const ObRawExpr &path_expr);
   static bool check_json_expr_can_pushdown(const ObRawExpr &json_expr);
@@ -544,7 +544,7 @@ public:
   void reset();
 
   int64_t get_partial_data_serialize_size() const;
-  int64_t get_lob_diff_serialize_size() const;
+  int64_t get_lob_diff_serialize_size() const; 
   uint32_t get_lob_diff_cnt() const;
 
   int serialize_partial_data(char* buf, const int64_t buf_len, int64_t& pos) const;

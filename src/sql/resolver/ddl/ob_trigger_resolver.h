@@ -49,7 +49,7 @@ public:
                              ObIArray<ObDependencyInfo> &dep_infos,
                              bool is_alter_compile);
   static int resolve_has_auto_trans(const ParseNode &declare_node,
-                                    share::schema::ObTriggerInfo &trigger_info);
+                                    share::schema::ObTriggerInfo &trigger_info);       
 private:
   int resolve_create_trigger_stmt(const ParseNode &parse_node,
                                   obrpc::ObCreateTriggerArg &trigger_arg);

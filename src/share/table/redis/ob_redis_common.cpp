@@ -55,7 +55,7 @@ const char *ObRedisFmt::NULL_ARRAY = "*-1\r\n";
 //**************
 
 const char *ObRedisInfoV1::DB_NAME = "obkv_redis";
-const char *ObRedisInfoV1::TABLE_SQLS[] =
+const char *ObRedisInfoV1::TABLE_SQLS[] = 
 {
   // string
   "create table if not exists obkv_redis.obkv_redis_string_table("
@@ -113,7 +113,7 @@ const char *ObRedisInfoV1::TABLE_SQLS[] =
   "PARTITION BY KEY(db, vk) PARTITIONS "
 };
 
-const char *ObRedisInfoV1::ALL_KV_REDIS_TABLE_SQLS[] =
+const char *ObRedisInfoV1::ALL_KV_REDIS_TABLE_SQLS[] = 
 {
   // set
   "\"sdiff\", \"obkv_redis_set_table\"",

@@ -19,7 +19,7 @@
 #include "rootserver/ob_unit_manager.h"
 #include "rootserver/ob_zone_manager.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
 namespace common
 {
@@ -148,7 +148,7 @@ public:
       const common::ObIArray<common::ObZone> &zone_list);
 #ifdef OB_BUILD_TDE_SECURITY
   int check_need_create_root_key(const obrpc::ObCreateTenantArg &arg, bool &need_create);
-  int get_root_key_from_primary(const obrpc::ObCreateTenantArg &arg,
+  int get_root_key_from_primary(const obrpc::ObCreateTenantArg &arg, 
   const uint64_t tenant_id, obrpc::RootKeyType &key_type,
   common::ObString &key_value,
   common::ObIAllocator &allocator);
@@ -263,7 +263,7 @@ private:
 
   int init_tenant_global_stat_(
       const uint64_t tenant_id,
-      const common::ObIArray<common::ObConfigPairs> &init_configs,
+      const common::ObIArray<common::ObConfigPairs> &init_configs, 
       ObMySQLTransaction &trans);
 
   int get_ls_member_list_for_creating_tenant_(

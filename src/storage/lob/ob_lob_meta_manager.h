@@ -29,7 +29,7 @@ class ObLobMetaWriteIter;
 class ObLobMetaScanIter;
 class ObLobMetaManager {
 public:
-  explicit ObLobMetaManager(const uint64_t tenant_id) :
+  explicit ObLobMetaManager(const uint64_t tenant_id) : 
     persistent_lob_adapter_(tenant_id)
   {}
   ~ObLobMetaManager() {}

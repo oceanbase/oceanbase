@@ -301,7 +301,7 @@ class ObTsSyncGetTsCbTask : public ObTsCbTask
 public:
   friend class ObTsSyncGetTsCbTaskPool;
   ObTsSyncGetTsCbTask()
-      :is_inited_(false), task_id_(0), is_occupied_(false), is_finished_(false),
+      :is_inited_(false), task_id_(0), is_occupied_(false), is_finished_(false), 
        is_early_exit_(false), stc_(0), tenant_id_(0), errcode_(OB_SUCCESS) {}
   ~ObTsSyncGetTsCbTask() {}
   int init(uint64_t task_id);
@@ -341,7 +341,7 @@ public:
   static constexpr int64_t POOL_SIZE = 8000;
   ObTsSyncGetTsCbTaskPool() {}
   ~ObTsSyncGetTsCbTaskPool() {}
-  static ObTsSyncGetTsCbTaskPool& get_instance()
+  static ObTsSyncGetTsCbTaskPool& get_instance() 
   {
     static ObTsSyncGetTsCbTaskPool pool;
     return pool;
@@ -385,7 +385,7 @@ public:
               ObTsCbTask *task,
               share::SCN &scn,
               MonotonicTs &receive_gts_ts);
-  /**
+  /** 
    * 与`get_gts`相对应的同步接口，用于同步获取合适的GTS时间戳，可传入超时时间以避免长时间等待。
    * 相较于原有同步接口`get_ts_sync`，本接口的性能更好
    * @param[in] tenant_id

@@ -376,7 +376,7 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
                 ObSPICursor *spi_cursor = cursor.get_spi_cursor();
                 // ps cursor position is be record in current_position
                 // ref cursor position is be record in get_spi_cursor()->cur_
-                if (!cursor.is_ps_cursor() && cursor.get_spi_cursor()->cur_ > 0
+                if (!cursor.is_ps_cursor() && cursor.get_spi_cursor()->cur_ > 0 
                       && cursor.get_current_position() != cursor.get_spi_cursor()->cur_) {
                   cursor.set_current_position(cursor.get_spi_cursor()->cur_ - 1);
                 }

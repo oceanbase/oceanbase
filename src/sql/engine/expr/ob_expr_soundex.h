@@ -51,7 +51,7 @@ public:
                        bool has_lob_header);
   static int eval_soundex(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   DECLARE_SET_LOCAL_SESSION_VARS;
-
+  
 private:
   static const int64_t MIN_RESULT_LENGTH = 4;
   // if result collation type is nonascii such as utf16, we need charset convert in the end.

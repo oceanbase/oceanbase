@@ -185,7 +185,7 @@ OB_SERIALIZE_MEMBER(ObTxReadSnapshot,
                     snapshot_acquire_addr_);
 
 
-// for lob aux table tx read snapshot
+// for lob aux table tx read snapshot 
 #define PREPARE_LOB_PARTS(parts, ls_id)         \
   ObSEArray<ObTxLSEpochPair, 1> parts;          \
   ARRAY_FOREACH_NORET(parts_, i) {              \
@@ -905,9 +905,9 @@ int64_t ObTxDesc::get_expire_ts() const
   return ret;
 }
 
-bool ObTxDesc::is_dup_ls_modified() const
+bool ObTxDesc::is_dup_ls_modified() const 
 {
-  int ret = OB_SUCCESS;
+  int ret = OB_SUCCESS; 
   bool dup_ls_modified = false;
   const bool self_locked = lock_.self_locked();
   if (!self_locked && OB_FAIL(lock_.lock())) {
@@ -1075,7 +1075,7 @@ bool ObTxDesc::execute_commit_cb()
 #ifdef ENABLE_DEBUG_LOG
           ob_abort();
 #endif
-          TRANS_LOG(ERROR, "unexpected error happen, cb_tid_ should smaller than 0",
+          TRANS_LOG(ERROR, "unexpected error happen, cb_tid_ should smaller than 0", 
                     KP(this), K(tx_id), KP(cb_tid_));
         }
         ATOMIC_STORE_REL(&cb_tid_, GETTID());
@@ -1413,10 +1413,10 @@ const char* ObTxReadSnapshot::get_source_name() const
   return SRC_NAME[(int)source_];
 }
 
-/*
- * format snapshot info for sql audit display
+/* 
+ * format snapshot info for sql audit display 
  * contains: src, ls_id, ls_role, parts
- * 1. local select:
+ * 1. local select: 
  *   "src:LOCAL;ls_id:1001;ls_role:LEADER;parts:[1001,1002]"
  * 2. glocal select, with no ls and ls_role: "src:GTS;parts[1001]"
  * 3. insert: "NONE"
@@ -1441,7 +1441,7 @@ int ObTxReadSnapshot::format_source_for_display(char *buf, const int64_t buf_len
       need_fill = false;
       n = snprintf(buf, buf_len, "NONE");
     } else if (SRC::GLOBAL != source_) {
-      n = snprintf(buf, buf_len, "src:%s;ls_id:%ld;ls_role:%s;parts:[",
+      n = snprintf(buf, buf_len, "src:%s;ls_id:%ld;ls_role:%s;parts:[", 
                    snapshot_src, ls_id, ls_role);
     } else {
       // GLOBAL snapshot not display ls_id and ls_role

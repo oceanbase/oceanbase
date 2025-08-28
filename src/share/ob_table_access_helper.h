@@ -377,7 +377,7 @@ private:
   {
     TIMEGUARD_INIT(OCCAM, 1_s, 60_s);
     #define PRINT_WRAPPER KR(ret), K(MTL_ID()), K(table), K(condition)
-    int ret = common::OB_SUCCESS;
+    int ret = common::OB_SUCCESS; 
     if (OB_ISNULL(GCTX.sql_proxy_)) {
       ret = OB_NULL_CHECK_ERROR;
       OB_LOG_(WARN, "GCTX.sql_proxy_ is null", K(ret));

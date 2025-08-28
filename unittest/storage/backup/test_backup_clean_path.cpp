@@ -34,7 +34,7 @@ namespace backup {
 
 class ObIDirectoryScanner {
 public:
-  virtual ~ObIDirectoryScanner() = default;
+  virtual ~ObIDirectoryScanner() = default;  
   virtual int list_directories(const ObString &uri, ObBaseDirEntryOperator &op) = 0;
 };
 

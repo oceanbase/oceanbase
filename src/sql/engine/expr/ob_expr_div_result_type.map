@@ -1526,7 +1526,7 @@ static constexpr ObObjType DIV_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObLobType     */
     ObMaxType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
-    ObMaxType,         /* ObUserDefinedSQLType*/
+    ObMaxType,         /* ObUserDefinedSQLType*/    
     ObMaxType,      /* ObDecimalIntType     */
     ObMaxType,         /* ObCollectionSQLType*/
     ObMaxType,      /* ObMySQLDateType */
@@ -1585,7 +1585,7 @@ static constexpr ObObjType DIV_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
-    ObMaxType,         /* ObUserDefinedSQLType*/
+    ObMaxType,         /* ObUserDefinedSQLType*/    
     ObDoubleType,      /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType*/
     ObDoubleType,      /* ObMySQLDateType */
@@ -2281,7 +2281,7 @@ static constexpr ObObjType DIV_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
-    ObMaxType,         /* ObUserDefinedSQLType*/
+    ObMaxType,         /* ObUserDefinedSQLType*/    
     ObNumberType,      /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType*/
     ObNumberType,      /* ObMySQLDateType */
@@ -2339,7 +2339,7 @@ static constexpr ObObjType DIV_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
-    ObMaxType,         /* ObUserDefinedSQLType*/
+    ObMaxType,         /* ObUserDefinedSQLType*/    
     ObNumberType,      /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType*/
     ObNumberType,      /* ObMySQLDateType */
@@ -2397,7 +2397,7 @@ static constexpr ObObjType DIV_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObLobType     */
     ObMaxType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
-    ObMaxType,         /* ObUserDefinedSQLType*/
+    ObMaxType,         /* ObUserDefinedSQLType*/    
     ObMaxType,         /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType*/
     ObMaxType,      /* ObMySQLDateType */
@@ -2455,7 +2455,7 @@ static constexpr ObObjType DIV_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObLobType     */
     ObMaxType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
-    ObMaxType,         /* ObUserDefinedSQLType*/
+    ObMaxType,         /* ObUserDefinedSQLType*/    
     ObMaxType,         /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType*/
     ObMaxType,      /* ObMySQLDateType */
@@ -2513,7 +2513,7 @@ static constexpr ObObjType DIV_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObLobType     */
     ObMaxType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
-    ObMaxType,         /* ObUserDefinedSQLType*/
+    ObMaxType,         /* ObUserDefinedSQLType*/    
     ObMaxType,         /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType*/
     ObMaxType,      /* ObMySQLDateType */
@@ -2571,7 +2571,7 @@ static constexpr ObObjType DIV_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObLobType     */
     ObMaxType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
-    ObMaxType,         /* ObUserDefinedSQLType*/
+    ObMaxType,         /* ObUserDefinedSQLType*/    
     ObMaxType,         /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType*/
     ObMaxType,      /* ObMySQLDateType */
@@ -2629,7 +2629,7 @@ static constexpr ObObjType DIV_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObLobType     */
     ObMaxType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
-    ObMaxType,         /* ObUserDefinedSQLType*/
+    ObMaxType,         /* ObUserDefinedSQLType*/    
     ObMaxType,         /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType*/
     ObMaxType,      /* ObMySQLDateType */
@@ -2687,7 +2687,7 @@ static constexpr ObObjType DIV_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObLobType     */
     ObMaxType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
-    ObMaxType,         /* ObUserDefinedSQLType*/
+    ObMaxType,         /* ObUserDefinedSQLType*/    
     ObMaxType,         /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType*/
     ObMaxType,      /* ObMySQLDateType */
@@ -2745,7 +2745,7 @@ static constexpr ObObjType DIV_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObLobType     */
     ObMaxType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
-    ObMaxType,         /* ObUserDefinedSQLType*/
+    ObMaxType,         /* ObUserDefinedSQLType*/    
     ObMaxType,         /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType*/
     ObMaxType,      /* ObMySQLDateType */
@@ -2860,7 +2860,7 @@ static constexpr ObObjType DIV_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObMaxType,      /* ObJsonType     */
-    ObMaxType,         /* ObGeometryType */
+    ObMaxType,         /* ObGeometryType */    
     ObMaxType,         /* ObUserDefinedSQLType*/
     ObMaxType,      /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType*/
@@ -2919,7 +2919,7 @@ static constexpr ObObjType DIV_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObLobType     */
     ObMaxType,         /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
-    ObMaxType,         /* ObUserDefinedSQLType*/
+    ObMaxType,         /* ObUserDefinedSQLType*/    
     ObMaxType,         /* ObDecimalIntType */
     ObMaxType,         /* ObCollectionSQLType*/
     ObMaxType,         /* ObMySQLDateType */

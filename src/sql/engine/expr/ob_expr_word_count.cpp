@@ -80,3 +80,4 @@ int ObExprWordCount::cg_expr(
 }
 }  // namespace sql
 }  // namespace oceanbase
+

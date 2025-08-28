@@ -116,7 +116,7 @@ TEST_F(TestObSimpleLogCache, read)
   PalfBufferIterator iterator1;
   EXPECT_EQ(OB_ITER_END, read_log(leader, iterator1, LogIOUser::FETCHLOG));
   EXPECT_EQ(false, iterator1.io_ctx_.iterator_info_.allow_filling_cache_);
-
+  
   PalfBufferIterator iterator2;
   EXPECT_EQ(OB_ITER_END, read_log(leader, iterator2, LogIOUser::CDC));
   EXPECT_EQ(true, iterator2.io_ctx_.iterator_info_.allow_filling_cache_);
@@ -181,15 +181,15 @@ TEST_F(TestObSimpleLogCache, raw_read)
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, MAX_LOG_BODY_SIZE, id, lsn_array, scn_array));
   const LSN max_lsn = leader.get_palf_handle_impl()->get_max_lsn();
   EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, max_lsn));
-  int64_t aligned_offset = common::upper_align(lsn_array[35].val_, LOG_DIO_ALIGN_SIZE);
+  int64_t aligned_offset = common::upper_align(lsn_array[35].val_, LOG_DIO_ALIGN_SIZE); 
   LSN aligned_lsn(aligned_offset);
   int64_t in_read_size = 2 * 1024 * 1024;
   int64_t out_read_size = 0;
   char *read_buf = reinterpret_cast<char*>(mtl_malloc_align(
     LOG_DIO_ALIGN_SIZE, in_read_size, "mittest"));
-  LogIOContext ctx;
+  LogIOContext ctx;    
   EXPECT_EQ(OB_SUCCESS, leader.get_palf_handle_impl()->raw_read(aligned_lsn, read_buf, in_read_size, out_read_size, ctx));
-
+  
   if (OB_NOT_NULL(read_buf)) {
     mtl_free_align(read_buf);
   }

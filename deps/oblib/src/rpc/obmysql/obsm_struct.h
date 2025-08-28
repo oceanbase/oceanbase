@@ -43,7 +43,7 @@ struct ObSMConnection
 public:
   static const uint32_t INITIAL_SESSID = 0;
   static const int64_t SCRAMBLE_BUF_SIZE = 20;
-
+  
   ObSMConnection()
   {
     cap_flags_.capability_ = 0;

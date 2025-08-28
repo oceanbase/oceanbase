@@ -134,7 +134,7 @@ ObInnerSQLConnection::ObInnerSQLConnection()
       user_timeout_(0),
       diagnostic_info_(nullptr),
       inner_sess_query_locked_(false)
-
+      
 {
   free_session_ctx_.sessid_ = ObSQLSessionInfo::INVALID_SESSID;
 }
@@ -279,7 +279,7 @@ void ObInnerSQLConnection::unref()
         LOG_WARN("revert connection failed", K(ret));
       }
     } else {
-      // see
+      // see 
       // extern_session_ = NULL;
     }
   }
@@ -2023,7 +2023,7 @@ int ObInnerSQLConnection::switch_tenant(const uint64_t tenant_id)
         get_session().set_user_priv_set(OB_PRIV_ALL | OB_PRIV_GRANT);
         get_session().set_database_id(OB_SYS_DATABASE_ID);
       }
-    }
+    } 
   } else { /*do nothing*/ }
   return ret;
 }
@@ -2401,7 +2401,7 @@ ObInnerSqlWaitGuard::ObInnerSqlWaitGuard(const bool is_inner_session, common::Ob
 {
   prev_di_ = ObLocalDiagnosticInfo::get();
   if (is_inner_session_ && OB_NOT_NULL(di) && /*when remote sql or bootstraping, do not record */
-      OB_NOT_NULL(GCTX.omt_) && 0 != di->get_session_id() &&
+      OB_NOT_NULL(GCTX.omt_) && 0 != di->get_session_id() && 
       prev_di_ != di) {
     inner_session_id_ = di->get_session_id();
     // 1. start inner sql wait event wait event

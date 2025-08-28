@@ -77,7 +77,7 @@ do
 
                             sort $origin_result_file -o $origin_result_file
                             sort $vec_result_file -o $vec_result_file
-
+                            
                             diff $origin_result_file $vec_result_file > /dev/null
                             if [ $? == 0 ]; then
                                 echo "Both result file are the same!"

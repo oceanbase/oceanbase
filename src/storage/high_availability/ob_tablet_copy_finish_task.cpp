@@ -154,9 +154,9 @@ int ObTabletCopyFinishTask::process()
     }
   }
 
-  int64_t sstable_count = mds_tables_handle_.get_count()
-                          + minor_tables_handle_.get_count()
-                          + ddl_tables_handle_.get_count()
+  int64_t sstable_count = mds_tables_handle_.get_count() 
+                          + minor_tables_handle_.get_count() 
+                          + ddl_tables_handle_.get_count() 
                           + major_tables_handle_.get_count();
 
   int tmp_ret = OB_SUCCESS;
@@ -466,7 +466,7 @@ int ObTabletCopyFinishTask::check_tablet_valid_()
      LOG_ERROR("before check tablet valid", "tablet_id", param_.tablet_id_);
     DEBUG_SYNC(BEFORE_CHECK_TABLET_VALID);
   }
-#endif
+#endif  
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet finish restore task do not init", K(ret));
@@ -474,7 +474,7 @@ int ObTabletCopyFinishTask::check_tablet_valid_()
     if (OB_TABLET_NOT_EXIST == ret) {
       LOG_INFO("tablet is not exist, skip check valid", "tablet_id", param_.tablet_id_);
     } else {
-      LOG_WARN("failed to get tablet", K(ret), "tablet_id", param_.tablet_id_);
+      LOG_WARN("failed to get tablet", K(ret), "tablet_id", param_.tablet_id_);      
     }
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
@@ -521,7 +521,7 @@ int ObTabletCopyFinishTask::deal_with_major_sstables_()
     // TODO(jyx441808): remove this logic when migration can fetch src macro id list for shared sstable
     LOG_WARN("failed to deal with shared majors", K(ret));
   } else if (local_major_sstables.empty()) {
-    // do nothing
+    // do nothing   
   } else {
     const bool need_replace_remote_sstable = ObTabletRestoreAction::is_restore_replace_remote_sstable(param_.restore_action_);
     ObStorageHATabletBuilderUtil::BatchBuildTabletTablesExtraParam batch_extra_param;
@@ -541,9 +541,9 @@ int ObTabletCopyFinishTask::deal_with_major_sstables_()
       param_.src_tablet_meta_->storage_schema_,
       param_.src_tablet_meta_->has_truncate_info_);
 
-    if (FAILEDx(ObStorageHATabletBuilderUtil::build_tablet_with_major_tables(param_.ls_,
+    if (FAILEDx(ObStorageHATabletBuilderUtil::build_tablet_with_major_tables(param_.ls_, 
                                                                              param_.tablet_id_,
-                                                                             major_tables_handle_,
+                                                                             major_tables_handle_, 
                                                                              major_sstables_param,
                                                                              batch_extra_param))) {
       LOG_WARN("failed to build tablet with major tables", K(ret), K(param_), K(batch_extra_param));
@@ -558,7 +558,7 @@ int ObTabletCopyFinishTask::deal_with_major_sstables_()
     }
 #endif
   }
-
+  
   return ret;
 }
 

@@ -9,6 +9,6 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 extern inline int64_t str_hash(str_t* s);
 extern inline int str_cmp(str_t* s1, str_t* s2);

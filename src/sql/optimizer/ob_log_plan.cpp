@@ -195,7 +195,7 @@ int64_t ObLogPlan::to_string(char *buf,
                                         EXPLAIN_EXTENDED,
                                         option,
                                         plan_strs))) {
-      LOG_WARN("failed to store sql plan", K(ret));
+      LOG_WARN("failed to store sql plan", K(ret));                                      
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < plan_strs.count(); ++i) {
       if (pos + plan_strs.at(i).length() + 1 < buf_len) {
@@ -329,7 +329,7 @@ int ObLogPlan::generate_join_orders()
       }
     }
   }
-
+  
   //生成第一级Array：单表路径
   OPT_TRACE_TITLE("GENERATE BASE PATH");
   for (int64_t i = 0; OB_SUCC(ret) && i < join_level; ++i) {
@@ -346,7 +346,7 @@ int ObLogPlan::generate_join_orders()
       OPT_TRACE_END_SECTION;
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(append(get_optimizer_context().get_deduce_info(),
+    } else if (OB_FAIL(append(get_optimizer_context().get_deduce_info(), 
                               join_rels.at(0).at(i)->get_deduce_info()))) {
       LOG_WARN("failed to append deduce info", K(ret));
     }
@@ -467,7 +467,7 @@ int ObLogPlan::get_connected_table_ids(const ObIArray<ObRawExpr*> &quals,
       LOG_WARN("failed to get table rel ids", K(ret));
     }
   }
-  return ret;
+  return ret; 
 }
 
 int ObLogPlan::check_push_subq_hint(const ObRawExpr *expr,
@@ -655,7 +655,7 @@ int ObLogPlan::distribute_filters_to_baserels(ObIArray<ObJoinOrder*> &base_level
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < base_level.count(); ++i) {
     ObJoinOrder *cur_rel= base_level.at(i);
-    ObSEArray<int64_t, 1> rel_id;
+    ObSEArray<int64_t, 1> rel_id; 
     if (OB_ISNULL(cur_rel)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(i));
@@ -773,7 +773,7 @@ int ObLogPlan::pre_process_quals(const ObIArray<TableItem*> &table_items,
         if (OB_FAIL(add_startup_filter(qual))) {
           LOG_WARN("failed to add startup filter", K(ret));
         }
-      }
+      } 
     } else if (qual->has_flag(CNT_RAND_FUNC) ||
                qual->has_flag(CNT_DYNAMIC_USER_VARIABLE)) {
       ret = add_special_expr(qual);
@@ -920,7 +920,7 @@ int ObLogPlan::select_location(ObIArray<ObTablePartitionInfo *> &tbl_part_info_l
     LOG_ERROR("exec ctx is NULL", K(ret));
   } else if (OB_FAIL(session_info->get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy))) {
     LOG_WARN("get route policy failed", K(ret));
-  }
+  } 
   for (int64_t i = 0; OB_SUCC(ret) && i < tbl_part_info_list.count(); ++i) {
     ObTablePartitionInfo *tbl_part_info = tbl_part_info_list.at(i);
     if (OB_ISNULL(tbl_part_info)) {
@@ -1047,7 +1047,7 @@ int ObLogPlan::strong_select_replicas(const ObAddr &local_server,
                                       ObIArray<ObCandiTableLoc*> &phy_tbl_loc_info_list,
                                       bool &is_hit_partition,
                                       bool sess_in_retry,      //当前session是否在retry中
-                                      bool is_dup_ls_modified)
+                                      bool is_dup_ls_modified) 
 {
   int ret = OB_SUCCESS;
   // 全部选主
@@ -1064,7 +1064,7 @@ int ObLogPlan::strong_select_replicas(const ObAddr &local_server,
     } else if (0 == phy_tbl_loc_info->get_partition_cnt()) {
       // 该table的partition个数为0，跳过
     } else {
-      if (!sess_in_retry
+      if (!sess_in_retry 
           && !is_dup_ls_modified
           && phy_tbl_loc_info->is_duplicate_table_not_in_dml()) {
         if (OB_FAIL(phy_tbl_loc_info->all_select_local_replica_or_leader(is_on_same_server, cur_same_server, local_server))) {
@@ -1270,7 +1270,7 @@ int ObLogPlan::calc_rwsplit_partition_feedback(const common::ObIArray<ObCandiTab
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("phy_tbl_loc_info is NULL", K(ret), K(i), K(phy_tbl_loc_info_list.count()));
     } else {
-      const ObCandiTabletLocIArray &phy_part_loc_info_list =
+      const ObCandiTabletLocIArray &phy_part_loc_info_list = 
                           phy_tbl_loc_info->get_phy_part_loc_info_list();
       if (phy_part_loc_info_list.empty()) {
         // just defense, when partition location list is empty, treat as it's not leader replica
@@ -1306,7 +1306,7 @@ int ObLogPlan::calc_rwsplit_partition_feedback(const common::ObIArray<ObCandiTab
 
   LOG_TRACE("get feedback policy", K(all_leader), K(all_follower));
   //Design a kv pair (hidden user variable, __ob_proxy_weakread_feedback(bool)):
-  //state:
+  //state: 
   //1. The current machine does not have any replicas (returns true)
   //2. Some/all copies involved are distributed on the current machine:
   //     a. ALL FOLLOWER (do not return)
@@ -1626,8 +1626,8 @@ int ObLogPlan::init_default_val_json(ObRelIds& depend_table_set,
   return ret;
 }
 
-int ObLogPlan::init_json_table_column_depend_info(ObRelIds& depend_table_set,
-                                                   TableItem* json_table,
+int ObLogPlan::init_json_table_column_depend_info(ObRelIds& depend_table_set, 
+                                                   TableItem* json_table, 
                                                    const ObDMLStmt *stmt)
 {
   int ret = OB_SUCCESS;
@@ -1641,10 +1641,10 @@ int ObLogPlan::init_json_table_column_depend_info(ObRelIds& depend_table_set,
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < stmt_column_items.count(); i++) {
     if (json_table->table_id_ != stmt_column_items.at(i).table_id_) {
-    } else if (OB_NOT_NULL(stmt_column_items.at(i).default_value_expr_)
+    } else if (OB_NOT_NULL(stmt_column_items.at(i).default_value_expr_) 
                 && OB_FAIL(init_default_val_json(depend_table_set, stmt_column_items.at(i).default_value_expr_))) {
       LOG_WARN("fail to init error default value depend info", K(ret));
-    } else if (OB_NOT_NULL(stmt_column_items.at(i).default_empty_expr_)
+    } else if (OB_NOT_NULL(stmt_column_items.at(i).default_empty_expr_) 
                 && OB_FAIL(init_default_val_json(depend_table_set, stmt_column_items.at(i).default_empty_expr_))) {
       LOG_WARN("fail to init error default value depend info", K(ret));
     }
@@ -2333,10 +2333,10 @@ int ObLogPlan::inner_generate_join_order(ObIArray<JoinOrderArray> &join_rels,
       LOG_TRACE("there is no valid join info for ", K(left_tree->get_tables()),
                                                     K(right_tree->get_tables()));
     } else if (NULL != join_tree &&
-               OB_FAIL(check_detector_valid(left_tree,
-                                            right_tree,
-                                            valid_detectors,
-                                            join_tree,
+               OB_FAIL(check_detector_valid(left_tree, 
+                                            right_tree, 
+                                            valid_detectors, 
+                                            join_tree, 
                                             is_detector_valid))) {
       LOG_WARN("failed to check detector valid", K(ret));
     } else if (!is_detector_valid) {
@@ -3221,7 +3221,7 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
         LOG_WARN("failed to set table scan filters", K(ret));
       } else if (OB_FAIL(append(scan->get_pushdown_filter_exprs(), ap->pushdown_filters_))) {
         LOG_WARN("failed to append pushdown filters", K(ret));
-      } else if (ap->est_cost_info_.index_meta_info_.is_multivalue_index_ &&
+      } else if (ap->est_cost_info_.index_meta_info_.is_multivalue_index_ && 
                  OB_FAIL(prepare_multivalue_retrieval_scan(scan))) {
         LOG_WARN("failed to prepare multivalue doc_rowkey ", K(ret));
       }
@@ -3938,7 +3938,7 @@ int ObLogPlan::assign_right_popular_value_to_left(ObExchangeInfo &left_exch_info
       }
     }
   }
-  return ret;
+  return ret; 
 }
 
 int ObLogPlan::compute_hash_distribution_info(const ObJoinType &join_type,
@@ -4695,7 +4695,7 @@ int ObLogPlan::check_has_dblink_sequence(bool &has)
   }
   for (int64_t i = 0; OB_SUCC(ret) && !has && i < get_stmt()->get_nextval_sequence_ids().count(); ++i) {
     const ObSequenceSchema *seq_schema = NULL;
-    if (OB_FAIL(session->get_dblink_sequence_schema(get_stmt()->get_nextval_sequence_ids().at(i),
+    if (OB_FAIL(session->get_dblink_sequence_schema(get_stmt()->get_nextval_sequence_ids().at(i), 
                                                     seq_schema))) {
       LOG_WARN("failed to get dblink sequence schema", K(ret));
     } else if (NULL != seq_schema) {
@@ -5006,8 +5006,8 @@ int ObLogPlan::candi_allocate_scala_group_by(const ObIArray<ObAggFunRawExpr*> &a
   bool is_from_povit = false;
   ObSEArray<ObRawExpr*, 1> dummy_having_exprs;
   ObSEArray<CandidatePlan, 4> groupby_plans;
-  if (OB_FAIL(candi_allocate_scala_group_by(agg_items,
-                                            dummy_having_exprs,
+  if (OB_FAIL(candi_allocate_scala_group_by(agg_items, 
+                                            dummy_having_exprs, 
                                             is_from_povit,
                                             groupby_plans))) {
     LOG_WARN("failed to allocate scala group by", K(ret));
@@ -5588,8 +5588,8 @@ int ObLogPlan::inner_candi_allocate_scala_group_by(const ObIArray<ObAggFunRawExp
   for (int64_t i = 0; OB_SUCC(ret) && i < candi_plans.count(); i++) {
     OPT_TRACE("start to generate scala group by plan:");
     uint64_t scala_group_dist_methods = 0;
-    if (OB_FAIL(get_distribute_group_by_method(candi_plans.at(i).plan_tree_,
-                                              groupby_helper,
+    if (OB_FAIL(get_distribute_group_by_method(candi_plans.at(i).plan_tree_, 
+                                              groupby_helper, 
                                               groupby_helper.distinct_exprs_,
                                               scala_group_dist_methods))) {
       LOG_WARN("failed to get distribute method", K(ret));
@@ -5641,7 +5641,7 @@ int ObLogPlan::get_distribute_group_by_method(ObLogicalOperator *top,
     if (query_ctx->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP2)) {
       group_dist_methods |= DistAlgo::DIST_HASH_HASH_LOCAL;
     }
-    if (!get_optimizer_context().is_partition_wise_plan_enabled() &&
+    if (!get_optimizer_context().is_partition_wise_plan_enabled() && 
         query_ctx->check_opt_compat_version(COMPAT_VERSION_4_3_2)) {
       group_dist_methods &= ~DistAlgo::DIST_PARTITION_WISE;
       OPT_TRACE("ignore partition wise group operator by tenant config");
@@ -5727,7 +5727,7 @@ int ObLogPlan::get_distribute_group_by_method(ObLogicalOperator *top,
                                                                 is_partition_wise))) {
       LOG_WARN("failed to check if sharding compatible with distinct expr", K(ret));
     } else if (is_partition_wise) {
-      if (top->is_parallel_more_than_part_cnt() &&
+      if (top->is_parallel_more_than_part_cnt() && 
           query_ctx->check_opt_compat_version(COMPAT_VERSION_4_3_5)) {
         OPT_TRACE("group operator will use partition wise method");
       } else {
@@ -5775,8 +5775,8 @@ int ObLogPlan::create_scala_group_plan(const ObIArray<ObAggFunRawExpr*> &aggr_it
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FALSE_IT(origin_child_card = top->get_card())) {
   } else if (groupby_helper.can_storage_pushdown_ &&
-             OB_FAIL(try_push_aggr_into_table_scan(top,
-                                                   groupby_helper.pushdown_groupby_columns_.empty() ? aggr_items : dummy_aggr,
+             OB_FAIL(try_push_aggr_into_table_scan(top, 
+                                                   groupby_helper.pushdown_groupby_columns_.empty() ? aggr_items : dummy_aggr, 
                                                    groupby_helper.pushdown_groupby_columns_))) {
     LOG_WARN("failed to push group by into table scan", K(ret));
   } else if (DistAlgo::DIST_BASIC_METHOD == algo) {
@@ -6035,11 +6035,11 @@ int ObLogPlan::init_groupby_helper(const ObIArray<ObRawExpr*> &group_exprs,
     LOG_WARN("failed to check use three stage push down", K(ret));
   }
   if (OB_FAIL(ret)) {
-  } else if (groupby_helper.enable_hash_rollup_ &&
-             rollup_exprs.count() > 0 &&
-             OB_FAIL(init_hash_rollup_info(group_exprs,
-                                           rollup_exprs,
-                                           aggr_items,
+  } else if (groupby_helper.enable_hash_rollup_ && 
+             rollup_exprs.count() > 0 && 
+             OB_FAIL(init_hash_rollup_info(group_exprs, 
+                                           rollup_exprs, 
+                                           aggr_items, 
                                            groupby_helper.hash_rollup_info_))) {
     LOG_WARN("failed to init hash rollup info", K(ret));
   }
@@ -6373,7 +6373,7 @@ int ObLogPlan::init_distinct_helper(const ObIArray<ObRawExpr*> &distinct_exprs,
       distinct_helper.group_ndv_ = 0.0;
       for (int64_t i = 0; i < sel_stmt->get_set_query().count(); i ++) {
         const OptTableMeta *table_meta = get_update_table_metas().get_table_meta_by_table_id(i);
-        double child_ndv = 0;
+        double child_ndv = 0; 
         if (OB_NOT_NULL(table_meta)) {
           child_ndv = table_meta->get_distinct_rows();
         }
@@ -6624,7 +6624,7 @@ int ObLogPlan::check_storage_groupby_pushdown(const ObIArray<ObAggFunRawExpr *> 
       OB_ISNULL(session_info = get_optimizer_context().get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(check_aggr_pushdown_enabled(*session_info,
+  } else if (OB_FAIL(check_aggr_pushdown_enabled(*session_info, 
                                                  enable_aggr_push_down,
                                                  enable_groupby_push_down))) {
     LOG_WARN("failed to check enable aggr pushdown", K(ret));
@@ -6634,7 +6634,7 @@ int ObLogPlan::check_storage_groupby_pushdown(const ObIArray<ObAggFunRawExpr *> 
              stmt->has_for_update() ||
              !stmt->is_single_table_stmt()) {
     /*do nothing*/
-  } else if (OB_FAIL(check_can_scala_storage_pushdown(*session_info,
+  } else if (OB_FAIL(check_can_scala_storage_pushdown(*session_info, 
                                                       *static_cast<const ObSelectStmt*>(stmt),
                                                       is_scala_push_down))) {
     LOG_WARN("failed to check is statistic gather sql", K(ret));
@@ -6659,7 +6659,7 @@ int ObLogPlan::check_storage_groupby_pushdown(const ObIArray<ObAggFunRawExpr *> 
     LOG_WARN("failed to check stmt is only full group by", K(ret));
   } else if (!is_only_full_group_by) {
     OPT_TRACE("not only full group by disable storage pushdwon");
-  } else if (static_cast<const ObSelectStmt*>(stmt)->has_rollup() ||
+  } else if (static_cast<const ObSelectStmt*>(stmt)->has_rollup() || 
              static_cast<const ObSelectStmt*>(stmt)->get_group_expr_size() > 1) {
     /*do nothing*/
   } else {
@@ -6765,7 +6765,7 @@ int ObLogPlan::check_table_columns_can_storage_pushdown(const uint64_t tenant_id
     LOG_TRACE("force pushdown group by to storage layer", K(ret), K(can_push));
   } else if (!ObColumnStatParam::is_valid_opt_col_type(column->get_data_type())) {
     can_push = false;
-  } else if (NULL == (table_meta =
+  } else if (NULL == (table_meta = 
                      get_basic_table_metas().get_table_meta_by_table_id(column->get_table_id()))) {
     can_push = false;
   } else if (table_meta->get_version() <= 0) {
@@ -9210,7 +9210,7 @@ int ObLogPlan::get_subplan_filter_distributed_method(ObLogicalOperator *&top,
       } else {
         int enable_px_random_shuffle_only_statistic_exist = (OB_E(EventTable::EN_PX_RANDOM_SHUFFLE_WITHOUT_STATISTIC_INFORMATION) OB_SUCCESS);
         int64_t compute_parallel = top->get_parallel();
-        int64_t px_expected_work_count = 0;
+        int64_t px_expected_work_count = 0;   
         ObLogTableScan *log_table_scan = static_cast<ObLogTableScan *>(top);
         const AccessPath *ap = NULL;
         const ObTableMetaInfo *table_meta_info = NULL;
@@ -9323,7 +9323,7 @@ int ObLogPlan::create_subplan_filter_plan(ObLogicalOperator *&top,
   } else if (DIST_INVALID_METHOD == (dist_algo = get_dist_algo(cur_dist_methods))) {
     top = NULL;
   } else if (DistAlgo::DIST_BASIC_METHOD == dist_algo ||
-             DistAlgo::DIST_PARTITION_WISE == dist_algo ||
+             DistAlgo::DIST_PARTITION_WISE == dist_algo || 
              DistAlgo::DIST_NONE_ALL == dist_algo) {
     // is basic or is_partition_wise
     if (OB_FAIL(allocate_subplan_filter_as_top(top,
@@ -9343,7 +9343,7 @@ int ObLogPlan::create_subplan_filter_plan(ObLogicalOperator *&top,
       LOG_WARN("failed to compute subplan filter random shuffle exchange info", K(ret));
     } else if (OB_FAIL(allocate_exchange_as_top(top, exch_info))) {
       LOG_WARN("failed to allocate exchange as top", K(ret));
-    } else if (OB_FAIL(allocate_subplan_filter_as_top(top,
+    } else if (OB_FAIL(allocate_subplan_filter_as_top(top, 
                                                       subquery_ops,
                                                       query_ref_exprs,
                                                       params,
@@ -9397,7 +9397,7 @@ int ObLogPlan::create_subplan_filter_plan(ObLogicalOperator *&top,
   return ret;
 }
 
-int ObLogPlan::compute_subplan_filter_random_shuffle_info(ObLogicalOperator* top,
+int ObLogPlan::compute_subplan_filter_random_shuffle_info(ObLogicalOperator* top, 
                                                           const ObIArray<ObExecParamRawExpr *> &params,
                                                           const DistAlgo dist_algo,
                                                           ObExchangeInfo &exch_info)
@@ -9606,8 +9606,8 @@ int ObLogPlan::check_if_subplan_filter_match_repart(ObLogicalOperator *top,
         } else {
           pre_child = child;
         }
-      } else if (!ObOptimizerUtil::is_exprs_equivalent(left_keys,
-                                                       pre_left_keys,
+      } else if (!ObOptimizerUtil::is_exprs_equivalent(left_keys, 
+                                                       pre_left_keys, 
                                                        input_esets)) {
         is_match_repart = false;
       } else if(OB_ISNULL(pre_child)) {
@@ -11787,7 +11787,7 @@ int ObLogPlan::do_post_plan_processing()
     LOG_WARN("failed to set identify seq expr", K(ret));
   } else if (OB_FAIL(update_re_est_cost(root))) {
     LOG_WARN("failed to re est cost", K(ret));
-  } else if (OB_FAIL(choose_duplicate_table_replica(root,
+  } else if (OB_FAIL(choose_duplicate_table_replica(root, 
                                                     get_optimizer_context().get_local_server_addr(),
                                                     true))) {
     LOG_WARN("failed to set duplicated table location", K(ret));
@@ -12167,7 +12167,7 @@ int ObLogPlan::choose_duplicate_table_replica(ObLogicalOperator *op,
     LOG_WARN("too deep recursive", K(ret));
   } else if (log_op_def::LOG_TEMP_TABLE_INSERT == op->get_type()) {
     // do nothing
-  } else if (log_op_def::LOG_TABLE_SCAN == op->get_type() &&
+  } else if (log_op_def::LOG_TABLE_SCAN == op->get_type() && 
              NULL != op->get_strong_sharding() &&
              op->get_strong_sharding()->get_can_reselect_replica() &&
              !is_root) {
@@ -12232,7 +12232,7 @@ int ObLogPlan::choose_duplicate_table_replica(ObLogicalOperator *op,
       } else if (OB_FAIL(SMART_CALL(choose_duplicate_table_replica(child,
                                                                    adjust_addr,
                                                                    false)))) {
-        LOG_WARN("failed to set duplicated table location", K(ret),
+        LOG_WARN("failed to set duplicated table location", K(ret), 
                   K(can_reselect_replica), K(adjust_addr));
       } else { /*do nothing*/ }
     }
@@ -12303,8 +12303,8 @@ int ObLogPlan::gen_das_table_location_info(ObLogTableScan *table_scan,
       } else if (OB_FALSE_IT(das_location.set_is_das_empty_part(table_partition_info->get_table_location().is_das_empty_part()))) {
       } else if (OB_FALSE_IT(das_location.set_broadcast_table(table_meta_info->is_broadcast_table_))) {
       } else if (OB_FALSE_IT(das_location.set_dynamic_replica_select_table(
-        ObConsistencyLevel::WEAK == stmt->get_query_ctx()->get_global_hint().read_consistency_
-        && table_meta_info->is_broadcast_table_
+        ObConsistencyLevel::WEAK == stmt->get_query_ctx()->get_global_hint().read_consistency_ 
+        && table_meta_info->is_broadcast_table_ 
         && opt_ctx->get_session_info()->get_ddl_info().is_mview_complete_refresh()))) {
       } else if (das_location.is_all_partition() &&
                  !das_location.is_dynamic_replica_select_table()) {
@@ -12393,7 +12393,7 @@ int ObLogPlan::collect_table_location(ObLogicalOperator *op)
       ObTablePartitionInfo *table_partition_info = dml_op->get_table_partition_info();
       const ObOptimizerContext &opt_ctx = get_optimizer_context();
       if (NULL == table_partition_info) {
-        // merge into has no insert, do nothing
+        // merge into has no insert, do nothing 
       } else if (OB_ISNULL(opt_ctx.get_query_ctx())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(table_partition_info), K(opt_ctx.get_query_ctx()), K(ret));
@@ -12419,7 +12419,7 @@ int ObLogPlan::collect_table_location(ObLogicalOperator *op)
   return ret;
 }
 
-int ObLogPlan::collect_vec_index_location_related_info(ObLogTableScan &tsc_op,
+int ObLogPlan::collect_vec_index_location_related_info(ObLogTableScan &tsc_op, 
                                                       TableLocRelInfo& rel_info)
 {
   int ret = OB_SUCCESS;
@@ -14357,7 +14357,7 @@ int ObLogPlan::set_advisor_table_id(ObLogicalOperator *op)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("operator is null", K(ret), K(op));
   } else if (OB_NOT_NULL(op->get_sharding()) &&
-             OB_NOT_NULL(op->get_sharding()->get_phy_table_location_info()) &&
+             OB_NOT_NULL(op->get_sharding()->get_phy_table_location_info()) && 
              (op->get_sharding()->is_local() || op->get_sharding()->is_remote())) {
     if (OB_FAIL(negotiate_advisor_table_id(op))) {
       LOG_WARN("failed to negotiate advise table id", K(ret));
@@ -14371,7 +14371,7 @@ int ObLogPlan::set_advisor_table_id(ObLogicalOperator *op)
   }
   return ret;
 }
-int ObLogPlan::negotiate_advisor_table_id(ObLogicalOperator *op)
+int ObLogPlan::negotiate_advisor_table_id(ObLogicalOperator *op) 
 {
   int ret = OB_SUCCESS;
   uint64_t base_table_id = OB_INVALID_ID;
@@ -14411,7 +14411,7 @@ int ObLogPlan::negotiate_advisor_table_id(ObLogicalOperator *op)
       }
     }
   }
-
+  
   if (base_table_id != OB_INVALID_ID || dup_table_id != OB_INVALID_ID) {
     uint64_t final_table_id =  (base_table_id == OB_INVALID_ID ? dup_table_id : base_table_id);
     for (int64_t i = 0; OB_SUCC(ret) && i < all_dup_tables.count(); ++i) {
@@ -14509,10 +14509,10 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
         bool use_row_store = false;
         if (scan->use_column_store()) {
           info.use_column_store_ = true;
-        } else if (OB_FAIL(will_use_column_store(info.table_id_,
-                                                 info.index_id_,
+        } else if (OB_FAIL(will_use_column_store(info.table_id_, 
+                                                 info.index_id_, 
                                                  info.ref_table_id_,
-                                                 use_column_store,
+                                                 use_column_store, 
                                                  use_row_store))) {
           LOG_WARN("failed to check will use column store", K(ret));
         } else if (use_column_store) {
@@ -14917,8 +14917,8 @@ int ObLogPlan::perform_gather_stat_replace(ObLogicalOperator *op)
                || OB_ISNULL(session = get_optimizer_context().get_session_info())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null pointers", K(ret), KP(schema_guard), KP(session));
-    } else if (OB_FAIL(schema_guard->get_table_schema(session->get_effective_tenant_id(),
-                                                      table_scan->get_real_ref_table_id(),
+    } else if (OB_FAIL(schema_guard->get_table_schema(session->get_effective_tenant_id(), 
+                                                      table_scan->get_real_ref_table_id(), 
                                                       table_schema))) {
       LOG_WARN("failed to get table schema", K(ret));
     } else if (OB_ISNULL(table_schema)) {
@@ -15305,7 +15305,7 @@ int ObLogPlan::check_scalar_aggr_can_storage_pushdown(const uint64_t table_id,
   }
     if (OB_FAIL(ret)) {
   } else if (distinct_count > 0 && distinct_count < aggrs.count()) {
-    can_push = false;
+    can_push = false; 
   } else if (can_push && OB_FAIL(append(pushdown_groupby_columns, distinct_exprs))) {
     LOG_WARN("failed to pushdown groupby columns", K(ret));
   }
@@ -15650,7 +15650,7 @@ int ObLogPlan::prepare_text_retrieval_info(const uint64_t ref_table_id,
     || OB_ISNULL(session = get_optimizer_context().get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null pointers", K(ret), KP(get_stmt()), KP(schema_guard), KP(session));
-  } else if (OB_FAIL(schema_guard->get_table_schema(session->get_effective_tenant_id(),
+  } else if (OB_FAIL(schema_guard->get_table_schema(session->get_effective_tenant_id(), 
                                                     ref_table_id,
                                                     table_schema))) {
     LOG_WARN("failed to get table schema", K(ret));
@@ -15670,8 +15670,8 @@ int ObLogPlan::prepare_text_retrieval_info(const uint64_t ref_table_id,
     // no fulltext index, retry
     ret = OB_SCHEMA_EAGAIN;
   } else if (OB_FALSE_IT(inv_idx_tid = index_table_id)) {
-  } else if (OB_FAIL(schema_guard->get_table_schema(session->get_effective_tenant_id(),
-                                                    inv_idx_tid,
+  } else if (OB_FAIL(schema_guard->get_table_schema(session->get_effective_tenant_id(), 
+                                                    inv_idx_tid, 
                                                     inv_idx_schema))) {
     LOG_WARN("failed to get inverted index id", K(ret));
   } else if (OB_ISNULL(inv_idx_schema)) {
@@ -15698,7 +15698,7 @@ int ObLogPlan::prepare_text_retrieval_info(const uint64_t ref_table_id,
         if (OB_UNLIKELY(fwd_idx_name.length() <= fwd_idx_suffix_len)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid argument", K(ret), K(fwd_idx_name), K(fwd_idx_suffix_len));
-        } else if (OB_FALSE_IT(fwd_idx_prefix_name.assign_ptr(fwd_idx_name.ptr(),
+        } else if (OB_FALSE_IT(fwd_idx_prefix_name.assign_ptr(fwd_idx_name.ptr(), 
                                                               fwd_idx_name.length() - fwd_idx_suffix_len))) {
         } else if (fwd_idx_prefix_name.compare(inv_idx_name) == 0) {
           found_fwd_idx = true;
@@ -15715,7 +15715,7 @@ int ObLogPlan::prepare_text_retrieval_info(const uint64_t ref_table_id,
                                                               need_calc_relevance,
                                                               constraints))) {
       LOG_WARN("failed to check need calc relevance", K(ret));
-    } else if (!need_calc_relevance &&
+    } else if (!need_calc_relevance && 
                OB_FAIL(append_array_no_dup(get_optimizer_context().get_query_ctx()->all_expr_constraints_, constraints))) {
       LOG_WARN("failed to append array no dup", K(ret));
     }
@@ -15731,7 +15731,7 @@ int ObLogPlan::prepare_text_retrieval_info(const uint64_t ref_table_id,
   return ret;
 }
 
-int ObLogPlan::prepare_vector_index_info(AccessPath *ap,
+int ObLogPlan::prepare_vector_index_info(AccessPath *ap, 
                                         ObLogicalOperator *scan)
 {
   int ret = OB_SUCCESS;
@@ -15778,7 +15778,7 @@ int ObLogPlan::prepare_vector_index_info(AccessPath *ap,
                 vec_col_id = tmp_index_col->get_column_id();
               }
             }
-          }
+          }  
         }
       }
       if (OB_SUCC(ret) && vec_col_id == OB_INVALID_ID && is_correct_table) {
@@ -15809,7 +15809,7 @@ int ObLogPlan::prepare_vector_index_info(AccessPath *ap,
         LOG_WARN("set query param fail", K(ret));
       } else if (vc_info.is_hnsw_vec_scan()) {
         if (OB_FAIL(prepare_hnsw_vector_index_scan(schema_guard, *table_schema, vec_col_id, table_scan))) {
-          LOG_WARN("fail to init hnsw aux index table info",
+          LOG_WARN("fail to init hnsw aux index table info", 
             K(ret), K(table_scan->get_table_id()), K(vec_col_id), K(vc_info), K(table_schema->get_table_name_str()));
         }
       } else if (vc_info.is_ivf_vec_scan()) {
@@ -15841,7 +15841,7 @@ int ObLogPlan::prepare_spiv_vector_index_scan(ObSchemaGetterGuard *schema_guard,
     uint64_t dim_docid_value_tid = OB_INVALID_ID;
     uint64_t docid_rowkey_tid = OB_INVALID_ID;
     uint64_t rowkey_docid_tid = OB_INVALID_ID;
-
+    
     ObVecIndexInfo &vc_info = table_scan->get_vector_index_info();
     if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(schema_guard,
                                                         table_schema,
@@ -15908,7 +15908,7 @@ int ObLogPlan::prepare_ivf_vector_index_scan(ObSchemaGetterGuard *schema_guard,
       } else if (center_id_tid == OB_INVALID_ID || cid_vec_tid == OB_INVALID_ID || rowkey_cid_tid == OB_INVALID_ID) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to init aux table id", K(center_id_tid), K(cid_vec_tid), K(rowkey_cid_tid), K(ret));
-      // do not change push order, should be same as ObVectorAuxTableIdx
+      // do not change push order, should be same as ObVectorAuxTableIdx 
       } else if (OB_FAIL(vc_info.aux_table_id_.push_back(center_id_tid))) {
         LOG_WARN("fail to push back aux table id", K(ret), K(center_id_tid), K(vc_info.aux_table_id_.count()));
       } else if (OB_FAIL(vc_info.aux_table_id_.push_back(cid_vec_tid))) {
@@ -15941,11 +15941,11 @@ int ObLogPlan::prepare_ivf_vector_index_scan(ObSchemaGetterGuard *schema_guard,
                                                           vec_col_id,
                                                           sq_meta_tid))) {
         LOG_WARN("fail to get rowkey_cid_tid", K(ret), K(vec_col_id), K(table_schema));
-      } else if (center_id_tid == OB_INVALID_ID || cid_vec_tid == OB_INVALID_ID
+      } else if (center_id_tid == OB_INVALID_ID || cid_vec_tid == OB_INVALID_ID 
               || rowkey_cid_tid == OB_INVALID_ID || sq_meta_tid == OB_INVALID_ID) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to init aux table id", K(center_id_tid), K(cid_vec_tid), K(rowkey_cid_tid), K(sq_meta_tid), K(ret));
-      // do not change push order, should be same as ObVectorAuxTableIdx
+      // do not change push order, should be same as ObVectorAuxTableIdx 
       } else if (OB_FAIL(vc_info.aux_table_id_.push_back(center_id_tid))) {
         LOG_WARN("fail to push back aux table id", K(ret), K(center_id_tid), K(vc_info.aux_table_id_.count()));
       } else if (OB_FAIL(vc_info.aux_table_id_.push_back(cid_vec_tid))) {
@@ -15980,11 +15980,11 @@ int ObLogPlan::prepare_ivf_vector_index_scan(ObSchemaGetterGuard *schema_guard,
                                                           vec_col_id,
                                                           pq_cid_pid_tid))) {
         LOG_WARN("fail to get pq_cid_pid_tid", K(ret), K(pq_cid_pid_tid), K(table_schema));
-      } else if (center_id_tid == OB_INVALID_ID || pq_id_tid == OB_INVALID_ID
+      } else if (center_id_tid == OB_INVALID_ID || pq_id_tid == OB_INVALID_ID 
               || pq_code_tid == OB_INVALID_ID || pq_cid_pid_tid == OB_INVALID_ID) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to init aux table id", K(ret), K(center_id_tid), K(pq_id_tid), K(pq_code_tid), K(pq_cid_pid_tid));
-      // do not change push order, should be same as ObVectorAuxTableIdx
+      // do not change push order, should be same as ObVectorAuxTableIdx 
       } else if (OB_FAIL(vc_info.aux_table_id_.push_back(center_id_tid))) {
         LOG_WARN("fail to push back aux table id", K(ret), K(center_id_tid), K(vc_info.aux_table_id_.count()));
       } else if (OB_FAIL(vc_info.aux_table_id_.push_back(pq_code_tid))) {
@@ -15993,7 +15993,7 @@ int ObLogPlan::prepare_ivf_vector_index_scan(ObSchemaGetterGuard *schema_guard,
         LOG_WARN("fail to push back aux table id", K(ret), K(pq_cid_pid_tid), K(vc_info.aux_table_id_.count()));
       } else if (OB_FAIL(vc_info.aux_table_id_.push_back(pq_id_tid))) {
         LOG_WARN("fail to push back aux table id", K(ret), K(pq_id_tid), K(vc_info.aux_table_id_.count()));
-      }
+      } 
     }
     if (OB_SUCC(ret)) {
       table_scan->set_index_back(true);
@@ -16098,13 +16098,13 @@ int ObLogPlan::prepare_multivalue_retrieval_scan(ObLogicalOperator *scan)
   return ret;
 }
 
-int ObLogPlan::try_push_topn_into_domain_scan(ObLogicalOperator *&top,
-                                              ObRawExpr *topn_expr,
-                                              ObRawExpr *limit_expr,
-                                              ObRawExpr *offset_expr,
+int ObLogPlan::try_push_topn_into_domain_scan(ObLogicalOperator *&top, 
+                                              ObRawExpr *topn_expr, 
+                                              ObRawExpr *limit_expr, 
+                                              ObRawExpr *offset_expr, 
                                               bool is_fetch_with_ties,
                                               bool need_exchange,
-                                              const ObIArray<OrderItem> &sort_keys,
+                                              const ObIArray<OrderItem> &sort_keys, 
                                               bool &need_further_sort)
 {
   int ret = OB_SUCCESS;
@@ -16116,24 +16116,24 @@ int ObLogPlan::try_push_topn_into_domain_scan(ObLogicalOperator *&top,
     // do nothing
   } else if (OB_FALSE_IT(table_scan = static_cast<ObLogTableScan*>(top))) {
   } else if (table_scan->is_text_retrieval_scan()) {
-    if (OB_FAIL(try_push_topn_into_text_retrieval_scan(top,
-                                                      topn_expr,
+    if (OB_FAIL(try_push_topn_into_text_retrieval_scan(top, 
+                                                      topn_expr, 
                                                       get_stmt()->get_limit_expr(),
-                                                      get_stmt()->get_offset_expr(),
+                                                      get_stmt()->get_offset_expr(), 
                                                       is_fetch_with_ties,
                                                       need_exchange,
-                                                      sort_keys,
+                                                      sort_keys, 
                                                       need_further_sort))) {
       LOG_WARN("failed to push topn into text retrieval scan", K(ret));
     }
   } else if (table_scan->is_vec_idx_scan_post_filter() || table_scan->is_ivf_pq_scan() || table_scan->is_hnsw_vec_scan()) {
-    if (OB_FAIL(try_push_topn_into_vector_index_scan(top,
-                                                    topn_expr,
+    if (OB_FAIL(try_push_topn_into_vector_index_scan(top, 
+                                                    topn_expr, 
                                                     get_stmt()->get_limit_expr(),
-                                                    get_stmt()->get_offset_expr(),
+                                                    get_stmt()->get_offset_expr(), 
                                                     is_fetch_with_ties,
                                                     need_exchange,
-                                                    sort_keys,
+                                                    sort_keys, 
                                                     need_further_sort))) {
       LOG_WARN("failed to push topn into vector index scan", K(ret));
     }
@@ -16141,13 +16141,13 @@ int ObLogPlan::try_push_topn_into_domain_scan(ObLogicalOperator *&top,
   return ret;
 }
 
-int ObLogPlan::try_push_topn_into_vector_index_scan(ObLogicalOperator *&top,
-                                                    ObRawExpr *topn_expr,
-                                                    ObRawExpr *limit_expr,
-                                                    ObRawExpr *offset_expr,
+int ObLogPlan::try_push_topn_into_vector_index_scan(ObLogicalOperator *&top, 
+                                                    ObRawExpr *topn_expr, 
+                                                    ObRawExpr *limit_expr, 
+                                                    ObRawExpr *offset_expr, 
                                                     bool is_fetch_with_ties,
                                                     bool need_exchange,
-                                                    const ObIArray<OrderItem> &sort_keys,
+                                                    const ObIArray<OrderItem> &sort_keys, 
                                                     bool &need_further_sort)
 {
   int ret = OB_SUCCESS;
@@ -16162,8 +16162,8 @@ int ObLogPlan::try_push_topn_into_vector_index_scan(ObLogicalOperator *&top,
   } else if (log_op_def::LOG_TABLE_SCAN != top->get_type()) {
     // do nothing
   } else if (OB_FALSE_IT(table_scan = static_cast<ObLogTableScan*>(top))) {
-  } else if ((table_scan->get_filter_exprs().count() != 0 ||
-             table_scan->get_pushdown_filter_exprs().count() != 0)
+  } else if ((table_scan->get_filter_exprs().count() != 0 || 
+             table_scan->get_pushdown_filter_exprs().count() != 0) 
              && !table_scan->get_vector_index_info().vec_index_with_filter()) {
     // do nothing, topn pushdown requires that only match filter exists on the base table.
   } else {
@@ -16181,15 +16181,15 @@ int ObLogPlan::try_push_topn_into_vector_index_scan(ObLogicalOperator *&top,
       LOG_WARN("failed to set op ordering", K(ret));
     } else {
       // check if single partion or non-partition, maybe need more check
-      // need_further_sort: if add topn
+      // need_further_sort: if add topn 
       // if there is filter or pushdown filter, vector will return more data than limit n, need to add a topn
       // ivf pq index always need top n to calculate vector distance
       need_further_sort = table_scan->is_distributed() || table_scan->get_table_partition_info()->get_table_location().is_partitioned()
                         || (vc_info.vec_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER
                         && (table_scan->get_filter_exprs().count() != 0 || table_scan->get_pushdown_filter_exprs().count() != 0))
                         || vc_info.is_hnsw_bq_scan();
-      if (vc_info.vec_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER
-          && table_scan->get_filter_exprs().count() == 0
+      if (vc_info.vec_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER 
+          && table_scan->get_filter_exprs().count() == 0 
           && table_scan->get_pushdown_filter_exprs().count() == 0) {
         vc_info.selectivity_ = 1;
       }
@@ -16198,13 +16198,13 @@ int ObLogPlan::try_push_topn_into_vector_index_scan(ObLogicalOperator *&top,
   return ret;
 }
 
-int ObLogPlan::try_push_topn_into_text_retrieval_scan(ObLogicalOperator *&top,
-                                                      ObRawExpr *topn_expr,
-                                                      ObRawExpr *limit_expr,
-                                                      ObRawExpr *offset_expr,
+int ObLogPlan::try_push_topn_into_text_retrieval_scan(ObLogicalOperator *&top, 
+                                                      ObRawExpr *topn_expr, 
+                                                      ObRawExpr *limit_expr, 
+                                                      ObRawExpr *offset_expr, 
                                                       bool is_fetch_with_ties,
                                                       bool need_exchange,
-                                                      const ObIArray<OrderItem> &sort_keys,
+                                                      const ObIArray<OrderItem> &sort_keys, 
                                                       bool &need_further_sort)
 {
   int ret = OB_SUCCESS;
@@ -16221,10 +16221,10 @@ int ObLogPlan::try_push_topn_into_text_retrieval_scan(ObLogicalOperator *&top,
   } else if (OB_FALSE_IT(table_scan = static_cast<ObLogTableScan*>(top))) {
   } else if (!table_scan->is_text_retrieval_scan() || table_scan->use_index_merge()) {
     // do nothing
-  } else if (table_scan->get_filter_exprs().count() != 0 ||
+  } else if (table_scan->get_filter_exprs().count() != 0 || 
              table_scan->get_pushdown_filter_exprs().count() != 0) {
     // do nothing, topn pushdown requires that only match filter exists on the base table.
-  } else if (sort_keys.count() >= 1 && OB_NOT_NULL(sort_keys.at(0).expr_) &&
+  } else if (sort_keys.count() >= 1 && OB_NOT_NULL(sort_keys.at(0).expr_) && 
              sort_keys.at(0).expr_ == table_scan->get_text_retrieval_info().match_expr_) {
     // only accept match expr as prefix sort key.
     has_multi_sort_keys = sort_keys.count() == 1 ? false : true;
@@ -16278,8 +16278,8 @@ int ObLogPlan::init_lateral_table_depend_info(const ObIArray<TableItem*> &table_
       } else if (OB_FAIL(table_depend_infos_.push_back(info))) {
         LOG_WARN("failed to push back info", K(ret));
       }
-    }
-
+    } 
+    
   }
   if (OB_SUCC(ret)) {
     LOG_TRACE("succeed to init function table depend info", K(table_depend_infos_));
@@ -16374,12 +16374,12 @@ int ObLogPlan::check_can_scala_storage_pushdown(ObSQLSessionInfo &session_info,
     LOG_WARN("get unexpected null", K(ret));
   } else if (group_expr->get_expr_type() != T_FUN_SYS_CALC_PARTITION_ID) {
     // do nothing
-      } else if (OB_FAIL(global_hint.opt_params_.get_bool_opt_param(ObOptParamHint::ROWSETS_ENABLED,
-                                                                hint_rowsets_enable,
+      } else if (OB_FAIL(global_hint.opt_params_.get_bool_opt_param(ObOptParamHint::ROWSETS_ENABLED, 
+                                                                hint_rowsets_enable, 
                                                                 is_exist_hint))) {
     LOG_WARN("failed to get bool opt param", K(ret));
   } else {
-    bool rowsets_enabled = is_exist_hint ? hint_rowsets_enable :
+    bool rowsets_enabled = is_exist_hint ? hint_rowsets_enable : 
                                            (tenant_config.is_valid() && tenant_config->_rowsets_enabled);
     can_pushdown = rowsets_enabled;
   }

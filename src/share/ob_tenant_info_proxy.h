@@ -42,9 +42,9 @@ namespace share
 {
 
 bool is_valid_tenant_scn(
-  const share::SCN &sync_scn,
+  const share::SCN &sync_scn, 
   const share::SCN &replayable_scn,
-  const share::SCN &readable_scn,
+  const share::SCN &readable_scn, 
   const share::SCN &recovery_until_scn);
 
 SCN gen_new_sync_scn(const share::SCN &cur_sync_scn, const share::SCN &desired_sync_scn, const share::SCN &cur_recovery_until_scn);
@@ -92,16 +92,16 @@ public:
  bool is_clone() const { return tenant_role_.is_clone(); }
 
  /**
-  * @description:
-  * STS is STANDBY tenant's GTS. It is ready only when tenant is STANDBY and not in 'switchover to standby' status.
+  * @description: 
+  * STS is STANDBY tenant's GTS. It is ready only when tenant is STANDBY and not in 'switchover to standby' status. 
   * Because STS will be changed when switchover to standby.
   */
- bool is_sts_ready() const { return !(tenant_role_.is_primary()
+ bool is_sts_ready() const { return !(tenant_role_.is_primary() 
                                       || tenant_is_switchover_to_standby()); }
 
  // ************* Functions that describe what tenant is doing *********************
  // tenant is in switchover from primary to standby
- bool tenant_is_switchover_to_standby() const { return is_prepare_switching_to_standby_status()
+ bool tenant_is_switchover_to_standby() const { return is_prepare_switching_to_standby_status() 
                                                        || is_switching_to_standby_status(); }
 
  // ObTenantSwitchoverStatus related function
@@ -109,12 +109,12 @@ public:
   bool is_##STATUS##_status() const { return switchover_status_.is_##STATUS##_status(); };
 
 IS_TENANT_STATUS(normal) 
-IS_TENANT_STATUS(switching_to_primary)
-IS_TENANT_STATUS(prepare_flashback_for_failover_to_primary)
+IS_TENANT_STATUS(switching_to_primary) 
+IS_TENANT_STATUS(prepare_flashback_for_failover_to_primary) 
 IS_TENANT_STATUS(flashback) 
-IS_TENANT_STATUS(switching_to_standby)
-IS_TENANT_STATUS(prepare_switching_to_standby)
-IS_TENANT_STATUS(prepare_flashback_for_switch_to_primary)
+IS_TENANT_STATUS(switching_to_standby) 
+IS_TENANT_STATUS(prepare_switching_to_standby) 
+IS_TENANT_STATUS(prepare_flashback_for_switch_to_primary) 
 #undef IS_TENANT_STATUS 
 
   TO_STRING_KV(K_(tenant_id), "tenant_role", tenant_role_.to_str(),
@@ -198,23 +198,23 @@ public:
                               ObAllTenantInfo &tenant_info);
 
   /**
-   * @description: get target tenant's tenant_info from inner table
+   * @description: get target tenant's tenant_info from inner table 
    * @param[in] tenant_id
    * @param[in] proxy
    * @param[in] for_update select for_update
-   * @param[out] ora_rowscn
-   * @param[out] tenant_info
+   * @param[out] ora_rowscn 
+   * @param[out] tenant_info 
    */
   static int load_tenant_info(const uint64_t tenant_id, ObISQLClient *proxy,
                               const bool for_update,
                               int64_t &ora_rowscn,
                               ObAllTenantInfo &tenant_info);
   /**
-   * @description: load tenant_info fro __all_tenant_info without fix max_ls_id
+   * @description: load tenant_info fro __all_tenant_info without fix max_ls_id 
    * @param[in] tenant_id
    * @param[in] proxy
-   * @param[out] tenant_info
-   * @param[out] max_ls_id of __all_tenant_info
+   * @param[out] tenant_info 
+   * @param[out] max_ls_id of __all_tenant_info 
    */
 private:
     static int load_pure_tenant_info_(const uint64_t tenant_id, ObISQLClient *proxy,
@@ -223,13 +223,13 @@ private:
                                 ObAllTenantInfo &tenant_info);
   public:
     /**
-     * @description: update tenant recovery status
+     * @description: update tenant recovery status 
      * @param[in] tenant_id
      * @param[in] trans
-     * @param[in] old_tenant_info : tenant_info get from load for update
+     * @param[in] old_tenant_info : tenant_info get from load for update 
      * @param[in] status: the target status while update recovery status
-     * @param[in] sync_scn : sync point
-     * @param[in] replay_scn : max replay point
+     * @param[in] sync_scn : sync point 
+     * @param[in] replay_scn : max replay point 
      * @param[in] reabable_scn : standby readable scn
      */
     static int update_tenant_recovery_status_in_trans(const uint64_t tenant_id,
@@ -247,7 +247,7 @@ private:
      * @param[in] status : target switchover status to be update
      * return :
      *   OB_SUCCESS update tenant switchover status successfully
-     *   OB_NEED_RETRY switchover_epoch or old_status not match, need retry
+     *   OB_NEED_RETRY switchover_epoch or old_status not match, need retry 
      */
     static int update_tenant_switchover_status(const uint64_t tenant_id, ObISQLClient *proxy,
                                   int64_t switchover_epoch,
@@ -268,13 +268,13 @@ private:
      *   OB_SUCCESS update tenant role successfully
      */
     static int update_tenant_status(
-      const uint64_t tenant_id,
+      const uint64_t tenant_id, 
       common::ObMySQLTransaction &trans,
       const ObTenantRole new_role,
       const ObTenantSwitchoverStatus &old_status,
-      const ObTenantSwitchoverStatus &new_status,
-      const share::SCN &sync_scn,
-      const share::SCN &replayable_scn,
+      const ObTenantSwitchoverStatus &new_status, 
+      const share::SCN &sync_scn, 
+      const share::SCN &replayable_scn, 
       const share::SCN &readable_scn,
       const share::SCN &recovery_until_scn,
       const int64_t old_switchover_epoch);
@@ -296,8 +296,8 @@ private:
       const uint64_t tenant_id,
       common::ObMySQLProxy *proxy,
       int64_t old_switchover_epoch,
-      const ObTenantRole &new_role,
-      const ObTenantSwitchoverStatus &old_status,
+      const ObTenantRole &new_role, 
+      const ObTenantSwitchoverStatus &old_status, 
       const ObTenantSwitchoverStatus &new_status,
       int64_t &new_switchover_epoch);
 
@@ -312,7 +312,7 @@ private:
      * @param[out] new_switchover_epoch, for operator concurrency
      * return :
      *   OB_SUCCESS update tenant role successfully
-     *   OB_NEED_RETRY old_switchover_epoch not match, need retry
+     *   OB_NEED_RETRY old_switchover_epoch not match, need retry 
      */
     static int update_tenant_role_in_trans(
       const uint64_t tenant_id,
@@ -330,12 +330,12 @@ private:
      *               max_ls_id can not be zero, create ls can update.
      * @param[in] tenant_id
      * @param[in] max_ls_id : max ls id
-     * @param[in] trans : must be in trans
+     * @param[in] trans : must be in trans 
      * @param[in] for_upgrade : if for upgrade, must update max ls id
      * return :
      *   OB_SUCCESS update tenant max ls id success
      *   OB_ERR_UNEXPECTED max ls id can not fallback, need retry
-     */
+     */ 
     static int update_tenant_max_ls_id(const uint64_t tenant_id, const share::ObLSID &max_ls_id,
                                        ObMySQLTransaction &trans, const bool for_upgrade);
 
@@ -348,8 +348,8 @@ private:
      *   OB_SUCCESS update recovery_until_scn successfully
      */
     static int update_tenant_recovery_until_scn(
-      const uint64_t tenant_id,
-      common::ObMySQLTransaction &trans,
+      const uint64_t tenant_id, 
+      common::ObMySQLTransaction &trans, 
       const int64_t switchover_epoch,
       const share::SCN &recovery_until_scn);
 
@@ -361,20 +361,20 @@ private:
      * @param[out] new_switchover_epoch
      */
     static int get_new_switchover_epoch_(
-      const int64_t old_switchover_epoch,
+      const int64_t old_switchover_epoch, 
       const ObTenantSwitchoverStatus &old_status,
-      const ObTenantSwitchoverStatus &new_status,
+      const ObTenantSwitchoverStatus &new_status, 
       int64_t &new_switchover_epoch);
 
     /**
      * @description: update tenant log mode in normal switchover status
      * @param[in] tenant_id
-     * @param[in] trans
+     * @param[in] trans 
      * @param[in] old_log_mode old log mode
      * @param[in] new_log_mode new log mode
      */
     static int update_tenant_log_mode(
-      const uint64_t tenant_id,
+      const uint64_t tenant_id, 
       ObISQLClient *proxy,
       const ObArchiveMode &old_log_mode,
       const ObArchiveMode &new_log_mode);
@@ -382,14 +382,14 @@ private:
     /**
      * @description: update tenant restore data mode
      * @param[in] tenant_id
-     * @param[in] proxy
+     * @param[in] proxy 
      * @param[in] new_log_mode new log mode
      */
     static int update_tenant_restore_data_mode(
-      const uint64_t tenant_id,
+      const uint64_t tenant_id, 
       ObISQLClient *proxy,
       const ObRestoreDataMode &new_restore_data_mode);
-
+      
 };
 }
 }

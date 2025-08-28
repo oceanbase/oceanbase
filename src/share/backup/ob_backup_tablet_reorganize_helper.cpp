@@ -101,7 +101,7 @@ int ObBackupTabletReorganizeHelper::check_tablet_has_reorganized(common::ObMySQL
   return ret;
 }
 
-int ObBackupTabletReorganizeHelper::get_leaf_children(ObMySQLProxy &sql_proxy,
+int ObBackupTabletReorganizeHelper::get_leaf_children(ObMySQLProxy &sql_proxy, 
     const uint64_t tenant_id, const common::ObTabletID &tablet_id, const share::ObLSID &ls_id,
     common::ObIArray<ObTabletID> &descendent_list)
 {
@@ -119,7 +119,7 @@ int ObBackupTabletReorganizeHelper::get_leaf_children(ObMySQLProxy &sql_proxy,
   return ret;
 }
 
-int ObBackupTabletReorganizeHelper::get_leaf_children(ObMySQLProxy &sql_proxy,
+int ObBackupTabletReorganizeHelper::get_leaf_children(ObMySQLProxy &sql_proxy, 
     const uint64_t tenant_id, const common::ObIArray<common::ObTabletID> &tablet_list,
     const share::ObLSID &ls_id, common::ObIArray<common::ObTabletID> &descendent_list)
 {
@@ -149,7 +149,7 @@ int ObBackupTabletReorganizeHelper::get_leaf_children(ObMySQLProxy &sql_proxy,
         LOG_WARN("failed to convert set to array", K(ret));
       }
     }
-  }
+  } 
   return ret;
 }
 
@@ -193,7 +193,7 @@ int ObBackupTabletReorganizeHelper::get_leaf_children_from_history(const uint64_
 }
 
 int ObBackupTabletReorganizeHelper::get_all_tablet_reorganize_history_infos_(
-    ObMySQLProxy &sql_proxy, const uint64_t tenant_id, const share::ObLSID &ls_id,
+    ObMySQLProxy &sql_proxy, const uint64_t tenant_id, const share::ObLSID &ls_id, 
     common::ObIArray<ObTabletReorganizeInfo> &history_infos)
 {
   int ret = OB_SUCCESS;

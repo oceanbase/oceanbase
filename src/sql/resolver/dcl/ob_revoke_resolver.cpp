@@ -374,7 +374,7 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
               revoke_stmt->set_grant_level(grant_level);
             }
 
-            if (OB_SUCC(ret)
+            if (OB_SUCC(ret) 
                 && grant_level != OB_PRIV_CATALOG_LEVEL
                 && grant_level != OB_PRIV_SENSITIVE_RULE_LEVEL) {
               if (OB_FAIL(check_and_convert_name(db, table))) {
@@ -429,11 +429,11 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
         if (OB_SUCC(ret) && (NULL != privs_node)) {
           ObPrivSet priv_set = 0;
           uint64_t compat_version = 0;
-          const uint64_t tenant_id = params_.session_info_->get_effective_tenant_id();
+          const uint64_t tenant_id = params_.session_info_->get_effective_tenant_id();  
           if (OB_ISNULL(allocator_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected error", K(ret));
-          } else if (OB_FAIL(ObGrantResolver::resolve_priv_set(tenant_id, privs_node, grant_level, priv_set, revoke_stmt,
+          } else if (OB_FAIL(ObGrantResolver::resolve_priv_set(tenant_id, privs_node, grant_level, priv_set, revoke_stmt, 
                                                         params_.schema_checker_, params_.session_info_,
                                                         *allocator_))) {
             LOG_WARN("Resolve priv set error", K(ret));
@@ -520,7 +520,7 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
                 ObString host_name;
                 if (user_hostname_node->children_[0]->type_ == T_FUN_SYS_CURRENT_USER) {
                   user_name = params_.session_info_->get_user_name();
-                } else {
+                } else {  
                   user_name = ObString(static_cast<int32_t>(user_hostname_node->children_[0]->str_len_),
                                    user_hostname_node->children_[0]->str_value_);
                 }
@@ -528,7 +528,7 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
                   if (user_hostname_node->children_[0]->type_ == T_FUN_SYS_CURRENT_USER) {
                     host_name = params_.session_info_->get_host_name();
                   } else {
-                    host_name.assign_ptr(OB_DEFAULT_HOST_NAME,
+                    host_name.assign_ptr(OB_DEFAULT_HOST_NAME, 
                                        static_cast<int32_t>(STRLEN(OB_DEFAULT_HOST_NAME)));
                   }
                 } else {

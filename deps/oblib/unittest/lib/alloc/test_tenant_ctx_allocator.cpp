@@ -32,7 +32,7 @@ struct TestTenantCtxAllocator
   }
   int set_tenant_memory_mgr() {return ctx_allocator_.set_tenant_memory_mgr(); }
   int set_limit(int64_t size) { return ctx_allocator_.set_limit(size); }
-
+  
   ObTenantCtxAllocatorV2 ctx_allocator_;
   ObTenantCtxAllocator allocator_;
 };
@@ -367,7 +367,7 @@ TEST(TestTenantAllocator, sub_ctx_id)
       NULL != ptrs[0] && NULL != ptrs[1]) {
     AObject *obj_0 = reinterpret_cast<AObject*>((char*)ptrs[0] - AOBJECT_HEADER_SIZE);
     AObject *obj_1 = reinterpret_cast<AObject*>((char*)ptrs[1] - AOBJECT_HEADER_SIZE);
-    ASSERT_NE(AChunk::ptr2chunk(obj_0)->ptr2blk(obj_0)->obj_set_,
+    ASSERT_NE(AChunk::ptr2chunk(obj_0)->ptr2blk(obj_0)->obj_set_, 
               AChunk::ptr2chunk(obj_1)->ptr2blk(obj_1)->obj_set_);
   }
 

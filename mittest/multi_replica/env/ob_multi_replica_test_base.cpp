@@ -438,19 +438,19 @@ int ObMultiReplicaTestBase::init_replicas_()
         std::string rpc_port_str = "";
         if (OB_FAIL(wait_event_finish("ZONE" + std::to_string(j + 1) + "_RPC_PORT", rpc_port_str,
                                       30000 /*30s*/, 100 /*100ms*/))) {
-
+    
           SERVER_LOG(ERROR, "read RPC_PORT event failed", K(ret), K(j), K(rpc_port_str.c_str()));
         } else {
-
+    
           int tmp_rpc_port = std::stoi(rpc_port_str);
           rpc_ports_.push_back(tmp_rpc_port);
-
+    
           rs_list_ += local_ip_ + ":" + rpc_port_str + ":" + std::to_string(tmp_rpc_port + 1);
-
+    
           if (j < MAX_ZONE_COUNT) {
             rs_list_ += ";";
           }
-
+    
           obrpc::ObServerInfo server_info;
           std::string zone_dir = "zone" + std::to_string(j + 1);
           server_info.zone_ = zone_dir.c_str();

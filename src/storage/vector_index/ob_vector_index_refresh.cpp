@@ -288,7 +288,7 @@ int ObVectorIndexRefresher::lock_domain_table_for_refresh() {
 
 int ObVectorIndexRefresher::do_refresh() {
   int ret = OB_SUCCESS;
-  uint64_t tenant_id = OB_INVALID_ID;
+  uint64_t tenant_id = OB_INVALID_ID; 
   ObSQLSessionInfo *session_info = nullptr;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *domain_table_schema = nullptr;
@@ -300,7 +300,7 @@ int ObVectorIndexRefresher::do_refresh() {
   ObTimeoutCtx timeout_ctx;
   const int64_t DDL_INNER_SQL_EXECUTE_TIMEOUT =
       ObDDLUtil::calc_inner_sql_execute_timeout();
-
+  
   ObArray<uint64_t> col_ids;
   if (OB_ISNULL(refresh_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -358,7 +358,7 @@ int ObVectorIndexRefresher::do_refresh() {
       // Return OB_EAGAIN for dbms_vector.refresh_index_inner to do inner retry.
       // For dbms_vector.refresh_index, the error code will return to user.
       ret = OB_EAGAIN;
-      LOG_WARN("delta buffer table or index id table is not available", K(ret), K(domain_table_schema->get_index_status()),
+      LOG_WARN("delta buffer table or index id table is not available", K(ret), K(domain_table_schema->get_index_status()), 
               K(index_id_tb_schema->get_index_status()));
     } else {
       ret = OB_ERR_INDEX_UNAVAILABLE;
@@ -612,7 +612,7 @@ int ObVectorIndexRefresher::do_rebuild() {
     bool is_valid = true;
     if (!refresh_ctx_->idx_parameters_.empty() && OB_FAIL(ob_write_string(allocator, refresh_ctx_->idx_parameters_, idx_parameters))) {
       LOG_WARN("fail to write string", K(ret), K(refresh_ctx_->idx_parameters_));
-    } else if (!idx_parameters.empty()
+    } else if (!idx_parameters.empty() 
         && OB_FAIL(ObVectorIndexUtil::construct_rebuild_index_param(*base_table_schema, domain_table_schema->get_index_params(), idx_parameters, &allocator))) {
       LOG_WARN("fail to construct rebuild index params", K(ret), K(refresh_ctx_->idx_parameters_));
     } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, refresh_ctx_->index_id_tb_id_, index_id_tb_schema))) {
@@ -632,8 +632,8 @@ int ObVectorIndexRefresher::do_rebuild() {
     LOG_WARN("not support rebuild ivf index with params", K(ret), K(idx_parameters));
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id,
-                                                      domain_table_schema->get_database_id(),
+  } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, 
+                                                      domain_table_schema->get_database_id(), 
                                                       db_schema))) {
     LOG_WARN("fail to get db schema", KR(ret), K(tenant_id), K(domain_table_schema->get_database_id()));
   } else if (OB_ISNULL(db_schema)) {
@@ -651,18 +651,18 @@ int ObVectorIndexRefresher::do_rebuild() {
     // no need to get table cnt if not hnsw index
   } else if (OB_FAIL(get_table_row_count(db_schema->get_database_name_str(),
                                          base_table_schema->get_table_name_str(),
-                                         refresh_ctx_->scn_,
+                                         refresh_ctx_->scn_, 
                                          base_table_row_cnt))) {
     LOG_WARN("fail to get base table row count", KR(ret),
              K(base_table_schema->get_table_name_str()));
   } else if (OB_FAIL(get_table_row_count(db_schema->get_database_name_str(),
-                                         domain_table_schema->get_table_name_str(),
-                                         refresh_ctx_->scn_,
+                                         domain_table_schema->get_table_name_str(), 
+                                         refresh_ctx_->scn_, 
                                          domain_table_row_cnt))) {
     LOG_WARN("fail to get delta_buf_table row count", KR(ret), K(domain_table_schema->get_table_name_str()));
-  } else if (OB_FAIL(get_table_row_count(db_schema->get_database_name_str(),
-                                         index_id_tb_schema->get_table_name_str(),
-                                         refresh_ctx_->scn_,
+  } else if (OB_FAIL(get_table_row_count(db_schema->get_database_name_str(), 
+                                         index_id_tb_schema->get_table_name_str(), 
+                                         refresh_ctx_->scn_, 
                                          index_id_table_row_cnt))) {
     LOG_WARN("fail to get index_id_table row count", KR(ret), K(index_id_tb_schema->get_table_name_str()));
   } else if (0 != base_table_row_cnt &&
@@ -672,8 +672,8 @@ int ObVectorIndexRefresher::do_rebuild() {
     // rebuilding is not triggered.
     triggered = false;
     LOG_WARN("no need to start rebuild", K(base_table_row_cnt));
-  }
-
+  } 
+  
   if (OB_FAIL(ret)) {
   } else if (domain_table_schema->is_vec_hnsw_index() &&
              !idx_parameters.empty() &&

@@ -448,7 +448,7 @@ public:
   void diagnose_count_info();
   int diagnose_tenant_major_merge();
   int64_t get_cnt() { return idx_; }
-  ObCompactionDiagnoseInfo::ObDiagnoseStatus gen_diagnose_status(int64_t scn)
+  ObCompactionDiagnoseInfo::ObDiagnoseStatus gen_diagnose_status(int64_t scn) 
   {
     return ObTimeUtility::current_time_ns() > scn + TOLERATE_MEDIUM_SCHEDULE_INTERVAL ?
         ObCompactionDiagnoseInfo::DIA_STATUS_FAILED :
@@ -824,7 +824,7 @@ int ObDiagnoseInfoParam<int_size, str_size>::fill_comment(char *buf, const int64
     STORAGE_LOG(WARN, "unexpected type", K(ret), K(type), K(OB_DIAGNOSE_INFO_PARAMS[struct_type_].max_type_));
   } else if (OB_DIAGNOSE_INFO_PARAMS[struct_type_].info_type[type].int_size != int_size) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexpected int size", K(ret), K_(struct_type), K(type), K(int_size),
+    STORAGE_LOG(WARN, "unexpected int size", K(ret), K_(struct_type), K(type), K(int_size), 
         K(OB_DIAGNOSE_INFO_PARAMS[struct_type_].info_type[type].int_size));
   } else {
     ObIDiagnoseInfoMgr::add_compaction_info_param(buf, buf_len, OB_DIAGNOSE_INFO_PARAMS[struct_type_].info_type[type].info_str);

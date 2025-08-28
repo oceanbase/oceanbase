@@ -90,13 +90,13 @@ void ObBackupService::run2()
         LOG_INFO("backup service is disable, need wait.");
         task_scheduler_->wakeup();
       }
-    }
+    } 
     idle();
   }
   LOG_INFO("[backupService]backup service stop");
 }
 
-bool ObBackupService::can_schedule()
+bool ObBackupService::can_schedule() 
 {
   bool can = false;
   if (is_sys_tenant(tenant_id_)) {
@@ -130,9 +130,9 @@ void ObBackupService::destroy()
 */
 
 int ObBackupDataService::sub_init(
-    common::ObMySQLProxy &sql_proxy,
+    common::ObMySQLProxy &sql_proxy, 
     obrpc::ObSrvRpcProxy &rpc_proxy,
-    schema::ObMultiVersionSchemaService &schema_service,
+    schema::ObMultiVersionSchemaService &schema_service, 
     share::ObLocationService &loacation_service,
     ObBackupTaskScheduler &task_scheduler)
 {
@@ -189,7 +189,7 @@ int ObBackupDataService::get_need_reload_task(
 int ObBackupDataService::handle_backup_database(const obrpc::ObBackupDatabaseArg &arg)
 {
   int ret = OB_SUCCESS;
-
+  
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -226,9 +226,9 @@ int ObBackupDataService::handle_backup_database_cancel(const uint64_t tenant_id,
 */
 
 int ObBackupCleanService::sub_init(
-    common::ObMySQLProxy &sql_proxy,
+    common::ObMySQLProxy &sql_proxy, 
     obrpc::ObSrvRpcProxy &rpc_proxy,
-    schema::ObMultiVersionSchemaService &schema_service,
+    schema::ObMultiVersionSchemaService &schema_service, 
     share::ObLocationService &loacation_service,
     ObBackupTaskScheduler &task_scheduler)
 {
@@ -284,7 +284,7 @@ ObIBackupJobScheduler *ObBackupCleanService::get_scheduler(const BackupJobType &
 }
 
 int ObBackupCleanService::get_need_reload_task(
-    common::ObIAllocator &allocator, common::ObIArray<ObBackupScheduleTask *> &tasks)
+    common::ObIAllocator &allocator, common::ObIArray<ObBackupScheduleTask *> &tasks) 
 {
   int ret = OB_SUCCESS;
   ObSArray<ObBackupScheduleTask *> need_reload_tasks;

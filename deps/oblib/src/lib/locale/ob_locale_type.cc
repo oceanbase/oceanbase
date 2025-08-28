@@ -140,6 +140,6 @@ OB_LOCALE ob_locale_zh_TW(57, "zh_TW", "Chinese - Taiwan", false,
                           '.',    /* decimal point zh_TW */
                           ',',    /* thousands_sep zh_TW */
                           "\x03" /* grouping      zh_TW */);
-
+                          
 } // common
 } // oceanbase

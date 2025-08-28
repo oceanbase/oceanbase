@@ -33,7 +33,7 @@ ObAggGroupVec::ObAggGroupVec()
   agg_cells_.set_attr(ObMemAttr(MTL_ID(), "PDAggStore"));
 }
 
-ObAggGroupVec::ObAggGroupVec(ObColumnParam* col_param, sql::ObExpr* project_expr,
+ObAggGroupVec::ObAggGroupVec(ObColumnParam* col_param, sql::ObExpr* project_expr, 
                              const int32_t col_offset, const int32_t col_index)
   : agg_cells_(),
     col_param_(col_param),
@@ -335,7 +335,7 @@ int ObAggregatedStoreVec::init_agg_groups(const ObTableAccessParam &param)
     share::schema::ObColumnParam *col_param = OB_COUNT_AGG_PD_COLUMN_ID == col_offset ? nullptr : param.iter_param_.get_col_params()->at(col_offset);
     if (i == 0 || (col_offset != pre_offset && OB_COUNT_AGG_PD_COLUMN_ID != col_offset)) {
       sql::ObExpr *project_expr = OB_COUNT_AGG_PD_COLUMN_ID == col_offset ? nullptr : agg_infos.at(agg_idx).param_exprs_[0];
-      if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObAggGroupVec))) ||
+      if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObAggGroupVec))) || 
           OB_ISNULL(agg_group = new (buf) ObAggGroupVec(col_param, project_expr, col_offset, col_index))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("Faile to alloc memory for ObAggrGroupVec", K(ret));
@@ -354,7 +354,7 @@ int ObAggregatedStoreVec::init_agg_groups(const ObTableAccessParam &param)
           exclude_null = col_param->is_nullable_for_write();
         }
       }
-      ObAggCellVecBasicInfo basic_info(pd_agg_ctx_.agg_ctx_, pd_agg_ctx_.rows_, pd_agg_ctx_.row_meta_, pd_agg_ctx_.batch_rows_,
+      ObAggCellVecBasicInfo basic_info(pd_agg_ctx_.agg_ctx_, pd_agg_ctx_.rows_, pd_agg_ctx_.row_meta_, pd_agg_ctx_.batch_rows_, 
                                        col_offset, col_param, is_pad_char_to_full_length(context_.sql_mode_));
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(pd_agg_factory_.alloc_cell(basic_info, agg_cell, agg_idx, exclude_null))) {
@@ -377,7 +377,7 @@ int ObAggregatedStoreVec::init_agg_groups(const ObTableAccessParam &param)
   return ret;
 }
 
-int ObAggregatedStoreVec::check_agg_store_valid()
+int ObAggregatedStoreVec::check_agg_store_valid() 
 {
   int ret = OB_SUCCESS;
   ObMemAttr attr(MTL_ID(), common::ObModIds::OB_HASH_BUCKET);
@@ -399,7 +399,7 @@ int ObAggregatedStoreVec::check_agg_store_valid()
     } else if (OB_UNLIKELY(agg_group->need_access_data_ && !agg_group->need_get_row_ids_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Invalid aggregate store status", K(ret), K(i), KPC(agg_group));
-    } else if (!agg_group->need_access_data_
+    } else if (!agg_group->need_access_data_ 
                && OB_FAIL(col_mask_set_.set_refactored(agg_group->col_offset_, 0 /*deduplicated*/))) {
       LOG_WARN("Failed to add column offset", K(ret), K(i), KPC(agg_group));
     } else {
@@ -495,7 +495,7 @@ int ObAggregatedStoreVec::fill_rows(
         count_ = nullptr == res.bitmap_ ? covered_row_count : res.bitmap_->popcnt();
         begin_index = end_index;
       }
-    } else if (OB_FAIL(ObVectorStore::fill_output_rows(0/*no use*/,
+    } else if (OB_FAIL(ObVectorStore::fill_output_rows(0/*no use*/, 
                                                        scanner,
                                                        begin_index,
                                                        end_index,
@@ -510,7 +510,7 @@ int ObAggregatedStoreVec::fill_rows(
       } else {
         reader->reserve_reader_memory(false);
       }
-    }
+    } 
   }
   return ret;
 }
@@ -558,10 +558,10 @@ int ObAggregatedStoreVec::do_aggregate(blocksstable::ObIMicroBlockReader *reader
       if (OB_ISNULL(agg_group)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected null aggregate group", K(ret), KP(agg_group));
-      } else if (OB_FAIL(agg_group->eval_batch(nullptr/*iter_param*/,
-                                               nullptr/*context*/,
-                                               agg_group->col_offset_,
-                                               reader,
+      } else if (OB_FAIL(agg_group->eval_batch(nullptr/*iter_param*/, 
+                                               nullptr/*context*/, 
+                                               agg_group->col_offset_, 
+                                               reader, 
                                                pd_row_id_ctx,
                                                reserve_memory))) {
         LOG_WARN("Failed to eval batch", K(ret), KPC(agg_group), K_(need_access_data), K_(need_get_row_ids));
@@ -580,7 +580,7 @@ int ObAggregatedStoreVec::collect_aggregated_result()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObAggregateStoreVec is not inited", K(ret));
-  } else if (OB_FAIL(storage::init_exprs_vector_header(iter_param_->aggregate_exprs_,
+  } else if (OB_FAIL(storage::init_exprs_vector_header(iter_param_->aggregate_exprs_, 
                                                        eval_ctx_,
                                                        eval_ctx_.max_batch_size_))) {
     LOG_WARN("Failed to init vector", K(ret), K_(eval_ctx_.max_batch_size));

@@ -209,9 +209,9 @@ struct SingleSetParam {
 
   int check_basic_validity(ObDMLStmt *stmt, const ObRawExpr* expr, TransformParam &trans_param);
 
-  int check_subquery_validity(ObQueryRefRawExpr *query_ref,
+  int check_subquery_validity(ObQueryRefRawExpr *query_ref, 
                               ObSelectStmt *subquery,
-                              bool is_correlated,
+                              bool is_correlated, 
                               bool &is_valid);
 
   int pull_up_tables_and_columns(ObDMLStmt* stmt, ObSelectStmt* subquery);
@@ -244,7 +244,7 @@ struct SingleSetParam {
                                SemiInfo *info);
 
   int is_where_having_subquery_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
-                                          const ObSelectStmt &subquery,
+                                          const ObSelectStmt &subquery, 
                                           bool &is_correlated);
 
   virtual int check_hint_status(const ObDMLStmt &stmt, bool &need_trans) override;

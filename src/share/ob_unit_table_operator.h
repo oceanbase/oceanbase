@@ -148,9 +148,9 @@ private:
   int read_unit_stats(common::ObSqlString &sql,
                  common::ObIArray<ObUnitStat> &unit_stats) const;
   int read_tenant_servers(common::ObSqlString &sql,
-                          common::ObIArray<ObTenantServers> &tenant_servers) const;
+                          common::ObIArray<ObTenantServers> &tenant_servers) const;               
   int read_tenant_server(const common::sqlclient::ObMySQLResult &result,
-                         uint64_t &tenant_id,
+                         uint64_t &tenant_id, 
                          common::ObAddr &server,
                          common::ObAddr &migrate_from_server) const;
 private:

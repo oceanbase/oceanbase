@@ -43,7 +43,7 @@ struct ObRedisTableInfo {
 class ObRedisCmdCtx
 {
 public:
-  explicit ObRedisCmdCtx(ObIAllocator &allocator) :
+  explicit ObRedisCmdCtx(ObIAllocator &allocator) : 
     in_same_ls_(true),
     tb_infos_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "ObRedisCtx"))
   {}
@@ -54,7 +54,7 @@ public:
   OB_INLINE bool is_valid() const { return tb_infos_.count() == ObRedisInfoV1::REDIS_MODEL_NUM; }
   OB_INLINE bool get_in_same_ls() const { return in_same_ls_; }
   OB_INLINE void set_in_same_ls(bool in_same_ls) { in_same_ls_ = in_same_ls; }
-
+  
 private:
   bool in_same_ls_;
   ObArray<ObRedisTableInfo*> tb_infos_;
@@ -107,7 +107,7 @@ public:
               K_(timeout_ts),
               K_(consistency_level),
               KPC_(credential),
-              K_(cur_table_idx),
+              K_(cur_table_idx), 
               K_(cur_rowkey_idx),
               K_(is_cmd_support_group),
               K_(is_enable_group_op),
@@ -146,15 +146,15 @@ public:
   static int reset_objects(common::ObObj *objs, int64_t obj_cnt);
 private:
   int get_tablet_id(const ObRowkey &rowkey,
-                    const ObSimpleTableSchemaV2 &simple_table_schema,
+                    const ObSimpleTableSchemaV2 &simple_table_schema, 
                     ObTableApiSessGuard &sess_guard,
-                    ObSchemaGetterGuard &schema_guard,
+                    ObSchemaGetterGuard &schema_guard, 
                     ObTabletID &tablet_id);
 
-  int init_table_info(ObRowkey &rowkey,
-                   ObSchemaGetterGuard &schema_guard,
-                   ObTableApiSessGuard &sess_guard,
-                   const ObString &table_name,
+  int init_table_info(ObRowkey &rowkey, 
+                   ObSchemaGetterGuard &schema_guard, 
+                   ObTableApiSessGuard &sess_guard, 
+                   const ObString &table_name, 
                    const ObIArray<ObString> &keys,
                    ObRedisTableInfo *&tb_info,
                    bool &is_in_same_ls,
@@ -244,11 +244,11 @@ public:
   explicit ObRedisBatchCtx(
     common::ObIAllocator &allocator,
     ObITableEntityFactory *entity_factory,
-    ObIArray<ObITableOp *> &ops)
+    ObIArray<ObITableOp *> &ops) 
       : ObRedisCtx(allocator, entity_factory), ops_(ops) {}
   virtual ~ObRedisBatchCtx() {}
   OB_INLINE ObIArray<ObITableOp *> &ops() { return ops_; }
-
+  
 private:
   ObIArray<ObITableOp *> &ops_;
   DISALLOW_COPY_AND_ASSIGN(ObRedisBatchCtx);

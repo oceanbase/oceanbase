@@ -55,8 +55,8 @@ public:
   int do_srand_member(int64_t db, const common::ObString &key, const common::ObString &count_str);
   int do_srem(int64_t db, const common::ObString &key, const SetCommand::MemberSet &members);
   int do_srem(int64_t db, const ObString &key, const common::ObIArray<ObString> &members);
-  int fill_set_batch_op(const ObRedisOp &op,
-                        ObIArray<ObTabletID> &tablet_ids,
+  int fill_set_batch_op(const ObRedisOp &op, 
+                        ObIArray<ObTabletID> &tablet_ids, 
                         ObTableBatchOperation &batch_op) override;
 
 protected:

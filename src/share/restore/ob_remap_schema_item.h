@@ -33,8 +33,8 @@ public:
   virtual bool is_valid() const override;
   virtual int64_t get_format_serialize_size() const override;
   virtual int format_serialize(
-      char *buf,
-      const int64_t buf_len,
+      char *buf, 
+      const int64_t buf_len, 
       int64_t &pos) const override;
   virtual int deep_copy(common::ObIAllocator &allocator, const ObIImportItem &src) override;
   virtual bool operator==(const ObIImportItem &other) const override;
@@ -64,7 +64,7 @@ public:
       int64_t &pos) const override;
 
   virtual void reset();
-
+  
   int assign(const ObRemapSchemaItemArray<S, T> &other);
   int add_item(const ObRemapSchemaItem<S, T> &item);
   bool is_empty() const { return remap_items_.empty(); }
@@ -101,7 +101,7 @@ using ObRemapDatabaseItem = ObRemapSchemaItem<ObImportDatabaseItem, ObImportData
 using ObRemapTableItem = ObRemapSchemaItem<ObImportTableItem, ObImportTableItem>;
 using ObRemapPartitionItem = ObRemapSchemaItem<ObImportPartitionItem, ObImportTableItem>;
 using ObRemapTablespaceItem = ObRemapSchemaItem<ObImportTablespaceItem, ObImportTablespaceItem>;
-using ObRemapTablegroupItem = ObRemapSchemaItem<ObImportTablegroupItem, ObImportTablegroupItem>;
+using ObRemapTablegroupItem = ObRemapSchemaItem<ObImportTablegroupItem, ObImportTablegroupItem>; 
 
 
 using ObRemapDatabaseArray = ObRemapSchemaItemArray<ObImportDatabaseItem, ObImportDatabaseItem>;

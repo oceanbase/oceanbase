@@ -340,7 +340,7 @@ int ObDASMergeIter::inner_init(ObDASIterParam &param)
         part_level_ = table_schema_->get_part_level();
       }
     }
-
+    
     if (OB_SUCC(ret)) {
       if (OB_NOT_NULL(exec_ctx_->get_my_session())) {
         is_diagnosis_enabled_ = exec_ctx_->get_my_session()->is_diagnosis_enabled();
@@ -832,7 +832,7 @@ int ObDASMergeIter::get_next_seq_row()
             }
           }
         }
-
+        
         if (OB_SUCC(ret)) {
           got_row = true;
           if (has_pseudo_part_id_columnref()) {
@@ -901,7 +901,7 @@ int ObDASMergeIter::get_next_seq_rows(int64_t &count, int64_t capacity)
               }
             }
           }
-
+          
           if (OB_ITER_END == ret && count > 0) {
             ret = OB_SUCCESS;
           }

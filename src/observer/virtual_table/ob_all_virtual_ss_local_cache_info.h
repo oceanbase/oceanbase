@@ -33,7 +33,7 @@ public:
   ObAllVirtualSSLocalCacheInfo();
   virtual ~ObAllVirtualSSLocalCacheInfo();
   virtual void reset() override;
-
+  
   virtual int inner_open() override;
   virtual int inner_get_next_row(common::ObNewRow *&row) override;
 
@@ -49,7 +49,7 @@ private:
   {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,
-    TENANT_ID,
+    TENANT_ID,	
     CACHE_NAME,
     PRIORITY,
     HIT_RATIO,

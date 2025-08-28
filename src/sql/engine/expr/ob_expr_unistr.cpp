@@ -158,7 +158,7 @@ int ObExprUnistr::calc_unistr(const common::ObString &src,
       return ret;
     }
   };
-
+  
   Functor temp_handler(buf, buf_len, pos, src.length(), dst_cs_type);
   ObCharsetType src_charset_type = ObCharset::charset_type_by_coll(src_cs_type);
   OZ(ObFastStringScanner::foreach_char(src, src_charset_type, temp_handler));
@@ -343,7 +343,7 @@ int calc_asciistr(const ObString &src,
       return ret;
     };
   };
-
+  
   ObCharsetType src_charset_type = ObCharset::charset_type_by_coll(src_cs_type);
   Functor temp_handler(buf, buf_len, pos, dst_cs_type);
   OZ(ObFastStringScanner::foreach_char(src, src_charset_type, temp_handler));

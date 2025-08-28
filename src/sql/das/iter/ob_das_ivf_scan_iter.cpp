@@ -185,7 +185,7 @@ int ObDASIvfBaseScanIter::inner_reuse()
   } else if (!brute_first_scan_ && OB_FAIL(ObDasVecScanUtils::reuse_iter(
                                       ls_id_, brute_iter_, brute_scan_param_, brute_tablet_id_))) {
     LOG_WARN("failed to reuse iter", K(ret));
-  }
+  } 
 
   if (OB_NOT_NULL(saved_rowkeys_itr_)) {
     saved_rowkeys_itr_->reset();
@@ -511,7 +511,7 @@ int ObDASIvfBaseScanIter::do_rowkey_cid_table_scan()
     }
   } else {
     const ObTabletID &scan_tablet_id = rowkey_cid_scan_param_.tablet_id_;
-    rowkey_cid_scan_param_.need_switch_param_ =
+    rowkey_cid_scan_param_.need_switch_param_ = 
       rowkey_cid_scan_param_.need_switch_param_ || (scan_tablet_id.is_valid() && (rowkey_cid_tablet_id_ != scan_tablet_id));
     rowkey_cid_scan_param_.tablet_id_ = rowkey_cid_tablet_id_;
     rowkey_cid_scan_param_.ls_id_ = ls_id_;
@@ -781,14 +781,14 @@ int ObDASIvfBaseScanIter::try_write_centroid_cache(
   if (OB_FAIL(ret)) {
     cent_cache.reuse();
   }
-
+  
   return ret;
 }
 
-int ObDASIvfBaseScanIter::get_centers_cache(bool is_vectorized,
-                                        bool is_pq_centers,
+int ObDASIvfBaseScanIter::get_centers_cache(bool is_vectorized, 
+                                        bool is_pq_centers, 
                                         ObIvfCacheMgrGuard &cache_guard,
-                                        ObIvfCentCache *&cent_cache,
+                                        ObIvfCentCache *&cent_cache, 
                                         bool &is_cache_usable)
 {
   int ret = OB_SUCCESS;
@@ -800,7 +800,7 @@ int ObDASIvfBaseScanIter::get_centers_cache(bool is_vectorized,
   // pq/flat both use centroid_tablet_id_
   if (OB_FAIL(vec_index_service->acquire_ivf_cache_mgr_guard(
         ls_id_, centroid_tablet_id_, vec_index_param_, dim_, centroid_ctdef->ref_table_id_, cache_guard))) {
-    LOG_WARN("failed to get ObPluginVectorIndexAdapter",
+    LOG_WARN("failed to get ObPluginVectorIndexAdapter", 
       K(ret), K(ls_id_), K(centroid_tablet_id_), K(vec_index_param_));
   } else if (OB_ISNULL(cache_mgr = cache_guard.get_ivf_cache_mgr())) {
     ret = OB_ERR_NULL_VALUE;
@@ -815,8 +815,8 @@ int ObDASIvfBaseScanIter::get_centers_cache(bool is_vectorized,
   } else if (!cent_cache->is_completed()) {
     if (cent_cache->set_writing_if_idle()) {
       // write cache
-      int tmp_ret = is_pq_centers ?
-          try_write_pq_centroid_cache(*cent_cache, is_vectorized) :
+      int tmp_ret = is_pq_centers ? 
+          try_write_pq_centroid_cache(*cent_cache, is_vectorized) : 
           try_write_centroid_cache(*cent_cache, is_vectorized);
       if (OB_TMP_FAIL(tmp_ret)) {
         LOG_WARN("fail to try write centroid cache", K(ret), K(is_vectorized), KPC(cent_cache), K(is_pq_centers));
@@ -854,7 +854,7 @@ int ObDASIvfBaseScanIter::generate_nearest_cid_heap(
       LOG_WARN("fail to gen near cid heap from table", K(ret), K(cache_guard));
     }
   }
-
+ 
   return ret;
 }
 
@@ -867,7 +867,7 @@ int ObDASIvfBaseScanIter::gen_near_cid_heap_from_table(
   const ObDASScanCtDef *centroid_ctdef = vec_aux_ctdef_->get_vec_aux_tbl_ctdef(
       vec_aux_ctdef_->get_ivf_centroid_tbl_idx(), ObTSCIRScanType::OB_VEC_IVF_CENTROID_SCAN);
   ObDASScanRtDef *centroid_rtdef = vec_aux_rtdef_->get_vec_aux_tbl_rtdef(vec_aux_ctdef_->get_ivf_centroid_tbl_idx());
-
+  
   // if no have center table cache, need deep copy center vec, else shallol copy
   // todo(wmj): need fit ivf adaptor cache
   CenterSaveMode center_save_mode = save_center_vec ? CenterSaveMode::DEEP_COPY_CENTER_VEC : CenterSaveMode::NOT_SAVE_CENTER_VEC;
@@ -896,7 +896,7 @@ int ObDASIvfBaseScanIter::gen_near_cid_heap_from_table(
         guard.set_batch_idx(i);
         ObString cid = cid_datum[i].get_string();
         ObString cid_vec = cid_vec_datum[i].get_string();
-
+        
         if (OB_FAIL(ObVectorClusterHelper::get_center_id_from_string(center_id, cid))) {
           LOG_WARN("failed to get center id from string", K(ret));
         } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(
@@ -949,15 +949,15 @@ int ObDASIvfBaseScanIter::gen_near_cid_heap_from_table(
       }
     }
   }
-
+  
   return ret;
 }
 
 int ObDASIvfBaseScanIter::parse_centroid_datum(
   const ObDASScanCtDef *centroid_ctdef,
-  ObIAllocator& allocator,
+  ObIAllocator& allocator, 
   blocksstable::ObDatumRow *datum_row,
-  ObString &cid,
+  ObString &cid, 
   ObString &cid_vec)
 {
   int ret = OB_SUCCESS;
@@ -984,7 +984,7 @@ int ObDASIvfBaseScanIter::parse_centroid_datum(
 }
 
 int ObDASIvfBaseScanIter::prepare_cid_range(
-  const ObDASScanCtDef *cid_vec_ctdef,
+  const ObDASScanCtDef *cid_vec_ctdef, 
   int64_t &cid_vec_column_count,
   int64_t &cid_vec_pri_key_cnt,
   int64_t &rowkey_cnt)
@@ -1005,9 +1005,9 @@ int ObDASIvfBaseScanIter::prepare_cid_range(
 }
 
 int ObDASIvfBaseScanIter::scan_cid_range(
-  const ObString &cid,
-  int64_t cid_vec_pri_key_cnt,
-  const ObDASScanCtDef *cid_vec_ctdef,
+  const ObString &cid, 
+  int64_t cid_vec_pri_key_cnt, 
+  const ObDASScanCtDef *cid_vec_ctdef, 
   ObDASScanRtDef *cid_vec_rtdef,
   storage::ObTableScanIterator *&cid_vec_scan_iter)
 {
@@ -1442,7 +1442,7 @@ int ObDASIvfScanIter::get_nearest_limit_rowkeys_in_cids(bool is_vectorized, T *s
     LOG_WARN("failed to alloc cid", K(ret));
   } else {
     cid_str.assign_buffer(buf, buf_len);
-  }
+  } 
   // 3. Obtain nprobes * k rowkeys
   if (near_cid_.count() == 0) {
     // The situation of index creation with table creation
@@ -1716,11 +1716,11 @@ int ObDASIvfPQScanIter::inner_init(ObDASIterParam &param)
   } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_3) {
     if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(vec_aux_ctdef_->vec_index_param_, ObVectorIndexType::VIT_IVF_INDEX, index_param))) {
       LOG_WARN("fail to parse params from string", K(ret), K(vec_aux_ctdef_->vec_index_param_));
-    }
+    } 
   } else if (OB_FAIL(index_param.assign(vec_aux_ctdef_->get_vec_index_param()))) {
     LOG_WARN("fail to assign params from vec_aux_ctdef_", K(ret));
   }
-
+  
   if (OB_FAIL(ret)) {
   } else {
     ObDASIvfScanIterParam &ivf_scan_param = static_cast<ObDASIvfScanIterParam &>(param);
@@ -1799,7 +1799,7 @@ int ObDASIvfPQScanIter::parse_pq_ids_vec_datum(
 {
   int ret = OB_SUCCESS;
   ObExpr *pq_ids_expr = cid_vec_ctdef->result_output_[PQ_IDS_IDX];
-
+  
   if (OB_FAIL(get_main_rowkey_from_cid_vec_datum(allocator, cid_vec_ctdef, rowkey_cnt, main_rowkey))) {
     LOG_WARN("failed to get main rowkey from cid vec datum", K(ret));
   } else if (pq_ids_expr->locate_expr_datum(*vec_aux_rtdef_->eval_ctx_).is_null()) {
@@ -1811,7 +1811,7 @@ int ObDASIvfPQScanIter::parse_pq_ids_vec_datum(
   return ret;
 }
 
-int ObDASIvfPQScanIter::calc_distance_between_pq_ids_by_cache(ObIvfCentCache &cent_cache,
+int ObDASIvfPQScanIter::calc_distance_between_pq_ids_by_cache(ObIvfCentCache &cent_cache, 
                                                               const ObString &pq_center_ids,
                                                               const ObIArray<float *> &splited_residual,
                                                               float &distance) {
@@ -1828,7 +1828,7 @@ int ObDASIvfPQScanIter::calc_distance_between_pq_ids_by_cache(ObIvfCentCache &ce
       LOG_WARN("fail to get pq cid vec from cache", K(ret), K(j + 1));
     } else if (OB_ISNULL(pq_cid_vec)) {
       ret = OB_ERR_NULL_VALUE;
-      LOG_WARN("invalid null pq_cid_vec",
+      LOG_WARN("invalid null pq_cid_vec", 
         K(ret), K(j), KPHEX(pq_center_ids.ptr(), pq_center_ids.length()));
     } else {
       // 3.3.2 Calculate the distance between pq_center_vecs[j] and r(x)[j].
@@ -1841,7 +1841,7 @@ int ObDASIvfPQScanIter::calc_distance_between_pq_ids_by_cache(ObIvfCentCache &ce
       }
     }
   } // end for
-
+  
   if (OB_SUCC(ret)) {
     distance = square;
   }
@@ -1864,7 +1864,7 @@ int ObDASIvfPQScanIter::calc_distance_between_pq_ids_by_table(
   if (OB_ISNULL(pq_cid_vec_ctdef) || OB_ISNULL(pq_cid_vec_rtdef)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctdef or rtdef is null", K(ret), KP(pq_cid_vec_ctdef), KP(pq_cid_vec_rtdef));
-  }
+  } 
 
   int count = 0;
   int pq_cid_idx = 0;
@@ -1959,7 +1959,7 @@ int ObDASIvfPQScanIter::calc_distance_between_pq_ids_by_table(
         }
       }
       int tmp_ret = (ret == OB_ITER_END) ? OB_SUCCESS : ret;
-      if (OB_FAIL(ObDasVecScanUtils::reuse_iter(ls_id_, pq_centroid_iter_, pq_centroid_scan_param_, pq_centroid_tablet_id_))) {
+      if (OB_FAIL(ObDasVecScanUtils::reuse_iter(ls_id_, pq_centroid_iter_, pq_centroid_scan_param_, pq_centroid_tablet_id_))) { 
         LOG_WARN("failed to reuse rowkey cid iter.", K(ret));
       } else {
         ret = tmp_ret;
@@ -1977,8 +1977,8 @@ int ObDASIvfPQScanIter::calc_distance_between_pq_ids_by_table(
 
 int ObDASIvfPQScanIter::calc_distance_between_pq_ids(
     bool is_vectorized,
-    const ObString &pq_center_ids,
-    const ObIArray<float *> &splited_residual,
+    const ObString &pq_center_ids, 
+    const ObIArray<float *> &splited_residual, 
     float &distance)
 {
   int ret = OB_SUCCESS;
@@ -1992,10 +1992,10 @@ int ObDASIvfPQScanIter::calc_distance_between_pq_ids(
       LOG_WARN("fail to calc distance between pq ids by cache", K(ret), K(is_vectorized), KPC(cent_cache));
     }
   } else {
-    if (OB_FAIL(calc_distance_between_pq_ids_by_table(is_vectorized,
-                                                      pq_center_ids,
-                                                      splited_residual,
-                                                      ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE,
+    if (OB_FAIL(calc_distance_between_pq_ids_by_table(is_vectorized, 
+                                                      pq_center_ids, 
+                                                      splited_residual, 
+                                                      ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE, 
                                                       distance))) {
       LOG_WARN("fail to calc distance between pq ids by table", K(ret), K(is_vectorized));
     }
@@ -2034,7 +2034,7 @@ int ObDASIvfPQScanIter::calc_distance_with_precompute(
         is_skip = true;
       }
     }
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(ret)) {  
     } else if (is_skip) {
     } else {
       saved_j[0] = (counter == 0) ? j : saved_j[0];
@@ -2160,7 +2160,7 @@ int ObDASIvfPQScanIter::calc_nearest_limit_rowkeys_in_cids(
   int64_t ksub = 1L << nbits_;
   IvfRowkeyHeap nearest_rowkey_heap(
       vec_op_alloc_, search_vec/*unused*/, dis_type_, sub_dim,
-      get_nprobe(limit_param_, 1)); // pq do not need to
+      get_nprobe(limit_param_, 1)); // pq do not need to 
   const ObDASScanCtDef *cid_vec_ctdef = vec_aux_ctdef_->get_vec_aux_tbl_ctdef(
       vec_aux_ctdef_->get_ivf_cid_vec_tbl_idx(), ObTSCIRScanType::OB_VEC_IVF_CID_VEC_SCAN);
   ObDASScanRtDef *cid_vec_rtdef = vec_aux_rtdef_->get_vec_aux_tbl_rtdef(vec_aux_ctdef_->get_ivf_cid_vec_tbl_idx());
@@ -2238,7 +2238,7 @@ int ObDASIvfPQScanIter::calc_nearest_limit_rowkeys_in_cids(
       if (dis_type_ == oceanbase::sql::ObExprVectorDistance::ObVecDisType::EUCLIDEAN) {
         if (OB_FAIL(ObVectorIndexUtil::calc_residual_vector(dim_, search_vec, cur_cid_vec, residual))) {
           LOG_WARN("fail to calc residual vector", K(ret), K(dim_));
-        }
+        } 
       } else {
         dis0 = near_cid_vec_dis_.at(i);
         residual = search_vec; // ip dis = dis0 + search_vec · pq_vec
@@ -2307,11 +2307,11 @@ int ObDASIvfPQScanIter::calc_nearest_limit_rowkeys_in_cids(
               LOG_WARN("failed to scan vid rowkey iter", K(ret));
             }
           } else if (OB_FAIL(parse_pq_ids_vec_datum(
-              mem_context_->get_arena_allocator(),
-              cid_vec_column_count,
-              cid_vec_ctdef,
+              mem_context_->get_arena_allocator(), 
+              cid_vec_column_count, 
+              cid_vec_ctdef, 
               rowkey_cnt,
-              main_rowkey,
+              main_rowkey, 
               pq_center_ids))) {
             LOG_WARN("fail to parse cid vec datum", K(ret), K(cid_vec_column_count), K(rowkey_cnt));
           } else if (pq_center_ids.empty()) {
@@ -2359,7 +2359,7 @@ int ObDASIvfPQScanIter::get_nearest_probe_centers(bool is_vectorized)
       mem_context_->get_arena_allocator(), reinterpret_cast<const float *>(real_search_vec_.ptr()), dis_type_, dim_, nprobes_);
   if (OB_FAIL(generate_nearest_cid_heap(is_vectorized, nearest_cid_heap, true/*save_center_vec*/))) {
     LOG_WARN("failed to generate nearest cid heap", K(ret), K(nprobes_), K(dim_), K(real_search_vec_));
-  }
+  } 
   if (OB_SUCC(ret)) {
     if (nearest_cid_heap.get_center_count() == 0) {
       ret = OB_ENTRY_NOT_EXIST;
@@ -2505,7 +2505,7 @@ int ObDASIvfBaseScanIter::get_rowkey_brute_post(bool is_vectorized, IvfRowkeyHea
         }
       } // end while
       int tmp_ret = (ret == OB_ITER_END) ? OB_SUCCESS : ret;
-      if (OB_FAIL(ObDasVecScanUtils::reuse_iter(ls_id_, brute_iter_, brute_scan_param_, brute_tablet_id_))) {
+      if (OB_FAIL(ObDasVecScanUtils::reuse_iter(ls_id_, brute_iter_, brute_scan_param_, brute_tablet_id_))) { 
         LOG_WARN("failed to reuse rowkey cid iter.", K(ret));
       } else {
         ret = tmp_ret;
@@ -2563,7 +2563,7 @@ int ObDASIvfBaseScanIter::get_main_rowkey_brute(
 int ObDASIvfPQScanIter::process_ivf_scan_post(bool is_vectorized)
 {
   int ret = OB_SUCCESS;
-  // 1. Scan the ivf_centroid table, calculate the distance between vec_x and cid_vec,
+  // 1. Scan the ivf_centroid table, calculate the distance between vec_x and cid_vec, 
   //    and get the nearest cluster center (cid 1, cid_vec 1)... (cid n, cid_vec n)
   if (OB_FAIL(get_nearest_probe_centers(is_vectorized))) {
     if (ret == OB_ENTRY_NOT_EXIST) {
@@ -2740,7 +2740,7 @@ int ObDASIvfPQScanIter::filter_rowkey_by_cid(bool is_vectorized, int64_t batch_r
         ObExpr *pq_cids_expr = rowkey_cid_ctdef->result_output_[PQ_IDS_IDX];
         ObDatum *cid_datum = cid_expr->locate_batch_datums(*vec_aux_rtdef_->eval_ctx_);
         ObDatum *pq_cid_datum = pq_cids_expr->locate_batch_datums(*vec_aux_rtdef_->eval_ctx_);
-
+  
         for (int64_t i = 0; OB_SUCC(ret) && i < scan_row_cnt; ++i) {
           guard.set_batch_idx(i);
           ObString cid = cid_datum[i].get_string();
@@ -2800,7 +2800,7 @@ int ObDASIvfPQScanIter::process_ivf_scan_pre(ObIAllocator &allocator, bool is_ve
   ObDASScanIter* inv_iter = (ObDASScanIter*)inv_idx_scan_iter_;
   bool is_range_prefilter = is_rk_opt && (inv_iter->get_scan_param().pd_storage_filters_ == nullptr);
   ObIvfPreFilter prefilter(MTL_ID());
-  // 1. Scan the ivf_centroid table, calculate the distance between vec_x and cid_vec,
+  // 1. Scan the ivf_centroid table, calculate the distance between vec_x and cid_vec, 
   //    and get the nearest cluster center (cid 1, cid_vec 1)... (cid n, cid_vec n)
   if (OB_FAIL(get_nearest_probe_centers(is_vectorized))) {
     if (ret == OB_ENTRY_NOT_EXIST) {
@@ -2969,7 +2969,7 @@ int ObDASIvfPQScanIter::try_write_pq_centroid_cache(
         }
       }
       int tmp_ret = (ret == OB_ITER_END) ? OB_SUCCESS : ret;
-      if (OB_FAIL(ObDasVecScanUtils::reuse_iter(ls_id_, pq_centroid_iter_, pq_centroid_scan_param_, pq_centroid_tablet_id_))) {
+      if (OB_FAIL(ObDasVecScanUtils::reuse_iter(ls_id_, pq_centroid_iter_, pq_centroid_scan_param_, pq_centroid_tablet_id_))) { 
         LOG_WARN("failed to reuse rowkey cid iter.", K(ret));
       } else {
         ret = tmp_ret;
@@ -2984,21 +2984,21 @@ int ObDASIvfPQScanIter::try_write_pq_centroid_cache(
         cent_cache.reuse();
         LOG_DEBUG("Empty centroid table, no need to set cache", K(pq_centroid_tablet_id_));
       }
-
+      
     }
   }
 
   if (OB_FAIL(ret)) {
     cent_cache.reuse();
   }
-
+  
   return ret;
 }
 
 int ObDASIvfPQScanIter::get_pq_precomputetable_cache(
-    bool is_vectorized,
+    bool is_vectorized, 
     ObIvfCacheMgrGuard &cache_guard,
-    ObIvfCentCache *&cent_cache,
+    ObIvfCentCache *&cent_cache, 
     bool &is_cache_usable)
 {
   int ret = OB_SUCCESS;
@@ -3009,7 +3009,7 @@ int ObDASIvfPQScanIter::get_pq_precomputetable_cache(
   // pq/flat both use centroid_tablet_id_
   if (OB_FAIL(vec_index_service->acquire_ivf_cache_mgr_guard(
         ls_id_, centroid_tablet_id_, vec_index_param_, dim_, centroid_ctdef->ref_table_id_, cache_guard))) {
-    LOG_WARN("failed to get ObPluginVectorIndexAdapter",
+    LOG_WARN("failed to get ObPluginVectorIndexAdapter", 
       K(ret), K(ls_id_), K(centroid_tablet_id_), K(vec_index_param_));
   } else if (OB_ISNULL(cache_mgr = cache_guard.get_ivf_cache_mgr())) {
     ret = OB_ERR_NULL_VALUE;
@@ -3064,7 +3064,7 @@ int ObDASIvfPQScanIter::try_write_pq_precompute_table_cache(
       LOG_INFO("other threads already writed centroids cache, skip", K(ret));
     } else {
       if (is_pq_cent_cache_usable && is_ivf_cent_cache_usable) {
-
+        
           ObArenaAllocator tmp_allocator;
           int64_t ksub = 1L << nbits_;
           int64_t sub_dim = dim_ / m_;
@@ -3406,7 +3406,7 @@ int ObDASIvfSQ8ScanIter::process_ivf_scan_post(bool is_vectorized)
       LOG_INFO("nearest probe center ids is empty", K(ret));
       ret = OB_SUCCESS;
     }
-  }
+  } 
   if (OB_FAIL(ret)) {
     LOG_WARN("failed to process_ivf_scan_post", K(ret));
   } else if (OB_FAIL(get_real_search_vec_u8(is_vectorized, real_search_vec_u8))) {

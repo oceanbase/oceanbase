@@ -73,7 +73,7 @@ int ObExprJsonSchemaValidationReport::cg_expr(ObExprCGCtx &op_cg_ctx,
 {
   INIT_SUCC(ret);
   const ObRawExpr *schema = raw_expr.get_param_expr(0);
-  if (lib::is_mysql_mode() && OB_JSON_SCHEMA_EXPR_ARG_NUM == rt_expr.arg_cnt_
+  if (lib::is_mysql_mode() && OB_JSON_SCHEMA_EXPR_ARG_NUM == rt_expr.arg_cnt_ 
      && OB_NOT_NULL(schema) && (schema->is_const_expr() || schema->is_static_scalar_const_expr())
      && schema->get_expr_type() != T_OP_GET_USER_VAR) {
     ObIAllocator &alloc = *op_cg_ctx.allocator_;
@@ -89,7 +89,7 @@ int ObExprJsonSchemaValidationReport::cg_expr(ObExprCGCtx &op_cg_ctx,
       rt_expr.extra_info_ = info;
     }
   }
-
+  
   if (OB_SUCC(ret)) {
     rt_expr.eval_func_ = eval_json_schema_validation_report;
   }
@@ -152,9 +152,9 @@ int ObExprJsonSchemaValidationReport::eval_json_schema_validation_report(const O
   return ret;
 }
 
-int ObExprJsonSchemaValidationReport::raise_validation_report(ObIAllocator &allocator,
-                                                              ObJsonSchemaValidator& validator,
-                                                              const bool& is_valid,
+int ObExprJsonSchemaValidationReport::raise_validation_report(ObIAllocator &allocator, 
+                                                              ObJsonSchemaValidator& validator, 
+                                                              const bool& is_valid, 
                                                               ObIJsonBase*& validation_report)
 {
   INIT_SUCC(ret);
@@ -163,7 +163,7 @@ int ObExprJsonSchemaValidationReport::raise_validation_report(ObIAllocator &allo
   if (OB_ISNULL(report_obj = OB_NEWx(ObJsonObject, &allocator, &allocator))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to init schema report.", K(ret));
-  } else if (OB_FALSE_IT(validation_report = report_obj)) {
+  } else if (OB_FALSE_IT(validation_report = report_obj)) { 
   } else if (OB_ISNULL(schema_result = OB_NEWx(ObJsonBoolean, &allocator, is_valid))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to init schema report result.", K(ret));
@@ -205,7 +205,7 @@ int ObExprJsonSchemaValidationReport::raise_validation_report(ObIAllocator &allo
       LOG_WARN("fail to add document location.", K(ret));
     }
   }
-  return ret;
+  return ret;  
 }
 
 } /* sql */

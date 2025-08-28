@@ -23,7 +23,7 @@ namespace sql
 
 struct ObFastFinalNLJRangeCtx
 {
-  ObFastFinalNLJRangeCtx(common::ObIAllocator &allocator)
+  ObFastFinalNLJRangeCtx(common::ObIAllocator &allocator) 
     : has_check_valid_(false),
       is_valid_(false),
       max_group_size_(0),
@@ -36,18 +36,18 @@ struct ObFastFinalNLJRangeCtx
       allocator_(allocator),
       first_ranges_(allocator),
       cache_ranges_(allocator) {}
-
+    
   TO_STRING_KV(K_(has_check_valid), K_(is_valid), K_(max_group_size),
                K_(range_buffer_size), K_(extra_buffer_size),
                K_(first_ranges));
-  int init_first_ranges(int64_t column_cnt,
-                        int64_t range_buffer_idx,
+  int init_first_ranges(int64_t column_cnt, 
+                        int64_t range_buffer_idx, 
                         ObIArray<common::ObNewRange*> &ranges);
   OB_INLINE char* locate_range_buffer(int64_t range_buffer_idx)
-  {
-    return range_buffer_ + range_buffer_size_ * range_buffer_idx;
+  { 
+    return range_buffer_ + range_buffer_size_ * range_buffer_idx; 
   }
-  int get_cached_ranges(int range_buffer_idx,
+  int get_cached_ranges(int range_buffer_idx, 
                         ObIArray<common::ObNewRange*> & ranges);
   bool has_check_valid_;
   bool is_valid_;
@@ -103,7 +103,7 @@ struct ObTmpRange : public common::ObDLinkBase<ObTmpRange>
 
 typedef ObDList<ObTmpRange> TmpRangeList;
 
-struct ObTmpInParam
+struct ObTmpInParam 
 {
   ObTmpInParam(common::ObIAllocator &allocator)
     : always_false_(false),
@@ -119,10 +119,10 @@ struct ObTmpInParam
 struct ObTmpGeoParam
 {
   ObTmpGeoParam(common::ObIAllocator &allocator)
-    : always_true_(false),
+    : always_true_(false), 
       start_keys_(allocator),
       end_keys_(allocator) {}
-
+    
   TO_STRING_KV(K(always_true_), K(start_keys_), K(end_keys_));
   bool always_true_;
   ObFixedArray<uint64_t, ObIAllocator> start_keys_;
@@ -154,7 +154,7 @@ public:
       always_false_tmp_range_(nullptr),
       mbr_filters_(mbr_filters),
       is_generate_ss_range_(false),
-      cur_datetime_(0)
+      cur_datetime_(0) 
   {
     if (OB_NOT_NULL(exec_ctx_.get_physical_plan_ctx())) {
       cur_datetime_ = exec_ctx_.get_physical_plan_ctx()->get_cur_time().get_datetime();
@@ -173,10 +173,10 @@ public:
   static int get_spatial_relationship_by_mask(const ObObj& extra, ObDomainOpType& op_type);
   static bool is_geo_type(const ObDomainOpType& op_type);
   static int calc_result_value(ObIAllocator &allocator,
-                               const ObRangeMap &range_map,
-                               const int64_t param_idx,
-                               ObObj &val,
-                               bool &is_valid,
+                               const ObRangeMap &range_map, 
+                               const int64_t param_idx, 
+                               ObObj &val, 
+                               bool &is_valid, 
                                ObExecContext &exec_ctx);
   static int check_range_type(const ObNewRange *range, bool &is_always_true, bool &is_false);
   static int false_range(const ObNewRange &range, bool &is_false);
@@ -213,7 +213,7 @@ public:
                                           int64_t &one_range_size,
                                           int64_t &range_buffer_size,
                                           int64_t &extra_buffer_size);
-
+  
 private:
   int generate_tmp_range(ObTmpRange *&tmp_range, const int64_t column_cnt);
   int generate_one_range(ObTmpRange &tmp_range);
@@ -237,8 +237,8 @@ private:
   int try_intersect_delayed_range(ObTmpRange &range);
   int create_new_range(ObNewRange *&range, int64_t column_cnt);
   static inline bool is_const_expr_or_null(int64_t idx) { return idx < OB_RANGE_EXTEND_VALUE || OB_RANGE_NULL_VALUE == idx; }
-  int final_not_in_range_node(const ObRangeNode &node,
-                              const int64_t not_in_idx,
+  int final_not_in_range_node(const ObRangeNode &node, 
+                              const int64_t not_in_idx, 
                               ObTmpInParam *in_param,
                               ObTmpRange *&range);
   int generate_tmp_not_in_param(const ObRangeNode &node,
@@ -274,7 +274,7 @@ private:
   int generate_tmp_json_array_param(const ObRangeNode &node,
                                     ObTmpInParam *&in_param);
   int final_domain_range_node(const ObRangeNode &node,
-                              const int64_t in_idx,
+                              const int64_t in_idx, 
                               ObTmpInParam *in_param,
                               ObTmpRange *&range);
 private:

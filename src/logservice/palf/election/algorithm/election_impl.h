@@ -80,7 +80,7 @@ public:
   virtual int get_role(common::ObRole &role, int64_t &epoch) const final
   {
 #ifdef OB_ENABLE_STANDALONE_LAUNCH
-    // for standalone deployment, only one replica exists, so self is leader forever
+    // for standalone deployment, only one replica exists, so self is leader forever 
     role = common::ObRole::LEADER;
     epoch = 1;
 #else
@@ -105,7 +105,7 @@ public:
   {
     int ret = common::OB_SUCCESS;
 #ifdef OB_ENABLE_STANDALONE_LAUNCH
-    // for standalone deployment, only one replica exists, so self is leader forever
+    // for standalone deployment, only one replica exists, so self is leader forever 
     addr = self_addr_;
     cur_leader_epoch = 1;
 #else

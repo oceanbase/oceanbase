@@ -13,28 +13,28 @@
 #include "lib/charset/ob_ctype.h"
 
 /**
-  The following PINYIN/STROKE Chinese character weight arrays are
+  The following PINYIN/STROKE Chinese character weight arrays are 
   based upon the PINYIN/STROKE collation in zh.xml file of CLDR42
   (http://cldr.unicode.org/)
   (http://unicode.org/Public/cldr/42/)
 
   The following RADICAL Chinese character weight arrays are based
   upon the kRSUnicode of UNICODE HAN DATABASE. We choose the first
-  radical-stroke count of kRSUnicode. The radical with apostrophe (')
-  which indicates a simplified version of the given radical will be
+  radical-stroke count of kRSUnicode. The radical with apostrophe (') 
+  which indicates a simplified version of the given radical will be 
   placed before the traditional version.
   e.g.
     The weight of 闯(GB+B4B3) is 84216 while the weight of 門(GB+E954) is 84390.
-  If two characters have the same the radical and remaining strokes,
+  If two characters have the same the radical and remaining strokes, 
   they will be sorted by the code point in GB18030-2022.
-  e.g.
-    The weight of 闯(GB+B4B3) is 84216 while the weight of 问(GB+CECA) is 84217
+  e.g. 
+    The weight of 闯(GB+B4B3) is 84216 while the weight of 问(GB+CECA) is 84217 
   (https://www.unicode.org/reports/tr38/tr38-33.html#kRSUnicode)
   (https://www.unicode.org/Public/UCD/latest/ucd/Unihan.zip)
 
   The arrays include the sort order of the code points accordingly.
   The weight here just mean the order of the corresponding gb18030_2022.
-  The arrays do not contain code points deleted by gb18030_2022, such as
+  The arrays do not contain code points deleted by gb18030_2022, such as 
   GB+FE51, GB+FD9C.
 
   There are 44085/97093/98051 Chinese characters being taken into

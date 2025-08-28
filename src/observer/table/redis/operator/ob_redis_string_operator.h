@@ -24,7 +24,7 @@ namespace table
 class StringCommandOperator : public CommandOperator
 {
 public:
-  explicit StringCommandOperator(ObRedisCtx &redis_ctx) :
+  explicit StringCommandOperator(ObRedisCtx &redis_ctx) : 
     CommandOperator(redis_ctx)
   {
     model_ = ObRedisDataModel::STRING;
@@ -66,7 +66,7 @@ public:
   int do_group_setnx();
   int do_group_incrbyfloat();
   int do_group_append();
-
+  
   int do_group_analyze(int (StringCommandOperator::*analyze_func)(ObRedisOp *op, ObTableOperationResult &),
                        StringCommandOperator *obj);
   int analyze_bitcount(ObRedisOp *op, ObTableOperationResult &res);

@@ -498,10 +498,10 @@ int ObSchemaHistoryRecycler::get_recycle_schema_version_by_global_stat(
           LOG_WARN("fail to get schema version by timestamp",
                    KR(ret), K(schema_status), K(tenant_id), K(expire_time));
         }
-
+        
         // if get_schema_version_by_timestamp failed, do not recycle this tenant's schema history in this round
         expire_schema_version = OB_SUCC(ret) ? expire_schema_version : OB_INVALID_VERSION;
-
+        
         // overwrite ret, so other tenants could recycle normally
         if (OB_FAIL(fill_recycle_schema_versions(
                   tenant_id, expire_schema_version, recycle_schema_versions))) {

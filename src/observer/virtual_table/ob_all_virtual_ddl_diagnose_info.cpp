@@ -48,7 +48,7 @@ int ObAllVirtualDDLDiagnoseInfo::init(ObMySQLProxy *sql_proxy)
     is_inited_ = true;
   }
   return ret;
-}
+}  
 
 int ObAllVirtualDDLDiagnoseInfo::process()
 {
@@ -124,15 +124,15 @@ int ObAllVirtualDDLDiagnoseInfoI1::process()
           } else {
             index_count++;
           }
-        }
-      }
+        } 
+      } 
     }
     if (OB_FAIL(ret)) {
     } else if (index_count <= 0) {
     } else if (OB_FAIL(task_id.append_fmt(") "))) {
       LOG_WARN("failed to assign sql", K(ret));
     } else if (OB_FAIL(scan_sql.assign_fmt("SELECT task_id, tenant_id, object_id, ddl_type, execution_id, time_to_usec(gmt_create) as GMT_CREATE, time_to_usec(gmt_modified) as GMT_MODIFIED "
-                                          "FROM %s WHERE task_id in %s "
+                                          "FROM %s WHERE task_id in %s " 
                                           "UNION "
                                           "SELECT task_id, tenant_id, object_id, ddl_type, NULL AS execution_id, time_to_usec(gmt_create) as GMT_CREATE, time_to_usec(gmt_modified) as GMT_MODIFIED "
                                           "FROM %s WHERE user_message = 'Successful ddl' AND task_id in %s "
@@ -149,7 +149,7 @@ int ObAllVirtualDDLDiagnoseInfoI1::process()
   return ret;
 }
 
-int ObAllVirtualDDLDiagnoseInfoI1::inner_open()
+int ObAllVirtualDDLDiagnoseInfoI1::inner_open() 
 {
   return set_index_ids(key_ranges_);
 }
@@ -219,7 +219,7 @@ int ObAllVirtualDDLDiagnoseInfo::fill_cells()
   return ret;
 }
 
-int ObAllVirtualDDLDiagnoseInfo::get_next_diagnose_info_row()
+int ObAllVirtualDDLDiagnoseInfo::get_next_diagnose_info_row() 
 {
   int ret = OB_SUCCESS;
   bool is_valid_diagnose = false;
@@ -285,7 +285,7 @@ int ObAllVirtualDDLDiagnoseInfo::collect_ddl_info(const ObSqlString &scan_sql)
         while (OB_SUCC(ret)) {
           if (OB_FAIL(scan_result->next())) {
             if (OB_ITER_END == ret) {
-              ret = OB_SUCCESS;
+              ret = OB_SUCCESS; 
               break;
             } else {
               LOG_WARN("failed to get next row", K(ret), K(scan_sql));
@@ -307,10 +307,10 @@ int ObAllVirtualDDLDiagnoseInfo::collect_ddl_info(const ObSqlString &scan_sql)
               LOG_WARN("failed to print ddl type", K(ret), K(value_.ddl_type_));
             } else if (OB_FAIL(ddl_scan_result_.push_back(value_))) {
               LOG_WARN("failed to push back value", K(ret), K(value_));
-            }
+            } 
           }
         }
-      }
+      } 
     }
   }
   if (OB_SUCC(ret)) {

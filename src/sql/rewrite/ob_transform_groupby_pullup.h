@@ -186,12 +186,12 @@ private:
                                          uint64_t table_id,
                                          ObIArray<ObRawExpr*> &column_exprs);
 
-  int get_group_by_subset(ObRawExpr *expr,
-                          const ObIArray<ObRawExpr *> &group_exprs,
+  int get_group_by_subset(ObRawExpr *expr, 
+                          const ObIArray<ObRawExpr *> &group_exprs, 
                           ObIArray<ObRawExpr *> &subset_group_exprs);
 
-  int get_group_by_subset(ObIArray<ObRawExpr *> &exprs,
-                          const ObIArray<ObRawExpr *> &group_exprs,
+  int get_group_by_subset(ObIArray<ObRawExpr *> &exprs, 
+                          const ObIArray<ObRawExpr *> &group_exprs, 
                           ObIArray<ObRawExpr *> &subset_group_exprs);
 
   int calc_group_exprs_ndv(const ObIArray<ObRawExpr*> &group_exprs,

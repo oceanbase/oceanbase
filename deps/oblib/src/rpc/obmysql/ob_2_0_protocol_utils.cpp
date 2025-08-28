@@ -542,7 +542,7 @@ inline int ObProto20Utils::fill_proto20_header(ObProtoEncodeParam &param) {
   uint32_t compress_len = 0;
   uint8_t compress_seq = 0;
   uint32_t uncompress_len = 0;
-
+  
   if (param.conn_->proxy_cap_flags_.is_ob_protocol_v2_compress()) {
     // do nothing
   } else {
@@ -550,7 +550,7 @@ inline int ObProto20Utils::fill_proto20_header(ObProtoEncodeParam &param) {
     compress_seq = proto20_context.comp_seq_;
     ++proto20_context.comp_seq_;
   }
-
+  
   int16_t magic_num = OB20_PROTOCOL_MAGIC_NUM;
   uint16_t version = OB20_PROTOCOL_VERSION_VALUE;
   uint32_t connid = param.conn_id_;
@@ -666,7 +666,7 @@ inline bool ObProto20Utils::has_extra_info(const ObProtoEncodeParam &param)
 
 int ObProto20Utils::reset_extra_info(ObProtoEncodeParam &param) {
   int ret = OB_SUCCESS;
-
+  
   if(OB_ISNULL(param.proto20_context_)) {
     // do nothing
   } else if (param.proto20_context_->is_new_extra_info_) {
@@ -677,7 +677,7 @@ int ObProto20Utils::reset_extra_info(ObProtoEncodeParam &param) {
       for (int64_t i = 0; OB_SUCC(ret) && i < param.extra_info_ecds_->count(); i++) {
         if (OB_ISNULL(param.extra_info_ecds_->at(i))) {
           // do nothing
-        } else if (!param.extra_info_ecds_->at(i)->is_serial_
+        } else if (!param.extra_info_ecds_->at(i)->is_serial_ 
             && OB_FAIL(tmp_ecds.push_back(param.extra_info_ecds_->at(i)))) {
           LOG_WARN("failed to push back encoders", K(ret), K(i));
         }

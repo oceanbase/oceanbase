@@ -227,7 +227,7 @@ int ObMySQLRequestManager::record_request(const ObAuditRecordData &audit_record,
         record->data_.request_memory_used_ = *audit_record.sql_memory_used_;
       }
 
-      //for find bug
+      //for find bug 
       // only print this log if enable_perf_event is enable,
       // for `receive_ts_` might be invalid if `enable_perf_event` is false
       if (lib::is_diagnose_info_enabled()
@@ -239,7 +239,7 @@ int ObMySQLRequestManager::record_request(const ObAuditRecordData &audit_record,
 
       // query response time
       if (enable_query_response_time_stats) {
-        observer::ObTenantQueryRespTimeCollector *t_query_resp_time_collector =
+        observer::ObTenantQueryRespTimeCollector *t_query_resp_time_collector = 
             MTL(observer::ObTenantQueryRespTimeCollector *);
         if (OB_NOT_NULL(t_query_resp_time_collector)) {
           int tmp_ret = OB_SUCCESS;

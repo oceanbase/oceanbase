@@ -43,7 +43,7 @@ JniScanner::JniScanner(ObString factory_class, ObString scanner_type, const bool
       cur_reader_(nullptr),
       inited_(false),
       is_opened_(false),
-      is_schema_scanner_(is_schema_scanner)
+      is_schema_scanner_(is_schema_scanner)      
 {
   int ret = OB_SUCCESS;
 
@@ -339,7 +339,7 @@ int JniScanner::init_jni_table_scanner_(JNIEnv *env) {
 
         jni_scanner_obj_ =
           env->NewObject(jni_scanner_cls_, scanner_constructor, hashmap_object);
-
+        
         env->DeleteLocalRef(hashmap_class);
         env->DeleteLocalRef(hashmap_object);
         if (OB_FAIL(check_jni_exception_(env))) {
@@ -517,7 +517,7 @@ int JniScanner::do_get_next_split_by_ob(int64_t *read_rows, bool *eof, int capac
     *eof = true;
   } else {
     // Which meta address will mapping by
-    // com.oceanbase.jni.connector.OffHeapTable#getMetaNativeAddress
+    // com.oceanbase.jni.connector.OffHeapTable#getMetaNativeAddress  
     table_meta_.set_meta(meta_address);
     num_rows = table_meta_.next_meta_as_long();
 
@@ -630,7 +630,7 @@ int JniScanner::do_get_next_split_by_odps(int64_t *read_rows, bool *eof, int cap
       remain_total_rows_ = 0;
     }
   }
-
+  
   LOG_DEBUG("get one odps size batch", K(remain_total_rows_), K(start_offset_), K(*eof), K(*read_rows));
   return ret;
 }
@@ -904,7 +904,7 @@ int JniScanner::get_file_total_row_count(int64_t& count) {
     } else if (nullptr == jni_scanner_get_total_row_count) {
       ret = OB_JNI_ERROR;
       LOG_WARN("faild to get the row count method", K(ret));
-    } else {
+    } else {       
       jlong size = env->CallLongMethod(jni_scanner_obj_, jni_scanner_get_total_row_count);
       if (OB_FAIL(check_jni_exception_(env))) {
         LOG_WARN("check jni with exception", K(ret));
@@ -936,7 +936,7 @@ int JniScanner::get_file_total_size(int64_t& size) {
     } else if (nullptr == jni_scanner_get_file_total_size) {
       ret = OB_JNI_ERROR;
       LOG_WARN("faild to get the row count method", K(ret));
-    } else {
+    } else {       
       jlong jsize = env->CallLongMethod(jni_scanner_obj_, jni_scanner_get_file_total_size);
       if (OB_FAIL(check_jni_exception_(env))) {
         LOG_WARN("check jni with exception", K(ret));
@@ -968,7 +968,7 @@ int JniScanner::get_split_count(int64_t& size) {
     } else if (nullptr == jni_scanner_get_split_count) {
       ret = OB_JNI_ERROR;
       LOG_WARN("faild to get the row count method", K(ret));
-    } else {
+    } else {       
       jlong count = env->CallLongMethod(jni_scanner_obj_, jni_scanner_get_split_count);
       if (OB_FAIL(check_jni_exception_(env))) {
         LOG_WARN("check jni with exception", K(ret));
@@ -1001,7 +1001,7 @@ int JniScanner::get_session_id(ObIAllocator& alloc, ObString& id) {
     } else if (nullptr == jni_scanner_get_session_id) {
       ret = OB_JNI_ERROR;
       LOG_WARN("faild to get the row count method", K(ret));
-    } else {
+    } else {       
       jstring session_id = (jstring) env->CallObjectMethod(jni_scanner_obj_, jni_scanner_get_session_id);
       const char *str = env->GetStringUTFChars(session_id, NULL);
       const jsize len = env->GetStringLength(session_id);
@@ -1012,7 +1012,7 @@ int JniScanner::get_session_id(ObIAllocator& alloc, ObString& id) {
       } else {
         if (OB_FAIL(ob_write_string(alloc, str_temp, id, true))) {
           LOG_WARN("failed to write string", K(ret), K(str));
-        }
+        } 
       }
       env->ReleaseStringUTFChars(session_id, str);
       env->DeleteLocalRef(session_id);
@@ -1040,7 +1040,7 @@ int JniScanner::get_serilize_session(ObIAllocator& alloc, ObString& sstr) {
     } else if (nullptr == jni_scanner_get_session) {
       ret = OB_JNI_ERROR;
       LOG_WARN("faild to get the row count method", K(ret));
-    } else {
+    } else {       
       jstring session_str = (jstring) env->CallObjectMethod(jni_scanner_obj_, jni_scanner_get_session);
       jsize sz = env->GetStringUTFLength(session_str);
       const char *str = env->GetStringUTFChars(session_str, NULL);
@@ -1051,7 +1051,7 @@ int JniScanner::get_serilize_session(ObIAllocator& alloc, ObString& sstr) {
       } else {
         if (OB_FAIL(ob_write_string(alloc, helper, sstr, true))) {
           LOG_WARN("failed to write string", K(ret), K(str));
-        }
+        } 
       }
       env->ReleaseStringUTFChars(session_str, str);
       env->DeleteLocalRef(session_str);
@@ -1094,7 +1094,7 @@ int JniScanner::get_project_timezone_info(ObIAllocator& alloc, ObString& sstr) {
         } else {
           if (OB_FAIL(ob_write_string(alloc, helper, sstr))) {
             LOG_WARN("failed to write string", K(ret), K(str));
-          }
+          } 
         }
         env->ReleaseStringUTFChars(timezone, str);
         env->DeleteLocalRef(timezone);

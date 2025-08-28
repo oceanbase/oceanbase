@@ -1316,9 +1316,9 @@ int ObNewTableTabletAllocator::alloc_ls_for_in_tablegroup_tablet(
     }
   } else {
     common::ObArray<const share::schema::ObTableSchema *> table_schema_array;
-    /*
-    scene of using latest_schema_guard:
-      When multiple tables are created in a DDL transaction, ObSchemaGetterGuard cannot obtain the latest schema,
+    /* 
+    scene of using latest_schema_guard: 
+      When multiple tables are created in a DDL transaction, ObSchemaGetterGuard cannot obtain the latest schema, 
       causing the partition distribution of each table not comply with the constraints of tablegroup.
     */
     if (OB_ISNULL(latest_schema_guard) && OB_FAIL(schema_guard_.get_table_schemas_in_tablegroup(
@@ -1329,7 +1329,7 @@ int ObNewTableTabletAllocator::alloc_ls_for_in_tablegroup_tablet(
                "tenant_id", tenant_id_,
                "tablegroup_id", tablegroup_schema.get_tablegroup_id());
     } else if (OB_NOT_NULL(latest_schema_guard) && OB_FAIL(latest_schema_guard->get_table_schemas_in_tablegroup(
-                  tablegroup_schema.get_tablegroup_id(),
+                  tablegroup_schema.get_tablegroup_id(), 
                   table_schema_array))) {
       LOG_WARN("fail to get latest table schemas in tablegroup", KR(ret),
                "tenant_id", tenant_id_,

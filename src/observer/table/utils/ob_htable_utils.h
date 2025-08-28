@@ -339,7 +339,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObNegativeTimeRange);
 };
 
-class KeyRange
+class KeyRange 
 {
 public:
   KeyRange()
@@ -365,14 +365,14 @@ public:
   void set_min_inclusive(bool value) { min_inclusive_ = value; }
   void set_max(ObString value) { max_ = value; }
   void set_max_inclusive(bool value) { max_inclusive_ = value; }
-  bool valid()
+  bool valid() 
   {
-    return min_.empty()
-    | max_.empty()
-    | (min_.compare(max_) < 0)
+    return min_.empty() 
+    | max_.empty() 
+    | (min_.compare(max_) < 0) 
     | (min_.compare(max_) == 0 && max_inclusive_);
   }
-  bool contain(ObString row_key)
+  bool contain(ObString row_key) 
   {
     int l_cmp = min_.compare(row_key);
     int r_cmp = max_.empty()? 1 : max_.compare(row_key);
@@ -429,12 +429,12 @@ public:
   /// Create a Cell that is larger than all other possible Cells for the given Cell's rk:cf:q
   static int create_last_cell_on_row_col(common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell);
   /// Create a Cell that is smaller than all other possible Cells for the given Cell's rk:cf and passed qualifier.
-  static int create_first_cell_on_row_col(common::ObIAllocator &allocator,
-                                          const ObHTableCell &cell,
-                                          const common::ObString &qualifier,
+  static int create_first_cell_on_row_col(common::ObIAllocator &allocator, 
+                                          const ObHTableCell &cell, 
+                                          const common::ObString &qualifier, 
                                           ObHTableCell *&new_cell);
   /// Create a Cell that is smaller than all other possible Cells for the given Cell's rk:ts and passed timestamp.
-  static int create_first_cell_on_row_col_ts(common::ObIAllocator &allocator,
+  static int create_first_cell_on_row_col_ts(common::ObIAllocator &allocator, 
                                              const ObHTableCell &cell,
                                              const int64_t timestamp,
                                              ObHTableCell *&new_cell);
@@ -457,10 +457,10 @@ public:
   static int lock_htable_rows(uint64_t table_id, const ObIArray<table::ObTableOperation> &ops, ObHTableLockHandle &handle, ObHTableLockMode lock_mode);
   static int lock_htable_rows(uint64_t table_id, const ObIArray<table::ObTableSingleOp> &ops, ObHTableLockHandle &handle, ObHTableLockMode lock_mode);
   // lock the check row in the given lock mode with the given lock hanle,
-  // for increment, append, and check operation in check_and_xxx
+  // for increment, append, and check operation in check_and_xxx 
   static int lock_htable_row(uint64_t table_id, const ObTableQuery &htable_query, ObHTableLockHandle &handle, ObHTableLockMode lock_mode);
   static int lock_redis_key(uint64_t table_id, const ObString &lock_key, ObHTableLockHandle &handle, ObHTableLockMode lock_mode);
-  static OB_INLINE bool is_tablegroup_req(const ObString &table_name, ObTableEntityType entity_type)
+  static OB_INLINE bool is_tablegroup_req(const ObString &table_name, ObTableEntityType entity_type) 
   {
     return entity_type == ObTableEntityType::ET_HKV && table_name.find('$') == nullptr;
   }
@@ -475,8 +475,8 @@ public:
   static int cons_query_by_entity(const ObITableEntity &entity, ObIAllocator &allocator, ObTableQuery &query);
   static int gen_filter_by_entity(const ObITableEntity &entity, ObHTableFilter &filter);
   static int get_mode_type(const share::schema::ObTableSchema &table_schema, ObHbaseModeType &mode_type);
-  static int construct_entity_from_row(const ObNewRow &row,
-                                       ObKvSchemaCacheGuard &schema_cache_guard,
+  static int construct_entity_from_row(const ObNewRow &row, 
+                                       ObKvSchemaCacheGuard &schema_cache_guard, 
                                        ObTableEntity &entity);
   static int process_columns(const ObIArray<ObString>& columns,
                              ObIArray<std::pair<ObString, bool>>& family_addfamily_flag_pairs,

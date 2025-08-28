@@ -795,7 +795,7 @@ int ObPxMSReceiveVecOp::get_one_row_from_channels(
       if (OB_ITER_END != ret) {
         LOG_WARN("fail to get row from merge sort input", K(ret));
       }
-    } else {
+    } else { 
       ++processed_cnt_;
       msi->processed_cnt_ = processed_cnt_;
     }
@@ -1259,7 +1259,7 @@ int ObPxMSReceiveVecOp::MergeSortInput::need_dump(ObSqlMemMgrProcessor &sql_mem_
 {
   int ret = OB_SUCCESS;
   need_dump = false;
-  if (sql_mem_processor.get_data_size() > sql_mem_processor.get_mem_bound()
+  if (sql_mem_processor.get_data_size() > sql_mem_processor.get_mem_bound() 
           && GCONF.is_sql_operator_dump_enabled()
           && OB_FAIL(sql_mem_processor.extend_max_memory_size(
             &alloc,
@@ -1268,7 +1268,7 @@ int ObPxMSReceiveVecOp::MergeSortInput::need_dump(ObSqlMemMgrProcessor &sql_mem_
             },
             need_dump, sql_mem_processor.get_data_size()))) {
     LOG_WARN("failed to extend max memory size", K(ret));
-  }
+  } 
   return ret;
 }
 

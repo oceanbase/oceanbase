@@ -181,7 +181,7 @@ OB_DEF_SERIALIZE_SIZE(ObITableEntity)
     }
     OB_UNIS_ADD_LEN(value);
   }
-
+  
   if (OB_SUCC(ret)) {
     ObTableEntityType entity_type = const_cast<ObITableEntity *>(this)->get_entity_type();
     if (entity_type == ObTableEntityType::ET_KV) {
@@ -1028,8 +1028,8 @@ int ObTableResult::assign(const ObTableResult &other)
   return OB_SUCCESS;
 }
 
-void ObTableResult::set_errno(int err) {
-  errno_ = err;
+void ObTableResult::set_errno(int err) { 
+  errno_ = err; 
 }
 
 ////////////////////////////////////////////////////////////////
@@ -1394,7 +1394,7 @@ int ObTableQuery::add_aggregation(ObTableAggregation &aggregation)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(aggregations_.push_back(aggregation))) {
-    LOG_WARN("failed to add rowkey range", K(ret), K(aggregation));
+    LOG_WARN("failed to add rowkey range", K(ret), K(aggregation));  
   }
   return ret;
 }
@@ -1655,7 +1655,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSingleOpQuery)
     LOG_WARN("scan_range_cols_bp_ is not init by rowkey_names", K(ret), K_(scan_range_cols_bp),
       K_(scan_range_columns), KPC(all_rowkey_names_));
   } else {
-    LST_DO_CODE(OB_UNIS_ADD_LEN,
+    LST_DO_CODE(OB_UNIS_ADD_LEN, 
                 index_name_);
 
     if (OB_SUCC(ret)) {
@@ -2242,7 +2242,7 @@ int ObTableQueryResult::add_row(const ObNewRow &row)
     } else if (OB_FAIL(alloc_buf_if_need(size))) {
       LOG_WARN("failed to alloc buff", K(ret), K(size));
     }
-
+    
     // 4. serialize
     for (int i = 0; OB_SUCC(ret) && i < N; ++i) {
       if (OB_FAIL(row.get_cell(i).serialize(buf_.get_data(), buf_.get_capacity(), buf_.get_position()))) {
@@ -2265,7 +2265,7 @@ int ObTableQueryResult::add_one_row_for_exist_only(const common::ObNewRow &row, 
     LOG_WARN("failed to add row", K(ret));
   }
   UNUSED(family_name);
-  return ret;
+  return ret; 
 }
 
 int ObTableQueryResult::add_all_property(const ObTableQueryResult &other)
@@ -2465,12 +2465,12 @@ int ObTableQueryIterableResult::add_all_row(ObTableQueryDListResult &other)
       } else {
         row_count_++;
       }
-    }
+    } 
   }
   if (ret == OB_ITER_END) {
     ret = OB_SUCCESS;
   }
-
+  
   return ret;
 }
 
@@ -2480,7 +2480,7 @@ int ObTableQueryIterableResult::add_one_row_for_exist_only(const common::ObNewRo
   if (OB_FAIL(add_row(row, family_name))) {
     LOG_WARN("failed to add row", K(ret), K(family_name));
   }
-  return ret;
+  return ret; 
 }
 
 int ObTableQueryIterableResult::get_row(ObNewRow& row)
@@ -2573,12 +2573,12 @@ bool ObTableQueryIterableResult::reach_batch_size_or_result_size(const int32_t b
   if (batch_count > 0 && this->get_row_count() >= batch_count) {
     LOG_DEBUG("reach batch limit", K(batch_count));
     reach_size = true;
-  }
+  } 
   return reach_size;
 }
 
 ////////////////////////////////////////////////////////////////
-ObTableQueryDListResult::ObTableQueryDListResult()
+ObTableQueryDListResult::ObTableQueryDListResult() 
   : ObTableQueryIterableResultBase(),
     cell_list_()
 {
@@ -2624,7 +2624,7 @@ int ObTableQueryDListResult::add_row(const common::ObNewRow &row, ObString famil
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("fail to add new_node to cell_list", K(ret));
           }
-        }
+        } 
       }
     }
   }
@@ -2667,7 +2667,7 @@ int ObTableQueryDListResult::add_row(const common::ObNewRow &row)
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("fail to add new_node to cell_list", K(ret));
           }
-        }
+        } 
       }
     }
   }
@@ -2758,7 +2758,7 @@ bool ObTableQueryDListResult::reach_batch_size_or_result_size(const int32_t batc
   if (batch_count > 0 && this->get_row_count() >= batch_count) {
     LOG_DEBUG("reach batch limit", K(batch_count));
     reach_size = true;
-  }
+  } 
   return reach_size;
 }
 
@@ -2893,7 +2893,7 @@ OB_DEF_DESERIALIZE(ObTableTabletOp,)
 
   int64_t single_op_size = 0;
   OB_UNIS_DECODE(single_op_size);
-
+  
   if (OB_SUCC(ret)) {
     if (OB_FAIL(single_ops_.prepare_allocate(single_op_size))) {
       LOG_WARN("fail to prepare allocatate single ops", K(ret), K(single_op_size));
@@ -3240,20 +3240,20 @@ int ObTableSingleOpEntity::construct_properties_bitmap_by_dict(const ObITableEnt
   } else if (FALSE_IT(all_prop_count = this->all_properties_names_->count())) {
   } else if (OB_FAIL(properties_names_bp_.init_bitmap(all_prop_count))) {
     LOG_WARN("failed to init bitmap size", K(ret));
-  } else if (all_prop_count == this->get_properties_count()) {
-    // fastpath: propterties in entity has all columns
+  } else if (all_prop_count == this->get_properties_count()) { 
+    // fastpath: propterties in entity has all columns 
     // and the result is from scan iterator, so we can ensure the property counts means all columns
     if (OB_FAIL(properties_names_bp_.set_all_bits_true())) {
       LOG_WARN("failed set all bits true", K(ret));
     }
-  } else {
+  } else { 
     // slow path: find each property position in dict and set bitmap
     const ObIArray<ObString> &prop_name = this->get_properties_names();
     for (int64_t i = 0; i < prop_name.count() && OB_SUCC(ret); i++) {
       int64_t idx = -1;
       if (!has_exist_in_array(*all_properties_names_, prop_name.at(i), &idx)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("property name is not exist in properties name dict", K(ret),
+        LOG_WARN("property name is not exist in properties name dict", K(ret), 
                   K(prop_name.at(i)), KPC(all_properties_names_), K(i));
       } else if (OB_FAIL(properties_names_bp_.set(idx))) {
         LOG_WARN("failed to set bitmap", K(ret), K(idx), K(prop_name.at(i)), K(properties_names_bp_));
@@ -3430,7 +3430,7 @@ OB_DEF_DESERIALIZE(ObTableSingleOpEntity)
           }
         } else if (OB_FAIL(ObTableSingleOpEntity::construct_column_names(
                         properties_names_bp_, *all_properties_names_, properties_names_))) {
-          LOG_WARN("failed to construct prop_names names from bitmap", K(ret),
+          LOG_WARN("failed to construct prop_names names from bitmap", K(ret), 
             K(properties_names_bp_), KPC(all_properties_names_), K(properties_names_));
         }
       }
@@ -3454,7 +3454,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSingleOpEntity)
       K(rowkey_names_), KPC(all_rowkey_names_));
   } else if (!properties_names_bp_.has_init()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("properties_names_bp is not init by prop_names", K(ret),
+    LOG_WARN("properties_names_bp is not init by prop_names", K(ret), 
       K(properties_names_bp_), K(properties_names_), KPC(all_properties_names_));
   } else {
     // row_key_names_bp size
@@ -3704,7 +3704,7 @@ DEF_TO_STRING(ObTableBitMap)
   return pos;
 }
 
-OB_SERIALIZE_MEMBER_SIMPLE(ObHBaseParams,
+OB_SERIALIZE_MEMBER_SIMPLE(ObHBaseParams, 
                            caching_,
                            call_timeout_,
                            flag_,
@@ -3730,7 +3730,7 @@ int ObHBaseParams::deep_copy(ObIAllocator &allocator, ObKVParamsBase *hbase_para
   return ret;
 }
 
-OB_SERIALIZE_MEMBER_SIMPLE(ObFTSParam,
+OB_SERIALIZE_MEMBER_SIMPLE(ObFTSParam, 
                            search_text_);
 
 int ObFTSParam::deep_copy( ObIAllocator &allocator, ObKVParamsBase *fts_params) const
@@ -3909,7 +3909,7 @@ int ObRedisResult::convert_to_table_op_result(ObTableOperationResult &result)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObTableMetaRequest,
+OB_SERIALIZE_MEMBER(ObTableMetaRequest, 
                      credential_,
                      meta_type_,
                      data_);

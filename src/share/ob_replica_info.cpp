@@ -657,7 +657,7 @@ bool ObZoneReplicaAttrSet::sort_compare_less_than(const ObZoneReplicaAttrSet *ls
 bool ObZoneReplicaAttrSet::operator<(
      const ObZoneReplicaAttrSet &that)
 {
-  return sort_compare_less_than(this, &that);
+  return sort_compare_less_than(this, &that);  
 }
 
 int ObZoneReplicaAttrSet::assign(const ObZoneReplicaAttrSet &that)

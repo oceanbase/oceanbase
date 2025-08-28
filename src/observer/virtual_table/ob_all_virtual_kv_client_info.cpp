@@ -92,7 +92,7 @@ int ObAllVirtualKvClientInfo::process_curr_tenant(ObNewRow *&row)
     ret = OB_NOT_INIT;
     LOG_WARN("allocator_ should not be NULL", K(ret));
   } else if (FALSE_IT(get_all_op.set_allocator(allocator_))) {
-  } else if (cli_infos_.count() == 0 &&
+  } else if (cli_infos_.count() == 0 && 
       OB_FAIL(TABLEAPI_CLI_INFO_MGR->get_cli_info_map().foreach_refactored(get_all_op))) {
     LOG_WARN("fail to get cli info map", K(ret), K(cli_infos_));
   } else if (cur_idx_ >= cli_infos_.count()) {

@@ -52,7 +52,7 @@ enum ObTTLTaskType
   OB_TTL_INVALID
 };
 
-enum ObTTLTaskStatus
+enum ObTTLTaskStatus 
 {
   // for obsever
   OB_TTL_TASK_PREPARE = 0,  //inner state
@@ -67,7 +67,7 @@ enum ObTTLTaskStatus
   OB_RS_TTL_TASK_CANCEL = 17,
   OB_RS_TTL_TASK_MOVE = 18,
 
-  OB_TTL_TASK_INVALID
+  OB_TTL_TASK_INVALID 
 };
 
 enum ObTTLType
@@ -144,7 +144,7 @@ typedef struct ObTTLStatusKey
   explicit ObTTLStatusKey(uint64_t tenant_id,
                           uint64_t table_id,
                           uint64_t tablet_id,
-                          uint64_t task_id)
+                          uint64_t task_id) 
   : tenant_id_(tenant_id),
     table_id_(table_id),
     tablet_id_(tablet_id),
@@ -165,14 +165,14 @@ typedef struct ObTTLStatusField {
     UINT_TYPE,
     STRING_TYPE,
   } type_;
-
+  
   union data {
     int64_t int_;
     uint64_t uint_;
     ObString str_;
     data () : str_() {}
   } data_;
-  ObTTLStatusField()
+  ObTTLStatusField() 
     : field_name_(),
       type_(INT_TYPE),
       data_() {}
@@ -186,7 +186,7 @@ typedef struct ObTTLDayTime {
   int32_t hour_;
   int32_t min_;
   int32_t sec_;
-  ObTTLDayTime()
+  ObTTLDayTime() 
     : hour_(0), min_(0), sec_(0) {}
   bool is_valid() {
     return ((hour_ >= 0 && hour_ <= 24) &&
@@ -213,7 +213,7 @@ struct ObTTLDutyDuration
 class ObTTLTime {
 public:
   static int64_t current_time();
-
+                          
   static bool is_same_day(int64_t ttl_time1,
                           int64_t ttl_time2);
 };
@@ -274,12 +274,12 @@ public:
     INVALID,
     TABLE
   };
-  explicit ObKVAttr()
-    : type_(ObTTLTableType::INVALID),
-      ttl_(0),
-      max_version_(0),
+  explicit ObKVAttr() 
+    : type_(ObTTLTableType::INVALID), 
+      ttl_(0), 
+      max_version_(0), 
       is_disable_(false),
-      is_redis_ttl_(false),
+      is_redis_ttl_(false), 
       redis_model_(table::ObRedisDataModel::MODEL_MAX),
       created_by_admin_(false)
   {}
@@ -321,35 +321,35 @@ public:
                                 bool &tenant_state_changed);
   static int insert_ttl_task(uint64_t tenant_id,
                              const char* tname,
-                             common::ObISQLClient& proxy,
+                             common::ObISQLClient& proxy, 
                              ObTTLStatus& task);
 
   static int replace_ttl_task(uint64_t tenant_id,
                              const char* tname,
-                             common::ObISQLClient& proxy,
+                             common::ObISQLClient& proxy, 
                              ObTTLStatus& task);
 
   static int update_ttl_task(uint64_t tenant_id,
                              const char* tname,
-                             common::ObISQLClient& proxy,
+                             common::ObISQLClient& proxy, 
                              ObTTLStatusKey& key,
                              ObTTLStatusFieldArray& update_fields);
 
   static int update_ttl_task_all_fields(uint64_t tenant_id,
                                         const char* tname,
-                                        common::ObISQLClient& proxy,
+                                        common::ObISQLClient& proxy, 
                                         ObTTLStatus& update_task);
 
   static int delete_ttl_task(uint64_t tenant_id,
                              const char* tname,
-                             common::ObISQLClient& proxy,
+                             common::ObISQLClient& proxy, 
                              ObTTLStatusKey& key,
                              int64_t &affect_rows);
 
   static int read_ttl_tasks(uint64_t tenant_id,
                             const char* tname,
                             common::ObISQLClient& proxy,
-                            ObTTLStatusFieldArray& filters,
+                            ObTTLStatusFieldArray& filters, 
                             ObTTLStatusArray& result_arr,
                             bool for_update = false,
                             common::ObIAllocator *allocator = NULL);
@@ -429,7 +429,7 @@ private:
 enum class ObTableTTLTimeUnit
 {
   INVALID,
-  SECOND,
+  SECOND, 
   MINUTE,
   HOUR,
   DAY,
@@ -440,7 +440,7 @@ enum class ObTableTTLTimeUnit
 class ObTableTTLExpr
 {
 public:
-  ObTableTTLExpr(): column_name_(), interval_(), time_unit_(ObTableTTLTimeUnit::INVALID), nsecond_(0), nmonth_(0), is_negative_(false) {}
+  ObTableTTLExpr(): column_name_(), interval_(), time_unit_(ObTableTTLTimeUnit::INVALID), nsecond_(0), nmonth_(0), is_negative_(false) {}  
   ~ObTableTTLExpr() {}
   const ObString &get_ttl_column() const { return column_name_; }
   TO_STRING_KV(K_(column_name), K_(interval), K_(time_unit));

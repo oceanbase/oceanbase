@@ -23,7 +23,7 @@ namespace common
 OB_NOINLINE int jump_call(void * arg_, int(*func_) (void*), void* stack_addr)
 {
   int ret = 0;
-  __asm__ __volatile__ (
+  __asm__ __volatile__ ( 
     "leaq  -0x10(%3), %3\n\t"                      /* reserve space for old RSP on new stack, 0x10 for align */
     "movq  %%rsp, (%3)\n\t"                        /* store RSP in new stack */
     "movq  %3, %%rsp\n\t"                          /* jump to new stack */
@@ -44,14 +44,14 @@ OB_NOINLINE int jump_call(void * arg_, int(*func_) (void*), void* stack_addr)
     "sub  %3, %3, #0x20\n\t"                       /* reserve space for old sp on new stack, 0x10 for align */
     "stp  x29, x30, [%3, #0x10]\n\t"               /* x29, x30 may not be stored in the innest function. */
     "mov  x9, sp\n\t"                              /* transit SP by x9 */
-    "str  x9, [%3, #0x00]\n\t"                     /* store SP in new stack */
+    "str  x9, [%3, #0x00]\n\t"                     /* store SP in new stack */          
     "mov  sp, %3\n\t"                              /* jump SP to new stack */
     "blr  %2\n\t"                                  /* run the second arg func_ */
     "ldp  x29, x30, [sp, #0x10]\n\t"               /* restore x29, x30 */
     "ldr  x9, [sp, #0x00]\n\t"                     /* jump back to old stack */
     "mov  sp, x9\n\t"                              /* transit SP by x9 */
     :"=r" (ret)                                    /* output */
-    :"r"(x0), "r"(func_), "r"(stack_addr)          /* input*/
+    :"r"(x0), "r"(func_), "r"(stack_addr)          /* input*/   
     :"x9", "memory"                                /* specify x9 is used */
   );
   return (int) ret;

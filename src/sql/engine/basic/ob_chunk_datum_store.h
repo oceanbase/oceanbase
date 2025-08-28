@@ -746,7 +746,7 @@ public:
     };
     friend class ObChunkDatumStore;
     friend class IteratedBlockHolder;
-    Iterator() : start_iter_(false),
+    Iterator() : start_iter_(false), 
                  store_(NULL),
                  cur_iter_blk_(NULL),
                  aio_read_handle_(),

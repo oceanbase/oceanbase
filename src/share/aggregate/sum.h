@@ -760,7 +760,7 @@ public:
 
 public:
   SumVectorAggregate() {}
-
+  
   inline int add_one_row(RuntimeContext &agg_ctx, int64_t batch_idx, int64_t batch_size,
                          const bool is_null, const char *data, const int32_t data_len,
                          int32_t agg_col_idx, char *agg_cell)

@@ -125,7 +125,7 @@ int ObParquetTableRowIterator::compute_column_id_by_index_type(int index, int &f
     }
     default:
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("unknown orc column_index_type", K(ret),
+      LOG_WARN("unknown orc column_index_type", K(ret), 
                               K(scan_param_->external_file_format_.orc_format_.column_index_type_));
       break;
   }
@@ -221,7 +221,7 @@ int ObParquetTableRowIterator::next_file()
                                                         state_.cur_row_group_idx_,
                                                         state_.end_row_group_idx_));
     OX (state_.end_row_group_idx_ = std::min((int64_t)(file_meta_->num_row_groups()), state_.end_row_group_idx_));
-
+                                                        
     BEGIN_CATCH_EXCEPTIONS
       for (int i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
         ObDataAccessPathExtraInfo *data_access_info =
@@ -241,7 +241,7 @@ int ObParquetTableRowIterator::next_file()
               ret = OB_INVALID_EXTERNAL_FILE_COLUMN_PATH;
               LOG_USER_ERROR(OB_INVALID_EXTERNAL_FILE_COLUMN_PATH,
                           data_access_info->data_access_path_.length(),
-                          data_access_info->data_access_path_.ptr());
+                          data_access_info->data_access_path_.ptr());            
             }
           } else {
             col_desc = file_meta_->schema()->Column(column_index);
@@ -1492,7 +1492,7 @@ int ObParquetTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
           MEMSET(def_levels_buf_.get_data(), 0, sizeof(def_levels_buf_.at(0)) * eval_ctx.max_batch_size_);
           MEMSET(rep_levels_buf_.get_data(), 0, sizeof(rep_levels_buf_.at(0)) * eval_ctx.max_batch_size_);
           OZ (loader.load_data_for_col(load_funcs_.at(i)));
-          load_row_count += temp_row_count;
+          load_row_count += temp_row_count;  
         }
         if (OB_SUCC(ret)) {
           if (0 == read_count) {

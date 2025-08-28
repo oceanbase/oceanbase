@@ -55,15 +55,15 @@ ObInfoSchemaUserPrivilegesTable::StaticInit::StaticInit()
                                                    "REPLICATION SLAVE";
   ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_REPL_CLIENT_SHIFT] = 
                                                    "REPLICATION CLIENT";
-  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_DROP_DATABASE_LINK_SHIFT] =
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_DROP_DATABASE_LINK_SHIFT] = 
                                                    "DROP DATABASE LINK";
-  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_DATABASE_LINK_SHIFT] =
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_DATABASE_LINK_SHIFT] = 
                                                    "CREATE DATABASE LINK";
-  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_EXECUTE_SHIFT] =
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_EXECUTE_SHIFT] = 
                                                    "EXECUTE";
-  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_ALTER_ROUTINE_SHIFT] =
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_ALTER_ROUTINE_SHIFT] = 
                                                    "ALTER ROUTINE";
-  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_ROUTINE_SHIFT] =
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_ROUTINE_SHIFT] = 
                                                    "CREATE ROUTINE";
   ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_TABLESPACE_SHIFT] =
                                                    "CREATE TABLESPACE";
@@ -79,19 +79,19 @@ ObInfoSchemaUserPrivilegesTable::StaticInit::StaticInit()
                                                    "CREATE ROLE";
   ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_DROP_ROLE_SHIFT] =
                                                    "DROP ROLE";
-  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_ENCRYPT_SHIFT] =
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_ENCRYPT_SHIFT] = 
                                                    "ENCRYPT";
-  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_DECRYPT_SHIFT] =
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_DECRYPT_SHIFT] = 
                                                    "DECRYPT";
-  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_EVENT_SHIFT] =
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_EVENT_SHIFT] = 
                                                    "EVENT";
-  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_CATALOG_SHIFT] =
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_CATALOG_SHIFT] = 
                                                    "CREATE CATALOG";
-  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_USE_CATALOG_SHIFT] =
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_USE_CATALOG_SHIFT] = 
                                                    "USE CATALOG";
-  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_SENSITIVE_RULE_SHIFT] =
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_SENSITIVE_RULE_SHIFT] = 
                                                    "CREATE SENSITIVE RULE";
-  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_PLAINACCESS_SHIFT] =
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_PLAINACCESS_SHIFT] = 
                                                    "PLAINACCESS";
 }
 

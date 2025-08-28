@@ -143,7 +143,7 @@ int ObExprAutoincNextval::check_and_cast(ObObj &result,
             is_to_generate = true;
           }
         } else {
-          // see:
+          // see: 
           if (autoinc_param->is_ignore_) {
             is_to_generate = true;
           }

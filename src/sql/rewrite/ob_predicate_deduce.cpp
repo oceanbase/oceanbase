@@ -75,8 +75,8 @@ int ObPredicateDeduce::check_deduce_validity(ObRawExpr *cond, bool &is_valid)
     is_valid = false;
   } else if (left_expr == right_expr || left_expr->same_as(*right_expr)) {
     is_valid = false;
-  } else if (OB_FAIL(ObRelationalExprOperator::is_equal_transitive(left_expr->get_result_type(),
-                                                                   right_expr->get_result_type(),
+  } else if (OB_FAIL(ObRelationalExprOperator::is_equal_transitive(left_expr->get_result_type(), 
+                                                                   right_expr->get_result_type(), 
                                                                    is_valid))) {
     LOG_WARN("failed to check equal transitive", K(ret));
   }
@@ -185,10 +185,10 @@ int ObPredicateDeduce::choose_equal_preds(ObIArray<uint8_t> &chosen,
       }
 //      bool is_eq = has(graph_, i, j, EQ);
 //      bool is_ch = has(chosen, i, j, EQ);
-//      LOG_TRACE("print predicate",
+//      LOG_TRACE("print predicate", 
 //               "first expr",
-//               ObLogPrintName<ObRawExpr>(*input_exprs_.at(i)),
-//               "second expr",
+//               ObLogPrintName<ObRawExpr>(*input_exprs_.at(i)), 
+//               "second expr", 
 //               ObLogPrintName<ObRawExpr>(*input_exprs_.at(j)), K(is_eq), K(is_ch));
     }
   }
@@ -698,7 +698,7 @@ int ObPredicateDeduce::get_equal_exprs(ObRawExpr *pred,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
       } else if (T_OP_IN == pred->get_expr_type() &&
-                 (!table_item->is_basic_table() ||
+                 (!table_item->is_basic_table() || 
                   has_raw_const_equal_condition(i))) {
         // deduce IN predicates for column parameters that only have basic tables and do not contain const equal predicates and IN predicates
         // do nothing
@@ -1044,7 +1044,7 @@ bool ObPredicateDeduce::has_raw_const_equal_condition(int64_t param_idx)
   return has_const_condition;
 }
 
-int ObPredicateDeduce::check_lossless_cast_table_filter(ObRawExpr *expr,
+int ObPredicateDeduce::check_lossless_cast_table_filter(ObRawExpr *expr, 
                                                         ObRawExpr *&cast_expr,
                                                         bool &is_valid)
 {
@@ -1084,3 +1084,4 @@ int ObPredicateDeduce::check_lossless_cast_table_filter(ObRawExpr *expr,
   }
   return ret;
 }
+

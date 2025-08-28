@@ -131,7 +131,7 @@ TEST_F(TestTextAnalyzer, test_basic_english_analyzer)
   analysis_ctx_.need_grouping_ = false;
 
   ASSERT_EQ(OB_SUCCESS, analyzer.init(analysis_ctx_, allocator_));
-
+  
   const int64_t doc_len_1 = 64;
   const char doc_1[doc_len_1] = {"Try to tokenize basic english doc."};
   const int64_t token_cnt_1 = 6;
@@ -148,7 +148,7 @@ TEST_F(TestTextAnalyzer, test_basic_english_analyzer)
   const int64_t tokens_2_len[token_cnt_2] = {9, 9, 3, 5, 3, 9, 3};
   const int64_t tokens_freq_2[token_cnt_2] = {1, 1, 1, 1, 1, 1, 1};
   analyze_test(analyzer, doc_2, doc_len_2, tokens_2, tokens_2_len, tokens_freq_2, token_cnt_2);
-
+  
   // won't trim extremely short phrase for now
   const int64_t doc_len_3 = 64;
   const char doc_3[doc_len_3] = {"if (a==b and c > !d)      then x=1;"};

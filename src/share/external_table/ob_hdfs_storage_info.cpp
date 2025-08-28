@@ -154,7 +154,7 @@ int ObHDFSStorageInfo::parse_storage_info_(const char *storage_info, bool &has_n
       } else if (0 == strncmp(KRB5CONF, token, strlen(KRB5CONF))) {
         if (ObStorageType::OB_STORAGE_HDFS != device_type_) {
           ret = OB_INVALID_BACKUP_DEST;
-          LOG_WARN("device don't support KRB5CONF yet", K(ret),
+          LOG_WARN("device don't support KRB5CONF yet", K(ret), 
               K_(device_type), KP(token));
         } else if (OB_FAIL(set_storage_info_field_(token, hdfs_extension_, sizeof(hdfs_extension_)))) {
           LOG_WARN("failed to set krb5conf", K(ret), KP(token));
@@ -162,7 +162,7 @@ int ObHDFSStorageInfo::parse_storage_info_(const char *storage_info, bool &has_n
       } else if (0 == strncmp(PRINCIPAL, token, strlen(PRINCIPAL))) {
         if (ObStorageType::OB_STORAGE_HDFS != device_type_) {
           ret = OB_INVALID_BACKUP_DEST;
-          LOG_WARN("device don't support PRINCIPAL yet", K(ret),
+          LOG_WARN("device don't support PRINCIPAL yet", K(ret), 
               K_(device_type), KP(token));
         } else if (OB_FAIL(set_storage_info_field_(token, hdfs_extension_, sizeof(hdfs_extension_)))) {
           LOG_WARN("failed to set principal", K(ret), KP(token));
@@ -170,7 +170,7 @@ int ObHDFSStorageInfo::parse_storage_info_(const char *storage_info, bool &has_n
       } else if (0 == strncmp(KEYTAB, token, strlen(KEYTAB))) {
         if (ObStorageType::OB_STORAGE_HDFS != device_type_) {
           ret = OB_INVALID_BACKUP_DEST;
-          LOG_WARN("device don't support KEYTAB yet", K(ret),
+          LOG_WARN("device don't support KEYTAB yet", K(ret), 
               K_(device_type), KP(token));
         } else if (OB_FAIL(set_storage_info_field_(token, hdfs_extension_, sizeof(hdfs_extension_)))) {
           LOG_WARN("failed to set keytab", K(ret), KP(token));
@@ -178,7 +178,7 @@ int ObHDFSStorageInfo::parse_storage_info_(const char *storage_info, bool &has_n
       } else if (0 == strncmp(TICKET_CACHE_PATH, token, strlen(TICKET_CACHE_PATH))) {
         if (ObStorageType::OB_STORAGE_HDFS != device_type_) {
           ret = OB_INVALID_BACKUP_DEST;
-          LOG_WARN("device don't support TICKET_CACHE_PATH yet", K(ret),
+          LOG_WARN("device don't support TICKET_CACHE_PATH yet", K(ret), 
               K_(device_type), KP(token));
         } else if (OB_FAIL(set_storage_info_field_(token, hdfs_extension_, sizeof(hdfs_extension_)))) {
           LOG_WARN("failed to set ticiket_cache_path", K(ret), KP(token));
@@ -186,7 +186,7 @@ int ObHDFSStorageInfo::parse_storage_info_(const char *storage_info, bool &has_n
       } else if (0 == strncmp(HDFS_CONFIGS, token, strlen(HDFS_CONFIGS))) {
         if (ObStorageType::OB_STORAGE_HDFS != device_type_) {
           ret = OB_INVALID_BACKUP_DEST;
-          LOG_WARN("device don't support HDFS_CONFIGS yet", K(ret),
+          LOG_WARN("device don't support HDFS_CONFIGS yet", K(ret), 
               K_(device_type), KP(token));
         } else if (OB_FAIL(set_storage_info_field_(token, hdfs_extension_, sizeof(hdfs_extension_)))) {
           LOG_WARN("failed to set configs", K(ret), KP(token));
@@ -213,7 +213,7 @@ int ObHDFSStorageInfo::get_info_str_(char *storage_info, const int64_t info_len)
     LOG_WARN("invalid device type to get info str", K(ret), K_(device_type),
              KP(storage_info), K(info_len));
   } else {
-    // Setup storage info for simple auth on hdfs, more related auth configs will get in
+    // Setup storage info for simple auth on hdfs, more related auth configs will get in 
     // append_extension_str_.
     if (OB_ISNULL(hdfs_extension_) || 0 == strlen(hdfs_extension_)) {
       LOG_TRACE("access hdfs with simple auth and hdfs extension is empty", K(ret));

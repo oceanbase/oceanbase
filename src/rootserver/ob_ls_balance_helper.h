@@ -41,7 +41,7 @@ struct ObUnitGroupBalanceInfo
 public:
   ObUnitGroupBalanceInfo() { reset(); }
   ObUnitGroupBalanceInfo(const share::ObSimpleUnitGroup &unit_group,
-                      const int64_t primary_zone_num) :
+                      const int64_t primary_zone_num) : 
                       primary_zone_count_(primary_zone_num), unit_group_(unit_group),
                       redundant_ls_array_(), normal_ls_array_() {}
   ~ObUnitGroupBalanceInfo() {}
@@ -56,7 +56,7 @@ public:
   {
     int64_t count = 0;
     if (unit_group_.is_active()) {
-      count = primary_zone_count_ - normal_ls_array_.count();
+      count = primary_zone_count_ - normal_ls_array_.count(); 
     }
     return count;
   }
@@ -85,7 +85,7 @@ public:
   int add_ls_status_info(const share::ObLSStatusInfo &ls_info);
   TO_STRING_KV(K_(primary_zone_count), K_(unit_group),
                K_(redundant_ls_array), K_(normal_ls_array));
-private:
+private:  
   int64_t primary_zone_count_;
   share::ObSimpleUnitGroup unit_group_;
   share::ObLSStatusInfoArray redundant_ls_array_;// ls need merge to other normal ls
@@ -115,7 +115,7 @@ public:
   const share::ObLSID get_ls_id() const {
     return (NULL == info_) ? share::ObLSID() : info_->ls_id_;
   }
-  //Each time you split, you need to ensure that there is
+  //Each time you split, you need to ensure that there is 
   //enough factor on the source side, and then allocate the rest
   double reduce_factor_for_dest(const double need_factor, const double target_factor)
   {
@@ -134,7 +134,7 @@ public:
     if (need_factor <= 0) {
     } else {
       can_split = std::min(need_factor, current_factor_);
-      current_factor_ -= can_split;
+      current_factor_ -= can_split; 
     }
     return can_split;
   }
@@ -147,7 +147,7 @@ private:
   const share::ObLSStatusInfo *info_;
   double current_factor_;
 };
-typedef ObArray<ObSplitLSParam> ObSplitLSParamArray;
+typedef ObArray<ObSplitLSParam> ObSplitLSParamArray; 
 
 
 class ObLSBalanceTaskHelper
@@ -216,13 +216,13 @@ private:
   int generate_migrate_task_();
   int generate_expand_task_();
   int generate_shrink_task_();
-  /* description: get index of the unit_group_id in unit_group_balance_array
+  /* description: get index of the unit_group_id in unit_group_balance_array 
    * param[in] unit_group_id : unit_group_id
    * param[out] index : index of unit_group in unit_group_balance_array
    * return:
    * OB_SUCCESS : find the valid index
    * OB_ENTRY_NOT_EXIST: the unit_group not exist
-   * OTHER : failed
+   * OTHER : failed 
    */
   int find_unit_group_balance_index(const uint64_t unit_group_id, int64_t &index);
   int construct_expand_dest_param_(const int64_t lack_ls_count, ObSplitLSParamArray &src_ls,

@@ -138,7 +138,7 @@ int ObAllVirtualSessionInfo::FillScanner::operator()(
               // this is a tmp solution to avoid core when we execute 'show processlist'
               // before we finally find the reason and resolve the bug. otherwise we cannot
               // use this command in on-line cluster.
-              // see
+              // see 
               cur_row_->cells_[cell_idx].set_varchar("");
               cur_row_->cells_[cell_idx].set_collation_type(default_collation);
             } else {

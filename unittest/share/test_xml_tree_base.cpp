@@ -80,12 +80,12 @@ public:
   int64_t size() { return ObLibContainerNode::size(); }
   int64_t count() { return size(); }
 
-  const common::ObString& get_key()
+  const common::ObString& get_key() 
   {
     return name_;
   }
 
-  int get_key(ObString& res, int64_t index = -1)  override
+  int get_key(ObString& res, int64_t index = -1)  override 
   {
     INIT_SUCC(ret);
 
@@ -93,7 +93,7 @@ public:
     return ret;
   }
 
-  int get_ns_value(ObStack<ObIMulModeBase*>& stk, ObString &ns_value, ObIMulModeBase* extend)
+  int get_ns_value(ObStack<ObIMulModeBase*>& stk, ObString &ns_value, ObIMulModeBase* extend) 
   {
     return 0;
   }
@@ -112,7 +112,7 @@ public:
   virtual bool check_extend() { return false; }
   virtual bool check_if_defined_ns() { return false; }
 
-  int get_value(ObString& value, int64_t index = -1)  override
+  int get_value(ObString& value, int64_t index = -1)  override 
   {
     INIT_SUCC(ret);
 
@@ -127,10 +127,10 @@ public:
   void set_standalone(uint16_t standalone) {  }
 
   // 用于确定key是否匹配
-  int compare(const ObString& key, int& res) {
-    UNUSED(key);
-    res = 0;
-    return 0;
+  int compare(const ObString& key, int& res) { 
+    UNUSED(key); 
+    res = 0; 
+    return 0; 
   }
 
   virtual int64_t attribute_size() { return 0; }
@@ -160,24 +160,24 @@ public:
   {
     return ObLibContainerNode::append(static_cast<TXmlNodeBase*>(node));
   }
-
+ 
   virtual int insert(int64_t pos, ObIMulModeBase* node)
   {
     return ObLibContainerNode::insert(pos, static_cast<TXmlNodeBase*>(node));
   }
 
-  virtual int get_node_count(ObMulModeNodeType node_type, int &count)
+  virtual int get_node_count(ObMulModeNodeType node_type, int &count) 
   {
     return 0;
   }
 
   ObMulModeNodeType type() { return M_ELEMENT; }
-
+ 
   virtual int remove(int64_t pos)
   {
     return ObLibContainerNode::remove(pos);
   }
-
+ 
   virtual int remove(ObIMulModeBase* node)
   {
      return ObLibContainerNode::remove(static_cast<TXmlNodeBase*>(node));
@@ -191,7 +191,7 @@ public:
     return 0;
   }
 
-  int get_value(ObIMulModeBase*& value, int64_t index = -1)
+  int get_value(ObIMulModeBase*& value, int64_t index = -1) 
   {
     return 0;
   }
@@ -237,14 +237,14 @@ public:
   }
 
   virtual ObIMulModeBase* at(int64_t pos, ObIMulModeBase* buffer = nullptr)
-  {
+  { 
     ObLibTreeNodeBase* tmp = ObLibContainerNode::member(pos);
     TXmlNodeBase* res = nullptr;
 
     if (OB_NOT_NULL(tmp)) {
       res = static_cast<TXmlNodeBase*>(tmp);
     }
-    return res;
+    return res; 
   }
 
   int print(ObJsonBuffer& j_buf, uint32_t format_flag, uint64_t depth = 0, uint64_t size = 0)
@@ -256,7 +256,7 @@ public:
   {
     return ObLibContainerNode::update(pos, static_cast<TXmlNodeBase*>(new_node));
   }
-
+ 
   virtual int update(ObIMulModeBase* old_node, ObIMulModeBase* new_node)
   {
     return ObLibContainerNode::update(static_cast<TXmlNodeBase*>(old_node), static_cast<TXmlNodeBase*>(new_node));
@@ -324,7 +324,7 @@ TEST_F(TestXmlTreeBase, append)
   ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, mem_ctx), OB_SUCCESS);
 
   XmlElement element_node(mem_ctx, element_key, element_value);
-
+  
   XmlText xml_text1(key1, value1);
   XmlText xml_text2(key2, value2);
   XmlText xml_text3(key3, value3);
@@ -403,7 +403,7 @@ TEST_F(TestXmlTreeBase, remove)
   ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
 
   XmlElement element_node(ctx, element_key, element_value);
-
+  
   XmlText xml_text1(key1, value1);
   XmlText xml_text2(key2, value2);
   XmlText xml_text3(key3, value3);
@@ -502,7 +502,7 @@ TEST_F(TestXmlTreeBase, insert_update)
   ObMulModeMemCtx* ctx = nullptr;
   ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
   XmlElement element_node(ctx, element_key, element_value);
-
+  
   XmlText xml_text1(key1, value1);
   XmlText xml_text2(key2, value2);
   XmlText xml_text3(key3, value3);
@@ -545,9 +545,9 @@ TEST_F(TestXmlTreeBase, insert_update)
   //   cout << "name: "  << p_xml_text->name_.ptr_
   //         << ", " << p_xml_text->value_.ptr_ << endl;
   // }
-  //
+  // 
   // cout << "----------------------------------------------------" << endl;
-  //
+  // 
   // for (ObLibTreeNodeVector::iterator iter = element_node.children_.begin();
   //      iter != element_node.children_.end();
   //      iter++) {
@@ -589,7 +589,7 @@ TEST_F(TestXmlTreeBase, insert_brother)
   ObMulModeMemCtx* ctx = nullptr;
   ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
   XmlElement element_node(ctx, element_key, element_value);
-
+  
   XmlText xml_text1(key1, value1);
   XmlText xml_text2(key2, value2);
   XmlText xml_text3(key3, value3);
@@ -621,9 +621,9 @@ TEST_F(TestXmlTreeBase, insert_brother)
     cout << "name: "  << p_xml_text->name_.ptr_
           << ", " << p_xml_text->value_.ptr_ << endl;
   }
-
+  
   cout << "----------------------------------------------------" << endl;
-
+  
   for (ObLibTreeNodeVector::iterator iter = element_node.children_->begin();
        iter != element_node.children_->end();
        iter++) {
@@ -695,18 +695,18 @@ TEST_F(TestXmlTreeBase, tree_iterator)
   IntContainer scalar2(2);
   IntContainer scalar3(3);
   IntContainer scalar4(4);
-
+  
   ASSERT_EQ(OB_SUCCESS, sub1.append(&scalar1));
   ASSERT_EQ(OB_SUCCESS, sub1.append(&scalar2));
   ASSERT_EQ(OB_SUCCESS, sub1.append(&scalar3));
   ASSERT_EQ(OB_SUCCESS, sub1.append(&scalar4));
-
-
+  
+  
   IntContainer scalar100(100);
   IntContainer scalar101(101);
   IntContainer scalar102(102);
   IntContainer scalar103(103);
-
+  
   ASSERT_EQ(OB_SUCCESS, sub2.append(&scalar100));
   ASSERT_EQ(OB_SUCCESS, sub2.append(&scalar101));
   ASSERT_EQ(OB_SUCCESS, sub2.append(&scalar102));
@@ -733,10 +733,10 @@ TEST_F(TestXmlTreeBase, tree_iterator)
     }
 
     ASSERT_EQ(ret, OB_ITER_END);
-  }
+  } 
 
   // post order scan tree
-  {
+  { 
     // init tree_iterator
     IntContainer::tree_iterator iter_post(&root, scan_type::POST_ORDER, &allocator);
 
@@ -757,7 +757,7 @@ TEST_F(TestXmlTreeBase, tree_iterator)
 TEST_F(TestXmlTreeBase, iterator)
 {
 
-  ObArenaAllocator allocator(ObModIds::TEST);
+  ObArenaAllocator allocator(ObModIds::TEST);  
   ObMulModeMemCtx* ctx = nullptr;
   ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
 
@@ -796,7 +796,7 @@ TEST_F(TestXmlTreeBase, iterator)
   IntContainer scalar101(101);
   IntContainer scalar102(102);
   IntContainer scalar103(103);
-
+  
   {
     IntContainer::iterator iter = scalar100.begin();
     iter.next();
@@ -816,7 +816,7 @@ TEST_F(TestXmlTreeBase, iterator)
 
     IntContainer *p1 = static_cast<IntContainer*>(*iter1);
     IntContainer *p2 = static_cast<IntContainer*>(*iter2);
-
+    
     ASSERT_EQ(p1->value_, 100);
     ASSERT_EQ(p2->value_, 101);
   }
@@ -829,7 +829,7 @@ TEST_F(TestXmlTreeBase, iterator)
 
     IntContainer *p1 = static_cast<IntContainer*>(*iter1);
     IntContainer *p2 = static_cast<IntContainer*>(*iter2);
-
+    
     ASSERT_EQ(p1->value_, 101);
     ASSERT_EQ(p2->value_, 101);
   }
@@ -947,7 +947,7 @@ TEST_F(TestXmlTreeBase, reader)
     ObPathSeekInfo seek_info;
     seek_info.type_ = SimpleSeekType::KEY_TYPE;
     seek_info.key_ = key3;
-
+  
     ObMulModeReader reader(&element, seek_info);
     ObIMulModeBase* node = nullptr;
     ObString key;
@@ -977,27 +977,27 @@ TEST_F(TestXmlTreeBase, reader)
   {
     ObPathSeekInfo seek_info;
     seek_info.type_ = SimpleSeekType::POST_SCAN_TYPE;
-
+  
     ObArray<ObIMulModeBase*> result1;
     ASSERT_EQ(element.get_descendant(result1, POST_ORDER), OB_SUCCESS);
     ASSERT_EQ(result1.size(), 11);
-
+  
     for (int64_t pos = 0; pos < result1.count(); ++pos) {
       ObXmlElement* tmp = static_cast<ObXmlElement*>(result1.at(pos));
       cout << tmp->tag_info_.ptr_ << ", "
           << tmp->prefix_.ptr_ << endl;
     }
   }
-
+  
   {
     ObPathSeekInfo seek_info;
     seek_info.type_ = SimpleSeekType::PRE_SCAN_TYPE;
-
+    
     ObArray<ObIMulModeBase*> result1;
-
+     
     ASSERT_EQ(element.get_descendant(result1, PRE_ORDER), OB_SUCCESS);
     ASSERT_EQ(result1.size(), 11);
-
+    
     cout << "pre scan type..." << endl;
     for (int64_t pos = 0; pos < result1.count(); ++pos) {
       ObXmlElement* tmp = static_cast<ObXmlElement*>(result1.at(pos));
@@ -1009,9 +1009,9 @@ TEST_F(TestXmlTreeBase, reader)
   {
     ObPathSeekInfo seek_info;
     seek_info.type_ = SimpleSeekType::ALL_KEY_TYPE;
-
+  
     ObMulModeReader reader(&element, seek_info);
-
+    
     ObIMulModeBase* node = nullptr;
     ObString key;
     ObString prefix;
@@ -1120,7 +1120,7 @@ TEST_F(TestXmlTreeBase, lazy_sort)
   ASSERT_EQ(sub1.add_element(&sub1_3), OB_SUCCESS);
   ASSERT_EQ(sub1.add_element(&sub1_2), OB_SUCCESS);
   ASSERT_EQ(sub1.add_element(&sub1_1), OB_SUCCESS);
-
+  
   ASSERT_EQ(sub1.size(), 3);
   // orginal order
   for (int i = 0; i < 3; i++) {

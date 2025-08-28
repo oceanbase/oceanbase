@@ -368,7 +368,7 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
         }
       }
     }
-
+    
     if (OB_FAIL(ret)) {
     } else if (GCTX.is_shared_storage_mode() && is_mysql_mode()) {
       // Version validation is included in check_alter_stmt_storage_cache_policy
@@ -879,7 +879,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema should not be null", K(ret));
       } else if (index_table_schema->is_materialized_view()) {
-        // bug:
+        // bug: 
         // index_tid_array: 包含index和mv, 这里只需要处理索引即可
         // so do-nothing for mv
       } else if (index_table_schema->is_built_in_fts_index()) {
@@ -2119,7 +2119,7 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
                 } else if (has_index_using_type_) {
                   create_index_arg->index_using_type_ = index_using_type_;
                 }
-              }
+              } 
             }
             if (OB_SUCC(ret) && is_mysql_mode()) {
               if (NULL != index_partition_option) {
@@ -2779,7 +2779,7 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("vector index search index isn't supported in shared storage mode", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector index search index in shared storage mode is");
-        } else if (GCTX.is_shared_storage_mode()
+        } else if (GCTX.is_shared_storage_mode() 
                    && (MULTI_KEY == index_keyname_ || MULTI_UNIQUE_KEY == index_keyname_)
                    && tenant_data_version < DATA_VERSION_4_3_5_2) {
           ret = OB_NOT_SUPPORTED;
@@ -4309,7 +4309,7 @@ int ObAlterTableResolver::resolve_index_options(const ParseNode &action_node_lis
         }
         break;
       }
-    case T_INDEX_ALTER_STORAGE_CACHE_POLICY: {
+    case T_INDEX_ALTER_STORAGE_CACHE_POLICY: {  
       if (!GCTX.is_shared_storage_mode()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("storage cache policy is not supported in shared storage mode", K(ret));
@@ -7514,7 +7514,7 @@ int ObAlterTableResolver::resolve_alter_column_groups(const ParseNode &node)
           } else {
             alter_table_stmt->get_alter_table_arg().is_alter_column_group_delayed_ = true;
             SQL_RESV_LOG(INFO, "set is_alter_column_group_delayed_ to true");
-          }
+          } 
         } else {
           ret = OB_ERR_UNEXPECTED;
           SQL_RESV_LOG(WARN, "invalid alter column group delayed type", K(ret), "type", delayed_node->type_);
@@ -7522,9 +7522,9 @@ int ObAlterTableResolver::resolve_alter_column_groups(const ParseNode &node)
       }
 
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(parse_column_group(column_group_node,
-                                            *table_schema_,
-                                            alter_table_schema,
+      } else if (OB_FAIL(parse_column_group(column_group_node, 
+                                            *table_schema_, 
+                                            alter_table_schema, 
                                             alter_table_stmt->get_alter_table_arg().is_alter_column_group_delayed_))) {
         LOG_WARN("fail to parse column gorup list", K(ret));
       }
@@ -7659,8 +7659,8 @@ int ObAlterTableResolver::check_semistruct_encoding_type(const ObTableSchema &or
   int ret = OB_SUCCESS;
   // skip check if not modify semistruct encoding options and store format
   if (! alter_table_bitset_.has_member(obrpc::ObAlterTableArg::SEMISTRUCT_ENCODING_TYPE)
-      && ! alter_table_bitset_.has_member(obrpc::ObAlterTableArg::STORE_FORMAT)) {
-  // skip check if semistruct_encoding is disable
+      && ! alter_table_bitset_.has_member(obrpc::ObAlterTableArg::STORE_FORMAT)) { 
+  // skip check if semistruct_encoding is disable 
   } else if ((alter_table_bitset_.has_member(obrpc::ObAlterTableArg::SEMISTRUCT_ENCODING_TYPE) && ! alter_schema.get_semistruct_encoding_type().is_enable_semistruct_encoding())
     || (! alter_table_bitset_.has_member(obrpc::ObAlterTableArg::SEMISTRUCT_ENCODING_TYPE) && ! origin_schema.get_semistruct_encoding_type().is_enable_semistruct_encoding())) {
   } else if (alter_table_bitset_.has_member(obrpc::ObAlterTableArg::STORE_FORMAT)) {

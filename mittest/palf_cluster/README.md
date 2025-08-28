@@ -75,3 +75,5 @@ $tail palf_raw_result_exp_test/palf_group_1500_512_3_1000.result -n 5
 [2023-09-27 11:29:28.048014] INFO  [PALF] handle_next_submit_log_ (log_sliding_window.cpp:1056) [61992][T1_LogLoop][T1][Y0-0000000000000000-0-0] [lt=22] [PALF STAT GROUP LOG INFO](palf_id=1, self="SERVER_IP1:53212", role="LEADER", total_group_log_cnt=1607, avg_log_batch_cnt=369, total_group_log_size=322903656, avg_group_log_size=200935)
 [2023-09-27 11:29:29.048263] INFO  [PALF] handle_next_submit_log_ (log_sliding_window.cpp:1056) [61992][T1_LogLoop][T1][Y0-0000000000000000-0-0] [lt=56] [PALF STAT GROUP LOG INFO](palf_id=1, self="SERVER_IP1:53212", role="LEADER", total_group_log_cnt=1611, avg_log_batch_cnt=370, total_group_log_size=324553496, avg_group_log_size=201460)
 ```
+  
+

@@ -235,10 +235,10 @@ int ObStorageObjectHandle::sn_async_read(const ObStorageObjectReadInfo &read_inf
     if (io_info.fd_.is_backup_block_file()) {
       ObStorageIdMod mod;
       mod.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_RESTORE;
-      if (OB_FAIL(backup::ObBackupDeviceHelper::get_device_and_fd(io_info.tenant_id_,
-                                                                  io_info.fd_.first_id_,
-                                                                  io_info.fd_.second_id_,
-                                                                  io_info.fd_.third_id_,
+      if (OB_FAIL(backup::ObBackupDeviceHelper::get_device_and_fd(io_info.tenant_id_, 
+                                                                  io_info.fd_.first_id_, 
+                                                                  io_info.fd_.second_id_, 
+                                                                  io_info.fd_.third_id_, 
                                                                   mod,
                                                                   backup_device,
                                                                   io_info.fd_))) {
@@ -256,7 +256,7 @@ int ObStorageObjectHandle::sn_async_read(const ObStorageObjectReadInfo &read_inf
 
     if (OB_NOT_NULL(backup_device)) {
       // fd ctx is hold by io request, close backup device and fd is safe here.
-      if (OB_TMP_FAIL(backup::ObBackupDeviceHelper::close_device_and_fd(backup_device,
+      if (OB_TMP_FAIL(backup::ObBackupDeviceHelper::close_device_and_fd(backup_device, 
                                                                         io_info.fd_))) {
         LOG_ERROR("failed to close backup device and fd", K(ret), K(tmp_ret), K(read_info));
         ret = COVER_SUCC(tmp_ret);

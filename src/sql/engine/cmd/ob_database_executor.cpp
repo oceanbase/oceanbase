@@ -72,7 +72,7 @@ int ObCreateDatabaseExecutor::execute(ObExecContext &ctx, ObCreateDatabaseStmt &
       "ret", ret,
       "trace_id", *ObCurTraceId::get_trace_id(),
       "rpc_dst", common_rpc_proxy->get_server(),
-      "database_info", database_id,
+      "database_info", database_id, 
       "schema_version", create_database_arg.database_schema_.get_schema_version());
   }
   SQL_ENG_LOG(INFO, "finish execute create database.", K(ret), "ddl_event_info", ObDDLEventInfo());

@@ -33,7 +33,7 @@ namespace sql {
 
   class ObOrcFileAccess : public orc::InputStream {
     public:
-      ObOrcFileAccess(ObExternalDataAccessDriver &file_reader, const char* file_name, int64_t len)
+      ObOrcFileAccess(ObExternalDataAccessDriver &file_reader, const char* file_name, int64_t len) 
       : file_reader_(file_reader), file_name_(file_name), total_length_(len), fileName_(file_name) {
       }
 
@@ -116,7 +116,7 @@ namespace sql {
     UNUSED(row);
     return common::OB_ERR_UNEXPECTED;
   }
-
+  
   int get_next_row() override;
   int get_next_rows(int64_t &count, int64_t capacity) override;
   virtual void reset() override;
@@ -175,7 +175,7 @@ private:
     int to_dot_column_path(ObIArray<ObString> &col_names, ObString &path);
     int get_data_column_batch_idxs(const orc::Type *type, const int col_id, ObIArray<int> &idxs);
   private:
-
+  
     ObOrcIteratorState state_;
     lib::ObMemAttr mem_attr_;
     ObArenaAllocator allocator_;
@@ -195,7 +195,7 @@ private:
     common::ObArrayWrap<ObLength> file_url_lens_; //for file url expr
     hash::ObHashMap<int64_t, const orc::Type*> id_to_type_;
     hash::ObHashMap<ObString, int64_t> name_to_id_;
-
+    
 };
 
 }

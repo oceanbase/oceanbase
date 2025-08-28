@@ -144,7 +144,7 @@ TEST_F(TestObSimpleLogClusterRestart, restart_when_first_log_block_is_empty)
     base_info.curr_lsn_ = rebuild_lsn;
     base_info.prev_log_info_.accum_checksum_ = 10000;
     base_info.prev_log_info_.log_id_ = 100;
-    base_info.prev_log_info_.lsn_ = rebuild_lsn - 4096;
+    base_info.prev_log_info_.lsn_ = rebuild_lsn - 4096; 
     base_info.prev_log_info_.log_proposal_id_ = 2;
     base_info.prev_log_info_.scn_ = leader.palf_handle_impl_->get_max_scn();
 

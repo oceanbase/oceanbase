@@ -1740,7 +1740,7 @@ int ObGarbageCollector::gc_check_ls_status_(storage::ObLS &ls,
         if (OB_TMP_FAIL(check_if_tenant_is_creating_(gen_meta_tenant_id(tenant_id), is_creating))
             || is_creating) {
           // tenant is creating, current observer may not refresh schema which will cause failure to get tenant schema
-          // when creating tenant, ls status may not exist, so treat it as normal
+          // when creating tenant, ls status may not exist, so treat it as normal 
           // after meta tenant is created, user ls should exists in __all_ls_status
           if (REACH_TIME_INTERVAL(10_s)) {
             CLOG_LOG(WARN, "failed to get ls status, tenant may be creating", KR(ret), KR(tmp_ret),

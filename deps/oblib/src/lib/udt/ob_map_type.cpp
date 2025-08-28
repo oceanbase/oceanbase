@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace common {
 
-int ObMapType::print(ObStringBuffer &format_str, uint32_t begin, uint32_t print_size, bool print_whole) const
+int ObMapType::print(ObStringBuffer &format_str, uint32_t begin, uint32_t print_size, bool print_whole) const 
 {
   int ret = OB_SUCCESS;
   if (OB_SUCC(ret) && print_whole) {
@@ -224,7 +224,7 @@ int ObMapType::compare(const ObIArrayType &right, int &cmp_ret) const
 }
 
 int ObMapType::compare_at(uint32_t left_begin, uint32_t left_len,
-                          uint32_t right_begin, uint32_t right_len,
+                          uint32_t right_begin, uint32_t right_len,  
                           const ObIArrayType &right, int &cmp_ret) const
 {
   int ret = OB_SUCCESS;

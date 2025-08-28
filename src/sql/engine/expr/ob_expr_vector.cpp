@@ -20,7 +20,7 @@ namespace oceanbase
 namespace sql
 {
 
-ObExprVectorDistance::SparseVectorDisFunc::FuncPtrType ObExprVectorDistance::SparseVectorDisFunc::spiv_distance_funcs[] =
+ObExprVectorDistance::SparseVectorDisFunc::FuncPtrType ObExprVectorDistance::SparseVectorDisFunc::spiv_distance_funcs[] = 
 {
   nullptr, // cosine_distance
   ObSparseVectorIpDistance::spiv_ip_distance_func,
@@ -33,8 +33,8 @@ ObExprVectorDistance::SparseVectorDisFunc::FuncPtrType ObExprVectorDistance::Spa
 ObExprVector::ObExprVector(ObIAllocator &alloc,
                          ObExprOperatorType type,
                          const char *name,
-                         int32_t param_num,
-                         int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension)
+                         int32_t param_num, 
+                         int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension) 
 {
 }
 // [a,b,c,...] is array type, there is no dim_cnt_ in ObCollectionArrayType
@@ -60,7 +60,7 @@ int ObExprVector::calc_result_type1(
     ObExprResType &type1,
     common::ObExprTypeCtx &type_ctx) const
 {
-  int ret = OB_SUCCESS;
+  int ret = OB_SUCCESS; 
   if (OB_FAIL(ObArrayExprUtils::calc_cast_type(type_, type1, type_ctx))) {
     LOG_WARN("failed to calc cast type", K(ret), K(type1));
   } else {
@@ -78,7 +78,7 @@ ObExprVectorDistance::ObExprVectorDistance(
     ObIAllocator &alloc,
     ObExprOperatorType type,
     const char *name,
-    int32_t param_num,
+    int32_t param_num, 
     int32_t dimension)
       : ObExprVector(alloc, type, name, param_num, dimension)
 {}
@@ -150,7 +150,7 @@ int ObExprVectorDistance::calc_distance(const ObExpr &expr, ObEvalCtx &ctx, ObDa
   } else if (OB_ISNULL(arr_l) || OB_ISNULL(arr_r)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr", K(ret), K(arr_l), K(arr_r));
-  } else if ((arr_l->get_array_type()->is_sparse_vector_type() && !arr_r->get_array_type()->is_sparse_vector_type())
+  } else if ((arr_l->get_array_type()->is_sparse_vector_type() && !arr_r->get_array_type()->is_sparse_vector_type()) 
              || (!arr_l->get_array_type()->is_sparse_vector_type() && arr_r->get_array_type()->is_sparse_vector_type())) {
     LOG_WARN("calc distance for sparse vector and other type is not supported", K(ret));
   } else if (arr_l->get_array_type()->is_sparse_vector_type() && arr_r->get_array_type()->is_sparse_vector_type()) {
@@ -193,7 +193,7 @@ int ObExprVectorDistance::calc_distance(const ObExpr &expr, ObEvalCtx &ctx, ObDa
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -203,7 +203,7 @@ ObExprVectorL1Distance::ObExprVectorL1Distance(ObIAllocator &alloc)
 int ObExprVectorL1Distance::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                                     ObExpr &rt_expr) const
 {
-    int ret = OB_SUCCESS;
+    int ret = OB_SUCCESS;  
     rt_expr.eval_func_ = ObExprVectorL1Distance::calc_l1_distance;
     return ret;
 }
@@ -219,7 +219,7 @@ ObExprVectorL2Distance::ObExprVectorL2Distance(ObIAllocator &alloc)
 int ObExprVectorL2Distance::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                                     ObExpr &rt_expr) const
 {
-    int ret = OB_SUCCESS;
+    int ret = OB_SUCCESS;  
     rt_expr.eval_func_ = ObExprVectorL2Distance::calc_l2_distance;
     return ret;
 }
@@ -235,7 +235,7 @@ ObExprVectorL2Squared::ObExprVectorL2Squared(ObIAllocator &alloc)
 int ObExprVectorL2Squared::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                                     ObExpr &rt_expr) const
 {
-    int ret = OB_SUCCESS;
+    int ret = OB_SUCCESS;  
     rt_expr.eval_func_ = ObExprVectorL2Squared::calc_l2_squared;
     return ret;
 }
@@ -251,7 +251,7 @@ ObExprVectorCosineDistance::ObExprVectorCosineDistance(ObIAllocator &alloc)
 int ObExprVectorCosineDistance::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                                     ObExpr &rt_expr) const
 {
-    int ret = OB_SUCCESS;
+    int ret = OB_SUCCESS;  
     rt_expr.eval_func_ = ObExprVectorCosineDistance::calc_cosine_distance;
     return ret;
 }
@@ -267,7 +267,7 @@ ObExprVectorIPDistance::ObExprVectorIPDistance(ObIAllocator &alloc)
 int ObExprVectorIPDistance::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                                     ObExpr &rt_expr) const
 {
-    int ret = OB_SUCCESS;
+    int ret = OB_SUCCESS;  
     rt_expr.eval_func_ = ObExprVectorIPDistance::calc_inner_product;
     return ret;
 }
@@ -283,7 +283,7 @@ ObExprVectorNegativeIPDistance::ObExprVectorNegativeIPDistance(ObIAllocator &all
 int ObExprVectorNegativeIPDistance::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                                     ObExpr &rt_expr) const
 {
-    int ret = OB_SUCCESS;
+    int ret = OB_SUCCESS;  
     rt_expr.eval_func_ = ObExprVectorNegativeIPDistance::calc_negative_inner_product;
     return ret;
 }
@@ -308,7 +308,7 @@ int ObExprVectorDims::calc_result_type1(
     ObExprResType &type1,
     common::ObExprTypeCtx &type_ctx) const
 {
-  int ret = OB_SUCCESS;
+  int ret = OB_SUCCESS; 
   if (OB_FAIL(ObArrayExprUtils::calc_cast_type(type_, type1, type_ctx))) {
     LOG_WARN("failed to calc cast type", K(ret), K(type1));
   } else {
@@ -363,7 +363,7 @@ ObExprVectorNorm::ObExprVectorNorm(ObIAllocator &alloc)
 int ObExprVectorNorm::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                                     ObExpr &rt_expr) const
 {
-    int ret = OB_SUCCESS;
+    int ret = OB_SUCCESS;  
     rt_expr.eval_func_ = ObExprVectorNorm::calc_norm;
     if (rt_expr.arg_cnt_ != 1 || OB_ISNULL(rt_expr.args_)) {
       ret = OB_ERR_UNEXPECTED;

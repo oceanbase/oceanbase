@@ -309,7 +309,7 @@ struct ObRVIntegerIterator
   }
   OB_INLINE ObRVIntegerIterator operator--(int)
   {
-    return ObRVIntegerIterator(pos_--, data_, nulls_);
+    return ObRVIntegerIterator(pos_--, data_, nulls_); 
   }
   OB_INLINE ObRVIntegerIterator operator++()
   {
@@ -367,7 +367,7 @@ struct ObRVIntegerIterator
 
 // null first
 // [left_is_null][right_is_null][left>right][left==right]
-static int NULL_FIRST_CMP_RET[2][2][2][2] =
+static int NULL_FIRST_CMP_RET[2][2][2][2] = 
 {
   // left_is_null = false
   {
@@ -400,7 +400,7 @@ static int NULL_FIRST_CMP_RET[2][2][2][2] =
 };
 // null last
 // [left_is_null][right_is_null][left>right][left==right]
-static int NULL_LAST_CMP_RET[2][2][2][2] =
+static int NULL_LAST_CMP_RET[2][2][2][2] = 
 {
   // left_is_null = false
   {

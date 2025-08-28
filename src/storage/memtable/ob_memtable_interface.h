@@ -107,13 +107,13 @@ struct CreateMemtableArg {
 
 class ObIMemtable : public storage::ObITable {
 public:
-  ObIMemtable()
-    : ls_id_(),
+  ObIMemtable() 
+    : ls_id_(), 
       snapshot_version_(share::SCN::max_scn()),
       trace_id_(checkpoint::INVALID_TRACE_ID)
   {}
   virtual ~ObIMemtable() {}
-  void reset()
+  void reset() 
   {
     ObITable::reset();
     ls_id_.reset();
@@ -199,12 +199,12 @@ public:
     return ref_cnt;
   }
 
-  void set_trace_id(const int64_t trace_id)
-  {
+  void set_trace_id(const int64_t trace_id) 
+  { 
     if (get_tablet_id().is_ls_inner_tablet()) {
-      ADD_CHECKPOINT_DIAGNOSE_INFO_AND_SET_TRACE_ID(checkpoint::ObCheckpointUnitDiagnoseInfo, trace_id);
+      ADD_CHECKPOINT_DIAGNOSE_INFO_AND_SET_TRACE_ID(checkpoint::ObCheckpointUnitDiagnoseInfo, trace_id); 
     } else {
-      ADD_CHECKPOINT_DIAGNOSE_INFO_AND_SET_TRACE_ID(checkpoint::ObMemtableDiagnoseInfo, trace_id);
+      ADD_CHECKPOINT_DIAGNOSE_INFO_AND_SET_TRACE_ID(checkpoint::ObMemtableDiagnoseInfo, trace_id); 
     }
   }
   void reset_trace_id() { ATOMIC_STORE(&trace_id_, checkpoint::INVALID_TRACE_ID); }

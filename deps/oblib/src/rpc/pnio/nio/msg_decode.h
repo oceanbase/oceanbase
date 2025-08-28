@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 inline int64_t msg_decode(const char* b, int64_t s) {
   if (s < 8) {
     return 8;

@@ -190,7 +190,7 @@ void ObLogRestoreService::do_thread_task_()
       // tenant_role not match or log_restore_source not exist
       clean_resource_();
     }
-
+    
     {
       ObDIActionGuard(ObDIActionGuard::NS_ACTION, "SourceType[%s]", ObLogRestoreSourceItem::get_source_type_str(source.type_));
       schedule_resource_(source.type_);

@@ -22,7 +22,7 @@ using namespace common;
 using namespace share;
 namespace sql {
 
-int ObOrcTableRowIterator::to_dot_column_path(ObIArray<ObString> &col_names, ObString &path)
+int ObOrcTableRowIterator::to_dot_column_path(ObIArray<ObString> &col_names, ObString &path) 
 {
   int ret = OB_SUCCESS;
   ObSqlString tmp_string;
@@ -41,7 +41,7 @@ int ObOrcTableRowIterator::to_dot_column_path(ObIArray<ObString> &col_names, ObS
   * Recurses over a type tree and build two maps
   * map<TypeName, TypeId>, map<TypeId, Type>
   */
-int ObOrcTableRowIterator::build_type_name_id_map(const orc::Type* type, ObIArray<ObString> &col_names)
+int ObOrcTableRowIterator::build_type_name_id_map(const orc::Type* type, ObIArray<ObString> &col_names) 
 {
   int ret = OB_SUCCESS;
   CK (type != nullptr);
@@ -79,7 +79,7 @@ int ObOrcTableRowIterator::compute_column_id_by_index_type(int64_t index, int64_
       ObString col_name;
       ObDataAccessPathExtraInfo *data_access_info =
         static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(index)->extra_info_);
-      col_name = data_access_info->data_access_path_;
+      col_name = data_access_info->data_access_path_; 
       OZ (name_to_id_.get_refactored(col_name, orc_col_id));
       break;
     }
@@ -95,7 +95,7 @@ int ObOrcTableRowIterator::compute_column_id_by_index_type(int64_t index, int64_
   return ret;
 }
 
-int ObOrcTableRowIterator::init(const storage::ObTableScanParam *scan_param)
+int ObOrcTableRowIterator::init(const storage::ObTableScanParam *scan_param) 
 {
   int ret = OB_SUCCESS;
 
@@ -268,7 +268,7 @@ int ObOrcTableRowIterator::next_file()
 
       try {
         OZ (data_access_driver_.open(url_.ptr()), url_);
-        std::unique_ptr<ObOrcFileAccess> inStream(new ObOrcFileAccess(data_access_driver_,
+        std::unique_ptr<ObOrcFileAccess> inStream(new ObOrcFileAccess(data_access_driver_, 
                                                           url_.ptr(), file_size));
         orc::ReaderOptions options;
         options.setMemoryPool(orc_alloc_);
@@ -303,7 +303,7 @@ int ObOrcTableRowIterator::next_file()
         switch (scan_param_->external_file_format_.orc_format_.column_index_type_) {
           case sql::ColumnIndexType::NAME: {
             for (int64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
-              ObDataAccessPathExtraInfo *data_access_info =
+              ObDataAccessPathExtraInfo *data_access_info = 
                   static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(i)->extra_info_);
               if (OB_SUCC(ret) && (data_access_info == nullptr ||
                                   data_access_info->data_access_path_.ptr() == nullptr ||
@@ -366,7 +366,7 @@ int ObOrcTableRowIterator::next_file()
             CK (type != nullptr);
 
             if (OB_SUCC(ret)) {
-              load_funcs_.at(i) = DataLoader::select_load_function(file_column_exprs_.at(i)->datum_meta_,
+              load_funcs_.at(i) = DataLoader::select_load_function(file_column_exprs_.at(i)->datum_meta_, 
                                                                     *type);
             }
             if (OB_FAIL(ret)) {
@@ -411,7 +411,7 @@ int ObOrcTableRowIterator::next_file()
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected error", K(ret));
         }
-      }
+      }                                                  
     }
   }
   return ret;
@@ -456,7 +456,7 @@ ObOrcTableRowIterator::DataLoader::LOAD_FUNC ObOrcTableRowIterator::DataLoader::
     const ObDatumMeta &datum_type, const orc::Type &type)
 {
   LOAD_FUNC func = NULL;
-
+  
   // int size = static_cast<int>(type.getSubtypeCount());
   // if (size > 1) {
   //   LOG_USER_ERROR(OB_NOT_SUPPORTED, "Non-primitive type now are");
@@ -533,15 +533,15 @@ ObOrcTableRowIterator::DataLoader::LOAD_FUNC ObOrcTableRowIterator::DataLoader::
     }
   } else if (ob_is_date_or_mysql_date(datum_type.type_) ||
              ob_is_datetime_or_mysql_datetime(datum_type.type_) ||
-             ob_is_time_tc(datum_type.type_) ||
-             ob_is_otimestamp_type(datum_type.type_) ||
+             ob_is_time_tc(datum_type.type_) || 
+             ob_is_otimestamp_type(datum_type.type_) || 
              ObTimestampType == datum_type.type_) {
     switch (type_kind) {
       // Values of TIMESTAMP type are stored in the writer timezone in the Orc file.
       // Values are read back in the reader timezone. However, the writer timezone
       // information in the Orc stripe footer is optional and may be missing. What is
       // more, stripes in the same Orc file may have different writer timezones (though
-      // unlikely). So we cannot tell the exact timezone of values read back. In the adapter
+      // unlikely). So we cannot tell the exact timezone of values read back. In the adapter 
       // implementations, we set both writer and
       // reader timezone to UTC to avoid any conversion so users can get the same values
       // as written. To get rid of this burden, TIMESTAMP_INSTANT type is always preferred
@@ -551,7 +551,7 @@ ObOrcTableRowIterator::DataLoader::LOAD_FUNC ObOrcTableRowIterator::DataLoader::
         LOG_DEBUG("show type kind", K(type_kind), K(orc::TypeKind::TIMESTAMP_INSTANT));
         if (ob_is_date_or_mysql_date(datum_type.type_) ||
              ob_is_datetime_or_mysql_datetime(datum_type.type_) ||
-             ob_is_time_tc(datum_type.type_) ||
+             ob_is_time_tc(datum_type.type_) || 
              ObTimestampType == datum_type.type_ ||
              ObTimestampLTZType == datum_type.type_ ||
              ObTimestampNanoType == datum_type.type_) {
@@ -662,7 +662,7 @@ int ObOrcTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
         int64_t col_id = -1;
         const orc::Type *col_type = nullptr;
         OZ(compute_column_id_by_index_type(i, col_id));
-
+        
         OZ (id_to_type_.get_refactored(col_id, col_type));
         ObArray<int> idxs;
         OZ (get_data_column_batch_idxs(&row_reader_->getSelectedType(), col_id, idxs));

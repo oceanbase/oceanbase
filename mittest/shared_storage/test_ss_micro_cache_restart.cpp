@@ -200,7 +200,7 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
 
   // 2.2 write data into object_storage
   ObArray<TestSSCommonUtil::MicroBlockInfo> micro_arr2;
-  ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::prepare_micro_blocks(macro_blk_cnt, block_size, micro_arr2, 1, false,
+  ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::prepare_micro_blocks(macro_blk_cnt, block_size, micro_arr2, 1, false, 
     micro_size, micro_size));
   ASSERT_LT(0, micro_arr2.count());
 
@@ -224,7 +224,7 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
   {
     for (int64_t i = 0; OB_SUCC(ret) && (i < micro_cnt2); ++i) {
       TestSSCommonUtil::MicroBlockInfo &cur_info = micro_arr2.at(i);
-      ObSSMicroBlockCacheKey cur_micro_key = TestSSCommonUtil::gen_phy_micro_key(cur_info.macro_id_, cur_info.offset_,
+      ObSSMicroBlockCacheKey cur_micro_key = TestSSCommonUtil::gen_phy_micro_key(cur_info.macro_id_, cur_info.offset_, 
                                                                                  cur_info.size_);
       ObSSMicroBlockMetaHandle cur_micro_meta_handle;
       ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.micro_meta_map_.get(&cur_micro_key, cur_micro_meta_handle));
@@ -252,7 +252,7 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
   ASSERT_EQ(persisted_micro_cnt, total_ckpt_micro_cnt);
   ASSERT_EQ(micro_cnt2, cache_stat.micro_stat().total_micro_cnt_);
   ASSERT_EQ(micro_cnt2 * micro_size, cache_stat.micro_stat().total_micro_size_);
-
+  
   // 2.6 destroy micro_cache
   micro_cache->stop();
   micro_cache->wait();
@@ -299,7 +299,7 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
     // 3.4.1 statistic persisted micro_meta count
     for (int64_t i = 0; OB_SUCC(ret) && (i < micro_cnt2); ++i) {
       TestSSCommonUtil::MicroBlockInfo &cur_info = micro_arr2.at(i);
-      ObSSMicroBlockCacheKey cur_micro_key = TestSSCommonUtil::gen_phy_micro_key(cur_info.macro_id_, cur_info.offset_,
+      ObSSMicroBlockCacheKey cur_micro_key = TestSSCommonUtil::gen_phy_micro_key(cur_info.macro_id_, cur_info.offset_, 
                                                                                  cur_info.size_);
       ObSSMicroBlockMetaHandle cur_micro_meta_handle;
       if (OB_SUCCESS == micro_meta_mgr.micro_meta_map_.get(&cur_micro_key, cur_micro_meta_handle)) {
@@ -312,7 +312,7 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
     }
     for (int64_t i = 0; OB_SUCC(ret) && (i < micro_cnt3); ++i) {
       TestSSCommonUtil::MicroBlockInfo &cur_info = micro_arr3.at(i);
-      ObSSMicroBlockCacheKey cur_micro_key = TestSSCommonUtil::gen_phy_micro_key(cur_info.macro_id_, cur_info.offset_,
+      ObSSMicroBlockCacheKey cur_micro_key = TestSSCommonUtil::gen_phy_micro_key(cur_info.macro_id_, cur_info.offset_, 
                                                                                  cur_info.size_);
       ObSSMicroBlockMetaHandle cur_micro_meta_handle;
       ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.micro_meta_map_.get(&cur_micro_key, cur_micro_meta_handle));
@@ -328,7 +328,7 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
   ObArray<ObSSMicroBlockMeta *> evicted_micro_meta;
   for (int64_t i = 0; i < 3; ++i) {
     TestSSCommonUtil::MicroBlockInfo &evict_micro_info = micro_arr3.at(i);
-    ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(evict_micro_info.macro_id_, evict_micro_info.offset_,
+    ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(evict_micro_info.macro_id_, evict_micro_info.offset_, 
                                                                            evict_micro_info.size_);
     ObSSMicroBlockMetaHandle evict_micro_handle;
     ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.micro_meta_map_.get(&micro_key, evict_micro_handle));
@@ -365,7 +365,7 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
     ASSERT_EQ(total_ckpt_micro_cnt + micro_cnt3 - 1, cache_stat.micro_stat().total_micro_cnt_);
     ASSERT_EQ((total_ckpt_micro_cnt + micro_cnt3 - 1) * micro_size, cache_stat.micro_stat().total_micro_size_);
   }
-
+  
   bool mark_invalid = false;
   {
     for (int64_t i = 4; i < micro_arr3.count(); ++i) {

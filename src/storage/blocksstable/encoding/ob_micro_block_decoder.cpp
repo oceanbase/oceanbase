@@ -462,7 +462,7 @@ int ObIEncodeBlockReader::alloc_decoders_buf(int64_t &decoders_buf_pos)
   int ret = OB_SUCCESS;
   int64_t size = 0;
   const int64_t decoder_ctx_cnt = MAX(request_cnt_, header_->column_count_);
-  size += sizeof(ObColumnDecoderCtx) * decoder_ctx_cnt;
+  size += sizeof(ObColumnDecoderCtx) * decoder_ctx_cnt; 
 
   for (int64_t i = 0; i < request_cnt_; ++i) {
     const int64_t store_idx = store_id_array_[i];
@@ -501,7 +501,7 @@ int ObIEncodeBlockReader::alloc_decoders_buf(int64_t &decoders_buf_pos)
 
   if (OB_SUCC(ret)) {
     ctxs_ = reinterpret_cast<ObColumnDecoderCtx*>(allocated_decoders_buf_);
-    decoders_buf_pos = sizeof(ObColumnDecoderCtx) * decoder_ctx_cnt;
+    decoders_buf_pos = sizeof(ObColumnDecoderCtx) * decoder_ctx_cnt; 
   }
 
   return ret;
@@ -1018,7 +1018,7 @@ int ObMicroBlockDecoder::alloc_decoders_buf(const bool by_read_info, int64_t &de
   } else {
     size += request_cnt_ * sizeof(ObColumnDecoder); // for decoders_
 
-    int64_t decoder_ctx_cnt = nullptr == read_info_ ? header_->column_count_ : MAX(header_->column_count_,
+    int64_t decoder_ctx_cnt = nullptr == read_info_ ? header_->column_count_ : MAX(header_->column_count_, 
         read_info_->get_schema_column_count() + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt());
 
     size += sizeof(ObColumnDecoderCtx) * decoder_ctx_cnt;  // for decoder ctxs
@@ -1063,7 +1063,7 @@ int ObMicroBlockDecoder::alloc_decoders_buf(const bool by_read_info, int64_t &de
       decoders_buf_pos = request_cnt_ * sizeof(ObColumnDecoder);
 
       ctxs_ = reinterpret_cast<ObColumnDecoderCtx*>(allocated_decoders_buf_ + decoders_buf_pos);
-      decoders_buf_pos += sizeof(ObColumnDecoderCtx) * decoder_ctx_cnt;
+      decoders_buf_pos += sizeof(ObColumnDecoderCtx) * decoder_ctx_cnt; 
     }
   }
   return ret;
@@ -1148,9 +1148,9 @@ int ObMicroBlockDecoder::init_decoders()
 }
 
 int ObMicroBlockDecoder::add_decoder(
-    const int64_t store_idx,
-    const ObObjMeta &obj_meta,
-    const ObColumnParam *col_param,
+    const int64_t store_idx, 
+    const ObObjMeta &obj_meta, 
+    const ObColumnParam *col_param, 
     int64_t &decoders_buf_pos,
     ObColumnDecoder &dest)
 {
@@ -1862,7 +1862,7 @@ int ObMicroBlockDecoder::filter_black_filter_batch(
     const common::ObIArray<int32_t> &col_offsets = filter.get_col_offsets(pd_filter_info.is_pd_to_cg_);
     const sql::ColumnParamFixedArray &col_params = filter.get_col_params();
     if (1 == col_offsets.count() &&
-        (decoders_[col_offsets.at(0)].decoder_->is_new_column() ||
+        (decoders_[col_offsets.at(0)].decoder_->is_new_column() || 
           ObColumnHeader::DICT == decoders_[col_offsets.at(0)].ctx_->col_header_->type_)) {
       ObColumnDecoder* column_decoder = decoders_ + col_offsets.at(0);
       if (!column_decoder->decoder_->fast_decode_valid(*column_decoder->ctx_)) {
@@ -2007,7 +2007,7 @@ int ObMicroBlockDecoder::get_rows(
   } else if (OB_UNLIKELY(nullptr == row_ids || nullptr == cell_datas ||
                          cols.count() != datum_infos.count())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(row_ids), KP(cell_datas),
+    LOG_WARN("invalid argument", K(ret), KP(row_ids), KP(cell_datas), 
              K(cols.count()), K(datum_infos.count()));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < cols.count(); i++) {

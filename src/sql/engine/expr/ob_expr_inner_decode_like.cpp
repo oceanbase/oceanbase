@@ -112,11 +112,11 @@ int ObExprInnerDecodeLike::eval_inner_decode_like(const ObExpr &expr, ObEvalCtx 
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ESCAPE");
     } else {
       // For a pattern like 'aaa%' that ends with `%`, we will extract a precise range with some special handling:
-      // We need to fill the end key of the like range with the maximum character
+      // We need to fill the end key of the like range with the maximum character 
       // up to the target column's length to match the semantics of `%`.
-      // However, when the target column length is less than the effective prefix length of the pattern,
+      // However, when the target column length is less than the effective prefix length of the pattern, 
       // the pattern gets truncated, resulting in an imprecise range and incorrect results.
-      // So, we need to ensure that the effective prefix of the pattern is not truncated
+      // So, we need to ensure that the effective prefix of the pattern is not truncated 
       // to guarantee that the range is always precise.
       int32_t range_str_len = col_len;
       //convert character counts to len in bytes
@@ -152,8 +152,8 @@ int ObExprInnerDecodeLike::eval_inner_decode_like(const ObExpr &expr, ObEvalCtx 
       } else {
         if (prefix_len >= col_len && ObCharset::strlen_char(cs_type, min_str_buf, prefix_len) >= col_len) {
           int32_t pattern_prefix_len = 0; // strlen_char of prefix
-          if (OB_FAIL(get_pattern_prefix_len(cs_type,
-                                            escape_str,
+          if (OB_FAIL(get_pattern_prefix_len(cs_type, 
+                                            escape_str, 
                                             pattern_str,
                                             pattern_prefix_len))) {
             LOG_WARN("failed to get pattern prefix len", K(ret), K(pattern_str), K(escape_str));
@@ -272,8 +272,8 @@ int ObExprInnerDecodeLike::cast_like_obj_if_needed(ObEvalCtx &ctx, const ObExpr 
   return ret;
 }
 
-int ObExprInnerDecodeLike::get_pattern_prefix_len(const ObCollationType &cs_type,
-                                                  const ObString &escape_str,
+int ObExprInnerDecodeLike::get_pattern_prefix_len(const ObCollationType &cs_type, 
+                                                  const ObString &escape_str, 
                                                   const ObString &pattern_str,
                                                   int32_t &pattern_prefix_len)
 {

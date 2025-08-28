@@ -166,7 +166,7 @@ public:
     return ((num_bits + BITS_PER_BLOCK - 1) & ~(BITS_PER_BLOCK - 1)) >> BLOCK_MOD_BITS;
   }
 
-  OB_INLINE int64_t get_valid_bits_num() const { return valid_bits_num_; }
+  OB_INLINE int64_t get_valid_bits_num() const { return valid_bits_num_; } 
   DECLARE_TO_STRING;
 
 private:
@@ -314,7 +314,7 @@ public:
   void reset() {
     free_all();
     alloc_.reset();
-  }
+  } 
 private:
   void free_all();
 private:
@@ -529,14 +529,14 @@ class ObTableTTLOperation
 public:
   ObTableTTLOperation(uint64_t tenant_id, uint64_t table_id, const ObTTLTaskParam &para,
                       uint64_t del_row_limit, ObRowkey start_rowkey, uint64_t hbase_cur_version)
-      : tenant_id_(tenant_id),
-        table_id_(table_id),
+      : tenant_id_(tenant_id), 
+        table_id_(table_id), 
         max_version_(para.max_version_),
-        time_to_live_(para.ttl_),
-        is_htable_(para.is_htable_),
-        has_cell_ttl_(para.has_cell_ttl_),
+        time_to_live_(para.ttl_), 
+        is_htable_(para.is_htable_), 
+        has_cell_ttl_(para.has_cell_ttl_), 
         del_row_limit_(del_row_limit),
-        start_rowkey_(start_rowkey),
+        start_rowkey_(start_rowkey), 
         hbase_cur_version_(hbase_cur_version)
   {}
 
@@ -598,7 +598,7 @@ public:
   }
   ~ObTableResult() = default;
   void set_err(int err)
-  {
+  { 
     errno_ = err;
     if (err != common::OB_SUCCESS) {
       common::ObWarningBuffer *wb = common::ob_get_tsi_warning_buffer();
@@ -639,7 +639,7 @@ public:
   ObITableEntity *get_entity() { return entity_; }
   const ObITableEntity *get_entity() const { return entity_; }
   int64_t get_affected_rows() const { return affected_rows_; }
-  int get_return_rows() const { return ((entity_ == NULL || entity_->is_empty()) ? 0 : 1); }
+  int get_return_rows() const { return ((entity_ == NULL || entity_->is_empty()) ? 0 : 1); } 
   OB_INLINE bool get_insertup_do_insert() { return is_insertup_do_insert_; }
   OB_INLINE bool get_is_insertup_do_put() { return is_insertup_do_put_; }
   OB_INLINE bool get_is_insertup_do_update() { return !is_insertup_do_put_ && !is_insertup_do_insert_; }
@@ -731,7 +731,7 @@ public:
   ObIRetryPolicy* retry_policy() { return retry_policy_; }
   void set_returning_affected_rows(bool returning) { returning_affected_rows_ = returning; }
   bool returning_affected_rows() const { return returning_affected_rows_; }
-  void set_returning_rowkey(bool returning)
+  void set_returning_rowkey(bool returning) 
   {
     if (returning) {
       option_flag_ |= OB_TABLE_OPTION_RETURNING_ROWKEY;
@@ -1011,7 +1011,7 @@ protected:
 class ObFTSParam : public ObKVParamsBase
 {
 public:
-  ObFTSParam()
+  ObFTSParam() 
     : ObKVParamsBase()
   {
     param_type_ = ParamType::FTS;
@@ -1022,7 +1022,7 @@ public:
   OB_INLINE ParamType get_param_type() { return param_type_; }
   OB_INLINE common::ObString &get_search_text() { return search_text_; }
   NEED_SERIALIZE_AND_DESERIALIZE;
-
+  
   VIRTUAL_TO_STRING_KV(K_(param_type),
                        K_(search_text));
 private:
@@ -1378,8 +1378,8 @@ public:
       is_check_and_execute_(is_check_and_execute),
       is_check_exists_(!is_check_no_exists),
       rollback_when_check_failed_(rollback_when_check_failed)
-  {}
-  ~ObTableSingleOpQAM() = default;
+  {} 
+  ~ObTableSingleOpQAM() = default; 
 
 public:
   OB_INLINE const ObTableQuery &get_query() const override { return query_; }
@@ -1413,7 +1413,7 @@ inline void ObTableQueryAndMutate::set_entity_factory(ObITableEntityFactory *ent
   mutations_.set_entity_factory(entity_factory);
 }
 
-class ObTableQueryIterableResultBase
+class ObTableQueryIterableResultBase 
 {
 public:
   ObTableQueryIterableResultBase()
@@ -1774,8 +1774,8 @@ public:
                K_(key_ranges),
                K_(filter_string));
 private:
-  ObTableBitMap scan_range_cols_bp_;
-  const ObIArray<ObString> *all_rowkey_names_; // do not serialize
+  ObTableBitMap scan_range_cols_bp_; 
+  const ObIArray<ObString> *all_rowkey_names_; // do not serialize 
 };
 
 class ObTableSingleOpEntity : public ObTableEntity {
@@ -1914,7 +1914,7 @@ public:
   OB_INLINE bool need_query() const { return op_type_ == ObTableOperationType::CHECK_AND_INSERT_UP
                                           || op_type_ == ObTableOperationType::SCAN
                                           || op_type_ == ObTableOperationType::QUERY_AND_MUTATE; }
-  uint64_t get_checksum();
+  uint64_t get_checksum(); 
 
   OB_INLINE void set_operation_type(ObTableOperationType::Type type) { op_type_ = type; }
   void reset();
@@ -1935,7 +1935,7 @@ private:
     {
         bool is_check_no_exists_ : 1;
         bool rollback_when_check_failed_ : 1;
-        uint64_t reserved : 62; // 64 - 2
+        uint64_t reserved : 62; // 64 - 2 
     } table_flag_;
 
     struct
@@ -1988,8 +1988,8 @@ public:
     this->option_flag_ = other.get_option_flag();
     this->single_ops_ = other.single_ops_;
   }
-  OB_INLINE void reset() {
-    single_ops_.reset();
+  OB_INLINE void reset() { 
+    single_ops_.reset(); 
   }
   OB_INLINE const ObTabletID &get_tablet_id() const { return tablet_id_; }
   OB_INLINE const uint64_t &get_option_flag() const { return option_flag_; }
@@ -2018,13 +2018,13 @@ public:
 
   void shaddow_copy_without_op(const ObTableTabletOp &other);
   OB_INLINE void reuse()
-  {
+  { 
     tablet_id_ = common::ObTabletID::INVALID_TABLET_ID;
     option_flag_ = 0;
     all_rowkey_names_ = nullptr;
     all_properties_names_ = nullptr;
     is_same_properties_names_ = false;
-    single_ops_.reuse();
+    single_ops_.reuse(); 
   }
 
   TO_STRING_KV(K_(tablet_id),
@@ -2113,7 +2113,7 @@ public:
   OB_INLINE bool is_same_type() const { return is_same_type_; }
   OB_INLINE bool is_same_properties_names() const { return is_same_properties_names_; }
   OB_INLINE bool return_one_result() const { return return_one_result_; }
-  OB_INLINE bool need_all_prop_bitmap() const { return need_all_prop_bitmap_; }
+  OB_INLINE bool need_all_prop_bitmap() const { return need_all_prop_bitmap_; } 
   void shaddow_copy_without_op(const ObTableLSOp &other);
 
   TO_STRING_KV(K_(ls_id),
@@ -2130,7 +2130,7 @@ public:
                K_(need_all_prop_bitmap));
 private:
   share::ObLSID ls_id_;
-  common::ObString table_name_;
+  common::ObString table_name_; 
   uint64_t table_id_;
   ObSEArray<ObString, 4> rowkey_names_;
   ObSEArray<ObString, 4> properties_names_;

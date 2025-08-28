@@ -32,7 +32,7 @@ int ObImportTableTaskGenerator::init(
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
-    LOG_WARN("ObImportTableTaskGenerator init twice", K(ret));
+    LOG_WARN("ObImportTableTaskGenerator init twice", K(ret)); 
   } else {
     schema_service_ = &schema_service;
     sql_proxy_ = &sql_proxy;
@@ -42,7 +42,7 @@ int ObImportTableTaskGenerator::init(
 }
 
 int ObImportTableTaskGenerator::gen_import_task(
-    share::ObImportTableJob &import_job,
+    share::ObImportTableJob &import_job, 
     common::ObIArray<share::ObImportTableTask> &import_tasks)
 {
   int ret = OB_SUCCESS;
@@ -64,7 +64,7 @@ int ObImportTableTaskGenerator::gen_import_task(
 }
 
 int ObImportTableTaskGenerator::gen_db_import_tasks_(
-    share::ObImportTableJob &import_job,
+    share::ObImportTableJob &import_job, 
     common::ObIArray<share::ObImportTableTask> &import_tasks)
 {
   int ret = OB_SUCCESS;
@@ -77,11 +77,11 @@ int ObImportTableTaskGenerator::gen_db_import_tasks_(
         LOG_WARN("failed to get tenant schema guard", K(ret), K(src_tenant_id));
       } else if (OB_FAIL(guard.get_database_schemas_in_tenant(src_tenant_id, database_schemas))) {
         LOG_WARN("failed to get database id", K(ret), K(src_tenant_id));
-      }
+      } 
       ARRAY_FOREACH(database_schemas, i) {
         const ObSimpleDatabaseSchema* database_schema = database_schemas.at(i);
-        const share::ObImportDatabaseItem db_item(database_schema->get_name_case_mode(),
-                                                          database_schema->get_database_name_str().ptr(),
+        const share::ObImportDatabaseItem db_item(database_schema->get_name_case_mode(), 
+                                                          database_schema->get_database_name_str().ptr(), 
                                                           database_schema->get_database_name_str().length());
         if (OB_FAIL(gen_one_db_import_tasks_(import_job, db_item, import_tasks))) {
           LOG_WARN("failed to generate one db import tasks", K(ret), K(db_item));
@@ -101,7 +101,7 @@ int ObImportTableTaskGenerator::gen_db_import_tasks_(
 }
 
 int ObImportTableTaskGenerator::gen_one_db_import_tasks_(
-    share::ObImportTableJob &import_job,
+    share::ObImportTableJob &import_job, 
     const share::ObImportDatabaseItem &db_item,
     common::ObIArray<share::ObImportTableTask> &import_tasks)
 {
@@ -129,7 +129,7 @@ int ObImportTableTaskGenerator::gen_one_db_import_tasks_(
     }
   } else if (OB_FAIL(guard.get_table_schemas_in_database(src_tenant_id, database_id, table_schemas))) {
     LOG_WARN("failed to get table schemas", K(ret), K(src_tenant_id), K(database_id));
-  }
+  } 
   ARRAY_FOREACH(table_schemas, i) {
     share::ObImportTableTask import_task;
     const ObTableSchema *table_schema = table_schemas.at(i);
@@ -151,7 +151,7 @@ int ObImportTableTaskGenerator::gen_one_db_import_tasks_(
 }
 
 int ObImportTableTaskGenerator::gen_table_import_tasks_(
-    share::ObImportTableJob &import_job,
+    share::ObImportTableJob &import_job, 
     common::ObIArray<share::ObImportTableTask> &import_tasks)
 {
   int ret = OB_SUCCESS;
@@ -170,13 +170,13 @@ int ObImportTableTaskGenerator::gen_table_import_tasks_(
       LOG_INFO("[RECOVER_TABLE]succeed gen one import task", K(import_task));
     }
   }
-
+  
   return ret;
 }
 
 int ObImportTableTaskGenerator::gen_table_import_task_(
-    share::ObImportTableJob &import_job,
-    const share::ObImportTableItem &table_item,
+    share::ObImportTableJob &import_job, 
+    const share::ObImportTableItem &table_item, 
     share::ObImportTableTask &import_task)
 {
   int ret = OB_SUCCESS;
@@ -193,7 +193,7 @@ int ObImportTableTaskGenerator::gen_table_import_task_(
       LOG_WARN("table not exist", K(ret), K(src_tenant_id), K(table_item));
       int tmp_ret = OB_SUCCESS;
       ObImportResult::Comment comment;
-      if (OB_TMP_FAIL(databuff_printf(comment.ptr(), comment.capacity(), "import table not exist, %.*s.%.*s",
+      if (OB_TMP_FAIL(databuff_printf(comment.ptr(), comment.capacity(), "import table not exist, %.*s.%.*s", 
           table_item.database_name_.length(), table_item.database_name_.ptr(),
           table_item.table_name_.length(), table_item.table_name_.ptr()))) {
         LOG_WARN("failed to databuff printf", K(ret));
@@ -231,7 +231,7 @@ int ObImportTableTaskGenerator::fill_import_task_from_import_db_(
     }
   }
 
-
+  
   if (OB_SUCC(ret)) {
     remap_table_item.mode_ = remap_db_item.mode_;
     remap_table_item.database_name_ = remap_db_item.name_;
@@ -241,14 +241,14 @@ int ObImportTableTaskGenerator::fill_import_task_from_import_db_(
   if (FAILEDx(fill_import_task_(import_job, guard, table_schema, table_item, remap_table_item, import_task))) {
     LOG_WARN("failed to fill import task", K(ret), K(import_job), K(table_schema), K(table_item), K(remap_table_item));
   }
-
+  
   return ret;
 }
 
 int ObImportTableTaskGenerator::fill_import_task_from_import_table_(
     share::ObImportTableJob &import_job,
     share::schema::ObSchemaGetterGuard &guard,
-    const share::schema::ObTableSchema &table_schema,
+    const share::schema::ObTableSchema &table_schema, 
     const share::ObImportTableItem &table_item,
     share::ObImportTableTask &import_task)
 {
@@ -270,14 +270,14 @@ int ObImportTableTaskGenerator::fill_import_task_from_import_table_(
   if (FAILEDx(fill_import_task_(import_job, guard, table_schema, table_item, remap_table_item, import_task))) {
     LOG_WARN("failed to fill import task", K(ret), K(import_job), K(table_schema), K(table_item), K(remap_table_item));
   }
-
+  
   return ret;
 }
 
 int ObImportTableTaskGenerator::fill_import_task_(
     share::ObImportTableJob &import_job,
     share::schema::ObSchemaGetterGuard &guard,
-    const share::schema::ObTableSchema &table_schema,
+    const share::schema::ObTableSchema &table_schema, 
     const share::ObImportTableItem &table_item,
     const share::ObImportTableItem &remap_table_item,
     share::ObImportTableTask &import_task)
@@ -302,7 +302,7 @@ int ObImportTableTaskGenerator::fill_import_task_(
   } else if (OB_FAIL(check_target_schema_(import_job, import_task))) {
     LOG_WARN("failed to check target schema", K(ret), K(import_task));
   }
-
+  
   return ret;
 }
 
@@ -317,7 +317,7 @@ int ObImportTableTaskGenerator::check_src_table_schema_(
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("import not user table is not allowed", K(ret), K(table_item));
     ObImportResult::Comment comment;
-    if (OB_TMP_FAIL(databuff_printf(comment.ptr(), comment.capacity(), "import table %.*s.%.*s is not user table",
+    if (OB_TMP_FAIL(databuff_printf(comment.ptr(), comment.capacity(), "import table %.*s.%.*s is not user table", 
         table_item.database_name_.length(), table_item.database_name_.ptr(),
         table_item.table_name_.length(), table_item.table_name_.ptr()))) {
       LOG_WARN("failed to databuff printf", K(ret));
@@ -329,7 +329,7 @@ int ObImportTableTaskGenerator::check_src_table_schema_(
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("import table in recyclebin is not allowed", K(ret), K(table_item));
     ObImportResult::Comment comment;
-    if (OB_TMP_FAIL(databuff_printf(comment.ptr(), comment.capacity(), "import table %.*s.%.*s is in recyclebin",
+    if (OB_TMP_FAIL(databuff_printf(comment.ptr(), comment.capacity(), "import table %.*s.%.*s is in recyclebin", 
         table_item.database_name_.length(), table_item.database_name_.ptr(),
         table_item.table_name_.length(), table_item.table_name_.ptr()))) {
       LOG_WARN("failed to databuff printf", K(ret));
@@ -341,7 +341,7 @@ int ObImportTableTaskGenerator::check_src_table_schema_(
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("import hidden user table is not allowed", K(ret), K(table_item));
     ObImportResult::Comment comment;
-    if (OB_TMP_FAIL(databuff_printf(comment.ptr(), comment.capacity(), "import table %.*s.%.*s is hidden table",
+    if (OB_TMP_FAIL(databuff_printf(comment.ptr(), comment.capacity(), "import table %.*s.%.*s is hidden table", 
         table_item.database_name_.length(), table_item.database_name_.ptr(),
         table_item.table_name_.length(), table_item.table_name_.ptr()))) {
       LOG_WARN("failed to databuff printf", K(ret));
@@ -354,40 +354,40 @@ int ObImportTableTaskGenerator::check_src_table_schema_(
 }
 
 int ObImportTableTaskGenerator::check_target_schema_(
-    share::ObImportTableJob &import_job,
+    share::ObImportTableJob &import_job, 
     const share::ObImportTableTask &task)
 {
   int ret = OB_SUCCESS;
   const uint64_t target_tenant_id = task.get_tenant_id();
   bool is_exist = true;
   int tmp_ret = OB_SUCCESS;
-  if (OB_FAIL(ObImportTableUtil::check_database_schema_exist(*schema_service_,
-                                                             target_tenant_id,
-                                                             task.get_target_database(),
+  if (OB_FAIL(ObImportTableUtil::check_database_schema_exist(*schema_service_, 
+                                                             target_tenant_id, 
+                                                             task.get_target_database(), 
                                                              is_exist))) {
     LOG_WARN("failed to check target database schema exist", K(ret), K(task));
   } else if (!is_exist) {
     ret = OB_ERR_BAD_DATABASE;;
     LOG_INFO("database not exist", K(ret), K(task.get_target_database()));
     ObImportResult::Comment comment;
-    if (OB_TMP_FAIL(databuff_printf(comment.ptr(), comment.capacity(), "import database %.*s not exist",
+    if (OB_TMP_FAIL(databuff_printf(comment.ptr(), comment.capacity(), "import database %.*s not exist", 
         task.get_target_database().length(), task.get_target_database().ptr()))) {
       LOG_WARN("failed to databuff printf", K(ret));
     } else {
       import_job.get_result().set_result(false, comment);
       import_job.get_result().set_tables_import_result(ObImportResult::FAILED);
     }
-  } else if (OB_FAIL(ObImportTableUtil::check_table_schema_exist(*schema_service_,
-                                                                 target_tenant_id,
-                                                                 task.get_target_database(),
-                                                                 task.get_target_table(),
+  } else if (OB_FAIL(ObImportTableUtil::check_table_schema_exist(*schema_service_, 
+                                                                 target_tenant_id, 
+                                                                 task.get_target_database(), 
+                                                                 task.get_target_table(), 
                                                                  is_exist))) {
     LOG_WARN("failed to check target table schema exist", K(ret), K(task));
   } else if (is_exist) {
     ret = OB_ERR_TABLE_EXIST;
-    LOG_INFO("target table exist", K(ret), K(task.get_target_table()));
+    LOG_INFO("target table exist", K(ret), K(task.get_target_table()));      
     ObImportResult::Comment comment;
-    if (OB_TMP_FAIL(databuff_printf(comment.ptr(), comment.capacity(), "import table %.*s.%.*s exist",
+    if (OB_TMP_FAIL(databuff_printf(comment.ptr(), comment.capacity(), "import table %.*s.%.*s exist", 
         task.get_target_database().length(), task.get_target_database().ptr(),
         task.get_target_table().length(), task.get_target_table().ptr()))) {
       LOG_WARN("failed to databuff printf", K(ret));
@@ -395,10 +395,10 @@ int ObImportTableTaskGenerator::check_target_schema_(
       import_job.get_result().set_result(false, comment);
       import_job.get_result().set_tables_import_result(ObImportResult::FAILED);
     }
-  }
+  } 
   is_exist = false;
   if (task.get_target_tablegroup().empty()) {
-  } else if (FAILEDx(ObImportTableUtil::check_tablegroup_exist(*schema_service_,
+  } else if (FAILEDx(ObImportTableUtil::check_tablegroup_exist(*schema_service_, 
                                                                target_tenant_id,
                                                                task.get_target_tablegroup(),
                                                                is_exist))) {
@@ -407,7 +407,7 @@ int ObImportTableTaskGenerator::check_target_schema_(
     ret = OB_TABLEGROUP_NOT_EXIST;
     LOG_WARN("tablegroup not exist", K(ret), K(task.get_target_tablegroup()));
     ObImportResult::Comment comment;
-    if (OB_TMP_FAIL(databuff_printf(comment.ptr(), comment.capacity(), "remap tablegroup %.*s not exist",
+    if (OB_TMP_FAIL(databuff_printf(comment.ptr(), comment.capacity(), "remap tablegroup %.*s not exist", 
         task.get_target_tablegroup().length(), task.get_target_tablegroup().ptr()))) {
       LOG_WARN("failed to databuff printf", K(ret));
     } else {
@@ -417,7 +417,7 @@ int ObImportTableTaskGenerator::check_target_schema_(
   }
   is_exist = false;
   if (task.get_target_tablespace().empty()) {
-  } else if (FAILEDx(ObImportTableUtil::check_tablespace_exist(*schema_service_,
+  } else if (FAILEDx(ObImportTableUtil::check_tablespace_exist(*schema_service_, 
                                                                target_tenant_id,
                                                                task.get_target_tablespace(),
                                                                is_exist))) {
@@ -426,7 +426,7 @@ int ObImportTableTaskGenerator::check_target_schema_(
     ret = OB_TABLESPACE_NOT_EXIST;
     LOG_WARN("tablespace not exist", K(ret), K(task.get_target_tablespace()));
     ObImportResult::Comment comment;
-    if (OB_TMP_FAIL(databuff_printf(comment.ptr(), comment.capacity(), "remap tablespace %.*s not exist",
+    if (OB_TMP_FAIL(databuff_printf(comment.ptr(), comment.capacity(), "remap tablespace %.*s not exist", 
         task.get_target_tablespace().length(), task.get_target_tablespace().ptr()))) {
       LOG_WARN("failed to databuff printf", K(ret));
     } else {
@@ -438,8 +438,8 @@ int ObImportTableTaskGenerator::check_target_schema_(
 }
 
 int ObImportTableTaskGenerator::fill_common_para_(
-    const share::ObImportTableJob &import_job,
-    const share::schema::ObTableSchema &table_schema,
+    const share::ObImportTableJob &import_job, 
+    const share::schema::ObTableSchema &table_schema, 
     share::ObImportTableTask &task)
 {
   int ret = OB_SUCCESS;
@@ -466,10 +466,10 @@ int ObImportTableTaskGenerator::fill_common_para_(
 }
 
 int ObImportTableTaskGenerator::fill_tablespace_(
-    const share::ObImportTableJob &import_job,
+    const share::ObImportTableJob &import_job, 
     share::schema::ObSchemaGetterGuard &guard,
-    const share::schema::ObTableSchema &table_schema,
-    const share::ObImportTableItem &table_item,
+    const share::schema::ObTableSchema &table_schema, 
+    const share::ObImportTableItem &table_item, 
     share::ObImportTableTask &task)
 {
   int ret = OB_SUCCESS;
@@ -500,17 +500,17 @@ int ObImportTableTaskGenerator::fill_tablespace_(
       }
     } else if (OB_FAIL(task.set_target_tablespace(target_ts.name_))) {
       LOG_WARN("failed to set target tablespace", K(ret), K(target_ts));
-    }
+    } 
   }
-
+  
   return ret;
 }
 
 int ObImportTableTaskGenerator::fill_tablegroup_(
-    const share::ObImportTableJob &import_job,
+    const share::ObImportTableJob &import_job, 
     share::schema::ObSchemaGetterGuard &guard,
-    const share::schema::ObTableSchema &table_schema,
-    const share::ObImportTableItem &table_item,
+    const share::schema::ObTableSchema &table_schema, 
+    const share::ObImportTableItem &table_item, 
     share::ObImportTableTask &task)
 {
   int ret = OB_SUCCESS;
@@ -541,7 +541,7 @@ int ObImportTableTaskGenerator::fill_tablegroup_(
       }
     } else if (OB_FAIL(task.set_target_tablegroup(target_tg.name_))) {
       LOG_WARN("failed to set target tablegroup", K(ret), K(target_tg));
-    }
+    } 
   }
 
   return ret;

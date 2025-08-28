@@ -33,7 +33,7 @@ public:
   static int calc_make_set_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   static int calc_text(const ObExpr &expr, ObEvalCtx &ctx, const ObDatum &input_bits_dat, ObDatum &res);
   DECLARE_SET_LOCAL_SESSION_VARS;
-
+  
 private:
 	DISALLOW_COPY_AND_ASSIGN(ObExprMakeSet);
 };

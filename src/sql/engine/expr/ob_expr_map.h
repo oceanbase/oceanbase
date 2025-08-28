@@ -27,12 +27,12 @@ class ObExprMap : public ObFuncExprOperator
 {
 public:
   explicit ObExprMap(common::ObIAllocator &alloc);
-  explicit ObExprMap(common::ObIAllocator &alloc, ObExprOperatorType type,
+  explicit ObExprMap(common::ObIAllocator &alloc, ObExprOperatorType type, 
                                 const char *name, int32_t param_num, int32_t dimension);
   virtual ~ObExprMap();
   virtual int calc_result_typeN(ObExprResType& type,
                                 ObExprResType* types,
-                                int64_t param_num,
+                                int64_t param_num, 
                                 common::ObExprTypeCtx& type_ctx)
                                 const override;
   static int eval_map(const ObExpr &expr,

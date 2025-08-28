@@ -90,8 +90,8 @@ int64_t ObRemapSchemaItem<S, T>::get_format_serialize_size() const
 
 template<typename S, typename T>
 int ObRemapSchemaItem<S, T>::format_serialize(
-    char *buf,
-    const int64_t buf_len,
+    char *buf, 
+    const int64_t buf_len, 
     int64_t &pos) const
 {
   int ret = OB_SUCCESS;
@@ -114,7 +114,7 @@ int ObRemapSchemaItem<S, T>::format_serialize(
 
 template<typename S, typename T>
 int ObRemapSchemaItem<S, T>::deep_copy(
-    common::ObIAllocator &allocator,
+    common::ObIAllocator &allocator, 
     const ObIImportItem &src)
 {
   int ret = OB_SUCCESS;
@@ -141,7 +141,7 @@ bool ObRemapSchemaItem<S, T>::operator==(const ObIImportItem &other) const
   bool is_equal = false;
   if (get_item_type() == other.get_item_type()) {
     const ObRemapSchemaItem<S, T> &the_other = static_cast<const ObRemapSchemaItem<S, T> &>(other);
-
+  
     is_equal = src_ == the_other.src_ && target_ == the_other.target_;
   }
   return is_equal;
@@ -292,7 +292,7 @@ bool ObRemapSchemaItemArray<S, T>::is_src_exist(const S &src) const
 
 template<typename S, typename T>
 bool ObRemapSchemaItemArray<S, T>::is_src_exist(
-    const S &src,
+    const S &src, 
     const S *&out) const
 {
   bool is_exist = false;
@@ -323,7 +323,7 @@ bool ObRemapSchemaItemArray<S, T>::is_target_exist(const T &target) const
 
 template<typename S, typename T>
 bool ObRemapSchemaItemArray<S, T>::is_target_exist(
-    const T &target,
+    const T &target, 
     const T *&out) const
 {
   bool is_exist = false;

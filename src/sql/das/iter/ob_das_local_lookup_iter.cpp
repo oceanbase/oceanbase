@@ -297,7 +297,7 @@ int ObDASLocalLookupIter::check_index_lookup()
     scan_iter = static_cast<ObDASFuncLookupIter *>(data_table_iter_)->get_index_scan_iter();
   } else if (data_table_iter_->get_type() == DAS_ITER_DOMAIN_ID_MERGE) {
     scan_iter = static_cast<ObDASDomainIdMergeIter *>(data_table_iter_)->get_data_table_iter();
-  }
+  } 
   if (GCONF.enable_defensive_check() &&
       lookup_ctdef_->pd_expr_spec_.pushdown_filters_.empty()) {
     if (OB_UNLIKELY(lookup_rowkey_cnt_ != lookup_row_cnt_)) {

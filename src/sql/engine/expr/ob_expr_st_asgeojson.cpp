@@ -48,8 +48,8 @@ int ObExprSTAsGeoJson::calc_result_typeN(ObExprResType &type, ObExprResType *typ
           LOG_WARN("invalid type for geometry", K(ret), K(type));
         }
       } else {
-        if (!ob_is_integer_type(type) && !ob_is_null(type)
-            && !ob_is_varchar_char_type(type, types_stack[i].get_collation_type())
+        if (!ob_is_integer_type(type) && !ob_is_null(type) 
+            && !ob_is_varchar_char_type(type, types_stack[i].get_collation_type()) 
             && !ob_is_enum_or_set_type(type)) {
           ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
           LOG_WARN("invalid type", K(ret), K(type));

@@ -43,14 +43,14 @@ int ObTableQueryASyncMgr::mtl_init(ObTableQueryASyncMgr *&query_async_mgr)
 int ObTableQueryASyncMgr::start()
 {
   int ret = OB_SUCCESS;
-
+    
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableQueryASyncMgr is not inited", K(ret));
   } else if (OB_FAIL(TG_SCHEDULE(MTL(omt::ObSharedTimer*)->get_tg_id(), *this,
                                   MIN_QUERY_SESSION_CLEAN_DELAY))) {
     LOG_WARN("failed to schedule QueryASyncMgr task", K(ret));
-  }
+  } 
   return ret;
 }
 
@@ -77,7 +77,7 @@ void ObTableQueryASyncMgr::runTimerTask()
 }
 
 int ObTableQueryASyncMgr::init()
-{
+{ 
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
@@ -247,7 +247,7 @@ ObTableQueryASyncMgr::ObQueryHashMap *ObTableQueryASyncMgr::get_query_session_ma
 void ObTableQueryASyncMgr::free_query_session(ObITableQueryAsyncSession *query_session)
 {
   if (OB_NOT_NULL(query_session)) {
-    query_session->~ObITableQueryAsyncSession();
+    query_session->~ObITableQueryAsyncSession(); 
     allocator_.free(query_session);
   }
 }
@@ -301,8 +301,8 @@ int ObTableQueryASyncMgr::get_query_session(uint64_t sessid,
       LOG_WARN("fail to insert session to query map", K(ret), K(sessid));
      free_query_session(query_session);
     } else {}
-  } else if (ObQueryOperationType::QUERY_NEXT == query_type ||
-             ObQueryOperationType::QUERY_END == query_type ||
+  } else if (ObQueryOperationType::QUERY_NEXT == query_type || 
+             ObQueryOperationType::QUERY_END == query_type || 
              ObQueryOperationType::QUERY_RENEW == query_type) {
     if (OB_FAIL(get_query_session(sessid, query_session))) {
       LOG_WARN("fail to get query session from query sync mgr", K(ret), K(sessid));

@@ -35,7 +35,7 @@ class GlobalConf():
     def __init__(self):
         # 输入静态库路径
         self.origin_static_abs_path = ""
-        # 输出静态库路径
+        # 输出静态库路径 
         self.target_static_abs_path = ""
         # 链接器路径
         self.ld_bin_abs_path = ""
@@ -136,7 +136,7 @@ def parse_arg():
                     print("[ERROR] 输入路径[%s]不是绝对路径或者不存在" % arg)
                     exit(ERROR_CODE.COMMON_ERROR)
                 GLOBAL_CONF.ld_bin_abs_path = arg
-
+            
     except getopt.GetoptError as ex:
         print_log("[ERROR] getopt.GetoptError 解析参数失败，请合法输入, %s" % ex)
         exit(ERROR_CODE.COMMON_ERROR)
@@ -178,7 +178,7 @@ def main():
     static_lib_name = os.path.basename(GLOBAL_CONF.origin_static_abs_path)
     print_log("开始使用链接器(%s)将bitcode obj(%s)转换为elf obj(%s)" % (GLOBAL_CONF.ld_bin_abs_path, GLOBAL_CONF.origin_static_abs_path, GLOBAL_CONF.target_static_abs_path))
     time.sleep(0.1)
-
+    
     # 提取 目标文件
     print_log("开始分析静态库%s..." % static_lib_name)
 
@@ -242,7 +242,7 @@ def main():
     cmd_ar_finial = "rm -rf %s && ar qc %s " % (GLOBAL_CONF.target_static_abs_path, GLOBAL_CONF.target_static_abs_path)
     for one_object in ar_after_object_list:
         cmd_ar_finial += "%s " % one_object
-
+    
     result = shell_run_command(cmd_ar_finial)
     if result['return_code'] != ERROR_CODE.COMMON_SUCCESS:
         print(result['return_message'])

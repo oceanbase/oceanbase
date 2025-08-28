@@ -80,3 +80,4 @@ int ObExprVecIVFPQCenterId::generate_pq_center_id(
 
 }  // namespace sql
 }  // namespace oceanbase
+

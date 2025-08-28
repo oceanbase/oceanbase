@@ -42,11 +42,11 @@ public:
   ExprFixedArray sort_columns_;
 };
 
-//new limit operator for vecorization 2.0
+//new limit operator for vecorization 2.0 
 class ObLimitVecOp : public ObOperator
 {
 public:
-  ObLimitVecOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input);
+  ObLimitVecOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input); 
   virtual ~ObLimitVecOp();
 
   virtual int inner_open() override;
@@ -76,7 +76,7 @@ private:
 
   int get_int_val(ObExpr *expr, ObEvalCtx &eval_ctx, int64_t &val, bool &is_null_value);
   int get_double_val(ObExpr *expr, ObEvalCtx &eval_ctx, double &val);
-
+  
 private:
   int64_t limit_;
   int64_t offset_;

@@ -27,7 +27,7 @@ class ObMaterialOpImpl {
 public:
   explicit ObMaterialOpImpl(ObMonitorNode &op_monitor_info);
   virtual ~ObMaterialOpImpl();
-
+  
   void reset();
   void unregister_profile_if_necessary()
   {
@@ -81,13 +81,13 @@ public:
   int get_next_batch(const common::ObIArray<ObExpr*> &exprs,
                      const int64_t max_rows,
                      int64_t &read_rows);
-
+    
   int rescan();
   int reuse();
   // rewind get_next_row() iterator to begin.
   int rewind();
 
-
+  
 private:
   int process_dump();
   bool need_dump()

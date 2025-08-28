@@ -71,7 +71,7 @@ public:
 private:
   void set(uint64_t unit_id, int64_t required_size, bool is_migrating) {
     unit_id_ = unit_id;
-    required_size_ = required_size;
+    required_size_ = required_size;  
     is_migrating_ = is_migrating;
   }
   uint64_t unit_id_;

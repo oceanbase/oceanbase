@@ -215,10 +215,10 @@ public:
     int64_t decint = static_cast<int64_t>(lhs);
     if (OB_UNLIKELY(scale == 0)) {
       if (OB_UNLIKELY(lhs > INT64_MAX)) {
-        q = INT64_MAX;
+        q = INT64_MAX; 
         err = OB_ERRNO_ERANGE;
       } else if (OB_UNLIKELY(lhs < INT64_MIN)) {
-        q = INT64_MIN;
+        q = INT64_MIN; 
         err = OB_ERRNO_ERANGE;
       } else {
         q = decint;
@@ -244,10 +244,10 @@ public:
         if (is_neg) { num = -num; }
         q = static_cast<int64_t>(num);
         if (OB_UNLIKELY(num > INT64_MAX)) {
-          q = INT64_MAX;
+          q = INT64_MAX; 
           err = OB_ERRNO_ERANGE;
         } else if (OB_UNLIKELY(num < INT64_MIN)) {
-          q = INT64_MIN;
+          q = INT64_MIN; 
           err = OB_ERRNO_ERANGE;
         } else {
           q = static_cast<int64_t>(num);
@@ -291,7 +291,7 @@ public:
     uint64_t decint = static_cast<int64_t>(lhs);
     if (OB_UNLIKELY(scale == 0)) {
       if (OB_UNLIKELY(lhs > UINT64_MAX)) {
-        q = UINT64_MAX;
+        q = UINT64_MAX; 
         err = OB_ERRNO_ERANGE;
       } else {
         q = decint;
@@ -314,7 +314,7 @@ public:
         round_up &= (remain >= (sf >> 1));
         if (round_up) { num = num + 1; }
         if (OB_UNLIKELY(num > UINT64_MAX)) {
-          q = UINT64_MAX;
+          q = UINT64_MAX; 
           err = OB_ERRNO_ERANGE;
         } else {
           q = static_cast<uint64_t>(num);

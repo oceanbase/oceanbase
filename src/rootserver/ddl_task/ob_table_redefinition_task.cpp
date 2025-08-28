@@ -27,9 +27,9 @@ using namespace oceanbase::obrpc;
 
 ObTableRedefinitionTask::ObTableRedefinitionTask()
   : ObDDLRedefinitionTask(ObDDLType::DDL_TABLE_REDEFINITION),
-    has_rebuild_index_(false), has_rebuild_constraint_(false), has_rebuild_foreign_key_(false),
+    has_rebuild_index_(false), has_rebuild_constraint_(false), has_rebuild_foreign_key_(false), 
     allocator_(lib::ObLabel("RedefTask")),
-    is_copy_indexes_(true), is_copy_triggers_(true), is_copy_constraints_(true), is_copy_foreign_keys_(true),
+    is_copy_indexes_(true), is_copy_triggers_(true), is_copy_constraints_(true), is_copy_foreign_keys_(true), 
     is_ignore_errors_(false), is_do_finish_(false), target_cg_cnt_(0), use_heap_table_ddl_plan_(false),
     is_ddl_retryable_(true)
 {
@@ -61,12 +61,12 @@ int ObTableRedefinitionTask::init(const ObTableSchema* src_table_schema,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(src_table_schema), KP(dst_table_schema));
   } else if (OB_UNLIKELY( !src_table_schema->is_valid()
-                        || !dst_table_schema->is_valid()
+                        || !dst_table_schema->is_valid() 
                         || task_id <= 0  || snapshot_version < 0 || tenant_data_version <= 0
-                        || task_status < ObDDLTaskStatus::PREPARE || task_status > ObDDLTaskStatus::SUCCESS
+                        || task_status < ObDDLTaskStatus::PREPARE || task_status > ObDDLTaskStatus::SUCCESS 
                         || (snapshot_version > 0 && task_status < ObDDLTaskStatus::WAIT_TRANS_END))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KPC(src_table_schema), KPC(dst_table_schema), K(task_id),
+    LOG_WARN("invalid arguments", K(ret), KPC(src_table_schema), KPC(dst_table_schema), K(task_id), 
                                   K(task_status), K(snapshot_version));
   } else if (OB_FAIL(deep_copy_table_arg(allocator_, alter_table_arg, alter_table_arg_))) {
     LOG_WARN("deep copy alter table arg failed", K(ret));
@@ -82,7 +82,7 @@ int ObTableRedefinitionTask::init(const ObTableSchema* src_table_schema,
 
     /* only table restore set schema_serson = src, other use dst*/
     if (ObDDLType::DDL_TABLE_RESTORE == ddl_type) {
-      schema_version_ = src_table_schema->get_schema_version();
+      schema_version_ = src_table_schema->get_schema_version();      
     } else {
       schema_version_ = dst_table_schema->get_schema_version();
     }
@@ -146,9 +146,9 @@ int ObTableRedefinitionTask::init(const ObDDLTaskRecord &task_record)
   } else if (FALSE_IT(dst_tenant_id = task_record.tenant_id_)) {
   } else if (FALSE_IT(src_schema_version = alter_table_arg_.alter_table_schema_.get_schema_version())) {
   } else if (FALSE_IT(dst_schema_version = task_record.schema_version_)) {
-  } else if (OB_UNLIKELY(common::OB_INVALID_ID == src_tenant_id
+  } else if (OB_UNLIKELY(common::OB_INVALID_ID == src_tenant_id 
                       || common::OB_INVALID_ID == dst_tenant_id
-                      || src_schema_version <= 0
+                      || src_schema_version <= 0 
                       || dst_schema_version <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected err", K(ret), K(task_record), K(src_tenant_id), K(dst_tenant_id), K(src_schema_version), K(dst_schema_version));
@@ -214,7 +214,7 @@ int ObTableRedefinitionTask::update_complete_sstable_job_status(const common::Ob
         ret_code_ = ret_code;
         LOG_INFO("table redefinition task callback", K(addr), K(complete_sstable_job_ret_code_));
         break;
-      }
+      } 
       default : {
         if (OB_UNLIKELY(snapshot_version_ != snapshot_version)) {
           ret = OB_ERR_UNEXPECTED;
@@ -946,7 +946,7 @@ int ObTableRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status)
     }
   }
   char object_id_buffer[256];
-  snprintf(object_id_buffer, sizeof(object_id_buffer), "object_id:%ld, target_object_id:%ld",
+  snprintf(object_id_buffer, sizeof(object_id_buffer), "object_id:%ld, target_object_id:%ld", 
             object_id_, target_object_id_);
   ROOTSERVICE_EVENT_ADD("ddl scheduler", "table redefinition task take effect",
     "tenant_id", tenant_id_,
@@ -1340,7 +1340,7 @@ int ObTableRedefinitionTask::collect_longops_stat(ObLongopsValue &value)
         } else if (OB_FAIL(sql_monitor_stats_collector.get_next_sql_plan_monitor_stat(sql_monitor_stats))) {
           LOG_WARN("failed to get next sql plan monitor stats", K(ret));
         } else if (OB_FAIL(diagnose_info.process_sql_monitor_and_generate_longops_message(sql_monitor_stats, target_cg_cnt_, stat_info_, pos))) {
-          LOG_WARN("failed to process sql monitor and generate longops message", K(ret), K(sql_monitor_stats), K(target_cg_cnt_), K(stat_info_), K(pos));
+          LOG_WARN("failed to process sql monitor and generate longops message", K(ret), K(sql_monitor_stats), K(target_cg_cnt_), K(stat_info_), K(pos)); 
         }
       }
       break;

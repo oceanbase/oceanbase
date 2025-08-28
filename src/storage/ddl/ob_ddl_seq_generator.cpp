@@ -121,7 +121,8 @@ int64_t ObDDLSeqGenerator::get_interval_size() const
 }
 
 bool ObDDLSeqGenerator::is_step_over(const int64_t val) const
-{
+{ 
   return is_inited_
     && val % step_ == (start_ % step_ + interval_ - 1);
 }
+

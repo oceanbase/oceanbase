@@ -76,7 +76,7 @@ public:
 #define DEF_VAL_FOR_SQL      \
   int ret = OB_SUCCESS;      \
   ObSqlString sql;           \
-  int64_t affected_rows = 0;
+  int64_t affected_rows = 0; 
 
 const int64_t SINGLE_TABLE_PARTITION_COUNT = 4000;
 const int64_t TABLET_FREEZE_THREAD_COUNT = 10;
@@ -137,7 +137,7 @@ void TestFrequentlyFreeze::async_tablet_freeze(const int64_t idx)
                                             ObFreezeSourceFlag::TEST_MODE));
     usleep(100 * 1000);
     STORAGE_LOG(INFO, "finish tablet freeze", K(tablet_to_freeze), K(is_sync), K(idx));
-
+    
     int_tablet_id_to_freeze += TABLET_FREEZE_THREAD_COUNT;
   }
   fprintf(stdout, "async tablet freeze finish. thread = %ld\n", idx);

@@ -16,7 +16,7 @@
 #include "common/ob_target_specific.h"
 #include "ob_vector_pq_coder.h"
 
-#if OB_USE_MULTITARGET_CODE
+#if OB_USE_MULTITARGET_CODE 
 #include <emmintrin.h>
 #include <immintrin.h>
 #include <tmmintrin.h>

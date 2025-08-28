@@ -1102,7 +1102,7 @@ private:
   ObIRetainCtxCheckFunctor *retain_ctx_func_ptr_;
   // sub_state_ is volatile
   ObTxSubState sub_state_;
-
+  
   bool has_extra_log_cb_group_;
   ObTxLogCbGroup reserve_log_cb_group_;
   TxLogCbGroupList extra_cb_group_list_;

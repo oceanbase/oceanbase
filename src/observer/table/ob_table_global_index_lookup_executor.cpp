@@ -30,13 +30,13 @@ ObTableGlobalIndexLookupExecutor::ObTableGlobalIndexLookupExecutor(ObTableApiSca
 {}
 
 void ObTableGlobalIndexLookupExecutor::do_clear_evaluated_flag()
-{
+{ 
   int ret = OB_SUCCESS;
   if (OB_ISNULL(scan_executor_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("scan executor is NULL", K(ret));
   } else {
-    scan_executor_->clear_evaluated_flag();
+    scan_executor_->clear_evaluated_flag(); 
   }
 }
 
@@ -85,7 +85,7 @@ int ObTableGlobalIndexLookupExecutor::get_next_row_from_index_table()
   int ret = OB_SUCCESS;
   uint64_t tenant_id = tb_ctx_.get_tenant_id();
   if (allocator_.used() > get_memory_limit(tenant_id)) {
-    // if the memory used is out of memory limit, force to stop the index table scan
+    // if the memory used is out of memory limit, force to stop the index table scan 
     // and the reserved index rows will be scanned in next batch
     ret = OB_ITER_END;
     LOG_WARN("allocator use reach limit", K(ret), K(allocator_.used()), K(get_memory_limit(tenant_id)));
@@ -118,15 +118,15 @@ int ObTableGlobalIndexLookupExecutor::process_data_table_rowkey()
   } else if (OB_ISNULL(lookup_rtdef = scan_executor_->tsc_rtdef_.lookup_rtdef_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lookup_rtdef is NULL", K(ret));
-  } else if (OB_FAIL(ObExprCalcPartitionBase::calc_part_and_tablet_id(get_calc_part_id_expr(),
-                                                               get_eval_ctx(),
-                                                               partition_id,
+  } else if (OB_FAIL(ObExprCalcPartitionBase::calc_part_and_tablet_id(get_calc_part_id_expr(), 
+                                                               get_eval_ctx(), 
+                                                               partition_id, 
                                                                tablet_id))) {
     LOG_WARN("fail to calc part id", K(ret), KPC(get_calc_part_id_expr()));
   } else if (OB_ISNULL(lookup_rtdef->table_loc_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lookup_rtdef table_loc is NULL", K(ret));
-  } else if (OB_FAIL(DAS_CTX(scan_executor_->get_exec_ctx()).extended_tablet_loc(*lookup_rtdef->table_loc_,
+  } else if (OB_FAIL(DAS_CTX(scan_executor_->get_exec_ctx()).extended_tablet_loc(*lookup_rtdef->table_loc_, 
             tablet_id, tablet_loc))) {
     LOG_WARN("failt to extend tablet loc", K(ret), K(tablet_id));
   } else if (OB_UNLIKELY(!has_das_scan_task(tablet_loc, das_scan_op))) {
@@ -272,19 +272,19 @@ void ObTableGlobalIndexLookupExecutor::destroy()
   allocator_.reset_remain_one_page();
 }
 
-int ObTableGlobalIndexLookupExecutor::get_next_rows_from_index_table(int64_t &count, int64_t capacity)
-{
-  return OB_NOT_IMPLEMENT;
+int ObTableGlobalIndexLookupExecutor::get_next_rows_from_index_table(int64_t &count, int64_t capacity) 
+{ 
+  return OB_NOT_IMPLEMENT; 
 }
 
-int ObTableGlobalIndexLookupExecutor::get_next_rows_from_data_table(int64_t &count, int64_t capacity)
-{
-  return OB_NOT_IMPLEMENT;
+int ObTableGlobalIndexLookupExecutor::get_next_rows_from_data_table(int64_t &count, int64_t capacity) 
+{ 
+  return OB_NOT_IMPLEMENT; 
 }
 
-int ObTableGlobalIndexLookupExecutor::process_data_table_rowkeys(const int64_t size, const ObBitVector *skip)
-{
-  return OB_NOT_IMPLEMENT;
+int ObTableGlobalIndexLookupExecutor::process_data_table_rowkeys(const int64_t size, const ObBitVector *skip) 
+{ 
+  return OB_NOT_IMPLEMENT; 
 }
 
 }  // namespace table

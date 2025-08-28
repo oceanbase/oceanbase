@@ -23,7 +23,7 @@ namespace libobcdc
 {
 // The task may be destroyed by other module threads during the dispatch process, so it needs to be popped out before it can be consumed
 // The basic information of the task being dispatched is still recorded in the queue to satisfy the query of the dispatch progress
-// bug logging:
+// bug logging: 
 //
 // pop task needs to record basic information about the task
 PartTransTask* SafeTaskWithRecordQueue::pop()

@@ -58,7 +58,7 @@ TEST_F(TestXmlNodeBase, test_xml_node_init)
   // document
   ObXmlDocument document(ObMulModeNodeType::M_DOCUMENT, ctx);
   // content
-  ObXmlDocument content(ObMulModeNodeType::M_CONTENT, ctx);
+  ObXmlDocument content(ObMulModeNodeType::M_CONTENT, ctx);  
   // attribute
   ObXmlAttribute attr(ObMulModeNodeType::M_ATTRIBUTE, ctx);
   // namespace
@@ -112,7 +112,7 @@ TEST_F(TestXmlNodeBase, test_xml_node_element_add_child)
   // document
   ObXmlDocument document(ObMulModeNodeType::M_DOCUMENT, ctx);
   // content
-  ObXmlDocument content(ObMulModeNodeType::M_CONTENT, ctx);
+  ObXmlDocument content(ObMulModeNodeType::M_CONTENT, ctx);  
   // attribute
   ObXmlAttribute attr1(ObMulModeNodeType::M_ATTRIBUTE, ctx);
   ObXmlAttribute attr2(ObMulModeNodeType::M_ATTRIBUTE, ctx);
@@ -235,7 +235,7 @@ TEST_F(TestXmlNodeBase, test_xml_node_element_ns_valid)
   attr2.set_value(atr_value2);
   attr2.set_ns(&ns);
   element1.add_attribute(&ns);
-
+  
   element2.set_prefix(prefix);
   ObXmlTreeTextWriter writer(&allocator);
   writer.visit(&element1);
@@ -273,7 +273,7 @@ TEST_F(TestXmlNodeBase, test_xml_node_element_ns_valid)
   ret = element1.remove_namespace(0);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(1, element1.size());
-
+  
 }
 
 TEST_F(TestXmlNodeBase, test_path_interface)
@@ -291,7 +291,7 @@ TEST_F(TestXmlNodeBase, test_path_interface)
   // document
   ObXmlDocument document(ObMulModeNodeType::M_DOCUMENT, ctx);
   // content
-  ObXmlDocument content(ObMulModeNodeType::M_CONTENT, ctx);
+  ObXmlDocument content(ObMulModeNodeType::M_CONTENT, ctx);  
   // attribute
   ObXmlAttribute attr1(ObMulModeNodeType::M_ATTRIBUTE, ctx);
   ObXmlAttribute attr2(ObMulModeNodeType::M_ATTRIBUTE, ctx);
@@ -655,7 +655,7 @@ TEST_F(TestXmlNodeBase, test_xml_node_element_add_well_from)
   // element2
   ObXmlElement element2(ObMulModeNodeType::M_ELEMENT, ctx);
   // content
-  ObXmlDocument content(ObMulModeNodeType::M_CONTENT, ctx);
+  ObXmlDocument content(ObMulModeNodeType::M_CONTENT, ctx);  
   // attribute
   ObXmlAttribute attr1(ObMulModeNodeType::M_ATTRIBUTE, ctx);
   // PI
@@ -702,10 +702,10 @@ TEST_F(TestXmlNodeBase, test_xml_node_element_add_well_from)
 
   content.add_element(&element1);
   content.add_element(&element2);
-  ObString str1 = "<dasdsa";
+  ObString str1 = "<dasdsa"; 
   content.append_unparse_text(str1);
   ASSERT_EQ(3, content.size());
-  ObString str2 = " a=\"dasa\" />";
+  ObString str2 = " a=\"dasa\" />"; 
   content.append_unparse_text(str2);
   ASSERT_EQ(3, content.size());
   content.add_element(&comment);

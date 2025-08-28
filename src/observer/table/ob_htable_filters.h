@@ -668,10 +668,10 @@ private:
 };
 
 /// Simple filter that returns first cell on row only.
-class FirstKeyOnlyFilter: public FilterBase
+class FirstKeyOnlyFilter: public FilterBase 
 {
 public:
-  FirstKeyOnlyFilter()
+  FirstKeyOnlyFilter() 
       : found_(false)
   {}
   virtual ~FirstKeyOnlyFilter() {}
@@ -687,10 +687,10 @@ private:
 };
 
 /// Simple filter that returns only the key component of each key-value.
-class KeyOnlyFilter: public FilterBase
+class KeyOnlyFilter: public FilterBase 
 {
 public:
-  KeyOnlyFilter(bool len_as_val)
+  KeyOnlyFilter(bool len_as_val) 
       : len_as_val_(len_as_val)
   {}
   virtual ~KeyOnlyFilter() {}
@@ -712,7 +712,7 @@ struct ObPair
 public:
   ObPair() : left_(), right_() {}
   ObPair(const L &l, const R &r): left_(l), right_(r) {}
-  inline bool operator==(const ObPair &b) const
+  inline bool operator==(const ObPair &b) const 
   {
     return b.left_ == left_ && b.right_ == right_;
   }
@@ -773,9 +773,9 @@ class RowTracker
 public:
   RowTracker(ObIAllocator &allocator, common::ObIArray<ObPair<ObString, ObString>*> &fuzzy_key_data, bool is_reversed)
       : allocator_(allocator),
-        is_reversed_(is_reversed),
-        cmp_(is_reversed),
-        next_rows_(cmp_, &allocator),
+        is_reversed_(is_reversed), 
+        cmp_(is_reversed), 
+        next_rows_(cmp_, &allocator), 
         fuzzy_key_data_(fuzzy_key_data) ,
         order_(nullptr),
         inited_(false)
@@ -786,7 +786,7 @@ public:
   int next_row(ObString &row); // get top row from next_rows_
   TO_STRING_KV("FuzzyRowFilter", "RowTracker", K_(is_reversed), K_(next_rows), K_(fuzzy_key_data));
 private:
-  int update_with(const ObString &cur_row, const ObPair<ObString, ObString> &fuzzy_data);
+  int update_with(const ObString &cur_row, const ObPair<ObString, ObString> &fuzzy_data); 
   // compare cur_cell rowkey and the given rowkey considering scan order
   bool less_than(const ObString &cur_row, const ObString &next_row);
 private:
@@ -803,7 +803,7 @@ private:
 class FuzzyRowFilter: public FilterBase
 {
 public:
-  FuzzyRowFilter(ObIAllocator &allocator, ObIArray<ObPair<ObString, ObString>*> &fuzzy_key)
+  FuzzyRowFilter(ObIAllocator &allocator, ObIArray<ObPair<ObString, ObString>*> &fuzzy_key) 
       : allocator_(allocator),
         row_tracker_(nullptr),
         done_(false),
@@ -840,14 +840,14 @@ private:
   DISALLOW_COPY_AND_ASSIGN(FuzzyRowFilter);
 };
 
-class ObTimestampNode
+class ObTimestampNode 
 {
 public:
   ObTimestampNode(): value_(0) {};
   ObTimestampNode(int64_t value): value_(value) {};
   ~ObTimestampNode() {};
   RBNODE(ObTimestampNode, rblink);
-  int64_t get_value() const
+  int64_t get_value() const 
   {
     return value_;
   }
@@ -872,7 +872,7 @@ public:
         nodes_(),
         timestamps_()
   {}
-  virtual ~TimestampsFilter()
+  virtual ~TimestampsFilter() 
   {
     if (OB_NOT_NULL(origin_ts_)) {
       origin_ts_->~ObSEArray();
@@ -900,7 +900,7 @@ private:
 class ColumnValueFilter: public FilterBase
 {
 public:
-  ColumnValueFilter(ObString &cf, ObString &qualifier, CompareOperator cmp_op, Comparable *comparator)
+  ColumnValueFilter(ObString &cf, ObString &qualifier, CompareOperator cmp_op, Comparable *comparator) 
       : cf_(cf),
         qualifier_(qualifier),
         cmp_op_(cmp_op),
@@ -923,7 +923,7 @@ private:
 };
 
 /// Simple filter that returns rows in range.
-class MultiRowRangeFilter: public FilterBase
+class MultiRowRangeFilter: public FilterBase 
 {
 public:
   MultiRowRangeFilter(common::ObSEArray<KeyRange*, 8>* origin_range)
@@ -958,7 +958,7 @@ private:
 };
 
 /// Simple filter that returns rows before stop key.
-class InclusiveStopFilter: public MultiRowRangeFilter
+class InclusiveStopFilter: public MultiRowRangeFilter 
 {
 public:
   InclusiveStopFilter(common::ObSEArray<KeyRange*, 8>* origin_range, ObString stop_key)
@@ -1006,7 +1006,7 @@ private:
 };
 
 /// Simple filter based on the multiple lead portion of Column names
-class MultipleColumnPrefixFilter: public ColumnRangeFilter
+class MultipleColumnPrefixFilter: public ColumnRangeFilter 
 {
 public:
   MultipleColumnPrefixFilter(common::ObSEArray<KeyRange*, 8>* origin_range)
@@ -1061,10 +1061,10 @@ private:
 };
 
 /// Simple filter that returns cells before matching qualifiers.
-class FirstKeyValueMatchingQualifiersFilter: public FilterBase
+class FirstKeyValueMatchingQualifiersFilter: public FilterBase 
 {
 public:
-  FirstKeyValueMatchingQualifiersFilter(common::ObSEArray<ObString, 8> *qualifiers)
+  FirstKeyValueMatchingQualifiersFilter(common::ObSEArray<ObString, 8> *qualifiers) 
       : found_(false),
         qualifiers_(qualifiers)
   {}

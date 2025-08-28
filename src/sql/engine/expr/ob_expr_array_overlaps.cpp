@@ -38,8 +38,8 @@ ObExprArrayOverlaps::ObExprArrayOverlaps(ObIAllocator &alloc)
 ObExprArrayOverlaps::ObExprArrayOverlaps(ObIAllocator &alloc,
                          ObExprOperatorType type,
                          const char *name,
-                         int32_t param_num,
-                         int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension)
+                         int32_t param_num, 
+                         int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension) 
 {
 }
 
@@ -96,7 +96,7 @@ int ObExprArrayOverlaps::calc_result_type2(ObExprResType &type,
     type.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].scale_);
     type.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].precision_);
   }
-
+  
   return ret;
 }
 

@@ -16,7 +16,7 @@
 #include "lib/ob_define.h"
 #include "lib/string/ob_string.h"
 #include "lib/container/ob_array.h"
-#include "lib/container/ob_se_array.h"
+#include "lib/container/ob_se_array.h" 
 #include "common/storage/ob_device_common.h"
 #include "ob_storage_info.h"
 #include "ob_object_storage_base.h"
@@ -109,7 +109,7 @@ public:
     APPENDABLE_FRAGMENT_SEAL_META = 2,
   };
 
-  ObAppendableFragmentMeta()
+  ObAppendableFragmentMeta() 
     : start_(-1), end_(-1), type_(ObAppendableFragmentType::APPENDABLE_FRAGMENT_DATA) {
     suffix_[0] = '\0';
   }
@@ -118,9 +118,9 @@ public:
   bool is_format_meta() const { return type_ == ObAppendableFragmentType::APPENDABLE_FRAGMENT_FORMAT_META; }
   bool is_seal_meta() const { return type_ == ObAppendableFragmentType::APPENDABLE_FRAGMENT_SEAL_META; }
   bool is_data() const { return type_ == ObAppendableFragmentType::APPENDABLE_FRAGMENT_DATA; }
-  bool is_valid() const
-  {
-    return (is_format_meta()) || (is_seal_meta()) || (is_data() && start_ >= 0 && end_ > start_);
+  bool is_valid() const 
+  { 
+    return (is_format_meta()) || (is_seal_meta()) || (is_data() && start_ >= 0 && end_ > start_); 
   }
 
   int assign(const ObAppendableFragmentMeta &other);
@@ -139,7 +139,7 @@ struct ObStorageObjectMeta : public ObStorageObjectMetaBase
 {
   OB_UNIS_VERSION_V(1);
 public:
-  ObStorageObjectMeta()
+  ObStorageObjectMeta() 
     : ObStorageObjectMetaBase(),
       fragment_metas_()
   {}
@@ -153,7 +153,7 @@ public:
       ObArray<ObAppendableFragmentMeta> &fragments);
 
   bool is_object_file_type() const
-  {
+  { 
     return (type_ == ObStorageObjectMetaType::OB_OBJ_NORMAL) ||
            (type_ == ObStorageObjectMetaType::OB_FS_FILE);
   }
@@ -185,7 +185,7 @@ public:
   opendal_lister *opendal_lister_; // The intermediate state of the list is kept in opendal, and we save opendal_lister to access the next page
 
   ObStorageListCtxBase()
-    : max_list_num_(0), name_arr_(NULL), max_name_len_(0), rsp_num_(0),
+    : max_list_num_(0), name_arr_(NULL), max_name_len_(0), rsp_num_(0), 
       has_next_(false), need_size_(false), size_arr_(NULL),
       cur_listed_count_(0), total_list_limit_(-1),
       opendal_lister_(nullptr)
@@ -214,7 +214,7 @@ public:
   int64_t next_token_buf_len_; // length of marker/continuation_token should not be longer than this value
   char *cur_appendable_full_obj_path_;
   const char *marker_;
-
+  
   ObStorageListObjectsCtx()
     : next_token_(NULL), next_token_buf_len_(0), cur_appendable_full_obj_path_(NULL),
       marker_(nullptr)
@@ -226,7 +226,7 @@ public:
 
   int init(ObArenaAllocator &allocator, const int64_t max_list_num, const bool need_size);
 
-  bool is_valid() const { return ObStorageListCtxBase::is_valid() && (next_token_ != NULL)
+  bool is_valid() const { return ObStorageListCtxBase::is_valid() && (next_token_ != NULL) 
                                  && (next_token_buf_len_ > 0); }
   int set_next_token(const bool has_next, const char *next_token, const int64_t next_token_len);
   int set_marker(const char *marker);

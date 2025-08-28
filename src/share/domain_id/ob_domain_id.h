@@ -79,7 +79,7 @@ public:
   static bool is_domain_id_index_col_expr(const void *col_expr);
   static int64_t get_domain_type_by_col_expr(const void *col_expr, ObIndexType index_type);
   /* tsc cg End */
-
+  
   /* dml cg Begin */
   static int check_has_domain_index(
       const void *table_schema,

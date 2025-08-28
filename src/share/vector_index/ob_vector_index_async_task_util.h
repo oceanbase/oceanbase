@@ -114,8 +114,8 @@ struct ObVecIndexTaskKey
   uint64_t table_id_;
   uint64_t tablet_id_;
   int64_t task_id_;
-  explicit ObVecIndexTaskKey(uint64_t tenant_id, uint64_t table_id,
-      uint64_t tablet_id, int64_t task_id) :
+  explicit ObVecIndexTaskKey(uint64_t tenant_id, uint64_t table_id, 
+      uint64_t tablet_id, int64_t task_id) : 
     tenant_id_(tenant_id),
     table_id_(table_id),
     tablet_id_(tablet_id),
@@ -184,9 +184,9 @@ typedef common::ObArray<ObVecIndexAsyncTaskCtx*> ObVecIndexTaskCtxArray;
 class ObVecIndexAsyncTaskOption
 {
 public:
-  ObVecIndexAsyncTaskOption(uint64_t tenant_id) :
+  ObVecIndexAsyncTaskOption(uint64_t tenant_id) : 
     mem_attr_(tenant_id, "VecIdxATaskCtx"),
-    allocator_(mem_attr_),
+    allocator_(mem_attr_), 
     ls_task_cnt_(0)
   {
     SET_IGNORE_MEM_VERSION(mem_attr_);
@@ -303,21 +303,21 @@ private:
   int optimize_vector_index( ObPluginVectorIndexAdaptor &adaptor);
   int refresh_snapshot_index_data(ObPluginVectorIndexAdaptor &adaptor, transaction::ObTxDesc *tx_desc, transaction::ObTxReadSnapshot &snapshot);
   int get_old_snapshot_data(
-      ObPluginVectorIndexAdaptor &adaptor,
-      transaction::ObTxDesc *tx_desc,
-      const int64_t snapshot_column_count,
+      ObPluginVectorIndexAdaptor &adaptor, 
+      transaction::ObTxDesc *tx_desc, 
+      const int64_t snapshot_column_count, 
       common::ObCollationType cs_type,
-      int64_t vector_key_col_idx,
-      int64_t vector_data_col_idx,
-      int64_t vector_vid_col_idx,
-      int64_t vector_col_idx,
+      int64_t vector_key_col_idx, 
+      int64_t vector_data_col_idx, 
+      int64_t vector_vid_col_idx, 
+      int64_t vector_col_idx, 
       ObSEArray<int64_t, 4> &extra_column_idxs,
-      storage::ObTableScanIterator *table_scan_iter,
+      storage::ObTableScanIterator *table_scan_iter, 
       storage::ObValueRowIterator &delete_row_iter);
   int delete_tablet_data(
-      ObPluginVectorIndexAdaptor &adaptor,
+      ObPluginVectorIndexAdaptor &adaptor, 
       ObTabletID& tablet_id,
-      storage::ObDMLBaseParam &dml_param,
+      storage::ObDMLBaseParam &dml_param, 
       transaction::ObTxDesc *tx_desc,
       storage::ObTableScanIterator *table_scan_iter,
       ObSEArray<uint64_t, 4> &dml_column_ids);
@@ -336,8 +336,8 @@ public:
       const uint64_t tenant_id,
       const char* tname,
       const bool for_update /*false*/,
-      const ObVecIndexFieldArray& filters,
-      storage::ObLS *ls, /* null means get all tenant task */
+      const ObVecIndexFieldArray& filters, 
+      storage::ObLS *ls, /* null means get all tenant task */ 
       common::ObISQLClient& proxy,
       ObVecIndexTaskStatusArray& result_arr,
       common::ObIAllocator *allocator /*NULL*/);
@@ -383,19 +383,19 @@ public:
       common::ObISQLClient &proxy,
       ObVecIndexAsyncTaskOption &async_task_opt);
   static int get_table_id_from_adapter(
-      ObPluginVectorIndexAdaptor *adapter,
-      const ObTabletID &tablet_id,
+      ObPluginVectorIndexAdaptor *adapter, 
+      const ObTabletID &tablet_id, 
       int64_t &table_id);
   static int construct_task_key(
-      const uint64_t tenant_id,
+      const uint64_t tenant_id, 
       const uint64_t table_id,
       const uint64_t tablet_id,
-      const int64_t task_id,
+      const int64_t task_id, 
       ObVecIndexFieldArray& task_key);
 
   static int64_t get_processing_task_cnt(ObVecIndexAsyncTaskOption &task_opt);
   static bool check_can_do_work();
-
+  
   static int fetch_new_task_id(const uint64_t tenant_id, int64_t &new_task_id);
   static int add_sys_task(ObVecIndexAsyncTaskCtx *task);
   static int remove_sys_task(ObVecIndexAsyncTaskCtx *task);

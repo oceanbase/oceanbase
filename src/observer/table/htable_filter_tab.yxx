@@ -66,7 +66,7 @@ using namespace oceanbase::common;
 %token LESS LESS_OR_EQUAL EQUAL NOT_EQUAL GREATER GREATER_OR_EQUAL NO_OP IS IS_NOT
 %token  <ival>          BOOL_VALUE
 %token  <sval>          STRING_VALUE
-%token  <lval>          INT_VALUE
+%token  <lval>          INT_VALUE 
 
 %left OR
 %left AND
@@ -456,7 +456,7 @@ simple_filter:
                         LOG_WARN("no memory", K(ret));
                     } else if (OB_FAIL(parse_ctx->store_filter($$))) {
                         LOG_WARN("failed to store filter", K(ret));
-                    }
+                    } 
                     if (OB_SUCCESS != ret) {
                         ob_hfilter_error(&(@$), parse_ctx, "failed to parse RandomRowFilter");
                         YYABORT;
@@ -639,7 +639,7 @@ simple_filter:
                             LOG_WARN("failed to store filter", K(ret));
                         }
                     }
-
+                    
                     if (OB_SUCCESS != ret) {
                         ob_hfilter_error(&(@$), parse_ctx, "failed to parse InclusiveStopFilter");
                         YYABORT;

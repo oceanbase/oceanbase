@@ -241,7 +241,7 @@ int ObLSMap::del_ls(const share::ObLSID &ls_id)
   } else {
     int64_t pos = ls_id.hash() % BUCKETS_CNT;
     // deal with the deadlock problem:
-    //
+    // 
     {
       //remove ls from map
       ObQSyncLockWriteGuard guard(buckets_lock_[pos]);

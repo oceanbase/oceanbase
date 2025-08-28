@@ -208,7 +208,7 @@ int ObDASDomainUtils::generate_spatial_index_rows(
             } else if (rows[i].storage_datums_[j].is_null()) {
             } else if (OB_FAIL(ObDASUtils::reshape_datum_value(col_type, col_accuracy, true, allocator, rows[i].storage_datums_[j]))) {
               LOG_WARN("reshape storage value failed", K(ret), K(col_type), K(projector_idx), K(j));
-            }
+            } 
           }
           if (OB_SUCC(ret)) {
             rows[i].storage_datums_[cellid_col_idx].set_uint(cellids.at(i));
@@ -399,7 +399,7 @@ int ObDASDomainUtils::get_pure_mutivalue_data(const ObString &json_str, const ch
   int ret = OB_SUCCESS;
 
   ObJsonBin bin(json_str.ptr(), json_str.length());
-
+  
   if (OB_FAIL(bin.reset_iter())) {
     LOG_WARN("failed to parse binary.", K(ret), K(json_str));
   } else if (!ObJsonVerType::is_opaque_or_string(bin.json_type())) {
@@ -408,7 +408,7 @@ int ObDASDomainUtils::get_pure_mutivalue_data(const ObString &json_str, const ch
   } else {
     data = bin.get_data();
     data_len = bin.get_data_length();
-
+    
     record_num = *reinterpret_cast<const uint32_t*>(data);
   }
 
@@ -434,7 +434,7 @@ int ObDASDomainUtils::calc_save_rowkey_policy(
 
   // -1 : doc id column
   uint64_t mulvalue_column_end = column_num - 1 - data_table_rowkey_cnt;
-
+  
   if (mulvalue_column_end <= mulvalue_column_start) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("failed to calc save rowkey policy.", K(ret), K(mulvalue_column_end), K(mulvalue_column_start));
@@ -463,7 +463,7 @@ int ObDASDomainUtils::calc_save_rowkey_policy(
             K(dml_row.cells()[projector_idx]), K(col_type), K(projector_idx), K(j));
       } else {
         pure_data_size += obj_arr[j].get_serialize_size();
-      }
+      } 
     }
 
     if (OB_SUCC(ret)) {
@@ -532,7 +532,7 @@ int ObDASDomainUtils::generate_multivalue_index_rows(ObIAllocator &allocator,
             ObObjMeta col_type = das_ctdef.column_types_.at(j);
             const ObAccuracy &col_accuracy = das_ctdef.column_accuracys_.at(j);
             int64_t projector_idx = row_projector.at(j);
-
+            
             if (multivalue_idx == projector_idx) {
               // TODO: change obj to datum when do deserialize@xuanxi
               ObObj obj;
@@ -546,7 +546,7 @@ int ObDASDomainUtils::generate_multivalue_index_rows(ObIAllocator &allocator,
                 } else {
                   col_type.set_collation_level(CS_LEVEL_IMPLICIT);
                 }
-                if (!obj.is_null()) {
+                if (!obj.is_null()) { 
                   obj.set_meta_type(col_type);
                 }
                 if (OB_FAIL(rows[i].storage_datums_[j].from_obj_enhance(obj))) {
@@ -570,7 +570,7 @@ int ObDASDomainUtils::generate_multivalue_index_rows(ObIAllocator &allocator,
           if (OB_SUCC(ret)) {
             if (OB_FAIL(mvi_rows.push_back(&rows[i]))) {
               LOG_WARN("failed to push back spatial index row", K(ret), K(rows[i]));
-            }
+            }      
           } // end if (OB_SUCC(ret))
         }
       }
@@ -1383,7 +1383,7 @@ int ObMultivalueDMLIterator::get_multivlaue_json_data(
 
   if (OB_INVALID_ID == multivalue_col_id) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid doc id or multivalue column id", K(ret),
+    LOG_WARN("invalid doc id or multivalue column id", K(ret), 
       K(multivalue_col_id), K(das_ctdef_->table_param_.get_data_table()));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < das_ctdef_->column_ids_.count() && !found; ++i) {
@@ -1412,7 +1412,7 @@ int ObMultivalueDMLIterator::get_multivlaue_json_data(
       LOG_WARN("can't get multivalue col idx, or get doc id column", K(ret), K(multivalue_idx));
     }
   }
-
+  
   return ret;
 }
 
@@ -1438,7 +1438,7 @@ int ObMultivalueDMLIterator::get_multivlaue_json_data_for_update(
         LOG_WARN("invalid index for sr", K(ret), KPC(store_row), K(i), K(projector_idx));
       } else {
         found = true;
-        multivalue_idx = projector_idx;
+        multivalue_idx = projector_idx; 
 
         if (projector_idx >= store_row->cnt_) {
           ret = OB_ERR_UNEXPECTED;
@@ -1447,7 +1447,7 @@ int ObMultivalueDMLIterator::get_multivlaue_json_data_for_update(
           multivalue_arr_idx = projector_idx + 1;
           multivalue_data = store_row->cells()[multivalue_arr_idx].get_string();
 
-          if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator_,
+          if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator_, 
                                                               ObJsonType,
                                                               CS_TYPE_UTF8MB4_BIN,
                                                               true, multivalue_data))) {
@@ -1462,7 +1462,7 @@ int ObMultivalueDMLIterator::get_multivlaue_json_data_for_update(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("can't get multivalue col idx, or get doc id column", K(ret), K(multivalue_idx));
   }
-
+  
   return ret;
 }
 

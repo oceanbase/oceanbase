@@ -195,7 +195,7 @@ public:
   TO_STRING_KV(K_(tablet_id), K_(major_column_cnt), K_(update_type), K_(is_inited));
 public:
   ObTabletID tablet_id_;
-  int64_t major_column_cnt_;
+  int64_t major_column_cnt_; 
   UpdateType update_type_;
   bool is_inited_;
 };
@@ -278,7 +278,7 @@ public:
   {
     return share::schema::IS_MV_MAJOR_REFRESH == (enum share::schema::ObMVMajorRefreshFlag)mv_mode_.mv_major_refresh_flag_;
   }
-  inline bool is_tablet_referenced_by_collect_mv() const
+  inline bool is_tablet_referenced_by_collect_mv() const 
   {
     return share::schema::IS_REFERENCED_BY_FAST_LSM_MV == (enum share::schema::ObTableReferencedByFastLSMMVFlag)mv_mode_.table_referenced_by_fast_lsm_mv_flag_;
   }
@@ -308,7 +308,7 @@ public:
   { return (share::schema::ObTableModeFlag)table_mode_.mode_flag_; }
   virtual inline share::schema::ObTableMode get_table_mode_struct() const override { return table_mode_; }
   virtual inline int get_mv_mode_struct(share::schema::ObMvMode &mv_mode) const override
-  {
+  { 
     mv_mode = mv_mode_;
     return OB_SUCCESS;
   }
@@ -340,7 +340,7 @@ public:
   int get_base_rowkey_column_group_index(int32_t &cg_idx) const;
   // This function only get cg idx for actually stored column
   int get_column_group_index(
-      const uint64_t &column_id,
+      const uint64_t &column_id, 
       const int32_t &column_idx,
       int32_t &cg_idx) const;
   bool is_cg_array_generated_in_cs_replica() const;
@@ -485,7 +485,7 @@ public:
   int deserialize(common::ObIAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_serialize_size() const;
 
-  inline bool can_read_index() const
+  inline bool can_read_index() const 
   { return share::schema::INDEX_STATUS_AVAILABLE == index_status_; }
   uint64_t get_table_id () const
   { return table_id_; }
@@ -508,7 +508,7 @@ private:
   uint64_t table_id_;
   // for create index
   share::schema::ObIndexStatus index_status_;
-  // for tablet throttling
+  // for tablet throttling 
   int64_t truncate_version_;
 };
 

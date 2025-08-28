@@ -38,9 +38,9 @@ ObExprArraySortby::ObExprArraySortby(ObIAllocator &alloc)
 ObExprArraySortby::ObExprArraySortby(ObIAllocator &alloc,
                                  ObExprOperatorType type,
                                  const char *name,
-                                 int32_t param_num,
+                                 int32_t param_num, 
                                  int32_t dimension)
-    : ObExprArrayMapCommon(alloc, type, name, param_num, NOT_VALID_FOR_GENERATED_COL, dimension)
+    : ObExprArrayMapCommon(alloc, type, name, param_num, NOT_VALID_FOR_GENERATED_COL, dimension) 
 {
 }
 

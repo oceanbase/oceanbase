@@ -295,7 +295,7 @@ int ObCreateMLogResolver::resolve_table_name_node(
     LOG_WARN("create materialized view log on a non-user table or mview is not supported",
         KR(ret), K(data_table_schema->get_table_type()));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view log on a non-user table or mview is");
-  }
+  } 
 
   if (OB_SUCC(ret)) {
     ObString tmp_new_db_name;

@@ -139,7 +139,7 @@ void ObXAInnerTableGCWorker::run1()
       SLEEP(20);
     }
     // try refresh gc_interval,
-    // if gc falied, and not update last_scan_ts, update gc_interval can be effective
+    // if gc falied, and not update last_scan_ts, update gc_interval can be effective 
     // gc_interval ～ [20s, 24h]
     tmp_start_delay = GCONF._xa_gc_interval;
     gc_interval = std::max(2 * max_gc_cost_time_, tmp_start_delay); // gc interval mini value is (2 * 10s)

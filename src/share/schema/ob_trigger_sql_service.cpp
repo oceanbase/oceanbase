@@ -268,7 +268,7 @@ int ObTriggerSqlService::fill_dml_sql(const ObTriggerInfo &trigger_info,
     }
 
     if (OB_SUCC(ret)) {
-      ObString empty_str;
+      ObString empty_str;                                                        
       OV (!trigger_info.get_trigger_body().empty());
       if (OB_FAIL(ret)) {
       } else if ((data_version < DATA_VERSION_4_3_5_0 && data_version >= DATA_VERSION_4_3_0_0)

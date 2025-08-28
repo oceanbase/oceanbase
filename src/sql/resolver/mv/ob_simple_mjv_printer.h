@@ -13,12 +13,12 @@
  #ifndef OCEANBASE_SQL_RESOLVER_MV_OB_SIMPLE_MJV_PRINTER_H_
  #define OCEANBASE_SQL_RESOLVER_MV_OB_SIMPLE_MJV_PRINTER_H_
  #include "sql/resolver/mv/ob_mv_printer.h"
-
+ 
  namespace oceanbase
  {
  namespace sql
  {
-
+ 
  class ObSimpleMJVPrinter : public ObMVPrinter
  {
  public:
@@ -29,7 +29,7 @@
                                const MlogSchemaPairIArray &mlog_tables)
     : ObMVPrinter(ctx, mv_schema, mv_container_schema, mv_def_stmt, &mlog_tables)
      {}
-
+ 
    ~ObSimpleMJVPrinter() {}
 
 private:

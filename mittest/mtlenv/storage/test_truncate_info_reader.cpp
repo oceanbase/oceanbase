@@ -323,7 +323,7 @@ TEST_F(TestTruncateInfoReader, test_truncate_info_cache)
   /*
   * insert 5 truncate info of same range part
   */
-
+  
   for (int64_t idx = 0; idx < mock_array.count(); ++idx) {
     ASSERT_EQ(OB_SUCCESS, insert_truncate_info(*mock_array.at(idx)));
   } // for

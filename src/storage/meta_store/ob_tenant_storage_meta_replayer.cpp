@@ -237,13 +237,13 @@ int ObTenantStorageMetaReplayer::ss_replay_ls_tablets_(
       LOG_WARN("fail to get active tablets", K(ret), K(active_opt), K(item));
     } else if (OB_FAIL(TENANT_STORAGE_META_PERSISTER.get_items_from_pending_free_tablet_array(ls_id, item.epoch_, deleting_tablets))) {
       LOG_WARN("failed to get_items_from_pending_free_tablet_array", K(ret), K(item));
-    }
+    } 
 
     // 2. check and delete the un-deleted current_version file for tablets recorded in pending_free_tablet_arr
     for (int64_t i = 0; OB_SUCC(ret) && i < deleting_tablets.count(); i++) {
       const ObPendingFreeTabletItem &deleting_item = deleting_tablets.at(i);
-      if (OB_FAIL(TENANT_STORAGE_META_PERSISTER.ss_check_and_delete_tablet_current_version(deleting_item.tablet_id_,
-                                                                                           ls->get_ls_id(),
+      if (OB_FAIL(TENANT_STORAGE_META_PERSISTER.ss_check_and_delete_tablet_current_version(deleting_item.tablet_id_, 
+                                                                                           ls->get_ls_id(), 
                                                                                            ls->get_ls_epoch(),
                                                                                            deleting_item.tablet_meta_version_,
                                                                                            deleting_item.tablet_transfer_seq_,
@@ -323,13 +323,13 @@ int ObTenantStorageMetaReplayer::ss_replay_ls_tablets_for_trans_info_tmp_(
       LOG_WARN("failed to list all tablets under ls", K(ret), K(MTL_ID()), K(item), K(ls_tablets));
     } else if (OB_FAIL(TENANT_STORAGE_META_PERSISTER.get_items_from_pending_free_tablet_array(ls_id, item.epoch_, deleting_tablets))) {
       LOG_WARN("failed to get_items_from_pending_free_tablet_array", K(ret), K(item.epoch_));
-    }
+    } 
 
     // 2. check and delete the un-deleted current_version file for tablets recorded in pending_free_tablet_arr
     for (int64_t i = 0; OB_SUCC(ret) && i < deleting_tablets.count(); i++) {
       const ObPendingFreeTabletItem &deleting_item = deleting_tablets.at(i);
-      if (OB_FAIL(TENANT_STORAGE_META_PERSISTER.ss_check_and_delete_tablet_current_version(deleting_item.tablet_id_,
-                                                                                           ls->get_ls_id(),
+      if (OB_FAIL(TENANT_STORAGE_META_PERSISTER.ss_check_and_delete_tablet_current_version(deleting_item.tablet_id_, 
+                                                                                           ls->get_ls_id(), 
                                                                                            ls->get_ls_epoch(),
                                                                                            deleting_item.tablet_meta_version_,
                                                                                            deleting_item.tablet_transfer_seq_,
@@ -361,7 +361,7 @@ int ObTenantStorageMetaReplayer::ss_replay_ls_tablets_for_trans_info_tmp_(
         } else {
           LOG_WARN("fail to read cur version", K(ret), K(item), K(current_version_opt));
         }
-      } else if (ObStorageObjectOpt::INVALID_TABLET_VERSION != deleted_tablet_meta_version
+      } else if (ObStorageObjectOpt::INVALID_TABLET_VERSION != deleted_tablet_meta_version 
               && latest_addr.tablet_addr_.block_id().meta_version_id() <= deleted_tablet_meta_version) {
         ret = OB_ERR_UNEXPECTED;
         LOG_INFO("this tablet has been deleted, but current_version has not been deleted", K(ret), K(item), K(current_version_opt), K(latest_addr), K(deleted_tablet_meta_version));

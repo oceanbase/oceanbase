@@ -100,7 +100,7 @@ int ObExprJsonArray::calc_result_typeN(ObExprResType& type,
         }
       }
 
-      // returning type : 2
+      // returning type : 2 
       if (OB_SUCC(ret)) {
         ObExprResType dst_type;
         dst_type.set_type(ObJsonType);
@@ -118,7 +118,7 @@ int ObExprJsonArray::calc_result_typeN(ObExprResType& type,
       }
 
       if (OB_SUCC(ret)) {
-        if (!ob_is_integer_type(types_stack[param_num - 3].get_type())
+        if (!ob_is_integer_type(types_stack[param_num - 3].get_type()) 
             || !ob_is_integer_type(types_stack[param_num - 1].get_type())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to calc type param type should be int type",
@@ -173,7 +173,7 @@ int ObExprJsonArray::eval_ora_json_array(const ObExpr &expr, ObEvalCtx &ctx, ObD
   } else if (OB_FAIL(ObJsonExprHelper::eval_and_check_res_type(opt_res_type, dst_type, dst_len))) {
     LOG_WARN("fail to check returning type", K(ret));
   }
-
+  
   int64_t& opt_null = opt_array[OPT_NULL_ID];
   bool is_strict = (opt_strict > 0 || (dst_type == ObJsonType && opt_res_type > 0));
   bool is_null_absent = opt_null > 0 ;
@@ -226,9 +226,9 @@ int ObExprJsonArray::eval_ora_json_array(const ObExpr &expr, ObEvalCtx &ctx, ObD
         ObCollationType in_cs_type = CS_TYPE_UTF8MB4_BIN;
         ObCollationType dst_cs_type = expr.obj_meta_.get_collation_type();
         ObString temp_str = string_buffer.string();
-
+        
         if (OB_FAIL(ObJsonExprHelper::convert_string_collation_type(in_cs_type,
-                                                                    dst_cs_type,
+                                                                    dst_cs_type, 
                                                                     &temp_allocator,
                                                                     temp_str,
                                                                     res_string))) {
@@ -243,7 +243,7 @@ int ObExprJsonArray::eval_ora_json_array(const ObExpr &expr, ObEvalCtx &ctx, ObD
         char res_ptr[OB_MAX_DECIMAL_PRECISION] = {0};
         if (OB_ISNULL(ObCharset::lltostr(dst_len, res_ptr, 10, 1))) {
           LOG_WARN("dst_len fail to string.", K(ret));
-        }
+        } 
         ret = OB_OPERATE_OVERFLOW;
         LOG_USER_ERROR(OB_OPERATE_OVERFLOW, res_ptr, N_JSON_ARRAY);
       } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, res_string))) {
@@ -262,7 +262,7 @@ int ObExprJsonArray::eval_json_array(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   ObDatum *json_datum = NULL;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
-  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);  
   ObJsonArray j_arr(&temp_allocator);
   ObIJsonBase *j_base = &j_arr;
 
@@ -306,7 +306,7 @@ int ObExprJsonArray::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr
   if (lib::is_oracle_mode()) {
     rt_expr.eval_func_ = eval_ora_json_array;
   } else {
-    rt_expr.eval_func_ = eval_json_array;
+    rt_expr.eval_func_ = eval_json_array;  
   }
 
   return OB_SUCCESS;

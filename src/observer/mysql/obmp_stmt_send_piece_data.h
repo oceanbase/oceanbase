@@ -252,7 +252,7 @@ class ObPieceCache {
     }
     // piece
     int make_piece(int32_t stmt_id, 
-                   uint16_t param_id,
+                   uint16_t param_id, 
                    ObPiece *&piece,
                    sql::ObSQLSessionInfo &session);
     int remove_piece(int64_t key, sql::ObSQLSessionInfo &session);
@@ -266,19 +266,19 @@ class ObPieceCache {
                           sql::ObSQLSessionInfo &session);
     //merge
     int get_buffer(int32_t stmt_id, 
-                    uint16_t param_id,
+                    uint16_t param_id, 
                     uint64_t count,
                     uint64_t &length, 
                     common::ObFixedArray<ObSqlString, ObIAllocator> &str_buf,
                     char *is_null_map);
     int get_oracle_buffer(int32_t stmt_id, 
-                    uint16_t param_id,
+                    uint16_t param_id, 
                     uint64_t count,
                     uint64_t &length, 
                     common::ObFixedArray<ObSqlString, ObIAllocator> &str_buf,
                     char *is_null_map);
     int get_mysql_buffer(int32_t stmt_id, 
-                    uint16_t param_id,
+                    uint16_t param_id, 
                     uint64_t &length, 
                     ObSqlString &str_buf);
     inline int64_t get_piece_key(int32_t stmt_id, uint16_t param_id)

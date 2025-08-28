@@ -113,8 +113,8 @@ void ObCosWrapperHandle::reset()
 }
 
 int ObCosWrapperHandle::create_cos_handle(
-    ObCosMemAllocator &allocator,
-    const bool check_md5,
+    ObCosMemAllocator &allocator, 
+    const bool check_md5, 
     qcloud_cos::ObCosWrapper::Handle *&handle)
 {
   int ret = OB_SUCCESS;
@@ -163,8 +163,8 @@ int ObCosWrapperHandle::create_tmp_cos_handle(
   } else if (OB_ISNULL(handle)) {
     ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "create tmp handle succeed, but returned handle is null", K(ret));
-  }
-
+  } 
+  
   return ret;
 }
 

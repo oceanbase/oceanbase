@@ -679,11 +679,11 @@ bool ObDBMSSchedJobMaster::mysql_event_scheduler_is_off(ObDBMSSchedJobInfo &job_
 bool ObDBMSSchedJobMaster::mysql_event_check_databse_exist(ObDBMSSchedJobInfo &job_info)
 {
   int ret = OB_SUCCESS;
-  bool mysql_databse_exist = true;
-  if (job_info.is_mysql_event_job()) {
+  bool mysql_databse_exist = true;  
+  if (job_info.is_mysql_event_job()) {   
     if (schema_service_->is_tenant_refreshed(job_info.get_tenant_id())) {
       ObSchemaGetterGuard schema_guard;
-      bool database_is_exist;
+      bool database_is_exist; 
       uint64_t owner_id = OB_INVALID_ID;
       if (OB_FAIL(schema_service_->get_tenant_schema_guard(job_info.get_tenant_id(), schema_guard))) {
         LOG_WARN("get tenant schema guard failed", K(ret));

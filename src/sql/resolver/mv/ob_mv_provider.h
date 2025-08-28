@@ -91,7 +91,7 @@ public:
                                    ObSQLSessionInfo *session_info,
                                    ObRawExprFactory *expr_factory,
                                    ObStmtFactory *stmt_factory);
-  int get_columns_referenced_by_mv(const uint64_t tenant_id,
+  int get_columns_referenced_by_mv(const uint64_t tenant_id, 
                                    const uint64_t mview_id,
                                    const uint64_t table_id,
                                    ObSQLSessionInfo *session_info,

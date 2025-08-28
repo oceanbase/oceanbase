@@ -179,7 +179,7 @@ int ObDASTextRetrievalIter::inner_init(ObDASIterParam &param)
     need_inv_idx_agg_ = ir_ctdef_->need_inv_idx_agg();
     need_inv_idx_agg_reset_ = retrieval_param.need_inv_idx_agg_reset_;
     max_batch_size_ = ir_rtdef_->eval_ctx_->max_batch_size_;
-
+  
     if (need_inv_idx_agg_) {
       inverted_idx_agg_iter_ = static_cast<ObDASScanIter *>(retrieval_param.inv_idx_agg_iter_);
     }
@@ -230,7 +230,7 @@ int ObDASTextRetrievalIter::inner_reuse()
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate skip bit vector", K(ret));
     } else {
-      skip_->init(default_size);
+      skip_->init(default_size); 
     }
   }
   if (OB_SUCC(ret)) {
@@ -240,7 +240,7 @@ int ObDASTextRetrievalIter::inner_reuse()
       ((old_inv_scan_id.is_valid() && old_inv_scan_id != inv_idx_tablet_id_) ? true : false);
     if (!inv_idx_scan_param_.key_ranges_.empty()) {
       inv_idx_scan_param_.key_ranges_.reuse();
-    }
+    } 
   }
   if (FAILEDx(inverted_idx_scan_iter_->reuse())) {
     LOG_WARN("failed to reuse inverted index iter", K(ret));
@@ -351,7 +351,7 @@ int ObDASTextRetrievalIter::rescan()
   }
   if (OB_FAIL(inverted_idx_scan_iter_->rescan())) {
     LOG_WARN("failed to rescan inverted scan iter", K(ret));
-  } else if (need_inv_idx_agg_ &&
+  } else if (need_inv_idx_agg_ && 
              !inv_idx_agg_evaluated_ &&
              OB_FAIL(inverted_idx_agg_iter_->rescan())) {
     LOG_WARN("failed to  rescan inverted index agg iter", K(ret));
@@ -903,7 +903,7 @@ int ObDASTextRetrievalIter::fill_token_cnt_with_doc_len()
     ObDatum &agg_datum = agg_expr->locate_datum_for_write(*eval_ctx);
     if (agg_expr->datum_meta_.get_type() == ObDecimalIntType) {
       if(OB_FAIL(set_decimal_int_by_precision(agg_datum, doc_length_datum->get_uint(), agg_expr->datum_meta_.precision_))) {
-        LOG_WARN("fail to set decimal int", K(ret));
+        LOG_WARN("fail to set decimal int", K(ret));  
       }
     } else {
       const int64_t in_val = doc_length_datum->get_uint64();
@@ -938,11 +938,11 @@ int ObDASTextRetrievalIter::batch_fill_token_cnt_with_doc_len(const int64_t &cou
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected no batch expr", K(ret), KP(doc_length_expr));
   } else {
-    const ObDatum *datums = doc_length_expr->locate_batch_datums(*eval_ctx);
+    const ObDatum *datums = doc_length_expr->locate_batch_datums(*eval_ctx);    
     ObDatum *agg_datum = agg_expr->locate_batch_datums(*eval_ctx);
     for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
       if (OB_LIKELY(!skip_->at(i))) {
-        if (agg_expr->datum_meta_.get_type() == ObDecimalIntType) {
+        if (agg_expr->datum_meta_.get_type() == ObDecimalIntType) { 
           if (OB_FAIL(set_decimal_int_by_precision(agg_datum[i], datums[i].get_uint(), agg_expr->datum_meta_.precision_))) {
             LOG_WARN("fail to set decimal int", K(ret));
           }
@@ -958,7 +958,7 @@ int ObDASTextRetrievalIter::batch_fill_token_cnt_with_doc_len(const int64_t &cou
       }
     }
   }
-  return ret;
+  return ret; 
 }
 
 int ObDASTextRetrievalIter::project_relevance_expr()
@@ -1097,7 +1097,7 @@ int ObDASTRCacheIter::inner_get_next_rows(int64_t &count, int64_t capacity)
       LOG_WARN("get next rows failed", K(ret));
     }
   }
-
+  
   if (OB_SUCC(ret)) {
     count = 1;
   }

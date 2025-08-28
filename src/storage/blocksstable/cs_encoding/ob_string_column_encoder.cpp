@@ -72,7 +72,7 @@ int ObStringColumnEncoder::do_init_()
       column_header_.set_has_null_bitmap();
       if (ctx_->fix_data_size_ >= 0) {
         column_header_.set_is_fixed_length();
-        fixed_len = ctx_->fix_data_size_;
+        fixed_len = ctx_->fix_data_size_; 
       } else {
         // not USE_ZERO_LEN_AS_NULL and not IS_FIXED_LENGTH_STRING
       }
@@ -91,7 +91,7 @@ int ObStringColumnEncoder::do_init_()
       // use fix length has less storage cost
       if (fix_padding_size + bitmap_size < offset_size_arr_size) {
         column_header_.set_is_fixed_length();
-        fixed_len = ctx_->fix_data_size_;
+        fixed_len = ctx_->fix_data_size_; 
         column_header_.set_has_null_bitmap();
       } else {
         is_use_zero_len_as_null = true;
@@ -104,7 +104,7 @@ int ObStringColumnEncoder::do_init_()
   } else { // has no null
     if (ctx_->fix_data_size_ >= 0) {
       column_header_.set_is_fixed_length();
-      fixed_len = ctx_->fix_data_size_;
+      fixed_len = ctx_->fix_data_size_; 
     } else {
       // not USE_ZERO_LEN_AS_NULL and not IS_FIXED_LENGTH_STRING
     }
@@ -113,7 +113,7 @@ int ObStringColumnEncoder::do_init_()
   if (fixed_len < 0) { // var len string, need offset int stream
     int_stream_count_ = 1;
     int_stream_idx = 0;
-    uncompress_len = ctx_->var_data_size_;
+    uncompress_len = ctx_->var_data_size_; 
   } else {
     uncompress_len = fixed_len * row_count_;
   }
@@ -250,7 +250,7 @@ int ObStringColumnEncoder::get_string_data_len(uint32_t &len) const
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
-    len = enc_ctx_.meta_.uncompressed_len_;
+    len = enc_ctx_.meta_.uncompressed_len_; 
   }
   return ret;
 }

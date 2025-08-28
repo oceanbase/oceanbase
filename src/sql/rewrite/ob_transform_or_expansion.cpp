@@ -170,7 +170,7 @@ int ObTransformOrExpansion::transform_in_where_conditon(ObIArray<ObParentDMLStmt
         LOG_WARN("failed to do transformation", K(ret));
       } else if (OB_FAIL(merge_stmt(trans_stmt, spj_stmt, transformed_union_stmt))) {
         LOG_WARN("failed to merge stmt", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*ctx_, parent_stmts, stmt,
+      } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*ctx_, parent_stmts, stmt, 
                                                                             true, partial_cost_check))) {
         LOG_WARN("failed to check partial cost eval validity", K(ret));
       } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt,
@@ -277,8 +277,8 @@ int ObTransformOrExpansion::transform_in_semi_info(ObIArray<ObParentDMLStmt> &pa
             LOG_WARN("failed to do transformation", K(ret));
           } else if (OB_FAIL(merge_stmt(trans_stmt, spj_stmt, transformed_union_stmt))) {
             LOG_WARN("failed to merge stmt", K(ret));
-          } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*ctx_, parent_stmts,
-                                                                                stmt, true,
+          } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*ctx_, parent_stmts, 
+                                                                                stmt, true, 
                                                                                 partial_cost_check))) {
             LOG_WARN("failed to check partial cost eval validity", K(ret));
           } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt,
@@ -454,8 +454,8 @@ int ObTransformOrExpansion::try_do_transform_inner_join(ObIArray<ObParentDMLStmt
         LOG_WARN("failed to merge stmt", K(ret));
       } else if (OB_FALSE_IT(NULL == view_table ? origin_trans_stmt = trans_stmt
                                                 : view_table->ref_query_ = static_cast<ObSelectStmt*>(trans_stmt))) {
-      } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*ctx_, parent_stmts,
-                                                                            stmt, true,
+      } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*ctx_, parent_stmts, 
+                                                                            stmt, true, 
                                                                             partial_cost_check))) {
         LOG_WARN("failed to check partial cost eval validity", K(ret));
       } else if (OB_FAIL(accept_transform(parent_stmts, stmt, origin_trans_stmt,
@@ -589,8 +589,8 @@ int ObTransformOrExpansion::try_do_transform_left_join(ObIArray<ObParentDMLStmt>
         LOG_WARN("just stmt select item failed", K(ret));
       } else if (OB_FALSE_IT(NULL == view_table ? trans_stmt = trans_ref_query
                                                 : view_table->ref_query_ = trans_ref_query)) {
-      } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*ctx_, parent_stmts,
-                                                                            stmt, true,
+      } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*ctx_, parent_stmts, 
+                                                                            stmt, true, 
                                                                             partial_cost_check))) {
         LOG_WARN("failed to check partial cost eval validity", K(ret));
       } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt,
@@ -2884,7 +2884,7 @@ int ObTransformOrExpansion::is_expected_topk_plan(ObLogicalOperator* op,
   return ret;
 }
 
-int ObTransformOrExpansion::build_deduced_index_expr_equal_sets(ObIArray<DeducedExprInfo> &deduced_exprs_info,
+int ObTransformOrExpansion::build_deduced_index_expr_equal_sets(ObIArray<DeducedExprInfo> &deduced_exprs_info, 
                                                                 EqualSets &equal_sets)
 {
   int ret = OB_SUCCESS;
@@ -2893,10 +2893,10 @@ int ObTransformOrExpansion::build_deduced_index_expr_equal_sets(ObIArray<Deduced
   for (int64_t i = 0; OB_SUCC(ret) && i < deduced_exprs_info.count(); ++i) {
     DeducedExprInfo &deduced_expr_info = deduced_exprs_info.at(i);
     ObSEArray<ObRawExpr*, 2> expr_pair;
-    if (OB_ISNULL(deduced_expr_info.deduced_expr_)
+    if (OB_ISNULL(deduced_expr_info.deduced_expr_) 
         || OB_ISNULL(deduced_expr_info.deduced_from_expr_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null", K(ret), K(deduced_expr_info.deduced_expr_),
+      LOG_WARN("unexpect null", K(ret), K(deduced_expr_info.deduced_expr_), 
                                 K(deduced_expr_info.deduced_from_expr_));
     } else if (OB_FAIL(expr_pair.push_back(deduced_expr_info.deduced_expr_))) {
       LOG_WARN("failed to push back", K(ret));
@@ -2928,7 +2928,7 @@ int ObTransformOrExpansion::is_expected_multi_index_plan(ObLogicalOperator* op,
   } else if (range_exprs.empty()) {
     is_valid = false;
   } else if (OB_FAIL(build_deduced_index_expr_equal_sets(
-                       op->get_plan()->get_optimizer_context().get_deduce_info(),
+                       op->get_plan()->get_optimizer_context().get_deduce_info(), 
                        deduced_index_expr_equal_sets))) {
     LOG_WARN("failed to build deduce index expr equal sets", K(ret));
   } else {
@@ -2940,9 +2940,9 @@ int ObTransformOrExpansion::is_expected_multi_index_plan(ObLogicalOperator* op,
       } else if (candi_exprs.empty()) {
         is_valid = false;
         LOG_TRACE("expr is not candi match index expr", K(*ctx.expand_exprs_.at(i)));
-      } else if (OB_FAIL(ObOptimizerUtil::intersect_exprs(candi_exprs,
-                                                          range_exprs,
-                                                          deduced_index_expr_equal_sets,
+      } else if (OB_FAIL(ObOptimizerUtil::intersect_exprs(candi_exprs, 
+                                                          range_exprs, 
+                                                          deduced_index_expr_equal_sets, 
                                                           result_exprs))) {
         LOG_WARN("failed to intersect exprs", K(ret));
       } else if (result_exprs.empty()) {
@@ -3119,7 +3119,7 @@ int ObTransformOrExpansion::pre_classify_or_expr(const ObRawExpr *expr, int &cou
       if (OB_ISNULL(branch = expr->get_param_expr(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret));
-      } else if (branch->has_flag(CNT_SUB_QUERY) ||
+      } else if (branch->has_flag(CNT_SUB_QUERY) || 
                  branch->get_relation_ids().is_empty() ||
                  !branch->has_flag(CNT_COLUMN)) {
         // conditions with subqueries will be classfied separately
@@ -3319,8 +3319,8 @@ int ObTransformOrExpansion::get_condition_related_tables(ObSelectStmt &stmt,
           }
         }
       }
-      //   b. rel_ids of expr is the proper subset of stmt table ids
-      //      and is related to only one basic table
+      //   b. rel_ids of expr is the proper subset of stmt table ids 
+      //      and is related to only one basic table 
       ObSqlBitSet<> all_table_set;
       bool related_to_only_one = false;
       if (OB_FAIL(ret)) {
@@ -3347,7 +3347,7 @@ int ObTransformOrExpansion::get_condition_related_tables(ObSelectStmt &stmt,
         //      where t1.a = t2.a and t2.b = t3.b and
         //            (t1.c = 1 or t3.c = 1) and
         //            t1.d in (select d from t4 where t4.a > t1.a limit 10)
-        // =>   select * from
+        // =>   select * from 
         //        (select * from t1, t2, t3
         //         where t1.a = t2.a and t2.b = t3.b and
         //            (t1.c = 1 or t3.c = 1)) v
@@ -3358,14 +3358,14 @@ int ObTransformOrExpansion::get_condition_related_tables(ObSelectStmt &stmt,
         } else if (OB_FAIL(stmt.get_from_tables(or_expr_tables))) {
           LOG_WARN("failed to get from tables", K(ret));
         }
-      }
+      } 
     }
   }
   return ret;
 }
 
 // Create a view of partial tables which are related to the condition
-// to avoid repeated computation of subqueries or joins
+// to avoid repeated computation of subqueries or joins 
 // For example:
 //     select * from t1, t2 where (t1.a = 1 or t1.b = 1) and t1.c = t2.c
 //  => select * from (select * from t1 where (t1.a = 1 or t1.b = 1)) v, t2 where v.c = t2.c
@@ -3392,7 +3392,7 @@ int ObTransformOrExpansion::get_condition_related_view(ObSelectStmt *stmt,
   int64_t new_expr_pos = OB_INVALID_ID;
   if (OB_ISNULL(ctx_) || OB_ISNULL(stmt) || OB_ISNULL(stmt_factory = ctx_->stmt_factory_)
       || OB_ISNULL(expr_factory = ctx_->expr_factory_) || OB_ISNULL(conds_exprs)
-      || OB_UNLIKELY(!stmt->is_select_stmt()) || OB_UNLIKELY(expr_pos < 0)
+      || OB_UNLIKELY(!stmt->is_select_stmt()) || OB_UNLIKELY(expr_pos < 0) 
       || OB_UNLIKELY(expr_pos >= conds_exprs->count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("have invalid params", K(ret), K(ctx_), K(stmt), K(stmt_factory),
@@ -3431,7 +3431,7 @@ int ObTransformOrExpansion::get_condition_related_view(ObSelectStmt *stmt,
     // get push down conditions
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (OB_FAIL(ObOptimizerUtil::remove_item(*conds_exprs,
+    } else if (OB_FAIL(ObOptimizerUtil::remove_item(*conds_exprs, 
                                                     push_conditions))) {
       LOG_WARN("failed to remove pushed conditions", K(ret));
     } else if (OB_FAIL(ObTransformUtils::replace_with_empty_view(ctx_,
@@ -3533,7 +3533,7 @@ int ObTransformOrExpansion::check_left_bottom_table(ObSelectStmt &stmt,
     JoinedTable *joined_table = static_cast<JoinedTable *>(table);
     if (joined_table->is_left_join() || joined_table->is_right_join()) {
       TableItem* left = joined_table->is_left_join() ?
-                        joined_table->left_table_ :
+                        joined_table->left_table_ : 
                         joined_table->right_table_;
       if (OB_FAIL(SMART_CALL(check_left_bottom_table(stmt,
                                                      rel_table,

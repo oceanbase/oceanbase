@@ -55,7 +55,7 @@ int ObDASSPIVScanIter::inner_init(ObDASIterParam &param)
       LOG_WARN("failed to build scan range", K(ret));
     } else if (OB_FAIL(scan_iter_param_.key_ranges_.push_back(scan_range))) {
       LOG_WARN("failed to push lookup range", K(ret));
-    } else if (OB_FAIL(ObDasVecScanUtils::init_scan_param(ls_id_, dim_docid_value_tablet_id_, scan_ctdef_, scan_rtdef_,
+    } else if (OB_FAIL(ObDasVecScanUtils::init_scan_param(ls_id_, dim_docid_value_tablet_id_, scan_ctdef_, scan_rtdef_, 
                                       tx_desc_, snapshot_, scan_iter_param_, false))) {
       LOG_WARN("failed to init scan param", K(ret), K(dim_docid_value_tablet_id_));
     } else {
@@ -74,7 +74,7 @@ int ObDASSPIVScanIter::inner_reuse()
   } else if (is_first_scan_) {
     scan_iter_param_.need_switch_param_ = false;
   }
-
+  
   if (nullptr != mem_context_) {
     mem_context_->reset_remain_one_page();
   }
@@ -94,11 +94,11 @@ int ObDASSPIVScanIter::inner_reuse()
 int ObDASSPIVScanIter::inner_release()
 {
   int ret = OB_SUCCESS;
-
+  
   if (OB_NOT_NULL(scan_iter_) && OB_FAIL(scan_iter_->release())) {
     LOG_WARN("failed to release scan iter", K(ret));
   }
-
+  
   ObDasVecScanUtils::release_scan_param(scan_iter_param_);
 
   scan_iter_ = nullptr;
@@ -112,7 +112,7 @@ int ObDASSPIVScanIter::inner_release()
     DESTROY_CONTEXT(mem_context_);
     mem_context_ = nullptr;
   }
-
+  
   return ret;
 }
 
@@ -125,7 +125,7 @@ int ObDASSPIVScanIter::build_range(ObNewRange &range, uint64_t table_id)
   ObObj *end_key_ptr = nullptr;
   ObRowkey start_key;
   ObRowkey end_key;
-
+  
   if (OB_ISNULL(start_key_ptr = static_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * 2)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory for ObObj", K(ret));
@@ -145,7 +145,7 @@ int ObDASSPIVScanIter::build_range(ObNewRange &range, uint64_t table_id)
     range.start_key_ = start_key;
     range.end_key_ = end_key;
   }
-
+  
   return ret;
 }
 

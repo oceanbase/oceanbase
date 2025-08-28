@@ -80,7 +80,7 @@ static const char czech[] =
     "& R < \\u0159 <<< \\u0158"
     "& S < \\u0161 <<< \\u0160"
     "& Z < \\u017E <<< \\u017D";
-static const char danish[] =
+static const char danish[] = 
     "& Y << \\u00FC <<< \\u00DC << \\u0171 <<< \\u0170"
     "& Z  < \\u00E6 <<< \\u00C6 << \\u00E4 <<< \\u00C4"
     " < \\u00F8 <<< \\u00D8 << \\u00F6 <<< \\u00D6 << \\u0151 <<< \\u0150"
@@ -98,11 +98,11 @@ static const char slovak[] =
     "& O < \\u00F4 <<< \\u00D4"
     "& S < \\u0161 <<< \\u0160"
     "& Z < \\u017E <<< \\u017D";
-static const char spanish2[] =
+static const char spanish2[] = 
     "&C <  ch <<< Ch <<< CH"
     "&L <  ll <<< Ll <<< LL"
     "&N < \\u00F1 <<< \\u00D1";
-static const char roman[] =
+static const char roman[] = 
     "& I << j <<< J "
     "& V << u <<< U ";
 static const char persian[] =
@@ -167,69 +167,69 @@ static const char sinhala[] =
     "< \\u0DDB < \\u0DDC < \\u0DDD < \\u0DDE < \\u0DCA";
 #endif
 static const char vietnamese[] =
-    " &A << \\u00E0 <<< \\u00C0"
+    " &A << \\u00E0 <<< \\u00C0" 
     " << \\u1EA3 <<< \\u1EA2"
     " << \\u00E3 <<< \\u00C3"
     " << \\u00E1 <<< \\u00C1"
     " << \\u1EA1 <<< \\u1EA0"
-    "  < \\u0103 <<< \\u0102"
+    "  < \\u0103 <<< \\u0102" 
     " << \\u1EB1 <<< \\u1EB0"
     " << \\u1EB3 <<< \\u1EB2"
     " << \\u1EB5 <<< \\u1EB4"
     " << \\u1EAF <<< \\u1EAE"
     " << \\u1EB7 <<< \\u1EB6"
-    "  < \\u00E2 <<< \\u00C2"
+    "  < \\u00E2 <<< \\u00C2" 
     " << \\u1EA7 <<< \\u1EA6"
     " << \\u1EA9 <<< \\u1EA8"
     " << \\u1EAB <<< \\u1EAA"
     " << \\u1EA5 <<< \\u1EA4"
     " << \\u1EAD <<< \\u1EAC"
-    " &D  < \\u0111 <<< \\u0110"
-    " &E << \\u00E8 <<< \\u00C8"
+    " &D  < \\u0111 <<< \\u0110" 
+    " &E << \\u00E8 <<< \\u00C8" 
     " << \\u1EBB <<< \\u1EBA"
     " << \\u1EBD <<< \\u1EBC"
     " << \\u00E9 <<< \\u00C9"
     " << \\u1EB9 <<< \\u1EB8"
-    "  < \\u00EA <<< \\u00CA"
+    "  < \\u00EA <<< \\u00CA" 
     " << \\u1EC1 <<< \\u1EC0"
     " << \\u1EC3 <<< \\u1EC2"
     " << \\u1EC5 <<< \\u1EC4"
     " << \\u1EBF <<< \\u1EBE"
     " << \\u1EC7 <<< \\u1EC6"
-    " &I << \\u00EC <<< \\u00CC"
+    " &I << \\u00EC <<< \\u00CC" 
     " << \\u1EC9 <<< \\u1EC8"
     " << \\u0129 <<< \\u0128"
     " << \\u00ED <<< \\u00CD"
     " << \\u1ECB <<< \\u1ECA"
-    " &O << \\u00F2 <<< \\u00D2"
+    " &O << \\u00F2 <<< \\u00D2" 
     " << \\u1ECF <<< \\u1ECE"
     " << \\u00F5 <<< \\u00D5"
     " << \\u00F3 <<< \\u00D3"
     " << \\u1ECD <<< \\u1ECC"
-    "  < \\u00F4 <<< \\u00D4"
+    "  < \\u00F4 <<< \\u00D4" 
     " << \\u1ED3 <<< \\u1ED2"
     " << \\u1ED5 <<< \\u1ED4"
     " << \\u1ED7 <<< \\u1ED6"
     " << \\u1ED1 <<< \\u1ED0"
     " << \\u1ED9 <<< \\u1ED8"
-    "  < \\u01A1 <<< \\u01A0"
+    "  < \\u01A1 <<< \\u01A0" 
     " << \\u1EDD <<< \\u1EDC"
     " << \\u1EDF <<< \\u1EDE"
     " << \\u1EE1 <<< \\u1EE0"
     " << \\u1EDB <<< \\u1EDA"
     " << \\u1EE3 <<< \\u1EE2"
-    " &U << \\u00F9 <<< \\u00D9"
+    " &U << \\u00F9 <<< \\u00D9" 
     " << \\u1EE7 <<< \\u1EE6"
     " << \\u0169 <<< \\u0168"
     " << \\u00FA <<< \\u00DA"
     " << \\u1EE5 <<< \\u1EE4"
-    "  < \\u01B0 <<< \\u01AF"
+    "  < \\u01B0 <<< \\u01AF" 
     " << \\u1EEB <<< \\u1EEA"
     " << \\u1EED <<< \\u1EEC"
     " << \\u1EEF <<< \\u1EEE"
     " << \\u1EE9 <<< \\u1EE8"
     " << \\u1EF1 <<< \\u1EF0"
-    " &Y << \\u1EF3 <<< \\u1EF2"
+    " &Y << \\u1EF3 <<< \\u1EF2" 
     " << \\u1EF7 <<< \\u1EF6"
     " << \\u1EF9 <<< \\u1EF8"
     " << \\u00FD <<< \\u00DD"
@@ -469,49 +469,49 @@ static unsigned char ctype_utf8[] = {
 };
 ObUCAInfo ob_uca_v400 = {
     UCA_V400,
-    0xFFFF,
-    ob_uca_length, ob_uca_weight, false, nullptr,
+    0xFFFF,                                 
+    ob_uca_length, ob_uca_weight, false, nullptr, 
     nullptr,
-
-    0x0009,
-    0xA48C,
-    0x0332,
-    0x20EA,
-    0x0000,
-    0xFE73,
-    0x0000,
-    0xFE73,
-    0x0000,
-    0x0000,
-    0x0009,
-    0x2183,
-    0,
-    0,
-    0
+    
+    0x0009, 
+    0xA48C, 
+    0x0332, 
+    0x20EA, 
+    0x0000, 
+    0xFE73, 
+    0x0000, 
+    0xFE73, 
+    0x0000, 
+    0x0000, 
+    0x0009, 
+    0x2183, 
+    0,      
+    0,      
+    0       
 };
 ObUCAInfo ob_uca_v520 = {
     UCA_V520,
-    0x10FFFF,
+    0x10FFFF, 
     ob_uca520_length,
     ob_uca520_weight,
     false,
+    nullptr, 
     nullptr,
-    nullptr,
-    0x0009,
-    0x1342E,
-    0x0332,
-    0x101FD,
-    0x0000,
-    0xFE73,
-    0x0000,
-    0xFE73,
-    0x0000,
-    0x0000,
-    0x0009,
-    0x1D371,
-    0,
-    0,
-    0
+    0x0009,  
+    0x1342E, 
+    0x0332,  
+    0x101FD, 
+    0x0000, 
+    0xFE73, 
+    0x0000, 
+    0xFE73, 
+    0x0000, 
+    0x0000, 
+    0x0009,  
+    0x1D371, 
+    0,       
+    0,       
+    0        
 };
 static ObUnicaseInfoChar turk00[] = {
     {0x0000, 0x0000, 0x0000}, {0x0001, 0x0001, 0x0001},
@@ -19699,5 +19699,5 @@ NULL       ,NULL       ,NULL       ,NULL       ,
 NULL       ,NULL       ,NULL       ,NULL       ,
 NULL       ,NULL       ,NULL       ,NULL       ,
 NULL       ,NULL       ,NULL       ,NULL       ,
-NULL       ,NULL       ,NULL       ,NULL
+NULL       ,NULL       ,NULL       ,NULL       
 };

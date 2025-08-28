@@ -97,7 +97,7 @@ int ObExprJsonUnquote::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta met
         LOG_WARN("failed: copy original string", K(ret), K(j_str));
       }
     } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, j_in_type,
-                                                        j_in_type, j_base, 0,
+                                                        j_in_type, j_base, 0, 
                                                         ObJsonExprHelper::get_json_max_depth_config()))) {
       LOG_WARN("failed: get json base", K(ret), K(type));
       if (OB_ERR_INVALID_JSON_TEXT) {

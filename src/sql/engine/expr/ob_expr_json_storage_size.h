@@ -34,7 +34,7 @@ public:
                                 const override;
 
   static int calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta meta, bool has_lob_header,
-                  MultimodeAlloctor *allocator, ObDatum &res);
+                  MultimodeAlloctor *allocator, ObDatum &res);                             
   static int eval_json_storage_size(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;

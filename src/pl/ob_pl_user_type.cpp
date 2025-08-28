@@ -507,7 +507,7 @@ int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session, bool 
     case PL_OPAQUE_TYPE: {
       ObPLOpaque *opaque = reinterpret_cast<ObPLOpaque*>(src.get_ext());
       CK (OB_NOT_NULL(opaque));
-      // json pl object manage
+      // json pl object manage 
       if (OB_NOT_NULL(opaque) && opaque->is_json_type()) {
         ObPLJsonBaseType* pl_jsontype = static_cast<ObPLJsonBaseType*>(opaque);
         ObPlJsonNode* pl_json_node = pl_jsontype->get_data();
@@ -824,7 +824,7 @@ int ObUserDefinedType::text_protocol_prefix_info_for_each_item(share::schema::Ob
       pos += 1;
     }
   }
-
+  
   return ret;
 }
 
@@ -875,7 +875,7 @@ int ObUserDefinedType::text_protocol_suffix_info_for_each_item(const ObPLDataTyp
       pos += 2;
     }
   }
-
+  
   return ret;
 }
 
@@ -922,7 +922,7 @@ int ObUserDefinedType::text_protocol_base_type_convert(const ObPLDataType &type,
     }
   }
   return ret;
-}
+} 
 
 int ObUserDefinedType::base_type_serialize_for_text(ObObj* obj,
                                                     const ObTimeZoneInfo *tz_info,
@@ -938,7 +938,7 @@ int ObUserDefinedType::base_type_serialize_for_text(ObObj* obj,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("obj is null.", K(ret));
   } else if (ObOTimestampTC == obj->get_type_class()) {
-    OZ (ObMySQLUtil::otimestamp_cell_str2(dst, dst_len, obj->get_otimestamp_value(), TEXT, dst_pos, tz_info,
+    OZ (ObMySQLUtil::otimestamp_cell_str2(dst, dst_len, obj->get_otimestamp_value(), TEXT, dst_pos, tz_info, 
       ObAccuracy::DML_DEFAULT_ACCURACY[obj->get_type()].get_scale(), obj->get_type()));
   } else if (obj->is_raw() || obj->is_hex_string()) {
     OZ (ObMySQLUtil::store_length(dst, dst_len, obj->get_string_len() * 2 + 1, dst_pos));
@@ -1979,7 +1979,7 @@ int ObRecordType::init_session_var(const ObPLResolveCtx &resolve_ctx,
         CK (OB_NOT_NULL(member));
         CK (OB_NOT_NULL(record_member));
         CK (OB_NOT_NULL(member_type));
-        if (OB_FAIL(ret)) {
+        if (OB_FAIL(ret)) { 
         } else if (record_member->get_default() != OB_INVALID_INDEX) {
           uint64_t package_id = extract_package_id(get_user_type_id());
           int64_t expr_idx = record_member->get_default();
@@ -2218,7 +2218,7 @@ int ObRecordType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
           }
         }
       } else if (TEXT == protocl_type && OB_FAIL(text_protocol_prefix_info_for_each_item(schema_guard,
-                                                                 *type,
+                                                                 *type, 
                                                                  dst,
                                                                  dst_len - dst_pos,
                                                                  dst_pos))) {
@@ -2230,7 +2230,7 @@ int ObRecordType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
         CK (obj->is_ext());
         CK (OB_NOT_NULL(coll_table));
         CK (OB_NOT_NULL(coll_src));
-        if (OB_FAIL(ret)) {
+        if (OB_FAIL(ret)) { 
         } else if (BINARY == protocl_type && !coll_table->is_inited()) {
           ObMySQLUtil::update_null_bitmap(bitmap, i);
         } else {
@@ -2883,7 +2883,7 @@ int ObCollectionType::get_serialize_size(
     CK (OB_NOT_NULL(assoc_table));
     OX (size += serialization::encoded_length(assoc_table->get_first()));
     OX (size += serialization::encoded_length(assoc_table->get_last()));
-  } else {
+  } else { 
     OX (size += serialization::encoded_length(table->get_pure_first()));
     OX (size += serialization::encoded_length(table->get_pure_last()));
   }
@@ -3176,7 +3176,7 @@ int ObCollectionType::serialize(share::schema::ObSchemaGetterGuard &schema_guard
           }
         }
       } else if (TEXT == type && OB_FAIL(text_protocol_prefix_info_for_each_item(schema_guard,
-                                                                 element_type_,
+                                                                 element_type_, 
                                                                  dst,
                                                                  dst_len - dst_pos,
                                                                  dst_pos))) {
@@ -4502,8 +4502,8 @@ int ObPLCollection::init_allocator(common::ObIAllocator &allocator, bool need_ne
  * 3、如果data域是record，那么该record本身的内存同样由Collection自己的allocator分配；record里的基础数据类型的内存同样由Collection自己的allocator分配；
  * 4、如果data域里是子Collection，那么该子Collection数据结构本身由父Collection的allocator分配，子Collection的内存管理递归遵循此约定。
  * */
-int ObPLCollection::deep_copy(ObPLCollection *src,
-                              ObIAllocator *allocator,
+int ObPLCollection::deep_copy(ObPLCollection *src, 
+                              ObIAllocator *allocator, 
                               bool ignore_del_element)
 {
   int ret = OB_SUCCESS;
@@ -5828,7 +5828,7 @@ int ObPLAssocArray::reserve_assoc_key()
     }
     OX (set_first(1));
     OX (set_last(get_count()));
-
+  
     if (OB_FAIL(ret)) {
       if (nullptr != get_key()) {
         get_allocator()->free(get_key());

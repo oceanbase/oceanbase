@@ -162,7 +162,7 @@ private:
   bool fast_string_equal_valid(
       const ObColumnDecoderCtx &col_ctx,
       const ObDatum &ref_datum) const;
-
+  
   int check_skip_block(
       const ObColumnDecoderCtx &col_ctx,
       sql::ObBlackFilterExecutor &filter,

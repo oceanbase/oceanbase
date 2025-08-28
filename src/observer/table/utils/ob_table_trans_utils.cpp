@@ -218,7 +218,7 @@ int ObTableTransUtils::end_trans(ObTableTransParam &trans_param)
     trans_state_ptr->reset();
   }
 
-  // In some scenarios, such as lsop, callback will be alloced for in advance.
+  // In some scenarios, such as lsop, callback will be alloced for in advance. 
   // If the transaction is rolled back, it also needs to be destroyed
   if (trans_param.is_rollback_ && OB_NOT_NULL(trans_param.create_cb_functor_)) {
     ObTableAPITransCb *callback = trans_param.create_cb_functor_->get_callback();

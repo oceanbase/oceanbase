@@ -21,7 +21,7 @@ namespace table
 class ObRedisGroupOpProcessor : public ObITableOpProcessor
 {
 public:
-  ObRedisGroupOpProcessor()
+  ObRedisGroupOpProcessor() 
     : ObITableOpProcessor(),
       allocator_(nullptr),
       processor_entity_factory_("RedisProrEntFac", MTL_ID())

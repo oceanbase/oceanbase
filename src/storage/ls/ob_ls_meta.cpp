@@ -181,7 +181,7 @@ LSN ObLSMeta::get_clog_base_lsn() const
 SCN ObLSMeta::get_clog_checkpoint_scn() const
 {
   ObReentrantRLockGuard guard(rw_lock_);
-	return clog_checkpoint_scn_;
+ 	return clog_checkpoint_scn_;
 }
 
 int ObLSMeta::set_clog_checkpoint(const int64_t ls_epoch,
@@ -214,7 +214,7 @@ int ObLSMeta::set_clog_checkpoint(const int64_t ls_epoch,
 
 SCN ObLSMeta::get_tablet_change_checkpoint_scn() const
 {
-	return tablet_change_checkpoint_scn_;
+ 	return tablet_change_checkpoint_scn_;
 }
 
 int ObLSMeta::set_tablet_change_checkpoint_scn(

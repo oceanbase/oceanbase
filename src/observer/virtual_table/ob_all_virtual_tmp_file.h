@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef OB_ALL_VIRTUAL_TMP_FILE_H_
 #define OB_ALL_VIRTUAL_TMP_FILE_H_
 

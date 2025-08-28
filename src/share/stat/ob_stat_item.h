@@ -547,12 +547,12 @@ private:
   int64_t cg_micro_blk_cnt_;
 };
 
-class ObGlobalCgSkipRateEval
+class ObGlobalCgSkipRateEval 
 {
 public:
   ObGlobalCgSkipRateEval() : cg_skip_rate_(0.0), cg_micro_blk_cnt_(0) {}
-
-  void add_cg_skip_rate(double value, int64_t cg_micro_blk_cnt)
+ 
+  void add_cg_skip_rate(double value, int64_t cg_micro_blk_cnt) 
   {
     cg_micro_blk_cnt_ += cg_micro_blk_cnt;
     cg_skip_rate_ += (value * (double)cg_micro_blk_cnt);
@@ -563,7 +563,7 @@ public:
   int64_t cg_micro_blk_cnt_;
 };
 
-struct ObGlobalAllColEvals
+struct ObGlobalAllColEvals 
 {
   ObGlobalMinEval min_eval_;
   ObGlobalMaxEval max_eval_;

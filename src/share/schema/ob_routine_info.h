@@ -477,7 +477,7 @@ public:
   OB_INLINE void set_tg_timing_event(TgTimingEvent tg) { tg_timing_event_ = tg; }
   OB_INLINE void set_dblink_id(uint64_t dblink_id) { dblink_id_ = dblink_id; }
   OB_INLINE int set_dblink_db_name(const common::ObString &db_name) { return deep_copy_str(db_name, dblink_db_name_); }
-  OB_INLINE int set_dblink_pkg_name(const common::ObString &pkg_name)
+  OB_INLINE int set_dblink_pkg_name(const common::ObString &pkg_name) 
                   { return deep_copy_str(pkg_name, dblink_pkg_name_); }
   OB_INLINE void set_routine_invalid() { flag_ |= SP_FLAG_INVALID; }
   OB_INLINE void set_noneditionable() { flag_ |= SP_FLAG_NONEDITIONABLE; }

@@ -296,7 +296,7 @@ int ObExprFrameInfo::alloc_frame(ObIAllocator &exec_allocator,
     }
     int64_t begin_idx = frame_idx;
     ALLOC_FRAME_MEM(dynamic_frame_);
-    //for subquery core
+    //for subquery core 
     //提前将frame中的datum置为null
     int64_t item_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
     if (dynamic_frame_.count() > 0 && dynamic_frame_.at(0).use_rich_format_) {
@@ -696,7 +696,7 @@ int ObTempExpr::row_to_frame(const ObNewRow &row, ObTempExprCtx &temp_expr_ctx) 
     } else if (is_lob_storage(v.get_type()) &&
                OB_FAIL(ob_adjust_lob_datum(v, expr.obj_meta_, expr.obj_datum_map_,
                                            temp_expr_ctx.exec_ctx_.get_allocator(), expr_datum))) {
-      LOG_WARN("adjust lob datum failed", K(ret), K(v.get_meta()), K(expr.obj_meta_));
+      LOG_WARN("adjust lob datum failed", K(ret), K(v.get_meta()), K(expr.obj_meta_));                                   
     }
   }
 

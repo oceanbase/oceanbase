@@ -116,7 +116,7 @@
     return RUN_ALL_TESTS();                                                           \
   }
 
-    // oceanbase::unittest::init_log_and_gtest(argc, argv);
+    // oceanbase::unittest::init_log_and_gtest(argc, argv);                              
 
 namespace oceanbase
 {

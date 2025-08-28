@@ -51,7 +51,7 @@ int ObCommonLSService::init()
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("has inited", KR(ret));
-  } else if (OB_FAIL(ObTenantThreadHelper::create("COMMONLSSe",
+  } else if (OB_FAIL(ObTenantThreadHelper::create("COMMONLSSe", 
           lib::TGDefIDs::SimpleLSService, *this))) {
     LOG_WARN("failed to create thread", KR(ret));
   } else if (OB_FAIL(ObTenantThreadHelper::start())) {
@@ -212,7 +212,7 @@ int ObCommonLSService::try_modify_ls_unit_group_(
                   K(ls_group_id), K(unit_group_id), K(ls_status));
 
             }
-          }
+          } 
         }//end for j
       }//end for i
     }
@@ -260,7 +260,7 @@ int ObCommonLSService::do_create_user_ls(
   const int64_t cost = ObTimeUtility::fast_current_time() - start_time;
   LOG_INFO("[COMMON_LS_SERVICE] end to create ls", KR(ret), K(info), K(cost));
   return ret;
-}
+}   
 
 int ObCommonLSService::try_force_drop_tenant_(
     const share::schema::ObTenantSchema &tenant_schema)
@@ -322,7 +322,7 @@ void ObCommonLSService::try_update_primary_ip_list()
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant is invalid", K_(tenant_id));
   } else if (!is_meta_tenant(tenant_id_)) {
-    ret = OB_INVALID_ARGUMENT;
+    ret = OB_INVALID_ARGUMENT; 
     LOG_WARN("tenant is invalid", K_(tenant_id));
   } else {
     ObLogRestoreSourceMgr restore_source_mgr;
@@ -346,7 +346,7 @@ void ObCommonLSService::try_update_primary_ip_list()
         log_restore_source_exist = false;
         if (REACH_THREAD_TIME_INTERVAL(60 * 1000 * 1000)) {
           LOG_INFO("log restore source is empty, just skip", K(ret), K(user_tenant_id));
-        }
+        } 
       } else {
         LOG_WARN("get source failed", K(user_tenant_id), K(ret));
       }
@@ -546,3 +546,4 @@ int ObCommonLSService::update_source_inner_table_(char *buf,
 
 }//end of rootserver
 }
+

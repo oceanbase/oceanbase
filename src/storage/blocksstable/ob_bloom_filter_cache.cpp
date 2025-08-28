@@ -575,7 +575,7 @@ DEFINE_GET_SERIALIZE_SIZE(ObBloomFilterCacheValue)
  * ----------------------------------------------------ObBloomFilterCache----------------------------------------------------
  */
 ObBloomFilterCache::ObBloomFilterCache()
-  : bf_cache_miss_count_threshold_(DEFAULT_EMPTY_READ_CNT_THRESHOLD)
+  : bf_cache_miss_count_threshold_(DEFAULT_EMPTY_READ_CNT_THRESHOLD)    
 {
 }
 
@@ -881,7 +881,7 @@ int ObBloomFilterCache::inc_empty_read(
       }
     }
   }
-  return ret;
+  return ret; 
 }
 
 int ObBloomFilterCache::check_need_build(const ObBloomFilterCacheKey &bf_key, bool &need_build)

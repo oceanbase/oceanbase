@@ -40,10 +40,10 @@ struct RestartIndex
   int restart_zone_id_;
   int restart_no_;
 
-  void reset()
+  void reset() 
   {
     restart_zone_id_ =  -1;
-    restart_no_ = 0;
+    restart_no_ = 0;                 
   }
 
   RestartIndex()
@@ -113,7 +113,7 @@ protected:
   static std::string app_name_;
   static std::string exec_dir_;
   static std::string event_file_path_;
-  static std::string env_prefix_path_;
+  static std::string env_prefix_path_; 
   static bool enable_env_warn_log_;
 
   static const char *log_disk_size_;

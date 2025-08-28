@@ -347,7 +347,7 @@ int ObNLConnectByWithIndexOp::read_pump_func_going()
   if (OB_FAIL(set_level_as_param(connect_by_pump_.get_current_level()))) {
     /* LEVEL is allowed to be a dynamic param, so it needs to be set before
      * preparing rescan params.
-     * set_level_as_param is currently repeatedly called in multiple places,
+     * set_level_as_param is currently repeatedly called in multiple places, 
      * which does not make sense and can be optimized later.
      */
     LOG_WARN("failed to set current level", K(ret));

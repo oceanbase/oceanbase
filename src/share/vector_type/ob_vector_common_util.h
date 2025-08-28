@@ -77,7 +77,7 @@ public:
                                                                           cmp_(cmp),
                                                                           heap_(cmp, &allocator_)
                                                                           {}
-
+  
   ~ObSPIVFixedSizeHeap() = default;
   int push(T &item)
   {
@@ -158,7 +158,7 @@ struct ObCentersBuffer
   int divide(const int64_t idx, const int64_t count);
   int64_t count() { return total_cnt_; }
   void clear(); // clear as all zero vectors
-
+  
   // for unittest
   int get_nearest_center(const int64_t dim, T *vector, int64_t &center_idx);
 
@@ -380,7 +380,7 @@ public:
   struct HeapCenterItemTemp
   {
     HeapCenterItemTemp() : distance_(DBL_MAX), center_with_buf_(nullptr) {}
-    HeapCenterItemTemp(const double distance, ObCenterWithBuf<CENTER_T>* center_with_buf) :
+    HeapCenterItemTemp(const double distance, ObCenterWithBuf<CENTER_T>* center_with_buf) : 
       distance_(distance), center_with_buf_(center_with_buf) {}
     void set_vec_dim(const ObVecWithDim<VEC_T>& vec_dim) {
       vec_dim_ = vec_dim;
@@ -576,8 +576,8 @@ int ObCentersBuffer<float>::get_nearest_center(const int64_t dim, float *vector,
 // ------------------------------- ObVectorCenterClusterHelper implement --------------------------------
 template <typename VEC_T, typename CENTER_T>
 int ObVectorCenterClusterHelper<VEC_T, CENTER_T>::push_center(
-    const CENTER_T &center,
-    VEC_T *center_vec,
+    const CENTER_T &center, 
+    VEC_T *center_vec, 
     const int64_t dim,
     CenterSaveMode center_save_mode /*= NOT_SAVE_CENTER_VEC*/)
 {

@@ -26,7 +26,7 @@ class ObPCParamConstraint
 {
 public:
   explicit ObPCParamConstraint(uint64_t idx) : param_idx_(idx) {}
-  virtual int deep_copy(ObIAllocator &allocator, ObPCParamConstraint *&to) = 0;
+  virtual int deep_copy(ObIAllocator &allocator, ObPCParamConstraint *&to) = 0; 
   virtual int build(const common::ParamStore &params, void *ctx) = 0; // build specific constraint based on params
   virtual int match(const common::ParamStore &params, void *ctx, bool &is_match) = 0;
 protected:

@@ -1,4 +1,4 @@
-// owner: jingyu.cr
+// owner: jingyu.cr 
 // owner group: rs
 
 /**
@@ -143,7 +143,7 @@ TEST_F(TestArbitrationServiceTableOperator, test_single)
   //    3.1 get from a empty table
   ret = arb_service_table_operator_.get(sql_proxy, arbitration_service_key, lock_line, arb_service_info_to_get);
   ASSERT_EQ(OB_ARBITRATION_SERVICE_NOT_EXIST, ret);
-  //    3.2 get a not exist key
+  //    3.2 get a not exist key 
   ret = arb_service_table_operator_.get(sql_proxy, not_exist_arbitration_service_key, lock_line, arb_service_info_to_get);
   ASSERT_EQ(OB_ARBITRATION_SERVICE_NOT_EXIST, ret);
   //    3.3 get a invalid key
@@ -187,7 +187,7 @@ TEST_F(TestArbitrationServiceTableOperator, test_single)
   ASSERT_EQ(OB_ARBITRATION_SERVICE_ALREADY_EXIST, ret);
   //    6.4 test update a valid info with previous_arbitration_service
   arb_service_info.reset();
-  ObString valid_previous_arbitration_service = "127.0.0.1:5678";
+  ObString valid_previous_arbitration_service = "127.0.0.1:5678"; 
   ret = arb_service_info.init(arbitration_service_key,
                               arbitration_service, valid_previous_arbitration_service, type);
   ret = arb_service_table_operator_.update(sql_proxy, arb_service_info);

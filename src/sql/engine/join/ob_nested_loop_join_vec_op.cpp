@@ -120,7 +120,7 @@ int ObNestedLoopJoinVecOp::do_drain_exch_multi_lvel_bnlj()
     // the drain request is triggered by current NLJ operator, and current NLJ is a multi level Batch NLJ
     // It will block rescan request for it's child operator, if the drain request is passed to it's child operator
     // The child operators will be marked as iter-end_, and will not get any row if rescan is blocked
-    // So we block the drain request here; Only set current operator to end;
+    // So we block the drain request here; Only set current operator to end; 
     int tmp_ret = inner_drain_exch();
     exch_drained_ = true;
     brs_.end_ = true;
@@ -342,7 +342,7 @@ int ObNestedLoopJoinVecOp::output()
     brs_.size_ = 1;
     drive_iter_.restore_drive_row(drive_iter_.get_left_batch_idx(), 0);
   }
-
+  
   if (OB_SUCC(ret) && need_left_join() && match_right_batch_end_ && no_match_row_found_) {
     reset_batchrows();
     brs_.size_ = 1;
@@ -440,5 +440,5 @@ int ObNestedLoopJoinVecOp::inner_get_next_batch(const int64_t max_row_cnt)
   return ret;
 }
 
-} // end namespace sql
+} // end namespace sql 
 } // end namespace oceanbase

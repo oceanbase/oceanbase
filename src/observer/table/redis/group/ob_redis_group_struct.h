@@ -26,7 +26,7 @@ public:
         cmd_type_(RedisCommandType::REDIS_COMMAND_INVALID),
         table_id_(OB_INVALID_ID)
   {}
-
+  
   ObRedisCmdKey(const RedisCommandType cmd_type, ObTableID table_id)
       : ObITableGroupKey(ObTableGroupType::TYPE_REDIS_GROUP),
         cmd_type_(cmd_type),

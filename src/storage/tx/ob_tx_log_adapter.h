@@ -31,7 +31,7 @@ class PalfHandle;
 namespace transaction
 {
 
-class ObDupTableLSHandler;
+class ObDupTableLSHandler; 
 class ObITxLogParam
 {
 public:
@@ -136,7 +136,7 @@ public:
                                 const share::SCN &redo_completed_scn,
                                 bool &redo_sync_finish,
                                 share::SCN &total_max_read_version);
-  bool is_dup_table_lease_valid();
+  bool is_dup_table_lease_valid(); 
   bool has_dup_tablet();
   int get_committing_dup_trx_cnt(int64_t &dup_trx_cnt);
   int add_commiting_dup_trx(const ObTransID &tx_id);

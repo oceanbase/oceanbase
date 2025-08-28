@@ -22,7 +22,7 @@ ObHTableCellEntity::ObHTableCellEntity(common::ObNewRow *ob_row)
       type_(Type::NORMAL)
 {}
 
-ObHTableCellEntity::ObHTableCellEntity(common::ObNewRow *ob_row, Type type)
+ObHTableCellEntity::ObHTableCellEntity(common::ObNewRow *ob_row, Type type) 
     : ob_row_(ob_row),
       type_(type)
 {}
@@ -309,7 +309,7 @@ int ObHTableCellEntity3::get_ttl(int64_t &ttl) const
 
 ////////////////////////////////////////////////////////////////
 int ObHTableUtils::create_last_cell_on_row_col(common::ObIAllocator &allocator,
-                                               const ObHTableCell &cell,
+                                               const ObHTableCell &cell, 
                                                ObHTableCell *&new_cell)
 {
   int ret = OB_SUCCESS;
@@ -339,9 +339,9 @@ int ObHTableUtils::create_last_cell_on_row_col(common::ObIAllocator &allocator,
   return ret;
 }
 
-int ObHTableUtils::create_first_cell_on_row_col(common::ObIAllocator &allocator,
+int ObHTableUtils::create_first_cell_on_row_col(common::ObIAllocator &allocator, 
                                                 const ObHTableCell &cell,
-                                                const common::ObString &qualifier,
+                                                const common::ObString &qualifier, 
                                                 ObHTableCell *&new_cell)
 {
   int ret = OB_SUCCESS;
@@ -372,7 +372,7 @@ int ObHTableUtils::create_first_cell_on_row_col(common::ObIAllocator &allocator,
 }
 
 int ObHTableUtils::create_last_cell_on_row(common::ObIAllocator &allocator,
-                                           const ObHTableCell &cell,
+                                           const ObHTableCell &cell, 
                                            ObHTableCell *&new_cell)
 {
   int ret = OB_SUCCESS;
@@ -401,7 +401,7 @@ int ObHTableUtils::create_last_cell_on_row(common::ObIAllocator &allocator,
 
 int ObHTableUtils::create_first_cell_on_row_col_ts(common::ObIAllocator &allocator,
                                                    const ObHTableCell &cell,
-                                                   const int64_t timestamp,
+                                                   const int64_t timestamp, 
                                                    ObHTableCell *&new_cell)
 {
   int ret = OB_SUCCESS;
@@ -432,14 +432,14 @@ int ObHTableUtils::create_first_cell_on_row_col_ts(common::ObIAllocator &allocat
 }
 
 int ObHTableUtils::create_first_cell_on_row(common::ObIAllocator &allocator,
-                                            const ObHTableCell &cell,
+                                            const ObHTableCell &cell, 
                                             ObHTableCell *&new_cell)
 {
   return create_first_cell_on_row(allocator, cell.get_rowkey(), new_cell);
 }
 
-int ObHTableUtils::create_first_cell_on_row(common::ObIAllocator &allocator,
-                                            const ObString &row_key,
+int ObHTableUtils::create_first_cell_on_row(common::ObIAllocator &allocator, 
+                                            const ObString &row_key, 
                                             ObHTableCell *&new_cell)
 {
   int ret = OB_SUCCESS;
@@ -510,7 +510,7 @@ int ObHTableUtils::compare_cell(const ObHTableCell &cell1, const ObHTableCell &c
 
 int ObHTableUtils::compare_cell(const ObHTableCell &cell1, const ObHTableCell &cell2, bool is_reversed)
 {
-  common::ObQueryFlag::ScanOrder scan_order =
+  common::ObQueryFlag::ScanOrder scan_order = 
     is_reversed? common::ObQueryFlag::ScanOrder::Reverse : common::ObQueryFlag::ScanOrder::Forward;
   return compare_cell(cell1, cell2, scan_order);
 }
@@ -641,7 +641,7 @@ int ObHTableUtils::lock_redis_key(uint64_t table_id, const ObString &lock_key, O
   } else if (OB_FAIL(HTABLE_LOCK_MGR->lock_row(table_id, lock_key, lock_mode, handle))) {
     LOG_WARN("fail to lock redis key", K(ret), K(table_id), K(lock_key), K(lock_mode));
   }
-
+  
   return ret;
 }
 
@@ -829,7 +829,7 @@ int ObHTableUtils::merge_key_range(ObKeyRangeTree& tree)
       KeyRange* r_val = merge_range->get_value();
       // With overlap in the ranges
       if (l_val->max().compare(r_val->min()) > 0
-      || (l_val->max().compare(r_val->min()) == 0 &&
+      || (l_val->max().compare(r_val->min()) == 0 && 
       (l_val->max_inclusive() || r_val->min_inclusive()) )) {
         if (r_val->max().empty()) {
           l_val->set_max(ObString());
@@ -848,7 +848,7 @@ int ObHTableUtils::merge_key_range(ObKeyRangeTree& tree)
       } else {
         curr_range = merge_range;
       }
-
+  
       if (loop && OB_FAIL(tree.get_next(curr_range, merge_range))) {
         LOG_WARN("fail to get next node from tree", KR(ret), KPC(merge_range));
       }
@@ -890,7 +890,7 @@ int ObHTableUtils::build_range_by_entity(const ObITableEntity &entity, ObIAlloca
   ObString row =  htable_cell.get_rowkey();
   ObObj *pk_objs_start = nullptr;
   ObObj *pk_objs_end = nullptr;
-  int64_t buf_size = sizeof(ObObj) * ObHTableConstants::HTABLE_ROWKEY_SIZE;
+  int64_t buf_size = sizeof(ObObj) * ObHTableConstants::HTABLE_ROWKEY_SIZE; 
 
   if (OB_ISNULL(pk_objs_start = static_cast<ObObj *>(allocator.alloc(buf_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -920,7 +920,7 @@ int ObHTableUtils::build_range_by_entity(const ObITableEntity &entity, ObIAlloca
     range.end_key_.assign(pk_objs_end, 3);
     range.border_flag_.set_inclusive_start();
     range.border_flag_.set_inclusive_end();
-
+    
     if (OB_FAIL(scan_ranges.push_back(range))) {
       LOG_WARN("fail to push back hbase delete scan range", K(ret), K(range));
     }
@@ -970,8 +970,8 @@ int ObHTableUtils::gen_filter_by_entity(const ObITableEntity &entity, ObHTableFi
   return ret;
 }
 
-int ObHTableUtils::construct_entity_from_row(const ObNewRow &row,
-                                             ObKvSchemaCacheGuard &schema_cache_guard,
+int ObHTableUtils::construct_entity_from_row(const ObNewRow &row, 
+                                             ObKvSchemaCacheGuard &schema_cache_guard, 
                                              ObTableEntity &entity)
 {
   int ret = OB_SUCCESS;
@@ -1119,7 +1119,7 @@ int ObHTableUtils::init_schema_info(const ObString &arg_table_name,
                                simple_table_schmea, schema_cache_guard))) {
     LOG_WARN("fail to init schema info", K(ret), K(arg_table_name), K(credential), K(is_tablegroup_req));
   }
-  // TODO: @dazhi
+  // TODO: @dazhi 
   // else if (simple_table_schmea->get_table_id() != arg_table_id) {
   //   ret = OB_SCHEMA_ERROR;
   //   LOG_WARN("arg table id is not equal to schema table id", K(ret), K(arg_table_id),
@@ -1143,11 +1143,11 @@ if (schema_cache_guard.is_inited()) {
   LOG_WARN("invalid schema service", K(ret));
 } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(credential.tenant_id_, schema_guard))) {
   LOG_WARN("fail to get schema guard", K(ret), K(credential.tenant_id_));
-/*When is_tablegroup_req is true, simple_table_schema is not properly initialized.
+/*When is_tablegroup_req is true, simple_table_schema is not properly initialized.  
   Defaulting to use the first element (index 0). */
 } else if (is_tablegroup_req &&
-           OB_FAIL(init_tablegroup_schema(schema_guard, credential, arg_table_name, simple_table_schema))) {
-  LOG_WARN("fail to get table schema from table group name", K(ret), K(credential.tenant_id_),
+           OB_FAIL(init_tablegroup_schema(schema_guard, credential, arg_table_name, simple_table_schema))) { 
+  LOG_WARN("fail to get table schema from table group name", K(ret), K(credential.tenant_id_), 
             K(credential.database_id_), K(arg_table_name));
 } else if (!is_tablegroup_req
             && OB_FAIL(schema_guard.get_simple_table_schema(credential.tenant_id_,
@@ -1155,7 +1155,7 @@ if (schema_cache_guard.is_inited()) {
                                                             arg_table_name,
                                                             false, /* is_index */
                                                             simple_table_schema))) {
-  LOG_WARN("fail to get table schema", K(ret), K(credential.tenant_id_),
+  LOG_WARN("fail to get table schema", K(ret), K(credential.tenant_id_), 
             K(credential.database_id_), K(arg_table_name));
 } else if (OB_ISNULL(simple_table_schema) || simple_table_schema->get_table_id() == OB_INVALID_ID) {
   ret = OB_TABLE_NOT_EXIST;
@@ -1165,10 +1165,10 @@ if (schema_cache_guard.is_inited()) {
 } else if (simple_table_schema->is_in_recyclebin()) {
   ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
   LOG_USER_ERROR(OB_ERR_OPERATION_ON_RECYCLE_OBJECT);
-  LOG_WARN("table is in recycle bin, not allow to do operation", K(ret), K(credential.tenant_id_),
+  LOG_WARN("table is in recycle bin, not allow to do operation", K(ret), K(credential.tenant_id_), 
               K(credential.database_id_), K(arg_table_name));
 } else if (OB_FAIL(schema_cache_guard.init(credential.tenant_id_,
-                                           simple_table_schema->get_table_id(),
+                                           simple_table_schema->get_table_id(), 
                                            simple_table_schema->get_schema_version(),
                                            schema_guard))) {
   LOG_WARN("fail to init schema cache guard", K(ret));
@@ -1187,10 +1187,10 @@ int ObHTableUtils::init_tablegroup_schema(share::schema::ObSchemaGetterGuard &sc
   uint64_t tablegroup_id = OB_INVALID_ID;
   ObSEArray<const schema::ObSimpleTableSchemaV2*, 8> table_schemas;
   if (OB_FAIL(schema_guard.get_tablegroup_id(credential.tenant_id_, arg_tablegroup_name, tablegroup_id))) {
-    LOG_WARN("fail to get tablegroup id", K(ret), K(credential.tenant_id_),
+    LOG_WARN("fail to get tablegroup id", K(ret), K(credential.tenant_id_), 
               K(credential.database_id_), K(arg_tablegroup_name));
   } else if (OB_FAIL(schema_guard.get_table_schemas_in_tablegroup(credential.tenant_id_, tablegroup_id, table_schemas))) {
-    LOG_WARN("fail to get table schema from table group", K(ret), K(credential.tenant_id_),
+    LOG_WARN("fail to get table schema from table group", K(ret), K(credential.tenant_id_), 
               K(credential.database_id_), K(arg_tablegroup_name), K(tablegroup_id));
   } else {
     if (table_schemas.count() != 1) {
@@ -1216,10 +1216,10 @@ int ObHTableUtils::init_tablegroup_schema(share::schema::ObSchemaGetterGuard &sc
   uint64_t tablegroup_id = OB_INVALID_ID;
   ObSEArray<const schema::ObTableSchema*, 8> table_schemas;
   if (OB_FAIL(schema_guard.get_tablegroup_id(credential.tenant_id_, arg_tablegroup_name, tablegroup_id))) {
-    LOG_WARN("fail to get tablegroup id", K(ret), K(credential.tenant_id_),
+    LOG_WARN("fail to get tablegroup id", K(ret), K(credential.tenant_id_), 
               K(credential.database_id_), K(arg_tablegroup_name));
   } else if (OB_FAIL(schema_guard.get_table_schemas_in_tablegroup(credential.tenant_id_, tablegroup_id, table_schemas))) {
-    LOG_WARN("fail to get table schema from table group", K(ret), K(credential.tenant_id_),
+    LOG_WARN("fail to get table schema from table group", K(ret), K(credential.tenant_id_), 
               K(credential.database_id_), K(arg_tablegroup_name), K(tablegroup_id));
   } else {
     if (table_schemas.count() != 1) {
@@ -1264,11 +1264,11 @@ int ObHTableUtils::init_schema_info(const ObString &arg_table_name,
     LOG_WARN("invalid schema service", K(ret));
   } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(credential.tenant_id_, schema_guard))) {
     LOG_WARN("fail to get schema guard", K(ret), K(credential.tenant_id_));
-  /*When is_tablegroup_req is true, table_schema is not properly initialized.
+  /*When is_tablegroup_req is true, table_schema is not properly initialized.  
     Defaulting to use the first element (index 0). */
   } else if (is_tablegroup_req &&
-            OB_FAIL(init_tablegroup_schema(schema_guard, credential, arg_table_name, table_schema))) {
-    LOG_WARN("fail to get table schema from table group name", K(ret), K(credential.tenant_id_),
+            OB_FAIL(init_tablegroup_schema(schema_guard, credential, arg_table_name, table_schema))) { 
+    LOG_WARN("fail to get table schema from table group name", K(ret), K(credential.tenant_id_), 
               K(credential.database_id_), K(arg_table_name));
   } else if (!is_tablegroup_req
               && OB_FAIL(schema_guard.get_table_schema(credential.tenant_id_,
@@ -1276,7 +1276,7 @@ int ObHTableUtils::init_schema_info(const ObString &arg_table_name,
                                                        arg_table_name,
                                                        false, /* is_index */
                                                        table_schema))) {
-    LOG_WARN("fail to get table schema", K(ret), K(credential.tenant_id_),
+    LOG_WARN("fail to get table schema", K(ret), K(credential.tenant_id_), 
               K(credential.database_id_), K(arg_table_name));
   } else if (OB_ISNULL(table_schema) || table_schema->get_table_id() == OB_INVALID_ID) {
     ret = OB_TABLE_NOT_EXIST;
@@ -1286,10 +1286,10 @@ int ObHTableUtils::init_schema_info(const ObString &arg_table_name,
   } else if (table_schema->is_in_recyclebin()) {
     ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
     LOG_USER_ERROR(OB_ERR_OPERATION_ON_RECYCLE_OBJECT);
-    LOG_WARN("table is in recycle bin, not allow to do operation", K(ret), K(credential.tenant_id_),
+    LOG_WARN("table is in recycle bin, not allow to do operation", K(ret), K(credential.tenant_id_), 
                 K(credential.database_id_), K(arg_table_name));
   } else if (OB_FAIL(schema_cache_guard.init(credential.tenant_id_,
-                                             table_schema->get_table_id(),
+                                             table_schema->get_table_id(), 
                                              table_schema->get_schema_version(),
                                              schema_guard))) {
     LOG_WARN("fail to init schema cache guard", K(ret));

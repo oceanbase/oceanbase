@@ -107,7 +107,7 @@ int ObCreateTenantSnapshotResolver::resolve(const ParseNode &parse_tree)
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -193,7 +193,7 @@ int ObDropTenantSnapshotResolver::resolve(const ParseNode &parse_tree)
       }
     }
   }
-
+  
   return ret;
 }
 

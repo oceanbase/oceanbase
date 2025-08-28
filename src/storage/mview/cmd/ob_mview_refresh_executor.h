@@ -83,7 +83,7 @@ public:
   int execute(sql::ObExecContext &ctx, const ObMViewRefreshArg &arg);
   share::schema::ObMViewInfo &get_first_mview_info() {
     return mview_infos_.at(0);
-  }
+  }   
 private:
   int resolve_arg(const ObMViewRefreshArg &arg);
   int do_refresh();
@@ -118,7 +118,7 @@ private:
                                      const share::SCN &target_data_sync_scn,
                                      const rootserver::MViewDeps &target_mview_deps,
                                      const rootserver::MViewDeps &mview_reverse_deps,
-                                     ObMySQLTransaction &trans,
+                                     ObMySQLTransaction &trans, 
                                      hash::ObHashSet<uint64_t> &mv_sets);
   int generate_database_table_name_(const ObTableSchema *table_schema,
                                     ObSqlString &table_name);

@@ -130,7 +130,7 @@ int ObExprCoalesce::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
   UNUSED(raw_expr);
   rt_expr.eval_func_ = calc_coalesce_expr;
   uint64_t ob_version = GET_MIN_CLUSTER_VERSION();
-  // 4.1.0 & 4.0 observers may run in same cluster, plan with batch func from observer(version4.1.0) may serialized to
+  // 4.1.0 & 4.0 observers may run in same cluster, plan with batch func from observer(version4.1.0) may serialized to 
   // observer(version4.0.0) to execute, thus batch func is not null only if min_cluster_version>=4.1.0
   if (ob_version >= CLUSTER_VERSION_4_1_0_0) {
     rt_expr.eval_batch_func_ = calc_batch_coalesce_expr;
@@ -161,7 +161,7 @@ int ObExprCoalesce::calc_batch_coalesce_expr(const ObExpr &expr, ObEvalCtx &ctx,
         break;
       } else if (OB_FAIL(expr.args_[arg_idx]->eval_batch(ctx, my_skip, batch_size))) {
         LOG_WARN("failed to eval batch results", K(arg_idx), K(ret));
-      } else {
+      } else {        
         ObDatumVector dv = expr.args_[arg_idx]->locate_expr_datumvector(ctx);
         ObBitVector::flip_foreach(
           my_skip,

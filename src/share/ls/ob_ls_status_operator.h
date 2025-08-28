@@ -350,14 +350,14 @@ public:
   * @param[in] ls_id
    * @param[in] old_ls_group_id
    * @param[in] new_ls_group_id
-   * @param[in] old_unit_group_id : the ls group's unit group
-   * @param[in] new_unit_group_id : the new ls group's target unit group
+   * @param[in] old_unit_group_id : the ls group's unit group 
+   * @param[in] new_unit_group_id : the new ls group's target unit group 
    * @param[in] client*/
   int alter_ls_group_id(const uint64_t tenant_id, const ObLSID &id,
                        const uint64_t old_ls_group_id,
-                       const uint64_t new_ls_group_id,
-                       const uint64_t old_unit_group_id,
-                       const uint64_t new_unit_group_id,
+                       const uint64_t new_ls_group_id, 
+                       const uint64_t old_unit_group_id, 
+                       const uint64_t new_unit_group_id, 
                        ObISQLClient &client);
    /*
    * description: update ls's unit group id
@@ -365,12 +365,12 @@ public:
    * @param[in] ls_id
    * @param[in] ls_group_id
    * @param[in] old_unit_group_id
-   * @param[in] new_unit_group_id : the new ls group's target unit group
+   * @param[in] new_unit_group_id : the new ls group's target unit group 
    * @param[in] client*/
   int alter_unit_group_id(const uint64_t tenant_id, const ObLSID &id,
-                       const uint64_t ls_group_id,
-                       const uint64_t old_unit_group_id,
-                       const uint64_t new_unit_group_id,
+                       const uint64_t ls_group_id, 
+                       const uint64_t old_unit_group_id, 
+                       const uint64_t new_unit_group_id, 
                        ObISQLClient &client);
 
   int get_all_ls_status_by_order(const uint64_t tenant_id,
@@ -415,7 +415,7 @@ public:
    *
    *    if ls status is OB_LS_CREATE_ABORT
    *       ignore ls
-   *
+   * 
    * @param[in] tenant_id
    * @param[in] ignore_need_create_abort
    * @param[out] ls_array returned ls list
@@ -445,7 +445,7 @@ public:
                                          ObLSPrimaryZoneInfoIArray &primary_zone_info_array,
                                          ObISQLClient &client);
   /*
-   * description: get user tenant max ls id, only for compatible
+   * description: get user tenant max ls id, only for compatible 
    * @param[in] tenant_id
    * @param[out] max_id: max ls id of the tenant
    * @param[in] client*/
@@ -491,24 +491,24 @@ public:
   // @param [in] client: sql client for inner sql
   // @param [in] print_str: string of operation. Used to print LOG_USER_ERROR "'print_str' not allowed"
   // @param [out] has_ls_without_leader: whether there is an LS without a leader
-  // @param [out] valid_error_msg: if has ls without leader, print ls and tenant_id error message
+  // @param [out] valid_error_msg: if has ls without leader, print ls and tenant_id error message 
   int check_all_ls_has_leader(
       ObISQLClient &client,
       const char *print_str,
       bool &has_ls_without_leader,
       ObSqlString &error_msg);
   /*
-   * description: get all tenant ls status. for user tenant: get user tenant ls status info and meta tenant ls status info
+   * description: get all tenant ls status. for user tenant: get user tenant ls status info and meta tenant ls status info 
    * @param[in] sql_proxy
    * @param[in] tenant_id : maybe user tenant id and sys tenant id
    * @param[out] ls status info array
    * */
   int get_all_tenant_related_ls_status_info(
-      common::ObMySQLProxy &sql_proxy,
+      common::ObMySQLProxy &sql_proxy, 
       const uint64_t tenant_id,
-      ObLSStatusInfoIArray &ls_status_info_array);
+      ObLSStatusInfoIArray &ls_status_info_array); 
  /*
-   * description: update ls's status
+   * description: update ls's status 
    * @param[in] tenant_id
    * @param[in] ls_id
    * @param[in] old_status
@@ -516,10 +516,10 @@ public:
    * @param[in] working_sw_status only support working on specified switchover status
    * @param[in] trans*/
   int update_ls_status_in_trans(
-      const uint64_t tenant_id,
+      const uint64_t tenant_id, 
       const ObLSID &id,
       const ObLSStatus &old_status,
-      const ObLSStatus &new_status,
+      const ObLSStatus &new_status, 
       const ObTenantSwitchoverStatus &working_sw_status,
       ObMySQLTransaction &trans);
 

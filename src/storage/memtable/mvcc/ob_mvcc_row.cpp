@@ -419,7 +419,7 @@ int64_t ObMvccRow::to_string(char *buf, const int64_t buf_len) const
                           list_head_,
                           latest_compact_node_);
   common::databuff_printf(buf, buf_len, pos, max_trans_version_);
-  common::databuff_printf(buf, buf_len, pos, " max_trans_id=%ld max_elr_trans_version=",
+  common::databuff_printf(buf, buf_len, pos, " max_trans_id=%ld max_elr_trans_version=", 
                           max_trans_id_.get_id());
   common::databuff_printf(buf, buf_len, pos, max_elr_trans_version_);
   common::databuff_printf(buf, buf_len, pos,

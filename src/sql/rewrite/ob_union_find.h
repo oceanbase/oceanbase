@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 
 #ifndef OCEANBASE_SQL_REWRITE_OB_UNION_FIND_
 #define OCEANBASE_SQL_REWRITE_OB_UNION_FIND_
@@ -21,7 +21,7 @@ namespace sql
 {
 
   /**
- * @brief
+ * @brief 
  * Union-Find: To efficiently check if two nodes in a graph are connected.
  * We use this algorithm to construct a graph for all the tables within a stmt
  * Once the graph is constructed, the connected relations of these tables are

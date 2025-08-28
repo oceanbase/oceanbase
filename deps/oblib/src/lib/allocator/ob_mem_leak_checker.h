@@ -72,7 +72,7 @@ public:
 
   class mod_info_map_t
   {
-    public:
+    public: 
       typedef hash::ObHashMap<Info, std::pair<int64_t, int64_t>> hashmap;
       int create(int64_t bucket_num)
       {
@@ -80,7 +80,7 @@ public:
                       lib::OB_HIGH_ALLOC);
         return map_.create(bucket_num, attr, attr);
       }
-
+      
       hashmap *operator->()
       {
         return &map_;

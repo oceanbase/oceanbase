@@ -34,9 +34,9 @@ public:
   virtual int construct_transform_hint(ObDMLStmt &stmt, void *trans_params) override;
   virtual int check_hint_status(const ObDMLStmt &stmt, bool &need_trans) override;
 protected:
-
+  
   int decorrelate_lateral_derived_table(ObDMLStmt *stmt,
-                                        ObIArray<ObSelectStmt*> &decorrelate_stmts,
+                                        ObIArray<ObSelectStmt*> &decorrelate_stmts, 
                                         bool &trans_happened);
 
   int decorrelate_aggr_lateral_derived_table(ObDMLStmt *stmt,
@@ -63,7 +63,7 @@ protected:
                                JoinedTable *joined_table,
                                bool &is_valid,
                                bool &need_create_spj);
-
+  
   int check_lateral_inline_view_validity(TableItem *table_item,
                                          ObSelectStmt *ref_query,
                                          bool &is_valid);

@@ -566,7 +566,7 @@ int ObFinishBackupTabletGroupFuseTask::record_server_event_()
                      "tenant_id", group_ctx_->param_.tenant_id_,
                      "backup_set_id", group_ctx_->param_.backup_set_desc_.backup_set_id_,
                      "ls_id", group_ctx_->param_.ls_id_.id(),
-                     "turn_id", group_ctx_->param_.turn_id_,
+                     "turn_id", group_ctx_->param_.turn_id_, 
                      "retry_id", group_ctx_->param_.retry_id_);
   }
   return ret;
@@ -714,7 +714,7 @@ int ObBackupTabletFuseTask::check_tablet_reorganized_(
 }
 
 int ObBackupTabletFuseTask::fetch_tablet_meta_in_user_data_(
-    const ObBackupMetaIndex &meta_index,
+    const ObBackupMetaIndex &meta_index, 
     ObMigrationTabletParam &tablet_param)
 {
   int ret = OB_SUCCESS;
@@ -863,7 +863,7 @@ int ObBackupTabletFuseTask::record_server_event_()
                           "tenant_id", group_ctx_->param_.tenant_id_,
                           "backup_set_id", group_ctx_->param_.backup_set_desc_.backup_set_id_,
                           "ls_id", group_ctx_->param_.ls_id_.id(),
-                          "turn_id_and_retry_id", buf,
+                          "turn_id_and_retry_id", buf, 
                           "tablet_id", fuse_ctx_->fuse_item_.tablet_id_.id(),
                           "result", result,
                           fuse_type_);
@@ -874,3 +874,4 @@ int ObBackupTabletFuseTask::record_server_event_()
 
 }
 }
+

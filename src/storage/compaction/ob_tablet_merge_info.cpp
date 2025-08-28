@@ -194,7 +194,7 @@ int ObTabletMergeInfo::create_sstable(
           && OB_FAIL(build_sstable_merge_res(ctx.static_param_, ctx.get_pre_warm_param(), macro_start_seq, res))) {
         LOG_WARN("fail to close index builder", K(ret), KPC(sstable), "is_small_sst", sstable->is_small_sstable());
         CTX_SET_DIAGNOSE_LOCATION(ctx);
-      }
+      } 
        if (OB_FAIL(ret)) {
         // error occurred
       } else if (is_reused_small_sst && OB_FAIL(sstable_builder_.build_reused_small_sst_merge_res(sstable->get_macro_read_size(),
@@ -206,15 +206,15 @@ int ObTabletMergeInfo::create_sstable(
       } else if (OB_FAIL(build_create_sstable_param(ctx, res, param, cg_schema, column_group_idx))) {
         LOG_WARN("fail to build create sstable param", K(ret));
       } else if (is_main_table) { // should build co sstable
-        if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable<ObCOSSTableV2>(param,
-                                                                              ctx.mem_ctx_.get_allocator(),
+        if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable<ObCOSSTableV2>(param, 
+                                                                              ctx.mem_ctx_.get_allocator(), 
                                                                               merge_table_handle))) {
           LOG_WARN("fail to create sstable", K(ret), K(param));
           CTX_SET_DIAGNOSE_LOCATION(ctx);
         }
       } else if (NULL == cg_schema) { // not co major merge, only need to create one sstable
-        if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable(param,
-                                                               ctx.mem_ctx_.get_allocator(),
+        if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable(param, 
+                                                               ctx.mem_ctx_.get_allocator(), 
                                                                merge_table_handle))) {
           LOG_WARN("fail to create sstable", K(ret), K(param));
           CTX_SET_DIAGNOSE_LOCATION(ctx);
@@ -227,8 +227,8 @@ int ObTabletMergeInfo::create_sstable(
         ObTableHandleV2 tmp_handle;
         ObSSTable *sstable = nullptr;
         ObSSTable *new_sstable = nullptr;
-        if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable(param,
-                                                               tmp_allocator,
+        if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable(param, 
+                                                               tmp_allocator, 
                                                                tmp_handle))) {
           LOG_WARN("fail to create sstable", K(ret), K(param));
           CTX_SET_DIAGNOSE_LOCATION(ctx);

@@ -526,7 +526,7 @@ void TestChooseMigrationSourcePolicy::TearDown()
 }
 // test checkpoint policy
 // candidate addr: ["192.168.1.1:1234", "192.168.1.2:1234", "192.168.1.3:1234", "192.168.1.4:1234"]
-// mock condition:
+// mock condition: 
 // 192.168.1.1:1234: checkpoint -> OB_MAX_SCN_TS_NS, type -> F
 // 192.168.1.2:1234, 192.168.1.3:1234, 192.168.1.4:1234: checkpoint -> OB_MIN_SCN_TS_NS, status -> F
 // output addr:192.168.1.1:1234
@@ -1412,3 +1412,4 @@ int main(int argc, char **argv)
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
+

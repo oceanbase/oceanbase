@@ -1107,7 +1107,7 @@ int ObPartitionExchange::compare_default_value_(ObObj &l_value, ObObj &r_value, 
   is_equal = false;
   int cmp = 0;
   if (OB_UNLIKELY(l_value.is_null() != r_value.is_null())) {
-    LOG_WARN("default value is_null are not equal", K(ret), K(l_value), K(r_value));
+    LOG_WARN("default value is_null are not equal", K(ret), K(l_value), K(r_value)); 
   } else if (l_value.is_null() && r_value.is_null()) {
     is_equal = true;
   } else if (OB_UNLIKELY(l_value.get_type() != r_value.get_type())) {
@@ -1470,7 +1470,7 @@ int ObPartitionExchange::set_global_storage_index_unusable_(const uint64_t tenan
                                        ddl_operator,
                                        trans,
                                        schema_guard))) {
-        LOG_WARN("fail to update partitioned data table index status", K(ret), K(tenant_id), K(pt_index_id), K(partitioned_data_table_schema.get_in_offline_ddl_white_list()));
+        LOG_WARN("fail to update partitioned data table index status", K(ret), K(tenant_id), K(pt_index_id), K(partitioned_data_table_schema.get_in_offline_ddl_white_list()));                      
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < unused_nt_index_id_.count(); i++) {
@@ -1482,7 +1482,7 @@ int ObPartitionExchange::set_global_storage_index_unusable_(const uint64_t tenan
                                        ddl_operator,
                                        trans,
                                        schema_guard))) {
-        LOG_WARN("fail to update non partitioned data table index status", K(ret), K(tenant_id), K(nt_index_id), K(non_partitioned_data_table_schema.get_in_offline_ddl_white_list()));
+        LOG_WARN("fail to update non partitioned data table index status", K(ret), K(tenant_id), K(nt_index_id), K(non_partitioned_data_table_schema.get_in_offline_ddl_white_list()));                      
       }
     }
   }
@@ -1554,7 +1554,7 @@ int ObPartitionExchange::get_subpart_tablet_ids_by_part_name(
 
 int ObPartitionExchange::exchange_data_table_partitions(
     const uint64_t tenant_id,
-    const ObTableSchema &base_table_schema,
+    const ObTableSchema &base_table_schema, 
     const ObTableSchema &inc_table_schema,
     const ObIArray<ObTabletID> &base_tablet_ids,
     const ObIArray<ObTabletID> &inc_tablet_ids,
@@ -2621,7 +2621,7 @@ int ObPartitionExchange::generate_lob_table_mapping_(const ObTableSchema &base_t
   return ret;
 }
 
-int ObPartitionExchange::update_index_status_(const uint64_t tenant_id,
+int ObPartitionExchange::update_index_status_(const uint64_t tenant_id, 
                                               const uint64_t table_id,
                                               const share::schema::ObIndexStatus status,
                                               const bool in_offline_ddl_white_list,
@@ -2731,7 +2731,7 @@ int ObPartitionExchange::build_modify_tablet_binding_args_v1_(const uint64_t ten
         ObBatchUnbindTabletArg &modify_arg = modify_args.at(j);
         const ObTabletID &tablet_id = tablets[i].second;
         if (OB_FAIL(modify_arg.hidden_tablet_ids_.push_back(tablet_id))) {
-          LOG_WARN("failed to push back", K(ret));
+          LOG_WARN("failed to push back", K(ret)); 
         }
       } else {
         ret = OB_ERR_UNEXPECTED;
@@ -2804,7 +2804,7 @@ int ObPartitionExchange::adapting_cdc_changes_in_exchange_partition_(const uint6
           }
         }
       }
-
+      
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(used_table_to_tablet_ids_map_.get_refactored(iter_table->first, tmp_pt_tablet_ids))) {
         LOG_WARN("get_refactored tablet id from used_table_to_tablet_id_map failed", K(ret), K(iter_table->first));
@@ -2986,7 +2986,7 @@ int ObPartitionExchange::sync_exchange_partition_stats_info_(const uint64_t tena
   int64_t affected_rows = 0;
   ObSqlString sql_string;
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || OB_INVALID_ID == new_table_id || StatLevel::INVALID_LEVEL == new_stat_level || OB_INVALID_ID == old_partition_id ||
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || OB_INVALID_ID == new_table_id || StatLevel::INVALID_LEVEL == new_stat_level || OB_INVALID_ID == old_partition_id || 
                   OB_INVALID_ID == new_partition_id || !tablet_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(new_table_id), K(new_stat_level), K(old_partition_id), K(new_partition_id), K(tablet_id));
@@ -3044,7 +3044,7 @@ int ObPartitionExchange::update_table_all_monitor_modified_(const uint64_t tenan
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || OB_INVALID_ID == new_table_id || !tablet_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(new_table_id), K(tablet_id));
-  } else if (OB_FAIL(monitor_modified_read_sql_string.assign_fmt("SELECT last_inserts, last_updates, last_deletes, inserts, updates, deletes FROM %s WHERE tenant_id = %ld and table_id = %ld and tablet_id = %ld",
+  } else if (OB_FAIL(monitor_modified_read_sql_string.assign_fmt("SELECT last_inserts, last_updates, last_deletes, inserts, updates, deletes FROM %s WHERE tenant_id = %ld and table_id = %ld and tablet_id = %ld", 
              OB_ALL_MONITOR_MODIFIED_TNAME, ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id), orig_table_schema.get_table_id(), tablet_id.id()))) {
     LOG_WARN("fail to assign sql string", K(ret), K(tenant_id), K(orig_table_schema.get_table_id()), K(tablet_id));
   } else {
@@ -3096,7 +3096,7 @@ int ObPartitionExchange::update_table_all_monitor_modified_(const uint64_t tenan
   return ret;
 }
 
-int ObPartitionExchange::get_object_id_from_partition_schema_(ObPartitionSchema &partition_schema, const bool get_subpart_only, int64_t &object_id)
+int ObPartitionExchange::get_object_id_from_partition_schema_(ObPartitionSchema &partition_schema, const bool get_subpart_only, int64_t &object_id) 
 {
   int ret = OB_SUCCESS;
   object_id = OB_INVALID_PARTITION_ID;
@@ -3390,7 +3390,7 @@ int ObPartitionExchange::ddl_exchange_table_partitions(
   return ret;
 }
 
-bool ObChangeTabletToTableArg::is_valid() const { return OB_INVALID_TENANT_ID != tenant_id_ && ls_id_.is_valid() && OB_INVALID_ID != base_table_id_
+bool ObChangeTabletToTableArg::is_valid() const { return OB_INVALID_TENANT_ID != tenant_id_ && ls_id_.is_valid() && OB_INVALID_ID != base_table_id_ 
                                                   && OB_INVALID_ID != inc_table_id_ &&  tablet_ids_.count() > 0 && table_ids_.count() > 0 && tablet_ids_.count() == table_ids_.count(); }
 
 int ObChangeTabletToTableArg::assign(const ObChangeTabletToTableArg &other)

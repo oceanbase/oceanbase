@@ -168,7 +168,7 @@ int ObDDLTabletScheduler::init(const uint64_t tenant_id,
             if (OB_ISNULL(location_service = GCTX.location_service_)) {
               ret = OB_ERR_SYS;
               LOG_WARN("location_cache is null", K(ret), KP(location_service));
-            } else if (OB_FAIL(location_service->get_leader_with_retry_until_timeout(GCONF.cluster_id,
+            } else if (OB_FAIL(location_service->get_leader_with_retry_until_timeout(GCONF.cluster_id, 
               tenant_id, ls_ids.at(i), leader_addr, rpc_timeout, retry_interval_us))) {
               LOG_WARN("fail to get ls locaiton leader", K(ret), K(tenant_id), K(ls_ids.at(i)));
             } else if (OB_FAIL(ls_location_map_.set_refactored(ls_ids.at(i), leader_addr, true /* overwrite */))) {
@@ -299,7 +299,7 @@ int ObDDLTabletScheduler::confirm_batch_tablets_status(const int64_t execution_i
           HashMapEraseIfNull functor;
           if (OB_FAIL(all_ls_to_tablets_map_.erase_if(ls_id, functor, is_erased))) {
             LOG_WARN("fail to erase lsid", K(ret), K(ls_id), K(tablets));
-          }
+          } 
         }
       }
     }
@@ -321,7 +321,7 @@ int ObDDLTabletScheduler::refresh_ls_location_map() {
     if (OB_ISNULL(location_service = GCTX.location_service_)) {
       ret = OB_ERR_SYS;
       LOG_WARN("location_cache is null", K(ret), KP(location_service));
-    } else if (OB_FAIL(location_service->get_leader_with_retry_until_timeout(GCONF.cluster_id,
+    } else if (OB_FAIL(location_service->get_leader_with_retry_until_timeout(GCONF.cluster_id, 
       tenant_id_, ls_id, leader_addr, rpc_timeout, retry_interval_us))) {
       LOG_WARN("fail to get ls locaiton leader", K(ret), K(tenant_id_), K(ls_id));
     } else if (OB_FAIL(ls_location_map_.set_refactored(ls_id, leader_addr, true /* overwrite */))) {

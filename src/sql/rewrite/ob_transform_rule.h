@@ -48,7 +48,7 @@ struct MvInfo {
              view_stmt_(NULL),
              select_mv_stmt_(NULL),
              mv_intersect_tbl_num_(0) {}
-
+  
   MvInfo(uint64_t mv_id,
           uint64_t data_table_id,
           const ObTableSchema *mv_schema,
@@ -302,7 +302,7 @@ struct ObTryTransHelper
     qb_name_other_start_id_(0),
     unique_key_provider_(NULL)
   {}
-
+  
   int fill_helper(const ObQueryCtx *query_ctx);
   int recover(ObQueryCtx *query_ctx);
   int is_filled() const { return !qb_name_counts_.empty(); }
@@ -390,7 +390,7 @@ public:
       (1L << TEMP_TABLE_OPTIMIZATION) |
       (1L << MV_REWRITE) |
       (1L << LATE_MATERIALIZATION);
-
+  
   static const uint64_t ALL_EXPR_LEVEL_HEURISTICS_RULES =
       (1L << SIMPLIFY_EXPR) |
       (1L << SIMPLIFY_DISTINCT) |
@@ -506,10 +506,10 @@ protected:
                              const int64_t current_level,
                              const ObDMLStmt &stmt,
                              bool &need_trans);
-
+  
   /**
    * @brief In principle, every rewriting rule that implements validity check in a heavy manner should implement this method
-   * which involves prepositioning some checks that can be efficiently completed, primarily including
+   * which involves prepositioning some checks that can be efficiently completed, primarily including 
    * basic form check of the stmt and the presence of some special expressions.
    */
   virtual int check_rule_bypass(const ObDMLStmt &stmt, bool &reject_trans);

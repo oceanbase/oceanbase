@@ -91,7 +91,7 @@ int ObIvfCacheMgr::init(lib::MemoryContext &parent_mem_ctx,
     LOG_WARN("invalid tablet id or dim", K(ret), K(key), K(dim), KP(all_vsag_use_mem));
   } else if (OB_ISNULL(mem_ctx_ = OB_NEWx(ObIvfMemContext, &get_self_allocator(), all_vsag_use_mem))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to create mem_ctx", K(ret));
+    LOG_WARN("failed to create mem_ctx", K(ret)); 
   } else if (OB_FAIL(mem_ctx_->init(parent_mem_ctx, all_vsag_use_mem, tenant_id_))) {
     LOG_WARN("failed to init memory context", K(ret));
     reset();
@@ -185,7 +185,7 @@ int ObIvfCacheMgr::create_cache_obj(const IvfCacheKey &key, ObIvfICache *&cache_
     void *tmp_buf = nullptr;
     if (OB_ISNULL(tmp_buf = mem_ctx_->Allocate(sizeof(ObIvfCentCache)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to alloc tmp_buf", K(ret));
+      LOG_WARN("failed to alloc tmp_buf", K(ret)); 
     } else {
       tmp_cent_cache = new(tmp_buf) ObIvfCentCache(get_self_allocator(), tenant_id_);
       cache_obj = tmp_cent_cache;
@@ -206,7 +206,7 @@ int ObIvfCacheMgr::create_cache_obj(const IvfCacheKey &key, ObIvfICache *&cache_
   } else if (OB_FAIL(check_memory_limit(0))) {
     LOG_WARN("fail to check memory limit", K(ret));
   }
-
+  
   if (OB_FAIL(ret) && OB_NOT_NULL(cache_obj)) {
     release_cache_obj(cache_obj);
   }
@@ -247,7 +247,7 @@ int ObIvfCacheMgr::fill_cache_info(ObVectorIndexInfo &info){
         LOG_WARN("failed to fill statistics", K(ret), K(this));
       }
       switch (cache_type) {
-        case IvfCacheType::IVF_CENTROID_CACHE:
+        case IvfCacheType::IVF_CENTROID_CACHE: 
         case IvfCacheType::IVF_PQ_PRECOMPUTE_TABLE_CACHE:
         case IvfCacheType::IVF_PQ_CENTROID_CACHE:
         {
@@ -342,7 +342,7 @@ int ObIvfICache::inner_init(ObIvfMemContext *parent_mem_ctx, uint64_t* all_vsag_
 
   if (OB_ISNULL(sub_mem_ctx_ = OB_NEWx(ObIvfMemContext, &get_self_allocator(), all_vsag_use_mem))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to create mem_ctx", K(ret));
+    LOG_WARN("failed to create mem_ctx", K(ret)); 
   } else if (OB_FAIL(sub_mem_ctx_->init(parent_mem_ctx->get_mem_context(), all_vsag_use_mem, tenant_id_))) {
     LOG_WARN("failed to init memory context", K(ret));
     reset();

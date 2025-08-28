@@ -51,9 +51,9 @@ public:
 protected:
   int gen_task_id_and_schema_versions_(const uint64_t schema_version_cnt,
                                        int64_t &task_id);
-  int wait_and_end_ddl_trans_(const int return_ret,
-                              const int64_t task_id,
-                              ObDDLSQLTransaction &trans,
+  int wait_and_end_ddl_trans_(const int return_ret, 
+                              const int64_t task_id, 
+                              ObDDLSQLTransaction &trans, 
                               bool &need_clean_failed);
   virtual int construct_result_();
   template <typename T1, typename T2>
@@ -117,28 +117,28 @@ private:
 class ObHTableLockHelper : public ObDDLHelper
 {
 public:
-  ObHTableLockHelper(share::schema::ObMultiVersionSchemaService *schema_service,
-                     const uint64_t tenant_id,
+  ObHTableLockHelper(share::schema::ObMultiVersionSchemaService *schema_service, 
+                     const uint64_t tenant_id, 
                      ObDDLSQLTransaction *external_trans);
   virtual ~ObHTableLockHelper() {}
-  int lock_objects(const common::ObString &tablegroup_name,
-                   const common::ObString &database_name,
+  int lock_objects(const common::ObString &tablegroup_name, 
+                   const common::ObString &database_name, 
                    const common::ObIArray<common::ObString> &table_names,
                    bool need_lock_id);
-  int check_htable_exist(const common::ObString &tablegroup_name,
-                         const common::ObString &database_name,
+  int check_htable_exist(const common::ObString &tablegroup_name, 
+                         const common::ObString &database_name, 
                          const common::ObIArray<common::ObString> &table_names);
-  int check_htable_not_exist(const common::ObString &tablegroup_name,
-                             const common::ObString &database_name,
+  int check_htable_not_exist(const common::ObString &tablegroup_name, 
+                             const common::ObString &database_name, 
                              const common::ObIArray<common::ObString> &table_names);
 private:
   int lock_database_by_name_(const ObString &database_name);
   int lock_tablegroup_and_tables_by_name_(const ObString &tablegroup_name,
-                                          const common::ObString &database_name,
+                                          const common::ObString &database_name, 
                                           const ObIArray<common::ObString> &table_names);
   int lock_htable_objects_by_id_();
 private:
-  // unused
+  // unused 
   virtual int init_() override { return OB_SUCCESS; }
   virtual int lock_objects_() override { return OB_NOT_IMPLEMENT; }
   virtual int generate_schemas_() override { return OB_NOT_IMPLEMENT; }

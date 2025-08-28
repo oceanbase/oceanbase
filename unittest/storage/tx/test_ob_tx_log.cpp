@@ -352,7 +352,7 @@ TEST_F(TestObTxLog, tx_log_body_redo)
                             TEST_TX_BUFFER_NODE_ARRAY,
                             TEST_TRANS_TYPE,
                             TEST_LOG_OFFSET,
-                            TEST_INFO_ARRAY,
+                            TEST_INFO_ARRAY, 
                             TEST_PREV_LOG_TYPE);
 
   ObTxLogBlockHeader &fill_block_header = fill_block.get_header();
@@ -882,7 +882,7 @@ TEST_F(TestObTxLog, test_commit_log_with_checksum_signature)
                      tx_buffer_node_array,
                      1,
                      LogOffSet(100),
-                     ls_info_array,
+                     ls_info_array, 
                      TEST_PREV_LOG_TYPE);
   int64_t size = log0.get_serialize_size();
   char *buf = new char[size];

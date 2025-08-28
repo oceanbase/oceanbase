@@ -93,7 +93,7 @@ int ObLSFlag::assign(const ObLSFlag &ls_flag)
   return ret;
 }
 
-//maybe empty, DUPLICATE, BLOCK_TABLET_IN, DUPLICATE|BLOCK_TABLET_IN
+//maybe empty, DUPLICATE, BLOCK_TABLET_IN, DUPLICATE|BLOCK_TABLET_IN 
 int ObLSFlag::flag_to_str(ObLSFlagStr &str) const
 {
   STATIC_ASSERT(ARRAYSIZEOF(LS_FLAG_ARRAY) == (int64_t)MAX_FLAG,
@@ -385,7 +385,7 @@ int ObLSAttrOperator::insert_ls(
 }
 
 int ObLSAttrOperator::delete_ls(
-    const ObLSID &ls_id, const share::ObLSStatus &old_status,
+    const ObLSID &ls_id, const share::ObLSStatus &old_status, 
     const ObTenantSwitchoverStatus &working_sw_status)
 {
   int ret = OB_SUCCESS;
@@ -558,7 +558,7 @@ int ObLSAttrOperator::update_ls_status_in_trans(const ObLSID &id,
                                    operation_type, SCN::base_scn()))) {
         LOG_WARN("failed to init new ls attr", KR(ret), K(id), K(ls_attr),
                  K(operation_type));
-      } else if (OB_FAIL(operator_ls_in_trans_(new_ls_attr, sql,
+      } else if (OB_FAIL(operator_ls_in_trans_(new_ls_attr, sql, 
                                       working_sw_status, trans))) {
         LOG_WARN("failed to operator ls", KR(ret), K(new_ls_attr), K(sql));
       }
@@ -916,7 +916,7 @@ int ObLSAttrOperator::update_ls_flag_in_trans(const ObLSID &id,
     }
   }
   ALL_LS_EVENT_ADD(tenant_id_, id, "update_ls_flag", ret, sql);
-  return ret;
+  return ret; 
 }
 
 int ObLSAttrOperator::get_random_normal_user_ls(

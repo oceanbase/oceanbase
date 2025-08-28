@@ -99,14 +99,14 @@ int Ob20ProtocolProcessor::do_decode(ObSMConnection& conn, ObICSMemPool& pool, c
         next_read_bytes = delta_len;
         // Attention!! when arrive here, all mysql compress protocols are in command phase
       } else if (OB_FAIL(decode_compressed_body(pool, start, pktlen, pktseq, pktlen_before_compress, pkt))) {
-        LOG_ERROR("fail to decode_compressed_body", K(sessid), K(pktseq), K(ret));
+        LOG_ERROR("fail to decode_compressed_body", K(sessid), K(pktseq), K(ret));  
       }
     } else {
       if (OB_FAIL(decode_ob20_header(origin_start, start, end, header20, sessid, true))) {
         LOG_ERROR("invalid 20 protocol header", K(header20), K(sessid), K(ret));
       } else if (0 != pktlen_before_compress) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("pktlen_before_compress must be 0 here",
+        LOG_ERROR("pktlen_before_compress must be 0 here", 
             K(pktlen_before_compress), K(sessid), K(ret));
       } else if (OB_UNLIKELY(pktlen !=
                              (header20.payload_len_ + OB20_PROTOCOL_HEADER_LENGTH + OB20_PROTOCOL_TAILER_LENGTH))) {
@@ -143,7 +143,7 @@ int Ob20ProtocolProcessor::do_decode(ObSMConnection& conn, ObICSMemPool& pool, c
   return ret;
 }
 
-inline int Ob20ProtocolProcessor::do_header_checksum(const char *origin_start,
+inline int Ob20ProtocolProcessor::do_header_checksum(const char *origin_start, 
     const Ob20ProtocolHeader &hdr, bool need_check_compress) {
   INIT_SUCC(ret);
   if (OB_ISNULL(origin_start)) {
@@ -204,7 +204,7 @@ inline int Ob20ProtocolProcessor::decode_ob20_header(const char*& origin_start, 
       origin = const_cast<char *>(origin_start);
     } else {
       origin = const_cast<char *>(start);
-    }
+    } 
     ObMySQLUtil::get_uint2(start, header20.magic_num_);
     ObMySQLUtil::get_uint2(start, header20.version_);
     ObMySQLUtil::get_uint4(start, header20.connection_id_);
@@ -395,7 +395,7 @@ int Ob20ProtocolProcessor::do_splice(ObSMConnection& conn, ObICSMemPool& pool, v
 {
   INIT_SUCC(ret);
   if (conn.proto20_pkt_context_.is_comp_packet_) {
-    // do nothing
+    // do nothing 
     if (OB_FAIL(process_compressed_ob20_packet(conn.sessid_,
                 conn.proto20_pkt_context_, conn.mysql_pkt_context_,
                 conn.pkt_rec_wrapper_, pool, pkt, need_decode_more))) {
@@ -454,7 +454,7 @@ inline int Ob20ProtocolProcessor::process_ob20_packet(ObProto20PktContext& conte
                         mysql_data_size, ipacket, need_decode_more))) {
       LOG_ERROR("fail to process fragment mysql packet", KP(mysql_data_start),
                 K(mysql_data_size), K(need_decode_more), K(ret));
-    } else if (!context.extra_info_.exist_extra_info()
+    } else if (!context.extra_info_.exist_extra_info() 
         && pkt20->get_extra_info().exist_extra_info()) {
       char* tmp_buffer = NULL;
       int64_t total_len = pkt20->get_extra_info().get_total_len();
@@ -601,7 +601,7 @@ inline int Ob20ProtocolProcessor::process_compressed_ob20_packet(uint32_t sessid
       } else {
         const char* start = decompress_data_buf;
         // compressed 20 proto skip compress head
-        if (OB_FAIL(decode_ob20_header(start, start,
+        if (OB_FAIL(decode_ob20_header(start, start, 
                   start + decompress_data_size, header20, sessid, false))) {
           LOG_ERROR("invalid 20 protocol header", K(header20), K(sessid), K(ret));
         } else if (OB_FAIL(do_body_checksum(start, header20))) {
@@ -613,7 +613,7 @@ inline int Ob20ProtocolProcessor::process_compressed_ob20_packet(uint32_t sessid
           LOG_ERROR("fail to process fragment mysql packet", KP(start),
                     K(decompress_data_size), K(need_decode_more), K(ret));
         } else {
-          // do nothing
+          // do nothing 
         }
       }
     }

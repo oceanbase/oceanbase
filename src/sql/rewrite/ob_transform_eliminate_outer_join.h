@@ -202,7 +202,7 @@ private:
    *   count(a + 1) + b => false
    */
   int check_expr_ref_column_all_in_aggr(const ObRawExpr *expr, bool &is_in);
-
+  
 };
 }//namespace sql
 }//namespace oceanbase

@@ -52,7 +52,7 @@ OB_DEF_DESERIALIZE(ObOptTableStat) {
               avg_row_size_,
               sample_size_
               );
-  return ret;
+  return ret; 
 }
 
 int ObOptTableStat::merge_table_stat(const ObOptTableStat &other)
@@ -64,7 +64,7 @@ int ObOptTableStat::merge_table_stat(const ObOptTableStat &other)
     LOG_WARN("two stat do not match", K(ret));
   } else {
     double avg_len = 0;
-    other.get_avg_row_size(avg_len);
+    other.get_avg_row_size(avg_len); 
     add_avg_row_size(avg_len, other.get_row_count());
     if (sample_size_ == 0) {
       sample_size_ = row_count_;

@@ -132,13 +132,13 @@ class ObHbaseRowIterator
 {
 public:
   ObHbaseRowIterator(const ObHbaseQuery &hbase_query, ObTableExecCtx &exec_ctx, bool is_timeseries_table);
-  virtual ~ObHbaseRowIterator()
+  virtual ~ObHbaseRowIterator() 
   {
     if (OB_NOT_NULL(cell_iter_)) {
       cell_iter_->~ObHbaseICellIter();
       cell_iter_ = nullptr;
     }
-
+    
     is_inited_ = false;
   };
   virtual int init(ScannerContext &scanner_context, const ObHBaseParams *hbase_params, hfilter::Filter *filter);
@@ -250,7 +250,7 @@ private:
   int seek_or_skip_to_next_col_inner(const ObString &rowkey, const ObString &qualifier);
   int create_forward_cell_iter(ObTableExecCtx &exec_ctx);
   virtual table::ObHbaseICellIter* get_forward_cell_iter() { return forward_cell_iter_; }
-
+  
 private:
   common::ObArenaAllocator iter_allocator_;  // used for forward iter
   common::ObArenaAllocator reversed_range_alloc_;  // used for reversed range

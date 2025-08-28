@@ -23,8 +23,8 @@ int GenericSequentialGrouper<OpType, IndexType>::add_operation(IndexType index, 
 {
   int ret = OB_SUCCESS;
   ObTableOperationType::Type op_type = get_group_type(op);
-
-  if (groups_.empty() || (OB_NOT_NULL(groups_.at(groups_.count()-1))
+  
+  if (groups_.empty() || (OB_NOT_NULL(groups_.at(groups_.count()-1)) 
                           && groups_.at(groups_.count()-1)->type_ != op_type))   {
     if (OB_FAIL(create_new_group(op_type))) {
       LOG_WARN("failed to create new group", K(ret), K(groups_));

@@ -29,7 +29,7 @@ public:
       (palfcluster::SubmitLogCmd));
   RPC_AP(PR3 send_submit_log_resp, OB_LOG_SUBMIT_LOG_CMD_RESP,
       (palfcluster::SubmitLogCmdResp));
-  RPC_AP(PR3 send_create_replica_cmd, OB_LOG_CREATE_REPLICA_CMD,
+  RPC_AP(PR3 send_create_replica_cmd, OB_LOG_CREATE_REPLICA_CMD, 
       (palfcluster::LogCreateReplicaCmd));
 };
 
@@ -72,3 +72,5 @@ public:
 } // end namespace oceanbase
 
 #endif
+
+

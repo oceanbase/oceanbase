@@ -88,7 +88,7 @@ int ObDropTablegroupHelper::lock_tablegroup_by_obj_id_()
     LOG_INFO("tablegroup not exists", K(ret), K(tablegroup_name));
   } else if (OB_FAIL(add_lock_object_by_id_(tablegroup_id_, share::schema::TABLEGROUP_SCHEMA,
                      transaction::tablelock::EXCLUSIVE))) {
-    LOG_WARN("failed to add lock object by tablegroup id", K(ret), K_(tablegroup_id));
+    LOG_WARN("failed to add lock object by tablegroup id", K(ret), K_(tablegroup_id));                      
   } else if (OB_FAIL(lock_existed_objects_by_id_())) {
     LOG_WARN("fail to lock objects by id", KR(ret));
   }
@@ -212,15 +212,15 @@ int ObDropTablegroupHelper::construct_and_adjust_result_(int &return_ret)
       ret = OB_SUCCESS;
       LOG_USER_NOTE(OB_TABLEGROUP_NOT_EXIST);
       LOG_INFO("tablegroup not exist, no need to delete it", KR(ret), K_(tenant_id),
-               "tablegroup_name", arg_.tablegroup_name_);
+               "tablegroup_name", arg_.tablegroup_name_); 
     } else {
       LOG_WARN("tablegroup not exist, can't delete it", KR(ret), K_(tenant_id),
-               "tablegroup_name", arg_.tablegroup_name_);
+               "tablegroup_name", arg_.tablegroup_name_); 
       LOG_USER_ERROR(OB_TABLEGROUP_NOT_EXIST);
     }
   } else if (OB_TABLEGROUP_NOT_EMPTY == ret) {
     LOG_WARN("tablegroup not empty, can't delete it", KR(ret), K_(tenant_id),
-              "tablegroup_name", arg_.tablegroup_name_);
+              "tablegroup_name", arg_.tablegroup_name_); 
     LOG_USER_ERROR(OB_TABLEGROUP_NOT_EMPTY);
   }
   return ret;

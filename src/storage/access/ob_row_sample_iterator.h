@@ -21,7 +21,7 @@ namespace oceanbase
 {
 namespace storage
 {
-class ObMemtableRowSampleIterator : public ObISampleIterator
+class ObMemtableRowSampleIterator : public ObISampleIterator 
 {
 public:
   // must larger than 1

@@ -21,7 +21,7 @@ namespace oceanbase
 namespace share
 {
 struct ObExternalTablePartInfo {
-  ObExternalTablePartInfo()
+  ObExternalTablePartInfo() 
     : part_id_(common::OB_INVALID_ID),
       list_row_value_() {}
 
@@ -32,13 +32,13 @@ struct ObExternalTablePartInfo {
   common::ObString partition_spec_;
 };
 
-class ObExternalTablePartInfoArray
+class ObExternalTablePartInfoArray 
 {
 public:
   ObExternalTablePartInfoArray(common::ObIAllocator &alloc)
     : part_infos_(),
       allocator_(alloc) {}
-
+  
   ~ObExternalTablePartInfoArray() {}
 
   TO_STRING_KV(K_(part_infos));

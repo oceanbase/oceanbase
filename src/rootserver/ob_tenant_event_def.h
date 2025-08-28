@@ -147,10 +147,10 @@ namespace tenant_event
 {
 #define DEF_MODULE(MODULE, MODULE_STR) \
   static constexpr const char* const MODULE##_NAME = #MODULE; \
-  static constexpr const char* const MODULE##_STR = MODULE_STR;
+  static constexpr const char* const MODULE##_STR = MODULE_STR; 
 #define DEF_EVENT_COMMON(EVENT, EVENT_STR) \
   static constexpr const char* const EVENT##_NAME = #EVENT; \
-  static constexpr const char* const EVENT##_STR = EVENT_STR;
+  static constexpr const char* const EVENT##_STR = EVENT_STR; 
 #define OneArguments(MODULE)
 #define TwoArguments(MODULE, EVENT)
 #define ThreeArguments(MODULE, EVENT, EVENT_STR) \
@@ -234,7 +234,7 @@ namespace tenant_event
                      #NAME3, value3, #NAME4, value4, #NAME5, value5, #NAME6, value6); \
     return ;\
   }
-
+ 
 #define GetMacro(_1, _2, _3, _4, _5, _6, _7, _8, _9, NAME, ...) NAME
 #define DEF_EVENT(...) \
   GetMacro(__VA_ARGS__, NineArguments, EightArguments, SevenArguments, SixArguments, FiveArguments, FourArguments, ThreeArguments, TwoArguments, OneArgument, ...)(__VA_ARGS__)

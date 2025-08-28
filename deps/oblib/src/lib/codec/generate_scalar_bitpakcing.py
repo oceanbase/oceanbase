@@ -120,7 +120,7 @@ void scalar_fastpackwithoutmask_{0}(const uint{1}_t *__restrict__ in, uint{2}_t 
   line = """
   default: {
     int ret = OB_ERR_UNEXPECTED;
-    LIB_LOG(ERROR, "unexpected", KP(in), KP(out), K(bit));
+    LIB_LOG(ERROR, "unexpected", KP(in), KP(out), K(bit)); 
     break;
   }
   }
@@ -152,7 +152,7 @@ void scalar_fastpackwithoutmask_{0}_32_count(const uint{1}_t *__restrict__ in, u
   line = """
   default: {
     int ret = OB_ERR_UNEXPECTED;
-    LIB_LOG(ERROR, "unexpected", KP(in), KP(out), K(bit));
+    LIB_LOG(ERROR, "unexpected", KP(in), KP(out), K(bit)); 
     break;
   }
   }
@@ -181,7 +181,7 @@ void scalar_fastunpack_{0}(const uint{1} *__restrict__ in, uint{2}_t *__restrict
   line = """
   default: {
     int ret = OB_ERR_UNEXPECTED;
-    LIB_LOG(ERROR, "unexpected", KP(in), KP(out), K(bit));
+    LIB_LOG(ERROR, "unexpected", KP(in), KP(out), K(bit)); 
     break;
   }
   }
@@ -216,7 +216,7 @@ void scalar_fastunpack_{0}_32_count(const uint32_t *__restrict__ _in, uint{1}_t 
   line = """
   default: {
     int ret = OB_ERR_UNEXPECTED;
-    LIB_LOG(ERROR, "unexpected", KP(in), KP(out), K(bit));
+    LIB_LOG(ERROR, "unexpected", KP(in), KP(out), K(bit)); 
     break;
   }
   }
@@ -336,7 +336,7 @@ if __name__ == "__main__":
   end_generate_h()
 
   start_generate_cpp("ob_generated_scalar_bp_func.cpp")
-
+  
   for i in range(1, 9) :
     generate_scalar_pack(8, i)
   for i in range(1, 9) :

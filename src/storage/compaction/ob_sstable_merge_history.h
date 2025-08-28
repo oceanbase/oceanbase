@@ -111,7 +111,7 @@ struct ObMergeStaticInfo
   TO_STRING_KV(K_(ls_id), K_(tablet_id), "merge_type", merge_type_to_str(merge_type_),
     K_(compaction_scn), K_(is_full_merge), K_(concurrent_cnt),
     "merge_level", merge_level_to_str(merge_level_),
-    "exec_mode", exec_mode_to_str(exec_mode_),
+    "exec_mode", exec_mode_to_str(exec_mode_), 
     "merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(merge_reason_),
     "base_major_status", co_major_sstable_status_to_str(base_major_status_),
     "co_major_merge_type", ObCOMajorMergePolicy::co_major_merge_type_to_str(co_major_merge_type_),

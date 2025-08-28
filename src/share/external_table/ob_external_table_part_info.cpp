@@ -41,7 +41,7 @@ int ObExternalTablePartInfoArray::reserve(const int64_t capacity)
   return ret;
 }
 
-int ObExternalTablePartInfoArray::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+int ObExternalTablePartInfoArray::serialize(char *buf, const int64_t buf_len, int64_t &pos) const 
 {
   int ret = OB_SUCCESS;
   // 序列化数组大小
@@ -84,7 +84,7 @@ int ObExternalTablePartInfoArray::deserialize(const char *buf, const int64_t dat
     void *tmp_buf = NULL;
     ObObj *obj_array = NULL;
     const int obj_capacity = 1024;
-
+    
     if (OB_ISNULL(tmp_buf = tmp_allocator.alloc(sizeof(ObObj) * obj_capacity))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc buf", KR(ret));
@@ -98,7 +98,7 @@ int ObExternalTablePartInfoArray::deserialize(const char *buf, const int64_t dat
         ObNewRow row;
         ObNewRow tmp_row;
         row.assign(obj_array, obj_capacity);
-
+        
         LST_DO_CODE(OB_UNIS_DECODE, part_info.part_id_);
         if (OB_FAIL(ret)) {
           LOG_WARN("fail to decode part_id", K(ret));

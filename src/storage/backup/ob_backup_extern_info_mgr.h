@@ -68,10 +68,10 @@ private:
 struct ObTabletInfoTrailer final : public ObExternBackupDataDesc
 {
 public:
-  static const uint8_t FILE_VERSION = 1;
+  static const uint8_t FILE_VERSION = 1; 
   OB_UNIS_VERSION_V(1);
 public:
-ObTabletInfoTrailer():
+ObTabletInfoTrailer(): 
   ObExternBackupDataDesc(share::ObBackupFileType::BACKUP_TABLET_METAS_INFO, FILE_VERSION),
   file_id_(0), tablet_cnt_(0), offset_(0), length_(0) {}
 virtual ~ObTabletInfoTrailer() {}
@@ -96,7 +96,7 @@ public:
       io_fd_(0), dev_handle_(nullptr), file_write_ctx_(), file_trailer_(), tmp_buffer_("BackupExtInfo"),
       bandwidth_throttle_(NULL) {};
   ~ObExternTabletMetaWriter();
-  int init(const share::ObBackupDest &backup_set_dest, const share::ObLSID &ls_id,
+  int init(const share::ObBackupDest &backup_set_dest, const share::ObLSID &ls_id, 
            const int64_t turn_id, const int64_t retry_id, const int64_t dest_id,
 	   const bool is_final_fuse, common::ObInOutBandwidthThrottle &bandwidth_throttle);
   int write_meta_data(const blocksstable::ObBufferReader &meta_data, const common::ObTabletID &tablet_id);
@@ -138,7 +138,7 @@ private:
 class ObExternTabletMetaReader final
 {
 public:
-  ObExternTabletMetaReader(): is_inited_(false), cur_tablet_idx_(-1), cur_trailer_idx_(-1), cur_buf_offset_(-1),
+  ObExternTabletMetaReader(): is_inited_(false), cur_tablet_idx_(-1), cur_trailer_idx_(-1), cur_buf_offset_(-1), 
                               tablet_meta_array_(), tablet_info_trailer_array_(), mod_() {}
   ~ObExternTabletMetaReader() {};
   int init(const share::ObBackupDest &backup_set_dest, const common::ObStorageIdMod& mod, const share::ObLSID &ls_id,

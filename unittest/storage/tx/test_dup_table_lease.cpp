@@ -11,10 +11,10 @@
 #include <gtest/gtest.h>
 #include "deps/oblib/src/lib/hash/ob_hashmap.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
 
-namespace unittest
+namespace unittest 
 {
 
 class TestDupTableLease : public ::testing::Test
@@ -46,3 +46,4 @@ int main(int argc, char **argv)
   ret = RUN_ALL_TESTS();
   return ret;
 }
+

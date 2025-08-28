@@ -40,7 +40,7 @@ int ObLineIntersectionAnalyzer::segment_intersection_query(ObGeometry *geo)
     } else if (OB_FAIL(rtree_index_.construct_rtree_index(line_segs->segs_))) {
       LOG_WARN("construct rtree index failed", K(ret));
     }
-  }
+  } 
   if (OB_SUCC(ret)) {
     ObLineSegments input_segments;
     ObGeoSegmentCollectVisitor seg_visitor(&input_segments);

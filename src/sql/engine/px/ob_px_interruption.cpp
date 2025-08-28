@@ -264,7 +264,7 @@ int ObInterruptUtil::generate_px_interrupt_id(const uint32_t server_id,
     // 取低12位
     timestamp = (uint64_t)0xfff & timestamp;
     interrupt_id.first_ = px_sequence_id;
-    //
+    // 
     // [ server_id (32bits) ][ qc_id (10bits)][ dfo_id (10bits) ][ timestamp (12bits) ]
     interrupt_id.last_ = ((uint64_t)server_id) << 32 | (uint64_t)qc_id << 22 |
         (uint64_t)dfo_id << 12 | (uint64_t)timestamp;

@@ -946,7 +946,7 @@ int ObHashPartInfrastructureVec<HashBucket>::init_hash_table(int64_t initial_siz
   mem_attr.ctx_id_ = common::ObCtxIds::WORK_AREA;
   bool nullable = true;
   bool all_int64 = false;
-  int64_t hash_bucket_cnt = is_push_down_ ? INIT_BKT_SIZE_FOR_ADAPTIVE_DISTINCT :
+  int64_t hash_bucket_cnt = is_push_down_ ? INIT_BKT_SIZE_FOR_ADAPTIVE_DISTINCT : 
     est_extend_hash_bucket_num(initial_size * EXTENDED_RATIO,
     sql_mem_processor_->get_mem_bound(), min_bucket);
   if (OB_ISNULL(alloc_) || !start_round_) {

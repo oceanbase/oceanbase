@@ -671,3 +671,4 @@ int ObStringColumnDecoder::bt_operator(
 
 }
 }
+

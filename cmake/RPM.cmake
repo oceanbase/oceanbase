@@ -108,7 +108,7 @@ install(FILES
 endif()
 
 if (BUILD_CDC_ONLY)
-  message(STATUS "oceanbase build cdc only")
+  message(STATUS "oceanbase build cdc only") 
   set(CPACK_COMPONENTS_ALL cdc)
   set(CPACK_PACKAGE_NAME "oceanbase-cdc")
   if (OB_BUILD_OPENSOURCE)
@@ -140,7 +140,7 @@ if (OB_BUILD_OPENSOURCE)
   )
 endif()
 
-set(CPACK_FULL_PACKAGE_NAME
+set(CPACK_FULL_PACKAGE_NAME 
   "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}${RPM_DIST}.${ARCHITECTURE}.rpm")
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/ocp/software_package.template

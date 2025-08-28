@@ -26,7 +26,7 @@ class ObGCUpperTransHelper
 public:
 static int try_get_sstable_upper_trans_version(
     ObLS &ls,
-    const blocksstable::ObSSTable &sstable,
+    const blocksstable::ObSSTable &sstable, 
     int64_t &new_upper_trans_version);
 
 static int check_need_gc_or_update_upper_trans_version(

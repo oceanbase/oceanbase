@@ -216,10 +216,10 @@ struct ObOTimestampTinyData {
   // add ==, < operator use to vec no null normalized cmp
   inline bool operator == (const ObOTimestampTinyData &other) const {
     return to_timestamp_data() == other.to_timestamp_data();
-  }
+  } 
   inline bool operator < (const ObOTimestampTinyData &other) const {
     return to_timestamp_data() < other.to_timestamp_data();
-  }
+  } 
   uint16_t desc_;
   int64_t time_us_;
 }__attribute__ ((packed));

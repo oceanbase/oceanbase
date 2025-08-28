@@ -346,7 +346,7 @@ int ObBackupDataBaseTask::deep_copy(const ObBackupDataBaseTask &that)
   return ret;
 }
 
-int ObBackupDataBaseTask::do_update_dst_and_doing_status_(common::ObISQLClient &sql_proxy, common::ObAddr &dst, share::ObTaskId &trace_id)
+int ObBackupDataBaseTask::do_update_dst_and_doing_status_(common::ObISQLClient &sql_proxy, common::ObAddr &dst, share::ObTaskId &trace_id) 
 {
   int ret = OB_SUCCESS;
   ObLSID ls_id(get_ls_id());
@@ -373,7 +373,7 @@ int ObBackupDataBaseTask::cancel(obrpc::ObSrvRpcProxy &rpc_proxy) const
   return ret;
 }
 
-int ObBackupDataBaseTask::build(const share::ObBackupJobAttr &job_attr, const share::ObBackupSetTaskAttr &set_task_attr,
+int ObBackupDataBaseTask::build(const share::ObBackupJobAttr &job_attr, const share::ObBackupSetTaskAttr &set_task_attr, 
     const share::ObBackupLSTaskAttr &ls_attr)
 {
   int ret = OB_SUCCESS;
@@ -407,9 +407,9 @@ int ObBackupDataBaseTask::build(const share::ObBackupJobAttr &job_attr, const sh
 }
 
 int ObBackupDataBaseTask::check_replica_status_for_backup(
-    const share::ObLSReplica &replica,
-    char *buf,
-    const int64_t size,
+    const share::ObLSReplica &replica, 
+    char *buf, 
+    const int64_t size, 
     bool &can_do_backup)
 {
   int ret = OB_SUCCESS;
@@ -465,12 +465,12 @@ int ObBackupDataBaseTask::set_optional_servers_(const ObIArray<common::ObAddr> &
       bool can_do_backup = false;
       if (replica.is_strong_leader()) {
         //do nothing
-      } else if (OB_FAIL(check_replica_status_for_backup(replica,
+      } else if (OB_FAIL(check_replica_status_for_backup(replica, 
                             replica_status_info+pos, OB_MAX_REPLICA_STATUS_FOR_BACKUP_INFO_LENGTH - pos, can_do_backup))) {
         LOG_WARN("failed to check replica status for backup", K(ret), K(replica), K(replica_status_info), K(pos));
       } else if (FALSE_IT(pos = strlen(replica_status_info))){
       } else if (check_replica_in_black_server_(replica, black_servers)) {
-        if (OB_FAIL(databuff_printf(replica_status_info,
+        if (OB_FAIL(databuff_printf(replica_status_info, 
                         OB_MAX_REPLICA_STATUS_FOR_BACKUP_INFO_LENGTH, pos, ": is in black server list. "))) {
           LOG_WARN("failed to databuff printf", K(ret), K(replica_status_info), K(pos));
         }
@@ -486,7 +486,7 @@ int ObBackupDataBaseTask::set_optional_servers_(const ObIArray<common::ObAddr> &
       const ObLSReplica &replica = replica_array.at(i);
       bool can_do_backup = false;
       if (replica.is_strong_leader()) {
-        if (OB_FAIL(check_replica_status_for_backup(replica, replica_status_info+pos,
+        if (OB_FAIL(check_replica_status_for_backup(replica, replica_status_info+pos, 
                         OB_MAX_REPLICA_STATUS_FOR_BACKUP_INFO_LENGTH - pos, can_do_backup))) {
           LOG_WARN("failed to check replica status for backup", K(ret), K(replica), K(replica_status_info), K(pos));
         } else if (FALSE_IT(pos = strlen(replica_status_info))){
@@ -499,13 +499,13 @@ int ObBackupDataBaseTask::set_optional_servers_(const ObIArray<common::ObAddr> &
               LOG_WARN("failed to push server", K(ret), K(server));
             }
           } else {
-            if (OB_FAIL(databuff_printf(replica_status_info,
+            if (OB_FAIL(databuff_printf(replica_status_info, 
                             OB_MAX_REPLICA_STATUS_FOR_BACKUP_INFO_LENGTH, pos, ": is in black server list. "))) {
               LOG_WARN("failed to databuff printf", K(ret), K(replica_status_info), K(pos));
             }
           }
         }
-      }
+      } 
     }
     if (OB_SUCC(ret) && servers.empty()) {
       ret = OB_NO_LS_REPLICA_CAN_DO_BACKUP;
@@ -540,7 +540,7 @@ int ObBackupDataBaseTask::get_ls_replica_array_(ObLSInfo &ls_info)
     server_ls_id = ObLSID(ObLSID::SYS_LS_ID);
     if (OB_FAIL(lst_operator->get(cluster_id, tenant_id, server_ls_id, share::ObLSTable::DEFAULT_MODE, ls_info))) {
       LOG_WARN("failed to get log stream info", K(ret), K(cluster_id), K(tenant_id), K(ls_id_));
-    }
+    } 
   }
   return ret;
 }
@@ -637,7 +637,7 @@ int ObBackupComplLogTask::clone(common::ObIAllocator &allocator, ObBackupSchedul
       LOG_WARN("taks is nullptr", K(ret));
     } else if (OB_FAIL(my_task->ObBackupDataBaseTask::deep_copy(*this))) {
       LOG_WARN("fail to deep copy base task", K(ret));
-    }
+    } 
     if (OB_SUCC(ret)) {
       out_task = my_task;
     } else if (OB_NOT_NULL(my_task)) {
@@ -653,7 +653,7 @@ int64_t ObBackupComplLogTask::get_deep_copy_size() const
   return sizeof(ObBackupComplLogTask);
 }
 
-int ObBackupComplLogTask::build(const share::ObBackupJobAttr &job_attr, const share::ObBackupSetTaskAttr &set_task_attr,
+int ObBackupComplLogTask::build(const share::ObBackupJobAttr &job_attr, const share::ObBackupSetTaskAttr &set_task_attr, 
     const share::ObBackupLSTaskAttr &ls_attr)
 {
   int ret = OB_SUCCESS;
@@ -729,7 +729,7 @@ int ObBackupComplLogTask::calc_start_replay_scn_(const ObBackupJobAttr &job_attr
   desc.backup_set_id_ = job_attr.backup_set_id_;
   desc.backup_type_ = job_attr.backup_type_;
   common::ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
-  if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy, job_attr.tenant_id_,
+  if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy, job_attr.tenant_id_, 
       job_attr.backup_path_, backup_dest))) {
     LOG_WARN("fail to get backup dest", K(ret), K(job_attr));
   } else if (OB_FAIL(store.init(backup_dest, desc))) {
@@ -769,7 +769,7 @@ int ObBackupBuildIndexTask::clone(common::ObIAllocator &allocator, ObBackupSched
       LOG_WARN("taks is nullptr", K(ret));
     } else if (OB_FAIL(my_task->ObBackupDataBaseTask::deep_copy(*this))) {
       LOG_WARN("fail to deep copy base task", K(ret));
-    }
+    } 
     if (OB_SUCC(ret)) {
       out_task = my_task;
     } else if (OB_NOT_NULL(my_task)) {
@@ -877,7 +877,7 @@ bool ObBackupCleanLSTask::can_execute_on_any_server() const
   return false;
 }
 
-int ObBackupCleanLSTask::do_update_dst_and_doing_status_(common::ObISQLClient &sql_proxy, common::ObAddr &dst, share::ObTaskId &trace_id)
+int ObBackupCleanLSTask::do_update_dst_and_doing_status_(common::ObISQLClient &sql_proxy, common::ObAddr &dst, share::ObTaskId &trace_id) 
 {
   int ret = OB_SUCCESS;
   ObLSID ls_id(get_ls_id());
@@ -909,7 +909,7 @@ int ObBackupCleanLSTask::set_optional_servers_()
     const common::ObIArray<ObLSReplicaLocation> &replica_array = location.get_replica_locations();
     for (int i = 0; OB_SUCC(ret) && i < replica_array.count(); ++i) {
       const ObLSReplicaLocation &replica = replica_array.at(i);
-      if (replica.is_valid()) {
+      if (replica.is_valid()) { 
         ObBackupServer server;
         server.set(replica.get_server(), 1/*high priority*/);
         if (OB_FAIL(servers.push_back(server))) {
@@ -996,7 +996,7 @@ int ObBackupCleanLSTask::build(const ObBackupCleanTaskAttr &task_attr, const ObB
     } else if (OB_FAIL(task_attr.get_backup_clean_id(id_))) {
       LOG_WARN("failed to get task id", K(ret), K(task_attr)); 
     } else if (OB_FAIL(set_optional_servers_())) {
-      LOG_WARN("failed to set optional servers", K(ret), K(task_attr));
+      LOG_WARN("failed to set optional servers", K(ret), K(task_attr));  
     }
   }
   return ret;
@@ -1006,7 +1006,7 @@ int ObBackupCleanLSTask::build(const ObBackupCleanTaskAttr &task_attr, const ObB
  *-------------------------------ObBackupDataLSMetaTask---------------------------------
  */
 
-int ObBackupDataLSMetaTask::clone(common::ObIAllocator &allocator, ObBackupScheduleTask *&out_task) const
+int ObBackupDataLSMetaTask::clone(common::ObIAllocator &allocator, ObBackupScheduleTask *&out_task) const 
 {
   int ret = OB_SUCCESS;
   void *input_ptr = NULL;
@@ -1020,7 +1020,7 @@ int ObBackupDataLSMetaTask::clone(common::ObIAllocator &allocator, ObBackupSched
       LOG_WARN("taks is nullptr", K(ret));
     } else if (OB_FAIL(my_task->ObBackupDataBaseTask::deep_copy(*this))) {
       LOG_WARN("fail to deep copy base task", K(ret));
-    }
+    } 
     if (OB_SUCC(ret)) {
       out_task = my_task;
     } else if (OB_NOT_NULL(my_task)) {
@@ -1067,7 +1067,7 @@ int ObBackupDataLSMetaTask::execute(obrpc::ObSrvRpcProxy &rpc_proxy) const
  *-------------------------------ObBackupDataLSMetaFinishTask---------------------------------
  */
 
-int ObBackupDataLSMetaFinishTask::clone(common::ObIAllocator &allocator, ObBackupScheduleTask *&out_task) const
+int ObBackupDataLSMetaFinishTask::clone(common::ObIAllocator &allocator, ObBackupScheduleTask *&out_task) const 
 {
   int ret = OB_SUCCESS;
   void *input_ptr = NULL;
@@ -1081,7 +1081,7 @@ int ObBackupDataLSMetaFinishTask::clone(common::ObIAllocator &allocator, ObBacku
       LOG_WARN("taks is nullptr", K(ret));
     } else if (OB_FAIL(my_task->ObBackupDataBaseTask::deep_copy(*this))) {
       LOG_WARN("fail to deep copy base task", K(ret));
-    }
+    } 
     if (OB_SUCC(ret)) {
       out_task = my_task;
     } else if (OB_NOT_NULL(my_task)) {
@@ -1116,7 +1116,7 @@ int ObBackupDataFuseTabletMetaTask::build(const share::ObBackupJobAttr &job_attr
   return ret;
 }
 
-int ObBackupDataFuseTabletMetaTask::clone(common::ObIAllocator &allocator, ObBackupScheduleTask *&out_task) const
+int ObBackupDataFuseTabletMetaTask::clone(common::ObIAllocator &allocator, ObBackupScheduleTask *&out_task) const 
 {
   int ret = OB_SUCCESS;
   void *input_ptr = NULL;
@@ -1130,7 +1130,7 @@ int ObBackupDataFuseTabletMetaTask::clone(common::ObIAllocator &allocator, ObBac
       LOG_WARN("taks is nullptr", K(ret));
     } else if (OB_FAIL(my_task->ObBackupDataBaseTask::deep_copy(*this))) {
       LOG_WARN("fail to deep copy base task", K(ret));
-    }
+    } 
     if (OB_SUCC(ret)) {
       out_task = my_task;
     } else if (OB_NOT_NULL(my_task)) {

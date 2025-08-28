@@ -230,7 +230,7 @@ TEST(test_basic_session_info, reset_sys_vars)
 
     // Step 1: Load default system variables
     ASSERT_EQ(OB_SUCCESS, session_info.load_default_sys_variable(true, true));
-
+    
     // Step 2: Set some variables to non-default values
 
     ObString current_default_catalog_name = ObString::make_string("_current_default_catalog");
@@ -244,30 +244,30 @@ TEST(test_basic_session_info, reset_sys_vars)
     ObObj result;
     ASSERT_EQ(OB_SUCCESS, session_info.get_sys_variable_by_name(current_default_catalog_name, result));
     ASSERT_EQ(result.get_uint64(), current_default_catalog_value.get_uint64());
-
+    
     // Step 4: Reset session with skip_sys_var = false (no session cache)
     session_info.reset(false);
-
+    
     // Step 5: Load default system variables again
     ASSERT_EQ(OB_SUCCESS, session_info.load_default_sys_variable(true, true));
-
+    
     // Step 6: Verify variables are back to default values
     ObObj default_current_default_catalog;
     default_current_default_catalog.set_uint64(0);
 
     ASSERT_EQ(OB_SUCCESS, session_info.get_sys_variable_by_name(current_default_catalog_name, result));
     ASSERT_EQ(result.get_uint64(), default_current_default_catalog.get_uint64()); // both are default value 0
-
+    
     // Step 7: Test with skip_sys_var = true (preserve system variables)
     // Set variables again to non-default values
     ASSERT_EQ(OB_SUCCESS, session_info.update_sys_variable_by_name(current_default_catalog_name, current_default_catalog_value));
 
     // Reset with skip_sys_var = true (with session cache, only clean inc value by reset inc flags)
     session_info.reset(true);
-
+    
     // Load default system variables
     ASSERT_EQ(OB_SUCCESS, session_info.load_default_sys_variable(true, true));
-
+    
     // Verify variables are back to default values
     ASSERT_EQ(OB_SUCCESS, session_info.get_sys_variable_by_name(current_default_catalog_name, result));
     ASSERT_EQ(result.get_uint64(), default_current_default_catalog.get_uint64());

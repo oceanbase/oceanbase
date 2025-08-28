@@ -230,7 +230,7 @@ int ObCGAggregatedScanner::inner_fetch_rows(const int64_t batch_size, uint64_t &
                                                         nullptr,  sql::EvalBound(row_cap, true)));
         }
       }
-    }
+    } 
   } else if (OB_FAIL(convert_bitmap_to_cs_index(row_ids_,
                                                 row_cap,
                                                 current_,
@@ -243,7 +243,7 @@ int ObCGAggregatedScanner::inner_fetch_rows(const int64_t batch_size, uint64_t &
   } else if (0 == row_cap) {
   } else {
     ObPushdownRowIdCtx pd_row_id_ctx(row_ids_, row_cap);
-    if (OB_FAIL(agg_group_->eval_batch(iter_param_, access_ctx_, 0/*col_offset*/,
+    if (OB_FAIL(agg_group_->eval_batch(iter_param_, access_ctx_, 0/*col_offset*/, 
                                        micro_scanner_->get_reader(), pd_row_id_ctx, false))) {
       LOG_WARN("fail to aggregate batch", K(ret));
     } else {
@@ -299,7 +299,7 @@ int ObCGAggregatedScanner::check_need_access_data(const ObTableIterParam &iter_p
         }
       }
       // need_get_row_ids_ not used in vec 1.0 now, keep it the same as need_access_data_
-      need_get_row_ids_ = need_access_data_;
+      need_get_row_ids_ = need_access_data_; 
     }
     if (OB_FAIL(ret)) {
       if (OB_NOT_NULL(agg_cells)) {

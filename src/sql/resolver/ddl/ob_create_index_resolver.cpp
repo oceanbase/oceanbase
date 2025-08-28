@@ -179,8 +179,8 @@ int ObCreateIndexResolver::resolve_index_column_node(
         sort_item.column_name_.assign_ptr(const_cast<char *>(col_node->children_[0]->str_value_),
                                           static_cast<int32_t>(col_node->children_[0]->str_len_));
         bool is_multi_value_index = false;
-        if (OB_FAIL(ObMulValueIndexBuilderUtil::adjust_index_type(sort_item.column_name_,
-                                                                  is_multi_value_index,
+        if (OB_FAIL(ObMulValueIndexBuilderUtil::adjust_index_type(sort_item.column_name_, 
+                                                                  is_multi_value_index, 
                                                                   reinterpret_cast<int*>(&index_keyname_)))) {
           LOG_WARN("failed to adjust index type", K(ret));
         } else if (is_multi_value_index) {
@@ -202,7 +202,7 @@ int ObCreateIndexResolver::resolve_index_column_node(
         }
         if (OB_SUCC(ret)) {
           const ObColumnSchemaV2 *column_schema = NULL;
-          if (is_oracle_mode()) { // oracle mode is not support vector column yet
+          if (is_oracle_mode()) { // oracle mode is not support vector column yet 
           } else if (OB_NOT_NULL(column_schema = tbl_schema->get_column_schema(sort_item.column_name_))) {
             if (ob_is_collection_sql_type(column_schema->get_data_type())) {
               bool is_sparse_vec_col = false;
@@ -265,7 +265,7 @@ int ObCreateIndexResolver::resolve_index_column_node(
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("vector index isn't supported in shared storage mode", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector index in shared storage mode is");
-        } else if (GCTX.is_shared_storage_mode()
+        } else if (GCTX.is_shared_storage_mode() 
                    && (MULTI_KEY == index_keyname_ || MULTI_UNIQUE_KEY == index_keyname_)
                    && tenant_data_version < DATA_VERSION_4_3_5_2) {
           ret = OB_NOT_SUPPORTED;
@@ -320,7 +320,7 @@ int ObCreateIndexResolver::resolve_index_column_node(
                                                         table_option_node))) {
           SQL_RESV_LOG(WARN, "check vec index constraint fail",K(ret), K(sort_item.column_name_));
         }
-      } else { // spatial index, NOTE resolve_spatial_index_constraint() will set index_keyname
+      } else { // spatial index, NOTE resolve_spatial_index_constraint() will set index_keyname 
         bool is_explicit_order = (NULL != col_node->children_[2]
             && 1 != col_node->children_[2]->is_empty_);
         if (OB_FAIL(resolve_spatial_index_constraint(*tbl_schema, sort_item.column_name_,
@@ -710,7 +710,7 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
   if (OB_SUCC(ret) && has_synonym) {
     ObString tmp_new_db_name;
     ObString tmp_new_tbl_name;
-    // related issue :
+    // related issue : 
     if (OB_FAIL(deep_copy_str(new_db_name, tmp_new_db_name))) {
       LOG_WARN("failed to deep copy new_db_name", K(ret));
     } else if (OB_FAIL(deep_copy_str(new_tbl_name, tmp_new_tbl_name))) {
@@ -763,7 +763,7 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
     } else if (NULL != parse_node.children_[6]) {
       if (T_COLUMN_GROUP != parse_node.children_[6]->type_ || parse_node.children_[6]->num_child_ <= 0) {
         ret = OB_INVALID_ARGUMENT;
-        SQL_RESV_LOG(WARN, "invalid argument", K(ret), K(parse_node.children_[6]->type_), K(parse_node.children_[6]->num_child_));
+        SQL_RESV_LOG(WARN, "invalid argument", K(ret), K(parse_node.children_[6]->type_), K(parse_node.children_[6]->num_child_));        
       } else if (OB_ISNULL(parse_node.children_[6]->children_[0])) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("node is null", K(ret));
@@ -822,7 +822,7 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
     if (OB_FAIL(check_create_stmt_storage_cache_policy(storage_cache_policy_, &index_schema))) {
       LOG_WARN("fail to check storage cache policy", K(ret), K(storage_cache_policy_));;
     }
-  }
+  } 
 
 
 if (OB_SUCC(ret) &&
@@ -936,7 +936,7 @@ int ObCreateIndexResolver::set_table_option_to_stmt(
         index_arg.index_type_ = INDEX_TYPE_UNIQUE_GLOBAL;
       } else {
         index_arg.index_type_ = INDEX_TYPE_UNIQUE_LOCAL;
-      }
+      }   
     } else if (NORMAL_KEY == index_keyname_) {
       if (global_) {
         index_arg.index_type_ = INDEX_TYPE_NORMAL_GLOBAL;

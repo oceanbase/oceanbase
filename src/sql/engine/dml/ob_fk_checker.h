@@ -55,15 +55,15 @@ public:
   int do_fk_check_single_row(const ObIArray<ObForeignKeyColumn> &columns,
                              const ObExprPtrIArray &row,
                              bool &has_result);
-
+  
   int do_fk_check_batch(bool &all_has_result);
-
-  int init_foreign_key_checker(int64_t estimate_row,
+  
+  int init_foreign_key_checker(int64_t estimate_row, 
                                const ObExprFrameInfo *expr_frame_info,
                                ObForeignKeyCheckerCtdef &fk_ctdef,
                                const ObExprPtrIArray &row,
                                ObIAllocator *allocator);
-
+  
   int build_fk_check_das_task(const ObIArray<ObForeignKeyColumn> &columns,
                                     const ObExprPtrIArray &row,
                                     bool &need_check);

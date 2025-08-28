@@ -72,7 +72,7 @@ int ObDelUpdLogPlan::compute_dml_parallel()
     max_dml_parallel_ = ObGlobalHint::DEFAULT_PARALLEL;
   }
   LOG_TRACE("finish compute dml parallel", K(use_pdml_), K(max_dml_parallel_), K(use_parallel_das_dml_),
-                              K(opt_ctx.can_use_pdml()), K(opt_ctx.is_online_ddl()),
+                              K(opt_ctx.can_use_pdml()), K(opt_ctx.is_online_ddl()), 
                               K(opt_ctx.get_parallel_rule()), K(opt_ctx.get_parallel()));
   return ret;
 }
@@ -237,7 +237,7 @@ int ObDelUpdLogPlan::get_pdml_parallel_degree(const int64_t target_part_cnt,
     ret = OB_SUCCESS;
     dop = max_dml_parallel_;
   } else {
-    OPT_TRACE("Decided PDML DOP by Auto DOP.");
+    OPT_TRACE("Decided PDML DOP by Auto DOP."); 
     dop = std::min(max_dml_parallel_, target_part_cnt * PDML_DOP_LIMIT_PER_PARTITION);
     OPT_TRACE("PDML target partition count:", target_part_cnt, "Max dml parallel", max_dml_parallel_);
   }
@@ -981,7 +981,7 @@ int ObDelUpdLogPlan::replace_assignment_expr_from_dml_info(const IndexDMLInfo &d
     if (OB_ISNULL(assignment.expr_) || OB_ISNULL(assignment.column_expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (expr == assignment.column_expr_
+    } else if (expr == assignment.column_expr_ 
                && OB_NOT_NULL(assignment.expr_)
                && assignment.expr_->get_expr_type() != T_TABLET_AUTOINC_NEXTVAL) {
       expr = assignment.expr_;
@@ -1312,7 +1312,7 @@ int ObDelUpdLogPlan::create_pdml_insert_plan(ObLogicalOperator *&top,
   } else if (OB_FAIL(allocate_exchange_as_top(top, exch_info))) {
     LOG_WARN("failed to allocate exchange as top", K(ret));
   } else if (osg_info != NULL &&
-             OB_FAIL(allocate_optimizer_stats_gathering_as_top(top,
+             OB_FAIL(allocate_optimizer_stats_gathering_as_top(top, 
                                                                *osg_info,
                                                                OSG_TYPE::GATHER_OSG))) {
     LOG_WARN("failed to allocate optimizer stats gathering");
@@ -1778,7 +1778,7 @@ int ObDelUpdLogPlan::prune_virtual_column(IndexDMLInfo &index_dml_info)
           (col_expr->is_virtual_generated_column()) && // udt/xml column need remove
           !optimizer_context_.has_trigger()) {
         //why need to exclude trigger here?
-        //see the issue:
+        //see the issue: 
         //key column means it is the rowkey column or part key column or index column
         //outside these scenarios with Oracle mode,
         //DML operator will not touch the virtual column

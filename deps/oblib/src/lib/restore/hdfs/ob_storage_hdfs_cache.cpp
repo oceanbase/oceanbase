@@ -27,7 +27,7 @@ using namespace share;
 
 // --------------------- ObHdfsFsClient ---------------------
 ObHdfsFsClient::ObHdfsFsClient()
-    : hdfs_fs_(nullptr), lock_(ObLatchIds::OBJECT_DEVICE_LOCK),
+    : hdfs_fs_(nullptr), lock_(ObLatchIds::OBJECT_DEVICE_LOCK), 
       is_inited_(false), stopped_(false), ref_cnt_(0), last_modified_ts_(0)
 {
 }
@@ -157,7 +157,7 @@ int ObHdfsCacheUtils::get_namenode_and_path_from_uri(char *namenode,
     ret = OB_HDFS_MALFORMED_URI;
     OB_LOG(WARN, "failed to handle namenode or path with prefix", K(ret), K(uri));
   } else {
-    // Full path is qualified, i.e. "scheme://authority/path/to/file".
+    // Full path is qualified, i.e. "scheme://authority/path/to/file".  
     // Extract "scheme://authority".
     const char *ptr = uri.ptr();
     // Check last slash after "scheme://authority"
@@ -301,9 +301,9 @@ int ObHdfsCacheUtils::create_fs_(ObHdfsFsClient *hdfs_client,
 
   hdfsBuilder *hdfs_builder = obHdfsNewBuilder();
   KerberosConfig kerberos_config = {
-      krb5conf_path, sizeof(krb5conf_path),
+      krb5conf_path, sizeof(krb5conf_path), 
       principal,     sizeof(principal),
-      keytab_path,   sizeof(keytab_path),
+      keytab_path,   sizeof(keytab_path),   
       ticiket_path,  sizeof(ticiket_path),
       hdfs_configs,  sizeof(hdfs_configs)};
 
@@ -657,4 +657,4 @@ int ObHdfsFsCache::get_connection(const ObString &namenode,
 }
 
 } // namespace common
-} // namespace oceanbase
+} // namespace oceanbase 

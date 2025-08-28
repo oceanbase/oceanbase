@@ -71,7 +71,7 @@ int ObHTableLockMgr::acquire_handle(ObHTableLockHandle *&handle)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory", K(ret), K(sizeof(ObHTableLockHandle)));
   } else  {
-    handle = new(buf) ObHTableLockHandle();
+    handle = new(buf) ObHTableLockHandle(); 
   }
   return ret;
 }
@@ -84,7 +84,7 @@ int ObHTableLockMgr::acquire_handle(const transaction::ObTransID &tx_id, ObHTabl
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory", K(ret), K(sizeof(ObHTableLockHandle)));
   } else  {
-    handle = new(buf) ObHTableLockHandle(tx_id);
+    handle = new(buf) ObHTableLockHandle(tx_id); 
   }
   return ret;
 }
@@ -92,7 +92,7 @@ int ObHTableLockMgr::acquire_handle(const transaction::ObTransID &tx_id, ObHTabl
 int ObHTableLockHandle::find_lock_node(uint64_t table_id, const common::ObString &key, ObHTableLockNode *&lock_node)
 {
   int ret = OB_SUCCESS;
-  ObHTableLockNode *cur_node = lock_nodes_;
+  ObHTableLockNode *cur_node = lock_nodes_; 
   lock_node = nullptr;
   ObHTableLockKey target_lock_key(table_id, key);
   bool is_matched = false;
@@ -157,10 +157,10 @@ int ObHTableLockMgr::internal_lock_row(const uint64_t table_id, const common::Ob
   if (OB_FAIL(alloc_lock_node(lock_mode, lock_node))) {
     LOG_WARN("fail to alloc lock node", K(ret), K(lock_mode));
   } else {
-    // suppose the lock exists firstly, try to get and add shared/exclusive lock
+    // suppose the lock exists firstly, try to get and add shared/exclusive lock 
     if (OB_FAIL(lock_map_.operate(&tmp_lock_key, lock_op))) {
       if (ret == OB_ENTRY_NOT_EXIST) {
-        // lock not exists, try to add a new lock or use the lock added by others
+        // lock not exists, try to add a new lock or use the lock added by others 
         ret = OB_SUCCESS;
         if (OB_FAIL(alloc_lock_key(table_id, key, new_lock_key))) {
           LOG_WARN("fail to alloc new lock key", K(ret));
@@ -192,7 +192,7 @@ int ObHTableLockMgr::internal_lock_row(const uint64_t table_id, const common::Ob
         handle.add_lock_node(*lock_node);
       }
     } else {
-      lock_node->set_lock_key(new_lock_key);
+      lock_node->set_lock_key(new_lock_key); 
       handle.add_lock_node(*lock_node);
     }
   }
@@ -200,7 +200,7 @@ int ObHTableLockMgr::internal_lock_row(const uint64_t table_id, const common::Ob
   if (OB_FAIL(ret) || lock_exists) {
     if (OB_NOT_NULL(new_lock_key)) {
       allocator_.free(new_lock_key->key_.ptr());
-      allocator_.free(new_lock_key);
+      allocator_.free(new_lock_key); 
     }
     if (OB_NOT_NULL(new_lock)) {
       allocator_.free(new_lock);
@@ -244,7 +244,7 @@ int ObHTableLockMgr::alloc_lock_key(const uint64_t table_id, const ObString &key
       LOG_WARN("fail to copy key", K(ret));
     } else {
       tmp_lock_key->table_id_ = table_id;
-      lock_key = tmp_lock_key;
+      lock_key = tmp_lock_key; 
     }
   }
 
@@ -255,7 +255,7 @@ int ObHTableLockMgr::alloc_lock_key(const uint64_t table_id, const ObString &key
 }
 
 // alloc lock with initial lock mode
-int ObHTableLockMgr::alloc_lock(ObHTableLockMode lock_mode, ObHTableLock *&lock)
+int ObHTableLockMgr::alloc_lock(ObHTableLockMode lock_mode, ObHTableLock *&lock) 
 {
   int ret = OB_SUCCESS;
   ObHTableLock *tmp_lock = nullptr;
@@ -356,7 +356,7 @@ bool ObHTableUnLockOpPred::operator() (ObHTableLockKey *&key, ObHTableLock *&val
 // head insert new lock node into lock handle
 void ObHTableLockHandle::add_lock_node(ObHTableLockNode &lock_node)
 {
-  ObHTableLockNode *orgin_lock_nodes = lock_nodes_;
+  ObHTableLockNode *orgin_lock_nodes = lock_nodes_; 
   lock_nodes_ = &lock_node;
   lock_nodes_->next_ = orgin_lock_nodes;
 }
@@ -372,7 +372,7 @@ int ObHTableLockMgr::rd2wrlock(ObHTableLockNode &lock_node)
     if (OB_FAIL(lock_map_.operate(lock_node.get_lock_key(), rd2wrlockop))) {
       LOG_WARN("fail to escalate read lock to write lock", K(ret));
     } else {
-      ret = rd2wrlockop.get_ret();
+      ret = rd2wrlockop.get_ret(); 
     }
   }
   return ret;

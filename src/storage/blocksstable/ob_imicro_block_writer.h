@@ -156,7 +156,7 @@ public:
   {
     int ret = OB_NOT_SUPPORTED;
     STORAGE_LOG(WARN, "Unspported micro block format for hash index", K(ret));
-    return ret;
+    return ret; 
   }
   virtual bool has_enough_space_for_hash_index(const int64_t hash_index_size) const
   {
@@ -259,7 +259,7 @@ protected:
     if (header->column_checksums_ != nullptr && header->has_column_checksum_) {
       header->column_checksums_ = reinterpret_cast<int64_t *>(
             data_buffer.data() + ObMicroBlockHeader::COLUMN_CHECKSUM_PTR_OFFSET);
-    }
+    }    
   }
 public:
   static const int64_t DEFAULT_MICRO_MAX_SIZE = 256 * 1024; //256K

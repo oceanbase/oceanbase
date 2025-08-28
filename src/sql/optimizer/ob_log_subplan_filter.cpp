@@ -485,7 +485,7 @@ int ObLogSubPlanFilter::compute_spf_batch_rescan(bool &can_batch)
     LOG_WARN("get unexpected null", K(ret), K(plan));
   } else if ((!init_plan_idxs_.is_empty() || !one_time_idxs_.is_empty()) &&
       !plan->get_optimizer_context().enable_onetime_initplan_batch()) {
-    /* spf contains onetime expr or init plan, enabled after 4.2.5 */
+    /* spf contains onetime expr or init plan, enabled after 4.2.5 */ 
     can_batch = false;
   }
 
@@ -502,7 +502,7 @@ int ObLogSubPlanFilter::compute_spf_batch_rescan(bool &can_batch)
     }
   }
 
-  // check if child can batch rescan
+  // check if child can batch rescan 
   for (int64_t i = 0; OB_SUCC(ret) && can_batch && i < get_num_of_child(); i++) {
     if (OB_ISNULL(child = get_child(i)) || OB_ISNULL(sharding = child->get_sharding())
         || OB_ISNULL(stmt= child->get_stmt())) {
@@ -629,7 +629,7 @@ int ObLogSubPlanFilter::replace_nested_subquery_exprs(ObRawExprReplacer &replace
     ObRawExpr *expr = subquery_exprs_.at(i);
     int64_t ref_id = subquery_exprs_.at(i)->get_ref_id();
     if (ObOptimizerUtil::find_item(plan->get_onetime_query_refs(), expr)) {
-      // do not replace onetime expr ref query, only adjust nested subquery
+      // do not replace onetime expr ref query, only adjust nested subquery  
     } else if (OB_FAIL(replace_expr_action(replacer, expr))) {
       LOG_WARN("failed to replace nested subquery expr", K(ret));
     } else if (expr == subquery_exprs_.at(i)) {

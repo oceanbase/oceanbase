@@ -266,7 +266,7 @@ public:
   void add_num_null(int64_t num_null) { num_null_ += num_null; }
 
   void add_num_not_null(int64_t num_not_null) { num_not_null_ += num_not_null; }
-
+  
   int64_t get_num_rows() const { return num_null_ + num_not_null_; }
 
   void set_avg_len(int64_t avg_len) { avg_length_ = avg_len; }
@@ -314,11 +314,11 @@ public:
         && num_distinct_ >= 0
         && num_null_ >= 0;
   }
-
+  
   void add_col_len(int64_t len) { total_col_len_ += len; }
   void set_total_col_len(int64_t len) { total_col_len_ = len; }
   int64_t get_total_col_len() const { return total_col_len_; }
-
+  
   int merge_column_stat(const ObOptColumnStat &other);
 
   common::ObCollationType get_collation_type() const { return cs_type_; }

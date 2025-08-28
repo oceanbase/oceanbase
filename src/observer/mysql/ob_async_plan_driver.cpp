@@ -90,7 +90,7 @@ int ObAsyncPlanDriver::response_result(ObMySQLResultSet &result)
     *  2. 重试， local 重试直接交给上层做， package 重试需要 注意 ps stmt 的泄漏问题
     *  3. response_query_header & flush_buffer 不会产生需要重试的报错，此位置是 ObAsyncPlanDriver 重试前的一步，中间不会有别的可能重试的操作
     *  4. ps stmt 清理要注意异步回包的情况，可能需要在异步包里面做清理
-    */
+    */ 
     // need close result set
     int close_ret = OB_SUCCESS;
     if (OB_SUCCESS != (close_ret = result.close())) {

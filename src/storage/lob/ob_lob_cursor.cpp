@@ -23,7 +23,7 @@ namespace storage
 ObLobCursor::~ObLobCursor()
 {
   // meta_cache_.destroy();
-  // modified_metas_.destroy();
+  // modified_metas_.destroy(); 
   if (nullptr != param_) {
     param_->~ObLobAccessParam();
     param_ = nullptr;
@@ -115,7 +115,7 @@ int ObLobCursor::get_ptr_for_write(int64_t offset, int64_t len, char *&ptr)
       LOG_WARN("data not enough", KR(ret), K(offset), K(len), K(start_offset), "data_len", data.length());
     } else {
       ptr = data.ptr() + offset - get_chunk_offset(start_chunk_pos);
-    }
+    } 
   }
   return ret;
 }
@@ -211,7 +211,7 @@ int ObLobCursor::merge_chunk_data(int start_chunk_pos, int end_chunk_pos)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc fail", KR(ret), K(merge_len), K(start_chunk_pos), K(end_chunk_pos), K(chunk_idx_array));
   }
-
+  
   // do merge if need
   if (OB_FAIL(ret) || ! need_merge) {
   } else {
@@ -225,7 +225,7 @@ int ObLobCursor::merge_chunk_data(int start_chunk_pos, int end_chunk_pos)
       allocator_->free(chunk_data.data_.ptr());
       chunk_data.data_.reset();
     }
-    if (OB_SUCC(ret) && pos != merge_len) {
+    if (OB_SUCC(ret) && pos != merge_len) { 
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("data merge len incorrect", KR(ret), K(pos), K(merge_len));
     }
@@ -248,7 +248,7 @@ int ObLobCursor::merge_chunk_data(int start_chunk_pos, int end_chunk_pos)
     if (OB_SUCC(ret)) {
       partial_data_->data_[new_chunk_data_idx].data_.assign_ptr(buf, merge_len);
     }
-    // defensive check
+    // defensive check 
     if (OB_SUCC(ret) && OB_FAIL(check_data_length())) {
       LOG_WARN("check len fail", KR(ret));
     }
@@ -498,7 +498,7 @@ int ObLobCursor::set(int64_t offset, const char *buf, int64_t buf_len, bool use_
       }
       partial_data_->data_length_ += append_len;
     }
-    // defensive check
+    // defensive check 
     if (OB_SUCC(ret) && OB_FAIL(check_data_length())) {
       LOG_WARN("check len fail", KR(ret));
     }
@@ -513,7 +513,7 @@ int ObLobCursor::record_chunk_old_data(int chunk_idx)
   if (OB_FAIL(set_old_data(chunk_index))) {
     LOG_WARN("record_chunk_old_data fail", KR(ret), K(chunk_index));
   }
-  return ret;
+  return ret;  
 }
 
 int ObLobCursor::set_old_data(ObLobChunkIndex &chunk_index)

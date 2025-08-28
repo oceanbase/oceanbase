@@ -531,7 +531,7 @@ enum class ObBackupIntermediateTreeType
 {
   BACKUP_INDEX_TREE = 0,
   BACKUP_META_TREE = 1,
-  BACKUP_TREE_MAX,
+  BACKUP_TREE_MAX, 
 };
 
 typedef common::ObFixedLengthString<OB_BACKUP_DEFAULT_FIXED_STR_LEN> ObBackupDefaultFixedLenString;
@@ -596,7 +596,7 @@ struct ObBackupSetDesc {
   bool is_valid() const;
   bool operator==(const ObBackupSetDesc &other) const;
   void reset();
-
+  
   TO_STRING_KV(K_(backup_set_id), K_(backup_type), K_(min_restore_scn), K_(total_bytes));
   int64_t backup_set_id_;
   ObBackupType backup_type_;  // FULL OR INC
@@ -959,8 +959,8 @@ public:
   bool is_root_path_equal(const ObBackupDest &backup_dest) const;
   int is_backup_path_equal(const ObBackupDest &backup_dest, bool &is_equal) const;
   bool is_assume_role_mode() const { return OB_ISNULL(storage_info_) ? false : storage_info_->is_assume_role_mode(); }
-  bool is_enable_worm() const { return OB_ISNULL(storage_info_) ? false : storage_info_->is_enable_worm(); }
-  bool is_storage_type_file(){ return OB_ISNULL(storage_info_) ?
+  bool is_enable_worm() const { return OB_ISNULL(storage_info_) ? false : storage_info_->is_enable_worm(); } 
+  bool is_storage_type_file(){ return OB_ISNULL(storage_info_) ? 
       false : ObStorageType::OB_STORAGE_FILE == storage_info_->get_type(); }
   bool is_storage_type_s3(){ return OB_ISNULL(storage_info_) ? false : ObStorageType::OB_STORAGE_S3 == storage_info_->get_type(); }
   ObStorageType get_storage_type() const { return OB_ISNULL(storage_info_) ? ObStorageType::OB_STORAGE_MAX_TYPE : storage_info_->get_type(); }
@@ -1081,7 +1081,7 @@ public:
   static int check_tenant_data_version_match(const uint64_t tenant_id, const uint64_t data_version);
   static int get_full_replica_num(const uint64_t tenant_id, int64_t &replica_num);
   static int backup_scn_to_str(const uint64_t tenant_id, const share::SCN &scn, char *buf, int64_t buf_len);
-  static int get_tenant_sys_time_zone_wrap(const uint64_t tenant_id,
+  static int get_tenant_sys_time_zone_wrap(const uint64_t tenant_id, 
                                            ObFixedLengthString<common::OB_MAX_TIMESTAMP_TZ_LENGTH> &time_zone,
                                            ObTimeZoneInfoWrap &time_zone_info_wrap);
 private:
@@ -1277,13 +1277,13 @@ public:
     CANCELING= 4,
     CANCELED = 5,
     BACKUP_SYS_META = 6,
-    BACKUP_USER_META = 7,
+    BACKUP_USER_META = 7, 
     BACKUP_META_FINISH = 8,
-    BACKUP_SYS_DATA = 9,
+    BACKUP_SYS_DATA = 9, 
     BACKUP_USER_DATA = 10,
     BEFORE_BACKUP_LOG = 11,
-    BACKUP_LOG = 12,
-    BACKUP_FUSE_TABLET_META = 13,
+    BACKUP_LOG = 12, 
+    BACKUP_FUSE_TABLET_META = 13, 
     PREPARE_BACKUP_LOG = 14,
     MAX_STATUS
   };
@@ -1397,7 +1397,7 @@ public:
     RESTORE_CLOG,
     BACKUP_DATA,
     BACKUP_CLEAN,
-    MAX_FAILED_TYPE
+    MAX_FAILED_TYPE 
   };
   ObHAResultInfo(const FailedType &type, const ObLSID &ls_id, const ObAddr &addr, const ObTaskId &trace_id,
       const int result);
@@ -1465,7 +1465,7 @@ public:
 
   int assign(const ObBackupSetTaskAttr &other);
   TO_STRING_KV(K_(task_id), K_(tenant_id), K_(incarnation_id), K_(job_id), K_(backup_set_id), K_(start_ts), K_(end_ts),
-      K_(start_scn), K_(end_scn), K_(user_ls_start_scn), K_(data_turn_id), K_(meta_turn_id), K_(minor_turn_id),
+      K_(start_scn), K_(end_scn), K_(user_ls_start_scn), K_(data_turn_id), K_(meta_turn_id), K_(minor_turn_id), 
       K_(major_turn_id), K_(status), K_(encryption_mode), K_(passwd), K_(stats), K_(backup_path), K_(retry_cnt), K_(result),
       K_(comment));
   int64_t task_id_;

@@ -987,7 +987,7 @@ int ObExprOLSLabelDrop::calc_result_type2(ObExprResType &type,
 }
 
 ObExprOLSTablePolicyApply::ObExprOLSTablePolicyApply(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_TABLE_POLICY_APPLY, N_OLS_TABLE_POLICY_APPLY, 6,VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_TABLE_POLICY_APPLY, N_OLS_TABLE_POLICY_APPLY, 6,VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION, 
                          false, INTERNAL_IN_ORACLE_MODE)
 {
 }
@@ -1096,7 +1096,7 @@ int ObExprOLSTablePolicyEnable::calc_result_type3(ObExprResType &type,
 }
 
 ObExprOLSUserSetLevels::ObExprOLSUserSetLevels(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_USER_SET_LEVELS, N_OLS_USER_SET_LEVELS, 6, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_USER_SET_LEVELS, N_OLS_USER_SET_LEVELS, 6, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION, 
                          false, INTERNAL_IN_ORACLE_MODE)
 {
 }

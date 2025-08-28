@@ -538,7 +538,7 @@ int ObLSService::post_create_ls_(const int64_t create_type,
     case ObLSCreateType::NORMAL: {
       if (OB_FAIL(ls->set_start_work_state())) {
         LOG_ERROR("ls set start work state failed", KR(ret), KPC(ls));
-      } else {
+      } else { 
         ls->enable_to_read();
       }
       break;
@@ -1240,7 +1240,7 @@ int ObLSService::create_ls_(const ObCreateLSCommonArg &arg,
   bool ls_exist = false;
   bool waiting_destroy = false;
   int64_t process_point = 0;
-  const ObLSStoreFormat ls_store_format = (REPLICA_TYPE_COLUMNSTORE == arg.replica_type_) ?
+  const ObLSStoreFormat ls_store_format = (REPLICA_TYPE_COLUMNSTORE == arg.replica_type_) ? 
                                           common::ObLSStoreType::OB_LS_STORE_COLUMN_ONLY
                                           : common::ObLSStoreType::OB_LS_STORE_NORMAL;
 
@@ -1322,7 +1322,7 @@ int ObLSService::create_ls_(const ObCreateLSCommonArg &arg,
         LOG_WARN("failed to add ls migration task", K(ret), K(mig_arg));
       } else if (OB_BREAK_FAIL(post_create_ls_(arg.create_type_, ls))) {
         LOG_WARN("post create ls failed", K(ret), K(ls_meta));
-      }
+      } 
     }
     if (OB_BREAK_FAIL(ret)) {
       DEBUG_SYNC(BEFORE_DEL_LS_AFTER_CREATE_LS_FAILED);

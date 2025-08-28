@@ -1170,7 +1170,7 @@ public:
   }
 
   template <typename _callback>
-  int callback_helper(const _value_type &value, _callback *callback)
+  int callback_helper(const _value_type &value, _callback *callback) 
   {
     return (*callback)(value);
   }

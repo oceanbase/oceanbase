@@ -263,7 +263,7 @@ int ObDBMSSchedTableOperator::_check_need_record(ObDBMSSchedJobInfo &job_info, b
             need_record = false;
           }
         }
-
+        
       }
     }
   }
@@ -468,7 +468,7 @@ int ObDBMSSchedTableOperator::update_for_kill(ObDBMSSchedJobInfo &job_info)
   if (OB_SUCC(ret) && need_record) {
     job_info.state_ = ObString("KILLED");
     OZ (_build_job_log_dml(now, job_info, OB_ERR_SESSION_INTERRUPTED, "user stop job", sql2));
-  }
+  }   
   OZ (trans.start(sql_proxy_, tenant_id, true));
   OZ (trans.write(tenant_id, sql1.ptr(), affected_rows));
   if (OB_SUCC(ret) && need_record) {
@@ -481,7 +481,7 @@ int ObDBMSSchedTableOperator::update_for_kill(ObDBMSSchedJobInfo &job_info)
       ret = OB_SUCC(ret) ? tmp_ret : ret;
     }
   }
-  return ret;
+  return ret; 
 }
 
 int ObDBMSSchedTableOperator::update_for_mysql_event_database_not_exist(ObDBMSSchedJobInfo &job_info)
@@ -519,7 +519,7 @@ int ObDBMSSchedTableOperator::update_for_mysql_event_database_not_exist(ObDBMSSc
       LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
       ret = OB_SUCC(ret) ? tmp_ret : ret;
     }
-  }
+  }  
   return ret;
 }
 

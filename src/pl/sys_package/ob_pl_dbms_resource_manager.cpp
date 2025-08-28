@@ -405,3 +405,4 @@ int ObPlDBMSResourceManager::set_consumer_group_mapping(
   }
   return ret;
 }
+

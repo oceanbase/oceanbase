@@ -62,7 +62,7 @@ struct ObTableQMParam
   table::ObKvSchemaCacheGuard *schema_cache_guard_;
   table::ObTableApiSessGuard *sess_guard_;
   uint64_t table_id_;
-  common::ObTabletID tablet_id_;
+  common::ObTabletID tablet_id_; 
   int64_t timeout_ts_;
   table::ObTableApiCredential credential_;
   table::ObTableEntityType entity_type_;
@@ -75,7 +75,7 @@ struct ObTableQMParam
 class QueryAndMutateHelper
 {
 public:
-  explicit QueryAndMutateHelper(common::ObIAllocator &allocator,
+  explicit QueryAndMutateHelper(common::ObIAllocator &allocator, 
                                 ObTableQMParam &qm_param,
                                 table::ObTableAuditCtx &audit_ctx)
     : allocator_(allocator),
@@ -130,7 +130,7 @@ private:
   int get_rowkey_column_names(common::ObIArray<common::ObString> &names);
   // check whether checkAndMutate's expected value is null or not
   int check_expected_value_is_null(table::ObTableQueryResultIterator *result_iter, bool &is_null);
-  // check value whether the value of first row of htable query result is null(empty string) or not
+  // check value whether the value of first row of htable query result is null(empty string) or not 
   int check_result_value_is_null(table::ObTableQueryResult *query_result, bool &is_null_value);
 
   int check_and_execute(table::ObTableQueryResultIterator *result_iterator);
@@ -164,7 +164,7 @@ private:
       }
     }
 
-    OB_TABLE_END_AUDIT(ret_code, ret,
+    OB_TABLE_END_AUDIT(ret_code, ret, 
                        snapshot, get_tx_snapshot(),
                        stmt_type, table::ObTableAuditUtils::get_stmt_type(mutation.type()));
     return ret;
@@ -198,7 +198,7 @@ private:
       }
     }
 
-    OB_TABLE_END_AUDIT(ret_code, ret,
+    OB_TABLE_END_AUDIT(ret_code, ret, 
                        snapshot, get_tx_snapshot(),
                        stmt_type, table::ObTableAuditUtils::get_stmt_type(mutation.type()));
     return ret;
@@ -249,7 +249,7 @@ private:
   table::ObKvSchemaCacheGuard *schema_cache_guard_;
   table::ObTableApiSessGuard *sess_guard_;
   uint64_t table_id_;
-  common::ObTabletID tablet_id_;
+  common::ObTabletID tablet_id_; 
   int64_t timeout_ts_;
   table::ObTableApiCredential credential_;
   table::ObTableCtx tb_ctx_;

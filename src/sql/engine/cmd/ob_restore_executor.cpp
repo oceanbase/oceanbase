@@ -69,7 +69,7 @@ int ObPhysicalRestoreTenantExecutor::execute(
     ctx.get_physical_plan_ctx()->set_timeout_timestamp(abs_timeout);
     if (ObTimeUtility::current_time() > abs_timeout) {
         ret = OB_TIMEOUT;
-        LOG_WARN("physical restore tenant timeout", K(ret), "tenant_name",
+        LOG_WARN("physical restore tenant timeout", K(ret), "tenant_name", 
         restore_tenant_arg.tenant_name_, K(abs_timeout), "cur_time_us", ObTimeUtility::current_time());
     } else if (OB_FALSE_IT(THIS_WORKER.set_timeout_ts(abs_timeout))) {
     } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(timeout))) {
@@ -168,7 +168,7 @@ int ObPhysicalRestoreTenantExecutor::sync_wait_tenant_created_(
         } else {
           break;
         }
-      }
+      } 
     }
 
     if (OB_SUCC(ret)) {
@@ -217,9 +217,9 @@ int ObPhysicalRestoreTenantExecutor::physical_restore_preview(
           restore_timestamp.meta_.set_meta(restore_timestamp.value_.meta_);
           if (OB_FAIL(session_info->replace_user_variable(OB_RESTORE_PREVIEW_TIMESTAMP_SESSION_STR, restore_timestamp))) {
             LOG_WARN("fail to set session variable", "name", OB_RESTORE_PREVIEW_TIMESTAMP_SESSION_STR, "value", restore_timestamp);
-          }
+          } 
         }
-      }
+      }      
     }
   }
   return ret;

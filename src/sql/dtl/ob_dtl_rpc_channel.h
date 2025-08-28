@@ -49,7 +49,7 @@ class ObDtlRpcChannel
   {
   public:
     explicit SendMsgCB(SendMsgResponse &response, const common::ObCurTraceId::TraceId trace_id, const int64_t timeout_ts)
-        : response_(response),
+        : response_(response), 
           timeout_ts_(timeout_ts)
     {
       trace_id_.set(trace_id);

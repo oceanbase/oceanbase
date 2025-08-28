@@ -33,7 +33,7 @@ find . -name "test_chunk_row_store"
 
 ## How to write unittest
 
-As a C++ project, [OceanBase](https://github.com/oceanbase/oceanbase) uses [google test](https://github.com/google/googletest) as the unittest framework.
+As a C++ project, [OceanBase](https://github.com/oceanbase/oceanbase) uses [google test](https://github.com/google/googletest) as the unittest framework. 
 
 OceanBase use `test_xxx.cpp` as the unittest file name. You can create a `test_xxx.cpp` file and add the file name into the specific `CMakeLists.txt` file.
 
@@ -51,7 +51,7 @@ You can then add some functions to test different scenarios. Below is an example
 
 ```cpp
 ///
-/// TEST is a google test macro.
+/// TEST is a google test macro. 
 /// You can use it to create a new test function
 ///
 /// RARowStore is the test suite name and alloc_project_fail
@@ -62,10 +62,10 @@ TEST(RARowStore, alloc_project_fail)
   ObEmptyAlloc alloc;
   ObRARowStore rs(&alloc, true);
 
-  /// ASSERT_XXX are some testing macros help us decide the results are
+  /// ASSERT_XXX are some testing macros help us decide the results are 
   /// expected, and it will terminate the test if failed.
   ///
-  /// There are some other testing macros begin with `EXPECT_` which
+  /// There are some other testing macros begin with `EXPECT_` which 
   /// don't terminate the test if failed.
   ///
   ASSERT_EQ(OB_SUCCESS, rs.init(100 << 20));

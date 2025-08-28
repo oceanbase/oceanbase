@@ -68,7 +68,7 @@ int ObExprArrayToString::calc_result_typeN(ObExprResType &type,
   } else if (OB_ISNULL(coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(arr_meta.value_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("collection info is null", K(ret));
-  } else if (coll_info->collection_meta_->type_id_ != ObNestedType::OB_ARRAY_TYPE
+  } else if (coll_info->collection_meta_->type_id_ != ObNestedType::OB_ARRAY_TYPE 
              && coll_info->collection_meta_->type_id_ != ObNestedType::OB_VECTOR_TYPE) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("invalid collection type", K(ret), K(coll_info->collection_meta_->type_id_));
@@ -126,7 +126,7 @@ int ObExprArrayToString::eval_array_to_string(const ObExpr &expr, ObEvalCtx &ctx
     LOG_WARN("failed to eval null string arg", K(ret));
   } else if (arr_datum->is_null() || delimiter_datum->is_null()) {
     is_null_res = true;
-  } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_datum->get_string(), arr_obj))) {
+  } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_datum->get_string(), arr_obj))) { 
     LOG_WARN("construct array obj failed", K(ret));
   } else if (OB_FALSE_IT(delimiter = delimiter_datum->get_string())) {
   } else if (expr.arg_cnt_ > 2 && !null_str_datum->is_null()) {
@@ -185,7 +185,7 @@ int ObExprArrayToString::eval_array_to_string_batch(const ObExpr &expr, ObEvalCt
       eval_flags.set(j);
       if (arr_array.at(j)->is_null() || delimiter_array.at(j)->is_null()) {
         is_null_res = true;
-      } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_array.at(j)->get_string(), arr_obj))) {
+      } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_array.at(j)->get_string(), arr_obj))) { 
         LOG_WARN("construct array obj failed", K(ret));
       } else if (OB_FALSE_IT(delimiter = delimiter_array.at(j)->get_string())) {
       } else if (expr.arg_cnt_ > 2 && !null_str_array.at(j)->is_null()) {

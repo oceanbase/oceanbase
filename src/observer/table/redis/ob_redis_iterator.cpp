@@ -98,7 +98,7 @@ int ObRedisCellEntity::get_is_data(bool &is_data) const
       LOG_WARN("fail to decode is_data", K(ret), K(rkey));
     }
   }
-
+  
   return ret;
 }
 
@@ -288,7 +288,7 @@ int ObRedisRowIterator::get_next_row_ttl(ObNewRow *&row)
   if (ttl_cnt_ >= limit_del_rows_ || is_finished_) {
     last_row_ = is_finished_ ? nullptr : meta_row_;
     ret = OB_ITER_END;
-    LOG_DEBUG("The upper limit for deleting rows exceeded, finish get next row",
+    LOG_DEBUG("The upper limit for deleting rows exceeded, finish get next row", 
         KR(ret), K(ttl_cnt_), K(limit_del_rows_), K(is_finished_), KPC(meta_row_));
   } else {
     bool is_expired = false;

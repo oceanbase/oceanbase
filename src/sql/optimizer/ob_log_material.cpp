@@ -62,7 +62,7 @@ int ObLogMaterial::do_re_est_cost(EstimateCostInfo &param, double &card, double 
     LOG_WARN("failed to re est cost", K(ret));
   } else {
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
-    op_cost = ObOptEstCost::cost_material(child_card / parallel,
+    op_cost = ObOptEstCost::cost_material(child_card / parallel, 
                                           child->get_width(),
                                           opt_ctx);
     cost = child_cost + op_cost;

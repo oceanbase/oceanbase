@@ -55,11 +55,11 @@ public:
 
   static int transform_to_raw_array(
       const ObStreamData &data, ObIntegerStreamDecoderCtx &ctx, char *raw_arr_buf, ObIAllocator &alloc);
-
+  
   OB_INLINE static int decimal_datum_assign(
-      common::ObDatum &datum,
-      uint8_t precision_width,
-      uint64_t value,
+      common::ObDatum &datum, 
+      uint8_t precision_width, 
+      uint64_t value, 
       const bool safe)
   {
     int ret = OB_SUCCESS;
@@ -77,7 +77,7 @@ public:
       case ObIntegerStream::UintWidth::UW_16_BYTE : {
         *(int128_t*)datum.ptr_ = (int64_t)(value);
         datum.pack_ = sizeof(int128_t);
-        break;
+        break;              
       }
       case ObIntegerStream::UintWidth::UW_32_BYTE : {
         *(int256_t*)datum.ptr_ = (int64_t)(value);
@@ -94,7 +94,7 @@ public:
         STORAGE_LOG(WARN, "Unexpected precison width", K(ret), K(precision_width));
         if (!safe) {
           ob_abort();
-        }
+        }    
         break;
       }
     }

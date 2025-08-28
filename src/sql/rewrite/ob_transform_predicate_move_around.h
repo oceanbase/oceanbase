@@ -236,9 +236,9 @@ private:
                                       ObTransformerCtx *ctx,
                                       SemiInfo *semi_info,
                                       ObIArray<ObRawExpr *> &pullup_preds);
-
+  
   int check_has_shared_query_ref(ObRawExpr *expr, bool &has);
-
+  
   int extract_semi_right_table_filter(ObDMLStmt *stmt,
                                       SemiInfo *semi_info,
                                       ObIArray<ObRawExpr *> &right_filters);
@@ -315,7 +315,7 @@ private:
 
   int inner_split_or_having_expr(ObSelectStmt &stmt,
                                 ObIArray<ObSEArray<ObRawExpr *, 16> > &sub_exprs,
-                                ObRawExpr *&new_expr);
+                                ObRawExpr *&new_expr);     
 
   int extract_leaf_filters(ObRawExpr *expr, ObIArray<ObRawExpr *> &leaf_filters);
 
@@ -380,7 +380,7 @@ private:
 
   int generate_basic_table_pullup_preds(ObDMLStmt *stmt, ObIArray<ObRawExpr *> &preds);
 
-  int update_current_property(ObDMLStmt &stmt,
+  int update_current_property(ObDMLStmt &stmt, 
                               ObIArray<ObRawExpr *> &exprs,
                               ObIArray<ObRawExpr *> &push_down_exprs);
 

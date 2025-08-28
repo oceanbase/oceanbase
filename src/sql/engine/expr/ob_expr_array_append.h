@@ -25,7 +25,7 @@ class ObExprArrayAppendCommon : public ObFuncExprOperator
 {
 public:
   explicit ObExprArrayAppendCommon(common::ObIAllocator &alloc, ObExprOperatorType type, const char *name);
-  explicit ObExprArrayAppendCommon(common::ObIAllocator &alloc, ObExprOperatorType type,
+  explicit ObExprArrayAppendCommon(common::ObIAllocator &alloc, ObExprOperatorType type, 
                                        const char *name, int32_t param_num, int32_t dimension);
   virtual ~ObExprArrayAppendCommon();
   virtual int calc_result_type2(ObExprResType &type,
@@ -56,7 +56,7 @@ class ObExprArrayAppend : public ObExprArrayAppendCommon
 {
 public:
   explicit ObExprArrayAppend(common::ObIAllocator &alloc);
-  explicit ObExprArrayAppend(common::ObIAllocator &alloc, ObExprOperatorType type,
+  explicit ObExprArrayAppend(common::ObIAllocator &alloc, ObExprOperatorType type, 
                              const char *name, int32_t param_num, int32_t dimension);
   virtual ~ObExprArrayAppend();
   static int eval_array_append(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
@@ -76,7 +76,7 @@ class ObExprArrayPrepend : public ObExprArrayAppendCommon
 {
 public:
   explicit ObExprArrayPrepend(common::ObIAllocator &alloc);
-  explicit ObExprArrayPrepend(common::ObIAllocator &alloc, ObExprOperatorType type,
+  explicit ObExprArrayPrepend(common::ObIAllocator &alloc, ObExprOperatorType type, 
                               const char *name, int32_t param_num, int32_t dimension);
   virtual ~ObExprArrayPrepend();
   static int eval_array_prepend(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);

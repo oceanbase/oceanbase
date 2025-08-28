@@ -28,10 +28,10 @@ public:
 																ObExprResType &type1,
 																ObExprResType &type2,
 																common::ObExprTypeCtx &type_ctx) const;
-	int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+  	int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                             ObExpr &rt_expr) const;
-	DECLARE_SET_LOCAL_SESSION_VARS;
-
+  	DECLARE_SET_LOCAL_SESSION_VARS;
+  
 private:
   int cast_param_type(const ObObj& in,
                       ObExprCtx& expr_ctx,

@@ -56,10 +56,10 @@ public:
   };
 
 public:
-  class TestSSMicroCacheReachMemLimitThread : public Threads
+  class TestSSMicroCacheReachMemLimitThread : public Threads 
   {
   public:
-    enum class TestParallelType
+    enum class TestParallelType 
     {
       ADD_MICRO_BLOCK_REACH_MEM_LIMIT,
     };
@@ -258,9 +258,9 @@ TEST_F(TestSSMicroCacheReachMemLimit, test_alloc_micro_meta_reach_mem_limit)
   This case covers two scenarios:
   1. When cache_mem_size reaches limit, arc_task will delete some micro_meta so that new micro_block can continue to be
      written into micro_cache.
-  2. When adding micro blocks concurrently, thread A and B both meet cache_mem_limit. After they finish writing micro data into
-     mem_block, A may alloc micro_meta successfully, but B fails. In this scenario, the micro_cnt of mem_block needs to rollback
-     so that mem_block can be completed and persisted by persist_task. By calling wait_for_persist_task() we can check that
+  2. When adding micro blocks concurrently, thread A and B both meet cache_mem_limit. After they finish writing micro data into 
+     mem_block, A may alloc micro_meta successfully, but B fails. In this scenario, the micro_cnt of mem_block needs to rollback 
+     so that mem_block can be completed and persisted by persist_task. By calling wait_for_persist_task() we can check that 
      all sealed_mem_blocks are completed and persisted.
 */
 TEST_F(TestSSMicroCacheReachMemLimit, test_reach_cache_mem_limit)
@@ -278,7 +278,7 @@ TEST_F(TestSSMicroCacheReachMemLimit, test_reach_cache_mem_limit)
   }
   micro_meta_mgr.update_cache_mem_limit_by_config();
   const int64_t max_micro_meta_cnt = micro_meta_mgr.get_micro_cnt_limit();
-
+  
   TestSSMicroCacheReachMemLimitCtx ctx;
   ctx.micro_blk_cnt_ = 2048;
   ctx.thread_num_ = 4;

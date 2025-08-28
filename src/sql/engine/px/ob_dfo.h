@@ -86,7 +86,7 @@ private:
   // 考虑到容错重试，同一个 addr 上可能有多个 sqc 存在，通过 sqc_id_ 来区分 task 归属为哪个 sqc
   int64_t sqc_id_;
   // 记录 Task 是 SQC 中的第几个任务，用于 partial partition wise join 场景
-  // ref:
+  // ref: 
   int64_t task_id_;
   // slave map group id
   int64_t sm_group_id_;
@@ -1142,10 +1142,10 @@ public:
   int64_t memstore_read_row_count_; // the count of row from mem
   int64_t ssstore_read_row_count_; // the count of row from disk
   //the schema version that px worker start executing
-  //Note: this parameter only valid in px worker
+  //Note: this parameter only valid in px worker 
   //we don't need to serialize it from sqc rpc thread to px worker thread
   //because it is inited used only in px worker
-  int64_t px_worker_execute_start_schema_version_;
+  int64_t px_worker_execute_start_schema_version_; 
   ObArenaAllocator allocator_;
 };
 

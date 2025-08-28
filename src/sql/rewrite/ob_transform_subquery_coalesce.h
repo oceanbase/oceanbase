@@ -205,10 +205,10 @@ private:
                                 ObQueryRefRawExpr *coalesce_query_expr,
                                 ObSelectStmt *coalesce_query,
                                 ObRawExpr* &new_expr);
-
+  
   int get_exec_params(ObDMLStmt *stmt,
                       ObIArray<ObExecParamRawExpr *> &all_params);
-
+  
   int check_hint_valid(const ObDMLStmt &stmt, 
                        ObSelectStmt &subquery1, 
                        ObSelectStmt &subquery2, 

@@ -64,7 +64,7 @@ public:
   };
 
 public:
-  ObDirectLoadMemDump(observer::ObTableLoadTableCtx *ctx,
+  ObDirectLoadMemDump(observer::ObTableLoadTableCtx *ctx, 
                       ObDirectLoadMemContext *mem_ctx,
                       const RangeType &range,
                       table::ObTableLoadHandle<Context> context_ptr, int64_t range_idx);

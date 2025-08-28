@@ -58,8 +58,8 @@ private:
 private:
   struct UnionOpInfo {
     UnionOpInfo () : op_idx_(0), child_op_brs_(nullptr), op_added_(false) {}
-    void reset()
-    {
+    void reset() 
+    { 
       op_idx_ = 0;
       child_op_brs_ = nullptr;
       op_added_ = false;
@@ -96,7 +96,7 @@ private:
   int64_t last_valid_idx_;
   //we will not push candidate op to next row until curr equal to candidate
   //in batch mode, if candidate move to last in a batch, we may have to return batch firstly,
-  //then at the start of next batch,
+  //then at the start of next batch, 
   //we decide if need get a new batch from candidate by this parameter
   bool need_push_candidate_;
   uint16_t *left_src_idx_selectors_ = nullptr;

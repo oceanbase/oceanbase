@@ -769,7 +769,7 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
       }
     }
 
-    OZ (ob_write_string(allocator != NULL ? *allocator
+    OZ (ob_write_string(allocator != NULL ? *allocator 
                         : ctx.get_allocator(), session_info.get_current_query_string(), cur_query_));
     OZ (session_info.store_top_query_string(cur_query_));
     OX (session_info.reset_query_string());
@@ -777,7 +777,7 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
     // set top level sql id
     ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
     if (OB_NOT_NULL(di) && di->get_ash_stat().top_level_sql_id_[0] == '\0') {
-      session_info.get_cur_sql_id(di->get_ash_stat().top_level_sql_id_,
+      session_info.get_cur_sql_id(di->get_ash_stat().top_level_sql_id_, 
         sizeof(di->get_ash_stat().top_level_sql_id_));
     }
     OX (session_info.set_pl_stack_ctx(this));
@@ -1012,7 +1012,7 @@ void ObPLContext::destory(
               DISABLE_SQL_MEMLEAK_GUARD;
               if (OB_SUCCESS != (rl_ret = ObTMService::tm_rollback(ctx, tx_id))) {
                 LOG_WARN("failed to rollback for dblink trans", K(ret), K(rl_ret), K(tx_id), K(xid), K(global_tx_type));
-              } else if (OB_SUCCESS != (rl_ret =
+              } else if (OB_SUCCESS != (rl_ret = 
                                         session_info.get_dblink_context().clean_dblink_conn(force_disconnect))) {
                 LOG_WARN("dblink trans failed to release dblink connections", K(ret), K(rl_ret), K(tx_id), K(xid));
               }
@@ -1420,7 +1420,7 @@ int ObPLContext::set_role_id_array(ObPLFunction &routine,
       OX (old_db_priv_set_ = session_info_->get_db_priv_set());
 
       OX (need_reset_role_id_array_ = true);
-
+      
       //assign new session values
       //1. priv user_id
       OX (session_info_->set_priv_user_id(priv_user_id));
@@ -1800,7 +1800,7 @@ int ObPL::execute(ObExecContext &ctx,
         }
       }
     }
-
+  
     if (OB_SUCC(ret) && routine.get_ret_type().is_ref_cursor_type()) {
       ObPLCursorInfo *ref_cursor = reinterpret_cast<ObPLCursorInfo *>(local_result.get_ext());
       if (OB_NOT_NULL(ref_cursor)) {
@@ -1832,12 +1832,12 @@ int ObPL::execute(ObExecContext &ctx,
   #ifndef NDEBUG
       LOG_INFO(">>>>>>>>>Execute Time: ", K(ret),
         K(routine.get_package_id()), K(routine.get_routine_id()), K(routine.get_package_name()), K(routine.get_function_name()), K(execute_end - execute_start),
-          K(is_top_stack), K(execute_end - execute_start - pl.get_pure_sql_exec_time()), K(pl.get_pure_sql_exec_time()),
+          K(is_top_stack), K(execute_end - execute_start - pl.get_pure_sql_exec_time()), K(pl.get_pure_sql_exec_time()),  
           K(pl.get_plsql_exec_time()), K(pl.get_sub_plsql_exec_time()));
   #else
       LOG_DEBUG(">>>>>>>>Execute Time: ", K(ret),
         K(routine.get_package_id()), K(routine.get_routine_id()), K(routine.get_package_name()), K(routine.get_function_name()), K(execute_end - execute_start),
-        K(is_top_stack), K(execute_end - execute_start - pl.get_pure_sql_exec_time()), K(pl.get_pure_sql_exec_time()),  K(pl.get_plsql_exec_time()),
+        K(is_top_stack), K(execute_end - execute_start - pl.get_pure_sql_exec_time()), K(pl.get_pure_sql_exec_time()),  K(pl.get_plsql_exec_time()), 
         K(pl.get_sub_plsql_exec_time()));
   #endif
     OX (routine.update_execute_time(execute_end - execute_start));
@@ -2573,7 +2573,7 @@ int ObPL::execute(ObExecContext &ctx,
           pack_id = ObTriggerInfo::get_package_trigger_id(pack_id);
         } else if (ObUDTObjectType::is_object_id(pack_id)) {
           pack_id = ObUDTObjectType::clear_object_id_mask(pack_id);
-        }
+        } 
         if (guard.is_set_entry_info()) {
           GET_DIAGNOSTIC_INFO->get_ash_stat().plsql_entry_object_id_ = OB_INVALID_ID != routine->get_package_id() ? pack_id : routine->get_routine_id();
         } else {
@@ -2754,7 +2754,7 @@ int ObPL::get_pl_function(ObExecContext &ctx,
                             pc_ctx.sql_id_,
                             (int32_t)sizeof(pc_ctx.sql_id_)));
     }
-
+  
     pc_ctx.key_.namespace_ = ObLibCacheNameSpace::NS_ANON;
     pc_ctx.key_.db_id_ = database_id;
     pc_ctx.key_.sessid_ = ctx.get_my_session()->is_pl_debug_on() ? ctx.get_my_session()->get_server_sid() : 0;
@@ -2947,11 +2947,11 @@ int ObPL::get_pl_function(ObExecContext &ctx,
         }
         OZ (error_info.delete_error(routine_info));
         if (need_update_schema) {
-          OZ (ObPLCompiler::update_schema_object_dep_info(routine->get_dependency_table(),
+          OZ (ObPLCompiler::update_schema_object_dep_info(routine->get_dependency_table(), 
                                                           routine->get_tenant_id(),
                                                           routine->get_owner(),
                                                           routine_id,
-                                                          routine_info->get_schema_version(),
+                                                          routine_info->get_schema_version(), 
                                                           routine_info->get_object_type()));
         }
       }
@@ -3143,7 +3143,7 @@ int ObPL::check_trigger_arg(ParamStore &params, const ObPLFunction &func, ObPLCo
                                                         ObTriggerInfo::get_package_trigger_id(func.get_package_id()),
                                                         trg_info));
       CK (OB_NOT_NULL(trg_info));
-      OX (pl_ctx.set_is_system_trigger(trg_info->is_system_type()));
+      OX (pl_ctx.set_is_system_trigger(trg_info->is_system_type())); 
     }
     if (OB_FAIL(ret)) {
     } else if (!pl_ctx.is_system_trigger()) {
@@ -3171,7 +3171,7 @@ int ObPL::check_trigger_arg(ParamStore &params, const ObPLFunction &func, ObPLCo
             CK (record->get_count() == (static_cast<const ObRecordType *>(udt))->get_member_count());
             OX (params.at(i).set_udt_id(udt_id));
           }
-        }
+        } 
       }
     }
     LOG_DEBUG("check trigger routine arg end", K(ret), K(func), K(params));
@@ -3368,7 +3368,7 @@ int ObPLExecState::final(int ret)
   int tmp_ret = OB_SUCCESS;
 
   for (int64_t i = 0; top_call_ && i < func_.get_arg_count(); ++i) {
-    if (func_.get_variables().at(i).is_cursor_type()
+    if (func_.get_variables().at(i).is_cursor_type() 
       && func_.get_out_args().has_member(i) && !func_.get_in_args().has_member(i)) {
       // the session cursor, be used as a out param should be closed from session when error happen
       if (OB_FAIL(ret)) {
@@ -3513,7 +3513,7 @@ int ObPLExecState::final(int ret)
               LOG_WARN("failed to close cursor info", K(tmp_ret),
               K(func_.get_package_id()), K(func_.get_routine_id()), K(i));
             }
-          }
+          } 
         }
       }
     } else if (func_.get_variables().at(i).is_obj_type() && i < get_params().count()) {
@@ -3572,7 +3572,7 @@ int ObPLExecState::final(int ret)
   // reset physical plan context
   if (need_reset_physical_plan_) {
     if (func_.get_expr_op_size() > 0) {
-      //Memory leak
+      //Memory leak 
       //Must be reset before free expr_op_ctx!
       ctx_.exec_ctx_->reset_expr_op();
     }
@@ -3636,7 +3636,7 @@ int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
     }
     OX (real_pl_type = user_type);
   }
-
+  
   if (OB_FAIL(ret)) {
   } else if (real_pl_type->is_ref_cursor_type() || real_pl_type->is_sys_refcursor_type()) {
     OX (obj.set_is_ref_cursor_type(true));
@@ -4086,7 +4086,7 @@ do {                                                                  \
               LOG_WARN("failed to apply tmp to params",
                        K(ret), K(copy_obj), K(i), K(params->count()));
             } else {
-              //
+              // 
               // 由存储层传入的数据未设置collation_level, 这里设置下
               if (get_params().at(i).is_string_type()) {
                 get_params().at(i).set_collation_level(result_type.get_collation_level());
@@ -4127,7 +4127,7 @@ do {                                                                  \
                   composite->set_id(pl_type.get_user_type_id());
                 }
               }
-            } else if (ObNullType == params->at(i).get_meta().get_type()
+            } else if (ObNullType == params->at(i).get_meta().get_type() 
                 && (ObCharType == params->at(i).get_param_meta().get_type()
                 || ObNCharType == params->at(i).get_param_meta().get_type())) {
               //check if meta_.type_ is null and param_meta is char, construct a new param store of ''
@@ -4240,7 +4240,7 @@ int ObPLExecState::init(const ParamStore *params, bool is_anonymous)
 
   if (OB_SUCC(ret)) {
     // TODO bin.lb: how about the memory?
-    //
+    // 
     OZ(func_.get_frame_info().pre_alloc_exec_memory(*ctx_.exec_ctx_, expr_alloc));
   }
 
@@ -4467,7 +4467,7 @@ int ObPL::check_exec_priv(
       } else if (OB_UNLIKELY(!session_priv.is_valid())) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("Session priv is invalid", "tenant_id", session_priv.tenant_id_,
-                  "user_id", session_priv.user_id_, K(ret));
+                  "user_id", session_priv.user_id_, K(ret)); 
       } else {
         ObNeedPriv need_priv;
         need_priv.priv_level_ = OB_PRIV_ROUTINE_LEVEL;
@@ -4613,7 +4613,7 @@ int ObPLExecState::check_pl_execute_priv(ObSchemaGetterGuard &guard,
                                           const uint64_t tenant_id,
                                           const uint64_t user_id,
                                           const ObSchemaObjVersion &schema_obj,
-                                          const ObIArray<uint64_t> &role_id_array)
+                                          const ObIArray<uint64_t> &role_id_array) 
 {
   int ret = OB_SUCCESS;
   DISABLE_SQL_MEMLEAK_GUARD;
@@ -4637,8 +4637,8 @@ int ObPLExecState::check_pl_execute_priv(ObSchemaGetterGuard &guard,
     }
   } else if (ROUTINE_SCHEMA == schema_type) {
     OZ (guard.get_routine_info(fetch_tenant_id, schema_obj.get_object_id(), routine_info));
-    OX (object_type =
-         DEPENDENCY_PROCEDURE == schema_obj.object_type_ ?
+    OX (object_type = 
+         DEPENDENCY_PROCEDURE == schema_obj.object_type_ ? 
          ObObjectType::PROCEDURE : ObObjectType::FUNCTION);
     if (OB_NOT_NULL(routine_info)) {
       OX (db_id = routine_info->get_database_id());
@@ -4664,7 +4664,7 @@ int ObPLExecState::check_pl_execute_priv(ObSchemaGetterGuard &guard,
       }
     }
   }
-
+  
   if (OB_SUCC(ret) && (OB_NOT_NULL(udt_info) || OB_NOT_NULL(routine_info))) {
     const ObDatabaseSchema *db_schema = NULL;
     common::ObString database_name = OB_SYS_DATABASE_NAME;
@@ -4866,7 +4866,7 @@ int ObPLExecState::execute()
         ctx_.exec_ctx_->get_my_session()->reset_all_package_changed_info();
       }
     }
-
+      
 #ifdef OB_BUILD_ORACLE_PL
     if (OB_FAIL(ret)&& top_call_ && OB_NOT_NULL(ctx_.exec_ctx_->get_my_session()) && OB_NOT_NULL(top_context_)) {
       ObSQLSessionInfo *session_info = ctx_.exec_ctx_->get_my_session();
@@ -5497,7 +5497,7 @@ int ObPLConcurrentGuard::set_concurrent_num(ObPLFunction &routine, ObExecContext
     if (routine.is_udt_routine()
       || NESTED_PROCEDURE == routine.get_proc_type()
       || NESTED_FUNCTION == routine.get_proc_type()) {
-      // TODO: jiabokai.jbk
+      // TODO: jiabokai.jbk 
       //Adjust the use of udt body id when adding package guard
     } else {
       int tmp_ret = package_guard.get(pkg_id, package);
@@ -5522,8 +5522,8 @@ int ObPLConcurrentGuard::set_concurrent_num(ObPLFunction &routine, ObExecContext
 
 ObPLConcurrentGuard::~ObPLConcurrentGuard()
 {
-  if (OB_SUCCESS == save_ret_
-    && inner_obj_ != NULL
+  if (OB_SUCCESS == save_ret_ 
+    && inner_obj_ != NULL 
     && inner_obj_->is_limited_concurrent_num()) {
     inner_obj_->dec_concurrent_num();
   }
@@ -5593,7 +5593,7 @@ ObPLASHGuard::ObPLASHGuard(int64_t package_id, int64_t routine_id)
     package_id = ObUDTObjectType::clear_object_id_mask(package_id);
   }
 
-    if (di->get_ash_stat().plsql_entry_object_id_ == OB_INVALID_ID ||
+    if (di->get_ash_stat().plsql_entry_object_id_ == OB_INVALID_ID || 
       di->get_ash_stat().plsql_entry_object_id_ == ObPLResolver::ANONYMOUS_VIRTUAL_OBJECT_ID) {
       set_entry_info_ = true;
       di->get_ash_stat().plsql_entry_object_id_ =

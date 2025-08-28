@@ -117,7 +117,7 @@ public:
   inline void set_t(llvm::Type *t) { t_ = t; }
   inline void set_t(ObLLVMType &t) { t_ = t.get_v(); }
   inline void reset()
-  {
+  { 
     v_ = nullptr;
     t_ = nullptr;
   }

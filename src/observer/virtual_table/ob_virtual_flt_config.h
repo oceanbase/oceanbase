@@ -51,9 +51,9 @@ namespace observer
       //static const char CHILD[] = "CHILD";
       DISALLOW_COPY_AND_ASSIGN(ObVirtualFLTConfig);
       ObSEArray<ObFLTConfRec, 16> rec_list_;
-      int64_t rec_array_idx_;
+      int64_t rec_array_idx_; 
       common::ObSEArray<uint64_t, 16> tenant_id_array_;
-      int64_t tenant_id_array_idx_;
+      int64_t tenant_id_array_idx_; 
   };
 } /* namespace observer */
 } /* namespace oceanbase */

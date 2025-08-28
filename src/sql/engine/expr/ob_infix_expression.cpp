@@ -329,7 +329,7 @@ int ObInfixExpression::calc(common::ObExprCtx &expr_ctx, const common::ObNewRow 
   return ret;
 }
 
-int ObInfixExpression::calc_row(common::ObExprCtx &expr_ctx, const common::ObNewRow &row,
+int ObInfixExpression::calc_row(common::ObExprCtx &expr_ctx, const common::ObNewRow &row, 
                                 ObItemType aggr_fun, const ObExprResType &res_type,
                                 common::ObNewRow &res_row) const
 {
@@ -357,7 +357,7 @@ int ObInfixExpression::calc_row(common::ObExprCtx &expr_ctx, const common::ObNew
           } else if (is_bool) {
             ObJsonBoolean j_bool(tmp->get_bool());
             ObIJsonBase *j_base = &j_bool;
-            ObString raw_bin; //
+            ObString raw_bin; // 
             if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, expr_ctx.calc_buf_))) {
               LOG_WARN("get result binary failed", K(ret), K(*j_base));
             } else {

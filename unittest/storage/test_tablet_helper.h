@@ -139,7 +139,7 @@ inline int TestTabletHelper::create_tablet(
     const ObTabletMapKey key(ls_id, tablet_id);
     const bool need_create_empty_major_sstable =
       !(create_tablet_schema.is_user_hidden_table() || (create_tablet_schema.is_index_table() && !create_tablet_schema.can_read_index()));
-    const bool need_generate_cs_replica_cg_array =
+    const bool need_generate_cs_replica_cg_array = 
       ls_handle.get_ls()->is_cs_replica() && create_tablet_schema.is_row_store() && create_tablet_schema.is_user_data_table();
     if (OB_FAIL(t3m->create_msd_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, tablet_handle))) {
       STORAGE_LOG(WARN, "t3m acquire tablet failed", K(ret), K(ls_id), K(tablet_id));

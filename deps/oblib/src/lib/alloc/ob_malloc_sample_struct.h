@@ -137,7 +137,7 @@ inline void ObMallocSampleLimiter::set_interval(int32_t max_interval, int32_t mi
                 "max_interval=%d, min_interval=%d", max_interval, min_interval);
   } else if (min_interval == INTERVAL_UPPER_LIMIT) {
     min_sample_size = 0;
-  } else {
+  } else {  
     min_sample_size = CUMULATIVE_SAMPLE_SIZE/max_interval;
     _OB_LOG_RET(INFO, common::OB_SUCCESS, "set the min or max malloc times between two samples succeed,"
                 "max_interval=%d, min_interval=%d", max_interval, min_interval);

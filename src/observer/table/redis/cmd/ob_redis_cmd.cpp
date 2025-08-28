@@ -27,7 +27,7 @@ int RedisCommand::init_common(const common::ObIArray<common::ObString> &args)
     LOG_WARN("init twice", K(ret));
   } else {
     // 1. check entity
-    // redis arity refers to the total length including the command itself, for example, "set key value" arity = 3.
+    // redis arity refers to the total length including the command itself, for example, "set key value" arity = 3. 
     // but args does not include the command itself, that is, only "key" and "value ", so + 1 is required.
     int argc = args.count() + 1;
     bool is_argc_valid = (attr_.arity_ >= 0 && argc == attr_.arity_) || (attr_.arity_ < 0 && argc >= (-attr_.arity_));
@@ -73,7 +73,7 @@ int ObRedisOp::get_key(ObString &key) const
   int ret = OB_SUCCESS;
   if (OB_ISNULL(redis_cmd_)) {
     ret = OB_ERR_NULL_VALUE;
-    LOG_WARN("invalid null redis cmd", K(ret));
+    LOG_WARN("invalid null redis cmd", K(ret)); 
   } else {
     key = redis_cmd_->key();
   }

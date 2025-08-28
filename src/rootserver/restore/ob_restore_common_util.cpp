@@ -100,8 +100,8 @@ int ObRestoreCommonUtil::create_all_ls(
       LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id));
     } else {
       //must be in trans
-      //Multiple LS groups will be created here.
-      //In order to ensure that each LS group can be evenly distributed in the unit group,
+      //Multiple LS groups will be created here. 
+      //In order to ensure that each LS group can be evenly distributed in the unit group, 
       //it is necessary to read the distribution of LS groups within the transaction.
       ObTenantLSInfo tenant_stat(sql_proxy, &tenant_schema, tenant_id, &trans);
       for (int64_t i = 0; OB_SUCC(ret) && i < ls_attr_array.count(); ++i) {
@@ -294,7 +294,7 @@ int ObRestoreCommonUtil::check_tenant_is_existed(ObMultiVersionSchemaService *sc
   is_existed = true;
   ObSchemaGetterGuard schema_guard;
   bool tenant_dropped = false;
-
+  
   if (OB_INVALID_TENANT_ID == tenant_id) {
     //maybe failed to create tenant
     is_existed = false;

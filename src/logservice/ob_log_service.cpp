@@ -274,7 +274,7 @@ int ObLogService::init(const PalfOptions &options,
              KP(alloc_mgr), KP(transport), KP(batch_rpc), KP(ls_service), KP(location_service), KP(reporter),
              KP(log_block_pool), KP(sql_proxy), KP(net_keepalive_adapter));
   } else if (OB_FAIL(PalfEnv::create_palf_env(options, base_dir, self, transport, batch_rpc,
-                                              alloc_mgr, log_block_pool, &monitor_, LOG_IO_DEVICE_WRAPPER.get_local_device(),
+                                              alloc_mgr, log_block_pool, &monitor_, LOG_IO_DEVICE_WRAPPER.get_local_device(), 
                                               &G_RES_MGR, &OB_IO_MANAGER, palf_env_))) {
     CLOG_LOG(WARN, "failed to create_palf_env", K(base_dir), K(ret));
   } else if (OB_ISNULL(palf_env_)) {
@@ -737,7 +737,7 @@ int ObLogService::create_ls_(const share::ObLSID &id,
       CLOG_LOG(INFO, "ObLogService create_ls success", K(ret), K(id), K(log_handler));
     }
     if (palf_handle.is_valid() && nullptr != palf_env_) {
-      palf_env_->close(palf_handle);
+      palf_env_->close(palf_handle); 
     }
     if (OB_FAIL(ret)) {
       CLOG_LOG(ERROR, "create_ls failed!!!", KR(ret), K(id));
@@ -748,7 +748,7 @@ int ObLogService::create_ls_(const share::ObLSID &id,
       palf_env_->close(palf_handle);
       palf_env_->remove(id.id());
     }
-  }
+  } 
   return ret;
 }
 

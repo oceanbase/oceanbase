@@ -48,7 +48,7 @@ public:
   void set_result();
   void set_result_null();
 private:
-  char * buff_alloc (const int64_t size);
+  char * buff_alloc (const int64_t size);  
 
 private:
   // for exprs
@@ -199,7 +199,7 @@ public:
   };
 
   static int read_real_string_data(ObIAllocator &allocator, const ObDatum &datum, const ObDatumMeta &meta,
-                                   bool has_lob_header, ObString &str, sql::ObExecContext *exec_ctx = nullptr)
+                                   bool has_lob_header, ObString &str, sql::ObExecContext *exec_ctx = nullptr) 
   {
     int ret = OB_SUCCESS;
     str = datum.get_string();
@@ -319,7 +319,7 @@ public:
 
   // return str is copy of inrow/outrow lob
   static int read_real_string_data_with_copy(ObIAllocator &allocator, const ObDatum &datum, const ObDatumMeta &meta,
-                                   bool has_lob_header, ObString &str)
+                                   bool has_lob_header, ObString &str) 
   {
     int ret = OB_SUCCESS;
     str = datum.get_string();
@@ -362,7 +362,7 @@ public:
                                      const bool has_lob_header,
                                      ObIAllocator *allocator,
                                      ObString &str,
-                                     uint32_t prefix_char_len = DEAFULT_LOB_PREFIX_BYTE_LEN)
+                                     uint32_t prefix_char_len = DEAFULT_LOB_PREFIX_BYTE_LEN) 
   {
     int ret = OB_SUCCESS;
     str = datum.get_string();
@@ -381,7 +381,7 @@ public:
 
   // get outrow lob prefix or inrow/string tc full data
   static int read_prefix_string_data(ObIAllocator *allocator,
-                                     const common::ObObj &obj,
+                                     const common::ObObj &obj, 
                                      ObString &str,
                                      uint32_t prefix_char_len = DEAFULT_LOB_PREFIX_BYTE_LEN)
   {
@@ -402,7 +402,7 @@ public:
   }
 
   OB_INLINE static int get_char_len(ObEvalCtx &ctx, ObString str, const ObDatumMeta &meta,
-                          const bool has_lob_header, int64_t &char_len)
+                          const bool has_lob_header, int64_t &char_len) 
   {
     int ret = OB_SUCCESS;
     ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
@@ -417,7 +417,7 @@ public:
   };
 
   static int get_char_len(ObEvalCtx &ctx, const ObDatum & datum, const ObDatumMeta &meta,
-                          const bool has_lob_header, int64_t &char_len)
+                          const bool has_lob_header, int64_t &char_len) 
   {
     int ret = OB_SUCCESS;
     if (datum.is_null()) {

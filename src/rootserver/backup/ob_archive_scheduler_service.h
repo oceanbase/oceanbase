@@ -38,7 +38,7 @@ class ObArchiveSchedulerService final : public ObBackupBaseService
 public:
   ObArchiveSchedulerService();
   virtual ~ObArchiveSchedulerService() {}
-
+  
   const int64_t RESERVED_FETCH_US = 10 * 1000 * 1000; // 10s, used for fetch observer log archive status
   const int64_t MIN_IDLE_INTERVAL_US = 2 * 1000 * 1000; // 2s
   const int64_t FAST_IDLE_INTERVAL_US = 10 * 1000 * 1000; // 10s, used during BEGINNING or STOPPING

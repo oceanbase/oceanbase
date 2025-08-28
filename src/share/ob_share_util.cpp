@@ -413,7 +413,7 @@ bool ObShareUtil::is_tenant_enable_transfer(const uint64_t tenant_id)
           "enable_transfer", tenant_config->enable_transfer);
      }
   }
-
+ 
   return bret;
 }
 
@@ -442,7 +442,7 @@ int ObShareUtil::check_compat_data_version_(
       } else if (required_data_version > data_version) {
         is_compatible = false;
       }
-    }
+    } 
     if (OB_FAIL(ret) || !is_compatible) {
       // skip
     } else if (check_user_tenant) {

@@ -26,7 +26,7 @@ namespace sql
 ObExprJsonAppend::ObExprJsonAppend(ObIAllocator &alloc)
     : ObExprJsonArrayAppend(alloc,
       T_FUN_SYS_JSON_APPEND,
-      N_JSON_APPEND,
+      N_JSON_APPEND, 
       MORE_THAN_TWO,
       VALID_FOR_GENERATED_COL,
       NOT_ROW_DIMENSION)

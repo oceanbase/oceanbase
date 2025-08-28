@@ -45,9 +45,9 @@ public:
   int visit(ObGeographPoint *geo) override;
   void get_coord_range_result(ObGeoCoordRangeResult& result);
   static int calculate_point_range(const ObSrsItem *srs,
-                                   double longti,
-                                   double lati,
-                                   bool is_normalized,
+                                   double longti, 
+                                   double lati, 
+                                   bool is_normalized, 
                                    ObGeoCoordRangeResult &result);
   bool set_after_visitor() { return false; }
 

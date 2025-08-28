@@ -48,9 +48,9 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
 private:
-  static int calc_convert_mode(const ObString &convert_option,
+  static int calc_convert_mode(const ObString &convert_option, 
                                ModeOption &convert_mode);
-
+  
   static int calc_result_length(const ObExprResType &type,
                                 int64_t &res_len);
   template <typename ArgVec, typename ResVec>

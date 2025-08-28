@@ -26,7 +26,7 @@ bool ObGeoSegmentCollectVisitor::prepare(ObGeometry *geo)
 }
 
 template<typename T_IBIN>
-int ObGeoSegmentCollectVisitor::collect_line_segment(T_IBIN *geo)
+int ObGeoSegmentCollectVisitor::collect_line_segment(T_IBIN *geo) 
 {
   int ret = OB_SUCCESS;
   bool is_new_start = true;
@@ -96,7 +96,7 @@ int ObGeoSegmentCollectVisitor::collect_line_segment(T_IBIN *geo)
 
 
 template<typename T_IBIN>
-int ObGeoSegmentCollectVisitor::collect_segment(T_IBIN *geo)
+int ObGeoSegmentCollectVisitor::collect_segment(T_IBIN *geo) 
 {
   int ret = OB_SUCCESS;
   const typename T_IBIN::value_type *line = reinterpret_cast<const typename T_IBIN::value_type*>(geo->val());
@@ -113,7 +113,7 @@ int ObGeoSegmentCollectVisitor::collect_segment(T_IBIN *geo)
       // do nothing
     } else if (OB_FAIL(segments_->push_back(seg))) {
       LOG_WARN("failed to append segment", K(ret));
-    }
+    } 
   }
   return ret;
 }

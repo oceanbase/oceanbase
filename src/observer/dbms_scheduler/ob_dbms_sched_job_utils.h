@@ -513,7 +513,7 @@ public:
   /**
    * @brief  计算 job 保存的时间表达式得到下一次执行的时间
    * @param [in] job_info  - job 信息
-   * @param [out] next_run_time
+   * @param [out] next_run_time 
    * @retval OB_SUCCESS execute success
    * @retval OB_ERR_UNEXPECTED 未知错误
    * @retval OB_INVALID_ARGUMENT 无效参数

@@ -39,7 +39,7 @@ namespace backup {
 /* ObBackupUtils */
 int ObBackupUtils::calc_start_replay_scn(
     const share::ObBackupSetTaskAttr &set_task_attr,
-    const storage::ObBackupLSMetaInfosDesc &ls_meta_infos,
+    const storage::ObBackupLSMetaInfosDesc &ls_meta_infos, 
     const share::ObTenantArchiveRoundAttr &round_attr,
     share::SCN &start_replay_scn)
 {
@@ -48,7 +48,7 @@ int ObBackupUtils::calc_start_replay_scn(
   // To ensure that restore can be successfully initiated,
   // we need to avoid clearing too many logs and the start_replay_scn less than the start_scn of the first piece.
   // so we choose the minimum palf_base_info.prev_log_info_.scn firstly, to ensure keep enough logs.
-  // Then we choose the max(minimum palf_base_info.prev_log_info_.scn, round_attr.start_scn) as the start_replay_scn,
+  // Then we choose the max(minimum palf_base_info.prev_log_info_.scn, round_attr.start_scn) as the start_replay_scn, 
   // to ensure the start_replay_scn is greater than the start scn of first piece
   ARRAY_FOREACH_X(ls_meta_infos.ls_meta_packages_, i, cnt, OB_SUCC(ret)) {
     const palf::PalfBaseInfo &palf_base_info = ls_meta_infos.ls_meta_packages_.at(i).palf_meta_;
@@ -2086,7 +2086,7 @@ int ObBackupTabletProvider::prepare_tablet_(const uint64_t tenant_id, const shar
     }
     if (FAILEDx(add_tablet_item_(tablet_id, has_ss_ddl, ss_ddl_table_key))) {
       LOG_WARN("failed to add tablet item if need", K(ret), K(tablet_id));
-    }
+    } 
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ls_backup_ctx_->tablet_stat_.prepare_tablet_sstables(
           tenant_id, backup_data_type, tablet_id, tablet_ref->tablet_handle_, sstable_array, cur_tablet_meta_count))) {
@@ -2106,12 +2106,12 @@ int ObBackupTabletProvider::get_consistent_scn_(share::SCN &consistent_scn) cons
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("need not get consistent scn during backup inner tablets", K(ret), K_(param), K_(backup_data_type));
   } else if (OB_FAIL(ObBackupSetFileOperator::get_backup_set_file(
-                     *sql_proxy_,
-                     false/*for update*/,
-                     param_.backup_set_desc_.backup_set_id_,
-                     OB_START_INCARNATION,
-                     param_.tenant_id_,
-                     param_.dest_id_,
+                     *sql_proxy_, 
+                     false/*for update*/, 
+                     param_.backup_set_desc_.backup_set_id_, 
+                     OB_START_INCARNATION, 
+                     param_.tenant_id_, 
+                     param_.dest_id_, 
                      backup_set_file))) {
     LOG_WARN("failed to get backup set", K(ret), K_(param), K_(backup_data_type));
   } else if (OB_FALSE_IT(consistent_scn = backup_set_file.consistent_scn_)) {
@@ -2119,7 +2119,7 @@ int ObBackupTabletProvider::get_consistent_scn_(share::SCN &consistent_scn) cons
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("consistent scn is not valid", K(ret), K_(param), K_(backup_data_type), K(backup_set_file));
   }
-
+  
   return ret;
 }
 
@@ -2143,7 +2143,7 @@ int ObBackupTabletProvider::get_tablet_handle_(const uint64_t tenant_id, const s
         LOG_WARN("failed to check ls valid for backup", K(ret), K(tenant_id), K(ls_id), K(rebuild_seq));
       } else {
         // sync wait transfer in tablet replace table finish
-        const int64_t ABS_TIMEOUT_TS = ObTimeUtil::current_time() + 5 * 60 * 1000 * 1000; //5min
+        const int64_t ABS_TIMEOUT_TS = ObTimeUtil::current_time() + 5 * 60 * 1000 * 1000; //5min 
         ObTabletStatus status(ObTabletStatus::MAX);
         while (OB_SUCC(ret)) {
           tablet_ref = NULL;
@@ -2743,8 +2743,8 @@ int ObBackupTabletProvider::pop_item_from_queue_(ObBackupProviderItem &item)
 }
 
 int ObBackupTabletProvider::get_tablet_status_(
-    const share::ObLSID &ls_id,
-    const common::ObTabletID &tablet_id,
+    const share::ObLSID &ls_id, 
+    const common::ObTabletID &tablet_id, 
     ObTabletStatus &status)
 {
   int ret = OB_SUCCESS;
@@ -3093,3 +3093,4 @@ OB_SERIALIZE_MEMBER(ObBackupProviderItem, item_type_, backup_data_type_, logic_i
 
 }  // namespace backup
 }  // namespace oceanbase
+

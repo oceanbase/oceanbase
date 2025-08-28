@@ -612,8 +612,8 @@ public:
       ASSERT_TRUE(cmp_fp != nullptr);
     }
 
-
-    // cmp int32
+    
+    // cmp int32 
 
     int128_t v1 = (int128_t(1) << 80) + UINT64_MAX;
     int128_t v2 = (int128_t(1) << 80) + INT64_MAX;

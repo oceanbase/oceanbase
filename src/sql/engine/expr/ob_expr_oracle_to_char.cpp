@@ -548,7 +548,7 @@ int ObExprToCharCommon::cg_expr(ObExprCGCtx &expr_cg_ctx,
       LOG_WARN("mysql to_char only support 1 or 2 args", K(ret));
     } else {
       rt_expr.eval_func_ = &ObExprToCharCommon::eval_to_char;
-      if (1 == rt_expr.arg_cnt_ ||
+      if (1 == rt_expr.arg_cnt_ || 
           ( 2 == rt_expr.arg_cnt_ && rt_expr.args_[1]->is_const_expr())) {
         rt_expr.eval_vector_func_ = &ObExprToCharCommon::eval_to_char_vector;
       }
@@ -941,7 +941,7 @@ int ObExprToCharCommon::is_valid_to_char_number(const ObExpr &expr)
 {
   int ret = OB_SUCCESS;
   bool is_valid = false;
-  if (OB_UNLIKELY(expr.arg_cnt_ < 1 ||
+  if (OB_UNLIKELY(expr.arg_cnt_ < 1 || 
                   (is_mysql_mode() && expr.arg_cnt_ > 2) ||
                   (is_oracle_mode() && expr.arg_cnt_ > 3))) {
     ret = OB_INVALID_ARGUMENT;
@@ -1360,7 +1360,7 @@ int ObExprToCharCommon::process_number_sci_value(
         strncpy(buf, "Nan", str_len);
       } else if (fabs(val) == INFINITY) {
         str_len = strlen("Inf");
-        strncpy(buf, "Inf", str_len);
+        strncpy(buf, "Inf", str_len); 
       } else {
         str_len = ob_gcvt_opt(val, OB_GCVT_ARG_FLOAT,
             static_cast<int32_t>(alloc_size), buf, NULL, lib::is_oracle_mode(), TRUE);

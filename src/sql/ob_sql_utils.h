@@ -619,8 +619,8 @@ public:
    * @param convert_flag, options to control convert behavior
    * @param action_flag, affected options
    * @param oracle_nls_string, convert to nls_collation result
-   * @return
-   */
+   * @return 
+   */                                        
   static int convert_sql_text_to_schema_for_storing(common::ObIAllocator &allocator,
                                                     const common::ObDataTypeCastParams &dtc_params,
                                                     common::ObString &sql_text,
@@ -684,8 +684,8 @@ public:
   static int check_location_access_priv(const common::ObString &location, ObSQLSessionInfo *session);
   static int check_sql_map_expected_resource_group(const ObSqlCtx &context,
                                             const ObResultSet &result,
-                                            const ObResolverParams *resolve_ctx,
-                                            const ObStmt *stmt,
+                                            const ObResolverParams *resolve_ctx, 
+                                            const ObStmt *stmt, 
                                             ObPCResourceMapRule &resource_map_rule);
 
   static int check_hint_for_resource_group(uint64_t tenant_id,
@@ -737,7 +737,7 @@ public:
   static bool check_json_expr(const ObRawExpr &expr);
 
   static int print_identifier_require_quotes(ObCollationType collation_type,
-                                             const ObString &ident,
+                                             const ObString &ident, 
                                              bool &require);
 
   static int64_t get_next_ts(int64_t &old_ts) {
@@ -759,21 +759,21 @@ public:
     return (ts & ((1LL << 43) - 1LL)) | ((server_id & 0xFFFF) << 48);
   }
   static int get_external_table_type(const uint64_t tenant_id,
-                                     const uint64_t table_id,
+                                     const uint64_t table_id, 
                                      ObExternalFileFormat::FormatType &type);
-  static int get_external_table_type(const ObTableSchema *table_schema,
+  static int get_external_table_type(const ObTableSchema *table_schema, 
                                      ObExternalFileFormat::FormatType &type);
-  static int get_external_table_type(const ObString &table_format_or_properties,
+  static int get_external_table_type(const ObString &table_format_or_properties, 
                                      ObExternalFileFormat::FormatType &type);
   static int get_odps_api_mode(const ObString &table_format_or_properties,
                                     bool &is_odps_external_table,
                                     ObODPSGeneralFormat::ApiMode& mode);
   static int is_odps_external_table(const uint64_t tenant_id,
-                                    const uint64_t table_id,
+                                    const uint64_t table_id, 
                                     bool &is_odps_external_table);
-  static int is_odps_external_table(const ObTableSchema *table_schema,
+  static int is_odps_external_table(const ObTableSchema *table_schema, 
                                     bool &is_odps_external_table);
-  static int is_odps_external_table(const ObString &table_format_or_properties,
+  static int is_odps_external_table(const ObString &table_format_or_properties, 
                                     bool &is_odps_external_table);
   static int extract_odps_part_spec(const ObString &all_part_spec, ObIArray<ObString> &part_spec_list);
   static int check_ident_name(const common::ObCollationType cs_type, common::ObString &name,
@@ -874,7 +874,7 @@ public:
       : RelExprCheckerBase(), rel_array_(rel_array)
   {
   }
-
+  
   virtual ~RelExprChecker() {}
   int add_expr(ObRawExpr *&expr);
 private:
@@ -1268,7 +1268,7 @@ struct ObPreCalcExprConstraint : public common::ObDLinkBase<ObPreCalcExprConstra
     {
     }
     virtual int assign(const ObPreCalcExprConstraint &other, common::ObIAllocator &allocator);
-    virtual int check_is_match(ObDatumObjParam &datum_param,
+    virtual int check_is_match(ObDatumObjParam &datum_param, 
                                ObExecContext &exec_ctx,
                                bool &is_match) const;
     ObPreCalcExprFrameInfo pre_calc_expr_info_;
@@ -1286,7 +1286,7 @@ struct ObRowidConstraint : public ObPreCalcExprConstraint
     }
     virtual int assign(const ObPreCalcExprConstraint &other,
                        common::ObIAllocator &allocator) override;
-    virtual int check_is_match(ObDatumObjParam &datum_param,
+    virtual int check_is_match(ObDatumObjParam &datum_param, 
                                ObExecContext &exec_ctx,
                                bool &is_match) const override;
     uint8_t rowid_version_;

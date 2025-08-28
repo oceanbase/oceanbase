@@ -55,14 +55,14 @@ public:
   virtual int update_inner_config_table(common::ObISQLClient &trans) override;
   virtual int check_before_update_inner_config(obrpc::ObSrvRpcProxy &rpc_proxy, common::ObISQLClient &trans) override;
   int check_before_update_inner_config(
-      const bool for_verify,
+      const bool for_verify, 
       ObCompatibilityMode &compat_mode);
   virtual int get_compatibility_mode(common::ObCompatibilityMode &compatibility_mode);
   int get_primary_server_addr(const common::ObSqlString &value,
   uint64_t &primary_tenant_id, uint64_t &primary_cluster_id,
   ObIArray<common::ObAddr> &addr_list);
 private:
-  int do_parse_sub_config_(const common::ObString &config_str);
+  int do_parse_sub_config_(const common::ObString &config_str);  
   int do_parse_restore_service_host_(const common::ObString &name, const common::ObString &value);
   int do_parse_restore_service_user_(const common::ObString &name, const common::ObString &value);
   int do_parse_restore_service_passwd_(const common::ObString &name, const common::ObString &value);

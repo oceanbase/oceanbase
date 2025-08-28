@@ -35,7 +35,7 @@ public:
   static const int64_t IGNORE = 8;               /*7. ignore node */
   static const int64_t RETURNING = 9;           /*8. returning node */
   static const int64_t ERRORLOGGING = 10;           /*9. error_logging node */
-
+  
 public:
   explicit ObUpdateResolver(ObResolverParams &params);
   virtual ~ObUpdateResolver();

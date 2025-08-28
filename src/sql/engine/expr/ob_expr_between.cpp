@@ -265,14 +265,14 @@ int ObExprBetween::cg_expr(ObExprCGCtx &expr_cg_ctx,
         ret = OB_ERR_UNEXPECTED;
         VecValueTypeClass value_tc = get_vec_value_tc(val_meta.type_, val_meta.scale_, val_meta.precision_);
         VecValueTypeClass left_tc = get_vec_value_tc(left_meta.type_, left_meta.scale_, left_meta.precision_);
-        LOG_WARN("The result of get_eval_vector_between_expr_cmp_func(left) is null.",
+        LOG_WARN("The result of get_eval_vector_between_expr_cmp_func(left) is null.", 
                   K(ret), K(left_meta), K(val_meta), K(right_meta), K(value_tc), K(left_tc), K(rt_expr));
       } else if (OB_ISNULL(vec_cmp_func_2 = VectorCmpExprFuncsHelper::get_row_cmp_func(
                                                   val_meta, right_meta))) {
         ret = OB_ERR_UNEXPECTED;
         VecValueTypeClass value_tc = get_vec_value_tc(val_meta.type_, val_meta.scale_, val_meta.precision_);
         VecValueTypeClass right_tc = get_vec_value_tc(right_meta.type_, right_meta.scale_, right_meta.precision_);
-        LOG_WARN("The result of get_eval_vector_between_expr_cmp_func(right) is null.",
+        LOG_WARN("The result of get_eval_vector_between_expr_cmp_func(right) is null.", 
                   K(ret), K(left_meta), K(val_meta), K(right_meta), K(value_tc), K(right_tc), K(rt_expr));
       } else if (OB_ISNULL(rt_expr.inner_functions_ = reinterpret_cast<void**>(
                           expr_cg_ctx.allocator_->alloc(sizeof(DatumCmpFunc) * 2 + sizeof(RowCmpFunc) * 2)))) {

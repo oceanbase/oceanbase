@@ -133,8 +133,8 @@ int ObDatumRowStore::Iterator::get_next_row(ObDatumRow &row)
     // the last block
     ret = OB_ITER_END;
   } else if (OB_FAIL(row.deserialize(cur_iter_block_->get_buffer_head() + cur_iter_pos_, cur_iter_block_->get_remain_size_for_read(cur_iter_pos_), pos))) {
-    STORAGE_LOG(WARN, "failed to deserialize datum row", K(ret), K(cur_iter_block_->get_block_size()), K(cur_iter_pos_),
-                                                          K(row.get_serialize_size()), K(pos), K(row));
+    STORAGE_LOG(WARN, "failed to deserialize datum row", K(ret), K(cur_iter_block_->get_block_size()), K(cur_iter_pos_),  
+                                                          K(row.get_serialize_size()), K(pos), K(row)); 
   } else {
     // next
     cur_iter_pos_ += pos;

@@ -204,7 +204,7 @@ public:
   ObSSTableMeta();
   ~ObSSTableMeta();
   int init(
-      const storage::ObTabletCreateSSTableParam &param,
+      const storage::ObTabletCreateSSTableParam &param, 
       common::ObArenaAllocator &allocator);
   int fill_cg_sstables(
       common::ObArenaAllocator &allocator,
@@ -365,20 +365,20 @@ public:
   bool is_shared_macro_blocks_sstable() const;
   bool is_only_shared_macro_blocks_sstable() const;
   int get_merge_res(blocksstable::ObSSTableMergeRes &res) const;
-  TO_STRING_KV(K_(basic_meta),
-               K(column_checksums_.count()),
+  TO_STRING_KV(K_(basic_meta), 
+               K(column_checksums_.count()), 
                K_(column_checksums),
                K_(table_key),
                K(column_default_checksums_.count()),
-               K_(column_default_checksums),
+               K_(column_default_checksums),  
                K_(is_small_sstable),
                K_(is_empty_cg_sstables),
-               K_(column_group_cnt),
-               K_(full_column_cnt),
+               K_(column_group_cnt), 
+               K_(full_column_cnt), 
                K_(co_base_type),
-               K_(root_block_addr),
+               K_(root_block_addr), 
                KP_(root_block_buf),
-               K_(data_block_macro_meta_addr),
+               K_(data_block_macro_meta_addr), 
                KP_(data_block_macro_meta_buf),
                K_(is_meta_root));
 private:

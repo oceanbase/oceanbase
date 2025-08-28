@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #include <openssl/engine.h>
 #include "ob_ssl_config.h"
 #include "lib/lock/ob_spin_rwlock.h"
@@ -110,7 +110,7 @@ const char baba_tls_ciphers_list[]= "!aNULL:!eNULL:!EXPORT:!LOW:!MD5:!DES:!RC2:!
                                "ECDH-RSA-AES128-SHA:DH-RSA-AES256-SHA:ECDH-RSA-AES256-SHA:DES-CBC3-SHA";
 
 
-static X509* ob_ssl_get_sm_cert_memory(const char *cert)
+static X509* ob_ssl_get_sm_cert_memory(const char *cert) 
 {
   BIO *bio = NULL;
   X509 *x509 = NULL;
@@ -125,7 +125,7 @@ static X509* ob_ssl_get_sm_cert_memory(const char *cert)
   return x509;
 }
 
-static EVP_PKEY* ob_ssl_get_sm_pkey_memory(const char *key)
+static EVP_PKEY* ob_ssl_get_sm_pkey_memory(const char *key) 
 {
   BIO *bio = NULL;
   EVP_PKEY *pkey = NULL;
@@ -426,7 +426,7 @@ static SSL_CTX* ob_ssl_create_ssl_ctx(const ObSSLConfig& ssl_config)
   return ctx;
 }
 
-static int ob_ssl_ctx_reconfigure(int ctx_id, int ctx_role, SSL_CTX* ssl_ctx)
+static int ob_ssl_ctx_reconfigure(int ctx_id, int ctx_role, SSL_CTX* ssl_ctx) 
 {
   int ret = OB_SUCCESS;
   SSL_CTX* ssl_ctx_temp = NULL;

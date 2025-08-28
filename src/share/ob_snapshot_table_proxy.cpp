@@ -41,11 +41,11 @@ ObSnapshotInfo::ObSnapshotInfo()
 }
 
 int ObSnapshotInfo::init(
-    const uint64_t tenant_id,
+    const uint64_t tenant_id, 
     const uint64_t tablet_id,
-    const ObSnapShotType &snapshot_type,
+    const ObSnapShotType &snapshot_type, 
     const SCN &snapshot_scn,
-    const int64_t schema_version,
+    const int64_t schema_version, 
     const char* comment)
 {
   int ret = OB_SUCCESS;
@@ -100,7 +100,7 @@ void TenantSnapshot::reset()
 
 bool TenantSnapshot::is_valid() const
 {
-  return (tenant_id_ != OB_INVALID_TENANT_ID)
+  return (tenant_id_ != OB_INVALID_TENANT_ID) 
          && (snapshot_scn_.is_valid());
 }
 
@@ -180,7 +180,7 @@ int ObSnapshotTableProxy::batch_add_snapshot(
   ObSqlString values;
   ObDMLSqlSplicer dml;
   const int64_t BATCH_CNT = 500;
-  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || schema_version < 0
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || schema_version < 0 
       || !snapshot_scn.is_valid() || tablet_id_array.count() <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(schema_version), K(snapshot_scn), K(tablet_id_array));
@@ -270,7 +270,7 @@ int ObSnapshotTableProxy::remove_snapshot(
     LOG_WARN("invalid argument", KR(ret), K(info), K(tenant_id));
   } else if (OB_FAIL(dml.add_pk_column("tenant_id", ext_tenant_id))
              || OB_FAIL(dml.add_pk_column("snapshot_type", info.snapshot_type_))
-             || (info.snapshot_scn_.is_valid() &&
+             || (info.snapshot_scn_.is_valid() && 
                  OB_FAIL(dml.add_uint64_pk_column("snapshot_scn", info.snapshot_scn_.get_val_for_inner_table_field())))
              || (info.schema_version_ > 0 && OB_FAIL(dml.add_pk_column("schema_version", info.schema_version_)))
              || (info.tablet_id_ > 0 && OB_FAIL(dml.add_pk_column("tablet_id", info.tablet_id_)))) {
@@ -330,7 +330,7 @@ int ObSnapshotTableProxy::batch_remove_snapshots(
           OB_ALL_ACQUIRED_SNAPSHOT_TNAME,
           ext_tenant_id, snapshot_type, tablet_list.string().length(), tablet_list.string().ptr()))) {
         LOG_WARN("fail to assign sql", KR(ret), K(sql));
-      } else if (snapshot_scn.is_valid() && OB_FAIL(sql.append_fmt(" AND snapshot_scn = %lu",
+      } else if (snapshot_scn.is_valid() && OB_FAIL(sql.append_fmt(" AND snapshot_scn = %lu", 
           snapshot_scn.get_val_for_inner_table_field()))) {
         LOG_WARN("fail to append snapshot version", KR(ret), K(sql), K(snapshot_scn));
       } else if (schema_version > 0 && OB_FAIL(sql.append_fmt(
@@ -656,7 +656,7 @@ int ObSnapshotTableProxy::get_snapshot(
       if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
         LOG_WARN("fail to get timeout ctx", KR(ret), K(tenant_id), K(ctx));
       } else if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE snapshot_type = %d AND snapshot_scn = %lu "
-          "AND tenant_id = '%lu'", OB_ALL_ACQUIRED_SNAPSHOT_TNAME, snapshot_type,
+          "AND tenant_id = '%lu'", OB_ALL_ACQUIRED_SNAPSHOT_TNAME, snapshot_type, 
           snapshot_scn.get_val_for_inner_table_field(),
           schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)))) {
         LOG_WARN("fail to assign sql", KR(ret), K(tenant_id), K(snapshot_type));

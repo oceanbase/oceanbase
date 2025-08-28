@@ -218,7 +218,7 @@ struct ToDecimalintCastImpl
   }
 
   // 1. data to int
-  // 2. use mul cast int to decimalint, and check overflow.
+  // 2. use mul cast int to decimalint, and check overflow. 
   template<typename OUT_TYPE>
   static int date_decimalint(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)
   {

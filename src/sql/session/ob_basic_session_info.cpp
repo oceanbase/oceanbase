@@ -1994,9 +1994,9 @@ int ObBasicSessionInfo::deep_copy_sys_variable(ObBasicSysVar &sys_var,
     }
 
     // defragment.
-    //
+    // 
     // Double buffer optimization
-    //
+    // 
     // Double buffer optimization uses two buffers to cyclically store
     // system variable values. If the currently used buffer reaches the
     // upper limit, the variable value will be defragmented and stored
@@ -2262,7 +2262,7 @@ void ObBasicSessionInfo::set_ash_stat_value(ObActiveSessionStat &ash_stat)
       min(sizeof(ash_stat.sql_id_), sizeof(sql_id_)));
   if (is_deserialized_) {
     // do nothing
-    // The deserialized session might have been created by the current tenant,
+    // The deserialized session might have been created by the current tenant, 
     // rather than by the tenant identified by the priv_tenant_id recorded in the session.
     // The session is using the resources of the current tenant, so the tenant_id_ in ash should not be modified.
   } else {
@@ -4276,7 +4276,7 @@ int ObBasicSessionInfo::set_enable_role_ids(const ObIArray<uint64_t>& role_ids)
   ObSqlString serialized_data;
   for (int i = 0; OB_SUCC(ret) && i < role_ids.count(); i++) {
     if (i != 0) {
-      OZ (serialized_data.append(","));
+      OZ (serialized_data.append(","));  
     }
     OZ (serialized_data.append_fmt("%lu", role_ids.at(i)));
   }
@@ -4964,7 +4964,7 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
   }();
   OB_UNIS_ENCODE(ObString(sql_id_));
   if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_ENCODE,
+    LST_DO_CODE(OB_UNIS_ENCODE, 
                 proxy_user_id_,
                 thread_data_.proxy_user_name_,
                 thread_data_.proxy_host_name_,
@@ -5246,7 +5246,7 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
   OB_UNIS_DECODE(sql_id);
   if (OB_SUCC(ret)) {
     set_cur_sql_id(sql_id.ptr());
-    LST_DO_CODE(OB_UNIS_DECODE,
+    LST_DO_CODE(OB_UNIS_DECODE, 
                 proxy_user_id_,
                 thread_data_.proxy_user_name_,
                 thread_data_.proxy_host_name_,
@@ -6767,7 +6767,7 @@ int ObBasicSessionInfo::stmt_restore_session(StmtSavedValue &saved_value)
   }
   if (OB_TMP_FAIL(base_restore_session(saved_value))) {
     LOG_WARN("failed to restore base session", K(tmp_ret));
-    ret = COVER_SUCC(tmp_ret);
+    ret = COVER_SUCC(tmp_ret);       
 	}
   stmt_type_ = saved_value.stmt_type_;
   return ret;
@@ -7039,7 +7039,7 @@ void ObExecEnv::reset()
   collation_connection_ = CS_TYPE_INVALID;
   collation_database_ = CS_TYPE_INVALID;
   plsql_ccflags_.reset();
-
+  
   // default PLSQL_OPTIMIZE_LEVEL = 2
   plsql_optimize_level_ = 2;
 }

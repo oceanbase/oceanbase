@@ -317,7 +317,7 @@ void ObPdFilterTestBase::init_filter(
   filter.filter_.expr_->arg_cnt_ = count + 1;
   filter.filter_.expr_->args_ = expr_p_buf;
   ASSERT_EQ(OB_SUCCESS, filter.datum_params_.init(count));
-
+  
   for (int64_t i = 0; i <= count; ++i) {
     filter.filter_.expr_->args_[i] = new (expr_buf + 1 + i) ObExpr();
     if (i < count) {
@@ -375,7 +375,7 @@ void ObPdFilterTestBase::init_in_filter(
   filter.filter_.expr_->args_[0]->obj_meta_ = col_meta;
   filter.filter_.expr_->args_[0]->datum_meta_.type_ = col_meta.get_type();
   filter.filter_.expr_->args_[0]->basic_funcs_ = col_basic_funcs;
-
+  
   ASSERT_EQ(OB_SUCCESS, filter.datum_params_.init(count));
   ASSERT_EQ(OB_SUCCESS, filter.param_set_.create(count * 2));
   filter.param_set_.set_hash_and_cmp_func(basic_funcs->murmur_hash_v2_, basic_funcs->null_first_cmp_);
@@ -472,7 +472,7 @@ int ObPdFilterTestBase::check_column_store_white_filter(
             K(op_type), K(row_cnt), K(col_cnt), K(col_offset), K(col_meta));
       }
     }
-
+    
     if (nullptr != expr_buf) {
       allocator_.free(expr_buf);
     }

@@ -150,7 +150,7 @@ int ObRemoteTaskExecutor::build_task(ObExecContext &query_ctx,
   ObOpSpec *root_spec = NULL;
   const ObPhysicalPlan *phy_plan = NULL;
   share::ObLSArray ls_list;
-
+  
   if (OB_ISNULL(root_spec = job.get_root_spec())) {
     ret = OB_NOT_INIT;
     LOG_WARN("root spec not init", K(ret));

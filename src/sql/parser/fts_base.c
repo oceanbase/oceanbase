@@ -75,7 +75,7 @@ int fts_create_node_term(void *arg, const FtsString *term, FtsNode **node)
 }
 
 int fts_create_node_oper(
-  void *arg,
+  void *arg,           
   enum FtsOperType oper,
   FtsNode **node)
 {
@@ -120,7 +120,7 @@ int fts_create_node_subexp_list(void *arg, FtsNode *expr, FtsNode **node)
   ret = fts_node_create((FtsParserResult *)arg, node);
 
   if (FTS_OK == ret) {
-    (*node)->type = FTS_NODE_SUBEXP_LIST;
+    (*node)->type = FTS_NODE_SUBEXP_LIST; 
     (*node)->list.head = (*node)->list.tail = expr;
   }
   return ret;

@@ -118,7 +118,7 @@ private:
   int64_t CB_CNT_;
 };
 
-class MockCbTimeoutTask : public ObITimeoutTask
+class MockCbTimeoutTask : public ObITimeoutTask 
 {
 public:
   MockCbTimeoutTask() : adapter_(nullptr) {}
@@ -139,7 +139,7 @@ private:
   MockTxLogAdapter *adapter_;
 };
 
-// struct MockReplayInfo
+// struct MockReplayInfo 
 // {
 //   logservice::ObIReplaySubHandler *replay_target_;
 //
@@ -158,7 +158,7 @@ private:
 //   MockReplayInfo() { reset(); }
 // };
 //
-// class MockReplayMgr : public lib::ThreadPool
+// class MockReplayMgr : public lib::ThreadPool 
 // {
 // public:
 //   int init(MockTxLogAdapter * log_adapter);

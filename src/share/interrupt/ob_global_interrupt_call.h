@@ -95,7 +95,7 @@ class ObInterruptChecker
   friend class ObInterruptCheckerRemoveCall;
 
   friend class ObGlobalInterruptManager;
-
+  
   friend class ObInterruptCheckerGuard;
 
 public:

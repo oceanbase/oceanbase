@@ -253,7 +253,7 @@ def generate_compile_parts():
   fn_cnt = int((len(DEFINED_COLLS) + COMPILE_UNIT_CNT  - 1) / COMPILE_UNIT_CNT)
   fn_list_text = ""
   for i in range(fn_cnt):
-    fn_list_text += "DEF_STR_FUNC_INIT(%COLL_NAME" + str(i) + "%, %unit_idx" + str(i) + "%);\n"
+    fn_list_text += "DEF_STR_FUNC_INIT(%COLL_NAME" + str(i) + "%, %unit_idx" + str(i) + "%);\n" 
   for start in range(0, len(DEFINED_COLLS), fn_cnt):
     text = compile_template.replace("%COMPILE_FUN_LIST%", fn_list_text)
     for i in range(fn_cnt):
@@ -294,7 +294,7 @@ namespace common
 
   for i in range(0, len(DEFINED_COLLS)):
     ctrl_text += "  __init_str_func%d();\n" % i
-
+  
   ctrl_text += '''}
 } // end common
 } // end oceanbase'''
@@ -306,8 +306,8 @@ namespace common
 def generate_common():
   with open("ob_str_datum_funcs_compilation.ipp", 'a') as f:
     f.write(common_template)
-
-
+  
+ 
 
 if __name__ == "__main__":
   rm_compile_part()

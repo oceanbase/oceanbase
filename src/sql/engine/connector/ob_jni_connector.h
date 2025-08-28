@@ -133,7 +133,7 @@ public:
       length_(-1),
       type_size_(-1),
       type_expr_("") {}
-
+    
     // simple primitive
     MirrorOdpsJniColumn(ObString name, OdpsType type, int32_t type_size,
                         ObString type_expr)
@@ -227,8 +227,8 @@ public:
         batch_meta_index_ = 0;
       }
 
-      long next_meta_as_long() {
-        return batch_meta_ptr_[batch_meta_index_++];
+      long next_meta_as_long() { 
+        return batch_meta_ptr_[batch_meta_index_++]; 
       }
 
       void *next_meta_as_ptr() {

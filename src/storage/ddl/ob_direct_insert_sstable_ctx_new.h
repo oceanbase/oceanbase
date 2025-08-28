@@ -72,7 +72,7 @@ public:
   int init();
 
   int alloc_execution_context_id(int64_t &context_id);
-
+  
   int alloc_slice_id(int64_t &slice_id);
   int get_agent_exec_context(
       const int64_t context_id,
@@ -85,7 +85,7 @@ public:
 
   // create tablet direct lob manager for data tablet, and
   // create lob meta tablet manager inner on need.
-  // Actually,
+  // Actually, 
   // 1. lob meta direct load mgr will be created when creating data tablet direct load mgr.
   // 2. lob meta direct load mgr will be created by itself when it is recovered from checkpoint.
   // @param [in] param, to init or update tablet direct load mgr.
@@ -131,7 +131,7 @@ public:
       const int64_t execution_id = -1);
 
   // some utils functions below.
-  // to get online stats result,
+  // to get online stats result, 
   // and to avoid empty result, the caller should set need_online_opt_stat_gather_ when create tablet manager.
   int get_online_stat_collect_result(
       const bool is_full_direct_load,
@@ -211,7 +211,7 @@ private:
       ObTabletDirectLoadExecContext &exec_context);
   int remove_tablet_direct_load_nolock(
       const ObTabletDirectLoadMgrKey &mgr_key);
-  // to generate unique slice id for slice writer, putting here is just to
+  // to generate unique slice id for slice writer, putting here is just to 
   // simplify the logic of the tablet_direct_load_mgr.
   int64_t generate_slice_id();
   int64_t generate_context_id();
@@ -246,10 +246,10 @@ public:
   {
     return common::murmurhash(&slice_id, sizeof(slice_id), 0L);
   }
-  void reset_slice_ctx_on_demand();
+  void reset_slice_ctx_on_demand(); 
   void cleanup_slice_writer(const int64_t context_id);
   share::SCN get_commit_scn() { return commit_scn_.atomic_load(); }
-  TO_STRING_KV(K_(build_param), K_(is_task_end), K_(task_finish_count), K_(task_total_cnt), K_(sorted_slices_idx), K_(commit_scn),
+  TO_STRING_KV(K_(build_param), K_(is_task_end), K_(task_finish_count), K_(task_total_cnt), K_(sorted_slices_idx), K_(commit_scn), 
       KP_(index_builder), KPC(storage_schema_));
   struct AggregatedCGInfo final {
   public:
@@ -408,7 +408,7 @@ public:
   bool is_originally_column_store_data_direct_load() const { return is_data_direct_load(direct_load_type_) && !need_process_cs_replica_; }
 
   bool get_is_no_logging() {return is_no_logging_;}
-  VIRTUAL_TO_STRING_KV(K_(is_inited), K_(is_schema_item_ready), K_(ls_id), K_(tablet_id), K_(table_key), K_(data_format_version), K_(ref_cnt),
+  VIRTUAL_TO_STRING_KV(K_(is_inited), K_(is_schema_item_ready), K_(ls_id), K_(tablet_id), K_(table_key), K_(data_format_version), K_(ref_cnt), 
                K_(direct_load_type), K_(need_process_cs_replica), K_(need_fill_column_group), K_(is_rescan_data_compl_dag), K_(sqc_build_ctx),
                KPC(lob_mgr_handle_.get_obj()), K_(schema_item), K_(column_items), K_(lob_column_idxs),
                K_(task_cnt), K_(cg_cnt), K_(micro_index_clustered), K_(tablet_transfer_seq), K_(is_no_logging));
@@ -455,11 +455,11 @@ protected:
   bool need_fill_column_group_;
   // only use for data complement dag rescan path
   bool is_rescan_data_compl_dag_;
-  // sqc_build_ctx_ is just used for the observer node who receives the requests from the SQL Layer
+  // sqc_build_ctx_ is just used for the observer node who receives the requests from the SQL Layer 
   // to write the start log and the data redo log. And other observer nodes can not use it.
   ObTabletDirectLoadBuildCtx sqc_build_ctx_;
   // to handle the lob meta tablet, use it before the is_valid judgement.
-  ObTabletDirectLoadMgrHandle lob_mgr_handle_;
+  ObTabletDirectLoadMgrHandle lob_mgr_handle_; 
   common::ObThreadCond cond_; // for fill column group
   // cache ObTableSchema for lob direct load performance
   ObArray<ObColumnSchemaItem> column_items_;
@@ -485,18 +485,18 @@ public:
   int open(const int64_t current_execution_id, share::SCN &start_scn) override; // start
   int close(const int64_t execution_id, const share::SCN &start_scn) override; // end, including write commit log, wait major sstable generates.
   int start_nolock(
-      const ObITable::TableKey &table_key,
-      const share::SCN &start_scn,
-      const uint64_t data_format_version,
+      const ObITable::TableKey &table_key, 
+      const share::SCN &start_scn, 
+      const uint64_t data_format_version, 
       const int64_t execution_id,
       const share::SCN &checkpoint_scn,
       ObDDLKvMgrHandle &ddl_kv_mgr_handle,
       ObDDLKvMgrHandle &lob_kv_mgr_handle);
   int start(
-      ObTablet &tablet,
-      const ObITable::TableKey &table_key,
-      const share::SCN &start_scn,
-      const uint64_t data_format_version,
+      ObTablet &tablet, 
+      const ObITable::TableKey &table_key, 
+      const share::SCN &start_scn, 
+      const uint64_t data_format_version, 
       const int64_t execution_id,
       const share::SCN &checkpoint_scn);
   int start_with_checkpoint(
@@ -529,7 +529,7 @@ public:
       const ObTablet &tablet,
       bool &can_schedule);
   int prepare_ddl_merge_param(
-      const ObTablet &tablet,
+      const ObTablet &tablet, 
       ObDDLTableMergeDagParam &merge_param);
   int prepare_major_merge_param(ObTabletDDLParam &param);
   void cleanup_slice_writer(const int64_t context_id);

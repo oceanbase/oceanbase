@@ -79,7 +79,7 @@ int ObLogFunctionTable::allocate_expr_post(ObAllocExprContext &ctx)
   return ret;
 }
 
-int ObLogFunctionTable::get_plan_item_info(PlanText &plan_text,
+int ObLogFunctionTable::get_plan_item_info(PlanText &plan_text, 
                                            ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
@@ -97,9 +97,9 @@ int ObLogFunctionTable::get_plan_item_info(PlanText &plan_text,
   }
   if (OB_SUCC(ret)) {
     const ObString &name = get_table_name();
-    BUF_PRINT_OB_STR(name.ptr(),
-                     name.length(),
-                     plan_item.object_alias_,
+    BUF_PRINT_OB_STR(name.ptr(), 
+                     name.length(), 
+                     plan_item.object_alias_, 
                      plan_item.object_alias_len_);
     BUF_PRINT_STR("FUNCTION TABLE",
                   plan_item.object_type_,

@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 void fixed_queue_init(fixed_queue_t* q, void* buf, int64_t bytes)
 {
   q->push = 0;

@@ -61,7 +61,7 @@ public:
 
   int get_archive_mode(
       common::ObISQLClient &proxy, ObArchiveMode &mode) const;
-
+  
   int open_archive_mode(common::ObISQLClient &proxy) const;
 
   int close_archive_mode(common::ObISQLClient &proxy) const;
@@ -85,7 +85,7 @@ public:
   int get_binding(common::ObISQLClient &proxy, const bool need_lock, const int64_t dest_no, 
       ObLogArchiveDestAtrr::Binding &binding) const;
     
-
+  
   int get_dest_state(common::ObISQLClient &proxy, const bool need_lock, const int64_t dest_no,
       ObLogArchiveDestState &state) const;
 

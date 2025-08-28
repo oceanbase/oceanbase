@@ -1,4 +1,4 @@
-// owner: jingyu.cr
+// owner: jingyu.cr 
 // owner group: rs
 
 /**
@@ -41,7 +41,7 @@ public:
 TEST_F(TestArbitrationServiceRpc, test_argument)
 {
   int ret = OB_SUCCESS;
-
+  
   uint64_t tenant_id = 1001;
   share::ObLSID ls_id(1);
   share::ObLSID invalid_ls_id(1001);

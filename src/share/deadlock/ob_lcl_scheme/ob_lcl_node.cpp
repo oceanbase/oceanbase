@@ -608,7 +608,7 @@ int ObLCLNode::process_collect_info_message(const ObDeadLockCollectInfoMessage &
     const ObSArray<ObDetectorInnerReportInfo> &collected_info = msg_copy.get_collected_info();
     if (!collected_info.empty()) {
       int64_t detector_id = private_label_.get_id();
-      const UserBinaryKey &victim = collected_info[0].get_user_key();
+      const UserBinaryKey &victim = collected_info[0].get_user_key(); 
       DETECT_LOG_(INFO, "witness deadlock", KP(this), K(detector_id), K_(self_key), K(victim));
     }
     DETECT_TIME_GUARD(100_ms);

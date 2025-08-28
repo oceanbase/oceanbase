@@ -11,7 +11,7 @@
 #ifndef OCEANBASE_ROOTSERVER_OB_BACKUP_BASE_SERVICE_H_
 #define OCEANBASE_ROOTSERVER_OB_BACKUP_BASE_SERVICE_H_
 
-#include "lib/thread/thread_mgr_interface.h"
+#include "lib/thread/thread_mgr_interface.h" 
 #include "rootserver/ob_tenant_thread_helper.h"
 #include "lib/lock/ob_thread_cond.h"
 #include "logservice/ob_log_base_type.h"
@@ -55,7 +55,7 @@ public:
   virtual int switch_to_leader() override;
   virtual int switch_to_follower_gracefully() override;
   virtual int resume_leader() override;
-
+  
   // backup service no need to use the above func
   virtual int replay(const void *buffer,
                      const int64_t nbytes,

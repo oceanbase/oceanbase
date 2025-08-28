@@ -701,7 +701,7 @@ int ObTenantArchivePieceAttr::parse_from(common::sqlclient::ObMySQLResult &resul
     LOG_WARN("failed to set max scn", K(ret), K(max_scn));
   } else if (OB_FAIL(end_scn_.convert_for_inner_table_field(end_scn))) {
     LOG_WARN("failed to set end scn", K(ret), K(end_scn));
-  }
+  } 
 
   return ret;
 }
@@ -1243,11 +1243,11 @@ int ObArchiveLSMetaType::get_next_type()
       break;
     };
     case Type::SCHEMA_META: {
-      ret = OB_ITER_END;
+      ret = OB_ITER_END; 
       break;
     };
     case Type::MAX_TYPE: {
-      ret = OB_ITER_END;
+      ret = OB_ITER_END; 
       break;
     };
   }

@@ -427,7 +427,7 @@ friend class ObSchemaGetterController;
   virtual void stop();
   virtual void wait();
   virtual int destroy();
-
+  
 protected:
   ObMultiVersionSchemaService();
   virtual ~ObMultiVersionSchemaService();

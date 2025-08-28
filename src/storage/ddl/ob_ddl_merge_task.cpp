@@ -439,7 +439,7 @@ int ObDDLTableMergeTask::merge_full_direct_load_ddl_kvs(ObLSHandle &ls_handle, O
       DEBUG_SYNC(BEFORE_MIG_DDL_TABLE_MERGE_TASK);
     }
 #endif
-
+    
     ObTabletDDLParam ddl_param;
     bool is_data_complete = false;
     const ObSSTable *first_major_sstable = nullptr;
@@ -774,9 +774,9 @@ int ObTabletDDLUtil::prepare_index_data_desc(ObTablet &tablet,
       LOG_WARN("unexpected table key is minor sstable", K(ret), K(table_key));
     } else {
       const ObStorageColumnGroupSchema &cur_cg_schema = cg_schemas.at(cg_idx);
-      if (OB_FAIL(data_desc.init(true/*is_ddl*/, *storage_schema, ls_id, tablet_id,
+      if (OB_FAIL(data_desc.init(true/*is_ddl*/, *storage_schema, ls_id, tablet_id, 
                                  compaction::ObMergeType::MAJOR_MERGE,
-                                 snapshot_version, data_format_version,
+                                 snapshot_version, data_format_version, 
                                  tablet.get_tablet_meta().micro_index_clustered_,
                                  tablet.get_transfer_seq(),
                                  end_scn, &cur_cg_schema, cg_idx))) {
@@ -2215,7 +2215,7 @@ int ObTabletDDLUtil::schedule_ddl_minor_merge_on_demand(
   } else if (ddl_kvs_handle.empty()) {
     LOG_TRACE("empty ddl kv", "tablet_id", ddl_kv_mgr_handle.get_obj()->get_tablet_id());
   } else if (need_freeze && OB_FAIL(ddl_kv_mgr_handle.get_obj()->freeze_ddl_kv(
-          ddl_kvs_handle.at(0).get_obj()->get_ddl_start_scn(),
+          ddl_kvs_handle.at(0).get_obj()->get_ddl_start_scn(), 
           ddl_kvs_handle.at(0).get_obj()->get_snapshot_version(),
           ddl_kvs_handle.at(0).get_obj()->get_data_format_version()))) {
     LOG_WARN("failed to freeze kv", K(ret), "tablet_id", ddl_kv_mgr_handle.get_obj()->get_tablet_id());
@@ -2239,3 +2239,4 @@ int ObTabletDDLUtil::schedule_ddl_minor_merge_on_demand(
 
 } // namespace storage
 } // namespace oceanbase
+  

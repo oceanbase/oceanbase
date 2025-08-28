@@ -36,7 +36,7 @@ int ObLogLink::compute_sharding_info()
 {
   int ret = OB_SUCCESS;
   ObOptimizerContext *opt_ctx = NULL;
-  if (OB_ISNULL(get_plan()) ||
+  if (OB_ISNULL(get_plan()) || 
       OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -107,7 +107,7 @@ int ObLogLink::print_link_stmt(char *buf, int64_t buf_len)
   return ret;
 }
 
-int ObLogLink::get_plan_item_info(PlanText &plan_text,
+int ObLogLink::get_plan_item_info(PlanText &plan_text, 
                                   ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;

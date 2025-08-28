@@ -137,7 +137,7 @@ int ObLogExchange::inner_replace_op_exprs(ObRawExprReplacer &replacer)
   return ret;
 }
 
-int ObLogExchange::get_plan_item_info(PlanText &plan_text,
+int ObLogExchange::get_plan_item_info(PlanText &plan_text, 
                                       ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
@@ -159,19 +159,19 @@ int ObLogExchange::get_plan_item_info(PlanText &plan_text,
   }
   if (OB_SUCC(ret) && OB_INVALID_ID != get_dfo_id()) {
     BEGIN_BUF_PRINT;
-    if (OB_FAIL(BUF_PRINTF(":EX%ld%04ld",
-                            get_px_id(),
+    if (OB_FAIL(BUF_PRINTF(":EX%ld%04ld", 
+                            get_px_id(), 
                             get_dfo_id()))) {
       LOG_WARN("failed to print str", K(ret));
     }
-    END_BUF_PRINT(plan_item.object_alias_,
+    END_BUF_PRINT(plan_item.object_alias_, 
                   plan_item.object_alias_len_);
   }
   return ret;
 }
 
 
-int ObLogExchange::get_plan_special_expr_info(PlanText &plan_text,
+int ObLogExchange::get_plan_special_expr_info(PlanText &plan_text, 
                                               ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
@@ -186,10 +186,10 @@ int ObLogExchange::get_plan_special_expr_info(PlanText &plan_text,
       OZ(append(exprs, repartition_keys_));
       OZ(append(exprs, repartition_sub_keys_));
       if (OB_SUCC(ret)) {
-        ret = print_annotation_keys(buf,
-                                    buf_len,
-                                    pos,
-                                    type,
+        ret = print_annotation_keys(buf, 
+                                    buf_len, 
+                                    pos, 
+                                    type, 
                                     exprs);
       }
     }
@@ -199,10 +199,10 @@ int ObLogExchange::get_plan_special_expr_info(PlanText &plan_text,
         OZ(exprs.push_back(e->expr_));
       }
       if (OB_SUCC(ret)) {
-        ret = print_annotation_keys(buf,
-                                    buf_len,
-                                    pos,
-                                    type,
+        ret = print_annotation_keys(buf, 
+                                    buf_len, 
+                                    pos, 
+                                    type, 
                                     exprs);
       }
     }
@@ -212,10 +212,10 @@ int ObLogExchange::get_plan_special_expr_info(PlanText &plan_text,
         OZ(exprs.push_back(sk->expr_));
       }
       if (OB_SUCC(ret)) {
-        ret = print_annotation_keys(buf,
-                                    buf_len,
-                                    pos,
-                                    type,
+        ret = print_annotation_keys(buf, 
+                                    buf_len, 
+                                    pos, 
+                                    type, 
                                     exprs);
       }
     }
@@ -250,7 +250,7 @@ int ObLogExchange::get_plan_special_expr_info(PlanText &plan_text,
   return ret;
 }
 
-int ObLogExchange::get_plan_distribution(PlanText &plan_text,
+int ObLogExchange::get_plan_distribution(PlanText &plan_text, 
                                          ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
@@ -293,11 +293,11 @@ int ObLogExchange::get_plan_distribution(PlanText &plan_text,
   return ret;
 }
 
-int ObLogExchange::print_annotation_keys(char *buf,
-                                        int64_t &buf_len,
-                                        int64_t &pos,
+int ObLogExchange::print_annotation_keys(char *buf, 
+                                        int64_t &buf_len, 
+                                        int64_t &pos, 
                                         ExplainType type,
-                                        const ObIArray<ObRawExpr *> &keys)
+                                        const ObIArray<ObRawExpr *> &keys) 
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(BUF_PRINTF("(#keys=%ld", keys.count()))) {
@@ -341,7 +341,7 @@ int ObLogExchange::print_annotation_keys(char *buf,
 
 /* If using merge sort, then set local = False, range = False
  * If using task sort and range order is True, then set local = False, range = False
- * Otherwise,
+ * Otherwise, 
  * local,range    | inherit          | inherit          | True, False      | True, False |
  * EXCHANGE IN    | LOCAL/REMOTE/ALL | DISTRUBUTE       | LOCAL/REMOTE/ALL | DISTRUBUTE  |
  * EXCHANGE OUT   | LOCAL/REMOTE/ALL | LOCAL/REMOTE/ALL | DISTRUBUTE       | DISTRUBUTE  |

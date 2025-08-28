@@ -15,19 +15,19 @@
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "sql/session/ob_sql_session_mgr.h"
 
-/* __all_virtual_open_cursor
+/* __all_virtual_open_cursor 
  * The original implementation logic of open_cursor is:
- *
+ * 
  * 1. lock each session and get cur_sql_id
  * 2. get all plans through plan_cache, when the plan's sql_id == cur_sql_id, get the current plan, and get sql_text & last_active_time information
- *
+ * 
  * the problem with this implementation is that:
- *
+ * 
  * 1. when get a plan, since the current session is not locked, the risk is high
  * 2. only sql_text & last_active_time information is read in the plan. These two values can be get on the session, and the cost of using the plan is relatively high
- *
+ * 
  * new open_cursor implementation logic:
- *
+ * 
  * 1. securely get session information through fore_each_session
  * 2. referring to the show_processlist framework, put the results into the scanner for results, this framework is also conducive to subsequent expansion
  * 3. cur_plan & session_cursor two kinds of information are currently recorded
@@ -72,7 +72,7 @@ public:
   virtual void reset();
   void set_session_mgr(sql::ObSQLSessionMgr *sess_mgr) { session_mgr_ = sess_mgr; }
   int set_addr(const common::ObAddr &addr);
-
+  
 private:
   // https://docs.oracle.com/en/database/oracle/oracle-database/19/refrn/V-OPEN_CURSOR.html
   enum {
@@ -85,12 +85,12 @@ private:
     ADDRESS,                    // now is null
     HASH_VALUE,                 // now is null
     SQL_ID,                     // sql id
-    SQL_TEXT,                   // sql text, only 60
+    SQL_TEXT,                   // sql text, only 60 
     LAST_SQL_ACTIVE_TIME,       // last sql active time
     SQL_EXEC_ID,                // now is null
     CURSOR_TYPE,                // cursor type, only support OPEN & SESSION CURSOR CACHED now
                                 /*
-                                 * OPEN PL/SQL
+                                 * OPEN PL/SQL 
                                  * OPEN
                                  * SESSION CURSOR CACHED
                                  * OPEN-RECURSIVE
@@ -100,7 +100,7 @@ private:
                                  * REPLICATION TRIGGER CURSOR CACHED
                                  * CONSTRAINTS CURSOR CACHED
                                  * PL/SQL CURSOR CACHED
-                                 */
+                                 */   
     CHILD_ADDRESS,              // Address of the child cursor
     CON_ID,                     // The ID of the container to which the data pertains, only support 1 now
   };
@@ -117,7 +117,7 @@ private:
     {}
     virtual ~FillScanner(){}
     bool operator()(sql::ObSQLSessionMgr::Key key, sql::ObSQLSessionInfo* sess_info);
-    int fill_cursor_cell(sql::ObSQLSessionInfo &sess_info,
+    int fill_cursor_cell(sql::ObSQLSessionInfo &sess_info, 
                          pl::ObPLCursorInfo* cursor_id,
                          bool is_session_cursor);
     int get_session_cursor_sql_text(sql::ObSQLSessionInfo &sess_info,

@@ -94,7 +94,7 @@ struct ObAuditUnit
     uint64_t obj_id,
     int64_t obj_idx,
     share::schema::ObSAuditOperationType stmt_operation_type,
-    share::schema::ObSAuditOperationType obj_operation_type)
+    share::schema::ObSAuditOperationType obj_operation_type) 
     : stmt_type_(stmt_type), obj_type_(obj_type), obj_id_(obj_id), obj_idx_(obj_idx),
       stmt_operation_type_(stmt_operation_type), obj_operation_type_(obj_operation_type) {}
 

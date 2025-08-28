@@ -81,7 +81,7 @@ TEST(TestPalfEnvLiteMgr, test_create_delete_palf)
 
 TEST(TestPalfEnvLiteMgr, test_create_block)
 {
-  DummyBlockPool dbp;
+  DummyBlockPool dbp; 
   int dir_fd = -1;
   std::string test_dir = "test_create_block";
   std::string mkdir_cmd = "mkdir -p " + test_dir;

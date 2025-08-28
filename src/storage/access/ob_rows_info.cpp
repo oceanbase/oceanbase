@@ -244,7 +244,7 @@ int ObRowsInfo::assign_duplicate_splitted_rows_info(
       if (splitted_rows_info.rowkeys_.at(i).marked_rowkey_.is_row_duplicate()) {
         const int64_t origin_row_idx = row_idxs.at(splitted_rows_info.rowkeys_.at(i).row_idx_);
         rowkeys_.at(origin_row_idx) = splitted_rows_info.rowkeys_.at(i);
-        // obj_ptr of store_rowkey is allocated by allocator in tmp_rows_info, so it need to be reset,
+        // obj_ptr of store_rowkey is allocated by allocator in tmp_rows_info, so it need to be reset, 
         // otherwise later printting store_rowkey will core.
         rowkeys_.at(origin_row_idx).marked_rowkey_.get_rowkey().store_rowkey_.reset();
         rowkeys_.at(origin_row_idx).row_idx_ = origin_row_idx;

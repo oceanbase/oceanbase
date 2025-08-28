@@ -364,7 +364,7 @@ int ObSchemaGetterGuard::get_all_unique_index(const uint64_t tenant_id,
                KR(ret), K(tenant_id), K(index_id));
     } else if (OB_UNLIKELY(index_schema->is_final_invalid_index())) {
       //invalid index status, need ingore
-    } else if ((index_schema->is_local_unique_index_table() ||
+    } else if ((index_schema->is_local_unique_index_table() || 
                index_schema->is_global_unique_index_table()) &&
                OB_FAIL(unique_index_ids.push_back(index_id))) {
       LOG_WARN("failed to push back local unique index", K(ret));
@@ -2444,7 +2444,7 @@ int ObSchemaGetterGuard::get_index_schemas_with_data_table_id(
 {
   int ret = OB_SUCCESS;
   index_schemas.reset();
-  const ObSchemaMgr *mgr = NULL;
+  const ObSchemaMgr *mgr = NULL; 
   const ObSimpleTableSchemaV2 *table_schema = NULL;
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
@@ -2466,7 +2466,7 @@ int ObSchemaGetterGuard::get_index_schemas_with_data_table_id(
     if (OB_FAIL(mgr->get_aux_schemas(tenant_id, data_table_id, index_schemas, USER_INDEX))) {
       LOG_WARN("fail to get aux schemas", KR(ret), K(tenant_id), K(data_table_id));
     }
-  }
+  } 
   return ret;
 }
 
@@ -2924,7 +2924,7 @@ int ObSchemaGetterGuard::check_user_access(
               LOG_WARN("fail to check activate all role", K(ret));
             }
           }
-
+          
           ObSEArray<uint64_t, 8> role_id_array;
           ObSEArray<uint64_t, 8> role_id_option_array;
           if (proxied_user_info != NULL) {
@@ -2952,7 +2952,7 @@ int ObSchemaGetterGuard::check_user_access(
               ObArray<uint64_t> new_role_id_option_array;
               if (OB_FAIL(sql::ObSQLUtils::get_proxy_can_activate_role(role_id_array,
                                                                   role_id_option_array,
-                                                                  *proxied_info,
+                                                                  *proxied_info, 
                                                                   new_role_id_array,
                                                                   new_role_id_option_array))) {
                 LOG_WARN("get proxy can activate role failed", K(ret));
@@ -3250,7 +3250,7 @@ int ObSchemaGetterGuard::get_column_priv_id(
   int ret = OB_SUCCESS;
   const ObSchemaMgr *mgr = NULL;
   priv_id = OB_INVALID_ID;
-  if (0 == db.length() || 0 == table.length() || 0 == column.length()
+  if (0 == db.length() || 0 == table.length() || 0 == column.length() 
       || OB_INVALID_ID == tenant_id || OB_INVALID_ID == user_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid arguments", KR(ret));
@@ -3980,7 +3980,7 @@ inline bool ObSchemaGetterGuard::check_inner_stat() const
 }
 
 // OB_INVALID_VERSION means schema doesn't exist.
-// bugfix:
+// bugfix: 
 int ObSchemaGetterGuard::get_schema_version(
     const ObSchemaType schema_type,
     const uint64_t tenant_id,
@@ -8768,16 +8768,16 @@ int ObSchemaGetterGuard::get_range_part_high_bound(
     const ObTableSchema &table_schema,
     const common::ObTabletID &tablet_id,
     ObIAllocator &allocator,
-    common::ObRowkey &high_bound)
+    common::ObRowkey &high_bound) 
 {
   int ret = OB_SUCCESS;
   high_bound.reset();
   if (OB_UNLIKELY(!table_schema.is_valid() || !tablet_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(tablet_id), K(table_schema));
-  } else if (OB_UNLIKELY((PARTITION_LEVEL_ONE == table_schema.get_part_level()
+  } else if (OB_UNLIKELY((PARTITION_LEVEL_ONE == table_schema.get_part_level() 
         && !is_range_part(table_schema.get_part_option().get_part_func_type()))
-    || (PARTITION_LEVEL_TWO == table_schema.get_part_level()
+    || (PARTITION_LEVEL_TWO == table_schema.get_part_level() 
         && !is_range_part(table_schema.get_sub_part_option().get_part_func_type())))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(table_schema));

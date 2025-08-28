@@ -141,7 +141,7 @@ const char *CORRECT_LICENSE = R"({
 class TestLicense : public ::testing::Test
 {
 public:
-
+  
   virtual void SetUp() override
   {
     LOG_INFO("set up");
@@ -238,7 +238,7 @@ TEST_F(TestLicense, LicenseTimestampService) {
   ASSERT_EQ(license_mgr_->timestamp_service_.get_time(last_time), OB_SUCCESS);
   for (int i = 0; i < 3; i ++) {
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
-
+  
     ASSERT_EQ(license_mgr_->timestamp_service_.get_time(time), OB_SUCCESS);
     ASSERT_LT(time, last_time + 20 * single_ms);
     ASSERT_GT(time, last_time + 5 * single_ms);
@@ -258,7 +258,7 @@ TEST_F(TestLicense, LicenseTimestampService) {
   ASSERT_EQ(license_mgr_->timestamp_service_.get_time(last_time), OB_SUCCESS);
   for (int i = 0; i < 3; i ++) {
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
-
+  
     ASSERT_EQ(license_mgr_->timestamp_service_.get_time(time), OB_SUCCESS);
     ASSERT_LT(time, last_time + 20 * single_ms);
     ASSERT_GT(time, last_time + 5 * single_ms);
@@ -273,7 +273,7 @@ TEST_F(TestLicense, LicenseTimestampService) {
       int64_t last_time = 0;
       ASSERT_EQ(license_mgr_->timestamp_service_.get_time(last_time), OB_SUCCESS);
 
-      for (int j = 0; j < 1000; j ++) {
+      for (int j = 0; j < 1000; j ++) {    
         ASSERT_EQ(license_mgr_->timestamp_service_.get_time(time), OB_SUCCESS);
         ASSERT_LT(time, last_time + single_second);
         ASSERT_GE(time, last_time);
@@ -341,13 +341,13 @@ TEST_F(TestLicense, TestLicenseUtils) {
 
   ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::get_login_message(login_msg, 50));
   ASSERT_EQ(0, strcmp(login_msg, "License has been expired"));
-
+  
 
   current_license->license_trail_ = false;
   current_license->expiration_time_ = 1739894401000000 + 1000000;
   ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::get_login_message(login_msg, 50));
   ASSERT_EQ(0, strcmp(login_msg, "License will be expired in 1 days"));
-
+  
 
   const char *auxiliary_tenant_name = "mysql_$aux";
   current_license->allow_multi_tenant_ = false;

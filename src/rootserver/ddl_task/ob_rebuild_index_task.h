@@ -70,7 +70,7 @@ private:
   int rebuild_vec_index_impl();
   int rebuild_mlog_impl();
   int drop_index_impl();
-  int prepare_drop_index_arg(ObSchemaGetterGuard &schema_guard,
+  int prepare_drop_index_arg(ObSchemaGetterGuard &schema_guard, 
                              const ObTableSchema *index_schema,
                              const ObDatabaseSchema *database_schema,
                              const ObTableSchema *data_table_schema,
@@ -83,19 +83,19 @@ private:
   int succ();
   int fail();
   int check_ddl_task_finish(
-      const int64_t tenant_id,
-      int64_t &task_id,
+      const int64_t tenant_id, 
+      int64_t &task_id, 
       bool &is_finished);
   int get_new_index_table_id(
-      ObSchemaGetterGuard &schema_guard,
-      const int64_t tenant_id,
-      const int64_t database_id,
+      ObSchemaGetterGuard &schema_guard, 
+      const int64_t tenant_id, 
+      const int64_t database_id, 
       const int64_t data_table_id,
-      const ObString &index_name,
+      const ObString &index_name,  
       int64_t &index_id);
   int deep_copy_index_arg(
-      common::ObIAllocator &allocator,
-      const obrpc::ObRebuildIndexArg &src_index_arg,
+      common::ObIAllocator &allocator, 
+      const obrpc::ObRebuildIndexArg &src_index_arg, 
       obrpc::ObRebuildIndexArg &dst_index_arg);
   virtual bool is_error_need_retry(const int ret_code) override
   {
@@ -121,3 +121,4 @@ private:
 }  // end namespace oceanbase
 
 #endif  // OCEANBASE_ROOTSERVER_OB_REBUILD_INDEX_TASK_H
+

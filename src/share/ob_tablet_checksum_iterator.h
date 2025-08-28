@@ -34,7 +34,7 @@ class ObTabletChecksumIterator
 public:
   ObTabletChecksumIterator() 
     : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID),
-      compaction_scn_(), checksum_items_(), cur_idx_(0),
+      compaction_scn_(), checksum_items_(), cur_idx_(0), 
       sql_proxy_(NULL)
   {}
   virtual ~ObTabletChecksumIterator() { reset(); }

@@ -30,20 +30,20 @@ namespace sql
 {
 
 ObExprArraySlice::ObExprArraySlice(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc,
-          T_FUNC_SYS_ARRAY_SLICE,
-          N_ARRAY_SLICE,
+    : ObFuncExprOperator(alloc, 
+          T_FUNC_SYS_ARRAY_SLICE, 
+          N_ARRAY_SLICE, 
           TWO_OR_THREE,
-          VALID_FOR_GENERATED_COL,
+          VALID_FOR_GENERATED_COL, 
           NOT_ROW_DIMENSION)
 {
 }
 
 ObExprArraySlice::~ObExprArraySlice() {}
 
-int ObExprArraySlice::calc_result_typeN(ObExprResType &type,
+int ObExprArraySlice::calc_result_typeN(ObExprResType &type, 
                           ObExprResType *types,
-                          int64_t param_num,
+                          int64_t param_num, 
                           ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
@@ -95,8 +95,8 @@ int ObExprArraySlice::calc_result_typeN(ObExprResType &type,
   return ret;
 }
 
-int ObExprArraySlice::eval_array_slice(const ObExpr &expr,
-                          ObEvalCtx &ctx,
+int ObExprArraySlice::eval_array_slice(const ObExpr &expr, 
+                          ObEvalCtx &ctx, 
                           ObDatum &res)
 {
   int ret = OB_SUCCESS;
@@ -118,16 +118,16 @@ int ObExprArraySlice::eval_array_slice(const ObExpr &expr,
   } else if (arr_datum->is_null() || offset_datum->is_null() ||
              (expr.arg_cnt_ > 2 && len_datum->is_null())) {
     res.set_null();
-  } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator,
-                                          ctx,
+  } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, 
+                                          ctx, 
                                           subschema_id,
-                                          arr_datum->get_string(),
+                                          arr_datum->get_string(), 
                                           src_arr))) {
     LOG_WARN("construct array obj failed", K(ret));
   } else if (OB_FAIL(ObArrayExprUtils::construct_array_obj(tmp_allocator,
-                                          ctx,
-                                          subschema_id,
-                                          res_arr,
+                                          ctx, 
+                                          subschema_id, 
+                                          res_arr, 
                                           false))) {
     LOG_WARN("construct array obj failed", K(ret));
   } else {
@@ -143,9 +143,9 @@ int ObExprArraySlice::eval_array_slice(const ObExpr &expr,
       LOG_WARN("failed to get subarray", K(ret));
     } else {
       ObString res_str;
-      if (OB_FAIL(ObArrayExprUtils::set_array_res(res_arr,
-                                        res_arr->get_raw_binary_len(),
-                                        expr,
+      if (OB_FAIL(ObArrayExprUtils::set_array_res(res_arr, 
+                                        res_arr->get_raw_binary_len(), 
+                                        expr, 
                                         ctx,
                                         res_str))) {
         LOG_WARN("get array binary string failed", K(ret));
@@ -158,9 +158,9 @@ int ObExprArraySlice::eval_array_slice(const ObExpr &expr,
   return ret;
 }
 
-int ObExprArraySlice::eval_array_slice_batch(const ObExpr &expr,
+int ObExprArraySlice::eval_array_slice_batch(const ObExpr &expr, 
                           ObEvalCtx &ctx,
-                          const ObBitVector &skip,
+                          const ObBitVector &skip, 
                           const int64_t batch_size)
 {
   int ret = OB_SUCCESS;
@@ -192,16 +192,16 @@ int ObExprArraySlice::eval_array_slice_batch(const ObExpr &expr,
       if (arr_array.at(j)->is_null() || offset_array.at(j)->is_null() ||
           (expr.arg_cnt_ > 2 && len_array.at(j)->is_null())) {
         res_datum.at(j)->set_null();
-      } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator,
-                                              ctx,
+      } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, 
+                                              ctx, 
                                               subschema_id,
                                               arr_array.at(j)->get_string(),
                                               src_arr))) {
         LOG_WARN("construct array obj failed", K(ret));
       } else if (OB_FAIL(ObArrayExprUtils::construct_array_obj(tmp_allocator,
-                                              ctx,
-                                              subschema_id,
-                                              res_arr,
+                                              ctx, 
+                                              subschema_id, 
+                                              res_arr, 
                                               false))) {
         LOG_WARN("construct array obj failed", K(ret));
       } else {
@@ -242,9 +242,9 @@ int ObExprArraySlice::eval_array_slice_batch(const ObExpr &expr,
   return ret;
 }
 
-int ObExprArraySlice::eval_array_slice_vector(const ObExpr &expr,
+int ObExprArraySlice::eval_array_slice_vector(const ObExpr &expr, 
                           ObEvalCtx &ctx,
-                          const ObBitVector &skip,
+                          const ObBitVector &skip, 
                           const EvalBound &bound)
 {
   int ret = OB_SUCCESS;
@@ -280,17 +280,17 @@ int ObExprArraySlice::eval_array_slice_vector(const ObExpr &expr,
           (expr.arg_cnt_ > 2 && len_vec->is_null(j))) {
         is_null_res = true;
       } else if (OB_FAIL(ObArrayExprUtils::construct_array_obj(tmp_allocator,
-                                              ctx,
-                                              subschema_id,
-                                              res_arr,
+                                              ctx, 
+                                              subschema_id, 
+                                              res_arr, 
                                               false))) {
         LOG_WARN("construct array obj failed", K(ret));
       } else {
         ObString arr_string = arr_vec->get_string(j);
-        if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator,
-                                            ctx,
+        if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator, 
+                                            ctx, 
                                             subschema_id,
-                                            arr_string,
+                                            arr_string, 
                                             src_arr))) {
           LOG_WARN("construct array obj failed", K(ret));
         }
@@ -333,10 +333,10 @@ int ObExprArraySlice::eval_array_slice_vector(const ObExpr &expr,
   return ret;
 }
 
-int ObExprArraySlice::get_subarray(ObIArrayType *&res_arr,
-                          ObIArrayType *src_arr,
+int ObExprArraySlice::get_subarray(ObIArrayType *&res_arr, 
+                          ObIArrayType *src_arr, 
                           int64_t offset,
-                          int64_t len,
+                          int64_t len, 
                           bool has_len)
 {
   int ret = OB_SUCCESS;
@@ -376,7 +376,7 @@ int ObExprArraySlice::get_subarray(ObIArrayType *&res_arr,
   return ret;
 }
 
-int ObExprArraySlice::cg_expr(ObExprCGCtx &expr_cg_ctx,
+int ObExprArraySlice::cg_expr(ObExprCGCtx &expr_cg_ctx, 
                           const ObRawExpr &raw_expr,
                           ObExpr &rt_expr) const
 {

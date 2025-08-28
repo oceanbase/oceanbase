@@ -139,7 +139,7 @@ int ObTableExecutorFactory::alloc_executor(ObIAllocator &alloc,
     LOG_WARN("table api executor is not supported", K(ret), K(exec_type));
   } else if (OB_FAIL(G_TABLE_API_ALLOC_FUNCS_[exec_type].exec_func_(alloc, ctx, spec, executor))) {
     LOG_WARN("fail to alloc table api executor", K(ret), K(exec_type));
-  } else {}
+  } else {} 
 
   return ret;
 }
@@ -155,7 +155,7 @@ int ObTableExecutorFactory::generate_spec(ObIAllocator &alloc,
     LOG_WARN("table api executor is not supported", K(ret), K(type));
   } else if (OB_FAIL(G_TABLE_API_ALLOC_FUNCS_[type].gen_spec_func_(alloc, type, ctx, spec))) {
     LOG_WARN("fail to alloc table api executor", K(ret), K(type));
-  } else {}
+  } else {} 
 
   return ret;
 }

@@ -134,7 +134,7 @@ public:
                        bool delay_cross_product,
                        ObIArray<TableDependInfo> &table_depend_infos,
                        bool &legal);
-
+  
 
 private:
   //table set包含的是当前join condition所引用的所有表，也就是SES

@@ -67,10 +67,10 @@ struct ObEstRowCountRecord
 struct SampleInfo
 {
   SampleInfo() { reset(); }
-  enum SampleMethod
-  {
-    NO_SAMPLE = 0,
-    ROW_SAMPLE = 1,
+  enum SampleMethod 
+  { 
+    NO_SAMPLE = 0, 
+    ROW_SAMPLE = 1, 
     BLOCK_SAMPLE = 2,
     HYBRID_SAMPLE = 3
   };
@@ -83,7 +83,7 @@ struct SampleInfo
   OB_INLINE bool is_trival_sample() const { return ROW_SAMPLE == method_; }
   OB_INLINE bool is_hybrid_sample() const { return HYBRID_SAMPLE == method_; }
   OB_INLINE bool is_block_sample() const { return BLOCK_SAMPLE == method_; }
-  OB_INLINE bool is_no_sample() const { return NO_SAMPLE == method_; }
+  OB_INLINE bool is_no_sample() const { return NO_SAMPLE == method_; }  
   OB_INLINE bool is_row_sample() const { return is_trival_sample() || is_hybrid_sample(); }
   uint64_t hash(uint64_t seed) const;
   void reset()
@@ -98,7 +98,7 @@ struct SampleInfo
 
   bool same_as(const SampleInfo &oth) const {
     return table_id_ == oth.table_id_
-           && method_ == oth.method_
+           && method_ == oth.method_ 
            && scope_ == oth.scope_
            && percent_ == oth.percent_
            && seed_ == oth.seed_
@@ -200,7 +200,7 @@ struct ObTSCMonitorInfo
             int64_t* ssstore_read_bytes,
             int64_t* ssstore_read_row_cnt,
             int64_t* memstore_read_row_cnt,
-            uint64_t* block_io_wait_time_us)
+            uint64_t* block_io_wait_time_us) 
   {
     io_read_bytes_ = io_read_bytes;
     ssstore_read_bytes_ = ssstore_read_bytes;

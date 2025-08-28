@@ -115,7 +115,7 @@ int ObITruncateFilterExecutor::prepare_datum_buf(ObIAllocator &alloc, const int6
       tmp_datum_buf_ = new (buf) ObStorageDatum[count];
       datum_allocator_ = &alloc;
     }
-  }
+  } 
   return ret;
 }
 

@@ -308,3 +308,6 @@ ObScale ObExprDiv::decint_res_round_up_scale(const ObExpr &expr, int64_t div_inc
 } // end oceanbase
 
 #endif // OCEANBASE_EXPR_DIV_DECINT_IPP_
+
+
+

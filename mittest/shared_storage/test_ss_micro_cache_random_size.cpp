@@ -64,7 +64,7 @@ public:
     TO_STRING_KV(KP_(micro_cache), K_(tenant_id), K_(min_micro_size), K_(max_micro_size), K_(micro_cnt), K_(check_read_data));
   };
 
-  class TestSSMicroCacheRandomSizeThread : public Threads
+  class TestSSMicroCacheRandomSizeThread : public Threads 
   {
   public:
     TestSSMicroCacheRandomSizeThread(ObTenantBase *tenant_base, TestSSMicroCacheRandomSizeCtx &ctx)
@@ -169,8 +169,8 @@ int TestSSMicroCacheRandomSize::TestSSMicroCacheRandomSizeThread::parallel_add_a
           MEMSET(buf, '\0', micro_size);
           if (OB_FAIL(build_io_info(io_info, ctx_.tenant_id_, micro_key, micro_size, buf))) {
             LOG_WARN("fail to build io_info", KR(ret), K_(ctx), KP(buf));
-          } else if (OB_FAIL(ctx_.micro_cache_->get_micro_block_cache(micro_key, ss_micro_block_id,
-                     MicroCacheGetType::FORCE_GET_DATA, io_info, obj_handle,
+          } else if (OB_FAIL(ctx_.micro_cache_->get_micro_block_cache(micro_key, ss_micro_block_id, 
+                     MicroCacheGetType::FORCE_GET_DATA, io_info, obj_handle, 
                      ObSSMicroCacheAccessType::COMMON_IO_TYPE))) {
             LOG_WARN("fail to get_micro_block_cache", KR(ret), K(ss_micro_block_id));
           } else {

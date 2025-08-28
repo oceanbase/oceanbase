@@ -1173,7 +1173,7 @@ int BatchTempRowStoresMgr::add_batch(const int64_t *idxes,
           blocks_[idxes[i]] = stores_.at(idxes[i])->cur_blk();
           buffers_[idxes[i]] = &stores_.at(idxes[i])->blk_buf_;
           prepare_one_row(idxes[i], i, stored_rows);
-        }
+        } 
       }
     }
     if (OB_SUCC(ret)) {

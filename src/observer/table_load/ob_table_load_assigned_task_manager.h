@@ -33,7 +33,7 @@ public:
 	int delete_assigned_task(ObTableLoadUniqueKey &task_key);
 	int get_assigned_tasks(common::ObSArray<ObDirectLoadResourceApplyArg> &assigned_tasks);
 private:
-  typedef common::hash::ObHashMap<ObTableLoadUniqueKey,
+  typedef common::hash::ObHashMap<ObTableLoadUniqueKey, 
 																	ObDirectLoadResourceApplyArg,
                                   common::hash::NoPthreadDefendMode>
 		ResourceApplyMap;

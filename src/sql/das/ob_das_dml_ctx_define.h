@@ -417,7 +417,7 @@ public:
   {
     return buffer_list_.header_.next_ != nullptr ? buffer_list_.header_.next_->cnt_ : 0;
   }
-  inline uint64_t get_tenant_id() const { return mem_attr_.tenant_id_; }
+  inline uint64_t get_tenant_id() const { return mem_attr_.tenant_id_; } 
   int add_row(const common::ObIArray<ObExpr*> &exprs,
               ObEvalCtx *ctx,
               DmlRow *&stored_row,

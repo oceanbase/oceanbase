@@ -642,7 +642,7 @@ int ObTenantWeakReadService::scan_all_ls_(storage::ObLSService *ls_svr)
       if (cur_time - start_time > 10000) {
         // too many ls, time cost too much in single scan
         // need sleep to prevent CPU cost too much
-        //
+        // 
         const uint32_t sleep_time = 1000; // 1ms
         ob_usleep(sleep_time); // 1ms
         start_time = cur_time + sleep_time;
@@ -955,7 +955,7 @@ bool ObTenantWeakReadService::need_generate_cluster_version_(const int64_t cur_t
 // need force self check
 // if need retry and affected_row is 0 in persisting __all_weak_read_service
 // need restart service
-// bug:
+// bug: 
 bool ObTenantWeakReadService::need_force_self_check_(int ret,
     int64_t affected_rows,
     bool &need_stop_service)

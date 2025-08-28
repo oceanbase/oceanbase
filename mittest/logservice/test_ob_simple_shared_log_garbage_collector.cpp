@@ -84,7 +84,7 @@ TEST_F(TestObSimpleSharedLogGC, test_get_min_using_scn)
       ls_attr.status_ = OB_LS_DROPPED;
       SCN min_using_scn;
       LSN min_using_upper_lsn;
-
+      
       EXPECT_EQ(OB_SUCCESS, shared_gc->get_min_using_scn_(MTL_ID(), ls_attr, min_using_scn, min_using_upper_lsn));
       EXPECT_EQ(SCN::max_scn(), min_using_scn);
       EXPECT_EQ(LSN(LOG_MAX_LSN_VAL), min_using_upper_lsn);

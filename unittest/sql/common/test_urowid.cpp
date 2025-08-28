@@ -367,7 +367,7 @@ public:
 
 TEST(TestURowID, single_urowid_test) {
   TestAllocator alloc;
-  // bug:
+  // bug: 
   const char *str = "*AAEWLlcAAABnYXJuaXNoIG51bWJlciB0ZWFyaW5nIG1hbnRsaW5nIGFjY3VzdG9tcyBleHRyZW1lcyBiYXNlbHkgY3JhemlseSBlbGRlciB0YXJkaWVzIHByZW1pc2UtCwAAAAACCkcywAAAAAAA";
   ObURowIDData dec_data;
   ASSERT_EQ(OB_SUCCESS, ObURowIDData::decode2urowid(str, strlen(str), alloc, dec_data));

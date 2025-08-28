@@ -40250,7 +40250,7 @@ SQL: select max(999+abs(-1)) from t7 group by c2;
   "check_option":0
 }
 ***************   Case 47   ***************
-SQL: select max(999+abs(-1)) from t7 group by c2;
+SQL: select max(999+abs(-1)) from t7 group by c2; 
 {
   "stmt_type":1,
   "transpose_item":null,
@@ -55517,7 +55517,7 @@ SQL: select min(1 + 1) from t7 group by c1 order by 1;
   "check_option":0
 }
 ***************   Case 66   ***************
-SQL: select min(1 + 1) from t7 group by c1 order by 1;
+SQL: select min(1 + 1) from t7 group by c1 order by 1; 
 {
   "stmt_type":1,
   "transpose_item":null,
@@ -55842,7 +55842,7 @@ SQL: select min(1 + 1) from t7 group by c1 order by 1;
   "check_option":0
 }
 ***************   Case 67   ***************
-SQL: select c1 from t1 where c1 > any (select c1 from t2);
+SQL: select c1 from t1 where c1 > any (select c1 from t2); 
 {
   "stmt_type":1,
   "transpose_item":null,
@@ -56434,7 +56434,7 @@ SQL: select c1 from t1 where c1 > any (select c1 from t2);
   "check_option":0
 }
 ***************   Case 68   ***************
-SQL: select c1 from t1 where c1 < some (select c1 from t2);
+SQL: select c1 from t1 where c1 < some (select c1 from t2); 
 {
   "stmt_type":1,
   "transpose_item":null,
@@ -57456,7 +57456,7 @@ SQL: select c1 from t1 where c1 < some (select c1 from t2);
   "check_option":0
 }
 ***************   Case 69   ***************
-SQL: select c1 from t1 where c1 > all (select c1 from t2);
+SQL: select c1 from t1 where c1 > all (select c1 from t2); 
 {
   "stmt_type":1,
   "transpose_item":null,
@@ -58048,7 +58048,7 @@ SQL: select c1 from t1 where c1 > all (select c1 from t2);
   "check_option":0
 }
 ***************   Case 70   ***************
-SQL: select c1 from t1 where c1 < all (select c1 from t2);
+SQL: select c1 from t1 where c1 < all (select c1 from t2); 
 {
   "stmt_type":1,
   "transpose_item":null,
@@ -58860,7 +58860,7 @@ SQL: select c1 from t1 where c1 < all (select c1 from t2);
   "is_hierarchical_query":false
 }
 ***************   Case 69   ***************
-SQL: select c1 from t1 where c1 > all (select c1 from t2);
+SQL: select c1 from t1 where c1 > all (select c1 from t2); 
 {
   "stmt_type":1,
   "transpose_item":null,
@@ -59299,7 +59299,7 @@ SQL: select c1 from t1 where c1 > all (select c1 from t2);
   "check_option":0
 }
 ***************   Case 71   ***************
-SQL: select c1 from t1 where c1 in (select c1 from t2 where c2 >= some(select c1 from t3 where t1.c2=t3.c1));
+SQL: select c1 from t1 where c1 in (select c1 from t2 where c2 >= some(select c1 from t3 where t1.c2=t3.c1)); 
 {
   "stmt_type":1,
   "transpose_item":null,
@@ -60247,7 +60247,7 @@ SQL: select c1 from t1 where c1 in (select c1 from t2 where c2 >= some(select c1
   "is_hierarchical_query":false
 }
 ***************   Case 70   ***************
-SQL: select c1 from t1 where c1 < all (select c1 from t2);
+SQL: select c1 from t1 where c1 < all (select c1 from t2); 
 {
   "stmt_type":1,
   "transpose_item":null,
@@ -61658,7 +61658,7 @@ SQL: select c1 from t1 where c1 < all (select c1 from t2);
   "is_hierarchical_query":false
 }
 ***************   Case 71   ***************
-SQL: select c1 from t1 where c1 in (select c1 from t2 where c2 >= some(select c1 from t3 where t1.c2=t3.c1));
+SQL: select c1 from t1 where c1 in (select c1 from t2 where c2 >= some(select c1 from t3 where t1.c2=t3.c1)); 
 {
   "stmt_type":1,
   "transpose_item":null,
@@ -62878,7 +62878,7 @@ SQL: select c1 from t1 where c1 in (select c1 from t2 where c2 >= some(select c1
   "check_option":0
 }
 ***************   Case 77   ***************
-SQL: select c1 from t1 where c1 + 1 > any (select c1 from t2);
+SQL: select c1 from t1 where c1 + 1 > any (select c1 from t2); 
 {
   "stmt_type":1,
   "transpose_item":null,
@@ -63643,7 +63643,7 @@ SQL: select c1 from t1 where c1 + 1 > any (select c1 from t2);
   "is_hierarchical_query":false
 }
 ***************   Case 72   ***************
-SQL: select c1 from t1 where c1 > any (select c1 from t2 where c2 >= some(select c1 from t3 where t1.c2=t3.c1));
+SQL: select c1 from t1 where c1 > any (select c1 from t2 where c2 >= some(select c1 from t3 where t1.c2=t3.c1)); 
 {
   "stmt_type":1,
   "transpose_item":null,
@@ -65949,7 +65949,7 @@ SQL: select c1 from t1 where c1 > any (select c1 from t2 where c2 >= some(select
   "is_hierarchical_query":false
 }
 ***************   Case 73   ***************
-SQL: select c1 from t1 group by c1 > any (select c1 from t2);
+SQL: select c1 from t1 group by c1 > any (select c1 from t2); 
 {
   "stmt_type":1,
   "transpose_item":null,
@@ -67091,7 +67091,7 @@ SQL: select c1 from t1 group by c1 > any (select c1 from t2);
   "is_hierarchical_query":false
 }
 ***************   Case 74   ***************
-SQL: select c1 from t1 having c1 < any (select c1 from t2);
+SQL: select c1 from t1 having c1 < any (select c1 from t2); 
 {
   "stmt_type":1,
   "transpose_item":null,
@@ -68304,7 +68304,7 @@ SQL: select c1 from t1 having c1 < any (select c1 from t2);
   "is_hierarchical_query":false
 }
 ***************   Case 75   ***************
-SQL: select c1 from t1 order by c1 > all (select c1 from t2);
+SQL: select c1 from t1 order by c1 > all (select c1 from t2); 
 {
   "stmt_type":1,
   "transpose_item":null,
@@ -83347,7 +83347,7 @@ SQL: select max(c3) from t9 where c2 = 1;
   "is_hierarchical_query":false
 }
 ***************   Case 84   ***************
-SQL: select max(c3) from t9 where c2 is TRUE;
+SQL: select max(c3) from t9 where c2 is TRUE; 
 {
   "stmt_type":1,
   "transpose_item":null,
@@ -85232,7 +85232,7 @@ SQL: select max(c3) from t9 where 1 = c2;
   "is_hierarchical_query":false
 }
 ***************   Case 86   ***************
-SQL: select max(c3) from t9 where c2 != 1;
+SQL: select max(c3) from t9 where c2 != 1; 
 {
   "stmt_type":1,
   "transpose_item":null,
@@ -85724,7 +85724,7 @@ SQL: select max(c3) from t9 where c2 != 1;
   "check_option":0
 }
 ***************   Case 84   ***************
-SQL: select max(c3) from t9 where c2 is TRUE;
+SQL: select max(c3) from t9 where c2 is TRUE; 
 {
   "stmt_type":1,
   "transpose_item":null,
@@ -86446,7 +86446,7 @@ SQL: select max(c3) from t9 where c2 is TRUE;
   "is_hierarchical_query":false
 }
 ***************   Case 88   ***************
-SQL: select max(c3) from t9 where c2 <1;
+SQL: select max(c3) from t9 where c2 <1; 
 {
   "stmt_type":1,
   "transpose_item":null,
@@ -87039,7 +87039,7 @@ SQL: select max(c3) from t9 where c2 <1;
   "is_hierarchical_query":false
 }
 ***************   Case 89   ***************
-SQL: select c1 from t1 where c1 > any (select c2 from t9);
+SQL: select c1 from t1 where c1 > any (select c2 from t9); 
 {
   "stmt_type":1,
   "transpose_item":null,
@@ -89891,7 +89891,7 @@ SQL: select max(c3) from t9 where c2 != 1;
   "is_hierarchical_query":false
 }
 ***************   Case 91   ***************
-SQL: select c1 from t1 where c1 > any (select c1 from t2 having c1 > 1);
+SQL: select c1 from t1 where c1 > any (select c1 from t2 having c1 > 1); 
 {
   "stmt_type":1,
   "transpose_item":null,

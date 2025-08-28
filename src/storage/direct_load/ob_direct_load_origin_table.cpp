@@ -255,10 +255,10 @@ int ObDirectLoadOriginTable::get(const ObDatumRowkey &key,
  */
 
 ObDirectLoadOriginTableAccessor::ObDirectLoadOriginTableAccessor()
-  : allocator_("TLD_OriAccess"),
-    stmt_allocator_("TLD_OriAccess"),
-    origin_table_(nullptr),
-    schema_param_(stmt_allocator_),
+  : allocator_("TLD_OriAccess"), 
+    stmt_allocator_("TLD_OriAccess"), 
+    origin_table_(nullptr), 
+    schema_param_(stmt_allocator_), 
     is_inited_(false)
 {
   allocator_.set_tenant_id(MTL_ID());

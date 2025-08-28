@@ -244,7 +244,7 @@ class ObBackupMetaIndexStoreWrapperV2 : public ObIBackupIndexStoreWrapper
 public:
   ObBackupMetaIndexStoreWrapperV2() : ObIBackupIndexStoreWrapper(), store_list_() {}
   virtual ~ObBackupMetaIndexStoreWrapperV2() {}
-
+  
 public:
   virtual int check_tenant_compatible(const int64_t tenant_compatible) override;
   virtual int get_index_store_array_size(int64_t &array_size) override;
@@ -306,7 +306,7 @@ class ObBackupOrderedMacroBlockIndexStore final : public ObIBackupIndexStore
     }
   };
 public:
-  ObBackupOrderedMacroBlockIndexStore();
+  ObBackupOrderedMacroBlockIndexStore(); 
   ~ObBackupOrderedMacroBlockIndexStore();
   int init(const ObBackupRestoreMode &mode, const ObBackupIndexStoreParam &param,
       const share::ObBackupDest &backup_dest, const share::ObBackupSetDesc &backup_set_info,

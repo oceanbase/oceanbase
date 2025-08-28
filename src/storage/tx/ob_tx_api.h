@@ -113,7 +113,7 @@ int release_tx(ObTxDesc &tx, const bool is_from_xa = false);
  * better performance.
  *
  * @tx:           the target transaction's descriptor
- * @data_version: tx data_version
+ * @data_version: tx data_version 
  *
  * Return: OB_SUCCESS -OK
  */
@@ -368,7 +368,7 @@ int create_branch_savepoint(ObTxDesc &tx,
  * @tx:                        the target transaction's descriptor
  *                             which hold the savepoint
  * @savepoint:                 the name of savepoint to be created
- *
+ * 
  * @session_id:                the session id to which the savepoint
  *                             belongs, used for xa
  *

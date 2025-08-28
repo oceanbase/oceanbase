@@ -35,16 +35,16 @@ void ObRecoverTableJobScheduler::reset()
 }
 
 int ObRecoverTableJobScheduler::init(
-    share::schema::ObMultiVersionSchemaService &schema_service,
-    common::ObMySQLProxy &sql_proxy,
-    obrpc::ObCommonRpcProxy &rs_rpc_proxy,
+    share::schema::ObMultiVersionSchemaService &schema_service, 
+    common::ObMySQLProxy &sql_proxy, 
+    obrpc::ObCommonRpcProxy &rs_rpc_proxy, 
     obrpc::ObSrvRpcProxy &srv_rpc_proxy)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = gen_user_tenant_id(MTL_ID());
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
-    LOG_WARN("ObRecoverTableJobScheduler init twice", K(ret));
+    LOG_WARN("ObRecoverTableJobScheduler init twice", K(ret)); 
   } else if (OB_FAIL(helper_.init(tenant_id))) {
     LOG_WARN("failed to init table op", K(ret), K(tenant_id));
   } else {
@@ -96,7 +96,7 @@ void ObRecoverTableJobScheduler::do_work()
       }
     }
   }
-
+   
 }
 
 int ObRecoverTableJobScheduler::check_compatible_() const
@@ -114,7 +114,7 @@ int ObRecoverTableJobScheduler::check_compatible_() const
   } else if (data_version < DATA_VERSION_4_2_1_0) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("min data version is smaller than v4.2.1", K(ret), K_(tenant_id), K(data_version));
-  }
+  } 
 
   return ret;
 }
@@ -211,7 +211,7 @@ int ObRecoverTableJobScheduler::check_target_tenant_version_(share::ObRecoverTab
   } else if (data_version < DATA_VERSION_4_2_1_0) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("min data version is smaller than v4.2.1", K(ret), K(target_tenant_id), K(data_version));
-  }
+  } 
 
   if (OB_FAIL(ret)) {
     int tmp_ret = OB_SUCCESS;
@@ -236,8 +236,8 @@ int ObRecoverTableJobScheduler::sys_prepare_(share::ObRecoverTableJob &job)
     LOG_WARN("failed to check target tenant version", K(ret));
   } else if (OB_FAIL(helper.init(job.get_target_tenant_id()))) {
     LOG_WARN("failed to init recover table persist helper", K(ret));
-  }
-
+  } 
+  
   ObMySQLTransaction trans;
   const uint64_t meta_tenant_id = gen_meta_tenant_id(job.get_target_tenant_id());
   if (FAILEDx(trans.start(sql_proxy_, meta_tenant_id))) {
@@ -251,8 +251,8 @@ int ObRecoverTableJobScheduler::sys_prepare_(share::ObRecoverTableJob &job)
           if (OB_FAIL(insert_user_job_(job, trans, helper))) {
             LOG_WARN("failed to insert user job", K(ret), K(job));
           } else {
-            ROOTSERVICE_EVENT_ADD("recover_table", "insert_user_job",
-                                  "tenant_id", job.get_tenant_id(),
+            ROOTSERVICE_EVENT_ADD("recover_table", "insert_user_job", 
+                                  "tenant_id", job.get_tenant_id(), 
                                   "job_id", job.get_job_id());
           }
         } else {
@@ -263,7 +263,7 @@ int ObRecoverTableJobScheduler::sys_prepare_(share::ObRecoverTableJob &job)
       LOG_WARN("failed to get target tenant recover table job", K(ret), K(job));
     }
   }
-
+  
   if (trans.is_started()) {
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
@@ -305,13 +305,13 @@ int ObRecoverTableJobScheduler::lock_recover_table_(
 }
 
 int ObRecoverTableJobScheduler::insert_user_job_(
-    const share::ObRecoverTableJob &job,
+    const share::ObRecoverTableJob &job, 
     ObMySQLTransaction &trans,
     share::ObRecoverTablePersistHelper &helper)
 {
   int ret = OB_SUCCESS;
   ObRecoverTableJob target_job;
-
+  
   if (OB_FAIL(target_job.assign(job))) {
     LOG_WARN("failed to assign target job", K(ret));
   } else {
@@ -319,7 +319,7 @@ int ObRecoverTableJobScheduler::insert_user_job_(
     target_job.set_initiator_tenant_id(job.get_tenant_id());
     target_job.set_initiator_job_id(job.get_job_id());
     target_job.set_target_tenant_id(target_job.get_tenant_id());
-  }
+  } 
   int64_t job_id = 0;
   if (FAILEDx(ObLSBackupInfoOperator::get_next_job_id(trans, job.get_target_tenant_id(), job_id))) {
     LOG_WARN("failed to get next job id", K(ret), "tenant_id", job.get_target_tenant_id());
@@ -350,8 +350,8 @@ int ObRecoverTableJobScheduler::recovering_(share::ObRecoverTableJob &job)
       LOG_WARN("failed to get target tenant recover table job history", K(ret), K(job));
     }
   } else {
-    ROOTSERVICE_EVENT_ADD("recover_table", "sys_wait_user_recover_finish",
-                          "tenant_id", job.get_tenant_id(),
+    ROOTSERVICE_EVENT_ADD("recover_table", "sys_wait_user_recover_finish", 
+                          "tenant_id", job.get_tenant_id(), 
                           "job_id", job.get_job_id());
     job.set_result(target_job.get_result());
   }
@@ -397,8 +397,8 @@ int ObRecoverTableJobScheduler::sys_finish_(const share::ObRecoverTableJob &job)
       if (OB_FAIL(trans.end(true))) {
         LOG_WARN("failed to commit", K(ret));
       } else {
-        ROOTSERVICE_EVENT_ADD("recover_table", "sys_recover_finish",
-                      "tenant_id", job.get_tenant_id(),
+        ROOTSERVICE_EVENT_ADD("recover_table", "sys_recover_finish", 
+                      "tenant_id", job.get_tenant_id(), 
                       "job_id", job.get_job_id());
       }
     } else {
@@ -423,7 +423,7 @@ int ObRecoverTableJobScheduler::drop_aux_tenant_(const share::ObRecoverTableJob 
   drop_tenant_arg.tenant_name_ = job.get_aux_tenant_name();
   drop_tenant_arg.drop_only_in_restore_ = false;
   common::ObAddr rs_addr;
-  if (OB_ISNULL(GCTX.rs_rpc_proxy_) || OB_ISNULL(GCTX.rs_mgr_)) {
+  if (OB_ISNULL(GCTX.rs_rpc_proxy_) || OB_ISNULL(GCTX.rs_mgr_)) { 
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("rootserver rpc proxy or rs mgr must not be NULL", K(ret), K(GCTX));
   } else if (OB_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_addr))) {
@@ -436,8 +436,8 @@ int ObRecoverTableJobScheduler::drop_aux_tenant_(const share::ObRecoverTableJob 
     }
   } else {
     LOG_INFO("[RECOVER_TABLE]drop aux tenant succeed", K(job));
-    ROOTSERVICE_EVENT_ADD("recover_table", "drop_aux_tenant",
-                          "tenant_id", job.get_tenant_id(),
+    ROOTSERVICE_EVENT_ADD("recover_table", "drop_aux_tenant", 
+                          "tenant_id", job.get_tenant_id(), 
                           "job_id", job.get_job_id(),
                           "aux_tenant_name", job.get_aux_tenant_name());
   }
@@ -547,8 +547,8 @@ int ObRecoverTableJobScheduler::canceling_(share::ObRecoverTableJob &job)
       LOG_WARN("failed to advance status", K(ret));
     } else {
       LOG_INFO("[RECOVER_TABLE]cancel recover table job finish", K(job), K(import_job));
-      ROOTSERVICE_EVENT_ADD("recover_table", "cancel recover job finish",
-                            "tenant_id", job.get_tenant_id(),
+      ROOTSERVICE_EVENT_ADD("recover_table", "cancel recover job finish", 
+                            "tenant_id", job.get_tenant_id(), 
                             "recover_job_id", job.get_job_id());
     }
   }
@@ -583,13 +583,13 @@ int ObRecoverTableJobScheduler::restore_aux_tenant_(share::ObRecoverTableJob &jo
         LOG_INFO("[RECOVER_TABLE]aux tenant restore not finish, wait later", K(job));
       }
     } else {
-      LOG_WARN("failed to get restore job history", K(ret),
+      LOG_WARN("failed to get restore job history", K(ret), 
         "initiator_job_id", job.get_job_id(), "initiator_tenant_id", job.get_tenant_id());
     }
   } else {
     LOG_INFO("[RECOVER_TABLE]aux tenant restore finish", K(restore_history_info), K(job));
-    ROOTSERVICE_EVENT_ADD("recover_table", "restore_aux_tenant_finish",
-                          "tenant_id", job.get_tenant_id(),
+    ROOTSERVICE_EVENT_ADD("recover_table", "restore_aux_tenant_finish", 
+                          "tenant_id", job.get_tenant_id(), 
                           "job_id", job.get_job_id(),
                           "aux_tenant_name", job.get_aux_tenant_name());
     const uint64_t aux_tenant_id = restore_history_info.restore_tenant_id_;
@@ -622,7 +622,7 @@ int ObRecoverTableJobScheduler::active_aux_tenant_(share::ObRecoverTableJob &job
     LOG_WARN("failed to init retore helper", K(ret));
   } else if (OB_FAIL(restore_helper.get_restore_job_history(
       *sql_proxy_, job.get_initiator_job_id(), job.get_initiator_tenant_id(), restore_history_info))) {
-      LOG_WARN("failed to get restore job history", K(ret),
+      LOG_WARN("failed to get restore job history", K(ret), 
         "initiator_job_id", job.get_job_id(), "initiator_tenant_id", job.get_tenant_id());
   } else if (OB_FAIL(ban_multi_version_recycling_(job, restore_history_info.restore_tenant_id_))) {
     LOG_WARN("failed to ban multi version cecycling", K(ret));
@@ -633,8 +633,8 @@ int ObRecoverTableJobScheduler::active_aux_tenant_(share::ObRecoverTableJob &job
   if (OB_FAIL(ret)) {
     int tmp_ret = OB_SUCCESS;
     schema::ObSchemaGetterGuard guard;
-    if (OB_TMP_FAIL(ObImportTableUtil::get_tenant_schema_guard(*schema_service_,
-                                                               restore_history_info.restore_tenant_id_,
+    if (OB_TMP_FAIL(ObImportTableUtil::get_tenant_schema_guard(*schema_service_, 
+                                                               restore_history_info.restore_tenant_id_, 
                                                                guard))) {
       if (OB_TENANT_NOT_EXIST == tmp_ret) {
         ret = tmp_ret;
@@ -703,7 +703,7 @@ int ObRecoverTableJobScheduler::check_aux_tenant_(share::ObRecoverTableJob &job,
   } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(aux_tenant_id, aux_tenant_guard))) {
     if (OB_TENANT_NOT_EXIST == ret) {
       ObImportResult::Comment comment;
-      if (OB_TMP_FAIL(databuff_printf(comment.ptr(), comment.capacity(),
+      if (OB_TMP_FAIL(databuff_printf(comment.ptr(), comment.capacity(), 
           "aux tenant %.*s has been dropped", job.get_aux_tenant_name().length(), job.get_aux_tenant_name().ptr()))) {
         LOG_WARN("failed to databuff printf", K(ret));
       } else {
@@ -744,7 +744,7 @@ int ObRecoverTableJobScheduler::check_aux_tenant_(share::ObRecoverTableJob &job,
 }
 
 int ObRecoverTableJobScheduler::check_tenant_compatibility(
-    share::schema::ObSchemaGetterGuard &aux_tenant_guard,
+    share::schema::ObSchemaGetterGuard &aux_tenant_guard, 
     share::schema::ObSchemaGetterGuard &recover_tenant_guard,
     bool &is_compatible)
 {
@@ -761,18 +761,18 @@ int ObRecoverTableJobScheduler::check_tenant_compatibility(
   } else {
     is_compatible = aux_compat_mode == recover_compat_mode;
     if (!is_compatible) {
-      LOG_WARN("[RECOVER_TABLE]tenant compat mode is different", K(is_compatible),
-                                                                 K(aux_tenant_id),
+      LOG_WARN("[RECOVER_TABLE]tenant compat mode is different", K(is_compatible), 
+                                                                 K(aux_tenant_id), 
                                                                  K(aux_compat_mode),
-                                                                 K(recover_tenant_id),
+                                                                 K(recover_tenant_id), 
                                                                  K(recover_compat_mode));
     }
   }
   return ret;
 }
 
-int ObRecoverTableJobScheduler::check_case_sensitive_compatibility(
-    share::schema::ObSchemaGetterGuard &aux_tenant_guard,
+int ObRecoverTableJobScheduler::check_case_sensitive_compatibility(      
+    share::schema::ObSchemaGetterGuard &aux_tenant_guard, 
     share::schema::ObSchemaGetterGuard &recover_tenant_guard,
     bool &is_compatible)
 {
@@ -789,10 +789,10 @@ int ObRecoverTableJobScheduler::check_case_sensitive_compatibility(
   } else {
     is_compatible = aux_mode == recover_mode;
     if (!is_compatible) {
-      LOG_WARN("[RECOVER_TABLE]tenant name case mode is different", K(is_compatible),
-                                                                    K(aux_tenant_id),
+      LOG_WARN("[RECOVER_TABLE]tenant name case mode is different", K(is_compatible), 
+                                                                    K(aux_tenant_id), 
                                                                     K(aux_mode),
-                                                                    K(recover_tenant_id),
+                                                                    K(recover_tenant_id), 
                                                                     K(recover_mode));
     }
   }
@@ -823,7 +823,7 @@ int ObRecoverTableJobScheduler::gen_import_job_(share::ObRecoverTableJob &job)
   } else if (OB_FAIL(guard.get_tenant_id(job.get_aux_tenant_name(), tenant_id))) {
     if (OB_ERR_INVALID_TENANT_NAME == ret) {
       ObImportResult::Comment comment;
-      if (OB_TMP_FAIL(databuff_printf(comment.ptr(), comment.capacity(),
+      if (OB_TMP_FAIL(databuff_printf(comment.ptr(), comment.capacity(), 
           "aux tenant %.*s has been dropped", job.get_aux_tenant_name().length(), job.get_aux_tenant_name().ptr()))) {
         LOG_WARN("failed to databuff printf", K(ret));
       } else {
@@ -853,8 +853,8 @@ int ObRecoverTableJobScheduler::gen_import_job_(share::ObRecoverTableJob &job)
     }
     if (OB_SUCC(ret)) {
       LOG_INFO("[RECOVER_TABLE]succeed generate import job", K(job), K(import_job));
-      ROOTSERVICE_EVENT_ADD("recover_table", "generate_import_job",
-                            "tenant_id", job.get_tenant_id(),
+      ROOTSERVICE_EVENT_ADD("recover_table", "generate_import_job", 
+                            "tenant_id", job.get_tenant_id(), 
                             "job_id", job.get_job_id(),
                             "import_job_id", import_job.get_job_id());
     }
@@ -890,8 +890,8 @@ int ObRecoverTableJobScheduler::importing_(share::ObRecoverTableJob &job)
     LOG_WARN("failed to advance status", K(ret));
   } else {
     LOG_INFO("[RECOVER_TABLE]import table job finish", K(job), K(import_job));
-    ROOTSERVICE_EVENT_ADD("recover_table", "import job finish",
-                          "tenant_id", job.get_tenant_id(),
+    ROOTSERVICE_EVENT_ADD("recover_table", "import job finish", 
+                          "tenant_id", job.get_tenant_id(), 
                           "job_id", job.get_job_id(),
                           "import_job_id", import_job.get_job_id());
   }
@@ -920,10 +920,11 @@ int ObRecoverTableJobScheduler::user_finish_(const share::ObRecoverTableJob &job
     }
     if (OB_SUCC(ret)) {
       LOG_INFO("[RECOVER_TABLE] recover table finish", K(job));
-      ROOTSERVICE_EVENT_ADD("recover_table", "recover table job finish",
-                            "tenant_id", job.get_tenant_id(),
+      ROOTSERVICE_EVENT_ADD("recover_table", "recover table job finish", 
+                            "tenant_id", job.get_tenant_id(), 
                             "job_id", job.get_job_id());
     }
   }
   return ret;
 }
+

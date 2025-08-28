@@ -28,7 +28,7 @@ public :
   uint32_t *get_offsets() const { return offsets_; }
   char *get_data() const { return data_->get_data();}
   void set_scale(ObScale scale) { UNUSED(scale); }
-  int print(ObStringBuffer &format_str, uint32_t begin = 0, uint32_t print_size = 0, bool print_whole = true) const;
+  int print(ObStringBuffer &format_str, uint32_t begin = 0, uint32_t print_size = 0, bool print_whole = true) const; 
   int print_element(ObStringBuffer &format_str, uint32_t begin = 0, uint32_t print_size = 0,
                     bool print_whole = true,
                     ObString delimiter = ObString(","),
@@ -36,7 +36,7 @@ public :
   int print_element_at(ObStringBuffer &format_str, uint32_t idx) const;
 
   int32_t get_data_binary_len()
-  {
+  { 
     return this->data_container_ == NULL ? (this->length_ * sizeof(uint8_t) + this->length_ * sizeof(uint32_t) + data_->get_data_binary_len())
       : (sizeof(uint8_t) * data_container_->null_bitmaps_.size()
                                         + sizeof(uint32_t) * data_container_->offsets_.size()
@@ -61,7 +61,7 @@ public :
   int at(uint32_t idx, ObIArrayType &dest) const;
   void clear();
   int flatten(ObArrayAttr *attrs, uint32_t attr_count, uint32_t &attr_idx);
-  int compare_at(uint32_t left_begin, uint32_t left_len, uint32_t right_begin, uint32_t right_len,
+  int compare_at(uint32_t left_begin, uint32_t left_len, uint32_t right_begin, uint32_t right_len,  
                  const ObIArrayType &right, int &cmp_ret) const;
   int compare(const ObIArrayType &right, int &cmp_ret) const;
   bool sort_cmp(uint32_t idx_l, uint32_t idx_r) const { return true; } // not supported
@@ -133,13 +133,13 @@ public :
               } else if (OB_FAIL(at(i, *child_obj))) {
                 OB_LOG(WARN, "get element failed", K(ret), K(i), K(length_));
               } else if (OB_FAIL(arr_data->push_back(*child_obj))) {
-                OB_LOG(WARN, "push null failed", K(ret));
+                OB_LOG(WARN, "push null failed", K(ret)); 
               } else {
                 child_obj->clear();
               }
             } else if (this->is_null(i)) {
               if (OB_FAIL(arr_data->push_null())) {
-                OB_LOG(WARN, "push null failed", K(ret));
+                OB_LOG(WARN, "push null failed", K(ret)); 
               }
             } else if (OB_FAIL(at(i, *child_obj))) {
               OB_LOG(WARN, "get element failed", K(ret), K(i), K(length_));
@@ -152,7 +152,7 @@ public :
             } else {
               child_obj->clear();
             }
-          }
+          } 
         }
       }
     }

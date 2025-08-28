@@ -33,8 +33,8 @@ public:
   static int eval_json_object(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   static int eval_ora_json_object(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const override;
-  static int set_result(ObObjType dst_type, ObString str_res, common::ObIAllocator *allocator,
-                        ObEvalCtx &ctx, const ObExpr &expr, ObDatum &res, uint8_t strict_type,
+  static int set_result(ObObjType dst_type, ObString str_res, common::ObIAllocator *allocator, 
+                        ObEvalCtx &ctx, const ObExpr &expr, ObDatum &res, uint8_t strict_type, 
                         uint8_t unique_type);
   static int check_key_valid(common::hash::ObHashSet<ObString> &view_key_names, const ObString &key_name);
 private:
@@ -58,9 +58,9 @@ private:
   static int eval_option_clause_value(ObExpr *expr,
                                       ObEvalCtx &ctx,
                                       uint8_t &type,
-                                      int64_t size_para);
-
-
+                                      int64_t size_para);                        
+                      
+                
 private:  
     DISALLOW_COPY_AND_ASSIGN(ObExprJsonObject);
 };
@@ -71,12 +71,12 @@ class ObExprJsonObjectStar : public ObFuncExprOperator
 public:
   explicit ObExprJsonObjectStar(common::ObIAllocator &alloc);
   virtual ~ObExprJsonObjectStar();
-  virtual int calc_result_typeN(ObExprResType& type, ObExprResType* types, int64_t param_num,
+  virtual int calc_result_typeN(ObExprResType& type, ObExprResType* types, int64_t param_num, 
     common::ObExprTypeCtx& type_ctx) const override;
   static int eval_ora_json_object_star(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const override;
-
-private:
+                
+private:  
   DISALLOW_COPY_AND_ASSIGN(ObExprJsonObjectStar);
 };
 

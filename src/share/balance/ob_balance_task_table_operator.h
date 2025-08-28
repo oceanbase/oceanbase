@@ -232,7 +232,7 @@ public:
   const ObTransferPartList& get_finished_part_list() const {return finished_part_list_;}
   ObBalanceTaskIDList& get_parent_task_list() { return parent_list_; }
   ObBalanceTaskIDList& get_child_task_list() { return child_list_; }
-  const ObSqlString& get_comment() const { return comment_; }
+  const ObSqlString& get_comment() const { return comment_; } 
 
 private:
   ObTransferPartList part_list_;
@@ -279,8 +279,8 @@ public:
    * @description: update task status of __all_balance_task
    * @param[in] balance_task : target balance task id and tenant_id, and old_task_status
    * @param[in] new_task_status : new task status
-   * @param[in] trans : must update in trans
-   * @return :
+   * @param[in] trans : must update in trans 
+   * @return : 
    * OB_SUCCESS : update task status success
    * OB_STATE_NOT_MATCH : current task status not match, can not update
    * OTHER : fail
@@ -293,9 +293,9 @@ public:
    * @param[in] tenant_id : user_tenant_id
    * @param[in] new_comment : new comment
    * @param[in] client: sql client or trans
-   * @return :
+   * @return : 
    * OB_SUCCESS : update comment success
-   * OB_STATE_NOT_MATCH : task not exist
+   * OB_STATE_NOT_MATCH : task not exist 
    * OTHER : fail
    */
   static int update_task_comment(const uint64_t tenant_id,
@@ -308,11 +308,11 @@ public:
    * @param[in] balance_task_id : target balance task id
    * @param[in] tranfer_task_id : tranfer_task_id start by the task
    * @param[in]: client: sql client or trans
-   * @return :
-   * OB_SUCCESS : start the transfer task
-   * OB_STATE_NOT_MATCH : already has transfer task, can not start now
+   * @return : 
+   * OB_SUCCESS : start the transfer task 
+   * OB_STATE_NOT_MATCH : already has transfer task, can not start now 
    * OTHER : fail
-   */
+   */  
   static int start_transfer_task(const uint64_t tenant_id,
                                  const ObBalanceTaskID balance_task_id,
                                  const ObTransferTaskID transfer_task_id,
@@ -329,7 +329,7 @@ public:
    * OB_SUCCESS : finish the transfer task
    * OB_STATE_NOT_MATCH : the transfer_task maybe finished
    * OTHER : fail
-   */
+   */ 
   static int finish_transfer_task(const ObBalanceTask &balance_task,
                                   const ObTransferTaskID transfer_task_id,
                                   const ObTransferPartList &transfer_finished_part_list,
@@ -371,7 +371,7 @@ public:
       common::ObMySQLTransaction &trans);
 
    /**
-   * @description: after process one task, set child_task can process
+   * @description: after process one task, set child_task can process 
    * @param[in] tenant_id : user_tenant_id
    * @param[in] balance_task_id : target balance task id
    * @param[in] parent_task_id : remove parent_task_id from the balance_task_id
@@ -410,13 +410,13 @@ public:
 
   /*
    * @description: load all task of the balance job that parent list not empty
-   * @param[in] job_id : balance_job_id
+   * @param[in] job_id : balance_job_id 
    * @param[out] balance_task_array : get all task of the job
    * @param[in] client: sql client or trans
    * @return OB_SUCCESS if success, otherwise failed
    * */
   static int get_job_cannot_execute_task(const uint64_t tenant_id,
-                              const ObBalanceJobID balance_job_id,
+                              const ObBalanceJobID balance_job_id, 
                               ObBalanceTaskIArray &task_array,
                               ObISQLClient &client);
   static int read_tasks_(const uint64_t tenant_id, ObISQLClient &client,
@@ -429,17 +429,17 @@ public:
    * @param[out] task_cnt : task count of the job
    * @param[in] client: sql client or trans
    * @return OB_SUCCESS if success, otherwise failed
-   * */
+   * */ 
   static int get_job_task_cnt(const uint64_t tenant_id, const ObBalanceJobID job_id,
   int64_t &task_cnt, ObISQLClient &client);
   /*
-   * @description: update ls part list before set to transfer
+   * @description: update ls part list before set to transfer 
    * @param[in] tenant_id : user_tenant_id
    * @param[in] balance_task_id : balance_task_id
    * @param[in] part_list : all part list of src ls
    * @param[in] trans: update in trans
    * @return OB_SUCCESS if success, otherwise failed
-   * */
+   * */ 
   static int update_task_part_list(const uint64_t tenant_id,
                                const ObBalanceTaskID balance_task_id,
                                const ObTransferPartList &part_list,
@@ -464,9 +464,9 @@ public:
       const ObLSID &src_ls,
       ObLSID &dest_ls);
   /*
-   * @description: load all task which has transfer task
+   * @description: load all task which has transfer task 
    * @param[in] tenant_id : user_tenant_id
-   * @param[out] balance_task_array : get all task which has transfer task
+   * @param[out] balance_task_array : get all task which has transfer task 
    * @param[in] client: sql client or trans
    * @return OB_SUCCESS if success, otherwise failed
    * */
@@ -475,7 +475,7 @@ public:
                                        ObISQLClient &client);
 
 };
-#undef IS_BALANCE_TASK
+#undef IS_BALANCE_TASK 
 }
 }
 

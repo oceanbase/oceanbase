@@ -453,7 +453,7 @@ TEST_F(ArchiveCheckpointerTest, in_prepare)
 }
 
 void ArchiveCheckpointerTest::SetUp()
-{
+{ 
   ASSERT_EQ(OB_SUCCESS, omt::ObTenantConfigMgr::get_instance().add_tenant_config(TENANT_ID));
 }
 
@@ -1989,8 +1989,8 @@ TEST_F(ArchiveCheckpointerTest, in_doing_06)
   ObLSDestRoundSummary ls_1001;
   ObArchiveLSPieceSummary piece_1001_1;
   fill_archive_ls_piece(
-    1001/* ls_id */,
-    false/* is_deleted */,
+    1001/* ls_id */, 
+    false/* is_deleted */, 
     1/* piece_id */,
     ObArchiveRoundState::doing()/* state */,
     "2022-01-01 00:00:30"/* start_time */,
@@ -2006,8 +2006,8 @@ TEST_F(ArchiveCheckpointerTest, in_doing_06)
   ObLSDestRoundSummary ls_1002;
   ObArchiveLSPieceSummary piece_1002_1;
   fill_archive_ls_piece(
-    1002/* ls_id */,
-    false/* is_deleted */,
+    1002/* ls_id */, 
+    false/* is_deleted */, 
     1/* piece_id */,
     ObArchiveRoundState::doing()/* state */,
     "2022-01-01 00:00:30"/* start_time */,
@@ -2023,8 +2023,8 @@ TEST_F(ArchiveCheckpointerTest, in_doing_06)
   ObLSDestRoundSummary ls_1003;
   ObArchiveLSPieceSummary piece_1003_1;
   fill_archive_ls_piece(
-    1003/* ls_id */,
-    true/* is_deleted */,
+    1003/* ls_id */, 
+    true/* is_deleted */, 
     1/* piece_id */,
     ObArchiveRoundState::doing()/* state */,
     "2022-01-01 00:00:30"/* start_time */,
@@ -2046,7 +2046,7 @@ TEST_F(ArchiveCheckpointerTest, in_doing_06)
   {
   public:
     int checkpoint_to(
-      const ObTenantArchiveRoundAttr &old_round,
+      const ObTenantArchiveRoundAttr &old_round, 
       const ObTenantArchiveRoundAttr &new_round,
       const common::ObIArray<ObTenantArchivePieceAttr> &pieces) override
     {
@@ -2055,7 +2055,7 @@ TEST_F(ArchiveCheckpointerTest, in_doing_06)
       ArchiveCheckpointerTest test;
       ObTenantArchiveRoundAttr expect_round;
       test.fill_new_round(
-        old_round,
+        old_round, 
         ObArchiveRoundState::doing()/* state */,
         "2022-01-01 00:00:50"/* checkpoint_time */,
         "2022-01-01 00:00:55"/* max_time */,
@@ -2070,8 +2070,8 @@ TEST_F(ArchiveCheckpointerTest, in_doing_06)
 
       ObTenantArchivePieceAttr expect_piece;
       test.fill_piece(
-        old_round,
-        1/* piece_id */,
+        old_round, 
+        1/* piece_id */, 
         "2022-01-01 00:00:50"/* checkpoint_time */,
         "2022-01-01 00:00:55"/* max_time */,
         400/* input_bytes */,
@@ -2080,7 +2080,7 @@ TEST_F(ArchiveCheckpointerTest, in_doing_06)
         ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE/* file_status */,
         expect_piece);
 
-
+      
       ret = test.compare_two_rounds(new_round, expect_round);
       if (OB_SUCC(ret)) {
         if (pieces.count() != 1) {
@@ -2095,16 +2095,16 @@ TEST_F(ArchiveCheckpointerTest, in_doing_06)
     }
   };
 
-  ObDestRoundCheckpointer::PieceGeneratedCb gen_piece_cb =
-    [](common::ObISQLClient *proxy, const ObTenantArchiveRoundAttr &old_round, const ObDestRoundCheckpointer::Result &result, const ObDestRoundCheckpointer::GeneratedPiece &piece)
-      {
+  ObDestRoundCheckpointer::PieceGeneratedCb gen_piece_cb = 
+    [](common::ObISQLClient *proxy, const ObTenantArchiveRoundAttr &old_round, const ObDestRoundCheckpointer::Result &result, const ObDestRoundCheckpointer::GeneratedPiece &piece) 
+      { 
         int ret = OB_SUCCESS;
         g_call_cnt++;
         ArchiveCheckpointerTest test;
         ObDestRoundCheckpointer::GeneratedPiece expect_piece;
         test.fill_piece(
-          old_round,
-          1/* piece_id */,
+          old_round, 
+          1/* piece_id */, 
           "2022-01-01 00:00:50"/* checkpoint_time */,
           "2022-01-01 00:00:55"/* max_time */,
           400/* input_bytes */,
@@ -2112,7 +2112,7 @@ TEST_F(ArchiveCheckpointerTest, in_doing_06)
           ObArchivePieceStatus::active()/* status */,
           ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE/* file_status */,
           expect_piece.piece_info_);
-
+        
         ObDestRoundCheckpointer::GeneratedLSPiece ls_piece_1001 = test.gen_checkpoint_ls_piece(
           1001/* ls_id */,
           "2022-01-01 00:00:30"/* start_time */,
@@ -2121,7 +2121,7 @@ TEST_F(ArchiveCheckpointerTest, in_doing_06)
           2000/* max_lsn */,
           200/* input_bytes */,
           20/* output_bytes */);
-
+        
         ObDestRoundCheckpointer::GeneratedLSPiece ls_piece_1002 = test.gen_checkpoint_ls_piece(
           1002/* ls_id */,
           "2022-01-01 00:00:30"/* start_time */,
@@ -2130,7 +2130,7 @@ TEST_F(ArchiveCheckpointerTest, in_doing_06)
           1000/* max_lsn */,
           100/* input_bytes */,
           10/* output_bytes */);
-
+        
         ObDestRoundCheckpointer::GeneratedLSPiece ls_piece_1003 = test.gen_checkpoint_ls_piece(
           1003/* ls_id */,
           "2022-01-01 00:00:30"/* start_time */,
@@ -2139,23 +2139,23 @@ TEST_F(ArchiveCheckpointerTest, in_doing_06)
           1000/* max_lsn */,
           100/* input_bytes */,
           10/* output_bytes */);
-
+        
         expect_piece.ls_piece_list_.push_back(ls_piece_1001);
         expect_piece.ls_piece_list_.push_back(ls_piece_1002);
         expect_piece.ls_piece_list_.push_back(ls_piece_1003);
         ret = test.compare_two_checkpoint_pieces(piece, expect_piece);
         return ret;
       };
-
-  ObDestRoundCheckpointer::RoundCheckpointCb round_cb =
-    [](common::ObISQLClient *proxy, const ObTenantArchiveRoundAttr &old_round, const ObTenantArchiveRoundAttr &new_round)
-      {
+  
+  ObDestRoundCheckpointer::RoundCheckpointCb round_cb = 
+    [](common::ObISQLClient *proxy, const ObTenantArchiveRoundAttr &old_round, const ObTenantArchiveRoundAttr &new_round) 
+      { 
         int ret = OB_SUCCESS;
         g_call_cnt++;
         ArchiveCheckpointerTest test;
         ObTenantArchiveRoundAttr expect_round;
         test.fill_new_round(
-          old_round,
+          old_round, 
           ObArchiveRoundState::doing()/* state */,
           "2022-01-01 00:00:50"/* checkpoint_time */,
           "2022-01-01 00:00:55"/* max_time */,
@@ -2171,7 +2171,7 @@ TEST_F(ArchiveCheckpointerTest, in_doing_06)
         ret = test.compare_two_rounds(new_round, expect_round);
         return ret;
       };
-
+  
   int ret = OB_SUCCESS;
   g_call_cnt = 0;
   MockRoundHandler mock_handler;
@@ -2238,7 +2238,7 @@ TEST_F(ArchiveCheckpointerTest, in_doing_07)
     100,                            /* input_bytes */
     10,                             /* output_bytes */
     piece_1002_1);
-
+  
   ObArchiveLSPieceSummary piece_1002_2;
   fill_archive_ls_piece(
     1002,                           /* ls id */
@@ -2263,7 +2263,7 @@ TEST_F(ArchiveCheckpointerTest, in_doing_07)
   {
   public:
     int checkpoint_to(
-      const ObTenantArchiveRoundAttr &old_round,
+      const ObTenantArchiveRoundAttr &old_round, 
       const ObTenantArchiveRoundAttr &new_round,
       const common::ObIArray<ObTenantArchivePieceAttr> &pieces) override
     {
@@ -2272,7 +2272,7 @@ TEST_F(ArchiveCheckpointerTest, in_doing_07)
       ArchiveCheckpointerTest test;
       ObTenantArchiveRoundAttr expect_round;
       test.fill_new_round(
-        old_round,
+        old_round, 
         ObArchiveRoundState::doing(),   /* state */
         "2022-01-01 00:00:40",          /* checkpoint_time */
         "2022-01-01 00:01:30",          /* max_time */
@@ -2287,7 +2287,7 @@ TEST_F(ArchiveCheckpointerTest, in_doing_07)
 
       ObTenantArchivePieceAttr expect_piece_1;
       test.fill_piece(
-        old_round,
+        old_round, 
         1,                                                    /* piece id */
         "2022-01-01 00:00:40",                                /* checkpoint time */
         "2022-01-01 00:00:50",                                /* max time */
@@ -2296,10 +2296,10 @@ TEST_F(ArchiveCheckpointerTest, in_doing_07)
         ObArchivePieceStatus::active(),                       /* piece status */
         ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE,    /* file status */
         expect_piece_1);
-
+      
       ObTenantArchivePieceAttr expect_piece_2;
       test.fill_piece(
-        old_round,
+        old_round, 
         2,                                                    /* piece id */
         "2022-01-01 00:01:00",                                /* checkpoint time */
         "2022-01-01 00:01:30",                                /* max time */
@@ -2309,7 +2309,7 @@ TEST_F(ArchiveCheckpointerTest, in_doing_07)
         ObBackupFileStatus::STATUS::BACKUP_FILE_INCOMPLETE,   /* file status */
         expect_piece_2);
 
-
+      
       ret = test.compare_two_rounds(new_round, expect_round);
       if (OB_SUCC(ret)) {
         if (pieces.count() != 2) {
@@ -2335,17 +2335,17 @@ TEST_F(ArchiveCheckpointerTest, in_doing_07)
     }
   };
 
-  ObDestRoundCheckpointer::PieceGeneratedCb gen_piece_cb =
-    [](common::ObISQLClient *proxy, const ObTenantArchiveRoundAttr &old_round, const ObDestRoundCheckpointer::Result &result, const ObDestRoundCheckpointer::GeneratedPiece &piece)
-      {
+  ObDestRoundCheckpointer::PieceGeneratedCb gen_piece_cb = 
+    [](common::ObISQLClient *proxy, const ObTenantArchiveRoundAttr &old_round, const ObDestRoundCheckpointer::Result &result, const ObDestRoundCheckpointer::GeneratedPiece &piece) 
+      { 
         int ret = OB_SUCCESS;
         g_call_cnt++;
         ArchiveCheckpointerTest test;
         ObDestRoundCheckpointer::GeneratedPiece expect_piece;
         if (piece.piece_info_.key_.piece_id_ == 1) {
           test.fill_piece(
-            old_round,
-            1,
+            old_round, 
+            1, 
             "2022-01-01 00:00:40",
             "2022-01-01 00:00:50",
             300,
@@ -2353,7 +2353,7 @@ TEST_F(ArchiveCheckpointerTest, in_doing_07)
             ObArchivePieceStatus::active(),
             ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE,
             expect_piece.piece_info_);
-
+          
           ObDestRoundCheckpointer::GeneratedLSPiece ls_piece_1001 = test.gen_checkpoint_ls_piece(
             1001,
             "2022-01-01 00:00:00",
@@ -2362,7 +2362,7 @@ TEST_F(ArchiveCheckpointerTest, in_doing_07)
             2000,
             200,
             20);
-
+          
           ObDestRoundCheckpointer::GeneratedLSPiece ls_piece_1002 = test.gen_checkpoint_ls_piece(
             1002,
             "2022-01-01 00:00:00",
@@ -2371,13 +2371,13 @@ TEST_F(ArchiveCheckpointerTest, in_doing_07)
             1000,
             100,
             10);
-
+          
           expect_piece.ls_piece_list_.push_back(ls_piece_1001);
           expect_piece.ls_piece_list_.push_back(ls_piece_1002);
         } else {
           test.fill_piece(
-            old_round,
-            2,
+            old_round, 
+            2, 
             "2022-01-01 00:01:00",
             "2022-01-01 00:01:30",
             100,
@@ -2385,7 +2385,7 @@ TEST_F(ArchiveCheckpointerTest, in_doing_07)
             ObArchivePieceStatus::active(),
             ObBackupFileStatus::STATUS::BACKUP_FILE_INCOMPLETE,
             expect_piece.piece_info_);
-
+          
           ObDestRoundCheckpointer::GeneratedLSPiece ls_piece_1002 = test.gen_checkpoint_ls_piece(
             1002,
             "2022-01-01 00:01:00",
@@ -2396,20 +2396,20 @@ TEST_F(ArchiveCheckpointerTest, in_doing_07)
             10);
            expect_piece.ls_piece_list_.push_back(ls_piece_1002);
         }
-
+        
         ret = test.compare_two_checkpoint_pieces(piece, expect_piece);
         return ret;
       };
-
-  ObDestRoundCheckpointer::RoundCheckpointCb round_cb =
-    [](common::ObISQLClient *proxy, const ObTenantArchiveRoundAttr &old_round, const ObTenantArchiveRoundAttr &new_round)
-      {
+  
+  ObDestRoundCheckpointer::RoundCheckpointCb round_cb = 
+    [](common::ObISQLClient *proxy, const ObTenantArchiveRoundAttr &old_round, const ObTenantArchiveRoundAttr &new_round) 
+      { 
         int ret = OB_SUCCESS;
         g_call_cnt++;
         ArchiveCheckpointerTest test;
         ObTenantArchiveRoundAttr expect_round;
         test.fill_new_round(
-          old_round,
+          old_round, 
           ObArchiveRoundState::doing(),
           "2022-01-01 00:00:40",
           "2022-01-01 00:01:30",
@@ -2425,7 +2425,7 @@ TEST_F(ArchiveCheckpointerTest, in_doing_07)
         ret = test.compare_two_rounds(new_round, expect_round);
         return ret;
       };
-
+  
   int ret = OB_SUCCESS;
   g_call_cnt = 0;
   MockRoundHandler mock_handler;
@@ -3504,7 +3504,7 @@ TEST_F(ArchiveCheckpointerTest, some_ls_interrupt_01)
 
 TEST_F(ArchiveCheckpointerTest, test_no_logging_beginning)
 {
-  // set tenant config as no logging first
+  // set tenant config as no logging first 
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(TENANT_ID));
   tenant_config->_no_logging = true;
   // old round's status is BEGINNING.
@@ -3517,8 +3517,8 @@ TEST_F(ArchiveCheckpointerTest, test_no_logging_beginning)
   ObLSDestRoundSummary ls_1001;
   ObArchiveLSPieceSummary piece_1001_1;
   fill_archive_ls_piece(
-    1001,
-    false,
+    1001, 
+    false, 
     1,
     ObArchiveRoundState::doing(),
     "2022-01-01 00:00:30",
@@ -3534,8 +3534,8 @@ TEST_F(ArchiveCheckpointerTest, test_no_logging_beginning)
   ObLSDestRoundSummary ls_1002;
   ObArchiveLSPieceSummary piece_1002_1;
   fill_archive_ls_piece(
-    1002,
-    false,
+    1002, 
+    false, 
     1,
     ObArchiveRoundState::doing(),
     "2022-01-01 00:00:30",
@@ -3555,7 +3555,7 @@ TEST_F(ArchiveCheckpointerTest, test_no_logging_beginning)
   {
   public:
     int checkpoint_to(
-      const ObTenantArchiveRoundAttr &old_round,
+      const ObTenantArchiveRoundAttr &old_round, 
       const ObTenantArchiveRoundAttr &new_round,
       const common::ObIArray<ObTenantArchivePieceAttr> &pieces) override
     {
@@ -3564,7 +3564,7 @@ TEST_F(ArchiveCheckpointerTest, test_no_logging_beginning)
       ArchiveCheckpointerTest test;
       ObTenantArchiveRoundAttr expect_round;
       test.fill_new_round(
-        old_round,
+        old_round, 
         ObArchiveRoundState::interrupted(),
         "2022-01-01 00:00:30",
         "2022-01-01 00:00:50",
@@ -3579,8 +3579,8 @@ TEST_F(ArchiveCheckpointerTest, test_no_logging_beginning)
 
       ObTenantArchivePieceAttr expect_piece;
       test.fill_piece(
-        old_round,
-        1,
+        old_round, 
+        1, 
         "2022-01-01 00:00:30",
         "2022-01-01 00:00:50",
         300,
@@ -3589,7 +3589,7 @@ TEST_F(ArchiveCheckpointerTest, test_no_logging_beginning)
         ObBackupFileStatus::STATUS::BACKUP_FILE_INCOMPLETE,
         expect_piece);
 
-
+      
       ret = test.compare_two_rounds(new_round, expect_round);
       if (OB_SUCC(ret)) {
         if (pieces.count() != 1) {
@@ -3604,16 +3604,16 @@ TEST_F(ArchiveCheckpointerTest, test_no_logging_beginning)
     }
   };
 
-  ObDestRoundCheckpointer::PieceGeneratedCb gen_piece_cb =
-    [](common::ObISQLClient *proxy, const ObTenantArchiveRoundAttr &old_round, const ObDestRoundCheckpointer::Result &result, const ObDestRoundCheckpointer::GeneratedPiece &piece)
-      {
+  ObDestRoundCheckpointer::PieceGeneratedCb gen_piece_cb = 
+    [](common::ObISQLClient *proxy, const ObTenantArchiveRoundAttr &old_round, const ObDestRoundCheckpointer::Result &result, const ObDestRoundCheckpointer::GeneratedPiece &piece) 
+      { 
         int ret = OB_SUCCESS;
         g_call_cnt++;
         ArchiveCheckpointerTest test;
         ObDestRoundCheckpointer::GeneratedPiece expect_piece;
         test.fill_piece(
-          old_round,
-          1,
+          old_round, 
+          1, 
           "2022-01-01 00:00:30",
           "2022-01-01 00:00:50",
           300,
@@ -3621,7 +3621,7 @@ TEST_F(ArchiveCheckpointerTest, test_no_logging_beginning)
           ObArchivePieceStatus::active(),
           ObBackupFileStatus::STATUS::BACKUP_FILE_INCOMPLETE,
           expect_piece.piece_info_);
-
+        
         ObDestRoundCheckpointer::GeneratedLSPiece ls_piece_1001 = test.gen_checkpoint_ls_piece(
           1001,
           "2022-01-01 00:00:30",
@@ -3630,7 +3630,7 @@ TEST_F(ArchiveCheckpointerTest, test_no_logging_beginning)
           2000,
           200,
           20);
-
+        
         ObDestRoundCheckpointer::GeneratedLSPiece ls_piece_1002 = test.gen_checkpoint_ls_piece(
           1002,
           "2022-01-01 00:00:30",
@@ -3639,22 +3639,22 @@ TEST_F(ArchiveCheckpointerTest, test_no_logging_beginning)
           1000,
           100,
           10);
-
+        
         expect_piece.ls_piece_list_.push_back(ls_piece_1001);
         expect_piece.ls_piece_list_.push_back(ls_piece_1002);
         ret = test.compare_two_checkpoint_pieces(piece, expect_piece);
         return ret;
       };
-
-  ObDestRoundCheckpointer::RoundCheckpointCb round_cb =
-    [](common::ObISQLClient *proxy, const ObTenantArchiveRoundAttr &old_round, const ObTenantArchiveRoundAttr &new_round)
-      {
+  
+  ObDestRoundCheckpointer::RoundCheckpointCb round_cb = 
+    [](common::ObISQLClient *proxy, const ObTenantArchiveRoundAttr &old_round, const ObTenantArchiveRoundAttr &new_round) 
+      { 
         int ret = OB_SUCCESS;
         g_call_cnt++;
         ArchiveCheckpointerTest test;
         ObTenantArchiveRoundAttr expect_round;
         test.fill_new_round(
-          old_round,
+          old_round, 
           ObArchiveRoundState::interrupted(),
           "2022-01-01 00:00:30",
           "2022-01-01 00:00:50",
@@ -3670,7 +3670,7 @@ TEST_F(ArchiveCheckpointerTest, test_no_logging_beginning)
         ret = test.compare_two_rounds(new_round, expect_round);
         return ret;
       };
-
+  
   int ret = OB_SUCCESS;
   g_call_cnt = 0;
   MockRoundHandler mock_handler;
@@ -3690,7 +3690,7 @@ TEST_F(ArchiveCheckpointerTest, test_no_logging_beginning)
 
 TEST_F(ArchiveCheckpointerTest, test_no_logging_doing)
 {
-  // set tenant config as no logging first
+  // set tenant config as no logging first 
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(TENANT_ID));
   tenant_config->_no_logging = true;
   // old round's status is DOING
@@ -3715,8 +3715,8 @@ TEST_F(ArchiveCheckpointerTest, test_no_logging_doing)
   ObLSDestRoundSummary ls_1001;
   ObArchiveLSPieceSummary piece_1001_1;
   fill_archive_ls_piece(
-    1001,
-    false,
+    1001, 
+    false, 
     1,
     ObArchiveRoundState::doing(),
     "2022-01-01 00:00:30",
@@ -3732,8 +3732,8 @@ TEST_F(ArchiveCheckpointerTest, test_no_logging_doing)
   ObLSDestRoundSummary ls_1002;
   ObArchiveLSPieceSummary piece_1002_1;
   fill_archive_ls_piece(
-    1002,
-    false,
+    1002, 
+    false, 
     1,
     ObArchiveRoundState::doing(),
     "2022-01-01 00:00:30",
@@ -3753,7 +3753,7 @@ TEST_F(ArchiveCheckpointerTest, test_no_logging_doing)
   {
   public:
     int checkpoint_to(
-      const ObTenantArchiveRoundAttr &old_round,
+      const ObTenantArchiveRoundAttr &old_round, 
       const ObTenantArchiveRoundAttr &new_round,
       const common::ObIArray<ObTenantArchivePieceAttr> &pieces) override
     {
@@ -3762,7 +3762,7 @@ TEST_F(ArchiveCheckpointerTest, test_no_logging_doing)
       ArchiveCheckpointerTest test;
       ObTenantArchiveRoundAttr expect_round;
       test.fill_new_round(
-        old_round,
+        old_round, 
         ObArchiveRoundState::interrupted(),
         "2022-01-01 00:00:35",
         "2022-01-01 00:00:50",
@@ -3777,8 +3777,8 @@ TEST_F(ArchiveCheckpointerTest, test_no_logging_doing)
 
       ObTenantArchivePieceAttr expect_piece;
       test.fill_piece(
-        old_round,
-        1,
+        old_round, 
+        1, 
         "2022-01-01 00:00:35",
         "2022-01-01 00:00:50",
         300,
@@ -3787,7 +3787,7 @@ TEST_F(ArchiveCheckpointerTest, test_no_logging_doing)
         ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE,
         expect_piece);
 
-
+      
       ret = test.compare_two_rounds(new_round, expect_round);
       if (OB_SUCC(ret)) {
         if (pieces.count() != 1) {
@@ -3802,16 +3802,16 @@ TEST_F(ArchiveCheckpointerTest, test_no_logging_doing)
     }
   };
 
-  ObDestRoundCheckpointer::PieceGeneratedCb gen_piece_cb =
-    [](common::ObISQLClient *proxy, const ObTenantArchiveRoundAttr &old_round, const ObDestRoundCheckpointer::Result &result, const ObDestRoundCheckpointer::GeneratedPiece &piece)
-      {
+  ObDestRoundCheckpointer::PieceGeneratedCb gen_piece_cb = 
+    [](common::ObISQLClient *proxy, const ObTenantArchiveRoundAttr &old_round, const ObDestRoundCheckpointer::Result &result, const ObDestRoundCheckpointer::GeneratedPiece &piece) 
+      { 
         int ret = OB_SUCCESS;
         g_call_cnt++;
         ArchiveCheckpointerTest test;
         ObDestRoundCheckpointer::GeneratedPiece expect_piece;
         test.fill_piece(
-          old_round,
-          1,
+          old_round, 
+          1, 
           "2022-01-01 00:00:35",
           "2022-01-01 00:00:50",
           300,
@@ -3819,7 +3819,7 @@ TEST_F(ArchiveCheckpointerTest, test_no_logging_doing)
           ObArchivePieceStatus::active(),
           ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE,
           expect_piece.piece_info_);
-
+        
         ObDestRoundCheckpointer::GeneratedLSPiece ls_piece_1001 = test.gen_checkpoint_ls_piece(
           1001,
           "2022-01-01 00:00:30",
@@ -3828,7 +3828,7 @@ TEST_F(ArchiveCheckpointerTest, test_no_logging_doing)
           2000,
           200,
           20);
-
+        
         ObDestRoundCheckpointer::GeneratedLSPiece ls_piece_1002 = test.gen_checkpoint_ls_piece(
           1002,
           "2022-01-01 00:00:30",
@@ -3842,16 +3842,16 @@ TEST_F(ArchiveCheckpointerTest, test_no_logging_doing)
         ret = test.compare_two_checkpoint_pieces(piece, expect_piece);
         return ret;
       };
-
-  ObDestRoundCheckpointer::RoundCheckpointCb round_cb =
-    [](common::ObISQLClient *proxy, const ObTenantArchiveRoundAttr &old_round, const ObTenantArchiveRoundAttr &new_round)
+  
+  ObDestRoundCheckpointer::RoundCheckpointCb round_cb = 
+    [](common::ObISQLClient *proxy, const ObTenantArchiveRoundAttr &old_round, const ObTenantArchiveRoundAttr &new_round) 
       {
         int ret = OB_SUCCESS;
         g_call_cnt++;
         ArchiveCheckpointerTest test;
         ObTenantArchiveRoundAttr expect_round;
         test.fill_new_round(
-          old_round,
+          old_round, 
           ObArchiveRoundState::interrupted(),
           "2022-01-01 00:00:35",
           "2022-01-01 00:00:50",
@@ -3867,7 +3867,7 @@ TEST_F(ArchiveCheckpointerTest, test_no_logging_doing)
         ret = test.compare_two_rounds(new_round, expect_round);
         return ret;
       };
-
+  
   int ret = OB_SUCCESS;
   g_call_cnt = 0;
   MockRoundHandler mock_handler;

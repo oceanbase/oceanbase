@@ -23,8 +23,8 @@ namespace common {
 
 enum ObXmlParserOption {
     OB_XML_PARSE_RECOVER	= 1<<1,	/* continue parse whenever some error occur */
-    OB_XML_PARSE_NOT_IGNORE_SPACE	= 1<<2,
-    OB_XML_PARSE_SYNTAX_CHECK	= 1<<3,
+    OB_XML_PARSE_NOT_IGNORE_SPACE	= 1<<2,	
+    OB_XML_PARSE_SYNTAX_CHECK	= 1<<3,	
     OB_XML_PARSE_CONTENT_ALLOW_XML_DECL = 1 << 4,
     OB_XML_PARSE_CONTAINER_LAZY_SORT = 1 << 5,
     OB_XML_PARSE_NOT_ENTITY_REPLACE = 1 << 6,
@@ -53,7 +53,7 @@ public:
   static constexpr const char* const OB_XML_PREDEFINED_ENTITY_AMP = "&amp;";
   static constexpr int OB_XML_PREDEFINED_ENTITY_AMP_LEN = 1 + 3 + 1;
 
-  ObXmlParserBase(ObMulModeMemCtx* ctx):
+  ObXmlParserBase(ObMulModeMemCtx* ctx): 
               allocator_(ctx->allocator_),
               document_(nullptr),
               cur_node_(nullptr),
@@ -188,9 +188,9 @@ private:
   int init_xml_text(const ObString& xml_text, bool skip_start_blank);
   int check();
 
-  int alloc_text_node(ObMulModeNodeType type,
-                      const char* src_value,
-                      int len,
+  int alloc_text_node(ObMulModeNodeType type, 
+                      const char* src_value, 
+                      int len, 
                       ObXmlText*& node);
   int escape_xml_text(const ObString &src_attr_value, ObString &dst_attr_value);
   int construct_text_value(const ObString &src_attr_value, ObString &attr_value);
@@ -238,7 +238,7 @@ public:
   // has <?xml ...?> decl
   static bool has_xml_decl(const ObString& xml_text);
   static int parse_xml_decl_encoding(const ObString& xml_decl, bool &has_decl, ObString& encoding_str);
-  static int parse_xml_decl(const ObString& xml_decl,
+  static int parse_xml_decl(const ObString& xml_decl, 
                             ObString& version,
                             bool &has_version_value,
                             ObString& encoding,
@@ -252,7 +252,7 @@ public:
   // escape character to predefine entity
   // just append to dst, don't clear
   static int escape_xml_text(const ObString &src, ObStringBuffer &dst);
-  // use ObString as buffer, caller need ensure dst have enough memory,
+  // use ObString as buffer, caller need ensure dst have enough memory, 
   // or return size overflow error
   static int escape_xml_text(const ObString &src, ObString &dst);
   static int get_xml_escape_char_length(const char c);

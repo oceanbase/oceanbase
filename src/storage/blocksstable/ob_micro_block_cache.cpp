@@ -1586,7 +1586,7 @@ int ObIndexMicroBlockCache::load_block(
         }
       } else if (OB_FAIL(macro_handle.wait())) {
         LOG_WARN("Fail to wait io finish", K(ret), K(macro_read_info));
-      }
+      } 
       // the reason why block_data.get_buf() can be released by this allocator directly is that the
       // memory is deep coiped in ObSyncSingleMicroBLockIOCallback. Maybe we should deep copy the memory in any case.
       raw_idx_block_buf = const_cast<char *>(block_data.get_buf());

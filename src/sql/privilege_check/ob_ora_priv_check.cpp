@@ -234,10 +234,10 @@ int ObOraSysChecker::check_plist_or_in_roles(
   OZ (get_user_sys_priv_in_roles(guard, tenant_id, user_id, sys_packed_array,
                                   true, role_id_array),
     tenant_id, user_id);
-
+  
   ObPackedPrivArray packed_privs;
   OZ (ObPrivPacker::pack_raw_priv_list(option, plist, packed_privs));
-  OZ (ObOraPrivCheck::packed_sys_priv_list_or_exists(packed_privs,
+  OZ (ObOraPrivCheck::packed_sys_priv_list_or_exists(packed_privs, 
                                                       sys_packed_array,
                                                       exists));
   if (OB_SUCC(ret) && !exists) {
@@ -261,10 +261,10 @@ int ObOraSysChecker::check_plist_and_in_roles(
   OZ (get_user_sys_priv_in_roles(guard, tenant_id, user_id, sys_packed_array,
                                   true, role_id_array),
     tenant_id, user_id);
-
+  
   ObPackedPrivArray packed_privs;
   OZ (ObPrivPacker::pack_raw_priv_list(option, plist, packed_privs));
-  OZ (ObOraPrivCheck::packed_sys_priv_list_and_exists(packed_privs,
+  OZ (ObOraPrivCheck::packed_sys_priv_list_and_exists(packed_privs, 
                                                       sys_packed_array,
                                                       exists));
   if (OB_SUCC(ret) && !exists) {
@@ -291,7 +291,7 @@ int ObOraSysChecker::check_plist_and_in_single(
     } else {
       ObPackedPrivArray packed_privs;
       OZ (ObPrivPacker::pack_raw_priv_list(option, plist, packed_privs));
-      OZ (ObOraPrivCheck::packed_sys_priv_list_and_exists(packed_privs,
+      OZ (ObOraPrivCheck::packed_sys_priv_list_and_exists(packed_privs, 
                                                           sys_priv->get_priv_array(),
                                                           exists));
       if (OB_SUCC(ret) && !exists) {
@@ -320,7 +320,7 @@ int ObOraSysChecker::check_plist_or_in_single(
     } else {
       ObPackedPrivArray packed_privs;
       OZ (ObPrivPacker::pack_raw_priv_list(option, plist, packed_privs));
-      OZ (ObOraPrivCheck::packed_sys_priv_list_or_exists(packed_privs,
+      OZ (ObOraPrivCheck::packed_sys_priv_list_or_exists(packed_privs, 
                                                           sys_priv->get_priv_array(),
                                                           exists));
       if (OB_SUCC(ret) && !exists) {
@@ -447,14 +447,14 @@ int ObOraSysChecker::check_obj_plist_or(
 {
   int ret = OB_SUCCESS;
   int ret1;
-  OZX2 (check_obj_plist_or_in_single(guard, tenant_id, user_id, obj_type,
+  OZX2 (check_obj_plist_or_in_single(guard, tenant_id, user_id, obj_type, 
                                       obj_id, col_id, plist),
         OB_ERR_NO_PRIVILEGE, OB_ERR_EMPTY_QUERY,
         tenant_id, user_id, obj_type, obj_id, col_id, plist);
   if (ret == OB_ERR_NO_PRIVILEGE || ret == OB_ERR_EMPTY_QUERY) {
     ret1 = ret;
     ret = OB_SUCCESS;
-    OZ (check_obj_plist_or_in_roles(guard, tenant_id, user_id, obj_type,
+    OZ (check_obj_plist_or_in_roles(guard, tenant_id, user_id, obj_type, 
         obj_id, col_id, plist, role_id_array),
         tenant_id, user_id, obj_type, obj_id, col_id, plist);
     /* 无任何间接权限，但有直接权限，需要更改错误码为 no privilege */
@@ -487,7 +487,7 @@ int ObOraSysChecker::check_obj_p1(
   if (ret == OB_ERR_NO_PRIVILEGE || ret == OB_ERR_EMPTY_QUERY) {
     ret1 = ret;
     ret = OB_SUCCESS;
-    OZX1 (check_obj_p1_in_roles(guard, tenant_id, user_id, obj_type,
+    OZX1 (check_obj_p1_in_roles(guard, tenant_id, user_id, obj_type, 
         obj_id, col_id, p1, option, role_id_array), OB_ERR_EMPTY_QUERY,
         tenant_id, user_id, obj_type, obj_id, col_id, p1, option);
     /* 无任何间接权限，但有直接权限，需要更改错误码为 no privilege */
@@ -508,7 +508,7 @@ int ObOraSysChecker::check_p1_or_plist_in_single(
 {
   int ret = OB_SUCCESS;
   ObSysPriv *sys_priv = NULL;
-  OZ (guard.get_sys_priv_with_grantee_id(tenant_id, user_id, sys_priv));
+  OZ (guard.get_sys_priv_with_grantee_id(tenant_id, user_id, sys_priv));   
   if (OB_SUCC(ret)) {
     if (sys_priv == NULL) {
       ret = OB_ERR_NO_PRIVILEGE;
@@ -570,7 +570,7 @@ int ObOraSysChecker::check_p1_with_plist_info(
       OZX1 (check_p1_in_roles(guard, tenant_id, user_id, p1, role_id_array), OB_ERR_NO_PRIVILEGE);
     } else {
       OZX1 (check_p1_with_plist_info_in_roles(
-            guard, tenant_id, user_id, p1, option, plist,
+            guard, tenant_id, user_id, p1, option, plist, 
             has_other_priv, role_id_array), OB_ERR_NO_PRIVILEGE);
     }
   }
@@ -674,7 +674,7 @@ int ObOraSysChecker::check_p1_or_plist(
                                     OB_ERR_NO_PRIVILEGE);
   if (ret == OB_ERR_NO_PRIVILEGE) {
     ret = OB_SUCCESS;
-    OZ (check_p1_or_plist_in_roles(guard, tenant_id, user_id, p1,
+    OZ (check_p1_or_plist_in_roles(guard, tenant_id, user_id, p1, 
                                       option, plist, role_id_array));
   }
   return ret;
@@ -734,15 +734,15 @@ int ObOraSysChecker::check_p1_or_cond_p2_in_single(
   int ret = OB_SUCCESS;
   ObSysPriv *sys_priv = NULL;
   bool exists = false;
-  OZ (guard.get_sys_priv_with_grantee_id(tenant_id, ur_id, sys_priv));
+  OZ (guard.get_sys_priv_with_grantee_id(tenant_id, ur_id, sys_priv));   
   if (OB_SUCC(ret)) {
     if (sys_priv == NULL) {
       ret = OB_ERR_NO_PRIVILEGE;
     } else {
-      OZ (ObOraPrivCheck::p1_or_cond_p2_exists(p1,
+      OZ (ObOraPrivCheck::p1_or_cond_p2_exists(p1, 
                                                 is_owner,
                                                 p2,
-                                                sys_priv->get_priv_array(),
+                                                sys_priv->get_priv_array(), 
                                                 exists));
       if (OB_SUCC(ret) && !exists) {
         ret = OB_ERR_NO_PRIVILEGE;
@@ -804,16 +804,16 @@ int ObOraSysChecker::check_p1_or_owner_and_p2(
       ret = OB_USER_NOT_EXIST;
       LOG_USER_ERROR(OB_USER_NOT_EXIST, database_name.length(), database_name.ptr());
     }
-    OX (is_owner = ObOraPrivCheck::user_is_owner(user_info->get_user_name(),
+    OX (is_owner = ObOraPrivCheck::user_is_owner(user_info->get_user_name(), 
                                                   database_name));
   }
   OZX1 (check_p1_or_cond_p2_in_single(guard, tenant_id, user_id, p1, is_owner, p2),
       OB_ERR_NO_PRIVILEGE, tenant_id, user_id, p1, is_owner, p2);
   if (ret == OB_ERR_NO_PRIVILEGE) {
     ret = OB_SUCCESS;
-    OZ (check_p1_or_cond_p2_in_roles(guard, tenant_id, user_id, p1,
+    OZ (check_p1_or_cond_p2_in_roles(guard, tenant_id, user_id, p1, 
                                         is_owner, p2, role_id_array));
-
+    
   }
   return ret;
 }
@@ -849,9 +849,9 @@ int ObOraSysChecker::check_owner_or_p1_or_objp2(
       ret = OB_USER_NOT_EXIST;
       LOG_USER_ERROR(OB_USER_NOT_EXIST, database_name.length(), database_name.ptr());
     }
-    OX (is_owner = ObOraPrivCheck::user_is_owner(user_info->get_user_name(),
+    OX (is_owner = ObOraPrivCheck::user_is_owner(user_info->get_user_name(), 
                                                   database_name));
-    OZ (guard.get_user_id(tenant_id, database_name,
+    OZ (guard.get_user_id(tenant_id, database_name, 
                           ObString(OB_DEFAULT_HOST_NAME), obj_owner_id));
     if (OB_SUCC(ret) && obj_owner_id == OB_INVALID_ID) {
       ret = OB_USER_NOT_EXIST;
@@ -859,12 +859,12 @@ int ObOraSysChecker::check_owner_or_p1_or_objp2(
     }
   }
   if (!is_owner) {
-    OZX1 (check_p1(guard, tenant_id, user_id, p1, role_id_array),
+    OZX1 (check_p1(guard, tenant_id, user_id, p1, role_id_array), 
                   OB_ERR_NO_PRIVILEGE, tenant_id, user_id, p1);
     if (ret == OB_ERR_NO_PRIVILEGE) {
       ret = OB_SUCCESS;
-      OZ (check_ora_obj_priv(guard, tenant_id, user_id, database_name, obj_id,
-                              OBJ_LEVEL_FOR_TAB_PRIV, obj_type, obj_p2, CHECK_FLAG_NORMAL,
+      OZ (check_ora_obj_priv(guard, tenant_id, user_id, database_name, obj_id, 
+                              OBJ_LEVEL_FOR_TAB_PRIV, obj_type, obj_p2, CHECK_FLAG_NORMAL, 
                               obj_owner_id, role_id_array));
       /*OZ (check_obj_p1(guard, tenant_id, user_id, obj_type,
           obj_id, OBJ_LEVEL_FOR_TAB_PRIV, obj_p2, NO_OPTION, role_id_array),
@@ -906,7 +906,7 @@ int ObOraSysChecker::check_owner_or_p1_or_access(
       }
     }
     // 1. Check if is owner
-    OX (is_owner = ObOraPrivCheck::user_is_owner(user_info->get_user_name(),
+    OX (is_owner = ObOraPrivCheck::user_is_owner(user_info->get_user_name(), 
                                                   database_name));
   }
   if (OB_SUCC(ret)) {
@@ -1085,7 +1085,7 @@ int ObOraSysChecker::check_access_to_obj(
       } else {
         accessible = false;
       }
-    }
+    } 
     // 3. 建立相关的对象权限
     OZ (build_related_obj_priv_array(obj_type, obj_priv_array));
     // 4. 检查user_id 是否具有 obj_priv_array中的一种
@@ -1304,7 +1304,7 @@ int ObOraSysChecker::check_owner_or_p1(
       ret = OB_USER_NOT_EXIST;
       LOG_USER_ERROR(OB_USER_NOT_EXIST, database_name.length(), database_name.ptr());
     }
-    OX (is_owner = ObOraPrivCheck::user_is_owner(user_info->get_user_name(),
+    OX (is_owner = ObOraPrivCheck::user_is_owner(user_info->get_user_name(), 
                                                   database_name));
   }
   if (!is_owner) {
@@ -1713,13 +1713,13 @@ int ObOraSysChecker::check_ora_obj_priv_for_create_view(
         /* if user can access object via a role, return OB_ERR_NO_PRIVILEGE, else OB_TABLE_NOT_EXIST */
         if (ret == OB_ERR_EMPTY_QUERY) {
           ret = OB_SUCCESS;
-          OZX1 (check_plist_or_in_roles(guard, tenant_id, user_id, priv_list, role_id_array),
+          OZX1 (check_plist_or_in_roles(guard, tenant_id, user_id, priv_list, role_id_array), 
                 OB_ERR_NO_PRIVILEGE);
           if (OB_SUCC(ret)) {
             ret = OB_ERR_NO_PRIVILEGE;
           } else if (ret == OB_ERR_NO_PRIVILEGE) {
             ret = OB_SUCCESS;
-            OZX1 (check_obj_plist_or_in_roles(guard, tenant_id, user_id, obj_type, obj_id, col_id,
+            OZX1 (check_obj_plist_or_in_roles(guard, tenant_id, user_id, obj_type, obj_id, col_id, 
                                               obj_p_list, role_id_array), OB_ERR_NO_PRIVILEGE);
             if (OB_SUCC(ret)) {
               ret = OB_ERR_NO_PRIVILEGE;
@@ -2656,7 +2656,7 @@ int ObOraSysChecker::check_ora_grant_role_priv(
           if (!user_info->role_exists(role_granted_id_array.at(i), ADMIN_OPTION)) {
             const ObUserInfo *user_info = NULL;            
             OZ (guard.get_user_info(tenant_id, role_granted_id_array.at(i), user_info));
-            /*
+            /* 
             对于dba角色，报错为：ORA-01031: insufficient privileges
                      . 其余角色报错 ORA-01932  ADMIN option not granted for role  */
             if (OB_SUCC(ret) && user_info != NULL) {

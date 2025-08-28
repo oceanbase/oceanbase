@@ -657,8 +657,8 @@ int ObSortOpImpl::enlarge_partition_topn_buckets()
     if (OB_ISNULL(new_pt_buckets)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory", K(ret));
-    } else {
-      MEMSET(new_pt_buckets, 0, sizeof(PartHeapNode*) * new_bucket_cnt);
+    } else { 
+      MEMSET(new_pt_buckets, 0, sizeof(PartHeapNode*) * new_bucket_cnt); 
       ObChunkDatumStore::StoredRow *top_row = NULL;
       for (int64_t idx = 0; OB_SUCC(ret) && idx < max_bucket_cnt_; ++idx) {
         PartHeapNode *hash_node = pt_buckets_[idx];

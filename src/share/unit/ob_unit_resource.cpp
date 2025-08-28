@@ -197,7 +197,7 @@ bool ObUnitResource::is_data_disk_size_valid_for_meta_tenant() const
 {
   bool b_ret = false;
   if (GCTX.is_shared_storage_mode()) {
-    b_ret = 0 == data_disk_size_ ||
+    b_ret = 0 == data_disk_size_ || 
             (data_disk_size_ >= META_TENANT_MIN_DATA_DISK_SIZE
             && data_disk_size_ <= META_TENANT_MAX_DATA_DISK_SIZE);
   } else {

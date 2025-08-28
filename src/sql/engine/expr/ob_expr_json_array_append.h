@@ -26,11 +26,11 @@ class ObExprJsonArrayAppend : public ObFuncExprOperator
 {
 public:
   explicit ObExprJsonArrayAppend(common::ObIAllocator &alloc);
-  explicit ObExprJsonArrayAppend(common::ObIAllocator &alloc,
-                                ObExprOperatorType type,
-                                const char *name,
-                                int32_t param_num,
-                                ObValidForGeneratedColFlag valid_for_generated_col,
+  explicit ObExprJsonArrayAppend(common::ObIAllocator &alloc, 
+                                ObExprOperatorType type, 
+                                const char *name, 
+                                int32_t param_num, 
+                                ObValidForGeneratedColFlag valid_for_generated_col, 
                                 int32_t dimension);
   virtual ~ObExprJsonArrayAppend();
 

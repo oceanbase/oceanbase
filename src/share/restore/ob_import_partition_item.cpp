@@ -30,9 +30,9 @@ void ObImportPartitionItem::reset()
 
 bool ObImportPartitionItem::is_valid() const
 {
-  return common::OB_NAME_CASE_INVALID != mode_
-         && !database_name_.empty()
-         && !table_name_.empty()
+  return common::OB_NAME_CASE_INVALID != mode_ 
+         && !database_name_.empty() 
+         && !table_name_.empty() 
          && !partition_name_.empty();
 }
 

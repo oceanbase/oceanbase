@@ -41,14 +41,14 @@ public:
   ~ObMock42xCreateTabletArg()
   { reset(); };
   void reset();
-  int serialize_for_create_tablet_schemas(char *buf,
-      const int64_t data_len,
+  int serialize_for_create_tablet_schemas(char *buf, 
+      const int64_t data_len, 
       int64_t &pos) const;
   int64_t get_serialize_size_for_create_tablet_schemas() const;
   int deserialize_create_tablet_schemas(const char *buf,
       const int64_t data_len,
       int64_t &pos);
-  TO_STRING_KV(K_(id), K_(major_frozen_scn), K_(table_schemas),
+  TO_STRING_KV(K_(id), K_(major_frozen_scn), K_(table_schemas), 
       K_(tablets), K_(need_check_tablet_cnt), K_(is_old_mds), K_(create_tablet_schemas));
 public:
   share::ObLSID id_;
@@ -94,8 +94,8 @@ int64_t ObMock42xCreateTabletArg::get_serialize_size_for_create_tablet_schemas()
 }
 
 
-int ObMock42xCreateTabletArg::serialize_for_create_tablet_schemas(char *buf,
-    const int64_t data_len,
+int ObMock42xCreateTabletArg::serialize_for_create_tablet_schemas(char *buf, 
+    const int64_t data_len, 
     int64_t &pos) const
 {
   int ret = OB_SUCCESS;
@@ -253,14 +253,14 @@ void TestDDLCreateTablet::SetUp()
   ObCreateTabletSchema data_table_tablet_schema;
   obrpc::ObBatchCreateTabletArg arg;
   ASSERT_EQ(OB_SUCCESS, build_create_tablet_arg(data_table_schema, data_table_tablet_schema, arg));
-
+  
   // 2. Mock 42x arg.
   ObMock42xCreateTabletArg mock_arg;
   ASSERT_EQ(OB_SUCCESS, build_create_tablet_mock_arg(arg, mock_arg));
 
   // 3. Use mock arg to build serialized buf.
   ASSERT_EQ(OB_SUCCESS, build_mds_buf(mock_arg));
-
+  
   // 4. create ls.
   ObLSHandle ls_handle;
   ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(ObLSID(TEST_LS_ID), ls_handle, ObLSGetMod::STORAGE_MOD));

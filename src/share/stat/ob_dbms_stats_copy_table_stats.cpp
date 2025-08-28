@@ -716,7 +716,7 @@ int ObDbmsStatsCopyTableStats::get_range_part_info(const ObTableSchema *table_sc
   } else {
     const ObRowkey &high_bound_val = part->get_high_bound_val();
     const ObRowkey &low_bound_val = part->get_low_bound_val();
-
+    
     ObCopyPartInfo *dst_part_info = NULL;
     for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_cnt; ++i) {
       if (OB_FAIL(get_copy_part_info(table_schema,

@@ -91,7 +91,7 @@ int ObStringStreamEncoder::do_convert_datum_to_stream_(ObIDatumIter &iter)
       STORAGE_LOG(WARN, "fail to ensure space", K(ret), K(umcompress_len), K(offset_arr_len));
     } else {
       byte_arr_ = all_string_writer_->current();
-      offset_arr_ = byte_arr_ + umcompress_len;
+      offset_arr_ = byte_arr_ + umcompress_len; 
     }
   } else {
     if (umcompress_len != 0 && OB_FAIL(all_string_writer_->ensure_space(umcompress_len))) {

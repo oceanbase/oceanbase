@@ -22,7 +22,7 @@ namespace sql
 class ObTriggerStorageCacheStmt : public ObCMDStmt
 {
 public:
-  ObTriggerStorageCacheStmt() :
+  ObTriggerStorageCacheStmt() : 
       ObCMDStmt(stmt::T_TRIGGER_STORAGE_CACHE),
       rpc_arg_()
   {}

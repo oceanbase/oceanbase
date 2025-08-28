@@ -133,13 +133,13 @@ int ObExprNLSSort::eval_nlssort_inner(const ObExpr &expr,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid cs", K(ret), K(coll_type));
   } else if (((ob_is_nchar(arg0_obj_type)) || (ob_is_char(arg0_obj_type, arg0_coll_type)))
-            && (OB_FAIL(ObCharsetUtils::remove_char_endspace(input_str,
+            && (OB_FAIL(ObCharsetUtils::remove_char_endspace(input_str, 
                                         ObCharset::get_charset(arg0_coll_type))))) {
     LOG_WARN("remove char endspace failed", K(ret));
   } else if (OB_FAIL(convert_to_coll_code(ctx, arg0_coll_type, input_str, coll_type, out))) {
     LOG_WARN("convert to coll code failed", K(ret));
   } else {
-    LOG_DEBUG("check coll type", K(coll_type), K(arg0_coll_type), K(expr),
+    LOG_DEBUG("check coll type", K(coll_type), K(arg0_coll_type), K(expr), 
         K(arg0_obj_type), K(out.length()));
     size_t buf_len = cs->coll->strnxfrmlen(cs, cs->mbmaxlen*out.length());
     char *buf = NULL;
@@ -232,7 +232,7 @@ int ObExprNLSSort::eval_nlssort(const ObExpr &expr,
                                                                 &temp_allocator,
                                                                 input_str,
                                                                 OB_MAX_ORACLE_VARCHAR_LENGTH))) {
-          LOG_WARN("failed to get string data", K(ret), K(expr.args_[0]->datum_meta_));
+          LOG_WARN("failed to get string data", K(ret), K(expr.args_[0]->datum_meta_));   
         } else if (input_str.empty()) {
           expr_datum.set_null();
         } else {

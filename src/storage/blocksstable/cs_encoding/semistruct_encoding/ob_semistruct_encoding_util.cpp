@@ -840,3 +840,4 @@ int ObSemiStructDecodeHandler::check_can_pushdown(
 
 }  // end namespace blocksstable
 }  // end namespace oceanbase
+

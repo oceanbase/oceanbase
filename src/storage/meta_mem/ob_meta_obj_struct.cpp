@@ -149,7 +149,7 @@ OB_SERIALIZE_MEMBER(ObMetaDiskAddr,
                     third_id_,
                     fourth_id_,
                     fifth_id_ // FOR the fourth_id_ of MacroBlockId // FARM COMPAT WHITELIST
-                    );
+                    ); 
 
 bool ObMetaDiskAddr::is_valid() const
 {

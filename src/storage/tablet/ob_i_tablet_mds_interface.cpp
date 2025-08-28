@@ -293,7 +293,7 @@ int ObITabletMdsInterface::split_partkey_compare(const blocksstable::ObDatumRowk
   }
 
   return ret;
-  #undef PRINT_WRAPPER
+  #undef PRINT_WRAPPER 
 }
 
 int ObITabletMdsInterface::read_raw_data(
@@ -372,7 +372,7 @@ int ObITabletMdsInterface::get_tablet_handle_from_this(
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
   if (OB_FAIL(t3m->build_tablet_handle_for_mds_scan(const_cast<ObTablet*>(tablet), tablet_handle))) {
     MDS_LOG(WARN, "fail to build tablet handle", K(ret), K(ls_id), K(tablet_id));
-  }
+  } 
   return ret;
 }
 

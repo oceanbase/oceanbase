@@ -126,7 +126,7 @@ int mvt_agg_result::transform_geom(const ObGeometry &geo)
     default :
       ret = OB_ERR_UNEXPECTED_GEOMETRY_TYPE;
         LOG_WARN("unexpected geometry type for st_area", K(ret));
-        LOG_USER_ERROR(OB_ERR_UNEXPECTED_GEOMETRY_TYPE, ObGeoTypeUtil::get_geo_name_by_type(geo.type()),
+        LOG_USER_ERROR(OB_ERR_UNEXPECTED_GEOMETRY_TYPE, ObGeoTypeUtil::get_geo_name_by_type(geo.type()), 
           ObGeoTypeUtil::get_geo_name_by_type(geo.type()), "_st_asmvt");
   }
   if (OB_SUCC(ret)) {
@@ -415,7 +415,7 @@ int mvt_agg_result::transform_other_column(ObObj *tmp_obj, uint32_t obj_cnt)
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -500,7 +500,7 @@ bool mvt_agg_result::is_upper_char_exist(const ObString &str)
   for (int32_t i = 0; i < str.length() && !res; i++) {
     if (isupper(static_cast<unsigned char>(ptr[i]))) {
       res = true;
-    }
+    } 
   }
   return res;
 }

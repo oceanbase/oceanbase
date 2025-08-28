@@ -65,7 +65,7 @@ int ObFlyingTabletPointerMap::set(const ObDieingTabletMapKey &key, ObTabletPoint
 }
 
 int ObFlyingTabletPointerMap::check_exist(
-    const ObDieingTabletMapKey &key,
+    const ObDieingTabletMapKey &key, 
     bool &is_exist)
 {
   int ret = common::OB_SUCCESS;
@@ -99,7 +99,7 @@ void ObFlyingTabletPointerMap::destroy()
   is_inited_ = false;
   bucket_lock_.destroy();
   for (common::hash::ObHashMap<ObDieingTabletMapKey, ObTabletPointerHandle>::iterator iter = map_.begin();
-      iter != map_.end();
+      iter != map_.end(); 
       ++iter) {
     iter->second.reset();
   }
@@ -117,9 +117,9 @@ int ObFlyingTabletPointerMap::erase(const ObDieingTabletMapKey &key)
     LOG_WARN("failed to check exist", K(ret), K(key));
   } else if (!is_exist) {
     LOG_WARN("this key is not exist, do not erase", K(ret), K(key));
-  } else if (OB_FAIL(inner_erase_(key))) {
+  } else if (OB_FAIL(inner_erase_(key))) {      
     LOG_WARN("fail to erase meta pointer", K(ret), K(key));
-  }
+  } 
 
   FLOG_INFO("success to remove tablet_pointer to flying_map", K(ret), K(key), K(count()));
   return ret;
@@ -140,7 +140,7 @@ int ObFlyingTabletPointerMap::inner_erase_(const ObDieingTabletMapKey &key)
       LOG_WARN("fail to get from map", K(ret), K(key));
     } else if (!handle_ptr->get_resource_ptr()->need_remove_from_flying_()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tablet_pointer should not be erased when tablet has been referred",
+      LOG_WARN("tablet_pointer should not be erased when tablet has been referred", 
         K(ret), KP(handle_ptr->get_resource_ptr()), KPC(handle_ptr->get_resource_ptr()) );
     } else if (OB_FAIL(map_.erase_refactored(key))) {
       LOG_WARN("fail to erase from map", K(ret));

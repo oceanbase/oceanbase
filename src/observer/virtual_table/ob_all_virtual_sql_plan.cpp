@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #include "observer/ob_server_utils.h"
 #include "ob_all_virtual_sql_plan.h"
 
@@ -421,14 +421,14 @@ int ObAllVirtualSqlPlan::extract_tenant_and_plan_id(const common::ObIArray<commo
     const ObObj *start_key_obj_ptr = start_key.get_obj_ptr();
     const ObObj *end_key_obj_ptr = end_key.get_obj_ptr();
 
-    if (start_key.get_obj_cnt() != end_key.get_obj_cnt() ||
+    if (start_key.get_obj_cnt() != end_key.get_obj_cnt() || 
         start_key.get_obj_cnt() != ROWKEY_COUNT) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "invalid range", K(ret));
     } else if (OB_ISNULL(start_key_obj_ptr) || OB_ISNULL(end_key_obj_ptr)) {
       ret = OB_INVALID_ARGUMENT;
       SERVER_LOG(WARN, "invalid arguments", K(ret));
-    } else if (start_key_obj_ptr[KEY_TENANT_ID_IDX].is_min_value() &&
+    } else if (start_key_obj_ptr[KEY_TENANT_ID_IDX].is_min_value() && 
                end_key_obj_ptr[KEY_TENANT_ID_IDX].is_max_value()) {
       is_always_true = true;
       if (OB_FAIL(dump_all_tenant_plans())) {
@@ -443,7 +443,7 @@ int ObAllVirtualSqlPlan::extract_tenant_and_plan_id(const common::ObIArray<commo
       ret = OB_NOT_IMPLEMENT;
       SERVER_LOG(WARN, "tenant id only supports exact value", K(ret));
     } else if (start_key_obj_ptr[KEY_TENANT_ID_IDX] == end_key_obj_ptr[KEY_TENANT_ID_IDX]) {
-      if (ObIntType != start_key_obj_ptr[KEY_TENANT_ID_IDX].get_type() ||
+      if (ObIntType != start_key_obj_ptr[KEY_TENANT_ID_IDX].get_type() || 
           (start_key_obj_ptr[KEY_TENANT_ID_IDX].get_type() != end_key_obj_ptr[KEY_TENANT_ID_IDX].get_type())) {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "expect tenant id type to be int",
@@ -451,10 +451,10 @@ int ObAllVirtualSqlPlan::extract_tenant_and_plan_id(const common::ObIArray<commo
                     K(end_key_obj_ptr[KEY_TENANT_ID_IDX].get_type()));
       } else {
         int64_t tenant_id = start_key_obj_ptr[KEY_TENANT_ID_IDX].get_int();
-        if (tenant_id != effective_tenant_id_ &&
+        if (tenant_id != effective_tenant_id_ && 
             !is_sys_tenant(effective_tenant_id_)) {
           //do nothing
-        } else if (start_key_obj_ptr[KEY_PLAN_ID_IDX].is_min_value() &&
+        } else if (start_key_obj_ptr[KEY_PLAN_ID_IDX].is_min_value() && 
                    end_key_obj_ptr[KEY_PLAN_ID_IDX].is_max_value()) {
           if (OB_FAIL(dump_tenant_plans(tenant_id))) {
             SERVER_LOG(WARN, "failed to dump tenant plans", K(ret));
@@ -468,7 +468,7 @@ int ObAllVirtualSqlPlan::extract_tenant_and_plan_id(const common::ObIArray<commo
           ret = OB_NOT_IMPLEMENT;
           SERVER_LOG(WARN, "tenant id only supports exact value", K(ret));
         } else if (start_key_obj_ptr[KEY_PLAN_ID_IDX] == end_key_obj_ptr[KEY_PLAN_ID_IDX]) {
-          if (ObIntType != start_key_obj_ptr[KEY_PLAN_ID_IDX].get_type() ||
+          if (ObIntType != start_key_obj_ptr[KEY_PLAN_ID_IDX].get_type() || 
               (start_key_obj_ptr[KEY_PLAN_ID_IDX].get_type() != end_key_obj_ptr[KEY_PLAN_ID_IDX].get_type())) {
             ret = OB_ERR_UNEXPECTED;
             SERVER_LOG(WARN, "expect plan id type to be int",
@@ -499,7 +499,7 @@ int ObAllVirtualSqlPlan::dump_all_tenant_plans()
     SERVER_LOG(WARN, "failed to get all tenant ids", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < all_tenant_ids.count(); i++) {
-    if (all_tenant_ids.at(i) != effective_tenant_id_ &&
+    if (all_tenant_ids.at(i) != effective_tenant_id_ && 
         !is_sys_tenant(effective_tenant_id_)) {
       //do nothing
     } else if (OB_FAIL(dump_tenant_plans(all_tenant_ids.at(i)))) {
@@ -544,7 +544,7 @@ int ObAllVirtualSqlPlan::prepare_next_plan()
   if (plan_idx_ >= plan_ids_.count()) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "no more plan", K(ret));
-  } else if (OB_INVALID_INDEX == plan_ids_.at(plan_idx_).tenant_id_ ||
+  } else if (OB_INVALID_INDEX == plan_ids_.at(plan_idx_).tenant_id_ || 
              OB_INVALID_INDEX == plan_ids_.at(plan_idx_).plan_id_) {
     SERVER_LOG(DEBUG, "invalid tenant_id or plan_id");
     //next plan

@@ -18,7 +18,7 @@ namespace common {
 
 bool ObGeoCoordinateRangeVisitor::prepare(ObGeometry *geo)
 {
-  UNUSED(geo);
+  UNUSED(geo);  
   if (srs_ == NULL || srs_->srs_type() == ObSrsType::PROJECTED_SRS) {
     return false;
   }
@@ -27,13 +27,13 @@ bool ObGeoCoordinateRangeVisitor::prepare(ObGeometry *geo)
 
 /*
 check whether the longitude or latitude of a geographical point is out of range or not
-@param[in] Geometry object pointer
+@param[in] Geometry object pointer 
 @return Returns OB_SUCCESS on success, error code otherwise.
 */
 int ObGeoCoordinateRangeVisitor::calculate_point_range(const ObSrsItem *srs,
-                                                       double longti,
-                                                       double lati,
-                                                       bool is_normalized,
+                                                       double longti, 
+                                                       double lati, 
+                                                       bool is_normalized, 
                                                        ObGeoCoordRangeResult &result)
 {
   int ret = OB_SUCCESS;
@@ -41,7 +41,7 @@ int ObGeoCoordinateRangeVisitor::calculate_point_range(const ObSrsItem *srs,
   if (is_normalized) {
     longti -= srs->prime_meridian() * srs->angular_unit();
     if (!srs->is_longtitude_east()) {
-      longti *= -1.0;
+      longti *= -1.0; 
     }
   } else {
     longti *= srs->angular_unit();

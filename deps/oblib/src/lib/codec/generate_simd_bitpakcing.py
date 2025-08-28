@@ -578,7 +578,7 @@ void uSIMD_fastpackwithoutmask_128_16(const uint16_t *__restrict__ in,
   line = """
   default: {
     int ret = OB_ERR_UNEXPECTED;
-    LIB_LOG(ERROR, "unexpected", KP(in), KP(out), K(bit));
+    LIB_LOG(ERROR, "unexpected", KP(in), KP(out), K(bit)); 
     break;
   }
   }
@@ -608,7 +608,7 @@ void uSIMD_fastunpack_128_16(const __m128i *__restrict__ in,
   line = """
   default: {
     int ret = OB_ERR_UNEXPECTED;
-    LIB_LOG(ERROR, "unexpected", KP(in), KP(out), K(bit));
+    LIB_LOG(ERROR, "unexpected", KP(in), KP(out), K(bit)); 
     break;
   }
   }
@@ -638,7 +638,7 @@ void uSIMD_fastpackwithoutmask_128_32(const uint32_t *__restrict__ in,
   line = """
   default: {
     int ret = OB_ERR_UNEXPECTED;
-    LIB_LOG(ERROR, "unexpected", KP(in), KP(out), K(bit));
+    LIB_LOG(ERROR, "unexpected", KP(in), KP(out), K(bit)); 
     break;
   }
   }
@@ -668,7 +668,7 @@ void uSIMD_fastunpack_128_32(const __m128i *__restrict__ in,
   line = """
   default: {
     int ret = OB_ERR_UNEXPECTED;
-    LIB_LOG(ERROR, "unexpected", KP(in), KP(out), K(bit));
+    LIB_LOG(ERROR, "unexpected", KP(in), KP(out), K(bit)); 
     break;
   }
   }
@@ -698,7 +698,7 @@ void uSIMD_fastpackwithoutmask_256_32(const uint32_t *__restrict__ in,
   line = """
   default: {
     int ret = OB_ERR_UNEXPECTED;
-    LIB_LOG(ERROR, "unexpected", KP(in), KP(out), K(bit));
+    LIB_LOG(ERROR, "unexpected", KP(in), KP(out), K(bit)); 
     break;
   }
   }
@@ -727,7 +727,7 @@ void uSIMD_fastunpack_256_32(const __m256i *__restrict__ in,
   line = """
   default: {
     int ret = OB_ERR_UNEXPECTED;
-    LIB_LOG(ERROR, "unexpected", KP(in), KP(out), K(bit));
+    LIB_LOG(ERROR, "unexpected", KP(in), KP(out), K(bit)); 
     break;
   }
   }

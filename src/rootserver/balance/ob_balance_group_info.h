@@ -80,7 +80,7 @@ public:
   //
   // @param [in] part                         target partition info which will be added
   // @param [in] data_size                    partition data size
-  // @param [in] part_group_uid               partition group unique id
+  // @param [in] part_group_uid               partition group unique id 
   //
   // @return OB_SUCCESS         success
   // @return OB_ENTRY_EXIST     no partition group found

@@ -272,7 +272,7 @@ private:
     }
     return ret;
   }
-
+  
 
   template <typename ResFmt>
   int set_payload(ResFmt *res_data, VecValueTypeClass out_tc, int64_t output_idx, const char *src,
@@ -782,8 +782,8 @@ int ObWindowFunctionVecOp::init()
         case T_FUN_ORA_JSON_ARRAYAGG:
         case T_FUN_ORA_JSON_OBJECTAGG:
         case T_FUN_ORA_XMLAGG:
-        case T_FUNC_SYS_ARRAY_AGG:
-        case T_FUN_SYS_RB_OR_CARDINALITY_AGG:
+        case T_FUNC_SYS_ARRAY_AGG: 
+        case T_FUN_SYS_RB_OR_CARDINALITY_AGG: 
         case T_FUN_SYS_RB_AND_CARDINALITY_AGG: {
           aggregate::IAggregate *agg_func = nullptr;
           winfunc::AggrExpr *aggr_expr = nullptr;
@@ -1939,7 +1939,7 @@ int ObWindowFunctionVecOp::output_batch_rows(const int64_t output_row_cnt)
         // partial aggregate row with aggr_status < 0 can't be outputed
         VectorFormat agg_status_fmt = MY_SPEC.wf_aggr_status_expr_->get_format(eval_ctx_);
         if (agg_status_fmt == VEC_FIXED) {
-          ObFixedLengthFormat<int64_t> *aggr_status_data =
+          ObFixedLengthFormat<int64_t> *aggr_status_data = 
             static_cast<ObFixedLengthFormat<int64_t> *>(MY_SPEC.wf_aggr_status_expr_->get_vector(eval_ctx_));
           for (int i = 0; i < outputed_cnt; i++) {
             if (*reinterpret_cast<const int64_t *>(aggr_status_data->get_payload(i)) < 0) {
@@ -2000,7 +2000,7 @@ int ObWindowFunctionVecOp::output_stored_rows(const int64_t out_processed_cnt,
   MEMSET(input_stored_rows, 0, sizeof(ObCompactRow *) * (out_processed_cnt + out_cur_cnt));
   int64_t out_start = store.processed_->output_row_idx_;
   // increase row store memory iteration age to keep row store memory
-  // get processed_ first
+  // get processed_ first  
   if (OB_FAIL(store.processed_->get_batch_rows(
         store.processed_->output_row_idx_, store.processed_->output_row_idx_ + out_processed_cnt,
         input_stored_rows))) {
@@ -3995,7 +3995,7 @@ int ObWindowFunctionVecSpec::rd_gen_agg_patches(RDWinFuncPXPieceMsgCtx &msg_ctx,
 
   // hence, first_row's patch is sum of previous partial results with same partition
   // last_row's patch is sum of following partial results with same partition and same order
-
+  
   // first row's patch
   if (OB_FAIL(first_row_patch.to_expr(rd_coord_exprs_, eval_ctx))) {
     LOG_WARN("to expr failed", K(ret));

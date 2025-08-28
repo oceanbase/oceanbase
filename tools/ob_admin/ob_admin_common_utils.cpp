@@ -15,14 +15,14 @@
 
 using namespace oceanbase::common;
 using namespace oceanbase::blocksstable;
-namespace oceanbase
+namespace oceanbase 
 {
-namespace tools
+namespace tools 
 {
 int ObAdminCommonUtils::dump_single_macro_block(
     const ObDumpMacroBlockParam &param,
-    const char* buf,
-    const int64_t size)
+    const char* buf, 
+    const int64_t size) 
 {
   int ret = OB_SUCCESS;
   ObSSTableDataBlockReader macro_reader;
@@ -40,8 +40,8 @@ int ObAdminCommonUtils::dump_single_macro_block(
 
 int ObAdminCommonUtils::dump_shared_macro_block(
     const ObDumpMacroBlockParam &param,
-    const char* buf,
-    const int64_t size)
+    const char* buf, 
+    const int64_t size) 
 {
   int ret = OB_SUCCESS;
   const int64_t aligned_size = 4096;

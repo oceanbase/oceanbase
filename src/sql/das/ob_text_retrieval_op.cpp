@@ -224,7 +224,7 @@ int ObTextRetrievalMerge::get_next_row(ObNewRow *&row)
       doc_cnt_calculated_ = true;
     }
   }
-
+  
   bool got_valid_document = false;
   ObExpr *match_filter = retrieval_param_.need_relevance()
       ? retrieval_param_.get_ir_ctdef()->match_filter_ : nullptr;

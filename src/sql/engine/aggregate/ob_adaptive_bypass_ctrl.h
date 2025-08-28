@@ -60,9 +60,9 @@ public:
     need_become_l2_insert_5x_ = false;
     last_round_processed_cnt_ = 0;
   }
-  inline void reset_state() {
-    state_ = (scaled_llc_est_ndv_ ? STATE_MAX_MEM_INSERT :
-      (need_become_l2_insert_5x_ ? STATE_L2_INSERT_5X : STATE_L2_INSERT));
+  inline void reset_state() { 
+    state_ = (scaled_llc_est_ndv_ ? STATE_MAX_MEM_INSERT : 
+      (need_become_l2_insert_5x_ ? STATE_L2_INSERT_5X : STATE_L2_INSERT)); 
     need_become_l2_insert_5x_ = false;
   }
   inline void set_max_mem_insert_state() { state_ = STATE_MAX_MEM_INSERT; }

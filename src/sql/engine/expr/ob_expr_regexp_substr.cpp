@@ -187,7 +187,7 @@ int ObExprRegexpSubstr::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_exp
   return ret;
 }
 
-int ObExprRegexpSubstr::is_valid_for_generated_column(const ObRawExpr*expr,
+int ObExprRegexpSubstr::is_valid_for_generated_column(const ObRawExpr*expr, 
                                                       const common::ObIArray<ObRawExpr *> &exprs,
                                                       bool &is_valid) const {
   int ret = OB_SUCCESS;

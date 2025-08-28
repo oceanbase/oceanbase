@@ -227,7 +227,7 @@ int ObTransformLateMaterialization::gen_trans_info_for_row_store(const ObSelectS
         LOG_WARN("got null ptr", K(ret));
       } else if (OB_FAIL(index_schema->get_column_ids(index_column_ids))) {
         LOG_WARN("failed to get column ids", K(ret));
-      } else if (OB_FAIL(check_index_match_late_materialization(index_schema->get_table_id(),
+      } else if (OB_FAIL(check_index_match_late_materialization(index_schema->get_table_id(), 
                                                     index_column_ids, key_col_ids, filter_col_ids,
                                                     orderby_col_ids, select_col_ids,
                                                     table_item->ref_id_, check_ctx, is_match))) {
@@ -872,7 +872,7 @@ int ObTransformLateMaterialization::generate_pk_join_conditions(const uint64_t r
           OB_ISNULL(view_col = new_col_exprs.at(idx))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::is_expr_not_null(not_null_ctx, view_col,
+      } else if (OB_FAIL(ObTransformUtils::is_expr_not_null(not_null_ctx, view_col, 
                                                             is_not_null, &constraints))) {
             LOG_WARN("failed to check expr not null", K(ret));
       } else if (is_not_null) {

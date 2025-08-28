@@ -187,7 +187,7 @@ inline bool is_queuing_table_mode(const ObTableModeFlag &table_mode)
 }
 inline bool not_compat_for_queuing_mode_42x(const uint64_t min_data_version)
 {
-  return (min_data_version < MOCK_DATA_VERSION_4_2_1_5)
+  return (min_data_version < MOCK_DATA_VERSION_4_2_1_5) 
         || (DATA_VERSION_4_2_2_0 <= min_data_version && min_data_version < MOCK_DATA_VERSION_4_2_3_0);
 }
 inline bool not_compat_for_queuing_mode(const uint64_t min_data_version)
@@ -393,7 +393,7 @@ public:
   }
   static ObTablePrimaryKeyExistsMode get_table_pk_exists_flag(int32_t table_mode)
   {
-    return (ObTablePrimaryKeyExistsMode)(((table_mode >> TM_TABLE_PK_EXISTS_MODE_OFFSET) & TABLE_PK_EXISTS_MODE_MASK));
+    return (ObTablePrimaryKeyExistsMode)(((table_mode >> TM_TABLE_PK_EXISTS_MODE_OFFSET) & TABLE_PK_EXISTS_MODE_MASK));  
   }
   static ObTableOrganizationMode get_table_organization_flag(int32_t table_mode)
   {
@@ -518,7 +518,7 @@ public:
   union
   {
     int64_t mode_;
-    struct
+    struct 
     {
       uint64_t mv_major_refresh_flag_ : MM_MV_MAJOR_REFRESH_BITS;
       uint64_t table_referenced_by_fast_lsm_mv_flag_ : MM_TABLE_REFERENCED_BY_FAST_LSM_MV_BITS;
@@ -551,10 +551,10 @@ public:
   bool is_enable_semistruct_encoding() const { return ENCODING == mode_; }
   int64_t get_deep_copy_size() const { return sizeof(ObSemiStructEncodingType); }
 
-  union
+  union 
   {
     int64_t flags_;
-    struct
+    struct 
     {
       uint64_t mode_ : 8;
       uint64_t reserved_ : 56;
@@ -595,7 +595,7 @@ struct ObBackUpTableModeOp
       ret_str = queuing_mode_str"|INDEX_ORGANIZED_TABLE";                \
     } else {                                                             \
       ret_str = queuing_mode_str;                                        \
-    }
+    }                                                                    
 
   static common::ObString get_table_mode_str(const ObTableMode mode) {
     common::ObString ret_str = "";
@@ -916,7 +916,7 @@ public:
   { return (TOM_HEAP_ORGANIZED == (enum ObTableOrganizationMode)table_mode_.table_organization_mode_ ||
            (TOM_INDEX_ORGANIZED == (enum ObTableOrganizationMode)table_mode_.table_organization_mode_ &&
             TOM_TABLE_WITHOUT_PK == (enum ObTablePrimaryKeyExistsMode)table_mode_.pk_exists_)); }
-  // returns true when ob considers the table does not have the user provided primary key and use the
+  // returns true when ob considers the table does not have the user provided primary key and use the 
   // hidden pk as ob's primary key
   // 返回true: 用户没指定主键（IOT模式）或者cluster by列（HEAP模式）
   inline bool is_table_without_pk() const
@@ -965,11 +965,11 @@ public:
   inline uint64_t get_session_id() const { return session_id_; }
   inline void set_truncate_version(const int64_t truncate_version ) { truncate_version_ = truncate_version; }
   inline int64_t get_truncate_version() const {return truncate_version_; }
-
-  inline void set_storage_cache_policy_type(const storage::ObStorageCachePolicyType &storage_cache_policy_type)
+  
+  inline void set_storage_cache_policy_type(const storage::ObStorageCachePolicyType &storage_cache_policy_type) 
   { storage_cache_policy_type_ = storage_cache_policy_type;}
   inline const storage::ObStorageCachePolicyType &get_storage_cache_policy_type() const { return storage_cache_policy_type_; }
-
+  
   virtual int get_zone_list(
       share::schema::ObSchemaGetterGuard &schema_guard,
       common::ObIArray<common::ObZone> &zone_list) const override;
@@ -1027,7 +1027,7 @@ public:
    * PARTITION_LEVEL_TWO
    *    - object_id = sub_part_id
    *    - first_level_part_id = part_id
-  */
+  */ 
   int get_part_id_and_tablet_id_by_idx(
       const int64_t part_idx,
       const int64_t subpart_idx,
@@ -1251,13 +1251,13 @@ public:
   inline void set_duplicate_read_consistency(const share::ObDuplicateReadConsistency duplicate_read_consistency) { duplicate_read_consistency_ = duplicate_read_consistency; }
   inline share::ObDuplicateReadConsistency get_duplicate_read_consistency() const { return duplicate_read_consistency_; }
 
-  inline bool is_duplicate_table() const {
+  inline bool is_duplicate_table() const { 
     return duplicate_scope_ == ObDuplicateScope::DUPLICATE_SCOPE_CLUSTER
-           && duplicate_read_consistency_ == ObDuplicateReadConsistency::STRONG;
+           && duplicate_read_consistency_ == ObDuplicateReadConsistency::STRONG; 
   }
-  inline bool is_broadcast_table() const {
+  inline bool is_broadcast_table() const { 
     return duplicate_scope_ == ObDuplicateScope::DUPLICATE_SCOPE_CLUSTER
-           && duplicate_read_consistency_ == ObDuplicateReadConsistency::WEAK;
+           && duplicate_read_consistency_ == ObDuplicateReadConsistency::WEAK; 
   }
   // for encrypt
   int set_encryption_str(const common::ObString &str) { return deep_copy_str(str, encryption_); }
@@ -1283,14 +1283,14 @@ public:
   /**
   * During the construction of a local index in a partition table, the included columns may not contain the partition key.
   * Since it's necessary to calculate which partition the data will be stored in, the partition key must be supplied to augment the index.
-  *
-  * For the function to return true, the following conditions must be met:
-  * 1) Local index
+  * 
+  * For the function to return true, the following conditions must be met: 
+  * 1) Local index 
   * 2) The indexed table does not contain the partition key.
-  *
+  * 
   * Current case:
-  * 1) the local index of the heap
-  * 2) two of the fts related table : fts_index_aux and fts_doc_word_aux.
+  * 1) the local index of the heap 
+  * 2) two of the fts related table : fts_index_aux and fts_doc_word_aux. 
   *    Note: other tables of the fts related table (doc_rowkey table and rowkey_doc table) contain the partition key.
   **/
   inline bool need_partition_key_for_build_local_index(const ObSimpleTableSchemaV2 &data_table_schema) const
@@ -1350,7 +1350,7 @@ protected:
   ObTabletID tablet_id_;
   ObObjectStatus object_status_;
   bool is_force_view_; // only record in create view path, do not persist to disk
-
+  
   // storage cache policy type
   storage::ObStorageCachePolicyType storage_cache_policy_type_;
   bool with_dynamic_partition_policy_; // do not persist to disk
@@ -1722,7 +1722,7 @@ public:
   inline void reset_column_group_count() { column_group_cnt_ = 0; }
   inline int64_t get_constraint_count() const { return cst_cnt_; }
   inline bool get_micro_index_clustered() const { return micro_index_clustered_; }
-  inline void set_micro_index_clustered(const bool micro_index_clustered) { micro_index_clustered_ = micro_index_clustered; }
+  inline void set_micro_index_clustered(const bool micro_index_clustered) { micro_index_clustered_ = micro_index_clustered; } 
   inline bool get_enable_macro_block_bloom_filter() const override { return enable_macro_block_bloom_filter_; }
   inline void set_enable_macro_block_bloom_filter(const bool enable_macro_block_bloom_filter)
   {
@@ -1763,9 +1763,9 @@ public:
   bool has_generated_and_partkey_column() const;
   int check_is_stored_generated_column_base_column(uint64_t column_id, bool &is_stored_base_col) const;
   // Check whether the data table column has prefix index column deps.
-  int check_prefix_index_columns_depend(const ObColumnSchemaV2 &data_column_schema,
-                                       ObSchemaGetterGuard &schema_guard,
-                                       bool &has_prefix_idx_col_deps,
+  int check_prefix_index_columns_depend(const ObColumnSchemaV2 &data_column_schema, 
+                                       ObSchemaGetterGuard &schema_guard, 
+                                       bool &has_prefix_idx_col_deps, 
                                        bool &can_change_prefix_column_length,
                                        const ObColumnSchemaV2 *&prefix_column) const;
   int check_functional_index_columns_depend(const ObColumnSchemaV2 &data_column_schema, ObSchemaGetterGuard &schema_guard, bool &has_prefix_idx_col_deps) const;
@@ -1889,7 +1889,7 @@ public:
   /**
    * FIXME: move to ObPartitionSchema
    * this function won't reset tablet_ids/partition_ids first, should be careful!!!
-   *
+   * 
    * first_level_part_ids represent the first level part id of subpartition,
    * otherwise its value is OB_INVALID_ID
    * e.g.
@@ -1902,7 +1902,7 @@ public:
    * PARTITION_LEVEL_TWO
    *    - partition_id = sub_part_id
    *    - first_level_part_id = part_id
-  */
+  */ 
   int get_all_tablet_and_object_ids(common::ObIArray<ObTabletID> &tablet_ids,
                                     common::ObIArray<ObObjectID> &partition_ids,
                                     ObIArray<ObObjectID> *first_level_part_ids = NULL) const;
@@ -2153,9 +2153,9 @@ public:
   inline const sql::ObLocalSessionVar &get_local_session_var() const { return local_session_vars_; }
   inline void set_mv_mode(const int64_t mv_mode) { mv_mode_.mode_ = mv_mode; }
   inline int64_t get_mv_mode() const { return mv_mode_.mode_; }
-
+  
   // storage cache policy
-  inline int set_storage_cache_policy(const common::ObString &storage_cache_policy)
+  inline int set_storage_cache_policy(const common::ObString &storage_cache_policy) 
   {return deep_copy_str(storage_cache_policy, storage_cache_policy_);}
   inline const common::ObString &get_storage_cache_policy() const { return storage_cache_policy_; }
   virtual int get_mv_mode_struct(ObMvMode &mv_mode) const override
@@ -2477,7 +2477,7 @@ inline bool ObSimpleTableSchemaV2::is_global_unique_index_table(const ObIndexTyp
 
 inline bool ObSimpleTableSchemaV2::is_local_unique_index_table() const
 {
-  //
+  // 
   return share::schema::is_local_unique_index_table(index_type_);
 }
 
@@ -2959,7 +2959,7 @@ int ObTableSchema::add_column(const ColumnType &column)
           index_column.multivalue_flag_ = column.is_multivalue_generated_column();
           if (index_column.type_.is_decimal_int()) {
             index_column.type_.set_scale(column.get_accuracy().get_scale());
-          }
+          } 
           if (OB_FAIL(index_info_.set_column(column.get_index_position() - 1, index_column))) {
             SHARE_SCHEMA_LOG(WARN, "Fail to set column to index info", KR(ret));
           } else {

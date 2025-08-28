@@ -345,7 +345,7 @@ int ObDictColumnDecoder::pushdown_operator(
     uint64_t effective_rows = pd_filter_info.count_;
     if (parent != nullptr && parent->need_check_row_filter()) {
       if (parent->is_logic_and_node()) {
-        effective_rows = parent->get_result()->popcnt();
+        effective_rows = parent->get_result()->popcnt(); 
       } else {
         effective_rows = pd_filter_info.count_ - parent->get_result()->popcnt();
       }

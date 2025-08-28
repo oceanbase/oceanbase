@@ -589,7 +589,7 @@ int ObDbmsStatsUtils::get_no_need_collect_part_ids(const ObTableStatParam &param
                                                    ObIArray<int64_t> &no_collect_subpart_ids)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<int64_t, 4> part_or_subpart_ids; //
+  ObSEArray<int64_t, 4> part_or_subpart_ids; // 
   if (OB_FAIL(ObDbmsStatsUtils::get_subpart_ids(param.all_subpart_infos_, partition_id, part_or_subpart_ids))) {
     LOG_WARN("failed to push back", K(ret));
   }
@@ -688,7 +688,7 @@ int ObDbmsStatsUtils::calssify_opt_stat(const ObIArray<ObOptStat> &opt_stats,
 
 // merge history stats and online stats
 // for each stats in history, first search wether is in online_stats(map).
-//  if not exists, set_refactored.
+//  if not exists, set_refactored. 
 //  else merge old and new stats;
 int ObDbmsStatsUtils::merge_tab_stats(const ObTableStatParam &param,
                                       const TabStatIndMap &online_table_stats,
@@ -1493,11 +1493,11 @@ int ObDbmsStatsUtils::scale_col_stats(const uint64_t tenant_id,
         }
       } else if (table_stat->get_sample_size() < table_stat->get_row_count() &&
                  table_stat->get_row_count() > 0) {
-        double sample_value = static_cast<double>(table_stat->get_sample_size()) /
+        double sample_value = static_cast<double>(table_stat->get_sample_size()) / 
                               static_cast<double>(table_stat->get_row_count());
         if (sample_value >= 0.00000001 && sample_value < 1.0) {
-          double num_distinct = ObOptSelectivity::scale_distinct(table_stat->get_row_count(),
-                                                                 table_stat->get_sample_size(),
+          double num_distinct = ObOptSelectivity::scale_distinct(table_stat->get_row_count(), 
+                                                                 table_stat->get_sample_size(), 
                                                                  col_stat->get_num_distinct());
           int64_t num_null = static_cast<int64_t>(col_stat->get_num_null() / sample_value);
           num_null = num_null > table_stat->get_row_count() ? table_stat->get_row_count() : num_null;
@@ -1505,7 +1505,7 @@ int ObDbmsStatsUtils::scale_col_stats(const uint64_t tenant_id,
           col_stat->set_num_null(num_null);
           col_stat->set_num_distinct(num_distinct);
         }
-      }
+      } 
     }
   }
   return ret;
@@ -1995,7 +1995,7 @@ int ObDbmsStatsUtils::copy_global_index_prefix_stats_to_text(share::schema::ObSc
         } else {
           text_col_stat->set_column_id(pair.related_column_id_);
           text_col_stat->set_table_id(data_table_id);
-          text_col_stat->set_partition_id(part_level == schema::ObPartitionLevel::PARTITION_LEVEL_ZERO ?
+          text_col_stat->set_partition_id(part_level == schema::ObPartitionLevel::PARTITION_LEVEL_ZERO ? 
                                             data_table_id : -1);
         }
       }
@@ -2028,8 +2028,8 @@ int ObDbmsStatsUtils::copy_prefix_column_stat_to_text(ObIAllocator &allocator,
     LOG_WARN("failed to get max value", K(ret));
   } else if (OB_FAIL(col_stat.get_min_value().get_string(min_value))) {
     LOG_WARN("failed to get min value", K(ret));
-  } else if (OB_FAIL(sql::ObTextStringHelper::str_to_lob_storage_obj(allocator,
-                                                                     max_value,
+  } else if (OB_FAIL(sql::ObTextStringHelper::str_to_lob_storage_obj(allocator, 
+                                                                     max_value, 
                                                                      text_col_stat->get_max_value()))) {
     LOG_WARN("failed to convert str to lob", K(ret));
   } else if (OB_FAIL(sql::ObTextStringHelper::str_to_lob_storage_obj(allocator,

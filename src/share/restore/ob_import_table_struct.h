@@ -57,7 +57,7 @@ private:
 
 #ifdef Property_declare_int
 #undef Property_declare_int
-#endif
+#endif 
 
 #define Property_declare_int(variable_type, variable_name)\
 private:\
@@ -82,7 +82,7 @@ public:\
 
 #ifdef Property_declare_struct
 #undef Property_declare_struct
-#endif
+#endif 
 
 #define Property_declare_struct(variable_type, variable_name)\
 private:\
@@ -135,7 +135,7 @@ private:
 struct ObImportTableTask final : public ObIInnerTableRow
 {
 public:
-  struct Key final : public ObIInnerTableKey
+  struct Key final : public ObIInnerTableKey 
   {
     Key() : tenant_id_(OB_INVALID_TENANT_ID), task_id_() {}
     ~Key() {}
@@ -167,11 +167,11 @@ public:
   int fill_dml(share::ObDMLSqlSplicer &dml) const override;
 
   TO_STRING_KV(K_(tenant_id), K_(task_id), K_(job_id), K_(src_tenant_id), K_(src_tablespace), K_(src_tablegroup),
-      K_(src_database), K_(src_table), K_(src_partition), K_(target_tablespace), K_(target_tablegroup), K_(target_database),
-      K_(target_table), K_(table_column), K_(status), K_(start_ts), K_(completion_ts), K_(cumulative_ts), K_(total_bytes),
-      K_(total_rows), K_(imported_bytes), K_(imported_rows), K_(total_index_count), K_(imported_index_count),
-      K_(failed_index_count), K_(total_constraint_count), K_(imported_constraint_count), K_(failed_constraint_count),
-      K_(total_ref_constraint_count), K_(imported_ref_constraint_count), K_(failed_ref_constraint_count),
+      K_(src_database), K_(src_table), K_(src_partition), K_(target_tablespace), K_(target_tablegroup), K_(target_database), 
+      K_(target_table), K_(table_column), K_(status), K_(start_ts), K_(completion_ts), K_(cumulative_ts), K_(total_bytes), 
+      K_(total_rows), K_(imported_bytes), K_(imported_rows), K_(total_index_count), K_(imported_index_count), 
+      K_(failed_index_count), K_(total_constraint_count), K_(imported_constraint_count), K_(failed_constraint_count), 
+      K_(total_ref_constraint_count), K_(imported_ref_constraint_count), K_(failed_ref_constraint_count), 
       K_(total_trigger_count), K_(imported_trigger_count), K_(failed_trigger_count), K_(result));
 
   Property_declare_int(uint64_t, tenant_id)
@@ -209,7 +209,7 @@ public:
   Property_declare_int(int64_t, imported_trigger_count)
   Property_declare_int(int64_t, failed_trigger_count)
   Property_declare_struct(ObImportResult, result)
-
+  
 private:
   common::ObArenaAllocator allocator_;
 };
@@ -217,7 +217,7 @@ private:
 class ObImportTableJobStatus final
 {
 public:
-  enum Status
+  enum Status 
   {
     INIT = 0,
     IMPORT_TABLE = 1,
@@ -264,7 +264,7 @@ struct ObImportTableJob final : public ObIInnerTableRow
 {
 public:
 
-  struct Key final : public ObIInnerTableKey
+  struct Key final : public ObIInnerTableKey 
   {
     Key() : tenant_id_(OB_INVALID_TENANT_ID), job_id_(-1) {}
     ~Key() {}
@@ -296,8 +296,8 @@ public:
   int fill_dml(share::ObDMLSqlSplicer &dml) const override;
   int assign(const ObImportTableJob &that);
 
-  TO_STRING_KV(K_(tenant_id), K_(job_id), K_(initiator_tenant_id), K_(initiator_job_id), K_(start_ts), K_(end_ts),
-      K_(src_tenant_name), K_(src_tenant_id), K_(status), K_(total_table_count), K_(finished_table_count),
+  TO_STRING_KV(K_(tenant_id), K_(job_id), K_(initiator_tenant_id), K_(initiator_job_id), K_(start_ts), K_(end_ts), 
+      K_(src_tenant_name), K_(src_tenant_id), K_(status), K_(total_table_count), K_(finished_table_count), 
       K_(failed_table_count), K_(total_bytes), K_(finished_bytes), K_(failed_bytes), K_(result), K_(import_arg));
 
   Property_declare_int(uint64_t, tenant_id)
@@ -382,12 +382,12 @@ private:
 struct ObRecoverTableJob final : public ObIInnerTableRow
 {
 public:
-  struct Key final : public ObIInnerTableKey
+  struct Key final : public ObIInnerTableKey 
   {
     Key() : tenant_id_(OB_INVALID_TENANT_ID), job_id_(-1) {}
     ~Key() {}
     void reset() { tenant_id_ = OB_INVALID_TENANT_ID; job_id_ = -1; }
-    bool is_pkey_valid() const override {
+    bool is_pkey_valid() const override { 
          return (is_user_tenant(tenant_id_) || is_sys_tenant(tenant_id_)) && job_id_ >= 0; }
 
     bool operator==(const Key &other) const

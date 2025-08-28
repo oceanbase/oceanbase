@@ -597,7 +597,7 @@ int ObDynamicSampling::estimte_rowcount(int64_t max_ds_timeout,
   }
   LOG_TRACE("go to dynamic sample one time", K(sample_block_ratio_), K(ret),
             K(raw_sql_str), K(max_ds_timeout), K(start_time), K(ObTimeUtility::current_time() - start_time));
-  OPT_TRACE("dynamic sample cost time:", ObTimeUtility::current_time()-start_time,
+  OPT_TRACE("dynamic sample cost time:", ObTimeUtility::current_time()-start_time, 
             "us, max sample time:", max_ds_timeout, "us");
   return ret;
 }
@@ -988,7 +988,7 @@ int ObDynamicSampling::estimate_table_block_count_and_row_count(const ObDSTableP
                                                                                     estimate_result))) {
       LOG_WARN("failed to do estimate block count and row count use leader replication", K(ret));
     }
-  }
+  } 
 
   if (OB_SUCC(ret)) {
     for (int64_t i = 0; i < estimate_result.count(); ++i) {

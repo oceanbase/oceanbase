@@ -345,10 +345,10 @@ int ObMPStmtSendLongData::store_piece(ObSQLSessionInfo &session)
       }
     }
     if (OB_FAIL(ret) || NULL == piece) {
-      ret = OB_SUCCESS == ret ? OB_ERR_UNEXPECTED : ret;
+      ret = OB_SUCCESS == ret ? OB_ERR_UNEXPECTED : ret; 
       need_disconnect_ = true;
       LOG_WARN("piece is null.", K(ret), K(piece), K(stmt_id_), K(param_id_));
-    } else if (OB_FAIL(piece_cache->add_piece_buffer(piece,
+    } else if (OB_FAIL(piece_cache->add_piece_buffer(piece, 
                                                       ObPieceMode::ObInvalidPiece, 
                                                       &buffer_))) {
       LOG_WARN("add piece buffer fail.", K(ret), K(stmt_id_));

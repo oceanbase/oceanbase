@@ -209,7 +209,7 @@ def generate_compile_parts():
   fn_cnt = int((len(DEFINED_COLLS) + COMPILE_UNIT_CNT  - 1) / COMPILE_UNIT_CNT)
   fn_list_text = ""
   for i in range(fn_cnt):
-    fn_list_text += "DEF_COMPILE_STR_FUNC_INIT(%COLL_NAME" + str(i) + "%, %unit_idx" + str(i) + "%);\n"
+    fn_list_text += "DEF_COMPILE_STR_FUNC_INIT(%COLL_NAME" + str(i) + "%, %unit_idx" + str(i) + "%);\n" 
   for start in range(0, len(DEFINED_COLLS), fn_cnt):
     text = compile_template.replace("%COMPILE_FUN_LIST%", fn_list_text)
     for i in range(fn_cnt):
@@ -250,7 +250,7 @@ namespace sql
 
   for i in range(0, len(DEFINED_COLLS)):
     ctrl_text += "  __init_str_expr_cmp_func%d();\n" % i
-
+  
   ctrl_text += '''}
 } // end sql
 } // end oceanbase'''

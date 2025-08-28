@@ -99,7 +99,7 @@ static DtlWriterType msg_writer_map[] =
   CONTROL_WRITER, // DH_RANGE_DIST_WF_PIECE_MSG,
   CONTROL_WRITER, // DH_RANGE_DIST_WF_WHOLE_MSG,
   CONTROL_WRITER, // DH_INIT_CHANNEL_PIECE_MSG,
-  CONTROL_WRITER, // DH_INIT_CHANNEL_WHOLE_MSG,
+  CONTROL_WRITER, // DH_INIT_CHANNEL_WHOLE_MSG, 
   CONTROL_WRITER, // DH_SECOND_STAGE_REPORTING_WF_PIECE_MSG,
   CONTROL_WRITER, // DH_SECOND_STAGE_REPORTING_WF_WHOLE_MSG,
   CONTROL_WRITER, // DH_OPT_STATS_GATHER_PIECE_MSG,
@@ -317,7 +317,7 @@ public:
   int init(ObDtlLinkedBuffer *buffer, uint64_t tenant_id);
   bool is_inited() const { return nullptr != write_buffer_; }
   int try_append_row(const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx);
-  int try_append_batch(const common::ObIArray<ObExpr*> &exprs,
+  int try_append_batch(const common::ObIArray<ObExpr*> &exprs, 
                        const common::ObIArray<ObIVector *> &vectors,
                        ObEvalCtx &ctx, const uint16_t selector[],
                        const int64_t size, uint32_t row_size_arr[],
@@ -399,7 +399,7 @@ OB_INLINE int ObDtlVectorRowMsgWriter::try_append_row(const common::ObIArray<ObE
   return ret;
 }
 
-OB_INLINE int ObDtlVectorRowMsgWriter::try_append_batch(const common::ObIArray<ObExpr*> &exprs,
+OB_INLINE int ObDtlVectorRowMsgWriter::try_append_batch(const common::ObIArray<ObExpr*> &exprs, 
                                                     const common::ObIArray<ObIVector *> &vectors,
                                                     ObEvalCtx &ctx, const uint16_t selector[],
                                                     const int64_t size, uint32_t row_size_arr[],
@@ -540,7 +540,7 @@ public:
   OB_INLINE int64_t get_row_cnt() const { return vector_buffer_.get_row_cnt(); }
   OB_INLINE int64_t get_row_limit() const { return vector_buffer_.get_row_limit(); }
   OB_INLINE int64_t get_fixed_len(int32_t col_idx) const { return vector_buffer_.get_fixed_length(col_idx); }
-  OB_INLINE void update_row_cnt(int64_t row_cnt) { vector_buffer_.update_row_cnt(row_cnt); }
+  OB_INLINE void update_row_cnt(int64_t row_cnt) { vector_buffer_.update_row_cnt(row_cnt); } 
   OB_INLINE void set_null(int32_t col_idx, int64_t row_idx) { vector_buffer_.get_nulls(col_idx)->set(row_idx); }
   int write(const ObDtlMsg &msg, ObEvalCtx *eval_ctx, const bool is_eof);
   int append_row(const common::ObIArray<ObExpr*> &exprs, const int32_t batch_idx, ObEvalCtx &ctx)
@@ -756,8 +756,8 @@ protected:
 
   OB_INLINE virtual bool has_msg() { return recv_buffer_cnt_ > processed_buffer_cnt_; }
 
-  virtual void reset_px_row_iterator()
-  {
+  virtual void reset_px_row_iterator() 
+  { 
     datum_iter_.reset();
     row_iter_.reset();
   }

@@ -121,7 +121,7 @@ TEST_F(TestObSimpleSharedLogSingleReplica, test_shared_log_interface)
     EXPECT_EQ(begin_lsn, base_lsn);
     EXPECT_EQ(OB_SUCCESS, log_handler.get_begin_lsn(begin_lsn));
     EXPECT_EQ(LSN(PALF_INITIAL_LSN_VAL), begin_lsn);
-
+      
     CLOG_LOG(INFO, "CASE4 test after delete shared");
     EXPECT_EQ(OB_SUCCESS, ObSharedLogUtils::delete_blocks(MTL_ID(), ObLSID(id), 0, 1));
     block_id_t oldest_block;
@@ -630,7 +630,7 @@ TEST_F(TestObSimpleSharedLogSingleReplica, test_log_cache_for_shared_storage)
       // expected to fill cache
       EXPECT_NE(0, leader.palf_handle_impl_->log_engine_.log_storage_.log_cache_->cold_cache_.kv_cache_->store_size(1002));
     }
-
+    
     {
       CLOG_LOG(INFO, "case 2: read from local storage and shared storage");
       EXPECT_EQ(OB_SUCCESS, submit_log_with_expected_size(leader, leader_idx, 2));
@@ -672,7 +672,7 @@ TEST_F(TestObSimpleSharedLogSingleReplica, test_log_cache_for_shared_storage)
       PalfIterator<LogEntry> iterator;
       EXPECT_EQ(OB_SUCCESS, seek_log_iterator(ObLSID(id), LSN(0), iterator));
       LSN expected_lsn(PALF_BLOCK_SIZE);
-      iterator.iterator_storage_.get_file_end_lsn_ = []() {
+      iterator.iterator_storage_.get_file_end_lsn_ = []() { 
         return LSN(PALF_BLOCK_SIZE);
       };
       LSN curr_lsn;

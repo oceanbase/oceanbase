@@ -265,9 +265,9 @@
                                                 "cpu_speed," \
                                                 "disk_seq_read_speed," \
                                                 "disk_rnd_read_speed," \
-                                                "network_speed) VALUES "
+                                                "network_speed) VALUES " 
 
-#define DELETE_SYSTEM_STAT_SQL "DELETE FROM %s WHERE TENANT_ID=%ld"
+#define DELETE_SYSTEM_STAT_SQL "DELETE FROM %s WHERE TENANT_ID=%ld" 
 
 namespace oceanbase
 {
@@ -2148,7 +2148,7 @@ int ObOptStatSqlService::update_opt_stat_gather_stat(const ObOptStatGatherStat &
 
 int ObOptStatSqlService::update_table_stat_failed_count(
     const uint64_t tenant_id, const uint64_t table_id,
-    const ObIArray<int64_t> &part_ids, int64_t &affected_rows)
+    const ObIArray<int64_t> &part_ids, int64_t &affected_rows) 
 {
   int ret = OB_SUCCESS;
   ObSqlString raw_sql;
@@ -2190,7 +2190,7 @@ int ObOptStatSqlService::update_table_stat_failed_count(
 
 int ObOptStatSqlService::get_update_fail_count_value_list(
     const uint64_t tenant_id, const uint64_t table_id,
-    const ObIArray<int64_t> &part_ids, ObSqlString &value_str)
+    const ObIArray<int64_t> &part_ids, ObSqlString &value_str) 
 {
   int ret = OB_SUCCESS;
   if (part_ids.empty()) {

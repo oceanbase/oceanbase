@@ -140,7 +140,7 @@ int ObTransferPartitionHelper::build(bool &has_job)
     LOG_WARN("failed to process object not exist task", KR(ret));
   } else if (0 == part_info_.count()) {
     has_job = false;
-    ISTAT("no transfer partition task", K(tenant_id_), K(task_array_));
+    ISTAT("no transfer partition task", K(tenant_id_), K(task_array_));	
     //根据part_info_中的task设置源端
   } else if (OB_FAIL(set_task_src_ls_())) {
     LOG_WARN("failed to construct task info", KR(ret), K(status_info_array));
@@ -154,7 +154,7 @@ int ObTransferPartitionHelper::build(bool &has_job)
 }
 
 int ObTransferPartitionHelper::try_process_dest_not_exist_task_(
-    const share::ObLSStatusInfoIArray &status_info_array,
+    const share::ObLSStatusInfoIArray &status_info_array,	
     int64_t& task_cnt)
 {
   int ret = OB_SUCCESS;
@@ -205,7 +205,7 @@ int ObTransferPartitionHelper::try_process_dest_not_exist_task_(
       ObString comment("LS status is not NORMAL or is in BLOCK_TABLET_IN state");
       if (OB_FAIL(try_finish_failed_task_(dest_not_valid_list, comment))) {
         LOG_WARN("failed to finish failed task", KR(ret), K(dest_not_valid_list));
-      }
+      }	
     }
   }
   task_cnt = dest_not_exist_list.count() + dest_not_valid_list.count();
@@ -265,7 +265,7 @@ int ObTransferPartitionHelper::try_process_object_not_exist_task_()
           ret = OB_SUCCESS;
           ISTAT("table is no exist", K(task), K(table_index));
           if (OB_FAIL(table_not_exist_list.push_back(task.get_part_info()))) {
-            LOG_WARN("failed to push back", KR(ret), K(task));
+            LOG_WARN("failed to push back", KR(ret), K(task));	
           }
         } else if (OB_PARTITION_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
@@ -289,15 +289,15 @@ int ObTransferPartitionHelper::try_process_object_not_exist_task_()
       ObString comment("Table has beed dropped");
       if (OB_FAIL(try_finish_failed_task_(table_not_exist_list, comment))) {
         LOG_WARN("failed to finish failed task", KR(ret), K(table_not_exist_list));
-      }
+      }	
     }
     if (OB_SUCC(ret) && part_not_exist_list.count() > 0) {
       ObString comment("Partition has beed dropped");
       if (OB_FAIL(try_finish_failed_task_(part_not_exist_list, comment))) {
         LOG_WARN("failed to finish failed task", KR(ret), K(part_not_exist_list));
-      }
+      }	
     }
-  }
+  }	
   ISTAT("finish check object exist", KR(ret), K(table_not_exist_list),
       K(part_not_exist_list));
 
@@ -345,7 +345,7 @@ int ObTransferPartitionHelper::batch_get_table_schema_in_order_(
 //table_schema_array maybe empty, table maybe dropped
 int ObTransferPartitionHelper::get_tablet_in_order_array(
       const ObArray<ObSimpleTableSchemaV2*> &table_schema_array,
-      const ObTransferPartInfo &part_info,
+      const ObTransferPartInfo &part_info, 
       int64_t &table_index, ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
@@ -410,7 +410,7 @@ int ObTransferPartitionHelper::set_task_src_ls_()
     if (FAILEDx(ObTabletToLSTableOperator::batch_get_ls(
             *sql_proxy_, tenant_id_, tablet_array, ls_id_array))) {
       if (OB_ITEM_NOT_MATCH == ret) {
-        WSTAT("has partition beed dropped, try again", KR(ret),
+        WSTAT("has partition beed dropped, try again", KR(ret), 
         K(tablet_array), K(ls_id_array));
       } else {
         LOG_WARN("failed to batch get", KR(ret), K(tenant_id_), K(tablet_array));
@@ -444,7 +444,7 @@ int ObTransferPartitionHelper::set_task_src_ls_()
       ObString comment("Partition is already in dest LS");
       if (OB_FAIL(try_finish_failed_task_(dest_src_equal_list, comment))) {
         LOG_WARN("failed to finish failed task", KR(ret), K(dest_src_equal_list));
-      }
+      }	
     }
   }
   ISTAT("finish set src ls", KR(ret), K(dest_src_equal_list));
@@ -507,7 +507,7 @@ int ObTransferPartitionHelper::construct_logical_task_(
   } else if (task_array.count() > part_info_.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("task array can not larger than part info", KR(ret),
-        "part_info count", part_info_.count(), "task_array count", task_array.count(),
+        "part_info count", part_info_.count(), "task_array count", task_array.count(), 
         K(part_info_), K(task_array));
   } else {
     //task_array and part_info is order by table_id, object_id

@@ -747,7 +747,7 @@ int LogConfigMgr::check_config_version_matches_state_(const LogConfigChangeType 
     if (config_version.is_valid()) {
       if (FORCE_SINGLE_MEMBER != type) {
         // For force set single member case, this may occur. After updating election's member_list,
-        // Self may be elected and finish reconfirm quickly, which will reset config_mgr state and
+        // Self may be elected and finish reconfirm quickly, which will reset config_mgr state and 
         // write start_working log successfully.
         ret = OB_ERR_UNEXPECTED;
       } else {

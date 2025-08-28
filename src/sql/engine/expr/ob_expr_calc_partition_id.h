@@ -71,7 +71,7 @@ struct PartValKey
 {
 public:
   PartValKey() : datum_(), hash_func_(nullptr), cmp_func_(nullptr)  {}
-  PartValKey(const ObDatum &datum, ObExprHashFuncType hash_func, ObExprCmpFuncType cmp_func) :
+  PartValKey(const ObDatum &datum, ObExprHashFuncType hash_func, ObExprCmpFuncType cmp_func) : 
         datum_(datum), hash_func_(hash_func), cmp_func_(cmp_func)  {}
   ~PartValKey() {}
   bool operator==(const PartValKey &other) const;
@@ -167,7 +167,7 @@ public:
     int init_calc_list_partition_base_info(const share::schema::ObTableSchema &table_schema,
                                           const ObExpr &part_expr,
                                           common::ObIAllocator &allocator);
-
+    
     TO_STRING_KV(K_(range_partitions), K_(default_list_part_idx), K_(first_part_id));
 
     ObFixedArray<RangePartition, common::ObIAllocator> range_partitions_; // Used to calc range part

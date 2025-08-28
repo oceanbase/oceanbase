@@ -278,7 +278,7 @@ public:
   }
 
   int64_t get_diff()
-  {
+  {  
     end_ts_ =  ObTimeUtility::fast_current_time();
     return end_ts_ -  start_ts_;
   }
@@ -289,9 +289,9 @@ public:
   }
 
   int64_t to_string(char *buf, const int64_t buf_len) const;
-
+  
 private:
-  static const int64_t MAX_CLICK_COUNT = 16;
+  static const int64_t MAX_CLICK_COUNT = 16; 
 private:
   const char * click_str_[MAX_CLICK_COUNT];
   int start_ts_;

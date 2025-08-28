@@ -103,8 +103,8 @@ int ObBackupDataScheduler::get_need_reload_task(
       const ObBackupJobAttr &job = jobs.at(i);
       ObBackupSetTaskAttr set_task_attr;
       bool is_valid = true;
-      if (OB_SYS_TENANT_ID == job.tenant_id_
-          || ObBackupStatus::Status::DOING != job.status_.status_) {
+      if (OB_SYS_TENANT_ID == job.tenant_id_ 
+          || ObBackupStatus::Status::DOING != job.status_.status_) { 
       } else if (OB_FAIL(ObBackupTaskOperator::get_backup_task(
           *sql_proxy_, job.job_id_, job.tenant_id_, false/*for update*/, set_task_attr))) {
         LOG_WARN("[DATA_BACKUP]failed to get set task", K(ret), K(job));
@@ -138,14 +138,14 @@ int ObBackupDataScheduler::do_get_need_reload_task_(
       bool is_dropped = false;
       if (ObBackupTaskStatus::Status::FINISH == ls_task.status_.status_ && OB_SUCCESS == ls_task.result_) {
         // do nothing
-      } else if (!(job.plus_archivelog_ && set_task_attr.status_.is_backup_log())
+      } else if (!(job.plus_archivelog_ && set_task_attr.status_.is_backup_log()) 
           && OB_FAIL(ObBackupDataLSTaskMgr::check_ls_is_dropped(ls_task, *sql_proxy_, is_dropped))) {
         LOG_WARN("failed to check ls is dropped", K(ret), K(ls_task));
       } else if (is_dropped) {
         // ls deleted, no need to reload, mark it to finish
-        ObHAResultInfo result_info(ObHAResultInfo::ROOT_SERVICE,
-                                  GCONF.self_addr_,
-                                  share::ObTaskId(*ObCurTraceId::get_trace_id()),
+        ObHAResultInfo result_info(ObHAResultInfo::ROOT_SERVICE, 
+                                  GCONF.self_addr_, 
+                                  share::ObTaskId(*ObCurTraceId::get_trace_id()), 
                                   OB_LS_NOT_EXIST);
         if (OB_FAIL(ObBackupDataLSTaskMgr::handle_execute_over(
               *backup_service_, *sql_proxy_, ls_task, result_info))) {
@@ -559,7 +559,7 @@ int ObBackupDataScheduler::start_tenant_backup_data_(const ObBackupJobAttr &job_
   ObBackupJobAttr new_job_attr;
   ObBackupPathString backup_path;
   bool is_doing = true;
-
+       
   if (!job_attr.is_tmplate_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[DATA_BACKUP]invalid tmplate job", K(ret), K(job_attr));
@@ -597,12 +597,12 @@ int ObBackupDataScheduler::start_tenant_backup_data_(const ObBackupJobAttr &job_
         LOG_WARN("[DATA_BACKUP]failed to get next job id", K(ret));
       } else if (OB_FAIL(get_next_backup_set_id(trans, new_job_attr.tenant_id_, new_job_attr.backup_set_id_))) {
         LOG_WARN("[DATA_BACKUP]failed to get next backup set id", K(ret));
-      } else if (OB_FAIL(update_backup_type_if_need_(trans, new_job_attr.tenant_id_, new_job_attr.backup_set_id_,
+      } else if (OB_FAIL(update_backup_type_if_need_(trans, new_job_attr.tenant_id_, new_job_attr.backup_set_id_, 
           new_job_attr.backup_path_, new_job_attr.backup_type_))) {
         LOG_WARN("[DATA_BACKUP]failed to update backup type", K(ret), K(new_job_attr));
       } else if (OB_FAIL(new_job_attr.executor_tenant_id_.push_back(new_job_attr.tenant_id_))) {
         LOG_WARN("[DATA_BACKUP]failed to push back tenant id", K(ret));
-      } else if (OB_FALSE_IT(new_job_attr.initiator_job_id_ = new_job_attr.tenant_id_ == new_job_attr.initiator_tenant_id_ ?
+      } else if (OB_FALSE_IT(new_job_attr.initiator_job_id_ = new_job_attr.tenant_id_ == new_job_attr.initiator_tenant_id_ ? 
           0/*no parent job*/ : new_job_attr.initiator_job_id_)) {
       } else if (OB_FAIL(backup_service_->check_leader())) {
         LOG_WARN("fail to check leader", K(ret));
@@ -664,14 +664,14 @@ int ObBackupDataScheduler::get_backup_scn(
       // for parmary tenant, the backup start scn get from gts as the same as end scn.
       if (OB_FAIL(ObBackupUtils::get_backup_scn(tenant_id, tmp_scn))) {
         LOG_WARN("failed to get gts", K(ret), K(tenant_id));
-      }
+      } 
     } else if (tenant_info.is_standby()) {
       // for standby tenant, the backup start scn must be the readable scn, so it get from sts.
       // but end scn must be replayable scn, so it get from the tenant_info.
       if (is_start) {
         if (OB_FAIL(ObBackupUtils::get_backup_scn(tenant_id, tmp_scn))) {
           LOG_WARN("failed to get gts", K(ret), K(tenant_id));
-        }
+        } 
       } else {
         tmp_scn = tenant_info.get_replayable_scn();
       }
@@ -740,7 +740,7 @@ int ObBackupDataScheduler::check_tenant_status(
       LOG_WARN("[DATA_BACKUP]tenant is in remote restore mode, can not backup now", K(tenant_id));
     } else {
       is_valid = true;
-    }
+    }  
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[DATA_BACKUP]unknown tenant status", K(tenant_id), K(tenant_schema));
@@ -788,7 +788,7 @@ int ObBackupDataScheduler::get_next_backup_set_id(common::ObISQLClient &trans, c
   return ret;
 }
 
-int ObBackupDataScheduler::update_backup_type_if_need_(common::ObISQLClient &trans, const uint64_t tenant_id,
+int ObBackupDataScheduler::update_backup_type_if_need_(common::ObISQLClient &trans, const uint64_t tenant_id, 
     const int64_t backup_set_id, const share::ObBackupPathString &backup_path, share::ObBackupType &backup_type)
 {
   // if backup type is inc backup but no prev backup set id.
@@ -822,10 +822,10 @@ int ObBackupDataScheduler::update_backup_type_if_need_(common::ObISQLClient &tra
         pre_compatible_buf, OB_INNER_TABLE_BACKUP_TASK_CLUSTER_FORMAT_LENGTH, pre_backup_set_desc.tenant_compatible_);
     pos = ObClusterVersion::get_instance().print_version_str(
         cur_compatible_buf, OB_INNER_TABLE_BACKUP_TASK_CLUSTER_FORMAT_LENGTH, data_version);
-    if (OB_TMP_FAIL(databuff_printf(user_error_msg_buf, USER_ERROR_MSG_LEN,
+    if (OB_TMP_FAIL(databuff_printf(user_error_msg_buf, USER_ERROR_MSG_LEN, 
         "cross compatible incremental backup is not supported, convert to full backup "
-        "previous backup set compatible is %.*s, current compatible is %.*s",
-        static_cast<int>(OB_INNER_TABLE_BACKUP_TASK_CLUSTER_FORMAT_LENGTH), pre_compatible_buf,
+        "previous backup set compatible is %.*s, current compatible is %.*s", 
+        static_cast<int>(OB_INNER_TABLE_BACKUP_TASK_CLUSTER_FORMAT_LENGTH), pre_compatible_buf, 
         static_cast<int>(OB_INNER_TABLE_BACKUP_TASK_CLUSTER_FORMAT_LENGTH), cur_compatible_buf))) {
       LOG_WARN("failed to databuff printf", K(ret), K(tmp_ret));
     }
@@ -834,7 +834,7 @@ int ObBackupDataScheduler::update_backup_type_if_need_(common::ObISQLClient &tra
                           "backup_set_id", backup_set_id,
                           "curr_data_version", pre_compatible_buf,
                           "prev_data_version", cur_compatible_buf);
-    LOG_WARN("pre backup set's tenant compatible does not match, convert to full backup",
+    LOG_WARN("pre backup set's tenant compatible does not match, convert to full backup", 
          K(ret), K(tenant_id), K(data_version), K(pre_backup_set_desc));
   } 
   return ret;
@@ -950,7 +950,7 @@ int ObBackupDataScheduler::handle_failed_job_(
       } else {
         sleep(5); // sleep 5s for retry
       }
-    }
+    } 
   }
   return ret;
 } 
@@ -972,14 +972,14 @@ int ObBackupDataScheduler::process()
   } else if (OB_ISNULL(job_mgr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("backup job mgr can't be nullptr", K(ret), K_(tenant_id));
-  }
+  } 
   for (int64_t i = 0; OB_SUCC(ret) && i < backup_jobs.count(); ++i) {
     ObBackupJobAttr &job_attr = backup_jobs.at(i);
     job_mgr->reset();
     if (!job_attr.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("[DATA_BACKUP]backup job is not valid", K(ret), K(job_attr));
-    } else if (OB_FAIL(job_mgr->init(tenant_id_, job_attr, *sql_proxy_, *rpc_proxy_, *task_scheduler_, *schema_service_,
+    } else if (OB_FAIL(job_mgr->init(tenant_id_, job_attr, *sql_proxy_, *rpc_proxy_, *task_scheduler_, *schema_service_, 
         *backup_service_))) {
       LOG_WARN("[DATA_BACKUP]failed to init tenant backup job mgr", K(ret), K_(tenant_id), K(job_attr));
     } else if (OB_SUCCESS != (tmp_ret = job_mgr->process())) { // tenant level backups are isolated
@@ -990,7 +990,7 @@ int ObBackupDataScheduler::process()
       } else {
         backup_service_->wakeup();
       }
-    }
+    } 
   }
   if (OB_NOT_NULL(job_mgr)) {
     job_mgr->~ObIBackupJobMgr();
@@ -1083,9 +1083,9 @@ int ObUserTenantBackupJobMgr::deal_non_reentrant_job(const int err)
   } else if (OB_FAIL(task_scheduler_->cancel_tasks(BackupJobType::BACKUP_DATA_JOB, job_attr_->job_id_, job_attr_->tenant_id_))) {
     LOG_WARN("[DATA_BACKUP]failed to cancel backup tasks", K(ret), KPC(job_attr_));
   } else if (job_attr_->comment_.is_empty()) {
-    ObHAResultInfo result_info(ObHAResultInfo::ROOT_SERVICE,
-                               GCONF.self_addr_,
-                               share::ObTaskId(*ObCurTraceId::get_trace_id()),
+    ObHAResultInfo result_info(ObHAResultInfo::ROOT_SERVICE, 
+                               GCONF.self_addr_, 
+                               share::ObTaskId(*ObCurTraceId::get_trace_id()), 
                                err);
     if (OB_FAIL(result_info.get_comment_str(job_attr_->comment_))) {
       LOG_WARN("failed to get comment str", K(ret), K(result_info));
@@ -1511,9 +1511,9 @@ int ObUserTenantBackupJobMgr::insert_backup_set_file_(common::ObISQLClient &sql_
       job_attr_->backup_type_, job_attr_->backup_path_, prev_full_backup_set_id, prev_inc_backup_set_id))) {
     LOG_WARN("[DATA_BACKUP]fail to get prev backup set id", K(ret), KPC(job_attr_));
   } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(sql_proxy, job_attr_->tenant_id_, job_attr_->backup_path_, backup_dest))) {
-    LOG_WARN("[DATA_BACKUP]fail to get backup dest", K(ret), KPC(job_attr_));
+    LOG_WARN("[DATA_BACKUP]fail to get backup dest", K(ret), KPC(job_attr_)); 
   } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(sql_proxy, job_attr_->tenant_id_, backup_dest, dest_id))) {
-    LOG_WARN("[DATA_BACKUP]fail to get dest id", K(ret), KPC(job_attr_));
+    LOG_WARN("[DATA_BACKUP]fail to get dest id", K(ret), KPC(job_attr_)); 
   } else if (OB_FAIL(fill_backup_set_desc_(*job_attr_, prev_full_backup_set_id, prev_inc_backup_set_id, dest_id, backup_set_desc))) {
     LOG_WARN("[DATA_BACKUP]fail to fill backup set desc", K(ret), K(*job_attr_), K(prev_full_backup_set_id), K(prev_inc_backup_set_id));
   } else if (OB_FAIL(backup_service_->check_leader())) {

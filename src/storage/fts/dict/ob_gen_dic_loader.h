@@ -27,7 +27,7 @@ public:
   class ObGenDicLoaderKey final
   {
   public:
-    ObGenDicLoaderKey() : tenant_id_(OB_INVALID_ID), charset_(CHARSET_INVALID)
+    ObGenDicLoaderKey() : tenant_id_(OB_INVALID_ID), charset_(CHARSET_INVALID) 
     {
       MEMSET(parser_name_, '\0', share::OB_PLUGIN_NAME_LENGTH);
     }
@@ -36,7 +36,7 @@ public:
     int assign(const ObGenDicLoaderKey &other);
     bool operator==(const ObGenDicLoaderKey &other) const
     {
-      return tenant_id_ == other.tenant_id_
+      return tenant_id_ == other.tenant_id_ 
              && 0 == STRCMP(parser_name_, other.parser_name_)
              && charset_ == other.charset_;
     }
@@ -67,7 +67,7 @@ public:
     ObNeedDeleteDicLoadersFn() = default;
     ~ObNeedDeleteDicLoadersFn() = default;
     int operator() (hash::HashMapPair<ObGenDicLoaderKey, ObTenantDicLoader*> &entry);
-
+    
   public:
     ObArray<ObGenDicLoaderKey> need_delete_loaders_;
   };
@@ -79,17 +79,17 @@ public:
     return ins;
   }
   int init();
-  int get_dic_loader(const uint64_t tenant_id,
-                     const ObString &parser_name,
-                     const ObCharsetType charset,
+  int get_dic_loader(const uint64_t tenant_id, 
+                     const ObString &parser_name, 
+                     const ObCharsetType charset, 
                      ObTenantDicLoaderHandle &loader_handle);
   int destroy_dic_loader_for_tenant();
 
 private:
-  ObGenDicLoader()
+  ObGenDicLoader() 
       : is_inited_(false), lock_(), dic_loader_map_() { }
   ~ObGenDicLoader() { dic_loader_map_.destroy(); }
-  int gen_dic_loader(const ObGenDicLoaderKey &dic_loader_key,
+  int gen_dic_loader(const ObGenDicLoaderKey &dic_loader_key, 
                      ObTenantDicLoader *&dic_loader);
 
 private:

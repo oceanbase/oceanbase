@@ -34,7 +34,7 @@ int __attribute__((weak))  build_test_schema(share::schema::ObTableSchema &table
   table_schema.set_table_id(table_id);
   table_schema.set_schema_version(1000);
   // by the way, test the stability of micro_index_clustered
-  table_schema.set_micro_index_clustered(false);
+  table_schema.set_micro_index_clustered(false); 
 
   column.set_table_id(table_id);
   column.set_column_id(16);

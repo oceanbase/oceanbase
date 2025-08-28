@@ -32,8 +32,8 @@ public:
   static int process_one_by_one(ObTableGroup &group);
 private:
   static int add_and_try_to_get_batch(ObITableOp *op, ObITableGroupValue *group, ObIArray<ObITableOp *> &ops);
-  static int execute_batch(ObTableGroupCtx &ctx,
-                           ObIArray<ObITableOp *> &ops,
+  static int execute_batch(ObTableGroupCtx &ctx, 
+                           ObIArray<ObITableOp *> &ops, 
                            bool is_direct_execute,
                           bool add_fail_group);
   static int process_failed_group();

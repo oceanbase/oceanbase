@@ -83,7 +83,7 @@ public:
   enum class CmpType
   {
     LOWER_BOUND,
-    GREATER_THAN
+    GREATER_THAN    
   };
 public:
   static int fetch_new_freeze_info(

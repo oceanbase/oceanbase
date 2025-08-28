@@ -310,8 +310,8 @@ public:
 
   bool is_valid() const override;
 
-  INHERIT_TO_STRING_KV("ObExternArchiveDesc", ObExternArchiveDesc, K_(dest_id),
-    K_(round_id), K_(piece_id), K_(ls_id), K_(checkpoint_scn), K_(min_lsn),
+  INHERIT_TO_STRING_KV("ObExternArchiveDesc", ObExternArchiveDesc, K_(dest_id), 
+    K_(round_id), K_(piece_id), K_(ls_id), K_(checkpoint_scn), K_(min_lsn), 
     K_(max_lsn), K_(filelist), K_(deleted));
 };
 
@@ -383,7 +383,7 @@ public:
   // oss://[user_specified_path]/checkpoint/checkpoint_info.0.obarc
   int read_piece_checkpoint(ObPieceCheckpointDesc &desc) const;
   // oss://archive/d[dest_id]r[round_id]p[piece_id]/piece_d[dest_id]r[round_id]p[piece_id]_20220601T120000_20220602T120000.obarc
-  int is_piece_inner_placeholder_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const SCN &start_scn,
+  int is_piece_inner_placeholder_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const SCN &start_scn, 
     const SCN &end_scn, bool &is_exist) const;
   int read_piece_inner_placeholder(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const SCN &start_scn, const SCN &end_scn, ObPieceInnerPlaceholderDesc &desc) const;
   int write_piece_inner_placeholder(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const SCN &start_scn, const SCN &end_scn, const ObPieceInnerPlaceholderDesc &desc) const;
@@ -397,10 +397,10 @@ public:
   // oss://[user_specified_path]/[s_id].file_info.obarc
   int read_single_ls_info(const ObLSID &ls_id, ObSingleLSInfoDesc &desc) const;
   int seal_file(
-    const int64_t dest_id,
-    const int64_t round_id,
-    const int64_t piece_id,
-    const ObLSID &ls_id,
+    const int64_t dest_id, 
+    const int64_t round_id, 
+    const int64_t piece_id, 
+    const ObLSID &ls_id, 
     const int64_t file_id) const;
 
 

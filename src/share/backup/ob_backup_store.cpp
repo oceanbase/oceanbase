@@ -492,7 +492,7 @@ int ObBackupDestMgr::check_dest_validity(obrpc::ObSrvRpcProxy &rpc_proxy, const 
     } else {
       ret = OB_BACKUP_FORMAT_FILE_NOT_EXIST;
       LOG_WARN("format file does not exist", K(ret), K_(backup_dest), K(is_empty));
-      LOG_USER_ERROR(OB_BACKUP_FORMAT_FILE_NOT_EXIST, ", try to set a new directory.");
+      LOG_USER_ERROR(OB_BACKUP_FORMAT_FILE_NOT_EXIST, ", try to set a new directory."); 
     }
   }
   return ret;

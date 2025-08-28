@@ -91,7 +91,7 @@ void ObStorageIOUsageRepoter::destroy()
         // do nothing
     } else if (is_inited_) {
         if (OB_FAIL(cancel_report_task())) {
-            LOG_WARN("failed to cancel io usage report task", K(ret));
+            LOG_WARN("failed to cancel io usage report task", K(ret)); 
         } else {
             is_inited_ = false;
         }
@@ -181,7 +181,7 @@ int ObStorageIOUsageRepoter::UpdateIOUsageFunctor::
             usleep(100);
         }
     }
-
+ 
     return ret;
 }
 

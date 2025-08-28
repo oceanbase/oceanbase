@@ -173,14 +173,14 @@ int ObTableObjectPoolMgr::init()
   get a session or create a new one if it doesn't exist
   - 1. the user should access the current tenant, so we check tenant id.
   - 2. ObTableApiSessGuard holds the reference count of session.
-  - 3. sess_pool_ have been created when login normally,
+  - 3. sess_pool_ have been created when login normally, 
     But some inner operation did not login, such as ttl operation, so we create a new pool for ttl.
     In the upgrade scenario, the odp does not login again. so we init system vars.
 */
 int ObTableObjectPoolMgr::get_sess_info(ObTableApiCredential &credential, ObTableApiSessGuard &guard)
 {
   int ret = OB_SUCCESS;
-
+  
   if (credential.tenant_id_ != MTL_ID()) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "access wrong tenant");
@@ -242,9 +242,9 @@ int ObTableObjectPoolMgr::create_session_pool_unsafe()
 
 /*
   update session when login.
-  - 1. because tableapi is not aware of changes to system variables,
+  - 1. because tableapi is not aware of changes to system variables, 
     users need to log in again to get the latest system variables.
-  - 2. we will create a new session node which has the latest system variables
+  - 2. we will create a new session node which has the latest system variables 
     to replace the old session node.
   - 3. login is handled by sys tenant.
   - 4. login has concurrency, many thread will login together.

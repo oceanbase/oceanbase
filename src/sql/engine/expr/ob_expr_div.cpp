@@ -1258,7 +1258,7 @@ void set_decimalint_div_func_ptr(ObExpr &expr)
       ObExprDiv::div_decimalint_512_512_batch
     }
   };
-  static ObExpr::EvalFunc funcs_with_check[] =
+  static ObExpr::EvalFunc funcs_with_check[] = 
   {
     ObExprDiv::div_decimalint_512_32_with_check,
     ObExprDiv::div_decimalint_512_64_with_check,
@@ -1266,7 +1266,7 @@ void set_decimalint_div_func_ptr(ObExpr &expr)
     ObExprDiv::div_decimalint_512_256_with_check,
     ObExprDiv::div_decimalint_512_512_with_check
   };
-  static ObExpr::EvalBatchFunc batch_funcs_with_check[] =
+  static ObExpr::EvalBatchFunc batch_funcs_with_check[] = 
   {
     ObExprDiv::div_decimalint_512_32_with_check_batch,
     ObExprDiv::div_decimalint_512_64_with_check_batch,
@@ -1381,4 +1381,5 @@ int ObExprDiv::cg_expr(ObExprCGCtx &op_cg_ctx,
 }
 
 #include "ob_expr_div_decint.ipp"
+
 

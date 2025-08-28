@@ -87,7 +87,7 @@ public:
                      AppendCb *cb,
                      palf::LSN &lsn,
                      share::SCN &scn) = 0;
-
+  
   virtual int append_big_log(const void *buffer,
                              const int64_t nbytes,
                              const share::SCN &ref_scn,
@@ -255,7 +255,7 @@ public:
              AppendCb *cb,
              palf::LSN &lsn,
              share::SCN &scn) override final;
-
+  
   // @brief append count bytes(which is bigger than MAX_NORMAL_LOG_BODY_SIZE) from the buffer starting at buf to the palf handle, return the LSN and timestamp
   // @param[in] const void *, the data buffer.
   // @param[in] const uint64_t, the length of data buffer.
@@ -323,7 +323,7 @@ public:
   int change_access_mode(const int64_t mode_version,
                          const palf::AccessMode &access_mode,
                          const share::SCN &ref_scn) override final;
-
+  
   // @desc: seek a log buffer iterator by lsn, the first log A in iterator must meet
   //        the start lsn of log A must equal to 'start_lsn'.
   // @params [in] start_lsn:

@@ -34,7 +34,7 @@ public:
       const int64_t macro_block_buf_size,
       const bool is_macro_meta_block,
       const bool need_check_data_integrity);
-
+  
   int64_t get_row_count() const { return row_count_; }
   int get_next_logic_micro_id(ObLogicMicroBlockId &logic_micro_id, int64_t &micro_checksum);
 

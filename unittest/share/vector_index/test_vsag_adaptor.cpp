@@ -207,7 +207,7 @@ TEST_F(TestVsagAdaptor, test_hnsw)
   ASSERT_EQ(0, obvsag::add_index(index_handler, inc, ids2, dim,inc_num));
   ASSERT_EQ(0, obvsag::get_index_number(index_handler, num_size));
   std::cout<<"after add index, size is "<< num_size <<std::endl;
-
+  
   const float* result_dist;
   const int64_t* result_ids;
   int64_t result_size = 0;
@@ -216,14 +216,14 @@ TEST_F(TestVsagAdaptor, test_hnsw)
   TestFilter testfilter(r1);
   const char *extra_info = nullptr;
   ASSERT_EQ(0, obvsag::knn_search(index_handler, vectors+dim*(num_vectors-1), dim, 10,
-                                                result_dist,result_ids,result_size,
+                                                result_dist,result_ids,result_size, 
                                                 100, false/*need_extra_info*/, extra_info, &testfilter, false, false, nullptr, 1));
   default_allocator.Deallocate((void*)result_ids);
   default_allocator.Deallocate((void*)result_dist);
   roaring64_bitmap_add_range(r1, 0, 19800);
 
   ASSERT_EQ(0, obvsag::knn_search(index_handler, vectors+dim*(num_vectors-1), dim, 10,
-                                                result_dist,result_ids,result_size,
+                                                result_dist,result_ids,result_size, 
                                                 100, false/*need_extra_info*/, extra_info, &testfilter, false, false, nullptr, 0.01));
   ASSERT_EQ(nullptr, extra_info);
   // const float *distances;
@@ -279,7 +279,7 @@ TEST_F(TestVsagAdaptor, test_hnswsq)
   int64_t num_size = 0;
   ASSERT_EQ(0, obvsag::get_index_number(index_handler, num_size));
   std::cout<<"after add index, size is "<< num_size <<std::endl;
-
+  
   const float* result_dist;
   const int64_t* result_ids;
   int64_t result_size = 0;
@@ -297,9 +297,9 @@ TEST_F(TestVsagAdaptor, test_hnswsq)
   TestFilter testfilter(r1);
   const char *extra_info = nullptr;
   ASSERT_EQ(0, obvsag::knn_search(index_handler, query_vector, dim, 10,
-                                                result_dist,result_ids,result_size,
+                                                result_dist,result_ids,result_size, 
                                                 100, false/*need_extra_info*/, extra_info, &testfilter));
-
+  
   for (int i = 0; i < result_size; i++) {
       std::cout << "result: " << result_ids[i] << " " << result_dist[i] << std::endl;
   }
@@ -319,10 +319,10 @@ TEST_F(TestVsagAdaptor, test_hnswsq)
 
   // const std::string dir = "./";
   // int ret_serialize_single = obvsag::serialize(index_handler,dir);
-  // int ret_deserilize_single_bin =
+  // int ret_deserilize_single_bin = 
   //                 obvsag::deserialize_bin(index_handler,dir);
   // ret_knn_search = obvsag::knn_search(index_handler, query_vector, dim, 10,
-  //                                              result_dist,result_ids,result_size,
+  //                                              result_dist,result_ids,result_size, 
   //                                              100, r1);
   // for (int i = 0; i < result_size; i++) {
   //     std::cout << "result: " << result_ids[i] << " " << result_dist[i] << std::endl;
@@ -490,11 +490,11 @@ TEST_F(TestVsagAdaptor, test_hgraph_iter_filter)
   }
   ASSERT_EQ(0, obvsag::build_index(index_handler, vectors, ids, dim, num_vectors));
   ASSERT_EQ(0, obvsag::add_index(index_handler, inc, ids2, dim,inc_num));
-
+  
   const float* result_dist;
   const int64_t* result_ids;
   int64_t result_size = 0;
-
+  
   // vsag::IteratorContext *filter_ctx = nullptr;
   void *iter_ctx = nullptr;
 
@@ -505,7 +505,7 @@ TEST_F(TestVsagAdaptor, test_hgraph_iter_filter)
   const char* extra_infos = nullptr;
 
   ASSERT_EQ(0, obvsag::knn_search(index_handler, vectors+dim*(num_vectors-1), dim, 10,
-                                                result_dist,result_ids,result_size,
+                                                result_dist,result_ids,result_size, 
                                                 100, false, extra_infos, &testfilter, false, false, 0.97, iter_ctx, false));
   ASSERT_NE(nullptr, iter_ctx);
   ASSERT_EQ(0, obvsag::cal_distance_by_id(index_handler, vectors+dim*(num_vectors-1), result_ids, result_size, distances));
@@ -513,9 +513,9 @@ TEST_F(TestVsagAdaptor, test_hgraph_iter_filter)
   for (int i = 0; i < result_size; i++) {
       std::cout << "result: " << result_ids[i] << " " << result_dist[i] << std::endl;
       std::cout << "calres: " << result_ids[i] << " " << distances[i] << std::endl;
-  }
+  }    
   default_allocator.Deallocate((void*)result_ids);
-  default_allocator.Deallocate((void*)result_dist);
+  default_allocator.Deallocate((void*)result_dist);  
   default_allocator.Deallocate((void*)distances);
 
   const float *distances2;
@@ -524,7 +524,7 @@ TEST_F(TestVsagAdaptor, test_hgraph_iter_filter)
   int64_t result_size2 = 0;
   std::cout << "-------- result2: --------" << std::endl;
   ASSERT_EQ(0, obvsag::knn_search(index_handler, vectors+dim*(num_vectors-1), dim, 10,
-                                                result_dist2,result_ids2,result_size2,
+                                                result_dist2,result_ids2,result_size2, 
                                                 100, false, extra_infos, &testfilter, false, false, 0.97, iter_ctx, false));
   ASSERT_EQ(0, obvsag::cal_distance_by_id(index_handler, vectors+dim*(num_vectors-1), result_ids2, result_size2, distances2));
   for (int i = 0; i < result_size2; i++) {
@@ -542,7 +542,7 @@ TEST_F(TestVsagAdaptor, test_hgraph_iter_filter)
   int64_t result_size3 = 0;
   std::cout << "-------- result3: --------" << std::endl;
   ASSERT_EQ(0, obvsag::knn_search(index_handler, vectors+dim*(num_vectors-1), dim, 20,
-                                                result_dist3,result_ids3,result_size3,
+                                                result_dist3,result_ids3,result_size3, 
                                                 100, false, extra_infos, &testfilter, false, false, 0.97, iter_ctx, true));
   ASSERT_EQ(0, obvsag::cal_distance_by_id(index_handler, vectors+dim*(num_vectors-1), result_ids3, result_size3, distances3));
   for (int i = 0; i < result_size3; i++) {
@@ -606,11 +606,11 @@ TEST_F(TestVsagAdaptor, test_hnsw_iter_filter)
   }
 
   ASSERT_EQ(0, obvsag::add_index(index_handler, inc, ids2, dim,inc_num));
-
+  
   const float* result_dist;
   const int64_t* result_ids;
   int64_t result_size = 0;
-
+  
   // vsag::IteratorContext *filter_ctx = nullptr;
   void *iter_ctx = nullptr;
 
@@ -621,7 +621,7 @@ TEST_F(TestVsagAdaptor, test_hnsw_iter_filter)
   const char* extra_infos = nullptr;
 
   ASSERT_EQ(0, obvsag::knn_search(index_handler, vectors+dim*(num_vectors-1), dim, 10,
-                                                result_dist,result_ids,result_size,
+                                                result_dist,result_ids,result_size, 
                                                 100, false, extra_infos, &testfilter, false, false, 0.97, iter_ctx, false));
   ASSERT_NE(nullptr, iter_ctx);
   ASSERT_EQ(0, obvsag::cal_distance_by_id(index_handler, vectors+dim*(num_vectors-1), result_ids, result_size, distances));
@@ -640,7 +640,7 @@ TEST_F(TestVsagAdaptor, test_hnsw_iter_filter)
   int64_t result_size2 = 0;
   std::cout << "-------- result2: --------" << std::endl;
   ASSERT_EQ(0, obvsag::knn_search(index_handler, vectors+dim*(num_vectors-1), dim, 10,
-                                                result_dist2,result_ids2,result_size2,
+                                                result_dist2,result_ids2,result_size2, 
                                                 100, false, extra_infos, &testfilter, false, false, 0.97, iter_ctx, false));
   ASSERT_EQ(0, obvsag::cal_distance_by_id(index_handler, vectors+dim*(num_vectors-1), result_ids2, result_size2, distances2));
   for (int i = 0; i < result_size2; i++) {
@@ -657,7 +657,7 @@ TEST_F(TestVsagAdaptor, test_hnsw_iter_filter)
   int64_t result_size3 = 0;
   std::cout << "-------- result3: --------" << std::endl;
   ASSERT_EQ(0, obvsag::knn_search(index_handler, vectors+dim*(num_vectors-1), dim, 20,
-                                                result_dist3,result_ids3,result_size3,
+                                                result_dist3,result_ids3,result_size3, 
                                                 100, false, extra_infos, &testfilter, false, false, 0.97, iter_ctx, true));
   ASSERT_EQ(0, obvsag::cal_distance_by_id(index_handler, vectors+dim*(num_vectors-1), result_ids3, result_size3, distances3));
   for (int i = 0; i < result_size3; i++) {
@@ -713,7 +713,7 @@ TEST_F(TestVsagAdaptor, test_hgraph_bq)
   int64_t num_size = 0;
   ASSERT_EQ(0, obvsag::get_index_number(index_handler, num_size));
   std::cout<<"after add index, size is "<< num_size << std::endl;
-
+  
   const float* result_dist;
   const int64_t* result_ids;
   int64_t result_size = 0;
@@ -731,9 +731,9 @@ TEST_F(TestVsagAdaptor, test_hgraph_bq)
   TestFilter testfilter(r1);
   const char *extra_info = nullptr;
   ASSERT_EQ(0, obvsag::knn_search(index_handler, query_vector, dim, 10,
-                                                result_dist,result_ids,result_size,
+                                                result_dist,result_ids,result_size, 
                                                 100, false/*need_extra_info*/, extra_info, &testfilter));
-
+  
   for (int i = 0; i < result_size; i++) {
       std::cout << "result: " << result_ids[i] << " " << result_dist[i] << std::endl;
   }

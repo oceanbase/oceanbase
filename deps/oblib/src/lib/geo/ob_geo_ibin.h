@@ -41,7 +41,7 @@ public:
   // size interface
   uint64_t length() const override;
   // visitor
-  virtual int do_visit(ObIGeoVisitor &visitor) = 0;
+  virtual int do_visit(ObIGeoVisitor &visitor) = 0;  
 protected:
   virtual bool is_empty_inner() const = 0;
   virtual uint64_t length_inner() const = 0;
@@ -303,7 +303,7 @@ private:
   { return reinterpret_cast<const ObWkbGeogLineString*>(val())->length(); }
   bool is_empty_inner() const override
   { return (reinterpret_cast<const ObWkbGeogLineString*>(val())->size() == 0); }
-
+  
 };
 
 class ObIWkbGeogLinearRing : public ObIWkbGeometry {

@@ -21,9 +21,9 @@ set(ob_sql_parser_charset_object_list
     ob_ctype_eucjpms.cc
     ob_ctype_cp932_tab.cpp
     ob_ctype_cp932.cc
-    ob_ctype_ascii.cc
+    ob_ctype_ascii.cc	
     ob_ctype_tis620_tab.cpp
-    ob_ctype_tis620.cc
+    ob_ctype_tis620.cc	
     ob_ctype_mb.cc
     ob_ctype_simple.cc
     ob_ctype_utf8.cc

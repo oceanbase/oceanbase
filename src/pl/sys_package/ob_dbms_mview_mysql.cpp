@@ -33,8 +33,8 @@ int ObDBMSMViewMysql::purge_log(ObExecContext &ctx, ParamStore &params, ObObj &r
 {
   UNUSED(result);
   int ret = OB_SUCCESS;
-  if (2 != params.count()
-      || !params.at(0).is_varchar()
+  if (2 != params.count() 
+      || !params.at(0).is_varchar() 
       || !params.at(1).is_int32()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument for mlog purge", KR(ret));
@@ -58,7 +58,7 @@ PROCEDURE refresh(
     IN     method                 VARCHAR(65535) DEFAULT NULL,
     IN     refresh_parallel       INT            DEFAULT 1,
     IN     nested                 BOOLEAN        DERAULT FALSE); -- 4.3.5.3
-    IN     nested_refresh_mode    VARCHAR(65535) DEFAULT NULL); -- 4.3.5.3
+    IN     nested_refresh_mode    VARCHAR(65535) DEFAULT NULL); -- 4.3.5.3 
 */
 int ObDBMSMViewMysql::refresh(ObExecContext &ctx, ParamStore &params, ObObj &result)
 {
@@ -135,13 +135,13 @@ int ObDBMSMViewMysql::refresh(ObExecContext &ctx, ParamStore &params, ObObj &res
     ObMViewRefreshExecutor refresh_executor;
     refresh_params.list_ =
             params.at(ObDBMSMViewRefreshParam::MV_LIST).get_varchar();
-    refresh_params.method_ =
+    refresh_params.method_ = 
             params.at(ObDBMSMViewRefreshParam::METHOD).is_varchar() ?
             params.at(ObDBMSMViewRefreshParam::METHOD).get_varchar() : NULL;
-    refresh_params.refresh_parallel_ =
+    refresh_params.refresh_parallel_ = 
             params.at(ObDBMSMViewRefreshParam::REFRESH_PARALLEL).get_int();
     refresh_params.nested_ = nested.get_bool();
-    refresh_params.nested_consistent_refresh_ = nested_consistent_refresh;
+    refresh_params.nested_consistent_refresh_ = nested_consistent_refresh; 
     if (OB_FAIL(refresh_executor.execute(ctx, refresh_params))) {
       LOG_WARN("fail to execute mview refresh", KR(ret), K(refresh_params));
     }

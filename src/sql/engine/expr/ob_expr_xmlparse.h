@@ -17,7 +17,7 @@
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
 
 namespace sql
@@ -25,18 +25,18 @@ namespace sql
 
 class ObExprXmlparse : public ObFuncExprOperator
 {
-  public:
+  public: 
   explicit ObExprXmlparse(common::ObIAllocator &alloc);
   virtual ~ObExprXmlparse();
-  virtual int calc_result_typeN(ObExprResType& type,
-                                ObExprResType* types_stack,
-                                int64_t param_num,
-                                common::ObExprTypeCtx& type_ctx)
+  virtual int calc_result_typeN(ObExprResType& type, 
+                                ObExprResType* types_stack, 
+                                int64_t param_num, 
+                                common::ObExprTypeCtx& type_ctx) 
                                 const override;
   static int eval_xmlparse(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
-  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
-                      const ObRawExpr &raw_expr,
-                      ObExpr &rt_expr)
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, 
+                      const ObRawExpr &raw_expr, 
+                      ObExpr &rt_expr) 
                       const override;
 
 private:
@@ -53,10 +53,10 @@ private:
   const static uint8_t OB_XML_NOT_WELLFORMED = 1;
   const static uint8_t OB_WELLFORMED_IMPLICIT = 2;
 
-  static int get_clause_opt(const ObExpr &expr,
-                            ObEvalCtx &ctx,
-                            uint8_t index,
-                            uint8_t &type,
+  static int get_clause_opt(const ObExpr &expr, 
+                            ObEvalCtx &ctx, 
+                            uint8_t index, 
+                            uint8_t &type, 
                             uint8_t size_para);
 
 private:

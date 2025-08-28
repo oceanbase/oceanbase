@@ -1657,7 +1657,7 @@ int ObAutoincrementService::calc_next_value(const uint64_t last_next_value,
 // https://dev.mysql.com/doc/refman/5.6/en/replication-options-master.html#sysvar_auto_increment_increment
 //
 // The doc does not mention one case: when offset > max_value, the formulator is not right.
-// a bug is recorded here:
+// a bug is recorded here: 
 int ObAutoincrementService::calc_prev_value(const uint64_t max_value,
                                             const uint64_t offset,
                                             const uint64_t increment,
@@ -1878,7 +1878,7 @@ int ObRpcGlobalAutoIncrementService::clear_global_autoinc_cache(const AutoincKey
   return gais_client_.clear_global_autoinc_cache(key);
 }
 
-int ObAutoIncInnerTableProxy::check_inner_autoinc_version(const int64_t &request_autoinc_version,
+int ObAutoIncInnerTableProxy::check_inner_autoinc_version(const int64_t &request_autoinc_version, 
                                                           const int64_t &inner_autoinc_version,
                                                           const AutoincKey &key)
 {

@@ -224,7 +224,7 @@ public:
   struct MergeIndexItem final
   {
   public:
-    MergeIndexItem() : is_scan_left_border_(false), is_scan_right_border_(false),
+    MergeIndexItem() : is_scan_left_border_(false), is_scan_right_border_(false), 
                        idx_row_header_(nullptr), rowkey_(nullptr), idx_minor_info_(nullptr), agg_row_buf_(nullptr),
                        item_allocator_(nullptr), agg_buf_size_(0), row_offset_(0), iter_index_(INT64_MAX) {}
     ~MergeIndexItem()

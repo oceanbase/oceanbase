@@ -165,9 +165,9 @@ public:
 public:
   ObITable::TableType get_merged_table_type() const;
   void prepare_table_schema(
-      const char **micro_data,
-      const int64_t schema_rowkey_cnt,
-      const ObScnRange &scn_range,
+      const char **micro_data, 
+      const int64_t schema_rowkey_cnt, 
+      const ObScnRange &scn_range, 
       const int64_t snapshot_version,
       const ObMergeEngineType merge_engine_type = ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE);
   void init_tablet();
@@ -433,7 +433,7 @@ void ObMultiVersionSSTableTest::reset_writer(
   ObTabletID tablet_id(tablet_id_);
   SCN scn;
   scn.convert_for_tx(snapshot_version);
-  ASSERT_EQ(OB_SUCCESS, data_desc_.init(false/*is_ddl*/, table_schema_, ls_id, tablet_id, merge_type, snapshot_version, DATA_VERSION_4_1_0_0,
+  ASSERT_EQ(OB_SUCCESS, data_desc_.init(false/*is_ddl*/, table_schema_, ls_id, tablet_id, merge_type, snapshot_version, DATA_VERSION_4_1_0_0, 
                                         table_schema_.get_micro_index_clustered(), 0 /*transfer_seq*/, scn));
   void *builder_buf = allocator_.alloc(sizeof(ObSSTableIndexBuilder));
   root_index_builder_ = new (builder_buf) ObSSTableIndexBuilder(false /* not need writer buffer*/);

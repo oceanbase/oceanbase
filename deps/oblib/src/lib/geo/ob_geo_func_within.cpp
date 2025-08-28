@@ -234,7 +234,7 @@ static int ob_caculate_mp_within_l_a_geog(const ObGeometry *g1, const ObGeometry
       } else {
         intersects = bg::intersects(point, *geo2, geog_pl_pa_strategy);
       }
-#else
+#else        
         within = bg::within(point, *geo2);
         if (!within) {
           intersects = bg::intersects(point, *geo2);
@@ -278,7 +278,7 @@ static int ob_caculate_ml_within_gc(const ObGeometry *g1, const ObGeometry *g2,
       LOG_WARN("failed to do geo2 to_tree visit", K(ret));
     } else if (OB_FAIL(do_multi_difference(*srs, context, visitor.get_geometry(),
                                            NULL,
-                                           reinterpret_cast<ObGeometry *>(multi_line),
+                                           reinterpret_cast<ObGeometry *>(multi_line), 
                                            reinterpret_cast<ObGeometry *>(multi_poly),
                                            res_geo2))) {
       LOG_WARN("failed to do mulit difference", K(ret));
@@ -322,7 +322,7 @@ static int ob_caculate_ml_within_gc_geog(const ObGeometry *g1, const ObGeometry 
       LOG_WARN("failed to do geo2 to_tree visit", K(ret));
     } else if (OB_FAIL(do_multi_difference(*srs, context, visitor.get_geometry(),
                                            NULL,
-                                           reinterpret_cast<ObGeometry *>(multi_line),
+                                           reinterpret_cast<ObGeometry *>(multi_line), 
                                            reinterpret_cast<ObGeometry *>(multi_poly),
                                            res_geo2))) {
       LOG_WARN("failed to do mulit difference", K(ret));
@@ -408,10 +408,10 @@ static int ob_caculate_gc_within_p(const ObGeometry *g1, const ObGeometry *g2,
   typename GCType::sub_mp_type *multi_poly = NULL;
   ObGeometry *geo1 = const_cast<ObGeometry *>(reinterpret_cast<const ObGeometry *>(g1));
   PType *geo2 = const_cast<PType *>(reinterpret_cast<const PType *>(g2->val()));
-  if (OB_FAIL(ObGeoFuncUtils::ob_gc_prepare<GCType>(context,
-                                                    geo1,
+  if (OB_FAIL(ObGeoFuncUtils::ob_gc_prepare<GCType>(context, 
+                                                    geo1, 
                                                     multi_point,
-                                                    multi_line,
+                                                    multi_line, 
                                                     multi_poly))) {
     LOG_WARN("failed to do gc prepare", K(ret));
   } else {
@@ -434,7 +434,7 @@ public:
   OB_GEO_TREE_UNARY_FUNC_DEFAULT(bool, OB_ERR_GIS_INVALID_DATA);
   OB_GEO_CART_TREE_FUNC_DEFAULT(bool, OB_ERR_NOT_IMPLEMENTED_FOR_CARTESIAN_SRS);
   OB_GEO_GEOG_TREE_FUNC_DEFAULT(bool, OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS);
-
+  
   // template for binary
   // default cases for cartesian
   template <typename GeoType1, typename GeoType2>
@@ -458,9 +458,9 @@ public:
   };
 private:
   template <typename CollectonType>
-  static int eval_within_geometry_collection(const ObGeometry *g1,
-                                             const ObGeometry *g2,
-                                             const ObGeoEvalCtx &context,
+  static int eval_within_geometry_collection(const ObGeometry *g1, 
+                                             const ObGeometry *g2, 
+                                             const ObGeoEvalCtx &context, 
                                              bool &result)
   {
     INIT_SUCC(ret);
@@ -681,7 +681,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeomMultiPoint, ObWkbGeo
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeomMultiPoint, ObWkbGeomCollection, bool)
-{
+{ 
   return ob_caculate_mp_within_gc<ObWkbGeomPoint, ObIWkbGeomPoint,
     ObWkbGeomCollection, ObWkbGeomMultiPoint>(g1, g2, context, result);
 } OB_GEO_FUNC_END;
@@ -747,7 +747,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeomCollection, ObWkbGeo
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeomCollection, ObWkbGeomLineString, bool)
-{
+{ 
   INIT_SUCC(ret);
   ObCartesianMultipoint *multi_point = NULL;
   ObCartesianMultilinestring *multi_line = NULL;
@@ -763,7 +763,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeomCollection, ObWkbGeo
                                                                            multi_line,
                                                                            multi_poly))) {
     LOG_WARN("failed to do gc prepare", K(ret));
-  } else if (!multi_poly->empty()) {
+  } else if (!multi_poly->empty()) { 
     result = false;
   } else if (OB_FAIL(ObGeoTypeUtil::tree_to_bin(*allocator, multi_point, multi_point_bin, srs))) {
     LOG_WARN("failed to convert geo tree to binary", K(ret));
@@ -791,7 +791,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeomCollection, ObWkbGeo
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeomCollection, ObWkbGeomPolygon, bool)
-{
+{ 
   INIT_SUCC(ret);
   ObCartesianMultipoint *multi_point = NULL;
   ObCartesianMultilinestring *multi_line = NULL;
@@ -826,7 +826,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeomCollection, ObWkbGeo
         ObCartesianMultipoint::value_type& point = *iter;
         covered = bg::covered_by(point, *geo2);
       }
-      result = !covered ? false :
+      result = !covered ? false : 
                (multi_poly->empty() ||
                bg::covered_by(*multi_poly, *geo2));
     } else if (bg::within(*multi_poly, *geo2)){
@@ -836,7 +836,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeomCollection, ObWkbGeo
         ObCartesianMultipoint::value_type& point = *iter;
         covered = bg::covered_by(point, *geo2);
       }
-      result = !covered ? false :
+      result = !covered ? false : 
                (multi_line->empty() ||
                bg::covered_by(*multi_line, *geo2));
     } else {
@@ -847,7 +847,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeomCollection, ObWkbGeo
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeomCollection, ObWkbGeomMultiPoint, bool)
-{
+{ 
   return ob_caculate_gc_within_mpt<ObCartesianGeometrycollection>(g1, g2, context, result);
 } OB_GEO_FUNC_END;
 
@@ -868,7 +868,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeomCollection, ObWkbGeo
                                                                            multi_line,
                                                                            multi_poly))) {
     LOG_WARN("failed to do gc prepare", K(ret));
-  } else if (!multi_poly->empty()) {
+  } else if (!multi_poly->empty()) { 
     result = false;
   } else if (OB_FAIL(ObGeoTypeUtil::tree_to_bin(*allocator, multi_point, multi_point_bin, srs))) {
     LOG_WARN("failed to convert geo tree to binary", K(ret));
@@ -896,7 +896,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeomCollection, ObWkbGeo
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeomCollection, ObWkbGeomMultiPolygon, bool)
-{
+{ 
   INIT_SUCC(ret);
   ObCartesianMultipoint *multi_point = NULL;
   ObCartesianMultilinestring *multi_line = NULL;
@@ -931,7 +931,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeomCollection, ObWkbGeo
         ObCartesianMultipoint::value_type& point = *iter;
         covered = bg::covered_by(point, *geo2);
       }
-      result = !covered ? false :
+      result = !covered ? false : 
                (multi_poly->empty() ||
                bg::covered_by(*multi_poly, *geo2));
     } else if (bg::within(*multi_poly, *geo2)){
@@ -941,7 +941,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeomCollection, ObWkbGeo
         ObCartesianMultipoint::value_type& point = *iter;
         covered = bg::covered_by(point, *geo2);
       }
-      result = !covered ? false :
+      result = !covered ? false : 
                (multi_line->empty() ||
                bg::covered_by(*multi_line, *geo2));
     } else {
@@ -981,7 +981,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeomCollection, ObWkbGeo
     ObGeometry *res_geo3 = NULL;
     if (OB_FAIL(do_multi_difference(*srs, context, reinterpret_cast<ObGeometry *>(g1_multi_point),
                                                       reinterpret_cast<ObGeometry *>(g2_multi_point),
-                                                      reinterpret_cast<ObGeometry *>(g2_multi_line),
+                                                      reinterpret_cast<ObGeometry *>(g2_multi_line), 
                                                       reinterpret_cast<ObGeometry *>(g2_multi_poly),
                                                       res_geo3))) {
       LOG_WARN("failed to do mulit difference", K(ret));
@@ -991,7 +991,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeomCollection, ObWkbGeo
       ObGeometry *res_geo5 = NULL;
       if (OB_FAIL(do_multi_difference(*srs, context, reinterpret_cast<ObGeometry *>(g1_multi_line),
                                                         NULL,
-                                                        reinterpret_cast<ObGeometry *>(g2_multi_line),
+                                                        reinterpret_cast<ObGeometry *>(g2_multi_line), 
                                                         reinterpret_cast<ObGeometry *>(g2_multi_poly),
                                                         res_geo5))) {
           LOG_WARN("failed to do mulit difference", K(ret));
@@ -1001,7 +1001,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeomCollection, ObWkbGeo
         ObGeometry *res_geo6 = NULL;
         if (OB_FAIL(do_multi_difference(*srs, context, reinterpret_cast<ObGeometry *>(g1_multi_poly),
                                                           NULL,
-                                                          NULL,
+                                                          NULL, 
                                                           reinterpret_cast<ObGeometry *>(g2_multi_poly),
                                                           res_geo6))) {
           LOG_WARN("failed to do mulit difference", K(ret));
@@ -1194,7 +1194,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogMultiPoint, ObWkbGeo
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogMultiPoint, ObWkbGeogCollection, bool)
-{
+{ 
   return ob_caculate_mp_within_gc<ObWkbGeogPoint, ObIWkbGeogPoint,
                                   ObWkbGeogCollection, ObWkbGeogMultiPoint>(g1, g2, context, result);
 } OB_GEO_FUNC_END;
@@ -1297,7 +1297,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogCollection, ObWkbGeo
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogCollection, ObWkbGeogLineString, bool)
-{
+{ 
   INIT_SUCC(ret);
   ObGeographMultipoint *multi_point = NULL;
   ObGeographMultilinestring *multi_line = NULL;
@@ -1316,7 +1316,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogCollection, ObWkbGeo
                                                                                  multi_line,
                                                                                  multi_poly))) {
     LOG_WARN("failed to do gc prepare", K(ret));
-  } else if (!multi_poly->empty()) {
+  } else if (!multi_poly->empty()) { 
     result = false;
   } else if (OB_FAIL(ObGeoTypeUtil::tree_to_bin(*allocator, multi_point, multi_point_bin, srs))) {
     LOG_WARN("failed to convert geo tree to binary", K(ret));
@@ -1356,7 +1356,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogCollection, ObWkbGeo
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogCollection, ObWkbGeogPolygon, bool)
-{
+{ 
   INIT_SUCC(ret);
   ObGeographMultipoint *multi_point = NULL;
   ObGeographMultilinestring *multi_line = NULL;
@@ -1409,7 +1409,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogCollection, ObWkbGeo
         covered = bg::covered_by(point, *geo2);
 #endif
       }
-      result = !covered ? false :
+      result = !covered ? false : 
                (multi_poly->empty() ||
 #ifdef USE_SPHERE_GEO
                bg::covered_by(*multi_poly, *geo2, geog_ll_la_aa_strategy));
@@ -1428,7 +1428,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogCollection, ObWkbGeo
         covered = bg::covered_by(point, *geo2);
 #endif
       }
-      result = !covered ? false :
+      result = !covered ? false : 
                (multi_line->empty() ||
 #ifdef USE_SPHERE_GEO
                bg::covered_by(*multi_line, *geo2, geog_ll_la_aa_strategy));
@@ -1443,7 +1443,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogCollection, ObWkbGeo
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogCollection, ObWkbGeogMultiPoint, bool)
-{
+{ 
   return ob_caculate_gc_within_mpt<ObGeographGeometrycollection>(g1, g2, context, result);
 } OB_GEO_FUNC_END;
 
@@ -1467,7 +1467,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogCollection, ObWkbGeo
                                                                                  multi_line,
                                                                                  multi_poly))) {
     LOG_WARN("failed to do gc prepare", K(ret));
-  } else if (!multi_poly->empty()) {
+  } else if (!multi_poly->empty()) { 
     result = false;
   } else if (OB_FAIL(ObGeoTypeUtil::tree_to_bin(*allocator, multi_point, multi_point_bin, srs))) {
     LOG_WARN("failed to convert geo tree to binary", K(ret));
@@ -1485,7 +1485,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogCollection, ObWkbGeo
       result = multi_line->empty() ||
                bg::covered_by(*multi_line, *geo2, geog_ll_la_aa_strategy);
     } else if (bg::within(*multi_line, *geo2, geog_ll_la_aa_strategy)){
-#else
+#else      
       result = multi_line->empty() ||
                bg::covered_by(*multi_line, *geo2);
     } else if (bg::within(*multi_line, *geo2)){
@@ -1509,7 +1509,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogCollection, ObWkbGeo
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogCollection, ObWkbGeogMultiPolygon, bool)
-{
+{ 
   INIT_SUCC(ret);
   ObGeographMultipoint *multi_point = NULL;
   ObGeographMultilinestring *multi_line = NULL;
@@ -1563,7 +1563,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogCollection, ObWkbGeo
         covered = bg::covered_by(point, *geo2);
 #endif
       }
-      result = !covered ? false :
+      result = !covered ? false : 
                (multi_poly->empty() ||
 #ifdef USE_SPHERE_GEO
                bg::covered_by(*multi_poly, *geo2, geog_ll_la_aa_strategy));
@@ -1582,7 +1582,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogCollection, ObWkbGeo
         covered = bg::covered_by(point, *geo2);
 #endif
       }
-      result = !covered ? false :
+      result = !covered ? false : 
                (multi_line->empty() ||
 #ifdef USE_SPHERE_GEO
                bg::covered_by(*multi_line, *geo2, geog_ll_la_aa_strategy));
@@ -1633,7 +1633,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogCollection, ObWkbGeo
     ObGeometry *res_geo3 = NULL;
     if (OB_FAIL(do_multi_difference(*srs, context, reinterpret_cast<ObGeometry *>(g1_multi_point),
                                                       reinterpret_cast<ObGeometry *>(g2_multi_point),
-                                                      reinterpret_cast<ObGeometry *>(g2_multi_line),
+                                                      reinterpret_cast<ObGeometry *>(g2_multi_line), 
                                                       reinterpret_cast<ObGeometry *>(g2_multi_poly),
                                                       res_geo3))) {
       LOG_WARN("failed to do mulit difference", K(ret));
@@ -1643,7 +1643,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogCollection, ObWkbGeo
       ObGeometry *res_geo5 = NULL;
       if (OB_FAIL(do_multi_difference(*srs, context, reinterpret_cast<ObGeometry *>(g1_multi_line),
                                                         NULL,
-                                                        reinterpret_cast<ObGeometry *>(g2_multi_line),
+                                                        reinterpret_cast<ObGeometry *>(g2_multi_line), 
                                                         reinterpret_cast<ObGeometry *>(g2_multi_poly),
                                                         res_geo5))) {
         LOG_WARN("failed to do mulit difference", K(ret));
@@ -1653,7 +1653,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogCollection, ObWkbGeo
         ObGeometry * res_geo6 = NULL;
         if (OB_FAIL(do_multi_difference(*srs, context, reinterpret_cast<ObGeometry *>(g1_multi_poly),
                                         NULL,
-                                        NULL,
+                                        NULL, 
                                         reinterpret_cast<ObGeometry *>(g2_multi_poly),
                                         res_geo6))) {
           LOG_WARN("failed to do mulit difference", K(ret));

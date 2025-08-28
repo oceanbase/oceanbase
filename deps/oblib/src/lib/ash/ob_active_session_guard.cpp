@@ -47,7 +47,7 @@ void ObActiveSessionStat::fixup_last_stat(const ObWaitEventDesc &desc)
 void ObActiveSessionStat::fixup_last_stat(const ObCurTraceId::TraceId &trace_id,
                                           const int64_t session_id,
                                           const char* sql_id,
-                                          const int64_t plan_id,
+                                          const int64_t plan_id, 
                                           const int64_t plan_hash,
                                           const int64_t stmt_type)
 {
@@ -435,7 +435,7 @@ void ObAshBuffer::fixup_stat(int64_t index,
       if (last_stat.plan_id_ == 0) {
         last_stat.plan_id_ = plan_id;
       }
-
+      
       if (last_stat.plan_hash_ == 0) {
         last_stat.plan_hash_ = plan_hash;
       }

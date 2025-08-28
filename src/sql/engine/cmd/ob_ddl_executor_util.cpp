@@ -128,8 +128,8 @@ int ObDDLExecutorUtil::wait_ddl_finish(
           } else {
             break;
           }
-        }
-
+        } 
+        
         if (OB_FAIL(ret)) {
         } else if (is_server_stopped()) {
           ret = OB_TIMEOUT;
@@ -286,7 +286,7 @@ int ObDDLExecutorUtil::wait_ddl_retry_task_finish(
           ret = OB_TENANT_HAS_BEEN_DROPPED;
           LOG_WARN("tenant has been dropped", K(ret), K(tenant_id));
         }
-
+        
         if (OB_FAIL(ret)) {
         } else if (OB_TMP_FAIL(ObAllTenantInfoProxy::is_standby_tenant(GCTX.sql_proxy_, tenant_id, is_tenant_standby))) {
           LOG_WARN("check is standby tenant failed", K(tmp_ret), K(tenant_id));
@@ -305,8 +305,8 @@ int ObDDLExecutorUtil::wait_ddl_retry_task_finish(
           } else {
             break;
           }
-        }
-
+        } 
+        
         if (OB_FAIL(ret)) {
         } else if (is_server_stopped()) {
           ret = OB_TIMEOUT;

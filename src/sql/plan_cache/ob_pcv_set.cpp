@@ -505,7 +505,7 @@ int ObPCVSet::check_contains_table(uint64_t db_id, common::ObString tab_name, bo
   DLIST_FOREACH(pcv, pcv_list_) {
     if (OB_ISNULL(pcv)) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(pcv), K(ret));
+      LOG_WARN("invalid argument", K(pcv), K(ret)); 
     } else if (OB_FAIL(pcv->check_contains_table(db_id, tab_name, contains))) {
       LOG_WARN("fail to check table name", K(ret), K(db_id), K(tab_name));
     } else if (!contains) {
@@ -524,7 +524,7 @@ int ObPCVSet::get_evolving_evolution_task(EvolutionPlanList &evo_task_list)
   DLIST_FOREACH(pcv, pcv_list_) {
     if (OB_ISNULL(pcv)) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(pcv), K(ret));
+      LOG_WARN("invalid argument", K(pcv), K(ret)); 
     } else if (OB_FAIL(pcv->get_evolving_evolution_task(evo_task_list))) {
       LOG_WARN("fail to get evolving evolution task", K(ret));
     }

@@ -77,7 +77,7 @@ int ObEliminateTask::check_config_mem_limit(bool &is_change)
   } else {
     if (config_mem_limit_ != mem_limit) {
       LOG_INFO("change config mem limit", K(config_mem_limit_), K(mem_limit), K(tenant_id));
-      bool use_mini_mem = lib::is_mini_mode() || MTL_IS_MINI_MODE() || is_meta_tenant(tenant_id);
+      bool use_mini_mem = lib::is_mini_mode() || MTL_IS_MINI_MODE() || is_meta_tenant(tenant_id);                 
       config_mem_limit_ = mem_limit;
       if (mem_limit < MINIMUM_LIMIT && !use_mini_mem) {
         config_mem_limit_ = MINIMUM_LIMIT;

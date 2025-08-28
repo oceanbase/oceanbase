@@ -33,3 +33,4 @@ add_custom_command(
 
 oblib_add_extra_objects(${CMAKE_CURRENT_BINARY_DIR}/cos_sdk_objs.o)
 oblib_add_library(cos_sdk cos_sdk_objs.o)
+

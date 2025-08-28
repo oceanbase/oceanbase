@@ -53,7 +53,7 @@ TEST_F(RoleChangeService, unique_set)
   int64_t base_ls_id = 10000;
   int64_t i = 0;
   int ret = OB_SUCCESS;
-  RoleChangeEventSet &set = rc_service->rc_set_;
+  RoleChangeEventSet &set = rc_service->rc_set_;  
   for (i = 0; i < size && OB_SUCC(ret); i++) {
     RoleChangeEvent event(RoleChangeEventType::ROLE_CHANGE_CB_EVENT_TYPE, ObLSID(i+base_ls_id));
     if (OB_FAIL(set.insert(event))) {
@@ -176,7 +176,7 @@ TEST_F(RoleChangeService, test_offline)
   // commit 会卡住
   CLOG_LOG(INFO, "runlin trace before commit");
   sql_proxy.write(sql.ptr(), affected_rows);
-
+  
   CLOG_LOG(INFO, "runlin trace commit success");
   ObLSService *ls_service = MTL(ObLSService *);
   ObLSHandle ls_handle;

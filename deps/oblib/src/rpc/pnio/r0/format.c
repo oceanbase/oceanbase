@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 void format_init(format_t* f, int64_t limit) {
   f->limit = limit;
   f->pos = 0;

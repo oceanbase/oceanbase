@@ -59,7 +59,7 @@ int ObTenantMajorFreezeP::process()
     }
   }
 
-  if (FAILEDx(rootserver::ObMajorFreezeUtil::get_major_freeze_service(primary_major_freeze_service_,
+  if (FAILEDx(rootserver::ObMajorFreezeUtil::get_major_freeze_service(primary_major_freeze_service_, 
         restore_major_freeze_service_, major_freeze_service, is_primary_service))) {
     RS_LOG(WARN, "fail to get major freeze service", KR(ret), K(req));
   } else if (OB_ISNULL(major_freeze_service)) {
@@ -116,7 +116,7 @@ int ObTenantAdminMergeP::process()
     }
   }
   
-  if (FAILEDx(rootserver::ObMajorFreezeUtil::get_major_freeze_service(primary_major_freeze_service_,
+  if (FAILEDx(rootserver::ObMajorFreezeUtil::get_major_freeze_service(primary_major_freeze_service_, 
         restore_major_freeze_service_, major_freeze_service, is_primary_service))) {
     RS_LOG(WARN, "fail to get major freeze service", KR(ret), K(req));
   } else if (OB_ISNULL(major_freeze_service)) {
@@ -124,7 +124,7 @@ int ObTenantAdminMergeP::process()
     RS_LOG(WARN, "major_freeze_service is null", KR(ret), K(req));
   } else if (OB_UNLIKELY(req.tenant_id() != major_freeze_service->get_tenant_id())) {
     ret = OB_ERR_UNEXPECTED;
-    RS_LOG(WARN, "tenant_id does not match", K(req),
+    RS_LOG(WARN, "tenant_id does not match", K(req), 
             "local_tenant_id", major_freeze_service->get_tenant_id(), K(is_primary_service));
   } else {
     switch(req.get_type()) {

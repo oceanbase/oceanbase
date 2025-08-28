@@ -82,7 +82,7 @@ expr_lst: /* Empty */   {
                           $$ = node;
                         } else {
                           ((FtsParserResult*) ftsParserResult)->ret_ = ret;
-                        }
+                        }                
                 } else if ($$) {
                         ((FtsParserResult*) ftsParserResult)->ret_ = fts_add_node($$, $2);
                 }
@@ -101,7 +101,7 @@ sub_expr: '(' expr_lst ')'              {
                           $$ = node;
                         } else {
                           ((FtsParserResult*) ftsParserResult)->ret_ = ret;
-                        }
+                        }  
                 }
         }
 
@@ -120,12 +120,12 @@ sub_expr: '(' expr_lst ')'              {
                           FtsNode *tmp_node = NULL;
                           ret = fts_create_node_subexp_list(ftsParserResult, $3, &tmp_node);
                           if (FTS_OK == ret) {
-                            ((FtsParserResult*) ftsParserResult)->ret_ = fts_add_node($$, tmp_node);
+                            ((FtsParserResult*) ftsParserResult)->ret_ = fts_add_node($$, tmp_node); 
                           } else {
                             ((FtsParserResult*) ftsParserResult)->ret_ = ret;
                           }
                         } else {
-                          $$ = NULL;
+                          $$ = NULL;  
                         }
                 }
         }
@@ -204,14 +204,14 @@ prefix  : '-'           {
                 yyerror(NULL, (FtsParserResult*) ftsParserResult, "syntax error: unsupport '*'");
                 YYABORT;
                 $$ = NULL;
-        }
+        } 
         | '%'           {
                 yyerror(NULL, (FtsParserResult*) ftsParserResult, "syntax error: unsupport '%'");
                 YYABORT;
                 $$ = NULL;
         }
         ;
-
+ 
 term    : FTS_TERM      {
                 if (FTS_OK != ((FtsParserResult*) ftsParserResult)->ret_) {
                         // do nothing
@@ -225,7 +225,7 @@ term    : FTS_TERM      {
                           $$ = NULL;
                         }
                 }
-        }
+        }       
         ;
 
 %%

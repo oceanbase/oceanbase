@@ -55,12 +55,12 @@ struct ObSetKvAttributeParam : public ObHTableDDLParam
 {
   OB_UNIS_VERSION_V(1);
 public:
-  ObSetKvAttributeParam() :
-    ObHTableDDLParam(),
+  ObSetKvAttributeParam() : 
+    ObHTableDDLParam(), 
     session_id_(common::OB_INVALID_ID),
-    database_name_(),
-    table_group_name_(),
-    is_disable_(false)
+    database_name_(), 
+    table_group_name_(), 
+    is_disable_(false) 
   {}
   virtual ~ObSetKvAttributeParam() = default;
   virtual bool is_valid() const override

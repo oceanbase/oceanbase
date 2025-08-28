@@ -35,7 +35,7 @@ public:
   template<typename T, typename T_BIN>
   int point_visit(T_BIN *geo);
 
-  template<typename P_TYPE, typename P_BIN_TYPE, typename L_TYPE, typename L_BIN_TYPE,
+  template<typename P_TYPE, typename P_BIN_TYPE, typename L_TYPE, typename L_BIN_TYPE, 
            typename POINT_TYPE, typename RINGS_TYPE, typename p_ibin_type>
   int polygon_visit(p_ibin_type *geo);
 
@@ -47,8 +47,8 @@ public:
   int visit(ObIWkbGeogPoint *geo) override;
   int visit(ObIWkbGeomPoint *geo) override;
   int visit(ObIWkbGeogLineString *geo) override;
-  int visit(ObIWkbGeomLineString *geo) override;
-  int visit(ObIWkbGeogMultiPoint *geo) override;
+  int visit(ObIWkbGeomLineString *geo) override;  
+  int visit(ObIWkbGeogMultiPoint *geo) override;  
   int visit(ObIWkbGeomMultiPoint *geo) override;
   int visit(ObIWkbGeogMultiLineString *geo) override;
   int visit(ObIWkbGeomMultiLineString *geo) override;
@@ -58,7 +58,7 @@ public:
   int visit(ObIWkbGeomMultiPolygon *geo) override;
   int visit(ObIWkbGeogCollection *geo) override;
   int visit(ObIWkbGeomCollection *geo) override;
-
+ 
   bool is_end(ObIWkbGeogLineString *geo) override { UNUSED(geo); return true; }
   bool is_end(ObIWkbGeomLineString *geo) override { UNUSED(geo); return true; }
   bool is_end(ObIWkbGeogMultiPoint *geo) override { UNUSED(geo); return true; }
@@ -73,7 +73,7 @@ public:
   int finish(ObIWkbGeogMultiPolygon *geo) override { UNUSED(geo); parent_.pop_back(); return OB_SUCCESS; }
   int finish(ObIWkbGeomMultiPolygon *geo) override { UNUSED(geo); parent_.pop_back(); return OB_SUCCESS; }
   int finish(ObIWkbGeogCollection *geo) override { UNUSED(geo); parent_.pop_back(); return OB_SUCCESS; }
-  int finish(ObIWkbGeomCollection *geo) override { UNUSED(geo); parent_.pop_back(); return OB_SUCCESS; }
+  int finish(ObIWkbGeomCollection *geo) override { UNUSED(geo); parent_.pop_back(); return OB_SUCCESS; }  
 
 
 private:

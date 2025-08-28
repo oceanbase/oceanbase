@@ -45,31 +45,31 @@ public:
     return true;
   }
 
-  bool prepare(ObIWkbGeomMultiPoint *geo)
+  bool prepare(ObIWkbGeomMultiPoint *geo) 
   {
     UNUSED(geo);
     return (dimension_ == -1 || dimension_ == 0);
   }
 
-  bool prepare(ObIWkbGeomLineString *geo)
+  bool prepare(ObIWkbGeomLineString *geo) 
   {
     UNUSED(geo);
     return (dimension_ == -1 || dimension_ == 1);
   }
 
-  bool prepare(ObIWkbGeomMultiLineString *geo)
+  bool prepare(ObIWkbGeomMultiLineString *geo) 
   {
     UNUSED(geo);
     return (dimension_ == -1 || dimension_ == 1);
   }
 
-  bool prepare(ObIWkbGeomPolygon *geo)
+  bool prepare(ObIWkbGeomPolygon *geo) 
   {
     UNUSED(geo);
     return (dimension_ == -1 || dimension_ == 2);
   }
 
-  bool prepare(ObIWkbGeomMultiPolygon *geo)
+  bool prepare(ObIWkbGeomMultiPolygon *geo) 
   {
     UNUSED(geo);
     return (dimension_ == -1 || dimension_ == 2);

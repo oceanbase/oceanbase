@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 static void pkts_post_io(pkts_t* io, pkts_req_t* r) {
   pkts_sk_t* sk = (typeof(sk))idm_get(&io->sk_map, r->sock_id);
   if (sk && 0 == r->errcode) {

@@ -224,7 +224,7 @@ public:
       const ObMergeType merge_type,
       ObCSReplicaTabletStatus &cs_replica_status);
   static int get_co_merge_type_for_compaction(
-      const int64_t merge_version,
+      const int64_t merge_version, 
       const storage::ObTablet &tablet,
       ObCOMajorMergePolicy::ObCOMajorMergeType &co_major_merge_type);
   static int schedule_merge_dag(
@@ -257,7 +257,7 @@ public:
     ObTabletHandle &tablet_handle,
     const ObAdaptiveMergePolicy::AdaptiveCompactionEvent &event,
     const int64_t update_row_cnt,
-    const int64_t delete_row_cnt,
+    const int64_t delete_row_cnt, 
     bool &create_dag);
   int get_min_dependent_schema_version(int64_t &min_schema_version);
   int user_request_schedule_medium_merge(

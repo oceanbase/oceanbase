@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef SHARE_CACHE_OB_VTABLE_EVENT_RECYCLE_BUFFER_H
 #define SHARE_CACHE_OB_VTABLE_EVENT_RECYCLE_BUFFER_H
 
@@ -156,7 +156,7 @@ public:
         databuff_printf(info, stack_buffer_size, pos, ObSizeLiteralPrettyPrinter(write_pos));
         databuff_printf(info, stack_buffer_size, pos, ", total_recycle_size:");
         databuff_printf(info, stack_buffer_size, pos, ObSizeLiteralPrettyPrinter(recycle_pos));
-        databuff_printf(info, stack_buffer_size, pos,
+        databuff_printf(info, stack_buffer_size, pos, 
             ", total_write_num:%ld, total_recycle_num:%ld]", write_number, recycle_number);
       }
       databuff_printf(info, stack_buffer_size, pos, ", buffer_size_each:");

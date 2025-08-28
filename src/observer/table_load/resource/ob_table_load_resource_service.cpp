@@ -130,7 +130,7 @@ int ObTableLoadResourceService::switch_to_follower_gracefully() {
   if (OB_FAIL(inner_switch_to_follower())) {
     LOG_WARN("fail to switch to follower", KR(ret));
   }
-
+  
   return ret;
 }
 
@@ -176,7 +176,7 @@ int ObTableLoadResourceService::alloc_resource_manager()
   return ret;
 }
 
-int ObTableLoadResourceService::delete_resource_manager()
+int ObTableLoadResourceService::delete_resource_manager() 
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
@@ -214,7 +214,7 @@ int ObTableLoadResourceService::inner_switch_to_follower()
   }
   const int64_t cost_us = ObTimeUtility::current_time() - start_time_us;
   FLOG_INFO("resource_manager: switch_to_follower", KR(ret), K_(tenant_id), K(cost_us), KP_(resource_manager));
-
+  
   return ret;
 }
 
@@ -237,7 +237,7 @@ int ObTableLoadResourceService::get_leader_addr(
   int ret = OB_SUCCESS;
   if (OB_FAIL(GCTX.location_service_->get_leader_with_retry_until_timeout(
       GCONF.cluster_id, tenant_id, ls_id, leader, GET_LEADER_RETRY_TIMEOUT))) {
-    LOG_WARN("fail to get ls location leader", KR(ret), K(tenant_id), K(ls_id));
+    LOG_WARN("fail to get ls location leader", KR(ret), K(tenant_id), K(ls_id));    
     if (is_location_service_renew_error(ret)) {
       ret = OB_EAGAIN;
     }
@@ -259,7 +259,7 @@ int ObTableLoadResourceService::local_apply_resource(ObDirectLoadResourceApplyAr
   } else {
     ret = service->resource_manager_->apply_resource(arg, res);
   }
-
+  
   return ret;
 }
 
@@ -276,7 +276,7 @@ int ObTableLoadResourceService::local_release_resource(ObDirectLoadResourceRelea
   } else {
     ret = service->resource_manager_->release_resource(arg);
   }
-
+  
   return ret;
 }
 
@@ -293,7 +293,7 @@ int ObTableLoadResourceService::local_update_resource(ObDirectLoadResourceUpdate
   } else {
     ret = service->resource_manager_->update_resource(arg);
   }
-
+  
   return ret;
 }
 
@@ -313,7 +313,7 @@ int ObTableLoadResourceService::apply_resource(ObDirectLoadResourceApplyArg &arg
       TABLE_LOAD_RESOURCE_RPC_CALL(apply_resource, leader, arg, res);
     }
   }
-
+  
   return ret;
 }
 
@@ -333,7 +333,7 @@ int ObTableLoadResourceService::release_resource(ObDirectLoadResourceReleaseArg 
       TABLE_LOAD_RESOURCE_RPC_CALL(release_resource, leader, arg);
     }
   }
-
+  
   return ret;
 }
 

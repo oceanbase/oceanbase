@@ -38,8 +38,8 @@ ObExprArrayDistinct::ObExprArrayDistinct(ObIAllocator &alloc)
 ObExprArrayDistinct::ObExprArrayDistinct(ObIAllocator &alloc,
                          ObExprOperatorType type,
                          const char *name,
-                         int32_t param_num,
-                         int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension)
+                         int32_t param_num, 
+                         int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension) 
 {
 }
 
@@ -71,7 +71,7 @@ int ObExprArrayDistinct::calc_result_type1(ObExprResType &type,
   } else {
     type.set_collection(type1.get_subschema_id());
   }
-
+  
   return ret;
 }
 
@@ -208,7 +208,7 @@ int ObExprArrayDistinct::eval_array_distinct_vector(const ObExpr &expr, ObEvalCt
         }
       } else if (OB_FAIL(ObArrayExprUtils::set_array_res<ObVectorBase>(res_obj, expr, ctx, static_cast<ObVectorBase *>(res_vec), idx))) {
         LOG_WARN("set array res failed", K(ret));
-      }
+      } 
       if (OB_SUCC(ret) && !is_null_res) {
         eval_flags.set(idx);
         res_obj->clear();

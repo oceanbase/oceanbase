@@ -699,7 +699,7 @@ int ObParser::split_multiple_stmt(const ObString &stmt,
       //first try parse part str, because it's have less length and need less memory
       if (OB_FAIL(tmp_ret = parse(part, parse_result, parse_mode, false, true))) {
         //if parser part str failed, then try parse all remain part, avoid parse many times
-        //bug:
+        //bug: 
         tmp_ret = OB_SUCCESS;
         tmp_ret = parse(remain_part, parse_result, parse_mode);
       }

@@ -145,7 +145,7 @@ struct ObGetOutlineKeyV3<ObOutlineSqlIdHashWrapper, ObSimpleOutlineSchema *>
   {
     ObOutlineSqlIdHashWrapper sql_wrap;
     if (!OB_ISNULL(outline_schema)) {
-      ObString sql_id = outline_schema->is_format() ? outline_schema->get_format_sql_id_str()
+      ObString sql_id = outline_schema->is_format() ? outline_schema->get_format_sql_id_str() 
                                                     : outline_schema->get_sql_id_str();
       sql_wrap.set_tenant_id(outline_schema->get_tenant_id());
       sql_wrap.set_database_id(outline_schema->get_database_id());

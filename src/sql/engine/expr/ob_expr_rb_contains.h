@@ -34,12 +34,12 @@ public:
   static int eval_rb_contains_vector(const ObExpr &expr, ObEvalCtx &ctx,
                                           const ObBitVector &skip, const EvalBound &bound);
   static int rb_contains(ObIAllocator &allocator,
-                         ObString &rb1_bin,
-                         ObString &rb2_bin,
-                         bool &is_contains,
-                         bool is_offset = false,
+                         ObString &rb1_bin, 
+                         ObString &rb2_bin, 
+                         bool &is_contains, 
+                         bool is_offset = false, 
                          uint64_t offset = 0);
-
+  
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;

@@ -20,13 +20,13 @@ namespace oceanbase
 namespace observer
 {
 
-int ObTableLoadBackupTable::get_table(ObTableLoadBackupVersion version,
-                                      ObTableLoadBackupTable *&table,
-                                      ObIAllocator &allocator)
-{
+int ObTableLoadBackupTable::get_table(ObTableLoadBackupVersion version, 
+                                      ObTableLoadBackupTable *&table, 
+                                      ObIAllocator &allocator) 
+{ 
   int ret = OB_SUCCESS;
   table = nullptr;
-  if (OB_UNLIKELY(version <= ObTableLoadBackupVersion::INVALID ||
+  if (OB_UNLIKELY(version <= ObTableLoadBackupVersion::INVALID || 
                   version >= ObTableLoadBackupVersion::MAX_VERSION)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(version));

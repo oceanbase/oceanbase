@@ -28,7 +28,7 @@ public:
   virtual int get_data(ObString &data) const = 0;
   virtual int set(int64_t offset, const char *buf, int64_t buf_len, bool use_memmove=false) = 0;
   int set(int64_t offset, const ObString &data) { return set(offset, data.ptr(), data.length()); }
-
+  
   virtual int get(int64_t offset, int64_t len, ObString &data) const = 0;
   int get_for_write(int64_t offset, int64_t len, ObString &data);
   virtual int64_t get_length() const = 0;

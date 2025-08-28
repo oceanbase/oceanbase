@@ -490,7 +490,7 @@ public:
     return (ObStmt::is_dml_stmt(stmt_type_)
             && (stmt::T_INSERT != stmt_type_ || is_insert_select_)
             && (stmt::T_REPLACE != stmt_type_ || is_insert_select_)
-            // TODO:@yibo inner sql 先不用SPM? pl里面的执行的SQL也是inner sql,
+            // TODO:@yibo inner sql 先不用SPM? pl里面的执行的SQL也是inner sql, 
             && !is_inner_sql_
             && !is_batch_params_execute_
             // TODO:@yibo batch multi stmt relay get_plan to init some structure. But spm may not enter
@@ -543,11 +543,11 @@ public:
   virtual int update_cache_obj_stat(ObILibCacheCtx &ctx);
   void calc_whether_need_trans();
   inline uint64_t get_min_cluster_version() const { return min_cluster_version_; }
-  inline void set_min_cluster_version(uint64_t curr_cluster_version)
-  {
+  inline void set_min_cluster_version(uint64_t curr_cluster_version) 
+  { 
     if (curr_cluster_version > min_cluster_version_) {
       min_cluster_version_ = curr_cluster_version;
-    }
+    } 
   }
   inline bool is_disable_auto_memory_mgr() const { return disable_auto_memory_mgr_; }
   inline void disable_auto_memory_mgr() { disable_auto_memory_mgr_ = true; }
@@ -666,7 +666,7 @@ private:
   int16_t regexp_op_count_;
   // for like expression's optimization
   int16_t like_op_count_;
-  // for px fast path
+  // for px fast path 
   int16_t px_exchange_out_op_count_;
   bool is_sfu_;
   //if the stmt  contains user variable assignment

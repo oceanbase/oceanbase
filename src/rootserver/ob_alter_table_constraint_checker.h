@@ -20,7 +20,7 @@ namespace share
 namespace schema
 {
 class ObTableSchema;
-class AlterTableSchema;
+class AlterTableSchema; 
 }
 }
 namespace obrpc
@@ -55,7 +55,7 @@ public:
       const uint64_t tenant_data_version,
       share::ObDDLType &ddl_type);
   static int need_modify_not_null_constraint_validate(
-      rootserver::ObDDLService &ddl_service,
+      rootserver::ObDDLService &ddl_service, 
       const obrpc::ObAlterTableArg &alter_table_arg,
       const uint64_t tenant_data_version,
       bool &is_add_not_null_col,

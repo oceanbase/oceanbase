@@ -297,7 +297,7 @@ public:
   int get_throttled_time(int64_t &throttled_time);
   common::ObPriorityQueue2<0, 1> &get_req_queue() { return req_queue_; }
   ObMultiLevelQueue* get_multi_level_queue() { return &multi_level_queue_; }
-  TO_STRING_KV("group_id", group_id_,
+  TO_STRING_KV("group_id", group_id_, 
                "queue_size", req_queue_.size(),
                "recv_req_cnt", recv_req_cnt_,
                "min_worker_cnt", min_worker_cnt(),
@@ -455,7 +455,7 @@ public:
   int get_default_group_throttled_time(int64_t &default_group_throttled_time);
   void print_throttled_time();
   void regist_threads_to_cgroup();
-
+  
   TO_STRING_KV(K_(id),
                K_(tenant_meta),
                K_(unit_min_cpu), K_(unit_max_cpu), K_(total_worker_cnt),
@@ -484,7 +484,7 @@ public:
   }
 
   int mark_group_deleted(uint64_t group_id);
-
+  
   void lq_end(ObThWorker &w);
   // called each checkpoint for worker of this tenant.
   void lq_wait(ObThWorker &w);

@@ -25,7 +25,7 @@ using namespace sql;
 
 namespace share
 {
-
+          
 
 
 bool ObExternalTableUtils::is_left_edge(const ObObj &value)
@@ -105,7 +105,7 @@ int ObExternalTableUtils::resolve_file_id_range(const ObNewRange &range,
     const ObObj &start_obj = range.get_start_key().get_obj_ptr()[column_idx];
     const ObObj &end_obj = range.get_end_key().get_obj_ptr()[column_idx];
     start_file = get_edge_value(start_obj);
-    end_file = get_edge_value(end_obj);
+    end_file = get_edge_value(end_obj); 
   }
   return ret;
 }
@@ -151,7 +151,7 @@ int ObExternalTableUtils::resolve_odps_start_step(const ObNewRange &range,
     const ObObj &start_obj = range.get_start_key().get_obj_ptr()[column_idx];
     const ObObj &end_obj = range.get_end_key().get_obj_ptr()[column_idx];
     start = start_obj.get_int();
-    int64_t end = end_obj.get_int();
+    int64_t end = end_obj.get_int(); 
     if (end != INT64_MAX) {
       step = end - start;
     } else {
@@ -284,7 +284,7 @@ int ObExternalTableUtils::make_external_table_scan_range(const common::ObString 
     obj_start[PARTITION_ID].set_uint64(part_id);
     obj_end[PARTITION_ID] = ObObj();
     obj_end[PARTITION_ID].set_uint64(part_id);
-
+    
     obj_start[FILE_URL] = ObObj();
     obj_start[FILE_URL].set_varchar(file_url);
     obj_start[FILE_URL].set_collation_type(ObCharset::get_system_collation());
@@ -346,27 +346,27 @@ int ObExternalTableUtils::prepare_single_scan_range(const uint64_t tenant_id,
     LOG_WARN("failed to assign array", K(ret));
   }
   const uint64_t table_id = das_ctdef.ref_table_id_;
-  const ObString &table_format_or_properties = das_ctdef.external_file_format_str_.str_;
+  const ObString &table_format_or_properties = das_ctdef.external_file_format_str_.str_; 
   if (OB_SUCC(ret)) {
     if (is_external_object_id(table_id)) {
       if (OB_FAIL(ObExternalTableFileManager::get_instance().get_mocked_external_table_files(
                                             tenant_id, partition_ids, ctx, das_ctdef, file_urls))) {
-        LOG_WARN("failed to get mocked external table files", K(ret));
+        LOG_WARN("failed to get mocked external table files", K(ret));                                 
       }
     } else {
       if (OB_FAIL(ObExternalTableFileManager::get_instance().get_external_files_by_part_ids(
-                            tenant_id, table_id, partition_ids, is_file_on_disk,
+                            tenant_id, table_id, partition_ids, is_file_on_disk, 
                             range_allocator, file_urls, tmp_ranges.empty() ? NULL : &tmp_ranges))) {
         LOG_WARN("failed to get external files by part ids", K(ret));
       }
     }
   }
-
+  
   if (OB_SUCC(ret)) {
     if (OB_FAIL(GCTX.location_service_->external_table_get(tenant_id, table_id, all_locations))) {
         LOG_WARN("fail to get external table location", K(ret));
     } else if (is_file_on_disk
-              && OB_FAIL(ObExternalTableUtils::filter_files_in_locations(file_urls,
+              && OB_FAIL(ObExternalTableUtils::filter_files_in_locations(file_urls, 
                                                                         all_locations))) {
         //For recovered cluster, the file addr may not in the cluster. Then igore it.
         LOG_WARN("filter files in location failed", K(ret));
@@ -638,7 +638,7 @@ int ObExternalTableUtils::assign_odps_file_to_sqcs(
     if (!GCONF._use_odps_jni_connector) {
 #if defined (OB_BUILD_CPP_ODPS)
       if (OB_FAIL(ObOdpsPartitionDownloaderMgr::fetch_row_count(
-              MTL_ID(),
+              MTL_ID(), 
               scan_ops.at(0)
                   ->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_,
               files,
@@ -768,7 +768,7 @@ int ObExternalTableUtils::split_odps_to_sqcs_storage_api(int64_t split_task_coun
     if (split_task_count == 0) {
       LOG_INFO("no task for reader", K(lbt()));
     } else {
-
+    
       int64_t sqc_idx = 0;
       for (int i = 0; OB_SUCC(ret) && i < split_task_count; i += 1) {
         ObExternalFileInfo info;
@@ -802,7 +802,7 @@ int ObExternalTableUtils::split_odps_to_sqcs_storage_api(int64_t split_task_coun
       for (int64_t start = 0; OB_SUCC(ret) && start < table_total_row_count; start += step) {
         if (start + step > table_total_row_count) {
           step = table_total_row_count - start;
-        }
+        } 
         ObExternalFileInfo info;
         info.file_url_ = new_file_urls;
         info.session_id_ = session_str;
@@ -1131,7 +1131,7 @@ int ObExternalTableUtils::calc_assigned_files_to_sqcs(
   return ret;
 }
 
-int ObExternalTableUtils::filter_files_in_locations(common::ObIArray<share::ObExternalFileInfo> &files,
+int ObExternalTableUtils::filter_files_in_locations(common::ObIArray<share::ObExternalFileInfo> &files, 
                                     common::ObIArray<common::ObAddr> &locations)
 {
   int ret = OB_SUCCESS;
@@ -1277,7 +1277,7 @@ int ObExternalTableUtils::collect_local_files_on_servers(
 }
 
 int ObExternalTableUtils::sort_external_files(ObIArray<ObString> &file_urls,
-                                              ObIArray<int64_t> &file_sizes)
+                                              ObIArray<int64_t> &file_sizes) 
 {
   int ret = OB_SUCCESS;
   const int64_t count = file_urls.count();
@@ -1430,7 +1430,7 @@ int ObExternalTableUtils::collect_external_file_list(
           // split by row of byte use one options
           if (OB_FAIL(odps_jni_iter.init_jni_schema_scanner(ex_format.odps_format_, session_ptr_in))) {
             LOG_WARN("failed to init and open jni schema scanner", K(ret));
-          }
+          } 
         } else {
           // tunnel api
           if (OB_FAIL(odps_jni_iter.init_jni_meta_scanner(ex_format.odps_format_, session_ptr_in))) {
@@ -1506,9 +1506,9 @@ int ObExternalTableUtils::collect_external_file_list(
     share::schema::ObSchemaGetterGuard schema_guard;
     OZ (GCTX.location_service_->external_table_get(tenant_id, table_id, all_servers));
     const bool is_local_storage = ObSQLUtils::is_external_files_on_local_disk(location);
-    if (OB_SUCC(ret) && full_path.length() > 0
-            && *(full_path.ptr() + full_path.length() - 1) != '/' ) {
-      OZ (full_path.append("/"));
+    if (OB_SUCC(ret) && full_path.length() > 0 
+            && *(full_path.ptr() + full_path.length() - 1) != '/' ) { 
+      OZ (full_path.append("/")); 
     }
     if (OB_FAIL(ret)) {
     } else if (is_local_storage) {

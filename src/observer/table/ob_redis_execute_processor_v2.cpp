@@ -139,7 +139,7 @@ int ObRedisExecuteV2P::try_process()
                        op);
   // NOTE(xiongliyao): Prevent redundant audit records during the execution of Redis commands
   audit_ctx_.need_audit_ = false;
-
+  
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(init_redis_ctx())) {
     LOG_WARN("faild init redis ctx", K(ret));
@@ -171,7 +171,7 @@ int ObRedisExecuteV2P::try_process()
 #endif
   // NOTE(xiongliyao): Prevent redundant audit records during the execution of Redis commands
   audit_ctx_.need_audit_ = true;
-  OB_TABLE_END_AUDIT(ret_code, ret,
+  OB_TABLE_END_AUDIT(ret_code, ret, 
                      snapshot, get_tx_snapshot(),
                      stmt_type, sql::stmt::StmtType::T_REDIS);
   return ret;

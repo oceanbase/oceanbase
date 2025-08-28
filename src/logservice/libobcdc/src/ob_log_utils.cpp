@@ -499,7 +499,7 @@ const char *get_ctype_string(int ctype)
     case oceanbase::obmysql::MYSQL_TYPE_OB_MAP:
       sc_type = "MYSQL_TYPE_OB_MAP";
       break;
-
+    
     case oceanbase::obmysql::MYSQL_TYPE_OB_SPARSE_VECTOR:
       sc_type = "MYSQL_TYPE_OB_SPARSE_VECTOR";
       break;

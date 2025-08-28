@@ -29,7 +29,7 @@ int ObMViewResolverHelper::resolve_materialized_view_container_table(ParseNode *
   container_table_schema.set_table_type(ObTableType::USER_TABLE);
   container_table_schema.get_view_schema().reset();
   container_table_schema.set_max_dependency_version(OB_INVALID_VERSION);
-
+  
   if (OB_FAIL(resolver.resolve_partition_option(partition_node, container_table_schema, true))) {
     LOG_WARN("fail to resolve_partition_option", KR(ret));
   } else if (OB_FAIL(resolver.set_table_option_to_schema(container_table_schema))) {
@@ -50,7 +50,7 @@ int ObMViewResolverHelper::resolve_materialized_view_container_table(ParseNode *
     container_table_schema.set_table_pk_exists_mode(ObTablePrimaryKeyExistsMode::TOM_TABLE_WITHOUT_PK);
   }
 
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret)) {  
   } else if (OB_FAIL(container_table_schema.check_primary_key_cover_partition_column())) {
     SQL_RESV_LOG(WARN, "fail to check primary key cover partition column", KR(ret));
   } else {
@@ -208,7 +208,7 @@ int ObMViewResolverHelper::resolve_mv_refresh_info(ParseNode *refresh_info_node,
   if (resolver.allocator_ == nullptr) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator_ is null", KR(ret));
-  }
+  } 
   char buf[OB_MAX_PROC_ENV_LENGTH];
   int64_t pos = 0;
   OZ (ObExecEnv::gen_exec_env(*resolver.session_info_, buf, OB_MAX_PROC_ENV_LENGTH, pos));
@@ -278,7 +278,7 @@ int ObMViewResolverHelper::resolve_mv_refresh_info(ParseNode *refresh_info_node,
           switch (nested_refresh_mode_node->value_) {
             case 0:
               refresh_info.nested_refresh_mode_ = ObMVNestedRefreshMode::INDIVIDUAL;
-              break;
+              break; 
             case 1:
               refresh_info.nested_refresh_mode_ = ObMVNestedRefreshMode::INCONSISTENT;
               break;
@@ -294,7 +294,7 @@ int ObMViewResolverHelper::resolve_mv_refresh_info(ParseNode *refresh_info_node,
         }
         LOG_INFO("nested refresh mode", K(nested_refresh_mode_node->value_));
       } else if (OB_ISNULL(nested_refresh_node)) {
-        refresh_info.nested_refresh_mode_ = ObMVNestedRefreshMode::INDIVIDUAL;
+        refresh_info.nested_refresh_mode_ = ObMVNestedRefreshMode::INDIVIDUAL; 
       }
 
       if (OB_SUCC(ret) && refresh_interval_node != nullptr

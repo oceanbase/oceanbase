@@ -213,7 +213,7 @@ struct SetArg {
   common::ObString expire_str_;
   bool is_ms_ = false;
   bool nx_ = false;
-
+  
   TO_STRING_KV(K_(value), K_(expire_str),K_(is_ms), K_(nx));
 };
 
@@ -415,7 +415,7 @@ public:
   explicit Incr(ObIAllocator &allocator) : IncrBy(allocator)
   {
     attr_.arity_ = 2;
-
+    
   }
   virtual ~Incr()
   {}

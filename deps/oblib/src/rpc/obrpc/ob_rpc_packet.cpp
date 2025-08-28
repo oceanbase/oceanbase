@@ -199,7 +199,7 @@ int ObRpcPacketHeader::deserialize(const char* buf, const int64_t data_len, int6
     // disconnection, to avoid it, we delay setting to the RPC process phase.
     if (OB_SUCC(ret) &&
         flags_ & ObRpcPacketHeader::RESP_FLAG &&
-        ObRpcNetHandler::is_self_cluster(src_cluster_id_) &&
+        ObRpcNetHandler::is_self_cluster(src_cluster_id_) && 
         data_version_ > 0 &&
         tenant_id_ > 0 &&
         ODV_MGR.need_set_for_rpc(pcode_)) {

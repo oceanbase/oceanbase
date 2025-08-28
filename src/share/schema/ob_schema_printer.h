@@ -60,7 +60,7 @@ class ObConstraint;
 class ObSchemaPrinter
 {
 public:
-  explicit ObSchemaPrinter(ObSchemaGetterGuard &schema_guard,
+  explicit ObSchemaPrinter(ObSchemaGetterGuard &schema_guard, 
                            bool strict_compat = false,
                            bool sql_quote_show_create = true,
                            bool ansi_quotes = false);
@@ -142,7 +142,7 @@ public:
                                          const ObTimeZoneInfo *tz_info,
                                          bool agent_mode,
                                          ObSQLMode sql_mode) const;
-
+                                         
   int print_database_definiton(const uint64_t tenant_id,
                                const uint64_t database_id,
                                bool if_not_exists,
@@ -508,7 +508,7 @@ public:
                        int64_t& pos,
                        const ObString &ident,
                        bool is_oracle_mode) const;
-
+  
   int print_view_define_str(char* buf,
                             const int64_t &buf_len,
                             int64_t& pos,

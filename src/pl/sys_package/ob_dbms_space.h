@@ -29,7 +29,7 @@ namespace pl
 class ObDbmsSpace
 {
 public:
-  struct IndexCostInfo final {
+  struct IndexCostInfo final { 
   public:
     IndexCostInfo(): tenant_id_(OB_SYS_TENANT_ID),
                  table_id_(common::OB_INVALID_ID),
@@ -40,7 +40,7 @@ public:
                  svr_addr_(),
                  tablet_ids_(),
                  table_tenant_id_(OB_INVALID_TENANT_ID) {}
-    ~IndexCostInfo() = default;
+    ~IndexCostInfo() = default; 
     TO_STRING_KV(K_(tenant_id), K_(table_id), K_(part_ids), K_(column_ids),
                  K_(compression_ratio), K_(default_index_len), K_(svr_addr),
                  K_(tablet_ids), K_(table_tenant_id));
@@ -67,7 +67,7 @@ public:
   };
 
   struct TabletInfo final {
-  public:
+  public: 
     TabletInfo(): tablet_id_(OB_INVALID_ID), partition_id_(OB_INVALID_PARTITION_ID), row_len_(0), row_count_(0), compression_ratio_(0) {}
     TabletInfo(ObTabletID tablet_id, ObObjectID partition_id): tablet_id_(tablet_id), partition_id_(partition_id), row_len_(0), row_count_(0), compression_ratio_(0) {}
     ~TabletInfo() = default;
@@ -114,7 +114,7 @@ public:
    *  in param:
    *    table_schema -- the target table we need to calc size.
    *  out param:
-   *    each tablet's size.
+   *    each tablet's size. 
    */
   static int get_each_tablet_size(ObMySQLProxy *sql_proxy,
                                   const ObTableSchema *table_schema,
@@ -133,7 +133,7 @@ private:
   static int get_index_column_ids(const share::schema::ObTableSchema *table_schema,
                                    const obrpc::ObCreateIndexArg &arg,
                                    IndexCostInfo &info);
-
+  
   static int get_optimizer_stats(const IndexCostInfo &info,
                                  OptStats &opt_stats);
 
@@ -171,7 +171,7 @@ private:
   static int inner_calc_index_size_by_default(IndexCostInfo &info,
                                               TabletInfoList &tablet_infos,
                                               ObIArray<uint64_t> &table_size);
-
+  
   static int fill_tablet_infos(const ObTableSchema *table_schema,
                                TabletInfoList &tablet_infos);
 
@@ -190,7 +190,7 @@ private:
 
   static const TabletInfo* get_tablet_info_by_part_id(const TabletInfoList &tablet_infos,
                                                 const ObObjectID partition_id);
-
+  
   static int set_tablet_info_by_tablet_id(const ObTabletID tablet_id,
                                           const double row_len,
                                           const uint64_t row_count,
@@ -204,13 +204,13 @@ private:
                                       ObIArray<ObAddr> &addr_list,
                                       ObIArray<ObTabletID> &tablet_list,
                                       uint64_t &tenant_id);
-
+  
   static int generate_part_key_str(ObSqlString &target_str,
                                    const ObIArray<ObAddr> &addr_list);
 
   static int generate_tablet_predicate_str(ObSqlString &target_str,
                                            const ObIArray<ObTabletID> &tablet_list);
-
+                            
 };
 
 }

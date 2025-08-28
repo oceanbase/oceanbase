@@ -5,7 +5,7 @@
 CREATE OR REPLACE PACKAGE dbms_workload_repository AUTHID CURRENT_USER
 
   PROCEDURE CREATE_SNAPSHOT(flush_level VARCHAR(64) DEFAULT 'TYPICAL');
-
+  
   PROCEDURE DROP_SNAPSHOT_RANGE(
     low_snap_id    INT,
     high_snap_id   INT);
@@ -35,5 +35,5 @@ CREATE OR REPLACE PACKAGE dbms_workload_repository AUTHID CURRENT_USER
                        SVR_IP        VARCHAR(64)  DEFAULT NULL,
                        SVR_PORT      INT          DEFAULT NULL,
                        TENANT_ID     INT          DEFAULT NULL);
-
+                       
 END dbms_workload_repository;

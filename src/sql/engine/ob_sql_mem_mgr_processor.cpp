@@ -99,7 +99,7 @@ int ObSqlMemMgrProcessor::init(
       profile_.get_work_area_type(), tenant_id_, exec_info, max_mem_size))) {
     LOG_WARN("failed to get workarea size", K(ret), K(tenant_id_), K(max_mem_size));
   }
-
+  
   if (OB_SUCC(ret) && nullptr == dummy_alloc_) {
     dummy_alloc_ = allocator;
     if (OB_ISNULL(dummy_ptr_ = static_cast<char *> (dummy_alloc_->alloc(sizeof(char))))) {

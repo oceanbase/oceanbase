@@ -20,14 +20,14 @@
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "mittest/shared_storage/clean_residual_data.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace storage
+namespace storage 
 {
 using namespace oceanbase::common;
 using namespace oceanbase::blocksstable;
 
-class TestSSMicroCacheBasicOp : public ::testing::Test
+class TestSSMicroCacheBasicOp : public ::testing::Test 
 {
 public:
   TestSSMicroCacheBasicOp() : mem_blk_(nullptr), micro_meta_(nullptr) {}
@@ -88,7 +88,7 @@ void TestSSMicroCacheBasicOp::TearDown()
 }
 
 int TestSSMicroCacheBasicOp::alloc_and_init_micro_meta(
-  ObSSMicroBlockMeta *&micro_meta,
+  ObSSMicroBlockMeta *&micro_meta, 
   const ObSSMemBlockHandle &mem_blk_handle)
 {
   int ret = OB_SUCCESS;
@@ -307,7 +307,7 @@ TEST_F(TestSSMicroCacheBasicOp, deleted_unpersisted_micro_func)
   tmp_micro_meta_handle.reset();
   ASSERT_EQ(ori_micro_ref_cnt + 1, micro_meta_->ref_cnt_);
 
-  ObSSMicroBlockMetaHandle micro_handle;
+  ObSSMicroBlockMetaHandle micro_handle; 
   micro_handle.set_ptr(micro_meta_);
   ASSERT_EQ(ori_micro_ref_cnt + 2, micro_meta_->ref_cnt_);
 
@@ -342,14 +342,14 @@ TEST_F(TestSSMicroCacheBasicOp, deleted_invalid_micro_func)
   ASSERT_EQ(OB_SUCCESS, micro_map.insert(&micro_key, tmp_micro_meta_handle));
   tmp_micro_meta_handle.reset();
 
-  ObSSMicroBlockMetaHandle micro_handle;
+  ObSSMicroBlockMetaHandle micro_handle; 
   micro_handle.set_ptr(micro_meta_);
   ASSERT_EQ(ori_micro_ref_cnt + 2, micro_meta_->ref_cnt_);
 
   // 1. fail to delete valid micro_meta
   SSMicroMapDeleteInvalidMicroFunc func1;
   ASSERT_EQ(OB_EAGAIN, micro_map.erase_if(&micro_key, func1));
-
+  
   // 2. succeed to delete invalid micro_meta
   micro_meta_->mark_invalid();
   SSMicroMapDeleteInvalidMicroFunc func2;
@@ -373,7 +373,7 @@ TEST_F(TestSSMicroCacheBasicOp, deleted_expired_micro_func)
   ASSERT_EQ(OB_SUCCESS, micro_map.insert(&micro_key, tmp_micro_meta_handle));
   tmp_micro_meta_handle.reset();
 
-  ObSSMicroBlockMetaHandle micro_handle;
+  ObSSMicroBlockMetaHandle micro_handle; 
   micro_handle.set_ptr(micro_meta_);
   ASSERT_EQ(ori_micro_ref_cnt + 2, micro_meta_->ref_cnt_);
 
@@ -381,7 +381,7 @@ TEST_F(TestSSMicroCacheBasicOp, deleted_expired_micro_func)
   ObSSMicroBaseInfo micro_info;
   SSMicroMapDeleteExpiredMicroFunc func1(SS_DEF_CACHE_EXPIRATION_TIME, micro_info);
   ASSERT_EQ(OB_EAGAIN, micro_map.erase_if(&micro_key, func1));
-
+  
   // 2. succeed to delete expired micro_meta
   micro_meta_->access_time_ -= SS_DEF_CACHE_EXPIRATION_TIME;
   micro_info.reset();
@@ -496,7 +496,7 @@ TEST_F(TestSSMicroCacheBasicOp, complete_reorganizing_micro_func)
   ASSERT_EQ(OB_SUCCESS, micro_map.insert(&micro_key, tmp_micro_meta_handle));
   tmp_micro_meta_handle.reset();
 
-  const int64_t old_valid_val = mem_blk_->valid_val_;
+  const int64_t old_valid_val = mem_blk_->valid_val_; 
   ASSERT_EQ(OB_SUCCESS, mock_micro_block_persisted(micro_meta_));
   ASSERT_EQ(true, micro_meta_->is_valid());
   // mock micro_block is reorganizing
@@ -578,7 +578,7 @@ TEST_F(TestSSMicroCacheBasicOp, micro_map_func)
   bool succ_add_new = false;
   ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.add_or_update_micro_block_meta(micro_key, size, crc, mem_blk_handle, succ_add_new));
   ASSERT_EQ(true, succ_add_new);
-
+  
   ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_block_meta_handle(micro_key, micro_handle, false));
   ASSERT_EQ(ori_micro_ref_cnt + 2, micro_handle.get_ptr()->ref_cnt_);
   ObSSMicroBlockMeta *micro_meta = micro_handle.get_ptr();
@@ -673,7 +673,7 @@ TEST_F(TestSSMicroCacheBasicOp, micro_map_func)
   int64_t phy_blk_idx = 2;
   int64_t data_dest = phy_blk_idx * micro_meta_mgr.block_size_;
   ObSSPhysicalBlock * phy_blk = phy_blk_mgr.get_phy_block_by_idx_nolock(phy_blk_idx);
-  ASSERT_NE(nullptr, phy_blk);
+  ASSERT_NE(nullptr, phy_blk); 
   int64_t phy_reuse_version = 7;
   phy_blk->reuse_version_ = phy_reuse_version;
   mem_blk_handle.set_ptr(&mem_blk);
@@ -746,7 +746,7 @@ TEST_F(TestSSMicroCacheBasicOp, micro_map_func)
   ASSERT_EQ(false, micro_meta->is_in_ghost_);
   ASSERT_EQ(phy_reuse_version, micro_meta->reuse_version());
   mem_blk_handle.reset();
-
+  
   // evict this micro_block meta
   ASSERT_EQ(ori_micro_ref_cnt + 2, micro_meta->ref_cnt_);
   ObSSMicroMetaSnapshot evict_micro;
@@ -819,7 +819,7 @@ TEST_F(TestSSMicroCacheBasicOp, macro_map_func2)
       micro_meta_handle.get_ptr()->data_dest_ = micro_cache->phy_block_size_ * 3;
     }
   }
-
+  
   ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.try_delete_micro_block_meta(mem_blk_handle));
   ASSERT_EQ(micro_cnt / 2, micro_map.count());
 

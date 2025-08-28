@@ -176,7 +176,7 @@ int ObMViewUtils::submit_build_mlog_task(const uint64_t tenant_id,
           }
         }
         if (OB_SUCC(ret)) {
-          // RS will check if the schema version of the base table is changed, if so, it means
+          // RS will check if the schema version of the base table is changed, if so, it means 
           // a concurrent ddl has already altered the base table, then we need to retry the task
           // to ensure we generate the correct column list for the mlog
           ObBasedSchemaObjectInfo based_info;

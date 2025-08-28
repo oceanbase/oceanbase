@@ -42,7 +42,7 @@ struct ObCompactionProgress
   void reset();
 
   TO_STRING_KV(K_(tenant_id), "merge_type", merge_type_to_str(merge_type_), K_(merge_version), K_(status), K_(data_size), K_(unfinished_data_size),
-      K_(original_size), K_(compressed_size), K_(start_time), K_(estimated_finish_time),
+      K_(original_size), K_(compressed_size), K_(start_time), K_(estimated_finish_time), 
       K_(start_cg_idx), K_(end_cg_idx));
 
   constexpr static double MERGE_SPEED = 1;  // almost 2 sec per macro_block

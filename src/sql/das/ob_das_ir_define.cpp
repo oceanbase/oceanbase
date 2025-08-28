@@ -46,3 +46,4 @@ OB_SERIALIZE_MEMBER((ObDASFuncLookupRtDef, ObDASAttachRtDef));
 
 } // sql
 } // oceanbase
+

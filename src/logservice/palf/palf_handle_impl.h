@@ -341,7 +341,7 @@ public:
                                  const int64_t timeout_us) = 0;
   // @brief: force set self as single replica.
   virtual int force_set_as_single_replica() = 0;
-
+  
   // @brief: force set member list.
   // @param[in] const common::ObMemberList &new_member_list: members which will be set forcely
   // @param[in] const int64_t new_replica_num: replica number of paxos group after forcing to set member list
@@ -429,7 +429,7 @@ public:
   // - OB_INVALID_ARGUMENT: invalid argument
   // - OB_TIMEOUT: switch_learner_to_acceptor timeout
   // - OB_NOT_MASTER: not leader or rolechange during membership changing
-  virtual int switch_learner_to_acceptor(const common::ObMember &learner,
+  virtual int switch_learner_to_acceptor(const common::ObMember &learner, 
                                          const int64_t new_replica_num,
                                          const LogConfigVersion &config_version,
                                          const int64_t timeout_us) = 0;
@@ -780,7 +780,7 @@ public:
   virtual int set_reconfig_checker_cb(palf::PalfReconfigCheckerCb *reconfig_checker) = 0;
   virtual int reset_reconfig_checker_cb() = 0;
   // ==================== Callback end ========================
-  virtual int advance_election_epoch_and_downgrade_priority(const int64_t proposal_id,
+  virtual int advance_election_epoch_and_downgrade_priority(const int64_t proposal_id, 
                                                             const int64_t downgrade_priority_time_us,
                                                             const char *reason) = 0;
   virtual int flashback(const int64_t mode_version,

@@ -130,7 +130,7 @@ class CompositeCodecTest : public ::testing::Test {
       }
   };
 
-void CompositeCodecTest::SetUp()
+void CompositeCodecTest::SetUp() 
 {
   codec.reset(new ObCompositeCodec<ObSIMDFixedPFor, ObJustCopy>());
 }

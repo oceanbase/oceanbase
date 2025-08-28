@@ -1028,7 +1028,7 @@ int ObPLDataType::intervalym_element_cell_str(char *buf,
     OZ (ObMySQLUtil::store_length(buf, len, total_len, pos_begin));
   }
   return ret;
-}
+}      
 
 int ObPLDataType::intervalds_element_cell_str(char *buf,
                                               const int64_t len,
@@ -1052,7 +1052,7 @@ int ObPLDataType::intervalds_element_cell_str(char *buf,
     OZ (ObMySQLUtil::store_length(buf, len, total_len, pos_begin));
   }
   return ret;
-}
+}   
 
 // -------------------- End for Package Session Variable Serialize/DeSerialize ------
 
@@ -1089,7 +1089,7 @@ int ObPLDataType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
                  K(get_obj_type()), K(obj.get_type()), K(obj), K(*this), K(ret));
       } else if (obj.is_lob() || obj.is_lob_locator() || obj.is_json() || obj.is_geometry()) {
         ObArenaAllocator local_allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-        if (OB_FAIL(ObQueryDriver::process_lob_locator_results(obj,
+        if (OB_FAIL(ObQueryDriver::process_lob_locator_results(obj, 
                                                                session.is_client_use_lob_locator(),
                                                                session.is_client_support_lob_locatorv2(),
                                                                &local_allocator,
@@ -1167,7 +1167,7 @@ int ObPLDataType::deserialize(ObSchemaGetterGuard &schema_guard,
       LOG_WARN("data size overflow", K(ret));
     } else if (OB_FAIL(ObSMUtils::get_mysql_type(get_obj_type(), mysql_type, flags, num_decimals))) {
       LOG_WARN("get mysql type failed", K(ret));
-    } else if (obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_BLOB == mysql_type
+    } else if (obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_BLOB == mysql_type 
               && CS_TYPE_BINARY != get_data_type()->get_collation_type()) {
       // Here must check collation_type which is set by request_type to distinguish clob or blob
       mysql_type = obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_CLOB;
@@ -1480,7 +1480,7 @@ case type: {                                                            \
     DEEP_COPY_TYPE(PL_ASSOCIATIVE_ARRAY_TYPE, ObAssocArrayType, COPY_COMMON);
     DEEP_COPY_TYPE(PL_VARRAY_TYPE, ObVArrayType, COPY_COMMON);
     DEEP_COPY_TYPE(PL_SUBTYPE, ObUserDefinedSubType, COPY_COMMON);
-    DEEP_COPY_TYPE(PL_REF_CURSOR_TYPE, ObRefCursorType, COPY_COMMON);
+    DEEP_COPY_TYPE(PL_REF_CURSOR_TYPE, ObRefCursorType, COPY_COMMON); 
     case PL_OPAQUE_TYPE: /*do nothing*/ break;
 #endif
     default: {
@@ -1500,7 +1500,7 @@ case type: {                                                            \
 int ObPLDataType::obj_is_null(ObObj& obj, bool &is_null)
 {
   int ret = OB_SUCCESS;
-
+  
   is_null = false;
 
   if (obj.is_null()) {
@@ -2679,7 +2679,7 @@ int ObPLCursorInfo::prepare_spi_cursor(ObSPICursor *&spi_cursor,
     LOG_WARN("cursor allocator is null.", K(ret), K(spi_allocator), K(id_));
   } else if (OB_ISNULL(spi_cursor_)) {
     int64_t alloc_size = is_local_for_update
-      ? (sizeof(ObSPICursor) > sizeof(ObSPIResultSet) ? sizeof(ObSPICursor) : sizeof(ObSPIResultSet))
+      ? (sizeof(ObSPICursor) > sizeof(ObSPIResultSet) ? sizeof(ObSPICursor) : sizeof(ObSPIResultSet)) 
       : sizeof(ObSPICursor);
     OX (spi_cursor_ = spi_allocator->alloc(alloc_size));
     OV (OB_NOT_NULL(spi_cursor_), OB_ALLOCATE_MEMORY_FAILED);

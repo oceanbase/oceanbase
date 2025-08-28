@@ -134,14 +134,14 @@ int ObLogTopk::est_cost()
   return ret;
 }
 
-int ObLogTopk::get_plan_item_info(PlanText &plan_text,
+int ObLogTopk::get_plan_item_info(PlanText &plan_text, 
                                   ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
     LOG_WARN("failed to get plan item info", K(ret));
-  }
-  BEGIN_BUF_PRINT;
+  } 
+  BEGIN_BUF_PRINT; 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(BUF_PRINTF("minimum_row_count:%ld top_precision:%ld ",
                                 minimum_row_count_, topk_precision_))) {

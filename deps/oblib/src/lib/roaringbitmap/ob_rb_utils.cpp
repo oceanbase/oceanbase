@@ -16,7 +16,7 @@
 #include "lib/roaringbitmap/ob_rb_utils.h"
 #include "roaring/roaring_array.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
 namespace common
 {
@@ -154,7 +154,7 @@ int ObRbUtils::build_empty_binary(ObIAllocator &allocator, ObString &res_rb_bin)
   } else {
     res_rb_bin.assign_ptr(res_buf.ptr(), res_buf.length());
   }
-  return ret;
+  return ret;                                                                                                                          
 }
 
 int ObRbUtils::to_roaring64_bin(ObIAllocator &allocator, ObRbBinType rb_type, const ObString &rb_bin, ObString &roaring64_bin)
@@ -517,7 +517,7 @@ int ObRbUtils::calc_inplace(ObRoaringBitmap *&rb1, ObRoaringBitmap *&rb2, ObRbOp
   return ret;
 }
 
-void ObRbUtils::rb_destroy(ObRoaringBitmap *&rb)
+void ObRbUtils::rb_destroy(ObRoaringBitmap *&rb) 
 {
   if (OB_NOT_NULL(rb)) {
     rb->set_empty();
@@ -967,7 +967,7 @@ int ObRbAggCell::destroy()
   return ret;
 }
 
-int ObRbAggCell::add_values(const ObArray<uint64_t> &values)
+int ObRbAggCell::add_values(const ObArray<uint64_t> &values) 
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i< values.count(); ++i) {
@@ -1098,7 +1098,7 @@ int ObRbAggCell::rollup(const ObRbAggCell *other, ObItemType func_type)
     } else if (OB_NOT_NULL(other->rb_) && OB_FAIL(rb_->value_or(other->rb_))) {
       LOG_WARN("or value fail", K(ret));
     } else {
-      // reset for save memory
+      // reset for save memory 
       cached_value_.reset();
     }
   } else if (func_type == T_FUN_SYS_RB_AND_AGG) {

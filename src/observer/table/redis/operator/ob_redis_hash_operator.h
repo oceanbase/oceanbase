@@ -44,10 +44,10 @@ public:
 
   // for group service
   int do_group_hget();
-  int fill_set_batch_op(const ObRedisOp &op,
-                        ObIArray<ObTabletID> &tablet_ids,
+  int fill_set_batch_op(const ObRedisOp &op, 
+                        ObIArray<ObTabletID> &tablet_ids, 
                         ObTableBatchOperation &batch_op) override;
-
+  
   int do_group_hsetnx();
 private:
   int do_hset_inner(int64_t db, const ObString &key, const RedisCommand::FieldValMap &field_val_map, int64_t &insert_num);

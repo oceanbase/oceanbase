@@ -295,7 +295,7 @@ echo "$md5sum_value" > $CACHE_MD5_FILE
 if [[ -n "$NEED_PARSER_CACHE" && "$NEED_PARSER_CACHE" == "ON" ]]; then
     echo "generate sql parser with cache"
     origin_md5sum_value=$(<$CACHE_MD5_FILE)
-    if [[ "$md5sum_value" == "$origin_md5sum_value" ]]; then
+    if [[ "$md5sum_value" == "$origin_md5sum_value" ]]; then 
       echo "hit the md5 cache"
     else
       generate_parser

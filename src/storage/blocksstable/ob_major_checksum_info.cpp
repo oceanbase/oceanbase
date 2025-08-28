@@ -247,7 +247,7 @@ int64_t ObMajorChecksumInfo::to_string(char *buf, const int64_t buf_len) const
     J_KV("is_empty", is_empty());
     if (!is_empty() || !is_valid()) {
       J_COMMA();
-      J_KV(K_(compaction_scn),
+      J_KV(K_(compaction_scn), 
         "exec_mode", compaction::exec_mode_to_str(get_exec_mode()),
         K_(row_count), K_(data_checksum), K_(column_ckm_struct));
     }

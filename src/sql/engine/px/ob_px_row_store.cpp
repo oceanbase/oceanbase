@@ -563,7 +563,7 @@ int ObReceiveRowReader::attach_vectors(const common::ObIArray<ObExpr*> &exprs,
   if (0 == read_rows) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("print vector", K(ret));
-  }
+  } 
   for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < exprs.count(); col_idx++) {
     if (exprs.at(col_idx)->is_static_const_) {
       continue;

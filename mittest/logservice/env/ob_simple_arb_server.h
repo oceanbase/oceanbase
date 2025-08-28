@@ -25,7 +25,7 @@ namespace unittest
 struct PalfEnvLiteGuard
 {
   PalfEnvLiteGuard() : palf_env_lite_(NULL), palf_env_mgr_(NULL) {}
-  ~PalfEnvLiteGuard()
+  ~PalfEnvLiteGuard() 
   {
     if (NULL != palf_env_lite_ && NULL != palf_env_mgr_) {
       palf_env_mgr_->revert_palf_env_lite(palf_env_lite_);
@@ -74,21 +74,21 @@ public:
   static const int64_t cluster_id_ = 1;
   ObSimpleArbServer();
   ~ObSimpleArbServer() override;
-  ILogBlockPool *get_block_pool() override final
+  ILogBlockPool *get_block_pool() override final 
   {return &dummy_block_pool_;};
   ObILogAllocator *get_allocator() override final
   {return &allocator_;}
-  virtual int update_disk_opts(const PalfDiskOptions &opts) override final
+  virtual int update_disk_opts(const PalfDiskOptions &opts) override final 
   {return OB_NOT_SUPPORTED;};
-  virtual int get_disk_opts(PalfDiskOptions &opts) override final
+  virtual int get_disk_opts(PalfDiskOptions &opts) override final 
   {return OB_NOT_SUPPORTED;};
   virtual int get_palf_env(PalfEnv *&palf_env)
   {return OB_NOT_SUPPORTED;};
-  bool is_valid() const override final
+  bool is_valid() const override final 
   {return true == is_inited_;}
   IPalfEnvImpl *get_palf_env() override final
   {
-    palflite::PalfEnvLite *palf_env_lite = NULL;
+    palflite::PalfEnvLite *palf_env_lite = NULL; 
     palflite::PalfEnvKey palf_env_key(cluster_id_, ObISimpleLogServer::DEFAULT_TENANT_ID);
     palf_env_mgr_.get_palf_env_lite(palf_env_key, palf_env_lite);
     PALF_LOG(INFO, "yunlong trace get_palf_env", KP(palf_env_lite));
@@ -105,11 +105,11 @@ public:
   {return self_;}
   ObTenantBase *get_tenant_base() const override final
   {return tenant_base_;}
-  logservice::ObLogFlashbackService *get_flashback_service() override final
+  logservice::ObLogFlashbackService *get_flashback_service() override final 
   {return NULL;}
 	void set_need_drop_packet(const bool need_drop_packet) override final
   {blacklist_.set_need_drop_packet(need_drop_packet);}
-  void block_net(const ObAddr &src) override final
+  void block_net(const ObAddr &src) override final 
   {blacklist_.block_net(src);}
   void unblock_net(const ObAddr &src) override final
   {blacklist_.unblock_net(src);}
@@ -117,9 +117,9 @@ public:
   {blacklist_.block_pcode(pcode);}
   void unblock_pcode(const ObRpcPacketCode &pcode) override final
   {blacklist_.unblock_pcode(pcode);}
-  void set_rpc_loss(const ObAddr &src, const int loss_rate) override final
+  void set_rpc_loss(const ObAddr &src, const int loss_rate) override final 
   {blacklist_.set_rpc_loss(src, loss_rate);}
-  void reset_rpc_loss(const ObAddr &src) override final
+  void reset_rpc_loss(const ObAddr &src) override final 
   {blacklist_.reset_rpc_loss(src);}
   bool is_arb_server() const override final {return true;}
   int64_t get_node_id() {return node_id_;}
@@ -188,7 +188,7 @@ public:
                   bool is_bootstrap) override final;
   int simple_start(const bool is_bootstrap) override final;
   int simple_close(const bool is_shutdown) override final;
-  int simple_restart(const std::string &cluster_name,
+  int simple_restart(const std::string &cluster_name, 
                      const int64_t node_idx,
                      ObTenantIOManager *tio_manager) override final;
   void destroy();

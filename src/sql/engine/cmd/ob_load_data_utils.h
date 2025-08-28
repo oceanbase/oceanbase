@@ -306,7 +306,7 @@ struct ObLoadDataGID
 
 struct ObLoadDataStat
 {
-  ObLoadDataStat() : allocator_(ObModIds::OB_SQL_LOAD_DATA),
+  ObLoadDataStat() : allocator_(ObModIds::OB_SQL_LOAD_DATA), 
                      ref_cnt_(0),
                      tenant_id_(0),
                      job_id_(0),
@@ -403,12 +403,12 @@ struct ObLoadDataStat
     int64_t compact_stage_consume_tmp_files_ CACHE_ALIGNED;
     int64_t compact_stage_merge_write_rows_ CACHE_ALIGNED;
     int64_t merge_stage_write_rows_ CACHE_ALIGNED;
-    TO_STRING_KV(K(processed_rows_), K(last_commit_segment_id_), K(status_), K(trans_status_),
-                 K(compact_stage_load_rows_), K(compact_stage_dump_rows_),
-                 K(compact_stage_product_tmp_files_), K(compact_stage_consume_tmp_files_),
+    TO_STRING_KV(K(processed_rows_), K(last_commit_segment_id_), K(status_), K(trans_status_), 
+                 K(compact_stage_load_rows_), K(compact_stage_dump_rows_), 
+                 K(compact_stage_product_tmp_files_), K(compact_stage_consume_tmp_files_), 
                  K(compact_stage_merge_write_rows_), K(merge_stage_write_rows_));
   } store_;
-  char message_[common::MAX_LOAD_DATA_MESSAGE_LENGTH];
+  char message_[common::MAX_LOAD_DATA_MESSAGE_LENGTH]; 
 
   TO_STRING_KV(K(tenant_id_), K(job_id_), K(job_type_),
       K(table_name_), K(file_path_), K(table_column_), K(file_column_),

@@ -96,13 +96,13 @@ int ObAllVirtualUnit::inner_open()
   } else if (OB_FAIL(tenant_meta_arr_.push_back(tenant->get_tenant_meta()))) {
     SERVER_LOG(WARN, "fail to push back tenant meta", K(ret));
   }
-
+  
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(locality_manager_)) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "fail to get locality manager from GCTX", KR(ret));
     } else {
-      // Loacality cache will be loaded shortly after ObServer starts.
+      // Loacality cache will be loaded shortly after ObServer starts. 
       // Before that, two columns ZONE_TYPE and REGION of the local unit rows will be set to NULL.
       if (OB_FAIL(locality_manager_->get_server_zone_type(addr_, zone_type_))) {
         if (OB_ENTRY_NOT_EXIST != ret) {
@@ -193,7 +193,7 @@ int ObAllVirtualUnit::inner_get_next_row(ObNewRow *&row)
           if (OB_UNLIKELY(!is_region_set_)) {
             // locality not refreshed yet, set to null
             cur_row_.cells_[i].set_null();
-          } else {
+          } else { 
             cur_row_.cells_[i].set_varchar(region_.str());
             cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           }
@@ -352,5 +352,6 @@ int ObAllVirtualUnit::get_clog_disk_used_size_(const uint64_t tenant_id,
   // return OB_SUCCESS whatever.
   return OB_SUCCESS;
 }
+
 
 

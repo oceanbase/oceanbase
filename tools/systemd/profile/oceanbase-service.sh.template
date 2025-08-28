@@ -230,7 +230,7 @@ function do_start_observer {
     else
       echo "The observer start without bootstarp failed."
       exit 1
-    fi
+    fi 
   elif [ "x$identity" = "xSINGLE" ]; then
     # do config observer first
     do_config_observer
@@ -245,7 +245,7 @@ function do_start_observer {
     check_trace $trace "start observer" 40 6
     if [ $? -eq 0 ]; then
       /bin/bash $prefix/profile/telemetry.sh $report "11" >/dev/null 2>&1
-    fi
+    fi 
   else
     # status is UNIDENTIFIED
     echo "The observer has been installed before"

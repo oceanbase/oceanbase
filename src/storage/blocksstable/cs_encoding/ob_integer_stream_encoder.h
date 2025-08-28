@@ -67,7 +67,7 @@ public:
         STORAGE_LOG(WARN, "fail to ineer encode", KPC(ctx_), K(arr_len));
       }
     }
-
+  
     return ret;
   }
 
@@ -355,11 +355,11 @@ private:
           start_time_us = ObTimeUtility::current_time();
           if (OB_FAIL(do_codec_encode<T>(int_arr, sample_count, buf_writer, true))) {
             if (OB_BUF_NOT_ENOUGH != ret) {
-              STORAGE_LOG(WARN,"fail to do codec encode", KR(ret), KPC(ctx_), K(sample_count),
+              STORAGE_LOG(WARN,"fail to do codec encode", KR(ret), KPC(ctx_), K(sample_count), 
                         K(candidate_count), K(candidate_list[i]), K(i));
             } else {
               // if buf not enough, set space_cost to INT32_MAX which must be large than raw_encoding_len,
-              // so this type will not be choosed, because we choose most space-saving encoding type.
+              // so this type will not be choosed, because we choose most space-saving encoding type. 
               ret = OB_SUCCESS;
               cost_arr[i].type_ = candidate_list[i];
               cost_arr[i].time_cost_us_ = 0;

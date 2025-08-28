@@ -341,7 +341,7 @@ bool ObConstraint::is_sys_generated_name(bool check_unknown) const
                                 CONSTRAINT_TYPE_NOT_NULL    == constraint_type_ ? "_OBNOTNULL_" : nullptr;
     if (OB_NOT_NULL(cst_type_name)) {
       const int64_t cst_type_name_len = static_cast<int64_t>(strlen(cst_type_name));
-      bret = (0 != ObCharset::instr(ObCollationType::CS_TYPE_UTF8MB4_BIN,
+      bret = (0 != ObCharset::instr(ObCollationType::CS_TYPE_UTF8MB4_BIN, 
                   constraint_name_.ptr(), constraint_name_.length(), cst_type_name, cst_type_name_len));
     }
   } else {

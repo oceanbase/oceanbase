@@ -356,7 +356,7 @@ TEST_F(TestStorageFile, test_list_files_with_marker)
       char expected_uri_c[OB_MAX_URI_LENGTH] = {'\0'};
       EXPECT_EQ(OB_SUCCESS, databuff_printf(expected_uri_c, OB_MAX_URI_LENGTH, "%012d", i));
       std::string expected_uri(expected_uri_c);
-      EXPECT_EQ(expected_uri, op.uris_[j++]);
+      EXPECT_EQ(expected_uri, op.uris_[j++]); 
     }
   }
 }

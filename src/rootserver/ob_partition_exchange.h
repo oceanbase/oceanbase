@@ -224,7 +224,7 @@ protected:
                                                      ObIArray<uint64_t> &unused_index_ids,
                                                      ObSchemaGetterGuard &schema_guard);
   int check_auxiliary_schema_conditions_(const ObTableSchema *table_schema, const bool is_oracle_mode);
-  int compare_column_extended_type_info_(const common::ObIArray<common::ObString> &l_extended_type_info,
+  int compare_column_extended_type_info_(const common::ObIArray<common::ObString> &l_extended_type_info, 
                                          const common::ObIArray<common::ObString> &r_extended_type_info,
                                          bool &is_equal);
   static bool in_supported_table_type_white_list_(const ObTableSchema &table_schema);
@@ -413,7 +413,7 @@ public:
   uint64_t base_table_id_; // PT table, always with the large amount of data.
   uint64_t inc_table_id_; // NT table, with the incremental data.
    // tablet ids of data table, index table, lob meta/piece table.
-  common::ObSArray<ObTabletID> tablet_ids_;
+  common::ObSArray<ObTabletID> tablet_ids_; 
   // the table ids corresponding to the tablet ids.
   common::ObSArray<uint64_t> table_ids_;
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(base_table_id), K_(inc_table_id), K_(tablet_ids), K_(table_ids));

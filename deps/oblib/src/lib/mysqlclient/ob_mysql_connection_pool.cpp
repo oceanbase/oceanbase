@@ -536,7 +536,7 @@ int ObMySQLConnectionPool::try_connect(ObMySQLConnection *connection)
       //}
     }
     if (OB_SUCC(ret) && ObMySQLConnection::OCEANBASE_MODE == mode_) {
-      // bugfix:
+      // bugfix: 
       if (OB_FAIL(connection->init_oceanbase_connection())) {
         LOG_WARN("fail to init oceanabse connection", K(ret));
       }
@@ -793,7 +793,7 @@ int ObMySQLConnectionPool::create_dblink_pool(const dblink_param_ctx &param_ctx,
     } else if (OB_ISNULL(dblink_pool = server_pool_.alloc())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("out of memory", K(ret));
-    } else if (OB_FAIL(dblink_pool->init_dblink(param_ctx.tenant_id_, param_ctx.dblink_id_,
+    } else if (OB_FAIL(dblink_pool->init_dblink(param_ctx.tenant_id_, param_ctx.dblink_id_, 
                                                 host_name, port, db_tenant, db_user, db_pass,
                                                 db_name, conn_str, cluster_str,
                                                 this, config_.sqlclient_per_observer_conn_limit_))) {
@@ -847,7 +847,7 @@ int ObMySQLConnectionPool::get_dblink_pool(const dblink_param_ctx &param_ctx, Ob
     if (OB_ISNULL(pool = *iter)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("pool is null", K(ret));
-    } else if (param_ctx.dblink_id_ == pool->get_dblink_id() &&
+    } else if (param_ctx.dblink_id_ == pool->get_dblink_id() && 
                param_ctx.tenant_id_ == pool->get_tenant_id()) {
       dblink_pool = pool;
       break;

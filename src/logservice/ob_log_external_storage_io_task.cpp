@@ -240,7 +240,7 @@ int convert_to_storage_access_type(const OPEN_FLAG &open_flag,
 {
   int ret = OB_SUCCESS;
   if (OPEN_FLAG::READ_FLAG == open_flag) {
-    storage_access_type = ObStorageAccessType::OB_STORAGE_ACCESS_ADAPTIVE_READER;
+    storage_access_type = ObStorageAccessType::OB_STORAGE_ACCESS_ADAPTIVE_READER;     
   } else {
     ret = OB_NOT_SUPPORTED;
     CLOG_LOG(WARN, "not supported flag", K(open_flag));
@@ -404,7 +404,7 @@ int ObLogExternalStorageIOTask::do_task()
     CLOG_LOG(WARN, "[io delay] handle io task delay too much", K(io_delay), KPC(this));
   }
   if (OB_FAIL(do_task_())) {
-    CLOG_LOG(WARN, "do_task_ failed", KP(this));
+    CLOG_LOG(WARN, "do_task_ failed", KP(this)); 
   }
   return ret;
 }

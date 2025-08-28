@@ -79,7 +79,7 @@ int ObLogExternalStorageHandler::start(const int64_t concurrency)
   int ret = OB_SUCCESS;
   WLockGuard guard(resize_rw_lock_);
   if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
+    ret = OB_NOT_INIT; 
     CLOG_LOG(WARN, "ObLogExternalStorageHandler not inited", K(concurrency), KPC(this));
   } else if (is_running_) {
     CLOG_LOG(WARN, "ObLogExternalStorageHandler has run", K(concurrency), KPC(this));
@@ -150,7 +150,7 @@ int ObLogExternalStorageHandler::resize(const int64_t new_concurrency,
       time_guard.click("after create new thread pool");
       CLOG_LOG(INFO, "ObLogExternalStorageHandler resize success", KPC(this), K(new_concurrency));
     }
-  }
+  } 
   return ret;
 }
 
@@ -370,14 +370,14 @@ int ObLogExternalStorageHandler::construct_async_pread_tasks_(
       run_ctx.wait(unused_read_size);
     }
   }
-  return ret;
+  return ret; 
 }
 
 int ObLogExternalStorageHandler::resize_(const int64_t new_concurrency)
 {
   int ret = OB_SUCCESS;
-  int64_t real_concurrency = MIN(new_concurrency, CONCURRENCY_LIMIT);
-  concurrency_ = real_concurrency;
+  int64_t real_concurrency = MIN(new_concurrency, CONCURRENCY_LIMIT);  
+  concurrency_ = real_concurrency;  
   capacity_ = CAPACITY_COEFFICIENT * real_concurrency;
   return ret;
 }
@@ -396,10 +396,10 @@ int ObLogExternalStorageHandler::convert_ret_code_(const int ret_code)
     case OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH:
       ret = OB_OBJECT_STORAGE_IO_ERROR;
       break;
-    case OB_OBJECT_NOT_EXIST:
+    case OB_OBJECT_NOT_EXIST: 
       ret = OB_NO_SUCH_FILE_OR_DIRECTORY;
       break;
-    default:
+    default: 
       ret = OB_OBJECT_STORAGE_IO_ERROR;
   }
   return ret;
@@ -465,7 +465,7 @@ int ObLogExternalStorageHandler::upload_one_part(
     CLOG_LOG(WARN, "ObLogExternalStorageHandler not init", KR(ret));
   } else if (NULL == write_buf
              || (0 > offset || offset >= PALF_PHY_BLOCK_SIZE)
-             || !run_ctx.is_valid()
+             || !run_ctx.is_valid() 
              || part_id != run_ctx.get_count()) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", KR(ret), K(part_id), KP(write_buf), K(offset));

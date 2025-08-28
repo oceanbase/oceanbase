@@ -179,7 +179,7 @@ int ObExprArrayMapCommon::eval_lambda_array(ObEvalCtx &ctx, ObArenaAllocator &tm
           LOG_WARN("failed to push back null value", K(ret));
         }
       } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, elem_subid,
-                                                         datum->get_string(), elem_arr))) {
+                                                         datum->get_string(), elem_arr))) { 
         LOG_WARN("construct array obj failed", K(ret));
       } else if (OB_FAIL(nested_arr->push_back(*elem_arr))) {
         LOG_WARN("failed to push back value", K(ret));
@@ -352,7 +352,7 @@ int ObExprArrayMapCommon::get_array_map_lambda_params(const ObRawExpr *raw_expr,
                  ((depth > 0 && i == 0) || // inner array_map shouldn't handle lambda func para
                   ( depth == 0 && i > 0))) { // array_map shouldn't handle para other than lambda func para
         // do nothing
-      } else if (OB_FAIL(get_array_map_lambda_params(child_expr, param_idx,
+      } else if (OB_FAIL(get_array_map_lambda_params(child_expr, param_idx, 
                                                  IS_ARRAY_MAP_OP(child_expr->get_expr_type()) ? depth + 1 : depth,
                                                  param_exprs))) {
         LOG_WARN("construct array map info failed", K(ret));
@@ -441,9 +441,9 @@ ObExprArrayMap::ObExprArrayMap(ObIAllocator &alloc)
 ObExprArrayMap::ObExprArrayMap(ObIAllocator &alloc,
                                ObExprOperatorType type,
                                const char *name,
-                               int32_t param_num,
+                               int32_t param_num, 
                                int32_t dimension)
-    : ObExprArrayMapCommon(alloc, type, name, param_num, NOT_VALID_FOR_GENERATED_COL, dimension)
+    : ObExprArrayMapCommon(alloc, type, name, param_num, NOT_VALID_FOR_GENERATED_COL, dimension) 
 {
 }
 
@@ -482,7 +482,7 @@ int ObExprArrayMap::calc_result_typeN(ObExprResType& type,
       LOG_WARN("invalid collection type", K(ret), K(coll_type->type_id_));
     }
   }
-
+  
   if (OB_FAIL(ret)) {
   } else if (is_null_res) {
     type.set_null();
@@ -492,7 +492,7 @@ int ObExprArrayMap::calc_result_typeN(ObExprResType& type,
       elem_type.meta_.set_utinyint(); // default type
     } else if (lambda_type == ObDecimalIntType || lambda_type == ObNumberType || lambda_type == ObUNumberType) {
       // decimalint isn't supported in array, so cast to supported type
-      ObObjType calc_type = ObIntType;
+      ObObjType calc_type = ObIntType; 
       if (types_stack[0].get_scale() != 0) {
         calc_type = ObDoubleType;
       }
@@ -523,7 +523,7 @@ int ObExprArrayMap::calc_result_typeN(ObExprResType& type,
     } else {
       type.set_collection(subschema_id);
     }
-  }
+  } 
   return ret;
 }
 

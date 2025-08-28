@@ -1,4 +1,4 @@
-// owner: msy164651
+// owner: msy164651 
 // owner group: rs
 
 /**
@@ -13,7 +13,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX RS
+#define USING_LOG_PREFIX RS 
 
 #include <gmock/gmock.h>
 #define  private public
@@ -88,7 +88,7 @@ TEST_F(TestLSRecoveryGuard, user_recovery_guard)
     readable_scn = guard.ls_recovery_stat_->readable_scn_upper_limit_;
     //内存中的scn还是可以推高的
     SCN readable_scn_memory = guard.ls_recovery_stat_->replicas_scn_.at(0).get_readable_scn();
-    config_version = guard.ls_recovery_stat_->config_version_in_inner_;
+    config_version = guard.ls_recovery_stat_->config_version_in_inner_; 
     ASSERT_EQ(1, guard.ls_recovery_stat_->ref_cnt_);
     ObLSRecoveryGuard guard1;
     //不能加锁成功
@@ -99,8 +99,8 @@ TEST_F(TestLSRecoveryGuard, user_recovery_guard)
     usleep(3000 * 1000);//sleep 300ms，应该设置成最新
     ASSERT_EQ(readable_scn.get_val_for_sql(), guard.ls_recovery_stat_->readable_scn_upper_limit_.get_val_for_sql());
   }
-
-}
+  
+} 
 } // namespace share
 } // namespace oceanbase
 

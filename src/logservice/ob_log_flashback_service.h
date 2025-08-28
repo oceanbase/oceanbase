@@ -123,7 +123,7 @@ private:
     obrpc::ObLogServiceRpcProxy *rpc_proxy_;
     int ret_;
   };
-
+  
   class CheckLSLogSyncOperator : public BaseLSOperator
   {
   public:
@@ -354,7 +354,7 @@ private:
                     const share::SCN &flashback_scn,
                     const ChangeModeOpArray &mode_op_array,
                     const int64_t timeout_us);
-
+  
   // util functions
   template<typename T>
   int construct_ls_operator_list_(

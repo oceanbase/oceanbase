@@ -40,7 +40,7 @@ public:
   int notify_need_writing_throttling(const bool &need_throtting);
   int64_t get_last_working_time() const;
   TO_STRING_KV(K_(is_inited), K_(is_user_tenant), K_(log_writer_parallelism), KP(log_io_workers_), K_(round_robin_idx));
-
+  
 private:
   int create_and_init_log_io_workers_(const LogIOWorkerConfig &config,
                                       const int64_t tenant_id,
@@ -53,7 +53,7 @@ private:
   void destory_and_free_log_io_workers_();
   int64_t palf_id_to_index_(const int64_t palf_id);
   constexpr static int64_t SYS_LOG_IO_WORKER_INDEX = 0;
-
+  
 private:
   bool is_user_tenant_;
   // 'log_writer_parallelism_' has include LogIOWorker which is used for sys log stream.

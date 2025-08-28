@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #include <gtest/gtest.h>
 #define private public
 #define protected public
@@ -69,12 +69,12 @@ public:
   void comapre_wkt_parse_wrong_result(const ObString &wkt);
 
 private:
-  ObArenaAllocator allocator_;
+  ObArenaAllocator allocator_; 
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestWktParser);
 };
 
-void TestWktParser::compare_3d_wkt_parse_result(ObGeoType geotype, const ObString &wkt, const ObString &wkb_res)
+void TestWktParser::compare_3d_wkt_parse_result(ObGeoType geotype, const ObString &wkt, const ObString &wkb_res) 
 {
   ObArenaAllocator allocator(ObModIds::TEST);
   ObGeometry *geo = NULL;
@@ -215,7 +215,7 @@ TEST_F(TestWktParser, test_parse_linestring)
   // large number of point inside linestring
   // single alloc size cannot exceed 4G
   uint64_t num_points = 10000000;
-
+  
   char *buf = static_cast<char *>(allocator.alloc(num_points * 4 + 64));
   ObString wkt(num_points * 8 + 64, 0, buf);
   ASSERT_EQ(strlen("linestring("), wkt.write("linestring(", strlen("linestring(")));
@@ -262,7 +262,7 @@ TEST_F(TestWktParser, test_parse_polygon)
   ASSERT_TRUE(NULL != geo);
   ASSERT_EQ(ObString("01030000000400000004000000000000000000284000000000000041400000000000004C4000000000008053400000000000C05840000000000000244000000000000028400000000000004140040000000000000000002A4000000000000041400000000000004B400000000000804640000000000080534000000000008058400000000000002A40000000000000414004000000000000000000F03F00000000000000400000000000000840000000000000104000000000000014400000000000001840000000000000F03F000000000000004007000000000000000000F03F0000000000000040000000000000084000000000000010400000000000001440000000000000184000000000000053400000000000002040000000000000F03F0000000000000040000000000000F03F0000000000000040000000000000F03F0000000000000040"), to_hex(mock_to_wkb(geo)));
 
-  // linstring of polygon must be a ring
+  // linstring of polygon must be a ring 
   geo = NULL;
   ASSERT_TRUE(OB_SUCCESS != ObWktParser::parse_wkt(allocator, ObString("polygon((12 34, 56 78 , 99 10, 12 34), (13 34, 54 45, 78 98, 13 35), (1 2, 3 4, 5 6, 1 2))"), geo, true, false));
   ASSERT_TRUE(NULL == geo);
@@ -620,11 +620,11 @@ TEST_F(TestWktParser, test_parse_3dwkt)
                                   "01440000000000000000000000000000000400000000000001440000000000000144000000000000008400000000000000000000000000000144000000000000008400000000000000000000000000000000000000000000"
                                   "0004001EB03000001000000050000000000000000000040000000000000004000000000000008400000000000000040000000000000144000000000000008400000000000001440000000000000144000000000000008400"
                                   "00000000000144000000000000000400000000000000840000000000000004000000000000000400000000000000840");
-  compare_3d_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGON(((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3), (0 0 2,5 0 2,5 5 3,0 5 3,0 0 2)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);
-  compare_3d_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGON Z (((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3), (0 0 2,5 0 2,5 5 3,0 5 3,0 0 2)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);
-  compare_3d_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGONZ(((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3), (0 0 2,5 0 2,5 5 3,0 5 3,0 0 2)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);
-  compare_3d_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGON(((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3), (0 0 2,5 0 2,5 5 3,0 5 3,0 0 2)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);
-  compare_3d_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGON Z (((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3), (0 0 2,5 0 2,5 5 3,0 5 3,0 0 2)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGON(((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3), (0 0 2,5 0 2,5 5 3,0 5 3,0 0 2)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);  
+  compare_3d_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGON Z (((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3), (0 0 2,5 0 2,5 5 3,0 5 3,0 0 2)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);  
+  compare_3d_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGONZ(((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3), (0 0 2,5 0 2,5 5 3,0 5 3,0 0 2)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);  
+  compare_3d_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGON(((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3), (0 0 2,5 0 2,5 5 3,0 5 3,0 0 2)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);  
+  compare_3d_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGON Z (((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3), (0 0 2,5 0 2,5 5 3,0 5 3,0 0 2)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);  
   comapre_wkt_parse_wrong_result(ObString("MULTIPOLYGON(((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3)),((2 2,2 5,5 5,5 2,2 2)))"));
   comapre_wkt_parse_wrong_result(ObString("MULTIPOLYGON(((0 0,10 0,10 10,0 10,0 0)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"));
   comapre_wkt_parse_wrong_result(ObString("MULTIPOLYGON Z(((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)),((0 0 1, 1 0 1, 0 0 1)))"));

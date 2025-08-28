@@ -187,7 +187,7 @@ private:
         d.len_ = 0;
         d.exp_ = 0;
       }
-    }
+    } 
 
     number_fast_ctx.is_fast_number_ = true;
     return ret;

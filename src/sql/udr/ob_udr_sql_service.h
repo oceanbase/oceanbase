@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef OB_SQL_UDR_OB_UDR_SQL_SERVICE_H_
 #define OB_SQL_UDR_OB_UDR_SQL_SERVICE_H_
 #include "lib/mysqlclient/ob_mysql_result.h"

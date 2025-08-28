@@ -29,7 +29,7 @@ int ObHybridHistEstimator::estimate(const ObOptStatGatherParam &param,
                                     ObOptStat &opt_stat)
 {
   int ret = OB_SUCCESS;
-  ret = estimate(param,
+  ret = estimate(param, 
                   opt_stat.table_stat_->get_row_count(),
                   opt_stat.table_stat_->get_micro_block_num(),
                   opt_stat.table_stat_->get_sstable_row_count() >= opt_stat.table_stat_->get_memtable_row_count(),
@@ -85,10 +85,10 @@ int ObHybridHistEstimator::estimate(const ObOptStatGatherParam &param,
                                                 est_percent,
                                                 no_sample_idx))) {
     LOG_WARN("failed to add hybrid hist stat items", K(ret));
-  } else if (OB_FAIL(fill_hints(allocator,
-                                param.tab_name_,
-                                param.gather_vectorize_,
-                                false,
+  } else if (OB_FAIL(fill_hints(allocator, 
+                                param.tab_name_, 
+                                param.gather_vectorize_, 
+                                false, 
                                 !need_sample))) {
     LOG_WARN("failed to fill hints", K(ret));
   } else if (OB_FAIL(add_from_table(allocator, param.db_name_, param.tab_name_))) {
@@ -102,8 +102,8 @@ int ObHybridHistEstimator::estimate(const ObOptStatGatherParam &param,
   } else if (OB_FAIL(fill_query_timeout_info(allocator, duration_time))) {
     LOG_WARN("failed to fill query timeout info", K(ret));
   } else if (!param.partition_infos_.empty() &&
-             OB_FAIL(fill_partition_info(allocator,
-                                         param,
+             OB_FAIL(fill_partition_info(allocator, 
+                                         param, 
                                          param.partition_infos_.at(0)))) {
     LOG_WARN("failed to add partition info", K(ret));
   } else if (OB_FAIL(fill_specify_scn_info(allocator, param.sepcify_scn_))) {
@@ -220,7 +220,7 @@ int ObHybridHistEstimator::estimate_no_sample_col_hydrid_hist(ObIAllocator &allo
   } else if (FALSE_IT(reset_select_items())) {
   //reset sample hint if exists;
   } else if (FALSE_IT(reset_sample_hint())) {
-  //reset other hint
+  //reset other hint 
   } else if (FALSE_IT(reset_other_hint())) {
   //add stat items
   } else if (OB_FAIL(add_no_sample_hybrid_hist_stat_items(hybrid_col_params,
@@ -546,14 +546,14 @@ int ObHybridHistograms::build_hybrid_hist(ObAggregateProcessor::HybridHistExtraR
       LOG_WARN("failed to get next row from material");
     } else if (OB_ISNULL(row) || OB_UNLIKELY(row->cnt_ != 1)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get null stored row", K(row));
+      LOG_WARN("get null stored row", K(row)); 
     } else if (num_distinct <= bucket_num + 2) {
       bucket_size = 1;
     } else if (bucket_num <= pop_count) {
       bucket_size = total_count / bucket_num;
     } else {
       dynamic_size = true;
-      // first bucket always contain only one values. following code will handle first value is
+      // first bucket always contain only one values. following code will handle first value is 
       // popular value or not.
       BucketDesc *desc = reinterpret_cast<BucketDesc*>(row->get_extra_payload());
       if (desc->is_pop_ || bucket_num == pop_count + 1) {
@@ -618,7 +618,7 @@ int ObHybridHistograms::build_hybrid_hist(ObAggregateProcessor::HybridHistExtraR
         }
       } while (OB_SUCC(ret));
     }
-
+    
     if (OB_LIKELY(OB_ITER_END == ret)) {
       ret = OB_SUCCESS;
     } else {

@@ -47,9 +47,9 @@ private:
   virtual int construct_transform_hint(ObDMLStmt &stmt, void *trans_params) override;
 
   int is_const_expr(ObRawExpr* expr, bool &is_const);
-
-  int check_transform_validity(const ObSelectStmt &stmt, bool &is_valid);
-
+ 
+  int check_transform_validity(const ObSelectStmt &stmt, bool &is_valid); 
+ 
   int check_hint_allowed_prune(ObSelectStmt &ref_query, bool &allowed);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransformProjectPruning);

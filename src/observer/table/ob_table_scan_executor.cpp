@@ -75,7 +75,7 @@ int ObTableApiScanExecutor::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef,
     }
 
     if (OB_SUCC(ret) && is_lookup && !tb_ctx_.is_global_index_back()) {
-      if (OB_FAIL(exec_ctx_.get_das_ctx().extended_tablet_loc(*das_rtdef.table_loc_,
+      if (OB_FAIL(exec_ctx_.get_das_ctx().extended_tablet_loc(*das_rtdef.table_loc_, 
                                                               tb_ctx_.get_tablet_id(),
                                                               tablet_loc))) {
         LOG_WARN("fail to extend tablet loc", K(ret), K(das_rtdef.table_loc_), K(tb_ctx_.get_tablet_id()));
@@ -364,7 +364,7 @@ int ObTableApiScanExecutor::prepare_multi_tablets_das_task()
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -374,7 +374,7 @@ int ObTableApiScanExecutor::prepare_single_tablet_das_task(const ObTabletID &tab
   ObDASTableLoc *table_loc = tsc_rtdef_.scan_rtdef_.table_loc_;
   ObDASScanOp *scan_op = nullptr;
   ObDASTabletLoc *tablet_loc = nullptr;
-
+  
   if (OB_ISNULL(table_loc)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table_loc is NULL", K(tablet_id), K(ret));
@@ -556,7 +556,7 @@ int ObTableApiScanExecutor::open()
   return ret;
 }
 
-int ObTableApiScanExecutor::get_next_row()
+int ObTableApiScanExecutor::get_next_row() 
 {
   int ret = OB_SUCCESS;
   if (tb_ctx_.is_global_index_back()) {
@@ -573,7 +573,7 @@ int ObTableApiScanExecutor::get_next_row()
       }
     }
   }
-
+  
   if (OB_SUCC(ret)) {
     ++input_row_cnt_;
     ++output_row_cnt_;
@@ -648,7 +648,7 @@ int ObTableApiScanExecutor::local_iter_rescan()
         LOG_WARN("scan op is NULL", K(ret), K(i));
       } else if (!scan_op->get_scan_param().is_valid()) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("scan param is invalid when do rescan", K(ret), KPC(scan_op->get_tablet_loc()),
+        LOG_WARN("scan param is invalid when do rescan", K(ret), KPC(scan_op->get_tablet_loc()), 
           K(i), K(scan_ops_), K(is_opened_), K(das_ref_.is_execute_directly()), K(lbt()));
       } else {
         // set scan range
@@ -787,7 +787,7 @@ int ObTableApiScanRowIterator::get_next_row(ObNewRow *&row)
             LOG_WARN("fail to adjust output obj type", K(ret));
           }
         }
-
+        
         cells[i] = tmp_obj;
       }
     } else {

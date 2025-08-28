@@ -55,33 +55,33 @@ int ObXmlNodeVisitor::visit(ObXmlNode* node) {
     case ObMulModeNodeType::M_ELEMENT:
       if (OB_FAIL(visit_xml_element(ObXmlUtil::xml_node_cast<ObXmlElement>(node, node->type())))) {
         LOG_WARN("visit element failed", K(ret), K(node->type()));
-      }
+      }      
       break;
     case ObMulModeNodeType::M_ATTRIBUTE:
     case ObMulModeNodeType::M_NAMESPACE:
       if (OB_FAIL(visit_xml_attribute(ObXmlUtil::xml_node_cast<ObXmlAttribute>(node, node->type())))) {
         LOG_WARN("visit attribute failed", K(ret), K(node->type()));
-      }
-      break;
+      }     
+      break; 
     case ObMulModeNodeType::M_TEXT:
       if (OB_FAIL(visit_xml_text(ObXmlUtil::xml_node_cast<ObXmlText>(node, node->type())))) {
         LOG_WARN("visit text failed", K(ret), K(node->type()));
-      }
+      }     
       break;
     case ObMulModeNodeType::M_CDATA:
       if (OB_FAIL(visit_xml_cdata(ObXmlUtil::xml_node_cast<ObXmlText>(node, node->type())))) {
         LOG_WARN("visit cdata failed", K(ret), K(node->type()));
-      }
+      }     
       break;
     case ObMulModeNodeType::M_COMMENT:
       if (OB_FAIL(visit_xml_comment(ObXmlUtil::xml_node_cast<ObXmlText>(node, node->type())))) {
         LOG_WARN("visit comment failed", K(ret), K(node->type()));
-      }
+      }     
       break;
     case ObMulModeNodeType::M_INSTRUCT:
       if (OB_FAIL(visit_xml_processing_instruction(ObXmlUtil::xml_node_cast<ObXmlAttribute>(node, node->type())))) {
         LOG_WARN("visit processing instruction failed", K(ret), K(node->type()));
-      }
+      }     
       break;
     default:
       ret = OB_ERR_UNEXPECTED;
@@ -94,7 +94,7 @@ int ObXmlNodeVisitor::visit(ObXmlNode* node) {
 
 class ObXmlTreeTextWriter : public ObXmlNodeVisitor{
 public:
-  ObXmlTreeTextWriter(ObIAllocator* allocator) : buffer_(allocator) {}
+  ObXmlTreeTextWriter(ObIAllocator* allocator) : buffer_(allocator) {} 
   virtual ~ObXmlTreeTextWriter() {}
 
   virtual int visit_xml_document(ObXmlDocument* node);
@@ -114,7 +114,7 @@ public:
     }
     if (!localname.empty()) {
       buffer_.append(localname);
-    }
+    }    
     return ret;
   }
 
@@ -159,7 +159,7 @@ int ObXmlTreeTextWriter::visit_xml_document(ObXmlDocument* node) {
       }
       buffer_.append("?>\n");
     }
-
+    
     for (int i = 0; OB_SUCC(ret) && i < node->size(); ++i) {
       ObXmlNode* child = node->at(i);
       if (OB_ISNULL(child)) {

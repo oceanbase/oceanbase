@@ -607,7 +607,7 @@ int ObExprBaseLRpad::calc_mysql_inner(const LRpadType pad_type,
   return ret;
 }
 
-int ObExprBaseLRpad::calc_mysql(const LRpadType pad_type, const ObExpr &expr, ObEvalCtx &ctx,
+int ObExprBaseLRpad::calc_mysql(const LRpadType pad_type, const ObExpr &expr, ObEvalCtx &ctx, 
                                 const ObDatum &text, const ObDatum &len, const ObDatum &pad_text,
                                 const ObSQLSessionInfo &session, ObIAllocator &res_alloc,
                                 ObDatum &res)
@@ -627,7 +627,7 @@ int ObExprBaseLRpad::calc_mysql(const LRpadType pad_type, const ObExpr &expr, Ob
         && !ob_is_text_tc(expr.args_[2]->datum_meta_.type_)) {
       const ObString &str_text = text.get_string();
       const ObString &str_pad = pad_text.get_string();
-      if (OB_FAIL(calc_mysql_inner(pad_type, expr, len, max_result_size,
+      if (OB_FAIL(calc_mysql_inner(pad_type, expr, len, max_result_size, 
                                    str_text, str_pad, res_alloc, res))) {
         LOG_WARN("Failed to eval base lrpad", K(ret));
       }
@@ -646,7 +646,7 @@ int ObExprBaseLRpad::calc_mysql(const LRpadType pad_type, const ObExpr &expr, Ob
                                                                    pad_text,
                                                                    expr.args_[2]->datum_meta_,
                                                                    expr.args_[2]->obj_meta_.has_lob_header(),
-                                                                   str_pad))) {
+                                                                   str_pad))) { 
         LOG_WARN("failed to read lob data pattern", K(ret), K(pad_text));
       } else if (OB_FAIL(calc_mysql_inner(pad_type, expr, len, max_result_size,
                                           str_text, str_pad, res_alloc, res))) {

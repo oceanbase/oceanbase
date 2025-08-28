@@ -107,7 +107,7 @@ private:
   int check_non_strict_pwj_cons(const ObPlanPwjConstraint &pwj_cons,
                                 const ObIArray<ObCandiTableLoc> &phy_tbl_infos,
                                 ObNonStrictPwjComparer &pwj_comparer,
-                                bool &is_same) const;
+                                bool &is_same) const;                              
   /**
    * @brief Check table partition location
    *

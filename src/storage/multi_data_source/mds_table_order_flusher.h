@@ -110,7 +110,7 @@ struct MdsTableOrderFlusher<STACK_QUEUE_SIZE, false>
   bool full() const { return high_priority_flusher_.size_ == STACK_QUEUE_SIZE; }
   FlushKey min_key() const { return high_priority_flusher_.high_priority_mds_tables_[0]; }
   FlushKey max_key() const { return high_priority_flusher_.high_priority_mds_tables_[high_priority_flusher_.size_ == 0 ?
-                                                                                     0 :
+                                                                                     0 : 
                                                                                      high_priority_flusher_.size_ - 1]; }
   TO_STRING_KV(K_(high_priority_flusher));
   MdsTableHighPriorityFlusher<STACK_QUEUE_SIZE> high_priority_flusher_;

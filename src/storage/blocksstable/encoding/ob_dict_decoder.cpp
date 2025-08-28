@@ -1662,14 +1662,14 @@ int ObDictDecoder::fast_to_accquire_dict_codes(
 
 ObDictDecoderIterator ObDictDecoder::begin(
     const ObColumnDecoderCtx *ctx,
-    const bool is_padding_mode,
+    const bool is_padding_mode, 
     const int64_t meta_length) const
 {
   return ObDictDecoderIterator(this, ctx, 0, meta_length, is_padding_mode);
 }
 ObDictDecoderIterator ObDictDecoder::end(
-    const ObColumnDecoderCtx *ctx,
-    const bool is_padding_mode,
+    const ObColumnDecoderCtx *ctx, 
+    const bool is_padding_mode, 
     const int64_t meta_length) const
 {
   return ObDictDecoderIterator(this, ctx, meta_header_->count_, meta_length, is_padding_mode);

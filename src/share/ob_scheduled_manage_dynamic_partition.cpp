@@ -121,7 +121,7 @@ int ObScheduledManageDynamicPartition::set_attribute(
         attr_name.length(),
         attr_name.ptr());
     LOG_WARN("not a valid SCHEDULED_MANAGE_DYNAMIC_PARTITION_DAILY attribute", KR(ret), K(errmsg), K(attr_name));
-    LOG_USER_ERROR(OB_INVALID_ARGUMENT, errmsg.ptr());
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, errmsg.ptr());  
   }
 
   return ret;
@@ -219,7 +219,7 @@ int ObScheduledManageDynamicPartition::create_job_(
     LOG_WARN("generate_job_id failed", KR(ret), K(tenant_id));
   } else {
     ObString exec_env(pos, buf);
-
+    
     const int64_t default_duration_sec = 3600; // 1hour
     const int64_t end_date = 64060560000000000; // 4000-01-01 00:00:00.000000 (same as maintenance_window)
 

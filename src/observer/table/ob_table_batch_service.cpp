@@ -218,7 +218,7 @@ int ObTableBatchService::multi_op_in_executor(ObTableBatchCtx &ctx,
   return ret;
 }
 
-int ObTableBatchService::adjust_entities(ObTableBatchCtx &ctx,
+int ObTableBatchService::adjust_entities(ObTableBatchCtx &ctx, 
                                         const ObIArray<ObTableOperation> &ops,
                                         ObIArray<ObITableEntity*> &entities)
 {
@@ -290,9 +290,9 @@ int ObTableBatchService::multi_get_fuse_key_range(ObTableBatchCtx &ctx,
           LOG_WARN("fail to push back rowkey idx", K(ret), K(rowkey_column_ids[i]));
         }
       }
-      // There may be duplicate primary keys in the range, duplicate primary keys can only scan 1 record,
+      // There may be duplicate primary keys in the range, duplicate primary keys can only scan 1 record, 
       // we will return an empty result for duplicate primary keys op.
-      // For example, if there are 50 operations out of 100 with the same primary key,
+      // For example, if there are 50 operations out of 100 with the same primary key, 
       // only 50 records can be scanned, but we return 100 results
       for (int64_t i = 0; OB_SUCC(ret) && i < entity_count; ++i) {
         ObNewRow *row = nullptr;
@@ -370,14 +370,14 @@ int ObTableBatchService::multi_execute_internal(ObTableBatchCtx &ctx,
     } else if (use_multi_tablets && FALSE_IT(tb_ctx.set_tablet_id(ctx.tablet_ids_.at(i)))) {
     } else if (tb_ctx.has_fts_index() && OB_FAIL(ObTableTransUtils::setup_tx_snapshot(*ctx.trans_param_))) {
       LOG_WARN("fail to refresh read snapshot for fts dml");
-    } else if (tb_ctx.has_fts_index() &&
+    } else if (tb_ctx.has_fts_index() && 
                 OB_FAIL(tb_ctx.init_trans(ctx.trans_param_->trans_desc_, ctx.trans_param_->tx_snapshot_))) {
       LOG_WARN("fail to init trans", K(ret), K(tb_ctx));
     } else if (OB_FAIL(ObTableOpWrapper::process_op_with_spec(tb_ctx, &spec, op_result))) {
       LOG_WARN("fail to process insert with spec", K(ret), K(i));
       ObTableApiUtil::replace_ret_code(ret);
     }
-
+    
     if (OB_FAIL(ret)) {
     } else if (ctx.is_atomic_ && OB_FAIL(op_result.get_errno())) {
       LOG_WARN("fail to execute one operation when batch execute as atomic", K(ret), K(op));
@@ -413,7 +413,7 @@ int ObTableBatchService::multi_get(ObTableBatchCtx &ctx,
     LOG_WARN("fail to check arg", K(ret), K(ctx.returning_rowkey_), K(ctx.returning_affected_entity_));
   } else if (OB_FAIL(adjust_entities(ctx, ops, entities))) {
     LOG_WARN("fail to adjust entities", K(ret), K(ctx), K(ops));
-  } else if (OB_FAIL(ObTableApiService::generate_scan_ranges_by_entities(tb_ctx.get_ref_table_id(),
+  } else if (OB_FAIL(ObTableApiService::generate_scan_ranges_by_entities(tb_ctx.get_ref_table_id(), 
                                                                     entities, tb_ctx.get_key_ranges()))) {
     LOG_WARN("fail to gen scan range from entities", K(ret), K(tb_ctx.get_ref_table_id()), K(entities));
   } else if (OB_FAIL(ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_SCAN>(tb_ctx, cache_guard, spec))) {
@@ -421,7 +421,7 @@ int ObTableBatchService::multi_get(ObTableBatchCtx &ctx,
   } else if (OB_FAIL(multi_get_fuse_key_range(ctx, *spec, entities, results, got_row_count))) {
     LOG_WARN("fail to multi get fuse key range", K(ret), K(ctx), K(ops));
   }
-  OB_TABLE_END_AUDIT(ret_code, ret,
+  OB_TABLE_END_AUDIT(ret_code, ret, 
                      snapshot, ctx.trans_param_->tx_snapshot_,
                      stmt_type, StmtType::T_KV_MULTI_GET,
                      return_rows, got_row_count,
@@ -456,7 +456,7 @@ int ObTableBatchService::multi_insert(ObTableBatchCtx &ctx,
     LOG_WARN("fail to multi exeucte internal", K(ret));
   }
 
-  OB_TABLE_END_AUDIT(ret_code, ret,
+  OB_TABLE_END_AUDIT(ret_code, ret, 
                      snapshot, ctx.trans_param_->tx_snapshot_,
                      stmt_type, StmtType::T_KV_MULTI_INSERT);
 
@@ -486,7 +486,7 @@ int ObTableBatchService::multi_delete(ObTableBatchCtx &ctx,
     LOG_WARN("fail to multi exeucte internal", K(ret));
   }
 
-  OB_TABLE_END_AUDIT(ret_code, ret,
+  OB_TABLE_END_AUDIT(ret_code, ret, 
                      snapshot, ctx.trans_param_->tx_snapshot_,
                      stmt_type, StmtType::T_KV_MULTI_DELETE);
 
@@ -516,7 +516,7 @@ int ObTableBatchService::multi_replace(ObTableBatchCtx &ctx,
     LOG_WARN("fail to multi exeucte internal", K(ret));
   }
 
-  OB_TABLE_END_AUDIT(ret_code, ret,
+  OB_TABLE_END_AUDIT(ret_code, ret, 
                      snapshot, ctx.trans_param_->tx_snapshot_,
                      stmt_type, StmtType::T_KV_MULTI_REPLACE);
 
@@ -533,7 +533,7 @@ int ObTableBatchService::multi_put(ObTableBatchCtx &ctx,
   ObTableApiCacheGuard cache_guard;
   ObTableCtx &tb_ctx = ctx.tb_ctx_;
   ObTableAuditMultiOp multi_op(ObTableOperationType::Type::PUT, &ops);
-  OB_TABLE_START_AUDIT(*ctx.credential_,
+  OB_TABLE_START_AUDIT(*ctx.credential_, 
                        *tb_ctx.get_sess_guard(),
                        tb_ctx.get_table_name(),
                        &ctx.audit_ctx_, multi_op);
@@ -550,7 +550,7 @@ int ObTableBatchService::multi_put(ObTableBatchCtx &ctx,
     LOG_WARN("fail to multi exeucte internal", K(ret));
   }
 
-  OB_TABLE_END_AUDIT(ret_code, ret,
+  OB_TABLE_END_AUDIT(ret_code, ret, 
                      snapshot, ctx.trans_param_->tx_snapshot_,
                      stmt_type, StmtType::T_KV_MULTI_PUT);
 
@@ -695,7 +695,7 @@ int ObTableBatchService::htable_put(ObTableBatchCtx &ctx,
     }
   }
 
-  OB_TABLE_END_AUDIT(ret_code, ret,
+  OB_TABLE_END_AUDIT(ret_code, ret, 
                      snapshot, ctx.trans_param_->tx_snapshot_,
                      stmt_type, StmtType::T_KV_MULTI_PUT);
   return ret;
@@ -855,7 +855,7 @@ int ObTableBatchService::init_table_ctx(ObTableCtx &tb_ctx,
   tb_ctx.set_sess_guard(batch_ctx.tb_ctx_.get_sess_guard());
   tb_ctx.set_audit_ctx(&batch_ctx.audit_ctx_);
   tb_ctx.set_need_dist_das(batch_ctx.tb_ctx_.need_dist_das());
-
+  
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(batch_ctx.credential_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -975,7 +975,7 @@ int ObTableBatchService::process_get(ObIAllocator &allocator,
   }
   result.set_err(ret);
   result.set_type(tb_ctx.get_opertion_type());
-  OB_TABLE_END_AUDIT(ret_code, ret,
+  OB_TABLE_END_AUDIT(ret_code, ret, 
                      snapshot, tb_ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
                      stmt_type, StmtType::T_KV_GET,
                      has_table_scan, true);
@@ -995,7 +995,7 @@ int ObTableBatchService::process_insert(ObTableCtx &tb_ctx, ObTableOperationResu
   if (OB_FAIL(ObTableOpWrapper::process_insert_op(tb_ctx, result))) {
     LOG_WARN("fail to process insert", K(ret));
   }
-  OB_TABLE_END_AUDIT(ret_code, ret,
+  OB_TABLE_END_AUDIT(ret_code, ret, 
                      snapshot, tb_ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
                      stmt_type, StmtType::T_KV_INSERT);
   return ret;
@@ -1014,7 +1014,7 @@ int ObTableBatchService::process_delete(ObTableCtx &tb_ctx, ObTableOperationResu
   if (OB_FAIL(ObTableOpWrapper::process_op<TABLE_API_EXEC_DELETE>(tb_ctx, result))) {
     LOG_WARN("fail to process delete", K(ret));
   }
-  OB_TABLE_END_AUDIT(ret_code, ret,
+  OB_TABLE_END_AUDIT(ret_code, ret, 
                      snapshot, tb_ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
                      stmt_type, StmtType::T_KV_DELETE);
   return ret;
@@ -1033,7 +1033,7 @@ int ObTableBatchService::process_update(ObTableCtx &tb_ctx, ObTableOperationResu
   if (OB_FAIL(ObTableOpWrapper::process_op<TABLE_API_EXEC_UPDATE>(tb_ctx, result))) {
     LOG_WARN("fail to process update", K(ret));
   }
-  OB_TABLE_END_AUDIT(ret_code, ret,
+  OB_TABLE_END_AUDIT(ret_code, ret, 
                      snapshot, tb_ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
                      stmt_type, StmtType::T_KV_UPDATE);
   return ret;
@@ -1052,7 +1052,7 @@ int ObTableBatchService::process_replace(ObTableCtx &tb_ctx, ObTableOperationRes
   if (OB_FAIL(ObTableOpWrapper::process_op<TABLE_API_EXEC_REPLACE>(tb_ctx, result))) {
     LOG_WARN("fail to process replace", K(ret));
   }
-  OB_TABLE_END_AUDIT(ret_code, ret,
+  OB_TABLE_END_AUDIT(ret_code, ret, 
                      snapshot, tb_ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
                      stmt_type, StmtType::T_KV_REPLACE);
   return ret;
@@ -1071,7 +1071,7 @@ int ObTableBatchService::process_insert_up(ObTableCtx &tb_ctx, ObTableOperationR
   if (OB_FAIL(ObTableOpWrapper::process_insert_up_op(tb_ctx, result))) {
     LOG_WARN("fail to process insert or update", K(ret));
   }
-  OB_TABLE_END_AUDIT(ret_code, ret,
+  OB_TABLE_END_AUDIT(ret_code, ret, 
                      snapshot, tb_ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
                      stmt_type, StmtType::T_KV_INSERT_OR_UPDATE);
   return ret;
@@ -1091,7 +1091,7 @@ int ObTableBatchService::process_put(ObTableCtx &tb_ctx, ObTableOperationResult 
     LOG_WARN("fail to process put", K(ret));
   }
 
-  OB_TABLE_END_AUDIT(ret_code, ret,
+  OB_TABLE_END_AUDIT(ret_code, ret, 
                      snapshot, tb_ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
                      stmt_type, StmtType::T_KV_PUT);
   return ret;
@@ -1112,7 +1112,7 @@ int ObTableBatchService::process_increment_or_append(ObTableCtx &tb_ctx, ObTable
   }
 
   StmtType stmt_type = tb_ctx.is_inc() ? StmtType::T_KV_INCREMENT : StmtType::T_KV_APPEND;
-  OB_TABLE_END_AUDIT(ret_code, ret,
+  OB_TABLE_END_AUDIT(ret_code, ret, 
                      snapshot, tb_ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
                      stmt_type, stmt_type);
   return ret;
@@ -1136,7 +1136,7 @@ int ObTableBatchService::batch_execute(ObTableBatchCtx &ctx,
     ObTableOperationResult &op_result = results.at(i);
     if (is_multi_tablets_batch) {
       tablet_id = ctx.tablet_ids_.at(i);
-    }
+    } 
     if (OB_SUCC(ret)) {
       SMART_VAR(ObTableCtx, tb_ctx, ctx.allocator_) {
         if (OB_FAIL(init_table_ctx(tb_ctx, op, ctx, tablet_id))) {

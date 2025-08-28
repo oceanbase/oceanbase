@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef _OCEABASE_TENANT_PRELOAD_H_
 #define _OCEABASE_TENANT_PRELOAD_H_
 
@@ -45,7 +45,7 @@ using namespace omt;
 
 extern "C" {
 
-int pthread_mutex_lock(pthread_mutex_t *__mutex)
+int pthread_mutex_lock(pthread_mutex_t *__mutex) 
 {
   static int (*real_pthread_mutex_lock)(pthread_mutex_t * __mutex) =
       (typeof(real_pthread_mutex_lock))dlsym(RTLD_NEXT,
@@ -56,7 +56,7 @@ int pthread_mutex_lock(pthread_mutex_t *__mutex)
 }
 
 int pthread_mutex_timedlock(pthread_mutex_t *__restrict __mutex,
-                            const struct timespec *__restrict __abstime)
+                            const struct timespec *__restrict __abstime) 
 {
   static int (*real_pthread_mutex_timedlock)(
       pthread_mutex_t *__restrict __mutex,
@@ -68,7 +68,7 @@ int pthread_mutex_timedlock(pthread_mutex_t *__restrict __mutex,
   return ret;
 }
 
-int pthread_rwlock_rdlock(pthread_rwlock_t *__rwlock)
+int pthread_rwlock_rdlock(pthread_rwlock_t *__rwlock) 
 {
   static int (*real_pthread_rwlock_rdlock)(pthread_rwlock_t * __rwlock) =
       (typeof(real_pthread_rwlock_rdlock))dlsym(RTLD_NEXT,
@@ -80,7 +80,7 @@ int pthread_rwlock_rdlock(pthread_rwlock_t *__rwlock)
 
 #ifdef __USE_XOPEN2K
 int pthread_rwlock_timedrdlock(pthread_rwlock_t *__restrict __rwlock,
-                               const struct timespec *__restrict __abstime)
+                               const struct timespec *__restrict __abstime) 
 {
   static int (*real_pthread_rwlock_timedrdlock)(
       pthread_rwlock_t *__restrict __rwlock,
@@ -93,7 +93,7 @@ int pthread_rwlock_timedrdlock(pthread_rwlock_t *__restrict __rwlock,
 }
 #endif
 
-int pthread_rwlock_wrlock(pthread_rwlock_t *__rwlock)
+int pthread_rwlock_wrlock(pthread_rwlock_t *__rwlock) 
 {
   static int (*real_pthread_rwlock_wrlock)(pthread_rwlock_t * __rwlock) =
       (typeof(real_pthread_rwlock_wrlock))dlsym(RTLD_NEXT,
@@ -115,7 +115,7 @@ int pthread_join(pthread_t _thread, void **__retval)
 
 #ifdef __USE_XOPEN2K
 int pthread_rwlock_timedwrlock(pthread_rwlock_t *__restrict __rwlock,
-                               const struct timespec *__restrict __abstime)
+                               const struct timespec *__restrict __abstime) 
 {
   static int (*real_pthread_rwlock_timedwrlock)(
       pthread_rwlock_t *__restrict __rwlock,
@@ -152,7 +152,7 @@ int ob_poll(struct pollfd *__fds, nfds_t __nfds, int __timeout)
 }
 
 int ob_pthread_cond_wait(pthread_cond_t *__restrict __cond,
-                         pthread_mutex_t *__restrict __mutex)
+                         pthread_mutex_t *__restrict __mutex) 
 {
   static int (*real_pthread_cond_wait)(pthread_cond_t *__restrict __cond,
       pthread_mutex_t *__restrict __mutex) = pthread_cond_wait;
@@ -163,7 +163,7 @@ int ob_pthread_cond_wait(pthread_cond_t *__restrict __cond,
 
 int ob_pthread_cond_timedwait(pthread_cond_t *__restrict __cond,
                               pthread_mutex_t *__restrict __mutex,
-                              const struct timespec *__restrict __abstime)
+                              const struct timespec *__restrict __abstime) 
 {
   static int (*real_pthread_cond_timedwait)(
       pthread_cond_t *__restrict __cond, pthread_mutex_t *__restrict __mutex,

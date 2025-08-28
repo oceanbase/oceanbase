@@ -37,10 +37,10 @@ public:
   virtual ~ObVirtualArchiveDestStatus();
   int init(common::ObMySQLProxy *sql_proxy);
   virtual int inner_get_next_row(common::ObNewRow *&row);
-  void destroy();
+  void destroy(); 
 
 private:
-  struct ObArchiveDestStatusInfo
+  struct ObArchiveDestStatusInfo 
   {
     ObArchiveDestStatusInfo();
     ~ObArchiveDestStatusInfo(){}
@@ -77,7 +77,7 @@ private:
   int get_ls_checkpoint_scn_(const uint64_t tenant_id, const int64_t dest_id);
   int get_full_row_(const share::schema::ObTableSchema *table,
                     const ObArchiveDestStatusInfo &dest_status,
-                    ObIArray<Column> &columns);
+                    ObIArray<Column> &columns); 
   int get_status_info_(const uint64_t tenant_id, const int64_t dest_id, ObArchiveDestStatusInfo &dest_status_info);
   int compare_scn_map_();
   int check_if_switch_piece_(const uint64_t tenant_id, const int64_t dest_id);

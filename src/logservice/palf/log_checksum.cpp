@@ -83,7 +83,7 @@ int LogChecksum::verify_accum_checksum(const int64_t data_checksum,
     PALF_LOG(TRACE, "verify_accum_checksum success", K(ret), K_(palf_id), K(data_checksum), K(accum_checksum),
              K_(verify_checksum), K_(accum_checksum));
   }
-
+  
   return ret;
 }
 
@@ -92,7 +92,7 @@ int LogChecksum::verify_accum_checksum(const int64_t old_accum_checksum,
                                        const int64_t expected_accum_checksum,
                                        int64_t &new_accum_checksum)
 {
-
+                                        
   int ret = common::OB_SUCCESS;
   new_accum_checksum = common::ob_crc64(old_accum_checksum, const_cast<int64_t *>(&data_checksum),
                                         sizeof(data_checksum));
@@ -105,7 +105,7 @@ int LogChecksum::verify_accum_checksum(const int64_t old_accum_checksum,
     PALF_LOG(TRACE, "verify_accum_checksum success", K(ret), K(data_checksum),
         K(expected_accum_checksum), K(old_accum_checksum), K(new_accum_checksum));
   }
-
+  
   return ret;
 }
 

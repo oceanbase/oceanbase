@@ -101,7 +101,7 @@ int ObSRSImporter::import_srs_info(const ObString &file_path)
       LOG_WARN("failed to assign sql", K(ret), K(trucate_sql));
     } else if (OB_FAIL(trans.write(tenant_id_, trucate_sql.ptr(), affected_rows_))) {
       LOG_WARN("failed to exec sql", K(ret), K(trucate_sql), K(tenant_id_));
-    }
+    } 
   }
 
   // load new data

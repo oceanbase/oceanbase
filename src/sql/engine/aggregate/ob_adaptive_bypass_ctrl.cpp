@@ -46,7 +46,7 @@ void ObAdaptiveByPassCtrl::gby_process_state(int64_t probe_cnt,
       state_ = STATE_ANALYZE;
     }
   } else if (STATE_MAX_MEM_INSERT == state_) {
-    if (row_cnt > scaled_llc_est_ndv_ &&
+    if (row_cnt > scaled_llc_est_ndv_ && 
         (static_cast<double>(row_cnt) / probe_cnt) > (1 / static_cast<double>(cut_ratio_))) {
       state_ = STATE_PROCESS_HT;
       set_max_rebuild_times();
@@ -74,7 +74,7 @@ void ObAdaptiveByPassCtrl::gby_process_state(int64_t probe_cnt,
         // now is L3_INSERT, restart round
         state_ = STATE_PROCESS_HT;
       }
-    } else if (round_times_ >= MAX_REBUILD_TIMES && in_cache_mem_bound(row_cnt,
+    } else if (round_times_ >= MAX_REBUILD_TIMES && in_cache_mem_bound(row_cnt, 
                 mem_size, min(INIT_L2_CACHE_SIZE_5X, INIT_L3_CACHE_SIZE))) {
       // if in L3insert or L2insert_5, no need calc new_ratio
       double select_rows = 0.0;

@@ -104,9 +104,9 @@ public:
       common::ObISQLClient &sql_proxy,
       const uint64_t tenant_id,
       const ObIArray<common::ObTabletID> &tablet_ids);
-  // Transferring a given tablet from the old ls to the new ls needs to
+  // Transferring a given tablet from the old ls to the new ls needs to 
   // update ls_id and transfer_seq in table __all_tablet_to_ls.
-  // This function replaces the old ls id with the new ls id
+  // This function replaces the old ls id with the new ls id 
   // and updates the transfer sequence according to the given value.
   //
   // @param[in]  sql_proxy			sql client
@@ -119,9 +119,9 @@ public:
   // @param[in]  group_id       rpc queue id
   //
   // @ret OB_SUCCESS 			    the updation is successful
-  // @ret OB_ENTRY_NOT_EXIST	    affected rows = 0,
-  //                                the reason might be the tablet is not in the old ls,
-  //                                or old_transfer_seq does not match the transfer sequence value
+  // @ret OB_ENTRY_NOT_EXIST	    affected rows = 0, 
+  //                                the reason might be the tablet is not in the old ls, 
+  //                                or old_transfer_seq does not match the transfer sequence value 
   //                                in table __all_tablet_to_ls.
   // @ret other error code			failure
   static int update_ls_id_and_transfer_seq(
@@ -180,7 +180,7 @@ public:
       const uint64_t tenant_id,
       const common::ObIArray<common::ObTabletID> &tablet_ids,
       common::ObIArray<ObTabletLSCache> &tablet_ls_caches);
-
+  
   // Gets ObTabletLSPair according to ObTableIDs
   //
   // @param [in] sql_proxy, ObMySQLProxy or ObMySQLTransaction

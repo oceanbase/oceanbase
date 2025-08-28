@@ -68,7 +68,7 @@ int ObExprSubstrb::calc_result_length_in_byte(const ObExprResType &type,
     // create table substrb_test_tbl(c1 varchar2(64 char), c2 varchar2(7 byte)
     // GENERATED ALWAYS AS (substrb(c1, -1, 8)) VIRTUAL);
     // 使用如上建表语句时，substrb的参数是负数时，pos_obj是null
-    //
+    // 
     if (pos_obj.is_null_oracle()) {
       pos_val = 1;
     } else {
@@ -97,7 +97,7 @@ int ObExprSubstrb::calc_result_length_in_byte(const ObExprResType &type,
             LOG_WARN("ignore failure when calc len_val oracle mode", K(ret));
           }
           LOG_WARN("get int64 failed", K(len_obj), K(ret));
-        }
+        } 
         if (OB_SUCC(ret) && (type.is_nchar() || type.is_nvarchar2())) {
           len_val /= mbminlen;
         }
@@ -203,7 +203,7 @@ int ObExprSubstrb::calc(ObString &res_str, const ObString &text,
     LOG_WARN("text.ptr() is null", K(ret));
   } else {
     if (0 == start) {
-      start = 1;//
+      start = 1;// 
     }
     start = (start > 0) ? (start - 1) : (start + text_len);
     if (OB_UNLIKELY(start < 0 || start >= text_len)) {
@@ -429,7 +429,7 @@ int ObExprSubstrb::calc_substrb_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
       }
     } else { // text tc
       if (0 == start_int) {
-        //
+        // 
         start_int = 1;
       }
       ObEvalCtx::TempAllocGuard alloc_guard(ctx);
@@ -496,9 +496,9 @@ int ObExprSubstrb::calc_substrb_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
         }
         if (OB_FAIL(ret)) {
         } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
-          ret = (input_iter.get_inner_ret() != OB_SUCCESS) ?
+          ret = (input_iter.get_inner_ret() != OB_SUCCESS) ? 
                 input_iter.get_inner_ret() : OB_INVALID_DATA;
-          LOG_WARN("iter state invalid", K(ret), K(state), K(input_iter));
+          LOG_WARN("iter state invalid", K(ret), K(state), K(input_iter)); 
         } else {
           output_result.set_result();
         }

@@ -505,7 +505,7 @@ TEST_F(TestTrans, tablet_to_ls_cache)
     ASSERT_EQ(OB_SUCCESS, tx_service->check_and_get_ls_info(tablet_id, ls_id, is_local));
     ASSERT_EQ((i < TABLET_NUM/2 ? ls_id_1.id():ls_id_2.id()), ls_id.id());
     ASSERT_EQ(true, is_local);
-    // tablet not exist
+    // tablet not exist 
     const ObTabletID &tablet_id_2 = tablet_ids_2.at(i);
     ASSERT_EQ(OB_SUCCESS, tx_service->check_and_get_ls_info(tablet_id_2, ls_id, is_local));
   }

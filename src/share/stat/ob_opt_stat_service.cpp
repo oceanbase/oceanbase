@@ -75,7 +75,7 @@ int ObOptStatService::batch_get_table_stats(const uint64_t tenant_id,
           LOG_WARN("failed to push back", K(ret));
         } else if (OB_FAIL(regather_handles_indices.push_back(i))) {
           LOG_WARN("failed to push back", K(ret));
-        }
+        } 
       } else if (NULL == handle.stat_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("cache hit but value is NULL. BUG here.", K(ret), KPC(keys.at(i)));

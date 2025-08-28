@@ -447,7 +447,7 @@ int LogModeMgr::switch_state_(const AccessMode &access_mode,
     {
       if (is_reach_majority_()) {
         //TODO(yunlong):check conflict
-
+        
         // not reaches majority until LogModeMeta is been flushed by leader,
         // otherwise next change_access_mode/reconfirm may learn wrong ModeMeta
         if (accepted_mode_meta_.proposal_id_ == new_proposal_id_) {

@@ -26,7 +26,7 @@ class ObExprSpatialCollection : public ObFuncExprOperator
 public:
   static const uint32_t POLYGON_RING_POINT_NUM_AT_LEAST = 4;
   explicit ObExprSpatialCollection(common::ObIAllocator &alloc,
-                                   ObExprOperatorType type,
+                                   ObExprOperatorType type, 
                                    const char *name,
                                    int32_t param_num,
                                    int32_t dimension);
@@ -162,7 +162,7 @@ public:
   const char *get_func_name() const override { return N_GEOMCOLLECTION; }
   common::ObGeoType get_geo_type() const override { return common::ObGeoType::GEOMETRYCOLLECTION; }
   common::ObGeoType expect_sub_type() const override { return common::ObGeoType::GEOTYPEMAX; }
-
+  
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprGeomCollection);
 };

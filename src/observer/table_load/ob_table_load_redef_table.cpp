@@ -131,7 +131,7 @@ int ObTableLoadRedefTable::start(const ObTableLoadRedefTableStartArg &arg,
 {
   int ret = OB_SUCCESS;
   res.reset();
-  if (OB_UNLIKELY(!arg.is_valid())) {
+  if (OB_UNLIKELY(!arg.is_valid())) { 
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(arg));
   } else if (session_info.get_ddl_info().is_mview_complete_refresh()) {

@@ -47,15 +47,15 @@ public:
 	int refresh_and_check(bool first_check = false);
 	int release_all_resource();
 private:
-	class ObResourceCtx
+	class ObResourceCtx 
 	{
 	public:
-		ObResourceCtx()
+		ObResourceCtx() 
 			: thread_remain_(0), memory_remain_(0), thread_total_(0), memory_total_(0)
 		{
 		}
-		ObResourceCtx(int64_t thread_remain, int64_t memory_remain,
-									int64_t thread_total, int64_t memory_total)
+		ObResourceCtx(int64_t thread_remain, int64_t memory_remain, 
+									int64_t thread_total, int64_t memory_total) 
 			: thread_remain_(thread_remain), memory_remain_(memory_remain), thread_total_(thread_total), memory_total_(memory_total)
 		{
 		}
@@ -66,11 +66,11 @@ private:
 		int64_t thread_total_;
 		int64_t memory_total_;
 	};
-	class ObResourceAssigned
+	class ObResourceAssigned 
 	{
 	public:
-		ObResourceAssigned()
-			: miss_counts_(0)
+		ObResourceAssigned() 
+			: miss_counts_(0) 
 		{
 		}
 		ObResourceAssigned(const ObDirectLoadResourceApplyArg &arg)
@@ -80,11 +80,11 @@ private:
 		ObDirectLoadResourceApplyArg apply_arg_;
 		uint64_t miss_counts_;
 	};
-	class ObRefreshAndCheckTask : public common::ObTimerTask
+	class ObRefreshAndCheckTask : public common::ObTimerTask 
 	{
   public:
-    ObRefreshAndCheckTask(ObTableLoadResourceManager &manager)
-			: manager_(manager), tenant_id_(common::OB_INVALID_ID), is_inited_(false)
+    ObRefreshAndCheckTask(ObTableLoadResourceManager &manager) 
+			: manager_(manager), tenant_id_(common::OB_INVALID_ID), is_inited_(false) 
 		{
 		}
     virtual ~ObRefreshAndCheckTask() = default;
@@ -93,11 +93,11 @@ private:
   public:
 		ObTableLoadResourceManager &manager_;
 		uint64_t tenant_id_;
-	bool is_inited_;
+  	bool is_inited_;
   };
 	int gen_update_arg(ObDirectLoadResourceUpdateArg &update_arg);
-	int gen_check_res(bool first_check,
-										ObDirectLoadResourceUpdateArg &update_arg,
+	int gen_check_res(bool first_check, 
+										ObDirectLoadResourceUpdateArg &update_arg, 
 										common::ObArray<ObDirectLoadResourceOpRes> &check_res);
 	void check_assigned_task(common::ObArray<ObDirectLoadResourceOpRes> &check_res);
 	int init_resource();

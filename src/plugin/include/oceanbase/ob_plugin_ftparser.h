@@ -46,20 +46,20 @@ typedef ObPluginDatum ObPluginFTParserParamPtr;
 enum ObPluginFTPaserAddWordFlag
 {
   OBP_FTPARSER_AWF_NONE           = 0LL,
-
+  
   /**< filter words that are less than a minimum or greater than a maximum word length. */
   OBP_FTPARSER_AWF_MIN_MAX_WORD   = 1LL << 0,
-
+  
   /**< filter by sotp word table. */
   OBP_FTPARSER_AWF_STOPWORD       = 1LL << 1,
-
+  
   /**< convert characters from uppercase to lowercase. */
   OBP_FTPARSER_AWF_CASEDOWN       = 1LL << 2,
-
+  
   /**< distinct and word aggregation */
   OBP_FTPARSER_AWF_GROUPBY_WORD   = 1LL << 3,
 };
-
+  
 /**
  * fulltext parser descriptor interface for domain index
  * splitting a document into many tokenizations.
@@ -102,7 +102,7 @@ OBP_PUBLIC_API uint64_t obp_ftparser_parser_version(ObPluginFTParserParamPtr par
  * the `fulltext` is the text you should split it to tokens
  * @NOTE the `fulltext` is not terminated by '\0'.
  * You can use `obp_ftparser_fulltext_length` to get the length.
- */
+ */    
 OBP_PUBLIC_API const char * obp_ftparser_fulltext(ObPluginFTParserParamPtr param);
 
 /**< the length of `fulltext` */

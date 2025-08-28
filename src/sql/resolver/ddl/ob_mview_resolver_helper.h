@@ -49,7 +49,7 @@ private:
                                                        ObTableSchema &container_table_schema,
                                                        ObSEArray<ObConstraint,4>& csts,
                                                        ObCreateViewResolver &resolver);
-  static int resolve_primary_key_node(ParseNode &pk_node,
+  static int resolve_primary_key_node(ParseNode &pk_node, 
                                       ObTableSchema &table_schema,
                                       ObCreateViewResolver &resolver);
   static int resolve_mv_options(const ObSelectStmt *stmt,

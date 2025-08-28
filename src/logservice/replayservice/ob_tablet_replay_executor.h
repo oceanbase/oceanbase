@@ -39,7 +39,7 @@ class MdsCtx;
 namespace logservice
 {
 
-// Adaptation method:
+// Adaptation method: 
 class ObTabletReplayExecutor
 {
 public:

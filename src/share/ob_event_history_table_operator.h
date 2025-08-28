@@ -103,7 +103,7 @@ public:
   void wait();
   void destroy();
   // number of others should not less than 0, or more than 13
-  // if number of others is not 13, should be even, every odd of them are name, every even of them are value
+  // if number of others is not 13, should be even, every odd of them are name, every even of them are value 
   // If Truncate is true, then too long value will be truncated to fit in the field.
   // Note: Only enable Truncate for rootservice_event_history!
   template <bool Truncate, typename ...Rest>
@@ -235,7 +235,7 @@ int ObEventHistoryTableOperator::add_event(const char *module, const char *event
         || OB_FAIL(dml.add_column("event", event))) {
       SHARE_LOG(WARN, "add column failed", K(ret));
     } else if (OB_FAIL((add_event_helper_<0, Truncate>(dml, std::forward<Rest>(others)...)))) {// recursive call
-    }
+    } 
     char ip_buf[common::MAX_IP_ADDR_LENGTH];
     if (common::OB_SUCCESS == ret && self_addr_.is_valid()) {
       if (is_rootservice_event_history_) {

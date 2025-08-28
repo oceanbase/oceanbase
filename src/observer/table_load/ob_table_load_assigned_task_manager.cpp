@@ -26,7 +26,7 @@ using namespace table;
 /**
  * ObTableLoadAssignedTaskManager
  */
-ObTableLoadAssignedTaskManager::ObTableLoadAssignedTaskManager()
+ObTableLoadAssignedTaskManager::ObTableLoadAssignedTaskManager() 
   : is_inited_(false)
 {
 }
@@ -51,7 +51,7 @@ int ObTableLoadAssignedTaskManager::init()
   return ret;
 }
 
-int ObTableLoadAssignedTaskManager::add_assigned_task(ObDirectLoadResourceApplyArg &arg)
+int ObTableLoadAssignedTaskManager::add_assigned_task(ObDirectLoadResourceApplyArg &arg) 
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -75,7 +75,7 @@ int ObTableLoadAssignedTaskManager::add_assigned_task(ObDirectLoadResourceApplyA
   return ret;
 }
 
-int ObTableLoadAssignedTaskManager::delete_assigned_task(ObTableLoadUniqueKey &task_key)
+int ObTableLoadAssignedTaskManager::delete_assigned_task(ObTableLoadUniqueKey &task_key) 
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -96,7 +96,7 @@ int ObTableLoadAssignedTaskManager::delete_assigned_task(ObTableLoadUniqueKey &t
 
   return ret;
 }
-
+	
 int ObTableLoadAssignedTaskManager::get_assigned_tasks(ObSArray<ObDirectLoadResourceApplyArg> &assigned_tasks)
 {
   int ret = OB_SUCCESS;

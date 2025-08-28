@@ -102,7 +102,7 @@ typedef struct ObJtColBaseInfo
 } ObJtColBaseInfo;
 
 typedef struct ObJsonTableDef {
-  ObJsonTableDef()
+  ObJsonTableDef() 
     : all_cols_(),
       doc_exprs_(),
       table_type_(MulModeTableType::INVALID_TABLE_TYPE),
@@ -502,7 +502,7 @@ struct JoinedTable : public TableItem
   bool is_right_join() const { return RIGHT_OUTER_JOIN == joined_type_; }
   bool is_full_join() const { return FULL_OUTER_JOIN == joined_type_; }
   bool is_straight_join() const { return is_inner_join() && is_straight_join_; }
-  virtual bool has_for_update() const
+  virtual bool has_for_update() const 
   {
     return (left_table_ != NULL &&  left_table_->has_for_update())
             || (right_table_ != NULL &&  right_table_->has_for_update());
@@ -646,17 +646,17 @@ public:
       const int64_t object_limit_count = common::OB_MAX_TABLE_NUM_PER_STMT) const;
 
   virtual int check_table_be_modified(uint64_t ref_table_id, bool& is_modified) const
-  {
-    UNUSED(ref_table_id);
+  { 
+    UNUSED(ref_table_id); 
     is_modified = false;
-    return OB_SUCCESS;
+    return OB_SUCCESS; 
   }
 
   virtual int init_stmt(TableHashAllocator &table_hash_alloc, ObWrapperAllocator &wrapper_alloc) override;
 
   bool is_hierarchical_query() const;
   int is_hierarchical_for_update(bool &is_hsfu) const;
-
+  
   int replace_relation_exprs(const common::ObIArray<ObRawExpr *> &other_exprs,
                              const common::ObIArray<ObRawExpr *> &new_exprs);
 
@@ -1034,7 +1034,7 @@ public:
                          ObStmtExprGetter &visitor) const;
   //如果希望修改指针的指向，需要使用下面的接口；ignore_scope表示不需要拿的relation
   int get_relation_exprs(common::ObIArray<ObRawExprPointer> &relation_expr_ptrs,
-                         ObStmtExprGetter &visitor);
+                         ObStmtExprGetter &visitor); 
   int get_relation_exprs(common::ObIArray<ObRawExpr *> &relation_exprs) const;
   int get_relation_exprs(common::ObIArray<ObRawExpr *> &relation_exprs,
                          const ObExprInfo &flags,
@@ -1126,8 +1126,8 @@ public:
   virtual bool is_returning() const { return false; }
   virtual bool has_instead_of_trigger() const { return false; }
   int has_lob_column(int64_t table_id, bool &has_lob)const;
-  int has_virtual_generated_column(int64_t table_id,
-                                   bool &has_virtual_col,
+  int has_virtual_generated_column(int64_t table_id, 
+                                   bool &has_virtual_col, 
                                    bool ignore_fulltext_gen_col = false) const;
   ObRawExpr *get_first_vector_expr() const;
 
@@ -1172,7 +1172,7 @@ public:
   int do_formalize_query_ref_exprs_pre();
 
   int do_formalize_query_ref_exprs_post();
-
+  
   int do_formalize_lateral_derived_table_pre();
 
   int deep_copy_join_tables(ObIAllocator &allocator,
@@ -1186,7 +1186,7 @@ public:
   int formalize_implicit_distinct_for_subquery();
 
   virtual int check_from_dup_insensitive(bool &is_from_dup_insens) const;
-
+  
   int get_partition_columns(const int64_t table_id,
                             const int64_t ref_table_id,
                             const share::schema::ObPartitionLevel part_level,
@@ -1275,8 +1275,8 @@ protected:
 
   common::ObSEArray<ObUserVarIdentRawExpr *, 4, common::ModulePageAllocator, true> user_var_exprs_;
   common::ObSEArray<CheckConstraintItem, 8, common::ModulePageAllocator, true> check_constraint_items_;
-  /*
-    keep all cte table defined in current level. Only used for print stmt.
+  /* 
+    keep all cte table defined in current level. Only used for print stmt. 
     Needn't maintain it after resolver.
   */
   common::ObSEArray<TableItem*, 2, common::ModulePageAllocator, true> cte_definitions_;

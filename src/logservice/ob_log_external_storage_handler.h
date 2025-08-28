@@ -43,11 +43,11 @@ public:
   ~ObLogExternalStorageHandler();
 
 public:
-  // @brief: Initializing ObLogExternalStorageHandler
+  // @brief: Initializing ObLogExternalStorageHandler 
   // @return value:
   //   OB_SUCCESS, initializing successfully.
   //   OB_NOT_INIT
-  //   OB_INIT_TWICE
+  //   OB_INIT_TWICE 
   //   OB_ALLOCATE_MEMORY_FAILED
   int init();
 
@@ -102,7 +102,7 @@ public:
   //   OB_NOT_INIT
   //   OB_NOT_RUNNING
   //
-  // NB:
+  // NB: 
   // 1. A fixed number of asynchronous tasks will be generated based on the read length, and the minimum
   //    read length of single asynchronous task is 2MB.
   // 2. Don't generate asynchronous task when concurrency_ is 0, and execute pread in current thread.
@@ -164,7 +164,7 @@ public:
   //   OB_NOT_INIT
   //   OB_NOT_RUNNING
   //
-  // NB:
+  // NB: 
   // 1. A fixed number of asynchronous tasks will be generated based on the read length, and the minimum
   //    read length of single asynchronous task is 2MB.
   // 2. Don't generate asynchronous task when concurrency_ is 0, and execute pread in current thread.
@@ -217,7 +217,7 @@ private:
 private:
 
   bool is_valid_concurrency_(const int64_t concurrency) const;
-
+  
   int64_t get_async_task_count_(const int64_t total_size) const;
 
   int construct_async_pread_tasks_(

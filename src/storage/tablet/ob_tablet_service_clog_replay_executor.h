@@ -35,9 +35,9 @@ public:
       const int64_t pos,
       const share::SCN &scn);
 
-  TO_STRING_KV(KP_(buf),
+  TO_STRING_KV(KP_(buf), 
                K_(buf_size),
-               K_(pos),
+               K_(pos), 
                K_(scn));
 
 protected:

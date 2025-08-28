@@ -21,20 +21,20 @@
 #include "lib/time/ob_time_utility.h"
 #include "share/schema/ob_schema_getter_guard.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace share
+namespace share 
 {
 
 class ObIndexUsageInfoMgr;
 
-enum ObIndexUsageOpMode
+enum ObIndexUsageOpMode 
 {
   UPDATE = 0, // for update haspmap
   RESET   // for reset hashmap
 };
 
-struct ObIndexUsageKey final
+struct ObIndexUsageKey final 
 {
 public:
   ObIndexUsageKey(const uint64_t index_table_id) : index_table_id_(index_table_id) {}
@@ -60,12 +60,12 @@ public:
 };
 
 /* strcut stores increment stasitic data */
-struct ObIndexUsageInfo final
+struct ObIndexUsageInfo final 
 {
 public:
   ObIndexUsageInfo()
-      : total_access_count_(0),
-        total_exec_count_(0),
+      : total_access_count_(0), 
+        total_exec_count_(0), 
         total_rows_returned_(0),
         bucket_0_access_count_(0),
         bucket_1_access_count_(0),
@@ -103,7 +103,7 @@ public:
             total_rows_returned_ > 0 ||
             bucket_0_access_count_ > 0 ||
             bucket_1_access_count_ > 0 ||
-            bucket_2_10_access_count_ > 0 ||
+            bucket_2_10_access_count_ > 0 || 
             bucket_2_10_rows_returned_ > 0 ||
             bucket_11_100_access_count_ > 0 ||
             bucket_11_100_rows_returned_ > 0 ||
@@ -131,11 +131,11 @@ public:
     return OB_SUCCESS;
   }
   TO_STRING_KV(K_(total_access_count), K_(total_exec_count), K_(total_rows_returned),
-               K_(bucket_0_access_count), K_(bucket_1_access_count),
-               K_(bucket_2_10_access_count), K_(bucket_2_10_rows_returned),
+               K_(bucket_0_access_count), K_(bucket_1_access_count), 
+               K_(bucket_2_10_access_count), K_(bucket_2_10_rows_returned), 
                K_(bucket_11_100_access_count), K_(bucket_11_100_rows_returned),
-               K_(bucket_101_1000_access_count), K_(bucket_101_1000_rows_returned),
-               K_(bucket_1000_plus_access_count), K_(bucket_1000_plus_rows_returned),
+               K_(bucket_101_1000_access_count), K_(bucket_101_1000_rows_returned), 
+               K_(bucket_1000_plus_access_count), K_(bucket_1000_plus_rows_returned), 
                K_(last_used_time));
 
 public:
@@ -160,7 +160,7 @@ typedef common::hash::ObHashMap<ObIndexUsageKey, uint64_t, common::hash::ReadWri
 typedef common::hash::HashMapPair<ObIndexUsageKey, ObIndexUsageInfo> ObIndexUsagePair;
 typedef common::ObList<ObIndexUsagePair, common::ObIAllocator> ObIndexUsagePairList;
 
-class ObIndexUsageReportTask : public common::ObTimerTask
+class ObIndexUsageReportTask : public common::ObTimerTask 
 {
   static const int64_t MAX_DUMP_ITEM_COUNT = 6000;
   static const int64_t DUMP_BATCH_SIZE = 100;
@@ -217,7 +217,7 @@ private:
   IndexUsageDeletedMap deleted_map_;
 };
 
-class ObIndexUsageRefreshConfTask : public common::ObTimerTask
+class ObIndexUsageRefreshConfTask : public common::ObTimerTask 
 {
   //friend ObIndexUsageInfoMgr;
 public:
@@ -239,10 +239,10 @@ private:
 };
 
 // callback for update or reset map value
-class ObIndexUsageOp final
+class ObIndexUsageOp final 
 {
 public:
-  explicit ObIndexUsageOp(ObIndexUsageOpMode mode, const uint64_t time = 0) :
+  explicit ObIndexUsageOp(ObIndexUsageOpMode mode, const uint64_t time = 0) : 
     op_mode_(mode), old_info_(), current_time_(time) {}
   virtual ~ObIndexUsageOp() {}
   void operator() (common::hash::HashMapPair<ObIndexUsageKey, ObIndexUsageInfo> &data);
@@ -257,7 +257,7 @@ private:
 
 #define INDEX_USAGE_INFO_MGR (MTL(ObIndexUsageInfoMgr*))
 
-class ObIndexUsageInfoMgr final
+class ObIndexUsageInfoMgr final 
 {
   static const int64_t SAMPLE_RATIO = 10; // 采样模式下的采样比例 10%
   static const int64_t DEFAULT_MAX_HASH_BUCKET_CNT = 3000;
@@ -288,7 +288,7 @@ public:
   void set_is_sample_mode(const bool mode) { is_sample_mode_ = mode; }
   void set_max_entries(const uint64_t entries) { max_entries_ = entries; }
   void set_current_time(const uint64_t time) { current_time_ = time; }
-  void set_min_tenant_data_version(const uint64_t version) { min_tenant_data_version_ = version; }
+  void set_min_tenant_data_version(const uint64_t version) { min_tenant_data_version_ = version; }  
 
   bool get_is_enabled() { return is_enabled_; }
   bool get_is_sample_mode() { return is_sample_mode_; }

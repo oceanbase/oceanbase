@@ -495,3 +495,4 @@ int FLTShowTrace::get_serialize_size()
   // this message is written by proxy, server will do nothing
   return 0;
 }
+

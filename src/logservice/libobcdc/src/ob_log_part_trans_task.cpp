@@ -1914,7 +1914,7 @@ int DdlStmtTask::build_ddl_binlog_record_(
   uint64_t cluster_id = get_host().get_cluster_id();
   // DDL tenant_id records the tenant ID of the tls_id to which it belongs, not the executor tenant ID, to ensure that in schema split
   // scenarios, incremental backup DDLs are not incorrectly distributed to the tenant to which they belong, causing loci to get stuck
-  //
+  // 
   const uint64_t tenant_id = get_host().get_tenant_id();
   IBinlogRecord *br_data = NULL;
 

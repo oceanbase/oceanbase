@@ -22,19 +22,19 @@ using namespace common;
 namespace sql
 {
 ObExprInnerDecimalToYear::ObExprInnerDecimalToYear(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_INNER_DECIMAL_TO_YEAR, N_INNER_DECIMAL_TO_YEAR, 1,
+    : ObFuncExprOperator(alloc, T_FUN_SYS_INNER_DECIMAL_TO_YEAR, N_INNER_DECIMAL_TO_YEAR, 1, 
                          NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE)
 {
 }
-const int64_t YEAR_MIN = 1901;
+const int64_t YEAR_MIN = 1901; 
 const int64_t YEAR_MAX = 2155;
 const int64_t YEAR_BASE = 1900;
 const uint8_t OBJ_YEAR_MIN = 1;
 const uint8_t OBJ_YEAR_MAX = 255;
 const uint8_t OBJ_YEAR_LOW = 0;
 
-int ObExprInnerDecimalToYear::eval_inner_decimal_to_year(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+int ObExprInnerDecimalToYear::eval_inner_decimal_to_year(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum) 
 {
   int ret = OB_SUCCESS;
   ObDatum* val_datum = NULL;
@@ -96,7 +96,7 @@ int ObExprInnerDecimalToYear::calc_result_type1(ObExprResType &type,
   return ret;
 }
 
-int ObExprInnerDecimalToYear::cg_expr(ObExprCGCtx &expr_cg_ctx,
+int ObExprInnerDecimalToYear::cg_expr(ObExprCGCtx &expr_cg_ctx, 
                                       const ObRawExpr &raw_expr,
                                       ObExpr &rt_expr) const
 {

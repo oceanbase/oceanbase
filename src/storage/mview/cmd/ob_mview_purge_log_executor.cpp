@@ -106,7 +106,7 @@ int ObMViewPurgeLogExecutor::resolve_arg(const ObMViewPurgeLogArg &arg)
       } else {
         table_schema = container_table_schema;
       }
-    }
+    } 
     if (OB_FAIL(ret)) {
     } else if (OB_UNLIKELY(OB_INVALID_ID == table_schema->get_mlog_tid())) {
       ret = OB_ERR_TABLE_NO_MLOG;

@@ -805,9 +805,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
           if (OB_ISNULL(buf)) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             SERVER_LOG(WARN, "fail to alloc memory for OUTLINE_DATA", K(ret));
-          } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+          } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, 
                   "/*+max_concurrent(%ld)*/", pl_object->get_max_concurrent_num()))) {
-            SERVER_LOG(WARN, "fail to print string of concurrent", K(ret));
+            SERVER_LOG(WARN, "fail to print string of concurrent", K(ret));  
           } else if (OB_FAIL(ob_write_string(*allocator_, ObString(pos, buf), outline_data))) {
             SERVER_LOG(ERROR, "copy outline_data failed", K(ret));
           }

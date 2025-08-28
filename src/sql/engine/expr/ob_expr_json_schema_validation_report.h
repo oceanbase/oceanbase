@@ -41,7 +41,7 @@ public:
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                     ObExpr &rt_expr) const override;
   virtual bool need_rt_ctx() const override { return true; }
-  static int raise_validation_report(ObIAllocator &allocator, ObJsonSchemaValidator& validator,
+  static int raise_validation_report(ObIAllocator &allocator, ObJsonSchemaValidator& validator, 
                                     const bool& is_valid, ObIJsonBase*& validation_report);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprJsonSchemaValidationReport);

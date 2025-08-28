@@ -908,7 +908,7 @@ OB_DEF_SERIALIZE(LogBatchFetchResp)
   }
   return ret;
 }
-
+ 
 OB_DEF_DESERIALIZE(LogBatchFetchResp)
 {
   int ret = OB_SUCCESS;

@@ -102,7 +102,7 @@ int ObExprUdtConstruct::cg_expr(ObExprCGCtx &op_cg_ctx,
     rt_expr.extra_info_ = info;
   }
   rt_expr.eval_func_ = eval_udt_construct;
-
+ 
   return ret;
 }
 
@@ -191,7 +191,7 @@ int ObExprUdtConstruct::eval_udt_construct(const ObExpr &expr, ObEvalCtx &ctx, O
   } else if (expr.args_[0]->datum_meta_.type_ == ObGeometryType) {
     ObString raw_data = null_bit->get_string();
     if (OB_FAIL(ObTextStringHelper::read_real_string_data(&temp_allocator, ObLongTextType,
-                                                                 CS_TYPE_BINARY, true,
+                                                                 CS_TYPE_BINARY, true, 
                                                                  raw_data))) {
       LOG_WARN("failed to get udt raw data", K(ret), K(info->udt_id_));
     } else if (FALSE_IT(temp_allocator.set_baseline_size(raw_data.length()))) {
@@ -252,7 +252,7 @@ int ObExprUdtConstruct::eval_udt_construct(const ObExpr &expr, ObEvalCtx &ctx, O
     ObExprStrResAlloc expr_res_alloc(expr, ctx);
     ObTextStringResult blob_res(ObLongTextType, true, &expr_res_alloc);
     if (is_sub_udt && OB_FAIL(ObSqlUdtUtils::ob_udt_build_nested_udt_bitmap_obj(nested_udt_bitmap_obj, sub_nested_bitmap))) {
-      LOG_WARN("failed to build nested udt bitmap object", K(ret));
+      LOG_WARN("failed to build nested udt bitmap object", K(ret)); 
     } else if (OB_FAIL(blob_res.init(res_len))) {
       LOG_WARN("fail to init result", K(ret), K(res_len));
     } else if (OB_FAIL(blob_res.get_reserved_buffer(res_buf, res_buf_len))) {

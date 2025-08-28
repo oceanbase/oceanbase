@@ -14,7 +14,7 @@
 
 #include "ob_backup_table_list_mgr.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
 using namespace oceanbase;
 using namespace storage;
@@ -22,7 +22,7 @@ using namespace common;
 
 namespace rootserver
 {
-bool ObGetMaxTableListPartNoOp::is_valid() const
+bool ObGetMaxTableListPartNoOp::is_valid() const 
 {
   return scn_.is_valid() && max_table_list_part_no_ >= 0;
 }
@@ -51,7 +51,7 @@ int ObGetMaxTableListPartNoOp::func(const dirent *entry)
   return ret;
 }
 
-bool ObGetMaxTableListSCNOp::is_valid() const
+bool ObGetMaxTableListSCNOp::is_valid() const 
 {
   return max_scn_.is_valid();
 }
@@ -76,7 +76,7 @@ int ObGetMaxTableListSCNOp::func(const dirent *entry)
   return ret;
 }
 
-bool ObGetTableListPartialMetasOp::is_valid() const
+bool ObGetTableListPartialMetasOp::is_valid() const 
 {
   return scn_.is_valid() && backup_set_dest_->is_valid();
 }
@@ -126,7 +126,7 @@ ObBackupTableListMgr::ObBackupTableListMgr()
     sql_proxy_(NULL),
     backup_service_(nullptr)
 {
-}
+} 
 
 int ObBackupTableListMgr::init(
                         const uint64_t tenant_id,
@@ -189,7 +189,7 @@ int ObBackupTableListMgr::backup_table_list()
     LOG_WARN("fail to backup table list to tmp file", K(ret), K_(snapshot_point));
   } else if (OB_FAIL(backup_table_list_to_extern_device_(count, serialize_size_array))) {
     LOG_WARN("fail to backup table list to external device", K(ret), K_(snapshot_point), K(count), K(serialize_size_array));
-  }
+  }  
   if (tmp_file_.is_opened() && OB_SUCCESS != (tmp_ret = tmp_file_.close())) {
     LOG_WARN("fail to close tmp file", K(ret), K(tmp_ret), K_(tmp_file));
     ret = OB_SUCCESS == ret ? tmp_ret : ret;
@@ -209,7 +209,7 @@ int ObBackupTableListMgr::backup_table_list_to_tmp_file_(int64_t &count, ObIArra
                             "ON t1.database_id = t2.database_id "
                             "WHERE t2.table_type IN (%d, %d) "
                             "ORDER BY t1.database_name, t2.table_name ASC",
-      query_timeout, OB_ALL_DATABASE_TNAME, snapshot_point_.get_val_for_inner_table_field(),
+      query_timeout, OB_ALL_DATABASE_TNAME, snapshot_point_.get_val_for_inner_table_field(), 
       OB_ALL_TABLE_TNAME, snapshot_point_.get_val_for_inner_table_field(),
       share::schema::ObTableType::USER_TABLE, share::schema::ObTableType::MATERIALIZED_VIEW))) {
     LOG_WARN("failed to assign sql", K(ret), K_(snapshot_point));
@@ -236,8 +236,8 @@ int ObBackupTableListMgr::backup_table_list_to_tmp_file_(int64_t &count, ObIArra
               LOG_WARN("fail to assign table name", K(ret), K(table_name));
             } else if (OB_FAIL(table_list.items_.push_back(item))) {
               LOG_WARN("fail to push back", K(ret), K(item));
-            }
-
+            } 
+            
             if (OB_SUCC(ret) && BATCH_SIZE == table_list.count()) {
               int64_t serialize_size = 0;
               SMART_VAR(ObBackupPartialTableListMeta, partial_meta) {
@@ -321,7 +321,7 @@ int ObBackupTableListMgr::backup_table_list_to_extern_device_(const int64_t &cou
     }
   }
   return ret;
-}
+} 
 
 int ObBackupTableListMgr::write_to_tmp_file_(const ObBackupPartialTableListDesc &table_list, int64_t &serialize_size)
 {
@@ -438,15 +438,15 @@ int ObBackupTableListMgr::get_max_complete_file_part_no_(int64_t &part_no)
   ObBackupStorageInfo *storage_info;
   ObBackupIoAdapter util;
   ObGetMaxTableListPartNoOp max_part_no_op(snapshot_point_, part_no);
-
+  
    if (OB_FAIL(share::ObBackupPathUtil::get_table_list_dir_path(backup_set_dest_, path))) {
       LOG_WARN("fail to get table list dir path", K(ret), K_(backup_set_dest));
   } else if (OB_ISNULL(storage_info = backup_set_dest_.get_storage_info())) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_ERR_UNEXPECTED;    
     LOG_WARN("fail to get storage_info", K(ret), K_(backup_set_dest));
   } else if (OB_FAIL(util.list_files(path.get_obstr(), storage_info, max_part_no_op))) {
     LOG_WARN("fail to get max complete file part_no", K(ret), K(path), K_(backup_set_dest));
-  }
+  } 
 
   return ret;
 }

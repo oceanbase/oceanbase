@@ -160,8 +160,8 @@ public:
   void reset_blockscan()
   { can_blockscan_ = false; is_filter_applied_ = false; }
   int check_and_revert_non_border_rowkey(
-      const ObDatumRowkey &border_rowkey,
-      const ObDatumRow &deleted_row,
+      const ObDatumRowkey &border_rowkey, 
+      const ObDatumRow &deleted_row, 
       ObCSRowId &co_current);
   VIRTUAL_TO_STRING_KV(K_(is_left_border), K_(is_right_border), K_(can_ignore_multi_version), K_(use_private_bitmap),
                        K_(can_blockscan), K_(is_filter_applied), K_(current), K_(start), K_(last), K_(step));
@@ -406,7 +406,7 @@ private:
 // multi version sstable micro block scanner for mow tables
 class ObMultiVersionDIMicroBlockRowScanner final : public ObMultiVersionMicroBlockRowScanner
 {
-public:
+public: 
   ObMultiVersionDIMicroBlockRowScanner(common::ObIAllocator &allocator)
       : ObMultiVersionMicroBlockRowScanner(allocator),
         is_prev_micro_row_valid_(false),
@@ -419,13 +419,13 @@ public:
       const ObMicroBlockData &block_data,
       const bool is_left_border,
       const bool is_right_border) override final;
-  INHERIT_TO_STRING_KV("ObMultiVersionDIMicroBlockRowScanner", ObMultiVersionMicroBlockRowScanner,
+  INHERIT_TO_STRING_KV("ObMultiVersionDIMicroBlockRowScanner", ObMultiVersionMicroBlockRowScanner, 
       K_(is_prev_micro_row_valid), K_(found_first_di_row));
 protected:
   virtual int inner_get_next_row(const ObDatumRow *&row) override final;
 private:
   int inner_get_next_di_row(const ObDatumRow *&row);
-  int inner_get_next_compact_di_row(const ObDatumRow *&ret_row);
+  int inner_get_next_compact_di_row(const ObDatumRow *&ret_row);  
   int inner_get_next_header_info(
     int64_t &index,
     bool &version_fit,
@@ -438,7 +438,7 @@ private:
       const int64_t delete_idx,
       const ObDatumRow *&ret_row);
   int check_meet_next_rowkey(
-      const int64_t start,
+      const int64_t start, 
       const int64_t end,
       bool &meet_next_rowkey) const;
   int try_cache_unfinished_row(

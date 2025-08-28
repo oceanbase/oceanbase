@@ -958,7 +958,7 @@ int ObKVGlobalCache::get_cache_name(const int64_t cache_id, char *cache_name)
   return ret;
 }
 
-int64_t ObKVGlobalCache::get_block_size() const
+int64_t ObKVGlobalCache::get_block_size() const 
 {
   int64_t block_size = 0;
   if (inited_) {

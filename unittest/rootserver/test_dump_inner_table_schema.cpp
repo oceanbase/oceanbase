@@ -61,7 +61,7 @@ class TestDumpInnerTableSchema : public ::testing::Test
 public:
   TestDumpInnerTableSchema() {}
 protected:
-  int get_target_file_name(ObSqlString &file, const ObString &name)
+  int get_target_file_name(ObSqlString &file, const ObString &name) 
   {
     int ret = OB_SUCCESS;
     char cwd[1024] = {0};
@@ -78,7 +78,7 @@ protected:
     OZ (FSU::open(file.ptr(), O_WRONLY | O_CREAT | O_TRUNC, 0644, fd));
     return ret;
   }
-  int close_target_file()
+  int close_target_file() 
   {
     int ret = OB_SUCCESS;
     OZ (FSU::close(fd));

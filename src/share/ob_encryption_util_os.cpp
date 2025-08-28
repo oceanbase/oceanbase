@@ -649,7 +649,7 @@ void ObTdeEncryptEngineLoader::ssl_init()
     ERR_load_ERR_strings();
 }
 
-int ObTdeEncryptEngineLoader::load(const common::ObString& engine)
+int ObTdeEncryptEngineLoader::load(const common::ObString& engine) 
 {
   int ret = OB_SUCCESS;
   common::ObString err_reason;
@@ -679,7 +679,7 @@ int ObTdeEncryptEngineLoader::load(const common::ObString& engine)
   return ret;
 }
 
-void ObTdeEncryptEngineLoader::destroy()
+void ObTdeEncryptEngineLoader::destroy() 
 {
   for (int i = 0; i < OB_MAX_ENGINE; i++) {
     if (NULL != tde_engine_[i]) {
@@ -689,7 +689,7 @@ void ObTdeEncryptEngineLoader::destroy()
   }
 }
 
-ENGINE* ObTdeEncryptEngineLoader::get_tde_engine(ObCipherOpMode &mode) const
+ENGINE* ObTdeEncryptEngineLoader::get_tde_engine(ObCipherOpMode &mode) const 
 {
   ObEncryptEngineType type = OB_INVALID_ENGINE;
   if (ObEncryptionUtil::is_aes_encryption(mode)) {

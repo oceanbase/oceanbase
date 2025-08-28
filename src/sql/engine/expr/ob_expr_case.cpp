@@ -276,7 +276,7 @@ int ObExprCase::eval_case_batch(const ObExpr &expr,
     // the logic is
     // 1. calc when branch, save result in when_datums and use match_when flag
     //    to mark which rows are matched in when branch and these rows should be
-    //    calculated in then branch
+    //    calculated in then branch 
     // 2. calc then branch, put matching result(then_datums) into output datums
     //    (results)
     // REPEAT 1. and 2.
@@ -469,7 +469,7 @@ static int inner_eval_case_vector(const ObExpr &expr,
     const int64_t total_cnt = bound.end() - bound.start();
     int64_t skip_cnt = 0;
     ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
-    // After verification, it is necessary to adopt the double ObBitVector scheme.
+    // After verification, it is necessary to adopt the double ObBitVector scheme. 
     // The single ObBitVector scheme can ensure correctness,
     // but the then_expression will result in redundant calculations.
     ObBitVector *case_when_match = &expr.get_pvt_skip(ctx);
@@ -488,7 +488,7 @@ static int inner_eval_case_vector(const ObExpr &expr,
     // but subsequent bitwise operations do not require shifting,
     // resulting in performance optimization and easier implementation.
     // The unit is byte.
-    int64_t mem_size = (((my_bound.end() - 1) / ObBitVector::WORD_BITS) -
+    int64_t mem_size = (((my_bound.end() - 1) / ObBitVector::WORD_BITS) - 
                         (my_bound.start() / ObBitVector::WORD_BITS) + 1) * ObBitVector::BYTES_PER_WORD;
     if (OB_ISNULL(data_tmp = alloc_guard.get_allocator().alloc(mem_size))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -510,7 +510,7 @@ static int inner_eval_case_vector(const ObExpr &expr,
     // the logic is
     // 1. calc when branch, save result in when_vec and use match_when flag
     //    to mark which rows are matched in when branch and these rows should be
-    //    calculated in then branch
+    //    calculated in then branch 
     // 2. calc then branch, put matching result(then_vec) into output vec
     //    (result_vec)
     // REPEAT 1. and 2.

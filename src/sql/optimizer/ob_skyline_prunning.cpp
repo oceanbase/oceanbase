@@ -377,7 +377,7 @@ int ObShardingInfoDim::compare(const ObSkylineDim &other, CompareStat &status) c
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("dimension type is different",
              "dim_type", get_dim_type(), "other.dim_type", other.get_dim_type());
-  } else if (should_skip_compare()
+  } else if (should_skip_compare() 
              || static_cast<const ObShardingInfoDim &>(other).should_skip_compare()) {
     status = ObSkylineDim::EQUAL;
   } else {

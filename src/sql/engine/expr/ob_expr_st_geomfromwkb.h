@@ -25,7 +25,7 @@ namespace sql
 class ObIExprSTGeomFromWKB : public ObFuncExprOperator
 {
 public:
-  ObIExprSTGeomFromWKB(common::ObIAllocator &alloc, ObExprOperatorType type,
+  ObIExprSTGeomFromWKB(common::ObIAllocator &alloc, ObExprOperatorType type, 
                       const char *name, int32_t param_num, ObValidForGeneratedColFlag valid_for_generated_col, int32_t dimension);
   virtual ~ObIExprSTGeomFromWKB() {}
 
@@ -39,7 +39,7 @@ public:
                       ObExpr &rt_expr) const override = 0;
   virtual const char *get_func_name() const = 0;
 
-  int create_by_wkb_without_srid(common::ObIAllocator &allocator,
+  int create_by_wkb_without_srid(common::ObIAllocator &allocator, 
                                  const common::ObString &wkb,
                                  const common::ObSrsItem *srs_item,
                                  common::ObGeometry *&geo,
@@ -47,7 +47,7 @@ public:
   int get_type_bo_from_wkb_without_srid(const common::ObString &wkb,
                                         common::ObGeoType &type,
                                         common::ObGeoWkbByteOrder &bo) const;
-
+                                       
 private:
   DISALLOW_COPY_AND_ASSIGN(ObIExprSTGeomFromWKB);
 };

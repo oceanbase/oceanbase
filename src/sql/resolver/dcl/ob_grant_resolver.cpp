@@ -320,7 +320,7 @@ int ObGrantResolver::priv_exists(
     if (sys_privs.count() != 1) {
       exists = FALSE;
     } else if (sys_privs.at(0) != PRIV_ID_SELECT_ANY_DICTIONARY
-               && sys_privs.at(0) != PRIV_ID_EXEMPT_ACCESS_POLICY) {
+               && sys_privs.at(0) != PRIV_ID_EXEMPT_ACCESS_POLICY) { 
       exists = FALSE;  
     } else {
       exists = TRUE;
@@ -881,7 +881,7 @@ int ObGrantResolver::check_user_dup(
       ret = OB_ERR_USER_NOT_EXIST;
       LOG_WARN("user is not exist", K(ret), K(tenant_id), K(user_name), K(host_name));
     } else {
-      contain_role |= user_info->is_role();
+      contain_role |= user_info->is_role(); 
       is_all_role &= user_info->is_role();
     }
   }
@@ -899,7 +899,7 @@ int ObGrantResolver::rebuild_table_priv(
     LOG_WARN("unexpected null stmt", K(ret));
   } else if (grant_stmt->is_grant_all_tab_priv()) {
     share::ObRawObjPrivArray table_priv_array;
-    OZ (build_table_priv_arary_for_all(grant_stmt,
+    OZ (build_table_priv_arary_for_all(grant_stmt, 
                                         table_priv_array,
                                         is_owner,
                                         is_all_role));
@@ -1173,9 +1173,9 @@ int ObGrantResolver::resolve_grant_obj_privileges(
           }
         }
         OZ (check_user_dup(params_.schema_checker_->get_schema_guard(),
-                            user_name_array,
-                            grant_stmt,
-                            user_name,
+                            user_name_array, 
+                            grant_stmt, 
+                            user_name, 
                             host_name,
                             priv_user_name,
                             contain_role,
@@ -1285,7 +1285,7 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
             grant_stmt->set_grant_level(grant_level);
           }
 
-          if (OB_SUCC(ret)
+          if (OB_SUCC(ret) 
               && grant_level != OB_PRIV_CATALOG_LEVEL
               && grant_level != OB_PRIV_SENSITIVE_RULE_LEVEL) {
             if (OB_FAIL(check_and_convert_name(db, table))) {
@@ -1312,7 +1312,7 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
 
         //resolve privileges
         if (OB_SUCC(ret)) {
-          const uint64_t tenant_id = params_.session_info_->get_effective_tenant_id();
+          const uint64_t tenant_id = params_.session_info_->get_effective_tenant_id();  
           ObPrivSet priv_set = 0;
           uint64_t compat_version = 0;
           if (OB_ISNULL(allocator_)) {
@@ -1367,7 +1367,7 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_3_5_2", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant create catalog/use catalog privilege");
-          } else if (compat_version < DATA_VERSION_4_3_5_3
+          } else if (compat_version < DATA_VERSION_4_3_5_3 
                      && ((priv_set & OB_PRIV_CREATE_SENSITIVE_RULE) != 0
                          || (priv_set & OB_PRIV_PLAINACCESS) != 0)) {
             ret = OB_NOT_SUPPORTED;
@@ -1610,8 +1610,8 @@ int ObGrantResolver::resolve_priv_level(
       // grant plainaccess on sensitive rule *.* to user
       if (OB_ISNULL(node->children_[0]) || OB_ISNULL(node->children_[1])) {
         ret = OB_ERR_PARSE_SQL;
-        LOG_WARN("Parse priv level error", K(ret),
-                 "child 0", node->children_[0],
+        LOG_WARN("Parse priv level error", K(ret), 
+                 "child 0", node->children_[0], 
                  "child 1", node->children_[1]);
       } else if (T_STAR == node->children_[0]->type_ && T_STAR == node->children_[1]->type_) {
         grant_level = OB_PRIV_USER_LEVEL;

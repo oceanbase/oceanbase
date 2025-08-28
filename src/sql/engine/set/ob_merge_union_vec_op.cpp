@@ -484,7 +484,7 @@ int ObMergeUnionVecOp::inner_get_next_batch(const int64_t max_row_cnt)
     VectorFormat default_format = !expr->batch_result_ ? VEC_UNIFORM_CONST
       : (expr->datum_meta_.type_ == ObNullType ? VEC_UNIFORM
     : (expr->is_fixed_length_data_ ? VEC_FIXED : VEC_DISCRETE));
-    if (OB_FAIL(expr->init_vector(eval_ctx_, default_format,
+    if (OB_FAIL(expr->init_vector(eval_ctx_, default_format, 
         MY_SPEC.max_batch_size_))) {
       LOG_WARN("init vector failed", K(ret), K(i));
     }
@@ -612,21 +612,21 @@ void ObMergeUnionVecOp::dispatch_convert_batch_rows(ObExpr *src_expr,
         static_cast<ObFixedLengthVector<int64_t, VectorBasicOp<VEC_TC_INTEGER>> *> (src_vec);
       ObFixedLengthVector<int64_t, VectorBasicOp<VEC_TC_INTEGER>> *dst_fixed_vec =
         static_cast<ObFixedLengthVector<int64_t, VectorBasicOp<VEC_TC_INTEGER>> *> (dst_vec);
-      convert_batch_column<FixedLengthVectorBigInt, FixedLengthVectorBigInt>
+      convert_batch_column<FixedLengthVectorBigInt, FixedLengthVectorBigInt> 
         (src_fixed_vec, dst_fixed_vec, src_selector, dst_selector, selector_cnt, src_has_null);
     } else if (src_format == VEC_DISCRETE && ob_is_string_tc(src_type)) {
-      ObDiscreteVector<VectorBasicOp<VEC_TC_STRING>> *src_string_vec =
+      ObDiscreteVector<VectorBasicOp<VEC_TC_STRING>> *src_string_vec = 
         static_cast<ObDiscreteVector<VectorBasicOp<VEC_TC_STRING>> *> (src_vec);
-      ObDiscreteVector<VectorBasicOp<VEC_TC_STRING>> *dst_string_vec =
+      ObDiscreteVector<VectorBasicOp<VEC_TC_STRING>> *dst_string_vec = 
         static_cast<ObDiscreteVector<VectorBasicOp<VEC_TC_STRING>> *> (dst_vec);
-      convert_batch_column<DiscreteVectorString, DiscreteVectorString>
+      convert_batch_column<DiscreteVectorString, DiscreteVectorString> 
         (src_string_vec, dst_string_vec, src_selector, dst_selector, selector_cnt, src_has_null);
     } else {
-      convert_batch_column<ObIVector, ObIVector>
+      convert_batch_column<ObIVector, ObIVector> 
         (src_vec, dst_vec, src_selector, dst_selector, selector_cnt, src_has_null);
     }
   } else {
-    convert_batch_column<ObIVector, ObIVector>
+    convert_batch_column<ObIVector, ObIVector> 
       (src_vec, dst_vec, src_selector, dst_selector, selector_cnt, src_has_null);
   }
 }

@@ -18,7 +18,7 @@ namespace oceanbase
 {
 namespace sql
 {
-class ObExprBaseEncrypt : public ObFuncExprOperator
+class ObExprBaseEncrypt : public ObFuncExprOperator 
 {
 public:
   ObExprBaseEncrypt();
@@ -26,7 +26,7 @@ public:
   virtual ~ObExprBaseEncrypt();
   virtual int calc_result_typeN(ObExprResType& type,
                                 ObExprResType* types,
-                                int64_t param_num,
+                                int64_t param_num, 
                                 common::ObExprTypeCtx& type_ctx) const override;
   static int eval_encrypt(const ObExpr &expr,
                           ObEvalCtx &ctx,
@@ -35,7 +35,7 @@ public:
                           ObDatum &res);
 };
 
-class ObExprBaseDecrypt : public ObFuncExprOperator
+class ObExprBaseDecrypt : public ObFuncExprOperator 
 {
 public:
   ObExprBaseDecrypt();
@@ -43,7 +43,7 @@ public:
   virtual ~ObExprBaseDecrypt();
   virtual int calc_result_typeN(ObExprResType& type,
                                 ObExprResType* types,
-                                int64_t param_num,
+                                int64_t param_num, 
                                 common::ObExprTypeCtx& type_ctx) const override;
   static int eval_decrypt(const ObExpr &expr,
                           ObEvalCtx &ctx,
@@ -52,7 +52,7 @@ public:
                           ObDatum &res);
 };
 
-class ObExprAesEncrypt : public ObExprBaseEncrypt
+class ObExprAesEncrypt : public ObExprBaseEncrypt 
 {
 public:
   ObExprAesEncrypt();
@@ -66,7 +66,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObExprAesEncrypt);
 };
 
-class ObExprAesDecrypt : public ObExprBaseDecrypt
+class ObExprAesDecrypt : public ObExprBaseDecrypt 
 {
 public:
   ObExprAesDecrypt();
@@ -94,7 +94,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSm4Encrypt);
 };
 
-class ObExprSm4Decrypt : public ObExprBaseDecrypt
+class ObExprSm4Decrypt : public ObExprBaseDecrypt 
 {
 public:
   ObExprSm4Decrypt();

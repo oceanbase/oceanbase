@@ -465,3 +465,4 @@ int64_t ObLSTransferMetaInfo::to_string(char *buf, const int64_t buf_len) const
 }
 
 OB_SERIALIZE_MEMBER(ObLSTransferMetaInfo, src_ls_, src_scn_, trans_status_, tablet_id_array_, data_version_);
+

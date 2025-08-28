@@ -23,8 +23,8 @@ namespace sql
 
 struct ObExplainDisplayOpt
 {
-  ObExplainDisplayOpt()
-    : with_tree_line_(false),
+  ObExplainDisplayOpt() 
+    : with_tree_line_(false), 
     with_color_(false) ,
     with_real_info_(false)
     {}

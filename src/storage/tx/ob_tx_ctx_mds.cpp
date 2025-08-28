@@ -22,7 +22,7 @@ int ObTxMDSCache::init(const int64_t tenant_id, const share::ObLSID ls_id, const
 {
   int ret = OB_SUCCESS;
 
-#ifdef  ENABLE_DEBUG_LOG
+#ifdef  ENABLE_DEBUG_LOG 
   tenant_id_ = tenant_id;
   ls_id_ = ls_id;
   tx_id_ = tx_id;

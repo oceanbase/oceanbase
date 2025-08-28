@@ -113,7 +113,7 @@ int ObGeoLatlongCheckVisitor::calculate_point_range(Geo_type *geo)
 {
   double longti = geo->x();
   double lati = geo->y();
-  if (longti < -180.0 || longti > 180.0 ||
+  if (longti < -180.0 || longti > 180.0 || 
       lati < -90.0 || lati > 90.0 ) {
     longti = ob_normalize_longitude(longti);
     lati = ob_normalize_latitude(lati);

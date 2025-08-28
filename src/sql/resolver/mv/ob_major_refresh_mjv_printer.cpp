@@ -195,7 +195,7 @@ int ObMajorRefreshMJVPrinter::fill_table_partition_name(const TableItem &src_tab
     LOG_WARN("failed to get table schema", K(ret));
   } else if (OB_ISNULL(src_schema)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), K(src_schema));
+    LOG_WARN("unexpected null", K(ret), K(src_schema));  
   } else if (OB_UNLIKELY(PARTITION_LEVEL_ONE != src_schema->get_part_level()
                          && PARTITION_LEVEL_TWO != src_schema->get_part_level())) {
     ret = OB_ERR_UNEXPECTED;
@@ -330,11 +330,11 @@ int ObMajorRefreshMJVPrinter::gen_mr_rt_mv_access_mv_data_stmt(ObSelectStmt *&se
   } else if (OB_FAIL(create_simple_table_item(sel_stmt, mv_schema_.get_table_name(), mv_table, NULL, false))) {
     LOG_WARN("failed to create simple table item", K(ret));
   } else if (OB_FAIL(create_mr_rt_mv_delta_stmt(*orig_left_table, view_stmt))
-             || OB_FAIL(create_simple_table_item(sel_stmt, orig_left_table->get_table_name(),
+             || OB_FAIL(create_simple_table_item(sel_stmt, orig_left_table->get_table_name(), 
                                                  delta_left_table, view_stmt, false))) {
     LOG_WARN("failed to create delta left table", K(ret));
   } else if (OB_FAIL(create_mr_rt_mv_delta_stmt(*orig_right_table, view_stmt))
-             || OB_FAIL(create_simple_table_item(sel_stmt, orig_right_table->get_table_name(),
+             || OB_FAIL(create_simple_table_item(sel_stmt, orig_right_table->get_table_name(), 
                                                  delta_right_table, view_stmt, false))) {
     LOG_WARN("failed to create delta right table", K(ret));
   } else if (OB_FAIL(create_mr_rt_mv_access_mv_from_table(*sel_stmt, *mv_table, *delta_left_table, *delta_right_table))) {
@@ -640,7 +640,7 @@ int ObMajorRefreshMJVPrinter::gen_one_refresh_select_for_major_refresh_mjv(const
   ObRawExpr *scn_filter = NULL;
   SelectItem sel_item;
   sel_item.is_real_alias_ = true;
-  sel_item.alias_name_ = OLD_NEW_COL_NAME;
+  sel_item.alias_name_ = OLD_NEW_COL_NAME;    
   if (OB_UNLIKELY(2 != orig_table_items.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected params", K(ret), K(orig_table_items));
@@ -657,7 +657,7 @@ int ObMajorRefreshMJVPrinter::gen_one_refresh_select_for_major_refresh_mjv(const
   } else if (OB_FAIL(create_simple_column_expr(delta_table->get_table_name(), ObString("ORA_ROWSCN"), delta_table->table_id_, col))
              || OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(ctx_.expr_factory_, T_OP_GT, col, exprs_.last_refresh_scn_, scn_filter))
              || OB_FAIL(delta_stmt->get_condition_exprs().push_back(scn_filter))) {
-    LOG_WARN("failed to add filter for delta left stmt", K(ret));
+    LOG_WARN("failed to add filter for delta left stmt", K(ret));  
   } else if (OB_FAIL(fill_table_partition_name(*orig_left_table, *left_table))) {
     LOG_WARN("failed to fill table partition name", K(ret));
   } else if (OB_FAIL(create_simple_column_expr(delta_table->get_table_name(), OLD_NEW_COL_NAME, delta_table->table_id_, sel_item.expr_))

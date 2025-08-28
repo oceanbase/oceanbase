@@ -92,7 +92,7 @@ int ObExprGetMySQLRoutineParameterTypeStr::get_mysql_routine_parameter_type_str(
   return ret;
 }
 
-int ObExprGetMySQLRoutineParameterTypeStr::cg_expr(ObExprCGCtx &op_cg_ctx,
+int ObExprGetMySQLRoutineParameterTypeStr::cg_expr(ObExprCGCtx &op_cg_ctx, 
                                   const ObRawExpr &raw_expr,
                                   ObExpr &rt_expr) const
 {

@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #include <gtest/gtest.h>
 #include "lib/geo/ob_geo_utils.h"
 #include "src/pl/ob_pl.h"
@@ -289,7 +289,7 @@ TEST_F(TestGeoCommon, sql_udt_to_wkt)
   ObString ordinates_str;
   ASSERT_EQ(ObSqlUdtUtils::cast_pl_varray_to_sql_varray(allocator, ordinates_str, ordinate_pl), OB_SUCCESS);
   ordinate_obj.set_sql_collection(ordinates_str.ptr(), ordinates_str.length(), 30028);
-
+  
   QualifiedMap map2;
   ASSERT_EQ(map2.create(7, ObModIds::TEST), OB_SUCCESS);
   ASSERT_EQ(map2.set_refactored("SDO_GTYPE", &gtype), OB_SUCCESS);

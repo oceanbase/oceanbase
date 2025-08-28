@@ -32,7 +32,7 @@ const char *get_storage_access_type_str(const ObStorageAccessType &type)
   return str;
 }
 
-ObObjectDevice::ObObjectDevice()
+ObObjectDevice::ObObjectDevice() 
   : storage_info_(), is_started_(false), lock_(common::ObLatchIds::OBJECT_DEVICE_LOCK),
     storage_id_mod_()
 {
@@ -705,7 +705,7 @@ int ObObjectDevice::batch_del_files(
   int ret = OB_SUCCESS;
   if (OB_FAIL(util_.batch_del_files(files_to_delete, failed_files_idx))) {
     OB_LOG(WARN, "fail to del file", K(ret));
-  }
+  } 
   return ret;
 }
 
@@ -786,7 +786,7 @@ int ObObjectDevice::inner_scan_dir_(const char *dir_name,
     }
 
     if (OB_FAIL(ret)) {
-      OB_LOG(WARN, "fail to do list/dir scan!", K(ret), KCSTRING(dir_name),
+      OB_LOG(WARN, "fail to do list/dir scan!", K(ret), KCSTRING(dir_name), 
           "is_dir_scan", op.is_dir_scan(), "is_marker_scan", op.is_marker_scan());
     }
   }
@@ -921,7 +921,7 @@ int ObObjectDevice::pwrite(const ObIOFd &fd, const int64_t offset, const int64_t
 
 int ObObjectDevice::upload_part(
     const ObIOFd &fd,
-    const char *buf,
+    const char *buf, 
     const int64_t size,
     const int64_t part_id,
     int64_t &write_size)

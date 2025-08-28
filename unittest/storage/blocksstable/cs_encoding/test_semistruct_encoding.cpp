@@ -287,7 +287,7 @@ int TestSemiStructEncoding::check_full_transform(
         LOG_WARN("print json fail", K(ret));
       } else {
         LOG_TRACE("result json", K(i), K(j_buf.string()));
-      }
+      }      
       ObString src = datums.at(i).get_string();
       ObString output = row.storage_datums_[1].get_string();
       LOG_TRACE("compare info", K(datums.at(i)), K(row.storage_datums_[1]));
@@ -349,7 +349,7 @@ int TestSemiStructEncoding::check_part_transform(
         LOG_WARN("print json fail", K(ret));
       } else {
         LOG_TRACE("result json", K(i), K(j_buf.string()));
-      }
+      }      
       ObString src = datums.at(i).get_string();
       ObString output = row.storage_datums_[1].get_string();
       LOG_TRACE("compare info", K(datums.at(i)), K(row.storage_datums_[1]));
@@ -482,7 +482,7 @@ int init_filter(
     LOG_WARN("init filter datum param fail", K(ret), K(count));
   } else {
     filter.filter_.expr_->args_[0] = json_expr;
-  }
+  }  
   for (int64_t i = 1; OB_SUCC(ret) && i <= count; ++i) {
     filter.filter_.expr_->args_[i] = new (expr_buf + 1 + i) ObExpr();
     if (sql::WHITE_OP_NU == op_type || sql::WHITE_OP_NN == op_type) {
@@ -536,7 +536,7 @@ int init_in_filter(
 
   filter.filter_.expr_->args_[0] = json_expr;
   filter.filter_.expr_->args_[0]->basic_funcs_ = col_basic_funcs;
-
+  
   if (OB_FAIL(filter.datum_params_.init(count))) {
     LOG_WARN("init filter datum fail", K(ret), K(count));
   } else if (OB_FAIL(filter.param_set_.create(count * 2))) {
@@ -748,7 +748,7 @@ int TestSemiStructEncoding::check_int_between_white_filter(
   } else if (OB_FAIL(check_white_filter(allocator, op_type, row_cnt, col_cnt, col_offset, col_meta, ref_objs, path_str, decoder, res_count))) {
     LOG_WARN("check_white_filter fail", K(ret));
   }
-  return ret;
+  return ret; 
 }
 
 int TestSemiStructEncoding::check_int_in_white_filter(
@@ -1218,7 +1218,7 @@ TEST_F(TestSemiStructEncoding, test_bug1)
 {
   share::ObTenantEnv::get_tenant_local()->id_ = 500;
   ObArenaAllocator allocator(ObModIds::TEST);
-
+  
   ObColDatums datums(allocator);
   ObMicroBlockCSEncoder encoder;
   const int64_t rowkey_cnt = 1;
@@ -1239,7 +1239,7 @@ TEST_F(TestSemiStructEncoding, test_bug1)
     "{\"avatar_url\":\"xaau;||avatars$githubusercontent$com/u/25180681?\",\"display_login\":\"renovate-bot\",\"gravatar_id\":\"\",\"id\":25180681,\"login\":\"renovate-bot\",\"url\":\"xaau;||api$github$com/users/renovate-bot\"}",
     "{\"avatar_url\":\"xaau;||avatars$githubusercontent$com/u/19896123?\",\"display_login\":\"justindbaur\",\"gravatar_id\":\"\",\"id\":19896123,\"login\":\"justindbaur\",\"url\":\"xaau;||api$github$com/users/justindbaur\"}",
   };
-
+  
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
   ObDatumRow row;
   ASSERT_EQ(OB_SUCCESS, row.init(allocator, col_cnt));
@@ -1268,7 +1268,7 @@ TEST_F(TestSemiStructEncoding, test_bug2)
 {
   share::ObTenantEnv::get_tenant_local()->id_ = 500;
   ObArenaAllocator allocator(ObModIds::TEST);
-
+  
   ObColDatums datums(allocator);
   ObMicroBlockCSEncoder encoder;
   const int64_t rowkey_cnt = 1;
@@ -1285,7 +1285,7 @@ TEST_F(TestSemiStructEncoding, test_bug2)
     "{\"id\":553937707,\"name\":\"sumonece15/New-ChatBot\",\"url\":\"xaau;||api$github$com/repos/sumonece15/New-ChatBot\"}",
     "{\"id\":460137687,\"name\":\"jvkassi/filament-modal\",\"url\":\"xaau;||api$github$com/repos/jvkassi/filament-modal\"}"
   };
-
+  
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
   ObDatumRow row;
   ASSERT_EQ(OB_SUCCESS, row.init(allocator, col_cnt));
@@ -1311,7 +1311,7 @@ TEST_F(TestSemiStructEncoding, test_bug2)
 }
 
 TEST_F(TestSemiStructEncoding, test_bug3)
-{ // serizlize does not count header size when add child
+{ // serizlize does not count header size when add child 
   ObArenaAllocator allocator(ObModIds::TEST);
   const int64_t row_cnt = 5;
   ObColDatums datums(allocator);
@@ -1371,7 +1371,7 @@ TEST_F(TestSemiStructEncoding, test_complex_situation)
   ObObjType col_types[col_cnt] = {ObIntType, ObIntType, ObVarcharType, ObJsonType, ObJsonType, ObJsonType, ObTinyIntType, ObVarcharType};
   ASSERT_EQ(OB_SUCCESS, prepare(col_types, rowkey_cnt, col_cnt));
   ctx_.semistruct_encoding_type_.mode_ = 1;
-
+  
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
   ObDatumRow row;
   ASSERT_EQ(OB_SUCCESS, row.init(allocator, col_cnt));
@@ -1683,9 +1683,9 @@ TEST_F(TestSemiStructEncoding, test_flat_json)
   ObArenaAllocator allocator(ObModIds::TEST);
   const int64_t row_cnt = 20;
   ObColDatums datums(allocator);
-  const char *names[20] = {"Mike", "Jackson", "Liam", "William", "Noah", "Bill", "Christopher", "Bruce",
+  const char *names[20] = {"Mike", "Jackson", "Liam", "William", "Noah", "Bill", "Christopher", "Bruce", 
                     "Les", "Hunter", "Frank", "Noel", "Ted", "Andy", "Devin", "Gordon", "JJJ", "XXXX", "ZZZZ", "oo"};
-  const char *fix_strings[20] = {"aaaa", "bbbb", "cccc", "dddd", "eeee", "ffff", "gggg", "hhhh",
+  const char *fix_strings[20] = {"aaaa", "bbbb", "cccc", "dddd", "eeee", "ffff", "gggg", "hhhh", 
                     "iiii", "jjjj", "kkkk", "llll", "mmmm", "nnnn", "oooo", "pppp", "qqqq", "rrrr", "ssss", "s"};
   {
     ObString j_text("{\"name\": \"Mike\", \"null\": null, \"age\" : 30, \"like\": [1, 2, 3], \"score\": 89.5, \"int_dict\": 51, \"str_dict\": \"json\", \"bool_type\": true, \"int_dicu\": \"\"}");
@@ -1830,7 +1830,7 @@ TEST_F(TestSemiStructEncoding, test_spare)
   ObArenaAllocator allocator(ObModIds::TEST);
   const int64_t row_cnt = 20;
   ObColDatums datums(allocator);
-  const char *names[20] = {"Mike", "Jackson", "Liam", "William", "Noah", "Bill", "Christopher", "Bruce",
+  const char *names[20] = {"Mike", "Jackson", "Liam", "William", "Noah", "Bill", "Christopher", "Bruce", 
                     "Les", "Hunter", "Frank", "Noel", "Ted", "Andy", "Devin", "Gordon", "JJJ", "XXXX", "ZZZZ", "oo"};
   {
     ObString j_text("{\"name\": \"Mike\", \"like\": [1, 2, 3], \"score\": 89.5, \"int_dict\": 52, \"str_dict\": \"xml\", \"bool_type\": true}");
@@ -1960,7 +1960,7 @@ TEST_F(TestSemiStructEncoding, test_without_null_row)
   ObArenaAllocator allocator(ObModIds::TEST);
   const int64_t row_cnt = 20;
   ObColDatums datums(allocator);
-  const char *names[20] = {"Mike", "Jackson", "Liam", "William", "Noah", "Bill", "Christopher", "Bruce",
+  const char *names[20] = {"Mike", "Jackson", "Liam", "William", "Noah", "Bill", "Christopher", "Bruce", 
                     "Les", "Hunter", "Frank", "Noel", "Ted", "Andy", "Devin", "Gordon", "JJJ", "XXXX", "ZZZZ", "oo"};
   {
     ObString j_text("{\"name\": \"Mike\", \"like\": [1, 2, 3], \"score\": 89.5, \"int_dict\": 52, \"str_dict\": \"xml\", \"bool_type\": true}");
@@ -2095,7 +2095,7 @@ TEST_F(TestSemiStructEncoding, test_spare_null_row)
   ObArenaAllocator allocator(ObModIds::TEST);
   const int64_t row_cnt = 20;
   ObColDatums datums(allocator);
-  const char *names[20] = {"Mike", "Jackson", "Liam", "William", "Noah", "Bill", "Christopher", "Bruce",
+  const char *names[20] = {"Mike", "Jackson", "Liam", "William", "Noah", "Bill", "Christopher", "Bruce", 
                     "Les", "Hunter", "Frank", "Noel", "Ted", "Andy", "Devin", "Gordon", "JJJ", "XXXX", "ZZZZ", "oo"};
   {
     ObString j_text("{\"name\": \"Mike\", \"age\" : 26, \"score\": 89.5, \"int_dict\": 52, \"str_dict\": \"xml\", \"bool_type\": true}");
@@ -2173,7 +2173,7 @@ TEST_F(TestSemiStructEncoding, test_full_json_type)
   ObArenaAllocator allocator(ObModIds::TEST);
   const int64_t row_cnt = 20;
   ObColDatums datums(allocator);
-  const char *names[20] = {"Mike", "Jackson", "Liam", "William", "Noah", "Bill", "Christopher", "Bruce",
+  const char *names[20] = {"Mike", "Jackson", "Liam", "William", "Noah", "Bill", "Christopher", "Bruce", 
                     "Les", "Hunter", "Frank", "Noel", "Ted", "Andy", "Devin", "Gordon", "JJJ", "XXXX", "ZZZZ", "oo"};
   {
     for (int i = 0; i < row_cnt; ++i) {
@@ -2756,7 +2756,7 @@ TEST_F(TestSemiStructEncoding, test_str_filter)
   ObArenaAllocator allocator(ObModIds::TEST);
   const int64_t row_cnt = 20;
   ObColDatums datums(allocator);
-  const char *names[20] = {"Mike", "Jackson", "Liam", "William", "Noah", "Bill", "Christopher", "Bruce",
+  const char *names[20] = {"Mike", "Jackson", "Liam", "William", "Noah", "Bill", "Christopher", "Bruce", 
                     "Les", "Hunter", "Frank", "Noel", "Ted", "Andy", "Devin", "Gordon", "JJJ", "XXXX", "ZZZZ", "oo"};
   int64_t null_cnt = 0;
   for (int i = 0; i < row_cnt; ++i) {
@@ -2801,7 +2801,7 @@ TEST_F(TestSemiStructEncoding, test_str_dict_filter)
   ObArenaAllocator allocator(ObModIds::TEST);
   const int64_t row_cnt = 2000;
   ObColDatums datums(allocator);
-  const char *names[20] = {"Mike", "Jackson", "Liam", "William", "Noah", "Bill", "Christopher", "Bruce",
+  const char *names[20] = {"Mike", "Jackson", "Liam", "William", "Noah", "Bill", "Christopher", "Bruce", 
                     "Les", "Hunter", "Frank", "Noel", "Ted", "Andy", "Devin", "Gordon", "JJJ", "XXXX", "ZZZZ", "oo"};
   int64_t null_cnt = 0;
   for (int i = 0; i < row_cnt; ++i) {
@@ -2846,7 +2846,7 @@ TEST_F(TestSemiStructEncoding, test_all_null_sub_col)
   ObArenaAllocator allocator(ObModIds::TEST);
   const int64_t row_cnt = 2000;
   ObColDatums datums(allocator);
-  const char *names[20] = {"Mike", "Jackson", "Liam", "William", "Noah", "Bill", "Christopher", "Bruce",
+  const char *names[20] = {"Mike", "Jackson", "Liam", "William", "Noah", "Bill", "Christopher", "Bruce", 
                     "Les", "Hunter", "Frank", "Noel", "Ted", "Andy", "Devin", "Gordon", "JJJ", "XXXX", "ZZZZ", "oo"};
   int64_t null_cnt = 0;
   for (int i = 0; i < row_cnt; ++i) {
@@ -2874,7 +2874,7 @@ TEST_F(TestSemiStructEncoding, test_int_null_replace)
   ObArenaAllocator allocator(ObModIds::TEST);
   const int64_t row_cnt = 20;
   ObColDatums datums(allocator);
-  const char *names[20] = {"Mike", "Jackson", "Liam", "William", "Noah", "Bill", "Christopher", "Bruce",
+  const char *names[20] = {"Mike", "Jackson", "Liam", "William", "Noah", "Bill", "Christopher", "Bruce", 
                     "Les", "Hunter", "Frank", "Noel", "Ted", "Andy", "Devin", "Gordon", "JJJ", "XXXX", "ZZZZ", "oo"};
   int64_t null_cnt = 0;
   for (int i = 0; i < row_cnt; ++i) {
@@ -3022,7 +3022,7 @@ int append_row_to_encoder(ObMicroBlockCSEncoder &encoder, ObDatumRow &row, ObCol
 TEST_F(TestSemiStructEncoding, test_sub_schema_null_reuse)
 {
   ObArenaAllocator allocator(ObModIds::TEST);
-
+  
   ObColDatums datums(allocator);
   ObMicroBlockCSEncoder encoder;
   const int64_t rowkey_cnt = 1;
@@ -3044,7 +3044,7 @@ TEST_F(TestSemiStructEncoding, test_sub_schema_null_reuse)
     "{\"id\":464337687, \"int_k\":null, \"str_k\":null}",
     "{\"id\":460437687, \"int_k\":null, \"str_k\":null}"
   };
-
+  
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
   ObDatumRow row;
   ASSERT_EQ(OB_SUCCESS, row.init(allocator, col_cnt));
@@ -3293,7 +3293,7 @@ TEST_F(TestSemiStructEncoding, test_zero_stream)
   ObObjType col_types[col_cnt] = {ObIntType, ObJsonType, ObJsonType};
   ASSERT_EQ(OB_SUCCESS, prepare(col_types, rowkey_cnt, col_cnt));
   ctx_.semistruct_encoding_type_.mode_ = 1;
-
+  
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
   ObDatumRow row;
   ASSERT_EQ(OB_SUCCESS, row.init(allocator, col_cnt));
@@ -3892,7 +3892,7 @@ TEST_F(TestSemiStructEncoding, test_mix)
   const int64_t col_cnt = 2;
   const int64_t row_cnt = 20;
   ObColDatums datums(allocator);
-  const char *names[20] = {"Mike", "Jackson", "Liam", "William", "Noah", "Bill", "Christopher", "Bruce",
+  const char *names[20] = {"Mike", "Jackson", "Liam", "William", "Noah", "Bill", "Christopher", "Bruce", 
                     "Les", "Hunter", "Frank", "Noel", "Ted", "Andy", "Devin", "Gordon", "JJJ", "XXXX", "ZZZZ", "oo"};
   int64_t null_cnt = 0;
   for (int i = 0; i < row_cnt; ++i) {
@@ -3942,7 +3942,7 @@ TEST_F(TestSemiStructEncoding, test_mix2)
   const int64_t col_cnt = 2;
   const int64_t row_cnt = 20;
   ObColDatums datums(allocator);
-  const char *names[20] = {"Mike", "Jackson", "Liam", "William", "Noah", "Bill", "Christopher", "Bruce",
+  const char *names[20] = {"Mike", "Jackson", "Liam", "William", "Noah", "Bill", "Christopher", "Bruce", 
                     "Les", "Hunter", "Frank", "Noel", "Ted", "Andy", "Devin", "Gordon", "JJJ", "XXXX", "ZZZZ", "oo"};
   int64_t null_cnt = 0;
   for (int i = 0; i < row_cnt; ++i) {
@@ -3995,7 +3995,7 @@ TEST_F(TestSemiStructEncoding, test_mix3)
   const int64_t col_cnt = 2;
   const int64_t row_cnt = 20;
   ObColDatums datums(allocator);
-  const char *names[20] = {"Mike", "Jackson", "Liam", "William", "Noah", "Bill", "Christopher", "Bruce",
+  const char *names[20] = {"Mike", "Jackson", "Liam", "William", "Noah", "Bill", "Christopher", "Bruce", 
                     "Les", "Hunter", "Frank", "Noel", "Ted", "Andy", "Devin", "Gordon", "JJJ", "XXXX", "ZZZZ", "oo"};
   int64_t null_cnt = 0;
   for (int i = 0; i < row_cnt; ++i) {
@@ -4044,7 +4044,7 @@ TEST_F(TestSemiStructEncoding, test_mix4)
   const int64_t col_cnt = 2;
   const int64_t row_cnt = 20;
   ObColDatums datums(allocator);
-  const char *names[20] = {"Mike", "Jackson", "Liam", "William", "Noah", "Bill", "Christopher", "Bruce",
+  const char *names[20] = {"Mike", "Jackson", "Liam", "William", "Noah", "Bill", "Christopher", "Bruce", 
                     "Les", "Hunter", "Frank", "Noel", "Ted", "Andy", "Devin", "Gordon", "JJJ", "XXXX", "ZZZZ", "oo"};
   int64_t null_cnt = 0;
   for (int i = 0; i < row_cnt; ++i) {
@@ -4376,7 +4376,7 @@ TEST_F(TestSemiStructEncoding, test_bug_var_size)
 {
   share::ObTenantEnv::get_tenant_local()->id_ = 500;
   ObArenaAllocator allocator(ObModIds::TEST);
-
+  
   ObColDatums datums(allocator);
   ObMicroBlockCSEncoder encoder;
   const int64_t rowkey_cnt = 1;
@@ -4393,7 +4393,7 @@ TEST_F(TestSemiStructEncoding, test_bug_var_size)
     "[4, 1385, {\"empty_array\":[], \"empty_object\":{}}, {\"id\":553937707,\"name\":\"sumonece15/New-ChatBot\",\"url\":\"xaau;||api$github$com/repos/sumonece15/New-ChatBot\"}, \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\", 1385, 1385]",
     "[5, 1385, {\"empty_array\":[], \"empty_object\":{}}, {\"id\":460137687,\"name\":\"jvkassi/filament-modal\",\"url\":\"xaau;||api$github$com/repos/jvkassi/filament-modal\"}, \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\", 1385, 1385]"
   };
-
+  
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
   ObDatumRow row;
   ASSERT_EQ(OB_SUCCESS, row.init(allocator, col_cnt));
@@ -4423,7 +4423,7 @@ TEST_F(TestSemiStructEncoding, test_empty_array)
 {
   share::ObTenantEnv::get_tenant_local()->id_ = 500;
   ObArenaAllocator allocator(ObModIds::TEST);
-
+  
   ObColDatums datums(allocator);
   ObMicroBlockCSEncoder encoder;
   const int64_t rowkey_cnt = 1;
@@ -4440,7 +4440,7 @@ TEST_F(TestSemiStructEncoding, test_empty_array)
     "{\"id\":553937707, \"empty_array\":[], \"empty_object\":{}}",
     "{\"id\":460137687, \"empty_array\":[], \"empty_object\":{}}"
   };
-
+  
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
   ObDatumRow row;
   ASSERT_EQ(OB_SUCCESS, row.init(allocator, col_cnt));
@@ -4470,7 +4470,7 @@ TEST_F(TestSemiStructEncoding, test_empty_array_v2)
 {
   share::ObTenantEnv::get_tenant_local()->id_ = 500;
   ObArenaAllocator allocator(ObModIds::TEST);
-
+  
   ObColDatums datums(allocator);
   ObMicroBlockCSEncoder encoder;
   const int64_t rowkey_cnt = 1;
@@ -4487,7 +4487,7 @@ TEST_F(TestSemiStructEncoding, test_empty_array_v2)
     "{\"id\":553937707, \"empty_array\":[3, \"4\"], \"empty_object\":{}}",
     "{\"id\":460137687, \"empty_array\":[], \"empty_object\":{}}"
   };
-
+  
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
   ObDatumRow row;
   ASSERT_EQ(OB_SUCCESS, row.init(allocator, col_cnt));

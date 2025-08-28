@@ -546,7 +546,7 @@ public:
   static int check_composite_cast(const ObPLINS &ns,
                                   ObRawExpr *&expr);
 
-  static int check_anonymous_array_compatible(const ObPLINS &ns,
+  static int check_anonymous_array_compatible(const ObPLINS &ns, 
                                         uint64_t actual_param_type_id,
                                         uint64_t formal_param_type_id,
                                         bool &is_compatible);

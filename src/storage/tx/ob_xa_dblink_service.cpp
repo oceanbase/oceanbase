@@ -38,7 +38,7 @@ int ObXAService::generate_xid(const ObTransID &tx_id, ObXATransID &new_xid)
   char gtrid_base_str[ObXATransID::MAX_GTRID_LENGTH] = {0};
   int64_t timestamp = ObTimeUtility::current_time() / 1000000; // second level
   const char *gtrid_base_format = "%llu.%lld.%lld";
-  int base_len = snprintf(gtrid_base_str, ObXATransID::MAX_GTRID_LENGTH, gtrid_base_format,
+  int base_len = snprintf(gtrid_base_str, ObXATransID::MAX_GTRID_LENGTH, gtrid_base_format, 
                           tenant_id, txid_value, timestamp);
   if (ObXATransID::MAX_GTRID_LENGTH <= base_len || 0 > base_len) {
     ret = OB_ERR_UNEXPECTED;
@@ -256,7 +256,7 @@ int ObXAService::xa_start_for_tm(const int64_t flags,
     TRANS_LOG(WARN, "invalid flags for xa start", K(ret), K(xid), K(flags));
   } else {
     if (ObXAFlag::is_tmnoflags(flags, ObXAReqType::XA_START)) {
-      if (OB_FAIL(xa_start_for_tm_(flags, timeout_seconds, session_id, client_sid,
+      if (OB_FAIL(xa_start_for_tm_(flags, timeout_seconds, session_id, client_sid, 
               tx_param, tx_desc, xid, data_version))) {
         TRANS_LOG(WARN, "xa start promotion failed", K(ret), K(flags), K(xid));
       }
@@ -301,11 +301,11 @@ int ObXAService::xa_start_for_tm_(const int64_t flags,
   const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
   // start trans to generate tx desc
   {
-    ObTxSavePointList copy_savepoints;
+    ObTxSavePointList copy_savepoints; 
     if (tx_desc != NULL) {
       if (tx_desc->is_in_tx()) {
         ret = OB_ERR_UNEXPECTED;
-        TRANS_LOG(WARN, "dblink trans not allow start in trans", K(ret), KPC(tx_desc));
+        TRANS_LOG(WARN, "dblink trans not allow start in trans", K(ret), KPC(tx_desc)); 
       } else if (tx_desc->in_tx_or_has_extra_state()) {
         if (OB_FAIL(tx_desc->get_savepoints_copy(copy_savepoints))) {
           TRANS_LOG(WARN, "copy savepoints array failed", K(ret), K(copy_savepoints), KPC(tx_desc));
@@ -814,7 +814,7 @@ int ObXAService::rollback_savepoint_for_dblink_trans(ObTxDesc *&tx_desc, const O
       }
 
       if (OB_FAIL(ret)) {
-        // if return savepoint not exist, but current rollback to statement finished, should abort
+        // if return savepoint not exist, but current rollback to statement finished, should abort 
         MTL(ObTransService *)->abort_tx(*tx_desc, ObTxAbortCause::SAVEPOINT_ROLLBACK_FAIL);
         TRANS_LOG(WARN, "rollback to savepoint failed, abort tx", K(ret), KP(this));
       }

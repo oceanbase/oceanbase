@@ -1,12 +1,12 @@
-/**
- * Copyright (code) 2021 OceanBase
- * OceanBase CE is licensed under Mulan PubL v2.
- * You can use this software according to the terms and conditions of the Mulan PubL v2.
- * You may obtain a copy of Mulan PubL v2 at:
- *          http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+/** 
+ * Copyright (code) 2021 OceanBase 
+ * OceanBase CE is licensed under Mulan PubL v2. 
+ * You can use this software according to the terms and conditions of the Mulan PubL v2. 
+ * You may obtain a copy of Mulan PubL v2 at: 
+ *          http://license.coscl.org.cn/MulanPubL-2.0 
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, 
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, 
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE. 
  * See the Mulan PubL v2 for more details.
  */
 
@@ -24,7 +24,7 @@
 #define OB_UCA_NCHARS 256
 #define OB_UCA_CMASK  255
 #define OB_UCA_PSHIFT 8
-#define OB_UCA_MAX_EXPANSION  6
+#define OB_UCA_MAX_EXPANSION  6  
 #define OB_UCA_CNT_FLAG_SIZE 4096
 #define OB_UCA_CNT_FLAG_MASK 4095
 #define OB_UCA_CNT_HEAD  1
@@ -146,17 +146,17 @@ class ob_uca_scanner {
  public:
   unsigned int get_weight_level() const { return weight_lv; }
  protected:
-  unsigned int weight_lv{0};
-  const uint16_t *wbeg;
-  unsigned int wbeg_stride{0};
-  const unsigned char *sbeg;
-  const unsigned char *send;
+  unsigned int weight_lv{0};   
+  const uint16_t *wbeg;  
+  unsigned int wbeg_stride{0}; 
+  const unsigned char *sbeg;   
+  const unsigned char *send;   
   const ObUCAInfo *uca;
   uint16_t implicit[10];
   ob_wc_t prev_char{0};  // Previous code point we scanned, if any.
   const ObCharsetInfo *cs;
   unsigned int num_of_ce_left{0};
-  const unsigned char *sbeg_dup;
+  const unsigned char *sbeg_dup; 
  protected:
   const uint16_t *contraction_find(ob_wc_t wc0, size_t *chars_skipped);
   inline const uint16_t *previous_context_find(ob_wc_t wc0, ob_wc_t wc1);
@@ -234,7 +234,7 @@ const uint16_t *ob_uca_scanner::contraction_find(ob_wc_t wc0,
     return cweight;
   } else {
     return nullptr;
-  }
+  } 
 }
 ALWAYS_INLINE
 const uint16_t *ob_uca_scanner::previous_context_find(ob_wc_t wc0, ob_wc_t wc1) {
@@ -412,7 +412,7 @@ ALWAYS_INLINE int uca_scanner_any<Mb_wc>::next_implicit(ob_wc_t ch) {
 }
 template <class Mb_wc>
 ALWAYS_INLINE int uca_scanner_any<Mb_wc>::next() {
-
+  
   if (wbeg[0]) {
     return *wbeg++;
   }
@@ -426,7 +426,7 @@ ALWAYS_INLINE int uca_scanner_any<Mb_wc>::next() {
     sbeg += mblen;
     char_index++;
     if (wc > uca->maxchar) {
-
+      
       wbeg = nochar;
       wbeg_stride = 0;
       return 0xFFFD;
@@ -434,11 +434,11 @@ ALWAYS_INLINE int uca_scanner_any<Mb_wc>::next() {
     if (ob_uca_have_contractions(uca)) {
       const uint16_t *cweight;
       if (ob_uca_can_be_previous_context_tail(uca->contraction_flags, wc) &&
-          wbeg != nochar &&
+          wbeg != nochar && 
           ob_uca_can_be_previous_context_head(uca->contraction_flags,
                                               prev_char) &&
           (cweight = previous_context_find(prev_char, wc))) {
-        prev_char = 0;
+        prev_char = 0; 
         return *cweight;
       } else if (ob_uca_can_be_contraction_head(uca->contraction_flags, wc)) {
         size_t chars_skipped;
@@ -457,7 +457,7 @@ ALWAYS_INLINE int uca_scanner_any<Mb_wc>::next() {
     }
     wbeg = wpage + code * uca->lengths[page];
     wbeg_stride = UCA900_DISTANCE_BETWEEN_WEIGHTS;
-  } while (!wbeg[0]);
+  } while (!wbeg[0]); 
   return *wbeg++;
 }
 template <class Mb_wc, int LEVELS_FOR_COMPARE>
@@ -470,7 +470,7 @@ inline int uca_scanner_900<Mb_wc, LEVELS_FOR_COMPARE>::more_weight() {
     uint16_t rtn = *wbeg;
     wbeg += wbeg_stride;
     --num_of_ce_left;
-    return rtn;
+    return rtn; 
   }
   return -1;
 }
@@ -562,10 +562,10 @@ ALWAYS_INLINE int uca_scanner_900<Mb_wc, LEVELS_FOR_COMPARE>::next_raw() {
           prev_char = 0;
           if (quat_wt > 0) return quat_wt;
         }
-        prev_char = 0;
+        prev_char = 0; 
         return *cweight;
       } else if (ob_uca_can_be_contraction_head(uca->contraction_flags, wc)) {
-
+        
         size_t chars_skipped;
         if ((cweight = contraction_find(wc, &chars_skipped))) return *cweight;
       }
@@ -585,7 +585,7 @@ ALWAYS_INLINE int uca_scanner_900<Mb_wc, LEVELS_FOR_COMPARE>::next_raw() {
     wbeg = UCA900_WEIGHT_ADDR(wpage, weight_lv, code);
     wbeg_stride = UCA900_DISTANCE_BETWEEN_WEIGHTS;
     num_of_ce_left = UCA900_NUM_OF_CE(wpage, code);
-  } while (!wbeg[0]);
+  } while (!wbeg[0]); 
   uint16_t rtn = *wbeg;
   wbeg += wbeg_stride;
   --num_of_ce_left;
@@ -746,7 +746,7 @@ static int ob_strnncoll_uca(const ObCharsetInfo *cs, const Mb_wc mb_wc,
   }
   return (s_res - t_res);
 }
-static inline int ob_space_weight(const ObCharsetInfo *cs)
+static inline int ob_space_weight(const ObCharsetInfo *cs) 
 {
   if (cs->uca && cs->uca->version == UCA_V900)
     return UCA900_WEIGHT(cs->uca->weights[0], 0, 0x20);
@@ -865,7 +865,7 @@ static size_t ob_strnxfrm_uca(const ObCharsetInfo *cs, Mb_wc mb_wc, unsigned cha
 }
 static int ob_uca_charcmp_900(const ObCharsetInfo *cs, ob_wc_t wc1,
                               ob_wc_t wc2) {
-  uint16_t *weight1_ptr = ob_char_weight_addr_900(cs->uca, wc1);
+  uint16_t *weight1_ptr = ob_char_weight_addr_900(cs->uca, wc1); 
   uint16_t *weight2_ptr = ob_char_weight_addr_900(cs->uca, wc2);
   if (!weight1_ptr || !weight2_ptr) return wc1 != wc2;
   if (weight1_ptr[0] && weight2_ptr[0] && weight1_ptr[0] != weight2_ptr[0])
@@ -908,14 +908,14 @@ static int ob_uca_charcmp(const ObCharsetInfo *cs, ob_wc_t wc1, ob_wc_t wc2) {
   if (cs->uca != nullptr && cs->uca->version == UCA_V900)
     return ob_uca_charcmp_900(cs, wc1, wc2);
   size_t length1, length2;
-  uint16_t *weight1 = ob_char_weight_addr(cs->uca, wc1);
+  uint16_t *weight1 = ob_char_weight_addr(cs->uca, wc1); 
   uint16_t *weight2 = ob_char_weight_addr(cs->uca, wc2);
   if (!weight1 || !weight2) {
     return wc1 != wc2;
   } else if (weight1[0] != weight2[0]) {
     return 1;
   }
-  length1 = cs->uca->lengths[wc1 >> OB_UCA_PSHIFT];
+  length1 = cs->uca->lengths[wc1 >> OB_UCA_PSHIFT]; 
   length2 = cs->uca->lengths[wc2 >> OB_UCA_PSHIFT];
   if (length1 > length2) {
     return memcmp((const void *)weight1, (const void *)weight2, length2 * 2)
@@ -933,7 +933,7 @@ static int ob_wildcmp_uca_impl(const ObCharsetInfo *cs, const char *str,
                                const char *wildend, int escape, int w_one,
                                int w_many, int recurse_level) {
   while (wildstr != wildend) {
-    int result = -1;
+    int result = -1; 
     auto mb_wc = cs->cset->mb_wc;
         ob_wc_t w_wc;
     while (true) {
@@ -991,7 +991,7 @@ static int ob_wildcmp_uca_impl(const ObCharsetInfo *cs, const char *str,
           str += mb_len;
           continue;
         }
-        break;
+        break; 
       }
       // No character in the expression string to match w_wc.
       if (str == str_end) return -1;
@@ -1162,7 +1162,7 @@ template <class Mb_wc, int LEVELS_FOR_COMPARE>
 static void ob_hash_sort_uca_900_tmpl(const ObCharsetInfo *cs, const Mb_wc mb_wc,
                                       const unsigned char *s, size_t slen, ulong *n1) {
   uca_scanner_900<Mb_wc, LEVELS_FOR_COMPARE> scanner(mb_wc, cs, s, slen);
-
+  
   uint64 h = *n1;
   h ^= 14695981039346656037ULL;
   scanner.for_each_weight(
@@ -1224,7 +1224,7 @@ enum ob_charset_err {
   OB_ERR_RESET_CHAR_OUT_OF_RANGE = 89,
   OB_ERR_UNKNOWN_LDML_TAG = 90,
   OB_ERR_FAILED_TO_RESET_BEFORE_SECONDARY_IGNORABLE_CHAR = 91,
-  OB_ERR_ERROR_LAST = 91,
+  OB_ERR_ERROR_LAST = 91, 
 };
 typedef enum ob_coll_lexem_num_en {
   OB_COLL_LEXEM_EOF = 0,
@@ -1266,10 +1266,10 @@ struct ObCollLexem {
   int code;
 };
 struct ObCollRule {
-  ob_wc_t base[OB_UCA_MAX_EXPANSION];
-  ob_wc_t curr[OB_UCA_MAX_CONTRACTION];
-  int diff[4];
-  size_t before_level;
+  ob_wc_t base[OB_UCA_MAX_EXPANSION];   
+  ob_wc_t curr[OB_UCA_MAX_CONTRACTION]; 
+  int diff[4]; 
+  size_t before_level; 
   bool with_context;
 };
 typedef enum {
@@ -1277,18 +1277,18 @@ typedef enum {
   ob_shift_method_expand
 } ObCollShiftMethod;
 struct ObCollRules {
-  ObUCAInfo *uca;
-  size_t nrules;
-  size_t mrules;
-  ObCollRule *rule;
+  ObUCAInfo *uca;   
+  size_t nrules;      
+  size_t mrules;      
+  ObCollRule *rule; 
   ObCharsetLoader *loader;
   ObCollShiftMethod shift_after_method;
 };
 struct ObCollRuleParser {
-  ObCollLexem tok[2];
-  ObCollRule rule;
-  ObCollRules *rules;
-  char errstr[128];
+  ObCollLexem tok[2]; 
+  ObCollRule rule;    
+  ObCollRules *rules; 
+  char errstr[128];     
 };
 static size_t ob_wstrnlen(ob_wc_t *s, size_t maxlen) {
   for (size_t i = 0; i < maxlen; i++) {
@@ -1311,7 +1311,7 @@ static int lex_cmp(ObCollLexem *lexem, const char *pattern,
   size_t lexemlen = lexem->beg - lexem->prev;
   if (lexemlen < patternlen) {
     return 1;
-  } else {
+  } else { 
   return strncasecmp(lexem->prev, pattern, patternlen);
   }
 }
@@ -1345,9 +1345,9 @@ static ob_coll_lexem_num ob_coll_lexem_next(ObCollLexem *lexem) {
       case '\r':
       case '\n':
         continue;
-      case '[':
+      case '[': 
       {
-        size_t nbrackets;
+        size_t nbrackets; 
         for (beg++, nbrackets = 1; beg < lexem->end; beg++) {
           if (*beg == '[') {
             nbrackets++;
@@ -1379,7 +1379,7 @@ static ob_coll_lexem_num ob_coll_lexem_next(ObCollLexem *lexem) {
         beg++;
         rc = OB_COLL_LEXEM_CONTEXT;
         goto ex;
-      case '<':
+      case '<': 
       {
         for (beg++, lexem->diff = 1;
              (beg < lexem->end) && (*beg == '<') && (lexem->diff <= 3);
@@ -1408,7 +1408,7 @@ static ob_coll_lexem_num ob_coll_lexem_next(ObCollLexem *lexem) {
       rc = OB_COLL_LEXEM_CHAR;
       goto ex;
     }
-    if (((unsigned char)*beg) > 0x7F)
+    if (((unsigned char)*beg) > 0x7F) 
     {
       ObCharsetInfo *cs = &ob_charset_utf8mb4_general_ci;
       ob_wc_t wc;
@@ -1466,23 +1466,23 @@ static int ob_coll_rules_add(ObCollRules *rules, ObCollRule *rule) {
 }
 static void ob_coll_rule_shift_at_level(ObCollRule *r, int level) {
   switch (level) {
-    case 4:
+    case 4: 
       r->diff[3]++;
       break;
-    case 3:
+    case 3: 
       r->diff[2]++;
       r->diff[3] = 0;
       break;
-    case 2:
+    case 2: 
       r->diff[1]++;
       r->diff[2] = r->diff[3] = 0;
       break;
-    case 1:
+    case 1: 
       r->diff[0]++;
       r->diff[1] = r->diff[2] = r->diff[3] = 0;
       break;
     case 0:
-
+      
       break;
     default:
       ob_charset_assert(0);
@@ -1544,7 +1544,7 @@ static int ob_coll_parser_scan_setting(ObCollRuleParser *p) {
   return ob_coll_parser_scan(p);
 }
 static int ob_coll_parser_scan_settings(ObCollRuleParser *p) {
-
+  
   while (ob_coll_parser_curr(p)->term == OB_COLL_LEXEM_OPTION) {
     if (!ob_coll_parser_scan_setting(p)) {
       return 0;
@@ -1568,7 +1568,7 @@ static int ob_coll_parser_scan_reset_before(ObCollRuleParser *p) {
     p->rule.before_level = 4;
   } else {
     p->rule.before_level = 0;
-    return 0;
+    return 0; 
   }
   return ob_coll_parser_scan(p);
 }
@@ -1643,7 +1643,7 @@ static int ob_coll_parser_scan_reset_sequence(ObCollRuleParser *p) {
   }
   if ((p->rules->shift_after_method == ob_shift_method_expand ||
        p->rule.before_level == 1) &&
-      p->rules->uca->version < UCA_V900)
+      p->rules->uca->version < UCA_V900) 
   {
     if (!ob_coll_rule_expand(p->rule.base, OB_UCA_MAX_EXPANSION,
                              p->rules->uca->last_non_ignorable)) {
@@ -1658,8 +1658,8 @@ static int ob_coll_parser_scan_shift_sequence(ObCollRuleParser *p) {
   if (!ob_coll_parser_scan_character_list(
           p, p->rule.curr, OB_UCA_MAX_CONTRACTION, "Contraction"))
     return 0;
-  before_extend = p->rule;
-
+  before_extend = p->rule; 
+  
   if (ob_coll_parser_curr(p)->term == OB_COLL_LEXEM_EXTEND) {
     ob_coll_parser_scan(p);
     if (!ob_coll_parser_scan_character_list(p, p->rule.base,
@@ -1682,7 +1682,7 @@ static int ob_coll_parser_scan_shift_sequence(ObCollRuleParser *p) {
   if (ob_coll_rules_add(p->rules, &p->rule)) {
     return 0;
   }
-  p->rule = before_extend;
+  p->rule = before_extend; 
   return 1;
 }
 static int ob_coll_parser_scan_shift(ObCollRuleParser *p) {
@@ -1748,7 +1748,7 @@ static void change_weight_if_case_first(ObCharsetInfo *cs,
                                         uint16_t *to, size_t to_stride,
                                         size_t curr_len,
                                         size_t tailored_ce_cnt) {
-
+  
   if (!(cs->coll_param && cs->coll_param->case_first == CASE_FIRST_UPPER &&
         cs->levels_for_compare == 3))
     return;
@@ -1975,9 +1975,9 @@ static bool apply_primary_shift_900(ObCharsetLoader *loader,
     if (to[last_sec_pri * to_stride * OB_UCA_900_CE_SIZE]) break;
   }
   if (last_sec_pri >= 0) {
-    to[last_sec_pri * to_stride * OB_UCA_900_CE_SIZE]--;
+    to[last_sec_pri * to_stride * OB_UCA_900_CE_SIZE]--; 
     if (rules->shift_after_method == ob_shift_method_expand) {
-
+            
       last_weight_ptr[0] += 0x1000;
     }
   } else {
@@ -2062,12 +2062,12 @@ static bool apply_shift(ObCharsetLoader *loader, ObCollRules *rules,
   ob_charset_assert(to_stride == 1);
   if (nweights) {
     to[nweights - 1] += r->diff[0];
-    if (r->before_level == 1)
+    if (r->before_level == 1) 
     {
       if (nweights >= 2) {
-        to[nweights - 2]--;
+        to[nweights - 2]--; 
         if (rules->shift_after_method == ob_shift_method_expand) {
-
+                    
           to[nweights - 1] += 0x1000;
         }
       } else {
@@ -2123,11 +2123,11 @@ static bool apply_one_rule(ObCharsetInfo *cs, ObCharsetLoader *loader,
                            ObCollRules *rules, ObCollRule *r, int level,
                            ObUCAInfo *dst) {
   size_t nweights;
-  size_t nreset = ob_coll_rule_reset_length(r);
-  size_t nshift = ob_coll_rule_shift_length(r);
+  size_t nreset = ob_coll_rule_reset_length(r); 
+  size_t nshift = ob_coll_rule_shift_length(r); 
   uint16_t *to, *to_num_ce;
   size_t to_stride;
-  if (nshift >= 2)
+  if (nshift >= 2) 
   {
     size_t i;
     int flag;
@@ -2400,10 +2400,10 @@ static bool init_weight_level(ObCharsetInfo *cs, ObCharsetLoader *loader,
   memcpy(dst->lengths, src->lengths, npages);
   memcpy(dst->weights, src->weights, npages * sizeof(uint16_t *));
     for (r = rules->rule, rlast = rules->rule + rules->nrules; r < rlast; r++) {
-    if (!r->curr[1])
+    if (!r->curr[1]) 
     {
       unsigned int pagec = (r->curr[0] >> 8);
-      if (r->base[1])
+      if (r->base[1]) 
       {
         dst->lengths[pagec] = OB_UCA_MAX_WEIGHT_SIZE;
       } else {
@@ -2417,7 +2417,7 @@ static bool init_weight_level(ObCharsetInfo *cs, ObCharsetLoader *loader,
         } else if (dst->lengths[pagec] < src->lengths[pageb])
           dst->lengths[pagec] = src->lengths[pageb];
       }
-      dst->weights[pagec] = nullptr;
+      dst->weights[pagec] = nullptr; 
     } else
       has_contractions = true;
   }
@@ -2632,7 +2632,7 @@ static void ob_calc_char_grp_gap_param(ObCharsetInfo *cs, int &rec_ind) {
         weight_start = param->wt_rec[rec_ind].new_wt_bdy.end + 1;
         rec_ind++;
       }
-
+      
       if (last_grp && last_grp->grp_wt_bdy.end < (info->grp_wt_bdy.begin - 1)) {
         ob_set_weight_rec(param->wt_rec, rec_ind, last_grp->grp_wt_bdy.end + 1,
                           info->grp_wt_bdy.begin - 1, weight_start,
@@ -2674,12 +2674,12 @@ static bool ob_prepare_coll_param(ObCharsetInfo *cs, ObCollRules *rules) {
   int rec_ind = ob_prepare_reorder(cs);
   if (add_normalization_rules(cs, rules)) return true;
   if (cs->coll_param == &ja_coll_param) adjust_japanese_weight(cs, rec_ind);
-
+  
   return false;
 }
 static bool create_tailoring(ObCharsetInfo *cs, ObCharsetLoader *loader) {
   if (!cs->tailoring)
-    return false;
+    return false; 
   ObCollRules rules;
   ObUCAInfo new_uca, *src_uca = nullptr;
   int rc = 0;
@@ -2690,7 +2690,7 @@ static bool create_tailoring(ObCharsetInfo *cs, ObCharsetLoader *loader) {
   *loader->errarg = '\0';
   memset(&rules, 0, sizeof(rules));
   rules.loader = loader;
-  rules.uca = cs->uca ? cs->uca : &ob_uca_v400;
+  rules.uca = cs->uca ? cs->uca : &ob_uca_v400; 
   memset(&new_uca, 0, sizeof(new_uca));
   if ((rc = ob_coll_rule_parse(&rules, cs->tailoring,
                               cs->tailoring + strlen(cs->tailoring), cs->name)))
@@ -2860,13 +2860,13 @@ static size_t ob_strnxfrmlen_uca_900(const ObCharsetInfo *cs, size_t len) {
 }
 }  // extern "C"
 ObCollationHandler ob_collation_any_uca_handler = {
-    ob_coll_init_uca,
+    ob_coll_init_uca, 
     ob_coll_uninit_uca,   ob_strnncoll_any_uca,  ob_strnncollsp_any_uca,
     ob_strnxfrm_any_uca,  ob_strnxfrmlen_simple, NULL, ob_like_range_mb,
     ob_wildcmp_uca,       ob_strcasecmp_uca,     ob_instr_mb,
     ob_hash_sort_any_uca, ob_propagate_complex};
 ObCollationHandler ob_collation_uca_900_handler = {
-    ob_coll_init_uca,
+    ob_coll_init_uca, 
     ob_coll_uninit_uca,   ob_strnncoll_uca_900,   ob_strnncollsp_uca_900,
     ob_strnxfrm_uca_900,  ob_strnxfrmlen_uca_900, NULL, ob_like_range_mb,
     ob_wildcmp_uca,       ob_strcasecmp_uca,      ob_instr_mb,
@@ -2875,35 +2875,35 @@ ObCollationHandler ob_collation_uca_900_handler = {
 #define OB_CS_UTF8MB4_UCA_FLAGS (OB_CS_COMPILED|OB_CS_STRNXFRM|OB_CS_UNICODE|OB_CS_UNICODE_SUPPLEMENT)
 ObCharsetInfo ob_charset_utf8mb4_unicode_ci=
 {
-  224,0,0,
+  224,0,0,             
   OB_CS_UTF8MB4_UCA_FLAGS | OB_CS_CI,
-  OB_UTF8MB4,
+  OB_UTF8MB4,          
   OB_UTF8MB4_UNICODE_CI,
-  "",
-  "",
-  NULL,
-  ctype_utf8,
-  NULL,
-  NULL,
-  NULL,
-  &ob_uca_v400,
-  NULL,
-  NULL,
-  &ob_unicase_default,
-  NULL,
-  NULL,
-  8,
+  "",                  
+  "",                  
+  NULL,                
+  ctype_utf8,          
+  NULL,                
+  NULL,                
+  NULL,                
+  &ob_uca_v400,        
+  NULL,              
+  NULL,              
+  &ob_unicase_default, 
+  NULL,                
+  NULL,                
+  8,                   
+  1,                   
+  1,                   
+  1,                   
+  4,                   
   1,
-  1,
-  1,
-  4,
-  1,
-  9,
-  0x10FFFF,
-  ' ',
-  0,
-  1,
-  1,
+  9,                   
+  0x10FFFF,              
+  ' ',                 
+  0,                   
+  1,                   
+  1,                   
   &ob_charset_utf8mb4_handler,
   &ob_collation_any_uca_handler,
   PAD_SPACE};
@@ -2931,7 +2931,7 @@ static int ob_strnncollsp_utf8mb4_0900_bin(const ObCharsetInfo *cs,
 }
 
 static ObCollationHandler ob_collation_utf8mb4_0900_bin_handler = {
-    nullptr,
+    nullptr, 
     nullptr,
     ob_strnncoll_mb_bin,
     ob_strnncollsp_utf8mb4_0900_bin,
@@ -2949,34 +2949,34 @@ static ObCollationHandler ob_collation_utf8mb4_0900_bin_handler = {
 ObCharsetInfo ob_charset_utf8mb4_zh2_0900_as_cs = {
     185,
     0,
-    0,
-    OB_CS_UTF8MB4_UCA_FLAGS | OB_CS_CSSORT,
-    OB_UTF8MB4,
-    OB_UTF8MB4 "_zh2_0900_as_cs",
-    "",
-    zh2_cldr_30,
-    &zh2_coll_param,
-    ctype_utf8,
-    nullptr,
-    nullptr,
-    nullptr,
-    &ob_uca_v900,
-    NULL,
-    NULL,
-    &ob_unicase_unicode900,
-    nullptr,
-    nullptr,
-    0,
+    0,                                      
+    OB_CS_UTF8MB4_UCA_FLAGS | OB_CS_CSSORT, 
+    OB_UTF8MB4,                             
+    OB_UTF8MB4 "_zh2_0900_as_cs",           
+    "",                                     
+    zh2_cldr_30,                             
+    &zh2_coll_param,                        
+    ctype_utf8,                             
+    nullptr,                                
+    nullptr,                                
+    nullptr,                                
+    &ob_uca_v900,                           
+    NULL,                
+    NULL,                
+    &ob_unicase_unicode900,                 
+    nullptr,                                
+    nullptr,                                
+    0,                                      
+    1,                                      
+    1,                                      
+    1,                                      
+    4,                                      
     1,
-    1,
-    1,
-    4,
-    1,
-    32,
-    0x10FFFF,
-    ' ',
-    false,
-    3,
+    32,                                     
+    0x10FFFF,                               
+    ' ',                                    
+    false, 
+    3,     
     1,
     &ob_charset_utf8mb4_handler,
     &ob_collation_uca_900_handler,
@@ -2985,68 +2985,68 @@ ObCharsetInfo ob_charset_utf8mb4_zh2_0900_as_cs = {
 ObCharsetInfo ob_charset_utf8mb4_zh3_0900_as_cs = {
     185,
     0,
-    0,
-    OB_CS_UTF8MB4_UCA_FLAGS | OB_CS_CSSORT,
-    OB_UTF8MB4,
-    OB_UTF8MB4 "_zh3_0900_as_cs",
-    "",
-    zh2_cldr_30,
-    &zh3_coll_param,
-    ctype_utf8,
-    nullptr,
-    nullptr,
-    nullptr,
-    &ob_uca_v900,
-    NULL,
-    NULL,
-    &ob_unicase_unicode900,
-    nullptr,
-    nullptr,
-    0,
-    1,
-    1,
-    1,
+    0,                                      
+    OB_CS_UTF8MB4_UCA_FLAGS | OB_CS_CSSORT, 
+    OB_UTF8MB4,                             
+    OB_UTF8MB4 "_zh3_0900_as_cs",           
+    "",                                     
+    zh2_cldr_30,                             
+    &zh3_coll_param,                        
+    ctype_utf8,                             
+    nullptr,                                
+    nullptr,                                
+    nullptr,                                
+    &ob_uca_v900,                           
+    NULL,                
+    NULL,                
+    &ob_unicase_unicode900,                 
+    nullptr,                                
+    nullptr,                                
+    0,                                      
+    1,                                      
+    1,                                      
+    1,                                      
     4,
     1,
-    32,
-    0x10FFFF,
-    ' ',
-    false,
-    3,
+    32,                                     
+    0x10FFFF,                               
+    ' ',                                    
+    false, 
+    3,     
     1,
     &ob_charset_utf8mb4_handler,
     &ob_collation_uca_900_handler,
     NO_PAD};
 
 ObCharsetInfo ob_charset_utf8mb4_0900_ai_ci = {
-    255, 0, 0,
-    OB_CS_UTF8MB4_UCA_FLAGS | OB_CS_PRIMARY,
-    OB_UTF8MB4,
-    OB_UTF8MB4 "_0900_ai_ci",
-    "UTF-8 Unicode",
-    nullptr,
-    nullptr,
-    ctype_utf8,
-    nullptr,
-    nullptr,
-    nullptr,
-    &ob_uca_v900,
-    NULL,
-    NULL,
-    &ob_unicase_unicode900,
-    nullptr,
-    nullptr,
-    0,
-    1,
-    1,
-    1,
+    255, 0, 0,                               
+    OB_CS_UTF8MB4_UCA_FLAGS | OB_CS_PRIMARY, 
+    OB_UTF8MB4,                              
+    OB_UTF8MB4 "_0900_ai_ci",                
+    "UTF-8 Unicode",                         
+    nullptr,                                 
+    nullptr,                                 
+    ctype_utf8,                              
+    nullptr,                                 
+    nullptr,                                 
+    nullptr,                                 
+    &ob_uca_v900,                            
+    NULL,                
+    NULL,                
+    &ob_unicase_unicode900,                  
+    nullptr,                                 
+    nullptr,                                 
+    0,                                       
+    1,                                       
+    1,                                       
+    1,                                       
     4,
-    1,                          /* mbmaxlenlen   */
-    9,
-    0x10FFFF,
-    ' ',
-    false,
-    1,
+    1,                          /* mbmaxlenlen   */         
+    9,                                       
+    0x10FFFF,                                
+    ' ',                                     
+    false, 
+    1,     
     1,
     &ob_charset_utf8mb4_handler,
     &ob_collation_uca_900_handler,
@@ -5288,67 +5288,67 @@ ObCharsetInfo ob_charset_utf8mb4_mn_cyrl_0900_as_cs = {
     NO_PAD};
 
 ObCharsetInfo *uca900_collations[] = {
-    &ob_charset_utf8mb4_0900_ai_ci,
+    &ob_charset_utf8mb4_0900_ai_ci,    
     &ob_charset_utf8mb4_de_pb_0900_ai_ci,
-    &ob_charset_utf8mb4_is_0900_ai_ci,
-    &ob_charset_utf8mb4_lv_0900_ai_ci,
-    &ob_charset_utf8mb4_ro_0900_ai_ci,
-    &ob_charset_utf8mb4_sl_0900_ai_ci,
-    &ob_charset_utf8mb4_pl_0900_ai_ci,
-    &ob_charset_utf8mb4_et_0900_ai_ci,
-    &ob_charset_utf8mb4_es_0900_ai_ci,
-    &ob_charset_utf8mb4_sv_0900_ai_ci,
-    &ob_charset_utf8mb4_tr_0900_ai_ci,
-    &ob_charset_utf8mb4_cs_0900_ai_ci,
-    &ob_charset_utf8mb4_da_0900_ai_ci,
-    &ob_charset_utf8mb4_lt_0900_ai_ci,
-    &ob_charset_utf8mb4_sk_0900_ai_ci,
+    &ob_charset_utf8mb4_is_0900_ai_ci, 
+    &ob_charset_utf8mb4_lv_0900_ai_ci, 
+    &ob_charset_utf8mb4_ro_0900_ai_ci, 
+    &ob_charset_utf8mb4_sl_0900_ai_ci, 
+    &ob_charset_utf8mb4_pl_0900_ai_ci, 
+    &ob_charset_utf8mb4_et_0900_ai_ci, 
+    &ob_charset_utf8mb4_es_0900_ai_ci, 
+    &ob_charset_utf8mb4_sv_0900_ai_ci, 
+    &ob_charset_utf8mb4_tr_0900_ai_ci, 
+    &ob_charset_utf8mb4_cs_0900_ai_ci, 
+    &ob_charset_utf8mb4_da_0900_ai_ci, 
+    &ob_charset_utf8mb4_lt_0900_ai_ci, 
+    &ob_charset_utf8mb4_sk_0900_ai_ci, 
     &ob_charset_utf8mb4_es_trad_0900_ai_ci,
-    &ob_charset_utf8mb4_la_0900_ai_ci,
-    &ob_charset_utf8mb4_eo_0900_ai_ci,
-    &ob_charset_utf8mb4_hu_0900_ai_ci,
-    &ob_charset_utf8mb4_hr_0900_ai_ci,
-    &ob_charset_utf8mb4_vi_0900_ai_ci,
-    &ob_charset_utf8mb4_0900_as_cs,
+    &ob_charset_utf8mb4_la_0900_ai_ci, 
+    &ob_charset_utf8mb4_eo_0900_ai_ci, 
+    &ob_charset_utf8mb4_hu_0900_ai_ci, 
+    &ob_charset_utf8mb4_hr_0900_ai_ci, 
+    &ob_charset_utf8mb4_vi_0900_ai_ci, 
+    &ob_charset_utf8mb4_0900_as_cs,    
     &ob_charset_utf8mb4_de_pb_0900_as_cs,
-    &ob_charset_utf8mb4_is_0900_as_cs,
-    &ob_charset_utf8mb4_lv_0900_as_cs,
-    &ob_charset_utf8mb4_ro_0900_as_cs,
-    &ob_charset_utf8mb4_sl_0900_as_cs,
-    &ob_charset_utf8mb4_pl_0900_as_cs,
-    &ob_charset_utf8mb4_et_0900_as_cs,
-    &ob_charset_utf8mb4_es_0900_as_cs,
-    &ob_charset_utf8mb4_sv_0900_as_cs,
-    &ob_charset_utf8mb4_tr_0900_as_cs,
-    &ob_charset_utf8mb4_cs_0900_as_cs,
-    &ob_charset_utf8mb4_da_0900_as_cs,
-    &ob_charset_utf8mb4_lt_0900_as_cs,
-    &ob_charset_utf8mb4_sk_0900_as_cs,
+    &ob_charset_utf8mb4_is_0900_as_cs, 
+    &ob_charset_utf8mb4_lv_0900_as_cs, 
+    &ob_charset_utf8mb4_ro_0900_as_cs, 
+    &ob_charset_utf8mb4_sl_0900_as_cs, 
+    &ob_charset_utf8mb4_pl_0900_as_cs, 
+    &ob_charset_utf8mb4_et_0900_as_cs, 
+    &ob_charset_utf8mb4_es_0900_as_cs, 
+    &ob_charset_utf8mb4_sv_0900_as_cs, 
+    &ob_charset_utf8mb4_tr_0900_as_cs, 
+    &ob_charset_utf8mb4_cs_0900_as_cs, 
+    &ob_charset_utf8mb4_da_0900_as_cs, 
+    &ob_charset_utf8mb4_lt_0900_as_cs, 
+    &ob_charset_utf8mb4_sk_0900_as_cs, 
     &ob_charset_utf8mb4_es_trad_0900_as_cs,
-    &ob_charset_utf8mb4_la_0900_as_cs,
-    &ob_charset_utf8mb4_eo_0900_as_cs,
-    &ob_charset_utf8mb4_hu_0900_as_cs,
-    &ob_charset_utf8mb4_hr_0900_as_cs,
-    &ob_charset_utf8mb4_vi_0900_as_cs,
-    &ob_charset_utf8mb4_ja_0900_as_cs,
+    &ob_charset_utf8mb4_la_0900_as_cs, 
+    &ob_charset_utf8mb4_eo_0900_as_cs, 
+    &ob_charset_utf8mb4_hu_0900_as_cs, 
+    &ob_charset_utf8mb4_hr_0900_as_cs, 
+    &ob_charset_utf8mb4_vi_0900_as_cs, 
+    &ob_charset_utf8mb4_ja_0900_as_cs, 
     &ob_charset_utf8mb4_ja_0900_as_cs_ks,
-    &ob_charset_utf8mb4_0900_as_ci,
-    &ob_charset_utf8mb4_ru_0900_ai_ci,
-    &ob_charset_utf8mb4_ru_0900_as_cs,
-    &ob_charset_utf8mb4_zh_0900_as_cs,
+    &ob_charset_utf8mb4_0900_as_ci,    
+    &ob_charset_utf8mb4_ru_0900_ai_ci, 
+    &ob_charset_utf8mb4_ru_0900_as_cs, 
+    &ob_charset_utf8mb4_zh_0900_as_cs, 
     &ob_charset_utf8mb4_0900_bin,
-    &ob_charset_utf8mb4_nb_0900_ai_ci,
-    &ob_charset_utf8mb4_nb_0900_as_cs,
-    &ob_charset_utf8mb4_nn_0900_ai_ci,
-    &ob_charset_utf8mb4_nn_0900_as_cs,
+    &ob_charset_utf8mb4_nb_0900_ai_ci, 
+    &ob_charset_utf8mb4_nb_0900_as_cs, 
+    &ob_charset_utf8mb4_nn_0900_ai_ci, 
+    &ob_charset_utf8mb4_nn_0900_as_cs, 
     &ob_charset_utf8mb4_sr_latn_0900_ai_ci,
     &ob_charset_utf8mb4_sr_latn_0900_as_cs,
-    &ob_charset_utf8mb4_bs_0900_ai_ci,
-    &ob_charset_utf8mb4_bs_0900_as_cs,
-    &ob_charset_utf8mb4_bg_0900_ai_ci,
-    &ob_charset_utf8mb4_bg_0900_as_cs,
-    &ob_charset_utf8mb4_gl_0900_ai_ci,
-    &ob_charset_utf8mb4_gl_0900_as_cs,
+    &ob_charset_utf8mb4_bs_0900_ai_ci, 
+    &ob_charset_utf8mb4_bs_0900_as_cs, 
+    &ob_charset_utf8mb4_bg_0900_ai_ci, 
+    &ob_charset_utf8mb4_bg_0900_as_cs, 
+    &ob_charset_utf8mb4_gl_0900_ai_ci, 
+    &ob_charset_utf8mb4_gl_0900_as_cs, 
     &ob_charset_utf8mb4_mn_cyrl_0900_ai_ci,
     &ob_charset_utf8mb4_mn_cyrl_0900_as_cs,
     nullptr   // do not delete the nullptr to prevent to count array overflow
@@ -6184,8 +6184,8 @@ ObCharsetInfo ob_charset_utf8mb4_vietnamese_ci = {
 
 static ObCollationHandler ob_collation_utf16_uca_handler =
 {
-  ob_coll_init_uca,
-  ob_coll_uninit_uca,
+  ob_coll_init_uca,        
+  ob_coll_uninit_uca,			
   ob_strnncoll_any_uca,
   ob_strnncollsp_any_uca,
   ob_strnxfrm_any_uca,
@@ -6202,35 +6202,35 @@ static ObCollationHandler ob_collation_utf16_uca_handler =
 #define OB_CS_UTF16_UCA_FLAGS (OB_CS_COMPILED|OB_CS_STRNXFRM|OB_CS_UNICODE|OB_CS_NONASCII)
 ObCharsetInfo ob_charset_utf16_unicode_ci=
 {
-    101,0,0,
+    101,0,0,             
     OB_CS_UTF16_UCA_FLAGS | OB_CS_CI,
-    OB_UTF16,
-    OB_UTF16_UNICODE_CI,
-    "",
-    "",
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    &ob_uca_v400,
-    NULL,
-    NULL,
-    &ob_unicase_default,
-    NULL,
-    NULL,
-    8,
-    1,
-    1,
-    2,
-    4,
-    1,                      /* mbmaxlenlen  */
-    9,
-    0x10FFFF,
-    ' ',
-    0,
-    1,
-    1,
+    OB_UTF16,             
+    OB_UTF16_UNICODE_CI,  
+    "",                  
+    "",                  
+    NULL,                
+    NULL,                
+    NULL,                
+    NULL,                
+    NULL,                
+    &ob_uca_v400,        
+    NULL,                
+    NULL,                
+    &ob_unicase_default, 
+    NULL,                
+    NULL,                
+    8,                   
+    1,                   
+    1,                   
+    2,                   
+    4,     
+    1,                      /* mbmaxlenlen  */              
+    9,                   
+    0x10FFFF,              
+    ' ',                 
+    0,                   
+    1,                   
+    1,                   
     &ob_charset_utf16_handler,
     &ob_collation_utf16_uca_handler,
     PAD_SPACE};
@@ -7113,3 +7113,4 @@ ObCharsetInfo *euro_collations[] = {
   &ob_charset_utf16_vietnamese_ci    ,
   nullptr     // do not delete the nullptr to prevent to count array overflow
 };
+

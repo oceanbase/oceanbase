@@ -45,7 +45,7 @@ public:
   void pause();
   void resume();
 
-  static const int64_t OB_KV_TTL_GC_INTERVAL =  30 * 1000L * 1000L; // 30s
+  static const int64_t OB_KV_TTL_GC_INTERVAL =  30 * 1000L * 1000L; // 30s 
   static const int64_t OB_KV_TTL_GC_COUNT_PER_TASK = 4096L;
 private:
   common::ObMySQLProxy *sql_proxy_;
@@ -61,7 +61,7 @@ public:
   ~ObTTLServerInfo() = default;
   TO_STRING_KV(K_(addr), K_(is_responsed));
 public:
-  common::ObAddr addr_;
+  common::ObAddr addr_; 
   bool is_responsed_;
 };
 
@@ -87,7 +87,7 @@ public:
   TO_STRING_KV(K_(tenant_id),
                K_(ttl_status),
                K_(is_finished));
-
+               
 public:
   uint64_t tenant_id_;
   common::ObTTLStatus ttl_status_;
@@ -139,11 +139,11 @@ private:
   int calc_next_task_state(ObTTLTaskType user_cmd_type,
                            ObTTLTaskStatus curr_state,
                            ObTTLTaskStatus &next_state);
-
+ 
   ObTTLTaskStatus next_status(int64_t curr);
 
   int add_ttl_task_internal(TRIGGER_TYPE trigger_type);
-
+  
   int check_all_tablet_task();
   int check_one_tablet_task(common::ObISQLClient &sql_client,
                             const uint64_t table_id,
@@ -174,10 +174,10 @@ protected:
 
   bool need_reload_;
   lib::ObMutex mutex_;
-  ObArray<share::ObTabletTablePair> tablet_table_pairs_;
+  ObArray<share::ObTabletTablePair> tablet_table_pairs_;    
   bool is_leader_; // current ttl manager in ls leader or not
   const int64_t OB_TTL_TASK_RETRY_INTERVAL = 15*1000*1000; // 15s
-  bool need_do_for_switch_; // need wait follower finish after switch leader
+  bool need_do_for_switch_; // need wait follower finish after switch leader  
 };
 
 class ObTTLAllTaskScheduler : public common::ObTimerTask
@@ -219,8 +219,8 @@ public:
 class ObTenantTTLManager
 {
 public:
-  static const int64_t SCHEDULE_PERIOD = 15 * 1000L * 1000L; // 15s
-  explicit ObTenantTTLManager()
+  static const int64_t SCHEDULE_PERIOD = 15 * 1000L * 1000L; // 15s 
+  explicit ObTenantTTLManager() 
     : is_inited_(false),
       clear_ttl_history_task_(),
       tenant_id_(OB_INVALID_TENANT_ID),

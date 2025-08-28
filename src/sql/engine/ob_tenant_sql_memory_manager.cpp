@@ -883,7 +883,7 @@ int ObTenantSqlMemoryManager::get_max_work_area_size(
             ret = OB_SUCCESS;
           } else {
             // TODO: kvcache大概可以淘汰多少内存，目前没有数据，后续寒晖他们会提供接口
-            // bug34818894
+            // bug34818894 
             // 这里暂时写一个默认比例
             max_tenant_memory_size += resource_handle.get_memory_mgr()->get_cache_hold() * pctg / 100;
             washable_size = -1;
@@ -1350,7 +1350,7 @@ ObSqlProfileExecInfo::ObSqlProfileExecInfo(ObExecContext *exec_ctx)
   }
 }
 
-ObSqlProfileExecInfo::ObSqlProfileExecInfo(dtl::ObDtlLinkedBuffer *buffer) :
+ObSqlProfileExecInfo::ObSqlProfileExecInfo(dtl::ObDtlLinkedBuffer *buffer) : 
   my_session_(nullptr)
 {
   dop_ = buffer->get_dop();

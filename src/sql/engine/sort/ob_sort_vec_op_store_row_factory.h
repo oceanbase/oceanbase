@@ -21,7 +21,7 @@ class ObSortVecOpStoreRowFactory {
 public:
   ObSortVecOpStoreRowFactory(common::ObIAllocator &allocator,
                   ObSqlMemMgrProcessor &sql_mem_processor,
-                  const RowMeta *&sk_row_meta,
+                  const RowMeta *&sk_row_meta, 
                   const RowMeta *&addon_row_meta,
                   int64_t &inmem_row_size,
                   const int64_t &topn_cnt)
@@ -193,7 +193,7 @@ public:
     }
     return ret;
   }
-
+  
 private:
   common::ObIAllocator &allocator_;
   ObSqlMemMgrProcessor &sql_mem_processor_;

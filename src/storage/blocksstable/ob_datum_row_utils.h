@@ -32,7 +32,7 @@ public:
   // TODO@xuanxi: rewrite it when store rowkey is no longer needed
   static int prepare_rowkey(
     const ObDatumRow &datum_row,
-    const int key_datum_cnt,
+    const int key_datum_cnt, 
     const ObColDescIArray &col_descs,
     common::ObIAllocator &allocator,
     ObDatumRowkey &rowkey);

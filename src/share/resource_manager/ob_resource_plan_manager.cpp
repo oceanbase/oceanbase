@@ -156,7 +156,7 @@ int ObResourcePlanManager::refresh_resource_plan(const uint64_t tenant_id, ObStr
   } else if (OB_FAIL(normalize_net_bandwidth_directives(tenant_id, directives, other_directive))) {
     LOG_WARN("fail normalize net bandwidthdirective", K(ret));
   } else if (OB_FAIL(flush_directive_to_iops_control(tenant_id, directives, other_directive))) { // for IOPS
-    LOG_WARN("fail flush directive to io control", K(ret));
+    LOG_WARN("fail flush directive to io control", K(ret)); 
   } else {
     if (OB_ISNULL(GCTX.cgroup_ctrl_) || !(GCTX.cgroup_ctrl_->is_valid())) {
       // do nothing，cgroup ctrl 没有初始化成功，可能是没有 cgroup fs、没有权限等原因
@@ -166,10 +166,10 @@ int ObResourcePlanManager::refresh_resource_plan(const uint64_t tenant_id, ObStr
       // directive => cgroup share/cfs_cpu_quota 转换。2 步:
       //   step1: 以 100 为总值做归一化
       //   step2: 将值转化成 cgroup 值 （utilization=>cfs_cpu_quota 的值和 cpu 核数等有关)
-      //      - 如果 utilization = 100，那么 cfs_cpu_quota = -1
+      //      - 如果 utilization = 100，那么 cfs_cpu_quota = -1        
     } else if (OB_FAIL(flush_directive_to_cgroup_fs(directives))) {  // for CPU
       LOG_WARN("fail flush directive to cgroup fs", K(ret));
-    }
+    } 
     (void) clear_deleted_directives(tenant_id, directives);
   }
   if (OB_SUCC(ret)) {
@@ -212,8 +212,8 @@ int64_t ObResourcePlanManager::to_string(char *buf, const int64_t len) const
   return pos;
 }
 
-int ObResourcePlanManager::normalize_iops_directives(const uint64_t tenant_id,
-                                                     ObPlanDirectiveSet &directives,
+int ObResourcePlanManager::normalize_iops_directives(const uint64_t tenant_id, 
+                                                     ObPlanDirectiveSet &directives, 
                                                      ObPlanDirective &other_group_directive)
 {
   int ret = OB_SUCCESS;
@@ -238,7 +238,7 @@ int ObResourcePlanManager::normalize_iops_directives(const uint64_t tenant_id,
         LOG_WARN("invalid group io config", K(cur_directive));
       } else {
         total_weight += cur_directive.weight_iops_;
-        total_min += cur_directive.min_iops_;
+        total_min += cur_directive.min_iops_;      
       }
     }
     total_weight += OTHER_GROUPS_IOPS_WEIGHT; //OTHER GROUPS WEIGHT
@@ -260,8 +260,8 @@ int ObResourcePlanManager::normalize_iops_directives(const uint64_t tenant_id,
   return ret;
 }
 
-int ObResourcePlanManager::normalize_net_bandwidth_directives(const uint64_t tenant_id,
-                                                              ObPlanDirectiveSet &directives,
+int ObResourcePlanManager::normalize_net_bandwidth_directives(const uint64_t tenant_id, 
+                                                              ObPlanDirectiveSet &directives, 
                                                               ObPlanDirective &other_group_directive)
 {
   int ret = OB_SUCCESS;
@@ -367,8 +367,8 @@ int ObResourcePlanManager::flush_directive_to_cgroup_fs(ObPlanDirectiveSet &dire
   return ret;
 }
 
-int ObResourcePlanManager::flush_directive_to_iops_control(const uint64_t tenant_id,
-                                                           ObPlanDirectiveSet &directives,
+int ObResourcePlanManager::flush_directive_to_iops_control(const uint64_t tenant_id, 
+                                                           ObPlanDirectiveSet &directives, 
                                                            ObPlanDirective &other_group_directive)
 {
   int ret = OB_SUCCESS;
@@ -401,8 +401,8 @@ int ObResourcePlanManager::flush_directive_to_iops_control(const uint64_t tenant
     if (OB_SUCC(ret)) {
       share::ObGroupIOInfo other_io_info;
       if (OB_FAIL(other_io_info.init(other_group_directive.group_name_.get_value().ptr(),
-                                     other_group_directive.min_iops_,
-                                     other_group_directive.max_iops_,
+                                     other_group_directive.min_iops_, 
+                                     other_group_directive.max_iops_, 
                                      other_group_directive.weight_iops_,
                                      other_group_directive.max_net_bandwidth_, other_group_directive.net_bandwidth_weight_))) {
         LOG_ERROR("fail init other group io info", K(other_group_directive), K(ret));
@@ -424,7 +424,7 @@ int ObResourcePlanManager::flush_directive_to_iops_control(const uint64_t tenant
 }
 
 
-int ObResourcePlanManager::clear_deleted_directives(const uint64_t tenant_id,
+int ObResourcePlanManager::clear_deleted_directives(const uint64_t tenant_id, 
                                                            ObPlanDirectiveSet &directives)
 {
   int ret = OB_SUCCESS;

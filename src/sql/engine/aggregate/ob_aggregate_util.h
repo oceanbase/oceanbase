@@ -32,7 +32,7 @@ struct nmb_param_may_has_null<src_type, std::void_t<decltype(src_type::_param_ma
   : public std::conditional<src_type::_param_maybe_null, std::true_type, std::false_type>::type
 {};
 
-template<typename SRC_TYPE, typename SELECTOR_TYPE>
+template<typename SRC_TYPE, typename SELECTOR_TYPE>  
 int number_accumulator(
     const SRC_TYPE &src,
     ObDataBuffer &allocator1,

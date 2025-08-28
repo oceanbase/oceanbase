@@ -25,7 +25,7 @@ class ObCOMinorSSTableFuser : public ObIPartitionMergeFuser
 public:
   ObCOMinorSSTableFuser(common::ObIAllocator &allocator) : ObIPartitionMergeFuser(allocator) {}
   virtual ~ObCOMinorSSTableFuser() {}
-  virtual int end_fuse_row(const storage::ObNopPos &nop_pos, blocksstable::ObDatumRow &result_row) override
+  virtual int end_fuse_row(const storage::ObNopPos &nop_pos, blocksstable::ObDatumRow &result_row) override 
   { UNUSEDx(nop_pos, result_row); return OB_SUCCESS;}
   virtual int inner_init(const ObMergeParameter &merge_param)
   {
@@ -48,4 +48,4 @@ public:
 } //oceanbase
 
 
-#endif
+#endif 

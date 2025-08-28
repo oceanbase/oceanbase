@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 
 #define USING_LOG_PREFIX SQL_QRR
 #include "sql/udr/ob_udr_struct.h"
@@ -46,7 +46,7 @@ DEFINE_SERIALIZE(QuestionMarkDefNameCtx)
 DEFINE_DESERIALIZE(QuestionMarkDefNameCtx)
 {
   int ret = OB_SUCCESS;
-  const int64_t min_needed_size = 1;
+  const int64_t min_needed_size = 1; 
   if (OB_ISNULL(buf) || OB_UNLIKELY((data_len - pos) < min_needed_size)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(buf), "remain", data_len - pos);

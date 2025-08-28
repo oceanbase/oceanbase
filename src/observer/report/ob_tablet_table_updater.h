@@ -117,7 +117,7 @@ public:
 
   TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(need_diagnose), K_(add_timestamp), K_(start_timestamp));
 private:
-  const int64_t TABLET_CHECK_INTERVAL = 2 * 3600 * 1000L * 1000L; //2 hour
+  const int64_t TABLET_CHECK_INTERVAL = 2 * 3600 * 1000L * 1000L; //2 hour 
   bool need_diagnose_; // task for compaction need diagnose
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
@@ -172,11 +172,11 @@ public:
   int set_thread_count();
   // for diagnose
   int check_exist(
-      const share::ObLSID &ls_id,
-      const ObTabletID &tablet_id,
+      const share::ObLSID &ls_id, 
+      const ObTabletID &tablet_id, 
       bool &exist);
   int check_processing_exist(
-      const share::ObLSID &ls_id,
+      const share::ObLSID &ls_id, 
       const ObTabletID &tablet_id,
       bool &exist);
   int diagnose_existing_task(

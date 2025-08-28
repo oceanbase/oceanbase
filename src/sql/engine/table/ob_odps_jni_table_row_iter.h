@@ -124,7 +124,7 @@ public:
   };
 
   struct OdpsFixedTypeDecoder : public OdpsDecoder {
-    OdpsFixedTypeDecoder(ObIAllocator& alloc, bool is_root, const MirrorOdpsJniColumn &odps_column,
+    OdpsFixedTypeDecoder(ObIAllocator& alloc, bool is_root, const MirrorOdpsJniColumn &odps_column, 
       ObSQLSessionInfo* session_ptr, ObTime& ob_time, int timezone_ret, int64_t timezone_offset)
     : OdpsDecoder(alloc, is_root, odps_column),
       column_addr_(0),
@@ -342,7 +342,7 @@ private:
                         const ObIArray<ObExpr*> &file_column_exprs,
                         const ObExpr* column_expr,
                         MirrorOdpsJniColumn *&mirror_column);
-
+  
   int print_predicate_string(const ObIArray<ObExpr*> &access_exprs,
                              const ObIArray<ObExpr*> &file_column_exprs,
                              sql::ObPushdownFilterExecutor &filter,
@@ -430,12 +430,12 @@ public:
 
   static int fetch_row_count(ObExecContext &exec_ctx, const ObString part_spec, const ObString &properties, int64_t &row_count);
 
-  static int fetch_storage_row_count(ObExecContext &exec_ctx,
+  static int fetch_storage_row_count(ObExecContext &exec_ctx, 
     const ObString part_spec, const ObString &properties, int64_t &row_count);
 
   static int fetch_storage_row_count(ObExecContext &exec_ctx, const ObString &properties, int64_t &row_count);
   static int fetch_storage_api_total_task(ObExecContext &exec_ctx, const ExprFixedArray &ext_file_column_expr, const ObString &part_list_str,
-      const ObDASScanCtDef &das_ctdef, ObDASScanRtDef *das_rtdef, int64_t parallel, ObString &session_str, int64_t &split_count,
+      const ObDASScanCtDef &das_ctdef, ObDASScanRtDef *das_rtdef, int64_t parallel, ObString &session_str, int64_t &split_count, 
       ObIAllocator &range_allocator);
   static int fetch_storage_api_split_by_row(ObExecContext &exec_ctx, const ExprFixedArray &ext_file_column_expr, const ObString &part_list_str,
       const ObDASScanCtDef &das_ctdef, ObDASScanRtDef *das_rtdef, int64_t parallel, ObString &session_str, int64_t &total_row_count,
@@ -537,7 +537,7 @@ public:
       OdpsUploader &odps_uploader);
 
   void release_hold_session();
-
+  
   int commit_session(int64_t num_block);
   int append_block_id(long block_id);
 

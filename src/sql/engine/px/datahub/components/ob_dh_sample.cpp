@@ -509,7 +509,7 @@ int ObDynamicSamplePieceMsgCtx::split_range(
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < sort_def_.exprs_->count(); ++i) {
       ObExpr *expr = sort_def_.exprs_->at(i);
-      if (coord_.get_spec().use_rich_format_ &&
+      if (coord_.get_spec().use_rich_format_ && 
           !is_uniform_format(expr->get_format(coord_.get_eval_ctx()))) {
         if (OB_FAIL(expr->init_vector(coord_.get_eval_ctx(),
                           expr->is_const_expr() ? VEC_UNIFORM_CONST : VEC_UNIFORM,

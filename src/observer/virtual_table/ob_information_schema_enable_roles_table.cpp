@@ -41,7 +41,7 @@ int ObInfoSchemaEnableRolesTable::inner_get_next_row(common::ObNewRow*& row)
       LOG_WARN("fail to prepare scan", K(ret));
     }
   }
-
+  
   if (OB_SUCC(ret)) {
     if (OB_FAIL(scanner_it_.get_next_row(cur_row_))) {
       if (OB_ITER_END != ret) {
@@ -67,7 +67,7 @@ int ObInfoSchemaEnableRolesTable::prepare_scan()
   ObObj *cells = NULL;
   share::schema::ObSchemaGetterGuard *schema_guard = NULL;
   const int64_t col_count = output_column_ids_.count();
-
+  
 
   if (0 > col_count || col_count > (MAX_COL_ID - OB_APP_MIN_COLUMN_ID)) {
     ret = OB_ERR_UNEXPECTED;

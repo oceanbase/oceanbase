@@ -11,7 +11,7 @@ on:
       - 'README_CN.md'
       - 'CONTRIBUTING.md'
   schedule:
-    - cron: '30 9 * * *'
+    - cron: '30 9 * * *'  
 
 jobs:
   farm:

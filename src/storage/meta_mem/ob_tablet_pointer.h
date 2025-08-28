@@ -45,19 +45,19 @@ public:
      backup_bytes_(0)
     {}
   ~ObTabletAttr() { reset(); }
-  void reset()
-  {
-    v_ = 0;
-    ha_status_ = 0;
-    all_sstable_data_occupy_size_ = 0;
-    all_sstable_data_required_size_ = 0;
-    tablet_meta_size_ = 0;
+  void reset() 
+  { 
+    v_ = 0; 
+    ha_status_ = 0; 
+    all_sstable_data_occupy_size_ = 0; 
+    all_sstable_data_required_size_ = 0; 
+    tablet_meta_size_ = 0; 
     ss_public_sstable_occupy_size_ = 0;
     backup_bytes_ = 0;
   }
   bool is_valid() const { return valid_; }
   TO_STRING_KV(K_(valid), K_(is_empty_shell), K_(has_transfer_table),
-      K_(has_next_tablet), K_(has_nested_table), K_(ha_status),
+      K_(has_next_tablet), K_(has_nested_table), K_(ha_status), 
       K_(all_sstable_data_occupy_size), K_(all_sstable_data_required_size), K_(tablet_meta_size),
       K_(ss_public_sstable_occupy_size), K_(backup_bytes)
       );
@@ -82,9 +82,9 @@ public:
   // meta_size in shared_nothing, meta_block_count * 2MB
   int64_t tablet_meta_size_;
   // major sstable data occupy_size
-  // which is same as major_sstable_required_size_;
+  // which is same as major_sstable_required_size_; 
   // because the alignment size is 1B in object_storage.
-  int64_t ss_public_sstable_occupy_size_;
+  int64_t ss_public_sstable_occupy_size_; 
   int64_t backup_bytes_;
 };
 
@@ -201,8 +201,8 @@ struct ObTabletResidentInfo final
 public:
   ObTabletResidentInfo() { reset(); }
   ObTabletResidentInfo(
-    const ObTabletAttr &attr,
-    const ObMetaDiskAddr &tablet_addr,
+    const ObTabletAttr &attr, 
+    const ObMetaDiskAddr &tablet_addr, 
     const share::ObLSID &ls_id,
     const ObTabletID &tablet_id)
   : attr_(attr), tablet_addr_(tablet_addr), ls_id_(ls_id), tablet_id_(tablet_id)
@@ -218,8 +218,8 @@ public:
   uint64_t get_tablet_meta_size() const { return attr_.tablet_meta_size_; }
   int64_t get_ss_public_sstable_occupy_size() const { return attr_.ss_public_sstable_occupy_size_; }
   int64_t get_backup_size() const { return attr_.backup_bytes_; }
-  void reset()
-  {
+  void reset() 
+  { 
     attr_.reset();
     tablet_addr_.set_none_addr();
     tablet_id_ = ObTabletID::INVALID_TABLET_ID;
@@ -276,3 +276,4 @@ struct ScanAllVersionTabletsOp
 } // namespace oceanbase
 
 #endif // OCEANBASE_STORAGE_OB_TABLET_POINTER
+

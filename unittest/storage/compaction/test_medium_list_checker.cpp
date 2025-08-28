@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #include <gtest/gtest.h>
 #define private public
 #define protected public
@@ -116,7 +116,7 @@ TEST_F(TestMediumListChecker, test_validate_medium_info_list)
     ObExtraMediumInfo extra_info;
     extra_info.last_medium_scn_ = 100;
     ObSEArray<compaction::ObMediumCompactionInfo*, 10> array;
-
+    
     ASSERT_EQ(OB_SUCCESS, construct_array("300, 400, 500", array, medium_compat_version, 10/*last_medium_scn_of_first_medium_info*/));
     ret = ObMediumListChecker::validate_medium_info_list(extra_info, &array, 100/*last_major_snapshot*/);
     ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
@@ -125,7 +125,7 @@ TEST_F(TestMediumListChecker, test_validate_medium_info_list)
     ASSERT_EQ(OB_SUCCESS, construct_array("200, 400, 500", array, medium_compat_version, 100/*last_medium_scn_of_first_medium_info*/));
     ret = ObMediumListChecker::validate_medium_info_list(extra_info, &array, 50/*last_major_snapshot*/);
     ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
-
+    
     ret = ObMediumListChecker::validate_medium_info_list(extra_info, &array, 100/*last_major_snapshot*/);
     ASSERT_EQ(OB_SUCCESS, ret);
 

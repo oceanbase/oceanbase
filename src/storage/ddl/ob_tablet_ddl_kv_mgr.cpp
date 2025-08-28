@@ -23,7 +23,7 @@ using namespace oceanbase::share;
 using namespace oceanbase::storage;
 
 ObTabletDDLKvMgr::ObTabletDDLKvMgr()
-  : is_inited_(false),
+  : is_inited_(false), 
     ls_id_(), tablet_id_(),
     max_freeze_scn_(SCN::min_scn()),
     head_(0), tail_(0), lock_(), ref_cnt_(0)
@@ -114,7 +114,7 @@ int ObTabletDDLKvMgr::get_rec_scn(SCN &rec_scn)
   } else if (OB_ISNULL(tablet_mgr = direct_load_mgr_hdl.get_full_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected err", K(ret), K(ls_id_), K(tablet_id_));
-  }
+  } 
   if (OB_SUCC(ret) && nullptr != tablet_mgr) {
     if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
       LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
@@ -400,7 +400,7 @@ int ObTabletDDLKvMgr::get_active_ddl_kv_impl(ObDDLKVHandle &kv_handle)
 int ObTabletDDLKvMgr::get_or_create_shared_nothing_ddl_kv(
     const share::SCN &macro_redo_scn,
     const share::SCN &macro_redo_start_scn,
-    ObTabletDirectLoadMgrHandle &direct_load_mgr_handle,
+    ObTabletDirectLoadMgrHandle &direct_load_mgr_handle, 
     ObDDLKVHandle &kv_handle)
 {
   int ret = OB_SUCCESS;
@@ -409,7 +409,7 @@ int ObTabletDDLKvMgr::get_or_create_shared_nothing_ddl_kv(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTabletDDLKvMgr is not inited", K(ret));
-  } else if (OB_UNLIKELY(!macro_redo_scn.is_valid_and_not_min()
+  } else if (OB_UNLIKELY(!macro_redo_scn.is_valid_and_not_min() 
                       || !macro_redo_start_scn.is_valid_and_not_min()
                       || !direct_load_mgr_handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -442,7 +442,7 @@ int ObTabletDDLKvMgr::get_or_create_shared_nothing_ddl_kv(
       try_get_ddl_kv_unlock(macro_redo_scn, kv_handle);
       if (kv_handle.is_valid()) {
         // do nothing
-      } else if (OB_FAIL(alloc_ddl_kv(direct_load_mgr_handle.get_obj()->get_start_scn(),
+      } else if (OB_FAIL(alloc_ddl_kv(direct_load_mgr_handle.get_obj()->get_start_scn(), 
         direct_load_mgr_handle.get_obj()->get_table_key().get_snapshot_version(),
         direct_load_mgr_handle.get_obj()->get_data_format_version(),
         kv_handle))) {
@@ -471,7 +471,7 @@ int ObTabletDDLKvMgr::get_or_create_shared_storage_ddl_kv(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTabletDDLKvMgr is not inited", K(ret));
-  } else if (OB_UNLIKELY(!macro_redo_scn.is_valid_and_not_min()
+  } else if (OB_UNLIKELY(!macro_redo_scn.is_valid_and_not_min() 
                       || !macro_redo_start_scn.is_valid_and_not_min()
                       || snapshot_version <= 0
                       || data_format_version <= 0)) {

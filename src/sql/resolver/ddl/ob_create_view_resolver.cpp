@@ -755,7 +755,7 @@ int ObCreateViewResolver::get_need_priv_tables(ObSelectStmt &root_stmt,
           if (OB_FAIL(ObResolverUtils::name_case_cmp(session_info_, table_item->database_name_,
                                        info_schema, OB_TABLE_NAME_CLASS, is_database_name_equal))) {
           } else if (is_database_name_equal) {
-            /* do nothing */
+            /* do nothing */ 
           } else if (select_table_ids.has_member(root_stmt.get_table_bit_index(table_item->table_id_))) {
             if (OB_FAIL(select_tables.set_refactored(table_item->ref_id_, table_item))) {
               LOG_WARN("failed to set refactor", K(ret));
@@ -1439,7 +1439,7 @@ int ObCreateViewResolver::add_column_infos(const uint64_t tenant_id,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("select item expr is null", K(ret), K(i));
       } else if (OB_FAIL(fill_column_meta_infos(*expr,
-                                                table_schema.get_charset_type(),
+                                                table_schema.get_charset_type(), 
                                                 table_schema.get_table_id(),
                                                 session_info,
                                                 column,
@@ -1480,7 +1480,7 @@ int ObCreateViewResolver::fill_column_meta_infos(const ObRawExpr &expr,
   column.set_accuracy(expr.get_accuracy());
   column.set_zero_fill(expr.get_result_type().has_result_flag(ZEROFILL_FLAG));
   if (is_from_create_mview) {
-    // bug fix for
+    // bug fix for 
     // mview should not set not null
     column.set_nullable(true);
   } else {
@@ -1543,14 +1543,14 @@ int ObCreateViewResolver::resolve_columns_nullable_value(const sql::ObSelectStmt
 {
   int ret = OB_SUCCESS;
   observer::ObTableColumns::ColumnAttributes column_attributes;
-  if (OB_FAIL(observer::ObTableColumns::deduce_column_attributes(is_oracle_mode(),
+  if (OB_FAIL(observer::ObTableColumns::deduce_column_attributes(is_oracle_mode(), 
                                                                  table_schema,
-                                                                 select_stmt,
-                                                                 select_item,
+                                                                 select_stmt, 
+                                                                 select_item, 
                                                                  schema_guard,
-                                                                 &session_info,
-                                                                 NULL,
-                                                                 0,
+                                                                 &session_info, 
+                                                                 NULL, 
+                                                                 0, 
                                                                  column_attributes,
                                                                  true,
                                                                  alloc))) {

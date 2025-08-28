@@ -18,7 +18,7 @@ using namespace oceanbase::common;
 namespace oceanbase
 {
 namespace observer
-{
+{    
 
 int ObAllVirtualSessionStat::inner_get_next_row(ObNewRow *&row)
 {

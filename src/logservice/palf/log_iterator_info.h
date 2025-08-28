@@ -56,21 +56,21 @@ public:
   void set_allow_filling_cache(const bool allow_filling_cache) {
     allow_filling_cache_ = allow_filling_cache;
   }
-  void inc_hit_cnt(const bool is_cold_cache = true) {
+  void inc_hit_cnt(const bool is_cold_cache = true) { 
     if (is_cold_cache) {
       cold_cache_stat_.inc_hit_cnt();
     } else {
       hot_cache_stat_.inc_hit_cnt();
     }
   }
-  void inc_miss_cnt(const bool is_cold_cache = true) {
+  void inc_miss_cnt(const bool is_cold_cache = true) { 
     if (is_cold_cache) {
       cold_cache_stat_.inc_miss_cnt();
     } else {
       hot_cache_stat_.inc_miss_cnt();
     }
   }
-  void inc_cache_read_size(int64_t cache_read_size, const bool is_cold_cache = true) {
+  void inc_cache_read_size(int64_t cache_read_size, const bool is_cold_cache = true) { 
     if (is_cold_cache) {
       cold_cache_stat_.inc_cache_read_size(cache_read_size);
     } else {
@@ -85,12 +85,12 @@ public:
                K_(read_io_cnt), K_(read_io_size), K_(read_disk_cost_ts), K_(start_lsn));
 
 private:
-  class IteratorCacheStat
+  class IteratorCacheStat 
   {
   public:
     IteratorCacheStat() : hit_cnt_(0), miss_cnt_(0), cache_read_size_(0) {}
     ~IteratorCacheStat() { reset(); }
-    IteratorCacheStat &operator=(const IteratorCacheStat &cache_stat)
+    IteratorCacheStat &operator=(const IteratorCacheStat &cache_stat) 
     {
       if (&cache_stat != this) {
         this->hit_cnt_ = cache_stat.hit_cnt_;
@@ -107,10 +107,10 @@ private:
     void inc_hit_cnt() { hit_cnt_++; }
     void inc_miss_cnt() { miss_cnt_++; }
     void inc_cache_read_size(int64_t cache_read_size) { cache_read_size_ += cache_read_size; }
-    double get_hit_ratio() const
-    {
+    double get_hit_ratio() const 
+    { 
       int64_t total_cnt = (hit_cnt_ + miss_cnt_ == 0) ? 1 : hit_cnt_ + miss_cnt_;
-      return hit_cnt_ * 1.0 /total_cnt;
+      return hit_cnt_ * 1.0 /total_cnt; 
     }
     TO_STRING_KV(K_(hit_cnt), K_(miss_cnt), K_(cache_read_size), "hit_ratio", get_hit_ratio());
   private:

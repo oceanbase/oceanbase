@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 #ifndef OB_STORAGE_COLUMN_STORE_OB_WHERE_OPTIMIZER_H_
-#define OB_STORAGE_COLUMN_STORE_OB_WHERE_OPTIMIZER_H_
+#define OB_STORAGE_COLUMN_STORE_OB_WHERE_OPTIMIZER_H_ 
 #include "sql/engine/basic/ob_pushdown_filter.h"
 #include "storage/column_store/ob_i_cg_iterator.h"
 
@@ -49,7 +49,7 @@ private:
     sql::ObPushdownFilterExecutor *filter_;
     ObICGIterator *filter_iter_;
     sql::ObPushdownFilterExecutor *filter_node_;
-
+  
     bool operator< (const ObFilterCondition &filter_condition) const {
       bool ret = false;
       if (skip_index_skip_mb_cnt_ != filter_condition.skip_index_skip_mb_cnt_) {

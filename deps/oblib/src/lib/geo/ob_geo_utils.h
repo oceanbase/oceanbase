@@ -31,7 +31,7 @@ namespace oceanbase
 {
 namespace common
 {
-typedef common::hash::ObHashMap<common::ObString, common::ObObj*> QualifiedMap;
+typedef common::hash::ObHashMap<common::ObString, common::ObObj*> QualifiedMap; 
 enum class NumberObjType {
   DOUBLE,
   UINT64
@@ -46,8 +46,8 @@ enum ObGeoBuildFlag: uint8_t {
   GEO_CHECK_RANGE = 0x10,
   GEO_RESERVE_3D = 0x20, // do not convert 3D Geometry to 2D
   GEO_NOT_COPY_WKB = 0x40, // copy input wkb str to output geo data
-  GEO_DEFAULT = GEO_NORMALIZE | GEO_CORRECT | GEO_CHECK_RANGE,
-  GEO_ALLOW_3D_DEFAULT = GEO_DEFAULT | GEO_ALLOW_3D,
+  GEO_DEFAULT = GEO_NORMALIZE | GEO_CORRECT | GEO_CHECK_RANGE, 
+  GEO_ALLOW_3D_DEFAULT = GEO_DEFAULT | GEO_ALLOW_3D, 
   GEO_CARTESIAN = GEO_CORRECT,
   GEO_ALLOW_3D_CARTESIAN = GEO_CARTESIAN | GEO_ALLOW_3D
 };
@@ -185,7 +185,7 @@ public:
                                       ObGeoWkbHeader &header);
   static int get_type_srid_from_wkb(const ObString &wkb,
                                     ObGeoType &type,
-                                    uint32_t &srid);
+                                    uint32_t &srid);                               
   static int get_srid_from_wkb(const ObString &wkb,
                                uint32_t &srid);
   static int get_type_from_wkb(const ObString &wkb,
@@ -243,7 +243,7 @@ public:
   static int check_empty(ObGeometry *geo, bool &is_empty);
   static int get_st_geo_name_by_type(ObGeoType type, ObString &res);
   static int get_coll_dimension(ObIWkbGeomCollection *geo, int8_t &dimension);
-  static int convert_geometry_3D_to_2D(const ObSrsItem *srs, ObIAllocator &allocator, ObGeometry *g3d,
+  static int convert_geometry_3D_to_2D(const ObSrsItem *srs, ObIAllocator &allocator, ObGeometry *g3d, 
                                       uint8_t build_flag, ObGeometry *&geo);
   static int normalize_geometry(ObGeometry &geo, const ObSrsItem *srs);
   static double round_double(double x, int32_t dec, bool truncate);
@@ -256,7 +256,7 @@ public:
   static int get_quadrant_direction(const ObPoint2d &start, const ObPoint2d &end, QuadDirection &res);
   static int get_polygon_size(ObGeometry &geo);
   static int polygon_check_self_intersections(lib::MemoryContext& ctx, ObGeometry &geo, const ObSrsItem *srs, bool& invalid_for_cache);
-  static int create_cached_geometry(ObIAllocator &allocator, ObIAllocator &tmp_allocator, ObGeometry *geo,
+  static int create_cached_geometry(ObIAllocator &allocator, ObIAllocator &tmp_allocator, ObGeometry *geo, 
                                     const ObSrsItem *srs, ObCachedGeom *&cached_geo);
   template<typename CachedGeoType>
   static int create_cached_geometry(ObIAllocator &allocator, ObGeometry *geo, ObCachedGeom *&cached_geo, const ObSrsItem *srs);
@@ -298,10 +298,10 @@ private:
   static int collection_close_ring(ObIAllocator &allocator, const ObString &wkb_in,
                                    ObGeoStringBuffer &res, uint32_t &geo_len);
   template <typename RetType>
-  static int get_number_obj_from_map(const QualifiedMap &map, const common::ObString &key, NumberObjType type,
+  static int get_number_obj_from_map(const QualifiedMap &map, const common::ObString &key, NumberObjType type, 
                                     bool &is_null_result, RetType &res);
   template <typename ArrayType>
-  static int get_varry_obj_from_map(const QualifiedMap &map, const common::ObString &key,
+  static int get_varry_obj_from_map(const QualifiedMap &map, const common::ObString &key, 
                                     const common::ObObjMeta &num_meta, NumberObjType type, ArrayType &array);
   static int append_point(double x, double y, ObWkbBuffer &wkb_buf);
   template<typename RingTree>
@@ -315,7 +315,7 @@ private:
   static int check_valid_and_self_intersects(ObGeoEvalCtx& gis_context, bool& invalid_for_cache, bool& need_recheck);
 
   template<typename MpType>
-  static int is_in_geometry(lib::MemoryContext &mem_ctx, const ObGeometry &geo, const MpType &multi_geo,
+  static int is_in_geometry(lib::MemoryContext &mem_ctx, const ObGeometry &geo, const MpType &multi_geo, 
       const ObSrsItem *srs, bool &res, uint32_t start_idx = 0);
   DISALLOW_COPY_AND_ASSIGN(ObGeoTypeUtil);
 };
@@ -359,8 +359,8 @@ public:
   static int get_geog_point_box(const ObWkbGeogInnerPoint &point, ObGeogBox &box);
   template<typename GeometryType>
   static int get_geog_line_box(const GeometryType &line, ObGeogBox &box);
-  static int get_geog_poly_box(const ObWkbGeogPolygon &poly, ObGeogBox &box);
-  static int get_geom_poly_box(const ObWkbGeomPolygon &poly, bool not_calc_inner_ring, ObGeogBox &res);
+  static int get_geog_poly_box(const ObWkbGeogPolygon &poly, ObGeogBox &box);  
+  static int get_geom_poly_box(const ObWkbGeomPolygon &poly, bool not_calc_inner_ring, ObGeogBox &res);  
   static int caculate_line_box(ObPoint3d &start, ObPoint3d &end, ObGeogBox &box);
   static void get_box_center(const ObGeogBox &box, ObPoint2d &center);
   static bool is_same_point3d(const ObPoint3d &p3d1, const ObPoint3d &p3d2);
@@ -380,7 +380,7 @@ public:
   static double correct_longitude(double longitude);
   static double correct_latitude(double latitude);
   static double caculate_box_angular_width(const ObGeogBox &box);
-  static double caculate_box_angular_height(const ObGeogBox &box);
+  static double caculate_box_angular_height(const ObGeogBox &box);  
   static void do_set_poles(const double &xmin, const double &xmax,
                        const double &ymin, const double &ymax,
                        double &zmin, double &zmax);
@@ -476,7 +476,7 @@ int ObGeoBoxUtil::get_geog_line_box(const GeometryType &line, ObGeogBox &box)
   ObPoint3d p3d1;
   ObPoint3d p3d2;
   ObGeogBox box_tmp;
-
+  
   typename GeometryType::iterator iter = line.begin();
   convert_ll_to_cartesian3d(*iter, p3d1);
   iter++;
@@ -508,19 +508,19 @@ int ObGeoTypeUtil::create_geo_bin_by_type(ObIAllocator &allocator,
 
   switch(geo_type) {
     case ObGeoType::POINT: {
-      tmp_geo = OB_NEWx(PT, (&allocator), srid);
+      tmp_geo = OB_NEWx(PT, (&allocator), srid);  
       break;
     }
     case ObGeoType::LINESTRING: {
-      tmp_geo = OB_NEWx(LN, (&allocator), srid);
+      tmp_geo = OB_NEWx(LN, (&allocator), srid);  
       break;
     }
     case ObGeoType::POLYGON: {
-      tmp_geo = OB_NEWx(PY, (&allocator), srid);
+      tmp_geo = OB_NEWx(PY, (&allocator), srid);  
       break;
     }
     case ObGeoType::MULTIPOINT: {
-      tmp_geo = OB_NEWx(MPT, (&allocator), srid);
+      tmp_geo = OB_NEWx(MPT, (&allocator), srid);  
       break;
     }
     case ObGeoType::MULTILINESTRING: {
@@ -874,7 +874,7 @@ int ObGeoTypeUtil::remove_duplicate_multi_geo(ObGeometry *&geo, lib::MemoryConte
 }
 
 template<typename GcTreeType>
-int ObGeoTypeUtil::check_if_geo_duplicate(ObGeometry *geo, lib::MemoryContext &mem_ctx,
+int ObGeoTypeUtil::check_if_geo_duplicate(ObGeometry *geo, lib::MemoryContext &mem_ctx, 
       const ObSrsItem *srs, bool &is_duplicate)
 {
   INIT_SUCC(ret);
@@ -1030,7 +1030,7 @@ int ObGeoBoxUtil::get_geom_line_box(const GeometryType &line, ObGeogBox &box)
     box.ymin = OB_MIN(point.y, box.ymin);
     box.ymax = OB_MAX(point.y, box.ymax);
   }
-
+  
   return ret;
 }
 
@@ -1089,7 +1089,7 @@ bool ObGeoTypeUtil::is_valid_ring_simple(const RingTree &ring)
       }
     }
   }
-
+  
   return is_valid;
 }
 
@@ -1106,7 +1106,7 @@ int ObGeoTypeUtil::is_polygon_valid_simple(const ObGeometry *geo, bool &res)
       OB_LOG(WARN, "fail to do tree visitor", K(ret));
     } else {
       geo_tree = tree_visit.get_geometry();
-    }
+    } 
   } else {
     geo_tree = geo;
   }

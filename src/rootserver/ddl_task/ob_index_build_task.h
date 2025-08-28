@@ -126,8 +126,8 @@ public:
   virtual int deserialize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t buf_size, int64_t &pos) override;
   virtual int64_t get_serialize_param_size() const override;
   virtual bool support_longops_monitoring() const override { return true; }
-  virtual bool task_can_retry() const
-  {
+  virtual bool task_can_retry() const 
+  { 
     return share::ObDDLTaskStatus::REDEFINITION == task_status_ ? is_retryable_ddl_ : true;
   }
   static int deep_copy_index_arg(common::ObIAllocator &allocator, const obrpc::ObCreateIndexArg &source_arg, obrpc::ObCreateIndexArg &dest_arg);
@@ -185,7 +185,7 @@ private:
   int64_t redefinition_execution_id_;
   ObDDLTabletScheduler tablet_scheduler_;
   obrpc::ObCreateIndexArg create_index_arg_; // this is not a valid arg, only has nls formats for now
-  int64_t target_cg_cnt_;
+  int64_t target_cg_cnt_; 
   bool is_retryable_ddl_;
 };
 

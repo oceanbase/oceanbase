@@ -220,7 +220,7 @@ int ObInsertTableInfo::iterate_stmt_expr(ObStmtExprVisitor &visitor)
     LOG_WARN("failed to iterate column conv exprs", K(ret));
   } else if (OB_FAIL(visitor.visit(part_generated_col_dep_cols_, SCOPE_DICT_FIELDS))) {
     LOG_WARN("failed to iterate part generated col dep cols", K(ret));
-  }
+  } 
   for (int64_t i = 0; OB_SUCC(ret) && i < value_desc_cnt; ++i) {
     const ObColumnRefRawExpr *col_expr = values_desc_.at(i);
     if (OB_ISNULL(col_expr)) {
@@ -503,7 +503,7 @@ int ObDelUpdStmt::iterate_stmt_expr(ObStmtExprVisitor &visitor)
       LOG_WARN("dml table info is null", K(ret));
     } else if (OB_FAIL(dml_table_infos.at(i)->iterate_stmt_expr(visitor))) {
       LOG_WARN("failed to itearte dml table infos", K(ret));
-    } else if (dml_table_infos.at(i)->table_id_ != OB_INVALID_ID &&
+    } else if (dml_table_infos.at(i)->table_id_ != OB_INVALID_ID && 
                dml_table_infos.at(i)->table_id_ != dml_table_infos.at(i)->loc_table_id_) {
       // handle updatable view in a speical way
       for (int64_t j = 0; OB_SUCC(ret) && !hit_updatable_view && j < part_expr_items_.count(); ++j) {

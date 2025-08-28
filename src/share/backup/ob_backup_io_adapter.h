@@ -30,13 +30,13 @@ public:
   virtual ~ObBackupIoAdapter() {}
 
   static int open_with_access_type(
-      ObIODevice *&device_handle, ObIOFd &fd,
+      ObIODevice *&device_handle, ObIOFd &fd, 
       const common::ObObjectStorageInfo *storage_info,
       const common::ObString &uri,
       ObStorageAccessType access_type,
       const common::ObStorageIdMod &storage_id_mod);
   static int get_and_init_device(
-      ObIODevice *&dev_handle,
+      ObIODevice *&dev_handle, 
       const common::ObObjectStorageInfo *storage_info,
       const common::ObString &storage_type_prefix,
       const common::ObStorageIdMod &storage_id_mod);
@@ -68,10 +68,10 @@ public:
    * of the objects that failed to delete.
    *
    * It's important to ensure that all the objects provided for deletion are located
-   * on the same destination. If the destination is object storage, all objects must be
+   * on the same destination. If the destination is object storage, all objects must be 
    * within the same bucket.
    *
-   * Due to the absence of a batch tagging interface, if delete mode 'tagging' is set
+   * Due to the absence of a batch tagging interface, if delete mode 'tagging' is set 
    * when initiating the utility, it will switch to a looped tagging operation.
    *
    * As NFS does not offer a batch deleting interface, and GCS's batch delete interface
@@ -88,14 +88,14 @@ public:
       const common::ObObjectStorageInfo *storage_info,
       const ObIArray<ObString> &files_to_delete,
       ObIArray<int64_t> &failed_files_idx);
-
+  
   static int mkdir(
       const common::ObString &uri, const common::ObObjectStorageInfo *storage_info);
   static int mk_parent_dir(
       const common::ObString &uri, const common::ObObjectStorageInfo *storage_info);
   static int is_empty_directory(
-      const common::ObString &uri,
-      const common::ObObjectStorageInfo *storage_info,
+      const common::ObString &uri, 
+      const common::ObObjectStorageInfo *storage_info, 
       bool &is_empty_directory);
   static int is_directory(const common::ObString &uri,
                           const common::ObObjectStorageInfo *storage_info,
@@ -113,17 +113,17 @@ public:
       const common::ObObjectStorageInfo *storage_info,
       common::ObBaseDirEntryOperator &op);
   // This function handles the deletion of directories specified by the 'uri' parameter. Its behavior varies depending
-  // on the 'recursive' flag and the underlying storage mechanism (e.g., NFS or object storage).
+  // on the 'recursive' flag and the underlying storage mechanism (e.g., NFS or object storage). 
   //
   // For NFS storage, when 'recursive' is false (the default),
   // the function attempts to delete the specified empty directory,
   // which matches the behavior of the UNIX command 'rm -d uri'.
   // If 'recursive' is true,
   // it resembles 'rm -rf', deleting the directory and all its contents indiscriminately.
-  //
-  // For object storage, if 'recursive' is false, the function returns success immediately
+  // 
+  // For object storage, if 'recursive' is false, the function returns success immediately 
   // since there is no "directory" to check for content presence.
-  // When 'recursive' is true,
+  // When 'recursive' is true, 
   // the function interprets the 'uri' as a prefix and deletes all objs under it, treating it as a "directory".
   //
   // Note: Using the 'recursive' option, especially with object storage, initiates numerous list and delete operations,
@@ -132,7 +132,7 @@ public:
   //       when choosing to recursively delete "directories" and their contents in object storage environments.
   static int del_dir(const common::ObString &uri,
       const common::ObObjectStorageInfo *storage_info, const bool recursive = false);
-
+  
   static int write_single_file(
       const common::ObString &uri,
       const common::ObObjectStorageInfo *storage_info,
@@ -156,7 +156,7 @@ public:
       const char *buf, const int64_t offset, const int64_t size,
       int64_t &write_size,
       const bool is_can_seal);
-
+  
   static int read_single_file(
       const common::ObString &uri,
       const common::ObObjectStorageInfo *storage_info,
@@ -208,10 +208,10 @@ public:
       char *buf, const int64_t offset, const int64_t size,
       common::ObIOHandle &io_handle,
       const uint64_t sys_module_id=OB_INVALID_ID);
-
+  
   static int async_upload_data(
       common::ObIODevice &device_handle,
-      common::ObIOFd &fd,
+      common::ObIOFd &fd, 
       const char *buf,
       const int64_t offset,
       const int64_t size,

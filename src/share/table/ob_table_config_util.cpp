@@ -1,15 +1,15 @@
-/**
- * Copyright (c) 2023 OceanBase
- * OceanBase CE is licensed under Mulan PubL v2.
- * You can use this software according to the terms and conditions of the Mulan PubL v2.
- * You may obtain a copy of Mulan PubL v2 at:
- *          http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+/** 
+ * Copyright (c) 2023 OceanBase 
+ * OceanBase CE is licensed under Mulan PubL v2. 
+ * You can use this software according to the terms and conditions of the Mulan PubL v2. 
+ * You may obtain a copy of Mulan PubL v2 at: 
+ *          http://license.coscl.org.cn/MulanPubL-2.0 
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, 
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, 
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE. 
  * See the Mulan PubL v2 for more details.
- */
-
+ */ 
+ 
 #define USING_LOG_PREFIX SHARE
 #include "ob_table_config_util.h"
 #include "share/config/ob_config_mode_name_def.h"
@@ -119,12 +119,12 @@ bool ObKVFeatureModeUitl::is_obkv_feature_enable(ObKVFeatureType feat_type)
   return bret;
 }
 
-bool ObKVFeatureModeUitl::is_ttl_enable()
+bool ObKVFeatureModeUitl::is_ttl_enable() 
 {
   return is_obkv_feature_enable(ObKVFeatureType::TTL);
 }
 
-bool ObKVFeatureModeUitl::is_rerouting_enable()
+bool ObKVFeatureModeUitl::is_rerouting_enable() 
 {
  return is_obkv_feature_enable(ObKVFeatureType::REROUTING);
 }
@@ -140,8 +140,8 @@ ObPrivControlMode::ObPrivControlMode(const uint8_t *values)
     value_ = 0;
     is_valid_ = false;
   } else {
-    value_ = (int64_t)values[0] | ((int64_t)values[1] << 8) | ((int64_t)values[2] << 16) | ((int64_t)values[3] << 24)
-            | ((int64_t)values[4] << 32) | ((int64_t)values[5] << 40) | ((int64_t)values[6] << 48)
+    value_ = (int64_t)values[0] | ((int64_t)values[1] << 8) | ((int64_t)values[2] << 16) | ((int64_t)values[3] << 24) 
+            | ((int64_t)values[4] << 32) | ((int64_t)values[5] << 40) | ((int64_t)values[6] << 48) 
             | ((int64_t)values[7] << 56);
     is_valid_ = true;
   }
@@ -167,7 +167,7 @@ void ObPrivControlMode::set_value(uint64_t value)
   }
 }
 
-int ObKVConfigUtil::get_compress_type(const int64_t tenant_id,
+int ObKVConfigUtil::get_compress_type(const int64_t tenant_id, 
                                       int64_t result_size,
                                       ObCompressorType &compressor_type)
 {

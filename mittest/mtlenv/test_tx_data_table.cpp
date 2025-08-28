@@ -383,7 +383,7 @@ void TestTxDataTable::do_basic_test()
 
   ObTxDataMemtableMgr *memtable_mgr = tx_data_table_.get_memtable_mgr_();
   init_memtable_mgr_(memtable_mgr);
-
+  
   fprintf(stdout, "start insert tx data\n");
   insert_tx_data_();
   fprintf(stdout, "start insert rollback tx data\n");
@@ -688,7 +688,7 @@ void TestTxDataTable::do_repeat_insert_test() {
 
     ASSERT_EQ(OB_SUCCESS, tx_data_table_.insert(tx_data));
   }
-
+  
 
   ObTxDataMemtable *frozen_memtable = nullptr;
   ObTxDataMemtable *active_memtable = nullptr;
@@ -709,7 +709,7 @@ void TestTxDataTable::do_repeat_insert_test() {
   ASSERT_EQ(OB_SUCCESS, frozen_memtable->get_split_ranges(input_range, 6, range_array));
   ASSERT_EQ(6, range_array.count());
   STORAGE_LOG(INFO, "output range", K(range_array));
-
+  
   memtable_mgr->destroy();
 }
 

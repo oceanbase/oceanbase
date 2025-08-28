@@ -426,7 +426,7 @@ int ObDCLResolver::resolve_user_list_node(ParseNode *user_node,
     LOG_WARN("The child of user node should not be NULL", K(ret));
   } else {
     ParseNode *user_hostname_node = user_node;
-
+  
     user_name = ObString (user_hostname_node->children_[0]->str_len_, user_hostname_node->children_[0]->str_value_);
     if (user_hostname_node->children_[0]->type_ != T_IDENT && OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(
                      *allocator_, session_info_->get_dtc_params(), user_name))) {

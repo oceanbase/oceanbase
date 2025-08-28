@@ -37,7 +37,7 @@ struct ObPersistLobReaderCacheKey
   int64_t snapshot_;
   bool is_get_;
   bool operator==(const ObPersistLobReaderCacheKey &other) const
-  {
+  { 
     return snapshot_ == other.snapshot_ && tablet_id_ == other.tablet_id_ && ls_id_ == other.ls_id_ && is_get_ == other.is_get_;
   }
 
@@ -63,7 +63,7 @@ public:
 public:
   ObPersistLobReaderCache(int32_t cap = DEFAULT_CAP):
     allocator_(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE/*8KB*/, MTL_ID()),
-    cap_(cap)
+    cap_(cap) 
   {}
   ~ObPersistLobReaderCache();
 

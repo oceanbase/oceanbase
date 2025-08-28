@@ -49,7 +49,7 @@ int ObTableBatchExecuteP::deserialize()
       }
     } // end for
    } else if (ObTableEntityType::ET_KV == arg_.entity_type_) {
-    // for KV, set entity allocator
+    // for KV, set entity allocator 
     const int64_t N = arg_.batch_operation_.count();
     for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i)
     {
@@ -88,7 +88,7 @@ int ObTableBatchExecuteP::before_process()
   } else if (OB_FAIL(init_batch_ctx())) {
     LOG_WARN("fail to init batch context", K(ret));
   }
-
+  
   return ret;
 }
 

@@ -130,7 +130,7 @@ TEST_F(ObserverExpandShink, resize_tenant_log_disk)
   while (true == tenant_exist && OB_SUCC(ret)) {
     if (OB_FAIL(check_tenant_exist(tenant_exist, "runlin"))) {
       SERVER_LOG(WARN, "check_tenant_exist failed", K(ret));
-    }
+    } 
   }
   // 保证log_disk_size变为10G生效
   sleep(3);
@@ -204,7 +204,7 @@ TEST_F(ObserverExpandShink, resize_tenant_log_disk)
 //  ObserverExpandShinkRestart() : ObSimpleClusterTestBase(TEST_FILE_NAME) {}
 //};
 //
-//TEST_F(ObserverExpandShinkRestart, create_tenant_after_restart)
+//TEST_F(ObserverExpandShinkRestart, create_tenant_after_restart) 
 //{
 //  EXPECT_NE(0, GCTX.log_block_mgr_->min_log_disk_size_for_all_tenants_);
 //  SERVER_LOG(INFO, "create_tenant_after_restart trace", KPC(GCTX.log_block_mgr_));

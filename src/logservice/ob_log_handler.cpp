@@ -440,7 +440,7 @@ int ObLogHandler::locate_by_scn_coarsely(const SCN &scn, LSN &result_lsn)
     CLOG_LOG(WARN, "locate_by_scn_coarsely from palf failed", K(id_), K(scn));
   }
 #endif
-
+  
   return ret;
 }
 
@@ -666,7 +666,7 @@ int ObLogHandler::get_palf_base_info(const LSN &base_lsn, PalfBaseInfo &palf_bas
     ret = palf_handle_.get_base_info(new_base_lsn, palf_base_info);
     #endif
     CLOG_LOG(INFO, "get_palf_base_info finish", KR(ret), K_(id), K(base_lsn), K(new_base_lsn), K(palf_base_info));
-  }
+  } 
   return ret;
 }
 

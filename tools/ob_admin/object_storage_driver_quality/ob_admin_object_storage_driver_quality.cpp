@@ -26,7 +26,7 @@ double cal_time_diff(const timeval &start, const timeval &end)
 
 std::string to_string_with_precision(const double value, const int precision)
 {
-
+    
   std::ostringstream out;
   out << std::fixed << std::setprecision(precision) << value;
   return out.str();
@@ -57,7 +57,7 @@ int check_content_by_object_id(const char *buf, const int64_t buf_len, const int
   for (int i = 0; i < buf_len && OB_SUCC(ret); i++) {
     if (OB_UNLIKELY(buf[i] != (object_id + i) % INT8_MAX)) {
       ret = OB_ERR_UNEXPECTED;
-      OB_LOG(WARN, "check content failed!", KR(ret), K(i), K(buf[i]), K(object_id), K(buf_len));
+      OB_LOG(WARN, "check content failed!", KR(ret), K(i), K(buf[i]), K(object_id), K(buf_len)); 
     }
   }
   return ret;
@@ -66,7 +66,7 @@ int check_content_by_object_id(const char *buf, const int64_t buf_len, const int
 /**
  *  @brief Get a random length for performing a write operation or a read operation
  *
- *  @return content_length Indicates the content length generated
+ *  @return content_length Indicates the content length generated 
  */
 int64_t get_random_content_length(const OSDQOpType op_type)
 {
@@ -99,18 +99,18 @@ int construct_object_name(const int64_t object_id, char *object_name, const int6
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument!", KR(ret), K(object_id), K(object_name_len));
   } else if (OB_FAIL(databuff_printf(object_name, object_name_len, pos, "object_%ld_", object_id))) {
-    OB_LOG(WARN, "failed to databuff_printf object_name", KR(ret), K(object_id), K(object_name_len), K(pos));
+    OB_LOG(WARN, "failed to databuff_printf object_name", KR(ret), K(object_id), K(object_name_len), K(pos)); 
   } else {
     for (int i = 0; i < MAX_OBJECT_NAME_SUFFIX_LENGTH && OB_SUCC(ret); i++) {
       if (OB_LIKELY(pos < object_name_len)) {
         object_name[pos] = alphanum[ObRandom::rand(0, sizeof(alphanum) - 2)];
         pos++;
       } else {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_ERR_UNEXPECTED; 
         OB_LOG(WARN, "pos should be smaller than MAX_OBJECT_NAME_LENGTH", KR(ret), K(i), K(pos), K(object_name_len));
       }
     }
-
+    
     if (OB_SUCC(ret)) {
       if (OB_LIKELY(pos < object_name_len)) {
         object_name[pos] = '\0';
@@ -125,12 +125,12 @@ int construct_object_name(const int64_t object_id, char *object_name, const int6
 
 int construct_file_path(
     const char *base_uri,
-    const char *object_name,
-    char *file_path,
+    const char *object_name, 
+    char *file_path, 
     const int64_t file_path_length)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(base_uri) || OB_ISNULL(object_name) || OB_ISNULL(file_path)
+  if (OB_ISNULL(base_uri) || OB_ISNULL(object_name) || OB_ISNULL(file_path) 
       || OB_UNLIKELY(file_path_length < OB_MAX_URI_LENGTH)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", KR(ret), K(base_uri), K(object_name), K(file_path), K(file_path_length));
@@ -188,7 +188,7 @@ int get_time_formatted(char *time_str, const int time_str_len, const char *forma
   struct tm current_timeinfo;
   gettimeofday(&current_real_time, nullptr);
   ob_localtime(const_cast<time_t *>(&current_real_time.tv_sec), &current_timeinfo);
-
+  
   if (OB_ISNULL(time_str) || OB_UNLIKELY(time_str_len <= 0) || OB_ISNULL(format)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", KR(ret), KP(time_str), K(time_str_len), KP(format));
@@ -217,7 +217,7 @@ std::string OSDQLogEntry::get_time_prefix_()
   return time_prefix;
 }
 
-void OSDQLogEntry::log_entry_kv(const std::string &key, const std::string &value, const std::string &color)
+void OSDQLogEntry::log_entry_kv(const std::string &key, const std::string &value, const std::string &color) 
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -255,7 +255,7 @@ void OSDQLogEntry::reset()
 }
 
 //================== OSDQTimeMap ===========================
-OSDQTimeMap::OSDQTimeMap()
+OSDQTimeMap::OSDQTimeMap() 
   : total_entry_(0)
 {
 }
@@ -267,7 +267,7 @@ int OSDQTimeMap::log_entry(const int64_t cost_time_us)
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", KR(ret), K(cost_time_us));
   } else {
-    const int64_t cost_time_ms = cost_time_us / 1000;
+    const int64_t cost_time_ms = cost_time_us / 1000; 
     time_map_[cost_time_ms]++;
     total_entry_++;
   }
@@ -307,7 +307,7 @@ int OSDQTimeMap::summary(const char *map_name_str, OSDQLogEntry &log) const
       }
       ++it;
     }
-
+    
     char buf[2048] = {0};
     int64_t pos = 0;
 
@@ -316,7 +316,7 @@ int OSDQTimeMap::summary(const char *map_name_str, OSDQLogEntry &log) const
     }
 
     for (int i = 0; i < latency_quantile_cnt && OB_SUCC(ret); ++i) {
-      if (FAILEDx(databuff_printf(buf, sizeof(buf), pos, "%7ld ",
+      if (FAILEDx(databuff_printf(buf, sizeof(buf), pos, "%7ld ", 
                                   latency_quantile_vals[i]))) {
         OB_LOG(WARN, "failed set log str", KR(ret), K(i), K(latency_quantile_vals[i]));
       }
@@ -333,9 +333,9 @@ int OSDQTimeMap::summary(const char *map_name_str, OSDQLogEntry &log) const
 //================== OSDQMetric::ReqStatisticalsInfo =============
 
 OSDQMetric::ReqStatisticalsInfo::ReqStatisticalsInfo()
-  : total_operation_num_(0),
-    total_queued_num_(0),
-    average_qps_(0),
+  : total_operation_num_(0), 
+    total_queued_num_(0), 
+    average_qps_(0), 
     average_bw_mb_(0)
 {}
 
@@ -376,27 +376,27 @@ int OSDQMetric::print_csv_title_()
     ofs << "id, time, "
       << "total_operation_num, "
       << "total_queued_num, "
-      << "total_throughput_mb, "
-      << "average_qps, "
-      << "average_bw_mb, "
-      << "real_qps, "
-      << "real_bw_mb,"
-      << "cpu_usage_for_100MB_bw, "
-      << "total_cpu_usage, "
-      << "total_user_time, "
-      << "total_system_time, "
-      << "real_cpu_usage,"
-      << "start_vm_size_kb, "
-      << "start_vm_rss_kb, "
-      << "object_storage_hold_kb, "
-      << "object_storage_used_kb, "
-      << "total_hold_kb, "
+      << "total_throughput_mb, " 
+      << "average_qps, " 
+      << "average_bw_mb, " 
+      << "real_qps, " 
+      << "real_bw_mb," 
+      << "cpu_usage_for_100MB_bw, " 
+      << "total_cpu_usage, " 
+      << "total_user_time, " 
+      << "total_system_time, " 
+      << "real_cpu_usage," 
+      << "start_vm_size_kb, " 
+      << "start_vm_rss_kb, " 
+      << "object_storage_hold_kb, " 
+      << "object_storage_used_kb, " 
+      << "total_hold_kb, " 
       << "total_used_kb, "
       << "vm_peak_kb, "
-      << "vm_size_kb, "
+      << "vm_size_kb, " 
       << "vm_hwm_kb, "
-      << "vm_rss_kb, "
-      << "ob_vslice_alloc_used_memory_kb, "
+      << "vm_rss_kb, " 
+      << "ob_vslice_alloc_used_memory_kb, " 
       << "ob_vslice_alloc_allocator_cnt, "
       << std::endl;
     ofs.close();
@@ -419,12 +419,12 @@ int OSDQMetric::print_csv_dump_()
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "failed to open metric_csv file", KR(ret), KP(metric_csv_path_));
   } else {
-    ofs << std::fixed << std::setprecision(6)
-      << summary_cnt_ << "," << time << ","
-      << last_req_statistical_info_.total_operation_num_ << ","
-      << last_req_statistical_info_.total_queued_num_ << ","
-      << last_req_statistical_info_.total_throughput_mb_ << ","
-      << last_req_statistical_info_.average_qps_ << ","
+    ofs << std::fixed << std::setprecision(6) 
+      << summary_cnt_ << "," << time << "," 
+      << last_req_statistical_info_.total_operation_num_ << "," 
+      << last_req_statistical_info_.total_queued_num_ << "," 
+      << last_req_statistical_info_.total_throughput_mb_ << "," 
+      << last_req_statistical_info_.average_qps_ << "," 
       << last_req_statistical_info_.average_bw_mb_ << ","
       << last_req_statistical_info_.real_qps_ << ","
       << last_req_statistical_info_.real_bw_mb_ << ","
@@ -451,7 +451,7 @@ int OSDQMetric::print_csv_dump_()
   return ret;
 }
 
-OSDQMetric::OSDQMetric()
+OSDQMetric::OSDQMetric() 
   : is_inited_(false),
     summary_cnt_(0),
     start_real_time_us_(ObTimeUtility::current_time()),
@@ -469,7 +469,7 @@ OSDQMetric::OSDQMetric()
 
 OSDQMetric::~OSDQMetric()
 {
-
+  
 }
 
 int get_metric_csv_path(char *metric_csv_path, const int metric_csv_path_len)
@@ -485,11 +485,11 @@ int get_metric_csv_path(char *metric_csv_path, const int metric_csv_path_len)
     OB_LOG(WARN, "failed to get time str", KR(ret));
   } else if (OB_ISNULL(ob_admin_log_dir)) {
     if (OB_FAIL(databuff_printf(metric_csv_path, metric_csv_path_len, "metric_csv_%s.csv", time_str))) {
-      OB_LOG(WARN, "failed databuff printf metric csv path", KR(ret), K(ob_admin_log_dir), K(time_str));
+      OB_LOG(WARN, "failed databuff printf metric csv path", KR(ret), K(ob_admin_log_dir), K(time_str)); 
     }
   } else if (OB_FAIL(databuff_printf(metric_csv_path, metric_csv_path_len, "%s/metric_csv_%s.csv",
           ob_admin_log_dir, time_str))) {
-    OB_LOG(WARN, "failed databuff printf metric csv path", KR(ret), K(ob_admin_log_dir), K(time_str));
+    OB_LOG(WARN, "failed databuff printf metric csv path", KR(ret), K(ob_admin_log_dir), K(time_str)); 
   }
   return ret;
 }
@@ -524,7 +524,7 @@ int OSDQMetric::add_latency_metric(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     OB_LOG(WARN, "not init", KR(ret), K(is_inited_));
-  } else if (OB_UNLIKELY(op_start_time_us <= 0 || op_type == MAX_OPERATE_TYPE || object_size < 0)) {
+  } else if (OB_UNLIKELY(op_start_time_us <= 0 || op_type == MAX_OPERATE_TYPE || object_size < 0)) { 
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", KR(ret), K(op_start_time_us), K(op_type), K(object_size));
   } else {
@@ -634,7 +634,7 @@ int OSDQMetric::get_memory_usage(MemInfo &mem_info)
 int OSDQMetric::get_req_statistical_info_(OSDQLogEntry &log)
 {
   int ret = OB_SUCCESS;
-  const double cost_time_s = 1.0 * (ObTimeUtility::current_time() - start_real_time_us_) / 1000000;
+  const double cost_time_s = 1.0 * (ObTimeUtility::current_time() - start_real_time_us_) / 1000000; 
   log.log_entry("===== PART 1 REQ STATISTICAL INFO =====", DARY_GRAY_PREFIX);
   if (cost_time_s > EPS) {
     last_req_statistical_info_.average_qps_ = total_operation_num_ / cost_time_s;
@@ -645,7 +645,7 @@ int OSDQMetric::get_req_statistical_info_(OSDQLogEntry &log)
   const double interval_time_s = (ObTimeUtility::current_time() - last_real_time_us_) / 1000000;
   if (interval_time_s > EPS) {
     real_qps = static_cast<double>(total_operation_num_ - last_req_statistical_info_.total_operation_num_) / interval_time_s;
-    real_bw_mb = static_cast<double>(total_throughput_mb_ - last_req_statistical_info_.total_throughput_mb_) / interval_time_s;
+    real_bw_mb = static_cast<double>(total_throughput_mb_ - last_req_statistical_info_.total_throughput_mb_) / interval_time_s; 
   }
   last_req_statistical_info_.total_operation_num_ = total_operation_num_;
   last_req_statistical_info_.total_throughput_mb_ = total_throughput_mb_;
@@ -655,11 +655,11 @@ int OSDQMetric::get_req_statistical_info_(OSDQLogEntry &log)
 
   log.log_entry_kv("Total operation num", std::to_string(last_req_statistical_info_.total_operation_num_));
   log.log_entry_kv("Total queued num", std::to_string(last_req_statistical_info_.total_queued_num_));
-  log.log_entry_kv("Total throughput bytes(MB)",
+  log.log_entry_kv("Total throughput bytes(MB)", 
       to_string_with_precision(last_req_statistical_info_.total_throughput_mb_, PRECISION));
-  log.log_entry_kv("Average QPS",
+  log.log_entry_kv("Average QPS", 
       to_string_with_precision(last_req_statistical_info_.average_qps_, PRECISION));
-  log.log_entry_kv("Average BW(MB/s)",
+  log.log_entry_kv("Average BW(MB/s)", 
       to_string_with_precision(last_req_statistical_info_.average_bw_mb_, PRECISION));
   log.log_entry_kv("Real QPS", to_string_with_precision(real_qps, PRECISION));
   log.log_entry_kv("Real BW(MB/s)", to_string_with_precision(real_bw_mb, PRECISION));
@@ -670,7 +670,7 @@ int OSDQMetric::get_req_latency_map_(OSDQLogEntry &log)
 {
   int ret = OB_SUCCESS;
   log.log_entry("===== PART 2 REQ LATENCY MAP =====", DARY_GRAY_PREFIX);
-  static const int latency_maps_num = MAX_OPERATE_TYPE;
+  static const int latency_maps_num = MAX_OPERATE_TYPE; 
   static const char *object_size_type_time_map_str[] = {
     "S |", // SMALL
     "N |", // NORMAL
@@ -705,7 +705,7 @@ int OSDQMetric::get_req_latency_map_(OSDQLogEntry &log)
 int OSDQMetric::get_cpu_info_(OSDQLogEntry &log)
 {
   int ret = OB_SUCCESS;
-  const double cost_time_s = 1.0 * (ObTimeUtility::current_time() - start_real_time_us_) / 1000000;
+  const double cost_time_s = 1.0 * (ObTimeUtility::current_time() - start_real_time_us_) / 1000000; 
   const double interval_time_s = 1.0 * (ObTimeUtility::current_time() - last_real_time_us_) / 1000000;
   log.log_entry("===== PART 3 CPU INFO =====", DARY_GRAY_PREFIX);
   struct rusage current_usage;
@@ -721,7 +721,7 @@ int OSDQMetric::get_cpu_info_(OSDQLogEntry &log)
   if (last_req_statistical_info_.average_bw_mb_ > EPS) {
     cpu_usage_for_100MB_bw = (100.0 / last_req_statistical_info_.average_bw_mb_) * avg_cpu_usage;
   }
-  double real_cpu_time_s = cal_time_diff(last_usage_.ru_utime, current_usage.ru_utime) +
+  double real_cpu_time_s = cal_time_diff(last_usage_.ru_utime, current_usage.ru_utime) + 
     cal_time_diff(last_usage_.ru_stime, current_usage.ru_stime);
   double real_cpu_usage_ = 0;
   if (interval_time_s > EPS) {
@@ -744,12 +744,12 @@ int OSDQMetric::get_cpu_info_(OSDQLogEntry &log)
 }
 
 static int iter_memory_label(
-    lib::ObLabel &label,
-    LabelItem *l_item,
+    lib::ObLabel &label, 
+    LabelItem *l_item, 
     int64_t &object_storage_hold_bytes,
     int64_t &object_storage_used_bytes,
     int64_t &total_hold_bytes,
-    int64_t &total_used_bytes)
+    int64_t &total_used_bytes) 
 {
   // OSS_SDK or StorageOss
   const char *oss_label = "OSS";
@@ -762,7 +762,7 @@ static int iter_memory_label(
   const char *object_label = "OBJECT_DEVICE";
 
   int ret = OB_SUCCESS;
-  if (strstr(label.str_, oss_label) != nullptr
+  if (strstr(label.str_, oss_label) != nullptr 
       || strstr(label.str_, cos_label) != nullptr
       || strstr(label.str_, s3_label) != nullptr
       || strstr(label.str_, obdal_label) != nullptr
@@ -812,7 +812,7 @@ int OSDQMetric::get_memory_info_(OSDQLogEntry &log, const bool is_final)
 
         if (OB_SUCC(ret)) {
           std::function<int(lib::ObLabel &label, LabelItem *l_item)> iter_label_func = std::bind(
-              &iter_memory_label,
+              &iter_memory_label, 
               std::placeholders::_1,
               std::placeholders::_2,
               std::ref(object_storage_hold_bytes),
@@ -841,12 +841,12 @@ int OSDQMetric::get_memory_info_(OSDQLogEntry &log, const bool is_final)
       log.log_entry_kv("VmSize", (std::to_string(last_mem_info_.vm_size_kb_) + " kB"));
       log.log_entry_kv("VmHWM", (std::to_string(last_mem_info_.vm_hwm_kb_) + " kB"));
       log.log_entry_kv("VmRSS", (std::to_string(last_mem_info_.vm_rss_kb_) + " kB"));
-      log.log_entry_kv("ObVSliceAlloc used memory",
+      log.log_entry_kv("ObVSliceAlloc used memory", 
           (std::to_string(last_mem_info_.ob_vslice_alloc_used_memory_kb_) + " kB"));
-      log.log_entry_kv("ObVSliceAlloc allocator cnt",
+      log.log_entry_kv("ObVSliceAlloc allocator cnt", 
           (std::to_string(last_mem_info_.ob_vslice_alloc_allocator_cnt_) + " times"));
     }
-
+   
     if (OB_FAIL(ret)) {
     } else if (is_final) {
       if (OB_UNLIKELY(last_mem_info_.object_storage_hold_kb_ > FINAL_OBJECT_STORAGE_MEMORY_LIMIT)) {
@@ -895,7 +895,7 @@ int OSDQMetric::summary(const bool is_final)
 
 //=========================== OSDQMonitor ==============================
 
-OSDQMonitor::OSDQMonitor()
+OSDQMonitor::OSDQMonitor() 
   : is_inited_(false),
     is_started_(false),
     metric_(nullptr),
@@ -941,7 +941,7 @@ int OSDQMonitor::start()
   }
 
   if (OB_FAIL(ret)) {
-    destroy();
+    destroy(); 
   }
   return ret;
 }
@@ -990,7 +990,7 @@ OSDQParameters::OSDQParameters()
 }
 
 //============================ ObAdminObjectStorageDriverQualityExecutor ===========================
-ObAdminObjectStorageDriverQualityExecutor::ObAdminObjectStorageDriverQualityExecutor()
+ObAdminObjectStorageDriverQualityExecutor::ObAdminObjectStorageDriverQualityExecutor() 
   : params_(),
     metric_(),
     monitor_()
@@ -1080,7 +1080,7 @@ int ObAdminObjectStorageDriverQualityExecutor::parse_cmd_(int argc, char *argv[]
       }
       case 's': {
         if (OB_FAIL(databuff_printf(params_.storage_info_str_, sizeof(params_.storage_info_str_), "%s", optarg))) {
-          OB_LOG(WARN, "failed to copy storage info str", KR(ret), K((char *)optarg));
+          OB_LOG(WARN, "failed to copy storage info str", KR(ret), K((char *)optarg)); 
         }
         break;
       }
@@ -1115,7 +1115,7 @@ int ObAdminObjectStorageDriverQualityExecutor::parse_cmd_(int argc, char *argv[]
         break;
       }
       case 'a': {
-        // 必须在 ObDeviceManager::get_instance().init_devices_env() 之后执行
+        // 必须在 ObDeviceManager::get_instance().init_devices_env() 之后执行 
         cluster_enable_obdal_config = &ObClusterEnableObdalConfigBase::get_instance();
         break;
       }
@@ -1137,13 +1137,13 @@ int ObAdminObjectStorageDriverQualityExecutor::parse_cmd_(int argc, char *argv[]
               ret = OB_INVALID_ARGUMENT;
               OB_LOG(WARN, "failed to parse limit cpu", KR(ret), K((char *) optarg));
             }
-          }
+          } 
           break;
         } else {
           print_usage_();
           exit(1);
         }
-      }
+      } 
       default: {
         print_usage_();
         exit(1);
@@ -1170,7 +1170,7 @@ int ObAdminObjectStorageDriverQualityExecutor::set_environment_()
   if (OB_ISNULL(malloc->get_tenant_ctx_allocator(OB_SERVER_TENANT_ID, 0))) {
     if (OB_FAIL(malloc->create_and_add_tenant_allocator(OB_SERVER_TENANT_ID))) {
       OB_LOG(WARN, "failed to create_and_add_tenant_allocator", KR(ret));
-    }
+    } 
   }
 
   // init tenant and tenant io manager
@@ -1186,7 +1186,7 @@ int ObAdminObjectStorageDriverQualityExecutor::set_environment_()
   } else if (OB_FAIL(ObObjectStorageInfo::register_cluster_version_mgr(&ObClusterVersionBaseMgr::get_instance()))) {
     STORAGE_LOG(WARN, "fail to register cluster version mgr", KR(ret));
   }
-
+ 
   // set tenant io manager memory limit;
   ObRefHolder<ObTenantIOManager> tenant_holder;
   if (FAILEDx(OB_IO_MANAGER.get_tenant_io_manager(OB_SERVER_TENANT_ID, tenant_holder))) {
@@ -1243,7 +1243,7 @@ OSDQScene *ObAdminObjectStorageDriverQualityExecutor::create_scene_()
       OB_LOG(WARN, "fail to alloc memory for hybrid test scene", KR(ret), K(sizeof(OSDQHybridTestScene)));
     } else {
       scene = new (scene) OSDQHybridTestScene();
-    }
+    } 
   } else if (params_.scene_type_ == RESOURCE_LIMITED_SCENE) {
     if (OB_ISNULL(scene = static_cast<OSDQResourceLimitedScene *>(allocator.alloc(sizeof(OSDQResourceLimitedScene))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1280,13 +1280,13 @@ void ObAdminObjectStorageDriverQualityExecutor::free_scene_(OSDQScene *&scene)
     }
     get_vslice_alloc_instance().free(scene);
     scene = nullptr;
-  }
+  } 
 }
 
 //=========================== OSDQFileSet ===============================
 
 OSDQFileSet::OSDQFileSet() {}
-OSDQFileSet::~OSDQFileSet()
+OSDQFileSet::~OSDQFileSet() 
 {
   FilePathMap::iterator it = file_path_map_.begin();
   while (it != file_path_map_.end()) {
@@ -1330,7 +1330,7 @@ int OSDQFileSet::fetch_and_delete_file(int64_t &object_id, char *&file_path)
   } else {
     // To quickly fetch a random element from file_set, we first generate a random value from [min, max]
     // and then look for lower_bound in file_set based on it.
-    // Note that the probability that each element will be fetched is not the same when the file_set are
+    // Note that the probability that each element will be fetched is not the same when the file_set are 
     // sparse, but this can be allowed to happen for now.
     int64_t min_object_id = *file_set_.begin();
     int64_t max_object_id = *file_set_.rbegin();

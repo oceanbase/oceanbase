@@ -48,7 +48,7 @@ int ObExprJsonContains::calc_result_typeN(ObExprResType& type,
     type.set_int32();
     type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
     type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].scale_);
-
+    
     for (int64_t i = 0; OB_SUCC(ret) && i < 2; i++) {
       ObObjType in_type = types_stack[i].get_type();
       if (!ob_is_string_type(in_type)) {

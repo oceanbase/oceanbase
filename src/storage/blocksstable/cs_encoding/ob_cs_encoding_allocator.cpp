@@ -31,3 +31,4 @@ CS_DEF_SIZE_ARRAY(ColumnDecoder, cs_decoder_sizes);
 
 }//end namespace blocksstable
 }//end namespace oceanbase
+

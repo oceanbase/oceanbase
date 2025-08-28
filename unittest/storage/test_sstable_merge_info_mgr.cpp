@@ -218,7 +218,7 @@ TEST_F(TestSSTableMergeInfoMgr, resize)
   add_merge_info(tablet_id, ObMergeType::MAJOR_MERGE)
 #define ADD_MINOR_MERGE_INFO(tablet_id) \
   add_merge_info(tablet_id, ObMergeType::MINOR_MERGE)
-
+  
   const int64_t max_cnt = 20;
   int i = 0;
   for (i = 0; i < max_cnt; ++i) {
@@ -230,7 +230,7 @@ TEST_F(TestSSTableMergeInfoMgr, resize)
     ADD_MINOR_MERGE_INFO(i + 1);
   }
   ASSERT_EQ(2 * max_cnt, MTL(ObTenantSSTableMergeInfoMgr*)->size());
-
+  
   compaction::ObIDiagnoseInfoMgr::Iterator major_iterator;
   compaction::ObIDiagnoseInfoMgr::Iterator minor_iterator;
   ASSERT_EQ(OB_SUCCESS, MTL(ObTenantSSTableMergeInfoMgr *)->open_iter(major_iterator, minor_iterator));

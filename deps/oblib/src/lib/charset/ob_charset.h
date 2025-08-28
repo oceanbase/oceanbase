@@ -491,14 +491,14 @@ public:
   static size_t scan_str(const char *str,
                          const char *end,
                          int sq);
-  // return position in characters
+  // return position in characters                     
   static uint32_t instr(ObCollationType collation_type,
                         const char *str1,
                         int64_t str1_len,
                         const char *str2,
                         int64_t str2_len);
 
-  // return position in bytes
+  // return position in bytes 
   static int64_t instrb(ObCollationType collation_type,
                         const char *str1,
                         int64_t str1_len,

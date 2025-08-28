@@ -173,7 +173,7 @@ TEST(TestKeyBtree, smoke_test)
       });
   }
 
-  // keep inserting at left bound, range is from
+  // keep inserting at left bound, range is from 
   std::thread head_insert_thread[2];
   CACHE_ALIGNED int64_t head_num = -1;
   for (int64_t i = 0; i < 2; ++i) {

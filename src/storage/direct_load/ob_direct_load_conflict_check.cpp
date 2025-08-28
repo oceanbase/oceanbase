@@ -48,7 +48,7 @@ bool ObDirectLoadConflictCheckParam::is_valid() const
          table_data_desc_.is_valid() &&
          nullptr != origin_table_ &&
          nullptr != range_ && range_->is_valid() &&
-         nullptr != col_descs_ &&
+         nullptr != col_descs_ && 
          nullptr != datum_utils_ &&
          nullptr != dml_row_handler_;
 }
@@ -80,7 +80,7 @@ ObDirectLoadConflictCheck::~ObDirectLoadConflictCheck()
 }
 
 int ObDirectLoadConflictCheck::init(
-    const ObDirectLoadConflictCheckParam &param,
+    const ObDirectLoadConflictCheckParam &param, 
     ObDirectLoadIStoreRowIterator *load_iter)
 {
   int ret = OB_SUCCESS;
@@ -100,7 +100,7 @@ int ObDirectLoadConflictCheck::init(
       is_inited_ = true;
     }
   }
-
+  
   return ret;
 }
 
@@ -126,7 +126,7 @@ int ObDirectLoadConflictCheck::get_next_row(const ObDirectLoadDatumRow *&result_
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -190,7 +190,7 @@ int ObDirectLoadConflictCheck::handle_get_next_row_finish(
 
 int ObDirectLoadConflictCheck::compare(
     const ObDirectLoadDatumRow &first_row,
-    const ObDirectLoadDatumRow &second_row,
+    const ObDirectLoadDatumRow &second_row, 
     int &cmp_ret)
 {
   int ret = OB_SUCCESS;

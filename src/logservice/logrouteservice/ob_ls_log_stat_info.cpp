@@ -20,7 +20,7 @@ namespace logservice
 /////////////////////////////////// LogStatRecord ///////////////////////////////
 int64_t LogStatRecord::to_string(char *buffer, int64_t length) const
 {
-  int64_t pos = 0;
+  int64_t pos = 0;  
   (void)databuff_printf(buffer, length, pos, "{svr=");
   (void)databuff_printf(buffer, length, pos, server_);
   (void)databuff_printf(buffer, length, pos, ", role=%d, LSN:[%ld, %ld]}",

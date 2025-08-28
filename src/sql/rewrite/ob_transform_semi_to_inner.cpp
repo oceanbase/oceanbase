@@ -92,8 +92,8 @@ int ObTransformSemiToInner::transform_one_stmt(
       } else if (!happened) {
         OPT_TRACE("semi join can not transform to inner join");
         LOG_TRACE("semi join can not transform to inner join", K(*semi_info));
-      } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*ctx_, parent_stmts,
-                                                                            stmt, true,
+      } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*ctx_, parent_stmts, 
+                                                                            stmt, true, 
                                                                             partial_cost_check))) {
         LOG_WARN("failed to check partial cost eval validity", K(ret));
       } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt,
@@ -208,12 +208,12 @@ int ObTransformSemiToInner::transform_semi_to_inner(ObDMLStmt *root_stmt,
 
 /**
  * @brief gather_params_by_rewrite_form
- * collect some key parameters for each rewrite form separately. Note: This function assumes that the rewrite form has
+ * collect some key parameters for each rewrite form separately. Note: This function assumes that the rewrite form has 
  * already been decided in the previous phase and is present in trans_param
  */
 int ObTransformSemiToInner::gather_params_by_rewrite_form(ObDMLStmt* trans_stmt,
-                                                          SemiInfo* semi_info,
-                                                          TransformParam& trans_param)
+                                                          SemiInfo* semi_info, 
+                                                          TransformParam& trans_param) 
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 4> equal_join_conds;
@@ -227,25 +227,25 @@ int ObTransformSemiToInner::gather_params_by_rewrite_form(ObDMLStmt* trans_stmt,
   if (OB_ISNULL(trans_stmt) || OB_ISNULL(semi_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(trans_stmt), K(semi_info));
-  } else if (OB_FAIL(split_join_condition(*trans_stmt,
-                                          *semi_info,
-                                          equal_join_conds,
-                                          cmp_join_conds,
-                                          filter_conds,
-                                          invalid_conds,
+  } else if (OB_FAIL(split_join_condition(*trans_stmt, 
+                                          *semi_info, 
+                                          equal_join_conds, 
+                                          cmp_join_conds, 
+                                          filter_conds, 
+                                          invalid_conds, 
                                           other_conds,
                                           is_multi_join_condition,
                                           is_all_left_filter))) {
     LOG_WARN("failed to check semi join condition", K(ret));
-  } else if (OB_FAIL(collect_param_exprs_of_correlated_conds(*trans_stmt,
+  } else if (OB_FAIL(collect_param_exprs_of_correlated_conds(*trans_stmt, 
                                                              *semi_info,
                                                              equal_join_conds,
-                                                             trans_param.equal_left_exprs_,
+                                                             trans_param.equal_left_exprs_, 
                                                              trans_param.equal_right_exprs_))) {
     LOG_WARN("failed to collect param exprs of equal correlated conditions", K(ret));
-  } else if (OB_FAIL(collect_filter_conds_related_to_right_table(*trans_stmt,
-                                                            *semi_info,
-                                                            filter_conds,
+  } else if (OB_FAIL(collect_filter_conds_related_to_right_table(*trans_stmt, 
+                                                            *semi_info, 
+                                                            filter_conds, 
                                                             trans_param.filter_conds_on_right_))) {
       LOG_WARN("failed to get filter conditions on right table", K(ret));
   } else if (trans_param.use_inner()) {
@@ -257,9 +257,9 @@ int ObTransformSemiToInner::gather_params_by_rewrite_form(ObDMLStmt* trans_stmt,
     } else if (OB_ISNULL(trans_param.cmp_join_cond_ = cmp_join_conds.at(0))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null expr", K(ret));
-    } else if (OB_FAIL(collect_param_expr_related_to_right_table(*trans_stmt,
-                                                                 *semi_info,
-                                                                 trans_param.cmp_join_cond_,
+    } else if (OB_FAIL(collect_param_expr_related_to_right_table(*trans_stmt, 
+                                                                 *semi_info, 
+                                                                 trans_param.cmp_join_cond_, 
                                                                  trans_param.cmp_right_expr_))) {
       LOG_WARN("failed to get param expr related to right table", K(ret));
     }
@@ -269,9 +269,9 @@ int ObTransformSemiToInner::gather_params_by_rewrite_form(ObDMLStmt* trans_stmt,
     StmtUniqueKeyProvider unique_key_provider;
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (OB_FAIL(unique_key_provider.generate_unique_key(ctx_,
-                                                               trans_stmt,
-                                                               empty_ignore_tables,
+    } else if (OB_FAIL(unique_key_provider.generate_unique_key(ctx_, 
+                                                               trans_stmt, 
+                                                               empty_ignore_tables, 
                                                                column_groups))) {
       LOG_WARN("failed to generate unique column group for from items", K(ret));
     } else if (OB_FAIL(trans_param.unique_column_groups_.assign(column_groups))) {
@@ -285,10 +285,10 @@ int ObTransformSemiToInner::gather_params_by_rewrite_form(ObDMLStmt* trans_stmt,
  * @brief do_transform_by_rewrite_form
  * call different rewriting functions according to the rewrite form
  */
-int ObTransformSemiToInner::do_transform_by_rewrite_form(ObDMLStmt* stmt,
+int ObTransformSemiToInner::do_transform_by_rewrite_form(ObDMLStmt* stmt, 
                                                          SemiInfo* semi_info,
                                                          ObCostBasedRewriteCtx &ctx,
-                                                         TransformParam& trans_param)
+                                                         TransformParam& trans_param) 
 {
   int ret  = OB_SUCCESS;
   if (OB_ISNULL(ctx_) || OB_ISNULL(stmt) || OB_ISNULL(semi_info)) {
@@ -297,7 +297,7 @@ int ObTransformSemiToInner::do_transform_by_rewrite_form(ObDMLStmt* stmt,
   } else if (OB_FAIL(gather_params_by_rewrite_form(stmt, semi_info, trans_param))) {
     LOG_WARN("failed to gather trans params", K(ret));
   } else if (trans_param.use_inner()) {
-    if (OB_FAIL(do_transform(*stmt,
+    if (OB_FAIL(do_transform(*stmt, 
                              semi_info,
                              ctx,
                              trans_param))) {
@@ -322,7 +322,7 @@ int ObTransformSemiToInner::do_transform_by_rewrite_form(ObDMLStmt* stmt,
       if (OB_ISNULL(view_stmt)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null pointer", K(ret));
-      } else if (OB_FAIL(do_transform(*view_stmt,
+      } else if (OB_FAIL(do_transform(*view_stmt, 
                                semi_info,
                                ctx,
                                trans_param))) {
@@ -355,21 +355,21 @@ int ObTransformSemiToInner::do_transform_by_rewrite_form(ObDMLStmt* stmt,
 
 /**
  * @brief split_join_condition
- * a more detailed splitting of semi join conditions based on some key properties
+ * a more detailed splitting of semi join conditions based on some key properties 
  * (table dependency, equal-value comparator, less-greater comparator, expression morphology...)
  * @param equal_join_conds equal-value correlated conditions in semi-join
  * @param cmp_join_conds less/greater correlated conditions (>,<,>=,<=) in semi-join
  * @param filter_conds non-correlated filter conditions that act on the left or right table alone
  * @param invalid_conds conditon references a table other than the left or right table in semi-join
- * @param other_conds condition references to the left and right tables are not located on either side of the operator
+ * @param other_conds condition references to the left and right tables are not located on either side of the operator 
  *        OR uses operators beyond: =, >, <, >=, <=
  */
-int ObTransformSemiToInner::split_join_condition(ObDMLStmt& stmt,
-                                                 SemiInfo& semi_info,
-                                                 ObIArray<ObRawExpr*>& equal_join_conds,
-                                                 ObIArray<ObRawExpr*>& cmp_join_conds,
-                                                 ObIArray<ObRawExpr*>& filter_conds,
-                                                 ObIArray<ObRawExpr*>& invalid_conds,
+int ObTransformSemiToInner::split_join_condition(ObDMLStmt& stmt, 
+                                                 SemiInfo& semi_info, 
+                                                 ObIArray<ObRawExpr*>& equal_join_conds, 
+                                                 ObIArray<ObRawExpr*>& cmp_join_conds, 
+                                                 ObIArray<ObRawExpr*>& filter_conds, 
+                                                 ObIArray<ObRawExpr*>& invalid_conds, 
                                                  ObIArray<ObRawExpr*>& other_conds,
                                                  bool& is_multi_join_cond,
                                                  bool& is_all_left_filter)
@@ -425,7 +425,7 @@ int ObTransformSemiToInner::split_join_condition(ObDMLStmt& stmt,
       bool right_param_use_left_table = left_table_set.overlap(right_param->get_relation_ids());
       bool left_param_use_right_table = right_table_set.overlap(left_param->get_relation_ids());
       bool right_param_use_right_table = right_table_set.overlap(right_param->get_relation_ids());
-      if ((left_param_use_left_table && left_param_use_right_table) ||
+      if ((left_param_use_left_table && left_param_use_right_table) || 
           (right_param_use_left_table && right_param_use_right_table)) {
         if (OB_FAIL(other_conds.push_back(expr))) {
           LOG_WARN("failed to push back expr", K(ret));
@@ -447,13 +447,13 @@ int ObTransformSemiToInner::split_join_condition(ObDMLStmt& stmt,
           LOG_WARN("failed to add members", K(ret));
         }
       } else if (!expr->get_relation_ids().equal(join_cond_table_ids)){
-        is_multi_join_cond = true;
+        is_multi_join_cond = true;        
       }
     }
   }
 
   if (OB_SUCC(ret)) {
-    if (semi_conditions.count() != invalid_conds.count() + filter_conds.count() + equal_join_conds.count() +
+    if (semi_conditions.count() != invalid_conds.count() + filter_conds.count() + equal_join_conds.count() + 
                                    cmp_join_conds.count() + other_conds.count()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected condition splitting : count mismatch", K(ret));
@@ -500,7 +500,7 @@ int ObTransformSemiToInner::check_basic_validity(ObDMLStmt *root_stmt,
   bool can_add_deduplication = false;
   ObIArray<uint64_t> & left_table_ids = semi_info.left_table_ids_;
   ObSEArray<TableItem*, 4> left_tables;
-  ObSEArray<ObRawExpr*, 4> left_exprs;
+  ObSEArray<ObRawExpr*, 4> left_exprs;   
   ObSEArray<ObRawExpr*, 4> right_exprs;
   is_valid = false;
   need_check_cost = false;
@@ -534,8 +534,8 @@ int ObTransformSemiToInner::check_basic_validity(ObDMLStmt *root_stmt,
                                                right_exprs,
                                                is_all_left_filter,
                                                ctx.is_multi_join_cond_,
-                                               cmp_join_conds_count,
-                                               invalid_conds_count,
+                                               cmp_join_conds_count, 
+                                               invalid_conds_count, 
                                                other_conds_count))) {
     LOG_WARN("failed to check semi join condition", K(ret));
   } else if (OB_FAIL(check_right_exprs_unique(stmt, right_table, right_exprs, is_unique))) {
@@ -782,11 +782,11 @@ int ObTransformSemiToInner::check_right_exprs_unique(ObDMLStmt &stmt,
 int ObTransformSemiToInner::check_semi_join_condition(ObDMLStmt &stmt,
                                                       SemiInfo &semi_info,
                                                       ObIArray<ObRawExpr*> &equal_left_exprs,
-                                                      ObIArray<ObRawExpr*> &equal_right_exprs,
+                                                      ObIArray<ObRawExpr*> &equal_right_exprs,                                              
                                                       bool &is_all_left_filter,
                                                       bool &is_multi_join_cond,
-                                                      int64_t& cmp_join_conds_count,
-                                                      int64_t& invalid_conds_count,
+                                                      int64_t& cmp_join_conds_count, 
+                                                      int64_t& invalid_conds_count, 
                                                       int64_t& other_conds_count)
 {
   int ret = OB_SUCCESS;
@@ -815,9 +815,9 @@ int ObTransformSemiToInner::check_semi_join_condition(ObDMLStmt &stmt,
                                                              equal_left_exprs,
                                                              equal_right_exprs))) {
     LOG_WARN("failed to collect param exprs related to left/right table respectively", K(ret));
-  } else if (OB_FAIL(collect_filter_conds_related_to_right_table(stmt,
-                                                                semi_info,
-                                                                filter_conds,
+  } else if (OB_FAIL(collect_filter_conds_related_to_right_table(stmt, 
+                                                                semi_info, 
+                                                                filter_conds, 
                                                                 filter_conds_on_right))) {
     LOG_WARN("failed to get filter conditions on right table", K(ret));
   } else if (OB_FAIL(collect_param_exprs_of_correlated_conds(stmt,
@@ -826,7 +826,7 @@ int ObTransformSemiToInner::check_semi_join_condition(ObDMLStmt &stmt,
                                                              equal_left_exprs,
                                                              equal_right_exprs,
                                                              true))) {
-    // collect equal info in right filters to check if right table is unique
+    // collect equal info in right filters to check if right table is unique 
     LOG_WARN("failed to collect param exprs of equal correlated conditions", K(ret));
   } else {
     cmp_join_conds_count = cmp_join_conds.count();
@@ -896,10 +896,10 @@ int ObTransformSemiToInner::collect_param_exprs_of_correlated_conds(ObDMLStmt& s
   return ret;
 }
 
-int ObTransformSemiToInner::collect_param_expr_related_to_right_table(ObDMLStmt& stmt,
-                                                                      SemiInfo& semi_info,
-                                                                      ObRawExpr* correlated_condition,
-                                                                      ObRawExpr*& param_expr_related_to_right_table)
+int ObTransformSemiToInner::collect_param_expr_related_to_right_table(ObDMLStmt& stmt, 
+                                                                      SemiInfo& semi_info, 
+                                                                      ObRawExpr* correlated_condition, 
+                                                                      ObRawExpr*& param_expr_related_to_right_table) 
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 4> correlated_conditions;
@@ -910,10 +910,10 @@ int ObTransformSemiToInner::collect_param_expr_related_to_right_table(ObDMLStmt&
     LOG_WARN("unexpected null", K(ret));
   } else if (OB_FAIL(correlated_conditions.push_back(correlated_condition))) {
     LOG_WARN("failed to push back expr", K(ret));
-  } else if (OB_FAIL(collect_param_exprs_of_correlated_conds(stmt,
-                                                             semi_info,
-                                                             correlated_conditions,
-                                                             left_exprs,
+  } else if (OB_FAIL(collect_param_exprs_of_correlated_conds(stmt, 
+                                                             semi_info, 
+                                                             correlated_conditions, 
+                                                             left_exprs, 
                                                              right_exprs))) {
     LOG_WARN("failed to collect param exprs", K(ret));
   } else if (left_exprs.count() != 1 || right_exprs.count() != 1) {
@@ -929,9 +929,9 @@ int ObTransformSemiToInner::collect_param_expr_related_to_right_table(ObDMLStmt&
 /**
  * @brief classify non-correlated filter conditions according to whether they are related to the right table or not
  */
-int ObTransformSemiToInner::collect_filter_conds_related_to_right_table(ObDMLStmt& stmt,
-                                                                        SemiInfo& semi_info,
-                                                                        ObIArray<ObRawExpr*>& filter_conds,
+int ObTransformSemiToInner::collect_filter_conds_related_to_right_table(ObDMLStmt& stmt, 
+                                                                        SemiInfo& semi_info, 
+                                                                        ObIArray<ObRawExpr*>& filter_conds, 
                                                                         ObIArray<ObRawExpr*>& filter_conds_on_right)
 {
   int ret = OB_SUCCESS;
@@ -942,7 +942,7 @@ int ObTransformSemiToInner::collect_filter_conds_related_to_right_table(ObDMLStm
   } else if (OB_FAIL(stmt.get_table_rel_ids(semi_info.right_table_id_, right_table_set))) {
     LOG_WARN("failed to get table rel ids", K(ret));
   }
-
+  
   for (int64_t i = 0; OB_SUCC(ret) && i < filter_conds.count(); i++) {
     ObRawExpr* expr = filter_conds.at(i);
     if (OB_ISNULL(expr)) {
@@ -961,7 +961,7 @@ int ObTransformSemiToInner::collect_filter_conds_related_to_right_table(ObDMLStm
   return ret;
 }
 
-bool ObTransformSemiToInner::is_less_or_greater_expr(ObItemType expr_type)
+bool ObTransformSemiToInner::is_less_or_greater_expr(ObItemType expr_type) 
 {
   return (expr_type >= T_OP_LE && expr_type <= T_OP_GT);
 }
@@ -1132,7 +1132,7 @@ int ObTransformSemiToInner::do_transform(ObDMLStmt &stmt,
     }
   } else if (OB_FAIL(new_condition_exprs.assign(semi_info->semi_conditions_))) {
     LOG_WARN("failed to assign semi join conditions", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::remove_item(new_condition_exprs,
+  } else if (OB_FAIL(ObOptimizerUtil::remove_item(new_condition_exprs, 
                                                   trans_param.filter_conds_on_right_))) {
     LOG_WARN("failed to remove non-correlated filter conditions on right table", K(ret));
   } else if (OB_FAIL(append(stmt.get_condition_exprs(), new_condition_exprs))) {
@@ -1229,7 +1229,7 @@ int ObTransformSemiToInner::find_basic_table(ObSelectStmt* stmt, uint64_t &table
   return ret;
 }
 
-int ObTransformSemiToInner::do_transform_with_aggr(ObDMLStmt& stmt,
+int ObTransformSemiToInner::do_transform_with_aggr(ObDMLStmt& stmt, 
                                                    SemiInfo* semi_info,
                                                    ObCostBasedRewriteCtx &ctx,
                                                    TransformParam& trans_param)
@@ -1307,10 +1307,10 @@ int ObTransformSemiToInner::do_transform_with_aggr(ObDMLStmt& stmt,
   return ret;
 }
 
-int ObTransformSemiToInner::create_min_max_aggr_expr(ObDMLStmt* stmt,
-                                                     ObRawExprFactory* expr_factory,
-                                                     ObRawExpr* condition_expr,
-                                                     ObRawExpr* target_param_expr,
+int ObTransformSemiToInner::create_min_max_aggr_expr(ObDMLStmt* stmt, 
+                                                     ObRawExprFactory* expr_factory, 
+                                                     ObRawExpr* condition_expr, 
+                                                     ObRawExpr* target_param_expr, 
                                                      ObAggFunRawExpr*& aggr_expr)
 {
   int ret = OB_SUCCESS;
@@ -1354,8 +1354,8 @@ int ObTransformSemiToInner::create_min_max_aggr_expr(ObDMLStmt* stmt,
   return ret;
 }
 
-int ObTransformSemiToInner::add_group_by_with_cast(ObSelectStmt& view,
-                                                  const ObIArray<ObRawExpr*>& left_exprs,
+int ObTransformSemiToInner::add_group_by_with_cast(ObSelectStmt& view, 
+                                                  const ObIArray<ObRawExpr*>& left_exprs, 
                                                   const ObIArray<ObRawExpr*>& right_exprs)
 {
   int ret = OB_SUCCESS;
@@ -1381,10 +1381,10 @@ int ObTransformSemiToInner::add_group_by_with_cast(ObSelectStmt& view,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expect valid cast expr", K(ret));
     } else if (need_add_cast) {
-      if (OB_FAIL(ObRawExprUtils::create_cast_expr(*ctx_->expr_factory_,
-                                                  right,
-                                                  left->get_result_type(),
-                                                  cast_expr,
+      if (OB_FAIL(ObRawExprUtils::create_cast_expr(*ctx_->expr_factory_, 
+                                                  right, 
+                                                  left->get_result_type(), 
+                                                  cast_expr, 
                                                   ctx_->session_info_))) {
         LOG_WARN("failed to create cast expr", K(ret));
       } else {
@@ -1634,7 +1634,7 @@ int ObTransformSemiToInner::construct_transform_hint(ObDMLStmt &stmt, void *tran
         LOG_WARN("failed to push back table hint", K(ret));
       } else if (OB_FAIL(ctx_->add_src_hash_val(table_item->get_table_name()))) {
         LOG_WARN("failed to add src hash val", K(ret));
-      } else if (NULL != myhint && (myhint->get_tables().count() == 0 ||
+      } else if (NULL != myhint && (myhint->get_tables().count() == 0 || 
                                     myhint->enable_semi_to_inner(query_hint->cs_type_, *table_item))) {
         use_hint = true;
       }
@@ -1665,7 +1665,7 @@ int ObTransformSemiToInner::check_hint_valid(const ObDMLStmt &stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(query_hint));
   } else {
-    force_trans = NULL != myhint && (myhint->get_tables().count() == 0 ||
+    force_trans = NULL != myhint && (myhint->get_tables().count() == 0 || 
                                      myhint->enable_semi_to_inner(query_hint->cs_type_, table));
     force_no_trans = !force_trans && query_hint->has_outline_data();
   }

@@ -262,7 +262,7 @@ TEST_F(TestObSimpleLogClusterRebuild, test_fast_rebuild)
   EXPECT_EQ(LSN(lsn_2_block(leader_end_lsn, PALF_BLOCK_SIZE) * PALF_BLOCK_SIZE), \
       rebuild_server->palf_handle_impl_->log_engine_.get_log_meta().get_log_snapshot_meta().base_lsn_);
   EXPECT_EQ(expected_base_lsn, rebuild_server->palf_handle_impl_->log_engine_.base_lsn_for_block_gc_);
-
+  
   leader.reset();
   rebuild_server->reset();
   revert_cluster_palf_handle_guard(palf_list);
@@ -276,3 +276,4 @@ int main(int argc, char **argv)
 {
   RUN_SIMPLE_LOG_CLUSTER_TEST(TEST_NAME);
 }
+

@@ -339,7 +339,7 @@ int ObTransformMinMax::is_valid_aggr_items(ObTransformerCtx &ctx,
   } else if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(stmt.get_condition_exprs(),
                                                           const_exprs))) {
     LOG_WARN("failed to compute const equivalent exprs", K(ret));
-  }
+  } 
   for (int64_t i = 0; OB_SUCC(ret) && valid && i < stmt.get_aggr_item_size(); ++i) {
     if (OB_ISNULL(expr = stmt.get_aggr_item(i))) {
       ret = OB_ERR_UNEXPECTED;

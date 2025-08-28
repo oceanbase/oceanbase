@@ -52,7 +52,7 @@ public:
   virtual bool is_oracle_mode() const override { return oracle_mode_; }
   // in some situation, it allows continuation of SQL execution after failure in transaction,
   // and last_error should be reset.
-  //
+  // 
   void reset_last_error() { errno_ = common::OB_SUCCESS; }
 
 protected:

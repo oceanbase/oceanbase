@@ -18,7 +18,7 @@
 #include "ob_redis_model.h"
 
 namespace oceanbase
-{
+{   
 namespace table
 {
 

@@ -149,7 +149,7 @@ int ObAllBackupScheduleTaskStat::get_full_row_(const ObBackupScheduleTask &task_
       case Column::TENANT_ID: {
         cur_row_.cells_[i].set_int(display.tenant_id_);
         break;
-      }
+      } 
       case Column::SVR_IP: {
         char *addr_buf = nullptr;
         if (OB_ISNULL(addr_buf = static_cast<char *>(allocator_.alloc(OB_IP_PORT_STR_BUFF)))) {

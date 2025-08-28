@@ -227,7 +227,7 @@ DEF_COMMAND(TRANS, force_set_server_list, 1, "replica_num ip:port ip:port ... #f
       ARRAY_FOREACH(result_info.failed_ls_info_, idx) {
         fprintf(stdout, "{");
         obrpc::ObForceSetServerListResult::LSFailedInfo failed_info = result_info.failed_ls_info_.at(idx);
-        fprintf(stdout, "\"ls_id\":%ld, \"failed_ret_code\":%d, \"failed_reason\":\"%s\"", failed_info.ls_id_.id(), failed_info.failed_ret_code_, ob_error_name(failed_info.failed_ret_code_));
+        fprintf(stdout, "\"ls_id\":%ld, \"failed_ret_code\":%d, \"failed_reason\":\"%s\"", failed_info.ls_id_.id(), failed_info.failed_ret_code_, ob_error_name(failed_info.failed_ret_code_)); 
         if (idx == result_info.failed_ls_info_.size() - 1) {
           fprintf(stdout, "}");
         } else {
@@ -843,7 +843,7 @@ DEF_COMMAND(TRANS, add_ls_replica, 1, "tenant_id=xxx,ls_id=xxx[,replica_type=xxx
 // force_clear_arb_cluster_info
 // @params [in]  cluster_id, which cluster to modify
 // @params [in]  svr_ip, the arbitration server IP
-// @params [in]  svr_port, the arbitration server IP
+// @params [in]  svr_port, the arbitration server IP 
 // ATTENTION:
 //    Please make sure let log stream's leader to execute this command
 //    For permanant offline, orig_paxos_number should equals to new_paxos_number
@@ -1050,7 +1050,7 @@ DEF_COMMAND(SERVER, dump_ss_macro_block, 1,  "tenant_id:ver:mode:obj_type:incar_
         COMMON_LOG(WARN, "invalid arg", KR(ret), K(macro_id_str));
       }
     } else {
-      if (8 != sscanf(macro_id_str, "%ld:%ld:%ld:%ld:%ld:%ld:%ld:%ld", &version, &mode,
+      if (8 != sscanf(macro_id_str, "%ld:%ld:%ld:%ld:%ld:%ld:%ld:%ld", &version, &mode, 
                    &obj_type, &incar_id, &cg_id, &second_id, &third_id, &fourth_id)) {
         ret = OB_INVALID_ARGUMENT;
         COMMON_LOG(WARN, "invalid arg", KR(ret), K(macro_id_str));
@@ -1262,7 +1262,7 @@ DEF_COMMAND(SERVER, dump_ss_macro_block_by_uri, 1, "tenant_id:uri")
   } else {
     arg_str = cmd_.substr(action_name_.length() + 1);
   }
-
+  
   arg.size_ = DEFAULT_MACRO_BLOCK_SIZE;
   arg.offset_ = 0;
   if (OB_FAIL(ret)) {
@@ -1298,7 +1298,7 @@ DEF_COMMAND(SERVER, dump_ss_macro_block_by_uri, 1, "tenant_id:uri")
   if (OB_FAIL(ret)) {
     fprintf(stderr, "fail to dump_ss_macro_block_by_uri, ret=%s\n", ob_error_name(ret));
   }
-
+  
   COMMON_LOG(INFO, "dump ss_macro_block by uri", K(arg));
   return ret;
 }
@@ -1530,7 +1530,7 @@ DEF_COMMAND(SERVER, download_ss_macro_block, 1,  "tenant_id:ver:mode:obj_type:in
         COMMON_LOG(WARN, "invalid arg", KR(ret), K(macro_id_str));
       }
     } else {
-      if (8 != sscanf(macro_id_str, "%ld:%ld:%ld:%ld:%ld:%ld:%ld:%ld", &version, &mode,
+      if (8 != sscanf(macro_id_str, "%ld:%ld:%ld:%ld:%ld:%ld:%ld:%ld", &version, &mode, 
                    &obj_type, &incar_id, &cg_id, &second_id, &third_id, &fourth_id)) {
         ret = OB_INVALID_ARGUMENT;
         COMMON_LOG(WARN, "invalid arg", KR(ret), K(macro_id_str));
@@ -1683,7 +1683,7 @@ DEF_COMMAND(SERVER, enable_ss_micro_cache, 1, "tenant_id:is_enabled")
       COMMON_LOG(ERROR, "send req fail", K(ret));
     }
   }
-
+  
   if (OB_FAIL(ret)) {
     fprintf(stderr, "fail to enable ss_micro_cache, ret=%s\n", ob_error_name(ret));
   }

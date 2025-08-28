@@ -92,7 +92,7 @@ public:
   virtual int inner_get_next_batch(const int64_t max_row_cnt);
   virtual int inner_get_next_row() override { return common::OB_NOT_IMPLEMENT; }
   virtual int inner_close() final;
-
+  
   virtual OperatorOpenOrder get_operator_open_order() const override final
   { return OPEN_SELF_FIRST; }
 

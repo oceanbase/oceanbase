@@ -54,7 +54,7 @@ private:
   } ObWktTokenVal;
 
   explicit ObWktParser (ObIAllocator &allocator, const ObString &wkt) :
-    allocator_(allocator), wkt_(wkt.ptr()), wkb_buf_(allocator), cur_pos_(0), wkt_len_(wkt.length()),
+    allocator_(allocator), wkt_(wkt.ptr()), wkb_buf_(allocator), cur_pos_(0), wkt_len_(wkt.length()), 
     dim_type_(ObGeoDimType::NOT_INIT), is_oracle_mode_(lib::is_oracle_mode()) {}
   ~ObWktParser(){};
 
@@ -71,7 +71,7 @@ private:
 
   int check_next_token(ObWktTokenType tkn_type);
   int check_next_token_keep_pos(ObWktTokenType tkn_type);
-  int check_next_token_with_val(ObWktTokenType tkn, ObWktTokenVal &tkn_val);
+  int check_next_token_with_val(ObWktTokenType tkn, ObWktTokenVal &tkn_val); 	
   int check_next_token_with_val_keep_pos(ObWktTokenType tkn_type, ObWktTokenVal &tkn_val);
   int get_next_token(ObWktTokenType &tkn_type, ObWktTokenVal &tkn_val);
   int get_next_token_keep_pos(ObWktTokenType &tkn_type, ObWktTokenVal &tkn_val);
@@ -83,7 +83,7 @@ private:
   bool is_two_brac_beginning();
   int process_number(ObWktTokenVal &tkn_val);
   int process_word(ObWktTokenVal &tkn_val);
-
+  
   int get_next_token(ObWktTokenType &tkn_type, ObString &tkn_string);
   // for 3D object
   int try_parse_zdim_token(ObWktTokenVal &z_val);

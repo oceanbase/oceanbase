@@ -24,7 +24,7 @@
 #include "lib/random/ob_random.h"
 #include "lib/compress/ob_compress_util.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
 namespace storage
 {
@@ -47,10 +47,10 @@ public:
   TO_STRING_KV(K_(macro_id), K_(total_micro_size), "micro_cnt", get_micro_count());
 };
 
-class TestSSCommonUtil
+class TestSSCommonUtil 
 {
 public:
-  struct MicroBlockInfo
+  struct MicroBlockInfo 
   {
     MicroBlockInfo() : macro_id_(), offset_(0), size_(0)
     {}
@@ -122,8 +122,8 @@ int TestSSCommonUtil::gen_random_data(char *buf, const int64_t size)
 }
 
 ObSSMicroBlockCacheKey TestSSCommonUtil::gen_phy_micro_key(
-    const MacroBlockId &macro_id,
-    const int32_t offset,
+    const MacroBlockId &macro_id, 
+    const int32_t offset, 
     const int32_t size)
 {
   ObSSMicroBlockCacheKey micro_key;
@@ -135,8 +135,8 @@ ObSSMicroBlockCacheKey TestSSCommonUtil::gen_phy_micro_key(
 }
 
 int TestSSCommonUtil::prepare_micro_blocks(
-    const int64_t macro_block_cnt,
-    const int64_t block_size,
+    const int64_t macro_block_cnt, 
+    const int64_t block_size, 
     ObArray<MicroBlockInfo> &micro_block_arr,
     const int64_t start_macro_id,
     const bool random_micro_size,

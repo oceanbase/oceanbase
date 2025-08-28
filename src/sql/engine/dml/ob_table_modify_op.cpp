@@ -91,7 +91,7 @@ int ForeignKeyHandle::do_handle(ObTableModifyOp &op,
             //  1. handling update operator and
             //  2. foreign key constraint is self reference
             // need to change %new_row and %old_row
-            //   (see
+            //   (see 
             // xxx_row_res_info helps to restore row. restore row before get_next_row()
             //op.fk_self_ref_row_res_infos_.reset();
             for (int64_t i = 0; OB_SUCC(ret) && i < fk_arg.columns_.count(); i++) {
@@ -429,7 +429,7 @@ int ForeignKeyHandle::set_null(ObTableModifyOp &op,
   int ret = OB_SUCCESS;
   static const char *UPDATE_FMT_MYSQL  = "update `%.*s`.`%.*s` set %.*s where %.*s";
   static const char *UPDATE_FMT_ORACLE = "update \"%.*s\".\"%.*s\" set %.*s where %.*s";
-
+  
   ObArenaAllocator alloc(ObModIds::OB_MODULE_PAGE_ALLOCATOR,
                           OB_MALLOC_NORMAL_BLOCK_SIZE,
                           MTL_ID());
@@ -470,7 +470,7 @@ int ForeignKeyHandle::set_null(ObTableModifyOp &op,
       stmt_buf[stmt_pos++] = 0;
     }
   }
-
+  
   if (OB_SUCC(ret) && stmt_pos > 0) {
     LOG_DEBUG("foreign key cascade set null", "stmt", stmt_buf, K(old_row), K(fk_arg));
     if (OB_FAIL(op.begin_nested_session(fk_arg.is_self_ref_))) {

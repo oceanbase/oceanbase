@@ -75,7 +75,7 @@ int ObDropCCLRuleResolver::resolve(const ParseNode &parse_tree)
         }
       }
     }
-
+    
     // 2. resolve ccl rule name
     if (OB_SUCC(ret)) {
       ObString ccl_rule_name;

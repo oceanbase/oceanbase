@@ -23,7 +23,7 @@ namespace common {
 enum ObJsonSchemaAns {
   JS_NOT_CHCECKED = 0,
   JS_TRUE = 1,
-  JS_FALSE = 2
+  JS_FALSE = 2   
 };
 
 enum ObJsonSchemaComp {
@@ -182,7 +182,7 @@ private:
   int get_ref_pointer_value(const ObString ref_str, ObJsonObject*& ref_value);
   int handle_ref_keywords(ObJsonObject* origin_schema, ObIArray<ObJsonNode*> &schema_vec_stk,
                           const bool& is_composition, ObJsonArray* comp_array);
-  int generate_schema_and_record(const ObString& key_word, ObJsonNode* value, ObIArray<ObJsonNode*> &schema_vec_stk,
+  int generate_schema_and_record(const ObString& key_word, ObJsonNode* value, ObIArray<ObJsonNode*> &schema_vec_stk, 
                                 const bool& is_composition, ObJsonArray* comp_array);
   int generate_schema_info(const ObString& key_word, ObJsonNode* value, ObIArray<ObJsonNode*> &schema_vec_stk);
   int union_schema_def(const ObString& key_word, ObJsonNode*& value, ObJsonNode* old_key_value, bool& update_old_key);
@@ -190,22 +190,22 @@ private:
   int union_array_key_words_value(ObJsonNode*& new_value, ObJsonNode* old_value, bool& update_old_key, bool get_merge = false);
   int union_scalar_key_words_value(ObJsonNode*& new_value, ObJsonNode* old_value, bool& update_old_key);
   int union_add_pro_value(ObJsonNode*& new_value, ObJsonNode* old_value);
-  int generate_comp_and_record(const ObString& key_word, ObJsonNode* value,
-                               ObIArray<ObJsonNode*> &schema_vec_stk,
+  int generate_comp_and_record(const ObString& key_word, ObJsonNode* value, 
+                               ObIArray<ObJsonNode*> &schema_vec_stk, 
                                ObJsonArray* comp_array);
-  int handle_keywords_with_specific_type(const ObString& key_word, const ObJsonNodeType& expect_type,
+  int handle_keywords_with_specific_type(const ObString& key_word, const ObJsonNodeType& expect_type, 
                                          ObJsonObject* origin_schema, ObIArray<ObJsonNode*> &schema_vec_stk,
                                          const bool& is_composition, ObJsonArray* comp_array);
   // for keywords:maxLength, minLength, maxProperties, minProperties, maxItems, minItems
   // these keywords must be positive integer, Otherwise, ignore it and it will not take effect.
-  int handle_positive_int_keywords(const ObString& key_word, ObJsonObject* origin_schema,
+  int handle_positive_int_keywords(const ObString& key_word, ObJsonObject* origin_schema, 
                                     ObIArray<ObJsonNode*> &schema_vec_stk,
                                     const bool& is_composition, ObJsonArray* comp_array);
-  int handle_keywords_with_number_value(const ObString& key_word, ObJsonObject* origin_schema,
+  int handle_keywords_with_number_value(const ObString& key_word, ObJsonObject* origin_schema, 
                                         ObIArray<ObJsonNode*> &schema_vec_stk,
-                                        const bool& is_composition, ObJsonArray* comp_array,
+                                        const bool& is_composition, ObJsonArray* comp_array, 
                                         bool must_be_positive = false);
-  int handle_keywords_with_subschemas(ObJsonSubSchemaKeywords& key_words, ObJsonObject* json_schema,
+  int handle_keywords_with_subschemas(ObJsonSubSchemaKeywords& key_words, ObJsonObject* json_schema, 
                                       ObIArray<ObJsonNode*> &schema_vec_stk,
                                       bool is_composition, ObJsonArray* comp_array);
   int handle_properties(ObJsonObject*& json_schema, bool is_composition, ObJsonArray*comp_array, ObIArray<ObJsonObject*>& pro_array);
@@ -216,29 +216,29 @@ private:
   int handle_array_schema(ObJsonObject* json_schema, bool is_composition, ObJsonArray*comp_array, bool is_additonal);
   int handle_array_tuple_schema(ObJsonObject* json_schema, bool is_composition, ObJsonArray*comp_array);
   int handle_unnested_dependencies(ObJsonObject* json_schema);
-
-  int handle_nested_dependencies(ObJsonObject* json_schema, ObJsonArray*comp_array);
+  
+  int handle_nested_dependencies(ObJsonObject* json_schema, ObJsonArray*comp_array); 
   int handle_unnested_composition(const ObString& key_word, ObJsonObject* json_schema);
-
+  
   int handle_nested_composition(const ObString& key_word, ObJsonObject* json_schema, ObJsonArray*comp_array);
   int handle_unnested_not(ObJsonObject* json_schema);
   int handle_nested_not(ObJsonObject* json_schema, ObJsonArray*comp_array);
-  int get_difined_type(ObJsonObject* origin_schema, ObIArray<ObJsonNode*> &schema_vec_stk,
+  int get_difined_type(ObJsonObject* origin_schema, ObIArray<ObJsonNode*> &schema_vec_stk, 
                       ObJsonSchemaType& s_type, const bool& is_composition, ObJsonArray* comp_array);
   int get_dep_schema_if_defined(ObJsonObject* origin_schema, ObIArray<ObJsonNode*> &schema_vec_stk, ObJsonSubSchemaKeywords& key_words,
                                 const bool& is_composition, ObJsonArray* comp_array);
-  int check_keywords_by_type(const ObJsonSchemaType& s_type, ObJsonObject* origin_schema,
+  int check_keywords_by_type(const ObJsonSchemaType& s_type, ObJsonObject* origin_schema, 
                              ObIArray<ObJsonNode*> &schema_vec_stk, ObJsonSubSchemaKeywords& key_words,
                              const bool& is_composition, ObJsonArray* comp_array);
   int check_keywords_of_string(ObJsonObject* origin_schema, ObIArray<ObJsonNode*> &schema_vec_stk,
                                const bool& is_composition, ObJsonArray* comp_array);
   int check_keywords_of_number(ObJsonObject* origin_schema, ObIArray<ObJsonNode*> &schema_vec_stk,
                               const bool& is_composition, ObJsonArray* comp_array);
-  int check_keywords_of_object(ObJsonObject* origin_schema, ObIArray<ObJsonNode*> &schema_vec_stk,
+  int check_keywords_of_object(ObJsonObject* origin_schema, ObIArray<ObJsonNode*> &schema_vec_stk, 
                                ObJsonSubSchemaKeywords& key_words,
                                const bool& is_composition, ObJsonArray* comp_array);
-  int check_keywords_of_array(ObJsonObject* origin_schema, ObIArray<ObJsonNode*> &schema_vec_stk,
-                              ObJsonSubSchemaKeywords& key_words,
+  int check_keywords_of_array(ObJsonObject* origin_schema, ObIArray<ObJsonNode*> &schema_vec_stk, 
+                              ObJsonSubSchemaKeywords& key_words, 
                               const bool& is_composition, ObJsonArray* comp_array);
   int all_move_to_key(const ObString& key_word, ObJsonObject*& json_schema);
   int add_pattern_pro_to_schema(ObJsonObject* pro_schema, const ObIArray<ObJsonObject*>& pro_array, const ObString& key);
@@ -282,7 +282,7 @@ public:
   int get_json_or_schema_point(ObJsonBuffer& pointer, bool is_schema_pointer);
   OB_INLINE ObString get_failed_keyword() { return failed_keyword_;}
   typedef int (*ObCheckCompSchema)(ObIJsonBase *json_doc, ObIJsonBase* dep_schema, ObIArray<ObJsonSchemaAns> &ans_map, bool& is_valid);
-
+  
 private:
   int inner_schema_validator(ObIJsonBase *json_doc, ObIArray<ObIJsonBase*> &schema_vec, ObIArray<ObJsonSchemaAns> &ans_map, bool& is_valid);
   int object_recursive_validator(ObIJsonBase *json_doc, ObIArray<ObIJsonBase*> &schema_vec, ObIArray<ObJsonSchemaAns> &ans_map, bool& is_valid);
@@ -374,7 +374,7 @@ public:
   typedef ObVector<ObIJsonBase*, JsonSchemaArena> ObJsonSchemaPointers;
   typedef ObVector<ObSchemaCacheStat, SchemaCacheStatArena> ObSchemaCacheStatArr;
   static const int64_t DEFAULT_PAGE_SIZE = (1LL << 10); // 1kb
-
+ 
 public:
   ObJsonSchemaCache(common::ObIAllocator *allocator) :
         allocator_(allocator),
@@ -390,7 +390,7 @@ public:
   ObIJsonBase* schema_at(size_t idx);
 
   ObSchemaParseStat schema_stat_at(size_t idx);
-
+  
   size_t size() { return schema_arr_ptr_.size(); }
   void reset() {stat_arr_.clear(); schema_arr_ptr_.clear(); schema_str_.clear();}
 
@@ -399,7 +399,7 @@ public:
   common::ObIAllocator* get_allocator() {return allocator_;}
 private:
   int set_schema(ObIJsonBase* j_schema, const ObString& in_str, int arg_idx, int index);
-  bool is_match(ObString& in_str, size_t idx);
+  bool is_match(ObString& in_str, size_t idx); 
 
   int fill_empty(size_t reserve_size);
 
@@ -442,7 +442,7 @@ public:
   // for object, recursive checking is only required if there are keywords: PROPERTIES, PATTERN_PRO, ADDITIONAL_PRO
   static int need_check_recursive(ObIArray<ObIJsonBase*> &schema_vec, bool& need_recursive, bool is_array_keywords);
 };
-
+    
 } // namespace common
 } // namespace oceanbase
 

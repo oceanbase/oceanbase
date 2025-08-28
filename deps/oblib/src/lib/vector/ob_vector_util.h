@@ -70,9 +70,9 @@ int cal_distance_by_id(obvsag::VectorIndexPtr index_handler,
                        const int64_t *ids,
                        int64_t count,
                        const float *&distances);
-int get_extra_info_by_ids(obvsag::VectorIndexPtr& index_handler,
-                          const int64_t* ids,
-                          int64_t count,
+int get_extra_info_by_ids(obvsag::VectorIndexPtr& index_handler, 
+                          const int64_t* ids, 
+                          int64_t count, 
                           char *extra_infos);
 int get_vid_bound(obvsag::VectorIndexPtr index_handler, int64_t &min_vid, int64_t &max_vid);
 uint64_t estimate_memory(obvsag::VectorIndexPtr& index_handler, const uint64_t row_count, const bool is_build);
@@ -106,7 +106,7 @@ int knn_search(obvsag::VectorIndexPtr index_handler,
                bool is_extra_info_filter,
                float valid_ratio,
                void *allocator,
-               bool need_extra_info,
+               bool need_extra_info, 
                void *&iter_filter,
                bool is_last_search = false);
 

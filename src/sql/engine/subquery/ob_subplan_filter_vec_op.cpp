@@ -255,7 +255,7 @@ int ObSubPlanFilterVecOp::inner_get_next_batch(const int64_t max_row_cnt)
   } else if (need_init_before_get_row_) {
     OZ(prepare_onetime_exprs());
   }
-
+ 
   clear_evaluated_flag();
   DASGroupScanMarkGuard mark_guard(ctx_.get_das_ctx(), MY_SPEC.enable_das_group_rescan_);
   while (OB_SUCC(ret) && !iter_end_) {

@@ -475,7 +475,7 @@ int ObTableUpdateOp::write_rows_post_proc(int last_errno)
         //update rows across partitions, need to add das delete op's affected rows
         changed_rows += upd_rtdef.ddel_rtdef_->affected_rows_;
         //insert new row to das after old row has been deleted in storage
-        //reference to:
+        //reference to: 
       }
       LOG_DEBUG("update rows post proc", K(ret), K(found_rows), K(changed_rows), K(upd_rtdef));
     }

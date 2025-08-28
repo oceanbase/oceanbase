@@ -59,7 +59,7 @@ int ObLogGranuleIterator::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
   return ret;
 }
 
-int ObLogGranuleIterator::get_plan_item_info(PlanText &plan_text,
+int ObLogGranuleIterator::get_plan_item_info(PlanText &plan_text, 
                                              ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
@@ -83,8 +83,8 @@ int ObLogGranuleIterator::get_plan_item_info(PlanText &plan_text,
       continue;
     } else if (has_first && OB_FAIL(BUF_PRINTF(", "))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
-    } else if (OB_FAIL(BUF_PRINTF("%.*s",
-                                  MAX_GI_FLAG_NAME_LENGTH,
+    } else if (OB_FAIL(BUF_PRINTF("%.*s", 
+                                  MAX_GI_FLAG_NAME_LENGTH, 
                                   gi_flag_name[i]))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else {
@@ -93,14 +93,14 @@ int ObLogGranuleIterator::get_plan_item_info(PlanText &plan_text,
   }
   END_BUF_PRINT(plan_item.special_predicates_,
                 plan_item.special_predicates_len_);
-  if (OB_SUCC(ret) &&
+  if (OB_SUCC(ret) && 
       get_join_filter_info().is_inited_ &&
       OB_INVALID_ID != get_join_filter_info().filter_id_) {
     BEGIN_BUF_PRINT;
     if (OB_FAIL(BUF_PRINTF(":RF%04ld", get_join_filter_info().filter_id_))) {
       LOG_WARN("failed to print str", K(ret));
     }
-    END_BUF_PRINT(plan_item.object_alias_,
+    END_BUF_PRINT(plan_item.object_alias_, 
                   plan_item.object_alias_len_);
   }
   return ret;
@@ -332,7 +332,7 @@ int ObLogGranuleIterator::branch_has_exchange(const ObLogicalOperator *op, bool 
 }
 
 
-// see
+// see 
 // if gi on the left of join, and there is a receive on the right of join,
 // it will generate a deadlock scene.
 int ObLogGranuleIterator::check_exist_deadlock_condition(const ObLogicalOperator *op, bool &exist)

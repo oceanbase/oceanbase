@@ -160,7 +160,7 @@ int ObLogCount::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
   return ret;
 }
 
-int ObLogCount::get_plan_item_info(PlanText &plan_text,
+int ObLogCount::get_plan_item_info(PlanText &plan_text, 
                                    ObSqlPlanItem &plan_item)
 {
 	int ret = OB_SUCCESS;
@@ -169,7 +169,7 @@ int ObLogCount::get_plan_item_info(PlanText &plan_text,
   } else if (NULL != rownum_limit_expr_) {
     BEGIN_BUF_PRINT;
     EXPLAIN_PRINT_EXPR(rownum_limit_expr_, type);
-    END_BUF_PRINT(plan_item.special_predicates_,
+    END_BUF_PRINT(plan_item.special_predicates_, 
                   plan_item.special_predicates_len_);
   }
 	return ret;

@@ -350,10 +350,10 @@ TEST_F(TestMultiVersionDIMerge, rowkey_cross_two_macro_and_second_macro_is_filte
       "1        var1  -8       DI_VERSION 2       2        INSERT    NORMAL   CLF\n"
       "2        var2  -10      MIN        3        12      INSERT    INSERT_DELETE   SCF\n"
       "2        var2  -10      DI_VERSION 3       12       INSERT    NORMAL   C\n"
-      "2        var2  -10      0          3       2        DELETE    NORMAL   C\n"
+      "2        var2  -10      0          3       2        DELETE    NORMAL   C\n"      
       "2        var2  -8       DI_VERSION 3       2        INSERT    NORMAL   C\n"
       "2        var2  -8       0          3       2        DELETE    NORMAL   C\n"
-      "2        var2  -6       DI_VERSION 2       2        INSERT    NORMAL   CL\n"
+      "2        var2  -6       DI_VERSION 2       2        INSERT    NORMAL   CL\n" 
       "3        var3  -10      DI_VERSION -1      13       INSERT    NORMAL   CF\n"
       "3        var3  -10      0          -1      -1       DELETE    NORMAL   CL\n";
 
@@ -833,7 +833,7 @@ TEST_F(TestMultiVersionDIMerge, uncommit_rowkey_in_one_macro_committed_following
       "0        var0  -8       0            -1      -1      DELETE    NORMAL   CL\n"
       "1        var1  -10       MIN          10      3      INSERT    INSERT_DELETE   SCF\n"
       "1        var1  -10       DI_VERSION   10      3      INSERT    NORMAL   C\n"
-      "1        var1  -10       0           -1       3      DELETE    NORMAL   C\n"
+      "1        var1  -10       0           -1       3      DELETE    NORMAL   C\n" 
       "1        var1  -5        DI_VERSION  -1       3      INSERT    NORMAL   C\n"
       "1        var1  -5        0           -1      -1      DELETE    NORMAL   CL\n"
       "2        var2  -10       MIN          2      12      INSERT    INSERT_DELETE   SCF\n"
@@ -1738,7 +1738,7 @@ TEST_F(TestMultiVersionDIMerge, test_merge_with_macro_reused_with_shadow)
 
   const char *result1 =
       "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag\n"
-      "0        var0   -9      MIN            7        12      INSERT    INSERT_DELETE   SCF\n"
+      "0        var0   -9      MIN            7        12      INSERT    INSERT_DELETE   SCF\n"   
       "0        var0   -9       DI_VERSION    7        12      INSERT    NORMAL   C\n"
       "0        var0   -9       0             -1       -1      DELETE    NORMAL   CL\n"
       "1        var1   -44      MIN           7        59      INSERT    INSERT_DELETE   SCF\n"
@@ -3626,7 +3626,7 @@ TEST_F(TestMultiVersionDIMerge, check_shadow_row_fuse)
   ObTxTableGuard tx_table_guard;
   get_tx_table_guard(tx_table_guard);
   ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
-
+  
   ObTxData *tx_data = new ObTxData();
   ASSERT_EQ(OB_SUCCESS, tx_data->init_tx_op());
   transaction::ObTransID tx_id = 1;
@@ -3692,22 +3692,22 @@ TEST_F(TestMultiVersionDIMerge, check_mv_start_compact_shadow_multi_sstables)
 
   ObTableHandleV2 handle1;
   const char *micro_data[2];
-  micro_data[0] =
+  micro_data[0] = 
       "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag\n"
       "1        var1  -25       MIN             20      20      INSERT    INSERT_DELETE   SCF\n"
       "1        var1  -25       DI_VERSION      20      20      INSERT    NORMAL   C\n"
       "1        var1  -25       0               15      15      DELETE    NORMAL   C\n"
       "1        var1  -15       DI_VERSION      15      15      INSERT    NORMAL   C\n"
       "1        var1  -15       0               10      10      DELETE    NORMAL   CL\n";
-
-  micro_data[1] =
+  
+  micro_data[1] = 
       "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag\n"
       "2        var2  -25       MIN             20      20      INSERT    INSERT_DELETE   SCF\n"
       "2        var2  -25       DI_VERSION      20      20      INSERT    NORMAL   C\n"
       "2        var2  -25       0               15      15      DELETE    NORMAL   C\n"
       "2        var2  -15       DI_VERSION      15      15      INSERT    NORMAL   C\n"
       "2        var2  -15       0               10      10      DELETE    NORMAL   CL\n";
-
+  
   int schema_rowkey_cnt = 2;
 
   int64_t snapshot_version = 30;
@@ -3724,15 +3724,15 @@ TEST_F(TestMultiVersionDIMerge, check_mv_start_compact_shadow_multi_sstables)
 
   ObTableHandleV2 handle2;
   const char *micro_data2[2];
-  micro_data2[0] =
+  micro_data2[0] = 
       "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag\n"
       "1        var1  -45       MIN             30      30      INSERT    INSERT_DELETE   SCF\n"
       "1        var1  -45       DI_VERSION      30      30      INSERT    NORMAL   C\n"
       "1        var1  -45       0               25      25      DELETE    NORMAL   C\n"
       "1        var1  -35       DI_VERSION      25      25      INSERT    NORMAL   C\n"
       "1        var1  -35       0               20      20      DELETE    NORMAL   CL\n";
-
-  micro_data2[1] =
+  
+  micro_data2[1] = 
       "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag\n"
       "2        var2  -35       MIN             30      30      INSERT    INSERT_DELETE   SCF\n"
       "2        var2  -35       DI_VERSION      30      30      INSERT    NORMAL   C\n"
@@ -3808,7 +3808,7 @@ TEST_F(TestMultiVersionDIMerge, check_mv_start_compact_committing_multi_sstables
 
   ObTableHandleV2 handle1;
   const char *micro_data[1];
-  micro_data[0] =
+  micro_data[0] = 
     "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag  trans_id\n"
     "1        var1  MIN       -10             20      20      INSERT    NORMAL   UCF   trans_id_2\n"
     "1        var1  MIN       -9              15      15      DELETE    NORMAL   UC    trans_id_2\n"
@@ -3833,7 +3833,7 @@ TEST_F(TestMultiVersionDIMerge, check_mv_start_compact_committing_multi_sstables
 
   ObTableHandleV2 handle2;
   const char *micro_data2[1];
-  micro_data2[0] =
+  micro_data2[0] = 
       "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag  trans_id\n"
       "1        var1  MIN       -12             30      30      INSERT    NORMAL   UCF   trans_id_2\n"
       "1        var1  MIN       -11             20      20      DELETE    NORMAL   UCL   trans_id_2\n";
@@ -3852,7 +3852,7 @@ TEST_F(TestMultiVersionDIMerge, check_mv_start_compact_committing_multi_sstables
   ObTxTableGuard tx_table_guard;
   get_tx_table_guard(tx_table_guard);
   ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
-
+  
   ObTxData *tx_data = new ObTxData();
   ASSERT_EQ(OB_SUCCESS, tx_data->init_tx_op());
   transaction::ObTransID tx_id = 2;
@@ -3919,11 +3919,11 @@ TEST_F(TestMultiVersionDIMerge, check_mv_start_compact_complex_env)
   // delete + insert
   ObTableHandleV2 handle1;
   const char *micro_data[1];
-  micro_data[0] =
+  micro_data[0] = 
       "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag\n"
       "1        var1  -20       0               15      15      DELETE    NORMAL   CF\n"
       "1        var1  -15       DI_VERSION      15      15      INSERT    NORMAL   CL\n";
-
+  
   int schema_rowkey_cnt = 2;
   int64_t snapshot_version = 20;
   share::ObScnRange scn_range;
@@ -3939,12 +3939,12 @@ TEST_F(TestMultiVersionDIMerge, check_mv_start_compact_complex_env)
   // insert + insert
   ObTableHandleV2 handle2;
   const char *micro_data2[1];
-  micro_data2[0] =
+  micro_data2[0] = 
       "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag\n"
       "1        var1  -30       DI_VERSION      30      30      INSERT    NORMAL   CF\n"
       "1        var1  -30       0               25      25      DELETE    NORMAL   C\n"
       "1        var1  -25       DI_VERSION      25      25      INSERT    NORMAL   CL\n";
-
+  
   snapshot_version = 30;
   scn_range.start_scn_.convert_for_tx(25);
   scn_range.end_scn_.convert_for_tx(30);
@@ -3958,14 +3958,14 @@ TEST_F(TestMultiVersionDIMerge, check_mv_start_compact_complex_env)
   // insert + delete
   ObTableHandleV2 handle3;
   const char *micro_data3[1];
-  micro_data3[0] =
+  micro_data3[0] = 
       "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag\n"
       "1        var1  -40       MIN              40      40      INSERT    INSERT_DELETE   SCF\n"
       "1        var1  -40       DI_VERSION       40      40      INSERT    NORMAL   C\n"
       "1        var1  -40       0                35      35      DELETE    NORMAL   C\n"
       "1        var1  -35       DI_VERSION       35      35      INSERT    NORMAL   C\n"
       "1        var1  -35       0                30      30      DELETE    NORMAL   CL\n";
-
+  
   snapshot_version = 40;
   scn_range.start_scn_.convert_for_tx(35);
   scn_range.end_scn_.convert_for_tx(40);
@@ -3979,7 +3979,7 @@ TEST_F(TestMultiVersionDIMerge, check_mv_start_compact_complex_env)
   // delete + delete
   ObTableHandleV2 handle4;
   const char *micro_data4[1];
-  micro_data4[0] =
+  micro_data4[0] = 
       "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag\n"
       "1        var1  -60       MIN              55      55      DELETE    INSERT_DELETE   SCF\n"
       "1        var1  -60       0                55      55      DELETE    NORMAL   C\n"
@@ -3987,7 +3987,7 @@ TEST_F(TestMultiVersionDIMerge, check_mv_start_compact_complex_env)
       "1        var1  -55       0                45      45      DELETE    NORMAL   C\n"
       "1        var1  -50       DI_VERSION       45      45      INSERT    NORMAL   C\n"
       "1        var1  -45       0                40      40      DELETE    NORMAL   CL\n";
-
+  
   snapshot_version = 55;
   scn_range.start_scn_.convert_for_tx(45);
   scn_range.end_scn_.convert_for_tx(60);
@@ -4052,11 +4052,11 @@ TEST_F(TestMultiVersionDIMerge, check_mv_start_with_base_version)
 
   ObTableHandleV2 handle1;
   const char *micro_data[1];
-  micro_data[0] =
+  micro_data[0] = 
       "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag\n"
       "1        var1  -20       DI_VERSION      20      20      INSERT    NORMAL   CF\n"
       "1        var1  -15       0               15      15      DELETE    NORMAL   CL\n";
-
+  
   int schema_rowkey_cnt = 2;
   int64_t snapshot_version = 20;
   share::ObScnRange scn_range;
@@ -4071,11 +4071,11 @@ TEST_F(TestMultiVersionDIMerge, check_mv_start_with_base_version)
 
   ObTableHandleV2 handle2;
   const char *micro_data2[1];
-  micro_data2[0] =
+  micro_data2[0] = 
       "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag\n"
       "1        var1  -25       DI_VERSION      25      25      INSERT    NORMAL   CF\n"
       "1        var1  -25       0               20      20      DELETE    NORMAL   CL\n";
-
+  
   snapshot_version = 30;
   scn_range.start_scn_.convert_for_tx(25);
   scn_range.end_scn_.convert_for_tx(30);
@@ -4088,10 +4088,10 @@ TEST_F(TestMultiVersionDIMerge, check_mv_start_with_base_version)
 
   ObTableHandleV2 handle3;
   const char *micro_data3[1];
-  micro_data3[0] =
+  micro_data3[0] = 
       "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag\n"
       "1        var1  -35       0                25      25      DELETE    NORMAL   CLF\n";
-
+  
   snapshot_version = 35;
   scn_range.start_scn_.convert_for_tx(35);
   scn_range.end_scn_.convert_for_tx(40);
@@ -4153,12 +4153,12 @@ TEST_F(TestMultiVersionDIMerge, uncommit_row_sql_sequence_check_order_error)
 
   ObTableHandleV2 handle1;
   const char *micro_data[1];
-  micro_data[0] =
+  micro_data[0] = 
       "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag  trans_id\n"
       "1        var1  MIN      -12       20      20      DELETE    NORMAL    FU   trans_id_1\n"
       "1        var1  MIN      -11       20      20      INSERT    NORMAL    LU   trans_id_1\n"
       "2        var2  MIN      -14       20      20      INSERT    NORMAL    ULF  trans_id_1\n";
-
+  
   int schema_rowkey_cnt = 2;
   int64_t snapshot_version = 20;
   share::ObScnRange scn_range;
@@ -4173,10 +4173,10 @@ TEST_F(TestMultiVersionDIMerge, uncommit_row_sql_sequence_check_order_error)
 
   ObTableHandleV2 handle2;
   const char *micro_data2[1];
-  micro_data2[0] =
+  micro_data2[0] = 
       "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag  trans_id\n"
       "2        var2  MIN      -13       20      20      DELETE    NORMAL    ULF  trans_id_1\n";
-
+  
   snapshot_version = 30;
   scn_range.start_scn_.convert_for_tx(25);
   scn_range.end_scn_.convert_for_tx(30);
@@ -4191,7 +4191,7 @@ TEST_F(TestMultiVersionDIMerge, uncommit_row_sql_sequence_check_order_error)
   ObTxTableGuard tx_table_guard;
   get_tx_table_guard(tx_table_guard);
   ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
-
+  
   ObTxData *tx_data = new ObTxData();
   ASSERT_EQ(OB_SUCCESS, tx_data->init_tx_op());
   transaction::ObTransID tx_id = 1;
@@ -4253,7 +4253,7 @@ TEST_F(TestMultiVersionDIMerge, crossed_range_checkorder_error)
 
   ObTableHandleV2 handle1;
   const char *micro_data[1];
-  micro_data[0] =
+  micro_data[0] = 
       "bigint   var   bigint                 bigint        bigint bigint   flag    flag_type  multi_version_row_flag\n"
       "1        var1  -1745565103366455000     MIN          20      20      INSERT    NORMAL    SCF\n"
       "1        var1  -1745565103366455000     DI_VERSION   20      20      INSERT    NORMAL    C\n"
@@ -4263,7 +4263,7 @@ TEST_F(TestMultiVersionDIMerge, crossed_range_checkorder_error)
       "1        var1  -1745564862088425000     DI_VERSION   20      20      INSERT    NORMAL    C\n"
       "1        var1  -1745564862088425000     0            20      20      DELETE    NORMAL    C\n"
       "1        var1  -1745564841050055000     DI_VERSION   20      20      INSERT    NORMAL    CL\n";
-
+  
   int schema_rowkey_cnt = 2;
   int64_t snapshot_version = 1745565132272214002;
   share::ObScnRange scn_range;
@@ -4278,7 +4278,7 @@ TEST_F(TestMultiVersionDIMerge, crossed_range_checkorder_error)
 
   ObTableHandleV2 handle2;
   const char *micro_data2[1];
-  micro_data2[0] =
+  micro_data2[0] = 
       "bigint   var   bigint                 bigint        bigint bigint   flag    flag_type  multi_version_row_flag\n"
       "1        var1  -1745565523125912000      MIN         20      20      INSERT    NORMAL    SCF\n"
       "1        var1  -1745565523125912000      DI_VERSION  20      20      INSERT    NORMAL    C\n"
@@ -4291,7 +4291,7 @@ TEST_F(TestMultiVersionDIMerge, crossed_range_checkorder_error)
       "1        var1  -1745565296623304000      0           20      20      DELETE    NORMAL    C\n"
       "1        var1  -1745565239306510002      DI_VERSION  20      20      INSERT    NORMAL    C\n"
       "1        var1  -1745565239306510002      0           20      20      DELETE    NORMAL    CL\n";
-
+  
   snapshot_version = 1745565526899601005;
   scn_range.start_scn_.convert_for_tx(1745565132272214002);
   scn_range.end_scn_.convert_for_tx(1745565526899601005);
@@ -4304,7 +4304,7 @@ TEST_F(TestMultiVersionDIMerge, crossed_range_checkorder_error)
 
   ObTableHandleV2 handle3;
   const char *micro_data3[1];
-  micro_data3[0] =
+  micro_data3[0] = 
       "bigint   var   bigint                 bigint        bigint bigint   flag    flag_type  multi_version_row_flag\n"
       "1        var1  -1745565646412642000      MIN         20      20      DELETE    NORMAL    SCF\n"
       "1        var1  -1745565646412642000      0           20      20      DELETE    NORMAL    C\n"
@@ -4312,7 +4312,7 @@ TEST_F(TestMultiVersionDIMerge, crossed_range_checkorder_error)
       "1        var1  -1745565557130273000      0           20      20      DELETE    NORMAL    C\n"
       "1        var1  -1745565523125912000      DI_VERSION  20      20      INSERT    NORMAL    C\n"
       "1        var1  -1745565239306510002      0           20      20      DELETE    NORMAL    CL\n";
-
+  
   snapshot_version = 1745566502778393003;
   scn_range.start_scn_.convert_for_tx(1745565526899601005);
   scn_range.end_scn_.convert_for_tx(1745566502778393003);
@@ -4390,7 +4390,7 @@ TEST_F(TestMultiVersionDIMerge, crossed_range_sstable_merge)
   // 16. new sstable output delete, old sstable output delete+delete
   ObTableHandleV2 handle1;
   const char *micro_data[1];
-  micro_data[0] =
+  micro_data[0] = 
       "bigint   var   bigint    bigint        bigint bigint   flag    flag_type  multi_version_row_flag\n"
       "1        var1  -20      DI_VERSION          20      20      INSERT    NORMAL    CF\n"
       "1        var1  -10      0                   20      20      DELETE    NORMAL    CL\n"
@@ -4420,7 +4420,7 @@ TEST_F(TestMultiVersionDIMerge, crossed_range_sstable_merge)
       "16       var16 -30      0                   20      20      DELETE    NORMAL    CF\n"
       "16       var16 -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
       "16       var16 -10      0                   20      20      DELETE    NORMAL    CL\n";
-
+  
   int schema_rowkey_cnt = 2;
   int64_t snapshot_version = 10;
   share::ObScnRange scn_range;
@@ -4435,7 +4435,7 @@ TEST_F(TestMultiVersionDIMerge, crossed_range_sstable_merge)
 
   ObTableHandleV2 handle2;
   const char *micro_data2[1];
-  micro_data2[0] =
+  micro_data2[0] = 
       "bigint   var   bigint    bigint        bigint bigint   flag    flag_type  multi_version_row_flag\n"
       "1        var1  -40      DI_VERSION          20      20      INSERT    NORMAL    CF\n"
       "1        var1  -30      0                   20      20      DELETE    NORMAL    C\n"
@@ -4517,7 +4517,7 @@ TEST_F(TestMultiVersionDIMerge, crossed_range_sstable_merge)
       "16       var16 -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
       "16       var16 -10      0                   20      20      DELETE    NORMAL    C\n"
       "16       var16 -5       DI_VERSION          20      20      INSERT    NORMAL    CL\n";
-
+  
   snapshot_version = 20;
   scn_range.start_scn_.convert_for_tx(10);
   scn_range.end_scn_.convert_for_tx(20);
@@ -4633,11 +4633,11 @@ TEST_F(TestMultiVersionDIMerge, compact_old_row_check_order_error)
 
   ObTableHandleV2 handle1;
   const char *micro_data[1];
-  micro_data[0] =
+  micro_data[0] = 
       "bigint   var   bigint                 bigint        bigint bigint   flag    flag_type  multi_version_row_flag\n"
       "1        var1  -1745818547933984005     DI_VERSION   20      20      INSERT    NORMAL    CLF\n"
       "3        var3  -1745818547933984005     DI_VERSION   20      20      INSERT    NORMAL    CLF\n";
-
+  
   int schema_rowkey_cnt = 2;
   int64_t snapshot_version = 1745818547933984005;
   share::ObScnRange scn_range;
@@ -4652,13 +4652,13 @@ TEST_F(TestMultiVersionDIMerge, compact_old_row_check_order_error)
 
   ObTableHandleV2 handle2;
   const char *micro_data2[1];
-  micro_data2[0] =
+  micro_data2[0] = 
       "bigint   var   bigint                 bigint        bigint bigint   flag    flag_type  multi_version_row_flag\n"
       "2        var2  -1745818788284569004      MIN         20      20      DELETE    NORMAL    SCF\n"
       "2        var2  -1745818788284569004      0           20      20      DELETE    NORMAL    C\n"
       "2        var2  -1745818547933984005      DI_VERSION  20      20      INSERT    NORMAL    C\n"
       "2        var2  -1745818547933984005      0           20      20      DELETE    NORMAL    CL\n";
-
+  
   snapshot_version = 1745565526899601005;
   scn_range.start_scn_.convert_for_tx(1745818547933984005);
   scn_range.end_scn_.convert_for_tx(1745818788284569004);
@@ -4717,7 +4717,7 @@ TEST_F(TestMultiVersionDIMerge, compact_old_row_with_base_version)
 
   ObTableHandleV2 handle1;
   const char *micro_data[1];
-  micro_data[0] =
+  micro_data[0] = 
       "bigint   var   bigint       bigint        bigint bigint   flag    flag_type  multi_version_row_flag  trans_id\n"
       "1        var1  -40          DI_VERSION   20      20      INSERT    NORMAL    CF  trans_id_0\n"
       "1        var1  -30          0            20      20      DELETE    NORMAL    C   trans_id_0\n"
@@ -4752,10 +4752,10 @@ TEST_F(TestMultiVersionDIMerge, compact_old_row_with_base_version)
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
-
+  
   ObTableHandleV2 handle2;
   const char *micro_data2[1];
-  micro_data2[0] =
+  micro_data2[0] = 
       "bigint   var   bigint       bigint        bigint bigint   flag    flag_type  multi_version_row_flag\n"
       "2        var2  -30          0            20      20      DELETE    NORMAL    CF\n"
       "2        var2  -20          DI_VERSION   20      20      INSERT    NORMAL    C\n"
@@ -4910,7 +4910,7 @@ TEST_F(TestMultiVersionDIMerge, single_trans_replayed_in_multi_sst)
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
-
+  
   ObTableHandleV2 handle2;
   const char *micro_data2[1];
   micro_data2[0] =
@@ -5104,7 +5104,7 @@ TEST_F(TestMultiVersionDIMerge, lock_row_replayed_in_multi_sst)
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
-
+  
   ObTableHandleV2 handle2;
   const char *micro_data2[1];
   micro_data2[0] =

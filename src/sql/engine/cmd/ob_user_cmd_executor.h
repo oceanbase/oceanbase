@@ -48,7 +48,7 @@ public:
       common::ObIArray<common::ObString> &users,
       common::ObIArray<common::ObString> &hosts);
 
-  static int check_user_valid(share::schema::ObSchemaGetterGuard& schema_guard,
+  static int check_user_valid(share::schema::ObSchemaGetterGuard& schema_guard, 
                               uint64_t priv_set,
                               int64_t tenant_id,
                               const common::ObString &user_name,
@@ -76,8 +76,8 @@ public:
                                         common::ObIArray<common::ObString> &dst_users,
                                         common::ObIArray<common::ObString> &dst_hosts);
 
-  static int build_fail_msg_for_one(const ObString &user,
-                                    const ObString &host,
+  static int build_fail_msg_for_one(const ObString &user, 
+                                    const ObString &host, 
                                     common::ObSqlString &msg);
   static int drop_user(obrpc::ObCommonRpcProxy *rpc_proxy,
                        const obrpc::ObDropUserArg &arg,

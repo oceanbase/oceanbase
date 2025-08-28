@@ -88,7 +88,7 @@ public:
   int init();
   void reset();
   void destroy();
-  int get_server_zone_type(const common::ObAddr &server, common::ObZoneType &zone_type) const;
+  int get_server_zone_type(const common::ObAddr &server, common::ObZoneType &zone_type) const; 
   int get_server_region(const common::ObAddr &server, common::ObRegion &region) const;
   int get_server_idc(const common::ObAddr &server, common::ObIDC &idc) const;
   int get_server_zone(const common::ObAddr &server, common::ObZone &zone) const;

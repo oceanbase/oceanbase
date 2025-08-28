@@ -51,7 +51,7 @@ public:
       const int64_t hit_mode);
   void test_border(const bool is_reverse_scan);
   void test_basic(const bool is_reverse_scan);
-
+  
 protected:
   enum CacheHitMode
   {
@@ -213,7 +213,7 @@ void TestDDLMergeRowScanner::test_single_case(
       ret = row_generate_.get_next_row(i, row);
       index = i;
     }
-
+    
     ASSERT_EQ(OB_SUCCESS, ret);
     if (index < row_cnt_) {
       ret = scanner.inner_get_next_row(prow);
@@ -221,7 +221,7 @@ void TestDDLMergeRowScanner::test_single_case(
           << " end: " << end << " prow: " << prow;
       ASSERT_TRUE(row == *prow) << i << "index: " << index << " start: " << start
           << " end: " << end << " prow: " << prow;
-
+      
       ret = merge_ddl_scanner.inner_get_next_row(kv_prow);
       ASSERT_EQ(OB_SUCCESS, ret) << i << "index: " << index << " start: " << start
           << " end: " << end << " kv_prow: " << to_cstring(kv_prow);
@@ -432,7 +432,7 @@ void TestDDLMergeRowScanner::test_basic(const bool is_reverse_scan)
   // full table scan
   range.set_whole_range();
   test_single_case(range, 0, row_cnt_ - 1, is_reverse_scan);
-
+  
   // the first row of sstable
   generate_range(0, 0, range);
   test_single_case(range, 0, 0, is_reverse_scan);

@@ -62,10 +62,10 @@ public:
   TO_STRING_KV(K(centroid_table_id_), K(cid_vector_table_id_), K(rowkey_cid_table_id_),
       K(sq_meta_table_id_), K(pq_centroid_table_id_), K(pq_code_table_id_), K(pq_rowkey_cid_table_id_),
       K(centroid_table_task_submitted_), K(cid_vector_table_task_submitted_), K(rowkey_cid_table_task_submitted_),
-      K(sq_meta_table_task_submitted_), K(pq_centroid_table_task_submitted_), K(pq_code_table_task_submitted_),
+      K(sq_meta_table_task_submitted_), K(pq_centroid_table_task_submitted_), K(pq_code_table_task_submitted_), 
       K(pq_rowkey_cid_table_task_submitted_),
       K(centroid_table_task_id_), K(cid_vector_table_task_id_), K(rowkey_cid_table_task_id_),
-      K(sq_meta_table_task_id_), K(pq_centroid_table_task_id_), K(pq_code_table_task_id_),
+      K(sq_meta_table_task_id_), K(pq_centroid_table_task_id_), K(pq_code_table_task_id_), 
       K(pq_rowkey_cid_table_task_id_),
       K(drop_index_task_id_), K(is_rebuild_index_),
       K(drop_index_task_submitted_), K(schema_version_), K(execution_id_),
@@ -160,7 +160,7 @@ private:
   struct CheckTaskStatusFn final
   {
   public:
-    CheckTaskStatusFn(common::hash::ObHashMap<uint64_t, share::ObDomainDependTaskStatus> &dependent_task_result_map,
+    CheckTaskStatusFn(common::hash::ObHashMap<uint64_t, share::ObDomainDependTaskStatus> &dependent_task_result_map, 
                       int64_t &finished_task_cnt, bool &child_task_failed, bool &state_finished, const uint64_t tenant_id) :
       dependent_task_result_map_(dependent_task_result_map),
       finished_task_cnt_(finished_task_cnt),
@@ -180,7 +180,7 @@ private:
   };
   static const int64_t OB_VEC_IVF_INDEX_BUILD_TASK_VERSION = 1;
   static const int64_t OB_VEC_IVF_MAX_BUILD_CHILD_TASK_NUM = 4;
-
+  
   using ObDDLTask::tenant_id_;
   using ObDDLTask::task_id_;
   using ObDDLTask::schema_version_;

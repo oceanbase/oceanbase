@@ -177,7 +177,7 @@ public:
   }
   inline bool is_checked() const
   {
-    return checked_;
+    return checked_; 
   }
   inline bool is_row_duplicate() const
   {
@@ -227,7 +227,7 @@ public:
     return rowkey_;
   }
   TO_STRING_KV(K_(row_mark), K_(rowkey));
-private:
+private: 
   union { // FARM COMPAT WHITELIST
     struct {
       uint8_t row_lock_checked_  : 1;

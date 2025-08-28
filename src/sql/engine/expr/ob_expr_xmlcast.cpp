@@ -24,7 +24,7 @@ namespace oceanbase
 namespace sql
 {
 
-ObExprXmlcast::ObExprXmlcast(common::ObIAllocator &alloc)
+ObExprXmlcast::ObExprXmlcast(common::ObIAllocator &alloc) 
   : ObFuncExprOperator(alloc, T_FUN_SYS_XMLCAST, N_XMLCAST, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
@@ -149,7 +149,7 @@ int ObExprXmlcast::eval_xmlcast(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res
   uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
   MultimodeAlloctor allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
   ObMulModeMemCtx* mem_ctx = nullptr;
-
+  
   if (OB_ISNULL(ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get session failed.", K(ret));
@@ -161,8 +161,8 @@ int ObExprXmlcast::eval_xmlcast(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res
   } else if (OB_FAIL(ObXMLExprHelper::get_xmltype_from_expr(expr.args_[0], ctx, xml_datum, allocator))) {
     // temporally use
     LOG_WARN("fail to get xml str", K(ret));
-  }
-
+  } 
+  
   lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObXMLExprHelper::get_xml_base(mem_ctx, xml_datum, cs_type, ObNodeMemType::BINARY_TYPE, xml_doc))) {

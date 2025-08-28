@@ -69,7 +69,7 @@ int ObRestoreUtil::fill_physical_restore_job(
       if (OB_FAIL(fill_backup_info_(arg, job))) {
         LOG_WARN("failed to fill backup info", KR(ret), K(arg), K(job));
       } else {
-        // restore progress display mode
+        // restore progress display mode    
         if (share::ObBackupSetFileDesc::is_allow_quick_restore(
             static_cast<share::ObBackupSetFileDesc::Compatible>(job.get_backup_compatible()))
             && job.get_restore_type().is_full_restore()) {
@@ -98,7 +98,7 @@ int ObRestoreUtil::fill_physical_restore_job(
         }
       }
     }
-
+    
     if (FAILEDx(fill_sts_credential_(arg, job))) {
       LOG_WARN("fail to fill sts credential", K(ret));
     }
@@ -254,13 +254,13 @@ int ObRestoreUtil::fill_multi_backup_path(
   } else if (OB_FAIL(ObPhysicalRestoreUriParser::parse(arg.multi_uri_, allocator, multi_path_array))) {
     LOG_WARN("fail to parse uri", K(ret), K(arg));
   } else if (OB_FAIL(get_encrypt_backup_dest_format_str(multi_path_array, allocator, backup_dest_list))) {
-    LOG_WARN("failed to convert uri", K(ret), K(arg));
+    LOG_WARN("failed to convert uri", K(ret), K(arg)); 
   } else if (OB_FAIL(job.set_backup_dest(backup_dest_list))) {
     LOG_WARN("failed to copy backup dest", K(ret), K(arg));
   } else if (OB_FAIL(get_restore_scn_from_multi_path_(arg ,multi_path_array, restore_using_compl_log, restore_scn, backup_piece_array))) {
     LOG_WARN("fail to get restore scn from multi path", K(ret), K(arg));
   } else if (OB_FALSE_IT(job.set_restore_scn(restore_scn))) {
-  } else if (OB_FAIL(get_restore_source_from_multi_path(restore_using_compl_log, multi_path_array, arg.passwd_array_, job.get_restore_scn(),
+  } else if (OB_FAIL(get_restore_source_from_multi_path(restore_using_compl_log, multi_path_array, arg.passwd_array_, job.get_restore_scn(), 
       backup_set_list, backup_piece_list, log_path_list))) {
     LOG_WARN("fail to get restore source", K(ret), K(arg));
   } else if (restore_using_compl_log) {
@@ -270,8 +270,8 @@ int ObRestoreUtil::fill_multi_backup_path(
   } else if (OB_FAIL(do_fill_backup_path_with_full_pieces_(backup_set_list, backup_piece_array, log_path_list, job))) {
     LOG_WARN("fail to do fill backup path with full pieces", K(ret), K(backup_set_list), K(backup_piece_array), K(log_path_list));
   }
-
-  if (OB_FAIL(ret)) {
+  
+  if (OB_FAIL(ret)) {    
   } else if (OB_FALSE_IT(last_backup_set_idx = backup_set_list.count() - 1)) {
   } else if (last_backup_set_idx < 0) {
     ret = OB_ERR_UNEXPECTED;
@@ -343,17 +343,17 @@ int ObRestoreUtil::fill_compat_backup_path(
   } else if (OB_FAIL(ObPhysicalRestoreUriParser::parse(arg.uri_, allocator, tenant_path_array))) {
     LOG_WARN("fail to parse uri", K(ret), K(arg));
   } else if (OB_FAIL(get_encrypt_backup_dest_format_str(tenant_path_array, allocator, tenant_dest_list))) {
-    LOG_WARN("failed to convert uri", K(ret), K(arg));
+    LOG_WARN("failed to convert uri", K(ret), K(arg)); 
   } else if (OB_FAIL(job.set_backup_dest(tenant_dest_list))) {
     LOG_WARN("failed to copy backup dest", K(ret), K(arg));
   } else if (OB_FAIL(check_restore_using_complement_log(tenant_path_array, restore_using_compl_log))) {
     LOG_WARN("failed to check only contain backup set", K(ret));
   } else if (OB_FAIL(fill_restore_scn(
-      arg.restore_scn_, arg.restore_timestamp_, arg.with_restore_scn_, tenant_path_array, arg.passwd_array_,
+      arg.restore_scn_, arg.restore_timestamp_, arg.with_restore_scn_, tenant_path_array, arg.passwd_array_, 
       restore_using_compl_log, restore_scn))) {
     LOG_WARN("fail to fill restore scn", K(ret), K(arg));
   } else if (OB_FALSE_IT(job.set_restore_scn(restore_scn))) {
-  } else if (OB_FAIL(get_restore_source(restore_using_compl_log, tenant_path_array, arg.passwd_array_, job.get_restore_scn(),
+  } else if (OB_FAIL(get_restore_source(restore_using_compl_log, tenant_path_array, arg.passwd_array_, job.get_restore_scn(), 
       backup_set_list, backup_piece_list, log_path_list))) {
     LOG_WARN("fail to get restore source", K(ret), K(arg));
   } else if (OB_FAIL(do_fill_backup_path_(backup_set_list, backup_piece_list, log_path_list, job))) {
@@ -372,7 +372,7 @@ int ObRestoreUtil::fill_restore_scn(
     const share::SCN &src_scn,
     const ObString &timestamp,
     const bool with_restore_scn,
-    const ObIArray<ObString> &tenant_path_array,
+    const ObIArray<ObString> &tenant_path_array, 
     const common::ObString &passwd,
     const bool restore_using_compl_log,
     share::SCN &restore_scn)
@@ -485,19 +485,19 @@ int ObRestoreUtil::fill_multi_path_restore_scn_(
         LOG_INFO("restore scn converted from timestamp is", K(restore_scn));
       }
   } else {
-    if (restore_using_compl_log) {
+    if (restore_using_compl_log) { 
       if (OB_FAIL(fill_multi_path_restore_scn_with_compl_log_(backup_set_array, arg.passwd_array_, restore_scn))) {
         LOG_WARN(" fail to fill multi path restore scn with compl log", K(ret), K(restore_scn));
       }
     } else if (OB_FAIL(fill_multi_path_restore_scn_without_compl_log_(backup_piece_array, restore_scn))) {
       LOG_WARN(" fail to fill multi path restore scn withOUT compl log", K(ret), K(restore_scn));
     }
-  }
+  } 
   return ret;
 }
 
 int ObRestoreUtil::fill_multi_path_restore_scn_with_compl_log_(
-      const ObIArray<ObBackupSetFileDesc> &backup_set_array,
+      const ObIArray<ObBackupSetFileDesc> &backup_set_array, 
       const common::ObString &passwd,
       share::SCN &restore_scn)
 {
@@ -527,7 +527,7 @@ int ObRestoreUtil::fill_multi_path_restore_scn_with_compl_log_(
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -576,7 +576,7 @@ int ObRestoreUtil::fill_encrypt_info_(
   } else if (OB_FAIL(ObPhysicalRestoreUriParser::parse(arg.kms_uri_, allocator, kms_path_array))) {
     LOG_WARN("fail to parse uri", K(ret), K(arg));
   } else if (OB_FAIL(get_encrypt_backup_dest_format_str(kms_path_array, allocator, kms_dest_str))) {
-    LOG_WARN("failed to convert uri", K(ret), K(arg), K(kms_path_array));
+    LOG_WARN("failed to convert uri", K(ret), K(arg), K(kms_path_array)); 
   } else if (OB_FAIL(dest.set(kms_dest_str))) {
     LOG_WARN("failed to set dest", K(ret));
   } else if (OB_FAIL(util.is_exist(dest.get_root_path(), dest.get_storage_info(), is_exist))) {
@@ -622,12 +622,12 @@ int ObRestoreUtil::get_restore_source(
 {
   int ret = OB_SUCCESS;
   SCN restore_start_scn = SCN::min_scn();
-  if (OB_FAIL(get_restore_backup_set_array_(tenant_path_array, passwd_array, restore_scn,
+  if (OB_FAIL(get_restore_backup_set_array_(tenant_path_array, passwd_array, restore_scn, 
       restore_start_scn, backup_set_list))) {
     LOG_WARN("fail to get restore backup set array", K(ret), K(restore_scn));
   } else if (!restore_using_compl_log && OB_FAIL(get_restore_log_piece_array_(
       tenant_path_array, restore_start_scn, restore_scn, backup_piece_list, log_path_list))) {
-    LOG_WARN("fail to get restore log piece array", K(ret), K(restore_start_scn),
+    LOG_WARN("fail to get restore log piece array", K(ret), K(restore_start_scn), 
         K(restore_scn));
   } else if (restore_using_compl_log && OB_FAIL(get_restore_log_array_for_complement_log_(
       backup_set_list, restore_start_scn, restore_scn, backup_piece_list, log_path_list))) {
@@ -635,7 +635,7 @@ int ObRestoreUtil::get_restore_source(
   } else if (backup_set_list.empty() || backup_piece_list.empty() || log_path_list.empty()) {
     ret = OB_ENTRY_NOT_EXIST;
     LOG_WARN("no backup set path or log piece can be used to restore", K(ret),
-        K(backup_set_list), K(backup_piece_list), K(log_path_list), K(restore_start_scn),
+        K(backup_set_list), K(backup_piece_list), K(log_path_list), K(restore_start_scn), 
         K(restore_scn));
     LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "no backup set path or log piece can be used to restore");
   }
@@ -654,7 +654,7 @@ int ObRestoreUtil::get_restore_source_from_multi_path(
   int ret = OB_SUCCESS;
   SCN restore_start_scn = SCN::min_scn();
   ObTimeZoneInfoWrap time_zone_wrap;
-  if (OB_FAIL(get_restore_backup_set_array_from_multi_path_(multi_path_array, passwd_array, restore_scn,
+  if (OB_FAIL(get_restore_backup_set_array_from_multi_path_(multi_path_array, passwd_array, restore_scn, 
       restore_start_scn, backup_set_list, time_zone_wrap))) {
     LOG_WARN("fail to get restore backup set array", K(ret), K(restore_scn));
   } else if (!restore_using_compl_log && OB_FAIL(get_restore_log_piece_array_from_multi_path_(
@@ -670,7 +670,7 @@ int ObRestoreUtil::get_restore_source_from_multi_path(
     LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "no backup set path or log piece can be used to restore");
   }
   return ret;
-}
+}             
 
 int ObRestoreUtil::check_restore_using_complement_log(
     const ObIArray<ObString> &tenant_path_array,
@@ -737,7 +737,7 @@ int ObRestoreUtil::get_restore_scn_from_multi_path_(
         LOG_WARN("fail to init ObArchiveStore", K(ret), K(backup_dest));
       } else if (OB_FAIL(store.is_tenant_archive_piece_infos_file_exist(is_exist))) { //read archive piece info
         LOG_WARN("fail to check if tenant arhive piece info is exist", K(ret), K(backup_dest));
-      } else if (OB_FALSE_IT(use_complement_log = (use_complement_log && !is_exist))) {
+      } else if (OB_FALSE_IT(use_complement_log = (use_complement_log && !is_exist))) {        
       } else if (is_exist) {
         if (OB_FAIL(store.get_single_piece_info(is_empty_piece, backup_piece))) {
           LOG_WARN("fail to read single piece info", K(ret), K(backup_dest), K(store));
@@ -756,10 +756,10 @@ int ObRestoreUtil::get_restore_scn_from_multi_path_(
           LOG_WARN("fail to get backup set info from multi path", K(ret));
         }
       }
-
-      if (OB_FAIL(ret)) {
+      
+      if (OB_FAIL(ret)) {        
       } else if (OB_FALSE_IT(path_set_pair.first = multi_path)) {
-      } else if (OB_FALSE_IT(path_set_pair.second = backup_set_info.backup_set_file_)) {
+      } else if (OB_FALSE_IT(path_set_pair.second = backup_set_info.backup_set_file_)) {        
       } else if (OB_FAIL(path_set_pairs.push_back(path_set_pair))) {
         LOG_WARN("fail to push back", K(ret));
       } else if (!backup_set_info.is_valid()) {
@@ -768,10 +768,10 @@ int ObRestoreUtil::get_restore_scn_from_multi_path_(
       }
     }
 
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(ret)) {      
     } else if (OB_FAIL(sort_multi_paths_by_backup_set_id_(path_set_pairs, multi_path_array))) {
       LOG_WARN("fail to sort multi paths by backup set id", K(ret));
-    } else if (OB_FAIL(fill_multi_path_restore_scn_(arg, use_complement_log, multi_path_array,
+    } else if (OB_FAIL(fill_multi_path_restore_scn_(arg, use_complement_log, multi_path_array, 
                        backup_set_array, backup_piece_array, restore_scn))) {
       LOG_WARN("fail to fill multi path restore scn", K(ret), K(arg), K(use_complement_log));
     } else if (!use_complement_log && OB_FAIL(sort_backup_piece_array_(backup_piece_array))) {
@@ -791,7 +791,7 @@ int ObRestoreUtil::sort_backup_piece_array_(ObArray<share::ObSinglePieceDesc> &b
     LOG_WARN("empty backup_piece_array", K(ret));
   } else {
     ObSinglePieceDescComparator cmp;
-    lib::ob_sort(backup_piece_array.begin(), backup_piece_array.end(), cmp);
+    lib::ob_sort(backup_piece_array.begin(), backup_piece_array.end(), cmp); 
   }
   return ret;
 }
@@ -878,7 +878,7 @@ int ObRestoreUtil::get_restore_backup_set_array_from_multi_path_(
         continue;
        } else {
         LOG_WARN("fail to read backup set info", K(ret), K(store));
-       }
+       } 
       } else if (OB_FAIL(backup_set_file.assign(backup_set_info.backup_set_file_))) {
         LOG_WARN("fail to assign backup set file", K(ret), "backup_set_file", backup_set_info.backup_set_file_);
       } else if (share::ObBackupSetFileDesc::BackupSetStatus::SUCCESS != backup_set_file.status_ //check if available
@@ -889,7 +889,7 @@ int ObRestoreUtil::get_restore_backup_set_array_from_multi_path_(
           has_inc_backup_set = true;
         }
         // the min_retore_scn of the earliest full backup set is the minimum restorable scn
-        min_restore_scn = backup_set_file.backup_type_.is_full_backup()
+        min_restore_scn = backup_set_file.backup_type_.is_full_backup() 
                           ? MIN(min_restore_scn, backup_set_file.min_restore_scn_) : min_restore_scn;
         // restoring from different tenants is not allowed
         tenant_id = UINT64_MAX == tenant_id ? backup_set_file.tenant_id_ : tenant_id;
@@ -901,23 +901,23 @@ int ObRestoreUtil::get_restore_backup_set_array_from_multi_path_(
           LOG_WARN("fail to set refactored", K(ret), K(backup_set_file));
         } else if (OB_FAIL(backup_set_file.check_passwd(passwd_array.ptr()))) {
           LOG_WARN("fail to check passwd", K(ret));
-        } else if (!time_zone_wrap.is_valid()
+        } else if (!time_zone_wrap.is_valid() 
                     && OB_FAIL(store.get_single_backup_set_sys_time_zone_wrap(time_zone_wrap))) {
           LOG_WARN("fail to get backup set sys time zone wrap", K(ret), K(store));
         } else if (backup_set_file.min_restore_scn_ > restore_scn) {
           // backup set file's min restore log ts > restore end log ts, can not be used to restore
-          LOG_INFO("min restore scn of backup set file is greater than restore scn. can't use to restore.",
+          LOG_INFO("min restore scn of backup set file is greater than restore scn. can't use to restore.", 
               K(ret), K(backup_set_file), K(restore_scn));
-        } else if (OB_FAIL(fill_backup_set_map_(backup_set_file,
-                                                backup_set_map,
+        } else if (OB_FAIL(fill_backup_set_map_(backup_set_file, 
+                                                backup_set_map, 
                                                 restore_start_scn))) {
-          LOG_WARN("fail to fill backup set map", K(ret), K(backup_set_info));
+          LOG_WARN("fail to fill backup set map", K(ret), K(backup_set_info));                                                    
         }
       }
-    }
+    } 
 
     if(OB_SUCC(ret)) {
-      if (backup_set_map.empty()) { // no "usable" backup sets, three cases:
+      if (backup_set_map.empty()) { // no "usable" backup sets, three cases: 
         ret = OB_RESTORE_SOURCE_NOT_ENOUGH;
         if (SCN::max_scn() > min_restore_scn) { // 1. do have full backup sets, but not enough to restore_scn
           const bool is_too_small = true;
@@ -928,8 +928,8 @@ int ObRestoreUtil::get_restore_backup_set_array_from_multi_path_(
           if (OB_TMP_FAIL(ObTimeConverter::scn_to_str(min_restore_scn.get_val_for_inner_table_field(),
                                                  time_zone_wrap.get_time_zone_info(),
                                                  time_str, OB_MAX_TIME_STR_LENGTH, time_str_pos))) {
-            LOG_WARN("fail to convert scn to str", K(ret), K(tmp_ret), K(min_restore_scn), K(time_zone_wrap));
-          } else if (OB_TMP_FAIL(databuff_printf(err_msg, OB_MAX_ERROR_MSG_LEN, msg_pos,
+            LOG_WARN("fail to convert scn to str", K(ret), K(tmp_ret), K(min_restore_scn), K(time_zone_wrap));                                                  
+          } else if (OB_TMP_FAIL(databuff_printf(err_msg, OB_MAX_ERROR_MSG_LEN, msg_pos, 
                                 "no full backup set can be used to restore to given time, minimum restorable time is %s",
                                 time_str))) {
             LOG_WARN("fail to databuff printf", K(ret), K(tmp_ret), K(msg_pos), K(time_str));
@@ -943,12 +943,12 @@ int ObRestoreUtil::get_restore_backup_set_array_from_multi_path_(
           } else { // 3. do NOT have inc backup sets, which means all files are unavailable
             LOG_WARN("no backup set is available", K(ret), K(restore_scn));
             LOG_USER_ERROR(OB_RESTORE_SOURCE_NOT_ENOUGH, "no backup set is available");
-          }
+          }          
         }
-      } else if (OB_FAIL(get_restore_backup_set_array_from_backup_set_map_(backup_set_path_map,
-                                                                    backup_set_map,
+      } else if (OB_FAIL(get_restore_backup_set_array_from_backup_set_map_(backup_set_path_map, 
+                                                                    backup_set_map, 
                                                                     backup_set_list))) {
-        LOG_WARN("fail to get restore backup set array from backup set map", K(ret));
+        LOG_WARN("fail to get restore backup set array from backup set map", K(ret));                                                                      
       } else {
         LOG_INFO("obtain restore start scn from backup sets", K(restore_start_scn));
       }
@@ -971,10 +971,10 @@ int ObRestoreUtil::sort_multi_paths_by_backup_set_id_(
     multi_path_array.reset();
 
     lib::ob_sort(
-      path_set_pairs.get_data(), path_set_pairs.get_data() + path_set_pairs.count(),
+      path_set_pairs.get_data(), path_set_pairs.get_data() + path_set_pairs.count(), 
       [](const std::pair<ObString, ObBackupSetFileDesc> &a,
          const std::pair<ObString, ObBackupSetFileDesc> &b) { return a.second.backup_set_id_ < b.second.backup_set_id_; });
-
+    
     ARRAY_FOREACH_X(path_set_pairs, i, cnt, OB_SUCC(ret)) {
       const ObString &path = path_set_pairs.at(i).first;
       if (OB_FAIL(multi_path_array.push_back(path))) {
@@ -982,7 +982,7 @@ int ObRestoreUtil::sort_multi_paths_by_backup_set_id_(
       }
     }
   }
-  return ret;
+  return ret; 
 }
 
 int ObRestoreUtil::get_backup_set_info_from_multi_path_(const ObString &multi_path, ObExternBackupSetInfoDesc &backup_set_info)
@@ -1057,7 +1057,7 @@ int ObRestoreUtil::fill_backup_set_map_(
     } else {
       restore_start_scn = backup_set_file.start_replay_scn_;
       LOG_INFO("find one full backup set", K(backup_set_file));
-    }
+    }    
   } else if (backup_set_file.backup_type_.is_inc_backup()) {
     share::ObBackupSetDesc value;
     value.backup_set_id_ = backup_set_file.prev_full_backup_set_id_;
@@ -1077,8 +1077,8 @@ int ObRestoreUtil::fill_backup_set_map_(
       } else {
         LOG_WARN("fail to get refactored", K(ret), K(backup_set_file));
       }
-    } else if (OB_FAIL(backup_set_map.set_refactored(backup_set_file.backup_set_id_, backup_set_desc))) {
-      LOG_WARN("fail to set refactored backup set map", K(ret), "backup set id", backup_set_file.backup_set_id_,
+    } else if (OB_FAIL(backup_set_map.set_refactored(backup_set_file.backup_set_id_, backup_set_desc))) {                                                
+      LOG_WARN("fail to set refactored backup set map", K(ret), "backup set id", backup_set_file.backup_set_id_, 
           K(backup_set_desc));
     } else {
       restore_start_scn = backup_set_file.start_replay_scn_;
@@ -1089,7 +1089,7 @@ int ObRestoreUtil::fill_backup_set_map_(
     LOG_WARN("Invalid backup set type", K(ret), K(backup_set_file));
   }
   return ret;
-}
+} 
 
 int ObRestoreUtil::get_restore_backup_piece_list_(
     const ObBackupDest &dest,
@@ -1126,7 +1126,7 @@ int ObRestoreUtil::get_restore_backup_piece_list_(
     const ObArray<share::ObPieceKey> &piece_array,
     ObIArray<ObRestoreLogPieceBriefInfo> &backup_piece_list)
 {
-  int ret = OB_SUCCESS;
+  int ret = OB_SUCCESS; 
   if (!dest.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("dest is invalid", K(ret), K(dest));
@@ -1141,7 +1141,7 @@ int ObRestoreUtil::get_restore_backup_piece_list_(
           piece_key.round_id_, piece_key.piece_id_, backup_path))) {
         LOG_WARN("failed to get piece dir path", K(ret), K(dest), K(piece_key));
       } else if (OB_FAIL(piece_dest.set(backup_path.get_ptr(), dest.get_storage_info()))) {
-        LOG_WARN("fail to set piece dest", K(ret), K(backup_path), K(dest));
+        LOG_WARN("fail to set piece dest", K(ret), K(backup_path), K(dest)); 
       } else if (OB_FAIL(piece_dest.get_backup_dest_str(backup_piece_path.piece_path_.ptr(), backup_piece_path.piece_path_.capacity()))) {
         LOG_WARN("fail to get piece dest str", K(ret), K(piece_dest));
       } else if (OB_FAIL(backup_piece_list.push_back(backup_piece_path))) {
@@ -1242,13 +1242,13 @@ int ObRestoreUtil::get_restore_log_piece_array_from_multi_path_(
     LOG_WARN("failed to push backup piece", K(ret));
   } else if (OB_FAIL(get_piece_paths_in_range_from_multi_path_(piece_whole_info.his_frozen_pieces_,
                       multi_path_map, restore_start_scn, restore_end_scn, time_zone_wrap, backup_piece_list))) {
-    LOG_WARN("fail to get pieces paths in range from multi path", K(ret),
-                K(piece_whole_info), K(restore_start_scn), K(restore_end_scn));
+    LOG_WARN("fail to get pieces paths in range from multi path", K(ret), 
+                K(piece_whole_info), K(restore_start_scn), K(restore_end_scn));                                                                
   }
   return ret;
 }
 
-int ObRestoreUtil::get_all_piece_keys_(const ObIArray<ObString> &multi_path_array,
+int ObRestoreUtil::get_all_piece_keys_(const ObIArray<ObString> &multi_path_array, 
                         ObArray<ObPieceKey> &piece_keys,
                         common::hash::ObHashMap<ObPieceKey, ObString> &multi_path_map)
 {
@@ -1272,7 +1272,7 @@ int ObRestoreUtil::get_all_piece_keys_(const ObIArray<ObString> &multi_path_arra
       LOG_WARN("fail to init ObArchiveStore", K(ret), K(dest));
     } else if (OB_FAIL(store.get_single_piece_info(is_empty_piece, piece_desc))) {
       LOG_WARN("fail to get single piece info", K(ret), K(store));
-    } else if (is_empty_piece
+    } else if (is_empty_piece 
                || ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE != piece_desc.piece_.file_status_) {
       LOG_INFO("skip non log dir or unavailable piece", K(dest));
     } else {
@@ -1302,7 +1302,7 @@ int ObRestoreUtil::get_all_piece_keys_(const ObIArray<ObString> &multi_path_arra
     }
   }
   return ret;
-}
+}    
 
 int ObRestoreUtil::get_latest_non_empty_piece_(
              const ObArray<ObPieceKey> &piece_keys,
@@ -1328,7 +1328,7 @@ int ObRestoreUtil::get_latest_non_empty_piece_(
     } else if (!is_empty_piece) {
       break;
     }
-  }
+  } 
   if (OB_SUCC(ret) && !is_empty_piece) {
     LOG_INFO("get latest non empty piece", K(piece_whole_info));
   }
@@ -1352,7 +1352,7 @@ int ObRestoreUtil::get_piece_paths_in_range_from_multi_path_(
   if (candidate_pieces.empty()) {
     LOG_WARN("candidate pieces is empty!", K(ret));
   } else {
-   dest_id = candidate_pieces.at(0).key_.dest_id_;
+   dest_id = candidate_pieces.at(0).key_.dest_id_; 
   }
 
   while (OB_SUCC(ret) && i < pieces_cnt) {
@@ -1400,9 +1400,9 @@ int ObRestoreUtil::get_piece_paths_in_range_from_multi_path_(
             }
           } else if (OB_FAIL(dest.set(path))) {
             LOG_WARN("fail to set backup dest", K(ret), K(path));
-          } else if (OB_FAIL(dest.get_backup_dest_str(piece_brief_info.piece_path_.ptr(),
+          } else if (OB_FAIL(dest.get_backup_dest_str(piece_brief_info.piece_path_.ptr(), 
                                                       piece_brief_info.piece_path_.capacity()))) {
-            LOG_WARN("fail to get backup dest str from multi path", K(ret), K(dest));
+            LOG_WARN("fail to get backup dest str from multi path", K(ret), K(dest));                                                        
           } else if (OB_FAIL(piece_brief_info.piece_path_.assign(dest.get_root_path()))) {
             LOG_WARN("failed to assign piece path", K(ret));
           } else if (OB_FALSE_IT(piece_brief_info.piece_id_ = cur.key_.piece_id_)) {
@@ -1488,11 +1488,11 @@ int ObRestoreUtil::get_piece_paths_in_range_from_multi_path_(
         LOG_INFO("add piece", K(last_piece_idx), K(cur));
       }
     }
-  }
+  }  
   if (OB_FAIL(ret)) {
   } else if (-1 == last_piece_idx) {
     ret = OB_RESTORE_SOURCE_NOT_ENOUGH;
-    LOG_WARN("archive log pieces are behind the latest backup set, or pieces are not contiuous",
+    LOG_WARN("archive log pieces are behind the latest backup set, or pieces are not contiuous", 
               K(ret), K(last_piece_idx), K(restore_end_scn), K(candidate_pieces));
     LOG_USER_ERROR(OB_RESTORE_SOURCE_NOT_ENOUGH, "no enough log for restore");
   } else {
@@ -1506,13 +1506,13 @@ int ObRestoreUtil::get_piece_paths_in_range_from_multi_path_(
       if (OB_TMP_FAIL(ObTimeConverter::scn_to_str(last_piece.checkpoint_scn_.get_val_for_inner_table_field(),
                                                   time_zone_wrap.get_time_zone_info(),
                                                   time_str, OB_MAX_TIME_STR_LENGTH, time_str_pos))) {
-        LOG_WARN("fail to convert scn to str", K(ret), K(tmp_ret), K(last_piece), K(time_zone_wrap));
-      } else if (OB_TMP_FAIL(databuff_printf(err_msg, OB_MAX_ERROR_MSG_LEN, msg_pos,
+        LOG_WARN("fail to convert scn to str", K(ret), K(tmp_ret), K(last_piece), K(time_zone_wrap));                                                  
+      } else if (OB_TMP_FAIL(databuff_printf(err_msg, OB_MAX_ERROR_MSG_LEN, msg_pos, 
                             "no enough log, maximum restorable time is %s",
                             time_str))) {
         LOG_WARN("fail to databuff printf", K(ret), K(tmp_ret), K(msg_pos), K(time_str));
       }
-      LOG_WARN(err_msg,  K(ret), K(last_piece), K(restore_end_scn));
+      LOG_WARN(err_msg,  K(ret), K(last_piece), K(restore_end_scn));      
       LOG_USER_ERROR(OB_RESTORE_SOURCE_NOT_ENOUGH, err_msg);
     }
   }
@@ -1523,7 +1523,7 @@ int ObRestoreUtil::get_piece_paths_in_range_from_multi_path_(
     LOG_INFO("find pieces", K(ret), K(restore_start_scn), K(restore_end_scn), K(pieces));
   }
   return ret;
-}
+}             
 
 int ObRestoreUtil::get_restore_log_array_for_complement_log_(
     const ObIArray<ObRestoreBackupSetBriefInfo> &backup_set_list,
@@ -1581,8 +1581,8 @@ int ObRestoreUtil::do_fill_backup_path_(
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(job.get_multi_restore_path_list().set(backup_set_list, backup_piece_path_list, log_path_list))) {
       LOG_WARN("failed to set mutli restore path list", KR(ret));
-    }
-  }
+    } 
+  } 
   return ret;
 }
 
@@ -1606,8 +1606,8 @@ int ObRestoreUtil::do_fill_backup_path_with_full_pieces_(
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(job.get_multi_restore_path_list().set(backup_set_list, backup_piece_path_list, log_path_list))) {
       LOG_WARN("failed to set mutli restore path list", KR(ret));
-    }
-  }
+    } 
+  } 
   return ret;
 }
 
@@ -1649,7 +1649,7 @@ int ObRestoreUtil::do_fill_backup_info_(
       job.set_backup_tenant_id(backup_set_info.backup_set_file_.tenant_id_);
       job.set_backup_compatible(backup_set_info.backup_set_file_.backup_compatible_);
       // becuase of no consistent scn in 4.1.x backup set, using ls_info.backup_scn to set the restore consisitent scn
-      // ls_info.backup_scn is the default replayable scn when create restore tenant,
+      // ls_info.backup_scn is the default replayable scn when create restore tenant, 
       // so using it as the consistet scn can also make recovery service work normally
       const SCN &scn = backup_set_info.backup_set_file_.tenant_compatible_ < DATA_VERSION_4_2_0_0
                      ? ls_info.backup_scn_
@@ -1765,7 +1765,7 @@ int ObRestoreUtil::recycle_restore_job(const uint64_t tenant_id,
         ARRAY_FOREACH_X(ls_restore_progress_infos, i, cnt, OB_SUCC(ret)) {
           const ObLSRestoreProgressPersistInfo &ls_restore_info = ls_restore_progress_infos.at(i);
           if (ls_restore_info.status_.is_failed()) {
-            if (OB_FAIL(databuff_printf(history_info.comment_.ptr(), history_info.comment_.capacity(), pos,
+            if (OB_FAIL(databuff_printf(history_info.comment_.ptr(), history_info.comment_.capacity(), pos, 
                                         "%s;", ls_restore_info.comment_.ptr()))) {
               if (OB_SIZE_OVERFLOW == ret) {
                 ret = OB_SUCCESS;
@@ -1900,7 +1900,7 @@ int ObRestoreUtil::check_physical_restore_finish(
   HEAP_VAR(ObMySQLProxy::ReadResult, res) {
     common::sqlclient::ObMySQLResult *result = nullptr;
     int64_t cnt = 0;
-    if (OB_FAIL(sql.assign_fmt("select status from %s where tenant_id=%lu and job_id=%ld",
+    if (OB_FAIL(sql.assign_fmt("select status from %s where tenant_id=%lu and job_id=%ld", 
         OB_ALL_RESTORE_JOB_HISTORY_TNAME, OB_SYS_TENANT_ID, job_id))) {
       LOG_WARN("failed to assign fmt", K(ret));
     } else if (OB_FAIL(proxy.read(res, OB_SYS_TENANT_ID, sql.ptr()))) {
@@ -1934,7 +1934,7 @@ int ObRestoreUtil::get_restore_job_comment(
   HEAP_VAR(ObMySQLProxy::ReadResult, res) {
     common::sqlclient::ObMySQLResult *result = nullptr;
     int64_t cnt = 0;
-    if (OB_FAIL(sql.assign_fmt("select comment from %s where tenant_id=%lu and job_id=%ld",
+    if (OB_FAIL(sql.assign_fmt("select comment from %s where tenant_id=%lu and job_id=%ld", 
         OB_ALL_RESTORE_JOB_HISTORY_TNAME, OB_SYS_TENANT_ID, job_id))) {
       LOG_WARN("failed to assign fmt", K(ret));
     } else if (OB_FAIL(proxy.read(res, OB_SYS_TENANT_ID, sql.ptr()))) {
@@ -1968,7 +1968,7 @@ int ObRestoreUtil::get_restore_tenant_cpu_count(
     LOG_WARN("failed to init proxy", K(ret));
   } else if (OB_FAIL(unit_op.get_resource_pools(tenant_id, pools))) {
     LOG_WARN("failed to get resource pool", K(ret), K(tenant_id));
-  }
+  } 
   ARRAY_FOREACH(pools, i) {
     if (OB_FAIL(unit_config_ids.push_back(pools.at(i).unit_config_id_))) {
       LOG_WARN("failed to push back unit config", K(ret));
@@ -1989,12 +1989,12 @@ int ObRestoreUtil::get_restore_tenant_cpu_count(
     }
     cpu_count = max_cpu;
   }
-
+  
   return ret;
 }
 
 int ObRestoreUtil::convert_restore_timestamp_to_scn_(
-    const ObString &timestamp,
+    const ObString &timestamp, 
     const common::ObTimeZoneInfoWrap &time_zone_wrap,
     share::SCN &scn)
 {
@@ -2008,12 +2008,12 @@ int ObRestoreUtil::convert_restore_timestamp_to_scn_(
     LOG_WARN("failed to str to scn value", K(ret), K(timestamp), K(time_zone_info));
   } else if (OB_FAIL(scn.convert_for_sql(scn_value))) {
     LOG_WARN("failed to convert for sql scn", K(ret), K(scn_value));
-  }
+  } 
   return ret;
 }
 
 int ObRestoreUtil::get_backup_sys_time_zone_(
-    const ObIArray<ObString> &tenant_path_array,
+    const ObIArray<ObString> &tenant_path_array, 
     common::ObTimeZoneInfoWrap &time_zone_wrap)
 {
   int ret = OB_SUCCESS;
@@ -2035,7 +2035,7 @@ int ObRestoreUtil::get_backup_sys_time_zone_(
     } else {
       break;
     }
-  }
+  } 
   return ret;
 }
 
@@ -2073,13 +2073,13 @@ int ObRestoreUtil::check_tenant_is_in_remote_restore_data_mode(
     common::ObISQLClient &proxy, const uint64_t tenant_id, bool &is_remote)
 {
   int ret = OB_SUCCESS;
-  ObAllTenantInfo all_tenant_info;
+  ObAllTenantInfo all_tenant_info;  
   is_remote = false;
   if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(
               tenant_id, &proxy, false/*for_update*/, all_tenant_info))) {
     LOG_WARN("fail to load tenant info", K(ret), K(tenant_id));
   } else {
-    is_remote = all_tenant_info.get_restore_data_mode().is_remote_mode();
+    is_remote = all_tenant_info.get_restore_data_mode().is_remote_mode();    
   }
   return ret;
 }

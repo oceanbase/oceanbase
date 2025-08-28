@@ -102,7 +102,7 @@ int LogGroupEntryHeader::generate(const bool is_raw_write,
     }
     if (is_raw_write) {
       flag_ = (flag_ | get_raw_write_mask_());
-    }
+    } 
     if (OB_FAIL(calculate_log_checksum_(is_padding_log, log_write_buf, data_len, data_checksum))) {
       PALF_LOG(ERROR, "calculate_log_checksum_ failed", K(ret), KPC(this));
     }

@@ -233,7 +233,7 @@ public:
   {
     int64_t idx = -1;
     if (!is_sorted_) {
-      idx = permutation_idx;
+      idx = permutation_idx; 
     } else {
       for (int64_t i = 0; i < rowkeys_.count(); ++i) {
         if (permutation_[i] == permutation_idx) {

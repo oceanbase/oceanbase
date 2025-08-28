@@ -88,7 +88,7 @@ public:
 protected:
   virtual bool should_retry_impl_(
       const RetType &outcome, const int64_t attempted_retries) const override;
-
+  
   int reinitialize_headers_() const;
   int reinitialize_buffer_() const;
 
@@ -319,7 +319,7 @@ private:
       ObStorageOssBase &oss_base,
       const common::ObString &bucket_str,
       const common::ObString &object_str);
-  int do_list_(ObStorageOssBase &oss_base,
+  int do_list_(ObStorageOssBase &oss_base, 
       const ObString &bucket, const char *full_dir_path,
       const int64_t max_ret, const char *delimiter,
       const char *next_marker, oss_list_object_params_t *&params);

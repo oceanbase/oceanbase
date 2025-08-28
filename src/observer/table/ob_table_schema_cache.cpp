@@ -43,7 +43,7 @@ bool ObKvSchemaCacheKey::is_equal(const ObILibCacheKey &other) const
   const ObKvSchemaCacheKey &key = static_cast<const ObKvSchemaCacheKey&>(other);
   bool cmp_ret = table_id_ == key.table_id_ &&
                  schema_version_ == key.schema_version_;
-
+                 
   return cmp_ret;
 }
 
@@ -94,8 +94,8 @@ int ObKvSchemaCacheObj::cons_table_info(const ObTableSchema *table_schema)
   return ret;
 }
 
-int ObKvSchemaCacheObj::cons_index_info(ObSchemaGetterGuard *schema_guard,
-                                        uint64_t tenant_id,
+int ObKvSchemaCacheObj::cons_index_info(ObSchemaGetterGuard *schema_guard, 
+                                        uint64_t tenant_id, 
                                         common::ObTableID table_id)
 {
   int ret = OB_SUCCESS;
@@ -128,7 +128,7 @@ int ObKvSchemaCacheObj::cons_index_info(ObSchemaGetterGuard *schema_guard,
         } else {
           flags_.has_local_index_ = true;
           if (index_schema->is_fts_index()) {
-            flags_.has_fts_index_ = true;
+            flags_.has_fts_index_ = true;          
           }
         }
       } else if (index_schema->is_global_index_table()) {
@@ -136,7 +136,7 @@ int ObKvSchemaCacheObj::cons_index_info(ObSchemaGetterGuard *schema_guard,
           LOG_WARN("fail to push back local index tids", K(ret));
         } else {
           flags_.has_global_index_ = true;
-        }
+        }      
       }
     }
   }
@@ -271,7 +271,7 @@ int ObKvSchemaCacheObj::cons_columns_array(const ObTableSchema *table_schema)
         // mark the flags for some special columns
         if (!flags_.has_auto_inc_ && col_info->is_auto_increment_) {
           set_has_auto_inc(col_info->is_auto_increment_);
-        }
+        }   
         if (!flags_.has_generated_column_ && col_info->is_generated_column()) {
           set_has_generated_column(col_info->is_generated_column());
         }
@@ -292,10 +292,10 @@ int ObKvSchemaCacheObj::build_index_map()
 {
   int ret = OB_SUCCESS;
   int64_t column_size = column_info_array_.count();
-  if (!col_name_idx_map_.created() &&
+  if (!col_name_idx_map_.created() && 
         OB_FAIL(col_name_idx_map_.create(column_size, &name_idx_allocator_, &bucket_allocator_wrapper_))) {
     LOG_WARN("fail to create colname_idx_map", K(ret), K(column_size));
-  } else if (!col_id_idx_map_.created() &&
+  } else if (!col_id_idx_map_.created() && 
         OB_FAIL(col_id_idx_map_.create(column_size, &colid_idx_allocator_, &bucket_allocator_wrapper_))) {
     LOG_WARN("fail to create colid_idx_map", K(ret), K(column_size));
   } else {
@@ -385,9 +385,9 @@ int ObKvSchemaCacheGuard::create_schema_cache_obj(ObSchemaGetterGuard &schema_gu
     LOG_WARN("failed get table state", K(ret), K(table_schema->get_kv_attributes()));
   } else if (kv_attr.is_disable_) {
     ret = OB_KV_TABLE_NOT_ENABLED;
-    const ObString &table_group_name = table_schema->get_tablegroup_name();
+    const ObString &table_group_name = table_schema->get_tablegroup_name(); 
     LOG_WARN("table is disabled", K(table_group_name), K(table_schema->get_table_name()), K(kv_attr), K(table_schema->get_kv_attributes()));
-    LOG_USER_ERROR(OB_KV_TABLE_NOT_ENABLED, table_group_name.length(), table_group_name.ptr());
+    LOG_USER_ERROR(OB_KV_TABLE_NOT_ENABLED, table_group_name.length(), table_group_name.ptr()); 
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObCacheObjectFactory::alloc(cache_guard_,
@@ -497,7 +497,7 @@ int ObKvSchemaCacheGuard::get_ttl_definition(ObString &ttl_definition)
   return ret;
 }
 
-int ObKvSchemaCacheGuard::has_generated_column(bool& has_generated_column)
+int ObKvSchemaCacheGuard::has_generated_column(bool& has_generated_column) 
 {
   int ret = OB_SUCCESS;
   ObKvSchemaCacheObj *cache_obj = nullptr;
@@ -509,7 +509,7 @@ int ObKvSchemaCacheGuard::has_generated_column(bool& has_generated_column)
   return ret;
 }
 
-int ObKvSchemaCacheGuard::is_ttl_table(bool &is_ttl_table)
+int ObKvSchemaCacheGuard::is_ttl_table(bool &is_ttl_table) 
 {
   int ret = OB_SUCCESS;
   ObKvSchemaCacheObj *cache_obj = nullptr;
@@ -521,7 +521,7 @@ int ObKvSchemaCacheGuard::is_ttl_table(bool &is_ttl_table)
   return ret;
 }
 
-int ObKvSchemaCacheGuard::is_redis_ttl_table(bool &is_redis_ttl_table)
+int ObKvSchemaCacheGuard::is_redis_ttl_table(bool &is_redis_ttl_table) 
 {
   int ret = OB_SUCCESS;
   ObKvSchemaCacheObj *cache_obj = nullptr;
@@ -533,7 +533,7 @@ int ObKvSchemaCacheGuard::is_redis_ttl_table(bool &is_redis_ttl_table)
   return ret;
 }
 
-int ObKvSchemaCacheGuard::has_hbase_ttl_column(bool &has_ttl_column)
+int ObKvSchemaCacheGuard::has_hbase_ttl_column(bool &has_ttl_column) 
 {
   int ret = OB_SUCCESS;
   ObKvSchemaCacheObj *cache_obj = nullptr;
@@ -582,7 +582,7 @@ int ObKvSchemaCacheGuard::has_global_index(bool &has_gloabl_index)
   return ret;
 }
 
-int ObKvSchemaCacheGuard::get_column_count(int64_t& column_count)
+int ObKvSchemaCacheGuard::get_column_count(int64_t& column_count) 
 {
   int ret = OB_SUCCESS;
   ObKvSchemaCacheObj *cache_obj = nullptr;

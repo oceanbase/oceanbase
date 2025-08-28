@@ -194,7 +194,7 @@ int ObCCLRuleMgr::add_ccl_rule(const ObSimpleCCLRuleSchema &schema, const ObName
       }
     }
   }
-
+  
   LOG_TRACE("add ccl_rule", K(schema), K(ccl_rule_infos.count()),
             K(ccl_rule_name_map_.item_count()), K(ccl_rule_id_map_.item_count()));
   return ret;

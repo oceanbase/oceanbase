@@ -156,7 +156,7 @@ namespace sql
     void set_join_path(JoinPath *path) { join_path_ = path; }
     JoinPath *get_join_path() { return join_path_; }
     bool is_my_exec_expr(const ObRawExpr *expr);
-    virtual int get_plan_item_info(PlanText &plan_text,
+    virtual int get_plan_item_info(PlanText &plan_text, 
                                 ObSqlPlanItem &plan_item) override;
     common::ObIArray<ObExecParamRawExpr *> &get_above_pushdown_left_params() { return above_pushdown_left_params_; }
     common::ObIArray<ObExecParamRawExpr *> &get_above_pushdown_right_params() { return above_pushdown_right_params_; }

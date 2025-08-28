@@ -682,8 +682,8 @@ public:
   // same with ObObjCaster::to_type().
   // input is ObExpr, and output is ObDatum, it's better if input is also ObDatum.
   // we will do this later if necessary.
-  // subschema id from sql udt type is a combination of (cs_type_ and cs_level_),
-  // datum meta does not have cs_level_, or we can use ObDatum precision_ as subschema id?
+  // subschema id from sql udt type is a combination of (cs_type_ and cs_level_), 
+  // datum meta does not have cs_level_, or we can use ObDatum precision_ as subschema id? 
   int to_type(const ObDatumMeta &dst_type,
               const ObExpr &src_expr,
               const common::ObCastMode &cm,

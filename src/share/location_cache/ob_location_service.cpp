@@ -448,11 +448,11 @@ int ObLocationService::batch_renew_tablet_locations(
           if (!common::has_exist_in_array(ls_ids, tablet_ls.get_ls_id())) {
             if (INT64_MAX != expire_renew_time) {
               if (OB_FAIL(ls_location_service_.check_ls_needing_renew(
-                  tenant_id,
+                  tenant_id, 
                   tablet_ls.get_ls_id(),
                   expire_renew_time,
                   need_renew))) {
-                LOG_WARN("failed to check_ls_needing_renew", KR(ret), K(tenant_id),
+                LOG_WARN("failed to check_ls_needing_renew", KR(ret), K(tenant_id), 
                     "ls_id", tablet_ls.get_ls_id(), K(expire_renew_time));
               }
             }
@@ -462,7 +462,7 @@ int ObLocationService::batch_renew_tablet_locations(
                 LOG_WARN("push back failed", KR(ret), K(tablet_ls));
               }
             }
-          }
+          } 
         } // end ARRAY_FOREACH
         if (OB_SUCC(ret) && !ls_ids.empty()){
           if (OB_FAIL(ls_location_service_.batch_renew_ls_locations(
@@ -633,7 +633,7 @@ int ObLocationService::check_ls_exist(
 
 // 1.relationship between ObLSStatus and ObLSExistState
 //         <ObLSStatus>     <ObLSExistState>
-//           CREATING   -->   UNCREATED
+//           CREATING   -->   UNCREATED 
 //         CREATE_ABORT -->   DELETED
 //            OTHER     -->   EXISTING
 //

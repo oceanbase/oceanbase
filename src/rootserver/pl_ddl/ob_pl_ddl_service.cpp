@@ -222,9 +222,9 @@ int ObPLDDLService::create_routine(ObRoutineInfo &routine_info,
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("database schema should not be null", K(ret));
           } else {
-            ObRoutinePrivSortKey routine_key(tenant_id, routine_info.get_owner_id(),
-                                              database_schema->get_database_name_str(),
-                                              routine_info.get_routine_name(), routine_info.is_procedure() ?
+            ObRoutinePrivSortKey routine_key(tenant_id, routine_info.get_owner_id(), 
+                                              database_schema->get_database_name_str(), 
+                                              routine_info.get_routine_name(), routine_info.is_procedure() ? 
                                               ObRoutineType::ROUTINE_PROCEDURE_TYPE : ObRoutineType::ROUTINE_FUNCTION_TYPE);
             ObPrivSet priv_set = (OB_PRIV_EXECUTE | OB_PRIV_ALTER_ROUTINE);
             int64_t option = 0;
@@ -515,9 +515,9 @@ int ObPLDDLService::drop_routine(const ObRoutineInfo &routine_info,
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpected null", K(ret));
             } else {
-              ObRoutinePrivSortKey routine_key(tenant_id, user_info->get_user_id(),
-                                            database_schema->get_database_name_str(),
-                                            routine_info.get_routine_name(), routine_info.is_procedure() ?
+              ObRoutinePrivSortKey routine_key(tenant_id, user_info->get_user_id(), 
+                                            database_schema->get_database_name_str(), 
+                                            routine_info.get_routine_name(), routine_info.is_procedure() ? 
                                             ObRoutineType::ROUTINE_PROCEDURE_TYPE : ObRoutineType::ROUTINE_FUNCTION_TYPE);
               ObPrivSet priv_set = (OB_PRIV_EXECUTE | OB_PRIV_ALTER_ROUTINE);
               bool gen_ddl_stmt = false;
@@ -2128,7 +2128,7 @@ int ObPLDDLService::rebuild_triggers_on_hidden_table(
       if (is_recover_restore_table) {
         if (OB_FAIL(check_and_construct_restore_trigger_info(
             alter_table_arg, src_tenant_schema_guard, dst_tenant_schema_guard,
-            orig_table_schema, hidden_table_schema, *trigger_info,
+            orig_table_schema, hidden_table_schema, *trigger_info, 
             new_trigger_info, need_rebuild))) {
           LOG_WARN("check and construct restore trigger info failed", K(ret));
         }
@@ -2176,7 +2176,7 @@ int ObPLDDLService::drop_trigger_in_drop_user(ObMySQLTransaction &trans,
 //----End of functions for managing trigger----
 
 //----Functions for restore table ddl ----
-//  Dont rebuild trigger if
+//  Dont rebuild trigger if 
 //  1. database name has changed.
 //  2. base_table name has changed.
 //  3. database of the trigger does no exist.
@@ -2203,7 +2203,7 @@ int ObPLDDLService::check_and_construct_restore_trigger_info(
     LOG_WARN("tenant is same", K(ret), K(src_tenant_id), K(dst_tenant_id));
   } else if (OB_FAIL(orig_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("failed to check if oralce compat mode", K(ret));
-  } else if (OB_FAIL(src_tenant_schema_guard.get_database_schema(src_tenant_id,
+  } else if (OB_FAIL(src_tenant_schema_guard.get_database_schema(src_tenant_id, 
       orig_table_schema.get_database_id(), src_db_schema))) {
     LOG_WARN("get db schema failed", K(ret), K(src_tenant_id), "db_id", orig_table_schema.get_database_id());
   } else if (OB_ISNULL(src_db_schema)) {
@@ -2221,12 +2221,12 @@ int ObPLDDLService::check_and_construct_restore_trigger_info(
     ObCompareNameWithTenantID name_cmp(dst_tenant_id);
     if (0 != name_cmp.compare(src_db_schema->get_database_name_str(), dst_db_schema->get_database_name_str())) {
       need_rebuild = false;
-      FLOG_INFO("ignore to rebuild the trigger whose db name has changed",
+      FLOG_INFO("ignore to rebuild the trigger whose db name has changed", 
           "src_db_name", src_db_schema->get_database_name_str(), "dst_db_name", dst_db_schema->get_database_name_str(),
           K(src_trigger_info));
     } else if (0 != name_cmp.compare(orig_table_schema.get_table_name_str(), target_table_name)) {
       need_rebuild = false;
-      FLOG_INFO("ignore to rebuild the trigger whose base_table name has changed",
+      FLOG_INFO("ignore to rebuild the trigger whose base_table name has changed", 
           "src_table_name", orig_table_schema.get_table_name_str(), K(target_table_name), K(src_trigger_info));
     }
   }
@@ -2240,7 +2240,7 @@ int ObPLDDLService::check_and_construct_restore_trigger_info(
       // Base table and trigger have the different database.
       // To find the target database by the database name.
       const ObDatabaseSchema *src_trigger_db_schema = nullptr;
-      if (OB_FAIL(src_tenant_schema_guard.get_database_schema(src_tenant_id,
+      if (OB_FAIL(src_tenant_schema_guard.get_database_schema(src_tenant_id, 
           src_trigger_info.get_database_id(), src_trigger_db_schema))) {
         LOG_WARN("get db schema failed", K(ret), K(src_tenant_id), "db_id", src_trigger_info.get_database_id());
       } else if (OB_ISNULL(src_trigger_db_schema)) {

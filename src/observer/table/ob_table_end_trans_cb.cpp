@@ -210,7 +210,7 @@ void ObTableExecuteEndTransCb::callback(int cb_param)
     tx_desc_ = NULL;
   }
   if (lock_handle_ != nullptr) {
-    HTABLE_LOCK_MGR->release_handle(*lock_handle_);
+    HTABLE_LOCK_MGR->release_handle(*lock_handle_); 
   }
   this->handin();
   CHECK_BALANCE("[table async callback]");
@@ -268,7 +268,7 @@ void ObTableBatchExecuteEndTransCb::callback(int cb_param)
     tx_desc_ = NULL;
   }
   if (lock_handle_ != nullptr) {
-    HTABLE_LOCK_MGR->release_handle(*lock_handle_);
+    HTABLE_LOCK_MGR->release_handle(*lock_handle_); 
   }
   this->handin();
   CHECK_BALANCE("[table batch async callback]");
@@ -334,7 +334,7 @@ void ObTableLSExecuteEndTransCb::callback(int cb_param)
     tx_desc_ = NULL;
   }
   if (lock_handle_ != nullptr) {
-    HTABLE_LOCK_MGR->release_handle(*lock_handle_);
+    HTABLE_LOCK_MGR->release_handle(*lock_handle_); 
   }
   this->handin();
   CHECK_BALANCE("[table ls execute async callback]");

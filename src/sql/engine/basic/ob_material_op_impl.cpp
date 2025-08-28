@@ -88,7 +88,7 @@ int ObMaterialOpImpl::init(const uint64_t tenant_id,
         LOG_WARN("null memory entity returned");
       }
     }
-
+    
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(datum_store_.init(UINT64_MAX, tenant_id_, ObCtxIds::WORK_AREA))) {
       LOG_WARN("init row store failed");

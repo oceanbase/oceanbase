@@ -59,7 +59,7 @@ public:
   int replay(const void *buffer,
              const int64_t buf_size,
              const palf::LSN &lsn,
-             const share::SCN &scn)
+             const share::SCN &scn) 
   { 
     UNUSED(buffer);
     UNUSED(buf_size);
@@ -93,9 +93,9 @@ public:
     common::ObArray<uint64_t> &uncompacted_table_ids) const;
 
 protected:
-  virtual ObMajorFreezeServiceType get_service_type() const
-  {
-    return ObMajorFreezeServiceType::SERVICE_TYPE_INVALID;
+  virtual ObMajorFreezeServiceType get_service_type() const 
+  { 
+    return ObMajorFreezeServiceType::SERVICE_TYPE_INVALID; 
   }
 
 private:
@@ -112,7 +112,7 @@ private:
   common::ObRecursiveMutex lock_;
   // rw_lock_: used for switch_role, not use lock_ in switch_role. Otherwise, if major_freeze
   // hang, switch_role may also hang
-  //
+  // 
   common::SpinRWLock rw_lock_;
   // switch_lock_: used for avoiding switch_to_leader, switch_to_follower concurrently execute. 
   common::ObRecursiveMutex switch_lock_;

@@ -74,7 +74,7 @@ public:
         : (share::schema::OB_PRIV_ROUTINE_LEVEL == grant_level_ ?  static_cast<obrpc::ObDDLArg &>(routine_arg_)
         : (share::schema::OB_PRIV_CATALOG_LEVEL == grant_level_ ?  static_cast<obrpc::ObDDLArg &>(catalog_arg_)
         : (share::schema::OB_PRIV_SENSITIVE_RULE_LEVEL == grant_level_ ? static_cast<obrpc::ObDDLArg &>(sensitive_rule_arg_)
-        : static_cast<obrpc::ObDDLArg &>(syspriv_arg_))))));
+        : static_cast<obrpc::ObDDLArg &>(syspriv_arg_)))))); 
   }
   int add_column_privs(const ObString& column_name,const ObPrivSet priv_set) { return column_names_priv_.push_back(std::make_pair(column_name, priv_set)); }
   const ObIArray<std::pair<ObString, ObPrivType>> &get_column_privs() const { return column_names_priv_; }

@@ -118,7 +118,7 @@ public:
   static int ob_udt_convert_sorted_objs_array_to_udf_format(const ObObj **sorted_objs,
                                                             char *buf,
                                                             const int64_t buf_len,
-                                                            int64_t &pos,
+                                                            int64_t &pos, 
                                                             ObSqlUDT &sql_udt);
 
   // functions to convert sql udt to string (only used in text protocal)
@@ -140,7 +140,7 @@ public:
                                       ObString *&attrs,
                                       bool &is_null);
 
-  static int convert_sql_udt_to_string(ObObj &sql_udt_obj,
+  static int convert_sql_udt_to_string(ObObj &sql_udt_obj, 
                                        common::ObIAllocator *allocator,
                                        sql::ObExecContext *exec_context,
                                        ObSqlUDT &sql_udt,
@@ -199,7 +199,7 @@ public:
 
 class ObSqlUdtMetaUtils final
 {
-
+  
 public:
   static int get_udt_meta_attr_info(ObSchemaGetterGuard *schema_guard,
                                     uint64_t tenant_id,

@@ -338,7 +338,7 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
 
   // limit calculator
   RPC_PROCESSOR(ObResourceLimitCalculatorP, gctx_);
-
+  
   // ddl
   RPC_PROCESSOR(ObRpcCheckandCancelDDLComplementDagP, gctx_);
 

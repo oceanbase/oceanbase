@@ -549,7 +549,7 @@ int ZCount::apply(ObRedisSingleCtx &redis_ctx)
     LOG_WARN("zadd not inited", K(ret));
   } else if (OB_FAIL(cmd_op.do_zcount(
                  redis_ctx.get_request_db(), key_, min_, min_inclusive_, max_, max_inclusive_))) {
-    LOG_WARN("fail to do zadd", K(ret), K(redis_ctx.get_request_db()), K(key_),
+    LOG_WARN("fail to do zadd", K(ret), K(redis_ctx.get_request_db()), K(key_), 
                 K(min_), K(min_inclusive_), K(max_), K(max_inclusive_));
   }
   return ret;
@@ -670,7 +670,7 @@ int ZUnionStore::apply(ObRedisSingleCtx &redis_ctx)
     LOG_WARN("zadd not inited", K(ret));
   } else if (OB_FAIL(cmd_op.do_zunion_store(
                  redis_ctx.get_request_db(), dest_, keys_, weights_, agg_type_))) {
-    LOG_WARN("fail to do zadd", K(ret), K(redis_ctx.get_request_db()),
+    LOG_WARN("fail to do zadd", K(ret), K(redis_ctx.get_request_db()), 
           K(dest_), K(keys_), K(weights_), K(agg_type_));
   }
 

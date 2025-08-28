@@ -286,7 +286,7 @@ int ObPrivSqlService::gen_delete_routine_priv_sql(
   int ret = OB_SUCCESS;
 
   // why we need to SELECT before DELETE?
-  //
+  // 
   // following case will write two rows of `routine_name` in different cases to __all_routine_privilege:
   //
   // create function `DB`.`f_Test`() returns int return 1;
@@ -554,9 +554,9 @@ int ObPrivSqlService::gen_column_priv_dml(
     LOG_WARN("all column priv is not suppported", KR(ret));
   } else {
     if ((priv_set & OB_PRIV_SELECT) != 0) { all_priv |= 1; }
-    if ((priv_set & OB_PRIV_INSERT) != 0) { all_priv |= 2; }
-    if ((priv_set & OB_PRIV_UPDATE) != 0) { all_priv |= 4; }
-    if ((priv_set & OB_PRIV_REFERENCES) != 0) { all_priv |= 8; }
+    if ((priv_set & OB_PRIV_INSERT) != 0) { all_priv |= 2; } 
+    if ((priv_set & OB_PRIV_UPDATE) != 0) { all_priv |= 4; } 
+    if ((priv_set & OB_PRIV_REFERENCES) != 0) { all_priv |= 8; } 
     if (OB_FAIL(dml.add_pk_column("tenant_id", 0))
         || OB_FAIL(dml.add_pk_column("user_id", column_priv_key.user_id_))
         || OB_FAIL(dml.add_pk_column("priv_id", priv_id))
@@ -730,7 +730,7 @@ int ObPrivSqlService::delete_db_priv(
                    OB_ALL_DATABASE_PRIVILEGE_TNAME, dml, affected_rows))) {
       LOG_WARN("execute sql failed", K(ret));
     } else if (!is_single_row(affected_rows)) {
-      //for mysql, if db name and table name is case sensitive,
+      //for mysql, if db name and table name is case sensitive, 
       //then for a privilege on t1 and T1 should exist 2 records in the inner table.
       //but the key of the inner table is tenant_id, user_id and database_name
       //the database_name is varchar, and its charset is utf8_general_ci(insensitive).
@@ -815,7 +815,7 @@ int ObPrivSqlService::delete_table_priv(
                    OB_ALL_TABLE_PRIVILEGE_TNAME, dml, affected_rows))) {
       LOG_WARN("execute sql failed", K(ret));
     } else if (!is_single_row(affected_rows)) {
-        //for mysql, if db name and table name is case sensitive,
+        //for mysql, if db name and table name is case sensitive, 
       //then for a privilege on t1 and T1 should exist 2 records in the inner table.
       //but the key of the inner table is tenant_id, user_id and database_name, table_name
       //the database_name and table_name is varchar, and its charset is utf8_general_ci(insensitive).
@@ -1095,8 +1095,8 @@ int ObPrivSqlService::gen_routine_priv_dml(
     LOG_WARN("all routine priv is not suppported when tenant's data version is below 4.3.1.0 or 4.2.2.0", KR(ret));
   } else {
     if ((priv_set & OB_PRIV_EXECUTE) != 0) { all_priv |= 1; }
-    if ((priv_set & OB_PRIV_ALTER_ROUTINE) != 0) { all_priv |= 2; }
-    if ((priv_set & OB_PRIV_GRANT) != 0) { all_priv |= 4; }
+    if ((priv_set & OB_PRIV_ALTER_ROUTINE) != 0) { all_priv |= 2; } 
+    if ((priv_set & OB_PRIV_GRANT) != 0) { all_priv |= 4; } 
     if (OB_FAIL(dml.add_pk_column("tenant_id", 0))
         || OB_FAIL(dml.add_pk_column("user_id", routine_priv_key.user_id_))
         || OB_FAIL(dml.add_pk_column("database_name", ObHexEscapeSqlStr(routine_priv_key.db_)))

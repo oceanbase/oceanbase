@@ -256,7 +256,7 @@ int ObCompactionBuffer::expand(const int64_t size)
 int ObCompactionBuffer::reserve(const int64_t size)
 {
   int ret = OB_SUCCESS;
-
+  
   if (OB_UNLIKELY(size < 0 || size > capacity_)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(size), K(capacity_));
@@ -292,7 +292,7 @@ int ObCompactionBuffer::ensure_space(const int64_t append_size)
     if (OB_FAIL(expand(len_ + append_size))) {
       STORAGE_LOG(WARN, "failed to expand size", K(ret), K(len_), K(append_size));
     }
-  }
+  } 
 
   return ret;
 }

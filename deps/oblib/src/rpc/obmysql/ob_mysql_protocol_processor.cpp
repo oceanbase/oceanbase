@@ -67,8 +67,8 @@ int ObMysqlProtocolProcessor::do_decode(ObSMConnection& conn, ObICSMemPool& pool
           connection_phase_ state transition
           (1)use ssl:
           1.when tcp connection establised, the state is initialized as CPE_CONNECTED
-          2.if client decide to open ssl,  after decode the first incomplete
-          login request packet, the state is changed to CPE_SSL_CONNECT, and the packet will be droped (not processed by processor)
+          2.if client decide to open ssl,  after decode the first incomplete 
+          login request packet, the state is changed to CPE_SSL_CONNECT, and the packet will be droped (not processed by processor) 
           3.after ssl handshake finished, after decode the complete login request
           packet, the state changed to CPE_CONNECTED and deliver the packet to processor(ObMPConnect)
           4.when complete the authentication operations, the state is changed to CPE_AUTHED
@@ -280,7 +280,7 @@ int ObMysqlProtocolProcessor::read_body(
       context.raw_pkt_.set_content(start + pos, static_cast<uint32_t>(context.payload_len_));
       const int64_t actual_data_len = handle_len;
       void *tmp_ipacket = reinterpret_cast<void *>(&context.raw_pkt_);
-      if (OB_FAIL(process_one_mysql_packet(context, NULL, pool, actual_data_len,
+      if (OB_FAIL(process_one_mysql_packet(context, NULL, pool, actual_data_len, 
                                                     tmp_ipacket, need_decode_more))) {
         LOG_ERROR("fail to process one mysql packet", K(context), K(ret));
       } else {

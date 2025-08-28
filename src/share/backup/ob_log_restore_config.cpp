@@ -46,28 +46,28 @@ int ObLogRestoreSourceLocationConfigParser::update_inner_config_table(common::Ob
       ObString key_string = ObString::make_string(config_items_.at(0).key_.ptr());
       ObString path_string = ObString::make_string(OB_STR_PATH);
       ObString value_string = ObString::make_string(config_items_.at(0).value_.ptr());
-
-      if (1 != config_items_.count()
+      
+      if (1 != config_items_.count() 
           || path_string != key_string
           || config_items_.at(0).value_.empty()) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid archive source", KR(ret), KPC(this));
         LOG_USER_ERROR(OB_INVALID_ARGUMENT, "set log_restore_source");
-      } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id_, &trans,
+      } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id_, &trans, 
                                                                 true /* for update */, tenant_info))) {
         LOG_WARN("failed to load tenant info", KR(ret), K_(tenant_id));
-      } else if (OB_FAIL(restore_source_mgr.add_location_source(tenant_info.get_recovery_until_scn(),
+      } else if (OB_FAIL(restore_source_mgr.add_location_source(tenant_info.get_recovery_until_scn(), 
                                                                 value_string))) {
         LOG_WARN("failed to add log restore source", KR(ret), K(tenant_info), K(value_string), KPC(this));
       }
     }
-  }
-
+  } 
+  
   return ret;
 }
 
 int ObLogRestoreSourceLocationConfigParser::check_before_update_inner_config(
-    obrpc::ObSrvRpcProxy &rpc_proxy,
+    obrpc::ObSrvRpcProxy &rpc_proxy, 
     common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
@@ -89,13 +89,13 @@ int ObLogRestoreSourceLocationConfigParser::check_before_update_inner_config(
       LOG_WARN("backup store desc is invalid");
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "access the log restore source location");
     } else if (GCONF.cluster_id == desc.cluster_id_ && tenant_id_ == desc.tenant_id_) {
-      ret = OB_INVALID_ARGUMENT;
+      ret = OB_INVALID_ARGUMENT; 
       LOG_WARN("set standby itself as log restore source is not allowed");
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "set standby itself as log restore source");
     }
   }
   //TODO (mingqiao) need support access permission check
-  //
+  // 
   return ret;
 }
 
@@ -175,7 +175,7 @@ int ObLogRestoreSourceServiceConfigParser::update_inner_config_table(common::ObI
     }
   } else if (!service_attr_.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid restore source", KPC(this));
+    LOG_WARN("invalid restore source", KPC(this)); 
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "log_restore_source");
   } else if (OB_FAIL(service_attr_.gen_config_items(config_items_))) {
     LOG_WARN("fail to gen restore source service config items", KPC(this));
@@ -185,17 +185,17 @@ int ObLogRestoreSourceServiceConfigParser::update_inner_config_table(common::ObI
       非开源版本 "ip_list=127.0.0.1:1001;127.0.0.1:1002,USER=restore_user@primary_tenant,PASSWORD=xxxxxxx(加密后密码),TENANT_ID=1002,CLUSTER_ID=10001,COMPATIBILITY_MODE=MYSQL,IS_ENCRYPTED=true"
     */
     char value_string[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
-
+    
     if (config_items_.empty() || OB_MAX_RESTORE_SOURCE_SERVICE_CONFIG_LEN != config_items_.count()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid restore source", KPC(this));
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "log_restore_source");
     } else if (OB_FAIL(service_attr_.gen_service_attr_str(value_string, OB_MAX_BACKUP_DEST_LENGTH))) {
       LOG_WARN("failed gen service attr str", K_(tenant_id));
-    } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id_, &trans,
+    } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id_, &trans, 
                                                             true /* for update */, tenant_info))) {
       LOG_WARN("failed to load tenant info", K_(tenant_id));
-    } else if (OB_FAIL(restore_source_mgr.add_service_source(tenant_info.get_recovery_until_scn(),
+    } else if (OB_FAIL(restore_source_mgr.add_service_source(tenant_info.get_recovery_until_scn(), 
                                                             value_string))) {
       LOG_WARN("failed to add log restore source", K(tenant_info), K(value_string), KPC(this));
     }
@@ -203,7 +203,7 @@ int ObLogRestoreSourceServiceConfigParser::update_inner_config_table(common::ObI
   return ret;
 }
 
-int ObLogRestoreSourceServiceConfigParser::check_before_update_inner_config(obrpc::ObSrvRpcProxy &rpc_proxy, common::ObISQLClient &trans)
+int ObLogRestoreSourceServiceConfigParser::check_before_update_inner_config(obrpc::ObSrvRpcProxy &rpc_proxy, common::ObISQLClient &trans) 
 {
   int ret = OB_SUCCESS;
   ObCompatibilityMode compat_mode = ObCompatibilityMode::OCEANBASE_MODE;
@@ -218,7 +218,7 @@ int ObLogRestoreSourceServiceConfigParser::check_before_update_inner_config(obrp
 }
 
 int ObLogRestoreSourceServiceConfigParser::check_before_update_inner_config(
-    const bool for_verify,
+    const bool for_verify, 
     ObCompatibilityMode &compat_mode)
 {
   int ret = OB_SUCCESS;
@@ -228,12 +228,12 @@ int ObLogRestoreSourceServiceConfigParser::check_before_update_inner_config(
 
   SMART_VAR(ObLogRestoreProxyUtil, proxy) {
     if (is_empty_) {
-    } else if (OB_FAIL(construct_restore_sql_proxy_(proxy))) {
+    } else if (OB_FAIL(construct_restore_sql_proxy_(proxy))) { 
       LOG_WARN("failed to construct restore sql proxy", KR(ret));
     } else if (!for_verify && OB_FAIL(service_attr_.check_restore_source_is_self_(source_is_self, tenant_id_))) {
       LOG_WARN("check restore source is self failed");
     } else if (source_is_self) {
-      ret = OB_OP_NOT_ALLOW;
+      ret = OB_OP_NOT_ALLOW; 
       LOG_WARN("set tenant itself as log restore source is not allowed");
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set tenant itself as log restore source is");
     } else if (!for_verify && OB_FAIL(proxy.check_different_cluster_with_same_cluster_id(

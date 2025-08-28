@@ -81,8 +81,8 @@ enum ObLSStatus
 
 /**
  * @description:
- *    In order to let switchover switch the accessmode of all LS correctly,
- *    when creating, deleting, and updating LS status,
+ *    In order to let switchover switch the accessmode of all LS correctly, 
+ *    when creating, deleting, and updating LS status, 
  *    it needs to be mutually exclusive with switchover status of __all_tenant_info
  */
 

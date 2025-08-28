@@ -50,7 +50,7 @@ public:
   int deep_copy(const ObSkipIndexAggResult &src, ObIAllocator &allocator);
   ObDatumRow &get_agg_datum_row() { return agg_row_; }
   const ObDatumRow &get_agg_datum_row() const { return agg_row_; }
-  ObIArray<ObSkipIndexDatumAttr> &get_agg_attrs() { return attr_array_; }
+  ObIArray<ObSkipIndexDatumAttr> &get_agg_attrs() { return attr_array_; } 
   const ObIArray<ObSkipIndexDatumAttr> &get_agg_attrs() const { return attr_array_; }
 
   int64_t get_agg_col_cnt() const { return agg_row_.get_column_count(); }

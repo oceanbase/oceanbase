@@ -28,7 +28,7 @@ int ObExprSTCoordinate::calc_result_typeN(ObExprResType& type,
                                           int64_t param_num,
                                           ObExprTypeCtx& type_ctx) const
 {
-  UNUSED(type_ctx);
+  UNUSED(type_ctx); 
   int ret = OB_SUCCESS;
   ObObjType geo_type = types_stack[0].get_type();
   if (ob_is_null(geo_type)) {
@@ -102,9 +102,9 @@ int ObExprSTCoordinate::eval_common(const ObExpr &expr,
     } else if (ObGeoType::POINT != geo->type()) {
       ret = OB_ERR_UNEXPECTED_GEOMETRY_TYPE;
       LOG_USER_ERROR(OB_ERR_UNEXPECTED_GEOMETRY_TYPE, "POINT",
-                      ObGeoTypeUtil::get_geo_name_by_type(geo->type()), func_name);
+                      ObGeoTypeUtil::get_geo_name_by_type(geo->type()), func_name); 
       LOG_WARN("unexpect geometry type, should be point", K(ret), "geo_type", geo->type());
-    } else if (FALSE_IT(point = dynamic_cast<ObIWkbPoint *>(geo))) {
+    } else if (FALSE_IT(point = dynamic_cast<ObIWkbPoint *>(geo))) { 
     } else if (OB_ISNULL(point)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null ObIWkbPoint pointer", K(ret));
@@ -164,7 +164,7 @@ int ObExprSTCoordinate::eval_common(const ObExpr &expr,
           } else {
             res.set_string(res_wkb);
           }
-        }
+        } 
       }
     }
   }
@@ -213,7 +213,7 @@ int ObExprSTCoordinate::check_latitude(double new_val_radian,
     } else {
       ret = OB_ERR_LATITUDE_OUT_OF_RANGE;
       LOG_USER_ERROR(OB_ERR_LATITUDE_OUT_OF_RANGE, new_val, func_name, min_lat_val, max_lat_val);
-      LOG_WARN("latitude value is out of range", K(ret), K(new_val), K(new_val_radian));
+      LOG_WARN("latitude value is out of range", K(ret), K(new_val), K(new_val_radian)); 
     }
   }
 
@@ -222,7 +222,7 @@ int ObExprSTCoordinate::check_latitude(double new_val_radian,
 
 int ObExprSTX::eval_st_x(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
-  return eval_common(expr, ctx, res, true, false, N_ST_X);
+  return eval_common(expr, ctx, res, true, false, N_ST_X); 
 }
 
 int ObExprSTX::cg_expr(ObExprCGCtx &expr_cg_ctx,
@@ -237,7 +237,7 @@ int ObExprSTX::cg_expr(ObExprCGCtx &expr_cg_ctx,
 
 int ObExprSTY::eval_st_y(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
-  return eval_common(expr, ctx, res, false, false, N_ST_Y);
+  return eval_common(expr, ctx, res, false, false, N_ST_Y); 
 }
 
 int ObExprSTY::cg_expr(ObExprCGCtx &expr_cg_ctx,
@@ -252,7 +252,7 @@ int ObExprSTY::cg_expr(ObExprCGCtx &expr_cg_ctx,
 
 int ObExprSTLatitude::eval_st_latitude(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
-  return eval_common(expr, ctx, res, false, true, N_ST_LATITUDE);
+  return eval_common(expr, ctx, res, false, true, N_ST_LATITUDE); 
 }
 
 int ObExprSTLatitude::cg_expr(ObExprCGCtx &expr_cg_ctx,
@@ -267,7 +267,7 @@ int ObExprSTLatitude::cg_expr(ObExprCGCtx &expr_cg_ctx,
 
 int ObExprSTLongitude::eval_st_longitude(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
-  return eval_common(expr, ctx, res, true, true, N_ST_LONGITUDE);
+  return eval_common(expr, ctx, res, true, true, N_ST_LONGITUDE); 
 }
 
 int ObExprSTLongitude::cg_expr(ObExprCGCtx &expr_cg_ctx,

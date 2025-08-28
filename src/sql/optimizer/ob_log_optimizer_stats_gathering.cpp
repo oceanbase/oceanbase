@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #define USING_LOG_PREFIX SQL_OPT
 #include "ob_log_optimizer_stats_gathering.h"
 #include "sql/optimizer/ob_log_plan.h"

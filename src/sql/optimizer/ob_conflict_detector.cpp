@@ -1688,7 +1688,7 @@ int ObConflictDetectorGenerator::deduce_redundant_join_conds_with_equal_set(cons
       } else if (equal_set.at(i)->is_const_expr()) {
         contain_const = true;
       }
-    }
+    }                                                                          
   }
   if (OB_SUCC(ret) && !contain_const) {
     for (int64_t m = 0; OB_SUCC(ret) && m < equal_set.count() - 1; ++m) {

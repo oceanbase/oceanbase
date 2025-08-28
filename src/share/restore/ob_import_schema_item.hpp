@@ -77,7 +77,7 @@ void ObImportSimpleSchemaItem<MAX_SIZE, ITEM_TYPE>::reset()
 template<int64_t MAX_SIZE, ObIImportItem::ItemType ITEM_TYPE>
 bool ObImportSimpleSchemaItem<MAX_SIZE, ITEM_TYPE>::is_valid() const
 {
-  return common::OB_NAME_CASE_INVALID != mode_
+  return common::OB_NAME_CASE_INVALID != mode_ 
           && !name_.empty()
           && 0 < name_.length()
           && MAX_SIZE >= name_.length();
@@ -104,8 +104,8 @@ int64_t ObImportSimpleSchemaItem<MAX_SIZE, ITEM_TYPE>::get_format_serialize_size
 
 template<int64_t MAX_SIZE, ObIImportItem::ItemType ITEM_TYPE>
 int ObImportSimpleSchemaItem<MAX_SIZE, ITEM_TYPE>::format_serialize(
-    char *buf,
-    const int64_t buf_len,
+    char *buf, 
+    const int64_t buf_len, 
     int64_t &pos) const
 {
   int ret = OB_SUCCESS;
@@ -128,7 +128,7 @@ int ObImportSimpleSchemaItem<MAX_SIZE, ITEM_TYPE>::format_serialize(
       SHARE_LOG(WARN, "fail to format str", K(ret), K(pos), K(buf_len));
     }
   }
-
+  
   return ret;
 }
 
@@ -150,7 +150,7 @@ int ObImportSimpleSchemaItem<MAX_SIZE, ITEM_TYPE>::deep_copy(common::ObIAllocato
       mode_ = other.mode_;
     }
   }
-
+  
   return ret;
 }
 
@@ -171,12 +171,12 @@ int ObImportSimpleSchemaItem<MAX_SIZE, ITEM_TYPE>::assign(const ObImportSimpleSc
 
 
 // ObImportSchemaItemArray
-OB_DEF_SERIALIZE_SIZE(ObImportSchemaItemArray<T>, template <typename T>)
+OB_DEF_SERIALIZE_SIZE(ObImportSchemaItemArray<T>, template <typename T>) 
 {
   return items_.get_serialize_size();
 }
 
-OB_DEF_SERIALIZE(ObImportSchemaItemArray<T>, template <typename T>)
+OB_DEF_SERIALIZE(ObImportSchemaItemArray<T>, template <typename T>) 
 {
   int ret = OB_SUCCESS;
   if ((NULL == buf) || (buf_len <= 0)) {
@@ -188,7 +188,7 @@ OB_DEF_SERIALIZE(ObImportSchemaItemArray<T>, template <typename T>)
   return ret;
 }
 
-OB_DEF_DESERIALIZE(ObImportSchemaItemArray<T>, template <typename T>)
+OB_DEF_DESERIALIZE(ObImportSchemaItemArray<T>, template <typename T>) 
 {
   int ret = OB_SUCCESS;
   common::ObSArray<T> tmp_items;
@@ -218,7 +218,7 @@ int64_t ObImportSchemaItemArray<T>::get_format_serialize_size() const
     size += 0 == idx ? 0 : 1;
     size += item.get_format_serialize_size();
   }
-
+  
   return size;
 }
 
@@ -266,7 +266,7 @@ int ObImportSchemaItemArray<T>::assign(const ObImportSchemaItemArray<T> &other)
 {
   int ret = OB_SUCCESS;
   const common::ObSArray<T> &items = other.get_items();
-
+  
   reset();
   ARRAY_FOREACH(items, idx) {
     const T &item = items.at(idx);

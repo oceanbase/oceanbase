@@ -333,7 +333,7 @@ public:
   OB_INLINE int64_t get_column_count() const { return count_; }
   OB_INLINE int64_t get_scan_idx() const { return scan_index_; }
   OB_INLINE bool is_valid() const { return nullptr != storage_datums_ && get_capacity() > 0; }
-  OB_INLINE bool check_has_nop_col() const
+  OB_INLINE bool check_has_nop_col() const 
   {
     for (int64_t i = 0; i < get_column_count(); i++) {
       if (storage_datums_[i].is_nop()) {

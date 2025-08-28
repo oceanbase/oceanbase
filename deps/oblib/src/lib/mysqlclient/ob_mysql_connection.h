@@ -52,7 +52,7 @@ public:
 public:
   ObMySQLConnection();
   ~ObMySQLConnection();
-  int connect(const char *user, const char *pass, const char *db,
+  int connect(const char *user, const char *pass, const char *db, 
               const char *domin_name, int32_t port, int64_t timeout, bool read_write_no_timeout = false, int64_t sql_req_level = 0);
   int connect(const char *user, const char *pass, const char *db, const bool use_ssl, bool read_write_no_timeout = false, int64_t sql_req_level = 0);
   void close();

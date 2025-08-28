@@ -105,7 +105,7 @@ int ObTenantDDLService::check_inner_stat()
     ret = OB_NOT_INIT;
     LOG_WARN("ObTenantDDLService is not inited", KR(ret), K(inited_));
   } else if (OB_ISNULL(ddl_service_) || OB_ISNULL(rpc_proxy_) || OB_ISNULL(common_rpc_)
-      || OB_ISNULL(sql_proxy_) || OB_ISNULL(schema_service_) || OB_ISNULL(lst_operator_)
+      || OB_ISNULL(sql_proxy_) || OB_ISNULL(schema_service_) || OB_ISNULL(lst_operator_) 
       || OB_ISNULL(ddl_trans_controller_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null pointer", KR(ret), KP(ddl_service_), KP(rpc_proxy_), KP(sql_proxy_),
@@ -829,7 +829,7 @@ int ObTenantDDLService::init_schema_status(
 }
 
 int ObTenantDDLService::create_tenant(const ObCreateTenantArg &arg,
-    ObCreateTenantSchemaResult &result)
+    ObCreateTenantSchemaResult &result) 
 {
   LOG_INFO("begin to create tenant schema", K(arg));
   int ret = OB_SUCCESS;
@@ -1248,12 +1248,12 @@ int ObTenantDDLService::get_root_key_from_primary(const obrpc::ObCreateTenantArg
     obrpc::ObRootKeyArg root_key_arg;
     obrpc::ObRootKeyResult result;
     if (OB_FAIL(value.assign(arg.log_restore_source_))) {
-      LOG_WARN("fail to assign value", KR(ret), K(log_restore_source));
+      LOG_WARN("fail to assign value", KR(ret), K(log_restore_source)); 
     } else if (OB_FAIL(log_restore_source.get_primary_server_addr(
       value, primary_tenant_id, cluster_id, addr_list))) {
-      LOG_WARN("failed to get primary server addr", KR(ret), K(value));
+      LOG_WARN("failed to get primary server addr", KR(ret), K(value)); 
     } else if (OB_FAIL(root_key_arg.init_for_get(primary_tenant_id))) {
-      LOG_WARN("failed to init for get", KR(ret), K(primary_tenant_id));
+      LOG_WARN("failed to init for get", KR(ret), K(primary_tenant_id)); 
     }
     //如果主备租户在同一个单节点的集群，addr里面就会只有一台RS的节点，
     //skip_call_rs就不能为true。
@@ -1476,7 +1476,7 @@ int ObTenantDDLService::get_tenant_schema_(
     const obrpc::ObParallelCreateNormalTenantArg &arg,
     ObTenantSchema &tenant_schema)
 {
-  int ret = OB_SUCCESS;
+  int ret = OB_SUCCESS; 
   ObSchemaGetterGuard schema_guard;
   const ObTenantSchema *tmp_tenant_schema = nullptr;
   const uint64_t tenant_id = arg.tenant_id_;
@@ -1498,7 +1498,7 @@ int ObTenantDDLService::get_tenant_schema_(
     LOG_WARN("tenant status is not creating", KR(ret), K(tenant_schema));
   } else if (OB_FAIL(set_tenant_schema_charset_and_collation(tenant_schema, arg.create_tenant_arg_))) {
     // charset and collation are not written in __all_tenant
-    // create database will use the charset
+    // create database will use the charset 
     // so if user set charset in create_tenant sql, we should assign it to tenant_schema
     LOG_WARN("failed to set tenant charset and collation", KR(ret));
   }
@@ -1584,7 +1584,7 @@ int ObTenantDDLService::init_tenant_env_after_schema_(
           user_tenant_id, create_tenant_arg.tenant_schema_.get_tenant_name(), tenant_role,
           create_tenant_arg.source_tenant_id_, trans))) {
     LOG_WARN("failed to insert restore or clone tenant job", KR(ret), K(create_tenant_arg));
-  } else if (create_tenant_arg.is_creating_standby_ &&
+  } else if (create_tenant_arg.is_creating_standby_ && 
       OB_FAIL(set_log_restore_source_(user_tenant_id, create_tenant_arg.log_restore_source_, trans))) {
     LOG_WARN("failed to set_log_restore_source", KR(ret), K(user_tenant_id), K(create_tenant_arg));
   } else if (is_meta_tenant(tenant_id)) {
@@ -1685,7 +1685,7 @@ int ObTenantDDLService::create_normal_tenant(obrpc::ObParallelCreateNormalTenant
   common::ObTraceIdGuard trace_id_guard(new_trace_id);
   TIMEGUARD_INIT(create_normal_tenant, 10_s);
   FLOG_INFO("[CREATE_TENANT] STEP 2. start create normal tenant", K(tenant_id));
-  ObArray<uint64_t> table_ids_to_construct; // empty means construct all
+  ObArray<uint64_t> table_ids_to_construct; // empty means construct all 
   ObArenaAllocator arena_allocator("InnerTableSchem", OB_MALLOC_MIDDLE_BLOCK_SIZE);
   ObSArray<ObTableSchema> tables;
   ObTenantSchema tenant_schema;
@@ -1735,7 +1735,7 @@ int ObTenantDDLService::create_normal_tenant(obrpc::ObParallelCreateNormalTenant
     DEBUG_SYNC(AFTER_CREATE_USER_NORMAL_TENANT);
   } else if (is_meta_tenant(tenant_id)) {
     DEBUG_SYNC(AFTER_CREATE_META_NORMAL_TENANT);
-  }
+  } 
   if (OB_FAIL(ret)) {
   } else if (is_user_tenant(tenant_id) && OB_FAIL(ERRSIM_CREATE_USER_NORMAL_TENANT_ERROR)) {
     LOG_WARN("ERRSIM_CREATE_USER_NORMAL_TENANT_ERROR hit", KR(ret));
@@ -1765,7 +1765,7 @@ int ObTenantDDLService::broadcast_sys_table_schemas(const uint64_t tenant_id)
     ObAddr leader;
     ObUnitTableOperator unit_operator;
     if (OB_FAIL(get_ls_member_list_for_creating_tenant_(tenant_id, ObLSID::SYS_LS_ID, leader, addrs))) {
-      // we just need leader, so addrs is not used, it will be reset later
+      // we just need leader, so addrs is not used, it will be reset later 
       LOG_WARN("failed to get ls member list for creating tenant", KR(ret), K(tenant_id));
     } else if (OB_FAIL(unit_operator.init(*sql_proxy_))) {
       LOG_WARN("failed to init unit operator", KR(ret));
@@ -1901,7 +1901,7 @@ int ObTenantDDLService::batch_create_system_table(
       LOG_WARN("failed to create sys table schemas", KR(ret), K(tenant_id));
     }
   }
-  FLOG_INFO("[UPGRADE] finish batch create system tables, not commited", KR(ret), K(tenant_id),
+  FLOG_INFO("[UPGRADE] finish batch create system tables, not commited", KR(ret), K(tenant_id), 
       K(table_ids), "cost", ObTimeUtility::current_time() - start_ts);
   return ret;
 }
@@ -2147,7 +2147,7 @@ int ObTenantDDLService::init_tenant_schema(
         LOG_WARN("fail to replace sys variable", KR(ret), K(sys_variable));
       } else if (CLICK_FAIL(ddl_operator.init_tenant_schemas(tenant_schema, sys_variable, trans))) {
         LOG_WARN("init tenant env failed", KR(ret), K(tenant_schema), K(sys_variable));
-      } else if (GCONF._enable_parallel_tenant_creation &&
+      } else if (GCONF._enable_parallel_tenant_creation && 
           CLICK_FAIL(ObLoadInnerTableSchemaExecutor::load_core_schema_version(tenant_id, trans))) {
         LOG_WARN("failed to load core schema version", KR(ret), K(tenant_id));
       }
@@ -2315,7 +2315,7 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
         LOG_WARN("fail to add config", KR(ret), K(config_name_enable_mlog_auto_maintenance), K(config_value_enable_mlog_auto_maintenance));
       } else if (OB_FAIL(tenant_init_config.add_config(config_name_enable_ps_paramterize, config_value_enable_ps_paramterize))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name_enable_ps_paramterize), K(config_value_enable_ps_paramterize));
-      }
+      } 
     }
   }
   // ---- Add new tenant init config above this line -----
@@ -5904,7 +5904,7 @@ int ObTenantDDLService::create_tenant_end(const uint64_t tenant_id)
       int64_t new_schema_version = OB_INVALID_VERSION;
       ObSchemaService *schema_service_impl = schema_service_->get_schema_service();
       // Ensure that the schema_version monotonically increases among tenants' cross-tenant transactions
-      //
+      // 
       if (OB_ISNULL(schema_service_impl)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("schema_service_impl is null", K(ret));
@@ -6011,7 +6011,7 @@ int ObTenantDDLService::refresh_creating_tenant_schema_(const ObTenantSchema &te
 
 int ObTenantDDLService::init_tenant_global_stat_(
     const uint64_t tenant_id,
-    const common::ObIArray<common::ObConfigPairs> &init_configs,
+    const common::ObIArray<common::ObConfigPairs> &init_configs, 
     ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;

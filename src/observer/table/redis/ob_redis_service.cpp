@@ -150,8 +150,8 @@ ObTableAPITransCb *ObTableRedisCbFunctor::new_callback()
 }
 
 ///////////////////////////////////////////////////////////////////////////////////
-int ObRedisService::init_group_ctx(ObTableGroupCtx &group_ctx,
-                                   const ObRedisSingleCtx &redis_ctx,
+int ObRedisService::init_group_ctx(ObTableGroupCtx &group_ctx, 
+                                   const ObRedisSingleCtx &redis_ctx, 
                                    ObRedisOp &redis_op,
                                    ObRedisCmdKey *key) {
   int ret = OB_SUCCESS;
@@ -178,7 +178,7 @@ int ObRedisService::init_group_ctx(ObTableGroupCtx &group_ctx,
     functor = OB_NEWx(ObTableRedisCbFunctor, &redis_op.get_allocator());
     if (OB_FAIL(functor->init(redis_op.req_, &redis_op.response_))) {
       LOG_WARN("fail to init create batch execute callback functor", K(ret));
-    }
+    } 
     group_ctx.create_cb_functor_ = functor;
   }
 
@@ -283,7 +283,7 @@ int ObRedisService::execute_cmd_single(ObRedisSingleCtx &ctx)
       ret = COVER_SUCC(tmp_ret);
     }
   }
-
+  
   return ret;
 }
 
@@ -429,7 +429,7 @@ ObTableProccessType ObRedisService::get_stat_process_type(const RedisCommandType
   int ret = OB_SUCCESS;
   ObTableProccessType type = ObTableProccessType::TABLE_API_PROCESS_TYPE_INVALID;
   int iret = static_cast<int>(cmd_type + observer::ObTableProccessType::TABLE_API_REDIS_TYPE_OFFSET);
-  if (iret <= observer::ObTableProccessType::TABLE_API_REDIS_TYPE_OFFSET
+  if (iret <= observer::ObTableProccessType::TABLE_API_REDIS_TYPE_OFFSET 
       || iret >= observer::ObTableProccessType::TABLE_API_REDIS_TYPE_MAX) {
     LOG_WARN("invalid redis type", K(cmd_type), K(iret), "max type", TABLE_API_REDIS_TYPE_MAX);
   } else {

@@ -110,7 +110,7 @@ int ObPxAdmission::enter_query_admission(ObSQLSessionInfo &session,
 {
   int ret = OB_SUCCESS;
   // 对于只有dop=1 的场景跳过检查，因为这种场景走 RPC 线程，不消耗 PX 线程
-  //
+  // 
   if (stmt::T_EXPLAIN != stmt_type
       && plan.is_use_px()
       && 1 != plan.get_px_dop()
@@ -124,7 +124,7 @@ int ObPxAdmission::enter_query_admission(ObSQLSessionInfo &session,
       LOG_WARN("create hash map failed", K(ret));
     }
     if (OB_SUCC(ret)) {
-      for (auto it = req_px_worker_map.begin();
+      for (auto it = req_px_worker_map.begin(); 
           OB_SUCC(ret) && it != req_px_worker_map.end(); ++it) {
         if (OB_FAIL(acl_px_worker_map.set_refactored(it->first, it->second))){
           LOG_WARN("set refactored failed", K(ret), K(it->first), K(it->second));

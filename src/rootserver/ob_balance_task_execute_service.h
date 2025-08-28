@@ -49,7 +49,7 @@ namespace rootserver
  */
 class ObBalanceTaskExecuteService : public ObTenantThreadHelper,
                            public logservice::ObICheckpointSubHandler,
-                           public logservice::ObIReplaySubHandler
+                           public logservice::ObIReplaySubHandler 
 {
 public:
   ObBalanceTaskExecuteService():inited_(false), tenant_id_(OB_INVALID_TENANT_ID),

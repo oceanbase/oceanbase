@@ -31,7 +31,7 @@ struct ObMicroBlockData;
 class ObMicroBufferWriter;
 class ObMicroBlockHashIndex
 {
-public:
+public:  
   static const uint8_t NO_ENTRY = 255;
   static const uint8_t COLLISION = 254;
   static const uint8_t MAX_OFFSET_SUPPORTED = 253;
@@ -67,11 +67,11 @@ public:
   {
     reset();
   }
-  OB_INLINE static uint32_t get_serialize_size(uint32_t num_bucket)
+  OB_INLINE static uint32_t get_serialize_size(uint32_t num_bucket) 
   {
     return sizeof(uint8_t) * num_bucket + get_fixed_header_size();
   }
-  OB_INLINE static uint32_t get_fixed_header_size()
+  OB_INLINE static uint32_t get_fixed_header_size() 
   {
     // reserved byte(1 byte) + num_buckets(2 bytes).
     return sizeof(uint16_t) + sizeof(uint8_t);
@@ -147,7 +147,7 @@ private:
   uint32_t row_index_;
   bool last_key_with_L_flag_;
   const ObDataStoreDesc *data_store_desc_;
-  bool is_inited_;
+  bool is_inited_; 
   uint8_t buckets_[ObMicroBlockHashIndex::MAX_BUCKET_NUMBER];
   uint8_t row_indexes_[ObMicroBlockHashIndex::MAX_OFFSET_SUPPORTED];
   uint32_t hash_values_[ObMicroBlockHashIndex::MAX_OFFSET_SUPPORTED];

@@ -37,9 +37,9 @@ ObExprArrayConcat::ObExprArrayConcat(ObIAllocator &alloc)
 ObExprArrayConcat::ObExprArrayConcat(ObIAllocator &alloc,
                                      ObExprOperatorType type,
                                      const char *name,
-                                     int32_t param_num,
+                                     int32_t param_num, 
                                      int32_t dimension)
-    : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension)
+    : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension) 
 {
 }
 
@@ -313,7 +313,7 @@ int ObExprArrayConcat::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_ex
   UNUSED(raw_expr);
   rt_expr.eval_func_ = eval_array_concat;
   rt_expr.eval_batch_func_ = eval_array_concat_batch;
-  rt_expr.eval_vector_func_ = eval_array_concat_vector;
+  rt_expr.eval_vector_func_ = eval_array_concat_vector; 
   return OB_SUCCESS;
 }
 

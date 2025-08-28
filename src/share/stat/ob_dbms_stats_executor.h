@@ -61,7 +61,7 @@ struct GatherHelper
   uint64_t sepcify_scn_;
 
   ObSEArray<PartInfo, 4> lasted_collect_parts_; // need recollect stats if timeout
-
+  
   TO_STRING_KV(K(is_split_gather_),
                K(maximum_gather_part_cnt_),
                K(maximum_gather_col_cnt_),
@@ -78,13 +78,13 @@ struct GatherHelper
 };
 
 struct GatherPartInfos {
-  explicit GatherPartInfos() :
-    sub_part_infos_(),
+  explicit GatherPartInfos() : 
+    sub_part_infos_(),  
     part_infos_(),
-    approx_gather_(false),
-    gather_global_(false)
+    approx_gather_(false), 
+    gather_global_(false) 
   {}
-
+  
   ObSEArray<PartInfo, 4> sub_part_infos_;
   ObSEArray<PartInfo, 4> part_infos_;
 
@@ -104,7 +104,7 @@ struct GatherPartInfos {
 struct TaskColumnParam {
   TaskColumnParam() : column_params_(), start(0), end(0)
   {}
-
+  
   // [start, end)
   const ObIArray<oceanbase::common::ObColumnStatParam> *column_params_;
   int32_t start;
@@ -231,7 +231,7 @@ private:
                                            const ObIArray<int64_t> *async_partition_ids);
 
   static int determine_auto_sample_table(ObExecContext &ctx, ObTableStatParam &param);
-
+  
   static int try_use_prefix_index_refine_min_max(ObExecContext &ctx, ObTableStatParam &param);
 
   static int check_use_single_partition_gather(const PartitionIdBlockMap &partition_id_block_map,
@@ -242,7 +242,7 @@ private:
                                         const uint64_t tenant_id,
                                         const uint64_t table_id,
                                         int64_t &sample_count);
-
+                                        
   static int collect_executed_part_ids(const ObTableStatParam &stat_param, ObIArray<int64_t> &part_ids);
   static int update_dml_modified_info(sqlclient::ObISQLConnection *conn, const ObTableStatParam &param);
 
@@ -253,7 +253,7 @@ private:
                                     bool need_collect_global,
                                     const hash::ObHashMap<int64_t, PartInfo*> &part_id_to_approx_part_map,
                                     GatherPartInfos &gather_info);
-
+                                    
   static int construct_part_to_subpart_map(const ObTableStatParam &stat_param,
                                            hash::ObHashMap<int64_t, PartInfo*> &part_id_to_approx_part_map,
                                            hash::ObHashMap<int64_t, ObArray<PartInfo*>> &part_id_to_subpart_map);

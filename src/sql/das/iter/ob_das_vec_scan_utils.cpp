@@ -58,22 +58,22 @@ int ObDasVecScanUtils::get_distance_expr_type(ObExpr &expr,
   int ret = OB_SUCCESS;
 
   switch (expr.type_) {
-    case T_FUN_SYS_L2_DISTANCE:
+    case T_FUN_SYS_L2_DISTANCE: 
       dis_type = ObExprVectorDistance::ObVecDisType::EUCLIDEAN;
       break;
     case T_FUN_SYS_L2_SQUARED:
       dis_type = ObExprVectorDistance::ObVecDisType::EUCLIDEAN_SQUARED;
       break;
-    case T_FUN_SYS_INNER_PRODUCT:
+    case T_FUN_SYS_INNER_PRODUCT: 
       dis_type = ObExprVectorDistance::ObVecDisType::DOT;
       break;
-    case T_FUN_SYS_NEGATIVE_INNER_PRODUCT:
+    case T_FUN_SYS_NEGATIVE_INNER_PRODUCT: 
       dis_type = ObExprVectorDistance::ObVecDisType::DOT;
       break;
-    case T_FUN_SYS_COSINE_DISTANCE:
+    case T_FUN_SYS_COSINE_DISTANCE: 
       dis_type = ObExprVectorDistance::ObVecDisType::COSINE;
       break;
-    default:
+    default: 
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not support vector sort expr", K(ret), K(expr.type_));
       break;
@@ -378,7 +378,7 @@ int ObDasVecScanUtils::get_rowkey(ObIAllocator &allocator, const ObDASScanCtDef 
   } else if (OB_UNLIKELY(rowkey_cnt <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid rowkey cnt", K(ret));
-  } else if (OB_ISNULL(buf = allocator.alloc(sizeof(ObObj) * rowkey_cnt))) {
+  } else if (OB_ISNULL(buf = allocator.alloc(sizeof(ObObj) * rowkey_cnt))) { 
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret), K(rowkey_cnt));
   } else if (OB_FALSE_IT(obj_ptr = new (buf) ObObj[rowkey_cnt])) {
@@ -409,11 +409,11 @@ int ObDasVecScanUtils::get_rowkey(ObIAllocator &allocator, const ObDASScanCtDef 
 }
 
 int ObDasVecScanUtils::get_rowkey_pre_filter(
-    ObIAllocator &allocator,
-    bool is_vectorized,
-    ObDASIter *iter,
-    const ObDASScanCtDef *ctdef,
-    ObDASScanRtDef *rtdef,
+    ObIAllocator &allocator, 
+    bool is_vectorized, 
+    ObDASIter *iter, 
+    const ObDASScanCtDef *ctdef, 
+    ObDASScanRtDef *rtdef, 
     ObIArray<ObRowkey *> &rowkeys)
 {
   int ret = OB_SUCCESS;

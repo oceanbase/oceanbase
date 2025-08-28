@@ -75,7 +75,7 @@ public:
   OB_INLINE table::ObTableTransParam &get_trans_param() const { return trans_param_; }
   OB_INLINE const transaction::ObTxReadSnapshot &get_tx_snapshot() const { return trans_param_.tx_snapshot_; }
   OB_INLINE int64_t get_timeout_ts() const { return timeout_ts_; }
-  OB_INLINE void set_timeout_ts(int64_t timeout_ts) { timeout_ts_ = timeout_ts; }
+  OB_INLINE void set_timeout_ts(int64_t timeout_ts) { timeout_ts_ = timeout_ts; } 
   OB_INLINE const common::ObString &get_table_name() const { return table_name_; }
   OB_INLINE void set_table_name(const common::ObString &table_name) { table_name_ = table_name; }
   OB_INLINE uint64_t get_table_id() const { return table_id_; }
@@ -87,10 +87,10 @@ public:
   OB_INLINE void set_ls_id(const share::ObLSID &ls_id) { ls_id_ = ls_id; }
   OB_INLINE const share::schema::ObTableSchema *get_table_schema() const { return table_schema_; }
   OB_INLINE void set_table_schema(const share::schema::ObTableSchema *table_schema) { table_schema_ = table_schema; }
-  // if table_schema is set and simple_schema is not set, return table_schema_ directly to avoid init simple_schema_ repeatedly.
-  OB_INLINE const share::schema::ObSimpleTableSchemaV2 *get_simple_schema() const
-  {
-    return simple_schema_ == nullptr ? (table_schema_ != nullptr ?  table_schema_ : nullptr) : simple_schema_;
+  // if table_schema is set and simple_schema is not set, return table_schema_ directly to avoid init simple_schema_ repeatedly. 
+  OB_INLINE const share::schema::ObSimpleTableSchemaV2 *get_simple_schema() const 
+  { 
+    return simple_schema_ == nullptr ? (table_schema_ != nullptr ?  table_schema_ : nullptr) : simple_schema_; 
   }
   OB_INLINE void set_simple_schema(const share::schema::ObSimpleTableSchemaV2 *simple_schema) { simple_schema_ = simple_schema; }
   OB_INLINE void set_async_commit(bool is_async) { is_async_commit_ = is_async; }

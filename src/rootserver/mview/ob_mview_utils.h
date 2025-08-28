@@ -30,7 +30,7 @@ public:
                                   sql::ObSQLSessionInfo *&session);
   static void release_inner_session(sql::ObFreeSessionCtx &free_session_ctx,
                                     sql::ObSQLSessionInfo *&session);
-  static int submit_build_mlog_task(const uint64_t tenant_id,
+  static int submit_build_mlog_task(const uint64_t tenant_id, 
                                     ObIArray<ObString> &mlog_columns,
                                     share::schema::ObSchemaGetterGuard &schema_guard,
                                     const share::schema::ObTableSchema *base_table_schema,

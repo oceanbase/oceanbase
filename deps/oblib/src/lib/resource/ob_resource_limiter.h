@@ -34,7 +34,7 @@ public:
   int64_t get_min() const { return min_; }
   void set_max(int64_t max) { max_ = max; }
   void set_min(int64_t min)
-  {
+  { 
     min_ = min;
     recalculate();
   }
@@ -70,7 +70,7 @@ struct ObShareTenantLimiter
   ObShareTenantLimiter *next_;
 };
 
-} // end of namespace lib
+} // end of namespace lib 
 } // end of namespace oceanbase
 
 #endif

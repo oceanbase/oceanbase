@@ -97,11 +97,11 @@ public:
                                     const bool revoke_all_flag,
                                     const share::ObRawObjPrivArray &obj_priv_array,
                                     const bool is_grant,
-                                    common::ObSqlString &sql_string);
+                                    common::ObSqlString &sql_string);   
   static int gen_routine_priv_sql(const obrpc::ObAccountArg &account,
                                   const share::schema::ObNeedPriv &need_priv,
                                   const bool is_grant,
-                                  common::ObSqlString &sql_string);
+                                  common::ObSqlString &sql_string);                           
   static int gen_audit_stmt_sql(const common::ObString &username,
                                 const share::schema::ObSAuditModifyType modify_type,
                                 const share::schema::ObSAuditSchema &audit_schema,

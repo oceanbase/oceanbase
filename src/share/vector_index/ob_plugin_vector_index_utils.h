@@ -68,11 +68,11 @@ public:
   static ObVectorIndexRecordType index_type_to_record_type(schema::ObIndexType type);
 
   static ObAdapterCreateType index_type_to_create_type(schema::ObIndexType type);
-
+  
   static int get_vector_index_prefix(const ObTableSchema &index_schema, ObString &prefix);
   static int split_snapshot_prefix(const ObString &src, const ObString &item, ObString &dst);
-  static int get_split_snapshot_prefix(const ObVectorIndexAlgorithmType index_type,
-                                       const ObString &src,
+  static int get_split_snapshot_prefix(const ObVectorIndexAlgorithmType index_type, 
+                                       const ObString &src, 
                                        ObString &dst);
   static int set_vsag_logger() {
     return obvectorutil::init_vasg_logger(&ObVsagLoggerSingleton::getInstance());
@@ -86,21 +86,21 @@ public:
   static int add_key_ranges(uint64_t table_id, ObRowkey& rowkey, storage::ObTableScanParam &scan_param);
   static int iter_table_rescan(storage::ObTableScanParam &scan_param, common::ObNewRowIterator *iter);
 
-  static int read_object_from_vid_rowkey_table_iter(ObObj *input_obj,
-                                                    uint64_t table_id,
-                                                    storage::ObTableScanParam &scan_param,
+  static int read_object_from_vid_rowkey_table_iter(ObObj *input_obj, 
+                                                    uint64_t table_id, 
+                                                    storage::ObTableScanParam &scan_param, 
                                                     common::ObNewRowIterator *iter,
                                                     schema::ObIndexType type,
-                                                    ObIAllocator &allocator,
+                                                    ObIAllocator &allocator, 
                                                     ObObj *&output_obj,
                                                     int32_t data_table_rowkey_count);
-  static int read_object_from_data_table_iter(ObObj *&input_obj,
+  static int read_object_from_data_table_iter(ObObj *&input_obj, 
                                               int32_t data_table_rowkey_count,
-                                              uint64_t table_id,
-                                              storage::ObTableScanParam &scan_param,
+                                              uint64_t table_id, 
+                                              storage::ObTableScanParam &scan_param, 
                                               common::ObNewRowIterator *iter,
                                               schema::ObIndexType type,
-                                              ObIAllocator &allocator,
+                                              ObIAllocator &allocator, 
                                               ObObj &output_obj,
                                               int64_t extra_info_count,
                                               ObVecExtraInfoObj *output_extra_objs,

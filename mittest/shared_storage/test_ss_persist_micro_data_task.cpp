@@ -20,12 +20,12 @@
 #include "test_ss_common_util.h"
 #include "mittest/shared_storage/clean_residual_data.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace storage
+namespace storage 
 {
 using namespace oceanbase::common;
-class TestSSPersistMicroDataTask : public ::testing::Test
+class TestSSPersistMicroDataTask : public ::testing::Test 
 {
 public:
   TestSSPersistMicroDataTask() {}
@@ -81,7 +81,7 @@ TEST_F(TestSSPersistMicroDataTask, test_persist_micro_task)
   micro_cache->task_runner_.is_stopped_ = true;
   ObSSPersistMicroDataTask &persist_task = micro_cache->task_runner_.persist_task_;
   usleep(persist_task.interval_us_);
-
+  
   ObSSMemDataManager *mem_data_mgr = &(micro_cache->mem_data_mgr_);
   ASSERT_NE(nullptr, mem_data_mgr);
   ObSSMicroMetaManager *micro_meta_mgr = &(micro_cache->micro_meta_mgr_);
@@ -151,7 +151,7 @@ TEST_F(TestSSPersistMicroDataTask, test_persist_micro_task)
       ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
       micro_cache->add_micro_block_cache(micro_key, data_buf, micro_size,
                                          ObSSMicroCacheAccessType::COMMON_IO_TYPE); // fail to add it
-      ASSERT_EQ(cur_mem_micro_cnt - 1, mem_data_mgr->fg_mem_block_->micro_count_);
+      ASSERT_EQ(cur_mem_micro_cnt - 1, mem_data_mgr->fg_mem_block_->micro_count_); 
 
       ObSSMemBlockHandle mem_blk_handle;
       uint32_t micro_crc = 0;

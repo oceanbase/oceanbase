@@ -29,20 +29,20 @@ class ObSensitiveString
 public:
   ObSensitiveString(const char *str) : str_(str) {}
   ObSensitiveString(const ObString &str) : str_(str) {}
-  int64_t to_string(char *buf, const int64_t len) const
+  int64_t to_string(char *buf, const int64_t len) const 
   {
     ObArenaAllocator allocator(ObModIds::OB_LOG);
     int ret = OB_SUCCESS;
     int64_t pos = 0;
     char *ptr = nullptr;
     if (OB_LIKELY(nullptr != buf) && OB_LIKELY(len > 0)) {
-      // Print "NULL" when str_ is nullptr, and "" when it's empty.
+      // Print "NULL" when str_ is nullptr, and "" when it's empty. 
       // Note that ob_dup_cstring will return nullptr even if an empty string is passed,
-      // making it impossible to distinguish between an empty string and a null pointer.
+      // making it impossible to distinguish between an empty string and a null pointer. 
       if (str_.ptr() == nullptr) {
         (void)logdata_printf(buf, len, pos, "NULL");
       } else if (str_.length() == 0) {
-        (void)logdata_printf(buf, len, pos, "");
+        (void)logdata_printf(buf, len, pos, ""); 
       } else if (OB_FAIL(ob_dup_cstring(allocator, str_, ptr))) {
         LIB_LOG(ERROR, "ob_dup_cstring failed", K(ret));
       } else {

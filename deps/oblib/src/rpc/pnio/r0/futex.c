@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #include <linux/futex.h>
 #ifdef futex
 #define rk_futex(...) futex(__VA_ARGS__)

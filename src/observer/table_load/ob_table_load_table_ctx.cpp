@@ -77,7 +77,7 @@ int ObTableLoadTableCtx::init(const ObTableLoadParam &param,
                               const ObTableLoadDDLParam &ddl_param,
                               sql::ObSQLSessionInfo *session_info,
                               const common::ObString &des_exec_ctx_serialized_str,
-                              ObExecContext *exec_ctx)
+                              ObExecContext *exec_ctx) 
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -86,7 +86,7 @@ int ObTableLoadTableCtx::init(const ObTableLoadParam &param,
   } else if (OB_UNLIKELY(!param.is_valid() || !ddl_param.is_valid() || nullptr == session_info)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(param), K(ddl_param));
-  } else if ((des_exec_ctx_serialized_str.empty() && exec_ctx == nullptr)
+  } else if ((des_exec_ctx_serialized_str.empty() && exec_ctx == nullptr) 
       || (!des_exec_ctx_serialized_str.empty() && exec_ctx != nullptr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(des_exec_ctx_serialized_str.empty()), KP(exec_ctx));

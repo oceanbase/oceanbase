@@ -400,7 +400,7 @@ int ObRestoreScheduler::restore_pre(const ObPhysicalRestoreJob &job_info)
 #ifdef ERRSIM
   ROOTSERVICE_EVENT_ADD("physical_restore", "restore_pre", "tenant_id", job_info.get_tenant_id());
   DEBUG_SYNC(BEFORE_RESTORE_PRE);
-#endif
+#endif  
   int ret = OB_SUCCESS;
   bool is_sys_ready = true;
   if (!inited_) {
@@ -966,7 +966,7 @@ PhysicalRestoreStatus ObRestoreScheduler::get_next_status(
           next_status = PHYSICAL_RESTORE_WAIT_QUICK_RESTORE_FINISH;
         } else {
           next_status = PHYSICAL_RESTORE_WAIT_LS;
-        }
+        }        
         break;
       }
       case PHYSICAL_RESTORE_WAIT_QUICK_RESTORE_FINISH : {
@@ -1365,7 +1365,7 @@ int ObRestoreScheduler::restore_wait_quick_restore_finish(const share::ObPhysica
       LOG_INFO("[RESTORE]restore wait quick restore finish failed", K(ret));
       if (OB_SUCCESS != (tmp_ret = try_update_job_status(*sql_proxy_, ret, job_info))) {
         LOG_WARN("fail to update job status", KR(ret), K(job_info));
-      }
+      } 
     } else if (OB_FAIL(stat_restore_progress_(*sql_proxy_, job_info, false/*is_restore_stat_start*/, false/*is_restore_finish*/))) {
       LOG_WARN("fail to stat restore progress", K(ret));
     } else if (OB_FAIL(try_update_job_status(*sql_proxy_, ret, job_info))) {
@@ -1484,7 +1484,7 @@ int ObRestoreScheduler::check_all_ls_restore_to_consistent_scn_finish_(
 }
 
 int ObRestoreScheduler::check_all_ls_quick_restore_finish_(
-    const uint64_t tenant_id,
+    const uint64_t tenant_id, 
     const ObRestoreType &restore_type,
     TenantRestoreStatus &tenant_restore_status)
 {

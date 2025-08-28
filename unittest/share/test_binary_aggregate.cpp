@@ -178,12 +178,12 @@ TEST_F(TestBinaryAgg, serialize_xml_bin)
       ObXmlBin bin(ctx);
       ObIMulModeBase* tree = tree_array.at(i);
       ASSERT_EQ(bin.parse_tree(tree), OB_SUCCESS);
-
+      
       ASSERT_EQ(bin_agg.append_key_and_value(&bin), OB_SUCCESS);
     }
 
     ASSERT_EQ(bin_agg.serialize(), OB_SUCCESS);
-
+    
     ObIMulModeBase *base;
     ObStringBuffer *buffer = bin_agg.get_buffer();
     ASSERT_EQ(ObMulModeFactory::get_xml_base(ctx, buffer->string(), ObNodeMemType::BINARY_TYPE, ObNodeMemType::TREE_TYPE, base), OB_SUCCESS);
@@ -320,12 +320,12 @@ TEST_F(TestBinaryAgg, mulit_bin)
       ObIMulModeBase* tree = tree_array.at(i);
       cout << "Add XML: " << i << endl;
       ASSERT_EQ(bin.parse_tree(tree), OB_SUCCESS);
-
+      
       ASSERT_EQ(bin_agg.append_key_and_value(&bin), OB_SUCCESS);
     }
 
     ASSERT_EQ(bin_agg.serialize(), OB_SUCCESS);
-
+    
     ObIMulModeBase *base;
     ObStringBuffer *buffer = bin_agg.get_buffer();
 
@@ -352,10 +352,10 @@ TEST_F(TestBinaryAgg, mulit_bin)
     }
 
     ASSERT_EQ(bin_agg.serialize(), OB_SUCCESS);
-
+    
     ObIMulModeBase *base;
     ObStringBuffer *buffer = bin_agg.get_buffer();
-
+    
     ASSERT_EQ(ObMulModeFactory::get_xml_base(ctx, buffer->string(), ObNodeMemType::BINARY_TYPE, ObNodeMemType::TREE_TYPE, base), OB_SUCCESS);
 
     ObStringBuffer str_buf(ctx->allocator_);
@@ -380,10 +380,10 @@ TEST_F(TestBinaryAgg, mulit_bin)
     }
 
     ASSERT_EQ(bin_agg.serialize(), OB_SUCCESS);
-
+    
     ObIMulModeBase *base;
     ObStringBuffer *buffer = bin_agg.get_buffer();
-
+    
     ASSERT_EQ(ObMulModeFactory::get_xml_base(ctx, buffer->string(), ObNodeMemType::BINARY_TYPE, ObNodeMemType::TREE_TYPE, base), OB_SUCCESS);
 
     ObStringBuffer str_buf(ctx->allocator_);
@@ -407,10 +407,10 @@ TEST_F(TestBinaryAgg, mulit_bin)
     }
 
     ASSERT_EQ(bin_agg.serialize(), OB_SUCCESS);
-
+    
     ObIMulModeBase *base;
     ObStringBuffer *buffer = bin_agg.get_buffer();
-
+    
     ASSERT_EQ(ObMulModeFactory::get_xml_base(ctx, buffer->string(), ObNodeMemType::BINARY_TYPE, ObNodeMemType::TREE_TYPE, base), OB_SUCCESS);
 
     ObStringBuffer str_buf(ctx->allocator_);
@@ -434,10 +434,10 @@ TEST_F(TestBinaryAgg, mulit_bin)
     }
 
     ASSERT_EQ(bin_agg.serialize(), OB_SUCCESS);
-
+    
     ObIMulModeBase *base;
     ObStringBuffer *buffer = bin_agg.get_buffer();
-
+    
     ASSERT_EQ(ObMulModeFactory::get_xml_base(ctx, buffer->string(), ObNodeMemType::BINARY_TYPE, ObNodeMemType::TREE_TYPE, base), OB_SUCCESS);
 
     ObStringBuffer str_buf(ctx->allocator_);

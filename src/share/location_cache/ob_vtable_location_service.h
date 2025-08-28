@@ -94,19 +94,19 @@ public:
   int destroy();
   int reload_config();
 private:
-  /*
-    get cached information,
+  /* 
+    get cached information, 
     rs machine location information is obtained from rs_mgr_;
     cluster machine location information is obtained from all_server_tracer;
     tenant machine location information is obtained from all_server_tracer;
-
+    
     @param[in] tenant_id:      Tenant for virtual table.
     @param[in] table_id:       Virtual table id.
     @param[out] locations:     Array of virtual table locations.
     @param[out] renew_time:    Refresh time of table locations.
-    @return
+    @return 
       - OB_SUCCESS:             successfully
-      - OB_ENTRY_NOT_EXIST      cache lacks the required information.
+      - OB_ENTRY_NOT_EXIST      cache lacks the required information.  
       - other:                  other failures
   */
   int get_from_vtable_cache_(

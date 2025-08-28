@@ -34,7 +34,7 @@ int ObStatMinMaxSubquery::gen_expr(char *buf, const int64_t buf_len, int64_t &po
                                      col_param_->index_name_.ptr()))) {
     LOG_WARN("failed to print  buf", K(ret));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-                                     lib::is_oracle_mode() ?
+                                     lib::is_oracle_mode() ? 
                                      " (SELECT /*+ %.*s */ %.*s FROM \"%.*s\".\"%.*s\" %.*s T WHERE %.*s IS NOT NULL ORDER BY 1 %s FETCH FIRST 1 ROWS ONLY)" :
                                      " (SELECT /*+ %.*s */ %.*s FROM `%.*s`.`%.*s` %.*s T WHERE %.*s IS NOT NULL ORDER BY 1 %s LIMIT 1)",
                                      (int)hint_pos,

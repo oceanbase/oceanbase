@@ -1,15 +1,15 @@
 
-/**
- * Copyright (c) 2021 OceanBase
- * OceanBase CE is licensed under Mulan PubL v2.
- * You can use this software according to the terms and conditions of the Mulan PubL v2.
- * You may obtain a copy of Mulan PubL v2 at:
- *          http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+/** 
+ * Copyright (c) 2021 OceanBase 
+ * OceanBase CE is licensed under Mulan PubL v2. 
+ * You can use this software according to the terms and conditions of the Mulan PubL v2. 
+ * You may obtain a copy of Mulan PubL v2 at: 
+ *          http://license.coscl.org.cn/MulanPubL-2.0 
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, 
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, 
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE. 
  * See the Mulan PubL v2 for more details.
- */
+ */ 
 
 #include "lib/charset/ob_ctype.h"
 #include "lib/charset/ob_ctype_gbk_tab.h"
@@ -90,7 +90,7 @@ static int ob_strnncollsp_gbk(const ObCharsetInfo * cs __attribute__((unused)),
     } else if (a_length < b_length) {
       a_length = b_length;
       a = b;
-      swap= -1;
+      swap= -1;				  
       res= -res;
     }
     for (end= a + a_length-length; a < end ; a++) {
@@ -309,7 +309,7 @@ static size_t ob_well_formed_len_gbk(const ObCharsetInfo *cs __attribute__((unus
                               size_t pos, int *error)
 {
   const char *b0= b;
-  const char *emb= e - 1;
+  const char *emb= e - 1; 
   *error= 0;
 
   while (pos-- && b < e) {
@@ -332,7 +332,7 @@ static ObCollationHandler ob_collation_gbk_ci_handler =
   ob_strnncoll_gbk,
   ob_strnncollsp_gbk,
   ob_strnxfrm_gbk,
-  ob_strnxfrmlen_simple,
+  ob_strnxfrmlen_simple, 
   ob_strnxfrm_gbk_varlen,
   ob_like_range_mb,
   ob_wildcmp_mb,
@@ -374,70 +374,70 @@ static ObCharsetHandler ob_charset_gbk_handler=
 
 ObCharsetInfo ob_charset_gbk_chinese_ci=
 {
-    28,0,0,
-    OB_CS_COMPILED|OB_CS_PRIMARY|OB_CS_STRNXFRM|OB_CS_CI,
-    "gbk",
-    "gbk_chinese_ci",
-    "",
-    NULL,
-    NULL,
+    28,0,0,		  
+    OB_CS_COMPILED|OB_CS_PRIMARY|OB_CS_STRNXFRM|OB_CS_CI,	  
+    "gbk",		  
+    "gbk_chinese_ci",	  
+    "",			  
+    NULL,		  
+    NULL,		  
     ctype_gbk,
     to_lower_gbk,
     to_upper_gbk,
     sort_order_gbk,
+    NULL,		  
     NULL,
     NULL,
-    NULL,
-    &ob_caseinfo_gbk,
-    NULL,
-    NULL,
+    &ob_caseinfo_gbk,     
+    NULL,		  
+    NULL,		  
+    1,			  
+    1,                    
+    1,                    
+    1,			  
+    2,			  
     1,
-    1,
-    1,
-    1,
-    2,
-    1,
-    0,
-    0xA967,
-    ' ',
-    1,
-    1,
-    1,
+    0,			  
+    0xA967,		  
+    ' ',                  
+    1,                    
+    1,                    
+    1,                    
     &ob_charset_gbk_handler,
     &ob_collation_gbk_ci_handler,
     PAD_SPACE};
 
 ObCharsetInfo ob_charset_gbk_bin=
 {
-    87,0,0,
-    OB_CS_COMPILED|OB_CS_BINSORT,
-    "gbk",
-    "gbk_bin",
-    "",
+    87,0,0,		  
+    OB_CS_COMPILED|OB_CS_BINSORT,	  
+    "gbk",		  
+    "gbk_bin",		  
+    "",			  
     NULL,
     NULL,
     ctype_gbk,
     to_lower_gbk,
     to_upper_gbk,
+    NULL,		  
+    NULL,		   
     NULL,
     NULL,
-    NULL,
-    NULL,
-    &ob_caseinfo_gbk,
-    NULL,
-    NULL,
+    &ob_caseinfo_gbk,     
+    NULL,		  
+    NULL,		  
+    1,			  
+    1,                    
+    1,                    
+    1,			  
+    2,			  
     1,
-    1,
-    1,
-    1,
-    2,
-    1,
-    0,
-    0xFEFE,
-    ' ',
-    1,
-    1,
-    1,
+    0,			  
+    0xFEFE,		  
+    ' ',                  
+    1,                    
+    1,                    
+    1,                    
     &ob_charset_gbk_handler,
     &ob_collation_mb_bin_handler,
     PAD_SPACE

@@ -89,14 +89,14 @@ public:
   // int log_cb_failure();
 
   int get_lease_valid_array(LeaseAddrArray &lease_array);
-
+  
   bool is_follower_lease_valid();
 
   bool check_follower_lease_serving(const bool election_is_leader,
                                     const share::SCN &max_replayed_scn);
 
   void print_lease_diag_info_log(const bool is_master);
-
+  
   int get_lease_mgr_stat(FollowerLeaseMgrStatArr &collect_arr);
 
   int recover_lease_from_ckpt(const ObDupTableLSCheckpoint::ObLSDupTableMeta &dup_ls_meta);
@@ -143,19 +143,19 @@ private:
     int64_t get_max_ser_size() { return max_ser_size_; }
     int get_error_ret() { return error_ret; }
     int64_t get_renew_lease_count() { return renew_lease_count_; }
-
+  
     void clear_ser_content()
     {
       lease_item_array_.reuse();
       max_ser_size_ = 0;
     }
-
+  
     TO_STRING_KV(K(renew_lease_count_),
                  K(max_ser_size_),
                  K(loop_start_time_),
                  K(local_max_applyed_scn_),
                  K(error_ret));
-
+  
   private:
     ObDupTableLSLeaseMgr *lease_mgr_ptr_;
     DupTableLeaseItemArray &lease_item_array_;
@@ -249,7 +249,7 @@ private:
     int64_t
     operator()(const common::hash::HashMapPair<common::ObAddr, DupTableLeaderLeaseInfo> &hash_pair);
   };
-
+  
   class LeaderLeaseMgrStatFunctor
   {
   public:
@@ -257,7 +257,7 @@ private:
                               const uint64_t tenant_id,
                               const int64_t collect_ts,
                               const ObAddr &leader_addr,
-                              const share::ObLSID ls_id)
+                              const share::ObLSID ls_id) 
                               :
                               collect_arr_(collect_arr),
                               tenant_id_(tenant_id),
@@ -266,7 +266,7 @@ private:
                               ls_id_(ls_id),
                               cnt_(0) {}
     int operator()(const common::hash::HashMapPair<common::ObAddr, DupTableLeaderLeaseInfo> &hash_pair);
-
+  
   private:
     FollowerLeaseMgrStatArr &collect_arr_;
     uint64_t tenant_id_;

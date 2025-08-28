@@ -163,7 +163,7 @@ int ObLogLimit::check_output_dep_specific(ObRawExprCheckDep &checker)
   return ret;
 }
 
-int ObLogLimit::get_plan_item_info(PlanText &plan_text,
+int ObLogLimit::get_plan_item_info(PlanText &plan_text, 
                                    ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;

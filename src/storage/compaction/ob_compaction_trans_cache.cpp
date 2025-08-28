@@ -93,7 +93,7 @@ int ObCachedTransStateMgr::add_trans_state(
     ret = OB_NOT_INIT;
     LOG_WARN("ObCachedTransStateMgr is not initialized", K(ret));
   } else if (!status.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
+    ret = OB_INVALID_ARGUMENT; 
     LOG_WARN("invalid trans state", K(ret), K(status));
   } else {
     array_[cal_idx(key)] = status;

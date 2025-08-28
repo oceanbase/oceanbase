@@ -490,7 +490,7 @@ int ObPLCompiler::compile(
 
   int64_t init_end = ObTimeUtility::current_time();
   LOG_INFO(">>>>>>>>Init AST Time: ", K(routine.get_routine_id()), K(routine.get_routine_name()), K(init_end - init_start));
-
+    
   //Step 2: Parser
   ObStmtNodeTree *parse_tree = NULL;
   if (OB_SUCC(ret)) {
@@ -539,7 +539,7 @@ int ObPLCompiler::compile(
   FLT_SET_TAG(pl_compile_resolve_time, resolve_end - parse_end);
   //Step 4: Code Generator
   if (OB_SUCC(ret)) {
-
+    
 #ifdef USE_MCJIT
     HEAP_VAR(ObPLCodeGenerator, cg, allocator_, session_info_) {
 #else
@@ -597,7 +597,7 @@ int ObPLCompiler::compile(
   FLT_SET_TAG(pl_compile_cg_time, cg_end - resolve_end);
   int64_t final_end = ObTimeUtility::current_time();
   LOG_INFO(">>>>>>>>Final Compile Routine Time: ", K(routine.get_routine_id()), K(routine.get_routine_name()), K(final_end - init_start));
-
+  
   OX (func.get_stat_for_update().compile_time_ = final_end - init_start);
   OX (session_info_.add_plsql_compile_time(final_end - init_start));
 
@@ -625,9 +625,9 @@ int ObPLCompiler::compile(
 int ObPLCompiler::update_schema_object_dep_info(ObIArray<ObSchemaObjVersion> &dp_tbl,
                                                 uint64_t tenant_id,
                                                 uint64_t owner_id,
-                                                uint64_t dep_obj_id,
+                                                uint64_t dep_obj_id, 
                                                 uint64_t schema_version,
-                                                ObObjectType dep_obj_type)
+                                                ObObjectType dep_obj_type) 
 {
   int ret = OB_SUCCESS;
   ObMySQLProxy *sql_proxy = nullptr;
@@ -720,8 +720,8 @@ int ObPLCompiler::check_package_body_legal(const ObPLBlockNS *parent_ns,
       LOG_WARN("PLS-00323: subprogram or cursor is declared in a package specification and must be defined in the package body",
                K(ret), K(i), K(spec_routine_info->get_decl_str()));
       ObPL::insert_error_msg(ret);
-      ObPLResolver::record_error_line(session_info_,
-                                      spec_routine_info->get_line_number(),
+      ObPLResolver::record_error_line(session_info_, 
+                                      spec_routine_info->get_line_number(), 
                                       spec_routine_info->get_col_number(), package_ast.get_db_name(), package_ast.get_name(), ObString());
     }
   }
@@ -789,7 +789,7 @@ int ObPLCompiler::analyze_package(const ObString &source,
           ret = OB_ERR_TRIGGER_NOT_EXIST;
           LOG_WARN("ref_trg_info is NULL", K(trg_info->get_ref_trg_db_name()), K(trg_info->get_ref_trg_name()), K(ret));
           if (lib::is_oracle_mode()) {
-            LOG_ORACLE_USER_ERROR(OB_ERR_TRIGGER_NOT_EXIST, trg_info->get_ref_trg_name().length(),
+            LOG_ORACLE_USER_ERROR(OB_ERR_TRIGGER_NOT_EXIST, trg_info->get_ref_trg_name().length(), 
                                   trg_info->get_ref_trg_name().ptr());
           }
         }
@@ -838,8 +838,8 @@ int ObPLCompiler::generate_package(const ObString &exec_env, ObPLPackageAST &pac
                                         get_tenant_id_by_object_id(package.get_id()));
       ObRoutinePersistentInfo::ObPLOperation op = ObRoutinePersistentInfo::ObPLOperation::NONE;
       bool exist_same_name_obj_with_public_synonym = false;
-      OZ (ObRoutinePersistentInfo::has_same_name_dependency_with_public_synonym(schema_guard_,
-                                                                            package_ast.get_dependency_table(),
+      OZ (ObRoutinePersistentInfo::has_same_name_dependency_with_public_synonym(schema_guard_, 
+                                                                            package_ast.get_dependency_table(), 
                                                                             exist_same_name_obj_with_public_synonym,
                                                                             session_info_));
       bool enable_persistent = GCONF._enable_persistent_compiled_routine
@@ -1118,7 +1118,7 @@ int ObPLCompiler::init_function(const share::schema::ObRoutineInfo *routine, ObP
       }
     }
     if (OB_SUCC(ret)) {
-      if (routine->is_procedure() &&
+      if (routine->is_procedure() && 
           (ROUTINE_PROCEDURE_TYPE == routine->get_routine_type() ||
             ROUTINE_UDT_TYPE == routine->get_routine_type())) {
         func.set_proc_type(STANDALONE_PROCEDURE);
@@ -1698,7 +1698,7 @@ void ObPLCompilerEnvGuard::init(const Info &info,
 
   OZ (session_info_.get_compatibility_version(compat_version));
   OZ (ObCompatControl::check_feature_enable(compat_version, ObCompatFeatureType::INVOKER_RIGHT_COMPILE, invoker_set_db));
-
+  
   if (OB_SUCC(ret)) {
     if (invoker_set_db) {
       // alway set db in compile phase when version greater or equal than 4.3.5.2

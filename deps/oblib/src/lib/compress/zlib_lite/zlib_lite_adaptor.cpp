@@ -41,7 +41,7 @@ static bool check_support_qpl(void)
     __cpuid(1, eax, ebx, ecx, edx);
     unsigned int family, model;
     /*
-    If the Family ID field is equal to 15, the family is equal to the sum of
+    If the Family ID field is equal to 15, the family is equal to the sum of 
     the Extended Family ID and the Family ID fields.
     Otherwise, the family is equal to the value of the Family ID field.
     */
@@ -50,7 +50,7 @@ static bool check_support_qpl(void)
       family += (eax >> 20) & 0xF;
     }
     /*
-    If the Family ID field is either 6 or 15, the model is equal to the sum of
+    If the Family ID field is either 6 or 15, the model is equal to the sum of 
     the Extended Model ID field shifted left by 4 bits and the Model field,
     Otherwise, the model is equal to the value of the Model field.
     */
@@ -59,7 +59,7 @@ static bool check_support_qpl(void)
       model += ((eax >> 16) & 0xF) << 4;
     }
 
-    // if Model less then 0X8F or family not equal 6, QPL compress and
+    // if Model less then 0X8F or family not equal 6, QPL compress and 
     // decompress is not supported, will use zlib instead.
     if (family == 6 && model >= 0X8F) {
       bret = true;
@@ -70,7 +70,7 @@ static bool check_support_qpl(void)
   return bret;
 }
 
-/*zlib_lite supports two algorithms. On the platform that supports qpl, the qpl compression algorithm will be used,
+/*zlib_lite supports two algorithms. On the platform that supports qpl, the qpl compression algorithm will be used, 
 otherwise the zlib algorithm will be used.*/
 
 ObZlibLiteAdaptor::ObZlibLiteAdaptor()
@@ -85,7 +85,7 @@ int ObZlibLiteAdaptor::init(allocator alloc, deallocator dealloc, int32_t io_thr
 {
   int ret = 0;
 #ifdef ENABLE_QPL_COMPRESSION
-
+    
   qpl_support_ = check_support_qpl();
   if (qpl_support_) {
     QplAllocator allocator;
@@ -97,7 +97,7 @@ int ObZlibLiteAdaptor::init(allocator alloc, deallocator dealloc, int32_t io_thr
     }
   }
 #endif
-
+  
   return ret;
 }
 
@@ -154,7 +154,7 @@ int ObZlibLiteAdaptor::zlib_decompress(char *dest, int64_t *dest_len, const char
   stream.avail_out = (uInt)*dest_len;
   stream.zalloc = (alloc_func)0;
   stream.zfree = (free_func)0;
-
+  
   /* Check for source > 64K on 16-bit machine: */
   if ((uLong)stream.avail_in != source_len || (uLong)stream.avail_out != *dest_len) {
     err = Z_BUF_ERROR;
@@ -189,15 +189,15 @@ int64_t ObZlibLiteAdaptor::compress(const char* src_buffer,
   }
 
 #endif // ENABLE_QPL_COMPRESSION
-
+  
   int zlib_errno = Z_OK;
   int64_t compress_ret_size = dst_buffer_size;
   zlib_errno = zlib_compress(dst_buffer, &compress_ret_size, src_buffer, src_data_size);
   if (Z_OK != zlib_errno) {
     // LIB_LOG(WARN, "Compress data by zlib in zlib_lite algorithm faild, ", K(ret), K(zlib_errno));
     return -1;
-  }
-
+  } 
+    
   return compress_ret_size;
 }
 
@@ -214,7 +214,7 @@ int64_t ObZlibLiteAdaptor::decompress(const char* src_buffer,
                           static_cast<int>(dst_buffer_size));
   }
 #endif
-
+  
   int64_t decompress_ret_size = dst_buffer_size;
   int zlib_errno = Z_OK;
   zlib_errno = zlib_decompress(dst_buffer, &decompress_ret_size, src_buffer, src_data_size);
@@ -232,7 +232,7 @@ const char *ObZlibLiteAdaptor::compression_method() const
     return qpl_hardware_enabled() ? "qpl_hardware" : "qpl_software";
   }
 #endif
-
+  
   return "zlib_native";
 }
 

@@ -38,7 +38,7 @@ public:
   ObAdaptiveAutoDop(ObExecContext &exec_ctx)
     : ctx_(exec_ctx)
   {
-
+    
   }
   int calculate_table_auto_dop(const ObPhysicalPlan &plan,
                                AutoDopHashMap &map,

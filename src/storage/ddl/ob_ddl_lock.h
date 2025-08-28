@@ -101,9 +101,9 @@ public:
   static int lock_for_add_lob_in_trans(
       const share::schema::ObTableSchema &data_table_schema,
       ObMySQLTransaction &trans);
-
+  
   static int lock_for_online_drop_column_in_trans(
-      const share::schema::ObTableSchema &table_schema,
+      const share::schema::ObTableSchema &table_schema, 
       ObMySQLTransaction &trans);
   static int lock_for_drop_lob(
       const share::schema::ObTableSchema &data_table_schema,
@@ -161,7 +161,7 @@ protected:
     const int64_t timeout_us,
     const bool is_lock,
     ObMySQLTransaction &trans);
-
+  
 private:
   static int lock_table_lock_in_trans(
       const uint64_t tenant_id,
@@ -290,7 +290,7 @@ public:
       const transaction::tablelock::ObTableLockOwnerID lock_owner,
       const int64_t timeout_us,
       ObMySQLTransaction &trans);
-
+  
   static int unlock_table(
       const uint64_t tenant_id,
       const uint64_t table_id,
@@ -299,7 +299,7 @@ public:
       const int64_t timeout_us,
       ObMySQLTransaction &trans,
       bool &some_lock_not_exist);
-
+  
   static int unlock_tablets(
       const uint64_t tenant_id,
       const ObIArray<ObTabletID> &tablet_ids,

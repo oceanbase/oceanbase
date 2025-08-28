@@ -98,7 +98,7 @@ int calc_to_multi_byte_expr(const ObString &input, const ObCollationType cs_type
       char *&ptr;
       char *&buf;
       int64_t buf_len;
-
+      
       int operator() (const ObString &encoding, ob_wc_t wc) {
         int ret = OB_SUCCESS;
         int32_t length = 0;
@@ -118,11 +118,11 @@ int calc_to_multi_byte_expr(const ObString &input, const ObCollationType cs_type
         OZ (ObCharset::wc_mb(cs_type, wc, ptr, buf + buf_len - ptr, length));
         ptr += length;
         LOG_DEBUG("process char", K(ret), K(wc));
-
+        
         return ret;
       };
     };
-
+    
     Functor temp_handler(cs_type, ptr, buf, buf_len);
     ObCharsetType charset_type = ObCharset::charset_type_by_coll(cs_type);
     OZ(ObFastStringScanner::foreach_char(input, charset_type, temp_handler));

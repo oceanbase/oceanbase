@@ -62,14 +62,14 @@ public:
 
   /*
   *  SliceIdxArray : used for row->channel in 1 to 1 and 1 to n, but only one row
-  *    for example:
+  *    for example: 
   *    if row0 to channel2, row1 to channel0, row2 to channel1
   *      the result of SliceIdxArray will be: [2,0,1].
   *    if row0 to channel1, SliceIdxArray will be: [1].
   *  SliceIdxFlattenArray + EndIdxArray : used for row->channel in 1 to 1 and 1 to n,
-  *    not only one row. [end_indexes[i-1] , end_indexes[i]) will be the index
+  *    not only one row. [end_indexes[i-1] , end_indexes[i]) will be the index 
   *   (in SliceIdxFlattenArray) range that rowi will be send to.
-  *    for example:
+  *    for example: 
   *    if row0->channel0,1,2; row1->channel2;row2->channel2,3
   *      SliceIdxArray will be [0,1,2,2,2,3],
   *      EndIdxArray will be [3,4,6].
@@ -153,7 +153,7 @@ public:
 protected:
   // used when calculate index id for single row. To make count of slice_idx_array = 1
   int setup_slice_index(SliceIdxArray &slice_idx_array);
-  // used in vectorized execution, allocate memory to initialize slice_indexes_.
+  // used in vectorized execution, allocate memory to initialize slice_indexes_. 
   int setup_slice_indexes(ObEvalCtx &ctx);
   int setup_tablet_ids(ObEvalCtx &ctx);
   // used for null aware anti join
@@ -296,7 +296,7 @@ public:
 protected:
   // this is a trick!
   // get part id from hashmap, implicate that only one level-1 part in the map
-  // reference to
+  // reference to 
   virtual int get_part_id_by_one_level_sub_ch_map(int64_t &part_id);
   virtual int get_sub_part_id_by_one_level_first_ch_map(
     const int64_t part_id, int64_t &sub_part_id);
@@ -1084,7 +1084,7 @@ public:
 
 private:
   template <bool USE_VEC>
-  int get_task_idx_by_tablet_id(ObEvalCtx &eval_ctx, int64_t tablet_id , int64_t &task_idx,
+  int get_task_idx_by_tablet_id(ObEvalCtx &eval_ctx, int64_t tablet_id , int64_t &task_idx, 
                                 ObBitVector *skip = NULL);
   int build_affi_hash_map(hash::ObHashMap<int64_t, ObPxPartChMapItem> &affi_hash_map);
 private:

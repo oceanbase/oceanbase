@@ -42,13 +42,13 @@ int ObTableResultRowIter::next_row()
           if (ret == OB_ARRAY_OUT_OF_RANGE) {
             SERVER_LOG(WARN, "fail to get_row after refreshing iterable_result_ OB_ITER_END", K(ret));
             ret = OB_ITER_END;
-          } else {
+          } else {  
             SERVER_LOG(WARN, "fail to get_row after refreshing iterable_result_", K(ret));
           }
         }
       }
     } else {
-      SERVER_LOG(WARN, "fail to get row", K(ret));
+      SERVER_LOG(WARN, "fail to get row", K(ret));  
     }
   }
   return ret;
@@ -96,11 +96,11 @@ int ObMergeTableQueryResultIterator::get_next_result(ObTableQueryResult *&one_re
 int ObMergeTableQueryResultIterator::get_next_result(ObTableQueryResult &one_result)
 {
   int ret = OB_SUCCESS;
-  int limit = query_->get_batch() <= 0 ?
+  int limit = query_->get_batch() <= 0 ? 
               static_cast<int64_t>(ObTableQueryResult::get_max_packet_buffer_length() - 1024)
               : query_->get_batch();
   while (OB_SUCC(ret) && one_result.get_row_count() < limit) {
-    ObNewRow *row = nullptr;
+    ObNewRow *row = nullptr; 
     if (OB_FAIL(get_next_row(row))) {
       LOG_WARN("fail to get next row", K(ret));
     } else if (OB_FAIL(one_result.add_row(*row))) {
@@ -123,11 +123,11 @@ int ObMergeTableQueryResultIterator::get_next_result(ObTableQueryIterableResult 
 int ObMergeTableQueryResultIterator::get_next_result(ObTableQueryIterableResult &one_result)
 {
   int ret = OB_SUCCESS;
-  int limit = query_->get_batch() <= 0 ?
+  int limit = query_->get_batch() <= 0 ? 
               static_cast<int64_t>(ObTableQueryResult::get_max_packet_buffer_length() - 1024)
               : query_->get_batch();
   while (OB_SUCC(ret) && one_result.get_row_count() < limit) {
-    ObNewRow *row = nullptr;
+    ObNewRow *row = nullptr; 
     if (OB_FAIL(get_next_row(row))) {
       LOG_WARN("fail to get next row", K(ret));
     } else if (OB_FAIL(one_result.add_row(*row))) {

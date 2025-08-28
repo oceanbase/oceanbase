@@ -11,7 +11,7 @@
  */
 
 #ifndef OCEANBASE_COMMON_OB_TARGET_SPECIFIC_H_
-#define OCEANBASE_COMMON_OB_TARGET_SPECIFIC_H_
+#define OCEANBASE_COMMON_OB_TARGET_SPECIFIC_H_ 
 
 #include <stdint.h>
 #include "lib/cpu/ob_cpu_topology.h"
@@ -20,9 +20,9 @@ namespace oceanbase
 {
 namespace common
 {
-enum ObTargetArch : uint32_t
+enum ObTargetArch : uint32_t 
 {
-  Default  = 0,
+  Default  = 0, 
   SSE42    = (1 << 0),
   AVX      = (1 << 1),
   AVX2     = (1 << 2),
@@ -163,24 +163,24 @@ OB_DECLARE_DEFAULT_CODE         (__VA_ARGS__) \
 OB_DECLARE_AVX512_SPECIFIC_CODE (__VA_ARGS__)
 
 OB_DECLARE_DEFAULT_CODE(
-  constexpr auto BuildArch = ObTargetArch::Default;
-)
+  constexpr auto BuildArch = ObTargetArch::Default; 
+) 
 
 OB_DECLARE_SSE42_SPECIFIC_CODE(
-  constexpr auto BuildArch = ObTargetArch::SSE42;
-)
+  constexpr auto BuildArch = ObTargetArch::SSE42; 
+) 
 
 OB_DECLARE_AVX_SPECIFIC_CODE(
-  constexpr auto BuildArch = ObTargetArch::AVX;
-)
+  constexpr auto BuildArch = ObTargetArch::AVX; 
+) 
 
 OB_DECLARE_AVX2_SPECIFIC_CODE(
-  constexpr auto BuildArch = ObTargetArch::AVX2;
-)
+  constexpr auto BuildArch = ObTargetArch::AVX2; 
+) 
 
 OB_DECLARE_AVX512_SPECIFIC_CODE(
-  constexpr auto BuildArch = ObTargetArch::AVX512;
-)
+  constexpr auto BuildArch = ObTargetArch::AVX512; 
+) 
 
 #define OB_MULTITARGET_FUNCTION_HEADER(...) __VA_ARGS__
 
@@ -226,4 +226,5 @@ OB_INLINE bool is_arch_supported(ObTargetArch arch)
 
 } // namespace common
 } // namespace oceanbase
-#endif // OCEANBASE_COMMON_OB_TARGET_SPECIFIC_H_
+#endif // OCEANBASE_COMMON_OB_TARGET_SPECIFIC_H_ 
+

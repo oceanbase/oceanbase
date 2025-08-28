@@ -65,8 +65,8 @@ public:
 
   int do_zinter_store(int64_t db, const ObString &dest, const ObIArray<ObString> &keys,
                       const ObIArray<double> &weights, ZSetAggCommand::AggType agg_type);
-  int fill_set_batch_op(const ObRedisOp &op,
-                        ObIArray<ObTabletID> &tablet_ids,
+  int fill_set_batch_op(const ObRedisOp &op, 
+                        ObIArray<ObTabletID> &tablet_ids, 
                         ObTableBatchOperation &batch_op) override;
   int do_group_zscore();
 
@@ -100,11 +100,11 @@ private:
                                    ZSetAggCommand::AggType agg_type, int start_idx, int end_idx,
                                    const ObString &member, bool &is_member, double &res_score);
   int get_rank_in_same_score(
-    int64_t db,
-    ZRangeCtx &zrange_ctx,
-    const ObString &member,
-    int64_t score,
-    ObRedisZSetMeta *set_meta,
+    int64_t db, 
+    ZRangeCtx &zrange_ctx, 
+    const ObString &member, 
+    int64_t score, 
+    ObRedisZSetMeta *set_meta, 
     int64_t &rank);
   DISALLOW_COPY_AND_ASSIGN(ZSetCommandOperator);
 };

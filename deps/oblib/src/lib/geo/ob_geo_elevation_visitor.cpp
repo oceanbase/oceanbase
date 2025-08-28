@@ -237,7 +237,7 @@ int ObGeoElevationVisitor::append_point(double x, double y, double z)
       LOG_WARN("fail to convert radians to longtitude", K(ret));
     } else if (OB_FAIL(srs_->latitude_convert_from_radians(y, val_y))) {
       LOG_WARN("fail to convert radians to latitude", K(ret));
-    }
+    } 
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(buffer_.append(val_x))) {

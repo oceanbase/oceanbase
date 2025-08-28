@@ -337,7 +337,7 @@ int ObInnerTableOperator::increase_column_by_one(
 }
 
 int ObInnerTableOperator::decrease_column_by_one(
-    common::ObISQLClient &proxy, const ObIInnerTableKey &key,
+    common::ObISQLClient &proxy, const ObIInnerTableKey &key, 
     const char *column_name, int64_t &affected_rows) const
 {
   return increase_column_by(proxy, key, column_name, -1LL, affected_rows);

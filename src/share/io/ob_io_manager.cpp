@@ -213,7 +213,7 @@ int ObTrafficControl::ObSharedDeviceControlV2::add_shared_device_limits()
   limit_ids_[static_cast<int>(ResourceType::ops)] = tclimit_create(TCLIMIT_COUNT, get_resource_type_str(ResourceType::ops));
   limit_ids_[static_cast<int>(ResourceType::obw)] = tclimit_create(TCLIMIT_BYTES, get_resource_type_str(ResourceType::obw));
   LOG_INFO("add shared device limit success",
-      "storage_key",
+      "storage_key", 
       storage_key_,
       "ips_limit_id",
       limit_ids_[static_cast<int>(ResourceType::ips)],
@@ -227,7 +227,7 @@ int ObTrafficControl::ObSharedDeviceControlV2::add_shared_device_limits()
   return ret;
 }
 
-int ObTrafficControl::ObSharedDeviceControlV2::fill_qsched_req_storage_key(ObIORequest& req)
+int ObTrafficControl::ObSharedDeviceControlV2::fill_qsched_req_storage_key(ObIORequest& req) 
 {
   int ret = OB_SUCCESS;
   req.qsched_req_.storage_key_ = this->storage_key_.hash();
@@ -644,7 +644,7 @@ int ObTrafficControl::register_bucket(ObIORequest &req, const int qid) {
         }
       }
     }
-
+    
     if (OB_NOT_NULL(tc)) {
       (void)tc->fill_qsched_req_storage_key(req);
     }
@@ -1314,7 +1314,7 @@ int ObIOManager::refresh_tenant_io_unit_config(const uint64_t tenant_id,
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) ||
-                         !tenant_io_unit_config.is_valid())) {
+                         !tenant_io_unit_config.is_valid())) { 
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(tenant_io_unit_config));
   } else if (OB_FAIL(get_tenant_io_manager(tenant_id, tenant_holder))) {
@@ -1334,7 +1334,7 @@ int ObIOManager::refresh_tenant_io_param_config(const uint64_t tenant_id,
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) ||
-                         !tenant_io_param_config.is_valid())) {
+                         !tenant_io_param_config.is_valid())) { 
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(tenant_io_param_config));
   } else if (OB_FAIL(get_tenant_io_manager(tenant_id, tenant_holder))) {
@@ -1835,7 +1835,7 @@ int ObTenantIOManager::alloc_req_and_result(const ObIOInfo &info, ObIOHandle &ha
     } else if (OB_FAIL(io_request->basic_init())) {
       LOG_WARN("basic init io request failed", K(ret));
     }
-  }
+  } 
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(io_request->init(info, io_result))) {
@@ -1879,7 +1879,7 @@ int ObTenantIOManager::inner_aio(const ObIOInfo &info, ObIOHandle &handle)
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(qsched_.schedule_request(*req))) {
       LOG_WARN("schedule request failed", K(ret), KPC(req));
-    }
+    }  
   } else if (OB_FAIL(io_scheduler_->schedule_request(*req))) {
     LOG_WARN("schedule request failed", K(ret), KPC(req));
   }
@@ -1971,7 +1971,7 @@ int ObTenantIOManager::retry_io(ObIORequest &req)
   } else if (GCONF._enable_tree_based_io_scheduler) {
     if (OB_FAIL(qsched_.schedule_request(req))) {
       LOG_WARN("retry io request failed", K(ret), K(req));
-    }
+    }  
   } else if (OB_FAIL(io_scheduler_->retry_request(req))) {
     LOG_WARN("retry io request into sender failed", K(ret), K(req));
   }
@@ -2812,7 +2812,7 @@ int ObTenantIOManager::print_io_function_status()
         } else if (avg_size < std::numeric_limits<double>::epsilon()) {
         } else {
           const char *func_name = to_cstring(get_io_function_name(static_cast<share::ObFunctionType>(i)));
-          snprintf(io_status, sizeof(io_status),
+          snprintf(io_status, sizeof(io_status), 
                     "function_name:%s, mode:%s, avg_size:%ld, avg_iops:%ld, avg_bw:%ld, [delay/us]: prepare:%ld, schedule:%ld, submit:%ld, device:%ld, total:%ld",
                     func_name,
                     mode_str,

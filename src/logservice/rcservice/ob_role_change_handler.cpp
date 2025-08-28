@@ -23,7 +23,7 @@ void RCDiagnoseInfo::reset()
   log_type_ = ObLogBaseType::INVALID_LOG_BASE_TYPE;
 }
 
-ObRoleChangeHandler::ObRoleChangeHandler(): lock_(common::ObLatchIds::RCS_LOCK),
+ObRoleChangeHandler::ObRoleChangeHandler(): lock_(common::ObLatchIds::RCS_LOCK), 
                                             sub_role_change_handler_arr_()
 {
   reset();

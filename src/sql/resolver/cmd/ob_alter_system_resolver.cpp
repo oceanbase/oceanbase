@@ -464,13 +464,13 @@ int ObAlterSystemResolverUtil::resolve_tenant(
         LOG_WARN("Only sys tenant can operate all tenants", KR(ret), K(tenant_id));
       } else if (tenants_node.num_child_ > 1) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("all/all_user/all_meta must be used separately",
+        LOG_WARN("all/all_user/all_meta must be used separately", 
                  KR(ret), "tenant list count", tenants_node.num_child_);
-        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, 
                        "all/all_user/all_meta in combination with other names is");
       }
     }
-    FLOG_INFO("resolve tenants", K(affect_all), K(affect_all_user),
+    FLOG_INFO("resolve tenants", K(affect_all), K(affect_all_user), 
               K(affect_all_meta), K(tenant_ids));
   }
   return ret;
@@ -694,8 +694,8 @@ int ObFreezeResolver::resolve_tenant_ls_tablet_(ObFreezeStmt *freeze_stmt,
 
     if (OB_FAIL(ret)) {
     } else if (OB_NOT_NULL(tenant_list_tuple) &&
-               OB_FAIL(Util::resolve_tenant(*tenant_list_tuple, cur_tenant_id,
-                                            freeze_stmt->get_tenant_ids(),
+               OB_FAIL(Util::resolve_tenant(*tenant_list_tuple, cur_tenant_id, 
+                                            freeze_stmt->get_tenant_ids(), 
                                             affect_all, affect_all_user, affect_all_meta))) {
       LOG_WARN("fail to resolve tenant", KR(ret));
     } else if (OB_NOT_NULL(ls_id) && OB_FAIL(Util::resolve_ls_id(ls_id, freeze_stmt->get_ls_id()))) {
@@ -708,9 +708,9 @@ int ObFreezeResolver::resolve_tenant_ls_tablet_(ObFreezeStmt *freeze_stmt,
           (true == affect_all && true == affect_all_meta) ||
           (true == affect_all_user && true == affect_all_meta)) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("only one of affect_all,affect_all_user,affect_all_meta can be true",
+        LOG_WARN("only one of affect_all,affect_all_user,affect_all_meta can be true", 
                 KR(ret), K(affect_all), K(affect_all_user), K(affect_all_meta));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, 
                        "all/all_user/all_meta in combination with other names is");
       } else {
         if (affect_all) {
@@ -1700,7 +1700,7 @@ int ObReportReplicaResolver::resolve(const ParseNode &parse_tree)
   return ret;
 }
 
-int ObLoadLicenseResolver::resolve(const ParseNode &parse_tree)
+int ObLoadLicenseResolver::resolve(const ParseNode &parse_tree) 
 {
   int ret = OB_SUCCESS;
 
@@ -1825,8 +1825,8 @@ int ObAdminMergeResolver::resolve(const ParseNode &parse_tree)
                 || OB_UNLIKELY(0 == child_num)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("children of tenant should not be null", KR(ret), K(child_num));
-            } else if (OB_FAIL(Util::resolve_tenant(*tenants_node, cur_tenant_id,
-                                                    stmt->get_rpc_arg().tenant_ids_, affect_all,
+            } else if (OB_FAIL(Util::resolve_tenant(*tenants_node, cur_tenant_id, 
+                                                    stmt->get_rpc_arg().tenant_ids_, affect_all, 
                                                     affect_all_user, affect_all_meta))) {
               LOG_WARN("fail to resolve tenant", KR(ret), K(cur_tenant_id));
             } else if (affect_all || affect_all_user || affect_all_meta) {
@@ -1834,9 +1834,9 @@ int ObAdminMergeResolver::resolve(const ParseNode &parse_tree)
                   (true == affect_all && true == affect_all_meta) ||
                   (true == affect_all_user && true == affect_all_meta)) {
                 ret = OB_NOT_SUPPORTED;
-                LOG_WARN("only one of affect_all,affect_all_user,affect_all_meta can be true",
+                LOG_WARN("only one of affect_all,affect_all_user,affect_all_meta can be true", 
                         KR(ret), K(affect_all), K(affect_all_user), K(affect_all_meta));
-                LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, 
                                "all/all_user/all_meta in combination with other names is");
               } else {
                 if (affect_all) {
@@ -2518,9 +2518,9 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
                           LOG_WARN("fail to get reslove tenant", K(ret), "exec_tenant_id", tenant_id);
                         } else if (affect_all || affect_all_meta) {
                           ret = OB_NOT_SUPPORTED;
-                          LOG_WARN("all/all_meta is not supported by ALTER SYSTEM SET ARCHIVE_LAG_TARGET",
+                          LOG_WARN("all/all_meta is not supported by ALTER SYSTEM SET ARCHIVE_LAG_TARGET", 
                                   KR(ret), K(affect_all), K(affect_all_user), K(affect_all_meta));
-                          LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                          LOG_USER_ERROR(OB_NOT_SUPPORTED, 
                                         "use all/all_meta in 'ALTER SYSTEM SET ARCHIVE_LAG_TARGET' syntax is");
                         } else if (affect_all_user) {
                           ObSchemaGetterGuard schema_guard;
@@ -2536,14 +2536,14 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
                                 if (OB_FAIL(tenant_ids.push_back(tmp_tenant_id))) {
                                   LOG_WARN("fail to push back", K(ret), K(tmp_tenant_id));
                                 }
-                              }
+                              } 
                             }
                           }
                         } else if (tenant_ids.empty()) {
                           if (OB_FAIL(tenant_ids.push_back(tenant_id))) {
                             LOG_WARN("fail to push back", K(ret), K(tenant_id));
                           }
-                        }
+                        } 
                         if (OB_SUCC(ret) && !tenant_ids.empty()) {
                           bool valid = true;
                           for (int i = 0; i < tenant_ids.count() && valid; i++) {
@@ -2569,9 +2569,9 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
                           LOG_WARN("fail to get reslove tenant", K(ret), "exec_tenant_id", tenant_id);
                         } else if (affect_all_meta) {
                           ret = OB_NOT_SUPPORTED;
-                          LOG_WARN("all_meta is not supported by ALTER SYSTEM SET DEFAULT_TABLE_ORGANIZATION",
+                          LOG_WARN("all_meta is not supported by ALTER SYSTEM SET DEFAULT_TABLE_ORGANIZATION", 
                                   KR(ret), K(affect_all), K(affect_all_user), K(affect_all_meta));
-                          LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                          LOG_USER_ERROR(OB_NOT_SUPPORTED, 
                                         "use all_meta in 'ALTER SYSTEM SET DEFAULT_TABLE_ORGANIZATION' syntax is");
                         } else if (tenant_ids.empty()) {
                           if (!affect_all && !affect_all_user) {
@@ -2597,7 +2597,7 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
                             } else if (lib::Worker::CompatMode::ORACLE == compat_mode || OB_SYS_TENANT_ID == tenant_id) {
                               LOG_WARN("can not set default_table_organization in oracle and sys tenants",
                                        "item", item, K(i), K(tenant_id), K(compat_mode));
-                              LOG_USER_NOTE(OB_NOT_SUPPORTED,
+                              LOG_USER_NOTE(OB_NOT_SUPPORTED, 
                                             "'ALTER SYSTEM SET DEFAULT_TABLE_ORGANIZATION' syntax in oracle or sys tenant is");
                             }
                           }
@@ -2623,7 +2623,7 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
                   } else if (OB_SYS_TENANT_ID == item.exec_tenant_id_) {
                     LOG_WARN("can not set default_table_organization in the sys tenant",
                               "item", item,"tenant_id", item.exec_tenant_id_);
-                    LOG_USER_NOTE(OB_NOT_SUPPORTED,
+                    LOG_USER_NOTE(OB_NOT_SUPPORTED, 
                                   "'ALTER SYSTEM SET DEFAULT_TABLE_ORGANIZATION' syntax in the sys tenant is");
                   }
                 }
@@ -2788,7 +2788,7 @@ int ObChangeExternalStorageDestResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_UNLIKELY(3 != parse_tree.num_child_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("children num not match", K(ret), "num_child", parse_tree.num_child_);
-  } else if (OB_ISNULL(parse_tree.children_[0])
+  } else if (OB_ISNULL(parse_tree.children_[0]) 
                 || (OB_ISNULL(parse_tree.children_[1]) && OB_ISNULL(parse_tree.children_[2])) ) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("children should not be null", K(ret), "children", parse_tree.children_);
@@ -3116,8 +3116,8 @@ int ObClearMergeErrorResolver::resolve(const ParseNode &parse_tree)
                 || OB_UNLIKELY(0 == child_num)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("children of tenant should not be null", KR(ret), K(child_num));
-            } else if (OB_FAIL(Util::resolve_tenant(*tenants_node, cur_tenant_id,
-                                                    stmt->get_rpc_arg().tenant_ids_, affect_all,
+            } else if (OB_FAIL(Util::resolve_tenant(*tenants_node, cur_tenant_id, 
+                                                    stmt->get_rpc_arg().tenant_ids_, affect_all, 
                                                     affect_all_user, affect_all_meta))) {
               LOG_WARN("fail to resolve tenant", KR(ret), K(cur_tenant_id));
             } else if (affect_all || affect_all_user || affect_all_meta) {
@@ -3125,9 +3125,9 @@ int ObClearMergeErrorResolver::resolve(const ParseNode &parse_tree)
                   (true == affect_all && true == affect_all_meta) ||
                   (true == affect_all_user && true == affect_all_meta)) {
                 ret = OB_NOT_SUPPORTED;
-                LOG_WARN("only one of affect_all,affect_all_user,affect_all_meta can be true",
+                LOG_WARN("only one of affect_all,affect_all_user,affect_all_meta can be true", 
                         KR(ret), K(affect_all), K(affect_all_user), K(affect_all_meta));
-                LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, 
                                "all/all_user/all_meta in combination with other names is");
               } else {
                 if (affect_all) {
@@ -3387,7 +3387,7 @@ int ObAddLSReplicaResolver::resolve(const ParseNode &parse_tree)
     ParseNode *data_source_node = parse_tree.children_[3];
     ParseNode *paxos_replica_num_node = parse_tree.children_[4];
     ParseNode *tenant_name_node = parse_tree.children_[5];
-
+    
     int64_t ls_id = 0;
     common::ObAddr server_addr;
     common::ObReplicaType replica_type = REPLICA_TYPE_INVALID;
@@ -3953,7 +3953,7 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode &parse_tree)
       }
     }
   } else {
-    stmt->set_is_preview(false);
+    stmt->set_is_preview(false);      
     stmt->get_rpc_arg().initiator_tenant_id_ = OB_SYS_TENANT_ID;
       if(OB_FAIL(Util::resolve_relation_name(parse_tree.children_[0], stmt->get_rpc_arg().tenant_name_))) {
         LOG_WARN("resolve tenant_name failed", K(ret));
@@ -4062,7 +4062,7 @@ int ObPhysicalRestoreTenantResolver::resolve_restore_with_config_item(const Pars
         } else if (OB_FAIL(Util::resolve_string(child_node->children_[0], arg.sts_credential_))) {
           LOG_WARN("fail to resolve string", K(ret));
         }
-      }
+      } 
     }
   }
   return ret;
@@ -4278,9 +4278,9 @@ int ObRunUpgradeJobResolver::resolve(const ParseNode &parse_tree)
           LOG_WARN("fail to resolve tenant", KR(ret), K(cur_tenant_id));
         } else if (affect_all_user || affect_all_meta) {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("all_user/all_meta is not supported by ALTER SYSTEM RUN UPGRADE JOB",
+          LOG_WARN("all_user/all_meta is not supported by ALTER SYSTEM RUN UPGRADE JOB", 
                   KR(ret), K(affect_all_user), K(affect_all_meta));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED,
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, 
                         "use all_user/all_meta in 'ALTER SYSTEM RUN UPGRADE JOB' syntax is");
         } else if (affect_all && 0 != tenant_ids.count()) {
           ret = OB_ERR_UNEXPECTED;
@@ -5191,14 +5191,14 @@ int ObArchiveLogResolver::resolve(const ParseNode &parse_tree)
             || OB_UNLIKELY(0 == child_num)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("children of tenant should not be null", KR(ret), K(child_num));
-        } else if (OB_FAIL(Util::resolve_tenant(*t_node, tenant_id, archive_tenant_ids,
+        } else if (OB_FAIL(Util::resolve_tenant(*t_node, tenant_id, archive_tenant_ids, 
                                                 affect_all, affect_all_user, affect_all_meta))) {
           LOG_WARN("fail to resolve tenant", KR(ret), K(tenant_id));
         } else if (affect_all_user || affect_all_meta) {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("all_user/all_meta is not supported by ALTER SYSTEM ARCHIVELOG",
+          LOG_WARN("all_user/all_meta is not supported by ALTER SYSTEM ARCHIVELOG", 
                   KR(ret), K(affect_all_user), K(affect_all_meta));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED,
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, 
                         "use all_user/all_meta in 'ALTER SYSTEM ARCHIVELOG' syntax is");
         } else if (affect_all) {
         } else if (archive_tenant_ids.empty()) {
@@ -5379,7 +5379,7 @@ int ObCancelRecoverTableResolver::resolve(const ParseNode &parse_tree)
     stmt->get_rpc_arg().tenant_name_ = tenant_name;
     stmt->get_rpc_arg().action_ = ObRecoverTableArg::CANCEL;
   }
-
+  
   return ret;
 }
 
@@ -5755,14 +5755,14 @@ int ObBackupKeyResolver::resolve(const ParseNode &parse_tree)
     uint64_t tenant_id = session_info_->get_login_tenant_id();
     const int64_t with_tenant = parse_tree.children_[0]->value_;
     common::ObSArray<uint64_t> backup_tenant_ids;
-    ObBackupPathString backup_dest;
+    ObBackupPathString backup_dest; 
     ObString encrypt_key;
     if (0 == with_tenant) {
       ParseNode *dest_node = parse_tree.children_[1];
       ParseNode *encrypt_key_node = parse_tree.children_[2];
       if (nullptr != dest_node && OB_FAIL(backup_dest.assign(dest_node->str_value_))) {
         LOG_WARN("failed to assign backup_dest", K(ret));
-      } else if (nullptr != encrypt_key_node) {
+      } else if (nullptr != encrypt_key_node) { 
         encrypt_key.assign_ptr(encrypt_key_node->str_value_,
                                static_cast<ObString::obstr_size_t>(encrypt_key_node->str_len_));
       }
@@ -5786,7 +5786,7 @@ int ObBackupKeyResolver::resolve(const ParseNode &parse_tree)
       } else if (FALSE_IT(tenant_id = backup_tenant_ids.at(0))) {
       } else if (nullptr != dest_node && OB_FAIL(backup_dest.assign(dest_node->str_value_))) {
         LOG_WARN("failed to assign backup_dest", K(ret));
-      } else if (nullptr != encrypt_key_node) {
+      } else if (nullptr != encrypt_key_node) { 
         encrypt_key.assign_ptr(encrypt_key_node->str_value_,
                                static_cast<ObString::obstr_size_t>(encrypt_key_node->str_len_));
       }
@@ -6130,7 +6130,7 @@ int ObRecoverTableResolver::resolve(const ParseNode &parse_tree)
     } else if (OB_FAIL(resolve_recover_tables_(
         parse_tree.children_[4], compat_mode, case_mode, stmt->get_rpc_arg().import_arg_.get_import_table_arg()))) {
       LOG_WARN("failed to resolve recover table list", K(ret));
-    } else if (OB_NOT_NULL(parse_tree.children_[5])
+    } else if (OB_NOT_NULL(parse_tree.children_[5]) 
         && OB_FAIL(Util::resolve_string(parse_tree.children_[5], stmt->get_rpc_arg().restore_tenant_arg_.encrypt_key_))) {
       LOG_WARN("failed to resolve encrypt key", K(ret));
     } else if (OB_NOT_NULL(parse_tree.children_[6])
@@ -6142,7 +6142,7 @@ int ObRecoverTableResolver::resolve(const ParseNode &parse_tree)
     } else if (OB_NOT_NULL(parse_tree.children_[7])
         && OB_FAIL(resolve_remap_(parse_tree.children_[7], compat_mode, case_mode, stmt->get_rpc_arg().import_arg_.get_remap_table_arg()))) {
       LOG_WARN("failed to resolve remap", K(ret));
-    } else if (OB_NOT_NULL(parse_tree.children_[8])
+    } else if (OB_NOT_NULL(parse_tree.children_[8]) 
         && OB_FAIL(Util::resolve_string(parse_tree.children_[8], stmt->get_rpc_arg().restore_tenant_arg_.description_))) {
       LOG_WARN("failed to resolve desc", K(ret));
 #ifdef OB_BUILD_TDE_SECURITY
@@ -6164,10 +6164,10 @@ int ObRecoverTableResolver::resolve(const ParseNode &parse_tree)
 }
 
 int ObRecoverTableResolver::resolve_remap_(
-    const ParseNode *node,
-    const lib::Worker::CompatMode &compat_mode,
-    const ObNameCaseMode &case_mode,
-    share::ObImportRemapArg &remap_arg)
+    const ParseNode *node, 
+    const lib::Worker::CompatMode &compat_mode, 
+    const ObNameCaseMode &case_mode, 
+    share::ObImportRemapArg &remap_arg) 
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(node)) {
@@ -6531,7 +6531,7 @@ int ObRecoverTableResolver::resolve_recover_tables_(
     LOG_WARN("table list node must not be null", K(ret));
   } else if (OB_FAIL(session_info_->get_collation_connection(cs_type))) {
     LOG_WARN("failed to get collation connection", K(ret));
-  }
+  } 
   for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
     const ParseNode *table_relation_node = node->children_[i];
     if (OB_ISNULL(table_relation_node)) {
@@ -6639,7 +6639,7 @@ int ObRecoverTableResolver::resolve_scn_(
 }
 
 int ObRecoverTableResolver::resolve_tenant_(
-    const ParseNode *node, uint64_t &tenant_id, common::ObString &tenant_name, lib::Worker::CompatMode &compat_mode,
+    const ParseNode *node, uint64_t &tenant_id, common::ObString &tenant_name, lib::Worker::CompatMode &compat_mode, 
     ObNameCaseMode &case_mode)
 {
   int ret = OB_SUCCESS;
@@ -6692,7 +6692,7 @@ int ObRecoverTableResolver::resolve_tenant_(
     } else if (OB_FAIL(ObImportTableUtil::get_tenant_name_case_mode(tenant_id, case_mode))) {
       LOG_WARN("failed to get name case mode", K(ret), K(tenant_id));
     }
-  }
+  } 
   return ret;
 }
 
@@ -6734,7 +6734,7 @@ int ObRecoverTableResolver::resolve_restore_with_config_item_(const ParseNode *n
         } else if (OB_FAIL(Util::resolve_string(child_node->children_[0], arg.restore_tenant_arg_.sts_credential_))) {
           LOG_WARN("fail to resolve string", K(ret));
         }
-      }
+      } 
     }
   }
   return ret;
@@ -6771,9 +6771,9 @@ int ObRecoverTenantResolver::resolve(const ParseNode &parse_tree)
         LOG_USER_ERROR(OB_INVALID_ARGUMENT, "restore until, should specify restore until point");
         LOG_WARN("should specify restore until point", KR(ret));
       } else if (T_PHYSICAL_RESTORE_UNTIL == parse_tree.children_[1]->type_) {
-        if (OB_FAIL(resolve_restore_until(*parse_tree.children_[1], session_info_, recovery_until_scn,
+        if (OB_FAIL(resolve_restore_until(*parse_tree.children_[1], session_info_, recovery_until_scn, 
                                           with_restore_scn))) {
-          LOG_WARN("failed to resolve restore until", KR(ret), KP(parse_tree.children_[1]),
+          LOG_WARN("failed to resolve restore until", KR(ret), KP(parse_tree.children_[1]), 
                                                       K(recovery_until_scn), K(with_restore_scn));
         } else {
           type = obrpc::ObRecoverTenantArg::RecoverType::UNTIL;
@@ -6791,10 +6791,10 @@ int ObRecoverTenantResolver::resolve(const ParseNode &parse_tree)
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(stmt->get_rpc_arg().init(session_info_->get_effective_tenant_id(),
+      if (OB_FAIL(stmt->get_rpc_arg().init(session_info_->get_effective_tenant_id(), 
                                               tenant_name, type, recovery_until_scn))) {
-        LOG_WARN("fail to init arg", KR(ret), K(stmt->get_rpc_arg()),
-                 K(session_info_->get_effective_tenant_id()), K(tenant_name), K(type),
+        LOG_WARN("fail to init arg", KR(ret), K(stmt->get_rpc_arg()), 
+                 K(session_info_->get_effective_tenant_id()), K(tenant_name), K(type), 
                  K(recovery_until_scn));
       } else {
         stmt_ = stmt;
@@ -6804,9 +6804,9 @@ int ObRecoverTenantResolver::resolve(const ParseNode &parse_tree)
   return ret;
 }
 
-int resolve_restore_until(const ParseNode &time_node,
-                          const ObSQLSessionInfo *session_info,
-                          share::SCN &recovery_until_scn,
+int resolve_restore_until(const ParseNode &time_node, 
+                          const ObSQLSessionInfo *session_info, 
+                          share::SCN &recovery_until_scn, 
                           bool &with_restore_scn)
 {
   int ret = OB_SUCCESS;
@@ -6843,7 +6843,7 @@ int resolve_restore_until(const ParseNode &time_node,
     } else if (OB_ISNULL(time_zone_info->get_tz_info_map())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("should not be null", KP(time_zone_info->get_tz_info_map()));
-    } else if (OB_FAIL(tz_info_wrap.init_time_zone(sys_time_zone, OB_INVALID_VERSION,
+    } else if (OB_FAIL(tz_info_wrap.init_time_zone(sys_time_zone, OB_INVALID_VERSION, 
         *(const_cast<ObTZInfoMap *>(time_zone_info->get_tz_info_map()))))) {
       LOG_WARN("tz_info_wrap init_time_zone fail", KR(ret), K(sys_time_zone));
     } else if (OB_ISNULL(sys_tz_info = tz_info_wrap.get_time_zone_info())) {

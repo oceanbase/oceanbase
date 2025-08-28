@@ -15,7 +15,7 @@
 #include "unittest/logservice/test_shared_log_common.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #endif
-#undef protected
+#undef protected 
 #undef private
 
 namespace oceanbase
@@ -70,7 +70,7 @@ TEST_F(TestLogEXTUtils, basic_interface)
   // 前置条件准备
   EXPECT_EQ(OB_SUCCESS, create_tenant(tenant_id));
   EXPECT_EQ(OB_SUCCESS, create_palf(tenant_id, ls_id.id_));
-
+  
   {
     const block_id_t start_block_id = 0;
     const block_id_t end_block_id = 0;
@@ -91,8 +91,8 @@ TEST_F(TestLogEXTUtils, basic_interface)
   const block_id_t start_block_id = 10;
   const block_id_t end_block_id = 19;
   EXPECT_EQ(OB_SUCCESS, upload_blocks(tenant_id, ls_id.id_, start_block_id, scns));
-
-  uint64_t invalid_tenant_id = OB_INVALID_TENANT_ID;
+  
+  uint64_t invalid_tenant_id = OB_INVALID_TENANT_ID;  
   uint64_t valid_tenant_id = 1;
   ObLSID invalid_ls_id;
   ObLSID valid_ls_id(1);
@@ -127,7 +127,7 @@ TEST_F(TestLogEXTUtils, basic_interface)
     EXPECT_EQ(start_block_id, oldest_block_id);
 
     // OB_ALLOCATE_MEMORY_FAILED AND OB_OBJECT_STORAGE_IO_ERROR
-
+    
     CLOG_LOG(INFO, "begin case1 not exist");
     // OB_ENTRY_NOT_EXIST
     uint64_t not_exist_tenant_id = 500;
@@ -198,7 +198,7 @@ TEST_F(TestLogEXTUtils, basic_interface)
     }
 
     // OB_ALLOCATE_MEMORY_FAILED AND OB_OBJECT_STORAGE_IO_ERROR
-
+    
     CLOG_LOG(INFO, "begin case2 not exist");
 
     // OB_ENTRY_NOT_EXIST
@@ -215,7 +215,7 @@ TEST_F(TestLogEXTUtils, basic_interface)
     EXPECT_EQ(OB_ENTRY_NOT_EXIST, ObSharedLogUtils::get_newest_block(
       tenant_id, no_block_ls_id, tmp_start_block_id, newest_block_id));
 
-    // 起点文件在oss上不存在
+    // 起点文件在oss上不存在 
     tmp_start_block_id = end_block_id+1;
     EXPECT_EQ(OB_ENTRY_NOT_EXIST, ObSharedLogUtils::get_newest_block(
       tenant_id, ls_id, tmp_start_block_id, newest_block_id));
@@ -243,7 +243,7 @@ TEST_F(TestLogEXTUtils, basic_interface)
     EXPECT_EQ(block_min_scn, scns[0]);
 
     // OB_ALLOCATE_MEMORY_FAILED AND OB_OBJECT_STORAGE_IO_ERROR
-
+    
     CLOG_LOG(INFO, "begin case4 entry not exist");
     // OB_ENTRY_NOT_EXIST
     uint64_t not_exist_tenant_id = 500;
@@ -300,8 +300,8 @@ TEST_F(TestLogEXTUtils, basic_interface)
         tmp_tenant_id, tmp_ls_id, tmp_oldest_block));
       EXPECT_EQ(tmp_start_block+1003, tmp_oldest_block);
       EXPECT_EQ(OB_SUCCESS, delete_palf(tmp_tenant_id, tmp_ls_id.id()));
-      bool tmp_palf_exist = false;
-      bool tmp_tenant_exist = false;
+      bool tmp_palf_exist = false; 
+      bool tmp_tenant_exist = false; 
       CLOG_LOG(INFO, "runlin trace delete_palf", K(tmp_tenant_id), K(tmp_ls_id));
       EXPECT_EQ(OB_SUCCESS, ObSharedLogUtils::check_ls_exist(
         tmp_tenant_id, tmp_ls_id, tmp_palf_exist));
@@ -324,7 +324,7 @@ TEST_F(TestLogEXTUtils, basic_interface)
     EXPECT_EQ(oldest_block_id, start_block_id);
 
     // OB_ALLOCATE_MEMORY_FAILED AND OB_OBJECT_STORAGE_IO_ERROR
-
+    
     // 删除不存在文件
     uint64_t not_exist_tenant_id = 500;
     EXPECT_EQ(OB_SUCCESS, ObSharedLogUtils::delete_blocks(
@@ -355,7 +355,7 @@ TEST_F(TestLogEXTUtils, basic_interface)
       tenant_id, ls_id, valid_block_id, valid_uri, valid_uri_len, dest, storage_id));
     EXPECT_EQ(0, STRNCMP(valid_uri, OB_FILE_PREFIX, strlen(OB_FILE_PREFIX)));
   }
-
+  
   // case7: 验证ObSharedLogUtils::delete_tenant和delete_palf
   // case7.1 验证ObSharedLogUtils::check_ls_exist
   // case7.2 验证ObSharedLogUtils::check_tenant_exist
@@ -495,7 +495,7 @@ TEST_F(TestLogEXTUtils, basic_interface)
         EXPECT_EQ(OB_SUCCESS, ObSharedLogUtils::check_tenant_exist(
           tmp_tenant_id, tmp_tenant_exist));
         EXPECT_EQ(false, tmp_tenant_exist);
-      } // end
+      } // end 
     }
   }
 }
@@ -508,7 +508,7 @@ TEST_F(TestLogEXTUtils, test_locate_by_scn_coarsely)
   // 前置条件准备
   EXPECT_EQ(OB_SUCCESS, create_tenant(tenant_id));
   EXPECT_EQ(OB_SUCCESS, create_palf(tenant_id, ls_id.id_));
-
+  
   // 产生5个文件，最小的block_id为10
   std::vector<SCN> scns(5, SCN::min_scn());
   int64_t start_ts = ObTimeUtility::current_time();
@@ -518,8 +518,8 @@ TEST_F(TestLogEXTUtils, test_locate_by_scn_coarsely)
   const block_id_t start_block_id = 10;
   const block_id_t end_block_id = 14;
   EXPECT_EQ(OB_SUCCESS, upload_blocks(tenant_id, ls_id.id(), start_block_id, scns));
-
-  uint64_t invalid_tenant_id = OB_INVALID_TENANT_ID;
+  
+  uint64_t invalid_tenant_id = OB_INVALID_TENANT_ID;  
   uint64_t valid_tenant_id = 1;
   ObLSID invalid_ls_id;
   ObLSID valid_ls_id(1001);
@@ -537,10 +537,10 @@ TEST_F(TestLogEXTUtils, test_locate_by_scn_coarsely)
     block_id_t out_block_id = LOG_INVALID_BLOCK_ID;
     SCN out_block_min_scn;
     SCN target_scn = scns[0];
-
+  
     // invalid argument
     EXPECT_EQ(OB_INVALID_ARGUMENT, ObSharedLogUtils::locate_by_scn_coarsely(
-      invalid_tenant_id, invalid_ls_id, invalid_start_block_id, invalid_end_block_id,
+      invalid_tenant_id, invalid_ls_id, invalid_start_block_id, invalid_end_block_id, 
       target_scn, out_block_id, out_block_min_scn));
     EXPECT_EQ(OB_INVALID_ARGUMENT, ObSharedLogUtils::locate_by_scn_coarsely(
       valid_tenant_id, invalid_ls_id, invalid_start_block_id, invalid_end_block_id,
@@ -568,37 +568,37 @@ TEST_F(TestLogEXTUtils, test_locate_by_scn_coarsely)
     temp_start_block_id = 1;
     temp_end_block_id = 9;
     EXPECT_EQ(OB_ENTRY_NOT_EXIST, ObSharedLogUtils::locate_by_scn_coarsely(
-      tenant_id, valid_ls_id, temp_start_block_id, temp_end_block_id,
+      tenant_id, valid_ls_id, temp_start_block_id, temp_end_block_id, 
       target_scn, out_block_id, out_block_min_scn));
     // temp_start_block_id > end_block_id
     temp_start_block_id = 15;
     temp_end_block_id = 20;
     EXPECT_EQ(OB_ENTRY_NOT_EXIST, ObSharedLogUtils::locate_by_scn_coarsely(
-      tenant_id, valid_ls_id, temp_start_block_id, temp_end_block_id,
+      tenant_id, valid_ls_id, temp_start_block_id, temp_end_block_id, 
       target_scn, out_block_id, out_block_min_scn));
-
+    
     // case 3.2: the min scn of each block is greater than target scn, return OB_ERR_OUT_OF_LOWER_BOUND
     temp_start_block_id = 11;
     temp_end_block_id = 16;
     target_scn = SCN::min_scn();
     EXPECT_EQ(OB_ERR_OUT_OF_LOWER_BOUND, ObSharedLogUtils::locate_by_scn_coarsely(
-      tenant_id, valid_ls_id, temp_start_block_id, temp_end_block_id,
+      tenant_id, valid_ls_id, temp_start_block_id, temp_end_block_id, 
       target_scn, out_block_id, out_block_min_scn));
-
+  
     // case 3.3: 日志流不存在和空日志流, return OB_ENTRY_NOT_EXIST
     uint64_t not_exist_tenant_id = 500;
     ObLSID no_block_ls_id(500);
 
     // EXPECT_EQ(OB_ENTRY_NOT_EXIST, ObSharedLogUtils::locate_by_scn_coarsely(
-    //   not_exist_tenant_id, valid_ls_id, temp_start_block_id, temp_end_block_id,
+    //   not_exist_tenant_id, valid_ls_id, temp_start_block_id, temp_end_block_id, 
     //   target_scn, out_block_id, out_block_min_scn));
     CLOG_LOG(INFO, "begin case3 empty logstream");
     EXPECT_EQ(OB_SUCCESS, create_palf(tenant_id, no_block_ls_id.id_));
     temp_start_block_id = LOG_INITIAL_BLOCK_ID;
     EXPECT_EQ(OB_ENTRY_NOT_EXIST, ObSharedLogUtils::locate_by_scn_coarsely(
-      tenant_id, no_block_ls_id, temp_start_block_id, temp_end_block_id,
+      tenant_id, no_block_ls_id, temp_start_block_id, temp_end_block_id, 
       target_scn, out_block_id, out_block_min_scn));
-
+    
     CLOG_LOG(INFO, "begin case3 success");
     // case 3.4: success situations
     temp_start_block_id = 8;
@@ -617,7 +617,7 @@ TEST_F(TestLogEXTUtils, test_locate_by_scn_coarsely)
     temp_end_block_id = 16;
     target_scn = SCN::max_scn();
     EXPECT_EQ(OB_SUCCESS, ObSharedLogUtils::locate_by_scn_coarsely(
-      tenant_id, valid_ls_id, temp_start_block_id, temp_end_block_id,
+      tenant_id, valid_ls_id, temp_start_block_id, temp_end_block_id, 
       target_scn, out_block_id, out_block_min_scn));
     EXPECT_EQ(14, out_block_id);
     EXPECT_EQ(scns[4], out_block_min_scn);
@@ -633,7 +633,7 @@ TEST_F(TestLogEXTUtils, test_locate_by_scn_coarsely_with_holes)
   // 前置条件准备
   EXPECT_EQ(OB_SUCCESS, create_tenant(tenant_id));
   EXPECT_EQ(OB_SUCCESS, create_palf(tenant_id, ls_id.id_));
-
+  
   // 产生10个连续的文件，最小的block_id为10，最大的block_id为19
   int block_count = 10;
   std::vector<SCN> scns(block_count, SCN::min_scn());
@@ -650,7 +650,7 @@ TEST_F(TestLogEXTUtils, test_locate_by_scn_coarsely_with_holes)
   const block_id_t start_block_id = 10;
   const block_id_t end_block_id = 19;
   EXPECT_EQ(OB_SUCCESS, upload_blocks(tenant_id, ls_id.id(), 10, scns));
-
+  
   block_id_t temp_start_block_id = 7;
   block_id_t temp_end_block_id = 18;
   SCN target_scn = target_scns[5];
@@ -684,7 +684,7 @@ TEST_F(TestLogEXTUtils, test_locate_by_scn_coarsely_with_holes)
   target_scn = target_scns[6];
   deleted_block_id = 13;
   EXPECT_EQ(OB_SUCCESS, ObSharedLogUtils::delete_blocks(
-      tenant_id, ls_id, deleted_block_id, deleted_block_id+2));
+      tenant_id, ls_id, deleted_block_id, deleted_block_id+2));   
   EXPECT_EQ(OB_SUCCESS, ObSharedLogUtils::locate_by_scn_coarsely(
       tenant_id, ls_id, temp_start_block_id, temp_end_block_id,
       target_scn, out_block_id, out_block_min_scn));
@@ -693,7 +693,7 @@ TEST_F(TestLogEXTUtils, test_locate_by_scn_coarsely_with_holes)
 
   // case 4: 测试第一次二分查询的block存在，但其右边在全局checkpoint之前的block都不存在
   CLOG_LOG(INFO, "begin case4");
-  temp_start_block_id = 4;
+  temp_start_block_id = 4; 
   EXPECT_EQ(OB_SUCCESS, ObSharedLogUtils::locate_by_scn_coarsely(
       tenant_id, ls_id, temp_start_block_id, temp_end_block_id,
       target_scn, out_block_id, out_block_min_scn));
@@ -742,8 +742,8 @@ TEST_F(TestLogEXTUtils, locate_with_gc)
   EXPECT_EQ(OB_SUCCESS, upload_blocks(tenant_id, ls_id.id(), 0, block_scns));
   block_id_t gc_start_block_id = 0;
   block_id_t min_block_id = 0;
-  block_id_t gc_end_block_id = random() % 1000 + 1;
-
+  block_id_t gc_end_block_id = random() % 1000 + 1; 
+  
   sleep(1);
   {
     // case 1: 测试locate范围完全落后OSS范围
@@ -754,10 +754,10 @@ TEST_F(TestLogEXTUtils, locate_with_gc)
     SCN target_scn = block_scns[target_idx];
     SCN out_block_min_scn;
     block_id_t out_block_id;
-    CLOG_LOG(INFO, "locate_by_scn_coarsely with case 1", K(locate_start_block_id), K(locate_end_block_id), K(target_idx),
+    CLOG_LOG(INFO, "locate_by_scn_coarsely with case 1", K(locate_start_block_id), K(locate_end_block_id), K(target_idx), 
                                                          K(gc_start_block_id), K(gc_end_block_id), K(min_block_id));
     EXPECT_EQ(OB_ENTRY_NOT_EXIST, ObSharedLogUtils::locate_by_scn_coarsely(
-      tenant_id, ls_id, locate_start_block_id, locate_end_block_id,
+      tenant_id, ls_id, locate_start_block_id, locate_end_block_id, 
       target_scn, out_block_id, out_block_min_scn));
   }
 
@@ -774,18 +774,18 @@ TEST_F(TestLogEXTUtils, locate_with_gc)
     SCN target_scn = block_scns[target_idx];
     SCN out_block_min_scn;
     block_id_t out_block_id;
-    CLOG_LOG(INFO, "locate_by_scn_coarsely with case 2.1", K(locate_start_block_id), K(locate_end_block_id), K(target_idx),
+    CLOG_LOG(INFO, "locate_by_scn_coarsely with case 2.1", K(locate_start_block_id), K(locate_end_block_id), K(target_idx), 
                                                            K(gc_start_block_id), K(gc_end_block_id), K(min_block_id));
     EXPECT_EQ(OB_ERR_OUT_OF_LOWER_BOUND, ObSharedLogUtils::locate_by_scn_coarsely(
-      tenant_id, ls_id, locate_start_block_id, locate_end_block_id,
+      tenant_id, ls_id, locate_start_block_id, locate_end_block_id, 
       target_scn, out_block_id, out_block_min_scn));
-
+    
     target_idx = gc_end_block_id + 1;
     target_scn = block_scns[target_idx];
-    CLOG_LOG(INFO, "locate_by_scn_coarsely with case 2.2", K(locate_start_block_id), K(locate_end_block_id), K(target_idx),
+    CLOG_LOG(INFO, "locate_by_scn_coarsely with case 2.2", K(locate_start_block_id), K(locate_end_block_id), K(target_idx), 
                                                            K(gc_start_block_id), K(gc_end_block_id), K(min_block_id));
     EXPECT_EQ(OB_SUCCESS, ObSharedLogUtils::locate_by_scn_coarsely(
-      tenant_id, ls_id, locate_start_block_id, locate_end_block_id,
+      tenant_id, ls_id, locate_start_block_id, locate_end_block_id, 
       target_scn, out_block_id, out_block_min_scn));
     EXPECT_EQ(target_idx, out_block_id);
     EXPECT_EQ(block_scns[target_idx], out_block_min_scn);
@@ -804,10 +804,10 @@ TEST_F(TestLogEXTUtils, locate_with_gc)
     SCN target_scn = block_scns[target_idx];
     SCN out_block_min_scn;
     block_id_t out_block_id;
-    CLOG_LOG(INFO, "locate_by_scn_coarsely with case 3.1", K(locate_start_block_id), K(locate_end_block_id), K(target_idx),
+    CLOG_LOG(INFO, "locate_by_scn_coarsely with case 3.1", K(locate_start_block_id), K(locate_end_block_id), K(target_idx), 
                                                            K(gc_start_block_id), K(gc_end_block_id), K(min_block_id));
     EXPECT_EQ(OB_SUCCESS, ObSharedLogUtils::locate_by_scn_coarsely(
-      tenant_id, ls_id, locate_start_block_id, locate_end_block_id,
+      tenant_id, ls_id, locate_start_block_id, locate_end_block_id, 
       target_scn, out_block_id, out_block_min_scn));
     EXPECT_EQ(target_idx, out_block_id);
     EXPECT_EQ(block_scns[target_idx], out_block_min_scn);
@@ -816,13 +816,13 @@ TEST_F(TestLogEXTUtils, locate_with_gc)
     locate_end_block_id = locate_start_block_id + random() % 1000 + 1;
     target_idx = min_block_id - 1;
     target_scn = block_scns[target_idx];
-    CLOG_LOG(INFO, "locate_by_scn_coarsely with case 3.2", K(locate_start_block_id), K(locate_end_block_id), K(target_idx),
+    CLOG_LOG(INFO, "locate_by_scn_coarsely with case 3.2", K(locate_start_block_id), K(locate_end_block_id), K(target_idx), 
                                                            K(gc_start_block_id), K(gc_end_block_id), K(min_block_id));
     EXPECT_EQ(OB_ERR_OUT_OF_LOWER_BOUND, ObSharedLogUtils::locate_by_scn_coarsely(
-      tenant_id, ls_id, locate_start_block_id, locate_end_block_id,
+      tenant_id, ls_id, locate_start_block_id, locate_end_block_id, 
       target_scn, out_block_id, out_block_min_scn));
   }
-
+  
   gc_start_block_id = gc_end_block_id;
   gc_end_block_id = gc_start_block_id + random() % 1000 + 1;
   min_block_id = gc_end_block_id;
@@ -836,10 +836,10 @@ TEST_F(TestLogEXTUtils, locate_with_gc)
     SCN target_scn = block_scns[target_idx];
     SCN out_block_min_scn;
     block_id_t out_block_id;
-    CLOG_LOG(INFO, "locate_by_scn_coarsely with case 4", K(locate_start_block_id), K(locate_end_block_id), K(target_idx),
+    CLOG_LOG(INFO, "locate_by_scn_coarsely with case 4", K(locate_start_block_id), K(locate_end_block_id), K(target_idx), 
                                                          K(gc_start_block_id), K(gc_end_block_id), K(min_block_id));
     EXPECT_EQ(OB_SUCCESS, ObSharedLogUtils::locate_by_scn_coarsely(
-      tenant_id, ls_id, locate_start_block_id, locate_end_block_id,
+      tenant_id, ls_id, locate_start_block_id, locate_end_block_id, 
       target_scn, out_block_id, out_block_min_scn));
     EXPECT_EQ(target_idx, out_block_id);
     EXPECT_EQ(block_scns[target_idx], out_block_min_scn);
@@ -868,10 +868,10 @@ TEST_F(TestLogEXTUtils, boundary_test)
   block_id_t out_block_id;
   SCN out_block_min_scn;
   EXPECT_EQ(OB_INVALID_ARGUMENT, ObSharedLogUtils::locate_by_scn_coarsely(
-    tenant_id, ls_id, start_block_id, LOG_INITIAL_BLOCK_ID,
+    tenant_id, ls_id, start_block_id, LOG_INITIAL_BLOCK_ID, 
     target_scn, out_block_id, out_block_min_scn));
   EXPECT_EQ(OB_INVALID_ARGUMENT, ObSharedLogUtils::locate_by_scn_coarsely(
-    tenant_id, ls_id, start_block_id, LOG_MAX_BLOCK_ID,
+    tenant_id, ls_id, start_block_id, LOG_MAX_BLOCK_ID, 
     target_scn, out_block_id, out_block_min_scn));
   EXPECT_EQ(OB_SUCCESS, ObSharedLogUtils::locate_by_scn_coarsely(
     tenant_id, ls_id, LOG_INITIAL_BLOCK_ID, MAX_BLOCK_ID+1, target_scn, out_block_id, out_block_min_scn));

@@ -314,7 +314,7 @@ void ObStandbyTimestampService::get_virtual_info(int64_t &ts_value, common::ObRo
     role = FOLLOWER;
     proposal_id = epoch_;
   }
-  TRANS_LOG(INFO, "sts get virtual info", K(ret), K_(last_id), K(ts_value),
+  TRANS_LOG(INFO, "sts get virtual info", K(ret), K_(last_id), K(ts_value), 
                   K(role), K(proposal_id), K_(epoch), K_(switch_to_leader_ts));
 }
 

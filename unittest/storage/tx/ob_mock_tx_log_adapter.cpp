@@ -13,12 +13,12 @@
 #include "src/storage/tx/ob_tx_log_cb_define.h"
 #include "ob_mock_tx_log_adapter.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
 
 using namespace palf;
 using namespace logservice;
-namespace transaction
+namespace transaction 
 {
 int MockTxLogAdapter::init(ObITxLogParam *param)
 {

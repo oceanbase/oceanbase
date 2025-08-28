@@ -527,3 +527,4 @@ void ObDictTenantInfoGuard::revert_tenant()
 
 } // namespace libobcdc
 } // namespace oceanbase
+

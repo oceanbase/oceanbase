@@ -31,7 +31,7 @@ namespace blocksstable
 //        |- row data
 //  |- row index buffer
 //        |- ObRowIndex
-//  |- row hash index builder(optional)
+//  |- row hash index builder(optional) 
 //
 // build output
 //  |- compressed data
@@ -68,7 +68,7 @@ private:
   int inner_init();
   inline int64_t get_index_size() const;
   inline int64_t get_data_size() const;
-  inline int64_t get_future_block_size() const;
+  inline int64_t get_future_block_size() const; 
   int try_to_append_row();
   int finish_row();
   int reserve_header(

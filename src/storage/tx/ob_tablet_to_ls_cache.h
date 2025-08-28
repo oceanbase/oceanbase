@@ -53,7 +53,7 @@ public:
     tablet_id_.reset();
   }
   ObLSTxCtxMgr *get_ls_tx_ctx_mgr() const
-  {
+  { 
     return ls_tx_ctx_mgr_;
   }
   bool contain(const common::ObTabletID &tablet_id) const

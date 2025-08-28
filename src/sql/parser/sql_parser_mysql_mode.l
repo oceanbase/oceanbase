@@ -1703,7 +1703,7 @@ BEGIN(in_c_comment);
     if (NULL != node->str_value_
     		&& *(yytext + 2) == *(yytext + 1 + node->str_len_)
     		&& (*(yytext + 2) == '`')) {
-      // bugfix:
+      // bugfix: 
       // support "select @@`xxx`;" as "select @@xxx;"
 			node->str_value_ += 1;
 			node->str_len_ -= 2;

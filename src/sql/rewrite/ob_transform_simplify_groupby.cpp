@@ -304,15 +304,15 @@ int ObTransformSimplifyGroupby::remove_child_stmts_group_by(ObArray<ObSelectStmt
           LOG_WARN("unexpected null", K(ret));
         } else if (!expr->is_aggr_expr()) {
           /*do nothing*/
-        } else if (T_FUN_MAX == expr->get_expr_type() ||
+        } else if (T_FUN_MAX == expr->get_expr_type() || 
                    T_FUN_MIN == expr->get_expr_type() ||
                    T_FUN_SUM == expr->get_expr_type() ||
                    T_FUN_SYS_BIT_AND == expr->get_expr_type() ||
                    T_FUN_SYS_BIT_OR == expr->get_expr_type() ||
                    T_FUN_SYS_BIT_XOR == expr->get_expr_type()) {
           ObRawExpr *cast_expr = expr->get_param_expr(0);
-          if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_,
-                                                                      expr, cast_expr,
+          if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_, 
+                                                                      expr, cast_expr, 
                                                                       ctx_->session_info_))) {
             LOG_WARN("failed to add cast", K(ret));
           } else {
@@ -674,22 +674,22 @@ int ObTransformSimplifyGroupby::remove_redundant_aggr(ObDMLStmt *stmt, bool &tra
     LOG_WARN("ctx_ is null", K(ret));
   } else if (!stmt->is_select_stmt() ||
              FALSE_IT(select_stmt = static_cast<ObSelectStmt *>(stmt))) {
-  } else if (select_stmt->get_group_expr_size() <= 0 ||
+  } else if (select_stmt->get_group_expr_size() <= 0 || 
              select_stmt->has_rollup()) { // do not transform stmt containing rollup for now
-  } else if (OB_FAIL(inner_remove_redundant_aggr(*select_stmt,
-                                                 redundant_aggrs,
-                                                 new_exprs,
+  } else if (OB_FAIL(inner_remove_redundant_aggr(*select_stmt, 
+                                                 redundant_aggrs, 
+                                                 new_exprs, 
                                                  trans_happened))) {
     LOG_WARN("failed to remove redundant aggrs that are determined by group by expr", K(ret));
-  }
+  } 
   return ret;
 }
 
 int ObTransformSimplifyGroupby::inner_remove_redundant_aggr(
-    ObSelectStmt &select_stmt,
-    ObIArray<ObRawExpr *> &redundant_aggrs,
+    ObSelectStmt &select_stmt, 
+    ObIArray<ObRawExpr *> &redundant_aggrs, 
     ObIArray<ObRawExpr *> &new_exprs,
-    bool &trans_happened)
+    bool &trans_happened) 
 {
   int ret = OB_SUCCESS;
   ObArray<ObAggFunRawExpr*> remaining_aggrs;  // aggrs that can not be removed
@@ -712,7 +712,7 @@ int ObTransformSimplifyGroupby::inner_remove_redundant_aggr(
       LOG_WARN("failed to push back new expr", K(ret));
     } else if (OB_FAIL(redundant_aggrs.push_back(aggr_expr))) {
       LOG_WARN("failed to push back redundant aggr", K(ret));
-    }
+    } 
   }
   // replace redundant aggr exprs, and remove them from aggr_items
   if (OB_FAIL(ret) || redundant_aggrs.count() == 0) {  // do nothing
@@ -734,7 +734,7 @@ int ObTransformSimplifyGroupby::inner_remove_redundant_aggr(
 }
 
 int ObTransformSimplifyGroupby::check_can_remove_redundant_aggr(
-    ObSelectStmt &select_stmt,
+    ObSelectStmt &select_stmt, 
     ObAggFunRawExpr &aggr_expr,
     bool &can_remove)
 {
@@ -785,8 +785,8 @@ int ObTransformSimplifyGroupby::check_can_remove_redundant_aggr(
 }
 
 int ObTransformSimplifyGroupby::simplify_redundant_aggr(
-    ObSelectStmt &select_stmt,
-    ObAggFunRawExpr &aggr_expr,
+    ObSelectStmt &select_stmt, 
+    ObAggFunRawExpr &aggr_expr, 
     ObRawExpr *&new_expr)
 {
   int ret = OB_SUCCESS;
@@ -800,8 +800,8 @@ int ObTransformSimplifyGroupby::simplify_redundant_aggr(
     switch (func_type) {
       case T_FUN_MAX:
       case T_FUN_MIN:
-      case T_FUN_MEDIAN:
-      case T_FUN_SUM:
+      case T_FUN_MEDIAN: 
+      case T_FUN_SUM: 
       case T_FUN_GROUP_CONCAT: {
         // max/min/median -> expr
         // sum/group_concat(distinct expr) -> expr
@@ -810,23 +810,23 @@ int ObTransformSimplifyGroupby::simplify_redundant_aggr(
       }
       case T_FUN_SYS_BIT_OR:
       case T_FUN_SYS_BIT_AND: {
-        // bit_and/bit_or(expr)
+        // bit_and/bit_or(expr) 
         // 1. expr is not nullable -> expr
         // 2. expr is nullable     -> case when expr is not null then expr else uint64_max
         ObConstRawExpr *const_u64_max_expr = NULL;
-        if (OB_FAIL(ObTransformUtils::is_expr_not_null(ctx_,
-                                                      &select_stmt,
-                                                      param_expr,
+        if (OB_FAIL(ObTransformUtils::is_expr_not_null(ctx_, 
+                                                      &select_stmt, 
+                                                      param_expr, 
                                                       NULLABLE_SCOPE::NS_GROUPBY,
                                                       is_not_null))) {
           LOG_WARN("failed to check if expr is not null", K(ret), K(aggr_expr));
         } else if (is_not_null) {
           new_expr = param_expr;
-        } else if (OB_FAIL(ObTransformUtils::transform_bit_aggr_to_common_expr(select_stmt,
-                                                                              &aggr_expr,
-                                                                              ctx_,
+        } else if (OB_FAIL(ObTransformUtils::transform_bit_aggr_to_common_expr(select_stmt, 
+                                                                              &aggr_expr, 
+                                                                              ctx_, 
                                                                               new_expr))) {
-          LOG_WARN("failed to transform bit aggr to common expr", KR(ret), K(aggr_expr),
+          LOG_WARN("failed to transform bit aggr to common expr", KR(ret), K(aggr_expr), 
                                                                   K(func_type), K(select_stmt));
         }
         break;
@@ -837,20 +837,20 @@ int ObTransformSimplifyGroupby::simplify_redundant_aggr(
         // 2. expr is nullable     -> case when expr is not null then 1 else 0
         ObConstRawExpr *const_one = NULL;
         ObConstRawExpr *const_zero = NULL;
-        if (OB_FAIL(ObTransformUtils::is_expr_not_null(ctx_,
-                                                      &select_stmt,
-                                                      param_expr,
+        if (OB_FAIL(ObTransformUtils::is_expr_not_null(ctx_, 
+                                                      &select_stmt, 
+                                                      param_expr, 
                                                       NULLABLE_SCOPE::NS_GROUPBY,
                                                       is_not_null))) {
           LOG_WARN("failed to check if expr is not null", K(ret), K(aggr_expr));
-        } else if (OB_FAIL(ObTransformUtils::build_const_expr_for_count(*ctx_->expr_factory_,
-                                                                        1,
+        } else if (OB_FAIL(ObTransformUtils::build_const_expr_for_count(*ctx_->expr_factory_, 
+                                                                        1, 
                                                                         const_one))) {
           LOG_WARN("failed to build const one expr", K(ret));
         } else if (is_not_null) {
           new_expr = const_one;
-        } else if (OB_FAIL(ObTransformUtils::build_const_expr_for_count(*ctx_->expr_factory_,
-                                                                        0,
+        } else if (OB_FAIL(ObTransformUtils::build_const_expr_for_count(*ctx_->expr_factory_, 
+                                                                        0, 
                                                                         const_zero))) {
           LOG_WARN("failed to build const zero expr", K(ret));
         } else if (OB_FAIL(ObTransformUtils::build_case_when_expr(select_stmt,
@@ -1175,8 +1175,8 @@ int ObTransformSimplifyGroupby::convert_valid_count_aggr(ObSelectStmt *select_st
                                                                       const_zero))) {
         LOG_WARN("failed to build const expr for count", K(ret));
       } else if (OB_FALSE_IT(const_zero_with_cast = const_zero)) {
-      } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_,
-                                                                        aggr, const_zero_with_cast,
+      } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_, 
+                                                                        aggr, const_zero_with_cast, 
                                                                         ctx_->session_info_))) {
         LOG_WARN("failed to add cast for replace if need", K(ret));
       } else if (OB_FAIL(const_zeros.push_back(const_zero_with_cast))) {
@@ -2085,7 +2085,7 @@ int ObTransformSimplifyGroupby::get_valid_having_exprs_contain_aggr(
   return ret;
 }
 
-/*A group by clause can be converted to distinct when all of the following conditions are met:
+/*A group by clause can be converted to distinct when all of the following conditions are met: 
 1. There is no aggregate function or window function or rownum
 2. having_exprs don't contain subquery exprs
 2. The group by expr is a subset of the select expr
@@ -2248,7 +2248,7 @@ bool ObTransformSimplifyGroupby::is_numeric(ObObjType type)
     case common::ObNumberType:
     case common::ObDecimalIntType: {
       aggr_is_valid = true;
-      break;
+      break;  
     }
     default: {
       aggr_is_valid = false;

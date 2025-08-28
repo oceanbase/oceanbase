@@ -64,7 +64,7 @@ namespace standby
 class ObStandbyService
 {
 public:
-  ObStandbyService():
+  ObStandbyService(): 
            sql_proxy_(NULL),
            schema_service_(NULL),
            inited_(false) {}
@@ -85,7 +85,7 @@ public:
   /**
    * @description:
    *    set tenant recover checkpoint
-   * @param[in] arg
+   * @param[in] arg 
    * @return return code
    */
   int recover_tenant(const obrpc::ObRecoverTenantArg &arg);
@@ -129,7 +129,7 @@ public:
   /**
    * @description:
    *    get tenant status from all_tenant
-   * @param[in] tenant_id
+   * @param[in] tenant_id 
    * @param[out] status tenant status from all_tenant
    * @return return code
    */
@@ -259,7 +259,7 @@ private:
    */
   int check_ls_restore_status_(const uint64_t tenant_id);
   int write_barrier_log_(const transaction::ObTxDataSourceType type,
-                         ObMySQLTransaction &trans,
+                         ObMySQLTransaction &trans, 
                          const uint64_t tenant_id,
                          const uint64_t data_version);
 

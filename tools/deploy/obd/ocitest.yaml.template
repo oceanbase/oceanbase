@@ -1,7 +1,7 @@
 oceanbase-ce:
 {{%% SERVERS %%}}
   tag: latest
-  global:
+  global: 
     log_disk_size: '240G'
     home_path: /data/{user}/{deploy_name}/observer/{server}
     production_mode: false

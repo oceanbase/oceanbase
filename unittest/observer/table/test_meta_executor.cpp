@@ -185,7 +185,7 @@ TEST_F(TestObHTableCreateHandler, parse_and_generate_sql_with_ttl)
   ObSEArray<ObString, 3> column_family_sql_array;
   ASSERT_EQ(OB_SUCCESS, handler.get_create_table_sql(tablegroup_sql, column_family_sql_array));
 
-  // 5. check sql
+  // 5. check sql 
   ASSERT_EQ(1, column_family_sql_array.count());
   std::string sql(column_family_sql_array[0].ptr(), column_family_sql_array[0].length());
   // check table name, column family name, kv_attributes
@@ -238,7 +238,7 @@ TEST_F(TestObHTableCreateHandler, parse_and_generate_sql_with_max_version)
   // check tablegroup
   std::string tg(tablegroup_sql.ptr(), tablegroup_sql.length());
   EXPECT_NE(tg.find("CREATE TABLEGROUP `test`"), std::string::npos);
-}
+} 
 
 TEST_F(TestObHTableCreateHandler, parse_and_generate_sql_with_ttl_and_max_version)
 {
@@ -381,7 +381,7 @@ int TestObHTableRegionLocatorHandler::build_tablet_infos(ObIAllocator &allocator
             tinfo->replicas_.push_back(replica);
           }
         }
-        tablet_infos.push_back(tinfo);
+        tablet_infos.push_back(tinfo); 
       }
     }
   }

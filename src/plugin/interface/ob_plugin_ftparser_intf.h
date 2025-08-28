@@ -53,7 +53,7 @@ public:
                        K_(parser_version),
                        KP_(plugin_param),
                        KP_(user_data));
-
+  
 public:
   const ObCharsetInfo  *cs_             = nullptr;
   const char           *fulltext_       = nullptr;

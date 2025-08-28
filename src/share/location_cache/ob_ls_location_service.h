@@ -194,7 +194,7 @@ public:
   // Dump all ls locations in cache.
   int dump_cache();
   /*
-    Check if the ls_id cache needs renewal:
+    Check if the ls_id cache needs renewal: 
     renew if cache time < expire_renew_time or ls_id info is missing.
   */
   int check_ls_needing_renew(

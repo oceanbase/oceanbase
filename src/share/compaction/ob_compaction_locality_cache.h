@@ -47,7 +47,7 @@ private:
       const char *str,
       ObIArray<common::ObZone> &zone_list);
   int refresh_by_zone(
-      const share::ObLSInfo &ls_info,
+      const share::ObLSInfo &ls_info, 
       const ObIArray<common::ObZone> &zone_list);
   bool replica_in_zone_list(
       const ObLSReplica &ls_replica,

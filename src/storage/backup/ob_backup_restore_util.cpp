@@ -164,7 +164,7 @@ int ObLSBackupRestoreUtil::read_macro_block_id_mapping_metas(const common::ObStr
 }
 
 int ObLSBackupRestoreUtil::read_macro_block_data(const common::ObString &path, const share::ObBackupStorageInfo *storage_info, const common::ObStorageIdMod &mod,
-    const ObBackupMacroBlockIndex &macro_index, const int64_t align_size, blocksstable::ObBufferReader &read_buffer,
+    const ObBackupMacroBlockIndex &macro_index, const int64_t align_size, blocksstable::ObBufferReader &read_buffer, 
     blocksstable::ObBufferReader &data_buffer)
 {
   int ret = OB_SUCCESS;
@@ -211,7 +211,7 @@ int ObLSBackupRestoreUtil::read_macro_block_data(const common::ObString &path, c
 }
 
 int ObLSBackupRestoreUtil::read_macro_block_data_with_retry(const common::ObString &path, const share::ObBackupStorageInfo *storage_info, const common::ObStorageIdMod &mod,
-      const ObBackupMacroBlockIndex &macro_index, const int64_t align_size, blocksstable::ObBufferReader &read_buffer,
+      const ObBackupMacroBlockIndex &macro_index, const int64_t align_size, blocksstable::ObBufferReader &read_buffer, 
       blocksstable::ObBufferReader &data_buffer)
 {
   int ret = OB_SUCCESS;
@@ -230,7 +230,7 @@ int ObLSBackupRestoreUtil::read_macro_block_data_with_retry(const common::ObStri
     }
   }
   return ret;
-}
+}      
 
 int ObLSBackupRestoreUtil::read_ddl_sstable_other_block_id_list_in_ss_mode(
     const share::ObBackupDest &backup_set_dest, const common::ObString &path, const share::ObBackupStorageInfo *storage_info, const ObStorageIdMod &mod,

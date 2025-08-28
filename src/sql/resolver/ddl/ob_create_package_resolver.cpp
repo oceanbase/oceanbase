@@ -447,7 +447,7 @@ int ObCreatePackageResolver::resolve_functions_spec(const ObPackageInfo &package
       if (pl_routine_info->is_pipelined()) {
         routine_info.set_pipelined();
       }
-      //set data access info
+      //set data access info 
       if (pl_routine_info->is_no_sql()) {
         routine_info.set_no_sql();
       } else if (pl_routine_info->is_reads_sql_data()) {

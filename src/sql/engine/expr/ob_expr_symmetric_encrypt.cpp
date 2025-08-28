@@ -183,7 +183,7 @@ int ObExprBaseDecrypt::eval_decrypt(const ObExpr &expr,
     res.set_null();
   } else if (OB_UNLIKELY(2 != expr.arg_cnt_ && 3 != expr.arg_cnt_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error", K(ret), K(expr.arg_cnt_));
+    LOG_WARN("unexpected error", K(ret), K(expr.arg_cnt_));  
   } else if (FALSE_IT(is_ecb= ObEncryptionUtil::is_ecb_mode(op_mode))) {
   } else if (!is_ecb && 3 != expr.arg_cnt_) {
     ret = OB_ERR_PARAM_SIZE;

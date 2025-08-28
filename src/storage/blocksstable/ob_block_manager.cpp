@@ -908,7 +908,7 @@ int ObBlockManager::get_limited_iter_macro_ids(ObArray<MacroBlockId> &ids_array,
     } else {
       LOG_WARN("fail to for each block map", K(ret), K(getter.get_ret_code()));
     }
-  }
+  }    
   return ret;
 }
 

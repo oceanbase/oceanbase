@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #include "ob_all_virtual_tablet_buffer_info.h"
 
 namespace oceanbase
@@ -148,7 +148,7 @@ int ObAllVirtualTabletBufferInfo::gen_row(
       break;
     case POOL_TYPE:
       //pool_type
-      cur_row_.cells_[i].set_varchar(buffer_info.pool_type_ == ObTabletPoolType::TP_LARGE
+      cur_row_.cells_[i].set_varchar(buffer_info.pool_type_ == ObTabletPoolType::TP_LARGE 
         ? "TP_LARGE" : "TP_NORMAL");
       cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
       break;

@@ -795,8 +795,8 @@ int ObRebuildService::errsim_manual_rebuild_() {
     const ObString &errsim_rebuild_addr = GCONF.errsim_rebuild_addr.str();
     common::ObAddr addr;
     const ObAddr &my_addr = GCONF.self_addr_;
-
-    // trigger follower rebuild
+    
+    // trigger follower rebuild 
     const ObLSRebuildType rebuild_type(ObLSRebuildType::TRANSFER);
     if (!errsim_rebuild_addr.empty() && OB_FAIL(addr.parse_from_string(errsim_rebuild_addr))) {
       LOG_WARN("failed to parse from string to addr", K(ret), K(errsim_rebuild_addr));
@@ -1294,7 +1294,7 @@ int ObLSRebuildMgr::generate_rebuild_ls_task_()
     } else if (FALSE_IT(ls_id = ls->get_ls_id())) {
     } else if (OB_ISNULL(GCTX.ob_service_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ob service should not be NULL", K(ret));
+      LOG_WARN("ob service should not be NULL", K(ret)); 
     } else if (OB_FAIL(GCTX.ob_service_->fill_ls_replica(tenant_id, ls_id, ls_replica))) {
       LOG_WARN("failed to fill ls replica", K(ret), K(tenant_id), K(ls_id));
     } else {
@@ -1369,3 +1369,4 @@ int ObLSRebuildMgr::generate_rebuild_tablet_task_()
   }
   return ret;
 }
+

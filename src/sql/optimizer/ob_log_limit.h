@@ -71,7 +71,7 @@ namespace sql
       return is_fetch_with_ties_;
     }
     virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
-    virtual int get_plan_item_info(PlanText &plan_text,
+    virtual int get_plan_item_info(PlanText &plan_text, 
                                 ObSqlPlanItem &plan_item) override;
   private:
     bool is_calc_found_rows_;

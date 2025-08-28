@@ -584,7 +584,7 @@ TEST_F(TestLSRestoreHandler, wait_state)
   EXPECT_EQ(ObLSRestoreStatus::Status::WAIT_RESTORE_MAJOR_DATA, ls->get_ls_restore_handler()->state_handler_->ls_restore_status_);
   EXPECT_EQ(OB_SUCCESS, ls->get_ls_restore_handler()->state_handler_->do_restore());
   EXPECT_EQ(ObLSRestoreStatus::Status::NONE, ls->ls_meta_.restore_status_);
-
+  
   ob_role = ObRole::FOLLOWER;
   // follower in wait restore sys tablets
   leader_status = ObLSRestoreStatus::Status::RESTORE_TABLETS_META;
@@ -613,7 +613,7 @@ TEST_F(TestLSRestoreHandler, wait_state)
   EXPECT_EQ(ObLSRestoreStatus::Status::WAIT_RESTORE_TABLETS_META, ls->get_ls_restore_handler()->state_handler_->ls_restore_status_);
   EXPECT_EQ(OB_SUCCESS, ls->get_ls_restore_handler()->state_handler_->do_restore());
   EXPECT_EQ(ObLSRestoreStatus::Status::RESTORE_TO_CONSISTENT_SCN, ls->ls_meta_.restore_status_);
-
+  
   leader_status = ObLSRestoreStatus::Status::WAIT_QUICK_RESTORE;
   ls->ls_meta_.restore_status_ = ObLSRestoreStatus::Status::WAIT_RESTORE_TABLETS_META;
   EXPECT_EQ(OB_SUCCESS, ls->get_ls_restore_handler()->state_handler_->do_restore());
@@ -637,7 +637,7 @@ TEST_F(TestLSRestoreHandler, wait_state)
   ls->ls_meta_.restore_status_ = ObLSRestoreStatus::Status::WAIT_QUICK_RESTORE;
   EXPECT_EQ(OB_SUCCESS, ls->get_ls_restore_handler()->state_handler_->do_restore());
   EXPECT_EQ(ObLSRestoreStatus::Status::WAIT_QUICK_RESTORE, ls->ls_meta_.restore_status_);
-
+  
   // follower in quick restore finish
   leader_status = ObLSRestoreStatus::Status::RESTORE_MAJOR_DATA;
   ls->get_ls_restore_handler()->state_handler_ = nullptr;

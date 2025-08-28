@@ -1298,7 +1298,7 @@ int ObInsertResolver::resolve_column_ref_expr(const ObQualifiedName &q_name, ObR
     } else {
       // don't print this log as WARN,
       // as it takes lots of CPU cycles when inserting many rows
-      // related issue:
+      // related issue: 
       LOG_TRACE("resolve basic column ref failed", K(ret), K(q_name));
     }
   }

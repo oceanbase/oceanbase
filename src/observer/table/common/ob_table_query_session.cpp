@@ -77,7 +77,7 @@ int ObTableNewQueryAsyncSession::get_or_create_query_iter(ObTableEntityType enti
 int ObTableNewQueryAsyncSession::init_query_ctx(const uint64_t table_id,
                                                 const ObTabletID tablet_id,
                                                 const ObString &table_name,
-                                                const bool is_tablegroup_req,
+                                                const bool is_tablegroup_req, 
                                                 table::ObTableApiCredential &credential)
 {
   int ret = OB_SUCCESS;
@@ -100,7 +100,7 @@ int ObTableNewQueryAsyncSession::init_query_ctx(const uint64_t table_id,
   return ret;
 }
 
-int ObTableNewQueryAsyncSession::get_or_create_exec_ctx(ObTableExecCtx *&async_exec_ctx)
+int ObTableNewQueryAsyncSession::get_or_create_exec_ctx(ObTableExecCtx *&async_exec_ctx) 
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(table_exec_ctx_)) {
@@ -125,7 +125,7 @@ int ObTableNewQueryAsyncSession::get_or_create_exec_ctx(ObTableExecCtx *&async_e
 void ObTableNewQueryAsyncSession::set_timeout_ts()
 {
   if (OB_NOT_NULL(query_iter_)) {
-    int64_t timeout_ts = query_iter_->get_session_time_out_ts();
+    int64_t timeout_ts = query_iter_->get_session_time_out_ts(); 
     if (timeout_ts != UINT64_MAX) {
       timeout_ts_ = timeout_ts;
     }
@@ -136,7 +136,7 @@ uint64_t ObTableNewQueryAsyncSession::get_lease_timeout_period() const
 {
   uint64_t lease_timeout_period = 0;
   if (OB_NOT_NULL(query_iter_)) {
-    uint64_t timeout_priod = query_iter_->get_lease_timeout_period();
+    uint64_t timeout_priod = query_iter_->get_lease_timeout_period(); 
     if (timeout_priod != UINT64_MAX) {
       lease_timeout_period = timeout_priod;
     }

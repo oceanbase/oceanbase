@@ -101,7 +101,7 @@ template <>
   const char *NULL_VALUE_STR = "NULL";
   if (params.print_null_string_value_) {
     bool is_oracle_mode = lib::is_oracle_mode();
-    // oracle and mysql data type mapping:
+    // oracle and mysql data type mapping: 
     switch (params.ob_obj_type_) {
       case ObNullType:
         break;
@@ -1680,12 +1680,12 @@ DEF_ENUMSET_INNER_FUNCS(ObSetInnerType, set_inner, ObString);
     int cs = obj.get_collation_type();                                      \
     uint64_t ret =  ob_crc64_sse42(current, &cs, sizeof(cs));               \
     return ob_crc64_sse42(ret, obj.get_string_ptr(), obj.get_string_len()); \
-  }
+  }  
 
 // ToDo: @gehao
 // 1. SERIALIZE/DESERIALIZE will drop has_lob_header flag. However, only table api use these functions,
 //    and lob locators are removed in table apis. Error may occur if used in other scenes.
-// 2. CS_FUNCS: lob with same content and different lobids will have different crc & hash,
+// 2. CS_FUNCS: lob with same content and different lobids will have different crc & hash, 
 //    but error occur in farm, not used?
 
 #define DEF_TEXT_FUNCS(OBJTYPE, TYPE, VTYPE) \
@@ -1871,7 +1871,7 @@ inline int obj_print_sql<ObJsonType>(const ObObj &obj, char *buffer, int64_t len
     COMMON_LOG(WARN, "fail to convert json to string", K(ret), K(obj));
   } else if (OB_FAIL(databuff_printf(buffer, length, pos, "'"))) {
     COMMON_LOG(WARN, "fail to print \"'\"", K(ret), K(length), K(pos));
-  } else if (OB_FAIL(databuff_printf(buffer, length, pos, "%.*s",
+  } else if (OB_FAIL(databuff_printf(buffer, length, pos, "%.*s", 
                                      static_cast<int>(MIN(jbuf.length(), length - pos)),
                                      jbuf.ptr()))) {
     COMMON_LOG(WARN, "fail to print json doc", K(ret), K(length), K(pos), K(jbuf.length()));
@@ -3383,7 +3383,7 @@ inline uint64_t obj_crc64_v3<ObDecimalIntType>(const ObObj &obj, const uint64_t 
 }
 
 // ObUserDefinedSQLType = 49
-// An UDT is stored as it's leaf type columns, the root type column will not appear in storage now,
+// An UDT is stored as it's leaf type columns, the root type column will not appear in storage now, 
 // and will be atmost a few bytes in the feature.
 // UDTs does not have hash functions
 // subschema id or flags are not used in checksum functions, because the same subschema id may has different meanings.
@@ -3432,7 +3432,7 @@ inline uint64_t obj_crc64_v3<ObDecimalIntType>(const ObObj &obj, const uint64_t 
     return ob_crc64_sse42(current, obj.get_string_ptr(), obj.get_string_len());      \
   }                                                                                  \
 
-DEF_UDT_CS_FUNCS(ObUserDefinedSQLType);
+DEF_UDT_CS_FUNCS(ObUserDefinedSQLType); 
 
 // DEF_TEXT_PRINT_FUNCS(ObUserDefinedSQLType);
 // use clob for test currently
@@ -3601,7 +3601,7 @@ inline int obj_print_plain_str<ObCollectionSQLType>(const ObObj &obj, char *buff
   ObString udt_data;
   if (OB_FAIL(obj.get_udt_print_data(udt_data, buffer, length, pos, true))) {
   } else if (params.coll_meta_ != NULL) {
-    // array
+    // array 
     ObCollectionArrayType *arr_type = static_cast<ObCollectionArrayType *>(params.coll_meta_->collection_meta_);
     ObString res_str;
     ObIArrayType *arr_obj = nullptr;

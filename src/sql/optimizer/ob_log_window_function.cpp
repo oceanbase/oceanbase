@@ -130,7 +130,7 @@ int ObLogWindowFunction::get_plan_item_info(PlanText &plan_text,
     END_BUF_PRINT(plan_item.operation_, plan_item.operation_len_);
   }
   if (OB_SUCC(ret)) {
-    BEGIN_BUF_PRINT;
+    BEGIN_BUF_PRINT; 
     for (int64_t i = 0; i < win_exprs_.count() && OB_SUCC(ret); ++i) {
       ObWinFunRawExpr *win_expr = win_exprs_.at(i);
       if (i != 0 && OB_FAIL(BUF_PRINTF("\n      "))) {
@@ -306,7 +306,7 @@ int ObLogWindowFunction::inner_est_cost(double child_card, double child_width, d
     LOG_WARN("plan is null", K(ret));
   } else if (OB_UNLIKELY((parallel = get_parallel()) < 1)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected parallel degree", K(parallel), K(ret));
+    LOG_WARN("get unexpected parallel degree", K(parallel), K(ret)); 
   } else if (OB_FAIL(ObOptEstCost::cost_window_function(child_card / parallel,
                                                         child_width,
                                                         win_exprs_.count(),
@@ -355,7 +355,7 @@ int ObLogWindowFunction::est_cost()
   } else if (need_re_est_child_cost() &&
              OB_FAIL(SMART_CALL(first_child->re_est_cost(param, child_card, child_cost)))) {
     LOG_WARN("failed to re est child cost", K(ret));
-  } else if (!need_re_est_child_cost() &&
+  } else if (!need_re_est_child_cost() && 
              OB_FALSE_IT(child_cost=first_child->get_cost())) {
   } else {
     set_cost(child_cost + op_cost_);
@@ -569,7 +569,7 @@ bool ObLogWindowFunction::is_block_op() const
 
 int ObLogWindowFunction::print_outline_data(PlanText &plan_text)
 {
-  int ret = OB_SUCCESS;
+  int ret = OB_SUCCESS;  
   const ObSelectStmt *stmt = NULL;
   ObString qb_name;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = dynamic_cast<const ObSelectStmt*>(get_plan()->get_stmt()))) {
@@ -582,7 +582,7 @@ int ObLogWindowFunction::print_outline_data(PlanText &plan_text)
   } else {
     get_plan()->set_added_win_dist();
     ObWindowDistHint win_dist_hint;
-    win_dist_hint.set_qb_name(qb_name);
+    win_dist_hint.set_qb_name(qb_name);  
     if (OB_FAIL(add_win_dist_options(this, stmt->get_window_func_exprs(), win_dist_hint))) {
       LOG_WARN("failed to add win dist options", K(ret));
     } else if (OB_FAIL(win_dist_hint.print_hint(plan_text))) {

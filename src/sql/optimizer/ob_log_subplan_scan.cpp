@@ -76,7 +76,7 @@ int ObLogSubPlanScan::allocate_expr_post(ObAllocExprContext &ctx)
   return ret;
 }
 
-int ObLogSubPlanScan::get_plan_item_info(PlanText &plan_text,
+int ObLogSubPlanScan::get_plan_item_info(PlanText &plan_text, 
                                          ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
@@ -84,7 +84,7 @@ int ObLogSubPlanScan::get_plan_item_info(PlanText &plan_text,
   if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
     LOG_WARN("failed to get plan item info", K(ret));
   } else {
-    BEGIN_BUF_PRINT;
+    BEGIN_BUF_PRINT; 
     const ObIArray<ObRawExpr*> &access = get_access_exprs();
     EXPLAIN_PRINT_EXPRS(access, type);
     END_BUF_PRINT(plan_item.access_predicates_,
@@ -92,9 +92,9 @@ int ObLogSubPlanScan::get_plan_item_info(PlanText &plan_text,
   }
   if (OB_SUCC(ret)) {
     const ObString &name = get_subquery_name();
-    BUF_PRINT_OB_STR(name.ptr(),
-                     name.length(),
-                     plan_item.object_alias_,
+    BUF_PRINT_OB_STR(name.ptr(), 
+                     name.length(), 
+                     plan_item.object_alias_, 
                      plan_item.object_alias_len_);
   }
   return ret;
@@ -128,7 +128,7 @@ int ObLogSubPlanScan::do_re_est_cost(EstimateCostInfo &param, double &card, doub
       LOG_WARN("failed to re est exchange cost", K(ret));
     } else {
       ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
-      op_cost = ObOptEstCost::cost_filter_rows(child_card / parallel,
+      op_cost = ObOptEstCost::cost_filter_rows(child_card / parallel, 
                                                get_filter_exprs(),
                                                opt_ctx);
       cost = child_cost + op_cost;

@@ -91,7 +91,7 @@ void ObMulModeReader::init()
         ObXmlNode* node = static_cast<ObXmlNode*>(cur_);
         node->ObLibContainerNode::get_children(seek_info_.key_, range);
         new (&tree_iter_) ObXmlNode::iterator(node->sorted_begin());
-
+        
         tree_iter_.set_range(range.first - tree_iter_, range.second - tree_iter_ + 1);
       }
     } else if (is_attr_scan) {

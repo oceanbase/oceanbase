@@ -506,7 +506,7 @@ int ObSetWriteDefensiveOp::operator()(ObTabletBindingMdsUserData &data)
   int ret = OB_SUCCESS;
   data.redefined_ = false;
   data.schema_version_ = schema_version_;
-  return ret;
+  return ret; 
 };
 
 int ObTabletUnbindMdsHelper::set_redefined_versions_for_hidden_tablets(

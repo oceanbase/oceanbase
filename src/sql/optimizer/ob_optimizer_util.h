@@ -165,7 +165,7 @@ public:
   static bool is_expr_equivalent(const ObRawExpr *from,
                                  const ObRawExpr *to,
                                  const EqualSets &equal_sets);
-
+  
   static bool is_exprs_equivalent(const common::ObIArray<ObRawExpr*> &from,
                                  const common::ObIArray<ObRawExpr*> &to,
                                  const EqualSets &equal_sets);
@@ -205,7 +205,7 @@ public:
                                    bool &is_strict,
                                    const ParamStore &param_store,
                                    ObPCConstParamInfo& const_param_info);
-
+                                   
   static int get_expr_monotonicity_recursively(const ObRawExpr *expr,
                                                const ObColumnRefRawExpr *var,
                                                ObExecContext &ctx,
@@ -1466,7 +1466,7 @@ public:
                                            const ObRelIds &left_tables,
                                            ObIArray<ObRawExpr *> &left_exprs,
                                            ObIArray<ObRawExpr *> &right_exprs);
-
+  
   static int extract_pushdown_join_filter_quals(const ObIArray<ObRawExpr *> &left_quals,
                                                 const ObIArray<ObRawExpr *> &right_quals,
                                                 const ObSqlBitSet<> &right_tables,
@@ -1487,7 +1487,7 @@ public:
                                               const ObIArray<ObRawExpr*> &pushdown_right_quals,
                                               ObIArray<ObRawExpr*> &candi_left_quals,
                                               ObIArray<ObRawExpr*> &candi_right_quals);
-
+  
   static int check_pushdown_join_filter_for_subquery(const ObDMLStmt &parent_stmt,
                                                      const ObSelectStmt &subquery,
                                                      ObIArray<ObRawExpr*> &common_exprs,
@@ -1548,7 +1548,7 @@ public:
                                            ObRawExpr *&push_filter,
                                            bool &can_pushdown_all,
                                            bool check_match_index = true);
-
+  
   static bool find_superset(const ObRelIds &rel_ids,
                            const ObIArray<ObRelIds> &single_table_ids);
 
@@ -1629,7 +1629,7 @@ public:
   static int preprocess_multivalue_range_exprs(ObIAllocator &allocator,
                                                const ObIArray<ObRawExpr*> &range_exprs,
                                                ObIArray<ObRawExpr*> &out_range_exprs);
-
+  
   static int can_extract_implicit_cast_range(ObItemType cmp_type,
                                             const ObColumnRefRawExpr &column_expr,
                                             const ObRawExpr &const_expr,

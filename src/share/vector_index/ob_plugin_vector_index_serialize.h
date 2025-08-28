@@ -52,7 +52,7 @@ public:
     virtual ~CbParam() = default;
   };
   using Callback = ObFunction<int(const char *, const int64_t, CbParam &)>;
-  explicit ObOStreamBuf(char *data, const int64_t capacity, CbParam &cb_param, Callback &cb)
+  explicit ObOStreamBuf(char *data, const int64_t capacity, CbParam &cb_param, Callback &cb) 
     : ObStreamBuf(data, capacity),
       cb_param_(cb_param),
       cb_(cb)
@@ -84,7 +84,7 @@ public:
     virtual ~CbParam() = default;
   };
   using Callback = ObFunction<int(char *&, const int64_t, int64_t &, CbParam &)>;
-  explicit ObIStreamBuf(char *data, const int64_t capacity, CbParam &cb_param, Callback &cb)
+  explicit ObIStreamBuf(char *data, const int64_t capacity, CbParam &cb_param, Callback &cb) 
     : ObStreamBuf(data, capacity),
       cb_param_(cb_param),
       cb_(cb)
@@ -181,13 +181,13 @@ public:
 private:
 };
 
-class ObVectorIndexSerializer
+class ObVectorIndexSerializer 
 {
 public:
   explicit ObVectorIndexSerializer(ObIAllocator &allocator)
     : allocator_(allocator)
   {}
-
+  
   int serialize(void *index, ObOStreamBuf::CbParam &cb_param, ObOStreamBuf::Callback &cb, uint64_t tenant_id, const int64_t capacity = DEFAULT_OUTBUF_CAPACITY);
   int deserialize(void *&index, ObIStreamBuf::CbParam &cb_param, ObIStreamBuf::Callback &cb, uint64_t tenant_id);
 private:

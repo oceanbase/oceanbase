@@ -29,7 +29,7 @@ ObCopyTabletRecordExtraInfo::ObCopyTabletRecordExtraInfo()
     reuse_macro_count_(0),
     max_reuse_mgr_size_(0),
     restore_action_(ObTabletRestoreAction::ACTION::RESTORE_NONE)
-{
+{ 
 }
 
 ObCopyTabletRecordExtraInfo::~ObCopyTabletRecordExtraInfo()
@@ -45,7 +45,7 @@ void ObCopyTabletRecordExtraInfo::reset()
   macro_count_ = 0;
   major_macro_count_ = 0;
   reuse_macro_count_ = 0;
-  max_reuse_mgr_size_ = 0;
+  max_reuse_mgr_size_ = 0; 
   restore_action_ = ObTabletRestoreAction::ACTION::RESTORE_NONE;
 }
 
@@ -64,7 +64,7 @@ int ObCopyTabletRecordExtraInfo::update_max_reuse_mgr_size(ObMacroBlockReuseMgr 
   }
 
   return ret;
-}
+} 
 
 /******************ObPhysicalCopyCtx*********************/
 ObPhysicalCopyCtx::ObPhysicalCopyCtx()
@@ -101,17 +101,17 @@ ObPhysicalCopyCtx::~ObPhysicalCopyCtx()
 bool ObPhysicalCopyCtx::is_valid() const
 {
   bool bool_ret = false;
-  bool_ret = tenant_id_ != OB_INVALID_ID
-             && ls_id_.is_valid()
+  bool_ret = tenant_id_ != OB_INVALID_ID 
+             && ls_id_.is_valid() 
              && tablet_id_.is_valid()
-             && OB_NOT_NULL(bandwidth_throttle_)
-             && OB_NOT_NULL(svr_rpc_proxy_)
+             && OB_NOT_NULL(bandwidth_throttle_) 
+             && OB_NOT_NULL(svr_rpc_proxy_) 
              && OB_NOT_NULL(ha_dag_)
-             && OB_NOT_NULL(sstable_index_builder_)
+             && OB_NOT_NULL(sstable_index_builder_) 
              && ((need_check_seq_ && ls_rebuild_seq_ >= 0) || !need_check_seq_)
-             && table_key_.is_valid()
-             && total_macro_count_ >= 0
-             && reuse_macro_count_ >= 0
+             && table_key_.is_valid() 
+             && total_macro_count_ >= 0 
+             && reuse_macro_count_ >= 0 
              && OB_NOT_NULL(extra_info_);
   if (bool_ret) {
     if (!is_leader_restore_) {
@@ -119,7 +119,7 @@ bool ObPhysicalCopyCtx::is_valid() const
     } else if (OB_ISNULL(restore_base_info_) || OB_ISNULL(second_meta_index_store_)) {
       bool_ret = false;
     } else if (!ObTabletRestoreAction::is_restore_remote_sstable(restore_action_)
-               && !ObTabletRestoreAction::is_restore_replace_remote_sstable(restore_action_)
+               && !ObTabletRestoreAction::is_restore_replace_remote_sstable(restore_action_) 
                && OB_ISNULL(restore_macro_block_id_mgr_)) {
       bool_ret = false;
       LOG_WARN_RET(OB_INVALID_ARGUMENT, "restore_macro_block_id_mgr_ is null", K_(restore_action), KP_(restore_macro_block_id_mgr));

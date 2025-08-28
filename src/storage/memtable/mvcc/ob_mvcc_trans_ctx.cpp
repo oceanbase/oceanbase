@@ -1376,7 +1376,7 @@ int ObTransCallbackMgr::acquire_callback_list(const bool new_epoch)
   } else if (tid == (stat >> 32)) { // same thread nested, no parallel
     ATOMIC_BCAS(&parallel_stat_, stat, stat + 1);
   } else { // has parallel
-    //
+    // 
     ATOMIC_STORE(&parallel_stat_, PARALLEL_STMT);
   }
   int slot = 0;
@@ -2145,12 +2145,12 @@ int64_t ObMvccRowCallback::to_string(char *buf, const int64_t buf_len) const
   int64_t pos = 0;
   databuff_printf(buf, buf_len, pos, "[this=%p, ctx=", this);
   databuff_printf(buf, buf_len, pos, ctx_);
-  databuff_printf(buf, buf_len, pos, ", is_link=%d, need_submit_log=%d, value=",
+  databuff_printf(buf, buf_len, pos, ", is_link=%d, need_submit_log=%d, value=", 
       is_link_, need_submit_log_);
   databuff_printf(buf, buf_len, pos, value_);
   databuff_printf(buf, buf_len, pos, ", tnode=(");
   databuff_printf(buf, buf_len, pos, tnode_);
-  databuff_printf(buf, buf_len, pos, "), seq_no=%ld, memtable=%p, scn=",
+  databuff_printf(buf, buf_len, pos, "), seq_no=%ld, memtable=%p, scn=", 
       seq_no_.cast_to_int(), memtable_);
   databuff_printf(buf, buf_len, pos, scn_);
   return pos;

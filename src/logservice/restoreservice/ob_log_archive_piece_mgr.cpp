@@ -1897,7 +1897,7 @@ int ObLogRawPathPieceContext::locate_precise_piece(palf::LSN &fetch_lsn)
         }
       }
     }
-
+    
     if (OB_SUCC(ret) && locate && ! file_exist && index_ == array_.count() - 1 && fetch_lsn >= max_lsn_) {
       ret = OB_ITER_END;
       CLOG_LOG(TRACE, "fetch to piece list end", K_(index), K(fetch_lsn), KPC(this));
@@ -2043,7 +2043,7 @@ int ObLogRawPathPieceContext::get_max_archive_log_(const ObLogRawPathPieceContex
   share::ObBackupPath prefix;
   share::ObArchiveStore archive_store;
   share::ObSingleLSInfoDesc ls_info_desc;
-
+  
   if (OB_FAIL(dest.set(uri.ptr(), array_[max_index].second.ptr()))) {
     CLOG_LOG(WARN, "fial to set dest", K_(id), KPC(this));
   } else if (OB_FAIL(storage_info.set(uri.ptr(), storage_info_ptr.ptr()))) {

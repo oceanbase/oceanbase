@@ -131,7 +131,7 @@ void ObRsReentrantThread::check_alert(const ObRsReentrantThread &thread)
     int64_t last_run_interval = ObTimeUtility::current_time() - last_run_timestamp;
     int64_t schedule_interval = thread.get_schedule_interval();
     int64_t check_interval = schedule_interval + MAX_THREAD_SCHEDULE_OVERRUN_TIME;
-    LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "rs_monitor_check : thread hang", K(thread_id), K(thread_name), K(last_run_timestamp),
+    LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "rs_monitor_check : thread hang", K(thread_id), K(thread_name), K(last_run_timestamp), 
         KTIME(last_run_timestamp), K(last_run_interval), K(check_interval), K(schedule_interval));
     LOG_DBA_WARN(OB_ERR_ROOTSERVICE_THREAD_HUNG, "msg", "rootservice backgroud thread may be hung",
                  K(thread_id), K(thread_name), K(last_run_timestamp), KTIME(last_run_timestamp),

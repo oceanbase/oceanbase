@@ -78,7 +78,7 @@ int ObExprArrayCardinality::eval_array_cardinality(const ObExpr &expr, ObEvalCtx
     LOG_WARN("failed to eval source array arg", K(ret));
   } else if (datum->is_null()) {
     res.set_null();
-  } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, datum->get_string(), src_arr))) {
+  } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, datum->get_string(), src_arr))) { 
     LOG_WARN("construct array obj failed", K(ret));
   } else {
     res.set_uint32(src_arr->cardinality());
@@ -108,7 +108,7 @@ int ObExprArrayCardinality::eval_array_cardinality_batch(const ObExpr &expr, ObE
       eval_flags.set(j);
       if (arr_array.at(j)->is_null()) {
         res_datum.at(j)->set_null();
-      } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_array.at(j)->get_string(), src_arr))) {
+      } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_array.at(j)->get_string(), src_arr))) { 
         LOG_WARN("construct array obj failed", K(ret));
       } else {
         res_datum.at(j)->set_uint32(src_arr->cardinality());

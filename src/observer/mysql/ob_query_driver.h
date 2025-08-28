@@ -97,7 +97,7 @@ public:
   static int convert_lob_locator_to_longtext(common::ObObj& value, 
                                              bool is_use_lob_locator, 
                                              common::ObIAllocator *allocator);
-  static int process_lob_locator_results(common::ObObj& value,
+  static int process_lob_locator_results(common::ObObj& value, 
                                          bool is_use_lob_locator,
                                          bool is_support_outrow_locator_v2,
                                          common::ObIAllocator *allocator,
@@ -111,7 +111,7 @@ public:
                                        common::ObCharsetType charset_type, 
                                        common::ObIAllocator &allocator);
   static int convert_text_value_charset(ObObj& value,
-                                        ObCharsetType charset_type,
+                                        ObCharsetType charset_type, 
                                         ObIAllocator &allocator,
                                         const sql::ObSQLSessionInfo *session_info,
                                         sql::ObExecContext *exec_ctx = nullptr);

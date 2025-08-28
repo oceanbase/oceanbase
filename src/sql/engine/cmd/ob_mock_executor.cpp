@@ -37,11 +37,11 @@ int ObMockExecutor::execute(ObExecContext &exec_ctx, ObMockStmt &stmt)
       || stmt::T_FLUSH_MOCK == stmt.get_stmt_type()
       || stmt::T_HANDLER_MOCK == stmt.get_stmt_type()
       || stmt::T_SHOW_PLUGINS == stmt.get_stmt_type()
-      || stmt::T_CREATE_SERVER == stmt.get_stmt_type()
-      || stmt::T_ALTER_SERVER == stmt.get_stmt_type()
-      || stmt::T_DROP_SERVER == stmt.get_stmt_type()
-      || stmt::T_CREATE_LOGFILE_GROUP == stmt.get_stmt_type()
-      || stmt::T_ALTER_LOGFILE_GROUP == stmt.get_stmt_type()
+      || stmt::T_CREATE_SERVER == stmt.get_stmt_type() 
+      || stmt::T_ALTER_SERVER == stmt.get_stmt_type() 
+      || stmt::T_DROP_SERVER == stmt.get_stmt_type() 
+      || stmt::T_CREATE_LOGFILE_GROUP == stmt.get_stmt_type() 
+      || stmt::T_ALTER_LOGFILE_GROUP == stmt.get_stmt_type() 
       || stmt::T_DROP_LOGFILE_GROUP == stmt.get_stmt_type()
       || stmt::T_GRANT_PROXY == stmt.get_stmt_type()
       || stmt::T_REVOKE_PROXY == stmt.get_stmt_type()) {
@@ -78,7 +78,7 @@ int ObMockExecutor::execute(ObExecContext &exec_ctx, ObMockStmt &stmt)
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_USER_WARN(OB_NOT_SUPPORTED, "unknown stmt type");
-  }
+  } 
   return ret;
 }
 

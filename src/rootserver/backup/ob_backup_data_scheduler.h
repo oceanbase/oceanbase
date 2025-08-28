@@ -55,8 +55,8 @@ public:
   static int get_next_job_id(common::ObISQLClient &trans, const uint64_t tenant_id, int64_t &job_id);
   static int get_next_backup_set_id(common::ObISQLClient &trans, const uint64_t tenant_id, int64_t &next_backup_set_id);
 public:
-  int init(const uint64_t tenant_id, common::ObMySQLProxy &sql_proxy, obrpc::ObSrvRpcProxy &rpc_proxy,
-      share::schema::ObMultiVersionSchemaService &schema_service, ObBackupTaskScheduler &task_scheduler,
+  int init(const uint64_t tenant_id, common::ObMySQLProxy &sql_proxy, obrpc::ObSrvRpcProxy &rpc_proxy, 
+      share::schema::ObMultiVersionSchemaService &schema_service, ObBackupTaskScheduler &task_scheduler, 
       ObBackupDataService &backup_service);
 
   // constructing a ObBackupJobAttr according to ObBackupDatabaseArg, them insert the ObBackupJobAttr into __all_backup_job
@@ -77,7 +77,7 @@ private:
   int get_all_tenants_(const bool with_backup_dest, ObIArray<uint64_t> &tenants);
 
   int start_tenant_backup_data_(const share::ObBackupJobAttr &job_attr);
-  int update_backup_type_if_need_(common::ObISQLClient &trans, const uint64_t tenant_id, const int64_t next_backup_set_id,
+  int update_backup_type_if_need_(common::ObISQLClient &trans, const uint64_t tenant_id, const int64_t next_backup_set_id, 
       const share::ObBackupPathString &backup_path, share::ObBackupType &backup_type);
   int get_need_cancel_tenants_(const uint64_t tenant_id, const common::ObIArray<uint64_t> &backup_tenant_ids, 
       common::ObIArray<uint64_t> &need_cancel_backup_tenants);

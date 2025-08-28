@@ -133,7 +133,7 @@ public:
   // @param [in] offset_right start position of right lob for comparison
   // @param [in] amount_len comparison length
   // @param [in] timeout lob read timeout
-  // @param [out] result: 0 if the data exactly matches over the range specified by the offset and amount parameters.
+  // @param [out] result: 0 if the data exactly matches over the range specified by the offset and amount parameters. 
   //                      -1 if the first is less than the second, and 1 if it is greater.
   int compare(ObLobLocatorV2& lob_left,
               ObLobLocatorV2& lob_right,

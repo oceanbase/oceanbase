@@ -83,7 +83,7 @@ int ObExprSet::eval_coll(const ObObj &obj, ObExecContext &ctx, pl::ObPLNestedTab
   pl::ObPLAllocator1 *collection_allocator = NULL;
   ObObj *data_arr = NULL;
   int64_t elem_count = 0;
-
+  
   if (OB_ISNULL(c1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("union udt failed due to null udt", K(ret), K(obj));

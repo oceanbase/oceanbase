@@ -163,7 +163,7 @@ int ObWkbToS2Visitor::MakeS2Polyline(T_IBIN *geo, S2Polyline *&res)
       res = ptr;
     }
   }
-
+  
   return ret;
 }
 
@@ -232,7 +232,7 @@ int ObWkbToS2Visitor::MakeS2Polygon(T_IBIN *geo, S2Polygon *&res)
         } else if (OB_FAIL(vector_emplace_back(s2poly, loop))) {
           LOG_WARN("failed to add loop", K(ret));
         }
-      }
+      }      
     }
   }
 
@@ -262,7 +262,7 @@ int ObWkbToS2Visitor::MakeS2Polygon(T_IBIN *geo, S2Polygon *&res)
         } else if (OB_FAIL(vector_emplace_back(s2poly, loop))) {
           LOG_WARN("failed to add loop", K(ret));
         }
-      }
+      }      
     }
   }
 
@@ -310,7 +310,7 @@ int ObWkbToS2Visitor::MakeProjS2Polygon(T_IBIN *geo, S2Polygon *&res)
         } else if (OB_FAIL(vector_emplace_back(s2poly, loop))) {
           LOG_WARN("failed to add loop", K(ret));
         }
-      }
+      }      
     }
   }
 
@@ -430,7 +430,7 @@ int ObWkbToS2Visitor::visit(ObIWkbGeogPolygon *geo)
   } else {
     mbr_ = mbr_.is_empty() ? polygon->GetRectBound() : mbr_.Union(polygon->GetRectBound());
   }
-
+  
   return ret;
 }
 
@@ -553,9 +553,9 @@ int ObWkbToS2Visitor::get_s2_cell_union()
   return ret;
 }
 
-int64_t ObWkbToS2Visitor::get_cellids_and_unrepeated_ancestors(ObS2Cellids &cells,
-                                                               ObS2Cellids &ancestors,
-                                                               bool need_buffer,
+int64_t ObWkbToS2Visitor::get_cellids_and_unrepeated_ancestors(ObS2Cellids &cells, 
+                                                               ObS2Cellids &ancestors, 
+                                                               bool need_buffer, 
                                                                S1Angle distance)
 {
   INIT_SUCC(ret);

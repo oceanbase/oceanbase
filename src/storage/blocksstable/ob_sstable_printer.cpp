@@ -853,7 +853,7 @@ void ObSSTablePrinter::print_sub_column_path(const share::ObSubColumnPath &sub_c
   P_BAR();
   for (int i = 0; i < sub_col_path.get_path_item_count(); ++i) {
     const share::ObSubColumnPathItem& path_item = sub_col_path.get_path_item(i);
-
+    
     if (path_item.is_array()) {
       FPRINTF("[%ld]", path_item.array_idx_);
     } else {

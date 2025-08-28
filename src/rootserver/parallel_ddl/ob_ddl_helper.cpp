@@ -97,8 +97,8 @@ int ObDDLHelperUtils::write_1503_ddl_operation(ObMultiVersionSchemaService *sche
   return ret;
 }
 
-int ObDDLHelperUtils::wait_ddl_trans(ObDDLTransController *controller,
-                                     const uint64_t tenant_id,
+int ObDDLHelperUtils::wait_ddl_trans(ObDDLTransController *controller, 
+                                     const uint64_t tenant_id, 
                                      const int64_t task_id)
 {
   int ret = OB_SUCCESS;
@@ -117,10 +117,10 @@ int ObDDLHelperUtils::wait_ddl_trans(ObDDLTransController *controller,
 }
 
 int ObDDLHelperUtils::end_ddl_trans(ObMultiVersionSchemaService *schema_service,
-                                    ObDDLTransController *ddl_trans_controller,
-                                    const uint64_t tenant_id,
-                                    const int return_ret,
-                                    const int64_t task_id,
+                                    ObDDLTransController *ddl_trans_controller, 
+                                    const uint64_t tenant_id, 
+                                    const int return_ret, 
+                                    const int64_t task_id, 
                                     ObDDLSQLTransaction &trans)
 {
   int ret = return_ret;
@@ -167,9 +167,9 @@ int ObDDLHelperUtils::check_schema_version()
 
 int ObDDLHelperUtils::wait_and_end_ddl_trans(const int return_ret,
                                              ObMultiVersionSchemaService *schema_service,
-                                             ObDDLTransController *ddl_trans_controller,
-                                             const uint64_t tenant_id,
-                                             const int64_t task_id,
+                                             ObDDLTransController *ddl_trans_controller, 
+                                             const uint64_t tenant_id, 
+                                             const int64_t task_id, 
                                              ObDDLSQLTransaction &trans,
                                              bool &need_clean_failed)
 {
@@ -179,7 +179,7 @@ int ObDDLHelperUtils::wait_and_end_ddl_trans(const int return_ret,
     LOG_WARN("fail to wait ddl trans", KR(ret));
   }
   bool commit = OB_SUCC(ret);
-  if (OB_FAIL(end_ddl_trans(schema_service, ddl_trans_controller,
+  if (OB_FAIL(end_ddl_trans(schema_service, ddl_trans_controller, 
         tenant_id, ret, task_id, trans))) { // won't overwrite ret
     LOG_WARN("fail to end ddl trans", KR(ret));
     need_clean_failed = commit; // need called clean_failed_on_commit
@@ -361,7 +361,7 @@ int ObDDLHelper::gen_task_id_and_schema_versions_()
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (OB_FAIL(ObDDLHelperUtils::gen_task_id_and_schema_versions(ddl_trans_controller_,
+  } else if (OB_FAIL(ObDDLHelperUtils::gen_task_id_and_schema_versions(ddl_trans_controller_, 
               tenant_id_, schema_version_cnt_, task_id_))) {
     LOG_WARN("fail to gen task id and schema version cnt", KR(ret));
   }
@@ -448,10 +448,10 @@ int ObDDLHelper::execute()
    * 4. calculate needed schema version count, register task id & generate schema versions:
    * - generate an appropriate number of schema versions for this DDL and register task id.
    * - concurrent DDL trans will be committed in descending order of version later.
-   * - when has external_trans_, we need to skip calc_schema_version and gen_task_id_and_schema_versions. The reason is that
-   *   there are multiple DDL statements being executed, which rely on external_trans_ to ensure atomicity.
+   * - when has external_trans_, we need to skip calc_schema_version and gen_task_id_and_schema_versions. The reason is that 
+   *   there are multiple DDL statements being executed, which rely on external_trans_ to ensure atomicity. 
    *   We cannot get the correct schema_version_cnt_ and task_id if each DDL Helpers execute by themselves.
-   *   The task_id and schema_version_cnt_ will be generated and calculated uniformly on the upper level where has all ddl operations.
+   *   The task_id and schema_version_cnt_ will be generated and calculated uniformly on the upper level where has all ddl operations. 
    */
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(external_trans_) && OB_FAIL(calc_schema_version_cnt_())) {
@@ -473,7 +473,7 @@ int ObDDLHelper::execute()
   if (FAILEDx(serialize_inc_schema_dict_())) {
     LOG_WARN("fail to serialize inc schema dict", KR(ret));
   }
-
+  
   /* ----------------------------------------------
    * 7. operate before commit
    */

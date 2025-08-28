@@ -42,11 +42,11 @@ int ObBackupSetEncryptionStmt::set_param(const int64_t mode, const common::ObStr
     COMMON_LOG(WARN, "invalid args", K(ret), K(mode), K(mode_));
   } else if (OB_FAIL(ObEncryptedHelper::encrypt_passwd_to_stage2(passwd, encrypted_str))) {
     COMMON_LOG(WARN, "failed to encrypted passwd", K(ret), K(passwd));
-  } else if (OB_FAIL(databuff_printf(passwd_buf_,
-                                     sizeof(passwd_buf_),
+  } else if (OB_FAIL(databuff_printf(passwd_buf_, 
+                                     sizeof(passwd_buf_), 
                                      pos,
-                                     "%.*s",
-                                     encrypted_str.length(),
+                                     "%.*s", 
+                                     encrypted_str.length(), 
                                      encrypted_str.ptr()))) {
     COMMON_LOG(WARN, "failed to format passwd_buf", K(ret), K(encrypted_str));
   } else {

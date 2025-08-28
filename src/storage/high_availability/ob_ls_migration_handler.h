@@ -32,16 +32,16 @@ class ObLSCompleteMigrationParam;
 /*
  * Migration Handler State Machine:
  *
- *                                                              ret!=OB_SUCCESS
- *    ┌────────────────────────────────────────────────────────────────────────┐
- *    │                                                                        │
+ *                                                              ret!=OB_SUCCESS                
+ *    ┌────────────────────────────────────────────────────────────────────────┐                       
+ *    │                                                                        │                                    
  * ┌──┴─┐  ┌──────────┐  ┌───────────────┐  ┌────────┐  ┌─────────────┐  ┌─────▼───────┐  ┌────────────────┐  ┌──────┐
  * │INIT├─►│PREPARE_LS├─►│WAIT_PREPARE_LS├─►│BUILD_LS├─►│WAIT_BUILD_LS├─►│ COMPLETE_LS ├─►│WAIT_COMPLETE_LS├─►│FINISH│
  * └────┘  └──────────┘  └──┬─┬──────▲───┘  └────────┘  └─┬─┬──────▲──┘  └─▲─┬──────▲──┘  └────┬──────▲────┘  └──────┘
- *                          │ │      │                    │ │      │       │ │      │          │      │
- *                          │ └─wait─┘                    │ └─wait─┘       │ └──────┘          └─wait─┘
- *                          └─────────────────────────────┴────────────────┘  ret!=OB_SUCCESS
- *                             ret!=OB_SUCCESS || result_!=OB_SUCCESS         && !is_complete_
+ *                          │ │      │                    │ │      │       │ │      │          │      │               
+ *                          │ └─wait─┘                    │ └─wait─┘       │ └──────┘          └─wait─┘               
+ *                          └─────────────────────────────┴────────────────┘  ret!=OB_SUCCESS                              
+ *                             ret!=OB_SUCCESS || result_!=OB_SUCCESS         && !is_complete_       
  */
 enum class ObLSMigrationHandlerStatus : int8_t // FARM COMPAT WHITELIST
 {
@@ -118,7 +118,7 @@ private:
   int get_ls_migration_task_(ObLSMigrationTask &task);
   int check_task_exist_(bool &is_exist);
   int handle_failed_task_(
-      const ObLSMigrationHandlerStatus &status,
+      const ObLSMigrationHandlerStatus &status, 
       bool &need_generate_dag_net);
   int handle_current_task_(
       bool &need_wait,

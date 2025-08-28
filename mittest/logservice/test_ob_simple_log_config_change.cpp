@@ -209,7 +209,7 @@ TEST_F(TestObSimpleLogClusterConfigChange, test_config_change_defensive)
     const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L; // 10s
     common::ObMember dummy_member;
     const LogConfigChangeArgs args(dummy_member, 1, STARTWORKING);
-	EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, &loc_cb, leader_idx, leader));
+  	EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, &loc_cb, leader_idx, leader));
     EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
     const int64_t lag_follower_idx = (leader_idx+1)%3;
     const int64_t remove_follower_idx = (leader_idx+2)%3;
@@ -656,7 +656,7 @@ TEST_F(TestObSimpleLogClusterConfigChange, test_replace_member)
                                                ObMember(palf_list[3]->palf_handle_impl_->self_, 1),
                                                config_version,
                                                CONFIG_CHANGE_TIMEOUT));
-
+  
     // switch acceptor to learner
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->switch_acceptor_to_learner(ObMember(palf_list[5]->palf_handle_impl_->self_, 1), 3, CONFIG_CHANGE_TIMEOUT));
     // add learner
@@ -1088,7 +1088,7 @@ TEST_F(TestObSimpleLogClusterConfigChange, learner_loop)
       palf_handle->palf_handle_impl_->config_mgr_.register_parent_(LogConfigMgr::RegisterParentReason::FIRST_REGISTER);
     }
   }
-
+  
   // 5. check loop
   for (int i = 0; i < ObSimpleLogClusterTestBase::node_cnt_; i++) {
     const common::ObAddr &addr = palf_list[i]->palf_handle_impl_->self_;
@@ -1200,3 +1200,4 @@ int main(int argc, char **argv)
 {
   RUN_SIMPLE_LOG_CLUSTER_TEST(TEST_NAME);
 }
+

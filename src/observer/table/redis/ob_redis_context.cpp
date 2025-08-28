@@ -57,7 +57,7 @@ int ObRedisCtx::init_table_info(
   const ObSimpleTableSchemaV2 *simple_table_schema = nullptr;
   ObKvSchemaCacheGuard *schema_cache_guard = nullptr;
   ObTabletID tablet_id;
-
+  
   if (!rowkey.is_valid() || rowkey.length() < 2) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid rowkey", K(ret), K(rowkey));
@@ -72,7 +72,7 @@ int ObRedisCtx::init_table_info(
                                                           table_name,
                                                           false, /* is_index */
                                                           simple_table_schema))) {
-    LOG_WARN("fail to get table schema", K(ret), K(credential_->tenant_id_),
+    LOG_WARN("fail to get table schema", K(ret), K(credential_->tenant_id_), 
               K(credential_->database_id_), K(table_name));
   } else if (OB_ISNULL(simple_table_schema) || simple_table_schema->get_table_id() == OB_INVALID_ID) {
     ret = OB_ERR_UNKNOWN_TABLE;
@@ -80,7 +80,7 @@ int ObRedisCtx::init_table_info(
     LOG_USER_ERROR(OB_ERR_UNKNOWN_TABLE, table_name.length(), table_name.ptr(), db.length(), db.ptr());
     LOG_WARN("table not exist", K(ret), K(credential_->tenant_id_), K(credential_->database_id_), K(table_name));
   } else if (OB_FAIL(schema_cache_guard->init(credential_->tenant_id_,
-                                              simple_table_schema->get_table_id(),
+                                              simple_table_schema->get_table_id(), 
                                               simple_table_schema->get_schema_version(),
                                               schema_guard))) {
     LOG_WARN("fail to init schema cache guard", K(ret));
@@ -116,22 +116,22 @@ int ObRedisCtx::init_table_info(
       }
     }
   }
-
-
+  
+  
   if (OB_SUCC(ret)) {
     tb_info->schema_cache_guard_ = schema_cache_guard;
     tb_info->simple_schema_ = simple_table_schema;
     tb_info->table_name_ = table_name;
   }
-
+  
   return ret;
 }
 
 // rowkey is 'partition by (rowkey)'
 int ObRedisCtx::get_tablet_id(const ObRowkey &rowkey,
-                              const ObSimpleTableSchemaV2 &simple_table_schema,
+                              const ObSimpleTableSchemaV2 &simple_table_schema, 
                               ObTableApiSessGuard &sess_guard,
-                              ObSchemaGetterGuard &schema_guard,
+                              ObSchemaGetterGuard &schema_guard, 
                               ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
@@ -169,10 +169,10 @@ int ObRedisCtx::init_cmd_ctx(int db, const ObString &table_name, const ObIArray<
   ObObj *obj_ptr = nullptr;
   if (OB_ISNULL(GCTX.schema_service_) || OB_ISNULL(credential_) || OB_ISNULL(schema_guard) || OB_ISNULL(sess_guard)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid schema service, credential, schema guard or sess guard",
-      K(ret),
-      K(GCTX.schema_service_),
-      K(credential_),
+    LOG_WARN("invalid schema service, credential, schema guard or sess guard", 
+      K(ret), 
+      K(GCTX.schema_service_), 
+      K(credential_), 
       K(schema_guard),
       K(sess_guard));
   } else if (OB_ISNULL(ret_ctx = OB_NEWx(ObRedisCmdCtx, &allocator_, allocator_))) {
@@ -213,10 +213,10 @@ int ObRedisCtx::init_cmd_ctx(ObRowkey &cur_rowkey, const ObIArray<ObString> &key
   ObTableApiSessGuard *sess_guard = redis_guard_.sess_guard_;
   if (OB_ISNULL(GCTX.schema_service_) || OB_ISNULL(credential_) || OB_ISNULL(schema_guard) || OB_ISNULL(sess_guard)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid schema service, credential, schema guard or sess guard",
-      K(ret),
-      K(GCTX.schema_service_),
-      K(credential_),
+    LOG_WARN("invalid schema service, credential, schema guard or sess guard", 
+      K(ret), 
+      K(GCTX.schema_service_), 
+      K(credential_), 
       K(schema_guard),
       K(sess_guard));
   } else if (OB_ISNULL(ret_ctx = OB_NEWx(ObRedisCmdCtx, &allocator_, allocator_))) {

@@ -168,7 +168,7 @@ int ObPxResourceAnalyzer::analyze(
   // 2. 然后模拟调度，每调度一对 dfo，就将 child 设置为 done，然后统计当前时刻多少个未完成 dfo
   // 3. 如此继续调度，直至所有 dfo 调度完成
   //
-  // ref:
+  // ref: 
   if (log_op_def::LOG_EXCHANGE == root_op.get_type() &&
       static_cast<const ObLogExchange *>(&root_op)->get_is_remote()) {
     max_parallel_thread_count = 0;

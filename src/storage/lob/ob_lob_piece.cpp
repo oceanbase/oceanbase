@@ -24,13 +24,13 @@ namespace storage
 
 int ObLobPieceUtil::transform_piece_id(blocksstable::ObDatumRow* row, ObLobPieceInfo &info)
 {
-  info.piece_id_ = row->storage_datums_[0].get_uint64();
-  return OB_SUCCESS;
+  info.piece_id_ = row->storage_datums_[0].get_uint64(); 
+  return OB_SUCCESS; 
 }
 
 int ObLobPieceUtil::transform_len(blocksstable::ObDatumRow* row, ObLobPieceInfo &info)
 {
-  info.len_ = row->storage_datums_[1].get_uint32();
+  info.len_ = row->storage_datums_[1].get_uint32(); 
   return OB_SUCCESS;
 }
 

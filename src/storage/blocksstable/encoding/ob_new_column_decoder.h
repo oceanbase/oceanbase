@@ -34,7 +34,7 @@ public:
 
   int batch_decode(
       const ObColumnParam *col_param,
-      common::ObIAllocator *allocator,
+      common::ObIAllocator *allocator, 
       const int64_t row_cap,
       common::ObDatum *datums) const;
 
@@ -74,7 +74,7 @@ public:
 
   virtual ObColumnHeader::Type get_type() const override { return type_; }
 
-  virtual int update_pointer(const char *, const char *) override { return common::OB_SUCCESS; }
+  virtual int update_pointer(const char *, const char *) override { return common::OB_SUCCESS; } 
 
   virtual bool can_vectorized() const override { return true; }
 

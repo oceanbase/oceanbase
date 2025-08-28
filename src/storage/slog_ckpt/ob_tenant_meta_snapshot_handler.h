@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef OB_STORAGE_TENANT_META_SNAPSHOT_HANDLER_H_
 #define OB_STORAGE_TENANT_META_SNAPSHOT_HANDLER_H_
 
@@ -58,20 +58,20 @@ public:
 
   // clone snapshot
   static int get_ls_snapshot(
-      const ObTenantSnapshotID &snapshot_id,
+      const ObTenantSnapshotID &snapshot_id, 
       const ObLSID &ls_id,
       blocksstable::MacroBlockId &tablet_meta_entry);
   static int create_all_tablet(observer::ObStartupAccelTaskHandler* startup_accel_handler,
                                const blocksstable::MacroBlockId &tablet_meta_entry);
   static int get_ls_meta_entry(const ObTenantSnapshotID &snapshot_id, blocksstable::MacroBlockId &ls_meta_entry);
-
+  
   // recover snapshot for restart
   static int get_all_tenant_snapshot(ObIArray<ObTenantSnapshotID> &snapshot_ids);
   static int get_all_ls_snapshot(const ObTenantSnapshotID &snapshot_id, ObIArray<ObLSID> &ls_ids);
-
+  
   // increase ref cnt for linked blocks
   static int inc_linked_block_ref(const ObIArray<blocksstable::MacroBlockId> &meta_block_list, bool &inc_success);
-
+  
 private:
   static int find_tablet_meta_entry(
       const blocksstable::MacroBlockId &ls_meta_entry,
@@ -79,7 +79,7 @@ private:
       blocksstable::MacroBlockId &tablet_meta_entry);
   static int push_ls_snapshot(const ObMetaDiskAddr &addr, const char *buf, const int64_t buf_len, ObIArray<ObLSID> &ls_ids);
   static int inc_all_linked_block_ref(
-      ObTenantStorageCheckpointWriter &tenant_storage_meta_writer,
+      ObTenantStorageCheckpointWriter &tenant_storage_meta_writer, 
       bool &inc_ls_blocks_ref_succ,
       bool &inc_tablet_blocks_ref_succ);
   static void rollback_ref_cnt(
@@ -92,15 +92,15 @@ private:
                                       ObIArray<ObMetaDiskAddr> &deleted_tablet_addrs,
                                       ObIArray<MacroBlockId> &tablet_meta_block_list);
   static int delete_ls_snapshot(
-      const ObMetaDiskAddr &addr,
-      const char *buf,
-      const int64_t buf_len,
+      const ObMetaDiskAddr &addr, 
+      const char *buf, 
+      const int64_t buf_len, 
       ObIArray<ObMetaDiskAddr> &deleted_tablet_addrs,
       ObIArray<blocksstable::MacroBlockId> &tablet_meta_block_list);
   static int delete_tablet_snapshot(
-      const ObMetaDiskAddr &addr,
-      const char *buf,
-      const int64_t buf_len,
+      const ObMetaDiskAddr &addr, 
+      const char *buf, 
+      const int64_t buf_len, 
       ObIArray<ObMetaDiskAddr> &deleted_tablet_addrs);
   static int batch_write_slog(
       const ObMetaDiskAddr &addr,

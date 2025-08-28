@@ -78,7 +78,7 @@ public:
   TO_STRING_KV(K_(tenant_id), K_(dest_tenant_id), K_(ddl_type), K_(source_tablet_ids),
                K_(dest_tablet_ids), K_(source_table_ids), K_(dest_table_ids),
                K_(source_schema_versions), K_(dest_schema_versions), K_(snapshot_version),
-               K_(task_id), K_(parallelism), K_(execution_id),
+               K_(task_id), K_(parallelism), K_(execution_id), 
                K_(data_format_version), K_(consumer_group_id), K_(can_reuse_macro_blocks),
                K_(parallel_datum_rowkey_list), K(min_split_start_scn_), K_(is_no_logging));
 public:
@@ -160,7 +160,7 @@ public:
   TO_STRING_KV(K(is_inited_), K(addr_), K(ddl_type_), K(src_table_id_),
                K(src_schema_version_), K(dest_schema_version_),
                K(dest_table_id_), K(tablet_task_id_), K(compaction_scn_),
-               K(src_tablet_id_), K(dest_tablet_id_), K_(can_reuse_macro_block),
+               K(src_tablet_id_), K(dest_tablet_id_), K_(can_reuse_macro_block), 
                K(parallel_datum_rowkey_list_), K(stat_), K(ret_code_),
                K(heart_beat_time_), K(row_inserted_), K(row_scanned_), K(physical_row_count_),
                K(sess_not_found_times_));
@@ -221,7 +221,7 @@ public:
                             const int64_t row_inserted,
                             const int64_t physical_row_count);
   int get_progress(int64_t &row_inserted, int64_t &physical_row_count_, double& percent);
-
+  
   TO_STRING_KV(K(is_inited_), K(tenant_id_), K(dest_tenant_id_), K(ddl_type_),
                K(ddl_task_id_), K(snapshot_version_), K(parallelism_),
                K(execution_id_), K(data_format_version_), K(consumer_group_id_),

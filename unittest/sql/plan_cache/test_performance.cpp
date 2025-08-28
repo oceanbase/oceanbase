@@ -131,7 +131,7 @@ void do_operation(const char *query, uint64_t tenant_id)
     _OB_LOG(INFO, "%s", CSJ(ObParserResultPrintWrapper(*parse_result.result_tree_)));
     time_2 = TestSQL::get_usec();
     // plan cache
-
+    
     //ObPlanCache *plan_cache = plan_cache_mgr->get_or_create_plan_cache(tenant_id);
     if (NULL != plan_cache) {
       plan_cache.set_mem_hwm(HIGH_WATER_MARK);
@@ -323,7 +323,7 @@ void test_plan_cache(obsys::CThread *thread, int thread_num, std::ostream &of)
     }
     //cache evict
     if (loop_count % CACHE_EVICT_LOOP_FREQUENCY == 0) {
-
+      
       ObPlanCache plan_cache;
       if (OB_FAIL(plan_cache.init(common::OB_PLAN_CACHE_BUCKET_NUMBER, tenant_id))) {
         LOG_WARN("failed to init request manager", K(ret));

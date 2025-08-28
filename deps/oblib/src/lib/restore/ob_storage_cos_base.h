@@ -63,7 +63,7 @@ public:
   virtual int del_unmerged_parts(const ObString &uri) override;
 private:
   int get_object_meta_(const common::ObString &uri, bool &is_file_exist, int64_t &file_length);
-
+  
 private:
   bool is_opened_;
   common::ObObjectStorageInfo *storage_info_;
@@ -89,9 +89,9 @@ public:
       ObIArray<int64_t> &failed_files_idx);
   int list_objects(const common::ObString &uri,
       const common::ObString &dir_name_str, common::CosListFilesCbArg &arg);
-  int list_objects(const common::ObString &uri, const common::ObString &dir_name_str,
+  int list_objects(const common::ObString &uri, const common::ObString &dir_name_str, 
       const char *next_token, common::CosListFilesCtx &ctx);
-  int list_directories(const common::ObString &uri, const common::ObString &dir_name_str,
+  int list_directories(const common::ObString &uri, const common::ObString &dir_name_str, 
       const char *next_marker_str, const char *delimiter_str, common::CosListFilesCbArg &arg);
   int is_object_tagging(const common::ObString &uri, bool &is_tagging);
   int del_unmerged_parts(const ObString &uri);
@@ -104,7 +104,7 @@ protected:
   bool is_opened_;
   ObCosWrapperHandle handle_;
   ObStorageChecksumType checksum_type_;
-
+  
 private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageCosBase);
 };

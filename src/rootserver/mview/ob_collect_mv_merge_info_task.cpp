@@ -310,7 +310,7 @@ int ObCollectMvMergeInfoTask::collect_ls_member_merge_info(const uint64_t tenant
                   K(merge_scn), K(batch_proxy.get_dests().at(min_idx)));
         }
         common::ObArray<common::ObAddr> addr_list_new;
-        palf::LogConfigVersion log_config_version_new;
+        palf::LogConfigVersion log_config_version_new; 
         if (OB_FAIL(get_stable_member_list_and_config_version(tenant_id, ls_id,
                                                              addr_list_new, log_config_version_new))) {
           LOG_WARN("fail to get member list", KR(ret), K(ls_id));

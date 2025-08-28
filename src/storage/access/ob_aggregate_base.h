@@ -92,9 +92,9 @@ public:
     is_reverse_ = false;
   }
   OB_INLINE bool is_valid() const
-  {
-    bool is_valid_bound = (OB_INVALID_CS_ROW_ID == bound_row_id_
-                           || (is_reverse_ && bound_row_id_ <= begin_)
+  { 
+    bool is_valid_bound = (OB_INVALID_CS_ROW_ID == bound_row_id_ 
+                           || (is_reverse_ && bound_row_id_ <= begin_) 
                            || (!is_reverse_ && bound_row_id_ >= end_));
     return (nullptr != row_ids_ && row_cap_ > 0)
         || (nullptr == row_ids_ && begin_ >= 0 && end_ >= begin_ && is_valid_bound);
@@ -123,7 +123,7 @@ public:
   int64_t begin_;
   int64_t end_;
   int64_t bound_row_id_; // row_id boundary reached in one pushdown decoder scan.
-  bool is_reverse_;
+  bool is_reverse_; 
 };
 
 // Common interface classes for aggregate pushdown in vectorization 1.0 and 2.0
@@ -142,7 +142,7 @@ public:
   // virtual int32_t get_col_offset() const = 0;
   virtual ObObjType get_obj_type() const = 0;
   int reserve_bitmap(const int64_t size);
-  OB_INLINE bool is_assigned_to_group_by_processor() const
+  OB_INLINE bool is_assigned_to_group_by_processor() const 
   { return is_assigned_to_group_by_processor_; }
   OB_INLINE void set_assigned_to_group_by_processor()
   { is_assigned_to_group_by_processor_ = true; }
@@ -315,15 +315,15 @@ public:
     return ret;
   }
   VIRTUAL_TO_STRING_KV(K_(is_inited),
-                       K_(batch_size),
-                       K_(row_capacity),
-                       K_(distinct_cnt),
+                       K_(batch_size), 
+                       K_(row_capacity), 
+                       K_(distinct_cnt), 
                        K_(ref_cnt),
-                       K_(projected_cnt),
+                       K_(projected_cnt), 
                        KP_(group_by_col_expr),
                        KPC_(group_by_col_param),
                        K_(group_by_col_offset),
-                       K_(need_extract_distinct),
+                       K_(need_extract_distinct), 
                        K_(is_processing),
                        K_(distinct_projector_buf),
                        K(ObArrayWrap<uint32_t>(refs_buf_, ref_cnt_)));
@@ -373,7 +373,7 @@ public:
   ObPushdownAggContext(
       const int64_t batch_size,
       sql::ObEvalCtx &eval_ctx,
-      sql::ObBitVector *skip_bit,
+      sql::ObBitVector *skip_bit, 
       common::ObIAllocator &allocator);
   virtual ~ObPushdownAggContext();
   void reset();
@@ -706,7 +706,7 @@ void free_group_by_buf(common::ObIAllocator &allocator, BUF_TYPE *&group_by_buf)
   }
 }
 
-} /* namespace storage */
+} /* namespace storage */ 
 } /* namespace oceanbase */
 
 #endif /* OCEANBASE_STORAGE_OB_AGGREGATE_BASE_H_ */

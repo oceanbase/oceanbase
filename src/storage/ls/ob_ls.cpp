@@ -1156,7 +1156,7 @@ void ObLS::unregister_common_service_()
   if (ls_meta_.ls_id_ == IDS_LS) {
     MTL(ObTransIDService *)->reset_ls();
     MTL(ObTimestampService *)->reset_ls();
-    // temporary fix of
+    // temporary fix of 
     MTL(sql::ObDASIDService *)->reset_ls();
     UNREGISTER_FROM_LOGSERVICE(TIMESTAMP_LOG_BASE_TYPE, MTL(ObTimestampService *));
     UNREGISTER_FROM_LOGSERVICE(TRANS_ID_LOG_BASE_TYPE, MTL(ObTransIDService *));
@@ -1221,7 +1221,7 @@ void ObLS::unregister_sys_service_()
       UNREGISTER_FROM_LOGSERVICE(DDL_SERVICE_LAUNCHER_LOG_BASE_TYPE, MTL(rootserver::ObDDLServiceLauncher*));
 #ifdef OB_BUILD_SYS_VEC_IDX
       UNREGISTER_FROM_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, MTL(ObPluginVectorIndexService *));
-
+      
       UNREGISTER_FROM_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, &tablet_ttl_mgr_.get_vector_idx_scheduler());
       UNREGISTER_FROM_LOGSERVICE(TTL_LOG_BASE_TYPE, tablet_ttl_mgr_);
       tablet_ttl_mgr_.destroy();

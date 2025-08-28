@@ -9,14 +9,14 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #pragma once
 #include "storage/direct_load/ob_direct_load_struct.h"
 #include "sql/resolver/cmd/ob_load_data_stmt.h"
 
 namespace oceanbase
 {
-namespace sql
+namespace sql 
 {
 class ObInsertStmt;
 class ObOptimizerContext;

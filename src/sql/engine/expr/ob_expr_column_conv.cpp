@@ -881,7 +881,7 @@ int ObExprColumnConv::column_convert_batch(const ObExpr &expr,
               }
             }
           }
-
+          
           if (OB_FAIL(ret) && ctx.exec_ctx_.get_my_session()->is_diagnosis_enabled()) {
             // overwrite ret on diagnosis node
             if (OB_FAIL(ctx.exec_ctx_.get_diagnosis_manager().add_warning_info(ret, i))) {
@@ -956,7 +956,7 @@ int ObExprColumnConv::column_convert_vector(const ObExpr &expr,
   } else {
     ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
     bool is_string_type = ob_is_string_type(out_type);
-    bool is_string2text = is_string_text_cast(expr);
+    bool is_string2text = is_string_text_cast(expr); 
     bool is_int_tc = ob_is_int_uint_tc(out_type);
     bool is_decimal_int_tc = ob_is_decimal_int_tc(out_type);
     ObAccuracy accuracy;
@@ -1115,7 +1115,7 @@ int ObExprColumnConv::column_convert_batch_fast(const ObExpr &expr,
       }
       results[i].set_datum(vals[i]);
       eval_flags.set(i);
-    }
+    } 
   }
   return ret;
 }

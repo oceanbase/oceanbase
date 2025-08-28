@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #include <gtest/gtest.h>
 #define private public
 #include "test_xml_utils.h"
@@ -272,13 +272,13 @@ ObString enter_predicate[PREDICATE_TEST_COUNT] = {
   "/bookstore/book/sell[(1 < 2) and (3 < 9)]",
 
   // bool e double
-  "/bookstore/book/sell[(1 < 2) = -123]",
+  "/bookstore/book/sell[(1 < 2) = -123]", 
   "/bookstore/book/sell[(1 < 2) = 123]",
 
   // bool e string
-  "/bookstore/book/sell[(1 < 2) = \"true\"]",
-  "/bookstore/book/sell[(1 < 2) = \"1\"]",
-  "/bookstore/book/sell[(1 > 2) != \"true\"]",
+  "/bookstore/book/sell[(1 < 2) = \"true\"]", 
+  "/bookstore/book/sell[(1 < 2) = \"1\"]", 
+  "/bookstore/book/sell[(1 > 2) != \"true\"]", 
 
   // double e bool
   "/bookstore/book/sell[0.0 != (1 < 2)]",
@@ -302,7 +302,7 @@ ObString enter_predicate[PREDICATE_TEST_COUNT] = {
   "/bookstore/book/sell[\"2\" = 2]",
 
   // compare
-
+  
   // bool c double
   "/bookstore/book/sell[(1 < 2) >= 1.0]",
   "/bookstore/book/sell[(1 > 2) >= -1]",
@@ -365,8 +365,8 @@ ObString expect_predicate_parse_result[PREDICATE_TEST_COUNT] = {
   "/bookstore/book/sell[1 < 2 = 123]",
 
   "/bookstore/book/sell[1 < 2 = \"true\"]",
-  "/bookstore/book/sell[1 < 2 = \"1\"]",
-  "/bookstore/book/sell[1 > 2 != \"true\"]",
+  "/bookstore/book/sell[1 < 2 = \"1\"]", 
+  "/bookstore/book/sell[1 > 2 != \"true\"]", 
 
   "/bookstore/book/sell[0 != 1 < 2]",
   "/bookstore/book/sell[-1 = 1 < 2]",
@@ -493,7 +493,7 @@ ObString enter_false_predicate[PREDICATE_FALSE_TEST_COUNT] = {
   "/bookstore/book/sell[\"\" != \"\"]",
   "/bookstore/book/sell[\"abc\" < \"\"]",
   "/bookstore/book/sell[\"\" <= \"efg\"]",
-  "/bookstore/book/sell[\"abc\" <= 1]",
+  "/bookstore/book/sell[\"abc\" <= 1]", 
   "/bookstore/book/sell[\"abc\" = \"efg\"]",
   "/bookstore/book/sell[\"abc\" = \"a bc\"]",
   "/bookstore/book/sell[\"2\" <= 1]",
@@ -504,7 +504,7 @@ ObString enter_false_predicate[PREDICATE_FALSE_TEST_COUNT] = {
   "/bookstore/book/sell[\"abc\" >= (2 > 1)]",
   "/bookstore/book/sell[1 and \"\"]",
   "/bookstore/book/sell[(1 > 2) > (1 < 2)]",
-  "/bookstore/book/sell[(1 > 2) != (3 < 2)]",
+  "/bookstore/book/sell[(1 > 2) != (3 < 2)]", 
   "/bookstore/book/sell[1.1 > 2]",
   "/bookstore/book/sell[189.23 > 222.2]",
   "/bookstore/book/sell[1 != 1.0]",
@@ -610,19 +610,19 @@ TEST_F(TestXPathFilter, test_false_in_predicate)
 
 # define COMPARE_TEST_COUNT 7
 ObString enter_compare[COMPARE_TEST_COUNT] = {
-  "1 = 2", "0=0", "1 < 2", "1 <= 2", "2 != 3",
-  // "1 + 2", "25 + 100 = 125", "2 +  10 < 1",
+  "1 = 2", "0=0", "1 < 2", "1 <= 2", "2 != 3", 
+  // "1 + 2", "25 + 100 = 125", "2 +  10 < 1", 
   "\"abc\" = \"abc\"", "\"abc\" != \"y\"",
   //"1.1 + 2.2 = 3.3"
 };
 ObString expect_parse_result[COMPARE_TEST_COUNT] = {
-  "1 = 2", "0 = 0", "1 < 2", "1 <= 2", "2 != 3",
-  //"1 + 2", "25 + 100 = 125", "2 + 10 < 1",
+  "1 = 2", "0 = 0", "1 < 2", "1 <= 2", "2 != 3", 
+  //"1 + 2", "25 + 100 = 125", "2 + 10 < 1", 
   "\"abc\" = \"abc\"", "\"abc\" != \"y\"",
   //"1.1 + 2.2 = 3.3"
 };
 ObString compare_ans[COMPARE_TEST_COUNT] = {
-  "false", "true", "true", "true", "true",
+  "false", "true", "true", "true", "true", 
   "true", "true",
   //"true"
 };
@@ -667,7 +667,7 @@ TEST_F(TestXPathFilter, test_equal_compare)
     ObXmlNode* xnode = static_cast<ObXmlNode*>(res);
     writer.visit(xnode);
     ObString s = writer.get_xml_text();
-    std::cout << "Test NO." << i << " : " << s.ptr() << std::endl;
+    std::cout << "Test NO." << i << " : " << s.ptr() << std::endl; 
     std::cout << "compare_ans[" << i  << "] : " << compare_ans[i].ptr() << std::endl;
     ASSERT_EQ(s, compare_ans[i]);
   }

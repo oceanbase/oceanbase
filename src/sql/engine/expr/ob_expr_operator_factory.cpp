@@ -1773,9 +1773,9 @@ void ObExprOperatorFactory::get_function_alias_name(const ObString &origin_name,
     } else if (0 == origin_name.case_compare("VEC_DATA")) {
       alias_name = ObString::make_string(N_VEC_DATA);
     } else if (0 == origin_name.case_compare("SPIV_DIM")) {
-      alias_name = ObString::make_string(N_SPIV_DIM);
+      alias_name = ObString::make_string(N_SPIV_DIM); 
     } else if (0 == origin_name.case_compare("SPIV_VALUE")) {
-      alias_name = ObString::make_string(N_SPIV_VALUE);
+      alias_name = ObString::make_string(N_SPIV_VALUE);  
     } else if (0 == origin_name.case_compare("DOC_ID")) {
       alias_name = ObString::make_string(N_DOC_ID);
     } else if (0 == origin_name.case_compare("ws")) {

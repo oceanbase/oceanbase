@@ -799,7 +799,7 @@ int ObVariableSetExecutor::global_variable_timezone_formalize(ObExecContext &ctx
   int ret_more = OB_SUCCESS;
   bool check_timezone_valid = false;
   bool is_oralce_mode = false;
-  ObSQLSessionInfo *session = ctx.get_my_session();
+  ObSQLSessionInfo *session = ctx.get_my_session(); 
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get session info", K(ret), K(session));
@@ -1374,7 +1374,7 @@ int ObVariableSetExecutor::is_support(const share::ObSetVar &set_var)
               (SYS_VAR_INSERT_ID <= var_id && SYS_VAR_MAX_WRITE_LOCK_COUNT >= var_id) ||
               (SYS_VAR_NDB_ALLOW_COPYING_ALTER_TABLE <= var_id
                && SYS_VAR_RELAY_LOG_SPACE_LIMIT >= var_id)) &&
-              SYS_VAR_LOG_SLAVE_UPDATES != var_id &&
+              SYS_VAR_LOG_SLAVE_UPDATES != var_id && 
               SYS_VAR_EXPIRE_LOGS_DAYS != var_id &&
               SYS_VAR_LOG_BIN_TRUST_FUNCTION_CREATORS != var_id) {
     ret = OB_NOT_SUPPORTED;

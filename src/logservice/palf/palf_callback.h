@@ -69,7 +69,7 @@ public:
                                                    const char *extra_info = NULL) = 0;
   virtual int record_election_leader_change_event(const int64_t palf_id, const common::ObAddr &dest_addr) = 0;
   virtual int record_reconfiguration_event(const char *sub_event,
-                                           const int64_t palf_id,
+                                           const int64_t palf_id,  
                                            const LogConfigVersion& config_version,
                                            const int64_t prev_replica_num,
                                            const int64_t curr_replica_num,
@@ -117,7 +117,7 @@ public:
                                                const common::ObRegion &region,
                                                const int64_t register_time_us,
                                                const char *extra_info = NULL) = 0;
-
+  
   // performance statistic
   virtual int add_log_write_stat(const int64_t palf_id, const int64_t log_write_size) = 0;
 };

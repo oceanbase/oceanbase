@@ -20,30 +20,30 @@ using namespace oceanbase::common;
 using namespace share;
 using namespace oceanbase::share::schema;
 
-int ObLogMerge::get_plan_item_info(PlanText &plan_text,
+int ObLogMerge::get_plan_item_info(PlanText &plan_text, 
                                    ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObLogDelUpd::get_plan_item_info(plan_text, plan_item))) {
     LOG_WARN("failed to get plan item info", K(ret));
   } else {
-    BEGIN_BUF_PRINT;
+    BEGIN_BUF_PRINT; 
     if (OB_FAIL(print_table_infos(ObString::make_string("columns"),
-                                  buf,
-                                  buf_len,
-                                  pos,
+                                  buf, 
+                                  buf_len, 
+                                  pos, 
                                   type))) {
       LOG_WARN("failed to print table info", K(ret));
     } else if (NULL == table_partition_info_) {
     } else if(OB_FAIL(BUF_PRINTF(", "))) {
       LOG_WARN("BUG_PRINTF fails", K(ret));
-    } else if (OB_FAIL(explain_print_partitions(*table_partition_info_,
-                                                buf,
-                                                buf_len,
+    } else if (OB_FAIL(explain_print_partitions(*table_partition_info_, 
+                                                buf, 
+                                                buf_len, 
                                                 pos))) {
       LOG_WARN("Failed to print partitions");
     } else { }
-    if (OB_SUCC(ret) &&
+    if (OB_SUCC(ret) && 
         NULL != get_primary_dml_info() &&
         !get_primary_dml_info()->column_convert_exprs_.empty()) {
       const ObIArray<ObRawExpr *> &column_values = get_primary_dml_info()->column_convert_exprs_;
@@ -55,7 +55,7 @@ int ObLogMerge::get_plan_item_info(PlanText &plan_text,
         EXPLAIN_PRINT_EXPRS(column_values, type);
       }
     }
-    if (OB_SUCC(ret) && !get_update_infos().empty() &&
+    if (OB_SUCC(ret) && !get_update_infos().empty() && 
         NULL != get_update_infos().at(0)) {
       const ObAssignments &assigns = get_update_infos().at(0)->assignments_;
       if (OB_FAIL(BUF_PRINTF(",\n"))) {
@@ -63,9 +63,9 @@ int ObLogMerge::get_plan_item_info(PlanText &plan_text,
       } else if (OB_FAIL(BUF_PRINTF("      update("))) {
         LOG_WARN("BUG_PRINTF fails", K(ret));
       } else if (OB_FAIL(print_assigns(assigns,
-                                       buf,
-                                       buf_len,
-                                       pos,
+                                       buf, 
+                                       buf_len, 
+                                       pos, 
                                        type))) {
         LOG_WARN("failed to print assigns", K(ret));
       } else { /* Do nothing */ }
@@ -339,7 +339,7 @@ int ObLogMerge::generate_part_id_expr_for_foreign_key(ObIArray<ObRawExpr*> &all_
       }
     }
   }
-
+  
   for (int64_t i = 0; OB_SUCC(ret) && i < get_update_infos().count(); ++i) {
     IndexDMLInfo *upd_info = get_update_infos().at(i);
     if (OB_ISNULL(upd_info)) {
@@ -487,3 +487,4 @@ int ObLogMerge::op_is_update_pk_with_dop(bool &is_update)
   }
   return ret;
 }
+

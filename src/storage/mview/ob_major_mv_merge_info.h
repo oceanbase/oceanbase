@@ -58,7 +58,7 @@ public:
   share::SCN merge_scn_;
 };
 
-struct ObMVPublishSCNHelper
+struct ObMVPublishSCNHelper 
 {
   static int on_register(
       const char *buf,
@@ -86,7 +86,7 @@ struct ObMVNoticeSafeHelper
       mds::BufferCtx &ctx);
 };
 
-struct ObMVUpdateSCNHelper
+struct ObMVUpdateSCNHelper 
 {
   static int on_register(
       const char *buf,
@@ -106,7 +106,7 @@ struct ObMVUpdateSCNHelper
   }
 };
 
-struct ObMVMergeSCNHelper
+struct ObMVMergeSCNHelper 
 {
   static int on_register(
       const char *buf,
@@ -123,7 +123,7 @@ struct ObMVMergeSCNHelper
 struct ObMVCheckReplicaHelper
 {
   static int get_and_update_merge_info(
-      const share::ObLSID &ls_id,
+      const share::ObLSID &ls_id, 
       ObMajorMVMergeInfo &info);
   static int check_can_add_member(
       const common::ObAddr &server,
@@ -131,7 +131,7 @@ struct ObMVCheckReplicaHelper
       const share::ObLSID &ls_id,
       const uint64_t rpc_timeout);
   static int get_merge_info(
-      const share::ObLSID &ls_id,
+      const share::ObLSID &ls_id, 
       ObMajorMVMergeInfo &info);
 };
 

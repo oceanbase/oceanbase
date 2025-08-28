@@ -51,7 +51,7 @@ enum ObTableObjType
   ObTableLongBlobType = 24,
   ObTableCharType = 25,
   ObTableObjTypeMax = 26,
-};
+}; 
 
 /*
   How to add a new ObTableObjType type T:

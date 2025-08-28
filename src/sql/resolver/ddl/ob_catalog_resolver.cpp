@@ -43,7 +43,7 @@ int ObCatalogResolver::resolve(const ParseNode &parse_tree)
   ObCatalogStmt *stmt = NULL;
   stmt::StmtType stmt_type = stmt::T_NONE;
   uint64_t data_version = 0;
-  uint64_t tenant_id = OB_INVALID_ID;
+  uint64_t tenant_id = OB_INVALID_ID; 
   if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));

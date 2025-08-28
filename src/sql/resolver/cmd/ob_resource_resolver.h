@@ -398,7 +398,7 @@ int ObResourceUnitOptionResolver<T>::resolve_varchar_(ParseNode *child, const Ob
     SQL_RESV_LOG(WARN, "fail to assign child str", KR(ret), K(child->str_value_), K(child->str_len_));
   } else {
     //
-    // bugfix:
+    // bugfix: 
     //
     // create resource unit unit_test4 max_cpu '1', max_iops '128'
     // 等价于
@@ -424,7 +424,7 @@ int ObResourceUnitOptionResolver<T>::resolve_varchar_(ParseNode *child, const Ob
       parse_int_value = common::ObConfigReadableIntParser::get(buf.ptr(), valid);
     } else if (T_MEMORY_SIZE == type ||
                T_LOG_DISK_SIZE == type ||
-               T_DATA_DISK_SIZE == type ||
+               T_DATA_DISK_SIZE == type || 
                T_MAX_NET_BANDWIDTH == type) {
       // '3' = '3mb' = 3*1024*1024
       parse_int_value = common::ObConfigCapacityParser::get(buf.ptr(), valid);

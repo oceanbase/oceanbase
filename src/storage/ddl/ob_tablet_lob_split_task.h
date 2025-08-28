@@ -85,7 +85,7 @@ struct ObLobSplitParam : public share::ObIDagInitParam
 {
 public:
   ObLobSplitParam() :
-    rowkey_allocator_("LobSplitRowkey", OB_MALLOC_NORMAL_BLOCK_SIZE /*8KB*/, MTL_ID()),
+    rowkey_allocator_("LobSplitRowkey", OB_MALLOC_NORMAL_BLOCK_SIZE /*8KB*/, MTL_ID()), 
     tenant_id_(common::OB_INVALID_TENANT_ID), ls_id_(share::ObLSID::INVALID_LS_ID),
     ori_lob_meta_tablet_id_(ObTabletID::INVALID_TABLET_ID),
     new_lob_tablet_ids_(), schema_version_(0),
@@ -110,7 +110,7 @@ public:
   int assign(const ObLobSplitParam &other);
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(ori_lob_meta_tablet_id),
     K_(new_lob_tablet_ids), K_(schema_version), K_(data_format_version),
-    K_(parallelism), K_(compaction_scn), K_(compat_mode), K_(task_id),
+    K_(parallelism), K_(compaction_scn), K_(compat_mode), K_(task_id), 
     K_(source_table_id), K_(dest_schema_id), K_(lob_col_idxs), K_(consumer_group_id),
     K_(lob_col_idxs), K_(split_sstable_type), K_(parallel_datum_rowkey_list),
     K_(min_split_start_scn));
@@ -140,7 +140,7 @@ struct ObLobSplitContext final
 {
 public:
   ObLobSplitContext() :
-    range_allocator_("LobSplitRange", OB_MALLOC_NORMAL_BLOCK_SIZE /*8KB*/, MTL_ID()),
+    range_allocator_("LobSplitRange", OB_MALLOC_NORMAL_BLOCK_SIZE /*8KB*/, MTL_ID()), 
     is_inited_(false), data_ret_(0), is_lob_piece_(false),
     ls_handle_(), main_tablet_id_(ObTabletID::INVALID_TABLET_ID),
     allocator_(common::ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
@@ -160,7 +160,7 @@ public:
   TO_STRING_KV(K_(is_inited), K_(data_ret), K_(is_lob_piece),
     K_(ls_handle), K_(main_tablet_id), K_(main_tablet_handle),
     K_(lob_meta_tablet_handle), K_(new_main_tablet_ids),
-    K_(new_lob_tablet_ids), KPC_(total_map), K_(sub_maps), K_(main_table_ranges),
+    K_(new_lob_tablet_ids), KPC_(total_map), K_(sub_maps), K_(main_table_ranges), 
     K_(skipped_split_major_keys), K_(row_inserted), K_(physical_row_count),
     K_(ls_rebuild_seq));
 private:
@@ -208,7 +208,7 @@ public:
   int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override
   { return param_.compat_mode_; }
-  virtual uint64_t get_consumer_group_id() const override
+  virtual uint64_t get_consumer_group_id() const override 
   { return consumer_group_id_; }
   virtual int create_first_task() override;
   virtual bool ignore_warning() override;

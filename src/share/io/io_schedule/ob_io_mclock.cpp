@@ -227,7 +227,7 @@ int ObTenantIOClock::init(const uint64_t tenant_id, const ObTenantIOConfig &io_c
       unit_clocks_[static_cast<int>(ObIOMode::MAX_MODE)].last_ns_ = 0;
       io_usage_ = io_usage;
       is_inited_ = true;
-    }
+    }    
   }
   return ret;
 }
@@ -307,7 +307,7 @@ int ObTenantIOClock::calc_phyqueue_clock(ObPhyQueue *phy_queue, ObIORequest &req
         unit_clock->compare_and_update(current_ts, iops_scale, phy_queue->limitation_ts_);
       }
     }
-  }
+  } 
   if (OB_FAIL(ret) || is_unlimited) {
     phy_queue->reservation_ts_ = current_ts;
     phy_queue->limitation_ts_ = current_ts;
@@ -535,11 +535,11 @@ int64_t ObTenantIOClock::get_max_proportion_ts()
   }
   return max_proportion_ts;
 }
-int64_t ObTenantIOClock::get_group_clocks_count() {
+int64_t ObTenantIOClock::get_group_clocks_count() { 
   DRWLock::RDLockGuard guard(group_clocks_lock_);
-  return group_clocks_.count();
+  return group_clocks_.count(); 
 }
-int ObTenantIOClock::get_group_limit(const int64_t idx, int64_t &group_limit) {
+int ObTenantIOClock::get_group_limit(const int64_t idx, int64_t &group_limit) { 
   int ret = OB_SUCCESS;
   DRWLock::RDLockGuard guard(group_clocks_lock_);
   if (idx >= group_clocks_.count()) {

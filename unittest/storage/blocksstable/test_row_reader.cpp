@@ -64,7 +64,7 @@ public:
   {
     int ret = ObTimerService::get_instance().start();
     ASSERT_TRUE(OB_SUCCESS == ret || OB_INIT_TWICE == ret);
-  }
+  } 
   static void TearDownTestCase()
   {
     ObTimerService::get_instance().stop();

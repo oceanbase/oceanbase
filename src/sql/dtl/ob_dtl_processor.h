@@ -90,7 +90,7 @@ int ObDtlPacketProc<Packet>::process(const ObDtlLinkedBuffer &buffer, bool &tran
   }
   // packet 处理完成后需要释放内存
   // 否则会有内存泄漏
-  //
+  // 
   // 无论处理是否成功，都需要reset对应的packet
   pkt_.reset();
   return ret;

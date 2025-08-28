@@ -25,7 +25,7 @@ class ObGeoVertexCollectVisitor : public ObEmptyGeoVisitor
 public:
   ObGeoVertexCollectVisitor(ObVertexes &vertexes) : vertexes_(vertexes), x_min_(NAN), x_max_(NAN) {}
   virtual ~ObGeoVertexCollectVisitor() {}
-  bool prepare(ObGeometry *geo);
+  bool prepare(ObGeometry *geo);  
   int visit(ObIWkbPoint *geo);
   int visit(ObIWkbGeometry *geo) { UNUSED(geo); return OB_SUCCESS; }
   inline double get_x_min() { return x_min_; }

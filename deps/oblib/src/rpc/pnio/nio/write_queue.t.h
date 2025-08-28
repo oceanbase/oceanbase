@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 static void my_flush_cb_exception(my_t* io, my_req_t* r) {
   return my_flush_cb(io, r);
 }

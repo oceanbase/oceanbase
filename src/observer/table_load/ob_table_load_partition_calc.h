@@ -35,7 +35,7 @@ class ObTableLoadPartitionCalc
 public:
   ObTableLoadPartitionCalc();
   ~ObTableLoadPartitionCalc();
-  int init(const ObTableLoadParam &param,
+  int init(const ObTableLoadParam &param, 
            sql::ObSQLSessionInfo *session_info,
            const ObIArray<ObTabletID> &tablet_ids);
   int get_part_key(const table::ObTableLoadObjRow &row, common::ObNewRow &part_key) const;

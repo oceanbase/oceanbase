@@ -15,7 +15,7 @@
 
 namespace oceanbase
 {
-namespace common
+namespace common 
 {
 ObBucketQSyncLock::ObBucketQSyncLock()
     : bucket_cnt_(0),

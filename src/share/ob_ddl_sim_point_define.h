@@ -17,7 +17,7 @@
 //  N_RET_ERR(max_repeat_times, ret_code, ...) // return fixed or random ret_code, execute multi times
 //  SLEEP_MS(min_sleep_ms, [max_sleep_ms]) // sleep random time between min_sleep_ms and max_sleep_ms, execute once
 //  N_SLEEP_MS(max_repeat_times, min_sleep_ms, [max_sleep_ms]) // sleep random time between min_sleep_ms and max_sleep_ms, execute multi times
-//
+// 
 // Examples:
 // DDL_SIM_POINT_DEFINE(DDL_SIM_POINT_EXAMPLE_1, 1, "return fixed ret_code once", RET_ERR(OB_TASK_EXPIRED))
 // DDL_SIM_POINT_DEFINE(DDL_SIM_POINT_EXAMPLE_2, 2, "return random ret_code once", RET_ERR(OB_NOT_MASTER, OB_EAGAIN, OB_INVALID_ARGUMENT, OB_NOT_INIT))

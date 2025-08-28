@@ -178,7 +178,7 @@ void ObTenantConfigMgr::refresh_config_version_map(const ObIArray<uint64_t> &ten
 
 // 背景：每个 server 上需要保存所有租户的 config 信息
 // 当新建租户/删除租户时需要对应维护 config 状态。
-//
+// 
 // IN: 当前活跃租户
 // ACTION: 根据 tenants 信息，决定要添加/删除哪些租户配置项
 int ObTenantConfigMgr::refresh_tenants(const ObIArray<uint64_t> &tenants)
@@ -538,7 +538,7 @@ void ObTenantConfigMgr::get_lease_request(share::ObLeaseRequest &lease_request)
 // for __all_virtual_tenant_parameter_info
 int ObTenantConfigMgr::get_all_tenant_config_info(
     common::ObArray<TenantConfigInfo> &all_config,
-    common::ObIAllocator *allocator)
+    common::ObIAllocator *allocator) 
 {
   int ret = OB_SUCCESS;
   DRWLock::RDLockGuard guard(rwlock_);

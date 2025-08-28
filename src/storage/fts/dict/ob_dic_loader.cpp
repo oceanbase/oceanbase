@@ -52,7 +52,7 @@ int ObTenantDicLoader::load_dictionary_in_trans(const uint64_t tenant_id, ObMySQ
             if (0 == j) {
               if (OB_FAIL(dml.splice_column_names(columns))) {
                 LOG_WARN("fail to splice column names", K(ret));
-              } else if (OB_FAIL(query_string.append_fmt("INSERT INTO %s (%s) VALUES",
+              } else if (OB_FAIL(query_string.append_fmt("INSERT INTO %s (%s) VALUES", 
                           table_name, columns.ptr()))) {
                 LOG_WARN("assign sql string failed", KR(ret), K(query_string));
               }
@@ -103,9 +103,9 @@ int ObTenantDicLoader::try_load_dictionary_in_trans(const uint64_t tenant_id, Ob
       if (OB_FAIL(check_need_load_dic(tenant_id, is_need_load_dic))) {
         LOG_WARN("failed to check is real load", K(ret), K(tenant_id));
       } else if (is_need_load_dic) {
-        if (OB_FAIL(ObDicLock::lock_dic_tables_in_trans(tenant_id,
+        if (OB_FAIL(ObDicLock::lock_dic_tables_in_trans(tenant_id, 
                                                         *this,
-                                                        transaction::tablelock::EXCLUSIVE,
+                                                        transaction::tablelock::EXCLUSIVE, 
                                                         trans))) {
           LOG_WARN("failed to lock all dictionary table", K(ret), K(tenant_id), KPC(this));
         }
@@ -164,7 +164,7 @@ int ObTenantDicLoader::try_load_dictionary_in_trans(const uint64_t tenant_id)
       }
     }
   }
-  return ret;
+  return ret; 
 }
 
 int ObTenantDicLoader::check_need_load_dic(const uint64_t tenant_id, bool &is_need_load_dic)

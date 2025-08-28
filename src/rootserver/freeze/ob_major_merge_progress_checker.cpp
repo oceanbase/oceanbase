@@ -855,7 +855,7 @@ int ObMajorMergeProgressChecker::get_idx_ckm_and_validate(
     if (OB_SUCC(ret) || OB_TABLE_NOT_EXIST == ret) {
       (void) deal_with_validated_table(index_table_id, 0 /*finish_index_cnt*/, index_table_ckm);
 #ifdef ERRSIM
-      if (EN_SPECIAL_INDEX_TABLE_VERIFY && index_table_ckm.get_table_schema()->should_not_validate_data_index_ckm()) {
+      if (EN_SPECIAL_INDEX_TABLE_VERIFY && index_table_ckm.get_table_schema()->should_not_validate_data_index_ckm()) { 
         SERVER_EVENT_ADD("storage_engine", "special_index_table_verify",
           "tenant_id", tenant_id_,
           "index_table_id", index_table_id,

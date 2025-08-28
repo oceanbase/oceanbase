@@ -38,8 +38,8 @@ protected:
   int check_hbase_ddl_enable();
   int parse_htable_name(common::ObIAllocator &allocator, const ObTableMetaRequest &request, ObString &htable_name);
   int get_tablet_boundary_internal(common::ObIAllocator &allocator,
-                                   const schema::ObSimpleTableSchemaV2 &table_schema,
-                                   const common::ObIArray<ObTabletID> &tablet_ids,
+                                   const schema::ObSimpleTableSchemaV2 &table_schema, 
+                                   const common::ObIArray<ObTabletID> &tablet_ids, 
                                    ObIArray<common::ObString> &upperbound_trims);
   int format_tablet_ids(common::ObIAllocator &allocator,
                         const ObIArray<ObTabletID>& tablet_ids,
@@ -323,7 +323,7 @@ private:
     TO_STRING_KV(K_(table_name));
     ObString table_name_;
   };
-
+  
 
 private:
   common::ObIAllocator &allocator_;

@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #include <gtest/gtest.h>
 #define private public
 #include "test_xml_utils.h"
@@ -42,32 +42,32 @@ private:
 };
 
 ObString axis_path_map[30][2] = {
-  {"/self::abc","/self::abc"},
+  {"/self::abc","/self::abc"}, 
   {"/parent::a","/parent::a"},
   {"/ancestor::a1","/ancestor::a1"},
   {"/ancestor-or-self::a1","/ancestor-or-self::a1"},
-  {"/child::a1","/a1"},
-  {"/ancestor::_a1","/ancestor::_a1"},
+  {"/child::a1","/a1"}, 
+  {"/ancestor::_a1","/ancestor::_a1"}, 
   {"/descendant::a_2","/descendant::a_2"},
   {"/descendant-or-self::a1","/descendant-or-self::a1"},
   {"/following-sibling::a1","/following-sibling::a1"},
   {"/following::a1","/following::a1"}, //10
-  {"/preceding-sibling::a1","/preceding-sibling::a1"},
+  {"/preceding-sibling::a1","/preceding-sibling::a1"}, 
   {"/preceding::k","/preceding::k"},
   {"/attribute::k","/@k"},
   {"/@k","/@k"},
   {"/namespace::k","/namespace::k"}, // 15
-  {"/self","/self"},
+  {"/self","/self"}, 
   {"/parent","/parent"},
   {"/ancestor","/ancestor"},
   {"/ancestor-or-self","/ancestor-or-self"},
-  {"/child","/child"},
-  {"/child::ancestor","/ancestor"},
+  {"/child","/child"}, 
+  {"/child::ancestor","/ancestor"}, 
   {"/descendant","/descendant"},
   {"/descendant-or-self","/descendant-or-self"},
   {"/following-sibling","/following-sibling"},
   {"/following","/following"}, //25
-  {"/preceding-sibling","/preceding-sibling"},
+  {"/preceding-sibling","/preceding-sibling"}, 
   {"/preceding","/preceding"},
   {"/attribute","/attribute"},
   {"/a/preceding-sibling","/a/preceding-sibling"},
@@ -97,27 +97,27 @@ TEST_F(TestXPath, test_axis)
 }
 
 ObString abbreviation_path_map[30][2] = {
-  {"/","/"},
+  {"/","/"}, 
   {"abc","abc"},
   {".","self::node()"},
   {"..","parent::node()"},
-  {"//a","//a"},
-  {"/.","/self::node()"},
+  {"//a","//a"}, 
+  {"/.","/self::node()"}, 
   {"/..","/parent::node()"},
   {"/*","/*"},
   {"/@*","/@*"},
   {"/attribute::*","/@*"}, //10
-  {"/a/./..","/a/self::node()/parent::node()"},
+  {"/a/./..","/a/self::node()/parent::node()"}, 
   {"/.tag","/self::tag"},
   {"/.text()","/self::node()"},
   {"//*","//*"},
   {"@test","@test"}, // 15
-  {"/*/*/*","/*/*/*"},
+  {"/*/*/*","/*/*/*"}, 
   {"//@ba","/descendant-or-self::node()/@ba"},
   {"/./a","/self::node()/a"},
   {"../a","parent::node()/a"},
   {"/a/child::*","/a/*"}, // 20
-  {"/a/b/c/ancestor-or-self::*","/a/b/c/ancestor-or-self::*"},
+  {"/a/b/c/ancestor-or-self::*","/a/b/c/ancestor-or-self::*"}, 
   {"/.//@x","/self::node()/descendant-or-self::node()/@x"},
 };
 
@@ -147,24 +147,24 @@ TEST_F(TestXPath, test_abbreviation)
 }
 
 ObString nodetest_path_map[30][2] = {
-  {"node()","node()"},
+  {"node()","node()"}, 
   {"text()","text()"},
   {"comment()","comment()"},
   {"processing-instruction()","processing-instruction()"},
-  {"processing-instruction(\"abc\")","processing-instruction(\"abc\")"},
-  {"processing-instruction('abc')","processing-instruction(\"abc\")"},
+  {"processing-instruction(\"abc\")","processing-instruction(\"abc\")"}, 
+  {"processing-instruction('abc')","processing-instruction(\"abc\")"}, 
   {"/a/parent::b/text()","/a/parent::b/text()"},
   {"a/following::node()","a/following::node()"},
   {"node","node"},
   {"/text","/text"}, //10
-  {"comment","comment"},
+  {"comment","comment"}, 
   {"processing-instruction","processing-instruction"},
   {"/.text()","/self::node()"},
   {"/node()/text()","/node()/text()"},
   {"element/comment","element/comment"}, // 15
   {"text   ()","text()"},
   {"text   (    )","text()"},
-  {"text   (    )    ","text()"},
+  {"text   (    )    ","text()"}, 
 };
 
 TEST_F(TestXPath, test_nodetest)
@@ -192,21 +192,21 @@ TEST_F(TestXPath, test_nodetest)
 }
 
 ObString ns_path_map[16][2] = {
-  {"/f:a","/ns_str:a"},
+  {"/f:a","/ns_str:a"}, 
   {"/@f:b","/@ns_str:b"},
   {"/self:a","/ns_str:a"},
   {"/processing-instruction:abc","/ns_str:abc"},
-  {"/parent:a","/ns_str:a"},
-  {"/ancestor:a","/ns_str:a"},
+  {"/parent:a","/ns_str:a"}, 
+  {"/ancestor:a","/ns_str:a"}, 
   {"/ancestor-or-self:a","/ns_str:a"},
   {"/descendant-or-self:a","/ns_str:a"},
   {"/following-sibling:a","/ns_str:a"},
   {"/preceding-sibling:a","/ns_str:a"}, //10
-  {"preceding:a","ns_str:a"},
+  {"preceding:a","ns_str:a"}, 
   {"attribute:a","ns_str:a"},
   {"namespace:a","ns_str:a"},
   {"/text:a","/ns_str:a"},
-  {"/node:a","/ns_str:a"},
+  {"/node:a","/ns_str:a"}, 
   {"/comment:a","/ns_str:a"},// 16
 };
 ObString ns_str[15] = {
@@ -235,7 +235,7 @@ TEST_F(TestXPath, test_ns)
   ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
   ObPathVarObject ans(allocator);
   ObString data_value("ns_str");
-  ObDatum* data =
+  ObDatum* data = 
     static_cast<ObDatum*> (allocator.alloc(sizeof(ObDatum)));
   if (OB_ISNULL(data)) {
     ret = OB_BAD_NULL_ERROR;
@@ -263,12 +263,12 @@ TEST_F(TestXPath, test_ns)
 }
 
 ObString path_map[35][2] = {
-  {"/abc","/abc"},
+  {"/abc","/abc"}, 
   {"/_abc","/_abc"},
   {"/atest123","/atest123"},
-  {"/ab-cd","/ab-cd"},
-  {"/ab_cd","/ab_cd"},
-  {"/a..a","/a..a"},
+  {"/ab-cd","/ab-cd"}, 
+  {"/ab_cd","/ab_cd"}, 
+  {"/a..a","/a..a"}, 
   {"Setp/@LValue", "Setp/@LValue"}, // following: user path
   {"/Rule/Format/Setp", "/Rule/Format/Setp"},
   {"/Rule/ExpressionText", "/Rule/ExpressionText"},
@@ -288,12 +288,12 @@ ObString path_map[35][2] = {
   {"//Element","//Element"},
   {"/12","/12"}, // 24 bad path
   {"/$a","/$a"},
-  {"$b","$b"},
-  {"abc(","abc("},
+  {"$b","$b"}, 
+  {"abc(","abc("},  
   {"test()","test()"},
   {"/.*",""},
   {"/..abc",""},
-  {"/@",""},
+  {"/@",""}, 
   {"/child::",""},
 };
 TEST_F(TestXPath, test_tag_and_badpath)
@@ -371,10 +371,10 @@ static ObString bad_func_map[10] = {
   "last()",
   "/abc/count(/abc)",
 };
-static int func_errcode[10] = {
-  OB_ERR_PARSER_SYNTAX,
-  OB_OP_NOT_ALLOW,
-  OB_ERR_PARSER_SYNTAX,
+static int func_errcode[10] = { 
+  OB_ERR_PARSER_SYNTAX, 
+  OB_OP_NOT_ALLOW, 
+  OB_ERR_PARSER_SYNTAX, 
   OB_OP_NOT_ALLOW,
   OB_INVALID_ARGUMENT,
 };
@@ -426,7 +426,7 @@ ObString good_filter_map[37][2] = {
   {"/Grade/Format/list_Step[text()=\"' || B.GRADE || '\"]/@PD", "/Grade/Format/list_Step[text() = \"' || B.GRADE || '\"]/@PD"},
   {"abc + abc", "abc + abc"},
   {"\"abc\" > \"abc\"", "\"abc\" > \"abc\""},
-  {"count(/abc) + count(/abc)", "count(/abc) + count(/abc)"},
+  {"count(/abc) + count(/abc)", "count(/abc) + count(/abc)"}, 
   {"count(/abc) > count(/abc)", "count(/abc) > count(/abc)"},
   {"1 or 1 < 2", "1 or 1 < 2"}, // 30
   {"/abc[abc > abc]", "/abc[abc > abc]"},
@@ -470,13 +470,13 @@ static ObString bad_filter_map[10] = {
   "\"abc\"+ abc",
   "1 <= (1 and 1)",
 };
-static int filter_errcode[10] = {
+static int filter_errcode[10] = { 
+  OB_OP_NOT_ALLOW, 
+  OB_OP_NOT_ALLOW, 
+  OB_OP_NOT_ALLOW, 
   OB_OP_NOT_ALLOW,
   OB_OP_NOT_ALLOW,
-  OB_OP_NOT_ALLOW,
-  OB_OP_NOT_ALLOW,
-  OB_OP_NOT_ALLOW,
-  OB_OP_NOT_ALLOW,
+  OB_OP_NOT_ALLOW, 
   OB_OP_NOT_ALLOW,
 };
 TEST_F(TestXPath, test_parse_bad_filter)
@@ -520,7 +520,7 @@ TEST_F(TestXPath, test_good_path)
   ret = test_path.to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -562,7 +562,7 @@ TEST_F(TestXPath, test_seek_element_by_tag) // tested
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -570,7 +570,7 @@ TEST_F(TestXPath, test_seek_element_by_tag) // tested
 
   ASSERT_EQ(OB_SUCCESS, ret);
   int i = 0;
-
+  
   while (OB_SUCC(ret)) {
     ObIMulModeBase* res;
     ret = pathiter.get_next_node(res);
@@ -587,7 +587,7 @@ TEST_F(TestXPath, test_seek_element_by_tag) // tested
     }
     ++i;
   }
-
+  
   std::cout<<"start binary: "<<std::endl;
   ObPathExprIter pathiter_bin(&allocator);
   pathiter_bin.init(ctx, str0, default_ns, &xbin, &pass);
@@ -653,7 +653,7 @@ TEST_F(TestXPath, test_seek_ellipsis_case) // tested
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -661,7 +661,7 @@ TEST_F(TestXPath, test_seek_ellipsis_case) // tested
 
   ASSERT_EQ(OB_SUCCESS, ret);
   int i = 0;
-
+  
   while (OB_SUCC(ret)) {
     ObIMulModeBase* res;
     ret = pathiter.get_next_node(res);
@@ -677,7 +677,7 @@ TEST_F(TestXPath, test_seek_ellipsis_case) // tested
     }
     ++i;
   }
-
+  
   std::cout<<"start binary: "<<std::endl;
   ObPathExprIter pathiter_bin(&allocator);
   pathiter_bin.init(ctx, str0, default_ns, &xbin, &pass);
@@ -737,7 +737,7 @@ TEST_F(TestXPath, test_seek_suite_ellipsis) // tested
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -745,7 +745,7 @@ TEST_F(TestXPath, test_seek_suite_ellipsis) // tested
 
   ASSERT_EQ(OB_SUCCESS, ret);
   int i = 0;
-
+  
   while (OB_SUCC(ret)) {
     ObIMulModeBase* res;
     ret = pathiter.get_next_node(res);
@@ -761,7 +761,7 @@ TEST_F(TestXPath, test_seek_suite_ellipsis) // tested
     }
     ++i;
   }
-
+  
   std::cout<<"start binary: "<<std::endl;
   ObPathExprIter pathiter_bin(&allocator);
   pathiter_bin.init(ctx, str0, default_ns, &xbin, &pass);
@@ -820,7 +820,7 @@ TEST_F(TestXPath, test_seek_suite_case) // tested
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -828,7 +828,7 @@ TEST_F(TestXPath, test_seek_suite_case) // tested
 
   ASSERT_EQ(OB_SUCCESS, ret);
   int i = 0;
-
+  
   while (OB_SUCC(ret)) {
     ObIMulModeBase* res;
     ret = pathiter.get_next_node(res);
@@ -844,7 +844,7 @@ TEST_F(TestXPath, test_seek_suite_case) // tested
     }
     ++i;
   }
-
+  
   std::cout<<"start binary: "<<std::endl;
   ObPathExprIter pathiter_bin(&allocator);
   pathiter_bin.init(ctx, str0, default_ns, &xbin, &pass);
@@ -903,7 +903,7 @@ TEST_F(TestXPath, test_seek_suite_filter) // tested
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -911,7 +911,7 @@ TEST_F(TestXPath, test_seek_suite_filter) // tested
 
   ASSERT_EQ(OB_SUCCESS, ret);
   int i = 0;
-
+  
   while (OB_SUCC(ret)) {
     ObIMulModeBase* res;
     ret = pathiter.get_next_node(res);
@@ -927,7 +927,7 @@ TEST_F(TestXPath, test_seek_suite_filter) // tested
     }
     ++i;
   }
-
+  
   std::cout<<"start binary: "<<std::endl;
   ObPathExprIter pathiter_bin(&allocator);
   pathiter_bin.init(ctx, str0, default_ns, &xbin, &pass);
@@ -986,7 +986,7 @@ TEST_F(TestXPath, test_seek_suite_complex_filter) // tested
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -994,7 +994,7 @@ TEST_F(TestXPath, test_seek_suite_complex_filter) // tested
 
   ASSERT_EQ(OB_SUCCESS, ret);
   int i = 0;
-
+  
   while (OB_SUCC(ret)) {
     ObIMulModeBase* res;
     ret = pathiter.get_next_node(res);
@@ -1010,7 +1010,7 @@ TEST_F(TestXPath, test_seek_suite_complex_filter) // tested
     }
     ++i;
   }
-
+  
   std::cout<<"start binary: "<<std::endl;
   ObPathExprIter pathiter_bin(&allocator);
   pathiter_bin.init(ctx, str0, default_ns, &xbin, &pass);
@@ -1069,7 +1069,7 @@ TEST_F(TestXPath, test_seek_descendant_or_self_text) // tested
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -1077,7 +1077,7 @@ TEST_F(TestXPath, test_seek_descendant_or_self_text) // tested
 
   ASSERT_EQ(OB_SUCCESS, ret);
   int i = 0;
-
+  
   while (OB_SUCC(ret)) {
     ObIMulModeBase* res;
     ret = pathiter.get_next_node(res);
@@ -1094,7 +1094,7 @@ TEST_F(TestXPath, test_seek_descendant_or_self_text) // tested
     }
     ++i;
   }
-
+  
   std::cout<<"start binary: "<<std::endl;
   ObPathExprIter pathiter_bin(&allocator);
   pathiter_bin.init(ctx, str0, default_ns, &xbin, &pass);
@@ -1150,7 +1150,7 @@ TEST_F(TestXPath, test_seek_all_element) // tested
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -1208,7 +1208,7 @@ TEST_F(TestXPath, test_seek_ns_element) // to test
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -1268,7 +1268,7 @@ TEST_F(TestXPath, test_seek_root) // tested
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -1327,7 +1327,7 @@ TEST_F(TestXPath, test_seek_all_attribute) // to test
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -1410,7 +1410,7 @@ TEST_F(TestXPath, test_seek_certain_attribute) // to test
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -1427,7 +1427,7 @@ TEST_F(TestXPath, test_seek_certain_attribute) // to test
       ObXmlNode* xnode = static_cast<ObXmlNode*>(res);
       writer.visit(xnode);
       ObString s = writer.get_xml_text();
-
+      
       std::string tmp_s(s.ptr(), s.length());
       std::string tmp_seek(seek_certain_attribute[i].ptr(), seek_certain_attribute[i].length());
       ASSERT_EQ(tmp_s, tmp_seek);
@@ -1495,7 +1495,7 @@ TEST_F(TestXPath, test_seek_ns_attribute) // to test
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -1577,7 +1577,7 @@ TEST_F(TestXPath, test_seek_node) // tested
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -1636,7 +1636,7 @@ TEST_F(TestXPath, test_seek_text) // tested
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -1694,7 +1694,7 @@ TEST_F(TestXPath, test_seek_comment) // tested
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -1752,7 +1752,7 @@ TEST_F(TestXPath, test_seek_pi_wildcard) // tested
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -1810,7 +1810,7 @@ TEST_F(TestXPath, test_seek_certain_pi) // tested
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -1869,7 +1869,7 @@ TEST_F(TestXPath, test_seek_default_ns_attribute)
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -1934,7 +1934,7 @@ TEST_F(TestXPath, test_seek_self)
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -1999,7 +1999,7 @@ TEST_F(TestXPath, test_seek_basic_descendant) // tested
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -2064,7 +2064,7 @@ TEST_F(TestXPath, test_seek_descendant) // tested
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -2128,7 +2128,7 @@ TEST_F(TestXPath, test_seek_descendant_or_self) // tested
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -2194,7 +2194,7 @@ TEST_F(TestXPath, test_seek_descendant_self_text) // tested
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -2258,7 +2258,7 @@ TEST_F(TestXPath, test_seek_user_extract)
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -2322,7 +2322,7 @@ TEST_F(TestXPath, test_seek_parent) // tested
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -2410,7 +2410,7 @@ TEST_F(TestXPath, test_seek_parent_child) // tested
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -2436,7 +2436,7 @@ TEST_F(TestXPath, test_seek_parent_child) // tested
   }
 }
 
-ObString ancestor_str[5] = {"<root>root<test1>test1</test1><test><a>a<a1>a1</a1><a2>a2</a2><a3>a3</a3></a><b>b<b1>b1<b11>b11</b11><b12>b12</b12></b1><b2>b2<b21>b21</b21><b22>b22</b22></b2><b3>b3<b31>b31</b31><b32>b32</b32></b3></b><c>c<c1>c1</c1><c2>c2</c2><c3>c3</c3></c></test>test<test2>test2</test2></root>",
+ObString ancestor_str[5] = {"<root>root<test1>test1</test1><test><a>a<a1>a1</a1><a2>a2</a2><a3>a3</a3></a><b>b<b1>b1<b11>b11</b11><b12>b12</b12></b1><b2>b2<b21>b21</b21><b22>b22</b22></b2><b3>b3<b31>b31</b31><b32>b32</b32></b3></b><c>c<c1>c1</c1><c2>c2</c2><c3>c3</c3></c></test>test<test2>test2</test2></root>", 
                             "<test><a>a<a1>a1</a1><a2>a2</a2><a3>a3</a3></a><b>b<b1>b1<b11>b11</b11><b12>b12</b12></b1><b2>b2<b21>b21</b21><b22>b22</b22></b2><b3>b3<b31>b31</b31><b32>b32</b32></b3></b><c>c<c1>c1</c1><c2>c2</c2><c3>c3</c3></c></test>",
                             "<b>b<b1>b1<b11>b11</b11><b12>b12</b12></b1><b2>b2<b21>b21</b21><b22>b22</b22></b2><b3>b3<b31>b31</b31><b32>b32</b32></b3></b>",
                             "<b2>b2<b21>b21</b21><b22>b22</b22></b2>"};
@@ -2477,7 +2477,7 @@ TEST_F(TestXPath, test_seek_ancestor) // tested
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -2526,7 +2526,7 @@ TEST_F(TestXPath, test_seek_ancestor) // tested
   }
 }
 
-ObString ancestor_str_or_self[5] = {"<root>root<test1>test1</test1><test><a>a<a1>a1</a1><a2>a2</a2><a3>a3</a3></a><b>b<b1>b1<b11>b11</b11><b12>b12</b12></b1><b2>b2<b21>b21</b21><b22>b22</b22></b2><b3>b3<b31>b31</b31><b32>b32</b32></b3></b><c>c<c1>c1</c1><c2>c2</c2><c3>c3</c3></c></test>test<test2>test2</test2></root>",
+ObString ancestor_str_or_self[5] = {"<root>root<test1>test1</test1><test><a>a<a1>a1</a1><a2>a2</a2><a3>a3</a3></a><b>b<b1>b1<b11>b11</b11><b12>b12</b12></b1><b2>b2<b21>b21</b21><b22>b22</b22></b2><b3>b3<b31>b31</b31><b32>b32</b32></b3></b><c>c<c1>c1</c1><c2>c2</c2><c3>c3</c3></c></test>test<test2>test2</test2></root>", 
                             "<test><a>a<a1>a1</a1><a2>a2</a2><a3>a3</a3></a><b>b<b1>b1<b11>b11</b11><b12>b12</b12></b1><b2>b2<b21>b21</b21><b22>b22</b22></b2><b3>b3<b31>b31</b31><b32>b32</b32></b3></b><c>c<c1>c1</c1><c2>c2</c2><c3>c3</c3></c></test>",
                             "<b>b<b1>b1<b11>b11</b11><b12>b12</b12></b1><b2>b2<b21>b21</b21><b22>b22</b22></b2><b3>b3<b31>b31</b31><b32>b32</b32></b3></b>",
                             "<b2>b2<b21>b21</b21><b22>b22</b22></b2>"};
@@ -2567,7 +2567,7 @@ TEST_F(TestXPath, test_seek_ancestor_or_self) //tested
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -2629,7 +2629,7 @@ TEST_F(TestXPath, test_seek_root_ancestor) // tested
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -2678,7 +2678,7 @@ TEST_F(TestXPath, test_seek_root_parent) // tested
   ret = pathiter.path_node_->node_to_string(buf);
   std::cout<<buf.ptr()<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str2(buf.ptr());
   ASSERT_EQ(str1, str2);
@@ -2704,8 +2704,8 @@ TEST_F(TestXPath, test_basic_add_ns)
       "<f:b b1=\"b1\" b2=\"b2\">"
         "<c>"
           "<h:d>"
-            "<f:e></f:e>"
-          "</h:d>"
+            "<f:e></f:e>" 
+          "</h:d>" 
         "</c>"
       "</f:b>"
       "<h:b1>"
@@ -2719,7 +2719,7 @@ TEST_F(TestXPath, test_basic_add_ns)
   ASSERT_EQ(OB_SUCCESS, ret);
   ObXmlBin xbin(ctx);
   ASSERT_EQ(xbin.parse_tree(doc), OB_SUCCESS);
-
+  
   // seek
   ObString str0 = "/a/f:b";
   ObString str1 = "/ns1:a/ns2:b";
@@ -2774,8 +2774,8 @@ TEST_F(TestXPath, test_add_ns)
       "<f:b b1=\"b1\" b2=\"b2\">"
         "<c>"
           "<h:d>"
-            "<f:e></f:e>"
-          "</h:d>"
+            "<f:e></f:e>" 
+          "</h:d>" 
         "</c>"
       "</f:b>"
       "<h:b1>"
@@ -2788,7 +2788,7 @@ TEST_F(TestXPath, test_add_ns)
   ASSERT_EQ(OB_SUCCESS, ret);
   ObXmlBin xbin(ctx);
   ASSERT_EQ(xbin.parse_tree(doc), OB_SUCCESS);
-
+  
   // seek
   ObString str0 = "//*";
   ObString str1 = "//*";
@@ -2838,8 +2838,8 @@ TEST_F(TestXPath, test_add_ns_and_merge)
       "<f:b b1=\"b1\" b2=\"b2\">"
         "<c>"
           "<h:d>"
-            "<f:e></f:e>"
-          "</h:d>"
+            "<f:e></f:e>" 
+          "</h:d>" 
         "</c>"
       "</f:b>"
       "<h:b1>"
@@ -2852,7 +2852,7 @@ TEST_F(TestXPath, test_add_ns_and_merge)
   ASSERT_EQ(OB_SUCCESS, ret);
   ObXmlBin xbin(ctx);
   ASSERT_EQ(xbin.parse_tree(doc), OB_SUCCESS);
-
+  
   // seek
   ObString str0 = "//*";
   ObString str1 = "//*";
@@ -2920,8 +2920,8 @@ TEST_F(TestXPath, test_add_prefix_ns_and_merge)
       "<f:b b1=\"b1\" b2=\"b2\">"
         "<c>"
           "<h:d>"
-            "<f:e></f:e>"
-          "</h:d>"
+            "<f:e></f:e>" 
+          "</h:d>" 
         "</c>"
       "</f:b>"
       "<h:b1>"
@@ -2934,7 +2934,7 @@ TEST_F(TestXPath, test_add_prefix_ns_and_merge)
   ASSERT_EQ(OB_SUCCESS, ret);
   ObXmlBin xbin(ctx);
   ASSERT_EQ(xbin.parse_tree(doc), OB_SUCCESS);
-
+  
   // seek
   ObString str0 = "//*";
   ObString str1 = "//*";
@@ -3002,8 +3002,8 @@ TEST_F(TestXPath, test_new_prefix_ns_and_merge)
       "<f:b xmlns:f=\"ns1\" b1=\"b1\" b2=\"b2\">"
         "<c>"
           "<h:d>"
-            "<f:e></f:e>"
-          "</h:d>"
+            "<f:e></f:e>" 
+          "</h:d>" 
         "</c>"
       "</f:b>"
       "<f:b1>"
@@ -3016,7 +3016,7 @@ TEST_F(TestXPath, test_new_prefix_ns_and_merge)
   ASSERT_EQ(OB_SUCCESS, ret);
   ObXmlBin xbin(ctx);
   ASSERT_EQ(xbin.parse_tree(doc), OB_SUCCESS);
-
+  
   // seek
   ObString str0 = "//*";
   ObString str1 = "//*";
@@ -3099,8 +3099,8 @@ TEST_F(TestXPath, test_merge_ns)
       "<f:b xmlns:f=\"ns1\" b1=\"b1\" b2=\"b2\">"
         "<c xmlns=\"ns1\">"
           "<h:d>"
-            "<f:e> <g>ggg</g></f:e>"
-          "</h:d>"
+            "<f:e> <g>ggg</g></f:e>" 
+          "</h:d>" 
         "</c>"
       "</f:b>"
       "<f:b1>"
@@ -3126,7 +3126,7 @@ TEST_F(TestXPath, test_merge_ns)
   ASSERT_EQ(OB_SUCCESS, ret);
   ObXmlBin xbin(ctx);
   ASSERT_EQ(xbin.parse_tree(doc), OB_SUCCESS);
-
+  
   // seek
   ObString str0 = "//node()";
   ObString str1 = "//node()";

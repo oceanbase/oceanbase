@@ -236,7 +236,7 @@ int ObLogMinerTableColumnCond::hash(uint64_t &hash_val) const
 int ObLogMinerMultiTableColumnCond::add_table_cond_(json::Object &obj)
 {
   int ret = OB_SUCCESS;
-  ObLogMinerTableColumnCond *cond =
+  ObLogMinerTableColumnCond *cond = 
       static_cast<ObLogMinerTableColumnCond*>(alloc_->alloc(sizeof(ObLogMinerTableColumnCond)));
   if (OB_ISNULL(cond)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;

@@ -146,7 +146,7 @@ int ObExprSTDifference::eval_st_difference(const ObExpr &expr, ObEvalCtx &ctx, O
   if (OB_FAIL(
           process_input_geometry(expr, ctx, temp_allocator, geo1_3d, geo2_3d, is_null_res, srs))) {
     LOG_WARN("fail to process input geometry", K(ret));
-  }
+  } 
   ObGeoBoostAllocGuard guard(tenant_id);
   lib::MemoryContext *mem_ctx = nullptr;
   if (!is_null_res && OB_SUCC(ret)) {
@@ -207,7 +207,7 @@ int ObExprSTDifference::eval_st_difference(const ObExpr &expr, ObEvalCtx &ctx, O
     if (OB_FAIL(ret)) {
     } else if (is_empty_res) {
       // 2D return GEOMETRYCOLLECTION EMPTY, 3D return GEOMETRYCOLLECTION Z EMPTY
-      if (OB_FAIL(ObGeoExprUtils::create_3D_empty_collection(temp_allocator, geo1->get_srid(), is_3d_geo1,
+      if (OB_FAIL(ObGeoExprUtils::create_3D_empty_collection(temp_allocator, geo1->get_srid(), is_3d_geo1, 
                     geo1->crs() == ObGeoCRS::Geographic, diff_res))) {
         LOG_WARN("fail to create 3D empty collection", K(ret));
       }
@@ -228,7 +228,7 @@ int ObExprSTDifference::eval_st_difference(const ObExpr &expr, ObEvalCtx &ctx, O
           LOG_WARN("fail to do elevation visitor", K(ret));
         } else if (OB_FAIL(visitor.get_geometry_3D(diff_res))) {
           LOG_WARN("failed get geometry 3D", K(ret));
-        }
+        } 
       }
     }
   }

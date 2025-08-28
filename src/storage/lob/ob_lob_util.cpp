@@ -179,7 +179,7 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
         }
       }
       if (OB_SUCCESS != (tmp_ret = end_trans(tx_desc, OB_SUCCESS != ret, timeout_ts))) {
-        ret = tmp_ret;
+        ret = tmp_ret; 
         LOG_WARN("fail to end trans", K(ret), KPC(tx_desc));
       }
     }
@@ -237,7 +237,7 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
     if (OB_FAIL(src.get_lob_data_byte_len(byte_len))) {
       LOG_WARN("fail to get lob data byte len", K(ret), K(src));
     } else if (src.has_inrow_data() && lob_mngr->can_write_inrow(byte_len, lob_storage_param.inrow_threshold_)) {
-      // do fast inrow
+      // do fast inrow 
       if (src.is_inrow_disk_lob_locator()) {
         // if is disk inrow lob, no need alloc new memory, just reset lob common header
         char *buf = src.ptr_;
@@ -345,7 +345,7 @@ int ObInsertLobColumnHelper::delete_lob_column(ObIAllocator &allocator,
         }
       }
       if (OB_SUCCESS != (tmp_ret = end_trans(tx_desc, OB_SUCCESS != ret, timeout_ts))) {
-        ret = tmp_ret;
+        ret = tmp_ret; 
         LOG_WARN("fail to end trans", K(ret), KPC(tx_desc));
       }
     }
@@ -530,7 +530,7 @@ int ObLobPartialData::push_chunk_index(const ObLobChunkIndex &chunk_index)
   if (OB_FAIL(index_.push_back(chunk_index))) {
     LOG_ERROR("push_back failed", K(ret));
   } else if (OB_FAIL(search_map_.set_refactored(chunk_index.offset_/chunk_size_, index_.count() - 1))) {
-    LOG_ERROR("set_refactored failed", K(ret), K(index_.count()), K(chunk_index));
+    LOG_ERROR("set_refactored failed", K(ret), K(index_.count()), K(chunk_index));      
   }
   return ret;
 }

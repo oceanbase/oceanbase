@@ -307,7 +307,7 @@ TEST_F(TestPrimaryLSService, zone_balance)
   ASSERT_EQ(z2, ls_primary_zone.at(2));
   ASSERT_EQ(z2, ls_primary_zone.at(3));
   ASSERT_EQ(1, count_group_by_zone.at(0));
-  ASSERT_EQ(2, count_group_by_zone.at(1));
+  ASSERT_EQ(2, count_group_by_zone.at(1)); 
   ASSERT_EQ(1, count_group_by_zone.at(2));
 
 }

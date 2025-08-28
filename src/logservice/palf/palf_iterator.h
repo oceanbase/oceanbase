@@ -65,7 +65,7 @@ public:
     }
     return ret;
   }
-
+  
   int set_io_context(const LogIOContext &io_ctx)
   {
     int ret = OB_SUCCESS;
@@ -79,7 +79,7 @@ public:
     }
     return ret;
   }
-
+  
   int reuse(const LSN &start_lsn)
   {
     int ret = OB_SUCCESS;
@@ -262,7 +262,7 @@ public:
   // @brief cleanup some resource when calling 'destroy'.
   int set_destroy_iterator_storage_functor(const DestroyStorageFunctor &destroy_func)
   {
-    int ret = OB_SUCCESS;
+    int ret = OB_SUCCESS; 
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
       PALF_LOG(WARN, "not inited");

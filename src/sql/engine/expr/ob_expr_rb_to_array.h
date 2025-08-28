@@ -34,9 +34,9 @@ public:
   static int eval_rb_to_array(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   static int eval_rb_to_array_vector(const ObExpr &expr, ObEvalCtx &ctx,
                                           const ObBitVector &skip, const EvalBound &bound);
-  static int rb_to_array(const ObExpr &expr,
+  static int rb_to_array(const ObExpr &expr, 
                          ObEvalCtx &ctx,
-                         ObIAllocator &alloc,
+                         ObIAllocator &alloc, 
                          ObRoaringBitmap *&rb,
                          ObIArrayType *&arr_res);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,

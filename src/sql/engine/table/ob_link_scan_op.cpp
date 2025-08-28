@@ -209,7 +209,7 @@ void ObLinkScanOp::reset_oci_connection()// once read oracle, once reset oci con
 {
   int tmp_ret = OB_SUCCESS;
 #ifdef OB_BUILD_DBLINK
-  if (DBLINK_DRV_OCI == link_type_ &&
+  if (DBLINK_DRV_OCI == link_type_ && 
       NULL != dblink_conn_ &&
       OB_SUCCESS != (tmp_ret = static_cast<ObOciConnection *>(dblink_conn_)->free_oci_stmt())) {
     LOG_WARN_RET(tmp_ret, "failed to close oci result", K(tmp_ret));
@@ -227,7 +227,7 @@ void ObLinkScanOp::reset_dblink()
 #ifdef OB_BUILD_DBLINK
   reset_oci_connection();
   // free oci snapshot when operator close
-  if (DBLINK_DRV_OCI == link_type_ &&
+  if (DBLINK_DRV_OCI == link_type_ && 
       NULL != dblink_conn_ &&
       OB_UNLIKELY(OB_SUCCESS != (tmp_ret = free_snapshot()))) {
       LOG_WARN_RET(tmp_ret, "free dblink snapshot failed");
@@ -265,7 +265,7 @@ void ObLinkScanOp::reset_result()
       if (OB_SUCCESS != (tmp_ret = result_->close())) {
         LOG_WARN_RET(tmp_ret, "failed to close result", K(tmp_ret));
       }
-    }
+    } 
     result_ = NULL;
     res_.reset();
   }
@@ -384,9 +384,9 @@ int ObLinkScanOp::fetch_row()
   if (OB_ISNULL(plan_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get plan ctx", K(ret));
-  } else if (need_read() &&
-             OB_FAIL(execute_link_stmt(stmt_fmt,
-                                       param_infos,
+  } else if (need_read() && 
+             OB_FAIL(execute_link_stmt(stmt_fmt, 
+                                       param_infos, 
                                        plan_ctx->get_param_store(),
                                        reverse_link_))) {
     LOG_WARN("failed to execute link stmt", K(ret), K(stmt_fmt), K(param_infos));
@@ -404,7 +404,7 @@ int ObLinkScanOp::fetch_row()
       reset_oci_connection();
     }
   } else {
-    const ObIArray<ObExpr *> &select_exprs =
+    const ObIArray<ObExpr *> &select_exprs = 
           (MY_SPEC.select_exprs_.empty() ? spec_.output_ : MY_SPEC.select_exprs_);
     for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); i++) {
       ObExpr *expr = select_exprs.at(i);
@@ -416,10 +416,10 @@ int ObLinkScanOp::fetch_row()
         if (OB_FAIL(result_->get_obj(i, value, tz_info_, &row_allocator_))) {
           LOG_WARN("failed to get obj", K(ret), K(i));
         } else if (OB_UNLIKELY(ObNullType != value.get_type() &&    // use get_type(), do not use get_type_class() here.
-                              (value.get_type() != expr->obj_meta_.get_type() ||
+                              (value.get_type() != expr->obj_meta_.get_type() || 
                                     (ob_is_string_or_lob_type(value.get_type()) &&
                                     ob_is_string_or_lob_type(expr->obj_meta_.get_type()) &&
-                                    value.get_type() == expr->obj_meta_.get_type() &&
+                                    value.get_type() == expr->obj_meta_.get_type() && 
                                     value.get_collation_type() != expr->obj_meta_.get_collation_type())))) {
           DEFINE_CAST_CTX(expr->datum_meta_.cs_type_);
           ObAccuracy res_acc;
@@ -440,7 +440,7 @@ int ObLinkScanOp::fetch_row()
           } else if (is_lob_storage(res_obj->get_type()) &&
                     OB_FAIL(ob_adjust_lob_datum(*res_obj, expr->obj_meta_,
                                                 get_exec_ctx().get_allocator(), datum))) {
-            LOG_WARN("adjust lob datum failed", K(ret), K(i), K(res_obj->get_meta()), K(expr->obj_meta_));
+            LOG_WARN("adjust lob datum failed", K(ret), K(i), K(res_obj->get_meta()), K(expr->obj_meta_));                                   
           }
         }
       } else {
@@ -496,7 +496,7 @@ int ObLinkScanOp::inner_get_next_batch(const int64_t max_row_cnt)
           LOG_WARN("inner get next row failed", K(ret));
         }
       } else {
-        const ObIArray<ObExpr *> &select_exprs =
+        const ObIArray<ObExpr *> &select_exprs = 
           (MY_SPEC.select_exprs_.empty() ? spec_.output_ : MY_SPEC.select_exprs_);
         for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); i++) {
           ObExpr *expr = select_exprs.at(i);

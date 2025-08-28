@@ -75,7 +75,7 @@ protected:
   palf::LSN lsn_;
   int64_t submit_ts_;
 
-  int64_t log_size_;
+  int64_t log_size_; 
 };
 
 typedef common::ObSEArray<memtable::ObCallbackScope, 1> ObCallbackScopeArray;
@@ -168,7 +168,7 @@ private:
 
 // private:
 public:
-  ObTxLogCbGroup * group_ptr_;
+  ObTxLogCbGroup * group_ptr_; 
   bool is_callbacked_;
   bool is_busy_;
 

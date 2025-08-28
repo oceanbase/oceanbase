@@ -650,7 +650,7 @@ int ObLogMinerFileManager::init_path_for_analyzer_()
     if (OB_FAIL(adapter.mkdir(output_dest_.get_root_path(), output_dest_.get_storage_info()))) {
       LOG_ERROR("failed to make output_dest", K(output_dest_));
     }
-  }
+  } 
   // oss don't create directory actually, so is_empty_directory() must be checked.
   if(OB_SUCC(ret)) {
     bool is_empty = false;

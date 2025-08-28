@@ -31,7 +31,7 @@ struct ObTableAssignment
   }
   static int replace_assigment_expr(const common::ObIArray<ObAssignment> &assigns, ObRawExpr *&expr);
   static int expand_expr(ObRawExprFactory &expr_factory,
-                         const common::ObIArray<ObAssignment> &assigns,
+                         const common::ObIArray<ObAssignment> &assigns, 
                          ObRawExpr *&expr);
   uint64_t table_id_;
   common::ObSEArray<ObAssignment, 4> assignments_;

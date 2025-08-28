@@ -119,3 +119,4 @@ REG_SER_FUNC_ARRAY(OB_SFA_VECTOR_CMP, g_ser_rowcmp_funcs,
                    sizeof(g_ser_rowcmp_funcs) / sizeof(void *));
 } // end namespace sql
 } // end namespace oceanabse
+

@@ -119,11 +119,11 @@ public:
       int64_t by_pass_count_before_ready_;
 
       ObAdaptiveFilterSlideWindow slide_window_;
-
+ 
       union {
         uint64_t flag_;
         struct { // FARM COMPAT WHITELIST
-          bool is_ready_:1;
+          bool is_ready_:1; 
           bool is_first_:1;
           // whether need to sync wait
           bool need_wait_rf_:1;

@@ -262,8 +262,8 @@ int ObTabletInfoTrailer::assign(const ObTabletInfoTrailer &that)
   return ret;
 }
 
-bool ObTabletInfoTrailer::is_valid() const
-{
+bool ObTabletInfoTrailer::is_valid() const 
+{ 
   return file_id_ >= 0 && tablet_cnt_ >= 0 && offset_ >= 0 && length_ >= 0;
 }
 
@@ -282,7 +282,7 @@ int ObTabletInfoTrailer::serialize(char *buf, const int64_t buf_len, int64_t &po
     LOG_WARN("failed to encode len", K(ret));
   } else if (OB_FAIL(serialize_(buf, buf_len, pos))) {
     LOG_WARN("failed to serialize_", K(ret));
-  }
+  } 
 
   return ret;
 }
@@ -306,7 +306,7 @@ int ObTabletInfoTrailer::deserialize(const char *buf, const int64_t data_len, in
   } else if (OB_FALSE_IT(pos = tmp_pos)) {
   } else if (OB_FAIL(deserialize_(buf, data_len, pos))) {
     LOG_WARN("failed to deserialize_", K(ret));
-  }
+  } 
 
   return ret;
 }
@@ -360,11 +360,11 @@ ObExternTabletMetaWriter::~ObExternTabletMetaWriter()
     if (OB_FAIL(util.close_device_and_fd(dev_handle_, io_fd_))) {
       LOG_WARN("fail to close device and fd", K(ret), KPC_(dev_handle), K_(io_fd));
     }
-  }
+  }    
 }
 
 int ObExternTabletMetaWriter::init(
-    const share::ObBackupDest &backup_set_dest, const share::ObLSID &ls_id,
+    const share::ObBackupDest &backup_set_dest, const share::ObLSID &ls_id, 
     const int64_t turn_id, const int64_t retry_id, const int64_t dest_id,
     const bool is_final_fuse, common::ObInOutBandwidthThrottle &bandwidth_throttle)
 {
@@ -467,7 +467,7 @@ int ObExternTabletMetaWriter::switch_file_()
   return ret;
 }
 
-int ObExternTabletMetaWriter::close()
+int ObExternTabletMetaWriter::close() 
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -689,7 +689,7 @@ int ObExternTabletMetaReader::read_file_trailer_(
   return ret;
 }
 
-int ObExternTabletMetaReader::get_next(storage::ObMigrationTabletParam &tablet_meta)
+int ObExternTabletMetaReader::get_next(storage::ObMigrationTabletParam &tablet_meta) 
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -707,7 +707,7 @@ int ObExternTabletMetaReader::get_next(storage::ObMigrationTabletParam &tablet_m
   return ret;
 }
 
-bool ObExternTabletMetaReader::end_()
+bool ObExternTabletMetaReader::end_() 
 {
   return tablet_meta_array_.count() == cur_tablet_idx_;
 }
@@ -726,7 +726,7 @@ int ObExternTabletMetaReader::read_next_batch_()
     }
   } else {
     ret = OB_ITER_END;
-    LOG_INFO("iterate to the end", K(ret),
+    LOG_INFO("iterate to the end", K(ret), 
         K(ls_id_), K(retry_id_), K(turn_id_), K(cur_buf_offset_), K(cur_trailer_idx_), K(tablet_info_trailer_array_),
         K(cur_tablet_idx_), K(tablet_meta_array_));
   }
@@ -742,7 +742,7 @@ int ObExternTabletMetaReader::read_next_range_tablet_metas_()
   const int64_t buf_len = tablet_info_trailer_array_.at(cur_trailer_idx_).length_ - cur_buf_offset_ < DEFAULT_BUF_LEN ?
                           (tablet_info_trailer_array_.at(cur_trailer_idx_).length_ - cur_buf_offset_) : DEFAULT_BUF_LEN;
   int64_t cur_total_len = 0;
-  common::ObArenaAllocator allocator(ObModIds::RESTORE);
+  common::ObArenaAllocator allocator(ObModIds::RESTORE); 
   const int64_t file_id = tablet_info_trailer_array_.at(cur_trailer_idx_).file_id_;
   if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(buf_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -820,7 +820,7 @@ int ObExternBackupInfoIdGetter::init(const share::ObBackupDest &backup_set_dest,
   } else {
     is_final_fuse_ = is_final_fuse;
     is_inited_ = true;
-  }
+  } 
   return ret;
 }
 

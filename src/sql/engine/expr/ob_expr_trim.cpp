@@ -839,7 +839,7 @@ static int eval_trim_inner(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_dat
       ObTextStringDatumResult output_result(expr.datum_meta_.type_, &expr, &ctx, &expr_datum);
       if (OB_FAIL(str_iter.init(0, NULL, &calc_alloc))) {
         LOG_WARN("init str_iter failed ", K(ret), K(str_iter));
-      } else if (OB_FAIL(text_trim2(str_iter, output_result, trim_type, pattern, pattern_len_in_char,
+      } else if (OB_FAIL(text_trim2(str_iter, output_result, trim_type, pattern, pattern_len_in_char, 
                                     cs_type, pattern_byte_num,  pattern_byte_offset))) {
         LOG_WARN("text_trim2 failed", K(ret));
       }

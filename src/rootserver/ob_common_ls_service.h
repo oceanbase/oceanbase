@@ -56,7 +56,7 @@ struct PalfBaseInfo;
 namespace rootserver
 {
 /*description:
- *COMMON_LS_SERVICE thread: Started on the leader of the meta tenant sys ls
+ *COMMON_LS_SERVICE thread: Started on the leader of the meta tenant sys ls 
  * 1. adjust sys ls primary zone of meta and user tenant
  * 2. adjust user ls primary zone
  * 3. make ls status from creating to created of __all_ls_status
@@ -64,7 +64,7 @@ namespace rootserver
  * */
 class ObCommonLSService : public ObTenantThreadHelper,
                            public logservice::ObICheckpointSubHandler,
-                           public logservice::ObIReplaySubHandler
+                           public logservice::ObIReplaySubHandler 
 {
 public:
   ObCommonLSService():inited_(false), tenant_id_(OB_INVALID_TENANT_ID), proxy_(NULL), restore_proxy_(), primary_is_avaliable_(true) {}

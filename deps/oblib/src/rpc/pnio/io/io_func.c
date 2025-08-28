@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 int make_fd_nonblocking(int fd)
 {
   int err = 0;
@@ -137,3 +137,4 @@ ssize_t uintr_writev(int fd, struct iovec* iov, int cnt) {
     ;
   return bytes;
 }
+

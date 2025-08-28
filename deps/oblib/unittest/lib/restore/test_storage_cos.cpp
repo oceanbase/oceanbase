@@ -24,8 +24,8 @@ TestStorageCosCommon() {}
 void init()
 {
   init_cos_env();
-  ASSERT_EQ(OB_SUCCESS,
-            databuff_printf(account, sizeof(account),
+  ASSERT_EQ(OB_SUCCESS, 
+            databuff_printf(account, sizeof(account), 
             "host=%s&access_id=%s&access_key=%s&appid=%s",
             endpoint, secretid, secretkey, appid));
   //build cos_base
@@ -50,7 +50,7 @@ protected:
 class TestCosCleanOp : public ObBaseDirEntryOperator, public TestStorageCosCommon
 {
 public:
-  TestCosCleanOp()
+  TestCosCleanOp()  
   {
   }
   ~TestCosCleanOp() {}
@@ -72,7 +72,7 @@ int TestCosCleanOp::func(const dirent *entry)
 }
 
 class TestStorageCos: public ::testing::Test, public TestStorageCosCommon
-{
+{ 
 public:
   TestStorageCos() : enable_test_(enable_test) {}
   virtual ~TestStorageCos(){}
@@ -110,7 +110,7 @@ TEST_F(TestStorageCos, test_append)
     ASSERT_EQ(OB_SUCCESS, util.open(&cos_base));
     const char *tmp_append_dir = "test_append";
     const int64_t ts = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld", 
         bucket, dir_name, tmp_append_dir, ts));
 
     ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/test_append_file", dir_uri));
@@ -165,9 +165,9 @@ TEST_F(TestStorageCos, test_append)
     // second append
     const char second_write[] = "4567";
     // repeatable_pwrite returned err code
-    ASSERT_EQ(OB_OBJECT_STORAGE_PWRITE_CONTENT_NOT_MATCH,
+    ASSERT_EQ(OB_OBJECT_STORAGE_PWRITE_CONTENT_NOT_MATCH, 
         appender.pwrite(second_write, strlen(second_write), strlen(first_write) - 1));
-    ASSERT_EQ(OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH,
+    ASSERT_EQ(OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH, 
         appender.pwrite(second_write, strlen(second_write) - 1, strlen(first_write) + 1));
     ASSERT_EQ(OB_SUCCESS, appender.pwrite(second_write, strlen(second_write), strlen(first_write)));
     ASSERT_EQ(strlen(first_write) + strlen(second_write), appender.get_length());
@@ -268,7 +268,7 @@ TEST_F(TestStorageCos, test_basic_rw)
       // rw empty object
       const int64_t ts = ObTimeUtility::current_time();
       WRITE_SINGLE_FILE(ts, "");
-
+      
       ASSERT_EQ(OB_SUCCESS, reader.open(uri, &cos_base));
       ASSERT_EQ(strlen(write_content), reader.get_length());
       ASSERT_EQ(OB_SUCCESS, reader.close());
@@ -293,7 +293,7 @@ TEST_F(TestStorageCos, test_basic_rw)
 
       ASSERT_EQ(OB_SUCCESS, util.del_file(uri));
     }
-
+    
     {
       // ObStorageWriter writer;
       const int64_t ts = ObTimeUtility::current_time();
@@ -352,12 +352,12 @@ TEST_F(TestStorageCos, test_util)
     ObStorageUtil util;
     const char *tmp_util_dir = "test_util";
     const int64_t ts = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld/",
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld/", 
       bucket, dir_name, tmp_util_dir, ts));
     ASSERT_EQ(OB_SUCCESS, util.open(&cos_base));
 
     ObStorageWriter writer;
-    {
+    { 
       WRITE_SINGLE_FILE(1L, "123456789ABC");
 
       bool is_obj_exist = false;
@@ -368,7 +368,7 @@ TEST_F(TestStorageCos, test_util)
       ASSERT_EQ(OB_SUCCESS, util.is_exist(uri, is_obj_exist));
       ASSERT_FALSE(is_obj_exist);
     }
-    {
+    { 
       WRITE_SINGLE_FILE(2L, "123456789ABCDEF");
 
       int64_t file_length = 0;
@@ -394,7 +394,7 @@ TEST_F(TestStorageCos, test_util_write_single_file)
     ObStorageUtil util;
     const char *tmp_util_dir = "test_util_write_single_file";
     const int64_t ts = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld", 
       bucket, dir_name, tmp_util_dir, ts));
     ASSERT_EQ(OB_SUCCESS, util.open(&cos_base));
 
@@ -472,7 +472,7 @@ TEST_F(TestStorageCos, test_util_list_files)
     ObStorageUtil util;
     const char *tmp_util_dir = "test_util_list_files";
     const int64_t ts = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld", 
       bucket, dir_name, tmp_util_dir, ts));
     ASSERT_EQ(OB_SUCCESS, util.open(&cos_base));
 
@@ -482,7 +482,7 @@ TEST_F(TestStorageCos, test_util_list_files)
       TestCosListOp op;
       ASSERT_EQ(OB_INVALID_BACKUP_DEST, util.list_files(uri, op));
     }
-
+    
     int64_t file_num = 1001;
     const char *write_content = "0123456789";
 
@@ -524,7 +524,7 @@ TEST_F(TestStorageCos, test_util_list_files)
     TestCosListOp list_empty_op;
     ASSERT_EQ(OB_SUCCESS, util.list_files(dir_uri, list_empty_op));
     ASSERT_EQ(0, list_empty_op.object_names_.size());
-
+    
     util.close();
   }
 }
@@ -537,7 +537,7 @@ TEST_F(TestStorageCos, test_util_list_directories)
     ObStorageUtil util;
     const char *tmp_util_dir = "test_util_list_directories";
     const int64_t ts = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld", 
       bucket, dir_name, tmp_util_dir, ts));
     ASSERT_EQ(OB_SUCCESS, util.open(&cos_base));
 
@@ -547,7 +547,7 @@ TEST_F(TestStorageCos, test_util_list_directories)
       TestCosListOp op;
       ASSERT_EQ(OB_INVALID_ARGUMENT, util.list_directories(uri, op));
     }
-
+    
     int64_t file_num = 1001;
     const char *write_content = "0123456789";
 
@@ -578,7 +578,7 @@ TEST_F(TestStorageCos, test_util_list_directories)
       ASSERT_EQ(0, op.object_names_.size());
       UTIL_DELETE_FILES(format, object_prefix_len, file_num);
     }
-
+    
     util.close();
   }
 }
@@ -590,7 +590,7 @@ TEST_F(TestStorageCos, test_util_is_tagging)
     ObStorageUtil util;
     const char *tmp_util_dir = "test_util_is_tagging";
     const int64_t ts = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld", 
       bucket, dir_name, tmp_util_dir, ts));
 
     bool is_tagging = true;
@@ -599,23 +599,23 @@ TEST_F(TestStorageCos, test_util_is_tagging)
     const char *write_content = "123456789ABCDEF";
 
     // wrong tag mode
-    ASSERT_EQ(OB_SUCCESS,
-              databuff_printf(tmp_account, sizeof(tmp_account),
+    ASSERT_EQ(OB_SUCCESS, 
+              databuff_printf(tmp_account, sizeof(tmp_account), 
               "host=%s&access_id=%s&access_key=%s&appid=%s&delete_mode=tag",
               endpoint, secretid, secretkey, appid));
     ASSERT_EQ(OB_INVALID_ARGUMENT, tmp_cos_base.set(ObStorageType::OB_STORAGE_COS, tmp_account));
     tmp_cos_base.reset();
 
-    ASSERT_EQ(OB_SUCCESS,
-              databuff_printf(tmp_account, sizeof(tmp_account),
+    ASSERT_EQ(OB_SUCCESS, 
+              databuff_printf(tmp_account, sizeof(tmp_account), 
               "host=%s&access_id=%s&access_key=%s&appid=%s&delete_mode=delete_delete",
               endpoint, secretid, secretkey, appid));
     ASSERT_EQ(OB_INVALID_ARGUMENT, tmp_cos_base.set(ObStorageType::OB_STORAGE_COS, tmp_account));
     tmp_cos_base.reset();
 
     // delete mode
-    ASSERT_EQ(OB_SUCCESS,
-              databuff_printf(tmp_account, sizeof(tmp_account),
+    ASSERT_EQ(OB_SUCCESS, 
+              databuff_printf(tmp_account, sizeof(tmp_account), 
               "host=%s&access_id=%s&access_key=%s&appid=%s&delete_mode=delete",
               endpoint, secretid, secretkey, appid));
     ASSERT_EQ(OB_SUCCESS, tmp_cos_base.set(ObStorageType::OB_STORAGE_COS, tmp_account));
@@ -631,22 +631,22 @@ TEST_F(TestStorageCos, test_util_is_tagging)
     ASSERT_EQ(OB_OBJECT_NOT_EXIST, util.is_tagging(uri, is_tagging));
     tmp_cos_base.reset();
     util.close();
-
+    
     // tagging mode
-    ASSERT_EQ(OB_SUCCESS,
-              databuff_printf(tmp_account, sizeof(tmp_account),
+    ASSERT_EQ(OB_SUCCESS, 
+              databuff_printf(tmp_account, sizeof(tmp_account), 
               "host=%s&access_id=%s&access_key=%s&appid=%s&delete_mode=tagging",
               endpoint, secretid, secretkey, appid));
     ASSERT_EQ(OB_SUCCESS, tmp_cos_base.set(ObStorageType::OB_STORAGE_COS, tmp_account));
-
+    
     ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/tagging_mode", dir_uri));
     ASSERT_EQ(OB_SUCCESS, util.open(&tmp_cos_base));
     ASSERT_EQ(OB_SUCCESS, util.write_single_file(uri, write_content, strlen(write_content)));
-
+    
     is_tagging = true;
     ASSERT_EQ(OB_SUCCESS, util.is_tagging(uri, is_tagging));
     ASSERT_FALSE(is_tagging);
-
+    
     ASSERT_EQ(OB_SUCCESS, util.del_file(uri));
     ASSERT_EQ(OB_SUCCESS, util.is_tagging(uri, is_tagging));
     ASSERT_TRUE(is_tagging);
@@ -654,12 +654,12 @@ TEST_F(TestStorageCos, test_util_is_tagging)
     util.close();
 
     // clean
-    ASSERT_EQ(OB_SUCCESS,
-              databuff_printf(tmp_account, sizeof(tmp_account),
+    ASSERT_EQ(OB_SUCCESS, 
+              databuff_printf(tmp_account, sizeof(tmp_account), 
               "host=%s&access_id=%s&access_key=%s&appid=%s",
               endpoint, secretid, secretkey, appid));
     ASSERT_EQ(OB_SUCCESS, tmp_cos_base.set(ObStorageType::OB_STORAGE_COS, tmp_account));
-
+    
     ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/tagging_mode", dir_uri));
     ASSERT_EQ(OB_SUCCESS, util.open(&tmp_cos_base));
     ASSERT_EQ(OB_SUCCESS, util.del_file(uri));
@@ -685,9 +685,9 @@ TEST_F(TestStorageCos, test_multipartupload)
     ASSERT_EQ(OB_OBJECT_STORAGE_IO_ERROR, multi_upload.write(content, content_size));
 
     const int64_t ts = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld", 
         bucket, dir_name, tmp_multi_dir, ts));
-
+    
     // operate correctly
     ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/multipartupload", dir_uri));
     ASSERT_EQ(OB_SUCCESS, multi_upload.open(uri, &cos_base));

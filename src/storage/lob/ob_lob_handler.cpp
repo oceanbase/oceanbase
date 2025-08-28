@@ -133,7 +133,7 @@ int ObLobQueryDataHandler::do_execute()
     meta_iter.set_not_calc_char_len(true);
     meta_iter.set_not_need_last_info(true);
   }
-
+  
   if (OB_SUCC(ret)) {
     ObString block_data;
     while (OB_SUCC(ret)) {
@@ -885,7 +885,7 @@ int ObLobDiffUpdateHandler::init(ObLobMetaManager *lob_meta_mngr)
     LOG_WARN("failed to set lob locator for param", K(ret), K(param_));
   } else if (param_.coll_type_ != ObCollationType::CS_TYPE_BINARY) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("delta lob coll_type must be binary", K(ret), K(param_));
+    LOG_WARN("delta lob coll_type must be binary", K(ret), K(param_)); 
   } else if (OB_FAIL(init_base(lob_meta_mngr))) {
     LOG_WARN("init_base fail", KR(ret), K(param_));
   } else {
@@ -915,7 +915,7 @@ int ObLobDiffUpdateHandler::execute(ObLobLocatorV2& delta_locator, ObLobDiffHead
     LOG_WARN("open iter fail", K(ret), K(param_), K(diff_header));
   } else if (iter.get_chunk_size() != store_chunk_size_) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("chunk size not match", K(ret), K(iter.get_chunk_size()), K(store_chunk_size_), KPC(param_.lob_common_), K(param_));
+    LOG_WARN("chunk size not match", K(ret), K(iter.get_chunk_size()), K(store_chunk_size_), KPC(param_.lob_common_), K(param_)); 
   } else {
     int64_t seq_cnt = iter.get_modified_chunk_cnt();
     param_.used_seq_cnt_ = 0;
@@ -956,7 +956,7 @@ int ObLobDiffUpdateHandler::execute(ObLobLocatorV2& delta_locator, ObLobDiffHead
           param_,
           *old_meta_row,
           *new_meta_row))) {
-        LOG_WARN("update_one_piece fail", K(ret), K(offset), K(store_chunk_size_));
+        LOG_WARN("update_one_piece fail", K(ret), K(offset), K(store_chunk_size_));   
       }
     }
   }

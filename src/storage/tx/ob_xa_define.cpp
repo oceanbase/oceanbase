@@ -450,7 +450,7 @@ void ObXAStatistics::print_statistics(int64_t cur_ts)
   const int64_t last_stat_ts = ATOMIC_LOAD(&last_stat_ts_);
   if (cur_ts - last_stat_ts >= STAT_INTERVAL) {
     if (ATOMIC_BCAS(&last_stat_ts_, last_stat_ts, cur_ts)) {
-      TRANS_LOG(INFO, "xa statistics",
+      TRANS_LOG(INFO, "xa statistics", 
                       "total_active_xa_ctx_count", ATOMIC_LOAD(&total_active_xa_ctx_count_),
                       "total_standby_clearup_count", ATOMIC_LOAD(&total_standby_clearup_count_),
                       "total_success_xa_start", ATOMIC_LOAD(&total_success_xa_start_),

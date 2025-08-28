@@ -219,7 +219,7 @@ public:
   // - CS_REPLICA_REPLAY_NONE: initial state, tablet not doing offline ddl. only take this type for inital.
   // - CS_REPLICA_INVISILE/CS_REPLICA_VISIBLE_AND_REPLAY_COLUMN/CS_REPLICA_VISIBLE_AND_REPLAY_ROW: tablet is doing offline ddl.
   // - CS_REPLICA_REPLAY_ROW_STORE_FINISH/CS_REPLICA_REPLAY_COLUMN_FINISH: tablet finish offline ddl, set when ddl merge task create major sstable.
-  //
+  // 
   // + -------------------- + -------------------------------- + ------------------------------------ +
   // | C-Replica is visible | ls (the tablet in) is C-Replica  | when tablet created                  |
   // + -------------------- + -------------------------------- + ------------------------------------ +
@@ -230,7 +230,7 @@ public:
   ObCSReplicaDDLReplayStatus ddl_replay_status_;
   //ATTENTION : Add a new variable need consider ObMigrationTabletParam
   // and tablet meta init interface for migration.
-  // yuque :
+  // yuque : 
   lib::Worker::CompatMode compat_mode_; // alignment: 1B, size: 4B
   bool has_next_tablet_; // alignment: 1B, size: 2B
   bool is_empty_shell_; // alignment: 1B, size: 2B

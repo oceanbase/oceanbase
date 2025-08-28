@@ -100,7 +100,7 @@ public:
            const int64_t cache_size);
   bool is_valid() const
   {
-    return is_valid_tenant_id(autoinc_key_.tenant_id_) && max_value_ > 0 && base_value_ <= max_value_
+    return is_valid_tenant_id(autoinc_key_.tenant_id_) && max_value_ > 0 && base_value_ <= max_value_ 
             && sender_.is_valid() && autoinc_version_ >= OB_INVALID_VERSION && cache_size_ >= 0;
   }
   TO_STRING_KV(K_(autoinc_key), K_(base_value), K_(max_value), K_(sender), K_(autoinc_version),

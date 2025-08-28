@@ -446,7 +446,7 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         break;
       }
 #endif
-      case T_FLUSH_PRIVILEGES:
+      case T_FLUSH_PRIVILEGES: 
       case T_INSTALL_PLUGIN:
       case T_UNINSTALL_PLUGIN:
       case T_FLUSH_MOCK:
@@ -803,7 +803,7 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       case T_SHOW_CHECK_TABLE:
       case T_SHOW_CREATE_USER:
       case T_SHOW_CATALOGS:
-      case T_SHOW_CREATE_CATALOG:
+      case T_SHOW_CREATE_CATALOG: 
       case T_SHOW_SENSITIVE_RULES: {
         REGISTER_STMT_RESOLVER(Show);
         break;
@@ -1414,7 +1414,7 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         break;
       }
     }  // end switch
-
+    
 
     // 外表写只放开insert
     if (OB_SUCC(ret) && stmt->is_dml_stmt() && !stmt->is_insert_stmt()) {
@@ -1434,7 +1434,7 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         TRANS_LOG(WARN, "standby tenant support read only", K(ret), K(stmt));
       }
     }
-
+    
     if (OB_SUCC(ret) && stmt->is_dml_write_stmt()) {
       // todo yanli:检查主备库
     }

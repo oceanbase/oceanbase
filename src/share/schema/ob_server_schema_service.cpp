@@ -4874,7 +4874,7 @@ int ObServerSchemaService::update_schema_mgr(ObISQLClient &sql_client,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id", K(ret), K(tenant_id));
   } else {
-    //
+    // 
     // note: Adjust the position of this code carefully
     // add sys tenant schema to cache
     if (!is_sys_tenant(tenant_id)) {
@@ -5326,12 +5326,12 @@ int ObServerSchemaService::replay_log(
           if (OB_FAIL(get_increment_ccl_rule_keys(schema_mgr, schema_operation, schema_keys))) {
             LOG_WARN("fail to get increment ccl rule id", K(ret));
           }
-        } else if (schema_operation.op_type_ > OB_DDL_SENSITIVE_RULE_OPERATION_BEGIN &&
+        } else if (schema_operation.op_type_ > OB_DDL_SENSITIVE_RULE_OPERATION_BEGIN && 
             schema_operation.op_type_ < OB_DDL_SENSITIVE_RULE_OPERATION_END) {
           if (OB_FAIL(get_increment_sensitive_rule_keys(schema_mgr, schema_operation, schema_keys))) {
             LOG_WARN("fail to get increment sensitive rule id", K(ret));
           }
-        } else if (schema_operation.op_type_ > OB_DDL_SENSITIVE_RULE_PRIV_OPERATION_BEGIN &&
+        } else if (schema_operation.op_type_ > OB_DDL_SENSITIVE_RULE_PRIV_OPERATION_BEGIN && 
             schema_operation.op_type_ < OB_DDL_SENSITIVE_RULE_PRIV_OPERATION_END) {
           if (OB_FAIL(get_increment_sensitive_rule_priv_keys(schema_mgr, schema_operation, schema_keys))) {
             LOG_WARN("fail to get increment sensitive rule priv id", K(ret));
@@ -6795,7 +6795,7 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
         }
         FOREACH_CNT_X(simple_tenant, simple_tenants, OB_SUCC(ret)) {
           const uint64_t tmp_tenant_id = simple_tenant->get_tenant_id();
-          //
+          // 
           // note: Adjust the position of this code carefully
           // add sys tenant schema to cache
           if (OB_FAIL(schema_mgr_for_cache->add_tenant(*simple_tenant))) {

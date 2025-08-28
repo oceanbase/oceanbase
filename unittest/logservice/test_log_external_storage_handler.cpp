@@ -160,7 +160,7 @@ TEST(TestLogExternalStorageHandler, test_log_external_storage_handler)
     // 验证construct_async_tasks_and_push_them_into_thread_pool_
     real_read_size = 0;
     EXPECT_EQ(OB_SUCCESS, handler.construct_async_pread_tasks_
-              (uri, storage_info, storage_id, offset, read_buf, read_buf_size, pread_ctx));
+              (uri, storage_info, storage_id, offset, read_buf, read_buf_size, pread_ctx)); 
     EXPECT_EQ(OB_SUCCESS, pread_ctx.wait(real_read_size));
     ASSERT_EQ(real_read_size, read_buf_size);
     CLOG_LOG(INFO, "after test private interface", K(real_read_size), K(read_buf_size));

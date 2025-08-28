@@ -480,7 +480,7 @@ public:
    * if endkey is equal to startkey, return value follows these rules:
    *  1. if last obj of endkey is max_value or min value, compare result is 0
    *  2. if last obj of endkey is not max_value or min_value, check inclusive_end
-   *     of current range and inclusive_start of other range. current range only
+   *     of current range and inclusive_start of other range. current range only 
    *     less than other range when inclusive_end and inclusive_start are both false.
   */
   inline int compare_endkey_with_startkey(const ObNewRange &r) const

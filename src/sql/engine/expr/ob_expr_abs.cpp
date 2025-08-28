@@ -301,7 +301,7 @@ public:
   static int inner_eval_abs_vector(const ObExpr &expr,
                                    ObEvalCtx &ctx,
                                    const ObBitVector &skip,
-                                   const EvalBound &bound)
+                                   const EvalBound &bound) 
   {
     int ret = OB_SUCCESS;
     ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
@@ -328,7 +328,7 @@ class EvalVectorAbsHelper<type, ArgVec, ResVec> {             \
   static int inner_eval_abs_vector(const ObExpr &expr,        \
                                     ObEvalCtx &ctx,           \
                                     const ObBitVector &skip,  \
-                                    const EvalBound &bound)
+                                    const EvalBound &bound) 
 
 #define END_DEF_INNER_EVAL_ABS_FUNC };
 
@@ -540,7 +540,7 @@ DEF_INNER_EVAL_ABS_VEC_ROW_FUNC(VEC_TC_INTEGER)
 {
   int ret = OB_SUCCESS;
   int64_t param_int = arg_vec->get_int(idx);
-  // This function is only called in the MySQL mode.
+  // This function is only called in the MySQL mode. 
   // If it is found to be INT64_MIN, it should report an "out of range" error.
   if (INT64_MIN == param_int) {
     ret = OB_OPERATE_OVERFLOW;

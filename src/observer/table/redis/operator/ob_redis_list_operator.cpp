@@ -229,7 +229,7 @@ int ListCommandOperator::do_push(int64_t db, const ObString &key, const ObIArray
 }
 
 int ListCommandOperator::pop_single_count_list(
-    int64_t db,
+    int64_t db, 
     const ObString &key,
     ObRedisListMeta &list_meta,
     const bool pop_left,
@@ -290,7 +290,7 @@ void ListCommandOperator::update_ins_region_after_pop(bool pop_left, ObRedisList
 }
 
 int ListCommandOperator::update_list_after_pop(
-    int64_t db,
+    int64_t db, 
     const ObString &key,
     const ListElement &old_borded,
     const ListElement &new_borded,
@@ -316,7 +316,7 @@ int ListCommandOperator::update_list_after_pop(
       } else {
         list_meta.right_idx_ = new_borded.first;
       }
-
+      
       // update ins region
       if (list_meta.has_ins_region()) {
         update_ins_region_after_pop(pop_left, list_meta);
@@ -602,8 +602,8 @@ int ListCommandOperator::build_index_query(
   return ret;
 }
 
-int ListCommandOperator::query_index_result(const ObTableQuery &query,
-                                            ObString &res_value,
+int ListCommandOperator::query_index_result(const ObTableQuery &query, 
+                                            ObString &res_value, 
                                             const ObRedisListMeta *list_meta)
 {
   int ret = OB_SUCCESS;
@@ -703,8 +703,8 @@ int ListCommandOperator::update_element(int64_t db, ObRedisMeta *meta, const ObS
   return ret;
 }
 
-int ListCommandOperator::query_set_index(const ObTableQuery &query,
-                                         int64_t &res_idx,
+int ListCommandOperator::query_set_index(const ObTableQuery &query, 
+                                         int64_t &res_idx, 
                                          ObRedisListMeta *meta/* = nullptr*/)
 {
   int ret = OB_SUCCESS;
@@ -839,8 +839,8 @@ int ListCommandOperator::build_range_query(
   return ret;
 }
 
-int ListCommandOperator::query_range_result(const ObTableQuery &query,
-                                            ObIArray<ObString> &res_values,
+int ListCommandOperator::query_range_result(const ObTableQuery &query, 
+                                            ObIArray<ObString> &res_values, 
                                             ObRedisListMeta *meta/*= nullptr*/)
 {
   int ret = OB_SUCCESS;
@@ -1184,7 +1184,7 @@ int ListCommandOperator::trim_list(
     int64_t end)
 {
   int ret = OB_SUCCESS;
-
+  
   bool is_del_all = false;
   ObSEArray<ObTableQuery, 2> querys;
   if (OB_FAIL(build_trim_querys(db, key, list_meta, start, end, is_del_all, querys))) {
@@ -1791,7 +1791,7 @@ int ListCommandOperator::get_adjacent_index(
 }
 
 int ListCommandOperator::do_insert(
-    int64_t db,
+    int64_t db, 
     const ObString &key,
     bool is_before_pivot,
     const ObString &pivot,
@@ -2070,10 +2070,10 @@ int ListCommandOperator::update_meta_after_rem(
 
     if (OB_SUCC(ret)) {
       ObITableEntity *meta_entity = nullptr;
-      if (OB_FAIL(gen_meta_entity(db,
-                                  key,
-                                  ObRedisDataModel::LIST,
-                                  list_meta,
+      if (OB_FAIL(gen_meta_entity(db, 
+                                  key, 
+                                  ObRedisDataModel::LIST, 
+                                  list_meta, 
                                   meta_entity))) {
         LOG_WARN("fail to put meta into batch operation", K(ret), K(key), K(list_meta));
       } else if (OB_FAIL(batch_ops.insert_or_update(*meta_entity))) {
@@ -2239,8 +2239,8 @@ int ListCommandOperator::do_rem(int64_t db, const ObString &key, int64_t count, 
   return ret;
 }
 
-int ListCommandOperator::build_del_ops(const ObTableQuery &query,
-                                       ObTableBatchOperation &del_ops,
+int ListCommandOperator::build_del_ops(const ObTableQuery &query, 
+                                       ObTableBatchOperation &del_ops, 
                                        ObRedisListMeta *meta/*= nullptr*/)
 {
   int ret = OB_SUCCESS;
@@ -2338,7 +2338,7 @@ int ListCommandOperator::do_del(int64_t db, const ObString &key, bool &is_exist)
   // 1. Get meta data and check whether it has expired.
   ObRedisListMeta *list_meta = nullptr;
   ObRedisMeta *meta = nullptr;
-
+  
   is_exist = true;
   if (OB_FAIL(get_meta(db, key, ObRedisDataModel::LIST, meta))) {
     if (ret != OB_ITER_END) {

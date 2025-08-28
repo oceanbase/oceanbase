@@ -21,14 +21,14 @@
 #include "mittest/shared_storage/clean_residual_data.h"
 #include "storage/shared_storage/micro_cache/ckpt/ob_ss_linked_phy_block_writer.h"
 
-namespace oceanbase
+namespace oceanbase 
 {
-namespace storage
+namespace storage 
 {
 using namespace oceanbase::common;
 using namespace oceanbase::blocksstable;
 
-class TestSSMicroCacheAbnormalCase : public ::testing::Test
+class TestSSMicroCacheAbnormalCase : public ::testing::Test 
 {
 public:
   TestSSMicroCacheAbnormalCase() = default;
@@ -124,13 +124,13 @@ TEST_F(TestSSMicroCacheAbnormalCase, test_mem_blk_update_meta_fail)
     ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_block_meta_handle(micro_key, micro_handle, false));
     if (j < micro_block_cnt / 2) {
       // mock some micro_block's reuse_version mismatch, these micro_block will fail to update meta.
-      micro_handle.get_ptr()->reuse_version_ = 1000;
+      micro_handle.get_ptr()->reuse_version_ = 1000; 
     }
     offset += micro_size;
   }
   ASSERT_EQ(micro_block_cnt, cache_stat.micro_stat().total_micro_cnt_);
   ASSERT_EQ(true, mem_data_mgr.mem_block_pool_.is_alloc_dynamiclly(mem_blk_handle.get_ptr()));
-
+  
   ObSSMemBlockHandle tmp_mem_handle;
   tmp_mem_handle.set_ptr(mem_blk_handle.get_ptr());
   ASSERT_EQ(3, tmp_mem_handle.get_ptr()->ref_cnt_);
@@ -140,14 +140,14 @@ TEST_F(TestSSMicroCacheAbnormalCase, test_mem_blk_update_meta_fail)
   int64_t updated_micro_size = 0;
   int64_t updated_micro_cnt = 0;
   /* As expected, we allow micro blocks to fail to update meta*/
-  ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.update_micro_block_meta(mem_blk_handle, block_offset, mem_blk_handle()->reuse_version_,
+  ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.update_micro_block_meta(mem_blk_handle, block_offset, mem_blk_handle()->reuse_version_, 
                                                                       updated_micro_size, updated_micro_cnt));
   ASSERT_EQ((micro_block_cnt / 2) * micro_size, updated_micro_size);
   ASSERT_EQ(micro_block_cnt / 2, updated_micro_cnt);
   ASSERT_EQ(1, mem_data_mgr.mem_block_pool_.used_extra_count_);
-
+  
   // free sealed_mem_block
-  ASSERT_EQ(OB_SUCCESS, persist_task.persist_op_.handle_sealed_mem_block(true, updated_micro_cnt, mem_blk_handle));
+  ASSERT_EQ(OB_SUCCESS, persist_task.persist_op_.handle_sealed_mem_block(true, updated_micro_cnt, mem_blk_handle)); 
   ASSERT_EQ(micro_block_cnt / 2, cache_stat.micro_stat().total_micro_cnt_); // micro_block which fail to update meta are deleted from map.
   ASSERT_EQ(1, tmp_mem_handle.get_ptr()->ref_cnt_);
   tmp_mem_handle.reset();
@@ -179,7 +179,7 @@ TEST_F(TestSSMicroCacheAbnormalCase, test_alloc_phy_block_abnormal)
   ASSERT_EQ(3, tmp_block_idx);
   ASSERT_EQ(true, phy_blk_handle.is_valid());
   phy_blk_handle.reset();
-
+  
   phy_blk->valid_len_ = 0;
   phy_blk->block_type_ = static_cast<uint64_t>(ObSSPhyBlockType::SS_CACHE_DATA_BLK);
   bool succ_free = false;
@@ -213,7 +213,7 @@ TEST_F(TestSSMicroCacheAbnormalCase, test_ckpt_write_abnormal)
   phy_blk_mgr.blk_cnt_info_.phy_ckpt_blk_cnt_ = cur_phy_ckpt_blk_cnt;
   phy_blk_mgr.blk_cnt_info_.phy_ckpt_blk_used_cnt_ = cur_phy_ckpt_blk_cnt / 2;
 
-
+  
   // 2. mock write ckpt item abnormal
   ObSSLinkedPhyBlockItemWriter item_writer;
   ASSERT_EQ(OB_SUCCESS, item_writer.init(tenant_id, phy_blk_mgr, ObSSPhyBlockType::SS_PHY_BLOCK_CKPT_BLK));
@@ -266,7 +266,7 @@ TEST_F(TestSSMicroCacheAbnormalCase, test_micro_cache_abnormal_health)
     }
     ob_usleep(3 * 1000 * 1000);
   }
-
+  
   // check abnormal count
   ASSERT_LE(3, micro_ckpt_task.ckpt_op_.cache_abnormal_cnt_);
 

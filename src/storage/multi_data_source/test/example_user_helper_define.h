@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef UNITTEST_SHARE_MULTI_DATA_SOURCE_EXAMPLE_USER_HELPER_DEFINE_H
 #define UNITTEST_SHARE_MULTI_DATA_SOURCE_EXAMPLE_USER_HELPER_DEFINE_H
 #include "storage/multi_data_source/buffer_ctx.h"

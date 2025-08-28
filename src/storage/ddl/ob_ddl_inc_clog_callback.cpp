@@ -140,13 +140,13 @@ int ObDDLIncRedoClogCb::on_success()
       LOG_INFO("data buffer is freed, do not need to callback");
     } else if (OB_FAIL(macro_block.block_handle_.set_block_id(macro_block_id_))) {
       LOG_WARN("set macro block id failed", K(ret), K(macro_block_id_));
-    } else if (OB_FAIL(macro_block.set_data_macro_meta(macro_block_id_,
-                                                       redo_info_.data_buffer_.ptr(),
+    } else if (OB_FAIL(macro_block.set_data_macro_meta(macro_block_id_, 
+                                                       redo_info_.data_buffer_.ptr(), 
                                                        redo_info_.data_buffer_.length(),
                                                        redo_info_.block_type_,
                                                        true))) {
-      LOG_WARN("fail to set data macro meta", K(ret), K(macro_block_id_),
-                                                      KP(redo_info_.data_buffer_.ptr()),
+      LOG_WARN("fail to set data macro meta", K(ret), K(macro_block_id_), 
+                                                      KP(redo_info_.data_buffer_.ptr()), 
                                                       K(redo_info_.data_buffer_.length()),
                                                       K(redo_info_.block_type_));
 
@@ -169,7 +169,7 @@ int ObDDLIncRedoClogCb::on_success()
   status_.set_ret_code(ret);
   status_.set_state(STATE_SUCCESS);
   try_release();
-
+  
   return OB_SUCCESS; // force return success
 }
 

@@ -76,7 +76,7 @@ void ObLSMetaPackage::reset()
 bool ObLSMetaPackage::is_valid() const
 {
   return (ls_meta_.is_valid() &&
-          palf_meta_.is_valid() &&
+          palf_meta_.is_valid() && 
           dup_ls_meta_.is_valid());
 }
 

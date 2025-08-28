@@ -745,7 +745,7 @@
 #    except mysql.connector.Error as e:
 #      logging.exception('mysql connctor error')
 #      logging.exception('run error, maybe you can reference ' + upgrade_params.rollback_sql_filename + ' to rollback it')
-#      raise
+#      raise 
 #    except Exception as e:
 #      logging.exception('normal error')
 #      logging.exception('run error, maybe you can reference ' + upgrade_params.rollback_sql_filename + ' to rollback it')
@@ -907,11 +907,11 @@
 #    except mysql.connector.Error as e:
 #      logging.exception('mysql connctor error')
 #      logging.exception('run error, maybe you can reference ' + upgrade_params.rollback_sql_filename + ' to rollback it')
-#      raise
+#      raise 
 #    except Exception as e:
 #      logging.exception('normal error')
 #      logging.exception('run error, maybe you can reference ' + upgrade_params.rollback_sql_filename + ' to rollback it')
-#      raise
+#      raise 
 #
 #
 #
@@ -994,7 +994,7 @@
 #    sql = "set @@session.ob_query_timeout = {0}".format(time)
 #    logging.info(sql)
 #    cur.execute(sql)
-#
+#  
 #  def get_session_timeout(self, cur):
 #    sql = "select @@session.ob_query_timeout"
 #    cur.execute(sql)

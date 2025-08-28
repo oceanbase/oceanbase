@@ -134,18 +134,18 @@ public:
   {
     UNUSEDx(expr, ctx);
     int ret = OB_SUCCESS;
-    const sql::ObBitVector *null_vec = cur_vec.get_nulls();
+    const sql::ObBitVector *null_vec = cur_vec.get_nulls();  
     if (not_has_skip && not_has_null) {
       diff += bound.range_size() * (sizeof(ObDatum) +  cur_vec.get_length());
     } else if (not_has_skip) {
-      diff += (sizeof(ObDatum) * bound.range_size()) + (bound.range_size()
+      diff += (sizeof(ObDatum) * bound.range_size()) + (bound.range_size() 
                 - null_vec->accumulate_bit_cnt(bound)) * cur_vec.get_length();
     } else if (not_has_null) {
       diff += (bound.range_size() - skip.accumulate_bit_cnt(bound))
                 * (sizeof(ObDatum) + cur_vec.get_length());
     } else {
       int cnt = bound.range_size() - skip.accumulate_bit_cnt(bound);
-      diff += (sizeof(ObDatum) * cnt) + (cnt
+      diff += (sizeof(ObDatum) * cnt) + (cnt 
                 - null_vec->accumulate_bit_cnt(bound)) * cur_vec.get_length();
     }
     return ret;
@@ -253,7 +253,7 @@ public:
 
   template <>
   OB_INLINE int sum_row_sel<ObFixedLengthBase>(RuntimeContext &agg_ctx, const int32_t agg_col_id,
-                                             RowSelector &row_sel, AggrRowPtr *agg_rows,
+                                             RowSelector &row_sel, AggrRowPtr *agg_rows, 
                                              ObFixedLengthBase &cur_vec)
   {
     int ret = OB_SUCCESS;
@@ -274,7 +274,7 @@ public:
     return ret;
   }
 
-  OB_INLINE bool is_valid_format(VectorFormat fmt)
+  OB_INLINE bool is_valid_format(VectorFormat fmt) 
   {
     return (fmt == VEC_UNIFORM || fmt == VEC_UNIFORM_CONST || fmt == VEC_DISCRETE
               || fmt == VEC_CONTINUOUS || fmt == VEC_FIXED);

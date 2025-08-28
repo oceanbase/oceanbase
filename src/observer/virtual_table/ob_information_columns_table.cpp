@@ -264,10 +264,10 @@ int ObInfoSchemaColumnsTable::iterate_table_schema_array(const bool is_filter_ta
             SERVER_LOG(WARN, "select_stmt is NULL", K(ret));
           } else if (OB_ISNULL(real_stmt = select_stmt->get_real_stmt())) {
             // case : view definition is set_op
-            // Bug :
+            // Bug : 
             ret = OB_ERR_UNEXPECTED;
             SERVER_LOG(WARN, "real stmt is NULL", K(ret));
-          }
+          } 
           for (int64_t k = 0; OB_SUCC(ret) && k < real_stmt->get_select_item_size() && !has_more_; ++k) {
             if (OB_FAIL(fill_row_cells(database_schema->get_database_name_str(), table_schema,
                                         real_stmt, real_stmt->get_select_item(k), k + 1/* add for position */))) {

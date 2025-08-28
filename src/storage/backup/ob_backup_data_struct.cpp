@@ -48,7 +48,7 @@ ObLSBackupParam::~ObLSBackupParam()
 
 bool ObLSBackupParam::is_valid() const
 {
-  return job_id_ > 0 && task_id_ > 0 && backup_dest_.is_valid() && OB_INVALID_ID != tenant_id_ && dest_id_ > 0
+  return job_id_ > 0 && task_id_ > 0 && backup_dest_.is_valid() && OB_INVALID_ID != tenant_id_ && dest_id_ > 0 
       && backup_set_desc_.is_valid() && ls_id_.is_valid() && turn_id_ >= 0 && retry_id_ >= 0;
 }
 
@@ -265,7 +265,7 @@ int ObBackupDataFileTrailer::check_valid() const
 
 ObBackupMacroBlockId::ObBackupMacroBlockId()
  : table_key_(), logic_id_(), macro_block_id_(),
-   nested_offset_(0), nested_size_(0),
+   nested_offset_(0), nested_size_(0), 
    is_ss_ddl_other_block_(false), absolute_row_offset_(0)
 {}
 
@@ -1055,7 +1055,7 @@ ObBackupMacroBlockIDMappingsMeta::ObBackupMacroBlockIDMappingsMeta()
 
 ObBackupMacroBlockIDMappingsMeta::~ObBackupMacroBlockIDMappingsMeta()
 {
-  for (int64_t i = 0; i < id_map_list_.count(); ++i) {
+  for (int64_t i = 0; i < id_map_list_.count(); ++i) {    
     if (OB_NOT_NULL(id_map_list_[i])) {
       ObBackupMacroBlockIDMapping *tmp = id_map_list_[i];
       tmp->~ObBackupMacroBlockIDMapping();
@@ -1789,3 +1789,4 @@ OB_SERIALIZE_MEMBER(ObBackupDeviceMacroBlockId, first_id_, second_id_, third_id_
 
 }  // namespace backup
 }  // namespace oceanbase
+

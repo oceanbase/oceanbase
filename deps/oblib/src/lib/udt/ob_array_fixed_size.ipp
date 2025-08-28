@@ -732,11 +732,11 @@ int ObArrayFixedSize<T>::except(ObIAllocator &alloc, ObIArrayType *arr2, ObIArra
     OB_LOG(WARN, "clone empty failed", K(ret));
   } else if (this->size() == 0) {
     output = arr_ptr;
-  } else if (OB_ISNULL(arr_bin_ptr = dynamic_cast<ObArrayFixedSize<T> *>(arr_ptr))
+  } else if (OB_ISNULL(arr_bin_ptr = dynamic_cast<ObArrayFixedSize<T> *>(arr_ptr)) 
             || OB_ISNULL(arr2_bin_ptr)) {
     ret = OB_ERR_ARRAY_TYPE_MISMATCH;
-    OB_LOG(WARN, "invalid array type", K(ret), K(arr_ptr->get_format()), K(arr2->get_format()));
-  } else if (OB_FAIL(elem_set.create(arr2_bin_ptr->length_ + this->length_,
+    OB_LOG(WARN, "invalid array type", K(ret), K(arr_ptr->get_format()), K(arr2->get_format())); 
+  } else if (OB_FAIL(elem_set.create(arr2_bin_ptr->length_ + this->length_, 
                                   ObMemAttr(common::OB_SERVER_TENANT_ID, "ArrayDistSet")))) {
     OB_LOG(WARN, "failed to create cellid set", K(ret), K(arr2_bin_ptr->length_ + this->length_));
   } else {
@@ -756,7 +756,7 @@ int ObArrayFixedSize<T>::except(ObIAllocator &alloc, ObIArrayType *arr2, ObIArra
         } else {
           OB_LOG(WARN, "failed to check element exist", K(ret));
         }
-      }
+      } 
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(arr_bin_ptr->push_not_in_set(this, elem_set, arr1_contain_null, arr2_contain_null))) {
@@ -775,14 +775,14 @@ int ObArrayFixedSize<T>::unionize(ObIAllocator &alloc, ObIArrayType **arr, uint3
   bool arr_contain_null = false;
   hash::ObHashSet<ObString> elem_set;
   ObArrayFixedSize<T> *arr_bin_ptr = NULL;
-
+  
   for (int64_t i = 0; i < arr_cnt && OB_SUCC(ret); ++i) {
     if (OB_ISNULL(arr_bin_ptr = dynamic_cast<ObArrayFixedSize<T> *>(arr[i]))) {
       ret = OB_ERR_ARRAY_TYPE_MISMATCH;
       OB_LOG(WARN, "invalid array type", K(ret), K(arr[i]->get_format()));
     } else if (arr_bin_ptr->size() == 0) {
       // skip
-    } else if (!elem_set.created() && OB_FAIL(elem_set.create(arr_bin_ptr->length_,
+    } else if (!elem_set.created() && OB_FAIL(elem_set.create(arr_bin_ptr->length_, 
                                             ObMemAttr(common::OB_SERVER_TENANT_ID, "ArrayDistSet")))) {
       OB_LOG(WARN, "failed to create cellid set", K(ret));
     } else if (OB_FAIL(this->push_not_in_set(arr_bin_ptr, elem_set, arr_contain_null, false))) {

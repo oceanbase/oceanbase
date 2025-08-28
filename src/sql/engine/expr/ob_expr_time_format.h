@@ -37,7 +37,7 @@ public:
   static int calc_time_format(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   virtual common::ObCastMode get_cast_mode() const override { return CM_NULL_ON_WARN;}
   DECLARE_SET_LOCAL_SESSION_VARS;
-
+  
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprTimeFormat);

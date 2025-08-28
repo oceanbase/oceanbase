@@ -766,7 +766,7 @@ int ObGroupByChecker::check_select_stmt(const ObSelectStmt *ref_stmt)
         LOG_WARN("fail to check group by", K(i), K(ret));
       }
     }
-
+  
     //处理结束，则退出
     int tmp_ret = OB_SUCCESS;
     const ObSelectStmt *pop_stmt = NULL;
@@ -926,8 +926,8 @@ int ObGroupByChecker::visit(ObUnpivotRawExpr &expr)
 
 
 // following case is allowed
-// select max(max(data)) from test group by id order by id, max(max(data)) ;
-// select max(max(data)) from test group by id order by id;
+// select max(max(data)) from test group by id order by id, max(max(data)) ; 
+// select max(max(data)) from test group by id order by id; 
 // select max(max(data)) from test group by id having id=1;
 // select sum(sum(data)) from test group by id order by sum(data);
 // select sum(sum(data)) from test group by id having max(data) = 4 order by max(max(data))

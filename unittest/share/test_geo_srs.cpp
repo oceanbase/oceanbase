@@ -9,14 +9,14 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #include <gtest/gtest.h>
 #define private public
 #include "src/share/schema/ob_server_schema_service.h"
 #undef private
 namespace oceanbase {
 using namespace oceanbase::share::schema;
-using namespace omt;
+using namespace omt; 
 namespace common {
 static common::ObMySQLProxy sql_proxy;
 class TestGeoSrs : public ::testing::Test {
@@ -43,7 +43,7 @@ TEST_F(TestGeoSrs, mock_srs_info)
   ObGeographicRs raw_rs;
   ObString wkt;
   ASSERT_EQ(OB_SUCCESS, srs_wkt_parser::mock_parse_geographic_coordinate_system(wkt, &raw_rs));
-
+  
   ObSpatialReferenceSystemBase *srs_info = NULL;
   ObArenaAllocator allocator(ObModIds::TEST);
   ASSERT_EQ(OB_SUCCESS, ObSpatialReferenceSystemBase::create_geographic_srs(&allocator, 4326, &raw_rs, srs_info));
@@ -70,20 +70,20 @@ TEST_F(TestGeoSrs, srs_mgr_srsid_4326)
   ASSERT_TRUE(std::abs(srs_item->angular_unit() - 0.017453292519943278) < 0.001);
   ASSERT_TRUE(std::abs(srs_item->semi_major_axis() - 6378137) < 0.001);
   ASSERT_TRUE(std::abs(srs_item->semi_minor_axis() - 6356752.314245) < 0.001);
-
+  
   double res = 0.0;
   double val = 0.26179938779914919;
   ASSERT_EQ(OB_SUCCESS, srs_item->latitude_convert_to_radians(15, res));
   ASSERT_TRUE(std::abs(res - val) < 0.001);
-
+  
   ASSERT_EQ(OB_SUCCESS, srs_item->latitude_convert_from_radians(val, res));
   ASSERT_TRUE(std::abs(res - 15) < 0.001);
   ASSERT_EQ(OB_SUCCESS, srs_item->longtitude_convert_to_radians(15, res));
   ASSERT_TRUE(std::abs(res - val) < 0.001);
-
+  
   ASSERT_EQ(OB_SUCCESS, srs_item->longtitude_convert_from_radians(val, res));
   ASSERT_TRUE(std::abs(res - 15) < 0.001);
-
+  
   tenant_srs_mgr_instance.destroy();
 }
 #endif

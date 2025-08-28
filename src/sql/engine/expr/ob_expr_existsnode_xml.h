@@ -16,14 +16,14 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "lib/xml/ob_xpath.h"
-namespace oceanbase
+namespace oceanbase 
 {
 
 namespace sql
 {
 class ObExprExistsNodeXml : public ObFuncExprOperator
 {
-  public:
+  public: 
   explicit ObExprExistsNodeXml(common::ObIAllocator &alloc);
   virtual ~ObExprExistsNodeXml();
   virtual int calc_result_typeN(

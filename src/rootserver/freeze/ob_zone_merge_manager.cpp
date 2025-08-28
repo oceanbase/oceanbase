@@ -1144,7 +1144,7 @@ int ObZoneMergeManagerBase::inner_adjust_global_merge_info(
   } else {
     // 1. adjust global_merge_info in memory to control the frozen_scn of the next major compaction.
     // 2. adjust global_merge_info in table for background thread to update report_scn.
-    //
+    // 
     // Note that, here not only adjust last_merged_scn, but also adjust global_broadcast_scn and
     // frozen_scn. So as to avoid error in ObMajorMergeScheduler::do_work(), which works based on
     // these global_merge_info in memory.

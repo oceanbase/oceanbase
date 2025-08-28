@@ -83,7 +83,7 @@ int ObColumnChecksumErrorOperator::insert_column_checksum_err_info_(
     LOG_WARN("fail to splice exec_insert_update", KR(ret), K(meta_tenant_id), K(info));
   } else if (affected_rows < 0 || affected_rows > 2) {
     // one ckm_error info may insert multi-times due to verifying checksum multi-times. if re-insert, cuz we
-    // use 'on duplicate key update', the 'affected_rows' may be 0(not pk_column values unchanged)
+    // use 'on duplicate key update', the 'affected_rows' may be 0(not pk_column values unchanged) 
     // or 2(not pk_column values changed)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected affected rows", KR(ret), K(affected_rows));
@@ -115,7 +115,7 @@ int ObColumnChecksumErrorOperator::delete_column_checksum_err_info(
 }
 
 int ObColumnChecksumErrorOperator::delete_column_checksum_err_info_by_scn(
-    common::ObISQLClient &sql_client,
+    common::ObISQLClient &sql_client, 
     const uint64_t tenant_id,
     const int64_t compaction_scn)
 {

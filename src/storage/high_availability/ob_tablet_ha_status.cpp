@@ -77,7 +77,7 @@ int ObTabletRestoreStatus::check_can_change_status(
         can_change = true;
       }
       break;
-    }
+    } 
     case ObTabletRestoreStatus::FULL: {
       if (ObTabletRestoreStatus::FULL == change_status
           || ObTabletRestoreStatus::EMPTY == change_status) {

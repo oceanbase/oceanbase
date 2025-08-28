@@ -30,7 +30,7 @@ PROCEDURE create_plan_directive (
   group_or_subplan     VARCHAR(65535),
   comment              VARCHAR(65535) DEFAULT '',
   mgmt_p1              INT DEFAULT 100,
-  utilization_limit    INT DEFAULT 100,
+  utilization_limit    INT DEFAULT 100, 
   min_iops             INT DEFAULT 0,
   max_iops             INT DEFAULT 100,
   weight_iops          INT DEFAULT 0,
@@ -68,3 +68,4 @@ pragma interface (C, SET_CONSUMER_GROUP_MAPPING_INNER);
 
 
 END dbms_resource_manager;
+

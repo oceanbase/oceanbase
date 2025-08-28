@@ -83,42 +83,42 @@ static constexpr char check_table_ok_template[] =
     "'status' As Msg_type, "
     "'OK' As Msg_text "
     "FROM dual)";
-static constexpr char check_table_db_not_exists1[] =
+static constexpr char check_table_db_not_exists1[] = 
     "(SELECT \'%s.%s\' As \"Table\", "
     "'check' As Op, "
     "'Error' As Msg_type, "
     "\"Unknown database \'%s\'\" As Msg_text "
     "FROM dual)";
 
-static constexpr char check_table_db_not_exists2[] =
+static constexpr char check_table_db_not_exists2[] = 
     "(SELECT \'%s.%s\' As \"Table\", "
     "'check' As Op, "
     "'error' As Msg_type, "
     "'Corrupt' As Msg_text "
     "FROM dual)";
 
-static constexpr char check_table_table_not_exists1[] =
+static constexpr char check_table_table_not_exists1[] = 
     "(SELECT \'%s.%s\' As \"Table\", "
     "'check' As Op, "
     "'Error' As Msg_type, "
     "\"Table \'%s.%s\' doesn't exist\" As Msg_text "
     "FROM dual)";
 
-static constexpr char check_table_table_not_exists2[] =
+static constexpr char check_table_table_not_exists2[] = 
     "(SELECT \'%s.%s\' As \"Table\", "
     "'check' As Op, "
     "'status' As Msg_type, "
     "'Operation failed' As Msg_text "
     "FROM dual)";
 
-static constexpr char check_table_view_invalid1[] =
+static constexpr char check_table_view_invalid1[] = 
     "(SELECT \'%s.%s\' As \"Table\", "
     "'check' As Op, "
     "'Error' As Msg_type, "
     "\"View \'%s.%s\' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them\" As Msg_text "
     "FROM dual)";
 
-static constexpr char check_table_view_invalid2[] =
+static constexpr char check_table_view_invalid2[] = 
     "(SELECT \'%s.%s\' As \"Table\", "
     "'check' As Op, "
     "'error' As Msg_type, "
@@ -249,8 +249,8 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
           } else {
             /* (parse_tree.children_[2]->value_)&1        ->  FULL
              * ((parse_tree.children_[2]->value_)>>1)&1   ->  EXTENDED
-             * ObServer does not have hidden tables created by failed ALTER TABLE
-             * statements, hence we do nothing for "EXTENDED"
+             * ObServer does not have hidden tables created by failed ALTER TABLE 
+             * statements, hence we do nothing for "EXTENDED" 
              */
             bool is_full = (1 == ((parse_tree.children_[2]->value_)&1));
             bool is_extended = (1 == (((parse_tree.children_[2]->value_)>>1)&1));
@@ -887,7 +887,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                 need_priv.db_ = show_db_name;
                 need_priv.table_ = show_table_name;
                 stmt_need_privs.need_privs_.push_back(need_priv);
-
+                
                 if (OB_FAIL(schema_checker_->check_priv_or(session_priv, enable_role_id_array, stmt_need_privs))) {
                   if (OB_ERR_NO_TABLE_PRIVILEGE == ret) {
                     ret = OB_SUCCESS;
@@ -1154,13 +1154,13 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("database id is invalid", K(ret), K(show_db_id));
             } else if (OB_FAIL(check_db_access_for_show_sql(catalog_id, show_resv_ctx, session_priv, enable_role_id_array))) {
-              LOG_WARN("check db access for show sql failed", K(ret));
+              LOG_WARN("check db access for show sql failed", K(ret));    
             } else {
               show_resv_ctx.stmt_type_ = stmt::T_SHOW_TABLE_STATUS;
               GEN_SQL_STEP_1(ObShowSqlSet::SHOW_TABLE_STATUS);
-              if ((GET_MIN_CLUSTER_VERSION() >=  MOCK_CLUSTER_VERSION_4_2_3_0
+              if ((GET_MIN_CLUSTER_VERSION() >=  MOCK_CLUSTER_VERSION_4_2_3_0 
                     && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0)
-                  || (GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_2_1_6
+                  || (GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_2_1_6 
                       && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_2_0)
                   || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_2_0) {
                 if (lib::is_mysql_mode()) {
@@ -1212,7 +1212,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("database id is invalid", K(ret), K(show_db_id));
             } else if (OB_FAIL(check_db_access_for_show_sql(catalog_id, show_resv_ctx, session_priv, enable_role_id_array))) {
-              LOG_WARN("check db access for show sql failed", K(ret));
+              LOG_WARN("check db access for show sql failed", K(ret));  
             } else {
               int64_t proc_type = T_SHOW_PROCEDURE_STATUS == parse_tree.type_ ? ROUTINE_PROCEDURE_TYPE : ROUTINE_FUNCTION_TYPE;
               show_resv_ctx.stmt_type_ = T_SHOW_PROCEDURE_STATUS == parse_tree.type_ ? stmt::T_SHOW_PROCEDURE_STATUS : stmt::T_SHOW_FUNCTION_STATUS;
@@ -1849,8 +1849,8 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("not support show async job", K(ret), K(real_tenant_id));
           } else if (parse_tree.num_child_ == 1 && OB_NOT_NULL(parse_tree.children_)) {
-            snprintf(where_job_name, WHERE_JOB_NAME_LENGTH, " AND JOB_NAME = '%.*s' ", (int)parse_tree.children_[0]->str_len_, parse_tree.children_[0]->str_value_);
-            snprintf(limit_count, LIMIT_LENGTH, "order by update_time desc limit 1");
+            snprintf(where_job_name, WHERE_JOB_NAME_LENGTH, " AND JOB_NAME = '%.*s' ", (int)parse_tree.children_[0]->str_len_, parse_tree.children_[0]->str_value_);     
+            snprintf(limit_count, LIMIT_LENGTH, "order by update_time desc limit 1");     
           } else if (parse_tree.num_child_ == 0) {
             //nothing to do
           } else {
@@ -1864,9 +1864,9 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
             char where_user_from_logs[WHERE_USR_NAME_LENGTH] = {};
             if (0 != session_info_->get_user_name().case_compare("root")) {
               snprintf(where_user_from_jobs, WHERE_USR_NAME_LENGTH, " AND T.POWNER = '%.*s@%.*s' ", session_info_->get_user_name().length(), session_info_->get_user_name().ptr(),
-                                                                                                   session_info_->get_host_name().length(), session_info_->get_host_name().ptr());
+                                                                                                   session_info_->get_host_name().length(), session_info_->get_host_name().ptr()); 
               snprintf(where_user_from_logs, WHERE_USR_NAME_LENGTH, " AND R.OWNER = '%.*s@%.*s' ", session_info_->get_user_name().length(), session_info_->get_user_name().ptr(),
-                                                                                                  session_info_->get_host_name().length(), session_info_->get_host_name().ptr());
+                                                                                                  session_info_->get_host_name().length(), session_info_->get_host_name().ptr()); 
             }
             show_resv_ctx.stmt_type_ = stmt::T_SHOW_OLAP_ASYNC_JOB_STATUS;
             GEN_SQL_STEP_1(ObShowSqlSet::SHOW_OLAP_ASYNC_JOB_STATUS);
@@ -1880,7 +1880,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                           sql_tenant_id,
                           where_job_name,
                           where_user_from_jobs,
-                          limit_count);
+                          limit_count);  
           }
         }();
         break;
@@ -2016,9 +2016,9 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
           } else if (NULL != from_relation_node) {  // show sensitive rule from table
             show_from_table = true;
             if (OB_FAIL(resolve_show_from_table(from_relation_node, from_database_node,
-                                                database_name.empty(), T_SHOW_SENSITIVE_RULES,
-                                                real_tenant_id, show_catalog_id, show_db_name,
-                                                show_db_id, show_table_name, show_table_id,
+                                                database_name.empty(), T_SHOW_SENSITIVE_RULES, 
+                                                real_tenant_id, show_catalog_id, show_db_name, 
+                                                show_db_id, show_table_name, show_table_id, 
                                                 is_view, synonym_checker))) {
               LOG_WARN("failed to resolve show from table", K(ret));
             }
@@ -2037,22 +2037,22 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
           } else if (NULL != condition_node && T_LIKE_CLAUSE == condition_node->type_) {
             if (OB_UNLIKELY(condition_node->num_child_ != 2 || NULL == condition_node->children_)) {
               ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("invalid like parse node", K(ret),
+              LOG_WARN("invalid like parse node", K(ret), 
                                                   K(condition_node->num_child_),
                                                   K(condition_node->children_));
             } else if (OB_UNLIKELY(NULL == condition_node->children_[0]
                                    || NULL == condition_node->children_[1])) {
               ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("invalid like parse node", K(ret),
+              LOG_WARN("invalid like parse node", K(ret), 
                                                   K(condition_node->num_child_),
                                                   K(condition_node->children_[0]),
                                                   K(condition_node->children_[1]));
-
+  
             } else if (show_from_table) {
               GEN_SQL_STEP_1(ObShowSqlSet::SHOW_SENSITIVE_RULES_FROM_TABLE_LIKE,
                              static_cast<ObString::obstr_size_t>(condition_node->children_[0]->str_len_),
                              condition_node->children_[0]->str_value_);
-              GEN_SQL_STEP_2(ObShowSqlSet::SHOW_SENSITIVE_RULES_FROM_TABLE_LIKE,
+              GEN_SQL_STEP_2(ObShowSqlSet::SHOW_SENSITIVE_RULES_FROM_TABLE_LIKE, 
                              OB_SYS_DATABASE_NAME, OB_ALL_SENSITIVE_RULE_TNAME,
                              OB_SYS_DATABASE_NAME, OB_ALL_SENSITIVE_COLUMN_TNAME,
                              OB_SYS_DATABASE_NAME, OB_ALL_TABLE_TNAME,
@@ -2063,7 +2063,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
               GEN_SQL_STEP_1(ObShowSqlSet::SHOW_SENSITIVE_RULES_FROM_DATABASE_LIKE,
                              static_cast<ObString::obstr_size_t>(condition_node->children_[0]->str_len_),
                              condition_node->children_[0]->str_value_);
-              GEN_SQL_STEP_2(ObShowSqlSet::SHOW_SENSITIVE_RULES_FROM_DATABASE_LIKE,
+              GEN_SQL_STEP_2(ObShowSqlSet::SHOW_SENSITIVE_RULES_FROM_DATABASE_LIKE, 
                              OB_SYS_DATABASE_NAME, OB_ALL_SENSITIVE_RULE_TNAME,
                              OB_SYS_DATABASE_NAME, OB_ALL_SENSITIVE_COLUMN_TNAME,
                              OB_SYS_DATABASE_NAME, OB_ALL_TABLE_TNAME,
@@ -2074,7 +2074,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
               GEN_SQL_STEP_1(ObShowSqlSet::SHOW_SENSITIVE_RULES_LIKE,
                              static_cast<ObString::obstr_size_t>(condition_node->children_[0]->str_len_),
                              condition_node->children_[0]->str_value_);
-              GEN_SQL_STEP_2(ObShowSqlSet::SHOW_SENSITIVE_RULES_LIKE,
+              GEN_SQL_STEP_2(ObShowSqlSet::SHOW_SENSITIVE_RULES_LIKE, 
                              OB_SYS_DATABASE_NAME, OB_ALL_SENSITIVE_RULE_TNAME,
                              OB_SYS_DATABASE_NAME, OB_ALL_SENSITIVE_COLUMN_TNAME,
                              OB_SYS_DATABASE_NAME, OB_ALL_TABLE_TNAME,
@@ -2083,7 +2083,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
             }
           } else if (show_from_table) {
             GEN_SQL_STEP_1(ObShowSqlSet::SHOW_SENSITIVE_RULES_FROM_TABLE);
-            GEN_SQL_STEP_2(ObShowSqlSet::SHOW_SENSITIVE_RULES_FROM_TABLE,
+            GEN_SQL_STEP_2(ObShowSqlSet::SHOW_SENSITIVE_RULES_FROM_TABLE, 
                            OB_SYS_DATABASE_NAME, OB_ALL_SENSITIVE_RULE_TNAME,
                            OB_SYS_DATABASE_NAME, OB_ALL_SENSITIVE_COLUMN_TNAME,
                            OB_SYS_DATABASE_NAME, OB_ALL_TABLE_TNAME,
@@ -2092,7 +2092,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                            show_table_id);
           } else if (show_from_database) {
             GEN_SQL_STEP_1(ObShowSqlSet::SHOW_SENSITIVE_RULES_FROM_DATABASE);
-            GEN_SQL_STEP_2(ObShowSqlSet::SHOW_SENSITIVE_RULES_FROM_DATABASE,
+            GEN_SQL_STEP_2(ObShowSqlSet::SHOW_SENSITIVE_RULES_FROM_DATABASE, 
                            OB_SYS_DATABASE_NAME, OB_ALL_SENSITIVE_RULE_TNAME,
                            OB_SYS_DATABASE_NAME, OB_ALL_SENSITIVE_COLUMN_TNAME,
                            OB_SYS_DATABASE_NAME, OB_ALL_TABLE_TNAME,
@@ -2101,7 +2101,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                            show_db_id);
           } else {
             GEN_SQL_STEP_1(ObShowSqlSet::SHOW_SENSITIVE_RULES);
-            GEN_SQL_STEP_2(ObShowSqlSet::SHOW_SENSITIVE_RULES,
+            GEN_SQL_STEP_2(ObShowSqlSet::SHOW_SENSITIVE_RULES, 
                            OB_SYS_DATABASE_NAME, OB_ALL_SENSITIVE_RULE_TNAME,
                            OB_SYS_DATABASE_NAME, OB_ALL_SENSITIVE_COLUMN_TNAME,
                            OB_SYS_DATABASE_NAME, OB_ALL_TABLE_TNAME,
@@ -3970,7 +3970,7 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_PRIVILEGES,
         
 DEFINE_SHOW_CLAUSE_SET(SHOW_QUERY_RESPONSE_TIME, 
                        NULL, 
-                       "SELECT response_time as RESPONSE_TIME, sum(count) as COUNT, sum(total) as TOTAL FROM %s.%s where tenant_id = %lu group by response_time",
+                       "SELECT response_time as RESPONSE_TIME, sum(count) as COUNT, sum(total) as TOTAL FROM %s.%s where tenant_id = %lu group by response_time", 
                        NULL, 
                        NULL);
 

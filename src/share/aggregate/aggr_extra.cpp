@@ -419,7 +419,7 @@ int DataStoreVecExtraResult::init_data_set(ObAggrInfo &aggr_info, ObEvalCtx &eva
                                            ObIAllocator &allocator, bool need_rewind)
 {
   int ret = OB_SUCCESS;
-
+  
   if (data_store_inited_) {
     ret = OB_INIT_TWICE;
     SQL_LOG(WARN, "inited", K(data_store_inited_), K(ret));
@@ -541,7 +541,7 @@ DataStoreVecExtraResult::~DataStoreVecExtraResult()
 {
   reuse();
   if (need_sort_) {
-    if (sort_ != nullptr) {
+    if (sort_ != nullptr) { 
       sort_->reset();
     }
   } else {
@@ -575,7 +575,7 @@ static int get_param_int_val(ObExpr *expr, ObDatum *datum, int64_t &val)
 }
 
 int TopFreHistVecExtraResult::init_topk_fre_histogram_item(ObIAllocator &allocator,
-                                                           ObAggrInfo &aggr_info,
+                                                           ObAggrInfo &aggr_info, 
                                                            ObEvalCtx &eval_ctx)
 {
   int ret = OB_SUCCESS;
@@ -661,7 +661,7 @@ void TopFreHistVecExtraResult::set_topk_fre_histogram_item()
 }
 
 int HybridHistVecExtraResult::init_data_set(ObIAllocator &allocator,
-                                            ObAggrInfo &aggr_info,
+                                            ObAggrInfo &aggr_info, 
                                             ObEvalCtx &eval_ctx,
                                             ObIOEventObserver *io_event_observer)
 {
@@ -684,7 +684,7 @@ int HybridHistVecExtraResult::init_data_set(ObIAllocator &allocator,
   } else if (OB_ISNULL(bucket_num_result)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(bucket_num_result));
-  } else if (OB_FAIL(get_param_int_val(aggr_info.bucket_num_param_expr_,
+  } else if (OB_FAIL(get_param_int_val(aggr_info.bucket_num_param_expr_, 
                                        bucket_num_result,
                                        bucket_num_))) {
     LOG_WARN("failed to get int param val", K(ret), K(bucket_num_result));
@@ -695,17 +695,17 @@ int HybridHistVecExtraResult::init_data_set(ObIAllocator &allocator,
   } else if (OB_ISNULL(mem_context_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null memory entity returned");
-  } else if (OB_FAIL(store_.init(aggr_info.param_exprs_,
-                                 eval_ctx.max_batch_size_,
-                                 attr,
+  } else if (OB_FAIL(store_.init(aggr_info.param_exprs_, 
+                                 eval_ctx.max_batch_size_, 
+                                 attr, 
                                  0,
-                                 true,
-                                 sizeof(BucketDesc),
+                                 true, 
+                                 sizeof(BucketDesc), 
                                  ObCompressorType::NONE_COMPRESSOR))) {
     LOG_WARN("init temp row store failed", K(ret));
   } else if (OB_FAIL(sql_mem_processor_.init(&mem_context_->get_malloc_allocator(),
-                                             tenant_id, 0,
-                                             op_monitor_info_.get_operator_type(),
+                                             tenant_id, 0, 
+                                             op_monitor_info_.get_operator_type(), 
                                              0, &eval_ctx.exec_ctx_))) {
     LOG_WARN("failed to init sql memory manager processor", K(ret));
   } else {
@@ -780,7 +780,7 @@ int HybridHistVecExtraResult::compute_hybrid_hist_result(
               bucket_size = total_count_ / bucket_num_;
             } else {
               dynamic_size = true;
-              // first bucket always contain only one values. following code will handle first value is
+              // first bucket always contain only one values. following code will handle first value is 
               // popular value or not.
               desc = reinterpret_cast<BucketDesc*>(rows[i]->get_extra_payload(store_.get_row_meta()));
               if (desc->is_pop_ || bucket_num_ == pop_count_ + 1) {
@@ -789,8 +789,8 @@ int HybridHistVecExtraResult::compute_hybrid_hist_result(
                 bucket_size = (total_count_ - pop_freq_ - desc->ep_count_) / (bucket_num_ - pop_count_ - 1);
               }
             }
-          }
-
+          } 
+          
           desc = reinterpret_cast<BucketDesc*>(rows[i]->get_extra_payload(store_.get_row_meta()));
           ep_count = desc->ep_count_;
           is_pop = desc->is_pop_;
@@ -800,8 +800,8 @@ int HybridHistVecExtraResult::compute_hybrid_hist_result(
             un_pop_count += ep_count;
           }
 
-          if (bucket_rows > bucket_size ||
-              0 == row_index ||
+          if (bucket_rows > bucket_size || 
+              0 == row_index || 
               num_distinct_ - 1 == row_index) {
             bucket_rows = 0;
             ObObj ep_val;
@@ -892,7 +892,7 @@ int HybridHistVecExtraResult::init_batch_vector(ObIAllocator &allocator, int max
   } else if (OB_ISNULL(ptrs = static_cast<char **>(allocator.alloc(ptrs_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc mem", KR(ret), K(ptrs_size));
-  } else if (OB_ISNULL(batch_bucket_desc_ =
+  } else if (OB_ISNULL(batch_bucket_desc_ = 
                         static_cast<BucketDesc*>(allocator.alloc(bucket_desc_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc mem", KR(ret), K(ptrs_size));
@@ -906,7 +906,7 @@ int HybridHistVecExtraResult::init_batch_vector(ObIAllocator &allocator, int max
     batch_vector_ = new(vector_buf) RTVectorType<VEC_DISCRETE, VEC_TC_STRING>(lens, ptrs, nulls);
     batch_idx_ = 0;
     max_batch_size_ = max_batch_size;
-  }
+  } 
   return ret;
 }
 
@@ -929,7 +929,7 @@ int HybridHistVecExtraResult::flush_batch_rows(bool need_dump)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected batch idx", K(ret));
       } else {
-        SMART_VARS_2((uint16_t[MAX_BATCH_SIZE], selector),
+        SMART_VARS_2((uint16_t[MAX_BATCH_SIZE], selector), 
                      (ObCompactRow*[MAX_BATCH_SIZE], rows)) {
           ObSEArray<ObIVector*, 1> vecs;
           for (uint16_t i = 0; i < batch_idx_; ++i) {
@@ -964,7 +964,7 @@ int HybridHistVecExtraResult::flush_batch_rows(bool need_dump)
           }
         }
       }
-
+      
     }
   }
   return ret;

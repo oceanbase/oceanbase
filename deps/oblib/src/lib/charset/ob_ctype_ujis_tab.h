@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+ 
 #ifndef CHARSET_UJIS_TAB_H_
 #define CHARSET_UJIS_TAB_H_
 

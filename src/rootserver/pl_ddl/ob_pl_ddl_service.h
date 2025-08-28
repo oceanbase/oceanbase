@@ -224,7 +224,7 @@ private:
   //----End of functions for managing trigger----
 
   //----Functions for restore table ddl ----
-  //  Dont rebuild trigger if
+  //  Dont rebuild trigger if 
   //  1. database name has changed.
   //  2. base_table name has changed.
   //  3. database of the trigger does no exist.

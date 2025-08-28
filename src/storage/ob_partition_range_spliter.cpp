@@ -1865,8 +1865,8 @@ int ObPartitionIncrementalRangeSpliter::ObIncrementalIterator::prepare_table_acc
                                          storage_schema->get_rowkey_column_num(),
                                          lib::is_oracle_mode(), rowkey_col_ids_))) {
     STORAGE_LOG(WARN, "Failed to init columns info", KR(ret));
-  } else if (OB_FAIL(tbl_xs_param_.init_merge_param(merge_ctx_.get_tablet_id().id(),
-                                                    merge_ctx_.get_tablet_id(),
+  } else if (OB_FAIL(tbl_xs_param_.init_merge_param(merge_ctx_.get_tablet_id().id(), 
+                                                    merge_ctx_.get_tablet_id(), 
                                                     tbl_read_info_,
                                                     false/*is_multi_version_minor_merge*/,
                                                     false/*is_delete_insert*/))) {

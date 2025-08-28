@@ -55,7 +55,7 @@ int init_top_fre_hist_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_i
       }
     }
   }
-
+  
   return ret;
 }
 

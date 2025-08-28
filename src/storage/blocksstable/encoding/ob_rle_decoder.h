@@ -158,7 +158,7 @@ private:
       const int32_t *row_ids,
       const int64_t row_cap,
       storage::ObGroupByCellBase &group_by_cell) const override;
-
+  
   bool has_null_value() const;
 
 private:

@@ -118,12 +118,12 @@ struct ObNestedVectorCmpFunc
     ObIArrayType *res_obj = NULL;
     ObString res_str;
     if (OB_FAIL(construct_param(tmp_allocator, ctx, left_meta_id, left, left_obj))) {
-      SQL_ENG_LOG(WARN, "init nested obj failed", K(ret));
+      SQL_ENG_LOG(WARN, "init nested obj failed", K(ret)); 
     } else if (OB_FAIL(construct_param(tmp_allocator, ctx, right_meta_id, right, right_obj))) {
       SQL_ENG_LOG(WARN, "init nested obj failed", K(ret));
     } else if (OB_FAIL(left_obj->compare(*right_obj, cmp_ret))) {
-      SQL_ENG_LOG(WARN, "init nested obj failed", K(ret));
-    }
+      SQL_ENG_LOG(WARN, "init nested obj failed", K(ret)); 
+    } 
     return ret;
   }
 

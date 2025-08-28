@@ -34,23 +34,23 @@ int ObRoaringBin::init()
 
   /* roaring_bitmap binary format
    * Only 2 cookies are accepted for the roaring binary: ROARING_SERIAL_COOKIE_NO_RUNCONTAINER and ROARING_SERIAL_COOKIE (start with 3A30 and 3B30)
-   *
+   * 
    * The 3A30 binary format as below:
    *  | cookie | size  | keyscards[0] | ... | keyscards[size - 1] | offset[0] | ... | offset[size - 1] | container_data[0] | ... | container_data[size - 1] |
    *  | 4Byte  | 4Byte |    8Byte     | ... |        8Byte        |   8Byte   | ... |      8Byte       |     not fixed     | ... |        not fixed         |
-   *
-   * This is the format of roaring_bitmap without run containers.
+   * 
+   * This is the format of roaring_bitmap without run containers. 
    * - size: number of containers in the bitmaps
    * - keyscards[i]: keys and cardinality for each container. The keys refer to the high 16 bits of the value.
    *                 The cardinality is the real cardinality - 1, because the maximum cardinality is 65536(2^16)
    * - offset[i]: offsets for each container, the offsets are relative to the beginning of the binary
    * - container_data[i]: for cardinality less than 4096, the data is stored as a uint16 array,
    *                      for else, the data stored as in a 2^16 bits (8192 Bytes) bitset.
-   *
+   * 
    * The 3B30 binary format as below:
    *  | cookie | size  |     run_bitmap      | keyscards[0] | ... | keyscards[size - 1] | offset[0] | ... | offset[size - 1] | container_data[0] | ... | container_data[size - 1] |
    *  | 2Byte  | 2Byte | (size + 7) / 8 Byte |    8Byte     | ... |        8Byte        |   8Byte   | ... |      8Byte       |     not fixed     | ... |        not fixed         |
-   * This is the format of roaring_bitmap includes one or more run containers.
+   * This is the format of roaring_bitmap includes one or more run containers. 
    * - size: number of containers in the bitmaps (real size - 1), no possible to have 0 container in 3B30.
    * - run_bitmap: to mark which container is the run container.
    * - keyscards: same as 3A30

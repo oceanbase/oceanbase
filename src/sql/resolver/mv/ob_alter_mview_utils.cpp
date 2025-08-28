@@ -94,7 +94,7 @@ int ObAlterMviewUtils::resolve_mv_options(const ParseNode &node,
       if (data_version < DATA_VERSION_4_3_5_3) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("tenant data version is less than 4.3.5.3, alter mv nested refresh mode is not supported",
-                K(ret), K(data_version));
+                K(ret), K(data_version)); 
       } else if (OB_ISNULL(nest_refresh_node) ||
                  OB_UNLIKELY(T_MV_NESTED_REFRESH_CLAUSE != nest_refresh_node->type_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -104,7 +104,7 @@ int ObAlterMviewUtils::resolve_mv_options(const ParseNode &node,
         switch (nested_refresh_mode_val) {
           case 0:
             alter_mview_arg.set_alter_nested_refresh_mode(share::schema::ObMVNestedRefreshMode::INDIVIDUAL);
-            break;
+            break; 
           case 1:
             alter_mview_arg.set_alter_nested_refresh_mode(share::schema::ObMVNestedRefreshMode::INCONSISTENT);
             break;

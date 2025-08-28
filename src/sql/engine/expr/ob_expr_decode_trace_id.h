@@ -27,7 +27,7 @@ public:
   static int calc_decode_trace_id_expr_batch(const ObExpr &expr, ObEvalCtx &ctx,
                                              const ObBitVector &skip,
                                              const int64_t batch_size);
-
+                                             
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   template <typename T>
