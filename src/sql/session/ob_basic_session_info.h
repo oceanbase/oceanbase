@@ -874,8 +874,24 @@ public:
     LockGuard lock_guard(thread_data_mutex_);
     thread_data_.cur_query_start_time_ = time;
   }
+    void set_pl_cur_query_start_time_bak(int64_t time)
+  {
+    LockGuard lock_guard(thread_data_mutex_);
+    thread_data_.pl_cur_query_start_time_bak_ = time;
+  }
+  void set_pl_spi_query_info(int64_t time) {
+    LockGuard lock_guard(thread_data_mutex_);
+    thread_data_.cur_query_start_time_ = time;
+    thread_data_.pl_internal_time_split_point_ = time;
+  }
+  void set_pl_internal_time_split_point(int64_t time) {
+    LockGuard lock_guard(thread_data_mutex_);
+    thread_data_.pl_internal_time_split_point_ = time;
+  }
+  int64_t get_pl_internal_time_split_point() const { return thread_data_.pl_internal_time_split_point_; }
   int64_t get_query_start_time() const { return thread_data_.cur_query_start_time_; }
   int64_t get_cur_state_start_time() const { return thread_data_.cur_state_start_time_; }
+  int64_t get_pl_cur_query_start_time_bak() const { return thread_data_.pl_cur_query_start_time_bak_; }
   void set_interactive(bool is_interactive)
   {
     LockGuard lock_guard(thread_data_mutex_);
@@ -956,6 +972,7 @@ public:
   char const *get_mysql_cmd_str() const { return obmysql::get_mysql_cmd_str(thread_data_.mysql_cmd_); }
   int store_query_string(const common::ObString &stmt);
   int store_top_query_string(const common::ObString &stmt);
+  void reset_pl_spi_query_info(int64_t time);
   void reset_query_string();
   void reset_top_query_string();
   void set_session_sleep();
@@ -972,6 +989,8 @@ public:
   const common::ObString get_top_query_string() const;
   void set_sql_mem_used(int64_t mem_used) { ATOMIC_STORE(&sql_mem_used_, mem_used); }
   int64_t get_sql_mem_used() const { return ATOMIC_LOAD(&sql_mem_used_); }
+  bool get_use_pl_inner_info_string() { return use_pl_inner_info_string_; }
+  void set_use_pl_inner_info_string(bool use_pl_inner_info_string) { use_pl_inner_info_string_ = use_pl_inner_info_string; }
   uint64_t get_current_statement_id() const { return thread_data_.cur_statement_id_; }
   int update_session_timeout();
   int is_timeout(bool &is_timeout);
@@ -1394,6 +1413,7 @@ public:
   int64_t get_current_execution_id() const { return current_execution_id_; }
   const common::ObCurTraceId::TraceId &get_last_trace_id() const { return last_trace_id_; }
   const common::ObCurTraceId::TraceId &get_current_trace_id() const { return curr_trace_id_; }
+  const common::ObCurTraceId::TraceId &get_top_trace_id() const { return top_trace_id_; }
   uint64_t get_current_plan_id() const { return plan_id_; }
   void reset_current_plan_id()
   {
@@ -1414,6 +1434,14 @@ public:
     if (OB_ISNULL(trace_id)) {
     } else {
       last_trace_id_ = *trace_id;
+    }
+  }
+  void set_top_trace_id(common::ObCurTraceId::TraceId *trace_id)
+  {
+    if (OB_ISNULL(trace_id)) {
+      top_trace_id_.reset();
+    } else {
+      top_trace_id_ = *trace_id;
     }
   }
   void set_current_trace_id(common::ObCurTraceId::TraceId *trace_id);
@@ -1670,6 +1698,8 @@ protected:
                          mysql_cmd_(obmysql::COM_SLEEP),
                          cur_query_start_time_(0),
                          cur_state_start_time_(0),
+                         pl_internal_time_split_point_(0),
+                         pl_cur_query_start_time_bak_(0),
                          wait_timeout_(0),
                          interactive_timeout_(0),
                          max_packet_size_(MultiThreadData::DEFAULT_MAX_PACKET_SIZE),
@@ -1716,6 +1746,8 @@ protected:
       mysql_cmd_ = obmysql::COM_SLEEP;
       cur_query_start_time_ = 0;
       cur_state_start_time_ = ::oceanbase::common::ObTimeUtility::current_time();
+      pl_internal_time_split_point_ = 0;
+      pl_cur_query_start_time_bak_ = 0;
       wait_timeout_ = 0;
       interactive_timeout_ = 0;
       max_packet_size_ = MultiThreadData::DEFAULT_MAX_PACKET_SIZE;
@@ -1758,6 +1790,8 @@ protected:
     obmysql::ObMySQLCmd mysql_cmd_;
     int64_t cur_query_start_time_;
     int64_t cur_state_start_time_;
+    int64_t pl_internal_time_split_point_;
+    int64_t pl_cur_query_start_time_bak_;
     int64_t wait_timeout_;
     int64_t interactive_timeout_;
     int64_t max_packet_size_;
@@ -2515,6 +2549,7 @@ private:
   int64_t current_execution_id_;
   common::ObCurTraceId::TraceId last_trace_id_;
   common::ObCurTraceId::TraceId curr_trace_id_;
+  common::ObCurTraceId::TraceId top_trace_id_;
   common::ObString app_trace_id_;
   uint64_t database_id_;
   ObQueryRetryInfo retry_info_;
@@ -2628,9 +2663,8 @@ private:
   // In addition, in situations such as PL execution, the external session will be passed to the inner sql Connection. In this case, it is not considered an inner session.
   // There are differences between the two in terms of ASH statistics and so on, so they should be distinguished.
   int64_t sql_mem_used_;
-  bool has_ccl_rule_;
-  int64_t last_ccl_cnt_update_time_;
   bool shadow_top_query_string_;
+  bool use_pl_inner_info_string_;
 public:
   bool get_enable_hyperscan_regexp_engine() const;
   int8_t get_min_const_integer_precision() const;

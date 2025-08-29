@@ -155,7 +155,8 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       sys_var_config_hash_val_(0),
       is_real_inner_session_(false),
       sql_mem_used_(0),
-      shadow_top_query_string_(false)
+      shadow_top_query_string_(false),
+      use_pl_inner_info_string_(false)
 {
   thread_data_.reset();
   MEMSET(sys_vars_, 0, sizeof(sys_vars_));
@@ -494,6 +495,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   current_execution_id_ = -1;
   last_trace_id_.reset();
   curr_trace_id_.reset();
+  top_trace_id_.reset();
   app_trace_id_.reset();
   database_id_ = OB_INVALID_ID;
   retry_info_.reset();
@@ -547,6 +549,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   sys_var_config_hash_val_ = 0;
   is_real_inner_session_ = false;
   sql_mem_used_ = 0;
+  use_pl_inner_info_string_ = false;
 }
 
 int ObBasicSessionInfo::reset_timezone()
@@ -6294,6 +6297,13 @@ int ObBasicSessionInfo::store_top_query_string(const ObString &stmt)
 {
   LockGuard lock_guard(thread_data_mutex_);
   return store_query_string_(stmt, thread_data_.top_query_buf_len_, thread_data_.top_query_, thread_data_.top_query_len_);
+}
+
+void ObBasicSessionInfo::reset_pl_spi_query_info(int64_t time) {
+  LockGuard lock_guard(thread_data_mutex_);
+  thread_data_.cur_query_start_time_ = time;
+  thread_data_.pl_internal_time_split_point_ =  ObTimeUtility::current_time();
+  use_pl_inner_info_string_ = true;
 }
 
 int ObBasicSessionInfo::store_query_string_(const ObString &stmt, int64_t& buf_len, char *& query,  volatile int64_t& query_len)

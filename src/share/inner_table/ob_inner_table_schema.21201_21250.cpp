@@ -1080,7 +1080,7 @@ int ObInnerTableSchema::gv_ob_processlist_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT   SVR_IP, SVR_PORT, SQL_PORT,   ID,   USER,   HOST,   DB,   TENANT,   COMMAND,   TIME,   TOTAL_TIME,   STATE,   INFO,   PROXY_SESSID,   MASTER_SESSID,   USER_CLIENT_IP,   USER_HOST,   RETRY_CNT,   RETRY_INFO,   SQL_ID,   TRANS_ID,   THREAD_ID,   SSL_CIPHER,   TRACE_ID,   TRANS_STATE,   ACTION,   MODULE,   CLIENT_INFO,   LEVEL,   SAMPLE_PERCENTAGE,   RECORD_POLICY,   LB_VID,   LB_VIP,   LB_VPORT,   IN_BYTES,   OUT_BYTES,   USER_CLIENT_PORT,   PROXY_USER,   SERVICE_NAME,   cast(total_cpu_time as SIGNED) as TOTAL_CPU_TIME,   TOP_INFO,   MEMORY_USAGE FROM oceanbase.__all_virtual_processlist )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT   SVR_IP, SVR_PORT, SQL_PORT,   ID,   USER,   HOST,   DB,   TENANT,   COMMAND,   TIME,   TOTAL_TIME,   STATE,   INFO,   PROXY_SESSID,   MASTER_SESSID,   USER_CLIENT_IP,   USER_HOST,   RETRY_CNT,   RETRY_INFO,   SQL_ID,   TRANS_ID,   THREAD_ID,   SSL_CIPHER,   TRACE_ID,   TRANS_STATE,   ACTION,   MODULE,   CLIENT_INFO,   LEVEL,   SAMPLE_PERCENTAGE,   RECORD_POLICY,   LB_VID,   LB_VIP,   LB_VPORT,   IN_BYTES,   OUT_BYTES,   USER_CLIENT_PORT,   PROXY_USER,   SERVICE_NAME,   cast(total_cpu_time as SIGNED) as TOTAL_CPU_TIME,   TOP_INFO,   MEMORY_USAGE,   TOP_TIME,   TOP_TRACE_ID FROM oceanbase.__all_virtual_processlist )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1131,7 +1131,7 @@ int ObInnerTableSchema::v_ob_processlist_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP, SVR_PORT, SQL_PORT,     ID,     USER,     HOST,     DB,     TENANT,     COMMAND,     TIME,     TOTAL_TIME,     STATE,     INFO,     PROXY_SESSID,     MASTER_SESSID,     USER_CLIENT_IP,     USER_HOST,     RETRY_CNT,     RETRY_INFO,     SQL_ID,     TRANS_ID,     THREAD_ID,     SSL_CIPHER,     TRACE_ID,     TRANS_STATE,     ACTION,     MODULE,     CLIENT_INFO,     LEVEL,     SAMPLE_PERCENTAGE,     RECORD_POLICY,     LB_VID,     LB_VIP,     LB_VPORT,     IN_BYTES,     OUT_BYTES,     USER_CLIENT_PORT,     PROXY_USER,     SERVICE_NAME,     cast(total_cpu_time as SIGNED) as TOTAL_CPU_TIME,     TOP_INFO,     MEMORY_USAGE     FROM oceanbase.GV$OB_PROCESSLIST     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP, SVR_PORT, SQL_PORT,     ID,     USER,     HOST,     DB,     TENANT,     COMMAND,     TIME,     TOTAL_TIME,     STATE,     INFO,     PROXY_SESSID,     MASTER_SESSID,     USER_CLIENT_IP,     USER_HOST,     RETRY_CNT,     RETRY_INFO,     SQL_ID,     TRANS_ID,     THREAD_ID,     SSL_CIPHER,     TRACE_ID,     TRANS_STATE,     ACTION,     MODULE,     CLIENT_INFO,     LEVEL,     SAMPLE_PERCENTAGE,     RECORD_POLICY,     LB_VID,     LB_VIP,     LB_VPORT,     IN_BYTES,     OUT_BYTES,     USER_CLIENT_PORT,     PROXY_USER,     SERVICE_NAME,     cast(total_cpu_time as SIGNED) as TOTAL_CPU_TIME,     TOP_INFO,     MEMORY_USAGE,     TOP_TIME,     TOP_TRACE_ID     FROM oceanbase.GV$OB_PROCESSLIST     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
