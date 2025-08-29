@@ -4419,5 +4419,34 @@ int ObDDLScheduler::update_ddl_task_active_time(const ObDDLTaskID &task_id)
   return ret;
 }
 
+int ObDDLScheduler::notify_refresh_related_mviews_task_end(const ObDDLTaskKey &task_key, const int ret_code) {
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!task_key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(task_key), K(ret_code));
+  } else if (OB_FAIL(task_queue_.modify_task(task_key, [&ret_code](ObDDLTask &task) -> int {
+    int ret = OB_SUCCESS;
+    const int64_t task_type = task.get_task_type();
+    switch (task_type) {
+      case ObDDLType::DDL_REPLACE_MLOG:
+        if (OB_FAIL(static_cast<ObRebuildIndexTask *>(&task)->notify_refresh_related_mviews_task_end(ret_code))) {
+          LOG_WARN("update complete sstable job status", K(ret), K(ret_code));
+        }
+        break;
+      default:
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not supported ddl task", K(ret), K(task));
+        break;
+      }
+      return ret;
+    }))) {
+    LOG_WARN("failed to modify task", K(ret));
+  }
+  return ret;
+}
+
 } // end namespace rootserver
 } // end namespace oceanbase

@@ -215,7 +215,7 @@ enum ObDDLTaskStatus { // FARM COMPAT WHITELIST
   GENERATE_PQ_CENTROID_TABLE_SCHEMA = 44,
   WAIT_PQ_CENTROID_TABLE_COMPLEMENT = 45,
   LOAD_DICTIONARY = 46,
-  PURGE_OLD_MLOG = 47,
+  REFRESH_RELATED_MVIEWS = 47,
   DROP_VID_ROWKEY_INDEX_TABLE = 50,
   DROP_ROWKEY_VID_INDEX_TABLE = 51,
   BUILD_MLOG = 52,
@@ -392,8 +392,8 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
     case ObDDLTaskStatus::WAIT_PQ_CENTROID_TABLE_COMPLEMENT:
       str = "WAIT_PQ_CENTROID_TABLE_COMPLEMENT";
       break;
-    case ObDDLTaskStatus::PURGE_OLD_MLOG:
-      str = "PURGE_OLD_MLOG";
+    case ObDDLTaskStatus::REFRESH_RELATED_MVIEWS:
+      str = "REFRESH_RELATED_MVIEWS";
       break;
     case ObDDLTaskStatus::DROP_VID_ROWKEY_INDEX_TABLE:
       str = "DROP_VID_ROWKEY_INDEX_TABLE";

@@ -33,7 +33,8 @@ using namespace oceanbase::share::schema;
 using namespace oceanbase::sql;
 
 ObRebuildIndexTask::ObRebuildIndexTask()
-  : ObDDLTask(DDL_REBUILD_INDEX), rebuild_index_arg_(), index_build_task_id_(-1), index_drop_task_id_(-1), new_index_id_(OB_INVALID_ID), target_object_name_()
+  : ObDDLTask(DDL_REBUILD_INDEX), rebuild_index_arg_(), index_build_task_id_(-1), index_drop_task_id_(-1), new_index_id_(OB_INVALID_ID), target_object_name_(),
+    refresh_related_mviews_ret_code_(INT64_MAX), update_refresh_related_mviews_job_time_(0)
 {
 }
 
@@ -547,23 +548,19 @@ int ObRebuildIndexTask::get_new_index_table_id(
   return ret;
 }
 
-ERRSIM_POINT_DEF(ERRSIM_PURGE_OLD_MLOG_ERROR);
-int ObRebuildIndexTask::purge_old_mlog(const ObDDLTaskStatus new_status)
+/**
+ * Refresh related mviews after creating the new mlog table, to ensure that all these mviews having
+ * last_refresh_scn >= last_purge_scn of the new mlog table. In this way, the increment data in the
+ * new mlog table is enough for next refresh. So we can safely replace the old mlog table with the new one.
+ */
+ERRSIM_POINT_DEF(ERRSIM_REFRESH_RELATED_MVIEWS_ERROR);
+int ObRebuildIndexTask::refresh_related_mviews(const ObDDLTaskStatus new_status)
 {
   int ret = OB_SUCCESS;
-  bool state_finished = false;
-  ObMultiVersionSchemaService &schema_service = root_service_->get_schema_service();
-  ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *old_mlog_schema = nullptr;
-  const ObTableSchema *new_mlog_schema = nullptr;
-  const ObDatabaseSchema *db_schema = nullptr;
   const uint64_t old_mlog_tid = target_object_id_;
   const uint64_t new_mlog_tid = new_index_id_;
-  bool oracle_mode = false;
-  const ObSysVariableSchema *sys_variable_schema = nullptr;
-  ObMLogInfo old_mlog_info;
-  ObMLogInfo new_mlog_info;
   uint64_t data_version = 0;
+  bool is_refresh_mviews_end = false;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -573,164 +570,27 @@ int ObRebuildIndexTask::purge_old_mlog(const ObDDLTaskStatus new_status)
   } else if (data_version < DATA_VERSION_4_3_5_3) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("rebuild mlog is not supported before 4.3.5.3");
-  } else if (OB_UNLIKELY(ERRSIM_PURGE_OLD_MLOG_ERROR)) {
+  } else if (OB_UNLIKELY(ERRSIM_REFRESH_RELATED_MVIEWS_ERROR)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("errsim ERRSIM_PURGE_OLD_MLOG_ERROR", KR(ret));
-  } else if (ObDDLTaskStatus::PURGE_OLD_MLOG != task_status_) {
+    LOG_WARN("errsim ERRSIM_REFRESH_RELATED_MVIEWS_ERROR", KR(ret));
+  } else if (ObDDLTaskStatus::REFRESH_RELATED_MVIEWS != task_status_) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("task status not match", KR(ret), K(task_status_));
-  } else if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
-    LOG_WARN("failed to get tanant schema guard", K(ret), K(tenant_id_));
-  } else if (OB_FAIL(
-                 schema_guard.get_table_schema(tenant_id_, old_mlog_tid, old_mlog_schema))) {
-    LOG_WARN("failed to get table schema", K(ret), K(tenant_id_), K(old_mlog_tid));
-  } else if (OB_ISNULL(old_mlog_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("mlog schema is null", K(ret), K(tenant_id_), K(old_mlog_tid));
-  } else if (!old_mlog_schema->is_mlog_table()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("not a mlog table", K(ret), K(tenant_id_), K(old_mlog_tid));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, new_mlog_tid, new_mlog_schema))) {
-    LOG_WARN("failed to get table schema", K(ret), K(tenant_id_), K(new_mlog_tid));
-  } else if (OB_ISNULL(new_mlog_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("base table schema is null", K(ret), K(tenant_id_), K(new_mlog_tid));
-  } else if (OB_FAIL(schema_guard.get_database_schema(
-                 tenant_id_, new_mlog_schema->get_database_id(), db_schema))) {
-    LOG_WARN("failed to get db schema", KR(ret), K(tenant_id_),
-             K(new_mlog_schema->get_database_id()));
-  } else if (OB_ISNULL(db_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("database not exist", KR(ret), K(tenant_id_), K(new_mlog_schema->get_database_id()));
-  } else if (OB_FAIL(schema_guard.get_sys_variable_schema(tenant_id_, sys_variable_schema))) {
-    LOG_WARN("get sys variable schema failed", K(ret), K(tenant_id_));
-  } else if (nullptr == sys_variable_schema) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sys variable schema is NULL", K(ret));
-  } else if (OB_FAIL(sys_variable_schema->get_oracle_mode(oracle_mode))) {
-    LOG_WARN("get oracle mode failed", K(ret));
-  } else if (OB_FAIL(ObMLogInfo::fetch_mlog_info(*GCTX.sql_proxy_, tenant_id_, old_mlog_tid,
-                                                 old_mlog_info, false /*for_update*/))) {
-    LOG_WARN("failed to fetch mlog info", KR(ret), K(tenant_id_), K(old_mlog_tid));
-  } else if (OB_FAIL(ObMLogInfo::fetch_mlog_info(*GCTX.sql_proxy_, tenant_id_, new_mlog_tid,
-                                                 new_mlog_info, false /*for_update*/))) {
-    LOG_WARN("failed to fetch mlog info", KR(ret), K(tenant_id_), K(new_mlog_tid));
-  } else if (old_mlog_info.get_last_purge_scn() >= new_mlog_info.get_last_purge_scn()) {
-    // when the old_mlog_info's last_purge_scn is greater than the new_mlog_info's last_purge_scn,
-    // the data in new mlog is a superset of the old mlog. we can directly return.
-    LOG_INFO("the old mlog is already satisfied to be replaced", K(old_mlog_info), K(new_mlog_info));
-    state_finished = true;
-  } else {
-    ObSEArray<uint64_t, 4> relevent_mv_tables;
-    const uint64_t base_table_id = new_mlog_schema->get_data_table_id();
-    const ObTableSchema *base_table_schema = nullptr;
-    common::ObCommonSqlProxy *mview_pl_proxy = nullptr;
-    if (oracle_mode) {
-      mview_pl_proxy = &root_service_->get_oracle_sql_proxy();
+  } else if (OB_FAIL(check_refresh_related_mviews_end(is_refresh_mviews_end))) {
+    LOG_WARN("failed to check purge mlog end", KR(ret));
+  } else if (!is_refresh_mviews_end && update_refresh_related_mviews_job_time_ == 0) {
+    ObRefreshRelatedMviewsTask task(tenant_id_, object_id_, old_mlog_tid, new_mlog_tid, schema_version_, trace_id_, task_id_);
+    if (OB_FAIL(root_service_->submit_ddl_single_replica_build_task(task))) {
+      LOG_WARN("failed to submit purge mlog task", KR(ret));
     } else {
-      mview_pl_proxy = GCTX.sql_proxy_;
-    }
-    // 1. get all of relevant mviews of the base table
-    // 2. invoke fast refresh for the mviews which have fast-refresh or on-query-computation flags
-    // 3. invoke purge for the old mlog
-    if (OB_ISNULL(mview_pl_proxy)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("mview pl proxy is null", K(ret));
-    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, base_table_id, base_table_schema))) {
-      LOG_WARN("failed to get table schema", K(ret), K(tenant_id_), K(base_table_id));
-    } else if (OB_ISNULL(base_table_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("base table schema is null", K(ret), K(tenant_id_), K(base_table_id));
-    } else if (OB_FAIL(sql::ObMVDepUtils::get_referring_mv_of_base_table(
-                   *GCTX.sql_proxy_, tenant_id_, base_table_id, relevent_mv_tables))) {
-      LOG_WARN("failed to get referring mv", KR(ret), K(tenant_id_), K(base_table_id));
-    } else {
-      for (int i = 0; OB_SUCC(ret) && i < relevent_mv_tables.count(); ++i) {
-        uint64_t mv_id = relevent_mv_tables.at(i);
-        const ObTableSchema *mv_schema = nullptr;
-        ObMViewInfo mview_info;
-        if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, mv_id, mv_schema))) {
-          LOG_WARN("failed to get mv schema", K(ret), K(tenant_id_), K(mv_id));
-        } else if (OB_ISNULL(mv_schema)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("mv schema is null", K(ret), K(tenant_id_), K(mv_id));
-        } else if (!mv_schema->mv_available()) {
-          // ignore
-        } else if (OB_FAIL(ObMViewInfo::fetch_mview_info(*GCTX.sql_proxy_, tenant_id_, mv_id,
-                                                         mview_info, false))) {
-          LOG_WARN("failed to get mview info", KR(ret), K(tenant_id_), K(mv_id));
-        } else if (!mview_info.is_valid()) {
-          // ignore
-        } else if (ObMVRefreshMethod::FAST != mview_info.get_refresh_method() &&
-                   ObMVRefreshMethod::FORCE != mview_info.get_refresh_method() &&
-                   !mv_schema->mv_on_query_computation()) {
-          // ignore
-        } else {
-          ObSqlString sql;
-          int64_t affected_rows = 0;
-          if (OB_FAIL(sql.assign_fmt("CALL DBMS_MVIEW.refresh('%s.%s')",
-                                     db_schema->get_database_name_str().ptr(),
-                                     mv_schema->get_table_name_str().ptr()))) {
-            LOG_WARN("failed to assign sql", K(ret));
-          } else if (OB_FAIL(mview_pl_proxy->write(tenant_id_, sql.ptr(), affected_rows))) {
-            LOG_WARN("failed to write sql", K(ret), K(sql), K(affected_rows));
-          }
-        }
-      }
-
-      if (OB_FAIL(ret)) {
-      } else {
-        ObString purge_table_name = base_table_schema->get_table_name_str();
-        ObSqlString sql;
-        int64_t affected_rows = 0;
-        if (base_table_schema->mv_container_table()) {
-          uint64_t mview_id = OB_INVALID_ID;
-          if (OB_FAIL(ObMViewInfo::get_mview_id_from_container_id(
-                  *GCTX.sql_proxy_, tenant_id_, base_table_schema->get_table_id(), mview_id))) {
-            LOG_WARN("failed to get mview_id", KR(ret), K(purge_table_name));
-          } else {
-            const ObTableSchema *mview_schema = nullptr;
-            if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, mview_id, mview_schema))) {
-              LOG_WARN("failed to get table schema", KR(ret), K(tenant_id_));
-            } else if (OB_ISNULL(mview_schema)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected null container table schema", KR(ret), KP(mview_schema));
-            } else {
-              purge_table_name = mview_schema->get_table_name();
-            }
-          }
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(sql.assign_fmt("CALL DBMS_MVIEW.purge_log('%s.%s') ",
-                                          db_schema->get_database_name_str().ptr(),
-                                          purge_table_name.ptr()))) {
-          LOG_WARN("failed to assign sql", K(ret));
-        } else if (OB_FAIL(mview_pl_proxy->write(tenant_id_, sql.ptr(), affected_rows))) {
-          LOG_WARN("failed to write sql", K(ret), K(sql), K(affected_rows));
-        }
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-    } else {
-      if (OB_FAIL(ObMLogInfo::fetch_mlog_info(*GCTX.sql_proxy_, tenant_id_, old_mlog_tid,
-                                              old_mlog_info, false /*for_update*/))) {
-        LOG_WARN("failed to fetch mlog info", KR(ret), K(tenant_id_), K(old_mlog_tid));
-      } else if (old_mlog_info.get_last_purge_scn() < new_mlog_info.get_last_purge_scn()) {
-        // ensure old_mlog_info's last_purge_scn is greater than the new_mlog_info's last_purge_scn,
-        // so we can safely go to next state.
-        ret = OB_EAGAIN;
-        LOG_WARN("the old mlog has not been purged, try again later");
-      } else {
-        state_finished = true;
-      }
+      update_refresh_related_mviews_job_time_ = ObTimeUtility::current_time();
+      LOG_INFO("submit purge mlog task success", KR(ret));
     }
   }
-
-  if (state_finished || OB_FAIL(ret)) {
-    DEBUG_SYNC(REBUILD_INDEX_WAIT_PURGE_OLD_MLOG);
+  if (is_refresh_mviews_end || OB_FAIL(ret)) {
+    DEBUG_SYNC(REBUILD_INDEX_WAIT_REFRESH_RELATED_MVIEWS);
     (void)switch_status(new_status, true, ret);
-    LOG_INFO("purge_old_mlog finished", KR(ret), K(*this), K(old_mlog_info), K(new_mlog_info));
+    LOG_INFO("refresh_related_mviews finished", KR(ret), K(*this));
   }
 
   return ret;
@@ -1035,12 +895,12 @@ int ObRebuildIndexTask::process()
         }
         break;
       case ObDDLTaskStatus::REBUILD_SCHEMA:
-        if (OB_FAIL(create_and_wait_rebuild_task_finish((rebuild_index_arg_.is_rebuild_mlog() ? PURGE_OLD_MLOG : SWITCH_INDEX_NAME)))) {
+        if (OB_FAIL(create_and_wait_rebuild_task_finish((rebuild_index_arg_.is_rebuild_mlog() ? REFRESH_RELATED_MVIEWS : SWITCH_INDEX_NAME)))) {
           LOG_WARN("rebuild index failed", KR(ret));
         }
         break;
-      case ObDDLTaskStatus::PURGE_OLD_MLOG:
-        if (OB_FAIL(purge_old_mlog(SWITCH_INDEX_NAME))) {
+      case ObDDLTaskStatus::REFRESH_RELATED_MVIEWS:
+        if (OB_FAIL(refresh_related_mviews(SWITCH_INDEX_NAME))) {
           LOG_WARN("purge old mlog failed", KR(ret));
         }
         break;
@@ -1155,4 +1015,167 @@ int64_t ObRebuildIndexTask::get_serialize_param_size() const
               new_index_id_,
               target_object_name_);
   return len;
+}
+
+int ObRebuildIndexTask::notify_refresh_related_mviews_task_end(const int64_t ret_code)
+{
+  int ret = OB_SUCCESS;
+  refresh_related_mviews_ret_code_ = ret_code;
+  return ret;
+}
+
+int ObRebuildIndexTask::check_refresh_related_mviews_end(bool &is_end)
+{
+  int ret = OB_SUCCESS;
+  if (INT64_MAX == refresh_related_mviews_ret_code_) {
+    // not finish
+  } else {
+    is_end = true;
+    ret_code_ = refresh_related_mviews_ret_code_;
+    ret = ret_code_;
+  }
+  return ret;
+}
+
+int ObRefreshRelatedMviewsTask::process() {
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObTraceIdGuard trace_id_guard(trace_id_);
+  ObDDLTaskKey task_key(tenant_id_, old_mlog_tid_, schema_version_);
+  ObRootService *root_service = GCTX.root_service_;
+
+  if (OB_ISNULL(root_service)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  } else if (OB_UNLIKELY(tenant_id_ == OB_INVALID_ID || base_table_id_ == OB_INVALID_ID || old_mlog_tid_ == OB_INVALID_ID || new_mlog_tid_ == OB_INVALID_ID)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id_), K(base_table_id_), K(old_mlog_tid_), K(new_mlog_tid_));
+  } else {
+    ObDDLService &ddl_service = root_service->get_ddl_service();
+    ObMultiVersionSchemaService &schema_service = ddl_service.get_schema_service();
+    ObSchemaGetterGuard schema_guard;
+    const ObDatabaseSchema *db_schema = nullptr;
+    const ObTableSchema *base_table_schema = nullptr;
+    const ObTableSchema *old_mlog_schema = nullptr;
+    const ObTableSchema *new_mlog_schema = nullptr;
+    common::ObCommonSqlProxy *mview_pl_proxy = nullptr;
+    ObMLogInfo new_mlog_info;
+    ObSEArray<ObDependencyInfo, 16> dependency_infos;
+    const ObSysVariableSchema *sys_variable_schema = NULL;
+    bool oracle_mode = false;
+
+    if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
+      LOG_WARN("failed to get schema guard", KR(ret), K(tenant_id_));
+    } else if (OB_FAIL(schema_guard.get_sys_variable_schema(tenant_id_, sys_variable_schema))) {
+      LOG_WARN("get sys variable schema failed", KR(ret), K(tenant_id_));
+    } else if (NULL == sys_variable_schema) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sys variable schema is NULL", KR(ret));
+    } else if (OB_FAIL(sys_variable_schema->get_oracle_mode(oracle_mode))) {
+      LOG_WARN("get oracle mode failed", KR(ret));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, base_table_id_, base_table_schema))) {
+      LOG_WARN("failed to get table schema", KR(ret), K(tenant_id_), K(base_table_id_));
+    } else if (OB_ISNULL(base_table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("base table schema is null", KR(ret), K(tenant_id_), K(base_table_id_));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, old_mlog_tid_, old_mlog_schema))) {
+      LOG_WARN("failed to get table schema", KR(ret), K(tenant_id_), K(old_mlog_tid_));
+    } else if (OB_ISNULL(old_mlog_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("mlog schema is null", KR(ret), K(tenant_id_), K(old_mlog_tid_));
+    } else if (!old_mlog_schema->is_mlog_table()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("not a mlog table", KR(ret), K(tenant_id_), K(old_mlog_tid_));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, new_mlog_tid_, new_mlog_schema))) {
+      LOG_WARN("failed to get table schema", KR(ret), K(tenant_id_), K(new_mlog_tid_));
+    } else if (OB_ISNULL(new_mlog_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("base table schema is null", KR(ret), K(tenant_id_), K(new_mlog_tid_));
+    } else if (!new_mlog_schema->is_tmp_mlog_table()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("not a tmp mlog table", KR(ret), K(tenant_id_), K(new_mlog_tid_));
+    } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id_, new_mlog_schema->get_database_id(), db_schema))) {
+      LOG_WARN("failed to get db schema", KR(ret), K(tenant_id_), K(new_mlog_schema->get_database_id()));
+    } else if (OB_ISNULL(db_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("database not exist", KR(ret), K(tenant_id_), K(new_mlog_schema->get_database_id()));
+    } else if (OB_FAIL(ObMLogInfo::fetch_mlog_info(*GCTX.sql_proxy_, tenant_id_, new_mlog_tid_,
+                                                   new_mlog_info, false /*for_update*/))) {
+      LOG_WARN("failed to fetch mlog info", KR(ret), K(tenant_id_), K(new_mlog_tid_));
+    } else if (OB_FAIL(ObDependencyInfo::collect_dep_infos(tenant_id_, base_table_id_, *GCTX.sql_proxy_, dependency_infos))) {
+      LOG_WARN("failed to collect dep infos", KR(ret), K(tenant_id_), K(base_table_id_));
+    } else {
+      if (oracle_mode) {
+        mview_pl_proxy = &root_service->get_oracle_sql_proxy();
+      } else {
+        mview_pl_proxy = GCTX.sql_proxy_;
+      }
+      for (int i = 0; OB_SUCC(ret) && i < dependency_infos.count(); ++i) {
+        const ObDependencyInfo &dependency_info = dependency_infos.at(i);
+        if (ObObjectType::VIEW == dependency_info.get_dep_obj_type()) {
+          const uint64_t mv_id = dependency_info.get_dep_obj_id();
+          const ObTableSchema *mv_schema = nullptr;
+          ObMViewInfo mview_info;
+          if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, mv_id, mv_schema))) {
+            LOG_WARN("failed to get mv schema", KR(ret), K(tenant_id_), K(mv_id));
+          } else if (OB_ISNULL(mv_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("mv schema is null", KR(ret), K(tenant_id_), K(mv_id));
+          } else if (!mv_schema->is_materialized_view()) {
+            // ignore non-mview tables
+          } else if (OB_FAIL(ObMViewInfo::fetch_mview_info(*GCTX.sql_proxy_, tenant_id_, mv_id, mview_info, false))) {
+            LOG_WARN("failed to get mview info", KR(ret), K(tenant_id_), K(mv_id));
+          } else if (!mview_info.is_valid()) {
+            // ignore
+          } else if (ObMVRefreshMethod::FAST != mview_info.get_refresh_method() &&
+                     ObMVRefreshMethod::FORCE != mview_info.get_refresh_method() &&
+                     !mv_schema->mv_on_query_computation()) {
+            // ignore
+          } else if (mview_info.get_last_refresh_scn() >= new_mlog_info.get_last_purge_scn()) {
+            // already refreshed
+          } else {
+            ObSqlString sql;
+            int64_t affected_rows = 0;
+            if (OB_FAIL(sql.assign_fmt("CALL DBMS_MVIEW.refresh('%s.%s', 'f')",
+                                       db_schema->get_database_name_str().ptr(),
+                                       mv_schema->get_table_name_str().ptr()))) {
+              LOG_WARN("failed to assign sql", KR(ret));
+            } else if (OB_FAIL(mview_pl_proxy->write(tenant_id_, sql.ptr(), affected_rows))) {
+              if (OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH == ret && ObMVRefreshMethod::FORCE == mview_info.get_refresh_method()) {
+                ret = OB_SUCCESS;
+                LOG_INFO("ignore mview can not fast refresh for force mview", KR(ret), K(sql), K(mview_info));
+              } else {
+                LOG_WARN("failed to write sql", KR(ret), K(sql), K(mview_info));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (OB_TMP_FAIL(ObSysDDLSchedulerUtil::notify_refresh_related_mviews_task_end(task_key, ret))) {
+    LOG_WARN("failed to finish purge mlog task", KR(tmp_ret), KR(ret));
+  }
+
+  return ret;
+}
+
+ObAsyncTask *ObRefreshRelatedMviewsTask::deep_copy(char *buf, const int64_t buf_size) const
+{
+  int ret = OB_SUCCESS;
+  ObRefreshRelatedMviewsTask *new_task = nullptr;
+  if (OB_ISNULL(buf) || buf_size < get_deep_copy_size()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), KP(buf), "deep_copy_size", get_deep_copy_size(), K(buf_size));
+  } else {
+    new_task = new (buf) ObRefreshRelatedMviewsTask(tenant_id_,
+                                         base_table_id_,
+                                         old_mlog_tid_,
+                                         new_mlog_tid_,
+                                         schema_version_,
+                                         trace_id_,
+                                         task_id_);
+  }
+  return new_task;
 }
