@@ -134,16 +134,20 @@ int ObBasicScheduleTabletFunc::check_with_schedule_scn(
   const bool weak_read_ts_ready = ls_status_.weak_read_ts_.get_val_for_tx() >= schedule_scn;
 
   if (need_merge) {
-    can_merge = (tablet_status.can_merge() &&
-                weak_read_ts_ready &&
-                tablet.get_snapshot_version() >= schedule_scn);
-    if (!can_merge && OB_FAIL(check_need_force_freeze(tablet, schedule_scn, need_force_freeze))) {
-      LOG_WARN("failed to check need force freeze", KR(ret), K(tablet_id), K(schedule_scn));
-    } else if (need_force_freeze) {
-      tablet_cnt_.force_freeze_cnt_++;
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(freeze_param_.tablet_info_array_.push_back(ObTabletSchedulePair(tablet_id, schedule_scn, co_major_merge_type)))) {
-        LOG_WARN("failed to push back tablet_id for batch_freeze", KR(tmp_ret), K(tablet_id));
+    const bool tablet_and_weak_read_ts_ready = (tablet_status.can_merge() && weak_read_ts_ready);
+    if (tablet_and_weak_read_ts_ready) {
+      if (tablet.get_snapshot_version() >= schedule_scn) {
+        can_merge = true;
+      } else { // only check force freeze when snapshot version is less than schedule scn
+        if (OB_FAIL(check_need_force_freeze(tablet, schedule_scn, need_force_freeze))) {
+          LOG_WARN("failed to check need force freeze", KR(ret), K(tablet_id), K(schedule_scn));
+        } else if (need_force_freeze) {
+          tablet_cnt_.force_freeze_cnt_++;
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(freeze_param_.tablet_info_array_.push_back(ObTabletSchedulePair(tablet_id, schedule_scn, co_major_merge_type)))) {
+            LOG_WARN("failed to push back tablet_id for batch_freeze", KR(tmp_ret), K(tablet_id));
+          }
+        }
       }
     }
   }
