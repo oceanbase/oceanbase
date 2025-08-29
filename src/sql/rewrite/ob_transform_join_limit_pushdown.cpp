@@ -332,21 +332,10 @@ int ObTransformJoinLimitPushDown::split_cartesian_tables(ObSelectStmt *select_st
   if (OB_ISNULL(select_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::check_contain_correlated_function_table(select_stmt,
-                                                                               is_contain))) {
-    LOG_WARN("failed to check contain correlated function table", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::check_contain_correlated_table(select_stmt, is_contain))) {
+    LOG_WARN("failed to check contain correlated table", K(ret));
   } else if (is_contain) {
-    OPT_TRACE("contain correlated function table, do not push down limit");
-  } else if (OB_FAIL(ObTransformUtils::check_contain_correlated_json_table(select_stmt,
-                                                                           is_contain))) {
-    LOG_WARN("failed to check contain correlated json table", K(ret));
-  } else if (is_contain) {
-    OPT_TRACE("contain correlated json table, do not push down limit");
-  } else if (OB_FAIL(ObTransformUtils::check_contain_correlated_lateral_table(select_stmt,
-                                                                              is_contain))) {
-    LOG_WARN("failed to check contain correlated lateral table", K(ret));
-  } else if (is_contain) {
-    OPT_TRACE("contain correlated lateral derived table, do not push down limit");
+    OPT_TRACE("contain correlated derived table, do not push down limit");
   } else {
     int64_t N = select_stmt->get_from_item_size();
     UnionFind uf(N);

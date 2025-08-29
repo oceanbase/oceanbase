@@ -162,7 +162,7 @@ int ObTransformGroupByPushdown::check_groupby_push_down_validity(ObSelectStmt *s
   int ret = OB_SUCCESS;
   bool has_rownum = false;
   bool contain_inner_table = false;
-  bool contain_lateral_table = false;
+  bool contain_correlated_table = false;
   is_valid = true;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
@@ -206,10 +206,9 @@ int ObTransformGroupByPushdown::check_groupby_push_down_validity(ObSelectStmt *s
     LOG_WARN("failed to check collation validity", K(ret));
   } else if (!is_valid) {
     // do nothing
-  } else if (OB_FAIL(ObTransformUtils::check_contain_correlated_lateral_table(stmt,
-                                                                              contain_lateral_table))) {
-    LOG_WARN("failed to check contain correlated lateral table", K(ret));
-  } else if (contain_lateral_table) {
+  } else if (OB_FAIL(ObTransformUtils::check_contain_correlated_table(stmt, contain_correlated_table))) {
+    LOG_WARN("failed to check contain correlated table", K(ret));
+  } else if (contain_correlated_table) {
     is_valid = false;
   }
   for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < stmt->get_aggr_item_size(); ++i) {
