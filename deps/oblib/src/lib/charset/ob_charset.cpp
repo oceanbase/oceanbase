@@ -1409,6 +1409,7 @@ int ObCharset::display_len(ObCollationType collation_type,
         int bytes = cs->cset->mb_wc(cs, &wc, buf + char_pos, buf + buf_size);
 
         if (bytes < 0) {
+          width = 1;
           found = true;
         } else {
           int w = 0;
