@@ -3075,7 +3075,9 @@ public:
       src_lob_tablet_ids_(),
       dest_lob_tablet_ids_(),
       task_type_(share::ObDDLType::DDL_INVALID),
-      src_ls_id_()
+      src_ls_id_(),
+      local_index_table_schemas_(),
+      lob_table_schemas_()
   {}
   virtual ~ObPartitionSplitArg() {}
   bool is_valid() const
@@ -3106,13 +3108,15 @@ public:
     task_type_ = share::ObDDLType::DDL_INVALID;
     ObDDLArg::reset();
     src_ls_id_.reset();
+    local_index_table_schemas_.reset();
+    lob_table_schemas_.reset();
   }
   INHERIT_TO_STRING_KV("ObDDLArg", ObDDLArg,
       K(src_tablet_id_), K(dest_tablet_ids_), K(local_index_table_ids_),
       K(local_index_schema_versions_), K(src_local_index_tablet_ids_),
       K(dest_local_index_tablet_ids_), K(lob_table_ids_), K(lob_schema_versions_),
       K(src_lob_tablet_ids_), K(dest_lob_tablet_ids_),
-      K(task_type_), K(src_ls_id_));
+      K(task_type_), K(src_ls_id_), K(local_index_table_schemas_), K(lob_table_schemas_));
 public:
   ObTabletID src_tablet_id_;
   ObSArray<ObTabletID> dest_tablet_ids_;
@@ -3126,6 +3130,8 @@ public:
   ObSArray<ObSArray<ObTabletID>> dest_lob_tablet_ids_;
   share::ObDDLType task_type_;
   share::ObLSID src_ls_id_;  // valid when data_version >= 4.3.5
+  ObSArray<ObTableSchema> local_index_table_schemas_;
+  ObSArray<ObTableSchema> lob_table_schemas_;
 };
 
 struct ObCleanSplittedTabletArg final

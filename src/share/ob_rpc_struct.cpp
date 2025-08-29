@@ -10351,6 +10351,10 @@ int ObPartitionSplitArg::assign(const ObPartitionSplitArg &other)
     LOG_WARN("failed to assign src lob tablet ids", K(ret));
   } else if (OB_FAIL(dest_lob_tablet_ids_.assign(other.dest_lob_tablet_ids_))) {
     LOG_WARN("failed to assign dest lob tablet ids", K(ret));
+  } else if (OB_FAIL(local_index_table_schemas_.assign(other.local_index_table_schemas_))) {
+    LOG_WARN("failed to assign local index table schemas", K(ret));
+  } else if (OB_FAIL(lob_table_schemas_.assign(other.lob_table_schemas_))) {
+    LOG_WARN("failed to assign lob table schemas", K(ret));
   }
   return ret;
 }
@@ -10367,7 +10371,9 @@ OB_SERIALIZE_MEMBER((ObPartitionSplitArg, ObDDLArg),
                     src_lob_tablet_ids_,
                     dest_lob_tablet_ids_,
                     task_type_,
-                    src_ls_id_);
+                    src_ls_id_,
+                    local_index_table_schemas_,
+                    lob_table_schemas_);
 
 int ObCleanSplittedTabletArg::assign(const ObCleanSplittedTabletArg &other)
 {

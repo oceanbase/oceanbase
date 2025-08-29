@@ -191,7 +191,10 @@ public:
       const int64_t data_format_version,
       ObStorageSchema *&storage_schema,
       ObIAllocator &allocator);
-  static int register_split_info_mds(rootserver::ObDDLService &ddl_service, const ObTabletSplitRegisterMdsArg &arg);
+  static int register_split_info_mds(const ObTabletSplitRegisterMdsArg &arg,
+                                     const ObPartitionSplitArg &partition_split_arg,
+                                     const uint64_t data_format_version,
+                                     rootserver::ObDDLService &ddl_service);
   static int persist_tablet_mds_on_demand(
       ObLS *ls,
       const ObTabletHandle &local_tablet_handle,

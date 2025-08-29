@@ -1092,25 +1092,29 @@ int ObTabletSplitUtil::get_storage_schema_from_mds(
   return ret;
 }
 
-int ObTabletSplitUtil::register_split_info_mds(rootserver::ObDDLService &ddl_service, const ObTabletSplitRegisterMdsArg &arg)
+int ObTabletSplitUtil::register_split_info_mds(const ObTabletSplitRegisterMdsArg &arg,
+                                               const ObPartitionSplitArg &partition_split_arg,
+                                               const uint64_t data_format_version,
+                                               rootserver::ObDDLService &ddl_service)
 {
   int ret = OB_SUCCESS;
   int64_t refreshed_schema_version = 0;
-  ObSchemaGetterGuard schema_guard;
   ObTabletSplitInfoMdsArg split_info_arg;
+  ObSchemaGetterGuard schema_guard;
   common::ObArenaAllocator allocator("regissplimds", OB_MALLOC_NORMAL_BLOCK_SIZE, common::OB_SERVER_TENANT_ID, ObCtxIds::DEFAULT_CTX_ID);
   common::ObMySQLTransaction trans;
-  if (OB_UNLIKELY(!arg.is_valid())) {
+  if (OB_UNLIKELY(!arg.is_valid() || !partition_split_arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret));
-  } else if (OB_ISNULL(GCTX.schema_service_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), KP(GCTX.schema_service_));
-  } else if (OB_FAIL(ddl_service.get_tenant_schema_guard_with_version_in_inner_table(arg.tenant_id_, schema_guard))) {
-    LOG_WARN("get schema guard failed", K(ret));
+    LOG_WARN("invalid argument", K(ret), K(arg), K(partition_split_arg));
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (DATA_VERSION_4_4_1_0 <= data_format_version && partition_split_arg.local_index_table_schemas_.count() + partition_split_arg.lob_table_schemas_.count() + 1/*main table schema count*/
+      != arg.split_info_array_.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("split info array count not match with table schemas count", K(ret), K(partition_split_arg), K(arg), K(arg.split_info_array_));
+  } else if (OB_FAIL(ddl_service.get_tenant_schema_guard_with_version_in_inner_table(arg.tenant_id_, schema_guard))) {
+    LOG_WARN("get schema guard failed", K(ret));
   } else {
     split_info_arg.ls_id_ = arg.ls_id_;
     split_info_arg.tenant_id_ = arg.tenant_id_;
@@ -1130,10 +1134,30 @@ int ObTabletSplitUtil::register_split_info_mds(rootserver::ObDDLService &ddl_ser
       bool is_data_table = i == 0;
       if (is_data_table) {
         table_schema = arg.table_schema_;
-      } else if ((is_lob && OB_FAIL(schema_guard.get_table_schema(arg.tenant_id_, split_info.lob_table_id_, table_schema)))) {
-        LOG_WARN("failed to get table schema", K(ret), K(arg.tenant_id_), K(split_info.lob_table_id_));
-      } else if (is_index && OB_FAIL(schema_guard.get_table_schema(arg.tenant_id_, split_info.table_id_, table_schema))) {
-        table_schema = arg.table_schema_;
+      } else if (is_index) {
+        if (DATA_VERSION_4_4_1_0 > data_format_version) {
+          if (OB_FAIL(schema_guard.get_table_schema(arg.tenant_id_, split_info.table_id_, table_schema))) {
+            LOG_WARN("failed to get table schema", K(ret), K(arg.tenant_id_), K(split_info.table_id_));
+          }
+        } else if (OB_UNLIKELY(i - index_tablet_start_idx >= partition_split_arg.local_index_table_schemas_.count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("index table schema count not match with split info array", K(ret), K(i - index_tablet_start_idx),
+              K(partition_split_arg.local_index_table_schemas_.count()), K(partition_split_arg.local_index_table_schemas_));
+        } else {
+          table_schema = &partition_split_arg.local_index_table_schemas_.at(i - index_tablet_start_idx);
+        }
+      } else if (is_lob) {
+        if (DATA_VERSION_4_4_1_0 > data_format_version) {
+          if (OB_FAIL(schema_guard.get_table_schema(arg.tenant_id_, split_info.lob_table_id_, table_schema))) {
+            LOG_WARN("failed to get table schema", K(ret), K(arg.tenant_id_), K(split_info.lob_table_id_));
+          }
+        } else if (OB_UNLIKELY(i - lob_tablet_start_idx >= partition_split_arg.lob_table_schemas_.count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("lob table schema count not match with split info array", K(ret), K(i - lob_tablet_start_idx),
+              K(partition_split_arg.lob_table_schemas_.count()));
+        } else {
+          table_schema = &partition_split_arg.lob_table_schemas_.at(i - lob_tablet_start_idx);
+        }
       }
       if (OB_FAIL(ret)) {
       } else if (OB_ISNULL(table_schema)) {

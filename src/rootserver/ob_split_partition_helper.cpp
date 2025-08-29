@@ -668,6 +668,8 @@ int ObSplitPartitionHelper::create_ddl_task_(
       }
     }
     // for aux tables, containing local index table, lob table.
+    ObSArray<ObTableSchema> &local_index_table_schemas = split_arg.local_index_table_schemas_;
+    ObSArray<ObTableSchema> &lob_table_schemas = split_arg.lob_table_schemas_;
     for (int64_t i = 1/* 0 is main table*/; OB_SUCC(ret) && i < inc_table_schemas.count(); i++) {
       const ObTableSchema *aux_table_schema = inc_table_schemas.at(i);
       uint64_t table_id = aux_table_schema->get_table_id();
@@ -692,11 +694,23 @@ int ObSplitPartitionHelper::create_ddl_task_(
           table_schema_versions = &split_arg.local_index_schema_versions_;
           src_tablet_ids = &split_arg.src_local_index_tablet_ids_;
           dest_tablets_ids = &split_arg.dest_local_index_tablet_ids_;
+          if (OB_FAIL(local_index_table_schemas.push_back(*aux_table_schema))) {
+            LOG_WARN("failed to push back", K(ret), KPC(aux_table_schema));
+          } else {
+            int64_t tmp_len = local_index_table_schemas.count();
+            local_index_table_schemas.at(tmp_len - 1).reset_partition_schema();
+          }
         } else if (aux_table_schema->is_aux_lob_table()) {
           table_ids = &split_arg.lob_table_ids_;
           table_schema_versions = &split_arg.lob_schema_versions_;
           src_tablet_ids = &split_arg.src_lob_tablet_ids_;
           dest_tablets_ids = &split_arg.dest_lob_tablet_ids_;
+          if (OB_FAIL(split_arg.lob_table_schemas_.push_back(*aux_table_schema))) {
+            LOG_WARN("failed to push back", K(ret), KPC(aux_table_schema));
+          } else {
+            int64_t tmp_len = lob_table_schemas.count();
+            lob_table_schemas.at(tmp_len - 1).reset_partition_schema();
+          }
         } else {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("invalid type of aux table", K(ret), KPC(aux_table_schema));
