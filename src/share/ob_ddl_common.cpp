@@ -3680,6 +3680,7 @@ int ObDDLUtil::check_table_empty(
     session_param.sql_mode_ = &new_sql_mode;
     session_param.tz_info_wrap_ = nullptr;
     session_param.ddl_info_.set_is_ddl(true);
+    session_param.ddl_info_.set_retryable_ddl(true);
     session_param.ddl_info_.set_source_table_hidden(table_schema.is_user_hidden_table());
     session_param.ddl_info_.set_dest_table_hidden(false);
     ObTimeoutCtx timeout_ctx;
