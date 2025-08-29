@@ -2803,6 +2803,7 @@ COMPATIBLE	varchar(65536)	NO
 MAX_LS_ID	bigint(20)	NO			
 RESTORE_DATA_MODE	varchar(128)	NO			
 FLASHBACK_LOG_SCN	bigint(20) unsigned	NO			
+INFO	varchar(4096)	NO		NULL	
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_TENANTS|%') then 2
