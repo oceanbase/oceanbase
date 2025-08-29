@@ -2855,16 +2855,8 @@ int ObSplitSampler::query_ranges_(const uint64_t tenant_id, const ObString &db_n
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(set_lower_case_table_names_(tenant_id, single_conn_proxy))) {
+    if (OB_FAIL(set_lower_case_table_names_(tenant_id, query_index, single_conn_proxy))) {
       LOG_WARN("fail to fetch lower_case_table_names", KR(ret), K(tenant_id));
-    } else if (query_index) {
-      ObSqlString set_sql;
-      int64_t affected_rows = 0;
-      if (OB_FAIL(set_sql.assign_fmt("SET session %s = true", share::OB_SV_ENABLE_INDEX_DIRECT_SELECT))) {
-        LOG_WARN("failed to assign sql", KR(ret));
-      } else if (OB_FAIL(single_conn_proxy.write(tenant_id, set_sql.ptr(), affected_rows))) {
-        LOG_WARN("single_conn_proxy write failed", KR(ret), K(set_sql));
-      }
     }
   }
 
@@ -3189,6 +3181,7 @@ int ObSplitSampler::gen_column_alias_(const ObIArray<ObString> &columns,
 }
 
 int ObSplitSampler::set_lower_case_table_names_(const uint64_t tenant_id,
+                                                const bool query_index,
                                                 ObSingleConnectionProxy &single_conn_proxy)
 {
   int ret = OB_SUCCESS;
@@ -3214,8 +3207,10 @@ int ObSplitSampler::set_lower_case_table_names_(const uint64_t tenant_id,
     LOG_WARN("unexpected null conn", K(ret));
   } else if (OB_FAIL(connection->set_session_variable(share::OB_SV_LOWER_CASE_TABLE_NAMES, sysvar->get_value()))) {
     LOG_WARN("update lower_case_table_names for ddl inner sql failed", K(ret));
+  } else if (query_index && OB_FAIL(connection->set_session_variable(share::OB_SV_ENABLE_INDEX_DIRECT_SELECT, 1))) {
+    LOG_WARN("update enable_index_direct_select for ddl inner sql failed", K(ret));
   } else {
-    LOG_TRACE("set lower_case_table_names", K(ret), K(tenant_id), "lower_case_table_names", sysvar->get_value());
+    LOG_TRACE("set lower_case_table_names", K(ret), K(tenant_id), K(query_index), "lower_case_table_names", sysvar->get_value());
   }
   return ret;
 }

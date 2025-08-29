@@ -590,6 +590,7 @@ private:
                                common::ObRowkey &high_bound_val,
                                common::ObArenaAllocator &allocator);
   int set_lower_case_table_names_(const uint64_t tenant_id,
+                                  const bool query_index,
                                   ObSingleConnectionProxy &single_conn_proxy);
 };
 }

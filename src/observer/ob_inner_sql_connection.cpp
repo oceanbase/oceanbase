@@ -1189,6 +1189,8 @@ int ObInnerSQLConnection::start_transaction_inner(
         ObSQLMode sql_mode = 0;
         const ObSessionDDLInfo &ddl_info = get_session().get_ddl_info();
         bool is_load_data_exec = get_session().is_load_data_exec_session();
+        ObNameCaseMode name_case_mode = OB_NAME_CASE_INVALID;
+        bool select_index_enabled = false;
         if (is_resource_conn()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("resource_conn of resource_svr still doesn't has the tenant resource",
@@ -1203,12 +1205,17 @@ int ObInnerSQLConnection::start_transaction_inner(
         } else if (FALSE_IT(set_resource_svr(resource_server_addr))) {
         } else if (OB_FAIL(get_session_timeout_for_rpc(query_timeout, trx_timeout))) {
           LOG_WARN("fail to get_session_timeout_for_rpc", K(ret), K(query_timeout), K(trx_timeout));
+        } else if (OB_FAIL(get_session().get_name_case_mode(name_case_mode))) {
+          LOG_WARN("fail to get name case mode", K(ret));
+        } else if (OB_FAIL(get_session().is_select_index_enabled(select_index_enabled))) {
+          LOG_WARN("fail to get select index enabled", K(ret));
         } else {
           ObInnerSQLTransmitArg arg (MYADDR, get_resource_svr(), tenant_id, get_resource_conn_id(),
               sql, ObInnerSQLTransmitArg::OPERATION_TYPE_START_TRANSACTION,
               lib::Worker::CompatMode::ORACLE == get_compat_mode(), GCONF.cluster_id,
               THIS_WORKER.get_timeout_ts(), query_timeout, trx_timeout,
-              sql_mode, ddl_info, is_load_data_exec, use_external_session_);
+              sql_mode, ddl_info, is_load_data_exec, use_external_session_,
+              0/*consumer_group_id, default*/, name_case_mode, select_index_enabled);
           arg.set_nls_formats(get_session().get_local_nls_date_format(),
                               get_session().get_local_nls_timestamp_format(),
                               get_session().get_local_nls_timestamp_tz_format());
@@ -1379,6 +1386,8 @@ int ObInnerSQLConnection::forward_request_(const uint64_t tenant_id,
   const ObSessionDDLInfo &ddl_info = get_session().get_ddl_info();
   bool is_load_data_exec = get_session().is_load_data_exec_session();
   int32_t real_group_id = group_id_;
+  ObNameCaseMode name_case_mode = OB_NAME_CASE_INVALID;
+  bool select_index_enabled = false;
   if (0 != group_id) {
     real_group_id = group_id;
   }
@@ -1392,12 +1401,17 @@ int ObInnerSQLConnection::forward_request_(const uint64_t tenant_id,
              K(get_resource_conn_id()), K(get_resource_svr()));
   } else if (OB_FAIL(get_session_timeout_for_rpc(query_timeout, trx_timeout))) {
     LOG_WARN("fail to get_session_timeout_for_rpc", K(ret), K(query_timeout), K(trx_timeout));
+  } else if (OB_FAIL(get_session().get_name_case_mode(name_case_mode))) {
+    LOG_WARN("fail to get name case mode", K(ret));
+  } else if (OB_FAIL(get_session().is_select_index_enabled(select_index_enabled))) {
+    LOG_WARN("fail to get select index enabled", K(ret));
   } else {
     ObInnerSQLTransmitArg arg(MYADDR, get_resource_svr(), tenant_id, get_resource_conn_id(),
                               sql, (ObInnerSQLTransmitArg::InnerSQLOperationType)op_type,
                               lib::Worker::CompatMode::ORACLE == get_compat_mode(),
                               GCONF.cluster_id, THIS_WORKER.get_timeout_ts(), query_timeout,
-                              trx_timeout, sql_mode, ddl_info, is_load_data_exec, use_external_session_);
+                              trx_timeout, sql_mode, ddl_info, is_load_data_exec, use_external_session_,
+                              0/*consumer_group_id, default*/, name_case_mode, select_index_enabled);
     arg.set_nls_formats(get_session().get_local_nls_date_format(),
                         get_session().get_local_nls_timestamp_format(),
                         get_session().get_local_nls_timestamp_tz_format());
@@ -1459,19 +1473,26 @@ int ObInnerSQLConnection::rollback()
         ObSQLMode sql_mode = 0;
         const ObSessionDDLInfo &ddl_info = get_session().get_ddl_info();
         bool is_load_data_exec = get_session().is_load_data_exec_session();
+        ObNameCaseMode name_case_mode = OB_NAME_CASE_INVALID;
+        bool select_index_enabled = false;
         if (OB_INVALID_ID == get_resource_conn_id() || !get_resource_svr().is_valid()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("resource_conn_id or resource_svr is invalid in rollback",
                     K(ret), K(get_resource_conn_id()), K(get_resource_svr()));
         } else if (OB_FAIL(get_session_timeout_for_rpc(query_timeout, trx_timeout))) {
           LOG_WARN("fail to get_session_timeout_for_rpc", K(ret), K(query_timeout), K(trx_timeout));
+        } else if (OB_FAIL(get_session().get_name_case_mode(name_case_mode))) {
+          LOG_WARN("fail to get name case mode", K(ret));
+        } else if (OB_FAIL(get_session().is_select_index_enabled(select_index_enabled))) {
+          LOG_WARN("fail to get select index enabled", K(ret));
         } else {
           ObInnerSQLTransmitArg arg (MYADDR, get_resource_svr(),
               get_session().get_effective_tenant_id(), get_resource_conn_id(),
               ObString::make_string("ROLLBACK"), ObInnerSQLTransmitArg::OPERATION_TYPE_ROLLBACK,
               lib::Worker::CompatMode::ORACLE == get_compat_mode(), GCONF.cluster_id,
               THIS_WORKER.get_timeout_ts(), query_timeout, trx_timeout, sql_mode,
-              ddl_info, is_load_data_exec, use_external_session_);
+              ddl_info, is_load_data_exec, use_external_session_,
+              0/*consumer_group_id, default*/, name_case_mode, select_index_enabled);
           arg.set_nls_formats(get_session().get_local_nls_date_format(),
                               get_session().get_local_nls_timestamp_format(),
                               get_session().get_local_nls_timestamp_tz_format());
@@ -1533,18 +1554,25 @@ int ObInnerSQLConnection::commit()
         ObSQLMode sql_mode = 0;
         const ObSessionDDLInfo &ddl_info = get_session().get_ddl_info();
         bool is_load_data_exec = get_session().is_load_data_exec_session();
+        ObNameCaseMode name_case_mode = OB_NAME_CASE_INVALID;
+        bool select_index_enabled = false;
         if (!get_resource_svr().is_valid()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("resource_svr is invalid in commit", K(ret), K(get_resource_svr()));
         } else if (OB_FAIL(get_session_timeout_for_rpc(query_timeout, trx_timeout))) {
           LOG_WARN("fail to get_session_timeout_for_rpc", K(ret), K(query_timeout), K(trx_timeout));
+        } else if (OB_FAIL(get_session().get_name_case_mode(name_case_mode))) {
+          LOG_WARN("fail to get name case mode", K(ret));
+        } else if (OB_FAIL(get_session().is_select_index_enabled(select_index_enabled))) {
+          LOG_WARN("fail to get select index enabled", K(ret));
         } else {
           ObInnerSQLTransmitArg arg (MYADDR, get_resource_svr(),
               get_session().get_effective_tenant_id(), get_resource_conn_id(),
               ObString::make_string("COMMIT"), ObInnerSQLTransmitArg::OPERATION_TYPE_COMMIT,
               lib::Worker::CompatMode::ORACLE == get_compat_mode(), GCONF.cluster_id,
               THIS_WORKER.get_timeout_ts(), query_timeout, trx_timeout, sql_mode,
-              ddl_info, is_load_data_exec, use_external_session_);
+              ddl_info, is_load_data_exec, use_external_session_,
+              0/*consumer_group_id, default*/, name_case_mode, select_index_enabled);
           arg.set_nls_formats(get_session().get_local_nls_date_format(),
                               get_session().get_local_nls_timestamp_format(),
                               get_session().get_local_nls_timestamp_tz_format());
@@ -1654,6 +1682,8 @@ int ObInnerSQLConnection::execute_write_inner(const uint64_t tenant_id, const Ob
       ObSQLMode sql_mode = 0;
       const ObSessionDDLInfo &ddl_info = get_session().get_ddl_info();
       bool is_load_data_exec = get_session().is_load_data_exec_session();
+      ObNameCaseMode name_case_mode = OB_NAME_CASE_INVALID;
+      bool select_index_enabled = false;
       if (is_in_trans()) {
         if (!get_resource_svr().is_valid() || OB_INVALID_ID == get_resource_conn_id()) {
           ret = OB_ERR_UNEXPECTED;
@@ -1681,6 +1711,10 @@ int ObInnerSQLConnection::execute_write_inner(const uint64_t tenant_id, const Ob
         ObObj tmp_sql_mode;
         if (OB_FAIL(get_session().get_sys_variable_by_name("sql_mode", tmp_sql_mode))) {
           LOG_WARN("fail to get sql mode", K(ret));
+        } else if (OB_FAIL(get_session().get_name_case_mode(name_case_mode))) {
+          LOG_WARN("fail to get name case mode", K(ret));
+        } else if (OB_FAIL(get_session().is_select_index_enabled(select_index_enabled))) {
+          LOG_WARN("fail to get select index enabled", K(ret));
         } else {
           sql_mode = tmp_sql_mode.get_uint64();
         }
@@ -1691,7 +1725,8 @@ int ObInnerSQLConnection::execute_write_inner(const uint64_t tenant_id, const Ob
             sql, ObInnerSQLTransmitArg::OPERATION_TYPE_EXECUTE_WRITE,
             lib::Worker::CompatMode::ORACLE == get_compat_mode(), GCONF.cluster_id,
             THIS_WORKER.get_timeout_ts(), query_timeout, trx_timeout, sql_mode,
-            ddl_info, is_load_data_exec, use_external_session_, consumer_group_id);
+            ddl_info, is_load_data_exec, use_external_session_, consumer_group_id,
+            name_case_mode, select_index_enabled);
         arg.set_nls_formats(get_session().get_local_nls_date_format(),
                             get_session().get_local_nls_timestamp_format(),
                             get_session().get_local_nls_timestamp_tz_format());
@@ -1858,6 +1893,8 @@ int ObInnerSQLConnection::execute_read_inner(const int64_t cluster_id,
     ObSQLMode sql_mode = 0;
     const ObSessionDDLInfo &ddl_info = get_session().get_ddl_info();
     bool is_load_data_exec = get_session().is_load_data_exec_session();
+    ObNameCaseMode name_case_mode = OB_NAME_CASE_INVALID;
+    bool select_index_enabled = false;
     if (is_in_trans()) {
       if (!get_resource_svr().is_valid() || OB_INVALID_ID == get_resource_conn_id()) {
         ret = OB_ERR_UNEXPECTED;
@@ -1889,6 +1926,10 @@ int ObInnerSQLConnection::execute_read_inner(const int64_t cluster_id,
       ObObj tmp_sql_mode;
       if (OB_FAIL(get_session().get_sys_variable_by_name("sql_mode", tmp_sql_mode))) {
         LOG_WARN("fail to get sql mode", K(ret));
+      } else if (OB_FAIL(get_session().get_name_case_mode(name_case_mode))) {
+        LOG_WARN("fail to get name case mode", K(ret));
+      } else if (OB_FAIL(get_session().is_select_index_enabled(select_index_enabled))) {
+        LOG_WARN("fail to get select index enabled", K(ret));
       } else {
         sql_mode = tmp_sql_mode.get_uint64();
       }
@@ -1899,7 +1940,8 @@ int ObInnerSQLConnection::execute_read_inner(const int64_t cluster_id,
           sql, ObInnerSQLTransmitArg::OPERATION_TYPE_EXECUTE_READ,
           lib::Worker::CompatMode::ORACLE == get_compat_mode(), GCONF.cluster_id,
           THIS_WORKER.get_timeout_ts(), query_timeout, trx_timeout, sql_mode,
-          ddl_info, is_load_data_exec, use_external_session_, consumer_group_id_);
+          ddl_info, is_load_data_exec, use_external_session_, consumer_group_id_,
+          name_case_mode, select_index_enabled);
       arg.set_nls_formats(get_session().get_local_nls_date_format(),
                           get_session().get_local_nls_timestamp_format(),
                           get_session().get_local_nls_timestamp_tz_format());
