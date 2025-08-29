@@ -5,14 +5,43 @@ title: "[Feature]: "
 labels: ["type: feature"]
 ---
 
-**Use Case**
-<!-- A clear and concise description of what is the intended usage scenario is. -->
-
-**Describe the solution you'd like**
-<!-- A clear and concise description of what you want to happen. -->
-
-**Describe alternatives you've considered**
-<!-- A clear and concise description of any alternative solutions or features you've considered. -->
-
-**Additional context**
-<!-- Add any other context or screenshots about the feature request here. -->
+name: "⭐ Feature request"
+description: Propose something new.
+labels:
+  - enhancement
+body:
+  - type: checkboxes
+    attributes:
+      label: Self Checks
+      description: "To make sure we get to you in time, please check the following :)"
+      options:
+        - label: I have read the [Contributing Guide](https://github.com/oceanbase/oceanbase/blob/develop/CONTRIBUTING.md).
+          required: true
+        - label: I have searched for existing issues [search for existing issues](https://github.com/oceanbase/oceanbase/issues), including closed ones.
+          required: true    
+        - label: I confirm that I am using English to submit this report, otherwise it will be closed.
+          required: true
+        - label: "Please do not modify this template :) and fill in all the required fields."
+          required: true
+  - type: textarea
+    attributes:
+      label: 1. Is this request related to a challenge you're experiencing? Tell me about your story.
+      placeholder: Please describe the specific scenario or problem you're facing as clearly as possible. For instance "I was trying to use [feature] for [specific task], and [what happened]... It was frustrating because...."
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: 2. Additional context or comments
+      placeholder: (Any other information, comments, documentations, links, or screenshots that would provide more clarity. This is the place to add anything else not covered above.)
+    validations:
+      required: false
+  - type: checkboxes
+    attributes:
+      label: 3. Can you help us with this feature?
+      description: Let us know! This is not a commitment, but a starting point for collaboration.
+      options:
+        - label: I am interested in contributing to this feature.
+          required: false
+  - type: markdown
+    attributes:
+      value: Please limit one request per issue.
