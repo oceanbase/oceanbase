@@ -177,6 +177,8 @@ int ObDbmsStats::gather_table_stats(ObExecContext &ctx, ParamStore &params, ObOb
  *      10. no_invalidate BOOLEAN     DEFAULT to_no_invalidate_type(get_param('NO_INVALIDATE')),
  *      11. stattype      VARCHAR2    DEFAULT 'DATA',
  *      12. force         BOOLEAN     DEFAULT false
+ *      13. hist_est_percent   NUMBER DEFAULT AUTO_SAMPLE_SIZE,
+ *      14. hist_block_sample  BOOLEAN DEFAULT NULL
  * @param result
  * @return
  */
@@ -243,8 +245,8 @@ int ObDbmsStats::gather_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
                                                    params.at(6),
                                                    params.at(10),
                                                    params.at(12),
-                                                   NULL/*hist_est_percent*/,
-                                                   NULL/*hist_block_sample*/,
+                                                   params.count() > 13 ? &params.at(13) : NULL,
+                                                   params.count() > 14 ? &params.at(14) : NULL,
                                                    stat_param))) {
         LOG_WARN("failed to parse stat optitions", K(ret));
       } else if (OB_FAIL(get_stats_consumer_group_id(stat_param))) {
@@ -324,6 +326,8 @@ int ObDbmsStats::gather_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
  *      9. no_invalidate BOOLEAN     DEFAULT to_no_invalidate_type(get_param('NO_INVALIDATE')),
  *      10.force         BOOLEAN     DEFAULT false,
  *      11.tabname       VARCHAR2    DEFAULT NULL(for mysql mode only)
+ *      12.hist_est_percent   NUMBER DEFAULT AUTO_SAMPLE_SIZE,
+ *      13.hist_block_sample  BOOLEAN DEFAULT NULL
  * @param result
  * @return
  */
@@ -4385,37 +4389,35 @@ int ObDbmsStats::parse_gather_stat_options(ObExecContext &ctx,
   }
 
   if (OB_SUCC(ret)) {
-    if (hist_est_percent != NULL) {
-      double percent = 0.0;
-      number::ObNumber num_hist_est_percent;
-      if (hist_est_percent->is_null()) {
-        param.hist_sample_info_.set_percent(100.0);
-      } else if (OB_FAIL(hist_est_percent->get_number(num_hist_est_percent))) {
-        LOG_WARN("failed to get number", K(ret));
-      } else if (OB_FAIL(ObDbmsStatsUtils::cast_number_to_double(num_hist_est_percent, percent))) {
-        LOG_WARN("failed to cast number to double" , K(ret));
-      } else if (percent == 0.0) {
-        stat_options |= StatOptionFlags::OPT_HIST_EST_PERCENT;
-      } else if (OB_UNLIKELY(percent < 0.000001 || percent > 100.0)) {
-        ret = OB_ERR_DBMS_STATS_PL;
-        LOG_WARN("Illegal sample percent: must be in the range[0.000001,100]", K(ret));
-        LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Illegal sample percent: must be in the range[0.000001,100]");
-      } else {
-        param.hist_sample_info_.set_percent(percent);
-              }
+    double percent = 0.0;
+    number::ObNumber num_hist_est_percent;
+    if (hist_est_percent == NULL) {
+      stat_options |= StatOptionFlags::OPT_HIST_EST_PERCENT;
+    } else if (hist_est_percent->is_null()) {
+      param.hist_sample_info_.set_percent(100.0);
+    } else if (OB_FAIL(hist_est_percent->get_number(num_hist_est_percent))) {
+      LOG_WARN("failed to get number", K(ret));
+    } else if (OB_FAIL(ObDbmsStatsUtils::cast_number_to_double(num_hist_est_percent, percent))) {
+      LOG_WARN("failed to cast number to double" , K(ret));
+    } else if (percent == 0.0) {
+      stat_options |= StatOptionFlags::OPT_HIST_EST_PERCENT;
+    } else if (OB_UNLIKELY(percent < 0.000001 || percent > 100.0)) {
+      ret = OB_ERR_DBMS_STATS_PL;
+      LOG_WARN("Illegal sample percent: must be in the range[0.000001,100]", K(ret));
+      LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Illegal sample percent: must be in the range[0.000001,100]");
+    } else {
+      param.hist_sample_info_.set_percent(percent);
     }
   }
 
   if (OB_SUCC(ret)) {
-    if (hist_block_sample != NULL) {
-      bool is_block_sample = false;
-      if (hist_block_sample->is_null()) {
-        stat_options |= StatOptionFlags::OPT_HIST_BLOCK_SAMPLE;
-      } else if (OB_FAIL(hist_block_sample->get_bool(is_block_sample))) {
-        LOG_WARN("failed to get block sample", K(ret));
-      } else {
-        param.hist_sample_info_.set_is_block_sample(is_block_sample);
-      }
+    bool is_block_sample = false;
+    if (hist_block_sample == NULL || hist_block_sample->is_null()) {
+      stat_options |= StatOptionFlags::OPT_HIST_BLOCK_SAMPLE;
+    } else if (OB_FAIL(hist_block_sample->get_bool(is_block_sample))) {
+      LOG_WARN("failed to get block sample", K(ret));
+    } else {
+      param.hist_sample_info_.set_is_block_sample(is_block_sample);
     }
   }
 
