@@ -83,7 +83,7 @@ int ObRoutePolicy::filter_replica(const ObAddr &local_server,
       if ((policy_type == ONLY_READONLY_ZONE && cur_replica.attr_.zone_type_ == ZONE_TYPE_READWRITE)
           || (policy_type == COLUMN_STORE_ONLY && !ObReplicaTypeCheck::is_columnstore_replica(cur_replica.get_replica_type()))
           || (policy_type != COLUMN_STORE_ONLY && ObReplicaTypeCheck::is_columnstore_replica(cur_replica.get_replica_type()))
-          || (policy_type == FORCE_READONLY_ZONE && cur_replica.get_replica_type() != REPLICA_TYPE_READONLY)
+          || (policy_type == FORCE_READONLY_ZONE && !ObReplicaTypeCheck::is_readonly_replica(cur_replica.get_replica_type()))
           || cur_replica.attr_.zone_status_ == ObZoneStatus::INACTIVE
           || cur_replica.attr_.server_status_ != ObServerStatus::OB_SERVER_ACTIVE
           || cur_replica.attr_.start_service_time_ == 0
@@ -150,6 +150,13 @@ int ObRoutePolicy::calculate_replica_priority(const ObAddr &local_server,
         policy_type == COLUMN_STORE_ONLY && 
         !is_inner_table &&
         !ObReplicaTypeCheck::is_columnstore_replica(candi_replicas.at(0).get_replica_type())) {
+      ret = OB_NO_REPLICA_VALID;
+      LOG_USER_ERROR(OB_NO_REPLICA_VALID);
+    }
+    if (1 == candi_replicas.count() &&
+        policy_type == FORCE_READONLY_ZONE &&
+        !is_inner_table &&
+        !ObReplicaTypeCheck::is_readonly_replica(candi_replicas.at(0).get_replica_type())) {
       ret = OB_NO_REPLICA_VALID;
       LOG_USER_ERROR(OB_NO_REPLICA_VALID);
     }
