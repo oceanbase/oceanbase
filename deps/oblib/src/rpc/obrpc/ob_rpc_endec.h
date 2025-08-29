@@ -20,6 +20,11 @@
 #include "lib/ash/ob_active_session_guard.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"
 
+extern "C" {
+void* pn_send_alloc(uint64_t gtid, int64_t sz);
+void pn_send_free(void* p);
+};
+
 namespace oceanbase
 {
 namespace obrpc
@@ -34,7 +39,7 @@ common::ObCompressorType get_proxy_compressor_type(ObRpcProxy& proxy);
 template <typename T>
     int rpc_encode_req(
       ObRpcProxy& proxy,
-      ObRpcMemPool& pool,
+      uint64_t gtid,
       ObRpcPacketCode pcode,
       const T& args,
       const ObRpcOpts& opts,
@@ -59,8 +64,8 @@ template <typename T>
   int64_t args_len = common::serialization::encoded_length(args);
 #endif
   int64_t payload_sz = extra_payload_size + args_len;
-  const int64_t reserve_bytes_for_pnio = 0;
-  char* header_buf = (char*)pool.alloc(reserve_bytes_for_pnio + header_sz + payload_sz) + reserve_bytes_for_pnio;
+  // char* header_buf = (char*)pool.alloc(reserve_bytes_for_pnio + header_sz + payload_sz) + reserve_bytes_for_pnio;
+  char* header_buf = (char*)pn_send_alloc(gtid, header_sz + payload_sz);
   char* payload_buf = header_buf + header_sz;
   int64_t pos = 0;
   UNIS_VERSION_GUARD(opts.unis_version_);
@@ -147,6 +152,9 @@ template <typename T>
         req_sz = header_sz + payload_sz;
       }
     }
+  }
+  if (OB_FAIL(ret) && NULL != header_buf) {
+    pn_send_free(header_buf);
   }
   return ret;
 }

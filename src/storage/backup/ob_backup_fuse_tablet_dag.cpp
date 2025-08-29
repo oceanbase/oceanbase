@@ -115,9 +115,9 @@ bool ObBackupTabletFuseDagNet::operator == (const ObIDagNet &other) const
   return is_same;
 }
 
-int64_t ObBackupTabletFuseDagNet::hash() const
+uint64_t ObBackupTabletFuseDagNet::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   if (OB_ISNULL(ctx_)) {
     LOG_ERROR_RET(OB_INVALID_ARGUMENT, "fuse ctx is NULL", KPC(ctx_));
   } else {
@@ -251,9 +251,9 @@ bool ObBackupTabletGroupFuseDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObBackupTabletGroupFuseDag::hash() const
+uint64_t ObBackupTabletGroupFuseDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   ObBackupTabletGroupFuseCtx *ctx = get_ctx();
 
   if (OB_ISNULL(ctx)) {
@@ -561,9 +561,9 @@ bool ObBackupTabletFuseDag::operator==(const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObBackupTabletFuseDag::hash() const
+uint64_t ObBackupTabletFuseDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   const ObDagType::ObDagTypeEnum type = get_type();
   hash_value = common::murmurhash(&type, sizeof(type), hash_value);
   hash_value = common::murmurhash(&fuse_ctx_.param_.ls_id_, sizeof(fuse_ctx_.param_.ls_id_), hash_value);

@@ -70,6 +70,7 @@ int bin_collation_search(const ObString &str, const ObString &str_list,
                          const ObCollationType &cs_type, uint64_t &res_pos) {
   UNUSED(cs_type);
   int ret = OB_SUCCESS;
+  res_pos = 0;
   if (str_list.length() < str.length()) {
     res_pos = 0;
   } else if (memchr(str.ptr(), ',', str.length()) != nullptr) {

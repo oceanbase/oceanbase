@@ -172,6 +172,8 @@ int ObTableLoadPreSorter::init_mem_ctx()
   mem_ctx_.load_thread_cnt_ = mem_ctx_.total_thread_cnt_;
   if (OB_FAIL(mem_ctx_.init())) {
     LOG_WARN("fail to init mem ctx", KR(ret));
+  } else if (OB_FAIL(mem_ctx_.init_enc_params(store_ctx_->ctx_->param_.dup_action_, store_ctx_->write_ctx_.schema_->column_descs_))) {
+    LOG_WARN("fail to init enc params", KR(ret));
   }
   return ret;
 }

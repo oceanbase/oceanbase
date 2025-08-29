@@ -153,6 +153,8 @@ int ObSplitPartitionHelper::check_allow_split(
   }
 
   if (OB_FAIL(ret)) {
+  } else if (table_schema.is_global_index_table()) {
+    // global index table doesn't have columnstore replica
   } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
     LOG_WARN("failed to get tenant schema", K(ret));
   } else if (OB_FAIL(tenant_schema->get_zone_replica_attr_array(zone_locality))) {
@@ -290,9 +292,6 @@ int ObSplitPartitionHelper::check_enable_global_index_auto_split(
   auto_part_size = -1;
   if (data_table_schema.is_mysql_tmp_table() || data_table_schema.is_sys_table()) {
     // not supported table type
-  } else if (data_table_schema.is_auto_partitioned_table()) {
-    enable_auto_split = true;
-    auto_part_size = data_table_schema.get_part_option().get_auto_part_size();
   } else {
     const uint64_t tenant_id = data_table_schema.get_tenant_id();
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));

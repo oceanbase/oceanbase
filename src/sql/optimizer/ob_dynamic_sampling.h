@@ -353,14 +353,17 @@ private:
                                 bool &is_no_backslash_escapes,
                                 transaction::ObTxDesc *&tx_desc,
                                 bool &is_sess_in_retry,
-                                int &last_query_retry_err);
+                                int &last_query_retry_err,
+                                int64_t ds_query_timeout,
+                                int64_t &session_query_timeout);
   int restore_session(ObSQLSessionInfo *session,
                       sql::ObSQLSessionInfo::StmtSavedValue *session_value,
                       int64_t nested_count,
                       bool is_no_backslash_escapes,
                       transaction::ObTxDesc *tx_desc,
                       bool &is_sess_in_retry,
-                      int &last_query_retry_err);
+                      int &last_query_retry_err,
+                      int64_t session_query_timeout);
   int add_table_clause(ObSqlString &table_str);
   bool allow_cache_ds_result_to_sql_ctx () const;
 

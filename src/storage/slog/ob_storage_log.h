@@ -198,7 +198,8 @@ public:
       const ObPendingFreeTabletStatus &status,
       const int64_t free_time,
       const GCTabletType &gc_type,
-      const int64_t tablet_transfer_seq);
+      const int64_t tablet_transfer_seq,
+      const int64_t last_gc_version = -1);
   virtual ~ObDeleteTabletLog() {}
   virtual bool is_valid() const override;
 
@@ -219,6 +220,7 @@ public:
   int64_t free_time_;
   GCTabletType gc_type_;
   int64_t tablet_transfer_seq_;
+  int64_t last_gc_version_;
 };
 
 class ObGCTabletLog : public ObIBaseStorageLogEntry

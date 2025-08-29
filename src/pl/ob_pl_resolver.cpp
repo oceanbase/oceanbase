@@ -3520,9 +3520,13 @@ int ObPLResolver::adjust_routine_param_type(ObPLDataType &type)
         data_type.set_precision(-1);
         data_type.set_scale(-85);
       } break;
+      case ObDecimalIntTC:
       case ObNumberTC: {
         data_type.set_precision(-1);
         data_type.set_scale(-85);
+        if (data_type.get_obj_type() == ObDecimalIntType) {
+          data_type.set_obj_type(ObNumberType);
+        }
       } break;
       case ObOTimestampTC: {
         data_type.set_precision(
@@ -3686,9 +3690,8 @@ int ObPLResolver::resolve_sp_data_type(const ParseNode *sp_data_type_node,
    */
   if (OB_SUCC(ret)
       && OB_NOT_NULL(extern_type_info)
-      && ObNumberType == data_type.get_obj_type()
-      && 38 == data_type.get_data_type()->get_precision()
-      && 0 == data_type.get_data_type()->get_scale()) {
+      && ((ObNumberType == data_type.get_obj_type() && 38 == data_type.get_data_type()->get_precision() && 0 == data_type.get_data_type()->get_scale())
+          || ObDecimalIntType == data_type.get_obj_type())) {
     OZ (adjust_routine_param_type(data_type));
   }
   // datatype is parameter type if extern_type_info is not null, need adjust presicion and scale etc...
@@ -5062,6 +5065,7 @@ int ObPLResolver::check_raw_expr_in_forall(ObRawExpr* expr, int64_t idx, bool &n
     if (expr->is_obj_access_expr()) {
       ObObjAccessRawExpr *obj_access_expr = static_cast<ObObjAccessRawExpr*>(expr);
       int64_t collection_index = OB_INVALID_INDEX;
+      ObRawExpr *ignore_expr = NULL;
       for (int64_t i = 0; OB_SUCC(ret) && !need_modify && i < obj_access_expr->get_access_idxs().count(); ++i) {
         if (obj_access_expr->get_access_idxs().at(i).elem_type_.is_collection_type()) {
           collection_index = i;
@@ -5088,9 +5092,32 @@ int ObPLResolver::check_raw_expr_in_forall(ObRawExpr* expr, int64_t idx, bool &n
               }
             }
           } else if (obj_access_expr->get_access_idxs().at(collection_index + 1).is_expr()) {
+            ObRawExpr *expr = obj_access_expr->get_access_idxs().at(collection_index + 1).get_sysfunc_;
             CK (OB_NOT_NULL(obj_access_expr->get_access_idxs().at(collection_index + 1).get_sysfunc_));
             if (OB_FAIL(ret)) {
-            } else if (T_FUN_PL_ASSOCIATIVE_INDEX == obj_access_expr->get_access_idxs().at(collection_index + 1).get_sysfunc_->get_expr_type()) {
+            } else if (T_QUESTIONMARK == expr->get_expr_type()) {
+              ObConstRawExpr *const_expr = NULL;
+              CK (OB_NOT_NULL(const_expr = static_cast<ObConstRawExpr *>(expr)));
+              if (OB_SUCC(ret)) {
+                const ObObj &const_obj = const_expr->get_value();
+                if (const_obj.is_unknown() && (idx == const_obj.get_unknown())) {
+                  need_modify = true;
+                  ignore_expr = const_expr;
+                }
+              }
+            } else if (T_FUN_COLUMN_CONV == expr->get_expr_type()
+                        && OB_NOT_NULL(expr->get_param_expr(4))
+                        && T_QUESTIONMARK == expr->get_param_expr(4)->get_expr_type()) {
+              ObConstRawExpr *const_expr = NULL;
+              CK (OB_NOT_NULL(const_expr = static_cast<ObConstRawExpr *>(expr->get_param_expr(4))));
+              if (OB_SUCC(ret)) {
+                const ObObj &const_obj = const_expr->get_value();
+                if (const_obj.is_unknown() && (idx == const_obj.get_unknown())) {
+                  need_modify = true;
+                  ignore_expr = expr;
+                }
+              }
+            } else if (T_FUN_PL_ASSOCIATIVE_INDEX == expr->get_expr_type()) {
               ObPLAssocIndexRawExpr *result_expr = static_cast<ObPLAssocIndexRawExpr *>(
                 obj_access_expr->get_access_idxs().at(collection_index + 1).get_sysfunc_);
               ObConstRawExpr *const_expr = NULL;
@@ -5107,6 +5134,7 @@ int ObPLResolver::check_raw_expr_in_forall(ObRawExpr* expr, int64_t idx, bool &n
                 const ObObj &const_obj = const_expr->get_value();
                 if (const_obj.is_unknown() && (idx == const_obj.get_unknown())) {
                   need_modify = true;
+                  ignore_expr = expr;
                 }
               }
             } else {
@@ -5123,10 +5151,12 @@ int ObPLResolver::check_raw_expr_in_forall(ObRawExpr* expr, int64_t idx, bool &n
         }
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-        if (expr->get_param_expr(i)->get_expr_type() != T_FUN_PL_ASSOCIATIVE_INDEX) {
+        if (OB_ISNULL(ignore_expr) || !expr->get_param_expr(i)->same_as(*ignore_expr)) {
           bool inner_modify = false;
           OZ (SMART_CALL(check_raw_expr_in_forall(expr->get_param_expr(i), idx, inner_modify)));
           OX (need_modify |= inner_modify);
+        } else {
+          ignore_expr = NULL;
         }
       }
     } else if (T_QUESTIONMARK == expr->get_expr_type()) {
@@ -5291,7 +5321,11 @@ int ObPLResolver::check_forall_sql_and_modify_params(ObPLForAllStmt &stmt, ObPLF
             ObObjAccessRawExpr *obj_access_expr = static_cast<ObObjAccessRawExpr*>(exec_param);
             CK (OB_NOT_NULL(obj_access_expr));
             OZ (obj_access_expr->get_final_type(type));
-            if (OB_SUCC(ret) && !type.is_obj_type()) {
+            if (OB_SUCC(ret)
+                  && (!type.is_obj_type()
+                      || ob_is_json(type.get_obj_type())
+                      || ob_is_geometry(type.get_obj_type())
+                      || ob_is_user_defined_sql_type(type.get_obj_type()))) {
               can_array_binding = false; // SQL Engine can not support SqlArray with ext element.
             }
           }
@@ -5357,7 +5391,11 @@ int ObPLResolver::check_forall_sql_and_modify_params(ObPLForAllStmt &stmt, ObPLF
               ObObjAccessRawExpr *obj_access_expr = static_cast<ObObjAccessRawExpr*>(exec_param);
               CK (OB_NOT_NULL(obj_access_expr));
               OZ (obj_access_expr->get_final_type(type));
-              if (OB_SUCC(ret) && !type.is_obj_type()) {
+              if (OB_SUCC(ret)
+                  && (!type.is_obj_type()
+                      || ob_is_json(type.get_obj_type())
+                      || ob_is_geometry(type.get_obj_type())
+                      || ob_is_user_defined_sql_type(type.get_obj_type()))) {
                 can_array_binding = false; // SQL Engine can not support SqlArray with ext element.
               }
             }
@@ -15673,7 +15711,9 @@ int ObPLResolver::build_collection_attribute_access(ObRawExprFactory &expr_facto
                                    empty_name,
                                    table_type.get_element_type(),
                                    NULL == func_expr ? attr_index : reinterpret_cast<int64_t>(func_expr));
-    if (NULL != func_expr && func_expr->is_const_raw_expr()) {
+    if (NULL != func_expr
+        && func_expr->is_const_raw_expr()
+        && !resolve_ctx_.is_sql_scope_) {
       //如果是NestedTable，且括号里的参数是Const，那么不把这个Const作为param_expr处理，这是一个优化
       const ObConstRawExpr* const_expr = static_cast<const ObConstRawExpr*>(func_expr);
       CK (OB_NOT_NULL(const_expr));

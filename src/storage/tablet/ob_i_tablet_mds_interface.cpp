@@ -71,9 +71,6 @@ int ObITabletMdsInterface::get_tablet_status(
     if (OB_EMPTY_RESULT != ret) {
       MDS_LOG(WARN, "fail to get snapshot", K(ret));
     }
-  } else if (GCTX.is_shared_storage_mode() && OB_FAIL(get_tablet_status_for_transfer(
-      mds::TwoPhaseCommitState::ON_COMMIT, data))) {
-    MDS_LOG(WARN, "fail to get tablet status for transfer", K(ret), K(data));
   }
   return ret;
   #undef PRINT_WRAPPER
@@ -101,8 +98,6 @@ int ObITabletMdsInterface::get_latest_tablet_status(
     if (OB_EMPTY_RESULT != ret) {
       MDS_LOG(WARN, "fail to get latest", K(ret));
     }
-  } else if (GCTX.is_shared_storage_mode() && OB_FAIL(get_tablet_status_for_transfer(trans_stat, data))) {
-    MDS_LOG(WARN, "fail to get tablet status for transfer", K(ret), K(data));
   }
   return ret;
   #undef PRINT_WRAPPER
@@ -377,29 +372,6 @@ int ObITabletMdsInterface::get_tablet_handle_from_this(
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
   if (OB_FAIL(t3m->build_tablet_handle_for_mds_scan(const_cast<ObTablet*>(tablet), tablet_handle))) {
     MDS_LOG(WARN, "fail to build tablet handle", K(ret), K(ls_id), K(tablet_id));
-  }
-  return ret;
-}
-
-int ObITabletMdsInterface::get_tablet_status_for_transfer(
-    const mds::TwoPhaseCommitState &trans_stat,
-    ObTabletCreateDeleteMdsUserData &tablet_status) const
-{
-  int ret = OB_SUCCESS;
-  bool is_transfer_out_deleted = get_tablet_meta_().transfer_info_.is_transfer_out_deleted();
-
-  // when is_transfer_out_deleted is true, tablet_status can be not only TRANSFER_OUT
-  // that is because when restart, is_transfer_out_deleted in tablet meta is true,
-  // but the tablet status in mds may not be replayed to TRANSFER_OUT,
-  // therefore, when tablet status is not TRANSFER_OUT, we need to skip the update
-  if (!is_transfer_out_deleted || ObTabletStatus::TRANSFER_OUT != tablet_status.tablet_status_) {
-    // do nothing
-  } else if (trans_stat != mds::TwoPhaseCommitState::ON_COMMIT) {
-    // do nothing
-  } else {
-    tablet_status.tablet_status_ = ObTabletStatus::TRANSFER_OUT_DELETED;
-    tablet_status.delete_commit_scn_ = tablet_status.start_transfer_commit_scn_;
-    tablet_status.delete_commit_version_ = tablet_status.start_transfer_commit_version_;
   }
   return ret;
 }

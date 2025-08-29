@@ -153,7 +153,8 @@ ObDeleteTabletLog::ObDeleteTabletLog()
     status_(ObPendingFreeTabletStatus::MAX),
     free_time_(0),
     gc_type_(GCTabletType::DropTablet),
-    tablet_transfer_seq_(share::OB_INVALID_TRANSFER_SEQ)
+    tablet_transfer_seq_(share::OB_INVALID_TRANSFER_SEQ),
+    last_gc_version_(-1)
 {
 }
 
@@ -165,7 +166,8 @@ ObDeleteTabletLog::ObDeleteTabletLog(const ObLSID &ls_id, const ObTabletID &tabl
     status_(ObPendingFreeTabletStatus::MAX),
     free_time_(0),
     gc_type_(GCTabletType::DropTablet),
-    tablet_transfer_seq_(share::OB_INVALID_TRANSFER_SEQ)
+    tablet_transfer_seq_(share::OB_INVALID_TRANSFER_SEQ),
+    last_gc_version_(-1)
 {
 }
 
@@ -177,7 +179,8 @@ ObDeleteTabletLog::ObDeleteTabletLog(
     const ObPendingFreeTabletStatus &status,
     const int64_t free_time,
     const GCTabletType &gc_type,
-    const int64_t tablet_transfer_seq)
+    const int64_t tablet_transfer_seq,
+    const int64_t last_gc_version)
   : ls_id_(ls_id),
     tablet_id_(tablet_id),
     ls_epoch_(ls_epoch),
@@ -185,7 +188,8 @@ ObDeleteTabletLog::ObDeleteTabletLog(
     status_(status),
     free_time_(free_time),
     gc_type_(gc_type),
-    tablet_transfer_seq_(tablet_transfer_seq)
+    tablet_transfer_seq_(tablet_transfer_seq),
+    last_gc_version_(last_gc_version)
 {
 }
 
@@ -197,7 +201,9 @@ bool ObDeleteTabletLog::is_valid() const
             && ls_epoch_ >= 0
             && tablet_meta_version_ >= 0
             && ObPendingFreeTabletStatus::MAX != status_
-            && tablet_transfer_seq_ != share::OB_INVALID_TRANSFER_SEQ;
+            && tablet_transfer_seq_ != share::OB_INVALID_TRANSFER_SEQ
+            && last_gc_version_ >= -1
+            && last_gc_version_ < tablet_meta_version_;
   }
   return is_valid;
 }
@@ -211,7 +217,8 @@ bool ObDeleteTabletLog::operator ==(const ObDeleteTabletLog &other) const
       && status_              == other.status_
       && free_time_           == other.free_time_
       && gc_type_             == other.gc_type_
-      && tablet_transfer_seq_ == other.tablet_transfer_seq_;
+      && tablet_transfer_seq_ == other.tablet_transfer_seq_
+      && last_gc_version_     == other.last_gc_version_;
 }
 
 bool ObDeleteTabletLog::operator !=(const ObDeleteTabletLog &other) const
@@ -225,6 +232,7 @@ uint64_t ObDeleteTabletLog::hash() const
   hash_val = common::murmurhash(&ls_epoch_, sizeof(ls_epoch_), hash_val);
   hash_val = common::murmurhash(&tablet_meta_version_, sizeof(tablet_meta_version_), hash_val);
   hash_val = common::murmurhash(&tablet_transfer_seq_, sizeof(tablet_transfer_seq_), hash_val);
+  hash_val = common::murmurhash(&last_gc_version_, sizeof(last_gc_version_), hash_val);
   return hash_val;
 }
 
@@ -235,14 +243,24 @@ int ObDeleteTabletLog::hash(uint64_t &hash_val) const
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDeleteTabletLog, ls_id_, tablet_id_, ls_epoch_, tablet_meta_version_, status_, free_time_, gc_type_, tablet_transfer_seq_);
+
+OB_SERIALIZE_MEMBER(ObDeleteTabletLog,
+                    ls_id_,
+                    tablet_id_,
+                    ls_epoch_,
+                    tablet_meta_version_,
+                    status_,
+                    free_time_,
+                    gc_type_,
+                    tablet_transfer_seq_,
+                    last_gc_version_);
 
 DEF_TO_STRING(ObDeleteTabletLog)
 {
   int64_t pos = 0;
   J_OBJ_START();
   J_KV(K_(ls_id), K_(tablet_id), K_(ls_epoch), K_(tablet_meta_version), K_(status), K_(free_time), K_(gc_type),
-       K_(tablet_transfer_seq));
+       K_(tablet_transfer_seq), K_(last_gc_version));
   J_OBJ_END();
   return pos;
 }

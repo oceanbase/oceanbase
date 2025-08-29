@@ -441,7 +441,8 @@ void ObTenantFreezeInfoMgr::check_tenant_in_restore_with_mv_(
 int ObTenantFreezeInfoMgr::get_min_reserved_snapshot(
     const ObTabletID &tablet_id,
     const int64_t merged_version,
-    ObStorageSnapshotInfo &snapshot_info)
+    ObStorageSnapshotInfo &snapshot_info,
+    const bool skip_undo_retention)
 {
   int ret = OB_SUCCESS;
   ObFreezeInfo freeze_info;
@@ -490,7 +491,10 @@ int ObTenantFreezeInfoMgr::get_min_reserved_snapshot(
 #endif
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(get_multi_version_duration(duration))) {
+  } else if (skip_undo_retention && !GCTX.is_shared_storage_mode()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("get unexpected argument skip_undo_retention", K(ret));
+  } else if (!skip_undo_retention && OB_FAIL(get_multi_version_duration(duration))) {
     STORAGE_LOG(WARN, "fail to get multi version duration", K(ret), K(tablet_id));
   } else {
     if (merged_version < 1) {

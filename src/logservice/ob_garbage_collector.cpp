@@ -1603,6 +1603,7 @@ int ObGarbageCollector::check_can_remove_sslog_ls_(bool &can_remove_sslog)
       CLOG_LOG(WARN, "check meta tenant failed", K(ret));
     } else {
       MTL_SWITCH(user_tenant_id) {
+        ls_service = MTL(ObLSService*);
         if (OB_FAIL(ls_service->foreach_ls(user_tenant_fn))) {
           CLOG_LOG(WARN, "check user tenant failed", K(ret));
         }
@@ -1954,6 +1955,7 @@ int ObGarbageCollector::gc_check_ls_status_(storage::ObLS &ls,
   candidate.ls_id_ = ls_id;
   candidate.ls_status_ = LSStatus::LS_NORMAL;
   candidate.gc_reason_ = GCReason::INVALID_GC_REASON;
+  common::ObArray<ObTabletID> tablet_id_set;
   if (OB_FAIL(get_ls_status_from_table(ls_id, ls_status))) {
     int tmp_ret = OB_SUCCESS;
     bool is_tenant_dropped = false;
@@ -1981,6 +1983,15 @@ int ObGarbageCollector::gc_check_ls_status_(storage::ObLS &ls,
       if (OB_SUCC(ret)) {
       } else if (OB_SUCCESS != (tmp_ret = ls.get_migration_status(migration_status))) {
         CLOG_LOG(WARN, "get_migration_status failed", K(tmp_ret), K(ls_id));
+#ifdef OB_BUILD_SHARED_STORAGE
+      } else if (GCTX.is_shared_storage_mode()
+                 && OB_TMP_FAIL(ls.get_tablet_svr()->get_all_tablet_ids(
+                     true /* except_ls_inner_tablet */, tablet_id_set))) {
+        CLOG_LOG(WARN, "get_all_tablet_ids failed", KR(tmp_ret), K(ls_id));
+      } else if (GCTX.is_shared_storage_mode() && tablet_id_set.count() != 0) {
+        CLOG_LOG(INFO, "tablets in ls are not mark delete, ls is not allowd to GC", K(ls_id),
+            K(tablet_id_set.count()), K(tablet_id_set));
+#endif
       } else if (OB_SUCCESS != (tmp_ret = ObMigrationStatusHelper::check_ls_allow_gc(
             ls.get_ls_id(), migration_status, allow_gc))) {
         CLOG_LOG(WARN, "failed to check ls allowed to gc", K(tmp_ret), K(migration_status), K(ls_id));
@@ -2059,8 +2070,17 @@ void ObGarbageCollector::execute_gc_(ObGCCandidateArray &gc_candidates)
         }
       }
       ObSwitchLeaderAdapter switch_leader_adapter;
+      bool can_remove_sslog_ls = true;
       if (OB_SUCCESS != (tmp_ret = (gc_handler->execute_pre_remove()))) {
         CLOG_LOG(WARN, "failed to execute_pre_remove", K(tmp_ret), K(id), K_(self_addr));
+#ifdef OB_BUILD_SHARED_STORAGE
+      } else if (GCTX.is_shared_storage_mode()
+                 && is_tenant_sslog_ls(MTL_ID(), ls->get_ls_id())
+                 && OB_TMP_FAIL(check_can_remove_sslog_ls_(can_remove_sslog_ls))) {
+        CLOG_LOG(WARN, "failed to check sslog ls", K(tmp_ret), K(id), K_(self_addr));
+      } else if (!can_remove_sslog_ls) {
+        CLOG_LOG(INFO, "sslog ls can not be removed", K(id), K_(self_addr));
+#endif
       } else if (OB_SUCCESS != (tmp_ret = switch_leader_adapter.remove_from_election_blacklist(id.id(), self_addr_))) {
         CLOG_LOG(WARN, "remove_from_election_blacklist failed", K(tmp_ret), K(id), K_(self_addr));
       } else if (OB_SUCCESS != (tmp_ret = ls_service_->remove_ls(id))) {

@@ -146,11 +146,11 @@ public:
       const common::ObIArray<blocksstable::ObStorageDatum> *default_datums,
       const bool is_padding_mode,
       const bool need_init_vector = true);
-  int64_t get_current_pos() const
+  OB_INLINE int64_t get_current_pos() const
   { return current_; }
   OB_INLINE int64_t get_last_pos() const
   { return last_; }
-  ObIMicroBlockReader *get_reader() const
+  OB_INLINE ObIMicroBlockReader *get_reader() const
   { return reader_; }
   int get_next_border_rows(const ObDatumRowkey &rowkey);
   OB_INLINE bool can_blockscan() const
@@ -212,10 +212,7 @@ protected:
   const ObDatumRange *range_;
   const blocksstable::ObSSTable *sstable_;
   ObIMicroBlockReader *reader_;
-  ObMicroBlockReader *flat_reader_;
-  ObIMicroBlockDecoder *decoder_;
-  ObMicroBlockDecoder *pax_decoder_;
-  ObMicroBlockCSDecoder *cs_decoder_;
+  ObMicroBlockReaderHelper reader_helper_;
   memtable::ObMemtableBlockReader *memtable_reader_;
   const storage::ObTableIterParam *param_;
   storage::ObTableAccessContext *context_;

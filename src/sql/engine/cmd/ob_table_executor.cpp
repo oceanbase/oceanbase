@@ -817,6 +817,7 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
   ObSArray<obrpc::ObIndexArg *> add_index_arg_list;
   ObSArray<obrpc::ObIndexArg *> drop_index_args;
   alter_table_arg.index_arg_list_.reset();
+  uint64_t tenant_id = alter_table_arg.exec_tenant_id_;
   if (OB_ISNULL(my_session)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
@@ -872,6 +873,8 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
       LOG_WARN("fail to get global index pre split schema if need", K(ret), K(alter_table_arg));
       //overwrite ret code
       ret = OB_SUCCESS;
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, alter_table_arg.data_version_))) {
+      LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
     }
     DEBUG_SYNC(BEFORE_SEND_ALTER_TABLE);
 
@@ -918,6 +921,8 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
           }
         }
       }
+    } else if (DATA_VERSION_SUPPORT_EMPTY_TABLE_CREATE_INDEX_OPT(alter_table_arg.data_version_)
+            && res.ddl_res_array_.empty()) {
     } else if (is_create_index(res.ddl_type_) || DDL_NORMAL_TYPE == res.ddl_type_) {
       // TODO(shuangcan): alter table create index returns DDL_NORMAL_TYPE now, check if we can fix this later
       // 同步等索引建成功
@@ -2149,14 +2154,18 @@ int ObDropTableExecutor::execute(ObExecContext &ctx, ObDropTableStmt &stmt)
   int ret = OB_SUCCESS;
   ObTaskExecutorCtx *task_exec_ctx = NULL;
   obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
-  obrpc::ObDDLRes res;
   const obrpc::ObDropTableArg &drop_table_arg = stmt.get_drop_table_arg();
   obrpc::ObDropTableArg &tmp_arg = const_cast<obrpc::ObDropTableArg&>(drop_table_arg);
   ObString first_stmt;
   ObSQLSessionInfo *my_session = NULL;
   int64_t foreign_key_checks = 0;
+  uint64_t data_version = 0;
+  const uint64_t tenant_id = drop_table_arg.tenant_id_;
+  const ObTableType table_type = drop_table_arg.table_type_;
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
-    LOG_WARN("get first statement failed", K(ret));
+    LOG_WARN("get first statement failed", KR(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
   } else {
     int64_t affected_rows = 0;
     tmp_arg.ddl_stmt_str_ = first_stmt;
@@ -2164,15 +2173,15 @@ int ObDropTableExecutor::execute(ObExecContext &ctx, ObDropTableStmt &stmt)
     my_session = ctx.get_my_session();
     if (NULL == my_session) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to get my session", K(ret), K(ctx));
+      LOG_WARN("failed to get my session", KR(ret), K(ctx));
     } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
       ret = OB_NOT_INIT;
       LOG_WARN("get task executor context failed");
     } else if (OB_FAIL(task_exec_ctx->get_common_rpc(common_rpc_proxy))) {
-      LOG_WARN("get common rpc proxy failed", K(ret));
+      LOG_WARN("get common rpc proxy failed", KR(ret));
     } else if (OB_ISNULL(common_rpc_proxy)){
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("common rpc proxy should not be null", K(ret));
+      LOG_WARN("common rpc proxy should not be null", KR(ret));
     } else if (OB_INVALID_ID == drop_table_arg.session_id_
                && FALSE_IT(tmp_arg.session_id_ = my_session->get_sessid_for_table())) {
       //impossible
@@ -2180,21 +2189,72 @@ int ObDropTableExecutor::execute(ObExecContext &ctx, ObDropTableStmt &stmt)
     } else if (FALSE_IT(tmp_arg.foreign_key_checks_ = is_oracle_mode() || (is_mysql_mode() && foreign_key_checks))) {
     } else if (FALSE_IT(tmp_arg.compat_mode_ = ORACLE_MODE == my_session->get_compatibility_mode() ?
         lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL)) {
-    } else if (OB_FAIL(common_rpc_proxy->drop_table(drop_table_arg, res))) {
-      LOG_WARN("rpc proxy drop table failed", K(ret), "dst", common_rpc_proxy->get_server());
-    } else if (res.is_valid() && OB_FAIL(ObDDLExecutorUtil::wait_ddl_retry_task_finish(res.tenant_id_, res.task_id_, *my_session, common_rpc_proxy, affected_rows))) {
-      LOG_WARN("wait ddl finish failed", K(ret), K(res.tenant_id_), K(res.task_id_));
     } else {
-      //do nothing
+      bool is_parallel_drop = false;
+      if (!((data_version >= MOCK_DATA_VERSION_4_2_5_1 && data_version < DATA_VERSION_4_3_0_0)
+            || (data_version >= MOCK_DATA_VERSION_4_3_5_3 && data_version < DATA_VERSION_4_4_0_0)
+            || (data_version >= DATA_VERSION_4_4_1_0))) {
+        is_parallel_drop = false;
+      } else if (!ObSchemaUtils::is_support_parallel_drop(table_type)) {
+        is_parallel_drop = false;
+      } else if (OB_FAIL(ObParallelDDLControlMode::is_parallel_ddl_enable(ObParallelDDLControlMode::DROP_TABLE, tenant_id, is_parallel_drop))) {
+        LOG_WARN("fail to check whether parallel drop table enable", KR(ret), K(tenant_id));
+      }
+
+      if (OB_SUCC(ret)) {
+        if (is_parallel_drop) {
+          int64_t start_time = ObTimeUtility::current_time();
+          obrpc::ObDropTableRes res;
+          ObTimeoutCtx ctx;
+          tmp_arg.is_parallel_ = true;
+          if (OB_FAIL(ctx.set_timeout(common_rpc_proxy->get_timeout()))) {
+            LOG_WARN("fail to set timeout ctx", KR(ret));
+          } else if (OB_FAIL(common_rpc_proxy->parallel_drop_table(drop_table_arg, res))) {
+            LOG_WARN("rpc proxy parallel drop table failed", KR(ret), "dst", common_rpc_proxy->get_server());
+          } else {
+            int64_t refresh_time = ObTimeUtility::current_time();
+            if (!res.do_nothing_ && OB_FAIL(ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
+                                            ctx, my_session, drop_table_arg.tenant_id_, res.schema_version_, false/*skip_consensus*/))) {
+              LOG_WARN("fail to check paralleld ddl schema in sync", KR(ret), K(res));
+            }
+            int64_t end_time = ObTimeUtility::current_time();
+            LOG_INFO("[parallel_drop_table]", KR(ret),
+                      "cost", end_time - start_time,
+                      "execute_time", refresh_time - start_time,
+                      "wait_schema", end_time - refresh_time);
+
+            if (OB_NOT_NULL(common_rpc_proxy)) {
+              SERVER_EVENT_ADD("ddl", "drop table execute finish",
+                "tenant_id", MTL_ID(),
+                "ret", ret,
+                "trace_id", *ObCurTraceId::get_trace_id(),
+                "rpc_dst", common_rpc_proxy->get_server(),
+                "schema_version", res.schema_version_);
+            }
+            SQL_ENG_LOG(INFO, "finish drop table execute.", KR(ret), "ddl_event_info", ObDDLEventInfo());
+          }
+        } else {
+          obrpc::ObDDLRes res;
+          if (OB_FAIL(common_rpc_proxy->drop_table(drop_table_arg, res))) {
+            LOG_WARN("rpc proxy drop table failed", KR(ret), "dst", common_rpc_proxy->get_server());
+          } else if (res.is_valid() && OB_FAIL(ObDDLExecutorUtil::wait_ddl_retry_task_finish(res.tenant_id_, res.task_id_, *my_session, common_rpc_proxy, affected_rows))) {
+            LOG_WARN("wait ddl finish failed", KR(ret), K(res.tenant_id_), K(res.task_id_));
+          } else {
+            //do nothing
+          }
+
+          SERVER_EVENT_ADD("ddl", "drop table execute finish",
+          "tenant_id", res.tenant_id_,
+          "ret", ret,
+          "trace_id", *ObCurTraceId::get_trace_id(),
+          "task_id", res.task_id_,
+          "schema_id", res.schema_id_);
+          SQL_ENG_LOG(INFO, "finish drop table execute.", KR(ret), "ddl_event_info", ObDDLEventInfo());
+        }
+      }
     }
   }
-  SERVER_EVENT_ADD("ddl", "drop table execute finish",
-    "tenant_id", res.tenant_id_,
-    "ret", ret,
-    "trace_id", *ObCurTraceId::get_trace_id(),
-    "task_id", res.task_id_,
-    "schema_id", res.schema_id_);
-    SQL_ENG_LOG(INFO, "finish drop table execute.", K(ret), "ddl_event_info", ObDDLEventInfo());
+
   return ret;
 }
 

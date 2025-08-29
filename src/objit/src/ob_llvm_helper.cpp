@@ -603,19 +603,36 @@ int ObLLVMHelper::init_llvm() {
   OZ (di_helper.init(helper.get_jc()));
 
   ObSEArray<ObLLVMType, 8> arg_types;
+  ObSEArray<ObLLVMType, 64> avx521_elem_types;
   ObLLVMType int64_type;
+  ObLLVMType avx512_type;
+  ObLLVMType avx512_ptr_type;
   ObLLVMFunction init_func;
   ObLLVMFunctionType ft;
   ObLLVMBasicBlock block;
+  ObLLVMValue avx512_value;
+  ObLLVMValue init_avx512_value;
   ObLLVMValue magic;
   uint64_t addr;
 
   OZ (helper.get_llvm_type(ObIntType, int64_type));
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < 512 / sizeof(int64_t); ++i) {
+    OZ (avx521_elem_types.push_back(int64_type));
+  }
+
+  OZ (helper.create_struct_type("init_avx512", avx521_elem_types, avx512_type));
+  OZ (avx512_type.get_pointer_to(avx512_ptr_type));
   OZ (arg_types.push_back(int64_type));
+  OZ (arg_types.push_back(avx512_ptr_type));
   OZ (ObLLVMFunctionType::get(int64_type, arg_types, ft));
   OZ (helper.create_function(init_func_name, ft, init_func));
   OZ (helper.create_block("entry", init_func, block));
   OZ (helper.set_insert_point(block));
+  OZ (helper.get_null_const(avx512_type, init_avx512_value));
+  OZ (init_func.get_argument(1, avx512_value));
+  OX (avx512_value.set_t(avx512_type));
+  OZ (helper.create_store(init_avx512_value, avx512_value));
   OZ (helper.get_int64(OB_SUCCESS, magic));
   OZ (helper.create_ret(magic));
 

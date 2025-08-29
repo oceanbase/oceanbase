@@ -240,12 +240,14 @@ public:
     } else {
       OK(dec_query_range1.get_tablet_ranges(allocator, exec_ctx_, ranges, all_single_value_ranges, NULL));
     }
+    helper.reset();
     _OB_LOG(INFO, "ranges: %s, except_range: %s", helper.convert(ranges), except_range);
 
     ASSERT_EQ(0, strcmp(helper.convert(ranges), except_range));
     EXPECT_EQ(all_single_value_ranges, except_all_single_value_ranges);
 
     ranges.reset();
+    helper.reset();
     all_single_value_ranges = true;
     OK(dec_query_range2.get_tablet_ranges(ranges, all_single_value_ranges, dtc_params));
     _OB_LOG(DEBUG, "ranges: %s, except_range: %s", helper.convert(ranges), except_range);
@@ -253,6 +255,7 @@ public:
     EXPECT_EQ(all_single_value_ranges, except_all_single_value_ranges);
 
     ranges.reset();
+    helper.reset();
     all_single_value_ranges = true;
     ObArray<ObRawExpr*> and_exprs;
     split_and_condition(expr, and_exprs);
@@ -1030,16 +1033,16 @@ TEST_F(ObQueryRangeTest, range_column_with_triple_key)
 //  resolve_condition(triple_range_columns_, "(a, d) in ((? , ?)) or (a, d) = (?, ?)", condition, &params);
 //  OK(query_range.preliminary_extract_query_range(triple_range_columns_, condition, dtc_params, &exec_ctx_));
 //
-//  _OB_LOG(INFO, "XXXX %s", to_cstring(query_range));
-//  _OB_LOG(INFO, "XXXX params: %s", to_cstring(params));
+//  _OB_LOG(INFO, "XXXX %s", helper.convert(query_range));
+//  _OB_LOG(INFO, "XXXX params: %s", helper.convert(params));
 //  OK(query_range.final_extract_query_range(exec_ctx_, dtc_params));
-//  _OB_LOG(INFO, "XXXX final: %s", to_cstring(query_range));
+//  _OB_LOG(INFO, "XXXX final: %s", helper.convert(query_range));
 //
 //  ObQueryRangeArray ranges;
 //  bool all_single_value_ranges = true;
 //
 //  OK(query_range.get_tablet_ranges(ranges, all_single_value_ranges, dtc_params));
-//  _OB_LOG(INFO, "ranges: %s", to_cstring(ranges));
+//  _OB_LOG(INFO, "ranges: %s", helper.convert(ranges));
 ////  ASSERT_EQ(1, ranges.count());
 ////  int64_t value = 0;
 ////

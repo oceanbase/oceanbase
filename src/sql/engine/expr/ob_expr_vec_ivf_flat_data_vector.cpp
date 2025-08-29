@@ -68,7 +68,7 @@ int ObExprVecIVFFlatDataVector::cg_expr(
   int ret = OB_SUCCESS;
   UNUSED(raw_expr);
   UNUSED(expr_cg_ctx);
-  if (OB_UNLIKELY(rt_expr.arg_cnt_ < 1) || OB_ISNULL(rt_expr.args_)) {
+  if (OB_UNLIKELY(rt_expr.arg_cnt_ != 2) || OB_ISNULL(rt_expr.args_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(rt_expr.arg_cnt_), KP(rt_expr.args_), K(rt_expr.type_));
   } else {
@@ -83,17 +83,67 @@ int ObExprVecIVFFlatDataVector::generate_data_vector(
     ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
-  ObDatum *datum = nullptr;
-  if (OB_FAIL(expr.args_[0]->eval(eval_ctx, datum))) {
-    LOG_WARN("fail to eval arg expr", K(ret), KPC(expr.args_[0]));
-  } else if (OB_ISNULL(datum)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get null datum", K(ret), KPC(expr.args_[0]));
-  } else if (datum->is_null()) {
-    expr_datum.set_null();
+
+  common::ObArenaAllocator tmp_allocator("IVFFlatExprVec", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObExpr *calc_vector_expr = expr.args_[0];
+  ObExpr *calc_distance_algo_expr = expr.args_[1];
+  ObDatum *res = nullptr;
+  if (OB_ISNULL(calc_vector_expr) || OB_ISNULL(calc_distance_algo_expr)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("invalid null exprs", K(ret), KP(calc_vector_expr), KP(calc_distance_algo_expr));
   } else {
-    expr_datum.set_string(datum->get_string());
+    ObVectorIndexDistAlgorithm dis_algo = VIDA_MAX;
+    if (OB_FAIL(ret)) {
+    } else if (calc_distance_algo_expr->datum_meta_.type_ != ObUInt64Type) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("calc distance algo expr is invalid", K(ret), KPC(calc_distance_algo_expr));
+    } else if (OB_FAIL(calc_distance_algo_expr->eval(eval_ctx, res))) {
+      LOG_WARN("calc table id expr failed", K(ret));
+    } else if (FALSE_IT(dis_algo = static_cast<ObVectorIndexDistAlgorithm>(res->get_uint64()))) {
+    } else if (VIDA_MAX <= dis_algo) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected distance algo", K(ret), K(dis_algo));
+    } else {
+      ObIArrayType *arr = NULL;
+      float *norm_vector = nullptr;
+      bool is_null = false;
+      if (calc_vector_expr->datum_meta_.type_ != ObCollectionSQLType) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("calc vector expr is invalid", K(ret), KPC(calc_vector_expr));
+      } else if (OB_FAIL(ObArrayExprUtils::get_type_vector(*(calc_vector_expr), eval_ctx, tmp_allocator, arr,
+                                                           is_null))) {
+        LOG_WARN("failed to get vector", K(ret), KPC(calc_vector_expr));
+      } else if (is_null) {
+        expr_datum.set_null();
+      } else if (dis_algo == ObVectorIndexDistAlgorithm::VIDA_COS) {
+        if (OB_ISNULL(norm_vector = reinterpret_cast<float *>(tmp_allocator.alloc(sizeof(float) * arr->size())))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloc vector", K(ret));
+        } else if (OB_FAIL(ObVectorNormalize::L2_normalize_vector(arr->size(),
+                                                                  reinterpret_cast<float *>(arr->get_data()),
+                                                                  norm_vector))) {
+          LOG_WARN("failed to normalize vector", K(ret));
+        }
+      }
+      if (OB_FAIL(ret) || is_null) {
+      } else {
+        float *data = norm_vector == nullptr ? reinterpret_cast<float*>(arr->get_data()) : norm_vector;
+        ObString data_str(arr->size() * sizeof(float), reinterpret_cast<char*>(data));
+        ObString res_str;
+        if (OB_FAIL(ObArrayExprUtils::set_array_res(nullptr,
+                                          data_str.length(),
+                                          expr,
+                                          eval_ctx,
+                                          res_str,
+                                          data_str.ptr()))) {
+          LOG_WARN("fail to set array res", K(ret), K(data_str));
+        } else {
+          expr_datum.set_string(res_str);
+        }
+      }
+    }
   }
+
   return ret;
 }
 

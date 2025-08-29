@@ -18,6 +18,7 @@
 #include "share/ob_service_epoch_proxy.h"
 #include "share/ob_max_id_fetcher.h"
 #include "rootserver/ob_root_service.h" // callback
+#include "share/ob_license_utils.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "share/object_storage/ob_zone_storage_table_operation.h"
 #endif
@@ -326,6 +327,8 @@ int ObServerZoneOpService::add_servers(const ObIArray<ObAddr> &servers,
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(is_inited_));
+  } else if (OB_FAIL(ObLicenseUtils::check_add_server_allowed(servers.count()))) {
+    LOG_WARN("fail to check add server allowed", KR(ret));
 #ifdef OB_BUILD_TDE_SECURITY
   } else if (OB_ISNULL(master_key_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -849,7 +852,11 @@ int ObServerZoneOpService::add_server_(
       server_id,
       zone,
       sql_port,
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+      true, /* with_rootserver */
+#else
       false, /* with_rootserver */
+#endif
       ObServerStatus::OB_SERVER_ACTIVE,
       build_version,
       0, /* stop_time */

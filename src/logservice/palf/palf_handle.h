@@ -560,8 +560,8 @@ public:
   virtual int set_allow_election_without_memlist(const bool allow_election_without_memlist) override final;
 #endif
 	//================= 依赖功能注册 ===========================
-  int set_location_cache_cb(PalfLocationCacheCb *lc_cb);
-  int reset_location_cache_cb();
+  virtual int set_location_cache_cb(PalfLocationCacheCb *lc_cb) override final;
+  virtual int reset_location_cache_cb() override final;
   virtual int set_election_priority(election::ElectionPriority *priority) override final;
   virtual int reset_election_priority() override final;
   virtual int set_locality_cb(palf::PalfLocalityInfoCb *locality_cb) override final;

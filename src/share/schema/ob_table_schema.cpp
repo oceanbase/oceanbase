@@ -629,6 +629,12 @@ int64_t ObSimpleTableSchemaV2::get_convert_size() const
   convert_size += transition_point_.get_deep_copy_size();
   convert_size += interval_range_.get_deep_copy_size();
   convert_size += sizeof(storage_cache_policy_type_);
+  if (OB_NOT_NULL(list_idx_hash_array_)) {
+    int64_t cnt = list_idx_hash_array_->item_count();
+    convert_size += ObPointerHashArray<ObNewRowKey, const ObNewRowValue*,
+                                       ObGetNewRowKey>::get_hash_array_mem_size(cnt);
+    convert_size += cnt * sizeof(ObNewRowValue);
+  }
   return convert_size;
 }
 
@@ -1203,6 +1209,97 @@ int ObSimpleTableSchemaV2::get_part_idx_by_tablet(const ObTabletID &tablet_id, i
   return ret;
 }
 
+int ObSimpleTableSchemaV2::get_part_idx_by_tablets(const ObIArray<uint64_t> &tablet_ids,
+                                                   ObIArray<int64_t> &part_idx,
+                                                   ObIArray<int64_t> &subpart_idx) const
+{
+  int ret = OB_SUCCESS;
+  ObHashMap<int64_t, std::pair<int64_t, int64_t>> id_hashmap;
+
+  ObPartition **part_array = NULL;
+  int64_t part_num = get_partition_num();
+  std::pair<int64_t, int64_t> part_info(OB_INVALID_INDEX, OB_INVALID_INDEX);
+  part_idx.reuse();
+  subpart_idx.reuse();
+  if (OB_ISNULL(part_array = get_part_array()) ||
+      OB_UNLIKELY(PARTITION_LEVEL_ZERO == part_level_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid part", KR(ret), KPC(this));
+  } else if (OB_FAIL(id_hashmap.create(get_all_part_num(), ObModIds::OB_SCHEMA))) {
+    LOG_WARN("create hashmap failed", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); i ++) {
+    if (OB_FAIL(id_hashmap.set_refactored(tablet_ids.at(i), part_info))) {
+      LOG_WARN("failed to set refactored", K(ret));
+    }
+  }
+  for (int64_t i = 0; i < part_num && OB_SUCC(ret); ++i) {
+    if (OB_ISNULL(part_array[i])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("NULL ptr", K(i), KPC(this), KR(ret));
+    } else if (PARTITION_LEVEL_ONE == part_level_) {
+      if (OB_FAIL(id_hashmap.get_refactored(part_array[i]->get_tablet_id().id(), part_info))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to check tablet id exist", K(ret));
+        }
+      } else if (OB_FAIL(id_hashmap.set_refactored(part_array[i]->get_tablet_id().id(),
+                                                   std::make_pair(i, OB_INVALID_INDEX),
+                                                   1/*overwrite*/))) {
+        LOG_WARN("failed to set refactored", K(ret));
+      }
+    } else if (PARTITION_LEVEL_TWO == part_level_) {
+      ObSubPartition **subpart_array = part_array[i]->get_subpart_array();
+      int64_t subpart_num = part_array[i]->get_subpartition_num();
+      if (OB_ISNULL(subpart_array)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("subpart array is null", KPC(this), KR(ret));
+      }
+      for (int64_t j = 0; j < subpart_num && OB_SUCC(ret); ++j) {
+        if (OB_ISNULL(subpart_array[j])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("NULL ptr", KPC(this), KR(ret));
+        } else {
+          if (OB_FAIL(id_hashmap.get_refactored(subpart_array[j]->get_tablet_id().id(), part_info))) {
+            if (OB_HASH_NOT_EXIST == ret) {
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("fail to check tablet id exist", K(ret));
+            }
+          } else if (OB_FAIL(id_hashmap.set_refactored(subpart_array[j]->get_tablet_id().id(),
+                                                       std::make_pair(i, j), 1/*overwrite*/))) {
+            LOG_WARN("failed to set refactored", K(ret));
+          }
+        }
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("4.0 not support part type", KR(ret), KPC(this));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); i ++) {
+    if (OB_FAIL(id_hashmap.get_refactored(tablet_ids.at(i), part_info))) {
+      LOG_WARN("failed to set refactored", K(ret));
+    } else if (OB_UNLIKELY(OB_INVALID_INDEX == part_info.first ||
+                           OB_INVALID_INDEX == part_info.second && PARTITION_LEVEL_TWO == part_level_)) {
+      ret = OB_TABLET_NOT_EXIST;
+      LOG_WARN("tablet is not exist", K(tablet_ids.at(i)), KPC(this), KR(ret));
+    } else if (OB_FAIL(part_idx.push_back(part_info.first))) {
+      LOG_WARN("failed to push back part idx", K(ret));
+    } else if (PARTITION_LEVEL_TWO == part_level_ && OB_FAIL(subpart_idx.push_back(part_info.second))) {
+      LOG_WARN("failed to push back subpart idx", K(ret));
+    }
+  }
+  if (id_hashmap.created()) {
+    int tmp_ret = id_hashmap.destroy();
+    if (OB_SUCC(ret) && OB_FAIL(tmp_ret)) {
+      LOG_WARN("failed to destory hashmap", K(ret));
+    }
+  }
+  return ret;
+}
+
 // only used for the first level parition;
 // not support get subpart_id by tablet_id;
 int ObSimpleTableSchemaV2::get_hidden_part_id_by_tablet_id(const ObTabletID &tablet_id, int64_t &part_id /*OUT*/) const
@@ -1767,6 +1864,7 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       max_used_column_group_id_ = src_schema.max_used_column_group_id_;
       micro_index_clustered_ = src_schema.micro_index_clustered_;
       enable_macro_block_bloom_filter_ = src_schema.enable_macro_block_bloom_filter_;
+      micro_block_format_version_ = src_schema.micro_block_format_version_;
       mlog_tid_ = src_schema.mlog_tid_;
       catalog_id_ = src_schema.catalog_id_;
       merge_engine_type_ = src_schema.merge_engine_type_;
@@ -5397,9 +5495,43 @@ int ObTableSchema::check_alter_column_in_index(const ObColumnSchemaV2 &src_colum
   const uint64_t column_id = src_column.get_column_id();
   const uint64_t tenant_id = get_tenant_id();
   ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
-  if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
+
+  // Vector index dependency validation: （start）
+  // The logical rule is that if a vector index exists on a column, no modifications to the column are allowed.
+  // To accommodate potential user operations where the data type remains consistent before and after the change,
+  // an additional conditional check has been implemented.
+  bool is_column_has_vector_index = false;
+  ObIndexType index_type = INDEX_TYPE_IS_NOT;
+  if (OB_FAIL(ObVectorIndexUtil::check_column_has_vector_index(
+        *this, schema_guard, column_id, is_column_has_vector_index, index_type))) {
+    LOG_WARN("check_column_has_vector_index failed", K(ret));
+  } else if (is_column_has_vector_index) {
+    // For vector-indexed columns, enforce strict data type consistency checks.
+    bool is_same_type = false;
+    if (src_column.is_collection() && dst_column.is_collection()) {
+      // Collection types (including vector types) require specialized comparison logic.
+      if (OB_FAIL(src_column.is_same_collection_column(dst_column, is_same_type))) {
+        LOG_WARN("failed to check collection column type", K(ret));
+      }
+    } else {
+      // For non-collection types, compare basic types and meta types.
+      is_same_type = (src_column.get_data_type() == dst_column.get_data_type() &&
+                     src_column.get_meta_type().get_type() == dst_column.get_meta_type().get_type());
+    }
+    if (OB_SUCC(ret) && !is_same_type) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "For columns with vector indexes, altering the column type is");
+      LOG_WARN("column type modification is not supported because it is depended by vector index",
+               K(column_id), K(ret), K(src_column.get_data_type()), K(dst_column.get_data_type()));
+    }
+  }
+  // Vector index dependency validation (end)
+
+  if(OB_FAIL(ret)){
+  } else if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
     LOG_WARN("get simple_index_infos failed", K(ret));
   }
+
   for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
     const ObTableSchema *index_table_schema = NULL;
     if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
@@ -7300,7 +7432,8 @@ int64_t ObTableSchema::to_string(char *buf, const int64_t buf_len) const
     K_(merge_engine_type),
     K_(semistruct_encoding_type),
     K_(dynamic_partition_policy),
-    K_(semistruct_properties));
+    K_(semistruct_properties),
+    K_(micro_block_format_version));
   J_OBJ_END();
 
   return pos;
@@ -9523,7 +9656,7 @@ int ObTableSchema::is_partition_key_match_rowkey_prefix(bool &is_prefix) const
       LOG_WARN("part_func_str is empty", KR(ret), KPC(this));
     }else if (OB_FAIL(get_partition_keys_by_part_func_expr(ori_part_func_str, partition_key_ids))) {
       is_prefix = false;
-      if (OB_ERR_BAD_FIELD_ERROR == ret) {
+      if (OB_ERR_BAD_FIELD_ERROR == ret || OB_ERR_PARSE_SQL == ret) {
         ret = OB_SUCCESS;
       } else {
         LOG_WARN("failed to get part keys", K(ret), K(ori_part_func_str));
@@ -9553,7 +9686,7 @@ int ObTableSchema::is_partition_key_match_rowkey_prefix(bool &is_prefix) const
           LOG_WARN("sub_part_func_str is empty", KR(ret), KPC(this));
         } else if (OB_FAIL(get_partition_keys_by_part_func_expr(ori_sub_part_func_str, sub_partition_key_ids))) {
           is_prefix = false;
-          if (OB_ERR_BAD_FIELD_ERROR == ret) {
+          if (OB_ERR_BAD_FIELD_ERROR == ret || OB_ERR_PARSE_SQL == ret) {
             ret = OB_SUCCESS;
           } else {
             LOG_WARN("failed to get part keys", K(ret), K(ori_sub_part_func_str));

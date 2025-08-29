@@ -1338,6 +1338,7 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
   OZ( resolve_order_clause(parse_tree.children_[PARSE_SELECT_ORDER]) );
   OZ( resolve_approx_clause(parse_tree.children_[PARSE_SELECT_APPROX]));
   OZ( resolve_limit_clause(parse_tree.children_[PARSE_SELECT_LIMIT]) );
+  OZ( resolve_vector_index_params(parse_tree.children_[PARSE_SELECT_VECTOR_INDEX_PARAMS]));
   OZ( resolve_fetch_clause(parse_tree.children_[PARSE_SELECT_FETCH]) );
   OZ( resolve_check_option_clause(parse_tree.children_[PARSE_SELECT_WITH_CHECK_OPTION]) );
   OZ( resolve_into_clause(ObResolverUtils::get_select_into_node(parse_tree)) );
@@ -1495,6 +1496,7 @@ int ObSelectResolver::resolve(const ParseNode &parse_tree)
       select_stmt->set_tenant_id(params_.show_tenant_id_);
     }
     select_stmt->set_show_seed(params_.show_seed_);
+    select_stmt->set_is_recursive_union_branch(cte_ctx_.is_set_left_resolver_ || NULL != cte_ctx_.left_select_stmt_);
     /* -----------------------------------------------------------------
      * The later resolve may need some information resolved by the former one,
      * so please follow the resolving orders:
@@ -1515,8 +1517,8 @@ int ObSelectResolver::resolve(const ParseNode &parse_tree)
      */
 
     // resolve outline data hint first
-    if (OB_FAIL(resolve_outline_data_hints())) {
-      LOG_WARN("resolve outline data hints failed", K(ret));
+    if (OB_FAIL(pre_process_hints(parse_tree))) {
+      LOG_WARN("pre process hint failed", K(ret));
     } else if (parse_tree.children_[PARSE_SELECT_SET] != NULL) {
       /* resolve set clause */
       if (OB_FAIL(SMART_CALL(resolve_set_query(parse_tree)))) {
@@ -1637,6 +1639,11 @@ int ObSelectResolver::set_for_update_mysql(ObSelectStmt &stmt, const int64_t wai
 {
   int ret = OB_SUCCESS;
   TableItem *table_item = NULL;
+  if (stmt.has_vec_approx()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "FOR UPDATE with APPROXIMATE vector search is");
+    LOG_WARN("FOR UPDATE is not supported with APPROXIMATE vector search", K(ret));
+  }
   for (int64_t idx = 0; OB_SUCC(ret) && idx < stmt.get_table_size(); ++idx) {
     if (OB_ISNULL(table_item = stmt.get_table_item(idx))) {
       ret = OB_ERR_UNEXPECTED;
@@ -2334,6 +2341,12 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
                       || OB_FAIL(prepare_get_child_at(project_node, 0))) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpected select item type", K(select_item), K(project_node->type_), K(ret));
+            } else if (T_FUN_SYS == project_node->children_[0]->type_ && project_node->children_[0]->num_child_ > 0) {
+              alias_node = project_node->children_[0]->children_[0];
+              if (ObSequenceNamespaceChecker::is_curr_or_next_val(alias_node->str_value_)) {
+                select_item.alias_name_.assign_ptr(const_cast<char *>(alias_node->str_value_),
+                                                   static_cast<int32_t>(alias_node->str_len_));
+              }
             } else {
               alias_node = project_node->children_[0];
               select_item.alias_name_.assign_ptr(const_cast<char *>(alias_node->str_value_),
@@ -2341,7 +2354,12 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
             }
           } else {
             // mysql mode
-            if (T_COLUMN_REF != project_node->type_ || project_node->num_child_ < 3) {
+            if (project_node->type_ == T_FUN_SYS && project_node->num_child_ > 0
+                && ObSequenceNamespaceChecker::is_curr_or_next_val(project_node->children_[0]->str_value_)) {
+              alias_node = project_node->children_[0];
+              select_item.alias_name_.assign_ptr(const_cast<char *>(alias_node->str_value_),
+                                                 static_cast<int32_t>(alias_node->str_len_));
+            } else if (T_COLUMN_REF != project_node->type_ || project_node->num_child_ < 3) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpected select item type",
                        K(select_item), K(project_node->type_), K(project_node->num_child_), K(ret));
@@ -6705,6 +6723,60 @@ int ObSelectResolver::check_window_exprs()
     }
   }
 
+  for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_grouping_sets_items_size(); ++i) {
+    const ObGroupingSetsItem &grouping_set_item = select_stmt->get_grouping_sets_items().at(i);
+    const ObIArray<ObRollupItem> &rollup_items = grouping_set_item.rollup_items_;
+    const ObIArray<ObCubeItem> &cube_items = grouping_set_item.cube_items_;
+    if (OB_FAIL(check_window_func_in_group_by_exprs(grouping_set_item.grouping_sets_exprs_))) {
+      LOG_WARN("check window function in grouping sets exprs failed", K(ret), K(i));
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && j < rollup_items.count(); ++j) {
+      const ObRollupItem &rollup_item = rollup_items.at(j);
+      if (OB_FAIL(check_window_func_in_group_by_exprs(rollup_item.rollup_list_exprs_))) {
+        LOG_WARN("check window function in rollup items in grouping sets failed", K(ret), K(i), K(j));
+      }
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && j < cube_items.count(); ++j) {
+      const ObCubeItem &cube_item = cube_items.at(j);
+      if (OB_FAIL(check_window_func_in_group_by_exprs(cube_item.cube_list_exprs_))) {
+        LOG_WARN("check window function in cube items in grouping sets failed", K(ret), K(i), K(j));
+      }
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_rollup_items_size(); ++i) {
+    const ObRollupItem &rollup_item = select_stmt->get_rollup_items().at(i);
+    if (OB_FAIL(check_window_func_in_group_by_exprs(rollup_item.rollup_list_exprs_))) {
+      LOG_WARN("check window function in rollup items failed", K(ret), K(i));
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_cube_items_size(); ++i) {
+    const ObCubeItem &cube_item = select_stmt->get_cube_items().at(i);
+    if (OB_FAIL(check_window_func_in_group_by_exprs(cube_item.cube_list_exprs_))) {
+      LOG_WARN("check window function in cube items failed", K(ret), K(i));
+    }
+  }
+
+  return ret;
+}
+
+int ObSelectResolver::check_window_func_in_group_by_exprs(const ObIArray<ObGroupbyExpr> &group_by_exprs)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < group_by_exprs.count(); ++i) {
+    const ObIArray<ObRawExpr *> &group_exprs = group_by_exprs.at(i).groupby_exprs_;
+    for (int64_t j = 0; OB_SUCC(ret) && j < group_exprs.count(); ++j) {
+      ObRawExpr *expr = group_exprs.at(j);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is null", K(ret));
+      } else if (OB_UNLIKELY(expr->has_flag(CNT_WINDOW_FUNC))) {
+        ret = OB_ERR_INVALID_WINDOW_FUNC_USE;
+        LOG_WARN("window function exists in group by not supported", K(ret), K(*expr), K(i), K(j));
+      }
+    }
+  }
   return ret;
 }
 

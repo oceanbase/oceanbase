@@ -192,6 +192,13 @@ private:
   int create_index_column_group(const obrpc::ObCreateIndexArg &arg,
                                 share::schema::ObTableSchema &index_table_schema);
 
+
+  int check_index_for_if_not_exist_(const uint64_t tenant_id,
+                                    const ObString database_name,
+                                    const ObString index_name,
+                                    share::schema::ObSchemaGetterGuard &schema_guard,
+                                    obrpc::ObAlterTableRes &res);
+
 private:
   ObDDLService &ddl_service_;
 private:

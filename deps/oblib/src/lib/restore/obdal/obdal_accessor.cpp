@@ -49,6 +49,10 @@ public:
   {
     opendal_fin_env();
   }
+  static void obdal_get_tenant_id(int64_t &tenant_id)
+  {
+    tenant_id = opendal_get_tenant_id();
+  }
   // span
   static void obdal_span_new(ObSpan *&span, const int64_t tenant_id, const char *trace_id)
   {
@@ -943,6 +947,13 @@ void ObDalAccessor::fin_env()
   if (OB_FAIL(do_safely_without_ret(ObDalRetryLayer::obdal_fin_env))) {
     OB_LOG(WARN, "failed to fin obdal env", K(ret));
   }
+}
+
+int64_t ObDalAccessor::obdal_get_tenant_id()
+{
+  int64_t tenant_id = OB_SERVER_TENANT_ID;
+  ObDalWrapper::obdal_get_tenant_id(tenant_id);
+  return tenant_id;
 }
 
 int ObDalAccessor::obdal_operator_options_new(opendal_operator_options *&options)

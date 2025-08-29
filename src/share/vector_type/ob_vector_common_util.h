@@ -23,6 +23,7 @@
 #include "common/object/ob_object.h"
 #include "sql/session/ob_sql_session_mgr.h"
 #include "sql/engine/expr/ob_expr_vector.h"
+#include "share/allocator/ob_tenant_vector_allocator.h"
 
 namespace oceanbase {
 namespace share {
@@ -109,7 +110,7 @@ private:
 class ObVectorNormalize final
 {
 public:
-  static int L2_normalize_vector(const int64_t dim, float *data, float *norm_vector);
+  static int L2_normalize_vector(const int64_t dim, float *data, float *norm_vector, bool *do_normalize = nullptr);
   static int L2_normalize_vectors(const int64_t dim, const int64_t count, float *datas, float *norm_vectors);
   // others if needed
 };
@@ -129,7 +130,7 @@ struct ObVectorNormalizeInfo
 
   int normalize_vectors(const int64_t dim, const int64_t count, float *datas, float *norm_vectors);
 
-  using FuncPtrType = int (*)(const int64_t dim, float *data, float *norm_vector);
+  using FuncPtrType = int (*)(const int64_t dim, float *data, float *norm_vector, bool *do_normalize);
 
   ObVectorNormalizeType type_;
   FuncPtrType normalize_func_;
@@ -138,13 +139,14 @@ struct ObVectorNormalizeInfo
 template <typename T>
 struct ObCentersBuffer
 {
-  ObCentersBuffer()
+  explicit ObCentersBuffer()
     : dim_(0),
       total_cnt_(0),
+      ivf_build_mem_ctx_(nullptr),
       vectors_()
   {}
   ~ObCentersBuffer() { destroy(); }
-  int init(const int64_t dim, const int64_t capacity, ObIAllocator &allocator);
+  int init(const int64_t dim, const int64_t capacity, ObIvfMemContext &ivf_build_mem_ctx);
   void destroy();
 
   T* at(const int64_t idx)
@@ -162,7 +164,7 @@ struct ObCentersBuffer
 
   int64_t dim_;
   int32_t total_cnt_;
-  ObIAllocator *allocator_;
+  ObIvfMemContext *ivf_build_mem_ctx_; // from ObIvfBuildHelper, used for alloc memory for kmeans build process
   // T *vectors_; // dim_ * capacity_
   common::ObArrayWrap<T*> vectors_;
 };
@@ -170,6 +172,14 @@ struct ObCentersBuffer
 class ObVectorClusterHelper
 {
 public:
+  enum IvfParseCentIdFlag: uint8_t  {
+    IVF_PARSE_TABLET_ID = 0x1,
+    IVF_PARSE_CENTER_ID = 0x2,
+    IVF_PARSE_M_ID      = 0x4, // only for pq
+    IVF_PARSE_CENTER    = IVF_PARSE_TABLET_ID | IVF_PARSE_CENTER_ID,
+    IVF_PARSE_PQ_CENTER = IVF_PARSE_TABLET_ID | IVF_PARSE_CENTER_ID | IVF_PARSE_M_ID,
+  };
+
   ObVectorClusterHelper()
   : max_heap_(max_compare_)
   {}
@@ -184,12 +194,13 @@ public:
       int l_idx = 0,
       int r_idx = -1);
   int get_center_idx(const int64_t idx, int64_t &center_id);
+  int get_pq_center_idx(const int64_t idx, const int64_t pq_center_num, int64_t &center_id);
   int get_center_vector(const int64_t idx, const ObIArray<float *> &centers, float*& center_vector);
   void reset();
 
-  static int get_center_id_from_string(ObCenterId &center_id, const ObString &str);
-  static int set_center_id_to_string(const ObCenterId &center_id, ObString &str);
-  static int get_pq_center_id_from_string(ObPqCenterId &pq_center_id, const ObString &str);
+  static int get_center_id_from_string(ObCenterId &center_id, const ObString &str, uint8_t flag = IVF_PARSE_CENTER);
+  static int set_center_id_to_string(const ObCenterId &center_id, ObString &str, ObIAllocator *allocator = nullptr);
+  static int get_pq_center_id_from_string(ObPqCenterId &pq_center_id, const ObString &str, uint8_t flag = IVF_PARSE_PQ_CENTER);
   static int set_pq_center_id_to_string(const ObPqCenterId &pq_center_id, ObString &str, ObIAllocator *alloc = nullptr);
 
   static int create_inner_session(
@@ -233,7 +244,7 @@ protected:
   };
 public:
   typedef common::ObBinaryHeap<HeapCenterItem, MaxHeapCompare, 64> CenterMaxHeap;
-  typedef common::ObBinaryHeap<HeapCenterItem, MaxHeapCompare, 64> CenterMinHeap;
+  typedef common::ObBinaryHeap<HeapCenterItem, MinHeapCompare, 64> CenterMinHeap;
 
 private:
   MaxHeapCompare max_compare_;
@@ -293,6 +304,8 @@ template <>
 int ObCenterWithBuf<ObRowkey>::new_from_src(const ObRowkey &src_rowkey);
 template <>
 int ObCenterWithBuf<ObString>::new_from_src(const ObString &src_cid);
+template <>
+int ObCenterWithBuf<ObCenterId>::new_from_src(const ObCenterId &src_cid);
 
 template<typename T>
 struct ObVecWithDim
@@ -336,23 +349,32 @@ struct ObVecWithDim
   T *vec_;
 };
 
-template <typename VEC_T, typename CENTER_T>
-class ObVectorCentorClusterHelper
+enum CenterSaveMode
 {
-public:
-  ObVectorCentorClusterHelper(ObIAllocator &allocator, const VEC_T *const_vec, oceanbase::sql::ObExprVectorDistance::ObVecDisType dis_type, int64_t dim, int64_t nprobe)
-      : alloc_(allocator), const_vec_(const_vec), dis_type_(dis_type), dim_(dim), nprobe_(nprobe), max_heap_(max_compare_)
-  {
-    // fixme: use euclidean dis type instead dot
-    if (dis_type == oceanbase::sql::ObExprVectorDistance::ObVecDisType::DOT) {
-      dis_type_ = oceanbase::sql::ObExprVectorDistance::ObVecDisType::EUCLIDEAN;
-    }
-  }
+  NOT_SAVE_CENTER_VEC = 0,
+  DEEP_COPY_CENTER_VEC = 1,
+  SHALLOW_COPY_CENTER_VEC = 2,
+};
+template <typename VEC_T, typename CENTER_T>
+class ObVectorCenterClusterHelper
+{
 
-  int push_center(const CENTER_T &center, VEC_T *center_vec, const int64_t dim, bool save_center_vec = false);
-  int push_center(const CENTER_T &center, double distance, bool save_center_vec = false, VEC_T *center_vec = nullptr);
+public:
+  ObVectorCenterClusterHelper(ObIAllocator &allocator, const VEC_T *const_vec, oceanbase::sql::ObExprVectorDistance::ObVecDisType dis_type, int64_t dim, int64_t nprobe)
+      : alloc_(allocator), const_vec_(const_vec), dis_type_(dis_type), dim_(dim), nprobe_(nprobe), compare_(dis_type), heap_(compare_)
+  {}
+
+  int push_center(const CENTER_T &center, VEC_T *center_vec, const int64_t dim, CenterSaveMode center_save_mode = NOT_SAVE_CENTER_VEC);
+  int push_center(const CENTER_T &center, double distance, CenterSaveMode center_save_mode = NOT_SAVE_CENTER_VEC, VEC_T *center_vec = nullptr);
   int get_nearest_probe_center_ids(ObIArray<CENTER_T> &center_ids);
+  int get_nearest_probe_center_ids_dist(ObArrayWrap<bool> &nearest_cid_vecs);
+  int get_nearest_probe_centers_ptrs(ObArrayWrap<VEC_T *> &nearest_cid_vecs);
   int get_nearest_probe_centers(ObIArray<std::pair<CENTER_T, VEC_T *>> &center_ids);
+  int get_nearest_probe_centers_vec_dist(ObIArray<std::pair<CENTER_T, VEC_T *>> &center_ids,
+                                         ObIArray<float> &distances);
+  int64_t get_center_count() const {
+    return heap_.count();
+  }
 
  public:
   struct HeapCenterItemTemp
@@ -369,19 +391,32 @@ public:
     ObVecWithDim<VEC_T> vec_dim_;
     TO_STRING_KV(K_(distance), KP_(center_with_buf), K_(vec_dim));
   };
-  struct MaxHeapCompare {
+  struct HeapCompare {
+    HeapCompare() : is_max_heap_(true) {}
+    explicit HeapCompare(oceanbase::sql::ObExprVectorDistance::ObVecDisType dis_type) {
+      if (dis_type == oceanbase::sql::ObExprVectorDistance::ObVecDisType::DOT) {
+        is_max_heap_ = false;
+      } else {
+        is_max_heap_ = true;
+      }
+    }
     bool operator()(const HeapCenterItemTemp &lhs, const HeapCenterItemTemp &rhs)
     {
-      return lhs.distance_ < rhs.distance_ ? true : false;
+      if (is_max_heap_) {
+        return lhs.distance_ < rhs.distance_ ? true : false;
+      } else {
+        return lhs.distance_ > rhs.distance_ ? true : false;
+      }
     }
     int get_error_code() const
     {
       return OB_SUCCESS;
     }
+    bool is_max_heap_ = true;
   };
 
 public:
-  typedef common::ObBinaryHeap<HeapCenterItemTemp, MaxHeapCompare, 64> CenterMaxHeap;
+  typedef common::ObBinaryHeap<HeapCenterItemTemp, HeapCompare, 64> CenterHeap;
 
 private:
   ObIAllocator &alloc_;
@@ -389,35 +424,51 @@ private:
   oceanbase::sql::ObExprVectorDistance::ObVecDisType dis_type_;
   int64_t dim_;
   int64_t nprobe_;
-  MaxHeapCompare max_compare_;
-  CenterMaxHeap max_heap_;
+  HeapCompare compare_;
+  CenterHeap heap_;
 };
 
 // ------------------ ObCentersBuffer implement ------------------
 template <typename T>
-int ObCentersBuffer<T>::init(const int64_t dim, const int64_t capacity, ObIAllocator &allocator)
+int ObCentersBuffer<T>::init(const int64_t dim, const int64_t capacity, ObIvfMemContext &ivf_build_mem_ctx)
 {
   int ret = OB_SUCCESS;
   if (0 >= dim || 0 >= capacity) {
     ret = OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "invalid argument", K(ret), K(dim), K(capacity));
-  } else if (OB_FAIL(vectors_.allocate_array(allocator, capacity))) {
-    SHARE_LOG(WARN, "failed to allocate array", K(ret), K(dim), K(capacity));
+  } else if (OB_FALSE_IT(ivf_build_mem_ctx_ = &ivf_build_mem_ctx)) {
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < capacity; ++i) {
-      T *vector = nullptr;
-      if (OB_ISNULL(vector = static_cast<T*>(allocator.alloc(dim * sizeof(T))))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        SHARE_LOG(WARN, "failed to alloc memory", K(ret), K(dim));
+    T **tmp_data = nullptr;
+    void *tmp_buf = nullptr;
+    int64_t size = capacity * sizeof(T *);
+    if (OB_ISNULL(tmp_buf = ivf_build_mem_ctx_->Allocate(size))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      SHARE_LOG(WARN, "failed to alloc tmp_buf", K(ret), K(ivf_build_mem_ctx_->get_all_vsag_use_mem_byte()));
+    } else {
+      tmp_data = new (tmp_buf) T *[capacity];
+      common::ObArrayWrap<T*> tmp_vectors(tmp_data, capacity);
+      if (OB_FAIL(vectors_.assign(tmp_vectors))) {
+        SHARE_LOG(WARN, "failed to assign array", K(ret), K(dim), K(capacity));
       } else {
-        MEMSET(vector, 0, sizeof(T) * dim);
-        vectors_.at(i) = vector;
+        memset(vectors_.get_data(), 0, vectors_.count() * sizeof(T *));
+        for (int64_t i = 0; OB_SUCC(ret) && i < capacity; ++i) {
+          T *vector = nullptr;
+          if (OB_ISNULL(vector = static_cast<T*>(ivf_build_mem_ctx_->Allocate(dim * sizeof(T))))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            SHARE_LOG(WARN, "failed to alloc memory", K(ret), K(dim), K(ivf_build_mem_ctx_->get_all_vsag_use_mem_byte()));
+          } else {
+            MEMSET(vector, 0, sizeof(T) * dim);
+            vectors_.at(i) = vector;
+          }
+        }
+        if (OB_SUCC(ret)) {
+          dim_ = dim;
+          total_cnt_ = 0;
+        } else {
+          // need release
+          destroy();
+        }
       }
-    }
-    if (OB_SUCC(ret)) {
-      dim_ = dim;
-      total_cnt_ = 0;
-      allocator_ = &allocator;
     }
   }
   return ret;
@@ -426,14 +477,24 @@ int ObCentersBuffer<T>::init(const int64_t dim, const int64_t capacity, ObIAlloc
 template <typename T>
 void ObCentersBuffer<T>::destroy()
 {
-  for (int64_t i = 0; i < vectors_.count(); ++i) {
-    T *vector = vectors_.at(i);
-    if (OB_NOT_NULL(allocator_)) {
-      allocator_->free(vector);
+  if (OB_NOT_NULL(ivf_build_mem_ctx_)) {
+    for (int64_t i = 0; i < vectors_.count(); ++i) {
+      T *&vector = vectors_.at(i);
+      if (OB_NOT_NULL(vector)) {
+        ivf_build_mem_ctx_->Deallocate(vector);
+        vector = nullptr;
+      }
+    }
+    char *data = reinterpret_cast<char *>(vectors_.get_data());
+    if (OB_NOT_NULL(data)) {
+      vectors_.release_array();
+      ivf_build_mem_ctx_->Deallocate(data);
     }
   }
+
   dim_ = 0;
   total_cnt_ = 0;
+  ivf_build_mem_ctx_ = nullptr;
 }
 
 template <typename T>
@@ -512,13 +573,13 @@ int ObCentersBuffer<T>::get_nearest_center(const int64_t dim, T *vector, int64_t
 template <>
 int ObCentersBuffer<float>::get_nearest_center(const int64_t dim, float *vector, int64_t &center_idx);
 
-// ------------------------------- ObVectorCentorClusterHelper implement --------------------------------
+// ------------------------------- ObVectorCenterClusterHelper implement --------------------------------
 template <typename VEC_T, typename CENTER_T>
-int ObVectorCentorClusterHelper<VEC_T, CENTER_T>::push_center(
+int ObVectorCenterClusterHelper<VEC_T, CENTER_T>::push_center(
     const CENTER_T &center,
     VEC_T *center_vec,
     const int64_t dim,
-    bool save_center_vec /*= false*/)
+    CenterSaveMode center_save_mode /*= NOT_SAVE_CENTER_VEC*/)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(center_vec) || dim_ != dim) {
@@ -528,7 +589,7 @@ int ObVectorCentorClusterHelper<VEC_T, CENTER_T>::push_center(
     double distance = DBL_MAX;
     if (OB_FAIL(oceanbase::sql::ObExprVectorDistance::DisFunc<VEC_T>::distance_funcs[dis_type_](const_vec_, center_vec, dim_, distance))) {
       SHARE_LOG(WARN, "failed to get distance type", K(ret));
-    } else if (OB_FAIL(push_center(center, distance, save_center_vec, center_vec))) {
+    } else if (OB_FAIL(push_center(center, distance, center_save_mode, center_vec))) {
       SHARE_LOG(WARN, "fail to push back center with distance", K(ret), K(distance));
     }
   }
@@ -537,14 +598,14 @@ int ObVectorCentorClusterHelper<VEC_T, CENTER_T>::push_center(
 }
 
 template <typename VEC_T, typename CENTER_T>
-int ObVectorCentorClusterHelper<VEC_T, CENTER_T>::push_center(
+int ObVectorCenterClusterHelper<VEC_T, CENTER_T>::push_center(
   const CENTER_T &center,
   double distance,
-  bool save_center_vec /*= false*/,
+  CenterSaveMode center_save_mode /*= NOT_SAVE_CENTER_VEC*/,
   VEC_T *center_vec /*= nullptr*/)
 {
   int ret = OB_SUCCESS;
-  if (max_heap_.count() < nprobe_) {
+  if (heap_.count() < nprobe_) {
     void *ptr = alloc_.alloc(sizeof(ObCenterWithBuf<CENTER_T>));
     if (NULL == ptr) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
@@ -558,20 +619,21 @@ int ObVectorCentorClusterHelper<VEC_T, CENTER_T>::push_center(
         SHARE_LOG(WARN, "center_entity fail init", K(ret));
       } else {
         HeapCenterItemTemp item(distance, center_with_buf);
-        if (save_center_vec && OB_FAIL(item.vec_dim_.new_from_src(alloc_, center_vec, dim_))) {
+        if (center_save_mode == DEEP_COPY_CENTER_VEC && OB_FAIL(item.vec_dim_.new_from_src(alloc_, center_vec, dim_))) {
           SHARE_LOG(WARN, "failed to new from src", K(ret), K(center_vec));
+        } else if (center_save_mode == SHALLOW_COPY_CENTER_VEC && OB_FALSE_IT(item.vec_dim_.vec_ = center_vec)) {
         }
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(max_heap_.push(item))) {
+        } else if (OB_FAIL(heap_.push(item))) {
           SHARE_LOG(WARN, "failed to push center heap", K(ret), K(center), K(distance));
         }
       }
     }
   } else {
-    const HeapCenterItemTemp &top = max_heap_.top();
+    const HeapCenterItemTemp &top = heap_.top();
     ObCenterWithBuf<CENTER_T> tmp_center_with_buf;
     HeapCenterItemTemp tmp(distance, &tmp_center_with_buf);
-    if (max_compare_(tmp, top)) {
+    if (compare_(tmp, top)) {
       ObCenterWithBuf<CENTER_T> *old_center_with_buf = top.center_with_buf_;
       if (OB_ISNULL(old_center_with_buf)) {
         ret = OB_ERR_UNEXPECTED;
@@ -580,14 +642,17 @@ int ObVectorCentorClusterHelper<VEC_T, CENTER_T>::push_center(
         SHARE_LOG(WARN, "failed to new from src", K(ret), K(center));
       } else {
         HeapCenterItemTemp new_top(distance, old_center_with_buf);
-        if (save_center_vec) {
+        if (center_save_mode == DEEP_COPY_CENTER_VEC) {
           new_top.set_vec_dim(top.vec_dim_);
           if (OB_FAIL(new_top.vec_dim_.reuse_from_src(center_vec, dim_))) {
             SHARE_LOG(WARN, "failed to new from src", K(ret), K(center_vec));
           }
+        } else if (center_save_mode == SHALLOW_COPY_CENTER_VEC) {
+          new_top.set_vec_dim(top.vec_dim_);
+          new_top.vec_dim_.vec_ = center_vec;
         }
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(max_heap_.replace_top(new_top))) {
+        } else if (OB_FAIL(heap_.replace_top(new_top))) {
           SHARE_LOG(WARN, "failed to replace top", K(ret), K(new_top));
         }
       }
@@ -597,22 +662,22 @@ int ObVectorCentorClusterHelper<VEC_T, CENTER_T>::push_center(
 }
 
 template <typename VEC_T, typename CENTER_T>
-int ObVectorCentorClusterHelper<VEC_T, CENTER_T>::get_nearest_probe_center_ids(ObIArray<CENTER_T> &center_ids)
+int ObVectorCenterClusterHelper<VEC_T, CENTER_T>::get_nearest_probe_center_ids(ObIArray<CENTER_T> &center_ids)
 {
   int ret = OB_SUCCESS;
-  if (max_heap_.count() > nprobe_) {
+  if (heap_.count() > nprobe_) {
     ret = OB_ERR_UNEXPECTED;
-    SHARE_LOG(WARN, "max heap count is not equal to nprobe", K(ret), K(max_heap_.count()), K(nprobe_));
+    SHARE_LOG(WARN, "max heap count is not equal to nprobe", K(ret), K(heap_.count()), K(nprobe_));
   }
-  while(OB_SUCC(ret) && !max_heap_.empty()) {
-    const HeapCenterItemTemp &cur_top = max_heap_.top();
+  while(OB_SUCC(ret) && !heap_.empty()) {
+    const HeapCenterItemTemp &cur_top = heap_.top();
     if (OB_ISNULL(cur_top.center_with_buf_)) {
       ret = OB_ERR_UNEXPECTED;
       SHARE_LOG(WARN, "center_with_buf is null", K(ret));
     } else if (OB_FAIL(center_ids.push_back(cur_top.center_with_buf_->get_center()))) {
       ret = OB_ERR_UNEXPECTED;
       SHARE_LOG(WARN, "failed to push center id", K(ret), K(cur_top.center_with_buf_->get_center()));
-    } else if (OB_FAIL(max_heap_.pop())) {
+    } else if (OB_FAIL(heap_.pop())) {
       ret = OB_ERR_UNEXPECTED;
       SHARE_LOG(WARN, "failed to pop max heap", K(ret));
     }
@@ -625,28 +690,79 @@ int ObVectorCentorClusterHelper<VEC_T, CENTER_T>::get_nearest_probe_center_ids(O
 }
 
 template <typename VEC_T, typename CENTER_T>
-int ObVectorCentorClusterHelper<VEC_T, CENTER_T>::get_nearest_probe_centers(ObIArray<std::pair<CENTER_T, VEC_T *>> &center_ids)
+int ObVectorCenterClusterHelper<VEC_T, CENTER_T>::get_nearest_probe_center_ids_dist(ObArrayWrap<bool> &nearest_cid_dist)
+{
+  int ret = OB_NOT_SUPPORTED;
+  SHARE_LOG(WARN, "not define", K(ret));
+  return ret;
+}
+
+template <>
+int ObVectorCenterClusterHelper<float, ObCenterId>::get_nearest_probe_center_ids_dist(ObArrayWrap<bool> &nearest_cid_dist);
+
+template <typename VEC_T, typename CENTER_T>
+int ObVectorCenterClusterHelper<VEC_T, CENTER_T>::get_nearest_probe_centers_ptrs(ObArrayWrap<VEC_T *> &nearest_cid_dist)
+{
+  int ret = OB_NOT_SUPPORTED;
+  SHARE_LOG(WARN, "not define", K(ret));
+  return ret;
+}
+
+template <>
+int ObVectorCenterClusterHelper<float, ObCenterId>::get_nearest_probe_centers_ptrs(ObArrayWrap<float *> &nearest_cid_dist);
+
+template <typename VEC_T, typename CENTER_T>
+int ObVectorCenterClusterHelper<VEC_T, CENTER_T>::get_nearest_probe_centers(ObIArray<std::pair<CENTER_T, VEC_T *>> &center_ids)
 {
   int ret = OB_SUCCESS;
-  if (max_heap_.count() > nprobe_) {
+  if (heap_.count() > nprobe_) {
     ret = OB_ERR_UNEXPECTED;
-    SHARE_LOG(WARN, "max heap count is not equal to nprobe", K(ret), K(max_heap_.count()), K(nprobe_));
+    SHARE_LOG(WARN, "max heap count is not equal to nprobe", K(ret), K(heap_.count()), K(nprobe_));
   }
-  while(OB_SUCC(ret) && !max_heap_.empty()) {
-    const HeapCenterItemTemp &cur_top = max_heap_.top();
+  while(OB_SUCC(ret) && !heap_.empty()) {
+    const HeapCenterItemTemp &cur_top = heap_.top();
     if (OB_ISNULL(cur_top.center_with_buf_)) {
       ret = OB_ERR_UNEXPECTED;
       SHARE_LOG(WARN, "center_with_buf is null", K(ret), K(cur_top));
     } else if (OB_FAIL(center_ids.push_back(std::make_pair(cur_top.center_with_buf_->get_center(), cur_top.vec_dim_.vec_)))) {
       ret = OB_ERR_UNEXPECTED;
       SHARE_LOG(WARN, "failed to push center id", K(ret), K(cur_top));
-    } else if (OB_FAIL(max_heap_.pop())) {
+    } else if (OB_FAIL(heap_.pop())) {
       ret = OB_ERR_UNEXPECTED;
       SHARE_LOG(WARN, "failed to pop max heap", K(ret));
     }
   }
   return ret;
 }
+
+template <typename VEC_T, typename CENTER_T>
+int ObVectorCenterClusterHelper<VEC_T, CENTER_T>::get_nearest_probe_centers_vec_dist(
+  ObIArray<std::pair<CENTER_T, VEC_T *>> &center_ids, ObIArray<float>& distances)
+{
+  int ret = OB_SUCCESS;
+  if (heap_.count() > nprobe_) {
+    ret = OB_ERR_UNEXPECTED;
+    SHARE_LOG(WARN, "max heap count is not equal to nprobe", K(ret), K(heap_.count()), K(nprobe_));
+  }
+  while(OB_SUCC(ret) && !heap_.empty()) {
+    const HeapCenterItemTemp &cur_top = heap_.top();
+    if (OB_ISNULL(cur_top.center_with_buf_)) {
+      ret = OB_ERR_UNEXPECTED;
+      SHARE_LOG(WARN, "center_with_buf is null", K(ret), K(cur_top));
+    } else if (OB_FAIL(center_ids.push_back(std::make_pair(cur_top.center_with_buf_->get_center(), cur_top.vec_dim_.vec_)))) {
+      ret = OB_ERR_UNEXPECTED;
+      SHARE_LOG(WARN, "failed to push center id", K(ret), K(cur_top));
+    } else if (OB_FAIL(distances.push_back(cur_top.distance_))) {
+      ret = OB_ERR_UNEXPECTED;
+      SHARE_LOG(WARN, "failed to push distance", K(ret), K(cur_top));
+    } else if (OB_FAIL(heap_.pop())) {
+      ret = OB_ERR_UNEXPECTED;
+      SHARE_LOG(WARN, "failed to pop max heap", K(ret));
+    }
+  }
+  return ret;
+}
+
 }
 }
 

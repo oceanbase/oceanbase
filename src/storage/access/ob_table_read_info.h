@@ -17,6 +17,7 @@
 #include "storage/meta_mem/ob_meta_obj_struct.h"
 #include "storage/blocksstable/ob_datum_row.h"
 #include "storage/ob_storage_schema.h"
+#include "storage/ob_micro_block_format_version_helper.h"
 
 namespace oceanbase {
 namespace share {
@@ -148,16 +149,18 @@ public:
       is_oracle_mode_(false),
       allocator_(nullptr),
       schema_column_count_(0),
-      compat_version_(READ_INFO_VERSION_V4),
+      compat_version_(READ_INFO_VERSION_LATEST),
       is_cs_replica_compat_(false),
       is_delete_insert_table_(false),
+      is_mv_major_refresh_tablet_(false),
       reserved_(0),
       schema_rowkey_cnt_(0),
       rowkey_cnt_(0),
       cols_desc_(),
       cols_index_(rowkey_mode, false/*for_memtable*/),
       memtable_cols_index_(rowkey_mode, true/*for_memtable*/),
-      datum_utils_()
+      datum_utils_(),
+      micro_block_format_version_(ObMicroBlockFormatVersionHelper::DEFAULT_VERSION)
   {}
   virtual ~ObReadInfoStruct() { reset(); }
   virtual bool is_valid() const override
@@ -234,6 +237,8 @@ public:
   }
   OB_INLINE bool is_cs_replica_compat() const { return is_cs_replica_compat_; }
   OB_INLINE bool is_delete_insert_table() const { return is_delete_insert_table_; }
+  OB_INLINE bool is_mv_major_refresh_tablet() const { return is_mv_major_refresh_tablet_; }
+  OB_INLINE int64_t get_micro_block_format_version() const { return micro_block_format_version_; }
   DECLARE_VIRTUAL_TO_STRING;
   int generate_for_column_store(ObIAllocator &allocator,
                                 const ObColDesc &desc,
@@ -244,7 +249,9 @@ public:
                        const bool is_cg_sstable,
                        const bool is_cs_replica_compat,
                        const bool is_delete_insert_table,
-                       const bool is_global_index_table);
+                       const bool is_global_index_table,
+                       const int64_t micro_block_format_version,
+                       const bool is_mv_major_refresh_tablet);
   int prepare_arrays(common::ObIAllocator &allocator,
                      const common::ObIArray<ObColDesc> &cols_desc,
                      const int64_t col_cnt);
@@ -256,9 +263,10 @@ protected:
   static const int64_t READ_INFO_VERSION_V3 = 3;
   static const int64_t READ_INFO_VERSION_V4 = 4;
   static const int64_t READ_INFO_VERSION_V5 = 5; // after V4.3.5 bp3
-  static const int64_t READ_INFO_VERSION_LATEST = READ_INFO_VERSION_V5;
+  static const int64_t READ_INFO_VERSION_V6 = 6; // after V4.4.1
+  static const int64_t READ_INFO_VERSION_LATEST = READ_INFO_VERSION_V6;
   static const int32_t READ_INFO_ONE_BIT = 1;
-  static const int32_t READ_INFO_RESERVED_BITS = 13;
+  static const int32_t READ_INFO_RESERVED_BITS = 12;
 
   bool is_inited_;
   bool is_oracle_mode_;
@@ -272,6 +280,7 @@ protected:
       uint16_t is_cs_replica_compat_   : READ_INFO_ONE_BIT; // only used for rowkey_read_info in ObTablet
       uint16_t is_delete_insert_table_ : READ_INFO_ONE_BIT;
       uint16_t is_global_index_table_  : READ_INFO_ONE_BIT; // only used for rowkey_read_info in ObTablet
+      uint16_t is_mv_major_refresh_tablet_  : READ_INFO_ONE_BIT; // only used for rowkey_read_info in ObTablet
       uint16_t reserved_               : READ_INFO_RESERVED_BITS;
     };
   };
@@ -281,6 +290,7 @@ protected:
   ObColumnIndexArray cols_index_; // col index in sstable
   ObColumnIndexArray memtable_cols_index_; // there is no multi verison rowkey col in memtable
   blocksstable::ObStorageDatumUtils datum_utils_;
+  int64_t micro_block_format_version_;
 };
 
 class ObTableReadInfo : public ObReadInfoStruct
@@ -310,7 +320,8 @@ public:
       const bool has_all_column_group = true,
       const bool is_cg_sstable = false,
       const bool need_truncate_filter = false,
-      const bool is_delete_insert_table = false);
+      const bool is_delete_insert_table = false,
+      const int64_t micro_block_format_version = ObMicroBlockFormatVersionHelper::DEFAULT_VERSION);
   int mock_for_sstable_query(
     common::ObIAllocator &allocator,
     const int64_t schema_column_count,
@@ -419,7 +430,9 @@ public:
       const bool use_default_compat_version = false,
       const bool is_cs_replica_compat = false,
       const bool is_delete_insert_table = false,
-      const bool is_global_index = false);
+      const bool is_global_index = false,
+      const int64_t micro_block_format_version = ObMicroBlockFormatVersionHelper::DEFAULT_VERSION,
+      const bool is_mv_major_refresh_tablet = false);
   OB_INLINE virtual int64_t get_seq_read_column_count() const override
   { return get_request_count(); }
   OB_INLINE virtual int64_t get_trans_col_index() const override

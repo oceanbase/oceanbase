@@ -80,6 +80,7 @@ enum ObJBVerType:uint8_t {
   J_FORWARD_V0 = 31,
   J_MYSQL_DATE_V0 = 32,
   J_MYSQL_DATETIME_V0 = 33,
+  J_SEMI_HETE_COL_V0 = 34,
 
   J_ERROR_V0 = 200
 };

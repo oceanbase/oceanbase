@@ -231,7 +231,6 @@ int LsElectionReferenceInfoRow::set_or_replace_server_in_blacklist(
   } else if (CLICK_FAIL(write_and_commit_())) {
     COORDINATOR_LOG_(WARN, "failed when convert info, write row, end trans");
   } else {
-    ObCStringHelper helper;
     COORDINATOR_LOG_(INFO, "set_or_replace_server_in_blacklist", K(server), "reason", to_cstring(reason));
   }
   if (trans_.is_started()) {

@@ -57,6 +57,8 @@ public:
   static const int64_t BUCKET_CNT = ObTmpFileWriteCacheFreePageList::MAX_FREE_LIST_NUM * 8;
   static const int64_t MAX_FLUSHING_DATA_SIZE = 400 * ObTmpFileGlobal::SN_BLOCK_SIZE;
   static const int64_t ACCESS_TENANT_CONFIG_TIMEOUT_US = 10 * 1000; // 10ms
+  static const int64_t MAX_FLUSH_TASK_NUM_PER_BATCH = 1024;
+  static const int64_t MAX_ITER_BLOCK_NUM_PER_BATCH = 1024;
 
   static const int64_t FLUSH_WATERMARK_L1 = 90;
   static const int64_t FLUSH_WATERMARK_L2 = 80;
@@ -106,12 +108,19 @@ private:
   int swap_page_(const int64_t timeout_ms);
 
   int flush_();
-  int build_task_(const int64_t expect_flush_cnt, ObTmpFileBlockFlushIterator &iterator);
+  int build_task_(const int64_t expect_flush_cnt,
+                  ObTmpFileBlockFlushIterator &iterator,
+                  ObIArray<ObTmpFileFlushTask *> &tasks,
+                  ObIArray<ObTmpFileBlockHandle> &failed_blocks);
+  int build_task_in_block_(
+                  ObTmpFileBlockHandle &block_handle,
+                  ObIArray<ObTmpFileFlushTask *> &tasks,
+                  ObIArray<ObTmpFileBlockHandle> &failed_blocks,
+                  int64_t &actual_flush_cnt);
   int collect_pages_(ObTmpFileBlockFlushingPageIterator &page_iterator,
                      ObTmpFileFlushTask &task,
                      ObTmpFileBlockHandle block_handle);
   int exec_wait_();
-  int reinsert_block_for_flushing_(ObIArray<ObTmpFileBlockHandle> &failed_blocks);
   int alloc_flush_task_(ObTmpFileFlushTask *&task);
   int free_flush_task_(ObTmpFileFlushTask *task);
   int add_flush_task_(ObTmpFileFlushTask *task);

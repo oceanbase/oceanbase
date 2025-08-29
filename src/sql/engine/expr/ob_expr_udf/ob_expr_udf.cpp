@@ -651,6 +651,8 @@ int ObExprUDF::eval_udf_vector(VECTOR_EVAL_FUNC_ARG_DECL)
   ObIVector *arg_vec[expr.arg_cnt_];
   ObIVector *res_vec = expr.get_vector(ctx);
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
+  batch_info_guard.set_batch_size(bound.end() - bound.start());
 
   for (int64_t i = 0;  OB_SUCC(ret) && i < expr.arg_cnt_; i++) {
     OZ (SMART_CALL(expr.args_[i]->eval_vector(ctx, skip, bound)));
@@ -664,11 +666,11 @@ int ObExprUDF::eval_udf_vector(VECTOR_EVAL_FUNC_ARG_DECL)
       continue;
     }
     OZ (build_udf_ctx(expr, ctx.exec_ctx_, udf_ctx));
+    OX (batch_info_guard.set_batch_idx(idx));
     OX (eval_flags.set(idx));
     OZ (transfer_vec_to_obj(udf_ctx->get_obj_stack(), arg_vec, expr, idx));
     OZ (eval_udf_single(expr, ctx, *udf_ctx, result));
-    OZ (deep_copy_obj(ctx.get_expr_res_alloc(), result, result));
-    OZ (transfer_obj_to_vec(result, res_vec, idx, expr.datum_meta_));
+    OZ (transfer_obj_to_vec(result, res_vec, idx, expr, ctx));
   }
   return ret;
 }

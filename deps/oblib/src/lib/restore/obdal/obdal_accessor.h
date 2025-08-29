@@ -36,6 +36,7 @@ public:
   static void fin_env();
 
 public:
+  static int64_t obdal_get_tenant_id();
   // operator
   static int obdal_operator_options_new(opendal_operator_options *&options);
   static int obdal_operator_options_set(opendal_operator_options *options, const char *key, const char *value);

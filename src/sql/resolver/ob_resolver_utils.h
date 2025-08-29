@@ -167,7 +167,7 @@ public:
   static int resolve_sparse_vector_type_info(const ParseNode &type_node,
                                       ObStringBuffer &buf,
                                       uint8_t &depth);
-  inline static bool is_collection_support_type(const ObObjType type);
+  static bool is_collection_support_type(const ObObjType type);
   // type_infos is %ori_cs_type, need convert to %cs_type first
   static int check_extended_type_info(common::ObIAllocator &alloc,
                                       ObIArray<ObString> &type_infos,
@@ -798,6 +798,7 @@ public:
                                           int64_t column_idx,
                                           const ObString &expr_name);
   static int calc_file_column_idx(const ObString &column_name, uint64_t &file_column_idx);
+  static int calc_file_column_external_name(const ObString &column_name, ObString &external_column_name);
   static int build_file_column_expr_for_odps(
     ObRawExprFactory &expr_factory,
     const ObSQLSessionInfo &session_info,
@@ -807,6 +808,7 @@ public:
     int64_t column_idx,
     const ObColumnSchemaV2 *column_schema,
     ObRawExpr *&expr);
+
   static int build_file_column_expr_for_csv(
     ObRawExprFactory &expr_factory,
     const ObSQLSessionInfo &session_info,
@@ -849,6 +851,8 @@ public:
     ObRawExpr *get_path_expr,
     ObRawExpr *cast_expr,
     const ObColumnSchemaV2 *generated_column,
+    bool is_index_by_pos,
+    uint64_t column_idx,
     ObRawExpr *&expr);
   //only used for DDL resolver, resolve a PSEUDO column expr for validation and printer not for execution
   static int resolve_external_table_column_def(ObRawExprFactory &expr_factory,
@@ -877,6 +881,7 @@ public:
                                              ObExternalFileFormat &format,
                                              ObResolverParams &params);
   static int resolve_binary_format(const ParseNode *node, ObExternalFileFormat &format);
+  static int resolve_column_index_type(const ParseNode *node, ObExternalFileFormat &format);
   static int wrap_csv_binary_format_expr(ObResolverParams &params, const ObCSVGeneralFormat& csv_format, ObRawExpr *&real_ref_expr);
   static int resolve_file_format_string_value(const ParseNode *node,
                                               const ObCharsetType &format_charset,

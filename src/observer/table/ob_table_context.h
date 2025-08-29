@@ -341,7 +341,18 @@ public:
   }
 
   virtual ~ObTableCtx()
-  {}
+  {
+    // async query 中可能提前析构session, 因此exec_ctx这里必须先解绑, 不然可能 use after free
+    exec_ctx_.set_my_session(nullptr);
+    // session在其他线程回收, 也可能提前被回收,
+    // 但 exec_ctx_ 的生命周期一定比 session 短, 因此需要把session的exec_ctx_置空
+    // 上层需要保证使用时, 如果提前回收 session, 要把 tb_ctx 的绑定 session_guard 设置为空指针
+    // 此处只要判断sess_guard不为空, 我们可以认为上层还没有主动析构 session
+    if (OB_NOT_NULL(get_sess_guard())) {
+      typedef ObSQLSessionInfo::ExecCtxSessionRegister MyExecCtxSessionRegister;
+      MyExecCtxSessionRegister ctx_unregister(get_session_info(), nullptr);
+    }
+  }
   TO_STRING_KV(K_(is_init),
                K_(tenant_id),
                K_(database_id),
@@ -646,7 +657,9 @@ public:
                   const common::ObTabletID &arg_tablet_id,
                   const int64_t &timeout_ts);
   int init_common_without_check(ObTableApiCredential &credential,
+                                const ObTabletID &arg_tablet_id,
                                 const int64_t &timeout_ts);
+  int check_tablet_id_valid();
   // 初始化 insert 相关
   int init_insert();
   // init put
@@ -654,7 +667,8 @@ public:
   // 初始化scan相关(不包括表达分类)
   int init_scan(const ObTableQuery &query,
                 const bool &is_wead_read,
-                const uint64_t arg_table_id);
+                const uint64_t arg_table_id,
+                bool skip_get_ls = false);
   // 初始化update相关
   int init_update();
   // 初始化delete相关
@@ -750,7 +764,7 @@ private:
   int add_aggregate_proj(int64_t cell_idx, const common::ObString &column_name, const ObIArray<ObTableAggregation> &aggregations);
 
   int add_auto_inc_param();
-  int check_legality(const common::ObTabletID &arg_tablet_id);
+  int check_legality();
 
 private:
   int init_schema_info_from_cache();

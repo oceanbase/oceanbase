@@ -53,7 +53,7 @@ OB_DEF_SERIALIZE(ObDASRemoteInfo)
     OB_UNIS_ENCODE(*session);
   }
   if (OB_SUCC(ret) && has_expr_) {
-    OZ(ObPxTreeSerializer::serialize_expr_frame_info(
+    OZ(ObPxTreeSerializer::serialize_expr_frame_info<true>(
         buf, buf_len, pos, *exec_ctx_, const_cast<ObExprFrameInfo &>(*frame_info_)));
   }
   OB_UNIS_ENCODE(ctdefs_.count());
@@ -147,7 +147,7 @@ OB_DEF_DESERIALIZE(ObDASRemoteInfo)
       //notice: can't unlink exec context and session info here
       typedef ObSQLSessionInfo::ExecCtxSessionRegister MyExecCtxSessionRegister;
       des_exec_ctx->get_my_session()->set_is_remote(true);
-      MyExecCtxSessionRegister ctx_register(*des_exec_ctx->get_my_session(), *des_exec_ctx);
+      MyExecCtxSessionRegister ctx_register(*des_exec_ctx->get_my_session(), des_exec_ctx);
       //   des_exec_ctx->get_my_session()->set_session_type_with_flag();
       // if (OB_FAIL(des_exec_ctx->get_my_session()->set_session_active(
       //     ObString::make_string("REMOTE/DISTRIBUTE DAS PLAN EXECUTING"),
@@ -169,7 +169,7 @@ OB_DEF_DESERIALIZE(ObDASRemoteInfo)
   }
   OZ(exec_ctx_->create_physical_plan_ctx());
   if (OB_SUCC(ret) && has_expr_) {
-    OZ(ObPxTreeSerializer::deserialize_expr_frame_info(
+    OZ(ObPxTreeSerializer::deserialize_expr_frame_info<true>(
         buf, data_len, pos, *exec_ctx_, const_cast<ObExprFrameInfo &>(*frame_info_)));
     OZ(exec_ctx_->init_expr_op(frame_info_->rt_exprs_.count()));
     if (OB_SUCC(ret)) {
@@ -270,7 +270,7 @@ OB_DEF_SERIALIZE_SIZE(ObDASRemoteInfo)
     OB_UNIS_ADD_LEN(*session);
   }
   if (has_expr_) {
-    len += ObPxTreeSerializer::get_serialize_expr_frame_info_size(*exec_ctx_,
+    len += ObPxTreeSerializer::get_serialize_expr_frame_info_size<true>(*exec_ctx_,
              const_cast<ObExprFrameInfo&>(*frame_info_));
   }
   OB_UNIS_ADD_LEN(ctdefs_.count());
@@ -741,8 +741,9 @@ OB_SERIALIZE_MEMBER(ObDASDataFetchRes,
                     enable_rich_format_, vec_row_store_,
                     io_read_bytes_,
                     ssstore_read_bytes_,
-                    ssstore_read_row_cnt_,
-                    memstore_read_row_cnt_);
+                    ssstore_read_row_cnt_,  // FARM COMPAT WHITELIST
+                    memstore_read_row_cnt_, // FARM COMPAT WHITELIST
+                    das_execute_remote_info_);
 
 ObDASDataFetchRes::ObDASDataFetchRes()
         : datum_store_("DASDataFetch"),
@@ -754,7 +755,8 @@ ObDASDataFetchRes::ObDASDataFetchRes()
           io_read_bytes_(0),
           ssstore_read_bytes_(0),
           ssstore_read_row_cnt_(0),
-          memstore_read_row_cnt_(0)
+          memstore_read_row_cnt_(0),
+          das_execute_remote_info_()
 {
 }
 

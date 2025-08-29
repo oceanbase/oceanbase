@@ -789,20 +789,37 @@ int ObLoadDataResolver::resolve_filename(ObLoadDataStmt *load_stmt, ParseNode *n
           }
         }
       } else if (ObLoadFileLocation::OSS == load_args.load_file_storage_) {
-        const char *storage_ptr = nullptr;
+        const char *storage_ptr = file_name.reverse_find('?');
         const char *file_ptr = nullptr;
-        if (OB_ISNULL(storage_ptr = file_name.reverse_find('?'))) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "file name or access key");
+        ObString temp_file_name = file_name;
+        if (OB_ISNULL(storage_ptr)) {
+          ObSessionPrivInfo session_priv;
+          share::schema::ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
+          const ObLocationSchema *schema_ptr = NULL;
+          if (OB_ISNULL(schema_guard)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("got null ptr", K(ret));
+          } else if (OB_FAIL(session_info_->get_session_priv_info(session_priv))) {
+            LOG_WARN("get session priv failed", K(ret));
+          } else if (OB_FAIL(schema_guard->get_location_schema_by_prefix_match_with_priv(
+                                    session_priv,
+                                    session_info_->get_enable_role_array(),
+                                    session_info_->get_effective_tenant_id(),
+                                    file_name,
+                                    schema_ptr,
+                                    false))) {
+            LOG_WARN("get location schema failed", K(ret), K(session_info_->get_effective_tenant_id()), K(file_name));
+          } else if (OB_ISNULL(schema_ptr)) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("match location object failed", K(ret), K(session_info_->get_effective_tenant_id()), K(file_name));
+          } else if (OB_FAIL(ob_write_string(*allocator_, temp_file_name, load_args.file_name_, true))) {
+            LOG_WARN("fail to copy string", K(ret));
+          } else if(OB_FAIL(load_args.access_info_.set(load_args.file_name_.ptr(), schema_ptr->get_location_access_info()))) {
+            LOG_WARN("failed to set access info", K(ret), K(load_args.file_name_), K(schema_ptr->get_location_access_info()));
+          }
         } else {
-          ObString temp_file_name = file_name.split_on(storage_ptr).trim_space_only();
+          temp_file_name = file_name.split_on(storage_ptr).trim_space_only();
           ObString storage_info;
-          bool matched = false;
-          ObString pattern;
-          ObString dir_path;
-          char *path = nullptr;
-          int64_t path_len = 0;
-          ObArray<ObString> file_list;
           if (OB_FAIL(ob_write_string(*allocator_, temp_file_name, load_args.file_name_, true))) {
             LOG_WARN("fail to copy string", K(ret));
           } else if (OB_FAIL(ob_write_string(*allocator_, file_name, storage_info, true))) {
@@ -817,7 +834,19 @@ int ObLoadDataResolver::resolve_filename(ObLoadDataStmt *load_stmt, ParseNode *n
             } else {
               LOG_WARN("failed to set access info", K(ret), K(load_args.file_name_), K(storage_info));
             }
-          } else if (load_args.access_info_.get_load_data_format() == ObLoadDataFormat::OB_BACKUP_1_4) {
+          }
+        }
+
+        if (OB_FAIL(ret)) {
+          // do nothing
+        } else {
+          ObString pattern;
+          ObString dir_path;
+          bool matched = false;
+          char *path = nullptr;
+          int64_t path_len = 0;
+          ObArray<ObString> file_list;
+          if (load_args.access_info_.get_load_data_format() == ObLoadDataFormat::OB_BACKUP_1_4) {
             load_args.file_name_ = temp_file_name;
           } else {
             if (OB_ISNULL(file_ptr = temp_file_name.reverse_find('/'))) {

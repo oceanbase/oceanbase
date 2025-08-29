@@ -144,6 +144,8 @@ int ObWhereSubQueryPullup::transform_one_expr(ObDMLStmt *stmt,
     LOG_WARN("failed to check hierarchical for update", K(ret), KPC(stmt));
   } else if (is_hsfu) {
     // do nothing
+  } else if (stmt->is_unpivot_select()) {
+    // do nothing
   } else if (OB_FAIL(gather_transform_params(stmt, expr, trans_param))) {
     LOG_WARN("failed to check can be pulled up ", K(expr), K(stmt), K(ret));
   } else if (!trans_param.can_be_transform_) {
@@ -225,7 +227,8 @@ int ObWhereSubQueryPullup::can_be_unnested(const ObItemType op_type,
              || subquery->is_hierarchical_query()
              || subquery->has_group_by()
              || subquery->has_window_function()
-             || subquery->is_set_stmt()) {
+             || subquery->is_set_stmt()
+             || subquery->is_unpivot_select()) {
     can_be = false;
   } else if (OB_FAIL(subquery->has_rownum(has_rownum))) {
     LOG_WARN("failed to check has rownum expr", K(ret));
@@ -480,12 +483,12 @@ int ObWhereSubQueryPullup::do_transform_pullup_subquery(ObDMLStmt *stmt,
                                                                    ctx_))) {
     LOG_WARN("failed to add const param constraints", K(ret));
   } else if (trans_param.need_create_spj_) {
-    bool ignore_select_item = T_OP_EXISTS == expr->get_expr_type() ||
-                              T_OP_NOT_EXISTS == expr->get_expr_type();
+    bool skip_const_in_select = T_OP_EXISTS == expr->get_expr_type() ||
+                                T_OP_NOT_EXISTS == expr->get_expr_type();
     if (OB_FAIL(ObTransformUtils::create_spj_and_pullup_correlated_exprs(query_ref->get_exec_params(),
                                                                          subquery,
                                                                          ctx_,
-                                                                         ignore_select_item))) {
+                                                                         skip_const_in_select))) {
       LOG_WARN("failed to create spj and pullup correlated exprs", K(ret));
     } else {
       query_ref->set_ref_stmt(subquery);
@@ -1148,7 +1151,7 @@ int ObWhereSubQueryPullup::transform_single_set_query(ObDMLStmt *stmt,
   ObSEArray<ObRawExpr *, 4> post_join_exprs;
   ObSEArray<ObRawExpr *, 4> select_exprs;
   ObSEArray<ObQueryRefRawExpr*, 4> transformed_subqueries;
-  if (OB_ISNULL(stmt)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
   } else if (0 == stmt->get_from_item_size() || !stmt->has_subquery()) {
@@ -1182,7 +1185,7 @@ int ObWhereSubQueryPullup::transform_single_set_query(ObDMLStmt *stmt,
       } else if (OB_FAIL(ObTransformUtils::check_subquery_match_index(ctx_, query_expr, subquery, subq_match_idx))) {
         LOG_WARN("fail to check subquery match index", K(ret));
       } else if (queries.at(j).use_outer_join_ && subq_match_idx && subquery->get_table_items().count() > 1 &&
-                 !subquery->get_stmt_hint().has_enable_hint(T_UNNEST)) {
+                 !subquery->get_stmt_hint().has_enable_hint(T_UNNEST) && !ctx_->force_subquery_unnest_) {
         // do nothing
       } else if (subquery->get_select_item_size() >= 2) {
         // do nothing
@@ -1226,7 +1229,7 @@ int ObWhereSubQueryPullup::transform_single_set_query(ObDMLStmt *stmt,
       } else if (OB_FAIL(ObTransformUtils::check_subquery_match_index(ctx_, query_expr, subquery, subq_match_idx))) {
         LOG_WARN("fail to check subquery match index", K(ret));
       } else if (queries.at(j).use_outer_join_ && subq_match_idx && subquery->get_table_items().count() > 1 &&
-                 !subquery->get_stmt_hint().has_enable_hint(T_UNNEST)) {
+                 !subquery->get_stmt_hint().has_enable_hint(T_UNNEST) && !ctx_->force_subquery_unnest_) {
         // do nothing
       } else if (is_select_expr && !subquery->get_stmt_hint().has_enable_hint(T_UNNEST)) {
         //do nothing

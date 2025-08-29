@@ -3044,8 +3044,6 @@ int ObCheckStartTransferTabletsDelegate::check_start_transfer_in_mv_tablets_()
   ObLSHandle ls_handle;
   ObLSService *ls_service = nullptr;
   ObLS *src_ls = nullptr;
-  ObStorageSchema *storage_schema = nullptr;
-  ObArenaAllocator allocator;
   if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
@@ -3059,6 +3057,7 @@ int ObCheckStartTransferTabletsDelegate::check_start_transfer_in_mv_tablets_()
       const ObTransferTabletInfo &tablet_info = arg_.tablet_list_.at(i);
       ObTabletHandle tablet_handle;
       ObTablet *tablet = nullptr;
+      bool is_mv_major_refresh_tablet = false;
       if (OB_FAIL(src_ls->get_tablet(tablet_info.tablet_id_, tablet_handle, 0,
           ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
         LOG_WARN("failed to get tablet", K(ret), K(tablet_info));
@@ -3067,12 +3066,9 @@ int ObCheckStartTransferTabletsDelegate::check_start_transfer_in_mv_tablets_()
         LOG_WARN("tablet should not be NULL", K(ret), KP(tablet));
       } else if (tablet->is_ls_inner_tablet()) {
         // skip ls inner tablet
-      } else if (OB_FAIL(tablet->load_storage_schema(allocator, storage_schema))) {
-        LOG_WARN("load storage schema failed", K(ret), KPC(tablet));
-      } else if (OB_ISNULL(storage_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("storage schema is NULL", K(ret), KPC(tablet));
-      } else if (storage_schema->is_mv_major_refresh()) {
+      } else if (OB_FAIL(tablet->check_is_mv_major_refresh_tablet(is_mv_major_refresh_tablet))) {
+        LOG_WARN("check mv major refresh tablet failed", KR(ret));
+      } else if (is_mv_major_refresh_tablet) {
         const int64_t snapshot = tablet->get_last_major_snapshot_version();
         if (0 == snapshot) {
           LOG_INFO("check major_mv merge_scn snapshot is 0, there is no major sstable", K(ret), K(arg_), K(snapshot), KPC(tablet));
@@ -5557,6 +5553,7 @@ int ObStorageRpc::get_micro_block_key_set(
   int ret = OB_SUCCESS;
   res.reset();
   obrpc::ObGetMicroBlockKeyArg arg;
+  const int64_t FETCH_MICRO_BLOCK_KEY_SET_TIMEOUT = 60 * 1000 * 1000LL; // 60s
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -5573,6 +5570,7 @@ int ObStorageRpc::get_micro_block_key_set(
     arg.job_info_ = job_info;
     if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_).dst_cluster_id(src_info.cluster_id_)
         .by(tenant_id)
+        .timeout(FETCH_MICRO_BLOCK_KEY_SET_TIMEOUT)
         .group_id(share::OBCG_STORAGE)
         .fetch_micro_block_keys(arg, res))) {
       LOG_WARN("fail to fetch micro block keys", K(ret), K(tenant_id), K(ls_id), K(src_info));

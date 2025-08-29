@@ -98,7 +98,6 @@ int ObExprSysMakeXML::eval_sys_makexml(const ObExpr &expr, ObEvalCtx &ctx, ObDat
    MultimodeAlloctor allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
   ObString full_xml_data;
   ObMulModeMemCtx* mem_ctx = nullptr;
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "XMLModule"));
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&allocator, mem_ctx))) {
@@ -112,6 +111,10 @@ int ObExprSysMakeXML::eval_sys_makexml(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     LOG_WARN("eval xml arg failed", K(ret));
   } else if (xml_datum->is_null()) {
     res.set_null();
+  }
+
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "XMLModule"));
+  if (OB_FAIL(ret)) {
   } else if (xml_arg->datum_meta_.cs_type_ == CS_TYPE_UTF8MB4_BIN) {
     // incase this function used directly with clob
     ObXmlDocument *xml_doc = NULL;

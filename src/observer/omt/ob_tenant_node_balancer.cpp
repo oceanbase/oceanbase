@@ -123,7 +123,11 @@ void ObTenantNodeBalancer::run1()
 
     {
       common::ObBKGDSessInActiveGuard inactive_guard;
-      USLEEP(refresh_interval_);  // sleep 10s
+      if (GCTX.in_bootstrap_) {
+        USLEEP(1_s);  // sleep 1s
+      } else {
+        USLEEP(refresh_interval_);  // sleep 10s
+      }
     }
   }
 }
@@ -206,7 +210,8 @@ int ObTenantNodeBalancer::notify_create_tenant(const obrpc::TenantServerUnitConf
                                        has_memstore,
                                        false /*is_removed*/,
                                        hidden_sys_data_disk_config_size,
-                                       basic_tenant_unit.gen_init_actual_data_disk_size(unit.unit_config_)))) {
+                                       basic_tenant_unit.gen_init_actual_data_disk_size(unit.unit_config_),
+                                       unit.replica_type_))) {
       LOG_WARN("fail to init user tenant config", KR(ret), K(unit));
     } else if (is_user_tenant(tenant_id)
         && OB_FAIL(basic_tenant_unit.divide_meta_tenant(meta_tenant_unit))) {

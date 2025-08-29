@@ -120,7 +120,7 @@ bool ObLSBackupCleanDagNetInitParam::operator != (const ObLSBackupCleanDagNetIni
 
 int64_t ObLSBackupCleanDagNetInitParam::hash() const
 { 
-  int64_t hash_value = 0; 
+  uint64_t hash_value = 0;
   hash_value += trace_id_.hash();
   hash_value = common::murmurhash(&job_id_, sizeof(job_id_), hash_value);
   hash_value = common::murmurhash(&tenant_id_, sizeof(tenant_id_), hash_value);
@@ -224,9 +224,9 @@ bool ObLSBackupCleanDagNet::operator == (const ObIDagNet &other) const
   return is_same;
 }
 
-int64_t ObLSBackupCleanDagNet::hash() const
+uint64_t ObLSBackupCleanDagNet::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   const int64_t type = ObDagNetType::DAG_NET_TYPE_BACKUP_CLEAN;
   hash_value = common::murmurhash(&type, sizeof(type), hash_value);
   hash_value += param_.hash();
@@ -326,7 +326,7 @@ bool ObLSBackupCleanDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObLSBackupCleanDag::hash() const
+uint64_t ObLSBackupCleanDag::hash() const
 {
   return param_.hash();
 }

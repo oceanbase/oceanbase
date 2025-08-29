@@ -3244,6 +3244,8 @@ int ObTableSqlService::gen_table_dml_without_check(
           && OB_FAIL(dml.add_column("external_location_id", table.get_external_location_id())))
       || (data_version >= DATA_VERSION_4_4_0_0
           && OB_FAIL(dml.add_column("external_sub_path", ObHexEscapeSqlStr(table.get_external_sub_path()))))
+      || (data_version >= DATA_VERSION_4_4_1_0
+          && OB_FAIL(dml.add_column("micro_block_format_version", table.get_micro_block_format_version())))
       ) {
         LOG_WARN("add column failed", K(ret));
       }
@@ -3360,6 +3362,9 @@ int ObTableSqlService::gen_table_dml(
   } else if (data_version < DATA_VERSION_4_3_5_2 && table.is_delete_insert_merge_engine()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("can't set merge_engine_type in current version", KR(ret), K(table));
+  } else if (!ObMicroBlockFormatVersionHelper::check_version_valid(table.get_micro_block_format_version(), data_version)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("can't set micro block format version in current version", KR(ret), K(table));
   } else if (OB_FAIL(gen_table_dml_without_check(exec_tenant_id, table,
           update_object_status_ignore_version, data_version, dml))) {
     LOG_WARN("failed to gen_table_dml_with_data_version", KR(ret), KDV(data_version));
@@ -5417,7 +5422,7 @@ int ObTableSqlService::check_table_options(const ObTableSchema &table)
   return ret;
 }
 
-// this interface have been used by parallel set comment
+// this interface have been used by parallel set comment and set kv_attribute(for hbase)
 // since parallel ddl have to allocate schema version previously
 // any modification of this interface should think the times of generate schema version carefully
 int ObTableSqlService::only_update_table_options(ObISQLClient &sql_client,
@@ -5836,14 +5841,14 @@ int ObTableSqlService::gen_column_group_dml(const ObTableSchema &table_schema,
     if (OB_FAIL(dml.add_pk_column("tenant_id", tmp_tenant_id))
       || OB_FAIL(dml.add_pk_column("table_id", tmp_table_id))
       || OB_FAIL(dml.add_pk_column("column_group_id", tmp_cg_id))
-      || (!(is_history && is_deleted) && OB_FAIL(dml.add_column("column_group_name", column_group_schema.get_column_group_name().ptr())))
+      || (!(is_history && is_deleted) && OB_FAIL(dml.add_column("column_group_name", ObHexEscapeSqlStr(column_group_schema.get_column_group_name().ptr()))))
       || OB_FAIL(dml.add_column("column_group_type", column_group_schema.get_column_group_type()))
       || OB_FAIL(dml.add_column("block_size", column_group_schema.get_block_size()))
       || OB_FAIL(dml.add_column("compressor_type", column_group_schema.get_compressor_type()))
       || OB_FAIL(dml.add_column("row_store_type", column_group_schema.get_row_store_type()))
       || (is_history && OB_FAIL(dml.add_column("is_deleted", is_deleted)))
       || (is_history && OB_FAIL(dml.add_column("schema_version", schema_version)))) {
-    LOG_WARN("fail to build column column dml", K(ret));
+      LOG_WARN("fail to build column column dml", K(ret));
     } else if (OB_FAIL(dml.finish_row())) {
       LOG_WARN("fail to finish column group dml row", K(ret));
     }

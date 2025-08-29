@@ -28,6 +28,43 @@ namespace storage
 {
 class ObDDLTableMergeDagParam;
 class ObTabletDDLCompleteArg;
+struct ObTabletDDLCompleteMdsUserDataKey final
+{
+public:
+  OB_UNIS_VERSION(1);
+  static constexpr uint8_t MAGIC_NUMBER = 0xFF; // if meet compat case, abort directly for now
+public:
+  ObTabletDDLCompleteMdsUserDataKey()
+    : trans_id_()
+  {}
+  ObTabletDDLCompleteMdsUserDataKey(const ObTabletDDLCompleteMdsUserDataKey &other)
+    : trans_id_(other.trans_id_)
+  {}
+  ObTabletDDLCompleteMdsUserDataKey(const int64_t tx_id)
+    : trans_id_(tx_id)
+  {}
+  ~ObTabletDDLCompleteMdsUserDataKey() = default;
+  ObTabletDDLCompleteMdsUserDataKey &operator=(const ObTabletDDLCompleteMdsUserDataKey &other)
+  {
+    trans_id_ = other.trans_id_;
+    return *this;
+  }
+  ObTabletDDLCompleteMdsUserDataKey &operator=(const int64_t tx_id)
+  {
+    trans_id_ = tx_id;
+    return *this;
+  }
+  void reset() { trans_id_.reset(); }
+  bool is_valid() const { return trans_id_.is_valid(); }
+  transaction::ObTransID get_trans_id() const { return trans_id_; }
+  int mds_serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int mds_deserialize(const char *buf, const int64_t buf_len, int64_t &pos);
+  int64_t mds_get_serialize_size() const;
+  TO_STRING_KV(K_(trans_id));
+private:
+  transaction::ObTransID trans_id_;
+};
+
 class ObTabletDDLCompleteMdsUserData
 {
   OB_UNIS_VERSION(1);

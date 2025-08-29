@@ -349,19 +349,20 @@ TEST_F(TestSSReorganizePhyBlock, test_estimate_reorgan_blk_cnt)
       SS_REORGAN_MIN_MICRO_SIZE + (max_reorgan_task_reserve_cnt - SS_MIN_REORGAN_BLK_CNT) * SS_REORGAN_BLK_SCALING_FACTOR;
   ASSERT_LT(max_micro_size, cache_stat.micro_stat().get_avg_micro_size());
   phy_blk_mgr.reserve_reorganize_block(available_cnt);
-  ASSERT_EQ(max_reorgan_task_reserve_cnt, available_cnt);
+  ASSERT_EQ(max_reorgan_task_reserve_cnt / 2, available_cnt);
 
   // test reserve blk for reorganize_task from shared_block
   blk_cnt_info.data_blk_.used_cnt_ = blk_cnt_info.data_blk_.hold_cnt_; // mock data_blk used up.
-  cache_stat.phy_blk_stat().update_data_block_used_cnt(blk_cnt_info.data_blk_.used_cnt_);
+  cache_stat.phy_blk_stat().data_blk_used_cnt_ = blk_cnt_info.data_blk_.used_cnt_;
   ASSERT_EQ(0, blk_cnt_info.data_blk_.free_blk_cnt());
 
   phy_blk_mgr.reserve_reorganize_block(available_cnt);
-  ASSERT_EQ(max_reorgan_task_reserve_cnt, available_cnt);
+  ASSERT_EQ(max_reorgan_task_reserve_cnt / 2, available_cnt);
 
   const int64_t data_blk_free_cnt = cache_stat.phy_blk_stat().data_blk_cnt_ - cache_stat.phy_blk_stat().data_blk_used_cnt_;
-  ASSERT_EQ(max_reorgan_task_reserve_cnt, blk_cnt_info.data_blk_.free_blk_cnt());
-  ASSERT_EQ(max_reorgan_task_reserve_cnt, data_blk_free_cnt);
+  ASSERT_EQ(SS_MAX_REORGAN_BLK_CNT / 2, blk_cnt_info.data_blk_.free_blk_cnt());
+  ASSERT_EQ(SS_MAX_REORGAN_BLK_CNT / 2, data_blk_free_cnt);
+  ASSERT_EQ(SS_MAX_REORGAN_BLK_CNT, max_reorgan_task_reserve_cnt);
   const int64_t shared_blk_used_cnt = blk_cnt_info.data_blk_.hold_cnt_ + blk_cnt_info.meta_blk_.hold_cnt_;
   ASSERT_EQ(shared_blk_used_cnt, blk_cnt_info.shared_blk_used_cnt_);
   ASSERT_EQ(shared_blk_used_cnt, cache_stat.phy_blk_stat().shared_blk_used_cnt_);

@@ -227,7 +227,7 @@ ObTablet::ObTablet(const bool is_external_tablet)
     is_external_tablet_(is_external_tablet)
 {
 #if defined(__x86_64__) && !defined(ENABLE_OBJ_LEAK_CHECK)
-  check_size<ObTablet, ObRowkeyReadInfo, 1512>();
+  check_size<ObTablet, ObRowkeyReadInfo, 1520>();
 #endif
   MEMSET(memtables_, 0x0, sizeof(memtables_));
 }
@@ -1146,6 +1146,10 @@ int ObTablet::init_for_sstable_replace(
   } else if (OB_UNLIKELY(!param.is_valid()) || OB_UNLIKELY(!old_tablet.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(param), K(old_tablet));
+  } else if (param.is_transfer_replace_ && !old_tablet.get_tablet_meta().has_transfer_table()) {
+    ret = OB_NO_NEED_UPDATE;
+    LOG_INFO("old tablet has no transfer table, should skip this operation when transfer replace", K(ret), K(param),
+      K(old_tablet));
   } else if (param.reorg_scn_ != old_tablet.get_reorganization_scn()) {
     ret = OB_TABLET_REORG_SCN_NOT_MATCH;
     LOG_WARN("tablet reorg scn not match, cannot do sstable replace", K(ret), K(param), K(old_tablet));
@@ -4995,7 +4999,7 @@ int ObTablet::update_rows(
     ObStoreCtx &store_ctx,
     const ObColDescIArray &col_descs,
     const ObIArray<int64_t> &update_idx,
-    const storage::ObDatumRow *old_rows,
+    const blocksstable::ObDatumRow *old_rows,
     const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr,
     ObRowsInfo &rows_info)
 {
@@ -5409,6 +5413,8 @@ int ObTablet::create_memtable(CreateMemtableArg &arg)
     LOG_WARN("invalid schema version", K(ret), K(arg));
   } else if (OB_FAIL(check_is_delete_insert_table(arg.is_delete_insert_))) {
     LOG_WARN("fail to check is delete insert table", K(ret));
+  } else if (OB_FAIL(check_micro_block_format_version(arg.micro_block_format_version_))) {
+    LOG_WARN("fail to check is delete insert table", K(ret));
   } else if (FALSE_IT(time_guard.click("prepare_memtables"))) {
   } else if (OB_FAIL(inner_create_memtable(arg))) {
     if (OB_ENTRY_EXIST == ret) {
@@ -5740,7 +5746,9 @@ int ObTablet::build_read_info(
                                              false /*use_default_compat_version*/,
                                              is_cs_replica_compat,
                                              storage_schema->is_delete_insert_merge_engine(),
-                                             storage_schema->is_global_index_table()))) {
+                                             storage_schema->is_global_index_table(),
+                                             storage_schema->get_micro_block_format_version(),
+                                             storage_schema->is_mv_major_refresh()))) {
     LOG_WARN("fail to init rowkey read info", K(ret), KPC(storage_schema));
   }
   ObTabletObjLoadHelper::free(allocator, storage_schema);
@@ -6161,6 +6169,7 @@ int ObTablet::get_ha_sstable_size(int64_t &data_size)
 }
 
 int ObTablet::fetch_tablet_autoinc_seq_cache(
+    const ObLSSwitchChecker &ls_switch_checker,
     const uint64_t cache_size,
     share::ObTabletAutoincInterval &result)
 {
@@ -6171,7 +6180,7 @@ int ObTablet::fetch_tablet_autoinc_seq_cache(
   mds::TwoPhaseCommitState trans_stat;// will be removed later
   share::SCN trans_version;// will be removed later
   uint64_t auto_inc_seqvalue = 0;
-  const int64_t rpc_timeout = THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_remain() : obrpc::ObRpcProxy::MAX_RPC_TIMEOUT;
+  bool is_online = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
@@ -6189,6 +6198,11 @@ int ObTablet::fetch_tablet_autoinc_seq_cache(
   } else if (OB_UNLIKELY(mds::TwoPhaseCommitState::ON_COMMIT != trans_stat)) {
     ret = OB_EAGAIN;
     LOG_WARN("tablet autoinc not committed", K(ret), K(autoinc_seq));
+  } else if (OB_FAIL(ls_switch_checker.double_check_epoch(is_online))) {
+    LOG_WARN("double check failed", K(ret), K(tablet_meta_.tablet_id_), K(is_online));
+    if (OB_VERSION_NOT_MATCH == ret) {
+      ret = OB_NOT_MASTER;
+    }
   } else if (OB_FAIL(autoinc_seq.get_autoinc_seq_value(auto_inc_seqvalue))) {
     LOG_WARN("failed to get autoinc seq value", K(ret), K(autoinc_seq));
   } else {
@@ -6211,12 +6225,13 @@ int ObTablet::fetch_tablet_autoinc_seq_cache(
 }
 
 // MIN { ls min_reserved_snapshot, freeze_info, all_acquired_snapshot}
+ERRSIM_POINT_DEF(ERRSIM_MULTI_VERSION_START)
 int ObTablet::get_kept_snapshot_info(
     const int64_t min_reserved_snapshot_on_ls,
-    ObStorageSnapshotInfo &snapshot_info) const
+    ObStorageSnapshotInfo &snapshot_info,
+    const bool skip_tablet_snapshot_and_undo_retention) const
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   snapshot_info.reset();
   const share::ObLSID &ls_id = tablet_meta_.ls_id_;
   const common::ObTabletID &tablet_id = tablet_meta_.tablet_id_;
@@ -6250,7 +6265,7 @@ int ObTablet::get_kept_snapshot_info(
   }
 
   ObStorageSnapshotInfo old_snapshot_info;
-  if (FAILEDx(MTL(ObTenantFreezeInfoMgr*)->get_min_reserved_snapshot(tablet_id, max_merged_snapshot, snapshot_info))) {
+  if (FAILEDx(MTL(ObTenantFreezeInfoMgr*)->get_min_reserved_snapshot(tablet_id, max_merged_snapshot, snapshot_info, skip_tablet_snapshot_and_undo_retention))) {
     LOG_WARN("failed to get multi version from freeze info mgr", K(ret), K(tablet_id));
   } else {
     old_snapshot_info = snapshot_info;
@@ -6276,14 +6291,36 @@ int ObTablet::get_kept_snapshot_info(
       snapshot_info.snapshot_ = get_multi_version_start();
     }
     // snapshot info should smaller than snapshot on tablet
-    snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_ON_TABLET, get_snapshot_version());
-    const int64_t current_time = common::ObTimeUtility::fast_current_time();
-    if (current_time - (snapshot_info.snapshot_ / 1000 /*use microsecond here*/) > 40_min) {
+    if (skip_tablet_snapshot_and_undo_retention) {
+      if (!GCTX.is_shared_storage_mode()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("get unexpected argument skip_tablet_snapshot_and_undo_retention", K(ret));
+      }
+    } else {
+      snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_ON_TABLET, get_snapshot_version());
+    }
+#ifdef ERRSIM
+    if (OB_UNLIKELY(ERRSIM_MULTI_VERSION_START)) {
+      // set snapshot info for multi version start
+      snapshot_info.snapshot_type_ = ObStorageSnapshotInfo::SNAPSHOT_MULTI_VERSION_START_ON_TABLET;
+      snapshot_info.snapshot_ = 1;
+      LOG_INFO("ERRSIM_MULTI_VERSION_START: get multi version start snapshot", K(snapshot_info));
+    }
+#endif
+    const int64_t snapshot_version = get_snapshot_version();
+    if (snapshot_info.snapshot_ < snapshot_version && (snapshot_version - snapshot_info.snapshot_) / 1000 /*use microsecond here*/ > 40_min) {
       if (REACH_THREAD_TIME_INTERVAL(10_s)) {
-        LOG_INFO("tablet multi version start not advance for a long time", K(ret),
-                 "ls_id", get_tablet_meta().ls_id_, K(tablet_id),
-                 K(snapshot_info), K(old_snapshot_info), K(min_medium_snapshot),
-                 K(min_reserved_snapshot_on_ls));
+        LOG_INFO("tablet multi version start dont advance for a long time", K(ret),
+                "ls_id", get_tablet_meta().ls_id_, K(tablet_id),
+                K(snapshot_info), K(old_snapshot_info), K(min_medium_snapshot),
+                K(snapshot_version), K(min_reserved_snapshot_on_ls));
+        ADD_SUSPECT_INFO(MAJOR_MERGE,
+                        share::ObDiagnoseTabletType::TYPE_MEDIUM_MERGE,
+                        ls_id,
+                        tablet_id,
+                        ObSuspectInfoType::SUSPECT_MULTI_VERSION_START_NOT_ADVANCE,
+                        snapshot_info.snapshot_,
+                        snapshot_version);
       }
     }
   }
@@ -6413,7 +6450,10 @@ int ObTablet::write_sync_tablet_seq_log(ObTabletAutoincSeq &autoinc_seq,
   return ret;
 }
 
-int ObTablet::update_tablet_autoinc_seq(const uint64_t autoinc_seq, const bool is_tablet_creating)
+int ObTablet::update_tablet_autoinc_seq(
+    const ObLSSwitchChecker &ls_switch_checker,
+    const uint64_t autoinc_seq,
+    const bool is_tablet_creating)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "UpdAutoincSeq"));
@@ -6423,7 +6463,7 @@ int ObTablet::update_tablet_autoinc_seq(const uint64_t autoinc_seq, const bool i
   share::SCN trans_version;// will be removed later
   uint64_t curr_auto_inc_seqvalue;
   SCN scn;
-  const int64_t rpc_timeout = THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_remain() : obrpc::ObRpcProxy::MAX_RPC_TIMEOUT;
+  bool is_online = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
@@ -6441,6 +6481,11 @@ int ObTablet::update_tablet_autoinc_seq(const uint64_t autoinc_seq, const bool i
   } else if (mds::TwoPhaseCommitState::ON_COMMIT != trans_stat) {
     ret = OB_EAGAIN;
     LOG_WARN("tablet autoinc not committed", K(ret), K(autoinc_seq));
+  } else if (OB_FAIL(ls_switch_checker.double_check_epoch(is_online))) {
+    LOG_WARN("double check failed", K(ret), K(tablet_meta_.tablet_id_), K(is_online));
+    if (OB_VERSION_NOT_MATCH == ret) {
+      ret = OB_NOT_MASTER;
+    }
   } else if (OB_FAIL(curr_autoinc_seq.get_autoinc_seq_value(curr_auto_inc_seqvalue))) {
     LOG_WARN("failed to get autoinc seq value", K(ret));
   } else if (autoinc_seq > curr_auto_inc_seqvalue) {
@@ -6492,6 +6537,37 @@ int ObTablet::check_is_delete_insert_table(bool &is_delete_insert_table) const
     LOG_WARN("get unexpected null rowkey readinfo", K(ret));
   } else {
     is_delete_insert_table = rowkey_read_info_->is_delete_insert_table();
+  }
+  return ret;
+}
+
+
+int ObTablet::check_micro_block_format_version(int64_t &micro_block_format_version) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTablet has not been inited", K(ret));
+  } else if (OB_UNLIKELY(nullptr == rowkey_read_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null rowkey readinfo", K(ret));
+  } else {
+    micro_block_format_version = rowkey_read_info_->get_micro_block_format_version();
+  }
+  return ret;
+}
+
+int ObTablet::check_is_mv_major_refresh_tablet(bool &val) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTablet has not been inited", K(ret));
+  } else if (OB_UNLIKELY(nullptr == rowkey_read_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null rowkey readinfo", K(ret));
+  } else {
+    val = rowkey_read_info_->is_mv_major_refresh_tablet();
   }
   return ret;
 }
@@ -7495,6 +7571,8 @@ int ObTablet::get_table_store_meta_info(ObSSTabletTableStoreMetaInfo &table_stor
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   const ObTabletTableStore *table_store = nullptr;
   bool minor_trans_state_determined = true;
+  share::SCN tx_recycle_scn = share::SCN::min_scn();
+  int64_t last_major_snapshot_version = 0;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
@@ -7510,6 +7588,17 @@ int ObTablet::get_table_store_meta_info(ObSSTabletTableStoreMetaInfo &table_stor
         break;
       }
     }
+    if (is_ls_tx_data_tablet()) {
+      if (table_store->get_minor_sstables().count() > 0) {
+        if (table_store->get_minor_sstables().at(0)->is_minor_sstable()) {
+          tx_recycle_scn = table_store->get_minor_sstables().at(0)->get_filled_tx_scn();
+        }
+      }
+    }
+    int major_cnt = table_store->get_major_sstables().count();
+    if (major_cnt > 0) {
+      last_major_snapshot_version = table_store->get_major_sstables().at(major_cnt - 1)->get_snapshot_version();
+    }
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(table_store_meta_info.set(
@@ -7518,7 +7607,9 @@ int ObTablet::get_table_store_meta_info(ObSSTabletTableStoreMetaInfo &table_stor
     table_store->get_ddl_sstables().count(),
     table_store->get_mds_sstables().count(),
     table_store->get_meta_major_sstables().count(),
-    minor_trans_state_determined))) {
+    minor_trans_state_determined,
+    last_major_snapshot_version,
+    tx_recycle_scn))) {
     LOG_WARN("set table store meta info failed", K(ret), KPC(this));
   }
   return ret;
@@ -7575,7 +7666,7 @@ int ObTablet::prepare_param(
   param.read_info_ = rowkey_read_info_;
   param.set_tablet_handle(relative_table.get_tablet_handle());
   param.is_non_unique_local_index_ = relative_table.is_storage_index_table() &&
-            relative_table.is_index_local_storage() && !relative_table.is_unique_index();
+            relative_table.is_index_local_storage() && !relative_table.is_unique_index() && !relative_table.is_vector_index();
   return ret;
 }
 

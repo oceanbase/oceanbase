@@ -352,18 +352,19 @@ void ObAdminDumpsstExecutor::dump_macro_block(const ObDumpMacroBlockContext &mac
         buf_size = macro_handle.get_data_size();
       }
     }
+    const ObDumpMacroBlockParam param(dump_macro_context_, hex_print_);
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(common_header.deserialize(macro_buf, buf_size, pos))) {
       STORAGE_LOG(ERROR, "deserialize common header fail", K(ret), K(pos));
     } else if (OB_FAIL(common_header.check_integrity())) {
       STORAGE_LOG(ERROR, "invalid common header", K(ret), K(common_header));
     } else if (ObMacroBlockCommonHeader::SharedSSTableData == common_header.get_type()) {
-      if (OB_FAIL(ObAdminCommonUtils::dump_shared_macro_block(dump_macro_context_, macro_buf, buf_size))) {
-        STORAGE_LOG(ERROR, "dump shared block fail", K(ret));
+      if (OB_FAIL(ObAdminCommonUtils::dump_shared_macro_block(param, macro_buf, buf_size))) {
+        STORAGE_LOG(ERROR, "dump shared block fail", K(ret), K(param));
       }
     } else {
-      if (OB_FAIL(ObAdminCommonUtils::dump_single_macro_block(dump_macro_context_, macro_buf, buf_size))) {
-        STORAGE_LOG(ERROR, "dump single block fail", K(ret));
+      if (OB_FAIL(ObAdminCommonUtils::dump_single_macro_block(param, macro_buf, buf_size))) {
+        STORAGE_LOG(ERROR, "dump single block fail", K(ret), K(param));
       }
     }
   }

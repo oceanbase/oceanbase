@@ -443,8 +443,9 @@ int ObMLogBuilder::create_mlog(
       LOG_WARN("failed to get table schema", KR(ret), K(create_mlog_arg));
     } else if (OB_ISNULL(base_table_schema)) {
       ret = OB_TABLE_NOT_EXIST;
-      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(create_mlog_arg.database_name_),
-          to_cstring(create_mlog_arg.table_name_));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(create_mlog_arg.database_name_),
+          helper.convert(create_mlog_arg.table_name_));
       LOG_WARN("table not exist", KR(ret), K(create_mlog_arg));
     } else if(!base_table_schema->is_user_table() && !base_table_schema->is_materialized_view()) {
       ret = OB_NOT_SUPPORTED;
@@ -469,9 +470,10 @@ int ObMLogBuilder::create_mlog(
     if (OB_FAIL(ret)) {
     } else if (data_table_schema->has_mlog_table()) {
       ret = OB_ERR_MLOG_EXIST;
+      ObCStringHelper helper;
       LOG_WARN("a materialized view log already exists on table",
           K(create_mlog_arg.table_name_), K(data_table_schema->get_mlog_tid()));
-      LOG_USER_ERROR(OB_ERR_MLOG_EXIST, to_cstring(create_mlog_arg.table_name_));
+      LOG_USER_ERROR(OB_ERR_MLOG_EXIST, helper.convert(create_mlog_arg.table_name_));
     } else if (FALSE_IT(base_table_id = data_table_schema->get_table_id())) {
     } else if (OB_FAIL(ObSysTableChecker::is_tenant_space_table_id(base_table_id, in_tenant_space))) {
       LOG_WARN("failed to check table in tenant space", KR(ret), K(base_table_id));
@@ -611,6 +613,7 @@ int ObMLogBuilder::generate_mlog_schema(
     } else {
       mlog_schema.set_micro_index_clustered(base_table_schema.get_micro_index_clustered());
       mlog_schema.set_enable_macro_block_bloom_filter(base_table_schema.get_enable_macro_block_bloom_filter());
+      mlog_schema.set_micro_block_format_version(base_table_schema.get_micro_block_format_version());
     }
   }
 

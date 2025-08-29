@@ -1511,6 +1511,13 @@ inline void ObFastParserBase::lex_store_param(ParseNode *node, char *buf)
   param_num_++;
 }
 
+namespace oceanbase
+{
+namespace common
+{
+extern void process_hex_chars_simd(ObRawSql& raw_sql, bool& is_arch_supported);
+}
+}
 /**
  * The hexadecimal number in mysql mode has the following two representations:
  * x'([0-9A-F])*' or 0x([0-9A-F])+
@@ -1524,9 +1531,21 @@ int ObFastParserBase::process_hex_number(bool is_quote)
   char next_ch = raw_sql_.scan();
   if (is_quote) {
     // X'([0-9A-F])*'
+#if defined(__GNUC__) && defined(__x86_64__)
+    bool is_arch_supported{true};
+    process_hex_chars_simd(raw_sql_, is_arch_supported);
+    if (!is_arch_supported) {
+      while (is_hex(next_ch)) {
+        next_ch = raw_sql_.scan();
+      }
+    } else {
+      next_ch = raw_sql_.char_at(raw_sql_.cur_pos_);
+    }
+#else
     while (is_hex(next_ch)) {
       next_ch = raw_sql_.scan();
     }
+#endif
     if ('\'' == next_ch) {
       cur_token_type_ = PARAM_TOKEN;
       next_ch = raw_sql_.scan();
@@ -1542,9 +1561,19 @@ int ObFastParserBase::process_hex_number(bool is_quote)
     }
   } else {
     // 0X([0-9A-F])+
+#if defined(__GNUC__) && defined(__x86_64__)
+    bool is_arch_supported{true};
+    process_hex_chars_simd(raw_sql_, is_arch_supported);
+    if (!is_arch_supported) {
+      while (is_hex(next_ch)) {
+        next_ch = raw_sql_.scan();
+      }
+    }
+#else
     while (is_hex(next_ch)) {
       next_ch = raw_sql_.scan();
     }
+#endif
     int64_t next_idf_pos = is_first_identifier_flags(raw_sql_.cur_pos_);
     if (-1 != next_idf_pos) {
       // it is possible that the next token is a string and needs to fall back to

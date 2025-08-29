@@ -18,6 +18,7 @@
 #include "storage/column_store/ob_co_merge_dag.h"
 #include "storage/compaction/ob_schedule_tablet_func.h"
 #include "storage/compaction/ob_medium_compaction_func.h"
+#include "storage/multi_data_source/ob_mds_table_merge_dag.h"
 
 namespace oceanbase
 {
@@ -661,9 +662,18 @@ int ObCompactionDiagnoseMgr::diagnose_dag(
   if (OB_FAIL(dag.init_by_param(&param))) {
     STORAGE_LOG(WARN, "failed to init dag", K(ret), K(param));
   } else if (is_minor_merge(merge_type)) {
-    if (OB_FAIL(MTL(ObTenantDagScheduler *)->diagnose_minor_exe_dag(&dag, progress))) {
+    if (OB_FAIL(MTL(ObTenantDagScheduler *)->diagnose_minor_exe_dag(ObDagPrio::DAG_PRIO_COMPACTION_MID,
+                                                                    &dag,
+                                                                    progress))) {
       if (OB_HASH_NOT_EXIST != ret) {
         STORAGE_LOG(WARN, "failed to diagnose minor execute dag", K(ret), K(ls_id), K(tablet_id), K(progress));
+      }
+    }
+  } else if (is_mds_minor_merge(merge_type)) {
+    if (OB_FAIL(MTL(ObTenantDagScheduler *)
+                    ->diagnose_minor_exe_dag(ObDagPrio::DAG_PRIO_MDS_COMPACTION_MID, &dag, progress))) {
+      if (OB_HASH_NOT_EXIST != ret) {
+        STORAGE_LOG(WARN, "failed to diagnose mds minor execute dag", K(ret), K(ls_id), K(tablet_id), K(progress));
       }
     }
   } else if (OB_FAIL(MTL(ObTenantDagScheduler *)->diagnose_dag(&dag, progress))) {
@@ -1047,6 +1057,9 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_tablet()
         if (OB_TMP_FAIL(diagnose_tablet_minor_merge(ls_id, *tablet))) {
           LOG_WARN("failed to get diagnose minor merge", K(tmp_ret));
         }
+        if (OB_TMP_FAIL(diagnose_tablet_multi_version_start(*ls, *tablet))) {
+          LOG_WARN("failed to get diagnose multi version start", K(tmp_ret));
+        }
       }
       // don't have any diagnose info, push_back this tablet
       if (normal_) {
@@ -1217,8 +1230,15 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_mini_merge(
           tablet))) {
         LOG_WARN("diagnose failed", K(tmp_ret), K(ls_id), "tablet_id", tablet.get_tablet_meta().tablet_id_, KPC(latest_sstable));
       }
+      if (OB_TMP_FAIL(diagnose_tablet_merge(
+          MDS_MINI_MERGE,
+          ls_id,
+          tablet))) {
+        LOG_WARN("diagnose mds failed", K(tmp_ret), K(ls_id), "tablet_id", tablet.get_tablet_meta().tablet_id_, KPC(latest_sstable));
+      }
     } else {
       (void) get_and_set_suspect_info(MINI_MERGE, ls_id, tablet_id);
+      (void) get_and_set_suspect_info(MDS_MINI_MERGE, ls_id, tablet_id);
     }
   }
   return ret;
@@ -1227,6 +1247,7 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_mini_merge(
 int ObCompactionDiagnoseMgr::diagnose_tablet_minor_merge(const ObLSID &ls_id, ObTablet &tablet)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   int64_t minor_compact_trigger = ObPartitionMergePolicy::DEFAULT_MINOR_COMPACT_TRIGGER;
   {
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
@@ -1241,7 +1262,46 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_minor_merge(const ObLSID &ls_id, Ob
         tablet))) {
       LOG_WARN("diagnose failed", K(ret), K(ls_id), "tablet_id", tablet.get_tablet_meta().tablet_id_);
     }
+    if (OB_TMP_FAIL(diagnose_tablet_merge(
+        MDS_MINOR_MERGE,
+        ls_id,
+        tablet))) {
+      LOG_WARN("diagnose failed", K(tmp_ret), K(ret), K(ls_id), "tablet_id", tablet.get_tablet_meta().tablet_id_);
+    }
   }
+  return ret;
+}
+
+int ObCompactionDiagnoseMgr::diagnose_tablet_multi_version_start(storage::ObLS &ls, ObTablet &tablet){
+  int ret = OB_SUCCESS;
+  const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
+  const int64_t current_time = common::ObTimeUtility::fast_current_time();
+  const ObLSID ls_id = ls.get_ls_id();
+  ObStorageSnapshotInfo snapshot_info;
+  if (OB_FAIL(tablet.get_kept_snapshot_info(ls.get_min_reserved_snapshot(), snapshot_info, false))) {
+    LOG_WARN("failed to get kept snapshot info", K(ret), K(ls_id), K(tablet_id));
+  } else {
+    // if multi version start not advance for a long time, diagnose major merge
+    const int64_t snapshot_version = tablet.get_snapshot_version();
+    if (snapshot_info.snapshot_ < snapshot_version && (snapshot_version - snapshot_info.snapshot_) / 1000 /*use microsecond here*/ > 40_min) {
+      LOG_INFO("tablet multi version start not advance for a long time", K(ret),
+              "ls_id", ls_id, K(tablet_id), K(current_time), K(snapshot_info));
+      if (OB_FAIL(ADD_DIAGNOSE_INFO_FOR_TABLET(
+        MAJOR_MERGE,
+        ObCompactionDiagnoseInfo::DIA_STATUS_RUNNING,
+        ObTimeUtility::fast_current_time(),
+        "tablet_id", tablet_id.id(),
+        K(snapshot_info),
+        K(snapshot_version),
+        "status", "table multi version start not advance for a long time"
+        ))) {
+        LOG_WARN("failed to add diagnose info", K(ret), K(ls_id), K(tablet_id));
+      }
+    }
+  }
+  LOG_TRACE("tablet multi version start diagnose", K(ret),
+          "ls_id", ls_id, K(ls.get_min_reserved_snapshot()), K(tablet.get_multi_version_start()),
+          K(tablet_id), K(current_time), K(snapshot_info));
   return ret;
 }
 
@@ -1256,8 +1316,6 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_major_merge(
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   const int64_t last_major_snapshot_version = tablet.get_last_major_snapshot_version();
   int64_t max_sync_medium_scn = 0;
-  ObArenaAllocator temp_allocator("GetSSchema", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-  ObStorageSchema *storage_schema = nullptr;
   bool is_mv_major_refresh_tablet = false;
   if (tablet_id.is_ls_inner_tablet()) {
     // do nothing
@@ -1270,9 +1328,8 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_major_merge(
   } else if (OB_FAIL(ObMediumCompactionScheduleFunc::get_max_sync_medium_scn(
       tablet, *tablet_status.medium_list(), max_sync_medium_scn))) {
     LOG_WARN("failed to get max sync medium scn", K(ret), K(ls_id), K(tablet_id));
-  } else if (OB_FAIL(tablet.load_storage_schema(temp_allocator, storage_schema))) {
-    LOG_WARN("failed to load storage schema", K(ret), K(tablet));
-  } else if (FALSE_IT(is_mv_major_refresh_tablet = storage_schema->is_mv_major_refresh())) {
+  } else if (OB_FAIL(tablet.check_is_mv_major_refresh_tablet(is_mv_major_refresh_tablet))) {
+    LOG_WARN("check mv major refresh tablet failed", KR(ret));
   } else if (tablet_status.tablet_merge_finish()) {
     diagnose_failed_report_task(ls_id, tablet_id, compaction_scn);
   } else {
@@ -1364,16 +1421,18 @@ int ObCompactionDiagnoseMgr::diagnose_row_store_dag(
     const int64_t compaction_scn)
 {
   int ret = OB_SUCCESS;
-  ObTabletMajorMergeDag major_dag;
-  ObTabletMergeExecuteDag minor_dag;
-  ObTabletMiniMergeDag mini_dag;
+  ObArenaAllocator temp_allocator("AllocDag", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObTabletMergeDag *dag = nullptr;
   if (is_major_merge_type(merge_type)) {
-    dag = &major_dag;
+    dag = OB_NEWx(ObTabletMajorMergeDag, &temp_allocator);
   } else if (is_minor_merge(merge_type)) {
-    dag = &minor_dag;
+    dag = OB_NEWx(ObTabletMergeExecuteDag, &temp_allocator);
   } else if (is_mini_merge(merge_type)) {
-    dag = &mini_dag;
+    dag = OB_NEWx(ObTabletMiniMergeDag, &temp_allocator);
+  } else if (is_mds_mini_merge(merge_type)) {
+    dag = OB_NEWx(mds::ObTabletMdsMiniMergeDag, &temp_allocator);
+  } else if (is_mds_minor_merge(merge_type)) {
+    dag = OB_NEWx(mds::ObTabletMdsMinorMergeDag, &temp_allocator);
   }
   if (OB_ISNULL(dag)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1400,6 +1459,7 @@ int ObCompactionDiagnoseMgr::diagnose_row_store_dag(
     } else if (OB_FAIL(diagnose_no_dag(dag->hash(), merge_type, ls_id, tablet_id, compaction_scn))) {
       LOG_WARN("failed to dagnose no dag", K(ret), K(ls_id), K(tablet_id));
     }
+    dag->~ObTabletMergeDag();
   }
   return ret;
 }
@@ -1741,7 +1801,7 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_merge_for_ss()
 
 
 /*
- * ObTabletCompactionProgressIterator implement
+ * ObCompactionProgressIterator implement
  * */
 
 int ObCompactionDiagnoseIterator::get_diagnose_info(const int64_t tenant_id)

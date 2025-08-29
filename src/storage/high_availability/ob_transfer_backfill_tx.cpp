@@ -773,7 +773,7 @@ bool ObTransferBackfillTXDagNet::operator == (const ObIDagNet &other) const
   return is_same;
 }
 
-int64_t ObTransferBackfillTXDagNet::hash() const
+uint64_t ObTransferBackfillTXDagNet::hash() const
 {
   int64_t hash_value = 0;
 
@@ -928,7 +928,7 @@ bool ObBaseTransferBackfillTXDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObBaseTransferBackfillTXDag::hash() const
+uint64_t ObBaseTransferBackfillTXDag::hash() const
 {
   int ret = OB_SUCCESS;
   int64_t hash_value = 0;
@@ -1741,17 +1741,6 @@ int ObTransferReplaceTableTask::transfer_replace_tables_(
                           "tablet_id", tablet_info.tablet_id_.id(),
                           "tablet_status", ObTabletStatus::get_str(user_data.tablet_status_),
                           "has_transfer_table", tablet->get_tablet_meta().has_transfer_table());
-#endif
-#ifdef OB_BUILD_SHARED_STORAGE
-    // need put shared major tables into shared tablet
-    // FIXME: this is a temporary impl @jyx441808
-    if (GCTX.is_shared_storage_mode() && OB_SUCC(ret)) {
-      if (OB_FAIL(put_sstables_to_shared_tablet_(param, *tablet))) {
-        LOG_WARN("failed to put sstables to shared tablet", K(ret));
-      } else {
-        LOG_INFO("success to put sstables to shared tablet");
-      }
-    }
 #endif
     if (FAILEDx(ls->build_tablet_with_batch_tables(tablet_info.tablet_id_, param))) {
       LOG_WARN("failed to build ha tablet new table store", K(ret), K(param), K(tablet_info));

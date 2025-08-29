@@ -2432,6 +2432,14 @@ int ObOraSysChecker::check_ora_ddl_priv(
         DEFINE_PUB_CHECK_CMD(PRIV_ID_CREATE_LOCATION);
         break;
       }
+      case stmt::T_CREATE_CCL_RULE: {
+        DEFINE_PUB_CHECK_CMD(PRIV_ID_CREATE_ANY_CCL_RULE);
+        break;
+      }
+      case stmt::T_DROP_CCL_RULE: {
+        DEFINE_PUB_CHECK_CMD(PRIV_ID_DROP_ANY_CCL_RULE);
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("stmt type ddl priv undefined", K(stmt_type));

@@ -6669,7 +6669,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[477].default_value_ = "2" ;
+      ObSysVars[477].default_value_ = "0" ;
       ObSysVars[477].info_ = "PLSQL_OPTIMIZE_LEVEL specifies the optimization level that will be used to compile PL/SQL library units. The higher the setting of this parameter, the more effort the compiler makes to optimize PL/SQL library units." ;
       ObSysVars[477].name_ = "plsql_optimize_level" ;
       ObSysVars[477].data_type_ = ObIntType ;

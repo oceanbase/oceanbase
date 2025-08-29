@@ -157,6 +157,7 @@ public:
   inline bool is_co_table_without_cgs() const { return is_co_table_without_cgs_; }
   inline int64_t column_group_cnt() const { return column_group_cnt_; }
   inline int64_t full_column_cnt() const { return full_column_cnt_; }
+  inline int64_t co_base_snapshot_version() const { return co_base_snapshot_version_; }
 
   // TODO: delete this interface
   // ObTabletMergeInfo::record_start_tx_scn_for_tx_data

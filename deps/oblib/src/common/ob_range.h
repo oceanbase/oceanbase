@@ -385,10 +385,6 @@ public:
     return end_key_;
   }
 
-  inline int32_t get_group_idx() const
-  {
-    return group_idx_;
-  }
   inline int32_t get_index_ordered_idx() const
   {
     return index_ordered_idx_;

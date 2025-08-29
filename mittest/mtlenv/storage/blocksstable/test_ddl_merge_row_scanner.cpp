@@ -223,10 +223,11 @@ void TestDDLMergeRowScanner::test_single_case(
           << " end: " << end << " prow: " << prow;
 
       ret = merge_ddl_scanner.inner_get_next_row(kv_prow);
+      ObCStringHelper helper;
       ASSERT_EQ(OB_SUCCESS, ret) << i << "index: " << index << " start: " << start
-          << " end: " << end << " kv_prow: " << to_cstring(kv_prow);
+          << " end: " << end << " kv_prow: " << helper.convert(kv_prow);
       ASSERT_TRUE(row == *kv_prow) << i << "index: " << index << " start: " << start
-          << " end: " << end << " kv_prow: " << to_cstring(kv_prow);
+          << " end: " << end << " kv_prow: " << helper.convert(kv_prow);
     }
   }
   ASSERT_EQ(OB_ITER_END, scanner.inner_get_next_row(prow));
@@ -320,10 +321,11 @@ void TestDDLMergeRowScanner::test_full_case(
       ASSERT_TRUE(row == *prow) << i << "index: " << index << " start: " << start
           << " end: " << end << " prow: " << prow;
       ret = merge_ddl_scanner.inner_get_next_row(kv_prow);
+      ObCStringHelper helper;
       ASSERT_EQ(OB_SUCCESS, ret) << i << "index: " << index << " start: " << start
-          << " end: " << end << " kv_prow: " << to_cstring(kv_prow);
+          << " end: " << end << " kv_prow: " << helper.convert(kv_prow);
       ASSERT_TRUE(row == *kv_prow) << i << "index: " << index << " start: " << start
-          << " end: " << end << " kv_prow: " << to_cstring(kv_prow);
+          << " end: " << end << " kv_prow: " << helper.convert(kv_prow);
     }
   }
   ASSERT_EQ(OB_ITER_END, scanner.inner_get_next_row(prow));
@@ -361,10 +363,11 @@ void TestDDLMergeRowScanner::test_full_case(
         ASSERT_TRUE(row == *prow) << i << "index: " << index << " start: " << start
             << " end: " << end << " prow: " << prow;
         ret = merge_ddl_scanner.inner_get_next_row(kv_prow);
+        ObCStringHelper helper;
         ASSERT_EQ(OB_SUCCESS, ret) << i << "index: " << index << " start: " << start
-            << " end: " << end << " kv_prow: " << to_cstring(kv_prow);
+            << " end: " << end << " kv_prow: " << helper.convert(kv_prow);
         ASSERT_TRUE(row == *kv_prow) << i << "index: " << index << " start: " << start
-            << " end: " << end << " kv_prow: " << to_cstring(kv_prow);
+            << " end: " << end << " kv_prow: " << helper.convert(kv_prow);
       }
     }
     ASSERT_EQ(OB_ITER_END, scanner.inner_get_next_row(prow));

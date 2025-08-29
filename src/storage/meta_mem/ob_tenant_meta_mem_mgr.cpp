@@ -17,6 +17,7 @@
 #include "storage/tablelock/ob_lock_memtable.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
+#include "storage/slog_ckpt/ob_tenant_slog_checkpoint_util.h"
 
 namespace oceanbase
 {
@@ -193,6 +194,28 @@ ObTenantMetaMemMgr::ObTenantMetaMemMgr(const uint64_t tenant_id)
 ObTenantMetaMemMgr::~ObTenantMetaMemMgr()
 {
   destroy();
+}
+
+int ObTenantMetaMemMgr::choose_tablet_pool_type(
+    const bool is_user_tablet,
+    const int64_t must_cache_size,
+    const int64_t try_cache_size,
+     ObTabletPoolType &type)
+{
+  int ret = OB_SUCCESS;
+  const int64_t user_tablet_count = MAX(tablet_map_.count() - 1000, 0); // 1000 is the number of system tablets, which
+                                                                        // is a rough estimate value.
+  if (!is_user_tablet) {
+    type = ObTabletPoolType::TP_NORMAL;
+  } else if (must_cache_size > NORMAL_TABLET_POOL_SIZE) {
+    type = ObTabletPoolType::TP_LARGE;
+  } else if (must_cache_size + try_cache_size > NORMAL_TABLET_POOL_SIZE
+          && user_tablet_count <= get_default_large_tablet_pool_count()) {
+    type = ObTabletPoolType::TP_LARGE;
+  } else {
+    type = ObTabletPoolType::TP_NORMAL;
+  }
+  return ret;
 }
 
 int ObTenantMetaMemMgr::mtl_new(ObTenantMetaMemMgr *&meta_mem_mgr)
@@ -1934,7 +1957,7 @@ int ObTenantMetaMemMgr::check_tablet_has_sstable_need_upload(const SCN &ls_ss_ch
     if (OB_ISNULL(tablet_ptr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet ptr is NULL", K(ret), K(ptr_handle));
-    } else if (tablet_ptr->is_empty_shell()) {
+    } else if (tablet_ptr->is_empty_shell() || tablet_ptr->get_addr().is_none()) {
       need_upload = false;
     } else {
       const share::SCN &scn = tablet_ptr->get_tablet_max_checkpoint_scn();
@@ -2867,9 +2890,12 @@ int ObT3mTabletMapIterator::fetch_tablet_item()
   ObMemAttr attr = SET_USE_500(ObMemAttr(MTL_ID(), "TabletIterSE"));
   tablet_items_.set_attr(attr);
   FetchTabletItemOp fetch_op(tablet_map_, tablet_items_);
+  const int64_t tablet_cnt = tablet_map_.count();
   if (OB_UNLIKELY(tablet_items_.count() > 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("iterator use again, may be not reset", K(ret));
+  } else if (OB_FAIL(tablet_items_.reserve(tablet_cnt))) {
+    LOG_WARN("iterator failed to initialize", K(ret), K(tablet_cnt));
   } else if (OB_FAIL(tablet_map_.for_each_value_store(fetch_op))) {
     LOG_WARN("fail to fetch value store for each in map", K(ret));
   } else {
@@ -3020,6 +3046,54 @@ int ObTenantInMemoryTabletIterator::get_next_tablet(ObTabletHandle &handle)
   return ret;
 }
 
+// =====================================
+//    ObT3mTabletStorageParamIterator
+// =====================================
+ObT3mTabletStorageParamIterator::ObT3mTabletStorageParamIterator(ObTenantMetaMemMgr &t3m)
+  : ObT3mTabletMapIterator(t3m)
+{
+}
+
+int ObT3mTabletStorageParamIterator::get_next(ObTabletStorageParam &param) {
+  int ret = OB_SUCCESS;
+
+  if (tablet_items_.count() == 0 && OB_FAIL(fetch_tablet_item())) {
+    LOG_WARN("failed to fetch value store pointers", K(ret));
+  } else {
+    ObMetaDiskAddr addr;
+    OB_ASSERT(ignore_err_code(OB_NOT_THE_OBJECT));
+    do {
+      if (idx_ == tablet_items_.count()) {
+        ret = OB_ITER_END;
+      } else {
+        param.tablet_key_ = tablet_items_.at(idx_);
+        if (OB_FAIL(tablet_map_.get_meta_addr(param.tablet_key_, addr))) {
+          STORAGE_LOG(WARN, "failed to fetch tablet addr", K(ret), K_(param.tablet_key));
+        } else if (addr.is_memory()) {
+          ret = OB_NOT_THE_OBJECT; // just skip and continue.
+          STORAGE_LOG(INFO, "skip MEM type", K_(param.tablet_key), K(addr));
+        } else if (addr.is_none()) {
+          ret = OB_NOT_THE_OBJECT; // just skip and continue.
+          STORAGE_LOG(INFO, "addr is none", K_(param.tablet_key), K(addr));
+        } else {
+          param.original_addr_ = addr;
+        }
+      }
+
+      if (OB_SUCC(ret) || ignore_err_code(ret)) {
+        ++idx_;
+      }
+
+    } while (ignore_err_code(ret));
+  }
+  // check it anyway
+  if (OB_UNLIKELY(OB_SUCCESS == ret && !param.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected invalid param", K(ret), K(param));
+  }
+  return ret;
+}
+
 int ObTenantMetaMemMgr::get_full_tablets_info(
     const ObFullTabletCreator &creator,
     const char *name,
@@ -3065,11 +3139,12 @@ int ObTenantMetaMemMgr::get_oldest_ss_change_version(
     const ObTabletMapKey key(ls_id, tablet_id);
     ObBucketHashRLockGuard lock_guard(bucket_lock_, key.hash()); // lock old_version_chain
     ObTablet *tablet = tablet_ptr->get_old_version_chain_();
+    if (OB_NOT_NULL(tablet)) {
+      min_ss_change_version.set_max();
+    }
     while (OB_NOT_NULL(tablet)) {
       ObTablet *next = tablet->get_next_tablet();
-      if (OB_ISNULL(next)) {
-        min_ss_change_version = tablet->get_min_ss_tablet_version();
-      }
+      min_ss_change_version = SCN::min(min_ss_change_version, tablet->get_min_ss_tablet_version());
       tablet = next;
     }
   }

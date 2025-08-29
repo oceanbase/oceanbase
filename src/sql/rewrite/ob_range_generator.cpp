@@ -1834,9 +1834,15 @@ int ObRangeGenerator::get_intersects_tmp_geo_param(uint32_t input_srid,
              OB_FAIL(OTSRS_MGR->get_srs_bounds(input_srid, srs_item, srs_bound))) {
     LOG_WARN("failed to get srs item", K(ret));
   } else if (op_type == ObDomainOpType::T_GEO_DWITHIN) {
+    bool is_valid = true;
     if (std::isnan(distance)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid distance para", K(ret));
+    } else if (OB_FAIL(ObGeoTypeUtil::geo_isvalid(&tmp_alloc, wkb_str, srs_item, is_valid))) {
+      LOG_WARN("failed to check geo is valid", K(ret));
+    } else if (!is_valid) {
+      // for invalid geometry, set whole range
+      geo_param->always_true_ = true;
     } else if (input_srid != 0 && srs_item->is_geographical_srs()) {
       double sphere_radius = (srs_item->semi_major_axis() * 2 + srs_item->semi_minor_axis()) /  3;
       const double SPHERIOD_ERR_FRACTION = 0.005;
@@ -1858,7 +1864,7 @@ int ObRangeGenerator::get_intersects_tmp_geo_param(uint32_t input_srid,
     }
   }
 
-  if (s2object == NULL && OB_SUCC(ret)) {
+  if (s2object == NULL && !geo_param->always_true_ && OB_SUCC(ret)) {
     s2object = OB_NEWx(ObS2Adapter, (&tmp_alloc), (&tmp_alloc), (input_srid != 0 ? srs_item->is_geographical_srs() : false), true);
     if (OB_ISNULL(s2object)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1866,7 +1872,7 @@ int ObRangeGenerator::get_intersects_tmp_geo_param(uint32_t input_srid,
     }
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && !geo_param->always_true_) {
     lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "S2Adapter"));
     // build s2 object from wkb
     if (OB_FAIL(ObGeoTypeUtil::get_type_from_wkb((buffer_geo.empty() ? wkb_str : buffer_geo), geo_type))) {

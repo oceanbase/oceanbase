@@ -337,3 +337,6 @@ alter system migrate replica ls=100 source='100.88.107.212:5000' destination='10
 
 alter system cancel replica task task_id = 'xxx' tenant='mysql_tenant';
 alter system cancel replica task task_id = 'xxx';
+alter system create ls unit_group 1001, primary_zone 'z1';
+alter system modify ls 1001 unit_group 1001, primary_zone  'z1';
+alter system drop ls 1001;

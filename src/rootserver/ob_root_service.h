@@ -65,6 +65,7 @@
 #include "share/ob_create_hidden_tablev2_rpc_struct.h"
 #include "rootserver/ob_location_ddl_service.h"
 #include "rootserver/ob_objpriv_mysql_ddl_service.h"
+#include "rootserver/ob_ccl_ddl_service.h"
 
 namespace oceanbase
 {
@@ -559,6 +560,7 @@ public:
   int create_index(const obrpc::ObCreateIndexArg &arg, obrpc::ObAlterTableRes &res);
   int parallel_create_index(const obrpc::ObCreateIndexArg &arg, obrpc::ObAlterTableRes &res);
   int drop_table(const obrpc::ObDropTableArg &arg, obrpc::ObDDLRes &res);
+  int parallel_drop_table(const obrpc::ObDropTableArg &arg, obrpc::ObDropTableRes &res);
   int drop_database(const obrpc::ObDropDatabaseArg &arg, obrpc::ObDropDatabaseRes &drop_database_res);
   int drop_tablegroup(const obrpc::ObDropTablegroupArg &arg);
   int drop_index(const obrpc::ObDropIndexArg &arg, obrpc::ObDropIndexRes &res);
@@ -748,6 +750,11 @@ public:
   int drop_external_resource(const obrpc::ObDropExternalResourceArg &arg, obrpc::ObDropExternalResourceRes &result);
   //----End of functions for managing external resource----
 
+  //----Functions for managing CCL rules----
+  int create_ccl_rule_ddl(const obrpc::ObCreateCCLRuleArg &arg);
+  int drop_ccl_rule_ddl(const obrpc::ObDropCCLRuleArg &arg);
+  //----End of functions for managing CCL rules----
+
   // server related
   int load_server_manager();
   ObStatusChangeCallback &get_status_change_cb() { return status_change_cb_; }
@@ -922,7 +929,7 @@ public:
                         obrpc::ObReloadMasterKeyResult &result);
 #endif
   int root_rebuild_tablet(const obrpc::ObRebuildTabletArg &arg);
-
+  int parallel_htable_ddl(const obrpc::ObHTableDDLArg &arg, obrpc::ObHTableDDLRes &res);
 private:
 #ifdef OB_BUILD_TDE_SECURITY
   int get_root_key_from_obs_(const obrpc::ObRootKeyArg &arg, obrpc::ObRootKeyResult &result);
@@ -955,6 +962,7 @@ private:
       const obrpc::ObCreateTableArg &arg,
       share::schema::ObTableSchema &table_schema);
   int clear_special_cluster_schema_status();
+  int update_inmemory_ls_table_();
   int check_tenant_gts_config(const int64_t tenant_id, bool &tenant_gts_config_ok,
                               share::schema::ObSchemaGetterGuard &schema_guard);
   int check_database_config(const int64_t tenant_id, bool &db_config_ok,
@@ -1030,6 +1038,9 @@ private:
   int check_data_disk_usage_limit_(obrpc::ObAdminSetConfigItem &item);
   int check_vector_memory_limit_(obrpc::ObAdminSetConfigItem &item);
   int check_transfer_task_tablet_count_threshold_(obrpc::ObAdminSetConfigItem &item);
+  int check_enable_database_sharding_none_(obrpc::ObAdminSetConfigItem &item);
+  int check_default_table_organization_(obrpc::ObAdminSetConfigItem &item);
+  int check_default_table_store_format_(obrpc::ObAdminSetConfigItem &item);
   int start_ddl_service_();
 private:
   static const int64_t OB_MAX_CLUSTER_REPLICA_COUNT = 10000000;
@@ -1130,7 +1141,9 @@ private:
 
   ObSnapshotInfoManager snapshot_manager_;
   int64_t core_meta_table_version_;
+#ifndef OB_ENABLE_STANDALONE_LAUNCH
   ObUpdateRsListTimerTask update_rs_list_timer_task_;
+#endif
   ObUpdateAllServerConfigTask update_all_server_config_task_;
   int64_t baseline_schema_version_;
 

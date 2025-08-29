@@ -434,6 +434,8 @@ int ObAllVirtualProxySchema::inner_open()
         common::ObCommonSqlProxy *user_sql_proxy = NULL;
         common::ObOracleSqlProxy oracle_sql_proxy;
         common::ObMySQLProxy::MySQLResult *sql_res = NULL;
+        common::ObAddr target_server;
+        bool is_use_random_server = true;
         if (OB_FAIL(oracle_sql_proxy.init(GCTX.sql_proxy_->get_pool()))) {
           LOG_WARN("fail to init oracle sql proxy", K(ret));
         } else if (FALSE_IT(user_sql_proxy = is_oracle_tenant ?
@@ -441,13 +443,26 @@ int ObAllVirtualProxySchema::inner_open()
         } else if (OB_ISNULL(sql_res = OB_NEWx(ObMySQLProxy::MySQLResult, (&inner_alloc_)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("allocate result failed", K(ret));
-        } else if (OB_FAIL(user_sql_proxy->read(*sql_res, exec_tenant_id, sql.ptr()))) {
-          LOG_WARN("execute sql failed", KR(ret), K(exec_tenant_id), K(sql));
-        } else if (OB_ISNULL(sql_res->get_result())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("NULL sql executing result", KR(ret), K(exec_tenant_id), K(sql));
-        } else {
-          sql_res_ = sql_res;
+        } else if (OB_FAIL(get_random_server_(exec_tenant_id, target_server))) {
+          // If the random server fails, send to the leader, and handle the error code
+          LOG_WARN("get random server failed", K(exec_tenant_id), KR(ret));
+          target_server.reset();
+          is_use_random_server = false;
+          ret = OB_SUCCESS;
+        }
+        if (OB_SUCC(ret)) {
+          if (is_use_random_server
+              && OB_FAIL(user_sql_proxy->read(*sql_res, exec_tenant_id, sql.ptr(), &target_server))) {
+            LOG_WARN("execute sql failed", KR(ret), K(exec_tenant_id), K(sql), K(target_server));
+          } else if (!is_use_random_server
+              && OB_FAIL(user_sql_proxy->read(*sql_res, exec_tenant_id, sql.ptr()))) {
+            LOG_WARN("execute sql failed", KR(ret), K(exec_tenant_id), K(sql));
+          } else if (OB_ISNULL(sql_res->get_result())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("NULL sql executing result", KR(ret), K(exec_tenant_id), K(sql));
+          } else {
+            sql_res_ = sql_res;
+          }
         }
         if (OB_FAIL(ret) && sql_res != NULL) {
           sql_res->~ReadResult();
@@ -763,6 +778,9 @@ int ObAllVirtualProxySchema::get_view_decoded_schema_(
   SMART_VARS_3((sql::ObSQLSessionInfo, empty_session), (ObExecContext, exec_ctx, *allocator_),
                (ObPhysicalPlanCtx, phy_plan_ctx, *allocator_)) {
     LinkExecCtxGuard link_guard(empty_session, exec_ctx);
+    ObSqlCtx empty_ctx;
+    empty_ctx.schema_guard_ = &schema_guard_;
+    exec_ctx.set_sql_ctx(&empty_ctx);
     exec_ctx.set_my_session(&empty_session);
     exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
     new_table_schema = NULL;
@@ -1599,6 +1617,44 @@ int ObAllVirtualProxySchema::get_actual_tablet_id_(
     }
   }
   LOG_TRACE("finish to get actual tablet id", K(tablet_id), K(table_schema));
+  return ret;
+}
+int ObAllVirtualProxySchema::get_random_server_(
+    const uint64_t tenant_id,
+    common::ObAddr &target_server)
+{
+  int ret = OB_SUCCESS;
+  target_server.reset();
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(location_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("location_service_ is null", KR(ret));
+  } else {
+    ObLSLocation ls_location;
+    if (OB_FAIL(location_service_->nonblock_get(
+      GCONF.cluster_id,
+      tenant_id,
+      SYS_LS,
+      ls_location))) {
+      LOG_WARN("fail to get ls location", KR(ret), K(tenant_id), K(SYS_LS));
+    } else if (ls_location.get_replica_locations().empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls location is empty", KR(ret), K(tenant_id), K(SYS_LS));
+    } else {
+      const int64_t replica_count = ls_location.get_replica_locations().count();
+      const int64_t random_idx = ObRandom::rand(0, replica_count - 1);
+      const ObLSReplicaLocation &replica_location =
+          ls_location.get_replica_locations().at(random_idx);
+      target_server = replica_location.get_server();
+      if (OB_UNLIKELY(!target_server.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid server", KR(ret), K(target_server));
+        target_server.reset();
+      }
+    }
+  }
   return ret;
 }
 

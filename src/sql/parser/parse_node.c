@@ -538,6 +538,7 @@ int64_t ob_parse_binary_len(int64_t len)
   return (len + 1) / 2;
 }
 
+extern void ob_parse_binary_simd(const char **src, const char *end, char **dest);
 void ob_parse_binary(const char *src, int64_t len, char *dest)
 {
   if (OB_UNLIKELY(NULL == src || len <= 0 || NULL == dest)) {
@@ -556,6 +557,9 @@ void ob_parse_binary(const char *src, int64_t len, char *dest)
     } else {
       //for odd number, we have copy the first char,  so we should minus 2;
       const char *end = src + len - (is_odd ? 2 : 1);
+#if defined(__GNUC__) && defined(__x86_64__)
+      ob_parse_binary_simd(&src, end, &dest);
+#endif
       for (; src <= end; src += 2)
       {
         *dest = (char)(16*char_int(src[0]) + char_int(src[1]));

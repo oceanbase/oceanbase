@@ -70,6 +70,8 @@ public:
   obrpc::ObRpcResultCode rcode_; //返回的错误信息
   ObSEArray<ObString, 8> file_urls_;
   ObSEArray<int64_t, 8> file_sizes_;
+  ObSEArray<int64_t, 8> modify_times_;
+  ObSEArray<ObString, 8> content_digests_;
 
 private:
   ObArenaAllocator allocator_;

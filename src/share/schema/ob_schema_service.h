@@ -27,6 +27,7 @@
 #include "share/schema/ob_catalog_schema_struct.h"
 #include "share/schema/ob_location_schema_struct.h"
 #include "share/schema/ob_objpriv_mysql_schema_struct.h"
+#include "share/schema/ob_ccl_schema_struct.h"
 
 namespace oceanbase
 {
@@ -235,6 +236,7 @@ enum ObSchemaOperationCategory
   ACT(OB_DDL_REPLACE_UDT,)                                       \
   ACT(OB_DDL_DROP_UDT,)                                          \
   ACT(OB_DDL_DROP_UDT_BODY,)                                     \
+  ACT(OB_DDL_ALTER_UDT,)                                         \
   ACT(OB_DDL_UDT_OPERATION_END, = 1330)                          \
   ACT(OB_DDL_AUDIT_OPERATION_BEGIN, = 1331)                      \
   ACT(OB_DDL_ADD_AUDIT,)                                         \
@@ -392,6 +394,11 @@ enum ObSchemaOperationCategory
   ACT(OB_DDL_GRANT_REVOKE_SENSITIVE_RULE, = 2151)                \
   ACT(OB_DDL_DEL_SENSITIVE_RULE_PRIV, = 2152)                    \
   ACT(OB_DDL_SENSITIVE_RULE_PRIV_OPERATION_END, = 2153)          \
+  ACT(OB_DDL_AI_MODEL_OPERATION_BEGIN, = 2154)                   \
+  ACT(OB_DDL_CREATE_AI_MODEL, )                                  \
+  ACT(OB_DDL_ALTER_AI_MODEL, )                                   \
+  ACT(OB_DDL_DROP_AI_MODEL, )                                    \
+  ACT(OB_DDL_AI_MODEL_OPERATION_END, = 2163)                     \
   ACT(OB_DDL_MAX_OP,)
 
 DECLARE_ENUM(ObSchemaOperationType, op_type, OP_TYPE_DEF);
@@ -443,6 +450,7 @@ IS_DDL_TYPE(RLS_GROUP, rls_group)
 IS_DDL_TYPE(RLS_CONTEXT, rls_context)
 IS_DDL_TYPE(CATALOG, catalog)
 IS_DDL_TYPE(EXTERNAL_RESOURCE, external_resource)
+IS_DDL_TYPE(CCL_RULE, ccl_rule)
 
 struct ObSchemaOperation
 {
@@ -495,6 +503,7 @@ public:
     uint64_t obj_type_;
     uint64_t ccl_rule_id_;
     uint64_t external_resource_id_;
+    uint64_t ai_model_id_;
   };
   union {
     common::ObString table_name_;
@@ -508,6 +517,7 @@ public:
     common::ObString catalog_name_;
     common::ObString obj_name_;
     common::ObString external_resource_name_;
+    common::ObString ai_model_name_;
   };
   ObSchemaOperationType op_type_;
   common::ObString ddl_stmt_str_;
@@ -798,6 +808,7 @@ class ObServerSchemaService;
 class ObContextSqlService;
 class ObCatalogSqlService;
 class ObExternalResourceSqlService;
+class ObCCLRuleSqlService;
 class ObSchemaService
 {
 public:
@@ -858,6 +869,7 @@ public:
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(Catalog, catalog);
   //DECLARE_GET_DDL_SQL_SERVICE_FUNC(sys_priv, priv);
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(ExternalResource, external_resource);
+  DECLARE_GET_DDL_SQL_SERVICE_FUNC(CCLRule, ccl_rule);
 
 
   /* sequence_id related */
@@ -923,6 +935,7 @@ public:
   GET_BATCH_FULL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(profile, ObProfileSchema);
   GET_BATCH_FULL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(audit, ObSAuditSchema);
   GET_BATCH_FULL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(mock_fk_parent_table, ObMockFKParentTableSchema);
+  GET_BATCH_FULL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(ccl_rule, ObCCLRuleSchema);
 
   virtual int get_batch_users(const ObRefreshSchemaStatus &schema_status,
                               const int64_t schema_version,
@@ -1008,6 +1021,7 @@ public:
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(rls_context, ObRlsContextSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(catalog, ObCatalogSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(external_resource, ObSimpleExternalResourceSchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(ccl_rule, ObSimpleCCLRuleSchema);
 
   //get tenant increment schema operation between (base_version, new_schema_version]
   virtual int get_increment_schema_operations(const ObRefreshSchemaStatus &schema_status,
@@ -1086,6 +1100,7 @@ public:
   virtual int fetch_new_priv_id(const uint64_t tenant_id, uint64_t &new_priv_id) = 0;
   virtual int fetch_new_catalog_id(const uint64_t tenant_id, uint64_t &new_catalog_id) = 0;
   virtual int fetch_new_external_resource_id(const uint64_t tenant_id, uint64_t &new_external_resource_id) = 0;
+  virtual int fetch_new_ccl_rule_id(const uint64_t tenant_id, uint64_t &new_ccl_rule_id) = 0;
 
 //------------------For managing privileges-----------------------------//
   #define GET_BATCH_SCHEMAS_WITH_ALLOCATOR_FUNC_DECLARE_PURE_VIRTUAL(SCHEMA, SCHEMA_TYPE)  \
@@ -1144,6 +1159,7 @@ public:
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(rls_context, ObRlsContextSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(catalog, ObCatalogSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(external_resource, ObSimpleExternalResourceSchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(ccl_rule, ObSimpleCCLRuleSchema);
 
 
   //--------------For manaing recyclebin -----//
@@ -1408,6 +1424,34 @@ public:
                const ObString &dst,
                const bool case_compare,
                const bool compare_with_collation) = 0;
+
+  virtual int get_obj_priv_with_obj_id(
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const uint64_t obj_id,
+              const uint64_t obj_type,
+              ObIArray<ObObjPriv> &obj_privs) = 0;
+
+  virtual int get_table_schemas_in_tablegroup(
+              common::ObIAllocator &allocator,
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const uint64_t tablegroup_id,
+              common::ObIArray<const ObTableSchema *> &table_schemas) = 0;
+
+  virtual int check_database_exists_in_tablegroup(
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const uint64_t tablegroup_id,
+              bool &exists) = 0;
+
+  virtual int get_table_id_and_table_name_in_tablegroup(
+              common::ObIAllocator &allocator,
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const uint64_t tablegroup_id,
+              common::ObIArray<ObString> &table_names,
+              common::ObIArray<uint64_t> &table_ids) = 0;
   /*----------- interfaces for latest schema end -------------*/
 
 };

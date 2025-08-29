@@ -264,7 +264,7 @@ public:
     int init();
     void destroy();
     int set_storage_key(const ObTrafficControl::ObStorageKey &key);
-    int add_shared_device_limits();
+    int add_shared_device_limits(uint64_t storage_key);
     int fill_qsched_req_storage_key(ObIORequest& req);
     int add_group(const ObIOSSGrpKey &grp_key, const int qid);
     int is_group_key_exist(const ObIOSSGrpKey &grp_key);
@@ -497,12 +497,13 @@ public:
   void inc_ref();
   void dec_ref();
   int get_throttled_time(uint64_t group_id, int64_t &throttled_time);
+  int64_t get_local_iops_util() const {return local_iops_util_;};
   const ObIOFuncUsages& get_io_func_infos();
   OB_INLINE int64_t get_object_storage_io_timeout_ms() const { return io_config_.param_config_.object_storage_io_timeout_ms_; }
 
   TO_STRING_KV(K(is_inited_), K(tenant_id_), K(ref_cnt_), K(io_memory_limit_), K(request_count_), K(result_count_),
        K(io_config_), K(io_clock_), K(io_allocator_), KPC(io_scheduler_), K(callback_mgr_), K(io_memory_limit_),
-       K(request_count_), K(result_count_));
+       K(request_count_), K(result_count_), K(local_iops_util_));
 private:
   friend class ObIORequest;
   friend class ObIOResult;
@@ -526,6 +527,7 @@ private:
   DRWLock io_config_lock_;                                      // for map and config
   hash::ObHashMap<ObIOGroupKey, uint64_t> group_id_index_map_;  // key:group_id, value:index
   ObTenantIOSchedulerV2 qsched_;
+  int64_t local_iops_util_;
 };
 
 #define OB_IO_MANAGER (oceanbase::common::ObIOManager::get_instance())

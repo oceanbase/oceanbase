@@ -683,9 +683,9 @@ bool ObLSBackupDataDagNet::is_valid() const
   return param_.is_valid();
 }
 
-int64_t ObLSBackupDataDagNet::hash() const
+uint64_t ObLSBackupDataDagNet::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   const int64_t type = ObBackupDagNetSubType::LOG_STREAM_BACKUP_DAG_DAG_NET;
   hash_value = common::murmurhash(&type, sizeof(type), hash_value);
   hash_value = common::murmurhash(&param_, sizeof(param_), hash_value);
@@ -900,9 +900,9 @@ bool ObBackupBuildTenantIndexDagNet::is_valid() const
   return param_.is_valid();
 }
 
-int64_t ObBackupBuildTenantIndexDagNet::hash() const
+uint64_t ObBackupBuildTenantIndexDagNet::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   const int64_t type = ObBackupDagNetSubType::LOG_STREAM_BACKUP_BUILD_INDEX_DAG_NET;
   hash_value = common::murmurhash(&type, sizeof(type), hash_value);
   hash_value = common::murmurhash(&param_, sizeof(param_), hash_value);
@@ -1033,9 +1033,9 @@ int ObLSBackupMetaDag::fill_dag_key(char *buf, const int64_t buf_len) const
   return ret;
 }
 
-int64_t ObLSBackupMetaDag::hash() const
+uint64_t ObLSBackupMetaDag::hash() const
 {
-  int64_t ptr = reinterpret_cast<int64_t>(this);
+  uint64_t ptr = reinterpret_cast<uint64_t>(this);
   return common::murmurhash(&ptr, sizeof(ptr), 0);
 }
 
@@ -1150,9 +1150,9 @@ int ObLSBackupPrepareDag::fill_dag_key(char *buf, const int64_t buf_len) const
   return ret;
 }
 
-int64_t ObLSBackupPrepareDag::hash() const
+uint64_t ObLSBackupPrepareDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   const int64_t type = get_type();
   hash_value = common::murmurhash(&type, sizeof(type), hash_value);
   hash_value = common::murmurhash(&param_, sizeof(param_), hash_value);
@@ -1287,9 +1287,9 @@ int ObLSBackupFinishDag::fill_dag_key(char *buf, const int64_t buf_len) const
   return ret;
 }
 
-int64_t ObLSBackupFinishDag::hash() const
+uint64_t ObLSBackupFinishDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   const int64_t type = get_type();
   hash_value = common::murmurhash(&type, sizeof(type), hash_value);
   hash_value = common::murmurhash(&param_, sizeof(param_), hash_value);
@@ -1412,9 +1412,9 @@ bool ObLSBackupDataDag::operator==(const ObIDag &other) const
   return bret;
 }
 
-int64_t ObLSBackupDataDag::hash() const
+uint64_t ObLSBackupDataDag::hash() const
 {
-  int64_t ptr = reinterpret_cast<int64_t>(this);
+  uint64_t ptr = reinterpret_cast<uint64_t>(this);
   return common::murmurhash(&ptr, sizeof(ptr), 0);
 }
 
@@ -1468,9 +1468,9 @@ bool ObPrefetchBackupInfoDag::operator==(const ObIDag &other) const
   return bret;
 }
 
-int64_t ObPrefetchBackupInfoDag::hash() const
+uint64_t ObPrefetchBackupInfoDag::hash() const
 {
-  int64_t ptr = reinterpret_cast<int64_t>(this);
+  uint64_t ptr = reinterpret_cast<uint64_t>(this);
   return common::murmurhash(&ptr, sizeof(ptr), 0);
 }
 
@@ -1630,7 +1630,7 @@ bool ObLSBackupIndexRebuildDag::operator==(const ObIDag &other) const
   return bret;
 }
 
-int64_t ObLSBackupIndexRebuildDag::hash() const
+uint64_t ObLSBackupIndexRebuildDag::hash() const
 {
   int64_t ptr = reinterpret_cast<int64_t>(this);
   return common::murmurhash(&ptr, sizeof(ptr), 0);
@@ -1873,6 +1873,7 @@ int ObPrefetchBackupInfoTask::inner_process_(int64_t &task_id)
   } else {
     const bool is_run_out = provider_->is_run_out();
     if (!is_run_out) {
+      DEBUG_SYNC(BACKUP_INFO_TASK_BEFORE_GET_NEXT_BATCH);
       if (OB_FAIL(provider_->get_next_batch_items(sorted_items, task_id))) {
         if (OB_ITER_END == ret) {
           LOG_INFO("provider reach end", K(ret));
@@ -2298,6 +2299,7 @@ void ObPrefetchBackupInfoTask::record_server_event_(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid backup data type", K(ret), K_(backup_data_type));
   }
+  ObCStringHelper helper;
   SERVER_EVENT_ADD("backup", backup_data_event,
       "tenant_id", param_.tenant_id_,
       "backup_set_id", param_.backup_set_desc_.backup_set_id_,
@@ -2305,7 +2307,7 @@ void ObPrefetchBackupInfoTask::record_server_event_(
       "turn_id", param_.turn_id_,
       "retry_id", param_.retry_id_,
       "task_id", task_id,
-      to_cstring(cost_us));
+      helper.convert(cost_us));
 }
 
 /* ObLSBackupDataTask */
@@ -2950,6 +2952,7 @@ int ObLSBackupDataTask::do_backup_single_macro_block_data_(ObMultiMacroBlockBack
   }
 #ifdef ERRSIM
   if (has_need_copy) {
+    ObCStringHelper helper;
     SERVER_EVENT_SYNC_ADD("backup_data", "first_need_copy_logic_id",
                           "tenant_id", param_.tenant_id_,
                           "backup_set_id", param_.backup_set_desc_.backup_set_id_,
@@ -2957,7 +2960,7 @@ int ObLSBackupDataTask::do_backup_single_macro_block_data_(ObMultiMacroBlockBack
                           "turn_id", param_.turn_id_,
                           "retry_id", param_.retry_id_,
                           "first_logic_id", first_logic_id,
-                          to_cstring(task_id_));
+                          helper.convert(task_id_));
   }
 #endif
   return ret;
@@ -3801,6 +3804,7 @@ void ObLSBackupDataTask::record_server_event_(const int64_t cost_us) const
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid backup data type", K(ret), K_(backup_data_type));
   }
+  ObCStringHelper helper;
   SERVER_EVENT_ADD("backup", backup_data_event,
       "tenant_id", param_.tenant_id_,
       "backup_set_id", param_.backup_set_desc_.backup_set_id_,
@@ -3808,7 +3812,7 @@ void ObLSBackupDataTask::record_server_event_(const int64_t cost_us) const
       "turn_id", param_.turn_id_,
       "retry_id", param_.retry_id_,
       "file_id", task_id_,
-      to_cstring(cost_us));
+      helper.convert(cost_us));
 }
 
 int ObLSBackupDataTask::get_backup_item_(const storage::ObITable::TableKey &table_key,
@@ -4413,7 +4417,7 @@ int ObLSBackupMetaTask::backup_ls_meta_and_tablet_metas_(const uint64_t tenant_i
   } else if (OB_FAIL(writer.init(backup_set_dest, param_.ls_id_, param_.turn_id_, param_.retry_id_, param_.dest_id_, false/*is_final_fuse*/, *ls_backup_ctx_->bandwidth_throttle_))) {
     LOG_WARN("failed to init tablet info writer", K(ret));
   } else {
-    const int64_t WAIT_GC_LOCK_TIMEOUT = 30 * 60 * 1000 * 1000; // 30 min TODO(zeyong) optimization timeout later 4.3
+    const int64_t WAIT_GC_LOCK_TIMEOUT = 30 * 60 * 1000 * 1000;
     const int64_t CHECK_GC_LOCK_INTERVAL = 1000000; // 1s
     const int64_t wait_gc_lock_start_ts = ObTimeUtility::current_time();
     int64_t cost_ts = 0;

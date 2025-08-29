@@ -175,7 +175,7 @@ int ObCSEncodingTestBase::prepare(const ObObjType *col_types, const int64_t rowk
     ctx_.column_cnt_ = column_cnt;
     ctx_.col_descs_ = &col_descs_;
     //ctx_.major_working_cluster_version_ = cal_version(4, 1, 0, 0);
-    ctx_.major_working_cluster_version_ = cal_version(4, 3, 5, 1);
+    ctx_.major_working_cluster_version_ = cal_version(4, 3, 5, 3);
     ctx_.row_store_type_ = common::CS_ENCODING_ROW_STORE;
     ctx_.compressor_type_ = compressor_type;
     ctx_.need_calc_column_chksum_ = true;
@@ -284,9 +284,10 @@ int ObCSEncodingTestBase::full_transform_check_row(const ObMicroBlockHeader *hea
     if (OB_SUCC(ret) && check_by_get) {
       ObCSEncodeBlockGetReader get_reader;
       ObDatumRowkey rowkey;
+      ObMicroBlockAddr block_addr;
       for(int32_t i = 0; i < row_cnt; ++i) {
         rowkey.assign(row_arr[i].storage_datums_, ctx_.rowkey_column_cnt_);
-        if (OB_FAIL(get_reader.get_row(full_transformed_data, rowkey, read_info_, row))) {
+        if (OB_FAIL(get_reader.get_row(block_addr, full_transformed_data, rowkey, read_info_, row))) {
           LOG_WARN("fail to get row", K(ret), K(rowkey));
         }
         for (int64_t j = 0; OB_SUCC(ret) && j < ctx_.column_cnt_; ++j) {
@@ -445,9 +446,10 @@ int ObCSEncodingTestBase::part_transform_check_row(const ObMicroBlockHeader *hea
     if (OB_SUCC(ret) && check_by_get) {
       ObCSEncodeBlockGetReader get_reader;
       ObDatumRowkey rowkey;
+      ObMicroBlockAddr block_addr;
       for(int32_t i = 0; i < row_cnt; ++i) {
         rowkey.assign(row_arr[i].storage_datums_, ctx_.rowkey_column_cnt_);
-        if (OB_FAIL(get_reader.get_row(part_transformed_data, rowkey, read_info, row))) {
+        if (OB_FAIL(get_reader.get_row(block_addr, part_transformed_data, rowkey, read_info, row))) {
           LOG_WARN("fail to get row", K(ret), K(rowkey));
         }
         for (int64_t j = 0; OB_SUCC(ret) && j < storage_cols_index.count(); ++j) {

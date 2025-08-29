@@ -43,6 +43,7 @@
 #include "share/schema/ob_rls_mgr.h"
 #include "share/schema/ob_catalog_mgr.h"
 #include "share/schema/ob_external_resource_mgr.h"
+#include "share/schema/ob_ccl_rule_mgr.h"
 
 namespace oceanbase
 {
@@ -942,6 +943,10 @@ private:
   int add_locations(const common::ObIArray<ObLocationSchema> &location_schemas);
   int add_location(const ObLocationSchema &location_schema);
   int del_location(const ObTenantLocationId &id);
+  // ccl
+  int add_ccl_rules(const common::ObIArray<ObSimpleCCLRuleSchema> &ccl_schemas);
+  int add_ccl_rule(const ObSimpleCCLRuleSchema &ccl_schema);
+  int del_ccl_rule(const ObTenantCCLRuleId &id);
 private:
   common::ObArenaAllocator local_allocator_;
   common::ObIAllocator &allocator_;
@@ -1000,6 +1005,7 @@ private:
   ObRlsGroupMgr rls_group_mgr_;
   ObRlsContextMgr rls_context_mgr_;
   ObCatalogMgr catalog_mgr_;
+  ObCCLRuleMgr ccl_rule_mgr_;
   int64_t timestamp_in_slot_; // when schema mgr put in slot, we will set the timestamp
   int64_t allocator_idx_;
   TableInfos mlog_infos_;

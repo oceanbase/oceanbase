@@ -291,6 +291,10 @@ ob_set_subtarget(oblib_lib common_mixed
   locale/ob_locale_type.cc
   locale/ob_locale.cpp
   enumset/ob_enum_set_meta.cpp
+  jni_env/ob_java_helper.cpp
+  jni_env/ob_java_env.cpp
+  jni_env/ob_java_native_method.cpp
+  jni_env/ob_jni_connector.cpp
   other/recursion.cpp
 )
 
@@ -395,6 +399,7 @@ ob_set_subtarget(oblib_lib vtoa
 
 ob_set_subtarget(oblib_lib ob_vector_util
   vector/ob_vector_util.cpp
+  vector/ob_vsag_adaptor.cpp
 )
 
 ob_lib_add_target(oblib_lib)
@@ -491,7 +496,6 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
 if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
   target_link_libraries(oblib_lib
     PUBLIC
-    libob_vsag_static.a
     libcpuinfo.a
     libsimd.a
     libvsag_static.a
@@ -501,11 +505,12 @@ if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
     libquadmath_static.a
     libgomp_static.a
     libroaring.a
+    libantlr4-runtime.a
+    libantlr4-autogen.a
   )
 elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
   target_link_libraries(oblib_lib
     PUBLIC
-    libob_vsag_static.a
     libcpuinfo.a
     libsimd.a
     libvsag_static.a
@@ -514,6 +519,8 @@ elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
     libgfortran_static.a
     libgomp_static.a
     libroaring.a
+    libantlr4-runtime.a
+    libantlr4-autogen.a
   )
 else()
     message(FATAL_ERROR "Unsupported architecture: ${CMAKE_SYSTEM_PROCESSOR}")

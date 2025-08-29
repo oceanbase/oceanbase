@@ -18,6 +18,7 @@
 #include "sql/engine/expr/ob_expr_between.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "sql/parser/ob_parser.h"
+#include "sql/engine/expr/ob_expr_estimate_ndv.h"
 
 namespace oceanbase
 {
@@ -522,7 +523,7 @@ int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
     op->set_row_dimension(row_dimension);
     op->set_real_param_num(static_cast<int32_t>(types.count()));
     op->set_is_called_in_sql(expr.is_called_in_sql());
-    ObSQLUtils::init_type_ctx(my_session_, type_ctx);
+    get_cached_initial_type_ctx(type_ctx);
     if (OB_SUCC(ret) && !solidify_session_vars_) {
       if (NULL != my_local_vars_) {
         if (OB_FAIL(ObSQLUtils::merge_solidified_vars_into_type_ctx(type_ctx,
@@ -887,6 +888,13 @@ int ObRawExprDeduceType::visit(ObOpRawExpr &expr)
     result_type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
     result_type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
     expr.set_result_type(result_type);
+  } else if (T_ANY == expr.get_expr_type() || T_ALL == expr.get_expr_type()) {
+    // ANY/ALL expr will be removed during transform preprocess, mock type deduce here
+    expr.set_data_type(ObNullType);
+  } else if (2 == expr.get_param_count() && NULL != expr.get_param_expr(1) &&
+             (T_ANY == expr.get_param_expr(1)->get_expr_type() || T_ALL == expr.get_param_expr(1)->get_expr_type())) {
+    // skip
+    expr.set_data_type(ObTinyIntType);
   } else if (T_OP_ROW == expr.get_expr_type()) {
     expr.set_data_type(ObNullType);
   // During the prepare phase, some boolean expressions do not undergo recursive type deduction.
@@ -1132,9 +1140,14 @@ int ObRawExprDeduceType::check_expr_param(ObOpRawExpr &expr)
       ret = OB_ERR_INVALID_COLUMN_NUM;
       LOG_WARN("invalid relational operator", K(ret));
       LOG_USER_ERROR(OB_ERR_INVALID_COLUMN_NUM, static_cast<long>(1));
+    } else if (T_ANY == expr.get_param_expr(1)->get_expr_type() ||
+               T_ALL == expr.get_param_expr(1)->get_expr_type()) {
+      // intermediate state, skip check
     } else if (1 > expr.get_param_expr(0)->get_param_count()
         || T_OP_ROW == expr.get_param_expr(0)->get_param_expr(0)->get_expr_type()
-        || T_OP_ROW != expr.get_param_expr(1)->get_expr_type()) {
+        || (T_OP_ROW != expr.get_param_expr(1)->get_expr_type() &&
+            T_ANY != expr.get_param_expr(1)->get_expr_type() &&
+            T_ALL != expr.get_param_expr(1)->get_expr_type())) {
       ret = OB_ERR_INVALID_COLUMN_NUM;
       LOG_WARN("invalid relational operator", K(ret), K(expr.get_param_expr(0)->get_param_count()));
       LOG_USER_ERROR(OB_ERR_INVALID_COLUMN_NUM, expr.get_param_expr(0)->get_param_count());
@@ -1192,6 +1205,8 @@ int ObRawExprDeduceType::check_expr_param(ObOpRawExpr &expr)
         } // end for
       }
     }
+  } else if (T_ANY == expr.get_expr_type() || T_ALL == expr.get_expr_type()) {
+    //do nothing, ANY/ALL will be removed after transform preprocess, mock here
   } else if (T_OP_ROW != expr.get_expr_type()
              && OB_FAIL(check_param_expr_op_row(&expr, 1))) {
     //其它普通操作符不能包含向量
@@ -2083,7 +2098,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
         }
         if (OB_SUCC(ret)) {
           result_type.set_varchar();
-          result_type.set_length(ObAggregateProcessor::get_llc_size());
+          result_type.set_length(ObAggrInfo::APPROX_COUNT_MAX_BUCKET_LEN);
           ObCollationType coll_type = CS_TYPE_INVALID;
           CK(OB_NOT_NULL(my_session_));
           OC( (my_session_->get_collation_connection)(coll_type) );
@@ -2801,7 +2816,7 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
 
   common::ObIArray<ObRawExpr *> &func_params = expr.get_func_params();
   ObExprTypeCtx type_ctx;
-  ObSQLUtils::init_type_ctx(my_session_, type_ctx);
+  get_cached_initial_type_ctx(type_ctx);
   if (func_params.count() <= 0) {
     if (NULL == expr.get_agg_expr()) {
       ObRawExprResType result_type;
@@ -3365,8 +3380,8 @@ int ObRawExprDeduceType::set_agg_udf_result_type(ObAggFunRawExpr &expr)
   }
   if (OB_SUCC(ret)) {
     ObExprTypeCtx type_ctx;
+    get_cached_initial_type_ctx(type_ctx);
     type_ctx.set_raw_expr(&expr);
-    ObSQLUtils::init_type_ctx(my_session_, type_ctx);
     if (OB_FAIL(udf_func.init(udf_meta))) {
       LOG_WARN("udf function init failed", K(ret));
     } else if (OB_FAIL(ObUdfUtil::calc_udf_result_type(
@@ -3399,7 +3414,7 @@ int ObRawExprDeduceType::set_agg_group_concat_result_type(ObAggFunRawExpr &expr,
   expr.set_data_type(ObVarcharType);
   const ObIArray<ObRawExpr*> &real_parm_exprs = expr.get_real_param_exprs();
   ObExprTypeCtx type_ctx;
-  ObSQLUtils::init_type_ctx(my_session_, type_ctx);
+  get_cached_initial_type_ctx(type_ctx);
   for (int64_t i = 0; OB_SUCC(ret) && i < real_parm_exprs.count(); ++i) {
     ObRawExpr *real_param_expr = real_parm_exprs.at(i);
     if (OB_ISNULL(real_param_expr)) {
@@ -4189,7 +4204,8 @@ int ObRawExprDeduceType::try_add_cast_expr_above_for_deduce_type(ObRawExpr &expr
       cast_dst_type.set_scale(SCALE_UNKNOWN_YET);
       cast_dst_type.set_precision(PRECISION_UNKNOWN_YET);
     }
-  } else if (lib::is_oracle_mode() && dst_type.get_calc_meta().is_number() && expr.is_const_expr()) {
+  } else if (lib::is_oracle_mode() && dst_type.get_calc_meta().is_number() &&
+      (expr.is_const_expr() || dst_type.get_calc_scale() == SCALE_UNKNOWN_YET)) {
     cast_dst_type.set_precision(PRECISION_UNKNOWN_YET);
     cast_dst_type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
   }
@@ -4417,6 +4433,17 @@ int ObRawExprDeduceType::set_extra_calc_type_info(ObRawExpr &expr, const ObExprR
     }
   }
   return ret;
+}
+
+void ObRawExprDeduceType::get_cached_initial_type_ctx(ObExprTypeCtx &type_ctx)
+{
+  if (OB_NOT_NULL(expr_factory_) &&
+      OB_NOT_NULL(expr_factory_->get_query_ctx()) &&
+      expr_factory_->get_query_ctx()->is_type_ctx_inited()) {
+    type_ctx.assign_initial_type_ctx(expr_factory_->get_query_ctx()->get_initial_type_ctx());
+  } else {
+    ObSQLUtils::init_type_ctx(my_session_, type_ctx);
+  }
 }
 
 }  // namespace sql

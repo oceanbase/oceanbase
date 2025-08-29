@@ -308,7 +308,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     enable_distributed_das_scan_(true),
     enable_topn_runtime_filter_(true),
     enable_index_merge_(false),
-    enable_runtime_filter_adaptive_apply_(true)
+    enable_runtime_filter_adaptive_apply_(true),
+    extend_sql_plan_monitor_metrics_(false)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -814,6 +815,9 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_enable_topn_runtime_filter(bool enabled) { enable_topn_runtime_filter_ = enabled; }
   inline bool enable_runtime_filter_adaptive_apply() const { return enable_runtime_filter_adaptive_apply_; }
   inline void set_enable_runtime_filter_adaptive_apply(bool enabled) { enable_runtime_filter_adaptive_apply_ = enabled; }
+  inline void set_extend_sql_plan_monitor_metrics(bool enabled) { extend_sql_plan_monitor_metrics_ = enabled; }
+  inline bool extend_sql_plan_monitor_metrics() { return extend_sql_plan_monitor_metrics_; }
+
 private:
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
@@ -940,6 +944,7 @@ private:
   bool enable_topn_runtime_filter_;
   bool enable_index_merge_;
   bool enable_runtime_filter_adaptive_apply_;
+  bool extend_sql_plan_monitor_metrics_;
 };
 }
 }

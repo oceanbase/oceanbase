@@ -35,6 +35,10 @@ ObLogRestoreService::ObLogRestoreService() :
   fetch_log_worker_(),
   writer_(),
   error_reporter_(),
+  restore_source_(),
+  query_restore_source_ts_(OB_INVALID_TIMESTAMP),
+  schedule_fetch_log_ts_(OB_INVALID_TIMESTAMP),
+  common_event_schedule_ts_(OB_INVALID_TIMESTAMP),
   allocator_(),
   scheduler_(),
   cond_(),
@@ -71,7 +75,7 @@ int ObLogRestoreService::init(rpc::frame::ObReqTransport *transport,
     LOG_WARN("net_driver_ init failed");
   } else if (OB_FAIL(fetch_log_impl_.init(tenant_id, &archive_driver_, &net_driver_))) {
     LOG_WARN("fetch_log_impl_ init failed", K(ret));
-  } else if (OB_FAIL(fetch_log_worker_.init(tenant_id, &allocator_, this, ls_svr))) {
+  } else if (OB_FAIL(fetch_log_worker_.init(tenant_id, &allocator_, this, ls_svr, &writer_))) {
     LOG_WARN("fetch_log_worker_ init failed", K(ret));
   } else if (OB_FAIL(writer_.init(tenant_id, ls_svr, this, &fetch_log_worker_))) {
     LOG_WARN("remote_log_writer init failed");
@@ -86,6 +90,10 @@ int ObLogRestoreService::init(rpc::frame::ObReqTransport *transport,
     init_ls_svr_ = ls_svr;
     init_log_service_ = log_service;
     ls_svr_ = ls_svr;
+    reset_restore_source_();
+    query_restore_source_ts_ = OB_INVALID_TIMESTAMP;
+    schedule_fetch_log_ts_ = OB_INVALID_TIMESTAMP;
+    common_event_schedule_ts_ = OB_INVALID_TIMESTAMP;
     inited_ = true;
     LOG_INFO("ObLogRestoreService init succ");
   }
@@ -104,6 +112,10 @@ void ObLogRestoreService::destroy()
   net_driver_.destroy();
   fetch_log_impl_.destroy();
   error_reporter_.destroy();
+  reset_restore_source_();
+  query_restore_source_ts_ = OB_INVALID_TIMESTAMP;
+  schedule_fetch_log_ts_ = OB_INVALID_TIMESTAMP;
+  common_event_schedule_ts_ = OB_INVALID_TIMESTAMP;
   proxy_.destroy();
   allocator_.destroy();
   scheduler_.destroy();
@@ -215,28 +227,37 @@ void ObLogRestoreService::do_thread_task_()
   if (is_user_tenant(MTL_ID())) {
     share::ObLogRestoreSourceItem source;
     bool source_exist = false;
-
-    if (OB_FAIL(update_upstream_(source, source_exist))) {
-      LOG_WARN("update_upstream_ failed");
-    } else if (source_exist) {
-      ObDIActionGuard(ObDIActionGuard::NS_ACTION, "SourceType[%s]", ObLogRestoreSourceItem::get_source_type_str(source.type_));
-
-      // log restore source exist, do schedule
-      // source_exist means tenant_role is standby or restore and log_restore_source exists
-      schedule_fetch_log_(source);
-    } else {
-      // tenant_role not match or log_restore_source not exist
-      clean_resource_();
+    const int64_t current_ts = ObTimeUtility::current_time();
+    if (reach_time_interval_(current_ts, UPDATE_UPSTREAM_INTERVAL, query_restore_source_ts_)) {
+      reset_restore_source_();
+      if (OB_FAIL(update_upstream_(source, source_exist))) {
+        // don't schedule if failed to update upstream
+        LOG_WARN("update_upstream_ failed");
+      } else if (source_exist) {
+        restore_source_.deep_copy(source);
+      } else {
+        // tenant_role not match or log_restore_source not exist
+        clean_resource_();
+      }
     }
 
-    {
-      ObDIActionGuard(ObDIActionGuard::NS_ACTION, "SourceType[%s]", ObLogRestoreSourceItem::get_source_type_str(source.type_));
-      schedule_resource_(source.type_);
+    if (reach_time_interval_(current_ts, SCHEDULE_FETCH_LOG_INTERVAL, schedule_fetch_log_ts_)) {
+      if (restore_source_.is_valid()) {
+        ObDIActionGuard(ObDIActionGuard::NS_ACTION, "SourceType[%s]", ObLogRestoreSourceItem::get_source_type_str(restore_source_.type_));
+        // log restore source exist, do schedule
+        // source_exist means tenant_role is standby or restore and log_restore_source exists
+        schedule_fetch_log_(restore_source_);
+      }
+      ObDIActionGuard(ObDIActionGuard::NS_ACTION, "SourceType[%s]", ObLogRestoreSourceItem::get_source_type_str(restore_source_.type_));
+      schedule_resource_(restore_source_.type_);
     }
-    report_error_();
-    update_restore_upper_limit_();
-    refresh_error_context_();
-    set_compressor_type_();
+
+    if (reach_time_interval_(current_ts, COMMON_EVENT_SCHEDULE_INTERVAL, common_event_schedule_ts_)) {
+      report_error_();
+      update_restore_upper_limit_();
+      refresh_error_context_();
+      set_compressor_type_();
+    }
   }
 }
 
@@ -328,5 +349,28 @@ void ObLogRestoreService::refresh_error_context_()
     }
   }
 }
+
+void ObLogRestoreService::reset_restore_source_()
+{
+  restore_source_.tenant_id_ = OB_INVALID_TENANT_ID;
+  restore_source_.id_ = OB_INVALID_DEST_ID;
+  restore_source_.type_ = ObLogRestoreSourceType::INVALID;
+  restore_source_.value_.reset();
+  restore_source_.until_scn_.reset();
+  restore_source_.allocator_.reset();
+}
+
+bool ObLogRestoreService::reach_time_interval_(const int64_t current_ts,
+     const int64_t time_interval,
+     int64_t &time_us)
+{
+  bool bret = (OB_INVALID_TIMESTAMP == time_us ||
+        current_ts - time_us >= time_interval);
+  if (bret) {
+    time_us = current_ts;
+  }
+  return bret;
+}
+
 } // namespace logservice
 } // namespace oceanbase

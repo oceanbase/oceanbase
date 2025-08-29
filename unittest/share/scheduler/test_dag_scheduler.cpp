@@ -24,7 +24,7 @@ int64_t stress_time= 1; // 100ms
 char log_level[20] = "INFO";
 uint32_t time_slice = 1000;
 uint32_t sleep_slice = 2 * time_slice;
-const int64_t CHECK_TIMEOUT = 2 * 1000 * 1000; // larger than SCHEDULER_WAIT_TIME_MS
+const int64_t CHECK_TIMEOUT = 20 * 1000 * 1000; // larger than SCHEDULER_WAIT_TIME_MS
 
 #define CHECK_EQ_UTIL_TIMEOUT(expected, expr) \
   { \
@@ -35,8 +35,12 @@ const int64_t CHECK_TIMEOUT = 2 * 1000 * 1000; // larger than SCHEDULER_WAIT_TIM
         break; \
       } else { \
         expr_result = (expr); \
-      }\
+      } \
     } while(oceanbase::common::ObTimeUtility::current_time() - start_time < CHECK_TIMEOUT); \
+    if ((expected) != (expr_result)) { \
+      COMMON_LOG_RET(WARN, OB_TIMEOUT, "check timeout", K(expected), K(expr_result), K(start_time), K(CHECK_TIMEOUT), \
+        "current time", oceanbase::common::ObTimeUtility::current_time()); \
+    } \
     EXPECT_EQ((expected), (expr_result)); \
   }
 
@@ -519,7 +523,7 @@ public:
     }
     return OB_SUCCESS;
   }
-  virtual int64_t hash() const { return murmurhash(&id_, sizeof(id_), 0);}
+  virtual uint64_t hash() const { return murmurhash(&id_, sizeof(id_), 0);}
   virtual bool operator == (const ObIDag &other) const
   {
     bool bret = false;

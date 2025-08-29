@@ -57,7 +57,6 @@ static int pktc_wq_push_pre(write_queue_t* wq, pktc_req_t* r) {
       rk_warn("too many requests in pktc write queue, wq_cnt=%ld, wq_sz=%ld, categ_id=%ld, categ_cnt=%d, socket=(ptr=%p,fd=%d)",
         wq->cnt, wq->sz, r->categ_id, bucket[id], r->sk, r->sk->fd);
     }
-    err = PNIO_DISPATCH_ERROR;
   }
   return err;
 }

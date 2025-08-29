@@ -583,11 +583,21 @@ public:
       const ObLSTabletService::HandleTabletMetaFunc &handle_tablet_meta_f);
 
   // ObLSTabletService interface:
-  // update tablet by checkpoint
-  // @param [in] key, key of tablet that will be updated
-  // @param [in] new_addr, new addr of the tablet
-  // @param [out] new_handle, new tablet handle
-  DELEGATE_WITH_RET(ls_tablet_svr_, update_tablet_checkpoint, int);
+  // apply defragment tablet(used for slog checkpoint)
+  // @param [in] t3m: the target that tablet will be applied to.
+  // @param [in] tablet_key: key of specified tablet
+  // @param [in] old_addr: tablet's original address
+  // @param [out] new_handle: handle of specified tablet
+  // @param [in] tsms: used for write slog(if not null).
+  DELEGATE_WITH_RET(ls_tablet_svr_, apply_defragment_tablet, int);
+
+  // ObLSTabletService interface:
+  // handle empty shell when doing slog truncate(only used for slog checkpoint)
+  // @param [in] t3m: used for empty shell cas
+  // @param [in] tablet_key: key of specified empty shell
+  // @param [in] old_addr: empty shell's original address
+  // @return: return OB_NOT_SUPPORTED in SS mode.
+  DELEGATE_WITH_RET(ls_tablet_svr_, refresh_empty_shell_for_slog_ckpt, int);
   // get a tablet handle
   // @param [in] tablet_id, the tablet needed
   // @param [out] handle, store the tablet and inc ref.
@@ -636,7 +646,6 @@ public:
   DELEGATE_WITH_RET(ls_tablet_svr_, remove_ls_inner_tablet, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, rebuild_create_tablet, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, update_tablet_ha_data_status, int);
-  DELEGATE_WITH_RET(ls_tablet_svr_, set_tablet_status_to_transfer_out_deleted, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, ha_get_tablet, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, get_tablet_without_memtables, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, ha_get_tablet_without_memtables, int);

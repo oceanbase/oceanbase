@@ -109,8 +109,13 @@ private:
 #ifdef OB_BUILD_SHARED_STORAGE
 public:
   static int64_t SS_UPDATE_CKPT_INTERVAL;
-  static int64_t SS_ADVANCE_CKPT_INTERVAL;
+  static int64_t SS_TRY_ADVANCE_CKPT_INTERVAL;
   static int64_t SS_TRY_SCHEDULE_UPLOAD_INTERVAL;
+
+public:
+  void set_prev_ss_advance_ckpt_task_ts(int64_t rhs) { prev_ss_advance_ckpt_task_ts_ = rhs; }
+  int64_t prev_ss_advance_ckpt_task_ts() { return prev_ss_advance_ckpt_task_ts_; }
+
 private:
   class ObSSUpdateCkptSCNTask : public common::ObTimerTask {
   public:
@@ -134,6 +139,7 @@ private:
   };
 
 private:
+  int64_t prev_ss_advance_ckpt_task_ts_;
   common::ObTimer ss_update_ckpt_scn_timer_;
   common::ObTimer ss_update_ckpt_lsn_timer_;
   common::ObTimer ss_advance_ckpt_timer_;

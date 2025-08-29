@@ -188,8 +188,10 @@ void TestSSReaderWriter::exhaust_tmp_file_disk_size(int64_t &avail_size)
   ObTenantDiskSpaceManager *disk_space_manager = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_manager) << "call_times: " << call_times;
   avail_size = disk_space_manager->get_macro_cache_free_size();
-  ASSERT_EQ(OB_SUCCESS, disk_space_manager->alloc_file_size(avail_size, ObSSMacroCacheType::TMP_FILE)) << "call_times: " << call_times;
-  ASSERT_EQ(OB_SERVER_OUTOF_DISK_SPACE, disk_space_manager->alloc_file_size(8192, ObSSMacroCacheType::TMP_FILE)) << "call_times: " << call_times;
+  ASSERT_EQ(OB_SUCCESS, disk_space_manager->alloc_file_size(avail_size,
+            ObSSMacroCacheType::TMP_FILE, ObDiskSpaceType::FILE)) << "call_times: " << call_times;
+  ASSERT_EQ(OB_SERVER_OUTOF_DISK_SPACE, disk_space_manager->alloc_file_size(8192,
+            ObSSMacroCacheType::TMP_FILE, ObDiskSpaceType::FILE)) << "call_times: " << call_times;
 }
 
 void TestSSReaderWriter::alloc_tmp_file_disk_size(const int64_t disk_size)
@@ -198,8 +200,10 @@ void TestSSReaderWriter::alloc_tmp_file_disk_size(const int64_t disk_size)
   call_times++;
   ObTenantDiskSpaceManager *disk_space_manager = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_manager) << "call_times: " << call_times;
-  ASSERT_EQ(OB_SUCCESS, disk_space_manager->alloc_file_size(disk_size, ObSSMacroCacheType::TMP_FILE)) << "call_times: " << call_times;
-  ASSERT_EQ(OB_SERVER_OUTOF_DISK_SPACE, disk_space_manager->alloc_file_size(8192, ObSSMacroCacheType::TMP_FILE)) << "call_times: " << call_times;
+  ASSERT_EQ(OB_SUCCESS, disk_space_manager->alloc_file_size(disk_size,
+            ObSSMacroCacheType::TMP_FILE, ObDiskSpaceType::FILE)) << "call_times: " << call_times;
+  ASSERT_EQ(OB_SERVER_OUTOF_DISK_SPACE, disk_space_manager->alloc_file_size(8192,
+            ObSSMacroCacheType::TMP_FILE, ObDiskSpaceType::FILE)) << "call_times: " << call_times;
 }
 
 void TestSSReaderWriter::release_tmp_file_disk_size(const int64_t avail_size)
@@ -208,7 +212,8 @@ void TestSSReaderWriter::release_tmp_file_disk_size(const int64_t avail_size)
   call_times++;
   ObTenantDiskSpaceManager *disk_space_manager = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_manager) << "call_times: " << call_times;
-  ASSERT_EQ(OB_SUCCESS, disk_space_manager->free_file_size(avail_size, ObSSMacroCacheType::TMP_FILE)) << "call_times: " << call_times;
+  ASSERT_EQ(OB_SUCCESS, disk_space_manager->free_file_size(avail_size,
+            ObSSMacroCacheType::TMP_FILE, ObDiskSpaceType::FILE)) << "call_times: " << call_times;
 }
 
 void TestSSReaderWriter::check_tmp_file_disk_size_enough(const int64_t size)
@@ -710,13 +715,25 @@ TEST_F(TestSSReaderWriter, tmp_file_reader_writer)
   read_and_compare_tmp_file_data(macro_id, 0/*offset*/, 8192 * 2/*size*/);
   check_tmp_file_seg_meta(macro_id, false/*is_meta_exist*/);
 
-  // 15. concurrent append and calibration
+  // 15. (a) disk space not enough, write remote, unsealed, [0, 8KB);
+  //     (b) disk space not enough, write remote, sealed, [0, 2MB);
+  macro_id.set_third_id(71); // segment_id
+  write_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/, 8192/*valid_length*/, false/*is_sealed*/, write_buf_);
+  read_and_compare_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/);
+  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, false/*is_in_local*/, 8192/*valid_length*/);
+
+  write_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/, true/*is_sealed*/, write_buf_);
+  read_and_compare_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/);
+  check_tmp_file_seg_meta(macro_id, false/*is_meta_exist*/);
+
+
+  // 16. concurrent append and calibration
   // (a) disk space enough, write local, unsealed, [0, 8KB);
   // (b) pause tmp file gc;
   // (c) append sealed segment, [0, 2MB], write remote; expect delete tmp_file_seg_meta
   release_tmp_file_disk_size(avail_size);
   check_tmp_file_disk_size_enough(8192);
-  macro_id.set_third_id(70); // segment_id
+  macro_id.set_third_id(72); // segment_id
   write_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/, 8192/*valid_length*/, false/*is_sealed*/, write_buf_);
   read_and_compare_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/);
   check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/, 8192/*valid_length*/);
@@ -729,13 +746,13 @@ TEST_F(TestSSReaderWriter, tmp_file_reader_writer)
 
   file_manager->set_tmp_file_cache_allow_gc();
 
-  // 16. concurrent append and calibration
+  // 17. concurrent append and calibration
   // (a) disk space enough, write local, unsealed;
   // (b) pause tmp file gc;
   // (c) disk space not enough, write remote, append unsealed segment
   // (d) rm_logical_deleted_file
   check_tmp_file_disk_size_enough(8192);
-  macro_id.set_third_id(80); // segment_id
+  macro_id.set_third_id(73); // segment_id
   write_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/, 8192/*valid_length*/, false/*is_sealed*/, write_buf_);
   read_and_compare_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/);
   check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/, 8192/*valid_length*/);
@@ -753,6 +770,44 @@ TEST_F(TestSSReaderWriter, tmp_file_reader_writer)
   ASSERT_EQ(OB_SUCCESS, file_manager->calibrate_disk_space_task_.rm_logical_deleted_file());
   read_and_compare_tmp_file_data(macro_id, 0/*offset*/, 8192 * 2/*size*/);
   check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, false/*is_in_local*/, 8192 * 2/*valid_length*/);
+
+  // 18. concurrent append and calibration
+  // (a) disk space enough, write local, unsealed, append local 3 times
+  // (b) pause tmp file gc
+  // (c) disk space not enough, write remote, unsealed (it will logical delete local file in io_callback)
+  // (d) disk space enough, write local, unsealed
+  // (e) allow tmp file gc, rm_logical_deleted_file
+  release_tmp_file_disk_size(avail_size);
+  check_tmp_file_disk_size_enough(8192);
+  macro_id.set_third_id(74); // segment_id
+  write_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/, 8192/*valid_length*/, false/*is_sealed*/, write_buf_);
+  read_and_compare_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/);
+  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/, 8192/*valid_length*/);
+
+  check_tmp_file_disk_size_enough(8192);
+  write_tmp_file_data(macro_id, 8192/*offset*/, 8192/*size*/, 8192 * 2/*valid_length*/, false/*is_sealed*/, write_buf_);
+  read_and_compare_tmp_file_data(macro_id, 8192/*offset*/, 8192/*size*/);
+  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/, 8192 * 2/*valid_length*/);
+
+  check_tmp_file_disk_size_enough(8192);
+  write_tmp_file_data(macro_id, 8192 * 2/*offset*/, 8192/*size*/, 8192 * 3/*valid_length*/, false/*is_sealed*/, write_buf_);
+  read_and_compare_tmp_file_data(macro_id, 8192 * 2/*offset*/, 8192/*size*/);
+  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/, 8192 * 3/*valid_length*/);
+
+  file_manager->set_tmp_file_cache_pause_gc();
+
+  exhaust_tmp_file_disk_size(avail_size);
+  write_tmp_file_data(macro_id, 8192 * 3/*offset*/, 8192/*size*/, 8192 * 4/*valid_length*/, false/*is_sealed*/, write_buf_);
+  read_and_compare_tmp_file_data(macro_id, 8192 * 3/*offset*/, 8192/*size*/);
+  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, false/*is_in_local*/, 8192 * 4/*valid_length*/);
+  file_manager->set_tmp_file_cache_allow_gc();
+
+  release_tmp_file_disk_size(avail_size);
+  check_tmp_file_disk_size_enough(8192);
+  write_tmp_file_data(macro_id, 8192 * 4/*offset*/, 8192/*size*/, 8192 * 5/*valid_length*/, false/*is_sealed*/, write_buf_);
+  ASSERT_EQ(OB_SUCCESS, file_manager->calibrate_disk_space_task_.rm_logical_deleted_file());
+  read_and_compare_tmp_file_data(macro_id, 8192 * 4/*offset*/, 8192/*size*/);
+  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/, 8192 * 5/*valid_length*/);
 }
 
 TEST_F(TestSSReaderWriter, private_tablet_meta_reader_writer)

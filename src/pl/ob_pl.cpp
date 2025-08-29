@@ -156,7 +156,12 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
   jit::ObLLVMHelper::add_symbol(ObString("spi_check_composite_not_null"),
                                 WRAP_SPI_CALL(sql::ObSPIService::spi_check_composite_not_null));
   jit::ObLLVMHelper::add_symbol(ObString("pl_execute"),
-                                WRAP_SPI_CALL(ObPL::execute_proc));
+#if defined(__aarch64__)
+                                (void*)(ObPL::execute_proc_arm)
+#else
+                                WRAP_SPI_CALL(ObPL::execute_proc)
+#endif // defined(__aarch64__)
+                                );
   jit::ObLLVMHelper::add_symbol(ObString("set_user_type_var"),
                                 WRAP_SPI_CALL(ObPL::set_user_type_var));
   jit::ObLLVMHelper::add_symbol(ObString("set_implicit_cursor_in_forall"),
@@ -223,6 +228,8 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
                                 WRAP_SPI_CALL(sql::ObSPIService::spi_convert_anonymous_array));
   jit::ObLLVMHelper::add_symbol(ObString("spi_internal_error"),
                                 WRAP_SPI_CALL(sql::ObSPIService::spi_internal_error));
+  jit::ObLLVMHelper::add_symbol(ObString("spi_reset_allocator"),
+                                (void*)(sql::ObSPIService::spi_reset_allocator));
 #undef WRAP_SPI_CALL
 
   sql_proxy_ = &sql_proxy;
@@ -268,6 +275,35 @@ ObPLCtx::~ObPLCtx()
 void ObPL::destory()
 {
 }
+
+#if defined(__aarch64__)
+int ObPL::execute_proc_arm(ObPLExecCtx &ctx,
+                           uint64_t package_id,
+                           uint64_t proc_id,
+                           int64_t *subprogram_path,
+                           int64_t path_length,
+                           uint64_t loc,
+                           int64_t argc,
+                           common::ObObjParam **argv,
+                           int64_t *nocopy_argv,
+                           uint64_t dblink_id)
+{
+  int ret = OB_SUCCESS;
+
+  bool is_overflow = false;
+
+  if (OB_FAIL(check_stack_overflow(is_overflow))) {
+    LOG_WARN("failed to check stack overflow", K(ret), K(is_overflow), K(package_id), K(proc_id), K(subprogram_path));
+  } else if (is_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("stack overflow when execute inner call", K(ret), K(is_overflow), K(package_id), K(proc_id), K(subprogram_path));
+  } else if (OB_FAIL(execute_proc(ctx, package_id, proc_id, subprogram_path, path_length, loc, argc, argv, nocopy_argv, dblink_id))) {
+    LOG_WARN("failed to execute inner call", K(ret), K(package_id), K(proc_id), K(subprogram_path));
+  }
+
+  return ret;
+}
+#endif // defined(__aarch64__)
 
 int ObPL::execute_proc(ObPLExecCtx &ctx,
                        uint64_t package_id,
@@ -369,6 +405,11 @@ int ObPL::execute_proc(ObPLExecCtx &ctx,
           }
         } catch (...) {
           ctx.exec_ctx_->get_sql_ctx()->schema_guard_ = old_schema_guard;
+          if (NULL != mem_context) {
+            proc_params.reset();
+            DESTROY_CONTEXT(mem_context);
+            mem_context = NULL;
+          }
           throw;
         }
         if (OB_SUCC(ret)) {
@@ -986,11 +1027,15 @@ void ObPLContext::destory(
               ret = OB_SUCCESS == ret ? rl_ret : ret;
             }
           } else if (OB_TRANS_XA_BRANCH_FAIL != ret) {
-            DISABLE_SQL_MEMLEAK_GUARD;
-            tmp_ret = ObDbmsXA::xa_rollback_savepoint(ctx);
-            if (OB_SUCCESS != tmp_ret) {
-              LOG_WARN("xa trans roll back to save point failed",
-                      K(tmp_ret), KPC(session_info.get_tx_desc()));
+            if (in_nested_sql_ctrl()) {
+              // rollback or commit by the top sql.
+            } else {
+              DISABLE_SQL_MEMLEAK_GUARD;
+              tmp_ret = ObDbmsXA::xa_rollback_savepoint(ctx);
+              if (OB_SUCCESS != tmp_ret) {
+                LOG_WARN("xa trans roll back to save point failed",
+                        K(tmp_ret), KPC(session_info.get_tx_desc()));
+              }
             }
           }
 #endif
@@ -1561,6 +1606,24 @@ int ObPLContext::get_routine_from_local(
   return ret;
 }
 
+int ObPLContext::get_subprogram_var_type(ObExecContext *exec_ctx,
+                                            uint64_t package_id,
+                                            uint64_t routine_id,
+                                            int64_t var_idx,
+                                            pl::ObPLDataType &type)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session_info = NULL;
+  ObPLExecState *state = NULL;
+  CK (OB_NOT_NULL(exec_ctx));
+  CK (OB_NOT_NULL(session_info = exec_ctx->get_my_session()));
+  OZ (ObPLContext::get_exec_state_from_local(*session_info, package_id, routine_id, state));
+  OV (OB_NOT_NULL(state), OB_ERR_UNEXPECTED, package_id, routine_id, var_idx);
+  CK (var_idx >= 0 && var_idx < state->get_function().get_variables().count());
+  OX (type = state->get_function().get_variables().at(var_idx));
+  return ret;
+}
+
 int ObPLContext::get_subprogram_var_from_local(
   ObSQLSessionInfo &session_info,
   int64_t package_id, int64_t routine_id,
@@ -1575,6 +1638,19 @@ int ObPLContext::get_subprogram_var_from_local(
 }
 
 int ObPLContext::set_subprogram_var_from_local(
+  ObSQLSessionInfo &session_info,
+  int64_t package_id, int64_t routine_id,
+  int64_t var_idx, const ObObjParam &value)
+{
+  int ret = OB_SUCCESS;
+  ObPLExecState *state = NULL;
+  OZ (get_exec_state_from_local(session_info, package_id, routine_id, state));
+  CK (OB_NOT_NULL(state));
+  OZ (state->set_var(var_idx, value, true));
+  return ret;
+}
+
+int ObPLContext::set_subprogram_var(
   ObSQLSessionInfo &session_info,
   int64_t package_id, int64_t routine_id,
   int64_t var_idx, const ObObjParam &value)
@@ -1665,8 +1741,10 @@ int ObPL::execute(ObExecContext &ctx,
             if (pl.get_params().at(i).get_meta().get_extend_type() != PL_REF_CURSOR_TYPE
                 && pl.get_params().at(i).get_meta().get_extend_type() != PL_CURSOR_TYPE
                 && pl.get_params().at(i).get_ext() != params->at(i).get_ext()) {
-              OX (params->at(i) = pl.get_params().at(i));
-              params->at(i).set_int(0);
+              if (!pl.param_converted(i)) {
+                OX (params->at(i) = pl.get_params().at(i));
+                OX (params->at(i).set_int(0));
+              }
               OZ (ObUserDefinedType::deep_copy_obj(allocator, pl.get_params().at(i), params->at(i)));
               ObUserDefinedType::destruct_objparam(pl_sym_allocator,
                                                 pl.get_params().at(i),
@@ -1674,10 +1752,13 @@ int ObPL::execute(ObExecContext &ctx,
             } else if (pl.get_params().at(i).get_meta().get_extend_type() == PL_REF_CURSOR_TYPE
                       || pl.get_params().at(i).get_meta().get_extend_type() == PL_CURSOR_TYPE) {
               ObObjParam &cursor_param = pl.get_params().at(i);
-              const ObPLCursorInfo *cursor = NULL;
-              OZ (ObSPIService::spi_copy_ref_cursor(&pl.get_exec_ctx(), &allocator, &cursor_param, &params->at(i)));
-              OZ (ObSPIService::spi_add_ref_cursor_refcount(&pl.get_exec_ctx(), &cursor_param, -1)); //we need to dec refcount after format param assign to actual param
+              ObPLCursorInfo *cursor = NULL;
               OX (cursor = reinterpret_cast<ObPLCursorInfo *>(cursor_param.get_ext()));
+              if (OB_SUCC(ret) && OB_NOT_NULL(cursor)) {
+                CK (1 <= cursor->get_ref_count());
+                OX (cursor->set_is_returning(true));  //Waiting for the actual param to be assigned to the formal param.
+                OX (cursor->dec_ref_count());
+              }
               OX (params->at(i) = cursor_param);
               if (pl.is_top_call() && OB_NOT_NULL(cursor)) {
                 uint64_t compat_version = 0;
@@ -1688,6 +1769,7 @@ int ObPL::execute(ObExecContext &ctx,
                                                           ObCompatFeatureType::NULL_VALUE_FOR_CLOSED_CURSOR,
                                                           null_value_for_closed_cursor));
                 if (null_value_for_closed_cursor && cursor->is_session_cursor() && !cursor->isopen()) {
+                  OX (cursor->inc_ref_count());
                   OZ (ObSPIService::spi_add_ref_cursor_refcount(&pl.get_exec_ctx(), &cursor_param, -1));
                   OX (params->at(i).set_obj_value(static_cast<uint64_t>(0)));  // return closed refcursor as null
                 }
@@ -3165,7 +3247,7 @@ int ObPLExecState::get_var(int64_t var_idx, ObObjParam& result)
   return ret;
 }
 
-int ObPLExecState::set_var(int64_t var_idx, const ObObjParam& value)
+int ObPLExecState::set_var(int64_t var_idx, const ObObjParam& value, bool set_var_from_local)
 {
   int ret = OB_SUCCESS;
   ParamStore *params = ctx_.params_;
@@ -3215,8 +3297,11 @@ int ObPLExecState::set_var(int64_t var_idx, const ObObjParam& value)
     OX (params->at(var_idx) = copy_value);
     OX (params->at(var_idx).set_udt_id(udt_id));
   } else {
-    OZ (ObUserDefinedType::destruct_objparam(*get_allocator(), params->at(var_idx), ctx_.exec_ctx_->get_my_session()));
-    OX (params->at(var_idx) = copy_value);
+    if (set_var_from_local) { //direct set cursor value when set subprogram var from local
+      OX (params->at(var_idx) = copy_value);
+    } else {
+      OZ (ObSPIService::spi_copy_ref_cursor(&ctx_, NULL, &copy_value, &params->at(var_idx)));
+    }
   }
   OX (params->at(var_idx).set_param_meta());
   return ret;
@@ -3232,8 +3317,14 @@ int ObPLExecState::deep_copy_result_if_need(ObIAllocator &allocator)
     CK (OB_NOT_NULL(ctx_.exec_ctx_->get_pl_ctx()));
     OZ (ObUserDefinedType::deep_copy_obj(ctx_.exec_ctx_->get_allocator(), result_, new_obj, false));
     ObUserDefinedType::destruct_objparam(*get_allocator(), result_, ctx_.exec_ctx_->get_my_session());
-    OZ (ctx_.exec_ctx_->get_pl_ctx()->add(new_obj));
-    OX (result_ = new_obj);
+    if (OB_SUCC(ret)) {
+      OZ (ctx_.exec_ctx_->get_pl_ctx()->add(new_obj));
+      if (OB_FAIL(ret)) {
+        ObUserDefinedType::destruct_obj(new_obj, ctx_.exec_ctx_->get_my_session());
+      } else {
+        result_ = new_obj;
+      }
+    }
   } else if (func_.get_ret_type().is_obj_type() && result_.need_deep_copy()) {
     // basic value, do not need copy when called by function from sql.
     if (!(is_called_from_sql_ && func_.is_function())) {
@@ -3432,13 +3523,7 @@ int ObPLExecState::final(int ret)
                                         func_.get_routine_id(),
                                         i, cursor, param, loc);
       if (OB_SUCCESS == tmp_ret && NULL != cursor) {
-        if (0 == cursor->get_ref_count() && (cursor->is_session_cursor() || cursor->is_ref_by_refcursor())) {
-          // when refcount is 0. should use session close cursor
-          ObSQLSessionInfo *session = ctx_.exec_ctx_->get_my_session();
-          tmp_ret = session->close_cursor(cursor->get_id());
-          ret = OB_SUCCESS == ret ? tmp_ret : ret;
-          LOG_INFO("close session cursor after pl exec.", K(ret), K(tmp_ret), K(cursor->get_id()));
-        } else if (OB_FAIL(ret)) {
+        if (OB_FAIL(ret)) {
           // 函数结束这儿还需要close cursor，因为如果有异常，block结束除的close cursor就走不到，这儿还需要关闭
           // 这儿为啥可能为null
           /*
@@ -3463,9 +3548,8 @@ int ObPLExecState::final(int ret)
           * 上例中c1 调用了cursor init，但是c2没有调用，因为被execption打断，这个时候在final函数里面调用cursor close
           * 函数，这个obj就是null，因为c2没有调用cursor init。 另外goto也可能导致执行流变动，没有open就去close
           */
-          if (OB_SUCCESS != ObSPIService::spi_cursor_close(&ctx_, func_.get_package_id(),
-                                                  func_.get_routine_id(), i, true)) {
-            LOG_WARN("failed to get cursor info", K(tmp_ret),
+          if (OB_SUCCESS != (tmp_ret = ObSPIService::spi_add_ref_cursor_refcount(&ctx_, &param, -1))) {
+            LOG_WARN("failed to spi_add_ref_cursor_refcount", K(tmp_ret),
               K(func_.get_package_id()), K(func_.get_routine_id()), K(i));
           }
         } else {
@@ -3629,7 +3713,7 @@ int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
 // to unexpected parameters being passed to the stored procedure, resulting in unknown errors.
 // This function can be removed after the feature of defending the compilation cache of the executing stored procedure
 // from being eliminated on the PL cache side.
-int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, const ObPLDataType &formal_param_type, int64_t param_idx)
+int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, const ObPLDataType &formal_param_type, int64_t param_idx, bool is_anonymous)
 {
   int ret = OB_SUCCESS;
   bool enable_defend = true;
@@ -3645,6 +3729,8 @@ int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, 
     // no actual param type info(eg: out params), skip check
     LOG_TRACE("actual param is null or mock default param, skip check",
               K(actual_param), K(formal_param_type));
+  } else if (is_anonymous && !func_.get_params_info().at(param_idx).flag_.need_to_check_type_) {
+    // anonymous param and not need to check type, skip check
   } else if (!actual_param.is_ext()) {
     if (!formal_param_type.is_obj_type()) {
       ret = OB_INVALID_ARGUMENT;
@@ -3700,8 +3786,9 @@ int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, 
         OZ (check_anonymous_collection_compatible(*actual_composite, formal_param_type, need_cast));
         if (OB_SUCC(ret) && need_cast && !formal_param_type.is_generic_type() && !formal_param_type.is_opaque_type() && func_.get_in_args().has_member(param_idx)) { //in arg and need cast add convert_composite
           OX (get_params().at(param_idx) = actual_param);
-          OZ (convert_composite(get_params().at(param_idx), formal_param_type));
+          OZ (convert_composite(ctx_, get_params().at(param_idx), formal_param_type.get_user_type_id()));
           OX (need_free_.at(param_idx) = get_params().at(param_idx).get_ext() != 0 ? true : false);
+          OX (param_converted_.at(param_idx) = true);
         }
       }
     } else {
@@ -3730,8 +3817,9 @@ int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, 
       OV (is_compatible, OB_ERR_SP_WRONG_ARG_NUM, formal_udt_id, actual_udt_id, formal_param_type, actual_param);
       if (OB_SUCC(ret) && actual_udt_id != formal_udt_id && !formal_param_type.is_generic_type() && !formal_param_type.is_opaque_type() && func_.get_in_args().has_member(param_idx)) { //in arg and need cast add convert_composite
         OX (get_params().at(param_idx) = actual_param);
-        OZ (convert_composite(get_params().at(param_idx), formal_param_type));
+        OZ (convert_composite(ctx_, get_params().at(param_idx), formal_param_type.get_user_type_id()));
         OX (need_free_.at(param_idx) = get_params().at(param_idx).get_ext() != 0 ? true : false);
+        OX (param_converted_.at(param_idx) = true);
       }
     }
   }
@@ -3784,7 +3872,7 @@ int ObPLExecState::check_anonymous_collection_compatible(const ObPLComposite &co
   return ret;
 }
 
-int ObPLExecState::convert_composite(ObObjParam &param, const ObPLDataType &dest_type)
+int ObPLExecState::convert_composite(ObPLExecCtx &ctx, ObObjParam &param, int64_t dest_type_id)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator tmp_allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
@@ -3794,27 +3882,25 @@ int ObPLExecState::convert_composite(ObObjParam &param, const ObPLDataType &dest
   ObPLPackageGuard *package_guard = NULL;
   const ObUserDefinedType *pl_user_type = NULL;
 
-  CK (OB_NOT_NULL(session = ctx_.exec_ctx_->get_my_session()));
-  CK (OB_NOT_NULL(schema_guard = ctx_.exec_ctx_->get_sql_ctx()->schema_guard_));
-  CK (OB_NOT_NULL(sql_proxy = ctx_.exec_ctx_->get_sql_proxy()));
-  CK (OB_NOT_NULL(package_guard = ctx_.exec_ctx_->get_package_guard()));
+  CK (OB_NOT_NULL(session = ctx.exec_ctx_->get_my_session()));
+  CK (OB_NOT_NULL(schema_guard = ctx.exec_ctx_->get_sql_ctx()->schema_guard_));
+  CK (OB_NOT_NULL(sql_proxy = ctx.exec_ctx_->get_sql_proxy()));
+  CK (OB_NOT_NULL(package_guard = ctx.exec_ctx_->get_package_guard()));
 
-  OZ (ctx_.get_user_type(dest_type.get_user_type_id(), pl_user_type, &tmp_allocator));
+  OZ (ctx.get_user_type(dest_type_id, pl_user_type, &tmp_allocator));
   CK (OB_NOT_NULL(pl_user_type));
 
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && param.is_ext() && param.get_ext() != 0) {
     int64_t dst_size = 0;
     ObObj dst;
     ObObj *dst_ptr = &dst;
     ObObj *src_ptr = &param;
     ObPLResolveCtx resolve_ctx(
-      *get_allocator(), *session, *schema_guard, *package_guard, *sql_proxy, false);
-    OZ (pl_user_type->init_obj(*(schema_guard), ctx_.exec_ctx_->get_allocator(), dst, dst_size));
+      *ctx.allocator_, *session, *schema_guard, *package_guard, *sql_proxy, false);
+    OZ (pl_user_type->init_obj(*(schema_guard), *ctx.allocator_, dst, dst_size));
     OZ (pl_user_type->convert(resolve_ctx, src_ptr, dst_ptr));
-    CK (OB_NOT_NULL(ctx_.exec_ctx_->get_pl_ctx()));
-    OZ (ctx_.exec_ctx_->get_pl_ctx()->add(dst));
-    if (OB_FAIL(ret)) {
-      ObUserDefinedType::destruct_obj(dst, session);
+    if (OB_SUCCESS != ret) {
+      ObUserDefinedType::destruct_objparam(*ctx.allocator_, dst, session);
     }
     OX (param = dst);
     OX (param.set_param_meta());
@@ -3873,6 +3959,7 @@ int ObPLExecState::init_params_simple(const ParamStore *params, bool is_anonymou
        *   else It will directly used by static sql, do not need to check.
        */
       need_free_.push_back(false);
+      param_converted_.push_back(false);
       OX (get_params().at(i) = params->at(i));
   }
   return ret;
@@ -3975,8 +4062,9 @@ do {                                                                  \
        *   else It will directly used by static sql, do not need to check.
        */
       need_free_.push_back(false);
+      param_converted_.push_back(false);
       const ObPLDataType &pl_type = func_.get_variables().at(i);  // formal param type
-      if (OB_FAIL(defend_stored_routine_change(params->at(i), pl_type, i))) {
+      if (OB_FAIL(defend_stored_routine_change(params->at(i), pl_type, i, is_anonymous))) {
         LOG_WARN("param type not match, procedure/function could have been replaced",
                  K(ret), K(i), K(params->at(i)), K(pl_type));
       } else if (func_.get_in_args().has_member(i)) {
@@ -4132,8 +4220,8 @@ do {                                                                  \
                        && pl_type.get_user_type_id() != params->at(i).get_udt_id()
                        && !pl_type.is_generic_type()
                        && !pl_type.is_opaque_type()) {
-              // if need_free is true, means already check is compatible and convert in defend_stored_routine_change
-              if (need_free_.at(i) == false) {
+              // if param_converted_ is true, means already check is compatible and convert in defend_stored_routine_change
+              if (!param_converted_.at(i)) {
                 ObPLComposite *composite = NULL;
                 get_params().at(i) = params->at(i);
                 get_params().at(i).set_udt_id(pl_type.get_user_type_id());
@@ -5225,12 +5313,16 @@ int ObPLFunction::is_special_pkg_invoke_right(ObSchemaGetterGuard &guard, bool &
   static const char *name_pair2[] = { "dbms_utility", "old_current_schema" };
   static const char *name_pair3[] = { "dbms_utility", "exec_ddl_statement" };
   static const char *name_pair4[] = { "dbms_describe", "describe_procedure" };
+  static const char *name_pair5[] = { "dbms_utility", "VALIDATE" };
+  static const char *name_pair6[] = { "dbms_utility", "INNER_VALIDATE" };
   static name_pair_ptr name_arr[] = {
     &name_pair,
     &name_pair1,
     &name_pair2,
     &name_pair3,
-    &name_pair4
+    &name_pair4,
+    &name_pair5,
+    &name_pair6
     // { "dbms_utility", "name_resolve" }
   };
   int ret = OB_SUCCESS;

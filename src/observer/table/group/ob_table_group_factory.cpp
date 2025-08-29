@@ -66,7 +66,17 @@ void ObTableGroupOpFactory::free_and_reuse(ObTableGroupType type)
 void ObTableGroupOpFactory::free_all()
 {
   for (int64_t i = 0; i < ObTableGroupType::TYPE_MAX; i++) {
-    this->free_and_reuse(static_cast<ObTableGroupType>(i));
+    ObLockGuard<ObSpinLock> guard(locks_[i]);
+    ObITableOp *op = nullptr;
+    const ObTableGroupType type = static_cast<ObTableGroupType>(i);
+    while(nullptr != (op = used_list_[type].remove_first())) {
+      op->~ObITableOp();
+      allocator_.free(op);
+    }
+    while(nullptr != (op = free_list_[type].remove_first())) {
+      op->~ObITableOp();
+      allocator_.free(op);
+    }
   }
 }
 } // end namespace table

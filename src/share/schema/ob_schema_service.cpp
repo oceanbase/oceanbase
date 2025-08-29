@@ -405,6 +405,7 @@ int AlterTableSchema::assign(const ObTableSchema &src_schema)
       enable_macro_block_bloom_filter_ = src_schema.enable_macro_block_bloom_filter_;
       merge_engine_type_ = src_schema.merge_engine_type_;
       external_location_id_ = src_schema.external_location_id_;
+      micro_block_format_version_ = src_schema.micro_block_format_version_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {
         LOG_WARN("Fail to deep copy tablegroup_name", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.comment_, comment_))) {

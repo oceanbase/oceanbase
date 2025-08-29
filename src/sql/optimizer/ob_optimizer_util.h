@@ -1068,7 +1068,8 @@ public:
                                const EqualSets &equal_sets,
                                const ObIArray<ObRawExpr *> &const_exprs,
                                int64_t &match_prefix_count,
-                               bool &sort_match);
+                               bool &sort_match,
+                               bool &full_covered);
 
   // fast check, return bool result
   static int is_order_by_match(const ObIArray<OrderItem> &expect_ordering,
@@ -1150,7 +1151,8 @@ public:
                                   ObIArray<ObRawExpr*> &exprs,
                                   const ObRawExprResType &res_type,
                                   const int64_t column_idx,
-                                  const int64_t row_cnt);
+                                  const int64_t row_cnt,
+                                  const int64_t cast_row_cnt);
   static int add_column_conv_to_set_list(ObSQLSessionInfo *session_info,
                                          ObRawExprFactory *expr_factory,
                                          ObIArray<ObSelectStmt*> &stmts,
@@ -1289,6 +1291,12 @@ public:
   static bool has_hierarchical_expr(const ObRawExpr &expr);
 
 
+
+  static int get_simple_equal_const_filter_column(const ObDMLStmt *stmt,
+                                                  ObRawExpr *expr,
+                                                  int64_t table_id,
+                                                  ObIArray<ObRawExpr*> &col_exprs);
+
   static int check_pushdown_filter_to_base_table(ObLogPlan &plan,
                                                  const uint64_t table_id,
                                                  const ObIArray<ObRawExpr*> &pushdown_filters,
@@ -1324,10 +1332,6 @@ public:
                                               const ObIArray<ObShardingInfo*> &right_sharding,
                                               const EqualSets &equal_sets,
                                               bool &is_left_dominate);
-
-  static int get_range_params(ObLogicalOperator *root,
-                              ObIArray<ObRawExpr*> &range_exprs,
-                              ObIArray<ObRawExpr*> &all_table_filters);
 
   static int check_basic_sharding_info(const ObAddr &local_addr,
                                        const ObIArray<ObLogicalOperator *> &child_ops,
@@ -1644,6 +1648,8 @@ public:
                                    ObIArray<T> &output_array,
                                    ObSqlBitSet<> *priority_indices = NULL);
 
+  static int check_contains_assignment(const ObDMLStmt* stmt,
+                                       bool &contains_assignment);
 private:
   //disallow construct
   ObOptimizerUtil();

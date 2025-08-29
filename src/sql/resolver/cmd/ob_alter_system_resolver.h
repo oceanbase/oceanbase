@@ -195,7 +195,8 @@ DEF_SIMPLE_CMD_RESOLVER(ObBackupSetDecryptionResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObAddRestoreSourceResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObClearRestoreSourceResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObCheckpointSlogResolver);
-DEF_SIMPLE_CMD_RESOLVER(ObServiceNameResolver);
+DEF_SIMPLE_CMD_RESOLVER(ObLoadLicenseResolver);
+
 int resolve_restore_until(const ParseNode &time_node,
                           const ObSQLSessionInfo *session_info,
                           share::SCN &recovery_until_scn,
@@ -259,17 +260,7 @@ private:
       const common::ObString &name_node, const common::ObString &value_node);
   int convert_param_value(obrpc::ObAdminSetConfigItem &item);
 };
-class ObTransferPartitionResolver : public ObSystemCmdResolver
-{
-public:
-  ObTransferPartitionResolver(ObResolverParams &params) : ObSystemCmdResolver(params) {}
-  virtual ~ObTransferPartitionResolver() {}
-  virtual int resolve(const ParseNode &parse_tree);
-private:
-  int resolve_transfer_partition_(const ParseNode &parse_tree);
-  int resolve_cancel_transfer_partition_(const ParseNode &parse_tree);
-  int resolve_cancel_balance_job_(const ParseNode &parse_tree);
-};
+
 class ObFreezeResolver : public ObSystemCmdResolver {
 public:
   ObFreezeResolver(ObResolverParams &params) : ObSystemCmdResolver(params) {}

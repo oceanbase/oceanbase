@@ -620,6 +620,7 @@ public:
     }
     return total;
   }
+
 public:
   int64_t magic_code_;
   int64_t seq_id_;

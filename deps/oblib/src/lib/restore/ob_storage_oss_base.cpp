@@ -409,6 +409,8 @@ bool ObStorageOSSRetryStrategy::should_retry_impl_(
       bret = true;
     } else if (code / 100 != 2 && (OB_ISNULL(req_id) || req_id[0] == '\0')) {
       bret = true;
+    } else if (OSS_TOO_MANY_REQUESTS == code || OSS_LIMIT_EXCEEDED == code) {
+      bret = true;
     }
   }
 

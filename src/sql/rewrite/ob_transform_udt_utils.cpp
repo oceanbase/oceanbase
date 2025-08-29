@@ -703,10 +703,8 @@ int ObTransformUdtUtils::check_skip_child_select_view(const ObIArray<ObParentDML
   } else if (OB_ISNULL(parent_stmt = parent_stmts.at(0).stmt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get parent stmt", K(ret));
-  } else if (parent_stmt->get_table_size() != 1 ||
-             !(parent_stmt->is_delete_stmt() || parent_stmt->is_update_stmt())) {
-    // do nothing
-  } else {
+  } else if (((parent_stmt->is_delete_stmt() || parent_stmt->is_update_stmt()) && parent_stmt->get_table_size() == 1) ||
+             (parent_stmt->is_merge_stmt() && parent_stmt->get_table_size() >= 1)) {
     const sql::TableItem *basic_table_item = stmt->get_table_item(0);
     const sql::TableItem *view_table_item = parent_stmt->get_table_item(0);
     if (OB_ISNULL(basic_table_item) || OB_ISNULL(view_table_item)) {
@@ -750,7 +748,8 @@ int ObTransformUdtUtils::transform_query_udt_columns_exprs(ObTransformerCtx *ctx
   } else {
     FastUdtExprChecker expr_checker(replace_exprs);
     if (OB_FAIL(scopes.push_back(SCOPE_DML_COLUMN)) ||
-        (stmt->get_stmt_type() != stmt::T_MERGE && OB_FAIL(scopes.push_back(SCOPE_DML_VALUE))) ||
+        (stmt->get_stmt_type() != stmt::T_MERGE && stmt->get_stmt_type() != stmt::T_UPDATE &&
+         OB_FAIL(scopes.push_back(SCOPE_DML_VALUE))) ||
         OB_FAIL(scopes.push_back(SCOPE_DML_CONSTRAINT)) ||
         OB_FAIL(scopes.push_back(SCOPE_INSERT_DESC)) ||
         OB_FAIL(scopes.push_back(SCOPE_BASIC_TABLE)) ||

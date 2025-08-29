@@ -83,7 +83,7 @@ private:
       share::ObImportRemapArg &import_remap_arg);
   int fill_remap_tablegroup(const share::ObImportArg &import_arg,
       share::ObImportRemapArg &import_remap_arg);
-  int fill_recover_table_restore_type_(share::ObPhysicalRestoreJob &job);
+  int check_aux_tenant_restore_type_(const share::ObPhysicalRestoreJob &job);
 
   int check_specified_database_remap_table_target_(const share::ObImportTableArg &import_table_arg,
     const share::ObImportRemapArg &import_remap_arg, const uint64_t target_tenant_id);

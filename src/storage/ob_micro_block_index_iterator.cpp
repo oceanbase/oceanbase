@@ -82,6 +82,7 @@ int ObMicroBlockIndexIterator::open(
 {
   int ret = OB_SUCCESS;
   ObDatumRowkey sstable_endkey;
+  ObArenaAllocator tmp_arena("MicroIterTmp", OB_MALLOC_MIDDLE_BLOCK_SIZE, MTL_ID());
   int cmp_ret = 0;
 
   if (IS_INIT) {
@@ -93,7 +94,7 @@ int ObMicroBlockIndexIterator::open(
   } else if (sstable.is_empty()) {
     is_iter_end_ = true;
     is_inited_ = true;
-  } else if (OB_FAIL(sstable.get_last_rowkey(allocator, sstable_endkey))) {
+  } else if (OB_FAIL(sstable.get_last_rowkey(tmp_arena, sstable_endkey))) {
     LOG_WARN("Fail to get last rowkey of sstable", K(ret));
   } else if (OB_FAIL(sstable_endkey.compare(
       range.get_start_key(), rowkey_read_info.get_datum_utils(), cmp_ret))) {
@@ -165,7 +166,7 @@ int ObMicroBlockIndexIterator::deep_copy_rowkey(const ObDatumRowkey &src_key, Ob
 
   if (OB_ISNULL(allocator_)) {
     ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "ObIndexBlockMacroIterator is not inited", K(ret), KP(allocator_));
+    STORAGE_LOG(WARN, "ObMicroBlockIndexIterator is not inited", K(ret), KP(allocator_));
   } else if (OB_UNLIKELY(!src_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to deep copy datum rowkey", K(ret), K(src_key));
@@ -193,7 +194,6 @@ int ObMicroBlockIndexIterator::get_next(ObMicroIndexInfo &micro_index_info)
   int ret = OB_SUCCESS;
   const ObIndexBlockRowHeader *idx_row_header = nullptr;
   const ObIndexBlockRowParser *idx_row_parser = nullptr;
-  ObLogicMacroBlockId logic_id;
   ObMicroBlockId micro_block_id;
   micro_index_info.reset();
   if (IS_NOT_INIT) {
@@ -265,7 +265,6 @@ int ObMicroBlockIndexIterator::locate_bound_micro_block(
   int ret = OB_SUCCESS;
   is_beyond_range = false;
   const ObIndexBlockRowHeader *idx_header = nullptr;
-  ObLogicMacroBlockId logic_id;
   bool equal = false;
   if (OB_FAIL(tree_cursor_.pull_up_to_root())) {
     LOG_WARN("Fail to pull up tree cursor back to root", K(ret));

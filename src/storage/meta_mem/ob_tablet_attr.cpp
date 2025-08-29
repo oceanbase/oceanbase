@@ -44,6 +44,7 @@ ObTabletAttr::ObTabletAttr()
     ss_public_sstable_occupy_size_(0),
     backup_bytes_(0),
     ss_change_version_(share::SCN::min_scn()),
+    last_match_tablet_meta_version_(0),
     auto_part_size_(OB_INVALID_SIZE),
     notify_ss_change_version_(share::SCN::min_scn()),
     tablet_max_checkpoint_scn_(share::SCN::invalid_scn())
@@ -61,6 +62,7 @@ OB_SERIALIZE_MEMBER(ObTabletAttr,
                     tablet_meta_size_,
                     ss_public_sstable_occupy_size_,
                     backup_bytes_,
-                    ss_change_version_);
+                    ss_change_version_,
+                    last_match_tablet_meta_version_);
 } // namespace storage
 } // namespace oceanbase

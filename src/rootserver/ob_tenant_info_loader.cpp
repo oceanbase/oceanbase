@@ -143,8 +143,12 @@ void ObTenantInfoLoader::run2()
       share::ObAllTenantInfo tenant_info;
       bool content_changed = false;
       bool is_sys_ls_leader = is_sys_ls_leader_();
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+      const int64_t STANDBY_REFRESH_TIME_US = tenant_config.is_valid() ?
+          tenant_config->_keepalive_interval :
+          ObTenantRoleTransitionConstants::STS_TENANT_INFO_REFRESH_TIME_US;
       const int64_t refresh_time_interval_us = act_as_standby_() && is_sys_ls_leader ?
-                ObTenantRoleTransitionConstants::STS_TENANT_INFO_REFRESH_TIME_US :
+                STANDBY_REFRESH_TIME_US :
                 ObTenantRoleTransitionConstants::DEFAULT_TENANT_INFO_REFRESH_TIME_US;
       bool need_refresh_tenant_info = need_refresh(refresh_time_interval_us);
       if (need_refresh_tenant_info

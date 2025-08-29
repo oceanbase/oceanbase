@@ -237,9 +237,9 @@ bool ObLSPrepareMigrationDagNet::operator == (const ObIDagNet &other) const
   return is_same;
 }
 
-int64_t ObLSPrepareMigrationDagNet::hash() const
+uint64_t ObLSPrepareMigrationDagNet::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   int tmp_ret = OB_SUCCESS;
   if (!is_inited_) {
     tmp_ret = OB_NOT_INIT;
@@ -379,10 +379,10 @@ bool ObPrepareMigrationDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObPrepareMigrationDag::hash() const
+uint64_t ObPrepareMigrationDag::hash() const
 {
   int ret = OB_SUCCESS;
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   if (OB_ISNULL(ha_dag_net_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("prepare migration ctx should not be NULL", KP(ha_dag_net_ctx_));

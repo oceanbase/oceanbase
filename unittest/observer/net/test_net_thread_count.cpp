@@ -264,6 +264,65 @@ TEST_F(TestNetThreadCount, test_pn_interface)
   ASSERT_EQ(pn_set_thread_count(-1, TEST_PNIO_GROUP, config_count), 0);
 }
 
+TEST_F(TestNetThreadCount, test_pn_write_queue_move)
+{
+
+  const int insert_count = 100;
+  dlink_t dlink_array[insert_count];
+
+  // move a empty wq
+  {
+    write_queue_t wq, wq_new;
+    wq_init(&wq);
+    wq_init(&wq_new);
+    wq_move(&wq_new, &wq);
+    ASSERT_EQ(dqueue_empty(&wq_new.queue), true);
+    ASSERT_EQ(dqueue_top(&wq_new.queue), &wq_new.queue.head);
+  }
+
+  // move a non-empty wq
+  {
+    write_queue_t wq, wq_new;
+    wq_init(&wq);
+    wq_init(&wq_new);
+    for (int i = 0; i < insert_count; i++) {
+      dlink_t* l = &dlink_array[i];
+      dlink_init(l);
+      wq_push(&wq, l);
+    }
+    wq_move(&wq_new, &wq);
+    int wq_new_cnt = 0;
+    dlink_for(&wq_new.queue.head, p) {
+      ASSERT_EQ(p, &dlink_array[wq_new_cnt]);
+      wq_new_cnt++;
+    }
+    ASSERT_EQ(wq_new_cnt, insert_count);
+    ASSERT_EQ(dqueue_empty(&wq_new.queue), false);
+
+    // check reverse
+    for(dlink_t* p = wq_new.queue.head.prev; p != &wq_new.queue.head; p = p->prev) {
+      wq_new_cnt--;
+      ASSERT_EQ(p, &dlink_array[wq_new_cnt]);
+    }
+    ASSERT_EQ(wq_new_cnt, 0);
+  }
+
+  // move a wq with one element
+  {
+    write_queue_t wq, wq_new;
+    wq_init(&wq);
+    wq_init(&wq_new);
+    dlink_t* l = &dlink_array[0];
+    dlink_init(l);
+    wq_push(&wq, l);
+    wq_move(&wq_new, &wq);
+    ASSERT_EQ(dqueue_empty(&wq_new.queue), false);
+    ASSERT_EQ(dqueue_top(&wq_new.queue), l);
+    ASSERT_EQ(l->next, &wq_new.queue.head);
+    ASSERT_EQ(l->prev, &wq_new.queue.head);
+  }
+}
+
 TEST_F(TestNetThreadCount, update_rpc_thread_count)
 {
   // init
@@ -271,15 +330,7 @@ TEST_F(TestNetThreadCount, update_rpc_thread_count)
   ObAddr dst;
   int port = find_port();
   uint32_t local_ip_value = 0;
-  int tmp_ret = OB_SUCCESS;
-  if (OB_TMP_FAIL(obsys::ObNetUtil::get_local_addr_ipv4("eth0", local_ip_value))
-    && OB_TMP_FAIL(obsys::ObNetUtil::get_local_addr_ipv4("bond0", local_ip_value))) {
-    dst.set_ip_addr("127.0.0.1", port);
-  } else {
-    local_ip_value = ntohl(local_ip_value);
-    dst.set_ipv4_addr(local_ip_value, port);
-    LOG_INFO("get local ip", K(dst));
-  }
+  dst.set_ip_addr("127.0.0.1", port);
 
   // We cannot create two RPC servers in one process because of the dependency of some global variables
   SimpleRpcServer server_end(port);

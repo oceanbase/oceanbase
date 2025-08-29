@@ -25,7 +25,7 @@ namespace common
 
 int64_t get_cpu_count();
 
-enum class CpuFlag { SSE4_2 = 0, AVX, AVX2, AVX512BW, MAX };
+enum class CpuFlag { SSE4_2 = 0, AVX, AVX2, AVX512BW, NEON, MAX };
 class CpuFlagSet {
   public:
   DISABLE_COPY_ASSIGN(CpuFlagSet);

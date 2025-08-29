@@ -103,6 +103,25 @@ public:
   int64_t row_id_;
 };
 
+struct ObMicroBlockAddr
+{
+  ObMicroBlockAddr() : macro_id_(), offset_(), size_() {}
+  ObMicroBlockAddr(const MacroBlockId &macro_id, const int32_t offset, const int32_t size)
+    : macro_id_(macro_id), offset_(offset), size_(size) {}
+
+  bool operator ==(const ObMicroBlockAddr &other) const
+  {
+    return macro_id_ == other.macro_id_ && offset_ == other.offset_ && size_ == other.size_;
+  }
+  bool operator !=(const ObMicroBlockAddr &other) const { return !(*this == other); }
+
+  TO_STRING_KV(K_(macro_id), K_(offset), K_(size));
+
+  MacroBlockId macro_id_;
+  int32_t offset_;
+  int32_t size_;
+};
+
 struct ObMicroBlockData
 {
   enum Type
@@ -235,6 +254,7 @@ public:
   }
   virtual ~ObIMicroBlockGetReader() {};
   virtual int get_row(
+      const ObMicroBlockAddr &block_addr,
       const ObMicroBlockData &block_data,
       const ObDatumRowkey &rowkey,
       const ObITableReadInfo &read_info,
@@ -246,11 +266,13 @@ public:
       bool &exist,
       bool &found) = 0;
   virtual int get_row(
+      const ObMicroBlockAddr &block_addr,
       const ObMicroBlockData &block_data,
       const ObITableReadInfo &read_info,
       const uint32_t row_idx,
       ObDatumRow &row) = 0;
   virtual int get_row_id(
+      const ObMicroBlockAddr &block_addr,
       const ObMicroBlockData &block_data,
       const ObDatumRowkey &rowkey,
       const ObITableReadInfo &read_info,
@@ -376,6 +398,17 @@ public:
     UNUSEDx(col_offset, pd_row_id_ctx, agg_cell);
     return OB_NOT_SUPPORTED;
   }
+  virtual int get_aggregate_result(
+    const ObTableIterParam &iter_param,
+    const ObTableAccessContext &context,
+    const int32_t *row_ids,
+    const int64_t row_cap,
+    ObDatumRow &row_buf,
+    common::ObIArray<storage::ObAggCell*> &agg_cells)
+  {
+    UNUSEDx(iter_param, context, row_ids, row_cap, row_buf, agg_cells);
+    return OB_NOT_SUPPORTED;
+  }
   // for normal group by pushdown
   virtual int get_distinct_count(const int32_t group_by_col, int64_t &distinct_cnt) const
   {
@@ -421,7 +454,8 @@ public:
       const common::ObIArray<blocksstable::ObStorageDatum> &default_datums,
       uint32_t *len_array,
       sql::ObEvalCtx &eval_ctx,
-      storage::ObGroupByCellVec &group_by_cell)
+      storage::ObGroupByCellVec &group_by_cell,
+      const bool use_new_format)
   {
     UNUSEDx(row_ids, cell_datas, row_cap, vec_offset, len_array, eval_ctx, group_by_cell);
     return OB_NOT_SUPPORTED;
@@ -467,6 +501,70 @@ public:
   static bool need_padding(const bool is_padding_mode, const ObObjMeta &obj_meta)
   {
     return is_padding_mode && obj_meta.is_fixed_len_char_type();
+  }
+
+  virtual int get_rows(const common::ObIArray<int32_t> &cols_projector,
+                       const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
+                       const common::ObIArray<blocksstable::ObStorageDatum> *default_datums,
+                       const bool is_padding_mode,
+                       const int32_t *row_ids,
+                       const int64_t row_cap,
+                       ObDatumRow &row_buf,
+                       common::ObIArray<ObSqlDatumInfo> &datum_infos,
+                       const int64_t datum_offset,
+                       sql::ObExprPtrIArray &exprs,
+                       sql::ObEvalCtx &eval_ctx)
+  {
+    return OB_NOT_SUPPORTED;
+  }
+
+  virtual int get_rows(
+      const common::ObIArray<int32_t> &cols_projector,
+      const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
+      const common::ObIArray<blocksstable::ObStorageDatum> *default_datums,
+      const bool is_padding_mode,
+      const int32_t *row_ids,
+      const int64_t vector_offset,
+      const int64_t row_cap,
+      ObDatumRow &row_buf,
+      sql::ObExprPtrIArray &exprs,
+      sql::ObEvalCtx &eval_ctx,
+      const bool need_init_vector)
+  {
+    return OB_NOT_SUPPORTED;
+  }
+
+  virtual int get_rows(
+      const common::ObIArray<int32_t> &cols,
+      const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
+      const common::ObIArray<blocksstable::ObStorageDatum> *default_datums,
+      const bool is_padding_mode,
+      const int32_t *row_ids,
+      const int64_t row_cap,
+      const char **cell_datas,
+      const int64_t vec_offset,
+      uint32_t *len_array,
+      sql::ObEvalCtx &eval_ctx,
+      sql::ObExprPtrIArray &exprs,
+      const bool need_init_vector)
+  {
+    return OB_NOT_SUPPORTED;
+  }
+
+  virtual int filter_pushdown_truncate_filter(const sql::ObPushdownFilterExecutor *parent,
+                                              sql::ObPushdownFilterExecutor &filter,
+                                              const sql::PushdownFilterInfo &pd_filter_info,
+                                              common::ObBitmap &result_bitmap)
+  {
+    return OB_NOT_SUPPORTED;
+  }
+
+  virtual int filter_pushdown_filter(const sql::ObPushdownFilterExecutor *parent,
+                                     sql::ObPushdownFilterExecutor &filter,
+                                     const sql::PushdownFilterInfo &pd_filter_info,
+                                     common::ObBitmap &result_bitmap)
+  {
+    return OB_NOT_SUPPORTED;
   }
 
 protected:

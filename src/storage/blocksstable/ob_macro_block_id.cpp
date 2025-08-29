@@ -261,6 +261,21 @@ bool MacroBlockId::is_shared_data_block_or_meta_block() const
   );
 }
 
+bool MacroBlockId::is_shared_data_block_or_meta_block_except_mds() const
+{
+  return is_id_mode_share() &&
+  (
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MICRO_DATA_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MICRO_META_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MINI_DATA_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MINI_META_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MINOR_DATA_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MINOR_META_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MAJOR_DATA_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MAJOR_META_MACRO) == storage_object_type_
+  );
+}
+
 bool MacroBlockId::is_shared_data_block_except_mds() const
 {
   return is_id_mode_share() &&

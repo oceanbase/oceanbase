@@ -14,6 +14,7 @@
 
 #include "lib/allocator/ob_malloc.h"
 #include "oceanbase/ob_plugin_ftparser.h"
+#include "oceanbase/ob_plugin_external.h"
 #include "plugin/sys/ob_plugin_utils.h"
 
 namespace oceanbase {
@@ -28,6 +29,7 @@ class ObIPluginDescriptor;
 class ObIFTParserDesc;
 class ObPluginEntryHandle;
 class ObPluginParam;
+class ObIExternalDescriptor;
 
 /**
  * A helper function to register, find plugins
@@ -38,6 +40,8 @@ public:
   static int find_ftparser(const common::ObString &parser_name, storage::ObFTParser &ftparser);
   static int find_ftparser(const common::ObString &parser_name, ObIFTParserDesc *&ftparser, ObPluginParam *&param);
 
+  static int find_external_table(const common::ObString &name, ObIExternalDescriptor *&external_desc);
+
   template<typename T>
   static int register_builtin_ftparser(ObPluginParamPtr param, const char *name, const char *description)
   {
@@ -46,6 +50,18 @@ public:
                                      OBP_PLUGIN_TYPE_FT_PARSER,
                                      name,
                                      OBP_FTPARSER_INTERFACE_VERSION_CURRENT,
+                                     description);
+    return ret;
+  }
+
+  template<typename T>
+  static int register_builtin_external(ObPluginParamPtr param, const char *name, const char *description)
+  {
+    int ret = OB_SUCCESS;
+    ret = register_builtin_plugin<T>(param,
+                                     OBP_PLUGIN_TYPE_EXTERNAL,
+                                     name,
+                                     OBP_EXTERNAL_INTERFACE_VERSION_CURRENT,
                                      description);
     return ret;
   }
@@ -78,6 +94,10 @@ public:
 
 private:
   static int find_ftparser_entry(const ObString &parser_name, ObPluginEntryHandle *&entry_handle);
+  static int find_plugin_entry(const ObString &name,
+                               ObPluginType type,
+                               int64_t interface_current_version,
+                               ObPluginEntryHandle *&entry_handle);
 };
 
 } // namespace plugin

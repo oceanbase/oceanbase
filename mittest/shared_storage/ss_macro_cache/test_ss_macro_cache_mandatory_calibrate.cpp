@@ -95,7 +95,7 @@ TEST_F(ObMandatoryCalibrateTest, test_mandatory_calibrate)
       cur_type_used_size_init = disk_space_mgr->macro_cache_stats_[static_cast<uint8_t>(cache_type)].used_;
       LOG_INFO("mandatory_calibrate_test_info", "cur_type_name", get_ss_macro_cache_type_str(cache_type),
               K(cur_type_used_size_init), "cur_type_used_size_init(MB)", cur_type_used_size_init / ObTenantFileManager::MB);
-      ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->alloc_file_size(cache_type, deviation_threshold + overflow_size));
+      ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->alloc_file_size(cache_type, deviation_threshold + overflow_size, ObDiskSpaceType::FILE));
       cur_type_used_size_alloc = disk_space_mgr->macro_cache_stats_[static_cast<uint8_t>(cache_type)].used_;
       LOG_INFO("mandatory_calibrate_test_info", "cur_type_name", get_ss_macro_cache_type_str(cache_type),
               K(cur_type_used_size_alloc), "cur_type_used_size_alloc(MB)", cur_type_used_size_alloc / ObTenantFileManager::MB);

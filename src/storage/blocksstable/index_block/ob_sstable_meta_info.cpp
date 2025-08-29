@@ -1173,7 +1173,7 @@ int ObSSTableMacroInfo::write_block_ids(
   } else if (OB_FAIL(writer.close())) {
     LOG_WARN("fail to close block id writer", K(ret));
   } else {
-    macro_start_seq = writer.get_written_macro_cnt();
+    macro_start_seq += writer.get_written_macro_cnt();
     const ObIArray<MacroBlockId> &linked_block = writer.get_meta_block_list();
     entry_id = linked_block.at(linked_block.count() - 1);
   }

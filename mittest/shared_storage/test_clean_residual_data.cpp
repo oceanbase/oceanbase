@@ -60,7 +60,7 @@ void TestCleanResidualData::TearDownTestCase()
     } else if (OB_FAIL(get_storage_type_from_path(device_config.path_, type))) {
       LOG_WARN("failed to get storage type", KR(ret), KCSTRING(device_config.path_));
     } else if (OB_FAIL(storage_info.set(
-                   type, device_config.endpoint_, device_config.access_info_, device_config.extension_))) {
+                   type, device_config.endpoint_, device_config.access_info_, device_config.extension_, OB_INVALID_DEST_ID))) {
       LOG_WARN("failed to set storage info", KR(ret), KCSTRING(device_config.path_));
     } else if (OB_FAIL(databuff_printf(file_uri, buf_size, "%s/%s", device_config.path_, uri))) {
       LOG_WARN("failed to get file uri", KR(ret), KCSTRING(uri), KCSTRING(device_config.path_));
@@ -105,7 +105,7 @@ TEST_F(TestCleanResidualData, clean_residual_data_test)
   } else if (OB_FAIL(get_storage_type_from_path(device_config.path_, type))) {
     LOG_WARN("failed to get storage type", KR(ret), KCSTRING(device_config.path_));
   } else if (OB_FAIL(storage_info.set(
-                 type, device_config.endpoint_, device_config.access_info_, device_config.extension_))) {
+                 type, device_config.endpoint_, device_config.access_info_, device_config.extension_, OB_INVALID_DEST_ID))) {
     LOG_WARN("failed to set storage info", KR(ret), KCSTRING(device_config.path_));
   } else if (OB_FAIL(databuff_printf(file_uri, buf_size, "%s/%s", device_config.path_, uri))) {
     LOG_WARN("failed to get file uri", KR(ret), KCSTRING(uri), KCSTRING(device_config.path_));

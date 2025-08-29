@@ -139,6 +139,11 @@
 #include "sql/resolver/cmd/ob_tenant_clone_resolver.h"
 #include "sql/resolver/cmd/ob_olap_async_job_resolver.h"
 #include "sql/resolver/cmd/ob_flashback_standby_log_resolver.h"
+#include "sql/resolver/cmd/ob_alter_ls_resolver.h"
+#include "sql/resolver/cmd/ob_service_name_resolver.h"
+#include "sql/resolver/cmd/ob_transfer_partition_resolver.h"
+#include "sql/resolver/ddl/ob_create_ccl_rule_resolver.h"
+#include "sql/resolver/ddl/ob_drop_ccl_rule_resolver.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "sql/resolver/ddl/ob_create_tablespace_resolver.h"
 #include "sql/resolver/ddl/ob_alter_tablespace_resolver.h"
@@ -211,7 +216,7 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
 
 #define REGISTER_SELECT_STMT_RESOLVER(name)                                   \
   do {                                                                        \
-    ret = select_stmt_resolver_func<Ob##name##Resolver>(params_, parse_tree, stmt); \
+    ret = select_stmt_resolver_func<Ob##name##Resolver>(params_, *real_parse_tree, stmt); \
   } while (0)
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_resolve);
   int ret = OB_SUCCESS;
@@ -239,6 +244,13 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
                               params_.is_prepare_protocol_);
     OZ (resolver.resolve_condition_compile(&parse_tree, real_parse_tree, questionmark_count));
     OX (params_.query_ctx_->set_questionmark_count(questionmark_count));
+  } else if (T_SQL_STMT == parse_tree.type_) {
+    if (1 != parse_tree.num_child_) {
+      ret = OB_ERR_PARSE_SQL;
+      LOG_WARN("sql stmt should have only one child", K(ret), K(parse_tree.num_child_));
+    } else {
+      real_parse_tree = parse_tree.children_[0];
+    }
   } else {
     real_parse_tree = &parse_tree;
   }
@@ -427,15 +439,15 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(FlushIlogCache);
         break;
       }
-      case T_FLUSH_SS_MICRO_CACHE: {
-        REGISTER_STMT_RESOLVER(FlushSSMicroCache);
-        break;
-      }
       case T_FLUSH_DAG_WARNINGS: {
         REGISTER_STMT_RESOLVER(FlushDagWarnings);
         break;
       }
 #ifdef OB_BUILD_SHARED_STORAGE
+      case T_FLUSH_SS_MICRO_CACHE: {
+        REGISTER_STMT_RESOLVER(FlushSSMicroCache);
+        break;
+      }
        case T_TRIGGER_STORAGE_CACHE: {
         REGISTER_STMT_RESOLVER(TriggerStorageCache);
         break;
@@ -1312,12 +1324,16 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(TransferPartition);
         break;
       }
-      case T_CANCEL_BALANCE_JOB: {
+      case T_BALANCE_JOB_OP: {
         REGISTER_STMT_RESOLVER(TransferPartition);
         break;
       }
       case T_SERVICE_NAME: {
         REGISTER_STMT_RESOLVER(ServiceName);
+        break;
+      }
+      case T_ALTER_LS: {
+        REGISTER_STMT_RESOLVER(AlterLS);
         break;
       }
       case T_REPAIR_TABLE: {
@@ -1364,6 +1380,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(RebuildTablet);
         break;
       }
+      case T_LOAD_LICENSE: {
+        REGISTER_STMT_RESOLVER(LoadLicense);
+        break;
+      }
       case T_GRANT_PROXY:
       case T_REVOKE_PROXY: {
         REGISTER_STMT_RESOLVER(Mock);
@@ -1403,6 +1423,14 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(FlashbackStandbyLog);
         break;
       }
+      case T_CREATE_CCL_RULE: {
+        REGISTER_STMT_RESOLVER(CreateCCLRule);
+        break;
+      }
+      case T_DROP_CCL_RULE: {
+        REGISTER_STMT_RESOLVER(DropCCLRule);
+        break;
+      }
       default: {
         ret = OB_NOT_SUPPORTED;
         const char *type_name = get_type_name(parse_tree.type_);
@@ -1411,6 +1439,7 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         break;
       }
     }  // end switch
+
 
     // 外表写只放开insert
     if (OB_SUCC(ret) && stmt->is_dml_stmt() && !stmt->is_insert_stmt()) {
@@ -1447,10 +1476,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
     if (OB_SUCC(ret) && stmt->is_dml_stmt() && !stmt->is_explain_stmt()) {
       if (OB_FAIL(params_.query_ctx_->query_hint_.init_query_hint(params_.allocator_,
                                                                   params_.session_info_,
+                                                                  params_.global_hint_,
                                                                   static_cast<ObDMLStmt*>(stmt)))) {
         LOG_WARN("failed to init query hint.", K(ret));
-      } else if (OB_FAIL(params_.query_ctx_->query_hint_.check_and_set_params_from_hint(params_,
-                                                         *static_cast<ObDMLStmt*>(stmt)))) {
+      } else if (OB_FAIL(params_.query_ctx_->query_hint_.set_params_from_hint(params_))) {
         LOG_WARN("failed to check and set params from hint", K(ret));
       }
     }

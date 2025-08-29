@@ -102,7 +102,7 @@ protected:
   static const uint64_t tablet_id_ = 200001;
   static const uint64_t TEST_TABLE_ID = 200001;
   static const uint64_t ls_id_ = 1001;
-  static const int64_t DDL_KVS_CNT = 3;
+  static const int64_t DDL_KVS_CNT = 4;
   ObMergeType merge_type_;
   int64_t max_row_cnt_;
   int64_t max_partial_row_cnt_;
@@ -415,6 +415,7 @@ void TestIndexBlockDataPrepare::prepare_schema()
   table_schema_.set_row_store_type(row_store_type_);
   table_schema_.set_storage_format_version(OB_STORAGE_FORMAT_VERSION_V4);
   table_schema_.set_micro_index_clustered(false);
+  table_schema_.set_micro_block_format_version(ObMicroBlockFormatVersionHelper::LATEST_VERSION);
 
   index_schema_.reset();
   ASSERT_EQ(OB_SUCCESS, index_schema_.set_table_name("test_index_block"));

@@ -54,7 +54,7 @@ private:
   blocksstable::ObDatumRange multi_version_range_;
 };
 
-class ObSSTableRowLockMultiChecker : public ObSSTableRowScanner<>
+class ObSSTableRowLockMultiChecker : public ObSSTableRowScanner<ObIndexTreeMultiPassPrefetcher<32, 8>>
 {
 public:
   ObSSTableRowLockMultiChecker();
@@ -68,9 +68,7 @@ public:
       const bool check_exist,
       const share::SCN &snapshot_version);
 protected:
-  virtual int fetch_row(
-      ObSSTableReadHandle &read_handle,
-      const ObDatumRow *&store_row) override;
+   int fetch_row(ObSSTableReadHandle &read_handle);
 private:
   int init_micro_scanner();
   int open_cur_data_block(ObSSTableReadHandle &read_handle);

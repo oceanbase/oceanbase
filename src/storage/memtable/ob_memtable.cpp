@@ -127,7 +127,8 @@ ObMemtable::ObMemtable()
       minor_merged_time_(0),
       encrypt_meta_(nullptr),
       encrypt_meta_lock_(ObLatchIds::DEFAULT_SPIN_RWLOCK),
-      max_column_cnt_(0) {}
+      max_column_cnt_(0),
+      micro_block_format_version_(ObMicroBlockFormatVersionHelper::DEFAULT_VERSION) {}
 
 ObMemtable::~ObMemtable()
 {
@@ -183,6 +184,7 @@ int ObMemtable::init(const ObITable::TableKey &table_key,
     init_timestamp_ = ObTimeUtility::current_time();
     contain_hotspot_row_ = false;
     (void)set_freeze_state(TabletMemtableFreezeState::ACTIVE);
+
     is_inited_ = true;
     TRANS_LOG(DEBUG, "memtable init success", K(*this));
   }
@@ -2520,7 +2522,7 @@ int ObMemtable::set_(
 {
   int ret = OB_SUCCESS;
   ObTxSEQ write_seq;
-  blocksstable::ObRowWriter row_writer;
+  blocksstable::ObCompatRowWriter row_writer;
   ObMemtableData mtd;
   ObRowData old_row_data;
   ObStoreCtx &ctx = *(context.store_ctx_);
@@ -2544,6 +2546,8 @@ int ObMemtable::set_(
   // the new row data(stack allocated currently and heap allocated later for tx
   // node build)
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(row_writer.init(micro_block_format_version_))) {
+    TRANS_LOG(WARN, "Fail to init row writer", K(ret));
   } else if (OB_FAIL(ctx.mvcc_acc_ctx_.get_write_seq(write_seq))) {
     TRANS_LOG(WARN, "get write seq failed", K(ret));
   } else if (writer_dml_flag == blocksstable::ObDmlFlag::DF_UPDATE
@@ -2632,16 +2636,16 @@ int ObMemtable::set_(
     // Step5.2: record the latest schema info on the memtable
     set_max_data_schema_version(ctx.table_version_);
     set_max_column_cnt(new_row->count_);
-
+    ObCStringHelper helper;
     TRANS_LOG(TRACE, "set end, success",
               "ret", ret,
               "tablet_id_", key_.tablet_id_,
               "dml_flag", writer_dml_flag,
               "columns", strarray<ObColDesc>(*columns),
-              "old_row", to_cstring(old_row),
-              "new_row", to_cstring(new_row),
-              "update_idx", (update_idx == NULL ? "" : to_cstring(update_idx)),
-              "mtd", to_cstring(mtd),
+              "old_row", helper.convert(old_row),
+              "new_row", helper.convert(new_row),
+              "update_idx", (update_idx == NULL ? "" : helper.convert(update_idx)),
+              "mtd", helper.convert(mtd),
               KPC(this));
   } else {
     // Step5.1: undo the side effects of mvcc_write which ensure the interface
@@ -2653,12 +2657,13 @@ int ObMemtable::set_(
     (void)cleanup_old_row_(mem_ctx, tx_node_arg);
 
     if (!is_mvcc_write_related_error_(ret)) {
+      ObCStringHelper helper;
       TRANS_LOG(WARN, "set end, fail",
                 "ret", ret,
                 "tablet_id_", key_.tablet_id_,
                 "columns", strarray<ObColDesc>(*columns),
-                "new_row", to_cstring(new_row),
-                "mem_ctx", mem_ctx ? to_cstring(mem_ctx) : "nil",
+                "new_row", helper.convert(new_row),
+                "mem_ctx", mem_ctx ? helper.convert(mem_ctx) : "nil",
                 "store_ctx", ctx);
     } else {
       // Tip1: we need notice that txn cannot be serializable when TSC occurs in
@@ -2683,7 +2688,7 @@ int ObMemtable::lock_(
   int ret = OB_SUCCESS;
   ObTxSEQ lock_seq;
   int64_t write_epoch = 0;
-  blocksstable::ObRowWriter row_writer;
+  blocksstable::ObCompatRowWriter row_writer;
   ObStoreCtx &ctx = *(context.store_ctx_);
   ObMvccAccessCtx &acc_ctx = ctx.mvcc_acc_ctx_;
   ObMemtableCtx *mem_ctx = acc_ctx.get_mem_ctx();
@@ -2693,15 +2698,19 @@ int ObMemtable::lock_(
   ObMvccWriteResults mvcc_results;
 
   const int64_t column_cnt = rowkey.get_obj_cnt();
+  const ObIArray<ObColDesc> *col_descs
+      = param.get_read_info() ? &param.get_read_info()->get_columns_desc() : nullptr;
 
-  if (OB_FAIL(mvcc_results.prepare_allocate(1))) {
+  if (OB_FAIL(row_writer.init(micro_block_format_version_))) {
+    TRANS_LOG(WARN, "Fail to init row writer", K(ret));
+  } else if (OB_FAIL(mvcc_results.prepare_allocate(1))) {
     TRANS_LOG(WARN, "mvcc_results reserve failed");
   } else if (OB_FAIL(tx_node_args.prepare_allocate(1))) {
     TRANS_LOG(WARN, "mvcc_results reserve failed");
   } else if (FALSE_IT(write_epoch = mem_ctx->get_write_epoch())) {
   } else if (OB_FAIL(acc_ctx.get_write_seq(lock_seq))) {
     TRANS_LOG(WARN, "get write seq failed", K(ret));
-  } else if (OB_FAIL(row_writer.write_lock_rowkey(rowkey, buf, len))) {
+  } else if (OB_FAIL(row_writer.write_lock_rowkey(rowkey, col_descs, buf, len))) {
     TRANS_LOG(WARN, "Failed to writer rowkey", K(ret), K(rowkey));
   } else {
     ObRowData empty_old_row;
@@ -2761,6 +2770,8 @@ int ObMemtable::lock_(
     // Step5.2: record the latest schema info on the memtable
     set_max_data_schema_version(ctx.table_version_);
     set_max_column_cnt(column_cnt);
+    // for elr optimization
+    mem_ctx->set_row_updated();
 
     TRANS_LOG(TRACE, "lock end, success",
               "ret", ret,
@@ -2785,10 +2796,6 @@ int ObMemtable::lock_(
           ret = OB_TRANS_CANNOT_SERIALIZE;
         }
       }
-    }
-    if (OB_SUCC(ret)) {
-      // for elr optimization
-      mem_ctx->set_row_updated();
     }
   }
 
@@ -2842,7 +2849,7 @@ int ObMemtable::batch_mvcc_write_(const storage::ObTableIterParam &param,
                                   ObMvccWriteResults &mvcc_results)
 {
   int ret = OB_SUCCESS;
-  blocksstable::ObRowWriter row_writer;
+  blocksstable::ObCompatRowWriter row_writer;
   ObMemtableData mtd;
   ObRowData old_row_data;
   ObMemtableCtx *mem_ctx = ctx.mvcc_acc_ctx_.get_mem_ctx();
@@ -2861,7 +2868,9 @@ int ObMemtable::batch_mvcc_write_(const storage::ObTableIterParam &param,
 
   // Step1: create or get all memtable keys and mvcc rows from the hash table
   // which ensuring the unqiueness of the key and value
-  if (OB_FAIL(stored_kvs.prepare_allocate(row_count))) {
+  if (OB_FAIL(row_writer.init(micro_block_format_version_))) {
+    TRANS_LOG(WARN, "Fail to init row writer", K(ret));
+  } else if (OB_FAIL(stored_kvs.prepare_allocate(row_count))) {
     TRANS_LOG(WARN, "reserce kvs failed", K(ret));
   } else if (OB_FAIL(mvcc_engine_.create_kvs(memtable_set_arg,
                                              memtable_key_generator,
@@ -2978,9 +2987,9 @@ int ObMemtable::batch_mvcc_write_(const storage::ObTableIterParam &param,
         // value_ in the result is used to record the mvcc_row on success and
         // mvcc_undo the insert on failure
         mvcc_results[i].value_ = stored_kvs[i].value_;
-
-        pos += aligned_data_size;
       }
+
+      pos += aligned_data_size;
     }
 
     // Step5: failure handler for mvcc write. we need ensure the atomicity of
@@ -3432,14 +3441,13 @@ int ObMemtable::build_row_data_(ObMemtableCtx *mem_ctx,
                                 const int64_t rowkey_column_cnt,
                                 const ObMemtableSetArg &arg,
                                 const int64_t index,
-                                blocksstable::ObRowWriter &row_writer,
+                                blocksstable::ObCompatRowWriter &row_writer,
                                 ObRowData &old_row_data,
                                 ObMemtableData &mtd)
 {
   int ret = OB_SUCCESS;
   char *buf = nullptr;
   int64_t len = 0;
-  row_writer.reset();
   old_row_data.reset();
 
   // Part1: build old row
@@ -3448,12 +3456,13 @@ int ObMemtable::build_row_data_(ObMemtableCtx *mem_ctx,
     // TODO(handora.qc): we can optimize the old row allocation to remove the
     // row writer allocation and old row memcpy
     char *old_row_buf = nullptr;
-    if(OB_FAIL(row_writer.write(rowkey_column_cnt,
-                                old_row,
-                                // full columns are necessary for old row
-                                nullptr,
-                                buf,
-                                len))) {
+    if (OB_FAIL(row_writer.write(rowkey_column_cnt,
+                                 old_row,
+                                 // full columns are necessary for old row
+                                 nullptr,
+                                 arg.columns_,
+                                 buf,
+                                 len))) {
       TRANS_LOG(WARN, "Failed to write old row", K(ret), K(old_row), K(index));
     } else if (OB_ISNULL(old_row_buf = (char *)mem_ctx->old_row_alloc(len))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -3466,13 +3475,13 @@ int ObMemtable::build_row_data_(ObMemtableCtx *mem_ctx,
 
   // Part3: build new row
   if (OB_SUCC(ret)) {
-    row_writer.reset();
     const blocksstable::ObDatumRow &new_row = arg.new_row_[index];
     const common::ObIArray<int64_t> *update_idx = arg.update_idx_;
     if (OB_FAIL(row_writer.write(rowkey_column_cnt,
                                  new_row,
                                  // only updated column for update new row
                                  update_idx,
+                                 arg.columns_,
                                  buf,
                                  len))) {
       TRANS_LOG(WARN, "Failed to write new row", K(ret), K(new_row));

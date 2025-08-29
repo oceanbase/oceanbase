@@ -16,6 +16,7 @@
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "src/share/table/ob_table_util.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "observer/table/utils/ob_table_convert_utils.h"
 
 using namespace oceanbase::common;
 
@@ -300,26 +301,23 @@ int ObTableCtx::init_common(ObTableApiCredential &credential,
 {
   int ret = OB_SUCCESS;
 
-  if (OB_FAIL(init_common_without_check(credential, timeout_ts))) {
+  if (OB_FAIL(init_common_without_check(credential, arg_tablet_id, timeout_ts))) {
     LOG_WARN("fail to init common without check", K(ret), K(credential), K(timeout_ts));
-  } else if (OB_FAIL(check_legality(arg_tablet_id))) {
-    LOG_WARN("fail to check legality", K(ret), K(arg_tablet_id));
+  } else if (OB_FAIL(check_legality())) {
+    LOG_WARN("fail to check legality", K(ret), K(tablet_id_));
   }
 
   return ret;
 }
 
-int ObTableCtx::check_legality(const ObTabletID &arg_tablet_id)
+int ObTableCtx::check_tablet_id_valid()
 {
   int ret = OB_SUCCESS;
-  bool is_cache_hit = false;
-  ObTabletID tablet_id = arg_tablet_id;
-
-  if (!arg_tablet_id.is_valid() && !is_scan_) {
+  if (!tablet_id_.is_valid()) {
     // for scan scene, we will process it in init_scan when tablet_id is invalid
     // because we need to know if use index and index_type
     if (!simple_table_schema_->is_partitioned_table()) {
-      tablet_id = simple_table_schema_->get_tablet_id();
+      tablet_id_ = simple_table_schema_->get_tablet_id();
     } else {
       // trigger client to refresh table entry
       // maybe drop a non-partitioned table and create a
@@ -328,19 +326,25 @@ int ObTableCtx::check_legality(const ObTabletID &arg_tablet_id)
       LOG_WARN("partitioned table should pass right tablet id from client", K(ret));
     }
   }
+  return ret;
+}
 
-  if (OB_FAIL(ret)) {
-  } else if (!is_scan_ && !ls_id_.is_valid() && tablet_id.is_valid()
+int ObTableCtx::check_legality()
+{
+  int ret = OB_SUCCESS;
+  bool is_cache_hit = false;
+  if (!is_scan_ && OB_FAIL(check_tablet_id_valid())) {
+    LOG_WARN("fail to check tablet id", K(ret), K(tablet_id_));
+  } else if (!is_scan_ && !ls_id_.is_valid() && tablet_id_.is_valid()
       && OB_FAIL(GCTX.location_service_->get(tenant_id_,
-                                             tablet_id,
+                                             tablet_id_,
                                              0, /* expire_renew_time */
                                              is_cache_hit,
                                              ls_id_))) {
-    LOG_WARN("fail to get ls id", K(ret), K(tablet_id), K_(tenant_id));
+    LOG_WARN("fail to get ls id", K(ret), K(tablet_id_), K_(tenant_id));
   } else if (!is_scan_ && OB_FAIL(adjust_entity())) {
     LOG_WARN("fail to adjust entity", K(ret));
   } else {
-    tablet_id_ = tablet_id;
     index_tablet_id_ = tablet_id_;
   }
 
@@ -348,6 +352,7 @@ int ObTableCtx::check_legality(const ObTabletID &arg_tablet_id)
 }
 
 int ObTableCtx::init_common_without_check(ObTableApiCredential &credential,
+                                          const ObTabletID &arg_tablet_id,
                                           const int64_t &timeout_ts)
 {
   int ret = OB_SUCCESS;
@@ -372,6 +377,11 @@ int ObTableCtx::init_common_without_check(ObTableApiCredential &credential,
     ref_table_id_ = simple_table_schema_->get_table_id();
     index_table_id_ = ref_table_id_;
     timeout_ts_ = timeout_ts;
+    tablet_id_ = arg_tablet_id;
+    index_tablet_id_ = tablet_id_;
+    exec_ctx_.set_my_session(&get_session_info());
+    typedef ObSQLSessionInfo::ExecCtxSessionRegister MyExecCtxSessionRegister;
+    MyExecCtxSessionRegister ctx_register(get_session_info(), &exec_ctx_);
   }
 
   return ret;
@@ -735,6 +745,15 @@ int ObTableCtx::adjust_properties()
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "The specified value for generated column");
         LOG_WARN("The specified value for generated column is not allowed", K(ret), K(col_info->column_name_));
+      } else if (entity_type_ == ObTableEntityType::ET_KV && ob_is_json(col_info->type_.get_type())) {
+        if (OB_ISNULL(entity->get_allocator())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("allocator of entity is NULL", K(ret), K(entity));
+        } else if (OB_FAIL(ObTableConvertUtils::convert_to_json_bin(*entity->get_allocator(),
+                                                                    *col_info,
+                                                                    prop_obj))) {
+          LOG_WARN("fail to convert json_text to json_bin", K(ret), K(col_info), K(prop_obj));
+        }
       } else if (OB_FAIL(adjust_column_type(*col_info, prop_obj))) {
         LOG_WARN("fail to adjust rowkey column type", K(ret), K(prop_obj), KPC(col_info));
       }
@@ -994,7 +1013,8 @@ int ObTableCtx::generate_key_range(const ObIArray<ObString> &scan_ranges_columns
 */
 int ObTableCtx::init_scan(const ObTableQuery &query,
                           const bool &is_wead_read,
-                          const uint64_t arg_table_id)
+                          const uint64_t arg_table_id,
+                          bool skip_get_ls_id /* false */)
 {
   int ret = OB_SUCCESS;
   query_ = &query;

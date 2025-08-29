@@ -28,8 +28,6 @@
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
 #include "sql/plan_cache/ob_ps_cache.h"
 #include "rootserver/restore/ob_tenant_clone_util.h"
-
-#include "rootserver/ob_service_name_command.h"
 #include "rootserver/ob_tenant_event_def.h"
 #include "rootserver/ob_disaster_recovery_worker.h" // ObDRWorker
 #include "rootserver/ob_disaster_recovery_task_utils.h" // DisasterRecoveryUtils
@@ -37,6 +35,8 @@
 #include "share/table/ob_redis_importer.h"
 #include "share/ob_timezone_importer.h"
 #include "share/ob_srs_importer.h"
+#include "share/ob_license_utils.h"
+#include "lib/string/ob_sensitive_string.h"
 
 namespace oceanbase
 {
@@ -226,6 +226,31 @@ int ObFlushCacheExecutor::execute(ObExecContext &ctx, ObFlushCacheStmt &stmt)
     int64_t db_num = stmt.flush_cache_arg_.db_ids_.count();
     common::ObString sql_id = stmt.flush_cache_arg_.sql_id_;
     switch (stmt.flush_cache_arg_.cache_type_) {
+      case CACHE_TYPE_SEQUENCE: {
+        if (stmt.flush_cache_arg_.is_fine_grained_) {
+          // we assume tenant_list must not be empty and this will be checked in resolve phase
+          if (0 == tenant_num) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected tenant_list in fine-grained plan evict", K(tenant_num));
+          } else {
+            for (int64_t i = 0; i < tenant_num; i++) {
+              int64_t t_id = stmt.flush_cache_arg_.tenant_ids_.at(i);
+              ObString sequence_name = stmt.flush_cache_arg_.sequence_name_;
+              share::ObSequenceCache &sequence_cache = share::ObSequenceCache::get_instance();
+              MTL_SWITCH(t_id) {
+                for(int64_t j = 0; j < db_num; j++) { // ignore ret
+                  uint64_t db_id = stmt.flush_cache_arg_.db_ids_.at(j);
+                  ret = sequence_cache.flush_sequence_cache(t_id, db_id, sequence_name);
+                }
+              }
+            }
+          }
+        } else {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("sequence_id is not specified, which is not supported", K(ret));
+        }
+        break;
+      }
       case CACHE_TYPE_LIB_CACHE: {
         if (stmt.flush_cache_arg_.ns_type_ != ObLibCacheNameSpace::NS_INVALID) {
           ObLibCacheNameSpace ns = stmt.flush_cache_arg_.ns_type_;
@@ -739,7 +764,9 @@ int ObAdminServerExecutor::execute(ObExecContext &ctx, ObAdminServerStmt &stmt)
   ObTaskExecutorCtx *task_exec_ctx = NULL;
   ObCommonRpcProxy *common_proxy = NULL;
 
-  if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
+  if (OB_FAIL(ObLicenseUtils::check_add_server_allowed(stmt.get_server_list().count(), stmt.get_op()))) {
+    LOG_WARN("failed to check add server allowed", KR(ret));
+  } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
     LOG_WARN("get task executor failed", K(ret));
   } else if (OB_ISNULL(common_proxy = task_exec_ctx->get_common_rpc())) {
@@ -1387,11 +1414,17 @@ int ObChangeExternalStorageDestExecutor::execute(ObExecContext &ctx, ObChangeExt
   } else if (OB_ISNULL(svr_rpc = task_exec_ctx->get_srv_rpc())) {
     ret = OB_NOT_INIT;
     LOG_WARN("get svr rpc proxy failed", K(task_exec_ctx));
-  } else if (OB_FAIL(svr_rpc->change_external_storage_dest(stmt.get_rpc_arg()))) {
-    LOG_WARN("set config rpc failed", K(ret), "rpc_arg", stmt.get_rpc_arg());
   } else {
-    LOG_INFO("change external storage dest rpc", K(stmt.get_rpc_arg()));
+    const ObAdminSetConfigArg &rpc_arg = stmt.get_rpc_arg();
+    ObCStringHelper helper;
+    const char *rpc_arg_cstr = helper.convert(rpc_arg);
+    if (OB_FAIL(svr_rpc->change_external_storage_dest(rpc_arg))) {
+      LOG_WARN("change external storage dest rpc failed", K(ret), KS(rpc_arg_cstr));
+    } else {
+      LOG_INFO("change external storage dest rpc", KS(rpc_arg_cstr));
+    }
   }
+
   return ret;
 }
 
@@ -3108,65 +3141,6 @@ int ObCancelCloneExecutor::execute(ObExecContext &ctx, ObCancelCloneStmt &stmt)
   return ret;
 }
 
-int ObTransferPartitionExecutor::execute(ObExecContext& ctx, ObTransferPartitionStmt& stmt)
-{
-  int ret = OB_SUCCESS;
-  const rootserver::ObTransferPartitionArg &arg = stmt.get_arg();
-  rootserver::ObTransferPartitionCommand command;
-  if (OB_UNLIKELY(!arg.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invaid argument", KR(ret), K(arg));
-  } else if (OB_FAIL(command.execute(arg))) {
-    LOG_WARN("fail to execute command", KR(ret), K(arg));
-  }
-  return ret;
-}
-
-int ObServiceNameExecutor::execute(ObExecContext& ctx, ObServiceNameStmt& stmt)
-{
-  int ret = OB_SUCCESS;
-  const ObServiceNameArg &arg = stmt.get_arg();
-  const ObServiceNameString &service_name_str = arg.get_service_name_str();
-  const ObServiceNameArg::ObServiceOp &service_op = arg.get_service_op();
-  const uint64_t tenant_id = arg.get_target_tenant_id();
-  ObSQLSessionInfo *session_info = ctx.get_my_session();
-  if (OB_UNLIKELY(!arg.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", KR(ret), K(arg));
-  } else if (OB_FAIL(ObServiceNameProxy::check_is_service_name_enabled(tenant_id))) {
-    LOG_WARN("fail to execute check_is_service_name_enabled", KR(ret), K(tenant_id));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "The tenant's or meta tenant's data_version is smaller than 4_2_4_0, service name related command is");
-  } else if (OB_ISNULL(session_info)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session_info is null", KR(ret), KP(session_info));
-  } else if (OB_UNLIKELY(!session_info->get_service_name().is_empty())) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("service_name related commands cannot be executed in the session which is created via service_name",
-        KR(ret), K(session_info->get_service_name()));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "This session is created via service_name, service name related command is");
-  } else if (arg.is_create_service()) {
-    if (OB_FAIL(ObServiceNameCommand::create_service(tenant_id, service_name_str))) {
-      LOG_WARN("fail to create service", KR(ret), K(tenant_id), K(service_name_str));
-    }
-  } else if (arg.is_delete_service()) {
-    if (OB_FAIL(ObServiceNameCommand::delete_service(tenant_id, service_name_str))) {
-      LOG_WARN("fail to delete service", KR(ret), K(tenant_id), K(service_name_str));
-    }
-  } else if (arg.is_start_service()) {
-    if (OB_FAIL(ObServiceNameCommand::start_service(tenant_id, service_name_str))) {
-      LOG_WARN("fail to start service", KR(ret), K(tenant_id), K(service_name_str));
-    }
-  } else if (arg.is_stop_service()) {
-    if (OB_FAIL(ObServiceNameCommand::stop_service(tenant_id, service_name_str))) {
-      LOG_WARN("fail to stop service", KR(ret), K(tenant_id), K(service_name_str));
-    }
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unknown service operation", KR(ret), K(arg));
-  }
-  return ret;
-}
-
 int ObRebuildTabletExecutor::execute(ObExecContext &ctx, ObRebuildTabletStmt &stmt)
 {
   int ret = OB_SUCCESS;
@@ -3244,5 +3218,23 @@ int ObModuleDataExecutor::execute(ObExecContext &ctx, ObModuleDataStmt &stmt)
       K(ret), K(arg), "cost_time", ObTimeUtility::current_time() - start_time);
   return ret;
 }
+
+int ObLoadLicenseExecutor::execute(ObExecContext &ctx, ObLoadLicenseStmt &stmt) {
+  int ret = OB_SUCCESS;
+  uint64_t tenant_data_version = 0;
+
+  if (OB_ISNULL(ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("session is null", KR(ret));
+  } else if (ctx.get_my_session()->get_priv_tenant_id() != OB_SYS_TENANT_ID) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("session is not sys tenant in load license command", KR(ret));
+  } else if (OB_FAIL(ObLicenseUtils::load_license(stmt.get_path()))) {
+    LOG_WARN("fail to load license", KR(ret), K(stmt));
+  }
+
+  return ret;
+}
+
 } // end namespace sql
 } // end namespace oceanbase

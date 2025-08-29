@@ -511,10 +511,17 @@ public:
       ObExpr &rt_expr);
 
   static int get_session_query_timeout_ts(ObEvalCtx &ctx, int64_t &timeout_ts);
-
+  static bool is_json_special_same_as_expr(ObItemType type, int64_t index);
+  static bool check_json_inner_same_as(const ObSysFunRawExpr *expr1,
+                                       const ObSysFunRawExpr *expr2,
+                                       int64_t index,
+                                       ObExprEqualCheckContext *check_context);
   static bool check_json_path_can_pushdown(const ObRawExpr &path_expr);
   static bool check_json_expr_can_pushdown(const ObRawExpr &json_expr);
   static int get_sub_column_path_from_json_expr(ObIAllocator& allocator, const ObRawExpr &json_expr, share::ObSubColumnPath& sub_col_path);
+
+public:
+  uint64_t tenant_id;
 
 private:
   const static uint32_t RESERVE_MIN_BUFF_SIZE = 32;

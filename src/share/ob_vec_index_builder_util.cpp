@@ -920,6 +920,13 @@ int ObVecIndexBuilderUtil::set_vec_ivf_table_columns(
           LOG_WARN("failed to add column", K(ret), KPC(rowkey_column), K(row_desc));
         }
       }
+      // if is pq center_id table, add rowkey column
+      ObVectorIndexParam index_param; // not use
+      if (OB_FAIL(ret)) {
+      } else if (share::schema::is_vec_ivfpq_pq_centroid_index(arg.index_type_) &&
+                 OB_FAIL(set_extra_info_columns(data_schema, row_desc, true, index_param, index_schema))) {
+        LOG_WARN("fail to set extra info columns", K(ret));
+      }
       if (OB_SUCC(ret)) {
         index_schema.set_rowkey_column_num(row_desc.get_column_num());
         index_schema.set_index_column_num(row_desc.get_column_num());
@@ -2724,7 +2731,7 @@ int ObVecIndexBuilderUtil::construct_ivf_partial_column_info(
           LOG_WARN("print generate expr definition prefix failed", K(ret));
         } else {
           collation_type = CS_TYPE_BINARY;
-          obj_type = ObCollectionSQLType;
+          obj_type = ObVarcharType;
           col_flag = GENERATED_VEC_IVF_PQ_CENTER_IDS_COLUMN_FLAG;
         }
         break;
@@ -2846,7 +2853,11 @@ int ObVecIndexBuilderUtil::generate_vec_ivf_column(
           column_schema.add_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
           column_schema.set_is_hidden(true);
           column_schema.set_data_type(obj_type);
-          column_schema.set_data_length(0);
+          if (col_type == IVF_PQ_CENTER_IDS_COL) {
+            column_schema.set_data_length(OB_MAX_VARCHAR_LENGTH);
+          } else {
+            column_schema.set_data_length(0);
+          }
           column_schema.set_collation_type(collection_type);
           column_schema.set_prev_column_id(UINT64_MAX);
           column_schema.set_next_column_id(UINT64_MAX);
@@ -3707,6 +3718,54 @@ int ObVecIndexBuilderUtil::del_extra_info_columns(const ObTableSchema &data_sche
       }
     }
   }
+  return ret;
+}
+
+int ObVecIndexBuilderUtil::check_alter_column_is_offline(const ObTableSchema &orig_table_schema,
+                                                         const ObColumnSchemaV2 *src_column,
+                                                         ObColumnSchemaV2 *dst_column,
+                                                         ObSchemaGetterGuard &schema_guard, bool &is_offline)
+{
+  int ret = OB_SUCCESS;
+  // is_offline = true:
+  // 1. orig_column_schema is rowkey_column and orig_column_accuracy != alter_column_accuracy and has hnsw index and
+  // extra_info_actual_size > 0
+  if (OB_ISNULL(src_column) || OB_ISNULL(dst_column)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("The column schema is NULL", K(ret), K(src_column), K(dst_column));
+  } else if (src_column->is_rowkey_column() && src_column->get_data_length() != dst_column->get_data_length()) {
+    ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+    if (OB_FAIL(orig_table_schema.get_simple_index_infos(simple_index_infos))) {
+      LOG_WARN("get simple_index_infos failed", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count() && !is_offline; i++) {
+        const ObTableSchema *index_schema = NULL;
+        if (OB_FAIL(schema_guard.get_table_schema(orig_table_schema.get_tenant_id(),
+                                                  simple_index_infos.at(i).table_id_, index_schema))) {
+          LOG_WARN("get_table_schema failed", K(orig_table_schema.get_tenant_id()), "table id",
+                   simple_index_infos.at(i).table_id_, K(ret));
+        } else if (OB_ISNULL(index_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("table schema should not be null", K(ret));
+        } else if (!index_schema->is_vec_delta_buffer_type()) {
+          // here skip other index.
+        } else {
+          const ObString &index_param_str = index_schema->get_index_params();
+          ObVectorIndexParam index_param;
+          if (index_param_str.empty()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("index params should not be empty", K(ret));
+          } else if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(
+                         index_param_str, ObVectorIndexType::VIT_HNSW_INDEX, index_param))) {
+            LOG_WARN("failed to parser params from string", K(ret), K(index_param_str));
+          } else if (index_param.extra_info_actual_size_ > 0) {
+            is_offline = true;
+          }
+        }
+      }
+    }
+  }
+
   return ret;
 }
 

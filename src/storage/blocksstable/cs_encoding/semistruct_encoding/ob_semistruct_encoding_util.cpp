@@ -386,7 +386,7 @@ int ObSemiStructColumnEncodeCtx::scan_sub_column_datums(const int64_t column_ind
   ObDictEncodingHashTableBuilder *builder = nullptr;
   bool need_build_hash_table = true;
   ObPreviousColumnEncoding *previous_encoding = previous_cs_encoding_.get_column_encoding(column_index);
-  if (previous_encoding->is_column_encoding_type_valid() && !previous_encoding->column_need_redetect_) {
+  if (previous_encoding->column_encoding_type_can_be_reused()) {
     // previous column encoding type is used and is not dict encoding, so no need to build hash table
     if (ObCSColumnHeader::INTEGER == previous_encoding->identifier_.column_encoding_type_ ||
         ObCSColumnHeader::STRING == previous_encoding->identifier_.column_encoding_type_) {
@@ -476,7 +476,7 @@ int ObSemiStructColumnEncodeCtx::try_use_previous_encoder(const int64_t column_i
   int ret = OB_SUCCESS;
   ObPreviousColumnEncoding *previous_encoding = previous_cs_encoding_.get_column_encoding(column_idx);
 
-  if (previous_encoding->is_column_encoding_type_valid() && !previous_encoding->column_need_redetect_) {
+  if (previous_encoding->column_encoding_type_can_be_reused()) {
     const ObCSColumnHeader::Type previous_type = previous_encoding->identifier_.column_encoding_type_;
     ObCSColumnHeader::Type curr_type = ObCSColumnHeader::Type::MAX_TYPE;
     ObColumnCSEncodingCtx &col_ctx = sub_col_ctxs_.at(column_idx);

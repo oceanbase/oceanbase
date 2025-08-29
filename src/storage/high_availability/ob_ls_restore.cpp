@@ -348,9 +348,9 @@ bool ObLSRestoreDagNet::operator == (const ObIDagNet &other) const
   return is_same;
 }
 
-int64_t ObLSRestoreDagNet::hash() const
+uint64_t ObLSRestoreDagNet::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   if (OB_ISNULL(ctx_)) {
     LOG_ERROR_RET(OB_INVALID_ARGUMENT, "ls restore ctx is NULL", KPC(ctx_));
   } else {
@@ -497,9 +497,9 @@ bool ObLSRestoreDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObLSRestoreDag::hash() const
+uint64_t ObLSRestoreDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   ObLSRestoreCtx *ctx = get_ctx();
 
   if (OB_ISNULL(ctx)) {
@@ -1380,7 +1380,6 @@ int ObSysTabletsRestoreTask::process()
   return ret;
 }
 
-//TODO(zeyong) check need to create or update anyway
 int ObSysTabletsRestoreTask::create_or_update_tablets_()
 {
   int ret = OB_SUCCESS;
@@ -1799,9 +1798,9 @@ bool ObTabletGroupMetaRestoreDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObTabletGroupMetaRestoreDag::hash() const
+uint64_t ObTabletGroupMetaRestoreDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   ObLSRestoreCtx *ctx = get_ctx();
 
   if (NULL != ctx) {

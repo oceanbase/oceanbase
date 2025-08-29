@@ -110,42 +110,49 @@ int ObArrayUtil::push_back_decimal_int(const ObPrecision prec, const ObDecimalIn
 // convert collection bin to string (for liboblog)
 int ObArrayUtil::convert_collection_bin_to_string(const ObString &collection_bin,
                                                   const common::ObIArray<common::ObString> &extended_type_info,
+                                                  const ObCollectionTypeBase *collection_meta,
                                                   common::ObIAllocator &allocator,
                                                   ObString &res_str)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(extended_type_info.count() != 1)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid extended type info for collection type", K(ret), K(extended_type_info.count()));
-  } else {
-    ObSqlCollectionInfo type_info_parse(allocator);
-    ObString collection_type_name = extended_type_info.at(0);
-    type_info_parse.set_name(collection_type_name);
-    if (OB_FAIL(type_info_parse.parse_type_info())) {
-      LOG_WARN("fail to parse type info", K(ret), K(collection_type_name));
-    } else if (OB_ISNULL(type_info_parse.collection_meta_)) {
+  ObIArrayType *coll_obj = nullptr;
+  const ObCollectionTypeBase *tmp_collection_meta = nullptr;
+  ObStringBuffer buf(&allocator);
+
+  if (OB_ISNULL(collection_meta)) {
+    if (OB_UNLIKELY(extended_type_info.count() != 1)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("collection meta is null", K(ret), K(collection_type_name));
+      LOG_WARN("invalid extended type info for collection type", K(ret), K(extended_type_info.count()));
     } else {
-      ObIArrayType *coll_obj = nullptr;
-      ObStringBuffer buf(&allocator);
-      if (OB_FAIL(ObArrayTypeObjFactory::construct(allocator, *type_info_parse.collection_meta_, coll_obj, true))) {
-        LOG_WARN("construct array obj failed", K(ret),  K(type_info_parse));
-      } else if (OB_ISNULL(coll_obj)) {
+      ObSqlCollectionInfo type_info_parse(allocator);
+      ObString collection_type_name = extended_type_info.at(0);
+      type_info_parse.set_name(collection_type_name);
+      if (OB_FAIL(type_info_parse.parse_type_info())) {
+        LOG_WARN("fail to parse type info", K(ret), K(collection_type_name));
+      } else if (OB_ISNULL(tmp_collection_meta = type_info_parse.collection_meta_)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("arr_obj is null", K(ret), K(collection_type_name));
-      } else {
-        ObString raw_binary = collection_bin;
-        if (OB_FAIL(coll_obj->init(raw_binary))) {
-          LOG_WARN("failed to init array", K(ret));
-        } else if (OB_FAIL(coll_obj->print(buf))) {
-          LOG_WARN("failed to format array", K(ret));
-        } else {
-          res_str.assign_ptr(buf.ptr(), buf.length());
-        }
+        LOG_WARN("collection meta is null", K(ret), K(collection_type_name));
       }
     }
+  } else {
+    tmp_collection_meta = collection_meta;
   }
+  if (FAILEDx(ObArrayTypeObjFactory::construct(allocator, *tmp_collection_meta, coll_obj, true))) {
+    LOG_WARN("construct array obj failed", K(ret),  K(tmp_collection_meta));
+  } else if (OB_ISNULL(coll_obj)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("arr_obj is null", K(ret), K(extended_type_info));
+  } else {
+    ObString raw_binary = collection_bin;
+    if (OB_FAIL(coll_obj->init(raw_binary))) {
+      LOG_WARN("failed to init array", K(ret));
+    } else if (OB_FAIL(coll_obj->print(buf))) {
+      LOG_WARN("failed to format array", K(ret));
+    } else {
+      res_str.assign_ptr(buf.ptr(), buf.length());
+    }
+  }
+
   return ret;
 }
 

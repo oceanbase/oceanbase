@@ -65,7 +65,7 @@ public:
   int init_by_param(const share::ObIDagInitParam *param) override;
   int start_running() override;
   bool operator == (const share::ObIDagNet &other) const override;
-  int64_t hash() const override;
+  virtual uint64_t hash() const override;
   int fill_comment(char *buf, const int64_t buf_len) const override;
   int fill_dag_net_key(char *buf, const int64_t buf_len) const override;
   bool is_valid() const override { return param_.is_valid(); }
@@ -92,7 +92,7 @@ public:
   ObLSBackupCleanDag();
   virtual ~ObLSBackupCleanDag();
   virtual bool operator == (const ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int init(share::ObIDagNet *dag_net);
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;

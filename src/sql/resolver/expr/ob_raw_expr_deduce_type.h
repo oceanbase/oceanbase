@@ -80,6 +80,7 @@ public:
 
   int check_type_for_case_expr(ObCaseOpRawExpr &case_expr, common::ObIAllocator &alloc);
   static bool skip_cast_expr(const ObRawExpr &parent, const int64_t child_idx);
+  void get_cached_initial_type_ctx(ObExprTypeCtx &type_ctx);
 
 private:
   // types and constants

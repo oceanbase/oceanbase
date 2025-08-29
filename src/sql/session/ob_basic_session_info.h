@@ -367,7 +367,7 @@ public:
     }
   public:
     // 原StmtSavedValue的属性
-    ObPhysicalPlan *cur_phy_plan_;
+    const ObPhysicalPlan *cur_phy_plan_;
     volatile int64_t cur_query_len_;
 //  int64_t cur_query_start_time_;          // 用于计算事务超时时间，如果在base_save_session接口中操作
                                             // 会导致start_trans报事务超时失败，不放在基类中。
@@ -1095,7 +1095,7 @@ public:
   void get_cur_sql_id(char *sql_id_buf, int64_t sql_id_buf_size) const;
   void set_cur_sql_id(char *sql_id);
   void reset_cur_sql_id() { sql_id_[0] = '\0'; }
-  int set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan);
+  int set_cur_phy_plan(const ObPhysicalPlan *cur_phy_plan);
   virtual void set_ash_stat_value(ObActiveSessionStat &ash_stat);
   void reset_cur_phy_plan_to_null();
 
@@ -2161,7 +2161,7 @@ private:
   void set_##SYS_VAR_NAME(SYS_VAR_TYPE value)                                         \
   {                                                                                   \
     inc_data_.SYS_VAR_NAME##_ = (value);                                              \
-    inc_##SYS_VAR_NAME##_ = true;                                                     \
+    bits_.inc_##SYS_VAR_NAME##_ = true;                                               \
   }                                                                                   \
   void set_base_##SYS_VAR_NAME(SYS_VAR_TYPE value)                                    \
   {                                                                                   \
@@ -2169,7 +2169,7 @@ private:
   }                                                                                   \
   const SYS_VAR_TYPE &get_##SYS_VAR_NAME() const                                      \
   {                                                                                   \
-    return get_##SYS_VAR_NAME(inc_##SYS_VAR_NAME##_);                                 \
+    return get_##SYS_VAR_NAME(bits_.inc_##SYS_VAR_NAME##_);                           \
   }                                                                                   \
   const SYS_VAR_TYPE &get_##SYS_VAR_NAME(bool is_inc) const                           \
   {                                                                                   \
@@ -2184,11 +2184,11 @@ private:
   void set_##SYS_VAR_NAME(const common::ObString &value)                 \
   {                                                                                   \
       inc_data_.set_##SYS_VAR_NAME(value);                                            \
-      inc_##SYS_VAR_NAME##_ = true;                                                   \
+      bits_.inc_##SYS_VAR_NAME##_ = true;                                             \
   }                                                                                   \
   const common::ObString &get_##SYS_VAR_NAME() const                                  \
   {                                                                                   \
-    return get_##SYS_VAR_NAME(inc_##SYS_VAR_NAME##_);                                 \
+    return get_##SYS_VAR_NAME(bits_.inc_##SYS_VAR_NAME##_);                           \
   }                                                                                   \
   const common::ObString &get_##SYS_VAR_NAME(bool is_inc) const                       \
   {                                                                                   \
@@ -2211,6 +2211,7 @@ private:
     }
     void clean_inc()
     {
+      ob_assert(sizeof(IncBits) <= sizeof(uint64_t));
       inc_flags_ = 0;
     }
     bool is_inc_empty() const
@@ -2279,11 +2280,11 @@ private:
     void set_autocommit_info(bool inc_value)
     {
       inc_data_.autocommit_ = inc_value;
-      inc_autocommit_ = true;
+      bits_.inc_autocommit_ = true;
     }
     void get_autocommit_info(bool &inc_value)
     {
-      if (inc_autocommit_) {
+      if (bits_.inc_autocommit_) {
         inc_value = inc_data_.autocommit_;
       } else {
         inc_value = base_data_.autocommit_;
@@ -2293,69 +2294,73 @@ private:
     // base_data 是 ObSysVariables 里的 hardcode 变量值
     static SysVarsCacheData base_data_;
     SysVarsCacheData inc_data_;
+    struct IncBits {
+      bool inc_auto_increment_increment_:1;
+      bool inc_sql_throttle_current_priority_:1;
+      bool inc_ob_last_schema_version_:1;
+      bool inc_sql_select_limit_:1;
+      bool inc_oracle_sql_select_limit_:1;
+      bool inc_auto_increment_offset_:1;
+      bool inc_last_insert_id_:1;
+      bool inc_binlog_row_image_:1;
+      bool inc_foreign_key_checks_:1;
+      bool inc_default_password_lifetime_:1;
+      bool inc_tx_read_only_:1;
+      bool inc_ob_enable_plan_cache_:1;
+      bool inc_optimizer_use_sql_plan_baselines_:1;
+      bool inc_optimizer_capture_sql_plan_baselines_:1;
+      bool inc_is_result_accurate_:1;
+      bool inc_ob_enable_transmission_checksum_:1;
+      bool inc_character_set_results_:1;
+      bool inc_character_set_connection_:1;
+      bool inc_ob_enable_jit_:1;
+      bool inc_cursor_sharing_mode_:1;
+      bool inc_timestamp_:1;
+      bool inc_tx_isolation_:1;
+      bool inc_autocommit_:1;
+      bool inc_ob_enable_trace_log_:1;
+      bool inc_ob_enable_sql_audit_:1;
+      bool inc_nls_length_semantics_:1;
+      bool inc_ob_org_cluster_id_:1;
+      bool inc_ob_query_timeout_:1;
+      bool inc_ob_trx_timeout_:1;
+      bool inc_collation_connection_:1;
+      bool inc_sql_mode_:1;
+      bool inc_nls_date_format_:1;
+      bool inc_nls_timestamp_format_:1;
+      bool inc_nls_timestamp_tz_format_:1;
+      bool inc_ob_trx_idle_timeout_:1;
+      bool inc_ob_trx_lock_timeout_:1;
+      bool inc_nls_collation_:1;
+      bool inc_nls_nation_collation_:1;
+      bool inc_ob_trace_info_:1;
+      bool inc_ob_pl_block_timeout_:1;
+      bool inc_plsql_ccflags_:1;
+      bool inc_iso_nls_currency_:1;
+      bool inc_log_row_value_option_:1;
+      bool inc_ob_max_read_stale_time_:1;
+      bool inc_runtime_filter_type_:1;
+      bool inc_runtime_filter_wait_time_ms_:1;
+      bool inc_runtime_filter_max_in_num_:1;
+      bool inc_runtime_bloom_filter_max_size_:1;
+      bool inc_enable_rich_vector_format_:1;
+      bool inc_ncharacter_set_connection_:1;
+      bool inc_default_lob_inrow_threshold_:1;
+      bool inc_ob_enable_pl_cache_:1;
+      bool inc_compat_type_:1;
+      bool inc_compat_version_:1;
+      bool inc_enable_sql_plan_monitor_:1;
+      bool inc_ob_enable_parameter_anonymous_block_:1;
+      bool inc_security_version_:1;
+      bool inc_ob_enable_ps_parameter_anonymous_block_:1;
+      bool inc_current_default_catalog_:1;
+      // when add new inc bit, please update reserved_bits_,
+      // so that the total bits is 64
+      int reserved_bits_:5;
+    };
     union { // FARM COMPAT WHITELIST
       uint64_t inc_flags_;
-      struct {
-        bool inc_auto_increment_increment_:1;
-        bool inc_sql_throttle_current_priority_:1;
-        bool inc_ob_last_schema_version_:1;
-        bool inc_sql_select_limit_:1;
-        bool inc_oracle_sql_select_limit_:1;
-        bool inc_auto_increment_offset_:1;
-        bool inc_last_insert_id_:1;
-        bool inc_binlog_row_image_:1;
-        bool inc_foreign_key_checks_:1;
-        bool inc_default_password_lifetime_:1;
-        bool inc_tx_read_only_:1;
-        bool inc_ob_enable_plan_cache_:1;
-        bool inc_optimizer_use_sql_plan_baselines_:1;
-        bool inc_optimizer_capture_sql_plan_baselines_:1;
-        bool inc_is_result_accurate_:1;
-        bool inc_ob_enable_transmission_checksum_:1;
-        bool inc_character_set_results_:1;
-        bool inc_character_set_connection_:1;
-        bool inc_ob_enable_jit_:1;
-        bool inc_cursor_sharing_mode_:1;
-        bool inc_timestamp_:1;
-        bool inc_tx_isolation_:1;
-        bool inc_autocommit_:1;
-        bool inc_ob_enable_trace_log_:1;
-        bool inc_ob_enable_sql_audit_;
-        bool inc_nls_length_semantics_:1;
-        bool inc_ob_org_cluster_id_:1;
-        bool inc_ob_query_timeout_:1;
-        bool inc_ob_trx_timeout_:1;
-        bool inc_collation_connection_:1;
-        bool inc_sql_mode_:1;
-        bool inc_nls_date_format_:1;
-        bool inc_nls_timestamp_format_:1;
-        bool inc_nls_timestamp_tz_format_:1;
-        bool inc_ob_trx_idle_timeout_:1;
-        bool inc_ob_trx_lock_timeout_:1;
-        bool inc_nls_collation_:1;
-        bool inc_nls_nation_collation_:1;
-        bool inc_ob_trace_info_:1;
-        bool inc_ob_pl_block_timeout_:1;
-        bool inc_plsql_ccflags_:1;
-        bool inc_iso_nls_currency_:1;
-        bool inc_log_row_value_option_:1;
-        bool inc_ob_max_read_stale_time_:1;
-        bool inc_runtime_filter_type_:1;
-        bool inc_runtime_filter_wait_time_ms_:1;
-        bool inc_runtime_filter_max_in_num_:1;
-        bool inc_runtime_bloom_filter_max_size_:1;
-        bool inc_enable_rich_vector_format_:1;
-        bool inc_ncharacter_set_connection_:1;
-        bool inc_default_lob_inrow_threshold_:1;
-        bool inc_ob_enable_pl_cache_:1;
-        bool inc_compat_type_:1;
-        bool inc_compat_version_:1;
-        bool inc_enable_sql_plan_monitor_:1;
-        bool inc_ob_enable_parameter_anonymous_block_:1;
-        bool inc_security_version_:1;
-        bool inc_ob_enable_ps_parameter_anonymous_block_:1;
-        bool inc_current_default_catalog_:1;
-      };
+      IncBits bits_;
     };
   };
 protected:
@@ -2475,7 +2480,7 @@ private:
   //===============================================================
 
   // 生命周期不保证，谨慎使用该指针
-  ObPhysicalPlan *cur_phy_plan_;
+  const ObPhysicalPlan *cur_phy_plan_;
   // sql_id of cur_phy_plan_ sql
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
   uint64_t plan_id_; // for ASH sampling, get current SQL's sql_id & plan_id
@@ -2619,6 +2624,8 @@ private:
   // In addition, in situations such as PL execution, the external session will be passed to the inner sql Connection. In this case, it is not considered an inner session.
   // There are differences between the two in terms of ASH statistics and so on, so they should be distinguished.
   int64_t sql_mem_used_;
+  bool has_ccl_rule_;
+  int64_t last_ccl_cnt_update_time_;
 public:
   bool get_enable_hyperscan_regexp_engine() const;
   int8_t get_min_const_integer_precision() const;

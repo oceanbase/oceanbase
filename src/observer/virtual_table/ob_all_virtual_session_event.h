@@ -33,6 +33,7 @@ class ObAllVirtualSessionEvent : public common::ObVirtualTableScannerIterator, p
 public:
   ObAllVirtualSessionEvent()
    : ObVirtualTableScannerIterator(),
+    alloc_(ObMemAttr(MTL_ID(), "VT_SessStatus")),
     alloc_wrapper_(),
     session_status_(OB_MALLOC_NORMAL_BLOCK_SIZE, alloc_wrapper_),
     addr_(NULL),
@@ -58,6 +59,7 @@ protected:
   }
   virtual int get_all_diag_info();
   inline sql::ObSQLSessionMgr* get_session_mgr() const { return session_mgr_; }
+  common::ObArenaAllocator alloc_;
   ObWrapperAllocator alloc_wrapper_;
   common::ObSEArray<std::pair<uint64_t, common::ObDISessionCollect>, 8, ObWrapperAllocator &>
       session_status_;

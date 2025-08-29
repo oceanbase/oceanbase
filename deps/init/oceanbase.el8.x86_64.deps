@@ -10,7 +10,7 @@ repo=http://mirrors.aliyun.com/oceanbase/community/stable/el/8/x86_64/
 
 
 [deps]
-obdal-0.2.2-262025071015.el8.x86_64.rpm target=community
+obdal-0.2.2-302025082510.el8.x86_64.rpm target=community
 devdeps-gtest-1.8.0-132022101316.el8.x86_64.rpm
 devdeps-isa-l-static-2.22.0-22022092915.el8.x86_64.rpm
 devdeps-libcurl-static-8.12.1-132025040210.el8.x86_64.rpm
@@ -36,7 +36,7 @@ devdeps-protobuf-c-1.5.1-100000052025032810.el8.x86_64.rpm
 devdeps-roaringbitmap-croaring-3.0.0-42024042816.el8.x86_64.rpm
 devdeps-apache-arrow-9.0.0-172024052218.el8.x86_64.rpm
 devdeps-hyperscan-5.4.2-242024090219.el8.x86_64.rpm
-devdeps-vsag-1.0.0-1672025052316.el8.x86_64.rpm
+devdeps-vsag-1.1.0-312025071511.el8.x86_64.rpm
 devdeps-apache-orc-2.1.1-62025032517.el8.x86_64.rpm
 devdeps-cloud-qpl-1.1.0-272023061419.el8.x86_64.rpm
 devdeps-fast-float-6.1.3-42024112122.el8.x86_64.rpm
@@ -55,7 +55,7 @@ obdevtools-llvm-17.0.6-72025060300.el8.x86_64.rpm
 devdeps-oblogmsg-1.1-52024052811.el8.x86_64.rpm
 devdeps-rocksdb-6.22.1-32024123015.el8.x86_64.rpm
 obstack-2.0.4-172024070513.el8.x86_64.rpm
-obshell-4.2.6.0-62025032619.el8.x86_64.rpm target=community
+obshell-4.3.1.0-12025070719.el8.x86_64.rpm target=community
 
 [test-utils]
 ob-deploy-3.0.1-1.el8.x86_64.rpm target=community

@@ -349,7 +349,7 @@ bool ObRebuildTabletDagNet::operator == (const ObIDagNet &other) const
   return is_same;
 }
 
-int64_t ObRebuildTabletDagNet::hash() const
+uint64_t ObRebuildTabletDagNet::hash() const
 {
   int64_t hash_value = 0;
   if (OB_ISNULL(ctx_)) {
@@ -497,7 +497,7 @@ bool ObInitialRebuildTabletDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObInitialRebuildTabletDag::hash() const
+uint64_t ObInitialRebuildTabletDag::hash() const
 {
   int64_t hash_value = 0;
   ObRebuildTabletCtx * ctx = get_rebuild_tablet_ctx();
@@ -818,7 +818,7 @@ bool ObStartRebuildTabletDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObStartRebuildTabletDag::hash() const
+uint64_t ObStartRebuildTabletDag::hash() const
 {
   int64_t hash_value = 0;
   ObRebuildTabletCtx *ctx = get_rebuild_tablet_ctx();
@@ -1092,7 +1092,7 @@ bool ObTabletRebuildMajorDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObTabletRebuildMajorDag::hash() const
+uint64_t ObTabletRebuildMajorDag::hash() const
 {
   int64_t hash_value = 0;
   ObRebuildTabletCtx *ctx = get_rebuild_tablet_ctx();
@@ -1823,7 +1823,7 @@ bool ObFinishRebuildTabletDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObFinishRebuildTabletDag::hash() const
+uint64_t ObFinishRebuildTabletDag::hash() const
 {
   int64_t hash_value = 0;
   ObRebuildTabletCtx *ctx = get_rebuild_tablet_ctx();

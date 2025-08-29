@@ -2195,6 +2195,9 @@ int ObDRWorker::try_tenant_single_replica_task(
     const bool only_for_display,
     int64_t &acc_dr_task)
 {
+#ifdef ERRSIM
+  DEBUG_SYNC(BEFORE_GENERATE_SINGLE_REPLICA_TASK);
+#endif
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {

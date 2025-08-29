@@ -21,9 +21,9 @@ ObObjectPrivMysqlSchemaKey::ObObjectPrivMysqlSchemaKey()
   : user_id_(OB_INVALID_ID),
     obj_type_(OB_INVALID_ID),
     all_priv_(0),
-    obj_name_(),
-    grantor_(),
-    grantor_host_()
+    obj_name_(OB_MAX_CORE_TALBE_NAME_LENGTH, 0, obj_name_ptr_),
+    grantor_(OB_MAX_USER_NAME_LENGTH_STORE, 0, grantor_ptr_),
+    grantor_host_(OB_MAX_HOST_NAME_LENGTH, 0, grantor_host_ptr_)
 {
 }
 
@@ -31,15 +31,20 @@ ObObjectPrivMysqlSchemaKey::ObObjectPrivMysqlSchemaKey(const ObObjectPrivMysqlSc
   : user_id_(other.user_id_),
     obj_type_(other.obj_type_),
     all_priv_(other.all_priv_),
-    obj_name_(other.obj_name_),
-    grantor_(other.grantor_),
-    grantor_host_(other.grantor_host_)
+    obj_name_(OB_MAX_CORE_TALBE_NAME_LENGTH, 0, obj_name_ptr_),
+    grantor_(OB_MAX_USER_NAME_LENGTH_STORE, 0, grantor_ptr_),
+    grantor_host_(OB_MAX_HOST_NAME_LENGTH, 0, grantor_host_ptr_)
 {
+  MEMCPY(obj_name_.ptr(), other.obj_name_.ptr(), other.obj_name_.length());
+  MEMCPY(grantor_.ptr(), other.grantor_.ptr(), other.grantor_.length());
+  MEMCPY(grantor_host_.ptr(), other.grantor_host_.ptr(), other.grantor_host_.length());
+  obj_name_.set_length(other.obj_name_.length());
+  grantor_.set_length(other.grantor_.length());
+  grantor_host_.set_length(other.grantor_host_.length());
 }
 
 ObObjectPrivMysqlSchemaKey::~ObObjectPrivMysqlSchemaKey()
 {
-  alloc_.clear();
 }
 
 bool ObObjectPrivMysqlSchemaKey::operator==(const ObObjectPrivMysqlSchemaKey &other) const
@@ -54,12 +59,7 @@ bool ObObjectPrivMysqlSchemaKey::operator==(const ObObjectPrivMysqlSchemaKey &ot
 
 bool ObObjectPrivMysqlSchemaKey::operator!=(const ObObjectPrivMysqlSchemaKey &other) const
 {
-  return user_id_ != other.user_id_
-         || obj_name_ != other.obj_name_
-         || obj_type_ != other.obj_type_
-         || all_priv_ != other.all_priv_
-         || grantor_ != other.grantor_
-         || grantor_host_ != other.grantor_host_;
+  return !(*this==other);
 }
 
 bool ObObjectPrivMysqlSchemaKey::operator<(const ObObjectPrivMysqlSchemaKey &other) const
@@ -85,14 +85,7 @@ bool ObObjectPrivMysqlSchemaKey::operator<(const ObObjectPrivMysqlSchemaKey &oth
 
 ObObjectPrivMysqlSchemaKey &ObObjectPrivMysqlSchemaKey::operator=(const ObObjectPrivMysqlSchemaKey &other)
 {
-  if (this != &other) {
-    user_id_ = other.user_id_;
-    obj_type_ = other.obj_type_;
-    all_priv_ = other.all_priv_;
-    obj_name_ = other.obj_name_;
-    grantor_ = other.grantor_;
-    grantor_host_ = other.grantor_host_;
-  }
+  assign(other);
   return *this;
 }
 
@@ -103,13 +96,12 @@ int ObObjectPrivMysqlSchemaKey::assign(const ObObjectPrivMysqlSchemaKey &other)
     user_id_ = other.user_id_;
     obj_type_ = other.obj_type_;
     all_priv_ = other.all_priv_;
-    if(OB_FAIL(ob_write_string(alloc_, other.obj_name_, obj_name_))) {
-      LOG_WARN("failed to copy obj_name_", K(ret));
-    } else if (OB_FAIL(ob_write_string(alloc_, other.grantor_, grantor_))) {
-      LOG_WARN("failed to copy grantor_", K(ret));
-    } else if (OB_FAIL(ob_write_string(alloc_, other.grantor_host_, grantor_host_))) {
-      LOG_WARN("failed to copy grantor_host_", K(ret));
-    }
+    MEMCPY(obj_name_.ptr(), other.obj_name_.ptr(), other.obj_name_.length());
+    MEMCPY(grantor_.ptr(), other.grantor_.ptr(), other.grantor_.length());
+    MEMCPY(grantor_host_.ptr(), other.grantor_host_.ptr(), other.grantor_host_.length());
+    obj_name_.set_length(other.obj_name_.length());
+    grantor_.set_length(other.grantor_.length());
+    grantor_host_.set_length(other.grantor_host_.length());
   }
   return ret;
 }
@@ -117,11 +109,11 @@ int ObObjectPrivMysqlSchemaKey::assign(const ObObjectPrivMysqlSchemaKey &other)
 void ObObjectPrivMysqlSchemaKey::reset()
 {
   user_id_ = OB_INVALID_ID;
-  obj_name_.reset();
   obj_type_ = OB_INVALID_ID;
   all_priv_ = 0;
-  grantor_.reset();
-  grantor_host_.reset();
+  obj_name_.set_length(0);
+  grantor_.set_length(0);
+  grantor_host_.set_length(0);
 }
 
 bool ObObjectPrivMysqlSchemaKey::is_valid() const
@@ -214,13 +206,12 @@ int ObObjectPrivMysqlRecycleSchemaExecutor::retrieve_schema_history(
     EXTRACT_INT_FIELD_MYSQL(result, "schema_version", cur_value.max_schema_version_, int64_t);
     EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", cur_value.is_deleted_, bool);
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ob_write_string(cur_key.alloc_, obj_name, cur_key.obj_name_))) {
-        LOG_WARN("failed to copy obj name ", K(ret));
-      } else if (OB_FAIL(ob_write_string(cur_key.alloc_, grantor, cur_key.grantor_))) {
-        LOG_WARN("failed to copy grantor ", K(ret));
-      } else if (OB_FAIL(ob_write_string(cur_key.alloc_, grantor_host, cur_key.grantor_host_))) {
-        LOG_WARN("failed to copy grantor host", K(ret));
-      }
+      MEMCPY(cur_key.obj_name_.ptr(), obj_name.ptr(), obj_name.length());
+      cur_key.obj_name_.set_length(obj_name.length());
+      MEMCPY(cur_key.grantor_.ptr(), grantor.ptr(), grantor.length());
+      cur_key.grantor_.set_length(grantor.length());
+      MEMCPY(cur_key.grantor_host_.ptr(), grantor_host.ptr(), grantor_host.length());
+      cur_key.grantor_host_.set_length(grantor_host.length());
     }
   }
   return ret;

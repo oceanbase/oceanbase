@@ -1867,8 +1867,10 @@ int ObPLPackageManager::notify_package_variable_deserialize(ObBasicSessionInfo *
     CK (OB_NOT_NULL(GCTX.schema_service_));
     OZ (GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard));
     OZ (schema_guard.get_package_info(OB_SYS_TENANT_ID, pkg_var_info.package_id_, package_info), pkg_var_info);
-    CK (OB_NOT_NULL(package_info));
-    if (OB_SUCC(ret) && package_info->get_package_name().compare_equal("DBMS_PROFILER")) {
+
+    if (OB_SUCC(ret)
+          && OB_NOT_NULL(package_info)
+          && package_info->get_package_name().compare_equal("DBMS_PROFILER")) {
       ObObj value_obj;
       bool has_run_status_var = false;
       hash::ObHashMap<int64_t, ObPackageVarEncodeInfo> value_map;

@@ -40,10 +40,10 @@ public:
       const uint64_t tenant_data_version,
       bool &can_modify_column_name_and_constraint);
 
-  static int check_can_add_cst_on_two_column(
+  static int check_can_add_cst_on_multi_column(
       const obrpc::ObAlterTableArg &alter_table_arg,
       const uint64_t tenant_data_version,
-      bool &can_add_cst_on_two_column);
+      bool &can_add_cst_on_multi_column);
   static int check_is_change_cst_column_name(
         const share::schema::ObTableSchema &table_schema,
         const share::schema::AlterTableSchema &alter_table_schema,

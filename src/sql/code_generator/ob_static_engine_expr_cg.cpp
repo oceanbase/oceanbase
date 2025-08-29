@@ -16,6 +16,7 @@
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/code_generator/ob_expr_generator_impl.h"
 #include "sql/engine/expr/ob_expr_get_path.h"
+#include "sql/engine/aggregate/ob_aggregate_processor.h"
 
 namespace oceanbase
 {
@@ -427,6 +428,37 @@ int ObStaticEngineExprCG::cg_expr_basic(const ObIArray<ObRawExpr *> &raw_exprs)
     }
     if (OB_SUCC(ret)) {
       rt_expr->local_session_var_id_ = raw_expr->get_local_session_var_id();
+    }
+    ObItemType real_expr_type = raw_expr->get_expr_type();
+    if (real_expr_type == T_WINDOW_FUNCTION) {
+      real_expr_type = static_cast<ObWinFunRawExpr *>(raw_expr)->get_func_type();
+    }
+
+    if (T_FUN_APPROX_COUNT_DISTINCT == real_expr_type
+        || T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS == real_expr_type
+        || T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE == real_expr_type) {
+      int64_t approx_cnt_distinct_prec = ObAggrInfo::DEFAULT_APPROX_COUNT_DISTINCT_PRECISION;
+      if (OB_ISNULL(op_cg_ctx_.log_plan_)) {
+        // just use default value
+      } else {
+        bool hint_exists = false;
+        int64_t hint_prec = ObAggrInfo::DEFAULT_APPROX_COUNT_DISTINCT_PRECISION;
+        const ObOptParamHint &opt_hint = op_cg_ctx_.log_plan_->get_optimizer_context().get_global_hint().opt_params_;
+        if (OB_FAIL(opt_hint.get_integer_opt_param(ObOptParamHint::APPROX_COUNT_DISTINCT_PRECISION,
+                                                   hint_prec, hint_exists))) {
+          LOG_WARN("get integer opt param failed", K(ret));
+        } else if (hint_exists) {
+          approx_cnt_distinct_prec = hint_prec;
+        } else {
+          omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+          approx_cnt_distinct_prec = tenant_config.is_valid() ?
+                                       tenant_config->approx_count_distinct_precision :
+                                       ObAggrInfo::DEFAULT_APPROX_COUNT_DISTINCT_PRECISION;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        rt_expr->extra_ = approx_cnt_distinct_prec;
+      }
     }
   } // for end
 
@@ -1883,6 +1915,29 @@ static inline bool expr_is_added(ObExpr &e)
   return v >> 63;
 }
 
+int64_t ObStaticEngineExprCG::frame_max_offset(const ObExpr &e, const int64_t batch_size, const bool use_rich_format)
+{
+  int64_t size = 0;
+  size = std::max<int64_t>(size, e.datum_off_ + sizeof(ObDatum));
+  size = std::max<int64_t>(size, e.eval_info_off_ + sizeof(ObEvalInfo));
+  size = std::max<int64_t>(size, e.dyn_buf_header_offset_ + dynamic_buf_header_size(e, batch_size));
+  size = std::max<int64_t>(size, e.res_buf_off_ + get_expr_datums_count(e, batch_size) * e.res_buf_len_);
+  if (e.is_batch_result()) {
+    size = std::max<int64_t>(size, e.eval_flags_off_ + get_expr_bitmap_vector_size(e, batch_size));
+    size = std::max<int64_t>(size, e.pvt_skip_off_ + get_expr_skip_vector_size(e, batch_size));
+    if (use_rich_format) {
+      if (!e.is_fixed_length_data_) {
+        size = std::max<int64_t>(size, e.len_arr_off_ + get_offsets_size(e, batch_size));
+        size = std::max<int64_t>(size, e.offset_off_ + get_ptrs_size(e, batch_size));
+        size = std::max<int64_t>(size, e.cont_buf_off_ + sizeof(ObDynReserveBuf));
+      }
+      size = std::max<int64_t>(size, e.vector_header_off_ + get_vector_header_size());
+      size = std::max<int64_t>(size, e.null_bitmap_off_ + get_expr_bitmap_vector_size(e, batch_size));
+    }
+  }
+  return size;
+};
+
 int ObStaticEngineExprCG::generate_partial_expr_frame(
     const ObPhysicalPlan &plan,
     ObExprFrameInfo &partial_expr_frame_info,
@@ -1949,7 +2004,6 @@ int ObStaticEngineExprCG::generate_partial_expr_frame(
       }
     }
   }
-
   // always clear expr is added flag
   FOREACH_CNT(e, exprs) {
     clear_expr_is_added(**e);
@@ -1963,18 +2017,6 @@ int ObStaticEngineExprCG::generate_partial_expr_frame(
   ObSEArray<ObExpr *, 8> farthest_exprs;
   const ObExpr *base = global.rt_exprs_.count() > 0 ? &global.rt_exprs_.at(0) : NULL;
   int64_t batch_size = std::max<int64_t>(plan.get_batch_size(), 1);
-  auto frame_max_offset = [](const ObExpr &e, const int64_t batch_size)
-  {
-    int64_t size = 0;
-    size = std::max<int64_t>(size, e.datum_off_ + sizeof(ObDatum));
-    size = std::max<int64_t>(size, e.eval_info_off_ + sizeof(ObEvalInfo));
-    size = std::max<int64_t>(size, e.res_buf_off_ + batch_size * e.res_buf_len_);
-    if (e.is_batch_result()) {
-      size = std::max<int64_t>(size, e.eval_flags_off_ + ObBitVector::memory_size(batch_size));
-      size = std::max<int64_t>(size, e.pvt_skip_off_ + ObBitVector::memory_size(batch_size));
-    }
-    return size;
-  };
   OZ(farthest_exprs.prepare_allocate(frame_cnt));
   if (OB_SUCC(ret)) {
     FOREACH(it, farthest_exprs) {
@@ -1991,9 +2033,8 @@ int ObStaticEngineExprCG::generate_partial_expr_frame(
           max_expr_idx = std::max(max_expr_idx, (*e)->parents_[i] - base);
         }
       }
-
       ObExpr *&p = farthest_exprs.at((*e)->frame_idx_);
-      if (NULL == p || frame_max_offset(*p, batch_size) < frame_max_offset(**e, batch_size)) {
+      if (NULL == p || frame_max_offset(*p, batch_size, use_rich_format) < frame_max_offset(**e, batch_size, use_rich_format)) {
         p = *e;
       }
     }
@@ -2004,7 +2045,9 @@ int ObStaticEngineExprCG::generate_partial_expr_frame(
     }
     FOREACH_CNT_X(e, exprs, OB_SUCC(ret)) {
       const int64_t expr_idx = *e - base;
-      partial.ser_expr_marks_.at(expr_idx) = 1;
+      if (!partial.ser_expr_marks_.at(expr_idx)) {
+        partial.ser_expr_marks_.at(expr_idx) = 1;
+      }
     }
   }
 
@@ -2023,26 +2066,33 @@ int ObStaticEngineExprCG::generate_partial_expr_frame(
     } else {
       item_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
     }
-    auto set_param_frame = [&](ObFrameInfo &f) {
-      ObExpr *e = farthest_exprs.at(f.frame_idx_);
-      int cnt = NULL == e
-          ? std::min<int64_t>(1, f.expr_cnt_)
-          : (e->datum_off_ / item_size) + 1;
-      f.expr_cnt_ = std::min<int64_t>(f.expr_cnt_, cnt);
-      f.frame_size_ = std::min<int64_t>(f.frame_size_, cnt * item_size);
-      f.use_rich_format_ = plan.get_use_rich_format();
-    };
     FOREACH_CNT_X(f, partial.param_frame_, OB_SUCC(ret)) {
-      set_param_frame(*f);
+      ObExpr *e = farthest_exprs.at(f->frame_idx_);
+      int cnt = NULL == e
+          ? std::min<int64_t>(1, f->expr_cnt_)
+          : (e->datum_off_ / item_size) + 1;
+      f->expr_cnt_ = std::min<int64_t>(f->expr_cnt_, cnt);
+      f->frame_size_ = std::min<int64_t>(f->frame_size_, cnt * item_size);
+      f->use_rich_format_ = plan.get_use_rich_format();
     }
     FOREACH_CNT_X(f, partial.dynamic_frame_, OB_SUCC(ret)) {
-      set_param_frame(*f);
+      ObExpr *e = farthest_exprs.at(f->frame_idx_);
+      int cnt = NULL == e
+          ? std::min<int64_t>(1, f->expr_cnt_)
+          : (e->datum_off_ / item_size) + 1;
+      f->expr_cnt_ = std::min<int64_t>(f->expr_cnt_, cnt);
+      int64_t size = item_size; // avoid zero frame size
+      if (NULL != e) {
+        size = std::max(size, frame_max_offset(*e, batch_size, use_rich_format));
+      }
+      f->frame_size_ = std::min<int64_t>(size, f->frame_size_);
+      f->use_rich_format_ = plan.get_use_rich_format();
     }
     FOREACH_CNT_X(f, partial.datum_frame_, OB_SUCC(ret)) {
       ObExpr *e = farthest_exprs.at(f->frame_idx_);
       int64_t size = item_size; // avoid zero frame size
       if (NULL != e) {
-        size = std::max(size, frame_max_offset(*e, batch_size));
+        size = std::max(size, frame_max_offset(*e, batch_size, use_rich_format));
       }
       f->frame_size_ = std::min<int64_t>(size, f->frame_size_);
     }

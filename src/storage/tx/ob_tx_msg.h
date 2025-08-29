@@ -222,12 +222,14 @@ namespace transaction
     };
     struct ObTxCommitRespMsg : public ObTxMsg {
       ObTxCommitRespMsg() :
-          ObTxMsg(TX_COMMIT_RESP)
+          ObTxMsg(TX_COMMIT_RESP),
+          need_wait_interval_us_(0)
       {}
       share::SCN commit_version_;
       int ret_;
+      int64_t need_wait_interval_us_;
       bool is_valid() const;
-      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(ret), K_(commit_version));
+      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(ret), K_(commit_version), K_(need_wait_interval_us));
       OB_UNIS_VERSION(1);
     };
 

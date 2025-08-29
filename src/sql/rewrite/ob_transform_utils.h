@@ -545,6 +545,14 @@ public:
                        const ObRawExpr *target,
                        bool &bret);
 
+  static int recursive_find_shared_expr(ObRawExpr *source,
+                                        ObRawExpr *target,
+                                        bool &bret);
+
+  static int recursive_find_shared_expr(ObIArray<ObRawExpr *> &source,
+                                        ObRawExpr *target,
+                                        bool &bret);
+
   template <typename T>
   static int get_expr_idx(const ObIArray<T *> &source,
                           const T *target,
@@ -1544,7 +1552,8 @@ public:
                                                    bool &is_valid,
                                                    ObIArray<ObRawExpr*> &left_new_select_exprs,
                                                    ObIArray<ObRawExpr*> &right_new_select_exprs,
-                                                   const bool skip_const_select_item = true);
+                                                   const bool skip_const_in_select = true,
+                                                   const bool skip_const_in_cond = true);
 
   static int check_result_type_same(ObIArray<ObRawExpr*> &left_exprs, 
                                     ObIArray<ObRawExpr*> &right_exprs,
@@ -1565,6 +1574,7 @@ public:
 
   static int is_correlated_expr_isomorphic(ObRawExpr *left_expr,
                                            ObRawExpr* right_expr,
+                                           bool check_same_as,
                                            bool &is_isomorphic);
 
   static int check_fixed_expr_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
@@ -1601,13 +1611,13 @@ public:
   static int create_spj_and_pullup_correlated_exprs(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                                     ObSelectStmt *&subquery,
                                                     ObTransformerCtx *ctx,
-                                                    const bool ignore_select_item = false,
-                                                    const bool skip_const_select_item = true);
+                                                    const bool skip_const_in_select = false,
+                                                    const bool skip_const_in_cond = true);
 
   static int create_spj_and_pullup_correlated_exprs_for_set(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                                             ObSelectStmt *&stmt,
                                                             ObTransformerCtx *ctx,
-                                                            const bool ignore_select_item);
+                                                            const bool skip_const_in_select);
 
   static int adjust_select_item_pos(ObIArray<ObRawExpr*> &right_select_exprs,
                                     ObSelectStmt *right_query);
@@ -1644,7 +1654,8 @@ public:
   static int pullup_correlated_conditions(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                           ObIArray<ObRawExpr *> &exprs,
                                           ObIArray<ObRawExpr *> &pullup_exprs,
-                                          ObIArray<ObRawExpr *> &new_select_list);
+                                          ObIArray<ObRawExpr *> &new_select_list,
+                                          const bool skip_const);
 
   static int extract_rowid_exprs(const ObDMLStmt *stmt,
                                  ObIArray<TableItem*> &table_items,
@@ -1994,6 +2005,7 @@ public:
   static int check_contain_lost_deterministic_expr(const ObIArray<ObRawExpr*> &exprs,
                                                    bool &is_contain);
   static bool is_enable_values_table_rewrite(const uint64_t compat_version);
+  static bool is_enable_hybrid_inlist_rewrite(const uint64_t compat_version);
   // check whether the score calculated by match expr is actually utilized
   static int check_need_calc_match_score(ObExecContext *exec_ctx,
                                         const ObDMLStmt* stmt,

@@ -265,28 +265,28 @@ int ObConfigItem::to_json_obj(ObIAllocator &allocator, ObJsonObject &j_obj) cons
   ObJsonString *v_description_en = nullptr;
   ObJsonString *v_optional_values = nullptr;
 
-  if (nullptr == (v_name = OB_NEW(ObJsonString, g_config_mem_attr, ObString(name())))) {
+  if (nullptr == (v_name = OB_NEWx(ObJsonString, &allocator, ObString(name())))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "create json value 'name' failed", K(ret));
-  } else if (nullptr == (v_type = OB_NEW(ObJsonString, g_config_mem_attr, ObString(data_type())))) {
+  } else if (nullptr == (v_type = OB_NEWx(ObJsonString, &allocator, ObString(data_type())))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "create json value 'type' failed", K(ret));
-  } else if (nullptr == (v_default_value = OB_NEW(ObJsonString, g_config_mem_attr, ObString(default_str())))) {
+  } else if (nullptr == (v_default_value = OB_NEWx(ObJsonString, &allocator, ObString(default_str())))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "create json value 'default_value' failed", K(ret));
-  } else if (nullptr == (v_range = OB_NEW(ObJsonString, g_config_mem_attr, ObString(range())))) {
+  } else if (nullptr == (v_range = OB_NEWx(ObJsonString, &allocator, ObString(range())))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "create json value 'range' failed", K(ret));
-  } else if (nullptr == (v_scope = OB_NEW(ObJsonString, g_config_mem_attr, ObString(scope())))) {
+  } else if (nullptr == (v_scope = OB_NEWx(ObJsonString, &allocator, ObString(scope())))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "create json value 'scope' failed", K(ret));
-  } else if (nullptr == (v_section = OB_NEW(ObJsonString, g_config_mem_attr, ObString(section())))) {
+  } else if (nullptr == (v_section = OB_NEWx(ObJsonString, &allocator, ObString(section())))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "create json value 'section' failed", K(ret));
-  } else if (nullptr == (v_edit_level = OB_NEW(ObJsonString, g_config_mem_attr, ObString(edit_level())))) {
+  } else if (nullptr == (v_edit_level = OB_NEWx(ObJsonString, &allocator, ObString(edit_level())))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "create json value 'edit_level' failed", K(ret));
-  } else if (nullptr == (v_description_en = OB_NEW(ObJsonString, g_config_mem_attr, ObString(info())))) {
+  } else if (nullptr == (v_description_en = OB_NEWx(ObJsonString, &allocator, ObString(info())))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "create json value 'description_en' failed", K(ret));
   } else if (OB_FAIL(j_obj.add(k_name, v_name))) {
@@ -307,7 +307,7 @@ int ObConfigItem::to_json_obj(ObIAllocator &allocator, ObJsonObject &j_obj) cons
     OB_LOG(WARN, "add json kv 'description_en' failed", K(ret));
   } else {
     if (nullptr != optional_configuration_values()) {
-      if (nullptr == (v_optional_values = OB_NEW(ObJsonString, g_config_mem_attr, ObString(optional_configuration_values())))) {
+      if (nullptr == (v_optional_values = OB_NEWx(ObJsonString, &allocator, ObString(optional_configuration_values())))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         OB_LOG(WARN, "create json value 'optional_values' failed", K(ret));
       } else if (OB_FAIL(j_obj.add(k_optional_values, v_optional_values))) {
@@ -349,7 +349,7 @@ bool ObConfigIntListItem::set(const char *str)
   value_.size_ = 0;
   int ret = OB_SUCCESS;
   SMART_VAR(char[OB_MAX_CONFIG_VALUE_LEN], tmp_value_str) {
-    MEMCPY(tmp_value_str, value_str_, sizeof (tmp_value_str));
+    MEMCPY(tmp_value_str, value_str_, std::min(sizeof(value_str_), sizeof(tmp_value_str)));
     s = STRTOK_R(tmp_value_str, ";", &saveptr);
     if (OB_LIKELY(NULL != s)) {
       do {

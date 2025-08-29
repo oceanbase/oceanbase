@@ -166,15 +166,6 @@ int ObTxFinishTransfer::do_tx_transfer_doing_(const ObTransferTaskID &task_id, c
   } else if (!is_ready) {
     LOG_INFO("transfer in tablet not ready", K(ret), K(tenant_id), K(dest_ls_id));
     transfer_service->wakeup();
-  // precheck all src tablet status has beed set to transfer out deleted (only in ss mode)
-  // won't lock src member list
-#ifdef OB_BUILD_SHARED_STORAGE
-  } else if (OB_FAIL(check_src_ls_tablet_status_(tenant_id, dest_ls_id, src_ls_id, tablet_list, start_scn, src_is_ready))) {
-    LOG_WARN("failed to check src ls tablet status", K(ret), K(tenant_id), K(dest_ls_id), K(src_ls_id), K(tablet_list));
-  } else if (!src_is_ready) {
-    LOG_INFO("src transfer out tablet not ready", K(ret), K(tenant_id), K(src_ls_id));
-    transfer_service->wakeup();
-#endif
   } else if (OB_FAIL(get_ls_handle_(tenant_id, dest_ls_id_, ls_handle))) {
     LOG_WARN("failed to get ls handle", K(ret));
   } else {
@@ -280,9 +271,7 @@ int ObTxFinishTransfer::do_tx_transfer_doing_(const ObTransferTaskID &task_id, c
         //    a) When the leader and follower of src_ls receive on_redo, change the ObTabletStatus of transfer_tablets to
         //    TRANFER_OUT_DELETED (the status may share DELETED)
 
-        if (OB_FAIL(ret)) {
-        } else if (!is_shared_storage && OB_FAIL(do_tx_finish_transfer_out_(task_id, tenant_id, src_ls_id, dest_ls_id,
-            finish_scn, tablet_list, conn))) {
+        if (FAILEDx(do_tx_finish_transfer_out_(task_id, tenant_id, src_ls_id, dest_ls_id, finish_scn, tablet_list, conn))) {
           LOG_WARN("failed to do tx finish transfer out",
               K(ret),
               K(task_id),
@@ -612,79 +601,6 @@ int ObTxFinishTransfer::inner_check_ls_logical_table_replaced_(const uint64_t te
   }
   return ret;
 }
-
-#ifdef OB_BUILD_SHARED_STORAGE
-int ObTxFinishTransfer::check_src_ls_tablet_status_(const uint64_t tenant_id, const share::ObLSID &dest_ls_id,
-    const share::ObLSID &src_ls_id, const common::ObArray<share::ObTransferTabletInfo> &tablet_list,
-    const share::SCN &transfer_scn, bool &all_transfer_out_deleted)
-{
-  int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  bool is_leader = false;
-  const int64_t cluster_id = GCONF.cluster_id;
-  ObLSLocation ls_location;
-  ObArray<ObAddr> addr_array;
-  bool is_shared_storage = GCTX.is_shared_storage_mode();
-  common::ObMemberList src_member_list;
-
-  if (!is_shared_storage) {
-    // sn mode won't check src tablet status, skip
-    all_transfer_out_deleted = true;
-  } else if (OB_FAIL(check_self_ls_leader_(dest_ls_id, is_leader))) {
-    LOG_WARN("failed to check self ls leader", K(ret), K(dest_ls_id));
-  } else if (!is_leader) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("self is not leader", K(ret), K(src_ls_id));
-  } else if (OB_FAIL(ObTransferUtils::get_ls_member_list(src_ls_id, src_member_list))) {
-    LOG_WARN("failed to get src ls member list", K(ret), K(src_ls_id));
-  } else if (OB_FAIL(src_member_list.get_addr_array(addr_array))) {
-    LOG_WARN("failed to get addr array", K(ret), K(src_member_list));
-  } else if (OB_FAIL(inner_check_src_ls_tablet_status_(
-                 tenant_id, src_ls_id, addr_array, tablet_list, transfer_scn, all_transfer_out_deleted))) {
-    LOG_WARN("failed to inner check majority backfilled", K(ret), K(tenant_id), K(src_ls_id), K(addr_array));
-  } else {
-    LOG_INFO("check ls logical table replace", K(tenant_id), K(src_ls_id), K(addr_array), K(tablet_list), K(all_transfer_out_deleted));
-  }
-  // TODO(jyx441808): add perf diagnose info
-  return ret;
-}
-
-int ObTxFinishTransfer::inner_check_src_ls_tablet_status_(const uint64_t tenant_id, const share::ObLSID &src_ls_id,
-      const common::ObArray<common::ObAddr> &member_addr_list,
-      const common::ObArray<share::ObTransferTabletInfo> &tablet_list,
-      const share::SCN &transfer_scn, bool &all_transfer_out_deleted)
-{
-  int ret = OB_SUCCESS;
-  all_transfer_out_deleted = true;
-  storage::ObCheckTransferOutTabletStatusProxy batch_rpc_proxy(
-      *(GCTX.storage_rpc_proxy_), &obrpc::ObStorageRpcProxy::check_transfer_out_tablet_status);
-  ObHAAsyncRpcArg async_rpc_arg;
-  ObArray<obrpc::ObCheckTransferOutTabletStatusRes> responses;
-  const int64_t rpc_timeout = GCONF.rpc_timeout;
-  const uint64_t group_id = share::OBCG_STORAGE;
-  ObCheckTransferOutTabletStatusArg arg;
-  arg.tenant_id_ = tenant_id;
-  arg.ls_id_ = src_ls_id;
-  arg.transfer_scn_ = transfer_scn;
-  if (OB_FAIL(arg.tablet_list_.assign(tablet_list))) {
-    LOG_WARN("failed to assign tablet array", K(ret), K(tablet_list));
-  } else if (OB_FAIL(async_rpc_arg.set_ha_async_arg(tenant_id, group_id, rpc_timeout, member_addr_list))) {
-    LOG_WARN("failed to set ha async arg", K(ret), K(tenant_id), K(group_id), K(rpc_timeout), K(member_addr_list));
-  } else if (OB_FAIL(ObHAAsyncRpc::send_async_rpc(async_rpc_arg, arg, batch_rpc_proxy, responses))) {
-    LOG_WARN("failed to send async rpc", K(ret), K(async_rpc_arg), K(arg));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < responses.count(); ++i) {
-      const obrpc::ObCheckTransferOutTabletStatusRes &res = responses.at(i);
-      if (!res.is_transfer_out_deleted_) {
-        all_transfer_out_deleted = false;
-        LOG_INFO("src tablet has not beed set to transfer out deleted", K(i), K(member_addr_list));
-        break;
-      }
-    }
-  }
-  return ret;
-}
-#endif
 
 int ObTxFinishTransfer::do_tx_finish_transfer_in_(const ObTransferTaskID &task_id, const uint64_t tenant_id,
     const share::ObLSID &src_ls_id, const share::ObLSID &dest_ls_id, const SCN &start_scn,

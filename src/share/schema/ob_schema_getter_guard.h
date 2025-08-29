@@ -27,6 +27,8 @@
 #include "share/schema/ob_external_resource_mgr.h"
 #include "share/schema/ob_location_schema_struct.h"
 #include "share/schema/ob_objpriv_mysql_schema_struct.h"
+#include "share/schema/ob_ccl_schema_struct.h"
+#include "share/schema/ob_ccl_rule_mgr.h"
 
 namespace oceanbase
 {
@@ -273,6 +275,7 @@ public:
   int get_simple_tenant_schemas(common::ObIArray<const ObSimpleTenantSchema *> &tenant_schemas) const;
 
   int get_tenant_ids(common::ObIArray<uint64_t> &tenant_ids) const;
+  int get_user_tenant_count(int64_t &count) const;
   int get_available_tenant_ids(common::ObIArray<uint64_t> &tenant_ids) const;
   int get_tablegroup_ids_in_tenant(const uint64_t tenant_id,
                                    common::ObIArray<uint64_t> &tablegroup_id_array);
@@ -1036,11 +1039,18 @@ public:
   int get_location_schema_by_id(const uint64_t tenant_id,
                                 const uint64_t location_id,
                                 const ObLocationSchema *&schema);
+  int get_location_schema_by_prefix_match_with_priv(const ObSessionPrivInfo &session_priv,
+                                                    const common::ObIArray<uint64_t> &enable_role_id_array,
+                                                    const uint64_t tenant_id,
+                                                    const common::ObString &access_path,
+                                                    const ObLocationSchema *&schema,
+                                                    const bool is_need_write_priv = false);
   int get_location_schemas_in_tenant(const uint64_t tenant_id,
                                      common::ObIArray<const ObLocationSchema *> &location_schemas);
   int check_location_access(const ObSessionPrivInfo &session_priv,
                             const common::ObIArray<uint64_t> &enable_role_id_array,
-                            const ObString &location_name);
+                            const ObString &location_name,
+                            const bool is_need_write_priv = false);
   int check_location_show(const ObSessionPrivInfo &session_priv,
                           const common::ObIArray<uint64_t> &enable_role_id_array,
                           const common::ObString &location_name,
@@ -1214,10 +1224,21 @@ public:
                                        ObIArray<const ObObjMysqlPriv *> &obj_privs,
                                        bool reset_flag);
 
+  int get_ccl_rule_with_name(const uint64_t tenant_id,
+                             const common::ObString &name,
+                             const ObCCLRuleSchema *&ccl_rule_schema);
+
+  int get_ccl_rule_with_ccl_rule_id(const uint64_t tenant_id,
+                                    const uint64_t ccl_rule_id,
+                                    const ObCCLRuleSchema *&ccl_rule_schema);
+
+  int get_ccl_rule_infos(const uint64_t tenant_id, CclRuleContainsInfo,
+                         ObCCLRuleMgr::CCLRuleInfos *&ccl_rule_infos);
+  int get_ccl_rule_count(const uint64_t tenant_id, uint64_t & count);
+
 private:
   int check_ssl_access(const ObUserInfo &user_info,
                        SSL *ssl_st);
-  int check_ssl_invited_cn(const uint64_t tenant_id, SSL *ssl_st);
   int check_catalog_priv(const ObSessionPrivInfo &session_priv,
                          const common::ObIArray<uint64_t> &enable_role_id_array,
                          const ObNeedPriv &need_priv);

@@ -39,8 +39,8 @@ int64_t ObCheckPointService::TRAVERSAL_FLUSH_INTERVAL = 5000 * 1000L;
 // Update ss checkpoint scn each 10 seconds
 int64_t ObCheckPointService::SS_UPDATE_CKPT_INTERVAL = 10LL * 1000LL * 1000LL;
 
-// Flush all CLOG module each 10 minutes
-int64_t ObCheckPointService::SS_ADVANCE_CKPT_INTERVAL = 10LL * 60LL * 1000LL * 1000LL;
+// Check if need flush all CLOG module each 1 minute
+int64_t ObCheckPointService::SS_TRY_ADVANCE_CKPT_INTERVAL = 60LL * 1000LL * 1000LL;
 
 // try schedule full/emergency upload each second
 int64_t ObCheckPointService::SS_TRY_SCHEDULE_UPLOAD_INTERVAL = 1LL * 1000LL * 1000LL;
@@ -61,6 +61,9 @@ int ObCheckPointService::init(const int64_t tenant_id)
     LOG_WARN("fail to initialize freeze thread", K(ret));
   } else {
     is_inited_ = true;
+#ifdef OB_BUILD_SHARED_STORAGE
+    prev_ss_advance_ckpt_task_ts_ = 0;
+#endif
   }
   return ret;
 }
@@ -122,7 +125,7 @@ int ObCheckPointService::start()
                               ss_advance_ckpt_task_,
                               "SSAdvanceCKPT",
                               "SSAdvanceTimer",
-                              SS_ADVANCE_CKPT_INTERVAL,
+                              SS_TRY_ADVANCE_CKPT_INTERVAL,
                               true/* repeat */);
     INIT_AND_START_TIMER_TASK(ss_schedule_upload_timer_,
                               ss_schedule_upload_task_,
@@ -482,7 +485,6 @@ public:
     } else if (sn_checkpoint_lsn < ss_checkpoint_lsn) {
       FLOG_INFO("local ckpt less than ss ckpt", K(ls_id), K(sn_checkpoint_lsn), K(ss_checkpoint_lsn));
     } else {
-
       ObSSMetaService *meta_svr = MTL(ObSSMetaService *);
       UpdateSSCkptFunctorForMetaSvr func(ObIMetaFunction::MetaFuncType::UPDATE_SS_CKPT_FUNC, ls_id);
       ObSSWriterKey sswriter_key(ObSSWriterType::META, ls_id);
@@ -508,34 +510,72 @@ public:
   }
 
 private:
-#define PRINT_CKPT_INFO_WRAPPER                                                                 \
-  "ls_id", ls.get_ls_id(), K(sn_ckpt_lsn), K(ss_ckpt_lsn), K(sn_ckpt_scn), K(ss_ckpt_scn),       \
-      KTIME(sn_ckpt_scn.convert_to_ts()), KTIME(ss_ckpt_scn.convert_to_ts()), "MAX LSN GAP(MB)", \
-      max_lsn_gap / 1024 / 1024
+  bool is_leader_(ObLS &ls)
+  {
+    int ret = OB_SUCCESS;
+    // set default value as leader because leader do not skip throttle
+    bool is_leader = true;
+    ObRole role;
+    int64_t proposal_id = 0;
+    if (OB_FAIL(ls.get_log_handler()->get_role(role, proposal_id))) {
+      LOG_WARN("get ls role failed", KR(ret), K(ls.get_ls_id()));
+    } else if (common::is_strong_leader(role)) {
+      is_leader = true;
+    } else {
+      is_leader = false;
+    }
+    return is_leader;
+  }
 
+#define PRINT_CKPT_INFO_WRAPPER                                                                   \
+  "ls_id", ls.get_ls_id(), K(sn_ckpt_lsn), K(ss_ckpt_lsn), K(sn_ckpt_scn), K(ss_ckpt_scn),        \
+      KTIME(sn_ckpt_scn.convert_to_ts()), KTIME(ss_ckpt_scn.convert_to_ts()), "SCN GAP(seconds)", \
+      scn_ts_gap / 1000 / 1000, "MAX LSN GAP(MB)", max_lsn_gap / 1024 / 1024
   void throttle_flush_if_needed(const ObSSLSMeta &ss_ls_meta, LSN sn_ckpt_lsn, LSN ss_ckpt_lsn, ObLS &ls)
   {
-    bool ckpt_lag_too_large = false;
-    int64_t max_lsn_gap = INT64_MAX;
-    (void)MTL(ObTenantFreezer*)->get_tenant_memstore_limit(max_lsn_gap);
-    const int64_t config_trigger = ObTenantFreezer::get_freeze_trigger_percentage();
-    const int64_t freeze_trigger = config_trigger > 0 ? config_trigger : 20;
-    max_lsn_gap = max_lsn_gap * freeze_trigger / 100;
+    if (is_leader_(ls)) {
+      bool ckpt_lag_too_large = false;
+      // use 16GB as default lsn gap
+      int64_t max_lsn_gap = 16LL * 1024LL * 1024LL * 1024LL;
+      (void)MTL(ObTenantFreezer *)->get_tenant_memstore_limit(max_lsn_gap);
+      const int64_t config_trigger = ObTenantFreezer::get_freeze_trigger_percentage();
+      const int64_t freeze_trigger = config_trigger > 0 ? config_trigger : 20;
+      // use 1/8 freeze_trigger as lsn_gap
+      max_lsn_gap = max_lsn_gap * freeze_trigger / 100 / 8;
 
-    const SCN sn_ckpt_scn = ls.get_clog_checkpoint_scn();
-    const SCN ss_ckpt_scn = ss_ls_meta.get_ss_checkpoint_scn();
+      // get advance_checkpoint interval
+      int64_t advance_ckpt_interval = 10LL * 60LL * 1000LL * 1000LL; // default 10 minutes
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+      if (tenant_config.is_valid()) {
+        advance_ckpt_interval = tenant_config->_ss_advance_checkpoint_interval;
+      }
 
-    if (!ls.get_inc_sstable_uploader().finish_reloading()) {
-      (void)ls.disable_flush();
-      FLOG_INFO("disable ls flush to wait uploader reloading", PRINT_CKPT_INFO_WRAPPER);
-    } else if ((sn_ckpt_lsn > ss_ckpt_lsn) && (sn_ckpt_lsn - ss_ckpt_lsn > max_lsn_gap)) {
-      (void)ls.disable_flush();
-      ckpt_lag_too_large = true;
-      FLOG_INFO("disable ls flush to throttle writes and allow ss checkpoint to catch up with sn checkpoint",
-                PRINT_CKPT_INFO_WRAPPER);
-    } else if (ls.flush_is_disabled()) {
-      (void)ls.enable_flush();
-      FLOG_INFO("enable ls flush", PRINT_CKPT_INFO_WRAPPER);
+      const SCN sn_ckpt_scn = ls.get_clog_checkpoint_scn();
+      const SCN ss_ckpt_scn = ss_ls_meta.get_ss_checkpoint_scn();
+      const int64_t scn_ts_gap = (sn_ckpt_scn.convert_to_ts() - ss_ckpt_scn.convert_to_ts());
+
+      if (!ls.get_inc_sstable_uploader().finish_reloading()) {
+        (void)ls.disable_flush();
+        FLOG_INFO("disable ls flush to wait uploader reloading", PRINT_CKPT_INFO_WRAPPER);
+      } else if (ls.get_inc_sstable_uploader().task_overflowed()) {
+        (void)ls.disable_flush();
+        FLOG_INFO("disable ls flush to handle current tasks", PRINT_CKPT_INFO_WRAPPER);
+      } else if ((sn_ckpt_lsn > ss_ckpt_lsn) && (sn_ckpt_lsn - ss_ckpt_lsn > max_lsn_gap) &&
+                 (scn_ts_gap > 2 * advance_ckpt_interval)) {
+        (void)ls.disable_flush();
+        ckpt_lag_too_large = true;
+        FLOG_INFO("disable ls flush to throttle writes and allow ss checkpoint to catch up with sn checkpoint",
+                  PRINT_CKPT_INFO_WRAPPER);
+      } else if (ls.flush_is_disabled()) {
+        (void)ls.enable_flush();
+        FLOG_INFO("enable ls flush", PRINT_CKPT_INFO_WRAPPER);
+      }
+    } else {
+      // this ls replica is not leader
+      if (ls.flush_is_disabled()) {
+        (void)ls.enable_flush();
+        FLOG_INFO("enable ls flush because this ls is not leader", K(ls.get_ls_id()));
+      }
     }
   }
 #undef  PRINT_CKPT_INFO_WRAPPER
@@ -633,11 +673,25 @@ public:
 void ObCheckPointService::ObSSAdvanceCkptTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
-  STORAGE_LOG(INFO, "====== SS Advance Checkpoint Task ======");
   INIT_TRACE_GUARD;
-  SSAdvanceCkptFunctorForLS advance_ckpt_func_for_ls;
-  if (OB_FAIL(MTL(ObLSService *)->foreach_ls(advance_ckpt_func_for_ls))) {
-    STORAGE_LOG(WARN, "for each ls functor failed", KR(ret));
+
+  // set 10 minutes as defualt value
+  int64_t advance_checkpoint_interval = 10LL * 60LL * 1000LL * 1000LL;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    // use config value if config is valid
+    advance_checkpoint_interval = tenant_config->_ss_advance_checkpoint_interval;
+  }
+
+  const int64_t current_ts = ObClockGenerator::getClock();
+  if (current_ts - MTL(ObCheckPointService *)->prev_ss_advance_ckpt_task_ts() > advance_checkpoint_interval) {
+    STORAGE_LOG(INFO, "====== SS Advance Checkpoint Task ======");
+    SSAdvanceCkptFunctorForLS advance_ckpt_func_for_ls;
+    if (OB_FAIL(MTL(ObLSService *)->foreach_ls(advance_ckpt_func_for_ls))) {
+      STORAGE_LOG(WARN, "for each ls functor failed", KR(ret));
+    } else {
+      MTL(ObCheckPointService *)->set_prev_ss_advance_ckpt_task_ts(current_ts);
+    }
   }
 }
 

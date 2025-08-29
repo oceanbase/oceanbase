@@ -13565,7 +13565,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
   },
   {
     /*mysql date-> xxx*/
-    cast_not_expected,/*null*/
+    cast_not_support,/*null*/
     mdate_int,/*int*/
     mdate_uint,/*uint*/
     mdate_float,/*float*/
@@ -13576,13 +13576,13 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     mdate_time,/*time*/
     mdate_year,/*year*/
     mdate_string,/*string*/
-    cast_not_expected,/*extend*/
-    cast_not_expected,/*unknown*/
+    cast_not_support,/*extend*/
+    cast_not_support,/*unknown*/
     mdate_text,/*text*/
     mdate_bit,/*bit*/
     cast_not_expected,/*enumset*/
     cast_not_expected,/*enumset_inner*/
-    cast_not_expected,/*otimestamp*/
+    cast_not_support,/*otimestamp*/
     cast_inconsistent_types,/*raw*/
     cast_not_expected,/*interval*/
     cast_not_expected,/*rowid*/
@@ -13598,7 +13598,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
   },
   {
     /*mysql datetime-> xxx*/
-    cast_not_expected,/*null*/
+    cast_not_support,/*null*/
     mdatetime_int,/*int*/
     mdatetime_uint,/*uint*/
     mdatetime_float,/*float*/
@@ -13609,8 +13609,8 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     mdatetime_time,/*time*/
     mdatetime_year,/*year*/
     mdatetime_string,/*string*/
-    cast_not_expected,/*extend*/
-    cast_not_expected,/*unknown*/
+    cast_not_support,/*extend*/
+    cast_not_support,/*unknown*/
     mdatetime_text,/*text*/
     mdatetime_bit,/*bit*/
     cast_not_expected,/*enumset*/

@@ -226,6 +226,7 @@ private:
       const transaction::ObTransID &trans_id,
       const uint64_t aux_lob_meta_tid,
       ObLobDataGetCtx &lob_data_get_ctx,
+      const bool is_new_col,
       volatile bool &stop_flag);
 
   bool is_need_to_disk_(int64_t alloc_size);

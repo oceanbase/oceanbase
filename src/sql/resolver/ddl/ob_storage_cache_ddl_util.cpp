@@ -385,11 +385,9 @@ int ObDDLResolver::check_alter_stmt_storage_cache_policy(const ObTableSchema *or
   ObAlterTableStmt *alter_table_stmt = static_cast<ObAlterTableStmt*>(stmt_);
   ObSArray<obrpc::ObCreateIndexArg*> &add_index_arg_list = alter_table_stmt->get_index_arg_list();
   const ObSArray<obrpc::ObIndexArg*> &alter_index_arg_list = alter_table_stmt->get_alter_index_arg_list();
-  const ObTableSchema *tbl_schema = nullptr;
 
   if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
-    if (FALSE_IT(alter_table_stmt = static_cast<ObAlterTableStmt*>(stmt_))) {
-    } else if (OB_ISNULL(alter_table_stmt)) {
+    if (OB_ISNULL(alter_table_stmt)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("alter table stmt is null", KR(ret));
     } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), tenant_data_version))) {
@@ -397,53 +395,48 @@ int ObDDLResolver::check_alter_stmt_storage_cache_policy(const ObTableSchema *or
     } else if (tenant_data_version >= DATA_VERSION_4_3_5_2) {
       if (storage_cache_policy_.empty()) {
         // If the storage cache policy is not set, the default storage cache policy will be set.
-        if (add_index_arg_list.count() > 0 && OB_FAIL(set_default_storage_cache_policy(true/*is_alter_add_index*/))) {
-          LOG_WARN("failed to set default storage cache policy", K(ret));
-        }
-        for (int64_t i = 0; OB_SUCC(ret) && i < add_index_arg_list.count(); ++i) {
-          ObCreateIndexArg *add_index_arg = add_index_arg_list.at(i);
-          if (OB_ISNULL(add_index_arg)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("index arg is null", K(ret));
-          } else if (obrpc::ObIndexArg::ADD_INDEX == add_index_arg->index_action_type_) {
-            add_index_arg->index_option_.storage_cache_policy_ = storage_cache_policy_;
+        // Check alter table add index and set default storage cache policy for add index
+        if (add_index_arg_list.count() > 0) {
+          if (OB_FAIL(set_default_storage_cache_policy(true/*is_alter_add_index*/))) {
+            LOG_WARN("failed to set default storage cache policy", K(ret));
           }
-        }
-      } else { //!storage_cache_policy_.empty()
-        ObStorageCachePolicy storage_cache_policy;
-        if (OB_FAIL(storage_cache_policy.load_from_string(storage_cache_policy_))) {
-          LOG_WARN("failed to load storage cache policy", K(ret));
-        } else {
-          // Check alter table add index
-          if (1 == add_index_arg_list.count()) {
-            const ObCreateIndexArg *create_index_arg = add_index_arg_list.at(0);
-            if (OB_ISNULL(create_index_arg)) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < add_index_arg_list.count(); ++i) {
+            const ObTableSchema *add_index_schema = nullptr;
+            ObCreateIndexArg *add_index_arg = add_index_arg_list.at(i);
+            if (OB_ISNULL(add_index_arg)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("index arg is null", K(ret));
-            } else if (obrpc::ObIndexArg::ADD_INDEX == create_index_arg->index_action_type_) {
-              tbl_schema = &create_index_arg->index_schema_;
+            } else if (obrpc::ObIndexArg::ADD_INDEX == add_index_arg->index_action_type_) {
+              if (OB_ISNULL(add_index_arg->index_option_.storage_cache_policy_)) {
+                add_index_arg->index_option_.storage_cache_policy_ = storage_cache_policy_;
+              } else {
+                add_index_schema = &add_index_arg->index_schema_;
+                ObStorageCachePolicy add_index_storage_cache_policy;
+                if (OB_FAIL(add_index_storage_cache_policy.load_from_string(add_index_arg->index_option_.storage_cache_policy_))) {
+                  LOG_WARN("failed to load storage cache policy", K(ret));
+                } else if (OB_FAIL(check_storage_cache_policy(add_index_storage_cache_policy, add_index_schema))) {
+                  LOG_WARN("failed to check storage cache policy", K(ret));
+                }
+              }
             }
-          } else if (add_index_arg_list.count() > 0 && 1 != add_index_arg_list.count()) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Adding multiple index with storage cache policy is");
-            LOG_WARN("add index with storage cache policy for multiple index not support", K(ret));
           }
-          // Check alter table alter index
-          if (OB_FAIL(ret)) {
-          } else if (1 == alter_index_arg_list.count()) {
-            const ObIndexArg *alter_index_arg = alter_index_arg_list.at(0);
+          storage_cache_policy_.reset();
+        }
+        // Check alter table alter index
+        if (OB_FAIL(ret)) {
+        } else if (alter_index_arg_list.count() > 0) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < alter_index_arg_list.count(); ++i) {
+            ObIndexArg *alter_index_arg = alter_index_arg_list.at(i);
+            const ObTableSchema *alter_index_schema = nullptr;
             if (OB_ISNULL(alter_index_arg)) {
               ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("index arg is null", K(ret));
+            LOG_WARN("index arg is null", K(ret));
             } else if (obrpc::ObIndexArg::ALTER_INDEX == alter_index_arg->index_action_type_) {
               // Since the alter table on the resolver side cannot distinguish between various behaviors,
               // alter_index_arg_list will be reused by other behaviors.
               // Therefore, no judgment is made here on behaviors other than alter_index.
               ObString index_table_name;
-              if (nullptr != tbl_schema) {
-                ret = OB_NOT_SUPPORTED;
-                LOG_USER_ERROR(OB_NOT_SUPPORTED, "Altering index and adding index with storage cache policy at the same time is");
-              } else if (OB_FAIL(ObTableSchema::build_index_table_name(*allocator_,
+              if (OB_FAIL(ObTableSchema::build_index_table_name(*allocator_,
                                                                       ori_table_schema->get_table_id(),
                                                                       alter_index_arg->index_name_,
                                                                       index_table_name))) {
@@ -452,30 +445,47 @@ int ObDDLResolver::check_alter_stmt_storage_cache_policy(const ObTableSchema *or
                                                                   alter_table_stmt->get_org_database_name(),
                                                                   index_table_name,
                                                                   true /* index table */,
-                                                                  tbl_schema))) {
+                                                                  alter_index_schema))) {
                 LOG_WARN("failed to get table schema", K(ret), K(alter_index_arg->index_name_), K(index_table_name));
               }
+              if (OB_FAIL(ret)) {
+              } else if (OB_ISNULL(alter_index_schema)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("alter index schema is null", K(ret));
+              } else {
+                ObStorageCachePolicy alter_index_storage_cache_policy;
+                if (OB_ISNULL(alter_index_arg->storage_cache_policy_)) {
+                  alter_index_arg->storage_cache_policy_ = alter_index_schema->get_storage_cache_policy();
+                }
+                if (OB_FAIL(ret)) {
+                } else if (OB_FAIL(alter_index_storage_cache_policy.load_from_string(alter_index_arg->storage_cache_policy_))) {
+                  LOG_WARN("failed to load storage cache policy", K(ret));
+                } else if (OB_FAIL(check_storage_cache_policy(alter_index_storage_cache_policy, alter_index_schema))) {
+                  LOG_WARN("failed to check storage cache policy", K(ret));
+                }
+              }
             }
-          } else if (alter_index_arg_list.count() > 0 && 1 != alter_index_arg_list.count()) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Altering multiple index with storage cache policy is");
-            LOG_WARN("alter index with storage cache policy for multiple index is not supported", K(ret));
           }
-
+        }
+      } else { //!storage_cache_policy_.empty()
+        // Check alter table storage_cache_policy
+        ObStorageCachePolicy storage_cache_policy;
+        if (OB_FAIL(storage_cache_policy.load_from_string(storage_cache_policy_))) {
+          LOG_WARN("failed to load storage cache policy", K(ret));
+        } else {
+          const ObTableSchema *alter_table_schema = nullptr;
           // Check alter table storage_cache_policy
           if (OB_FAIL(ret)) {
-          } else if (OB_ISNULL(tbl_schema)) {
+          } else if (OB_ISNULL(alter_table_schema)) {
             if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
                                                           alter_table_stmt->get_org_database_name(),
                                                           alter_table_stmt->get_org_table_name(),
                                                           false,
-                                                          tbl_schema))) {
+                                                          alter_table_schema))) {
               LOG_WARN("table is not exist", K(alter_table_stmt->get_org_database_name()), K(alter_table_stmt->get_org_table_name()), K(ret));
+            } else if (OB_FAIL(check_storage_cache_policy(storage_cache_policy, alter_table_schema))) {
+              LOG_WARN("failed to check storage cache policy", K(ret), K(storage_cache_policy), K(alter_table_stmt->get_alter_table_arg()));
             }
-          }
-          if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(check_storage_cache_policy(storage_cache_policy, tbl_schema))) {
-            LOG_WARN("failed to check storage cache policy", K(ret), K(storage_cache_policy), K(alter_table_stmt->get_alter_table_arg()));
           }
         }
       }
@@ -527,7 +537,12 @@ int ObDDLResolver::check_storage_cache_policy(ObStorageCachePolicy &storage_cach
     } else {
       const ObPartitionOption &part_option = column_schema->is_part_key_column() ?
                                             tbl_schema->get_part_option() : tbl_schema->get_sub_part_option();
-      const ObString &part_func_str = ObString(part_option.get_part_func_expr_str());
+      ObString part_func_str = ObString(part_option.get_part_func_expr_str());
+      // remove the '`' in the part_func_str, example: `part_func_expr` -> part_func_expr
+      if (part_func_str.length() > 2 && part_func_str[part_func_str.length() - 1] == '`' && part_func_str[0] == '`') {
+        ++part_func_str;
+        part_func_str.assign(part_func_str.ptr(), part_func_str.length() - 1);
+      }
       const ObString &boundary_column_name = ObString(column_schema->get_column_name());
       if (!(ObColumnNameHashWrapper(part_func_str) == ObColumnNameHashWrapper(boundary_column_name))) {
         ret = OB_NOT_SUPPORTED;
@@ -824,11 +839,13 @@ int ObAlterTableResolver::resolve_alter_index_storage_cache_policy(const ParseNo
       }
     }
   }
+  // reset storage cache policy, cause it will be reused in alter table options and alter add index options
+  storage_cache_policy_.reset();
   return ret;
 }
 
-/*************************ObStorageCacheUtil*************************/
 
+/*************************ObStorageCacheUtil*************************/
 int ObStorageCacheUtil::print_table_storage_cache_policy(const ObTableSchema &table_schema, char* buf, const int64_t &buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;

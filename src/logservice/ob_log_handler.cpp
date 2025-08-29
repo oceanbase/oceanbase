@@ -18,6 +18,7 @@
 #endif
 #include "logservice/ob_log_service.h"
 #include "logservice/ob_reconfig_checker_adapter.h"
+#include "storage/concurrency_control/ob_data_validation_service.h"
 
 #define INVOKE_PALF_HANDLE_FN(fn, args...) \
   do { \
@@ -537,7 +538,16 @@ int ObLogHandler::get_max_decided_scn_as_leader(share::SCN &scn) const
 
 int ObLogHandler::advance_base_lsn(const LSN &lsn)
 {
-  return advance_base_lsn_impl_(lsn);
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(concurrency_control::ObDataValidationService::
+                  need_delay_resource_recycle(share::ObLSID(id_)))) {
+    if (REACH_TIME_INTERVAL(1_s)) {
+      CLOG_LOG(WARN, "4377 stopping the resource recyle", K(id_));
+    }
+  } else {
+    ret = advance_base_lsn_impl_(lsn);
+  }
+  return ret;
 }
 
 int ObLogHandler::get_begin_lsn(LSN &lsn) const

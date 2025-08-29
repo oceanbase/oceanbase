@@ -24,6 +24,7 @@
 #include "share/domain_id/ob_domain_id.h"
 #include "share/external_table/ob_external_table_part_info.h"
 #include "share/external_table/ob_external_object_ctx.h"
+#include "share/catalog/ob_catalog_properties.h"
 
 namespace oceanbase
 {
@@ -99,6 +100,7 @@ public:
       result_output_(alloc),
       is_get_(false),
       is_external_table_(false),
+      lake_table_format_(share::ObLakeTableFormat::INVALID),
       external_file_access_info_(alloc),
       external_file_location_(alloc),
       external_file_pattern_(alloc),
@@ -162,6 +164,7 @@ public:
                        K_(external_file_format_str),
                        K_(external_file_location),
                        K_(external_file_pattern),
+                       K_(external_pushdown_filters),
                        KPC_(trans_info_expr),
                        K_(ir_scan_type),
                        K_(rowkey_exprs),
@@ -186,6 +189,7 @@ public:
   sql::ExprFixedArray result_output_;
   bool is_get_;
   bool is_external_table_;
+  share::ObLakeTableFormat lake_table_format_;
   ObExternalFileFormat::StringData external_file_access_info_;
   ObExternalFileFormat::StringData external_file_location_;
   ObExternalFileFormat::StringData external_file_pattern_;
@@ -209,7 +213,9 @@ public:
     struct {
       uint64_t is_index_merge_               : 1; // whether used for index merge
       uint64_t is_new_query_range_           : 1; // whether use new query range
-      uint64_t reserved_                     : 62;
+      uint64_t enable_new_false_range_       : 1; // whether use new false range
+      uint64_t has_local_dynamic_filter_     : 1; // whether has local dynamic filter
+      uint64_t reserved_                     : 60;
     };
   };
   ObFixedArray<share::DomainIdxs, common::ObIAllocator> domain_id_idxs_;
@@ -217,6 +223,14 @@ public:
   ObFixedArray<uint64_t, common::ObIAllocator> domain_tids_;
   ObPreRangeGraph pre_range_graph_;
   ObFixedArray<share::ObAggrParamProperty, common::ObIAllocator> aggregate_param_props_;
+};
+
+enum class ObDASScanTaskType
+{
+  SCAN = 0,
+  LOCAL_LOOKUP = 1,
+  GLOBAL_LOOKUP_INDEX_SCAN = 2,
+  GLOBAL_LOOKUP_DATA_SCAN = 3
 };
 
 struct ObDASScanRtDef : ObDASBaseRtDef
@@ -254,7 +268,11 @@ public:
       row_width_(common::OB_INVALID_ID),
       das_tasks_key_(),
       in_row_cache_threshold_(common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM),
-      row_scan_cnt_(0)
+      row_scan_cnt_(0),
+      task_type_(ObDASScanTaskType::SCAN),
+      das_execute_local_info_(nullptr),
+      das_execute_remote_info_(nullptr),
+      local_dynamic_filter_params_()
   { }
 
   virtual ~ObDASScanRtDef();
@@ -279,7 +297,8 @@ public:
                        K_(scan_op_id),
                        K_(scan_rows_size),
                        K_(das_tasks_key),
-                       K_(in_row_cache_threshold));
+                       K_(in_row_cache_threshold),
+                       K_(local_dynamic_filter_params));
   int init_pd_op(ObExecContext &exec_ctx, const ObDASScanCtDef &scan_ctdef);
 
   storage::ObRow2ExprsProjector *p_row2exprs_projector_;
@@ -314,6 +333,10 @@ public:
   // row_scan_cnt_ indicates the total rows scanned during a table scan, for multi-partition tables, it sums rows
   // from all local partitions and retains its value even after rescan.
   uint64_t row_scan_cnt_;
+  ObDASScanTaskType task_type_;
+  ObDasExecuteLocalInfo *das_execute_local_info_;
+  ObDasExecuteRemoteInfo *das_execute_remote_info_;
+  common::ObSEArray<common::ObDatum, 1> local_dynamic_filter_params_;
 
 private:
   union {
@@ -482,7 +505,8 @@ public:
                        K_(io_read_bytes),
                        K_(ssstore_read_bytes),
                        K_(ssstore_read_row_cnt),
-                       K_(memstore_read_row_cnt));
+                       K_(memstore_read_row_cnt),
+                       K_(das_execute_remote_info));
 private:
   ObChunkDatumStore datum_store_;
   ObChunkDatumStore::Iterator result_iter_;
@@ -497,6 +521,7 @@ private:
   int64_t ssstore_read_bytes_;
   int64_t ssstore_read_row_cnt_;
   int64_t memstore_read_row_cnt_;
+  ObDasExecuteRemoteInfo das_execute_remote_info_;
 };
 
 class ObLocalIndexLookupOp : public common::ObNewRowIterator, public ObIndexLookupOpImpl

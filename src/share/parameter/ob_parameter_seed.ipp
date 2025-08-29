@@ -491,6 +491,10 @@ DEF_STR_WITH_CHECKER(_non_standard_comparison_level, OB_TENANT_PARAMETER, "NONE"
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
         "none, equal, range");
 
+DEF_BOOL(_enable_seq_wrap_around_flush_cache, OB_TENANT_PARAMETER, "True",
+         "Specifies whether to enable clearing cache when sequence wrap around ",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 // tenant memtable consumption related
 DEF_INT(memstore_limit_percentage, OB_CLUSTER_PARAMETER, "0", "[0, 100)",
         "used in calculating the value of MEMSTORE_LIMIT parameter: "
@@ -530,7 +534,7 @@ DEF_INT(_tx_share_memory_limit_percentage, OB_TENANT_PARAMETER, "0", "[0, 100)",
         "This primarily includes user data (MemTable), transaction data (TxData), etc. "
         "When it is set to the default value of 0, it represents dynamic adaptive behavior, "
         "which will be adjusted dynamically based on memstore_limit_percentage. The adjustment rule is: "
-        " _tx_share_memory_limit_percentage = memstore_limit_percentage + 10. "
+        " _tx_share_memory_limit_percentage = max(memstore_limit_percentage, ob_vector_memory_limit_percentage + 5) + 10. "
         "Range: [0, 100)",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_tx_data_memory_limit_percentage, OB_TENANT_PARAMETER, "20", "(0, 100)",
@@ -856,6 +860,12 @@ DEF_TIME(partition_balance_schedule_interval, OB_TENANT_PARAMETER, "2h", "[0s,]"
          "Default value 2h and the value 0s means disable partition balance. "
          "Range: [0s, +∞)",
          ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(ls_scale_out_factor, OB_TENANT_PARAMETER, "1", "[1, 10]",
+        "Parameters can allow tenant to have enough LS to meet the scaling requirements, "
+        "and disabling transfer when scaling can also achieve a flat effect. "
+        "Default value 1. "
+        "Range: [1, +∞)]",
+        ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(balancer_tolerance_percentage, OB_CLUSTER_PARAMETER, "10", "[1, 100)",
         "specifies the tolerance (in percentage) of the unbalance of the disk space utilization "
         "among all units. The average disk space utilization is calculated by dividing "
@@ -898,6 +908,9 @@ DEF_INT(server_balance_cpu_mem_tolerance_percent, OB_CLUSTER_PARAMETER, "5", "[1
         "when the deviation between the average usage and some server load is greater than this tolerance "
         "Range: [1, 100] in percentage",
         ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(enable_database_sharding_none, OB_TENANT_PARAMETER, "False",
+         "Enable automatic creation of sharding none tablegroup for new databases in MySQL mode.",
+         ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_TIME(_lcl_op_interval, OB_CLUSTER_PARAMETER, "30ms", "[0ms, 1s]",
          "Scan interval for every detector node, smaller interval support larger deadlock scale, but cost more system resource. "
@@ -941,7 +954,7 @@ DEF_INT(row_compaction_update_limit, OB_CLUSTER_PARAMETER, "6", "[1, 6400]",
         "maximum update count before trigger row compaction. "
         "Range: [1, 6400]",
         ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(ignore_replay_checksum_error, OB_CLUSTER_PARAMETER, "False",
+DEF_BOOL(ignore_replay_checksum_error, OB_CLUSTER_PARAMETER, "True",
          "specifies whether error raised from the memtable replay checksum validation can be ignored. "
          "Value: True:ignored; False: not ignored",
          ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -970,8 +983,8 @@ DEF_CAP(_parallel_redo_logging_trigger, OB_CLUSTER_PARAMETER, "16M", "[0B,)",
         "size of single transaction's pending redo log to trigger parallel writes redo log. "
         "Range: [0B,+∞)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_TIME(_ob_get_gts_ahead_interval, OB_CLUSTER_PARAMETER, "0s", "[0s, 1s]",
-         "get gts ahead interval. Range: [0s, 1s]",
+DEF_TIME(_ob_get_gts_ahead_interval, OB_CLUSTER_PARAMETER, "0s", "[0s, 100ms]",
+         "get gts ahead interval. Range: [0s, 100ms]",
          ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_tx_debug_level, OB_TENANT_PARAMETER, "0", "[0, 10]",
         "the debug level of transaction module. Range: [0, 10] in integer.",
@@ -980,6 +993,11 @@ DEF_BOOL(_enable_mock_stmt_flush_table, OB_TENANT_PARAMETER, "False",
         "Enable the mock MySQL statement FLUSH TABLE. When enabled, the mock SQL statement will do nothing. "
         "If disabled, executing the mock SQL statement will return the 'NOT_SUPPORTED' error code.",
         ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_TIME(_keepalive_interval, OB_TENANT_PARAMETER, "100ms", "[10ms, 10s]",
+        "This configuration item is used to control the write interval of the keepalive log, "
+        "ensuring that the readable point of the standby database can be advanced in a timely manner.",
+        ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE))
 
 //// rpc config
 DEF_TIME(rpc_timeout, OB_CLUSTER_PARAMETER, "2s",
@@ -1069,8 +1087,7 @@ DEF_BOOL(_enable_ss_replica_prewarm, OB_TENANT_PARAMETER, "True",
          "Value: True:turned on;  False: turned off",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_ss_micro_cache_memory_percentage, OB_TENANT_PARAMETER, "20", "[1,50]",
-        "the percentage of tenant memory size used by microblock_cache in shared_stoarge mode, 0 means follow the "
-        "adjusting value. Range: [1, 50]",
+        "the percentage of tenant memory size used by microblock_cache in shared_stoarge mode, Range: [1, 50]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 //background limit config
 DEF_TIME(_data_storage_io_timeout, OB_CLUSTER_PARAMETER, "10s", "[1s,600s]",
@@ -1126,8 +1143,14 @@ DEF_INT(compaction_low_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
 DEF_INT(compaction_mid_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
         "the current work thread score of middle priority compaction. Range: [0,100] in integer. Especially, 0 means default value",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(mds_compaction_mid_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
+        "the current work thread score of mds middle priority compaction. Range: [0,100] in integer. Especially, 0 means default value",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(compaction_high_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
         "the current work thread score of high priority compaction. Range: [0,100] in integer. Especially, 0 means default value",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(mds_compaction_high_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
+        "the current work thread score of mds high priority compaction. Range: [0,100] in integer. Especially, 0 means default value",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(ha_high_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
         "the current work thread score of high availability high thread. Range: [0,100] in integer. Especially, 0 means default value",
@@ -1143,6 +1166,9 @@ DEF_INT(ddl_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(minor_compact_trigger, OB_TENANT_PARAMETER, "2", "[0,16]",
         "minor_compact_trigger, Range: [0,16] in integer",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(mds_minor_compact_trigger, OB_TENANT_PARAMETER, "2", "[2,16]",
+        "minor_compact_trigger, Range: [2,16] in integer",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_compaction_diagnose, OB_CLUSTER_PARAMETER, "False",
          "enable compaction diagnose function"
@@ -1913,7 +1939,7 @@ DEF_TIME(_transfer_task_retry_interval, OB_TENANT_PARAMETER, "1m", "[0s,)",
 
 // end of transfer
 
-DEF_TIME(dump_data_dictionary_to_log_interval, OB_TENANT_PARAMETER, "24h", "(0s,]",
+DEF_TIME(dump_data_dictionary_to_log_interval, OB_TENANT_PARAMETER, "0s", "[0s,]",
          "data dictionary dump to log(SYS LS) interval"
         "Range: (0s,+∞)",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -2070,6 +2096,9 @@ DEF_CAP(_rebuild_replica_log_lag_threshold, OB_TENANT_PARAMETER, "0M", "[0M,)",
 DEF_BOOL(_enable_in_range_optimization, OB_TENANT_PARAMETER, "True",
         "Enable extract query range optimization for in predicate",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_force_subquery_unnest, OB_TENANT_PARAMETER, "FALSE",
+        "aggressively unnest all subqueries that can be unnested, with correctness guaranteed.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_force_explict_500_malloc, OB_CLUSTER_PARAMETER, "False",
          "Force 500 memory for explicit allocation",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -2166,7 +2195,7 @@ DEF_BOOL_WITH_CHECKER(enable_auto_split, OB_TENANT_PARAMETER, "False",
          "if the auto-partition clause is not used, "
          "this config judge whether to enable auto-partition for creating table.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_CAP_WITH_CHECKER(auto_split_tablet_size, OB_TENANT_PARAMETER, "128M", common::ObConfigAutoSplitTabletSizeChecker,
+DEF_CAP_WITH_CHECKER(auto_split_tablet_size, OB_TENANT_PARAMETER, "2GB", common::ObConfigAutoSplitTabletSizeChecker,
         "[128M,)",
         "when create an auto-partitioned table in \"create table\" syntax or "
         "modify a table as an auto-partitioned table in \"alter table\" syntax,"
@@ -2175,13 +2204,17 @@ DEF_CAP_WITH_CHECKER(auto_split_tablet_size, OB_TENANT_PARAMETER, "128M", common
         "Note that the modification of this config will not affect the created auto-partitioned table."
         "Range: [128M, +∞)",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+#ifdef OB_BUILD_CLOSE_MODULES
 DEF_STR_WITH_CHECKER(global_index_auto_split_policy, OB_TENANT_PARAMETER, "DISTRIBUTED",
+#else
+DEF_STR_WITH_CHECKER(global_index_auto_split_policy, OB_TENANT_PARAMETER, "ALL",
+#endif
          common::ObConfigGlobalIndexAutoSplitPolicyChecker,
          "if the auto-partition clause is not used, "
-         "this config judge whether to enable auto-partition for creating global index."\
+         "this config judge whether to enable auto-partition for global index."\
          "DISTRIBUTED: enable auto-partition for creating global index if tenant has multiple nodes, e.g., multiple primary zones or multiple units;"\
          "ALL: enable auto-partition for creating all global index;"\
-         "OFF: disable auto-partition for creating all global index.",
+         "OFF: disable auto-partition for all global index.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
          "DISTRIBUTED, ALL, OFF");
 DEF_INT(_inlist_rewrite_threshold, OB_TENANT_PARAMETER, "1000", "[1, 2147483647]"
@@ -2255,6 +2288,9 @@ DEF_INT(kv_hbase_client_scanner_timeout_period, OB_TENANT_PARAMETER, "60000", "(
     "OBKV Hbase client scanner query timeout, which unit is milliseconds. Range: (0, +∞) in integer. Especially, 60000 means default value",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_BOOL(_enable_kv_hbase_admin_ddl, OB_TENANT_PARAMETER, "False",
+    "Whether to allow the execution of the DDL function provided by the OBKV-HBase Admin interface. The default value is false.",
+    ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(_enable_optimizer_qualify_filter, OB_TENANT_PARAMETER, "True",
         "Enable extracting qualify filters for window function",
@@ -2490,6 +2526,9 @@ DEF_BOOL(_preset_runtime_bloom_filter_size, OB_CLUSTER_PARAMETER, "False",
          "Whether build runtime bloom filter with row count estimated by optimizor."
          "Value:  True:turned on  False: turned off",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_ddl_worker_isolation, OB_TENANT_PARAMETER, "False",
+         "a switch controling ddl thread isolation",
+         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(_enable_check_trigger_const_variables_assign, OB_TENANT_PARAMETER, "True",
         "Used to control whether an error is reported when assigning a value to a const variable in a trigger under an Oracle tenant",
@@ -2527,7 +2566,8 @@ DEF_INT(_enable_kv_group_commit_ops, OB_TENANT_PARAMETER, "10000", "[0,)",
 
 DEF_INT(ob_vector_memory_limit_percentage, OB_TENANT_PARAMETER, "0",
         "[0,100)",
-        "Used to control the upper limit percentage of memory resources that the vector_index module can use. Range:[0, 100)",
+        "Used to control the upper limit percentage of memory resources that the vector_index module can use. Range:[0, 100)."
+        "The system will adjust automatically if ob_vector_memory_limit_percentage set to 0(by default).",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(enable_ps_parameterize, OB_TENANT_PARAMETER, "True",
@@ -2720,11 +2760,19 @@ DEF_TIME(_ss_schedule_upload_interval, OB_TENANT_PARAMETER, "10m", "[1s,12h]",
          "The execution interval for the inc sstable upload task"
          "Range: [1s, 12h]",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_ss_advance_checkpoint_interval, OB_TENANT_PARAMETER, "10m", "[1m,12h]",
+         "The execution interval for the ss advance checkpoint task"
+         "Range: [1m, 12h]",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(_ss_clog_retention_period, OB_TENANT_PARAMETER, "1d", "[1h,7d]",
          "Minimum retention period for CLOG data in the log service. Default: 1 day. Range: [1h, 7d]",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_palf_kv, OB_CLUSTER_PARAMETER, "True", "specifies the observer enable palf kv",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::READONLY));
+
+DEF_BOOL(_enable_async_load_sys_package, OB_CLUSTER_PARAMETER, "False",
+         "Controls the ability to enable/disable async load sys package",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(_enable_pl_recompile_job, OB_TENANT_PARAMETER, "False",
          "Enable pl recompile task.",
@@ -2763,6 +2811,10 @@ DEF_BOOL(_enable_kvcache_hazard_pointer, OB_CLUSTER_PARAMETER, "True",
          "use hazard pointer(default) or reference counting to manage memory in kvcache",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::READONLY))
 
+DEF_BOOL(_px_worker_share_plan_enabled, OB_CLUSTER_PARAMETER, "True",
+        "Enable parallel execution optimization by sharing plan and only serializing necessary expressions.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_INT(_restore_io_max_retry_count, OB_CLUSTER_PARAMETER, "3", "[0, 64]",
         "max retry times for restore when encounting io error"
         "Range: [0,64] in integer",
@@ -2800,6 +2852,7 @@ DEF_INT(ob_result_cache_evict_percentage, OB_TENANT_PARAMETER, "90", "[0, 100]",
 DEF_CAP(ob_deterministic_udf_cache_max_size, OB_TENANT_PARAMETER, "16M", "[0B,)",
         "deternimistic cache can use max size memory(in bytes). if it's zero, disable cache",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_CAP(_storage_stream_rpc_buffer_size, OB_TENANT_PARAMETER, "2M", "[2M,128M]"
          "the buffer size of storage stream rpc"
          "Range: [2M, 128M]",
@@ -2885,6 +2938,47 @@ DEF_STR(_object_storage_condition_put_mode, OB_CLUSTER_PARAMETER, "none",
         "\"none\": no conditional put."
         "\"if-match\": conditional put with if-match.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE), "none, if-match");
+
+DEF_INT_WITH_CHECKER(default_micro_block_format_version, OB_TENANT_PARAMETER, "1",
+                     common::ObConfigDefaultMicroBlockFormatVersionChecker,
+                     "specify the default micro block format version when create table",
+                     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_BOOL(_prexec_prepare_with_params, OB_TENANT_PARAMETER, "False",
          "Control the prexec protocol prepare with or without parameters during the prepare phase.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_disable_record_outrow_lob_in_clog, OB_TENANT_PARAMETER, "False",
+        "Whether to force outrow lob data to be written to CLOG for OBCDC synchronization when lob columns are not updated",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(_external_table_mem_cache_page_size, OB_TENANT_PARAMETER, "512KB", "[0,)",
+       "page size of the external table memory cache. Range: [0,+∞)",
+       ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_session_temp_table_clean_interval, OB_TENANT_PARAMETER, "10m", "[0s,)",
+        "schedule interval for session temporary table clean task. "
+        "Range: [0s, +∞). Default: 10m",
+        ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_data_based_sqc_dop, OB_TENANT_PARAMETER, "True",
+         "Assign sqc dop based on data size.",
+          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_more_aggressive_dynamic_worker, OB_TENANT_PARAMETER, "True",
+        "specifies whether worker count increases more aggressive.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_extend_sql_plan_monitor_metrics, OB_TENANT_PARAMETER, "True",
+        "Extend sql plan monitor metrics.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_insertup_column_store_opt, OB_TENANT_PARAMETER, "True",
+        "Enable or disable insert up optimization path for column store.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_sql_ccl_rule, OB_TENANT_PARAMETER, "True",
+         "Enable or disable sql ccl rule.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(approx_count_distinct_precision, OB_TENANT_PARAMETER, "10", "[4, 16]",
+        "specify the result accuracy of approx_count_distinct",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

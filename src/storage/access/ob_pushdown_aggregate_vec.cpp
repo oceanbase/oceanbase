@@ -33,28 +33,44 @@ int init_sum_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                        int32 *tmp_res_size = NULL);
 int init_approx_count_distinct_synopsis_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                                                   ObIAllocator &allocator, IAggregate *&agg);
-// TODO@fengshang, need to support sum_opnsize vec 2.0
 int init_sum_opnsize_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                                ObIAllocator &allocator, IAggregate *&agg);
 int init_rb_build_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                             ObIAllocator &allocator, IAggregate *&agg);
+int init_rb_or_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                         ObIAllocator &allocator, IAggregate *&agg);
+int init_rb_and_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                          ObIAllocator &allocator, IAggregate *&agg);
+int init_count_sum_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                             ObIAllocator &allocator, IAggregate *&agg);
 }
 }
 }
 namespace storage
 {
 using namespace aggregate;
-ObAggCellVec::ObAggCellVec(const int64_t agg_idx, const ObAggCellVecBasicInfo &basic_info, common::ObIAllocator &allocator)
-  : ObAggCellBase(allocator),
-    agg_idx_(agg_idx),
-    basic_info_(basic_info),
-    aggregate_(nullptr),
-    padding_allocator_("ObStorageAgg", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-    default_datum_(),
-    agg_row_id_(OB_INVALID_CS_ROW_ID)
+
+ObAggCellVec::ObAggCellVec(
+  const int64_t agg_idx,
+  const ObAggCellVecBasicInfo &basic_info,
+  const share::ObAggrParamProperty &param_prop,
+  common::ObIAllocator &allocator)
+    : ObAggCellBase(allocator, param_prop),
+      agg_idx_(agg_idx),
+      basic_info_(basic_info),
+      aggregate_(nullptr),
+      padding_allocator_("ObStorageAgg", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      default_datum_(),
+      eval_infos_(),
+      output_expr_(nullptr),
+      agg_row_id_(OB_INVALID_CS_ROW_ID),
+      single_row_count_(0),
+      aggr_with_expr_(false),
+      enable_rich_format_(false)
 {
   result_datum_.set_null();
   default_datum_.set_nop();
+  eval_infos_.set_attr(ObMemAttr(MTL_ID(), "ObStorageAgg"));
 }
 
 ObAggCellVec::~ObAggCellVec()
@@ -62,69 +78,23 @@ ObAggCellVec::~ObAggCellVec()
   reset();
 }
 
-int ObAggCellVec::init()
+int ObAggCellVec::init(const ObTableAccessParam &param)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
-    LOG_WARN("ObMaxAggCellVec has been inited", K(ret));
+    LOG_WARN("ObAggCellVec has been inited", K(ret));
+  } else if (OB_FAIL(init_aggregate())) {
+    LOG_WARN("Fail to init aggregate", K(ret));
+  } else if (OB_FAIL(set_aggr_with_expr())) {
+    LOG_WARN("Fail to set aggr with expr", K(ret));
+  } else if (OB_FAIL(set_output_expr(param))){
+    LOG_WARN("fail to set output expr", K(ret));
+  } else if (OB_FAIL(set_eval_infos(param))) {
+    LOG_WARN("fail to set eval infos", K(ret));
   } else {
-    switch (agg_type_) {
-      case PD_COUNT: {
-        if (OB_FAIL(helper::init_count_aggregate(basic_info_.agg_ctx_, agg_idx_, allocator_, aggregate_))) {
-          LOG_WARN("Failed to init Count aggregate", K(ret), K_(agg_idx));
-        }
-        break;
-      }
-      case PD_MIN: {
-        if (OB_FAIL(helper::init_min_aggregate(basic_info_.agg_ctx_, agg_idx_, allocator_, aggregate_))) {
-          LOG_WARN("Failed to init MIN aggregate", K(ret), K_(agg_idx));
-        }
-        break;
-      }
-      case PD_MAX: {
-        if (OB_FAIL(helper::init_max_aggregate(basic_info_.agg_ctx_, agg_idx_, allocator_, aggregate_))) {
-          LOG_WARN("Failed to init MAX aggregate", K(ret), K_(agg_idx));
-        }
-        break;
-      }
-      case PD_HLL: {
-        if (OB_FAIL(helper::init_approx_count_distinct_synopsis_aggregate(basic_info_.agg_ctx_, agg_idx_, allocator_, aggregate_))) {
-          LOG_WARN("Failed to init HLL aggregate", K(ret), K_(agg_idx));
-        }
-        break;
-      }
-      case PD_SUM_OP_SIZE: {
-        if (OB_FAIL(helper::init_sum_opnsize_aggregate(basic_info_.agg_ctx_, agg_idx_, allocator_, aggregate_))) {
-          LOG_WARN("Failed to init SumOpNSize aggregate", K(ret), K_(agg_idx));
-        }
-        break;
-      }
-      case PD_SUM: {
-        if (OB_FAIL(helper::init_sum_aggregate(basic_info_.agg_ctx_, agg_idx_, allocator_, aggregate_))) {
-          LOG_WARN("Failed to init SUM aggregate", K(ret), K_(agg_idx));
-        }
-        break;
-      }
-      case PD_RB_BUILD: {
-        if (OB_FAIL(helper::init_rb_build_aggregate(basic_info_.agg_ctx_, agg_idx_, allocator_, aggregate_))) {
-          LOG_WARN("Failed to init rb build aggregate", K(ret), K_(agg_idx));
-        }
-        break;
-      }
-      default: {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Unexpected aggregate type", K(ret), K_(agg_type));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_ISNULL(aggregate_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("aggregate is null", K(ret), KP_(aggregate));
-      } else {
-        is_inited_ = true;
-      }
-    }
+    enable_rich_format_ = param.iter_param_.use_new_format();
+    is_inited_ = true;
   }
   return ret;
 }
@@ -139,19 +109,153 @@ void ObAggCellVec::reset()
   }
   padding_allocator_.reset();
   default_datum_.set_nop();
+  single_row_count_ = 0;
+  agg_row_id_ = OB_INVALID_CS_ROW_ID;
 }
 
 void ObAggCellVec::reuse()
 {
   ObAggCellBase::reuse();
   padding_allocator_.reuse();
+  single_row_count_ = 0;
   agg_row_id_ = OB_INVALID_CS_ROW_ID;
+}
+
+#define INIT_AGGREGATE_CASE(op_type, func_name)                                                                   \
+  case (op_type): {                                                                                               \
+    if (OB_FAIL(helper::init_##func_name##_aggregate(basic_info_.agg_ctx_, agg_idx_, allocator_, aggregate_))) {  \
+      LOG_WARN("Failed to init "#func_name" aggregate", K(ret), K_(agg_idx), K(op_type));                         \
+    }                                                                                                             \
+    break;                                                                                                        \
+  }
+
+int ObAggCellVec::init_aggregate()
+{
+  int ret = OB_SUCCESS;
+  switch (agg_type_) {
+    INIT_AGGREGATE_CASE(PD_COUNT, count)
+    INIT_AGGREGATE_CASE(PD_MIN, min)
+    INIT_AGGREGATE_CASE(PD_MAX, max)
+    INIT_AGGREGATE_CASE(PD_HLL, approx_count_distinct_synopsis)
+    INIT_AGGREGATE_CASE(PD_SUM_OP_SIZE, sum_opnsize)
+    INIT_AGGREGATE_CASE(PD_SUM, sum)
+    INIT_AGGREGATE_CASE(PD_COUNT_SUM, count_sum)
+    INIT_AGGREGATE_CASE(PD_RB_BUILD, rb_build)
+    INIT_AGGREGATE_CASE(PD_RB_OR, rb_or)
+    INIT_AGGREGATE_CASE(PD_RB_AND, rb_and)
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected aggregate type", K(ret), K_(agg_type));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(aggregate_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("aggregate is null", K(ret), KP_(aggregate));
+  }
+  return ret;
+}
+#undef INIT_AGGREGATE_CASE
+
+int ObAggCellVec::set_aggr_with_expr()
+{
+  int ret = OB_SUCCESS;
+  aggr_with_expr_ = false;
+  sql::ObExpr *agg_expr = get_agg_expr();
+  if (OB_ISNULL(agg_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null aggr expr", K(ret), KPC(agg_expr));
+  } else if (agg_expr->arg_cnt_ > 0) {
+    if (OB_ISNULL(agg_expr->args_[0])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null aggr expr arg", K(ret), KPC(agg_expr->args_[0]));
+    } else if (agg_expr->args_[0]->arg_cnt_ > 0) {
+      aggr_with_expr_ = true;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_UNLIKELY(aggr_with_expr_ && (PD_SUM_OP_SIZE == agg_type_ || PD_HLL == agg_type_))) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported aggregate pushdown with expr", K(ret), K_(agg_type), K_(aggr_with_expr));
+    }
+  }
+  return ret;
+}
+
+int ObAggCellVec::set_output_expr(const ObTableAccessParam &param)
+{
+  int ret = OB_SUCCESS;
+  output_expr_ = nullptr;
+  if (OB_COUNT_AGG_PD_COLUMN_ID == basic_info_.col_offset_ ) {
+  } else if (OB_ISNULL(param.output_exprs_) || OB_ISNULL(param.iter_param_.out_cols_project_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect table access param", K(ret), K(param));
+  } else {
+    for (int64_t i = 0; i < param.output_exprs_->count(); ++i) {
+      if (nullptr == param.output_sel_mask_ || param.output_sel_mask_->at(i)) {
+        if (basic_info_.col_offset_ == param.iter_param_.out_cols_project_->at(i)) {
+          output_expr_ = param.output_exprs_->at(i);
+          break;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAggCellVec::set_eval_infos(const ObTableAccessParam &param)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObExpr *, 4> eval_exprs;
+  const sql::ObAggrInfo &aggr_info = basic_info_.agg_ctx_.aggr_infos_.at(agg_idx_);
+  sql::ObPushdownOperator *op = param.get_op();
+  if (OB_ISNULL(op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null op", K(ret), KP(op), K(param));
+  } else {
+    for (int i = 0; OB_SUCC(ret) && i < aggr_info.param_exprs_.count(); ++i) {
+      if (OB_FAIL(find_eval_exprs(aggr_info.param_exprs_.at(i), op->expr_spec_.calc_exprs_, eval_exprs))) {
+        LOG_WARN("failed to find eval exprs", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && eval_exprs.count() > 0) {
+      FOREACH_CNT_X(e, eval_exprs, OB_SUCC(ret)) {
+        if (OB_FAIL(eval_infos_.push_back(&(*e)->get_eval_info(op->get_eval_ctx())))) {
+          LOG_WARN("fail to push back eval info", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        clear_evaluated_infos();
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAggCellVec::find_eval_exprs(
+    ObExpr *expr,
+    const ObIArray<ObExpr*> &calc_exprs,
+    ObIArray<ObExpr*> &eval_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (is_contain(calc_exprs, expr)) {
+    if (OB_FAIL(eval_exprs.push_back(expr))) {
+      LOG_WARN("failed to push back expr", K(ret));
+    }
+    for (uint32_t i = 0; OB_SUCC(ret) && i < expr->arg_cnt_; ++i) {
+      if (OB_FAIL(find_eval_exprs(expr->args_[i], calc_exprs, eval_exprs))) {
+        LOG_WARN("failed to find evaluated datums", K(ret));
+      }
+    }
+  }
+  return ret;
 }
 
 int ObAggCellVec::eval(
     blocksstable::ObStorageDatum &datum,
-    const int64_t row_count,
-    const int64_t agg_row_idx/*0*/)
+    const int64_t row_count/*1*/,
+    const int64_t agg_row_idx/*0*/,
+    const int64_t agg_batch_size/*0*/)
 {
   UNUSED(row_count);
   int ret = OB_SUCCESS;
@@ -162,12 +266,17 @@ int ObAggCellVec::eval(
   } else if (OB_UNLIKELY(nullptr == row)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Invalid arguments to aggregate one row", K(ret), K(row));
-  } else if (datum.is_null()) {
+  } else if (datum.is_null() && is_param_null_prop()) {
   } else if (OB_FAIL(pad_column_if_need(datum))) {
     LOG_WARN("Failed to pad column", K(ret), KPC(this));
   } else {
     char *agg_cell = basic_info_.agg_ctx_.row_meta().locate_cell_payload(agg_idx_, row);
-    if (OB_FAIL(aggregate_->add_one_row(basic_info_.agg_ctx_, 0, 1, datum.is_null(),
+    const int64_t batch_size = 0 == agg_batch_size ? basic_info_.brs_.size_ : agg_batch_size;
+    if (aggr_with_expr_) {
+      if (OB_FAIL(fill_single_row_with_expr(datum, agg_row_idx, batch_size))) {
+        LOG_WARN("Failed to fill single row", K(ret), K(datum), KP(agg_row_idx));
+      }
+    } else if (OB_FAIL(aggregate_->add_one_row(basic_info_.agg_ctx_, 0, 1, datum.is_null(),
                                       datum.ptr_, datum.len_, agg_idx_, agg_cell))) {
       LOG_WARN("Failed to add one row in aggregate", K(ret), K_(agg_idx), K(datum), KP(agg_cell));
     }
@@ -182,7 +291,8 @@ int ObAggCellVec::eval_batch(
     const int32_t *row_ids,
     const int64_t row_count,
     const int64_t row_offset, /*0*/
-    const int64_t agg_row_idx /*0*/)
+    const int64_t agg_row_idx, /*0*/
+    const bool need_eval /*true*/)
 {
   int ret = OB_SUCCESS;
   AggrRowPtr row = static_cast<char *>(basic_info_.rows_[agg_row_idx]->get_extra_payload(basic_info_.row_meta_));
@@ -193,21 +303,19 @@ int ObAggCellVec::eval_batch(
   } else if (OB_UNLIKELY(nullptr == row || row_count < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument to aggregate batch rows", K(ret), K(row), K(row_count));
-  } else if (nullptr != reader && can_pushdown_decoder(reader, col_offset, row_ids, row_count)) {
-    ObPushdownRowIdCtx pd_row_id_ctx(row_ids, row_count);
-    if (OB_FAIL(reader->get_aggregate_result(col_offset, pd_row_id_ctx, *this))) {
-      LOG_WARN("Failed to get aggregate result", K(ret));
-    }
   } else if (OB_LIKELY(brs.size_ > 0)) {
     sql::EvalBound bound(brs.size_, row_offset, row_offset + row_count, brs.all_rows_active_);
-    CK(OB_NOT_NULL(brs.skip_));
     char *agg_cell = basic_info_.agg_ctx_.row_meta().locate_cell_payload(agg_idx_, row);
-    if (OB_FAIL(aggregate_->add_batch_rows(basic_info_.agg_ctx_, agg_idx_, *brs.skip_, bound, agg_cell))) {
+    CK(OB_NOT_NULL(brs.skip_));
+    if (OB_FAIL(ret)) {
+    } else if (need_eval && OB_FAIL(eval_aggr_param(brs, bound))) {
+      LOG_WARN("fail to eval aggr param", K(ret), K(brs), K(bound));
+    } else if (OB_FAIL(aggregate_->add_batch_rows(basic_info_.agg_ctx_, agg_idx_, *brs.skip_, bound, agg_cell))) {
       LOG_WARN("Failed to add batch rows in max cell", K(ret), KP(agg_cell));
     }
   }
   LOG_DEBUG("[PD_AGGREGATE] aggregate batch rows", K(ret), K(row_count), K(row_offset), K(agg_row_idx),
-                K(reader), K(col_offset), K(row_ids), K(brs), KPC(this));
+                KP(reader), K(col_offset), K(need_eval), KP(row_ids), K(brs), KPC(this));
   return ret;
 }
 
@@ -221,6 +329,8 @@ int ObAggCellVec::agg_pushdown_decoder(
   } else if (can_pushdown_decoder(reader, col_offset, pd_row_id_ctx.row_ids_, pd_row_id_ctx.row_cap_)) {
     if (OB_FAIL(reader->get_aggregate_result(col_offset, pd_row_id_ctx, *this))) {
       LOG_WARN("Failed to get aggregate result", K(ret), K(col_offset), K(pd_row_id_ctx), KPC(this));
+    } else if (OB_FAIL(aggregate_batch_single_rows(0/*agg_row_idx*/))) {
+      LOG_WARN("Failed to aggreatge batch single rows", K(ret));
     } else {
       agg_row_id_ = pd_row_id_ctx.bound_row_id_;
     }
@@ -250,7 +360,7 @@ int ObAggCellVec::eval_index_info(
     } else if (OB_UNLIKELY(skip_index_datum_.is_null() ||  skip_index_datum_is_prefix_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected skip index datum", K(ret), K(index_info), K_(skip_index_datum), K_(skip_index_datum_is_prefix));
-    } else if (OB_FAIL(eval(skip_index_datum_, 1))) {
+    } else if (OB_FAIL(eval(skip_index_datum_, 1/*row_count*/, agg_row_idx, 1/*agg_batch_size*/))) {
       LOG_WARN("Failed to eval skip index datum", K(ret), K_(skip_index_datum));
     }
   }
@@ -277,16 +387,20 @@ int ObAggCellVec::eval_batch_in_group_by(
     const ObBatchRows &brs = basic_info_.brs_;
     const sql::ObAggrInfo &agg_info = basic_info_.agg_ctx_.aggr_infos_.at(agg_idx_);
     const bool read_distinct_val = is_group_by_col || is_default_datum;
+    sql::EvalBound bound(brs.size_, 0, count, brs.all_rows_active_);
+    if (!read_distinct_val && OB_FAIL(eval_aggr_param(brs, bound))) {
+      LOG_WARN("fail to eval aggr param", K(ret), K(brs), K(bound));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
       const uint32_t distinct_ref = refs[i];
       const uint32_t dictinct_datum_offset = is_default_datum ? 0 : refs[i];
       if (read_distinct_val) {
         blocksstable::ObStorageDatum storage_datum;
         storage_datum.shallow_copy_from_datum(datums[dictinct_datum_offset]);
-        if (OB_FAIL(eval(storage_datum, 1, distinct_ref))) {
+        if (OB_FAIL(eval(storage_datum, 1/*row_count*/, distinct_ref, 1/*agg_batch_size*/))) {
           LOG_WARN("Failed to eval one datum", K(ret), K(storage_datum));
         }
-      } else if (OB_FAIL(eval_batch(nullptr, basic_info_.col_offset_, nullptr, 1, i, distinct_ref))) {
+      } else if (OB_FAIL(eval_batch(nullptr, basic_info_.col_offset_, nullptr, 1, i, distinct_ref, false))) {
         LOG_WARN("Failed to eval one row in group by", K(ret), K(i), K(distinct_ref));
       }
     }
@@ -318,21 +432,121 @@ int ObAggCellVec::collect_result(
     LOG_WARN("Failed to collect results", K(ret));
   } else {
     sql::ObEvalCtx &eval_ctx = basic_info_.agg_ctx_.eval_ctx_;
-    sql::ObExpr *output_expr = agg_info.param_exprs_.count() > 0 ? agg_info.param_exprs_.at(0) : nullptr;
-    if (fill_output && output_expr != nullptr
-        && OB_FAIL(fill_output_expr_if_need(output_expr, group_by_col_expr, eval_ctx, batch_size))) {
-      LOG_WARN("Failed to fill output expr", K(ret), K(fill_output), K(group_by_col_expr), K(output_expr), K(batch_size));
+    if (fill_output && output_expr_ != nullptr
+        && OB_FAIL(fill_output_expr_if_need(output_expr_, group_by_col_expr, eval_ctx, batch_size))) {
+      LOG_WARN("Failed to fill output expr", K(ret), K(fill_output), K(group_by_col_expr), K_(output_expr), K(batch_size));
     } else {
       sql::ObEvalInfo &eval_info = agg_info.expr_->get_eval_info(eval_ctx);
       eval_info.evaluated_ = true;
-      if (nullptr != output_expr) {
-        sql::ObEvalInfo &output_eval_info = output_expr->get_eval_info(eval_ctx);
+      if (nullptr != output_expr_) {
+        sql::ObEvalInfo &output_eval_info = output_expr_->get_eval_info(eval_ctx);
         output_eval_info.evaluated_ = true;
       }
     }
   }
   LOG_DEBUG("[PD_AGGREGATE] collect result", K(ret), K(fill_output), K(group_by_col_expr),
               K(output_start_idx), K(row_start_idx), K(batch_size), KPC(this));
+  return ret;
+}
+
+int ObAggCellVec::eval_aggr_param(const ObBatchRows &brs, const sql::EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  if (aggr_with_expr_ || !enable_rich_format_) {
+    const sql::ObAggrInfo &aggr_info = basic_info_.agg_ctx_.aggr_infos_.at(agg_idx_);
+    sql::ObEvalCtx &eval_ctx = basic_info_.agg_ctx_.eval_ctx_;
+    sql::ObEvalCtx::BatchInfoScopeGuard batch_guard(eval_ctx);
+    batch_guard.set_batch_idx(bound.start());
+    for (int i = 0; OB_SUCC(ret) && i < aggr_info.param_exprs_.count(); ++i) {
+      const sql::ObExpr *param_expr = aggr_info.param_exprs_.at(i);
+      if (OB_ISNULL(param_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected null param expr", K(ret), KP(param_expr));
+      } else if (OB_FAIL(param_expr->eval_vector(eval_ctx, *brs.skip_, bound))) {
+        LOG_WARN("eval aggr param failed", K(ret), KPC(param_expr));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAggCellVec::fill_single_row_with_expr(
+    blocksstable::ObStorageDatum &datum,
+    const int64_t agg_row_idx,
+    const int64_t batch_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(output_expr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected null output expr", K(ret), KP_(output_expr));
+  } else if (OB_UNLIKELY(!aggr_with_expr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected status, no expr on aggregate", K(ret), K_(aggr_with_expr));
+  } else {
+    sql::ObEvalCtx &eval_ctx = basic_info_.agg_ctx_.eval_ctx_;
+    if (enable_rich_format_) {
+      const VectorFormat format = output_expr_->get_format(eval_ctx);
+      if (single_row_count_ == 0) {
+        clear_evaluated_infos();
+        if (OB_FAIL(storage::init_expr_vector_header(*output_expr_, eval_ctx,
+                    batch_size, output_expr_->get_default_res_format()))) {
+          LOG_WARN("fail to init vector header", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (VEC_DISCRETE == format) {
+        char* buf = output_expr_->get_str_res_mem(eval_ctx, datum.len_, single_row_count_);
+        if (OB_ISNULL(buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("Failed to get res mem", K(ret), KPC_(output_expr));
+        } else {
+          MEMCPY(buf, datum.ptr_, datum.len_);
+          ObDatum tmp_datum(buf, datum.len_, datum.is_null());
+          static_cast<ObDiscreteFormat *>(output_expr_->get_vector(eval_ctx))->set_datum(single_row_count_, tmp_datum);
+        }
+      } else {
+        static_cast<ObFixedLengthBase *>(output_expr_->get_vector(eval_ctx))->set_datum(single_row_count_, datum);
+      }
+    } else {
+      common::ObDatum *output_datums = nullptr;
+      if (single_row_count_ == 0) {
+        clear_evaluated_infos();
+      }
+      if (OB_ISNULL(output_datums = output_expr_->locate_batch_datums(eval_ctx))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected null datums", K(ret), KPC_(output_expr));
+      } else if (OB_FAIL(output_datums[single_row_count_].from_storage_datum(datum, output_expr_->obj_datum_map_))) {
+        LOG_WARN("failed to from storage datum", K(ret), K_(single_row_count), K(datum), K(output_datums[single_row_count_]));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (++single_row_count_ >= batch_size) {
+        if (OB_FAIL(aggregate_batch_single_rows(agg_row_idx))) {
+          LOG_WARN("Failed to aggregate batch single rows", K(ret), K(agg_row_idx), K_(single_row_count), K(batch_size));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAggCellVec::aggregate_batch_single_rows(const int64_t agg_row_idx)
+{
+  int ret = OB_SUCCESS;
+  if (aggr_with_expr_ && single_row_count_ > 0) {
+    LOG_TRACE("all projected single row", K(ret), K("new format rows"),
+      K(sql::ToStrVectorHeader(*output_expr_, basic_info_.agg_ctx_.eval_ctx_, nullptr, sql::EvalBound(single_row_count_, true))));
+    if (OB_FAIL(eval_batch(nullptr, /*reader*/
+                           basic_info_.col_offset_,
+                           nullptr, /*row_ids*/
+                           single_row_count_,
+                           0,  /*row_offset*/
+                           agg_row_idx))) {
+      LOG_WARN("Failed to eval batch rows", K(ret));
+    } else {
+      single_row_count_ = 0;
+    }
+  }
   return ret;
 }
 
@@ -344,12 +558,24 @@ int ObAggCellVec::fill_output_expr_if_need(
 {
   int ret = OB_SUCCESS;
   if (nullptr == group_by_col_expr || output_expr != group_by_col_expr) {
-    if (OB_FAIL(storage::init_expr_vector_header(*output_expr, eval_ctx,
-              eval_ctx.max_batch_size_, output_expr->get_default_res_format()))) {
-      LOG_WARN("Failed to init vector header", K(ret), KPC(output_expr), K_(eval_ctx.max_batch_size));
+    if (enable_rich_format_) {
+      if (OB_FAIL(storage::init_expr_vector_header(*output_expr, eval_ctx,
+                eval_ctx.max_batch_size_, output_expr->get_default_res_format()))) {
+        LOG_WARN("Failed to init vector header", K(ret), KPC(output_expr), K_(eval_ctx.max_batch_size));
+      } else {
+        for (int32_t i = 0; i < batch_size; ++i) {
+          output_expr->get_vector(eval_ctx)->set_null(i);
+        }
+      }
     } else {
-      for (int32_t i = 0; i < batch_size; ++i) {
-        output_expr->get_vector(eval_ctx)->set_null(i);
+      common::ObDatum *output_datums = nullptr;
+      if (OB_ISNULL(output_datums = output_expr_->locate_batch_datums(eval_ctx))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected null datums", K(ret), KPC_(output_expr));
+      } else {
+        for (int32_t i = 0; i < batch_size; ++i) {
+          output_datums[i].set_null();
+        }
       }
     }
   }
@@ -430,11 +656,19 @@ int ObAggCellVec::read_agg_datum(
         break;
       }
       case PD_MIN: {
-        meta.col_type_ = blocksstable::SK_IDX_MIN;
+        if (is_monotonic_asc()) {
+          meta.col_type_ = blocksstable::SK_IDX_MIN;
+        } else if (is_monotonic_desc()) {
+          meta.col_type_ = blocksstable::SK_IDX_MAX;
+        }
         break;
       }
       case PD_MAX: {
-        meta.col_type_ = blocksstable::SK_IDX_MAX;
+        if (is_monotonic_asc()) {
+          meta.col_type_ = blocksstable::SK_IDX_MAX;
+        } else if (is_monotonic_desc()) {
+          meta.col_type_ = blocksstable::SK_IDX_MIN;
+        }
         break;
       }
       case PD_SUM: {
@@ -451,7 +685,7 @@ int ObAggCellVec::read_agg_datum(
       if (OB_FAIL(agg_row_reader_->init(index_info.agg_row_buf_, index_info.agg_buf_size_))) {
         LOG_WARN("Fail to init aggregate row reader", K(ret));
       } else if (OB_FAIL(agg_row_reader_->read(meta, skip_index_datum_, skip_index_datum_is_prefix_))) {
-        LOG_WARN("Failed read aggregate row", K(ret), K(meta));
+        LOG_WARN("Failed read aggregate row", K(ret), K(meta), K_(basic_info));
       }
     }
   }
@@ -505,9 +739,10 @@ int ObAggCellVec::get_def_datum(const blocksstable::ObStorageDatum *&default_dat
 ObCountAggCellVec::ObCountAggCellVec(
     const int64_t agg_idx,
     const ObAggCellVecBasicInfo &basic_info,
+    const share::ObAggrParamProperty &param_prop,
     common::ObIAllocator &allocator,
     const bool exclude_null)
-      : ObAggCellVec(agg_idx, basic_info, allocator),
+      : ObAggCellVec(agg_idx, basic_info, param_prop, allocator),
         row_id_buffer_(nullptr),
         exclude_null_(exclude_null)
 {
@@ -523,11 +758,11 @@ void ObCountAggCellVec::reset()
   }
 }
 
-int ObCountAggCellVec::init()
+int ObCountAggCellVec::init(const ObTableAccessParam &param)
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
-  if (OB_FAIL(ObAggCellVec::init())) {
+  if (OB_FAIL(ObAggCellVec::init(param))) {
     LOG_WARN("fail to init ObAggCellVec", K(ret));
   } else if (need_get_row_ids()) {
     if (OB_ISNULL(buf = allocator_.alloc(sizeof(int32_t) * AGGREGATE_STORE_BATCH_SIZE))) {
@@ -543,8 +778,10 @@ int ObCountAggCellVec::init()
 int ObCountAggCellVec::eval(
     blocksstable::ObStorageDatum &datum,
     const int64_t row_count,
-    const int64_t agg_row_idx/*0*/)
+    const int64_t agg_row_idx/*0*/,
+    const int64_t agg_batch_size/*0*/)
 {
+  UNUSED(agg_batch_size);
   int ret = OB_SUCCESS;
   AggrRowPtr row = static_cast<char *>(basic_info_.rows_[agg_row_idx]->get_extra_payload(basic_info_.row_meta_));
   if (IS_NOT_INIT) {
@@ -556,7 +793,14 @@ int ObCountAggCellVec::eval(
   } else {
     char *agg_cell = basic_info_.agg_ctx_.row_meta().locate_cell_payload(agg_idx_, row);
     int64_t &data = *reinterpret_cast<int64_t *>(agg_cell);
-    if (!exclude_null_) {
+    if (!is_param_null_prop()) {
+      const int64_t prev_data = data;
+      if (OB_FAIL(ObAggCellVec::eval(datum, 1/*row_count*/, agg_row_idx, 1/*agg_batch_size*/))) {
+        LOG_WARN("Failed to count single value", K(ret), K(datum));
+      } else if (data > prev_data) {
+        data += row_count - 1;
+      }
+    } else if (!exclude_null_) {
       data += row_count;
     } else if (!datum.is_null()) {
       data += row_count;
@@ -573,7 +817,8 @@ int ObCountAggCellVec::eval_batch(
     const int32_t *row_ids,
     const int64_t row_count,
     const int64_t row_offset, /*0*/
-    const int64_t agg_row_idx/*0*/)
+    const int64_t agg_row_idx, /*0*/
+    const bool need_eval /*true*/)
 {
   int ret = OB_SUCCESS;
   AggrRowPtr row = static_cast<char *>(basic_info_.rows_[agg_row_idx]->get_extra_payload(basic_info_.row_meta_));
@@ -588,8 +833,8 @@ int ObCountAggCellVec::eval_batch(
     int64_t &data = *reinterpret_cast<int64_t *>(agg_cell);
     if (!need_get_row_ids()) {
       data += row_count;
-    } else if (nullptr == reader) { // row scan or group by pushdown
-      if (OB_FAIL(ObAggCellVec::eval_batch(reader, col_offset, row_ids, row_count, row_offset, agg_row_idx))) {
+    } else if (nullptr == reader || !is_param_null_prop()) { // row scan or group by pushdown
+      if (OB_FAIL(ObAggCellVec::eval_batch(reader, col_offset, row_ids, row_count, row_offset, agg_row_idx, need_eval))) {
         LOG_WARN("Failed to aggregate batch rows", K(ret));
       }
     } else { // block scan and only has count aggregate in one column
@@ -604,7 +849,7 @@ int ObCountAggCellVec::eval_batch(
       }
     }
     LOG_DEBUG("[PD_COUNT_AGGREGATE] aggregate eval batch rows", K(ret), K(col_offset), K(row_count),
-                K(row_offset), K(agg_row_idx), K(data), K(reader), K(row_ids), KPC(this));
+                K(row_offset), K(agg_row_idx), K(need_eval), K(data), K(reader), KP(row_ids), KPC(this));
   }
   return ret;
 }
@@ -735,6 +980,12 @@ int ObCountAggCellVec::eval_batch_in_group_by(
   } else if (OB_UNLIKELY(nullptr == refs || distinct_cnt <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid arguments", K(ret), K(refs), K(distinct_cnt));
+  } else if (!is_param_null_prop()) {
+    if (OB_FAIL(ObAggCellVec::eval_batch_in_group_by(
+        datums, count, refs, distinct_cnt, is_group_by_col, is_default_datum))) {
+      LOG_WARN("Failed to eval batch rows in group by", K(ret), KP(datums), KP(refs),
+        K(count), K(distinct_cnt), K(is_group_by_col), K(is_default_datum));
+    }
   } else if (!exclude_null_) {
     for (int i = 0; i < count; ++i) {
       ADD_ONE_ROW(refs[i]);
@@ -757,10 +1008,22 @@ int ObCountAggCellVec::eval_batch_in_group_by(
     if (OB_ISNULL(project_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected aggregate or project expr", KPC(project_expr));
-    } else {
+    } else if (enable_rich_format_) {
       for (int64_t i = 0; i < count; ++i) {
         if (!project_expr->get_vector(eval_ctx)->is_null(i)) {
           ADD_ONE_ROW(refs[i]);
+        }
+      }
+    } else {
+      common::ObDatum *output_datums = nullptr;
+      if (OB_ISNULL(output_datums = project_expr->locate_batch_datums(eval_ctx))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected null datums", K(ret), KPC(project_expr));
+      } else {
+        for (int64_t i = 0; i < count; ++i) {
+          if (!output_datums[i].is_null()) {
+            ADD_ONE_ROW(refs[i]);
+          }
         }
       }
     }
@@ -779,24 +1042,38 @@ int ObCountAggCellVec::copy_output_rows(const int32_t start_offset, const int32_
   if (OB_ISNULL(agg_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected aggregate or output expr", K(ret), KPC(agg_expr));
+  } else if (!is_param_null_prop()) {
+    if (OB_FAIL(ObAggCellVec::copy_output_rows(start_offset, end_offset))) {
+      LOG_WARN("Failed to copy output rows", K(ret), K(start_offset), K(end_offset));
+    }
   } else if (exclude_null_) {
     sql::ObExpr *project_expr = get_project_expr();
+    common::ObDatum *output_datums = nullptr;
     if (OB_ISNULL(project_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected aggregate or project expr", K(ret), KPC(project_expr));
-    } else {
+    } else if (enable_rich_format_) {
       if (lib::is_oracle_mode()) {
         for (int64_t i = start_offset; i < end_offset; ++i) {
-          project_expr->get_vector(eval_ctx)->is_null(i)
-            ? agg_expr->get_vector(eval_ctx)->set_number(i, common::number::ObNumber::get_zero())
-            : agg_expr->get_vector(eval_ctx)->set_number(i, common::number::ObNumber::get_positive_one());
+          agg_expr->get_vector(eval_ctx)->set_number(i, project_expr->get_vector(eval_ctx)->is_null(i)
+            ? common::number::ObNumber::get_zero() : common::number::ObNumber::get_positive_one());
         }
       } else {
         for (int64_t i = start_offset; i < end_offset; ++i) {
-          project_expr->get_vector(eval_ctx)->is_null(i)
-            ? agg_expr->get_vector(eval_ctx)->set_int(i, 0)
-            : agg_expr->get_vector(eval_ctx)->set_int(i, 1);
+          agg_expr->get_vector(eval_ctx)->set_int(i, project_expr->get_vector(eval_ctx)->is_null(i) ? 0 : 1);
         }
+      }
+    } else if (OB_ISNULL(output_datums = project_expr->locate_batch_datums(eval_ctx))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected null output datums", K(ret), K_(enable_rich_format), KPC(project_expr));
+    } else if (lib::is_oracle_mode()) {
+      for (int64_t i = start_offset; i < end_offset; ++i) {
+        agg_expr->get_vector(eval_ctx)->set_number(i, output_datums[i].is_null()
+          ? common::number::ObNumber::get_zero() : common::number::ObNumber::get_positive_one());
+      }
+    } else {
+      for (int64_t i = start_offset; i < end_offset; ++i) {
+        agg_expr->get_vector(eval_ctx)->set_int(i, output_datums[i].is_null() ? 0 : 1);
       }
     }
   } else if (lib::is_oracle_mode()) {
@@ -821,10 +1098,10 @@ int ObCountAggCellVec::can_use_index_info(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObAggCellVec not inited", K(ret));
-  } else if (!exclude_null_) {
+  } else if (!exclude_null_ && is_param_null_prop()) {
     can_agg = true;
   } else {
-    if (index_info.has_agg_data() && ObAggCellVec::can_use_index_info()) {
+    if (index_info.has_agg_data() && can_use_index_info()) {
       if (OB_FAIL(read_agg_datum(index_info, col_index))) {
         LOG_WARN("Failed to read agg datum", K(ret), K_(basic_info), K(col_index), K(index_info));
       } else {
@@ -840,8 +1117,9 @@ int ObCountAggCellVec::can_use_index_info(
 ObMaxAggCellVec::ObMaxAggCellVec(
     const int64_t agg_idx,
     const ObAggCellVecBasicInfo &basic_info,
+    const share::ObAggrParamProperty &param_prop,
     common::ObIAllocator &allocator)
-      : ObAggCellVec(agg_idx, basic_info, allocator)
+      : ObAggCellVec(agg_idx, basic_info, param_prop, allocator)
 {
   agg_type_ = PD_MAX;
 }
@@ -849,8 +1127,9 @@ ObMaxAggCellVec::ObMaxAggCellVec(
 ObMinAggCellVec::ObMinAggCellVec(
     const int64_t agg_idx,
     const ObAggCellVecBasicInfo &basic_info,
+    const share::ObAggrParamProperty &param_prop,
     common::ObIAllocator &allocator)
-      : ObAggCellVec(agg_idx, basic_info, allocator)
+      : ObAggCellVec(agg_idx, basic_info, param_prop, allocator)
 {
   agg_type_ = PD_MIN;
 }
@@ -858,8 +1137,9 @@ ObMinAggCellVec::ObMinAggCellVec(
 ObSumAggCellVec::ObSumAggCellVec(
     const int64_t agg_idx,
     const ObAggCellVecBasicInfo &basic_info,
+    const share::ObAggrParamProperty &param_prop,
     common::ObIAllocator &allocator)
-      : ObAggCellVec(agg_idx, basic_info, allocator),
+      : ObAggCellVec(agg_idx, basic_info, param_prop, allocator),
         cast_datum_()
 {
   agg_type_ = PD_SUM;
@@ -875,18 +1155,22 @@ void ObSumAggCellVec::reuse()
 int ObSumAggCellVec::eval(
     blocksstable::ObStorageDatum &datum,
     const int64_t row_count,
-    const int64_t agg_row_idx/*0*/)
+    const int64_t agg_row_idx/*0*/,
+    const int64_t agg_batch_size/*0*/)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObSumAggCellVec not inited", K(ret));
-  } else if (datum.is_null()) {
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < row_count; ++i) {
-      if (OB_FAIL(ObAggCellVec::eval(datum, i, agg_row_idx))) {
+      if (OB_FAIL(ObAggCellVec::eval(datum, 1/*row_count*/, agg_row_idx, agg_batch_size))) {
         LOG_WARN("Failed to sum single value", K(ret), K(datum));
       }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(aggregate_batch_single_rows(agg_row_idx))) {
+      LOG_WARN("Failed to aggregate batch single rows", K(ret), K(agg_row_idx));
     }
   }
   return ret;
@@ -945,19 +1229,30 @@ int ObSumAggCellVec::eval_index_info(
     if (OB_UNLIKELY(eval_datum->is_null())){
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected skip index datum is null", K(ret), K(index_info));
-    } else if (OB_FAIL(eval(*eval_datum, 1))) {
-      LOG_WARN("Failed to eval skip index datum", K(ret), K_(skip_index_datum));
+    } else if (OB_FAIL(eval(*eval_datum, 1/*row_count*/, agg_row_idx, 1/*agg_batch_size*/))) {
+      LOG_WARN("Failed to eval skip index datum", K(ret), K_(skip_index_datum), K(agg_row_idx));
     }
   }
   LOG_DEBUG("[PD_AGGREGATE] aggregate index info", K(ret), KPC(eval_datum), K(is_cg), K(agg_row_idx), KPC(this));
   return ret;
 }
 
+ObCountSumAggCellVec::ObCountSumAggCellVec(
+    const int64_t agg_idx,
+    const ObAggCellVecBasicInfo &basic_info,
+    const share::ObAggrParamProperty &param_prop,
+    common::ObIAllocator &allocator)
+      : ObSumAggCellVec(agg_idx, basic_info, param_prop, allocator)
+{
+  agg_type_ = PD_COUNT_SUM;
+}
+
 ObHyperLogLogAggCellVec::ObHyperLogLogAggCellVec(
     const int64_t agg_idx,
     const ObAggCellVecBasicInfo &basic_info,
+    const share::ObAggrParamProperty &param_prop,
     common:: ObIAllocator &allocator)
-      : ObAggCellVec(agg_idx, basic_info, allocator)
+      : ObAggCellVec(agg_idx, basic_info, param_prop, allocator)
 {
   agg_type_ = PD_HLL;
 }
@@ -965,19 +1260,20 @@ ObHyperLogLogAggCellVec::ObHyperLogLogAggCellVec(
 ObSumOpNSizeAggCellVec::ObSumOpNSizeAggCellVec(
     const int64_t agg_idx,
     const ObAggCellVecBasicInfo &basic_info,
+    const share::ObAggrParamProperty &param_prop,
     common::ObIAllocator &allocator,
     const bool exclude_null)
-      : ObAggCellVec(agg_idx, basic_info, allocator),
+      : ObAggCellVec(agg_idx, basic_info, param_prop, allocator),
         op_nsize_(0),
         exclude_null_(exclude_null)
 {
   agg_type_ = PD_SUM_OP_SIZE;
 }
 
-int ObSumOpNSizeAggCellVec::init()
+int ObSumOpNSizeAggCellVec::init(const ObTableAccessParam &param)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObAggCellVec::init())) {
+  if (OB_FAIL(ObAggCellVec::init(param))) {
     LOG_WARN("Failed to init agg cell", K(ret));
   } else if (OB_FAIL(set_op_nsize())) {
     LOG_WARN("Failed to get op size", K(ret));
@@ -1027,13 +1323,15 @@ int ObSumOpNSizeAggCellVec::get_datum_op_nsize(blocksstable::ObStorageDatum &dat
 int ObSumOpNSizeAggCellVec::eval(
     blocksstable::ObStorageDatum &datum,
     const int64_t row_count,
-    const int64_t agg_row_idx/*0*/)
+    const int64_t agg_row_idx/*0*/,
+    const int64_t agg_batch_size/*0*/)
 {
+  UNUSED(agg_batch_size);
   int ret = OB_SUCCESS;
   AggrRowPtr row = static_cast<char *>(basic_info_.rows_[agg_row_idx]->get_extra_payload(basic_info_.row_meta_));
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ObCountAggCellVec not inited", K(ret));
+    LOG_WARN("ObSumOpNSizeAggCellVec not inited", K(ret));
   } else if (OB_ISNULL(row)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null row", K(ret));
@@ -1060,13 +1358,14 @@ int ObSumOpNSizeAggCellVec::eval_batch(
     const int32_t *row_ids,
     const int64_t row_count,
     const int64_t row_offset, /*0*/
-    const int64_t agg_row_idx/*0*/)
+    const int64_t agg_row_idx, /*0*/
+    const bool need_eval /*true*/)
 {
   int ret = OB_SUCCESS;
   AggrRowPtr row = static_cast<char *>(basic_info_.rows_[agg_row_idx]->get_extra_payload(basic_info_.row_meta_));
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ObCountAggCellVec not inited", K(ret));
+    LOG_WARN("ObSumOpNSizeAggCellVec not inited", K(ret));
   } else if (OB_UNLIKELY(row_count < 0 || nullptr == row)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument to aggregate batch rows", K(ret), K(row_count), KP(row), KPC(this));
@@ -1076,7 +1375,7 @@ int ObSumOpNSizeAggCellVec::eval_batch(
     if (!need_get_row_ids()) {
       data += row_count * op_nsize_;
     } else if (nullptr == reader || !is_fixed_length_type()) { // nullptr == reader means row scan or group by pushdown
-      if (OB_FAIL(ObAggCellVec::eval_batch(reader, col_offset, row_ids, row_count, row_offset, agg_row_idx))) {
+      if (OB_FAIL(ObAggCellVec::eval_batch(reader, col_offset, row_ids, row_count, row_offset, agg_row_idx, need_eval))) {
         LOG_WARN("Failed to aggregate batch rows", K(ret));
       }
     } else {
@@ -1088,7 +1387,7 @@ int ObSumOpNSizeAggCellVec::eval_batch(
       }
     }
     LOG_DEBUG("[PD_SUMOPNSIZE_AGGREGATE] aggregate eval batch rows", K(ret), K(col_offset), K(row_count),
-                K(row_offset), K(agg_row_idx), K(data), K(reader), K(row_ids), KPC(this));
+                K(row_offset), K(agg_row_idx), K(need_eval), K(data), K(reader), KP(row_ids), KPC(this));
   }
   return ret;
 }
@@ -1102,7 +1401,7 @@ int ObSumOpNSizeAggCellVec::eval_index_info(
   AggrRowPtr row = static_cast<char *>(basic_info_.rows_[agg_row_idx]->get_extra_payload(basic_info_.row_meta_));
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ObCountAggCellVec not inited", K(ret));
+    LOG_WARN("ObSumOpNSizeAggCellVec not inited", K(ret));
   } else if (OB_ISNULL(row) || OB_UNLIKELY(!is_cg && (!index_info.can_blockscan() ||
                                                       index_info.is_left_border() || index_info.is_right_border()))) {
     ret = OB_ERR_UNEXPECTED;
@@ -1151,94 +1450,73 @@ int ObSumOpNSizeAggCellVec::can_use_index_info(
   return ret;
 }
 
-ObRbBuildAggCellVec::ObRbBuildAggCellVec(
+ObRbAggCellVec::ObRbAggCellVec(
     const int64_t agg_idx,
     const ObAggCellVecBasicInfo &basic_info,
-    common::ObIAllocator &allocator)
-      : ObAggCellVec(agg_idx, basic_info, allocator)
+    const share::ObAggrParamProperty &param_prop,
+    common::ObIAllocator &allocator,
+    ObPDAggType agg_type)
+      : ObAggCellVec(agg_idx, basic_info, param_prop, allocator)
 {
-  agg_type_ = PD_RB_BUILD;
+  agg_type_ = agg_type;
 }
+
+#define INIT_AGG_CELL(agg_type, cell_type, ...)                                                                                   \
+  case agg_type: {                                                                                                                \
+    if (OB_ISNULL(buf = allocator_.alloc(sizeof(Ob##cell_type##AggCellVec))) ||                                                   \
+        OB_ISNULL(agg_cell = new (buf) Ob##cell_type##AggCellVec(agg_idx, basic_info, param_prop, allocator_, ##__VA_ARGS__))) {  \
+      ret = OB_ALLOCATE_MEMORY_FAILED;                                                                                            \
+      LOG_WARN("Failed to alloc memory for "#cell_type" agg cell", K(ret));                                                       \
+    }                                                                                                                             \
+    break;                                                                                                                        \
+  }
 
 int ObPDAggVecFactory::alloc_cell(
     const ObAggCellVecBasicInfo &basic_info,
-    ObAggCellVec *&agg_cell,
     const int64_t agg_idx,
-    const bool exclude_null)
+    const ObTableAccessParam &param,
+    const bool exclude_null,
+    ObAggCellVec *&agg_cell)
 {
   int ret = OB_SUCCESS;
-  void *buf = nullptr;
-  agg_cell = nullptr;
-  const sql::ObExprOperatorType type = basic_info.agg_ctx_.aggr_infos_.at(agg_idx).real_aggr_type_;
-  switch (type) {
-    case T_FUN_COUNT: {
-      if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObCountAggCellVec))) ||
-          OB_ISNULL(agg_cell = new (buf) ObCountAggCellVec(agg_idx, basic_info, allocator_, exclude_null))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("Failed to alloc memory for COUNT agg cell", K(ret));
+  const bool use_aggr_param_prop = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0;
+  if (OB_UNLIKELY(use_aggr_param_prop
+      && (nullptr == param.iter_param_.aggr_param_props_ || param.iter_param_.aggr_param_props_->count() <= agg_idx))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid aggregate param properties", K(ret), K(agg_idx), K(param));
+  } else {
+    void *buf = nullptr;
+    agg_cell = nullptr;
+    const sql::ObExprOperatorType type = basic_info.agg_ctx_.aggr_infos_.at(agg_idx).real_aggr_type_;
+    const share::ObAggrParamProperty mock_param_prop(share::Monotonicity::ASC, true);
+    const share::ObAggrParamProperty &param_prop = use_aggr_param_prop ? param.iter_param_.aggr_param_props_->at(agg_idx) : mock_param_prop;
+    switch (type) {
+      INIT_AGG_CELL(T_FUN_COUNT, Count, exclude_null)
+      INIT_AGG_CELL(T_FUN_MAX, Max)
+      INIT_AGG_CELL(T_FUN_INNER_PREFIX_MAX, Max)
+      INIT_AGG_CELL(T_FUN_MIN, Min)
+      INIT_AGG_CELL(T_FUN_INNER_PREFIX_MIN, Min)
+      INIT_AGG_CELL(T_FUN_SUM, Sum)
+      INIT_AGG_CELL(T_FUN_COUNT_SUM, CountSum)
+      INIT_AGG_CELL(T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS, HyperLogLog)
+      INIT_AGG_CELL(T_FUN_SUM_OPNSIZE, SumOpNSize, exclude_null)
+      INIT_AGG_CELL(T_FUN_SYS_RB_BUILD_AGG, Rb, PD_RB_BUILD)
+      INIT_AGG_CELL(T_FUN_SYS_RB_AND_AGG, Rb, PD_RB_AND)
+      INIT_AGG_CELL(T_FUN_SYS_RB_OR_AGG, Rb, PD_RB_OR)
+      default: {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("Not supported aggregate type", K(ret), K(type));
       }
-      break;
     }
-    case T_FUN_INNER_PREFIX_MAX:
-    case T_FUN_MAX: {
-      if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObMaxAggCellVec))) ||
-          OB_ISNULL(agg_cell = new (buf) ObMaxAggCellVec(agg_idx, basic_info, allocator_))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("Failed to alloc memory for MAX agg cell", K(ret));
-      }
-      break;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(agg_cell->init(param))) {
+      LOG_WARN("Failed to init agg cell", K(ret));
     }
-    case T_FUN_INNER_PREFIX_MIN:
-    case T_FUN_MIN: {
-      if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObMinAggCellVec))) ||
-          OB_ISNULL(agg_cell = new (buf) ObMinAggCellVec(agg_idx, basic_info, allocator_))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("Failed to alloc memory for MIN agg cell", K(ret));
-      }
-      break;
-    }
-    case T_FUN_SUM: {
-      if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObSumAggCellVec))) ||
-          OB_ISNULL(agg_cell = new (buf) ObSumAggCellVec(agg_idx, basic_info, allocator_))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("Failed to alloc memory for SUM agg cell", K(ret));
-      }
-      break;
-    }
-    case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS: {
-      if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObHyperLogLogAggCellVec))) ||
-          OB_ISNULL(agg_cell = new (buf) ObHyperLogLogAggCellVec(agg_idx, basic_info, allocator_))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("Failed to alloc memory for HyperLogLog agg cell", K(ret));
-      }
-      break;
-    }
-    case T_FUN_SUM_OPNSIZE: {
-      if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObSumOpNSizeAggCellVec))) ||
-          OB_ISNULL(agg_cell = new (buf) ObSumOpNSizeAggCellVec(agg_idx, basic_info, allocator_, exclude_null))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("Failed to alloc memory for SumOpNSize agg cell", K(ret));
-      }
-      break;
-    }
-    case T_FUN_SYS_RB_BUILD_AGG:
-      if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObRbBuildAggCellVec))) ||
-          OB_ISNULL(agg_cell = new (buf) ObRbBuildAggCellVec(agg_idx, basic_info, allocator_))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("Failed to alloc memory for rb build agg cell", K(ret));
-      }
-      break;
-    default: {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("Not supported aggregate type", K(ret), K(type));
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(agg_cell->init())) {
-    LOG_WARN("Failed to init agg cell", K(ret));
+    LOG_TRACE("[PD_AGGREGATE] init agg cell", KPC(agg_cell));
   }
   return ret;
 }
+#undef INIT_AGG_CELL
 
 void ObPDAggVecFactory::release(common::ObIArray<ObAggCellVec *> &agg_cells)
 {
@@ -1265,7 +1543,9 @@ ObGroupByCellVec::ObGroupByCellVec(
       agg_cell_factory_vec_(allocator),
       eval_ctx_(eval_ctx),
       tmp_datum_allocator_("PDGroupBy", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-      group_by_datum_allocator_("PDGroupBy", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
+      group_by_datum_allocator_("PDGroupBy", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      has_aggr_with_expr_(false),
+      enable_rich_format_(false)
 {
 }
 
@@ -1304,13 +1584,12 @@ void ObGroupByCellVec::reuse()
 int ObGroupByCellVec::init(const ObTableAccessParam &param, const ObTableAccessContext &context, sql::ObEvalCtx &eval_ctx)
 {
   int ret = OB_SUCCESS;
-  const common::ObIArray<share::schema::ObColumnParam *> *out_cols_param = param.iter_param_.get_col_params();
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObGroupByCellVec has been inited", K(ret));
   } else if (OB_UNLIKELY(nullptr == param.iter_param_.group_by_cols_project_ ||
                   0 == param.iter_param_.group_by_cols_project_->count() ||
-                  nullptr == out_cols_param)) {
+                  nullptr == param.iter_param_.get_col_params())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param.iter_param_));
   } else {
@@ -1347,9 +1626,32 @@ int ObGroupByCellVec::init(const ObTableAccessParam &param, const ObTableAccessC
         LOG_WARN("Failed to alloc memory", K(ret));
       } else {
         refs_buf_ = reinterpret_cast<uint32_t*>(buf);
+        enable_rich_format_ = param.iter_param_.use_new_format();
         is_inited_ = true;
       }
     }
+  }
+  return ret;
+}
+
+int ObGroupByCellVec::init_for_single_row(const ObTableAccessParam &param, const ObTableAccessContext &context, sql::ObEvalCtx &eval_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ObGroupByCellVec has been inited", K(ret));
+  } else if (OB_UNLIKELY(nullptr == param.iter_param_.group_by_cols_project_ ||
+                  0 == param.iter_param_.group_by_cols_project_->count() ||
+                  nullptr == param.iter_param_.get_col_params())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument", K(ret), K(param.iter_param_));
+  } else if (OB_FAIL(pd_agg_ctx_.init(param, 1))) {
+    LOG_WARN("Failed to init agg context", K(ret), K(param));
+  } else if (OB_FAIL(init_agg_cells(param, context, eval_ctx, false))) {
+    LOG_WARN("Failed to init agg cells", K(ret));
+  } else {
+    enable_rich_format_ = param.iter_param_.use_new_format();
+    is_inited_ = true;
   }
   return ret;
 }
@@ -1359,7 +1661,7 @@ int ObGroupByCellVec::init_vector_header(
     const bool init_group_by_col)
 {
   int ret = OB_SUCCESS;
-  if (init_group_by_col) {
+  if (init_group_by_col && enable_rich_format_) {
     if (OB_FAIL(storage::init_expr_vector_header(*group_by_col_expr_, eval_ctx_,
                 eval_ctx_.max_batch_size_, group_by_col_expr_->get_default_res_format()))) {
       LOG_WARN("Failed to init vector for group by column output expr", KPC_(group_by_col_expr), K(eval_ctx_.max_batch_size_));
@@ -1404,8 +1706,7 @@ int ObGroupByCellVec::copy_output_row(const int64_t batch_idx, const ObTableIter
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGroupByCellVec is not inited", K(ret), K_(is_inited));
-  } else if (batch_idx == 1 && OB_FAIL(init_exprs_uniform_header(iter_param.aggregate_exprs_,
-                                            eval_ctx_, eval_ctx_.max_batch_size_))) {
+  } else if (batch_idx == 1 && OB_FAIL(init_vector_header(iter_param.aggregate_exprs_, false))) {
     LOG_WARN("Failed to init uniform vector", K(ret), K(iter_param));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < agg_cells_.count(); ++i) {
@@ -1436,6 +1737,24 @@ int ObGroupByCellVec::copy_output_rows(const int64_t batch_idx, const ObTableIte
   }
   if (OB_SUCC(ret)) {
     set_distinct_cnt(batch_idx);
+  }
+  return ret;
+}
+
+int ObGroupByCellVec::copy_single_output_row(const ObTableIterParam &iter_param, sql::ObEvalCtx &ctx)
+{
+  UNUSED(ctx);
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObGroupByCellVec is not inited", K(ret), K_(is_inited));
+  } else if (OB_FAIL(storage::init_exprs_vector_header(iter_param.aggregate_exprs_, eval_ctx_, 1))) {
+    LOG_WARN("Failed to init vector header", K(ret), K(iter_param));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < agg_cells_.count(); ++i) {
+    if (OB_FAIL(agg_cells_.at(i)->copy_output_rows(0, 1))) {
+      LOG_WARN("Failed to copy output row", K(ret));
+    }
   }
   return ret;
 }
@@ -1540,13 +1859,26 @@ int ObGroupByCellVec::output_extra_group_by_result(int64_t &count, const ObTable
     LOG_WARN("Failed to init vector header", K(ret), K(iter_param));
   } else {
     count = MIN(row_capacity_, distinct_cnt_ - projected_cnt_);
-    const VectorFormat format = group_by_col_expr_->get_format(eval_ctx_);
     common::ObDatum *col_datums = group_by_col_datum_buf_->get_datums();
-    for (int64_t i = 0; i < count; ++i) {
-      if (VEC_DISCRETE == format) {
-        static_cast<ObDiscreteFormat *>(group_by_col_expr_->get_vector(eval_ctx_))->set_datum(i, col_datums[projected_cnt_ + i]);
-      } else {
-        static_cast<ObFixedLengthBase *>(group_by_col_expr_->get_vector(eval_ctx_))->set_datum(i, col_datums[projected_cnt_ + i]);
+    if (enable_rich_format_) {
+      const VectorFormat format = group_by_col_expr_->get_format(eval_ctx_);
+      for (int64_t i = 0; i < count; ++i) {
+        if (VEC_DISCRETE == format) {
+          static_cast<ObDiscreteFormat *>(group_by_col_expr_->get_vector(eval_ctx_))->set_datum(i, col_datums[projected_cnt_ + i]);
+        } else {
+          static_cast<ObFixedLengthBase *>(group_by_col_expr_->get_vector(eval_ctx_))->set_datum(i, col_datums[projected_cnt_ + i]);
+        }
+      }
+    } else {
+      common::ObDatum *output_datums = nullptr;
+      if (OB_ISNULL(output_datums = group_by_col_expr_->locate_batch_datums(eval_ctx_))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected null datums", K(ret), KPC_(group_by_col_expr));
+      }
+      for(int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+        if (OB_FAIL(output_datums[i].from_storage_datum(col_datums[projected_cnt_ + i], group_by_col_expr_->obj_datum_map_))) {
+          LOG_WARN("failed to from storage datum", K(ret), K(i), K_(projected_cnt), K(col_datums[projected_cnt_ + i]), K(output_datums[i]));
+        }
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < agg_cells_.count(); ++i) {
@@ -1560,7 +1892,7 @@ int ObGroupByCellVec::output_extra_group_by_result(int64_t &count, const ObTable
         ret = OB_ITER_END;
       }
     }
-    LOG_DEBUG("[GROUP BY PUSHDOWN] output group by result", K(ret), K(format), K(count), K_(projected_cnt), K_(distinct_cnt));
+    LOG_DEBUG("[GROUP BY PUSHDOWN] output group by result", K(ret), K(count), K_(projected_cnt), K_(distinct_cnt));
   }
   return ret;
 }
@@ -1571,9 +1903,9 @@ int ObGroupByCellVec::pad_column_in_group_by(const int64_t row_cap)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGroupByCellVec is not inited", K(ret), K_(is_inited));
-  } else if (nullptr != group_by_col_param_ &&
-      group_by_col_param_->get_meta_type().is_fixed_len_char_type() &&
-      OB_FAIL(storage::pad_on_rich_format_columns(
+  } else if (nullptr != group_by_col_param_ && group_by_col_param_->get_meta_type().is_fixed_len_char_type()) {
+    if (enable_rich_format_) {
+      if (OB_FAIL(storage::pad_on_rich_format_columns(
               group_by_col_param_->get_accuracy(),
               group_by_col_param_->get_meta_type().get_collation_type(),
               row_cap,
@@ -1581,7 +1913,22 @@ int ObGroupByCellVec::pad_column_in_group_by(const int64_t row_cap)
               padding_allocator_,
               *group_by_col_expr_,
               eval_ctx_))) {
-    LOG_WARN("Failed pad on rich format columns", K(ret), KPC_(group_by_col_expr));
+        LOG_WARN("Failed pad on rich format columns", K(ret), KPC_(group_by_col_expr));
+      }
+    } else {
+      common::ObDatum *group_by_col_datums = group_by_col_expr_->locate_batch_datums(eval_ctx_);
+      if (OB_ISNULL(group_by_col_datums)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected null col datums", K(ret), KPC_(group_by_col_expr));
+      } else if (OB_FAIL(storage::pad_on_datums(
+                  group_by_col_param_->get_accuracy(),
+                  group_by_col_param_->get_meta_type().get_collation_type(),
+                  padding_allocator_,
+                  row_cap,
+                  group_by_col_datums))) {
+        LOG_WARN("Failed pad on datums", K(ret), K(row_cap), KPC(group_by_col_datums), KPC_(group_by_col_param));
+      }
+    }
   }
   return ret;
 }
@@ -1637,10 +1984,29 @@ int ObGroupByCellVec::init_agg_cells(
     if (OB_SUCC(ret)) {
       ObAggCellVecBasicInfo basic_info(pd_agg_ctx_.agg_ctx_, pd_agg_ctx_.rows_, pd_agg_ctx_.row_meta_, pd_agg_ctx_.batch_rows_,
                                        col_offset, col_param, is_pad_char_to_full_length(context.sql_mode_));
-      if (OB_FAIL(agg_cell_factory_vec_.alloc_cell(basic_info, agg_cell, i, exclude_null))) {
+      if (OB_FAIL(agg_cell_factory_vec_.alloc_cell(basic_info, i, param, exclude_null, agg_cell))) {
         LOG_WARN("Failed to alloc aggregate cell", K(ret));
       } else if (OB_FAIL(agg_cells_.push_back(agg_cell))) {
         LOG_WARN("Failed to push agg cell", K(ret));
+      } else {
+        has_aggr_with_expr_ |= agg_cell->is_aggr_with_expr();
+      }
+    }
+  }
+  return ret;
+}
+
+int ObGroupByCellVec::clear_evaluated_infos()
+{
+  int ret = OB_SUCCESS;
+  if (has_aggr_with_expr_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < agg_cells_.count(); ++i) {
+      ObAggCellVec *agg_cell = agg_cells_.at(i);
+      if (OB_ISNULL(agg_cell)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected null agg cell", K(ret), K(i), K_(agg_cells));
+      } else {
+        agg_cell->clear_evaluated_infos();
       }
     }
   }

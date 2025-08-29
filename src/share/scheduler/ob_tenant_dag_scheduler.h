@@ -408,9 +408,9 @@ public:
 
   const static char *ObIDagStatusStr[];
 
-  static const int64_t MergeDagPrioCnt = 3;
+  static const int64_t MergeDagPrioCnt = 5;
   static const ObDagPrio::ObDagPrioEnum MergeDagPrio[];
-  static const int64_t MergeDagTypeCnt = 7;
+  static const int64_t MergeDagTypeCnt = 9;
   static const ObDagType::ObDagTypeEnum MergeDagType[];
 
   explicit ObIDag(const ObDagType::ObDagTypeEnum type);
@@ -463,6 +463,8 @@ public:
       diagnose_type = ObDiagnoseTabletType::TYPE_TX_TABLE_MERGE;
     } else if (ObDagType::ObDagTypeEnum::DAG_TYPE_MDS_MINI_MERGE == type) {
       diagnose_type = ObDiagnoseTabletType::TYPE_MDS_MINI_MERGE;
+    } else if (ObDagType::ObDagTypeEnum::DAG_TYPE_MDS_MINOR_MERGE == type) {
+      diagnose_type = ObDiagnoseTabletType::TYPE_MDS_MINOR_MERGE;
     } else if (is_batch_exec_dag(type)) {
       diagnose_type = ObDiagnoseTabletType::TYPE_BATCH_EXECUTE;
     }
@@ -568,7 +570,7 @@ public:
   DISABLE_COPY_ASSIGN(ObIDag);
 public:
   virtual bool operator == (const ObIDag &other) const = 0;
-  virtual int64_t hash() const = 0;
+  virtual uint64_t hash() const = 0;
   virtual int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const = 0;
   virtual int init_by_param(const ObIDagInitParam *param)
@@ -718,7 +720,7 @@ public:
   virtual bool is_valid() const = 0;
   virtual int start_running() = 0;
   virtual bool operator == (const ObIDagNet &other) const = 0;
-  virtual int64_t hash() const = 0;
+  virtual uint64_t hash() const = 0;
   virtual int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const = 0;
   virtual int fill_comment(char *buf, const int64_t buf_len) const = 0;
@@ -1096,7 +1098,9 @@ private:
   {
     return ObDagPrio::DAG_PRIO_COMPACTION_HIGH == priority_
         || ObDagPrio::DAG_PRIO_COMPACTION_MID == priority_
-        || ObDagPrio::DAG_PRIO_COMPACTION_LOW == priority_;
+        || ObDagPrio::DAG_PRIO_COMPACTION_LOW == priority_
+        || ObDagPrio::DAG_PRIO_MDS_COMPACTION_HIGH == priority_
+        || ObDagPrio::DAG_PRIO_MDS_COMPACTION_MID == priority_;
   }
   int sys_task_start(ObIDag &dag);
   // Please lock prio_lock_ before calling the function with _ suffix
@@ -1271,6 +1275,7 @@ public:
       const compaction::ObTabletMergeDagParam &param,
       ObIArray<share::ObScnRange> &merge_range_array);
   int diagnose_minor_exe_dag(
+      const ObDagPrio::ObDagPrioEnum dag_prio /* maybe mds minor dag or minor dag */,
       const compaction::ObMergeDagHash *merge_dag_info,
       compaction::ObDiagnoseTabletCompProgress &progress);
   int get_max_major_finish_time(const int64_t version, int64_t &estimated_finish_time);

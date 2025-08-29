@@ -63,6 +63,8 @@ int ObMvccValueIterator::init(ObMvccAccessCtx &ctx,
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_LOCK_FOR_READ_SLEEP);
+
 int ObMvccValueIterator::lock_for_read_(const ObQueryFlag &flag)
 {
   int ret = OB_SUCCESS;
@@ -70,6 +72,13 @@ int ObMvccValueIterator::lock_for_read_(const ObQueryFlag &flag)
   ObMvccTransNode *iter = value_->get_list_head();
   // the resolved mvcc read position
   version_iter_ = NULL;
+
+#ifdef ENABLE_DEBUG_LOG
+  if (OB_UNLIKELY(OB_SUCCESS != ERRSIM_LOCK_FOR_READ_SLEEP)) {
+    ob_usleep(5_ms);
+    TRANS_LOG(WARN, "lock for read injection sleep finish", K(ret));
+  }
+#endif
 
   while (OB_SUCC(ret) && NULL != iter && NULL == version_iter_) {
     if (OB_FAIL(lock_for_read_inner_(flag, iter))) {

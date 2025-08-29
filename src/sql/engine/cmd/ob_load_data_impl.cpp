@@ -445,6 +445,10 @@ int ObLoadDataBase::pre_parse_lines(ObLoadFileBuffer &buffer,
         UNUSED(param);
         return OB_SUCCESS;
       }
+      int operator()(ObCSVGeneralParser::HandleBatchLinesParam param) {
+        UNUSED(param);
+        return OB_SUCCESS;
+      }
     };
     struct Functor unused_handler;
     if (OB_FAIL(parser.scan(ptr, end, line_count, NULL, NULL, unused_handler, err_records, is_last_buf))) {
@@ -1013,6 +1017,10 @@ int ObLoadDataSPImpl::exec_shuffle(int64_t task_id, ObShuffleTaskHandle *handle)
 
     struct Functor {
       int operator()(ObCSVGeneralParser::HandleOneLineParam param) {
+        UNUSED(param);
+        return OB_SUCCESS;
+      }
+      int operator()(ObCSVGeneralParser::HandleBatchLinesParam param) {
         UNUSED(param);
         return OB_SUCCESS;
       }

@@ -773,7 +773,7 @@ int ObAdminSetConfig::verify_config(obrpc::ObAdminSetConfigArg &arg)
     } else {
       ObConfigItem *ci = nullptr;
       ObString config_name(item->name_.size(), item->name_.ptr());
-      bool is_default_table_organization_config = (0 == config_name.case_compare(DEFAULT_TABLE_ORAGNIZATION));
+      bool is_default_table_organization_config = (0 == config_name.case_compare(DEFAULT_TABLE_ORGANIZATION));
       if (OB_SYS_TENANT_ID != item->exec_tenant_id_ || item->tenant_name_.size() > 0) {
         // tenants(user or sys tenants) modify tenant level configuration
         item->want_to_set_tenant_config_ = true;
@@ -2393,6 +2393,7 @@ int ObAdminFlushCache::execute(const obrpc::ObAdminFlushCacheArg &arg)
           fc_arg.sql_id_ = arg.sql_id_;
           fc_arg.is_fine_grained_ = arg.is_fine_grained_;
           fc_arg.schema_id_ = arg.schema_id_;
+          fc_arg.sequence_name_ = arg.sequence_name_;
           for(int64_t j=0; OB_SUCC(ret) && j<arg.db_ids_.count(); j++) {
             if (OB_FAIL(fc_arg.push_database(arg.db_ids_.at(j)))) {
               LOG_WARN("fail to add db ids", KR(ret));

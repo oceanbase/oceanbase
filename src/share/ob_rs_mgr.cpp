@@ -281,6 +281,10 @@ int ObRsMgr::get_all_rs_list_from_configure_(common::ObIArray<common::ObAddr> &s
   ObSEArray<ObRootAddr, OB_MAX_MEMBER_NUMBER> readonly_list; // not used
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check inner stat faild", KR(ret));
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+  } else if (OB_FAIL(server_list.push_back(GCONF.self_addr_))) {
+    LOG_WARN("failed to push_back", KR(ret), K(GCONF.self_addr_), K(server_list));
+#else
   } else if (OB_FAIL(addr_agent_.fetch(
              rs_list,
              readonly_list))) {
@@ -290,6 +294,7 @@ int ObRsMgr::get_all_rs_list_from_configure_(common::ObIArray<common::ObAddr> &s
     LOG_WARN("get empty rs list", KR(ret));
   } else if (OB_FAIL(convert_addr_array(rs_list, server_list))) {
     LOG_WARN("fail to convert addr array", KR(ret), K(rs_list));
+#endif
   }
   return ret;
 }

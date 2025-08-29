@@ -30,7 +30,8 @@ using namespace oceanbase::rootserver;
 int ObRestoreUtil::fill_physical_restore_job(
     const int64_t job_id,
     const obrpc::ObPhysicalRestoreTenantArg &arg,
-    ObPhysicalRestoreJob &job)
+    ObPhysicalRestoreJob &job,
+    bool is_recover_table)
 {
   int ret = OB_SUCCESS;
 
@@ -44,7 +45,10 @@ int ObRestoreUtil::fill_physical_restore_job(
     job.set_tenant_name(arg.tenant_name_);
     job.set_initiator_job_id(arg.initiator_job_id_);
     job.set_initiator_tenant_id(arg.initiator_tenant_id_);
-    job.set_restore_type(FULL_RESTORE_TYPE);
+    /* set default restore type
+     * 1.physical restore: full.
+     * 2.recover table restore aux teannt: quick */
+    job.set_restore_type(is_recover_table ? QUICK_RESTORE_TYPE : FULL_RESTORE_TYPE);
     if (OB_FAIL(job.set_description(arg.description_))) {
       LOG_WARN("fail to set description", K(ret));
     }

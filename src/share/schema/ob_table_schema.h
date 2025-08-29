@@ -312,6 +312,12 @@ enum ObTableReferencedByFastLSMMVFlag
   IS_REFERENCED_BY_FAST_LSM_MV = 1
 };
 
+enum ObMvCntProctimeTableFlag
+{
+  MV_NOT_CNT_PROCTIME_TABLE = 0,
+  MV_CNT_PROCTIME_TABLE = 1
+};
+
 struct ObTableMode {
   OB_UNIS_VERSION_V(1);
 private:
@@ -482,7 +488,10 @@ private:
   static const int32_t MM_TABLE_REFERENCED_BY_FAST_LSM_MV_BITS = 1;
   static const uint32_t MM_TABLE_REFERENCED_BY_FAST_LSM_MV_MASK =
       (1U << MM_TABLE_REFERENCED_BY_FAST_LSM_MV_BITS) - 1;
-  static const int32_t MM_RESERVED = 62;
+  static const int32_t MM_CNT_PROCTIME_TABLE_OFFSET = 2;
+  static const int32_t MM_CNT_PROCTIME_TABLE_BITS = 1;
+  static const uint32_t MM_CNT_PROCTIME_TABLE_MASK = (1U << MM_CNT_PROCTIME_TABLE_BITS) - 1;
+  static const int32_t MM_RESERVED = 61;
 public:
   ObMvMode() { reset(); }
   virtual ~ObMvMode() { reset(); }
@@ -502,6 +511,11 @@ public:
         (mv_mode >> MM_TABLE_REFERENCED_BY_FAST_LSM_MV_OFFSET) &
         MM_TABLE_REFERENCED_BY_FAST_LSM_MV_MASK);
   }
+  static ObMvCntProctimeTableFlag get_cnt_proctime_table_flag(int64_t mv_mode)
+  {
+    return (ObMvCntProctimeTableFlag)((mv_mode >> MM_CNT_PROCTIME_TABLE_OFFSET) &
+                                       MM_CNT_PROCTIME_TABLE_MASK);
+  }
   union
   {
     int64_t mode_;
@@ -509,11 +523,13 @@ public:
     {
       uint64_t mv_major_refresh_flag_ : MM_MV_MAJOR_REFRESH_BITS;
       uint64_t table_referenced_by_fast_lsm_mv_flag_ : MM_TABLE_REFERENCED_BY_FAST_LSM_MV_BITS;
+      uint64_t cnt_proctime_table_ : MM_CNT_PROCTIME_TABLE_BITS;
       uint64_t reserved_ : MM_RESERVED;
     };
   };
   TO_STRING_KV("mv_major_refresh_flag", mv_major_refresh_flag_,
-               "table_referenced_by_fast_lsm_mv_flag", table_referenced_by_fast_lsm_mv_flag_);
+               "table_referenced_by_fast_lsm_mv_flag", table_referenced_by_fast_lsm_mv_flag_,
+               "cnt_proctime_table", cnt_proctime_table_);
 };
 
 struct ObSemiStructEncodingType
@@ -663,6 +679,7 @@ public:
   virtual inline uint64_t get_master_key_id() const { return OB_INVALID_ID; }
   virtual inline bool is_use_bloomfilter() const { return false; }
   virtual inline bool get_enable_macro_block_bloom_filter() const { return false; }
+  virtual inline int64_t get_micro_block_format_version() const { return storage::ObMicroBlockFormatVersionHelper::DEFAULT_VERSION; }
   virtual inline bool is_primary_aux_vp_table() const { return false; }
   virtual inline bool is_primary_vp_table() const { return false; }
   virtual inline bool is_aux_vp_table() const { return false; }
@@ -983,6 +1000,10 @@ public:
       const ObTabletID &tablet_id,
       int64_t &part_id,
       int64_t &subpart_id) const;
+  int get_part_idx_by_tablets(
+      const ObIArray<uint64_t> &tablet_ids,
+      ObIArray<int64_t> &part_idx,
+      ObIArray<int64_t> &subpart_idx) const;
   int get_part_id_by_tablet(
       const ObTabletID &tablet_id,
       int64_t &part_id,
@@ -1715,6 +1736,11 @@ public:
   inline void set_enable_macro_block_bloom_filter(const bool enable_macro_block_bloom_filter)
   {
     enable_macro_block_bloom_filter_ = enable_macro_block_bloom_filter;
+  }
+  inline int64_t get_micro_block_format_version() const override { return micro_block_format_version_; }
+  inline void set_micro_block_format_version(const int64_t micro_block_format_version)
+  {
+    micro_block_format_version_ = micro_block_format_version;
   }
   inline int64_t get_virtual_column_cnt() const { return virtual_column_cnt_; }
   inline const_column_iterator column_begin() const { return column_array_; }
@@ -2712,7 +2738,8 @@ inline bool ObSimpleTableSchemaV2::is_domain_index(const ObIndexType index_type)
          share::schema::is_vec_ivfflat_centroid_index(index_type) ||
          share::schema::is_vec_ivfpq_centroid_index(index_type) ||
          share::schema::is_vec_ivfsq8_centroid_index(index_type) ||
-         share::schema::is_vec_dim_docid_value_type(index_type);
+         share::schema::is_vec_dim_docid_value_type(index_type) ||
+         share::schema::is_hybrid_vec_index(index_type);
 }
 
 inline bool ObSimpleTableSchemaV2::is_fts_or_multivalue_index() const
@@ -2738,7 +2765,8 @@ inline bool ObSimpleTableSchemaV2::should_check_major_merge_progress() const
   return is_normal_schema() && (is_sys_table()
           || is_user_table()
           || is_tmp_table()
-          || is_aux_lob_table());
+          || is_aux_lob_table()
+          || is_mlog_table());
 }
 
 inline int64_t ObTableSchema::get_id_hash_array_mem_size(const int64_t column_cnt) const

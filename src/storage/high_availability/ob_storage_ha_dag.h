@@ -140,6 +140,13 @@ public:
   static int inc_member_list_config_version(
       const share::ObLSID &ls_id,
       const bool with_leader);
+  static int get_migration_src_info(
+      const ObMigrationOpArg &arg,
+      const uint64_t tenant_id,
+      const share::SCN &local_clog_checkpoint_scn,
+      storage::ObStorageRpc *storage_rpc,
+      ObStorageHASrcInfo &src_info);
+
 #ifdef OB_BUILD_SHARED_STORAGE
   static int check_self_is_valid_member_with_log_service(
       const share::ObLSID &ls_id,

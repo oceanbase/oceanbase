@@ -48,12 +48,22 @@ public:
 
   int check_table_partition_in_tablegroup(const share::schema::ObTableSchema *first_table_schema,
                                           share::schema::ObTableSchema &table_schema,
-                                          share::schema::ObSchemaGetterGuard &schema_guard);
+                                          share::schema::ObSchemaGetterGuard &schema_guard,
+                                          const share::schema::ObTablegroupSchema *tablegroup = nullptr);
 
   int add_tables_to_tablegroup(common::ObMySQLTransaction &trans,
                                share::schema::ObSchemaGetterGuard &schema_guard,
                                const share::schema::ObTablegroupSchema &tablegroup_schema,
                                const obrpc::ObAlterTablegroupArg &arg);
+
+  int update_table_tablegroup(
+      common::ObMySQLTransaction &trans,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const uint64_t new_tablegroup_id,
+      const share::schema::ObTableSchema &table_schema,
+      const ObString &ddl_stmt_str,
+      const share::schema::ObTableSchema *first_table_schema = nullptr);
+
   int modify_partition_option(ObMySQLTransaction &trans,
                               ObSchemaGetterGuard &schema_guard,
                               const ObTablegroupSchema &tablegroup_schema,

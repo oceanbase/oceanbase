@@ -145,6 +145,7 @@ TEST_F(TestSSBatchMicroCheckpointTask, test_batch_micro_meta_ckpt)
     } while (!finish_check && (ObTimeUtility::current_time_s() - start_time_s < MAX_WAIT_MICRO_CKPT_TIME_S));
     ASSERT_EQ(ori_micro_ckpt_cnt + 1, cache_stat.task_stat().micro_ckpt_cnt_);
     ASSERT_EQ(ori_micro_ckpt_op_cnt + 1, cache_stat.task_stat().micro_ckpt_op_cnt_);
+    ASSERT_EQ(true, persist_meta_task.persist_meta_op_.micro_ckpt_ctx_.complete_full_ckpt_);
     ASSERT_LT(0, phy_blk_mgr.super_blk_.get_micro_ckpt_used_blk_list_cnt());
     ASSERT_LT(0, cache_stat.task_stat().micro_ckpt_item_cnt_);
   }
@@ -204,6 +205,7 @@ TEST_F(TestSSBatchMicroCheckpointTask, test_batch_micro_meta_ckpt)
     } while (!finish_check && (ObTimeUtility::current_time_s() - start_time_s < MAX_WAIT_MICRO_CKPT_TIME_S));
     ASSERT_EQ(ori_micro_ckpt_cnt + 1, cache_stat.task_stat().micro_ckpt_cnt_);
     ASSERT_EQ(ori_micro_ckpt_op_cnt + ckpt_split_cnt, cache_stat.task_stat().micro_ckpt_op_cnt_);
+    ASSERT_EQ(true, persist_meta_task.persist_meta_op_.micro_ckpt_ctx_.complete_full_ckpt_);
     ASSERT_LT(0, phy_blk_mgr.super_blk_.get_micro_ckpt_used_blk_list_cnt());
     ASSERT_EQ(ckpt_split_cnt, phy_blk_mgr.super_blk_.micro_ckpt_entries().count());
     ASSERT_LT(0, cache_stat.task_stat().micro_ckpt_item_cnt_);

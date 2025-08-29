@@ -294,7 +294,6 @@ int ObTableApiService::calc_tablet_ids(ObTableCtx &ctx,
                                       *ctx.get_sess_guard(),
                                       *ctx.get_schema_cache_guard(),
                                       *ctx.get_schema_guard(),
-                                      nullptr,/*simple_schema*/
                                       clip_type);
       if (OB_FAIL(part_calc.calc(ctx.get_index_table_id(), ranges, *tablet_ids))) {
         LOG_WARN("fail to calc tablet_ids", K(ret), K(ctx.get_table_id()));

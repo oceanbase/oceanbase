@@ -12,7 +12,7 @@
 #define USING_LOG_PREFIX SERVER
 #include "ob_redis_service.h"
 #include "ob_redis_command_factory.h"
-#include "observer/table/ob_htable_utils.h"
+#include "observer/table/utils/ob_htable_utils.h"
 #include "observer/table/redis/ob_redis_rkey.h"
 #include "observer/table/group/ob_table_tenant_group.h"
 #include "observer/table/group/ob_table_group_service.h"

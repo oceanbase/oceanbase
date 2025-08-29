@@ -181,7 +181,7 @@ int MdsTableBase::get_ls_max_consequent_callbacked_scn_(share::SCN &max_conseque
 int MdsTableBase::merge(const int64_t construct_sequence, const share::SCN &flushing_scn)
 {
   int ret = OB_SUCCESS;
-  ObMdsTableMergeDagParam param;
+  ObTabletMdsMiniMergeDagParam param;
   param.ls_id_ = ls_id_;
   param.tablet_id_ = tablet_id_;
   param.flush_scn_ = flushing_scn;

@@ -22,6 +22,8 @@
 #include "storage/tablelock/ob_table_lock_service.h"
 #include "rootserver/ddl_task/ob_sys_ddl_util.h" // for ObSysDDLSchedulerUtil
 #include "rootserver/ob_split_partition_helper.h"
+#include "share/table/ob_ttl_util.h"
+#include "rootserver/ob_create_index_on_empty_table_helper.h"
 
 namespace oceanbase
 {
@@ -239,7 +241,8 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &const_arg, obrpc::ObDropInd
   } else if (NULL == table_schema) {
     ret = OB_TABLE_NOT_EXIST;
     if (!(ignore_for_domain_index = ignore_error_code_for_domain_index(ret, arg))) {
-      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(arg.database_name_), to_cstring(arg.table_name_));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(arg.database_name_), helper.convert(arg.table_name_));
     }
     LOG_WARN("table not found", K(arg), K(ret));
   } else if (arg.is_in_recyclebin_) {
@@ -296,9 +299,10 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &const_arg, obrpc::ObDropInd
     } else if (OB_ISNULL(index_table_schema)) {
       if (is_mlog) {
         ret = OB_ERR_TABLE_NO_MLOG;
+        ObCStringHelper helper;
         LOG_WARN("table does not have a materialized view log", KR(ret),
             K(arg.database_name_), K(arg.index_name_));
-        LOG_USER_ERROR(OB_ERR_TABLE_NO_MLOG, to_cstring(arg.database_name_), to_cstring(arg.index_name_));
+        LOG_USER_ERROR(OB_ERR_TABLE_NO_MLOG, helper.convert(arg.database_name_), helper.convert(arg.index_name_));
       } else {
         ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
         LOG_WARN("index table schema should not be null", K(arg.index_name_), K(index_table_name), K(ret));
@@ -552,7 +556,12 @@ int ObIndexBuilder::do_create_global_index(
     ObDDLSQLTransaction trans(&ddl_service_.get_schema_service());
     int64_t refreshed_schema_version = 0;
     const uint64_t tenant_id = table_schema.get_tenant_id();
-    if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+    bool create_index_on_empty_table_opt = false;
+    const ObString &database_name = arg.database_name_;
+    if (database_name.empty()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("database name is empty", K(ret), K(database_name));
+    } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
       LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
     } else if (OB_FAIL(trans.start(&ddl_service_.get_sql_proxy(), tenant_id, refreshed_schema_version))) {
       LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
@@ -566,6 +575,16 @@ int ObIndexBuilder::do_create_global_index(
     } else if (!new_arg.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to copy create index arg", K(ret));
+    } else if (OB_FAIL(ObCreateIndexOnEmptyTableHelper::check_create_index_on_empty_table_opt(ddl_service_,
+                                                                                              trans,
+                                                                                              database_name,
+                                                                                              table_schema,
+                                                                                              new_arg.index_type_,
+                                                                                              new_arg.data_version_,
+                                                                                              new_arg.sql_mode_,
+                                                                                              create_index_on_empty_table_opt))) {
+      LOG_WARN("fail to check table empty with lock", K(ret));
+    } else if (create_index_on_empty_table_opt && FALSE_IT(new_arg.index_option_.index_status_ = INDEX_STATUS_AVAILABLE)) {
     } else if (OB_FAIL(ObIndexBuilderUtil::adjust_expr_index_args(
             new_arg, new_table_schema, allocator, gen_columns))) {
       LOG_WARN("fail to adjust expr index args", K(ret));
@@ -578,16 +597,34 @@ int ObIndexBuilder::do_create_global_index(
     } else {
       if (gen_columns.empty()) {
         if (OB_FAIL(ddl_service_.create_global_index(
-                trans, new_arg, new_table_schema, tenant_data_version, index_schema))) {
+                trans, new_arg, new_table_schema, tenant_data_version, create_index_on_empty_table_opt, index_schema))) {
           LOG_WARN("fail to create global index", K(ret));
         }
       } else {
         if (OB_FAIL(ddl_service_.create_global_inner_expr_index(
-              trans, table_schema, tenant_data_version, new_table_schema, gen_columns, index_schema))) {
+              trans, table_schema, tenant_data_version, new_arg, create_index_on_empty_table_opt, new_table_schema, gen_columns, index_schema))) {
           LOG_WARN("fail to create global inner expr index", K(ret));
         }
       }
+      if (OB_ERR_TABLE_EXIST == ret && new_arg.if_not_exist_) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(check_index_for_if_not_exist_(tenant_id, arg.database_name_, index_schema.get_table_name(),
+                        schema_guard, res))) {
+          ret = tmp_ret; //overwrite ret
+          LOG_WARN("fail to check index for if not exist", KR(ret), K(tenant_id), K(arg.database_name_), K(index_schema.get_table_name()));
+        }
+      }
       if (OB_FAIL(ret)) {
+      } else if (create_index_on_empty_table_opt) {
+        if OB_FAIL(ObTabletBindingHelper::build_single_table_write_defensive(new_table_schema,
+                                                                             index_schema.get_schema_version(),
+                                                                             trans)) {
+          LOG_WARN("fail to build single table write defensive", K(ret), K(index_schema));
+        } else {
+          res.index_table_id_ = index_schema.get_table_id();
+          res.schema_version_ = index_schema.get_schema_version();
+          res.task_id_ = 0;
+        }
       } else if (OB_FAIL(submit_build_index_task(trans,
                                                  new_arg,
                                                  &new_table_schema,
@@ -1252,7 +1289,12 @@ int ObIndexBuilder::do_create_local_index(
     int64_t refreshed_schema_version = 0;
     const uint64_t tenant_id = table_schema.get_tenant_id();
     uint64_t tenant_data_version = 0;
-    if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+    bool create_index_on_empty_table_opt = false;
+    const ObString &database_name = create_index_arg.database_name_;
+    if (database_name.empty()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("database name is empty", K(ret), K(database_name));
+    } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
       LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
     } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
       LOG_WARN("get tenant data version failed", K(ret));
@@ -1268,6 +1310,16 @@ int ObIndexBuilder::do_create_local_index(
     } else if (!my_arg.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to copy create index arg", K(ret));
+    } else if (OB_FAIL(ObCreateIndexOnEmptyTableHelper::check_create_index_on_empty_table_opt(ddl_service_,
+                                                                                              trans,
+                                                                                              database_name,
+                                                                                              table_schema,
+                                                                                              my_arg.index_type_,
+                                                                                              my_arg.data_version_,
+                                                                                              my_arg.sql_mode_,
+                                                                                              create_index_on_empty_table_opt))) {
+      LOG_WARN("fail to check table empty with lock", K(ret));
+    } else if (create_index_on_empty_table_opt && FALSE_IT(my_arg.index_option_.index_status_ = INDEX_STATUS_AVAILABLE)) {
     } else {
       const bool global_index_without_column_info = true;
       // build a global index with local storage if both the data table and index table are non-partitioned
@@ -1389,13 +1441,15 @@ int ObIndexBuilder::do_create_local_index(
       } else if (OB_FAIL(new_table_schema.check_create_index_on_hidden_primary_key(index_schema))) {
         LOG_WARN("failed to check create index on table", K(ret), K(index_schema));
       } else if (gen_columns.empty()) {
-        if (OB_FAIL(ddl_service_.create_index_table(my_arg, tenant_data_version, index_schema, trans))) {
+        if (OB_FAIL(ddl_service_.create_index_table(my_arg, tenant_data_version, create_index_on_empty_table_opt, index_schema, trans))) {
           LOG_WARN("fail to create index", K(ret), K(index_schema));
         }
       } else {
         if (OB_FAIL(ddl_service_.create_inner_expr_index(trans,
                                                          table_schema,
                                                          tenant_data_version,
+                                                         my_arg,
+                                                         create_index_on_empty_table_opt,
                                                          new_table_schema,
                                                          gen_columns,
                                                          index_schema))) {
@@ -1403,6 +1457,14 @@ int ObIndexBuilder::do_create_local_index(
         }
       }
 
+      if (OB_ERR_TABLE_EXIST == ret && my_arg.if_not_exist_) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(check_index_for_if_not_exist_(tenant_id, my_arg.database_name_, index_schema.get_table_name(),
+                        schema_guard, res))) {
+          ret = tmp_ret; //overwrite ret
+          LOG_WARN("fail to check index for if not exist", KR(ret), K(tenant_id), K(my_arg.database_name_), K(index_schema.get_table_name()));
+        }
+      }
       if (OB_SUCC(ret) && (is_generate_rowkey_doc || is_generate_rowkey_vid)) {
         if (OB_FAIL(ObDDLUtil::write_defensive_and_obtain_snapshot(trans,
                                                                    tenant_id,
@@ -1416,6 +1478,13 @@ int ObIndexBuilder::do_create_local_index(
       }
 
       if (OB_FAIL(ret)) {
+      } else if (create_index_on_empty_table_opt && OB_FAIL(ObTabletBindingHelper::build_single_table_write_defensive(new_table_schema,
+                                                                                                                      index_schema.get_schema_version(),
+                                                                                                                      trans))) {
+        LOG_WARN("fail to build single table write defensive", K(ret), K(index_schema));
+      } else if (create_index_on_empty_table_opt) {
+        res.index_table_id_ = index_schema.get_table_id();
+        res.schema_version_ = index_schema.get_schema_version();
       } else if (OB_FAIL(submit_build_index_task(trans,
                                                  create_index_arg,
                                                  &new_table_schema,
@@ -1445,6 +1514,7 @@ int ObIndexBuilder::do_create_local_index(
         LOG_WARN("fail to update parent task message", K(ret), K(create_index_arg.task_id_), K(res.task_id_));
       }
     }
+    DEBUG_SYNC(CREATE_INDEX_ON_EMPTY_TABLE);
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
@@ -1455,7 +1525,7 @@ int ObIndexBuilder::do_create_local_index(
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ddl_service_.publish_schema(tenant_id))) {
         LOG_WARN("fail to publish schema", K(ret), K(tenant_id));
-      } else if (OB_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
+      } else if (!create_index_on_empty_table_opt && OB_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
         LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
       }
     }
@@ -1491,7 +1561,8 @@ int ObIndexBuilder::do_create_index(
     LOG_WARN("get_table_schema failed", K(arg), K(ret));
   } else if (NULL == table_schema) {
     ret = OB_TABLE_NOT_EXIST;
-    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(arg.database_name_), to_cstring(arg.table_name_));
+    ObCStringHelper helper;
+    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(arg.database_name_), helper.convert(arg.table_name_));
     LOG_WARN("table not exist", K(arg), K(ret));
   } else if (FALSE_IT(table_id = table_schema->get_table_id())) {
   } else if (!arg.is_inner_
@@ -1526,6 +1597,8 @@ int ObIndexBuilder::do_create_index(
              K(index_count), K(OB_MAX_INDEX_PER_TABLE), K(index_aux_count), K(OB_MAX_AUX_TABLE_PER_MAIN_TABLE), K(ret));
   } else if (OB_FAIL(ddl_service_.check_fk_related_table_ddl(*table_schema, ObDDLType::DDL_CREATE_INDEX))) {
     LOG_WARN("check whether the foreign key related table is executing ddl failed", K(ret));
+  } else if (OB_FAIL(ObTTLUtil::check_htable_ddl_supported(*table_schema, false/*by_admin*/))) {
+    LOG_WARN("failed to check htable ddl supported", K(ret));
   } else if (INDEX_TYPE_NORMAL_LOCAL == arg.index_type_
              || INDEX_TYPE_UNIQUE_LOCAL == arg.index_type_
              || INDEX_TYPE_DOMAIN_CTXCAT_DEPRECATED == arg.index_type_
@@ -1604,8 +1677,9 @@ int ObIndexBuilder::generate_schema(
       if (!GCONF.enable_sys_table_ddl) {
         if (!data_schema.is_user_table() && !data_schema.is_tmp_table()) {
           ret = OB_ERR_WRONG_OBJECT;
-          LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, to_cstring(arg.database_name_),
-                         to_cstring(arg.table_name_), "BASE_TABLE");
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, helper.convert(arg.database_name_),
+                         helper.convert(arg.table_name_), "BASE_TABLE");
           ObTableType table_type = data_schema.get_table_type();
           LOG_WARN("Not support to create index on non-normal table", K(table_type), K(arg), K(ret));
         } else if (OB_INVALID_ID != arg.index_table_id_ || OB_INVALID_ID != arg.data_table_id_) {
@@ -1858,6 +1932,7 @@ int ObIndexBuilder::generate_schema(
   if (OB_SUCC(ret)) {
     schema.set_micro_index_clustered(data_schema.get_micro_index_clustered());
     schema.set_enable_macro_block_bloom_filter(data_schema.get_enable_macro_block_bloom_filter());
+    schema.set_micro_block_format_version(data_schema.get_micro_block_format_version());
   }
   if (OB_SUCC(ret) && OB_FAIL(ObDDLService::set_dbms_job_exec_env(arg, schema))) {
     LOG_WARN("fail to set dbms_job exec_env", K(ret), K(arg));
@@ -2311,6 +2386,29 @@ int ObIndexBuilder::set_index_table_column_store_if_need(
       if (OB_FAIL(table_schema.add_default_column_group())) {
         LOG_WARN("fail to add default column group", KR(ret), K(tenant_id), K(table_id));
       }
+    }
+  }
+  return ret;
+}
+
+
+int ObIndexBuilder::check_index_for_if_not_exist_(const uint64_t tenant_id,
+                                                  const ObString database_name,
+                                                  const ObString index_name,
+                                                  share::schema::ObSchemaGetterGuard &schema_guard,
+                                                  obrpc::ObAlterTableRes &res)
+{
+  int ret = OB_SUCCESS;
+  uint64_t index_id = OB_INVALID_ID;
+  if (OB_FAIL(schema_guard.get_table_id(tenant_id, database_name, index_name,
+              true/*is_index*/, ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES, index_id))) {
+    LOG_WARN("fail to get index id", KR(ret), K(tenant_id), K(database_name), K(index_name));
+  } else if (OB_INVALID_ID != index_id) {
+    if (OB_FAIL(ObIndexBuilderUtil::check_index_for_if_not_exist(
+                tenant_id, index_id, res.task_id_))) {
+      LOG_WARN("fail to check index status for if not exist", KR(ret), K(tenant_id), K(index_id));
+    } else if (res.task_id_ > 0) {
+      res.index_table_id_ = index_id;
     }
   }
   return ret;

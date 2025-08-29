@@ -917,7 +917,6 @@ void ObQueryRetryCtrl::timeout_proc(ObRetryParam &v)
 {
 #ifdef OB_BUILD_SPM
   if (OB_UNLIKELY(v.err_ == OB_TIMEOUT &&
-                  ObSpmCacheCtx::STAT_FIRST_EXECUTE_PLAN == v.ctx_.spm_ctx_.spm_stat_ &&
                   v.ctx_.spm_ctx_.need_spm_timeout_)) {
     const_cast<ObSqlCtx &>(v.ctx_).spm_ctx_.spm_stat_ = ObSpmCacheCtx::STAT_FALLBACK_EXECUTE_PLAN;
     const_cast<ObSqlCtx &>(v.ctx_).spm_ctx_.need_spm_timeout_ = false;
@@ -1152,6 +1151,7 @@ int ObQueryRetryCtrl::init()
   ERR_RETRY_FUNC("SCHEMA",   OB_SCHEMA_EAGAIN,                   schema_error_proc,          inner_schema_error_proc,                              nullptr);
   ERR_RETRY_FUNC("SCHEMA",   OB_SCHEMA_NOT_UPTODATE,             schema_error_proc,          inner_schema_error_proc,                              nullptr);
   ERR_RETRY_FUNC("SCHEMA",   OB_ERR_PARALLEL_DDL_CONFLICT,       schema_error_proc,          inner_schema_error_proc,                              nullptr);
+  ERR_RETRY_FUNC("SCHEMA",   OB_ERR_DDL_RESOURCE_NOT_ENOUGH,     short_wait_retry_proc,      short_wait_retry_proc,                                nullptr);
   ERR_RETRY_FUNC("SCHEMA",   OB_AUTOINC_CACHE_NOT_EQUAL,         autoinc_cache_not_equal_retry_proc, autoinc_cache_not_equal_retry_proc, nullptr);
   ERR_RETRY_FUNC("SCHEMA",   OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR, schema_error_proc,  empty_proc,                                           nullptr);
 

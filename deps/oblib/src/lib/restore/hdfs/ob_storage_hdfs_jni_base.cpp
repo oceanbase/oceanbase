@@ -13,7 +13,7 @@
 #include "lib/restore/ob_storage.h"
 #include "ob_storage_hdfs_jni_base.h"
 #include "ob_storage_hdfs_cache.h"
-#include "sql/engine/connector/ob_java_helper.h"
+#include "lib/jni_env/ob_java_helper.h"
 
 #include "lib/utility/ob_print_utils.h"
 #include "lib/utility/ob_tracepoint.h"

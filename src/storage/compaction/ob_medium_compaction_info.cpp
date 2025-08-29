@@ -466,6 +466,7 @@ void ObMediumCompactionInfo::reset()
   co_major_merge_type_ = ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE;
   is_skip_tenant_major_ = false;
   contain_mds_filter_info_ = false;
+  contain_inc_major_info_ = false;
   reserved_ = 0;
   cluster_id_ = 0;
   data_version_ = 0;

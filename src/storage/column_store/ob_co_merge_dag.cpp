@@ -1515,31 +1515,24 @@ int ObCOMergeDagNet::inner_create_column_store_dag(
 int ObCOMergeDagNet::swap_tablet_after_minor()
 {
   int ret = OB_SUCCESS;
-  ObTabletHandle tmp_tablet_handle;
   ObGetMergeTablesResult tmp_result;
-  if (OB_FAIL(co_merge_ctx_->get_ls()->get_tablet(
-          co_merge_ctx_->get_tablet_id(),
-          tmp_tablet_handle,
-          ObTabletCommon::DEFAULT_GET_TABLET_NO_WAIT,
-          storage::ObMDSGetTabletMode::READ_ALL_COMMITED))) {
-    LOG_WARN("failed to get tablet", K(ret));
-  } else if (OB_FAIL(ObTablet::check_transfer_seq_equal(*tmp_tablet_handle.get_obj(), co_merge_ctx_->get_schedule_transfer_seq()))) {
-    LOG_WARN("tmp tablet transfer seq not eq with old transfer seq", K(ret),
-        "tmp_tablet_meta", tmp_tablet_handle.get_obj()->get_tablet_meta(),
-        "old_transfer_seq", co_merge_ctx_->get_schedule_transfer_seq());
+  // ATTENTION: must reset tables_handle_ before swap_tablet !!!
+  co_merge_ctx_->static_param_.tables_handle_.reset();
+  if (OB_FAIL(co_merge_ctx_->swap_tablet())) {
+    LOG_WARN("failed to get tablet without memtables", K(ret));
   } else if (OB_FAIL(ObPartitionMergePolicy::get_result_by_snapshot(
-    *tmp_tablet_handle.get_obj(),
+    *co_merge_ctx_->tablet_handle_.get_obj(),
     co_merge_ctx_->get_merge_version(),
-    tmp_result))) {
+    tmp_result,
+    false/*need_check_tablet*/))) {
     LOG_WARN("failed to get result by snapshot", K(ret));
-  } else if (OB_FAIL(co_merge_ctx_->static_param_.tables_handle_.assign(tmp_result.handle_))) {
+  }
+#ifdef ERRSIM
+  DEBUG_SYNC(MAJOR_MERGE_PREPARE);
+#endif
+  if (FAILEDx(co_merge_ctx_->static_param_.tables_handle_.assign(tmp_result.handle_))) {
     LOG_WARN("failed to assign tables handle", K(ret), K(tmp_result));
-  } else if (OB_FAIL(co_merge_ctx_->tablet_handle_.assign(tmp_tablet_handle))) {
-    LOG_WARN("failed to assign tablet_handle", K(ret), K(tmp_tablet_handle));
   } else {
-    co_merge_ctx_->static_param_.tablet_transfer_seq_ = tmp_tablet_handle.get_obj()->get_transfer_seq();
-    co_merge_ctx_->static_param_.rowkey_read_info_ =
-      static_cast<const ObRowkeyReadInfo *>(&(co_merge_ctx_->get_tablet()->get_rowkey_read_info()));
     LOG_INFO("success to swap tablet after minor", K(ret), K(tmp_result),
       "new_rowkey_read_info", co_merge_ctx_->static_param_.rowkey_read_info_);
   }

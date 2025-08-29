@@ -67,6 +67,8 @@ enum class ObJsonNodeType
   J_OYEARMONTH = 29, // yearMonthInterval string
   J_MYSQL_DATE = 30, // mysql date
   J_MYSQL_DATETIME = 31, // mysql datetime
+  J_SEMI_HETE_COL = 34,
+  J_SEMI_BIN = 35, //  semistruct bin data
   J_MAX_TYPE,
 
   J_ERROR = 200 // 14
@@ -107,6 +109,7 @@ OB_INLINE ObObjType json_type_to_obj_type(const  ObJsonNodeType json_type)
     ObMaxType,                           // ObJsonNodeType::J_OYEARMONTH = 29,
     ObMySQLDateType,                     // ObJsonNodeType::J_MYSQL_DATE = 30,
     ObMySQLDateTimeType,                 // ObJsonNodeType::J_MYSQL_DATETIME = 31,
+    ObMaxType,                           // ObJsonNodeType::J_SEMI_HETE_COL = 34,
     ObMaxType,                           // ObJsonNodeType::J_MAX_TYPE
   };
   return JSON_TYPE_TO_OBJ_TYPE[static_cast<int64_t>(json_type)];

@@ -1588,6 +1588,110 @@ int ObFtsIndexBuildTask::get_task_status(int64_t task_id, uint64_t aux_table_id,
   return ret;
 }
 
+// refresh the values of variables across fts task states
+int ObFtsIndexBuildTask::refresh_task_context(const share::ObDDLTaskStatus status)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("the obj is not initialized", K(ret));
+  } else {
+    SMART_VAR(ObFtsIndexBuildTask, task) {
+      switch (status)
+      {
+        case ObDDLTaskStatus::PREPARE:
+        case ObDDLTaskStatus::GENERATE_ROWKEY_DOC_SCHEMA: {
+          break;
+        }
+        case ObDDLTaskStatus::WAIT_ROWKEY_DOC_TABLE_COMPLEMENT: {
+          if (OB_FAIL(ObDDLUtil::load_ddl_task(tenant_id_, task_id_, allocator_, task))) {
+            LOG_WARN("fail to get fulltext task objection", K(ret));
+          } else if (OB_FAIL(refresh_task_depend_map_context(task))) {
+            LOG_WARN("fail to refresh subtask execution status", K(ret), K(task));
+          }
+          break;
+        }
+        case ObDDLTaskStatus::LOAD_DICTIONARY:
+        case ObDDLTaskStatus::GENERATE_DOC_AUX_SCHEMA: {
+          break;
+        }
+        case ObDDLTaskStatus::WAIT_AUX_TABLE_COMPLEMENT: {
+          if (OB_FAIL(ObDDLUtil::load_ddl_task(tenant_id_, task_id_, allocator_, task))) {
+            LOG_WARN("fail to get fulltext task objection", K(ret));
+          } else if (OB_FAIL(refresh_task_depend_map_context(task))) {
+            LOG_WARN("fail to refresh subtask execution status", K(ret), K(task));
+          }
+          break;
+        }
+        case ObDDLTaskStatus::TAKE_EFFECT: {
+          if (is_fts_task() &&
+              (OB_INVALID_ID == domain_index_aux_table_id_ ||
+              OB_INVALID_ID == fts_doc_word_aux_table_id_)) {
+            if (OB_FAIL(ObDDLUtil::load_ddl_task(tenant_id_, task_id_, allocator_, task))) {
+              LOG_WARN("fail to get fulltext task objection", K(ret));
+            } else {
+              domain_index_aux_table_id_ = task.get_domain_index_aux_table_id();
+              fts_doc_word_aux_table_id_ = task.get_fts_doc_word_aux_table_id();
+            }
+          }
+          break;
+        }
+        case ObDDLTaskStatus::FAIL: {
+          if (OB_FAIL(ObDDLUtil::load_ddl_task(tenant_id_, task_id_, allocator_, task))) {
+            LOG_WARN("fail to get fulltext task objection", K(ret));
+          } else if (OB_FAIL(refresh_task_depend_map_context(task))) {
+            LOG_WARN("fail to refresh subtask execution status", K(ret), K(task));
+          } else {
+            rowkey_doc_aux_table_id_ = task.get_rowkey_doc_aux_table_id();
+            doc_rowkey_aux_table_id_ = task.get_doc_rowkey_aux_table_id();
+            domain_index_aux_table_id_ = task.get_domain_index_aux_table_id();
+            fts_doc_word_aux_table_id_ = task.get_fts_doc_word_aux_table_id();
+          }
+          break;
+        }
+        case ObDDLTaskStatus::SUCCESS: {
+          break;
+        }
+        default: {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("error unexpected task status", K(ret), K(status));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObFtsIndexBuildTask::refresh_task_depend_map_context(const ObFtsIndexBuildTask &task)
+{
+  int ret = OB_SUCCESS;
+  using task_iter = common::hash::ObHashMap<uint64_t, DependTaskStatus>::const_iterator;
+  const common::hash::ObHashMap<uint64_t, DependTaskStatus> &complete_child_task_map_ = task.dependent_task_result_map_;
+  const int64_t num_fts_child_task = 4;
+  if (!dependent_task_result_map_.created() &&
+      OB_FAIL(dependent_task_result_map_.create(num_fts_child_task, lib::ObLabel("DepTasMap")))) {
+    LOG_WARN("fail to create dependent task map", K(ret));
+  }
+  for (task_iter iter = complete_child_task_map_.begin();
+       OB_SUCC(ret) && iter != complete_child_task_map_.end(); ++iter) {
+    DependTaskStatus status;
+    TCWLockGuard guard(lock_);
+    if (OB_FAIL(dependent_task_result_map_.get_refactored(iter->first, status))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        status = iter->second;
+        if (OB_FAIL(dependent_task_result_map_.set_refactored(iter->first, status))) {
+          LOG_WARN("fail to set dependent task map", K(ret), K(iter->first));
+        }
+      } else {
+        LOG_WARN("fail ot get status from dependent task map",
+            K(ret), K(iter->first), K(dependent_task_result_map_.size()));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObFtsIndexBuildTask::get_task_status()
 {
   int ret = OB_SUCCESS;
@@ -1733,7 +1837,11 @@ int ObFtsIndexBuildTask::submit_drop_fts_index_task()
   } else if (drop_index_arg.index_ids_.count() <= 0) {
     LOG_INFO("no table need to be drop, skip", K(ret)); // no table exist, skip drop
   } else if (schema_guard.get_table_schema(tenant_id_, object_id_, data_table_schema)) {
+    drop_index_task_submitted_ = true;
     LOG_WARN("fail to get table schema", K(ret), K(object_id_));
+  } else if (create_index_arg_.is_offline_rebuild_ && OB_ISNULL(data_table_schema)) {
+    drop_index_task_submitted_ = true;
+    LOG_INFO("the data table schema is null, skip drop for the offline ddl rebuild fulltext index", K(ret), K(object_id_));
   } else if (OB_ISNULL(data_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("data table schema is null", K(ret), KP(data_table_schema));
@@ -1945,6 +2053,7 @@ int ObFtsIndexBuildTask::cleanup_impl()
     const ObString &parser_name = create_index_arg_.index_option_.parser_name_;
     ObTenantDicLoaderHandle dic_loader_handle;
     ObCharsetType charset_type = CHARSET_INVALID;
+    bool is_skip_unlock = false;
     if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_,
                                                        schema_guard))) {
       LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id_));
@@ -1952,14 +2061,19 @@ int ObFtsIndexBuildTask::cleanup_impl()
                                                      data_table_id,
                                                      data_schema))) {
       LOG_WARN("fail to get table schema", K(ret), K(data_table_id));
+    } else if (create_index_arg_.is_offline_rebuild_ && OB_ISNULL(data_schema)) {
+      is_skip_unlock = true;
+      LOG_INFO("the data table schema is null, skip unlock for the offline ddl rebuild fulltext index", K(ret), K(object_id_));
     } else if (OB_ISNULL(data_schema)) {
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("fail to get table schema", K(ret), KPC(data_schema));
-    } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, dst_tenant_id_))) {
+    }
+    if (FAILEDx(trans.start(GCTX.sql_proxy_, dst_tenant_id_))) {
       LOG_WARN("start transaction failed", K(ret));
     } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, task_id_))) {
       LOG_WARN("failed to get owner id", K(ret), K(task_id_));
-    } else if (OB_FAIL(ObDDLLock::unlock_for_add_drop_index(*data_schema,
+    } else if (!is_skip_unlock &&
+               OB_FAIL(ObDDLLock::unlock_for_add_drop_index(*data_schema,
                                                             index_table_id,
                                                             false /* is_global_index = false */,
                                                             owner_id,

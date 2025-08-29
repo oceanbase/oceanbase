@@ -1330,7 +1330,9 @@ bool ObExpandAggregateUtils::is_valid_aggr_type(const ObItemType aggr_type)
          aggr_type == T_FUN_STDDEV ||
          aggr_type == T_FUN_STDDEV_POP ||
          aggr_type == T_FUN_STDDEV_SAMP ||
-         aggr_type == T_FUN_APPROX_COUNT_DISTINCT;
+         aggr_type == T_FUN_APPROX_COUNT_DISTINCT ||
+         aggr_type == T_FUN_SYS_RB_AND_CARDINALITY_AGG ||
+         aggr_type == T_FUN_SYS_RB_OR_CARDINALITY_AGG;
 }
 
 bool ObExpandAggregateUtils::is_regr_expr_type(const ObItemType aggr_type)
@@ -1694,6 +1696,13 @@ int ObExpandAggregateUtils::expand_common_aggr_expr(ObAggFunRawExpr *aggr_expr,
                                                   replace_expr,
                                                   new_aggr_items))) {
       LOG_WARN("failed to expand approxy_count_distinct expr", K(ret));
+    }
+  } else if (aggr_expr->get_expr_type() == T_FUN_SYS_RB_AND_CARDINALITY_AGG ||
+             aggr_expr->get_expr_type() == T_FUN_SYS_RB_OR_CARDINALITY_AGG) {
+    if (OB_FAIL(expand_rb_cardinality_expr(aggr_expr,
+                                           replace_expr,
+                                           new_aggr_items))) {
+      LOG_WARN("failed to expand rb cardinality expr", K(ret));
     }
   } else {/*do nothing*/}
   return ret;
@@ -2198,6 +2207,57 @@ int ObExpandAggregateUtils::expand_approx_count_distinct_expr(ObAggFunRawExpr *a
     sys_func_expr->set_func_name(func_name);
     replace_expr = sys_func_expr;
   }
+  return ret;
+}
+
+int ObExpandAggregateUtils::expand_rb_cardinality_expr(ObAggFunRawExpr *aggr_expr,
+                                                       ObRawExpr *&replace_expr,
+                                                       ObIArray<ObAggFunRawExpr*> &new_aggr_items)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *parma_expr = NULL;
+  ObAggFunRawExpr *calc_expr = NULL;
+  ObSysFunRawExpr *card_expr = NULL;
+  if (OB_ISNULL(aggr_expr) ||
+      OB_UNLIKELY(aggr_expr->get_expr_type() != T_FUN_SYS_RB_AND_CARDINALITY_AGG &&
+                  aggr_expr->get_expr_type() != T_FUN_SYS_RB_OR_CARDINALITY_AGG) ||
+      OB_UNLIKELY(aggr_expr->get_real_param_exprs().count() != 1) ||
+      OB_ISNULL(parma_expr = aggr_expr->get_real_param_exprs().at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(aggr_expr));
+  } else if (aggr_expr->get_expr_type() == T_FUN_SYS_RB_AND_CARDINALITY_AGG &&
+             OB_FAIL(ObRawExprUtils::build_common_aggr_expr(expr_factory_,
+                                                            session_info_,
+                                                            T_FUN_SYS_RB_AND_AGG,
+                                                            parma_expr,
+                                                            calc_expr))) {
+    LOG_WARN("failed to build common aggr expr", K(ret));
+  } else if (aggr_expr->get_expr_type() == T_FUN_SYS_RB_OR_CARDINALITY_AGG &&
+             OB_FAIL(ObRawExprUtils::build_common_aggr_expr(expr_factory_,
+                                                            session_info_,
+                                                            T_FUN_SYS_RB_OR_AGG,
+                                                            parma_expr,
+                                                            calc_expr))) {
+    LOG_WARN("failed to build common aggr expr", K(ret));
+  } else if (OB_FALSE_IT(calc_expr->set_param_distinct(aggr_expr->is_param_distinct()))) {
+  } else if (OB_FAIL(add_aggr_item(new_aggr_items, calc_expr))) {
+    LOG_WARN("failed to push back aggr item");
+
+  } else if (OB_FAIL(expr_factory_.create_raw_expr(T_FUN_SYS_RB_CARDINALITY, card_expr))) {
+    LOG_WARN("failed to create rb cardinality expr", K(ret));
+  } else if (OB_ISNULL(card_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sys func expr is null", K(ret), K(card_expr));
+  } else if (OB_FAIL(card_expr->set_param_expr(calc_expr))) {
+    LOG_WARN("failed to set calc_expr param", K(ret));
+  } else if (OB_FAIL(card_expr->formalize(session_info_))) {
+    LOG_WARN("failed to formalize expr", K(ret));
+  } else {
+    ObString func_name = ObString::make_string("rb_cardinality");
+    card_expr->set_func_name(func_name);
+    replace_expr = card_expr;
+  }
+
   return ret;
 }
 

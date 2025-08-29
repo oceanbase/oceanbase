@@ -29,6 +29,7 @@
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_trigger_info.h"
 #include "common/ob_common_utility.h"
+#include "share/diagnosis/ob_runtime_profile.h"
 
 namespace oceanbase
 {
@@ -211,7 +212,7 @@ public:
   int set_dynamic_param(ObEvalCtx &eval_ctx, common::ObObjParam *&param) const;
   int update_dynamic_param(ObEvalCtx &eval_ctx, common::ObDatum &datum) const;
 
-  static void clear_parent_evaluated_flag(ObEvalCtx &eval_ctx, ObExpr &expr);
+  static void clear_parent_evaluated_flag(ObEvalCtx &eval_ctx, const ObExpr &expr);
 
 public:
   int64_t param_idx_; // param idx in param store
@@ -369,7 +370,7 @@ public:
   const static int64_t REAL_TIME_MONITOR_THRESHOLD = 1000000; //1s
   const static uint64_t REAL_TIME_MONITOR_TRY_TIMES = 256;
   const static uint64_t SMART_CALL_CLOSE_RETRY_TIMES = 10;
-
+  typedef ObOpProfile<ObMetric> ObProfile;
 public:
   ObOperator(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input);
   virtual ~ObOperator();
@@ -696,6 +697,7 @@ protected:
   char *dummy_ptr_;
   #endif
   bool check_stack_overflow_;
+  ObProfile profile_;
   DISALLOW_COPY_AND_ASSIGN(ObOperator);
 };
 

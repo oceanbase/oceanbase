@@ -77,7 +77,8 @@ OB_SERIALIZE_MEMBER(ObDASScanCtDef,
                     external_file_pattern_,
                     external_object_ctx_,
                     external_pushdown_filters_,
-                    aggregate_param_props_);
+                    aggregate_param_props_,
+                    lake_table_format_);
 
 OB_DEF_SERIALIZE(ObDASScanRtDef)
 {
@@ -104,7 +105,9 @@ OB_DEF_SERIALIZE(ObDASScanRtDef)
     scan_rows_size_,
     row_width_,
     das_tasks_key_,
-    row_scan_cnt_);
+    row_scan_cnt_,
+    task_type_,
+    local_dynamic_filter_params_);
   return ret;
 }
 
@@ -133,7 +136,9 @@ OB_DEF_DESERIALIZE(ObDASScanRtDef)
     scan_rows_size_,
     row_width_,
     das_tasks_key_,
-    row_scan_cnt_);
+    row_scan_cnt_,
+    task_type_,
+    local_dynamic_filter_params_);
   if (OB_SUCC(ret)) {
     (void)ObSQLUtils::adjust_time_by_ntp_offset(timeout_ts_);
   }
@@ -165,7 +170,9 @@ OB_DEF_SERIALIZE_SIZE(ObDASScanRtDef)
     scan_rows_size_,
     row_width_,
     das_tasks_key_,
-    row_scan_cnt_);
+    row_scan_cnt_,
+    task_type_,
+    local_dynamic_filter_params_);
   return len;
 }
 
@@ -365,6 +372,7 @@ int ObDASScanOp::init_scan_param()
     scan_param_.partition_infos_ = &(scan_ctdef_->partition_infos_);
     scan_param_.external_file_access_info_ = scan_ctdef_->external_file_access_info_.str_;
     scan_param_.external_file_location_ = scan_ctdef_->external_file_location_.str_;
+    scan_param_.external_pushdown_filters_ = &scan_ctdef_->external_pushdown_filters_.strs_;
     if (OB_FAIL(scan_param_.external_file_format_.load_from_string(scan_ctdef_->external_file_format_str_.str_, *scan_param_.allocator_))) {
       LOG_WARN("fail to load from string", K(ret));
     } else {
@@ -396,7 +404,7 @@ ObDASIterTreeType ObDASScanOp::get_iter_tree_type() const
   bool is_fts_index = scan_param_.table_param_->is_fts_index() && attach_ctdef_ != nullptr;
   bool is_vector_index = is_vec_idx_scan(attach_ctdef_);
   bool is_spatial_index = scan_param_.table_param_->is_spatial_index() && !is_vector_index;
-  bool is_multivalue_index = scan_param_.table_param_->is_multivalue_index();
+  bool is_multivalue_index = scan_param_.table_param_->is_multivalue_index() && !is_vector_index;
 
   if (is_func_lookup(attach_ctdef_)) {
     tree_type = ObDASIterTreeType::ITER_TREE_FUNC_LOOKUP;
@@ -1488,7 +1496,8 @@ ObDASScanResult::ObDASScanResult()
     io_read_bytes_(0),
     ssstore_read_bytes_(0),
     ssstore_read_row_cnt_(0),
-    memstore_read_row_cnt_(0)
+    memstore_read_row_cnt_(0),
+    das_execute_remote_info_()
 {
 }
 
@@ -1645,8 +1654,9 @@ OB_SERIALIZE_MEMBER((ObDASScanResult, ObIDASTaskResult),
                     vec_row_store_,
                     io_read_bytes_,
                     ssstore_read_bytes_,
-                    ssstore_read_row_cnt_,
-                    memstore_read_row_cnt_);
+                    ssstore_read_row_cnt_,  // FARM COMPAT WHITELIST
+                    memstore_read_row_cnt_, // FARM COMPAT WHITELIST
+                    das_execute_remote_info_);
 
 ObLocalIndexLookupOp::~ObLocalIndexLookupOp()
 {

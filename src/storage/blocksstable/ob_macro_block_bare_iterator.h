@@ -121,8 +121,6 @@ public:
   { return rowkey_descs_; }
   int get_column_checksums(const int64_t *&column_checksums);
 private:
-  int init_micro_reader(const ObRowStoreType store_type);
-private:
   ObDatumRow row_;
   ObMicroBlockBareIterator micro_iter_;
   const ObObjMeta *column_types_;
@@ -133,6 +131,7 @@ private:
   ObMicroBlockData curr_micro_block_data_;
   int64_t curr_block_row_idx_;
   int64_t curr_block_row_cnt_;
+  ObMicroBlockReaderHelper reader_helper_;
   bool is_inited_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMacroBlockRowBareIterator);

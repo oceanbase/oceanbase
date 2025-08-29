@@ -808,6 +808,8 @@ ccl_rule_id	bigint(20)	YES		NULL
 ccl_match_time	bigint(20)	YES		NULL	
 insert_duplicate_row_count	bigint(20)	YES		NULL	
 commit_time	bigint(20)	NO		NULL	
+tx_table_read_cnt	bigint(20)	YES		NULL	
+outrow_lob_cnt	bigint(20)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_sql_audit;
 IF(count(*) >= 0, 1, 0)
 1
@@ -1822,6 +1824,7 @@ cg_idx	bigint(20)	NO		NULL
 data_checksum	bigint(20)	NO		NULL	
 table_flag	bigint(20)	NO		NULL	
 rec_scn	bigint(20)	NO		NULL	
+row_count	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table_mgr;
 IF(count(*) >= 0, 1, 0)
 1
@@ -2250,6 +2253,7 @@ WORKAREA_TEMPSEG	bigint(20)	NO		NULL
 WORKAREA_MAX_TEMPSEG	bigint(20)	NO		NULL	
 SQL_ID	varchar(32)	NO		NULL	
 PLAN_HASH_VALUE	bigint(20) unsigned	NO		NULL	
+RAW_PROFILE	varbinary(65536)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_sql_plan_monitor;
 IF(count(*) >= 0, 1, 0)
 1
@@ -2812,6 +2816,7 @@ region	varchar(128)	NO		NULL
 data_disk_size	bigint(20)	YES		NULL	
 max_net_bandwidth	bigint(20)	YES		NULL	
 net_bandwidth_weight	bigint(20)	YES		NULL	
+replica_type	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_unit;
 IF(count(*) >= 0, 1, 0)
 1
@@ -5626,6 +5631,7 @@ snapshot_index_tablet_id	bigint(20)	NO		NULL
 data_tablet_id	bigint(20)	NO		NULL	
 statistics	varchar(2048)	NO		NULL	
 sync_info	varchar(1024)	NO		NULL	
+index_type	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_vector_index_info;
 IF(count(*) >= 0, 1, 0)
 1
@@ -5948,6 +5954,41 @@ IF(count(*) >= 0, 1, 0)
 "oceanbase.__all_virtual_tablet_local_cache runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_ccl_rule;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+ccl_rule_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+ccl_rule_name	varchar(128)	NO		NULL	
+affect_user_name	varchar(64)	NO		NULL	
+affect_host	varchar(128)	NO		NULL	
+affect_for_all_databases	tinyint(4)	NO		1	
+affect_for_all_tables	tinyint(4)	NO		1	
+affect_database	varchar(128)	YES		NULL	
+affect_table	varchar(256)	YES		NULL	
+affect_dml	bigint(20)	NO		0	
+affect_scope	bigint(20)	NO		0	
+ccl_keywords	varchar(1048576)	NO		NULL	
+max_concurrency	bigint(20)	NO		0	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ccl_rule;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_ccl_status;
+Field	Type	Null	Key	Default	Extra
+svr_ip	varchar(46)	NO	PRI	NULL	
+svr_port	bigint(20)	NO	PRI	NULL	
+tenant_id	bigint(20)	NO	PRI	NULL	
+ccl_rule_id	bigint(20)	NO	PRI	NULL	
+format_sqlid	varchar(32)	NO	PRI	NULL	
+current_concurrency	bigint(20)	NO		NULL	
+max_concurrency	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ccl_status;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_ccl_status runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_mview_running_job;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO		NULL	
@@ -6035,6 +6076,21 @@ location_sub_path	varchar(128)	NO	PRI	NULL
 pattern	varchar(128)	NO	PRI	NULL	
 file_name	varchar(16384)	NO		NULL	
 file_size	bigint(20)	NO		NULL	
+desc oceanbase.__all_virtual_tenant_vector_mem_info;
+Field	Type	Null	Key	Default	Extra
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+tenant_id	bigint(20)	NO		NULL	
+raw_malloc_size	bigint(20)	NO		NULL	
+index_metadata_size	bigint(20)	NO		NULL	
+vector_mem_hold	bigint(20)	NO		NULL	
+vector_mem_used	bigint(20)	NO		NULL	
+vector_mem_limit	bigint(20)	NO		NULL	
+tx_share_limit	bigint(20)	NO		NULL	
+vector_mem_detail_info	varchar(65535)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_vector_mem_info;
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_ss_gc_status;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	
@@ -6060,5 +6116,18 @@ gc_end_scn	bigint(20)	NO		NULL
 svr_ip	varchar(46)	NO		NULL	
 svr_port	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ss_gc_detect_info;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_dba_source_v1;
+Field	Type	Null	Key	Default	Extra
+owner	varchar(128)	NO		NULL	
+name	varchar(128)	NO		NULL	
+type	varchar(12)	NO		NULL	
+line	decimal(38,0)	NO		NULL	
+text	varchar(4000)	NO		NULL	
+origin_con_id	decimal(38,0)	NO		NULL	
+object_id	decimal(38,0)	NO		NULL	
+database_id	decimal(38,0)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_dba_source_v1;
 IF(count(*) >= 0, 1, 0)
 1

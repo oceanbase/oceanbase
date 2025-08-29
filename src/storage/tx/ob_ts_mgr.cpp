@@ -479,7 +479,10 @@ void ObTsMgr::run1()
   lib::set_thread_name("TsMgr");
   while (!has_set_stop()) {
     // sleep 100 * 1000 us
-    ob_usleep(REFRESH_GTS_INTERVEL_US, true/*is_idle_sleep*/);
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    const int64_t IDLE_US = tenant_config.is_valid() ?
+        tenant_config->_keepalive_interval : REFRESH_GTS_INTERVEL_US;
+    ob_usleep(IDLE_US, true/*is_idle_sleep*/);
     ts_source_info_map_.for_each(gts_refresh_funtor);
     ts_source_info_map_.for_each(get_obsolete_tenant_functor);
     for (int64_t i = 0; i < ids.count(); i++) {
@@ -958,7 +961,7 @@ int ObTsMgr::get_gts_sync(const uint64_t tenant_id,
       if (!is_sslog_gts_tenant_id(tenant_id)) {
         TRANS_LOG(WARN, "failed to get ObTsSyncGetTsCbTask, fall back to sleep", K(ret));
       } else {
-        TRANS_LOG(INFO, "get gts sync for sslog", K(ret));
+        TRANS_LOG(TRACE, "get gts sync for sslog", K(ret));
       }
       int64_t expire_ts = ObClockGenerator::getClock() + timeout_us;
       int retry_times = 0;

@@ -144,7 +144,6 @@ ob_set_subtarget(ob_server table
   table/ob_htable_filter_parser.cpp
   table/ob_htable_filters.cpp
   table/ob_table_filter.cpp
-  table/ob_htable_utils.cpp
   table/ob_table_batch_execute_processor.cpp
   table/ob_table_end_trans_cb.cpp
   table/ob_table_execute_processor.cpp
@@ -186,7 +185,6 @@ ob_set_subtarget(ob_server table
   table/ob_table_connection_mgr.cpp
   table/redis/ob_redis_meta.cpp
   table/ob_table_batch_service.cpp
-  table/ob_table_trans_utils.cpp
   table/group/ob_table_group_common.cpp
   table/group/ob_table_tenant_group.cpp
   table/group/ob_table_group_service.cpp
@@ -256,6 +254,13 @@ ob_set_subtarget(ob_server table
   table/common/ob_table_query_session_mgr.cpp
   table/common/ob_hbase_common_struct.cpp
   table/ob_table_merge_filter.cpp
+  table/ob_table_meta_handler.cpp
+  table/ob_table_meta_processor.cpp
+  table/utils/ob_table_sql_utils.cpp
+  table/utils/ob_htable_utils.cpp
+  table/utils/ob_table_trans_utils.cpp
+  table/utils/ob_table_json_utils.cpp
+  table/utils/ob_table_convert_utils.cpp
 )
 
 ob_set_subtarget(ob_server table_load
@@ -320,6 +325,7 @@ ob_set_subtarget(ob_server table_load
   table_load/ob_table_load_partition_location.cpp
   table_load/ob_table_load_pre_sort_writer.cpp
   table_load/ob_table_load_pre_sorter.cpp
+  table_load/ob_table_load_px_batch_rows.cpp
   table_load/ob_table_load_redef_table.cpp
   table_load/ob_table_load_row_projector.cpp
   table_load/ob_table_load_rpc_processor.cpp
@@ -583,6 +589,9 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_logservice_cluster_info.cpp
   virtual_table/ob_all_virtual_ss_gc_status.cpp
   virtual_table/ob_all_virtual_ss_gc_detect_info.cpp
+  virtual_table/ob_all_virtual_dba_source.cpp
+  virtual_table/ob_all_virtual_tenant_vector_mem_info.cpp
+  virtual_table/ob_all_virtual_ccl_status.cpp
 )
 
 ob_server_add_target(ob_server)
@@ -700,8 +709,10 @@ endif()
 
 configure_file(../share/ob_version.cpp.in ob_version.cpp)
 
-message(STATUS "dump config item")
-add_custom_command(TARGET observer POST_BUILD
-COMMAND ${CMAKE_BINARY_DIR}/src/observer/observer -C
-WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-)
+if (NOT OB_USE_ASAN)
+  message(STATUS "dump config item")
+  add_custom_command(TARGET observer POST_BUILD
+    COMMAND ${CMAKE_BINARY_DIR}/src/observer/observer -C
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  )
+endif()

@@ -19,6 +19,7 @@ namespace oceanbase
 namespace storage
 {
 class ObDirectLoadInsertDataTableContext;
+class ObDirectLoadBatchRows;
 class ObDirectLoadDatumRow;
 
 class ObDirectLoadInsertDataTabletContext : public ObDirectLoadInsertTabletContext
@@ -122,8 +123,11 @@ public:
                             const ObDirectLoadDatumRow &datum_row,
                             const ObDirectLoadRowFlag &row_flag) override;
   int update_sql_statistics(table::ObTableLoadSqlStatistics &sql_statistics,
-                            const IVectorPtrs &vectors, const int64_t row_idx,
-                            const ObDirectLoadRowFlag &row_flag) override;
+                            const ObDirectLoadBatchRows &batch_rows) override;
+  int update_sql_statistics(table::ObTableLoadSqlStatistics &sql_statistics,
+                            const ObDirectLoadBatchRows &batch_rows,
+                            const uint16_t *selector,
+                            const int64_t size) override;
   int collect_sql_stats(table::ObTableLoadDmlStat &dml_stats,
                         table::ObTableLoadSqlStatistics &sql_statistics) override;
 

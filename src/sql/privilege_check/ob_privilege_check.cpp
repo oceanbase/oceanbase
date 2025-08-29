@@ -49,10 +49,12 @@
 #include "sql/resolver/ddl/ob_trigger_stmt.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
 #include "sql/resolver/dml/ob_insert_all_stmt.h"
+#include "sql/resolver/ddl/ob_create_ccl_rule_stmt.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
 #include "sql/resolver/dcl/ob_alter_user_profile_stmt.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/resolver/cmd/ob_event_stmt.h"
+#include "sql/resolver/cmd/ob_location_utils_stmt.h"
 
 namespace oceanbase {
 using namespace share;
@@ -1869,15 +1871,10 @@ int get_create_outline_stmt_need_privs(
     LOG_WARN("failed to get priv need check", K(ret));
   } else if (lib::is_mysql_mode() && need_check) {
     const ObCreateOutlineStmt *stmt = static_cast<const ObCreateOutlineStmt*>(basic_stmt);
-    if (OB_FAIL(ObPrivilegeCheck::can_do_operation_on_db(session_priv,
-                                                         stmt->get_create_outline_arg().db_name_))) {
-      LOG_WARN("Can not create outline in current database", K(session_priv), K(ret));
-    } else {
-      need_priv.db_ = stmt->get_create_outline_arg().db_name_;
-      need_priv.priv_set_ = OB_PRIV_CREATE;
-      need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
-      ADD_NEED_PRIV(need_priv);
-    }
+    need_priv.db_ = stmt->get_create_outline_arg().db_name_;
+    need_priv.priv_set_ = OB_PRIV_CREATE;
+    need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
+    ADD_NEED_PRIV(need_priv);
   }
   return ret;
 }
@@ -1901,15 +1898,10 @@ int get_alter_outline_stmt_need_privs(
     LOG_WARN("failed to get priv need check", K(ret));
   } else if (lib::is_mysql_mode() && need_check) {
     const ObAlterOutlineStmt *stmt = static_cast<const ObAlterOutlineStmt*>(basic_stmt);
-    if (OB_FAIL(ObPrivilegeCheck::can_do_operation_on_db(session_priv,
-                                                         stmt->get_alter_outline_arg().db_name_))) {
-      LOG_WARN("Can not alter outline in current database", K(session_priv), K(ret));
-    } else {
-      need_priv.db_ = stmt->get_alter_outline_arg().db_name_;
-      need_priv.priv_set_ = OB_PRIV_ALTER;
-      need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
-      ADD_NEED_PRIV(need_priv);
-    }
+    need_priv.db_ = stmt->get_alter_outline_arg().db_name_;
+    need_priv.priv_set_ = OB_PRIV_ALTER;
+    need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
+    ADD_NEED_PRIV(need_priv);
   }
   return ret;
 }
@@ -1933,15 +1925,10 @@ int get_drop_outline_stmt_need_privs(
     LOG_WARN("failed to get priv need check", K(ret));
   } else if (lib::is_mysql_mode() && need_check) {
     const ObDropOutlineStmt *stmt = static_cast<const ObDropOutlineStmt*>(basic_stmt);
-    if (OB_FAIL(ObPrivilegeCheck::can_do_operation_on_db(session_priv,
-                                                         stmt->get_drop_outline_arg().db_name_))) {
-      LOG_WARN("Can not drop outline in current database", K(session_priv), K(ret));
-    } else {
-      need_priv.db_ = stmt->get_drop_outline_arg().db_name_;
-      need_priv.priv_set_ = OB_PRIV_DROP;
-      need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
-      ADD_NEED_PRIV(need_priv);
-    }
+    need_priv.db_ = stmt->get_drop_outline_arg().db_name_;
+    need_priv.priv_set_ = OB_PRIV_DROP;
+    need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
+    ADD_NEED_PRIV(need_priv);
   }
   return ret;
 }
@@ -2554,6 +2541,40 @@ int get_location_privs(const ObSessionPrivInfo &session_priv,
   return ret;
 }
 
+int get_location_util_privs(const ObSessionPrivInfo &session_priv,
+                            const ObStmt *basic_stmt,
+                            ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(basic_stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Basic stmt should be not be NULL", K(ret));
+  } else if (lib::is_oracle_mode()) {
+    ret = no_priv_needed(session_priv, basic_stmt, need_privs);
+  } else {
+    ObNeedPriv need_priv;
+    stmt::StmtType stmt_type = basic_stmt->get_stmt_type();
+    const ObLocationUtilsStmt *stmt = static_cast<const ObLocationUtilsStmt*>(basic_stmt);
+    switch (stmt_type) {
+      case stmt::T_LOCATION_UTILS: {
+        ObNeedPriv tmp_need_priv;
+        tmp_need_priv.table_ = stmt->get_location_name();
+        tmp_need_priv.priv_level_ = OB_PRIV_OBJECT_LEVEL;
+        tmp_need_priv.priv_set_ = OB_PRIV_WRITE;
+        tmp_need_priv.obj_type_ = ObObjectType::LOCATION;
+        ADD_NEED_PRIV(tmp_need_priv);
+        break;
+      }
+      default: {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("Stmt type not in types dealt in this function", K(ret), K(stmt_type));
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 int get_variable_set_stmt_need_privs(
     const ObSessionPrivInfo &session_priv,
     const ObStmt *basic_stmt,
@@ -2998,6 +3019,7 @@ int get_sys_tenant_alter_system_priv(
              stmt::T_TRANSFER_PARTITION != basic_stmt->get_stmt_type() &&
              stmt::T_LOAD_TIME_ZONE_INFO != basic_stmt->get_stmt_type() &&
              stmt::T_SERVICE_NAME != basic_stmt->get_stmt_type() &&
+             stmt::T_ALTER_LS != basic_stmt->get_stmt_type() &&
              stmt::T_ALTER_LS_REPLICA != basic_stmt->get_stmt_type() &&
              stmt::T_TRIGGER_STORAGE_CACHE != basic_stmt->get_stmt_type() &&
              stmt::T_FLASHBACK_STANDBY_LOG != basic_stmt->get_stmt_type()) {
@@ -3524,6 +3546,50 @@ int get_lock_table_priv(
         }
       }
     }
+  }
+  return ret;
+}
+
+int get_create_ccl_priv(
+    const ObSessionPrivInfo &session_priv,
+    const ObStmt *basic_stmt,
+    ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(session_priv);
+  ObNeedPriv need_priv;
+  if (OB_ISNULL(basic_stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Basic stmt should be not be NULL", K(ret));
+  } else if (stmt::T_CREATE_CCL_RULE != basic_stmt->get_stmt_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected stmt type", K(basic_stmt->get_stmt_type()), K(ret));
+  } else {
+    need_priv.priv_set_ = OB_PRIV_CREATE;
+    need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
+    ADD_NEED_PRIV(need_priv);
+  }
+  return ret;
+}
+
+int get_drop_ccl_priv(
+    const ObSessionPrivInfo &session_priv,
+    const ObStmt *basic_stmt,
+    ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(session_priv);
+  ObNeedPriv need_priv;
+  if (OB_ISNULL(basic_stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Basic stmt should be not be NULL", K(ret));
+  } else if (stmt::T_DROP_CCL_RULE != basic_stmt->get_stmt_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected stmt type", K(basic_stmt->get_stmt_type()), K(ret));
+  } else {
+    need_priv.priv_set_ = OB_PRIV_DROP;
+    need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
+    ADD_NEED_PRIV(need_priv);
   }
   return ret;
 }

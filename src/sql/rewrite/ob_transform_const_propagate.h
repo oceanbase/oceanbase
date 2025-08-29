@@ -189,7 +189,12 @@ private:
 
   int exclude_redundancy_join_cond(ObIArray<ObRawExpr*> &condition_exprs,
                                   ObIArray<ExprConstInfo> &expr_const_infos,
-                                  ObIArray<ObRawExpr*> &excluded_exprs);
+                                  ObIArray<ObRawExpr*> &excluded_exprs,
+                                  ObDMLStmt *stmt);
+
+  int check_is_expr_const_null(ObIArray<ExprConstInfo> &expr_const_infos,
+                               ObRawExpr *expr,
+                               bool &is_const_null);
 
   bool find_const_expr(ObIArray<ExprConstInfo> &expr_const_infos, 
                       ObRawExpr *expr, 

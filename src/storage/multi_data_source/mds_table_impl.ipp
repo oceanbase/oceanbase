@@ -1092,7 +1092,12 @@ int MdsTableImpl<MdsTableType>::flush(share::SCN need_advanced_rec_scn_lower_lim
   share::SCN do_flush_scn = max_decided_scn;// this scn is defined for calculation
   int64_t undump_node_cnt = 0;
   MdsWLockGuard lg(lock_);
-  if (OB_UNLIKELY(!need_advanced_rec_scn_lower_limit.is_valid() || !max_decided_scn.is_valid() || max_decided_scn.is_max())) {
+  if (!mgr_handle_.get_mds_table_mgr()->can_flush()) {
+    ret = OB_EAGAIN;
+    if (REACH_TIME_INTERVAL(10LL * 1000LL * 1000LL/*10 seconds*/)) {
+      MDS_LOG_FLUSH(INFO, "mds flush is disabled");
+    }
+  } else if (OB_UNLIKELY(!need_advanced_rec_scn_lower_limit.is_valid() || !max_decided_scn.is_valid() || max_decided_scn.is_max())) {
     ret = OB_INVALID_ARGUMENT;
     MDS_LOG_FLUSH(WARN, "invalid recycle scn");
   } else if (get_rec_scn().is_max()) {

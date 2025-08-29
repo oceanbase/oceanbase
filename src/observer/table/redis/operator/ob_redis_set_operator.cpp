@@ -625,6 +625,8 @@ int SetCommandOperator::do_srand_mem_repeat_inner(
         int64_t cur_index = 0;
         int64_t idx = 0;
         ObTableQuery query;
+        query.set_limit(1);
+        query.set_offset(target_idxs[0]+1);
         if (OB_FAIL(add_complex_type_subkey_scan_range(db, key, query))) {
           LOG_WARN("fail to build scan query", K(ret));
         } else if (OB_FAIL(query.add_select_column(ObRedisUtil::RKEY_PROPERTY_NAME))) {
@@ -708,6 +710,8 @@ int SetCommandOperator::do_srand_mem_inner(
 
       if (OB_SUCC(ret)) {
         ObTableQuery query;
+        query.set_limit(1);
+        query.set_offset(target_idxs[0]+1);
         if (OB_FAIL(add_complex_type_subkey_scan_range(db, key, query))) {
           LOG_WARN("fail to build scan query", K(ret));
         } else if (OB_FAIL(query.add_select_column(ObRedisUtil::RKEY_PROPERTY_NAME))) {

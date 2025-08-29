@@ -46,6 +46,7 @@ struct ObStorageDatum : public common::ObDatum
   ~ObStorageDatum() = default;
   // ext value section
   OB_INLINE void reuse() { ptr_ = buf_; reserved_ = 0; pack_ = 0; }
+  OB_INLINE int read_int(const char *buf, int64_t len);
   OB_INLINE void set_ext_value(const int64_t ext_value)
   { reuse(); set_ext(); no_cv(extend_obj_)->set_ext(ext_value); }
   OB_INLINE void set_nop() { set_ext_value(ObActionFlag::OP_NOP); }
@@ -64,7 +65,6 @@ struct ObStorageDatum : public common::ObDatum
   OB_INLINE ObStorageDatum& operator=(const ObStorageDatum &other);
   OB_INLINE int64_t storage_to_string(char *buf, int64_t buf_len, const bool for_dump = false) const;
   OB_INLINE bool need_copy_for_encoding_column_with_flat_format(const ObObjDatumMapType map_type) const;
-  OB_INLINE const char *to_cstring2(const bool for_dump = false) const;
   //only for unittest
   OB_INLINE bool operator==(const ObStorageDatum &other) const;
   OB_INLINE bool operator==(const ObObj &other) const;
@@ -253,6 +253,29 @@ OB_INLINE int ObStorageDatum::from_buf_enhance(const char *buf, const int64_t bu
     }
   }
 
+  return ret;
+}
+
+OB_INLINE int ObStorageDatum::read_int(const char *buf, int64_t len)
+{
+  int ret = OB_SUCCESS;
+
+  reuse();
+  if (OB_UNLIKELY(nullptr == buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid argument to read int", KR(ret), KP(buf), K(len));
+  } else if (len == 8) {
+    set_uint(*reinterpret_cast<const uint64_t *>(buf));
+  } else if (len == 4) {
+    set_uint(*reinterpret_cast<const uint32_t *>(buf));
+  } else if (len == 2) {
+    set_uint(*reinterpret_cast<const uint16_t *>(buf));
+  } else if (len == 1) {
+    set_uint(*reinterpret_cast<const uint8_t *>(buf));
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Invalid len to read int", KR(ret), KP(buf), K(len));
+  }
 
   return ret;
 }
@@ -393,12 +416,6 @@ OB_INLINE int64_t ObStorageDatum::storage_to_string(char *buf, int64_t buf_len, 
   }
 
   return pos;
-}
-
-OB_INLINE const char *ObStorageDatum::to_cstring2(const bool for_dump) const
-{
-  char *buffer = NULL;
-  return buffer;
 }
 
 OB_INLINE bool ObStorageDatum::need_copy_for_encoding_column_with_flat_format(const ObObjDatumMapType map_type) const

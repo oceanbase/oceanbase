@@ -603,7 +603,8 @@ ObTableScanSpec::ObTableScanSpec(ObIAllocator &alloc, const ObPhyOperatorType ty
     parser_properties_(),
     est_cost_simple_info_(),
     pseudo_column_exprs_(alloc),
-    lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD)
+    lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
+    lake_table_format_(share::ObLakeTableFormat::INVALID)
 {
 }
 
@@ -632,7 +633,8 @@ OB_SERIALIZE_MEMBER((ObTableScanSpec, ObOpSpec),
                     parser_name_,
                     parser_properties_,
                     pseudo_column_exprs_,
-                    lob_inrow_threshold_);
+                    lob_inrow_threshold_,
+                    lake_table_format_);
 
 DEF_TO_STRING(ObTableScanSpec)
 {
@@ -3829,7 +3831,7 @@ int ObTableScanOp::multivalue_get_pure_data(
     if (OB_FAIL(ret)) {
     } else if (FALSE_IT(rowkey_end = column_count - 1)) {
     } else if (FALSE_IT(rowkey_start = rowkey_end - data_rowkey_cnt)) {
-    } else if (OB_FAIL(extend_domain_obj_buffer(SAPTIAL_INDEX_DEFAULT_ROW_COUNT))) {
+    } else if (OB_FAIL(extend_domain_obj_buffer(record_num))) {
       LOG_WARN("failed to extend obobj buffer.", K(ret));
     } else {
       ObObj tmp_objs[column_count];
@@ -3869,7 +3871,7 @@ int ObTableScanOp::inner_get_next_multivalue_index_row()
   bool need_ignore_null = false;
   if (OB_ISNULL(domain_index_.dom_rows_)) {
     if (OB_FAIL(init_multivalue_index_rows())) {
-      LOG_WARN("init spatial row store failed", K(ret));
+      LOG_WARN("init multivalue row store failed", K(ret));
     }
   }
   if (OB_SUCC(ret)) {

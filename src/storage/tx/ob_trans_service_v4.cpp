@@ -173,7 +173,6 @@ int ObTransService::do_commit_tx_(ObTxDesc &tx,
   int ret = OB_SUCCESS;
   ObTxPart *coord = NULL;
   tx.set_commit_cb(&cb);
-  tx.commit_expire_ts_ = expire_ts;
   if (OB_FAIL(decide_tx_commit_info_(tx, coord))) {
     TRANS_LOG(WARN, "decide tx coordinator fail, tx will abort", K(ret), K(tx));
   } else if (OB_FAIL(tx.commit_task_.init(&tx, this))) {
@@ -1453,7 +1452,7 @@ int ObTransService::validate_snapshot_version_(const SCN snapshot,
       snapshot <= ls_weak_read_ts) {
   } else {
     SCN gts;
-    const int64_t GET_GTS_AHEAD_INTERVAL = 0;
+    const int64_t GET_GTS_AHEAD_INTERVAL = get_gts_ahead_();
     const MonotonicTs stc_ahead = get_req_receive_mts_() - MonotonicTs(GET_GTS_AHEAD_INTERVAL);
     MonotonicTs tmp_receive_gts_ts(0);
     do {
@@ -1820,7 +1819,8 @@ int ObTransService::sync_acquire_global_snapshot_(ObTxDesc &tx,
 {
   int ret = OB_SUCCESS;
   uint64_t op_sn = tx.op_sn_;
-  const int64_t GET_GTS_AHEAD_INTERVAL = 0;
+  // const int64_t GET_GTS_AHEAD_INTERVAL = 0;
+  const int64_t GET_GTS_AHEAD_INTERVAL = get_gts_ahead_();
   tx.flags_.BLOCK_ = true;
   tx.lock_.unlock();
   ret = acquire_global_snapshot__(expire_ts,
@@ -1864,14 +1864,14 @@ int ObTransService::acquire_global_snapshot__(const int64_t expire_ts,
   const int64_t current_time = ObClockGenerator::getClock();
   // occupy current worker thread for at most 1s
   const int64_t MAX_WAIT_TIME_US = 1 * 1000 * 1000;
-  MonotonicTs gts_receive_ts(0);
+  MonotonicTs receive_gts_ts(0);
   const int64_t timeout_us = min(MAX_WAIT_TIME_US, expire_ts - current_time);
   // NOTE thant sslog is only for meta tenant or sys tenant
   const uint64_t gts_tenant_id = !is_for_sslog ? tenant_id_ : get_sslog_gts_tenant_id(tenant_id_);
   if (current_time >= expire_ts) {
     ret = OB_TIMEOUT;
     TRANS_LOG(WARN, "get gts timeout", K(ret), K(expire_ts), K(current_time));
-  } else if (OB_FAIL(ts_mgr_->get_gts_sync(gts_tenant_id, request_time, timeout_us, snapshot, gts_receive_ts))) {
+  } else if (OB_FAIL(ts_mgr_->get_gts_sync(gts_tenant_id, request_time, timeout_us, snapshot, receive_gts_ts))) {
     TRANS_LOG(WARN, "get gts fail", K(ret), K(timeout_us), K(request_time));
     if (OB_TIMEOUT == ret) {
       ret = OB_GTS_NOT_READY;
@@ -1880,7 +1880,7 @@ int ObTransService::acquire_global_snapshot__(const int64_t expire_ts,
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "invalid snapshot from gts", K(ret), K(snapshot));
   } else {
-    uncertain_bound = gts_receive_ts.mts_ + gts_ahead;
+    uncertain_bound = receive_gts_ts.mts_ + gts_ahead;
   }
 
   if (OB_FAIL(ret)) {
@@ -1975,7 +1975,16 @@ bool ObTransService::is_sync_replica_(const share::ObLSID &ls_id)
 int ObTransService::handle_trans_commit_response(ObTxCommitRespMsg &resp, ObTransRpcResult &result)
 {
   int ret = OB_SUCCESS;
-  ret = handle_tx_commit_result(resp.tx_id_, resp.ret_, resp.commit_version_);
+  if (0 < resp.need_wait_interval_us_) {
+    if (TC_REACH_TIME_INTERVAL(1000000)) {
+      TRANS_LOG(WARN, "wait for consistency, please note parameter _ob_get_gts_ahead_interval",
+          K(ret), K(resp.need_wait_interval_us_));
+    }
+    ob_usleep(resp.need_wait_interval_us_);
+    ret = handle_tx_commit_result(resp.tx_id_, resp.ret_, resp.commit_version_);
+  } else {
+    ret = handle_tx_commit_result(resp.tx_id_, resp.ret_, resp.commit_version_);
+  }
   result.reset();
   result.init(ret, resp.get_timestamp());
 #ifndef NDEBUG
@@ -2018,6 +2027,17 @@ int ObTransService::handle_trans_commit_request(ObTxCommitMsg &msg,
   result.reset();
   result.init(ret, msg.get_timestamp());
   result.private_data_ = commit_version;
+  if (OB_TRANS_COMMITED == ret) {
+    // in this case, if gts_head_interval > 0, must sleep gts_head_interval
+    const int64_t gts_head_interval = get_gts_ahead_();
+    if (0 < gts_head_interval) {
+      if (TC_REACH_TIME_INTERVAL(1000000)) {
+        TRANS_LOG(WARN, "wait for consistency, please note parameter _ob_get_gts_ahead_interval",
+            K(ret), K(gts_head_interval), K(msg));
+      }
+      ob_usleep(gts_head_interval);
+    }
+  }
 #ifndef NDEBUG
   TRANS_LOG(INFO, "handle trans commit request", K(ret), K(msg));
 #else
@@ -4143,6 +4163,24 @@ void ObTransService::adjust_tx_snapshot_(ObTxDesc &tx, ObTxReadSnapshot &snapsho
       tx.last_rc_snapshot_version_ = snapshot.core_.version_;
     }
   }
+}
+
+// gts ahead is only used for user tenant
+// 100ms is max value for gts ahead
+int64_t ObTransService::get_gts_ahead_()
+{
+  int64_t final_result = 0;
+  if (is_user_tenant(MTL_ID())) {
+    const int64_t GET_GTS_AHEAD_INTERVAL = GCONF._ob_get_gts_ahead_interval;
+    if (100000 < GET_GTS_AHEAD_INTERVAL) {
+      final_result = 100000;  // 100ms is upper bound
+    } else if (0 > GET_GTS_AHEAD_INTERVAL) {
+      final_result = 0;
+    } else {
+      final_result = GET_GTS_AHEAD_INTERVAL;
+    }
+  }
+  return final_result;
 }
 
 } // transaction

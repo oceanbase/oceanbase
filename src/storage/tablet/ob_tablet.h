@@ -535,6 +535,8 @@ public:
 public:
   bool is_cs_replica_compat() const { return nullptr == rowkey_read_info_ ? false : rowkey_read_info_->is_cs_replica_compat(); }
   int check_is_delete_insert_table(bool &is_delete_insert_table) const;
+  int check_is_mv_major_refresh_tablet(bool &val) const;
+  int check_micro_block_format_version(int64_t &micro_block_format_version) const;
   int check_row_store_with_co_major(bool &is_row_store_with_co_major) const;
   int pre_process_cs_replica(
       const ObDirectLoadType direct_load_type,
@@ -601,13 +603,18 @@ public:
       int64_t &pos);
 
   int fetch_tablet_autoinc_seq_cache(
+      const ObLSSwitchChecker &ls_switch_checker,
       const uint64_t cache_size,
       share::ObTabletAutoincInterval &result);
 
-  int update_tablet_autoinc_seq(const uint64_t autoinc_seq, const bool is_tablet_creating);
+  int update_tablet_autoinc_seq(
+      const ObLSSwitchChecker &ls_switch_checker,
+      const uint64_t autoinc_seq,
+      const bool is_tablet_creating);
   int get_kept_snapshot_info(
       const int64_t min_reserved_snapshot_on_ls,
-      ObStorageSnapshotInfo &snapshot_info) const;
+      ObStorageSnapshotInfo &snapshot_info,
+      const bool skip_tablet_snapshot_and_undo_retention = false) const;
   int check_schema_version_elapsed(
       const int64_t schema_version,
       const bool need_wait_trans_end,
@@ -1001,6 +1008,7 @@ public:
   static constexpr int32_t VERSION_V2 = 2;
   static constexpr int32_t VERSION_V3 = 3;
   static constexpr int32_t VERSION_V4 = 4;
+
 private:
   // ObTabletDDLKvMgr::MAX_DDL_KV_CNT_IN_STORAGE
   // Array size is too large, need to shrink it if possible

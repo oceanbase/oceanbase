@@ -50,9 +50,9 @@ bool ObTransferParallelBuildTabletDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObTransferParallelBuildTabletDag::hash() const
+uint64_t ObTransferParallelBuildTabletDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   hash_value = common::murmurhash(
       &ls_id_, sizeof(ls_id_), hash_value);
   return hash_value;

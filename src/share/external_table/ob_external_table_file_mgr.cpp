@@ -40,18 +40,33 @@ int ObExternalFileInfo::deep_copy(ObIAllocator &allocator, const ObExternalFileI
     LOG_WARN("fail to write string", K(ret));
   } else if (OB_FAIL(ob_write_string(allocator, other.session_id_, this->session_id_))) {
     LOG_WARN("failed to write session id string", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, other.content_digest_, this->content_digest_))) {
+    LOG_WARN("fail to write string", K(ret));
   } else {
     this->file_id_ = other.file_id_;
     this->part_id_ = other.part_id_;
     this->file_addr_ = other.file_addr_;
     this->file_size_ = other.file_size_;
+    this->modify_time_ = other.modify_time_;
     this->row_start_ = other.row_start_;
     this->row_count_ = other.row_count_;
+
+    this->pos_del_files_.reset();
+    for (int64_t i = 0; OB_SUCC(ret) && i < other.pos_del_files_.count(); ++i) {
+      ObString copied_str;
+      if (OB_FAIL(ob_write_string(allocator, other.pos_del_files_.at(i), copied_str))) {
+        LOG_WARN("fail to write string array element", K(ret), K(i));
+      } else if (OB_FAIL(this->pos_del_files_.push_back(copied_str))) {
+        LOG_WARN("fail to push back string array element", K(ret), K(i));
+      }
+    }
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObExternalFileInfo, file_url_, file_id_, file_addr_, file_size_, part_id_, row_start_, row_count_, session_id_);
+OB_SERIALIZE_MEMBER(ObExternalFileInfo, file_url_, file_id_, file_addr_, file_size_, part_id_,
+                    row_start_, row_count_, session_id_, pos_del_files_, modify_time_,
+                    content_digest_);
 
 int ObExternalTableFilesKey::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey *&key) const
 {
@@ -287,6 +302,7 @@ int ObExternalTableFileManager::get_mocked_external_table_files(
         }
 
         if (found) {
+          file.file_size_ = -1;
           file.file_id_ = i + 1;
           file.file_addr_ = GCTX.self_addr();
           OZ (external_files.push_back(file));
@@ -294,6 +310,7 @@ int ObExternalTableFileManager::get_mocked_external_table_files(
       }
     } else {
       ObExternalFileInfo file;
+      file.file_size_ = -1;
       file.file_id_ = 1;
       file.file_addr_ = GCTX.self_addr();
       OZ (external_files.push_back(file));

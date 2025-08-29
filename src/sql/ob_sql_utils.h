@@ -71,6 +71,7 @@ struct ObPCResourceMapRule;
 class ObResolverParams;
 class ObGlobalHint;
 class ObSqlSchemaGuard;
+struct ObPlanCacheCtx;
 
 struct EstimatedPartition {
   common::ObAddr addr_;
@@ -434,6 +435,9 @@ public:
                              ObObjPrintParams print_params = ObObjPrintParams(),
                              const ParamStore *param_store = NULL,
                              const ObSQLSessionInfo *session = NULL);
+  static int reconstruct_ps_sql(ObSqlString &reconstruct_sql, const ObString &ps_sql,
+                                const ObIArray<const common::ObObjParam *> &const_tokens);
+  static int append_obj_param(ObSqlString &reconstruct_sql, const common::ObObjParam & obj_param);
   static int print_sql(char *buf,
                        int64_t buf_len,
                        int64_t &pos,
@@ -707,12 +711,6 @@ public:
                                                 ObPCResourceMapRule &resource_map_rule,
                                                 uint64_t &group_id);
 
-#ifdef OB_BUILD_SPM
-  static int handle_plan_baseline(const ObAuditRecordData &audit_record,
-                                  ObPhysicalPlan *plan,
-                                  const int ret_code,
-                                  ObSqlCtx &sql_ctx);
-#endif
   static int async_recompile_view(const share::schema::ObTableSchema &old_view_schema,
                                   ObSelectStmt *select_stmt,
                                   bool reset_column_infos,
@@ -801,6 +799,16 @@ public:
 
   static int get_strong_partition_replica_addr(const ObCandiTabletLoc &phy_part_loc_info,
                                                ObAddr &selected_addr);
+
+  static int match_ccl_rule(ObIAllocator &alloc, ObSQLSessionInfo &session, ObSqlCtx &context,
+                            const ObString &sql, bool is_ps_mode,
+                            const ObIArray<const common::ObObjParam *> &param_store,
+                            const ObString &format_sqlid, CclRuleContainsInfo contians_info,
+                            ParseResult *parse_result = nullptr, ObStmt *stmt = nullptr);
+
+  static int match_ccl_rule(const ObPlanCacheCtx *pc_ctx, ObSQLSessionInfo &session, bool is_ps_mode,
+                            const DependenyTableStore &dependency_table_store);
+
 private:
   static bool check_mysql50_prefix(common::ObString &db_name);
   static bool part_expr_has_virtual_column(const ObExpr *part_expr);

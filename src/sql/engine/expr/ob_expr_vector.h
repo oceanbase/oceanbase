@@ -42,6 +42,9 @@ namespace sql
 class ObExprVector : public ObFuncExprOperator
 {
 public:
+
+  static const int64_t MAX_VECTOR_DIM = 16000;
+
   struct VectorCastInfo
   {
     VectorCastInfo()

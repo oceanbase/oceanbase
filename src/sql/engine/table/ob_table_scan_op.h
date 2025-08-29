@@ -241,7 +241,8 @@ public:
       uint64_t is_das_keep_order_            : 1; // whether das need keep ordering
       uint64_t use_index_merge_              : 1; // whether use index merge
       uint64_t ordering_used_by_parent_      : 1; // whether tsc ordering used by parent
-      uint64_t reserved_                     : 61;
+      uint64_t enable_new_false_range_       : 1; // whether use new false range
+      uint64_t reserved_                     : 60;
     };
   };
 };
@@ -466,7 +467,8 @@ public:
       uint64_t is_multivalue_ddl_               : 1;
       uint64_t can_be_paused_                   : 1;
       uint64_t need_check_outrow_lob_           : 1;
-      uint64_t reserved_                        : 48;
+      uint64_t is_spiv_ddl_                     : 1;
+      uint64_t reserved_                        : 47;
     };
   };
   int64_t tenant_id_col_idx_;
@@ -477,6 +479,7 @@ public:
   ObCostTableScanSimpleInfo est_cost_simple_info_;
   ExprFixedArray pseudo_column_exprs_;
   int64_t lob_inrow_threshold_;
+  share::ObLakeTableFormat lake_table_format_;
 };
 
 // for random batch_size & skip
@@ -806,6 +809,8 @@ protected:
   ObDASTCBMemProfileKey das_tasks_key_;
   ObTSCMonitorInfo tsc_monitor_info_;
   bool need_check_outrow_lob_;
+  ObDasExecuteLocalInfo das_execute_local_info_;
+  ObDasExecuteRemoteInfo das_execute_remote_info_;
 private:
   ObRandScanProcessor rand_scan_processor_;
  };

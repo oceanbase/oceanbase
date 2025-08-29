@@ -1304,6 +1304,8 @@ int ObAdminObjectStorageDriverQualityExecutor::set_environment_()
     OB_LOG(WARN, "failed to init io manager", KR(ret));
   } else if (OB_FAIL(ObIOManager::get_instance().start())) {
     OB_LOG(WARN, "failed to start io manager", KR(ret));
+  } else if (OB_FAIL(ObObjectStorageInfo::register_cluster_state_mgr(&ObClusterStateBaseMgr::get_instance()))) {
+    STORAGE_LOG(WARN, "fail to register cluster state mgr", KR(ret));
   }
 
   // set tenant io manager memory limit;

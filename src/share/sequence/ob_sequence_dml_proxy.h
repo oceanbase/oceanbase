@@ -63,14 +63,20 @@ public:
                  const int64_t schema_version,
                  const share::ObSequenceOption &option,
                  SequenceCacheNode &cache_range,
-                 ObSequenceCacheItem &old_cache);
+                 ObSequenceCacheItem &old_cache,
+                 bool &wrap_around);
   int prefetch_next_batch(
       const uint64_t tenant_id,
       const uint64_t sequence_id,
       const int64_t schema_version,
       const share::ObSequenceOption &option,
       SequenceCacheNode &cache_range,
-      ObSequenceCacheItem &old_cache);
+      ObSequenceCacheItem &old_cache,
+      bool &wrap_around);
+
+  share::schema::ObMultiVersionSchemaService *get_schema_service() {
+    return schema_service_;
+  }
 private:
   /* functions */
   int set_pre_op_timeout(common::ObTimeoutCtx &ctx);

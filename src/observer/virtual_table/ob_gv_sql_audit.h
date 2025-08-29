@@ -185,6 +185,8 @@ private:
     CCL_MATCH_TIME,
     INSERT_DUPLICATE_ROW_COUNT,
     COMMIT_TIME,
+    TX_TABLE_READ_CNT,
+    OUTROW_LOB_CNT,
   };
 
   const static int64_t PRI_KEY_IP_IDX        = 0;

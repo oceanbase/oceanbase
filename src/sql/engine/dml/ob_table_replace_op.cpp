@@ -45,6 +45,7 @@ OB_DEF_SERIALIZE(ObTableReplaceSpec)
   OB_UNIS_ENCODE(has_global_unique_index_);
   OB_UNIS_ENCODE(all_saved_exprs_);
   OB_UNIS_ENCODE(doc_id_col_id_);
+  OB_UNIS_ENCODE(hidden_ck_col_id_);
   return ret;
 }
 
@@ -70,6 +71,7 @@ OB_DEF_DESERIALIZE(ObTableReplaceSpec)
   OB_UNIS_DECODE(has_global_unique_index_);
   OB_UNIS_DECODE(all_saved_exprs_);
   OB_UNIS_DECODE(doc_id_col_id_);
+  OB_UNIS_DECODE(hidden_ck_col_id_);
   return ret;
 }
 
@@ -92,6 +94,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableReplaceSpec)
   OB_UNIS_ADD_LEN(has_global_unique_index_);
   OB_UNIS_ADD_LEN(all_saved_exprs_);
   OB_UNIS_ADD_LEN(doc_id_col_id_);
+  OB_UNIS_ADD_LEN(hidden_ck_col_id_);
   return len;
 }
 
@@ -1062,6 +1065,7 @@ int ObTableReplaceOp::check_values(bool &is_equal,
           LOG_WARN("compare failed", K(ret));
         } else if (0 != cmp_ret) {
           is_equal = false;
+          break;
         }
       }
     }

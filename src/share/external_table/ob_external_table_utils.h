@@ -66,6 +66,8 @@ class ObExternalTableUtils {
   };
 
  public:
+  static const char *dummy_file_name();
+
   // range_filter is from query_range
   static int is_file_id_in_ranges(const common::ObIArray<common::ObNewRange *> &range_filter,
                                   const int64_t &file_id,
@@ -112,7 +114,7 @@ class ObExternalTableUtils {
     int64_t sqc_count);
   static int assigned_files_to_sqcs_by_load_balancer(
     const common::ObIArray<ObExternalFileInfo> &files,
-    const ObIArray<ObPxSqcMeta *> &sqcs,
+    const ObIArray<ObPxSqcMeta> &sqcs,
     common::ObIArray<int64_t> &assigned_idx);
   static int select_external_table_loc_by_load_balancer(
     const common::ObIArray<ObExternalFileInfo> &files,
@@ -122,17 +124,24 @@ class ObExternalTableUtils {
   static int assign_odps_file_to_sqcs(
     ObDfo &dfo,
     ObExecContext &exec_ctx,
-    ObIArray<ObPxSqcMeta *> &sqcs,
+    ObIArray<ObPxSqcMeta> &sqcs,
     int64_t parallel,
     ObODPSGeneralFormat::ApiMode odps_api_mode);
   static int split_odps_to_sqcs_process_tunnel(common::ObIArray<share::ObExternalFileInfo> &files,
-                                        ObIArray<ObPxSqcMeta *> &sqcs,
+                                        ObIArray<ObPxSqcMeta> &sqcs,
                                         int parallel);
   static int split_odps_to_sqcs_storage_api(int64_t split_task_count, int64_t table_total_file_size,
-      const ObString &session_str, const ObString &new_file_urls, ObIArray<ObPxSqcMeta *> &sqcs, int parallel,
+      const ObString &session_str, const ObString &new_file_urls, ObIArray<ObPxSqcMeta> &sqcs, int parallel,
       ObIAllocator &range_allocator, ObODPSGeneralFormat::ApiMode odps_api_mode);
   static int filter_files_in_locations(common::ObIArray<share::ObExternalFileInfo> &files,
       common::ObIArray<common::ObAddr> &locations);
+
+  static int plugin_split_tasks(
+      ObIAllocator &allocator,
+      const ObString &external_table_format_str,
+      ObDfo &dfo,
+      ObIArray<ObPxSqcMeta> &sqcs,
+      int64_t parallel);
 
   static int collect_external_file_list(
     const ObSQLSessionInfo* session_ptr_in,
@@ -183,6 +192,7 @@ class ObExternalTableUtils {
                                        const ObString &pattern,
                                        const sql::ObExprRegexpSessionVariables &regexp_vars,
                                        ObIAllocator &allocator);
+  static int get_credential_field_name(ObSqlString &str, int64_t opt);
  private:
   static bool is_left_edge(const common::ObObj &value);
   static bool is_right_edge(const common::ObObj &value);

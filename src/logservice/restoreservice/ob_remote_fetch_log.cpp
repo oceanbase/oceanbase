@@ -83,6 +83,7 @@ int ObRemoteFetchLogImpl::do_schedule(const share::ObLogRestoreSourceItem &sourc
   } else if (is_location_log_source_type(source.type_) || is_raw_path_log_source_type(source.type_)) {
     ret = archive_driver_->do_schedule();
     archive_driver_->set_global_recovery_scn(source.until_scn_);
+    archive_driver_->print_stat();
   } else {
     ret = OB_NOT_SUPPORTED;
     CLOG_LOG(WARN, "unsupported log source type", K(ret), K_(source.type));

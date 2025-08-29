@@ -104,6 +104,7 @@ public:
   // support read buffer in parallel, iterator can read data only
   // @param[out] empty, if data read or not
   int pre_read(bool &empty);
+  int pre_read(bool &empty, int64_t &read_size);
 
   // @brief call update_source_func explicitly
   void update_source_cb();
@@ -125,6 +126,7 @@ private:
       const std::function<int(share::ObBackupDest &dest)> &refresh_storage_info_func);
   int next_entry_(LogEntryType &entry, LSN &lsn, const char *&buf, int64_t &buf_size);
   int prepare_buf_();
+  int prepare_buf_(int64_t &read_size);
   int get_entry_(LogEntryType &entry, LSN &lsn, const char *&buf, int64_t &buf_size);
   void update_data_gen_max_lsn_();
   void advance_data_gen_lsn_();

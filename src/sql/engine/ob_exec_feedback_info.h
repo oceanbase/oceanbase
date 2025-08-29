@@ -13,7 +13,6 @@
 #ifndef _OB_EXEC_FEEDBACK_INFO_H
 #define _OB_EXEC_FEEDBACK_INFO_H
 
-#include "share/diagnosis/ob_sql_plan_monitor_node_list.h"
 #include "lib/container/ob_array.h"
 #include "lib/container/ob_iarray.h"
 #include "lib/container/ob_array_serialization.h"
@@ -29,14 +28,26 @@ struct ObExecFeedbackNode final
 public:
   ObExecFeedbackNode(int64_t op_id) : op_id_(op_id), output_row_count_(0),
       op_open_time_(INT64_MAX), op_close_time_(0), op_first_row_time_(INT64_MAX),
-      op_last_row_time_(0), db_time_(0),  block_time_(0), worker_count_(0), pdml_op_write_rows_(0) {}
+      op_last_row_time_(0), db_time_(0),  block_time_(0), worker_count_(0), pdml_op_write_rows_(0),
+      ssstore_read_row_count_(0), memstore_read_row_count_(0),  das_local_index_scan_time_(0),
+      das_local_index_scan_rows_(0), das_local_data_scan_time_(0), das_local_data_scan_rows_(0),
+      das_remote_index_scan_time_(0), das_remote_index_scan_rows_(0), das_remote_data_scan_time_(0),
+      das_remote_data_scan_rows_(0), das_index_rpc_count_(0), das_data_rpc_count_(0), is_table_scan_op_(false) {}
   ObExecFeedbackNode() : op_id_(OB_INVALID_ID), output_row_count_(0),
       op_open_time_(INT64_MAX), op_close_time_(0), op_first_row_time_(INT64_MAX),
-      op_last_row_time_(0), db_time_(0),  block_time_(0), worker_count_(0), pdml_op_write_rows_(0) {}
+      op_last_row_time_(0), db_time_(0),  block_time_(0), worker_count_(0), pdml_op_write_rows_(0),
+      ssstore_read_row_count_(0), memstore_read_row_count_(0),  das_local_index_scan_time_(0),
+      das_local_index_scan_rows_(0), das_local_data_scan_time_(0), das_local_data_scan_rows_(0),
+      das_remote_index_scan_time_(0), das_remote_index_scan_rows_(0), das_remote_data_scan_time_(0),
+      das_remote_data_scan_rows_(0), das_index_rpc_count_(0), das_data_rpc_count_(0), is_table_scan_op_(false) {}
   ~ObExecFeedbackNode() {}
   TO_STRING_KV(K_(op_id), K_(output_row_count), K_(op_open_time),
                K_(op_close_time), K_(op_first_row_time), K_(op_last_row_time),
-               K_(db_time), K_(block_time), K_(pdml_op_write_rows));
+               K_(db_time), K_(block_time), K_(pdml_op_write_rows), K_(ssstore_read_row_count),
+               K_(memstore_read_row_count), K_(das_local_index_scan_time), K_(das_local_index_scan_rows),
+               K_(das_local_data_scan_time), K_(das_local_data_scan_rows), K_(das_remote_index_scan_time),
+               K_(das_remote_index_scan_rows), K_(das_remote_data_scan_time), K_(das_remote_data_scan_rows),
+               K_(das_index_rpc_count), K_(das_data_rpc_count), K_(is_table_scan_op));
 public:
   int64_t op_id_;
   int64_t output_row_count_;
@@ -48,6 +59,19 @@ public:
   int64_t block_time_; // rdtsc cpu cycles wait for network, io etc
   int64_t worker_count_;
   int64_t pdml_op_write_rows_;
+  int64_t ssstore_read_row_count_;
+  int64_t memstore_read_row_count_;
+  int64_t das_local_index_scan_time_;
+  int64_t das_local_index_scan_rows_;
+  int64_t das_local_data_scan_time_;
+  int64_t das_local_data_scan_rows_;
+  int64_t das_remote_index_scan_time_;
+  int64_t das_remote_index_scan_rows_;
+  int64_t das_remote_data_scan_time_;
+  int64_t das_remote_data_scan_rows_;
+  int64_t das_index_rpc_count_;
+  int64_t das_data_rpc_count_;
+  bool is_table_scan_op_;
 };
 
 class ObExecFeedbackInfo final

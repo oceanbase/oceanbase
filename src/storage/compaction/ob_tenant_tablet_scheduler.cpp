@@ -20,6 +20,7 @@
 #include "storage/ddl/ob_ddl_merge_task.h"
 #include "storage/compaction/ob_sstable_merge_info_mgr.h"
 #include "storage/column_store/ob_co_merge_dag.h"
+#include "storage/multi_data_source/ob_mds_table_merge_dag.h"
 #include "storage/ob_gc_upper_trans_helper.h"
 #include "share/schema/ob_tenant_schema_service.h"
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -1315,7 +1316,11 @@ int ObTenantTabletScheduler::schedule_tablet_minor_merge(
     {
       omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
       if (tenant_config.is_valid()) {
-        minor_compact_trigger = tenant_config->minor_compact_trigger;
+        if (is_mds_merge(merge_type)) {
+          minor_compact_trigger = tenant_config->mds_minor_compact_trigger;
+        } else {
+          minor_compact_trigger = tenant_config->minor_compact_trigger;
+        }
       }
     }
 
@@ -1355,6 +1360,11 @@ int ObTenantTabletScheduler::schedule_tablet_minor_merge(
   }
   return ret;
 }
+
+template int ObTenantTabletScheduler::schedule_tablet_minor_merge<mds::ObTabletMdsMinorMergeDag>(
+  const ObMergeType &merge_type,
+  ObLSHandle &ls_handle,
+  ObTabletHandle &tablet_handle);
 
 int ObTenantTabletScheduler::schedule_tablet_ddl_major_merge(
     ObLSHandle &ls_handle,
@@ -1631,6 +1641,7 @@ int ObTenantTabletScheduler::schedule_ddl_tablet_merge(
 #ifdef OB_BUILD_SHARED_STORAGE
   bool is_ls_leader = false;
   if (OB_FAIL(ret)) {
+  } else if (!GCTX.is_shared_storage_mode()) {
   } else if (OB_TMP_FAIL(ObDDLUtil::is_ls_leader(*ls_handle.get_ls(), is_ls_leader))) {
     LOG_WARN("failed to check if is ls leader", K(tmp_ret), K(*ls_handle.get_ls()));
     is_ls_leader = false;
@@ -1931,7 +1942,11 @@ int ObTenantTabletScheduler::schedule_tablet_ss_minor_merge(const ObMergeType &m
   {
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     if (tenant_config.is_valid()) {
-      minor_compact_trigger = tenant_config->minor_compact_trigger;
+      if (is_mds_minor_merge(merge_type)) {
+        minor_compact_trigger = tenant_config->mds_minor_compact_trigger;
+      } else {
+        minor_compact_trigger = tenant_config->minor_compact_trigger;
+      }
     }
   }
   if (is_mds_minor_merge(merge_type)) {

@@ -185,7 +185,9 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       service_name_(),
       executing_sql_stat_record_(),
       unit_gc_min_sup_proxy_version_(0),
-      external_resource_schema_cache_(nullptr)
+      external_resource_schema_cache_(nullptr),
+      has_ccl_rule_(false),
+      last_update_ccl_cnt_time_(-1)
 {
   MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
   MEMSET(vip_buf_, 0, sizeof(vip_buf_));
@@ -400,6 +402,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
   service_name_.reset();
   executing_sql_stat_record_.reset();
   unit_gc_min_sup_proxy_version_ = 0;
+  got_tenant_conn_res_ = false;
 }
 
 void ObSQLSessionInfo::clean_status()
@@ -3232,6 +3235,7 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
         tenant_config->sql_plan_management_mode.get_value_string());
       enable_mysql_compatible_dates_ = tenant_config->_enable_mysql_compatible_dates;
       enable_enum_set_subschema_ = tenant_config->_enable_enum_set_subschema;
+      enable_seq_wrap_around_flush_cache_ = tenant_config->_enable_seq_wrap_around_flush_cache;
       // 7. print_sample_ppm_ for flt
       ATOMIC_STORE(&print_sample_ppm_, tenant_config->_print_sample_ppm);
       // 8. _enable_enhanced_cursor_validation
@@ -3244,6 +3248,7 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       ATOMIC_STORE(&enable_adaptive_plan_cache_, tenant_config->enable_adaptive_plan_cache);
       // 13. enable_ps_parameterize
       ATOMIC_STORE(&enable_ps_parameterize_, tenant_config->enable_ps_parameterize);
+      ATOMIC_STORE(&enable_sql_ccl_rule_, tenant_config->_enable_sql_ccl_rule);
     }
     ATOMIC_STORE(&last_check_ec_ts_, cur_ts);
     session_->update_tenant_config_version(
@@ -3400,15 +3405,18 @@ int ObSQLSessionInfo::on_user_disconnect()
 // prepare baseline for the following `calc_txn_free_route` to get the diff
 void ObSQLSessionInfo::prep_txn_free_route_baseline(bool reset_audit)
 {
+
 #define RESET_TXN_STATE_ENCODER_CHANGED_(x) txn_##x##_info_encoder_.is_changed_ = false
 #define RESET_TXN_STATE_ENCODER_CHANGED(x) RESET_TXN_STATE_ENCODER_CHANGED_(x)
-  LST_DO(RESET_TXN_STATE_ENCODER_CHANGED, (;), static, dynamic, participants, extra);
+  if (txn_free_route_ctx_.has_calculated()) {
+    LST_DO(RESET_TXN_STATE_ENCODER_CHANGED, (;), static, dynamic, participants, extra);
+    if (reset_audit) {
+      txn_free_route_ctx_.reset_audit_record();
+    }
+    txn_free_route_ctx_.init_before_handle_request(tx_desc_);
+  }
 #undef RESET_TXN_STATE_ENCODER_CHANGED
 #undef RESET_TXN_STATE_ENCODER_CHANGED_
-  if (reset_audit) {
-    txn_free_route_ctx_.reset_audit_record();
-  }
-  txn_free_route_ctx_.init_before_handle_request(tx_desc_);
 }
 
 void ObSQLSessionInfo::post_sync_session_info()

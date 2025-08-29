@@ -80,6 +80,61 @@ int ObSchemaGetterGuard::get_location_schema_by_id(const uint64_t tenant_id,
   return ret;
 }
 
+
+int ObSchemaGetterGuard::get_location_schema_by_prefix_match_with_priv(
+                                          const ObSessionPrivInfo &session_priv,
+                                          const common::ObIArray<uint64_t> &enable_role_id_array,
+                                          const uint64_t tenant_id,
+                                          const common::ObString &access_path,
+                                          const ObLocationSchema *&schema,
+                                          const bool is_need_write_priv)
+{
+  int ret = OB_SUCCESS;
+  schema = nullptr;
+  const ObSchemaMgr *mgr = NULL;
+  ObArray<const ObLocationSchema*> match_schemas;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)) || OB_UNLIKELY(access_path.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(tenant_id), K(access_path), KR(ret));
+  } else if (OB_FAIL(check_tenant_schema_guard(tenant_id))) {
+    LOG_WARN("fail to check tenant schema guard", KR(ret), K(tenant_id), K_(tenant_id));
+  } else if (OB_FAIL(get_schema_mgr(tenant_id, mgr))) {
+    LOG_WARN("fail to get schema mgr", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(mgr)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("get simple schema in lazy mode not supported", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(mgr->location_mgr_.get_location_schema_by_prefix_match(tenant_id, // 检查权限需要priv_mgr, 只能先拿出url匹配的对象
+                                                                            access_path,
+                                                                            match_schemas))) {
+    LOG_WARN("get schema failed", K(tenant_id), K(access_path), KR(ret));
+  } else {
+    // 再检查是否具有所需权限, 选择具有权限的对象中url最长匹配的对象(各个对象的aksk可能不一样)
+    int max_match_len = 0;
+    for (int i = 0; OB_SUCC(ret) && i < match_schemas.count(); ++i) {
+      const ObLocationSchema *tmp_schema = match_schemas.at(i);
+      bool has_priv = true;
+      if (OB_ISNULL(tmp_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("got null ptr", K(ret));
+      } else if (OB_FAIL(check_location_access(session_priv, enable_role_id_array, tmp_schema->get_location_name_str(), is_need_write_priv))) {
+        if (OB_ERR_LOCATION_ACCESS_DENIED == ret) {
+          ret = OB_SUCCESS;
+          has_priv = false;
+        } else {
+          LOG_WARN("check location access failed", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (has_priv && tmp_schema->get_location_name_str().length() > max_match_len) {
+        schema = tmp_schema;
+        max_match_len = tmp_schema->get_location_name_str().length();
+      }
+    }
+  }
+  return ret;
+}
+
 }
 }
 }

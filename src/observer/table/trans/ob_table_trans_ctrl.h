@@ -13,7 +13,7 @@
 #ifndef _OB_TABLE_TRANS_CTRL_H
 #define _OB_TABLE_TRANS_CTRL_H
 
-#include "observer/table/ob_table_trans_utils.h"
+#include "observer/table/utils/ob_table_trans_utils.h"
 
 
 namespace oceanbase

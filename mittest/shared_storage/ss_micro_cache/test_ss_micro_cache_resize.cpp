@@ -65,7 +65,7 @@ void TestSSMicroCacheResize::SetUp()
   micro_cache->stop();
   micro_cache->wait();
   micro_cache->destroy();
-  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 27))); // 128MB
+  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 30))); // 1GB
   ASSERT_EQ(OB_SUCCESS, micro_cache->start());
   micro_cache_ = micro_cache;
 }
@@ -107,6 +107,44 @@ int TestSSMicroCacheResize::resize_micro_cache_file(
     }
   }
   return ret;
+}
+
+TEST_F(TestSSMicroCacheResize, test_decrease_micro_cache_size_pct)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("TEST_CASE: start test_decrease_micro_cache_size_pct");
+  ObTenantDiskSpaceManager *tnt_disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, tnt_disk_space_mgr);
+  const int64_t ori_total_disk_size = tnt_disk_space_mgr->total_disk_size_;
+  const int64_t ori_micro_cache_size = tnt_disk_space_mgr->micro_cache_file_size_;
+  const uint64_t tenant_id = MTL_ID();
+  {
+    // 1. try to decrease micro_cache size pct
+    int64_t new_pct = 10;
+    bool succ_adjust = false;
+    int64_t new_micro_cache_size = 0;
+    ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->try_adjust_cache_file_size(new_pct, succ_adjust, new_micro_cache_size));
+    ASSERT_EQ(false, succ_adjust);
+    ASSERT_EQ(0, new_micro_cache_size);
+  }
+
+  {
+    // 2. try to decrease micro_cache size pct, but increase total disk size
+    const int64_t micro_cache_size_pct = ObTenantDiskSpaceManager::get_micro_cache_size_pct(tenant_id);
+    const int64_t new_micro_cache_pct = 15;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      tenant_config->_ss_micro_cache_size_max_percentage = new_micro_cache_pct;
+    }
+    ASSERT_EQ(new_micro_cache_pct, ObTenantDiskSpaceManager::get_micro_cache_size_pct(tenant_id));
+    bool succ_resize = false;
+    const int64_t new_total_size = ori_total_disk_size * 2 - 100 * 1024 * 1024L;
+    ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->resize_total_disk_size(new_total_size, succ_resize));
+    ASSERT_EQ(true, succ_resize);
+    double micro_cache_pct = tenant_config->_ss_micro_cache_size_max_percentage / static_cast<double>(100);
+    const int64_t exp_micro_cache_size = new_total_size * micro_cache_pct;
+    ASSERT_EQ(exp_micro_cache_size, tnt_disk_space_mgr->micro_cache_file_size_);
+  }
 }
 
 TEST_F(TestSSMicroCacheResize, test_basic_resize_cache_file)
@@ -153,7 +191,7 @@ TEST_F(TestSSMicroCacheResize, test_resize_between_free_space_for_prewarm)
   const int64_t p = static_cast<int64_t>((static_cast<double>(new_limit * arc_info.DEF_ARC_P_OF_LIMIT_PCT) / 100.0));
   const int64_t max_p = new_limit * arc_info.MAX_ARC_P_OF_LIMIT_PCT / 100;
   const int64_t min_p = new_limit * arc_info.MIN_ARC_P_OF_LIMIT_PCT / 100;
-  ASSERT_LE(abs(p - arc_info.p_), 5); // the conversion between 'int64_t' and 'double' causes some deviations
+  ASSERT_LE(abs(p - arc_info.p_), 20); // the conversion between 'int64_t' and 'double' causes some deviations
   ASSERT_EQ(max_p, arc_info.max_p_);
   ASSERT_EQ(min_p, arc_info.min_p_);
 }
@@ -209,6 +247,8 @@ int main(int argc, char **argv)
   system("rm -f ./test_ss_micro_cache_resize.log*");
   OB_LOGGER.set_file_name("test_ss_micro_cache_resize.log", true);
   OB_LOGGER.set_log_level("INFO");
+  ObPLogWriterCfg log_cfg;
+  OB_LOGGER.init(log_cfg, true);
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

@@ -256,13 +256,10 @@ int ObTabletStatusCache::inner_init_state(
     LOG_TRACE("no major", KR(ret), K(tablet_id), K(last_major_snapshot));
   } else if (FALSE_IT(tablet_merge_finish_ = (last_major_snapshot >= merge_version))){
   } else if (is_skip_merge_tenant) {
-    // temp solution(load storage schema to decide whether tablet is MV)
-    // TODO replace with new func on tablet later @lana
-    ObArenaAllocator temp_allocator("GetSSchema", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-    ObStorageSchema *storage_schema = nullptr;
-    if (OB_FAIL(tablet.load_storage_schema(temp_allocator, storage_schema))) {
-      LOG_WARN("failed to load storage schema", K(ret), K(tablet));
-    } else if (!storage_schema->is_mv_major_refresh()) {
+    bool is_mv_major_refresh_tablet = false;
+    if (OB_FAIL(tablet.check_is_mv_major_refresh_tablet(is_mv_major_refresh_tablet))) {
+      LOG_WARN("check mv major refresh tablet failed", KR(ret));
+    } else if (!is_mv_major_refresh_tablet) {
       execute_state_ = TENANT_SKIP_MERGE;
     } else {
       // MV tablet should schedule merge in skip_merge_tenant

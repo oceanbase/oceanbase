@@ -13,6 +13,7 @@
 
 #include "ob_share_throttle_define.h"
 #include "share/throttle/ob_throttle_info.h"
+#include "share/allocator/ob_tenant_vector_allocator.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 
 
@@ -40,9 +41,11 @@ void FakeAllocatorForTxShare::init_throttle_config(int64_t &resource_limit,
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   if (tenant_config.is_valid()) {
     int64_t share_mem_limit = tenant_config->_tx_share_memory_limit_percentage;
-    // if _tx_share_memory_limit_percentage equals 1, use (memstore_limit_percentage + 10) as default value
+    // if _tx_share_memory_limit_percentage equals 0, use (MAX(memstore_limit_percentage, vector_mem_limit_percentage + 5) + 10) as default value
     if (0 == share_mem_limit) {
-      share_mem_limit = MTL(ObTenantFreezer*)->get_memstore_limit_percentage() + 10;
+      int64_t memstore_limit = MTL(ObTenantFreezer*)->get_memstore_limit_percentage();
+      int64_t vector_limit = ObTenantVectorAllocator::get_vector_mem_limit_percentage(tenant_config);
+      share_mem_limit = MAX(memstore_limit, vector_limit + 5) + 10;
     }
     resource_limit = total_memory * share_mem_limit / 100LL;
     trigger_percentage = tenant_config->writing_throttling_trigger_percentage;

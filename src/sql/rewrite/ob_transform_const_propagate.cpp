@@ -507,32 +507,107 @@ int ObTransformConstPropagate::check_allow_trans(ObDMLStmt *stmt, bool &allow_tr
 
 int ObTransformConstPropagate::exclude_redundancy_join_cond(ObIArray<ObRawExpr*> &condition_exprs,
                                                             ObIArray<ExprConstInfo> &expr_const_infos,
-                                                            ObIArray<ObRawExpr*> &excluded_exprs)
+                                                            ObIArray<ObRawExpr*> &excluded_exprs,
+                                                            ObDMLStmt *stmt)
 {
   int ret = OB_SUCCESS;
-  ObRawExpr *l_const_expr = NULL;
-  ObRawExpr *r_const_expr = NULL;
   ObExprEqualCheckContext equal_ctx;
   equal_ctx.override_const_compare_ = true;
-  for (int64_t i = 0; OB_SUCC(ret) && i < condition_exprs.count(); ++i) {
-    ObRawExpr *expr = condition_exprs.at(i);
-    if (OB_ISNULL(expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null expr", K(ret));
-    } else if (!expr->has_flag(IS_JOIN_COND) ||
-               2 != expr->get_param_count()) {
-      //do nothing
-    } else if (!find_const_expr(expr_const_infos, expr->get_param_expr(0), l_const_expr) || 
-               !find_const_expr(expr_const_infos, expr->get_param_expr(1), r_const_expr)) {
-      //do nothing
-    } else if (OB_ISNULL(l_const_expr) || OB_ISNULL(r_const_expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null expr", K(ret));
-    } else if (!l_const_expr->same_as(*r_const_expr, &equal_ctx)) {
-      //do nothing
-    } else if (OB_FAIL(excluded_exprs.push_back(expr))) {
-      LOG_WARN("failed to push back expr", K(ret));
+  uint64_t version = GET_MIN_CLUSTER_VERSION();
+  uint64_t opt_feature_version = 0;
+  if (OB_ISNULL(stmt) || OB_ISNULL(stmt->get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  } else if (FALSE_IT(opt_feature_version = stmt->get_query_ctx()->optimizer_features_enable_version_)) {
+  } else if (!stmt->is_insert_stmt() && !stmt->is_merge_stmt() /* Avoid modifying behaviors related to sharding_cond */ &&
+             ((MOCK_CLUSTER_VERSION_4_2_5_6 <= version && version < CLUSTER_VERSION_4_3_0_0) ||
+              (CLUSTER_VERSION_4_3_5_0 <= version && version < CLUSTER_VERSION_4_4_0_0) ||
+              (CLUSTER_VERSION_4_4_1_0 <= version)) &&
+             ((COMPAT_VERSION_4_2_5_BP6 <= opt_feature_version && opt_feature_version < COMPAT_VERSION_4_3_0) ||
+              (COMPAT_VERSION_4_3_5_BP4 <= opt_feature_version && opt_feature_version < COMPAT_VERSION_4_4_0) ||
+              (COMPAT_VERSION_4_4_1 <= opt_feature_version))) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < condition_exprs.count(); ++i) {
+      ObRawExpr *expr = condition_exprs.at(i);
+      bool is_const_null = false;
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null expr", K(ret));
+      } else if (!expr->has_flag(IS_JOIN_COND) ||
+                2 != expr->get_param_count()) {
+        // don't exclude
+      } else if (!expr->get_param_expr(0)->has_flag(IS_COLUMN) ||
+                !expr->get_param_expr(1)->has_flag(IS_COLUMN)) {
+        // don't exclude
+
+        // PredDeduce can't handle cannot handle 'is null' expr, e.g:
+        // 'select * from t1, t2 where t1.c1 = t2.c1 and t2.c1 is null'
+        // so it's nessasary to handle it during ConstPropagate
+      } else if (OB_FAIL(check_is_expr_const_null(expr_const_infos, expr->get_param_expr(0), is_const_null))) {
+        LOG_WARN("failed to check is expr const null", K(ret));
+      } else if (is_const_null) {
+        // don't exclude
+      } else if (OB_FAIL(check_is_expr_const_null(expr_const_infos, expr->get_param_expr(1), is_const_null))) {
+        LOG_WARN("failed to check is expr const null", K(ret));
+      } else if (is_const_null) {
+        // don't exclude
+      } else if (OB_FAIL(excluded_exprs.push_back(expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
     }
+  } else {
+    ObRawExpr *l_const_expr = NULL;
+    ObRawExpr *r_const_expr = NULL;
+    for (int64_t i = 0; OB_SUCC(ret) && i < condition_exprs.count(); ++i) {
+      ObRawExpr *expr = condition_exprs.at(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null expr", K(ret));
+      } else if (!expr->has_flag(IS_JOIN_COND) ||
+                2 != expr->get_param_count()) {
+        //do nothing
+      } else if (!find_const_expr(expr_const_infos, expr->get_param_expr(0), l_const_expr) ||
+                !find_const_expr(expr_const_infos, expr->get_param_expr(1), r_const_expr)) {
+        //do nothing
+      } else if (OB_ISNULL(l_const_expr) || OB_ISNULL(r_const_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null expr", K(ret));
+      } else if (!l_const_expr->same_as(*r_const_expr, &equal_ctx)) {
+        //do nothing
+      } else if (OB_FAIL(excluded_exprs.push_back(expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformConstPropagate::check_is_expr_const_null(ObIArray<ExprConstInfo> &expr_const_infos,
+                                                        ObRawExpr *expr,
+                                                        bool &is_const_null) {
+  int ret = OB_SUCCESS;
+  ObRawExpr *const_expr = NULL;
+  ObObj result;
+  bool is_null = false;
+  bool calc_happened = false;
+  is_const_null = false;
+  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->exec_ctx_) ||
+      OB_ISNULL(ctx_->allocator_) || OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null ctx", K(ret));
+  } else if (!find_const_expr(expr_const_infos, expr, const_expr)) {
+    is_const_null = false;
+  } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(ctx_->exec_ctx_,
+                                                               const_expr,
+                                                               result,
+                                                               calc_happened,
+                                                               *ctx_->allocator_))) {
+    LOG_WARN("failed to calc const or calculable expr", K(ret));
+  } else if (!calc_happened) {
+    is_const_null = false;
+  } else if (is_oracle_mode()) {
+    is_const_null = result.is_null_oracle();
+  } else {
+    is_const_null = result.is_null();
   }
   return ret;
 }
@@ -575,7 +650,8 @@ int ObTransformConstPropagate::collect_equal_pair_from_condition(ObDMLStmt *stmt
   if (OB_SUCC(ret)) {
     if (OB_FAIL(exclude_redundancy_join_cond(condition_exprs,
                                              const_ctx.active_const_infos_,
-                                             const_ctx.extra_excluded_exprs_))) {
+                                             const_ctx.extra_excluded_exprs_,
+                                             stmt))) {
       LOG_WARN("failed to exclude redundancy join cond", K(ret));
     }
   }
@@ -1020,7 +1096,8 @@ int ObTransformConstPropagate::replace_semi_conditions(ObDMLStmt *stmt,
       LOG_WARN("invalid semi info", K(ret));
     } else if (OB_FAIL(exclude_redundancy_join_cond(semi_info->semi_conditions_,
                                                     const_ctx.active_const_infos_,
-                                                    const_ctx.extra_excluded_exprs_))) {
+                                                    const_ctx.extra_excluded_exprs_,
+                                                    stmt))) {
       LOG_WARN("failed to exclude redundancy join cond", K(ret));
     } else if (OB_FAIL(replace_common_exprs(semi_info->semi_conditions_,
                                             const_ctx,
@@ -1840,7 +1917,7 @@ int ObTransformConstPropagate::recursive_collect_equal_pair_from_condition(ObDML
                                                                            bool &trans_happened)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(stmt) || OB_ISNULL(expr)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(expr) || OB_ISNULL(stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(stmt), K(expr));
   } else if (T_OP_EQ == expr->get_expr_type()) {
@@ -1879,7 +1956,8 @@ int ObTransformConstPropagate::recursive_collect_equal_pair_from_condition(ObDML
         }
       }
     }
-  } else if (T_OP_AND == expr->get_expr_type()) {
+  } else if (T_OP_AND == expr->get_expr_type() &&
+             !(expr->get_param_count() >= 10 && stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_1))) {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       bool is_happened = false;
       if (OB_FAIL(SMART_CALL(recursive_collect_equal_pair_from_condition(stmt,
@@ -1930,7 +2008,8 @@ int ObTransformConstPropagate::recursive_collect_equal_pair_from_condition(ObDML
         }
       }
     }
-  } else if (T_OP_OR == expr->get_expr_type()) {
+  } else if (T_OP_OR == expr->get_expr_type() &&
+             !(expr->get_param_count() >= 10 && stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_1))) {
     ObArray<ExprConstInfo> complex_infos;
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       ConstInfoContext tmp_ctx(const_ctx.shared_expr_checker_, const_ctx.allow_trans_);

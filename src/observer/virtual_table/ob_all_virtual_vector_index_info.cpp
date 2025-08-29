@@ -33,8 +33,11 @@ int ObVectorIndexInfoIterator::open()
     SERVER_LOG(WARN, "failed to get snapshot_ids", K(ret));
   } else if (OB_FAIL(ptr_set_.create(MAX_PTR_SET_VALUES, ObMemAttr(MTL_ID(), "AdaptorSet")))) {
     SERVER_LOG(WARN, "failed to create set", K(ret));
+  } else if (OB_FAIL(service->get_cache_ids(cache_tablet_ids_))) {
+    SERVER_LOG(WARN, "failed to get cache_ids", K(ret));
   } else {
-    cur_idx_ = 0;
+    index_idx_ = 0;
+    cache_idx_ = 0;
     is_opened_ = true;
   }
   return ret;
@@ -46,17 +49,30 @@ int ObVectorIndexInfoIterator::get_next_info(ObVectorIndexInfo &info)
   if (!is_opened_) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "not init", K(ret));
-  } else if (cur_idx_ >= complete_tablet_ids_.count() + partial_tablet_ids_.count()) {
+  } else if (index_idx_ >= complete_tablet_ids_.count() + partial_tablet_ids_.count() &&
+          cache_idx_ >= cache_tablet_ids_.count()) {
     ret = OB_ITER_END;
-  } else {
+  } else if (cache_idx_ < cache_tablet_ids_.count()) {
+    // fill cache info
+    ObLSID ls_id = cache_tablet_ids_.at(cache_idx_).ls_id_;
+    ObTabletID tablet_id = cache_tablet_ids_.at(cache_idx_).tablet_id_;
+    ObIvfCacheMgrGuard cache_mgr_guard;
+    if (OB_FAIL(MTL(ObPluginVectorIndexService*)->acquire_ivf_cache_mgr_guard(ls_id, tablet_id, cache_mgr_guard))) {
+      SERVER_LOG(WARN, "failed to get cache mgr guard", K(ls_id), K(tablet_id), KR(ret));
+    } else if (OB_FAIL(cache_mgr_guard.get_ivf_cache_mgr()->fill_cache_info(info))) {
+      SERVER_LOG(WARN, "failed to fill cache info", K(ret), K(ls_id), K(tablet_id));
+    }
+    info.ls_id_ = ls_id.id();
+    cache_idx_++;
+  } else { // fill vector index info
     ObLSID ls_id;
     ObTabletID tablet_id;
-    if (cur_idx_ < complete_tablet_ids_.count()) {
-      ls_id = complete_tablet_ids_.at(cur_idx_).ls_id_;
-      tablet_id = complete_tablet_ids_.at(cur_idx_).tablet_id_;
-    } else if (cur_idx_ < complete_tablet_ids_.count() + partial_tablet_ids_.count()) {
-      ls_id = partial_tablet_ids_.at(cur_idx_ - complete_tablet_ids_.count()).ls_id_;
-      tablet_id = partial_tablet_ids_.at(cur_idx_ - complete_tablet_ids_.count()).tablet_id_;
+    if (index_idx_ < complete_tablet_ids_.count()) {
+      ls_id = complete_tablet_ids_.at(index_idx_).ls_id_;
+      tablet_id = complete_tablet_ids_.at(index_idx_).tablet_id_;
+    } else if (index_idx_ < complete_tablet_ids_.count() + partial_tablet_ids_.count()) {
+      ls_id = partial_tablet_ids_.at(index_idx_ - complete_tablet_ids_.count()).ls_id_;
+      tablet_id = partial_tablet_ids_.at(index_idx_ - complete_tablet_ids_.count()).tablet_id_;
     }
     ObPluginVectorIndexAdapterGuard adapter_guard;
     if (OB_FAIL(MTL(ObPluginVectorIndexService*)->get_adapter_inst_guard(ls_id, tablet_id, adapter_guard))) {
@@ -77,16 +93,18 @@ int ObVectorIndexInfoIterator::get_next_info(ObVectorIndexInfo &info)
     } else {
       SERVER_LOG(WARN, "failed to check adapter ptr", K(ret));
     }
-    cur_idx_++;
+    index_idx_++;
   }
   return ret;
 }
 
 void ObVectorIndexInfoIterator::reset()
 {
-  cur_idx_ = 0;
+  index_idx_ = 0;
+  cache_idx_ = 0;
   complete_tablet_ids_.reset();
   partial_tablet_ids_.reset();
+  cache_tablet_ids_.reset();
   allocator_.reset();
   ptr_set_.destroy();
   is_opened_ = false;
@@ -217,6 +235,9 @@ int ObAllVirtualVectorIndexInfo::process_curr_tenant(ObNewRow *&row)
     case SYNC_INFO:
       cells[i].set_varchar(info_.sync_info_);
       cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+      break;
+    case INDEX_TYPE:
+      cells[i].set_null();
       break;
     default:
       ret = OB_ERR_UNEXPECTED;

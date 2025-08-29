@@ -31,6 +31,10 @@
 #include "storage/init_basic_struct.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "close_modules/shared_storage/storage/incremental/sslog/notify/ob_sslog_notify_adapter.h"
+#include "unittest/storage/sslog/test_mock_palf_kv.h"
+#include "close_modules/shared_storage/storage/incremental/sslog/ob_i_sslog_proxy.h"
+#include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_kv_proxy.h"
+
 
 static const char *TEST_FILE_NAME = "test_sslog_atomic_protocol";
 static const char *BORN_CASE_NAME = "ObTestSSLogAtomicProtocol";
@@ -40,6 +44,55 @@ namespace oceanbase
 {
 namespace sslog
 {
+
+oceanbase::unittest::ObMockPalfKV PALF_KV;
+
+int get_sslog_table_guard(const ObSSLogTableType type,
+                          const int64_t tenant_id,
+                          ObSSLogProxyGuard &guard)
+{
+  int ret = OB_SUCCESS;
+
+  switch (type)
+  {
+    case ObSSLogTableType::SSLOG_TABLE: {
+      void *proxy = share::mtl_malloc(sizeof(ObSSLogTableProxy), "ObSSLogTable");
+      if (nullptr == proxy) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        ObSSLogTableProxy *sslog_table_proxy = new (proxy) ObSSLogTableProxy(tenant_id);
+        if (OB_FAIL(sslog_table_proxy->init())) {
+          SSLOG_LOG(WARN, "fail to inint", K(ret));
+        } else {
+          guard.set_sslog_proxy((ObISSLogProxy *)proxy);
+        }
+      }
+      break;
+    }
+    case ObSSLogTableType::SSLOG_PALF_KV: {
+      void *proxy = share::mtl_malloc(sizeof(ObSSLogKVProxy), "ObSSLogTable");
+      if (nullptr == proxy) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        ObSSLogKVProxy *sslog_kv_proxy = new (proxy) ObSSLogKVProxy(&PALF_KV);
+        // if (OB_FAIL(sslog_kv_proxy->init(GCONF.cluster_id, tenant_id))) {
+        //   SSLOG_LOG(WARN, "init palf kv failed", K(ret));
+        // } else {
+          guard.set_sslog_proxy((ObISSLogProxy *)proxy);
+        // }
+      }
+      break;
+    }
+    default: {
+      ret = OB_INVALID_ARGUMENT;
+      SSLOG_LOG(WARN, "invalid sslog type", K(type));
+      break;
+    }
+  }
+
+  return ret;
+}
+
 int ObSSLogNotifyAdapter::generate_notify_task_on_trans_ctx(NotifyPath ,
                                                             memtable::ObMvccTransNode *,
                                                             memtable::ObMemtableCtx *) {
@@ -452,10 +505,13 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
 
   // ========== Test 3: update and read the row =========
   {
+    char buf[100];
+    int64_t pos = 0;
+    ASSERT_EQ(OB_SUCCESS, extra_info1.serialize(buf, sizeof(buf), pos));
     ASSERT_EQ(OB_SUCCESS, ObAtomicFile::update_sslog_row(param.meta_type_,
                                                        meta_key1.get_string_key(),
                                                        meta_value2,
-                                                       extra_info1,
+                                                       ObString(pos, buf),
                                                        extra_info1,
                                                        false,
                                                        affected_rows));

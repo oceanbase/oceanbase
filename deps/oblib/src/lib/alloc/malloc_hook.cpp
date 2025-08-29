@@ -26,10 +26,13 @@ static bool g_malloc_hook_inited = false;
 typedef void* (*MemsetPtr)(void*, int, size_t);
 MemsetPtr memset_ptr = nullptr;
 ObMallocHook &global_malloc_hook = ObMallocHook::get_instance();
-void init_malloc_hook()
+void __attribute__((constructor(0))) init_malloc_hook()
 {
-  g_malloc_hook_inited = true;
+  // The aim of calling memset is to initialize certain states in memset,
+  // and to avoid nested deadlock of memset after malloc_hook inited.
+  memset(&memset_ptr, 0, sizeof(memset_ptr));
   memset_ptr = memset;
+  g_malloc_hook_inited = true;
 }
 uint64_t up_align(uint64_t x, uint64_t align)
 {

@@ -333,6 +333,10 @@ int ObTableQueryUtils::get_table_schemas(ObSchemaGetterGuard& schema_guard,
     // Handle table group case
     if (OB_FAIL(schema_guard.get_tablegroup_id(arg_tenant_id, arg_table_name, tablegroup_id))) {
       LOG_WARN("Failed to get table group ID", K(ret), K(arg_tenant_id), K(arg_table_name));
+    } else if (tablegroup_id == OB_INVALID_ID) {
+      ret = OB_KV_HBASE_TABLE_NOT_FOUND;
+      LOG_WARN("the table group for hbase table not found", KR(ret), K(arg_table_name));
+      LOG_USER_ERROR(OB_KV_HBASE_TABLE_NOT_FOUND, arg_table_name.length(), arg_table_name.ptr());
     } else if (OB_FAIL(schema_guard.get_table_schemas_in_tablegroup(arg_tenant_id, tablegroup_id, table_schemas))) {
       LOG_WARN("Failed to get table schemas from table group", K(ret), K(arg_tenant_id), K(tablegroup_id));
     } else {

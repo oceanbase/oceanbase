@@ -28,6 +28,7 @@
 #include "sql/dblink/ob_dblink_utils.h"
 #include "sql/monitor/ob_sql_stat_record.h"
 #include "share/stat/ob_opt_ds_stat_cache.h"
+#include "sql/ob_sql_ccl_rule_manager.h"
 #ifdef OB_BUILD_SPM
 #include "sql/spm/ob_spm_define.h"
 #endif
@@ -231,6 +232,7 @@ class ObRawExpr;
 class ObSQLSessionInfo;
 
 class ObSelectStmt;
+class ObCCLRuleConcurrencyValueWrapper;
 
 class ObMultiStmtItem
 {
@@ -783,6 +785,11 @@ public:
     };
   };
   common::ObString raw_sql_;
+  uint64_t ccl_rule_id_;
+  uint64_t ccl_match_time_;
+  common::ObString reconstruct_ps_sql_;
+  common::ObSEArray<ObCCLRuleConcurrencyValueWrapper*, 4> matched_ccl_rule_level_values_;
+  common::ObSEArray<ObCCLRuleConcurrencyValueWrapper*, 4> matched_ccl_format_sqlid_level_values_;
   TO_STRING_KV(K(stmt_type_));
 private:
   share::ObFeedbackRerouteInfo *reroute_info_;
@@ -831,7 +838,8 @@ public:
       has_dblink_(false),
       injected_random_status_(false),
       ori_question_marks_count_(0),
-      type_demotion_flag_(0)
+      type_demotion_flag_(0),
+      initial_type_ctx_()
   {
   }
   TO_STRING_KV(N_PARAM_NUM, question_marks_count_,
@@ -878,6 +886,7 @@ public:
     ori_question_marks_count_ = 0;
     filter_ds_stat_cache_.reuse();
     type_demotion_flag_ = 0;
+    // initial_type_ctx_.reset();
   }
 
   int64_t get_new_stmt_id() { return stmt_count_++; }
@@ -923,7 +932,9 @@ public:
     ori_question_marks_count_ = count;
     question_marks_count_ = count;
   };
-
+  void init_type_ctx(const ObSQLSessionInfo *session);
+  bool is_type_ctx_inited() const { return NULL != initial_type_ctx_.get_session(); }
+  const ObExprTypeCtx& get_initial_type_ctx() const { return initial_type_ctx_; };
 
 public:
   static const int64_t CALCULABLE_EXPR_NUM = 1;
@@ -1002,6 +1013,9 @@ public:
       int8_t type_demotion_flag_reserved_   : 4;
     };
   };
+  // A type context master copy that requires duplication during usage.
+  // For scenarios involving numerous and deeply nested expressions, frequent type context initialization is costy.
+  ObExprTypeCtx initial_type_ctx_;
 };
 
 template<typename... Args>

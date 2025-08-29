@@ -473,6 +473,7 @@ private:
 #endif
   int diagnose_tablet_mini_merge(const ObLSID &ls_id, ObTablet &tablet);
   int diagnose_tablet_minor_merge(const ObLSID &ls_id, ObTablet &tablet);
+  int diagnose_tablet_multi_version_start(storage::ObLS &ls, ObTablet &tablet);
   int diagnose_tablet_major_merge(
       const int64_t compaction_scn,
       const ObLSID &ls_id,

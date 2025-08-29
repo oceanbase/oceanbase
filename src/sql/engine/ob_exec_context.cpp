@@ -636,7 +636,7 @@ int ObExecContext::get_gi_task_map(GIPrepareTaskMap *&gi_task_map)
   return ret;
 }
 
-int ObExecContext::get_convert_charset_allocator(ObArenaAllocator *&allocator)
+int ObExecContext::get_convert_charset_allocator(ObIAllocator *&allocator)
 {
   int ret = OB_SUCCESS;
   allocator = NULL;
@@ -839,7 +839,7 @@ int ObExecContext::init_physical_plan_ctx(const ObPhysicalPlan &plan)
       if (sql_ctx_ != NULL && sql_ctx_->spm_ctx_.need_spm_timeout_) {
         phy_plan_ctx_->set_spm_timeout_timestamp(
             ObSpmController::calc_spm_timeout_us(start_time + plan_timeout,
-                                                 sql_ctx_->spm_ctx_.baseline_exec_time_));
+                                                 sql_ctx_->spm_ctx_.spm_plan_timeout_));
       }
 #endif
     }
@@ -978,7 +978,7 @@ int ObExecContext::get_local_var_array(int64_t local_var_array_id, const ObSolid
 }
 
 int ObExecContext::fill_px_batch_info(ObBatchRescanParams &params,
-    int64_t batch_id, sql::ObExpr::ObExprIArray &array)
+    int64_t batch_id, const sql::ObExpr::ObExprIArray &array)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(phy_plan_ctx_)) {
@@ -998,14 +998,17 @@ int ObExecContext::fill_px_batch_info(ObBatchRescanParams &params,
       } else {
         phy_plan_ctx_->get_param_store_for_update().at(params.get_param_idx(i)) = one_params.at(i);
         if (params.param_expr_idxs_.count() == one_params.count()) {
-          sql::ObExpr *expr = NULL;
+          const sql::ObExpr *expr = NULL;
           int64_t idx = params.param_expr_idxs_.at(i);
           if (OB_FAIL(ret)) {
           } else if (OB_UNLIKELY(idx > array.count())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("expr index out of expr array range", K(ret), K(array), K(idx), K(array.count()));
+            // do nothing.
+            LOG_TRACE("param idx out of array count", K(idx), K(array.count()));
+          } else if (FALSE_IT(expr = &array.at(idx - 1))) {
+          } else if (T_INVALID == expr->type_) {
+            // do nothing.
+            LOG_TRACE("empty expr", KPC(expr));
           } else {
-            expr = &array.at(idx - 1);
             expr->get_eval_info(eval_ctx).clear_evaluated_flag();
             ObDynamicParamSetter::clear_parent_evaluated_flag(eval_ctx, *expr);
             ObDatum &param_datum = expr->locate_datum_for_write(eval_ctx);

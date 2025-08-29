@@ -632,7 +632,17 @@ public:
   int build_task_from_sql_result(const sqlclient::ObMySQLResult &res);
 public:
   virtual const common::ObAddr &get_dst_server() const override {
-    return leader_;
+    // When removing a sslog replica, the task is not actually removed, Instead, it is converted into a type transform task.
+    // When removing sslog F, F is converted to R, and when removing R, this task is ignored.
+    // The same logic applies when an sslog replica is permanently offline. However, in the event of a machine shutdown,
+    // the type transform task cannot be completed, so it must be sent to the leader for execution.
+    // For normal LS, type transform requires various pre-checks like transfer requirements.
+    // Therefore, type transform tasks for normal LS still need to be sent to the corresponding server.
+    // For SSLog LS, it do not require transfer operation and can be sent directly to the leader for execution.
+    if (is_sslog_dr_task()) {
+      return leader_;
+    }
+    return dst_member_.get_server();
   }
 
   virtual obrpc::ObDRTaskType get_disaster_recovery_task_type() const override {

@@ -1236,7 +1236,7 @@ int ObSchemaGetterGuard::check_obj_mysql_priv(const ObSessionPrivInfo &session_p
     LOG_WARN("fail to check tenant schema guard", KR(ret), K(tenant_id), K_(tenant_id));
   } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {
     LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
-  } else {
+  } else if (!sql::ObOraSysChecker::is_super_user(session_priv.user_id_)) {
     const ObPrivMgr &priv_mgr = mgr->priv_mgr_;
     //1. fetch obj priv
     const ObObjMysqlPriv *obj_mysql_priv = NULL;
@@ -1640,8 +1640,6 @@ int ObSchemaGetterGuard::check_priv(const ObSessionPrivInfo &session_priv,
           if (OB_ISNULL(this)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("schema guard is null", K(ret));
-          } else if (!sql::ObSchemaChecker::enable_mysql_pl_priv_check(tenant_id, *this)) {
-            //do nothing
           } else if (OB_FAIL(check_obj_mysql_priv(session_priv, enable_role_id_array, need_priv))) {
             LOG_WARN("No privilege", "tenant_id", session_priv.tenant_id_,
                 "user_id", session_priv.user_id_,
@@ -1944,14 +1942,15 @@ int ObSchemaGetterGuard::check_priv_or(const ObSessionPrivInfo &session_priv,
 
 int ObSchemaGetterGuard::check_location_access(const ObSessionPrivInfo &session_priv,
                                                const common::ObIArray<uint64_t> &enable_role_id_array,
-                                               const ObString &location_name)
+                                               const ObString &location_name,
+                                               const bool is_need_write_priv)
 {
   int ret = OB_SUCCESS;
   ObNeedPriv tmp_need_priv;
   tmp_need_priv.db_ = session_priv.db_;
   tmp_need_priv.table_ = location_name;
   tmp_need_priv.priv_level_ = OB_PRIV_OBJECT_LEVEL;
-  tmp_need_priv.priv_set_ = OB_PRIV_READ;
+  tmp_need_priv.priv_set_ = is_need_write_priv ? OB_PRIV_WRITE : OB_PRIV_READ;
   tmp_need_priv.obj_type_ = ObObjectType::LOCATION;
 
   const ObSchemaMgr *mgr = NULL;
@@ -1967,19 +1966,15 @@ int ObSchemaGetterGuard::check_location_access(const ObSessionPrivInfo &session_
     LOG_WARN("fail to check tenant schema guard", K(ret));
   } else if (OB_FAIL(check_lazy_guard(session_priv.tenant_id_, mgr))) {
     LOG_WARN("fail to check lazy guard", K(ret));
-  }
-
-  if (OB_SUCC(ret) && compat_mode == lib::Worker::CompatMode::MYSQL) {
+  } else if (compat_mode == lib::Worker::CompatMode::MYSQL) {
     if (OB_FAIL(check_obj_mysql_priv(session_priv, enable_role_id_array, tmp_need_priv))) {
       LOG_WARN("No privilege to access location", K(session_priv), K(location_name), K(ret));
     }
-  }
-
-  if (OB_SUCC(ret) && compat_mode == lib::Worker::CompatMode::ORACLE) {
+  } else if (compat_mode == lib::Worker::CompatMode::ORACLE) {
     if (OB_FAIL(get_location_schema_by_name(session_priv.tenant_id_, location_name, location_schema))) {
       LOG_WARN("failed to get location schema", K(ret));
     } else if (OB_ISNULL(location_schema)) {
-      ret = OB_LOCATION_NOT_EXIST;
+      ret = OB_LOCATION_OBJ_NOT_EXIST;
       LOG_WARN("location not exist", K(ret), K(location_name));
     } else if (OB_FAIL(sql::ObOraSysChecker::check_ora_obj_priv(*this,
                                                                 session_priv.tenant_id_,
@@ -1988,7 +1983,7 @@ int ObSchemaGetterGuard::check_location_access(const ObSessionPrivInfo &session_
                                                                 location_schema->get_location_id(),
                                                                 OBJ_LEVEL_FOR_TAB_PRIV,
                                                                 static_cast<uint64_t>(ObObjectType::LOCATION),
-                                                                OBJ_PRIV_ID_READ,
+                                                                is_need_write_priv ? OBJ_PRIV_ID_WRITE : OBJ_PRIV_ID_READ,
                                                                 CHECK_FLAG_NORMAL,
                                                                 OB_ORA_SYS_USER_ID,
                                                                 enable_role_id_array))) {

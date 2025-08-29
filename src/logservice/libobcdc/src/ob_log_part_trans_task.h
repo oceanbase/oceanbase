@@ -266,6 +266,11 @@ protected:
       const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info,
       const bool is_macroblock_row,
       ColValueList &cols);
+  int parse_outrow_lob_column_(
+      const bool is_parse_new_col,
+      const blocksstable::ObDmlRowFlag &dml_flag,
+      const uint64_t column_id,
+      const ObLobCommon &lob_common);
   int parse_rowkey_(
       ColValueList &rowkey_cols,
       const common::ObStoreRowkey &rowkey,

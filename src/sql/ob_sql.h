@@ -320,6 +320,13 @@ private:
                            ObResultSet &result,
                            ObPlanCacheCtx &pc_ctx,
                            const int get_plan_err);
+
+  int deal_generate_physical_plan_error(ObExecContext &exec_ctx, ObPlanCacheCtx &pc_ctx, int ret);
+#ifdef OB_BUILD_SPM
+  int pc_add_spm_plan(ObPlanCacheCtx &pc_ctx,
+                      ObResultSet &result, ObOutlineState &outline_state,
+                      ObPlanCache *plan_cache);
+#endif
   // @brief  Generate 'stmt' from syntax tree
   // @param parse_result[in]     syntax tree
   // @param select_item_param_infos           select_item_param_infos from fast parser

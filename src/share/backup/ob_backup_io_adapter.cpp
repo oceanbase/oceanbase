@@ -15,12 +15,39 @@
 #include "lib/restore/ob_object_device.h"
 #include "share/external_table/ob_hdfs_storage_info.h"
 #include "share/io/ob_io_manager.h"
- 
+#include "observer/omt/ob_multi_tenant.h"
+#include "share/backup/ob_backup_connectivity.h"
+
 namespace oceanbase
 {
 namespace common
 {
 extern const char *OB_STORAGE_ACCESS_TYPES_STR[];
+
+int ObBackupIoAdapter::is_io_prohibited(const common::ObObjectStorageInfo *storage_info)
+{
+  int ret = OB_SUCCESS;
+  bool is_io_prohibited = false;
+  share::ObBackupDestIOPermissionMgr *dest_io_permission_mgr = nullptr;
+  if (OB_ISNULL(dest_io_permission_mgr = MTL(share::ObBackupDestIOPermissionMgr*))) {
+    //do nothing
+    //Currently, threads without tenant resources do not support the backup zone feature.
+    //For example, when restoring a tenant, filling in the backup path is performed thread without tenant resources.
+  } else if (OB_FAIL(dest_io_permission_mgr->is_io_prohibited(storage_info, is_io_prohibited))) {
+    OB_LOG(WARN, "fail to check io prohibited!", K(ret), K(storage_info));
+  } else {
+    if (is_io_prohibited) {
+      ret = OB_BACKUP_IO_PROHIBITED;
+      if (REACH_THREAD_TIME_INTERVAL(20_s)) {
+        OB_LOG(ERROR, "observer is not in locality that has access to the target path of the task,"
+        "please check backup zone configuration.", K(ret), K(storage_info), K(is_io_prohibited));
+      } else {
+        OB_LOG(WARN, "io prohibited, please check!", K(ret), K(storage_info), K(is_io_prohibited));
+      }
+    }
+  }
+  return ret;
+}
 static constexpr char OB_STORAGE_IO_ADAPTER[] = "io_adapter";
 
 static int release_device(ObIODevice *&dev_handle)
@@ -101,6 +128,12 @@ int ObBackupIoAdapter::open_with_access_type(ObIODevice*& device_handle, ObIOFd 
   if (access_type >= OB_STORAGE_ACCESS_MAX_TYPE) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid access type!", KR(ret), K(access_type));
+  } else if (OB_FAIL(is_io_prohibited(storage_info))) {
+    if (OB_BACKUP_IO_PROHIBITED == ret) {
+      OB_LOG(WARN, "io prohibited, please check!", K(ret), K(storage_info));
+    } else {
+      OB_LOG(WARN, "fail to check io prohibited!", K(ret), K(storage_info));
+    }
   } else {
     iod_opts.opts_[0].set("AccessType", OB_STORAGE_ACCESS_TYPES_STR[access_type]);
     if (access_type == OB_STORAGE_ACCESS_APPENDER)
@@ -169,7 +202,10 @@ int ObBackupIoAdapter::get_and_init_device(ObIODevice *&dev_handle,
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "storage info is invalid",
         KR(ret), KPC(storage_info), K(storage_type_prefix), K(storage_id_mod));
+  } else if (OB_FAIL(is_io_prohibited(storage_info))) {
+    OB_LOG(WARN, "fail to check io prohibited!", K(ret), K(storage_info));
   }
+
   if (OB_FAIL(ret)) {
     /* do nothing */
   } else if (OB_LIKELY(storage_info->is_hdfs_storage())) {
@@ -370,6 +406,8 @@ int ObBackupIoAdapter::mk_parent_dir(const common::ObString &uri, const common::
   int ret = OB_SUCCESS;
   char path[OB_MAX_URI_LENGTH];
   ObIODevice *device_handle = NULL;
+  ObObjectStorageTenantGuard object_storage_tenant_guard(
+    get_tenant_id(), OB_IO_MANAGER.get_object_storage_io_timeout_ms(get_tenant_id()) * 1000LL);
 
   if (uri.empty()) {
     ret = OB_INVALID_ARGUMENT;
@@ -492,7 +530,8 @@ int ObBackupIoAdapter::seal_file(
   int tmp_ret = OB_SUCCESS;
   ObIOFd fd;
   ObIODevice *device_handle = nullptr;
-
+  ObObjectStorageTenantGuard object_storage_tenant_guard(
+    get_tenant_id(), OB_IO_MANAGER.get_object_storage_io_timeout_ms(get_tenant_id()) * 1000LL);
   if (OB_FAIL(open_with_access_type(device_handle, fd,
       storage_info, uri, ObStorageAccessType::OB_STORAGE_ACCESS_APPENDER, storage_id_mod))) {
     OB_LOG(WARN, "fail to get device and open file !", K(uri), K(storage_info), KR(ret));
@@ -1216,6 +1255,8 @@ int get_real_file_path(const common::ObString &uri, char *buf, const int64_t buf
     prefix = OB_FILE_PREFIX;
   } else if (OB_STORAGE_HDFS == device_type) {
     prefix = OB_HDFS_PREFIX;
+  } else if (OB_STORAGE_AZBLOB == device_type) {
+    prefix = OB_AZBLOB_PREFIX;
   } else {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid device type!", K(device_type), K(ret), K(uri));

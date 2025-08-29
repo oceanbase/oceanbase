@@ -105,6 +105,7 @@
 #include "storage/incremental/atomic_protocol/ob_atomic_file_mgr.h"
 #include "storage/incremental/ob_shared_meta_service.h"
 #include "storage/incremental/garbage_collector/ob_ss_garbage_collector_service.h"
+#include "storage/incremental/sslog/ob_sslog_service.h"
 #endif
 #include "sql/engine/table/ob_pcached_external_file_service.h"
 #include "share/object_storage/ob_device_config_mgr.h"
@@ -499,7 +500,8 @@ int MockTenantModuleEnv::construct_default_tenant_meta(const uint64_t tenant_id,
                         has_memstore,
                         false /*is_removed*/,
                         hidden_sys_data_disk_config_size,
-                        0 /*actual_data_disk_size*/))) {
+                        0/*actual_data_disk_size*/,
+                        ObReplicaType::REPLICA_TYPE_FULL/*replica_type*/))) {
     STORAGE_LOG(WARN, "fail to init tenant unit", K(ret), K(tenant_id));
   } else if (OB_FAIL(meta.build(unit, super_block))) {
     STORAGE_LOG(WARN, "fail to build tenant meta", K(ret), K(tenant_id));
@@ -921,6 +923,7 @@ int MockTenantModuleEnv::init()
         MTL_BIND2(mtl_new_default, ObSSWriterService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
         MTL_BIND2(mtl_new_default, ObSSMetaService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
         MTL_BIND2(mtl_new_default, ObSSGarbageCollectorService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+        MTL_BIND2(mtl_new_default, ObSSLogService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       }
 #else
 #endif

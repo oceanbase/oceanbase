@@ -59,7 +59,7 @@ private:
 };
 
 template<typename Key, typename Value>
-class ObConcurrentHashMap
+class ObConcurrentHashMapDoNotUse
 {
 private:
   typedef HashRoot                  SHashRoot;
@@ -69,8 +69,8 @@ private:
   typedef typename SHash::Handle    SGetHandle;
   typedef typename SHash::Handle    SPutHandle;
 public:
-  ObConcurrentHashMap();
-  ObConcurrentHashMap(IHashAlloc &hash_alloc, IArrayAlloc &array_alloc);
+  ObConcurrentHashMapDoNotUse();
+  ObConcurrentHashMapDoNotUse(IHashAlloc &hash_alloc, IArrayAlloc &array_alloc);
   int init(const lib::ObLabel &label = ObModIds::OB_CONCURRENT_HASH_MAP,
       const uint64_t tenant_id = OB_SERVER_TENANT_ID);
   void reset();
@@ -87,7 +87,7 @@ public:
   template <typename Function> int for_each(Function &fn);
   template <typename Function> int remove_if(Function &fn);
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObConcurrentHashMap);
+  DISALLOW_COPY_AND_ASSIGN(ObConcurrentHashMapDoNotUse);
   int err_code_map(int err) const;
 private:
   class ReclaimCallback : public SHash::IKVRCallback
@@ -99,10 +99,10 @@ private:
   class RemoveIf
   {
   public:
-    RemoveIf(ObConcurrentHashMap &hash, Function &fn) : hash_(hash), predicate_(fn) {}
+    RemoveIf(ObConcurrentHashMapDoNotUse &hash, Function &fn) : hash_(hash), predicate_(fn) {}
     bool operator()(Key &key, Value &value);
   private:
-    ObConcurrentHashMap &hash_;
+    ObConcurrentHashMapDoNotUse &hash_;
     Function &predicate_;
   };
   static int always_true(Key &key, Value &value) { UNUSED(key); UNUSED(value); return true; }
@@ -115,7 +115,7 @@ private:
 };
 
 template<typename Key, typename Value>
-ObConcurrentHashMap<Key, Value>::ObConcurrentHashMap()
+ObConcurrentHashMapDoNotUse<Key, Value>::ObConcurrentHashMapDoNotUse()
   : hash_alloc_(),
     array_alloc_(),
     relaim_callback_(),
@@ -125,7 +125,7 @@ ObConcurrentHashMap<Key, Value>::ObConcurrentHashMap()
 }
 
 template<typename Key, typename Value>
-ObConcurrentHashMap<Key, Value>::ObConcurrentHashMap(IHashAlloc &hash_alloc, IArrayAlloc &array_alloc)
+ObConcurrentHashMapDoNotUse<Key, Value>::ObConcurrentHashMapDoNotUse(IHashAlloc &hash_alloc, IArrayAlloc &array_alloc)
   : hash_alloc_(),
     array_alloc_(),
     relaim_callback_(),
@@ -135,7 +135,7 @@ ObConcurrentHashMap<Key, Value>::ObConcurrentHashMap(IHashAlloc &hash_alloc, IAr
 }
 
 template<typename Key, typename Value>
-int ObConcurrentHashMap<Key, Value>::init(const lib::ObLabel &label, const uint64_t tenant_id)
+int ObConcurrentHashMapDoNotUse<Key, Value>::init(const lib::ObLabel &label, const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   if (!is_valid_tenant_id(tenant_id)) {
@@ -152,19 +152,19 @@ int ObConcurrentHashMap<Key, Value>::init(const lib::ObLabel &label, const uint6
 }
 
 template<typename Key, typename Value>
-void ObConcurrentHashMap<Key, Value>::reset()
+void ObConcurrentHashMapDoNotUse<Key, Value>::reset()
 {
   (void)remove_if(always_true);
 }
 
 template<typename Key, typename Value>
-void ObConcurrentHashMap<Key, Value>::destroy()
+void ObConcurrentHashMapDoNotUse<Key, Value>::destroy()
 {
   reset();
 }
 
 template<typename Key, typename Value>
-int ObConcurrentHashMap<Key, Value>::put_refactored(const Key &key, const Value &value)
+int ObConcurrentHashMapDoNotUse<Key, Value>::put_refactored(const Key &key, const Value &value)
 {
   int hash_ret = 0;
   SPutHandle handle(hash_, hash_root_);
@@ -175,7 +175,7 @@ int ObConcurrentHashMap<Key, Value>::put_refactored(const Key &key, const Value 
 }
 
 template<typename Key, typename Value>
-int ObConcurrentHashMap<Key, Value>::remove_refactored(const Key &key)
+int ObConcurrentHashMapDoNotUse<Key, Value>::remove_refactored(const Key &key)
 {
   int hash_ret = 0;
   Value v;
@@ -187,7 +187,7 @@ int ObConcurrentHashMap<Key, Value>::remove_refactored(const Key &key)
 }
 
 template<typename Key, typename Value>
-int ObConcurrentHashMap<Key, Value>::get_refactored(const Key &key, Value &value) const
+int ObConcurrentHashMapDoNotUse<Key, Value>::get_refactored(const Key &key, Value &value) const
 {
   int hash_ret = 0;
   SGetHandle handle(const_cast<SHash&>(hash_), const_cast<SHashRoot&>(hash_root_));
@@ -198,7 +198,7 @@ int ObConcurrentHashMap<Key, Value>::get_refactored(const Key &key, Value &value
 }
 
 template<typename Key, typename Value>
-int ObConcurrentHashMap<Key, Value>::contains_key(const Key &key) const
+int ObConcurrentHashMapDoNotUse<Key, Value>::contains_key(const Key &key) const
 {
   int hash_ret = 0;
   Value v;
@@ -212,7 +212,7 @@ int ObConcurrentHashMap<Key, Value>::contains_key(const Key &key) const
 
 template <typename Key, typename Value>
 template <typename Function>
-int ObConcurrentHashMap<Key, Value>::for_each(Function &fn)
+int ObConcurrentHashMapDoNotUse<Key, Value>::for_each(Function &fn)
 {
   int ret = OB_SUCCESS;
   int hash_ret = 0;
@@ -241,14 +241,14 @@ int ObConcurrentHashMap<Key, Value>::for_each(Function &fn)
 
 template <typename Key, typename Value>
 template <typename Function>
-int ObConcurrentHashMap<Key, Value>::remove_if(Function &fn)
+int ObConcurrentHashMapDoNotUse<Key, Value>::remove_if(Function &fn)
 {
   RemoveIf<Function> remove_if(*this, fn);
   return for_each(remove_if);
 }
 
 template<typename Key, typename Value>
-int ObConcurrentHashMap<Key, Value>::err_code_map(int err) const
+int ObConcurrentHashMapDoNotUse<Key, Value>::err_code_map(int err) const
 {
   int ret = OB_SUCCESS;
   switch (err) {
@@ -269,7 +269,7 @@ int ObConcurrentHashMap<Key, Value>::err_code_map(int err) const
 // 3. remove_if return true and do nothing if fn() return false.
 template<typename Key, typename Value>
 template <typename Function>
-bool ObConcurrentHashMap<Key, Value>::RemoveIf<Function>::operator()(Key &key, Value &value)
+bool ObConcurrentHashMapDoNotUse<Key, Value>::RemoveIf<Function>::operator()(Key &key, Value &value)
 {
   bool bool_ret = true;
   int tmp_ret = OB_SUCCESS;

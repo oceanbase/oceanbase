@@ -128,7 +128,7 @@ private:
                                 sql::ObSQLSessionInfo &session,
                                 common::ParamStore &params);
 public:
-  static const int64_t MAX_SELF_OBJ_SIZE = 2 * 1024L;
+  static const int64_t MAX_SELF_OBJ_SIZE = 2.5 * 1024L;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMPQuery);
 private:

@@ -87,6 +87,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcAlterTableP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcExchangePartitionP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDropTableP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcParallelDropTableP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcRenameTableP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcTruncateTableP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcTruncateTableV2P, *gctx_.root_service_);
@@ -287,6 +288,8 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcHandleRlsPolicyDDLP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcHandleRlsGroupDDLP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcHandleRlsContextDDLP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcCreateCCLRuleDDLP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcDropCCLRuleDDLP, *gctx_.root_service_);
 #ifdef OB_BUILD_TDE_SECURITY
     RPC_PROCESSOR(rootserver::ObGetRootKeyP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObReloadMasterKeyP, *gctx_.root_service_);
@@ -300,4 +303,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
 
     RPC_PROCESSOR(rootserver::ObRpcCreateExternalResourceP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDropExternalResourceP, *gctx_.root_service_);
+
+    // htable ddl
+    RPC_PROCESSOR(rootserver::ObRpcParallelHTableDDLP, *gctx_.root_service_);
 }

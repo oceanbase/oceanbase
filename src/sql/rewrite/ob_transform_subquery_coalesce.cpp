@@ -1800,7 +1800,8 @@ int ObTransformSubqueryCoalesce::get_coalesce_infos(ObDMLStmt &parent_stmt,
                                                                 map_info,
                                                                 relation))) {
         LOG_WARN("failed to check stmt containment", K(ret));
-      } else if (!check_subquery_can_coalesce(map_info)) {
+      } else if (!check_subquery_can_coalesce(map_info) ||
+                 stmt->is_scala_group_by() != helper->stmt_->is_scala_group_by()) {
         //do nothing
         OPT_TRACE("not same suqbuery, can not coalesce");
       } else if (OB_FAIL(helper->similar_stmts_.push_back(stmt))) {

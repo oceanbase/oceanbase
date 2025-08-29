@@ -142,6 +142,30 @@ bool ObShareResourceThrottleTool<FakeAllocator, Args...>::has_triggered_throttle
 
 template <typename FakeAllocator, typename... Args>
 template <typename ALLOCATOR>
+bool ObShareResourceThrottleTool<FakeAllocator, Args...>::exceeded_resource_limit(const int64_t alloc_size)
+{
+  ACQUIRE_THROTTLE_UNIT(FakeAllocator, share_throttle_unit);
+  ACQUIRE_UNIT_ALLOCATOR(ALLOCATOR, module_throttle_unit, allocator);
+
+  int64_t module_hold = allocator->hold();
+  SumModuleHoldResourceFunctor sum_hold_func;
+  (void)module_throttle_tuple_.for_each(sum_hold_func);
+
+  bool share_exceeded = share_throttle_unit.exceeded_resource_limit(sum_hold_func.sum_, alloc_size);
+  bool module_exceeded = module_throttle_unit.exceeded_resource_limit(module_hold, alloc_size);
+  if (share_exceeded) {
+    SHARE_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "resource hold exceeded share limit", K(sum_hold_func.sum_), K(module_hold), K(alloc_size));
+  }
+  if (module_exceeded) {
+    SHARE_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "resource hold exceeded module limit", K(sum_hold_func.sum_), K(module_hold), K(alloc_size));
+  }
+
+  bool exceeded = (share_exceeded | module_exceeded);
+  return exceeded;
+}
+
+template <typename FakeAllocator, typename... Args>
+template <typename ALLOCATOR>
 bool ObShareResourceThrottleTool<FakeAllocator, Args...>::is_throttling(ObThrottleInfoGuard &share_ti_guard,
                                                                         ObThrottleInfoGuard &module_ti_guard)
 {
@@ -292,6 +316,15 @@ void ObShareResourceThrottleTool<FakeAllocator, Args...>::set_resource_limit(con
 {
   ACQUIRE_THROTTLE_UNIT(ALLOCATOR, module_throttle_unit);
   module_throttle_unit.set_resource_limit(resource_limit);
+}
+
+
+template <typename FakeAllocator, typename... Args>
+template <typename ALLOCATOR>
+int64_t ObShareResourceThrottleTool<FakeAllocator, Args...>::get_resource_limit()
+{
+  ACQUIRE_THROTTLE_UNIT(ALLOCATOR, module_throttle_unit);
+  return module_throttle_unit.get_resource_limit();
 }
 
 template <typename FakeAllocator, typename... Args>

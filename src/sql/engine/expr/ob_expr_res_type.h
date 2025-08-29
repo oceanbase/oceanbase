@@ -427,7 +427,7 @@ protected:
   uint64_t cast_mode_; // store cast mode for decimal int single side cast
 };
 
-typedef common::ObSEArray<ObExprResType, 5, common::ModulePageAllocator, true> ObExprResTypes;
+typedef common::ObSEArray<ObExprResType, 5> ObExprResTypes;
 typedef common::ObIArray<ObExprResType> ObIExprResTypes;
 
 enum ObSubQueryKey : int8_t

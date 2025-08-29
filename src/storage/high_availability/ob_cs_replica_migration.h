@@ -126,7 +126,7 @@ public:
   int check_convert_ctx_valid(ObIHADagNetCtx *ha_dag_net_ctx);
 public:
   virtual bool operator == (const share::ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   INHERIT_TO_STRING_KV("ObIMigrationDag", ObMigrationDag, KP(this), KPC_(ls), K_(first_start_time), K_(is_inited));
 private:

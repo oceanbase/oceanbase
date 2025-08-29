@@ -522,17 +522,16 @@ int ObLogSubPlanFilter::compute_spf_batch_rescan(bool &can_batch)
       right_allocated_exchange |= child->is_exchange_allocated();
     }
   }
-  if (OB_FAIL(ret) || !can_batch || !has_rescan_subquery) {
+  if (OB_FAIL(ret) || !can_batch || !has_rescan_subquery || right_allocated_exchange) {
     can_batch = false;
   } else if (DistAlgo::DIST_BASIC_METHOD == dist_algo_
              || DistAlgo::DIST_NONE_ALL == dist_algo_
              || DistAlgo::DIST_HASH_ALL == dist_algo_
              || DistAlgo::DIST_RANDOM_ALL == dist_algo_
              || (DistAlgo::DIST_PARTITION_WISE == dist_algo_
-                 && !left_allocated_exchange
-                 && !right_allocated_exchange)) {
+                 && !left_allocated_exchange)) {
     can_batch = true;
-  } else if (DistAlgo::DIST_PULL_TO_LOCAL == dist_algo_ && !right_allocated_exchange) {
+  } else if (DistAlgo::DIST_PULL_TO_LOCAL == dist_algo_) {
     can_batch = true;
   } else {
     can_batch = false;

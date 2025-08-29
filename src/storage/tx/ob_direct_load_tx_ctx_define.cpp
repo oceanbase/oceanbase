@@ -25,8 +25,8 @@ namespace transaction
 
 OB_SERIALIZE_MEMBER(ObTxDirectLoadIncBatchInfo,
                     batch_key_, /* 1 */
-                    start_scn_ /* 2 */);
-// flag_.val_ /* 3 */);
+                    start_scn_ /* 2 */,
+                    flag_.val_ /* 3 */)
 
 int ObTxDirectLoadIncBatchInfo::set_start_log_synced()
 {

@@ -46,7 +46,8 @@ class ObAllVirtualUnit : public common::ObVirtualTableScannerIterator
     REGION,
     DATA_DISK_SIZE,
     MAX_NET_BANDWIDTH,
-    NET_BANDWIDTH_WEIGHT
+    NET_BANDWIDTH_WEIGHT,
+    REPLICA_TYPE
   };
 
 public:

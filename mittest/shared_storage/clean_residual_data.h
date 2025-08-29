@@ -52,7 +52,7 @@ int ResidualDataCleaner::init(const char *path, const char *endpoint, const char
     OB_LOG(WARN, "failed to set path when initiating residual data cleaner", KR(ret), KCSTRING(path));
   } else if (OB_FAIL(get_storage_type_from_path(path, type))) {
     OB_LOG(WARN, "failed to get storage type when initiating residual data cleaner", KR(ret), KCSTRING(path));
-  } else if (OB_FAIL(storage_info_.set(type, endpoint, access_info, extension))) {
+  } else if (OB_FAIL(storage_info_.set(type, endpoint, access_info, extension, OB_INVALID_DEST_ID))) {
     OB_LOG(WARN, "failed to set storage info when initiating residual data cleaner", KR(ret), KCSTRING(path), KCSTRING(endpoint));
   } else {
     is_inited_ = true;

@@ -433,7 +433,7 @@ ObTableLoadSchema::ObTableLoadSchema()
     lob_meta_table_id_(OB_INVALID_ID),
     lob_inrow_threshold_(-1),
     cg_cnt_(0),
-    non_partitioned_tablet_id_vector_(nullptr),
+    col_nullables_(nullptr),
     is_inited_(false)
 {
   allocator_.set_tenant_id(MTL_ID());
@@ -476,7 +476,7 @@ void ObTableLoadSchema::reset()
   lob_meta_column_descs_.reset();
   lob_meta_datum_utils_.reset();
   cmp_funcs_.reset();
-  non_partitioned_tablet_id_vector_ = nullptr;
+  col_nullables_ = nullptr;
   allocator_.reset();
   is_inited_ = false;
 }
@@ -549,26 +549,28 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
       LOG_WARN("fail to init cmp funcs", KR(ret));
     }
     if (OB_SUCC(ret)) {
-      for (ObTableSchema::const_column_iterator iter = table_schema->column_begin();
-          OB_SUCC(ret) && iter != table_schema->column_end(); ++iter) {
-        ObColumnSchemaV2 *column_schema = *iter;
+      const int64_t col_nullables_size = ObBitVector::memory_size(column_descs_.count());
+      if (OB_ISNULL(col_nullables_ = to_bit_vector(allocator_.alloc(col_nullables_size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc mem", KR(ret), K(col_nullables_size));
+      } else {
+        col_nullables_->reset(column_descs_.count());
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < column_descs_.count(); ++i) {
+        ObColDesc &col_desc = column_descs_.at(i);
+        const ObColumnSchemaV2 *column_schema = table_schema->get_column_schema(col_desc.col_id_);
         if (OB_ISNULL(column_schema)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("invalid column schema", K(column_schema));
+          LOG_WARN("invalid column schema", KR(ret), K(column_schema));
         } else {
-          uint64_t column_id = column_schema->get_column_id();
-          if (column_schema->is_identity_column() && column_id != OB_HIDDEN_PK_INCREMENT_COLUMN_ID) {
+          const uint64_t column_id = column_schema->get_column_id();
+          if (!column_schema->is_not_null_for_write()) {
+            col_nullables_->set(i);
+          }
+          if (column_schema->is_identity_column() && !ObColumnSchemaV2::is_hidden_pk_column_id(column_id)) {
             has_identity_column_ = true;
-            break;
           }
         }
-      }//end for
-    }
-    if (OB_SUCC(ret) && !is_partitioned_table_) {
-      const ObTabletID &tablet_id = table_schema->get_tablet_id();
-      if (OB_FAIL(ObDirectLoadVectorUtils::make_const_tablet_id_vector(
-            tablet_id, allocator_, non_partitioned_tablet_id_vector_))) {
-        LOG_WARN("fail to make const tablet id vector", KR(ret), K(tablet_id));
       }
     }
     if (OB_SUCC(ret)) {

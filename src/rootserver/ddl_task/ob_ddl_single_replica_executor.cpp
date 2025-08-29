@@ -79,6 +79,7 @@ void ObSingleReplicaBuildCtx::reset_build_stat()
   row_inserted_ = 0;
   row_scanned_ = 0;
   physical_row_count_ = 0;
+  sess_not_found_times_= 0;
 }
 
 bool ObSingleReplicaBuildCtx::is_valid() const
@@ -116,6 +117,7 @@ int ObSingleReplicaBuildCtx::assign(const ObSingleReplicaBuildCtx &other)
     row_inserted_ = other.row_inserted_;
     row_scanned_ = other.row_scanned_;
     physical_row_count_ = other.physical_row_count_;
+    sess_not_found_times_ = other.sess_not_found_times_;
     dest_tablet_id_ = other.dest_tablet_id_;
   }
   return ret;

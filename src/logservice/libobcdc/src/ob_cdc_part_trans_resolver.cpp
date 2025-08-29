@@ -16,6 +16,7 @@
 
 #include "ob_cdc_part_trans_resolver.h"
 #include "ob_log_cluster_id_filter.h"     // ClusterIdFilter
+#include "ob_log_lsn_filter.h"            // LsnFilter
 #include "logservice/logfetcher/ob_log_part_serve_info.h"       // PartServeInfo
 #include "ob_log_config.h"                // TCONF
 
@@ -142,12 +143,14 @@ ObCDCPartTransResolver::ObCDCPartTransResolver(
     TaskPool &task_pool,
     PartTransTaskMap &task_map,
     IObLogFetcherDispatcher &dispatcher,
-    IObLogClusterIDFilter &cluster_id_filter) :
+    IObLogClusterIDFilter &cluster_id_filter,
+    IObLogLsnFilter &lsn_filter) :
     offlined_(false),
     tls_id_(),
     part_trans_dispatcher_(tls_id_str, task_pool, task_map, dispatcher),
     cluster_id_filter_(cluster_id_filter),
-    enable_direct_load_inc_(false)
+    enable_direct_load_inc_(false),
+    lsn_filter_(lsn_filter)
 {}
 
 ObCDCPartTransResolver::~ObCDCPartTransResolver()
@@ -920,7 +923,9 @@ int ObCDCPartTransResolver::handle_commit_(
   bool is_redo_complete = false;
   is_served = false;
 
-  if (OB_UNLIKELY(! missing_info.is_empty())) {
+  if (OB_UNLIKELY(lsn_filter_.filter(tls_id_.get_tenant_id(), tls_id_.get_ls_id().id(), lsn.val_))) {
+    LOG_INFO("commit log is filtered", K_(tls_id), K(lsn), K(tx_id));
+  } else if (OB_UNLIKELY(! missing_info.is_empty())) {
     ret = OB_NEED_RETRY;
     missing_info.set_need_reconsume_commit_log_entry();
     LOG_WARN("found missing_info not empty, may have commit_info_log before the commit_log in current log_entry, retry later",

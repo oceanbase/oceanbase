@@ -170,6 +170,8 @@ int ObTransformAggrSubquery::transform_with_aggregation_first(ObDMLStmt *&stmt,
     LOG_WARN("unexpected null", K(ret), K(ctx_), K(query_hint));
   } else if (stmt->is_hierarchical_query() || stmt->is_set_stmt() || !stmt->is_sel_del_upd()) {
     OPT_TRACE("hierarchical/set/insert/merge query can not transform");
+  } else if (stmt->is_unpivot_select()) {
+    OPT_TRACE("unpivot query can not transform");
   } else if (OB_FAIL(stmt->is_hierarchical_for_update(is_hsfu))) {
     LOG_WARN("failed to check hierarchical for update", K(ret));
   } else if (is_hsfu) {
@@ -544,7 +546,8 @@ int ObTransformAggrSubquery::check_aggr_first_validity(ObDMLStmt &stmt,
              subquery->has_window_function() ||
              subquery->has_sequence() ||
              subquery->is_set_stmt() ||
-             subquery->is_hierarchical_query()) {
+             subquery->is_hierarchical_query() ||
+             subquery->is_unpivot_select()) {
     is_valid = false;
     LOG_TRACE("invalid subquery", K(is_valid), K(*subquery));
     OPT_TRACE("subquery has rollup/having/limit offset/limit percent/win_func/sequence");
@@ -588,8 +591,8 @@ int ObTransformAggrSubquery::check_aggr_first_validity(ObDMLStmt &stmt,
     // 6. check correlated subquery conditions
   } else if (OB_FALSE_IT(hint_allowed_transform = (subquery->get_stmt_hint().has_enable_hint(T_UNNEST) ||
                                         subquery->get_stmt_hint().has_enable_hint(T_AGGR_FIRST_UNNEST)))) {
-  } else if (OB_FALSE_IT(check_match_index = hint_allowed_transform ? false :
-                                             is_select_item_expr || limit_to_aggr)) {
+  } else if (OB_FALSE_IT(check_match_index = (hint_allowed_transform || ctx_->force_subquery_unnest_)
+                                              ? false : is_select_item_expr || limit_to_aggr)) {
   } else if (OB_FAIL(check_subquery_conditions(query_ref,
                                                *subquery,
                                                nested_conditions,
@@ -759,7 +762,7 @@ int ObTransformAggrSubquery::check_join_first_condition_for_limit_1(ObQueryRefRa
     }
 
     // correlation condition should not match index
-    if (OB_SUCC(ret) && IS_COMMON_COMPARISON_OP(cond->get_expr_type())) {
+    if (OB_SUCC(ret) && IS_COMMON_COMPARISON_OP(cond->get_expr_type()) && !ctx_->force_subquery_unnest_) {
       ObColumnRefRawExpr *column_expr = NULL;
       ObRawExpr *const_expr = NULL;
       bool is_match = false;
@@ -1201,6 +1204,7 @@ int ObTransformAggrSubquery::transform_with_join_first(ObDMLStmt *&stmt,
 {
   int ret = OB_SUCCESS;
   bool is_valid = false;
+  bool post_groupby_only = false;
   int64_t query_num = 0;
   ObDMLStmt *target_stmt = stmt;
   const ObQueryHint* query_hint = nullptr;
@@ -1209,7 +1213,7 @@ int ObTransformAggrSubquery::transform_with_join_first(ObDMLStmt *&stmt,
       OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null stmt", K(ret), K(stmt), K(query_hint));
-  } else if (OB_FAIL(check_stmt_valid(*stmt, is_valid))) {
+  } else if (OB_FAIL(check_stmt_valid(*stmt, is_valid, post_groupby_only))) {
     LOG_WARN("failed to check stmt valid", K(ret));
   } else if (is_valid) {
     query_num = stmt->get_subquery_expr_size();
@@ -1219,7 +1223,7 @@ int ObTransformAggrSubquery::transform_with_join_first(ObDMLStmt *&stmt,
     ObSelectStmt *view_stmt = NULL;
     ObRawExpr *root_expr = NULL;
     bool post_group_by = false;
-    if (OB_FAIL(get_trans_param(*target_stmt, param, root_expr, post_group_by))) {
+    if (OB_FAIL(get_trans_param(*target_stmt, param, root_expr, post_groupby_only, post_group_by))) {
       LOG_WARN("failed to find trans params", K(ret));
     } else if (NULL == root_expr) {
       break;
@@ -1303,6 +1307,7 @@ int ObTransformAggrSubquery::add_constraints_for_limit(TransformParam &param)
 int ObTransformAggrSubquery::get_trans_param(ObDMLStmt &stmt,
                                              TransformParam &param,
                                              ObRawExpr *&root_expr,
+                                             const bool post_groupby_only,
                                              bool &post_group_by)
 {
   int ret = OB_SUCCESS;
@@ -1318,15 +1323,17 @@ int ObTransformAggrSubquery::get_trans_param(ObDMLStmt &stmt,
   } else if (has_rownum) {
     // do nothing
   } else if (stmt.is_select_stmt()) {
+    // 1. we can create spj view with group-by pushed down for normal group by
+    // 2. if there is no group by clause, we can directly pullup subqueries
     ObSelectStmt &sel_stmt = static_cast<ObSelectStmt &>(stmt);
     if (sel_stmt.has_rollup()) {
-      // we can create spj view with group-by pushed down for normal group by
+      // do nothing
     } else if (OB_FAIL(append(pre_group_by_exprs, sel_stmt.get_group_exprs()))) {
       LOG_WARN("failed to append group by exprs", K(ret));
     } else if (OB_FAIL(append(pre_group_by_exprs, sel_stmt.get_aggr_items()))) {
       LOG_WARN("failed to append aggr items", K(ret));
     } else if (sel_stmt.is_scala_group_by()) {
-      // there is no group by clause, we can directly pullup subqueries
+      // do nothing
     } else if (OB_FAIL(append(post_group_by_exprs, sel_stmt.get_having_exprs()))) {
       LOG_WARN("failed to append having exprs", K(ret));
     } else if (OB_FAIL(sel_stmt.get_select_exprs(post_group_by_exprs))) {
@@ -1340,7 +1347,8 @@ int ObTransformAggrSubquery::get_trans_param(ObDMLStmt &stmt,
   }
   int64_t pre_count = pre_group_by_exprs.count();
   int64_t post_count = post_group_by_exprs.count();
-  for (int64_t i = 0; OB_SUCC(ret) && NULL == root_expr && i < pre_count + post_count; ++i) {
+  int64_t start = post_groupby_only ? pre_count : 0;
+  for (int64_t i = start; OB_SUCC(ret) && NULL == root_expr && i < pre_count + post_count; ++i) {
     params.reset();
     post_group_by = (i >= pre_count);
     ObRawExpr *expr = !post_group_by ? pre_group_by_exprs.at(i) :
@@ -1358,7 +1366,17 @@ int ObTransformAggrSubquery::get_trans_param(ObDMLStmt &stmt,
     }
     for (int64_t j = 0; OB_SUCC(ret) && NULL == root_expr && j < params.count(); ++j) {
       bool is_valid = true;
+      bool found = false;
       if (ObOptimizerUtil::find_item(invalid_list, params.at(j).ja_query_ref_)) {
+        is_valid = false;
+      } else if (post_groupby_only &&
+                 OB_FAIL(ObTransformUtils::recursive_find_shared_expr(pre_group_by_exprs,
+                                                                      params.at(j).ja_query_ref_,
+                                                                      found))) {
+        LOG_WARN("failed to find shared expr", K(ret));
+      } else if (found) {
+        // found in pre_group_by_exprs, will be pushed down into view when
+        // 'post group by only' mode and can't transform
         is_valid = false;
       } else if (is_exists_op(expr->get_expr_type())) {
         if (OB_FAIL(choose_pullup_method_for_exists(params.at(j).ja_query_ref_,
@@ -1435,20 +1453,33 @@ int ObTransformAggrSubquery::get_trans_view(ObDMLStmt &stmt,
   return ret;
 }
 
-int ObTransformAggrSubquery::check_stmt_valid(ObDMLStmt &stmt, bool &is_valid)
+int ObTransformAggrSubquery::check_stmt_valid(ObDMLStmt &stmt, bool &is_valid, bool &post_groupby_only)
 {
   int ret = OB_SUCCESS;
   is_valid = true;
+  post_groupby_only = false;
   bool can_set_unique = false;
   if (stmt.is_set_stmt()
       || stmt.is_hierarchical_query()
       || stmt.has_for_update()
-      || !stmt.is_sel_del_upd()) {
+      || !stmt.is_sel_del_upd()
+      || stmt.is_unpivot_select()) {
     is_valid = false;
   } else if (OB_FAIL(StmtUniqueKeyProvider::check_can_set_stmt_unique(&stmt, can_set_unique))) {
     LOG_WARN("failed to check can set stmt unque", K(ret));
   } else if (!can_set_unique) {
-    is_valid = false;
+    // check has group by;
+    if (stmt.is_select_stmt() && static_cast<ObSelectStmt &>(stmt).has_group_by()) {
+      // Consider such a query:
+      // 'explain select t1.c1, (select sum(c2) from t2 where t2.c1 = t1.c1)
+      //  from t1, (select 1 c1 union all select 1+1) v group by t1.c1;'
+      // Although v does not satisfy uniqueness, since t1.c1 is a group by column
+      // and has uniqueness, subqueries that operate after group by can still be
+      // rewritten.
+      post_groupby_only = true;
+    } else {
+      is_valid = false;
+    }
   }
   return ret;
 }
@@ -1502,7 +1533,8 @@ int ObTransformAggrSubquery::check_join_first_validity(ObQueryRefRawExpr &query_
              subquery->has_window_function() ||
              subquery->has_sequence() ||
              subquery->is_set_stmt() ||
-             subquery->is_hierarchical_query()) {
+             subquery->is_hierarchical_query() ||
+             subquery->is_unpivot_select()) {
     is_valid = false;
     LOG_TRACE("invalid subquery", K(is_valid), K(*subquery));
     OPT_TRACE("subquery has rollup/win_func/sequence");
@@ -2522,6 +2554,8 @@ int ObTransformAggrSubquery::extract_no_rewrite_expr(ObRawExpr *expr)
                subquery->get_stmt_hint().has_enable_hint(T_AGGR_FIRST_UNNEST) ||
                subquery->get_stmt_hint().has_enable_hint(T_JOIN_FIRST_UNNEST)) {
       //do nothing
+    } else if (ctx_->force_subquery_unnest_) {
+      //do nothing
     } else if (OB_FAIL(ObTransformUtils::check_subquery_match_index(ctx_,
                                                                     static_cast<ObQueryRefRawExpr *>(expr),
                                                                     subquery,
@@ -2799,6 +2833,7 @@ int ObTransformAggrSubquery::check_can_trans_any_all_as_scalar_subquery(ObDMLStm
              subquery->has_sequence() ||
              subquery->is_set_stmt() ||
              subquery->is_hierarchical_query() ||
+             subquery->is_unpivot_select() ||
              has_rownum) {
     is_valid = false;
   } else {
@@ -2849,6 +2884,7 @@ int ObTransformAggrSubquery::check_can_trans_exists_as_scalar_subquery(ObQueryRe
              subquery->has_sequence() ||
              subquery->is_set_stmt() ||
              subquery->is_hierarchical_query() ||
+             subquery->is_unpivot_select() ||
              has_rownum) {
     // do nothing
   } else if (OB_NOT_NULL(subquery->get_limit_expr()) && limit_value < 1) {

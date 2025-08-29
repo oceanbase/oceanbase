@@ -283,7 +283,7 @@ int ObLSCreator::create_tenant_sys_ls(
     } else if (is_meta_tenant(tenant_id_)) {
       share::ObLSLifeAgentManager ls_life_agent(*proxy_);
       if (OB_FAIL(ls_life_agent.create_new_ls(status_info, create_scn, zone_priority,
-              share::NORMAL_SWITCHOVER_STATUS))) {
+          ObAllTenantInfo::INITIAL_SWITCHOVER_EPOCH))) {
         LOG_WARN("failed to create new ls", KR(ret), K(status_info), K(create_scn), K(zone_priority));
       }
     }

@@ -65,6 +65,8 @@ public:
   ExprFixedArray gby_exprs_;
   ObExpr *grouping_id_expr_;
   ObFixedArray<DupExprPair, ObIAllocator> dup_expr_pairs_;
+  ObFixedArray<ExprFixedArray, ObIAllocator> group_set_exprs_;
+  ExprFixedArray pruned_groupby_exprs_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExpandVecSpec);
 };

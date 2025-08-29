@@ -66,22 +66,20 @@ public:
       evolution_count_(0),
       start_evolution_time_(0),
       evolution_count_ts_(DEFAULT_EVOLUTION_COUNT_THRESHOLD),
-      evolution_timeout_ts_(DEFAULT_EVOLUTION_TIMEOUT_THRESHOLD),
       evolving_plan_(NULL),
       history_exec_time_(0),
-      is_inited_(false),
+      is_evo_best_plan_(false),
+      best_plan_cnt_(0),
       current_stage_cnt_(0),
-      lazy_finished_(false),
-      lazy_better_(false),
-      spm_mode_(SPM_MODE_DISABLE)
+      type_(-1),
+      evolution_records_(NULL)
   {
   }
   void reset();
   int remove_all_plan();
   int init(ObSqlPlanSet *plan_set);
   int init(ObSqlPlanSet *plan_set,
-           const int64_t evolution_count_ts,
-           const int64_t evolution_timeout_ts);
+           const int64_t evolution_count_ts);
   void disable_is_evolving_flag() { ATOMIC_STORE(&is_evolving_, false); }
   void enable_is_evolving_flag() { ATOMIC_STORE(&is_evolving_, true); }
   bool get_is_evolving_flag() const { return ATOMIC_LOAD(&is_evolving_); }
@@ -89,28 +87,16 @@ public:
   int64_t get_evolution_count() const { return evolution_count_; }
   int64_t get_start_evolution_time() const { return start_evolution_time_; }
   int64_t get_evolution_count_ts() const { return evolution_count_ts_; }
-  int64_t get_evolution_timeout_ts() const { return evolution_timeout_ts_; }
   // EvolutionPercentage get_evolution_percentage() const { return percentage_; }
   const ObPhysicalPlan *get_evolving_plan() const { return evolving_plan_; }
   const ObIArray<ObPhysicalPlan *> &get_baseline_plans() const { return baseline_plans_; }
-  void set_evolution_count_ts(const int64_t threshold)
-  {
-    evolution_count_ts_ = threshold;
-  }
-  void set_evolution_timeout_ts(const int64_t threshold)
-  {
-    evolution_timeout_ts_ = threshold;
-  }
   int get_plan(ObPlanCacheCtx &ctx, ObPhysicalPlan *&plan);
   int add_plan(ObPlanCacheCtx &ctx, ObPhysicalPlan *plan);
   void inc_evolution_finish_count();
-  void check_task_need_finish();
-  int compare_and_lazy_finalize_plan();
   TO_STRING_KV(K_(is_evolving),
                K_(evolution_count),
                K_(start_evolution_time),
                K_(evolution_count_ts),
-               K_(evolution_timeout_ts),
                K_(baseline_plans),
                KPC_(evolving_plan));
   
@@ -119,8 +105,14 @@ private:
   static const int64_t DEFAULT_EVOLUTION_COUNT_THRESHOLD = 150;
   static const int64_t DEFAULT_EVOLUTION_TIMEOUT_THRESHOLD = 3 * 60 * 60 * 1000L * 1000L; //3 hours
   static const int64_t DEFAULT_ERROR_COUNT_THRESHOLD = 3;
-  static const int64_t EVOLVING_PLAN_TIMEOUT_THRESHOLD = 5000; // 5ms
+  static const int64_t EVOLVING_PLAN_TIMEOUT_THRESHOLD = 10 * 1000L * 1000L; // 10s
 
+  int get_spm_fallback_retry_execute_plan(ObPlanCacheCtx &ctx,
+                                          ObPhysicalPlan *&plan);
+  int get_normal_retry_execute_plan(ObPlanCacheCtx &ctx,
+                                    ObPhysicalPlan *&plan);
+  int get_verify_execute_plan(ObPlanCacheCtx &ctx,
+                              ObPhysicalPlan *&plan);
   int online_evolve_get_plan_with_guard(ObPlanCacheCtx &ctx,
                                         ObPhysicalPlan *&plan);
   int add_baseline_plan(ObPlanCacheCtx &ctx,
@@ -133,8 +125,6 @@ private:
                         ObPhysicalPlan *&plan);
   int compare_and_finalize_plan(ObPlanCacheCtx &ctx,
                                 ObPhysicalPlan *&plan);
-  // bool need_evolution_plan_this_time();
-  bool need_evolution_plan_this_time(const int64_t evolution_count);
   // Use the hash value of the plan to determine whether it is the same plan
   int is_same_plan(const ObPhysicalPlan *l_plan,
                    const ObPhysicalPlan *r_plan,
@@ -147,13 +137,21 @@ private:
   int add_evolving_plan_to_pc(ObPlanCacheCtx &ctx);
   int add_all_baseline_plans_to_pc(ObPlanCacheCtx &ctx);
   void reset_evolution_plan_info();
-  void get_evolution_count_and_calc_dynamic_exec_count(int64_t &evolution_count);
+  int choose_plan_for_online_evolution(bool &use_baseline_plan);
+  int choose_plan_for_online_evolution_compat(bool &use_baseline_plan);
   int get_final_plan_and_discard_other_plan(const bool need_evolving_plan,
                                             ObPlanCacheCtx &ctx,
                                             ObPhysicalPlan *&plan);
-  int64_t get_baseline_plan_error_cnt();
   int64_t get_plan_finish_cnt();
-  int confirm_baseline_plan();
+  inline bool is_verifying_plan() const { return baseline_plans_.empty();  }
+  int init_evolution_records();
+  void reset_evolution_records();
+  int start_evolution_plan(ObSpmCacheCtx &spm_ctx);
+  static bool enable_spm_improve(const uint64_t opt_version) {
+    return  (COMPAT_VERSION_4_2_5_BP4 <= opt_version && COMPAT_VERSION_4_3_0 > opt_version)
+            || (COMPAT_VERSION_4_3_5_BP4 <= opt_version && COMPAT_VERSION_4_4_0 >opt_version)
+            || COMPAT_VERSION_4_4_1 <= opt_version;
+  }
 protected:
   ObSqlPlanSet *plan_set_;
   common::SpinRWLock ref_lock_;
@@ -161,20 +159,17 @@ protected:
   int64_t evolution_count_;
   int64_t start_evolution_time_;
   int64_t evolution_count_ts_;
-  int64_t evolution_timeout_ts_;
   // ObRandom random_;
   // EvolutionPercentage percentage_;
   ObPhysicalPlan *evolving_plan_;
   common::ObSEArray<ObPhysicalPlan *, 4> baseline_plans_; 
   common::ObSEArray<ObPhysicalPlan *, 4> garbage_list_;
   int64_t history_exec_time_;
-  bool is_inited_;
   bool is_evo_best_plan_;
   int64_t best_plan_cnt_;
   int64_t current_stage_cnt_;
-  bool lazy_finished_;
-  bool lazy_better_;
-  int64_t spm_mode_;
+  int64_t type_;
+  ObEvolutionRecords *evolution_records_;
 };
 
 } //namespace sql end

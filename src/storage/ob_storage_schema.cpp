@@ -469,6 +469,7 @@ ObStorageSchema::ObStorageSchema()
     progressive_merge_round_(0),
     progressive_merge_num_(0),
     master_key_id_(INVALID_ID),
+    micro_block_format_version_(ObMicroBlockFormatVersionHelper::DEFAULT_VERSION),
     compressor_type_(ObCompressorType::NONE_COMPRESSOR),
     encryption_(),
     encrypt_key_(),
@@ -570,6 +571,7 @@ int ObStorageSchema::init(
     is_column_table_schema_ = is_column_table_schema;
     is_cs_replica_compat_ = is_cg_array_generated_in_cs_replica();
     enable_macro_block_bloom_filter_ = input_schema.get_enable_macro_block_bloom_filter();
+    micro_block_format_version_ = input_schema.get_micro_block_format_version();
     is_inited_ = true;
   }
 
@@ -662,6 +664,7 @@ int ObStorageSchema::init(
       is_column_table_schema_ = old_schema.is_column_table_schema_;
       is_cs_replica_compat_ = is_cg_array_generated_in_cs_replica();
       enable_macro_block_bloom_filter_ = old_schema.get_enable_macro_block_bloom_filter();
+      micro_block_format_version_ = old_schema.get_micro_block_format_version();
       is_inited_ = true;
     }
   }
@@ -871,6 +874,7 @@ void ObStorageSchema::reset()
   }
   semistruct_encoding_type_.reset();
   semistruct_properties_.reset();
+  micro_block_format_version_ = ObMicroBlockFormatVersionHelper::DEFAULT_VERSION;
   is_inited_ = false;
 }
 
@@ -979,6 +983,7 @@ int ObStorageSchema::serialize(char *buf, const int64_t buf_len, int64_t &pos) c
     }
     if (OB_SUCC(ret) && storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V6) {
       OB_UNIS_ENCODE(semistruct_properties_);
+      OB_UNIS_ENCODE(micro_block_format_version_);
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -1104,6 +1109,8 @@ int ObStorageSchema::deserialize(
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(deep_copy_str(tmp_semi_properties, semistruct_properties_))) {
         STORAGE_LOG(WARN, "failed to deep copy string", K(ret), K(tmp_semi_properties));
+      } else {
+        OB_UNIS_DECODE(micro_block_format_version_);
       }
     }
     if (OB_SUCC(ret)) {
@@ -1664,6 +1671,7 @@ int64_t ObStorageSchema::get_serialize_size() const
   }
   if (storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V6) {
     OB_UNIS_ADD_LEN(semistruct_properties_);
+    OB_UNIS_ADD_LEN(micro_block_format_version_);
   }
   return len;
 }

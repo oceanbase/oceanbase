@@ -31,7 +31,7 @@ int ObJavaUtils::load_routine_jar(const ObString &jar, jobject &class_loader)
 
   JNIEnv *env = nullptr;
 
-  if (OB_FAIL(sql::ObJniConnector::get_jni_env(env))) {
+  if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
     LOG_WARN("failed to get_jni_env", K(ret));
   } else {
     jclass loader_clazz = nullptr;
@@ -87,7 +87,7 @@ void ObJavaUtils::delete_local_ref(jobject obj, JNIEnv *env)
 
   if (OB_NOT_NULL(obj)) {
     if (OB_ISNULL(env)) {
-      if (OB_FAIL(sql::ObJniConnector::get_jni_env(env))) {
+      if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
         LOG_WARN("failed to get_jni_env", K(ret));
       }
     }
@@ -104,7 +104,7 @@ void ObJavaUtils::delete_global_ref(jobject obj, JNIEnv *env)
 
   if (OB_NOT_NULL(obj)) {
     if (OB_ISNULL(env)) {
-      if (OB_FAIL(sql::ObJniConnector::get_jni_env(env))) {
+      if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
         LOG_WARN("failed to get_jni_env", K(ret));
       }
     }
@@ -120,7 +120,7 @@ int ObJavaUtils::exception_check(JNIEnv *env)
   int ret = OB_SUCCESS;
 
   if (OB_ISNULL(env)) {
-    if (OB_FAIL(sql::ObJniConnector::get_jni_env(env))) {
+    if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
       LOG_WARN("failed to get_jni_env", K(ret));
     }
   }

@@ -466,6 +466,7 @@ public:
       force_dist_hash_(false),
       force_pull_to_local_(false),
       force_hash_local_(false),
+      force_pushdown_group_by_(false),
       is_scalar_group_by_(false),
       distinct_exprs_(),
       aggr_code_expr_(NULL),
@@ -504,6 +505,8 @@ public:
 
     inline bool force_basic() const { return ignore_hint_ ? false : force_basic_; }
 
+    inline bool force_pushdown_group_by() const { return ignore_hint_ ? false : force_pushdown_group_by_; }
+
     inline bool allow_hash_local() const { return ignore_hint_ || (!force_basic_ &&
                                                                    !force_dist_hash_ &&
                                                                    !force_partition_wise_ &&
@@ -529,6 +532,7 @@ public:
     bool force_dist_hash_;      // pq hint force use hash distributed method plan
     bool force_pull_to_local_;
     bool force_hash_local_;
+    bool force_pushdown_group_by_;
     bool is_scalar_group_by_;
     bool is_from_povit_;
     bool ignore_hint_;
@@ -569,6 +573,7 @@ public:
                  K_(force_dist_hash),
                  K_(force_pull_to_local),
                  K_(force_hash_local),
+                 K_(force_pushdown_group_by),
                  K_(is_scalar_group_by),
                  K_(is_from_povit),
                  K_(ignore_hint),
@@ -752,9 +757,10 @@ public:
                                           ObIArray<CandidatePlan> &groupby_plans);
 
   int get_distribute_group_by_method(ObLogicalOperator *top,
-                                    GroupingOpHelper &groupby_helper,
-                                    const ObIArray<ObRawExpr*> &reduce_exprs,
-                                    uint64_t &group_dist_methods);
+                                     GroupingOpHelper &groupby_helper,
+                                     const ObIArray<ObRawExpr*> &reduce_exprs,
+                                     uint64_t &group_dist_methods,
+                                     bool is_for_three_stage = false);
   int prepare_three_stage_info(const ObIArray<ObRawExpr *> &group_by_exprs,
                                GroupingOpHelper &helper);
 
@@ -849,19 +855,21 @@ public:
 
   int check_basic_distinct_pushdown(bool &can_push);
 
-  int check_storage_distinct_pushdown(const ObIArray<ObRawExpr*> &distinct_exprs,
+  int check_storage_distinct_pushdown(omt::ObTenantConfigGuard &tenant_config,
+                                      const ObIArray<ObRawExpr*> &distinct_exprs,
                                       bool &can_push);
 
-  int check_aggr_pushdown_enabled(ObSQLSessionInfo &session_info,
+  int check_aggr_pushdown_enabled(omt::ObTenantConfigGuard &tenant_config,
                                   bool &enable_aggr_push_down,
                                   bool &enable_groupby_push_down);
 
-  int check_storage_groupby_pushdown(const ObIArray<ObAggFunRawExpr *> &aggrs,
+  int check_storage_groupby_pushdown(omt::ObTenantConfigGuard &tenant_config,
+                                     const ObIArray<ObAggFunRawExpr *> &aggrs,
                                      const ObIArray<ObRawExpr *> &group_exprs,
                                      ObIArray<ObRawExpr *> &pushdown_groupby_columns,
                                      bool &can_push);
 
-  int check_can_scala_storage_pushdown(ObSQLSessionInfo &session_info,
+  int check_can_scala_storage_pushdown(omt::ObTenantConfigGuard &tenant_config,
                                        const ObSelectStmt &stmt,
                                        bool &can_pushdown);
 
@@ -870,16 +878,23 @@ public:
                                                const ObIArray<ObRawExpr *> &pushdown_groupby_columns,
                                                bool &can_push);
 
-  int check_scalar_aggr_can_storage_pushdown(const uint64_t table_id,
+  int check_aggr_param_match_pushdown_rule(const uint64_t table_id,
+                                           const ObRawExpr *first_param,
+                                           bool &can_push);
+
+  int check_scalar_aggr_can_storage_pushdown(omt::ObTenantConfigGuard &tenant_config,
+                                             const uint64_t table_id,
                                              const ObIArray<ObAggFunRawExpr *> &aggrs,
                                              ObIArray<ObRawExpr *> &pushdown_groupby_columns,
                                              bool &can_push);
 
-  int check_normal_aggr_can_storage_pushdown(const uint64_t table_id,
+  int check_normal_aggr_can_storage_pushdown(omt::ObTenantConfigGuard &tenant_config,
+                                             const uint64_t table_id,
                                              const ObIArray<ObAggFunRawExpr *> &aggrs,
                                              bool &can_push);
 
-  int check_basic_groupby_pushdown(const ObIArray<ObAggFunRawExpr*> &aggr_items,
+  int check_basic_groupby_pushdown(omt::ObTenantConfigGuard &tenant_config,
+                                   const ObIArray<ObAggFunRawExpr*> &aggr_items,
                                    const EqualSets &equal_sets,
                                    bool &push_group);
 
@@ -1477,7 +1492,7 @@ public:
                             CalcPartIdType calc_id_type,
                             ObRawExpr *&expr);
 
-  int candi_allocate_for_update_material();
+  int candi_allocate_material_for_dml();
 
   int allocate_material_for_recursive_cte_plan(ObLogicalOperator &op);
 
@@ -1917,7 +1932,9 @@ public:
   int do_alloc_values_table_path(ValuesTablePath *values_table_path,
                                  ObLogValuesTableAccess *&out_access_path_op);
   inline ObRawExprReplacer &gen_col_replacer() { return gen_col_replacer_; }
-  int get_enable_rich_vector_format(bool &enable);
+  int get_enable_rich_vector_format(omt::ObTenantConfigGuard &tenant_config, bool &enable) const;
+  bool get_need_accurate_cardinality() const { return need_accurate_cardinality_; }
+  void set_need_accurate_cardinality(bool need) { need_accurate_cardinality_ = need; }
 private:
   static const int64_t IDP_PATHNUM_THRESHOLD = 5000;
 protected: // member variable
@@ -2110,6 +2127,7 @@ private:
   //
   // 为select into分配了range shuffle后, 在分配select into算子时不应再分配exchange算子
   bool has_allocated_range_shuffle_;
+  bool need_accurate_cardinality_;
   DISALLOW_COPY_AND_ASSIGN(ObLogPlan);
 };
 

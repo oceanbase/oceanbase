@@ -114,7 +114,7 @@ public:
     ndv_info_.reset();
     sqc_row_infos_.reset();
   }
-  int send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs) override;
+  int send_whole_msg(common::ObIArray<ObPxSqcMeta> &sqcs) override;
   int send_whole_msg_to_one_sqc(ObPxSqcMeta *sqc, JoinFilterSqcRowInfo &sqc_row_info);
 
   static int init_target_ndv_info(const ObJoinFilterNdvInfo &source_ndv_info,
@@ -300,7 +300,7 @@ public:
   ~ObJoinFilterCountRowPieceMsgListener() = default;
   static int on_message(
     ObJoinFilterCountRowPieceMsgCtx &piece_ctx,
-    common::ObIArray<ObPxSqcMeta *> &sqcs,
+    common::ObIArray<ObPxSqcMeta> &sqcs,
     const ObJoinFilterCountRowPieceMsg &pkt);
 
 private:

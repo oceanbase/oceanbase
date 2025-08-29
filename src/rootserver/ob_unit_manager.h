@@ -1154,7 +1154,6 @@ private:
     }
     return str;
   }
-  void print_user_error_(const uint64_t tenant_id);
 
 private:
   bool inited_;

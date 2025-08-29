@@ -357,11 +357,7 @@ int ObMultiVersionSchemaService::get_latest_schema(
       schema = new_schema;
     } else {
       ObTableSchema *new_table = static_cast<ObTableSchema *>(new_schema);
-      if (MATERIALIZED_VIEW == new_table->get_table_type()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter materialized view is");
-        LOG_WARN("not support to fetch latest mv", KR(ret), "table_id", schema_id);
-      } else if (is_hardcode_schema_table(schema_id)) {
+      if (is_hardcode_schema_table(schema_id)) {
         // do-nothing
       } else if (!need_construct_aux_infos_(*new_table)) {
         // do-nothing

@@ -573,10 +573,13 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
 
   // ========== Test 3: update and read the row =========
   {
+    char buf[100];
+    int64_t pos = 0;
+    ASSERT_EQ(OB_SUCCESS, extra_info1.serialize(buf, sizeof(buf), pos));
     ASSERT_EQ(OB_SUCCESS, ObAtomicFile::update_sslog_row(param.meta_type_,
                                                        meta_key1.get_string_key(),
                                                        meta_value2,
-                                                       extra_info1,
+                                                       ObString(pos, buf),
                                                        extra_info1,
                                                        false,
                                                        affected_rows));

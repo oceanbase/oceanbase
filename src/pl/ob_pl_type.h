@@ -634,6 +634,7 @@ public:
                                   int64_t level,
                                   int64_t &sequence,
                                   share::schema::ObRoutineInfo &routine_info);
+  static int adjust_routine_param_type(const share::schema::ObRoutineParam *iparam, pl::ObPLDataType &pl_type);
   static int deep_copy_pl_type(ObIAllocator &allocator, const ObPLDataType &src, ObPLDataType *&dst);
 
   static int obj_is_null(ObObj &obj, bool &is_null);
@@ -1006,13 +1007,10 @@ public:
     in_forall_ = false;
     save_exception_ = false;
     forall_rollback_ = false;
-    if (is_session_cursor()) {
-      cursor_flag_ = SESSION_CURSOR;
-    } else if (is_dbms_sql_cursor()) {
-      cursor_flag_ = DBMS_SQL_CURSOR;
-    }else {
-      cursor_flag_ = CURSOR_FLAG_UNDEF;
-    }
+    // clear temporary cursor flags
+    clear_flag_bit(TRANSFERING_RESOURCE);
+    clear_flag_bit(SYNC_CURSOR);
+    clear_flag_bit(INVALID_CURSOR);
     // ref_count_ = 0; // 这个不要清零，因为oracle在close之后，它的ref count还是保留的
     is_scrollable_ = false;
     last_execute_time_ = 0;

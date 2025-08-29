@@ -1679,5 +1679,8 @@ DEF_SET_LOCAL_SESSION_VARS(ObExprLike, raw_expr) {
   return ret;
 }
 
+template int64_t ObExprLike::match_with_instr_mode<true, true>(const ObString &text,
+                                                               const InstrInfo instr_info,
+                                                               void *string_searcher);
 }
 }

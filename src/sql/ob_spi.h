@@ -458,6 +458,10 @@ public:
                              uint64_t package_id,
                              int64_t var_idx,
                              const ObObj &value);
+  static int spi_get_package_var_type(ObExecContext *exec_ctx,
+                              uint64_t package_id,
+                              int64_t var_idx,
+                              pl::ObPLDataType &type);
   static int check_and_deep_copy_result(ObIAllocator &alloc,
                                         const ObObj &src,
                                         ObObj &dst);
@@ -495,6 +499,7 @@ public:
                        bool for_update = false);
   static int spi_check_autonomous_trans(pl::ObPLExecCtx *ctx);
   static int spi_get_current_expr_allocator(pl::ObPLExecCtx *ctx, int64_t *addr);
+  static void spi_reset_allocator(ObIAllocator *allocator);
   static int spi_init_composite(ObIAllocator *current_allcator, int64_t addr, bool is_record, bool need_allocator);
   static int spi_get_parent_allocator(ObIAllocator *current_allcator, int64_t *parent_allocator_addr);
   static int spi_prepare(common::ObIAllocator &allocator,
@@ -939,7 +944,8 @@ public:
                          bool &is_iter_end,
                          int64_t orc_max_ret_rows = INT64_MAX);
 
-  static int cursor_release(ObSQLSessionInfo *session,
+  static int cursor_release(pl::ObPLExecCtx *ctx,
+                            ObSQLSessionInfo *session,
                             pl::ObPLCursorInfo *cursor,
                             bool is_refcursor,
                             uint64_t package_id,
@@ -1309,6 +1315,12 @@ private:
                                     const int64_t *formal_param_idxs,
                                     const ObSqlExpression **actual_param_exprs,
                                     int64_t cursor_param_count);
+  static int release_cursor_parameters(pl::ObPLExecCtx *ctx,
+                                      ObSQLSessionInfo &session_info,
+                                      uint64_t package_id,
+                                      uint64_t routine_id,
+                                      const int64_t *formal_param_idxs,
+                                      int64_t cursor_param_count);
   static bool is_sql_type_into_pl(ObObj &dest_addr, ObIArray<ObObj> &obj_array);
 
   static int streaming_cursor_open(pl::ObPLExecCtx *ctx,

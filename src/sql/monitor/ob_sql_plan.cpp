@@ -1104,7 +1104,7 @@ int ObSqlPlan::format_sql_plan(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
     //do nothing
   } else {
     if (EXPLAIN_PLAN_TABLE == type) {
-      if (OB_FAIL(format_plan_table(sql_plan_infos, option, plan_text))) {
+      if (OB_FAIL(format_plan_table(sql_plan_infos, false, option, plan_text))) {
         LOG_WARN("failed to print plan", K(ret));
       }
     } else if (EXPLAIN_BASIC == type) {
@@ -1114,7 +1114,7 @@ int ObSqlPlan::format_sql_plan(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
         LOG_WARN("failed to print plan output", K(ret));
       }
     } else if (EXPLAIN_UNINITIALIZED == type) {
-      if (OB_FAIL(format_plan_table(sql_plan_infos, option, plan_text))) {
+      if (OB_FAIL(format_plan_table(sql_plan_infos, false, option, plan_text))) {
         LOG_WARN("failed to print plan", K(ret));
       } else if (OB_FAIL(format_plan_output(sql_plan_infos, plan_text))) {
         LOG_WARN("failed to print plan output", K(ret));
@@ -1127,7 +1127,7 @@ int ObSqlPlan::format_sql_plan(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
         }
       }
     } else if (EXPLAIN_OUTLINE == type) {
-      if (OB_FAIL(format_plan_table(sql_plan_infos, option, plan_text))) {
+      if (OB_FAIL(format_plan_table(sql_plan_infos, false, option, plan_text))) {
         LOG_WARN("failed to print plan", K(ret));
       } else if (OB_FAIL(format_plan_output(sql_plan_infos, plan_text))) {
         LOG_WARN("failed to print plan output", K(ret));
@@ -1136,7 +1136,7 @@ int ObSqlPlan::format_sql_plan(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
       }
     } else if (EXPLAIN_EXTENDED == type ||
                EXPLAIN_EXTENDED_NOADDR == type) {
-      if (OB_FAIL(format_plan_table(sql_plan_infos, option, plan_text))) {
+      if (OB_FAIL(format_plan_table(sql_plan_infos, false, option, plan_text))) {
         LOG_WARN("failed to print plan", K(ret));
       } else if (OB_FAIL(format_plan_output(sql_plan_infos, plan_text))) {
         LOG_WARN("failed to print plan output", K(ret));
@@ -1151,12 +1151,18 @@ int ObSqlPlan::format_sql_plan(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
       } else if (OB_FAIL(format_other_info(sql_plan_infos, plan_text))) {
         LOG_WARN("failed to print other info", K(ret));
       }
+    } else if (EXPLAIN_FORMAT_OBJECT_NAME_DISPLAY == type) {
+      if (OB_FAIL(format_plan_table(sql_plan_infos, true, option, plan_text))) {
+        LOG_WARN("failed to print plan", K(ret));
+      } else if (OB_FAIL(format_plan_output(sql_plan_infos, plan_text))) {
+        LOG_WARN("failed to print plan output", K(ret));
+      }
     } else if (EXPLAIN_FORMAT_JSON == type) {
       if (OB_FAIL(format_plan_to_json(sql_plan_infos, plan_text))) {
         LOG_WARN("failed to print plan to json", K(ret));
       }
     } else {
-      if (OB_FAIL(format_plan_table(sql_plan_infos, option, plan_text))) {
+      if (OB_FAIL(format_plan_table(sql_plan_infos, false, option, plan_text))) {
         LOG_WARN("failed to print plan", K(ret));
       } else if (OB_FAIL(format_plan_output(sql_plan_infos, plan_text))) {
         LOG_WARN("failed to print plan output", K(ret));
@@ -1651,6 +1657,7 @@ int ObSqlPlan::format_basic_plan_table(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
 }
 
 int ObSqlPlan::format_plan_table(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
+                                 const bool is_explain_format_object_name_display,
                                  const ObExplainDisplayOpt& option,
                                  PlanText &plan_text)
 {
@@ -1734,10 +1741,17 @@ int ObSqlPlan::format_plan_table(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
         ret = BUF_PRINTF(COLUMN_SEPARATOR);
       }
       if (OB_SUCC(ret) && plan_item->object_alias_len_ > 0) {
-        ret = BUF_PRINTF("%-*.*s",
+        if(is_explain_format_object_name_display) {
+           ret = BUF_PRINTF("%-*.*s",
+                         format_helper.column_len_.at(Name),
+                         static_cast<int>(plan_item->object_name_len_),
+                         plan_item->object_name_);
+        } else {
+           ret = BUF_PRINTF("%-*.*s",
                          format_helper.column_len_.at(Name),
                          static_cast<int>(plan_item->object_alias_len_),
                          plan_item->object_alias_);
+        }
       } else if (OB_SUCC(ret)) {
         ret = BUF_PRINTF("%-*s",
                          format_helper.column_len_.at(Name),

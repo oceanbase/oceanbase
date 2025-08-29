@@ -153,9 +153,6 @@ int ObITabletMdsCustomizedInterface::get_latest_committed_tablet_status(ObTablet
     if (OB_EMPTY_RESULT != ret) {
       MDS_LOG_GET(WARN, "fail to get latest committed", K(ret));
     }
-  } else if (GCTX.is_shared_storage_mode() && OB_FAIL(get_tablet_status_for_transfer(
-      mds::TwoPhaseCommitState::ON_COMMIT, data))) {
-    MDS_LOG(WARN, "fail to get tablet status for transfer", K(ret), K(data));
   }
   return ret;
   #undef PRINT_WRAPPER

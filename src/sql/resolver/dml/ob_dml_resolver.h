@@ -393,13 +393,15 @@ protected:
   int resolve_qualified_identifier(ObQualifiedName &q_name,
                                    ObIArray<ObQualifiedName> &columns,
                                    ObIArray<ObRawExpr*> &real_exprs,
-                                   ObRawExpr *&real_ref_expr);
+                                   ObRawExpr *&real_ref_expr,
+                                   bool need_cast_udt = false);
   int resolve_basic_column_ref(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
   int resolve_basic_column_item(const TableItem &table_item,
                                 const common::ObString &column_name,
                                 bool include_hidden,
                                 ColumnItem *&col_item,
-                                ObDMLStmt *stmt = NULL);
+                                ObDMLStmt *stmt = NULL,
+                                bool need_check_exist = true);
   int adjust_values_desc_position(ObInsertTableInfo& table_info,
                                   ObIArray<int64_t> &value_idxs);
 public:
@@ -462,15 +464,19 @@ protected:
   int resolve_order_clause(const ParseNode *node, bool is_for_set_query = false);
   int resolve_limit_clause(const ParseNode *node, bool disable_offset = false);
   int resolve_approx_clause(const ParseNode *approx_node);
+  int resolve_vector_index_params(const ParseNode *params_node);
   int resolve_into_clause(const ParseNode *node);
 public:
   int resolve_hints(const ParseNode *node);
   int resolve_outline_data_hints();
+  int pre_resolve_global_hints(const ParseNode *node);
+  int pre_process_hints(const ParseNode &parse_tree);
 protected:
   const ParseNode *get_outline_data_hint_node();
   int inner_resolve_hints(const ParseNode &node,
                           const bool filter_embedded_hint,
                           bool &get_outline_data,
+                          const bool is_pre_resolve,
                           ObGlobalHint &global_hint,
                           ObIArray<ObHint*> &hints,
                           ObString &qb_name);
@@ -1038,13 +1044,22 @@ public:
   static int resolve_direct_load_hint(const ParseNode &hint_node, ObDirectLoadHint &hint);
   //////////end of functions for sql hint/////////////
   static int set_upper_column_name(ObColumnSchemaV2 &column_schema);
-#ifdef OB_BUILD_CPP_ODPS
-  static int build_column_schemas_for_odps(const common::ObIArray<oceanbase::sql::ObODPSTableRowIterator::OdpsColumn> &column_list,
-                                           const common::ObIArray<ObString> &part_col_names,
+  template <typename ODPSType>
+  static int build_column_schemas_for_odps(const ObIArray<ODPSType> &column_list,
+                                           const ObIArray<ObString> &part_col_names,
                                            ObTableSchema& table_schema);
+  template <typename ODPSType>
+  static int build_column_for_odps(const ODPSType &odps_column,
+                                   ObColumnSchemaV2 &column_schema,
+                                   common::ObIAllocator &allocator);
+  template <typename ODPSType>
+  static int build_array_info(const ODPSType &odps_column,
+                              ObSEArray<common::ObString, 8> &info,
+                              ObString &info_str,
+                              int root_level,
+                              common::ObIAllocator &allocator);
   static int set_partition_info_for_odps(ObTableSchema &table_schema,
                                          const common::ObIArray<ObString> &part_col_names);
-#endif
 
 private:
   int resolve_table_check_constraint_items(const TableItem *table_item,
@@ -1096,8 +1111,12 @@ private:
   bool is_update_for_mv_fast_refresh(const ObDMLStmt &stmt);
   int resolve_px_node_addrs(const ParseNode &hint_node, ObIArray<ObAddr> &addrs);
   static int set_basic_column_properties(ObColumnSchemaV2 &column_schema, const common::ObString &mock_gen_column_str);
-  int build_column_schemas_for_orc(const orc::Type* type, ObTableSchema& table_schema);
-  int build_column_schemas_for_parquet(const parquet::SchemaDescriptor* schema, ObTableSchema& table_schema);
+  int build_column_schemas_for_orc(const orc::Type* type,
+                                  const ColumnIndexType column_index_type,
+                                  ObTableSchema& table_schema);
+  int build_column_schemas_for_parquet(const parquet::SchemaDescriptor* schema,
+                                      const ColumnIndexType column_index_type,
+                                      ObTableSchema& table_schema);
   int build_column_schemas_for_csv(const ObExternalFileFormat &format,
                                   common::ObString table_location,
                                   ObTableSchema &table_schema,

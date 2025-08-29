@@ -14,6 +14,7 @@
 #define __OB_SQL_ENGINE_PX_DATAHUB_BARRIER_PIECE_MSG_CTX_H__
 
 #include "lib/container/ob_se_array.h"
+#include "sql/engine/px/ob_dfo.h"
 
 namespace oceanbase
 {
@@ -26,7 +27,7 @@ public:
   ObPieceMsgCtx(uint64_t op_id, int64_t task_cnt, int64_t timeout_ts)
       : op_id_(op_id), task_cnt_(task_cnt), timeout_ts_(timeout_ts) {}
   virtual ~ObPieceMsgCtx() {}
-  virtual int send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs) { return OB_SUCCESS; };
+  virtual int send_whole_msg(common::ObIArray<ObPxSqcMeta> &sqcs) { return OB_SUCCESS; };
   virtual void reset_resource() = 0;
   VIRTUAL_TO_STRING_KV(K_(op_id), K_(task_cnt));
   virtual void destroy() {}

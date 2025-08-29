@@ -32,7 +32,7 @@ struct Adder
   void operator()(Key k, int64_t* v) { UNUSED(k); UNUSED(v); sum++; }
 };
 
-typedef ObConcurrentHashMap<Key, int64_t> HashMap;
+typedef ObConcurrentHashMapDoNotUse<Key, int64_t> HashMap;
 
 int64_t create_num = 0;
 class ObStressThread : public lib::ThreadPool
@@ -53,7 +53,7 @@ public:
   HashMap* hashmap;
 };
 
-TEST(TestObConcurrentHashMap, concurrent)
+TEST(TestObConcurrentHashMapDoNotUse, concurrent)
 {
   HashMap hashmap;
   for (int64_t i = 0; i < 137; i++) {

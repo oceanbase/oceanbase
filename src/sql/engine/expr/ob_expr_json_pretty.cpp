@@ -98,7 +98,6 @@ int ObExprJsonPretty::eval_json_pretty(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
   MultimodeAlloctor tmp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "JSONModule"));
   ObExpr *arg = expr.args_[0];
   ObDatum *j_datum = NULL;
   ObJsonBuffer j_buf(&tmp_allocator);

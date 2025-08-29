@@ -13,6 +13,7 @@
 
 #include "storage/direct_load/ob_direct_load_external_multi_partition_row.h"
 #include "observer/table_load/ob_table_load_stat.h"
+#include "share/ob_order_perserving_encoder.h"
 #include "storage/direct_load/ob_direct_load_datum_row.h"
 
 namespace oceanbase
@@ -21,6 +22,7 @@ namespace storage
 {
 using namespace common;
 using namespace blocksstable;
+using namespace sql;
 
 /**
  * ObDirectLoadExternalMultiPartitionRow
@@ -215,6 +217,156 @@ int ObDirectLoadConstExternalMultiPartitionRow::to_datum_row(ObDirectLoadDatumRo
                  K(deserialize_datum_array.count_), K(datum_row.count_));
       }
     }
+  }
+  return ret;
+}
+
+int ObDirectLoadConstExternalMultiPartitionRow::generate_aqs_store_row(
+  unsigned char *encode_buf, const int64_t encode_buf_size, ObArray<share::ObEncParam> &enc_params,
+  ObIAllocator &allocator, sql::ObChunkDatumStore::StoredRow *&store_row, bool &has_invalid_uni) const
+{
+  int ret = OB_SUCCESS;
+  // enc_params |tablet id| rowkeys | seq_no |
+  if (OB_UNLIKELY(!is_valid() || OB_ISNULL(encode_buf) || enc_params.count() != (rowkey_datum_array_.count_ + 2))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected invalid row", KR(ret), KPC(this), KP(encode_buf), K(enc_params));
+  } else {
+    // build StoreRow
+    const int64_t size = sizeof(ObChunkDatumStore::StoredRow) + sizeof(ObDatum) * 2;
+    char *buf = nullptr;
+    if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory", KR(ret), K(size));
+    } else {
+      store_row = reinterpret_cast<ObChunkDatumStore::StoredRow *>(buf);
+      // build sortkey datum
+      ObDatum &sortkey_datum = store_row->cells()[0];
+      if (OB_FAIL(build_sortkey_datum(encode_buf, encode_buf_size, enc_params, allocator,
+                                      sortkey_datum, has_invalid_uni))) {
+        LOG_WARN("fail to build sortkey datum", KR(ret));
+      } else if (!has_invalid_uni) {
+        // store data datum
+        ObDatum &data_datum = store_row->cells()[1];
+        data_datum.ptr_ = reinterpret_cast<const char *>((this));
+        data_datum.len_ = 0; // non-sense
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadConstExternalMultiPartitionRow::build_sortkey_datum(
+  unsigned char *encode_buf, const int64_t encode_buf_size,
+  ObArray<share::ObEncParam> &enc_params, ObIAllocator &allocator, ObDatum &sortkey_datum,
+  bool &has_invalid_uni) const
+{
+  int ret = OB_SUCCESS;
+  int64_t data_len = 0;
+  // encode tablet_id
+  if (OB_FAIL(encode_table_id(encode_buf, encode_buf_size, enc_params.at(0), data_len,
+                              has_invalid_uni))) {
+    LOG_WARN("failed to encode tablet_id", KR(ret), K(encode_buf_size), K(enc_params.at(0)),
+             K(data_len), K(has_invalid_uni));
+  }
+  // encode rowkey
+  else if (!has_invalid_uni && OB_FAIL(encode_rowkey(encode_buf, encode_buf_size, enc_params,
+                                                     data_len, has_invalid_uni))) {
+    LOG_WARN("failed to encode rowkey", KR(ret), K(encode_buf_size), K(enc_params), K(data_len),
+             K(has_invalid_uni));
+  }
+  // encode seq_no
+  else if (!has_invalid_uni &&
+           OB_FAIL(encode_seq_no(encode_buf, encode_buf_size, enc_params.at(enc_params.count() - 1),
+                                 data_len, has_invalid_uni))) {
+    LOG_WARN("failed to encode seq_no", KR(ret), K(encode_buf_size), K(enc_params), K(data_len),
+             K(has_invalid_uni));
+  } else {
+    if (has_invalid_uni) {
+      sortkey_datum.set_null();
+    } else {
+      // copy sortkey from encode_buf memory to sort memory
+      char *buf = nullptr;
+      if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(data_len)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate memory", KR(ret), K(data_len));
+      } else {
+        MEMCPY(buf, encode_buf, data_len);
+        sortkey_datum.set_string(ObString(data_len, buf));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadConstExternalMultiPartitionRow::encode_table_id(unsigned char *encode_buf,
+                                                                const int64_t encode_buf_size,
+                                                                share::ObEncParam &enc_param,
+                                                                int64_t &data_len,
+                                                                bool &has_invalid_uni) const
+{
+  int ret = OB_SUCCESS;
+  uint64_t tablet_id = tablet_id_.id();
+  ObDatum tablet_id_datum(reinterpret_cast<char *>(&tablet_id), sizeof(uint64_t), false);
+  enc_param.is_valid_uni_ = true; // reset to true
+  int64_t tmp_data_len = 0;
+  if (OB_FAIL(share::ObSortkeyConditioner::process_key_conditioning(
+        tablet_id_datum, encode_buf + data_len, encode_buf_size - data_len, tmp_data_len,
+        enc_param))) {
+    if (OB_UNLIKELY(OB_BUF_NOT_ENOUGH != ret)) {
+      LOG_WARN("failed  to encode sortkey", KR(ret));
+    }
+  } else {
+    if (!enc_param.is_valid_uni_) has_invalid_uni = true;
+    data_len += tmp_data_len;
+  }
+  return ret;
+}
+
+int ObDirectLoadConstExternalMultiPartitionRow::encode_rowkey(
+  unsigned char *encode_buf, const int64_t encode_buf_size,
+  ObArray<share::ObEncParam> &enc_params, int64_t &data_len, bool &has_invalid_uni) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 1; OB_SUCC(ret) && !has_invalid_uni && i < enc_params.count() - 1; i++) {
+    ObDatum &data = rowkey_datum_array_.datums_[i - 1];
+    enc_params.at(i).is_valid_uni_ = true; // reset to true
+    int64_t tmp_data_len = 0;
+    if (OB_FAIL(share::ObSortkeyConditioner::process_key_conditioning(
+          data, encode_buf + data_len, encode_buf_size - data_len, tmp_data_len,
+          enc_params.at(i)))) {
+      if (OB_UNLIKELY(OB_BUF_NOT_ENOUGH != ret)) {
+        LOG_WARN("failed to encode sortkey", KR(ret));
+      }
+    } else {
+      if (!enc_params.at(i).is_valid_uni_) {
+        has_invalid_uni = true;
+      }
+      data_len += tmp_data_len;
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadConstExternalMultiPartitionRow::encode_seq_no(unsigned char *encode_buf,
+                                                              const int64_t encode_buf_size,
+                                                              share::ObEncParam &enc_param,
+                                                              int64_t &data_len,
+                                                              bool &has_invalid_uni) const
+{
+  int ret = OB_SUCCESS;
+  uint64_t seq_no = seq_no_.sequence_no_;
+  ObDatum seq_no_datum(reinterpret_cast<char *>(&seq_no), sizeof(uint64_t), false);
+  enc_param.is_valid_uni_ = true;
+  int64_t tmp_data_len = 0;
+  if (OB_FAIL(share::ObSortkeyConditioner::process_key_conditioning(
+        seq_no_datum, encode_buf + data_len, encode_buf_size - data_len, tmp_data_len,
+        enc_param))) {
+    if (OB_UNLIKELY(OB_BUF_NOT_ENOUGH != ret)) {
+      LOG_WARN("failed  to encode sortkey", KR(ret));
+    }
+  } else {
+    if (!enc_param.is_valid_uni_) has_invalid_uni = true;
+    data_len += tmp_data_len;
   }
   return ret;
 }

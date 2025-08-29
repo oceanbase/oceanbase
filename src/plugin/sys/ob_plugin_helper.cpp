@@ -29,30 +29,41 @@ using namespace storage;
 
 namespace plugin {
 
-int ObPluginHelper::find_ftparser_entry(const ObString &parser_name, ObPluginEntryHandle *&entry_handle)
+int ObPluginHelper::find_plugin_entry(const ObString &name,
+                                      ObPluginType type,
+                                      int64_t interface_current_version,
+                                      ObPluginEntryHandle *&entry_handle)
 {
   int ret = OB_SUCCESS;
   entry_handle = nullptr;
-  if (OB_FAIL(GCTX.plugin_mgr_->find_plugin(OBP_PLUGIN_TYPE_FT_PARSER, parser_name, entry_handle))) {
-    LOG_DEBUG("failed to find parser", K(parser_name), K(ret));
+  if (OB_FAIL(GCTX.plugin_mgr_->find_plugin(type, name, entry_handle))) {
+    LOG_DEBUG("failed to find parser", K(name), K(ret));
   } else if (OB_ISNULL(entry_handle)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("find plugin success but got null", K(parser_name), K(ret));
+    LOG_WARN("find plugin success but got null", K(name), K(ret));
   } else if (!entry_handle->ready()) {
     ret = OB_FUNCTION_NOT_DEFINED;
-    LOG_WARN("plugin is not ready", K(parser_name));
-  } else if (entry_handle->entry().interface_version > OBP_FTPARSER_INTERFACE_VERSION_CURRENT) {
+    LOG_WARN("plugin is not ready", K(name));
+  } else if (entry_handle->entry().interface_version > interface_current_version) {
     ret = OB_FUNCTION_NOT_DEFINED;
     LOG_WARN("invalid interface version",
              K(ObPluginVersionAdaptor(entry_handle->entry().interface_version)),
-             K(ObPluginVersionAdaptor(OBP_FTPARSER_INTERFACE_VERSION_CURRENT)));
+             K(ObPluginVersionAdaptor(interface_current_version)));
   } else if (OB_ISNULL(entry_handle->entry().descriptor)) {
     ret = OB_FUNCTION_NOT_DEFINED;
-    LOG_WARN("find ftparser but descriptor is null", K(ret), K(parser_name));
+    LOG_WARN("find ftparser but descriptor is null", K(ret), K(name));
   } else {
-    LOG_TRACE("find ftparser plugin", K(parser_name));
+    LOG_TRACE("find plugin", K(name));
   }
   return ret;
+}
+
+int ObPluginHelper::find_ftparser_entry(const ObString &parser_name, ObPluginEntryHandle *&entry_handle)
+{
+  return find_plugin_entry(parser_name,
+                           OBP_PLUGIN_TYPE_FT_PARSER,
+                           OBP_FTPARSER_INTERFACE_VERSION_CURRENT,
+                           entry_handle);
 }
 
 int ObPluginHelper::find_ftparser(const ObString &parser_name, ObFTParser &ftparser)
@@ -99,6 +110,22 @@ int ObPluginHelper::find_ftparser(const ObString &parser_name, ObIFTParserDesc *
   return ret;
 }
 
+int ObPluginHelper::find_external_table(const common::ObString &name,
+                                        ObIExternalDescriptor *&external_desc)
+{
+  int ret = OB_SUCCESS;
+  ObPluginEntryHandle *entry_handle = nullptr;
+  if (OB_FAIL(find_plugin_entry(name, OBP_PLUGIN_TYPE_EXTERNAL, OBP_EXTERNAL_INTERFACE_VERSION_CURRENT, entry_handle))) {
+    LOG_DEBUG("failed to find external table plugin entry", K(name));
+  } else if (OB_ISNULL(entry_handle->entry().plugin_handle)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("find a plugin entry without plugin handle", K(ret), KPC(entry_handle));
+  } else {
+    external_desc = reinterpret_cast<ObIExternalDescriptor *>(entry_handle->entry().descriptor);
+    LOG_DEBUG("find external table plugin entry successfully", K(name), KP(external_desc));
+  }
+  return ret;
+}
 int ObPluginHelper::register_plugin_entry(ObPluginParamPtr param,
                                           ObPluginType type,
                                           const char *name,

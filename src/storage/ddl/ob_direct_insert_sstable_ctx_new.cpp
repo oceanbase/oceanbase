@@ -2122,7 +2122,7 @@ int ObTabletDirectLoadMgr::close_sstable_slice(
       LOG_WARN("close lob sstable slice failed", K(ret), K(slice_info));
     }
   } else {
-    bool already_commited = false;
+    bool need_commit = false;
     int64_t fill_cg_finish_count = -1;
     ObDirectLoadSliceWriter *slice_writer = nullptr;
     int64_t last_seq = 0;
@@ -2147,13 +2147,16 @@ int ObTabletDirectLoadMgr::close_sstable_slice(
         } else if (start_scn == get_start_scn() && slice_info.is_task_finish_) {
           task_finish_count = ATOMIC_AAF(&sqc_build_ctx_.task_finish_count_, 1);
         }
-        already_commited = sqc_build_ctx_.get_commit_scn().is_valid_and_not_min();
+        need_commit = sqc_build_ctx_.get_commit_scn().is_valid_and_not_min();
         if (0 != lock_tid) {
           unlock(lock_tid);
         }
       }
       LOG_INFO("inc task finish count", K(tablet_id_), K(execution_id), K(task_finish_count), K(sqc_build_ctx_.task_total_cnt_));
       if (OB_FAIL(ret)) {
+      } else if (need_commit) {
+        LOG_INFO("already committed, close mgr directly", K(tablet_id_), K(start_scn), K(execution_id),
+          "record_commit_scn", sqc_build_ctx_.get_commit_scn(), K(slice_info));
       } else if (OB_ISNULL(sqc_build_ctx_.storage_schema_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid tablet handle", K(ret), KP(sqc_build_ctx_.storage_schema_));
@@ -2174,43 +2177,40 @@ int ObTabletDirectLoadMgr::close_sstable_slice(
             }
           }
           // for ddl, write commit log when all slices ready.
-          if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(close(execution_id, start_scn))) {
-            LOG_WARN("close sstable slice failed", K(ret), K(sqc_build_ctx_.build_param_));
+          if (OB_SUCC(ret)) {
+            need_commit = true;
           }
         }
       } else if (need_fill_column_group_ && is_rescan_data_compl_dag_) {
         LOG_INFO("data complement dag rescan path which need skip calc range and fill column group",
             K(tablet_id_), K(execution_id), K(slice_info));
       } else {
-        if (!already_commited) {
-          if (task_finish_count < sqc_build_ctx_.task_total_cnt_) {
-            if (OB_FAIL(wait_notify(slice_writer, slice_info.context_id_, start_scn))) {
-              LOG_WARN("wait notify failed", K(ret));
-            } else if (OB_FAIL(slice_writer->fill_column_group(sqc_build_ctx_.storage_schema_, start_scn, insert_monitor))) {
-              LOG_WARN("slice writer fill column group failed", K(ret));
-            }
-          } else {
-            if (OB_FAIL(calc_range(slice_info.context_id_, 0))) {
-              LOG_WARN("calc range failed", K(ret));
-            } else if (OB_FAIL(notify_all())) {
-              LOG_WARN("notify all failed", K(ret));
-            } else if (OB_FAIL(slice_writer->fill_column_group(sqc_build_ctx_.storage_schema_, start_scn, insert_monitor))) {
-              LOG_WARN("slice fill column group failed", K(ret));
-            }
+        if (task_finish_count < sqc_build_ctx_.task_total_cnt_) {
+          if (OB_FAIL(wait_notify(slice_writer, slice_info.context_id_, start_scn))) {
+            LOG_WARN("wait notify failed", K(ret));
+          } else if (OB_FAIL(slice_writer->fill_column_group(sqc_build_ctx_.storage_schema_, start_scn, insert_monitor))) {
+            LOG_WARN("slice writer fill column group failed", K(ret));
           }
-          if (OB_SUCC(ret)) {
-            if (start_scn == get_start_scn()) {
-              fill_cg_finish_count = ATOMIC_AAF(&sqc_build_ctx_.fill_column_group_finish_count_, 1);
-            }
+        } else {
+          if (OB_FAIL(calc_range(slice_info.context_id_, 0))) {
+            LOG_WARN("calc range failed", K(ret));
+          } else if (OB_FAIL(notify_all())) {
+            LOG_WARN("notify all failed", K(ret));
+          } else if (OB_FAIL(slice_writer->fill_column_group(sqc_build_ctx_.storage_schema_, start_scn, insert_monitor))) {
+            LOG_WARN("slice fill column group failed", K(ret));
           }
         }
-        LOG_INFO("inc fill cg finish count", K(ret), K(already_commited), K(tablet_id_), K(execution_id), K(fill_cg_finish_count), K(sqc_build_ctx_.task_total_cnt_));
-        if (OB_SUCC(ret) && (already_commited || fill_cg_finish_count >= sqc_build_ctx_.task_total_cnt_)) {
-          // for ddl, write commit log when all slices ready.
-          if (OB_FAIL(close(execution_id, start_scn))) {
-            LOG_WARN("close sstable slice failed", K(ret));
+        if (OB_SUCC(ret)) {
+          if (start_scn == get_start_scn()) {
+            fill_cg_finish_count = ATOMIC_AAF(&sqc_build_ctx_.fill_column_group_finish_count_, 1);
           }
+          need_commit = fill_cg_finish_count >= sqc_build_ctx_.task_total_cnt_;
+          LOG_INFO("inc fill cg finish count", K(ret), K(need_commit), K(tablet_id_), K(execution_id), K(fill_cg_finish_count), K(sqc_build_ctx_.task_total_cnt_));
+        }
+      }
+      if (OB_SUCC(ret) && need_commit) {
+        if (OB_FAIL(close(execution_id, start_scn))) {
+          LOG_WARN("close sstable slice failed", K(ret));
         }
       }
     }

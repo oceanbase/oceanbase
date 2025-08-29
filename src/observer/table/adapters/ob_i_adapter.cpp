@@ -32,8 +32,12 @@ int ObIHbaseAdapter::init_table_ctx(ObTableExecCtx &exec_ctx,
   tb_ctx.set_entity(&cell);
   tb_ctx.set_entity_type(ObTableEntityType::ET_HKV);
   tb_ctx.set_schema_guard(&schema_guard);
-  if (OB_FAIL(schema_guard.get_simple_table_schema(MTL_ID(), exec_ctx.get_table_id(), simple_table_schema))) {
+  if (OB_NOT_NULL(exec_ctx.get_simple_schema()) && exec_ctx.get_table_id() == exec_ctx.get_simple_schema()->get_table_id()) {
+    simple_table_schema = exec_ctx.get_simple_schema();
+  } else if (OB_FAIL(schema_guard.get_simple_table_schema(MTL_ID(), exec_ctx.get_table_id(), simple_table_schema))) {
     LOG_WARN("fail to get simple table schema", K(ret), K(exec_ctx.get_table_id()));
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(simple_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("simple table schema is null", K(ret));
@@ -44,8 +48,10 @@ int ObIHbaseAdapter::init_table_ctx(ObTableExecCtx &exec_ctx,
     tb_ctx.set_audit_ctx(exec_ctx.get_audit_ctx());
     if (tb_ctx.is_init()) {
       LOG_INFO("tb ctx has been inited", K(tb_ctx));
-    } else if (OB_FAIL(tb_ctx.init_common(exec_ctx.get_credential(), cell.get_tablet_id(), exec_ctx.get_timeout_ts()))) {
+    } else if (OB_FAIL(tb_ctx.init_common_without_check(exec_ctx.get_credential(), cell.get_tablet_id(), exec_ctx.get_timeout_ts()))) {
       LOG_WARN("fail to init table ctx common", K(ret), K(cell.get_tablet_id()));
+    } else if (OB_FAIL(tb_ctx.check_tablet_id_valid())) {
+      LOG_WARN("fail to check tablet_id", K(ret), K(tb_ctx.get_tablet_id()));
     } else if (op_type == ObTableOperationType::INSERT_OR_UPDATE && OB_FAIL(tb_ctx.check_insert_up_can_use_put(can_use_put))) {
         LOG_WARN("fail to check htable put can use table api put", K(ret));
     } else {
@@ -106,15 +112,20 @@ int ObIHbaseAdapter::init_scan(ObTableExecCtx &exec_ctx,
   if (tb_ctx.is_init()) {
     ret = OB_INIT_TWICE;
     LOG_INFO("tb ctx has been inited", K(tb_ctx));
+  } else if (OB_NOT_NULL(exec_ctx.get_simple_schema()) &&
+             exec_ctx.get_table_id() == exec_ctx.get_simple_schema()->get_table_id()) {
+    table_schema = exec_ctx.get_simple_schema();
   } else if (OB_FAIL(schema_guard.get_simple_table_schema(MTL_ID(), exec_ctx.get_table_id(), table_schema))) {
-    LOG_WARN("fail to get simple table schema", K(ret));
+    LOG_WARN("fail to get simple table schema", K(ret), K(exec_ctx.get_table_id()));
+  }
+  if (OB_FAIL(ret)) {
   } else if (FALSE_IT(tb_ctx.set_simple_table_schema(table_schema))){
   } else if (tablet_ids.count() <= 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet ids is empty", K(ret));
-  } else if (OB_FAIL(tb_ctx.init_common(exec_ctx.get_credential(), tablet_ids.at(0), exec_ctx.get_timeout_ts()))) {
+  } else if (OB_FAIL(tb_ctx.init_common_without_check(exec_ctx.get_credential(), tablet_ids.at(0), exec_ctx.get_timeout_ts()))) {
     LOG_WARN("fail to init table ctx common part", K(ret));
-  } else if (OB_FAIL(tb_ctx.init_scan(query, is_weak_read, exec_ctx.get_table_id()))) {
+  } else if (OB_FAIL(tb_ctx.init_scan(query, is_weak_read, exec_ctx.get_table_id(), true /* skip_get_ls */))) {
     LOG_WARN("fail to init table ctx scan part", K(ret), K(is_weak_read), K(exec_ctx.get_table_id()));
   } else if (OB_FAIL(tb_ctx.init_exec_ctx())) {
     LOG_WARN("fail to init exec ctx", K(ret), K(tb_ctx));

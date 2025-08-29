@@ -296,7 +296,7 @@ int ObSimpleClusterTestBase::create_tenant(const char *tenant_name,
         }
       } while (OB_TMP_FAIL(tmp_ret) && retry_cnt < 1000);
     }
-    if (OB_TMP_FAIL(ret)) {
+    if (OB_TMP_FAIL(tmp_ret)) {
     } else if (OB_TMP_FAIL(drop_sql2.assign_fmt("drop resource pool if exists %s%s", POOL_BASE, tenant_name))) {
       SERVER_LOG(WARN, "drop resource pool fail", K(tmp_ret), K(ret));
     } else {
@@ -311,7 +311,7 @@ int ObSimpleClusterTestBase::create_tenant(const char *tenant_name,
         }
       } while (OB_TMP_FAIL(tmp_ret) && retry_cnt < 1000);
     }
-    if (OB_TMP_FAIL(ret)) {
+    if (OB_TMP_FAIL(tmp_ret)) {
     } else if (OB_TMP_FAIL(drop_sql3.assign_fmt("drop resource unit if exists %s%s;", UNIT_BASE, tenant_name))) {
       SERVER_LOG(WARN, "drop resource pool fail", K(tmp_ret), K(ret));
     } else {

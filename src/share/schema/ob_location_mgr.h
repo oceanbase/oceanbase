@@ -123,6 +123,9 @@ public:
                                   const ObNameCaseMode mode,
                                   const common::ObString &name,
                                   const ObLocationSchema *&schema) const;
+  int get_location_schema_by_prefix_match(const uint64_t tenant_id,
+                                          const common::ObString &access_path,
+                                          ObArray<const ObLocationSchema*> &match_schemas) const;
   int get_location_schemas_in_tenant(const uint64_t tenant_id,
                                       common::ObIArray<const ObLocationSchema *> &schemas) const;
   int del_location_schemas_in_tenant(const uint64_t tenant_id);

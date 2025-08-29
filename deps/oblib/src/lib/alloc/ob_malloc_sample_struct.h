@@ -108,10 +108,7 @@ inline bool ObMallocSampleLimiter::try_acquire(int64_t alloc_bytes)
 inline bool ObMallocSampleLimiter::malloc_sample_allowed(const int64_t size, const ObMemAttr &attr)
 {
   bool ret = false;
-  if (ObLightBacktraceGuard::is_enabled()) {
-    // light_backtrace can sample all.
-    ret = true;
-  } else if (OB_UNLIKELY(min_sample_size == 0)) {
+  if (OB_UNLIKELY(min_sample_size == 0)) {
     // Zero sample mode.
   } else if (OB_UNLIKELY(MUST_SAMPLE_SIZE <= size)) {
     // Full sample when size is bigger than 16M.

@@ -58,10 +58,9 @@ void ObOrcOutputStream::write(const void *buf, size_t length)
     }
   } else {
     const char *location = nullptr;
-    if (OB_FAIL(ObArrowUtil::get_location(file_location_, location))) {
+    if (OB_FAIL(ObArrowUtil::get_location(file_location_, location)) || OB_ISNULL(location)) {
       LOG_WARN("failed to get location string", K(ret), K_(file_location));
-    } else if (OB_ISNULL(location)) {
-      ret = OB_INVALID_ARGUMENT;
+      throw std::runtime_error("failed to get location string");
     } else {
       int64_t write_size = 0;
       int64_t begin_ts = ObTimeUtility::current_time();
@@ -380,6 +379,10 @@ int ObArrowUtil::get_location(const IntoFileLocation &file_location, const char 
     }
     case IntoFileLocation::REMOTE_HDFS: {
       location = "hdfs";
+      break;
+    }
+    case IntoFileLocation::REMOTE_AZBLOB: {
+      location = "azblob";
       break;
     }
     case IntoFileLocation::REMOTE_UNKNOWN:

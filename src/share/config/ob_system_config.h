@@ -49,7 +49,6 @@ public:
   int read_str(const ObSystemConfigKey &key, char buf[], int64_t len, const char *def) const;
   int read_config(const uint64_t tenant_id, const ObSystemConfigKey &key, ObConfigItem &item) const;
   int64_t to_string(char *buf, const int64_t len) const;
-  int reload(FILE *fp);
   int64_t get_version() const { return version_; }
 
 private:

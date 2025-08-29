@@ -1150,16 +1150,22 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
           cells[cell_idx].set_int(record.data_.plsql_compile_time_);
         } break;
         case CCL_RULE_ID: {
-          cells[cell_idx].set_int(0);
+          cells[cell_idx].set_int(record.data_.ccl_rule_id_);
         } break;
         case CCL_MATCH_TIME: {
-          cells[cell_idx].set_int(0);
+          cells[cell_idx].set_int(record.data_.ccl_match_time_);
         } break;
         case INSERT_DUPLICATE_ROW_COUNT: {
           cells[cell_idx].set_int(record.data_.insert_update_or_replace_duplicate_row_count_);
         } break;
         case COMMIT_TIME: {
           cells[cell_idx].set_int(0);
+        } break;
+        case TX_TABLE_READ_CNT: {
+          cells[cell_idx].set_int(record.data_.exec_record_.tx_table_read_cnt_);
+        } break;
+        case OUTROW_LOB_CNT: {
+          cells[cell_idx].set_int(record.data_.exec_record_.outrow_lob_cnt_);
         } break;
         default: {
           ret = OB_ERR_UNEXPECTED;

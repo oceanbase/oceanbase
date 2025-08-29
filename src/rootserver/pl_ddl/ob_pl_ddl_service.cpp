@@ -19,6 +19,7 @@
 #include "share/schema/ob_routine_info.h"
 #include "share/schema/ob_package_info.h"
 #include "share/schema/ob_trigger_info.h"
+#include "share/table/ob_ttl_util.h"
 
 namespace oceanbase
 {
@@ -2089,6 +2090,8 @@ int ObPLDDLService::get_object_info(ObSchemaGetterGuard &schema_guard,
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "not create on user table or user view in trigger now");
       LOG_WARN("trigger only support create on user table or user view now", K(ret));
+    } else if (OB_FAIL(ObTTLUtil::check_htable_ddl_supported(*table_schema, false/*by_admin*/))) {
+      LOG_WARN("fail to check htable ddl supported", K(ret));
     } else {
       object_type = table_schema->is_user_table() ? TABLE_SCHEMA : VIEW_SCHEMA;
       object_id = table_schema->get_table_id();

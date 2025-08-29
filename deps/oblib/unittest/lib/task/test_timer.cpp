@@ -294,6 +294,24 @@ TEST_F(TestTimer, without_start)
   timer.destroy();
 }
 
+TEST_F(TestTimer, run_twice)
+{
+  TestTimerTask task;
+  ObTimer timer;
+  task.exec_time_ = 100 * 1000;
+  ASSERT_EQ(OB_SUCCESS, timer.init());
+  ASSERT_EQ(OB_SUCCESS, timer.schedule(task, 0, false, false));
+  usleep(20 * 1000);// make sure the first task is scheduled
+  ASSERT_EQ(true, timer.task_exist(task));
+  timer.cancel(task); // we don't care whether success to cancel the task. The first task is running now
+  ASSERT_EQ(OB_SUCCESS, timer.schedule(task, 0, false, false));
+  usleep(500 * 1000); // Sleep a long time to make sure the second task is executed
+  ASSERT_EQ(2, task.task_run_count_);
+  timer.stop();
+  timer.wait();
+  timer.destroy();
+}
+
 } // end namespace common
 } // end namespace oceanbase
 

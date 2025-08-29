@@ -2259,7 +2259,7 @@ int ObBasicSessionInfo::sys_variable_exists(const ObString &var, bool &is_exists
 }
 
 // for query and DML
-int ObBasicSessionInfo::set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan)
+int ObBasicSessionInfo::set_cur_phy_plan(const ObPhysicalPlan *cur_phy_plan)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(cur_phy_plan)) {
@@ -2292,7 +2292,14 @@ void ObBasicSessionInfo::set_ash_stat_value(ObActiveSessionStat &ash_stat)
   ash_stat.plan_hash_ = plan_hash_;
   MEMMOVE(ash_stat.sql_id_, sql_id_,
       min(sizeof(ash_stat.sql_id_), sizeof(sql_id_)));
-  ash_stat.tenant_id_ = tenant_id_;
+  if (is_deserialized_) {
+    // do nothing
+    // The deserialized session might have been created by the current tenant,
+    // rather than by the tenant identified by the priv_tenant_id recorded in the session.
+    // The session is using the resources of the current tenant, so the tenant_id_ in ash should not be modified.
+  } else {
+    ash_stat.tenant_id_ = tenant_id_;
+  }
   ash_stat.user_id_ = get_user_id();
   ash_stat.trace_id_ = get_current_trace_id();
   ash_stat.tid_ = GETTID();

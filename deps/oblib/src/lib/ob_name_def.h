@@ -220,6 +220,10 @@
 #define N_FROZEN_VERSION "frozen_version"
 #define N_VERSION "version"
 #define N_OB_VERSION "ob_version"
+#define N_TMP_FILE_OPEN "tmp_file_open"
+#define N_TMP_FILE_CLOSE "tmp_file_close"
+#define N_TMP_FILE_WRITE "tmp_file_write"
+#define N_TMP_FILE_READ "tmp_file_read"
 #define N_ICU_VERSION "icu_version"
 #define N_CONNECTION_ID "connection_id"
 #define N_SESSIONTIMEZONE "sessiontimezone"
@@ -1107,6 +1111,7 @@
 #define N_PARTITION_LIST_COL                "metadata$partition_list_col"
 #define N_EXTERNAL_FILE_URL                 "metadata$fileurl"
 #define N_EXTERNAL_FILE_ROW                 "external$filerow"
+#define N_EXTERNAL_FILE_POS                 "external$filepos"
 
 #define N_PREFIX_PATTERN                    "prefix_pattern"
 #define N_PRIV_XML_BINARY                   "_make_xml_binary"
@@ -1270,4 +1275,7 @@
 #define N_INNER_INFO_COLS_COLUMN_TYPE_PRINTER "inner_info_cols_column_type_printer"
 #define N_INNER_INFO_COLS_COLUMN_KEY_PRINTER "inner_info_cols_column_key_printer"
 #define N_STARTUP_MODE                       "startup_mode"
+#define N_HIDDEN_CLUSTERING_KEY_COLUMN       "hidden_clustering_key_column"
+#define N_FORMAT_PROFILE                       "format_profile"
+#define N_BUCKET "bucket"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

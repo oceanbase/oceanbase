@@ -314,6 +314,10 @@ int ObSyncCmdDriver::check_and_refresh_schema(uint64_t tenant_id)
 int ObSyncCmdDriver::response_query_result(ObMySQLResultSet &result)
 {
   int ret = OB_SUCCESS;
+  // for external consistency
+  transaction::ObTxReadSnapshot &tx_read_snapshot = DAS_CTX(result.get_exec_context()).get_snapshot();
+  tx_read_snapshot.wait_consistency();
+
   const common::ObNewRow *row = NULL;
   if (OB_FAIL(result.next_row(row)) ) {
     LOG_WARN("fail to get next row", K(ret));
@@ -338,22 +342,8 @@ int ObSyncCmdDriver::response_query_result(ObMySQLResultSet &result)
     ObNewRow *tmp_row = const_cast<ObNewRow*>(row);
     for (int64_t i = 0; OB_SUCC(ret) && i < tmp_row->get_count(); i++) {
       ObObj& value = tmp_row->get_cell(i);
-      if (ob_is_string_tc(value.get_type()) && CS_TYPE_INVALID != value.get_collation_type()) {
-        OZ(convert_string_value_charset(value, result, charset_type, nchar));
-      } else if (value.is_clob_locator()
-                && OB_FAIL(convert_lob_value_charset(value, result, charset_type, nchar))) {
-        LOG_WARN("convert lob value charset failed", K(ret));
-      } else if (ob_is_text_tc(value.get_type())
-                && OB_FAIL(convert_text_value_charset(value, result, charset_type, nchar))) {
-        LOG_WARN("convert text value charset failed", K(ret));
-      }
-      if (OB_FAIL(ret)) {
-      } else if ((value.is_lob() || value.is_lob_locator() || value.is_json() || value.is_geometry() || value.is_roaringbitmap())
-                  && OB_FAIL(process_lob_locator_results(value, result))) {
-        LOG_WARN("convert lob locator to longtext failed", K(ret));
-      } else if ((value.is_user_defined_sql_type() || value.is_collection_sql_type() || value.is_geometry()) &&
-                 OB_FAIL(ObXMLExprHelper::process_sql_udt_results(value, result))) {
-        LOG_WARN("convert udt to client format failed", K(ret), K(value.get_udt_subschema_id()));
+      if (OB_FAIL(convert_value_charset(value, result, charset_type, nchar ))) {
+        LOG_WARN("fail to convert value charset", K(ret), K(value));
       }
     }
 
@@ -372,7 +362,7 @@ int ObSyncCmdDriver::response_query_result(ObMySQLResultSet &result)
       if (OB_FAIL(sender_.response_packet(rp, const_cast<ObSQLSessionInfo *>(tmp_session)))) {
         LOG_WARN("response packet fail", K(ret), KP(row));
       } else {
-        ObArenaAllocator *allocator = NULL;
+        ObIAllocator *allocator = NULL;
         if (OB_FAIL(result.get_exec_context().get_convert_charset_allocator(allocator))) {
           LOG_WARN("fail to get lob fake allocator", K(ret));
         } else if (OB_NOT_NULL(allocator)) {

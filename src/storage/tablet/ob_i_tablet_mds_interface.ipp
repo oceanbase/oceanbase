@@ -163,7 +163,7 @@ inline int ObITabletMdsInterface::get_mds_data_from_tablet(
       MDS_LOG(DEBUG, "read nothing from mds sstable", K(ret));
     } else if (OB_EMPTY_RESULT == ret) {
       // skip report warn log
-    } else {
+    } else if (OB_SNAPSHOT_DISCARDED != ret) {
       MDS_LOG(WARN, "fail to read data from mds sstable", K(ret));
     }
   } else {

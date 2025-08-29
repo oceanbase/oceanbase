@@ -401,18 +401,22 @@ void ObIMvccCtx::check_row_callback_registration_between_stmt_()
 }
 
 int ObIMvccCtx::register_ext_info_commit_cb(
+    storage::ObStoreCtx &store_ctx,
     const int64_t timeout,
     const blocksstable::ObDmlFlag dml_flag,
     const transaction::ObTxSEQ &seq_no_st,
     const int64_t seq_no_cnt,
     const ObString &index_data,
     const ObObjType index_data_type,
+    const transaction::ObTxReadSnapshot &snapshot,
     const ObExtInfoLogHeader &header,
+    const ObTabletID &tabelt_id,
     ObObj &ext_info_data)
 {
   int ret = OB_SUCCESS;
   storage::ObExtInfoCbRegister cb_register;
-  if (OB_FAIL(cb_register.register_cb(this, timeout, dml_flag, seq_no_st, seq_no_cnt, index_data, index_data_type, header, ext_info_data))) {
+  if (OB_FAIL(cb_register.register_cb(this, store_ctx, timeout, dml_flag, seq_no_st, seq_no_cnt,
+      index_data, index_data_type, snapshot, header, tabelt_id, ext_info_data))) {
     TRANS_LOG(WARN, "register ext info callback failed", K(ret), K(cb_register), K(*this));
   }
   return ret;
@@ -455,6 +459,12 @@ ObMvccWriteGuard::~ObMvccWriteGuard()
         }
         if (is_freeze && OB_BLOCK_FROZEN != ret) {
           memtable_->get_freezer()->set_need_resubmit_log(true);
+        }
+      }
+    } else if (is_lob_ext_info_log_) {
+      if (OB_FAIL(tx_ctx->submit_redo_after_write(false/*force*/, write_seq_no_))) {
+        if (REACH_TIME_INTERVAL(100 * 1000)) {
+          TRANS_LOG(WARN, "failed to submit ext info log if neccesary", K(ret), KPC(tx_ctx));
         }
       }
     }

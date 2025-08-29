@@ -14,6 +14,7 @@
 
 #include "rootserver/ob_root_utils.h"       // for rootserver::ObRootUtils::get_rs_default_timeout_ctx
 #include "ob_ls_table_operator.h"   // for declarations of functions in this cpp
+#include "observer/ob_service.h"
 
 namespace oceanbase
 {
@@ -57,6 +58,7 @@ int ObLSTableOperator::set_use_memory_ls_(ObIRsListChangeCb &rs_list_change_cb)
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else {
+    int tmp_ret = OB_SUCCESS;
     if (OB_UNLIKELY(!inmemory_ls_.is_inited())) {
       if (OB_FAIL(inmemory_ls_.init(rs_list_change_cb))) {
         LOG_WARN("inmemory_ls_ init failed", KR(ret));

@@ -113,6 +113,7 @@ enum DynamicFilterType
 {
   JOIN_RUNTIME_FILTER= 0,
   PD_TOPN_FILTER = 1,
+  LOCAL_FILTER = 2,
   MAX_DYNAMIC_FILTER_TYPE
 };
 
@@ -1373,6 +1374,7 @@ public:
   int64_t ext_tbl_filter_pd_level_;
   ExprFixedArray ext_mapping_column_exprs_;
   ObFixedArray<uint64_t, ObIAllocator> ext_mapping_column_ids_;
+  bool ext_enable_late_materialization_;
 };
 
 //下压到存储层的表达式执行依赖的op ctx

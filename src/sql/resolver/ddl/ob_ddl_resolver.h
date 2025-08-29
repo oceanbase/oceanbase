@@ -467,7 +467,7 @@ public:
       const share::schema::ObTableSchema &table_schema,
       const ObString &column_name,
       ObAlterTableStmt *alter_table_stmt);
-  int check_is_json_contraint(ObTableSchema &tmp_table_schema,
+  int check_is_json_contraint(const share::schema::ObTableSchema &tmp_table_schema,
                               ObIArray<ObConstraint> &csts,
                               ParseNode *cst_check_expr_node);
 
@@ -495,11 +495,12 @@ public:
                                                   common::ObString sub_path);
 
   static int mask_properties_sensitive_info(const ParseNode *node,
+                                            const ObExternalFileFormat &format,
                                             ObString &ddl_sql,
                                             ObIAllocator *allocator,
                                             ObString &masked_sql);
 
-  static int check_format_valid(const ObExternalFileFormat &format, bool &is_valid);
+  static int check_format_valid(ObExternalFileFormat &format, bool &is_valid);
   int check_column_in_check_constraint(
       const share::schema::ObTableSchema &table_schema,
       const ObReducedVisibleColSet &drop_column_names_set,
@@ -523,7 +524,7 @@ public:
   static int resolve_check_constraint_expr(
         ObResolverParams &params,
         const ParseNode *node,
-        share::schema::ObTableSchema &table_schema,
+        const share::schema::ObTableSchema &table_schema,
         share::schema::ObConstraint &constraint,
         ObRawExpr *&check_expr,
         const share::schema::ObColumnSchemaV2 *column_schema = NULL);
@@ -731,7 +732,7 @@ protected:
       bool check_column_exist = true,
       bool is_hidden = false,
       bool *has_invalid_types = NULL);
-  virtual int get_table_schema_for_check(share::schema::ObTableSchema &table_schema)
+  virtual int get_table_schema_for_check(const share::schema::ObTableSchema *&table_schema)
   {
     UNUSED(table_schema);
     return common::OB_SUCCESS;
@@ -1178,6 +1179,7 @@ protected:
   bool have_generate_vec_arg_;
   int64_t auto_increment_cache_size_;
   ObExternalFileFormat::FormatType external_table_format_type_;
+  sql::ColumnIndexType column_index_type_;
   common::ObBitSet<> mocked_external_table_column_ids_;
   common::ObString index_params_;
   ObTableOrganizationType table_organization_;

@@ -390,7 +390,7 @@ private:
 template<typename T,
          typename ...Args,
          typename std::enable_if<!std::is_array<T>::value, bool>::type = true>
-inline int ob_alloc_shared(ObSharedGuard<T> &guard, ObIAllocator &alloc) {
+inline int ob_alloc_shared(ObSharedGuard<T> &guard, ObIAllocator &alloc, Args&& ...args) {
   int ret = OB_SUCCESS;
   guard::CombinedBLock<T> *temp_ptr = nullptr;
   if (OB_NOT_NULL(temp_ptr =
@@ -398,6 +398,7 @@ inline int ob_alloc_shared(ObSharedGuard<T> &guard, ObIAllocator &alloc) {
     guard.reset();
     new(&(temp_ptr->control_block_)) guard::ControlBlock<T>(alloc, (void *)temp_ptr);
     guard = guard::ObSharedGuardFriend<T>::create_shared_from_combined_block(*temp_ptr);
+    new(guard.get_ptr()) T(std::forward<Args>(args)...);
   } else {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   }
@@ -408,13 +409,7 @@ template<typename T,
          typename ...Args,
          typename std::enable_if<!std::is_array<T>::value, bool>::type = true>
 inline int ob_make_shared(ObSharedGuard<T> &guard, Args&& ...args) {
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ob_alloc_shared<T>(guard, DEFAULT_ALLOCATOR))) {
-    OCCAM_LOG(WARN, "allock memory failed", K(ret), K(lbt()));
-  } else {
-    new(guard.get_ptr()) T(std::forward<Args>(args)...);
-  }
-  return ret;
+  return ob_alloc_shared(guard, DEFAULT_ALLOCATOR, std::forward<Args>(args)...);
 }
 #undef DEFAULT_ALLOCATOR
 

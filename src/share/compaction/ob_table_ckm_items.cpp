@@ -262,42 +262,6 @@ int ObTableCkmItems::build(
   return ret;
 }
 
-#ifdef OB_BUILD_SHARED_STORAGE
-int ObTableCkmItems::build_for_s2(
-    const uint64_t table_id,
-    const share::SCN &compaction_scn,
-    common::ObMySQLProxy &sql_proxy,
-    schema::ObSchemaGetterGuard &schema_guard,
-    const compaction::ObTabletLSPairCache &tablet_ls_pair_cache)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObTabletID, 64> tablet_id_array;
-
-  if (OB_FAIL(prepare_build(table_id, schema_guard, tablet_ls_pair_cache, tablet_id_array))) {
-    LOG_WARN("failed to prepare build ckm items", K(ret));
-  } else if (OB_FAIL(ckm_items_.init(tenant_id_, tablet_pairs_.count()))) {
-    STORAGE_LOG(WARN, "failed to init ckm array", K(ret), K_(tenant_id), K(tablet_pairs_.count()));
-  } else if (OB_FAIL(ObTabletReplicaChecksumOperator::batch_get(tenant_id_,
-                                                                tablet_pairs_,
-                                                                compaction_scn,
-                                                                sql_proxy,
-                                                                ckm_items_,
-                                                                true/*include_larger_than*/,
-                                                                share::OBCG_DEFAULT))) {
-    LOG_WARN("failed to get table column checksum items", KR(ret));
-  } else if (!table_schema_->is_index_table() && OB_FAIL(sort_col_id_array_.build(tenant_id_, *table_schema_))) {
-    LOG_WARN("failed to build column id array for data table", KR(ret), KPC(table_schema_));
-  } else {
-    table_id_ = table_id;
-    is_inited_ = true;
-  }
-
-  if (OB_FAIL(ret)) {
-    reset();
-  }
-  return ret;
-}
-#endif
 
 // For partition split ddl, the scenario will generate major sstables with more columns expectedly.
 // 1. multi parts compact with columns cnt A.
@@ -438,7 +402,8 @@ int ObTableCkmItems::validate_column_ckm_sum(
     LOG_WARN("failed to build column ckm sum map for index table", KR(ret));
   } else if (OB_UNLIKELY(data_row_cnt != index_row_cnt)) {
     ret = OB_CHECKSUM_ERROR;
-    LOG_ERROR("sum row count in data & global index is not equal", KR(ret), K(data_row_cnt), K(index_row_cnt));
+    LOG_WARN("sum row count in data & global index is not equal", KR(ret), "data_table_id", data_table_schema->get_table_id(),
+      "index_table_id", index_table_schema->get_table_id(), K(data_row_cnt), K(index_row_cnt));
   } else if (OB_FAIL(compare_ckm_by_column_ids(
                  data_ckm,
                  index_ckm,
@@ -681,17 +646,23 @@ int ObTableCkmItems::check_schema_change_after_major_freeze(
     } else {
       LOG_WARN("fail to get table schema", KR(ret), K(index_ckm));
     }
-  } else if (old_table_schema->get_partition_num() != data_ckm.tablet_pairs_.count()) {
-    FLOG_INFO("[IGNORE CHECKSUM_ERROR] partition num changed in data table", KR(ret),
-      "old_partition_num", old_table_schema->get_partition_num(),
-      "new_partition_num", data_ckm.tablet_pairs_.count(),
-      K(data_ckm));
-#ifdef ERRSIM
-    SERVER_EVENT_SYNC_ADD("merge_errsim", "ignore_checksum_error", K(tenant_id), "reason", "partition_num_changed");
-#endif
   } else {
-    ret = OB_CHECKSUM_ERROR;
-    LOG_WARN("schema not changed after major freeze", KR(ret), K(data_ckm), K(index_ckm));
+    const int64_t old_part_num = old_table_schema->get_all_part_num();
+    if (OB_UNLIKELY(-1 == old_part_num)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("get_all_part_num returned unexpected value", KR(ret), K(old_part_num), K(data_ckm));
+    } else if (old_part_num != data_ckm.tablet_pairs_.count()) {
+      FLOG_INFO("[IGNORE CHECKSUM_ERROR] partition num changed in data table", KR(ret),
+        "old_partition_num", old_part_num,
+        "new_partition_num", data_ckm.tablet_pairs_.count(),
+        K(data_ckm));
+#ifdef ERRSIM
+      SERVER_EVENT_SYNC_ADD("merge_errsim", "ignore_checksum_error", K(tenant_id), "reason", "partition_num_changed");
+#endif
+    } else {
+      ret = OB_CHECKSUM_ERROR;
+      LOG_WARN("schema not changed after major freeze", KR(ret), K(data_ckm), K(index_ckm));
+    }
   }
   return ret;
 }

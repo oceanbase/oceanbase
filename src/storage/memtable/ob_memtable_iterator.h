@@ -285,7 +285,7 @@ protected:
   ScanState scan_state_;
   int32_t trans_version_col_idx_;
   int32_t sql_sequence_col_idx_;
-  blocksstable::ObRowReader row_reader_;
+  blocksstable::ObCompatRowReader row_reader_;
   ObOuputRowValidateChecker row_checker_;
 };
 

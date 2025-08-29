@@ -35,6 +35,7 @@ void fin_obdal_env();
 static constexpr int POOL_MAX_IDLE_PER_HOST = 32;         // the max idle http client count
 static constexpr int POOL_MAX_IDLE_TIME_S = 45;          // the max time of idle http client (unit s)
 static constexpr int CONNECT_TIMEOUT_S = 10;             // the max time of connect timeout (unit s)
+static constexpr int OBDAL_MALLOC_BIG_SIZE = 8 * 1024; // 8k
 
 static constexpr int MAX_OBDAL_REGION_LENGTH = 128;
 static constexpr int MAX_OBDAL_ENDPOINT_LENGTH = 256;
@@ -42,28 +43,6 @@ static constexpr int MAX_OBDAL_ACCESS_ID_LENGTH = 256;
 static constexpr int MAX_OBDAL_SECRET_KEY_LENGTH = 256;
 static constexpr char OB_STORAGE_OBDAL_ALLOCATOR[] = "StorageObDal";
 static constexpr char OB_DAL_SDK[] = "OBDALSDK";
-
-class ObDalMemoryManager
-{
-public:
-  static ObDalMemoryManager &get_instance();
-  int init();
-  void *allocate(std::size_t size, std::size_t align);
-  void free(void *ptr);
-
-
-private:
-  ObDalMemoryManager();
-  ~ObDalMemoryManager();
-
-private:
-  static constexpr int64_t N_WAY = 32;
-  static constexpr int64_t DEFAULT_BLOCK_SIZE = 128 * 1024; // 128KB
-  ObMemAttr attr_;
-  ObBlockAllocMgr mem_limiter_;
-  ObVSliceAlloc allocator_;
-  DISALLOW_COPY_AND_ASSIGN(ObDalMemoryManager);
-};
 
 class ObDalEnvIniter
 {

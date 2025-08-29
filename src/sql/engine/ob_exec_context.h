@@ -194,7 +194,7 @@ public:
   int init_expr_op(const uint64_t expr_op_size, ObIAllocator *allocator = NULL);
   void reset_expr_op();
   inline bool is_expr_op_ctx_inited() { return expr_op_size_ > 0 && NULL != expr_op_ctx_store_; }
-  int get_convert_charset_allocator(common::ObArenaAllocator *&allocator);
+  int get_convert_charset_allocator(common::ObIAllocator *&allocator);
   int get_malloc_allocator(ObIAllocator *&allocator);
   void try_reset_convert_charset_allocator();
 
@@ -471,7 +471,7 @@ public:
   int fill_px_batch_info(
       ObBatchRescanParams &params,
       int64_t batch_id,
-      sql::ObExpr::ObExprIArray &array);
+      const sql::ObExpr::ObExprIArray &array);
   int64_t get_px_batch_id() { return px_batch_id_; }
 
   ObDmlEventType get_dml_event() const { return dml_event_; }
@@ -804,9 +804,11 @@ inline void ObExecContext::reference_my_plan(const ObPhysicalPlan *my_plan)
 inline void ObExecContext::set_my_session(ObSQLSessionInfo *session)
 {
   my_session_ = session;
-  set_mem_attr(ObMemAttr(session->get_effective_tenant_id(),
+  if (OB_NOT_NULL(session)) {
+    set_mem_attr(ObMemAttr(session->get_effective_tenant_id(),
                          ObModIds::OB_SQL_EXEC_CONTEXT,
                          ObCtxIds::EXECUTE_CTX_ID));
+  }
 }
 
 inline ObSQLSessionInfo *ObExecContext::get_my_session() const

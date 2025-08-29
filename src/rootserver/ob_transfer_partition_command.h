@@ -23,6 +23,7 @@ class ObMySQLTransaction;
 namespace share
 {
 class ObTransferPartitionTask;
+class ObBalanceJobStatus;
 }
 namespace rootserver
 {
@@ -52,8 +53,9 @@ public:
       const ObTransferPartitionType type,
       const uint64_t table_id,
       const ObObjectID &object_id);
-  int init_for_cancel_balance_job(
-      const uint64_t target_tenant_id);
+  int init_for_balance_job_op(
+      const uint64_t target_tenant_id,
+      const ObTransferPartitionType type);
   bool is_valid() const;
   int assign(const ObTransferPartitionArg &other);
   void reset()
@@ -74,9 +76,23 @@ public:
   {
     return CANCEL_TRANSFER_PARTITION_ALL == type_;
   }
+  bool is_balance_job_op() const
+  {
+    return is_cancel_balance_job()
+      || is_suspend_balance_job()
+      || is_resume_balance_job();
+  }
   bool is_cancel_balance_job() const
   {
     return CANCEL_BALANCE_JOB == type_;
+  }
+  bool is_suspend_balance_job() const
+  {
+    return SUSPEND_BALANCE_JOB == type_;
+  }
+  bool is_resume_balance_job() const
+  {
+    return RESUME_BALANCE_JOB == type_;
   }
   const uint64_t &get_target_tenant_id() const { return target_tenant_id_; }
   const uint64_t &get_table_id() const { return table_id_; }
@@ -100,9 +116,10 @@ private:
   int execute_transfer_partition_(const ObTransferPartitionArg &arg);
   int execute_cancel_transfer_partition_(const ObTransferPartitionArg &arg);
   int execute_cancel_transfer_partition_all_(const ObTransferPartitionArg &arg);
-  int execute_cancel_balance_job_(const ObTransferPartitionArg &arg);
+  int execute_balance_job_op_(const ObTransferPartitionArg &arg);
   int check_tenant_status_(const uint64_t tenant_id);
   int check_data_version_for_cancel_(const uint64_t tenant_id);
+  int check_data_version_for_balance_job_(const ObTransferPartitionArg &arg);
   int check_data_version_and_config_(const uint64_t tenant_id);
   int check_table_schema_(
       const uint64_t tenant_id,
@@ -112,7 +129,9 @@ private:
   int check_ls_(const uint64_t tenant_id, const share::ObLSID &ls_id, const bool is_dup_table);
   int try_cancel_transfer_partition_(const share::ObTransferPartitionTask &task,
       common::ObMySQLTransaction &trans);
-  int cancel_balance_job_in_trans_(const uint64_t tenant_id, common::ObMySQLTransaction &trans);
+  int op_balance_job_in_trans_(const uint64_t tenant_id,
+      const share::ObBalanceJobStatus &balance_job_status,
+      common::ObMySQLTransaction &trans);
   int cancel_transfer_partition_in_init_(const share::ObTransferPartitionTask &task,
       common::ObMySQLTransaction &trans);
   int get_transfer_part_list_(const uint64_t tenant_id,
@@ -122,6 +141,7 @@ private:
   int cancel_all_init_transfer_partition_(const uint64_t tenant_id,
       const share::ObTransferPartList &init_list,
       common::ObMySQLTransaction &trans);
+  int notify_balance_service_(const uint64_t tenant_id);
 };
 }
 }

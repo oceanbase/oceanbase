@@ -28,8 +28,10 @@ ObAdminSlogExecutor::ObAdminSlogExecutor()
     period_scan_(false),
     dir_op_(),
     offset_(0),
-    parse_count_(-1)
+    parse_count_(-1),
+    dump_mode_(SLOG_MODE_SN)
 {
+  MEMSET(ss_slog_dir_, 0, common::MAX_PATH_SIZE);
 }
 
 int ObAdminSlogExecutor::execute(int argc, char *argv[])
@@ -60,13 +62,19 @@ int ObAdminSlogExecutor::execute(int argc, char *argv[])
     if (OB_FAIL(scan_periodically())) {
       LOG_WARN("fail to scan slog file and check integrity", K(ret));
     }
-  } else if (OB_UNLIKELY(tenant_id_ == OB_INVALID_TENANT_ID || log_file_id_ <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tenant_id_), K(log_file_id_));
-  } else if (OB_FAIL(slogger_mgr.get_tenant_slog_dir(tenant_id_, tenant_slog_dir))) {
-    LOG_WARN("fail to get_tenant_slog_dir", K(ret));
-  } else if (OB_FAIL(parse_log(tenant_slog_dir, log_file_id_))) {
-    LOG_WARN("fail to parse slog file", K(ret));
+  } else if (SLOG_MODE_SN == dump_mode_) {
+    if (OB_UNLIKELY(tenant_id_ == OB_INVALID_TENANT_ID || log_file_id_ <= 0)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(tenant_id_), K(log_file_id_));
+    } else if (OB_FAIL(slogger_mgr.get_tenant_slog_dir(tenant_id_, tenant_slog_dir))) {
+      LOG_WARN("fail to get_tenant_slog_dir", K(ret));
+    } else if (OB_FAIL(parse_log(tenant_slog_dir, log_file_id_))) {
+      LOG_WARN("fail to parse slog file", K(ret));
+    }
+  } else if (SLOG_MODE_SS == dump_mode_) {
+    if (OB_FAIL(parse_log(ss_slog_dir_, log_file_id_))) {
+      LOG_WARN("fail to parse slog file", K(ret));
+    }
   }
 
   return ret;
@@ -155,7 +163,7 @@ int ObAdminSlogExecutor::parse_args(int argc, char *argv[])
 {
   int ret = OB_SUCCESS;
   int opt = 0;
-  const char* opt_string = "hsd:u:f:o:c:";
+  const char* opt_string = "hsd:u:f:o:c:p:";
   struct option longopts[] =
     {{"help", 0, NULL, 'h' },
      {"period_scan", 0, NULL, 's'},
@@ -163,7 +171,8 @@ int ObAdminSlogExecutor::parse_args(int argc, char *argv[])
      {"tenant_id", 1, NULL, 'u' },
      {"log_file_id", 1, NULL, 'f' },
      {"offset", 1, NULL, 'o'},
-     {"parse count", 1, NULL, 'c'}};
+     {"parse count", 1, NULL, 'c'},
+     {"ss_log_path", 1, NULL, 'p'}};
 
   while ((opt = getopt_long(argc, argv, opt_string, longopts, NULL)) != -1) {
     switch (opt) {
@@ -190,6 +199,11 @@ int ObAdminSlogExecutor::parse_args(int argc, char *argv[])
       case 'c':
         parse_count_ = static_cast<int64_t>(strtol(optarg, NULL, 10));
         break;
+      case 'p': {
+        STRCPY(ss_slog_dir_, optarg);
+        dump_mode_ = SLOG_MODE_SS;
+        break;
+      }
       default: {
         print_usage();
         ret = OB_INVALID_ARGUMENT;
@@ -208,7 +222,10 @@ void ObAdminSlogExecutor::print_usage()
                     "       -f --log_file_id specify the slog file id which is to be dumped\n"
                     "       -o --offset specify the offset from which to start scanning / default value is 0, meaning reading from the begining of the file\n"
                     "       -c --parse_count specify the count of slogs needed to be read / default value is -1, meaning reading all slogs left\n"
-                    "eg.    1.ob_admin slog_tool -d/home/fenggu.yh/ob1.obs0/store -u1 -f1\n"
+                    "       -p --ss_log_path specify the path of the ss slog file\n"
+                    "\n"
+                    "eg.    1. share nothing mode: ./bin/ob_admin slog_tool -d/home/fenggu.yh/ob1.obs0/store -u1 -f1\n"
+                    "       2. share storage mode: ./bin/ob_admin slog_tool -p/home/fenggu.yh/ob1.obs0/store/sstable/1_0/slog -f1\n"
                     "         (NOTICE: no space between -d/home...)\n\n");
 }
 

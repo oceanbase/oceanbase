@@ -83,6 +83,7 @@
 #include "storage/fts/dict/ob_gen_dic_loader.h"
 #include "plugin/sys/ob_plugin_mgr.h"
 #include "storage/reorganization_info_table/ob_tablet_reorg_info_table_schema_helper.h"
+#include "share/ob_license_utils.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -1235,6 +1236,14 @@ int ObServer::start()
             "replay_log_cost_us", ObTimeUtility::current_time() - schema_refreshed_ts);
       }
     }
+
+    if (OB_SUCC(ret)) {
+      (void) ObLicenseUtils::clear_license_table_if_need();
+      if (OB_FAIL(ObLicenseUtils::start_license_mgr())) {
+        FLOG_ERROR("failed to start license manager", KR(ret));
+      }
+    }
+
   }
 
   if (OB_FAIL(ret)) {
@@ -1318,11 +1327,23 @@ int ObServer::check_if_schema_ready()
 {
   int ret = OB_SUCCESS;
   bool schema_ready = false;
+  bool in_bootstrap = false;
   LOG_DBA_INFO_V2(OB_SERVER_WAIT_SCHEMA_READY_BEGIN,
                   DBA_STEP_INC_INFO(server_start),
                   "wait schema ready begin.");
   while (OB_SUCC(ret) && !stop_ && !schema_ready) {
-    schema_ready = schema_service_.is_sys_full_schema();
+    if (in_bootstrap) {
+      // GCTX.in_bootstrap_ is set false when tenant full schema refreshed
+      schema_ready = !GCTX.in_bootstrap_;
+    } else {
+      if (GCTX.in_bootstrap_) {
+        in_bootstrap = true;
+      } else {
+        // in bootstrap, refreshed schema version is set to 2 when broadcasting schema
+        // full schema is refreshed later, which will cause write sql failed in the following steps
+        schema_ready = schema_service_.is_sys_full_schema();
+      }
+    }
     if (!schema_ready) {
       SLEEP(1);
     }

@@ -17,6 +17,8 @@
 #include "share/index_usage/ob_index_usage_info_mgr.h"
 #include "observer/table/redis/ob_redis_rkey.h"
 #include "share/table/redis/ob_redis_util.h"
+#include "observer/table/utils/ob_table_json_utils.h"
+#include "observer/table/utils/ob_table_convert_utils.h"
 
 namespace oceanbase
 {
@@ -831,6 +833,10 @@ int ObTableApiScanRowIterator::adjust_output_obj_type(ObObj &obj)
     } else {
       obj.set_datetime(datetime);
     }
+  } else if (ObTableEntityType::ET_KV == scan_executor_->get_table_ctx().get_entity_type()
+             && obj.is_json()
+             && OB_FAIL(ObTableConvertUtils::convert_to_json_text(row_allocator_, obj))) {
+    LOG_WARN("fail to convert json_bin to json_text", K(ret), K(obj));
   }
   return ret;
 }

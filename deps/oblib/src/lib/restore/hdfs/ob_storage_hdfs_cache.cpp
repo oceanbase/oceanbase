@@ -11,8 +11,9 @@
  */
 
 #include "ob_storage_hdfs_cache.h"
-#include "sql/engine/connector/ob_java_env.h"
-#include "sql/engine/connector/ob_java_helper.h"
+#include "lib/jni_env/ob_java_env.h"
+#include "lib/jni_env/ob_java_helper.h"
+#include "lib/jni_env/ob_jni_connector.h"
 #include "share/external_table/ob_hdfs_storage_info.h"
 
 #include "lib/container/ob_array.h"
@@ -487,26 +488,13 @@ int ObHdfsCacheUtils::create_hdfs_fs_handle(const ObString &namenode,
                                             ObObjectStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
-  sql::ObJavaEnv &java_env = sql::ObJavaEnv::getInstance();
+  JNIEnv* temp_env;
+  ObJavaEnv &java_env = ObJavaEnv::getInstance();
   // This entry is first time to setup java env
-  if (!java_env.is_env_inited()) {
-    if (OB_FAIL(java_env.setup_java_env())) {
-      OB_LOG(WARN, "failed to setup java env", K(ret));
-    }
-  }
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else {
-    sql::JVMFunctionHelper &helper = sql::JVMFunctionHelper::getInstance();
-    if (OB_UNLIKELY(!helper.is_inited())) {
-      if (OB_FAIL(helper.init_jni_env())) {
-        OB_LOG(WARN, "failed to re-init jni env from helper", K(ret));
-      } else if (OB_UNLIKELY(!helper.is_inited())) {
-        ret = OB_ERR_UNEXPECTED;
-        OB_LOG(WARN, "failed to re-init jni env from helper", K(ret));
-      }
-      OB_LOG(TRACE, "get helper init status", K(ret), K(helper.is_inited()));
-    }
+  if (OB_FAIL(ObJniConnector::java_env_init())) {
+    OB_LOG(WARN, "failed to init java env", K(ret));
+  } else if (OB_FAIL(ObJniConnector::get_jni_env(temp_env))) {
+    OB_LOG(WARN, "failed to get jni env ptr", K(ret));
   }
 
   if (OB_FAIL(ret)) {

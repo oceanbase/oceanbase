@@ -28,7 +28,8 @@ int ObIndexStatsEstimator::estimate(const ObOptStatGatherParam &param,
 {
   int ret = OB_SUCCESS;
   const ObIArray<ObColumnStatParam> &column_params = param.column_params_;
-  ObString no_rewrite("NO_REWRITE USE_PLAN_CACHE(NONE) DBMS_STATS OPT_PARAM('ROWSETS_MAX_ROWS', 256)");
+  ObString no_rewrite(
+    "NO_REWRITE USE_PLAN_CACHE(NONE) DBMS_STATS OPT_PARAM('ROWSETS_MAX_ROWS', 256) OPT_PARAM('APPROX_COUNT_DISTINCT_PRECISION', 10)");
   ObString calc_part_id_str;
   ObOptTableStat tab_stat;
   ObOptStat src_opt_stat;

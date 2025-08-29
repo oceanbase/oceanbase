@@ -15,9 +15,73 @@
 
 #include <gtest/gtest.h>
 #include "mittest/shared_storage/simple_server/test_storage_cache_common_util.h"
+#include "unittest/storage/sslog/test_mock_palf_kv.h"
+#include "close_modules/shared_storage/storage/incremental/sslog/ob_i_sslog_proxy.h"
+#include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_kv_proxy.h"
+
+namespace oceanbase
+{
+namespace sslog
+{
+
+oceanbase::unittest::ObMockPalfKV PALF_KV;
+
+int get_sslog_table_guard(const ObSSLogTableType type,
+                          const int64_t tenant_id,
+                          ObSSLogProxyGuard &guard)
+{
+  int ret = OB_SUCCESS;
+
+  switch (type)
+  {
+    case ObSSLogTableType::SSLOG_TABLE: {
+      void *proxy = share::mtl_malloc(sizeof(ObSSLogTableProxy), "ObSSLogTable");
+      if (nullptr == proxy) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        ObSSLogTableProxy *sslog_table_proxy = new (proxy) ObSSLogTableProxy(tenant_id);
+        if (OB_FAIL(sslog_table_proxy->init())) {
+          SSLOG_LOG(WARN, "fail to inint", K(ret));
+        } else {
+          guard.set_sslog_proxy((ObISSLogProxy *)proxy);
+        }
+      }
+      break;
+    }
+    case ObSSLogTableType::SSLOG_PALF_KV: {
+      void *proxy = share::mtl_malloc(sizeof(ObSSLogKVProxy), "ObSSLogTable");
+      if (nullptr == proxy) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        ObSSLogKVProxy *sslog_kv_proxy = new (proxy) ObSSLogKVProxy(&PALF_KV);
+        // if (OB_FAIL(sslog_kv_proxy->init(GCONF.cluster_id, tenant_id))) {
+        //   SSLOG_LOG(WARN, "init palf kv failed", K(ret));
+        // } else {
+          guard.set_sslog_proxy((ObISSLogProxy *)proxy);
+        // }
+      }
+      break;
+    }
+    default: {
+      ret = OB_INVALID_ARGUMENT;
+      SSLOG_LOG(WARN, "invalid sslog type", K(type));
+      break;
+    }
+  }
+
+  return ret;
+}
+} // namespace sslog
+} // namespace oceanbase
+
 
 using namespace oceanbase::transaction;
 using namespace oceanbase::storage;
+
+const char *get_per_file_test_name()
+{
+    return "test_storage_cache_prewarm_macro_cache_";
+}
 
 namespace oceanbase
 {
@@ -122,7 +186,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_macro_cache_space_occupy)
 
   // 6. test whether occupy space happens when hot tablet macro block space is not enough
   const int64_t macro_free_size = tnt_disk_space_mgr->get_macro_cache_free_size();
-  OK(tnt_disk_space_mgr->alloc_file_size((macro_free_size), ObSSMacroCacheType::MACRO_BLOCK));
+  OK(tnt_disk_space_mgr->alloc_file_size((macro_free_size), ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE));
 
 
   ObSSMacroCacheStat macro_cache_stat1;
@@ -148,7 +212,8 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_macro_cache_space_occupy)
   ASSERT_TRUE(hot_macro_cache_stat1.used_ < hot_macro_cache_stat2.used_);
   ASSERT_TRUE(macro_cache_stat1.used_ >  macro_cache_stat2.used_);
 
-  ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->free_file_size(macro_free_size, ObSSMacroCacheType::MACRO_BLOCK));
+  ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->free_file_size(macro_free_size, ObSSMacroCacheType::MACRO_BLOCK,
+                                                           ObDiskSpaceType::FILE));
   FLOG_INFO("[TEST] test_macro_cache_space_occupy end", K(tnt_disk_space_mgr->get_macro_cache_free_size()));
 }
 
@@ -177,7 +242,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_macro_cache_full)
 
   // 7. Test if the space of hot tablet macro cache is full
   int64_t max_hot_tablet_size = tnt_disk_space_mgr->get_macro_cache_free_size();
-  OK(tnt_disk_space_mgr->alloc_file_size(max_hot_tablet_size, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK));
+  OK(tnt_disk_space_mgr->alloc_file_size(max_hot_tablet_size, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, ObDiskSpaceType::FILE));
   int64_t after_alloc_hot_tablet_size = tnt_disk_space_mgr->get_macro_cache_free_size();
   ASSERT_EQ(0, after_alloc_hot_tablet_size);
   OK(exe_sql("insert into test_macro_cache_full values (7)"));
@@ -228,7 +293,8 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_macro_cache_full)
   const char *size_comment = "size:";
   ASSERT_NE(nullptr, strstr(task2->get_comment().ptr(), size_comment));
   ASSERT_TRUE(data_block_ids.count() + meta_block_ids.count() > second_stat.macro_data_block_num_ + second_stat.macro_block_hit_cnt_);
-  ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->free_file_size(max_hot_tablet_size, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK));
+  ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->free_file_size(max_hot_tablet_size, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK,
+                                                           ObDiskSpaceType::FILE));
   FLOG_INFO("[TEST] test_prewarm_macro_block end", K(tnt_disk_space_mgr->get_macro_cache_free_size()));
 }
 

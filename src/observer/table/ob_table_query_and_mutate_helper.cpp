@@ -753,6 +753,7 @@ int QueryAndMutateHelper::execute_one_mutation(ObIAllocator &allocator,
       } else if (OB_FAIL(new_entity->deep_copy_properties(allocator_, mutate_entity))) {
         LOG_WARN("fail to deep copy property", K(ret));
       } else {
+        new_entity->set_allocator(&allocator_);
         for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
           ObObj key;
           if (OB_FAIL(query_res_entity->get_property(rk_names.at(i), key))) {

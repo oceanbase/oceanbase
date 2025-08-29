@@ -70,10 +70,6 @@ const char *const HOST = "host=";
 const char *const APPID = "appid=";
 const char *const DELETE_MODE = "delete_mode=";
 const char *const REGION = "s3_region=";
-const char* const PRINCIPAL = "principal=";
-const char* const KEYTAB = "keytab=";
-const char* const KRB5CONF= "krb5conf=";
-const char* const CONFIGS= "configs=";
 const char* const SEPERATE_SYMBOL = "&";
 const char *const MAX_IOPS = "max_iops=";
 const char *const MAX_BANDWIDTH = "max_bandwidth=";
@@ -119,7 +115,7 @@ enum ObStorageChecksumType : uint8_t
 
 bool is_oss_supported_checksum(const ObStorageChecksumType checksum_type);
 bool is_s3_supported_checksum(const ObStorageChecksumType checksum_type);
-bool is_obdal_supported_checksum(const ObStorageChecksumType checksum_type);
+bool is_obdal_supported_checksum(const ObStorageType storage_type, const ObStorageChecksumType checksum_type);
 const char *get_storage_checksum_type_str(const ObStorageChecksumType &type);
 bool is_use_obdal();
 // [Extensions]
@@ -189,6 +185,10 @@ public:
   {
     return OB_SUCCESS;
   };
+  virtual int is_supported_azblob_version() const
+  {
+    return OB_SUCCESS;
+  }
   virtual bool is_shared_storage_mode() const
   {
     return false;
@@ -260,8 +260,10 @@ public:
   const char *get_type_str() const;
   ObStorageChecksumType get_checksum_type() const;
   const char *get_checksum_type_str() const;
+  const char *get_extension() const { return extension_; }
 
   bool is_hdfs_storage() const { return OB_STORAGE_HDFS == device_type_; }
+  virtual bool is_backup_storage_info() const { return false; }
   bool is_enable_worm() const;
   bool is_assume_role_mode() const;
   virtual bool is_valid() const;

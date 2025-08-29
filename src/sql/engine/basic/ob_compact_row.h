@@ -59,8 +59,9 @@ public:
     reset();
   }
   int init(const ObExprPtrIArray &exprs, const int32_t extra_size,
-           const bool reorder_fixed_expr = true);
-  int assign(const RowMeta &row_meta);
+           const bool reorder_fixed_expr = true,
+           common::ObIAllocator *allocator = NULL);
+  int assign(const RowMeta &row_meta, common::ObIAllocator *allocator = NULL);
   void reset();
   int32_t get_row_fixed_size() const { return sizeof(RowHeader) + var_data_off_; }
   int32_t get_var_col_cnt() const { return col_cnt_ - fixed_cnt_; }

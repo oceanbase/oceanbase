@@ -227,7 +227,7 @@ int ObAllVirtualSSSSTableMgr::get_next_tablet_()
                                  ls_id_,
                                  tablet_id_,
                                  SCN::invalid_scn());
-    if (OB_FAIL(meta_service->get_max_committed_meta_scn(read_snapshot))) {
+    if (OB_FAIL(meta_service->get_max_committed_meta_scn(ls_id_, read_snapshot))) {
       SERVER_LOG(WARN, "get max committed meta scn failed", K(ret));
     } else if (OB_UNLIKELY(!param.is_valid())) {
       ret = OB_INVALID_ARGUMENT;

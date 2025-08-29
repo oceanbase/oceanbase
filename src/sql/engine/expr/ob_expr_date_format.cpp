@@ -117,6 +117,12 @@ int ObExprDateFormat::calc_date_format(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     if (CM_IS_WARN_ON_FAIL(cast_mode) && OB_ALLOCATE_MEMORY_FAILED != ret) {
       ret = OB_SUCCESS;
       expr_datum.set_null();
+    } else if (OB_UNLIKELY(ret == OB_INVALID_DATE_VALUE)) {
+      ObObjTypeClass obj_type = ob_obj_type_class(expr.args_[0]->datum_meta_.type_);
+      if (obj_type == ObTextTC || obj_type == ObStringTC) {
+        const ObString && date_str = date->get_string();
+        LOG_USER_ERROR(OB_INVALID_DATE_VALUE, date_str.length(), date_str.ptr(), "");
+      }
     }
   } else if (OB_UNLIKELY(format->get_string().empty())) {
     expr_datum.set_null();

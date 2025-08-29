@@ -17,3 +17,5 @@ else()
   ob_unittest(test_kmeans)
   ob_unittest(test_simd_vector_op)
 endif()
+
+ob_unittest(test_vsag_adaptor)

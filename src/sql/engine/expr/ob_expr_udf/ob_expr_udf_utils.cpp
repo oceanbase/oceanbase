@@ -140,6 +140,10 @@ int ObExprUDFUtils::inner_vec_to_obj(ObIVector *in_vec, ObObj &obj, const ObObjM
           ret = common::OB_ERR_UNEXPECTED;
           LOG_WARN("invalid obj type in vec to obj transfer", K(ret), K(meta.get_type()));
         }
+        default: {
+          ret = common::OB_NOT_SUPPORTED;
+          LOG_WARN("not supported obj type in vec to obj transfer", K(ret), K(meta.get_type()));
+        }
       }
       OX (obj.meta_ = meta);
     }
@@ -183,7 +187,11 @@ int ObExprUDFUtils::dispatch_transfer_vec_to_obj(ObObj& obj, ObIVector *arg_vec,
 }
 
 template <typename RES_VEC>
-int ObExprUDFUtils::inner_obj_to_vec(ObIVector *in_vec, ObObj& res, const int64_t batch_idx)
+int ObExprUDFUtils::inner_obj_to_vec(ObIVector *in_vec,
+                                      ObObj& res,
+                                      const int64_t batch_idx,
+                                      const ObExpr &expr,
+                                      ObEvalCtx &eval_ctx)
 {
   int ret = OB_SUCCESS;
   RES_VEC *arg_vec = static_cast<RES_VEC *>(in_vec);
@@ -212,14 +220,41 @@ int ObExprUDFUtils::inner_obj_to_vec(ObIVector *in_vec, ObObj& res, const int64_
     case ObRoaringBitmapType:
     case ObLobType: {
       const ObString tmp = res.get_string();
-      arg_vec->set_string(batch_idx, tmp);
+      char *buf = expr.get_str_res_mem(eval_ctx, tmp.length());
+      if (OB_ISNULL(buf)) {
+        ret = common::OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(ret));
+      } else {
+        MEMMOVE(buf, tmp.ptr(), tmp.length());
+      }
+      OX (arg_vec->set_string(batch_idx, buf, tmp.length()));
       break;
     }
     case ObNumberType:
     case ObUNumberType:
     case ObNumberFloatType: {
-      const number::ObNumber& tmp = res.get_number();
-      arg_vec->set_number(batch_idx, tmp);
+      int64_t buf_len = sizeof(res.nmb_desc_);
+      int64_t nmb_digits_len = 0;
+      if (OB_LIKELY(1 == res.nmb_desc_.len_)) {
+        nmb_digits_len = sizeof(*res.v_.nmb_digits_);
+      } else {
+        nmb_digits_len = sizeof(*res.v_.nmb_digits_) * res.nmb_desc_.len_;
+      }
+      buf_len += nmb_digits_len;
+      char *buf = expr.get_str_res_mem(eval_ctx, buf_len);
+      if (OB_ISNULL(buf)) {
+        ret = common::OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(ret));
+      } else {
+        MEMMOVE(buf, &res.nmb_desc_, sizeof(res.nmb_desc_));
+        MEMMOVE(buf + sizeof(res.nmb_desc_), res.v_.nmb_digits_, nmb_digits_len);
+      }
+      if (OB_FAIL(ret)) {
+      } else {
+        const number::ObNumber& tmp = number::ObNumber(res.nmb_desc_.desc_,
+                              reinterpret_cast<uint32_t *>(buf + sizeof(res.nmb_desc_)));
+        arg_vec->set_number(batch_idx, tmp);
+      }
       break;
     }
     case ObTinyIntType:
@@ -308,34 +343,42 @@ int ObExprUDFUtils::inner_obj_to_vec(ObIVector *in_vec, ObObj& res, const int64_
       ret = common::OB_ERR_UNEXPECTED;
       LOG_WARN("invalid obj type in obj to vec transfer", K(ret), K(res));
     }
+    default: {
+      ret = common::OB_NOT_SUPPORTED;
+      LOG_WARN("not supported obj type in obj to vec transfer", K(ret), K(res));
+    }
   }
   return ret;
 }
 
 template<VecValueTypeClass vec_tc>
-int ObExprUDFUtils::dispatch_transfer_obj_to_vec(ObObj& result, ObIVector *res_vec, int64_t idx)
+int ObExprUDFUtils::dispatch_transfer_obj_to_vec(ObObj& result,
+                                                  ObIVector *res_vec,
+                                                  int64_t idx,
+                                                  const ObExpr &expr,
+                                                  ObEvalCtx &eval_ctx)
 {
   int ret = OB_SUCCESS;
   VectorFormat res_format = res_vec->get_format();
   switch (res_format) {
     case VEC_UNIFORM_CONST: {
-      ret = inner_obj_to_vec<ObUniformVector<true, VectorBasicOp<vec_tc>>>(res_vec, result, idx);
+      ret = inner_obj_to_vec<ObUniformVector<true, VectorBasicOp<vec_tc>>>(res_vec, result, idx, expr, eval_ctx);
       break;
     }
     case VEC_UNIFORM: {
-      ret = inner_obj_to_vec<ObUniformVector<false, VectorBasicOp<vec_tc>>>(res_vec, result, idx);
+      ret = inner_obj_to_vec<ObUniformVector<false, VectorBasicOp<vec_tc>>>(res_vec, result, idx, expr, eval_ctx);
       break;
     }
     case VEC_DISCRETE: {
-      ret = inner_obj_to_vec<ObDiscreteVector<VectorBasicOp<vec_tc>>>(res_vec, result, idx);
+      ret = inner_obj_to_vec<ObDiscreteVector<VectorBasicOp<vec_tc>>>(res_vec, result, idx, expr, eval_ctx);
       break;
     }
     case VEC_CONTINUOUS: {
-      ret = inner_obj_to_vec<ObContinuousVector<VectorBasicOp<vec_tc>>>(res_vec, result, idx);
+      ret = inner_obj_to_vec<ObContinuousVector<VectorBasicOp<vec_tc>>>(res_vec, result, idx, expr, eval_ctx);
       break;
     }
     case VEC_FIXED: {
-      ret = inner_obj_to_vec<ObFixedLengthVector<RTCType<vec_tc>, VectorBasicOp<vec_tc>>>(res_vec, result, idx);
+      ret = inner_obj_to_vec<ObFixedLengthVector<RTCType<vec_tc>, VectorBasicOp<vec_tc>>>(res_vec, result, idx, expr, eval_ctx);
       break;
     }
     default: {
@@ -407,13 +450,17 @@ case VecType: \
   return ret;
 }
 
-int ObExprUDFUtils::transfer_obj_to_vec(ObObj& result, ObIVector *res_vec, int64_t idx, const ObDatumMeta &meta)
+int ObExprUDFUtils::transfer_obj_to_vec(ObObj& result,
+                                        ObIVector *res_vec,
+                                        int64_t idx,
+                                        const ObExpr &expr,
+                                        ObEvalCtx &eval_ctx)
 {
   int ret = OB_SUCCESS;
 
 #define HANDLE_VEC_TC_OBJ2VEC(ObjType, VecType) \
   case ObjType: { \
-    ret = dispatch_transfer_obj_to_vec<VecType>(result, res_vec, idx); \
+    ret = dispatch_transfer_obj_to_vec<VecType>(result, res_vec, idx, expr, eval_ctx); \
   } break;
 
   switch(result.meta_.get_type()){
@@ -473,25 +520,25 @@ int ObExprUDFUtils::transfer_obj_to_vec(ObObj& result, ObIVector *res_vec, int64
 
     case ObUDoubleType:
     case ObDoubleType: {
-      if (meta.scale_ > SCALE_UNKNOWN_YET && meta.scale_ <= OB_MAX_DOUBLE_FLOAT_SCALE) {
-        ret = dispatch_transfer_obj_to_vec<VecValueTypeClass::VEC_TC_FIXED_DOUBLE>(result, res_vec, idx);
+      if (expr.datum_meta_.scale_ > SCALE_UNKNOWN_YET && expr.datum_meta_.scale_ <= OB_MAX_DOUBLE_FLOAT_SCALE) {
+        ret = dispatch_transfer_obj_to_vec<VecValueTypeClass::VEC_TC_FIXED_DOUBLE>(result, res_vec, idx, expr, eval_ctx);
       } else {
-        ret = dispatch_transfer_obj_to_vec<VecValueTypeClass::VEC_TC_DOUBLE>(result, res_vec, idx);
+        ret = dispatch_transfer_obj_to_vec<VecValueTypeClass::VEC_TC_DOUBLE>(result, res_vec, idx, expr, eval_ctx);
       }
       break;
     }
     case ObDecimalIntType: {
-      const int16_t precision = meta.precision_;
+      const int16_t precision = expr.datum_meta_.precision_;
       if (precision <= MAX_PRECISION_DECIMAL_INT_32) {
-        ret = dispatch_transfer_obj_to_vec<VecValueTypeClass::VEC_TC_DEC_INT32>(result, res_vec, idx);
+        ret = dispatch_transfer_obj_to_vec<VecValueTypeClass::VEC_TC_DEC_INT32>(result, res_vec, idx, expr, eval_ctx);
       } else if (precision <= MAX_PRECISION_DECIMAL_INT_64) {
-        ret = dispatch_transfer_obj_to_vec<VecValueTypeClass::VEC_TC_DEC_INT64>(result, res_vec, idx);
+        ret = dispatch_transfer_obj_to_vec<VecValueTypeClass::VEC_TC_DEC_INT64>(result, res_vec, idx, expr, eval_ctx);
       } else if (precision <= MAX_PRECISION_DECIMAL_INT_128) {
-        ret = dispatch_transfer_obj_to_vec<VecValueTypeClass::VEC_TC_DEC_INT128>(result, res_vec, idx);
+        ret = dispatch_transfer_obj_to_vec<VecValueTypeClass::VEC_TC_DEC_INT128>(result, res_vec, idx, expr, eval_ctx);
       } else if (precision <= MAX_PRECISION_DECIMAL_INT_256) {
-        ret = dispatch_transfer_obj_to_vec<VecValueTypeClass::VEC_TC_DEC_INT256>(result, res_vec, idx);
+        ret = dispatch_transfer_obj_to_vec<VecValueTypeClass::VEC_TC_DEC_INT256>(result, res_vec, idx, expr, eval_ctx);
       } else if (precision <= MAX_PRECISION_DECIMAL_INT_512) {
-        ret = dispatch_transfer_obj_to_vec<VecValueTypeClass::VEC_TC_DEC_INT512>(result, res_vec, idx);
+        ret = dispatch_transfer_obj_to_vec<VecValueTypeClass::VEC_TC_DEC_INT512>(result, res_vec, idx, expr, eval_ctx);
       }
       break;
     }
@@ -825,7 +872,12 @@ int ObExprUDFUtils::process_out_params(const ObObj *objs_stack,
           }
         }
       }
-      OX (result.copy_value_or_obj(*modify, true));
+      if (result.is_pl_extend()
+          && (result.get_meta().get_extend_type() == pl::PL_REF_CURSOR_TYPE || result.get_meta().get_extend_type() == pl::PL_CURSOR_TYPE)) {
+        OZ (ObSPIService::spi_copy_ref_cursor(ctx, NULL, &result, modify));
+      } else {
+        OX (result.copy_value_or_obj(*modify, true));
+      }
       OX (modify->set_param_meta());
       if (OB_SUCC(ret) && iparams.at(i).is_ref_cursor_type()) {
         modify->set_is_ref_cursor_type(true);
@@ -900,7 +952,12 @@ int ObExprUDFUtils::process_singal_out_param(int64_t i,
           LOG_WARN("process function out param failed, type mismatch", K(ret),
                                                                  K(iparams.at(i)), K(*modify));
         } else {
-          OX (iparams.at(i).copy_value_or_obj(*modify, true));
+          if (iparams.at(i).is_pl_extend()
+              && (iparams.at(i).get_meta().get_extend_type() == pl::PL_REF_CURSOR_TYPE || iparams.at(i).get_meta().get_extend_type() == pl::PL_CURSOR_TYPE)) {
+            OZ (ObSPIService::spi_copy_ref_cursor(ctx, NULL, &iparams.at(i), modify));
+          } else {
+            OX (iparams.at(i).copy_value_or_obj(*modify, true));
+          }
           OX (modify->set_param_meta());
           if (OB_SUCC(ret) && iparams.at(i).is_ref_cursor_type()) {
             modify->set_is_ref_cursor_type(true);

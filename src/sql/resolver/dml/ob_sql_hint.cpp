@@ -223,36 +223,30 @@ int ObQueryHint::set_stmt_id_map_info(const ObDMLStmt &stmt, ObString &qb_name)
   return ret;
 }
 
-int ObQueryHint::check_and_set_params_from_hint(const ObResolverParams &params, const ObDMLStmt &stmt) const
+int ObQueryHint::set_params_from_hint(const ObResolverParams &params) const
 {
   int ret = OB_SUCCESS;
-  const ObSQLSessionInfo *session_info = NULL;
-  bool has_enable_param = false;
+  ObSQLSessionInfo *session_info = NULL;
   ObQueryCtx *query_ctx = NULL;
-  if (OB_ISNULL(session_info = params.session_info_)
-      || OB_ISNULL(query_ctx = params.query_ctx_)) {
+  if (OB_ISNULL(session_info = params.session_info_) ||
+      OB_ISNULL(query_ctx = params.query_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(session_info), K(query_ctx));
-  } else if (T_NONE_SCOPE != params.hidden_column_scope_ &&
-             OB_FAIL(global_hint_.opt_params_.has_enable_opt_param(ObOptParamHint::OptParamType::HIDDEN_COLUMN_VISIBLE, has_enable_param))) {
-    LOG_WARN("failed to check has enable opt param", K(ret));
-  } else if (OB_UNLIKELY(T_NONE_SCOPE != params.hidden_column_scope_ && !has_enable_param)) {
-    if (OB_ISNULL(params.hidden_column_name_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret), K(params.hidden_column_scope_), K(params.hidden_column_name_));
-    } else {
-      ret = OB_ERR_BAD_FIELD_ERROR;
-      LOG_WARN("hidden columns not allowed", K(ret));
-      ObString column_name(params.hidden_column_name_);
-      ObString scope_name = ObString::make_string(get_scope_name(params.hidden_column_scope_));
-      LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(),
-                                            scope_name.length(), scope_name.ptr());
-    }
-  } else if (OB_FAIL(check_ddl_schema_version_from_hint(stmt))) {
-    LOG_WARN("failed to check ddl schema version", K(ret));
   } else {
+    ObSqlCtx *sql_ctx = NULL;
+    ObExecContext *exec_ctx = NULL;
     if (global_hint_.query_timeout_ > 0) {
       THIS_WORKER.set_timeout_ts(session_info->get_query_start_time() + global_hint_.query_timeout_);
+    }
+    if (!OB_ISNULL(exec_ctx = session_info->get_cur_exec_ctx()) &&
+        !OB_ISNULL(sql_ctx = exec_ctx->get_sql_ctx())) {
+      sql_ctx->force_print_trace_ = global_hint_.force_trace_log_;
+    }
+    if (global_hint_.log_level_.length() > 0) {
+      const ObString &log_level = global_hint_.log_level_;
+      if (OB_UNLIKELY(OB_SUCCESS != process_thread_log_id_level_map(log_level.ptr(), log_level.length()))) {
+        LOG_WARN("Failed to process thread log id level map");
+      }
     }
     if (global_hint_.has_valid_opt_features_version()) {
       query_ctx->optimizer_features_enable_version_ = global_hint_.opt_features_version_;
@@ -263,40 +257,21 @@ int ObQueryHint::check_and_set_params_from_hint(const ObResolverParams &params, 
   return ret;
 }
 
-int ObQueryHint::check_ddl_schema_version_from_hint(const ObDMLStmt &stmt,
-                                                    const ObDDLSchemaVersionHint& ddlSchemaVersionHint) const
+int ObQueryHint::check_ddl_schema_version_from_hint(TableItem *table_item) const
 {
   int ret = OB_SUCCESS;
-  TableItem* item = NULL;
-  if (OB_FAIL(get_basic_table_without_index_by_hint_table(stmt, ddlSchemaVersionHint.table_, item))) {
-    LOG_WARN("failed to get table item by hint table", K(ret));
-  } else if (OB_ISNULL(item)) {
-    ObSEArray<ObSelectStmt*, 8> child_stmts;
-    if (OB_FAIL(stmt.get_child_stmts(child_stmts))) {
-      LOG_WARN("failed to get child stmts", K(ret));
-    }
-    for (int64_t index = 0; OB_SUCC(ret) && index < child_stmts.count(); ++index) {
-      if (OB_FAIL(SMART_CALL(check_ddl_schema_version_from_hint(*child_stmts.at(index),
-                                                        ddlSchemaVersionHint)))) {
-        LOG_WARN("failed to check ddl schema version from hint", K(ret));
-      }
-    }
-  } else if (OB_LIKELY(item->ddl_schema_version_ > 0) &&
-             OB_UNLIKELY(ddlSchemaVersionHint.schema_version_ != item->ddl_schema_version_)) {
-    ret = OB_DDL_SCHEMA_VERSION_NOT_MATCH;
-    LOG_USER_ERROR(OB_DDL_SCHEMA_VERSION_NOT_MATCH);
-    LOG_WARN("failed to check ddl schema version", K(ret), K(item->ddl_schema_version_), K(ddlSchemaVersionHint.schema_version_));
+  if (OB_ISNULL(table_item)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("NULL ptr", K(table_item), K(ret));
   }
-  return ret;
-}
-
-int ObQueryHint::check_ddl_schema_version_from_hint(const ObDMLStmt &stmt) const
-{
-  int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < global_hint_.ob_ddl_schema_versions_.count(); i++) {
-    if (OB_FAIL(check_ddl_schema_version_from_hint(stmt, 
-                                                   global_hint_.ob_ddl_schema_versions_.at(i)))) {
-      LOG_WARN("failed to check ddl schema version from hint", K(ret));
+    const ObDDLSchemaVersionHint &ddlSchemaVersionHint = global_hint_.ob_ddl_schema_versions_.at(i);
+    if (ddlSchemaVersionHint.table_.is_match_physical_table_item(cs_type_, *table_item) &&
+        OB_LIKELY(table_item->ddl_schema_version_ > 0) &&
+        OB_UNLIKELY(ddlSchemaVersionHint.schema_version_ != table_item->ddl_schema_version_)) {
+      ret = OB_DDL_SCHEMA_VERSION_NOT_MATCH;
+      LOG_USER_ERROR(OB_DDL_SCHEMA_VERSION_NOT_MATCH);
+      LOG_WARN("failed to check ddl schema version", K(ret), K(table_item->ddl_schema_version_), K(ddlSchemaVersionHint.schema_version_));
     }
   }
   return ret;
@@ -305,6 +280,7 @@ int ObQueryHint::check_ddl_schema_version_from_hint(const ObDMLStmt &stmt) const
 // init query hint after resolve all stmt.
 int ObQueryHint::init_query_hint(ObIAllocator *allocator,
                                  ObSQLSessionInfo *session_info,
+                                 const ObGlobalHint &global_hint,
                                  ObDMLStmt *stmt)
 {
   int ret = OB_SUCCESS;
@@ -322,6 +298,8 @@ int ObQueryHint::init_query_hint(ObIAllocator *allocator,
     LOG_WARN("failed to generate stmt name after resolve", K(ret));
   } else if (OB_FAIL(distribute_hint_to_orig_stmt(stmt))) {
     LOG_WARN("faild to distribute hint to orig stmt", K(ret));
+  } else if (OB_FAIL(!has_outline_data() && !has_user_def_outline() && OB_FAIL(global_hint_.assign(global_hint)))) {
+    LOG_WARN("failed to combine global hint", K(ret));
   } else {
     LOG_TRACE("finish init query hint", K(*this));
   }
@@ -903,33 +881,6 @@ int ObQueryHint::get_table_item_by_hint_table(const ObDMLStmt &stmt,
     table_item = NULL != explicit_matched ? explicit_matched : implicit_matched;
     if (NULL == table_item) {
       LOG_TRACE("no table item matched hint table", K(table), K(table_items));
-    }
-  }
-  return ret;
-}
-
-int ObQueryHint::get_basic_table_without_index_by_hint_table(const ObDMLStmt &stmt,
-                                                             const ObTableInHint &table,
-                                                             TableItem *&table_item) const
-{
-  int ret = OB_SUCCESS;
-  table_item = NULL;
-  const ObIArray<TableItem*> &table_items = stmt.get_table_items();
-  int64_t num = table_items.count();
-  TableItem *item = NULL;
-  table_item = NULL;
-  for (int64_t i = 0; OB_SUCC(ret) && NULL == table_item && i < num; ++i) {
-    if (OB_ISNULL(item = table_items.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected table item.", K(ret), K(item));
-    } else if (!item->is_basic_table()) {
-      /* do nothing */
-    } else if (OB_LIKELY(item->ddl_table_id_ != OB_INVALID_ID) && OB_UNLIKELY(item->ddl_table_id_ != item->ref_id_)) {
-      // do nothing
-    } else if (!table.is_match_physical_table_item(cs_type_, *item)) {
-      /* do nothing */
-    } else {
-      table_item = item;
     }
   }
   return ret;
@@ -1771,7 +1722,8 @@ int ObLogPlanHint::get_aggregation_info(bool &force_use_hash,
                                         bool &force_partition_wise,
                                         bool &force_dist_hash,
                                         bool &force_pull_to_local,
-                                        bool &force_hash_local) const
+                                        bool &force_hash_local,
+                                        bool &force_pushdown_group_by) const
 {
   int ret = OB_SUCCESS;
   force_use_hash = false;
@@ -1783,6 +1735,7 @@ int ObLogPlanHint::get_aggregation_info(bool &force_use_hash,
   force_dist_hash = false;
   force_pull_to_local = false;
   force_hash_local = false;
+  force_pushdown_group_by = pushdown_group_by();
   const ObAggHint *agg_hint = static_cast<const ObAggHint*>(get_normal_hint(T_USE_HASH_AGGREGATE));
   const ObPQHint *pq_hint = static_cast<const ObPQHint*>(get_normal_hint(T_PQ_GBY_HINT));
   const bool enable_pq_hint = COMPAT_VERSION_4_3_3 <= optimizer_features_enable_version_
@@ -2455,6 +2408,7 @@ int LogJoinHint::add_join_hint(const ObJoinHint &join_hint)
       } else {
         dist_methods_ |= join_hint.get_dist_algo();
       }
+      parallel_ = join_hint.get_parallel();
       break;
     }
     case T_PQ_MAP:  {

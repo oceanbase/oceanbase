@@ -98,12 +98,12 @@ class ObLSLifeIAgent
 {
 public:
   ObLSLifeIAgent() {}
-  virtual ~ObLSLifeIAgent () {} 
+  virtual ~ObLSLifeIAgent () {}
   //create new ls
   virtual int create_new_ls(const ObLSStatusInfo &ls_info,
                             const SCN &create_scn,
                             const common::ObString &zone_priority,
-                            const share::ObTenantSwitchoverStatus &working_sw_status,
+                            const int64_t switchover_epoch,
                             ObMySQLTransaction &trans) = 0;
   //drop ls
   virtual int drop_ls(const uint64_t &tenant_id,

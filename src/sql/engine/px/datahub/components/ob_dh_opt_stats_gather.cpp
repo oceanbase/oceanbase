@@ -96,7 +96,7 @@ OB_SERIALIZE_MEMBER((ObOptStatsGatherWholeMsg, ObDatahubWholeMsg), ready_state_)
 
 int ObOptStatsGatherPieceMsgListener::on_message(
   ObOptStatsGatherPieceMsgCtx &piece_ctx,
-  common::ObIArray<ObPxSqcMeta *> &sqcs,
+  common::ObIArray<ObPxSqcMeta> &sqcs,
   const ObOptStatsGatherPieceMsg &pkt)
 {
   int ret = OB_SUCCESS;

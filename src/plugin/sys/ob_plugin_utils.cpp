@@ -11,18 +11,35 @@
  */
 
 #include "plugin/sys/ob_plugin_utils.h"
+#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase {
 using namespace common;
+using namespace lib;
 namespace plugin {
 
 lib::ObLabel OB_PLUGIN_MEMORY_LABEL = lib::ObLabel("PluginMod");
+
+ObMemAttr ob_plugin_mem_attr()
+{
+  return ob_plugin_mem_attr(OB_PLUGIN_MEMORY_LABEL);
+}
+
+ObMemAttr ob_plugin_mem_attr(lib::ObLabel label)
+{
+  int64_t tenant_id = MTL_ID();
+  if (OB_INVALID_TENANT_ID == tenant_id) {
+    tenant_id = OB_SERVER_TENANT_ID;
+  }
+  return ObMemAttr(tenant_id, label);
+}
 
 const char *ob_plugin_type_to_string(ObPluginType type)
 {
   switch (type) {
     case OBP_PLUGIN_TYPE_INVALID:      return "INVALID";
     case OBP_PLUGIN_TYPE_FT_PARSER:    return "FTPARSER";
+    case OBP_PLUGIN_TYPE_EXTERNAL:     return "EXTERNAL TABLE";
     default:                           return "UNKNOWN PLUGIN TYPE";
   }
 }
@@ -78,6 +95,8 @@ int ObPluginNameHash::operator() (const ObString &name, uint64_t &res) const
   return ret;
 }
 
+/// TODO 处理一下，能够容忍字符串包含最后的'\0'也可以不包含
+/// include pluginNameHash
 bool ObPluginNameEqual::operator()(const ObString &name1, const ObString &name2) const
 {
   bool ret = false;

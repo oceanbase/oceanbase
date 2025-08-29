@@ -21,7 +21,7 @@ namespace oceanbase
 {
 namespace common
 {
-class ObMySQLProxy;
+class ObISQLClient;
 }
 namespace share
 {
@@ -42,8 +42,11 @@ const static int DEFAULT_RESERVE_SIZE = 32;
 typedef common::ObSEArray<SchemaObj, DEFAULT_RESERVE_SIZE> SchemaObjs;
 public:
   ObLatestSchemaGuard() = delete;
+  // The sql proxy of schema_service is used by default
+  // If you want to get the schema of the current transaction, you can pass in a transaction
   ObLatestSchemaGuard(share::schema::ObMultiVersionSchemaService *schema_service,
-                      const uint64_t tenant_id);
+                      const uint64_t tenant_id,
+                      common::ObISQLClient *sql_client = nullptr);
   ~ObLatestSchemaGuard();
 public:
   /* -------------- interfaces without cache ---------------*/
@@ -256,6 +259,18 @@ public:
       common::ObIArray<ObSAuditSchema> &audit_schemas);
 
   // 1. won't cache
+  // 2. return audits which is [audit_type] and owner is [object_id].
+  // @param[in]:
+  // - audit_type
+  // - object_id: owner id
+  // @param[out]:
+  // - audit_schemas
+  int get_audit_schemas_in_owner(
+      const oceanbase::share::schema::ObSAuditType audit_type,
+      const uint64_t object_id,
+      common::ObIArray<ObSAuditSchema> &audit_schemas);
+
+  // 1. won't cache
   //
   // https://docs.oracle.com/cd/E18283_01/server.112/e17118/sql_elements008.htm
   // Within a namespace, no two objects can have the same name.
@@ -299,6 +314,46 @@ public:
       const ObString &index_name,
       const bool is_built_in,
       ObIndexSchemaInfo &index_info);
+
+  // 1. won't cache
+  // 2. this function is used to get obj_privs of specified object
+  // @param[in]:
+  // - obj_id: the obj_id that privs belong to
+  // - obj_type: the type of obj
+  // @param[out]:
+  // - obj_privs: return empty if obj has no privs
+  //
+  int get_obj_privs(const uint64_t obj_id,
+                    const ObObjectType obj_type,
+                    common::ObIArray<ObObjPriv> &obj_privs);
+
+  // 1. won't cache
+  // @param[in]:
+  // - rls_id
+  // @param[out]:
+  // - rls_schema: return NULL if rls not exist
+#ifndef GET_RLS_SCHEMA
+#define GET_RLS_SCHEMA(SCHEMA, SCHEMA_TYPE) \
+  int get_##SCHEMA##s(const uint64_t rls_id, \
+                      const SCHEMA_TYPE *&rls_schema);
+  GET_RLS_SCHEMA(rls_policy, ObRlsPolicySchema);
+  GET_RLS_SCHEMA(rls_group, ObRlsGroupSchema);
+  GET_RLS_SCHEMA(rls_context, ObRlsContextSchema);
+#undef GET_RLS_SCHEMA
+#endif
+
+int get_table_schemas_in_tablegroup(
+    const uint64_t tablegroup_id,
+    common::ObIArray<const ObTableSchema *> &table_schemas);
+
+int check_database_exists_in_tablegroup(
+    const uint64_t tablegroup_id,
+    bool &exists);
+
+int get_table_id_and_table_name_in_tablegroup(
+    const uint64_t tablegroup_id,
+    common::ObIArray<ObString> &table_names,
+    common::ObIArray<uint64_t> &table_ids);
 
   /* -------------- interfaces without cache end ---------------*/
 
@@ -365,13 +420,32 @@ public:
   // - udt_info: return NULL if udt not exist
   int get_udt_info(
       const uint64_t udt_id,
-      const ObUDTTypeInfo *udt_info);
+      const ObUDTTypeInfo *&udt_info);
+  // 1. will cache trigger schema in guard
+  // @param[in]:
+  // - trigger_id
+  // @param[out]:
+  // - trigger_schema: return NULL if trigger not exist
+  int get_trigger_info(const uint64_t trigger_id,
+                       const ObTriggerInfo *&trigger_info);
+  // 1. will cache sequence schema in guard
+  // @param[in]:
+  // - sequence_id
+  // @param[out]:
+  // - sequence_schema: return NULL if sequence not exist
+  int get_sequence_schema(const uint64_t sequence_id,
+                          const ObSequenceSchema *&sequence_schema);
+
   /* -------------- interfaces with cache end ---------------*/
 private:
   int check_inner_stat_();
   int check_and_get_service_(
       ObSchemaService *&schema_service_impl,
-      common::ObMySQLProxy *&sql_proxy);
+      common::ObISQLClient *&sql_client);
+  int get_tablegroup_schema_(
+      common::ObISQLClient &sql_client,
+      const uint64_t tablegroup_id,
+      const ObTablegroupSchema *&tablegroup_schema);
 
   // For TENANT_SCHEMA, tenant_id should be OB_SYS_TENANT_ID;
   // For SYS_VARIABLE_SCHEMA, tenant_id should be equal with schema_id;
@@ -400,6 +474,7 @@ private:
   uint64_t tenant_id_;
   common::ObArenaAllocator local_allocator_;
   SchemaObjs schema_objs_;
+  common::ObISQLClient *sql_client_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLatestSchemaGuard);
 };

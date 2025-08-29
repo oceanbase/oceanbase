@@ -1141,12 +1141,25 @@ int ObLS::register_sys_service()
       REGISTER_TO_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
       REGISTER_TO_LOGSERVICE(SYS_DDL_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDDLScheduler *));
       REGISTER_TO_LOGSERVICE(DDL_SERVICE_LAUNCHER_LOG_BASE_TYPE, MTL(rootserver::ObDDLServiceLauncher *));
+#ifdef OB_BUILD_SYS_VEC_IDX
+      REGISTER_TO_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, MTL(ObPluginVectorIndexService *));
+
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(tablet_ttl_mgr_.init(this))) {
+          LOG_WARN("fail to init tablet ttl manager", KR(ret));
+        } else {
+          REGISTER_TO_LOGSERVICE(TTL_LOG_BASE_TYPE, &tablet_ttl_mgr_);
+          REGISTER_TO_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, &tablet_ttl_mgr_.get_vector_idx_scheduler());
+        }
+      }
+#endif
     }
     if (is_meta_tenant(tenant_id)) {
       REGISTER_TO_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
       REGISTER_TO_LOGSERVICE(SNAPSHOT_SCHEDULER_LOG_BASE_TYPE, MTL(ObTenantSnapshotScheduler *));
     }
   }
+
   return ret;
 }
 
@@ -1321,6 +1334,13 @@ void ObLS::unregister_sys_service_()
       UNREGISTER_FROM_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
       UNREGISTER_FROM_LOGSERVICE(SYS_DDL_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDDLScheduler*));
       UNREGISTER_FROM_LOGSERVICE(DDL_SERVICE_LAUNCHER_LOG_BASE_TYPE, MTL(rootserver::ObDDLServiceLauncher*));
+#ifdef OB_BUILD_SYS_VEC_IDX
+      UNREGISTER_FROM_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, MTL(ObPluginVectorIndexService *));
+
+      UNREGISTER_FROM_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, &tablet_ttl_mgr_.get_vector_idx_scheduler());
+      UNREGISTER_FROM_LOGSERVICE(TTL_LOG_BASE_TYPE, tablet_ttl_mgr_);
+      tablet_ttl_mgr_.destroy();
+#endif
     }
     if (is_meta_tenant(MTL_ID())) {
       ObTenantSnapshotScheduler * snapshot_scheduler = MTL(ObTenantSnapshotScheduler*);

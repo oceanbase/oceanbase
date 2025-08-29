@@ -896,13 +896,18 @@ int ObLogCommitter::handle_ddl_task_(PartTransTask *ddl_task)
     const uint64_t tenant_id = ddl_task->get_tenant_id();
     const ObTransID &trans_id = ddl_task->get_trans_id();
     int64_t local_schema_version = OB_INVALID_TIMESTAMP;
+    bool can_recycle_trans_ctx = false; // used to mark begin/commit br released, ddl_task/ls_op_trans don't have begin/commit br
 
     // Advance the transaction context state to COMMITTED
     if (OB_FAIL(trans_ctx_mgr_->get_trans_ctx(tenant_id, trans_id, trans_ctx, false))) {
       LOG_ERROR("get_trans_ctx fail", KR(ret), K(tenant_id), K(trans_id), KPC(trans_ctx), KPC(ddl_task));
     } else if (OB_FAIL(trans_ctx->commit())) {
       LOG_ERROR("TransCtx::commit fail", KR(ret), K(trans_id), KPC(trans_ctx), KPC(ddl_task));
-    } else {}
+    } else if (OB_FAIL(trans_ctx->mark_dont_have_begin_commit_br(can_recycle_trans_ctx, stop_flag_))) {
+      LOG_ERROR("TransCtx::mark_dont_have_begin_commit_br fail", KR(ret), K(trans_id), KPC(trans_ctx), KPC(ddl_task));
+    } else if (can_recycle_trans_ctx) {
+      LOG_WARN_RET(OB_STATE_NOT_MATCH, "trans not expected to be recycled here, may result in memory leak", KR(ret), K(trans_ctx));
+    }
 
     if (OB_SUCC(ret) && ddl_task->is_ddl_trans()) {
       // Set the reference count to: number of statements + 1
@@ -1261,6 +1266,12 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
       } else {
         LOG_DEBUG("trans has no valid br to output, skip this trans", KR(ret), K(trans_ctx));
         ret = OB_SUCCESS;
+        bool tmp_can_recycle_trans_ctx = false;
+        if (OB_FAIL(trans_ctx.mark_dont_have_begin_commit_br(tmp_can_recycle_trans_ctx, stop_flag_))) {
+          LOG_ERROR("mark_dont_have_begin_commit_br fail", KR(ret), K(trans_ctx));
+        } else if (tmp_can_recycle_trans_ctx) {
+          LOG_WARN_RET(OB_STATE_NOT_MATCH, "trans not expected to be recycled here, may result in memory leak", KR(ret), K(trans_ctx));
+        }
       }
     } else {
       LOG_ERROR("failed to wait for valid br", KR(ret), K(trans_ctx));
@@ -1295,6 +1306,12 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
           K(ddl_schema_version), K(part_trans_task_count));
     } else {
       LOG_DEBUG("commit trans begin", K(trans_ctx));
+
+      // Set host for BEGIN/COMMIT BR to enable TransCtx reference count management
+      // Directly point to TransCtx for easier access
+      begin_br->set_host(&trans_ctx);
+      commit_br->set_host(&trans_ctx);
+
       // push begin br to queue
       if (OB_FAIL(push_br_queue_(begin_br))) {
         if (OB_IN_STOP_STATE != ret) {

@@ -9,7 +9,7 @@
 * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 * See the Mulan PubL v2 for more details.
 */
-
+#define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/cmd/ob_location_utils_resolver.h"
 #include "sql/resolver/cmd/ob_location_utils_stmt.h"
 #include "sql/session/ob_sql_session_info.h"
@@ -29,9 +29,10 @@ ObLocationUtilsResolver::~ObLocationUtilsResolver()
 int ObLocationUtilsResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
+  ObString location_name;
   if (T_LOCATION_UTILS != parse_tree.type_) {
     ret = OB_INVALID_ARGUMENT;
-    SQL_RESV_LOG(WARN, "create stmt failed", K(ret));
+    SQL_RESV_LOG(WARN, "invalid parse tree type", K(ret));
   } else if (OB_ISNULL(parse_tree.children_)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "parse_tree.children_ is null.", K(ret));
@@ -45,7 +46,6 @@ int ObLocationUtilsResolver::resolve(const ParseNode &parse_tree)
       SQL_RESV_LOG(ERROR, "create stmt failed", K(ret));
     }
     if (OB_SUCC(ret)) {
-      ObString location_name;
       ParseNode *child_node = parse_tree.children_[LOCATION_NAME];
       location_name.assign_ptr(child_node->str_value_, static_cast<int32_t>(child_node->str_len_));
       stmt->set_location_name(location_name);
@@ -88,6 +88,20 @@ int ObLocationUtilsResolver::resolve(const ParseNode &parse_tree)
           stmt->set_pattern(pattern);
         }
       }
+    }
+  }
+
+  if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
+    ObSessionPrivInfo session_priv;
+    ObSchemaGetterGuard *schema_guard = NULL;
+    if (OB_ISNULL(params_.schema_checker_)
+        || NULL == (schema_guard = params_.schema_checker_->get_schema_guard())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema checker or schema guard is null", K(ret));
+    } else if (OB_FAIL(session_info_->get_session_priv_info(session_priv))) {
+      LOG_WARN("faile to get session priv info", K(ret));
+    } else if (OB_FAIL(schema_guard->check_location_access(session_priv, session_info_->get_enable_role_array(), location_name, true))) {
+      LOG_WARN("fail to check location access", K(ret), K(session_priv), K(location_name));
     }
   }
   return ret;

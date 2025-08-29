@@ -30,6 +30,10 @@ ObArchiveLogFetchTask::ObArchiveLogFetchTask() :
   send_task_(NULL)
 {
   max_scn_ = SCN::min_scn();
+  generate_ts_ = OB_INVALID_TIMESTAMP;
+  push_fetch_queue_ts_ = OB_INVALID_TIMESTAMP;
+  submit_dest_queue_ts_ = OB_INVALID_TIMESTAMP;
+  consume_ts_ = OB_INVALID_TIMESTAMP;
 }
 
 ObArchiveLogFetchTask::~ObArchiveLogFetchTask()
@@ -46,6 +50,10 @@ ObArchiveLogFetchTask::~ObArchiveLogFetchTask()
   start_offset_.reset();
   end_offset_.reset();
   max_scn_.reset();
+  generate_ts_ = OB_INVALID_TIMESTAMP;
+  push_fetch_queue_ts_ = OB_INVALID_TIMESTAMP;
+  submit_dest_queue_ts_ = OB_INVALID_TIMESTAMP;
+  consume_ts_ = OB_INVALID_TIMESTAMP;
 }
 
 int ObArchiveLogFetchTask::init(const uint64_t tenant_id,
@@ -74,6 +82,10 @@ int ObArchiveLogFetchTask::init(const uint64_t tenant_id,
     start_offset_ = start_lsn;
     cur_offset_ = start_lsn;
     end_offset_ = end_lsn;
+    generate_ts_ = ObTimeUtility::current_time();
+    push_fetch_queue_ts_ = OB_INVALID_TIMESTAMP;
+    submit_dest_queue_ts_ = OB_INVALID_TIMESTAMP;
+    consume_ts_ = OB_INVALID_TIMESTAMP;
   }
   return ret;
 }
@@ -153,6 +165,10 @@ bool ObArchiveLogFetchTask::is_continuous_with(const LSN &lsn) const
 }
 
 ObArchiveSendTask::ObArchiveSendTask() :
+  generate_ts_(OB_INVALID_TIMESTAMP),
+  submit_ts_(OB_INVALID_TIMESTAMP),
+  consume_ts_(OB_INVALID_TIMESTAMP),
+  finish_ts_(OB_INVALID_TIMESTAMP),
   status_(INITAL_STATUS),
   tenant_id_(OB_INVALID_TENANT_ID),
   id_(),
@@ -178,6 +194,10 @@ ObArchiveSendTask::~ObArchiveSendTask()
   max_scn_.reset();
   data_ = NULL;
   data_len_ = 0;
+  generate_ts_ = OB_INVALID_TIMESTAMP;
+  submit_ts_ = OB_INVALID_TIMESTAMP;
+  consume_ts_ = OB_INVALID_TIMESTAMP;
+  finish_ts_ = OB_INVALID_TIMESTAMP;
 }
 
 int ObArchiveSendTask::init(const uint64_t tenant_id,
@@ -208,6 +228,10 @@ int ObArchiveSendTask::init(const uint64_t tenant_id,
     start_offset_ = start_offset;
     end_offset_ = end_offset;
     max_scn_ = max_scn;
+    generate_ts_ = ObTimeUtility::current_time();
+    submit_ts_ = OB_INVALID_TIMESTAMP;
+    consume_ts_ = OB_INVALID_TIMESTAMP;
+    finish_ts_ = OB_INVALID_TIMESTAMP;
   }
   return ret;
 }

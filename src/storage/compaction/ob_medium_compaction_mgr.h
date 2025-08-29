@@ -77,9 +77,11 @@ private:
   {
     free_allocated_info();
   }
+  virtual int reset_for_retry_in_lock() override;
   void free_allocated_info();
   OB_INLINE int submit_trans_on_mds_table(const bool is_commit);
-
+private:
+  static const int64_t MAX_RETRY_TIMES = 3;
 private:
   bool is_inited_;
   bool ignore_medium_;
@@ -89,6 +91,7 @@ private:
   ObMediumCompactionInfo *medium_info_;
   common::ObIAllocator *allocator_;
   mds::MdsCtx *mds_ctx_;
+  int64_t retry_times_;
 };
 
 class ObMediumCompactionInfoList final

@@ -327,13 +327,18 @@ int ObDropVecIndexTask::process()
         }
         break;
       case ObDDLTaskStatus::DROP_AUX_INDEX_TABLE:
-        if (OB_FAIL(drop_aux_index_table(WAIT_CHILD_TASK_FINISH))) {
-          LOG_WARN("fail to prepare", K(ret));
+        if (OB_FAIL(drop_aux_index_table(ObDDLTaskStatus::DROP_VID_ROWKEY_INDEX_TABLE))) {
+          LOG_WARN("fail to drop aux index table", K(ret));
         }
         break;
-      case ObDDLTaskStatus::WAIT_CHILD_TASK_FINISH:
-        if (OB_FAIL(check_and_wait_finish(SUCCESS))) {
-          LOG_WARN("fail to check and wait task", K(ret));
+      case ObDDLTaskStatus::DROP_VID_ROWKEY_INDEX_TABLE:
+        if (OB_FAIL(wait_vid_rowkey_task_finish(ObDDLTaskStatus::DROP_ROWKEY_VID_INDEX_TABLE))) {
+          LOG_WARN("fail to drop vid rowkey index table", K(ret));
+        }
+        break;
+      case ObDDLTaskStatus::DROP_ROWKEY_VID_INDEX_TABLE:
+        if (OB_FAIL(wait_rowkey_vid_task_finish(SUCCESS))) {
+          LOG_WARN("fail to drop rowkey vid index table", K(ret));
         }
         break;
       case ObDDLTaskStatus::SUCCESS:
@@ -620,39 +625,6 @@ int ObDropVecIndexTask::drop_aux_index_table(const share::ObDDLTaskStatus &new_s
   return ret;
 }
 
-int ObDropVecIndexTask::check_and_wait_finish(const share::ObDDLTaskStatus &new_status)
-{
-  int ret = OB_SUCCESS;
-  bool has_finished = false;
-  if (OB_FAIL(create_drop_share_index_task())) {
-    LOG_WARN("fail to create drop share index child task", K(ret));
-  } else if (0 == rowkey_vid_.task_id_ && 0 == vid_rowkey_.task_id_) {
-    // If there are other vector indexes, there is no need to drop the rowkey vid auxiliary table. And the task
-    // status is set to success and skipped.
-    has_finished = true;
-  } else if (OB_FAIL(wait_share_index_child_task_finish(has_finished))) {
-    LOG_WARN("fail to wait share index child task finish", K(ret));
-  }
-#ifdef ERRSIM
-  if (OB_SUCC(ret)) {
-    ret = OB_E(common::EventTable::EN_VEC_INDEX_DROP_SHARE_TABLE_ERR) OB_SUCCESS;
-    if (OB_FAIL(ret)) {
-      has_finished = false;
-      LOG_WARN("[ERRSIM] fail to drop share index table", K(ret));
-    }
-  }
-#endif
-  if (has_finished) {
-    // overwrite return code
-    if (OB_FAIL(switch_status(new_status, true/*enable_flt*/, ret))) {
-      LOG_WARN("fail to switch status", K(ret), K(new_status));
-    } else {
-      LOG_INFO("check_and_wait_finish success", K(ret));
-    }
-  }
-  return ret;
-}
-
 int ObDropVecIndexTask::check_drop_index_finish(
     const uint64_t tenant_id,
     const int64_t task_id,
@@ -732,16 +704,95 @@ int ObDropVecIndexTask::wait_none_share_index_child_task_finish(bool &has_finish
   return ret;
 }
 
-int ObDropVecIndexTask::wait_share_index_child_task_finish(bool &has_finished)
+int ObDropVecIndexTask::wait_vid_rowkey_task_finish(const share::ObDDLTaskStatus &next_task_status)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObVecIndexDDLChildTaskInfo, 2> vec_child_tasks;
-  if (vid_rowkey_.is_valid() && OB_FAIL(vec_child_tasks.push_back(vid_rowkey_))) {
-    LOG_WARN("fail to push back vid rowkey table child task", K(ret));
-  } else if (rowkey_vid_.is_valid() && OB_FAIL(vec_child_tasks.push_back(rowkey_vid_))) {
-    LOG_WARN("fail to push back rowkey vid table child task", K(ret));
-  } else if (OB_FAIL(wait_child_task_finish(vec_child_tasks, has_finished))) {
-    LOG_WARN("fail to wait child task finish", K(ret), K(vec_child_tasks));
+  bool has_finished = false;
+  bool skip_drop_shared_table = false;
+  ObSchemaGetterGuard schema_guard;
+  LOG_DEBUG("start wait_vid_rowkey_task_finish !!", K(ret));
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.schema_service_));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id_));
+  } else if (0 == vid_rowkey_.task_id_ && vid_rowkey_.is_valid()
+             && OB_FAIL(create_drop_index_task(schema_guard, vid_rowkey_.table_id_, vid_rowkey_.index_name_, vid_rowkey_.task_id_))) {
+    LOG_WARN("fail to create drop index task", K(ret), K(vid_rowkey_));
+  } else if (OB_FAIL(update_task_message())) {
+    LOG_WARN("fail to update vid_rowkey_ to __all_ddl_task_status", K(ret));
+  } else if (-1 == vid_rowkey_.task_id_ || 0 == vid_rowkey_.task_id_) {
+    // If there are no vid_rowkey_ tables to drop, go to success
+    has_finished = true;
+    LOG_INFO("drop vid_rowkey_ index table success", K(ret));
+  } else if (OB_FAIL(check_drop_index_finish(tenant_id_, vid_rowkey_.task_id_, vid_rowkey_.table_id_, has_finished))) {
+    LOG_WARN("fail to check vid_rowkey drop index finish", K(ret));
+  }
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = OB_E(common::EventTable::EN_VEC_INDEX_DROP_SHARE_TABLE_ERR) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      has_finished = false;
+      LOG_WARN("[ERRSIM] fail to drop share index table", K(ret));
+    }
+  }
+#endif
+  if (has_finished) {
+    if (OB_FAIL(switch_status(next_task_status, true/*enable_flt*/, ret))) {
+      LOG_WARN("fail to switch status", K(ret), K(next_task_status));
+    } else {
+      LOG_INFO("wait_vid_rowkey_task_finish success", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDropVecIndexTask::wait_rowkey_vid_task_finish(const share::ObDDLTaskStatus &next_task_status)
+{
+  int ret = OB_SUCCESS;
+  bool has_finished = false;
+  ObSchemaGetterGuard schema_guard;
+  LOG_DEBUG("start wait_rowkey_vid_task_finish !!", K(ret));
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.schema_service_));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id_));
+  } else if (0 == rowkey_vid_.task_id_ && rowkey_vid_.is_valid()
+             && OB_FAIL(create_drop_index_task(schema_guard, rowkey_vid_.table_id_, rowkey_vid_.index_name_, rowkey_vid_.task_id_))) {
+    LOG_WARN("fail to create drop index task", K(ret), K(rowkey_vid_));
+  } else if (OB_FAIL(update_task_message())) {
+    LOG_WARN("fail to update rowkey_vid to __all_ddl_task_status", K(ret));
+  } else if (-1 == rowkey_vid_.task_id_ || 0 == rowkey_vid_.task_id_) {
+    // If there are no rowkey_vid_ tables to drop, go to success
+    has_finished = true;
+    LOG_INFO("drop rowkey_vid index table success", K(ret));
+  } else if (OB_FAIL(check_drop_index_finish(tenant_id_, rowkey_vid_.task_id_, rowkey_vid_.table_id_, has_finished))) {
+    LOG_WARN("fail to check rowkey_vid drop index finish", K(ret));
+  }
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = OB_E(common::EventTable::EN_VEC_INDEX_DROP_SHARE_TABLE_ERR) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      has_finished = false;
+      LOG_WARN("[ERRSIM] fail to drop share index table", K(ret));
+    }
+  }
+#endif
+  if (has_finished) {
+    if (OB_FAIL(switch_status(next_task_status, true/*enable_flt*/, ret))) {
+      LOG_WARN("fail to switch status", K(ret), K(next_task_status));
+    } else {
+      LOG_INFO("wait_rowkey_vid_task_finish success", K(ret));
+    }
   }
   return ret;
 }
@@ -811,30 +862,6 @@ int ObDropVecIndexTask::create_drop_index_task(
     LOG_INFO("drop index", K(ret), K(index_tid), K(index_name), K(task_id),
         "data table name", data_table_schema->get_table_name_str(),
         "database name", database_schema->get_database_name_str());
-  }
-  return ret;
-}
-
-int ObDropVecIndexTask::create_drop_share_index_task()
-{
-  int ret = OB_SUCCESS;
-  ObSchemaGetterGuard schema_guard;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_ISNULL(GCTX.schema_service_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), KP(GCTX.schema_service_));
-  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
-    LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id_));
-  } else if (0 == rowkey_vid_.task_id_ && rowkey_vid_.is_valid()
-      && OB_FAIL(create_drop_index_task(schema_guard, rowkey_vid_.table_id_, rowkey_vid_.index_name_, rowkey_vid_.task_id_))) {
-    LOG_WARN("fail to create drop index task", K(ret), K(rowkey_vid_));
-  } else if (0 == vid_rowkey_.task_id_ && vid_rowkey_.is_valid()
-      && OB_FAIL(create_drop_index_task(schema_guard, vid_rowkey_.table_id_, vid_rowkey_.index_name_, vid_rowkey_.task_id_))) {
-    LOG_WARN("fail to create drop index task", K(ret), K(vid_rowkey_));
-  } else if (OB_FAIL(update_task_message())) {
-    LOG_WARN("fail to update vid_rowkey_ and rowkey_vid_ to __all_ddl_task_status", K(ret));
   }
   return ret;
 }

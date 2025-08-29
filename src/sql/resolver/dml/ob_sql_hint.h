@@ -82,11 +82,9 @@ struct ObQueryHint {
   const ObHints* get_stmt_id_hints(int64_t stmt_id) const;
   int add_stmt_id_map(const int64_t stmt_id, stmt::StmtType stmt_type);
   int set_stmt_id_map_info(const ObDMLStmt &stmt, ObString &qb_name);
-  int init_query_hint(ObIAllocator *allocator, ObSQLSessionInfo *session_info, ObDMLStmt *stmt);
-  int check_and_set_params_from_hint(const ObResolverParams &params, const ObDMLStmt &stmt) const;
-  int check_ddl_schema_version_from_hint(const ObDMLStmt &stmt) const;
-  int check_ddl_schema_version_from_hint(const ObDMLStmt &stmt,
-                                         const ObDDLSchemaVersionHint& ddlSchemaVersionHint) const;
+  int init_query_hint(ObIAllocator *allocator, ObSQLSessionInfo *session_info, const ObGlobalHint &global_hint, ObDMLStmt *stmt);
+  int set_params_from_hint(const ObResolverParams &params) const;
+  int check_ddl_schema_version_from_hint(TableItem *table_item) const;
   int distribute_hint_to_orig_stmt(ObDMLStmt *stmt);
   int adjust_qb_name_for_stmt(ObIAllocator &allocator,
                               ObDMLStmt &stmt,
@@ -140,9 +138,6 @@ struct ObQueryHint {
   int get_table_item_by_hint_table(const ObDMLStmt &stmt,
                                    const ObTableInHint &table,
                                    TableItem *&table_item) const;
-  int get_basic_table_without_index_by_hint_table(const ObDMLStmt &stmt,
-                                                  const ObTableInHint &table,
-                                                  TableItem *&table_item) const;
   bool has_hint_exclude_concurrent() const {  return !qb_hints_.empty() || !stmt_id_hints_.empty()
                                                      || global_hint_.has_hint_exclude_concurrent(); }
 
@@ -259,6 +254,7 @@ struct LogJoinHint
   LogJoinHint() : join_tables_(),
                   local_methods_(0),
                   dist_methods_(0),
+                  parallel_(ObGlobalHint::UNSET_PARALLEL),
                   slave_mapping_(NULL),
                   nl_material_(NULL),
                   local_method_hints_(),
@@ -271,6 +267,7 @@ struct LogJoinHint
                K_(local_methods),
                K_(dist_methods),
                K_(slave_mapping),
+               K_(parallel),
                K_(nl_material),
                K_(local_method_hints),
                K_(dist_method_hints));
@@ -278,6 +275,7 @@ struct LogJoinHint
   ObRelIds join_tables_;
   int64_t local_methods_;
   int64_t dist_methods_;
+  int64_t parallel_;
   const ObJoinHint *slave_mapping_;
   const ObJoinHint *nl_material_;
   ObSEArray<const ObJoinHint*, 4, common::ModulePageAllocator, true> local_method_hints_;
@@ -489,7 +487,8 @@ struct ObLogPlanHint
                            bool &force_partition_wise,
                            bool &force_dist_hash,
                            bool &force_pull_to_local,
-                           bool &force_hash_local) const;
+                           bool &force_hash_local,
+                           bool &force_pushdown_group_by) const;
   int get_aggregation_dop(int64_t &dop) const;
   int get_distinct_info(bool &force_use_hash,
                         bool &force_use_merge,

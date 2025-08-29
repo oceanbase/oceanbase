@@ -23,6 +23,23 @@ namespace oceanbase
 {
 namespace logservice
 {
+
+struct ObRemoteFetchTaskStat
+{
+  int64_t fetch_log_size_ = 0;
+  int64_t gen_ts_ = OB_INVALID_TIMESTAMP;
+  int64_t start_fetch_ts_ = OB_INVALID_TIMESTAMP;
+  int64_t finish_fetch_ts_ = OB_INVALID_TIMESTAMP;
+  int64_t start_submit_ts_ = OB_INVALID_TIMESTAMP;
+  int64_t finish_submit_ts_ = OB_INVALID_TIMESTAMP;
+  TO_STRING_KV(K_(fetch_log_size),
+    K_(gen_ts),
+    "gen_to_fetch_time", start_fetch_ts_ - gen_ts_,
+    "fetch_log_time", finish_fetch_ts_ - start_fetch_ts_,
+    "fetch_to_submit_time", start_submit_ts_ - finish_fetch_ts_,
+    "submit_log_time", finish_submit_ts_ - start_submit_ts_);
+};
+
 // The granularity for Restore Service to schedule log fetch.
 // ObFetchLogTask is produced by Restore Service and consumed by FetchLogWorkers.
 //
@@ -56,6 +73,7 @@ public:
   share::SCN max_fetch_scn_;     // 拉取日志最大scn
   share::SCN max_submit_scn_;    // 提交日志最大scn
   ObRemoteLogGroupEntryIterator iter_;
+  ObRemoteFetchTaskStat task_stat_;
 };
 
 struct FetchLogTaskCompare final

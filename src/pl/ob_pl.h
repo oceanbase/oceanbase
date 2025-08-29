@@ -654,6 +654,7 @@ class ObPLPackageGuard;
 #define IDX_PLEXECCTX_FUNC 6
 #define IDX_PLEXECCTX_IN 7
 #define IDX_PLEXECCTX_PL_CTX 8
+#define IDX_PLEXECCTX_TMP_ALLOCATOR 9
 
 struct ObPLExecCtx : public ObPLINS
 {
@@ -668,11 +669,14 @@ struct ObPLExecCtx : public ObPLINS
               ObPLPackageGuard *guard = NULL) :
       allocator_(allocator), exec_ctx_(exec_ctx), params_(params),
       result_(result), status_(status), func_(func),
-      in_function_(in_function), pl_ctx_(NULL), nocopy_params_(nocopy_params), guard_(guard),
-      local_expr_alloc_("PLBlockExpr", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
+      in_function_(in_function), pl_ctx_(NULL), tmp_allocator_(NULL),
+      nocopy_params_(nocopy_params), guard_(guard),
+      local_expr_alloc_("PLBlockExpr", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      tmp_alloc_for_copy_param_("PLTmpAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
   {
     if (NULL != exec_ctx && NULL != exec_ctx_->get_my_session()) {
       pl_ctx_ = exec_ctx_->get_my_session()->get_pl_context();
+      tmp_allocator_ = &tmp_alloc_for_copy_param_;
     }
   }
 
@@ -699,9 +703,11 @@ struct ObPLExecCtx : public ObPLINS
   ObPLFunction *func_; // 对应该执行上下文的func_
   bool in_function_; //记录当前是否在function中
   ObPLContext *pl_ctx_; // for error stack
+  common::ObIAllocator *tmp_allocator_; // tmp allocator for copy param
   const common::ObIArray<int64_t> *nocopy_params_; //用于描述nocopy参数
   ObPLPackageGuard *guard_; //对应该次执行的package_guard
   ObArenaAllocator local_expr_alloc_;
+  ObArenaAllocator tmp_alloc_for_copy_param_;
 };
 
 // backup and restore ObExecContext attributes
@@ -760,14 +766,15 @@ public:
     pure_plsql_exec_time_(0),
     pure_sub_plsql_exec_time_(0),
     profiler_time_stack_(nullptr),
-    need_free_()
+    need_free_(),
+    param_converted_()
   { }
   virtual ~ObPLExecState();
 
   int init(const ParamStore *params = NULL, bool is_anonymous = false);
-  int defend_stored_routine_change(const ObObjParam &actual_param, const ObPLDataType &formal_param_type, int64_t param_idx);
+  int defend_stored_routine_change(const ObObjParam &actual_param, const ObPLDataType &formal_param_type, int64_t param_idx, bool is_anonymous);
   int check_anonymous_collection_compatible(const ObPLComposite &composite, const ObPLDataType &dest_type, bool &need_cast);
-  int convert_composite(ObObjParam &param, const ObPLDataType &dest_type);
+  static int convert_composite(ObPLExecCtx &ctx, ObObjParam &param, int64_t dest_type_id);
   int init_params_simple(const ParamStore *params = NULL, bool is_anonymous = false);
   int init_params(const ParamStore *params = NULL, bool is_anonymous = false);
   int execute();
@@ -780,7 +787,7 @@ public:
   inline ParamStore &get_params() { return phy_plan_ctx_->get_param_store_for_update(); }
   ObPLFunction &get_function() { return func_; }
   int get_var(int64_t var_idx, ObObjParam& result);
-  int set_var(int64_t var_idx, const ObObjParam& value);
+  int set_var(int64_t var_idx, const ObObjParam& value, bool set_var_from_local = false);
   ObPLExecCtx& get_exec_ctx() { return ctx_; }
   int check_pl_execute_priv(ObSchemaGetterGuard &guard,
                             const uint64_t tenant_id,
@@ -838,6 +845,10 @@ public:
   {
     return need_free_.count() > i ? need_free_.at(i) : false;
   }
+  bool param_converted(int64_t i)
+  {
+    return param_converted_.count() > i ? param_converted_.at(i) : false;
+  }
   ObPLContext *get_top_pl_context() { return top_context_; }
   ExecCtxBak &get_exec_ctx_bak() { return self_exec_ctx_bak_; }
 
@@ -871,6 +882,7 @@ private:
   int64_t pure_sub_plsql_exec_time_;
   ObPLProfilerTimeStack *profiler_time_stack_;
   common::ObSEArray<bool,8> need_free_;
+  common::ObSEArray<bool,8> param_converted_;
 };
 
 class ObPLCallStackTrace;
@@ -971,6 +983,11 @@ public:
                                     int64_t package_id,
                                     int64_t routine_id,
                                     ObPLFunction *&routine);
+  static int get_subprogram_var_type(ObExecContext *exec_ctx,
+                                      uint64_t package_id,
+                                      uint64_t routine_id,
+                                      int64_t var_idx,
+                                      pl::ObPLDataType &type);
   static int get_subprogram_var_from_local(sql::ObSQLSessionInfo &session_info,
                                     int64_t package_id,
                                     int64_t routine_id,
@@ -981,6 +998,11 @@ public:
                                     int64_t routine_id,
                                     int64_t var_idx,
                                     const ObObjParam &value);
+  static int set_subprogram_var(sql::ObSQLSessionInfo &session_info,
+                                      int64_t package_id,
+                                      int64_t routine_id,
+                                      int64_t var_idx,
+                                      const ObObjParam &value);
   static int check_debug_priv(ObSchemaGetterGuard *guard,
                               sql::ObSQLSessionInfo *sess_info,
                               ObPLFunction *func);
@@ -1255,6 +1277,19 @@ public:
                           common::ObObjParam **argv,
                           int64_t *nocopy_argv,
                           uint64_t dblink_id);
+
+#if defined(__aarch64__)
+    static int execute_proc_arm(ObPLExecCtx &ctx,
+                                uint64_t package_id,
+                                uint64_t proc_id,
+                                int64_t *subprogram_path,
+                                int64_t path_length,
+                                uint64_t line_num, /* call position line number, for call_stack info*/
+                                int64_t argc,
+                                common::ObObjParam **argv,
+                                int64_t *nocopy_argv,
+                                uint64_t dblink_id);
+#endif // defined(__aarch64__)
 
   static int set_user_type_var(ObPLExecCtx *ctx,
                                int64_t var_index,

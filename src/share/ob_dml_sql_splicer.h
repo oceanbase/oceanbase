@@ -101,6 +101,7 @@ public:
   int add_time_column(const char *col_name, const int64_t now, bool is_pk = false);
   int add_raw_time_column(const char *col_name, const int64_t now);
   int add_long_double_column(const char *col_name, const double value);
+  int add_function_call(const char *col_name, const char *func_call);
   // mark end of one row
   int finish_row();
 
@@ -123,7 +124,7 @@ public:
   // "SELECT 1 FROM %table_name WHERE pk1 = value1 AND pk2 = value2 ..."
   int splice_select_1_sql(const char *table_name, common::ObSqlString &sql) const;
 
-  int splice_core_cells(ObCoreTableProxy &kv_proxy,
+  int splice_core_cells(ObCoreTableStoreCell &kv_proxy,
       common::ObIArray<ObCoreTableProxy::UpdateCell> &cells);
 
   // functions to splice batch sql statement
@@ -170,6 +171,7 @@ private:
       ALL,
       ONLY_COL_NAME,
       ONLY_VALUE,
+      ADD_VALUE,
     };
   };
   // splice columns to sql, e.g:

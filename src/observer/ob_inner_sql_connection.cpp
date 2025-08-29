@@ -24,6 +24,9 @@
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/stat/ob_diagnostic_info_container.h"
 #include "storage/ob_inner_tablet_access_service.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/incremental/sslog/ob_sslog_service.h"
+#endif
 
 namespace oceanbase
 {
@@ -134,8 +137,8 @@ ObInnerSQLConnection::ObInnerSQLConnection()
       group_id_(0),
       user_timeout_(0),
       diagnostic_info_(nullptr),
-      inner_sess_query_locked_(false)
-
+      inner_sess_query_locked_(false),
+      is_for_sslog_(false)
 {
   free_session_ctx_.sessid_ = ObSQLSessionInfo::INVALID_SESSID;
 }
@@ -608,7 +611,8 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
                                          bool has_tenant_resource,
                                          const ObString &ps_sql,
                                          bool is_from_pl,
-                                         ObString *pl_exec_params)
+                                         ObString *pl_exec_params,
+                                         const bool is_for_sslog)
 {
   int ret = OB_SUCCESS;
   ObPhysicalPlan *plan = result_set.get_physical_plan();
@@ -652,6 +656,11 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
       audit_record.params_value_ = pl_exec_params->ptr();
       audit_record.params_value_len_ = pl_exec_params->length();
     }
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (is_for_sslog) {
+      MTL(sslog::ObSSLogService*)->gather_statistic(audit_record);
+    }
+#endif
   }
   ObSQLUtils::handle_audit_record(false, sql::PSCursor == audit_record.exec_timestamp_.exec_type_
                                          ? EXECUTE_PS_EXECUTE :
@@ -752,6 +761,8 @@ int ObInnerSQLConnection::process_audit_record(sql::ObResultSet &result_set,
 template <typename T>
 int ObInnerSQLConnection::process_final(const T &sql,
                                         ObInnerSQLResult &res,
+                                        ObExecRecord &exec_record,
+                                        ObExecTimestamp &exec_timestamp,
                                         int last_ret)
 {
   int ret = OB_SUCCESS;
@@ -766,6 +777,23 @@ int ObInnerSQLConnection::process_final(const T &sql,
 
     if (process_time > 1L * 1000 * 1000) {
       LOG_INFO("slow inner sql", K(last_ret), K(sql), K(process_time));
+    }
+
+    if (is_for_sslog_ && process_time > 30_ms) {
+      exec_timestamp.update_stage_time();
+      exec_record.update_stat();
+      const bool enable_perf_event = lib::is_diagnose_info_enabled();
+      LOG_INFO("slow sslog inner sql", K(last_ret), K(sql), K(process_time),
+               K(exec_timestamp));
+
+      if (enable_perf_event) {
+        LOG_INFO("slow sslog inner sql", K(exec_record.max_wait_event_),
+                 K(exec_record.wait_time_), K(exec_record.wait_count_));
+      }
+
+      if (diagnostic_info_) {
+        LOG_INFO("slow sslog diagnose", K(diagnostic_info_->get_ash_stat()));
+      }
     }
   }
   return ret;
@@ -981,7 +1009,8 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
           int record_ret = process_record(res.result_set(), res.sql_ctx(), get_session(),
                                 time_record, ret, execution_id, OB_INVALID_ID,
                                 max_wait_desc, total_wait_desc, exec_record, exec_timestamp,
-                                res.has_tenant_resource(), dummy_ps_sql);
+                                res.has_tenant_resource(), dummy_ps_sql,
+                                false /*is_from_pl*/, NULL /*pl_exec_params*/, is_for_sslog_);
           if (OB_SUCCESS != record_ret) {
             LOG_WARN("failed to process record",  K(executor), K(record_ret), K(ret));
           }
@@ -1018,7 +1047,7 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
     }
   }
   if (res.is_inited()) {
-    int aret = process_final(executor, res, ret);
+    int aret = process_final(executor, res, exec_record, exec_timestamp, ret);
     if (OB_SUCCESS != aret) {
       LOG_WARN("failed to process final",  K(executor), K(aret), K(ret));
     }
@@ -2057,7 +2086,7 @@ int ObInnerSQLConnection::set_timeout(int64_t &abs_timeout_us)
         LOG_DEBUG("set timeout by worker", K(timeout), K(abs_timeout_us));
         trx_timeout = timeout;
         LOG_DEBUG("set timeout according to THIS_WORKER", K(timeout), K(trx_timeout), K(abs_timeout_us));
-      } else {
+      } else if (THIS_WORKER.is_timeout_ts_valid()) {
         // timeout exceeds 102 years, so set it to 102 years
         timeout = OB_MAX_USER_SPECIFIED_TIMEOUT;
         abs_timeout_us = now + timeout;
@@ -2316,6 +2345,7 @@ int ObInnerSQLConnection::create_session_by_mgr()
     free_session_ctx_.proxy_sessid_ = proxy_sid;
     free_session_ctx_.tenant_id_ = tenant_id;
     inner_session_->set_session_state(QUERY_ACTIVE);
+    inner_session_->set_mysql_cmd(COM_QUERY);
     EVENT_INC(ACTIVE_SESSIONS);
     free_session_ctx_.has_inc_active_num_ = true;
   }

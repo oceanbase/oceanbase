@@ -186,7 +186,6 @@ struct ObLSStatusInfo
   }
 
   bool is_user_ls() const { return ls_id_.is_user_ls(); }
-
   uint64_t tenant_id_;
   ObLSID ls_id_;
   uint64_t ls_group_id_;
@@ -278,7 +277,7 @@ public:
   virtual int create_new_ls(const ObLSStatusInfo &ls_info,
                             const SCN &current_tenant_scn,
                             const common::ObString &zone_priority,
-                            const share::ObTenantSwitchoverStatus &working_sw_status,
+                            const int64_t switchover_epoch,
                             ObMySQLTransaction &trans) override;
   /*
    * description: override of ObLSLifeIAgent

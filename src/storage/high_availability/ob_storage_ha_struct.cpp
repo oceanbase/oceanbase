@@ -1550,6 +1550,7 @@ bool ObMigrationUtils::is_need_retry_error(const int err)
     case OB_TABLET_TRANSFER_SEQ_NOT_MATCH :
     case OB_MIGRATE_TX_DATA_NOT_CONTINUES :
     case OB_TRANS_CTX_NOT_EXIST:
+    case OB_LS_NOT_IN_LEARNER_LIST:
       bret = false;
       break;
     default:

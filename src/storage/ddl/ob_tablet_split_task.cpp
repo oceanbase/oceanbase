@@ -299,9 +299,11 @@ int ObTabletSplitCtx::init(const ObTabletSplitParam &param)
     } else {
       split_scn_ = local_dest_tablet_hdl.get_obj()->get_tablet_meta().split_info_.get_split_start_scn();
       reorg_scn_ = local_dest_tablet_hdl.get_obj()->get_reorganization_scn();
-      if (OB_UNLIKELY(!split_scn_.is_valid() || !reorg_scn_.is_valid())) {
+      if (OB_UNLIKELY((!split_scn_.is_valid() && param.data_format_version_ >= DATA_VERSION_4_4_0_0) || !reorg_scn_.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected err", K(ret), K(split_scn_), K(reorg_scn_));
+        LOG_WARN("unexpected err", K(ret), K(split_scn_), K(reorg_scn_), "data_format_version", param.data_format_version_);
+      } else if (!split_scn_.is_valid()) {
+        FLOG_INFO("invalid split scn from tablet meta", K(ret), K(param));
       }
     }
   }
@@ -492,7 +494,7 @@ int ObTabletSplitCtx::prepare_index_builder(
   } else if (OB_FAIL(ObTabletSplitUtil::get_participants(
     param.split_sstable_type_, table_store_iterator_, false, skipped_split_major_keys_, sstables))) {
     LOG_WARN("get participant sstables failed", K(ret));
-  } else if (OB_FAIL(ObTabletSplitUtil::get_storage_schema_from_mds(tablet_handle_, storage_schema, tmp_arena))) {
+  } else if (OB_FAIL(ObTabletSplitUtil::get_storage_schema_from_mds(tablet_handle_, param.data_format_version_, storage_schema, tmp_arena))) {
     LOG_WARN("failed to get storage schema", K(ret));
   } else if (OB_ISNULL(storage_schema)) {
     ret = OB_ERR_UNEXPECTED;
@@ -502,6 +504,7 @@ int ObTabletSplitCtx::prepare_index_builder(
     ObTabletHandle tablet_handle;
     compaction::ObExecMode exec_mode = GCTX.is_shared_storage_mode() ?
         ObExecMode::EXEC_MODE_OUTPUT : ObExecMode::EXEC_MODE_LOCAL;
+    const share::SCN split_reorganization_scn = split_scn_.is_valid() ? split_scn_ : SCN::min_scn()/*use min_scn to avoid invalid*/;
     for (int64_t i = 0; OB_SUCC(ret) && i < sstables.count(); i++) {
       ObSSTable *sstable = static_cast<ObSSTable *>(sstables.at(i));
       for (int64_t j = 0; OB_SUCC(ret) && j < param.dest_tablets_id_.count(); j++) {
@@ -530,7 +533,7 @@ int ObTabletSplitCtx::prepare_index_builder(
             dst_tablet_id, merge_type, snapshot_version, param.data_format_version_,
             tablet_handle.get_obj()->get_tablet_meta().micro_index_clustered_,
             tablet_handle.get_obj()->get_transfer_seq(),
-            split_scn_, sstable->get_end_scn(),
+            split_reorganization_scn, sstable->get_end_scn(),
             nullptr/*cg_schema*/,
             0/*table_cg_idx*/,
             exec_mode))) {
@@ -793,10 +796,10 @@ int ObTabletSplitDag::create_first_task()
   return ret;
 }
 
-int64_t ObTabletSplitDag::hash() const
+uint64_t ObTabletSplitDag::hash() const
 {
   int ret = OB_SUCCESS;
-  int64_t hash_val = 0;
+  uint64_t hash_val = 0;
   if (OB_UNLIKELY(!is_inited_ || !param_.is_valid())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("invalid argument", K(ret), K(is_inited_), K(param_));
@@ -1157,7 +1160,7 @@ int ObTabletSplitWriteTask::prepare_context(const ObStorageSchema *&clipped_stor
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(ObTabletSplitUtil::get_storage_schema_from_mds(context_->tablet_handle_, storage_schema, allocator_))) {
+  } else if (OB_FAIL(ObTabletSplitUtil::get_storage_schema_from_mds(context_->tablet_handle_, param_->data_format_version_, storage_schema, allocator_))) {
     LOG_WARN("failed to get storage schema from mds", K(ret));
   } else if (OB_FAIL(context_->get_clipped_storage_schema_on_demand(
       param_->source_tablet_id_, *sstable_, *storage_schema,
@@ -1323,6 +1326,7 @@ int ObTabletSplitWriteTask::prepare_macro_block_writer(
   ObWholeDataStoreDesc data_desc;
   ObTabletHandle tablet_handle;
   const bool micro_index_clustered = context_->tablet_handle_.get_obj()->get_tablet_meta().micro_index_clustered_;
+  const share::SCN split_reorganization_scn = context_->split_scn_.is_valid() ? context_->split_scn_ : SCN::min_scn();
   for (int64_t i = 0; OB_SUCC(ret) && i < param_->dest_tablets_id_.count(); i++) {
     macro_seq_param.reset();
     pre_warm_param.reset();
@@ -1353,7 +1357,7 @@ int ObTabletSplitWriteTask::prepare_macro_block_writer(
                                       param_->data_format_version_,
                                       micro_index_clustered,
                                       tablet_handle.get_obj()->get_transfer_seq(),
-                                      context_->split_scn_,
+                                      split_reorganization_scn,
                                       sstable_->get_end_scn(),
                                       nullptr/*cg_schema*/,
                                       0/*table_cg_idx*/,
@@ -1365,7 +1369,7 @@ int ObTabletSplitWriteTask::prepare_macro_block_writer(
     } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObMacroBlockWriter)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc mem failed", K(ret));
-    } else if (FALSE_IT(macro_block_writer = new (buf) ObMacroBlockWriter())) {
+    } else if (FALSE_IT(macro_block_writer = new (buf) ObMacroBlockWriter(true/*is_need_macro_buffer*/))) {
     } else if (OB_FAIL(pre_warm_param.init(param_->ls_id_, dst_tablet_id))) {
       LOG_WARN("failed to init pre warm param", K(ret), K(dst_tablet_id), KPC(param_));
     } else if (OB_FAIL(ObSSTablePrivateObjectCleaner::get_cleaner_from_data_store_desc(
@@ -2370,13 +2374,13 @@ int ObSplitDownloadSSTableTask::init(
 int ObSplitDownloadSSTableTask::iterate_macros_update_eff_id(
     const ObTabletID &dest_tablet_id,
     ObDualMacroMetaIterator &meta_iter,
-    ObIArray<ObMacroEndKey> &dest_macro_end_keys,
+    ObIArray<MacroBlockId> &dest_macro_ids,
     ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   ObDataMacroBlockMeta macro_meta;
   ObMacroBlockDesc data_macro_desc;
-  ObMacroEndKey tmp_macro_endkey;
+  MacroBlockId tmp_macro_id;
   ObDatumRowkey tmp_row_key;
   const int64_t MACRO_BATCH_SIZE = 100;
   ObSSLocalCacheService *local_cache_service = MTL(ObSSLocalCacheService *);
@@ -2393,9 +2397,9 @@ int ObSplitDownloadSSTableTask::iterate_macros_update_eff_id(
         }
         ret = OB_SUCCESS;
         // get the last macro end keys
-        if (!dest_macro_end_keys.empty() && dest_macro_end_keys.at(0).macro_id_ != tmp_macro_endkey.macro_id_) {
-          if (OB_FAIL(dest_macro_end_keys.push_back(tmp_macro_endkey))) {
-            LOG_WARN("failed to push back", K(ret), K(dest_macro_end_keys), K(tmp_macro_endkey));
+        if (!dest_macro_ids.empty() && dest_macro_ids.at(0) != tmp_macro_id) {
+          if (OB_FAIL(dest_macro_ids.push_back(tmp_macro_id))) {
+            LOG_WARN("failed to push back", K(ret), K(dest_macro_ids), K(tmp_macro_id));
           }
         }
         break;
@@ -2409,16 +2413,12 @@ int ObSplitDownloadSSTableTask::iterate_macros_update_eff_id(
         local_cache_service->update_macro_cache_tablet_id(macro_ids, dest_tablet_id);
         macro_ids.reuse();
       }
-      tmp_macro_endkey.reset();
-      tmp_macro_endkey.macro_id_ = data_macro_desc.macro_block_id_;
-      if (OB_FAIL(data_macro_desc.macro_meta_->get_rowkey(tmp_row_key))) { //shallow copy
-        LOG_WARN("failed to copy range", K(ret), K(data_macro_desc.range_));
-      } else if (OB_FAIL(tmp_row_key.deep_copy(tmp_macro_endkey.end_key_, allocator))) { //deep copy
-        LOG_WARN("failed to copy end key", K(ret));
-      } else if (dest_macro_end_keys.empty()) {
+      tmp_macro_id.reset();
+      tmp_macro_id = data_macro_desc.macro_block_id_;
+      if (dest_macro_ids.empty()) {
         //get first macro end keys
-        if (OB_FAIL(dest_macro_end_keys.push_back(tmp_macro_endkey))) { //shallow copy
-          LOG_WARN("failed to push back", K(ret), K(dest_macro_end_keys), K(tmp_macro_endkey));
+        if (OB_FAIL(dest_macro_ids.push_back(tmp_macro_id))) {
+          LOG_WARN("failed to push back", K(ret), K(dest_macro_ids), K(tmp_macro_id));
         }
       }
     }
@@ -2530,13 +2530,13 @@ int ObSplitDownloadSSTableTask::prewarm_for_split(const ObTabletHandle &dest_tab
                                                   ObSSTable &sstable)
 {
   int ret = OB_SUCCESS;
-  common::ObArenaAllocator allocator("splprewarm",
-      OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ObCtxIds::DEFAULT_CTX_ID);
+  ObMalloc allocator;
+  allocator.set_attr(ObMemAttr(MTL_ID(), "splprewarm"));
   const ObTabletID &dest_tablet_id = dest_tablet_handle.get_obj()->get_tablet_id();
   const ObITableReadInfo *read_info = nullptr;
   bool is_from_rewrite_warm_macro = false;
   ObMicroBlockIndexIterator micro_iter;
-  ObSEArray<ObMacroEndKey, 2> dest_macro_end_keys; // record the first and last macros of sstable if any
+  ObSEArray<MacroBlockId, 2> dest_macro_ids; // record the first and last macros of sstable if any
   ObTablet *dest_tablet = nullptr;
   if (OB_ISNULL(dest_tablet = dest_tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
@@ -2545,21 +2545,20 @@ int ObSplitDownloadSSTableTask::prewarm_for_split(const ObTabletHandle &dest_tab
     LOG_WARN("fail to get index read info ", KR(ret), K(sstable));
   } else {
     SMART_VAR(ObDualMacroMetaIterator, meta_iter) {
-      int64_t dest_tablet_index = 0;
       ObDatumRange whole_range;
       whole_range.set_whole_range();
       const bool is_small_sstable = sstable.is_small_sstable();
       const bool is_major_sstable = sstable.is_major_sstable();
       if (OB_FAIL(meta_iter.open(sstable, whole_range, *read_info, allocator))) {
         LOG_WARN("open dual macro meta iter failed", K(ret), K(sstable));
-      } else if (OB_FAIL(iterate_macros_update_eff_id(dest_tablet_id, meta_iter, dest_macro_end_keys, allocator))) {
+      } else if (OB_FAIL(iterate_macros_update_eff_id(dest_tablet_id, meta_iter, dest_macro_ids, allocator))) {
         LOG_WARN("failed to iterate macros and update effective id", K(ret));
       } else if (OB_FAIL(micro_iter.open(sstable, whole_range, dest_tablet->get_rowkey_read_info(), allocator, true))) {
         LOG_WARN("failed to open micro iter", K(ret), K(sstable), K(dest_tablet_id));
       } else if (OB_FAIL(iterate_micros_update_eff_id(dest_tablet_id, micro_iter))) {
         LOG_WARN("failed to iterate micros and update effective id", K(ret), K(dest_tablet_id));
-      } else if (OB_FAIL(prewarm_split_point_macro_if_need(dest_tablet->get_tablet_id().id(), sstable, dest_macro_end_keys))) {
-        LOG_WARN("failed to try prewamr split point macro", K(ret), K(sstable), K(dest_macro_end_keys));
+      } else if (OB_FAIL(prewarm_split_point_macro_if_need(dest_tablet->get_tablet_id().id(), sstable, dest_macro_ids))) {
+        LOG_WARN("failed to try prewamr split point macro", K(ret), K(sstable), K(dest_macro_ids));
       }
     }
   }
@@ -2568,15 +2567,15 @@ int ObSplitDownloadSSTableTask::prewarm_for_split(const ObTabletHandle &dest_tab
 
 int ObSplitDownloadSSTableTask::prewarm_split_point_macro_if_need(const int64_t dest_tablet_id,
                                                                   const ObSSTable &dest_sstable,
-                                                                  const ObIArray<ObMacroEndKey> &dest_macro_end_keys/*fist and last macro of dest sstable if any*/)
+                                                                  const ObIArray<MacroBlockId> &dest_macro_ids/*fist and last macro of dest sstable if any*/)
 {
   int ret = OB_SUCCESS;
   bool stop = false;
   /*TODO: only prewarm warm macro ly435438*/
   storage::ObSSTableMacroPrewarmer prewarmer(&dest_sstable, stop);
-  for (int64_t i = 0; i < dest_macro_end_keys.count(); ++i) {
-    if (OB_FAIL(prewarmer.prewarm_single_macro(dest_macro_end_keys.at(i).macro_id_, dest_tablet_id))) {
-      LOG_WARN("failed to prewarm macro", K(ret), K(dest_macro_end_keys.at(i).macro_id_));
+  for (int64_t i = 0; i < dest_macro_ids.count(); ++i) {
+    if (OB_FAIL(prewarmer.prewarm_single_macro(dest_macro_ids.at(i), dest_tablet_id))) {
+      LOG_WARN("failed to prewarm macro", K(ret), K(dest_macro_ids.at(i)));
     }
   }
   return ret;
@@ -3442,7 +3441,7 @@ int ObSnapshotRowScan::init(
     ObQueryFlag query_flag(ObQueryFlag::Forward,
         false, /* daily merge*/
         true,  /* use *optimize */
-        false,  /* use whole macro scan*/
+        true,  /* use whole macro scan*/
         false, /* not full row*/
         false, /* not index_back*/
         false);/* query stat */

@@ -470,6 +470,9 @@ bool ObTimerService::task_exist(const ObTimer *timer, const ObTimerTask &task)
     TaskToken *token = priority_task_queue_.at(idx);
     exist = has_same_task_and_timer(token, timer, &task);
   }
+  if (!exist) {
+    exist = find_task_in_set(running_task_set_, timer, &task);
+  }
   return exist;
 }
 

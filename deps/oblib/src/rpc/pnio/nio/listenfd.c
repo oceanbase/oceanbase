@@ -87,6 +87,7 @@ void on_dispatch(listenfd_dispatch_t* lfd, sf_t* sf, eloop_t* ep)
               new_sk, sock_fd_str(ns->fd, sock_fd_buf, sizeof(sock_fd_buf)), ns->tid, old_sk);
       wq_move(&new_sk->wq, &old_sk->wq);
       memcpy(&new_sk->ib, &old_sk->ib, sizeof(old_sk->ib));
+      new_sk->sk_diag_info.doing_cnt = old_sk->sk_diag_info.doing_cnt;
       old_sk->relocate_sock_id = new_sk->id;
       // To avoid dropping events, add socket to handle list
       eloop_fire(ep, ns);

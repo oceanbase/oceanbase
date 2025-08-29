@@ -238,6 +238,8 @@ int ObCGGroupByScanner::calc_aggregate(const bool is_group_by_col)
       } else if (OB_UNLIKELY(0 == read_row_count || read_row_count > remain_row_count)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected output row count", K(ret), K(read_row_count), K(remain_row_count));
+      } else if (OB_FAIL(group_by_cell_->clear_evaluated_infos())) {
+        LOG_WARN("Failed to clear evaluated infos", K(ret), KPC_(group_by_cell));
       } else if (OB_FAIL(do_group_by_aggregate(read_row_count, is_group_by_col, ref_offset))) {
         LOG_WARN("Failed to do group by aggregate", K(ret));
       } else {

@@ -16,6 +16,7 @@
 #include "share/aggregate/agg_ctx.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/engine/basic/ob_compact_row.h"
+#include "agg_reuse_cell.h"
 
 namespace oceanbase
 {
@@ -181,8 +182,12 @@ public:
     for (int i = 0; supported && i < aggr_exprs.count(); i++) {
       ObAggFunRawExpr *agg_expr = static_cast<ObAggFunRawExpr *>(aggr_exprs.at(i));
       OB_ASSERT(agg_expr != NULL);
-      supported = aggregate::supported_aggregate_function(agg_expr->get_expr_type(),
-                                                          use_hash_rollup, has_rollup);
+      if (agg_expr->is_param_distinct() && (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_3_0)) {
+        supported = false;
+      } else {
+        supported = aggregate::supported_aggregate_function(agg_expr->get_expr_type(),
+							    use_hash_rollup, has_rollup);
+      }
     }
     return supported;
   }
@@ -217,6 +222,8 @@ public:
   int init_one_aggr_row(const RowMeta &row_meta, ObCompactRow *&row, ObIAllocator &extra_allocator,
                         const int64_t group_id = 0);
   int reuse_group(const int64_t group_id);
+
+  static int reuse_agg_row(AggrRowPtr agg_row, RuntimeContext &agg_ctx, ReuseAggCellMgr &reuse_mgr);
 
   int init_fast_single_row_aggs();
   bool has_extra() const { return agg_ctx_.has_extra_; }
@@ -280,23 +287,6 @@ private:
       add_one_row_fns_.at(i) = nullptr;
     }
   }
-private:
-  struct ReuseAggCellMgr
-  {
-    ReuseAggCellMgr(ObIAllocator &allocator, int32_t agg_cnt) :
-      tmp_store_vals_(allocator, agg_cnt), allocator_(allocator), extra_store_idx_(-1)
-    {}
-    int init(RuntimeContext &agg_ctx);
-    int save(RuntimeContext &agg_ctx, const char *agg_row);
-    int restore(RuntimeContext &agg_ctx, char *agg_row);
-  private:
-    int save_extra_stores(RuntimeContext &agg_ctx, const char *agg_row);
-    int restore_extra_stores(RuntimeContext &agg_ctx, char *agg_row);
-  private:
-    ObFixedArray<void *, ObIAllocator> tmp_store_vals_;
-    ObIAllocator &allocator_;
-    int32_t extra_store_idx_;
-  };
 private:
   static const int32_t MAX_SUPPORTED_AGG_CNT = 1000000;
   static const int64_t BATCH_GROUP_SIZE = 16;

@@ -66,7 +66,7 @@ public:
   void set_flag(const uint64_t flag) { flag_ |= flag; }
 private:
   void clear_flag(const uint64_t flag) { flag_ &= ~flag; }
-  bool has_flag(const uint64 flag) const { return (flag_ & flag) == flag; }
+  bool has_flag(const uint64_t flag) const { return (flag_ & flag) == flag; }
 public:
   void set_min_max_word() { set_flag(AWF_MIN_MAX_WORD); }
   void set_stop_word() { set_flag(AWF_STOPWORD); }

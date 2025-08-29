@@ -2018,9 +2018,12 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
           ObString location_name;
           location_name.assign_ptr(parse_tree.children_[0]->str_value_,
                                   static_cast<ObString::obstr_size_t>(parse_tree.children_[0]->str_len_));
-          ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
+          ObSchemaGetterGuard *schema_guard = NULL;
           uint64_t location_id = OB_INVALID_ID;
-          if (OB_FAIL(schema_checker_->get_location_id(real_tenant_id, location_name, location_id))) {
+          if(OB_ISNULL(schema_checker_) || OB_ISNULL(schema_guard = schema_checker_->get_schema_guard())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("got null ptr", K(ret));
+          } else if (OB_FAIL(schema_checker_->get_location_id(real_tenant_id, location_name, location_id))) {
             LOG_WARN("failed to get location id", K(ret));
           } else if (OB_FAIL(schema_guard->check_location_access(session_priv, enable_role_id_array, location_name))) {
             LOG_WARN("failed to check location access", K(ret));
@@ -2038,6 +2041,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
         uint64_t location_id = OB_INVALID_ID;
         ObString sub_path;
         ObString pattern;
+        ObString location_name;
         if (OB_FAIL(GET_MIN_DATA_VERSION(real_tenant_id, min_version))) {
             LOG_WARN("get min data_version failed", K(ret), K(real_tenant_id));
         } else if (min_version < DATA_VERSION_4_4_0_0) {
@@ -2049,10 +2053,20 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
           LOG_WARN("parse tree is wrong", K(ret), K(parse_tree.num_child_));
         } else {
           show_resv_ctx.stmt_type_ = stmt::T_LOCATION_UTILS_LIST;
-          ObString location_name;
           ParseNode *child_node = parse_tree.children_[0];
           location_name.assign_ptr(child_node->str_value_, static_cast<int32_t>(child_node->str_len_));
-          OZ (schema_checker_->get_location_id(real_tenant_id, location_name, location_id));
+          ObSchemaGetterGuard *schema_guard = NULL;
+          if(OB_ISNULL(schema_checker_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("got null ptr", K(ret));
+          } else if (OB_FAIL(schema_checker_->get_location_id(real_tenant_id, location_name, location_id))) {
+            LOG_WARN("get location id failed", K(ret), K(real_tenant_id), K(location_name));
+          } else if(OB_ISNULL(schema_guard = schema_checker_->get_schema_guard())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("got null ptr", K(ret));
+          } else if (OB_FAIL(schema_guard->check_location_access(session_priv, enable_role_id_array, location_name))) {
+            LOG_WARN("check location priv failed", K(ret), K(session_priv), K(enable_role_id_array), K(location_name));
+          }
           if (OB_SUCC(ret) && OB_NOT_NULL(parse_tree.children_[1])) {
             ParseNode *child_node = parse_tree.children_[1];
             sub_path.assign_ptr(child_node->str_value_, static_cast<int32_t>(child_node->str_len_));

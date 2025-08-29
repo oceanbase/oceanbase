@@ -96,7 +96,6 @@ int ObExprXmlparse::eval_xmlparse(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &r
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
   MultimodeAlloctor tmp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
   ObMulModeMemCtx* mem_ctx = nullptr;
 
   if (OB_ISNULL(ctx.exec_ctx_.get_my_session())) {
@@ -128,6 +127,7 @@ int ObExprXmlparse::eval_xmlparse(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &r
   } else if (is_xml_text_null) {
     res.set_null();
   } else {
+    lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
     ObXmlDocument* doc = nullptr;
     ObXmlParser parser(mem_ctx);
 

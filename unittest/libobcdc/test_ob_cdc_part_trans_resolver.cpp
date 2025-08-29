@@ -32,6 +32,7 @@
 #include "logservice/libobcdc/src/ob_log_committer.h"
 #include "logservice/libobcdc/src/ob_log_instance.h"
 #include "logservice/libobcdc/src/ob_log_resource_collector.h"
+#include "logservice/libobcdc/src/ob_log_lsn_filter.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -70,10 +71,12 @@ using namespace logfetcher;
     EXPECT_EQ(OB_SUCCESS, fetcher_dispatcher.init(&sys_ls_handler, &committer, 0)); \
     ObLogClusterIDFilter cluster_id_filter; \
     const char *cluster_id_black_list = "2147473648"; \
+    ObLogLsnFilter lsn_filter; \
     double a = 1.0; \
     void *fetcher = &a; \
     EXPECT_EQ(OB_SUCCESS, cluster_id_filter.init(cluster_id_black_list, 2147473648, 2147483647)); \
-    EXPECT_EQ(OB_SUCCESS, resolver_factory.init(task_pool, log_entry_task_pool, fetcher_dispatcher, cluster_id_filter)); \
+    EXPECT_EQ(OB_SUCCESS, lsn_filter.init("|")); \
+    EXPECT_EQ(OB_SUCCESS, resolver_factory.init(task_pool, log_entry_task_pool, fetcher_dispatcher, cluster_id_filter, lsn_filter)); \
     EXPECT_EQ(OB_SUCCESS, ls_fetch_mgr.init(1, progress_controller, resolver_factory, fetcher));
 
 

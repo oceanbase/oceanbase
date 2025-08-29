@@ -731,11 +731,11 @@ int ObPLDependencyCheck::get_synonym_schema_version(ObPLCacheBasicCtx &pc_ctx,
         } else {
           bool exist = false;
           bool is_private_syn = false;
-          OZ (schema_checker.check_exist_same_name_object_with_synonym(synonym_info->get_tenant_id(),
-                                                                        pcv_schema.invoker_db_id_,
-                                                                        synonym_info->get_synonym_name_str(),
-                                                                        exist,
-                                                                        is_private_syn));
+          OZ (schema_checker.check_object_exists_by_name(synonym_info->get_tenant_id(),
+                                                         pcv_schema.invoker_db_id_,
+                                                         synonym_info->get_synonym_name_str(),
+                                                         exist,
+                                                         is_private_syn));
           if (OB_FAIL(ret)) {
           } else if (exist) {
             ret = OB_OLD_SCHEMA_VERSION;
@@ -1530,8 +1530,9 @@ int ObPLCacheCtx::adjust_definer_database_id()
 do {                                                                             \
   OZ(schema_guard_->get_##type##_info(get_tenant_id_by_object_id(key_id),        \
                                       key_id, tmp_##type##_info));               \
-  CK(OB_NOT_NULL(tmp_##type##_info));                                            \
-  if (OB_FAIL(ret)) {                                                            \
+  if (OB_ISNULL(tmp_##type##_info)) {                                            \
+    ret = OB_ERR_INVALID_SCHEMA;                                                 \
+    LOG_WARN("failed to get " #type " info. ", K(ret), K(key_id));               \
   } else if (!tmp_##type##_info->is_invoker_right()) {                           \
     key_.db_id_ = tmp_##type##_info->get_database_id();                          \
   }                                                                              \

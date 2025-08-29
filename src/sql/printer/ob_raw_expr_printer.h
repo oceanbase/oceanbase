@@ -140,6 +140,7 @@ private:
   int print(ObWinFunRawExpr *expr);
   int print(ObPseudoColumnRawExpr *expr);
   int print(ObMatchFunRawExpr *expr);
+  int print(ObUnpivotRawExpr *expr);
 
   int print_date_unit(ObRawExpr *expr);
   int print_get_format_unit(ObRawExpr *expr);

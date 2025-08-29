@@ -40,7 +40,6 @@ const char* __attribute__((weak)) ob_strerror(const int oberr)
   const char* ret = "ob_strerror";
   return ret;
 }
-_RLOCAL(ByteBuf<ObLogger::LOCAL_BUF_SIZE>, ObLogger::local_buf_);
 extern void update_easy_log_level();
 lib::ObRateLimiter *ObLogger::default_log_limiter_ = nullptr;
 _RLOCAL(lib::ObRateLimiter*, ObLogger::tl_log_limiter_);
@@ -473,7 +472,7 @@ void ObLogger::print_trace_buffer(const char* mod_name,
                              return OB_SUCCESS;
     };
     // invoke log_it isn't workable，that will recycle infinitely
-    do_log_message(is_async_log_used(), mod_name, nullptr, level, file, line, function,
+    do_log_message(mod_name, nullptr, level, file, line, function,
                    false, location_hash_val, 0, log_data_func);
     tb->reset();//reset, than reuse the TraceBuffer
   }
@@ -552,7 +551,16 @@ void ObLogger::drop_log_items(ObIBaseLogItem **items, const int64_t item_cnt)
 void ObLogger::set_trace_mode(bool trace_mode)
 {
   trace_mode_ = trace_mode;
-  get_trace_buffer()->reset();
+  if (trace_mode_) {
+    // do-nothing
+  } else {
+    TraceBuffer *&tb = get_trace_buffer();
+    if (NULL != tb) {
+      tb->~TraceBuffer();
+      ob_free(tb);
+      tb = nullptr;
+    }
+  }
 }
 
 void ObLogger::set_log_level(const char *level, const char *wf_level, int64_t version)
@@ -639,12 +647,18 @@ void ObLogger::set_file_name(const char *filename,
   }
 }
 
-ObLogger::TraceBuffer *ObLogger::get_trace_buffer()
+ObLogger::TraceBuffer *&ObLogger::get_trace_buffer()
 {
   RLOCAL_INLINE(TraceBuffer*, tb);
-  if (OB_UNLIKELY(NULL == tb)) {
-    STATIC_ASSERT(sizeof(TraceBuffer) <= LOCAL_BUF_SIZE - LOG_ITEM_SIZE, "check sizeof TraceBuffer failed");
-    tb = new (&local_buf_[0] + LOG_ITEM_SIZE) TraceBuffer(); /* LOG_ITEM_SIZE is reserved for ObPlogitem */
+  if (OB_UNLIKELY(NULL == tb && trace_mode_)) {
+    void *buf = nullptr;
+    if (OB_ISNULL(buf = ob_malloc(sizeof(TraceBuffer), "TraceBuffer"))) {
+      int ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_STDERR("alloc failed, ret=%d\n", ret);
+    } else {
+      tb = new (buf) TraceBuffer();
+      tb->reset();
+    }
   }
   return tb;
 }
@@ -1766,11 +1780,6 @@ int ObLogger::backtrace_if_needed(ObPLogItem &log_item, const bool force)
       }
     }
     check_log_end(log_item, pos);
-    if (OB_UNLIKELY(OB_SIZE_OVERFLOW == ret)) {
-      //treat it succ
-      log_item.set_size_overflow();
-      ret = OB_SUCCESS;
-    }
   }
   return ret;
 }

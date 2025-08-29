@@ -161,7 +161,7 @@ public:
     id_(ObTimeUtility::current_time() + random())
   {}
   void init(int64_t id) { id_ = id; }
-  virtual int64_t hash() const { return murmurhash(&id_, sizeof(id_), 0);}
+  virtual uint64_t hash() const { return murmurhash(&id_, sizeof(id_), 0);}
   virtual bool operator == (const ObIDag &other) const
   {
     bool bret = false;
@@ -806,7 +806,7 @@ public:
     }
     return ret;
   }
-  virtual int64_t hash() const { return murmurhash(&id_, sizeof(id_), 0);}
+  virtual uint64_t hash() const { return murmurhash(&id_, sizeof(id_), 0);}
   virtual bool operator == (const ObIDagNet &other) const
   {
     bool bret = false;
@@ -1900,7 +1900,7 @@ public:
     }
     return ret;
   }
-  virtual int64_t hash() const { return murmurhash(&id_, sizeof(id_), 0);}
+  virtual uint64_t hash() const { return murmurhash(&id_, sizeof(id_), 0);}
   virtual bool operator == (const ObIDagNet &other) const
   {
     bool bret = false;

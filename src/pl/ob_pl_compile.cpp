@@ -102,6 +102,7 @@ int ObPLCompiler::init_anonymous_ast(
         pl_type.reset();
         pl_type.set_type(pl::PL_REF_CURSOR_TYPE);
         pl_type.set_type_from(pl::PL_TYPE_SYS_REFCURSOR);
+        pl_type.set_user_type_id(pl::PL_REF_CURSOR_TYPE, func_ast.get_user_type_table().get_sys_refcursor_type().get_user_type_id());
       } else
 #endif
       if (!is_mocked_anonymous_array_id(param.get_udt_id())) {
@@ -530,6 +531,7 @@ int ObPLCompiler::compile(
       LOG_USER_WARN(OB_ERR_PACKAGE_COMPILE_ERROR, "ROUTINE",
                     func_ast.get_db_name().length(), func_ast.get_db_name().ptr(),
                     func_ast.get_name().length(), func_ast.get_name().ptr());
+      ObWarningBufferIgnoreScope ignore_warning_guard;
       if (OB_SUCCESS != (tmp_ret = error_info.handle_error_info(&routine))) {
         LOG_WARN("handler compile routine error failed", K(ret), KR(tmp_ret), K(routine));
       }
@@ -618,6 +620,7 @@ int ObPLCompiler::compile(
                     routine.get_routine_name().length(),
                     routine.get_routine_name().ptr());
     }
+    ObWarningBufferIgnoreScope ignore_warning_guard;
     if (OB_SUCCESS != (tmp_ret = error_info.handle_error_info(&routine))) {
       LOG_WARN("handler compile udt error failed", K(ret), KR(tmp_ret), K(routine));
     }

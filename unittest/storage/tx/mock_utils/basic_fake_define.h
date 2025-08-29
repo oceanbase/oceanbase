@@ -518,7 +518,22 @@ public:
       share::SCN scn;
       scn.convert_for_gts(ts);
       int64_t queue_idx = replay_hint % TASK_QUEUE_CNT;
-      if (!ATOMIC_LOAD(&log_drop_)) {
+
+      // if (need_nonblock == true) {
+        ObTxLogCb *tx_log_cb = static_cast<ObTxLogCb *>(cb);
+        for (int i = 0; i < block_log_type_array_.size() && OB_SUCC(ret); i++) {
+          TRANS_LOG(INFO, "check block log type", K(ret), K(i), K(replay_hint), KP(tx_log_cb));
+          if (is_contain(tx_log_cb->cb_arg_array_, block_log_type_array_[i])) {
+            ret = OB_EAGAIN;
+            TRANS_LOG(INFO, "block to submit log", K(ret), K(replay_hint), K(block_log_type_array_[i]),
+                      KPC(tx_log_cb));
+          }
+        }
+      // }
+
+      if(OB_FAIL(ret)) {
+        //do nothing
+      } else if (!ATOMIC_LOAD(&log_drop_)) {
         const palf::LSN lsn = palf::LSN(++lsn_);
         cb->set_log_ts(scn);
         cb->set_lsn(lsn);
@@ -544,11 +559,11 @@ public:
         ATOMIC_INC(&unreplay_cnt_);
 
         TRANS_LOG(INFO, "submit_log",
-            K(replay_hint), K(inflight_cnt_), K(unreplay_cnt_), K(queue_idx));
+            K(replay_hint), K(inflight_cnt_), K(unreplay_cnt_), K(queue_idx), KP(cb));
         hex_dump(buf, size, true, OB_LOG_LEVEL_INFO);
       } else {
         TRANS_LOG(INFO, "drop_log",
-            K(replay_hint), K(inflight_cnt_), K(unreplay_cnt_), K(queue_idx));
+            K(replay_hint), K(inflight_cnt_), K(unreplay_cnt_), K(queue_idx), KP(cb));
         hex_dump(buf, size, true, OB_LOG_LEVEL_INFO);
       }
     }
@@ -640,8 +655,18 @@ public:
     ATOMIC_SET(&log_drop_, false);
   }
 
+  void push_back_block_log_type(ObTxLogType log_type) {
+    block_log_type_array_.push_back(log_type);
+  }
+
+  void clear_block_log_type()
+  {
+    block_log_type_array_.clear();
+  }
+
   bool pause_ = false;
   bool log_drop_ = false;
+  std::vector<ObTxLogType> block_log_type_array_;
   int64_t ts_ = 1;
   int64_t lsn_ = 1;
   int64_t inflight_cnt_ = 0;

@@ -218,7 +218,7 @@ public:
   ObTabletLobSplitDag();
   virtual ~ObTabletLobSplitDag();
   virtual int init_by_param(const share::ObIDagInitParam *param) override;
-  int64_t hash() const;
+  virtual uint64_t hash() const override;
   bool operator ==(const share::ObIDag &other) const;
   bool is_inited() const { return is_inited_; }
   ObLobSplitParam &get_param() { return param_; }

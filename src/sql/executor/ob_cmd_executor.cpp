@@ -91,6 +91,9 @@
 #include "sql/resolver/ddl/ob_drop_directory_stmt.h"
 #include "sql/resolver/ddl/ob_create_location_stmt.h"
 #include "sql/resolver/ddl/ob_drop_location_stmt.h"
+#include "sql/resolver/ddl/ob_create_ccl_rule_stmt.h"
+#include "sql/resolver/ddl/ob_drop_ccl_rule_stmt.h"
+#include "sql/engine/ob_exec_context.h"
 #include "sql/engine/cmd/ob_empty_query_executor.h"
 #include "sql/engine/cmd/ob_dcl_executor.h"
 #include "sql/engine/cmd/ob_tcl_executor.h"
@@ -129,6 +132,7 @@
 #include "sql/engine/prepare/ob_execute_executor.h"
 #include "sql/engine/prepare/ob_deallocate_executor.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "observer/omt/ob_tenant.h"
 #include "sql/engine/cmd/ob_directory_executor.h"
 #include "sql/engine/cmd/ob_location_executor.h"
 #include "sql/resolver/dcl/ob_alter_role_stmt.h"
@@ -142,8 +146,16 @@
 #include "sql/engine/cmd/ob_olap_async_job_executor.h"
 #include "sql/resolver/cmd/ob_event_stmt.h"
 #include "sql/engine/cmd/ob_event_executor.h"
+#include "sql/resolver/cmd/ob_alter_ls_stmt.h"
+#include "sql/engine/cmd/ob_alter_ls_executor.h"
+#include "sql/resolver/cmd/ob_service_name_stmt.h"
+#include "sql/engine/cmd/ob_service_name_executor.h"
+#include "sql/resolver/cmd/ob_transfer_partition_stmt.h"
+#include "sql/engine/cmd/ob_transfer_partition_executor.h"
+
 #include "sql/resolver/cmd/ob_flashback_standby_log_stmt.h"
 #include "sql/engine/cmd/ob_flashback_standby_log_executor.h"
+#include "sql/engine/cmd/ob_ccl_rule_executor.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "sql/resolver/ddl/ob_create_keystore_stmt.h"
 #include "sql/resolver/ddl/ob_alter_keystore_stmt.h"
@@ -189,6 +201,8 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
   bool is_ddl_or_dcl_stmt = false;
   int64_t ori_query_timeout;
   int64_t ori_trx_timeout;
+  omt::ObMultiTenant *omt = GCTX.omt_;
+  omt::ObTenant *tenant = NULL;
 
   if (ObStmt::is_ddl_stmt(static_cast<stmt::StmtType>(cmd.get_cmd_type()), true)
       || ObStmt::is_dcl_stmt(static_cast<stmt::StmtType>(cmd.get_cmd_type()))) {
@@ -239,7 +253,25 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
     }
   }
-  
+  uint64_t tenant_id = OB_INVALID_ID;
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(my_session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", KR(ret));
+  } else {
+    tenant_id = my_session->get_effective_tenant_id();
+  }
+  ObTenantDDLCountGuard tenant_ddl_guard(tenant_id);
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (OB_SUCC(ret)) {
+    if (tenant_config.is_valid() && tenant_config->_enable_ddl_worker_isolation
+        && ObStmt::is_ddl_stmt(static_cast<stmt::StmtType>(cmd.get_cmd_type()), true)) {
+      if (OB_FAIL(tenant_ddl_guard.try_inc_ddl_count(tenant_config->cpu_quota_concurrency))) {
+        LOG_WARN("fail to inc tenant ddl count", KR(ret), K(tenant_id));
+      }
+    }
+  }
+
   if (OB_SUCC(ret)) {
     switch (cmd.get_cmd_type()) {
       case stmt::T_CREATE_RESOURCE_POOL: {
@@ -587,10 +619,12 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObFlushIlogCacheStmt, ObFlushIlogCacheExecutor);
         break;
       }
+#ifdef OB_BUILD_SHARED_STORAGE
       case stmt::T_FLUSH_SS_MICRO_CACHE: {
         DEFINE_EXECUTE_CMD(ObFlushSSMicroCacheStmt, ObFlushSSMicroCacheExecutor);
         break;
       }
+#endif
       case stmt::T_FLUSH_DAG_WARNINGS: {
         DEFINE_EXECUTE_CMD(ObFlushDagWarningsStmt, ObFlushDagWarningsExecutor);
         break;
@@ -1144,6 +1178,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObTransferPartitionStmt, ObTransferPartitionExecutor);
         break;
       }
+      case stmt::T_ALTER_LS: {
+        DEFINE_EXECUTE_CMD(ObAlterLSStmt, ObAlterLSExecutor);
+        break;
+      }
       case stmt::T_CHANGE_EXTERNAL_STORAGE_DEST: {
         DEFINE_EXECUTE_CMD(ObChangeExternalStorageDestStmt, ObChangeExternalStorageDestExecutor);
         break;
@@ -1178,6 +1216,18 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
       case stmt::T_FLASHBACK_STANDBY_LOG: {
         DEFINE_EXECUTE_CMD(ObFlashbackStandbyLogStmt, ObFlashbackStandbyLogExecutor);
+        break;
+      }
+      case stmt::T_LOAD_LICENSE: {
+        DEFINE_EXECUTE_CMD(ObLoadLicenseStmt, ObLoadLicenseExecutor);
+        break;
+      }
+      case stmt::T_CREATE_CCL_RULE: {
+        DEFINE_EXECUTE_CMD(ObCreateCCLRuleStmt, ObCreateCCLRuleExecutor);
+        break;
+      }
+      case stmt::T_DROP_CCL_RULE: {
+        DEFINE_EXECUTE_CMD(ObDropCCLRuleStmt, ObDropCCLRuleExecutor);
         break;
       }
       case stmt::T_CS_DISKMAINTAIN:
@@ -1239,6 +1289,7 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       ret = tmp_ret;
     }
   }
+
 
   return ret;
 }

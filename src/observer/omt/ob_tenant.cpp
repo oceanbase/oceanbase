@@ -42,7 +42,7 @@ using namespace oceanbase::obrpc;
 const int64_t var_name##_offset = ((int64_t)addr - (int64_t)pthread_self()); \
 decltype(*addr) var_name = *(decltype(addr))(thread_base + var_name##_offset);
 
-#define EXPAND_INTERVAL (1 * 1000 * 1000)
+#define EXPAND_INTERVAL (500 * 1000)
 #define SHRINK_INTERVAL (1 * 1000 * 1000)
 #define SLEEP_INTERVAL (60 * 1000 * 1000)
 
@@ -726,6 +726,7 @@ ObTenant::ObTenant(const int64_t id,
       tenant_meta_(),
       shrink_(0),
       total_worker_cnt_(0),
+      total_ddl_thread_cnt_(0),
       gc_thread_(nullptr),
       has_created_(false),
       stopped_(0),
@@ -1206,6 +1207,17 @@ int64_t ObTenant::cpu_quota_concurrency() const
 {
   ObTenantConfigGuard tenant_config(TENANT_CONF(id_));
   return static_cast<int64_t>((tenant_config.is_valid() ? tenant_config->cpu_quota_concurrency : 4));
+}
+
+int64_t ObTenant::min_active_worker_cnt() const
+{
+  ObTenantConfigGuard tenant_config(TENANT_CONF(id_));
+  bool enable_more_aggressive_dynamic_worker = tenant_config.is_valid() ? tenant_config->_enable_more_aggressive_dynamic_worker : false;
+  int64_t cnt = 3;
+  if (is_user_tenant(id()) && enable_more_aggressive_dynamic_worker) {
+    cnt = std::max(3L, 2 + static_cast<int64_t>(unit_max_cpu()));
+  }
+  return cnt;
 }
 
 int64_t ObTenant::min_worker_cnt() const
@@ -1786,7 +1798,8 @@ void ObTenant::check_worker_count()
 {
   int ret = OB_SUCCESS;
   if (OB_SUCC(workers_lock_.trylock())) {
-    int64_t token = 3;
+    int64_t ddl_token = 0;
+    int64_t token = min_active_worker_cnt();
     int64_t now = ObTimeUtility::current_time();
     bool enable_dynamic_worker = true;
     int64_t threshold = 3 * 1000;
@@ -1802,15 +1815,19 @@ void ObTenant::check_worker_count()
         workers_.remove(wnode);
         destroy_worker(w);
       } else if (w->has_req_flag()
-                 && 0 != w->blocking_ts()
-                 && now - w->blocking_ts() >= threshold
+                 && ((0 != w->blocking_ts() && now - w->blocking_ts() >= threshold) || w->is_doing_ddl())
                  && w->is_default_worker()
                  && enable_dynamic_worker) {
-        ++token;
+        if (w->is_doing_ddl()) {
+          ddl_token++;
+        } else {
+          token++;
+        }
       }
     }
     int64_t succ_num = 0L;
     token = std::max(token, min_worker_cnt());
+    token = token + ddl_token;
     token = std::min(token, max_worker_cnt());
     if (OB_UNLIKELY(workers_.get_size() < min_worker_cnt())) {
       const auto diff = min_worker_cnt() - workers_.get_size();

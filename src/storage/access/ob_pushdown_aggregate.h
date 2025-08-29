@@ -89,11 +89,6 @@ public:
   virtual void reset();
   virtual void reuse();
   virtual int init(const bool is_group_by, sql::ObEvalCtx *eval_ctx);
-  // need to fill default value
-  virtual int eval(
-      blocksstable::ObStorageDatum &datum,
-      const int64_t row_count = 1,
-      const int64_t agg_row_idx = 0) = 0;
   // no need to fill default value
   virtual int eval_batch(const common::ObDatum *datums, const int64_t count) = 0;
   virtual int eval_micro_block(
@@ -121,7 +116,6 @@ public:
   virtual bool finished() const { return false; }
   virtual int reserve_group_by_buf(const int64_t size);
   virtual int output_extra_group_by_result(const int64_t start, const int64_t count);
-  virtual int pad_column_in_group_by(const int64_t row_cap, common::ObIAllocator &allocator);
   OB_INLINE bool is_aggregated() const { return aggregated_; }
   OB_INLINE int32_t get_col_offset() const { return basic_info_.col_offset_; }
   OB_INLINE common::ObDatum *get_col_datums() const { return col_datums_; }
@@ -178,7 +172,8 @@ public:
   virtual int eval(
       blocksstable::ObStorageDatum &datum,
       const int64_t row_count = 1,
-      const int64_t agg_row_idx = 0) override;
+      const int64_t agg_row_idx = 0,
+      const int64_t agg_batch_size = 0) override;
   virtual int eval_batch(const common::ObDatum *datums, const int64_t count) override;
   virtual int eval_micro_block(
       const ObTableIterParam &iter_param,
@@ -217,7 +212,8 @@ public:
   virtual int eval(
       blocksstable::ObStorageDatum &datum,
       const int64_t row_count = 1,
-      const int64_t agg_row_idx = 0) override;
+      const int64_t agg_row_idx = 0,
+      const int64_t agg_batch_size = 0) override;
   virtual int eval_batch(const common::ObDatum *datums, const int64_t count) override;
   virtual int eval_batch_in_group_by(
       const common::ObDatum *datums,
@@ -226,7 +222,6 @@ public:
       const int64_t distinct_cnt,
       const bool is_group_by_col = false,
       const bool is_default_datum = false) override;
-  virtual int pad_column_in_group_by(const int64_t row_cap, common::ObIAllocator &allocator) override;
   INHERIT_TO_STRING_KV("ObAggCell", ObAggCell, K_(cmp_fun));
 private:
   virtual bool can_use_index_info() const override
@@ -250,7 +245,8 @@ public:
   virtual int eval(
       blocksstable::ObStorageDatum &datum,
       const int64_t row_count = 1,
-      const int64_t agg_row_idx = 0) override;
+      const int64_t agg_row_idx = 0,
+      const int64_t agg_batch_size = 0) override;
   virtual int eval_batch(const common::ObDatum *datums, const int64_t count) override;
   virtual int eval_batch_in_group_by(
       const common::ObDatum *datums,
@@ -259,7 +255,6 @@ public:
       const int64_t distinct_cnt,
       const bool is_group_by_col = false,
       const bool is_default_datum = false) override;
-  virtual int pad_column_in_group_by(const int64_t row_cap, common::ObIAllocator &allocator) override;
   INHERIT_TO_STRING_KV("ObAggCell", ObAggCell, K_(cmp_fun));
 private:
   virtual bool can_use_index_info() const override
@@ -285,7 +280,8 @@ public:
   virtual int eval(
       blocksstable::ObStorageDatum &datum,
       const int64_t row_count = 1,
-      const int64_t agg_row_idx = 0) override;
+      const int64_t agg_row_idx = 0,
+      const int64_t agg_batch_size = 0) override;
   virtual int eval_batch(const common::ObDatum *datums, const int64_t count) override;
   virtual int eval_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg = false) override
   { return OB_NOT_SUPPORTED; }
@@ -327,7 +323,8 @@ public:
   virtual int eval(
       blocksstable::ObStorageDatum &datum,
       const int64_t row_count = 1,
-      const int64_t agg_row_idx = 0) override;
+      const int64_t agg_row_idx = 0,
+      const int64_t agg_batch_size = 0) override;
   virtual int eval_batch(const common::ObDatum *datums, const int64_t count) override;
   virtual int eval_micro_block(
       const ObTableIterParam &iter_param,
@@ -389,7 +386,8 @@ public:
   virtual int eval(
       blocksstable::ObStorageDatum &datum,
       const int64_t row_count = 1,
-      const int64_t agg_row_idx = 0) override;
+      const int64_t agg_row_idx = 0,
+      const int64_t agg_batch_size = 0) override;
   virtual int eval_batch(const common::ObDatum *datums, const int64_t count) override;
   virtual int eval_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg = false) override;
   virtual int eval_batch_in_group_by(
@@ -505,7 +503,8 @@ public:
   virtual int eval(
       blocksstable::ObStorageDatum &datum,
       const int64_t row_count = 1,
-      const int64_t agg_row_idx = 0) override;
+      const int64_t agg_row_idx = 0,
+      const int64_t agg_batch_size = 0) override;
   virtual int eval_batch(const common::ObDatum *datums, const int64_t count) override
   {
     UNUSEDx(datums, count);
@@ -606,7 +605,7 @@ public:
   // in the case where can not do batch scan or can not do group by pushdown
   int copy_output_row(const int64_t batch_idx, const ObTableIterParam &iter_param) override;
   int copy_output_rows(const int64_t batch_idx, const ObTableIterParam &iter_param) override;
-  int copy_single_output_row(sql::ObEvalCtx &ctx) override;
+  int copy_single_output_row(const ObTableIterParam &iter_param, sql::ObEvalCtx &ctx) override;
   int pad_column_in_group_by(const int64_t row_cap);
   int collect_result() override;
   int add_distinct_null_value() override;

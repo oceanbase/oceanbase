@@ -55,7 +55,6 @@ public:
   {
     // don't change the order
     // no need to reset rpc_proxy_
-    // no need to reset root_receive_ch_provider_
     coord_info_.destroy();
     row_allocator_.reset();
     allocator_.reset();
@@ -66,7 +65,6 @@ public:
   {
     coord_info_.reset_for_rescan();
     root_dfo_ = nullptr;
-    root_receive_ch_provider_.reset();
     first_row_fetched_ = false;
     first_row_sent_ = false;
     // time_recorder_ = 0;
@@ -136,7 +134,6 @@ protected:
   common::ObArenaAllocator row_allocator_;
   ObPxCoordInfo coord_info_;
   ObDfo *root_dfo_; // 指向 QC
-  ObPxRootReceiveChProvider root_receive_ch_provider_;
   bool first_row_fetched_;
   bool first_row_sent_;
   uint64_t qc_id_;

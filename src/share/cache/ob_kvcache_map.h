@@ -34,7 +34,7 @@ class ObKVCacheMap
   static constexpr int64_t DEFAULT_BUCKET_SIZE = (16L << 20); // 16M
   static constexpr int64_t MIN_BUCKET_SIZE     = ( 4L << 10); //  4K
   static const int64_t HAZARD_STATION_WAITING_THRESHOLD = 512;
-  static const int64_t HAZARD_STATION_SLOT_NUM = 1L << 10; //  1K
+  static const int64_t HAZARD_STATION_SLOT_NUM = 2L << 10; //  2K
   static constexpr int64_t BUCKET_SIZE_ARRAY_LEN = 4;
   static constexpr int64_t BUCKET_SIZE_ARRAY[BUCKET_SIZE_ARRAY_LEN] = {MIN_BUCKET_SIZE, MIN_BUCKET_SIZE << 4,  MIN_BUCKET_SIZE << 8, DEFAULT_BUCKET_SIZE};
   static const int64_t DEFAULT_LFU_THRESHOLD_BASE = 2;

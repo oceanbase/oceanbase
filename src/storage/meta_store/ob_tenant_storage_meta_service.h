@@ -42,7 +42,7 @@ public:
 
   // for slog & checkpoint operation
   int get_meta_block_list(ObIArray<blocksstable::MacroBlockId> &meta_block_list);
-  int write_checkpoint(bool is_force);
+  int write_checkpoint(const ObTenantSlogCheckpointWorkflow::Type ckpt_type);
   storage::ObStorageLogger &get_slogger() { return slogger_; }
   const ObTenantCheckpointSlogHandler& get_ckpt_slog_hdl() const { return ckpt_slog_handler_; };
 
@@ -108,9 +108,10 @@ public:
       common::ObArenaAllocator &allocator,
       char *&buf,
       int64_t &buf_len);
-  int update_tenant_preallocated_seqs(const ObTenantMonotonicIncSeqs &preallocated_seqs);
   ObSharedObjectReaderWriter &get_shared_object_reader_writer() { return shared_object_rwriter_; }
   ObSharedObjectReaderWriter &get_shared_object_raw_reader_writer() { return shared_object_raw_rwriter_; }
+  int update_hidden_sys_tenant_super_block_to_real(omt::ObTenant &sys_tenant);
+  int update_real_sys_tenant_super_block_to_hidden(omt::ObTenant &sys_tenant);
 
 #ifdef OB_BUILD_SHARED_STORAGE
   // for shared storage gc operation

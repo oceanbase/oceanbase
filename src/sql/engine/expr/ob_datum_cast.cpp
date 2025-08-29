@@ -506,6 +506,23 @@ int ObDatumHexUtils::rawtohex(const ObExpr &expr, const ObString &in_str,
         } else {
           out_str = lob_data;
         }
+        break;
+      }
+      case ObUserDefinedSQLType: {
+        // max_length_ field record udt_id, only allow GIS UDT currently
+        if (ObGeometryTypeCastUtil::is_sdo_geometry_udt(expr.args_[0]->max_length_)) {
+          ObString lob_data = in_str;
+          if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_alloc, ObLongTextType,
+                      expr.args_[0]->datum_meta_.cs_type_, true, lob_data))) {
+            LOG_WARN("fail to get real data.", K(ret), K(lob_data));
+          } else {
+            out_str = lob_data;
+          }
+        } else {
+          ret = OB_ERR_INVALID_HEX_NUMBER;
+          LOG_WARN("invalid hex number", K(ret), K(in_str), "type", in_type);
+        }
+        break;
       }
       default: {
         ret = OB_ERR_INVALID_HEX_NUMBER;
@@ -2481,14 +2498,20 @@ static int common_string_text(const ObExpr &expr,
   int ret = OB_SUCCESS;
   ObObjType in_type = expr.args_[0]->datum_meta_.type_;
   ObObjType out_type = expr.datum_meta_.type_; // ObLongTextType
-  ObCollationType in_cs_type = expr.args_[0]->datum_meta_.cs_type_;
-  ObCollationType out_cs_type = expr.datum_meta_.cs_type_;
+  const ObCollationType in_cs_type = expr.args_[0]->datum_meta_.cs_type_;
+  const ObCollationType out_cs_type = expr.datum_meta_.cs_type_;
+  const bool has_lob_header = expr.obj_meta_.has_lob_header();
   ObString res_str = in_str;
   bool is_final_res = false;
-  bool is_different_charset_type = (ObCharset::charset_type_by_coll(in_cs_type)
-                                    != ObCharset::charset_type_by_coll(out_cs_type));
   OB_ASSERT(ob_is_text_tc(out_type));
-  if (is_different_charset_type) {
+  // fast path for mysql same cs type because charset_type_by_coll may be slow
+  if (OB_LIKELY(in_cs_type == out_cs_type && has_lob_header && lib::is_mysql_mode() && OB_ISNULL(lob_locator))) {
+    if (OB_FAIL(ObTextStringHelper::pack_to_disk_inrow_lob(expr, ctx, res_str, res_datum))) {
+      LOG_WARN("pack_to_disk_inrow_lob fail", K(ret), K(expr), K(ctx));
+    } else {
+      is_final_res = true;
+    }
+  } else if (ObCharset::charset_type_by_coll(in_cs_type) != ObCharset::charset_type_by_coll(out_cs_type)) {
     if (OB_FAIL(common_string_string(expr, in_type, in_cs_type, out_type,
                                      out_cs_type, in_str, ctx, res_datum, is_final_res))) {
       LOG_WARN("Lob: fail to cast string to longtext", K(ret), K(in_str), K(expr));
@@ -2504,10 +2527,9 @@ static int common_string_text(const ObExpr &expr,
 
   if (OB_FAIL(ret)) {
   } else if (is_final_res) {
-  } else if (expr.obj_meta_.has_lob_header() && lib::is_mysql_mode() && nullptr == lob_locator) {
+  } else if (has_lob_header && lib::is_mysql_mode() && nullptr == lob_locator) {
     // fast path for mysql string_text
-    ObExprStrResAlloc expr_res_alloc(expr, ctx);
-    if (OB_FAIL(ObTextStringHelper::pack_to_disk_inrow_lob(expr_res_alloc, res_str, res_datum))) {
+    if (OB_FAIL(ObTextStringHelper::pack_to_disk_inrow_lob(expr, ctx, res_str, res_datum))) {
       LOG_WARN("pack_to_disk_inrow_lob fail", K(ret), K(expr), K(ctx));
     }
   } else {
@@ -2533,8 +2555,8 @@ int ObOdpsDataTypeCastUtil::common_string_text_wrap(const ObExpr &expr,
                                               ObEvalCtx &ctx,
                                               const ObLobLocatorV2 *lob_locator,
                                               ObDatum &res_datum,
-                                              ObObjType &in_type,
-                                              ObCollationType &in_cs_type)
+                                              const ObObjType &in_type,
+                                              const ObCollationType &in_cs_type)
 {
   int ret = OB_SUCCESS;
   ObObjType out_type = expr.datum_meta_.type_; // ObLongTextType
@@ -2543,7 +2565,7 @@ int ObOdpsDataTypeCastUtil::common_string_text_wrap(const ObExpr &expr,
   bool is_final_res = false;
   bool is_different_charset_type = (ObCharset::charset_type_by_coll(in_cs_type)
                                     != ObCharset::charset_type_by_coll(out_cs_type));
-  OB_ASSERT(ob_is_text_tc(out_type));
+  OB_ASSERT(is_lob_storage(out_type));
   if (is_different_charset_type) {
     if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_string_wrap(expr, in_type, in_cs_type, out_type,
                                      out_cs_type, in_str, ctx, res_datum, is_final_res))) {
@@ -4454,10 +4476,6 @@ CAST_FUNC_NAME(string, text)
 {
   EVAL_STRING_ARG()
   {
-    ObObjType in_type = expr.args_[0]->datum_meta_.type_;
-    ObObjType out_type = expr.datum_meta_.type_;
-    ObCollationType in_cs_type = expr.args_[0]->datum_meta_.cs_type_;
-    ObCollationType out_cs_type = expr.datum_meta_.cs_type_;
     ObString in_str(child_res->len_, child_res->ptr_);
     OZ(common_string_text(expr, in_str, ctx, NULL, res_datum));
   }
@@ -8335,7 +8353,17 @@ CAST_FUNC_NAME(bit, text)
       // if cast mode is column convert, using bit as int64 to do cast.
       ObFastFormatInt ffi(in_val);
       ObString res_str(ffi.length(), ffi.ptr());
-      if (OB_FAIL(common_copy_string_zf_to_text_result(expr, res_str, ctx, res_datum))) {
+      // When convert binary bit to other charset, need to align to mbminlen of destination charset
+      // by add '\0' prefix in mysql mode. (see mysql String::copy)
+      const ObCharsetInfo *cs = NULL;
+      int64_t align_offset = 0;
+      if (CS_TYPE_BINARY == expr.args_[0]->datum_meta_.cs_type_
+          && (NULL != (cs = ObCharset::get_charset(expr.datum_meta_.cs_type_)))) {
+        if (cs->mbminlen > 0 && res_str.length() % cs->mbminlen != 0) {
+          align_offset = cs->mbminlen - res_str.length() % cs->mbminlen;
+        }
+      }
+      if (OB_FAIL(common_copy_string_zf_to_text_result(expr, res_str, ctx, res_datum, align_offset))) {
         LOG_WARN("common_copy_string_zf_to_text_result failed", K(ret), K(res_str));
       }
     } else {
@@ -18159,7 +18187,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
   },
   {
     /*mysql date -> XXX*/
-    cast_not_expected,/*null*/
+    cast_not_support,/*null*/
     mdate_int,/*int*/
     mdate_uint,/*uint*/
     mdate_float,/*float*/
@@ -18192,7 +18220,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
   },
   {
     /*mysql datetime -> XXX*/
-    cast_not_expected,/*null*/
+    cast_not_support,/*null*/
     mdatetime_int,/*int*/
     mdatetime_uint,/*uint*/
     mdatetime_float,/*float*/

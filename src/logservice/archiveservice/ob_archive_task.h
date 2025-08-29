@@ -107,6 +107,11 @@ public:
                K_(max_scn),
                K_(send_task),
                KP(this));
+public:
+  int64_t generate_ts_;
+  int64_t push_fetch_queue_ts_;  // push fetch task to fetcher's queue_
+  int64_t submit_dest_queue_ts_;    // submit fetch task to dest fetch tasks queue
+  int64_t consume_ts_; // fether consume fetch task from dest fetch tasks queue
 
 private:
   uint64_t tenant_id_;
@@ -153,6 +158,12 @@ private:
  * */
 class ObArchiveSendTask : public common::ObLink
 {
+private:
+  static const int8_t INITAL_STATUS = 0;
+  static const int8_t ISSUE_STATUS = 1;
+  static const int8_t FINISH_STATUS = 2;
+  static const int8_t STALE_STATUS = 3;
+
 public:
   ObArchiveSendTask();
   virtual ~ObArchiveSendTask();
@@ -210,11 +221,11 @@ public:
                K_(data),
                K_(data_len),
                KP(this));
-private:
-  static const int8_t INITAL_STATUS = 0;
-  static const int8_t ISSUE_STATUS = 1;
-  static const int8_t FINISH_STATUS = 2;
-  static const int8_t STALE_STATUS = 3;
+public:
+  int64_t generate_ts_;     // send task generate timestamp
+  int64_t submit_ts_;      // send task submit to dest queue timestamp
+  int64_t consume_ts_;     // consume send task from dest queue timestamp
+  int64_t finish_ts_;      // send task finish timestamp
 
 private:
   int8_t status_;           // low 1st bit means issued(1) or not(0), low 2nd bit means finished(1) or not(0)

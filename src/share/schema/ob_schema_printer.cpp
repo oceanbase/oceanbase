@@ -4152,8 +4152,7 @@ int ObSchemaPrinter::add_create_tenant_variables(
   return ret;
 }
 
-int ObSchemaPrinter::print_element_type(const uint64_t tenant_id,
-                                        const uint64_t element_type_id,
+int ObSchemaPrinter::print_element_type(const uint64_t element_type_id,
                                         const ObUDTBase *elem_type_info,
                                         char* buf,
                                         const int64_t& buf_len,
@@ -4180,6 +4179,7 @@ int ObSchemaPrinter::print_element_type(const uint64_t tenant_id,
   } else {
     const ObUDTTypeInfo *udt_info = NULL;
     const ObDatabaseSchema *db_schema = NULL;
+    uint64_t tenant_id = pl::get_tenant_id_by_object_id(element_type_id);
     OZ (schema_guard_.get_udt_info(tenant_id, element_type_id, udt_info));
     if (OB_SUCC(ret) && OB_ISNULL(udt_info)) {
       ret = OB_ERR_SP_UNDECLARED_TYPE;
@@ -4235,8 +4235,7 @@ int ObSchemaPrinter::print_udt_definition(const uint64_t tenant_id,
     } else {
       OZ (databuff_printf(buf, buf_len, pos, " IS TABLE OF "));
     }
-    OZ (print_element_type(tenant_id,
-                           udt_info->get_coll_info()->get_elem_type_id(),
+    OZ (print_element_type(udt_info->get_coll_info()->get_elem_type_id(),
                            udt_info->get_coll_info(),
                            buf, buf_len, pos));
     if (OB_SUCC(ret)
@@ -4253,8 +4252,7 @@ int ObSchemaPrinter::print_udt_definition(const uint64_t tenant_id,
         CK (OB_NOT_NULL(attr));
         OZ (databuff_printf(buf, buf_len, pos, "  \"%.*s\" ",
                             attr->get_name().length(), attr->get_name().ptr()));
-        OZ (print_element_type(tenant_id,
-                               attr->get_type_attr_id(), attr,
+        OZ (print_element_type(attr->get_type_attr_id(), attr,
                                buf, buf_len, pos));
         if (OB_SUCC(ret)) {
           if (i != udt_info->get_attributes() - 1) {
@@ -6339,8 +6337,9 @@ int ObSchemaPrinter::print_heap_table_pk_info(const ObTableSchema &table_schema,
     }
     if (OB_SUCC(ret)) {
       if (!is_oracle_mode && table_schema.get_pk_comment_str().length() > 0) {
+        ObCStringHelper helper;
         if (OB_FAIL(databuff_printf(buf, buf_len, pos, " COMMENT '%s'" ,
-            to_cstring(ObHexEscapeSqlStr(table_schema.get_pk_comment_str()))))) {
+            helper.convert(ObHexEscapeSqlStr(table_schema.get_pk_comment_str()))))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print primary key comment", K(ret), K(table_schema));
         }
       }
@@ -6480,10 +6479,15 @@ int ObSchemaPrinter::print_location_definiton(const uint64_t tenant_id,
         if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  KRB5CONF = "))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print krb5conf", K(ret), K(*location_schema));
         }
-      } else if (0 == strncmp(CONFIGS, token, strlen(CONFIGS))) {
-        length = strlen(CONFIGS);
+      } else if (0 == strncmp(HDFS_CONFIGS, token, strlen(HDFS_CONFIGS))) {
+        length = strlen(HDFS_CONFIGS);
         if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  CONFIGS = "))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print configs", K(ret), K(*location_schema));
+        }
+      } else if (0 == strncmp(HADOOP_USERNAME, token, strlen(HADOOP_USERNAME))) {
+        length = strlen(HADOOP_USERNAME);
+        if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  USERNAME = "))) {
+          SHARE_SCHEMA_LOG(WARN, "fail to print user_name", K(ret), K(*location_schema));
         }
       }
 

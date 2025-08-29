@@ -22,6 +22,7 @@
 #include "common/ob_role.h"
 #include "common/ob_timeout_ctx.h"
 #include "common/ob_region.h"
+#include "common/ob_idc.h"
 #include "share/ob_define.h"
 #include "share/ob_force_print_log.h"
 #include "share/ob_encryption_util.h"
@@ -39,7 +40,6 @@ class ObBackupLSMetaInfosDesc;
 }
 namespace share
 {
-
 // for log archive and data backup, exclude backup lease service inner table
 enum ObBackupInnerTableVersion {
   OB_BACKUP_INNER_TABLE_V1 = 1, // since 2.2.60
@@ -71,6 +71,7 @@ const int64_t OB_MAX_INCREMENTAL_BACKUP_NUM = 64;
 const int64_t OB_MAX_LOG_ARCHIVE_CONCURRENCY = 128;
 const int64_t OB_BACKUP_PIECE_DIR_NAME_LENGTH = 128;
 const int64_t OB_BACKUP_LS_DIR_NAME_LENGTH = 64;
+const int64_t OB_MAX_BACKUP_SRC_INFO_LENGTH = 128;
 const int64_t OB_BACKUP_NO_SWITCH_PIECE_ID = 0;
 const int64_t OB_BACKUP_INVALID_PIECE_ID = -1;
 const int64_t OB_BACKUP_SWITCH_BASE_PIECE_ID = 1;
@@ -101,7 +102,7 @@ const int64_t OB_MAX_COMPAT_MODE_STR_LEN = 6; //ORACLE/MYSQL
 const int64_t OB_MAX_RESTORE_USER_AND_TENANT_LEN = OB_MAX_ORIGINAL_NANE_LENGTH + OB_MAX_USER_NAME_LENGTH + 1;
 const int64_t OB_MAX_RESTORE_TYPE_LEN = 8; // LOCATION/SERVICE/RAWPATH
 const int64_t OB_MAX_BACKUP_SET_NUM = 1000000;
-
+const int64_t OB_MAX_BACKUP_DEST_COUNT = 256;
 const int64_t OB_MAX_BACKUP_PIECE_NUM = 1000000;
 const int64_t MIN_LAG_TARGET_FOR_S3 = 60 * 1000 * 1000UL/*60s*/;
 
@@ -156,8 +157,9 @@ const char *const OB_STR_CLUSTER_BACKUP_BACKUP_SET_FILE_INFO = "cluster_backup_b
 const char *const OB_STR_TENANT_BACKUP_BACKUP_SET_FILE_INFO = "tenant_backup_backup_set_file_info";
 const char *const OB_STR_LS_FILE_INFO = "ls_file_info";
 const char *const OB_STR_TMP_FILE_MARK = ".tmp.";
-const char *const Ob_STR_BACKUP_REGION = "backup_region";
-const char *const OB_STR_BACKUP_ZONE = "backup_zone";
+const char *const Ob_STR_BACKUP_REGION = "region";
+const char *const OB_STR_BACKUP_ZONE = "zone";
+const char *const OB_STR_BACKUP_IDC = "idc";
 const char *const OB_STR_JOB_ID = "job_id";
 const char *const OB_STR_BACKUP_SET_ID = "backup_set_id";
 const char *const OB_STR_BACKUP_COMPRESSOR_TYPE = "compressor_type";
@@ -210,6 +212,7 @@ const char *const OB_STR_BACKUP_BACKUP_DEST_OPT = "backup_backup_dest_option";
 const char *const OB_STR_BACKUP_CHECK_FILE = "check_file";
 const char *const OB_STR_BACKUP_DEST_ENDPOINT = "endpoint";
 const char *const OB_STR_BACKUP_DEST_AUTHORIZATION = "authorization";
+const char *const OB_STR_BACKUP_DEST_ID = "dest_id";
 const char *const OB_STR_BACKUP_DEST_EXTENSION = "extension";
 const char *const OB_STR_BACKUP_CHECK_FILE_NAME = "check_file_name";
 const char *const OB_STR_BACKUP_LAST_CHECK_TIME = "last_check_time";
@@ -367,7 +370,10 @@ const char *const OB_RESTORE_PREVIEW_BACKUP_CLUSTER_NAME_SESSION_STR = "__ob_res
 const char *const OB_RESTORE_PREVIEW_BACKUP_CLUSTER_ID_SESSION_STR = "__ob_restore_preview_backup_cluster_id__";
 const char *const MULTI_BACKUP_SET_PATH_PREFIX = "BACKUPSET";
 const char *const MULTI_BACKUP_PIECE_PATH_PREFIX = "BACKUPPIECE";
-
+const char *const BACKUP_REGION = "region=";
+const char *const BACKUP_ZONE = "zone=";
+const char *const BACKUP_IDC = "idc=";
+const char *const DEST_ID = "dest_id=";
 const char *const ENCRYPT_KEY = "encrypt_key=";
 const char *const OB_STR_INITIATOR_JOB_ID = "initiator_job_id";
 const char *const OB_STR_EXECUTOR_TENANT_ID = "executor_tenant_id";
@@ -602,6 +608,25 @@ struct ObBackupSetDesc {
   ObBackupType backup_type_;  // FULL OR INC
   share::SCN min_restore_scn_;
   int64_t total_bytes_;
+};
+
+enum class ObBackupSrcType: int64_t
+{
+  EMPTY = 0,
+  ZONE = 1,
+  IDC = 2,
+  REGION = 3,
+  MAX
+};
+
+struct ObDestIOProhibitedInfo final
+{
+public:
+  ObDestIOProhibitedInfo(): io_prohibited_(false), last_access_time_(0) {}
+  ~ObDestIOProhibitedInfo() {}
+  TO_STRING_KV(K_(io_prohibited), K_(last_access_time));
+  bool io_prohibited_;
+  int64_t last_access_time_;
 };
 
 struct ObRestoreBackupSetBriefInfo final
@@ -914,24 +939,36 @@ public:
   using common::ObObjectStorageInfo::set;
 
 public:
-  ObBackupStorageInfo() {}
+  ObBackupStorageInfo();
   virtual ~ObBackupStorageInfo();
-
+  virtual void reset() override;
   int set(
       const common::ObStorageType device_type,
       const char *endpoint,
       const char *authorization,
-      const char *extension);
+      const char *extension,
+      const int64_t dest_id);
   int set_endpoint(const common::ObStorageType device_type, const char *storage_info);
   int get_authorization_info(char *authorization, const int64_t length, int64_t &out_len) const;
+  virtual int get_storage_info_str(char *storage_info, const int64_t info_len) const override;
   int get_authorization_info(char *authorization, const int64_t length) const;
+  int get_src_type(ObBackupSrcType &src_type) const;
+  int get_src_info(char *src_info, const int64_t info_length) const;
+  int64_t get_dest_id() const { return dest_id_; }
+  virtual bool is_backup_storage_info() const override { return true; }
+  virtual int assign(const ObObjectStorageInfo &storage_info) override;
   int get_unencrypted_authorization_info(char *authorization, const int64_t length) const;
   int get_unencrypted_authorization_info(char *authorization, const int64_t length, int64_t &out_len) const;
+  bool operator ==(const ObBackupStorageInfo &storage_info) const;
+  bool operator !=(const ObBackupStorageInfo &storage_info) const;
+
+  INHERIT_TO_STRING_KV("ObObjectStorageInfo", ObObjectStorageInfo, K_(dest_id));
 
 protected:
+  int64_t dest_id_;
+  virtual int parse_storage_info_(const char *storage_info, bool &has_needed_extension) override;
 #ifdef OB_BUILD_TDE_SECURITY
   virtual int get_access_key_(char *key_buf, const int64_t key_buf_len) const override;
-  virtual int parse_storage_info_(const char *storage_info, bool &has_needed_extension) override;
   int encrypt_access_key_(char *encrypt_key, const int64_t length) const;
   int decrypt_access_key_(const char *buf);
 #endif
@@ -963,6 +1000,12 @@ public:
       const char *endpoint,
       const char *authorization,
       const char *extension);
+  int set(
+      const char *path,
+      const char *endpoint,
+      const char *authorization,
+      const char *extension,
+      const int64_t dest_id);
   int set(const char *root_path, const char *storage_info);
   int set(const char *root_path, const ObBackupStorageInfo *storage_info);
   int set_without_decryption(const common::ObString &backup_dest);
@@ -975,9 +1018,10 @@ public:
   int is_backup_path_equal(const ObBackupDest &backup_dest, bool &is_equal) const;
   bool is_assume_role_mode() const { return OB_ISNULL(storage_info_) ? false : storage_info_->is_assume_role_mode(); }
   bool is_enable_worm() const { return OB_ISNULL(storage_info_) ? false : storage_info_->is_enable_worm(); }
-  bool is_storage_type_file(){ return OB_ISNULL(storage_info_) ?
+  bool is_storage_type_file() const { return OB_ISNULL(storage_info_) ?
       false : ObStorageType::OB_STORAGE_FILE == storage_info_->get_type(); }
-  bool is_storage_type_s3(){ return OB_ISNULL(storage_info_) ? false : ObStorageType::OB_STORAGE_S3 == storage_info_->get_type(); }
+  bool is_storage_type_s3() const { return OB_ISNULL(storage_info_) ? false : ObStorageType::OB_STORAGE_S3 == storage_info_->get_type(); }
+  ObStorageType get_storage_type() const { return OB_ISNULL(storage_info_) ? ObStorageType::OB_STORAGE_MAX_TYPE : storage_info_->get_type(); }
   int get_backup_dest_str(char *buf, const int64_t buf_size) const;
   int get_backup_dest_str_with_primary_attr(char *buf, const int64_t buf_size) const;
   int get_backup_path_str(char *buf, const int64_t buf_size) const;
@@ -1082,7 +1126,6 @@ public:
   template<class T>
   static int parse_backup_format_input(
       const ObString &format_input,
-      const int64_t max_length,
       common::ObIArray<T> &array);
   static int convert_timestamp_to_date(
       const int64_t snapshot_version,
@@ -1098,7 +1141,17 @@ public:
   static int get_tenant_sys_time_zone_wrap(const uint64_t tenant_id,
                                            ObFixedLengthString<common::OB_MAX_TIMESTAMP_TZ_LENGTH> &time_zone,
                                            ObTimeZoneInfoWrap &time_zone_info_wrap);
+  static int get_tenant_backup_servers(
+      const uint64_t tenant_id,
+      common::ObArray<ObAddr> &server_list,
+      bool &is_self_tenant_server);
 private:
+  static int get_full_type_zones_in_locality_(const uint64_t tenant_id, ObArray<ObZone> &full_zones);
+  static int get_tenant_alive_servers_in_zone_(
+      const uint64_t tenant_id,
+      const ObArray<ObZone> &zone_list,
+      ObArray<ObAddr> &server_list,
+      bool &is_self_tenant_server);
   static const int64_t  RETRY_INTERVAL = 10 * 1000 * 1000;
   static const int64_t  MAX_RETRY_TIMES = 3;
 };
@@ -1181,10 +1234,10 @@ public:
   BackupDataType type_;
 };
 
-struct ObBackupRegion
+struct ObBackupRegion final
 {
   ObBackupRegion();
-  virtual ~ObBackupRegion();
+  ~ObBackupRegion();
   void reset();
   int set(const ObString &region, const int64_t priority);
 
@@ -1194,10 +1247,23 @@ struct ObBackupRegion
   int64_t priority_;
 };
 
-struct ObBackupZone
+struct ObBackupIdc final
+{
+  ObBackupIdc();
+  ~ObBackupIdc();
+  void reset();
+  int set(const ObString &idc, const int64_t priority);
+
+  bool is_valid() const { return !idc_.is_empty() && priority_ >= 0; }
+  TO_STRING_KV(K_(idc), K_(priority));
+  ObIDC idc_;
+  int64_t priority_;
+};
+
+struct ObBackupZone final
 {
   ObBackupZone();
-  virtual ~ObBackupZone();
+  ~ObBackupZone();
   void reset();
   int set(const ObString &zone, const int64_t priority);
 
@@ -1211,7 +1277,6 @@ struct ObBackupZone
 template<class T>
 int ObBackupUtils::parse_backup_format_input(
     const ObString &format_input,
-    const int64_t max_length,
     ObIArray<T> &array)
 {
   int ret = OB_SUCCESS;
@@ -1223,19 +1288,16 @@ int ObBackupUtils::parse_backup_format_input(
   T object;
   int64_t priority = 0;
 
-  if (max_length <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "parse backup format input get invalid argument", K(ret), K(max_length));
-  } else if (0 == format_input.length()) {
+  if (0 == format_input.length()) {
     //do nothing
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < format_input.length(); ++i) {
 
       if (format_input.ptr()[i] == split_commma || format_input.ptr()[i] == split_semicolon) {
         length = i - pos;
-        if (length <= 0 || length > max_length || length > INT32_MAX) {
+        if (length <= 0 || length > INT32_MAX) {
           ret = OB_ERR_UNEXPECTED;
-          OB_LOG(WARN, "format input value is unexpcted", K(ret), K(format_input), K(length), K(max_length));
+          OB_LOG(WARN, "format input value is unexpcted", K(ret), K(format_input), K(length));
         } else {
           ObString tmp_string;
           object.reset();
@@ -1836,13 +1898,16 @@ struct ObBackupDestAttribute
   {
     MEMSET(access_id_, 0, sizeof(access_id_));
     MEMSET(access_key_, 0, sizeof(access_key_));
+    MEMSET(src_info_, 0, sizeof(src_info_));
     max_iops_ = 0;
     max_bandwidth_ = 0;
   }
-
+  bool change_qosattr() const { return max_iops_ > 0 || max_bandwidth_ > 0; }
+  bool change_src_info() const { return src_info_[0] != '\0'; }
   TO_STRING_KV(K_(max_iops), K_(max_bandwidth));
   char access_id_[OB_MAX_BACKUP_ACCESSID_LENGTH];
   char access_key_[OB_MAX_BACKUP_ACCESSKEY_LENGTH];
+  char src_info_[OB_MAX_BACKUP_SRC_INFO_LENGTH];
   int64_t max_iops_;
   int64_t max_bandwidth_;
 };
@@ -1851,9 +1916,10 @@ class ObBackupDestAttributeParser
 {
 public:
   static int parse(const common::ObString &str, ObBackupDestAttribute &option);
-
+  static int parse_access_info(const ObString &str, ObBackupDestAttribute &access_info);
 private:
   static int parse_(const char *str, ObBackupDestAttribute &option);
+  static int set_access_info_(const char *prefix, const char *token, char *output, const int64_t output_len);
 public:
   class ExtraArgsCb : public share::ObKVMatchCb
   {
@@ -1867,6 +1933,10 @@ public:
     static int set_access_key_(const char *val, ObBackupDestAttribute &option);
     static int set_max_iops_(const char *val, ObBackupDestAttribute &option);
     static int set_max_bandwidth_(const char *val, ObBackupDestAttribute &option);
+    static int set_zone_(const char *val, ObBackupDestAttribute &option);
+    static int set_idc_(const char *val, ObBackupDestAttribute &option);
+    static int set_region_(const char *val, ObBackupDestAttribute &option);
+    static int set_src_info_(const char *val, const ObBackupSrcType src_type, ObBackupDestAttribute &option);
   private:
     ObBackupDestAttribute &option_;
     struct Action {
@@ -1874,7 +1944,7 @@ public:
       Setter setter_;
       bool required_;
     };
-    const static int ACTION_CNT = 4;
+    const static int ACTION_CNT = 7;
     static Action actions_[ACTION_CNT];
     bool is_set_[ACTION_CNT];
   };
@@ -1921,6 +1991,24 @@ public:
   ObBackupTableListItem end_key_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupPartialTableListMeta);
+};
+
+struct ObBackupDestType final
+{
+  enum TYPE : int64_t
+  {
+    DEST_TYPE_BACKUP_DATA = 0,
+    DEST_TYPE_ARCHIVE_LOG = 1,
+    DEST_TYPE_BACKUP_KEY = 2,
+    DEST_TYPE_RESTORE_DATA = 3,
+    DEST_TYPE_RESTORE_LOG = 4,
+    DEST_TYPE_MAX
+  };
+  static const char *get_str(const TYPE &type);
+  static TYPE get_type(const char *type_str);
+  static OB_INLINE bool is_valid(const TYPE &type) { return type >= 0 && type < TYPE::DEST_TYPE_MAX; }
+
+  static OB_INLINE bool is_clean_valid(const TYPE &type) { return DEST_TYPE_BACKUP_DATA == type || DEST_TYPE_ARCHIVE_LOG == type; }
 };
 }//share
 }//oceanbase

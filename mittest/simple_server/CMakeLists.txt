@@ -75,7 +75,6 @@ ob_offline_observer(test_collect_mv mv/test_collect_mv.cpp)
 ob_unittest_observer(test_transfer_no_kill_tx test_transfer_tx.cpp)
 ob_unittest_observer(test_ls_recover test_ls_recover.cpp)
 ob_unittest_observer(test_ob_simple_cluster test_ob_simple_cluster.cpp)
-ob_unittest_observer(test_ob_partition_balance test_ob_partition_balance.cpp)
 ob_unittest_observer(test_mds_table_checkpoint test_mds_table_checkpoint.cpp)
 ob_unittest_observer(test_ob_black_list_service test_ob_black_list_service.cpp)
 ob_unittest_observer(test_ob_queuing_table test_ob_queuing_table.cpp)
@@ -166,6 +165,10 @@ ob_unittest_observer(test_ob_parallel_migration_mode rootservice/test_ob_paralle
 ob_unittest_observer(test_ls_status_operator rootservice/test_ls_status_operator.cpp)
 ob_unittest_observer(test_external_resource_schema rootservice/test_external_resource_schema.cpp)
 ob_unittest_observer(test_location_schema_refresh rootservice/test_location_schema_refresh.cpp)
+ob_unittest_observer(test_create_tenant_compare rootservice/test_create_tenant_compare.cpp)
+ob_unittest_observer(test_bootstrap_hang rootservice/test_bootstrap_hang.cpp)
+ob_unittest_observer(test_ob_partition_balance rootservice/test_ob_partition_balance.cpp)
+ob_unittest_observer(test_object_balance_weight rootservice/test_object_balance_weight.cpp)
 ####### rootservice case #########
 
 

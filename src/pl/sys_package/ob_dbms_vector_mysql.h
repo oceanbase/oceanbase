@@ -32,8 +32,22 @@ public:
   DECLARE_FUNC(rebuild_index);
   DECLARE_FUNC(refresh_index_inner);
   DECLARE_FUNC(rebuild_index_inner);
+  DECLARE_FUNC(index_vector_memory_advisor);
+  DECLARE_FUNC(index_vector_memory_estimate);
 
 #undef DECLARE_FUNC
+
+  static int parse_idx_param(const ObString &idx_type_str,
+                             const ObString &idx_param_str,
+                             uint32_t dim_count,
+                             ObVectorIndexParam &index_param);
+
+private:
+  static int get_estimate_memory_str(ObVectorIndexParam index_param,
+                                     uint64_t num_vectors,
+                                     uint64_t tablet_max_num_vectors,
+                                     ObStringBuffer &res_buf);
+  static int print_mem_size(uint64_t mem_size, ObStringBuffer &res_buf);
 };
 
 } // namespace pl

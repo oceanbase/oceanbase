@@ -9603,6 +9603,62 @@ int ObRawExprUtils::extract_params(const common::ObIArray<ObRawExpr*> &exprs,
   return ret;
 }
 
+int ObRawExprUtils::extract_dynamic_params(ObRawExpr* expr,
+                                           common::ObIArray<ObRawExpr*> &params,
+                                           const bool without_const_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("expr passed in is NULL", K(ret));
+  } else if (expr->is_param_expr() &&
+             expr->has_flag(CNT_DYNAMIC_PARAM) &&
+             !expr->has_flag(CNT_ONETIME)) {
+    if (OB_FAIL(params.push_back(expr))) {
+      LOG_WARN("failed to push back param", K(ret));
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      ObRawExpr *param_expr = expr->get_param_expr(i);
+      if (OB_ISNULL(param_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param expr is null", K(ret));
+      } else if ((expr->get_expr_type() == T_OP_OR ||
+                  expr->get_expr_type() == T_OP_AND) &&
+                  without_const_expr &&
+                  param_expr->is_const_expr()) {
+        //do nothing
+      } else if (OB_FAIL(SMART_CALL(extract_dynamic_params(expr->get_param_expr(i),
+                                                    params,
+                                                    without_const_expr)))) {
+        LOG_WARN("failed to extract dynamic params", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRawExprUtils::extract_dynamic_params(const common::ObIArray<ObRawExpr*> &exprs,
+                                            common::ObIArray<ObRawExpr*> &params,
+                                            const bool without_const_expr)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
+    ObRawExpr *expr = exprs.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expr is null", K(ret));
+    } else if (expr->is_const_expr() && without_const_expr) {
+      // do nothing
+    } else if (OB_FAIL(extract_dynamic_params(expr,
+                                              params,
+                                              without_const_expr))) {
+      LOG_WARN("failed to extract dynamic params", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObRawExprUtils::is_contain_params(const common::ObIArray<ObRawExpr*> &exprs,
                                       bool &is_contain)
 {
