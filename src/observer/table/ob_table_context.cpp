@@ -804,7 +804,8 @@ int ObTableCtx::check_is_cs_replica_query(bool &is_cs_replica_query) const
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid route policy", K(ret));
     } else {
-      is_cs_replica_query = ObRoutePolicyType::COLUMN_STORE_ONLY == loc_meta->route_policy_;
+      is_cs_replica_query = ObRoutePolicyType::COLUMN_STORE_ONLY == loc_meta->route_policy_
+                            && loc_meta->is_weak_read_;
     }
     LOG_TRACE("[CS-Replica] check cs replica query", K(ret), K(is_cs_replica_query), KPC(loc_meta));
   }

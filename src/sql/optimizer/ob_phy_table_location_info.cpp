@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_OPT
 
 #include "ob_phy_table_location_info.h"
-#include "sql/das/ob_das_location_router.h"
 #include "storage/tx/wrs/ob_black_list.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -60,7 +59,7 @@ int ObOptTabletLoc::assign_with_only_readable_replica(const ObObjectID &partitio
                                                       const ObObjectID &first_level_part_id,
                                                       const common::ObTabletID &tablet_id,
                                                       const ObLSLocation &ls_location,
-                                                      const ObRoutePolicyType route_policy)
+                                                      const ObDASTableLocMeta &loc_meta)
 {
   int ret = OB_SUCCESS;
   reset();
@@ -69,6 +68,8 @@ int ObOptTabletLoc::assign_with_only_readable_replica(const ObObjectID &partitio
   tablet_id_ = tablet_id;
   ls_id_ = ls_location.get_ls_id();
   int64_t leader_replica_idx = OB_INVALID_INDEX;
+  const ObRoutePolicyType route_policy = static_cast<const ObRoutePolicyType>(loc_meta.route_policy_);
+  bool is_weak_read = loc_meta.is_weak_read_;
   for (int64_t i = 0; OB_SUCC(ret) && i < ls_location.get_replica_locations().count(); ++i) {
     const ObLSReplicaLocation &replica_loc = ls_location.get_replica_locations().at(i);
     if (replica_loc.is_strong_leader()) {
@@ -82,8 +83,12 @@ int ObOptTabletLoc::assign_with_only_readable_replica(const ObObjectID &partitio
       } else if (OB_FAIL(ObBLService::get_instance().check_in_black_list(bl_key, in_black_list))) {
         LOG_WARN("check in black list failed", K(ret));
       } else if (!in_black_list) {
-        if ((route_policy == COLUMN_STORE_ONLY && replica_loc.get_replica_type() != REPLICA_TYPE_COLUMNSTORE) ||
-            (route_policy != COLUMN_STORE_ONLY && replica_loc.get_replica_type() == REPLICA_TYPE_COLUMNSTORE)) {
+        if ((is_weak_read && 
+             route_policy == COLUMN_STORE_ONLY && 
+             replica_loc.get_replica_type() != REPLICA_TYPE_COLUMNSTORE) ||
+            (is_weak_read && 
+              route_policy != COLUMN_STORE_ONLY && 
+              replica_loc.get_replica_type() == REPLICA_TYPE_COLUMNSTORE)) {
           // skip the tmp_replica_loc
           LOG_TRACE("skip the replica due to the replica policy.", K(ret), K(replica_loc));
         } else if (OB_FAIL(replica_locations_.push_back(replica_loc))) {
@@ -349,7 +354,7 @@ int ObCandiTabletLoc::set_part_loc_with_only_readable_replica(const ObObjectID &
                                                               const ObObjectID &first_level_part_id,
                                                               const common::ObTabletID &tablet_id,
                                                               const ObLSLocation &partition_location,
-                                                              const ObRoutePolicyType route_policy)
+                                                              const ObDASTableLocMeta &loc_meta)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(has_selected_replica())) {
@@ -360,7 +365,7 @@ int ObCandiTabletLoc::set_part_loc_with_only_readable_replica(const ObObjectID &
                                                                        first_level_part_id,
                                                                        tablet_id,
                                                                        partition_location,
-                                                                       route_policy))) {
+                                                                       loc_meta))) {
     LOG_WARN("fail to assign partition location with only readable replica",
              K(ret), K(partition_location));
   }

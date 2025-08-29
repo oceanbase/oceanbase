@@ -1054,16 +1054,23 @@ int ObOptimizer::init_replica_policy(ObDMLStmt &dml_stmt, const ObSQLSessionInfo
 {
   int ret = OB_SUCCESS;
   int64_t route_policy_type = 0;
-  if (OB_FAIL(session.get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy_type))) {
+  bool is_weak_read = false;
+  if (OB_ISNULL(ctx_.get_exec_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null exec ctx", K(ret));
+  } else if (OB_ISNULL(ctx_.get_exec_ctx()->get_sql_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null sql ctx", K(ret));
+  } else if (OB_FAIL(session.get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy_type))) {
     LOG_WARN("fail to get sys variable", K(ret));
-  } else if (COLUMN_STORE_ONLY == static_cast<ObRoutePolicyType>(route_policy_type)) {
-    if (dml_stmt.get_query_ctx()->has_dml_write_stmt_ ||
-        dml_stmt.get_query_ctx()->is_contain_select_for_update_) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "when route policy is COLUMN_STORE_ONLY, read query request");
-    } else {
-      ctx_.set_use_column_store_replica(true);
-    }
+  } else if (OB_FAIL(ObTableLocation::get_is_weak_read(dml_stmt, 
+                                                       &session, 
+                                                       ctx_.get_exec_ctx()->get_sql_ctx(), 
+                                                       is_weak_read))) {
+    LOG_WARN("fail to get is weak read", K(ret));
+  } else if (is_weak_read && 
+             COLUMN_STORE_ONLY == static_cast<ObRoutePolicyType>(route_policy_type)) {
+    ctx_.set_use_column_store_replica(true);
   }
   return ret;
 }

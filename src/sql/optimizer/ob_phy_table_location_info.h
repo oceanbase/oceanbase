@@ -16,6 +16,7 @@
 #include "sql/ob_phy_table_location.h"
 #include "sql/ob_sql_define.h"
 #include "sql/optimizer/ob_route_policy.h"
+#include "sql/das/ob_das_location_router.h"
 namespace oceanbase
 {
 namespace sql
@@ -39,7 +40,7 @@ public:
                                         const ObObjectID &first_level_part_id,
                                         const common::ObTabletID &tablet_id,
                                         const share::ObLSLocation &partition_location,
-                                        const ObRoutePolicyType route_policy);
+                                        const ObDASTableLocMeta &loc_meta);
 
   bool is_valid() const;
   bool operator==(const ObOptTabletLoc &other) const;
@@ -107,7 +108,7 @@ public:
                                               const ObObjectID &first_level_part_id,
                                               const common::ObTabletID &tablet_id,
                                               const share::ObLSLocation &partition_location,
-                                              const ObRoutePolicyType route_policy);
+                                              const ObDASTableLocMeta &loc_meta);
   const ObOptTabletLoc &get_partition_location() const { return opt_tablet_loc_; }
   ObOptTabletLoc &get_partition_location() { return opt_tablet_loc_; }
   const common::ObIArray<int64_t> &get_priority_replica_idxs() const { return priority_replica_idxs_; }

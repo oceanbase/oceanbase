@@ -421,7 +421,7 @@ private:
   int nonblock_get_readable_replica(const uint64_t tenant_id,
                                     const common::ObTabletID &tablet_id,
                                     ObDASTabletLoc &tablet_loc,
-                                    const ObRoutePolicyType route_policy);
+                                    const ObDASTableLocMeta &loc_meta);
 private:
   int last_errno_;
   int cur_errno_;

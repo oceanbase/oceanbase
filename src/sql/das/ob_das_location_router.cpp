@@ -857,11 +857,13 @@ ObDASLocationRouter::~ObDASLocationRouter()
 int ObDASLocationRouter::nonblock_get_readable_replica(const uint64_t tenant_id,
                                                        const ObTabletID &tablet_id,
                                                        ObDASTabletLoc &tablet_loc,
-                                                       const ObRoutePolicyType route_policy)
+                                                       const ObDASTableLocMeta &loc_meta)
 {
   int ret = OB_SUCCESS;
   ObLSLocation ls_loc;
   tablet_loc.tablet_id_ = tablet_id;
+  ObRoutePolicyType route_policy = static_cast<ObRoutePolicyType>(loc_meta.route_policy_);
+  bool is_weak_read = loc_meta.is_weak_read_;
   if (OB_FAIL(all_tablet_list_.push_back(tablet_id))) {
     LOG_WARN("store access tablet id failed", K(ret));
   } else if (OB_FAIL(GCTX.location_service_->nonblock_get(tenant_id,
@@ -901,8 +903,12 @@ int ObDASLocationRouter::nonblock_get_readable_replica(const uint64_t tenant_id,
     } else if (OB_FAIL(ObBLService::get_instance().check_in_black_list(bl_key, in_black_list))) {
       LOG_WARN("check in black list failed", K(ret));
     } else if (!in_black_list) {
-      if ((route_policy == COLUMN_STORE_ONLY && tmp_replica_loc.get_replica_type() != REPLICA_TYPE_COLUMNSTORE) ||
-          (route_policy != COLUMN_STORE_ONLY && tmp_replica_loc.get_replica_type() == REPLICA_TYPE_COLUMNSTORE) ||
+      if ((is_weak_read && 
+           route_policy == COLUMN_STORE_ONLY && 
+           tmp_replica_loc.get_replica_type() != REPLICA_TYPE_COLUMNSTORE) ||
+          (is_weak_read && 
+            route_policy != COLUMN_STORE_ONLY && 
+            tmp_replica_loc.get_replica_type() == REPLICA_TYPE_COLUMNSTORE) ||
           (route_policy == FORCE_READONLY_ZONE && tmp_replica_loc.get_replica_type() != REPLICA_TYPE_READONLY)) {
         // skip the tmp_replica_loc
         LOG_TRACE("skip the replica due to the replica policy.", K(ret), K(tmp_replica_loc.get_replica_type()), K(tmp_replica_loc));
@@ -919,7 +925,7 @@ int ObDASLocationRouter::nonblock_get_readable_replica(const uint64_t tenant_id,
   if (OB_SUCC(ret)) {
     if (local_replica != nullptr) {
       tablet_loc.server_ = local_replica->get_server();
-    } else if (route_policy == COLUMN_STORE_ONLY && remote_replicas.empty()) {
+    } else if (is_weak_read && route_policy == COLUMN_STORE_ONLY && remote_replicas.empty()) {
       //do not retry
       ret = OB_NO_REPLICA_VALID;
       LOG_USER_ERROR(OB_NO_REPLICA_VALID);
@@ -1018,7 +1024,7 @@ int ObDASLocationRouter::nonblock_get_candi_tablet_locations(const ObDASTableLoc
                                                                              first_level_part_id,
                                                                              tablet_ids.at(i),
                                                                              location,
-                                                                             static_cast<ObRoutePolicyType>(loc_meta.route_policy_)))) {
+                                                                             loc_meta))) {
           LOG_WARN("fail to set partition location with only readable replica",
                    K(ret),K(i), K(location), K(candi_tablet_locs), K(tablet_ids), K(partition_ids));
         }
@@ -1047,8 +1053,7 @@ int ObDASLocationRouter::get_tablet_loc(const ObDASTableLocMeta &loc_meta,
       //if this statement is retried because of OB_NOT_MASTER, we will choose the leader directly
       ret = nonblock_get_leader(tenant_id, tablet_id, tablet_loc);
     } else {
-      ret = nonblock_get_readable_replica(tenant_id, tablet_id, tablet_loc, 
-                                          static_cast<ObRoutePolicyType>(loc_meta.route_policy_));
+      ret = nonblock_get_readable_replica(tenant_id, tablet_id, tablet_loc, loc_meta);
     }
   }
   return ret;

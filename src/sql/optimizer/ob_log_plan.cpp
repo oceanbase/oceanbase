@@ -1027,9 +1027,6 @@ int ObLogPlan::select_replicas(ObExecContext &exec_ctx,
         }
       }
     }
-  } else if (COLUMN_STORE_ONLY == route_policy_type) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "when route policy is COLUMN_STORE_ONLY, weak read request");
   } else {
     const bool sess_in_retry = session->get_is_in_retry_for_dup_tbl(); //重试状态下不优化复制表的副本选择
     const bool is_dup_ls_modified = session->is_dup_ls_modified();
