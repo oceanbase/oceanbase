@@ -11754,6 +11754,9 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
         // column that has been add, alter, change or modify
         const ObColumnSchemaV2 *orig_column_schema = NULL;
         const ObSchemaOperationType op_type = alter_column_schema->alter_type_;
+        bool has_prefix_idx_col_deps = false;
+        bool can_change_prefix_column_length = false;
+        const ObColumnSchemaV2 *prefix_column = nullptr;
         switch (op_type) {
           case OB_DDL_DROP_COLUMN: {
             if (OB_FAIL(drop_column_offline(origin_table_schema, new_table_schema,
@@ -11842,6 +11845,18 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
                                                        new_column_schema,
                                                        is_contain_part_key))) {
                 LOG_WARN("prepare new column schema failed", K(ret));
+              } else if (OB_FAIL(origin_table_schema.check_prefix_index_columns_depend(
+                           *orig_column_schema, schema_guard, has_prefix_idx_col_deps,
+                           can_change_prefix_column_length, prefix_column))) {
+                LOG_WARN("check prefix index columns depend failed", K(ret));
+              } else if (can_change_prefix_column_length && (!has_prefix_idx_col_deps || OB_ISNULL(prefix_column))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("prefix index columns depend", K(ret), K(has_prefix_idx_col_deps), K(can_change_prefix_column_length), K(prefix_column));
+              } else if (can_change_prefix_column_length
+                      && prefix_column->get_data_length() > new_column_schema.get_data_length()
+                      && OB_FAIL(drop_column_update_new_table(prefix_column->get_column_name_str(), new_table_schema))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "Alter column that the prefix index column depends on");
               } else if (OB_FAIL(new_table_schema.alter_column(
                            new_column_schema, ObTableSchema::CHECK_MODE_OFFLINE, false))) {
                 LOG_WARN("alter column failed", K(ret));
@@ -21528,7 +21543,8 @@ int ObDDLService::gen_hidden_index_schema_columns(const ObTableSchema &orig_tabl
                                                   ObTableSchema &new_table_schema,
                                                   ObTableSchema &index_schema,
                                                   const ObIArray<ObColumnSortItem> &domain_index_columns,
-                                                  const ObIArray<ObString> &domain_store_columns)
+                                                  const ObIArray<ObString> &domain_store_columns,
+                                                  const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
   SMART_VAR(ObCreateIndexArg, create_index_arg) {
@@ -21575,7 +21591,39 @@ int ObDDLService::gen_hidden_index_schema_columns(const ObTableSchema &orig_tabl
         if (col->is_prefix_column()) {
           sort_item.prefix_len_ = col->get_data_length();
         }
-        if (OB_FAIL(index_columns.push_back(std::make_pair(col->get_index_position(), sort_item)))) {
+        if (col->is_prefix_index_column()) {
+          ObSEArray<uint64_t, 1> deps_column_ids;
+          const ObColumnSchemaV2 *orig_column = NULL;
+          const ObColumnSchemaV2 *alter_column = NULL;
+          const ObColumnSchemaV2 *prefix_column = NULL;
+          ObString alter_column_name;
+          if (OB_ISNULL(prefix_column = orig_table_schema.get_column_schema(col->get_column_name_str()))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("prefix column not found in table schema", K(ret), K(col->get_column_id()), K(orig_table_schema));
+          } else if (OB_FAIL(prefix_column->get_cascaded_column_ids(deps_column_ids))) {
+            LOG_WARN("get cascaded column ids from column schema failed", K(ret), KPC(prefix_column));
+          } else if (OB_UNLIKELY(deps_column_ids.count() != 1)) {
+            // do nothing
+          } else if (OB_ISNULL(orig_column = orig_table_schema.get_column_schema(deps_column_ids.at(0)))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("deps column not found in table schema", K(ret), K(deps_column_ids.at(0)), K(orig_table_schema));
+          } else if (OB_FAIL(col_name_map.get(orig_column->get_column_name_str(), alter_column_name))) {
+            LOG_WARN("failed to get new name", K(ret), K(orig_column->get_column_name()));
+          } else if (OB_ISNULL(alter_column = new_table_schema.get_column_schema(alter_column_name))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("alter column not found in table schema", K(ret), K(alter_column_name), K(new_table_schema));
+          } else if (alter_column->get_data_length() < col->get_data_length()) {
+            if (MOCK_DATA_VERSION_4_3_5_4 > data_version || (DATA_VERSION_4_4_0_0 <= data_version && DATA_VERSION_4_4_1_0 > data_version) ) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected error, data version is not supported", K(ret), K(data_version));
+            } else {
+              // alter dep_column_length < prefix_len, we need delete prefix column ,change prefix index to common index
+              sort_item.column_name_ = alter_column_name;
+            }
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(index_columns.push_back(std::make_pair(col->get_index_position(), sort_item)))) {
           LOG_WARN("fail to add index columns", K(ret));
         }
       } else if (col->is_user_specified_storing_column()) {
@@ -22232,7 +22280,7 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
 
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(gen_hidden_index_schema_columns(
-                     orig_table_schema, *index_table_schema, schema_guard, drop_cols_id_arr, col_name_map, is_oracle_mode, new_table_schema, new_index_schema, domain_index_columns, domain_store_columns))) {
+                     orig_table_schema, *index_table_schema, schema_guard, drop_cols_id_arr, col_name_map, is_oracle_mode, new_table_schema, new_index_schema, domain_index_columns, domain_store_columns, alter_table_arg.data_version_))) {
             LOG_WARN("failed to gen hidden index schema", K(ret));
           } else if ((hidden_table_schema.get_part_level() > 0 || hidden_table_schema.is_auto_partitioned_table())
                      && new_index_schema.is_index_local_storage()

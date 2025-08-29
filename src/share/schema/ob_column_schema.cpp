@@ -213,6 +213,17 @@ bool ObColumnSchemaV2::is_prefix_column() const
   return bret;
 }
 
+bool ObColumnSchemaV2::is_prefix_index_column() const
+{
+  bool bret = false;
+  if (is_hidden() && !is_generated_column()) {
+    const char *prefix_str = "__substr";
+    int64_t min_len = min(column_name_.length(), static_cast<int64_t>(strlen(prefix_str)));
+    bret = (0 == strncasecmp(get_column_name(), prefix_str, min_len));
+  }
+  return bret;
+}
+
 bool ObColumnSchemaV2::is_func_idx_column() const
 {
   bool bret = false;
