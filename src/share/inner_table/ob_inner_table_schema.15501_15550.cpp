@@ -1290,7 +1290,7 @@ int ObInnerTableSchema::all_virtual_dynamic_partition_table_ora_schema(ObTableSc
   return ret;
 }
 
-int ObInnerTableSchema::all_virtual_dba_source_v1_ora_schema(ObTableSchema &table_schema)
+int ObInnerTableSchema::all_virtual_dba_ob_source_ora_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
   uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
@@ -1299,7 +1299,7 @@ int ObInnerTableSchema::all_virtual_dba_source_v1_ora_schema(ObTableSchema &tabl
   table_schema.set_tenant_id(OB_SYS_TENANT_ID);
   table_schema.set_tablegroup_id(OB_INVALID_ID);
   table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
-  table_schema.set_table_id(OB_ALL_VIRTUAL_DBA_SOURCE_V1_ORA_TID);
+  table_schema.set_table_id(OB_ALL_VIRTUAL_DBA_OB_SOURCE_ORA_TID);
   table_schema.set_rowkey_split_pos(0);
   table_schema.set_is_use_bloomfilter(false);
   table_schema.set_progressive_merge_num(0);
@@ -1310,7 +1310,7 @@ int ObInnerTableSchema::all_virtual_dba_source_v1_ora_schema(ObTableSchema &tabl
   table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_table_name(OB_ALL_VIRTUAL_DBA_SOURCE_V1_ORA_TNAME))) {
+    if (OB_FAIL(table_schema.set_table_name(OB_ALL_VIRTUAL_DBA_OB_SOURCE_ORA_TNAME))) {
       LOG_ERROR("fail to set table_name", K(ret));
     }
   }

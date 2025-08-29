@@ -11409,7 +11409,7 @@ select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all
 IF(count(*) >= 0, 1, 0)
 1
 select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_sensitive_rule_privilege_history limit 1;
-desc oceanbase.__all_virtual_dba_source_v1;
+desc oceanbase.__all_virtual_dba_ob_source;
 Field	Type	Null	Key	Default	Extra
 owner	varchar(128)	NO		NULL	
 name	varchar(128)	NO		NULL	
@@ -11419,7 +11419,7 @@ text	varchar(4000)	NO		NULL
 origin_con_id	decimal(38,0)	NO		NULL	
 object_id	decimal(38,0)	NO		NULL	
 database_id	decimal(38,0)	NO		NULL	
-select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_dba_source_v1;
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_dba_ob_source;
 IF(count(*) >= 0, 1, 0)
 1
-select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_dba_source_v1 limit 1;
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_dba_ob_source limit 1;

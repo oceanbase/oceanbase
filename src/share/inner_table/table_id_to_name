@@ -1276,7 +1276,7 @@
 # 12560: __all_virtual_sensitive_rule_privilege_history
 # 12560: __all_sensitive_rule_privilege  # BASE_TABLE_NAME
 # 12560: __all_sensitive_rule_privilege_history  # BASE_TABLE_NAME1
-# 12571: __all_virtual_dba_source_v1
+# 12571: __all_virtual_dba_ob_source
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -1975,8 +1975,8 @@
 # 15508: __all_mview_dep  # BASE_TABLE_NAME
 # 15509: ALL_VIRTUAL_DYNAMIC_PARTITION_TABLE
 # 15509: __all_virtual_dynamic_partition_table  # BASE_TABLE_NAME
-# 15533: ALL_VIRTUAL_DBA_SOURCE_V1
-# 15533: __all_virtual_dba_source_v1  # BASE_TABLE_NAME
+# 15533: ALL_VIRTUAL_DBA_OB_SOURCE
+# 15533: __all_virtual_dba_ob_source  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA
@@ -2821,9 +2821,9 @@
 # 25308: DBA_MVIEW_RUNNING_JOBS
 # 25309: DBA_MVIEW_DEPS
 # 25310: DBA_OB_DYNAMIC_PARTITION_TABLES
-# 25316: DBA_SOURCE_V1
-# 25317: ALL_SOURCE_V1
-# 25318: USER_SOURCE_V1
+# 25316: DBA_OB_SOURCE
+# 25317: ALL_OB_SOURCE
+# 25318: USER_OB_SOURCE
 # 28002: GV$OB_SQL_AUDIT
 # 28003: V$OB_SQL_AUDIT
 # 28004: GV$INSTANCE

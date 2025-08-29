@@ -16461,7 +16461,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
 
 def_table_schema(
   owner = 'wangbai.wx',
-  table_name      = '__all_virtual_dba_source_v1',
+  table_name      = '__all_virtual_dba_ob_source',
   table_id        = '12571',
   table_type      = 'VIRTUAL_TABLE',
   rowkey_columns  = [],
@@ -17027,7 +17027,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15507', all_def_keyword
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15508', all_def_keywords['__all_mview_dep']))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15509', all_def_keywords['__all_virtual_dynamic_partition_table']))
 # 15510: __all_virtual_balance_job_description
-def_table_schema(**gen_oracle_mapping_virtual_table_def('15533', all_def_keywords['__all_virtual_dba_source_v1']))
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15533', all_def_keywords['__all_virtual_dba_ob_source']))
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -64816,7 +64816,7 @@ def_table_schema(
 
 def_table_schema(
     owner           = 'wangbai.wx',
-    table_name      = 'DBA_SOURCE_V1',
+    table_name      = 'DBA_OB_SOURCE',
     database_id     = 'OB_ORA_SYS_DATABASE_ID',
     table_id        = '25316',
     table_type      = 'SYSTEM_VIEW',
@@ -64825,13 +64825,13 @@ def_table_schema(
     gm_columns      = [],
     in_tenant_space = True,
     view_definition = """
-    SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_DBA_SOURCE_V1;
+    SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_DBA_OB_SOURCE;
 """.replace("\n", " ")
 )
 
 def_table_schema(
     owner           = 'wangbai.wx',
-    table_name      = 'ALL_SOURCE_V1',
+    table_name      = 'ALL_OB_SOURCE',
     database_id     = 'OB_ORA_SYS_DATABASE_ID',
     table_id        = '25317',
     table_type      = 'SYSTEM_VIEW',
@@ -64840,7 +64840,7 @@ def_table_schema(
     gm_columns      = [],
     in_tenant_space = True,
     view_definition = """
-    SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_DBA_SOURCE_V1
+    SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_DBA_OB_SOURCE
     WHERE origin_con_id != 1 AND
       (owner = USER OR
        USER_CAN_ACCESS_OBJ(CASE type
@@ -64853,13 +64853,13 @@ def_table_schema(
          WHEN 'TYPE BODY' THEN 4
          END, object_id, database_id) = 1)
     UNION ALL
-    SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_DBA_SOURCE_V1 WHERE origin_con_id = 1;
+    SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_DBA_OB_SOURCE WHERE origin_con_id = 1;
 """.replace("\n", " ")
 )
 
 def_table_schema(
     owner           = 'wangbai.wx',
-    table_name      = 'USER_SOURCE_V1',
+    table_name      = 'USER_OB_SOURCE',
     database_id     = 'OB_ORA_SYS_DATABASE_ID',
     table_id        = '25318',
     table_type      = 'SYSTEM_VIEW',
@@ -64868,7 +64868,7 @@ def_table_schema(
     gm_columns      = [],
     in_tenant_space = True,
     view_definition = """
-    SELECT name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_DBA_SOURCE_V1 WHERE owner = USER AND origin_con_id != 1;
+    SELECT name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_DBA_OB_SOURCE WHERE owner = USER AND origin_con_id != 1;
 """.replace("\n", " ")
 )
 #

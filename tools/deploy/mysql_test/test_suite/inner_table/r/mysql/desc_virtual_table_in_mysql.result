@@ -5858,7 +5858,7 @@ IF(count(*) >= 0, 1, 0)
 "oceanbase.__all_virtual_tenant_vector_mem_info runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
-desc oceanbase.__all_virtual_dba_source_v1;
+desc oceanbase.__all_virtual_dba_ob_source;
 Field	Type	Null	Key	Default	Extra
 owner	varchar(128)	NO		NULL	
 name	varchar(128)	NO		NULL	
@@ -5868,6 +5868,6 @@ text	varchar(4000)	NO		NULL
 origin_con_id	decimal(38,0)	NO		NULL	
 object_id	decimal(38,0)	NO		NULL	
 database_id	decimal(38,0)	NO		NULL	
-select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_dba_source_v1;
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_dba_ob_source;
 IF(count(*) >= 0, 1, 0)
 1

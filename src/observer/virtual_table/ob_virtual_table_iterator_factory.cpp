@@ -2674,7 +2674,7 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
-          case OB_ALL_VIRTUAL_DBA_SOURCE_V1_TID: {
+          case OB_ALL_VIRTUAL_DBA_OB_SOURCE_TID: {
             ObAllVirtualDbaSource *table = nullptr;
             if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualDbaSource, table))) {
               SERVER_LOG(ERROR, "ObAllVirtualDbaSource table construct fail", K(ret));

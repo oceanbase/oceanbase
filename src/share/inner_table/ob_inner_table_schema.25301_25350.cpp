@@ -484,7 +484,7 @@ int ObInnerTableSchema::dba_ob_dynamic_partition_tables_ora_schema(ObTableSchema
   return ret;
 }
 
-int ObInnerTableSchema::dba_source_v1_schema(ObTableSchema &table_schema)
+int ObInnerTableSchema::dba_ob_source_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
   uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
@@ -493,7 +493,7 @@ int ObInnerTableSchema::dba_source_v1_schema(ObTableSchema &table_schema)
   table_schema.set_tenant_id(OB_SYS_TENANT_ID);
   table_schema.set_tablegroup_id(OB_INVALID_ID);
   table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
-  table_schema.set_table_id(OB_DBA_SOURCE_V1_TID);
+  table_schema.set_table_id(OB_DBA_OB_SOURCE_TID);
   table_schema.set_rowkey_split_pos(0);
   table_schema.set_is_use_bloomfilter(false);
   table_schema.set_progressive_merge_num(0);
@@ -504,7 +504,7 @@ int ObInnerTableSchema::dba_source_v1_schema(ObTableSchema &table_schema)
   table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_table_name(OB_DBA_SOURCE_V1_TNAME))) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_OB_SOURCE_TNAME))) {
       LOG_ERROR("fail to set table_name", K(ret));
     }
   }
@@ -519,7 +519,7 @@ int ObInnerTableSchema::dba_source_v1_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_DBA_SOURCE_V1; )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_DBA_OB_SOURCE; )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -535,7 +535,7 @@ int ObInnerTableSchema::dba_source_v1_schema(ObTableSchema &table_schema)
   return ret;
 }
 
-int ObInnerTableSchema::all_source_v1_schema(ObTableSchema &table_schema)
+int ObInnerTableSchema::all_ob_source_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
   uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
@@ -544,7 +544,7 @@ int ObInnerTableSchema::all_source_v1_schema(ObTableSchema &table_schema)
   table_schema.set_tenant_id(OB_SYS_TENANT_ID);
   table_schema.set_tablegroup_id(OB_INVALID_ID);
   table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
-  table_schema.set_table_id(OB_ALL_SOURCE_V1_TID);
+  table_schema.set_table_id(OB_ALL_OB_SOURCE_TID);
   table_schema.set_rowkey_split_pos(0);
   table_schema.set_is_use_bloomfilter(false);
   table_schema.set_progressive_merge_num(0);
@@ -555,7 +555,7 @@ int ObInnerTableSchema::all_source_v1_schema(ObTableSchema &table_schema)
   table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_table_name(OB_ALL_SOURCE_V1_TNAME))) {
+    if (OB_FAIL(table_schema.set_table_name(OB_ALL_OB_SOURCE_TNAME))) {
       LOG_ERROR("fail to set table_name", K(ret));
     }
   }
@@ -570,7 +570,7 @@ int ObInnerTableSchema::all_source_v1_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_DBA_SOURCE_V1     WHERE origin_con_id != 1 AND       (owner = USER OR        USER_CAN_ACCESS_OBJ(CASE type          WHEN 'PACKAGE' THEN 3          WHEN 'PACKAGE BODY' THEN 3          WHEN 'PROCEDURE' THEN 12          WHEN 'FUNCTION' THEN 9          WHEN 'TRIGGER' THEN 7          WHEN 'TYPE' THEN 4          WHEN 'TYPE BODY' THEN 4          END, object_id, database_id) = 1)     UNION ALL     SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_DBA_SOURCE_V1 WHERE origin_con_id = 1; )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_DBA_OB_SOURCE     WHERE origin_con_id != 1 AND       (owner = USER OR        USER_CAN_ACCESS_OBJ(CASE type          WHEN 'PACKAGE' THEN 3          WHEN 'PACKAGE BODY' THEN 3          WHEN 'PROCEDURE' THEN 12          WHEN 'FUNCTION' THEN 9          WHEN 'TRIGGER' THEN 7          WHEN 'TYPE' THEN 4          WHEN 'TYPE BODY' THEN 4          END, object_id, database_id) = 1)     UNION ALL     SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_DBA_OB_SOURCE WHERE origin_con_id = 1; )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -586,7 +586,7 @@ int ObInnerTableSchema::all_source_v1_schema(ObTableSchema &table_schema)
   return ret;
 }
 
-int ObInnerTableSchema::user_source_v1_schema(ObTableSchema &table_schema)
+int ObInnerTableSchema::user_ob_source_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
   uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
@@ -595,7 +595,7 @@ int ObInnerTableSchema::user_source_v1_schema(ObTableSchema &table_schema)
   table_schema.set_tenant_id(OB_SYS_TENANT_ID);
   table_schema.set_tablegroup_id(OB_INVALID_ID);
   table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
-  table_schema.set_table_id(OB_USER_SOURCE_V1_TID);
+  table_schema.set_table_id(OB_USER_OB_SOURCE_TID);
   table_schema.set_rowkey_split_pos(0);
   table_schema.set_is_use_bloomfilter(false);
   table_schema.set_progressive_merge_num(0);
@@ -606,7 +606,7 @@ int ObInnerTableSchema::user_source_v1_schema(ObTableSchema &table_schema)
   table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_table_name(OB_USER_SOURCE_V1_TNAME))) {
+    if (OB_FAIL(table_schema.set_table_name(OB_USER_OB_SOURCE_TNAME))) {
       LOG_ERROR("fail to set table_name", K(ret));
     }
   }
@@ -621,7 +621,7 @@ int ObInnerTableSchema::user_source_v1_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_DBA_SOURCE_V1 WHERE owner = USER AND origin_con_id != 1; )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_DBA_OB_SOURCE WHERE owner = USER AND origin_con_id != 1; )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
