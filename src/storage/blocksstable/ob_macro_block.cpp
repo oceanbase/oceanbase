@@ -384,6 +384,11 @@ int ObMacroBlock::flush(ObStorageObjectHandle &macro_handle,
         object_info.size_ = data_.capacity();
       } else {
         object_info.size_ = data_.upper_align_length();
+#ifdef OB_BUILD_SHARED_STORAGE
+        if (object_info.size_ - data_.length() > 0 && GCTX.is_shared_storage_mode()) {
+          MEMSET(data_.current(), '\0', object_info.size_ - data_.length());
+        }
+#endif
       }
       object_info.mtl_tenant_id_ = MTL_ID();
       object_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
