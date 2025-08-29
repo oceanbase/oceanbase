@@ -81,6 +81,12 @@ int ObTransformTempTable::transform_one_stmt(common::ObIArray<ObParentDMLStmt> &
         LOG_TRACE("succeed to do project pruning for temp table", K(temp_table_infos),  K(is_happened));
       }
     }
+    if (OB_SUCC(ret) && trans_happened) {
+      temp_table_infos.reuse();
+      if (OB_FAIL(stmt->collect_temp_table_infos(temp_table_infos))) {
+        LOG_WARN("failed to collect temp table infos", K(ret));
+      }
+    }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(try_inline_temp_table(stmt, temp_table_infos, is_happened))) {
         LOG_WARN("failed to inline temp table", K(ret));
