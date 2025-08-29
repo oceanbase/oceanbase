@@ -263,10 +263,10 @@ void ObSSTablePrinter::print_cell(const ObObj &cell)
   P_VALUE_STR_B(helper.convert(cell));
 }
 
-void ObSSTablePrinter::print_cell(const ObStorageDatum &datum)
+void ObSSTablePrinter::print_cell(const ObStorageDatum &datum, const int64_t hex_length)
 {
   ObCStringHelper helper;
-  ObStorageDatumWrapper wrapper(datum, true);
+  ObStorageDatumWrapper wrapper(datum, true, hex_length);
   P_VALUE_STR_B(helper.convert(wrapper));
 }
 
@@ -403,7 +403,7 @@ void ObSSTablePrinter::print_pre_agg_row(const int64_t column_cnt, ObAggRowReade
         P_VALUE_BINT(meta_type);
         P_COLON();
         P_NAME("value=");
-        print_cell(agg_datum);
+        print_cell(agg_datum, tools::ObDumpMacroBlockContext::DEFUALT_DUMP_HEX_LENGTH);
         P_COLON();
         P_NAME("is_min_max_prefix=");
         P_VALUE_INT(is_min_max_prefix);
@@ -539,6 +539,7 @@ void ObSSTablePrinter::print_store_row(
     const ObDatumRow *row,
     const ObObjMeta *obj_metas,
     const int64_t type_array_column_cnt,
+    const int64_t print_hex_length,
     const bool is_index_block,
     const bool is_trans_sstable)
 {
@@ -609,7 +610,7 @@ void ObSSTablePrinter::print_store_row(
           print_cell(obj);
         }
       } else {
-        print_cell(row->storage_datums_[i]);
+        print_cell(row->storage_datums_[i], print_hex_length);
       }
     }
   }
