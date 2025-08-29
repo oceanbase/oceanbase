@@ -15236,6 +15236,7 @@ int ObDMLResolver::resolve_rowid_expr(ObDMLStmt *stmt, const TableItem &table_it
                                                        index_keys,
                                                        part_expr,
                                                        subpart_expr,
+                                                       true,
                                                        rowid_expr))) {
             LOG_WARN("build rowid expr failed", K(ret));
           } else {
