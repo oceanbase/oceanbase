@@ -45,6 +45,7 @@
 #include "lib/signal/ob_signal_handlers.h"
 #include "common/ob_common_utility.h"
 #include "lib/oblog/ob_log_dba_event.h"
+#include "lib/ob_abort.h"
 
 #define OB_LOG_MAX_PAR_MOD_SIZE 64
 #define OB_LOG_MAX_SUB_MOD_SIZE 64
@@ -800,7 +801,7 @@ private:
 
   int try_upgrade_log_item(ObPLogItem *&log_item, bool &upgrade_result);
 
-  void check_log_end(ObPLogItem &log_item, int64_t pos);
+  int check_log_end(ObPLogItem &log_item, int64_t pos);
 
   int backtrace_if_needed(ObPLogItem &log_item, const bool force);
   int check_tl_log_limiter(const uint64_t location_hash_val, const int32_t level, const int errcode,
@@ -984,15 +985,17 @@ inline int8_t& ObThreadLogLevelUtils::get_level_()
   return level;
 }
 
-inline void ObLogger::check_log_end(ObPLogItem &log_item, int64_t pos)
+inline int ObLogger::check_log_end(ObPLogItem &log_item, int64_t pos)
 {
+  int ret = OB_SUCCESS;
   const int64_t buf_size = log_item.get_buf_size();
   if (buf_size > 0) {
-    if (pos < 0) {
-      pos = 0;
-    } else if (pos > buf_size - 2) {
+    DEBUG_ASSERT(pos >=0 && pos <= buf_size);
+    if (pos > buf_size - 2) {
       pos = buf_size - 2;
+      ret = OB_SIZE_OVERFLOW;
     }
+    // ret==OB_SIZE_OVERFLOW will be ignored
     char *data = log_item.get_buf();
     if (pos > 0 && data[pos - 1] != '\n') {
       data[pos++] = '\n';
@@ -1000,6 +1003,7 @@ inline void ObLogger::check_log_end(ObPLogItem &log_item, int64_t pos)
     data[pos] = '\0';
     log_item.set_data_len(pos);
   }
+  return ret;
 }
 
 template<typename Function>
@@ -1287,19 +1291,18 @@ inline void ObLogger::do_log_message(const char *mod_name,
           log_item->set_header_len(pos);
           if (allow) {
             if (OB_FAIL(log_data_func(buf, buf_len, pos)) && buf_len == MAX_LOG_SIZE) {
-            LOG_STDERR("log data error ret = %d\n", ret);
-            } else {
-              check_log_end(*log_item, pos);
-              if (OB_FAIL(backtrace_if_needed(*log_item, force_bt)) && buf_len == MAX_LOG_SIZE) {
-                LOG_STDERR("backtrace_if_needed error ret = %d\n", ret);
-              }
+              LOG_STDERR("log data error ret = %d\n", ret);
+            } else if (OB_FAIL(check_log_end(*log_item, pos))) {
+              // do nothing
+            } else if (OB_FAIL(backtrace_if_needed(*log_item, force_bt)) && buf_len == MAX_LOG_SIZE) {
+              LOG_STDERR("backtrace_if_needed error ret = %d\n", ret);
             }
           } else {
             int64_t pos = log_item->get_header_len();
             if (OB_FAIL(logdata_print_info(buf, buf_len, pos, limiter_info))) {
               // do nothing
-            } else {
-              check_log_end(*log_item, pos);
+            } else if (OB_FAIL(check_log_end(*log_item, pos))) {
+              // do nothing
             }
           }
         }
