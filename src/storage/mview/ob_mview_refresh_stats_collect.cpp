@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_mview_refresh_stats_collect.h"
+#include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/engine/ob_exec_context.h"
 #include "storage/mview/cmd/ob_mview_refresh_executor.h"
 #include "storage/mview/ob_mview_refresh_ctx.h"
@@ -135,7 +136,7 @@ int ObMViewRefreshStatsCollection::collect_after_refresh(ObMViewRefreshCtx &refr
   } else {
     ObMViewTransaction &trans = *refresh_ctx.trans_;
     const ObIArray<ObDependencyInfo> &dependency_infos = refresh_ctx.dependency_infos_;
-    const ObIArray<ObMLogInfo> &mlog_infos = refresh_ctx.mlog_infos_;
+    const ObIArray<uint64_t> &tables_need_mlog = refresh_ctx.tables_need_mlog_;
     int64_t num_rows = 0;
     if (ObMVRefreshStatsCollectionLevel::ADVANCED == collection_level_ &&
         OB_TMP_FAIL(ObMViewRefreshHelper::get_table_row_num(trans, tenant_id_, mview_id_,
@@ -146,7 +147,6 @@ int ObMViewRefreshStatsCollection::collect_after_refresh(ObMViewRefreshCtx &refr
     if (collection_level_ >= ObMVRefreshStatsCollectionLevel::TYPICAL) {
       for (int64_t i = 0; OB_SUCC(ret) && i < dependency_infos.count(); ++i) {
         const ObDependencyInfo &dep = dependency_infos.at(i);
-        const ObMLogInfo &mlog_info = mlog_infos.at(i);
         int64_t num_rows_ins = 0;
         int64_t num_rows_upd = 0;
         int64_t num_rows_del = 0;
@@ -165,11 +165,11 @@ int ObMViewRefreshStatsCollection::collect_after_refresh(ObMViewRefreshCtx &refr
         }
         if (OB_SUCC(ret)) {
           ObWarningBufferIgnoreScope ignore_warning_guard;
-          if (mlog_info.is_valid() &&
+          if (ObOptimizerUtil::find_item(tables_need_mlog, dep.get_ref_obj_id()) &&
               OB_TMP_FAIL(ObMViewRefreshHelper::get_mlog_dml_row_num(
-                trans, tenant_id_, mlog_info.get_mlog_id(), tmp_scn_range,
+                trans, tenant_id_, table_schema->get_mlog_tid(), tmp_scn_range,
                 num_rows_ins, num_rows_upd, num_rows_del))) {
-            LOG_WARN("fail to get mlog dml row num", KR(tmp_ret), K(mlog_info));
+            LOG_WARN("fail to get mlog dml row num", KR(tmp_ret), K(table_schema->get_mlog_tid()));
           }
           if (ObMVRefreshStatsCollectionLevel::ADVANCED == collection_level_ &&
               OB_TMP_FAIL(ObMViewRefreshHelper::get_table_row_num(

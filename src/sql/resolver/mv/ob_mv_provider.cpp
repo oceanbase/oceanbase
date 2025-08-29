@@ -40,6 +40,7 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
 {
   int ret = OB_SUCCESS;
   dependency_infos_.reuse();
+  tables_need_mlog_.reuse();
   operators_.reuse();
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
@@ -66,6 +67,7 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
       int64_t max_version = OB_INVALID_VERSION;
       ObSEArray<ObString, 4> operators;
       ObSEArray<ObDependencyInfo, 4> dependency_infos;
+      ObSEArray<uint64_t, 4> tables_need_mlog;
       SMART_VARS_2((ObExecContext, exec_ctx, alloc), (ObPhysicalPlanCtx, phy_plan_ctx, alloc)) {
         LinkExecCtxGuard link_guard(*session_info, exec_ctx);
         exec_ctx.set_my_session(session_info);
@@ -106,7 +108,9 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
                                                  &expr_factory,
                                                  &stmt_factory))) {
           LOG_WARN("failed to transform mv stmt", K(ret));
-        } else if (OB_FALSE_IT(view_stmt = static_cast<ObSelectStmt *>(trans_stmt))) {
+        } else if (OB_ISNULL(view_stmt = static_cast<ObSelectStmt *>(trans_stmt))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null stmt", K(ret));
         } else if (OB_FAIL(ObDependencyInfo::collect_dep_infos(query_ctx->reference_obj_tables_,
                                                                dependency_infos,
                                                                ObObjectType::VIEW,
@@ -115,6 +119,10 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
           LOG_WARN("failed to collect dep infos", K(ret));
         } else if (OB_FAIL(dependency_infos_.assign(dependency_infos))) {
           LOG_WARN("failed to assign fixed array", K(ret));
+        } else if (OB_FAIL(collect_tables_need_mlog(view_stmt, tables_need_mlog))) {
+          LOG_WARN("failed to collect tables need mlog", K(ret));
+        } else if (OB_FAIL(tables_need_mlog_.assign(tables_need_mlog))) {
+          LOG_WARN("failed to assign tables need mlog", K(ret));
         } else if (OB_FAIL(check_mv_column_type(mv_schema, view_stmt, *session_info))) {
           if (OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH == ret) {
             inited_ = true;
@@ -179,6 +187,36 @@ int ObMVProvider::pre_process_view_stmt(ObSelectStmt &view_stmt)
           set_queries.at(j)->get_select_item(i).alias_name_ = set_queries.at(0)->get_select_item(i).alias_name_;
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObMVProvider::collect_tables_need_mlog(const ObSelectStmt* stmt,
+                                           ObIArray<uint64_t> &tables_need_mlog)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObSelectStmt*, 4> child_stmts;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null stmt", K(ret));
+  } else if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
+    LOG_WARN("failed to get child stmts", K(ret), KPC(stmt));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_table_size(); ++i) {
+    const TableItem* table = stmt->get_table_item(i);
+    if (OB_ISNULL(table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(i));
+    } else if (table->is_mv_proctime_table_) {
+      // do nothing
+    } else if (OB_FAIL(add_var_to_array_no_dup(tables_need_mlog, table->ref_id_))) {
+      LOG_WARN("failed to push back table ref id", K(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+    if (OB_FAIL(SMART_CALL(collect_tables_need_mlog(child_stmts.at(i), tables_need_mlog)))) {
+      LOG_WARN("failed to check collect tables need mlog for child stmt", K(ret), K(i), KPC(stmt));
     }
   }
   return ret;
@@ -294,6 +332,7 @@ int ObMVProvider::get_mlog_mv_refresh_infos(ObSQLSessionInfo *session_info,
                                             const share::SCN *mv_last_refresh_scn,
                                             const share::SCN *mv_refresh_scn,
                                             ObIArray<ObDependencyInfo> &dep_infos,
+                                            ObIArray<uint64_t> &tables_need_mlog,
                                             bool &can_fast_refresh,
                                             const ObIArray<ObString> *&operators)
 {
@@ -307,6 +346,8 @@ int ObMVProvider::get_mlog_mv_refresh_infos(ObSQLSessionInfo *session_info,
     LOG_WARN("failed to init mv provider", K(ret));
   } else if (OB_FAIL(dep_infos.assign(dependency_infos_))) {
     LOG_WARN("failed to assign dependency_infos", K(ret));
+  } else if (OB_FAIL(tables_need_mlog.assign(tables_need_mlog_))) {
+    LOG_WARN("failed to assign tables need mlog", K(ret));
   } else if (OB_UNLIKELY(ObMVRefreshableType::OB_MV_REFRESH_INVALID == refreshable_type_)) {
     // column type for mv is changed after it is created
     ret = OB_NOT_SUPPORTED;

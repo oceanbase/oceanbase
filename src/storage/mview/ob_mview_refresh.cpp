@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/mview/ob_mview_refresh.h"
+#include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
 #include "sql/resolver/mv/ob_mv_provider.h"
 #include "storage/mview/ob_mview_refresh_helper.h"
@@ -171,6 +172,7 @@ int ObMViewRefresher::prepare_for_refresh()
   ObMViewInfo &mview_info = refresh_ctx_->mview_info_;
   ObMViewRefreshStatsParams &refresh_stats_params = refresh_ctx_->refresh_stats_params_;
   ObIArray<ObDependencyInfo> &dependency_infos = refresh_ctx_->dependency_infos_;
+  ObIArray<uint64_t> &tables_need_mlog = refresh_ctx_->tables_need_mlog_;
   // ObScnRange &refresh_scn_range = refresh_ctx_->refresh_scn_range_;
   ObScnRange &mview_refresh_scn_range = refresh_ctx_->mview_refresh_scn_range_;
   ObScnRange &base_table_scn_range = refresh_ctx_->base_table_scn_range_;
@@ -309,9 +311,10 @@ int ObMViewRefresher::prepare_for_refresh()
                                                              &schema_guard,
                                                              base_table_scn_range.start_scn_,
                                                              base_table_scn_range.end_scn_,
-                                                             &mview_refresh_scn_range.start_scn_, 
+                                                             &mview_refresh_scn_range.start_scn_,
                                                              &mview_refresh_scn_range.end_scn_,
                                                              dependency_infos,
+                                                             tables_need_mlog,
                                                              can_fast_refresh,
                                                              operators))) {
       LOG_WARN("fail to get mlog mv refresh infos", KR(ret), K(tenant_id));
@@ -383,6 +386,7 @@ int ObMViewRefresher::fetch_based_infos(ObSchemaGetterGuard &schema_guard)
   const uint64_t tenant_id = refresh_param_.tenant_id_;
   ObMViewTransaction &trans = *refresh_ctx_->trans_;
   const ObIArray<ObDependencyInfo> &dependency_infos = refresh_ctx_->dependency_infos_;
+  const ObIArray<uint64_t> &tables_need_mlog = refresh_ctx_->tables_need_mlog_;
   ObIArray<ObBasedSchemaObjectInfo> &based_schema_object_infos =
     refresh_ctx_->based_schema_object_infos_;
   ObIArray<ObMLogInfo> &mlog_infos = refresh_ctx_->mlog_infos_;
@@ -414,7 +418,7 @@ int ObMViewRefresher::fetch_based_infos(ObSchemaGetterGuard &schema_guard)
           LOG_WARN("fail to push back base info", KR(ret));
         }
       }
-      if (OB_SUCC(ret)) {
+      if (OB_SUCC(ret) && ObOptimizerUtil::find_item(tables_need_mlog, dep.get_ref_obj_id())) {
         const uint64_t mlog_table_id = based_table_schema->get_mlog_tid();
         const ObTableSchema *mlog_table_schema = nullptr;
         ObMLogInfo mlog_info;
@@ -484,17 +488,7 @@ int ObMViewRefresher::check_fast_refreshable_(
       // check mlog
       for (int64_t i = 0; OB_SUCC(ret) && i < mlog_infos.count(); ++i) {
         const ObMLogInfo &mlog_info = mlog_infos.at(i);
-        const ObDependencyInfo &dep = dependency_infos.at(i);
-        const ObTableSchema *based_table_schema = nullptr;
-        if (OB_FAIL(schema_guard.get_table_schema(tenant_id, dep.get_ref_obj_id(),
-                                                  based_table_schema))) {
-          LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(dep));
-        } else if (OB_ISNULL(based_table_schema)) {
-          ret = OB_TABLE_NOT_EXIST;
-          LOG_WARN("based table not exist", KR(ret), K(tenant_id), K(dep));
-        } else if (based_table_schema->get_mlog_tid() == OB_INVALID_ID) {
-          // skip check container table
-        } else if (!mlog_info.is_valid()) {
+        if (OB_UNLIKELY(!mlog_info.is_valid())) {
           ret = OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH;
           LOG_WARN("table does not have mlog", KR(ret), K(i), K(dependency_infos), K(mlog_info));
         } else { 
@@ -704,18 +698,8 @@ int ObMViewRefresher::fast_refresh()
     {
       for (int64_t i = 0; OB_SUCC(ret) && i < mlog_infos.count(); ++i) {
         const ObMLogInfo &mlog_info = mlog_infos.at(i);
-        const ObDependencyInfo &dep = dependency_infos.at(i);
         ObMLogInfo new_mlog_info;
-        const ObTableSchema *based_table_schema = nullptr;
-        if (OB_FAIL(schema_guard.get_table_schema(tenant_id, dep.get_ref_obj_id(),
-                                                  based_table_schema))) {
-          LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(dep));
-        } else if (OB_ISNULL(based_table_schema)) {
-          ret = OB_TABLE_NOT_EXIST;
-          LOG_WARN("based table not exist", KR(ret), K(tenant_id), K(dep));
-        } else if (based_table_schema->get_mlog_tid() == OB_INVALID_ID) {
-          // skip check container table
-        } else if (OB_UNLIKELY(!mlog_info.is_valid())) {
+        if (OB_UNLIKELY(!mlog_info.is_valid())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected invalid mlog", KR(ret), K(i), K(mlog_infos));
         } else if (OB_FAIL(ObMLogInfo::fetch_mlog_info(trans, tenant_id, mlog_info.get_mlog_id(),
