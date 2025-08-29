@@ -1431,8 +1431,7 @@ int ObDMLService::split_upd_to_del_and_ins(const ObUpdCtDef &upd_ctdef,
                                                          upd_ctdef.trans_info_expr_,
                                                          old_row))) {
       LOG_WARN("delete row to das op failed", K(ret), K(upd_ctdef), K(upd_rtdef));
-    } else if (upd_ctdef.is_table_without_pk_ &&
-        old_tablet_loc != new_tablet_loc &&
+    } else if (((upd_ctdef.is_table_without_pk_ && old_tablet_loc != new_tablet_loc) || (upd_ctdef.is_vec_hnsw_index_vid_opt_)) &&
         OB_FAIL(set_update_hidden_pk(dml_rtctx.get_eval_ctx(),
                                      upd_ctdef,
                                      new_tablet_loc->tablet_id_))) {
@@ -2465,9 +2464,12 @@ int ObDMLService::set_update_hidden_pk(ObEvalCtx &eval_ctx,
     } else if (OB_ISNULL(auto_inc_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("new_hidden_pk_expr is null", K(ret), K(upd_ctdef));
-    } else if (auto_inc_expr->type_ != T_TABLET_AUTOINC_NEXTVAL) {
+    } else if (!upd_ctdef.is_vec_hnsw_index_vid_opt_ && auto_inc_expr->type_ != T_TABLET_AUTOINC_NEXTVAL) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("the first expr is not tablet_auto_inc column", K(ret), KPC(auto_inc_expr));
+    } else if (upd_ctdef.is_vec_hnsw_index_vid_opt_ && auto_inc_expr->type_ != T_REF_COLUMN) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("the first expr is not ref column", K(ret), KPC(auto_inc_expr));
     } else {
       ObDatum &datum = auto_inc_expr->locate_datum_for_write(eval_ctx);
       datum.set_uint(autoinc_seq);

@@ -1172,6 +1172,18 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
         }
         break;
       }
+      case T_FUN_ES_SCORE: {
+        if (OB_FAIL(process_match_score(node, expr))) {
+          LOG_WARN("process fun sys match score failed", K(ret));
+        }
+        break;
+      }
+      case T_FUN_ES_MATCH: {
+        if (OB_FAIL(process_match(node, expr))) {
+          LOG_WARN("process fun sys match failed", K(ret));
+        }
+        break;
+      }
       case T_WINDOW_FUNCTION: {
         const int64_t orig_win_func_cnt = ctx_.win_exprs_->count();
         if (OB_FAIL(process_window_function_node(node, expr))) {
@@ -7961,6 +7973,125 @@ int ObRawExprResolverImpl::process_match_against(const ParseNode *node, ObRawExp
   }
   if (OB_SUCC(ret) && OB_FAIL(match_against->extract_info())) {
     LOG_WARN("failed to extract info", K(ret));
+  }
+  return ret;
+}
+
+int ObRawExprResolverImpl::process_match(const ParseNode *node, ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 2> match_exprs;
+  ObMatchFunRawExpr *match_against = NULL;
+  if (OB_ISNULL(node) || OB_ISNULL(node->children_) ||
+      node->num_child_ != 3 ||
+      OB_ISNULL(ctx_.match_exprs_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument for match against", K(ret), K(node));
+  } else if (OB_ISNULL(node->children_[0]) || node->children_[0]->type_ != T_MATCH_COLUMN_LIST) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("match column list is unexpected", K(ret), K(node->children_[0]));
+  } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_ES_MATCH, match_against))) {
+    LOG_WARN("create match_against expr failed", K(ret));
+  } else if (OB_ISNULL(match_against)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(ctx_.match_exprs_->push_back(match_against))) {
+    LOG_WARN("failed to push back expr", K(ret));
+  } else {
+    // resolve match columns
+    ParseNode *column_list_node = node->children_[0];
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_list_node->num_child_; ++i) {
+      const ParseNode *merge_node = column_list_node->children_[i];
+      const ParseNode *column_node = nullptr;
+      const ParseNode *boost_node = nullptr;
+      ObRawExpr *column_ref = NULL;
+      ObRawExpr *boost_expr = NULL;
+      if (OB_ISNULL(merge_node) || OB_ISNULL(merge_node->children_) || merge_node->num_child_ != 2) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("merge node is unexpected", K(ret), K(merge_node));
+      } else if (OB_ISNULL(column_node = merge_node->children_[0]) || OB_ISNULL(boost_node = merge_node->children_[1])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column node or boost node is unexpected", K(ret), K(column_node), K(boost_node));
+      } else if (OB_FAIL(process_column_ref_node(column_node, column_ref))) {
+        LOG_WARN("resolve column node failed", K(ret));
+      } else if (OB_FAIL(match_against->get_match_columns().push_back(column_ref))) {
+        LOG_WARN("add column ref to column list failed", K(ret));
+      } else if (OB_FAIL(SMART_CALL(recursive_resolve(boost_node, boost_expr)))) {
+        LOG_WARN("recursive resolve boost node failed", K(ret));
+      } else if (OB_FAIL(boost_expr->extract_info())) {
+        LOG_WARN("failed to extract info", K(ret));
+      } else if (FALSE_IT(match_against->get_columns_boosts().push_back(boost_expr))) {
+        LOG_WARN("failed to set boost expr", K(ret));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    // resolve search query and mode
+    ObRawExpr *search_keywords = nullptr;
+    ObRawExpr *params = nullptr;
+    ObExecContext *exec_ctx = NULL;
+    ObIAllocator &allocator = ctx_.expr_factory_.get_allocator();
+    ObObj result;
+    bool got_result = false;
+    if (OB_ISNULL(node->children_[1])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("match against search keywords is unexpected");
+    } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[1], search_keywords)))) {
+      LOG_WARN("recursive resolve search keywords failed", K(ret));
+    } else if (OB_FAIL(search_keywords->extract_info())) {
+      LOG_WARN("failed to extract info", K(ret));
+    } else if (!search_keywords->is_static_const_expr()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-const search query");
+      LOG_WARN("search query is not const expr", K(ret));
+    } else if (OB_ISNULL(node->children_[2])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("match against search keywords is unexpected");
+    } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[2], params)))) {
+      LOG_WARN("recursive resolve search keywords failed", K(ret));
+    } else {
+      match_against->set_search_key(search_keywords);
+      match_against->set_param_text_expr(params);
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else {
+    expr = match_against;
+  }
+  return ret;
+}
+
+int ObRawExprResolverImpl::process_match_score(const ParseNode *node, ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *result_expr = NULL;
+  if (OB_ISNULL(node)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument for match against", K(ret), K(node));
+  } else if (node->type_ != T_FUN_ES_SCORE) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("match column list is unexpected", K(ret), K(node->children_[0]));
+  } else if (OB_ISNULL(ctx_.stmt_) || static_cast<ObDMLStmt*>(ctx_.stmt_)->get_match_exprs().count() == 0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("The position of score() is not supported", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "The position of score() is");
+  } else if (FALSE_IT(result_expr = static_cast<ObDMLStmt*>(ctx_.stmt_)->get_match_exprs().at(0))) {
+  } else if (!static_cast<ObMatchFunRawExpr *>(result_expr)->is_es_match()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("The score with match agaisnt is not supported", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "The score with match agaisnt is");
+  } else {
+    ObOpRawExpr *add_expr = NULL;
+    for (int64_t i = 1; OB_SUCC(ret) && i < static_cast<ObDMLStmt*>(ctx_.stmt_)->get_match_exprs().count(); ++i) {
+      ObMatchFunRawExpr *match_expr = static_cast<ObMatchFunRawExpr *>(static_cast<ObDMLStmt*>(ctx_.stmt_)->get_match_exprs().at(i));
+      if (OB_FAIL(ObRawExprUtils::build_add_expr(ctx_.expr_factory_, match_expr, result_expr, add_expr))) {
+        LOG_WARN("add column ref to column list failed", K(ret));
+      } else {
+        result_expr = add_expr;
+      }
+    }
+    expr = result_expr;
   }
   return ret;
 }

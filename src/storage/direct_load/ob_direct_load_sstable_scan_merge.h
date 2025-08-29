@@ -52,7 +52,7 @@ public:
   typedef ObDirectLoadSSTableScanMergeLoserTreeItem LoserTreeItem;
   typedef ObDirectLoadSSTableScanMergeLoserTreeCompare LoserTreeCompare;
   typedef ObSimpleRowsMerger<LoserTreeItem, LoserTreeCompare> ScanSimpleMerger;
-  typedef common::ObLoserTree<LoserTreeItem, LoserTreeCompare, MAX_SSTABLE_COUNT>
+  typedef common::ObLoserTree<LoserTreeItem, LoserTreeCompare>
     ScanMergeLoserTree;
 public:
   ObDirectLoadSSTableScanMerge();

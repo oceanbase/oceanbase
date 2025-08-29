@@ -32,7 +32,7 @@
 | ObWinFunRawExpr | 680 |
 | ObPseudoColumnRawExpr | 240 |
 | ObOpPseudoColumnRawExpr | 184 |
-| ObMatchFunRawExpr | 464 |
+| ObMatchFunRawExpr | 744 |
 | ObUnpivotRawExpr | 360 |
 | ObPlQueryRefRawExpr | 512 |
 | ObUDTConstructorRawExpr | 496 |

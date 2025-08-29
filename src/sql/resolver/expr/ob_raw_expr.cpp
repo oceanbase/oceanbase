@@ -1079,7 +1079,8 @@ int ObRawExpr::is_const_inherit_expr(bool &is_const_inherit,
       || T_FUN_SYS_IS_FREE_LOCK == type_
       || T_FUN_SYS_IS_USED_LOCK == type_
       || T_FUN_SYS_RELEASE_LOCK == type_
-      || T_FUN_SYS_RELEASE_ALL_LOCKS == type_) {
+      || T_FUN_SYS_RELEASE_ALL_LOCKS == type_
+      || T_FUN_ES_MATCH == type_) {
      is_const_inherit = false;
   }
   if (is_const_inherit && T_OP_GET_USER_VAR == type_) {
@@ -7498,6 +7499,13 @@ int ObMatchFunRawExpr::assign(const ObRawExpr &other)
         mode_flag_ = tmp.mode_flag_;
         search_key_ = tmp.search_key_;
       }
+      if (OB_SUCC(ret) && is_es_match()) {
+        if (OB_FAIL(columns_boosts_.assign(tmp.columns_boosts_))) {
+          LOG_WARN("failed to assign columns boosts", K(ret));
+        } else {
+          param_text_expr_ = tmp.param_text_expr_;
+        }
+      }
     }
   }
   return ret;
@@ -7516,6 +7524,14 @@ int ObMatchFunRawExpr::replace_expr(const common::ObIArray<ObRawExpr *> &other_e
   } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs,
                                                     new_exprs,
                                                     search_key_))) {
+    LOG_WARN("failed to replace expr", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
+                                                    new_exprs,
+                                                    columns_boosts_))) {
+    LOG_WARN("failed to replace expr", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs,
+                                                    new_exprs,
+                                                    param_text_expr_))) {
     LOG_WARN("failed to replace expr", K(ret));
   } else { /*do nothing*/ }
   return ret;
@@ -7541,7 +7557,7 @@ uint64_t ObMatchFunRawExpr::hash_internal(uint64_t seed) const
 int ObMatchFunRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const
 {
   int ret = OB_SUCCESS;
-  if (lib::is_mysql_mode()) {
+  if (lib::is_mysql_mode() && !is_es_match()) {
     if (OB_FAIL(BUF_PRINTF("MATCH("))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
     } else {
@@ -7594,6 +7610,56 @@ int ObMatchFunRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64
         }
       }
     }
+  } else if (lib::is_mysql_mode() && is_es_match()) {
+    if (OB_FAIL(BUF_PRINTF("MATCH("))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    } else {
+      int64_t i = 0;
+      for (; OB_SUCC(ret) && i < get_match_columns().count() - 1; ++i) {
+        if (OB_ISNULL(get_match_columns().at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret));
+        } else if (OB_FAIL(get_match_columns().at(i)->get_name(buf, buf_len, pos, type))) {
+          LOG_WARN("fail to get_name", K(i), K(ret));
+        } else if (OB_FAIL(BUF_PRINTF("^"))) {
+          LOG_WARN("fail to BUF_PRINTF", K(ret));
+        } else if (OB_FAIL(get_columns_boosts().at(i)->get_name(buf, buf_len, pos, type))) {
+          LOG_WARN("fail to get_name", K(i), K(ret));
+        } else if (OB_FAIL(BUF_PRINTF(", "))) {
+          LOG_WARN("fail to BUF_PRINTF", K(ret));
+        } else {}
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_ISNULL(get_match_columns().at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret));
+        } else if (OB_FAIL(get_match_columns().at(i)->get_name(buf, buf_len, pos, type))) {
+          LOG_WARN("fail to get_name", K(i), K(ret));
+        } else if (OB_FAIL(BUF_PRINTF("^"))) {
+          LOG_WARN("fail to BUF_PRINTF", K(ret));
+        } else if (OB_FAIL(get_columns_boosts().at(i)->get_name(buf, buf_len, pos, type))) {
+          LOG_WARN("fail to get_name", K(i), K(ret));
+        } else if (OB_FAIL(BUF_PRINTF(", "))) {
+          LOG_WARN("fail to BUF_PRINTF", K(ret));
+        } else if (OB_FAIL(get_search_key()->get_name(buf, buf_len, pos, type))) {
+          LOG_WARN("fail to BUF_PRINTF", K(ret));
+        } else if (OB_FAIL(BUF_PRINTF(", "))) {
+          LOG_WARN("fail to BUF_PRINTF", K(ret));
+        } else if (OB_FAIL(get_param_text_expr()->get_name(buf, buf_len, pos, type))) {
+          LOG_WARN("fail to get_name", K(i), K(ret));
+        } else if (OB_FAIL(BUF_PRINTF(")"))) {
+          LOG_WARN("fail to BUF_PRINTF", K(ret));
+        } else if (EXPLAIN_EXTENDED == type) {
+          if (OB_FAIL(BUF_PRINTF("("))) {
+            LOG_WARN("fail to BUF_PRINTF", K(ret));
+          } else if (OB_FAIL(BUF_PRINTF("%p", this))) {
+            LOG_WARN("fail to BUF_PRINTF", K(ret));
+          } else if (OB_FAIL(BUF_PRINTF(")"))) {
+            LOG_WARN("fail to BUF_PRINTF", K(ret));
+          } else {}
+        }
+      }
+    }
   } else {
     // jinmao TODO: serialize oracle contains()
   }
@@ -7605,6 +7671,27 @@ bool ObMatchFunRawExpr::inner_same_as(const ObRawExpr &expr, ObExprEqualCheckCon
   bool bret = true;
   if (get_expr_type() != expr.get_expr_type()) {
     bret = false;
+  } else if (is_es_match()) {
+    const ObMatchFunRawExpr *match_expr = static_cast<const ObMatchFunRawExpr*>(&expr);
+    if (match_columns_.count() != match_expr->match_columns_.count() ||
+        columns_boosts_.count() != match_expr->columns_boosts_.count()) {
+      bret = false;
+    } else if (OB_ISNULL(search_key_) || OB_ISNULL(match_expr->search_key_) ||
+               !search_key_->same_as(*match_expr->search_key_, check_context)) {
+      bret = false;
+    } else if (OB_ISNULL(param_text_expr_) || OB_ISNULL(match_expr->param_text_expr_) ||
+               !param_text_expr_->same_as(*match_expr->param_text_expr_, check_context)) {
+      bret = false;
+    }
+    for (int64_t i = 0; bret && i < match_columns_.count(); i++) {
+      if (OB_ISNULL(match_columns_.at(i)) || OB_ISNULL(match_expr->match_columns_.at(i)) ||
+          !match_columns_.at(i)->same_as(*match_expr->match_columns_.at(i), check_context)) {
+        bret = false;
+      } else if (OB_ISNULL(columns_boosts_.at(i)) || OB_ISNULL(match_expr->columns_boosts_.at(i)) ||
+                 !columns_boosts_.at(i)->same_as(*match_expr->columns_boosts_.at(i), check_context)) {
+        bret = false;
+      }
+    }
   } else {
     const ObMatchFunRawExpr *match_expr = static_cast<const ObMatchFunRawExpr*>(&expr);
     if (mode_flag_ != match_expr->mode_flag_ ||
@@ -7635,6 +7722,12 @@ void ObMatchFunRawExpr::inner_calc_hash()
     if (match_columns_.at(i) != NULL) {
       expr_hash_ = common::do_hash(match_columns_.at(i)->get_expr_hash(), expr_hash_);
     }
+    if (is_es_match() && columns_boosts_.at(i) != NULL) {
+      expr_hash_ = common::do_hash(columns_boosts_.at(i)->get_expr_hash(), expr_hash_);
+    }
+  }
+  if (is_es_match() && param_text_expr_ != NULL) {
+    expr_hash_ = common::do_hash(param_text_expr_->get_expr_hash(), expr_hash_);
   }
 }
 
@@ -7643,6 +7736,10 @@ void ObMatchFunRawExpr::clear_child()
   match_columns_.reset();
   search_key_ = NULL;
   mode_flag_ = NATURAL_LANGUAGE_MODE;
+  if (is_es_match()) {
+    columns_boosts_.reset();
+    param_text_expr_ = NULL;
+  }
 }
 
 void ObMatchFunRawExpr::reset()
@@ -7653,28 +7750,58 @@ void ObMatchFunRawExpr::reset()
 
 int64_t ObMatchFunRawExpr::get_param_count() const
 {
-  return match_columns_.count() + 1 /*search key*/;
+  if (is_es_match()) {
+    return match_columns_.count() + 1 /*search key*/ + columns_boosts_.count() + 1 /*param_text_expr_*/;
+  } else {
+    return match_columns_.count() + 1 /*search key*/;
+  }
 }
 
 const ObRawExpr *ObMatchFunRawExpr::get_param_expr(int64_t index) const
 {
   const ObRawExpr *ptr_ret = NULL;
-  if (0 <= index && index < match_columns_.count()) {
-    ptr_ret = match_columns_.at(index);
-  } else if (index == match_columns_.count()) {
-    ptr_ret = search_key_;
-  } else { /*do nothing*/ }
+  if (is_es_match()) {
+    if (0 <= index && index < match_columns_.count()) {
+      ptr_ret = match_columns_.at(index);
+    } else if (index == match_columns_.count()) {
+      ptr_ret = search_key_;
+    } else if (index < match_columns_.count() + 1 + columns_boosts_.count()) {
+      ptr_ret = columns_boosts_.at(index - match_columns_.count() - 1);
+    } else if (index == match_columns_.count() + 1 + columns_boosts_.count()) {
+      ptr_ret = param_text_expr_;
+    } else { /*do nothing*/ }
+  } else {
+    if (0 <= index && index < match_columns_.count()) {
+      ptr_ret = match_columns_.at(index);
+    } else if (index == match_columns_.count()) {
+      ptr_ret = search_key_;
+    } else { /*do nothing*/ }
+  }
   return ptr_ret;
 }
 
 ObRawExpr *&ObMatchFunRawExpr::get_param_expr(int64_t index)
 {
-  if (0 <= index && index < match_columns_.count()) {
-    return match_columns_.at(index);
-  } else if (index == match_columns_.count()) {
-    return search_key_;
+  if (is_es_match()) {
+    if (0 <= index && index < match_columns_.count()) {
+      return match_columns_.at(index);
+    } else if (index == match_columns_.count()) {
+      return search_key_;
+    } else if (index < match_columns_.count() + 1 + columns_boosts_.count()) {
+      return columns_boosts_.at(index - match_columns_.count() - 1);
+    } else if (index == match_columns_.count() + 1 + columns_boosts_.count()) {
+      return param_text_expr_;
+    } else {
+      return USELESS_POINTER;
+    }
   } else {
-    return USELESS_POINTER;
+    if (0 <= index && index < match_columns_.count()) {
+      return match_columns_.at(index);
+    } else if (index == match_columns_.count()) {
+      return search_key_;
+    } else {
+      return USELESS_POINTER;
+    }
   }
   return USELESS_POINTER;
 }

@@ -1291,7 +1291,13 @@ int ObPluginVectorIndexMgr::replace_with_complete_adapter(ObVectorIndexAdapterCa
         LOG_WARN("failed to get vector index shared table info",
           K(new_adapter->get_data_tablet_id()), KR(ret));
       } else {
-        new_adapter->set_vid_rowkey_info(info);
+        if (info.rowkey_vid_table_id_ != OB_INVALID_ID) {
+          new_adapter->set_is_need_vid(true);
+          new_adapter->set_vid_rowkey_info(info);
+        } else {
+          new_adapter->set_is_need_vid(false);
+          new_adapter->set_data_table_id(info);
+        }
       }
     }
     if (OB_FAIL(ret)) {

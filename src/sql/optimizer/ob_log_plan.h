@@ -1796,6 +1796,9 @@ public:
   int prepare_text_retrieval_lookup(const ObIArray<ObRawExpr *> &lookup_match_exprs,
                                     const ObIArray<uint64_t> &lookup_index_ids,
                                     ObLogicalOperator *scan);
+  int prepare_text_retrieval_match_score(const ObIArray<ObRawExpr *> &match_score_exprs,
+                                         const ObIArray<uint64_t> &match_score_index_ids,
+                                         ObLogicalOperator *scan);
   int prepare_text_retrieval_merge(const ObIArray<ObRawExpr *> &merge_match_exprs,
                                    const ObIArray<uint64_t> &merge_index_ids,
                                    ObLogicalOperator *scan);

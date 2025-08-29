@@ -15,9 +15,10 @@
 
 #include "lib/allocator/page_arena.h"
 #include "lib/hash/ob_hashset.h"
+#include "share/datum/ob_datum.h"
 #include "sql/das/ob_das_dml_ctx_define.h"
-#include "storage/fts/ob_fts_plugin_helper.h"
 #include "storage/fts/ob_fts_doc_word_iterator.h"
+#include "storage/fts/ob_fts_plugin_helper.h"
 
 namespace oceanbase
 {
@@ -38,10 +39,7 @@ public:
       const bool is_fts_index_aux,
       const common::ObString &parser_name,
       const common::ObString &parser_properties);
-  int segment(
-      const common::ObObjMeta &ft_obj_meta,
-      const common::ObString &doc_id,
-      const common::ObString &fulltext);
+  int segment(const common::ObObjMeta &ft_obj_meta, const ObDatum &doc_id, const common::ObString &fulltext);
   int get_next_row(blocksstable::ObDatumRow *&row);
   void reset();
   void reuse();
@@ -173,14 +171,13 @@ public:
       const IntFixedArray &row_projector,
       const ObDASWriteBuffer::DmlRow &dml_row,
       ObDomainIndexRow &spat_rows);
-  static int generate_fulltext_word_rows(
-      common::ObIAllocator &allocator,
-      storage::ObFTParseHelper *helper,
-      const common::ObObjMeta &ft_obj_meta,
-      const ObString &doc_id,
-      const ObString &fulltext,
-      const bool is_fts_index_aux,
-      ObDomainIndexRow &word_rows);
+  static int generate_fulltext_word_rows(common::ObIAllocator &allocator,
+                                         storage::ObFTParseHelper *helper,
+                                         const common::ObObjMeta &ft_obj_meta,
+                                         const ObDatum &doc_id_datum,
+                                         const ObString &fulltext,
+                                         const bool is_fts_index_aux,
+                                         ObDomainIndexRow &word_rows);
   static int generate_multivalue_index_rows(
       ObIAllocator &allocator,
       const ObDASDMLBaseCtDef &das_ctdef,
@@ -321,7 +318,6 @@ private:
     ObString &multivalue_data);
 };
 
-
 class ObFTDMLIterator final : public ObDomainDMLIterator
 {
 public:
@@ -353,16 +349,14 @@ public:
   INHERIT_TO_STRING_KV("ObDomainDMLIterator", ObDomainDMLIterator, K_(ft_parse_helper), K_(is_inited));
 protected:
   virtual int generate_domain_rows(const ObChunkDatumStore::StoredRow *store_row) override;
-  int get_ft_and_doc_id(
-      const ObChunkDatumStore::StoredRow *store_row,
-      ObString &doc_id,
-      ObString &ft,
-      common::ObObjMeta &ft_meta);
-  int get_ft_and_doc_id_for_update(
-      const ObChunkDatumStore::StoredRow *store_row,
-      ObString &doc_id,
-      ObString &ft,
-      common::ObObjMeta &ft_meta);
+  int get_ft_and_doc_id(const ObChunkDatumStore::StoredRow *store_row,
+                        ObDatum &doc_id_datum,
+                        ObString &ft,
+                        common::ObObjMeta &ft_meta);
+  int get_ft_and_doc_id_for_update(const ObChunkDatumStore::StoredRow *store_row,
+                                   ObDatum &doc_id_datum,
+                                   ObString &ft,
+                                   common::ObObjMeta &ft_meta);
   int generate_ft_word_rows(const ObChunkDatumStore::StoredRow *store_row);
   int scan_ft_word_rows(const ObChunkDatumStore::StoredRow *store_row);
   int build_ft_word_row(blocksstable::ObDatumRow *src_row, blocksstable::ObDatumRow *&dest_row);

@@ -55,7 +55,14 @@ public:
 public:
   static int print_node(ObFtsEvalNode *node, const ObArray<ObString> &tokens, int level);
   static int fts_boolean_eval(ObFtsEvalNode *node, const common::ObIArray<double> &relevences, double &result);
-  static int fts_boolean_node_create(ObFtsEvalNode *&parant_node, const FtsNode *cur_node, const ObCollationType &cs_type, ObIAllocator &allocator, ObArray<ObString> &tokens, hash::ObHashMap<ObString, int32_t> &tokens_map);
+  static int fts_boolean_node_create(
+      ObFtsEvalNode *&parant_node,
+      const FtsNode *cur_node,
+      const ObCollationType &cs_type,
+      ObIAllocator &allocator,
+      ObArray<ObString> &tokens,
+      hash::ObHashMap<ObString, int32_t> &tokens_map,
+      bool &has_duplicate_tokens /* should be false before call; will be set to true if has duplicates */);
   ObFtsEvalNode *parant_node_;
   ObArray<ObFtsEvalNode *> child_nodes_;
   ObArray<FtsComputeFlag> child_flags_;

@@ -347,13 +347,13 @@ TEST_F(ObMajorRowsMergerTest, single)
   ASSERT_TRUE(merger.is_unique_champion());
 
   // 0 player
-  ret = merger.init(0, allocator_);
+  ret = merger.init(0, 0, allocator_);
   ASSERT_EQ(ret, OB_INVALID_ARGUMENT);
 
   // init twice
-  OK(merger.init(1, allocator_));
+  OK(merger.init(1, 1, allocator_));
   ASSERT_TRUE(merger.is_unique_champion());
-  ret = merger.init(1, allocator_);
+  ret = merger.init(1, 1, allocator_);
   ASSERT_EQ(ret, OB_INIT_TWICE);
   ASSERT_EQ(0, merger.count());
 
@@ -459,7 +459,7 @@ TEST_F(ObMajorRowsMergerTest, two_iters)
   ObPartitionMajorRowsMerger merger(cmp);
 
   //need purge
-  OK(merger.init(2, allocator_));
+  OK(merger.init(2, 2, allocator_));
   OK(merger.push(item_0));
   OK(merger.push(item_1));
   ASSERT_EQ(2, merger.count());

@@ -404,7 +404,8 @@ public:
   //only used in local index lookup, it it nullptr when scan data table or scan index table
   const ObDASScanCtDef *get_lookup_ctdef() const;
   ObDASScanRtDef *get_lookup_rtdef();
-  int get_doc_rowkey_tablet_id(common::ObTabletID &tablet_id) const;
+  int get_domain_rowkey_tablet_id(const ObDASBaseCtDef *ctdef, common::ObTabletID &tablet_id) const;
+  int get_doc_rowkey_tablet_id(ObDASRelatedTabletID &related_tablet_ids) const;
   int get_table_lookup_tablet_id(common::ObTabletID &tablet_id) const;
   int get_rowkey_doc_tablet_id(common::ObTabletID &tablet_id) const;
   int get_rowkey_vid_tablet_id(common::ObTabletID &tablet_id) const;
@@ -430,7 +431,8 @@ public:
       common::ObTabletID &index_id_tid,
       common::ObTabletID &snapshot_tid,
       common::ObTabletID &com_aux_vec_tid,
-      common::ObTabletID &rowkey_vid_tid);
+      common::ObTabletID &rowkey_vid_tid,
+      common::ObTabletID &vid_rowkey_tid);
   int get_spiv_ir_tablet_ids(
       common::ObTabletID &vec_row_tid,
       common::ObTabletID &dim_docid_value_tid,
@@ -448,9 +450,6 @@ protected:
   common::ObITabletScan &get_tsc_service();
   common::ObNewRowIterator *get_output_result_iter() { return result_; }
   ObDASIterTreeType get_iter_tree_type() const;
-  bool is_index_merge(const ObDASBaseCtDef *attach_ctdef) const;
-  bool is_func_lookup(const ObDASBaseCtDef *attach_ctdef) const;
-  bool is_vec_idx_scan(const ObDASBaseCtDef *attach_ctdef) const;
 
 public:
   ObSEArray<ObDatum *, 4> trans_info_array_;

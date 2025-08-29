@@ -9845,11 +9845,18 @@ public:
   inline void set_column_attr(uint64_t column_attr) { pack_ = column_attr; }
   inline void set_min_max() { min_max_ = 1; }
   inline void set_sum() { sum_ = 1; }
+  inline void set_loose_min_max() { loose_min_max_ =1; }
+  inline void set_bm25_token_freq_param() { bm25_token_freq_param_ = 1; }
+  inline void set_bm25_doc_len_param() { bm25_doc_len_param_ = 1; }
   inline bool has_skip_index() const { return OB_DEFAULT_SKIP_INDEX_COLUMN_ATTR != pack_; }
+  inline bool has_loose_skip_index() const { return has_loose_min_max(); }
   inline bool has_min_max() const { return 1 == min_max_; }
   inline bool has_sum() const { return 1 == sum_; }
+  inline bool has_loose_min_max() const { return 1 == loose_min_max_; }
+  inline bool has_bm25_token_freq_param() const { return 1 == bm25_token_freq_param_; }
+  inline bool has_bm25_doc_len_param() const { return 1 == bm25_doc_len_param_; }
   inline bool operator==(const ObSkipIndexColumnAttr &other) const { return pack_ == other.pack_; }
-  TO_STRING_KV(K_(pack), K_(min_max), K_(sum));
+  TO_STRING_KV(K_(pack), K_(min_max), K_(sum), K_(loose_min_max), K_(bm25_token_freq_param), K_(bm25_doc_len_param));
 
   union
   {

@@ -128,20 +128,22 @@ ObDDLResolver::~ObDDLResolver()
 {
 }
 
-int ObDDLResolver::append_fts_args(
-    const share::schema::ObTableSchema &data_schema,
-    const ObPartitionResolveResult &resolve_result,
-    const obrpc::ObCreateIndexArg &index_arg,
-    bool &fts_common_aux_table_exist,
-    ObIArray<ObPartitionResolveResult> &resolve_results,
-    ObIArray<ObCreateIndexArg> &index_arg_list,
-    ObIAllocator *allocator)
+int ObDDLResolver::append_fts_args(const share::schema::ObTableSchema &data_schema,
+                                   const ObPartitionResolveResult &resolve_result,
+                                   const obrpc::ObCreateIndexArg &index_arg,
+                                   bool &fts_common_aux_table_exist,
+                                   ObIArray<ObPartitionResolveResult> &resolve_results,
+                                   ObIArray<ObCreateIndexArg> &index_arg_list,
+                                   ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
+  ObDocIDType doc_id_type = ObDocIDType::INVALID;
   if (OB_ISNULL(allocator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator is null", K(ret));
-  } else if (!fts_common_aux_table_exist) {
+  } else if (OB_FAIL(ObFtsIndexBuilderUtil::determine_docid_type(data_schema, doc_id_type))) {
+    LOG_WARN("Failed to check skip rowkey doc mapping", K(ret));
+  } else if ((doc_id_type == ObDocIDType::TABLET_SEQUENCE) && !fts_common_aux_table_exist) {
     const int64_t num_fts_args = 4;
     // append fts index aux arg first, keep same logic as build fts index on existing table
     if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_index_arg(data_schema,
@@ -193,47 +195,9 @@ int ObDDLResolver::append_fts_args(
   return ret;
 }
 
-int ObDDLResolver::append_multivalue_args(
-    const ObPartitionResolveResult &resolve_result,
-    const obrpc::ObCreateIndexArg *index_arg,
-    bool &common_aux_table_exist,
-    ObIArray<ObPartitionResolveResult> &resolve_results,
-    ObIArray<ObCreateIndexArg *> &index_arg_list,
-    ObIAllocator *arg_allocator)
-{
-  int ret = OB_SUCCESS;
-  ObSArray<obrpc::ObCreateIndexArg> multivalue_args;
-  if (OB_ISNULL(arg_allocator) || OB_ISNULL(index_arg)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(arg_allocator), KP(index_arg));
-  } else if (OB_FAIL(append_multivalue_args(resolve_result,
-                                            *index_arg,
-                                            common_aux_table_exist,
-                                            resolve_results,
-                                            multivalue_args,
-                                            arg_allocator))) {
-    LOG_WARN("failed to append multivalue args", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < multivalue_args.count(); ++i) {
-    ObCreateIndexArg *index_arg = NULL;
-    void *tmp_ptr = NULL;
-    if (NULL == (tmp_ptr = (ObCreateIndexArg *)arg_allocator->alloc(
-            sizeof(obrpc::ObCreateIndexArg)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to alloc memory", K(ret));
-    } else if (FALSE_IT(index_arg = new (tmp_ptr) ObCreateIndexArg())) {
-    } else if (OB_FAIL(index_arg->assign(multivalue_args.at(i)))) {
-      LOG_WARN("failed to assign", K(ret));
-    } else if (OB_FAIL(index_arg_list.push_back(index_arg))) {
-      index_arg->~ObCreateIndexArg();
-      arg_allocator->free(index_arg);
-      LOG_WARN("failed to push back", K(ret));
-    }
-  }
-  return ret;
-}
 
 int ObDDLResolver::append_multivalue_args(
+    const share::schema::ObTableSchema &data_schema,
     const ObPartitionResolveResult &resolve_result,
     const obrpc::ObCreateIndexArg &index_arg,
     bool &common_aux_table_exist,
@@ -242,21 +206,19 @@ int ObDDLResolver::append_multivalue_args(
     ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
+  ObDocIDType doc_id_type = ObDocIDType::INVALID;
   int64_t num_mulvalue_args = 3;
-
   if (OB_ISNULL(allocator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator is null", K(ret));
-  } else if (!common_aux_table_exist) {
-    ObCreateIndexArg tmp_index_arg;
-    if (OB_FAIL(tmp_index_arg.assign(index_arg))) {
-      LOG_WARN("failed to assign arg", K(ret));
-    } else if (FALSE_IT(tmp_index_arg.index_columns_.reuse())) {
-    } else if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_rowkey_doc_arg(tmp_index_arg,
+  } else if (OB_FAIL(ObFtsIndexBuilderUtil::determine_docid_type(data_schema, doc_id_type))) {
+    LOG_WARN("Failed to check skip rowkey doc mapping", K(ret));
+  } else if ((doc_id_type == ObDocIDType::TABLET_SEQUENCE) && !common_aux_table_exist) {
+    if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_rowkey_doc_arg(index_arg,
                                                                  allocator,
                                                                  index_arg_list))) {
       LOG_WARN("failed to append fts_rowkey_doc arg", K(ret));
-    } else if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_doc_rowkey_arg(tmp_index_arg,
+    } else if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_doc_rowkey_arg(index_arg,
                                                                         allocator,
                                                                         index_arg_list))) {
       LOG_WARN("failed to append fts_doc_rowkey arg", K(ret));
@@ -264,6 +226,8 @@ int ObDDLResolver::append_multivalue_args(
                                                                        allocator,
                                                                        index_arg_list))) {
       LOG_WARN("failed to append fts_index arg", K(ret));
+    } else {
+      common_aux_table_exist = true;
     }
   } else {
     num_mulvalue_args = 1;
@@ -274,15 +238,12 @@ int ObDDLResolver::append_multivalue_args(
     }
   }
 
-
   for (int64_t i = 0; OB_SUCC(ret) && i < num_mulvalue_args; ++i) {
     if (OB_FAIL(resolve_results.push_back(resolve_result))) {
       LOG_WARN("fail to push back index_stmt_list", K(ret), K(resolve_result));
     }
   }
-  if (OB_SUCC(ret)) {
-    common_aux_table_exist = true;
-  }
+
   return ret;
 }
 

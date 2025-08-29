@@ -13,6 +13,8 @@
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/iter/ob_das_cache_lookup_iter.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/das/ob_das_ir_define.h"
+#include "storage/concurrency_control/ob_data_validation_service.h"
 
 namespace oceanbase
 {

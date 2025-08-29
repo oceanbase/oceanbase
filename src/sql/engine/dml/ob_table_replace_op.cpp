@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "share/ob_fts_index_builder_util.h"
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/dml/ob_table_replace_op.h"
 #include "sql/engine/dml/ob_dml_service.h"
@@ -1054,10 +1055,11 @@ int ObTableReplaceOp::check_values(bool &is_equal,
     const UIntFixedArray &column_ids = MY_SPEC.replace_ctdefs_.at(0)->ins_ctdef_->column_ids_;
     CK(new_row.at(i)->basic_funcs_->null_first_cmp_ == old_row.at(i)->basic_funcs_->null_first_cmp_);
     if (OB_SUCC(ret)) {
+      ObDocIDType type = ObDocIDUtils::get_type_by_col_id(MY_SPEC.doc_id_col_id_);
       if (share::schema::ObColumnSchemaV2::is_hidden_pk_column_id(column_ids[i])) {
-        //隐藏主键列不处理
-      } else if (MY_SPEC.doc_id_col_id_ == column_ids[i]) {
-        // skip doc id
+        // 隐藏主键列不处理
+      } else if ((type == ObDocIDType::TABLET_SEQUENCE) && (MY_SPEC.doc_id_col_id_ == column_ids[i])) {
+        // skip doc id (only for current doc id)
       } else {
         const ObDatum &insert_datum = replace_row->cells()[i];
         const ObDatum &del_datum = delete_row->cells()[i];

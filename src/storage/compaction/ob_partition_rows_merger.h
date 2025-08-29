@@ -96,7 +96,7 @@ private:
 
 typedef common::ObRowsMerger<ObPartitionMergeLoserTreeItem, ObPartitionMergeLoserTreeCmp> RowsMerger;
 typedef common::ObSEArray<int64_t, DEFAULT_ITER_COUNT> CONSUME_ITER_IDX_ARRAY;
-typedef ObMergeLoserTree<ObPartitionMergeLoserTreeItem, ObPartitionMergeLoserTreeCmp, common::MAX_TABLE_CNT_IN_STORAGE> ObPartitionMergeLoserTree;
+typedef ObMergeLoserTree<ObPartitionMergeLoserTreeItem, ObPartitionMergeLoserTreeCmp> ObPartitionMergeLoserTree;
 typedef ObSimpleRowsMerger<ObPartitionMergeLoserTreeItem, ObPartitionMergeLoserTreeCmp> ObSimpleRowsPartitionMerger;
 typedef common::ObRowsMerger<ObPartitionMergeLoserTreeItem, ObPartitionMergeLoserTreeCmp> RowsMerger;
 
@@ -128,7 +128,7 @@ public:
   {}
   virtual ~ObPartitionMajorRowsMerger() { reset(); }
   virtual ObRowMergerType type() override { return common::ObRowMergerType::MAJOR_ROWS_MERGE; }
-  virtual int init(const int64_t total_player_cnt, common::ObIAllocator &allocator) override;
+  virtual int init(const int64_t max_player_cnt, const int64_t player_cnt, common::ObIAllocator &allocator) override;
   virtual int open(const int64_t total_player_cnt) override;
   virtual bool is_inited() const { return merger_state_ != MergerState::NOT_INIT; }
   virtual void reset() override;
@@ -144,7 +144,7 @@ public:
   inline bool is_need_skip() const { return merger_state_ == NEED_SKIP || merger_state_ == NEED_SKIP_REBUILD; }
   TO_STRING_KV(K_(merger_state), K_(base_item), KPC(rows_merger_))
 private:
-  int init_rows_merger(const int64_t total_player_cnt);
+  int init_rows_merger(const int64_t max_player_cnt, const int64_t total_player_cnt);
   int compare_base_iter();
   int check_row_iters_purge(const ObPartitionMergeIter &check_iter, bool &can_purged);
 private:

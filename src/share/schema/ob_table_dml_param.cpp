@@ -11,7 +11,11 @@
  */
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
+
 #include "ob_table_dml_param.h"
+
+#include "object/ob_object.h"
+#include "share/ob_fts_index_builder_util.h"
 #include "share/vector_index/ob_vector_index_util.h"
 
 namespace oceanbase
@@ -156,12 +160,16 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
         LOG_WARN("fail to get spatial mbr column id", K(ret), K(schema->get_index_info()));
       }
     } else if (schema->is_fts_index_aux() || schema->is_fts_doc_word_aux()) {
-      if (OB_FAIL(schema->get_fulltext_column_ids(doc_id_col_id_, fulltext_col_id_))) {
+      ObDocIDType doc_id_type;
+      uint64_t docid_col_id;
+      if (OB_FAIL(schema->get_fulltext_typed_col_ids(docid_col_id, doc_id_type, fulltext_col_id_))) {
         LOG_WARN("fail to get fulltext column ids", K(ret));
-      } else if (OB_UNLIKELY(doc_id_col_id_ <= OB_APP_MIN_COLUMN_ID || OB_INVALID_ID == doc_id_col_id_
-                        || fulltext_col_id_ <= OB_APP_MIN_COLUMN_ID || OB_INVALID_ID == fulltext_col_id_)) {
+      } else if (OB_UNLIKELY(!ObDocIDUtils::is_docid_col_id_valid(docid_col_id)
+                             || fulltext_col_id_ <= OB_APP_MIN_COLUMN_ID || OB_INVALID_ID == fulltext_col_id_)) {
         ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid doc id or fulltext column id", K(ret), K(doc_id_col_id_), K(fulltext_col_id_));
+        LOG_WARN("invalid doc id or fulltext column id", K(ret), K(docid_col_id), K(fulltext_col_id_));
+      } else if (doc_id_type == ObDocIDType::TABLET_SEQUENCE && FALSE_IT(doc_id_col_id_ = docid_col_id)) {
+      } else if (doc_id_type == ObDocIDType::HIDDEN_INC_PK && FALSE_IT(inc_pk_doc_id_col_id_ = docid_col_id)) {
       } else if (OB_FAIL(ob_write_string(allocator_, schema->get_parser_name_str(), fts_parser_name_))) {
         LOG_WARN("fail to copy fts parser name", K(ret), K(schema->get_parser_name_str()));
       } else if (OB_FAIL(ob_write_string(allocator_, schema->get_parser_property_str(), fts_parser_properties_))) {
@@ -194,14 +202,22 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < schema->get_column_count(); ++i) {
         const ObColumnSchemaV2 *column_schema = schema->get_column_schema_by_idx(i);
+        uint64_t col_id = column_schema->get_column_id();
         if (OB_ISNULL(column_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected error, column schema is nullptr", K(ret), K(i), KPC(schema));
         } else if (column_schema->is_vec_hnsw_vid_column()) {
-          vec_id_col_id_ = column_schema->get_column_id();
+          vec_id_col_id_ = col_id;
         } else if (schema->is_vec_delta_buffer_type()) {
           if (column_schema->is_vec_hnsw_vector_column()) {
-            vec_vector_col_id_ = column_schema->get_column_id();
+            vec_vector_col_id_ = col_id;
+          } else if (column_schema->is_hidden_pk_column_id(col_id)) {
+            if (vec_id_col_id_ == OB_INVALID_ID) {
+              vec_id_col_id_ = col_id;
+            } else {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("invalid vec id column id", K(ret), K(vec_id_col_id_), K(col_id));
+            }
           }
         }
       }
@@ -532,6 +548,23 @@ bool ObTableSchemaParam::is_depend_column(uint64_t column_id) const
   return is_depend;
 }
 
+int ObTableSchemaParam::get_typed_doc_id_col_id(uint64_t &doc_id_col_id, ObDocIDType &type) const
+{
+  int ret = OB_SUCCESS;
+  if ((doc_id_col_id_ != OB_INVALID_ID && inc_pk_doc_id_col_id_ != OB_INVALID_ID)
+      || (doc_id_col_id_ == OB_INVALID_ID && inc_pk_doc_id_col_id_ == OB_INVALID_ID)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("One and only one id should be valid", K(ret), K(doc_id_col_id_), K(inc_pk_doc_id_col_id_));
+  } else if (doc_id_col_id_ != OB_INVALID_ID) {
+    doc_id_col_id = doc_id_col_id_;
+    type = ObDocIDType::TABLET_SEQUENCE;
+  } else if (inc_pk_doc_id_col_id_ != OB_INVALID_ID) {
+    doc_id_col_id = inc_pk_doc_id_col_id_;
+    type = ObDocIDType::HIDDEN_INC_PK;
+  }
+  return ret;
+}
+
 int64_t ObTableSchemaParam::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
@@ -550,7 +583,9 @@ int64_t ObTableSchemaParam::to_string(char *buf, const int64_t buf_len) const
        K_(pk_name),
        K_(columns),
        K_(read_info),
-       K_(lob_inrow_threshold));
+       K_(lob_inrow_threshold),
+       K_(inc_pk_doc_id_col_id));
+
   J_OBJ_END();
   return pos;
 }

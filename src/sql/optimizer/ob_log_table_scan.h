@@ -41,23 +41,25 @@ struct ObTextRetrievalInfo
     inv_idx_tid_(OB_INVALID_ID),
     fwd_idx_tid_(OB_INVALID_ID),
     doc_id_idx_tid_(OB_INVALID_ID),
+    data_table_id_(OB_INVALID_ID),
     token_column_(NULL),
     token_cnt_column_(NULL),
-    doc_id_column_(NULL),
+    docid_or_rowkey_column_(NULL),
     doc_length_column_(NULL),
     related_doc_cnt_(NULL),
     total_doc_cnt_(NULL),
     doc_token_cnt_(NULL),
-    relevance_expr_(NULL)
+    relevance_expr_(NULL),
+    column_boost_idx_(-1)
   { }
   ~ObTextRetrievalInfo() {}
 
   TO_STRING_KV(K_(match_expr), K_(pushdown_match_filter), K_(sort_key), K_(topk_limit_expr),
                K_(topk_offset_expr), K_(with_ties), K_(need_calc_relevance), K_(inv_idx_tid),
-               K_(fwd_idx_tid), K_(doc_id_idx_tid));
+               K_(fwd_idx_tid), K_(doc_id_idx_tid), K_(column_boost_idx));
 
   bool need_sort() const { return sort_key_.expr_ != nullptr; }
-
+  bool need_block_max_scan() const { return need_sort() && nullptr != topk_limit_expr_ && sort_key_.is_descending(); }
   ObMatchFunRawExpr *match_expr_;
   ObRawExpr *pushdown_match_filter_;
   OrderItem sort_key_;  // for pushdown topk, only support match expr as sort expr
@@ -69,15 +71,17 @@ struct ObTextRetrievalInfo
   uint64_t fwd_idx_tid_;  // chosen aux forward index table id (doc-word)
   uint64_t doc_id_idx_tid_; // chosen aux doc_id index table id (doc-rowkey)
   uint64_t rowkey_idx_tid_; // chosen aux rowkey index table id (rowkey-doc)
+  uint64_t data_table_id_; // chosen data table id
   // the following exprs are used for intermediate calculation of relevance score
   ObColumnRefRawExpr *token_column_;
   ObColumnRefRawExpr *token_cnt_column_;
-  ObColumnRefRawExpr *doc_id_column_;
+  ObColumnRefRawExpr *docid_or_rowkey_column_; // named to doc_id_column_, now may be rowkey column sometimes
   ObColumnRefRawExpr *doc_length_column_;
   ObAggFunRawExpr *related_doc_cnt_;  // count(token_cnt_column)
-  ObAggFunRawExpr *total_doc_cnt_;  // count(doc_id_column)
-  ObAggFunRawExpr *doc_token_cnt_;  // sum(token_cnt_column)
+  ObAggFunRawExpr *total_doc_cnt_;  // count(doc_id_column) or count(data_table_rows)
+  ObAggFunRawExpr *doc_token_cnt_;  // sum(token_cnt_column) or the number of doc_length_column_
   ObRawExpr *relevance_expr_; // BM25
+  int column_boost_idx_;
 };
 
 struct ObRawFilterMonotonicity
@@ -291,7 +295,7 @@ struct ObVecIndexInfo
   int64_t get_extra_info_columns_count() const { return extra_info_columns_.count(); }
   ObColumnRefRawExpr* get_extra_info_column(int idx) const { return idx < extra_info_columns_.count() ? extra_info_columns_[idx] : nullptr; }
   int check_vec_aux_column_is_all_inited(bool& is_all_null) const;
-  int check_vec_aux_table_is_all_inited(bool& is_all_null) const;
+  int check_vec_aux_table_is_all_inited(bool& is_all_null, bool skip_rowkey_vid_tbl=false, bool skip_rowkey_docid_tbl=false) const;
   const ObString &get_vec_index_name() const { return vec_index_name_; }
   const ObVectorIndexQueryParam& get_query_param() const { return query_param_; }
   int set_query_param(const ObVectorIndexQueryParam &param) { return query_param_.assign(param); }
@@ -390,6 +394,8 @@ public:
         auto_split_filter_(NULL),
         is_tsc_with_doc_id_(false),
         rowkey_doc_tid_(common::OB_INVALID_ID),
+        is_skip_rowkey_doc_(false),
+        is_skip_rowkey_vid_(false),
         multivalue_col_idx_(common::OB_INVALID_ID),
         multivalue_type_(-1),
         is_tsc_with_vid_(false),
@@ -878,13 +884,21 @@ public:
   int prepare_vector_access_exprs();
   int vector_access_push_rowkey_exprs();
   inline bool has_func_lookup() const { return 0 != lookup_tr_infos_.count(); }
+  inline bool has_es_match() const { return 0 != match_tr_infos_.count(); }
   inline bool has_merge_fts_index() const { return 0 != merge_tr_infos_.count(); }
   inline ObIArray<ObTextRetrievalInfo> &get_lookup_tr_infos() { return lookup_tr_infos_; }
   inline const ObIArray<ObTextRetrievalInfo> &get_lookup_tr_infos() const { return lookup_tr_infos_; }
+  inline ObIArray<ObTextRetrievalInfo> &get_vec_iter_tr_infos() { return vec_iter_tr_infos_; }
+  inline const ObIArray<ObTextRetrievalInfo> &get_vec_iter_tr_infos() const { return vec_iter_tr_infos_; }
+  inline ObIArray<ObTextRetrievalInfo> &get_match_tr_infos() { return match_tr_infos_; }
+  inline const ObIArray<ObTextRetrievalInfo> &get_match_tr_infos() const { return match_tr_infos_; }
   inline ObIArray<ObTextRetrievalInfo> &get_merge_tr_infos() { return merge_tr_infos_; }
   inline const ObIArray<ObTextRetrievalInfo> &get_merge_tr_infos() const { return merge_tr_infos_; }
-  inline bool need_text_retrieval_calc_relevance() const { return text_retrieval_info_.need_calc_relevance_; }
-  inline bool need_rowkey_doc_expr() const { return is_tsc_with_domain_id() || has_func_lookup(); }
+  inline bool need_text_retrieval_calc_relevance() const { return text_retrieval_info_.need_calc_relevance_; } // TODO: need to judge function lookup
+  inline bool need_rowkey_doc_expr() const
+  {
+    return is_skip_rowkey_doc_ ? is_tsc_with_domain_id() : is_tsc_with_domain_id() || has_func_lookup();
+  }
   int prepare_hnsw_vector_access_exprs();
   int prepare_ivf_vector_access_exprs();
   int prepare_spiv_vector_access_exprs();
@@ -892,6 +906,7 @@ public:
                                                     const ObTableSchema *table_schema,
                                                     ObRawExprFactory *expr_factory,
                                                     TableItem *table_item,
+                                                    ObColumnRefRawExpr *&aux_dim_column,
                                                     ObColumnRefRawExpr *&aux_docid_column,
                                                     ObColumnRefRawExpr *&aux_value_column,
                                                     ObColumnRefRawExpr *&vec_data_column);
@@ -965,7 +980,18 @@ public:
                                             ObColumnRefRawExpr *&snapshot_key_column,
                                             ObColumnRefRawExpr *&snapshot_data_column);
   int prepare_hnsw_index_id_col();
-  inline bool need_doc_id_index_back() const { return is_text_retrieval_scan() || is_multivalue_index_scan() || has_merge_fts_index() || is_spiv_vec_scan(); }
+  inline bool need_doc_id_index_back() const
+  {
+    return !is_skip_rowkey_doc_ && (is_text_retrieval_scan()
+            || has_es_match()
+            || is_multivalue_index_scan()
+            || has_merge_fts_index()
+            || is_spiv_vec_scan());
+  }
+  inline bool need_vec_id_index_back() const
+  {
+    return !is_skip_rowkey_vid_ && is_hnsw_vec_scan();
+  }
   inline void set_doc_id_index_table_id(const uint64_t doc_id_index_table_id) { doc_id_table_id_ = doc_id_index_table_id; }
   inline void set_rowkey_vid_tid(const uint64_t rowkey_vid_tid) { rowkey_vid_tid_ = rowkey_vid_tid;}
   inline uint64_t get_doc_id_index_table_id() const { return doc_id_table_id_; }
@@ -975,6 +1001,30 @@ public:
   bool is_scan_domain_id_table(uint64 table_id) const;
   inline void set_rowkey_doc_table_id(const uint64_t tid) { rowkey_doc_tid_ = tid; }
   inline uint64_t get_rowkey_doc_table_id() const { return rowkey_doc_tid_; }
+  inline int set_is_skip_rowkey_doc(const bool is_skip_rowkey_doc)
+  {
+    int ret = OB_SUCCESS;
+    if (is_skip_rowkey_doc_ && !is_skip_rowkey_doc) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected skip rowkey doc flag", K(ret), K(is_skip_rowkey_doc));
+    } else {
+      is_skip_rowkey_doc_ = is_skip_rowkey_doc;
+    }
+    return ret;
+  }
+  inline int set_is_skip_rowkey_vid(const bool is_skip_rowkey_vid)
+  {
+    int ret = OB_SUCCESS;
+    if (is_skip_rowkey_vid_ && !is_skip_rowkey_vid) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected skip rowkey vid flag", K(ret), K(is_skip_rowkey_vid), K(is_skip_rowkey_vid_));
+    } else {
+      is_skip_rowkey_vid_ = is_skip_rowkey_vid;
+    }
+    return ret;
+  }
+  inline bool need_skip_rowkey_doc() const { return is_skip_rowkey_doc_; }
+  inline bool need_skip_rowkey_vid() const { return is_skip_rowkey_vid_; }
   inline uint64_t get_multivalue_col_idx() const { return multivalue_col_idx_; }
   inline int32_t get_multivalue_type() const { return multivalue_type_; }
   inline const common::ObIArray<std::pair<ObRowkeyIdExprType, ObRawExpr *>> &get_rowkey_id_exprs() const { return rowkey_id_exprs_; }
@@ -990,17 +1040,21 @@ public:
   inline bool is_ivf_pq_scan() const {return vector_index_info_.is_ivf_pq_scan();}
   inline bool is_hnsw_vec_scan() const {return vector_index_info_.is_hnsw_vec_scan();}
   inline bool is_primary_vec_idx_scan() const { return is_vec_idx_scan_pre_filter() && ref_table_id_ == index_table_id_; }
-  inline bool is_vec_index_table_id(const uint64_t tid) const { return vector_index_info_.is_vec_aux_table_id(tid) || tid == doc_id_table_id_; }
+  inline bool is_vec_index_table_id(const uint64_t tid) const { return vector_index_info_.is_vec_aux_table_id(tid); }
   inline bool is_vec_idx_scan_pre_filter() const { return vector_index_info_.vec_index_pre_filter() || vector_index_info_.is_vec_adaptive_scan(); }
   inline bool is_vec_idx_scan_post_filter() const { return is_index_scan() && vector_index_info_.vec_index_post_filter(); }
   inline bool is_vec_idx_scan() const { return is_vec_idx_scan_pre_filter() || is_vec_idx_scan_post_filter(); }
   inline bool is_vec_adaptive_scan() const { return vector_index_info_.is_vec_adaptive_scan(); }
   inline bool is_spiv_vec_scan() const {return vector_index_info_.is_spiv_scan();}
-  inline bool is_pre_vec_idx_scan() const { return vector_index_info_.vec_type_ == ObVecIndexType::VEC_INDEX_PRE; } // spiv only
   inline ObVecIndexInfo &get_vector_index_info() { return vector_index_info_; }
   inline const ObVecIndexInfo &get_vector_index_info() const { return vector_index_info_; }
 
   inline bool das_need_keep_ordering() const { return das_keep_ordering_; }
+  inline bool need_get_rowkey_exprs() const
+  {
+    return index_back_ || has_func_lookup() || is_tsc_with_domain_id()
+      || ((is_text_retrieval_scan() || has_merge_fts_index() || has_es_match()) && need_skip_rowkey_doc());
+  }
 
   int check_das_need_keep_ordering();
   int check_das_need_scan_with_domain_id();
@@ -1077,6 +1131,7 @@ private: // member functions
   int print_ranges(char *buf, int64_t buf_len, int64_t &pos, const ObIArray<ObNewRange> &ranges);
   virtual int explain_index_selection_info(char *buf, int64_t &buf_len, int64_t &pos);
   int generate_necessary_rowkey_and_partkey_exprs();
+  int generate_necessary_domain_exprs();
   int add_mapping_columns_for_vt(ObIArray<ObRawExpr*> &access_exprs);
   int get_mbr_column_exprs(const uint64_t table_id, ObIArray<ObRawExpr *> &mbr_exprs);
   int allocate_lookup_trans_info_expr();
@@ -1086,21 +1141,25 @@ private: // member functions
   int allocate_group_id_expr();
   int extract_vec_idx_access_expr(ObIArray<ObRawExpr *> &exprs);
   int get_vec_idx_calc_exprs(ObIArray<ObRawExpr *> &all_exprs);
-  int extract_doc_id_index_back_expr(ObIArray<ObRawExpr *> &exprs, bool is_hnsw_scan = false);
+  int extract_domain_id_index_back_expr(ObIArray<ObRawExpr *> &exprs);
   int add_domain_id_expr(ObIArray<ObRawExpr *> &exprs, const ObColumnSchemaV2 *domain_id_col_schema);
   int extract_text_retrieval_access_expr(ObTextRetrievalInfo &tr_info, ObIArray<ObRawExpr *> &exprs);
   int get_text_retrieval_calc_exprs(ObTextRetrievalInfo &tr_info, ObIArray<ObRawExpr *> &all_exprs);
   int prepare_text_retrieval_dep_exprs(ObTextRetrievalInfo &tr_info);
   int extract_func_lookup_access_exprs(ObIArray<ObRawExpr *> &all_exprs);
   int get_func_lookup_calc_exprs(ObIArray<ObRawExpr *> &all_exprs);
+  int extract_match_score_access_exprs(ObIArray<ObRawExpr *> &all_exprs);
+  int get_match_score_calc_exprs(ObIArray<ObRawExpr *> &all_exprs);
 
   int prepare_func_lookup_dep_exprs();
+  int prepare_match_dep_exprs();
   /* used for fulltext indexes that as part of index merge */
   int extract_index_merge_access_exprs(ObIArray<ObRawExpr *> &all_exprs);
   int get_index_merge_calc_exprs(ObIArray<ObRawExpr *> &all_exprs);
   int prepare_index_merge_dep_exprs();
   /* used for fulltext indexes that as part of index merge */
   int print_text_retrieval_annotation(char *buf, int64_t buf_len, int64_t &pos, ExplainType type);
+  int print_match_annotation(char *buf, int64_t buf_len, int64_t &pos, ExplainType type);
   int find_nearest_rcte_op(ObLogSet *&rcte_op);
   int generate_filter_monotonicity();
   int generate_aggr_param_monotonicity();
@@ -1258,11 +1317,15 @@ protected: // memeber variables
   share::schema::ObTableType table_type_;
   share::ObLakeTableFormat lake_table_format_;
   bool use_column_store_;
+  // in the new fts version, doc_id_table_id_ may be invalid.
   uint64_t doc_id_table_id_; // used for rowkey lookup of fulltext, JSON multi-value and vector index
   // text retrieval as index scan
   ObTextRetrievalInfo text_retrieval_info_;
   // text retrieval as functional lookup
   common::ObSEArray<ObTextRetrievalInfo, 2, common::ModulePageAllocator, true> lookup_tr_infos_;
+  // text retrieval as match score
+  common::ObSEArray<ObTextRetrievalInfo, 2, common::ModulePageAllocator, true> match_tr_infos_;
+  common::ObSEArray<ObTextRetrievalInfo, 2, common::ModulePageAllocator, true> vec_iter_tr_infos_;
   common::ObSEArray<ObTextRetrievalInfo, 2, common::ModulePageAllocator, true> merge_tr_infos_;
   ObVecIndexInfo vector_index_info_;
 
@@ -1276,7 +1339,8 @@ protected: // memeber variables
   // begin for table scan with doc id
   bool is_tsc_with_doc_id_;
   uint64_t rowkey_doc_tid_;
-
+  bool is_skip_rowkey_doc_; // in the new fts version, is_skip_rowkey_doc_ is true.
+  bool is_skip_rowkey_vid_; // in the new fts version, is_skip_rowkey_vid_ is true.
   common::ObSEArray<std::pair<ObRowkeyIdExprType, ObRawExpr*>, 4, common::ModulePageAllocator, true> rowkey_id_exprs_;
   uint64_t multivalue_col_idx_;
   int32_t multivalue_type_;

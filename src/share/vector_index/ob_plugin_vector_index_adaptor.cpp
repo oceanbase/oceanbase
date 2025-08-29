@@ -437,7 +437,7 @@ ObPluginVectorIndexAdaptor::ObPluginVectorIndexAdaptor(common::ObIAllocator *all
     rowkey_vid_table_id_(OB_INVALID_ID), vid_rowkey_table_id_(OB_INVALID_ID),
     ref_cnt_(0), idle_cnt_(0), mem_check_cnt_(0), is_mem_limited_(false), all_vsag_use_mem_(nullptr), allocator_(allocator),
     parent_mem_ctx_(entity), index_identity_(), follower_sync_statistics_(), is_in_opt_task_(false), need_be_optimized_(false), extra_info_column_count_(0),
-    query_lock_(), reload_finish_(false)
+    query_lock_(), reload_finish_(false), is_need_vid_(true)
 {
 }
 
@@ -1635,6 +1635,7 @@ int ObPluginVectorIndexAdaptor::copy_meta_info(ObPluginVectorIndexAdaptor &other
   type_ = other.type_;
   follower_sync_statistics_.sync_count_ = other.follower_sync_statistics_.sync_count_;
   follower_sync_statistics_.sync_fail_ = other.follower_sync_statistics_.sync_fail_;
+  is_need_vid_ = other.is_need_vid_;
   if (OB_NOT_NULL(algo_data_)) {
     // do nothing
   } else if (OB_ISNULL(get_allocator())) {
@@ -2801,7 +2802,7 @@ int ObPluginVectorIndexAdaptor::query_next_result(ObVectorQueryAdaptorResultCont
     LOG_WARN("failed to allocator iter.", K(ret));
   } else if (OB_FAIL(get_extra_info_actual_size(extra_info_actual_size))) {
     LOG_WARN("failed to get extra info actual size.", K(ret));
-  } else if (OB_FALSE_IT(vids_iter = new(iter_buff) ObVectorQueryVidIterator(query_cond->extra_column_count_, extra_info_actual_size))) {
+  } else if (OB_FALSE_IT(vids_iter = new(iter_buff) ObVectorQueryVidIterator(query_cond->extra_column_count_, extra_info_actual_size, query_cond->rel_count_, query_cond->rel_map_ptr_))) {
   } else {
     ObHnswBitmapFilter ifilter(tenant_id_);
     ObHnswBitmapFilter dfilter(tenant_id_);
@@ -2980,7 +2981,7 @@ int ObPluginVectorIndexAdaptor::query_result(ObLSID &ls_id,
     LOG_WARN("failed to allocator iter.", K(ret));
   } else if (OB_FAIL(get_extra_info_actual_size(extra_info_actual_size))) {
     LOG_WARN("failed to get extra info actual size.", K(ret));
-  } else if (OB_FALSE_IT(vids_iter = new(iter_buff) ObVectorQueryVidIterator(query_cond->extra_column_count_, extra_info_actual_size))) {
+  } else if (OB_FALSE_IT(vids_iter = new(iter_buff) ObVectorQueryVidIterator(query_cond->extra_column_count_, extra_info_actual_size, query_cond->rel_count_, query_cond->rel_map_ptr_))) {
   }
 
   const bool need_load_data_from_table = (ctx->flag_ == PVQP_SECOND || !ctx->get_ls_leader()) ? true : false;
@@ -3235,6 +3236,11 @@ void ObPluginVectorIndexAdaptor::set_vid_rowkey_info(ObVectorIndexSharedTableInf
   vid_rowkey_tablet_id_ = info.vid_rowkey_tablet_id_;
   rowkey_vid_table_id_ = info.rowkey_vid_table_id_;
   vid_rowkey_table_id_ = info.vid_rowkey_table_id_;
+  data_table_id_ = info.data_table_id_;
+}
+
+void ObPluginVectorIndexAdaptor::set_data_table_id(ObVectorIndexSharedTableInfo &info)
+{
   data_table_id_ = info.data_table_id_;
 }
 

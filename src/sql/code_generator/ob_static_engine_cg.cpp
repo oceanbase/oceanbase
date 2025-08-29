@@ -5861,6 +5861,9 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
             } else {
               LOG_WARN("CG skip is_multivalue_ddl, multivalue meta missing", K(expr->get_expr_type()), K(op.get_multivalue_type()), K(op.get_multivalue_col_idx()));
             }
+          } else if (expr->get_expr_type() == T_FUN_SYS_SPIV_DIM || expr->get_expr_type() == T_FUN_SYS_SPIV_VALUE) {
+            // TODO: @qiyu, remove me later after support post-building sparse vector index vectorization.
+            spec.max_batch_size_ = 0;
           }
         }
       } else if (OB_FAIL(generate_rt_expr(*expr, rt_expr))) {

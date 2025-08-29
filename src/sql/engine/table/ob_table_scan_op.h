@@ -79,7 +79,6 @@ public:
       rows_(nullptr),
       domain_row_index_(0),
       mbr_buffer_(nullptr),
-      docid_buffer_(nullptr),
       geo_idx_(0),
       cell_idx_(0),
       mbr_idx_(0),
@@ -94,7 +93,6 @@ public:
   blocksstable::ObDatumRow *rows_;
   uint32_t domain_row_index_;
   void *mbr_buffer_;
-  ObDocId* docid_buffer_;
   uint32_t geo_idx_;
   uint32_t cell_idx_;
   uint32_t mbr_idx_;
@@ -369,6 +367,8 @@ public:
   inline bool is_spatial_ddl() const { return is_spatial_ddl_; }
   inline void set_multivalue_ddl(bool is_multivalue_ddl) { is_multivalue_ddl_ = is_multivalue_ddl; }
   inline bool is_multivalue_ddl() const { return is_multivalue_ddl_; }
+  inline void set_spiv_ddl(bool is_spiv_ddl) { is_spiv_ddl_ = is_spiv_ddl; }
+  inline bool is_spiv_ddl() const { return is_spiv_ddl_; }
   void set_est_cost_simple_info(const ObCostTableScanSimpleInfo &info)
   {
     est_cost_simple_info_ = info;
@@ -633,8 +633,28 @@ protected:
                                uint32_t& rowkey_start,
                                uint32_t& rowkey_end,
                                uint32_t& record_num,
-                               bool& is_save_rowkey);
+                               bool& is_save_rowkey,
+                               bool& use_docid);
   int inner_get_next_multivalue_index_row();
+  int init_spiv_index_rows();
+  int get_sparse_vector_index_column_idxs(int64_t &sparse_vec_idx,
+                                          int64_t &dim_idx,
+                                          int64_t &docid_idx,
+                                          int64_t &value_idx);
+  int generate_sparse_vector_index_row(ObIAllocator &allocator,
+                                       const int64_t dim_idx,
+                                       const int64_t docid_idx,
+                                       const int64_t value_idx,
+                                       const int64_t vec_idx,
+                                       ObDatum &docid_datum,
+                                       ObString &sparse_vec,
+                                       bool &need_ignore_null);
+  int get_sparse_vector_data(ObIAllocator &allocator,
+                             int64_t sparse_vec_idx,
+                             int64_t docid_idx,
+                             ObString &sparse_vector,
+                             ObDatum &docid_datum);
+  int inner_get_next_spiv_index_row();
   int set_need_check_outrow_lob();
   void set_real_rescan_cnt(int64_t real_rescan_cnt) { group_rescan_cnt_ = real_rescan_cnt; }
   int64_t get_real_rescan_cnt() { return group_rescan_cnt_; }

@@ -84,7 +84,11 @@ public:
   virtual int do_table_scan() override;
   virtual int rescan() override;
   virtual void clear_evaluated_flag() override;
-
+  virtual int set_scan_rowkey(ObEvalCtx *eval_ctx,
+                              const ObIArray<ObExpr *> &rowkey_exprs,
+                              const ObDASScanCtDef *lookup_ctdef,
+                              ObIAllocator *alloc,
+                              int64_t group_id) override;
   ObDASScanIter *get_data_table_iter() { return data_table_iter_; }
   int set_domain_id_merge_related_ids(const ObDASRelatedTabletID &tablet_ids, const share::ObLSID &ls_id);
 

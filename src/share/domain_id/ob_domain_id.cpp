@@ -81,16 +81,31 @@ int ObDomainIdUtils::check_table_need_domain_id_merge(ObDomainIDType type, const
   } else {
     switch (type) {
       case ObDomainIDType::DOC_ID: {
-        if (ddl_table_schema->is_doc_id_rowkey() ||
+        uint64_t docid_col_id = OB_INVALID_ID;
+        if (OB_FAIL(ddl_table_schema->get_docid_col_id(docid_col_id)) && OB_ERR_INDEX_KEY_NOT_FOUND != ret) {
+          LOG_WARN("failed to determine docid type", K(ret), KPC(ddl_table_schema));
+        } else if (OB_ERR_INDEX_KEY_NOT_FOUND == ret) {
+          // no such docid column, so no need to merge
+          ret = OB_SUCCESS;
+          res = false;
+        } else if (ddl_table_schema->is_doc_id_rowkey() ||
             ddl_table_schema->is_fts_index_aux() ||
             ddl_table_schema->is_fts_doc_word_aux() ||
-            ddl_table_schema->is_multivalue_index_aux()) {
+            ddl_table_schema->is_multivalue_index_aux() ||
+            ddl_table_schema->is_vec_spiv_index_aux()) {
           res = true;
         }
         break;
       }
       case ObDomainIDType::VID: {
-        if (ddl_table_schema->is_vec_vid_rowkey_type() ||
+        uint64_t vid_col_id = OB_INVALID_ID;
+        if (OB_FAIL(ddl_table_schema->get_vec_index_vid_col_id(vid_col_id)) && OB_ERR_INDEX_KEY_NOT_FOUND != ret) {
+          LOG_WARN("failed to determine vid type", K(ret), KPC(ddl_table_schema));
+        } else if (OB_ERR_INDEX_KEY_NOT_FOUND == ret) {
+          // no such vid column, so no need to merge
+          ret = OB_SUCCESS;
+          res = false;
+        } else if (ddl_table_schema->is_vec_vid_rowkey_type() ||
             ddl_table_schema->is_vec_delta_buffer_type() ||
             ddl_table_schema->is_vec_index_id_type() ||
             ddl_table_schema->is_vec_index_snapshot_data_type()) {

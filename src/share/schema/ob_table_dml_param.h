@@ -53,6 +53,7 @@ public:
   OB_INLINE int64_t get_data_table_rowkey_column_num() const { return data_table_rowkey_column_num_; }
   OB_INLINE void set_data_table_rowkey_column_num(int64_t cnt) { data_table_rowkey_column_num_ = cnt; }
   OB_INLINE int64_t get_doc_id_col_id() const { return doc_id_col_id_; }
+  int get_typed_doc_id_col_id(uint64_t &doc_id_col_id, ObDocIDType &type) const;
   OB_INLINE int64_t get_fulltext_col_id() const { return fulltext_col_id_; }
   OB_INLINE const common::ObString &get_fts_parser_name() const { return fts_parser_name_; }
   OB_INLINE const common::ObString &get_fts_parser_property() const { return fts_parser_properties_; }

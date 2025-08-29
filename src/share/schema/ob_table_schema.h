@@ -1307,7 +1307,8 @@ public:
     const bool heap_case =  is_index_local_storage() && data_table_schema.is_table_without_pk();
     const bool fts_case = is_partitioned_table() && is_index_local_storage() && (is_fts_index_aux() || is_fts_doc_word_aux());
     const bool multivalue_case = is_partitioned_table() && is_index_local_storage() && is_multivalue_index_aux();
-    const bool vec_case = is_partitioned_table() && is_index_local_storage() && (is_vec_delta_buffer_type() || is_vec_index_id_type() || is_vec_index_snapshot_data_type());
+    const bool vec_case = is_partitioned_table() && is_index_local_storage() &&
+                          (is_vec_delta_buffer_type() || is_vec_index_id_type() || is_vec_index_snapshot_data_type() || is_vec_spiv_index_aux());
     return heap_case || fts_case || vec_case || multivalue_case;
   }
   inline void set_with_dynamic_partition_policy(bool with_dynamic_partition_policy)
@@ -1806,7 +1807,10 @@ public:
       const bool no_virtual = false) const;
   int get_spatial_geo_column_id(uint64_t &geo_column_id) const;
   int get_spatial_index_column_ids(common::ObIArray<uint64_t> &column_ids) const;
-  int get_fulltext_column_ids(uint64_t &doc_id_col_id, uint64_t &ft_col_id) const;
+  int get_fulltext_column_ids(uint64_t &doc_id_col_id, uint64_t &ft_col_id) const
+      __attribute__((deprecated("Use get_fulltext_typed_col_ids() which adapt to more docid type.")));
+
+  int get_fulltext_typed_col_ids(uint64_t &doc_id_col_id, ObDocIDType &type, uint64_t &ft_col_id) const;
   int get_multivalue_column_id(uint64_t &multivalue_col_id) const;
 
   int get_sparse_vec_index_column_id(uint64_t &sparse_vec_col_id) const;
@@ -2120,6 +2124,8 @@ public:
   void set_aux_lob_meta_tid(const uint64_t& table_id) { aux_lob_meta_tid_ = table_id; }
   void set_aux_lob_piece_tid(const uint64_t& table_id) { aux_lob_piece_tid_ = table_id; }
   int get_rowkey_doc_tid(uint64_t &index_table_id) const;
+
+  // NOTE: here you can get a **generated** doc id column id.
   int get_docid_col_id(uint64_t &docid_col_id) const;
   int get_rowkey_vid_tid(uint64_t &index_table_id) const;
   uint64_t get_aux_lob_meta_tid() const { return aux_lob_meta_tid_; }

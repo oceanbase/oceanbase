@@ -815,6 +815,14 @@ ob_set_subtarget(ob_share vector_type
   vector_type/ob_sparse_vector_ip_distance.cpp
 )
 
+ob_set_subtarget(ob_share hybrid_search
+  hybrid_search/ob_query_parse.cpp
+  hybrid_search/ob_request_base.cpp
+  hybrid_search/ob_query_request.cpp
+  hybrid_search/ob_query_translator.cpp
+  hybrid_search/ob_hybrid_search_exector.cpp
+)
+
 ob_set_subtarget(ob_share domain_id
   domain_id/ob_domain_id.cpp
 )

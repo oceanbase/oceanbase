@@ -43,6 +43,7 @@ public:
   const ObDASScanCtDef *main_lookup_ctdef_;
   ObDASScanRtDef *main_lookup_rtdef_;
   ObDASIter *main_lookup_iter_;
+  ObExpr *doc_id_expr_;
   transaction::ObTxDesc *trans_desc_;
   transaction::ObTxReadSnapshot *snapshot_;
 };
@@ -69,7 +70,12 @@ public:
   virtual int do_table_scan() override;
   virtual int rescan() override;
   virtual void clear_evaluated_flag() override;
-  inline int add_doc_id(const ObDocId &doc_id)
+  virtual int set_scan_rowkey(ObEvalCtx *eval_ctx,
+                              const ObIArray<ObExpr *> &rowkey_exprs,
+                              const ObDASScanCtDef *lookup_ctdef,
+                              ObIAllocator *alloc,
+                              int64_t group_id) override;
+  inline int add_doc_id(const ObDocIdExt &doc_id)
   {
     int ret = OB_SUCCESS;
     int64_t idx = doc_ids_.count();
@@ -89,6 +95,7 @@ public:
   bool has_main_lookup_iter() const { return nullptr != main_lookup_iter_; }
   ObTableScanParam &get_main_lookup_scan_param() { return main_lookup_param_; }
   const ObDASScanCtDef *get_main_lookup_ctdef() { return main_lookup_ctdef_; }
+  const ObIArray<std::pair<ObDocIdExt, int>> &get_doc_ids() { return doc_ids_; }
   INHERIT_TO_STRING_KV("ObDASIter", ObDASIter,
                       K(main_lookup_param_),
                       KPC(main_lookup_iter_));
@@ -115,16 +122,11 @@ private:
       err_code_ = ret;
     }
 
-    bool operator()(const std::pair<ObDocId, int> &a, const std::pair<ObDocId, int> &b) const
+    bool operator()(const std::pair<ObDocIdExt, int> &a, const std::pair<ObDocIdExt, int> &b) const
     {
       int ret = OB_SUCCESS;
-      ObDatum l_datum;
-      ObDatum r_datum;
-      // ObDocId must be not null; ObDocIds must be not same
-      l_datum.set_string(a.first.get_string());
-      r_datum.set_string(b.first.get_string());
       int tmp_ret = 0;
-      if (OB_FAIL(cmp_func_(l_datum, r_datum, tmp_ret))) {
+      if (OB_FAIL(cmp_func_(a.first.get_datum(), b.first.get_datum(), tmp_ret))) {
         LOG_WARN("failed to compare doc id by datum", K(ret));
       }
       *err_code_ = *err_code_ == OB_SUCCESS ? ret : *err_code_;
@@ -145,8 +147,9 @@ private:
   share::ObLSID main_lookup_ls_id_;
   storage::ObTableScanParam main_lookup_param_;
   lib::MemoryContext merge_memctx_;
-  ObSEArray<std::pair<ObDocId, int>, 4> doc_ids_;
+  ObSEArray<std::pair<ObDocIdExt, int>, 4> doc_ids_;
   int64_t read_count_;
+  bool start_table_scan_;
 };
 
 } // end namespace sql

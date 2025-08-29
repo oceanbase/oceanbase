@@ -1957,7 +1957,7 @@ public:
     EXPR_EXEC_PARAM,
     EXPR_PL_QUERY_REF,
     EXPR_MATCH_AGAINST,
-    EXPR_UNPIVOT,
+    EXPR_UNPIVOT
   };
 
   explicit ObRawExpr(ObItemType expr_type = T_INVALID)
@@ -5404,7 +5404,9 @@ public:
     : ObRawExpr(),
       mode_flag_(NATURAL_LANGUAGE_MODE),
       match_columns_(),
-      search_key_(NULL)
+      search_key_(NULL),
+      columns_boosts_(),
+      param_text_expr_(NULL)
   {
     set_expr_class(EXPR_MATCH_AGAINST);
   }
@@ -5413,7 +5415,9 @@ public:
     : ObRawExpr(alloc),
       mode_flag_(NATURAL_LANGUAGE_MODE),
       match_columns_(),
-      search_key_(NULL)
+      search_key_(NULL),
+      columns_boosts_(),
+      param_text_expr_(NULL)
   {
     set_expr_class(EXPR_MATCH_AGAINST);
   }
@@ -5443,12 +5447,22 @@ public:
   inline void set_search_key(ObRawExpr *search_key) { search_key_ = search_key; }
   inline const ObRawExpr *get_search_key() const { return search_key_; }
   inline ObRawExpr *get_search_key() { return search_key_; }
+  inline int set_columns_boosts(ObIArray<ObRawExpr*> &columns_boosts)
+  {
+    return columns_boosts_.assign(columns_boosts);
+  }
+  inline void set_param_text_expr(ObRawExpr *param_text_expr) { param_text_expr_ = param_text_expr; }
+  inline ObRawExpr *get_param_text_expr() const { return param_text_expr_; }
+  inline ObRawExpr *get_param_text_expr() { return param_text_expr_; }
+  inline const ObIArray<ObRawExpr*>& get_columns_boosts() const { return columns_boosts_; }
+  inline ObIArray<ObRawExpr*>& get_columns_boosts() { return columns_boosts_; }
   int get_table_id(uint64_t &table_id);
   int get_match_column_type(ObRawExprResType &result_type);
   inline int64_t get_search_key_idx() { return get_match_columns().count(); }
 
   int replace_param_expr(int64_t index, ObRawExpr *expr);
 
+  bool is_es_match() const { return get_expr_type() == T_FUN_ES_MATCH; }
   VIRTUAL_TO_STRING_KVP(
       N_ITEM_TYPE, type_,
       N_RESULT_TYPE, result_type_,
@@ -5456,7 +5470,8 @@ public:
       N_REL_ID, rel_ids_,
       K_(mode_flag),
       K_(match_columns),
-      KPC_(search_key));
+      KPC_(search_key),
+      KPC_(param_text_expr));
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMatchFunRawExpr);
@@ -5464,6 +5479,9 @@ private:
   ObSEArray<ObRawExpr*, COMMON_MULTI_NUM, ModulePageAllocator, true> match_columns_; // columns for choosing full-text index to use, serves only as an identifier;
                                                                                      // can only be replaced with equivalent base table columns, not with arbitrary expressions that are not base table columns.
   ObRawExpr *search_key_; // user defined search query
+
+  ObSEArray<ObRawExpr*, COMMON_MULTI_NUM, ModulePageAllocator, true> columns_boosts_; // boost values for each column
+  ObRawExpr *param_text_expr_; // param text expr for should_match_expr_
 };
 
 class ObUnpivotRawExpr : public ObRawExpr

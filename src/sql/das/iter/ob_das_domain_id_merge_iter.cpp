@@ -143,6 +143,19 @@ void ObDASDomainIdMergeIter::clear_evaluated_flag()
   }
 }
 
+int ObDASDomainIdMergeIter::set_scan_rowkey(ObEvalCtx *eval_ctx,
+                                            const ObIArray<ObExpr *> &rowkey_exprs,
+                                            const ObDASScanCtDef *lookup_ctdef,
+                                            ObIAllocator *alloc,
+                                            int64_t group_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_data_table_iter()->set_scan_rowkey(eval_ctx, rowkey_exprs, lookup_ctdef, alloc, group_id))) {
+    LOG_WARN("failed to set scan rowkey of data table iter", K(ret));
+  }
+  return ret;
+}
+
 int ObDASDomainIdMergeIter::inner_init(ObDASIterParam &param)
 {
   int ret = OB_SUCCESS;

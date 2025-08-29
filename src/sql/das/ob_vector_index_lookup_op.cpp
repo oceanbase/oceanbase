@@ -1133,7 +1133,7 @@ int ObVectorIndexLookupOp::do_aux_table_lookup()
     doc_id_scan_param_.need_switch_param_ = false;
     // init doc_id -> rowkey table iterator as rowkey iter
     if (OB_FAIL(set_doc_id_idx_lookup_param(
-        doc_id_lookup_ctdef_, doc_id_lookup_rtdef_, doc_id_scan_param_, doc_id_idx_tablet_id_, ls_id_))) {
+        doc_id_lookup_ctdef_, doc_id_lookup_rtdef_, doc_id_scan_param_, domain_id_idx_tablet_id_, ls_id_))) {
       LOG_WARN("failed to init vid lookup scan param", K(ret));
     } else if (OB_FAIL(tsc_service.table_scan(doc_id_scan_param_, rowkey_iter_))) {
       if (OB_SNAPSHOT_DISCARDED == ret && scan_param_.fb_snapshot_.is_valid()) {
@@ -1144,13 +1144,13 @@ int ObVectorIndexLookupOp::do_aux_table_lookup()
     }
   } else {
     const ObTabletID &scan_tablet_id = doc_id_scan_param_.tablet_id_;
-    doc_id_scan_param_.need_switch_param_ = scan_tablet_id.is_valid() && (doc_id_idx_tablet_id_ != scan_tablet_id);
-    doc_id_scan_param_.tablet_id_ = doc_id_idx_tablet_id_;
+    doc_id_scan_param_.need_switch_param_ = scan_tablet_id.is_valid() && (domain_id_idx_tablet_id_ != scan_tablet_id);
+    doc_id_scan_param_.tablet_id_ = domain_id_idx_tablet_id_;
     doc_id_scan_param_.ls_id_ = ls_id_;
     if (OB_FAIL(tsc_service.reuse_scan_iter(doc_id_scan_param_.need_switch_param_, rowkey_iter_))) {
       LOG_WARN("failed to reuse vid iterator", K(ret));
     } else if (OB_FAIL(tsc_service.table_rescan(doc_id_scan_param_, rowkey_iter_))) {
-      LOG_WARN("failed to rescan vid rowkey table", K(ret), K_(doc_id_idx_tablet_id), K(scan_tablet_id));
+      LOG_WARN("failed to rescan vid rowkey table", K(ret), K_(domain_id_idx_tablet_id), K(scan_tablet_id));
     }
   }
   return ret;

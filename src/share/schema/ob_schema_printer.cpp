@@ -670,12 +670,16 @@ int ObSchemaPrinter::print_single_index_definition(const ObTableSchema *index_sc
                                                                     rowkey_column->column_id_))) {
             ret = OB_SCHEMA_ERROR;
             SHARE_SCHEMA_LOG(WARN, "fail to get column schema", K(ret), KPC(index_schema));
-          } else if (index_schema->is_fts_index() && col->is_doc_id_column()) {
-            // skip doc id for fts index.
-          } else if (index_schema->is_multivalue_index_aux() && col->is_doc_id_column()) {
-            // skip doc id for multivalue index.
-          } else if (index_schema->is_vec_index() && (col->is_vec_hnsw_vid_column())) {
-            // only need vec_type column to show index key, here skip vec_vid column of delta_buffer_table rowkey column
+          } else if (index_schema->is_fts_index() &&
+                     (col->is_doc_id_column() || col->is_hidden_pk_column_id(col->get_column_id()))) {
+            // skip doc id / hidden pk column(for doc id optimization) for fts index.
+          } else if (index_schema->is_multivalue_index_aux() &&
+                     (col->is_doc_id_column() || col->is_hidden_pk_column_id(col->get_column_id()))) {
+            // skip doc id / hidden pk column(for doc id optimization)
+          } else if (index_schema->is_vec_index() &&
+                     (col->is_vec_hnsw_vid_column() || col->is_hidden_pk_column_id(col->get_column_id()))) {
+            // only need vec_type column to show index key,
+            // here skip vec_vid column / hidden pk column(for vid optimization)
           } else if (!col->is_shadow_column()) {
             const ObColumnSchemaV2 *tmp_column = NULL;
             if (index_schema->is_multivalue_index_aux() &&

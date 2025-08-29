@@ -236,6 +236,7 @@ public:
                             int64_t idx, ObCollectionArrayType *arr_type, uint32_t &len,
                             uint8_t *&null_bitmaps, const char *&data, uint32_t &data_len);
 
+  static int convert_to_string(common::ObIAllocator &allocator, ObEvalCtx &ctx, const uint16_t subschema_id, const common::ObString &data, ObString &res_str);
   // for vector
   static int get_type_vector(const ObExpr &expr,
                              ObEvalCtx &ctx,

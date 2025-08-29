@@ -2014,6 +2014,22 @@ int ObArrayExprUtils::get_collection_raw_data(ObIAllocator &allocator, const ObO
   return ret;
 }
 
+int ObArrayExprUtils::convert_to_string(common::ObIAllocator &allocator, ObEvalCtx &ctx, const uint16_t subschema_id, const common::ObString &data, ObString &res_str)
+{
+  int ret = OB_SUCCESS;
+  common::ObArenaAllocator tmp_allocator;
+  ObIArrayType *arr_obj = NULL;
+  ObStringBuffer buf(&allocator);
+  if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, data, arr_obj))) {
+    LOG_WARN("get array failed", K(ret));
+  } else if (OB_FAIL(arr_obj->print(buf))) {
+    LOG_WARN("failed to format array", K(ret));
+  } else {
+    res_str.assign_ptr(buf.ptr(), buf.length());
+  }
+  return ret;
+}
+
 template <typename ColumnFmt>
 static int inner_cast_compact2vector_fmt(ColumnFmt *column, ObExpr *coll_expr, ObEvalCtx *eval_ctx,
                                          const int64_t size, const ObBitVector &skip)

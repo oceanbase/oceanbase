@@ -185,7 +185,7 @@ int ObTableFtsExprCgService::generate_text_retrieval_dep_exprs(ObTableCtx &ctx, 
       tr_info->pushdown_match_filter_ = pushdown_match_filter;
       tr_info->token_column_ = token_column;
       tr_info->token_cnt_column_ = token_cnt_column;
-      tr_info->doc_id_column_ = doc_id_column;
+      tr_info->docid_or_rowkey_column_ = doc_id_column;
       tr_info->doc_length_column_ = doc_length_column;
       tr_info->related_doc_cnt_ = related_doc_cnt;
       tr_info->doc_token_cnt_ = doc_token_cnt;
@@ -345,7 +345,7 @@ int ObTableFtsExprCgService::add_all_text_retrieval_scan_dep_exprs(ObTableCtx &c
     LOG_WARN("fail to push back token_column", K(ret));
   } else if (OB_FAIL(all_exprs.push_back(tr_info->token_cnt_column_))) {
     LOG_WARN("fail to push back token_cnt_column", K(ret));
-  } else if (OB_FAIL(all_exprs.push_back(tr_info->doc_id_column_))) {
+  } else if (OB_FAIL(all_exprs.push_back(tr_info->docid_or_rowkey_column_))) {
     LOG_WARN("fail to push back doc_id_column", K(ret));
   } else if (OB_FAIL(all_exprs.push_back(tr_info->doc_length_column_))) {
     LOG_WARN("fail to push back doc_length_column", K(ret));
@@ -567,13 +567,13 @@ int ObTableFtsTscCgService::extract_text_ir_access_columns(const ObTableCtx &ctx
   } else {
     switch (scan_ctdef.ir_scan_type_) {
       case ObTSCIRScanType::OB_IR_INV_IDX_SCAN:
-        if (OB_ISNULL(tr_info->token_cnt_column_) || OB_ISNULL(tr_info->doc_id_column_) || OB_ISNULL(tr_info->doc_length_column_)) {
+        if (OB_ISNULL(tr_info->token_cnt_column_) || OB_ISNULL(tr_info->docid_or_rowkey_column_) || OB_ISNULL(tr_info->doc_length_column_)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("inv index expr is NULL", KP(tr_info->token_cnt_column_), KP(tr_info->doc_id_column_),
+          LOG_WARN("inv index expr is NULL", KP(tr_info->token_cnt_column_), KP(tr_info->docid_or_rowkey_column_),
                     KP(tr_info->doc_length_column_), K(ret));
         } else if (OB_FAIL(add_var_to_array_no_dup(access_exprs, static_cast<ObRawExpr*>(tr_info->token_cnt_column_)))) {
           LOG_WARN("failed to push token cnt column to access exprs", K(ret));
-        } else if (OB_FAIL(add_var_to_array_no_dup(access_exprs, static_cast<ObRawExpr*>(tr_info->doc_id_column_)))) {
+        } else if (OB_FAIL(add_var_to_array_no_dup(access_exprs, static_cast<ObRawExpr*>(tr_info->docid_or_rowkey_column_)))) {
           LOG_WARN("failed to push document id column to access exprs", K(ret));
         } else if (OB_FAIL(add_var_to_array_no_dup(access_exprs, static_cast<ObRawExpr*>(tr_info->doc_length_column_)))) {
           LOG_WARN("failed to add document length column to access exprs", K(ret));
@@ -629,15 +629,15 @@ int ObTableFtsTscCgService::extract_text_ir_das_output_column_ids(const ObTableC
       LOG_WARN("fail to assgin tsc_out_cols", K(ret), K(scan_ctdef.access_column_ids_));
     }
   } else if (ObTSCIRScanType::OB_IR_INV_IDX_SCAN == scan_ctdef.ir_scan_type_) {
-    if (OB_ISNULL(tr_info->token_cnt_column_) || OB_ISNULL(tr_info->doc_id_column_) || OB_ISNULL(tr_info->doc_id_column_)) {
+    if (OB_ISNULL(tr_info->token_cnt_column_) || OB_ISNULL(tr_info->docid_or_rowkey_column_) || OB_ISNULL(tr_info->docid_or_rowkey_column_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tr_info exprs is NULL", K(ret), KP(tr_info->token_cnt_column_),
-                KP(tr_info->doc_id_column_), KP(tr_info->doc_id_column_));
+                KP(tr_info->docid_or_rowkey_column_), KP(tr_info->docid_or_rowkey_column_));
     } else if (OB_FAIL(tsc_out_cols.push_back(
         static_cast<ObColumnRefRawExpr *>(tr_info->token_cnt_column_)->get_column_id()))) {
       LOG_WARN("failed to push output token cnt col id", K(ret));
     } else if (OB_FAIL(tsc_out_cols.push_back(
-        static_cast<ObColumnRefRawExpr *>(tr_info->doc_id_column_)->get_column_id()))) {
+        static_cast<ObColumnRefRawExpr *>(tr_info->docid_or_rowkey_column_)->get_column_id()))) {
       LOG_WARN("failed to push output doc id col id", K(ret));
     } else if (OB_FAIL(tsc_out_cols.push_back(
         static_cast<ObColumnRefRawExpr *>(tr_info->doc_length_column_)->get_column_id()))) {
@@ -987,10 +987,10 @@ int ObTableFtsTscCgService::generate_text_ir_spec_exprs(const ObTableCtx &ctx, O
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tr_info is NULL", K(ret));
   } else if (OB_ISNULL(tr_info->match_expr_) || OB_ISNULL(tr_info->relevance_expr_) ||
-      OB_ISNULL(tr_info->doc_id_column_) || OB_ISNULL(tr_info->doc_length_column_)) {
+      OB_ISNULL(tr_info->docid_or_rowkey_column_) || OB_ISNULL(tr_info->doc_length_column_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), KP(tr_info->match_expr_), KP(tr_info->relevance_expr_),
-                KP(tr_info->doc_id_column_), KP(tr_info->doc_length_column_));
+                KP(tr_info->docid_or_rowkey_column_), KP(tr_info->doc_length_column_));
   } else if (OB_FAIL(cg.generate_rt_expr(*tr_info->match_expr_->get_search_key(), text_ir_scan_ctdef.search_text_))) {
     LOG_WARN("cg rt expr for search text failed", K(ret));
   } else if (OB_ISNULL(tr_info->pushdown_match_filter_)) {
@@ -1000,7 +1000,7 @@ int ObTableFtsTscCgService::generate_text_ir_spec_exprs(const ObTableCtx &ctx, O
     LOG_WARN("cg rt expr for match filter failed", K(ret));
   } else {
     const UIntFixedArray &inv_scan_col_id = text_ir_scan_ctdef.get_inv_idx_scan_ctdef()->access_column_ids_;
-    const ObColumnRefRawExpr *doc_id_column = static_cast<ObColumnRefRawExpr *>(tr_info->doc_id_column_);
+    const ObColumnRefRawExpr *doc_id_column = static_cast<ObColumnRefRawExpr *>(tr_info->docid_or_rowkey_column_);
     const ObColumnRefRawExpr *doc_length_column = static_cast<ObColumnRefRawExpr *>(tr_info->doc_length_column_);
 
     int64_t doc_id_col_idx = -1;
@@ -1240,8 +1240,6 @@ int ObTableFtsTscCgService::extract_rowkey_doc_exprs(const ObTableCtx &ctx,
   } else if (OB_FAIL(rowkey_doc_schema->get_column_ids(rowkey_doc_cids))) {
     LOG_WARN("fail to get rowkey column ids in rowkey doc", K(ret), KPC(rowkey_doc_schema));
   } else {
-    uint64_t doc_id_col_id = OB_INVALID_ID;
-    uint64_t ft_col_id = OB_INVALID_ID;
     for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_doc_cids.count(); i++) {
       const ObTableColumnItem *item = nullptr;
       if (OB_FAIL(ctx.get_column_item_by_column_id(rowkey_doc_cids.at(i), item))) {
@@ -1276,8 +1274,6 @@ int ObTableFtsTscCgService::extract_doc_rowkey_exprs(const ObTableCtx &ctx,
   } else if (OB_FAIL(doc_rowkey_schema->get_column_ids(rowkey_doc_cids))) {
     LOG_WARN("fail to get rowkey column ids in rowkey doc", K(ret), KP(doc_rowkey_schema));
   } else {
-    uint64_t doc_id_col_id = OB_INVALID_ID;
-    uint64_t ft_col_id = OB_INVALID_ID;
     for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_doc_cids.count(); i++) {
       const ObTableColumnItem *item = nullptr;
       if (OB_FAIL(ctx.get_column_item_by_column_id(rowkey_doc_cids.at(i), item))) {

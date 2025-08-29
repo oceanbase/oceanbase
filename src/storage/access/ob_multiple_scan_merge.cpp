@@ -681,6 +681,7 @@ int ObMultipleScanMerge::prepare_blockscan(ObStoreRowIterator &iter)
 int ObMultipleScanMerge::set_rows_merger(const int64_t table_cnt)
 {
   int ret = OB_SUCCESS;
+  const int64_t max_table_cnt = 2 * common::MAX_TABLE_CNT_IN_STORAGE;
   if (table_cnt <= ObScanSimpleMerger::USE_SIMPLE_MERGER_MAX_TABLE_CNT) {
     STORAGE_LOG(DEBUG, "Use simple rows merger", K(table_cnt));
     if (nullptr == simple_merge_) {
@@ -703,7 +704,7 @@ int ObMultipleScanMerge::set_rows_merger(const int64_t table_cnt)
 
   if (OB_SUCC(ret)) {
     if (!rows_merger_->is_inited()) {
-      if (OB_FAIL(rows_merger_->init(table_cnt, *long_life_allocator_))) {
+      if (OB_FAIL(rows_merger_->init(max_table_cnt, table_cnt, *long_life_allocator_))) {
         STORAGE_LOG(WARN, "Failed to init rows merger", K(ret), K(table_cnt));
       }
     } else if (FALSE_IT(rows_merger_->reuse())) {

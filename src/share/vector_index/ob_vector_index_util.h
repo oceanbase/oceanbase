@@ -48,6 +48,7 @@ enum ObVecAuxTableIdx { //FARM COMPAT WHITELIST
   THIRD_VEC_AUX_TBL_IDX = 3,
   FOURTH_VEC_AUX_TBL_IDX = 4,
   FIFTH_VEC_AUX_TBL_IDX = 5,
+  SIXTH_VEC_AUX_TBL_IDX = 6,
 };
 
 enum ObVectorIndexDistAlgorithm
@@ -300,6 +301,7 @@ static constexpr double DEFAULT_IVFPQ_SELECTIVITY_RATE = 0.9;
   int64_t get_row_count() { return row_count_; }
   bool is_pre_filter() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_PRE; }
   bool is_post_filter() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER || vec_idx_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER; }
+  bool use_iter_filter() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN || vec_idx_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER; }
   int set_vec_param_info(const ObTableSchema *vec_index_schema);
   ObVectorIndexParam get_vector_index_param() const {return vector_index_param_;}
   double get_default_selectivity_rate() const {
@@ -321,6 +323,29 @@ static constexpr double DEFAULT_IVFPQ_SELECTIVITY_RATE = 0.9;
   bool is_spatial_index_;
   bool can_extract_range_;
   bool with_extra_info_;
+};
+
+struct VecIndexAccessInfo
+{
+  VecIndexAccessInfo()
+    : vec_extra_info_(),
+      vec_index_ids_(),
+      inited_(false) {}
+
+  void reset()
+  {
+    vec_index_ids_.reset();
+    inited_ = false;
+  }
+
+  bool has_vec_index() const { return inited_;}
+  bool is_pre_filter() const { return inited_ && vec_extra_info_.is_pre_filter(); }
+  bool is_post_filter() const { return inited_ && vec_extra_info_.is_post_filter(); }
+  TO_STRING_KV(K_(vec_extra_info), K_(vec_index_ids), K_(inited));
+
+  ObVecIdxExtraInfo vec_extra_info_;
+  common::ObSEArray<uint64_t, 2, common::ModulePageAllocator, true> vec_index_ids_;
+  bool inited_;
 };
 
 class ObExprVecIvfCenterIdCache
@@ -379,6 +404,9 @@ class ObVectorIndexUtil final
     ObExprVecIvfCenterIdCache pq_cache_;
   };
 public:
+  static int determine_vid_type(
+      const ObTableSchema &table_schema,
+      ObDocIDType &vid_type);
   static int construct_rebuild_index_param(
       const ObTableSchema &data_table_schema,
       const ObString &old_index_params,
@@ -625,7 +653,8 @@ public:
       common::ObMySQLTransaction &trans,
       common::ObIArray<share::schema::ObTableSchema> &new_aux_schemas);
   static int check_drop_vec_indexs_ith_valid(
-      const ObIndexType index_type, const int64_t schema_count,
+      const share::schema::ObTableSchema &index_schema,
+      const int64_t schema_count,
       int64_t &rowkey_vid_ith, int64_t &vid_rowkey_ith,
       int64_t &domain_index_ith, int64_t &index_id_ith,
       int64_t &snapshot_data_ith, int64_t &centroid_ith,

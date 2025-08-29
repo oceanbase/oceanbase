@@ -10821,6 +10821,58 @@ int ObTransformPreProcess::preserve_order_for_fulltext_search(ObDMLStmt *stmt, b
     // do nothing
   } else if (0 == stmt->get_match_exprs().count()) {
     // do nothing
+  } else if (stmt->get_match_exprs().at(0) != nullptr && stmt->get_match_exprs().at(0)->is_es_match()) {
+    ObSEArray<ObRawExpr*, 2> relation_exprs;
+    if (OB_FAIL(stmt->get_relation_exprs(relation_exprs))) {
+      LOG_WARN("failed to get relation exprs", K(ret));
+    } else {
+      ObRawExpr *es_match_expr = nullptr;
+      ObRawExpr *es_score_expr = nullptr;
+      for (int64_t i = 0; OB_SUCC(ret) && i < relation_exprs.count(); ++i) {
+        ObRawExpr *relation_expr = relation_exprs.at(i);
+        if (OB_ISNULL(relation_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null relation expr", K(ret));
+        } else if (relation_expr->has_flag(CNT_MATCH_EXPR) && relation_expr->get_expr_type() == T_OP_ADD) {
+          if (relation_expr->get_param_count() != 2) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected relation expr param count", K(ret), K(relation_expr));
+          } else {
+            es_score_expr = relation_expr;
+            ObRawExpr *param_expr0 = relation_expr->get_param_expr(0);
+            ObRawExpr *param_expr1 = relation_expr->get_param_expr(1);
+            if (OB_ISNULL(param_expr0) || OB_ISNULL(param_expr1)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected null param expr", K(ret), KP(param_expr0), KP(param_expr1));
+            } else if (param_expr0->has_flag(IS_MATCH_EXPR)) {
+              es_match_expr = param_expr0;
+            } else if (param_expr1->has_flag(IS_MATCH_EXPR)) {
+              es_match_expr = param_expr1;
+            } else {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected relation expr param expr", K(ret), KP(param_expr0), KP(param_expr1));
+            }
+          }
+        } else if (relation_expr->has_flag(IS_MATCH_EXPR)) {
+          es_match_expr = relation_expr;
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(es_match_expr)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("no score expr is not supported", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "no score expr is");
+      } else {
+        es_score_expr = nullptr == es_score_expr ? es_match_expr : es_score_expr;
+        OrderItem item(es_score_expr, default_desc_direction());
+        if (OB_FAIL(stmt->add_order_item(item))) {
+          LOG_WARN("failed to add order item", K(ret), K(item));
+        } else {
+          trans_happened = true;
+        }
+      }
+    }
   } else {
     const common::ObIArray<ObRawExpr *> &condition_exprs = stmt->get_condition_exprs();
     bool found = false;
@@ -10861,7 +10913,53 @@ int ObTransformPreProcess::preserve_order_for_fulltext_search(ObDMLStmt *stmt, b
     }
   }
 
-  if (OB_SUCC(ret) && nullptr != match_expr) {
+  if (OB_FAIL(ret)) {
+  } else if (0 == stmt->get_match_exprs().count()) {
+    // do nothing
+  } else if (stmt->get_match_exprs().at(0) != nullptr && stmt->get_match_exprs().at(0)->is_es_match()) {
+    ObSEArray<ObRawExpr*, 2> relation_exprs;
+    if (OB_FAIL(stmt->get_relation_exprs(relation_exprs))) {
+      LOG_WARN("failed to get relation exprs", K(ret));
+    } else {
+      ObRawExpr *es_match_expr = nullptr;
+      for (int64_t i = 0; OB_SUCC(ret) && i < relation_exprs.count(); ++i) {
+        ObRawExpr *relation_expr = relation_exprs.at(i);
+        if (OB_ISNULL(relation_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null relation expr", K(ret));
+        } else if (relation_expr->has_flag(CNT_MATCH_EXPR) && relation_expr->get_expr_type() == T_OP_ADD) {
+          if (relation_expr->get_param_count() != 2) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected relation expr param count", K(ret), K(relation_expr));
+          } else {
+            ObRawExpr *param_expr0 = relation_expr->get_param_expr(0);
+            ObRawExpr *param_expr1 = relation_expr->get_param_expr(1);
+            if (OB_ISNULL(param_expr0) || OB_ISNULL(param_expr1)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected null param expr", K(ret), KP(param_expr0), KP(param_expr1));
+            } else if (param_expr0->has_flag(IS_MATCH_EXPR)) {
+              es_match_expr = param_expr0;
+            } else if (param_expr1->has_flag(IS_MATCH_EXPR)) {
+              es_match_expr = param_expr1;
+            } else {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected relation expr param expr", K(ret), KP(param_expr0), KP(param_expr1));
+            }
+          }
+        } else if (relation_expr->has_flag(IS_MATCH_EXPR)) {
+          es_match_expr = relation_expr;
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(es_match_expr)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("no score expr is not supported", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "no score expr is");
+      }
+    }
+  }
+  if (OB_SUCC(ret) && nullptr != match_expr && !static_cast<ObMatchFunRawExpr*>(match_expr)->is_es_match()) {
     OrderItem item(match_expr, default_desc_direction());
     if (OB_FAIL(stmt->add_order_item(item))) {
       LOG_WARN("failed to add order item", K(ret), K(item));
@@ -10869,7 +10967,6 @@ int ObTransformPreProcess::preserve_order_for_fulltext_search(ObDMLStmt *stmt, b
       trans_happened = true;
     }
   }
-
   return ret;
 }
 

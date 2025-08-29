@@ -233,7 +233,9 @@ public:
 
   // core interfaces
   int execute_adapter_maintenance();
-  int acquire_adapter_in_maintenance(const int64_t table_id, const ObTableSchema *table_schema);
+  int acquire_adapter_in_maintenance(const int64_t table_id,
+                                     const ObTableSchema *table_schema,
+                                     ObVecIdxSharedTableInfoMap &shared_table_info_map);
   int set_shared_table_info_in_maintenance(const int64_t table_id,
                                            const ObTableSchema *table_schema,
                                            ObVecIdxSharedTableInfoMap &shared_table_info_map);

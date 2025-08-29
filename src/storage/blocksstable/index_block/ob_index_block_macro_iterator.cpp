@@ -400,14 +400,12 @@ int ObIndexBlockMacroIterator::get_next_idx_row(ObIAllocator &item_allocator, Ob
     // traverse all node of this macro block and collect index info
     ObDatumRowkey rowkey;
     row_offset = idx_row_parser->get_row_offset();
-    if (idx_row_header->is_data_index() && !idx_row_header->is_major_node()) {
+    if (idx_row_header->is_pre_aggregated() && OB_FAIL(idx_row_parser->get_agg_row(agg_row_buf, agg_buf_size))) {
+      LOG_WARN("Fail to get aggregate", K(ret), KPC(idx_row_header));
+    } else if (idx_row_header->is_data_index() && !idx_row_header->is_major_node()) {
       if (OB_FAIL(idx_row_parser->get_minor_meta(minor_meta_info))) {
         LOG_WARN("Fail to get minor meta info", K(ret));
       }
-    } else if (!idx_row_header->is_major_node() || !idx_row_header->is_pre_aggregated()) {
-      // Do not have aggregate data
-    } else if (OB_FAIL(idx_row_parser->get_agg_row(agg_row_buf, agg_buf_size))) {
-      LOG_WARN("Fail to get aggregate", K(ret));
     }
 
     if (OB_SUCC(ret)) {

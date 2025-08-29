@@ -176,7 +176,7 @@ int ObDirectLoadMultipleSSTableScanMerge::init_rows_merger(int64_t sstable_count
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(rows_merger_->init(sstable_count, allocator_))) {
+    if (OB_FAIL(rows_merger_->init(MAX_SSTABLE_COUNT, sstable_count, allocator_))) {
       LOG_WARN("fail to init rows merger", KR(ret), K(sstable_count));
     } else if (FALSE_IT(rows_merger_->reuse())) {
     } else if (OB_FAIL(rows_merger_->open(sstable_count))) {

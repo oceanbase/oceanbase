@@ -170,6 +170,7 @@ struct ObColDataStoreDesc
 private:
   // simplified do not generate skip index, do not init agg_meta_array
   int generate_skip_index_meta(
+      const bool is_major,
       const share::schema::ObMergeSchema &schema,
       const storage::ObStorageColumnGroupSchema *cg_schema,
       const int64_t major_working_cluster_version);

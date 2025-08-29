@@ -139,7 +139,7 @@ int ObIndexBuilderUtil::add_column(
       if (column.is_spatial_generated_column()) {
         column.set_geo_col_id(data_column->get_geo_col_id());
       }
-      if (table_schema.is_fts_index() || (table_schema.is_multivalue_index())) {
+      if (table_schema.is_fts_index() || (table_schema.is_multivalue_index()) || (table_schema.is_vec_spiv_index())) {
         ObObj default_value;
         column.del_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
         if (column.is_word_segment_column()) {
@@ -734,8 +734,8 @@ int ObIndexBuilderUtil::adjust_expr_index_args(
     } else if (OB_FAIL(gen_columns.push_back(spatial_cols.at(1)))) {
       LOG_WARN("push back mbr column to gen columns failed", K(ret));
     }
-  } else if (ObIndexBuilderUtil::is_do_create_dense_vec_index(arg.index_type_)) {
-    if (OB_FAIL(ObVecIndexBuilderUtil::check_vec_index_allowed(data_schema))) {
+  } else if (ObIndexBuilderUtil::is_do_create_dense_vec_index(arg.index_type_) || is_vec_spiv_index_aux(arg.index_type_)) {
+    if (OB_FAIL(ObVecIndexBuilderUtil::check_vec_index_allowed(arg.index_type_, data_schema))) {
       LOG_WARN("fail to check vector index allowed", K(ret));
     } else if (OB_FAIL(ObVecIndexBuilderUtil::adjust_vec_args(arg, data_schema, allocator, gen_columns))) {
       LOG_WARN("failed to adjust vec index args", K(ret), K(arg.index_type_));

@@ -83,6 +83,7 @@
 #include "pl/sys_package/ob_dbms_balance.h"
 #include "pl/sys_package/ob_dbms_external_table.h"
 #include "pl/sys_package/ob_dbms_vector_mysql.h"
+#include "pl/sys_package/ob_dbms_hybrid_vector_mysql.h"
 #include "pl/pl_recompile/ob_pl_recompile_task_helper.h"
 #include "pl/sys_package/ob_dbms_partition.h"
 #include "pl/sys_package/ob_dbms_java.h"
@@ -954,6 +955,16 @@
   INTERFACE_DEF(INTERFACE_DBMS_PYTHON_LOADPYTHON_MYSQL, "DBMS_PYTHON_LOADPYTHON_MYSQL", (ObDBMSPython::loadpython_mysql))
   INTERFACE_DEF(INTERFACE_DBMS_PYTHON_DROPPYTHON_MYSQL, "DBMS_PYTHON_DROPPYTHON_MYSQL", (ObDBMSPython::droppython_mysql))
   // end of dbms_python
+
+  // start of dbms_hybrid_search
+#define DEFINE_DBMS_HYBRID_VECTOR_MYSQL_INTERFACE(symbol, func) \
+INTERFACE_DEF(INTERFACE_##symbol, #symbol, (func))
+
+DEFINE_DBMS_HYBRID_VECTOR_MYSQL_INTERFACE(DBMS_HYBRID_VECTOR_MYSQL_SEARCH, ObDBMSHybridVectorMySql::search)
+DEFINE_DBMS_HYBRID_VECTOR_MYSQL_INTERFACE(DBMS_HYBRID_VECTOR_MYSQL_GET_SQL, ObDBMSHybridVectorMySql::get_sql)
+
+#undef DEFINE_DBMS_HYBRID_VECTOR_MYSQL_INTERFACE
+  // end of dbms_hybrid_search
 
   INTERFACE_DEF(INTERFACE_END, "INVALID", (nullptr))
 #endif

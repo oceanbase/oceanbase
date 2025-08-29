@@ -41,6 +41,7 @@
 .pydevproject
 .review/
 .vscode/
+.cursor/
 /.obdev
 /.settings/
 BROWSE

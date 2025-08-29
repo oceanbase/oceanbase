@@ -216,9 +216,17 @@ int ObCreateIndexResolver::resolve_index_column_node(
               } else if (OB_FAIL(ObVectorIndexUtil::is_sparse_vec_col(column_schema->get_extended_type_info(), is_sparse_vec_col))) {
                 LOG_WARN("fail to check is sparse vec col", K(ret));
               } else if (is_sparse_vec_col) {
-                ret = OB_NOT_SUPPORTED;
-                LOG_WARN("build sparse vector index afterward not supported", K(ret), K(index_keyname_));
-                LOG_USER_ERROR(OB_NOT_SUPPORTED, "build sparse vector index afterward is");
+                uint64_t tenant_data_version = 0;
+                if (OB_ISNULL(session_info_)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("unexpected null", K(ret));
+                } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+                  LOG_WARN("get tenant data version failed", K(ret));
+                } else if (tenant_data_version < DATA_VERSION_4_4_1_0) {
+                  ret = OB_NOT_SUPPORTED;
+                  LOG_WARN("tenant data version is less than 4.4.1, build sparse vector index afterward not supported", K(ret), K(tenant_data_version));
+                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "build sparse vector index afterward is");
+                }
               }
             }
           }

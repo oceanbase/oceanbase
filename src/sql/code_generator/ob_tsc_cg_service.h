@@ -67,24 +67,40 @@ private:
     DASScanCGCtx()
       : curr_func_lookup_idx_(OB_INVALID_ID),
         is_func_lookup_(false),
+        curr_match_idx_(OB_INVALID_ID),
+        is_es_match_(false),
         curr_merge_fts_idx_(OB_INVALID_ID),
-        is_merge_fts_index_(false)
+        is_merge_fts_index_(false),
+        is_vec_iter_func_lookup_(false)
     {}
     void reset()
     {
       curr_func_lookup_idx_ = OB_INVALID_ID;
       is_func_lookup_ = false;
+      curr_match_idx_ = OB_INVALID_ID;
+      is_es_match_ = false;
       curr_merge_fts_idx_ = OB_INVALID_ID;
       is_merge_fts_index_ = false;
+      is_vec_iter_func_lookup_  = false;
     }
     void set_func_lookup_idx(const int64_t idx)
     {
       is_func_lookup_ = true;
       curr_func_lookup_idx_ = idx;
     }
+    inline bool is_merge_fts_index() {return is_merge_fts_index_;}
     void set_is_func_lookup()
     {
       is_func_lookup_ = true;
+    }
+    void set_match_idx(const int64_t idx)
+    {
+      is_es_match_ = true;
+      curr_match_idx_ = idx;
+    }
+    void set_is_match()
+    {
+      is_es_match_ = true;
     }
     void set_curr_merge_fts_idx(const int64_t idx)
     {
@@ -105,14 +121,21 @@ private:
     {
       return is_func_lookup_ && OB_INVALID_ID == curr_func_lookup_idx_;
     }
-    TO_STRING_KV(K_(curr_func_lookup_idx), K_(is_func_lookup), K_(curr_merge_fts_idx), K_(is_merge_fts_index));
+    void set_is_vec_iter_func_lookup(bool val)
+    {
+      is_vec_iter_func_lookup_ = val;
+    }
+    TO_STRING_KV(K_(curr_func_lookup_idx), K_(is_func_lookup), K_(curr_match_idx), K_(is_es_match), K_(curr_merge_fts_idx), K_(is_merge_fts_index));
     int64_t curr_func_lookup_idx_;
     bool is_func_lookup_;
-
+    int64_t curr_match_idx_;
+    bool is_es_match_;
     /* used by fts index in index merge */
     int64_t curr_merge_fts_idx_;
     bool is_merge_fts_index_;
     /* used by fts index in index merge */
+    /* used by fts index in vector iter scan */
+    bool is_vec_iter_func_lookup_;
   };
   int generate_access_ctdef(const ObLogTableScan &op,
                             const DASScanCGCtx &cg_ctx,
@@ -128,7 +151,10 @@ private:
                                     const ObTableSchema &index_schema,
                                     const DASScanCGCtx &cg_ctx,
                                     common::ObIArray<uint64_t> &output_cids);
-
+  int extract_fts_das_access_exprs(const ObLogTableScan &op,
+                                   const DASScanCGCtx &cg_ctx,
+                                   ObDASScanCtDef &scan_ctdef,
+                                   ObIArray<ObRawExpr*> &access_exprs);
   int extract_das_access_exprs(const ObLogTableScan &op,
                                const DASScanCGCtx &cg_ctx,
                                ObDASScanCtDef &scan_ctdef,
@@ -148,6 +174,7 @@ private:
                                     ObDASScanCtDef *&spiv_scan_ctdef,
                                     ObDASScanCtDef *&rowkey_docid_ctdef,
                                     ObDASScanCtDef *&aux_data_ctdef,
+                                    ObDASScanCtDef *&block_max_scan_ctdef,
                                     ObStoragePushdownFlag& pushdown_flag);
   int generate_vec_aux_idx_tbl_ctdef(const ObLogTableScan &op,
                                     ObDASScanCtDef *&first_aux_ctdef,
@@ -182,8 +209,29 @@ private:
                                            ObDASScanCtDef &scan_ctdef);
   int generate_text_ir_spec_exprs(const ObTextRetrievalInfo &tr_info,
                                   ObDASIRScanCtDef &text_ir_scan_ctdef);
+  int check_skip_index_validity(const ObTextRetrievalInfo &tr_info, bool &is_valid) const;
+  int generate_text_block_max_scan_ctdef(const ObTextRetrievalInfo &tr_info,
+                                         ObDASIRScanCtDef &text_ir_scan_ctdef);
+  int append_block_max_scan_agg_column(const int64_t column_id,
+                                       const ObTableSchema &table_schema,
+                                       const ObSkipIndexColType skip_index_type,
+                                       const ObIArray<ObColDesc> &col_descs,
+                                       const ObIArray<uint64_t> &access_column_ids,
+                                       ObIArray<int32_t> &block_max_scan_col_store_idxes,
+                                       ObIArray<ObSkipIndexColType> &block_max_scan_col_types,
+                                       ObIArray<int32_t> &block_max_scan_col_proj);
+  int generate_vec_extra_info_exprs(const ObLogTableScan &op,
+                                    ObDASVecAuxScanCtDef &vec_ir_scan_ctdef,
+                                    ObIArray<ObExpr*> &output_exprs);
+  int generate_vec_relavence_exprs(const ObLogTableScan &op,
+                                    ObDASVecAuxScanCtDef &vec_ir_scan_ctdef,
+                                    ObIArray<ObExpr*> &output_exprs);
+  int collect_all_relavence_exprs(ObDASBaseCtDef * idx_ctdef,
+                                  ObIArray<ObExpr*> &output_exprs,
+                                  int64_t& relavence_col_cnt);
   int generate_vec_ir_spec_exprs(const ObLogTableScan &op,
                                   ObDASVecAuxScanCtDef &vec_ir_scan_ctdef);
+  int generate_spiv_block_max_spec(const ObLogTableScan &op, const ObVecIndexInfo &vec_info, ObDASVecAuxScanCtDef &vec_ir_scan_ctdef);
   int generate_vec_ir_ctdef(const ObLogTableScan &op, ObTableScanCtDef &tsc_ctdef, ObDASBaseCtDef *&root_ctdef);
   int generate_multivalue_ir_ctdef(const ObLogTableScan &op, ObTableScanCtDef &tsc_ctdef, ObDASBaseCtDef *&root_ctdef);
   int generate_gis_ir_ctdef(const ObLogTableScan &op, ObTableScanCtDef &tsc_ctdef, ObDASBaseCtDef *&root_ctdef);
@@ -295,9 +343,13 @@ private:
                                        ObTableScanCtDef &tsc_ctdef,
                                        ObDASBaseCtDef *rowkey_scan_ctdef,
                                        ObDASBaseCtDef *main_lookup_ctdef,
-                                       ObDASBaseCtDef *&root_ctdef);
+                                       ObDASBaseCtDef *&root_ctdef,
+                                       const bool is_vec_pre_filter = false,
+                                       const bool is_vec_iter_filter = false);
   int check_lookup_iter_type(ObDASBaseCtDef *scan_ctdef, bool &need_proj_relevance_score);
-
+  int generate_match_ctdef(const ObLogTableScan &op,
+                                 ObTableScanCtDef &tsc_ctdef,
+                                 ObDASBaseCtDef *&root_ctdef);
 private:
   ObStaticEngineCG &cg_;
 };

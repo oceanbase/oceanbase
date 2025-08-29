@@ -1261,6 +1261,13 @@ public:
   bool has_lob_header_; // for observer 4.0 compatibility
 };
 
+enum class ObDocIDType : uint16_t
+{
+  INVALID = 0,
+  TABLET_SEQUENCE,
+  HIDDEN_INC_PK,
+};
+
 class ObDocId final
 {
 public:

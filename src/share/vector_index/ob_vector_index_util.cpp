@@ -17,6 +17,7 @@
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "sql/engine/ob_exec_context.h"
 #include "share/ob_vec_index_builder_util.h"
+#include "share/ob_fts_index_builder_util.h"
 #include "share/vector_index/ob_plugin_vector_index_util.h"
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
@@ -987,6 +988,33 @@ int ObVectorIndexUtil::check_has_extra_info(const ObTableSchema &data_table_sche
     }
   }
 
+  return ret;
+}
+
+int ObVectorIndexUtil::determine_vid_type(const ObTableSchema &table_schema, ObDocIDType &vid_type)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  uint64_t vid_col_id = OB_INVALID_ID;
+  static constexpr bool ENABLE_VID_OPT = true;
+  // 1. check sys tenant data version
+  if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, data_version))) {
+    LOG_WARN("fail to get sys tenant data version", KR(ret), K(data_version));
+  } else if (data_version < MIN_DATA_VERSION_FOR_DOC_ID_OPT) {
+    vid_type = ObDocIDType::TABLET_SEQUENCE;
+  } else if (!table_schema.is_table_with_hidden_pk_column()) {
+    vid_type = ObDocIDType::TABLET_SEQUENCE;
+  } else if (OB_FAIL(table_schema.get_vec_index_vid_col_id(vid_col_id, false))) {
+    if (OB_ERR_INDEX_KEY_NOT_FOUND == ret) {
+      ret = OB_SUCCESS;
+      vid_type = ENABLE_VID_OPT ? ObDocIDType::HIDDEN_INC_PK : ObDocIDType::TABLET_SEQUENCE;
+    } else {
+      LOG_WARN("Failed to check docid in schema", K(ret));
+    }
+  } else {
+    // exists
+    vid_type = ObDocIDType::TABLET_SEQUENCE;
+  }
   return ret;
 }
 
@@ -2294,6 +2322,10 @@ int ObVectorIndexUtil::check_index_param(
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("invalid vector param num", K(ret), K(option_node->num_child_));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector index params not set distance and type is");
+    } else if (is_sparse_vec) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not sopport sparse vector index", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "sparse vector index is");
     }
     ObString last_variable;
     ObString key_parser_name;
@@ -2570,10 +2602,17 @@ int ObVectorIndexUtil::check_index_param(
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "parameter for current index is");
     }
     if (OB_SUCC(ret) && extra_info_max_size_is_set) {
+      ObDocIDType vid_type = ObDocIDType::INVALID;
       if (tenant_data_version < DATA_VERSION_4_3_5_2) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "vec hnsw extra_info before 4.3.5.2 is");
         LOG_WARN("vec hnsw index extra_info is not supported before 4.3.5.2", K(ret), K(tenant_data_version));
+      } else if (OB_FAIL(ObVectorIndexUtil::determine_vid_type(tbl_schema, vid_type))) {
+        LOG_WARN("Failed to check vid type", K(ret));
+      } else if (vid_type == ObDocIDType::HIDDEN_INC_PK) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "vec hnsw extra_info on table with pk increment is");
+        LOG_WARN("vec hnsw index extra_info is not supported on table with pk increment", K(ret));
       }
     }
     if (OB_FAIL(ret)) {
@@ -2730,8 +2769,8 @@ int ObVectorIndexUtil::check_index_param(
     } else if (is_sparse_vec) {
       if (!distance_is_set) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("sparce vector index distance algorithm need to be set 'INNER_PRODUCT'", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "sparce vector index distance algorithm need to be set 'INNER_PRODUCT'");
+        LOG_WARN("sparse vector index distance algorithm need to be set 'INNER_PRODUCT'", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "sparse vector index distance algorithm need to be set 'INNER_PRODUCT'");
       } else {
         if (lib_is_set
             || type_hnsw_is_set
@@ -3833,11 +3872,10 @@ int ObVectorIndexUtil::check_vector_index_by_column_name(
 
   is_valid = false;
 
-  if (index_column_name.empty() ||
-      OB_INVALID_ID == data_table_id || OB_INVALID_TENANT_ID == tenant_id || OB_INVALID_ID == database_id) {
+  if (index_column_name.empty() || OB_INVALID_ID == data_table_id ||
+      OB_INVALID_TENANT_ID == tenant_id || OB_INVALID_ID == database_id) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument",
-      K(ret), K(index_column_name), K(data_table_id), K(tenant_id), K(database_id));
+    LOG_WARN("invalid argument", K(ret), K(index_column_name), K(data_table_id), K(tenant_id), K(database_id));
   } else {
     ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
     if (OB_FAIL(table_schema.get_simple_index_infos(simple_index_infos))) {
@@ -3921,10 +3959,16 @@ int ObVectorIndexUtil::check_vector_index_by_column_name(
         LOG_WARN("only one vector index can be created on a vector column.", K(ret),
                   K(index_column_name), K(data_table_id), K(tenant_id), K(database_id));
       } else if (is_hnsw) {
-        if (rowkey_vid_table_is_valid && vid_rowkey_table_is_valid && delta_buffer_table_is_valid &&
-            index_id_table_is_valid && snapshot_table_is_valid) {
-          is_valid = true;
-        } else {
+        ObDocIDType vid_type = ObDocIDType::INVALID;
+        if (OB_FAIL(ObVectorIndexUtil::determine_vid_type(table_schema, vid_type))) {
+          LOG_WARN("Failed to check skip rowkey doc mapping", K(ret));
+        } else if (vid_type == ObDocIDType::TABLET_SEQUENCE) {
+          is_valid = rowkey_vid_table_is_valid && vid_rowkey_table_is_valid &&
+                     delta_buffer_table_is_valid && index_id_table_is_valid && snapshot_table_is_valid;
+        } else if (vid_type == ObDocIDType::HIDDEN_INC_PK) {
+          is_valid = delta_buffer_table_is_valid && index_id_table_is_valid && snapshot_table_is_valid;
+        }
+        if (!is_valid) {
           LOG_WARN("vector index is not all valid",
                    K(rowkey_vid_table_is_valid),
                    K(vid_rowkey_table_is_valid),
@@ -3943,9 +3987,15 @@ int ObVectorIndexUtil::check_vector_index_by_column_name(
                   K(ivf_forth_table_is_valid));
         }
       } else if (is_spiv) {
-        if (spiv_dim_docid_value_is_valid && spiv_rowkey_docid_is_valid && spiv_docid_rowkey_is_valid) {
-          is_valid = true;
-        } else {
+        ObDocIDType docid_type = ObDocIDType::INVALID;
+        if (OB_FAIL(ObFtsIndexBuilderUtil::determine_docid_type(table_schema, docid_type))) {
+          LOG_WARN("Failed to check skip rowkey doc mapping", K(ret));
+        } else if (docid_type == ObDocIDType::TABLET_SEQUENCE) {
+          is_valid = spiv_dim_docid_value_is_valid && spiv_rowkey_docid_is_valid && spiv_docid_rowkey_is_valid;
+        } else if (docid_type == ObDocIDType::HIDDEN_INC_PK) {
+          is_valid = spiv_dim_docid_value_is_valid;
+        }
+        if (!is_valid) {
           LOG_WARN("spiv index is not all valid",
                     K(spiv_dim_docid_value_is_valid),
                     K(spiv_rowkey_docid_is_valid),
@@ -3975,22 +4025,6 @@ int ObVectorIndexUtil::get_vector_index_column_name(
     // skip rowkey_vid and vid_rowkey table
   } else if (index_table_schema.is_rowkey_doc_id() || index_table_schema.is_doc_id_rowkey()) {
     // skip rowkey_docid and docid_rowkey
-  } else if (index_table_schema.is_vec_spiv_index_aux()) {
-    uint64_t col_id;
-    const ObColumnSchemaV2 *column = NULL;
-    ObString col_name;
-    if (OB_FAIL(index_table_schema.get_sparse_vec_index_column_id(col_id))) {
-      LOG_WARN("failed to get sparse vector col id", K(ret));
-    } else if (OB_ISNULL(column = index_table_schema.get_column_schema(col_id))) {
-       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected cascaded column", K(ret));
-    } else if (OB_FALSE_IT(col_name = column->get_column_name())) {
-    } else if (OB_FAIL(col_names.push_back(col_name))) {
-      LOG_WARN("fail to push back col names", K(ret), K(col_name));
-    } else {
-      has_get_column_name = true;
-      LOG_DEBUG("success to get vector index col name", K(ret), K(col_name));
-    }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && !has_get_column_name && i < index_table_schema.get_column_count(); i++) {
       const ObColumnSchemaV2 *col_schema = nullptr;
@@ -4363,19 +4397,35 @@ int ObVectorIndexUtil::get_dropping_vec_index_invisiable_table_schema(
   return ret;
 }
 
-int ObVectorIndexUtil::check_drop_vec_indexs_ith_valid(const ObIndexType index_type, const int64_t schema_count,
-      int64_t &rowkey_vid_ith, int64_t &vid_rowkey_ith, int64_t &domain_index_ith, int64_t &index_id_ith, int64_t &snapshot_data_ith,
-      int64_t &centroid_ith, int64_t &cid_vector_ith, int64_t &rowkey_cid_ith, int64_t &sq_meta_ith, int64_t &pq_centroid_ith, int64_t &pq_code_ith)
+int ObVectorIndexUtil::check_drop_vec_indexs_ith_valid(
+    const share::schema::ObTableSchema &index_schema, const int64_t schema_count,
+    int64_t &rowkey_vid_ith, int64_t &vid_rowkey_ith, int64_t &domain_index_ith, int64_t &index_id_ith, int64_t &snapshot_data_ith,
+    int64_t &centroid_ith, int64_t &cid_vector_ith, int64_t &rowkey_cid_ith, int64_t &sq_meta_ith, int64_t &pq_centroid_ith, int64_t &pq_code_ith)
 {
   int ret = OB_SUCCESS;
-  if (share::schema::is_vec_hnsw_index(index_type)) {
-    if (rowkey_vid_ith < 0 || rowkey_vid_ith >= schema_count ||
-        vid_rowkey_ith < 0 || vid_rowkey_ith >= schema_count ||
-        index_id_ith < 0 || index_id_ith >= schema_count ||
-        snapshot_data_ith < 0 || snapshot_data_ith >= schema_count) {
+  const ObIndexType index_type = index_schema.get_index_type();
+  uint64_t vid_col_id = OB_INVALID_ID;
+  bool has_vid_col = true;
+
+  if (OB_FAIL(index_schema.get_vec_index_vid_col_id(vid_col_id, false))) {
+    if (OB_ERR_INDEX_KEY_NOT_FOUND == ret) {
+      has_vid_col = false;
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to get docid col id", K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (share::schema::is_vec_hnsw_index(index_type)) {
+    if (has_vid_col && (rowkey_vid_ith < 0 || rowkey_vid_ith >= schema_count ||
+                        vid_rowkey_ith < 0 || vid_rowkey_ith >= schema_count)) {
+      LOG_WARN("check drop vec hnsw index fail", K(ret), K(rowkey_vid_ith), K(vid_rowkey_ith));
+    } else if (domain_index_ith < 0 || domain_index_ith >= schema_count ||
+               index_id_ith < 0 || index_id_ith >= schema_count ||
+               snapshot_data_ith < 0 || snapshot_data_ith >= schema_count) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("check drop vec hnsw index fail",
-        K(ret), K(rowkey_vid_ith), K(vid_rowkey_ith), K(index_id_ith), K(snapshot_data_ith));
+      LOG_WARN("check drop vec hnsw index fail", K(ret), K(domain_index_ith), K(index_id_ith), K(snapshot_data_ith));
     }
   } else if (share::schema::is_vec_ivfflat_index(index_type)) {
     if (centroid_ith < 0 || centroid_ith >= schema_count ||

@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/iter/ob_das_local_lookup_iter.h"
 #include "sql/das/iter/ob_das_functional_lookup_iter.h"
+#include "sql/das/iter/ob_das_func_data_iter.h"
 #include "sql/das/iter/ob_das_domain_id_merge_iter.h"
 #include "sql/das/ob_das_ir_define.h"
 #include "sql/das/ob_das_vec_define.h"
@@ -180,19 +181,9 @@ int ObDASLocalLookupIter::add_rowkey()
   int ret = OB_SUCCESS;
   OB_ASSERT(data_table_iter_->get_type() == DAS_ITER_SCAN ||
             data_table_iter_->get_type() == DAS_ITER_FUNC_LOOKUP ||
+            data_table_iter_->get_type() == DAS_ITER_FUNC_DATA ||
             data_table_iter_->get_type() == DAS_ITER_DOMAIN_ID_MERGE);
-  ObDASScanIter *scan_iter = nullptr;
-  if (data_table_iter_->get_type() == DAS_ITER_SCAN) {
-    scan_iter = static_cast<ObDASScanIter *>(data_table_iter_);
-  } else if (data_table_iter_->get_type() == DAS_ITER_FUNC_LOOKUP) {
-    scan_iter = static_cast<ObDASFuncLookupIter *>(data_table_iter_)->get_index_scan_iter();
-  } else if (data_table_iter_->get_type() == DAS_ITER_DOMAIN_ID_MERGE) {
-    scan_iter = static_cast<ObDASDomainIdMergeIter *>(data_table_iter_)->get_data_table_iter();
-  }
-  storage::ObTableScanParam &scan_param = scan_iter->get_scan_param();
-  ObNewRange lookup_range;
   int64 group_id = 0;
-
   if (DAS_OP_TABLE_SCAN == index_ctdef_->op_type_) {
     const ObDASScanCtDef *index_ctdef = static_cast<const ObDASScanCtDef*>(index_ctdef_);
     if (nullptr != index_ctdef->group_id_expr_) {
@@ -213,18 +204,9 @@ int ObDASLocalLookupIter::add_rowkey()
     group_id = static_cast<ObDASFuncLookupIter *>(data_table_iter_)->get_group_id();
   }
 
-  int64_t group_idx = ObNewRange::get_group_idx(group_id);
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(build_lookup_range(lookup_range))) {
-    LOG_WARN("failed to build lookup range", K(ret));
-  } else if (FALSE_IT(lookup_range.group_idx_ = group_idx)) {
-  } else if (OB_FAIL(scan_param.key_ranges_.push_back(lookup_range))) {
-    LOG_WARN("failed to push back lookup range", K(ret));
-  } else {
-    scan_param.is_get_ = true;
+  if (FAILEDx(data_table_iter_->set_scan_rowkey(eval_ctx_, rowkey_exprs_, lookup_ctdef_, &lookup_memctx_->get_arena_allocator(), group_id))) {
+    LOG_WARN("failed to set scan rowkey of data table iter", K(ret));
   }
-  LOG_DEBUG("build local lookup range", K(lookup_range), K(ret));
-
   return ret;
 }
 
@@ -262,13 +244,17 @@ int ObDASLocalLookupIter::do_index_lookup()
   int ret = OB_SUCCESS;
   OB_ASSERT(data_table_iter_->get_type() == DAS_ITER_SCAN ||
             data_table_iter_->get_type() == DAS_ITER_FUNC_LOOKUP ||
+            data_table_iter_->get_type() == DAS_ITER_FUNC_DATA ||
             data_table_iter_->get_type() == DAS_ITER_DOMAIN_ID_MERGE);
   if (is_first_lookup_) {
     is_first_lookup_ = false;
-    if (OB_FAIL(init_scan_param(lookup_param_, lookup_ctdef_, lookup_rtdef_))) {
+    if (DAS_ITER_FUNC_DATA != data_table_iter_->get_type() &&
+        OB_FAIL(init_scan_param(lookup_param_, lookup_ctdef_, lookup_rtdef_))) {
       LOG_WARN("failed to init scan param", K(ret));
     } else if (OB_FAIL(data_table_iter_->do_table_scan())) {
-      if (OB_SNAPSHOT_DISCARDED == ret && lookup_param_.fb_snapshot_.is_valid()) {
+      if (DAS_ITER_FUNC_DATA == data_table_iter_->get_type()) {
+        LOG_WARN("failed to scan func data iter", K(ret));
+      } else if (OB_SNAPSHOT_DISCARDED == ret && lookup_param_.fb_snapshot_.is_valid()) {
         ret = OB_INVALID_QUERY_TIMESTAMP;
       } else if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
         LOG_WARN("failed to do partition scan", K(lookup_param_), K(ret));
@@ -278,8 +264,10 @@ int ObDASLocalLookupIter::do_index_lookup()
     // reuse -> real rescan
     // reuse: store next tablet_id, ls_id and reuse storage iter;
     // rescan: bind tablet_id, ls_id to scan_param and rescan;
-    lookup_param_.tablet_id_ = lookup_tablet_id_;
-    lookup_param_.ls_id_ = lookup_ls_id_;
+    if (DAS_ITER_FUNC_DATA != data_table_iter_->get_type()) {
+      lookup_param_.tablet_id_ = lookup_tablet_id_;
+      lookup_param_.ls_id_ = lookup_ls_id_;
+    }
     if (OB_FAIL(data_table_iter_->rescan())) {
       LOG_WARN("failed to rescan data table", K(ret));
     }
@@ -292,6 +280,7 @@ int ObDASLocalLookupIter::check_index_lookup()
   int ret = OB_SUCCESS;
   OB_ASSERT(data_table_iter_->get_type() == DAS_ITER_SCAN ||
             data_table_iter_->get_type() == DAS_ITER_FUNC_LOOKUP ||
+            data_table_iter_->get_type() == DAS_ITER_FUNC_DATA ||
             data_table_iter_->get_type() == DAS_ITER_DOMAIN_ID_MERGE);
   ObDASScanIter *scan_iter = nullptr;
   if (data_table_iter_->get_type() == DAS_ITER_SCAN) {
@@ -301,38 +290,62 @@ int ObDASLocalLookupIter::check_index_lookup()
   } else if (data_table_iter_->get_type() == DAS_ITER_DOMAIN_ID_MERGE) {
     scan_iter = static_cast<ObDASDomainIdMergeIter *>(data_table_iter_)->get_data_table_iter();
   }
-  if (GCONF.enable_defensive_check() &&
-      lookup_ctdef_->pd_expr_spec_.pushdown_filters_.empty()) {
-    if (OB_UNLIKELY(lookup_rowkey_cnt_ != lookup_row_cnt_)) {
-      ret = OB_ERR_DEFENSIVE_CHECK;
-      ObString func_name = ObString::make_string("check_lookup_row_cnt");
-      LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-      LOG_ERROR("Fatal Error!!! Catch a defensive error!",
-          K(ret), K_(lookup_rowkey_cnt), K_(lookup_row_cnt),
-          "main table id", lookup_ctdef_->ref_table_id_,
-          "main tablet id", lookup_tablet_id_,
-          KPC_(trans_desc), KPC_(snapshot));
-      concurrency_control::ObDataValidationService::set_delay_resource_recycle(lookup_ls_id_);
-      const ObTableScanParam &scan_param = scan_iter->get_scan_param();
-      if (trans_info_array_.count() == scan_param.key_ranges_.count()) {
-        for (int64_t i = 0; i < trans_info_array_.count(); i++) {
-          ObDatum *datum = trans_info_array_.at(i);
-          LOG_ERROR("dump lookup range and trans info of local lookup das task",
-              K(i), KPC(trans_info_array_.at(i)), K(scan_param.key_ranges_.at(i)));
+  if (DAS_ITER_FUNC_DATA == data_table_iter_->get_type()) {
+    if (GCONF.enable_defensive_check()) {
+      if (OB_UNLIKELY(lookup_rowkey_cnt_ != lookup_row_cnt_)) {
+        ret = OB_ERR_DEFENSIVE_CHECK;
+        ObString func_name = ObString::make_string("check_lookup_row_cnt");
+        LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
+        if (nullptr != lookup_ctdef_) {
+          LOG_ERROR("Fatal Error!!! Catch a defensive error!",
+            K(ret), K_(lookup_rowkey_cnt), K_(lookup_row_cnt),
+            "main table id", lookup_ctdef_->ref_table_id_,
+            "main tablet id", lookup_tablet_id_,
+            KPC_(trans_desc), KPC_(snapshot));
+        } else {
+          LOG_ERROR("Fatal Error!!! Catch a defensive error!",
+            K(ret), K_(lookup_rowkey_cnt), K_(lookup_row_cnt), KPC_(trans_desc), KPC_(snapshot));
         }
-      } else {
-        for (int64_t i = 0; i < scan_param.key_ranges_.count(); i++) {
-          LOG_ERROR("dump lookup range of local lookup das task",
-              K(i), K(scan_param.key_ranges_.at(i)));
+        const ObIArray<std::pair<ObDocIdExt, int>> &doc_ids = static_cast<ObDASFuncDataIter *>(data_table_iter_)->get_doc_ids();
+        for (int64_t i = 0; i < doc_ids.count(); i++) {
+          LOG_ERROR("dump doc ids of cache lookup das task", K(i), K(doc_ids.at(i).first.get_datum()));
         }
       }
     }
-  }
+  } else {
+    if (GCONF.enable_defensive_check() &&
+        lookup_ctdef_->pd_expr_spec_.pushdown_filters_.empty()) {
+      if (OB_UNLIKELY(lookup_rowkey_cnt_ != lookup_row_cnt_)) {
+        ret = OB_ERR_DEFENSIVE_CHECK;
+        ObString func_name = ObString::make_string("check_lookup_row_cnt");
+        LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
+        LOG_ERROR("Fatal Error!!! Catch a defensive error!",
+            K(ret), K_(lookup_rowkey_cnt), K_(lookup_row_cnt),
+            "main table id", lookup_ctdef_->ref_table_id_,
+            "main tablet id", lookup_tablet_id_,
+            KPC_(trans_desc), KPC_(snapshot));
+        concurrency_control::ObDataValidationService::set_delay_resource_recycle(lookup_ls_id_);
+        const ObTableScanParam &scan_param = scan_iter->get_scan_param();
+        if (trans_info_array_.count() == scan_param.key_ranges_.count()) {
+          for (int64_t i = 0; i < trans_info_array_.count(); i++) {
+            ObDatum *datum = trans_info_array_.at(i);
+            LOG_ERROR("dump lookup range and trans info of local lookup das task",
+                K(i), KPC(trans_info_array_.at(i)), K(scan_param.key_ranges_.at(i)));
+          }
+        } else {
+          for (int64_t i = 0; i < scan_param.key_ranges_.count(); i++) {
+            LOG_ERROR("dump lookup range of local lookup das task",
+                K(i), K(scan_param.key_ranges_.at(i)));
+          }
+        }
+      }
+    }
 
-  int simulate_error = EVENT_CALL(EventTable::EN_DAS_SIMULATE_DUMP_WRITE_BUFFER);
-  if (0 != simulate_error) {
-    for (int64_t i = 0; i < trans_info_array_.count(); i++) {
-      LOG_INFO("dump trans info of local lookup das task", K(i), KPC(trans_info_array_.at(i)));
+    int simulate_error = EVENT_CALL(EventTable::EN_DAS_SIMULATE_DUMP_WRITE_BUFFER);
+    if (0 != simulate_error) {
+      for (int64_t i = 0; i < trans_info_array_.count(); i++) {
+        LOG_INFO("dump trans info of local lookup das task", K(i), KPC(trans_info_array_.at(i)));
+      }
     }
   }
 

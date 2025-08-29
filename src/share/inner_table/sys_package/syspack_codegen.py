@@ -285,6 +285,7 @@ syspack_config = [
     SysPackConfig(SysPackGroup.MYSQL, "dbms_external_table", "dbms_external_table_mysql.sql", "dbms_external_table_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "external_table_alert_log", "external_table_alert_log.sql", None),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_vector", "dbms_vector_mysql.sql", "dbms_vector_body_mysql.sql"),
+    SysPackConfig(SysPackGroup.MYSQL, "dbms_hybrid_search", "dbms_hybrid_vector_mysql.sql", "dbms_hybrid_vector_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_space", "dbms_space_mysql.sql", "dbms_space_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_partition", "dbms_partition_mysql.sql", "dbms_partition_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_java", "dbms_java_mysql.sql", "dbms_java_body_mysql.sql"),

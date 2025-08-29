@@ -96,6 +96,8 @@ struct ObUpdateTableStoreParam;
 struct ObMigrationTabletParam;
 class ObTableScanRange;
 class ObTabletCreateDeleteMdsUserData;
+class ObBlockStatScanParam;
+class ObBlockStatIterator;
 
 
 class ObLSTabletService : public logservice::ObIReplaySubHandler,
@@ -441,6 +443,10 @@ public:
       const common::ObIArray<uint64_t> &sample_count,
       common::ObIArray<double> &sortedness,
       common::ObIArray<uint64_t> &res_sample_counts);
+  int scan_block_stat(
+      const ObTabletHandle &tablet_handle,
+      ObBlockStatScanParam &scan_param,
+      ObBlockStatIterator &iter);
 
   // iterator
   int build_tablet_iter(ObLSTabletIterator &iter, const bool except_ls_inner_tablet = false);

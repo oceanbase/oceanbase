@@ -43,6 +43,8 @@ enum ObSkipIndexColType : uint8_t
   SK_IDX_MAX,
   SK_IDX_NULL_COUNT,
   SK_IDX_SUM,
+  SK_IDX_BM25_MAX_SCORE_TOKEN_FREQ,
+  SK_IDX_BM25_MAX_SCORE_DOC_LEN,
   SK_IDX_MAX_COL_TYPE
 };
 
@@ -51,7 +53,7 @@ struct ObSkipIndexColMeta
   // For data with length larger than 40 bytes(normally string), we will store the prefix as min/max
   static constexpr int64_t MAX_SKIP_INDEX_COL_LENGTH = 40;
   static constexpr int64_t SKIP_INDEX_ROW_SIZE_LIMIT = 1 << 10; // 1kb
-  static constexpr int64_t MAX_AGG_COLUMN_PER_ROW = 4; // min / max / null count / sum
+  static constexpr int64_t MAX_AGG_COLUMN_PER_ROW = 6; // min (loose_min) / max (loose_max) / null count / sum / bm25 params
   static constexpr ObObjDatumMapType NULL_CNT_COL_TYPE = OBJ_DATUM_8BYTE_DATA;
   static_assert(common::OBJ_DATUM_NUMBER_RES_SIZE == MAX_SKIP_INDEX_COL_LENGTH,
       "Buffer size of ObStorageDatum and maximum size of skip index data is equal to maximum size of ObNumber");
@@ -59,6 +61,13 @@ struct ObSkipIndexColMeta
   ObSkipIndexColMeta(const uint32_t col_idx, const ObSkipIndexColType col_type)
       : col_idx_(col_idx), col_type_(col_type) {}
   bool is_valid() const { return col_type_ < SK_IDX_MAX_COL_TYPE; }
+  bool is_single_col_agg() const { return is_valid() && !is_multi_col_agg(); }
+  bool is_multi_col_agg() const
+  {
+    return SK_IDX_BM25_MAX_SCORE_TOKEN_FREQ == col_type_ || SK_IDX_BM25_MAX_SCORE_DOC_LEN == col_type_;
+  }
+  ObSkipIndexColType get_col_type() const { return static_cast<ObSkipIndexColType>(col_type_); }
+  uint32_t get_col_idx() const { return col_idx_; }
   bool operator <(const ObSkipIndexColMeta &rhs) const
   {
     bool ret = false;
@@ -76,6 +85,7 @@ struct ObSkipIndexColMeta
   }
 
   static int append_skip_index_meta(
+      const bool is_major,
       const share::schema::ObSkipIndexColumnAttr &skip_idx_attr,
       const int64_t col_idx,
       common::ObIArray<ObSkipIndexColMeta> &skip_idx_metas);
@@ -202,6 +212,14 @@ OB_INLINE static int get_sum_store_size(const ObObjType &obj_type, uint32_t &sum
     }
   }
   return ret;
+}
+
+OB_INLINE static bool non_baseline_enabled_agg_type(const ObSkipIndexColType &col_type)
+{
+  return ObSkipIndexColType::SK_IDX_BM25_MAX_SCORE_TOKEN_FREQ == col_type
+      || ObSkipIndexColType::SK_IDX_BM25_MAX_SCORE_DOC_LEN == col_type
+      || ObSkipIndexColType::SK_IDX_MIN == col_type
+      || ObSkipIndexColType::SK_IDX_MAX == col_type;
 }
 
 OB_INLINE static bool enable_skip_index_min_max_prefix(const int64_t data_version)

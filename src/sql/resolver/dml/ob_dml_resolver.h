@@ -920,6 +920,7 @@ protected:
                                     const ObIArray<ObRawExprResType> &res_types,
                                     TableItem &table_item);
   int resolve_match_against_expr(ObMatchFunRawExpr &expr);
+  int resolve_es_match_expr(ObMatchFunRawExpr &expr);
 private:
   int resolve_function_table_column_item_udf(const TableItem &table_item,
                                              common::ObIArray<ColumnItem> &col_items);
@@ -1096,6 +1097,7 @@ private:
                          ObIArray<ObColumnRefRawExpr*> &values_desc,
                          ObRawExpr *&expr);
   int build_row_for_empty_values(ObIArray<ObRawExpr*> &values_vector);
+  int check_match_against_expr(ObIArray<ObMatchFunRawExpr*> &match_exprs, const ObStmtScope scope, bool &is_match);
   int resolve_match_against_exprs(ObRawExpr *&expr,
                                   ObIArray<ObMatchFunRawExpr*> &match_exprs,
                                   const ObStmtScope scope);

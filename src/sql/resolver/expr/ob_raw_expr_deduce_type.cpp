@@ -3327,6 +3327,19 @@ int ObRawExprDeduceType::visit(ObMatchFunRawExpr &expr)
       LOG_WARN("add_implicit_cast failed", K(ret));
     }
   }
+  if (OB_FAIL(ret)) {
+  } else if (expr.is_es_match()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr.get_columns_boosts().count(); ++i) {
+      int index = expr.get_search_key_idx() + 1 + i;
+      ObCastMode def_cast_mode = CM_NONE;
+      ObExprResType result_type;
+      result_type.set_double();
+      result_type.set_calc_type(ObDoubleType);
+      if (OB_FAIL(try_add_cast_expr(expr, index, result_type, def_cast_mode))) {
+        LOG_WARN("add_implicit_cast failed", K(ret));
+      }
+    }
+  }
   return ret;
 }
 

@@ -66,16 +66,30 @@ public:
            : true;
   }
   virtual bool is_ddl_retryable() const override { return is_retryable_ddl_; }
-  TO_STRING_KV(K(index_table_id_), K(rowkey_doc_aux_table_id_),
-      K(doc_rowkey_aux_table_id_), K(domain_index_aux_table_id_),
-      K(fts_doc_word_aux_table_id_), K(rowkey_doc_task_submitted_),
-      K(doc_rowkey_task_submitted_), K(domain_index_aux_task_submitted_),
-      K(fts_doc_word_task_submitted_), K(rowkey_doc_task_id_),
-      K(doc_rowkey_task_id_), K(domain_index_aux_task_id_),
-      K(fts_doc_word_task_id_), K(drop_index_task_id_),
-      K(drop_index_task_submitted_), K(schema_version_), K(execution_id_),
-      K(consumer_group_id_), K(trace_id_), K(parallelism_), K(create_index_arg_),
-      K(is_retryable_ddl_));
+  TO_STRING_KV(
+      K(index_table_id_),
+      K(rowkey_doc_aux_table_id_),
+      K(doc_rowkey_aux_table_id_),
+      K(domain_index_aux_table_id_),
+      K(fts_doc_word_aux_table_id_),
+      K(rowkey_doc_task_submitted_),
+      K(doc_rowkey_task_submitted_),
+      K(domain_index_aux_task_submitted_),
+      K(fts_doc_word_task_submitted_),
+      K(rowkey_doc_task_id_),
+      K(doc_rowkey_task_id_),
+      K(domain_index_aux_task_id_),
+      K(fts_doc_word_task_id_),
+      K(drop_index_task_id_),
+      K(drop_index_task_submitted_),
+      K(schema_version_),
+      K(execution_id_),
+      K(consumer_group_id_),
+      K(trace_id_),
+      K(parallelism_),
+      K(create_index_arg_),
+      K(is_retryable_ddl_),
+      K(use_doc_id_));
 
 public:
   void set_rowkey_doc_aux_table_id(const uint64_t id) { rowkey_doc_aux_table_id_ = id; }
@@ -101,6 +115,12 @@ public:
 
 private:
   bool is_fts_task() const { return task_type_ == share::DDL_CREATE_FTS_INDEX; }
+  bool is_multivalue_task() const { return task_type_ == share::DDL_CREATE_MULTIVALUE_INDEX; }
+  bool is_spiv_task() const { return task_type_ == share::DDL_CREATE_VEC_SPIV_INDEX; }
+  bool is_domain_index_aux(const ObIndexType index_type) const { return share::schema::is_fts_index_aux(index_type) ||
+                           share::schema::is_multivalue_index_aux(index_type) || share::schema::is_vec_spiv_index_aux(index_type); }
+  bool is_domain_index(const ObIndexType index_type) const { return share::schema::is_fts_index(index_type) ||
+                       share::schema::is_multivalue_index(index_type) || share::schema::is_vec_spiv_index(index_type); }
   int get_next_status(share::ObDDLTaskStatus &next_status);
   int prepare_aux_table(
       const ObIndexType index_type,
@@ -116,9 +136,6 @@ private:
   int construct_doc_rowkey_arg(obrpc::ObCreateIndexArg &arg);
   int construct_domain_index_aux_arg(obrpc::ObCreateIndexArg &arg);
   int construct_fts_doc_word_arg(obrpc::ObCreateIndexArg &arg);
-  int record_index_table_id(
-      const obrpc::ObCreateIndexArg *create_index_arg_,
-      uint64_t &aux_table_id);
   int get_index_table_id(
       const obrpc::ObCreateIndexArg *create_index_arg,
       uint64_t &index_table_id);
@@ -126,10 +143,6 @@ private:
   int load_dictionary();
   int get_charset_type(ObCharsetType &charset_type);
   int wait_aux_table_complement();
-  int submit_build_aux_index_task(
-      const obrpc::ObCreateIndexArg &create_index_arg,
-      ObDDLTaskRecord &task_record,
-      bool &task_submitted);
   int clean_on_failed();
   int submit_drop_fts_index_task();
   int wait_drop_index_finish(bool &is_finish);
@@ -211,6 +224,7 @@ private:
   obrpc::ObCreateIndexArg create_index_arg_;
   common::hash::ObHashMap<uint64_t, share::ObDomainDependTaskStatus> dependent_task_result_map_;
   bool is_retryable_ddl_;
+  bool use_doc_id_;
 };
 
 } // end namespace rootserver

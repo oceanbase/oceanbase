@@ -30,11 +30,11 @@ namespace share {
 struct ObDocidScoreItem
 {
   ObDocidScoreItem() = default;
-  ObDocidScoreItem(ObString docid, double score): docid_(docid), score_(score) {}
+  ObDocidScoreItem(int64_t idx, double score): docid_idx_(idx), score_(score) {}
   ~ObDocidScoreItem() = default;
-  ObString docid_;
+  int64_t docid_idx_;
   double score_;
-  TO_STRING_KV(K_(docid), K_(score));
+  TO_STRING_KV(K_(docid_idx), K_(score));
 };
 struct ObDocidScoreItemCmp
 {
@@ -71,14 +71,12 @@ template <typename T,
           typename CompareFunctor>
 class ObSPIVFixedSizeHeap {
 public:
-  ObSPIVFixedSizeHeap(int64_t limit_size, ObIAllocator &allocator, CompareFunctor cmp):
-                                                                          limit_size_(limit_size),
-                                                                          allocator_(allocator),
-                                                                          cmp_(cmp),
-                                                                          heap_(cmp, &allocator_)
-                                                                          {}
+  ObSPIVFixedSizeHeap(int64_t limit_size, ObIAllocator &allocator, CompareFunctor cmp)
+    : limit_size_(limit_size), allocator_(allocator), cmp_(cmp), heap_(cmp, &allocator_)
+  {}
 
   ~ObSPIVFixedSizeHeap() = default;
+
   int push(T &item)
   {
     int ret = OB_SUCCESS;

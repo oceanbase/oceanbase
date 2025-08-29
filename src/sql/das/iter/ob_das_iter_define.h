@@ -85,19 +85,19 @@ public:
   ObDASFTSTabletID()
     : inv_idx_tablet_id_(),
       fwd_idx_tablet_id_(),
-      doc_id_idx_tablet_id_()
+      domain_id_idx_tablet_id_()
   {}
   common::ObTabletID inv_idx_tablet_id_;
   common::ObTabletID fwd_idx_tablet_id_;
-  common::ObTabletID doc_id_idx_tablet_id_;
+  common::ObTabletID domain_id_idx_tablet_id_;
 
   void reset()
   {
     inv_idx_tablet_id_.reset();
     fwd_idx_tablet_id_.reset();
-    doc_id_idx_tablet_id_.reset();
+    domain_id_idx_tablet_id_.reset();
   }
-  TO_STRING_KV(K_(inv_idx_tablet_id), K_(fwd_idx_tablet_id), K_(doc_id_idx_tablet_id));
+  TO_STRING_KV(K_(inv_idx_tablet_id), K_(fwd_idx_tablet_id), K_(domain_id_idx_tablet_id));
 };
 
 #define SUPPORTED_DAS_ITER_TREE(_type)                    \
@@ -107,6 +107,7 @@ public:
     ITER_TREE_TEXT_RETRIEVAL == (_type) ||               \
     ITER_TREE_MATCH == (_type)          ||               \
     ITER_TREE_FUNC_LOOKUP == (_type)    ||               \
+    ITER_TREE_MATCH == (_type)          ||               \
     ITER_TREE_INDEX_MERGE == (_type)    ||               \
     ITER_TREE_MVI_LOOKUP == (_type)     ||               \
     ITER_TREE_VEC_LOOKUP == (_type)     ||               \
@@ -129,7 +130,7 @@ public:
   /* used by basic fulltext index */
   common::ObTabletID inv_idx_tablet_id_;
   common::ObTabletID fwd_idx_tablet_id_;
-  common::ObTabletID doc_id_idx_tablet_id_;
+  common::ObTabletID domain_id_idx_tablet_id_;
   /* used by basic fulltext index */
 
   /* used by index merge */
@@ -155,6 +156,7 @@ public:
   common::ObTabletID special_aux_tablet_id_;
     // for spiv
   common::ObTabletID dim_docid_value_tablet_id_;
+  common::ObTabletID vid_rowkey_tablet_id_;
   /* used by vector index */
 
   void reset()
@@ -165,13 +167,14 @@ public:
     rowkey_vid_tablet_id_.reset();
     inv_idx_tablet_id_.reset();
     fwd_idx_tablet_id_.reset();
-    doc_id_idx_tablet_id_.reset();
+    domain_id_idx_tablet_id_.reset();
     index_merge_tablet_ids_.reset();
     fts_tablet_ids_.reset();
     domain_tablet_ids_.reset();
     delta_buf_tablet_id_.reset();
     index_id_tablet_id_.reset();
     snapshot_tablet_id_.reset();
+    vid_rowkey_tablet_id_.reset();
   }
 };
 

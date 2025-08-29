@@ -339,7 +339,9 @@ public:
       query_scn_(),
       row_iter_(nullptr),
       is_last_search_(false),
-      scan_param_(nullptr) {};
+      scan_param_(nullptr),
+      rel_count_(0),
+      rel_map_ptr_(nullptr) {};
   ~ObVectorQueryConditions() { query_vector_.reset(); }
   bool is_inited() { return query_vector_.length() > 0 && ef_search_ > 0; }
   void reset() {
@@ -361,6 +363,8 @@ public:
   int64_t extra_column_count_;
   bool is_last_search_;
   ObTableScanParam *scan_param_;  // scan param of row_iter_
+  int64_t rel_count_;
+  common::hash::ObHashMap<int64_t, double*> *rel_map_ptr_;
 };
 
 struct ObVidBound {
@@ -601,6 +605,7 @@ public:
 
   int set_table_id(ObVectorIndexRecordType type, uint64_t table_id);
   void set_vid_rowkey_info(ObVectorIndexSharedTableInfo &info);
+  void set_data_table_id(ObVectorIndexSharedTableInfo &info);
 
   int merge_parital_index_adapter(ObPluginVectorIndexAdaptor *partial_index);
 
@@ -779,6 +784,14 @@ public:
            && snapshot_tablet_id_ == ctx.snapshot_tablet_id_
            && data_tablet_id_ == ctx.data_tablet_id_;
   }
+  OB_INLINE bool get_is_need_vid()
+  {
+    return is_need_vid_;
+  }
+  OB_INLINE void set_is_need_vid(bool is_need_vid)
+  {
+    is_need_vid_ = is_need_vid;
+  }
   TO_STRING_KV(K_(create_type), K_(type), KP_(algo_data),
               KP_(incr_data), KP_(snap_data), KP_(vbitmap_data), K_(tenant_id),
               K_(data_tablet_id),K_(rowkey_vid_tablet_id), K_(vid_rowkey_tablet_id),
@@ -787,7 +800,7 @@ public:
               K_(inc_table_id),  K_(vbitmap_table_id), K_(snapshot_table_id),
               K_(ref_cnt), K_(idle_cnt), KP_(allocator),
               K_(index_identity), K_(follower_sync_statistics),
-              K_(mem_check_cnt), K_(is_mem_limited));
+              K_(mem_check_cnt), K_(is_mem_limited), K_(is_need_vid));
 
 private:
   void *get_incr_index();
@@ -872,6 +885,9 @@ private:
   common::ObSpinLock reload_lock_;  // lock for reload from table
   RWLock query_lock_;// lock for async task and query
   bool reload_finish_;
+
+  // for vid opt
+  bool is_need_vid_;
 
   constexpr static uint32_t VEC_INDEX_INCR_DATA_SYNC_THRESHOLD = 100;
   constexpr static uint32_t VEC_INDEX_VBITMAP_SYNC_THRESHOLD = 100;

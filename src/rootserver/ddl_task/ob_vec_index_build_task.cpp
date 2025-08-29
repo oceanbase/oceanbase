@@ -53,7 +53,8 @@ ObVecIndexBuildTask::ObVecIndexBuildTask()
     is_offline_rebuild_(false),
     root_service_(nullptr),
     create_index_arg_(),
-    dependent_task_result_map_()
+    dependent_task_result_map_(),
+    use_vid_(true)
 {
 }
 
@@ -78,6 +79,7 @@ int ObVecIndexBuildTask::init(
   int ret = OB_SUCCESS;
   const bool is_rebuild_index = create_index_arg.is_rebuild_index_;
   const bool is_offline_rebuild = create_index_arg.is_offline_rebuild_;
+  ObDocIDType vid_type = ObDocIDType::INVALID;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
@@ -104,7 +106,14 @@ int ObVecIndexBuildTask::init(
         KPC(data_table_schema), KPC(index_schema), K(schema_version), K(parallelism),
         K(consumer_group_id), K(create_index_arg.is_valid()), K(create_index_arg),
         K(task_status), K(snapshot_version), K(is_rebuild_index));
-  } else if (index_schema->is_vec_rowkey_vid_type() && snapshot_version <= 0) {
+  } else if (OB_FAIL(ObVectorIndexUtil::determine_vid_type(*data_table_schema, vid_type))) {
+    LOG_WARN("Failed to determine vid type.", K(ret));
+  } else {
+    use_vid_ = (vid_type == ObDocIDType::TABLET_SEQUENCE);
+  }
+
+  if(OB_FAIL(ret)) {
+  } else if (use_vid_ && index_schema->is_vec_rowkey_vid_type() && snapshot_version <= 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the snapshot version should be more than zero", K(ret), K(snapshot_version));
   } else if (OB_FAIL(deep_copy_index_arg(allocator_,
@@ -439,7 +448,7 @@ int ObVecIndexBuildTask::check_aux_table_schemas_exist(bool &is_all_exist)
         }
       }
     } else if (status <= ObDDLTaskStatus::WAIT_VID_ROWKEY_TABLE_COMPLEMENT) {
-      if (!is_rebuild_index_ &&
+      if (!is_rebuild_index_ && OB_INVALID_ID != rowkey_vid_aux_table_id_ &&
           OB_FAIL(schema_guard.check_table_exist(tenant_id_,
                                                  rowkey_vid_aux_table_id_,
                                                  rowkey_vid_exist))) {
@@ -456,18 +465,19 @@ int ObVecIndexBuildTask::check_aux_table_schemas_exist(bool &is_all_exist)
         LOG_WARN("check index id table exist failed", K(ret), K(tenant_id_),
             K(index_id_table_id_), K(status));
       } else {
-        // is_all_exist = rowkey_vid_exist;
-        is_all_exist = (rowkey_vid_exist && delta_buffer_aux_exist
-                        && index_id_exist);
+        is_all_exist = (delta_buffer_aux_exist && index_id_exist);
+        if (use_vid_) {
+          is_all_exist &= rowkey_vid_exist;
+        }
       }
     } else if (status == ObDDLTaskStatus::VALIDATE_CHECKSUM) {
-      if (!is_rebuild_index_ &&
+      if (!is_rebuild_index_ && OB_INVALID_ID != rowkey_vid_aux_table_id_ &&
           OB_FAIL(schema_guard.check_table_exist(tenant_id_,
                                                  rowkey_vid_aux_table_id_,
                                                  rowkey_vid_exist))) {
         LOG_WARN("check rowkey vid table exist failed", K(ret), K(tenant_id_),
             K(rowkey_vid_aux_table_id_), K(status));
-      } else if (!is_rebuild_index_ &&
+      } else if (!is_rebuild_index_ && OB_INVALID_ID != vid_rowkey_aux_table_id_ &&
                  OB_FAIL(schema_guard.check_table_exist(tenant_id_,
                                                         vid_rowkey_aux_table_id_,
                                                         vid_rowkey_exist))) {
@@ -489,9 +499,10 @@ int ObVecIndexBuildTask::check_aux_table_schemas_exist(bool &is_all_exist)
         LOG_WARN("check index snapshot table exist failed", K(ret), K(tenant_id_),
             K(index_snapshot_data_table_id_), K(status));
       } else {
-        is_all_exist = (rowkey_vid_exist && vid_rowkey_exist &&
-                        delta_buffer_aux_exist && index_id_exist &&
-                        index_snapshot_data_exist);
+        is_all_exist = (delta_buffer_aux_exist && index_id_exist && index_snapshot_data_exist);
+        if (use_vid_) {
+          is_all_exist &= (rowkey_vid_exist && vid_rowkey_exist);
+        }
       }
     }
     if (!is_all_exist) {
@@ -636,12 +647,14 @@ int ObVecIndexBuildTask::prepare_rowkey_vid_table()
     LOG_WARN("task status not match", K(ret), K(task_status_));
   } else if (is_rebuild_index_) {
     LOG_DEBUG("skip prepare_rowkey_vid_table, is rebuild index");
-  } else if (OB_FAIL(prepare_aux_table(index_type,
+  } else if (use_vid_ && OB_FAIL(prepare_aux_table(index_type,
                                        rowkey_vid_task_submitted_,
                                        rowkey_vid_aux_table_id_,
                                        rowkey_vid_task_id_))) {
     LOG_WARN("failed to prepare rowkey vid aux table", K(ret), K(index_type),
         K(rowkey_vid_task_submitted_), K(rowkey_vid_aux_table_id_));
+  } else if (!use_vid_) {
+    rowkey_vid_task_submitted_ = true;
   }
   if (OB_SUCC(ret) && (rowkey_vid_task_submitted_ || is_rebuild_index_)) {
     state_finished = true;
@@ -770,14 +783,17 @@ int ObVecIndexBuildTask::prepare_vid_rowkey_table()
   } else if (ObDDLTaskStatus::GENERATE_VID_ROWKEY_SCHEMA != task_status_) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("task status not match", K(ret), K(task_status_));
-  } else if (!is_rebuild_index_ &&
+  } else if (!is_rebuild_index_ && use_vid_ &&
              OB_FAIL(prepare_aux_table(aux_vid_rowkey_type,
                                        vid_rowkey_task_submitted_,
                                        vid_rowkey_aux_table_id_,
                                        vid_rowkey_task_id_))) {
     LOG_WARN("failed to prepare aux vid rowkey table", K(ret),
         K(vid_rowkey_task_submitted_), K(vid_rowkey_aux_table_id_));
-  } else if (OB_FAIL(prepare_aux_table(aux_index_snapshot_type,
+  } else if (!is_rebuild_index_ && !use_vid_) {
+    vid_rowkey_task_submitted_ = true;
+  }
+  if (FAILEDx(prepare_aux_table(aux_index_snapshot_type,
                                        index_snapshot_data_task_submitted_,
                                        index_snapshot_data_table_id_,
                                        index_snapshot_task_id_))) {
@@ -879,25 +895,6 @@ int ObVecIndexBuildTask::construct_index_snapshot_data_arg(obrpc::ObCreateIndexA
   return ret;
 }
 
-int ObVecIndexBuildTask::record_index_table_id(
-    const obrpc::ObCreateIndexArg *create_index_arg,
-    uint64_t &aux_table_id)
-{
-  int ret = OB_SUCCESS;
-  ObIndexType index_type = create_index_arg->index_type_;
-  if (share::schema::is_vec_rowkey_vid_type(index_type)) {
-    rowkey_vid_aux_table_id_ = aux_table_id;
-  } else if (share::schema::is_vec_vid_rowkey_type(index_type)) {
-    vid_rowkey_aux_table_id_ = aux_table_id;
-  } else if (share::schema::is_vec_delta_buffer_type(index_type)) {
-    delta_buffer_table_id_ = aux_table_id;
-  } else if (share::schema::is_vec_index_id_type(index_type)) {
-    index_id_table_id_ = aux_table_id;
-  } else if (share::schema::is_vec_index_snapshot_data_type(index_type)) {
-    index_snapshot_data_table_id_ = aux_table_id;
-  }
-  return ret;
-}
 
 int ObVecIndexBuildTask::get_index_table_id(
     const obrpc::ObCreateIndexArg *create_index_arg,
@@ -989,6 +986,8 @@ int ObVecIndexBuildTask::wait_aux_table_complement()
             (ObDDLTaskStatus::WAIT_ROWKEY_VID_TABLE_COMPLEMENT == task_status_)) {
     state_finished = true;
     LOG_DEBUG("rebuild index, no share table rebuild, no need to wait", K(task_status_));
+  } else if (!use_vid_ && ObDDLTaskStatus::WAIT_ROWKEY_VID_TABLE_COMPLEMENT == task_status_) {
+    state_finished = true;
   } else {
     int64_t finished_task_cnt = 0;
     CheckTaskStatusFn check_task_status_fn(dependent_task_result_map_, finished_task_cnt, child_task_failed, state_finished, dst_tenant_id_);
@@ -1251,6 +1250,10 @@ int ObVecIndexBuildTask::serialize_params_to_message(
                                               pos,
                                               is_offline_rebuild))) {
     LOG_WARN("serialize is_offline_rebuild failed", K(ret));
+  } else if (data_format_version_ >= MIN_DATA_VERSION_FOR_VID_OPT) {
+    if (OB_FAIL(serialization::encode_i8(buf, buf_len, pos, static_cast<int8_t>(use_vid_)))) {
+      LOG_WARN("serialize is use_vid failed", K(ret));
+    }
   }
   return ret;
 }
@@ -1270,6 +1273,8 @@ int ObVecIndexBuildTask::deserialize_params_from_message(
   int8_t drop_index_submitted = 0;
   int8_t is_rebuild_index = 0;
   int8_t is_offline_rebuild = 0;
+  int8_t use_vid = true;
+
   SMART_VAR(obrpc::ObCreateIndexArg, tmp_arg) {
     if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) ||
                     nullptr == buf ||
@@ -1380,6 +1385,19 @@ int ObVecIndexBuildTask::deserialize_params_from_message(
                                                 pos,
                                                 &is_offline_rebuild))) {
       LOG_WARN("fail to deserialize is_offline_rebuild", K(ret));
+    } else if (data_format_version_ >= MIN_DATA_VERSION_FOR_VID_OPT) {
+      if (OB_FAIL(serialization::decode_i8(buf, data_len, pos, &use_vid))) {
+        LOG_WARN("fail to deserialize use vid", K(ret));
+      }
+    } else {
+      use_vid = true;
+      LOG_INFO("data_format_version_ < MIN_DATA_VERSION_FOR_VID_OPT, use_vid set to default value true",
+               K(data_format_version_),
+               K(MIN_DATA_VERSION_FOR_VID_OPT),
+               K(use_vid));
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (!dependent_task_result_map_.created() &&
               OB_FAIL(dependent_task_result_map_.create(OB_VEC_INDEX_BUILD_CHILD_TASK_NUM,
                                                         lib::ObLabel("DepTasMap")))) {
@@ -1393,6 +1411,7 @@ int ObVecIndexBuildTask::deserialize_params_from_message(
       drop_index_task_submitted_ = drop_index_submitted;
       is_rebuild_index_ = is_rebuild_index;
       is_offline_rebuild_ = is_offline_rebuild;
+      use_vid_ = use_vid;
       if (rowkey_vid_task_id_ > 0) {
         share::ObDomainDependTaskStatus rowkey_vid_status;
         rowkey_vid_status.task_id_ = rowkey_vid_task_id_;
@@ -1453,6 +1472,7 @@ int64_t ObVecIndexBuildTask::get_serialize_param_size() const
   int8_t drop_index_submitted = static_cast<int8_t>(drop_index_task_submitted_);
   int8_t is_rebuild_index = static_cast<int8_t>(is_rebuild_index_);
   int8_t is_offline_rebuild = static_cast<int8_t>(is_offline_rebuild_);
+  int8_t use_vid = static_cast<int8_t>(use_vid_);
   return create_index_arg_.get_serialize_size()
       + ObDDLTask::get_serialize_param_size()
       + serialization::encoded_length(rowkey_vid_aux_table_id_)
@@ -1473,7 +1493,8 @@ int64_t ObVecIndexBuildTask::get_serialize_param_size() const
       + serialization::encoded_length_i8(drop_index_submitted)
       + serialization::encoded_length_i64(drop_index_task_id_)
       + serialization::encoded_length_i8(is_rebuild_index)
-      + serialization::encoded_length_i8(is_offline_rebuild);
+      + serialization::encoded_length_i8(is_offline_rebuild)
+      + (data_format_version_ >= MIN_DATA_VERSION_FOR_VID_OPT ? serialization::encoded_length_i8(use_vid) : 0);
 }
 
 int ObVecIndexBuildTask::print_child_task_ids(char *buf, int64_t len)

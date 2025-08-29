@@ -27,7 +27,7 @@ public:
   virtual ObRowMergerType type() override { return ObRowMergerType::SIMPLE_MERGER; }
   ObSimpleRowsMerger(Comparator& cmp);
   virtual ~ObSimpleRowsMerger();
-  virtual int init(const int64_t table_cnt, common::ObIAllocator &allocator) override;
+  virtual int init(const int64_t max_table_cnt, const int64_t table_cnt, common::ObIAllocator &allocator) override;
   virtual bool is_inited() const override { return is_inited_; }
   virtual int open(const int64_t table_cnt) override;
   virtual void reset() override;
@@ -89,8 +89,9 @@ void ObSimpleRowsMerger<T, Comparator>::reuse()
 }
 
 template <typename T, typename Comparator>
-int ObSimpleRowsMerger<T, Comparator>::init(const int64_t table_cnt, common::ObIAllocator &allocator)
+int ObSimpleRowsMerger<T, Comparator>::init(const int64_t max_table_cnt, const int64_t table_cnt, common::ObIAllocator &allocator)
 {
+  UNUSED(max_table_cnt);
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;

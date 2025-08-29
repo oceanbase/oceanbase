@@ -30,6 +30,7 @@
 #include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/blocksstable/ob_sstable.h"
 #include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
+#include "storage/retrieval/ob_block_stat_iter.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "storage/tablet/ob_tablet_service_clog_replay_executor.h"
@@ -8921,6 +8922,33 @@ int ObLSTabletService::estimate_skip_index_sortedness(
     }
   }
 
+  return ret;
+}
+
+int ObLSTabletService::scan_block_stat(
+    const ObTabletHandle &tablet_handle,
+    ObBlockStatScanParam &scan_param,
+    ObBlockStatIterator &iter)
+{
+  int ret = OB_SUCCESS;
+  bool allow_to_read = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_UNLIKELY(!tablet_handle.is_valid() || !scan_param.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(tablet_handle), K(scan_param));
+  } else if (FALSE_IT(allow_to_read_mgr_.load_allow_to_read_info(allow_to_read))) {
+  } else if (OB_UNLIKELY(!allow_to_read)) {
+    ret = OB_REPLICA_NOT_READABLE;
+    LOG_WARN("ls not allow to read", K(ret), KPC_(ls));
+  } else if (OB_FAIL(prepare_scan_table_param(*scan_param.get_scan_param(), *(MTL(ObTenantSchemaService *)->get_schema_service())))) {
+    LOG_WARN("fail to prepare scan table param", K(ret), K(scan_param), K(tablet_handle));
+  } else if (OB_UNLIKELY(scan_param.get_scan_param()->fb_snapshot_.is_min())) {
+    ret = OB_SNAPSHOT_DISCARDED;
+  } else if (OB_FAIL(iter.init(tablet_handle, scan_param))) {
+    LOG_WARN("fail to init block stat iterator", K(ret), K(scan_param), K(tablet_handle));
+  }
   return ret;
 }
 

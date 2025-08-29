@@ -17,6 +17,7 @@
 #include "src/sql/optimizer/ob_join_order.h"
 #include "src/share/vector_index/ob_vector_index_util.h"
 #include "share/vector_index/ob_vector_index_param.h"
+#include "src/sql/das/ob_das_ir_define.h"
 
 namespace oceanbase
 {
@@ -38,7 +39,6 @@ public:
   static const int32_t MIN_ID_IDX = 0;
   static const int32_t MAX_ID_IDX = 1;
   static const int32_t VALUE_IDX = 2;
-
   ObFixedArray<ObSkipIndexColType, ObIAllocator> col_types_;
   ObFixedArray<int32_t, ObIAllocator> col_store_idxes_;
   ObFixedArray<int32_t, ObIAllocator> scan_col_proj_;
@@ -90,6 +90,8 @@ public:
   int64_t get_com_aux_tbl_idx() const { return ObVecAuxTableIdx::FOURTH_VEC_AUX_TBL_IDX; }
   int64_t get_rowkey_vid_tbl_idx() const { return ObVecAuxTableIdx::FIFTH_VEC_AUX_TBL_IDX; }
   const ObVectorIndexParam& get_vec_index_param() const { return vector_index_param_; }
+  int64_t get_functial_lookup_idx() const { return children_cnt_ - 1; }
+
   // IVF
   int64_t get_ivf_centroid_tbl_idx() const { return ObVecAuxTableIdx::FIRST_VEC_AUX_TBL_IDX; }
   // for pq, is ivf_pq_code
@@ -130,6 +132,18 @@ public:
       }
     }
     return aux_tbl_ctdef;
+  }
+
+  const ObDASFuncLookupCtDef *get_functional_lookup_ctdef() const
+  {
+    const ObDASBaseCtDef *func_ctdef = nullptr;
+    if (children_cnt_ > 0 && children_ != nullptr) {
+      func_ctdef = children_[get_functial_lookup_idx()];
+      if (OB_ISNULL(func_ctdef) || DAS_OP_FUNC_LOOKUP != func_ctdef->op_type_ ) {
+        func_ctdef = nullptr;
+      }
+    }
+    return static_cast<const ObDASFuncLookupCtDef*>(func_ctdef);
   }
 
   INHERIT_TO_STRING_KV("ObDASBaseCtDef", ObDASBaseCtDef,
@@ -180,6 +194,17 @@ public:
       idx_scan_rtdef = children_[rtdef_idx];
     }
     return idx_scan_rtdef;
+  }
+
+  ObDASFuncLookupRtDef* get_functional_lookup_rtdef()
+  {
+    const ObDASVecAuxScanCtDef *ctdef = static_cast<const ObDASVecAuxScanCtDef *>(ctdef_);
+    const int64_t rtdef_idx = ctdef->get_functial_lookup_idx();
+    ObDASFuncLookupRtDef* rtdef = nullptr;
+    if (children_cnt_ > rtdef_idx && children_ != nullptr && OB_NOT_NULL(ctdef->get_functional_lookup_ctdef())) {
+      rtdef = static_cast<ObDASFuncLookupRtDef*>(children_[rtdef_idx]);
+    }
+    return rtdef;
   }
 
   ObDASScanRtDef *get_vec_aux_tbl_rtdef(int64_t rtdef_idx) const

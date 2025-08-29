@@ -4351,7 +4351,39 @@ int ObRawExprPrinter::print(ObMatchFunRawExpr *expr)
   if (OB_ISNULL(buf_) || OB_ISNULL(pos_) || OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(buf_), K(pos_), K(expr));
-  } else if (is_mysql_mode()) {
+  } else if (is_mysql_mode() && expr->is_es_match()) {
+    DATA_PRINTF("MATCH('");
+    int64_t i = 0;
+    for (; OB_SUCC(ret) && i < expr->get_match_columns().count() - 1; ++i) {
+      if (OB_ISNULL(expr->get_match_columns().at(i)) || OB_ISNULL(expr->get_columns_boosts().at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else {
+        PRINT_EXPR(expr->get_match_columns().at(i));
+        DATA_PRINTF("^");
+        PRINT_EXPR(expr->get_columns_boosts().at(i));
+        DATA_PRINTF(",");
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(expr->get_match_columns().at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (OB_ISNULL(expr->get_search_key())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else {
+        PRINT_EXPR(expr->get_match_columns().at(i));
+        DATA_PRINTF("^");
+        PRINT_EXPR(expr->get_columns_boosts().at(i));
+        DATA_PRINTF("', '");
+        PRINT_EXPR(expr->get_search_key());
+        DATA_PRINTF("', '");
+        DATA_PRINTF(expr->get_param_text_expr());
+        DATA_PRINTF("')");
+      }
+    }
+  } else if (is_mysql_mode() && !expr->is_es_match()) {
     DATA_PRINTF("MATCH(");
     int64_t i = 0;
     for (; OB_SUCC(ret) && i < expr->get_match_columns().count() - 1; ++i) {

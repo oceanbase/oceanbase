@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "share/ob_fts_index_builder_util.h"
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_table_schema.h"
 
@@ -9816,6 +9817,28 @@ int ObTableSchema::get_fulltext_column_ids(uint64_t &doc_id_col_id, uint64_t &ft
   return ret;
 }
 
+int ObTableSchema::get_fulltext_typed_col_ids(uint64_t &doc_id_col_id, ObDocIDType &type, uint64_t &ft_col_id) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < get_column_count(); ++i) {
+    const ObColumnSchemaV2 *column_schema = get_column_schema_by_idx(i);
+    uint64_t col_id = column_schema->get_column_id();
+    if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error, column schema is nullptr", K(ret), K(i), KPC(this));
+    } else if (column_schema->is_doc_id_column()) {
+      type = ObDocIDType::TABLET_SEQUENCE;
+      doc_id_col_id = col_id;
+    } else if (column_schema->is_hidden_pk_column_id(col_id)) {
+      type = ObDocIDType::HIDDEN_INC_PK;
+      doc_id_col_id = col_id;
+    } else if (column_schema->is_word_segment_column()) {
+      ft_col_id = column_schema->get_column_id();
+    }
+  }
+  return ret;
+}
+
 int ObTableSchema::get_vec_index_column_id(uint64_t &with_cascaded_info_column_id) const
 {
   int ret = OB_SUCCESS;
@@ -9875,6 +9898,7 @@ int ObTableSchema::get_vec_index_vid_col_id(uint64_t &vec_id_col_id, bool is_cid
   return ret;
 }
 
+// Get generated column's id which contains a doc_id flag
 int ObTableSchema::get_docid_col_id(uint64_t &docid_col_id) const
 {
   int ret = OB_SUCCESS;
@@ -10860,8 +10884,8 @@ int ObTableSchema::get_vec_id_rowkey_tid(uint64_t &vec_id_rowkey_tid) const
       break;
     }
   }
-  if (OB_INVALID_ID == vec_id_rowkey_tid) {
-    ret = OB_ERR_FT_COLUMN_NOT_INDEXED;
+  if (OB_SUCC(ret) && OB_INVALID_ID == vec_id_rowkey_tid) {
+    ret = OB_ERR_INDEX_KEY_NOT_FOUND;
   }
   return ret;
 }

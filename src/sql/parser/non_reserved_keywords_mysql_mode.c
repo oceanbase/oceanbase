@@ -867,6 +867,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"schema_name", SCHEMA_NAME},
   {"scn", SCN},
   {"scope", SCOPE},
+  {"score", SCORE},
   {"second", SECOND},
   {"second_microsecond", SECOND_MICROSECOND},
   {"security", SECURITY},

@@ -454,6 +454,8 @@ enum ObTSCIRScanType : uint16_t
   OB_VEC_IVF_SPECIAL_AUX_SCAN,// for pq is pq id, for sq is sq meta
   OB_VEC_SPIV_INDEX_SCAN,
   OB_VEC_EMBEDDED_SCAN,
+  OB_IR_BLOCK_MAX_SCAN,
+  OB_VEC_SPIV_BLOCK_MAX_SCAN
   // OB_VEC_SPIV_INDEX_AGG,
 };
 

@@ -1168,7 +1168,8 @@ int ObDDLUtil::generate_build_replica_sql(
           LOG_WARN("error unexpected, column schema must not be nullptr", K(ret), K(col_id));
         } else if (column_schema->is_generated_column() &&
           !dest_table_schema->is_spatial_index() &&
-          !dest_table_schema->is_multivalue_index_aux()) {
+          !dest_table_schema->is_multivalue_index_aux() &&
+          !dest_table_schema->is_vec_spiv_index_aux()) {
           // generated columns cannot be row key.
         } else if (OB_FAIL(rowkey_column_names.push_back(ObColumnNameInfo(column_schema->get_column_name_str(), is_shadow_column)))) {
           LOG_WARN("fail to push back rowkey column name", K(ret));
@@ -1983,6 +1984,8 @@ int ObDDLUtil::construct_domain_index_arg(const ObTableSchema *table_schema,
     ddl_type = ObDDLType::DDL_CREATE_FTS_INDEX;
   } else if (index_schema->is_multivalue_index()) {
     ddl_type = ObDDLType::DDL_CREATE_MULTIVALUE_INDEX;
+  } else if (index_schema->is_vec_spiv_index()) {
+    ddl_type = ObDDLType::DDL_CREATE_VEC_SPIV_INDEX;
   } else {
     ddl_type = get_create_index_type(task.get_data_format_version(), *index_schema);
   }
@@ -1994,10 +1997,16 @@ int ObDDLUtil::construct_domain_index_arg(const ObTableSchema *table_schema,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(root_service->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(task.get_tenant_id(), new_schema_guard))) {
     LOG_WARN("failed to refresh schema guard", K(ret));
-  } else if (index_schema->is_vec_index() && OB_FAIL(share::ObVectorIndexUtil::get_vector_index_column_name(*table_schema, *index_schema, col_names))) {
+  } else if (index_schema->is_vec_index()
+             && OB_FAIL(share::ObVectorIndexUtil::get_vector_index_column_name(*table_schema, *index_schema, col_names))) {
     LOG_WARN("fail to get vector index column name", K(ret), K(index_schema));
-  } else if ((index_schema->is_fts_index() || index_schema->is_multivalue_index()) && OB_FAIL(share::ObFtsIndexBuilderUtil::get_fts_multivalue_index_column_name(*table_schema, *index_schema, col_names))) {
-    LOG_WARN("fail to get fulltext index column name", K(ret), K(index_schema));
+  } else if (index_schema->is_fts_index()
+             && OB_FAIL(share::ObFtsIndexBuilderUtil::get_fts_index_column_name(*table_schema, *index_schema, col_names))) {
+    LOG_WARN("fail to get fts index column name", K(ret), K(index_schema));
+  } else if (index_schema->is_multivalue_index()
+             && OB_FAIL(share::ObFtsIndexBuilderUtil::get_multivalue_index_column_name(
+                 *table_schema, *index_schema, col_names))) {
+    LOG_WARN("fail to get multivalue index column name", K(ret), K(index_schema));
   } else {
     FOREACH_X(it, col_names, OB_SUCC(ret)) {
       obrpc::ObColumnSortItem sort_item;
@@ -2030,25 +2039,88 @@ int ObDDLUtil::construct_domain_index_arg(const ObTableSchema *table_schema,
   return ret;
 }
 
+int ObDDLUtil::check_need_update_domain_index_share_table_snapshot(
+  const ObTableSchema *table_schema,
+  const ObTableSchema *index_schema,
+  const int64_t task_id,
+  const obrpc::ObCreateIndexArg &create_index_arg,
+  bool &need_update_snapshot)
+{
+  int ret = OB_SUCCESS;
+  bool in_table_restore = false;
+  ObDocIDType doc_id_type = ObDocIDType::INVALID;
+  uint64_t docid_col_id = OB_INVALID_ID;
+  ObDocIDType vid_type = ObDocIDType::INVALID;
+  uint64_t vid_col_id = OB_INVALID_ID;
+
+  need_update_snapshot = false;
+  bool is_index_with_docid = false;
+  bool is_index_with_vid = false;
+  uint64_t domain_index_share_tid = OB_INVALID_ID;
+  if (OB_ISNULL(table_schema) || OB_ISNULL(index_schema)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("error sys, table schema, index schema must not be nullptr", K(ret), K(table_schema), K(index_schema));
+  } else {
+    is_index_with_docid = index_schema->is_fts_index() || index_schema->is_multivalue_index() || index_schema->is_vec_spiv_index();
+    is_index_with_vid = index_schema->is_vec_hnsw_index();
+  }
+
+  if (FAILEDx(ObDDLUtil::check_is_table_restore_task(create_index_arg.tenant_id_, task_id, in_table_restore))) {
+      LOG_WARN("fail to check is table restore task", K(ret));
+  } else if (!(create_index_arg.is_offline_rebuild_ || in_table_restore)) {
+    // don't need update snapshot
+  } else if (is_index_with_docid && OB_FAIL(ObFtsIndexBuilderUtil::determine_docid_type(*table_schema, doc_id_type))) {
+    LOG_WARN("fail to get docid id type", K(ret));
+  } else if (is_index_with_vid && OB_FAIL(ObVectorIndexUtil::determine_vid_type(*table_schema, vid_type))) {
+    LOG_WARN("fail to get vid type", K(ret));
+  } else if (doc_id_type == ObDocIDType::HIDDEN_INC_PK || vid_type == ObDocIDType::HIDDEN_INC_PK) {
+    FLOG_INFO("Hidden inc pk, skip update.", K(ret));
+  } else if (create_index_arg.is_offline_rebuild_ && (
+              (is_index_with_docid && OB_FAIL(table_schema->get_docid_col_id(docid_col_id))) ||
+              (is_index_with_vid && OB_FAIL(table_schema->get_vec_index_vid_col_id(vid_col_id))))) {
+    if (ret == OB_ERR_INDEX_KEY_NOT_FOUND) {
+      FLOG_INFO("There may be no docid or vid column in origin index, skip update.", K(ret), K(is_index_with_docid), K(is_index_with_vid));
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to get col id", K(ret), K(is_index_with_docid), K(is_index_with_vid));
+    }
+  } else if ((is_index_with_docid && OB_FAIL(table_schema->get_rowkey_doc_tid(domain_index_share_tid))) ||
+             (is_index_with_vid && OB_FAIL(table_schema->get_rowkey_vid_tid(domain_index_share_tid)))) {
+    if (OB_ERR_INDEX_KEY_NOT_FOUND == ret) {
+      FLOG_INFO("There may be no rowkey_doc/vid table in origin index, skip update.", K(ret), K(is_index_with_docid), K(is_index_with_vid));
+      ret = OB_SUCCESS;
+    }
+  } else {
+    need_update_snapshot = true;
+  }
+  return ret;
+}
+
 int ObDDLUtil::get_domain_index_share_table_snapshot(const ObTableSchema *table_schema,
     const ObTableSchema *index_schema,
-    uint64_t tenant_id,
+    const int64_t task_id,
+    const obrpc::ObCreateIndexArg &create_index_arg,
     int64_t &fts_snapshot_version)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard new_schema_guard;
   rootserver::ObRootService *root_service = GCTX.root_service_;
-  if (OB_ISNULL(root_service)) {
+  uint64_t tenant_id = create_index_arg.tenant_id_;
+  bool need_update_snapshot = false;
+  if (OB_ISNULL(root_service) || OB_ISNULL(table_schema) || OB_ISNULL(index_schema)) {
     ret = OB_ERR_SYS;
-    LOG_WARN("error sys, root service must not be nullptr", K(ret));
-  } else if (OB_ISNULL(table_schema) || OB_ISNULL(index_schema)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys, table schema must not be nullptr", K(ret));
-  } else if (index_schema->is_fts_index() || index_schema->is_multivalue_index() || index_schema->is_vec_hnsw_index()) {
+    LOG_WARN("error sys, root service, table schema, index schema must not be nullptr", K(ret), K(root_service), K(table_schema), K(index_schema));
+  } else if (OB_FAIL(ObDDLUtil::check_need_update_domain_index_share_table_snapshot(
+                 table_schema, index_schema, task_id, create_index_arg, need_update_snapshot))) {
+    LOG_WARN("fail to check need update domain index share table snapshot", K(ret));
+  } else if (!need_update_snapshot) {
+    // don't need update snapshot
+  } else if (index_schema->is_fts_index() || index_schema->is_multivalue_index() || index_schema->is_vec_spiv_index()
+             || index_schema->is_vec_hnsw_index()) {
     ObMySQLTransaction trans;
     const ObTableSchema *domain_index_share_schema = nullptr;
     uint64_t  domain_index_share_tid = 0;
-    if ((index_schema->is_fts_index() || index_schema->is_multivalue_index()) && OB_FAIL(table_schema->get_rowkey_doc_tid(domain_index_share_tid))) {
+    if ((index_schema->is_fts_index() || index_schema->is_multivalue_index() || index_schema->is_vec_spiv_index()) && OB_FAIL(table_schema->get_rowkey_doc_tid(domain_index_share_tid))) {
       LOG_WARN("failed to get rowkey doc table id", K(ret));
     } else if (index_schema->is_vec_hnsw_index() && OB_FAIL(table_schema->get_rowkey_vid_tid(domain_index_share_tid))) {
       LOG_WARN("failed to get rowkey vid table id", K(ret));

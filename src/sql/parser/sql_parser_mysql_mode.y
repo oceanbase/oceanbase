@@ -349,7 +349,7 @@ END_P SET_VAR DELIMITER
         RECYCLEBIN ROTATE ROW_NUMBER RUDUNDANT RECURSIVE RANDOM REDO_TRANSPORT_OPTIONS REMOTE_OSS RT
         RANK READ_ERROR_LOG READ_ONLY RECOVERY REJECT ROLE
 
-        S3_REGION SAMPLE SAVEPOINT SCALARS SCHEDULE SCHEMA_NAME SCN SCOPE SECOND SECURITY SEED SEMISTRUCT_PROPERTIES SEQUENCES SERIAL SERIALIZABLE SERVER
+        S3_REGION SAMPLE SAVEPOINT SCALARS SCHEDULE SCHEMA_NAME SCN SCOPE SCORE SECOND SECURITY SEED SEMISTRUCT_ENCODING_TYPE SEMISTRUCT_PROPERTIES SEQUENCES SERIAL SERIALIZABLE SERVER
         SERVER_IP SERVER_PORT SERVER_TYPE SERVICE SESSION SESSION_USER SETS SET_MASTER_CLUSTER SET_SLAVE_CLUSTER
         SET_TP SHARE SHARED_STORAGE_DEST SHARED_STORAGE_INFO SHUTDOWN SIGNED SIMPLE SINGLE SKIP_INDEX SLAVE SLOW SLOT_IDX SNAPSHOT SOCKET SOME SONAME SOUNDS
         SOURCE SPFILE SPLIT SQL_AFTER_GTIDS SQL_AFTER_MTS_GAPS SQL_BEFORE_GTIDS SQL_BUFFER_RESULT
@@ -582,6 +582,8 @@ END_P SET_VAR DELIMITER
 %type <node> dynamic_partition_option dynamic_partition_option_list sys_view_cast_opt
 %type <node> create_location_stmt alter_location_stmt drop_location_stmt location_name location_url opt_sub_path credential_option_list credential_option opt_credential location_utils_stmt
 %type <node> flashback_standby_log_stmt
+%type <node> column_list_with_boost with_param_column_ref
+%type <node> es_sql_opt
 %type <node> operator_list
 %type <node> semistruct_properties_list semistruct_properties semistruct_encoding_type_option
 
@@ -1929,6 +1931,16 @@ simple_expr collation %prec NEG
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_MATCH_AGAINST, 2, column_list_node, $7);
   $$->value_ = $8[0];
 }
+| MATCH '(' column_list_with_boost ',' search_expr ',' es_sql_opt ')'
+{
+  ParseNode *column_list_node = NULL;
+  merge_nodes(column_list_node, result, T_MATCH_COLUMN_LIST, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_ES_MATCH, 3, column_list_node, $5, $7);
+}
+| SCORE'(' ')'
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_FUN_ES_SCORE);
+}
 | case_expr
 {
   $$ = $1;
@@ -2013,6 +2025,15 @@ expr_const
   $$ = $1;
 };
 
+es_sql_opt:
+expr_const
+{
+  $$ = $1;
+}
+| func_expr
+{
+  $$ = $1;
+};
 
 opt_mode_flag:
 IN NATURAL LANGUAGE MODE
@@ -11297,6 +11318,27 @@ INSERT
   ParseNode *op_node = NULL;
   malloc_terminal_node(op_node, result->malloc_pool_, T_INSERT);
   malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, op_node, $2);
+}
+;
+
+/*TODO: support no_param_column_ref case*/
+column_list_with_boost:
+with_param_column_ref { $$ = $1}
+| column_list_with_boost ',' with_param_column_ref
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+with_param_column_ref:
+no_param_column_ref '^' literal
+{
+  ParseNode *node = NULL;
+  malloc_non_terminal_node(node, result->malloc_pool_, T_COLUMN_REF, 3, NULL, NULL, $1);
+  dup_node_string($1, node, result->malloc_pool_);
+  ParseNode *list_node = NULL;
+  malloc_non_terminal_node(list_node, result->malloc_pool_, T_LINK_NODE, 2, node, $3);
+  merge_nodes($$, result, T_MATCH_COLUMN_LIST, list_node);
 }
 ;
 
@@ -26801,6 +26843,7 @@ ACCESS_INFO
 |       SCHEMA_NAME
 |       SCN
 |       SCOPE
+|       SCORE
 |       SECOND
 |       SECURITY
 |       SEED
