@@ -17129,6 +17129,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   keywords = all_def_keywords['__all_ai_model_endpoint'],
   in_tenant_space=True))
 
+# 12575: __all_virtual_ss_object_type_io_stat
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -44038,7 +44039,8 @@ def_table_schema(
     WHERE ENDPOINT_ID != -1;
   """.replace("\n", " ")
 )
-
+# 21693: GV$OB_SS_OBJECT_TYPE_IO_STAT
+# 21694: V$OB_SS_OBJECT_TYPE_IO_STAT
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
