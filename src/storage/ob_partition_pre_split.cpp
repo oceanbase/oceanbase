@@ -210,7 +210,7 @@ int ObPartitionPreSplit::get_estimated_table_size(
   
   if (OB_FAIL(index_table_schema.get_column_ids(column_ids))) {
     LOG_WARN("[PRE_SPLIT] fail to get mapping column ids.", K(ret));
-  } else if (OB_FAIL(get_data_table_part_ids(data_table_schema, part_ids))) {
+  } else if (OB_FAIL(part_ids.push_back(-1))) {
     LOG_WARN("[PRE_SPLIT] fail to get data table part id.", K(ret), K(data_table_schema));
   } else {
     common::ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
