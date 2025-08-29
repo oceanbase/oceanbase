@@ -3238,7 +3238,8 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(hms_client_pool_stat_table);
             }
-          } break;
+            break;
+          }
         END_CREATE_VT_ITER_SWITCH_LAMBDA
 
 #define AGENT_VIRTUAL_TABLE_CREATE_ITER
