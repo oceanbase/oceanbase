@@ -1,14 +1,6 @@
----
-name: 🐞 Bug report
-about: Create a report to help us improve
-title: "[Bug]: "
-labels: ["type: bug"]
----
-
-name: "🕷️ Bug report"
-description: Report errors or unexpected behavior
-labels:
-  - bug
+name: "🙋 Question"
+description: Ask a question about OceanBase\mlabels:
+  - type: question
 body:
   - type: checkboxes
     attributes:
@@ -17,16 +9,23 @@ body:
       options:
         - label: I have read the [Contributing Guide](https://github.com/oceanbase/oceanbase/blob/develop/CONTRIBUTING.md).
           required: true
-        - label: This is only for bug report, if you would like to ask a question, please head to [Discussions](https://github.com/oceanbase/oceanbase/discussions/categories/general).
+        - label: This is only for question, if you would like to report a bug, please use the bug report template.
           required: true
         - label: I have searched for existing issues [search for existing issues](https://github.com/oceanbase/oceanbase/issues), including closed ones.
           required: true
-        - label: I confirm that I am using English to submit this report, otherwise it will be closed.
+        - label: I confirm that I am using English to submit this question, otherwise it will be closed.
           required: true
         - label: 【中文用户 & Non English User】请使用英语提交，否则会被关闭 ：）
           required: true
         - label: "Please do not modify this template :) and fill in all the required fields."
           required: true
+
+  - type: textarea
+    attributes:
+      label: Quick Question (Optional)
+      description: If your question is concise and probably has a short answer, you may also ask it in our [Discord Community](https://discord.gg/74cF8vbNEs) for faster response.
+    validations:
+      required: false
 
   - type: input
     attributes:
@@ -62,24 +61,24 @@ body:
 
   - type: textarea
     attributes:
-      label: Steps to reproduce
-      description: We highly suggest including screenshots and a bug report log. Please use the right markdown syntax for code blocks.
-      placeholder: Having detailed steps helps us reproduce the bug. If you have logs, please use fenced code blocks (triple backticks ```) to format them.
+      label: Your Question
+      description: Please describe your question in detail.
+      placeholder: What would you like to know about OceanBase? Please provide as much context as possible.
     validations:
       required: true
 
   - type: textarea
     attributes:
-      label: ✔️ Expected Behavior
-      description: Describe what you expected to happen.
-      placeholder: What were you expecting? Please do not copy and paste the steps to reproduce here.
+      label: Relevant Context
+      description: Add any other context or screenshots about your question here.
+      placeholder: Include any code snippets, logs, or other information that might help us understand your question.
     validations:
-      required: true
+      required: false
 
   - type: textarea
     attributes:
-      label: ❌ Actual Behavior
-      description: Describe what actually happened.
-      placeholder: What happened instead? Please do not copy and paste the steps to reproduce here.
+      label: What You've Tried
+      description: Describe what you have tried so far to find an answer to your question.
+      placeholder: Have you checked the documentation, searched for similar issues, or tried any solutions?
     validations:
       required: false
