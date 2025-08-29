@@ -15656,9 +15656,15 @@ int ObDMLResolver::resolve_outline_data_hints()
   ObDMLStmt *stmt = NULL;
   ObQueryCtx *query_ctx = NULL;
   const ParseNode *outline_hint_node = NULL;
-  if (OB_ISNULL(stmt = get_stmt()) || OB_ISNULL(query_ctx = stmt->get_query_ctx())) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("Stmt and query ctx should not be NULL. ", K(ret), K(stmt), K(query_ctx));
+  const ObExecContext *exec_ctx = NULL;
+  const ObPhysicalPlanCtx *phy_plan_ctx = NULL;
+  if (OB_ISNULL(stmt = get_stmt()) || OB_ISNULL(query_ctx = stmt->get_query_ctx())
+      || OB_ISNULL(session_info_) || OB_ISNULL(exec_ctx = session_info_->get_cur_exec_ctx())
+      || OB_ISNULL(phy_plan_ctx = exec_ctx->get_physical_plan_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(stmt), K(query_ctx), K(session_info_), K(exec_ctx), K(phy_plan_ctx));
+  } else if (get_parent_namespace_resolver() != NULL) {
+    /* do noting */
   } else if (NULL == (outline_hint_node = get_outline_data_hint_node())) {
     /* do noting */
   } else {
@@ -15667,6 +15673,9 @@ int ObDMLResolver::resolve_outline_data_hints()
     ObSEArray<ObHint*, 8> hints;
     bool get_outline_data = false;
     ObString qb_name;
+    int64_t concurrent_num = -1;
+    int64_t param_idx = OB_INVALID_INDEX;
+    const ObOutlineParamsWrapper *otl_params = NULL;
     if (OB_FAIL(inner_resolve_hints(*outline_hint_node, false,
                                     get_outline_data,
                                     false,
@@ -15674,13 +15683,23 @@ int ObDMLResolver::resolve_outline_data_hints()
                                     hints,
                                     qb_name))) {
       LOG_WARN("failed to resolve outline data hints", K(ret));
+    } else if (OB_NOT_NULL(otl_params = exec_ctx->get_outline_params_wrapper())
+               && OB_FAIL(otl_params->get_concurrent_limit_param(phy_plan_ctx->get_param_store(),
+                                                                 param_idx,
+                                                                 concurrent_num))) {
+      LOG_WARN("failed to get concurrent limit param", K(ret));
+    } else if (OB_INVALID_INDEX != param_idx &&
+               OB_FALSE_IT(global_hint.merge_max_concurrent_hint(concurrent_num))) {
     } else if (OB_UNLIKELY(0 == global_hint.max_concurrent_)) {
       ret = OB_REACH_MAX_CONCURRENT_NUM;
       LOG_USER_ERROR(OB_REACH_MAX_CONCURRENT_NUM, global_hint.max_concurrent_);
       LOG_WARN("SQL reach max concurrent num 0", K(ret));
     } else if (hints.empty() && !global_hint.has_hint_exclude_concurrent()
                && ObGlobalHint::UNSET_MAX_CONCURRENT != global_hint.max_concurrent_) {
-      /* max concurrent outline, do not ignore other hint */
+      /* max concurrent outline, do not ignore embedded hint */
+      if (NULL != params_.outline_state_) {
+        params_.outline_state_->is_prue_concurrent_limit_ = true;
+      }
       if (OB_FAIL(query_hint.get_global_hint().assign(global_hint))) {
         LOG_WARN("failed to assign global hint.", K(ret));
       }
@@ -15953,6 +15972,7 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
 {
   int ret = OB_SUCCESS;
   resolved_hint = true;
+  bool is_max_concurrent_hint = false;
   ParseNode *child0 = NULL;
   ParseNode *child1 = NULL;
 
@@ -16104,6 +16124,7 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
       break;
     }
     case T_MAX_CONCURRENT: {
+      is_max_concurrent_hint = true;
       CHECK_HINT_PARAM(hint_node, 1) {
         global_hint.merge_max_concurrent_hint(child0->value_);
       }
@@ -16293,6 +16314,10 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
       resolved_hint = false;
       break;
     }
+  }
+
+  if (OB_SUCC(ret) && resolved_hint && !is_max_concurrent_hint) {
+    global_hint.set_has_hint_exclude_concurrent();
   }
   return ret;
 }

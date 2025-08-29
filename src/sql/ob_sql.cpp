@@ -3032,7 +3032,8 @@ int ObSql::generate_stmt(ParseResult &parse_result,
                          ObIAllocator &allocator,
                          ObResultSet &result,
                          ObStmt *&stmt,
-                         ParseResult *outline_parse_result)
+                         ParseResult *outline_parse_result,
+                         ObOutlineState *outline_state)
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(resolve);
@@ -3084,6 +3085,7 @@ int ObSql::generate_stmt(ParseResult &parse_result,
     resolver_ctx.external_param_info_.by_name_
         = parse_result.question_mark_ctx_.by_name_ || NULL != context.secondary_namespace_; //static sql in PL must be by name
     resolver_ctx.outline_parse_result_ = outline_parse_result;
+    resolver_ctx.outline_state_ = outline_state;
     resolver_ctx.is_execute_call_stmt_ = context.is_execute_call_stmt_;
     if (NULL != pc_ctx) {
       resolver_ctx.select_item_param_infos_ = &pc_ctx->select_item_param_infos_;
@@ -3316,7 +3318,8 @@ int ObSql::generate_physical_plan(ParseResult &parse_result,
                                   ObResultSet &result,
                                   const bool is_begin_commit_stmt,
                                   const PlanCacheMode mode,
-                                  ParseResult *outline_parse_result /* null */ )
+                                  ParseResult *outline_parse_result /* null */,
+                                  ObOutlineState *outline_state /* null */ )
 {
   int ret = OB_SUCCESS;
   bool is_valid = true;
@@ -3339,7 +3342,8 @@ int ObSql::generate_physical_plan(ParseResult &parse_result,
                                    allocator,
                                    result,
                                    basic_stmt,
-                                   outline_parse_result))) {
+                                   outline_parse_result,
+                                   outline_state))) {
     LOG_WARN("Failed to generate stmt", K(ret), K(result.get_exec_context().need_disconnect()));
   } else if (OB_ISNULL(basic_stmt)) {
     ret = OB_ERR_UNEXPECTED;
@@ -4413,9 +4417,13 @@ int ObSql::get_outline_data(ObSqlCtx &context,
   } else if (pc_ctx.sql_ctx_.spm_ctx_.is_retry_for_spm_) {
     ObPlanBaselineItem* baseline_item =
         static_cast<ObPlanBaselineItem*>(pc_ctx.sql_ctx_.spm_ctx_.baseline_guard_.get_cache_obj());
+    ObString tmp_outline_content;
     if (OB_ISNULL(baseline_item)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
+    } else if (pc_ctx.sql_ctx_.spm_ctx_.has_concurrent_limited_ &&
+               OB_FAIL(get_outline_data(pc_ctx, signature_sql, signature_format_sql, outline_state, tmp_outline_content))) {
+      LOG_WARN("failed to get outline data", K(ret));
     } else {
       outline_content = baseline_item->get_outline_data_str();
     }
@@ -4869,9 +4877,6 @@ int ObSql::pc_add_plan(ObPlanCacheCtx &pc_ctx,
       ret = plan_cache->add_plan(phy_plan, pc_ctx);
     }
     plan_added = (OB_SUCCESS == ret);
-    if (pc_ctx.is_max_curr_limit_) {
-      ret = OB_REACH_MAX_CONCURRENT_NUM;
-    }
 
     int tmp_ret = OB_SUCCESS;
     tmp_ret = OB_E(EventTable::EN_PC_NOT_SWALLOW_ERROR) OB_SUCCESS;
@@ -5394,7 +5399,8 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
                                             result,
                                             pc_ctx.is_begin_commit_stmt(),
                                             mode,
-                                            &outline_parse_result))) {
+                                            &outline_parse_result,
+                                            &outline_state))) {
     ret = deal_generate_physical_plan_error(result.get_exec_context(), pc_ctx, ret);
   } else if (OB_FALSE_IT(backup_recovery_guard.recovery())) {
   } else if (OB_FAIL(try_get_plan(pc_ctx, result, use_plan_cache, add_plan_to_pc))) {
@@ -5465,18 +5471,22 @@ int ObSql::pc_add_spm_plan(ObPlanCacheCtx &pc_ctx,
   bool plan_added = false;
   pc_ctx.need_evolution_ = true;
   ObSpmCacheCtx &spm_ctx = pc_ctx.sql_ctx_.spm_ctx_;
-  if (!spm_ctx.is_retry_for_spm_) {
+  ObPhysicalPlan *plan = NULL;
+  if (OB_ISNULL(plan = result.get_physical_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(plan));
+  } else if (!spm_ctx.is_retry_for_spm_) {
     pc_ctx.need_evolution_ = false;
     spm_ctx.spm_stat_ = ObSpmCacheCtx::SpmStat::STAT_INVALID;
-    if (DEPENDENCY_OUTLINE != outline_state.outline_version_.object_type_
-        && OB_FAIL(ObSpmController::check_baseline_enable(pc_ctx, result.get_physical_plan(), pc_ctx.need_evolution_))) {
+    plan->set_outline_state(outline_state);
+    if (OB_FAIL(ObSpmController::check_baseline_enable(pc_ctx, plan, pc_ctx.need_evolution_))) {
       LOG_WARN("failed to check need capture baseline", K(ret));
     } else if (pc_ctx.need_evolution_ && OB_FALSE_IT(spm_ctx.spm_stat_ = ObSpmCacheCtx::SpmStat::STAT_ADD_EVOLUTION_PLAN)) {
     } else if (OB_FAIL(pc_add_plan(pc_ctx, result, outline_state, plan_cache, plan_added))) {
       LOG_WARN("fail to add plan to plan cache", K(ret));
     } else if (!plan_added || !pc_ctx.need_evolution_) {
       /* do nothing */
-    } else if (OB_FAIL(ObSpmController::update_plan_baseline_cache(pc_ctx, result.get_physical_plan()))) {
+    } else if (OB_FAIL(ObSpmController::update_plan_baseline_cache(pc_ctx, plan))) {
       LOG_WARN("failed to check baseline exists", K(ret));
     } else if ((spm_ctx.evo_plan_is_baseline_ && SPM_MODE_BASELINE_FIRST == spm_ctx.spm_mode_)
                || spm_ctx.evo_plan_is_fixed_baseline_) {
@@ -5485,12 +5495,12 @@ int ObSql::pc_add_spm_plan(ObPlanCacheCtx &pc_ctx,
       ret = OB_SQL_RETRY_SPM;
     } else {
       need_get_baseline = true;
+      spm_ctx.has_concurrent_limited_ = plan->is_limited_concurrent_num();
     }
-  } else if (OB_ISNULL(result.get_physical_plan())
-             || OB_ISNULL(baseline_item = static_cast<ObPlanBaselineItem*>(spm_ctx.baseline_guard_.get_cache_obj()))) {
+  } else if (OB_ISNULL(baseline_item = static_cast<ObPlanBaselineItem*>(spm_ctx.baseline_guard_.get_cache_obj()))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get null physical plan", K(ret), K(result.get_physical_plan()), K(baseline_item));
-  } else if (result.get_physical_plan()->get_plan_hash_value() != baseline_item->get_plan_hash_value()) {
+    LOG_WARN("get unexpected null", K(ret), K(baseline_item));
+  } else if (plan->get_plan_hash_value() != baseline_item->get_plan_hash_value()) {
     LOG_TRACE("spm need get baseline due to plan hash value not equal");
     need_get_baseline = true;
   } else if (OB_FALSE_IT(spm_ctx.spm_stat_ = ObSpmCacheCtx::SpmStat::STAT_ADD_BASELINE_PLAN)) {
@@ -5503,7 +5513,7 @@ int ObSql::pc_add_spm_plan(ObPlanCacheCtx &pc_ctx,
     need_get_baseline = true;
   } else if (OB_UNLIKELY(!plan_added)) {
     /* fail to add baseline plan by unexpected reason, execute baseline plan directly */
-    LOG_INFO("fail to add baseline plan", K(result.get_physical_plan()->get_sql_id_string()));
+    LOG_INFO("fail to add baseline plan", K(plan->get_sql_id_string()));
   } else if (baseline_item->get_fixed() || SPM_MODE_BASELINE_FIRST == spm_ctx.spm_mode_) {
     // fixed baseline plan or baseline first mode, use is directly
     spm_ctx.spm_stat_ = ObSpmCacheCtx::SpmStat::STAT_START_EVOLUTION;

@@ -946,6 +946,17 @@ bool ObQueryHint::is_valid_outline_transform(int64_t trans_list_loc, const ObHin
   return bret;
 }
 
+bool ObQueryHint::has_hint_exclude_concurrent() const
+{
+  bool bret = !qb_hints_.empty()
+              || !stmt_id_hints_.empty()
+              || global_hint_.has_hint_exclude_concurrent();
+  for (int64_t i = 0; !bret && i < stmt_id_map_.count(); ++i) {
+    bret = stmt_id_map_.at(i).is_from_hint_;
+  }
+  return bret;
+}
+
 void QbNames::reset()
 {
   stmt_type_ = stmt::StmtType::T_NONE;

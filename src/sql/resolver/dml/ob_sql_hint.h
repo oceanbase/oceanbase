@@ -138,8 +138,7 @@ struct ObQueryHint {
   int get_table_item_by_hint_table(const ObDMLStmt &stmt,
                                    const ObTableInHint &table,
                                    TableItem *&table_item) const;
-  bool has_hint_exclude_concurrent() const {  return !qb_hints_.empty() || !stmt_id_hints_.empty()
-                                                     || global_hint_.has_hint_exclude_concurrent(); }
+  bool has_hint_exclude_concurrent() const;
 
   // print hint
   int print_stmt_hint(PlanText &plan_text, const ObDMLStmt &stmt, const bool is_first_stmt_for_hint) const;

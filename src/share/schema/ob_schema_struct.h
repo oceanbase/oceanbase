@@ -6428,6 +6428,9 @@ public:
   int add_param(const ObMaxConcurrentParam& param);
   int has_param(const ObMaxConcurrentParam& param, bool &has_param) const;
   int has_concurrent_limit_param(bool &has) const;
+  int get_concurrent_limit_param(const ParamStore &const_param_store,
+                                 int64_t &param_idx,
+                                 int64_t &concurrent_num) const;
   int64_t get_param_count() const {return outline_params_.count();}
   void reset_allocator() { allocator_ = NULL; mem_attr_ = common::ObMemAttr(); }
   void set_mem_attr(const common::ObMemAttr &attr) { mem_attr_ = attr; };

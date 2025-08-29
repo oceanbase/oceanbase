@@ -1161,22 +1161,12 @@ int ObPlanCacheValue::get_outline_param_index(ObExecContext &exec_ctx, int64_t &
 {
   int ret = OB_SUCCESS;
   param_idx = OB_INVALID_INDEX;
-  int64_t param_count = outline_params_wrapper_.get_outline_params().count();
   int64_t concurrent_num = INT64_MAX;
-  if (exec_ctx.get_physical_plan_ctx() != NULL) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < param_count; ++i) {
-      bool is_match = false;
-      const ObMaxConcurrentParam *param = outline_params_wrapper_.get_outline_params().at(i);
-      if (OB_ISNULL(param)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("param is NULl", K(ret));
-      } else if (OB_FAIL(param->match_fixed_param(exec_ctx.get_physical_plan_ctx()->get_param_store(), is_match))) {
-        LOG_WARN("fail to match", K(ret), K(i));
-      } else if (is_match && param->concurrent_num_ < concurrent_num) {
-        concurrent_num = param->concurrent_num_;
-        param_idx = i;
-      } else {/*do nothing*/}
-    }
+  if (NULL == exec_ctx.get_physical_plan_ctx()) {
+    /* do nothing */
+  } else if (OB_FAIL(outline_params_wrapper_.get_concurrent_limit_param(exec_ctx.get_physical_plan_ctx()->get_param_store(),
+                                                                        param_idx, concurrent_num))) {
+    LOG_WARN("failed to get concurrent limit param", K(ret));
   }
   return ret;
 }
