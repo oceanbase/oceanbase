@@ -1597,20 +1597,20 @@ Query Plan
 ===============================================================
 |ID|OPERATOR              |NAME         |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |NESTED-LOOP SEMI JOIN |             |2       |40          |
+|0 |NESTED-LOOP SEMI JOIN |             |2       |35          |
 |1 |├─TABLE FULL SCAN     |xy_t4        |2       |3           |
-|2 |└─TABLE RANGE SCAN    |xy_t1(idx_c2)|1       |18          |
+|2 |└─TABLE RANGE SCAN    |xy_t1(idx_c2)|1       |16          |
 ===============================================================
 Outputs & filters:
 -------------------------------------
   0 - output([xy_t4.c1], [xy_t4.c2]), filter(nil), rowset=16
-      conds(nil), nl_params_([xy_t4.c1(:0)]), use_batch=false
+      conds(nil), nl_params_([xy_t4.c1(:0)]), use_batch=true
   1 - output([xy_t4.c1], [xy_t4.c2]), filter(nil), rowset=16
       access([xy_t4.c1], [xy_t4.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([xy_t4.__pk_increment]), range(MIN ; MAX)always true
   2 - output(nil), filter(nil), rowset=16
-      access(nil), partitions(p0)
+      access([GROUP_ID]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c2], [xy_t1.c1], [xy_t1.__pk_increment]), range(MIN ; MAX), 
       range_cond([:0 = xy_t1.c2])
@@ -1722,20 +1722,20 @@ Query Plan
 ===============================================================
 |ID|OPERATOR              |NAME         |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |NESTED-LOOP SEMI JOIN |             |8       |153         |
+|0 |NESTED-LOOP SEMI JOIN |             |8       |132         |
 |1 |├─TABLE FULL SCAN     |xy_t2(idx_c2)|8       |3           |
-|2 |└─TABLE RANGE SCAN    |xy_t1(idx_c2)|1       |18          |
+|2 |└─TABLE RANGE SCAN    |xy_t1(idx_c2)|1       |16          |
 ===============================================================
 Outputs & filters:
 -------------------------------------
   0 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
-      conds(nil), nl_params_([xy_t2.c2(:0)]), use_batch=false
+      conds(nil), nl_params_([xy_t2.c2(:0)]), use_batch=true
   1 - output([xy_t2.c2], [xy_t2.c1]), filter(nil), rowset=16
       access([xy_t2.c2], [xy_t2.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c2], [xy_t2.c1], [xy_t2.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   2 - output(nil), filter(nil), rowset=16
-      access(nil), partitions(p0)
+      access([GROUP_ID]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c2], [xy_t1.c1], [xy_t1.__pk_increment]), range(MIN ; MAX), 
       range_cond([:0 = xy_t1.c2])
@@ -2471,20 +2471,20 @@ Query Plan
 ===============================================================
 |ID|OPERATOR              |NAME         |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |NESTED-LOOP ANTI JOIN |             |1       |40          |
+|0 |NESTED-LOOP ANTI JOIN |             |1       |35          |
 |1 |├─TABLE FULL SCAN     |xy_t4        |2       |3           |
-|2 |└─TABLE RANGE SCAN    |xy_t1(idx_c2)|1       |18          |
+|2 |└─TABLE RANGE SCAN    |xy_t1(idx_c2)|1       |16          |
 ===============================================================
 Outputs & filters:
 -------------------------------------
   0 - output([xy_t4.c1], [xy_t4.c2]), filter(nil), rowset=16
-      conds(nil), nl_params_([xy_t4.c1(:0)]), use_batch=false
+      conds(nil), nl_params_([xy_t4.c1(:0)]), use_batch=true
   1 - output([xy_t4.c1], [xy_t4.c2]), filter(nil), rowset=16
       access([xy_t4.c1], [xy_t4.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([xy_t4.__pk_increment]), range(MIN ; MAX)always true
   2 - output(nil), filter(nil), rowset=16
-      access(nil), partitions(p0)
+      access([GROUP_ID]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c2], [xy_t1.c1], [xy_t1.__pk_increment]), range(MIN ; MAX), 
       range_cond([:0 = xy_t1.c2])
@@ -2586,20 +2586,20 @@ Query Plan
 ===============================================================
 |ID|OPERATOR              |NAME         |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |NESTED-LOOP ANTI JOIN |             |1       |153         |
+|0 |NESTED-LOOP ANTI JOIN |             |1       |132         |
 |1 |├─TABLE FULL SCAN     |xy_t2(idx_c2)|8       |3           |
-|2 |└─TABLE RANGE SCAN    |xy_t1(idx_c2)|1       |18          |
+|2 |└─TABLE RANGE SCAN    |xy_t1(idx_c2)|1       |16          |
 ===============================================================
 Outputs & filters:
 -------------------------------------
   0 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
-      conds(nil), nl_params_([xy_t2.c2(:0)]), use_batch=false
+      conds(nil), nl_params_([xy_t2.c2(:0)]), use_batch=true
   1 - output([xy_t2.c2], [xy_t2.c1]), filter(nil), rowset=16
       access([xy_t2.c2], [xy_t2.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c2], [xy_t2.c1], [xy_t2.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   2 - output(nil), filter(nil), rowset=16
-      access(nil), partitions(p0)
+      access([GROUP_ID]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c2], [xy_t1.c1], [xy_t1.__pk_increment]), range(MIN ; MAX), 
       range_cond([:0 = xy_t1.c2])
@@ -4318,20 +4318,20 @@ Query Plan
 =======================================================
 |ID|OPERATOR              |NAME |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------
-|0 |NESTED-LOOP ANTI JOIN |     |5       |97          |
+|0 |NESTED-LOOP ANTI JOIN |     |5       |84          |
 |1 |├─TABLE FULL SCAN     |xy_t2|5       |3           |
-|2 |└─TABLE GET           |xy_t1|1       |18          |
+|2 |└─TABLE GET           |xy_t1|1       |16          |
 =======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
-      conds(nil), nl_params_([xy_t2.c1(:0)], [xy_t2.c3(:1)]), use_batch=false
+      conds(nil), nl_params_([xy_t2.c1(:0)], [xy_t2.c3(:1)]), use_batch=true
   1 - output([xy_t2.c1], [xy_t2.c3], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c3], [xy_t2.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
   2 - output(nil), filter([xy_t1.c3 < :1]), rowset=16
-      access([xy_t1.c3]), partitions(p0)
+      access([GROUP_ID], [xy_t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([xy_t1.c1]), range(MIN ; MAX), 
       range_cond([xy_t1.c1 = :0])

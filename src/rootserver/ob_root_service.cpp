@@ -11778,6 +11778,8 @@ int ObRootService::set_config_after_bootstrap_()
     {"_ob_enable_pl_dynamic_stack_check", "true"},
     {"_system_trig_enabled", "false"},
     {"_update_all_columns_for_trigger", "false"},
+    {"_enable_spf_batch_rescan", "true"},
+    {"_enable_das_batch_rescan_flag", "15"},
   };
   if (OB_FAIL(sql.assign("ALTER SYSTEM SET"))) {
     LOG_WARN("failed to assign sql string", KR(ret));
