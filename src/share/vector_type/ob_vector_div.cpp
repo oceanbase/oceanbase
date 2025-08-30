@@ -30,6 +30,12 @@ int ObVectorDiv::calc(float *a, float f, const int64_t len)
   } else {
     ret = common::specific::normal::vector_div(a, f, len);
   }
+#elif defined(__aarch64__)
+  if (common::is_arch_supported(ObTargetArch::NEON)) {
+    ret = vector_div_neon(a, f, len);
+  } else {
+    ret = common::specific::normal::vector_div(a, f, len);
+  }
 #else
   ret = common::specific::normal::vector_div(a, f, len);
 #endif
