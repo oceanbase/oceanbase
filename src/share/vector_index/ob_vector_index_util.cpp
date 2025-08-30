@@ -4519,20 +4519,50 @@ int ObVectorIndexUtil::estimate_ivf_memory(uint64_t num_vectors,
   uint64_t sample_cnt = MIN(num_vectors, param.sample_per_nlist_ * nlist);
   if (param.type_ == VIAT_IVF_SQ8 || param.type_ == VIAT_IVF_FLAT) {
     buff_mem = sizeof(float) * nlist * param.dim_;
-    construct_mem = 4 * sample_cnt * (7 + nlist + param.dim_) + nlist * 4 * (5 + nlist + 2 * param.dim_);
+    construct_mem = 1000 + 2 * nlist * (nlist + 1) + 8 * nlist * param.dim_ + 4 * sample_cnt * (param.dim_ + 2);
   } else if (param.type_ == VIAT_IVF_PQ) {
     uint64_t ksub = MIN(num_vectors, 1L << param.nbits_);
     uint64_t pq_sample_cnt = MIN(num_vectors, ksub * param.sample_per_nlist_);
     buff_mem = sizeof(float) * param.dim_ * (ksub + nlist) + sizeof(float) * nlist * ksub * param.m_;
-    uint64_t ivf_construct = 4 * sample_cnt * (7 + nlist + param.dim_) + nlist * 4 * (5 + nlist + 2 * param.dim_);
-    uint64_t pq_construct = sizeof(float) * pq_sample_cnt * (param.dim_ + 2) + pq_sample_cnt * 4 * (5 + ksub) + ksub * 4 * (5 + ksub);
-    construct_mem = MAX(ivf_construct, pq_construct);
+    uint64_t ivf_construct = 1000 + 2 * nlist * (nlist + 1) + 8 * nlist * param.dim_ + 4 * sample_cnt * (param.dim_ + 2);
+    uint64_t pq_construct = 1000 + 4 * pq_sample_cnt * (param.dim_ + 1); // sample memused
+    uint64_t pq_kmeans_mem = 0;
+    if (OB_UNLIKELY(OB_FAIL(estimate_ivf_pq_kmeans_memory(num_vectors, param, 1 /*thread_cnt*/, pq_kmeans_mem)))) {
+      LOG_WARN("failed to estimate ivf pq kmeans memory", K(ret));
+    } else {
+      pq_construct += pq_kmeans_mem;
+      construct_mem = MAX(ivf_construct, pq_construct);
+      buff_mem = sizeof(float) * param.dim_ * (ksub + nlist);
+      if (param.dist_algorithm_ == VIDA_L2) {
+        buff_mem += sizeof(float) * nlist * ksub * param.m_;
+      }
+    }
   } else {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid ivf algorithm type", K(ret), K(param));
   }
-  construct_mem = static_cast<uint64_t>(construct_mem * 1.5);
-  buff_mem = static_cast<uint64_t>(buff_mem * 1.5);
+  construct_mem = static_cast<uint64_t>(construct_mem * 1.2);
+  buff_mem = static_cast<uint64_t>(buff_mem * 1.2);
+  return ret;
+}
+
+int ObVectorIndexUtil::estimate_ivf_pq_kmeans_memory(uint64_t num_vectors, const ObVectorIndexParam &param,
+                                                     int64_t thread_cnt, uint64_t &kmeans_mem)
+{
+  int ret = OB_SUCCESS;
+  if (param.type_ == VIAT_IVF_PQ) {
+    int64_t pq_dim = param.dim_;
+    if (param.m_ != 0) {
+      pq_dim = param.dim_ / param.m_;
+    }
+
+    uint64_t ksub = MIN(num_vectors, 1L << param.nbits_);
+    uint64_t pq_sample_cnt = MIN(num_vectors, ksub * param.sample_per_nlist_);
+    kmeans_mem = (2 * ksub * (ksub + 1) + 4 * pq_sample_cnt + 8 * ksub * pq_dim) * thread_cnt;  // thread cnt is 1
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ivf algorithm type", K(ret), K(param));
+  }
   return ret;
 }
 

@@ -98,7 +98,6 @@ public:
       weight_(nullptr),
       status_(PREPARE_CENTERS),
       force_stop_(false),
-      tmp_allocator_(),
       ivf_build_mem_ctx_(ivf_build_mem_ctx)
   {}
   virtual ~ObKmeansAlgo() {
@@ -110,18 +109,28 @@ public:
   bool is_finish() const { return FINISH == status_; }
   int64_t next_idx() { return 1L - cur_idx_; }
   ObCentersBuffer<float> &get_cur_centers() { return centers_[cur_idx_]; }
+  ObCentersBuffer<float> &get_centers(int64_t idx) { return centers_[idx]; }
 
   VIRTUAL_TO_STRING_KV(K(is_inited_), 
                KPC(kmeans_ctx_), 
                K(cur_idx_), 
                KP(weight_), 
                K(status_));
+  // virtual functions
+  virtual int do_kmeans(const ObIArray<float*> &input_vectors) = 0;
+  int calc_kmeans_distance(const float* a, const float* b, const int64_t len, float &distance);
 
-  virtual int inner_build(const ObIArray<float*> &input_vectors) = 0;
-  virtual int calc_kmeans_distance(const float* a, const float* b, const int64_t len, float &distance) = 0;
-  int quick_centers(const ObIArray<float*> &input_vectors); // use samples as finally centers
   void set_stop() { ATOMIC_STORE(&force_stop_, true); }
   bool check_stop() { return ATOMIC_LOAD(&force_stop_) == true; }
+protected:
+  int inner_build(const ObIArray<float*> &input_vectors);
+  int quick_centers(const ObIArray<float*> &input_vectors); // use samples as finally centers
+  virtual int init_first_center(const ObIArray<float*> &input_vectors);
+  // use kmeans++ to init centers
+  virtual int init_centers(const ObIArray<float*> &input_vectors);
+  double calc_imbalance_factor(const ObIArray<float*> &input_vectors, int32_t *data_cnt_in_cluster);
+  void set_centers_distance(float* centers_distance, int64_t i, int64_t j, float distance);
+  float get_centers_distance(float* centers_distance, int64_t i, int64_t j);
 
 protected:
   bool is_inited_;
@@ -132,44 +141,30 @@ protected:
   ObKMeansStatus status_;
   // When executing in parallel, tasks may be forcibly stopped.
   volatile bool force_stop_;
-  ObArenaAllocator tmp_allocator_; // 这里也会有少量内存使用
   ObIvfMemContext &ivf_build_mem_ctx_; // from ObIvfBuildHelper, used for alloc memory for kmeans build process
 };
 
-// elkan kmeans 
-// distance must satisfy triangle inequality // l2 or angular distance
-// cuz D(x, c1) + D(x, c2) > D(c1, c2), so D(x, c2) > D(c1, c2) - D(x, c1)
-// if 2D(x, c1) <= D(c1, c2), then D(x, c2) > D(c1, c2) - D(x, c1) >= D(x, c1) -> D(x, c2) > D(x, c1)
 class ObElkanKmeansAlgo : public ObKmeansAlgo
 {
 public:
   ObElkanKmeansAlgo(ObIvfMemContext &ivf_build_mem_ctx)
-    : ObKmeansAlgo(ivf_build_mem_ctx),
-      lower_bounds_(),
-      upper_bounds_(nullptr),
-      nearest_centers_(nullptr)
+    : ObKmeansAlgo(ivf_build_mem_ctx)
   {}
   virtual ~ObElkanKmeansAlgo() {
     destroy();
   }
   virtual void destroy() override;
 
-  TO_STRING_KV(KP(upper_bounds_), 
-               KP(nearest_centers_));
-
 protected:
-  virtual int inner_build(const ObIArray<float*> &input_vectors) override;
-  virtual int calc_kmeans_distance(const float* a, const float* b, const int64_t len, float &distance) override;
+  virtual int do_kmeans(const ObIArray<float*> &input_vectors) override;
 
 private:
-  int init_first_center(const ObIArray<float*> &input_vectors);
-  int init_centers(const ObIArray<float*> &input_vectors);
-  int do_kmeans(const ObIArray<float*> &input_vectors);
+  int search_nearest_center(const ObIArray<float*> &input_vectors, float* centers_distance, int32_t *data_cnt_in_cluster, float &dis_obj);
 
 protected:
-  common::ObArrayWrap<float*> lower_bounds_; // the minimum possible distance from a vector to the every cluster center
-  float *upper_bounds_; // the distance from a vector to its nearest cluster center
-  int32_t *nearest_centers_; // idx of each vector's nearest cluster center
+  static constexpr float GATE_DISTANCE_FACTOR = 4.0; // for gate distance
+  static constexpr float EARLY_FINISH_THRESHOLD = 1; // 0.1% for early finish threshold
+  static const int64_t N_ITER = 25; // for max iterations
 };
 
 class ObKmeansExecutor

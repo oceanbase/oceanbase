@@ -653,6 +653,10 @@ public:
                                  const ObVectorIndexParam &param,
                                  uint64_t &construct_mem,
                                  uint64_t &buff_mem);
+  static int estimate_ivf_pq_kmeans_memory(uint64_t num_vectors,
+                                           const ObVectorIndexParam &param,
+                                           int64_t thread_cnt,
+                                           uint64_t &kmeans_mem);
   static ObExprVecIvfCenterIdCache* get_ivf_center_id_cache_ctx(const uint64_t& id, sql::ObExecContext *exec_ctx);
   static void get_ivf_pq_center_id_cache_ctx(const uint64_t& id, sql::ObExecContext *exec_ctx, ObExprVecIvfCenterIdCache *&cache, ObExprVecIvfCenterIdCache *&pq_cache);
   static int get_ivf_aux_info(share::ObPluginVectorIndexService *service, 
