@@ -2680,6 +2680,7 @@ private:
                                         common::ObIAllocator &allocator,
                                         const uint64_t tenant_data_version,
                                         const share::schema::ObMViewInfo &mview_info,
+                                        const ObString &ddl_stmt_str,
                                         ObDDLTaskRecord &task_record);
 
   bool need_modify_dep_obj_status(const obrpc::ObAlterTableArg &alter_table_arg) const;

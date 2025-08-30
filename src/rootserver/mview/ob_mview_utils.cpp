@@ -14,6 +14,7 @@
 #include "rootserver/mview/ob_mview_utils.h"
 #include "share/schema/ob_mview_info.h"
 #include "share/ob_common_rpc_proxy.h"
+#include "rootserver/ob_tenant_event_def.h"
 
 namespace oceanbase
 {
@@ -22,6 +23,7 @@ namespace rootserver
 
 using namespace share::schema;
 using namespace obrpc;
+using namespace tenant_event;
 
 int ObMViewUtils::create_inner_session(const uint64_t tenant_id,
                                        ObSchemaGetterGuard &schema_guard,
@@ -101,29 +103,12 @@ int ObMViewUtils::submit_build_mlog_task(const uint64_t tenant_id,
     {
       const ObDatabaseSchema *db_schema = nullptr;
       common::ObArenaAllocator allocator("ObMViewUtils");
-      ObString base_table_name = base_table_schema->get_table_name();
+      ObString base_table_name;
       ObString mlog_table_name;
       bool is_table_with_logic_pk = false;
       const ObSysVariableSchema *sys_variable_schema = nullptr;
-      if (base_table_schema->mv_container_table()) {
-        // when the base table is a container table, we should get the name of its mview
-        uint64_t mview_id = OB_INVALID_ID;
-        if (OB_FAIL(ObMViewInfo::get_mview_id_from_container_id(
-                *GCTX.sql_proxy_, tenant_id, base_table_schema->get_table_id(), mview_id))) {
-          LOG_WARN("failed to get mview_id", KR(ret), K(base_table_name));
-        } else {
-          const ObTableSchema *mview_schema = nullptr;
-          if (OB_FAIL(schema_guard.get_table_schema(tenant_id, mview_id, mview_schema))) {
-            LOG_WARN("failed to get table schema", KR(ret), K(tenant_id));
-          } else if (OB_ISNULL(mview_schema)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected null container table schema", KR(ret), KP(mview_schema));
-          } else {
-            base_table_name = mview_schema->get_table_name();
-          }
-        }
-      }
-      if (OB_FAIL(ret)) {
+      if (OB_FAIL(get_base_table_name_for_print(tenant_id, base_table_schema, schema_guard, base_table_name))) {
+        LOG_WARN("failed to get real base table name", KR(ret), K(tenant_id));
       } else if (OB_FAIL(schema_guard.get_database_schema(
                      tenant_id, base_table_schema->get_database_id(), db_schema))) {
         LOG_WARN("failed to get db schema", KR(ret), K(base_table_schema->get_database_id()));
@@ -175,7 +160,8 @@ int ObMViewUtils::submit_build_mlog_task(const uint64_t tenant_id,
             LOG_WARN("failed to push back column", KR(ret), K(i));
           }
         }
-        if (OB_SUCC(ret)) {
+        if (OB_FAIL(ret)) {
+        } else {
           // RS will check if the schema version of the base table is changed, if so, it means 
           // a concurrent ddl has already altered the base table, then we need to retry the task
           // to ensure we generate the correct column list for the mlog
@@ -221,5 +207,110 @@ int ObMViewUtils::submit_build_mlog_task(const uint64_t tenant_id,
   return ret;
 }
 
+int ObMViewUtils::get_base_table_name_for_print(const uint64_t tenant_id,
+                                                const ObTableSchema *base_table_schema,
+                                                ObSchemaGetterGuard &schema_guard,
+                                                ObString &base_table_name)
+{
+  int ret = OB_SUCCESS;
+  base_table_name.reset();
+
+  if (OB_ISNULL(base_table_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(base_table_schema));
+  } else if (base_table_schema->mv_container_table()) {
+    uint64_t mview_id = OB_INVALID_ID;
+    if (OB_FAIL(ObMViewInfo::get_mview_id_from_container_id(*GCTX.sql_proxy_, tenant_id, base_table_schema->get_table_id(), mview_id))) {
+      LOG_WARN("failed to get mview id", KR(ret), K(tenant_id));
+    } else {
+      const ObTableSchema *mview_schema = nullptr;
+      if (OB_FAIL(schema_guard.get_table_schema(tenant_id, mview_id, mview_schema))) {
+        LOG_WARN("failed to get table schema", KR(ret), K(tenant_id));
+      } else if (OB_ISNULL(mview_schema)) { 
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null mview schema", KR(ret), KP(mview_schema));
+      } else {
+        base_table_name = mview_schema->get_table_name();
+      }
+    }
+  } else {
+    base_table_name = base_table_schema->get_table_name();
+  }
+
+  return ret;
+} 
+
+int ObMViewUtils::get_mlog_column_list_str(const ObIArray<ObString> &mlog_columns,
+                                           ObSqlString &column_list_str)
+{
+  int ret = OB_SUCCESS;
+  column_list_str.reset();
+
+  if (OB_FAIL(column_list_str.assign_fmt("["))) {
+    LOG_WARN("failed to assign column list str", KR(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < mlog_columns.count(); ++i) {
+      if (0 != i) {
+        if (OB_FAIL(column_list_str.append_fmt(", "))) {
+          LOG_WARN("failed to append column name", KR(ret), K(mlog_columns.at(i)));
+        }
+      }
+      if (OB_FAIL(ret)) { 
+      } else if (OB_FAIL(column_list_str.append_fmt("%s", mlog_columns.at(i).ptr()))) {
+        LOG_WARN("failed to append column name", KR(ret), K(mlog_columns.at(i)));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(column_list_str.append_fmt("]"))) {
+      LOG_WARN("failed to append column list str", KR(ret));
+    }
+  }
+
+  return ret;
+}
+
+int ObMViewAutoMlogEventInfo::set_base_table_name(const ObString &base_table_name)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is null", KR(ret));
+  } else if (OB_FAIL(ob_write_string(*allocator_, base_table_name, base_table_name_, true))) {
+    LOG_WARN("failed to write string", KR(ret), K(base_table_name));
+  }
+  return ret;
+}
+
+int ObMViewAutoMlogEventInfo::set_related_create_mview_ddl(const ObString &related_create_mview_ddl)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is null", KR(ret));
+  } else if (OB_FAIL(ob_write_string(*allocator_, related_create_mview_ddl, related_create_mview_ddl_, true))) {
+    LOG_WARN("failed to write string", KR(ret), K(related_create_mview_ddl));
+  }
+  return ret;
+}
+
+int ObMViewAutoMlogEventInfo::set_mlog_columns(const ObString &mlog_columns)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is null", KR(ret));
+  } else if (OB_FAIL(ob_write_string(*allocator_, mlog_columns, mlog_columns_, true))) {
+    LOG_WARN("failed to write string", KR(ret), K(mlog_columns));
+  }
+  return ret;
+}
+
+void ObMViewAutoMlogEventInfo::submit_event()
+{
+  const int64_t cost_time = ObTimeUtility::current_time() - start_ts_;
+  TENANT_EVENT(tenant_id_, MVIEW, AUTO_BUILD_MLOG, start_ts_, ret_, cost_time,
+               base_table_id_, base_table_name_, old_mlog_id_, new_mlog_id_,
+               mlog_columns_, related_create_mview_ddl_);
+}
 } // namespace rootserver
 } // namespace oceanbase

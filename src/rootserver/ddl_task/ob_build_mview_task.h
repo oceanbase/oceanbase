@@ -14,6 +14,7 @@
 #define OCEANBASE_ROOTSERVER_OB_BUILD_MVIEW_TASK_H
 
 #include "rootserver/ddl_task/ob_ddl_task.h"
+#include "rootserver/mview/ob_mview_utils.h"
 
 namespace oceanbase
 {
@@ -72,7 +73,7 @@ private:
   obrpc::ObMViewCompleteRefreshArg arg_;
   int64_t mview_complete_refresh_task_id_;
   bool has_build_mlog_;
-  ObSEArray<int64_t, 8> build_mlog_task_ids_;
+  ObSEArray<ObMViewAutoMlogEventInfo, 8> build_mlog_events_;
 };
 } // namespace rootserver
 } // namespace oceanbase

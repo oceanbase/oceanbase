@@ -2708,6 +2708,7 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist,
                                                         allocator,
                                                         tenant_data_version,
                                                         mview_info,
+                                                        tmp_ddl_stmt_str,
                                                         task_record))) {
             LOG_WARN("failed to start mview complete refresh task", KR(ret));
           } else {
@@ -2764,6 +2765,7 @@ int ObDDLService::start_mview_complete_refresh_task(
     common::ObIAllocator &allocator,
     const uint64_t tenant_data_version,
     const ObMViewInfo &mview_info,
+    const ObString &ddl_stmt_str,
     ObDDLTaskRecord &task_record)
 {
   int ret = OB_SUCCESS;
@@ -2826,6 +2828,7 @@ int ObDDLService::start_mview_complete_refresh_task(
     arg.nls_formats_[ObNLSFormatEnum::NLS_DATE] = data_format_schema->get_value();
     arg.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP] = nls_timestamp_format->get_value();
     arg.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP_TZ] = nls_timestamp_tz_format->get_value();
+    arg.ddl_stmt_str_ = ddl_stmt_str;
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < dep_infos->count(); ++i) {
     const ObDependencyInfo &dep = dep_infos->at(i);

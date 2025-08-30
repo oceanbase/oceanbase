@@ -34,8 +34,8 @@ namespace sql
 // 3. print refresh dmls
 int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
                                    ObSchemaGetterGuard *schema_guard,
-                                   ObMVPrinterRefreshInfo *refresh_info,
                                    const bool check_refreshable_only,
+                                   ObMVPrinterRefreshInfo *refresh_info,
                                    ObTableReferencedColumnsInfo *table_referenced_columns_info)
 {
   int ret = OB_SUCCESS;
@@ -48,6 +48,9 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
   } else if (OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(session_info));
+  } else if (check_refreshable_only && OB_NOT_NULL(refresh_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("refresh info should be null when check refreshable only", K(ret), K(refresh_info));
   } else {
     lib::ContextParam param;
     const uint64_t tenant_id = session_info->get_effective_tenant_id();
@@ -68,6 +71,7 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
       ObSEArray<ObString, 4> operators;
       ObSEArray<ObDependencyInfo, 4> dependency_infos;
       ObSEArray<uint64_t, 4> tables_need_mlog;
+      bool is_rt_expand = false;
       SMART_VARS_2((ObExecContext, exec_ctx, alloc), (ObPhysicalPlanCtx, phy_plan_ctx, alloc)) {
         LinkExecCtxGuard link_guard(*session_info, exec_ctx);
         exec_ctx.set_my_session(session_info);
@@ -135,13 +139,15 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
                    || OB_ISNULL(mv_container_schema)) {
           COVER_SUCC(OB_ERR_UNEXPECTED);
           LOG_WARN("fail to get mv container schema", KR(ret), K(mv_schema->get_data_table_id()), K(mv_container_schema));
+        } else if (OB_FAIL(check_is_rt_expand(check_refreshable_only, *mv_schema, mv_printer_ctx, is_rt_expand))) {
+          LOG_WARN("failed to check is rt expand", K(ret));
         } else {
           query_ctx->get_query_hint_for_update().reset();
           ObMVChecker checker(*view_stmt,
                               expr_factory,
                               session_info,
                               *mv_container_schema,
-                              mv_printer_ctx.for_rt_expand(),
+                              is_rt_expand,
                               fast_refreshable_note_,
                               table_referenced_columns_info);
           if (OB_FAIL(pre_process_view_stmt(*view_stmt))) {
@@ -308,7 +314,7 @@ int ObMVProvider::check_mv_refreshable(const uint64_t tenant_id,
   int ret = OB_SUCCESS;
   can_fast_refresh = false;
   ObMVProvider mv_provider(tenant_id, mview_id);
-  if (OB_FAIL(mv_provider.init_mv_provider(session_info, schema_guard, NULL, true))) {
+  if (OB_FAIL(mv_provider.init_mv_provider(session_info, schema_guard, true /*check_refreshable_only*/, NULL /*refresh_info*/))) {
     LOG_WARN("fail to init mv provider", KR(ret), K(tenant_id));
   } else if (OB_UNLIKELY(ObMVRefreshableType::OB_MV_REFRESH_INVALID == mv_provider.refreshable_type_)) {
     // column type for mv is changed after it is created
@@ -342,7 +348,7 @@ int ObMVProvider::get_mlog_mv_refresh_infos(ObSQLSessionInfo *session_info,
   ObMVPrinterRefreshInfo refresh_info(last_refresh_scn, refresh_scn);
   refresh_info.mv_last_refresh_scn_ = mv_last_refresh_scn;
   refresh_info.mv_refresh_scn_ = mv_refresh_scn;
-  if (OB_FAIL(init_mv_provider(session_info, schema_guard, &refresh_info, false))) {
+  if (OB_FAIL(init_mv_provider(session_info, schema_guard, false /*check_refreshable_only*/, &refresh_info))) {
     LOG_WARN("failed to init mv provider", K(ret));
   } else if (OB_FAIL(dep_infos.assign(dependency_infos_))) {
     LOG_WARN("failed to assign dependency_infos", K(ret));
@@ -376,7 +382,7 @@ int ObMVProvider::get_major_refresh_operators(ObSQLSessionInfo *session_info,
 {
   int ret = OB_SUCCESS;
   ObMVPrinterRefreshInfo refresh_info(last_refresh_scn, refresh_scn, part_idx, sub_part_idx, &range);
-  if (OB_FAIL(init_mv_provider(session_info, schema_guard, &refresh_info, false))) {
+  if (OB_FAIL(init_mv_provider(session_info, schema_guard, false /*check_refreshable_only*/, &refresh_info))) {
     LOG_WARN("failed to init mv provider", K(ret));
   } else if (OB_UNLIKELY(operators_.empty())) {
     ret = OB_ERR_UNEXPECTED;
@@ -400,7 +406,7 @@ int ObMVProvider::get_real_time_mv_expand_view(const uint64_t tenant_id,
   expand_view.reset();
   is_major_refresh_mview = false;
   ObMVProvider mv_provider(tenant_id, mview_id);
-  if (OB_FAIL(mv_provider.init_mv_provider(session_info, schema_guard, NULL, false))) {
+  if (OB_FAIL(mv_provider.init_mv_provider(session_info, schema_guard, false /*check_refreshable_only*/, NULL /*refresh_info*/))) {
     LOG_WARN("failed to init mv provider", K(ret));
   } else if (OB_UNLIKELY(ObMVRefreshableType::OB_MV_COMPLETE_REFRESH >= mv_provider.refreshable_type_)) {
     ret = OB_ERR_MVIEW_CAN_NOT_ON_QUERY_COMPUTE;
@@ -794,7 +800,7 @@ int ObMVProvider::get_columns_referenced_by_mv(const uint64_t tenant_id,
   
   if (OB_FAIL(table_referenced_columns_info.init())) {
     LOG_WARN("failed to init table referenced columns info", KR(ret));
-  } else if (OB_FAIL(init_mv_provider(session_info, schema_guard, NULL, true, &table_referenced_columns_info))) {
+  } else if (OB_FAIL(init_mv_provider(session_info, schema_guard, true /*check_refreshable_only*/, NULL /*refresh_info*/, &table_referenced_columns_info))) {
     LOG_WARN("failed to init mv provider", KR(ret));
   } else if (OB_FAIL(table_referenced_columns_info.append_to_table_referenced_columns(table_id, table_referenced_columns))) {
     LOG_WARN("failed to append to table referenced columns", KR(ret));
@@ -802,6 +808,35 @@ int ObMVProvider::get_columns_referenced_by_mv(const uint64_t tenant_id,
 
   return ret;
 }
+
+int ObMVProvider::check_is_rt_expand(const bool check_refreshable_only,
+                                     const ObTableSchema &mv_schema,
+                                     const ObMVPrinterCtx &mv_printer_ctx,
+                                     bool &is_rt_expand)
+{
+  int ret = OB_SUCCESS;
+  is_rt_expand = false;
+
+  // the result of this function `is_rt_expand` is passed to mv checker to decide the refresh type of a mview.
+  // if the mv provider is only used to check fast refreshable, then we should pass the on query computation definition of the mview, just like the resolver does.
+  // otherwise, `is_rt_expand` is decided by the actual usage of the mv provider:
+  //   if the mv provider is used to print the rt expand sqls, then `is_rt_expand` is true
+  //   otherwise, `is_rt_expand` is false.
+
+  if (!check_refreshable_only) {
+    if (mv_printer_ctx.for_rt_expand() && !mv_schema.mv_on_query_computation()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("need to print rt expand sqls, but the mview is not defined with on query computation", KR(ret));
+    } else {
+      is_rt_expand = mv_printer_ctx.for_rt_expand();
+    }
+  } else {
+    is_rt_expand = mv_schema.mv_on_query_computation();
+  }
+
+  return ret;
+}
+
 
 }//end of namespace sql
 }//end of namespace oceanbase

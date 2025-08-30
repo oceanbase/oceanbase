@@ -40,7 +40,8 @@ private:
                      share::schema::ObSchemaGetterGuard &schema_guard,
                      common::ObISQLClient *sql_proxy,
                      sql::ObSQLSessionInfo *session);
-  int drop_mlog(const share::schema::ObTableSchema *mlog_schema,
+  int drop_mlog(share::schema::ObSchemaGetterGuard &schema_guard,
+                const share::schema::ObTableSchema *mlog_schema,
                 const share::schema::ObTableSchema *base_table_schema,
                 const share::schema::ObDatabaseSchema *db_schema);
   int replace_mlog(const ObIArray<uint64_t> &relevent_mviews,
@@ -51,7 +52,7 @@ private:
   int check_has_build_mview_task(bool &has_build_mview_task);
   int get_relevent_mviews(common::ObISQLClient *sql_proxy,
                           share::schema::ObSchemaGetterGuard &schema_guard,
-                          const uint64_t base_table_id,
+                          const share::schema::ObTableSchema *base_table_schema,
                           ObIArray<uint64_t> &relevent_mviews);
 
 private:

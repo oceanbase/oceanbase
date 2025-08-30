@@ -102,8 +102,8 @@ public:
 private:
   int init_mv_provider(ObSQLSessionInfo *session_info,
                        ObSchemaGetterGuard *schema_guard,
-                       ObMVPrinterRefreshInfo *refresh_info,
                        const bool check_refreshable_only,
+                       ObMVPrinterRefreshInfo *refresh_info,
                        ObTableReferencedColumnsInfo *table_referenced_columns_info = nullptr);
   int check_mv_column_type(const ObTableSchema *mv_schema, const ObSelectStmt *view_stmt,
                            ObSQLSessionInfo &session);
@@ -129,6 +129,7 @@ private:
                          ObIArray<ObString> &operators);
   static int get_trans_rule_set(const ObDMLStmt *mv_def_stmt,
                                 uint64_t &rule_set);
+  int check_is_rt_expand(const bool check_refreshable_only, const ObTableSchema &mv_schema, const ObMVPrinterCtx &mv_printer_ctx, bool &is_rt_expand);
   TO_STRING_KV(K_(mview_id), K_(inited), K_(refreshable_type),
                 K_(operators), K_(dependency_infos), K_(tables_need_mlog));
 

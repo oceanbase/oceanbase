@@ -1492,7 +1492,6 @@ int ObMVChecker::check_left_table_partition_rule_valid(const ObSelectStmt &stmt,
             found_item = true;
             break;
           }
-          LOG_INFO("iter select item", K(*col_expr));
         }
       }
       if (OB_FAIL(ret)) {
