@@ -519,7 +519,7 @@ int ObInnerTableSchema::dba_ob_source_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_DBA_OB_SOURCE; )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_SOURCE; )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -570,7 +570,7 @@ int ObInnerTableSchema::all_ob_source_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_DBA_OB_SOURCE     WHERE origin_con_id != 1 AND       (owner = USER OR        USER_CAN_ACCESS_OBJ(CASE type          WHEN 'PACKAGE' THEN 3          WHEN 'PACKAGE BODY' THEN 3          WHEN 'PROCEDURE' THEN 12          WHEN 'FUNCTION' THEN 9          WHEN 'TRIGGER' THEN 7          WHEN 'TYPE' THEN 4          WHEN 'TYPE BODY' THEN 4          END, object_id, database_id) = 1)     UNION ALL     SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_DBA_OB_SOURCE WHERE origin_con_id = 1; )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_SOURCE     WHERE origin_con_id != 1 AND       (owner = USER OR        USER_CAN_ACCESS_OBJ(CASE type          WHEN 'PACKAGE' THEN 3          WHEN 'PACKAGE BODY' THEN 3          WHEN 'PROCEDURE' THEN 12          WHEN 'FUNCTION' THEN 9          WHEN 'TRIGGER' THEN 7          WHEN 'TYPE' THEN 4          WHEN 'TYPE BODY' THEN 4          END, object_id, database_id) = 1)     UNION ALL     SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_SOURCE WHERE origin_con_id = 1; )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -621,7 +621,7 @@ int ObInnerTableSchema::user_ob_source_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_DBA_OB_SOURCE WHERE owner = USER AND origin_con_id != 1; )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_SOURCE WHERE owner = USER AND origin_con_id != 1; )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

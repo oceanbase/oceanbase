@@ -856,7 +856,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12558	__all_virtual_sensitive_column_history	2	201001	1
 12559	__all_virtual_sensitive_rule_privilege	2	201001	1
 12560	__all_virtual_sensitive_rule_privilege_history	2	201001	1
-12571	__all_virtual_dba_ob_source	2	201001	1
+12571	__all_virtual_source	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
