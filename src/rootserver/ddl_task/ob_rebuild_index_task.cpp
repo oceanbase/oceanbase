@@ -1054,7 +1054,6 @@ int ObRefreshRelatedMviewsTask::process() {
     ObDDLService &ddl_service = root_service->get_ddl_service();
     ObMultiVersionSchemaService &schema_service = ddl_service.get_schema_service();
     ObSchemaGetterGuard schema_guard;
-    const ObDatabaseSchema *db_schema = nullptr;
     const ObTableSchema *base_table_schema = nullptr;
     const ObTableSchema *old_mlog_schema = nullptr;
     const ObTableSchema *new_mlog_schema = nullptr;
@@ -1094,11 +1093,6 @@ int ObRefreshRelatedMviewsTask::process() {
     } else if (!new_mlog_schema->is_tmp_mlog_table()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("not a tmp mlog table", KR(ret), K(tenant_id_), K(new_mlog_tid_));
-    } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id_, new_mlog_schema->get_database_id(), db_schema))) {
-      LOG_WARN("failed to get db schema", KR(ret), K(tenant_id_), K(new_mlog_schema->get_database_id()));
-    } else if (OB_ISNULL(db_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("database not exist", KR(ret), K(tenant_id_), K(new_mlog_schema->get_database_id()));
     } else if (OB_FAIL(ObMLogInfo::fetch_mlog_info(*GCTX.sql_proxy_, tenant_id_, new_mlog_tid_,
                                                    new_mlog_info, false /*for_update*/))) {
       LOG_WARN("failed to fetch mlog info", KR(ret), K(tenant_id_), K(new_mlog_tid_));
@@ -1115,12 +1109,18 @@ int ObRefreshRelatedMviewsTask::process() {
         if (ObObjectType::VIEW == dependency_info.get_dep_obj_type()) {
           const uint64_t mv_id = dependency_info.get_dep_obj_id();
           const ObTableSchema *mv_schema = nullptr;
+          const ObDatabaseSchema *mv_db_schema = nullptr;
           ObMViewInfo mview_info;
           if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, mv_id, mv_schema))) {
             LOG_WARN("failed to get mv schema", KR(ret), K(tenant_id_), K(mv_id));
           } else if (OB_ISNULL(mv_schema)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("mv schema is null", KR(ret), K(tenant_id_), K(mv_id));
+          } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id_, mv_schema->get_database_id(), mv_db_schema))) {
+            LOG_WARN("failed to get mv db schema", K(ret), K(tenant_id_), K(mv_id));
+          } else if (OB_ISNULL(mv_db_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("mv db schema is null", K(ret), K(tenant_id_), K(mv_id));
           } else if (!mv_schema->is_materialized_view()) {
             // ignore non-mview tables
           } else if (OB_FAIL(ObMViewInfo::fetch_mview_info(*GCTX.sql_proxy_, tenant_id_, mv_id, mview_info, false))) {
@@ -1137,7 +1137,7 @@ int ObRefreshRelatedMviewsTask::process() {
             ObSqlString sql;
             int64_t affected_rows = 0;
             if (OB_FAIL(sql.assign_fmt("CALL DBMS_MVIEW.refresh('%s.%s', 'f')",
-                                       db_schema->get_database_name_str().ptr(),
+                                       mv_db_schema->get_database_name_str().ptr(),
                                        mv_schema->get_table_name_str().ptr()))) {
               LOG_WARN("failed to assign sql", KR(ret));
             } else if (OB_FAIL(mview_pl_proxy->write(tenant_id_, sql.ptr(), affected_rows))) {
