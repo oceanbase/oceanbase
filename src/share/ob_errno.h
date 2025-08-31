@@ -2056,8 +2056,8 @@ constexpr int OB_ERR_UPDATE_TWICE = -30926;
 constexpr int OB_ERR_FLASHBACK_QUERY_WITH_UPDATE = -32491;
 constexpr int OB_ERR_UPDATE_ON_EXPR = -38104;
 constexpr int OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS = -38105;
-constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
+constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 
 
 #define OB_SUCCESS__USER_ERROR_MSG "Success"
@@ -2242,7 +2242,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_CURL_ERROR__USER_ERROR_MSG "curl error"
 #define OB_MAJOR_FREEZE_NOT_ALLOW__USER_ERROR_MSG "%s"
 #define OB_PREPARE_FREEZE_FAILED__USER_ERROR_MSG "prepare freeze failed"
-#define OB_INVALID_DATE_VALUE__USER_ERROR_MSG "Incorrect datetime value: '%.*s' for column '%s'"
+#define OB_INVALID_DATE_VALUE__USER_ERROR_MSG "Incorrect datetime value: '%.*s'%s"
 #define OB_INACTIVE_SQL_CLIENT__USER_ERROR_MSG "Inactive sql client, only read allowed"
 #define OB_INACTIVE_RPC_PROXY__USER_ERROR_MSG "Inactive rpc proxy, can not send RPC request"
 #define OB_INTERVAL_WITH_MONTH__USER_ERROR_MSG "Interval with year or month can not be converted to microseconds"
@@ -4558,8 +4558,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_FLASHBACK_QUERY_WITH_UPDATE__USER_ERROR_MSG "snapshot expression not allowed here"
 #define OB_ERR_UPDATE_ON_EXPR__USER_ERROR_MSG "Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__USER_ERROR_MSG "specified row no longer exists"
-#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__USER_ERROR_MSG "Data too long for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
+#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__USER_ERROR_MSG "Data too long for column '%.*s' at row %ld"
 
 
 #define OB_SUCCESS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: 0, Success"
@@ -9558,10 +9558,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_UPDATE_ON_EXPR__OBE_USER_ERROR_MSG "OBE-38104: Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__ORA_USER_ERROR_MSG "ORA-08006: specified row no longer exists"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__OBE_USER_ERROR_MSG "OBE-08006: specified row no longer exists"
-#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
-#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
+#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
+#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 
 extern int g_all_ob_errnos[2498];
 
