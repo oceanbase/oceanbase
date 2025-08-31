@@ -689,41 +689,34 @@ int ObTenantCheckpointSlogHandler::write_checkpoint(const ObTenantSlogCheckpoint
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  omt::ObTenant *tenant = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTenantCheckpointSlogHandler not init", K(ret));
-  } else if (OB_FAIL(gc_checkpoint_file())) {
-    LOG_WARN("fail to gc checkpoint file before checkpoint", K(ret));
-  } else if (OB_FAIL(inner_write_checkpoint(ckpt_type))) {
-    LOG_WARN("fail to inner write checkpoint", K(ret), K(ckpt_type));
-  }
-
-  // Regardless of success or failure, gc checkpoint file
-  if (OB_TMP_FAIL(gc_checkpoint_file())) {
-    LOG_WARN("fail to gc checkpoint file after checkpoint", K(ret), K(tmp_ret));
-  }
-  return ret;
-}
-
-int ObTenantCheckpointSlogHandler::inner_write_checkpoint(const ObTenantSlogCheckpointWorkflow::Type ckpt_type)
-{
-  int ret = OB_SUCCESS;
-  omt::ObTenant *tenant = static_cast<omt::ObTenant*>(share::ObTenantEnv::get_tenant());
-
- if (tenant->is_hidden()) {
+  } else if (OB_ISNULL(tenant = static_cast<omt::ObTenant*>(share::ObTenantEnv::get_tenant()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null tenant", K(ret), K(tenant));
+  } else if (tenant->is_hidden()) {
     // skip hidden tenant
     LOG_INFO("tenant is hidden while trying to process tenant slog checkpoint, skip this time");
   } else {
     // wait until another ckpt task finished...
     while (!ATOMIC_BCAS(&is_writing_checkpoint_, false, true)) {
-        if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) { // 10s
-          LOG_INFO("wait until last checkpoint finished");
-        }
-        ob_usleep(100 * 1000); // 100ms
+      if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) { // 10s
+        LOG_INFO("wait until last checkpoint finished");
+      }
+      ob_usleep(100 * 1000); // 100ms
     }
 
-    if (OB_FAIL(ObTenantSlogCheckpointWorkflow::execute(ckpt_type, *this))) {
+    if (OB_FAIL(gc_checkpoint_file())) {
+      LOG_WARN("fail to gc checkpoint file before checkpoint", K(ret));
+    } else if (OB_FAIL(ObTenantSlogCheckpointWorkflow::execute(ckpt_type, *this))) {
       LOG_WARN("failed to execute tenant slog checkpoint workflow", K(ret), K(ckpt_type));
+    }
+
+    // Regardless of success or failure, gc checkpoint file
+    if (OB_TMP_FAIL(gc_checkpoint_file())) {
+      LOG_WARN("fail to gc checkpoint file after checkpoint", K(ret), K(tmp_ret));
     }
 
     ATOMIC_STORE(&is_writing_checkpoint_, false);  // end up checkpoint

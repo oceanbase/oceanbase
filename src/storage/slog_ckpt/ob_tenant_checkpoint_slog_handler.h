@@ -212,7 +212,6 @@ private:
   int read_from_ckpt(const ObMetaDiskAddr &phy_addr, char *buf, const int64_t buf_len, int64_t &r_len);
   int read_from_slog(const ObMetaDiskAddr &phy_addr, char *buf, const int64_t buf_len, int64_t &pos);
   int remove_tablets_from_replay_map_(const share::ObLSID &ls_id);
-  int inner_write_checkpoint(const ObTenantSlogCheckpointWorkflow::Type ckpt_type);
 
   int inner_replay_deserialize(
       const char *buf,

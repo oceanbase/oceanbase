@@ -124,7 +124,7 @@ void ObTabletPointer::reset_obj()
       const int64_t ref_cnt = obj_.ptr_->dec_ref();
       if (0 == ref_cnt) {
         if (nullptr != obj_.pool_) {
-          obj_.pool_->free_obj(obj_.ptr_);
+          STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "release pool obj at ObTabletPointer is unexpected", K_(obj));
         } else {
           obj_.ptr_->~ObTablet();
           obj_.allocator_->free(obj_.ptr_);

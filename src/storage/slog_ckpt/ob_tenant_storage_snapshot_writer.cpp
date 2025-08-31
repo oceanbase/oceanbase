@@ -427,7 +427,8 @@ int ObTenantStorageSnapshotWriter::copy_tablet(
       }
     }
     const ObTabletPersisterParam param(data_version, tablet_key.ls_id_, ls_epoch, tablet_key.tablet_id_, tablet->get_transfer_seq(), tablet_meta_version);
-    if (OB_UNLIKELY(!tablet->is_empty_shell())) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(!tablet->is_empty_shell())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("addr format normal tablet's shouldn't be file", K(ret), KPC(tablet));
     } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(param, *tablet, new_empty_shell_handle))) {
