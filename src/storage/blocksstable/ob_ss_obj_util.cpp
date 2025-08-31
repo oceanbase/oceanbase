@@ -111,6 +111,12 @@ bool SSObjUtil::is_tmp_file(const ObStorageObjectType type)
 {
   return STI(type).is_tmp_file();
 }
+
+bool SSObjUtil::is_support_sn(const ObStorageObjectType type)
+{
+  return STI(type).is_support_sn();
+}
+
 int SSObjUtil::get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id)
 {
   return STI(opt.object_type_).get_object_id(opt, object_id);
@@ -194,6 +200,12 @@ bool SSObjUtil::is_tmp_file(const MacroBlockId &macro_id)
 {
   return is_tmp_file(macro_id.storage_object_type());
 }
+
+bool SSObjUtil::is_support_sn(const MacroBlockId &macro_id)
+{
+  return is_support_sn(macro_id.storage_object_type());
+}
+
 bool SSObjUtil::is_valid(const MacroBlockId &macro_id)
 {
   return STI(macro_id.storage_object_type()).is_valid(macro_id);

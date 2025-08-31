@@ -7,6 +7,7 @@
 # the generated code will be in the `ob_storage_object_type.h` and `ob_storage_object_type.cpp` files
 # if you need to modify the code in these files, please modify this file or generate_shared_object_type.py.
 # the following is the parameter description:
+#
 # required parameters:
 # obj_type: the name of the storage object type
 # owner: the owner of the storage object type
@@ -14,6 +15,7 @@
 # access_mode: the access mode of the storage object, include private, shared
 # read_odirect: whether to read the storage object directly, True or False
 # write_odirect: whether to write the storage object directly, True or False
+#
 # optional parameters: All parameters are optional, if you don't need to modify, just not add it.If you want modify, please contact zhaomiao.
 # is_pin_local: the ObjetType only store in local cache, True or False. If is_pin_local is True, is_overwrite must be true.
 # need_fsync: whether to need fsync, True or False, default is True
@@ -28,6 +30,7 @@
 # is_major: whether it is major, True or False
 # is_prewarm_file: whether it is prewarm file, True or False
 # is_tmp: whether it is tmp file, True or False
+# is_support_sn: whether it is support sn mode, True or False
 # server_tenant_can_have: whether it is 500 tenant can have, True or False
 # is_path_include_inner_tablet: whether to is path include inner tablet, True or False.
 #   a normal tablet's id is unique in tenant, but the id of a log stream internal tablet is the same in each log stream.
@@ -133,6 +136,7 @@ def_storage_object_type_cfg(
     read_odirect = False,
     write_odirect = False,
     is_support_fd_cache = True,
+    is_support_sn = True,
     is_valid = '''
 bool is_valid(const MacroBlockId &file_id) const
 {
@@ -285,6 +289,7 @@ def_storage_object_type_cfg(
     read_odirect = False,
     write_odirect = False,
     is_support_fd_cache = True,
+    is_support_sn = True,
     is_valid = '''
 bool is_valid(const MacroBlockId &file_id) const
 {
@@ -1921,6 +1926,7 @@ def_storage_object_type_cfg(
     read_odirect = True,
     write_odirect = True,
     server_tenant_can_have = True,
+    is_support_sn = True,
     is_valid = '''
 bool is_valid(const MacroBlockId &file_id) const
 {
@@ -3667,6 +3673,7 @@ def_storage_object_type_cfg(
     data_type = 'tenant_data',
     read_odirect = False,
     write_odirect = False,
+    is_support_sn = True,
     is_valid = '''
 bool is_valid(const MacroBlockId &file_id) const
 {
@@ -3742,6 +3749,18 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
   object_id.set_second_id(opt.ss_external_table_file_opt_.server_seq_id_);
   object_id.set_third_id(opt.ss_external_table_file_opt_.offset_idx_);
   return OB_SUCCESS;
+}
+''',
+    get_parent_dir = '''
+int get_parent_dir(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id, const uint64_t tenant_id, const uint64_t tenant_epoch_id, const uint64_t ls_epoch_id) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(databuff_printf(path, length, "%s/%lu_%ld/%s",
+      OB_DIR_MGR.get_local_cache_root_dir(), tenant_id, tenant_epoch_id, EXTERNAL_TABLE_FILE_DIR_STR))) {
+    LOG_WARN("failed to get external table file dir", KR(ret),
+        K(path), K(length), K(tenant_id), K(tenant_epoch_id));
+  }
+  return ret;
 }
 ''',
 )

@@ -170,11 +170,9 @@ int ObObjectManager::alloc_object(const ObStorageObjectOpt &opt, ObStorageObject
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (!is_shared_storage_) {
-    if (!(SSObjUtil::is_private(opt.object_type_) &&
-        (SSObjUtil::is_macro(opt.object_type_) || SSObjUtil::is_tenant_meta(opt.object_type_)) &&
-        ObStorageObjectType::EXTERNAL_TABLE_FILE != opt.object_type_)) {
+    if (OB_UNLIKELY(!SSObjUtil::is_support_sn(opt.object_type_))) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("only support private marco for shared-nothing", K(ret), K(opt.object_type_), K(opt));
+      LOG_WARN("not supported marco type for shared-nothing", K(ret), K(opt.object_type_), K(opt));
     } else if (CLICK_FAIL(OB_SERVER_BLOCK_MGR.alloc_object(object_handle))) {
       LOG_WARN("fail to alloc object", K(ret), K(opt));
     }

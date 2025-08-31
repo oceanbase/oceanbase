@@ -3471,6 +3471,18 @@ int ObExternalTableFileType::local_path_to_macro_id(const char *path, MacroBlock
   }
   return ret;
 }
+int ObExternalTableFileType::get_parent_dir(char *path, const int64_t length, int64_t &pos,
+  const MacroBlockId &file_id, const uint64_t tenant_id,
+  const uint64_t tenant_epoch_id, const uint64_t ls_epoch_id) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(databuff_printf(path, length, "%s/%lu_%ld/%s",
+      OB_DIR_MGR.get_local_cache_root_dir(), tenant_id, tenant_epoch_id, EXTERNAL_TABLE_FILE_DIR_STR))) {
+    LOG_WARN("failed to get external table file dir", KR(ret),
+        K(path), K(length), K(tenant_id), K(tenant_epoch_id));
+  }
+  return ret;
+}
 #endif
 
 int ObExternalTableFileType::opt_to_string(char *buf, const int64_t buf_len, int64_t &pos,

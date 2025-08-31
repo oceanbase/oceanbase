@@ -172,6 +172,8 @@ public:
   virtual bool is_mds() const { return false; }
   //the ObjectType is tmp type, true or false
   virtual bool is_tmp_file() const { return false; }
+  //whether this type of object support sn mode, true or false
+  virtual bool is_support_sn() const { return false; }
   //the ObjectType is prewarm type, true or false
   virtual bool is_prewarm_file() const { return false; }
   //the ObjectType which 500 tenant can write
@@ -226,6 +228,7 @@ public:
   virtual bool is_macro_data() const { return true; }
   virtual bool is_private() const { return true; }
   virtual bool is_support_fd_cache() const { return true; }
+  virtual bool is_support_sn() const { return true; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
   virtual bool has_effective_tablet_id() const { return true; }
 
@@ -261,6 +264,7 @@ public:
   virtual bool is_macro_meta() const { return true; }
   virtual bool is_private() const { return true; }
   virtual bool is_support_fd_cache() const { return true; }
+  virtual bool is_support_sn() const { return true; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
   virtual bool has_effective_tablet_id() const { return true; }
 
@@ -635,6 +639,7 @@ public:
   virtual bool is_private() const { return true; }
   virtual bool is_direct_read() const { return true; }
   virtual bool is_direct_write() const { return true; }
+  virtual bool is_support_sn() const { return true; }
   virtual bool server_tenant_can_have() const { return true; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
 
@@ -1783,6 +1788,7 @@ public:
   virtual ~ObExternalTableFileType() {}
   virtual bool is_tenant_data() const{ return true; }
   virtual bool is_private() const { return true; }
+  virtual bool is_support_sn() const { return true; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
 
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -1790,6 +1796,9 @@ public:
                                    const MacroBlockId &file_id, const uint64_t tenant_id,
                                    const uint64_t tenant_epoch_id, const uint64_t ls_epoch_id) const;
   virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int get_parent_dir(char *path, const int64_t length, int64_t &pos,
+                             const MacroBlockId &file_id, const uint64_t tenant_id,
+                             const uint64_t tenant_epoch_id, const uint64_t ls_epoch_id) const;
 
 #endif
   virtual int opt_to_string(char *buf, const int64_t buf_len, int64_t &pos, const ObStorageObjectOpt &opt) const;

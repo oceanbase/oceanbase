@@ -222,6 +222,8 @@ public:
   virtual bool is_mds() const { return false; }
   //the ObjectType is tmp type, true or false
   virtual bool is_tmp_file() const { return false; }
+  //whether this type of object support sn mode, true or false
+  virtual bool is_support_sn() const { return false; }
   //the ObjectType is prewarm type, true or false
   virtual bool is_prewarm_file() const { return false; }
   //the ObjectType which 500 tenant can write
@@ -744,6 +746,9 @@ public:
 
         if cfg.get('is_tmp'):
             h_f.write('  virtual bool is_tmp_file() const { return true; }\n')
+
+        if cfg.get('is_support_sn'):
+            h_f.write('  virtual bool is_support_sn() const { return true; }\n')
 
         if cfg.get('server_tenant_can_have'):
             h_f.write('  virtual bool server_tenant_can_have() const { return true; }\n')

@@ -42,6 +42,7 @@ public:
   static bool is_overwrite(const ObStorageObjectType type);
   static bool need_check_inner_tablet_type(const ObStorageObjectType type);
   static bool is_tmp_file(const ObStorageObjectType type);
+  static bool is_support_sn(const ObStorageObjectType type);
   static bool is_support_fd_cache(const ObStorageObjectType type);
   static bool use_reserved_disk_space(const ObStorageObjectType type);
   static bool is_need_stat(const ObStorageObjectType type);
@@ -64,6 +65,7 @@ public:
   static bool is_read_out_of_bounds(const MacroBlockId &macro_id);
   static bool has_effective_tablet_id(const MacroBlockId &macro_id);
   static bool is_tmp_file(const MacroBlockId &macro_id);
+  static bool is_support_sn(const MacroBlockId &macro_id);
 #ifdef OB_BUILD_SHARED_STORAGE
   static int get_open_flag_for_write(const ObStorageObjectType type);
   static int get_open_flag_for_read(const ObStorageObjectType type);
