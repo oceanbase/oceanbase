@@ -583,9 +583,10 @@ void ObPhysicalPlan::update_evolution_stat(const ObAuditRecordData &record)
     ATOMIC_AAF(&(stat_.evolution_stat_.cpu_time_), record.exec_timestamp_.executor_t_);
     ATOMIC_AAF(&(stat_.evolution_stat_.elapsed_time_), record.get_elapsed_time());
     ATOMIC_STORE(&(stat_.evolution_stat_.last_exec_ts_), record.exec_timestamp_.executor_end_ts_);
-    ObEvolutionRecords *evo_records = ATOMIC_LOAD(&(stat_.evolution_stat_.records_));
-    if (NULL != evo_records) {
-      evo_records->set_record_for_finish_plan(record.exec_timestamp_.receive_ts_, record.get_elapsed_time());
+    ObEvoRecordsGuard guard;
+    stat_.get_evo_records(guard);
+    if (NULL != guard.get_evo_records()) {
+      guard.get_evo_records()->set_record_for_finish_plan(record.exec_timestamp_.receive_ts_, record.get_elapsed_time());
     }
   }
 }
