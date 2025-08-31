@@ -4734,7 +4734,7 @@ int ObTenantDagScheduler::diagnose_minor_exe_dag(
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid arugment", K(ret), KP(merge_dag_info));
   } else if (OB_UNLIKELY(dag_prio != ObDagPrio::DAG_PRIO_COMPACTION_MID
-                         || dag_prio != ObDagPrio::DAG_PRIO_MDS_COMPACTION_MID)) {
+                         && dag_prio != ObDagPrio::DAG_PRIO_MDS_COMPACTION_MID)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid argument, un-expected dag prio", K(ret), K(dag_prio));
   } else if (OB_FAIL(prio_sche_[dag_prio].diagnose_minor_exe_dag(*merge_dag_info, progress))) {
