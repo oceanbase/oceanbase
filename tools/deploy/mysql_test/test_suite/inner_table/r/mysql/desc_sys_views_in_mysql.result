@@ -5796,6 +5796,7 @@ OBJECT_ID	bigint(20)	NO
 TABLEGROUP_NAME	varchar(128)	NO		NULL	
 TABLEGROUP_ID	bigint(20)	NO		NULL	
 SHARDING	varchar(10)	NO			
+INDEX_TYPE	varchar(6)	NO			
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_TABLE_LOCATIONS|%') then 2

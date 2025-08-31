@@ -343,13 +343,16 @@ const int64_t OB_MAX_AUX_TABLE_PER_MAIN_TABLE = OB_MAX_INDEX_PER_TABLE * OB_MAX_
 // The max tablet count of a transfer is one data table tablet with max aux tablets bound together.
 const int64_t OB_MAX_TRANSFER_BINDING_TABLET_CNT = OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1; // 518
 
-// Note: When adding new index type, you should modifiy "tools/obtest/t/quick/partition_balance.test" and
+// Note:
+// - When adding new index type, you should modifiy "tools/obtest/t/quick/partition_balance.test" and
 //       "tools/obtest/t/shared_storage/local_cache/partition_balance.test" to verify that all aux tables of the new index
 //       can be properly distributed after table creation and partition rebalanceing.
 //
 //       If the new index has multiple aux tables, you need to make sure that OB_MAX_AUX_TABLE_PER_MAIN_TABLE is correct and
 //       modify "tools/obtest/t/quick/include/transfer_max_aux.test" to verify that a partition with
 //       max aux tables can be transferred.
+// - When adding a new index type, make sure to add it to INDEX_TYPE field of DBA_OB_TABLE_LOCATIONS and CDB_OB_TABLE_LOCATIONS
+//   to distinguish between global and local index
 enum ObIndexType
 {
   INDEX_TYPE_IS_NOT = 0,//is not index table
