@@ -259,6 +259,7 @@ void ObTableScanIterator::reuse()
   main_iter_ = NULL;
   reuse_row_iters();
   sample_ranges_.reuse();
+  main_table_param_.reuse();
 }
 
 void ObTableScanIterator::reset_for_switch()

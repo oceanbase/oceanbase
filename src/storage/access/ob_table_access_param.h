@@ -46,6 +46,7 @@ struct ObTableIterParam
 public:
   ObTableIterParam();
   virtual ~ObTableIterParam();
+  void reuse();
   void reset();
   OB_INLINE bool is_valid() const
   {
@@ -250,6 +251,7 @@ struct ObTableAccessParam
 public:
   ObTableAccessParam();
   virtual ~ObTableAccessParam();
+  void reuse();
   void reset();
   OB_INLINE bool is_valid() const { return is_inited_ && iter_param_.is_valid(); }
   // used for query
