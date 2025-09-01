@@ -446,6 +446,8 @@ int ObPhyLocationGetter::build_related_tablet_info(const ObTableLocation &table_
 
 OB_SERIALIZE_MEMBER(ObTableRowCount, op_id_, row_count_);
 
+
+
 int ObConfigInfoInPC::load_influence_plan_config()
 {
   int ret = OB_SUCCESS;
