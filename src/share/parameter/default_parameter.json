@@ -168,8 +168,8 @@
         },
         {
           "name": "default_load_mode",
-          "value": "FULL_DIRECT_WRITE",
-          "comment": "for classic OLAP workloads, the default import is full direct load"
+          "value": "DISABLED",
+          "comment": "for classic OLAP workloads, the default import is not-direct load"
         },
         {
           "name": "direct_load_allow_fallback",
