@@ -111,13 +111,14 @@ void TestTmpFile::TearDown()
 
 void TestTmpFile::check_final_status()
 {
+  ObSSTmpFileFlushManager &flush_mgr = MTL(ObTenantTmpFileManager *)->get_ss_file_manager().flush_mgr_;
   ASSERT_LE(MTL(ObTenantTmpFileManager *)->get_ss_file_manager().wbp_.default_wbp_memory_limit_, SMALL_WBP_MEM_LIMIT);
-  MTL(ObTenantTmpFileManager *)->get_ss_file_manager().flush_mgr_.print_stat_info();
+  flush_mgr.print_stat_info();
   bool is_over = false;
   const int64_t max_wait_cnt = 50;
   int cnt = 0;
   while (!is_over) {
-    is_over = MTL(ObTenantTmpFileManager *)->get_ss_file_manager().flush_mgr_.wait_task_queue_.queue_length_ == 0;
+    is_over = flush_mgr.wait_task_queue_.get_queue_length() == 0 && !ATOMIC_LOAD(&flush_mgr.is_processing_wait_task_);
     if (!is_over) {
       if (cnt++ > max_wait_cnt) {
         is_over = true;
@@ -126,13 +127,13 @@ void TestTmpFile::check_final_status()
       }
     }
   }
-  MTL(ObTenantTmpFileManager *)->get_ss_file_manager().flush_mgr_.print_stat_info();
-  ASSERT_EQ(0, MTL(ObTenantTmpFileManager *)->get_ss_file_manager().flush_mgr_.flush_prio_mgr_.get_file_size());
-  ASSERT_EQ(0, MTL(ObTenantTmpFileManager *)->get_ss_file_manager().flush_mgr_.wait_task_queue_.queue_length_);
-  ASSERT_EQ(0, MTL(ObTenantTmpFileManager *)->get_ss_file_manager().flush_mgr_.f1_cnt_);
-  ASSERT_EQ(0, MTL(ObTenantTmpFileManager *)->get_ss_file_manager().flush_mgr_.f2_cnt_);
-  ASSERT_EQ(0, MTL(ObTenantTmpFileManager *)->get_ss_file_manager().flush_mgr_.f3_cnt_);
-  ASSERT_EQ(0, MTL(ObTenantTmpFileManager *)->get_ss_file_manager().flush_mgr_.total_flushing_page_num_);
+  flush_mgr.print_stat_info();
+  ASSERT_EQ(0, flush_mgr.flush_prio_mgr_.get_file_size());
+  ASSERT_EQ(0, flush_mgr.wait_task_queue_.get_queue_length());
+  ASSERT_EQ(0, flush_mgr.f1_cnt_);
+  ASSERT_EQ(0, flush_mgr.f2_cnt_);
+  ASSERT_EQ(0, flush_mgr.f3_cnt_);
+  ASSERT_EQ(0, flush_mgr.total_flushing_page_num_);
 }
 
 // generate 2MB random data (will not trigger flush and evict logic)
@@ -620,7 +621,7 @@ TEST_F(TestTmpFile, test_prefetch_read)
   io_info.io_desc_.set_wait_event(2);
   io_info.buf_ = write_buf;
   io_info.size_ = write_size;
-  io_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  io_info.io_timeout_ms_ = IO_WAIT_TIME_MS;
 
   // 1. Write data and wait flushing over
   int64_t write_time = ObTimeUtility::current_time();
