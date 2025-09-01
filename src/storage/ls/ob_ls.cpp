@@ -447,11 +447,11 @@ int ObLS::set_finish_ha_state()
   return ret;
 }
 
-int ObLS::set_remove_state()
+int ObLS::set_remove_state(const bool write_slog)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ls_meta_.set_remove_state())) {
-    LOG_WARN("set remove state failed", K(ret), K_(ls_meta));
+  if (OB_FAIL(ls_meta_.set_remove_state(write_slog))) {
+    LOG_WARN("set remove state failed", K(ret), K_(ls_meta), K(write_slog));
   } else {
     update_state_seq_();
   }
