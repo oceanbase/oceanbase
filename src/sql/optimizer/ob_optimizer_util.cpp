@@ -5447,10 +5447,6 @@ int ObOptimizerUtil::compute_stmt_interesting_order(const ObIArray<OrderItem> &o
     bool check_distinct = (check_scope & OrderingCheckScope::CHECK_DISTINCT) > 0;
     bool check_set = (check_scope & OrderingCheckScope::CHECK_SET) > 0;
     bool check_order = (check_scope & OrderingCheckScope::CHECK_ORDERBY) > 0;
-    bool has_group = false;
-    bool has_distinct = false;
-    bool has_winfunc = false;
-    bool has_orderby = stmt->has_order_by();
     bool winfunc_require_sort = false;
     bool group_match = false;
     bool winfunc_match = false;
@@ -5459,12 +5455,20 @@ int ObOptimizerUtil::compute_stmt_interesting_order(const ObIArray<OrderItem> &o
     bool orderby_match = false;
     if (stmt->is_select_stmt()) {
       select_stmt = static_cast<const ObSelectStmt*>(stmt);
-      has_group = select_stmt->get_group_expr_size() > 0 || select_stmt->get_rollup_expr_size() > 0;
-      has_distinct = select_stmt->has_distinct();
-      has_winfunc = select_stmt->has_window_function();
+      check_group &= select_stmt->get_group_expr_size() > 0 || select_stmt->get_rollup_expr_size() > 0;
+      check_distinct &= select_stmt->has_distinct();
+      check_winfunc &= select_stmt->has_window_function();
+      check_set &= is_parent_set_distinct;
+    } else {
+      check_group = false;
+      check_distinct = false;
+      check_winfunc = false;
+      check_set = false;
     }
+    check_order &= stmt->has_order_by();
+    bool check_next = true;
 
-    if (has_group && check_group) {
+    if (check_group) {
       prefix_count = 0;
       //group by 是否匹配索引前缀
       if (OB_FAIL(is_group_by_match(ordering, select_stmt, equal_sets, const_exprs,
@@ -5475,7 +5479,11 @@ int ObOptimizerUtil::compute_stmt_interesting_order(const ObIArray<OrderItem> &o
         match_info |= OrderingFlag::GROUP_MATCH;
         LOG_TRACE("ordering is math group by", K(max_prefix_count), K(prefix_count));
       }
-    } else if (has_winfunc && check_winfunc) {
+      // the ordering of groupby output must be the subset of the input
+      check_next = false;
+    }
+
+    if (OB_SUCC(ret) && check_next && check_winfunc) {
       prefix_count = 0;
       if (OB_FAIL(is_winfunc_match(ordering, select_stmt, equal_sets, const_exprs,
                                    prefix_count, winfunc_match, winfunc_require_sort))) {
@@ -5485,60 +5493,58 @@ int ObOptimizerUtil::compute_stmt_interesting_order(const ObIArray<OrderItem> &o
         match_info |= OrderingFlag::WINFUNC_MATCH;
         LOG_TRACE("ordering is match window function", K(max_prefix_count), K(prefix_count));
       }
+      check_next = !winfunc_require_sort;
     }
-    if (OB_SUCC(ret) && (!check_group || !has_group) && !winfunc_require_sort) {
-      //没有group并且窗口函数不需要排序的情况下，看distinct和 order by 和 set
-      if (has_distinct && check_distinct) {
-        prefix_count = 0;
-        if (OB_FAIL(is_distinct_match(ordering_exprs, select_stmt, equal_sets, const_exprs,
-                                      prefix_count, distinct_match))) {
-          LOG_WARN("failed to check is distinct match", K(ret));
-        } else if (distinct_match) {
+
+    if (OB_SUCC(ret) && check_next && check_distinct) {
+      prefix_count = 0;
+      if (OB_FAIL(is_distinct_match(ordering_exprs, select_stmt, equal_sets, const_exprs,
+                                    prefix_count, distinct_match))) {
+        LOG_WARN("failed to check is distinct match", K(ret));
+      } else if (distinct_match) {
+        max_prefix_count = std::max(max_prefix_count, prefix_count);
+        match_info |= OrderingFlag::DISTINCT_MATCH;
+        LOG_TRACE("ordering is math distinct", K(max_prefix_count), K(prefix_count));
+      }
+      // the ordering of distinct output must be the subset of the input
+      check_next = false;
+    }
+
+    if (OB_SUCC(ret) && check_next && check_order) {
+      prefix_count = 0;
+      bool full_coverd = false;
+      if (OB_FAIL(is_order_by_match(ordering, stmt, equal_sets, const_exprs,
+                                    prefix_count, orderby_match, full_coverd))) {
+        LOG_WARN("failed to check is order by match", K(ret));
+      } else if (orderby_match) {
+        max_prefix_count = std::max(max_prefix_count, prefix_count);
+        match_info |= OrderingFlag::ORDERBY_MATCH;
+        LOG_TRACE("ordering is math order by", K(max_prefix_count), K(prefix_count));
+      }
+      check_next = orderby_match && full_coverd;
+    }
+
+    if (OB_SUCC(ret) && check_next && check_set) {
+      //没有distinct的情况下才看 set(union/interscept)
+      prefix_count = 0;
+      if (NULL != select_stmt && is_parent_set_distinct) {
+        if (OB_FAIL(is_set_match(ordering_exprs, select_stmt, equal_sets, const_exprs,
+                                 prefix_count, set_match))) {
+          LOG_WARN("failed to check is set match", K(ret));
+        } else if (set_match) {
           max_prefix_count = std::max(max_prefix_count, prefix_count);
-          match_info |= OrderingFlag::DISTINCT_MATCH;
-          LOG_TRACE("ordering is math distinct", K(max_prefix_count), K(prefix_count));
-        }
-      } else if (check_set) {
-        //没有distinct的情况下才看 set(union/interscept)
-        prefix_count = 0;
-        if (NULL != select_stmt && is_parent_set_distinct) {
-          if (OB_FAIL(is_set_match(ordering_exprs, select_stmt, equal_sets, const_exprs,
-                                   prefix_count, set_match))) {
-            LOG_WARN("failed to check is set match", K(ret));
-          } else if (set_match) {
-            max_prefix_count = std::max(max_prefix_count, prefix_count);
-            match_info |= OrderingFlag::SET_MATCH;
-            LOG_TRACE("ordering is match set", K(max_prefix_count), K(prefix_count));
-          }
+          match_info |= OrderingFlag::SET_MATCH;
+          LOG_TRACE("ordering is match set", K(max_prefix_count), K(prefix_count));
         }
       }
-      /**
-       * stmt without groupby (not just select)
-       */
-      if (OB_SUCC(ret) && has_orderby && check_order) {
-        prefix_count = 0;
-        if (OB_FAIL(is_order_by_match(ordering, stmt, equal_sets, const_exprs,
-                                      prefix_count, orderby_match))) {
-          LOG_WARN("failed to check is order by match", K(ret));
-        } else if (orderby_match) {
-          max_prefix_count = std::max(max_prefix_count, prefix_count);
-          match_info |= OrderingFlag::ORDERBY_MATCH;
-          LOG_TRACE("ordering is math order by", K(max_prefix_count), K(prefix_count));
-        }
-      }
+      check_next = false;
     }
+
     if (OB_SUCC(ret)) {
       max_prefix_count_ptr = max_prefix_count;
     }
-    if (OB_SUCC(ret) && in_subplan_scan && !ordering_exprs.empty()) {
-      if ((check_group && has_group && !group_match) ||
-          (check_winfunc && winfunc_require_sort) ||
-          (check_distinct && has_distinct && !distinct_match) ||
-          (check_order && has_orderby && !orderby_match)) {
-        // do nothing
-      } else {
-        match_info |= OrderingFlag::POTENTIAL_MATCH;
-      }
+    if (OB_SUCC(ret) && check_next && in_subplan_scan && !ordering_exprs.empty()) {
+      match_info |= OrderingFlag::POTENTIAL_MATCH;
     }
   }
   return ret;
@@ -5617,6 +5623,14 @@ int ObOptimizerUtil::compute_stmt_interesting_order(const ObIArray<OrderItem> &o
         match_info |= OrderingFlag::DISTINCT_MATCH;
         LOG_TRACE("ordering is math distinct");
       }
+    } else if (has_orderby && check_order) {
+      if (OB_FAIL(is_order_by_match(stmt->get_order_items(), ordering,
+                                    equal_sets, const_exprs, is_match))) {
+        LOG_WARN("failed to check is order by match", K(ret));
+      } else if (is_match) {
+        match_info |= OrderingFlag::ORDERBY_MATCH;
+        LOG_TRACE("ordering is math order by");
+      }
     } else if (check_set && NULL != select_stmt && is_parent_set_distinct) {
       ObSEArray<ObRawExpr *, 4> select_exprs;
       if (OB_FAIL(select_stmt->get_select_exprs(select_exprs))) {
@@ -5627,14 +5641,6 @@ int ObOptimizerUtil::compute_stmt_interesting_order(const ObIArray<OrderItem> &o
       } else if (is_match) {
         match_info |= OrderingFlag::SET_MATCH;
         LOG_TRACE("ordering is match set");
-      }
-    } else if (has_orderby && check_order) {
-      if (OB_FAIL(is_order_by_match(stmt->get_order_items(), ordering,
-                                    equal_sets, const_exprs, is_match))) {
-        LOG_WARN("failed to check is order by match", K(ret));
-      } else if (is_match) {
-        match_info |= OrderingFlag::ORDERBY_MATCH;
-        LOG_TRACE("ordering is math order by");
       }
     } else if (in_subplan_scan) {
       match_info |= OrderingFlag::POTENTIAL_MATCH;
@@ -6001,11 +6007,12 @@ int ObOptimizerUtil::is_order_by_match(const ObIArray<OrderItem> &ordering,
                                        const EqualSets &equal_sets,
                                        const ObIArray<ObRawExpr *> &const_exprs,
                                        int64_t &match_prefix,
-                                       bool &sort_match)
+                                       bool &sort_match,
+                                       bool &full_covered)
 {
   int ret = OB_SUCCESS;
   int64_t match_count = 0;
-  bool dummy_full_covered = false;
+  full_covered = false;
   match_prefix = 0;
   sort_match = false;
   if (OB_ISNULL(stmt)) {
@@ -6016,7 +6023,7 @@ int ObOptimizerUtil::is_order_by_match(const ObIArray<OrderItem> &ordering,
                                                   0,  // input ordering offser
                                                   equal_sets,
                                                   const_exprs,
-                                                  dummy_full_covered,
+                                                  full_covered,
                                                   match_count))) {
     LOG_WARN("failed to match order by against index", K(ret));
   } else if (match_count > 0) {
