@@ -210,10 +210,22 @@ int ObHMSClientPool::get_client(ObHiveMetastoreClient *&client)
         int tmp_ret = try_get_client_from_queue_unlocked_(client);
         if (OB_SUCCESS == tmp_ret) {
           got_client = true;
-        } else if (idle_clients_available_unlocked_() || !is_pool_full_unlocked_()) {
+        } else if (can_create_client_unlocked_()) {
+          LOG_TRACE("try to create and get client",
+                    K(ret),
+                    K(tmp_ret),
+                    K(total_clients_),
+                    K(in_use_clients_),
+                    K(pool_size_));
           tmp_ret = try_create_and_get_client_unlocked_(client);
           if (OB_SUCCESS == tmp_ret) {
             got_client = true;
+            LOG_TRACE("got client",
+                      K(ret),
+                      K(tmp_ret),
+                      K(total_clients_),
+                      K(in_use_clients_),
+                      K(pool_size_));
           } else if (OB_INVALID_HMS_METASTORE == tmp_ret) {
             ret = OB_INVALID_HMS_METASTORE;
             LOG_WARN("invalid metastore to skip try again", K(ret));
@@ -233,7 +245,9 @@ int ObHMSClientPool::get_client(ObHiveMetastoreClient *&client)
       }
 
       // Check timeout and wait if we haven't got client yet
-      if (!got_client) {
+      if (OB_FAIL(ret)) {
+        LOG_WARN("failed to get client", K(ret));
+      } else if (!got_client) {
         const int64_t elapsed_time = ObTimeUtility::current_time() - start_time;
         if (elapsed_time >= timeout_us) {
           ret = OB_TIMEOUT;
@@ -265,6 +279,13 @@ int ObHMSClientPool::get_client(ObHiveMetastoreClient *&client)
             }
             break;
           }
+          LOG_TRACE("wait for available client done",
+                    K(ret),
+                    K(total_clients_),
+                    K(in_use_clients_),
+                    K(pool_size_),
+                    K(elapsed_time),
+                    K(remaining_time));
         }
       }
     } while (OB_SUCC(ret) && !got_client);
@@ -314,8 +335,8 @@ int ObHMSClientPool::return_client(ObHiveMetastoreClient *&client)
 
     last_access_ts_ = ObTimeUtility::current_time();
 
-    // Check if pool size has been reduced and we need to shrink the pool
-    if (OB_LIKELY(is_pool_full_unlocked_())) {
+    // Check if pool size has been reduced and we need to shrink the pool.
+    if (OB_LIKELY(can_destroy_client_unlocked_())) {
       // Pool is full (or over capacity due to configuration change), destroy the client
       LOG_TRACE("pool is full, destroying returned client to shrink pool size",
                 K(ret),
@@ -469,12 +490,22 @@ int ObHMSClientPool::cleanup()
 
 bool ObHMSClientPool::is_pool_full_unlocked_()
 {
-  return total_clients_ > pool_size_;
+  return total_clients_ > pool_size_ && pool_size_ > 0;
 }
 
 bool ObHMSClientPool::idle_clients_available_unlocked_()
 {
   return total_clients_ > in_use_clients_;
+}
+
+bool ObHMSClientPool::can_create_client_unlocked_()
+{
+  return idle_clients_available_unlocked_() || !is_pool_full_unlocked_() || pool_size_ <= 0;
+}
+
+bool ObHMSClientPool::can_destroy_client_unlocked_()
+{
+  return is_pool_full_unlocked_() || pool_size_ <= 0;
 }
 
 int ObHMSClientPool::create_new_client_unlocked_()
@@ -577,6 +608,7 @@ int ObHMSClientPool::try_get_client_from_queue_unlocked_(ObHiveMetastoreClient *
     }
   } else {
     ret = OB_ENTRY_NOT_EXIST; // No client available in queue
+    LOG_WARN("no client available in queue", K(ret));
   }
 
   return ret;
