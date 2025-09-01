@@ -396,9 +396,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
         ObString sp_info_str;
         char *buf = nullptr;
         int64_t buf_len =
-            plan->stat_.sp_info_str_.length() > OB_MAX_COMMAND_LENGTH
+            (plan->stat_.sp_info_str_.length() + 1) > OB_MAX_COMMAND_LENGTH
                 ? OB_MAX_COMMAND_LENGTH
-                : plan->stat_.sp_info_str_.length();
+                : plan->stat_.sp_info_str_.length() + 1;
         if (buf_len > 0 && OB_ISNULL(buf = static_cast<char *>(allocator_->alloc(buf_len)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           SERVER_LOG(ERROR, "allocate memory failed!", K(ret), K(buf_len));
@@ -459,9 +459,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
         }
         char *buf = nullptr;
         int64_t buf_len =
-            origin_str.length() > OB_MAX_COMMAND_LENGTH
+            (origin_str.length() + 1) > OB_MAX_COMMAND_LENGTH
                 ? OB_MAX_COMMAND_LENGTH
-                : origin_str.length();
+                : origin_str.length() + 1;
         if (OB_FAIL(ret)) {
         } else if (buf_len > 0 && OB_ISNULL(buf = static_cast<char *>(allocator_->alloc(buf_len)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -491,9 +491,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
         }
         char *buf = nullptr;
         int64_t buf_len =
-            origin_str.length() > OB_MAX_COMMAND_LENGTH
+            (origin_str.length() + 1) > OB_MAX_COMMAND_LENGTH
                 ? OB_MAX_COMMAND_LENGTH
-                : origin_str.length();
+                : origin_str.length() + 1;
         if (buf_len > 0 && OB_ISNULL(buf = static_cast<char *>(allocator_->alloc(buf_len)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           SERVER_LOG(ERROR, "allocate memory failed!", K(ret), K(buf_len));

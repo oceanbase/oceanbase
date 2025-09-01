@@ -602,27 +602,27 @@ int ObConfigInfoInPC::serialize_configs(char *buf, int buf_len, int64_t &pos)
                                "%d,", enable_hyperscan_regexp_engine_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_hyperscan_regexp_engine_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-                               "%d", realistic_runtime_bloom_filter_size_))) {
+                               "%d,", realistic_runtime_bloom_filter_size_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(realistic_runtime_bloom_filter_size_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                "%d,", enable_parallel_das_dml_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_parallel_das_dml_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-                               "%d", direct_load_allow_fallback_))) {
+                               "%d,", direct_load_allow_fallback_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(direct_load_allow_fallback_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-                               "%d", default_load_mode_))) {
+                               "%d,", default_load_mode_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(default_load_mode_));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%d", hash_rollup_policy_))) {
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%d,", hash_rollup_policy_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(hash_rollup_policy_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                "%d,", enable_nlj_spf_use_rich_format_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_nlj_spf_use_rich_format_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-                               "%d", ndv_runtime_bloom_filter_size_))) {
+                               "%d,", ndv_runtime_bloom_filter_size_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(ndv_runtime_bloom_filter_size_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-                               "%d", enable_index_merge_))) {
+                               "%d,", enable_index_merge_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_index_merge_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                               "%d,", enable_distributed_das_scan_))) {
