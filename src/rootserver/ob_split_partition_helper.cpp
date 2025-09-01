@@ -311,8 +311,13 @@ int ObSplitPartitionHelper::check_enable_global_index_auto_split(
       }
       if (OB_SUCC(ret) && enable_auto_split) {
         const int64_t data_auto_part_size = data_table_schema.get_part_option().get_auto_part_size();
-        auto_part_size = data_table_schema.get_part_option().is_valid_auto_part_size() ? data_auto_part_size : tenant_config->auto_split_tablet_size;
-        LOG_INFO("enable global index auto split by tenant config", K(auto_part_size), K(data_auto_part_size), K(policy_str));
+        int64_t tenant_auto_part_size = tenant_config->auto_split_tablet_size;
+        const int64_t errsim_auto_part_size = OB_E(common::EventTable::EN_AUTO_SPLIT_TABLET_SIZE) 0;
+        if (0 != errsim_auto_part_size) {
+          tenant_auto_part_size = std::abs(errsim_auto_part_size);
+        }
+        auto_part_size = data_table_schema.get_part_option().is_valid_auto_part_size() ? data_auto_part_size : tenant_auto_part_size;
+        LOG_INFO("enable global index auto split by tenant config", K(auto_part_size), K(data_auto_part_size), K(tenant_auto_part_size), K(errsim_auto_part_size), K(policy_str));
       }
     }
   }

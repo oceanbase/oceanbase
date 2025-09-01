@@ -1757,6 +1757,18 @@ int ObAutoSplitArgBuilder::build_alter_table_schema_(const uint64_t tenant_id,
   return ret;
 }
 
+int ObAutoSplitArgBuilder::check_null_value(const ObRowkey &high_bound_val)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < high_bound_val.get_obj_cnt(); i++) {
+    if (OB_UNLIKELY(high_bound_val.get_obj_ptr()[i].is_null())) {
+      ret = OB_EER_NULL_IN_VALUES_LESS_THAN;
+      LOG_WARN("null value is not allowed in less than", K(ret), K(i), K(high_bound_val));
+    }
+  }
+  return ret;
+}
+
 int ObAutoSplitArgBuilder::build_partition_(const uint64_t tenant_id, const uint64_t table_id,
                                             const ObTabletID split_source_tablet_id,
                                             const ObRowkey &high_bound_val,
@@ -1767,11 +1779,13 @@ int ObAutoSplitArgBuilder::build_partition_(const uint64_t tenant_id, const uint
   bool need_cast = false;
   ObRowkey cast_high_bound_val;
   common::ObArenaAllocator cast_allocator;
+  const ObRowkey *target_high_bound_val = nullptr;
   if (OB_FAIL(check_and_cast_high_bound(high_bound_val, tz_info, cast_high_bound_val, need_cast, cast_allocator))) {
     LOG_WARN("failed to check cast high bound", K(ret));
-  } else if (need_cast && OB_FAIL(new_part.set_high_bound_val(cast_high_bound_val))) {
-    LOG_WARN("failed to set high_bound_val", KR(ret));
-  } else if (!need_cast && OB_FAIL(new_part.set_high_bound_val(high_bound_val))) {
+  } else if (OB_FALSE_IT(target_high_bound_val = need_cast ? &cast_high_bound_val : &high_bound_val)) {
+  } else if (OB_FAIL(check_null_value(*target_high_bound_val))) {
+    LOG_WARN("failed to check null value in high bound val", K(ret), K(need_cast), K(high_bound_val), KPC(target_high_bound_val));
+  } else if (OB_FAIL(new_part.set_high_bound_val(*target_high_bound_val))) {
     LOG_WARN("failed to set high_bound_val", KR(ret));
   } else {
     new_part.set_is_empty_partition_name(true);

@@ -265,6 +265,7 @@ private:
                                 bool &need_cast,
                                 ObIAllocator &allocator);
   int check_need_to_cast(const ObObj &obj, bool &need_to_cast);
+  int check_null_value(const ObRowkey &high_bound_val);
 private:
   static const int32_t MAX_SPLIT_PARTITION_NUM = 2;
 };
