@@ -261,7 +261,7 @@ int ObDbmsStatsMaintenanceWindow::get_spm_stats_job_info(const bool is_oracle_mo
     job_info.repeat_interval_ = ObString("FREQ=DAYLY; INTERVAL=1");
     job_info.enabled_ = true;
     job_info.auto_drop_ = false;
-    job_info.max_run_duration_ = 10 * 60; // 10 min
+    job_info.max_run_duration_ = 60 * 60; // 1 hour
     job_info.exec_env_ = exec_env;
     job_info.comments_ = ObString("used to handle spm stats");
     job_info.func_type_ = dbms_scheduler::ObDBMSSchedFuncType::STAT_MAINTENANCE_JOB;

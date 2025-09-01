@@ -166,6 +166,10 @@ public:
                         int64_t record_type);
   int delete_timeout_record(const uint64_t tenant_id, const uint64_t current_time);
 
+  int batch_delete_rows(const uint64_t exec_tenant_id,
+                        ObSqlString &delete_sql,
+                        const int64_t batch_size,
+                        int64_t &total_affected_rows);
   int update_baseline_item_verify_result(ObMySQLTransaction& trans,
                                          const uint64_t tenant_id,
                                          const ObBaselineKey& key,
