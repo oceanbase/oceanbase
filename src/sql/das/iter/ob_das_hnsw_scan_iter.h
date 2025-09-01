@@ -61,6 +61,7 @@ public:
       com_aux_vec_iter_(nullptr),
       rowkey_vid_iter_(nullptr),
       data_filter_iter_(nullptr),
+      pre_scan_param_(nullptr),
       vec_aux_ctdef_(nullptr),
       vec_aux_rtdef_(nullptr),
       vid_rowkey_ctdef_(nullptr),
@@ -84,6 +85,7 @@ public:
            nullptr != snapshot_iter_ &&
            nullptr != vid_rowkey_iter_ &&
            nullptr != com_aux_vec_iter_ &&
+           nullptr != pre_scan_param_ &&
            nullptr != vec_aux_ctdef_ &&
            nullptr != vec_aux_rtdef_ &&
            nullptr != vid_rowkey_ctdef_ &&
@@ -116,6 +118,7 @@ public:
   ObDASScanIter *com_aux_vec_iter_;
   ObDASScanIter *rowkey_vid_iter_;
   ObDASScanIter *data_filter_iter_;
+  ObTableScanParam* pre_scan_param_;
   const ObDASVecAuxScanCtDef *vec_aux_ctdef_;
   ObDASVecAuxScanRtDef *vec_aux_rtdef_;
   const ObDASScanCtDef *vid_rowkey_ctdef_;
@@ -228,6 +231,7 @@ public:
       vid_rowkey_tablet_id_(ObTabletID::INVALID_TABLET_ID),
       com_aux_vec_tablet_id_(ObTabletID::INVALID_TABLET_ID),
       rowkey_vid_tablet_id_(ObTabletID::INVALID_TABLET_ID),
+      pre_scan_param_(nullptr),
       delta_buf_scan_param_(),
       index_id_scan_param_(),
       snapshot_scan_param_(),
@@ -303,6 +307,7 @@ protected:
   virtual int inner_get_next_rows(int64_t &count, int64_t capacity) override;
 
 private:
+  int reuse_pre_filter_by_type();
   int build_rowkey_vid_range();
   bool is_hnsw_bq() const { return OB_NOT_NULL(vec_aux_ctdef_) && vec_aux_ctdef_->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ;}
   bool need_save_distance_result() {
@@ -447,6 +452,7 @@ private:
   ObTabletID com_aux_vec_tablet_id_;
   ObTabletID rowkey_vid_tablet_id_;
 
+  ObTableScanParam* pre_scan_param_;
   ObTableScanParam delta_buf_scan_param_;
   ObTableScanParam index_id_scan_param_;
   ObTableScanParam snapshot_scan_param_;

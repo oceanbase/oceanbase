@@ -3388,6 +3388,7 @@ int ObDASIterUtils::create_vec_hnsw_lookup_tree(ObTableScanParam &scan_param,
         hnsw_scan_param.vec_idx_try_path_ = vec_aux_ctdef->adaptive_try_path_;
         hnsw_scan_param.can_extract_range_ = vec_aux_ctdef->can_extract_range_;
         hnsw_scan_param.is_primary_index_ = is_primary_index;
+        hnsw_scan_param.pre_scan_param_ = &scan_param;
         uint64_t batch_count = hnsw_scan_param.max_size_;
 
         if (OB_SUCC(ret) && (vec_aux_ctdef->is_iter_filter() || can_use_adaptive_path)) {
