@@ -369,6 +369,8 @@ bool ObSqlParameterization::is_tree_not_param(const ParseNode *tree)
     ret_bool = true;
   } else if (T_WIN_NAMED_WINDOWS == tree->type_) {//name window无法参数化，因为无法保证其参数化顺序
     ret_bool = true;
+  } else if (T_VEC_INDEX_PARAMS == tree->type_) {
+    ret_bool = true;
   } else {
     // do nothing
   }
