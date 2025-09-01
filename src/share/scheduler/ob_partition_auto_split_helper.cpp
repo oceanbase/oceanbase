@@ -2121,26 +2121,28 @@ int ObSplitSampler::query_ranges_(const uint64_t tenant_id, const ObString &db_n
                       100 :
                       static_cast<double>(MAX_SAMPLE_SCALE) / used_disk_space * 100;
   ranges.reset();
-
-  ObCompatibilityMode compat_mode = is_oracle_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE;
-  ObCommonSqlProxy *sql_proxy = GCTX.ddl_sql_proxy_;
-  if (is_oracle_mode) {
-    sql_proxy = GCTX.ddl_oracle_sql_proxy_;
-  }
-  ObSessionParam session_param;
-  session_param.sql_mode_ = nullptr;
-  session_param.tz_info_wrap_ = nullptr;
-  session_param.ddl_info_.set_is_ddl(true); // force Px.
-  session_param.ddl_info_.set_source_table_hidden(is_query_table_hidden);
-
+  ObOracleSqlProxy oracle_sql_proxy(*GCTX.sql_proxy_);
+  ObSingleConnectionProxy single_conn_proxy;
   if (OB_FAIL(ret)) {
-  } else if (query_index) {
-    ObSqlString set_sql;
-    int64_t affected_rows = 0;
-    if (OB_FAIL(set_sql.assign_fmt("SET session %s = true", share::OB_SV_ENABLE_INDEX_DIRECT_SELECT))) {
-      LOG_WARN("failed to assign sql", KR(ret));
-    } else if (OB_FAIL(sql_proxy->write(tenant_id, set_sql.ptr(), affected_rows, compat_mode, &session_param))) {
-      LOG_WARN("sql_proxy write failed", KR(ret), K(set_sql));
+  } else if (is_oracle_mode) {
+    if (OB_FAIL(single_conn_proxy.connect(tenant_id, 0/*group_id*/, &oracle_sql_proxy))) {
+      LOG_WARN("failed to get mysql connect", KR(ret), K(tenant_id));
+    }
+  } else if (OB_FAIL(single_conn_proxy.connect(tenant_id, 0/*group_id*/, GCTX.sql_proxy_))) {
+    LOG_WARN("failed to get mysql connect", KR(ret), K(tenant_id));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(set_lower_case_table_names_(tenant_id, single_conn_proxy))) {
+      LOG_WARN("fail to fetch lower_case_table_names", KR(ret), K(tenant_id));
+    } else if (query_index) {
+      ObSqlString set_sql;
+      int64_t affected_rows = 0;
+      if (OB_FAIL(set_sql.assign_fmt("SET session %s = true", share::OB_SV_ENABLE_INDEX_DIRECT_SELECT))) {
+        LOG_WARN("failed to assign sql", KR(ret));
+      } else if (OB_FAIL(single_conn_proxy.write(tenant_id, set_sql.ptr(), affected_rows))) {
+        LOG_WARN("single_conn_proxy write failed", KR(ret), K(set_sql));
+      }
     }
   }
 
@@ -2148,14 +2150,14 @@ int ObSplitSampler::query_ranges_(const uint64_t tenant_id, const ObString &db_n
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(build_sample_sql_(db_name, table_name, part_name,
                                        column_names, column_ranges,
-                                       range_num, sample_pct, is_oracle_mode, sql))) {
+                                       range_num, sample_pct, is_oracle_mode, query_index, sql))) {
     LOG_WARN("fail to build sample sql", KR(ret), K(db_name), K(table_name), K(part_name),
                                          K(column_names), K(column_ranges),
                                          K(range_num), K(sample_pct));
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       sqlclient::ObMySQLResult *sql_result = nullptr;
-      if (OB_FAIL(sql_proxy->read(res, tenant_id, sql.ptr(), &session_param))) {
+      if (OB_FAIL(single_conn_proxy.read(res, tenant_id, sql.ptr()))) {
         LOG_WARN("execute sql failed", KR(ret), K(sql));
       } else if (OB_ISNULL(sql_result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
@@ -2244,6 +2246,7 @@ int ObSplitSampler::build_sample_sql_(const ObString &db_name, const ObString &t
                                       const ObIArray<ObNewRange> &column_ranges,
                                       const int range_num, const double sample_pct,
                                       const bool is_oracle_mode,
+                                      const bool query_index,
                                       ObSqlString &sql)
 {
   int ret = OB_SUCCESS;
@@ -2252,6 +2255,7 @@ int ObSplitSampler::build_sample_sql_(const ObString &db_name, const ObString &t
   ObString db_name_quoted;
   ObSqlString col_alias_str;
   ObSqlString col_name_alias_str;
+  ObSqlString query_index_hint;
 
   if (OB_FAIL(gen_column_alias_(column_names, is_oracle_mode, col_alias_str, col_name_alias_str))) {
     LOG_WARN("fail to gen column alias", KR(ret), K(column_names));
@@ -2259,11 +2263,13 @@ int ObSplitSampler::build_sample_sql_(const ObString &db_name, const ObString &t
     LOG_WARN("failed to generate new name with escape character", K(ret), K(db_name));
   } else if (OB_FAIL(ObAutoSplitArgBuilder::print_identifier(tmp_allocator, is_oracle_mode, table_name, table_name_quoted))) {
     LOG_WARN("failed to generate new name with escape character", K(ret), K(table_name));
+  } else if (!query_index && OB_FAIL(query_index_hint.assign_fmt("/*+ index(%.*s primary) */", table_name.length(), table_name.ptr()))) {
+    LOG_WARN("failed to assign query index hint", K(ret), K(table_name));
   } else if (OB_FAIL(sql.assign_fmt(
       "SELECT %.*s FROM "
       "(SELECT %.*s, bucket, ROW_NUMBER() OVER (PARTITION BY bucket ORDER BY %.*s) rn FROM "
       "(SELECT %.*s, NTILE(%d) OVER (ORDER BY %.*s) bucket FROM "
-      "(SELECT /*+ index(%.*s primary) */ %.*s FROM %.*s.%.*s ",
+      "(SELECT %.*s %.*s FROM %.*s.%.*s ",
       static_cast<int>(col_alias_str.length()), col_alias_str.ptr(),
 
       static_cast<int>(col_alias_str.length()), col_alias_str.ptr(),
@@ -2273,7 +2279,7 @@ int ObSplitSampler::build_sample_sql_(const ObString &db_name, const ObString &t
       range_num,
       static_cast<int>(col_alias_str.length()), col_alias_str.ptr(),
 
-      table_name.length(), table_name.ptr(),
+      static_cast<int>(query_index_hint.length()), query_index_hint.ptr(),
       static_cast<int>(col_name_alias_str.length()), col_name_alias_str.ptr(),
       db_name_quoted.length(), db_name_quoted.ptr(),
       table_name_quoted.length(), table_name_quoted.ptr()))) {
@@ -2457,6 +2463,38 @@ int ObSplitSampler::gen_column_alias_(const ObIArray<ObString> &columns,
     }
   }
 
+  return ret;
+}
+
+int ObSplitSampler::set_lower_case_table_names_(const uint64_t tenant_id,
+                                                ObSingleConnectionProxy &single_conn_proxy)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  const ObSysVarSchema *sysvar = nullptr;
+  sqlclient::ObISQLConnection *connection = nullptr;
+  int64_t refreshed_schema_version = OB_INVALID_VERSION;
+  if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+    LOG_WARN("fail to get tenant schema version", K(ret), K(tenant_id));
+  } else if (OB_CORE_SCHEMA_VERSION >= refreshed_schema_version) {
+    // tenant creating or tenant create failed or schema refreshing.
+    ret = OB_SCHEMA_EAGAIN;
+    LOG_WARN("schema retry to get lower_case_table_names", K(ret), K(tenant_id), K(refreshed_schema_version));
+  } else if (OB_FAIL(schema_guard.get_tenant_system_variable(tenant_id, SYS_VAR_LOWER_CASE_TABLE_NAMES, sysvar))) {
+    LOG_WARN("get tenant system variable failed", K(ret), K(tenant_id));
+  } else if (OB_ISNULL(sysvar)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null schema", K(ret), K(tenant_id), KPC(sysvar));
+  } else if (OB_ISNULL(connection = single_conn_proxy.get_connection())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null conn", K(ret));
+  } else if (OB_FAIL(connection->set_session_variable(share::OB_SV_LOWER_CASE_TABLE_NAMES, sysvar->get_value()))) {
+    LOG_WARN("update lower_case_table_names for ddl inner sql failed", K(ret));
+  } else {
+    LOG_TRACE("set lower_case_table_names", K(ret), K(tenant_id), "lower_case_table_names", sysvar->get_value());
+  }
   return ret;
 }
 
