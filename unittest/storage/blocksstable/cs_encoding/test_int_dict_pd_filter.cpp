@@ -494,7 +494,6 @@ TEST_F(TestIntDictPdFilter, test_exceed_range_compare_filter)
   const int64_t row_cnt = 2;
   ObMicroBlockCSEncoder encoder;
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
-  encoder.has_lob_out_row_ = true;
   ObDatumRow row_arr[row_cnt];
   for (int64_t i = 0; i < row_cnt; ++i) {
     ASSERT_EQ(OB_SUCCESS, row_arr[i].init(allocator_, col_cnt));
@@ -616,6 +615,58 @@ TEST_F(TestIntDictPdFilter, test_singed_and_unsigned_compare_filter)
     integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_GE, 4, 1, res_arr_ge);
   }
 
+  LOG_INFO(">>>>>>>>>>FINISH PD FILTER<<<<<<<<<<<");
+}
+
+TEST_F(TestIntDictPdFilter, test_bound_ref_exceed_range_compare_filter)
+{
+  const int64_t rowkey_cnt = 1;
+  const int64_t col_cnt = 2;
+  const bool enable_check = ENABLE_CASE_CHECK;
+  ObObjType col_types[col_cnt] = {ObInt32Type, ObIntType};
+  ASSERT_EQ(OB_SUCCESS, prepare(col_types, rowkey_cnt, col_cnt));
+  ctx_.column_encodings_[0] = ObCSColumnHeader::Type::INT_DICT;
+  ctx_.column_encodings_[1] = ObCSColumnHeader::Type::INT_DICT;
+
+  const int64_t row_cnt = 256;
+  ObMicroBlockCSEncoder encoder;
+  ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
+  ObDatumRow row_arr[row_cnt];
+  for (int64_t i = 0; i < row_cnt; ++i) {
+    ASSERT_EQ(OB_SUCCESS, row_arr[i].init(allocator_, col_cnt));
+    row_arr[i].storage_datums_[0].set_int32(i);
+    row_arr[i].storage_datums_[1].set_int(i);
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
+  }
+  HANDLE_TRANSFORM();
+
+  const int64_t col_offset = 1;
+  bool need_check = true;
+
+  // check EQ NE
+  {
+    int64_t ref_arr[4] = {-1, 0, 255, 256};
+    int64_t res_arr_eq[4] = {0, 1, 1, 0};
+    integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_EQ, 4, 1, res_arr_eq);
+    int64_t res_arr_ne[4] = {256, 255, 255, 256};
+    integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_NE, 4, 1, res_arr_ne);
+  }
+
+  // check LT/LE/GT/GE
+  {
+    int64_t ref_arr[4] = {-1, 0, 255, 256};
+    int64_t res_arr_lt[4] = {0, 0, 255, 256};
+    integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_LT, 4, 1, res_arr_lt);
+    int64_t res_arr_le[4] = {0, 1, 256, 256};
+    integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_LE, 4, 1, res_arr_le);
+  }
+  {
+    int64_t ref_arr[4] = {-1, 0, 255, 256};
+    int64_t res_arr_gt[4] = {256, 255, 0, 0};
+    integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_GT, 4, 1, res_arr_gt);
+    int64_t res_arr_ge[4] = {256, 256, 1, 0};
+    integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_GE, 4, 1, res_arr_ge);
+  }
   LOG_INFO(">>>>>>>>>>FINISH PD FILTER<<<<<<<<<<<");
 }
 
