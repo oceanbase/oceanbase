@@ -1334,7 +1334,7 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter(
     } else if (OB_FAIL(adaptor->query_result(ls_id_, ada_ctx, &query_cond_, adaptor_vid_iter_))) {
       LOG_WARN("failed to query result.", K(ret));
     } else if (PVQ_REFRESH == ada_ctx->get_status()) {
-      if (OB_FAIL(ObPluginVectorIndexUtils::query_need_refresh_memdata(adaptor, ls_id_))) {
+      if (OB_FAIL(ObPluginVectorIndexUtils::query_need_refresh_memdata(adaptor, ls_id_, ada_ctx->get_ls_leader()))) {
         if (ret != OB_SCHEMA_EAGAIN) {
           LOG_WARN("fail to refresh memdata in query", K(ret));
         }
@@ -2303,7 +2303,7 @@ int ObDASHNSWScanIter::call_pva_interface(const ObVidAdaLookupStatus& cur_state,
       break;
     }
     case ObVidAdaLookupStatus::STATES_REFRESH: {        // refresh
-      if (OB_FAIL(ObPluginVectorIndexUtils::query_need_refresh_memdata(&adaptor, ls_id_))) {
+      if (OB_FAIL(ObPluginVectorIndexUtils::query_need_refresh_memdata(&adaptor, ls_id_, ada_ctx.get_ls_leader()))) {
         if (ret != OB_SCHEMA_EAGAIN) {
           LOG_WARN("fail to refresh memdata in query", K(ret));
         }
