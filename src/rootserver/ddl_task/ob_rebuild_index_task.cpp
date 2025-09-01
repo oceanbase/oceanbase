@@ -1123,6 +1123,8 @@ int ObRefreshRelatedMviewsTask::process() {
             LOG_WARN("mv db schema is null", K(ret), K(tenant_id_), K(mv_id));
           } else if (!mv_schema->is_materialized_view()) {
             // ignore non-mview tables
+          } else if (!mv_schema->mv_available()) {
+            // ignore mviews in creation
           } else if (OB_FAIL(ObMViewInfo::fetch_mview_info(*GCTX.sql_proxy_, tenant_id_, mv_id, mview_info, false))) {
             LOG_WARN("failed to get mview info", KR(ret), K(tenant_id_), K(mv_id));
           } else if (!mview_info.is_valid()) {
