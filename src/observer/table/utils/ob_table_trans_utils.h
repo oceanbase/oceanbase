@@ -51,6 +51,8 @@ public:
     create_cb_functor_ = nullptr;
     timeout_ts_ = -1;
     did_async_commit_ = false;
+    require_rerouting_ = false;
+    require_refresh_kv_meta_ = false;
     if (OB_NOT_NULL(trans_state_ptr_)) {
       trans_state_ptr_->reset();
     }
@@ -93,6 +95,8 @@ public:
   bool is_rollback_;
   ObTableCreateCbFunctor *create_cb_functor_;
   bool did_async_commit_;
+  bool require_rerouting_;
+  bool require_refresh_kv_meta_;
 };
 
 class ObTableTransUtils final

@@ -177,6 +177,7 @@ protected:
   int check_parallel_ddl_conflict_(const common::ObIArray<share::schema::ObBasedSchemaObjectInfo> &based_schema_object_infos);
   int add_lock_table_udt_id_(const ObTableSchema &table_schema);
   int check_table_udt_exist_(const ObTableSchema &table_schema);
+  ObSchemaType transfer_obj_type_to_schema_type_for_dep_(const ObObjectType obj_type);
   // lock tablegroup name
   int add_lock_object_by_tablegroup_name_(
       const ObString &tablegroup_name,

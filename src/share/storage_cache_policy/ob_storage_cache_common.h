@@ -91,8 +91,8 @@ int get_storage_cache_policy_type_from_str(const common::ObString &storage_cache
 
 int get_storage_cache_policy_type_from_part_str(const common::ObString &storage_cache_policy_part_str,
                                                 ObStorageCachePolicyType &policy_type);
-
-
+bool is_valid_part_storage_cache_policy(const ObStorageCachePolicyType &policy_type);
+bool is_hot_or_auto_policy(const ObStorageCachePolicyType &part_policy);
 
 struct ObBoundaryColumnUnit
 {

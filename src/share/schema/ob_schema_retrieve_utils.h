@@ -471,6 +471,9 @@ public:
   static int retrieve_external_resource_schema(const uint64_t tenant_id, T &result, ObIArray<ObSimpleExternalResourceSchema> &schema_array);
 
   template<typename T>
+  static int retrieve_ai_model_schema(const uint64_t tenant_id, T &result, ObIArray<ObAiModelSchema> &schema_array);
+
+  template<typename T>
   static int retrieve_object_list(const uint64_t tenant_id, T &result, common::ObIArray<uint64_t> &trigger_list);
   template<typename T>
   static int retrieve_mock_fk_parent_table_schema_column(
@@ -577,6 +580,9 @@ public:
 
   // external resource
   FILL_SCHEMA_FUNC_DECLARE(external_resource, ObSimpleExternalResourceSchema);
+  // ai model
+  FILL_SCHEMA_FUNC_DECLARE(ai_model, ObAiModelSchema);
+
   // ccl
   FILL_SCHEMA_FUNC_DECLARE(ccl_rule, ObCCLRuleSchema);
   template<typename T>

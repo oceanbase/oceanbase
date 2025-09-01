@@ -1092,25 +1092,29 @@ int ObTabletSplitUtil::get_storage_schema_from_mds(
   return ret;
 }
 
-int ObTabletSplitUtil::register_split_info_mds(rootserver::ObDDLService &ddl_service, const ObTabletSplitRegisterMdsArg &arg)
+int ObTabletSplitUtil::register_split_info_mds(const ObTabletSplitRegisterMdsArg &arg,
+                                               const ObPartitionSplitArg &partition_split_arg,
+                                               const uint64_t data_format_version,
+                                               rootserver::ObDDLService &ddl_service)
 {
   int ret = OB_SUCCESS;
   int64_t refreshed_schema_version = 0;
-  ObSchemaGetterGuard schema_guard;
   ObTabletSplitInfoMdsArg split_info_arg;
+  ObSchemaGetterGuard schema_guard;
   common::ObArenaAllocator allocator("regissplimds", OB_MALLOC_NORMAL_BLOCK_SIZE, common::OB_SERVER_TENANT_ID, ObCtxIds::DEFAULT_CTX_ID);
   common::ObMySQLTransaction trans;
-  if (OB_UNLIKELY(!arg.is_valid())) {
+  if (OB_UNLIKELY(!arg.is_valid() || !partition_split_arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret));
-  } else if (OB_ISNULL(GCTX.schema_service_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), KP(GCTX.schema_service_));
-  } else if (OB_FAIL(ddl_service.get_tenant_schema_guard_with_version_in_inner_table(arg.tenant_id_, schema_guard))) {
-    LOG_WARN("get schema guard failed", K(ret));
+    LOG_WARN("invalid argument", K(ret), K(arg), K(partition_split_arg));
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (DATA_VERSION_4_4_1_0 <= data_format_version && partition_split_arg.local_index_table_schemas_.count() + partition_split_arg.lob_table_schemas_.count() + 1/*main table schema count*/
+      != arg.split_info_array_.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("split info array count not match with table schemas count", K(ret), K(partition_split_arg), K(arg), K(arg.split_info_array_));
+  } else if (OB_FAIL(ddl_service.get_tenant_schema_guard_with_version_in_inner_table(arg.tenant_id_, schema_guard))) {
+    LOG_WARN("get schema guard failed", K(ret));
   } else {
     split_info_arg.ls_id_ = arg.ls_id_;
     split_info_arg.tenant_id_ = arg.tenant_id_;
@@ -1130,10 +1134,30 @@ int ObTabletSplitUtil::register_split_info_mds(rootserver::ObDDLService &ddl_ser
       bool is_data_table = i == 0;
       if (is_data_table) {
         table_schema = arg.table_schema_;
-      } else if ((is_lob && OB_FAIL(schema_guard.get_table_schema(arg.tenant_id_, split_info.lob_table_id_, table_schema)))) {
-        LOG_WARN("failed to get table schema", K(ret), K(arg.tenant_id_), K(split_info.lob_table_id_));
-      } else if (is_index && OB_FAIL(schema_guard.get_table_schema(arg.tenant_id_, split_info.table_id_, table_schema))) {
-        table_schema = arg.table_schema_;
+      } else if (is_index) {
+        if (DATA_VERSION_4_4_1_0 > data_format_version) {
+          if (OB_FAIL(schema_guard.get_table_schema(arg.tenant_id_, split_info.table_id_, table_schema))) {
+            LOG_WARN("failed to get table schema", K(ret), K(arg.tenant_id_), K(split_info.table_id_));
+          }
+        } else if (OB_UNLIKELY(i - index_tablet_start_idx >= partition_split_arg.local_index_table_schemas_.count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("index table schema count not match with split info array", K(ret), K(i - index_tablet_start_idx),
+              K(partition_split_arg.local_index_table_schemas_.count()), K(partition_split_arg.local_index_table_schemas_));
+        } else {
+          table_schema = &partition_split_arg.local_index_table_schemas_.at(i - index_tablet_start_idx);
+        }
+      } else if (is_lob) {
+        if (DATA_VERSION_4_4_1_0 > data_format_version) {
+          if (OB_FAIL(schema_guard.get_table_schema(arg.tenant_id_, split_info.lob_table_id_, table_schema))) {
+            LOG_WARN("failed to get table schema", K(ret), K(arg.tenant_id_), K(split_info.lob_table_id_));
+          }
+        } else if (OB_UNLIKELY(i - lob_tablet_start_idx >= partition_split_arg.lob_table_schemas_.count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("lob table schema count not match with split info array", K(ret), K(i - lob_tablet_start_idx),
+              K(partition_split_arg.lob_table_schemas_.count()));
+        } else {
+          table_schema = &partition_split_arg.lob_table_schemas_.at(i - lob_tablet_start_idx);
+        }
       }
       if (OB_FAIL(ret)) {
       } else if (OB_ISNULL(table_schema)) {
@@ -1359,7 +1383,7 @@ void ObSSDataSplitHelper::reset()
     if (split_sstable_list_handle_[i]->is_valid()
         && i < add_minor_op_handle_.count() && add_minor_op_handle_[i]->is_valid()
         && !add_minor_op_handle_[i]->get_atomic_op()->is_committed()) {
-      if (OB_FAIL(split_sstable_list_handle_[i]->get_atomic_file()->abort_op(*add_minor_op_handle_[i]))) {
+      if (OB_FAIL(split_sstable_list_handle_[i]->get_atomic_file()->abort_op_parallel(*add_minor_op_handle_[i]))) {
         LOG_ERROR("abort failed", K(ret));
       }
     } else {
@@ -1394,14 +1418,11 @@ int ObSSDataSplitHelper::get_op_id(
 int ObSSDataSplitHelper::prepare_minor_gc_info_list(
     const int64_t parallel_cnt_of_each_sstable,
     const int64_t sstables_cnt_of_each_tablet,
-    const ObAtomicOpHandle<ObAtomicSSTableListAddOp> &op_handle,
-    ObSSMinorGCInfo &minor_gc_info)
+    ObSSTableGCInfo &minor_gc_info)
 {
   int ret = OB_SUCCESS;
-  const int64_t op_id = op_handle.get_atomic_op()->get_op_id();
   const int64_t gc_reply_parallel_cnt = parallel_cnt_of_each_sstable/*parallel child task*/ + 1/*IndexTree*/;
-  const int64_t start_macro_seq = op_id << SPLIT_MINOR_MACRO_DATA_SEQ_BITS;
-  minor_gc_info.start_seq_ = start_macro_seq;
+  minor_gc_info.data_seq_bits_ = SPLIT_MINOR_MACRO_DATA_SEQ_BITS;
   minor_gc_info.seq_step_ = compaction::MACRO_STEP_SIZE;
   minor_gc_info.parallel_cnt_ = gc_reply_parallel_cnt * sstables_cnt_of_each_tablet;
   return ret;
@@ -1442,20 +1463,20 @@ int ObSSDataSplitHelper::start_add_op(
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < dest_tablets_count; i++) {
-      ObSSMinorGCInfo ss_minor_gc_info;
+      ObSSTableGCInfo ss_minor_gc_info;
       const ObTabletID &dest_tablet_id = dest_tablets_id.at(i);
       ObAtomicFileHandle<ObAtomicSSTableListFile> &file_handle = *split_sstable_list_handle_[i];
       ObAtomicOpHandle<ObAtomicSSTableListAddOp> &op_handle = *add_minor_op_handle_[i];
       if (OB_FAIL(MTL(ObAtomicFileMgr*)->get_tablet_file_handle(
                   ls_id, dest_tablet_id, file_type, split_scn, file_handle))) {
         LOG_WARN("get tablet file handle failed", K(ret));
-      } else if (OB_FAIL(file_handle.get_atomic_file()->create_op(op_handle))) {
-        LOG_WARN("create op handle failed", K(ret));
       } else if (OB_FAIL(prepare_minor_gc_info_list(parallel_cnt_of_each_sstable,
-        sstables_cnt_of_each_tablet, op_handle, ss_minor_gc_info))) {
+        sstables_cnt_of_each_tablet, ss_minor_gc_info))) {
         LOG_WARN("prepare minor task info list failed", K(ret));
-      } else if (OB_FAIL(op_handle.get_atomic_op()->update_gc_info(ss_minor_gc_info))) {
-        LOG_WARN("write task state fail", K(ret));
+      } else if (OB_FAIL(file_handle.get_atomic_file()->create_op_parallel(op_handle,
+                                                                           true/*check sswriter*/,
+                                                                           ss_minor_gc_info))) {
+        LOG_WARN("create op handle failed", K(ret));
       }
     }
   }
@@ -1630,11 +1651,11 @@ int ObSSDataSplitHelper::finish_add_op(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(dest_tablet_index));
   } else if (need_finish) {
-    if (OB_FAIL(split_sstable_list_handle_[dest_tablet_index]->get_atomic_file()->finish_op(*add_minor_op_handle_[dest_tablet_index]))) {
+    if (OB_FAIL(split_sstable_list_handle_[dest_tablet_index]->get_atomic_file()->finish_op_parallel(*add_minor_op_handle_[dest_tablet_index]))) {
       LOG_WARN("abort failed", K(ret));
     }
   } else {
-    if (OB_FAIL(split_sstable_list_handle_[dest_tablet_index]->get_atomic_file()->abort_op(*add_minor_op_handle_[dest_tablet_index]))) {
+    if (OB_FAIL(split_sstable_list_handle_[dest_tablet_index]->get_atomic_file()->abort_op_parallel(*add_minor_op_handle_[dest_tablet_index]))) {
       LOG_WARN("abort failed", K(ret));
     }
   }

@@ -2487,7 +2487,6 @@ int ObPLExternalNS::resolve_external_routine(const ObString &db_name,
         } else if (OB_FAIL(pl::ObPLDataType::transform_from_iparam(param,
                                                     resolve_ctx_.schema_guard_,
                                                     resolve_ctx_.session_info_,
-                                                    resolve_ctx_.allocator_,
                                                     resolve_ctx_.sql_proxy_,
                                                     param_type,
                                                     &deps,
@@ -2975,6 +2974,10 @@ int ObPLBlockNS::resolve_symbol(const ObString &var_name,
                                 int64_t &var_idx,
                                 bool resolve_external) const
 {
+#define NAME_MATCH(targe_name)  \
+  ((is_oracle_mode && var_name.compare_equal(targe_name)) || \
+  (!is_oracle_mode && ObCharset::case_compat_mode_equal(var_name, targe_name)))
+
   int ret = OB_SUCCESS;
   data_type.reset();
   if (OB_ISNULL(symbol_table_)) {
@@ -2994,6 +2997,7 @@ int ObPLBlockNS::resolve_symbol(const ObString &var_name,
       }
     }
   } else {
+    bool is_oracle_mode = lib::is_oracle_mode();
     // 尝试匹配为当前NS的VAR
     for (int64_t i = 0;
          OB_SUCC(ret)
@@ -3004,7 +3008,7 @@ int ObPLBlockNS::resolve_symbol(const ObString &var_name,
       if (OB_ISNULL(pl_var)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("PL var ns is null", K(i), K(get_symbols().at(i)), K(ret));
-      } else if (ObCharset::case_compat_mode_equal(var_name, pl_var->get_name())) {
+      } else if (NAME_MATCH(pl_var->get_name())) {
         bool is_referenced = true;
         pl_var->set_is_referenced(is_referenced);
         if (pl_var->is_dup_declare()) {
@@ -3025,7 +3029,7 @@ int ObPLBlockNS::resolve_symbol(const ObString &var_name,
         const ObUserDefinedType* user_type = type_table_->get_type(get_types().at(i));
         CK (OB_NOT_NULL(user_type));
         if (OB_FAIL(ret)) {
-        } else if (ObCharset::case_compat_mode_equal(var_name, user_type->get_name())) {
+        } else if (NAME_MATCH(user_type->get_name())) {
           if (var_idx != OB_INVALID_INDEX) {
             ret = OB_ERR_DECL_MORE_THAN_ONCE;
             LOG_USER_ERROR(OB_ERR_DECL_MORE_THAN_ONCE, var_name.length(), var_name.ptr());
@@ -3041,7 +3045,7 @@ int ObPLBlockNS::resolve_symbol(const ObString &var_name,
           && OB_INVALID_INDEX == var_idx
           && OB_INVALID_INDEX == parent_id
           && BLOCK_OBJECT_SPEC == get_block_type()
-          && ObCharset::case_compat_mode_equal(var_name, get_package_name())) {
+          && NAME_MATCH(get_package_name())) {
         parent_id = get_database_id();
       }
     }
@@ -3055,7 +3059,7 @@ int ObPLBlockNS::resolve_symbol(const ObString &var_name,
       if (OB_ISNULL(label)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("PL Label is NULL", K(ret), K(i), K(get_labels().at(i)));
-      } else if (ObCharset::case_compat_mode_equal(var_name, *label)) {
+      } else if (NAME_MATCH(*label)) {
         var_idx = reinterpret_cast<int64_t>(this);
         type = ObPLExternalNS::LABEL_NS;
       }
@@ -3067,7 +3071,7 @@ int ObPLBlockNS::resolve_symbol(const ObString &var_name,
         const ObPLRoutineInfo *routine = NULL;
         OZ (get_routine_info(routines.at(i), routine));
         CK (OB_NOT_NULL(routine));
-        if (OB_SUCC(ret) && ObCharset::case_compat_mode_equal(routine->get_routine_name(), var_name)) {
+        if (OB_SUCC(ret) && NAME_MATCH(routine->get_routine_name())) {
           if (get_block_type() != BLOCK_ROUTINE) { // subprogram is not member function, distingish with block type
             if (routine->is_udt_routine() && !routine->is_udt_cons() && !routine->is_udt_static_routine()) {
               // only care about member routine without prefix.
@@ -3116,7 +3120,7 @@ int ObPLBlockNS::resolve_symbol(const ObString &var_name,
           if (OB_ISNULL(record_type->get_record_member_name(i))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected record member name", K(ret), K(i), KPC(record_type));
-          } else if (ObCharset::case_compat_mode_equal(var_name, *record_type->get_record_member_name(i))) {
+          } else if (NAME_MATCH(*record_type->get_record_member_name(i))) {
             type = ObPLExternalNS::SELF_ATTRIBUTE;
             var_idx = i;
             parent_id = user_type->get_user_type_id();
@@ -3143,6 +3147,7 @@ int ObPLBlockNS::resolve_symbol(const ObString &var_name,
     }
 
   }
+#undef NAME_MATCH
   return ret;
 }
 

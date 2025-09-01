@@ -467,8 +467,8 @@ LOG_MOD_END(PL)
 #define _BALANCE_LOG(level, _fmt_, args...) _OB_MOD_LOG(BALANCE, level, _fmt_, ##args)
 #define MDS_LOG(level, info_string, args...) OB_MOD_LOG(MDS, level, info_string, ##args)
 #define _MDS_LOG(level, _fmt_, args...) _OB_MOD_LOG(MDS, level, _fmt_, ##args)
-#define DDLOG(level, info_string, args...) OB_MOD_LOG(DATA_DICT, level, info_string, ##args)
-#define _DDLOG(level, _fmt_, args...) _OB_MOD_LOG(DATA_DICT, level, _fmt_, ##args)
+#define DATA_DICT_LOG(level, info_string, args...) OB_MOD_LOG(DATA_DICT, level, info_string, ##args)
+#define _DATA_DICT_LOG(level, _fmt_, args...) _OB_MOD_LOG(DATA_DICT, level, _fmt_, ##args)
 #define MVCC_LOG(level, info_string, args...) OB_MOD_LOG(MVCC, level, info_string, ##args)
 #define _MVCC_LOG(level, _fmt_, args...) _OB_MOD_LOG(MVCC, level, _fmt_, ##args)
 #define WR_LOG(level, info_string, args...) OB_MOD_LOG(WR, level, info_string, ##args)
@@ -1182,8 +1182,8 @@ LOG_MOD_END(PL)
 #define _LOGMNR_LOG_RET(level, errcode, args...) { int ret = errcode; _LOGMNR_LOG(level, ##args); }
 #define MDS_LOG_RET(level, errcode, args...) { int ret = errcode; MDS_LOG(level, ##args); }
 #define _MDS_LOG_RET(level, errcode, args...) { int ret = errcode; _MDS_LOG(level, ##args); }
-#define DDLOG_RET(level, errcode, args...){ int ret = errcode; DDLOG(level, ##args); }
-#define _DDLOG_RET(level, errcode, args...){ int ret = errcode; _DDLOG(level, ##args); }
+#define DATA_DICT_LOG_RET(level, errcode, args...){ int ret = errcode; DATA_DICT_LOG(level, ##args); }
+#define _DATA_DICT_LOG_RET(level, errcode, args...){ int ret = errcode; _DATA_DICT_LOG(level, ##args); }
 
 // END XXX_LOG_RET MACRO DEFINE
 

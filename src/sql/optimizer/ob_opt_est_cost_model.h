@@ -20,6 +20,7 @@
 #include "sql/optimizer/ob_opt_default_stat.h"
 #include "sql/resolver/dml/ob_dml_stmt.h"
 #include "share/stat/ob_opt_ds_stat.h"
+#include "share/catalog/ob_catalog_properties.h"
 
 namespace oceanbase
 {
@@ -62,7 +63,9 @@ struct ObTableMetaInfo
       has_opt_stat_(false),
       micro_block_count_(-1),
       table_type_(share::schema::MAX_TABLE_TYPE),
-      is_broadcast_table_(false)
+      is_broadcast_table_(false),
+      lake_table_format_(share::ObLakeTableFormat::INVALID),
+      lake_table_file_count_(0)
   { }
   virtual ~ObTableMetaInfo()
   { }
@@ -92,6 +95,8 @@ struct ObTableMetaInfo
   int64_t micro_block_count_;  // main table micro block count
   share::schema::ObTableType table_type_;
   bool is_broadcast_table_;
+  share::ObLakeTableFormat lake_table_format_;
+  int64_t lake_table_file_count_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableMetaInfo);
 };
@@ -673,6 +678,7 @@ public:
   const static int64_t DEFAULT_LOCAL_ORDER_DEGREE;
   const static int64_t DEFAULT_MAX_STRING_WIDTH;
   const static int64_t DEFAULT_FIXED_OBJ_WIDTH;
+  const static int64_t DEFAULT_BATCH_SIZE;
 
 	ObOptEstCostModel(const ObOptCostModelParameter &cost_params,
                     const OptSystemStat &stat)

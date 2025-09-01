@@ -148,6 +148,9 @@ int ObInitSqcP::pre_setup_op_input(ObPxSqcHandler &sqc_handler)
   if (sqc.is_single_tsc_leaf_dfo() &&
       OB_FAIL(sub_coord.rebuild_sqc_access_table_locations())) {
     LOG_WARN("fail to rebuild sqc access location", K(ret));
+  } else if (sqc.is_single_tsc_leaf_dfo() &&
+             OB_FAIL(sub_coord.rebuild_sqc_lake_table_file_map())) {
+    LOG_WARN("failed to rebuild sqc lake table file map");
   } else if (OB_FAIL(sub_coord.pre_setup_op_input(*ctx, *root, sub_coord.get_sqc_ctx(),
       sqc.get_access_table_locations(),
       sqc.get_access_table_location_keys()))) {

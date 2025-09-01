@@ -49,7 +49,7 @@ public:
                K_(vbitmap_table_id), K_(snapshot_index_table_id), K_(data_table_id),
                K_(rowkey_vid_tablet_id), K_(vid_rowkey_tablet_id), K_(inc_index_tablet_id),
                K_(vbitmap_tablet_id), K_(snapshot_index_tablet_id), K_(data_tablet_id),
-               K_(statistics), K_(sync_info));
+               K_(statistics), K_(sync_info), K_(index_type));
 public:
   int64_t ls_id_;
   // table_id
@@ -68,6 +68,7 @@ public:
   int64_t data_tablet_id_;
   char statistics_[OB_VECTOR_INDEX_STATISTICS_SIZE];
   char sync_info_[OB_VECTOR_INDEX_SYNC_INFO_SIZE];
+  ObVectorIndexAlgorithmType index_type_;
 };
 
 typedef common::ObArray<int64_t>  ObVecIdxVidArray;
@@ -338,7 +339,9 @@ public:
       query_scn_(),
       row_iter_(nullptr),
       is_last_search_(false),
-      scan_param_(nullptr) {};
+      scan_param_(nullptr),
+      rel_count_(0),
+      rel_map_ptr_(nullptr) {};
   ~ObVectorQueryConditions() { query_vector_.reset(); }
   bool is_inited() { return query_vector_.length() > 0 && ef_search_ > 0; }
   void reset() {
@@ -360,6 +363,8 @@ public:
   int64_t extra_column_count_;
   bool is_last_search_;
   ObTableScanParam *scan_param_;  // scan param of row_iter_
+  int64_t rel_count_;
+  common::hash::ObHashMap<int64_t, double*> *rel_map_ptr_;
 };
 
 struct ObVidBound {
@@ -463,7 +468,10 @@ public:
       snap_count_(0),
       sync_count_(0),
       sync_fail_(0),
-      idle_count_(0)
+      idle_count_(0),
+      last_succ_time_(0),
+      last_fail_time_(0),
+      last_fail_code_(0)
   {}
   void reset() {
     incr_count_ = 0;
@@ -472,6 +480,9 @@ public:
     sync_count_ = 0;
     sync_fail_ = 0;
     idle_count_ = 0;
+    last_succ_time_ = 0;
+    last_fail_time_ = 0;
+    last_fail_code_ = 0;
   }
   TO_STRING_KV(K_(incr_count), K_(vbitmap_count), K_(snap_count),
                K_(sync_count), K_(sync_fail), K_(idle_count));
@@ -482,6 +493,9 @@ public:
   int64_t sync_count_;
   int64_t sync_fail_;
   int64_t idle_count_; // loops not receive sync
+  int64_t last_succ_time_;
+  int64_t last_fail_time_;
+  int last_fail_code_;
 };
 
 struct ObVectorIndexSharedTableInfo
@@ -591,6 +605,7 @@ public:
 
   int set_table_id(ObVectorIndexRecordType type, uint64_t table_id);
   void set_vid_rowkey_info(ObVectorIndexSharedTableInfo &info);
+  void set_data_table_id(ObVectorIndexSharedTableInfo &info);
 
   int merge_parital_index_adapter(ObPluginVectorIndexAdaptor *partial_index);
 
@@ -685,7 +700,18 @@ public:
   int check_need_sync_to_follower_or_do_opt_task(bool &need_sync);
 
   void sync_finish() { follower_sync_statistics_.sync_count_++; }
-  void sync_fail() { follower_sync_statistics_.sync_fail_++; }
+  void sync_succ() {
+    sync_finish();
+    reset_sync_idle_count();
+    follower_sync_statistics_.last_succ_time_ = ObTimeUtility::current_time();
+  }
+  void sync_fail(int ret) {
+    sync_finish();
+    reset_sync_idle_count();
+    follower_sync_statistics_.sync_fail_++;
+    follower_sync_statistics_.last_fail_time_ = ObTimeUtility::current_time();
+    follower_sync_statistics_.last_fail_code_ = ret;
+  }
 
   void inc_sync_idle_count() { follower_sync_statistics_.idle_count_++; }
   void reset_sync_idle_count() { follower_sync_statistics_.idle_count_ = 0;}
@@ -758,6 +784,14 @@ public:
            && snapshot_tablet_id_ == ctx.snapshot_tablet_id_
            && data_tablet_id_ == ctx.data_tablet_id_;
   }
+  OB_INLINE bool get_is_need_vid()
+  {
+    return is_need_vid_;
+  }
+  OB_INLINE void set_is_need_vid(bool is_need_vid)
+  {
+    is_need_vid_ = is_need_vid;
+  }
   TO_STRING_KV(K_(create_type), K_(type), KP_(algo_data),
               KP_(incr_data), KP_(snap_data), KP_(vbitmap_data), K_(tenant_id),
               K_(data_tablet_id),K_(rowkey_vid_tablet_id), K_(vid_rowkey_tablet_id),
@@ -766,7 +800,7 @@ public:
               K_(inc_table_id),  K_(vbitmap_table_id), K_(snapshot_table_id),
               K_(ref_cnt), K_(idle_cnt), KP_(allocator),
               K_(index_identity), K_(follower_sync_statistics),
-              K_(mem_check_cnt), K_(is_mem_limited));
+              K_(mem_check_cnt), K_(is_mem_limited), K_(is_need_vid));
 
 private:
   void *get_incr_index();
@@ -851,6 +885,9 @@ private:
   common::ObSpinLock reload_lock_;  // lock for reload from table
   RWLock query_lock_;// lock for async task and query
   bool reload_finish_;
+
+  // for vid opt
+  bool is_need_vid_;
 
   constexpr static uint32_t VEC_INDEX_INCR_DATA_SYNC_THRESHOLD = 100;
   constexpr static uint32_t VEC_INDEX_VBITMAP_SYNC_THRESHOLD = 100;

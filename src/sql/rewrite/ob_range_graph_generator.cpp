@@ -36,6 +36,7 @@ int ObRangeGraphGenerator::generate_range_graph(const ObIArray<ObRawExpr*> &expr
   ObSEArray<ObPriciseExprItem, 4> unprecise_exprs;
   ObSEArray<ObRawExpr*, 4> sorted_exprs;
   ObSEArray<ObRangeNode*, 4> domain_range_nodes;
+  ObSEArray<ObFastFinalPos, 8> pos_arr;
   if (OB_FAIL(range_node_generator.sort_range_exprs(exprs, sorted_exprs))) {
     LOG_WARN("failed to sort range exprs", K(ret));
   }
@@ -97,6 +98,7 @@ int ObRangeGraphGenerator::generate_range_graph(const ObIArray<ObRawExpr*> &expr
   if (OB_SUCC(ret)) {
     ObRangeNode *final_range_node = nullptr;
     bool can_fast_nlj_extraction = false;
+    bool can_general_nlj_extraction = false;
     if (range_nodes.empty()) {
       if (OB_FAIL(range_node_generator.generate_always_true_or_false_node(true, final_range_node))) {
         LOG_WARN("failed to generate whole range");
@@ -131,6 +133,16 @@ int ObRangeGraphGenerator::generate_range_graph(const ObIArray<ObRawExpr*> &expr
                                                            pre_range_graph_->is_equal_range(),
                                                            can_fast_nlj_extraction))) {
       LOG_WARN("failed to check can fast nlj range extraction", K(ret));
+    } else if (pre_range_graph_->has_exec_param() &&
+               !can_fast_nlj_extraction &&
+               OB_FAIL(check_can_general_nlj_range_extraction(pre_range_graph_->get_range_head(),
+                                                              pre_range_graph_->get_range_map(),
+                                                              pos_arr,
+                                                              can_general_nlj_extraction))) {
+      LOG_WARN("failed to check can general nlj range extraction", K(ret));
+    } else if (can_general_nlj_extraction &&
+               OB_FAIL(pre_range_graph_->set_general_nlj_range_extraction(pos_arr))) {
+      LOG_WARN("failed to set general nlj range extraction", K(ret));
     } else {
       pre_range_graph_->set_fast_nlj_range(can_fast_nlj_extraction);
       pre_range_graph_->set_contain_geo_filters(ctx_.contail_geo_filters_);
@@ -1357,9 +1369,11 @@ int ObRangeGraphGenerator::generate_expr_final_info()
       expr_info.is_expr_ = true;
     }
 
+
     if (final_expr_bits.has_member(i)) {
       if (expr->has_flag(CNT_DYNAMIC_PARAM)) {
         cnt_exec_param = true;
+        expr_info.cnt_exec_param_ = true;
       }
     }
   }
@@ -1803,6 +1817,76 @@ int ObRangeGraphGenerator::formalize_one_range_node(ObRangeNode &range_node)
   return ret;
 }
 
+class GeneralNljChecker
+{
+private:
+  const int32_t OFFSET_INITED = 1 ;
+  const int32_t OFFSET_START_HAVE_EXEC_PARAM = 1 << 1;
+  const int32_t OFFSET_END_HAVE_EXEC_PARAM = 1 << 2;
+  const int32_t OFFSET_HAVE_EXEC_PARAM_MASK = (OFFSET_START_HAVE_EXEC_PARAM |
+                                               OFFSET_END_HAVE_EXEC_PARAM);
+public:
+  GeneralNljChecker() :
+    column_cnt_(0),
+    max_precise_offset_(0),
+    start_idxs_(),
+    end_idxs_(),
+    offset_flags_() {}
+
+  int init(int64_t column_cnt, int64_t max_precise_offset);
+
+  int visit(const ObRangeNode *range_node, const ObRangeMap &range_map, bool &can_etract);
+
+  int get_fast_final_pos_array(const ObRangeMap &range_map, ObIArray<ObFastFinalPos> &pos_arr);
+
+  int check_one_range(const ObRangeNode &range_node, const ObRangeMap &range_map, bool &can_extract);
+
+  int check_in_param(const InParam* param, const ObRangeMap &range_map, bool &can_extract);
+private:
+  int64_t column_cnt_;
+  int64_t max_precise_offset_;
+  ObArray<int64_t> start_idxs_;
+  ObArray<int64_t> end_idxs_;
+  ObArray<int32_t> offset_flags_;
+};
+
+int GeneralNljChecker::init(int64_t column_cnt, int64_t max_precise_offset)
+{
+  int ret = OB_SUCCESS;
+  column_cnt_ = column_cnt;
+  max_precise_offset_ = max_precise_offset;
+  if (OB_FAIL(start_idxs_.prepare_allocate(column_cnt, OB_RANGE_EMPTY_VALUE))) {
+    LOG_WARN("failed to prepare allocate array", K(ret));
+  } else if (OB_FAIL(end_idxs_.prepare_allocate(column_cnt, OB_RANGE_EMPTY_VALUE))) {
+    LOG_WARN("failed to prepare allocate array", K(ret));
+  } else if (OB_FAIL(offset_flags_.prepare_allocate(column_cnt, 0))) {
+    LOG_WARN("failed to prepare allocate array", K(ret));
+  }
+  return ret;
+}
+
+int GeneralNljChecker::visit(const ObRangeNode *range_node, const ObRangeMap &range_map, bool &can_extract)
+{
+  int ret = OB_SUCCESS;
+  can_extract = true;
+  if (OB_ISNULL(range_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else {
+    for (const ObRangeNode *node = range_node;
+         OB_SUCC(ret) && can_extract && OB_NOT_NULL(node) ; node = node->or_next_) {
+      if (OB_FAIL(check_one_range(*node, range_map, can_extract))) {
+        LOG_WARN("failed to check one range", K(ret));
+      } else if (!can_extract) {
+        // do nothing
+      } else if (node->and_next_ != NULL &&
+                 OB_FAIL(SMART_CALL(visit(node->and_next_, range_map, can_extract)))) {
+        LOG_WARN("failed to visit node", K(ret));
+      }
+    }
+  }
+  return ret;
+}
 int ObRangeGraphGenerator::formalize_final_exprs(const ObRangeNode *range_node,
                                                  ObSqlBitSet<> &exprs_bitset,
                                                  ObSqlBitSet<> &in_params_bitset)
@@ -1825,6 +1909,110 @@ int ObRangeGraphGenerator::formalize_final_exprs(const ObRangeNode *range_node,
   return ret;
 }
 
+int GeneralNljChecker::get_fast_final_pos_array(const ObRangeMap &range_map,
+                                                ObIArray<ObFastFinalPos> &pos_arr)
+{
+  int ret = OB_SUCCESS;
+  ObFastFinalPos pos;
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt_; ++i) {
+    int32_t flag = offset_flags_.at(i);
+    if (flag & OFFSET_START_HAVE_EXEC_PARAM) {
+      int64_t start_idx = start_idxs_.at(i);
+      pos.offset_ = i;
+      pos.is_upper_bound_ = 1;
+      if (OB_UNLIKELY(start_idx < 0||
+                      start_idx > range_map.expr_final_infos_.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected start idx", K(ret), K(start_idx), K(offset_flags_));
+      } else if (OB_FALSE_IT(pos.index_ = start_idx)) {
+      } else if (OB_FAIL(pos_arr.push_back(pos))) {
+        LOG_WARN("failed to push back pos arr", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && (flag & OFFSET_END_HAVE_EXEC_PARAM)) {
+      int64_t end_idx = end_idxs_.at(i);
+      pos.offset_ = i;
+      pos.is_upper_bound_ = 0;
+      if (OB_UNLIKELY(end_idx < 0 ||
+                      end_idx > range_map.expr_final_infos_.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected start idx", K(ret), K(end_idx), K(offset_flags_));
+      } else if (OB_FALSE_IT(pos.index_ = end_idx)) {
+      } else if (OB_FAIL(pos_arr.push_back(pos))) {
+        LOG_WARN("failed to push back pos arr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int GeneralNljChecker::check_one_range(const ObRangeNode &range_node,
+                                       const ObRangeMap &range_map,
+                                       bool &can_extract)
+{
+  int ret = OB_SUCCESS;
+  int32_t flag = 0;
+  int64_t start_idx = 0;
+  int64_t end_idx = 0;
+  bool is_start_have_exec_param = false;
+  bool is_end_have_exe_param = false;
+  can_extract = true;
+  if (range_node.is_domain_node_ ||
+      range_node.is_rowid_node_) {
+    can_extract = false;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && can_extract && i < range_node.column_cnt_; ++i) {
+    flag = offset_flags_.at(i);
+    start_idx = range_node.start_keys_[i];
+    end_idx = range_node.end_keys_[i];
+    is_start_have_exec_param = false;
+    is_end_have_exe_param = false;
+
+    if (start_idx >= 0 && start_idx < range_map.expr_final_infos_.count()) {
+      is_start_have_exec_param = range_map.expr_final_infos_.at(start_idx).cnt_exec_param_;
+    }
+    if (end_idx >= 0 && end_idx < range_map.expr_final_infos_.count()) {
+      is_end_have_exe_param = range_map.expr_final_infos_.at(end_idx).cnt_exec_param_;
+    }
+    if (start_idx == end_idx && start_idx < 0 &&
+        -start_idx - 1 < range_map.in_params_.count()) {
+      if (OB_FAIL(check_in_param(range_map.in_params_.at(-start_idx - 1),
+                                 range_map, can_extract))) {
+        LOG_WARN("failed to check in param", K(ret));
+      }
+    } else if (start_idx < 0 || end_idx < 0) {
+      can_extract = false;
+    }
+    if (OB_FAIL(ret)) {
+    } else if (!can_extract) {
+      // do nothing
+    } else if (i < max_precise_offset_ &&
+               start_idx == OB_RANGE_MIN_VALUE &&
+               end_idx == OB_RANGE_MAX_VALUE) {
+      // do nothing
+    } else if (start_idx == OB_RANGE_EMPTY_VALUE &&
+               end_idx == OB_RANGE_EMPTY_VALUE) {
+      // do nothing
+    } else if ((flag & OFFSET_INITED) == 0) {
+      offset_flags_.at(i) |= OFFSET_INITED;
+      if (is_start_have_exec_param) {
+        offset_flags_.at(i) |= OFFSET_START_HAVE_EXEC_PARAM;
+      }
+      if (is_end_have_exe_param) {
+        offset_flags_.at(i) |= OFFSET_END_HAVE_EXEC_PARAM;
+      }
+      if (is_start_have_exec_param || is_end_have_exe_param) {
+        start_idxs_[i] = start_idx;
+        end_idxs_[i] = end_idx;
+      }
+    } else if ((flag & OFFSET_HAVE_EXEC_PARAM_MASK) == 0) {
+      can_extract = !is_start_have_exec_param && !is_end_have_exe_param;
+    } else if (start_idxs_[i] != start_idx || end_idxs_[i] != end_idx) {
+      can_extract = false;
+    }
+  }
+  return ret;
+}
 int ObRangeGraphGenerator::formalize_one_range_exprs(const ObRangeNode &range_node,
                                                      ObSqlBitSet<> &exprs_bitset,
                                                      ObSqlBitSet<> &in_params_bitset)
@@ -1861,6 +2049,24 @@ int ObRangeGraphGenerator::formalize_one_range_exprs(const ObRangeNode &range_no
   return ret;
 }
 
+int GeneralNljChecker::check_in_param(const InParam* param,
+                                      const ObRangeMap &range_map,
+                                      bool &can_extract)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(param)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && can_extract && i < param->count(); ++i) {
+      int64_t idx = param->at(i);
+      if (idx >= 0 && idx < range_map.expr_final_infos_.count()) {
+        can_extract = !range_map.expr_final_infos_.at(idx).cnt_exec_param_;
+      }
+    }
+  }
+  return ret;
+}
 int ObRangeGraphGenerator::formalize_in_param_exprs(int64_t in_param_idx,
                                                     ObSqlBitSet<> &exprs_bitset,
                                                     ObSqlBitSet<> &in_params_bitset)
@@ -1883,6 +2089,32 @@ int ObRangeGraphGenerator::formalize_in_param_exprs(int64_t in_param_idx,
         LOG_WARN("failed to add member", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObRangeGraphGenerator::check_can_general_nlj_range_extraction(
+                           const ObRangeNode *range_node,
+                           const ObRangeMap &range_map,
+                           ObIArray<ObFastFinalPos> &pos_arr,
+                           bool &general_nlj_range)
+{
+  int ret = OB_SUCCESS;
+  GeneralNljChecker range_checker;
+  general_nlj_range = false;
+  if (OB_ISNULL(range_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (ctx_.optimizer_features_enable_version_ < COMPAT_VERSION_4_3_5_BP3) {
+    // do nothing
+  } else if (OB_FAIL(range_checker.init(range_node->column_cnt_, max_precise_offset_))) {
+    LOG_WARN("failed to prepare allocate array", K(ret));
+  } else if (OB_FAIL(range_checker.visit(range_node, range_map, general_nlj_range))) {
+    LOG_WARN("failed to check can use general nlj extraction", K(ret));
+  } else if (!general_nlj_range) {
+    // do nothing
+  } else if (OB_FAIL(range_checker.get_fast_final_pos_array(range_map, pos_arr))) {
+    LOG_WARN("failed to get fast final pos array", K(ret));
   }
   return ret;
 }

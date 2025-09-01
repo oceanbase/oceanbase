@@ -134,10 +134,12 @@ TEST_F(TestExtFileAccess, test_buffer_split_without_page_cache)
   ObIOFlag io_desc;
   const int64_t BLOCK_SIZE = 2 * 1024 * 1024;
   const int64_t modify_time = 1024;
+  const int64_t page_size = 512 * 1024;
   void *buf = allocator_.alloc(BLOCK_SIZE);
   int64_t cur_offset;
   int64_t cur_size;
   ObString url("/path/to/file");
+  ObString content_digest("");
 
   // init fd and io_desc
   fd.is_valid();
@@ -153,7 +155,9 @@ TEST_F(TestExtFileAccess, test_buffer_split_without_page_cache)
   cur_size = BLOCK_SIZE;
   ASSERT_EQ(OB_SUCCESS, mgr_->fill_cache_hit_buf_and_get_cache_miss_segments_(fd,
                                                                               url,
+                                                                              content_digest,
                                                                               modify_time,
+                                                                              page_size,
                                                                               cur_offset,
                                                                               cur_size,
                                                                               false,
@@ -163,11 +167,11 @@ TEST_F(TestExtFileAccess, test_buffer_split_without_page_cache)
   ASSERT_EQ(0, handle.cache_hit_size_);
   ASSERT_EQ(2, sg_arr.count());
   ASSERT_EQ(cur_offset, sg_arr[0].get_rd_offset());
-  ASSERT_EQ(0, sg_arr[0].get_page_offset());
+  ASSERT_EQ(0, sg_arr[0].get_page_offset(page_size));
   ASSERT_EQ(cur_size - cur_offset, sg_arr[0].get_rd_len()); // split by 2MB boundary;
 
   ASSERT_EQ(cur_size, sg_arr[1].get_rd_offset());
-  ASSERT_EQ(cur_size, sg_arr[1].get_page_offset());
+  ASSERT_EQ(cur_size, sg_arr[1].get_page_offset(page_size));
   ASSERT_EQ(cur_offset, sg_arr[1].get_rd_len()); // split by 2MB boundary;
 
   ObExternalReadInfo info(
@@ -176,7 +180,9 @@ TEST_F(TestExtFileAccess, test_buffer_split_without_page_cache)
       cur_size,
       INT64_MAX,
       io_desc);
-  ASSERT_EQ(OB_SUCCESS, mgr_->get_rd_info_arr_by_cache_miss_seg_arr_(fd, url, 0, sg_arr, info, false, rd_info_arr));
+  ASSERT_EQ(OB_SUCCESS, mgr_->get_rd_info_arr_by_cache_miss_seg_arr_(
+                          fd, url, content_digest, modify_time, page_size, 0, sg_arr, info, false,
+                          rd_info_arr));
   ASSERT_EQ(OB_SUCCESS, check_correct_for_two_arr(sg_arr, rd_info_arr));
 
   // init req [2048, 3072) => [2048, 3072)
@@ -186,7 +192,9 @@ TEST_F(TestExtFileAccess, test_buffer_split_without_page_cache)
   cur_size = 1024;
   ASSERT_EQ(OB_SUCCESS, mgr_->fill_cache_hit_buf_and_get_cache_miss_segments_(fd,
                                                                               url,
+                                                                              content_digest,
                                                                               modify_time,
+                                                                              page_size,
                                                                               cur_offset,
                                                                               cur_size,
                                                                               false,
@@ -196,7 +204,7 @@ TEST_F(TestExtFileAccess, test_buffer_split_without_page_cache)
   ASSERT_EQ(0, handle.cache_hit_size_);
   ASSERT_EQ(1, sg_arr.count());
   ASSERT_EQ(cur_offset, sg_arr[0].get_rd_offset());
-  ASSERT_EQ(0, sg_arr[0].get_page_offset());
+  ASSERT_EQ(0, sg_arr[0].get_page_offset(page_size));
   ASSERT_EQ(cur_size, sg_arr[0].get_rd_len());
 
   ObExternalReadInfo info2(
@@ -205,7 +213,9 @@ TEST_F(TestExtFileAccess, test_buffer_split_without_page_cache)
       cur_size,
       INT64_MAX,
       io_desc);
-  ASSERT_EQ(OB_SUCCESS, mgr_->get_rd_info_arr_by_cache_miss_seg_arr_(fd, url, 0, sg_arr, info2, false, rd_info_arr));
+  ASSERT_EQ(OB_SUCCESS, mgr_->get_rd_info_arr_by_cache_miss_seg_arr_(
+                          fd, url, content_digest, modify_time, page_size, 0, sg_arr, info2, false,
+                          rd_info_arr));
   ASSERT_EQ(OB_SUCCESS, check_correct_for_two_arr(sg_arr, rd_info_arr));
 
 
@@ -216,7 +226,9 @@ TEST_F(TestExtFileAccess, test_buffer_split_without_page_cache)
   cur_size = 2;
   ASSERT_EQ(OB_SUCCESS, mgr_->fill_cache_hit_buf_and_get_cache_miss_segments_(fd,
                                                                               url,
+                                                                              content_digest,
                                                                               modify_time,
+                                                                              page_size,
                                                                               cur_offset,
                                                                               cur_size,
                                                                               false,
@@ -236,7 +248,9 @@ TEST_F(TestExtFileAccess, test_buffer_split_without_page_cache)
       cur_size,
       INT64_MAX,
       io_desc);
-  ASSERT_EQ(OB_SUCCESS, mgr_->get_rd_info_arr_by_cache_miss_seg_arr_(fd, url, 0, sg_arr, info3, false, rd_info_arr));
+  ASSERT_EQ(OB_SUCCESS, mgr_->get_rd_info_arr_by_cache_miss_seg_arr_(
+                          fd, url, content_digest, modify_time, page_size, 0, sg_arr, info3, false,
+                          rd_info_arr));
   ASSERT_EQ(OB_SUCCESS, check_correct_for_two_arr(sg_arr, rd_info_arr));
 
 
@@ -247,7 +261,9 @@ TEST_F(TestExtFileAccess, test_buffer_split_without_page_cache)
   cur_size = 4 * BLOCK_SIZE;
   ASSERT_EQ(OB_SUCCESS, mgr_->fill_cache_hit_buf_and_get_cache_miss_segments_(fd,
                                                                               url,
+                                                                              content_digest,
                                                                               modify_time,
+                                                                              page_size,
                                                                               cur_offset,
                                                                               cur_size,
                                                                               false,
@@ -273,7 +289,9 @@ TEST_F(TestExtFileAccess, test_buffer_split_without_page_cache)
       cur_size,
       INT64_MAX,
       io_desc);
-  ASSERT_EQ(OB_SUCCESS, mgr_->get_rd_info_arr_by_cache_miss_seg_arr_(fd, url, 0, sg_arr, info4, false, rd_info_arr));
+  ASSERT_EQ(OB_SUCCESS, mgr_->get_rd_info_arr_by_cache_miss_seg_arr_(
+                          fd, url, content_digest, modify_time, page_size, 0, sg_arr, info4, false,
+                          rd_info_arr));
   ASSERT_EQ(OB_SUCCESS, check_correct_for_two_arr(sg_arr, rd_info_arr));
 }
 
@@ -310,11 +328,20 @@ TEST_F(TestExtFileAccess, test_file_map_key) {
       return out;
     }
     int ret = OB_SUCCESS;
+    int64_t file_size = 0;
+    const int64_t modify_time = 1024;
+    const int64_t page_size = 512 * 1024;
+    ObString content_digest("");
     out = new(buf) ObExternalAccessFileInfo;
-    out->set_modify_time(1);
     ObObjectStorageInfo access_info;
     access_info.set(OB_STORAGE_HDFS, "dummy");
-    if (OB_FAIL(out->set_url_and_access_info_(str, &access_info, &allocator))) {
+    if (OB_FAIL(out->set_access_info(&access_info, &allocator))) {
+      LOG_WARN("failed to set access info", K(ret));
+    } else if (OB_FAIL(out->set_basic_file_info(str, content_digest, modify_time, page_size,
+                                                file_size, allocator))) {
+      LOG_WARN("failed to set access info", K(ret));
+    }
+    if (OB_FAIL(ret)) {
       out->~ObExternalAccessFileInfo();
       allocator.free(out);
       out = nullptr;
@@ -326,11 +353,14 @@ TEST_F(TestExtFileAccess, test_file_map_key) {
 
   {
     ObString str;
+    const int64_t modify_time = 1024;
+    const int64_t page_size = 512 * 1024;
+    ObString content_digest("");
     void *buf = make_obstr("key0", str);
     ASSERT_NE(nullptr, buf);
 
-    FileMapKey key(0, &allocator);
-    EXPECT_SUCC(key.init(str));
+    FileMapKey key(&allocator);
+    EXPECT_SUCC(key.init(str, content_digest, modify_time, page_size));
 
     ObExternalAccessFileInfo *info = make_file_info(str);
     ASSERT_NE(nullptr, info);
@@ -341,8 +371,11 @@ TEST_F(TestExtFileAccess, test_file_map_key) {
 
   {
     ObString str("key1");
-    FileMapKey key(0, &allocator);
-    EXPECT_SUCC(key.init(str));
+    const int64_t modify_time = 1024;
+    const int64_t page_size = 512 * 1024;
+    ObString content_digest("");
+    FileMapKey key(&allocator);
+    EXPECT_SUCC(key.init(str, content_digest, modify_time, page_size));
 
     ObExternalAccessFileInfo *info = make_file_info(str);
     ASSERT_NE(nullptr, info);
@@ -350,8 +383,11 @@ TEST_F(TestExtFileAccess, test_file_map_key) {
   }
 
   ObExternalAccessFileInfo *info = nullptr;
-  FileMapKey key(0, &allocator);
-  EXPECT_SUCC(key.init(ObString("key0")));
+  FileMapKey key(&allocator);
+  const int64_t modify_time = 1024;
+  const int64_t page_size = 512 * 1024;
+  ObString content_digest("");
+  EXPECT_SUCC(key.init(ObString("key0"), content_digest, modify_time, page_size));
   EXPECT_SUCC(map.get_refactored(key, info));
   ASSERT_NE(nullptr, info);
   ASSERT_TRUE(ObString("key0") == info->get_url());
@@ -363,7 +399,7 @@ TEST_F(TestExtFileAccess, test_file_map_key) {
   info = nullptr;
   key.modify_time_ = 0;
   key.allocator_ = &allocator;
-  EXPECT_SUCC(key.init(ObString("key1")));
+  EXPECT_SUCC(key.init(ObString("key1"), content_digest, modify_time, page_size));
   EXPECT_SUCC(map.get_refactored(key, info));
   ASSERT_NE(nullptr, info);
   ASSERT_TRUE(ObString("key1") == info->get_url());
@@ -380,7 +416,9 @@ TEST_F(TestExtFileAccess, test_ext_page_cache_key) {
   common::ObIKVCacheKey *key = nullptr;
   {
     std::string url = "/path/to/file";
-    ObExternalDataPageCacheKey tmp(url.data(), url.size(), 123, 456, 789);
+    const int64_t modify_time = 1024;
+    const int64_t page_size = 512 * 1024;
+    ObExternalDataPageCacheKey tmp(url.data(), url.size(),  nullptr, 0, modify_time, page_size, 0, 789);
 
     char *buf = (char*)allocator.alloc(tmp.size());
     EXPECT_NE(nullptr, buf);
@@ -389,7 +427,9 @@ TEST_F(TestExtFileAccess, test_ext_page_cache_key) {
     memset(url.data(), 0, url.size());
   }
   std::string url = "/path/to/file";
-  EXPECT_TRUE(key->operator==(ObExternalDataPageCacheKey(url.data(), url.size(), 123, 456, 789)));
+  const int64_t modify_time = 1024;
+  const int64_t page_size = 512 * 1024;
+  EXPECT_TRUE(key->operator==(ObExternalDataPageCacheKey(url.data(), url.size(), nullptr, 0, modify_time, page_size, 0, 789)));
   LOG_INFO("print ext page cache key", KPC(static_cast<ObExternalDataPageCacheKey*>(key)));
 
   key->~ObIKVCacheKey();

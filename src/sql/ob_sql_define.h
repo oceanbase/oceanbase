@@ -110,7 +110,8 @@ enum PathType
   FUNCTION_TABLE_ACCESS,
   TEMP_TABLE_ACCESS,
   JSON_TABLE_ACCESS,
-  VALUES_TABLE_ACCESS
+  VALUES_TABLE_ACCESS,
+  LAKE_TABLE_ACCESS
 };
 
 enum JtColType {
@@ -142,6 +143,25 @@ enum ObMatchAgainstMode {
   WITH_QUERY_EXPANSION = 3,
   MATCH_PHRASE_MODE = 4,
   MAX_MATCH_AGAINST_MODE = 5,
+};
+
+enum ObMatchOperator {
+  MATCH_OPERATOR_OR = 0,
+  MATCH_OPERATOR_AND = 1,
+  MAX_MATCH_OPERATOR = 2,
+};
+
+enum ObMatchScoreNorm {
+  SCORE_NORM_NONE = 0,
+  SCORE_NORM_MIN_MAX = 1,
+  MAX_SCORE_NORM_TYPE = 3,
+};
+
+enum ObMatchFiledsType {
+  MATCH_MOST_FIELDS = 0,
+  MATCH_BEST_FIELDS = 1,
+  MATCH_CROSS_FIELDS = 2,
+  MAX_MATCH_FIELDS_TYPE = 3,
 };
 
 #define IS_HASH_SLAVE_MAPPING(type)                                                                \

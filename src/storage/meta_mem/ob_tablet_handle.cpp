@@ -21,10 +21,11 @@ namespace storage
 ObTabletHandle::ObTabletHandle(const char *file /* __builtin_FILE() */,
                                const int line /* __builtin_LINE() */,
                                const char *func /* __builtin_FUNCTION() */)
-  : Base(),
-    type_(ObTabletHandle::ObTabletHdlType::MAX),
+  : type_(ObTabletHandle::ObTabletHdlType::MAX),
+    wash_priority_(WashTabletPriority::WTP_MAX),
     index_(ObTabletHandleIndexMap::LEAK_CHECKER_INITIAL_INDEX),
-    wash_priority_(WashTabletPriority::WTP_MAX)
+    obj_(nullptr), obj_pool_(nullptr), allocator_(nullptr),
+    t3m_(nullptr), hold_start_time_(INT64_MAX)
 {
   // tablet leak checker related
   register_into_leak_checker(file, line, func);
@@ -37,12 +38,26 @@ int ObTabletHandle::assign(const ObTabletHandle &other)
   if (&other != this) {
     switch (other.type_) {
       case ObTabletHandle::ObTabletHdlType::FROM_T3M : {
-        reset();
-        Base::operator=(other);
-        type_ = other.type_;
-        wash_priority_ = other.wash_priority_;
-        if (OB_FAIL(inc_ref_in_leak_checker(this->t3m_))) {
-          LOG_WARN("failed to inc ref in leak checker", K(ret), K(index_), KP(this->t3m_));
+        if (OB_UNLIKELY(!other.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "tablet handle is invalid", K(ret), K(other), KPC(this));
+          ob_abort();
+        } else {
+          reset();
+          type_ = other.type_;
+          wash_priority_ = other.wash_priority_;
+          obj_ = other.obj_;
+          obj_pool_ = other.obj_pool_;
+          allocator_ = other.allocator_;
+          hold_start_time_ = ObClockGenerator::getClock();
+          t3m_ = other.t3m_;
+          obj_->inc_ref();
+
+          if (OB_UNLIKELY(obj_->get_ref() < 2)) {
+            STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "tablet handle may be accessed by multiple threads or ref cnt leak", KP(obj_), KP(obj_pool_));
+          } else if (OB_FAIL(inc_ref_in_leak_checker(this->t3m_))) {
+            LOG_WARN("failed to inc ref in leak checker", K(ret), K(index_), KP(this->t3m_));
+          }
         }
         break;
       }
@@ -61,6 +76,7 @@ int ObTabletHandle::assign(const ObTabletHandle &other)
   return ret;
 }
 
+
 ObTabletHandle::~ObTabletHandle()
 {
   reset();
@@ -68,35 +84,55 @@ ObTabletHandle::~ObTabletHandle()
 
 void ObTabletHandle::set_obj(const ObTabletHdlType type, ObMetaObj<ObTablet> &obj)
 {
-  set_obj(obj);
-  type_ = type;
+  int ret = OB_SUCCESS;
+  reset();
+  if (nullptr != obj.ptr_) {
+    if (OB_UNLIKELY(nullptr == obj.pool_ && nullptr == obj.allocator_)) {
+      STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "object pool is nullptr", K(obj));
+      ob_abort();
+    }
+
+    type_ = type;
+    obj_ = obj.ptr_;
+    t3m_ = obj.t3m_; // t3m maybe nullptr
+    obj_pool_ = obj.pool_;
+    allocator_ = obj.allocator_;
+    hold_start_time_ = ObClockGenerator::getClock();
+    wash_priority_ = WashTabletPriority::WTP_LOW;
+    obj_->inc_ref();
+
+    // tablet leak checker related
+    if (OB_FAIL(inc_ref_in_leak_checker(obj.t3m_))) {
+      LOG_WARN("failed to inc ref in leak checker", K(ret), K(index_), KP(this->t3m_));
+    }
+  }
 }
 
 void ObTabletHandle::set_obj(const ObTabletHdlType type, ObTablet *obj, common::ObIAllocator *allocator, ObTenantMetaMemMgr *t3m)
 {
-  set_obj(obj, allocator, t3m);
-  type_ = type;
-}
-
-void ObTabletHandle::set_obj(ObMetaObj<ObTablet> &obj)
-{
-  Base::set_obj(obj);
-  type_ = ObTabletHandle::ObTabletHdlType::MAX;
-  // tablet leak checker related
   int ret = OB_SUCCESS;
-  if (OB_FAIL(inc_ref_in_leak_checker(obj.t3m_))) {
-    LOG_WARN("failed to inc ref in leak checker", K(ret), K(index_), KP(this->t3m_));
-  }
-}
+  reset();
+  if (nullptr == obj && nullptr == allocator && nullptr == t3m) {
+    STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "invalid args to set", KP(obj), KP(allocator), KP(t3m));
+    ob_abort();
+  } else if (nullptr != obj) {
+    if (nullptr == allocator) {
+      STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "allocator is nullptr", KP(obj), KP(allocator), KP(t3m));
+      ob_abort();
+    }
 
-void ObTabletHandle::set_obj(ObTablet *obj, common::ObIAllocator *allocator, ObTenantMetaMemMgr *t3m)
-{
-  Base::set_obj(obj, allocator, t3m);
-  type_ = ObTabletHandle::ObTabletHdlType::MAX;
-  // tablet leak checker related
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(inc_ref_in_leak_checker(t3m))) {
-    LOG_WARN("failed to inc ref in leak checker", K(ret), K(index_), KP(this->t3m_));
+    type_ = type;
+    obj_ = obj;
+    t3m_ = t3m;
+    allocator_ = allocator;
+    hold_start_time_ = ObClockGenerator::getClock();
+    wash_priority_ = WashTabletPriority::WTP_LOW;
+    obj_->inc_ref();
+
+    // tablet leak checker related
+    if (OB_FAIL(inc_ref_in_leak_checker(t3m))) {
+      LOG_WARN("failed to inc ref in leak checker", K(ret), K(index_), KP(this->t3m_));
+    }
   }
 }
 
@@ -105,7 +141,8 @@ bool ObTabletHandle::is_valid() const
   bool ret = false;
   switch (type_) {
     case ObTabletHandle::ObTabletHdlType::FROM_T3M : {
-      ret = Base::is_valid();
+      ret = nullptr != obj_ && nullptr != t3m_
+          && ((nullptr != obj_pool_ && nullptr == allocator_) || (nullptr == obj_pool_ && nullptr != allocator_));
       break;
     }
     case ObTabletHandle::ObTabletHdlType::COPY_FROM_T3M : {

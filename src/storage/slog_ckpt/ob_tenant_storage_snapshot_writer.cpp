@@ -375,7 +375,7 @@ int ObTenantStorageSnapshotWriter::record_tablet_meta(
     } else if (addr.is_none()) {
       ret = OB_NEED_RETRY;  // tablet slog has been written, but the addr hasn't been updated
       LOG_WARN("addr is none", K(ret));
-    } else if (ObTenantStorageMetaType::SNAPSHOT == meta_type_ && OB_FAIL(copy_tablet(data_version, tablet_key, ls.get_ls_epoch(), slog_buf, clog_max_scn))) {
+    } else if (ObTenantStorageMetaType::SNAPSHOT == meta_type_ && OB_FAIL(copy_tablet(ls, data_version, tablet_key, ls.get_ls_epoch(), slog_buf, clog_max_scn))) {
       LOG_WARN("fail to copy tablet", K(ret), K(tablet_key), K(data_version));
     }
   }
@@ -393,6 +393,7 @@ int ObTenantStorageSnapshotWriter::record_tablet_meta(
 }
 
 int ObTenantStorageSnapshotWriter::copy_tablet(
+    ObLS &ls,
     const uint64_t data_version,
     const ObTabletMapKey &tablet_key,
     const int64_t ls_epoch,
@@ -417,8 +418,17 @@ int ObTenantStorageSnapshotWriter::copy_tablet(
     }
   } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
   } else if (tablet->get_tablet_addr().is_file()) {
-    const ObTabletPersisterParam param(data_version, tablet_key.ls_id_, ls_epoch, tablet_key.tablet_id_, tablet->get_transfer_seq());
-    if (OB_UNLIKELY(!tablet->is_empty_shell())) {
+    int64_t tablet_meta_version = 0;
+    if (GCTX.is_shared_storage_mode() && OB_FAIL(ls.get_tablet_svr()->alloc_private_tablet_meta_version_with_lock(tablet_key, tablet_meta_version))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        LOG_INFO("skip writing snapshot for this tablet", K(tablet_key));
+      } else {
+        LOG_WARN("failed to alloc tablet meta version", K(ret), K(tablet_key));
+      }
+    }
+    const ObTabletPersisterParam param(data_version, tablet_key.ls_id_, ls_epoch, tablet_key.tablet_id_, tablet->get_transfer_seq(), tablet_meta_version);
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(!tablet->is_empty_shell())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("addr format normal tablet's shouldn't be file", K(ret), KPC(tablet));
     } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(param, *tablet, new_empty_shell_handle))) {

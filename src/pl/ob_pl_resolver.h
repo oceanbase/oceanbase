@@ -544,11 +544,11 @@ public:
   int check_common_accessible(
     AccessorItem &caller, ObIArray<AccessorItem> &accessors);
   int resolve_routine_accessible_by(
-    const ObString source, ObIArray<AccessorItem> &result);
+    const ObString source, ObIAllocator &allocator, ObIArray<AccessorItem> &result);
   int resolve_package_accessible_by(
-    const ObString source, ObIArray<AccessorItem> &result);
+    const ObString source, ObIAllocator &allocator, ObIArray<AccessorItem> &result);
   int resolve_accessible_by(
-    const ObStmtNodeTree *accessor_list, ObIArray<AccessorItem> &result);
+    const ObStmtNodeTree *accessor_list, ObIAllocator &alloc, ObIArray<AccessorItem> &result);
 
   static
   int resolve_sp_subtype_precision(ObSQLSessionInfo &session_info,

@@ -21,6 +21,8 @@ namespace oceanbase
 namespace rootserver
 {
 
+static constexpr int64_t MIN_DATA_VERSION_FOR_VID_OPT = DATA_VERSION_4_4_1_0;
+
 class ObVecIndexBuildTask : public ObDDLTask
 {
 public:
@@ -67,7 +69,7 @@ public:
       K(vid_rowkey_task_id_), K(delta_buffer_task_id_),
       K(index_id_task_id_), K(index_snapshot_task_id_), K(drop_index_task_id_), K(is_rebuild_index_),
       K(drop_index_task_submitted_), K(schema_version_), K(execution_id_), K(is_offline_rebuild_),
-      K(consumer_group_id_), K(trace_id_), K(parallelism_), K(create_index_arg_));
+      K(consumer_group_id_), K(trace_id_), K(parallelism_), K(create_index_arg_), K(use_vid_));
 
 public:
   static bool is_rebuild_dense_vec_index_task(const share::schema::ObTableSchema &index_schema);
@@ -107,9 +109,6 @@ private:
   int construct_index_id_arg(obrpc::ObCreateIndexArg &arg);
   int construct_index_snapshot_data_arg(obrpc::ObCreateIndexArg &arg);
 
-  int record_index_table_id(
-      const obrpc::ObCreateIndexArg *create_index_arg_,
-      uint64_t &aux_table_id);
   int get_index_table_id(
       const obrpc::ObCreateIndexArg *create_index_arg,
       uint64_t &index_table_id);
@@ -208,6 +207,7 @@ private:
   ObDDLWaitTransEndCtx wait_trans_ctx_;
   obrpc::ObCreateIndexArg create_index_arg_;
   common::hash::ObHashMap<uint64_t, share::ObDomainDependTaskStatus> dependent_task_result_map_;
+  bool use_vid_;
 };
 
 } // end namespace rootserver

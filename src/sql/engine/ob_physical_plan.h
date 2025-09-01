@@ -55,6 +55,7 @@ struct ObAuditRecordData;
 class ObOpSpec;
 class ObEvolutionPlan;
 class ObSqlSchemaGuard;
+class EnableOpRichFormat;
 
 //class ObPhysicalPlan: public common::ObDLinkBase<ObPhysicalPlan>
 typedef common::ObFixedArray<common::ObFixedArray<int64_t, common::ObIAllocator>, common::ObIAllocator> PhyRowParamMap;
@@ -179,7 +180,7 @@ public:
     const ObPhyOperatorType type, const int64_t child_cnt, ObOpSpec *&op, const uint64_t op_id);
   int alloc_op_spec_for_cg(ObLogicalOperator *op, ObSqlSchemaGuard *schema_guard,
                            const ObPhyOperatorType type, const int64_t child_cnt, ObOpSpec *&spec,
-                           const uint64_t op_id);
+                           const uint64_t op_id, const EnableOpRichFormat &enable_rich_format);
 
   void set_location_type(ObPhyPlanType type) { location_type_ = type; }
   bool has_uncertain_local_operator() const { return OB_PHY_PLAN_UNCERTAIN == location_type_; }
@@ -234,7 +235,6 @@ public:
   uint64_t get_signature() const { return signature_; }
   void set_plan_hash_value(uint64_t v) { stat_.plan_hash_value_ = v; }
   int32_t *alloc_projector(int64_t projector_size);
-  int add_table_location(const ObPhyTableLocation &table_location);
   ObExprOperatorFactory &get_expr_op_factory() { return expr_op_factory_; }
   const ObExprOperatorFactory &get_expr_op_factory() const { return expr_op_factory_; }
 
@@ -480,6 +480,13 @@ public:
   inline void set_is_inner_sql(bool v) { is_inner_sql_ = v; }
   inline void set_is_batch_params_execute(bool v) { is_batch_params_execute_ = v; }
   inline bool is_dml_write_stmt() const { return ObStmt::is_dml_write_stmt(stmt_type_); }
+#ifdef OB_BUILD_SPM
+  static bool enable_spm_improve(const uint64_t opt_version) {
+    return  (COMPAT_VERSION_4_2_5_BP4 <= opt_version && COMPAT_VERSION_4_3_0 > opt_version)
+             || (COMPAT_VERSION_4_3_5_BP4 <= opt_version && COMPAT_VERSION_4_4_0 >opt_version)
+             || COMPAT_VERSION_4_4_1 <= opt_version;
+  }
+  bool enable_spm_improve() const { return enable_spm_improve(optimizer_features_enable_version_);  }
   inline bool should_add_baseline() const {
     return (ObStmt::is_dml_stmt(stmt_type_)
             && (stmt::T_INSERT != stmt_type_ || is_insert_select_)
@@ -490,8 +497,11 @@ public:
             // TODO:@yibo batch multi stmt relay get_plan to init some structure. But spm may not enter
             // get_plan. Now we disable spm when batch multi stmt exists.
             && !is_remote_plan()
-            && is_dep_base_table());
+            && is_dep_base_table()
+            && (DEPENDENCY_OUTLINE != get_outline_state().outline_version_.object_type_
+                || (enable_spm_improve() && get_outline_state().is_prue_concurrent_limit_)));
   }
+#endif
   inline bool is_plain_select() const
   {
     bool is_plain = true;

@@ -20,6 +20,7 @@
 #include "storage/lob/ob_lob_manager.h"
 #include "lib/charset/ob_charset_string_helper.h"
 #include "sql/engine/expr/ob_json_param_type.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -758,6 +759,27 @@ int ObJsonExprHelper::get_json_val(const ObExpr &expr, ObEvalCtx &ctx,
                                                                   HAS_FLAG(parse_flag, ObJsonParser::JSN_RELAXED_FLAG),
                                                                   format_json)))) {
       LOG_WARN("failed: parse value to jsonBase", K(ret), K(val_type));
+    }
+  } else if (val_type == ObCollectionSQLType) {
+    ObString val_str = json_datum->get_string();
+    ObString res_str;
+    void *buf = NULL;
+    if (OB_FAIL(ObArrayExprUtils::convert_to_string(*allocator, ctx, json_arg->obj_meta_.get_subschema_id(),
+                                                    val_str, res_str))) {
+      LOG_WARN("failed to convert collection to string", K(ret), K(val_type));
+    } else if (OB_ISNULL(buf = allocator->alloc(sizeof(ObJsonString)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate json string", K(ret));
+    } else {
+      ObIJsonBase* json_node = NULL;
+      json_node = (ObJsonString*)new(buf)ObJsonString(res_str.ptr(), res_str.length());
+      if (to_bin) {
+        if (OB_FAIL(ObJsonBaseFactory::transform(allocator, json_node, ObJsonInType::JSON_BIN, j_base))) {
+          LOG_WARN("failed: json tree to bin", K(ret));
+        }
+      } else {
+        j_base = json_node;
+      }
     }
   } else {
     ObBasicSessionInfo *session = ctx.exec_ctx_.get_my_session();

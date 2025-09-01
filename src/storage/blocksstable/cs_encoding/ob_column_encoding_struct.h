@@ -57,7 +57,7 @@ struct ObCSColumnHeader
   enum Attribute : uint8_t
   {
     IS_FIXED_LENGTH = 0x01,
-    HAS_NULL_BITMAP = 0x02,
+    HAS_NULL_OR_NOP_BITMAP = 0x02, // FARM COMPAT WHITELIST
     OUT_ROW = 0x04,
     HAS_NOP_BITMAP = 0x08,
     HAS_NOP = 0x10,
@@ -96,13 +96,29 @@ struct ObCSColumnHeader
   {
     return INT_DICT == type_;
   }
-  inline bool has_null_bitmap() const
+  inline bool has_null_or_nop_bitmap() const
   {
-    return attrs_ & HAS_NULL_BITMAP;
+    return attrs_ & HAS_NULL_OR_NOP_BITMAP;
   }
-  inline void set_has_null_bitmap()
+  inline void set_has_null_or_nop_bitmap()
   {
-    attrs_ |= HAS_NULL_BITMAP;
+    attrs_ |= HAS_NULL_OR_NOP_BITMAP;
+  }
+  inline bool has_nop_bitmap() const
+  {
+    return attrs_ & HAS_NOP_BITMAP;
+  }
+  inline void set_has_nop_bitmap()
+  {
+    attrs_ |= HAS_NOP_BITMAP;
+  }
+  inline bool has_nop() const
+  {
+    return attrs_ & HAS_NOP;
+  }
+  inline void set_has_nop()
+  {
+    attrs_ |= HAS_NOP;
   }
   inline bool is_out_row() const
   {
@@ -337,8 +353,8 @@ class ObSemiStructColumnEncodeCtx;
 struct ObColumnCSEncodingCtx
 {
   ObIAllocator *allocator_;
-  int64_t null_cnt_;
-  int64_t nope_cnt_;
+  int64_t null_or_nop_cnt_; // = null_cnt_ + nop_cnt_
+  int64_t nop_cnt_;
   int64_t var_data_size_;
   int64_t dict_var_data_size_;
   int64_t fix_data_size_;
@@ -361,7 +377,7 @@ struct ObColumnCSEncodingCtx
 
   ObColumnCSEncodingCtx()
     : allocator_(nullptr),
-      null_cnt_(0), nope_cnt_(0),
+      null_or_nop_cnt_(0), nop_cnt_(0),
       var_data_size_(0), dict_var_data_size_(0),
       fix_data_size_(0), max_string_size_(0),
       col_datums_(nullptr), ht_(nullptr),
@@ -381,7 +397,7 @@ struct ObColumnCSEncodingCtx
                          const bool micro_block_has_lob_out_row,
                          const int64_t major_working_cluster_version);
 
-  TO_STRING_KV(K_(null_cnt), K_(nope_cnt), K_(var_data_size),
+  TO_STRING_KV(K_(null_or_nop_cnt), K_(nop_cnt), K_(var_data_size),
                K_(dict_var_data_size), K_(fix_data_size),
                KP_(col_datums), KP_(ht), KP_(encoding_ctx), KP_(semistruct_ctx), K_(max_string_size),
                K_(need_sort), K_(force_raw_encoding), K_(is_semistruct_sub_col), K_(has_stored_meta),
@@ -396,30 +412,60 @@ struct ObBaseColumnDecoderCtx
   common::ObObjMeta obj_meta_;
   enum ObNullFlag : uint8_t
   {
-    HAS_NO_NULL = 0, // has no null
-    HAS_NULL_BITMAP = 1, // must be not dict encoding, because dict encoding use max ref as null
+    HAS_NO_NULL_OR_NOP = 0, // FARM COMPAT WHITELIST has no null or nope
+    HAS_NULL_OR_NOP_BITMAP = 1, // FARM COMPAT WHITELIST must be not dict encoding, because dict encoding use max ref as null
     IS_NULL_REPLACED = 2, // represet use_null_replaced_value or use_zero_len_as_null
     IS_NULL_REPLACED_REF = 3, // must be dict encoding
     MAX = 4
   };
   ObNullFlag null_flag_;
+  enum class ObNopFlag : uint8_t
+  {
+    HAS_NO_NOP = 0,
+    HAS_NOP_BITMAP = 1,
+    IS_NOP_REPLACED = 2,
+    MAX = 3
+  };
+  // IS_NOP_REPLACED: no null value and has nop value
+  // null (replace value or bitmap) is considered as nop
+  ObNopFlag nop_flag_;
   union
   {
     const void *null_desc_;
-    const char *null_bitmap_; // 1 is null, 0 not null, valid when null_flag_ == HAS_NULL_BITMAP
+    const char *null_or_nop_bitmap_; // 1 is null / nop, 0 not null / nop, valid when null_flag_ == HAS_NULL_OR_NOP_BITMAP
     int64_t null_replaced_ref_; // dict may use a special ref(usually max_ref + 1) to replace null, valid when null_flag_ == IS_NULL_REPLACED_REF
     int64_t null_replaced_value_; // valid when column type is integer and  null_flag_ == IS_NULL_REPLACED
   };
+  const char* nop_bitmap_; // 1 is nop, 0 not nop
+  // nop_bitmap_ is after null_bitmap_ aka nop_bitmap_ == null_bitmap_ + null_bitmap_size
+  // when using replaced value / ref as null, null_bitmap_size is 0
+  // and if there has nop bitmap, nop_bitmap_ == null_bitmap_
+  // -----------------------------------------------------
+  // | null_bitmap | nop_bitmap | description           |
+  // -----------------------------------------------------
+  // |      0      |      0      | not null and not nop |
+  // -----------------------------------------------------
+  // |      1      |      0      | null                  |
+  // -----------------------------------------------------
+  // |      0      |      1      | impossible            |
+  // -----------------------------------------------------
+  // |      1      |      1      | nop                  |
+  // -----------------------------------------------------
   const ObMicroBlockHeader *micro_block_header_;
   const ObCSColumnHeader *col_header_;
    // Pointer to ColumnParam for padding in filter pushdown
   const share::schema::ObColumnParam *col_param_;
   common::ObIAllocator *allocator_;
+  // `datum` must be null before calling this function
+  void set_nop_if_is_null(const int32_t row_id, ObStorageDatum &datum) const;
 
-  OB_INLINE bool has_no_null() const { return HAS_NO_NULL == null_flag_; }
-  OB_INLINE bool has_null_bitmap() const { return HAS_NULL_BITMAP == null_flag_; }
+  OB_INLINE bool has_no_null_or_nop() const { return HAS_NO_NULL_OR_NOP == null_flag_; }
+  OB_INLINE bool has_null_or_nop_bitmap() const { return HAS_NULL_OR_NOP_BITMAP == null_flag_; }
   OB_INLINE bool is_null_replaced() const { return IS_NULL_REPLACED == null_flag_; }
   OB_INLINE bool is_null_replaced_ref() const { return IS_NULL_REPLACED_REF == null_flag_; }
+  OB_INLINE bool has_no_nop() const { return ObNopFlag::HAS_NO_NOP == nop_flag_; }
+  OB_INLINE bool has_nop_bitmap() const { return ObNopFlag::HAS_NOP_BITMAP == nop_flag_; }
+  OB_INLINE bool is_nop_replaced() const { return ObNopFlag::IS_NOP_REPLACED == nop_flag_; }
 
   OB_INLINE void set_col_param(const share::schema::ObColumnParam *col_param)
   {
@@ -427,7 +473,13 @@ struct ObBaseColumnDecoderCtx
   }
   void reset() { MEMSET(this, 0, sizeof(ObBaseColumnDecoderCtx));}
 
-  TO_STRING_KV(K_(obj_meta), KPC_(micro_block_header), KPC_(col_header), KP_(allocator), K_(null_flag), KP_(col_param));
+  TO_STRING_KV(K_(obj_meta),
+               KPC_(micro_block_header),
+               KPC_(col_header),
+               KP_(allocator),
+               K_(null_flag),
+               K_(nop_flag),
+               KP_(col_param));
 };
 
 struct ObIntegerColumnDecoderCtx : public ObBaseColumnDecoderCtx
@@ -529,6 +581,7 @@ struct ObColumnCSDecoderCtx final
     ObDictColumnDecoderCtx dict_ctx_;
     ObBaseColumnDecoderCtx new_col_ctx_;
     ObSemiStructColumnDecoderCtx semistruct_ctx_;
+    ObBaseColumnDecoderCtx base_ctx_;
   };
   bool is_padding_mode_;
   void reset() { MEMSET(this, 0, sizeof(ObColumnCSDecoderCtx));}

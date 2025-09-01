@@ -307,9 +307,17 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     px_node_selection_mode_(ObPxNodeSelectionMode::DEFAULT),
     enable_distributed_das_scan_(true),
     enable_topn_runtime_filter_(true),
+    enable_partial_group_by_pushdown_(true),
+    enable_partial_limit_pushdown_(true),
+    enable_storage_aggr_push_down_(false),
+    enable_storage_group_by_push_down_(false),
     enable_index_merge_(false),
+    enable_partial_distinct_pushdown_(true),
     enable_runtime_filter_adaptive_apply_(true),
-    extend_sql_plan_monitor_metrics_(false)
+    enable_rich_vector_format_(false),
+    rowsets_enabled_(false),
+    extend_sql_plan_monitor_metrics_(false),
+    min_cluster_version_(GET_MIN_CLUSTER_VERSION())
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -357,17 +365,6 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   obrpc::ObSrvRpcProxy* get_srv_proxy() { return srv_proxy_; }
   void set_srv_proxy(obrpc::ObSrvRpcProxy *srv_proxy) { srv_proxy_ = srv_proxy; }
   common::ObIArray<ObTablePartitionInfo *> & get_table_partition_info() { return table_partition_infos_; }
-  ObTablePartitionInfo *get_table_part_info_by_id(uint64_t table_loc_id, uint64_t ref_table_id)
-  {
-    ObTablePartitionInfo *table_part = nullptr;
-    for (int64_t i = 0; OB_ISNULL(table_part) && i < table_partition_infos_.count(); ++i) {
-      const ObDASTableLocMeta &loc_meta = table_partition_infos_.at(i)->get_table_location().get_loc_meta();
-      if (table_loc_id == loc_meta.table_loc_id_ && ref_table_id == loc_meta.ref_table_id_) {
-        table_part = table_partition_infos_.at(i);
-      }
-    }
-    return table_part;
-  }
   common::ObIArray<ObTableLocation> &get_table_location_list() { return table_location_list_; }
   inline const ParamStore *get_params()
   {
@@ -574,7 +571,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     if (0 > runtime_filter_type_) {
       get_runtime_filter_type();
     }
-    return 0 != runtime_filter_type_ && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0;
+    return 0 != runtime_filter_type_ && get_min_cluster_version() >= CLUSTER_VERSION_4_2_0_0;
   }
   bool enable_bloom_filter() {
     if (0 > runtime_filter_type_) {
@@ -813,11 +810,25 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_enable_distributed_das_scan(bool enabled) { enable_distributed_das_scan_ = enabled; }
   inline bool enable_topn_runtime_filter() const { return enable_topn_runtime_filter_; }
   inline void set_enable_topn_runtime_filter(bool enabled) { enable_topn_runtime_filter_ = enabled; }
+  inline bool enable_partial_group_by_pushdown() const { return enable_partial_group_by_pushdown_; }
+  inline void set_enable_partial_group_by_pushdown(bool enabled) { enable_partial_group_by_pushdown_ = enabled; }
+  inline bool enable_partial_limit_pushdown() const { return enable_partial_limit_pushdown_; }
+  inline void set_enable_partial_limit_pushdown(bool enabled) { enable_partial_limit_pushdown_ = enabled; }
+  inline bool get_rowsets_enabled() const { return rowsets_enabled_; }
+  inline void set_rowsets_enabled(bool enabled) { rowsets_enabled_ = enabled; }
+  inline bool enable_storage_aggr_pushdown() const { return enable_storage_aggr_push_down_; }
+  inline void set_enable_storage_aggr_pushdown(bool enabled) { enable_storage_aggr_push_down_ = enabled; }
+  inline bool enable_storage_groupby_pushdown() const { return enable_storage_group_by_push_down_; }
+  inline void set_enable_storage_groupby_pushdown(bool enabled) { enable_storage_group_by_push_down_ = enabled; }
+  inline bool enable_partial_distinct_pushdown() const { return enable_partial_distinct_pushdown_; }
+  inline void set_enable_partial_distinct_pushdown(bool enabled) { enable_partial_distinct_pushdown_ = enabled; }
   inline bool enable_runtime_filter_adaptive_apply() const { return enable_runtime_filter_adaptive_apply_; }
   inline void set_enable_runtime_filter_adaptive_apply(bool enabled) { enable_runtime_filter_adaptive_apply_ = enabled; }
+  inline bool get_enable_rich_vector_format() const { return enable_rich_vector_format_; }
+  inline void set_enable_rich_vector_format(bool enabled) { enable_rich_vector_format_ = enabled; }
   inline void set_extend_sql_plan_monitor_metrics(bool enabled) { extend_sql_plan_monitor_metrics_ = enabled; }
   inline bool extend_sql_plan_monitor_metrics() { return extend_sql_plan_monitor_metrics_; }
-
+  inline uint64_t get_min_cluster_version() const { return min_cluster_version_; }
 private:
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
@@ -942,9 +953,17 @@ private:
   ObPxNodeSelectionMode px_node_selection_mode_;
   bool enable_distributed_das_scan_;
   bool enable_topn_runtime_filter_;
+  bool enable_partial_group_by_pushdown_;
+  bool enable_partial_limit_pushdown_;
+  bool enable_storage_aggr_push_down_;
+  bool enable_storage_group_by_push_down_;
   bool enable_index_merge_;
+  bool enable_partial_distinct_pushdown_;
   bool enable_runtime_filter_adaptive_apply_;
+  bool enable_rich_vector_format_;
+  bool rowsets_enabled_;
   bool extend_sql_plan_monitor_metrics_;
+  uint64_t min_cluster_version_; // Record the unified cluster version during the optimizer phase
 };
 }
 }

@@ -732,6 +732,13 @@ OB_DEF_SERIALIZE(ObInsertUpCtDef)
   int ret = OB_SUCCESS;
   OB_UNIS_ENCODE(*ins_ctdef_);
   OB_UNIS_ENCODE(*upd_ctdef_);
+  OB_UNIS_ENCODE(do_opt_path_);
+  OB_UNIS_ENCODE(do_index_lookup_);
+  OB_UNIS_ENCODE(unique_key_conv_exprs_);
+  OB_UNIS_ENCODE(unique_index_rowkey_exprs_);
+  if (OB_NOT_NULL(das_index_scan_ctdef_)) {
+    OB_UNIS_ENCODE(*das_index_scan_ctdef_);
+  }
   return ret;
 }
 
@@ -751,6 +758,19 @@ OB_DEF_DESERIALIZE(ObInsertUpCtDef)
   }
   OB_UNIS_DECODE(*ins_ctdef_);
   OB_UNIS_DECODE(*upd_ctdef_);
+  OB_UNIS_DECODE(do_opt_path_);
+  OB_UNIS_DECODE(do_index_lookup_);
+  OB_UNIS_DECODE(unique_key_conv_exprs_);
+  OB_UNIS_DECODE(unique_index_rowkey_exprs_);
+  if (do_index_lookup_) {
+    ObDMLCtDefAllocator<ObDASScanCtDef> das_index_scan_ctdef_allocator(alloc_);
+    das_index_scan_ctdef_ = das_index_scan_ctdef_allocator.alloc();
+    if (OB_ISNULL(das_index_scan_ctdef_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc das_index_scan_ctdef failed", K(ret));
+    }
+    OB_UNIS_DECODE(*das_index_scan_ctdef_);
+  }
   return ret;
 }
 
@@ -759,6 +779,13 @@ OB_DEF_SERIALIZE_SIZE(ObInsertUpCtDef)
   int64_t len = 0;
   OB_UNIS_ADD_LEN(*ins_ctdef_);
   OB_UNIS_ADD_LEN(*upd_ctdef_);
+  OB_UNIS_ADD_LEN(do_opt_path_);
+  OB_UNIS_ADD_LEN(do_index_lookup_);
+  OB_UNIS_ADD_LEN(unique_key_conv_exprs_);
+  OB_UNIS_ADD_LEN(unique_index_rowkey_exprs_);
+  if (OB_NOT_NULL(das_index_scan_ctdef_)) {
+    OB_UNIS_ADD_LEN(*das_index_scan_ctdef_);
+  }
   return len;
 }
 

@@ -38,13 +38,21 @@ bool ObDictNodeCmp::operator()(const ObDictHashNode &lhs, const ObDictHashNode &
 }
 
 ObDictEncodingHashTable::ObDictEncodingHashTable()
-  : is_created_(false), is_sorted_(false),
-    bucket_num_(0), node_num_(0), distinct_node_cnt_(0),
-    buckets_(NULL), nodes_(NULL),
-    row_refs_(nullptr), null_node_(nullptr),
-    alloc_(blocksstable::OB_ENCODING_LABEL_HASH_TABLE, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
-{
-}
+    : is_created_(false),
+      is_sorted_(false),
+      bucket_num_(0),
+      node_num_(0),
+      distinct_node_cnt_(0),
+      buckets_(NULL),
+      nodes_(NULL),
+      row_refs_(nullptr),
+      refs_permutation_(nullptr),
+      null_node_(),
+      nop_node_(),
+      alloc_(blocksstable::OB_ENCODING_LABEL_HASH_TABLE,
+             OB_MALLOC_NORMAL_BLOCK_SIZE,
+             MTL_ID())
+{}
 
 ObDictEncodingHashTable::~ObDictEncodingHashTable()
 {
@@ -84,8 +92,8 @@ int ObDictEncodingHashTable::create(const int64_t bucket_num, const int64_t node
     } else {
       MEMSET(buckets_, 0, bucket_size);
       // nodes_ no need to memset;
-      null_node_ = &nodes_[node_num_ -1]; // last node in nodes_ is used for null datum
-      null_node_->reset();
+      null_node_.reset();
+      nop_node_.reset();
       is_created_ = true;
     }
   }
@@ -101,7 +109,8 @@ void ObDictEncodingHashTable::reset()
   buckets_ = NULL;
   nodes_ = NULL;
   row_refs_ = nullptr;
-  null_node_ = nullptr;
+  null_node_.reset();
+  nop_node_.reset();
   is_created_ = false;
   is_sorted_ = false;
 }
@@ -111,7 +120,8 @@ void ObDictEncodingHashTable::reuse()
   MEMSET(buckets_, 0, bucket_num_ * sizeof(HashBucket));
   // nodes_ no need to reset
   // row_refs_ no need to reset
-  null_node_->reset();
+  null_node_.reset();
+  nop_node_.reset();
   distinct_node_cnt_ = 0;
   is_sorted_ = false;
 }
@@ -136,7 +146,7 @@ int ObDictEncodingHashTable::sort_dict(ObCmpFunc &cmp_func)
       refs_permutation[nodes_[i].dict_ref_] = i;
     }
     // calc new dict_ref if dict is sorted
-    if (null_node_->duplicate_cnt_ > 0) { // has null
+    if (null_node_.duplicate_cnt_ + nop_node_.duplicate_cnt_ > 0) { // has null
       for(int64_t i = 0; i < row_count_; i++) {
         if (row_refs_[i] < distinct_node_cnt_) {
           row_refs_[i] = refs_permutation[row_refs_[i]];
@@ -170,7 +180,12 @@ int ObDictEncodingHashTableBuilder::build(const ObColDatums &col_datums, const O
       for (int64_t row_idx = 0; row_idx < row_count_; ++row_idx) {
         const ObDatum &datum = col_datums.at(row_idx);
         if (datum.is_null()) {
-          null_node_->duplicate_cnt_++;
+          null_node_.duplicate_cnt_++;
+          row_refs_[row_idx] = NULL_REF;
+        } else if (datum.is_nop()) {
+          nop_node_.duplicate_cnt_++;
+          // nop is considered as null in dict encoding
+          // use nop bitmap to distinguish nop and null if needed
           row_refs_[row_idx] = NULL_REF;
         } else {
           uint64_t pos = (datum.get_uint64() * 0x5bd1e995ULL) & mask; // simple hash
@@ -197,7 +212,12 @@ int ObDictEncodingHashTableBuilder::build(const ObColDatums &col_datums, const O
       for (int64_t row_idx = 0; row_idx < row_count_; ++row_idx) {
         const ObDatum &datum = col_datums.at(row_idx);
         if (datum.is_null()) {
-          null_node_->duplicate_cnt_++;
+          null_node_.duplicate_cnt_++;
+          row_refs_[row_idx] = NULL_REF;
+        } else if (datum.is_nop()) {
+          nop_node_.duplicate_cnt_++;
+          // nop is considered as null in dict encoding
+          // use nop bitmap to distinguish nop and null if needed
           row_refs_[row_idx] = NULL_REF;
         } else {
           // add to table
@@ -231,9 +251,9 @@ int ObDictEncodingHashTableBuilder::build(const ObColDatums &col_datums, const O
       }
     }
 
-    if (null_node_->duplicate_cnt_ > 0) {
-      null_node_->datum_.set_null();
-      null_node_->dict_ref_ = distinct_node_cnt_;
+    if (OB_SUCC(ret) && (null_node_.duplicate_cnt_ + nop_node_.duplicate_cnt_ > 0)) {
+      null_node_.datum_.set_null();
+      null_node_.dict_ref_ = distinct_node_cnt_;
       for (int64_t i = 0; i < row_count_; i++) {
         if (row_refs_[i] == NULL_REF) {
           row_refs_[i] = distinct_node_cnt_; // use distinct_node_cnt_ as null replaced ref

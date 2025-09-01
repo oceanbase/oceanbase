@@ -74,6 +74,58 @@ enum ObVecIndexAsyncTaskType { //FARM COMPAT WHITELIST
   OB_VECTOR_ASYNC_TASK_TYPE_INVALID
 };
 
+enum ObVectorAsyncOptStatus
+{
+  OB_VECTOR_ASYNC_OPT_PREPARE = 0,
+  OB_VECTOR_ASYNC_OPT_INSERTING,
+  OB_VECTOR_ASYNC_OPT_SERIALIZE,
+  OB_VECTOR_ASYNC_OPT_REPLACE,
+  OB_VECTOR_ASYNC_OPT_STATUS_MAX,
+};
+
+struct ObVecIndexTaskProgressInfo
+{
+  ObVectorAsyncOptStatus vec_opt_status_;
+  int64_t opt_esitimate_row_cnt_;
+  int64_t opt_finished_row_cnt_;
+  float progress_;
+  int64_t start_time_;
+  int64_t remain_time_;
+  ObVecIndexTaskProgressInfo()
+      : vec_opt_status_(OB_VECTOR_ASYNC_OPT_STATUS_MAX),
+        opt_esitimate_row_cnt_(0),
+        opt_finished_row_cnt_(0),
+        progress_(0),
+        start_time_(0),
+        remain_time_(0) {}
+  void start_progress(int64_t esitimate_row_cnt) {
+    opt_esitimate_row_cnt_ = esitimate_row_cnt;
+    opt_finished_row_cnt_ = 0;
+    progress_ = 0;
+    start_time_ = ObTimeUtility::fast_current_time();
+    remain_time_ = 0;
+  }
+  void update_progress(int64_t row_cnt) {
+    opt_finished_row_cnt_ += row_cnt;
+    if (opt_esitimate_row_cnt_ > 0 && opt_finished_row_cnt_ < opt_esitimate_row_cnt_) {
+      progress_ = static_cast<float>(opt_finished_row_cnt_) / static_cast<float>(opt_esitimate_row_cnt_);
+      remain_time_ = (ObTimeUtility::fast_current_time() - start_time_) / progress_ * (1 - progress_);
+    } else {
+      progress_ = 1;
+      remain_time_ = 0;
+    }
+  }
+  void reset() {
+    vec_opt_status_ = OB_VECTOR_ASYNC_OPT_STATUS_MAX;
+    opt_esitimate_row_cnt_ = 0;
+    opt_finished_row_cnt_ = 0;
+    progress_ = 0;
+    start_time_ = 0;
+    remain_time_ = 0;
+  }
+  TO_STRING_KV(K_(opt_esitimate_row_cnt), K_(opt_finished_row_cnt), K_(vec_opt_status), K_(progress), K_(start_time), K_(remain_time));
+};
+
 struct ObVecIndexTaskStatus
 {
   int64_t gmt_create_;
@@ -90,6 +142,7 @@ struct ObVecIndexTaskStatus
   int64_t ret_code_;
   // ObString trace_id_str_;
   TraceId trace_id_;
+  ObVecIndexTaskProgressInfo progress_info_;
 
   ObVecIndexTaskStatus() :  gmt_create_(0),
                             gmt_modified_(0),
@@ -102,11 +155,13 @@ struct ObVecIndexTaskStatus
                             status_(ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_INVALID),
                             target_scn_(),
                             ret_code_(VEC_ASYNC_TASK_DEFAULT_ERR_CODE),
-                            trace_id_() {}
+                            trace_id_(),
+                            progress_info_() {}
 
   TO_STRING_KV(K_(gmt_create), K_(gmt_modified), K_(tenant_id), K_(table_id),
                 K_(tablet_id), K_(task_type), K_(trigger_type), K_(task_id),
-                K_(status), K_(target_scn), K_(trace_id), K_(ret_code));
+                K_(status), K_(target_scn), K_(trace_id), K_(ret_code),
+                K_(progress_info));
 };
 
 struct ObVecIndexTaskKey
@@ -304,7 +359,7 @@ public:
 private:
   static const int BATCH_CNT = 2000; // 8M / 4(sizeof(float)) / 1000(dim)
   int build_inc_index(ObPluginVectorIndexAdaptor &adaptor);
-  int optimize_vector_index( ObPluginVectorIndexAdaptor &adaptor);
+  int optimize_vector_index( ObPluginVectorIndexAdaptor &adaptor, ObPluginVectorIndexAdaptor &old_adaptor);
   int refresh_snapshot_index_data(ObPluginVectorIndexAdaptor &adaptor, transaction::ObTxDesc *tx_desc, transaction::ObTxReadSnapshot &snapshot);
   int get_old_snapshot_data(
       ObPluginVectorIndexAdaptor &adaptor,
@@ -356,7 +411,8 @@ public:
       const char *tname,
       common::ObISQLClient &proxy,
       ObVecIndexTaskKey &key,
-      ObVecIndexFieldArray &update_fields);
+      ObVecIndexFieldArray &update_fields,
+      ObVecIndexTaskProgressInfo &progress_info);
   static int insert_vec_tasks(
       uint64_t tenant_id,
       const char *tname,

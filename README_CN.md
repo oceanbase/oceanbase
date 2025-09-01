@@ -150,4 +150,3 @@ OceanBase 数据库根据 Mulan 公共许可证版本 2 获得许可。有关详
 * [钉钉群:  33254054](images/dingtalk.png): 寻求帮助, 获取最新信息.
 * 微信群 (添加微信小助手: OBCE666): 社区交流与分享, 获取最新信息.
 * [GitHub Issues](https://github.com/oceanbase/oceanbase/issues): 反馈使用 OceanBase 时遇到的问题或建议。
-

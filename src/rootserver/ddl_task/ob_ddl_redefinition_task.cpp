@@ -2138,6 +2138,27 @@ int ObDDLRedefinitionTask::sync_column_level_stats_info(common::ObMySQLTransacti
         } else {
           LOG_WARN("fail to get new column name", K(ret), K(*col));
         }
+      } else if (col->is_prefix_column()) {
+        ObSEArray<uint64_t, 1> deps_column_ids;
+        const ObColumnSchemaV2 *orig_column = NULL;
+        const ObColumnSchemaV2 *alter_column = NULL;
+        ObString alter_column_name;
+        if (OB_FAIL(col->get_cascaded_column_ids(deps_column_ids))) {
+            LOG_WARN("get cascaded column ids from column schema failed", K(ret), KPC(col));
+        } else if (OB_UNLIKELY(deps_column_ids.count() != 1)) {
+          // do nothing
+        } else if (OB_ISNULL(orig_column = data_table_schema.get_column_schema(deps_column_ids.at(0)))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("deps column not found in table schema", K(ret), K(deps_column_ids.at(0)), K(data_table_schema));
+        } else if (OB_FAIL(col_name_map.get(orig_column->get_column_name_str(), alter_column_name))) {
+          LOG_WARN("failed to get new name", K(ret), K(orig_column->get_column_name()));
+        } else if (OB_ISNULL(alter_column = new_table_schema.get_column_schema(alter_column_name))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("alter column not found in table schema", K(ret), K(alter_column_name), K(new_table_schema));
+        } else if (alter_column->get_data_length() < col->get_data_length()) {
+          // alter dep_column_length < prefix_len, we need delete prefix column ,do nothing here
+          ret = OB_SUCCESS;
+        }
       } else if (OB_ISNULL(new_col = new_table_schema.get_column_schema(new_col_name))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("new column schema should not be null", K(ret), K(new_col_name), K(new_table_schema));

@@ -17,9 +17,13 @@
 
 namespace oceanbase
 {
+namespace obrpc
+{
+class ObTableSessIDRpcProxy;
+} // namespace obrpc
 namespace observer
 {
-
+class ObTableSessIDRequestRpc;
 class ObTableQueryASyncMgr : public common::ObTimerTask
 {
 public:
@@ -79,18 +83,22 @@ private:
   ObQueryHashMap *get_query_session_map();
   int generate_query_sessid(uint64_t &sess_id);
   lib::ObMutex& get_locker(uint64_t sessid) { return locker_arr_[sessid % DEFAULT_LOCK_ARR_SIZE];}
+  int generate_new_session_ids(const int64_t arg_session_count);
+  int release_occupied_session_id(const int64_t sess_id);
 
 private:
   int init();
+  int alloc_request_rpc_proxy();
+  int binary_search_sess_id_index(const int64_t session_id, int64_t &idx);
   DISALLOW_COPY_AND_ASSIGN(ObTableQueryASyncMgr);
 
 public:
   static const uint64_t INVALID_SESSION_ID = 0;
 private:
   static const uint64_t DEFAULT_LOCK_ARR_SIZE = 2000;
-  static const uint64_t QUERY_SESSION_MAX_SIZE = 1000;
+  static const uint64_t QUERY_SESSION_EXTEND_BATCH_SIZE = 10000;
   static const uint64_t MIN_QUERY_SESSION_CLEAN_DELAY = 1 * 1000 * 1000;  // 1s
-
+  static const uint64_t INIT_ARRAY_SIZE = 10000;
 
 private:
   common::ObFIFOAllocator allocator_;
@@ -99,6 +107,12 @@ private:
   lib::ObMutex locker_arr_[DEFAULT_LOCK_ARR_SIZE];
   common::ObTimer timer_;
   bool is_inited_;
+  uint64_t session_count_;
+  common::SpinRWLock lock_;
+  obrpc::ObTableSessIDRpcProxy *rpc_proxy_;
+  ObTableSessIDRequestRpc *id_request_rpc_;
+  ObSEArray<int64_t, INIT_ARRAY_SIZE> session_ids_; // start from 1
+  ObSEArray<uint8_t, INIT_ARRAY_SIZE> session_id_in_use_;
 };
 
 } // end of namespace table

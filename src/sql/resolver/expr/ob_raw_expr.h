@@ -1957,7 +1957,7 @@ public:
     EXPR_EXEC_PARAM,
     EXPR_PL_QUERY_REF,
     EXPR_MATCH_AGAINST,
-    EXPR_UNPIVOT,
+    EXPR_UNPIVOT
   };
 
   explicit ObRawExpr(ObItemType expr_type = T_INVALID)
@@ -3924,6 +3924,7 @@ public:
     udf_meta_(),
     expr_in_inner_stmt_(false),
     is_need_deserialize_row_(false),
+    keep_sum_precision_(false),
     pl_agg_udf_expr_(NULL)
   {
     set_expr_class(EXPR_AGGR);
@@ -3938,6 +3939,7 @@ public:
     udf_meta_(),
     expr_in_inner_stmt_(false),
     is_need_deserialize_row_(false),
+    keep_sum_precision_(false),
     pl_agg_udf_expr_(NULL)
   {
     set_expr_class(EXPR_AGGR);
@@ -3953,6 +3955,7 @@ public:
     udf_meta_(),
     expr_in_inner_stmt_(false),
     is_need_deserialize_row_(false),
+    keep_sum_precision_(false),
     pl_agg_udf_expr_(NULL)
   {
     set_expr_class(EXPR_AGGR);
@@ -4021,6 +4024,8 @@ public:
 
   int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const;
   const char *get_name_dblink(ObItemType expr_type) const;
+  void set_is_keep_sum_precision(bool v) { keep_sum_precision_ = v; }
+  bool get_is_keep_sum_precision() const { return keep_sum_precision_; }
   VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,
@@ -4045,6 +4050,7 @@ private:
   share::schema::ObUDFMeta udf_meta_;
   bool expr_in_inner_stmt_;
   bool is_need_deserialize_row_;// for topk histogram and hybrid histogram computation
+  bool keep_sum_precision_; // wether sum aggr should increase precision
   ObRawExpr *pl_agg_udf_expr_;//for pl agg udf expr
 };
 
@@ -4494,7 +4500,8 @@ public:
       params_desc_v2_(),
       dblink_name_(),
       dblink_id_(common::OB_INVALID_ID),
-      external_routine_type_(ObExternalRoutineType::INTERNAL_ROUTINE) {
+      external_routine_type_(ObExternalRoutineType::INTERNAL_ROUTINE),
+      is_mysql_udtf_(false) {
     set_expr_class(EXPR_UDF);
     is_deterministic_ = false;
   }
@@ -4525,7 +4532,8 @@ public:
       params_desc_v2_(),
       dblink_name_(),
       dblink_id_(common::OB_INVALID_ID),
-      external_routine_type_(ObExternalRoutineType::INTERNAL_ROUTINE) {
+      external_routine_type_(ObExternalRoutineType::INTERNAL_ROUTINE),
+      is_mysql_udtf_(false) {
     set_expr_class(EXPR_UDF);
     is_deterministic_ = false;
   }
@@ -4676,6 +4684,9 @@ public:
   inline ObExternalRoutineType get_external_routine_type() const { return external_routine_type_; }
   inline void set_external_routine_type(ObExternalRoutineType type) { external_routine_type_ = type; }
 
+  inline void set_mysql_udtf(bool is_mysql_udtf) { is_mysql_udtf_ = is_mysql_udtf; }
+  inline bool is_mysql_udtf() const { return is_mysql_udtf_; }
+
   VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,
@@ -4706,7 +4717,8 @@ public:
                                             K_(dblink_id),
                                             N_CHILDREN, exprs_,
                                             K_(expr_hash),
-                                            K_(external_routine_type));
+                                            K_(external_routine_type),
+                                            K_(is_mysql_udtf));
 
 private:
   uint64_t udf_id_;
@@ -4734,6 +4746,7 @@ private:
   common::ObString dblink_name_;
   uint64_t dblink_id_;
   ObExternalRoutineType external_routine_type_;
+  bool is_mysql_udtf_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObUDFRawExpr);
 };
@@ -5293,13 +5306,15 @@ class ObPseudoColumnRawExpr : public ObTerminalRawExpr
 public:
   ObPseudoColumnRawExpr() :
     ObTerminalRawExpr(),
-    table_id_(common::OB_INVALID_ID)
+    table_id_(common::OB_INVALID_ID),
+    mapped_column_id_(common::OB_INVALID_ID)
   {
     set_expr_class(EXPR_PSEUDO_COLUMN);
   }
   ObPseudoColumnRawExpr(common::ObIAllocator &alloc) :
     ObTerminalRawExpr(alloc),
-    table_id_(common::OB_INVALID_ID)
+    table_id_(common::OB_INVALID_ID),
+    mapped_column_id_(common::OB_INVALID_ID)
   {
     set_expr_class(EXPR_PSEUDO_COLUMN);
   }
@@ -5323,8 +5338,9 @@ public:
   void set_table_name(const common::ObString &table_name) { table_name_ = table_name; }
   const common::ObString & get_table_name() const { return table_name_; }
   void set_data_access_path(const common::ObString &data_access_path) { data_access_path_ = data_access_path; }
+  void set_mapped_column_id(int64_t mapped_column_id) { mapped_column_id_ = mapped_column_id; }
   const common::ObString & get_data_access_path() const { return data_access_path_; }
-
+  int64_t get_mapped_column_id() const { return mapped_column_id_; }
   VIRTUAL_TO_STRING_KVP(N_ITEM_TYPE, type_,
                        N_RESULT_TYPE, result_type_,
                        N_EXPR_INFO, info_,
@@ -5332,13 +5348,15 @@ public:
                        N_TABLE_ID, table_id_,
                        N_TABLE_NAME, table_name_,
                        K_(data_access_path),
-                       K_(expr_hash));
+                       K_(expr_hash),
+                       K_(mapped_column_id));
 private:
   ObRawExpr *cte_cycle_value_;
   ObRawExpr *cte_cycle_default_value_;
   uint64_t table_id_;
   common::ObString table_name_;
   common::ObString data_access_path_; //for external table column
+  int64_t mapped_column_id_; // for external table column
   DISALLOW_COPY_AND_ASSIGN(ObPseudoColumnRawExpr);
 };
 
@@ -5386,7 +5404,9 @@ public:
     : ObRawExpr(),
       mode_flag_(NATURAL_LANGUAGE_MODE),
       match_columns_(),
-      search_key_(NULL)
+      search_key_(NULL),
+      columns_boosts_(),
+      param_text_expr_(NULL)
   {
     set_expr_class(EXPR_MATCH_AGAINST);
   }
@@ -5395,7 +5415,9 @@ public:
     : ObRawExpr(alloc),
       mode_flag_(NATURAL_LANGUAGE_MODE),
       match_columns_(),
-      search_key_(NULL)
+      search_key_(NULL),
+      columns_boosts_(),
+      param_text_expr_(NULL)
   {
     set_expr_class(EXPR_MATCH_AGAINST);
   }
@@ -5425,12 +5447,22 @@ public:
   inline void set_search_key(ObRawExpr *search_key) { search_key_ = search_key; }
   inline const ObRawExpr *get_search_key() const { return search_key_; }
   inline ObRawExpr *get_search_key() { return search_key_; }
+  inline int set_columns_boosts(ObIArray<ObRawExpr*> &columns_boosts)
+  {
+    return columns_boosts_.assign(columns_boosts);
+  }
+  inline void set_param_text_expr(ObRawExpr *param_text_expr) { param_text_expr_ = param_text_expr; }
+  inline ObRawExpr *get_param_text_expr() const { return param_text_expr_; }
+  inline ObRawExpr *get_param_text_expr() { return param_text_expr_; }
+  inline const ObIArray<ObRawExpr*>& get_columns_boosts() const { return columns_boosts_; }
+  inline ObIArray<ObRawExpr*>& get_columns_boosts() { return columns_boosts_; }
   int get_table_id(uint64_t &table_id);
   int get_match_column_type(ObRawExprResType &result_type);
   inline int64_t get_search_key_idx() { return get_match_columns().count(); }
 
   int replace_param_expr(int64_t index, ObRawExpr *expr);
 
+  bool is_es_match() const { return get_expr_type() == T_FUN_ES_MATCH; }
   VIRTUAL_TO_STRING_KVP(
       N_ITEM_TYPE, type_,
       N_RESULT_TYPE, result_type_,
@@ -5438,7 +5470,8 @@ public:
       N_REL_ID, rel_ids_,
       K_(mode_flag),
       K_(match_columns),
-      KPC_(search_key));
+      KPC_(search_key),
+      KPC_(param_text_expr));
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMatchFunRawExpr);
@@ -5446,6 +5479,9 @@ private:
   ObSEArray<ObRawExpr*, COMMON_MULTI_NUM, ModulePageAllocator, true> match_columns_; // columns for choosing full-text index to use, serves only as an identifier;
                                                                                      // can only be replaced with equivalent base table columns, not with arbitrary expressions that are not base table columns.
   ObRawExpr *search_key_; // user defined search query
+
+  ObSEArray<ObRawExpr*, COMMON_MULTI_NUM, ModulePageAllocator, true> columns_boosts_; // boost values for each column
+  ObRawExpr *param_text_expr_; // param text expr for should_match_expr_
 };
 
 class ObUnpivotRawExpr : public ObRawExpr

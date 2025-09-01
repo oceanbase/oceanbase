@@ -84,11 +84,28 @@ struct ObHashRollupInfo
   {
 
   }
-
+  int assign(const ObHashRollupInfo &other);
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> expand_exprs_;
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> gby_exprs_;
   common::ObSEArray<ObTuple<ObRawExpr *, ObRawExpr *>, 8, common::ModulePageAllocator, true> dup_expr_pairs_;
   ObOpPseudoColumnRawExpr *rollup_grouping_id_;
+  common::ObSEArray<ObTuple<ObRawExpr *, ObRawExpr *>, 8, common::ModulePageAllocator, true> replaced_agg_pairs_;
+};
+
+struct ObGroupingSetInfo
+{
+  ObGroupingSetInfo(): grouping_set_id_(nullptr) {}
+  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> common_group_exprs_;
+  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> group_exprs_;
+  common::ObSEArray<ObOrderDirection, 8, common::ModulePageAllocator, true> group_dirs_;
+  common::ObSEArray<ObGroupbyExpr, 8, common::ModulePageAllocator, true> groupset_exprs_;
+  common::ObSEArray<ObGroupbyExpr, 8, common::ModulePageAllocator, true> pruned_groupset_exprs_;
+  common::ObSEArray<ObTuple<ObRawExpr *, ObRawExpr *>, 8, common::ModulePageAllocator, true> dup_expr_pairs_;
+  common::ObSEArray<ObTuple<ObRawExpr *, ObRawExpr *>, 8, common::ModulePageAllocator, true> replaced_agg_pairs_;
+  ObOpPseudoColumnRawExpr *grouping_set_id_;
+  TO_STRING_KV(KP_(grouping_set_id), K_(group_exprs), K_(groupset_exprs), K_(pruned_groupset_exprs),
+               K_(dup_expr_pairs));
+  int assign(const ObGroupingSetInfo &other);
 };
 
 class ObLogGroupBy : public ObLogicalOperator
@@ -100,6 +117,7 @@ public:
         rollup_exprs_(),
         aggr_exprs_(),
         algo_(AGGREGATE_UNINITIALIZED),
+        step_(SINGLE),
         from_pivot_(false),
         is_push_down_(false),
         is_partition_gi_(false),
@@ -113,7 +131,9 @@ public:
         use_part_sort_(false),
         gby_dop_(ObGlobalHint::UNSET_PARALLEL),
         is_pushdown_scalar_aggr_(false),
-        hash_rollup_info_()
+        hash_rollup_info_(nullptr),
+        grouping_set_info_(nullptr),
+        distinct_pairs_()
   {}
   virtual ~ObLogGroupBy()
   {}
@@ -150,6 +170,11 @@ public:
   inline void set_hash_type() { algo_ = HASH_AGGREGATE; }
   inline void set_merge_type() { algo_ = MERGE_AGGREGATE; }
   inline void set_scalar_type() { algo_ = SCALAR_AGGREGATE; }
+  inline void set_step(AggregatePathType step) { step_ = step; }
+  inline void set_step_partial() { step_ = PARTIAL; }
+  inline void set_step_final() { step_ = FINAL; }
+  inline bool is_final() { return step_ == FINAL; }
+  inline bool is_partial() { return step_ == PARTIAL; }
   inline void set_algo_type(AggregateAlgo type) { algo_ = type; }
   inline AggregateAlgo get_algo() const { return algo_; }
 
@@ -206,6 +231,7 @@ public:
   inline bool is_second_stage() const { return ObThreeStageAggrStage::SECOND_STAGE == three_stage_info_.aggr_stage_; }
   inline bool is_third_stage() const { return ObThreeStageAggrStage::THIRD_STAGE == three_stage_info_.aggr_stage_; }
   inline bool force_push_down() const { return force_push_down_; }
+  inline bool has_push_down() const { return has_push_down_; }
   inline bool is_adaptive_aggregate() const { return HASH_AGGREGATE == get_algo()
                                                      && !force_push_down()
                                                      && (is_first_stage() || (!is_three_stage_aggr() && is_push_down())); }
@@ -257,6 +283,7 @@ public:
   virtual int get_card_without_filter(double &card) override;
 
   void set_hash_rollup_info(ObHashRollupInfo *info) { hash_rollup_info_ = info; }
+  void set_grouping_set_info(ObGroupingSetInfo *info) { grouping_set_info_ = info; }
   const ObHashRollupInfo *get_hash_rollup_info() const
   {
     return hash_rollup_info_;
@@ -265,9 +292,30 @@ public:
   {
     return NULL != hash_rollup_info_;
   }
+  const ObGroupingSetInfo *get_grouping_set_info() const
+  {
+    return grouping_set_info_;
+  }
+  inline bool use_vec_grouping() const
+  {
+    return hash_rollup_info_ != nullptr || grouping_set_info_ != nullptr;
+  }
+  int unwrap_cast_for_aggr_expr();
 
+  int is_duplicate_insensitive_aggregation(bool & is_duplicate_insensitive);
+
+  int set_distinct_pairs(const ObIArray<ObTuple<ObRawExpr *, ObRawExpr *>> &distinct_pairs)
+  {
+    return distinct_pairs_.assign(distinct_pairs);
+  }
+
+  const ObIArray<ObTuple<ObRawExpr *, ObRawExpr *>> &get_distinct_pairs() const
+  {
+    return distinct_pairs_;
+  }
 private:
   virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
+
   virtual int allocate_granule_post(AllocGIContext &ctx) override;
   virtual int allocate_granule_pre(AllocGIContext &ctx) override;
   int create_fd_item_from_select_list(ObFdItemSet *fd_item_set);
@@ -281,6 +329,7 @@ private:
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> rollup_exprs_;
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> aggr_exprs_;
   AggregateAlgo algo_;
+  AggregatePathType step_;
   bool from_pivot_;
   bool is_push_down_;
   bool is_partition_gi_;
@@ -299,6 +348,9 @@ private:
   // end use print outline
   bool is_pushdown_scalar_aggr_;
   ObHashRollupInfo *hash_rollup_info_;
+  ObGroupingSetInfo *grouping_set_info_;
+  // used for transform distinct agg plan
+  common::ObSEArray<ObTuple<ObRawExpr *, ObRawExpr *>, 4, common::ModulePageAllocator, true> distinct_pairs_;
 };
 } // end of namespace sql
 } // end of namespace oceanbase

@@ -183,7 +183,7 @@ int MultiDataSourceInfo::get_new_tenant_scehma_info(
           tenant_id,
           tenant_meta->get_schema_version(),
           tenant_meta->get_tenant_name(),
-          tenant_meta->is_restore());
+          tenant_meta->get_status());
     }
   }
 

@@ -64,7 +64,8 @@ int ObTabletCreateDeleteHelper::replay_mds_get_tablet(
 int ObTabletCreateDeleteHelper::get_tablet(
     const ObTabletMapKey &key,
     ObTabletHandle &handle,
-    const int64_t timeout_us)
+    const int64_t timeout_us,
+    const WashTabletPriority priority)
 {
 #ifdef ENABLE_DEBUG_LOG
   ObTimeGuard tg("ObTabletCreateDeleteHelper::get_tablet", 10000);
@@ -76,7 +77,7 @@ int ObTabletCreateDeleteHelper::get_tablet(
   int64_t current_time = 0;
 
   while (OB_SUCC(ret)) {
-    ret = t3m->get_tablet(WashTabletPriority::WTP_HIGH, key, handle);
+    ret = t3m->get_tablet(priority, key, handle);
     if (OB_SUCC(ret)) {
       break;
     } else if (OB_ENTRY_NOT_EXIST == ret) {
@@ -108,8 +109,15 @@ int ObTabletCreateDeleteHelper::check_and_get_tablet(
 {
   int ret = OB_SUCCESS;
   ObTablet *tablet = nullptr;
+  WashTabletPriority priority = WashTabletPriority::WTP_MAX;
 
-  if (OB_FAIL(get_tablet(key, handle, timeout_us))) {
+  if (ObMDSGetTabletMode::READ_READABLE_COMMITED == mode) {
+    priority = WashTabletPriority::WTP_HIGH;
+  } else {
+    priority = WashTabletPriority::WTP_LOW;
+  }
+
+  if (OB_FAIL(get_tablet(key, handle, timeout_us, priority))) {
     if (OB_TABLET_NOT_EXIST == ret) {
       LOG_DEBUG("tablet does not exist", K(ret), K(key), K(mode));
     } else {

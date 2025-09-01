@@ -220,6 +220,23 @@ public:
   static int mul_decimalint128_int128_int128_oracle(EVAL_FUNC_ARG_DECL);
   static int mul_decimalint128_int128_int128_oracle_batch(BATCH_EVAL_FUNC_ARG_DECL);
   static int mul_decimalint128_int128_int128_oracle_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  static int mul_decimalint64_int64_int64(EVAL_FUNC_ARG_DECL);
+  static int mul_decimalint64_int64_int64_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int mul_decimalint64_int64_int64_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  static int mul_decint64_decint32_int32_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  static int mul_decint64_int32_decint32_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  static int mul_decint128_decint64_int32_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  static int mul_decint128_int32_decint64_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  static int mul_decint256_int32_decint128_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  static int mul_decint256_decint128_int32_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  static int mul_decint32_decint32_int32_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  static int mul_decint32_int32_decint32_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  static int mul_decint64_decint64_int32_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  static int mul_decint64_int32_decint64_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  static int mul_decint128_decint128_int32_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  static int mul_decint128_int32_decint128_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  static int mul_decint256_decint256_int32_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  static int mul_decint256_int32_decint256_vector(VECTOR_EVAL_FUNC_ARG_DECL);
 
   static int mul_vec_vec(EVAL_FUNC_ARG_DECL);
   static int mul_vec_vec_batch(BATCH_EVAL_FUNC_ARG_DECL);

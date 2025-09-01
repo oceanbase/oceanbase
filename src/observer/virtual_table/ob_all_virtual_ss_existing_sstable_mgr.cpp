@@ -253,6 +253,7 @@ int ObAllVirtualSSExistingSSTableMgr::get_next_tablet_()
 
     param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
                                  ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                 false, /*try read local*/
                                  ObSSLogMetaType::SSLOG_TABLET_META,
                                  ls_id_,
                                  tablet_id_,

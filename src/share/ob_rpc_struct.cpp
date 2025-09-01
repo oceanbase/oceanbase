@@ -5920,6 +5920,45 @@ int ObUpgradeTableSchemaArg::assign(const ObUpgradeTableSchemaArg &other)
 
 OB_SERIALIZE_MEMBER((ObUpgradeTableSchemaArg, ObDDLArg), tenant_id_, table_id_, upgrade_virtual_schema_);
 
+int ObBatchUpgradeTableSchemaArg::init(const uint64_t tenant_id, const ObIArray<uint64_t> &table_ids)
+{
+  int ret = OB_SUCCESS;
+  ObDDLArg::reset();
+  if (OB_FAIL(table_ids_.assign(table_ids))) {
+    LOG_WARN("failed to assign table_ids", KR(ret), K(table_ids));
+  } else {
+    exec_tenant_id_ = tenant_id;
+    tenant_id_ = tenant_id;
+  }
+  return ret;
+}
+
+bool ObBatchUpgradeTableSchemaArg::is_valid() const
+{
+  bool valid = is_valid_tenant_id(exec_tenant_id_) && is_valid_tenant_id(tenant_id_);
+  FOREACH_X(it, table_ids_, valid) {
+    if (!is_system_table(*it)) {
+      valid = false;
+    }
+  }
+  return valid;
+}
+
+int ObBatchUpgradeTableSchemaArg::assign(const ObBatchUpgradeTableSchemaArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", KR(ret));
+  } else if (OB_FAIL(table_ids_.assign(other.table_ids_))) {
+    LOG_WARN("failed to assign table_ids", KR(ret), K(table_ids_), K(other.table_ids_));
+  } else {
+    tenant_id_ = other.tenant_id_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER((ObBatchUpgradeTableSchemaArg, ObDDLArg), tenant_id_, table_ids_);
+
 int ObAdminFlushCacheArg::assign(const ObAdminFlushCacheArg &other)
 {
   int ret = OB_SUCCESS;
@@ -6837,6 +6876,26 @@ OB_SERIALIZE_MEMBER((ObDropUDTArg, ObDDLArg),
                     is_type_body_,
                     force_or_validate_,
                     exist_valid_udt_);
+
+int ObAlterUDTArg::assign(const ObAlterUDTArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObCreateUDTArg::assign(other))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else {
+    type_code_ = other.type_code_;
+    alter_option_ = other.alter_option_;
+    compile_unit_ = other.compile_unit_;
+    cascade_ = other.cascade_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER((ObAlterUDTArg, ObCreateUDTArg),
+                    type_code_,
+                    alter_option_,
+                    compile_unit_,
+                    cascade_);
 
 OB_SERIALIZE_MEMBER(ObCancelTaskArg, task_id_);
 
@@ -8653,7 +8712,36 @@ OB_SERIALIZE_MEMBER(ObBackupCleanArg, tenant_id_, initiator_tenant_id_, initiato
                     value_, dest_id_, description_, clean_tenant_ids_, batch_values_, dest_path_, dest_type_);
 bool ObBackupCleanArg::is_valid() const
 {
-  return OB_INVALID_ID != initiator_tenant_id_ && value_ >= 0;
+  bool valid = true;
+  if (OB_INVALID_ID == initiator_tenant_id_) {
+    valid = false;
+  } else {
+    switch (type_) {
+    case ObNewBackupCleanType::DELETE_BACKUP_ALL:
+        valid = (!dest_path_.is_empty() && share::ObBackupDestType::is_clean_valid(dest_type_));
+        break;
+    case ObNewBackupCleanType::CANCEL_DELETE:
+        valid = (1 == batch_values_.count() && 0 == batch_values_.at(0));
+        break;
+    case ObNewBackupCleanType::DELETE_OBSOLETE_BACKUP:
+        break;
+    case ObNewBackupCleanType::DELETE_BACKUP_SET:
+    case ObNewBackupCleanType::DELETE_BACKUP_PIECE:
+        for (int64_t i = 0; valid && i < batch_values_.count(); ++i) {
+          if (batch_values_.at(i) < 0) {
+            valid = false;
+            break;
+          }
+        }
+        if (valid && batch_values_.empty() && value_ < 0) {
+          valid = false;
+        }
+        break;
+    default:
+        valid = false;
+    }
+  }
+  return valid;
 }
 
 int ObBackupCleanArg::assign(const ObBackupCleanArg &arg)
@@ -8663,6 +8751,8 @@ int ObBackupCleanArg::assign(const ObBackupCleanArg &arg)
     LOG_WARN("fail to assign clean_tenant_ids_", K(ret));
   } else if (OB_FAIL(batch_values_.assign(arg.batch_values_))) {
     LOG_WARN("fail to assign clean arg value", K(ret), "batch_values", arg.batch_values_);
+  } else if (OB_FAIL(dest_path_.assign(arg.dest_path_))) {
+    LOG_WARN("fail to assign dest path", K(ret), "dest_path", arg.dest_path_);
   } else {
     tenant_id_ = arg.tenant_id_;
     initiator_tenant_id_ = arg.initiator_tenant_id_;
@@ -8671,6 +8761,39 @@ int ObBackupCleanArg::assign(const ObBackupCleanArg &arg)
     value_ = arg.value_;
     dest_id_ = arg.dest_id_;
     description_ = arg.description_;
+    dest_type_ = arg.dest_type_;
+  }
+  return ret;
+}
+
+
+int ObBackupCleanArg::get_value_array(common::ObIArray<int64_t> &value_array) const
+{
+  int ret = OB_SUCCESS;
+  value_array.reset();
+
+  // backward compatibility: if the array is not empty, use the array, otherwise use the single value
+  if (!batch_values_.empty()) {
+    if (OB_FAIL(value_array.assign(batch_values_))) {
+      LOG_WARN("fail to assign value array", K(ret));
+    }
+  } else if (value_ > 0) {
+    if (OB_FAIL(value_array.push_back(value_))) {
+      LOG_WARN("fail to push back single value", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+// backward compatibility: should set value_array to batch_values_, and set value_ to the first element of value_array
+int ObBackupCleanArg::set_value_array(const common::ObIArray<int64_t> &value_array)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(batch_values_.assign(value_array))) {
+    LOG_WARN("fail to assign value array", K(ret));
+  } else {
+    value_ = value_array.empty() ? 0 : value_array.at(0);
   }
   return ret;
 }
@@ -10228,6 +10351,10 @@ int ObPartitionSplitArg::assign(const ObPartitionSplitArg &other)
     LOG_WARN("failed to assign src lob tablet ids", K(ret));
   } else if (OB_FAIL(dest_lob_tablet_ids_.assign(other.dest_lob_tablet_ids_))) {
     LOG_WARN("failed to assign dest lob tablet ids", K(ret));
+  } else if (OB_FAIL(local_index_table_schemas_.assign(other.local_index_table_schemas_))) {
+    LOG_WARN("failed to assign local index table schemas", K(ret));
+  } else if (OB_FAIL(lob_table_schemas_.assign(other.lob_table_schemas_))) {
+    LOG_WARN("failed to assign lob table schemas", K(ret));
   }
   return ret;
 }
@@ -10244,7 +10371,9 @@ OB_SERIALIZE_MEMBER((ObPartitionSplitArg, ObDDLArg),
                     src_lob_tablet_ids_,
                     dest_lob_tablet_ids_,
                     task_type_,
-                    src_ls_id_);
+                    src_ls_id_,
+                    local_index_table_schemas_,
+                    lob_table_schemas_);
 
 int ObCleanSplittedTabletArg::assign(const ObCleanSplittedTabletArg &other)
 {
@@ -11623,6 +11752,7 @@ OB_SERIALIZE_MEMBER(ObEnableSSMicroCacheArg, tenant_id_, is_enabled_);
 OB_SERIALIZE_MEMBER(ObGetSSMicroCacheAllInfoArg, tenant_id_);
 OB_SERIALIZE_MEMBER(ObGetSSMicroCacheAllInfoResult, micro_cache_stat_, super_blk_, arc_info_);
 OB_SERIALIZE_MEMBER(ObClearSSMicroCacheArg, tenant_id_);
+OB_SERIALIZE_MEMBER(ObFlushSSLocalCacheArg, tenant_id_, flush_type_);
 OB_SERIALIZE_MEMBER(ObDelSSLocalTmpFileArg, tenant_id_, macro_id_);
 OB_SERIALIZE_MEMBER(ObDelSSLocalMajorArg, tenant_id_);
 OB_SERIALIZE_MEMBER(ObCalibrateSSDiskSpaceArg, tenant_id_);
@@ -14062,6 +14192,46 @@ int ObFetchArbMemberArg::init(const uint64_t tenant_id, const ObLSID &ls_id)
 
 OB_SERIALIZE_MEMBER(ObFetchArbMemberArg, tenant_id_, ls_id_);
 #endif
+
+OB_SERIALIZE_MEMBER((ObCreateAiModelArg, ObDDLArg), model_info_);
+OB_SERIALIZE_MEMBER((ObDropAiModelArg, ObDDLArg), ai_model_name_);
+
+int ObCreateAiModelArg::check_valid() const
+{
+  int ret = OB_SUCCESS;
+  if (exec_tenant_id_ == OB_INVALID_TENANT_ID) {
+    return OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", K(exec_tenant_id_));
+  } else if (OB_FAIL(model_info_.check_valid())) {
+    LOG_WARN("invalid model info", K(ret), K(model_info_));
+  }
+  return ret;
+}
+
+int ObCreateAiModelArg::assign(const ObCreateAiModelArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", KR(ret), K(other));
+  } else {
+    model_info_ = other.model_info_;
+  }
+  return ret;
+}
+
+int ObDropAiModelArg::assign(const ObDropAiModelArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", KR(ret), K(other));
+  } else {
+    ai_model_name_ = other.ai_model_name_;
+  }
+  return ret;
+}
+
 
 OB_SERIALIZE_MEMBER(ObCheckBackupDestRWConsistencyArg, tenant_id_, backup_dest_str_, data_checksum_, file_len_);
 bool ObCheckBackupDestRWConsistencyArg::is_valid() const

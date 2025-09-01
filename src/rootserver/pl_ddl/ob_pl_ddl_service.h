@@ -49,6 +49,9 @@ public:
                         rootserver::ObDDLService &ddl_service);
   static int drop_udt(const ObDropUDTArg &arg,
                       rootserver::ObDDLService &ddl_service);
+  static int alter_udt(const obrpc::ObAlterUDTArg &arg,
+                        obrpc::ObRoutineDDLRes *res,
+                        rootserver::ObDDLService &ddl_service);
   //----End of functions for managing udt----
 
   //----Functions for managing package----
@@ -165,6 +168,25 @@ private:
                        bool specify_force,
                        bool exist_valid_udt,
                        rootserver::ObDDLService &ddl_service);
+
+  static int alter_udt_compile(ObSchemaGetterGuard &schema_guard,
+                                ObUDTTypeInfo &udt_info,
+                                const ObUDTTypeInfo *old_udt_info,
+                                int16_t compile_unit,
+                                share::schema::ObErrorInfo &error_info,
+                                common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
+                                const ObString *ddl_stmt_str,
+                                rootserver::ObDDLService &ddl_service);
+
+  static int alter_udt_alter(ObSchemaGetterGuard &schema_guard,
+                              ObUDTTypeInfo &udt_info,
+                              const ObUDTTypeInfo* old_udt_info,
+                              bool cascade,
+                              ObIArray<ObRoutineInfo> &public_routinep_infos,
+                              ObErrorInfo &error_info,
+                              ObIArray<ObDependencyInfo> &dep_infos,
+                              const ObString *ddl_stmt_str,
+                              rootserver::ObDDLService &ddl_service);
   //----End of functions for managing udt----
 
   //----Functions for managing package----

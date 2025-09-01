@@ -192,7 +192,7 @@ static struct VarsInit{
       ObSysVars[9].name_ = "collation_connection" ;
       ObSysVars[9].data_type_ = ObIntType ;
       ObSysVars[9].to_show_str_func_ = "ObSysVarToStrFuncs::to_str_collation" ;
-      ObSysVars[9].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NULLABLE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[9].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NULLABLE | ObSysVarFlag::NEED_SERIALIZE ;
       ObSysVars[9].base_class_ = "ObCharsetSysVar" ;
       ObSysVars[9].to_select_obj_func_ = "ObSysVarToObjFuncs::to_obj_collation" ;
       ObSysVars[9].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_collation_not_null" ;

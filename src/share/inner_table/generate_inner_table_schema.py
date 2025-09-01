@@ -198,7 +198,7 @@ def print_default_column(column_name, rowkey_id, index_id, part_key_pos, column_
       {12}_default,
       {12}_default, //default_value
       {14}, //is_hidden
-      {15}); //is_storing_column 
+      {15}); //is_storing_column
   }}
 """
       cpp_f.write(line.format(column_name, column_id, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrement, column_name.lower(), set_op, is_hidden, is_storing_column))
@@ -272,7 +272,7 @@ def print_default_column(column_name, rowkey_id, index_id, part_key_pos, column_
   }}
 """
       cpp_f.write(line.format(column_name, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrement, column_name.lower(),set_op))
-    
+
 def print_column(column_name, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrement, column_id, is_hidden, is_storing_column):
   global cpp_f
 
@@ -314,7 +314,7 @@ def print_column(column_name, rowkey_id, index_id, part_key_pos, column_type, co
       {9}, //is_nullable
       {10},//is_autoincrement
       {11},//is_hidden
-      {12});//is_storing_column 
+      {12});//is_storing_column
   }}
 """
       cpp_f.write(line.format(column_name, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrement,is_hidden ,is_storing_column))
@@ -357,7 +357,7 @@ def print_column(column_name, rowkey_id, index_id, part_key_pos, column_type, co
 """
       cpp_f.write(line.format(column_name, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrement))
 
-    
+
 def print_discard_column(column_name):
   global cpp_f
   line = """
@@ -419,7 +419,7 @@ def print_timestamp_column(column_name, rowkey_id, index_id, part_key_pos, colum
       {11}, //is_autoincrement
       {12}, //is_on_update_for_timestamp
       {13}, //is_hidden
-      {14});//is_storing_column 
+      {14});//is_storing_column
   }}
 """
       cpp_f.write(line.format(column_name, column_id, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrement, is_on_update_for_timestamp,is_hidden, is_storing_column))
@@ -468,7 +468,7 @@ def print_timestamp_column(column_name, rowkey_id, index_id, part_key_pos, colum
       {10}, //is_autoincrement
       {11}, //is_on_update_for_timestamp
       {12}, //is_hidden
-      {13});//is_storing_column 
+      {13});//is_storing_column
   }}
 """
       cpp_f.write(line.format(column_name, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrement, is_on_update_for_timestamp, is_hidden, is_storing_column))
@@ -1716,8 +1716,8 @@ def kw2tid(kw):
   else:
     return table_name2tid(kw['table_name']+ name_postfix)
 
-__current_range_idx = -1 
-__def_cnt = 0 
+__current_range_idx = -1
+__def_cnt = 0
 __split_size = 50
 def check_split_file(tid):
   global __current_range_idx
@@ -1971,7 +1971,7 @@ def def_table_schema(**keywords):
           tenant_space_table_names.append(table_name2tname(keywords['table_name'] + keywords['name_postfix']))
     elif field == 'view_definition':
       if keywords[field]:
-        add_char_field(field, 'R"__({0})__"'.format(value))
+        add_char_field(field, 'R"__({0})__"'.format(value.replace("\n", " ")))
     elif field == 'partition_expr':
       if keywords[field]:
         add_list_partition_expr_field(value)
@@ -2298,13 +2298,16 @@ private:
     if is_mysql_virtual_table(table_id):
       h_f.write(method_name.format(table_name.replace('$', '_').lower().strip('_'), table_name))
       virtual_table_count = virtual_table_count + 1
-  for index_l in new_index_name_ids:
-    if is_mysql_virtual_table(index_l[1]):
-      h_f.write(method_name.format(index_l[2].replace('$', '_').strip('_').lower()+'_'+index_l[0].lower(), index_l[2]))
-      virtual_table_count = virtual_table_count + 1
   for (table_name, table_id) in new_table_name_postfix_ids:
     if is_ora_virtual_table(table_id):
       h_f.write(method_name.format(table_name.replace('$', '_').lower().strip('_'), table_name))
+      virtual_table_count = virtual_table_count + 1
+  h_f.write("  NULL,};\n\n")
+
+  h_f.write("const schema_create_func virtual_table_index_schema_creators [] = {\n")
+  for index_l in new_index_name_ids:
+    if is_mysql_virtual_table(index_l[1]):
+      h_f.write(method_name.format(index_l[2].replace('$', '_').strip('_').lower()+'_'+index_l[0].lower(), index_l[2]))
       virtual_table_count = virtual_table_count + 1
   for index_l in new_index_name_ids:
     if is_ora_virtual_table(index_l[1]):
@@ -2786,8 +2789,15 @@ def generate_load_inner_table_schema():
   run_command('{} {} -DOB_BUILD_WITH_EMPTY_LOAD_SCHEMA=ON --init'.format(build_sh_path, build_type))
   run_command('cd {} && {} {} && ./{}'.format(unittest_path, make_type, test_name, test_name))
   run_command('cp -f {}/ob_load_inner_table_schema.cpp {}'.format(unittest_path, current_dir))
-  run_command('{} {} --init'.format(build_sh_path, build_type))
+  # 还原一下build_debug目录
+  run_command('{} {} -DOB_BUILD_WITH_EMPTY_LOAD_SCHEMA=OFF --init'.format(build_sh_path, build_type))
 
+def check_file_no_tail_space(file):
+  with open(file) as f:
+    for i, line in enumerate(f):
+      line1 = line.strip('\n\r')
+      if len(line1) !=0 and line1[-1] in ' \t':
+        raise Exception("tailing space in file {}:{}".format(file, i + 1))
 
 if __name__ == "__main__":
   global ob_virtual_index_table_id
@@ -2795,6 +2805,7 @@ if __name__ == "__main__":
   ora_virtual_index_table_id = max_ora_virtual_table_id - 1
 
   clean_files("ob_inner_table_schema.*")
+  check_file_no_tail_space("ob_inner_table_schema_def.py")
   execfile("ob_inner_table_schema_def.py")
   def_all_lob_aux_table()
   end_generate_cpp()

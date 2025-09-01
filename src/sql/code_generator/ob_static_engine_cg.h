@@ -148,10 +148,14 @@ class ObLogExpand;
 class ObExpandVecSpec;
 class ObHashRollupInfo;
 class HashRollupRTInfo;
+class ObGroupingSetInfo;
+class GroupingSetRTInfo;
 
 class ObMergeGroupByVecSpec;
 class ObNestedLoopJoinVecSpec;
 class ObTableDirectInsertSpec;
+
+class EnableOpRichFormat;
 
 typedef common::ObList<uint64_t, common::ObIAllocator> DASTableIdList;
 typedef common::ObSEArray<common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true>,
@@ -218,9 +222,13 @@ public:
                                                  bool &found);
   inline uint64_t get_cur_cluster_version() { return cur_cluster_version_; }
 
+  // operator types with rich format disabled
+  static int get_phy_op_type(ObLogicalOperator &op, ObPhyOperatorType &type,
+                             const bool in_root_job);
+
   // detect physical operator type from logic operator.
   static int get_phy_op_type(ObLogicalOperator &op, ObPhyOperatorType &type,
-                             const bool in_root_job, const bool use_rich_format = false);
+                             const bool in_root_job, const EnableOpRichFormat &enable_rich_format);
   //set is json constraint type is strict or relax
   const static uint8_t IS_JSON_CONSTRAINT_RELAX = 1;
   const static uint8_t IS_JSON_CONSTRAINT_STRICT = 4;
@@ -266,6 +274,7 @@ private:
                             bool &check_eval_once,
                             const bool need_check_output_datum,
                             const common::ObCompressorType compress_type,
+                            const EnableOpRichFormat &enable_rich_format,
                             PartialExprFrameInfoGen &partial_frame_gen);
   int clear_all_exprs_specific_flag(const ObIArray<ObRawExpr *> &exprs, ObExprInfoFlag flag);
   int mark_expr_self_produced(ObRawExpr *expr);
@@ -497,6 +506,8 @@ private:
   int generate_spec(ObLogTempTableAccess &op, ObTempTableAccessVecOpSpec &spec, const bool in_root_job);
   int generate_spec(ObLogTempTableTransformation &op, ObTempTableTransformationVecOpSpec &spec, const bool in_root_job);
   int generate_spec(ObLogExpand &op, ObExpandVecSpec &spec, const bool in_root_job);
+
+  int generate_expand_spec(ObExpandVecSpec &spec, ObGroupingSetInfo *grouping_set_info);
   template<typename MergeDistinctSpecType>
   int generate_merge_distinct_spec(ObLogDistinct &op, MergeDistinctSpecType &spec, const bool in_root_job);
 
@@ -540,8 +551,10 @@ private:
   int fill_aggr_info(ObAggFunRawExpr &raw_expr, ObExpr &expr, ObAggrInfo &aggr_info,
                     common::ObIArray<ObExpr *> *group_exprs/*NULL*/,
                     common::ObIArray<ObExpr *> *rollup_exprs/*NULL*/,
-                    const ObHashRollupInfo *hash_rollup_info = nullptr);
+                    const ObHashRollupInfo *hash_rollup_info = nullptr,
+                    const ObGroupingSetInfo *grouping_set_info = nullptr);
   int generate_hash_rollup_info(const ObHashRollupInfo &rollup_info, HashRollupRTInfo *&rt_info);
+  int generate_grouping_set_info(const ObGroupingSetInfo &grouping_set_info, GroupingSetRTInfo *&rt_info);
   int extract_non_aggr_expr(ObExpr *input,
                             const ObRawExpr *raw_input,
                             common::ObIArray<ObExpr *> &exist_in_child,
@@ -653,6 +666,7 @@ private:
   int check_refreshing_mview_session_var(ObSchemaGetterGuard &schema_guard,
                                          ObSQLSessionInfo &session,
                                          const ObDMLStmt *dml_stmt);
+  int generate_disable_rich_format_flags(int64_t &flags);
 private:
   struct BatchExecParamCache {
     BatchExecParamCache(ObExecParamRawExpr* expr, ObOpSpec* spec, bool is_left)

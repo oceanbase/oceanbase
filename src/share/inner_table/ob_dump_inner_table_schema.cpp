@@ -162,8 +162,9 @@ int ObInnerTableSchemaDumper::get_schema_pointers_(
 int ObInnerTableSchemaDumper::init()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObSchemaUtils::construct_inner_table_schemas(OB_INVALID_TENANT_ID, schemas_,
-          allocator_, true/*construct_all*/))) {
+  ObArray<uint64_t> table_ids;
+  if (OB_FAIL(ObSchemaUtils::construct_inner_table_schemas(OB_INVALID_TENANT_ID, table_ids,
+          true/*include_index_and_lob_aux_schemas*/, allocator_, schemas_, true/*ignore_tenant_id*/))) {
     LOG_WARN("failed to construct inner table schemas", KR(ret));
   } else if (OB_FAIL(ObSchemaUtils::generate_hard_code_schema_version(schemas_))) {
     LOG_WARN("failed to generate hard code schema version", KR(ret));

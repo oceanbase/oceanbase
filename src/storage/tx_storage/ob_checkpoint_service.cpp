@@ -18,8 +18,10 @@
 #include "storage/tx_storage/ob_tenant_freezer.h"
 
 #ifdef OB_BUILD_SHARED_STORAGE
+#include "observer/ob_srv_network_frame.h"
 #include "storage/incremental/share/ob_shared_ls_meta.h"
 #include "storage/incremental/ob_shared_meta_service.h"
+#include "storage/incremental/ob_ss_checkpoint_rpc.h"
 #endif
 
 namespace oceanbase
@@ -599,21 +601,28 @@ public:
   int operator()(ObLS &ls)
   {
     int ret = OB_SUCCESS;
+
     ObSSLSMeta ss_ls_meta;
-    if (OB_FAIL(MTL(ObSSMetaService *)->get_ls_meta(ls.get_ls_id(), ss_ls_meta))) {
-      STORAGE_LOG(WARN, "get ls meta failed", KR(ret), K(ss_ls_meta));
+    SCN min_checkpoint_scn_from_cn;
+    const ObLSID ls_id = ls.get_ls_id();
+    if (!is_ls_leader_(ls)) {
+      STORAGE_LOG(INFO, "current replica is not ls leader, no need advance base lsn", K(ls_id));
+    } else if (OB_FAIL(MTL(ObSSMetaService *)->get_ls_meta(ls_id, ss_ls_meta))) {
+      STORAGE_LOG(WARN, "get ls meta failed", KR(ret), K(ls_id),K(ss_ls_meta));
+    } else if (OB_FAIL(get_min_clog_checkpoint_scn_from_compute_node_(ls, min_checkpoint_scn_from_cn))) {
+      STORAGE_LOG(WARN, "get min clog checkpoint scn from compute nodes failed", KR(ret), K(ls_id));
     } else {
       SCN delay_recycle_checkpoint_scn;
       LSN ss_clog_recycle_lsn;
-      // Delay clog recycling to avoid rebuilding as much as possible
-      int64_t clog_recycle_delay_time_us = 24LL * 60LL * 60LL * 1000LL * 1000LL; // default 1 day
+      // Delay clog recycling to avoid rebuilding
+      int64_t clog_recycle_delay_time_us = 10LL * 60LL * 1000LL * 1000LL; // default 10 minutes
       omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
       if (tenant_config.is_valid()) {
         clog_recycle_delay_time_us = tenant_config->_ss_clog_retention_period;
       }
 
-      SCN checkpoint_scn_in_meta = ss_ls_meta.get_ss_checkpoint_scn();
-      int64_t delay_recycle_ts_us = checkpoint_scn_in_meta.convert_to_ts() - clog_recycle_delay_time_us;
+      SCN base_scn = MIN(ss_ls_meta.get_ss_checkpoint_scn(), min_checkpoint_scn_from_cn);
+      int64_t delay_recycle_ts_us = base_scn.convert_to_ts() - clog_recycle_delay_time_us;
       if (delay_recycle_ts_us < 0) {
         delay_recycle_ts_us = 0;
       }
@@ -625,17 +634,82 @@ public:
         STORAGE_LOG(WARN, "advance base lsn failed", K(ret), K(ss_clog_recycle_lsn));
       } else {
         FLOG_INFO("[CHECKPOINT] advance palf base lsn successfully",
-                  K(checkpoint_scn_in_meta),
+                  K(base_scn),
                   KTIME(delay_recycle_ts_us),
                   K(delay_recycle_checkpoint_scn),
                   K(ss_clog_recycle_lsn),
-                  K(ls.get_ls_id()));
+                  K(ls_id));
       }
+    }
+
+    if (OB_FAIL(ret)) {
+      FLOG_INFO("[CHECKPOINT] advance palf base lsn fail", KR(ret), K(ls_id));
     }
 
     // returen OB_SUCCESS to iterate all logstreams
     return OB_SUCCESS;
   }
+private:
+  bool is_ls_leader_(ObLS &ls)
+  {
+    int ret = OB_SUCCESS;
+    // set default value as leader because leader do not skip throttle
+    bool is_leader = true;
+    ObRole role;
+    int64_t proposal_id = 0;
+    if (OB_FAIL(ls.get_log_handler()->get_role(role, proposal_id))) {
+      LOG_WARN("get ls role failed", KR(ret), K(ls.get_ls_id()));
+    } else if (common::is_strong_leader(role)) {
+      is_leader = true;
+    } else {
+      is_leader = false;
+    }
+    return is_leader;
+  }
+
+
+  int get_min_clog_checkpoint_scn_from_compute_node_(ObLS &ls, SCN &min_clog_checkpoint_scn)
+  {
+    int ret = OB_SUCCESS;
+    min_clog_checkpoint_scn.set_max();
+    const int64_t expire_renew_time = INT64_MAX;
+    share::ObLSLocation location;
+    bool is_cache_hit = false;
+    const uint64_t tenant_id = MTL_ID();
+    const ObLSID ls_id = ls.get_ls_id();
+
+    obrpc::ObSSCkptRpcProxy ss_ckpt_rpc_proxy;
+    ObSSRpcCollectCNClogCkptArg arg(tenant_id, ls_id);
+    if (OB_FAIL(GCTX.location_service_->get(
+            GCONF.cluster_id, tenant_id, ls_id, expire_renew_time, is_cache_hit, location))) {
+      LOG_WARN("get ls location failed", KR(ret), K(tenant_id), K(ls_id));
+    } else if (OB_FAIL(GCTX.net_frame_->get_proxy(ss_ckpt_rpc_proxy))) {
+      STORAGE_LOG(WARN, "get proxy failed", KR(ret), K(ls_id), K(arg));
+    } else {
+      const ObIArray<ObLSReplicaLocation> &ls_locations = location.get_replica_locations();
+      for (int i = 0; i < ls_locations.count() && OB_SUCC(ret); ++i) {
+        const ObAddr &server = ls_locations.at(i).get_server();
+        ObSSRpcCollectCNClogCkptResult result;
+        if (OB_FAIL(ss_ckpt_rpc_proxy.to(server).by(tenant_id).collect_cn_clog_ckpt(arg, result))) {
+          STORAGE_LOG(WARN, "post rpc collect cn clog ckpt failed", KR(ret), K(ls_id), K(arg));
+        } else if (OB_FAIL(result.ret_code_)) {
+          STORAGE_LOG(WARN, "collect cn clog ckpt failed", KR(ret), K(ls_id), K(arg), K(result));
+        } else {
+          min_clog_checkpoint_scn = MIN(min_clog_checkpoint_scn, result.clog_checkpoint_scn_);
+          FLOG_INFO("finish get clog_checkpoint_scn from one compute node",
+                    K(ls_id),
+                    K(server),
+                    K(result),
+                    K(min_clog_checkpoint_scn));
+        }
+      }
+    }
+
+    return ret;
+  }
+
+private:
+  obrpc::ObSSCkptRpcProxy ss_ckpt_rpc_proxy_;
 };
 
 void ObCheckPointService::ObSSUpdateCkptLSNTask::runTimerTask()

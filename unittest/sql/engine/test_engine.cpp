@@ -113,7 +113,6 @@ TEST_F(TestEngine, basic_test)
     task_exec_ctx.set_self_addr(optctx_->get_local_server_addr());
     common::ObSEArray<ObTablePartitionInfo *, 4> table_partition_info;
     EXPECT_TRUE(OB_SUCCESS == log_plan->get_global_table_partition_info(table_partition_info));
-    task_exec_ctx.set_table_locations(table_partition_info);
 
     EXPECT_TRUE(OB_SUCCESS == exec_ctx_.create_physical_plan_ctx());
     GCTX.self_addr_seq_.set_addr(optctx_->get_local_server_addr());

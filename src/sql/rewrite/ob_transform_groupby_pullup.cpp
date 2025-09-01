@@ -560,6 +560,7 @@ int ObTransformGroupByPullup::is_valid_group_stmt(ObSelectStmt *sub_stmt,
   } else if (sub_stmt->get_group_expr_size() <= 0 ||
              sub_stmt->get_aggr_item_size() <= 0 ||
              sub_stmt->has_rollup() ||
+             sub_stmt->has_grouping_sets() ||
              sub_stmt->get_window_func_exprs().count() > 0 ||
              sub_stmt->has_limit() ||
              sub_stmt->has_order_by() ||

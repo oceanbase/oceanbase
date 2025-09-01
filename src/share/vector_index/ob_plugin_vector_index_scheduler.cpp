@@ -285,8 +285,10 @@ void ObPluginVectorIndexLoadScheduler::mark_tenant_checked()
   local_tenant_task_.need_check_ = false;
 }
 
-int ObPluginVectorIndexLoadScheduler::acquire_adapter_in_maintenance(const int64_t table_id,
-                                                                     const ObTableSchema *table_schema)
+int ObPluginVectorIndexLoadScheduler::acquire_adapter_in_maintenance(
+    const int64_t table_id,
+    const ObTableSchema *table_schema,
+    ObVecIdxSharedTableInfoMap &shared_table_info_map)
 {
   int ret = OB_SUCCESS;
   ObIndexType index_type = table_schema->get_index_type();
@@ -300,6 +302,8 @@ int ObPluginVectorIndexLoadScheduler::acquire_adapter_in_maintenance(const int64
     LOG_WARN("ls is null", KR(ret));
   } else {
     ObTabletHandle tablet_handle;
+    ObVectorIndexSharedTableInfo info;
+
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); i++) {
       if (OB_FAIL(ls_->get_tablet_svr()->get_tablet(tablet_ids.at(i), tablet_handle))) {
         if (OB_TABLET_NOT_EXIST != ret) {
@@ -313,6 +317,7 @@ int ObPluginVectorIndexLoadScheduler::acquire_adapter_in_maintenance(const int64
         // Notice:only no.3 aux table has vec_idx_params
         ObString vec_idx_params = table_schema->get_index_params();
         int64_t dim = 0;
+        ObTabletID data_tablet_id = tablet_handle.get_obj()->get_data_tablet_id();
         if (OB_FAIL(ObVectorIndexUtil::get_vector_index_column_dim(*table_schema, dim))) {
           LOG_WARN("fail to get vec_index_col_param", K(ret));
         } else if (OB_FAIL(vector_index_service_->acquire_adapter_guard(ls_id,
@@ -327,10 +332,8 @@ int ObPluginVectorIndexLoadScheduler::acquire_adapter_in_maintenance(const int64
         } else if (OB_FAIL(adapter_guard.get_adatper()->
             set_table_id(ObPluginVectorIndexUtils::index_type_to_record_type(index_type), table_id))) {
           LOG_WARN("fail to set table id", K(ret), K(ls_id), K(tablet_ids.at(i)));
-        } else if (OB_FAIL(adapter_guard.get_adatper()->
-            set_tablet_id(VIRT_DATA, tablet_handle.get_obj()->get_data_tablet_id()))) {
-          LOG_WARN("fail to fill partial index adapter info",
-            K(ret), K(ls_id), K(tablet_ids.at(i)), K(tablet_handle.get_obj()->get_data_tablet_id()));
+        } else if (OB_FAIL(adapter_guard.get_adatper()->set_tablet_id(VIRT_DATA, data_tablet_id))) {
+          LOG_WARN("fail to fill partial index adapter info", K(ret), K(ls_id), K(tablet_ids.at(i)), K(data_tablet_id));
         } else if (OB_FAIL(ObPluginVectorIndexUtils::get_vector_index_prefix(*table_schema,
                                                                              index_identity))) {
           LOG_WARN("fail to get index identity", KR(ret));
@@ -338,6 +341,26 @@ int ObPluginVectorIndexLoadScheduler::acquire_adapter_in_maintenance(const int64
           LOG_WARN("fail to set index identity", KR(ret), KPC(adapter_guard.get_adatper()));
         } else {
           adapter_guard.get_adatper()->reset_idle();
+        }
+
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(shared_table_info_map.get_refactored(data_tablet_id, info))) {
+            if (OB_HASH_NOT_EXIST != ret) {
+              LOG_WARN("fail to get shared table info", K(ret), K(tablet_ids.at(i)));
+            } else { // OB_HASH_NOT_EXIST
+              ret = OB_SUCCESS;
+              info.data_table_id_ = table_schema->get_data_table_id();
+              if (OB_FAIL(shared_table_info_map.set_refactored(data_tablet_id, info))) {
+                LOG_WARN("fail to set shared table info", K(ret), K(data_tablet_id));
+              }
+            }
+          } else {
+            info.data_table_id_ = table_schema->get_data_table_id();
+            const int overwrite = 1;
+            if (OB_FAIL(shared_table_info_map.set_refactored(data_tablet_id, info, overwrite))) {
+              LOG_WARN("fail to set shared table info", K(ret), K(data_tablet_id));
+            }
+          }
         }
       }
     }
@@ -394,10 +417,7 @@ int ObPluginVectorIndexLoadScheduler::set_shared_table_info_in_maintenance(
         }
         info.data_table_id_ = table_schema->get_data_table_id();
         const int overwrite = 1;
-        if (!info.is_valid()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid shared table info", K(ret), K(info));
-        } else if (OB_FAIL(shared_table_info_map.set_refactored(data_tablet_id, info, overwrite))) {
+        if (OB_FAIL(shared_table_info_map.set_refactored(data_tablet_id, info, overwrite))) {
           LOG_WARN("fail to set shared table info", K(ret), K(data_tablet_id));
         }
       }
@@ -464,7 +484,7 @@ int ObPluginVectorIndexLoadScheduler::execute_adapter_maintenance()
         } else if (OB_FAIL(check_is_vector_index_table(*table_schema, is_vector_index, is_shared_index))) {
           LOG_WARN("fail to check is vector index", KR(ret));
         } else if (is_vector_index
-                  && OB_FAIL(acquire_adapter_in_maintenance(table_id, table_schema))) {
+                  && OB_FAIL(acquire_adapter_in_maintenance(table_id, table_schema, shared_table_info_map))) {
           // for one vector_index table
           LOG_WARN("fail to create adapter in maintenance", KR(ret), K(table_id));
         } else if (is_shared_index
@@ -955,9 +975,7 @@ int ObPluginVectorIndexLoadScheduler::log_tablets_need_memdata_sync(ObPluginVect
 
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (!need_submit_log) {
-    // do nothing
-  } else if (is_leader_) {
+  } else if (need_submit_log) {
     if (need_refresh_) {
       if (OB_FAIL(mgr->get_mem_sync_info().add_task_to_waiting_map(mgr->get_complete_adapter_map()))) {
         TRANS_LOG(WARN, "fail to add complete adaptor to waiting map",KR(ret), K(tenant_id_));
@@ -1593,18 +1611,13 @@ int ObVectorIndexTask::process_one()
 
   if (OB_SUCC(ret)) {
     task_ctx_->err_code_ = OB_SUCCESS;
-    new_adpt_guard.get_adatper()->sync_finish();
-    new_adpt_guard.get_adatper()->reset_sync_idle_count();
+    new_adpt_guard.get_adatper()->sync_succ();
   } else {
     task_ctx_->err_code_ = ret;
     if (OB_NOT_NULL(new_adpt_guard.get_adatper())) {
-      new_adpt_guard.get_adatper()->sync_finish();
-      new_adpt_guard.get_adatper()->sync_fail();
-      new_adpt_guard.get_adatper()->reset_sync_idle_count();
+      new_adpt_guard.get_adatper()->sync_fail(ret);
     } else if (OB_NOT_NULL(adpt_guard.get_adatper())) {
-      adpt_guard.get_adatper()->sync_finish();
-      adpt_guard.get_adatper()->sync_fail();
-      adpt_guard.get_adatper()->reset_sync_idle_count();
+      adpt_guard.get_adatper()->sync_fail(ret);
     }
   }
 

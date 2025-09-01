@@ -52,6 +52,7 @@ public:
     UNUSED(type_ctx);
     type.set_varchar();
     type.set_collation_type(CS_TYPE_BINARY);
+    type.set_collation_level(CS_LEVEL_IMPLICIT);
     return common::OB_SUCCESS;
   }
   virtual int cg_expr(ObExprCGCtx &op_cg_ctx,

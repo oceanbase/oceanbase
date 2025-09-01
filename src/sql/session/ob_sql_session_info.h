@@ -60,6 +60,7 @@ class ObPieceCache;
 }
 namespace pl
 {
+class ObUtlHttp;
 class ObPLPackageState;
 class ObPL;
 struct ObPLExecRecursionCtx;
@@ -75,7 +76,7 @@ class ObPLDebugger;
 #endif // OB_BUILD_ORACLE_PL
 
 class ObPLProfiler;
-
+class ObPLCodeCoverage;
 } // namespace pl
 
 namespace obmysql
@@ -1092,6 +1093,7 @@ public:
   void set_pl_debugger (pl::debugger::ObPLDebugger *pl_debugger) {pl_debugger_ = pl_debugger; };
 
   int alloc_pl_profiler(int32_t run_id);
+  int alloc_pl_code_coverage(int32_t run_id);
 #endif
   bool is_pl_debug_on();
   inline pl::ObPLProfiler *get_pl_profiler() const
@@ -1104,7 +1106,16 @@ public:
 
     return profiler;
   }
+  inline pl::ObPLCodeCoverage *get_pl_code_coverage() const
+  {
+    pl::ObPLCodeCoverage *code_coverage_ = nullptr;
 
+#ifdef OB_BUILD_ORACLE_PL
+    code_coverage_ = pl_code_coverage_;
+#endif // OB_BUILD_ORACLE_PL
+
+    return code_coverage_;
+  }
   inline void set_pl_attached_id(uint32_t id) { pl_attach_session_id_ = id; }
   inline uint32_t get_pl_attached_id() const { return pl_attach_session_id_; }
 
@@ -1286,13 +1297,15 @@ public:
   }
   void reset_pl_debugger_resource();
   void reset_pl_profiler_resource();
+  int collect_pl_code_coverage_info();
+  void reset_pl_code_coverage_resource();
   void reset_all_package_changed_info();
   void reset_all_package_state();
   int reset_all_package_state_by_dbms_session(bool need_set_sync_var);
   int reset_all_serially_package_state();
   bool is_package_state_changed() const;
   bool get_changed_package_state_num() const;
-  int add_changed_package_info(ObExecContext &exec_ctx);
+  int add_changed_package_info();
 
   // 当前 session 上发生的 sequence.nextval 读取 sequence 值，
   // 都会由 ObSequence 算子将读取结果保存在当前 session 上
@@ -1872,6 +1885,7 @@ private:
 #ifdef OB_BUILD_ORACLE_PL
   pl::debugger::ObPLDebugger *pl_debugger_; // 如果开启了debug, 该字段不为null
   pl::ObPLProfiler *pl_profiler_;
+  pl::ObPLCodeCoverage *pl_code_coverage_;
 #endif
 #ifdef OB_BUILD_SPM
   ObSpmCacheCtx::SpmSelectPlanType select_plan_type_;
@@ -2036,6 +2050,13 @@ private:
   void *external_resource_schema_cache_;
   bool has_ccl_rule_;
   int64_t last_update_ccl_cnt_time_;
+
+  private:
+  pl::ObUtlHttp* ob_utl_http_info_ = NULL;
+
+  public:
+  pl::ObUtlHttp* get_ob_utl_http_info() {return ob_utl_http_info_;}
+  void set_ob_utl_http_info(pl::ObUtlHttp* ob_utl_http_info_ptr) { ob_utl_http_info_ = ob_utl_http_info_ptr;}
 };
 
 

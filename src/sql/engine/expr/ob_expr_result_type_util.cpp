@@ -267,7 +267,12 @@ int ObExprResultTypeUtil::get_div_result_type(ObObjType &result_type,
     } else if (can_use_decint_div && result_type == ObNumberType) {
       // use decimal int as calc type
       result_ob1_type = ObDecimalIntType;
-      result_ob2_type = ObDecimalIntType;
+      if (ob_is_integer_type(type2)) {
+        // divisor is integer, not need cast to decint
+        result_ob2_type = type2;
+      } else {
+        result_ob2_type = ObDecimalIntType;
+      }
     } else {
       result_ob1_type = result_type;
       result_ob2_type = result_type;
@@ -492,8 +497,21 @@ int ObExprResultTypeUtil::get_mul_result_type(ObObjType &result_type,
     }
   } else {
     result_type = ARITH_RESULT_TYPE[type1][type2];
-    result_ob1_type = result_type;
-    result_ob2_type = result_type;
+    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0) {
+      if (ob_is_decimal_int(result_type) && ob_is_integer_type(type1)) {
+        result_ob1_type = type1;
+        result_ob2_type = result_type;
+      } else if (ob_is_decimal_int(result_type) && ob_is_integer_type(type2)) {
+        result_ob1_type = result_type;
+        result_ob2_type = type2;
+      } else {
+        result_ob1_type = result_type;
+        result_ob2_type = result_type;
+      }
+    } else {
+      result_ob1_type = result_type;
+      result_ob2_type = result_type;
+    }
   }
   return ret;
 }

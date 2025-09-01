@@ -266,6 +266,9 @@ public:
   int build_tablet_handle_for_mds_scan(
       ObTablet *tablet,
       ObTabletHandle &tablet_handle);
+  /// NOTE: make sure call within the scope of ls_tablet_svr's bucket lock.
+  /// need special handling of OB_ENTRY_NOT_EXIST
+  int alloc_tablet_meta_version(const ObTabletMapKey &key, int64_t &tablet_meta_version);
 
   // NOTE: This interface return tablet handle, which couldn't be used by compare_and_swap_tablet.
   int get_tablet_with_allocator(
@@ -279,8 +282,27 @@ public:
       const share::ObLSID &ls_id,
       const ObTabletID &tablet_id,
       int64_t &tablet_version,
+      int64_t &last_gc_version,
       int64_t &tablet_transfer_seq,
+      uintptr_t &tablet_fingerprint,
       bool &allow_tablet_version_gc);
+  int get_last_gc_version_for_tablet(
+      const share::ObLSID &ls_id,
+      const ObTabletID &tablet_id,
+      int64_t &last_gc_version);
+  int get_last_gc_versions_for_tablets(
+      const share::ObLSID &ls_id,
+      const ObIArray<ObTabletID> &tablet_ids,
+      ObIArray<int64_t> &last_gc_versions);
+  /// @brief: update tablet's last gc version(only used for private block gc)
+  /// skip if tablet not exist. Return OB_NOT_THE_OBJECT if @c tablet_fingerprint
+  /// mismatch
+  /// @param version: gc version to update.
+  int update_tablet_last_gc_version(
+      const share::ObLSID &ls_id,
+      const ObTabletID &tablet_id,
+      const uintptr_t tablet_fingerprint,
+      const int64_t new_gc_version);
   int check_allow_tablet_gc(const ObTabletID &tablet_id, const int64_t transfer_seq, bool &allow);
   int get_tablet_buffer_infos(ObIArray<ObTabletBufferInfo> &buffer_infos);
   int check_tablet_has_sstable_need_upload(const SCN &ls_ss_checkpoint_scn, const ObTabletMapKey &key, bool &need_upload);

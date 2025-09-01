@@ -21,6 +21,7 @@
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
 #include "storage/tablet/ob_tablet_macro_info_iterator.h"
 #include "storage/backup/ob_backup_device_wrapper.h"
+#include "sql/engine/table/ob_pcached_external_file_service.h" // for ObPCachedExternalFileService
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::hash;
@@ -805,6 +806,7 @@ void ObBlockManager::update_marker_status(const ObMacroBlockMarkerStatus &tmp_st
     marker_status_.index_block_count_ = tmp_status.index_block_count_;
     marker_status_.ids_block_count_ = tmp_status.ids_block_count_;
     marker_status_.tmp_file_count_ = tmp_status.tmp_file_count_;
+    marker_status_.ext_disk_cache_count_ = tmp_status.ext_disk_cache_count_;
     marker_status_.data_block_count_ = tmp_status.data_block_count_;
     marker_status_.shared_data_block_count_ = tmp_status.shared_data_block_count_;
     marker_status_.pending_free_count_ = tmp_status.pending_free_count_;
@@ -817,6 +819,7 @@ void ObBlockManager::update_marker_status(const ObMacroBlockMarkerStatus &tmp_st
     marker_status_.index_block_count_ = prev_result.index_block_count_;
     marker_status_.ids_block_count_ = prev_result.ids_block_count_;
     marker_status_.tmp_file_count_ = prev_result.tmp_file_count_;
+    marker_status_.ext_disk_cache_count_ = prev_result.ext_disk_cache_count_;
     marker_status_.data_block_count_ = prev_result.data_block_count_;
     marker_status_.shared_data_block_count_ = prev_result.shared_data_block_count_;
     marker_status_.pending_free_count_ = prev_result.pending_free_count_;
@@ -1072,7 +1075,10 @@ int ObBlockManager::mark_macro_blocks(
   } else if (OB_FAIL(mark_server_meta_blocks(mark_info, macro_id_set, tmp_status))) {
     LOG_WARN("fail to mark server meta blocks", K(ret));
   } else {
-    omt->get_mtl_tenant_ids(mtl_tenant_ids);
+    if (OB_FAIL(omt->get_mtl_tenant_ids(mtl_tenant_ids))) {
+      LOG_WARN("failed to get mtl tenant ids", K(ret));
+    }
+
     for (int64_t i = 0; OB_SUCC(ret) && i < mtl_tenant_ids.count(); i++) {
       const uint64_t tenant_id = mtl_tenant_ids.at(i);
       MacroBlockId macro_id;
@@ -1089,6 +1095,8 @@ int ObBlockManager::mark_macro_blocks(
                                    .get_cur_shared_block(macro_id))) {
         } else if (OB_FAIL(mark_held_shared_block(macro_id, mark_info, macro_id_set, tmp_status))) {
           LOG_WARN("fail to mark shared block held by shared_reader_writer", K(ret), K(macro_id));
+        } else if (OB_FAIL(calc_ext_disk_cache_blocks(tmp_status))) {
+          LOG_WARN("fail to calc ext disk cache blocks", K(ret));
         }
       }
     }
@@ -1526,6 +1534,28 @@ int ObBlockManager::mark_server_meta_blocks(
   } else {
     tmp_status.linked_block_count_ += macro_block_list.count();
     tmp_status.hold_count_ -= macro_block_list.count();
+  }
+  return ret;
+}
+
+int ObBlockManager::calc_ext_disk_cache_blocks(ObMacroBlockMarkerStatus &tmp_status)
+{
+  int ret = OB_SUCCESS;
+  sql::ObPCachedExternalFileService *ext_file_svr = MTL(sql::ObPCachedExternalFileService*);
+  ObStorageCacheStat cache_stat;
+  if (is_meta_tenant(MTL_ID())) {
+    // do nothing
+  } else if (OB_ISNULL(ext_file_svr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ext_file_svr", K(ret), K(ext_file_svr));
+  } else if (OB_FAIL(ext_file_svr->get_cache_stat(cache_stat))) {
+    LOG_WARN("failed to get ext disk cache stat", K(ret));
+  } else if (OB_UNLIKELY(cache_stat.macro_count_ < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unepxected ext disk cache stat", K(ret), K(cache_stat));
+  } else {
+    tmp_status.hold_count_ -= cache_stat.macro_count_;
+    tmp_status.ext_disk_cache_count_ += cache_stat.macro_count_;
   }
   return ret;
 }

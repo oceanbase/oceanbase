@@ -3416,14 +3416,15 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
               LOG_WARN("unexpected index type", KR(ret), K(vec_index_type_));
             } else if (FALSE_IT(create_index_arg.index_type_ = vec_index_type_)) {
             } else if (FALSE_IT(create_index_arg.index_schema_.set_index_params(index_params_))) {
-            } else if (OB_FAIL(ObVecIndexBuilderUtil::append_vec_args(resolve_result,
-                                                              create_index_arg,
-                                                              have_generate_vec_arg_,
-                                                              have_generate_fts_arg_,
-                                                              resolve_results,
-                                                              index_arg_list,
-                                                              allocator_,
-                                                              session_info_))) {
+            } else if (OB_FAIL(ObVecIndexBuilderUtil::append_vec_args(tbl_schema,
+                                                                      resolve_result,
+                                                                      create_index_arg,
+                                                                      have_generate_vec_arg_,
+                                                                      have_generate_fts_arg_,
+                                                                      resolve_results,
+                                                                      index_arg_list,
+                                                                      allocator_,
+                                                                      session_info_))) {
               LOG_WARN("failed to append vec args", K(ret));
             } else if (OB_FAIL(vec_index_col_ids_.push_back(vec_index_col_id))) {
               LOG_WARN("fail to push back vec index col id", K(ret));
@@ -3443,7 +3444,8 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
               has_fts_index_ = true;
             }
           } else if (is_multivalue_index(index_arg_.index_type_)) {
-            if (OB_FAIL(ObDDLResolver::append_multivalue_args(resolve_result,
+            if (OB_FAIL(ObDDLResolver::append_multivalue_args(tbl_schema,
+                                                              resolve_result,
                                                               create_index_arg,
                                                               have_generate_fts_arg_,
                                                               resolve_results,

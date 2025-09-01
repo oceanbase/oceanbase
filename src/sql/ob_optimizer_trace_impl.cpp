@@ -571,7 +571,7 @@ int ObOptimizerTraceImpl::append(const Path *path)
       const ObIndexMetaInfo &index_info = ap.est_cost_info_.index_meta_info_;
       if (ap.is_index_merge_path()) {
         const IndexMergePath& index_merge_path = static_cast<const IndexMergePath&>(ap);
-        append("is index merge: True, index merge conditions:", index_merge_path.root_);
+        append("is index merge: True, index merge tree:", index_merge_path.root_);
       } else {
         append("is index merge: False, index id:", ap.index_id_, ", global index:", ap.is_global_index_, ", unique index:", index_info.is_unique_index_);
       }
@@ -973,8 +973,34 @@ int ObOptimizerTraceImpl::append(const ObTabletID& id)
 int ObOptimizerTraceImpl::append(const ObIndexMergeNode *node)
 {
   int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(node)) {
-    append(node->filter_);
+  if (OB_ISNULL(node)) {
+    // do nothing
+  } else if (node->is_merge_node()) {
+    if (INDEX_MERGE_UNION == node->node_type_) {
+      if (OB_FAIL(append("OR("))) {
+        LOG_WARN("failed to append node type or", K(ret));
+      }
+    } else if (INDEX_MERGE_INTERSECT == node->node_type_) {
+      if (OB_FAIL(append("AND("))) {
+        LOG_WARN("failed to append node type and", K(ret));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < node->children_.count(); ++i) {
+      if (OB_FAIL(SMART_CALL(append(node->children_.at(i))))) {
+        LOG_WARN("failed to append child node", K(ret), K(i));
+      } else if (i < node->children_.count() - 1 && OB_FAIL(append(", "))) {
+        LOG_WARN("failed to append comma", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(append(")"))) {
+      LOG_WARN("failed to append right bracket", K(ret));
+    }
+  } else { // is scan node
+    if (OB_FAIL(append(node->index_tid_, ":"))) {
+      LOG_WARN("failed to append index tid", K(ret));
+    } else if (OB_FAIL(append(node->filter_))) {
+      LOG_WARN("failed to append filter", K(ret));
+    }
   }
   return ret;
 }

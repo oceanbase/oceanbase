@@ -231,23 +231,6 @@ public:
       const ObString &udt_name,
       bool &exist);
 
-  // 1. won't cache versions.
-  // @param[in]:
-  // - table_ids
-  // @param[out]:
-  // - versions
-  int get_table_schema_versions(
-      const common::ObIArray<uint64_t> &table_ids,
-      common::ObIArray<ObSchemaIdVersion> &versions);
-
-  // 1. won't cache versions.
-  // @param[in]:
-  // - table_ids
-  // @param[out]:
-  // - versions
-  int get_mock_fk_parent_table_schema_versions(
-      const common::ObIArray<uint64_t> &table_ids,
-      common::ObIArray<ObSchemaIdVersion> &versions);
 
   // 1. won't cache.
   // 2. return audits which is AUDIT_OBJ_DEFAULT and owner is OB_AUDIT_MOCK_USER_ID.
@@ -315,6 +298,25 @@ public:
       const bool is_built_in,
       ObIndexSchemaInfo &index_info);
 
+ // 1. won't cache versions.
+  // @param[in]:
+  // - obj_ids
+  // @param[out]:
+  // - versions
+#ifndef GET_OBJ_SCHEMA_VERSIONS
+#define GET_OBJ_SCHEMA_VERSIONS(OBJECT_NAME) \
+  int get_##OBJECT_NAME##_schema_versions(const common::ObIArray<uint64_t> &obj_ids, \
+                                          common::ObIArray<ObSchemaIdVersion> &versions);
+
+  GET_OBJ_SCHEMA_VERSIONS(table);
+  GET_OBJ_SCHEMA_VERSIONS(mock_fk_parent_table);
+  GET_OBJ_SCHEMA_VERSIONS(routine);
+  GET_OBJ_SCHEMA_VERSIONS(synonym);
+  GET_OBJ_SCHEMA_VERSIONS(package);
+  GET_OBJ_SCHEMA_VERSIONS(type);
+  GET_OBJ_SCHEMA_VERSIONS(sequence);
+#undef GET_OBJ_SCHEMA_VERSIONS
+#endif
   // 1. won't cache
   // 2. this function is used to get obj_privs of specified object
   // @param[in]:

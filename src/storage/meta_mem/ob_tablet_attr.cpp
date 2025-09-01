@@ -47,10 +47,11 @@ ObTabletAttr::ObTabletAttr()
     last_match_tablet_meta_version_(0),
     auto_part_size_(OB_INVALID_SIZE),
     notify_ss_change_version_(share::SCN::min_scn()),
+    ss_minor_version_(share::SCN::min_scn()),
     tablet_max_checkpoint_scn_(share::SCN::invalid_scn())
 {
 #if defined(__x86_64__)
-   check_obj_size<ObTabletAttr, 104>();
+   check_obj_size<ObTabletAttr, 112>();
 #endif
 }
 

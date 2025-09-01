@@ -575,8 +575,7 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
     }
   }
 
-  ObArray<ObString> file_urls;
-  ObArray<int64_t> file_sizes;
+  ObArray<share::ObExternalTableBasicFileInfo> basic_file_infos;
   if (OB_FAIL(ret)) {
   } else if (table_schema.is_external_table() && !table_schema.is_user_specified_partition_for_external_table()) {
     ObExprRegexpSessionVariables regexp_vars;
@@ -601,21 +600,13 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
               regexp_vars,
               ctx.get_allocator(),
               tmp,
-              file_urls,
-              file_sizes));
+              basic_file_infos));
   }
   if (OB_FAIL(ret)) {
   } else {
     create_table_arg.is_inner_ = my_session->is_inner();
     create_table_arg.consumer_group_id_ = THIS_WORKER.get_group_id();
     const_cast<obrpc::ObCreateTableArg&>(create_table_arg).ddl_stmt_str_ = first_stmt;
-    bool enable_parallel_create_table = false;
-    {
-      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-      enable_parallel_create_table = tenant_config.is_valid()
-                                     && tenant_config->_enable_parallel_table_creation;
-
-    }
     if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
       ret = OB_NOT_INIT;
       LOG_WARN("get task executor context failed", K(ret));
@@ -629,11 +620,27 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("common rpc proxy should not be null", K(ret));
     } else if (OB_ISNULL(select_stmt)) { // 普通建表的处理
+      bool is_parallel_create = false;
       if (OB_FAIL(ctx.get_sql_ctx()->schema_guard_->reset())){
         LOG_WARN("schema_guard reset failed", KR(ret));
-      } else if (table_schema.is_view_table()
-                 || data_version < DATA_VERSION_4_2_1_0
-                 || !enable_parallel_create_table) {
+      } else if (table_schema.is_view_table()) {
+        if ((data_version >= DATA_VERSION_4_4_0_0
+             && data_version < DATA_VERSION_4_4_1_0)
+            || table_schema.is_materialized_view()) {
+          is_parallel_create = false;
+        } else if (OB_FAIL(ObParallelDDLControlMode::is_parallel_ddl_enable(
+                          ObParallelDDLControlMode::CREATE_VIEW,
+                          tenant_id, is_parallel_create))) {
+          LOG_WARN("fail to check whether is parallel create view", KR(ret), K(tenant_id));
+        }
+      } else {
+        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+        is_parallel_create = tenant_config.is_valid()
+                             && tenant_config->_enable_parallel_table_creation;
+      }
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (!is_parallel_create) {
         if (OB_FAIL(common_rpc_proxy->create_table(create_table_arg, res))) {
           LOG_WARN("rpc proxy create table failed", KR(ret), "dst", common_rpc_proxy->get_server());
         }
@@ -654,6 +661,7 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
           }
           int64_t end_time = ObTimeUtility::current_time();
           LOG_INFO("[parallel_create_table]", KR(ret),
+                   "table_type", create_table_arg.schema_.get_table_type(),
                    "cost", end_time - start_time,
                    "execute_time", refresh_time - start_time,
                    "wait_schema", end_time - refresh_time,
@@ -678,7 +686,9 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
         }
       }
 
-      if (OB_SUCC(ret) && table_schema.is_external_table() && !table_schema.is_user_specified_partition_for_external_table()) {
+      if (OB_SUCC(ret) && table_schema.is_external_table()
+          && !table_schema.is_user_specified_partition_for_external_table()
+          && !res.do_nothing_) {
         //auto refresh after create external table
         ObArray<uint64_t> updated_part_ids; //not used
         bool has_partition_changed = false; //not used
@@ -697,8 +707,9 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
             collect_statistics_on_create = ex_format.odps_format_.collect_statistics_on_create_;
           }
         }
-        OZ (ObExternalTableFileManager::get_instance().update_inner_table_file_list(ctx, tenant_id, res.table_id_, file_urls, file_sizes, updated_part_ids, has_partition_changed,
-                                                                                    part_id, collect_statistics_on_create));
+        OZ (ObExternalTableFileManager::get_instance().update_inner_table_file_list(
+          ctx, tenant_id, res.table_id_, basic_file_infos, updated_part_ids, has_partition_changed,
+          part_id, collect_statistics_on_create));
       }
     } else {
       if (table_schema.is_external_table()) {
@@ -1032,8 +1043,7 @@ int ObAlterTableExecutor::execute_alter_external_table(ObExecContext &ctx, ObAlt
   int64_t option = stmt.get_alter_external_table_type();
   switch (option) {
     case T_ALTER_REFRESH_EXTERNAL_TABLE: {
-      ObArray<ObString> file_urls;
-      ObArray<int64_t> file_sizes;
+      ObArray<share::ObExternalTableBasicFileInfo> basic_file_infos;
       ObExprRegexpSessionVariables regexp_vars;
       CK (ctx.get_my_session());
       // 此处的ctx.get_sql_ctx()->schema_guard_没初始化
@@ -1065,15 +1075,15 @@ int ObAlterTableExecutor::execute_alter_external_table(ObExecContext &ctx, ObAlt
                   arg.alter_table_schema_.is_partitioned_table(),
                   regexp_vars, ctx.get_allocator(),
                   full_path,
-                  file_urls, file_sizes));
+                  basic_file_infos));
 
       //TODO [External Table] opt performance
       ObSEArray<ObAddr, 8> all_servers;
       ObSEArray<uint64_t, 64> updated_part_ids;
       bool has_partition_changed = false;
-      OZ (GCTX.location_service_->external_table_get(stmt.get_tenant_id(), arg.alter_table_schema_.get_table_id(), all_servers));
+      OZ (GCTX.location_service_->external_table_get(stmt.get_tenant_id(), all_servers));
       OZ (ObExternalTableFileManager::get_instance().update_inner_table_file_list(ctx, stmt.get_tenant_id(),
-                  arg.alter_table_schema_.get_table_id(), file_urls, file_sizes, updated_part_ids, has_partition_changed));
+                  arg.alter_table_schema_.get_table_id(), basic_file_infos, updated_part_ids, has_partition_changed));
       for (int64_t i = 0; OB_SUCC(ret) && i < updated_part_ids.count(); i++) {
         OZ (ObExternalTableFileManager::get_instance().flush_external_file_cache(stmt.get_tenant_id(),
                   arg.alter_table_schema_.get_table_id(), updated_part_ids.at(i), all_servers));
@@ -1178,8 +1188,7 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
             need_modify_fk_validate = true;
           }
         }
-        ObArray<ObString> file_urls;
-        ObArray<int64_t> file_sizes;
+        ObArray<share::ObExternalTableBasicFileInfo> basic_file_infos;
         if (OB_FAIL(ret)) {
         } else if (alter_table_arg.alter_part_type_ == ObAlterTableArg::ADD_PARTITION && alter_table_arg.alter_table_schema_.is_external_table()) {
           ObExprRegexpSessionVariables regexp_vars;
@@ -1226,8 +1235,7 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
                     regexp_vars,
                     ctx.get_allocator(),
                     full_path,
-                    file_urls,
-                    file_sizes));
+                    basic_file_infos));
 
         }
         if (OB_SUCC(ret)) {
@@ -1253,7 +1261,7 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
                 int64_t part_id = res.res_arg_array_.at(0).part_object_id_;
                 OZ (ObExternalTableFileManager::get_instance().update_inner_table_file_list(
                   ctx, tenant_id, alter_table_arg.alter_table_schema_.get_table_id(),
-                  file_urls, file_sizes, updated_part_ids, has_partition_changed, part_id));
+                  basic_file_infos, updated_part_ids, has_partition_changed, part_id));
               } else {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("unexpected error", K(ret));
@@ -1264,8 +1272,8 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
                 ObSEArray<ObAddr, 8> all_servers;
                 OZ (ObExternalTableFileManager::get_instance().update_inner_table_file_list(
                   ctx, tenant_id, alter_table_arg.alter_table_schema_.get_table_id(),
-                  file_urls, file_sizes, updated_part_ids, has_partition_changed, part_id));
-                OZ (GCTX.location_service_->external_table_get(tenant_id, alter_table_arg.alter_table_schema_.get_table_id(), all_servers));
+                  basic_file_infos, updated_part_ids, has_partition_changed, part_id));
+                OZ (GCTX.location_service_->external_table_get(tenant_id, all_servers));
                 OZ (ObExternalTableFileManager::get_instance().flush_external_file_cache(tenant_id, alter_table_arg.alter_table_schema_.get_table_id(), part_id, all_servers));
               } else {
                 ret = OB_ERR_UNEXPECTED;

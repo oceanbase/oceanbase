@@ -53,6 +53,10 @@ public:
       const uint64_t initiator_tenant_id,
       const int64_t initiator_job_id, 
       int64_t &cnt);
+  static int cnt_jobs_of_user_tenant(
+      common::ObISQLClient &proxy,
+      const uint64_t tenant_id,
+      int64_t &cnt);
   static int advance_job_status(
       common::ObISQLClient &proxy,
       const ObBackupCleanJobAttr &job_attr,
@@ -67,22 +71,34 @@ public:
       common::ObISQLClient &proxy,
       const uint64_t tenant_id,
       const int64_t job_id);
-  static int check_same_tenant_and_clean_type_job_exist(
-      common::ObISQLClient &proxy,
-      const ObBackupCleanJobAttr &job_attr,
-      bool &is_exist);
   static int report_failed_to_sys_tenant(
       common::ObISQLClient &proxy,
       const ObBackupCleanJobAttr &job_attr);
   static int update_retry_count(
       common::ObISQLClient &proxy, 
       const ObBackupCleanJobAttr &job_attr);
+  static int update_comment(common::ObISQLClient &proxy, const ObBackupCleanJobAttr &job_attr);
+
 private:
   static int fill_dml_with_job_(const ObBackupCleanJobAttr &job_attr, ObDMLSqlSplicer &dml);
   static int fill_select_job_sql_(ObSqlString &sql);
   static int parse_job_result_(sqlclient::ObMySQLResult &result, common::ObIArray<ObBackupCleanJobAttr> &jobs);
   static int do_parse_job_result_(sqlclient::ObMySQLResult &result, ObBackupCleanJobAttr &job);
   static int parse_int_(const char *str, int64_t &val);
+  static int handle_get_delete_backup_all_path_(
+      ObBackupCleanJobAttr &job,
+      const char *log_archive_path_list_str,
+      const char *data_backup_path_list_str);
+  static int handle_get_delete_obsolete_backup_path_(
+      ObBackupCleanJobAttr &job,
+      const char *log_archive_path_list_str,
+      const char *data_backup_path_list_str);
+  static int handle_write_delete_backup_all_path_(
+      const ObBackupCleanJobAttr &job_attr,
+      ObDMLSqlSplicer &dml);
+  static int handle_write_delete_obsolete_backup_path_(
+      const ObBackupCleanJobAttr &job_attr,
+      ObDMLSqlSplicer &dml);
 };
 
 class ObBackupCleanTaskOperator
@@ -190,7 +206,7 @@ class ObDeletePolicyOperator
 public:
   static int insert_delete_policy(common::ObISQLClient &proxy, const ObDeletePolicyAttr &delete_policy);
   static int drop_delete_policy(common::ObISQLClient &proxy, const ObDeletePolicyAttr &delete_policy);
-  static int get_default_delete_policy(common::ObISQLClient &proxy, const uint64_t tenant_id, ObDeletePolicyAttr &delete_policy);
+  static int get_delete_policy(common::ObISQLClient &proxy, const uint64_t tenant_id, ObDeletePolicyAttr &delete_policy);
 private:
   static int fill_dml_with_delete_policy_(const ObDeletePolicyAttr &delete_policy, ObDMLSqlSplicer &dml);
 };

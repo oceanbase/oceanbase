@@ -118,7 +118,8 @@ ObDDLResolver::ObDDLResolver(ObResolverParams &params)
     vec_index_type_(INDEX_TYPE_MAX),
     enable_macro_block_bloom_filter_(false),
     semistruct_encoding_type_(),
-    dynamic_partition_policy_()
+    dynamic_partition_policy_(),
+    semistruct_properties_()
 {
   table_mode_.reset();
 }
@@ -127,20 +128,22 @@ ObDDLResolver::~ObDDLResolver()
 {
 }
 
-int ObDDLResolver::append_fts_args(
-    const share::schema::ObTableSchema &data_schema,
-    const ObPartitionResolveResult &resolve_result,
-    const obrpc::ObCreateIndexArg &index_arg,
-    bool &fts_common_aux_table_exist,
-    ObIArray<ObPartitionResolveResult> &resolve_results,
-    ObIArray<ObCreateIndexArg> &index_arg_list,
-    ObIAllocator *allocator)
+int ObDDLResolver::append_fts_args(const share::schema::ObTableSchema &data_schema,
+                                   const ObPartitionResolveResult &resolve_result,
+                                   const obrpc::ObCreateIndexArg &index_arg,
+                                   bool &fts_common_aux_table_exist,
+                                   ObIArray<ObPartitionResolveResult> &resolve_results,
+                                   ObIArray<ObCreateIndexArg> &index_arg_list,
+                                   ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
+  ObDocIDType doc_id_type = ObDocIDType::INVALID;
   if (OB_ISNULL(allocator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator is null", K(ret));
-  } else if (!fts_common_aux_table_exist) {
+  } else if (OB_FAIL(ObFtsIndexBuilderUtil::determine_docid_type(data_schema, doc_id_type))) {
+    LOG_WARN("Failed to check skip rowkey doc mapping", K(ret));
+  } else if ((doc_id_type == ObDocIDType::TABLET_SEQUENCE) && !fts_common_aux_table_exist) {
     const int64_t num_fts_args = 4;
     // append fts index aux arg first, keep same logic as build fts index on existing table
     if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_index_arg(data_schema,
@@ -192,47 +195,9 @@ int ObDDLResolver::append_fts_args(
   return ret;
 }
 
-int ObDDLResolver::append_multivalue_args(
-    const ObPartitionResolveResult &resolve_result,
-    const obrpc::ObCreateIndexArg *index_arg,
-    bool &common_aux_table_exist,
-    ObIArray<ObPartitionResolveResult> &resolve_results,
-    ObIArray<ObCreateIndexArg *> &index_arg_list,
-    ObIAllocator *arg_allocator)
-{
-  int ret = OB_SUCCESS;
-  ObSArray<obrpc::ObCreateIndexArg> multivalue_args;
-  if (OB_ISNULL(arg_allocator) || OB_ISNULL(index_arg)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(arg_allocator), KP(index_arg));
-  } else if (OB_FAIL(append_multivalue_args(resolve_result,
-                                            *index_arg,
-                                            common_aux_table_exist,
-                                            resolve_results,
-                                            multivalue_args,
-                                            arg_allocator))) {
-    LOG_WARN("failed to append multivalue args", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < multivalue_args.count(); ++i) {
-    ObCreateIndexArg *index_arg = NULL;
-    void *tmp_ptr = NULL;
-    if (NULL == (tmp_ptr = (ObCreateIndexArg *)arg_allocator->alloc(
-            sizeof(obrpc::ObCreateIndexArg)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to alloc memory", K(ret));
-    } else if (FALSE_IT(index_arg = new (tmp_ptr) ObCreateIndexArg())) {
-    } else if (OB_FAIL(index_arg->assign(multivalue_args.at(i)))) {
-      LOG_WARN("failed to assign", K(ret));
-    } else if (OB_FAIL(index_arg_list.push_back(index_arg))) {
-      index_arg->~ObCreateIndexArg();
-      arg_allocator->free(index_arg);
-      LOG_WARN("failed to push back", K(ret));
-    }
-  }
-  return ret;
-}
 
 int ObDDLResolver::append_multivalue_args(
+    const share::schema::ObTableSchema &data_schema,
     const ObPartitionResolveResult &resolve_result,
     const obrpc::ObCreateIndexArg &index_arg,
     bool &common_aux_table_exist,
@@ -241,21 +206,19 @@ int ObDDLResolver::append_multivalue_args(
     ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
+  ObDocIDType doc_id_type = ObDocIDType::INVALID;
   int64_t num_mulvalue_args = 3;
-
   if (OB_ISNULL(allocator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator is null", K(ret));
-  } else if (!common_aux_table_exist) {
-    ObCreateIndexArg tmp_index_arg;
-    if (OB_FAIL(tmp_index_arg.assign(index_arg))) {
-      LOG_WARN("failed to assign arg", K(ret));
-    } else if (FALSE_IT(tmp_index_arg.index_columns_.reuse())) {
-    } else if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_rowkey_doc_arg(tmp_index_arg,
+  } else if (OB_FAIL(ObFtsIndexBuilderUtil::determine_docid_type(data_schema, doc_id_type))) {
+    LOG_WARN("Failed to check skip rowkey doc mapping", K(ret));
+  } else if ((doc_id_type == ObDocIDType::TABLET_SEQUENCE) && !common_aux_table_exist) {
+    if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_rowkey_doc_arg(index_arg,
                                                                  allocator,
                                                                  index_arg_list))) {
       LOG_WARN("failed to append fts_rowkey_doc arg", K(ret));
-    } else if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_doc_rowkey_arg(tmp_index_arg,
+    } else if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_doc_rowkey_arg(index_arg,
                                                                         allocator,
                                                                         index_arg_list))) {
       LOG_WARN("failed to append fts_doc_rowkey arg", K(ret));
@@ -263,6 +226,8 @@ int ObDDLResolver::append_multivalue_args(
                                                                        allocator,
                                                                        index_arg_list))) {
       LOG_WARN("failed to append fts_index arg", K(ret));
+    } else {
+      common_aux_table_exist = true;
     }
   } else {
     num_mulvalue_args = 1;
@@ -273,15 +238,12 @@ int ObDDLResolver::append_multivalue_args(
     }
   }
 
-
   for (int64_t i = 0; OB_SUCC(ret) && i < num_mulvalue_args; ++i) {
     if (OB_FAIL(resolve_results.push_back(resolve_result))) {
       LOG_WARN("fail to push back index_stmt_list", K(ret), K(resolve_result));
     }
   }
-  if (OB_SUCC(ret)) {
-    common_aux_table_exist = true;
-  }
+
   return ret;
 }
 
@@ -1281,16 +1243,19 @@ int ObDDLResolver::add_storing_column(const ObString &column_name,
   return ret;
 }
 
-
-int ObDDLResolver::resolve_file_prefix(ObString &url, ObSqlString &prefix_str, common::ObStorageType &device_type, ObResolverParams &params) {
+int ObDDLResolver::resolve_file_prefix(ObString &url,
+                                       ObSqlString &prefix_str,
+                                       common::ObStorageType &device_type,
+                                       ObIAllocator *allocator)
+{
   int ret = OB_SUCCESS;
   ObString tmp_url;
-  ObArenaAllocator allocator;
-  OZ (ob_write_string(allocator, url, tmp_url));
+  ObArenaAllocator tmp_allocator;
+  OZ (ob_write_string(tmp_allocator, url, tmp_url));
   ObCharset::caseup(CS_TYPE_UTF8MB4_GENERAL_CI, tmp_url);
   device_type = common::ObStorageType::OB_STORAGE_MAX_TYPE;
   ObString tmp_prefix = tmp_url.split_on(':');
-  OZ (ob_write_string(allocator, tmp_prefix, tmp_prefix, true));
+  OZ (ob_write_string(tmp_allocator, tmp_prefix, tmp_prefix, true));
   if (!tmp_prefix.empty()) {
     OZ (get_storage_type_from_name(tmp_prefix.ptr(), device_type));
   }
@@ -1307,11 +1272,11 @@ int ObDDLResolver::resolve_file_prefix(ObString &url, ObSqlString &prefix_str, c
   if (OB_SUCC(ret)) {
     ObString prefix;
     const char *ts = get_storage_type_str(device_type);
-    if (OB_ISNULL(params.allocator_)) {
+    if (OB_ISNULL(allocator)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("allocator is null", K(ret));
     } else {
-      if (OB_FAIL(ob_write_string(*params.allocator_, ObString(ts), prefix))) {
+      if (OB_FAIL(ob_write_string(*allocator, ObString(ts), prefix))) {
         LOG_WARN("failed to write string", K(ret));
       } else {
         ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, prefix);
@@ -3109,8 +3074,8 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
         }
         break;
       }
-      case T_SEMISTRUCT_ENCODING_TYPE: {
-        ret = resolve_semistruct_encoding_type(option_node, is_index_option);
+      case T_SEMISTRUCT_PROPERTIES: {
+        ret = resolve_semistruct_properties(option_node, is_index_option);
         break;
       }
       case T_MERGE_ENGINE: {
@@ -5732,6 +5697,7 @@ void ObDDLResolver::reset() {
   enable_macro_block_bloom_filter_ = false;
   semistruct_encoding_type_.reset();
   dynamic_partition_policy_.reset();
+  semistruct_properties_.reset();
 }
 
 void ObDDLResolver::reset_index()
@@ -12517,6 +12483,9 @@ int ObDDLResolver::resolve_hash_partition_elements(ObPartitionedStmt *stmt,
       } else if (OB_NOT_NULL(element_node->children_[PART_ID_NODE])) {
         // PART_ID is deprecated in 4.0, we just ignore and show warnings here.
         LOG_USER_WARN_ONCE(OB_NOT_SUPPORTED, "specify part_id");
+      } else if (OB_FAIL(resolve_storage_cache_policy_in_part_list(element_node, table_schema.get_tenant_id(),
+          false/*is_template_subpartition*/, partition))) {
+        LOG_WARN("failed to resolve storage cache policy in partition list", KR(ret), K(table_schema), K(partition));
       }
       //add hash partition elements to table schema
       if (OB_SUCC(ret)) {
@@ -12589,6 +12558,14 @@ int ObDDLResolver::resolve_hash_subpartition_elements(ObPartitionedStmt *stmt,
         // PART_ID is deprecated in 4.0, we just ignore and show warnings here.
         LOG_USER_WARN_ONCE(OB_NOT_SUPPORTED, "specify part_id");
       }
+      if (OB_SUCC(ret)) {
+        const bool is_template_subpartition = is_template || table_schema.has_sub_part_template_def();
+        if (OB_FAIL(resolve_storage_cache_policy_in_part_list(element_node, table_schema.get_tenant_id(),
+            is_template_subpartition, subpartition))) {
+          LOG_WARN("failed to resolve storage cache policy in subpartition list", K(ret), K(table_schema),
+              K(subpartition), K(is_template_subpartition));
+        }
+      }
       // add hash subpartition elements to table schema or partition
       if (OB_SUCC(ret)) {
         subpartition.set_sub_part_idx(i);
@@ -12660,6 +12637,9 @@ int ObDDLResolver::resolve_range_partition_elements(ObPartitionedStmt *stmt,
       } else if (OB_NOT_NULL(element_node->children_[PART_ID_NODE])) {
         // PART_ID is deprecated in 4.0, we just ignore and show warnings here.
         LOG_USER_WARN_ONCE(OB_NOT_SUPPORTED, "specify part_id");
+      } else if (OB_FAIL(resolve_storage_cache_policy_in_part_list(element_node, table_schema.get_tenant_id(),
+          false/*is_template_subpartition*/, partition))) {
+        LOG_WARN("failed to resolve storage cache policy in partition list", KR(ret), K(table_schema), K(partition));
       }
 
       //add range partition elements to table schema
@@ -12745,6 +12725,14 @@ int ObDDLResolver::resolve_range_subpartition_elements(ObPartitionedStmt *stmt,
         // PART_ID is deprecated in 4.0, we just ignore and show warnings here.
         LOG_USER_WARN_ONCE(OB_NOT_SUPPORTED, "specify part_id");
       }
+      if (OB_SUCC(ret)) {
+        const bool is_template_subpartition = is_template || table_schema.has_sub_part_template_def();
+        if (OB_FAIL(resolve_storage_cache_policy_in_part_list(element_node, table_schema.get_tenant_id(),
+            is_template_subpartition, subpartition))) {
+          LOG_WARN("failed to resolve storage cache policy in subpartition list", K(ret), K(table_schema),
+              K(subpartition), K(is_template_subpartition));
+        }
+      }
 
       //add range partition elements to table schema
       if (OB_SUCC(ret)) {
@@ -12817,6 +12805,9 @@ int ObDDLResolver::resolve_list_partition_elements(ObPartitionedStmt *stmt,
       } else if (OB_NOT_NULL(element_node->children_[PART_ID_NODE])) {
         // PART_ID is deprecated in 4.0, we just ignore and show warnings here.
         LOG_USER_WARN_ONCE(OB_NOT_SUPPORTED, "specify part_id");
+      } else if (OB_FAIL(resolve_storage_cache_policy_in_part_list(element_node, table_schema.get_tenant_id(),
+          false/*is_template_subpartition*/, partition))) {
+        LOG_WARN("failed to resolve storage cache policy in partition list", K(ret), K(table_schema), K(partition));
       }
 
       //add list partition elements to table schema
@@ -12898,7 +12889,14 @@ int ObDDLResolver::resolve_list_subpartition_elements(ObPartitionedStmt *stmt,
         // PART_ID is deprecated in 4.0, we just ignore and show warnings here.
         LOG_USER_WARN_ONCE(OB_NOT_SUPPORTED, "specify part_id");
       }
-
+      if (OB_SUCC(ret)) {
+        const bool is_template_subpartition = is_template || table_schema.has_sub_part_template_def();
+        if (OB_FAIL(resolve_storage_cache_policy_in_part_list(element_node, table_schema.get_tenant_id(),
+            is_template_subpartition, subpartition))) {
+          LOG_WARN("failed to resolve storage cache policy in subpartition list", K(ret), K(table_schema),
+              K(subpartition), K(is_template_subpartition));
+        }
+      }
       //add list partition elements to table schema
       if (OB_SUCC(ret)) {
         subpartition.set_tablespace_id(tablespace_id);
@@ -14131,7 +14129,7 @@ bool ObDDLResolver::is_column_group_supported() const
   return is_supported;
 }
 
-int ObDDLResolver::resolve_semistruct_encoding_type(const ParseNode *option_node, const bool is_index_option)
+int ObDDLResolver::resolve_semistruct_properties(const ParseNode *option_node, const bool is_index_option)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = 0;
@@ -14142,10 +14140,6 @@ int ObDDLResolver::resolve_semistruct_encoding_type(const ParseNode *option_node
   } else if (OB_FALSE_IT(tenant_id = session_info_->get_effective_tenant_id())) {
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
     LOG_WARN("get tenant data version failed", K(ret));
-  } else if (tenant_data_version < DATA_VERSION_4_3_5_2) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("semistruct encoding is not supported in data version less than 4.3.5.2", K(ret), K(tenant_data_version));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "semistruct encoding in data version less than 4.3.5.2");
   } else if (is_index_option) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("index option should not specify semistruct encoding", K(ret));
@@ -14155,27 +14149,98 @@ int ObDDLResolver::resolve_semistruct_encoding_type(const ParseNode *option_node
   } else if (OB_ISNULL(option_node->children_)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "the children of option_node is null", K(option_node->children_), K(ret));
-  } else if (OB_ISNULL(option_node->children_[0])) {
-    ret = OB_ERR_UNEXPECTED;
-    SQL_RESV_LOG(WARN,"children can't be null", K(ret));
   } else if (OB_ISNULL(stmt_)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN,"stmt_ is null", K(ret));
+  } else if (option_node->num_child_ == 0) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "semistruct params is empty", K(ret));
   } else {
-    ObString type_str(static_cast<int32_t>(option_node->children_[0]->str_len_), (char *)(option_node->children_[0]->str_value_));
-    if (type_str.empty()) {
-      semistruct_encoding_type_.mode_ = ObSemistructProperties::Mode::NONE;
-    } else if (0 == type_str.case_compare("encoding")) {
-      semistruct_encoding_type_.mode_ = ObSemistructProperties::Mode::ENCODING;
-    } else {
-      ret = OB_INVALID_ARGUMENT;
-      SQL_RESV_LOG(WARN, "failed to resolve semistruct encoding type str", K(ret), K(type_str));
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "semistruct encoding type, should be none or encoding");
+    ObArenaAllocator semi_allocator;
+    ObIJsonBase *root = nullptr;
+    if (OB_ISNULL(root = OB_NEWx(ObJsonObject, allocator_, allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to new ObJsonObject", K(ret));
     }
-    if (OB_SUCC(ret) && stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
-      if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::SEMISTRUCT_ENCODING_TYPE))) {
+    for (int i = 0; OB_SUCC(ret) && i < option_node->num_child_; ++i) {
+      if (OB_ISNULL(option_node->children_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_RESV_LOG(WARN, "list node can't be null", K(ret));
+      } else if (OB_ISNULL(option_node->children_[i]->children_[0])) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_RESV_LOG(WARN, "children node can't be null", K(ret));
+      } else if (OB_FAIL(resolve_semistruct_child_node(semi_allocator, option_node->children_[i], tenant_data_version, root))) {
+        SQL_RESV_LOG(WARN, "failed to resolve semistruct child node", K(ret));
+      }
+    }
+    ObJsonBuffer j_buf(allocator_);
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(root->print(j_buf, false))) {
+      LOG_WARN("Fail to print json", K(ret));
+    } else if (OB_FAIL(j_buf.get_result_string(semistruct_properties_))) {
+      LOG_WARN("Fail to get result string", K(ret));
+    } else if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
+      if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::SEMISTRUCT_PROPERTIES))) {
         SQL_RESV_LOG(WARN, "failed to add member to bitset!", K(ret));
       }
+    }
+  }
+  return ret;
+}
+
+int ObDDLResolver::resolve_semistruct_child_node(ObArenaAllocator &semi_allocator, const ParseNode *option_node, const uint64_t tenant_data_version, ObIJsonBase *&root) {
+  int ret = OB_SUCCESS;
+  switch (option_node->type_) {
+    case T_SEMISTRUCT_ENCODING_TYPE: {
+      const int64_t encoding_type = option_node->children_[0]->value_;
+      if (OB_UNLIKELY(tenant_data_version < DATA_VERSION_4_4_1_0)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("semistruct encoding is not supported in data version less than 4.4.1.0", K(ret), K(tenant_data_version));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "semistruct encoding in data version less than 4.4.1.0");
+      } else if (ObSemistructProperties::is_mode_valid(encoding_type)) {
+        ObJsonInt *encoding_type_node = nullptr;
+        if (OB_ISNULL(encoding_type_node = OB_NEWx(ObJsonInt, &semi_allocator, encoding_type))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("Fail to new ObJsonInt", K(ret));
+        } else if (OB_FAIL(root->object_add(ObString("encoding_type"), encoding_type_node))) {
+          LOG_WARN("Fail to add encoding_type str", K(ret));
+        } else {
+          semistruct_encoding_type_.mode_ = encoding_type;
+        }
+      } else {
+        ret = OB_INVALID_ARGUMENT;
+        SQL_RESV_LOG(WARN, "failed to resolve semistruct encoding type str", K(ret), K(encoding_type));
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "semistruct encoding type, should be none or encoding");
+      }
+      break;
+    }
+    case T_FREQ_THRESHOLD: {
+      const int64_t semistruct_freq_threshold = option_node->children_[0]->value_;
+      if (OB_UNLIKELY(semistruct_freq_threshold > 100 || semistruct_freq_threshold <= 0)) {
+        ret = OB_INVALID_ARGUMENT;
+        SQL_RESV_LOG(
+            WARN, "failed to resolve semistruct freq threshold value", K(ret), K(semistruct_freq_threshold));
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT,
+            "semistruct freq threshold, should be greater than 0 and less than or equal to 100");
+      } else if (OB_UNLIKELY(tenant_data_version < DATA_VERSION_4_4_1_0)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("semistruct freq threshold is not supported in data version less than 4.4.1.0", K(ret), K(tenant_data_version));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "semistruct freq threshold in data version less than 4.4.1.0");
+      } else {
+        ObJsonInt *freq_threshold = nullptr;
+        if (OB_ISNULL(freq_threshold = OB_NEWx(ObJsonInt, &semi_allocator, semistruct_freq_threshold))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("Fail to new ObJsonInt", K(ret));
+        } else if (OB_FAIL(root->object_add(ObString("freq_threshold"), freq_threshold))) {
+          LOG_WARN("Fail to add freq_threshold", K(ret));
+        }
+      }
+      break;
+    }
+    default: {
+      ret = OB_INVALID_ARGUMENT;
+      SQL_RESV_LOG(WARN, "failed to resolve semistruct encoding type str", K(ret), K(option_node->type_));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "semistruct encoding type, should be semistruct_freq_threshold");
     }
   }
   return ret;

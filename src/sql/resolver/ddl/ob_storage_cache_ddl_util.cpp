@@ -638,6 +638,69 @@ int ObDDLResolver::check_storage_cache_policy(ObStorageCachePolicy &storage_cach
   return ret;
 }
 
+int ObDDLResolver::resolve_partition_storage_cache_policy_element(const ObString &storage_cache_policy_str, ObStorageCachePolicyType &storage_cache_policy_type)
+{
+  int ret = OB_SUCCESS;
+  storage_cache_policy_type = ObStorageCachePolicyType::MAX_POLICY;
+  if (OB_UNLIKELY(storage_cache_policy_str.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid storage cache policy str", KR(ret), K(storage_cache_policy_str));
+  } else {
+    if (OB_FAIL(get_storage_cache_policy_type_from_part_str(storage_cache_policy_str, storage_cache_policy_type))) {
+      LOG_WARN("get storage cache policy type failed", KR(ret), K(storage_cache_policy_str));
+    } else if (storage_cache_policy_type == ObStorageCachePolicyType::MAX_POLICY) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "storage_cache_policy for partition must be 'HOT', 'AUTO' or 'NONE'");
+      LOG_WARN("invalid storage cache policy", KR(ret), K(storage_cache_policy_str));
+    }
+  }
+  return ret;
+}
+
+int ObDDLResolver::resolve_storage_cache_policy_in_part_list(const ParseNode *node,
+                                                             const int64_t tenant_id,
+                                                             const bool is_template_subpartition,
+                                                             ObBasePartition &partition)
+{
+  int ret = OB_SUCCESS;
+  ObStorageCachePolicyType storage_cache_policy_type = ObStorageCachePolicyType::MAX_POLICY;
+  uint64_t tenant_data_version = 0;
+  if (OB_ISNULL(node)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("parse node for storage cache policy element in partition list is null", KR(ret));
+  } else if (GCTX.is_shared_storage_mode() &&
+             lib::is_mysql_mode() &&
+             OB_NOT_NULL(node->children_[ELEMENT_STORAGE_CACHE_POLICY])) {
+    if (is_template_subpartition) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "storage cache policy in subpartition template");
+    } else {
+      const ParseNode *storage_cache_policy_node = node->children_[ELEMENT_STORAGE_CACHE_POLICY];
+      if (T_STORAGE_CACHE_POLICY_IN_PART_LIST != storage_cache_policy_node->type_ ||
+          1 != storage_cache_policy_node->num_child_ ||
+          OB_ISNULL(storage_cache_policy_node->children_[0])) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid parse tree when resolve storage cache policy as partition element",
+            KR(ret), K(storage_cache_policy_node->num_child_), K(storage_cache_policy_node->type_));
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+        LOG_WARN("get data version failed", KR(ret), K(tenant_id));
+      } else if (tenant_data_version < DATA_VERSION_4_4_1_0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("storage cache policy int partition list is not supported in versions before 4.4.1.0", KR(ret));
+      } else {
+        const ObString new_storage_cache_policy(static_cast<int32_t>(storage_cache_policy_node->children_[0]->str_len_),
+            storage_cache_policy_node->children_[0]->str_value_);
+        if (OB_FAIL(resolve_partition_storage_cache_policy_element(new_storage_cache_policy, storage_cache_policy_type))) {
+          LOG_WARN("fail to resolve storage cache in part definition", KR(ret), K(partition));
+        } else if (FALSE_IT(partition.set_part_storage_cache_policy_type(storage_cache_policy_type))) {
+          LOG_WARN("failed to set part storage_cache_policy", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 /*************************ObAlterTableResolver*************************/
 int ObAlterTableResolver::resolve_alter_partition_storage_cache_policy(const ParseNode &node,
     const share::schema::ObTableSchema &orig_table_schema)
@@ -730,6 +793,9 @@ int ObAlterTableResolver::resolve_alter_subpartition_storage_cache_policy(const 
   } else if (!orig_table_schema.is_user_table()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("unsupport behavior on not user table", KR(ret), K(orig_table_schema));
+  } else if (orig_table_schema.has_sub_part_template_def()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("unsupport behavior on subpartition template table", KR(ret), K(orig_table_schema));
   } else if (PARTITION_LEVEL_ZERO == part_level || PARTITION_LEVEL_ONE == part_level) {
     ret = OB_ERR_PARTITION_MGMT_ON_NONPARTITIONED;
     LOG_USER_ERROR(OB_ERR_PARTITION_MGMT_ON_NONPARTITIONED);
@@ -845,7 +911,38 @@ int ObAlterTableResolver::resolve_alter_index_storage_cache_policy(const ParseNo
 }
 
 
-/*************************ObStorageCacheUtil*************************/
+int ObStorageCacheUtil::print_storage_cache_policy_element(const ObBasePartition *partition, char* buf, const int64_t &buf_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  uint64_t compat_version = OB_INVALID_VERSION;
+  if (OB_ISNULL(partition)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("partition is null", K(ret), K(partition));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(partition->get_tenant_id(), compat_version))) {
+    LOG_WARN("get min data_version failed", K(ret), K(partition->get_tenant_id()));
+  } else if (compat_version < DATA_VERSION_4_4_1_0) {
+    // do nothing
+  } else {
+    ObStorageCachePolicyType storage_cache_policy_type = partition->get_part_storage_cache_policy_type();
+    if (is_hot_or_auto_policy(storage_cache_policy_type)) {
+      const char *storage_cache_policy_str = nullptr;
+      if (OB_FAIL(ObStorageCacheGlobalPolicy::safely_get_str(storage_cache_policy_type, storage_cache_policy_str))) {
+        LOG_WARN("failed to get storage cache policy str", K(ret), K(storage_cache_policy_type));
+      } else if (OB_ISNULL(storage_cache_policy_str)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("storage cache policy str is null", K(ret), K(storage_cache_policy_type));
+      } else {
+        ObString storage_cache_policy(storage_cache_policy_str);
+        if (OB_FAIL(databuff_printf(buf, buf_len, pos, " storage_cache_policy = \'%.*s\'",
+                                    storage_cache_policy.length(), storage_cache_policy.ptr()))) {
+          LOG_WARN("failed to print storage cache policy", K(ret), K(storage_cache_policy_type));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObStorageCacheUtil::print_table_storage_cache_policy(const ObTableSchema &table_schema, char* buf, const int64_t &buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;

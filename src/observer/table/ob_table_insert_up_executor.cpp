@@ -139,7 +139,7 @@ void ObTableApiInsertUpExecutor::set_need_fetch_conflict()
   upd_rtctx_.set_non_sub_full_task();
 }
 
-int ObTableApiInsertUpExecutor::refresh_exprs_frame(const ObTableEntity *entity)
+int ObTableApiInsertUpExecutor::refresh_exprs_frame(const ObITableEntity *entity)
 {
   int ret = OB_SUCCESS;
   const ObTableInsCtDef &ins_ctdef = insert_up_spec_.get_ctdefs().at(0)->ins_ctdef_;
@@ -284,6 +284,7 @@ int ObTableApiInsertUpExecutor::cache_insert_row()
 int ObTableApiInsertUpExecutor::do_insert_up_cache()
 {
   int ret = OB_SUCCESS;
+  bool is_heap_table = tb_ctx_.is_heap_table();
   ObSEArray<ObConflictValue, 1> constraint_values;
   ObTableUpdRtDef &upd_rtdef = insert_up_rtdefs_.at(0).upd_rtdef_;
 
@@ -297,14 +298,15 @@ int ObTableApiInsertUpExecutor::do_insert_up_cache()
     LOG_WARN("constraint_values is empty", K(ret), KPC_(insert_row), K(conflict_checker_.conflict_map_array_.count()));
   } else {
     upd_rtdef.found_rows_++;
-    const ObChunkDatumStore::StoredRow *upd_new_row = insert_row_;
+    ObChunkDatumStore::StoredRow *upd_new_row = insert_row_;
     const ObChunkDatumStore::StoredRow *upd_old_row = constraint_values.at(0).current_datum_row_;
     old_row_ = upd_old_row;
     if (OB_ISNULL(upd_old_row)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("upd_old_row is NULL", K(ret));
-    } else if (OB_FAIL(check_rowkey_change(*upd_old_row,
-                                           *upd_new_row))) {
+    } else if (is_heap_table && OB_FAIL(copy_heap_table_hidden_pk(upd_old_row, upd_new_row))) {
+      LOG_WARN("fail to copy heap table hidden pk", K(ret));
+    } else if (!is_heap_table && OB_FAIL(check_rowkey_change(*upd_old_row, *upd_new_row))) {
       LOG_WARN("can not update rowkey column", K(ret));
     } else if (OB_FAIL(check_whether_row_change(*upd_old_row,
                                                 *upd_new_row,

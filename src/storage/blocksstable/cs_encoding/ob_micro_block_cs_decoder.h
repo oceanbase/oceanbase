@@ -40,7 +40,7 @@ public:
     ctx_ = nullptr;
   }
   // performance critical, do not check parameters
-  int decode(const int64_t row_id, common::ObDatum &datum);
+  int decode(const int64_t row_id, ObStorageDatum &datum);
 
   // used for locate row in micro block rowkey object compare
   // performance critical, do not check parameters

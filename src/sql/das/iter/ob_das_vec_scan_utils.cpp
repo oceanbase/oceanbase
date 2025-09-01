@@ -133,16 +133,19 @@ int ObDasVecScanUtils::init_limit(const ObDASVecAuxScanCtDef *ir_ctdef,
       && ObDASOpType::DAS_OP_TABLE_SCAN == sort_rtdef->children_[0]->children_[0]->op_type_) {
       base_rtdef = static_cast<ObDASScanRtDef *>(sort_rtdef->children_[0]->children_[0]);
     }
+  } else if (ObDASOpType::DAS_OP_INDEX_MERGE == ir_rtdef->get_inv_idx_scan_rtdef()->op_type_ && OB_ISNULL(sort_ctdef->limit_expr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null base limit expr", K(ret));
   }
 
-  if (OB_ISNULL(base_rtdef)) {
+  if (OB_ISNULL(base_rtdef) && (OB_ISNULL(sort_ctdef->limit_expr_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null base rtdef", K(ret), KPC(ir_ctdef), KPC(ir_rtdef));
-  } else if (nullptr != sort_ctdef && nullptr != sort_rtdef) {
+  } else if (OB_NOT_NULL(sort_ctdef->limit_expr_)) {
     // try init top-k limits
     bool is_null = false;
-    if (OB_UNLIKELY((nullptr != sort_ctdef->limit_expr_ || nullptr != sort_ctdef->offset_expr_) &&
-                    base_rtdef->limit_param_.is_valid())) {
+    if (OB_UNLIKELY((nullptr == sort_ctdef->limit_expr_ && nullptr == sort_ctdef->offset_expr_)
+                    && (OB_ISNULL(base_rtdef) || base_rtdef->limit_param_.is_valid()))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected top k limit with table scan limit pushdown", K(ret), KPC(ir_ctdef), KPC(ir_rtdef));
     } else if (nullptr != sort_ctdef->limit_expr_) {
@@ -275,7 +278,8 @@ int ObDasVecScanUtils::init_scan_param(const share::ObLSID &ls_id,
     scan_param.ext_file_column_exprs_ = &(ctdef->pd_expr_spec_.ext_file_column_exprs_);
     scan_param.ext_mapping_column_exprs_ = &(ctdef->pd_expr_spec_.ext_mapping_column_exprs_);
     scan_param.ext_mapping_column_ids_ = &(ctdef->pd_expr_spec_.ext_mapping_column_ids_);
-    scan_param.ext_column_convert_exprs_ = &(ctdef->pd_expr_spec_.ext_column_convert_exprs_);
+    scan_param.ext_column_dependent_exprs_ = &(ctdef->pd_expr_spec_.ext_column_convert_exprs_);
+    scan_param.ext_enable_late_materialization_ = ctdef->pd_expr_spec_.ext_enable_late_materialization_;
     scan_param.calc_exprs_ = &(ctdef->pd_expr_spec_.calc_exprs_);
     scan_param.aggregate_exprs_ = &(ctdef->pd_expr_spec_.pd_storage_aggregate_output_);
     scan_param.table_param_ = &(ctdef->table_param_);

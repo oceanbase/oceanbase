@@ -76,16 +76,50 @@ public:
   {
     // rerouting: whether client should refresh location cache and retry
     // Now, following the same logic as in ../mysql/ob_query_retry_ctrl.cpp
-    return is_master_changed_error(err)
-      || is_server_down_error(err)
-      || is_partition_change_error(err)
-      || is_server_status_error(err)
-      || is_unit_migrate(err)
-      || is_transaction_rpc_timeout_err(err)
-      || is_has_no_readable_replica_err(err)
-      || is_select_dup_follow_replic_err(err)
-      || is_trans_stmt_need_retry_error(err)
-      || is_snapshot_discarded_err(err);
+    return is_need_refresh_route_meta_error(err)
+        || is_need_refresh_route_location_error(err);
+  }
+
+  OB_INLINE static bool is_need_refresh_route_meta_error(int err)
+  {
+      return err == OB_SCHEMA_ERROR
+          || err == OB_TABLE_NOT_EXIST
+          || err == OB_TABLET_NOT_EXIST
+          || err == OB_LS_NOT_EXIST
+          || err == OB_MAPPING_BETWEEN_TABLET_AND_LS_NOT_EXIST
+          || err == OB_SNAPSHOT_DISCARDED
+          || err == OB_SCHEMA_EAGAIN
+          || err == OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH
+          || err == OB_GTS_NOT_READY
+          || err == OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+  }
+
+  OB_INLINE static bool is_need_refresh_route_location_error(int err) {
+    return err == OB_LOCATION_LEADER_NOT_EXIST
+        || err == OB_NOT_MASTER
+        || err == OB_RS_NOT_MASTER
+        || err == OB_RS_SHUTDOWN
+        || err == OB_RPC_SEND_ERROR
+        || err == OB_RPC_POST_ERROR
+        || err == OB_PARTITION_NOT_EXIST
+        || err == OB_LOCATION_NOT_EXIST
+        || err == OB_PARTITION_IS_STOPPED
+        || err == OB_PARTITION_IS_BLOCKED
+        || err == OB_SERVER_IS_INIT
+        || err == OB_SERVER_IS_STOPPING
+        || err == OB_TRANS_RPC_TIMEOUT
+        || err == OB_NO_READABLE_REPLICA;
+  }
+
+  OB_INLINE static bool can_did_local_retry(int err) {
+    return is_need_refresh_route_location_error(err)
+        || err == OB_TABLET_NOT_EXIST
+        || err == OB_LS_NOT_EXIST
+        || err == OB_MAPPING_BETWEEN_TABLET_AND_LS_NOT_EXIST
+        || err == OB_SNAPSHOT_DISCARDED
+        || err == OB_SCHEMA_EAGAIN
+        || err == OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH
+        || err == OB_GTS_NOT_READY;
   }
 
   OB_INLINE static bool need_do_move_response(const int err, const obrpc::ObRpcPacket &rpc_pkt)

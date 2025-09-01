@@ -221,7 +221,7 @@ int ObRemoteScheduler::execute_with_sql(ObExecContext &ctx, ObPhysicalPlan *phy_
     LOG_WARN("fail to reset and init result", K(ret));
   } else if (OB_FAIL(build_remote_task(ctx, task, phy_plan->get_dependency_table()))) {
     LOG_WARN("build remote task failed", K(ret), K(task));
-  } else if (OB_FAIL(session->add_changed_package_info(ctx))) {
+  } else if (OB_FAIL(session->add_changed_package_info())) {
     LOG_WARN("failed to add changed package info to session", K(ret));
   } else {
     session->reset_all_package_changed_info();

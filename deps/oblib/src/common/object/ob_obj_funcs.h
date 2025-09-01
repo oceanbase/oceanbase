@@ -57,6 +57,7 @@ struct ObObjTypeFuncs
   ob_obj_crc64_v3 crc64_v3;
   ob_obj_hash xxhash64;
   ob_obj_hash murmurhash_v3;
+  ob_obj_hash murmurhash3_x86_32;
 };
 
 // function templates for the above functions

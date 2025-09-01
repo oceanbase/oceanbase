@@ -289,7 +289,7 @@ int ObTransformQueryPushDown::check_transform_validity(ObSelectStmt *select_stmt
   } else if (!check_status) {
     can_transform = false;
     OPT_TRACE("can not pushdown where condition");
-  } else if ((select_stmt->has_group_by() || select_stmt->has_rollup())
+  } else if ((select_stmt->has_group_by() || select_stmt->has_rollup() || select_stmt->has_grouping_sets())
              && !view_stmt->is_spj()) {//判断6
     can_transform = false;
     OPT_TRACE("stmt has group by, but view is not spj");
@@ -554,6 +554,7 @@ int ObTransformQueryPushDown::check_rownum_push_down(ObSelectStmt *select_stmt,
              (select_stmt->get_condition_size() > 0 ||
               select_stmt->has_group_by() ||
               select_stmt->has_rollup() ||
+              select_stmt->has_grouping_sets() ||
               select_stmt->has_window_function() ||
               select_stmt->is_set_stmt() ||
               select_stmt->has_order_by())) { //判断2
@@ -588,7 +589,7 @@ int ObTransformQueryPushDown::check_select_item_push_down(ObSelectStmt *select_s
   if (OB_ISNULL(select_stmt) || OB_ISNULL(view_stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt is NULL", K(select_stmt), K(view_stmt), K(ret));
-  } else if (select_stmt->has_rollup()) {
+  } else if (select_stmt->has_rollup() || select_stmt->has_grouping_sets()) {
     can_be = false;
     OPT_TRACE("outer stmt has rollup, can not merge");
   } else if (OB_FAIL(check_select_item_subquery(*select_stmt, *view_stmt, check_status))) {

@@ -369,6 +369,7 @@ public:
             // user define type
             || stmt_type == stmt::T_CREATE_TYPE
             || stmt_type == stmt::T_DROP_TYPE
+            || stmt_type == stmt::T_ALTER_TYPE
 
             // trigger
             || stmt_type == stmt::T_CREATE_TRIGGER

@@ -621,6 +621,8 @@ public:
   double token_usage_;
   int64_t token_usage_check_ts_;
   int64_t token_change_ts_ CACHE_ALIGNED;
+  int64_t stream_rpc_wait_cnt_ CACHE_ALIGNED;
+  int64_t stream_rpc_wait_cnt_limit_ CACHE_ALIGNED; // used to limit the concurrency of processing stream rpc
 
   share::ObTenantSpace *ctx_;
 

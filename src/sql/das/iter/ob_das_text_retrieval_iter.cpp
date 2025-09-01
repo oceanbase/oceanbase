@@ -81,7 +81,7 @@ int ObDASTextRetrievalIter::set_query_token(const ObString &query_token)
   return ret;
 }
 
-int ObDASTextRetrievalIter::set_query_token_and_rangekey(const ObString &query_token, const common::ObIArray<ObDocId> &doc_id, const int64_t &batch_size)
+int ObDASTextRetrievalIter::set_query_token_and_rangekey(const ObString &query_token, const common::ObIArray<ObDocIdExt> &doc_id, const int64_t &batch_size)
 {
   int ret = OB_SUCCESS;
   ObNewRange inv_idx_scan_range;
@@ -608,7 +608,7 @@ int ObDASTextRetrievalIter::get_next_doc_token_cnt(const bool use_fwd_idx_agg)
 {
   int ret = OB_SUCCESS;
   if (use_fwd_idx_agg) {
-    common::ObDocId cur_doc_id;
+    ObDocIdExt cur_doc_id;
     int64_t token_cnt = 0;
     if (OB_FAIL(get_inv_idx_scan_doc_id(cur_doc_id))) {
       LOG_WARN("failed to get current doc id", K(ret));
@@ -623,20 +623,20 @@ int ObDASTextRetrievalIter::get_next_doc_token_cnt(const bool use_fwd_idx_agg)
   return ret;
 }
 
-int ObDASTextRetrievalIter::get_inv_idx_scan_doc_id(ObDocId &doc_id)
+int ObDASTextRetrievalIter::get_inv_idx_scan_doc_id(ObDocIdExt &doc_id)
 {
   int ret = OB_SUCCESS;
-  sql::ObExpr *doc_id_expr = ir_ctdef_->inv_scan_doc_id_col_;
+  sql::ObExpr *doc_id_expr = ir_ctdef_->inv_scan_domain_id_col_;
   sql::ObEvalCtx *eval_ctx = ir_rtdef_->get_inv_idx_scan_rtdef()->eval_ctx_;
   ObDatum &doc_id_datum = doc_id_expr->locate_expr_datum(*eval_ctx);
-  if (OB_FAIL(doc_id.from_string(doc_id_datum.get_string()))) {
-    LOG_WARN("failed to get ObDocId from datum", K(ret));
+  if (OB_FAIL(doc_id.from_datum(doc_id_datum))) {
+    LOG_WARN("failed to get doc id", K(ret), K(doc_id_datum));
   }
 
   return ret;
 }
 
-int ObDASTextRetrievalIter::do_token_cnt_agg(const ObDocId &doc_id, int64_t &token_count)
+int ObDASTextRetrievalIter::do_token_cnt_agg(const ObDocIdExt &doc_id, int64_t &token_count)
 {
   int ret = OB_SUCCESS;
 
@@ -740,7 +740,7 @@ int ObDASTextRetrievalIter::gen_default_inv_idx_scan_range(const ObString &query
   return ret;
 }
 
-int ObDASTextRetrievalIter::gen_inv_idx_scan_range(const ObString &query_token, const ObDocId &doc_id, ObNewRange &scan_range)
+int ObDASTextRetrievalIter::gen_inv_idx_scan_range(const ObString &query_token, const ObDocIdExt &doc_id, ObNewRange &scan_range)
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
@@ -760,8 +760,9 @@ int ObDASTextRetrievalIter::gen_inv_idx_scan_range(const ObString &query_token, 
     LOG_WARN("unexpected nullptr", K(ret));
   } else if (OB_FAIL(ob_write_obj(ctx_alloc, tmp_obj, obj_ptr[0]))) {
     LOG_WARN("failed to write obj", K(ret));
+  } else if (OB_FAIL(doc_id.get_datum().to_obj(obj_ptr[1], ir_ctdef_->inv_scan_domain_id_col_->obj_meta_))) {
+    LOG_WARN("failed to set obj", K(ret));
   } else {
-    obj_ptr[1].set_varbinary(doc_id.get_string());
     ObRowkey row_key(obj_ptr, obj_cnt);
     common::ObTableID inv_table_id = ir_ctdef_->get_inv_idx_scan_ctdef()->ref_table_id_;
     if (OB_FAIL(scan_range.build_range(inv_table_id, row_key))) {
@@ -771,7 +772,7 @@ int ObDASTextRetrievalIter::gen_inv_idx_scan_range(const ObString &query_token, 
   return ret;
 }
 
-int ObDASTextRetrievalIter::gen_fwd_idx_scan_range(const ObDocId &doc_id, ObNewRange &scan_range)
+int ObDASTextRetrievalIter::gen_fwd_idx_scan_range(const ObDocIdExt &doc_id, ObNewRange &scan_range)
 {
   int ret = OB_SUCCESS;
   if (nullptr == fwd_range_objs_) {
@@ -786,10 +787,13 @@ int ObDASTextRetrievalIter::gen_fwd_idx_scan_range(const ObDocId &doc_id, ObNewR
       LOG_WARN("allocate memory failed", K(ret));
     }
   }
-  if (OB_SUCC(ret)) {
-    fwd_range_objs_[0].set_varbinary(doc_id.get_string());
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(doc_id.get_datum().to_obj(fwd_range_objs_[0], ir_ctdef_->inv_scan_domain_id_col_->obj_meta_))) {
+    LOG_WARN("failed to set obj", K(ret));
+  } else if (OB_FAIL(doc_id.get_datum().to_obj(fwd_range_objs_[2], ir_ctdef_->inv_scan_domain_id_col_->obj_meta_))) {
+    LOG_WARN("failed to set obj", K(ret));
+  } else {
     fwd_range_objs_[1].set_min_value();
-    fwd_range_objs_[2].set_varbinary(doc_id.get_string());
     fwd_range_objs_[3].set_max_value();
     scan_range.table_id_ = ir_ctdef_->get_fwd_idx_agg_ctdef()->ref_table_id_;
     scan_range.start_key_.assign(fwd_range_objs_, FWD_IDX_ROWKEY_COL_CNT);
@@ -1143,7 +1147,7 @@ int ObDASTRCacheIter::save_relevances_and_docids()
 {
   int ret = OB_SUCCESS;
   sql::ObExpr *relevance_expr = ir_ctdef_->relevance_expr_;
-  ObExpr *doc_id_expr = ir_ctdef_->inv_scan_doc_id_col_;
+  ObExpr *doc_id_expr = ir_ctdef_->inv_scan_domain_id_col_;
   if (OB_ISNULL(relevance_expr) || OB_ISNULL(doc_id_expr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid relevance or doc id expr", K(ret));
@@ -1156,7 +1160,9 @@ int ObDASTRCacheIter::save_relevances_and_docids()
     for (int64_t i = 0; OB_SUCC(ret) && i < count_; ++i) {
       if (OB_LIKELY(!skip_->at(i))) {
         relevance_[i] = relevance_datum.at(i)->get_double();
-        doc_id_[i].from_string(doc_id_datum.at(i)->get_string());
+        if (OB_FAIL(doc_id_[i].from_datum(*doc_id_datum.at(i)))) {
+          LOG_WARN("failed to get doc id", K(ret), K(doc_id_datum.at(i)));
+        }
       }
     }
   }
@@ -1166,7 +1172,7 @@ int ObDASTRCacheIter::save_relevances_and_docids()
 int ObDASTRCacheIter::save_docids()
 {
   int ret = OB_SUCCESS;
-  ObExpr *doc_id_expr = ir_ctdef_->inv_scan_doc_id_col_;
+  ObExpr *doc_id_expr = ir_ctdef_->inv_scan_domain_id_col_;
   if (OB_ISNULL(doc_id_expr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid relevance or doc id expr", K(ret));
@@ -1175,14 +1181,16 @@ int ObDASTRCacheIter::save_docids()
     const ObDatumVector &doc_id_datum = doc_id_expr->locate_expr_datumvector(*ir_rtdef_->eval_ctx_);
     for (int64_t i = 0; OB_SUCC(ret) && i < count_; ++i) {
       if (OB_LIKELY(!skip_->at(i))) {
-        doc_id_[i].from_string(doc_id_datum.at(i)->get_string());
+        if (OB_FAIL(doc_id_[i].from_datum(*doc_id_datum.at(i)))) {
+          LOG_WARN("failed to get doc id", K(ret));
+        };
       }
     }
   }
   return ret;
 }
 
-int ObDASTRCacheIter::get_cur_row(double &relevance, ObDocId &doc_id) const
+int ObDASTRCacheIter::get_cur_row(double &relevance, ObDocIdExt &doc_id) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(cur_idx_ >= count_)) {

@@ -53,7 +53,8 @@ public:
   static int get_tablet(
       const ObTabletMapKey &key,
       ObTabletHandle &handle,
-      const int64_t timeout_us = ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US);
+      const int64_t timeout_us = ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US,
+      const WashTabletPriority priority = WashTabletPriority::WTP_HIGH);
 
   // snapshot version is used for multi source data reading,
   // tablet's multi source data will infect its visibility.

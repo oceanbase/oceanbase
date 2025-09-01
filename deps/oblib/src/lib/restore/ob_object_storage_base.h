@@ -19,6 +19,23 @@
 
 namespace oceanbase
 {
+
+namespace common
+{
+// time
+constexpr int64_t MS_US = 1000LL;
+constexpr int64_t S_US = 1000LL * MS_US;
+constexpr int64_t MIN_US = 60LL * S_US;
+constexpr int64_t HOUR_US = 60LL * MIN_US;
+constexpr int64_t DAY_US = 24LL * HOUR_US;
+
+// size
+constexpr int64_t KB = 1024LL;
+constexpr int64_t MB = 1024LL * KB;
+constexpr int64_t GB = 1024LL * MB;
+
+} // common
+
 namespace common
 {
 

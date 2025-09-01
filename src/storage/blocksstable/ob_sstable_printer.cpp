@@ -263,10 +263,10 @@ void ObSSTablePrinter::print_cell(const ObObj &cell)
   P_VALUE_STR_B(helper.convert(cell));
 }
 
-void ObSSTablePrinter::print_cell(const ObStorageDatum &datum)
+void ObSSTablePrinter::print_cell(const ObStorageDatum &datum, const int64_t hex_length)
 {
   ObCStringHelper helper;
-  ObStorageDatumWrapper wrapper(datum, true);
+  ObStorageDatumWrapper wrapper(datum, true, hex_length);
   P_VALUE_STR_B(helper.convert(wrapper));
 }
 
@@ -403,7 +403,7 @@ void ObSSTablePrinter::print_pre_agg_row(const int64_t column_cnt, ObAggRowReade
         P_VALUE_BINT(meta_type);
         P_COLON();
         P_NAME("value=");
-        print_cell(agg_datum);
+        print_cell(agg_datum, tools::ObDumpMacroBlockContext::DEFUALT_DUMP_HEX_LENGTH);
         P_COLON();
         P_NAME("is_min_max_prefix=");
         P_VALUE_INT(is_min_max_prefix);
@@ -539,6 +539,7 @@ void ObSSTablePrinter::print_store_row(
     const ObDatumRow *row,
     const ObObjMeta *obj_metas,
     const int64_t type_array_column_cnt,
+    const int64_t print_hex_length,
     const bool is_index_block,
     const bool is_trans_sstable)
 {
@@ -609,7 +610,7 @@ void ObSSTablePrinter::print_store_row(
           print_cell(obj);
         }
       } else {
-        print_cell(row->storage_datums_[i]);
+        print_cell(row->storage_datums_[i], print_hex_length);
       }
     }
   }
@@ -792,37 +793,62 @@ void ObSSTablePrinter::print_semistruct_column_meta(
     const ObCSColumnHeader &col_header,
     const uint32_t row_cnt)
 {
-  int ret = OB_SUCCESS;
-  HEAP_VAR(ObSemiStructSubSchema, sub_schema) {
-    ObSemiStructEncodeMetaDesc semistruct_desc;
-    int64_t pos = 0;
-    semistruct_desc.deserialize(col_header, row_cnt, start, len, pos);
-    print_line("semistruct_type", semistruct_desc.semistruct_header_->type_);
-    print_line("semistruct_header_len", semistruct_desc.semistruct_header_->header_len_);
-    print_line("has_nullbitmap", (0 != semistruct_desc.bitmap_size_));
-    print_line("sub_col_cnt", semistruct_desc.semistruct_header_->column_cnt_);
-    print_line("sub_stream_cnt", semistruct_desc.semistruct_header_->stream_cnt_);
-    print_line("sub_schema_len", semistruct_desc.semistruct_header_->schema_len_);
+  ObSemiStructEncodeMetaDesc semistruct_desc;
+  int64_t pos = 0;
+  semistruct_desc.deserialize(col_header, row_cnt, start, len, pos);
+  print_line("semistruct_type", semistruct_desc.semistruct_header_->type_);
+  print_line("semistruct_header_len", semistruct_desc.semistruct_header_->header_len_);
+  print_line("has_nullbitmap", (0 != semistruct_desc.bitmap_size_));
+  print_line("sub_col_cnt", semistruct_desc.semistruct_header_->column_cnt_);
+  print_line("sub_stream_cnt", semistruct_desc.semistruct_header_->stream_cnt_);
+  print_line("sub_schema_len", semistruct_desc.semistruct_header_->schema_len_);
+  pos = 0;
+  print_sub_schema(semistruct_desc);
 
-    pos = 0;
-    sub_schema.decode(semistruct_desc.sub_schema_data_ptr_, semistruct_desc.semistruct_header_->schema_len_, pos);
-    print_sub_schema(sub_schema);
-
-    for (int i = 0; i < semistruct_desc.semistruct_header_->column_cnt_; ++i) {
-      print_cs_encoding_column_header(semistruct_desc.sub_col_headers_[i], i);
-    }
+  for (int i = 0; i < semistruct_desc.semistruct_header_->column_cnt_; ++i) {
+    print_cs_encoding_column_header(semistruct_desc.sub_col_headers_[i], i);
   }
 }
 
-void ObSSTablePrinter::print_sub_schema(const ObSemiStructSubSchema &sub_schema)
+void ObSSTablePrinter::print_sub_schema(const ObSemiStructEncodeMetaDesc &semistruct_desc)
 {
+  int ret = OB_SUCCESS;
   print_title("SubSchema Information");
-  const ObIArray<ObSemiStructSubColumn>& freq_columns = sub_schema.get_freq_columns();
-  const ObIArray<ObSemiStructSubColumn>& spare_columns = sub_schema.get_spare_columns();
-  print_line("freq_sub_col_cnt", freq_columns.count());
-  print_line("spare_sub_col_cnt", spare_columns.count());
-  print_freq_column_info(freq_columns);
-  print_spare_column_info(spare_columns);
+  int64_t pos = 0;
+  if (*reinterpret_cast<const uint8_t *>(semistruct_desc.sub_schema_data_ptr_) == ObSemiStructSubSchema::SCHEMA_VERSION) {
+      HEAP_VAR(ObSemiStructSubSchema, sub_schema) {
+        sub_schema.decode(semistruct_desc.sub_schema_data_ptr_, semistruct_desc.semistruct_header_->schema_len_, pos);
+        print_line("sub_schema_version", sub_schema.get_version());
+        const ObIArray<ObSemiStructSubColumn>& freq_columns = sub_schema.get_freq_columns();
+        const ObIArray<ObSemiStructSubColumn>& spare_columns = sub_schema.get_spare_columns();
+        print_line("freq_sub_col_cnt", freq_columns.count());
+        print_line("spare_sub_col_cnt", spare_columns.count());
+        print_freq_column_info(freq_columns);
+        print_spare_column_info(spare_columns);
+    }
+  } else {
+    HEAP_VAR(ObSemiNewSchema, sub_schema) {
+      sub_schema.decode(semistruct_desc.sub_schema_data_ptr_, semistruct_desc.semistruct_header_->schema_len_, pos);
+      print_line("sub_schema_version", sub_schema.get_version());
+      print_line("semi_schema_header", sub_schema.get_schema_header());
+      const ObSemiSchemaInfo* semi_schema_infos = sub_schema.get_semi_schema_infos();
+      for (int i = 0; i < sub_schema.get_element_cnt(); ++i) {
+        P_TAB_LEVEL(1);
+        P_BAR();
+        P_LINE_NAME("schema info");
+        P_BAR();
+        FPRINTF("col_id {%d}, {json_type_: %d, obj_type_: %d, is_freq_column_: %d, prec_: %d, scale_: %d, reserved_: %d}",
+              i, semi_schema_infos[i].json_type_, semi_schema_infos[i].obj_type_, semi_schema_infos[i].is_freq_column_,
+                     semi_schema_infos[i].prec_, semi_schema_infos[i].scale_, semi_schema_infos[i].reserved_);
+        P_END();
+      }
+      ObJsonBuffer json_schema(&sub_schema.get_allocator());
+      ObJsonBin bin(sub_schema.get_schema_buf().ptr(), sub_schema.get_schema_buf().length());
+      bin.reset_iter();
+      bin.print(json_schema, true, 0);
+      print_line("json schema", json_schema.string().ptr());
+    }
+  }
   print_end_line();
 }
 

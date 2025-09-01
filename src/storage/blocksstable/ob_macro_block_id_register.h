@@ -1171,7 +1171,8 @@
       } \
     }, \
     /*to_remote_path_format*/OB_NOT_SUPPORTED, \
-    /*get_parent_dir*/OB_NOT_SUPPORTED, \
+    /*get_parent_dir*/ \
+    (OB_DIR_MGR.get_external_table_file_dir(path, length, tenant_id, tenant_epoch_id)), \
     /*create_parent_dir*/OB_NOT_SUPPORTED)
 
   STORAGE_OBJECT_TYPE_INFO(MACRO_CACHE_CKPT_DATA, "MACRO_CACHE_CKPT_DATA", false/*is_pin_local*/, true/*is_read_through*/, \

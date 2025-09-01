@@ -123,8 +123,8 @@ public:
   virtual void reuse();
   ObIAllocator &get_self_allocator() { return self_allocator_; }
 
-  int64_t get_actual_memory_used() { return sub_mem_ctx_->used(); }
-  int64_t get_memory_hold() { return sub_mem_ctx_ == nullptr ? 0 : sub_mem_ctx_->hold(); }
+  uint64_t get_actual_memory_used() { return sub_mem_ctx_ == nullptr ? 0 : sub_mem_ctx_->used(); }
+  uint64_t get_memory_hold() { return sub_mem_ctx_ == nullptr ? 0 : sub_mem_ctx_->hold(); }
   virtual int64_t get_expect_memory_used(const IvfCacheKey &key, const ObVectorIndexParam &param) = 0;
   RWLock &get_lock() { return rwlock_; }
   OB_INLINE bool is_writing() { return ATOMIC_LOAD(&status_) == IvfCacheStatus::IVF_CACHE_WRITING; }
@@ -228,8 +228,8 @@ public:
   bool dec_ref_and_check_release();
   // only used to alloc/free ObIvfCacheMgr self
   ObIAllocator &get_self_allocator() { return self_allocator_; }
-  int64_t get_actual_memory_used();
-  int64_t get_memory_hold();
+  uint64_t get_actual_memory_used();
+  uint64_t get_memory_hold();
   template<typename CacheType>
   int get_or_create_cache_node(const IvfCacheKey &key, CacheType *&cache);
 

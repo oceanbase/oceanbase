@@ -80,7 +80,7 @@ using namespace oceanbase::storage;
 
 const char *get_per_file_test_name()
 {
-    return "test_storage_cache_prewarm_macro_cache_";
+  return "test_storage_cache_prewarm_macro_cache_";
 }
 
 namespace oceanbase
@@ -292,9 +292,8 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_macro_cache_full)
   ASSERT_NE(nullptr, strstr(task2->get_comment().ptr(), macro_cache_warn_comment));
   const char *size_comment = "size:";
   ASSERT_NE(nullptr, strstr(task2->get_comment().ptr(), size_comment));
-  ASSERT_TRUE(data_block_ids.count() + meta_block_ids.count() > second_stat.macro_data_block_num_ + second_stat.macro_block_hit_cnt_);
-  ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->free_file_size(max_hot_tablet_size, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK,
-                                                           ObDiskSpaceType::FILE));
+  ASSERT_TRUE(data_block_ids.count() + meta_block_ids.count() > second_stat.macro_block_num_ + second_stat.macro_block_hit_cnt_);
+  ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->free_file_size(max_hot_tablet_size, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, ObDiskSpaceType::FILE));
   FLOG_INFO("[TEST] test_prewarm_macro_block end", K(tnt_disk_space_mgr->get_macro_cache_free_size()));
 }
 

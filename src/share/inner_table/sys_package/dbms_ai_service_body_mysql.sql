@@ -1,0 +1,19 @@
+#package_name:dbms_ai_service
+#author:shenyunlong.syl
+
+CREATE OR REPLACE PACKAGE BODY dbms_ai_service
+  PROCEDURE create_ai_model(IN name VARCHAR(128), IN params JSON);
+    PRAGMA INTERFACE(C, DBMS_AI_SERVICE_CREATE_AI_MODEL_MYSQL);
+
+  PROCEDURE drop_ai_model(IN name VARCHAR(128));
+    PRAGMA INTERFACE(C, DBMS_AI_SERVICE_DROP_AI_MODEL_MYSQL);
+
+  PROCEDURE create_ai_model_endpoint(IN name VARCHAR(128), IN params JSON);
+    PRAGMA INTERFACE(C, DBMS_AI_SERVICE_CREATE_AI_MODEL_ENDPOINT_MYSQL);
+
+  PROCEDURE alter_ai_model_endpoint(IN name VARCHAR(128), IN params JSON);
+    PRAGMA INTERFACE(C, DBMS_AI_SERVICE_ALTER_AI_MODEL_ENDPOINT_MYSQL);
+
+  PROCEDURE drop_ai_model_endpoint(IN name VARCHAR(128));
+    PRAGMA INTERFACE(C, DBMS_AI_SERVICE_DROP_AI_MODEL_ENDPOINT_MYSQL);
+END dbms_ai_service;

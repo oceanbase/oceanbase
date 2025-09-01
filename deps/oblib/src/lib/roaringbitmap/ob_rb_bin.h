@@ -41,7 +41,7 @@ public:
   int calc_and_cardinality(ObRoaringBin *rb, uint64_t &cardinality);
   int calc_and(ObRoaringBin *rb, ObStringBuffer &res_buf, uint64_t &res_card, uint32_t high32);
   int calc_andnot(ObRoaringBin *rb, ObStringBuffer &res_buf, uint64_t &res_card, uint32_t high32);
-  inline ObString get_bin() { return roaring_bin_; }
+  inline char *get_bin_ptr() { return roaring_bin_.ptr(); }
   inline size_t get_bin_length() { return bin_length_; }
   inline uint16_t get_key_at_index(uint16_t idx) { return keyscards_[idx * 2]; }
   inline int32_t get_card_at_index(uint16_t idx) { return keyscards_[idx * 2 + 1] + 1; }

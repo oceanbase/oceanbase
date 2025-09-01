@@ -810,6 +810,10 @@ void ObServer::destroy()
     ObQueryRetryCtrl::destroy();
     FLOG_INFO("query retry ctrl destroy");
 
+    FLOG_INFO("begin to destroy external file disk space mgr");
+    OB_EXTERNAL_FILE_DISK_SPACE_MGR.destroy();
+    FLOG_INFO("external file disk space mgr destroyed");
+
     FLOG_INFO("begin to destroy storage object mgr");
     OB_STORAGE_OBJECT_MGR.destroy();
     FLOG_INFO("storage object mgr destroyed");
@@ -996,6 +1000,12 @@ int ObServer::start()
       LOG_ERROR("start storage object mgr fail", KR(ret), K(slog_reserved_size));
     } else {
       FLOG_INFO("success to start storage object manager");
+    }
+
+    if (FAILEDx(OB_EXTERNAL_FILE_DISK_SPACE_MGR.start())) {
+      LOG_ERROR("fail to start external file disk space mgr", KR(ret));
+    } else {
+      FLOG_INFO("success to start external file disk space mgr");
     }
 
     if (FAILEDx(multi_tenant_.start())) {
@@ -1513,6 +1523,10 @@ int ObServer::stop()
     TG_STOP(lib::TGDefIDs::DiskUseReport);
     FLOG_INFO("disk usage report task stopped");
 
+    FLOG_INFO("begin to stop external file disk space mgr");
+    OB_EXTERNAL_FILE_DISK_SPACE_MGR.stop();
+    FLOG_INFO("external file disk space mgr stopped");
+
     FLOG_INFO("begin to stop storage object mgr");
     OB_STORAGE_OBJECT_MGR.stop();
     FLOG_INFO("storage object mgr stopped");
@@ -1941,6 +1955,10 @@ int ObServer::wait()
     FLOG_INFO("begin to wait disk usage report task");
     TG_WAIT(lib::TGDefIDs::DiskUseReport);
     FLOG_INFO("wait disk usage report task success");
+
+    FLOG_INFO("begin to wait external file disk space mgr");
+    OB_EXTERNAL_FILE_DISK_SPACE_MGR.wait();
+    FLOG_INFO("wait external file disk space mgr success");
 
     FLOG_INFO("begin to wait storage object mgr");
     OB_STORAGE_OBJECT_MGR.wait();
@@ -3153,6 +3171,8 @@ int ObServer::init_storage()
       LOG_WARN("fail to init disk usage report task", KR(ret));
     } else if (OB_FAIL(TG_START(lib::TGDefIDs::DiskUseReport))) {
       LOG_WARN("fail to initialize disk usage report timer", KR(ret));
+    } else if (OB_FAIL(OB_EXTERNAL_FILE_DISK_SPACE_MGR.init())) {
+      LOG_ERROR("fail to init external file disk space mgr", KR(ret));
     } else if (OB_FAIL(sql::ObExternalDataPageCache::get_instance().init("ObExtPageCache", 1))) {
       LOG_ERROR("init external_table pageCache failed", KR(ret));
     }

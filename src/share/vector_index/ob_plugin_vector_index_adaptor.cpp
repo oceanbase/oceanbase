@@ -41,7 +41,8 @@ ObVectorIndexInfo::ObVectorIndexInfo()
     snapshot_index_tablet_id_(common::ObTabletID::INVALID_TABLET_ID),
     data_tablet_id_(common::ObTabletID::INVALID_TABLET_ID),
     statistics_(),
-    sync_info_()
+    sync_info_(),
+    index_type_(ObVectorIndexAlgorithmType::VIAT_MAX)
 {
   MEMSET(statistics_, '\0', sizeof(statistics_));
   MEMSET(sync_info_, '\0', sizeof(sync_info_));
@@ -64,6 +65,7 @@ void ObVectorIndexInfo::reset()
   data_tablet_id_ = common::ObTabletID::INVALID_TABLET_ID;
   MEMSET(statistics_, '\0', sizeof(statistics_));
   MEMSET(sync_info_, '\0', sizeof(sync_info_));
+  index_type_ = ObVectorIndexAlgorithmType::VIAT_MAX;
 }
 
 OB_DEF_SERIALIZE_SIZE(ObVectorIndexParam)
@@ -85,7 +87,12 @@ OB_DEF_SERIALIZE_SIZE(ObVectorIndexParam)
               refine_k_,
               bq_use_fht_,
               sync_interval_type_,
-              sync_interval_value_);
+              sync_interval_value_,
+              prune_,
+              refine_,
+              ob_sparse_drop_ratio_build_,
+              window_size_,
+              ob_sparse_drop_ratio_search_);
   OB_UNIS_ADD_LEN_ARRAY(endpoint_, OB_MAX_ENDPOINT_LENGTH);
   return len;
 }
@@ -108,7 +115,12 @@ OB_DEF_SERIALIZE(ObVectorIndexParam)
               refine_k_,
               bq_use_fht_,
               sync_interval_type_,
-              sync_interval_value_);
+              sync_interval_value_,
+              prune_,
+              refine_,
+              ob_sparse_drop_ratio_build_,
+              window_size_,
+              ob_sparse_drop_ratio_search_);
   OB_UNIS_ENCODE_ARRAY(endpoint_, OB_MAX_ENDPOINT_LENGTH);
   return ret;
 }
@@ -138,7 +150,12 @@ OB_DEF_DESERIALIZE(ObVectorIndexParam)
               refine_k_,
               bq_use_fht_,
               sync_interval_type_,
-              sync_interval_value_);
+              sync_interval_value_,
+              prune_,
+              refine_,
+              ob_sparse_drop_ratio_build_,
+              window_size_,
+              ob_sparse_drop_ratio_search_);
   OB_UNIS_DECODE_ARRAY(endpoint_, OB_MAX_ENDPOINT_LENGTH);
   return ret;
 }
@@ -420,7 +437,7 @@ ObPluginVectorIndexAdaptor::ObPluginVectorIndexAdaptor(common::ObIAllocator *all
     rowkey_vid_table_id_(OB_INVALID_ID), vid_rowkey_table_id_(OB_INVALID_ID),
     ref_cnt_(0), idle_cnt_(0), mem_check_cnt_(0), is_mem_limited_(false), all_vsag_use_mem_(nullptr), allocator_(allocator),
     parent_mem_ctx_(entity), index_identity_(), follower_sync_statistics_(), is_in_opt_task_(false), need_be_optimized_(false), extra_info_column_count_(0),
-    query_lock_(), reload_finish_(false)
+    query_lock_(), reload_finish_(false), is_need_vid_(true)
 {
 }
 
@@ -713,80 +730,85 @@ int ObPluginVectorIndexAdaptor::fill_vector_index_info(ObVectorIndexInfo &info)
   ObVectorIndexParam *param;
   int64_t pos = 0;
   ObCStringHelper helper;
-  if (OB_FAIL(databuff_printf(info.statistics_,
-                 sizeof(info.statistics_), pos,
-                 "is_complete=%d;", is_complete()))) {
-    LOG_WARN("failed to fill statistics", K(ret), K(this));
-  } else if (type_ == VIAT_MAX) {
-    // partial adapter without index configuration
-  } else if (OB_FAIL(get_hnsw_param(param))) {
-    LOG_WARN("get hnsw param failed.", K(ret));
-  } else if (OB_FAIL(databuff_printf(info.statistics_,
-                 sizeof(info.statistics_), pos,
-                 "param=%s;", helper.convert(*param)))) {
-    LOG_WARN("failed to fill statistics", K(ret), K(this));
-  } else if (OB_FAIL(databuff_printf(info.statistics_,
-                      sizeof(info.statistics_), pos,
-                      "snap_index_type=%d;", int(get_snap_index_type())))) {
-    LOG_WARN("failed to fill snap index type", K(ret), K(this));
+
+  #define STAT_PRINT(...) \
+    if (OB_SUCC(ret)) { \
+      if (OB_FAIL(databuff_printf(info.statistics_, sizeof(info.statistics_), pos, __VA_ARGS__))) { \
+        LOG_WARN("failed to fill statistics", K(ret)); \
+      } \
+    }
+
+  STAT_PRINT("{");
+  STAT_PRINT("\"is_complete\":%d", is_complete());
+  STAT_PRINT(",\"incr_mem_used\":%ld", get_incr_vsag_mem_used());
+  STAT_PRINT(",\"incr_mem_hold\":%ld", get_incr_vsag_mem_hold());
+  STAT_PRINT(",\"snap_mem_used\":%ld", get_snap_vsag_mem_used());
+  STAT_PRINT(",\"snap_mem_hold\":%ld", get_snap_vsag_mem_hold());
+
+  if (type_ != VIAT_MAX && OB_SUCC(ret)) {
+    if (OB_FAIL(get_hnsw_param(param))) {
+      LOG_WARN("get hnsw param failed.", K(ret));
+    } else {
+      info.index_type_ = param->type_;
+      STAT_PRINT(",\"param\":\"");
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(param->print_to_string(info.statistics_, sizeof(info.statistics_), pos))) {
+          LOG_WARN("failed to print param", K(ret));
+        }
+      }
+      STAT_PRINT("\"");
+    }
   }
-  if (FAILEDx(databuff_printf(info.statistics_,
-                 sizeof(info.statistics_), pos,
-                 "ref_cnt=%ld;",  ATOMIC_LOAD(&ref_cnt_) - 1))) { // delete the virtual table ref
-    LOG_WARN("failed to fill statistics", K(ret), K(this));
-  } else if (OB_FAIL(databuff_printf(info.statistics_,
-             sizeof(info.statistics_), pos, "idle_cnt=%ld;", idle_cnt_))) {
-    LOG_WARN("failed to fill statistics", K(ret), K(this));
-  } else if (!index_identity_.empty() && OB_FAIL(databuff_printf(
-             info.statistics_, sizeof(info.statistics_), pos,
-             "index=%s;", helper.convert(index_identity_)))) {
-    LOG_WARN("failed to fill statistic", K(ret), K(this));
-  } else if (nullptr != incr_data_ && OB_FAIL(databuff_printf(
-             info.statistics_, sizeof(info.statistics_), pos,
-             "incr_data.scn=%lu;", incr_data_->scn_.get_val_for_inner_table_field()))) {
-    LOG_WARN("failed to fill statistic", K(ret), K(this));
-  } else if (nullptr != vbitmap_data_ && OB_FAIL(databuff_printf(
-             info.statistics_, sizeof(info.statistics_), pos,
-             "vbitmap_data.scn=%lu;", vbitmap_data_->scn_.get_val_for_inner_table_field()))) {
-    LOG_WARN("failed to fill statistic", K(ret), K(this));
-  } else if (nullptr != snap_data_ && OB_FAIL(databuff_printf(
-             info.statistics_, sizeof(info.statistics_), pos,
-             "snap_data.scn=%lu;", snap_data_->scn_.get_val_for_inner_table_field()))) {
-    LOG_WARN("failed to fill statistic", K(ret), K(this));
-  } else if (nullptr != all_vsag_use_mem_ && OB_FAIL(databuff_printf(
-             info.statistics_, sizeof(info.statistics_), pos,
-             "all_index_mem_used=%lu;", ATOMIC_LOAD(all_vsag_use_mem_)))) {
-    LOG_WARN("failed to fill statistic", K(ret), K(this));
-  } else {
+  STAT_PRINT(",\"snap_index_type\":%d", int(get_snap_index_type()));
+  STAT_PRINT(",\"ref_cnt\":%ld", ATOMIC_LOAD(&ref_cnt_) - 1);
+  STAT_PRINT(",\"idle_cnt\":%ld", idle_cnt_);
+
+  if (!index_identity_.empty()) {
+    STAT_PRINT(",\"index\":\"%s\"", helper.convert(index_identity_));
+  }
+  if (nullptr != incr_data_) {
+    STAT_PRINT(",\"incr_data_scn\":%lu", incr_data_->scn_.get_val_for_inner_table_field());
+  }
+  if (nullptr != vbitmap_data_) {
+    STAT_PRINT(",\"vbitmap_data_scn\":%lu", vbitmap_data_->scn_.get_val_for_inner_table_field());
+  }
+  if (nullptr != snap_data_) {
+    STAT_PRINT(",\"snap_data_scn\":%lu", snap_data_->scn_.get_val_for_inner_table_field());
+  }
+  if (nullptr != all_vsag_use_mem_) {
+    STAT_PRINT(",\"all_index_mem_used\":%lu", ATOMIC_LOAD(all_vsag_use_mem_));
+  }
+  if (OB_SUCC(ret)) {
     ObRbMemMgr *mem_mgr = nullptr;
     uint64_t tenant_id = MTL_ID();
     if (OB_ISNULL(mem_mgr = MTL(ObRbMemMgr *))) {
-      int ret = OB_ERR_UNEXPECTED;
+      ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("mem_mgr is null", K(tenant_id));
-    } else if (OB_FAIL(databuff_printf(
-               info.statistics_, sizeof(info.statistics_), pos,
-               "all_index_bitmap_used=%lu;", mem_mgr->get_vec_idx_used()))) {
-      LOG_WARN("failed to fill statistic", K(ret), K(this));
+    } else {
+      STAT_PRINT(",\"all_index_bitmap_used\":%lu", mem_mgr->get_vec_idx_used());
     }
   }
-  pos = 0;
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(databuff_printf(info.sync_info_, sizeof(info.sync_info_), pos,
-             "incr_cnt=%lu;", follower_sync_statistics_.incr_count_))) {
-    LOG_WARN("failed to fill sync_info", K(ret), K(this));
-  } else if (OB_FAIL(databuff_printf(info.sync_info_, sizeof(info.sync_info_), pos,
-             "vbitmap_cnt=%lu;", follower_sync_statistics_.vbitmap_count_))) {
-    LOG_WARN("failed to fill sync_info", K(ret), K(this));
-  } else if (OB_FAIL(databuff_printf(info.sync_info_, sizeof(info.sync_info_), pos,
-             "snap_cnt=%lu;", follower_sync_statistics_.snap_count_))) {
-    LOG_WARN("failed to fill sync_info", K(ret), K(this));
-  } else if (OB_FAIL(databuff_printf(info.sync_info_, sizeof(info.sync_info_), pos,
-             "sync_total_cnt=%lu;", follower_sync_statistics_.sync_count_))) {
-    LOG_WARN("failed to fill sync_info", K(ret), K(this));
-  } else if (OB_FAIL(databuff_printf(info.sync_info_, sizeof(info.sync_info_), pos,
-             "sync_fail_cnt=%lu;", follower_sync_statistics_.sync_fail_))) {
-    LOG_WARN("failed to fill sync_info", K(ret), K(this));
+  STAT_PRINT("}");
+  #undef STAT_PRINT
+
+  #define SYNC_INFO_PRINT(...) \
+  if (OB_SUCC(ret)) { \
+    if (OB_FAIL(databuff_printf(info.sync_info_, sizeof(info.sync_info_), pos, __VA_ARGS__))) { \
+      LOG_WARN("failed to fill sync_info", K(ret)); \
+    } \
   }
+  pos = 0;
+  SYNC_INFO_PRINT("{\"incr_cnt\":%lu", follower_sync_statistics_.incr_count_);
+  SYNC_INFO_PRINT(",\"vbitmap_cnt\":%lu", follower_sync_statistics_.vbitmap_count_);
+  SYNC_INFO_PRINT(",\"snap_cnt\":%lu", follower_sync_statistics_.snap_count_);
+  SYNC_INFO_PRINT(",\"sync_total_cnt\":%lu", follower_sync_statistics_.sync_count_);
+  SYNC_INFO_PRINT(",\"sync_fail_cnt\":%lu", follower_sync_statistics_.sync_fail_);
+  SYNC_INFO_PRINT(",\"last_succ_time\":%ld", follower_sync_statistics_.last_succ_time_);
+  SYNC_INFO_PRINT(",\"last_fail_time\":%ld", follower_sync_statistics_.last_fail_time_);
+  SYNC_INFO_PRINT(",\"last_fail_code\":%d", follower_sync_statistics_.last_fail_code_);
+  SYNC_INFO_PRINT("}");
+
+  #undef SYNC_INFO_PRINT
   return ret;
 }
 
@@ -1613,6 +1635,7 @@ int ObPluginVectorIndexAdaptor::copy_meta_info(ObPluginVectorIndexAdaptor &other
   type_ = other.type_;
   follower_sync_statistics_.sync_count_ = other.follower_sync_statistics_.sync_count_;
   follower_sync_statistics_.sync_fail_ = other.follower_sync_statistics_.sync_fail_;
+  is_need_vid_ = other.is_need_vid_;
   if (OB_NOT_NULL(algo_data_)) {
     // do nothing
   } else if (OB_ISNULL(get_allocator())) {
@@ -2779,7 +2802,7 @@ int ObPluginVectorIndexAdaptor::query_next_result(ObVectorQueryAdaptorResultCont
     LOG_WARN("failed to allocator iter.", K(ret));
   } else if (OB_FAIL(get_extra_info_actual_size(extra_info_actual_size))) {
     LOG_WARN("failed to get extra info actual size.", K(ret));
-  } else if (OB_FALSE_IT(vids_iter = new(iter_buff) ObVectorQueryVidIterator(query_cond->extra_column_count_, extra_info_actual_size))) {
+  } else if (OB_FALSE_IT(vids_iter = new(iter_buff) ObVectorQueryVidIterator(query_cond->extra_column_count_, extra_info_actual_size, query_cond->rel_count_, query_cond->rel_map_ptr_))) {
   } else {
     ObHnswBitmapFilter ifilter(tenant_id_);
     ObHnswBitmapFilter dfilter(tenant_id_);
@@ -2958,7 +2981,7 @@ int ObPluginVectorIndexAdaptor::query_result(ObLSID &ls_id,
     LOG_WARN("failed to allocator iter.", K(ret));
   } else if (OB_FAIL(get_extra_info_actual_size(extra_info_actual_size))) {
     LOG_WARN("failed to get extra info actual size.", K(ret));
-  } else if (OB_FALSE_IT(vids_iter = new(iter_buff) ObVectorQueryVidIterator(query_cond->extra_column_count_, extra_info_actual_size))) {
+  } else if (OB_FALSE_IT(vids_iter = new(iter_buff) ObVectorQueryVidIterator(query_cond->extra_column_count_, extra_info_actual_size, query_cond->rel_count_, query_cond->rel_map_ptr_))) {
   }
 
   const bool need_load_data_from_table = (ctx->flag_ == PVQP_SECOND || !ctx->get_ls_leader()) ? true : false;
@@ -3213,6 +3236,11 @@ void ObPluginVectorIndexAdaptor::set_vid_rowkey_info(ObVectorIndexSharedTableInf
   vid_rowkey_tablet_id_ = info.vid_rowkey_tablet_id_;
   rowkey_vid_table_id_ = info.rowkey_vid_table_id_;
   vid_rowkey_table_id_ = info.vid_rowkey_table_id_;
+  data_table_id_ = info.data_table_id_;
+}
+
+void ObPluginVectorIndexAdaptor::set_data_table_id(ObVectorIndexSharedTableInfo &info)
+{
   data_table_id_ = info.data_table_id_;
 }
 

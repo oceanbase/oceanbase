@@ -30,7 +30,7 @@ class SCN;
 namespace ipalf
 {
 class IPalfHandle;
-class IPalfLogIterator;
+template<class LogEntryType> class IPalfIterator;
 }
 namespace palf
 {
@@ -136,8 +136,10 @@ public:
 
   virtual int seek(const LSN &lsn, PalfGroupBufferIterator &iter) override final;
 
-  virtual int seek(const palf::LSN &lsn, ipalf::IPalfLogIterator &iter) override final;
-
+  virtual int seek(const palf::LSN &lsn, ipalf::IPalfIterator<ipalf::ILogEntry> &iter) override final;
+  virtual int seek(const palf::LSN &lsn, ipalf::IPalfIterator<ipalf::IGroupEntry> &iter) override final;
+  virtual int seek(const share::SCN &scn, ipalf::IPalfIterator<ipalf::ILogEntry> &iter) override final;
+  virtual int seek(const share::SCN &scn, ipalf::IPalfIterator<ipalf::IGroupEntry> &iter) override final;
   // @desc: seek a buffer(group buffer) iterator by scn, the first log A in iterator must meet
   // one of the following conditions:
   // 1. scn of log A equals to scn

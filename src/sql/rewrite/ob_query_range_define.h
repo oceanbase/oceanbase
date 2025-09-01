@@ -384,6 +384,7 @@ public:
                                          common::ObIAllocator &allocator,
                                          ObExecContext &exec_ctx,
                                          const ParamStore &param_store,
+                                         int64_t range_buffer_idx,
                                          void *range_buffer,
                                          ObQueryRangeArray &ranges,
                                          const common::ObDataTypeCastParams &dtc_params) const;
@@ -422,7 +423,8 @@ public:
   virtual int get_total_range_sizes(common::ObIArray<uint64_t> &total_range_sizes) const;
 
   const ObIArray<uint64_t>& get_range_sizes() const { return total_range_sizes_; }
-  virtual bool is_fast_nlj_range() const { return fast_nlj_range_; }
+  virtual bool is_fast_nlj_range() const { return fast_nlj_range_ | general_nlj_range_; }
+  virtual bool enable_new_false_range() const { return enable_new_false_range_; }
   int get_prefix_info(const ObRangeNode *range_node,
                       bool* equals,
                       bool* extract_ranges,
@@ -503,6 +505,9 @@ public:
                      ObRawExpr *column_expr,
                      ObRawExpr *value_expr,
                      ObRawExpr *extra_value_expr = nullptr);
+  int set_general_nlj_range_extraction(const ObIArray<ObFastFinalPos> &pos_arr);
+  const ObIArray<ObFastFinalPos>& get_general_nlj_range_extraction() const { return fast_final_pos_arr_; }
+  void set_enable_new_false_range(bool v) { enable_new_false_range_ = v; }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPreRangeGraph);
 private:

@@ -367,7 +367,8 @@ public:
         result_set_(nullptr),
         sql_ctx_(),
         schema_guard_(share::schema::ObSchemaMgrItem::MOD_PL_PREPARE_RESULT),
-        question_mark_cnt_(0) {}
+        question_mark_cnt_(0),
+        parent_allocator_(nullptr) {}
     ~PLPrepareResult() { reset(); }
     int init(sql::ObSQLSessionInfo &session_info);
     void reset()
@@ -390,6 +391,7 @@ public:
     sql::ObSqlCtx sql_ctx_; // life period follow result_set_
     share::schema::ObSchemaGetterGuard schema_guard_;
     int64_t question_mark_cnt_;
+    ObIAllocator *parent_allocator_;
   };
 
   enum ObCusorDeclareLoc {
@@ -458,7 +460,7 @@ public:
                              uint64_t package_id,
                              int64_t var_idx,
                              const ObObj &value);
-  static int spi_get_package_var_type(ObExecContext *exec_ctx,
+  static int spi_get_package_var_type(pl::ObPLExecCtx *ctx,
                               uint64_t package_id,
                               int64_t var_idx,
                               pl::ObPLDataType &type);
@@ -954,7 +956,7 @@ public:
 
   static int spi_opaque_assign_null(int64_t opaque_ptr);
 
-  static int spi_pl_profiler_before_record(pl::ObPLExecCtx *ctx, int64_t line, int64_t level);
+  static int spi_pl_profiler_before_record(pl::ObPLExecCtx *ctx, int64_t line, int64_t level, int64_t column);
 
   static int spi_pl_profiler_after_record(pl::ObPLExecCtx *ctx, int64_t line, int64_t level);
 

@@ -47,13 +47,8 @@ int ObTenantSlogCkptUtil::write_and_apply_tablet(
 {
   int ret = OB_SUCCESS;
   uint64_t data_version = 0;
-  if (OB_UNLIKELY(!storage_param.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tablet storage param", K(ret), K(storage_param));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
-    LOG_WARN("fail to get min data version", K(ret));
-  }
-
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
   enum:uint8_t {
     NEED_RETRY,
     SKIPPED,
@@ -67,6 +62,19 @@ int ObTenantSlogCkptUtil::write_and_apply_tablet(
 
   const ObTabletMapKey &tablet_key = storage_param.tablet_key_;
   const ObMetaDiskAddr &original_addr = storage_param.original_addr_;
+
+  if (OB_UNLIKELY(!storage_param.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid tablet storage param", K(ret), K(storage_param));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+    STORAGE_LOG(WARN, "fail to get min data version", K(ret));
+  } else if (OB_FAIL(ls_service.get_ls(tablet_key.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    STORAGE_LOG(WARN, "failed to get ls", K(ret), K(tablet_key));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected null ls", K(ret), K(ls), K(ls_handle));
+  }
+
 
   while (NEED_RETRY == status && OB_SUCC(ret)) {
     new_tablet = nullptr;
@@ -95,6 +103,8 @@ int ObTenantSlogCkptUtil::write_and_apply_tablet(
     } else {
       ObTablet *src_tablet = nullptr;
       const bool need_compat = old_tablet->get_version() < ObTablet::VERSION_V4;
+      int64_t ls_epoch = 0;
+      int64_t tablet_meta_version = 0;
       if (!need_compat) {
         src_tablet = old_tablet;
       } else if (OB_FAIL(ObTenantSlogCkptUtil::handle_old_version_tablet_for_compat(
@@ -107,14 +117,25 @@ int ObTenantSlogCkptUtil::write_and_apply_tablet(
       } else {
         src_tablet = tmp_tablet_handle.get_obj();
       }
-      int64_t ls_epoch = 0;
+
       if (OB_FAIL(ret)) {
-        // do nothing
+      } else if (SKIPPED == status) {
+      } else if (GCTX.is_shared_storage_mode() &&
+                 OB_FAIL(ls->get_tablet_svr()->alloc_private_tablet_meta_version_with_lock(tablet_key, tablet_meta_version))) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          STORAGE_LOG(INFO, "skip writing snapshot for this tablet", K(tablet_key));
+          status = SKIPPED;
+          ret = OB_SUCCESS;
+        } else {
+          STORAGE_LOG(WARN, "failed to alloc tablet meta version", K(ret), K(tablet_key));
+        }
       } else if (OB_NOT_NULL(src_tablet) && OB_FAIL(src_tablet->get_ls_epoch(ls_epoch))) {
         STORAGE_LOG(WARN, "failed to get ls epoch", K(ret), K(tablet_key));
       }
-      const ObTabletPersisterParam param(data_version, tablet_key.ls_id_, ls_epoch, tablet_key.tablet_id_, nullptr != src_tablet ? src_tablet->get_transfer_seq() : 0);
+
+      const ObTabletPersisterParam param(data_version, tablet_key.ls_id_, ls_epoch, tablet_key.tablet_id_, nullptr != src_tablet ? src_tablet->get_transfer_seq() : 0, tablet_meta_version);
       if (OB_FAIL(ret)) {
+      } else if (SKIPPED == status) {
       } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(param, *src_tablet, new_tablet_handle))) {
         if (OB_ENTRY_NOT_EXIST == ret) {
           // tablet may be deleted, skip this tablet's defragment
@@ -154,10 +175,7 @@ int ObTenantSlogCkptUtil::write_and_apply_tablet(
 
   if (OB_SUCC(ret) && status == DONE) {
     // succeed to move tablet to the new place, now trying to apply defragment tablet to t3m.
-    ObLSHandle ls_handle;
-    if (OB_FAIL(ls_service.get_ls(tablet_key.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
-      STORAGE_LOG(WARN, "failed to get ls", K(ret), K(tablet_key));
-    } else if (OB_FAIL(ls_handle.get_ls()->apply_defragment_tablet(t3m, tablet_key, original_addr, new_tablet_handle, tsms))) {
+    if (OB_FAIL(ls->apply_defragment_tablet(t3m, tablet_key, original_addr, new_tablet_handle, tsms))) {
       STORAGE_LOG(WARN, "failed to apply defragment tablet", K(ret), K(tablet_key), K(original_addr));
       if (OB_TABLET_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
@@ -462,6 +480,23 @@ void TabletDfgtPicker::reset_()
   }
   map_.destroy();
   allocator_.reset();
+}
+
+/// NOTE: block must exists at @c map_
+int TabletDfgtPicker::remove_(const MacroBlockId &block_id)
+{
+  int ret = OB_SUCCESS;
+  MapValue *val = nullptr;
+  if (OB_FAIL(map_.erase_refactored(block_id, &val))) {
+    STORAGE_LOG(WARN, "failed to remove block from map", K(ret), K(block_id));
+  } else if (OB_ISNULL(val)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected null val founded", K(ret), K(block_id), K(val));
+  } else {
+    val->~MapValue();
+    allocator_.free(val);
+  }
+  return ret;
 }
 
 // ==========================

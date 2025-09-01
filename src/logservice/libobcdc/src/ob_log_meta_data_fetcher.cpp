@@ -8,7 +8,7 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 
-#define USING_LOG_PREFIX OBLOG
+#define USING_LOG_PREFIX DATA_DICT
 
 #include "ob_log_meta_data_fetcher.h"
 #include "ob_log_fetcher.h"
@@ -48,6 +48,7 @@ namespace libobcdc
 {
 ObLogMetaDataFetcher::ObLogMetaDataFetcher() :
     is_inited_(false),
+    stop_flag_(true),
     trans_task_pool_alloc_(),
     trans_task_pool_(),
     log_entry_task_pool_(),
@@ -78,7 +79,7 @@ int ObLogMetaDataFetcher::init(
     ret = OB_INIT_TWICE;
     LOG_ERROR("init twice", KR(ret));
   } else if (OB_FAIL(trans_task_pool_alloc_.init(
-          TASK_POOL_ALLOCATOR_TOTAL_LIMIT,
+          cfg.meta_data_inc_trans_size_upper_limit.get(),
           TASK_POOL_ALLOCATOR_HOLD_LIMIT,
           TASK_POOL_ALLOCATOR_PAGE_SIZE))) {
     LOG_ERROR("trans_task_pool_alloc_ allocator init failed", KR(ret));
@@ -99,7 +100,8 @@ int ObLogMetaDataFetcher::init(
 
     is_inited_ = true;
     LOG_INFO("ObLogMetaDataFetcher init success",
-        K(fetching_mode), "fetching_log_mode", print_fetching_mode(fetching_mode));
+        K(fetching_mode), "fetching_log_mode", print_fetching_mode(fetching_mode),
+        "trans_pool_size_upper_limit", cfg.meta_data_inc_trans_size_upper_limit.get());
   }
 
   return ret;
@@ -108,6 +110,7 @@ int ObLogMetaDataFetcher::init(
 int ObLogMetaDataFetcher::start()
 {
   int ret = OB_SUCCESS;
+  stop_flag_ = false;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -123,6 +126,14 @@ int ObLogMetaDataFetcher::start()
   return ret;
 }
 
+void ObLogMetaDataFetcher::mark_stop_flag()
+{
+  stop_flag_ = true;
+  if (OB_NOT_NULL(log_fetcher_)) {
+    log_fetcher_->mark_stop_flag();
+  }
+}
+
 void ObLogMetaDataFetcher::stop()
 {
   int ret = OB_SUCCESS;
@@ -134,9 +145,9 @@ void ObLogMetaDataFetcher::stop()
     LOG_ERROR("log_fetcher_ is nullptr", KR(ret), K(log_fetcher_));
   } else {
     LOG_INFO("ObLogMetaDataFetcher stop begin");
-    bool stop_flag = false;
-    RETRY_FUNC(stop_flag, *log_fetcher_, wait_for_all_ls_to_be_removed, FETCHER_WAIT_LS_TIMEOUT);
-    log_fetcher_->mark_stop_flag();
+    // normally will invoke by ObLogMetaDataService::finish_when_all_tennats_are_refreshed
+    RETRY_FUNC(stop_flag_, *log_fetcher_, wait_for_all_ls_to_be_removed, FETCHER_WAIT_LS_TIMEOUT);
+    mark_stop_flag();
     log_fetcher_->stop();
 
     LOG_INFO("ObLogMetaDataFetcher stop success");
@@ -187,9 +198,7 @@ int ObLogMetaDataFetcher::add_ls_and_fetch_until_the_progress_is_reached(
         if (OB_FAIL(log_fetcher_->check_progress(tenant_id, end_tstamp_ns, is_exceeded, cur_progress))) {
           LOG_ERROR("ObLogFetcher check_progress failed", KR(ret), K(tenant_id), K(end_tstamp_ns),
               K(is_exceeded), K(cur_progress));
-        }
-
-        if (! is_exceeded) {
+        } else if (! is_exceeded) {
           if (REACH_TIME_INTERVAL(10 * _SEC_)) {
             LOG_INFO("ObLogFetcher check_progress is less than end_timestamp",
                 K(tenant_id), K(cur_progress), K(end_tstamp_ns));
@@ -213,6 +222,10 @@ int ObLogMetaDataFetcher::add_ls_and_fetch_until_the_progress_is_reached(
         LOG_INFO("log_fetcher_ recycle_ls success", K(tls_id));
       }
     }
+  }
+
+  if (OB_FAIL(ret)) {
+    mark_stop_flag(); // mark stop_flag in case of stuck at stop() function
   }
 
   return ret;

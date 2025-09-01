@@ -466,7 +466,7 @@ struct ObMicroBlockEncodingCtx
   ObCompressorType compressor_type_;
   uint64_t encoding_granularity_;
   uint64_t minimum_rows_;
-  share::schema::ObSemiStructEncodingType semistruct_encoding_type_;
+  share::ObSemistructProperties semistruct_properties_;
 
   ObMicroBlockEncodingCtx() : macro_block_size_(0), micro_block_size_(0),
     rowkey_column_cnt_(0), column_cnt_(0), col_descs_(nullptr),
@@ -477,17 +477,17 @@ struct ObMicroBlockEncodingCtx
     row_store_type_(ENCODING_ROW_STORE), need_calc_column_chksum_(false),
     compressor_type_(INVALID_COMPRESSOR), encoding_granularity_(UINT64_MAX),
     minimum_rows_(1),
-    semistruct_encoding_type_()
+    semistruct_properties_()
   {
     previous_encodings_.set_attr(ObMemAttr(MTL_ID(), "MicroEncodeCtx"));
   }
   bool is_valid() const;
-  bool is_enable_semistruct_encoding() const { return semistruct_encoding_type_.is_enable_semistruct_encoding();}
+  bool is_enable_semistruct_encoding() const { return semistruct_properties_.is_enable_semistruct_encoding();}
   TO_STRING_KV(K_(macro_block_size), K_(micro_block_size), K_(rowkey_column_cnt),
       K_(column_cnt), KP_(col_descs), K_(estimate_block_size), K_(real_block_size),
       K_(micro_block_cnt), K_(encoder_opt), K_(previous_encodings), KP_(column_encodings),
       K_(major_working_cluster_version), K_(row_store_type), K_(need_calc_column_chksum),
-      K_(compressor_type), K_(encoding_granularity), K_(minimum_rows), K_(semistruct_encoding_type));
+      K_(compressor_type), K_(encoding_granularity), K_(minimum_rows), K_(semistruct_properties));
 };
 
 template <typename T, int64_t MAX_COUNT, int64_t BLOCK_SIZE>
@@ -707,6 +707,7 @@ public:
                K_(reserved_block_count),
                K_(linked_block_count),
                K_(tmp_file_count),
+               K_(ext_disk_cache_count),
                K_(data_block_count),
                K_(shared_data_block_count),
                K_(index_block_count),
@@ -728,6 +729,7 @@ public:
   int64_t reserved_block_count_;
   int64_t linked_block_count_;
   int64_t tmp_file_count_;
+  int64_t ext_disk_cache_count_;
   int64_t data_block_count_;
   int64_t shared_data_block_count_;
   int64_t index_block_count_;

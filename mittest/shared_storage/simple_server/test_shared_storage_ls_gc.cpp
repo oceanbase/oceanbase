@@ -198,7 +198,8 @@ public:
   void wait_minor_finish();
   void wait_tablet_gc_finish();
   void get_tablet_version(
-      int64_t &tablet_version);
+      int64_t &tablet_version,
+      int64_t &last_gc_version);
   void set_ls_and_tablet_id_for_run_ctx();
   void wait_ls_gc_finish(
       const ObLSID &ls_id,
@@ -252,24 +253,31 @@ TEST_F(ObSharedStorageTest, test_tablet_gc_for_private_dir)
   ASSERT_EQ(OB_SUCCESS, tguard.switch_to(RunCtx.tenant_id_));
   ObSqlString sql;
   int64_t affected_rows = 0;
-  int64_t tablet_version1;
-  int64_t tablet_version2;
-  int64_t tablet_version3;
+  int64_t tablet_version1 = -1;
+  int64_t tablet_version2 = -1;
+  int64_t tablet_version3 = -1;
+  int64_t last_gc_version1 = -1;
+  int64_t last_gc_version2 = -1;
+  int64_t last_gc_version3 = -1;
   EXE_SQL("create table test_table (a int)");
   LOG_INFO("create_table finish");
 
   set_ls_and_tablet_id_for_run_ctx();
 
 
-  get_tablet_version(tablet_version1);
+  get_tablet_version(tablet_version1, last_gc_version1);
   EXE_SQL("insert into test_table values (1)");
   LOG_INFO("insert data finish");
+  ASSERT_GE(last_gc_version1, -1);
+  ASSERT_LT(last_gc_version1, tablet_version1);
 
   EXE_SQL("alter system minor freeze tenant tt1;");
   wait_minor_finish();
-  get_tablet_version(tablet_version2);
+  get_tablet_version(tablet_version2, last_gc_version2);
   LOG_INFO("get tablet version", K(tablet_version1), K(tablet_version2));
   ASSERT_LT(tablet_version1, tablet_version2);
+  ASSERT_GE(last_gc_version2, -1);
+  ASSERT_LT(last_gc_version2, tablet_version2);
 
 
   EXE_SQL("insert into test_table values (1)");
@@ -278,9 +286,11 @@ TEST_F(ObSharedStorageTest, test_tablet_gc_for_private_dir)
   EXE_SQL("alter system minor freeze tenant tt1;");
   wait_minor_finish();
 
-  get_tablet_version(tablet_version3);
+  get_tablet_version(tablet_version3, last_gc_version3);
   LOG_INFO("get tablet version", K(tablet_version2), K(tablet_version3));
   ASSERT_LT(tablet_version2, tablet_version3);
+  ASSERT_GE(last_gc_version3, -1);
+  ASSERT_LT(last_gc_version3, tablet_version3);
 
   check_block_for_private_dir(tablet_version3);
 
@@ -411,23 +421,30 @@ TEST_F(ObSharedStorageTest, end)
 }
 
 void ObSharedStorageTest::get_tablet_version(
-      int64_t &tablet_version)
+      int64_t &tablet_version,
+      int64_t &last_gc_version)
 {
   ObArray<int64_t> tablet_versions;
   bool is_old_version_empty = false;
   int64_t current_tablet_version = -1;
   int64_t current_tablet_trans_seq = -1;
+  uintptr_t tablet_fingerprint = 0;
   do {
-    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantMetaMemMgr*)->get_current_version_for_tablet(RunCtx.ls_id_, RunCtx.tablet_id_, current_tablet_version, current_tablet_trans_seq, is_old_version_empty));
+    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantMetaMemMgr*)->get_current_version_for_tablet(RunCtx.ls_id_, RunCtx.tablet_id_, current_tablet_version, last_gc_version, current_tablet_trans_seq, tablet_fingerprint, is_old_version_empty));
     ASSERT_NE(-1, current_tablet_version);
+    ASSERT_GE(last_gc_version, -1);
+    ASSERT_LT(last_gc_version, current_tablet_version);
     if (!is_old_version_empty) continue;
 
-    ObPrivateBlockGCHandler handler(RunCtx.ls_id_, RunCtx.ls_epoch_, RunCtx.tablet_id_, current_tablet_version, current_tablet_trans_seq);
-    LOG_INFO("wait old tablet version delete", K(current_tablet_version), K(is_old_version_empty), K(RunCtx.ls_id_), K(RunCtx.ls_epoch_), K(handler));
+    ObPrivateBlockGCHandler handler(RunCtx.ls_id_, RunCtx.ls_epoch_, RunCtx.tablet_id_, current_tablet_version, last_gc_version, current_tablet_trans_seq, tablet_fingerprint);
+    LOG_INFO("wait old tablet version delete", K(current_tablet_version), K(last_gc_version), K(is_old_version_empty), K(RunCtx.ls_id_), K(RunCtx.ls_epoch_), K(handler));
     ASSERT_EQ(OB_SUCCESS, handler.list_tablet_meta_version(tablet_versions));
     usleep(100 * 1000);
   } while (1 != tablet_versions.count());
-  tablet_version = tablet_versions.at(0);
+  tablet_version = -1;
+  for (int64_t i = 0; i < tablet_versions.count(); ++i) {
+    tablet_version = max(tablet_version, tablet_versions.at(i));
+  }
 }
 
 void ObSharedStorageTest::wait_tablet_gc_finish()
@@ -452,7 +469,7 @@ void ObSharedStorageTest::check_block_for_private_dir(
     const int64_t tablet_version)
 {
 
-  ObPrivateBlockGCHandler handler(RunCtx.ls_id_, RunCtx.ls_epoch_, RunCtx.tablet_id_, tablet_version, 0 /*transfer_seq*/);
+  ObPrivateBlockGCHandler handler(RunCtx.ls_id_, RunCtx.ls_epoch_, RunCtx.tablet_id_, tablet_version, -1/*last_gc_version*/, 0 /*transfer_seq*/, 0/*tablet_fingerprint*/);
   ObArray<blocksstable::MacroBlockId> block_ids_in_tablet;
   ObArray<blocksstable::MacroBlockId> unuse_block_ids;
   ObArray<blocksstable::MacroBlockId> block_ids_in_dir;

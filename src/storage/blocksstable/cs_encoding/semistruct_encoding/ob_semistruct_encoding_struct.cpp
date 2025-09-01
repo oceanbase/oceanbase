@@ -51,7 +51,7 @@ int ObSemiStructEncodeMetaDesc::deserialize(
       sub_schema_data_ptr_ = buf + offset;
       offset += semistruct_header_->schema_len_;
 
-      if (col_header.has_null_bitmap()) {
+      if (col_header.has_null_or_nop_bitmap()) {
         bitmap_size_ = ObCSEncodingUtil::get_bitmap_byte_size(row_cnt);
         null_bitmap_ = buf + offset;
         offset += bitmap_size_;

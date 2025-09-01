@@ -63,15 +63,19 @@ public:
       const int64_t ls_epoch,
       const common::ObTabletID &tablet_id,
       const ObUpdateTabletPointerParam &update_tablet_pointer_param);
+  /// @param last_gc_version: only used when SS mode(Just pass -1 if in SN mode)
   int remove_tablet(
       const share::ObLSID &ls_id,
       const int64_t ls_epoch,
-      const ObTabletHandle &tablet_handle);
+      const ObTabletHandle &tablet_handle,
+      const int64_t last_gc_version);
+  /// @param last_gc_versions: only used when SS mode(Just pass empty array if in SN mode)
   int batch_remove_tablet(
       const share::ObLSID &ls_id,
       const int64_t ls_epoch,
       const ObIArray<common::ObTabletID> &tablet_id_arr,
-      const ObIArray<ObMetaDiskAddr> &tablet_addr_arr);
+      const ObIArray<ObMetaDiskAddr> &tablet_addr_arr,
+      const ObIArray<int64_t> &last_gc_versions);
   int write_empty_shell_tablet(
       const uint64_t data_version,
       const int64_t ls_epoch,
@@ -208,7 +212,45 @@ private:
   };
 
   typedef common::hash::ObHashMap<WaitGCTabletArrayKey, WaitGCTabletArray*, common::hash::NoPthreadDefendMode> WaitGCTabletArrayMap;
-  typedef hash::HashMapPair<ObTabletID, ObMetaDiskAddr> TabletInfo;
+
+  struct TabletInfo
+  {
+  public:
+    TabletInfo():
+      tablet_id_(),
+      tablet_addr_(),
+      last_gc_version_(-1)
+    {
+    }
+    TabletInfo(
+      const ObTabletID &tablet_id,
+      const ObMetaDiskAddr &tablet_addr,
+      const int64_t last_gc_version):
+      tablet_id_(tablet_id),
+      tablet_addr_(tablet_addr),
+      last_gc_version_(last_gc_version)
+    {
+    }
+    bool is_valid() const
+    {
+      return tablet_id_.is_valid() &&
+             tablet_addr_.is_valid() &&
+             last_gc_version_ >= -1 &&
+             last_gc_version_ < static_cast<int64_t>(tablet_addr_.block_id().meta_version_id());
+    }
+    void reset()
+    {
+      tablet_id_.reset();
+      tablet_addr_.reset();
+      last_gc_version_ = -1;
+    }
+    TO_STRING_KV(K_(tablet_id), K_(tablet_addr), K_(last_gc_version));
+
+  public:
+    ObTabletID tablet_id_;
+    ObMetaDiskAddr tablet_addr_;
+    int64_t last_gc_version_;
+  };
 
 private:
   int read_from_share_blk(
@@ -224,12 +266,15 @@ private:
       const share::ObLSID &ls_id,
       const int64_t ls_epoch,
       const ObTabletID &tablet_id,
-      const ObTablet &tablet);
+      const ObTablet &tablet,
+      const int64_t last_gc_version);
+  /// @param last_gc_versions: only used when SS mode(Just pass empty array if in SN mode)
   int batch_write_remove_tablet_slog(
       const ObLSID &ls_id,
       const int64_t ls_epoch,
       const common::ObIArray<ObTabletID> &tablet_ids,
-      const common::ObIArray<ObMetaDiskAddr> &tablet_addrs);
+      const common::ObIArray<ObMetaDiskAddr> &tablet_addrs,
+      const common::ObIArray<int64_t> &last_gc_versions);
   int safe_batch_write_remove_tablet_slog_for_sn(
       const ObLSID &ls_id,
       const common::ObIArray<TabletInfo> &tablet_infos);

@@ -51,6 +51,39 @@ int ObRollupAdaptiveInfo::assign(const ObRollupAdaptiveInfo &info)
   return ret;
 }
 
+int ObHashRollupInfo::assign(const ObHashRollupInfo &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expand_exprs_.assign(other.expand_exprs_))) {
+    LOG_WARN("assign array failed", K(ret));
+  } else if (OB_FAIL(gby_exprs_.assign(other.gby_exprs_))) {
+    LOG_WARN("assign array failed", K(ret));
+  } else if (OB_FAIL(dup_expr_pairs_.assign(other.dup_expr_pairs_))) {
+    LOG_WARN("assign array failed", K(ret));
+  } else if (OB_FAIL(replaced_agg_pairs_.assign(other.replaced_agg_pairs_))) {
+    LOG_WARN("assign array failed", K(ret));
+  } else {
+    rollup_grouping_id_ = other.rollup_grouping_id_;
+  }
+  return ret;
+}
+int ObGroupingSetInfo::assign(const ObGroupingSetInfo &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(common_group_exprs_.assign(other.common_group_exprs_))
+      || OB_FAIL(group_exprs_.assign(other.group_exprs_))
+      || OB_FAIL(group_dirs_.assign(other.group_dirs_))
+      || OB_FAIL(groupset_exprs_.assign(other.groupset_exprs_))
+      || OB_FAIL(pruned_groupset_exprs_.assign(other.pruned_groupset_exprs_))
+      || OB_FAIL(dup_expr_pairs_.assign(other.dup_expr_pairs_))
+      || OB_FAIL(replaced_agg_pairs_.assign(other.replaced_agg_pairs_))) {
+    LOG_WARN("assign array failed", K(ret));
+  } else {
+    grouping_set_id_ = other.grouping_set_id_;
+  }
+  return ret;
+}
+
 int ObLogGroupBy::get_explain_name_internal(char *buf,
                                             const int64_t buf_len,
                                             int64_t &pos)
@@ -125,7 +158,29 @@ int ObLogGroupBy::get_group_rollup_exprs(common::ObIArray<ObRawExpr *> &group_ro
   } else { /*do nothing*/ }
   return ret;
 }
-
+int ObLogGroupBy::is_duplicate_insensitive_aggregation(bool & is_duplicate_insensitive)
+{
+  int ret = OB_SUCCESS;
+  // iterate over all aggregations
+  is_duplicate_insensitive = true;
+  for (int64_t i = 0; OB_SUCC(ret) && is_duplicate_insensitive && i < aggr_exprs_.count(); ++i) {
+    ObAggFunRawExpr *aggr_expr = static_cast<ObAggFunRawExpr *>(aggr_exprs_.at(i));
+    ObItemType aggr_type = aggr_expr->get_expr_type();
+    if (OB_ISNULL(aggr_expr) || OB_UNLIKELY(!aggr_expr->is_aggr_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid aggr expr", K(ret));
+    } else if (aggr_expr->is_param_distinct()) {
+      // any distinct is duplicate insensitive
+      // do nothing
+    } else if (aggr_expr->get_order_items().count() == 0 &&
+               (aggr_type == T_FUN_MIN || aggr_type == T_FUN_MAX)) {
+      // max min is duplicate insensitive
+    } else {
+      is_duplicate_insensitive = false;
+    }
+  }
+  return ret;
+}
 int ObLogGroupBy::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
 {
   int ret = OB_SUCCESS;
@@ -490,6 +545,26 @@ int ObLogGroupBy::inner_replace_op_exprs(ObRawExprReplacer &replacer)
           }
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObLogGroupBy::unwrap_cast_for_aggr_expr()
+{
+  int ret = OB_SUCCESS;
+  // unwrap cast for aggr expr
+  for (int64_t i = 0; OB_SUCC(ret) && i < aggr_exprs_.count(); i++) {
+    ObRawExpr *aggr_expr = aggr_exprs_.at(i);
+    if (OB_ISNULL(aggr_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("aggr_expr is null", K(ret));
+    } else if (aggr_expr->get_expr_type() == T_FUN_SYS_CAST &&
+               aggr_expr->get_param_count() > 0 &&
+               aggr_expr->has_flag(IS_INNER_ADDED_EXPR)) {
+      // if param 0 is inner added aggr, unwrap cast
+      aggr_exprs_.at(i) = aggr_expr->get_param_expr(0);
+    } else {
     }
   }
   return ret;

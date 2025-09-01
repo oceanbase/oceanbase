@@ -229,6 +229,7 @@ public:
       const share::schema::ObColumnSchemaV2 *column_schema,
       ObRawExpr *&real_ref_expr,
       ObRawExpr *&ref_expr);
+  int handle_duplicate_mapped_column_id(ObRawExpr *real_ref_expr, uint64_t table_id);
   int resolve_using_columns(const ParseNode &using_node, common::ObIArray<common::ObString> &column_names);
   int transfer_using_to_on_expr(JoinedTable *&joined_table);
   int resolve_table_column_expr(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
@@ -919,6 +920,7 @@ protected:
                                     const ObIArray<ObRawExprResType> &res_types,
                                     TableItem &table_item);
   int resolve_match_against_expr(ObMatchFunRawExpr &expr);
+  int resolve_es_match_expr(ObMatchFunRawExpr &expr);
 private:
   int resolve_function_table_column_item_udf(const TableItem &table_item,
                                              common::ObIArray<ColumnItem> &col_items);
@@ -995,7 +997,7 @@ private:
                          ObOptHint *&opt_hint);
   int resolve_index_hint(const TableItem &table, // resolved mysql mode index hint after table
                          const ParseNode &index_hint_node);
-  int resolve_union_merge_hint(const ParseNode &hint_node,
+  int resolve_index_merge_hint(const ParseNode &hint_node,
                                ObOptHint *&opt_hint);
   int resolve_table_parallel_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
   int resolve_join_order_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
@@ -1061,6 +1063,7 @@ public:
   static int set_partition_info_for_odps(ObTableSchema &table_schema,
                                          const common::ObIArray<ObString> &part_col_names);
 
+  static int set_basic_column_properties(ObColumnSchemaV2 &column_schema, const common::ObString &mock_gen_column_str);
 private:
   int resolve_table_check_constraint_items(const TableItem *table_item,
                                            const ObTableSchema *table_schema);
@@ -1094,6 +1097,7 @@ private:
                          ObIArray<ObColumnRefRawExpr*> &values_desc,
                          ObRawExpr *&expr);
   int build_row_for_empty_values(ObIArray<ObRawExpr*> &values_vector);
+  int check_match_against_expr(ObIArray<ObMatchFunRawExpr*> &match_exprs, const ObStmtScope scope, bool &is_match);
   int resolve_match_against_exprs(ObRawExpr *&expr,
                                   ObIArray<ObMatchFunRawExpr*> &match_exprs,
                                   const ObStmtScope scope);
@@ -1110,10 +1114,11 @@ private:
   int compute_values_table_row_count(ObValuesTableDef &table_def);
   bool is_update_for_mv_fast_refresh(const ObDMLStmt &stmt);
   int resolve_px_node_addrs(const ParseNode &hint_node, ObIArray<ObAddr> &addrs);
-  static int set_basic_column_properties(ObColumnSchemaV2 &column_schema, const common::ObString &mock_gen_column_str);
+  int resolve_disable_rich_format_op_list(const ParseNode &hint_node, ObIArray<common::ObString> &op_list);
   int build_column_schemas_for_orc(const orc::Type* type,
                                   const ColumnIndexType column_index_type,
                                   ObTableSchema& table_schema);
+  int check_array_column_schema_for_parquet(const parquet::schema::Node* node, bool &is_arry, ObStringBuffer &buf);
   int build_column_schemas_for_parquet(const parquet::SchemaDescriptor* schema,
                                       const ColumnIndexType column_index_type,
                                       ObTableSchema& table_schema);
@@ -1235,6 +1240,8 @@ protected:
   //for values table used to insert stmt:insert into table values row()....
   ObInsertResolver *upper_insert_resolver_;
   bool can_resolve_pseudo_column_ref_with_empty_tablename_ = false;
+  // mapped table id and column id
+  common::ObSEArray<std::pair<uint64_t, int64_t>, 4, common::ModulePageAllocator, true> mapped_ids_;
 protected:
   DISALLOW_COPY_AND_ASSIGN(ObDMLResolver);
 };

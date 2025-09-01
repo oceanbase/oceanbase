@@ -113,7 +113,8 @@ int ObLogLSFetchMgr::add_ls(
     const bool is_loading_data_dict_baseline_data,
     const ClientFetchingMode fetching_mode,
     const ObBackupPathString &archive_dest_str,
-    IObLogErrHandler &err_handler)
+    IObLogErrHandler &err_handler,
+    logservice::ObLogserviceModelInfo &logservice_model_info)
 {
   int ret = OB_SUCCESS;
   LSFetchCtx *ctx = NULL;
@@ -169,7 +170,7 @@ int ObLogLSFetchMgr::add_ls(
     LOG_ERROR("acquire_progress fail", KR(ret), K(start_tstamp_ns));
   // init LSFetchCtx
   } else if (OB_FAIL(ctx->init(tls_id, start_parameters, is_loading_data_dict_baseline_data,
-          progress_id, fetching_mode, archive_dest_str, *ls_ctx_add_info, err_handler))) {
+          progress_id, fetching_mode, archive_dest_str, *ls_ctx_add_info, err_handler, logservice_model_info))) {
     LOG_ERROR("ctx init fail", KR(ret), K(tls_id), K(start_tstamp_ns), K(start_lsn), K(progress_id));
   } else {
     ctx->set_host(*this);

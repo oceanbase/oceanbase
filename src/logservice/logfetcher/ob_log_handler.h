@@ -18,6 +18,7 @@
 #include "share/ob_ls_id.h"  // ObLSID
 #include "ob_log_fetcher_switch_info.h"  // KickOutInfo
 #include "ob_log_fetch_stat_info.h"  // TransStatInfo
+#include "logservice/ipalf/ipalf_log_group_entry.h"
 
 namespace oceanbase
 {
@@ -53,7 +54,7 @@ public:
       const share::ObLSID &ls_id,
       const int64_t proposal_id,
       const palf::LSN &group_start_lsn,
-      const palf::LogGroupEntry &group_entry,
+      const ipalf::IGroupEntry &group_entry,
       const char *buffer,
       void *ls_fetch_ctx,
       KickOutInfo &kick_out_info,

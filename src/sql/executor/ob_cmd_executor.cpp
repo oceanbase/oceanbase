@@ -37,6 +37,7 @@
 #include "sql/resolver/ddl/ob_alter_routine_stmt.h"
 #include "sql/resolver/ddl/ob_create_udt_stmt.h"
 #include "sql/resolver/ddl/ob_drop_udt_stmt.h"
+#include "sql/resolver/ddl/ob_alter_udt_stmt.h"
 #include "sql/resolver/ddl/ob_create_package_stmt.h"
 #include "sql/resolver/ddl/ob_alter_package_stmt.h"
 #include "sql/resolver/ddl/ob_drop_package_stmt.h"
@@ -624,6 +625,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObFlushSSMicroCacheStmt, ObFlushSSMicroCacheExecutor);
         break;
       }
+      case stmt::T_FLUSH_SS_LOCAL_CACHE: {
+        DEFINE_EXECUTE_CMD(ObFlushSSLocalCacheStmt, ObFlushSSLocalCacheExecutor);
+        break;
+      }
 #endif
       case stmt::T_FLUSH_DAG_WARNINGS: {
         DEFINE_EXECUTE_CMD(ObFlushDagWarningsStmt, ObFlushDagWarningsExecutor);
@@ -834,6 +839,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
       case stmt::T_DROP_TYPE: {
         DEFINE_EXECUTE_CMD(ObDropUDTStmt, ObDropUDTExecutor);
+        break;
+      }
+      case stmt::T_ALTER_TYPE: {
+        DEFINE_EXECUTE_CMD(ObAlterUDTStmt, ObAlterUDTExecutor);
         break;
       }
 #endif

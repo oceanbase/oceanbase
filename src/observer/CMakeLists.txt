@@ -135,6 +135,7 @@ ob_set_subtarget(ob_server omt
   omt/ob_worker_processor.cpp
   omt/ob_multi_tenant_operator.cpp
   omt/ob_tenant_srs.cpp
+  omt/ob_tenant_ai_service.cpp
 )
 
 ob_set_subtarget(ob_server table
@@ -228,6 +229,7 @@ ob_set_subtarget(ob_server table
   table/ob_table_multi_batch_common.cpp
   table/ob_table_multi_batch_service.cpp
   table/ob_redis_execute_processor_v2.cpp
+  table/ob_hbase_execute_processor.cpp
   table/fts/ob_table_fts_cg_service.cpp
   table/adapters/ob_hbase_cell_iter.cpp
   table/adapters/ob_normal_adapter_iter.cpp
@@ -261,6 +263,8 @@ ob_set_subtarget(ob_server table
   table/utils/ob_table_trans_utils.cpp
   table/utils/ob_table_json_utils.cpp
   table/utils/ob_table_convert_utils.cpp
+  table/common/ob_table_query_session_id_service.cpp
+  table/common/ob_table_query_session_id_rpc.cpp
 )
 
 ob_set_subtarget(ob_server table_load
@@ -474,6 +478,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_apply_stat.cpp
   virtual_table/ob_all_virtual_replay_stat.cpp
   virtual_table/ob_all_virtual_ha_diagnose.cpp
+  virtual_table/ob_all_virtual_hms_client_pool_stat.cpp
   virtual_table/ob_all_virtual_ls_migration_task.cpp
   virtual_table/ob_global_variables.cpp
   virtual_table/ob_gv_sql.cpp

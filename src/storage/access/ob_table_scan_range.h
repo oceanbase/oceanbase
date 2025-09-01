@@ -43,7 +43,7 @@ public:
   OB_INLINE const ObIArray<blocksstable::ObDatumRange> &get_suffix_ranges() const { return skip_scan_ranges_; }
   OB_INLINE const ObIArray<blocksstable::ObDatumRowkey> &get_rowkeys() const { return rowkeys_; }
   int get_query_iter_type(ObQRIterType &iter_type) const;
-  TO_STRING_KV(K_(rowkeys), K_(ranges), K_(status), K_(is_inited));
+  TO_STRING_KV(K_(rowkeys), K_(ranges), K_(status), K_(is_inited), K_(enable_new_false_range));
 private:
   int init_rowkeys(
       const ObTablet &tablet,
@@ -98,6 +98,7 @@ private:
   common::ObSEArray<blocksstable::ObDatumRange, DEFAULT_RANGE_CNT> skip_scan_ranges_;
   ObIAllocator *allocator_;
   RangeStatus status_;
+  bool enable_new_false_range_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObTableScanRange);
 };

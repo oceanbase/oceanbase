@@ -36,6 +36,8 @@ namespace oceanbase
 {
 namespace sql
 {
+
+#ifdef OB_BUILD_SPM
 struct ObGetCandiBaselinePlanIdOp
 {
   explicit ObGetCandiBaselinePlanIdOp(common::ObIArray<uint64_t> *key_array,
@@ -78,6 +80,7 @@ struct ObGetCandiBaselinePlanIdOp
   bool with_plan_hash_;
   uint64_t plan_hash_value_;
 };
+#endif
 
 struct ObGetKVEntryByNsOp : public ObKVEntryTraverseOp
 {
@@ -1080,6 +1083,13 @@ int ObPlanCache::add_plan(ObPhysicalPlan *plan, ObPlanCacheCtx &pc_ctx)
   } else {
     (void)inc_mem_used(plan->get_mem_size());
   }
+  #ifndef NDEBUG
+     ObCacheObjGuard guard(PC_DIAG_HANDLE);
+    if (OB_FAIL(get_plan_cache(pc_ctx, guard) || guard.cache_obj_ != plan)) {
+      LOG_WARN("There are some bugs in plan cache", K(ret), KP(plan));
+      ret = OB_ERR_UNEXPECTED;
+    }
+  #endif
 
   return ret;
 }
@@ -2312,6 +2322,7 @@ OB_INLINE int ObPlanCache::construct_plan_cache_key(ObSQLSessionInfo &session,
   pc_key.sys_var_config_hash_val_ = session.get_sys_var_config_hash_val();
   pc_key.is_weak_read_ = is_weak;
   pc_key.enable_mysql_compatible_dates_ = session.enable_mysql_compatible_dates();
+  OZ (session.get_collation_connection(pc_key.collation_connection_));
   return ret;
 }
 

@@ -511,7 +511,8 @@ ObSchemaMgr::ObSchemaMgr()
       timestamp_in_slot_(0),
       allocator_idx_(OB_INVALID_INDEX),
       mlog_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_MLOG_INFO_VEC, ObCtxIds::SCHEMA_SERVICE)),
-      external_resource_mgr_(allocator_)
+      external_resource_mgr_(allocator_),
+      ai_model_mgr_(allocator_)
 {
 }
 
@@ -571,7 +572,8 @@ ObSchemaMgr::ObSchemaMgr(ObIAllocator &allocator)
       timestamp_in_slot_(0),
       allocator_idx_(OB_INVALID_INDEX),
       mlog_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_MLOG_INFO_VEC, ObCtxIds::SCHEMA_SERVICE)),
-      external_resource_mgr_(allocator_)
+      external_resource_mgr_(allocator_),
+      ai_model_mgr_(allocator_)
 {
 }
 
@@ -656,6 +658,8 @@ int ObSchemaMgr::init(const uint64_t tenant_id)
     LOG_WARN("init mock_fk_parent_table_mgr_ failed", K(ret));
   } else if (OB_FAIL(external_resource_mgr_.init())) {
     LOG_WARN("init external_resource_mgr_ failed", K(ret));
+  } else if (OB_FAIL(ai_model_mgr_.init())) {
+    LOG_WARN("init ai_model_mgr_ failed", K(ret));
   } else if (OB_FAIL(ccl_rule_mgr_.init())) {
     LOG_WARN("init ccl_rule mgr failed", K(ret));
   } else {
@@ -729,6 +733,7 @@ void ObSchemaMgr::reset()
     mock_fk_parent_table_mgr_.reset();
     mlog_infos_.clear();
     external_resource_mgr_.reset();
+    ai_model_mgr_.reset();
   }
 }
 
@@ -848,6 +853,8 @@ int ObSchemaMgr::assign(const ObSchemaMgr &other)
         LOG_WARN("assign catalog mgr failed", K(ret));
       } else if (OB_FAIL(external_resource_mgr_.assign(other.external_resource_mgr_))) {
         LOG_WARN("assign external_resource_mgr_ failed", K(ret));
+      } else if (OB_FAIL(ai_model_mgr_.assign(other.ai_model_mgr_))) {
+        LOG_WARN("assign ai_model_mgr_ failed", K(ret));
       } else if (OB_FAIL(ccl_rule_mgr_.assign(other.ccl_rule_mgr_))) {
         LOG_WARN("assign ccl_rule mgr failed", K(ret));
       }
@@ -953,6 +960,8 @@ int ObSchemaMgr::deep_copy(const ObSchemaMgr &other)
         LOG_WARN("deep copy catalog mgr failed", K(ret));
       } else if (OB_FAIL(external_resource_mgr_.deep_copy(other.external_resource_mgr_))) {
         LOG_WARN("deep copy external_resource mgr failed", K(ret));
+      } else if (OB_FAIL(ai_model_mgr_.deep_copy(other.ai_model_mgr_))) {
+        LOG_WARN("deep copy ai_model mgr failed", K(ret));
       } else if (OB_FAIL(ccl_rule_mgr_.deep_copy(other.ccl_rule_mgr_))) {
         LOG_WARN("deep copy ccl_rule mgr failed", K(ret));
       }
@@ -4660,6 +4669,8 @@ int ObSchemaMgr::del_schemas_in_tenant(const uint64_t tenant_id)
         LOG_WARN("del catalog in tenant failed", K(ret), K(tenant_id));
       } else if (OB_FAIL(external_resource_mgr_.del_schemas_in_tenant(tenant_id))) {
         LOG_WARN("del external_resource in tenant failed", K(ret), K(tenant_id));
+      } else if (OB_FAIL(ai_model_mgr_.del_schemas_in_tenant(tenant_id))) {
+        LOG_WARN("del ai_model in tenant failed", K(ret), K(tenant_id));
       } else if (OB_FAIL(ccl_rule_mgr_.del_schemas_in_tenant(tenant_id))) {
         LOG_WARN("del ccl_rule in tenant failed", K(ret), K(tenant_id));
       }
@@ -4709,6 +4720,7 @@ int ObSchemaMgr::get_schema_count(int64_t &schema_count) const
     int64_t rls_context_schema_count = 0;
     int64_t catalog_schema_count = 0;
     int64_t external_resource_schema_count = 0;
+    int64_t ai_model_schema_count = 0;
     int64_t ccl_rule_schema_count = 0;
     if (OB_FAIL(outline_mgr_.get_outline_schema_count(outline_schema_count))) {
       LOG_WARN("get_outline_schema_count failed", K(ret));
@@ -4766,6 +4778,8 @@ int ObSchemaMgr::get_schema_count(int64_t &schema_count) const
       LOG_WARN("get catalog schema count failed", K(ret));
     } else if (OB_FAIL(external_resource_mgr_.get_external_resource_schema_count(external_resource_schema_count))) {
       LOG_WARN("get external_resource schema count failed", K(ret));
+    } else if (OB_FAIL(ai_model_mgr_.get_ai_model_schema_count(ai_model_schema_count))) {
+      LOG_WARN("get ai_model schema count failed", K(ret));
     } else if (OB_FAIL(ccl_rule_mgr_.get_schema_count(ccl_rule_schema_count))) {
       LOG_WARN("get ccl_rule schema count failed", K(ret));
     } else {
@@ -4791,6 +4805,7 @@ int ObSchemaMgr::get_schema_count(int64_t &schema_count) const
                        + context_schema_count
                        + mock_fk_parent_table_schema_count
                        + external_resource_schema_count
+                       + ai_model_schema_count
                       );
     }
   }
@@ -5585,6 +5600,10 @@ int ObSchemaMgr::get_schema_statistics(common::ObIArray<ObSchemaStatisticsInfo> 
     LOG_WARN("failed to get external_resource statistics", K(ret));
   } else if (OB_FAIL(schema_infos.push_back(schema_info))) {
     LOG_WARN("failed to push back schema statistics", K(ret), K(schema_info));
+  } else if (OB_FAIL(ai_model_mgr_.get_schema_statistics(schema_info))) {
+    LOG_WARN("failed to get ai_model statistics", K(ret));
+  } else if (OB_FAIL(schema_infos.push_back(schema_info))) {
+    LOG_WARN("failed to push back schema statistics", K(ret), K(schema_info));
   }
   return ret;
 }
@@ -5914,6 +5933,80 @@ int ObSchemaMgr::get_external_resource_schema(
     LOG_WARN("tenant_id not matched", K(ret), K(tenant_id), K_(tenant_id));
   } else {
     ret = external_resource_mgr_.get_external_resource_schema(tenant_id, database_id, external_resource_name, external_resource_schema);
+  }
+
+  return ret;
+}
+
+int ObSchemaMgr::get_ai_model_schema(
+  const uint64_t &tenant_id,
+  const uint64_t &ai_model_id,
+  const ObAiModelSchema *&ai_model_schema) const
+{
+  int ret = OB_SUCCESS;
+
+  if (tenant_id_ != tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant_id not matched", K(ret), K(tenant_id), K_(tenant_id));
+  } else {
+    ret = ai_model_mgr_.get_ai_model_schema(ai_model_id, ai_model_schema);
+  }
+
+  return ret;
+}
+
+int ObSchemaMgr::add_ai_models(const common::ObIArray<ObAiModelSchema> &ai_model_schemas)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; i < ai_model_schemas.count() && OB_SUCC(ret); ++i) {
+    if (OB_FAIL(add_ai_model(ai_model_schemas.at(i)))) {
+      LOG_WARN("push schema failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSchemaMgr::add_ai_model(const ObAiModelSchema &ai_model_schema)
+{
+  int ret = OB_SUCCESS;
+  ObNameCaseMode mode = OB_NAME_CASE_INVALID;
+  if (is_sys_tenant(tenant_id_)) {
+    mode = OB_ORIGIN_AND_INSENSITIVE;
+  } else if (OB_FAIL(get_tenant_name_case_mode(ai_model_schema.get_tenant_id(), mode))) {
+    LOG_WARN("fail to get_tenant_name_case_mode", K(ret), "tenant_id", ai_model_schema.get_tenant_id());
+  } else if (OB_NAME_CASE_INVALID == mode) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid case mode", K(ret), K(mode));
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(ai_model_mgr_.add_ai_model(ai_model_schema, mode))) {
+    LOG_WARN("fail to add ai model", K(ret));
+  }
+  return ret;
+}
+
+int ObSchemaMgr::del_ai_model(const ObTenantAiModelId &tenant_ai_model_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ai_model_mgr_.del_ai_model(tenant_ai_model_id))) {
+    LOG_WARN("fail to del ai model", K(ret));
+  }
+  return ret;
+}
+
+int ObSchemaMgr::get_ai_model_schema(
+  const uint64_t &tenant_id,
+  const ObString &ai_model_name,
+  const common::ObNameCaseMode &case_mode,
+  const ObAiModelSchema *&ai_model_schema) const
+{
+  int ret = OB_SUCCESS;
+
+  if (tenant_id_ != tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant_id not matched", K(ret), K(tenant_id), K_(tenant_id));
+  } else {
+    ret = ai_model_mgr_.get_ai_model_schema(tenant_id, ai_model_name, case_mode, ai_model_schema);
   }
 
   return ret;

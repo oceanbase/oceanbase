@@ -18,6 +18,7 @@
 #include "lib/container/ob_vector.h"
 #include "lib/list/ob_list.h"
 #include "sql/engine/table/ob_external_file_access.h"
+#include "sql/engine/basic/ob_lake_table_reader_profile.h"
 
 namespace oceanbase {
 namespace sql {
@@ -184,7 +185,7 @@ private:
     {}
     RangeCacheEntry &operator=(const RangeCacheEntry &other) = delete;
     bool is_read_cache_range_end(const ReadRange &range) const;
-    int wait();
+    int wait(ObLakeTablePreBufferMetrics &metrics);
     static bool compare(const RangeCacheEntry *l, const RangeCacheEntry *r)
     {
       return l->range_.offset_ < r->range_.offset_;
@@ -207,13 +208,13 @@ private:
 
 public:
   ObFilePreBuffer(ObExternalFileAccess &file_reader) :
-    alloc_(common::ObMemAttr(MTL_ID(), "PreBuffer")), options_(),
-    timeout_ts_(INT64_MAX), file_reader_(file_reader), cache_entries_(),
+    alloc_(common::ObMemAttr(MTL_ID(), "PreBuffer")), options_(), timeout_ts_(INT64_MAX),
+    metrics_(), file_reader_(file_reader), cache_entries_(),
     column_range_cache_entries_()
   {}
   ObFilePreBuffer(const int64_t tenant_id, ObExternalFileAccess &file_reader) :
-    alloc_(common::ObMemAttr(tenant_id, "PreBuffer")), options_(),
-    timeout_ts_(INT64_MAX), file_reader_(file_reader), cache_entries_(),
+    alloc_(common::ObMemAttr(tenant_id, "PreBuffer")), options_(), timeout_ts_(INT64_MAX),
+    metrics_(), file_reader_(file_reader), cache_entries_(),
     column_range_cache_entries_()
   {}
   ~ObFilePreBuffer();
@@ -228,6 +229,7 @@ public:
   /// each column is triggered first, and then prefetched according to the prefetch limit
   int pre_buffer(const ColumnRangeSlicesList &range_list);
   int read(int64_t position, int64_t length, void* out);
+  int register_metrics(ObLakeTableReaderProfile &reader_profile, const ObString &label);
 
 private:
   int prefetch_first_range_of_each_column(ColumnRangeCacheEntryList &range_entries);
@@ -258,6 +260,7 @@ private:
   common::ObMalloc alloc_;
   CacheOptions options_;
   int64_t timeout_ts_;
+  ObLakeTablePreBufferMetrics metrics_;
   ObExternalFileAccess &file_reader_;
   // need to delete randomly, so a list is better, but we also need to sort
   // and do a binary search, so we will use ObSortedVector for now.

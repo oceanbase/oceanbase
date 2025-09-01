@@ -751,20 +751,7 @@ int ObObjectStorageInfo::clone(
     common::ObIAllocator &allocator,
     ObObjectStorageInfo *&storage_info) const
 {
-  int ret = OB_SUCCESS;
-  storage_info = nullptr;
-  if (OB_UNLIKELY(!is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("storage info is invalid", K(ret), KPC(this));
-  } else if (OB_ISNULL(storage_info = OB_NEWx(ObObjectStorageInfo, &allocator))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to new ObObjectStorageInfo", K(ret), KPC(this));
-  } else if (OB_FAIL(storage_info->ObObjectStorageInfo::assign(*this))) {
-    LOG_WARN("fail to assign storage info", K(ret), KPC(this));
-    OB_DELETEx(ObObjectStorageInfo, &allocator, storage_info);
-    storage_info = nullptr;
-  }
-  return ret;
+  return clone_impl_<ObObjectStorageInfo>(allocator, *this, storage_info);
 }
 
 int ObObjectStorageInfo::get_info_str_(char *storage_info, const int64_t info_len) const

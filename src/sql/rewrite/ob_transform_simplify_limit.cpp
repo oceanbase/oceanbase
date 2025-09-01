@@ -182,6 +182,7 @@ int ObTransformSimplifyLimit::check_pushdown_limit_offset_validity(ObSelectStmt 
   } else if (0 != upper_stmt->get_condition_size()
              || upper_stmt->has_group_by()
              || upper_stmt->has_rollup()
+             || upper_stmt->has_grouping_sets()
              || upper_stmt->has_window_function()
              || upper_stmt->has_distinct()
              || upper_stmt->has_sequence()
@@ -299,6 +300,7 @@ int ObTransformSimplifyLimit::check_can_pushdown_limit_order(ObSelectStmt& upper
   } else if (0 < upper_stmt.get_condition_size() ||
              upper_stmt.has_group_by() ||
              upper_stmt.has_rollup() ||
+             upper_stmt.has_grouping_sets() ||
              upper_stmt.has_window_function() ||
              upper_stmt.has_distinct() ||
              upper_stmt.has_sequence()) {

@@ -243,7 +243,6 @@ int ObDeleteTabletLog::hash(uint64_t &hash_val) const
   return ret;
 }
 
-
 OB_SERIALIZE_MEMBER(ObDeleteTabletLog,
                     ls_id_,
                     tablet_id_,

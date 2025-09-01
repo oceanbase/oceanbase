@@ -1362,7 +1362,7 @@ int ObDDLMergeBlockRowIterator::init_merger()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("merger is null", K(ret));
     } else if (FALSE_IT(endkey_merger_->reset())) {
-    } else if (OB_FAIL(endkey_merger_->init(iters_.count(), *allocator_))) {
+    } else if (OB_FAIL(endkey_merger_->init(MAX_SSTABLE_COUNT, iters_.count(), *allocator_))) {
       LOG_WARN("fail to init rows merger", K(ret), K(iters_.count()));
     } else if (OB_FAIL(endkey_merger_->open(iters_.count()))) {
       LOG_WARN("fail to open rows merger", K(ret), K(iters_.count()));

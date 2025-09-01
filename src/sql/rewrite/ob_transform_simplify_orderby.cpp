@@ -225,8 +225,10 @@ int ObTransformSimplifyOrderby::remove_order_by_duplicates(ObDMLStmt *stmt,
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null pointer passed to transform", K(ret));
-  } else if (!stmt->is_sel_del_upd() ||
-             (stmt->is_select_stmt() && (static_cast<ObSelectStmt*>(stmt)->has_rollup()))) {
+  } else if (!stmt->is_sel_del_upd()
+             || (stmt->is_select_stmt()
+                 && (static_cast<ObSelectStmt *>(stmt)->has_rollup()
+                     || static_cast<ObSelectStmt *>(stmt)->has_grouping_sets()))) {
     //do nothing
   } else {
     ObIArray<OrderItem> &order_items = stmt->get_order_items();

@@ -51,6 +51,7 @@ public:
   // query immediately.
   virtual bool need_retry() const { return false; }
   virtual void resume() {}
+  virtual int try_add_stream_rpc_session_wait_cnt(int cnt) { return OB_SUCCESS; }
 
   // This function is called before worker waiting for some resources
   // and starting to give cpu out so that Multi-Tenancy would be aware

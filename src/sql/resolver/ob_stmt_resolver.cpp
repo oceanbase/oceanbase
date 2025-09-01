@@ -159,7 +159,7 @@ int ObStmtResolver::resolve_table_relation_node_v2(const ParseNode *node,
   } else if (OB_FAIL(session_info_->get_collation_connection(cs_type))) {
     LOG_WARN("fail to get collation_connection", K(ret));
   } else if (OB_FAIL(resolve_catalog_node(catalog_node, catalog_id, catalog_name))) {
-    LOG_WARN("fail to resolve catalog node", K(ret));
+    LOG_WARN("fail to resolve catalog node", K(ret), K(catalog_id), K(catalog_name));
   } else if (OB_UNLIKELY(is_external_catalog_id(catalog_id) && !is_catalog_supported_stmt_())) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "this operation in catalog is");
@@ -309,7 +309,7 @@ int ObStmtResolver::resolve_catalog_node(const ParseNode *catalog_node, uint64_t
       LOG_WARN("failed to get catalog schema by name", K(ret), K(tenant_id), K(catalog_id));
     } else if (OB_ISNULL(catalog_schema)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("catalog schema is null", K(ret), K(tenant_id), K(catalog_id));
+      LOG_USER_ERROR(OB_ERR_UNEXPECTED, "current session's catalog is not existed");
     } else if (OB_FAIL(ob_write_string(*allocator_, catalog_schema->get_catalog_name(), catalog_name))) {
       // use catalog name from CatalogSchema and deep copy it
       LOG_WARN("deep copy catalog_name failed", K(ret));

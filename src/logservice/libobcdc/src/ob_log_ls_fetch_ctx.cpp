@@ -131,6 +131,7 @@ void LSFetchCtx::reset()
   data_dict_iterator_.reset();
   fetched_log_size_ = 0;
   ctx_desc_.reset();
+  LOG_INFO("LSFetchCtx reset success.");
 }
 
 int LSFetchCtx::init(
@@ -141,7 +142,8 @@ int LSFetchCtx::init(
     const ClientFetchingMode fetching_mode,
     const ObBackupPathString &archive_dest_str,
     IObCDCPartTransResolver &part_trans_resolver,
-    IObLogLSFetchMgr &ls_fetch_mgr)
+    IObLogLSFetchMgr &ls_fetch_mgr,
+    logservice::ObLogserviceModelInfo &logservice_model_info)
 {
   int ret = OB_SUCCESS;
   const int64_t start_tstamp_ns = start_parameters.get_start_tstamp_ns();
@@ -164,6 +166,9 @@ int LSFetchCtx::init(
   progress_.reset(start_lsn, start_tstamp_ns);
   start_parameters_ = start_parameters;
   fetched_log_size_ = 0;
+
+  enable_logservice_ = logservice_model_info.get_model();
+  group_iterator_.set_logservice_mode(enable_logservice_);
 
   if (start_lsn.is_valid()) {
     // LSN is valid, init mem_storage; otherwise after need locate start_lsn success, we can init mem_storage
@@ -195,7 +200,7 @@ int LSFetchCtx::init_group_iterator_(const palf::LSN &start_lsn)
   } else {
     palf::GetFileEndLSN group_iter_end_func = [&](){ return palf::LSN(palf::LOG_MAX_LSN_VAL); };
 
-    if (OB_FAIL(mem_storage_.init(start_lsn))) {
+    if (OB_FAIL(mem_storage_.init(start_lsn, enable_logservice_))) {
       LOG_ERROR("init mem_storage_ failed", KR(ret), K_(tls_id), K(start_lsn));
     }
     // init palf iterator
@@ -272,7 +277,7 @@ int LSFetchCtx::init_remote_iter()
   } else if (OB_FAIL(get_log_ext_handler(log_ext_handler))) {
     LOG_ERROR("get log ext handler failed", KR(ret));
   } else if (OB_FAIL(remote_iter_.init(tenant_id, ls_id, start_scn, start_lsn,
-      LSN(LOG_MAX_LSN_VAL), large_buffer_pool, log_ext_handler, archive::ARCHIVE_FILE_DATA_BUF_SIZE))) {
+      LSN(LOG_MAX_LSN_VAL), large_buffer_pool, log_ext_handler, archive::ARCHIVE_FILE_DATA_BUF_SIZE, enable_logservice_))) {
     LOG_ERROR("remote iter init failed", KR(ret), K(tenant_id), K(ls_id), K(start_scn), K(start_lsn));
   } else if (OB_FAIL(remote_iter_.set_io_context(palf::LogIOContext(palf::LogIOUser::CDC)))) {
     LOG_ERROR("remote iter set_io_context failed", KR(ret), K(tenant_id), K(ls_id), K(start_scn), K(start_lsn));
@@ -287,7 +292,7 @@ int LSFetchCtx::append_log(const char *buf, const int64_t buf_len)
 if (! mem_storage_.is_inited()) {
     const LSN &start_lsn = progress_.get_next_lsn();
 
-    if (OB_FAIL(mem_storage_.init(start_lsn))) {
+    if (OB_FAIL(mem_storage_.init(start_lsn, enable_logservice_))) {
       LOG_ERROR("init mem_storage_ failed", KR(ret), K_(tls_id), K(start_lsn));
     } else if (OB_FAIL(group_iterator_.reuse(start_lsn))) {
       LOG_ERROR("MemPalfBufferIterator resuse failed", KR(ret), K_(tls_id), K(start_lsn));
@@ -311,11 +316,11 @@ if (! mem_storage_.is_inited()) {
 
 void LSFetchCtx::reset_memory_storage()
 {
-  mem_storage_.destroy();
+  mem_storage_.reset();
   LOG_DEBUG("reset memory storage", KPC(this));
 }
 
-int LSFetchCtx::get_next_group_entry(palf::LogGroupEntry &group_entry, palf::LSN &lsn)
+int LSFetchCtx::get_next_group_entry(ipalf::IGroupEntry &group_entry, palf::LSN &lsn)
 {
   int ret = OB_SUCCESS;
 
@@ -334,7 +339,7 @@ int LSFetchCtx::get_next_group_entry(palf::LogGroupEntry &group_entry, palf::LSN
 }
 
 int LSFetchCtx::get_next_remote_group_entry(
-    palf::LogGroupEntry &group_entry,
+    ipalf::IGroupEntry &group_entry,
     palf::LSN &lsn,
     const char *&buf,
     int64_t &buf_size)
@@ -353,17 +358,15 @@ int LSFetchCtx::get_next_remote_group_entry(
   return ret;
 }
 
-int LSFetchCtx::get_log_entry_iterator(palf::LogGroupEntry &group_entry,
+int LSFetchCtx::get_log_entry_iterator(ipalf::IGroupEntry &group_entry,
     palf::LSN &start_lsn,
-    palf::MemPalfBufferIterator &entry_iter)
+    ipalf::IPalfIterator<ipalf::ILogEntry> &entry_iter)
 {
   int ret = OB_SUCCESS;
-  palf::GetFileEndLSN entry_iter_end_func = [&](){ return start_lsn + group_entry.get_group_entry_size(); };
-
+  palf::GetFileEndLSN entry_iter_end_func = [&](){ return start_lsn + group_entry.get_group_entry_size(start_lsn); };
   if (OB_FAIL(entry_iter.init(start_lsn, entry_iter_end_func, &mem_storage_))) {
     LOG_ERROR("entry_iter init failed", KR(ret), K_(mem_storage), K_(group_iterator), K(group_entry), K(start_lsn));
   }
-
   return ret;
 }
 
@@ -424,7 +427,7 @@ int LSFetchCtx::dispatch_(volatile bool &stop_flag, int64_t &pending_trans_count
 }
 
 int LSFetchCtx::read_log(
-    const palf::LogEntry &log_entry,
+    const ipalf::ILogEntry &log_entry,
     const palf::LSN &lsn,
     IObCDCPartTransResolver::MissingLogInfo &missing,
     logfetcher::TransStatInfo &tsi,
@@ -518,6 +521,9 @@ int LSFetchCtx::read_log(
                 LOG_INFO("[DataDictionary] The last log of the baseline data "
                          "has been fetched",
                          K(tls_id_), K(lsn), K(log_entry));
+                if (OB_FAIL(GLOGMETADATASERVICE.finish_fetch_tenant_baseline_meta_data(tls_id_.get_tenant_id()))) {
+                  LOG_ERROR("finish_fetch_tenant_baseline_meta_data failed", KR(ret));
+                }
               }
             } else {
               // do nothing
@@ -555,7 +561,7 @@ int LSFetchCtx::read_log(
 }
 
 int LSFetchCtx::read_miss_tx_log(
-    const palf::LogEntry &log_entry,
+    const ipalf::ILogEntry &log_entry,
     const palf::LSN &lsn,
     logfetcher::TransStatInfo &tsi,
     IObCDCPartTransResolver::MissingLogInfo &missing)
@@ -614,12 +620,12 @@ int LSFetchCtx::read_miss_tx_log(
 }
 
 int LSFetchCtx::update_progress(
-    const palf::LogGroupEntry &group_entry,
+    const ipalf::IGroupEntry &group_entry,
     const palf::LSN &group_entry_lsn)
 {
   int ret = OB_SUCCESS;
   const int64_t submit_ts = group_entry.get_scn().get_val_for_logservice();
-  const int64_t group_entry_serialize_size = group_entry.get_serialize_size();
+  const int64_t group_entry_serialize_size = group_entry.get_serialize_size(group_entry_lsn);
 
   // Verifying log continuity
   if (OB_UNLIKELY(progress_.get_next_lsn() != group_entry_lsn)) {
@@ -642,7 +648,7 @@ int LSFetchCtx::update_progress(
   return ret;
 }
 
-int LSFetchCtx::handle_offline_ls_log_(const palf::LogEntry &log_entry,
+int LSFetchCtx::handle_offline_ls_log_(const ipalf::ILogEntry &log_entry,
     volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;

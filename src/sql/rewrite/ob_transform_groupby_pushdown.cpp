@@ -241,6 +241,7 @@ int ObTransformGroupByPushdown::check_push_down_into_union_validity(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret), K(stmt));
   } else if (stmt->has_rollup() ||
+             stmt->has_grouping_sets() ||
              stmt->get_aggr_item_size() <= 0 ||
              stmt->is_hierarchical_query()) {
     is_valid = false;
@@ -437,12 +438,26 @@ int ObTransformGroupByPushdown::is_basic_select_stmt(ObSelectStmt *stmt, bool &i
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
   } else if (stmt->has_limit() || stmt->has_group_by() || stmt->has_order_by() ||
-      stmt->has_window_function() || stmt->has_distinct() || stmt->has_rollup() ||
+      stmt->has_window_function() || stmt->has_distinct() || stmt->has_rollup() || stmt->has_grouping_sets() ||
       stmt->is_set_stmt() || stmt->is_hierarchical_query()) {
     is_basic = false;
   } else if (0 != stmt->get_aggr_item_size()) {
     is_basic = false;
-  } else { /* do nothing */ }
+  } else if (1 == stmt->get_from_item_size()) {
+    TableItem *table_item = stmt->get_table_item(stmt->get_from_item(0));
+    if (OB_ISNULL(table_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (TableItem::TEMP_TABLE == table_item->type_) {
+      ObSelectStmt *ref_query = table_item->ref_query_;
+      if (OB_ISNULL(ref_query)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (ref_query->has_group_by()) {
+        is_basic = false;
+      }
+    }
+  }
   return ret;
 }
 
@@ -1174,7 +1189,7 @@ int ObTransformGroupByPushdown::check_push_down_into_join_validity(ObSelectStmt 
   int ret = OB_SUCCESS;
   bool has_rownum = false;
   bool contain_inner_table = false;
-  bool contain_lateral_table = false;
+  bool contain_correlated_table = false;
   bool allow_distinct = false;
   ObSEArray<ObRawExpr *, 4> group_cols;
   bool is_enabled = ctx_->is_groupby_placement_enabled_;
@@ -1192,6 +1207,7 @@ int ObTransformGroupByPushdown::check_push_down_into_join_validity(ObSelectStmt 
     OPT_TRACE("do not rewrite inner table stmt with cost-based rule");
     // do not rewrite inner table stmt with cost-based rule
   } else if (stmt->has_rollup() ||
+             stmt->has_grouping_sets() ||
              stmt->get_semi_infos().count() > 0 ||
              stmt->get_subquery_exprs().count() > 0 ||
              stmt->get_aggr_item_size() <= 0 ||
@@ -1230,10 +1246,9 @@ int ObTransformGroupByPushdown::check_push_down_into_join_validity(ObSelectStmt 
     LOG_WARN("failed to check collation validity", K(ret));
   } else if (!is_valid) {
     // do nothing
-  } else if (OB_FAIL(ObTransformUtils::check_contain_correlated_lateral_table(stmt,
-                                                                              contain_lateral_table))) {
-    LOG_WARN("failed to check contain correlated lateral table", K(ret));
-  } else if (contain_lateral_table) {
+  } else if (OB_FAIL(ObTransformUtils::check_contain_correlated_table(stmt, contain_correlated_table))) {
+    LOG_WARN("failed to check contain correlated table", K(ret));
+  } else if (contain_correlated_table) {
     is_valid = false;
   } else if (OB_FAIL(is_push_through_cross_join_enabled(stmt, allow_distinct))) {
     LOG_WARN("failed to check support cross joins", K(ret));

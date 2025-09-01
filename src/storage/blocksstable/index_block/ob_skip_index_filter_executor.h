@@ -95,15 +95,13 @@ public:
                                   const int64_t row_count,
                                   ObMinMaxFilterParam &param,
                                   sql::ObPhysicalFilterExecutor &filter,
-                                  common::ObIAllocator &allocator,
                                   const bool use_vectorize);
 
 private:
   int filter_on_min_max(const uint32_t col_idx,
                         const uint64_t row_count,
                         const ObMinMaxFilterParam &param,
-                        sql::ObWhiteFilterExecutor &filter,
-                        common::ObIAllocator &allocator);
+                        sql::ObWhiteFilterExecutor &filter);
 
   int read_aggregate_data(const uint32_t col_idx,
                    common::ObIAllocator &allocator,
@@ -177,7 +175,6 @@ private:
                               const uint64_t row_count,
                               ObMinMaxFilterParam &param,
                               sql::ObBlackFilterExecutor &filter,
-                              common::ObIAllocator &allocator,
                               const bool use_vectorize);
 private:
   ObAggRowReader agg_row_reader_;

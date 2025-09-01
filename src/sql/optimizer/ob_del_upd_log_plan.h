@@ -232,7 +232,8 @@ public:
                                 IndexDMLInfo*& index_dml_info) const;
   int check_update_part_key(const ObTableSchema* index_schema,
                             IndexDMLInfo*& index_dml_info) const;
-  int check_update_primary_key(const ObTableSchema* index_schema,
+  int check_update_primary_key(ObSchemaGetterGuard &schema_guard,
+                               const ObTableSchema* index_schema,
                                IndexDMLInfo*& index_dml_info) const;
   int allocate_link_dml_as_top(ObLogicalOperator *&old_top);
   bool use_pdml() const { return use_pdml_; }

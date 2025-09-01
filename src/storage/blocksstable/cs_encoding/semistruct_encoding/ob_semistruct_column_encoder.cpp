@@ -51,10 +51,13 @@ int ObSemiStructColumnEncoder::do_init_()
 {
   int ret = OB_SUCCESS;
   uint32_t uncompress_len = ctx_->var_data_size_;
-  if (ctx_->null_cnt_ > 0) {
-    column_header_.set_has_null_bitmap();
+  if (ctx_->null_or_nop_cnt_ > 0) {
+    column_header_.set_has_null_or_nop_bitmap();
   }
-  if (OB_ISNULL(semistruct_ctx_ = ctx_->semistruct_ctx_)) {
+  if (ctx_->nop_cnt_ > 0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("nop is not supported in semistruct json column", K(ret));
+  } else if (OB_ISNULL(semistruct_ctx_ = ctx_->semistruct_ctx_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("semistruct_ctx is null", K(ret), KPC(ctx_));
   } else if (OB_FAIL(semistruct_ctx_->init_sub_column_encoders())) {
@@ -226,7 +229,7 @@ int64_t ObSemiStructColumnEncoder::base_header_size_() const
   size += sizeof(ObSemiStructEncodeHeader);
   size += sizeof(ObCSColumnHeader) * sub_col_count;
   size += semistruct_ctx_->get_sub_schema_serialize_size();
-  if (column_header_.has_null_bitmap()) {
+  if (column_header_.has_null_or_nop_bitmap()) {
     size += ObCSEncodingUtil::get_bitmap_byte_size(row_count_);
   }
   return size;

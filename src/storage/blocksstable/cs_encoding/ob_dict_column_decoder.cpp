@@ -155,7 +155,7 @@ void ObDictValueIterator::build_decode_by_ref_func_()
     ref_bitset->init(bitset_size); \
   } \
 
-int ObDictColumnDecoder::get_null_count(
+int ObDictColumnDecoder::inner_get_null_count(
     const ObColumnCSDecoderCtx &col_ctx,
     const int32_t *row_ids,
     const int64_t row_cap,

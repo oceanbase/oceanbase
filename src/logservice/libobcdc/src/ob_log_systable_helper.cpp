@@ -178,17 +178,12 @@ int QueryAllTenantStrategy::build_sql_statement(
   if (OB_ISNULL(sql_buf) || OB_UNLIKELY(mul_statement_buf_len <=0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", KR(ret), K(sql_buf), K(mul_statement_buf_len));
-  } else if (TCTX.is_tenant_sync_mode()) {
-    if (OB_FAIL(databuff_printf(sql_buf, mul_statement_buf_len, pos,
-        "SELECT DISTINCT TENANT_ID, TENANT_NAME FROM %s", OB_DBA_OB_ACCESS_POINT_TNAME))) {
-      LOG_ERROR("build_sql_statement failed for query all_tenant_info in tenant_sync_mode", KR(ret), K(pos), KCSTRING(sql_buf));
-    }
-    // should not filter tenant by status because schema_service may launch sql to all tenant
   } else if (OB_FAIL(databuff_printf(sql_buf, mul_statement_buf_len, pos,
-      "SELECT DISTINCT TENANT_ID, TENANT_NAME FROM %s WHERE TENANT_TYPE != 'META'", OB_DBA_OB_TENANTS_TNAME))) {
-    LOG_ERROR("build_sql_statement failed for query all_tenant_info", KR(ret), K(pos), KCSTRING(sql_buf));
+      "SELECT DISTINCT TENANT_ID, TENANT_NAME, STATUS FROM %s WHERE TENANT_TYPE != 'META'", OB_DBA_OB_TENANTS_TNAME))) {
+    LOG_ERROR("build_sql_statement failed for query all_tenant_info", KR(ret), K(pos), KCSTRING(sql_buf), K_(tenant_id));
+  } else if (common::OB_INVALID_TENANT_ID != tenant_id_ && OB_FAIL(databuff_printf(sql_buf, mul_statement_buf_len, pos, " AND TENANT_ID = %lu", tenant_id_))) {
+    LOG_ERROR("build_sql_statement failed for query_all_tenant_info while append where clause", KR(ret), K(pos), KCSTRING(sql_buf), K_(tenant_id));
   }
-
 
   return ret;
 }
@@ -259,7 +254,7 @@ int QueryTenantStatusStrategy::build_sql_statement(
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", KR(ret), K(sql_buf), K(mul_statement_buf_len));
   } else if (OB_FAIL(databuff_printf(sql_buf, mul_statement_buf_len, pos,
-      "SELECT IS_DELETE FROM %s WHERE TENANT_ID = %lu ORDER BY SCHEMA_VERSION DESC LIMIT 1",
+      "SELECT IS_DELETED FROM %s WHERE TENANT_ID = %lu ORDER BY SCHEMA_VERSION DESC LIMIT 1",
       OB_ALL_TENANT_HISTORY_TNAME, tenant_id_))) {
     LOG_ERROR("build_sql_statement failed for query all_server_info", KR(ret), K(pos), KCSTRING(sql_buf));
   }
@@ -622,16 +617,22 @@ int IObLogSysTableHelper::BatchSQLQuery::parse_record_from_row_(common::ObIArray
   uint64_t tenant_id = OB_INVALID_TENANT_ID;
   int64_t index = -1;
   ObString tenant_name;
+  ObString tenant_status_str;
+  share::schema::ObTenantStatus tenant_status;
 
   index++;
   GET_DATA(uint, index, tenant_id, "TENANT_ID");
   index++;
   GET_DATA(varchar, index, tenant_name, "TENANT_NAME");
+  index++;
+  GET_DATA(varchar, index, tenant_status_str, "STATUS");
 
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_DATA;
     LOG_ERROR("invalid tenant_id query from server", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(records.push_back(TenantInfo(tenant_id, tenant_name)))) {
+  } else if (OB_FAIL(share::schema::get_tenant_status(tenant_status_str, tenant_status))) {
+    LOG_ERROR("convert tenant_status_str to ObTenantStatus failed", KR(ret), K(tenant_id), K(tenant_name), K(tenant_status_str));
+  } else if (OB_FAIL(records.push_back(TenantInfo(tenant_id, tenant_name, tenant_status)))) {
     LOG_ERROR("push_back tenant_id into tenant_id_list failed", KR(ret), K(tenant_id), K(records));
   }
 
@@ -642,6 +643,40 @@ int IObLogSysTableHelper::BatchSQLQuery::get_records(common::ObIArray<TenantInfo
 {
   int64_t record_count = 0;
   return get_records_tpl_(records, "QueryAllTenantInfo", record_count);
+}
+
+int IObLogSysTableHelper::BatchSQLQuery::parse_record_from_row_(TenantInfo &records)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  int64_t index = -1;
+  ObString tenant_name;
+  ObString tenant_status_str;
+  share::schema::ObTenantStatus tenant_status;
+
+  index++;
+  GET_DATA(uint, index, tenant_id, "TENANT_ID");
+  index++;
+  GET_DATA(varchar, index, tenant_name, "TENANT_NAME");
+  index++;
+  GET_DATA(varchar, index, tenant_status_str, "STATUS");
+
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_DATA;
+    LOG_ERROR("invalid tenant_id query from server", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(share::schema::get_tenant_status(tenant_status_str, tenant_status))) {
+    LOG_ERROR("convert tenant_status_str to ObTenantStatus failed", KR(ret), K(tenant_id), K(tenant_name), K(tenant_status_str));
+  } else if (OB_FAIL(records.reset(tenant_id, tenant_name, tenant_status))) {
+    LOG_ERROR("push_back tenant_id into tenant_id_list failed", KR(ret), K(tenant_id), K(records));
+  }
+
+  return ret;
+}
+
+int IObLogSysTableHelper::BatchSQLQuery::get_records(TenantInfo &records)
+{
+  int64_t record_count = 0;
+  return get_records_tpl_(records, "QueryTenantInfo", record_count);
 }
 
 int IObLogSysTableHelper::BatchSQLQuery::parse_record_from_row_(common::ObIArray<common::ObAddr> &records)
@@ -1150,6 +1185,44 @@ int ObLogSysTableHelper::query_tenant_info_list(common::ObIArray<TenantInfo> &te
   return ret;
 }
 
+int ObLogSysTableHelper::query_tenant_info(const uint64_t tenant_id, TenantInfo &tenant_info)
+{
+  int ret = OB_SUCCESS;
+  BatchSQLQuery query;
+  QueryAllTenantStrategy query_all_tenant_strategy(tenant_id);
+  tenant_info.reset();
+
+  if (OB_UNLIKELY(! inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("systable_helper not init", KR(ret));
+  } else if (OB_FAIL(query.init(&query_all_tenant_strategy))) {
+    LOG_ERROR("init all_tenant_info query failed", KR(ret));
+  } else if (OB_FAIL(do_query_(query))) {
+    if (OB_NEED_RETRY == ret) {
+      LOG_WARN("do query_tenant_info fail, need retry", KR(ret),
+          "mysql_error_code", query.get_mysql_err_code(),
+          "mysql_error_msg", query.get_mysql_err_msg());
+    } else {
+      LOG_ERROR("do query_tenant_info fail", KR(ret),
+          "mysql_error_code", query.get_mysql_err_code(),
+          "mysql_error_msg", query.get_mysql_err_msg());
+    }
+  } else if (OB_FAIL(query.get_records(tenant_info))) {
+    if (OB_NEED_RETRY == ret) {
+      LOG_WARN("get_records fail while query_tenant_info, need retry", KR(ret),
+          "mysql_error_code", query.get_mysql_err_code(),
+          "mysql_error_msg", query.get_mysql_err_msg());
+    } else {
+      LOG_ERROR("get_records fail while query_tenant_info", KR(ret),
+          "mysql_error_code", query.get_mysql_err_code(),
+          "mysql_error_msg", query.get_mysql_err_msg());
+    }
+  }
+
+  LOG_INFO("query_tenant_info", KR(ret), K(tenant_info));
+  return ret;
+}
+
 int ObLogSysTableHelper::query_tenant_id_list(common::ObIArray<uint64_t> &tenant_id_list)
 {
   int ret = OB_SUCCESS;
@@ -1167,9 +1240,9 @@ int ObLogSysTableHelper::query_tenant_id_list(common::ObIArray<uint64_t> &tenant
   } else {
     const int64_t tenant_list_size = tenant_info_list.count();
     ARRAY_FOREACH_N(tenant_info_list, i, tenant_list_size) {
-      const TenantInfo &tenant_id_name = tenant_info_list.at(i);
-      if (OB_FAIL(tenant_id_list.push_back(tenant_id_name.tenant_id))) {
-        LOG_ERROR("push tenant_id into tenant_id_list failed", K(tenant_id_name), K(tenant_id_list),
+      const TenantInfo &tenant_info = tenant_info_list.at(i);
+      if (OB_FAIL(tenant_id_list.push_back(tenant_info.get_tenant_id()))) {
+        LOG_ERROR("push tenant_id into tenant_id_list failed", K(tenant_info), K(tenant_id_list),
             K(tenant_info_list));
       }
     }

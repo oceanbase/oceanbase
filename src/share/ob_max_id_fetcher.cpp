@@ -127,6 +127,7 @@ int ObMaxIdFetcher::convert_id_type(
     case OB_MAX_USED_LOCK_OWNER_ID_TYPE:
     case OB_MAX_USED_REWRITE_RULE_VERSION_TYPE:
     case OB_MAX_USED_SERVICE_NAME_ID_TYPE:
+    case OB_MAX_USED_AI_MODEL_ENDPOINT_ID_TYPE:
     case OB_MAX_USED_TTL_TASK_ID_TYPE: {
       dst = src;
       break;
@@ -162,6 +163,7 @@ int ObMaxIdFetcher::convert_id_type(
     case OB_MAX_USED_RLS_CONTEXT_ID_TYPE:
     case OB_MAX_USED_CATALOG_ID_TYPE:
     case OB_MAX_USED_EXTERNAL_RESOURCE_ID_TYPE:
+    case OB_MAX_USED_AI_MODEL_ID_TYPE:
     case OB_MAX_USED_LOCATION_ID_TYPE:
     case OB_MAX_USED_CCL_RULE_ID_TYPE: {
       dst = OB_MAX_USED_OBJECT_ID_TYPE;
@@ -325,6 +327,8 @@ int ObMaxIdFetcher::fetch_new_max_id(const uint64_t tenant_id,
         case OB_MAX_USED_LS_GROUP_ID_TYPE:
         case OB_MAX_USED_REWRITE_RULE_VERSION_TYPE:
         case OB_MAX_USED_SERVICE_NAME_ID_TYPE:
+        case OB_MAX_USED_AI_MODEL_ID_TYPE:
+        case OB_MAX_USED_AI_MODEL_ENDPOINT_ID_TYPE:
         case OB_MAX_USED_TTL_TASK_ID_TYPE: {
           // won't check other id
           break;

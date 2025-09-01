@@ -707,7 +707,68 @@ uint64_t ObLogSet::hash(uint64_t seed) const
   return seed;
 }
 
+int ObLogSet::init_set_exprs()
+{
+  int ret = OB_SUCCESS;
+  set_exprs_.reset();
+  pure_set_exprs_.reset();
+  if (OB_FAIL(get_set_exprs_internal(set_exprs_))) {
+    LOG_WARN("failed to get set exprs", K(ret));
+  } else if (OB_FAIL(get_pure_set_exprs_internal(pure_set_exprs_))) {
+    LOG_WARN("failed to get set exprs", K(ret));
+  }
+  return ret;
+}
 int ObLogSet::get_set_exprs(ObIArray<ObRawExpr *> &set_exprs)
+{
+  int ret = OB_SUCCESS;
+  set_exprs.reset();
+  if (OB_FAIL(set_exprs.assign(set_exprs_))) {
+    LOG_WARN("failed to get set exprs", K(ret));
+  }
+  return ret;
+}
+int ObLogSet::get_pure_set_exprs(ObIArray<ObRawExpr *> &set_exprs)
+{
+  int ret = OB_SUCCESS;
+  set_exprs.reset();
+  if (OB_FAIL(set_exprs.assign(pure_set_exprs_))) {
+    LOG_WARN("failed to get set exprs", K(ret));
+  }
+  return ret;
+}
+
+int ObLogSet::append_set_exprs(ObIArray<ObRawExpr *> &append_exprs)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *select_expr = NULL;
+  ObRawExpr *set_op_expr = NULL;
+  if (OB_ISNULL(get_stmt()) || OB_UNLIKELY(!get_stmt()->is_select_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(get_stmt()), K(ret));
+  } else {
+    const ObSelectStmt *sel_stmt = static_cast<const ObSelectStmt *>(get_stmt());
+    for (int64_t i = 0; OB_SUCC(ret) && i < append_exprs.count(); ++i) {
+      if (OB_ISNULL(select_expr = append_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(i));
+      } else if (OB_FAIL(set_exprs_.push_back(append_exprs.at(i)))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      } else if (!select_expr->has_flag(CNT_SET_OP)) {
+        /* do nothing, for recursive union all, exists search/cycle pseudo columns*/
+      } else if (OB_ISNULL(set_op_expr = sel_stmt->get_pure_set_expr(select_expr))
+                 || OB_UNLIKELY(!set_op_expr->is_set_op_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected expr", K(ret), K(i), K(*select_expr));
+      } else if (OB_FAIL(pure_set_exprs_.push_back(set_op_expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogSet::get_set_exprs_internal(ObIArray<ObRawExpr *> &set_exprs)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(get_stmt()) || OB_UNLIKELY(!get_stmt()->is_select_stmt())) {
@@ -722,7 +783,7 @@ int ObLogSet::get_set_exprs(ObIArray<ObRawExpr *> &set_exprs)
   return ret;
 }
 
-int ObLogSet::get_pure_set_exprs(ObIArray<ObRawExpr *> &set_exprs)
+int ObLogSet::get_pure_set_exprs_internal(ObIArray<ObRawExpr *> &set_exprs)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(get_stmt()) || OB_UNLIKELY(!get_stmt()->is_select_stmt())) {
@@ -763,15 +824,12 @@ int ObLogSet::print_outline_data(PlanText &plan_text)
   const ObDMLStmt *stmt = NULL;
   ObString qb_name;
   ObPQSetHint hint;
-  bool has_push_down = false;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(ret), K(get_plan()), K(stmt));
   } else if (OB_FAIL(stmt->get_qb_name(qb_name))) {
     LOG_WARN("fail to get qb_name", K(ret), K(stmt->get_stmt_id()));
-  } else if (OB_FAIL(check_has_push_down(has_push_down))) {
-    LOG_WARN("failed to check has push down", K(ret));
-  } else if (has_push_down &&
+  } else if (is_distinct_pushed_down() &&
              OB_FAIL(BUF_PRINTF("%s%s(@\"%.*s\")",
                                 ObQueryHint::get_outline_indent(plan_text.is_oneline_),
                                 ObHint::get_hint_name(T_DISTINCT_PUSHDOWN),
@@ -815,15 +873,10 @@ int ObLogSet::print_used_hint(PlanText &plan_text)
     } else if (NULL != used_pq_hint && OB_FAIL(used_pq_hint->print_hint(plan_text))) {
       LOG_WARN("failed to print pq_set hint for set", K(ret), K(*used_pq_hint));
     } else if (NULL != pushdown) {
-      bool has_push_down = false;
-      if (OB_FAIL(check_has_push_down(has_push_down))) {
-        LOG_WARN("failed to check has push down", K(ret));
-      } else {
-        bool pushdown_match = has_push_down ? pushdown->is_enable_hint()
-                                            : pushdown->is_disable_hint();
-        if (pushdown_match && OB_FAIL(pushdown->print_hint(plan_text))) {
-          LOG_WARN("failed to print used push down hint for set", K(ret), KPC(pushdown));
-        }
+      bool pushdown_match = is_distinct_pushed_down() ? pushdown->is_enable_hint()
+                            : pushdown->is_disable_hint();
+      if (pushdown_match && OB_FAIL(pushdown->print_hint(plan_text))) {
+        LOG_WARN("failed to print used push down hint for set", K(ret), KPC(pushdown));
       }
     }
   }
@@ -878,23 +931,10 @@ int ObLogSet::construct_pq_set_hint(ObPQSetHint &hint)
   }
 
   if (DistAlgo::DIST_BASIC_METHOD != set_dist_algo_) {
-    int64_t random_none_idx = OB_INVALID_INDEX;
-    if (DistAlgo::DIST_SET_RANDOM == set_dist_algo_) {
-      const ObLogicalOperator *child = NULL;
-      for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); ++i) {
-        if (OB_ISNULL(child = get_child(i))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret), K(i), K(child));
-        } else if (DistAlgo::DIST_SET_RANDOM == set_dist_algo_
-                   && LOG_EXCHANGE != child->get_type()) {
-          random_none_idx = i;
-        }
-      }
-    }
     if (OB_SUCC(ret) && OB_FAIL(hint.set_pq_set_hint(set_dist_algo_,
                                                      get_num_of_child(),
-                                                     random_none_idx))) {
-      LOG_WARN("failed to get dist methods", K(ret), K(set_dist_algo_), K(random_none_idx));
+                                                     random_none_idx_))) {
+      LOG_WARN("failed to get dist methods", K(ret), K(set_dist_algo_), K(random_none_idx_));
     }
   }
   return ret;

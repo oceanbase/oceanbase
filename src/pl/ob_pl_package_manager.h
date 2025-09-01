@@ -209,6 +209,10 @@ private:
   int get_cached_package_spec(const ObPLResolveCtx &resolve_ctx, uint64_t package_id,
                               ObPLPackage *&package_spec);
 
+  int try_get_package_state_direct(const ObPLResolveCtx &resolve_ctx,
+                                    uint64_t package_id,
+                                    ObPLPackageState *&package_state);
+
   int get_package_item_state(const ObPLResolveCtx &resolve_ctx,
                              sql::ObExecContext &exec_ctx,
                              ObPLPackage &package,

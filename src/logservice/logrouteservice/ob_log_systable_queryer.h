@@ -68,6 +68,10 @@ public:
       const uint64_t tenant_id,
       ObAllZoneTypeInfo &all_zone_type_info);
 
+  int get_logservice_model_info(
+      const uint64_t tenant_id,
+      ObLogserviceModelInfo &logservice_model_info);
+
 private:
   int do_query_(const uint64_t tenant_id,
       ObSqlString &sql,
@@ -108,6 +112,9 @@ private:
   // @param [out] all_zone_type_info, for __all_zone record
   int parse_record_from_row_(common::sqlclient::ObMySQLResult &res,
       ObAllZoneTypeInfo &all_zone_type_info);
+
+  int parse_record_from_row_(common::sqlclient::ObMySQLResult &res,
+    ObLogserviceModelInfo &logservice_model_info);
 
 private:
   bool is_inited_;                     // whether this class is inited

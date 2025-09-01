@@ -1500,7 +1500,7 @@ int ObLogArchivePieceContext::get_max_log_in_file_(const ObLogArchivePieceContex
     guard.click("read_data");
     const char *log_buf = context_match ? buf : buf + header_size;
     const int64_t log_buf_size = context_match ? read_size : read_size - header_size;
-    if (OB_FAIL(mem_storage.init(base_lsn))) {
+    if (OB_FAIL(mem_storage.init(base_lsn, GCONF.enable_logservice))) {
       CLOG_LOG(WARN, "MemoryStorage init failed", K(ret), K(base_lsn), KPC(this));
     } else if (OB_FAIL(mem_storage.append(log_buf, log_buf_size))) {
       CLOG_LOG(WARN, "MemoryStorage append failed", K(log_buf), K(log_buf_size),
@@ -1608,7 +1608,7 @@ int ObLogArchivePieceContext::seek_in_file_(const int64_t file_id, const SCN &sc
     CLOG_LOG(WARN, "read part file failed", K(ret), K(file_id), KPC(this));
   } else if (OB_FAIL(extract_file_base_lsn_(buf, buf_size, base_lsn))) {
     CLOG_LOG(WARN, "extract base_lsn failed", KPC(this));
-  } else if (OB_FAIL(mem_storage.init(base_lsn))) {
+  } else if (OB_FAIL(mem_storage.init(base_lsn, GCONF.enable_logservice))) {
     CLOG_LOG(WARN, "MemoryStorage init failed", K(ret), K_(id), K(base_lsn), KPC(this));
   } else if (OB_FAIL(mem_storage.append(buf + header_size, read_size - header_size))) {
     CLOG_LOG(WARN, "MemoryStorage append failed", K(ret));
@@ -2186,7 +2186,7 @@ int ObLogRawPathPieceContext::get_max_log_in_file_(const ObLogRawPathPieceContex
     guard.click("read_data");
     const char *log_buf = buf + header_size;
     const int64_t log_buf_size = read_size - header_size;
-    if (OB_FAIL(mem_storage.init(base_lsn))) {
+    if (OB_FAIL(mem_storage.init(base_lsn, GCONF.enable_logservice))) {
       CLOG_LOG(WARN, "MemoryStorage init failed", K(ret), K(base_lsn), KPC(this));
     } else if (OB_FAIL(mem_storage.append(log_buf, log_buf_size))) {
       CLOG_LOG(WARN, "MemoryStorage append failed", K(log_buf), K(log_buf_size),

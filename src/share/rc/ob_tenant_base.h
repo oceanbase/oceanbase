@@ -45,6 +45,7 @@ namespace omt {
  class ObTenant;
  class ObSharedTimer;
  class ObTenantSrs;
+ class ObTenantAiService;
 }
 namespace obmysql {
   class ObMySQLRequestManager;
@@ -113,6 +114,7 @@ class ObTenantMdsService;
   class ObTenantDiskSpaceManager;
   class ObTenantFileManager;
   class ObSSMacroCacheMgr;
+  class ObSSMemMacroCache;
   class ObSSLocalCachePrewarmService;
   class ObSSMicroCache;
   class ObSSLocalCacheService;
@@ -235,6 +237,7 @@ namespace observer
   class ObTabletTableUpdater;
   class ObTenantQueryRespTimeCollector;
   class ObTableQueryASyncMgr;
+  class ObTableSessIDService;
 }
 
 // for ObTenantSwitchGuard 临时使用>>>>>>>>
@@ -276,6 +279,7 @@ class ObResourceLimitCalculator;
 class ObWorkloadRepositoryContext;
 class ObPluginVectorIndexService;
 class ObAutoSplitTaskCache;
+class ObHMSClientPoolMgr;
 #ifdef OB_BUILD_SHARED_STORAGE
 class ObTabletSplitTaskCache;
 #endif
@@ -307,6 +311,7 @@ namespace detector
 #define TenantDiskSpaceManager storage::ObTenantDiskSpaceManager*,
 #define TenantFileManager storage::ObTenantFileManager*,
 #define SSMacroCacheMgr storage::ObSSMacroCacheMgr*,
+#define SSMemMacroCache storage::ObSSMemMacroCache*,
 #define SSLocalCachePrewarmService storage::ObSSLocalCachePrewarmService*,
 #define SSMicroCache storage::ObSSMicroCache*,
 #define SSLocalCacheService storage::ObSSLocalCacheService*,
@@ -327,6 +332,7 @@ namespace detector
 #define TenantDiskSpaceManager
 #define TenantFileManager
 #define SSMacroCacheMgr
+#define SSMemMacroCache
 #define SSLocalCachePrewarmService
 #define SSMicroCache
 #define SSLocalCacheService
@@ -373,6 +379,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       TenantDiskSpaceManager                        \
       TenantFileManager                              \
       SSMacroCacheMgr                                \
+      SSMemMacroCache                                \
       SSMicroCache                                   \
       SSLocalCachePrewarmService                     \
       SSLocalCacheService                            \
@@ -515,8 +522,11 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       rootserver::ObDDLScheduler*,                   \
       storage::ObInnerTabletAccessService*,          \
       storage::ObTabletReorgInfoTableService*,       \
+      observer::ObTableSessIDService*,                \
+      omt::ObTenantAiService*,                       \
       sql::ObSQLCCLRuleManager*,                     \
-      share::ObBackupDestIOPermissionMgr*            \
+      share::ObBackupDestIOPermissionMgr*,           \
+      share::ObHMSClientPoolMgr*                     \
   )
 
 

@@ -349,7 +349,7 @@ Outputs & filters:
   7 - output([t2.c6]), filter([cast(:1, DECIMAL_INT(64, 0)) <= column_conv(DECIMAL_INT,PS:(64,0),NULL,cast(cast(t2.c3, DECIMAL_INT(81, 18)) + cast(t2.c4,
        DECIMAL_INT(81, 18)), DECIMAL_INT(64, 0)))]), rowset=16
       access([GROUP_ID], [t2.__pk_increment], [t2.c3], [t2.c4], [t2.c6]), partitions(p0)
-      is_index_back=true, is_global_index=false, filter_before_indexback[true], 
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.c2], [t2.c1], [t2.c5], [t2.shadow_pk_0]), range(MIN ; MAX), 
       range_cond([cast(:0, DECIMAL_INT(64, 16)) = t2.c2])
 select /*+use_nl(t1 t2) parallel(2) */t1.c1, t2.c6 FROM t1 LEFT JOIN t2 ON t1.c1 = t2.c2 AND t1.c2 <= t2.c5;

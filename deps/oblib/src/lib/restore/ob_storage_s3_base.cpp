@@ -1259,6 +1259,16 @@ int ObStorageS3Base::get_s3_file_meta_(S3ObjectMeta &meta)
       meta.length_ = outcome.GetResult().GetContentLength();
       const Aws::Utils::DateTime &last_modified_date_time = outcome.GetResult().GetLastModified();
       meta.mtime_s_ = last_modified_date_time.Seconds();
+
+      int tmp_ret = OB_SUCCESS;
+      const Aws::String &etag = outcome.GetResult().GetETag();
+      const ObString etag_ob_str(etag.size(), etag.c_str());
+      if (!etag_ob_str.empty()) {
+        if (OB_TMP_FAIL(meta.digest_.set(etag_ob_str))) {
+          OB_LOG(WARN, "fail to set digest", K(ret), K(tmp_ret),
+              K_(bucket), K_(object), K(etag_ob_str), K(meta));
+        }
+      }
     }
   }
   return ret;
@@ -1638,6 +1648,9 @@ int ObStorageS3Util::head_object_meta(const ObString &uri, ObStorageObjectMetaBa
     if (obj_meta.is_exist_) {
       obj_meta.length_ = meta.length_;
       obj_meta.mtime_s_ = meta.mtime_s_;
+      if (!meta.digest_.empty() && OB_FAIL(obj_meta.digest_.assign(meta.digest_))) {
+        OB_LOG(WARN, "fail to set digest", K(ret), K(uri), K(meta));
+      }
     }
   }
   return ret;
@@ -1873,6 +1886,10 @@ int ObStorageS3Util::list_files_(const ObString &uri, ObBaseDirEntryOperator &op
           const Aws::S3::Model::Object &obj = contents[i];
           const char *obj_path = obj.GetKey().c_str();
           const int64_t obj_path_len = obj.GetKey().size();
+          ObFileExtraInfo file_extra_info;
+          file_extra_info.etag_ = obj.GetETag().c_str();
+          file_extra_info.etag_len_ = obj.GetETag().size();
+          file_extra_info.last_modified_time_ms_ = obj.GetLastModified().Millis();
 
           // For example, we can use oss console to create a 'read dir', like aaa/bbb/ccc/.
           // When list 'aaa/bbb/ccc/' this dir, we will get it self, that means we will get
@@ -1887,8 +1904,9 @@ int ObStorageS3Util::list_files_(const ObString &uri, ObBaseDirEntryOperator &op
                  K(request_id), K(obj_path), K(full_dir_path), K(full_dir_path_len));
           } else if (OB_FAIL(handle_listed_object(op, obj_path + full_dir_path_len,
                                                   obj_path_len - full_dir_path_len,
-                                                  obj.GetSize()))) {
-            OB_LOG(WARN, "fail to handle listed s3 object", K(ret),  K(request_id),
+                                                  obj.GetSize(),
+                                                  &file_extra_info))) {
+            OB_LOG(WARN, "fail to handle listed s3 object", K(ret), K(request_id), K(file_extra_info),
                 K(obj_path), K(obj_path_len), K(full_dir_path), K(full_dir_path_len), K(uri));
           }
         } // end for

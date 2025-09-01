@@ -431,6 +431,7 @@ int ObStorageObDalBase::inner_open(const ObString &uri, ObObjectStorageInfo *sto
 int ObStorageObDalBase::get_file_meta(ObDalObjectMeta &meta)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   meta.reset();
   opendal_metadata *query_meta = nullptr;
 
@@ -451,20 +452,33 @@ int ObStorageObDalBase::get_file_meta(ObDalObjectMeta &meta)
   } else {
     meta.is_exist_ = true;
 
-    if (OB_FAIL(ObDalAccessor::obdal_metadata_last_modified(query_meta, meta.mtime_s_))) {
-      OB_LOG(WARN, "fail get last modified", K(ret), K(bucket_), K(object_));
+    if (OB_TMP_FAIL(ObDalAccessor::obdal_metadata_last_modified(query_meta, meta.mtime_s_))) {
+      OB_LOG(WARN, "fail get last modified", K(ret), K(tmp_ret), K(bucket_), K(object_));
       // This field is currently only used by external tables.
       // To avoid impacting existing functionality,
       // even if the value is invalid, no error is reported. Instead, `meta.mtime_s_` is set to -1.
-      ret = OB_SUCCESS;
       meta.mtime_s_ = -1;
+    }
+
+    char *obdal_etag = nullptr;
+    if (OB_TMP_FAIL(ObDalAccessor::obdal_metadata_etag(query_meta, obdal_etag))) {
+      OB_LOG(WARN, "fail get etag", K(ret), K(tmp_ret), K(bucket_), K(object_));
+    } else if (OB_TMP_FAIL(meta.digest_.set(obdal_etag))) {
+      OB_LOG(WARN, "fail to set digest", K(ret), K(tmp_ret), K(bucket_), K(object_));
+    }
+
+    if (OB_NOT_NULL(obdal_etag)) {
+      if (OB_TMP_FAIL(ObDalAccessor::obdal_c_char_free(obdal_etag))) {
+        OB_LOG(WARN, "failed to free obdal etag", K(ret), K(tmp_ret), K(bucket_), K(object_));
+      }
+      obdal_etag = nullptr;
     }
   }
 
   if (OB_NOT_NULL(query_meta)) {
-    int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(ObDalAccessor::obdal_metadata_free(query_meta))) {
-      OB_LOG(WARN, "fail free opendal metadata", K(tmp_ret), KP(query_meta));
+      OB_LOG(WARN, "fail free opendal metadata",
+          K(ret), K(tmp_ret), KP(query_meta), K(bucket_), K(object_));
     }
     ret = COVER_SUCC(tmp_ret);
     query_meta = nullptr;
@@ -780,6 +794,9 @@ int ObStorageObDalUtil::head_object_meta(const common::ObString &uri, ObStorageO
     if (obj_meta.is_exist_) {
       obj_meta.length_ = meta.length_;
       obj_meta.mtime_s_ = meta.mtime_s_;
+      if (!meta.digest_.empty() && OB_FAIL(obj_meta.digest_.assign(meta.digest_))) {
+        OB_LOG(WARN, "fail to set digest", K(ret), K(uri), K(meta));
+      }
     }
   }
   return ret;
@@ -982,6 +999,51 @@ int get_entry_length(const opendal_entry *entry, int64_t &length)
   return ret;
 }
 
+int get_file_extra_info(ObIAllocator &allocator, const opendal_entry *entry, ObFileExtraInfo &file_extra_info)
+{
+  int ret = OB_SUCCESS;
+  file_extra_info.reset();
+  opendal_metadata *meta = nullptr;
+  char *obdal_etag = nullptr;
+  char *deep_copied_etag = nullptr;
+  int64_t last_modified_time_s = 0;
+  if (OB_ISNULL(entry)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid arguments", K(ret), KP(entry));
+  } else if (OB_FAIL(ObDalAccessor::obdal_entry_metadata(entry, meta))) {
+    OB_LOG(WARN, "failed to get entry metadata", K(ret), KP(entry));
+  } else if (OB_FAIL(ObDalAccessor::obdal_metadata_etag(meta, obdal_etag))) {
+    OB_LOG(WARN, "failed to get entry etag", K(ret), KP(entry), KP(meta));
+  } else if (OB_FAIL(ObDalAccessor::obdal_metadata_last_modified(meta, last_modified_time_s))) {
+    OB_LOG(WARN, "failed to get entry last modified time", K(ret), KP(entry), KP(meta));
+  } else if (OB_FAIL(ob_dup_cstring(allocator, obdal_etag, deep_copied_etag))) {
+    OB_LOG(WARN, "failed to deep copy obdal etag data", K(ret), KP(entry), KP(meta));
+  } else {
+    file_extra_info.last_modified_time_ms_ = last_modified_time_s * 1000LL;
+    file_extra_info.etag_ = deep_copied_etag;
+    file_extra_info.etag_len_ = get_safe_str_len(deep_copied_etag);
+  }
+
+  int tmp_ret = OB_SUCCESS;
+  if (OB_NOT_NULL(obdal_etag)) {
+    if (OB_TMP_FAIL(ObDalAccessor::obdal_c_char_free(obdal_etag))) {
+      OB_LOG(WARN, "failed to free obdal etag", K(ret), K(tmp_ret));
+    }
+    obdal_etag = nullptr;
+    ret = COVER_SUCC(tmp_ret);
+  }
+  if (OB_NOT_NULL(meta)) {
+    tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(ObDalAccessor::obdal_metadata_free(meta))) {
+      OB_LOG(WARN, "fail free opendal metadata", K(ret), K(tmp_ret));
+    }
+    meta = nullptr;
+    ret = COVER_SUCC(tmp_ret);
+  }
+
+  return ret;
+}
+
 int ObStorageObDalUtil::list_files(const common::ObString &uri, common::ObBaseDirEntryOperator &op)
 {
   int ret = OB_SUCCESS;
@@ -1006,9 +1068,11 @@ int ObStorageObDalUtil::list_files(const common::ObString &uri, common::ObBaseDi
           OB_STORAGE_LIST_MAX_NUM, true/*recursive*/, "", lister))) {
     OB_LOG(WARN, "failed to list obdal objects", K(ret), K(uri), K(OB_STORAGE_LIST_MAX_NUM));
   } else {
+    ObArenaAllocator etag_allocator(OB_STORAGE_OBDAL_ALLOCATOR);
     opendal_entry *entry = nullptr;
     const int64_t full_dir_path_len = get_safe_str_len(full_dir_path);
     while (OB_SUCC(ret)) {
+      etag_allocator.clear();
       if (OB_FAIL(ObDalAccessor::obdal_lister_next(lister, entry))) {
         OB_LOG(WARN, "failed to exec obdal lister next", K(ret));
       } else if (entry == nullptr) {
@@ -1018,10 +1082,11 @@ int ObStorageObDalUtil::list_files(const common::ObString &uri, common::ObBaseDi
         // a break is used to exit the loop here.
         break;
       } else {
-        int64_t obj_size = 0;
+        int64_t obj_size = -1;
         char *cur_obj_path = nullptr;
         int64_t cur_obj_path_len = 0;
-        if (OB_FAIL(get_entry_length(entry, obj_size))) {
+        ObFileExtraInfo file_extra_info;
+        if (op.need_get_file_meta() && OB_FAIL(get_entry_length(entry, obj_size))) {
           OB_LOG(WARN, "faield to exec obdal entry content length", K(ret));
         } else if (OB_FAIL(ObDalAccessor::obdal_entry_path(entry, cur_obj_path))) {
           OB_LOG(WARN, "failed exec obdal entry path", K(ret));
@@ -1037,11 +1102,16 @@ int ObStorageObDalUtil::list_files(const common::ObString &uri, common::ObBaseDi
         } else if (OB_UNLIKELY(cur_obj_path_len == full_dir_path_len)) {
           OB_LOG(INFO, "exist object path length is same with dir path length",
               K(cur_obj_path), K(full_dir_path), K(full_dir_path_len));
+        } else if (op.need_get_file_meta()
+            && OB_FAIL(get_file_extra_info(etag_allocator, entry, file_extra_info))) {
+          OB_LOG(WARN, "fail to get file extra info", K(ret),
+              K(cur_obj_path), K(full_dir_path), K(full_dir_path_len));
         } else if (OB_FAIL(handle_listed_object(op, cur_obj_path + full_dir_path_len,
                                                 cur_obj_path_len - full_dir_path_len,
-                                                obj_size))) {
+                                                obj_size,
+                                                &file_extra_info))) {
           OB_LOG(WARN, "fail to add listed obdal obejct meta into ctx",
-              K(ret), K(cur_obj_path), K(cur_obj_path_len),
+              K(ret), K(cur_obj_path), K(cur_obj_path_len), K(file_extra_info),
               K(full_dir_path), K(full_dir_path_len), K(obj_size));
         }
 
@@ -1115,7 +1185,7 @@ int ObStorageObDalUtil::list_files(const common::ObString &uri, ObStorageListCtx
     const int64_t full_dir_path_len = get_safe_str_len(full_dir_path);
 
     for (int64_t i = 0; OB_SUCC(ret) && (i < max_list_num); i++) {
-      int64_t obj_size = 0;
+      int64_t obj_size = -1;
       char *cur_obj_path = nullptr;
       int64_t cur_obj_path_len = 0;
       if (OB_FAIL(ObDalAccessor::obdal_lister_next(list_ctx.opendal_lister_, entry))) {
@@ -1123,7 +1193,7 @@ int ObStorageObDalUtil::list_files(const common::ObString &uri, ObStorageListCtx
       } else if (entry == nullptr) {
         list_ctx.has_next_ = false;
         break;
-      } else if (OB_FAIL(get_entry_length(entry, obj_size))) {
+      } else if (list_ctx.need_meta_ && OB_FAIL(get_entry_length(entry, obj_size))) {
         OB_LOG(WARN, "faield to exec obdal entry content length", K(ret));
       } else if (OB_FAIL(ObDalAccessor::obdal_entry_path(entry, cur_obj_path))) {
         OB_LOG(WARN, "failed exec obdal entry path", K(ret));

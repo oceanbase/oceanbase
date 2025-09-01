@@ -1003,14 +1003,15 @@ int ObLogRestoreHandler::get_next_log_after_end_lsn_(ObRemoteLocationParent &loc
     ObRemoteLocationParent &location_parent_;
   };
   GetSourceFunctor get_source_func(location_parent);
-  ObRemoteLogGroupEntryIterator remote_iter(get_source_func);
+  ObRemoteIGroupEntryIterator remote_iter(get_source_func);
   LargeBufferPool tmp_buffer_pool;
   ObLogExternalStorageHandler tmp_handler;
-  LogGroupEntry tmp_entry;
+  ipalf::IGroupEntry tmp_entry;
   LSN tmp_lsn;
   const char *tmp_buf = NULL;
   int64_t tmp_buf_len = 0;
   constexpr int64_t DEFAULT_BUF_SIZE = 64L * 1024 * 1024;
+  const bool enable_logservice = GCONF.enable_logservice;
 
   if (OB_FAIL(tmp_buffer_pool.init("TmpLargePool", 1024L * 1024 * 1024))) {
     CLOG_LOG(WARN, "failed to init tmp_buffer_pool");
@@ -1018,7 +1019,7 @@ int ObLogRestoreHandler::get_next_log_after_end_lsn_(ObRemoteLocationParent &loc
     CLOG_LOG(WARN, "failed to init tmp_handler");
   } else if (OB_FAIL(tmp_handler.start(0))) {
     CLOG_LOG(WARN, "failed to start tmp_handler");
-  } else if (OB_FAIL(remote_iter.init(MTL_ID(), ObLSID(id_), end_scn, end_lsn, palf::LSN(palf::LOG_MAX_LSN_VAL), &tmp_buffer_pool, &tmp_handler, DEFAULT_BUF_SIZE))) {
+  } else if (OB_FAIL(remote_iter.init(MTL_ID(), ObLSID(id_), end_scn, end_lsn, palf::LSN(palf::LOG_MAX_LSN_VAL), &tmp_buffer_pool, &tmp_handler, DEFAULT_BUF_SIZE, enable_logservice))) {
     CLOG_LOG(WARN, "failed to init remote_iter");
   } else if (OB_FAIL(remote_iter.next(tmp_entry, tmp_lsn, tmp_buf, tmp_buf_len))) {
     if (OB_ITER_END == ret) {
@@ -1100,7 +1101,7 @@ int ObLogRestoreHandler::check_offline_log_(bool &done)
 {
   int ret = OB_SUCCESS;
   share::SCN replayed_scn;
-  PalfBufferIterator iter;
+  ipalf::IPalfIterator<ipalf::ILogEntry> iter;
   done = false;
   ObLogService *logservice = MTL(ObLogService*);
   ObLogReplayService *replayservice = NULL;
@@ -1118,7 +1119,7 @@ int ObLogRestoreHandler::check_offline_log_(bool &done)
   } else if (OB_FAIL(iter.set_io_context(palf::LogIOContext(MTL_ID(), id_, palf::LogIOUser::RESTORE)))) {
     CLOG_LOG(WARN, "set_io_context failed", K(id_));
   } else {
-    palf::LogEntry entry;
+    ipalf::ILogEntry entry;
     palf::LSN lsn;
     while (OB_SUCC(ret)) {
       if (OB_FAIL(iter.next())) {
@@ -1361,6 +1362,10 @@ void ObLogRestoreHandler::deep_copy_source_(ObRemoteSourceGuard &source_guard)
     CLOG_LOG(WARN, "parent_ is NULL", K(ret));
   } else if (OB_ISNULL(source = ObResSrcAlloctor::alloc(parent_->get_source_type(), share::ObLSID(id_)))) {
   } else if (FALSE_IT(parent_->deep_copy_to(*source))) {
+  } else if (! source->is_valid()) {
+    ObResSrcAlloctor::free(source); // free source when it is invalid
+    source = nullptr;
+    CLOG_LOG(WARN, "source is invalid");
   } else if (FALSE_IT(source_guard.set_source(source))) {
   }
 }

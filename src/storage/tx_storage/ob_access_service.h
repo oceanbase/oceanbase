@@ -248,6 +248,8 @@ public:
       ObTableScanParam &param,
       ObNewRowIterator *&result);
 
+  int scan_block_stat(ObBlockStatScanParam &scan_param, ObBlockStatIterator &iter);
+
 protected:
   int check_tenant_out_of_memstore_limit_(bool &is_out_of_mem);
   int check_data_disk_full_(

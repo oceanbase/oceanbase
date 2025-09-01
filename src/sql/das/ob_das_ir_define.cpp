@@ -56,7 +56,7 @@ OB_DEF_SERIALIZE(ObDASIRScanCtDef)
   LST_DO_CODE(OB_UNIS_ENCODE,
     flags_,
     search_text_,
-    inv_scan_doc_id_col_,
+    inv_scan_domain_id_col_, // FARM COMPAT WHITELIST
     inv_scan_doc_length_col_,
     match_filter_,
     relevance_expr_,
@@ -65,7 +65,8 @@ OB_DEF_SERIALIZE(ObDASIRScanCtDef)
     mode_flag_,
     topk_limit_expr_,
     topk_offset_expr_,
-    token_col_);
+    token_col_,
+    field_boost_expr_);
   if (OB_SUCC(ret) && has_block_max_scan_) {
     OB_UNIS_ENCODE(block_max_spec_);
   }
@@ -81,7 +82,7 @@ OB_DEF_DESERIALIZE(ObDASIRScanCtDef)
   LST_DO_CODE(OB_UNIS_DECODE,
     flags_,
     search_text_,
-    inv_scan_doc_id_col_,
+    inv_scan_domain_id_col_, // FARM COMPAT WHITELIST
     inv_scan_doc_length_col_,
     match_filter_,
     relevance_expr_,
@@ -90,7 +91,8 @@ OB_DEF_DESERIALIZE(ObDASIRScanCtDef)
     mode_flag_,
     topk_limit_expr_,
     topk_offset_expr_,
-    token_col_);
+    token_col_,
+    field_boost_expr_);
   if (OB_SUCC(ret) && has_block_max_scan_) {
     OB_UNIS_DECODE(block_max_spec_);
   }
@@ -104,7 +106,7 @@ OB_DEF_SERIALIZE_SIZE(ObDASIRScanCtDef)
   LST_DO_CODE(OB_UNIS_ADD_LEN,
     flags_,
     search_text_,
-    inv_scan_doc_id_col_,
+    inv_scan_domain_id_col_, // FARM COMPAT WHITELIST
     inv_scan_doc_length_col_,
     match_filter_,
     relevance_expr_,
@@ -113,7 +115,8 @@ OB_DEF_SERIALIZE_SIZE(ObDASIRScanCtDef)
     mode_flag_,
     topk_limit_expr_,
     topk_offset_expr_,
-    token_col_);
+    token_col_,
+    field_boost_expr_);
   if (has_block_max_scan_) {
     OB_UNIS_ADD_LEN(block_max_spec_);
   }
@@ -131,9 +134,95 @@ OB_SERIALIZE_MEMBER((ObDASFuncLookupCtDef, ObDASAttachCtDef),
     main_lookup_cnt_,
     doc_id_lookup_cnt_,
     func_lookup_cnt_,
-    lookup_doc_id_expr_);
+    lookup_domain_id_expr_ // FARM COMPAT WHITELIST
+    );
 
 OB_SERIALIZE_MEMBER((ObDASFuncLookupRtDef, ObDASAttachRtDef));
+
+OB_SERIALIZE_MEMBER((ObDASIREsMatchCtDef, ObDASAttachCtDef),
+                    relevance_proj_col_,
+                    inv_scan_domain_id_col_,
+                    es_param_text_expr_);
+
+OB_SERIALIZE_MEMBER((ObDASIREsMatchRtDef, ObDASAttachRtDef));
+
+OB_SERIALIZE_MEMBER((ObDASIREsScoreCtDef, ObDASAttachCtDef));
+
+OB_SERIALIZE_MEMBER((ObDASIREsScoreRtDef, ObDASAttachRtDef));
+
+ObDocIdExt::ObDocIdExt()
+  : buf_{}, datum_(buf_, 0, false)
+{
+}
+
+ObDocIdExt::ObDocIdExt(const ObDocIdExt &other)
+  : buf_{}, datum_(other.datum_)
+{
+  MEMCPY(buf_, other.buf_, OB_DOC_ID_EXT_SIZE);
+  datum_.ptr_ = buf_;
+}
+
+void ObDocIdExt::reset()
+{
+  MEMSET(buf_, 0, OB_DOC_ID_EXT_SIZE);
+  datum_ = ObDatum(buf_, 0, false);
+}
+
+int ObDocIdExt::hash(uint64_t &hash_val) const
+{
+  int ret = common::OB_SUCCESS;
+  if (OB_ISNULL(datum_.ptr_)) {
+    ret = common::OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret), KP(datum_.ptr_));
+  } else {
+    hash_val = murmurhash(datum_.ptr_, datum_.len_, 0);
+  }
+  return ret;
+}
+
+const ObDatum &ObDocIdExt::get_datum() const
+{
+  return datum_;
+}
+
+int ObDocIdExt::from_obj(const ObObj &obj)
+{
+  int ret = common::OB_SUCCESS;
+  if (OB_FAIL(datum_.from_obj(obj))) {
+    LOG_WARN("failed to copy obj to doc id ext", K(ret));
+  }
+  return ret;
+}
+
+int ObDocIdExt::from_datum(const ObDatum &datum)
+{
+  int ret = common::OB_SUCCESS;
+  int64_t dummy_pos = 0;
+  if (OB_FAIL(datum_.deep_copy(datum, buf_, OB_DOC_ID_EXT_SIZE, dummy_pos))) {
+    LOG_WARN("failed to copy datum to doc id ext", K(ret));
+  }
+  return ret;
+}
+
+ObDocIdExt &ObDocIdExt::operator=(const ObDocIdExt &other)
+{
+  if (this != &other) {
+    MEMCPY(buf_, other.buf_, OB_DOC_ID_EXT_SIZE);
+    datum_ = other.datum_;
+    datum_.ptr_ = buf_;
+  }
+  return *this;
+}
+
+bool ObDocIdExt::operator==(const ObDocIdExt &other) const
+{
+  return ObDatum::binary_equal(datum_, other.datum_);
+}
+
+bool ObDocIdExt::operator!=(const ObDocIdExt &other) const
+{
+  return !(*this == other);
+}
 
 } // sql
 } // oceanbase

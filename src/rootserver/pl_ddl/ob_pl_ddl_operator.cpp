@@ -523,6 +523,153 @@ int ObPLDDLOperator::replace_udt(share::schema::ObUDTTypeInfo &udt_info,
   return ret;
 }
 
+int ObPLDDLOperator::alter_udt_compile(share::schema::ObUDTTypeInfo &udt_info,
+                                       const share::schema::ObUDTTypeInfo *old_udt_info,
+                                       int16_t compile_unit,
+                                       common::ObMySQLTransaction &trans,
+                                       share::schema::ObErrorInfo &error_info,
+                                       common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
+                                       const common::ObString *ddl_stmt_str/*=NULL*/)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = udt_info.get_tenant_id();
+  int64_t del_param_schema_version = OB_INVALID_VERSION;
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  CK(OB_NOT_NULL(schema_service));
+  CK(OB_NOT_NULL(old_udt_info));
+
+  if (OB_SUCC(ret)) {
+    if (old_udt_info->get_attrs().count() > 0 || OB_NOT_NULL(old_udt_info->get_coll_info())) {
+      if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, del_param_schema_version))) {
+        LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+      LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+    } else {
+      udt_info.set_schema_version(new_schema_version);
+      udt_info.set_type_id(old_udt_info->get_type_id());
+      if (udt_info.is_object_type()) {
+        CK (udt_info.get_object_type_infos().count() > 0);
+        CK (old_udt_info->get_object_type_infos().count() > 0);
+        OX (udt_info.get_object_type_infos().at(0)->set_coll_type(old_udt_info->get_object_type_infos().at(0)->get_coll_type()));
+        if (udt_info.get_object_type_infos().count() == 2) {
+          CK (old_udt_info->get_object_type_infos().count() == 2);
+          OX (udt_info.get_object_type_infos().at(1)->set_coll_type(old_udt_info->get_object_type_infos().at(1)->get_coll_type()));
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(schema_service->get_udt_sql_service().alter_udt(udt_info,
+                                                                 old_udt_info,
+                                                                 del_param_schema_version,
+                                                                 &trans,
+                                                                 ddl_stmt_str))) {
+      LOG_WARN("alter udt info failed", K(udt_info), K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret) && (ObAlterUDTArg::TYPE_UNIT_SPEC == compile_unit || ObAlterUDTArg::TYPE_UNIT_BOTH == compile_unit)) {
+      if (OB_FAIL(ObDependencyInfo::delete_schema_object_dependency(trans, tenant_id,
+                                                                    old_udt_info->get_type_id(),
+                                                                    new_schema_version,
+                                                                    udt_info.get_object_type()))) {
+        LOG_WARN("delete schema object body dependency failed", K(ret));
+      } else if (OB_FAIL(ObDependencyInfo::insert_dependency_infos(trans, dep_infos, tenant_id,
+                                                                  udt_info.get_type_id(),
+                                                                  udt_info.get_schema_version(),
+                                                                  udt_info.get_database_id()))) {
+        LOG_WARN("insert dependency infos failed", K(ret));
+      }
+    }
+
+  // alter type compile has handle_error info in resolver
+  }
+  return ret;
+}
+
+int ObPLDDLOperator::alter_udt_alter(share::schema::ObUDTTypeInfo &udt_info,
+                                     const share::schema::ObUDTTypeInfo *old_udt_info,
+                                     common::ObMySQLTransaction &trans,
+                                     share::schema::ObErrorInfo &error_info,
+                                     common::ObIArray<share::schema::ObRoutineInfo> &public_routine_infos,
+                                     share::schema::ObSchemaGetterGuard &schema_guard,
+                                     common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
+                                     const common::ObString *ddl_stmt_str/*=NULL*/)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = udt_info.get_tenant_id();
+  int64_t del_param_schema_version = OB_INVALID_VERSION;
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  CK(OB_NOT_NULL(schema_service));
+  CK(OB_NOT_NULL(old_udt_info));
+
+  if (OB_SUCC(ret)) {
+    if (old_udt_info->get_attrs().count() > 0 || OB_NOT_NULL(old_udt_info->get_coll_info())) {
+      if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, del_param_schema_version))) {
+        LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+      LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+    } else {
+      udt_info.set_schema_version(new_schema_version);
+      udt_info.set_type_id(old_udt_info->get_type_id());
+    }
+
+    if (OB_SUCC(ret) && public_routine_infos.count() > 0 && ERROR_STATUS_NO_ERROR == error_info.get_error_status()) {
+      if (OB_INVALID_ID != ObUDTObjectType::mask_object_id(old_udt_info->get_object_spec_id(tenant_id))) {
+        OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
+                      ObUDTObjectType::mask_object_id(old_udt_info->get_object_spec_id(tenant_id)),
+                                                              old_udt_info->get_database_id()));
+        if (old_udt_info->has_type_body() &&
+            OB_INVALID_ID != ObUDTObjectType::mask_object_id(old_udt_info->get_object_body_id(tenant_id))) {
+          OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
+                        ObUDTObjectType::mask_object_id(old_udt_info->get_object_body_id(tenant_id)),
+                                                                old_udt_info->get_database_id()));
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      // todo alter_method_spec del_routines_in_udt
+      if (OB_FAIL(schema_service->get_udt_sql_service().alter_udt(udt_info,
+                                                                 old_udt_info,
+                                                                 del_param_schema_version,
+                                                                 &trans,
+                                                                 ddl_stmt_str))) {
+      LOG_WARN("alter udt info failed", K(udt_info), K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      ObArray<ObDependencyInfo> current_dependency_infos;
+      if (OB_FAIL(ObDependencyInfo::collect_ref_infos(tenant_id, udt_info.get_type_id(), trans, current_dependency_infos))) {
+        LOG_WARN("collect ref infos failed", K(ret));
+      } else if (OB_FAIL(ObDependencyInfo::remove_duplicated_dep_infos(dep_infos, current_dependency_infos))) { //Remove duplicates from dependency
+        LOG_WARN("remove duplicate dep infos failed", K(ret), K(dep_infos), K(current_dependency_infos));
+      } else if (OB_FAIL(ObDependencyInfo::insert_dependency_infos(trans, dep_infos, tenant_id, udt_info.get_type_id(),
+                                                        udt_info.get_schema_version(),
+                                                        udt_info.get_database_id()))) {
+        LOG_WARN("insert dependency infos failed", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(error_info.handle_error_info(trans, &udt_info))) {
+      LOG_WARN("insert trigger error info failed.", K(ret), K(error_info));
+    }
+  }
+
+  return ret;
+}
+
 int ObPLDDLOperator::drop_udt(const share::schema::ObUDTTypeInfo &udt_info,
                               common::ObMySQLTransaction &trans,
                               share::schema::ObSchemaGetterGuard &schema_guard,

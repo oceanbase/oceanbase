@@ -27,7 +27,10 @@ target_include_directories(
   ${DEP_DIR}/include/apache-arrow
   ${DEP_DIR}/include/apache-orc
   ${DEP_DIR}/include/fast_float
+  ${DEP_DIR}/include/avro
+  ${DEP_DIR}/include/krb5
   ${USSL_INCLUDE_DIRS}
+  ${DEP_DIR}/python3/include/python3.13
 )
 
 if(OB_BUILD_OPENSOURCE)
@@ -261,6 +264,13 @@ target_link_libraries(oblib_base_without_pass
   ${DEP_DIR}/lib/libicustubdata.a
   ${DEP_DIR}/lib/libicuuc.a
   ${DEP_DIR}/lib/libprotobuf-c.a
+  ${DEP_DIR}/lib/libthrift.a
+  ${DEP_DIR}/lib/cyrus-sasl/libsasl2.a
+  ${DEP_DIR}/lib/krb5/libgssapi_krb5.a
+  ${DEP_DIR}/lib/krb5/libkrb5.a
+  ${DEP_DIR}/lib/krb5/libk5crypto.a
+  ${DEP_DIR}/lib/krb5/libkrb5support.a
+  ${DEP_DIR}/lib/krb5/libcom_err.a
   ${DEP_DIR}/lib64/libarrow.a
   ${DEP_DIR}/lib64/libparquet.a
   ${DEP_DIR}/lib64/libarrow_bundled_dependencies.a
@@ -277,6 +287,8 @@ target_link_libraries(oblib_base_without_pass
   -laio -lpthread -ldl -lrt
   ${ARCH_LDFLAGS}
   ${DEP_DIR}/lib/libisal.a
+  ${DEP_DIR}/lib/libavrocpp_s.a
+  ${DEP_DIR}/lib64/libfmt.a # used by avro
  )
 else()
 set(ignoreMe OB_STATIC_LINK_LGPL_DEPS)
@@ -297,6 +309,13 @@ target_link_libraries(oblib_base_without_pass
   ${DEP_DIR}/lib/libicustubdata.a
   ${DEP_DIR}/lib/libicuuc.a
   ${DEP_DIR}/lib/libprotobuf-c.a
+  ${DEP_DIR}/lib/libthrift.a
+  ${DEP_DIR}/lib/cyrus-sasl/libsasl2.a
+  ${DEP_DIR}/lib/krb5/libgssapi_krb5.a
+  ${DEP_DIR}/lib/krb5/libkrb5.a
+  ${DEP_DIR}/lib/krb5/libk5crypto.a
+  ${DEP_DIR}/lib/krb5/libkrb5support.a
+  ${DEP_DIR}/lib/krb5/libcom_err.a
   ${DEP_DIR}/lib64/libarrow.a
   ${DEP_DIR}/lib64/libparquet.a
   ${DEP_DIR}/lib64/libarrow_bundled_dependencies.a
@@ -314,6 +333,8 @@ target_link_libraries(oblib_base_without_pass
   ${ARCH_LDFLAGS}
   ${DEP_DIR}/lib/libisal.a
   ${DEP_DIR}/lib/libpalf.a
+  ${DEP_DIR}/lib/libavrocpp_s.a
+  ${DEP_DIR}/lib64/libfmt.a # used by avro
  )
 endif()
 target_link_libraries(oblib_base INTERFACE oblib_base_without_pass oblib_pass)

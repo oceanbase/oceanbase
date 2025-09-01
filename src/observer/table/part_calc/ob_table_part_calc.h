@@ -87,11 +87,11 @@ public:
            common::ObTabletID &tablet_id);
   // 计算多个 entity 的 tablet id
   int calc(uint64_t table_id,
-           const common::ObIArray<ObITableEntity*> &entities,
+           const common::ObIArray<const ObITableEntity*> &entities,
            common::ObIArray<common::ObTabletID> &tablet_ids);
   // 计算多个 entity 的 tablet id
   int calc(const common::ObString table_name,
-           const common::ObIArray<ObITableEntity*> &entities,
+           const common::ObIArray<const ObITableEntity*> &entities,
            common::ObIArray<common::ObTabletID> &tablet_ids);
   // 计算单个 range 的 tablet id
   int calc(uint64_t table_id,
@@ -110,6 +110,10 @@ public:
            const common::ObIArray<ObNewRange> &ranges,
            common::ObIArray<common::ObTabletID> &tablet_ids);
   OB_INLINE void set_clip_type(ObTablePartClipType clip_type) { clip_type_ = clip_type; }
+  int calc(const share::schema::ObSimpleTableSchemaV2 *simple_schema,
+           ObHCfRows &same_cf_rows,
+           bool &is_same_ls,
+           ObLSID &ls_id);
 private:
   void clear_evaluated_flag();
   int init_tb_ctx(const share::schema::ObSimpleTableSchemaV2 &simple_schema,
@@ -135,7 +139,7 @@ private:
            const ObITableEntity &entity,
            common::ObTabletID &tablet_id);
   int calc(const share::schema::ObSimpleTableSchemaV2 &simple_schema,
-           const common::ObIArray<ObITableEntity*> &entities,
+           const common::ObIArray<const ObITableEntity*> &entities,
            common::ObIArray<common::ObTabletID> &tablet_ids);
   int calc(const ObTableSchema &table_schema,
            const ObIArray<ObITableEntity*> &entities,
@@ -205,7 +209,7 @@ private:
   int get_ctdef_by_table_id();
   int check_param(const ObTableColumnInfo &col_info,
                   const common::ObIArray<sql::ObExpr *> &new_row,
-                  const common::ObIArray<common::ObObj> &rowkey,
+                  ObRowkey &rowkey,
                   bool &is_min,
                   bool &is_max);
   int construct_series_entity(const ObITableEntity &entity,

@@ -31,6 +31,7 @@
 #include "share/scn.h"                    // SCN
 #include "ob_remote_log_source.h"                   // Parent
 #include "ob_log_restore_rpc_define.h"              // ObRemoteFetchLogResponse
+#include "logservice/ipalf/ipalf_iterator.h"
 
 namespace oceanbase
 {
@@ -53,7 +54,7 @@ struct RemoteDataBuffer
   LSN cur_lsn_;
   LSN end_lsn_;
   palf::MemoryStorage mem_storage_;
-  palf::PalfIterator<LogEntryType> iter_;
+  ipalf::IPalfIterator<LogEntryType> iter_;
 
   RemoteDataBuffer() { reset(); }
   ~RemoteDataBuffer() { reset(); }
@@ -103,8 +104,7 @@ struct RemoteDataBuffer
     } else if (OB_FAIL(iter_.get_entry(buf, entry, lsn))) {
       CLOG_LOG(WARN, "get_entry failed", K(ret));
     } else {
-      // 当前返回entry对应buff和长度
-      buf_size = entry.get_serialize_size();
+      buf_size = entry.get_serialize_size(lsn);
       cur_lsn_ = lsn + buf_size;
     }
     return ret;
@@ -119,7 +119,7 @@ private:
     iter_.destroy();
     int ret = OB_SUCCESS;
     auto get_file_size = [&]() -> LSN { return end_lsn_;};
-    if (OB_FAIL(mem_storage_.init(start_lsn_))) {
+    if (OB_FAIL(mem_storage_.init(start_lsn_, iter_.enable_logservice_))) {
       CLOG_LOG(WARN, "MemoryStorage init failed", K(ret), K(start_lsn_));
     } else if (OB_FAIL(mem_storage_.append(data_, data_len_))) {
       CLOG_LOG(WARN, "MemoryStorage append failed", K(ret));

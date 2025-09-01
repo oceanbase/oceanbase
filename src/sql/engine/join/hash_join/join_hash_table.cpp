@@ -50,8 +50,7 @@ int JoinHashTable::init(JoinTableCtx &hjt_ctx, ObIAllocator &allocator)
   if (hjt_ctx.is_shared_) {
     if (use_normalized ) {
       if (1 == hjt_ctx.build_keys_->count()) {
-        //hash_table_ = OB_NEWx(NormalizedSharedInt64Table, (&allocator));
-        hash_table_ = OB_NEWx(GenericSharedHashTable, (&allocator));
+        hash_table_ = OB_NEWx(NormalizedSharedInt64Table, (&allocator));
       } else if (2 == hjt_ctx.build_keys_->count()) {
         //hash_table_ = OB_NEWx(NormalizedSharedInt128Table, (&allocator));
         hash_table_ = OB_NEWx(GenericSharedHashTable, (&allocator));

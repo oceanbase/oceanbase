@@ -444,7 +444,7 @@ Outputs & filters:
       access([GROUP_ID], [t21.a]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t21.a]), range(MIN ; MAX), 
-      range_cond([:0 = t21.a])
+      range_cond([:0 = t21.a]),  is_fast_range = true
 Used Hint:
 -------------------------------------
   /*+

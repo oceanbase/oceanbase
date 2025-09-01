@@ -163,8 +163,9 @@ TEST_F(TestTabletMemberLoadAndFree, storage_schema)
   ObLSHandle ls_handle;
   ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD));
   const uint64_t data_version = DATA_CURRENT_VERSION;
+  const int64_t tablet_meta_version = 0;
   ObTabletPersisterParam  persister_param(
-      data_version, ls_handle.get_ls()->get_ls_id(), ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq());
+      data_version, ls_handle.get_ls()->get_ls_id(), ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq(), tablet_meta_version);
   ret = ObTabletPersister::persist_and_transform_tablet(persister_param, *tablet, new_tablet_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObTablet *new_tablet = new_tablet_handle.get_obj();

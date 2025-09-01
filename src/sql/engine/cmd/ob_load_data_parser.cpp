@@ -13,9 +13,11 @@
 #define USING_LOG_PREFIX  SQL_ENG
 
 #include "ob_load_data_parser.h"
+
 #include "lib/string/ob_hex_utils_base.h"
+#include "sql/table_format/iceberg/ob_iceberg_utils.h"
 #include "src/sql/engine/ob_exec_context.h"
-#if defined (OB_BUILD_CPP_ODPS) || defined (OB_BUILD_JNI_ODPS)
+#if defined(OB_BUILD_CPP_ODPS) || defined(OB_BUILD_JNI_ODPS)
 #include "share/ob_encryption_util.h"
 #endif
 
@@ -90,17 +92,30 @@ int ObODPSGeneralFormat::encrypt_str(common::ObString &src, common::ObString &ds
     //do nothing
     dst = src;
   } else {
-    char encrypted_string[common::OB_MAX_ENCRYPTED_EXTERNAL_TABLE_PROPERTIES_ITEM_LENGTH] = {0};
-
-    char hex_buff[common::OB_MAX_ENCRYPTED_EXTERNAL_TABLE_PROPERTIES_ITEM_LENGTH + 1] = {0}; // +1 to reserve space for \0
     int64_t encrypt_len = -1;
-    if (OB_FAIL(oceanbase::share::ObEncryptionUtil::encrypt_sys_data(tenant_id,
-                                                   src.ptr(),
-                                                   src.length(),
-                                                   encrypted_string,
-                                                   common::OB_MAX_ENCRYPTED_EXTERNAL_TABLE_PROPERTIES_ITEM_LENGTH,
-                                                   encrypt_len))) {
-
+    ObArenaAllocator tmp_allocator;
+    char *encrypted_string = static_cast<char *>(
+        tmp_allocator.alloc(common::OB_MAX_ENCRYPTED_EXTERNAL_TABLE_PROPERTIES_ITEM_LENGTH));
+    char *hex_buff = static_cast<char *>(
+        tmp_allocator.alloc(common::OB_MAX_ENCRYPTED_EXTERNAL_TABLE_PROPERTIES_ITEM_LENGTH + 1));
+    if (OB_ISNULL(encrypted_string) || OB_ISNULL(hex_buff)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory", K(ret));
+    } else if (OB_FALSE_IT(
+                   memset(encrypted_string,
+                          0,
+                          common::OB_MAX_ENCRYPTED_EXTERNAL_TABLE_PROPERTIES_ITEM_LENGTH))) {
+    } else if (OB_FALSE_IT(
+                   memset(hex_buff,
+                          0,
+                          common::OB_MAX_ENCRYPTED_EXTERNAL_TABLE_PROPERTIES_ITEM_LENGTH + 1))) {
+    } else if (OB_FAIL(oceanbase::share::ObEncryptionUtil::encrypt_sys_data(
+                   tenant_id,
+                   src.ptr(),
+                   src.length(),
+                   encrypted_string,
+                   common::OB_MAX_ENCRYPTED_EXTERNAL_TABLE_PROPERTIES_ITEM_LENGTH,
+                   encrypt_len))) {
       LOG_WARN("fail to encrypt_sys_data", KR(ret), K(src));
     } else if (0 >= encrypt_len || common::OB_MAX_ENCRYPTED_EXTERNAL_TABLE_PROPERTIES_ITEM_LENGTH < encrypt_len * 2) {
       ret = OB_ERR_UNEXPECTED;
@@ -1185,12 +1200,39 @@ int ObExternalFileFormat::load_from_string_(const ObString &str, ObIAllocator &a
             OZ (plugin_format_.init(allocator));
             OZ (plugin_format_.load_from_json_node(format_type_node));
             break;
+          case ICEBERG_FORMAT:
+            // todo nothing
+            break;
           default:
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("invalid format type", K(ret), K(format_type_str));
             break;
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObExternalFileFormat::mock_gen_bool_tinyint_column_def(
+    const share::schema::ObColumnSchemaV2 &column,
+    ObIAllocator &allocator,
+    ObString &def)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString temp_str;
+  if (format_type_ != CSV_FORMAT) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported format type", K(ret), K(format_type_));
+  } else {
+    uint64_t file_column_idx = column.get_column_id() - OB_APP_MIN_COLUMN_ID + 1;
+    if (OB_FAIL(temp_str.append_fmt(
+            "case %s%lu when 'true' then 1 when 'false' then 0 else NULL end",
+            N_EXTERNAL_FILE_COLUMN_PREFIX,
+            file_column_idx))) {
+      LOG_WARN("fail to append sql str", K(ret));
+    } else if (OB_FAIL(ob_write_string(allocator, temp_str.string(), def))) {
+      LOG_WARN("fail to write string", K(ret));
     }
   }
   return ret;
@@ -1220,11 +1262,46 @@ int ObExternalFileFormat::mock_gen_column_def(
       break;
     }
     case PARQUET_FORMAT: {
+      // Expect to concat the collection type info suffix.
+      // TODO(bitao): temp implementation, we will remove it.
+      uint8_t depth = 0;
+
+      if (column.is_collection()) {
+        if (1 != column.get_extended_type_info().count()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid extended type info", K(ret));
+        } else {
+          ObString type_info = column.get_extended_type_info().at(0);
+          if (!type_info.prefix_match("ARRAY")) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid type info prefix", K(ret), K(type_info));
+          } else {
+            const char *type_ptr = type_info.ptr();
+            int32_t type_len = type_info.length();
+            char letter = '\0';
+            // Reverse to find out depth for array. ARRAY(ARRAY(INT)) -> 1.
+            for (int32_t i = type_len - 1; OB_SUCC(ret) && i > 0; i --) {
+              letter = type_ptr[i];
+              if (letter == ')') {
+                depth ++;
+              } else {
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      // Parquet format won't use position.
       if (parquet_format_.column_index_type_ == sql::ColumnIndexType::NAME) {
+        ObSqlString expect_column_name;
+        OZ (expect_column_name.append(column.get_column_name_str()));
+
+        LOG_TRACE("get expect column name", K(ret), K(expect_column_name.string()));
         if (OB_FAIL(temp_str.append_fmt("get_path(%s, '%.*s')",
                                         N_EXTERNAL_FILE_ROW,
-                                        column.get_column_name_str().length(),
-                                        column.get_column_name_str().ptr()))) {
+                                        expect_column_name.string().length(),
+                                        expect_column_name.string().ptr()))) {
           LOG_WARN("fail to append sql str", K(ret));
         }
       } else if (parquet_format_.column_index_type_ == sql::ColumnIndexType::POSITION) {
@@ -1262,6 +1339,13 @@ int ObExternalFileFormat::mock_gen_column_def(
                                       N_EXTERNAL_FILE_ROW,
                                       column.get_column_name_str().length(),
                                       column.get_column_name_str().ptr()))) {
+        LOG_WARN("fail to append sql str", K(ret));
+      }
+      break;
+    }
+    case ICEBERG_FORMAT: {
+      int32_t field_id = iceberg::ObIcebergUtils::get_iceberg_field_id(column.get_column_id());
+      if (OB_FAIL(temp_str.append_fmt("%s%d", N_EXTERNAL_TABLE_COLUMN_ID, field_id))) {
         LOG_WARN("fail to append sql str", K(ret));
       }
       break;

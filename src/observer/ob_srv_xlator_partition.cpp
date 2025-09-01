@@ -31,8 +31,9 @@
 #include "observer/table/ob_table_ls_execute_processor.h"
 #include "observer/table/ob_redis_execute_processor.h"
 #include "observer/table/ob_redis_execute_processor_v2.h"
+#include "observer/table/ob_hbase_execute_processor.h"
 #include "observer/table/ob_table_meta_processor.h"
-
+#include "observer/table/common/ob_table_query_session_id_rpc.h"
 #include "storage/ob_storage_rpc.h"
 
 #include "rootserver/freeze/ob_major_freeze_rpc_define.h"        // ObTenantMajorFreezeP
@@ -175,6 +176,10 @@ void oceanbase::observer::init_srv_xlator_for_migration(ObSrvRpcXlator *xlator)
   RPC_PROCESSOR(ObGetMigrationCacheJobInfoP);
   RPC_PROCESSOR(ObNotifySSWriterDoBackfillP);
   RPC_PROCESSOR(ObCheckTransferOutTabletStatusP);
+  RPC_PROCESSOR(ObHAGetLocalCacheInfoP);
+  RPC_PROCESSOR(ObHAGetCacheJobInfoP);
+  RPC_PROCESSOR(ObGetLocalCacheKeyP);
+  RPC_PROCESSOR(ObFetchLocalCacheBlockP, gctx_.bandwidth_throttle_);
 #endif
 
   //rebuild tablet
@@ -215,7 +220,9 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObTableLSExecuteP, gctx_);
   RPC_PROCESSOR(ObRedisExecuteP, gctx_);
   RPC_PROCESSOR(ObRedisExecuteV2P, gctx_);
+  RPC_PROCESSOR(ObHbaseExecuteP, gctx_);
   RPC_PROCESSOR(ObTableMetaP, gctx_);
+  RPC_PROCESSOR(ObTableSessIDP);
 
   // HA GTS
   RPC_PROCESSOR(ObHaGtsPingRequestP, gctx_);

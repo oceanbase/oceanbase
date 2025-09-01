@@ -121,12 +121,24 @@ int ObSelectStmt::check_table_be_modified(uint64_t ref_table_id, bool& is_exists
 bool ObSelectStmt::has_distinct_or_concat_agg() const
 {
   bool has = false;
+  has = has_concat_agg();
   for (int64_t i = 0; !has && i < get_aggr_item_size(); ++i) {
     const ObAggFunRawExpr *aggr = get_aggr_item(i);
     if (NULL != aggr) {
-      has = aggr->is_param_distinct() ||
-            // Consistent with the has_group_concat_ flag in ObAggregateProcessor.
-            T_FUN_GROUP_CONCAT == aggr->get_expr_type() ||
+      has = aggr->is_param_distinct();
+    }
+  }
+  return has;
+}
+
+bool ObSelectStmt::has_concat_agg() const
+{
+  bool has = false;
+  for (int i = 0; !has && i < get_aggr_item_size(); i++) {
+    const ObAggFunRawExpr *aggr = get_aggr_item(i);
+    if (NULL != aggr) {
+      // Consistent with the has_group_concat_ flag in ObAggregateProcessor.
+      has = T_FUN_GROUP_CONCAT == aggr->get_expr_type() ||
             T_FUN_KEEP_WM_CONCAT == aggr->get_expr_type() ||
             T_FUN_WM_CONCAT == aggr->get_expr_type() ||
             T_FUN_JSON_ARRAYAGG == aggr->get_expr_type() ||
@@ -1174,6 +1186,8 @@ int ObGroupingSetsItem::assign(const ObGroupingSetsItem& other)
     LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(cube_items_.assign(other.cube_items_))) {
     LOG_WARN("failed to assign", K(ret));
+  } else if (OB_FAIL(pruned_grouping_set_ids_.assign(other.pruned_grouping_set_ids_))) {
+    LOG_WARN("failed to assign", K(ret));
   } else {/*do nothing*/}
   return ret;
 }
@@ -1206,6 +1220,10 @@ int ObGroupingSetsItem::deep_copy(ObIRawExprCopier &expr_copier,
     } else if (OB_FAIL(cube_items_.push_back(cube_item))) {
       LOG_WARN("failed to push back cube item", K(ret));
     } else {/* do nothing */}
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(pruned_grouping_set_ids_.assign(other.pruned_grouping_set_ids_))) {
+    LOG_WARN("failed to assign", K(ret));
   }
   return ret;
 }

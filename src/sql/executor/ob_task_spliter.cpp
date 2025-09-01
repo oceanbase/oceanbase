@@ -22,7 +22,6 @@ namespace oceanbase
 namespace sql
 {
 
-#define ENG_OP typename ObEngineOpTraits<NEW_ENG>
 ObTaskSpliter::ObTaskSpliter()
     : server_(),
       plan_ctx_(NULL),
@@ -69,17 +68,11 @@ int ObTaskSpliter::init(ObPhysicalPlanCtx *plan_ctx,
 
 int ObTaskSpliter::find_scan_ops(ObIArray<const ObTableScanSpec*> &scan_ops, const ObOpSpec &op)
 {
-  return find_scan_ops_inner<true>(scan_ops, op);
-}
-
-template <bool NEW_ENG>
-int ObTaskSpliter::find_scan_ops_inner(ObIArray<const ENG_OP::TSC *> &scan_ops, const ENG_OP::Root &op)
-{
   // 后序遍历，保证scan_ops.at(0)为最左下的叶子节点
   int ret = OB_SUCCESS;
   if (!IS_RECEIVE(op.get_type())) {
     for (int32_t i = 0; OB_SUCC(ret) && i < op.get_child_num(); ++i) {
-      const ENG_OP::Root *child_op = op.get_child(i);
+      const ObOpSpec *child_op = op.get_child(i);
       if (OB_ISNULL(child_op)) {
         ret = OB_ERR_UNEXPECTED;
       } else if (OB_FAIL(ObTaskSpliter::find_scan_ops(scan_ops, *child_op))) {
@@ -90,32 +83,50 @@ int ObTaskSpliter::find_scan_ops_inner(ObIArray<const ENG_OP::TSC *> &scan_ops, 
   }
   if (OB_FAIL(ret)) {
   } else if (op.is_table_scan() && op.get_type() != PHY_FAKE_CTE_TABLE) {
-    if (static_cast<const ENG_OP::TSC &>(op).use_dist_das()) {
+    if (static_cast<const ObTableScanSpec &>(op).use_dist_das()) {
       //do nothing,使用DAS执行TSC，DAS会处理DAS相关信息，不需要调度器感知TSC
-    } else if (OB_FAIL(scan_ops.push_back(static_cast<const ENG_OP::TSC *>(&op)))) {
+    } else if (OB_FAIL(scan_ops.push_back(static_cast<const ObTableScanSpec *>(&op)))) {
       LOG_WARN("fail to push back table scan op", K(ret));
     }
   }
   return ret;
 }
 
-int ObTaskSpliter::find_insert_ops(ObIArray<const ObTableModifySpec *> &insert_ops, const ObOpSpec &op)
+int ObTaskSpliter::find_all_scan_ops(common::ObIArray<const ObTableScanSpec*> &scan_ops, const ObOpSpec &op)
 {
-  return find_insert_ops_inner<true>(insert_ops, op);
+  // 后序遍历，保证scan_ops.at(0)为最左下的叶子节点
+  int ret = OB_SUCCESS;
+  for (int32_t i = 0; OB_SUCC(ret) && i < op.get_child_num(); ++i) {
+    const ObOpSpec *child_op = op.get_child(i);
+    if (OB_ISNULL(child_op)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else if (OB_FAIL(ObTaskSpliter::find_scan_ops(scan_ops, *child_op))) {
+      LOG_WARN("fail to find child scan ops",
+               K(ret), K(i), "op_id", op.get_id(), "child_id", child_op->get_id());
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (op.is_table_scan() && op.get_type() != PHY_FAKE_CTE_TABLE) {
+    if (static_cast<const ObTableScanSpec &>(op).use_dist_das()) {
+      //do nothing,使用DAS执行TSC，DAS会处理DAS相关信息，不需要调度器感知TSC
+    } else if (OB_FAIL(scan_ops.push_back(static_cast<const ObTableScanSpec *>(&op)))) {
+      LOG_WARN("fail to push back table scan op", K(ret));
+    }
+  }
+  return ret;
 }
 
-template <bool NEW_ENG>
-int ObTaskSpliter::find_insert_ops_inner(ObIArray<const ENG_OP::TableModify *> &insert_ops, const ENG_OP::Root &op)
+int ObTaskSpliter::find_insert_ops(ObIArray<const ObTableModifySpec*> &insert_ops, const ObOpSpec &op)
 {
   int ret = OB_SUCCESS;
   if (IS_TABLE_INSERT(op.get_type())) { // INSERT, REPLACE, INSERT UPDATE, INSERT RETURNING
-    if (OB_FAIL(insert_ops.push_back(static_cast<const ENG_OP::TableModify *>(&op)))) {
+    if (OB_FAIL(insert_ops.push_back(static_cast<const ObTableModifySpec*>(&op)))) {
       LOG_WARN("fail to push back table insert op", K(ret));
     }
   }
   if (OB_SUCC(ret) && !IS_RECEIVE(op.get_type())) {
     for (int32_t i = 0; OB_SUCC(ret) && i < op.get_child_num(); ++i) {
-      const ENG_OP::Root *child_op = op.get_child(i);
+      const ObOpSpec *child_op = op.get_child(i);
       if (OB_ISNULL(child_op)) {
         ret = OB_ERR_UNEXPECTED;
       } else if (OB_FAIL(ObTaskSpliter::find_insert_ops(insert_ops, *child_op))) {
@@ -153,6 +164,31 @@ int ObTaskSpliter::create_task_info(ObTaskInfo *&task)
     task->set_state(OB_TASK_STATE_NOT_INIT);
     task->set_task_split_type(get_type());
     task->set_force_save_interm_result(false);
+  }
+  return ret;
+}
+
+int ObTaskSpliter::find_scan_ops_under_qc(common::ObIArray<const ObTableScanSpec*> &scan_ops, const ObOpSpec &op)
+{
+  // 后序遍历，保证scan_ops.at(0)为最左下的叶子节点
+  int ret = OB_SUCCESS;
+  if (IS_COORD_RECEIVE(op.get_type())) {
+    const ObOpSpec *child_op = op.get_child(0);
+    if (OB_ISNULL(child_op)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null child op");
+    } else if (OB_FAIL(ObTaskSpliter::find_all_scan_ops(scan_ops, *child_op))) {
+      LOG_WARN("fail to find all child scan ops", "op_id", op.get_id(), "child_id", child_op->get_id());
+    }
+  } else if (!IS_RECEIVE(op.get_type())) {
+    for (int32_t i = 0; OB_SUCC(ret) && i < op.get_child_num(); ++i) {
+      const ObOpSpec *child_op = op.get_child(i);
+      if (OB_ISNULL(child_op)) {
+        ret = OB_ERR_UNEXPECTED;
+      } else if (OB_FAIL(ObTaskSpliter::find_scan_ops_under_qc(scan_ops, *child_op))) {
+        LOG_WARN("fail to find child scan ops under qc", K(i), "op_id", op.get_id(), "child_id", child_op->get_id());
+      }
+    }
   }
   return ret;
 }

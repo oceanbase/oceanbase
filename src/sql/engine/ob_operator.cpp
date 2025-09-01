@@ -910,18 +910,8 @@ int ObOperator::open()
     if (OB_SUCC(ret)) {
       opened_ = true;
       clear_batch_end_flag();
-      if (spec_.need_check_output_datum_) {
-        void * ptr = ctx_.get_allocator().alloc(sizeof(ObBatchResultHolder));
-        if (OB_ISNULL(ptr)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("allocation failed for brs_checker_", K(ret), K(sizeof(ObBatchResultHolder)));
-        } else {
-          // replace new the object
-          brs_checker_ = new(ptr) ObBatchResultHolder();
-          if (OB_FAIL(brs_checker_->init(spec_.output_, eval_ctx_))) {
-            LOG_WARN("brs_holder init failed", K(ret));
-          }
-        }
+      if (spec_.need_check_output_datum_ && OB_FAIL(output_ptr_checker_.init(spec_, eval_ctx_, &(ctx_.get_allocator())))) {
+        LOG_WARN("output ptr checker init failed", K(ret));
       }
     }
 
@@ -956,6 +946,21 @@ int ObOperator::init_evaluated_flags()
   return ret;
 }
 
+
+static int init_brs(ObIAllocator *alloc, int64_t batch_size, ObBatchRows &brs)
+{
+  int ret = OB_SUCCESS;
+  void *mem = alloc->alloc(ObBitVector::memory_size(batch_size));
+  if (OB_ISNULL(mem)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory failed", K(ret));
+  } else {
+    brs.skip_ = to_bit_vector(mem);
+    brs.skip_->init(batch_size);
+  }
+  return ret;
+}
+
 // default batch_size is 1
 int ObOperator::init_skip_vector()
 {
@@ -967,13 +972,23 @@ int ObOperator::init_skip_vector()
     } else {
       batch_size = 1;
     }
-    void *mem = ctx_.get_allocator().alloc(ObBitVector::memory_size(batch_size));
-    if (OB_ISNULL(mem)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory failed", K(ret));
+    if (OB_FAIL(init_brs(&(ctx_.get_allocator()), batch_size, brs_))) {
+      LOG_WARN("init brs failed", K(ret));
     } else {
-      brs_.skip_ = to_bit_vector(mem);
-      brs_.skip_->init(batch_size);
+      int tmp_ret = OB_SUCCESS;
+      tmp_ret = OB_E(EventTable::EN_ENABLE_ENGINE_CHECK) tmp_ret;
+      if (OB_FAIL(tmp_ret)) {
+        need_check_brs_ = true;
+      }
+      if (need_check_brs_) {
+        if (OB_FAIL(init_brs(&(ctx_.get_allocator()), batch_size, backup_brs_))) {
+          LOG_WARN("init brs failed", K(ret));
+        } else {
+          backup_brs_.size_ = brs_.size_;
+          backup_brs_.end_ = brs_.end_;
+          backup_brs_.all_rows_active_ = brs_.all_rows_active_;
+        }
+      }
     }
   }
   return ret;
@@ -1031,8 +1046,8 @@ int ObOperator::inner_rescan()
   op_monitor_info_.rescan_times_++;
   INC_METRIC_VAL(ObMetricId::RESCAN_TIMES, 1);
   output_batches_b4_rescan_ = op_monitor_info_.output_batches_;
-  if (spec_.need_check_output_datum_ && brs_checker_) {
-    brs_checker_->reset();
+  if (spec_.need_check_output_datum_) {
+    output_ptr_checker_.reset();
   }
   if (OB_UNLIKELY(stash_rows_cnt_ > 0)) {
     stash_rows_cnt_ = 0;
@@ -1446,11 +1461,13 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
   if (OB_FAIL(check_stack_once())) {
     LOG_WARN("too deep recursive", K(ret));
   } else {
-    if (OB_UNLIKELY(!spec_.plan_->get_use_rich_format()
-                    && spec_.need_check_output_datum_
-                    && brs_checker_)) {
-      if (OB_FAIL(brs_checker_->check_datum_modified())) {
-        LOG_WARN("check output datum failed", K(ret), "id", spec_.get_id(), "op_name", op_name());
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (need_check_brs_ && OB_FAIL(check_brs())) {
+      LOG_WARN("check brs failed", K(ret), "id", spec_.get_id(), "op_name", op_name());
+    } else if (OB_UNLIKELY(spec_.need_check_output_datum_ && !brs_.end_ && brs_.size_ > 0)) {
+      if (OB_FAIL(output_ptr_checker_.check())) {
+        LOG_WARN("check output ptr failed", K(ret), "id", spec_.get_id(), "op_name", op_name());
       }
     }
     reset_batchrows();
@@ -1613,18 +1630,23 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
         // do nothing
       }
     }
-    if (OB_SUCC(ret)) {
-      if (OB_UNLIKELY(spec_.need_check_output_datum_) && brs_checker_ && !brs_.end_ && brs_.size_ > 0) {
-        OZ(brs_checker_->save(brs_.size_));
-      }
-      LOG_DEBUG("get next batch", "id", spec_.get_id(), "op_name", op_name(), K(brs_));
-    }
   }
 
   // for operator which not use_rich_format, not maintain all_rows_active flag;
   OZ (convert_vector_format());
   if (!spec_.use_rich_format_ && PHY_TABLE_SCAN != spec_.type_) {
     brs_.set_all_rows_active(false);
+  }
+  if (OB_SUCC(ret) && need_check_brs_) {
+    OZ (save_brs());
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_UNLIKELY(spec_.need_check_output_datum_) && !brs_.end_ && brs_.size_ > 0) {
+      if (OB_FAIL(output_ptr_checker_.save(brs_))) {
+        LOG_WARN("save output ptr failed", K(ret));
+      }
+    }
+    LOG_DEBUG("get next batch", "id", spec_.get_id(), "op_name", op_name(), K(brs_));
   }
 
   end_ash_line_id_reg(ret);
@@ -1755,20 +1777,17 @@ int ObOperator::filter_vector_rows(const ObExprPtrIArray &exprs,
       LOG_DEBUG("const vector filter", K(bsize));
     } else if (OB_LIKELY(VEC_FIXED == vec->get_format())) {
       ObFixedLengthBase *fixed_vec = static_cast<ObFixedLengthBase *>(vec);
-      ObBitVector *nulls = fixed_vec->get_nulls();
-      int64_t *int_arr = reinterpret_cast<int64_t *>(fixed_vec->get_data());
-      ObBitVector::flip_foreach(skip, bsize,
-        [&](int64_t idx) __attribute__((always_inline)) {
-          if (0 == int_arr[idx] || nulls->at(idx)) {
-            skip.set(idx);
-            tmp_all_active = false;
-          } else {
-            output_rows++;
-          }
-          return OB_SUCCESS;
-        }
-      );
-      LOG_DEBUG("fixed vector filter", K(bsize));
+      if (OB_UNLIKELY(static_cast<ObFixedLengthBase *>(vec)->get_length() != sizeof(int64_t))) {
+        ob_abort();
+      }
+      ObFixedLengthFormat<int64_t> *vec_ptr = static_cast<ObFixedLengthFormat<int64_t> *>(vec);
+      if (vec_ptr->has_null()) {
+        brs_.merge_skip(vec_ptr->get_nulls(), brs_.size_);
+        brs_.all_rows_active_ = false;
+      }
+      brs_.apply_filter(reinterpret_cast<const int64_t *>(vec_ptr->get_data()));
+      output_rows = bsize - brs_.skip_->accumulate_bit_cnt(bsize);
+      tmp_all_active = brs_.skip_->accumulate_bit_cnt(bsize) == 0;
     } else if (VEC_UNIFORM == vec->get_format()) {
       ObUniformBase *uniform_vec = static_cast<ObUniformBase *>(vec);
       const ObDatum *datums = uniform_vec->get_datums();
@@ -2020,6 +2039,51 @@ bool ObOperator::enable_get_next_row() const
     default: {
       break;
     }
+    }
+  }
+  return ret;
+}
+
+static uint64_t bitwise_xor(const uint64_t l, const uint64_t r)
+{
+  return l ^ r;
+}
+int ObOperator::check_brs()
+{
+  int ret = OB_SUCCESS;
+  // transmit op will call inner_get_next_batch() directly.
+  if (backup_brs_.size_ == 0 || IS_PX_TRANSMIT(spec_.get_type())) {
+    // do nothing
+  } else if (OB_UNLIKELY(NULL == backup_brs_.skip_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("backup brs skip is null", K(ret), "id", spec_.get_id(), "op_name", op_name());
+  } else if (backup_brs_.size_ != brs_.size_
+            || backup_brs_.end_ != brs_.end_
+            || backup_brs_.all_rows_active_ != brs_.all_rows_active_
+            || (brs_.size_ != 0 && !ObBitVector::bit_op_zero(*backup_brs_.skip_, *brs_.skip_,
+                                                             brs_.size_, bitwise_xor))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("backup brs size is not equal to brs size", K(ret), "id", spec_.get_id(), "op_name", op_name(),
+             K(backup_brs_), K(brs_));
+    if (OB_NOT_NULL(spec_.get_parent())) {
+      LOG_WARN("brs maybe is modifed by", K(ret), "id", spec_.get_parent()->get_id(),
+               "op_name", spec_.get_parent()->op_name());
+    }
+  }
+  return ret;
+}
+int ObOperator::save_brs()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(NULL == backup_brs_.skip_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("backup brs skip is null", K(ret), "id", spec_.get_id(), "op_name", op_name());
+  } else {
+    backup_brs_.size_ = brs_.size_;
+    backup_brs_.all_rows_active_ = brs_.all_rows_active_;
+    backup_brs_.end_ = brs_.end_;
+    if (brs_.size_) {
+      backup_brs_.skip_->deep_copy(*brs_.skip_, brs_.size_);
     }
   }
   return ret;

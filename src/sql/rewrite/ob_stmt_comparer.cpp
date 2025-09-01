@@ -139,8 +139,8 @@ int ObStmtCompareContext::get_table_map_idx(uint64_t l_table_id, uint64_t r_tabl
   return ret_idx;
 }
 
-bool ObStmtCompareContext::compare_column(const ObColumnRefRawExpr &inner,
-                                          const ObColumnRefRawExpr &outer)
+bool ObStmtCompareContext::compare_column_inner(const ObColumnRefRawExpr &inner,
+                                                const ObColumnRefRawExpr &outer)
 {
   bool bret = false;
   int idx = get_table_map_idx(inner.get_table_id(), outer.get_table_id());
@@ -162,6 +162,61 @@ bool ObStmtCompareContext::compare_column(const ObColumnRefRawExpr &inner,
       //do nothing
     } else {
       bret = select_item_map.at(inner_pos) == outer_pos;
+    }
+  }
+  return bret;
+}
+
+bool ObStmtCompareContext::compare_column(const ObColumnRefRawExpr &inner,
+                                          const ObColumnRefRawExpr &outer)
+{
+  bool bret = compare_column_inner(inner, outer);
+  if (bret) {
+  } else if (OB_ISNULL(first_equal_sets_) || OB_ISNULL(second_equal_sets_)) {
+  } else {
+    int ret = OB_SUCCESS; // will not be returned
+    ObSEArray<const EqualSet *, 1> inner_equal_sets;
+    ObSEArray<const EqualSet *, 1> outer_equal_sets;
+    // compare equal exprs of inner with outer
+    if (OB_FAIL(ObOptimizerUtil::find_equal_set(&inner, *first_equal_sets_, inner_equal_sets))) {
+      LOG_WARN("failed to find equal set", K(ret));
+      bret = false;
+    }
+    for (int64_t i = 0; !bret && OB_SUCC(ret) && i < inner_equal_sets.count(); ++i) {
+      const EqualSet *equal_set = inner_equal_sets.at(i);
+      if (OB_ISNULL(equal_set)) {
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "equal set is null", K(ret));
+      }
+      for (int64_t j = 0; !bret && OB_SUCC(ret) && j < equal_set->count(); ++j) {
+        const ObRawExpr *inner_expr = equal_set->at(j);
+        if (OB_ISNULL(inner_expr)) {
+          LOG_WARN_RET(OB_ERR_UNEXPECTED, "inner expr is null", K(ret));
+        } else {
+          // the order or parameters (inner, outer) matters, do not exchange them
+          bret = compare_column_inner(*static_cast<const ObColumnRefRawExpr*>(inner_expr), outer);
+        }
+      }
+    }
+    // compare equal exprs of outer with inner
+    if (OB_FAIL(ret) || bret) {
+    } else if (OB_FAIL(ObOptimizerUtil::find_equal_set(&outer, *second_equal_sets_, outer_equal_sets))) {
+      LOG_WARN("failed to find equal set", K(ret));
+      bret = false;
+    }
+    for (int64_t i = 0; !bret && OB_SUCC(ret) && i < outer_equal_sets.count(); ++i) {
+      const EqualSet *equal_set = outer_equal_sets.at(i);
+      if (OB_ISNULL(equal_set)) {
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "equal set is null", K(ret));
+      }
+      for (int64_t j = 0; !bret && OB_SUCC(ret) && j < equal_set->count(); ++j) {
+        const ObRawExpr *outer_expr = equal_set->at(j);
+        if (OB_ISNULL(outer_expr)) {
+          LOG_WARN_RET(OB_ERR_UNEXPECTED, "outer expr is null", K(ret));
+        } else {
+          // the order or parameters (inner, outer) matters, do not exchange them
+          bret = compare_column_inner(inner, *static_cast<const ObColumnRefRawExpr*>(outer_expr));
+        }
+      }
     }
   }
   return bret;
@@ -654,7 +709,11 @@ int ObStmtComparer::check_stmt_containment(const ObDMLStmt *first,
       int64_t first_rollup_count = first_sel->get_rollup_exprs().count();
       int64_t second_rollup_count = second_sel->get_rollup_exprs().count();
       QueryRelation this_relation;
-      if (second_count == 0 && first_rollup_count == 0 && second_rollup_count == 0
+      if (first_sel->has_grouping_sets() || second_sel->has_grouping_sets()) {
+        // TODO: support temp table extraction with grouping sets
+        relation = QueryRelation::QUERY_UNCOMPARABLE;
+        LOG_TRACE("succeed to check group by map", K(relation), K(map_info));
+      } else if (second_count == 0 && first_rollup_count == 0 && second_rollup_count == 0
             && (relation == QueryRelation::QUERY_LEFT_SUBSET || relation == QueryRelation::QUERY_EQUAL)
             && !need_check_select_items) {
         // for mv rewrite
@@ -949,11 +1008,14 @@ int ObStmtComparer::compute_conditions_map(const ObDMLStmt *first,
                                            QueryRelation &relation,
                                            bool is_in_same_cond,
                                            bool is_same_by_order,
-                                           bool need_check_second_range)
+                                           bool need_check_second_range,
+                                           const EqualSets *first_equal_sets, /* NULL */
+                                           const EqualSets *second_equal_sets /* NULL */)
 {
   int ret = OB_SUCCESS;
   ObSqlBitSet<> matched_items;
-  ObStmtCompareContext context(first, second, map_info, &first->get_query_ctx()->calculable_items_, false, is_in_same_cond);
+  ObStmtCompareContext context(first, second, map_info, &first->get_query_ctx()->calculable_items_,
+                               first_equal_sets, second_equal_sets, false, is_in_same_cond);
   int match_count = 0;
   relation = QueryRelation::QUERY_UNCOMPARABLE;
   if (OB_ISNULL(first) || OB_ISNULL(second) || OB_ISNULL(first->get_query_ctx())) {
@@ -971,9 +1033,9 @@ int ObStmtComparer::compute_conditions_map(const ObDMLStmt *first,
           if (matched_items.has_member(j)) {
             // do nothing
           } else if (OB_FAIL(is_same_condition(first_exprs.at(i),
-                                              second_exprs.at(j),
-                                              context,
-                                              is_match))) {
+                                               second_exprs.at(j),
+                                               context,
+                                               is_match))) {
             LOG_WARN("failed to check is condition equal", K(ret));
           } else if (!is_match) {
             // do nothing
@@ -1823,6 +1885,516 @@ int ObStmtComparer::compare_values_table_item(const ObDMLStmt *first,
              KP(first_def), KP(second_def));
   } else if (first_def == second_def) {
     relation = QueryRelation::QUERY_EQUAL;
+  }
+  return ret;
+}
+
+/**
+ * @brief check if it is valid to compare this select stmt to other select stmts in set semantics.
+ * if `bret` is true, then you can use `check_stmt_set_containment` to compare two stmts in set semantics
+ */
+int ObStmtComparer::can_compare_by_set_semantics(const ObSelectStmt *stmt,
+                                                 bool ignore_filling_null,
+                                                 bool &bret)
+{
+  int ret = OB_SUCCESS;
+  bool is_query_deterministic = false;
+  bret = true;
+  // two stmts are either not comparable or too complex to calculate containment relation
+  // in set semantics under the following scenarios:
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (!stmt->is_spj()) {
+    // 1. stmt is not spj
+    bret = false;
+    OPT_TRACE("using row semantics due to not spj");
+  } else if (!stmt->get_semi_infos().empty()) {
+    // 2. stmt contains semi infos
+    bret = false;
+    OPT_TRACE("using row semantics due to semi infos");
+  } else if (!stmt->get_subquery_exprs().empty()) {
+    // 3. stmt contains subquery exprs
+    bret = false;
+    OPT_TRACE("using row semantics due to subquery exprs");
+  } else if (stmt->has_recursive_cte()) {
+    // 4. stmt contains recursive CTE
+    bret = false;
+    OPT_TRACE("using row semantics due to recursive CTE");
+  } else if (stmt->get_qualify_filters_count() > 0) {
+    // 5. stmt contains qualify filters
+    bret = false;
+    OPT_TRACE("using row semantics due to qualify filters");
+  } else if (OB_FAIL(stmt->is_query_deterministic(is_query_deterministic))) {
+    LOG_WARN("failed to check if query is deterministic", K(ret));
+  } else if (!is_query_deterministic) {
+    // 6. stmt is not deterministic
+    bret = false;
+    OPT_TRACE("using row semantics due to not deterministic");
+  } else {
+    // 7. stmt contains FULL JOIN while ignore_filling_null is false
+    if (!ignore_filling_null) {
+      bool has_full_join = false;
+      if (OB_FAIL(check_has_full_join(stmt, has_full_join))) {
+        LOG_WARN("failed to check full join in first stmt", K(ret));
+      } else if (has_full_join) {
+        bret = false;
+        OPT_TRACE("using row semantics due to FULL OUTER JOIN in non-ignore-filling-null scenario");
+      }
+    }
+  }
+
+  return ret;
+}
+
+/*
+ * check if two select stmts are comparable in set semantics
+ * you MUST call `can_compare_by_set_semantics` before using this function
+ */
+int ObStmtComparer::check_stmt_set_containment(const ObDMLStmt *first,
+                                               const ObDMLStmt *second,
+                                               ObStmtMapInfo &map_info,
+                                               QueryRelation &relation,
+                                               bool is_in_same_stmt)
+{
+  int ret = OB_SUCCESS;
+  relation = QueryRelation::QUERY_UNCOMPARABLE;
+  if (OB_ISNULL(first) || OB_ISNULL(second)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(first), K(second), K(ret));
+  } else if (!first->is_select_stmt() || !second->is_select_stmt()) {
+    LOG_TRACE("failed to compare, not a select item",
+              K(first->is_select_stmt()), K(second->is_select_stmt()));
+  } else {
+    const ObSelectStmt *first_sel = static_cast<const ObSelectStmt*>(first);
+    const ObSelectStmt *second_sel = static_cast<const ObSelectStmt*>(second);
+    EqualSets first_equal_sets;
+    EqualSets second_equal_sets;
+    ObArenaAllocator alloc;
+    if (OB_FAIL(first_sel->get_stmt_equal_sets(first_equal_sets, alloc, true))) {
+      LOG_WARN("failed to get first stmt equal sets", K(ret));
+    } else if (OB_FAIL(second_sel->get_stmt_equal_sets(second_equal_sets, alloc, true))) {
+      LOG_WARN("failed to get second stmt equal sets", K(ret));
+    }
+    // check from items
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(check_from_items_containment(first_sel, second_sel, is_in_same_stmt,
+                                                    map_info, relation))) {
+      LOG_WARN("failed to check from items containment", K(ret));
+    }
+    // check select items
+    if (OB_FAIL(ret)) {
+    } else if (QueryRelation::QUERY_UNCOMPARABLE == relation) {
+    } else if (OB_FAIL(check_select_items_equivalence(first_sel, second_sel,
+                                                      map_info, is_in_same_stmt,
+                                                      &first_equal_sets, &second_equal_sets))) {
+      LOG_WARN("failed to check select items equivalence", K(ret));
+    } else if (!map_info.is_select_item_equal_) {
+      relation = QueryRelation::QUERY_UNCOMPARABLE;
+      LOG_TRACE("select items not equivalent, cannot determine set containment");
+    }
+    // check join conditions
+    if (OB_FAIL(ret)) {
+    } else if (QueryRelation::QUERY_UNCOMPARABLE == relation) {
+    } else if (OB_FAIL(check_join_conditions_containment(first_sel, second_sel,
+                                                         map_info, relation,
+                                                         is_in_same_stmt,
+                                                         &first_equal_sets,
+                                                         &second_equal_sets))) {
+      LOG_WARN("failed to check join conditions containment", K(ret));
+    }
+    // check where conditions
+    if (OB_FAIL(ret)) {
+    } else if (QueryRelation::QUERY_UNCOMPARABLE == relation) {
+    } else {
+      QueryRelation cond_relation = QueryRelation::QUERY_UNCOMPARABLE;
+      if (OB_FAIL(compute_conditions_map(first_sel, second_sel,
+                                         first_sel->get_condition_exprs(),
+                                         second_sel->get_condition_exprs(),
+                                         map_info, map_info.cond_map_,
+                                         cond_relation, is_in_same_stmt,
+                                         false, true,
+                                         &first_equal_sets, &second_equal_sets))) {
+        LOG_WARN("failed to compute conditions map", K(ret));
+      } else if (cond_relation == QueryRelation::QUERY_UNCOMPARABLE) {
+        relation = QueryRelation::QUERY_UNCOMPARABLE;
+      } else if (cond_relation == QueryRelation::QUERY_EQUAL) {
+        map_info.is_cond_equal_ = true;
+      } else if (relation == QueryRelation::QUERY_EQUAL) {
+        relation = cond_relation;
+      } else if (cond_relation != relation) {
+        relation = QueryRelation::QUERY_UNCOMPARABLE;
+      }
+    }
+  }
+  if (OB_FAIL(ret) || QueryRelation::QUERY_UNCOMPARABLE == relation) {
+    map_info.is_select_item_equal_ = false;
+  }
+  return ret;
+}
+
+/*
+ * Check containment of from items between two select stmts.
+ * 1. if from items are the same in two select stmts, the relation is QUERY_EQUAL.
+ * 2. because JOIN itself will not change the result set for the non-null side table, (let aside the join conditions)
+ *    if from items are not identical, they can still be comparable.
+ *
+ *    For example, LEFT JOIN will not change the result set for left table,
+ *    so `from t1 LEFT JOIN t2` produces a same result set for data from table `t1` as `from t1`,
+ *    but it only produces a subset of data from table `t2` compared to `from t2`.
+ *    So we say `from t1 LEFT JOIN t2` contains `t1` and vice versa, and `t2` contains `from t1 LEFT JOIN t2`.
+ *    To summary, we say:
+ *    (1) For `FULL JOIN`: the JOINED_TABLE contains the non-null side table and vice versa.
+ *                          and the null-side table contains the JOINED_TABLE.
+ *        [EXCEPTION] full join may produce extra `NULL` value which affects the result of cmp all (e.g. NOT IN)
+ *                    DO NOT use this function for cmp all expr with FULL JOIN.
+ *    (2) For `INNER JOIN`: the JOINED_TABLE contains both the left and right tables, and vice versa.
+ *    (3) For other types of join: we do not consider containment for other types of join for now.
+ *
+ * NOTICE: it is necessary to compare join conditions between two select stmts later
+ *         to further determine the relation between two select stmts.
+ * NOTICE 2: because the inner join conditions can filter out data,
+ *           they should be compared again individually just like where conditions.
+ */
+int ObStmtComparer::check_from_items_containment(const ObSelectStmt *first_sel,
+                                                 const ObSelectStmt *second_sel,
+                                                 bool is_in_same_stmt,
+                                                 ObStmtMapInfo &map_info,
+                                                 QueryRelation &relation)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<const TableItem*, 4> first_table_items;
+  ObSEArray<const TableItem*, 4> second_table_items;
+  relation = QueryRelation::QUERY_UNCOMPARABLE;
+  if (OB_ISNULL(first_sel) || OB_ISNULL(second_sel)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(first_sel), K(second_sel), K(ret));
+  // 1. extract non-null side table items from first_sel and second_sel
+  } else if (OB_FAIL(extract_non_filtered_side_table_items(first_sel, first_table_items))) {
+    LOG_WARN("failed to extract non null side table items", K(ret));
+  } else if (OB_FAIL(extract_non_filtered_side_table_items(second_sel, second_table_items))) {
+    LOG_WARN("failed to extract non null side table items", K(ret));
+  } else if (OB_FAIL(map_info.table_map_.prepare_allocate(
+                     MAX(first_table_items.count(), second_table_items.count())))) {
+    LOG_WARN("failed to preallocate table map", K(ret));
+  } else if (OB_FAIL(map_info.view_select_item_map_.prepare_allocate(
+                     MAX(first_table_items.count(), second_table_items.count())))) {
+    LOG_WARN("failed to pre-allocate generated table map", K(ret));
+  }
+  // 2. check if first_table_items contains second_table_items or vice versa.
+  //    if not, then these two select stmt are uncomparable.
+  //    notice that containment of from items DOES NOT imply relation between two select stmts,
+  //    we consider two select stmts are EQUAL if one's from items contain another's or vice versa.
+  //    NOTE: joined_table`s are not required to be comparable,
+  //          they are only used to compute correct table map for their left/right tables.
+  if (OB_SUCC(ret) && first_table_items.count() >= second_table_items.count()) {
+    relation = QueryRelation::QUERY_EQUAL;
+    for (int64_t i = 0; OB_SUCC(ret) && relation == QueryRelation::QUERY_EQUAL && i < second_table_items.count(); ++i) {
+      bool found = false;
+      for (int64_t j = 0; OB_SUCC(ret) && !found && j < first_table_items.count(); ++j) {
+        QueryRelation tmp_relation = QueryRelation::QUERY_UNCOMPARABLE;
+        if (OB_FAIL(compare_table_item(first_sel, first_table_items.at(j),
+                                       second_sel, second_table_items.at(i),
+                                       is_in_same_stmt, map_info, tmp_relation))) {
+          LOG_WARN("failed to compare table item", K(ret));
+        } else if (tmp_relation == QueryRelation::QUERY_EQUAL) {
+          found = true;
+        }
+      }
+      if (OB_FAIL(ret) || (!found && !second_table_items.at(i)->is_joined_table())) {
+        relation = QueryRelation::QUERY_UNCOMPARABLE;
+      }
+    }
+    if (OB_SUCC(ret) && relation == QueryRelation::QUERY_EQUAL) {
+      LOG_TRACE("succeed to check from items containment in set semantics, first contained second");
+    }
+  }
+  if (OB_SUCC(ret) && relation == QueryRelation::QUERY_UNCOMPARABLE
+      && first_table_items.count() <= second_table_items.count()) {
+    relation = QueryRelation::QUERY_EQUAL;
+    for (int64_t i = 0; OB_SUCC(ret) && relation == QueryRelation::QUERY_EQUAL && i < first_table_items.count(); ++i) {
+      bool found = false;
+      for (int64_t j = 0; OB_SUCC(ret) && !found && j < second_table_items.count(); ++j) {
+        QueryRelation tmp_relation = QueryRelation::QUERY_UNCOMPARABLE;
+        if (OB_FAIL(compare_table_item(first_sel, first_table_items.at(i),
+                                       second_sel, second_table_items.at(j),
+                                       is_in_same_stmt, map_info, tmp_relation))) {
+          LOG_WARN("failed to compare table item", K(ret));
+        } else if (tmp_relation == QueryRelation::QUERY_EQUAL) {
+          found = true;
+        }
+      }
+      if (OB_FAIL(ret) || (!found && !first_table_items.at(i)->is_joined_table())) {
+        relation = QueryRelation::QUERY_UNCOMPARABLE;
+      }
+    }
+    if (OB_SUCC(ret) && relation == QueryRelation::QUERY_EQUAL) {
+      LOG_TRACE("succeed to check from items containment in set semantics, second contained first");
+    }
+  }
+  if (OB_SUCC(ret) && relation == QueryRelation::QUERY_UNCOMPARABLE) {
+    LOG_TRACE("from items not comparable, cannot determine set containment");
+  }
+
+  return ret;
+}
+
+// the non-filtered side tables are one of the following:
+// 1. single table
+// 2. non-null side table of left/right outer join
+// 3. left or right table of inner/outer join
+//
+// Notice that the on conditions of inner join indeed filter out data,
+// so inner join conditions should be compared just as where conditions later
+int ObStmtComparer::extract_non_filtered_side_table_items(const ObSelectStmt *sel,
+                                                          ObIArray<const TableItem*> &table_items)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(sel)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("select stmt is null", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < sel->get_from_item_size(); ++i) {
+    const FromItem &from_item = sel->get_from_item(i);
+    const TableItem *table_item = from_item.is_joined_ ? sel->get_joined_table(from_item.table_id_)
+                                                       : sel->get_table_item_by_id(from_item.table_id_);
+    if (OB_ISNULL(table_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null table item", K(ret));
+    } else if (OB_FAIL(extract_non_filtered_side_table_items_rec(table_item, table_items))) {
+      LOG_WARN("failed to extract non null side table items", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObStmtComparer::extract_non_filtered_side_table_items_rec(const TableItem *table_item,
+                                                              ObIArray<const TableItem*> &table_items)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_item)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table item is null", K(ret));
+  } else if (OB_FAIL(table_items.push_back(table_item))) {
+      LOG_WARN("failed to push back table item", K(ret));
+  } else if (table_item->is_joined_table()) {
+    const JoinedTable *joined_table = static_cast<const JoinedTable*>(table_item);
+    switch (joined_table->joined_type_) {
+      case LEFT_OUTER_JOIN:
+        if (OB_FAIL(SMART_CALL(extract_non_filtered_side_table_items_rec(joined_table->left_table_,table_items)))) {
+          LOG_WARN("failed to extract non null side table items", K(ret));
+        }
+        break;
+      case RIGHT_OUTER_JOIN:
+        if (OB_FAIL(SMART_CALL(extract_non_filtered_side_table_items_rec(joined_table->right_table_, table_items)))) {
+          LOG_WARN("failed to extract non null side table items", K(ret));
+        }
+        break;
+      case INNER_JOIN:
+      case FULL_OUTER_JOIN:
+        if (OB_FAIL(SMART_CALL(extract_non_filtered_side_table_items_rec(joined_table->left_table_, table_items)))) {
+          LOG_WARN("failed to extract non null side table items", K(ret));
+        } else if (OB_FAIL(SMART_CALL(extract_non_filtered_side_table_items_rec(joined_table->right_table_, table_items)))) {
+          LOG_WARN("failed to extract non null side table items", K(ret));
+        }
+        break;
+      default:  // ignore other join types
+        break;
+    }
+  }
+  return ret;
+}
+
+int ObStmtComparer::check_join_conditions_containment(const ObSelectStmt *first_sel,
+                                                      const ObSelectStmt *second_sel,
+                                                      ObStmtMapInfo &map_info,
+                                                      QueryRelation &relation,
+                                                      bool is_in_same_stmt,
+                                                      const EqualSets *first_equal_sets,
+                                                      const EqualSets *second_equal_sets)
+{
+  int ret = OB_SUCCESS;
+  // join conditions of all joined table
+  ObSEArray<ObRawExpr*, 8> first_join_conds;
+  ObSEArray<ObRawExpr*, 8> second_join_conds;
+  // join conditions of inner join, they should be further compared individually as where conditions
+  ObSEArray<ObRawExpr*, 4> first_inner_join_conds;
+  ObSEArray<ObRawExpr*, 4> second_inner_join_conds;
+  if (OB_ISNULL(first_sel) || OB_ISNULL(second_sel)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(first_sel), K(second_sel), K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < first_sel->get_joined_tables().count(); ++i) {
+    const JoinedTable *joined_table = first_sel->get_joined_tables().at(i);
+    if (OB_ISNULL(joined_table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(first_sel->extract_on_condition_from_joined_table(
+                                  joined_table, first_join_conds, false))) {
+      LOG_WARN("failed to extract equal condition from joined table", K(ret));
+    } else if (OB_FAIL(first_sel->extract_on_condition_from_joined_table(
+                                  joined_table, first_inner_join_conds, true))) {
+      LOG_WARN("failed to extract inner join condition from joined table", K(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < second_sel->get_joined_tables().count(); ++i) {
+    const JoinedTable *joined_table = second_sel->get_joined_tables().at(i);
+    if (OB_ISNULL(joined_table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(second_sel->extract_on_condition_from_joined_table(
+                                    joined_table, second_join_conds, false))) {
+      LOG_WARN("failed to extract equal condition from joined table", K(ret));
+    } else if (OB_FAIL(second_sel->extract_on_condition_from_joined_table(
+                                    joined_table, second_inner_join_conds, true))) {
+      LOG_WARN("failed to extract inner join condition from joined table", K(ret));
+    }
+  }
+  // compare join conditions
+  if (OB_FAIL(ret)) {
+  } else {
+    ObSEArray<int64_t, 4> condition_map;
+    QueryRelation join_cond_relation = QueryRelation::QUERY_UNCOMPARABLE;
+    if (OB_FAIL(compute_conditions_map(first_sel, second_sel,
+                                       first_join_conds, second_join_conds,
+                                       map_info, condition_map,
+                                       join_cond_relation, is_in_same_stmt,
+                                       false, true,
+                                       first_equal_sets, second_equal_sets))) {
+      LOG_WARN("failed to compute join conditions map", K(ret));
+    } else if (join_cond_relation == QueryRelation::QUERY_EQUAL) {
+      // do nothing
+    } else if (join_cond_relation == QueryRelation::QUERY_UNCOMPARABLE) {
+      relation = QueryRelation::QUERY_UNCOMPARABLE;
+    } else if (QueryRelation::QUERY_EQUAL == relation) {
+      relation = join_cond_relation;
+    } else if (join_cond_relation != relation) {
+      relation = QueryRelation::QUERY_UNCOMPARABLE;
+    }
+  }
+  // compare inner join conditions
+  if (OB_FAIL(ret)) {
+  } else {
+    ObSEArray<int64_t, 4> condition_map;
+    QueryRelation inner_join_cond_relation = QueryRelation::QUERY_UNCOMPARABLE;
+    if (OB_FAIL(compute_conditions_map(first_sel, second_sel,
+                                       first_inner_join_conds, second_inner_join_conds,
+                                       map_info, condition_map,
+                                       inner_join_cond_relation, is_in_same_stmt,
+                                       false, true,
+                                       first_equal_sets, second_equal_sets))) {
+      LOG_WARN("failed to compute inner join conditions map", K(ret));
+    } else if (inner_join_cond_relation == QueryRelation::QUERY_EQUAL) {
+      // do nothing
+    } else if (inner_join_cond_relation == QueryRelation::QUERY_UNCOMPARABLE) {
+      relation = QueryRelation::QUERY_UNCOMPARABLE;
+    } else if (QueryRelation::QUERY_EQUAL == relation) {
+      relation = inner_join_cond_relation;
+    } else if (inner_join_cond_relation != relation) {
+      relation = QueryRelation::QUERY_UNCOMPARABLE;
+    }
+  }
+  return ret;
+}
+
+/*
+ * check if select items are equivalent between two select stmts.
+ * 1. select items must have the same count and order in two select stmts.
+ * 2. two matched select items should either be identical,
+ *    or they can be deduced as equivalent by the equal sets of the two select stmts.
+ *    for example:
+ *    (1) `select t1.a from t1` and `select t1.a from t1` are equivalent.
+ *    (2) `select t1.a from t1` and `select t2.b from t1, t2 where t1.a = t2.b` are equivalent.
+ */
+int ObStmtComparer::check_select_items_equivalence(const ObSelectStmt *first_sel,
+                                                   const ObSelectStmt *second_sel,
+                                                   ObStmtMapInfo &map_info,
+                                                   bool is_in_same_stmt,
+                                                   const EqualSets *first_equal_sets,
+                                                   const EqualSets *second_equal_sets)
+{
+  int ret = OB_SUCCESS;
+  map_info.is_select_item_equal_ = false;
+  if (OB_ISNULL(first_sel) || OB_ISNULL(second_sel)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(first_sel), K(second_sel), K(ret));
+  } else if (first_sel->get_select_item_size() != second_sel->get_select_item_size()) {
+    LOG_TRACE("select item count not equal");
+  } else {
+    ObSEArray<ObRawExpr*, 16> first_select_exprs;
+    ObSEArray<ObRawExpr*, 16> second_select_exprs;
+    QueryRelation this_relation;
+    if (OB_FAIL(first_sel->get_select_exprs(first_select_exprs))) {
+      LOG_WARN("failed to get select exprs", K(ret));
+    } else if (OB_FAIL(second_sel->get_select_exprs(second_select_exprs))) {
+      LOG_WARN("failed to get select exprs", K(ret));
+    } else if (OB_FAIL(compute_conditions_map(first_sel,
+                                              second_sel,
+                                              first_select_exprs,
+                                              second_select_exprs,
+                                              map_info,
+                                              map_info.select_item_map_,
+                                              this_relation,
+                                              is_in_same_stmt,
+                                              true, false,
+                                              first_equal_sets,
+                                              second_equal_sets))) {
+      LOG_WARN("failed to compute output expr map", K(ret));
+    } else if (QueryRelation::QUERY_EQUAL == this_relation) {
+      map_info.is_select_item_equal_ = true;
+      LOG_TRACE("succeed to check select item map", K(this_relation), K(map_info));
+    } else {
+      LOG_TRACE("succeed to check stmt containment", K(this_relation), K(map_info));
+    }
+  }
+
+  return ret;
+}
+
+int ObStmtComparer::check_has_full_join(const ObSelectStmt *stmt, bool &has_full_join)
+{
+  int ret = OB_SUCCESS;
+  has_full_join = false;
+
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !has_full_join && i < stmt->get_joined_tables().count(); ++i) {
+    const JoinedTable *joined_table = stmt->get_joined_tables().at(i);
+    if (OB_ISNULL(joined_table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("joined table is null", K(ret));
+    } else if (OB_FAIL(check_has_full_join_rec(joined_table, has_full_join))) {
+      LOG_WARN("failed to check full full join recursively", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+int ObStmtComparer::check_has_full_join_rec(const JoinedTable *joined_table, bool &has_full_join)
+{
+  int ret = OB_SUCCESS;
+  has_full_join = false;
+
+  if (OB_ISNULL(joined_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (joined_table->is_full_join()) {
+    has_full_join = true;
+  } else if (OB_ISNULL(joined_table->left_table_) || OB_ISNULL(joined_table->right_table_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("joined table children are null", K(ret));
+  } else if (joined_table->left_table_->is_joined_table()
+             && OB_FAIL(SMART_CALL(check_has_full_join_rec(
+                static_cast<const JoinedTable*>(joined_table->left_table_), has_full_join)))) {
+    LOG_WARN("failed to check left joined table", K(ret));
+  } else if (!has_full_join
+             && joined_table->right_table_->is_joined_table()
+             && OB_FAIL(SMART_CALL(check_has_full_join_rec(
+                static_cast<const JoinedTable*>(joined_table->right_table_), has_full_join)))) {
+    LOG_WARN("failed to check right joined table", K(ret));
   }
   return ret;
 }

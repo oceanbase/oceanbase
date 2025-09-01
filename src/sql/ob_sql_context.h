@@ -27,6 +27,7 @@
 #include "share/client_feedback/ob_feedback_partition_struct.h"
 #include "sql/dblink/ob_dblink_utils.h"
 #include "sql/monitor/ob_sql_stat_record.h"
+#include "share/catalog/ob_external_catalog.h"
 #include "share/stat/ob_opt_ds_stat_cache.h"
 #include "sql/ob_sql_ccl_rule_manager.h"
 #ifdef OB_BUILD_SPM
@@ -495,6 +496,8 @@ public:
                                const uint64_t database_id,
                                const ObString &tbl_name,
                                const ObTableSchema *&table_schema);
+  int get_lake_table_metadata(const uint64_t table_id,
+                              const share::ObILakeTableMetadata *&lake_table_metadata) const;
   int get_catalog_table_id(const uint64_t tenant_id,
                            const uint64_t catalog_id,
                            const uint64_t database_id,
@@ -530,11 +533,17 @@ public:
   uint64_t get_next_mocked_schema_id() { return ++mocked_schema_id_counter_; }
   int get_mocked_table_schema(uint64_t ref_table_id, const share::schema::ObTableSchema *&table_schema) const;
   int add_mocked_table_schema(const share::schema::ObTableSchema &table_schema);
+  int add_mocked_table_schema(const share::schema::ObTableSchema *table_schema);
   int add_mocked_database_schema(const share::schema::ObDatabaseSchema &database_schema);
   int recover_schema_from_external_object(const share::ObExternalObject &external_object);
   int recover_schema_from_external_objects(const ObIArray<share::ObExternalObject> &external_objects);
   common::ObIArray<const share::schema::ObDatabaseSchema *> &get_mocked_database_schemas();
   common::ObIArray<const share::schema::ObTableSchema *> &get_mocked_table_schemas();
+  const share::ObILakeTableMetadata* get_table_metadata(int64_t table_id);
+
+  int get_lake_table_metadata(const uint64_t tenant_id,
+                              const uint64_t table_id,
+                              const share::ObILakeTableMetadata *&lake_table_metadata);
 public:
   static TableItem *get_table_item_by_ref_id(const ObDMLStmt *stmt, uint64_t ref_table_id);
   static bool is_link_table(const ObDMLStmt *stmt, uint64_t table_id);
@@ -544,6 +553,7 @@ private:
   common::ObArenaAllocator allocator_;
   common::ObSEArray<const share::schema::ObTableSchema *, 1> table_schemas_;
   common::ObSEArray<const share::schema::ObDatabaseSchema *, 1> mocked_database_schemas_;
+  common::ObSEArray<const share::ObILakeTableMetadata *, 1> lake_table_metadatas_;
   uint64_t next_link_table_id_;
   // key is dblink_id, value is current scn.
   common::hash::ObHashMap<uint64_t, uint64_t> dblink_scn_;

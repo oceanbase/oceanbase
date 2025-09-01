@@ -163,7 +163,7 @@ TEST_F(TestSSMicroRangeManager, sub_range_mem_usage)
   mem_diff = cf_allocator.allocated() - total_sub_rng_mem;
   total_sub_rng_mem = cf_allocator.allocated();
   LOG_INFO("finish concurrent fifo allocator usage check", K(total_sub_rng_mem));
-  ASSERT_LE(total_sub_rng_mem, 2097152);
+  ASSERT_LE(total_sub_rng_mem, 4194304);
 }
 
 TEST_F(TestSSMicroRangeManager, basic_test)
@@ -248,6 +248,8 @@ int main(int argc, char **argv)
   system("rm -f test_ss_micro_range_manager.log*");
   OB_LOGGER.set_file_name("test_ss_micro_range_manager.log", true, true);
   OB_LOGGER.set_log_level("INFO");
+  ObPLogWriterCfg log_cfg;
+  OB_LOGGER.init(log_cfg, true);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

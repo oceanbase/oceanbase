@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "lib/utility/utility.h"
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_micro_block_cs_encoder.h"
@@ -47,6 +48,7 @@ int ObVecBatchInfo::init(const int32_t row_count,
   return ret;
 }
 
+ObObj ObMicroBlockCSEncoder::NOP = ObObj::make_nop_obj();
 
 template <typename T>
 T *ObMicroBlockCSEncoder::alloc_encoder_()
@@ -1472,7 +1474,7 @@ int ObMicroBlockCSEncoder::process_out_row_columns_()
           }
         } else {
           const int64_t row_count = col_ctx.col_datums_->count();
-          if (col_ctx.null_cnt_ == 0) { // has no null
+          if (col_ctx.null_or_nop_cnt_ == 0) { // has no null
             for (int64_t row_idx = 0; row_idx < row_count && !has_lob_out_row_; ++row_idx) {
               const ObDatum &datum = col_ctx.col_datums_->at(row_idx);
               const ObLobCommon &lob_common = datum.get_lob_data();
@@ -1481,7 +1483,7 @@ int ObMicroBlockCSEncoder::process_out_row_columns_()
           } else {
             for (int64_t row_idx = 0; row_idx < row_count && !has_lob_out_row_; ++row_idx) {
               const ObDatum &datum = col_ctx.col_datums_->at(row_idx);
-              if (datum.is_null()) {
+              if (datum.is_null() || datum.is_nop()) {
               } else {
                 const ObLobCommon &lob_common = datum.get_lob_data();
                 has_lob_out_row_ = !lob_common.in_row_;
@@ -1620,6 +1622,10 @@ int ObMicroBlockCSEncoder::copy_cell_(const ObColDesc &col_desc, const
   int64_t extra_store_size_for_var_string = 0;
   if (src.is_null()) {
     dest.set_null();
+    datum_size = sizeof(uint64_t);
+  } else if (src.is_nop()) {
+    dest.set_ext();
+    dest.extend_obj_ = &NOP;
     datum_size = sizeof(uint64_t);
   } else if (OB_UNLIKELY(src.is_ext())) {
     ret = OB_NOT_SUPPORTED;
@@ -1804,14 +1810,7 @@ int ObMicroBlockCSEncoder::prescan_(const int64_t column_index)
     }
 
     if (need_build_hash_table) {
-      // next power of 2
-      uint64_t bucket_num = appended_row_count_ << 1;
-      if (0 != (bucket_num & (bucket_num - 1))) {
-        while (0 != (bucket_num & (bucket_num - 1))) {
-          bucket_num = bucket_num & (bucket_num - 1);
-        }
-        bucket_num = bucket_num << 1;
-      }
+      uint64_t bucket_num = next_pow2(appended_row_count_);
       const int64_t node_num = appended_row_count_;
       if (OB_UNLIKELY(node_num != col_ctx.col_datums_->count())) {
         ret = OB_INNER_STAT_ERROR;
@@ -1863,14 +1862,14 @@ int ObMicroBlockCSEncoder::semistruct_prescan_(const int64_t column_index)
   if (OB_ISNULL(semistruct_encode_ctx_) && OB_ISNULL(semistruct_encode_ctx_ = OB_NEW(ObSemiStructEncodeCtx, ObMemAttr(MTL_ID(), "SemiEncCtx")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc semistruct_encoder fail", K(ret), "size", sizeof(ObSemiStructEncodeCtx));
-  } else if (OB_FAIL(semistruct_encode_ctx_->get_col_ctx(column_index, semistruct_col_ctx))) {
+  } else if (OB_FAIL(semistruct_encode_ctx_->get_col_ctx(column_index, ctx_, semistruct_col_ctx))) {
     LOG_WARN("aloc semistruct_col_ctx fail",K(ret), K(column_index), K(col_desc), K(col_ctx));
   } else {
-    semistruct_col_ctx->encoding_ctx_ = &ctx_;
     semistruct_col_ctx->column_index_ = column_index;
     semistruct_col_ctx->col_desc_ = col_desc;
     semistruct_col_ctx->datums_ = col_ctx.col_datums_;
     semistruct_col_ctx->all_string_buf_writer_ = &all_string_data_buffer_;
+    semistruct_col_ctx->freq_threshold_ = ctx_.semistruct_properties_.get_freq_threshold();
     col_ctx.semistruct_ctx_ = semistruct_col_ctx;
     if (OB_FAIL(semistruct_col_ctx->scan())) {
       LOG_WARN("semistruct handle fail", K(ret), K(column_index), K(col_desc));
@@ -2388,7 +2387,7 @@ int ObMicroBlockCSEncoder::get_pre_agg_param(const int64_t col_idx, ObMicroDataP
     const ObObjTypeStoreClass sc = get_store_class_map()[ctx_.col_descs_->at(col_idx).col_type_.get_type_class()];
     pre_agg_param.col_datums_ = ctx.col_datums_;
     pre_agg_param.cs_encoding_ht_ = ctx.ht_;
-    pre_agg_param.null_cnt_ = ctx.null_cnt_;
+    pre_agg_param.null_cnt_ = ctx.null_or_nop_cnt_ - ctx.nop_cnt_;
     pre_agg_param.is_cs_encoding_ = true;
     if (sc == ObIntSC || sc == ObUIntSC) {
       pre_agg_param.min_integer_ = ctx.integer_min_;

@@ -99,6 +99,14 @@ public:
   static int find_child_das_ctdef(const ObDASBaseCtDef *root_ctdef,
                                 ObDASOpType op_type,
                                 const ObDASBaseCtDef *&target_ctdef);
+  static int find_child_das_rtdef(ObDASBaseRtDef *root_rtdef,
+                                ObDASOpType op_type,
+                                ObDASBaseRtDef *&target_rtdef);
+  static bool is_index_merge(const ObDASBaseCtDef *attach_ctdef);
+  static bool is_func_lookup(const ObDASBaseCtDef *attach_ctdef);
+  static bool is_vec_idx_scan(const ObDASBaseCtDef *attach_ctdef);
+  static bool is_fts_idx_scan(const ObDASBaseCtDef *attach_ctdef);
+  static bool is_es_match_scan(const ObDASBaseCtDef *attach_ctdef);
   template <typename CtDefType>
   static int find_target_ctdef(const ObDASBaseCtDef *root_ctdef,
                                  ObDASOpType op_type,

@@ -82,7 +82,7 @@ private:
   int handle_fetch_log_task_(ObFetchLogTask *task);
   bool need_fetch_log_(const share::ObLSID &id);
   void mark_if_to_end_(ObFetchLogTask &task, const share::SCN &upper_limit_scn, const share::SCN &scn);
-  void try_update_location_info_(const ObFetchLogTask &task, ObRemoteLogGroupEntryIterator &iter);
+  void try_update_location_info_(const ObFetchLogTask &task, ObRemoteIGroupEntryIterator &iter);
 
   int push_submit_array_(ObFetchLogTask &task);
 

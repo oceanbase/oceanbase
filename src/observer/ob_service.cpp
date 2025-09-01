@@ -2430,14 +2430,16 @@ int ObService::request_heartbeat(ObLeaseRequest &lease_request)
 }
 
 int ObService::generate_tenant_table_schemas_(const obrpc::ObBatchBroadcastSchemaArg &arg,
-      ObSArray<share::schema::ObTableSchema> &tables, ObIAllocator &allocator)
+      ObIAllocator &allocator, ObSArray<share::schema::ObTableSchema> &tables)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = arg.get_tenant_id();
+  ObArray<uint64_t> table_ids_to_construct; // empty means construct all
   if (CLUSTER_CURRENT_VERSION != arg.get_cluster_current_version()) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("server binary not equal, create tenant is not allowed", KR(ret), KCV(CLUSTER_CURRENT_VERSION), K(arg));
-  } else if (OB_FAIL(ObSchemaUtils::construct_inner_table_schemas(tenant_id, tables, allocator))) {
+  } else if (OB_FAIL(ObSchemaUtils::construct_inner_table_schemas(tenant_id,
+          table_ids_to_construct, true/*include_index_and_lob_aux_schemas*/, allocator, tables))) {
     LOG_WARN("failed to construct_inner_table_schemas", KR(ret), K(tenant_id));
   }
   return ret;
@@ -2471,7 +2473,7 @@ int ObService::batch_broadcast_schema(
              OB_SYS_TENANT_ID, sys_schema_version))) {
     LOG_WARN("fail to refresh sys schema", KR(ret), K(sys_schema_version));
   } else if (arg.need_generate_schema()) {
-    if (OB_FAIL(generate_tenant_table_schemas_(arg, generated_tables, arena_allocator))) {
+    if (OB_FAIL(generate_tenant_table_schemas_(arg, arena_allocator, generated_tables))) {
       LOG_WARN("failed to generate tenant table schemas", KR(ret), K(arg));
     } else {
       tables_to_broadcast = &generated_tables;

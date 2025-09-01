@@ -88,7 +88,8 @@ int c_str_to_int(const char *str, int64_t &num)
 }
 
 int handle_listed_object(ObBaseDirEntryOperator &op,
-    const char *obj_name, const int64_t obj_name_len, const int64_t obj_size)
+    const char *obj_name, const int64_t obj_name_len, const int64_t obj_size,
+    const ObFileExtraInfo *extra_info)
 {
   int ret = OB_SUCCESS;
   dirent entry;
@@ -99,10 +100,23 @@ int handle_listed_object(ObBaseDirEntryOperator &op,
     OB_LOG(WARN, "invalid arguments",
         K(ret), K(obj_name), K(obj_name_len), K(sizeof(entry.d_name)));
   } else {
-    if (op.need_get_file_size()) {
-      if (OB_UNLIKELY(obj_size < 0)) {
+    if (op.need_get_file_meta()) {
+      // extra_info = nullptr means no extra info, do not return error
+      if (OB_NOT_NULL(extra_info)) {
+        if (OB_UNLIKELY(!extra_info->is_last_modify_time_valid()
+            && !extra_info->is_etag_valid())) {
+          ret = OB_INVALID_ARGUMENT;
+          OB_LOG(WARN, "invalid extra info", K(ret),
+              K(obj_name), K(obj_name_len), K(obj_size), KPC(extra_info));
+        } else {
+          op.set_extra_info(*extra_info);
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_UNLIKELY(obj_size < 0)) {
         ret = OB_INVALID_ARGUMENT;
-        OB_LOG(WARN, "invalid object size", K(obj_size));
+        OB_LOG(WARN, "invalid object size", K(ret), K(obj_name), K(obj_name_len), K(obj_size));
       } else {
         op.set_size(obj_size);
       }
@@ -115,6 +129,11 @@ int handle_listed_object(ObBaseDirEntryOperator &op,
         OB_LOG(WARN, "fail to exe application callback for listed object",
             K(ret), K(obj_name), K(obj_name_len), K(obj_size));
       }
+      // Note: extra_info does not own the memory of etag. After func() execution completes,
+      // accessing extra_info is dangerous as the etag memory may have been freed.
+      // Therefore, we proactively reset extra_info after each func() call to prevent
+      // potential use-after-free issues.
+      op.reset_extra_info();
     }
   }
   return ret;
@@ -554,7 +573,7 @@ int ObStorageObjectMeta::get_needed_fragments(
 int ObStorageListCtxBase::init(
     ObArenaAllocator &allocator,
     const int64_t max_list_num,
-    const bool need_size)
+    const bool need_meta)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(max_list_num < 1)) {
@@ -563,7 +582,7 @@ int ObStorageListCtxBase::init(
   } else {
     max_list_num_ = max_list_num;
     max_name_len_ = OB_MAX_URI_LENGTH;
-    need_size_ = need_size;
+    need_meta_ = need_meta;
     if (OB_ISNULL(name_arr_ = static_cast<char **>(allocator.alloc(sizeof(void *) * max_list_num_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       OB_LOG(WARN, "fail to alloc name_arr buff", K(ret), K(*this));
@@ -578,7 +597,7 @@ int ObStorageListCtxBase::init(
       }
     }
 
-    if (OB_SUCC(ret) && need_size) {
+    if (OB_SUCC(ret) && need_meta) {
       if (OB_ISNULL(size_arr_ = static_cast<int64_t *>(allocator.alloc(sizeof(int64_t) * max_list_num_)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         OB_LOG(WARN, "fail to alloc size_arr buff", K(ret), K(*this));
@@ -596,7 +615,7 @@ void ObStorageListCtxBase::reset()
   max_name_len_ = 0;
   rsp_num_ = 0;
   has_next_ = false;
-  need_size_ = false;
+  need_meta_ = false;
   size_arr_ = NULL;
   cur_listed_count_ = 0;
   total_list_limit_ = -1;
@@ -608,7 +627,7 @@ void ObStorageListCtxBase::reset()
 bool ObStorageListCtxBase::is_valid() const
 {
   bool bret = (max_list_num_ > 0) && (name_arr_ != NULL) && (max_name_len_ > 0);
-  if (need_size_) {
+  if (need_meta_) {
     bret &= (size_arr_ != NULL);
   }
   return bret;
@@ -646,11 +665,11 @@ void ObStorageListObjectsCtx::reset()
 int ObStorageListObjectsCtx::init(
     ObArenaAllocator &allocator,
     const int64_t max_list_num,
-    const bool need_size)
+    const bool need_meta)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObStorageListCtxBase::init(allocator, max_list_num, need_size))) {
-    OB_LOG(WARN, "fail to init storage_list_ctx_base", K(ret), K(max_list_num), K(need_size));
+  if (OB_FAIL(ObStorageListCtxBase::init(allocator, max_list_num, need_meta))) {
+    OB_LOG(WARN, "fail to init storage_list_ctx_base", K(ret), K(max_list_num), K(need_meta));
   } else {
     next_token_buf_len_ = OB_MAX_URI_LENGTH;
     if (OB_ISNULL(next_token_ = static_cast<char *>(allocator.alloc(next_token_buf_len_)))) {
@@ -720,19 +739,28 @@ int ObStorageListObjectsCtx::handle_object(
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_NOT_INIT;
-    OB_LOG(WARN, "ObStorageListObjectsCtx not init", K(ret));
-  } else if (OB_UNLIKELY(obj_size < 0 || obj_path_len >= max_name_len_
+    OB_LOG(WARN, "ObStorageListObjectsCtx not init", K(ret), KPC(this));
+  } else if (OB_UNLIKELY(obj_path_len >= max_name_len_
                         || obj_path_len <= 0 || rsp_num_ >= max_list_num_)
             || OB_ISNULL(obj_path) || OB_ISNULL(name_arr_[rsp_num_])) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid arguments", K(ret), K(obj_path), K(obj_path_len), K(obj_size), K(*this));
   } else {
-    if (need_size_) {
-      size_arr_[rsp_num_] = obj_size;
+    // if need_meta_ is false, the obj_size may be the default -1
+    if (need_meta_) {
+      if (OB_UNLIKELY(obj_size < 0)) {
+        ret = OB_INVALID_ARGUMENT;
+        OB_LOG(WARN, "invalid object size", K(ret), K(obj_size), K(obj_path));
+      } else {
+        size_arr_[rsp_num_] = obj_size;
+      }
     }
-    MEMCPY(name_arr_[rsp_num_], obj_path, obj_path_len);
-    name_arr_[rsp_num_][obj_path_len] = '\0';
-    ++rsp_num_;
+
+    if (OB_SUCC(ret)) {
+      MEMCPY(name_arr_[rsp_num_], obj_path, obj_path_len);
+      name_arr_[rsp_num_][obj_path_len] = '\0';
+      ++rsp_num_;
+    }
   }
   return ret;
 }

@@ -265,10 +265,8 @@ int ObLocationService::vtable_get(
 
 int ObLocationService::external_table_get(
     const uint64_t tenant_id,
-    const uint64_t table_id,
     ObIArray<ObAddr> &locations)
 {
-  UNUSED(table_id);
   int ret = OB_SUCCESS;
   bool is_cache_hit = false;
   //using the locations from any distributed virtual table

@@ -205,7 +205,13 @@ public:
   virtual int remove_directory(const char *base_dir) = 0;
   virtual bool check_disk_space_enough() = 0;
   virtual int64_t get_rebuild_replica_log_lag_threshold() const = 0;
-  virtual int get_io_start_time(int64_t &last_working_time) = 0;
+  virtual int get_io_statistic_info(int64_t &last_working_time,
+                                    int64_t &pending_write_size,
+                                    int64_t &pending_write_count,
+                                    int64_t &pending_write_rt,
+                                    int64_t &accum_write_size,
+                                    int64_t &accum_write_count,
+                                    int64_t &accum_write_rt) = 0;
   virtual int64_t get_tenant_id() = 0;
   // should be removed in version 4.2.0.0
   virtual int update_replayable_point(const SCN &replayable_scn) = 0;
@@ -282,7 +288,13 @@ public:
   int for_each(const common::ObFunction<int(const PalfHandle&)> &func);
   int for_each(const common::ObFunction<int(IPalfHandleImpl *ipalf_handle_impl)> &func) override final;
   common::ObILogAllocator* get_log_allocator() override final;
-  int get_io_start_time(int64_t &last_working_time) override final;
+  int get_io_statistic_info(int64_t &last_working_time,
+                            int64_t &pending_write_size,
+                            int64_t &pending_write_count,
+                            int64_t &pending_write_rt,
+                            int64_t &accum_write_size,
+                            int64_t &accum_write_count,
+                            int64_t &accum_write_rt) override final;
   int64_t get_tenant_id() override final;
   int update_replayable_point(const SCN &replayable_scn) override final;
   int get_throttling_options(PalfThrottleOptions &option);
@@ -330,6 +342,21 @@ private:
     int64_t maximum_used_size_;
     int64_t palf_id_;
     int ret_code_;
+  };
+  struct GetIOStatistic
+  {
+    GetIOStatistic();
+    ~GetIOStatistic();
+    bool operator() (const LSKey &palf_id, IPalfHandleImpl *palf_handle_impl);
+    TO_STRING_KV(K_(last_working_time), K_(accum_write_size), K_(accum_write_count),
+        K_(accum_write_rt), K_(pending_write_size), K_(pending_write_count), K_(pending_write_rt));
+    int64_t last_working_time_;
+    int64_t accum_write_size_;
+    int64_t accum_write_count_;
+    int64_t accum_write_rt_;
+    int64_t pending_write_size_;
+    int64_t pending_write_count_;
+    int64_t pending_write_rt_;
   };
   struct RemoveStaleIncompletePalfFunctor : public ObBaseDirFunctor {
     RemoveStaleIncompletePalfFunctor(PalfEnvImpl *palf_env_impl);

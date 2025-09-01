@@ -26,7 +26,9 @@ using sql::ObSqlExpression;
 namespace pl {
 
 class ObPLCGBufferGuard;
-
+#ifdef OB_BUILD_ORACLE_PL
+struct CoverageData;
+#endif
 class ObPLCodeGenerator
 {
 friend class ObPLCGBufferGuard;
@@ -211,9 +213,13 @@ public:
     oracle_mode_(oracle_mode),
     out_params_(allocator),
     profile_mode_(session_info_.get_pl_profiler() != nullptr),
+    code_coverage_mode_(session_info_.get_pl_code_coverage() != nullptr),
     global_strings_(),
     int_buffer_(allocator),
     objparam_buffer_(allocator),
+#ifdef OB_BUILD_ORACLE_PL
+    vaild_row_info_array_(allocator),
+#endif
     need_cg_(true),
     dispatch_map_()
     { }
@@ -695,6 +701,9 @@ public:
 
 public:
   int store_obj(const ObObj &object, jit::ObLLVMValue &p_obj);
+  int store_datatype_of_record(const ObDataType &object,
+                                int64_t idx,
+                                jit::ObLLVMValue &record);
   int store_data_type(const ObDataType &object, jit::ObLLVMValue &result);
   int store_elem_desc(const ObElemDesc &object, jit::ObLLVMValue &result);
   int generate_debug(const ObString &name, int64_t value);
@@ -823,7 +832,8 @@ public:
   int generate_entry_alloca(const common::ObString &name, const common::ObObjType &type, jit::ObLLVMValue &result);
   int generate_entry_alloca(const common::ObString &name, const jit::ObLLVMType &ir_type, jit::ObLLVMValue &result);
   bool get_profile_mode() { return profile_mode_; }
-
+  bool get_code_coverage_mode() { return code_coverage_mode_; }
+  int reset_code_coverage_mode(const ObPLFunction &pl_func);
   int generate_spi_pl_profiler_before_record(const ObPLStmt &s);
   int generate_spi_pl_profiler_after_record(const ObPLStmt &s);
 
@@ -913,6 +923,7 @@ private:
   bool oracle_mode_;
   ObPLSEArray<jit::ObLLVMValue> out_params_;
   bool profile_mode_;
+  bool code_coverage_mode_;
 
   using GlobalStringMap = common::hash::ObHashMap<
                             common::ObString,
@@ -935,6 +946,9 @@ private:
   int64_t int_buffer_idx_ = 0;
 
   ObPLSEArray<jit::ObLLVMValue> objparam_buffer_;
+#ifdef OB_BUILD_ORACLE_PL
+  ObPLSEArray<CoverageData> vaild_row_info_array_;
+#endif
   int64_t objparam_buffer_idx_ = 0;
 
   jit::ObLLVMValue char_buffer_;

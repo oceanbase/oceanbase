@@ -332,6 +332,13 @@ public:
 
   bool is_valid() const override;
 
+  void reset() {
+    dest_id_ = 0;
+    round_id_ = 0;
+    piece_id_ = 0;
+    filelist_.reset();
+  }
+
   INHERIT_TO_STRING_KV("ObExternArchiveDesc", ObExternArchiveDesc, K_(dest_id), K_(round_id), K_(piece_id), K_(filelist));
 };
 
@@ -608,7 +615,7 @@ private:
     ObLSFileListOp();
     virtual ~ObLSFileListOp() {}
     int init(const ObArchiveStore *store, ObIArray<ObSingleLSInfoDesc::OneFile> *filelist);
-    bool need_get_file_size() const override { return true; }
+    bool need_get_file_meta() const override { return true; }
     int func(const dirent *entry) override;
 
     TO_STRING_KV(K_(is_inited), KPC(store_), KPC(filelist_));

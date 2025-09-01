@@ -59,6 +59,7 @@ void TestSSMicroCacheSmallFileSize::SetUp()
   micro_cache->destroy();
   ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), 214748364)); // 204MB
   ASSERT_EQ(OB_SUCCESS, micro_cache->start());
+  micro_cache->micro_meta_mgr_.enable_save_meta_mem_ = false; // disable save meta memory
 }
 
 void TestSSMicroCacheSmallFileSize::TearDown()

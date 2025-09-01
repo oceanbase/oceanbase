@@ -252,6 +252,19 @@ public:
   DISALLOW_COPY_AND_ASSIGN(ObChangeExternalStorageDestMgr);
 };
 
+class ObBackupConfigUtil {
+public:
+  ObBackupConfigUtil() {}
+  ~ObBackupConfigUtil() {}
+  static int admin_set_backup_config(
+      common::ObMySQLProxy &sql_proxy,
+      obrpc::ObSrvRpcProxy &rpc_proxy,
+      share::schema::ObMultiVersionSchemaService &schema_service,
+      const obrpc::ObAdminSetConfigArg &arg);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBackupConfigUtil);
+};
+
 }
 }
 

@@ -51,7 +51,7 @@ TEST_F(ObLoserTreeTest, single)
   int ret = 0;
   TestMaxComp tc;
   ObArenaAllocator allocator;
-  ObLoserTree<int64_t, TestMaxComp, 8> tree(tc);
+  ObLoserTree<int64_t, TestMaxComp> tree(tc);
   int64_t data = 2019;
 
   // not init
@@ -63,14 +63,14 @@ TEST_F(ObLoserTreeTest, single)
   ASSERT_TRUE(tree.is_unique_champion());
 
   // 0 player
-  ret = tree.init(0, allocator);
+  ret = tree.init(8, 0, allocator);
   ASSERT_EQ(ret, OB_INVALID_ARGUMENT);
 
   // init twice
-  ret = tree.init(1, allocator);
+  ret = tree.init(8, 1, allocator);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_TRUE(tree.is_unique_champion());
-  ret = tree.init(1, allocator);
+  ret = tree.init(8, 1, allocator);
   ASSERT_EQ(ret, OB_INIT_TWICE);
   ASSERT_EQ(0, tree.count());
 
@@ -125,7 +125,7 @@ TEST_F(ObLoserTreeTest, multiple_players)
   int ret = 0;
   TestMaxComp tc;
   ObArenaAllocator allocator;
-  ObLoserTree<int64_t, TestMaxComp, 8> tree(tc);
+  ObLoserTree<int64_t, TestMaxComp> tree(tc);
   const int64_t DATA_CNT = 8;
   int64_t data[DATA_CNT] = {1, 2, 3, 4, 5, 6, 7, 8};
 
@@ -133,7 +133,7 @@ TEST_F(ObLoserTreeTest, multiple_players)
   const int64_t *top;
   for (int64_t count = 1; count <= DATA_CNT; ++count) {
     tree.reset();
-    ret = tree.init(count, allocator);
+    ret = tree.init(DATA_CNT, count, allocator);
     ASSERT_EQ(ret, OB_SUCCESS);
     ASSERT_TRUE(tree.empty());
     for (int64_t i = 0; i < count; ++i) {
@@ -156,10 +156,10 @@ TEST_F(ObLoserTreeTest, basic)
   int ret = 0;
   TestMaxComp tc;
   ObArenaAllocator allocator;
-  ObLoserTree<int64_t, TestMaxComp, 8> tree(tc);
+  ObLoserTree<int64_t, TestMaxComp> tree(tc);
   const int64_t DATA_CNT = 7;
   int64_t data[DATA_CNT] = {0, 8, 12, 3, 14, 7, 5};
-  ret = tree.init(DATA_CNT, allocator);
+  ret = tree.init(DATA_CNT, DATA_CNT, allocator);
   ASSERT_EQ(ret, OB_SUCCESS);
 
   for (int64_t i = 0; i < DATA_CNT; ++i) {
@@ -230,10 +230,10 @@ TEST_F(ObLoserTreeTest, only_one_element)
   int ret = 0;
   TestMaxComp tc;
   ObArenaAllocator allocator;
-  ObLoserTree<int64_t, TestMaxComp, 8> tree(tc);
+  ObLoserTree<int64_t, TestMaxComp> tree(tc);
   const int64_t DATA_CNT = 7;
   int64_t data[DATA_CNT] = {5, 12, 4, 3, 12, 0, 5};
-  ret = tree.init(DATA_CNT, allocator);
+  ret = tree.init(DATA_CNT, DATA_CNT, allocator);
   ASSERT_EQ(ret, OB_SUCCESS);
 
   for (int64_t i = 0; i < DATA_CNT; ++i) {
@@ -282,10 +282,10 @@ TEST_F(ObLoserTreeTest, unique_champion)
   int ret = 0;
   TestMaxComp tc;
   ObArenaAllocator allocator;
-  ObLoserTree<int64_t, TestMaxComp, 8> tree(tc);
+  ObLoserTree<int64_t, TestMaxComp> tree(tc);
   const int64_t DATA_CNT = 7;
   int64_t data[DATA_CNT] = {4, 4, 7, 3, 12, 5, 12};
-  ret = tree.init(DATA_CNT, allocator);
+  ret = tree.init(DATA_CNT, DATA_CNT, allocator);
   ASSERT_EQ(ret, OB_SUCCESS);
 
   for (int64_t i = 0; i < DATA_CNT; ++i) {

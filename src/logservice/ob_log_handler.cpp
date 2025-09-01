@@ -1957,7 +1957,8 @@ int ObLogHandler::pend_submit_replay_log()
   } else if (OB_FAIL(replay_service_->block_submit_log(id))) {
     CLOG_LOG(WARN, "failed to block_submit_log", K(ret), K(id));
   } else {
-    CLOG_LOG(INFO, "block_submit_log success", K(ret), K(id));
+    const int64_t pending_task_size_MB = replay_service_->get_pending_task_size() / 1024 / 1024;
+    FLOG_INFO("block_submit_log success", K(ret), K(id), K(pending_task_size_MB));
   }
   return ret;
 }
@@ -1973,7 +1974,8 @@ int ObLogHandler::restore_submit_replay_log()
   } else if (OB_FAIL(replay_service_->unblock_submit_log(id))) {
     CLOG_LOG(WARN, "failed to unblock_submit_log", K(ret), K(id));
   } else {
-    CLOG_LOG(INFO, "unblock_submit_log success", K(ret), K(id));
+    const int64_t pending_task_size_MB = replay_service_->get_pending_task_size() / 1024 / 1024;
+    FLOG_INFO("unblock_submit_log success", K(ret), K(id), K(pending_task_size_MB));
   }
   return ret;
 }

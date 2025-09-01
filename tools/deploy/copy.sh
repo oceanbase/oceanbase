@@ -28,9 +28,7 @@ function do_install {
     quiet=true
   fi
   [[ "$quiet" == "false" ]] && echo -n "Installing $1 "
-  sources=$(ls $1 2>/dev/null)
-  if [[ "$sources" == "" ]]
-  then
+  if [ ! -e "$1" ]; then
     [[ "$quiet" == "false" ]] && echo -e "\033[0;31mFAIL\033[0m\nNo such file: $1"
     if [ "$quiet" == "false" ]
     then
@@ -39,8 +37,23 @@ function do_install {
       return 0
     fi
   fi
-  target=$2
-  err_msg=$(libtool --mode=install cp $sources $target 2>&1 >/dev/null)
+  if [ -d "$1" ]; then
+    err_msg=$(cp -r "$1" "$2"/ 2>&1)
+  else
+    sources=$(ls $1 2>/dev/null)
+    if [[ "$sources" == "" ]]
+    then
+      [[ "$quiet" == "false" ]] && echo -e "\033[0;31mFAIL\033[0m\nNo such file: $1"
+      if [ "$quiet" == "false" ]
+      then
+        return 1
+      else
+        return 0
+      fi
+    fi
+    target=$2
+    err_msg=$(libtool --mode=install cp $sources $target 2>&1 >/dev/null)
+  fi
   if [ $? -eq 0 ]
   then
     [[ "$quiet" == "false" ]] && echo -e "\033[0;32mOK\033[0m"
@@ -81,5 +94,11 @@ then
   do_install ./usr/lib/oracle/12.2/client64/lib/libociei.so $LIB_DIR true
   do_install ./usr/lib/oracle/12.2/client64/lib/libmql1.so $LIB_DIR true
   do_install ./usr/lib/oracle/12.2/client64/lib/libipc1.so $LIB_DIR true
+
+
+  do_install ./usr/local/oceanbase/deps/devel/python3/lib/python3.13 $LIB_DIR true
+  do_install ./usr/local/oceanbase/deps/devel/python3/lib/pkgconfig $LIB_DIR true
+  do_install ./usr/local/oceanbase/deps/devel/python3/lib/libpython3.so $LIB_DIR true
+  do_install ./usr/local/oceanbase/deps/devel/python3/lib/libpython3.13.so.1.0 $LIB_DIR true
 
 fi

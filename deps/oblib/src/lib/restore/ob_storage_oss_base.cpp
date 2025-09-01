@@ -298,6 +298,43 @@ int get_bucket_object_name_for_list(const ObString &uri, ObString &bucket, ObStr
   return ret;
 }
 
+//datetime formate : Tue, 09 Apr 2019 06:24:00 GMT
+//time unit is second
+int ob_strtotime(const ObString &date_time, int64_t &time_s)
+{
+  int ret = OB_SUCCESS;
+  time_s = -1;
+  if (OB_UNLIKELY(date_time.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "ob_strtotime get invalid argument", K(ret), K(date_time));
+  } else {
+    try {
+      // Parses the date-time string into a current-time-zone timestamp using Aws::Utils::DateTime
+      // to ensure consistency with S3/OBDAL parsing results.
+      Aws::String date_time_string(date_time.ptr(), date_time.length());
+      time_s = Aws::Utils::DateTime(date_time_string, Aws::Utils::DateFormat::AutoDetect).Seconds();
+      if (OB_UNLIKELY(time_s < 0)) {
+        ret = OB_INVALID_ARGUMENT;
+        OB_LOG(WARN, "date time is invalid", K(ret), K(date_time), K(time_s));
+      }
+    } catch (const std::exception &e) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "fail to parse date time", K(ret), K(e.what()), K(date_time));
+    } catch (...) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "fail to parse date time", K(ret), K(date_time));
+    }
+  }
+  return ret;
+}
+
+//datetime formate : Tue, 09 Apr 2019 06:24:00 GMT
+//time unit is second
+int ob_strtotime(const char *date_time, int64_t &time_s)
+{
+  return ob_strtotime(ObString(date_time), time_s);
+}
+
 ObStorageOSSRetryStrategy::ObStorageOSSRetryStrategy(const int64_t timeout_us)
     : ObStorageIORetryStrategy<aos_status_t *>(timeout_us),
       origin_headers_(nullptr),
@@ -938,27 +975,43 @@ int ObStorageOssBase::get_oss_file_meta(
         ret = OB_OBJECT_STORAGE_IO_ERROR;
         OB_LOG(WARN, "fail to get file length string from response", K(ret));
       } else if (OB_FAIL(ob_atoll(file_length_ptr, meta.length_))) {
-        OB_LOG(WARN, "fail to convert string to int64", K(ret), K(file_length_ptr));
+        OB_LOG(WARN, "fail to convert string to int64", K(ret),
+            K(file_length_ptr), K(bucket_ob_string), K(object_ob_string));
       } else if (OB_UNLIKELY(meta.length_ < 0)) {
         ret = OB_OBJECT_STORAGE_IO_ERROR;
         OB_LOG(WARN, "fail to get object length", K(ret), K(file_length_ptr),
             K(bucket_ob_string), K(object_ob_string), K(meta));
       } else {
+        int tmp_ret = OB_SUCCESS;
         const char *last_modified_str = nullptr;
         if (OB_ISNULL(last_modified_str =
             static_cast<const char *>(apr_table_get(resp_headers, "Last-Modified")))) {
-          ret = OB_OBJECT_STORAGE_IO_ERROR;
-          OB_LOG(WARN, "fail to Last-Modified string from response", K(ret), K(meta));
-        } else if (OB_FAIL(ob_strtotime(last_modified_str, meta.mtime_s_))) {
-          OB_LOG(WARN, "fail to convert string to int64", K(ret), K(last_modified_str));
+          tmp_ret = OB_OBJECT_STORAGE_IO_ERROR;
+          OB_LOG(WARN, "fail to get Last-Modified string from response",
+              K(ret), K(tmp_ret), K(meta), K(bucket_ob_string), K(object_ob_string));
+        } else if (OB_TMP_FAIL(ob_strtotime(last_modified_str, meta.mtime_s_))) {
+          OB_LOG(WARN, "fail to convert string to int64", K(ret), K(tmp_ret),
+              K(last_modified_str), K(bucket_ob_string), K(object_ob_string));
         }
 
-        // This field is currently only used by external tables.
+        // Last_modified_time and etag are currently only used by external tables.
         // To avoid impacting existing functionality,
-        // even if the value is invalid, no error is reported. Instead, `meta.mtime_s_` is set to -1.
-        if (OB_FAIL(ret)) {
-          ret = OB_SUCCESS;
+        // even if the value is invalid, no error is reported.
+        // Instead, `meta.mtime_s_` is set to -1, and `meta.digest_` is set to empty.
+        if (OB_TMP_FAIL(tmp_ret)) {
+          tmp_ret = OB_SUCCESS;
           meta.mtime_s_ = -1;
+        }
+
+        const char *etag_str = nullptr;
+        if (OB_ISNULL(etag_str =
+            static_cast<const char *>(apr_table_get(resp_headers, "ETag")))) {
+          tmp_ret = OB_OBJECT_STORAGE_IO_ERROR;
+          OB_LOG(WARN, "fail to get etag string from response",
+              K(ret), K(tmp_ret), K(meta), K(bucket_ob_string), K(object_ob_string));
+        } else if (OB_TMP_FAIL(meta.digest_.set(etag_str))) {
+          OB_LOG(WARN, "fail to set etag", K(ret), K(tmp_ret),
+              K(meta), K(etag_str), K(bucket_ob_string), K(object_ob_string));
         }
       }
     }
@@ -1691,6 +1744,8 @@ int ObStorageOssReader::pread(
     char *buf,const int64_t buf_size, const int64_t offset, int64_t &read_size)
 {
   int ret = OB_SUCCESS;
+  static const char *OSS_RANGE_BEHAVIOR_KEY = "x-oss-range-behavior";
+  static const char *OSS_RANGE_BEHAVIOR_VALUE_STANDARD = "standard";
   ObExternalIOCounterGuard io_guard;
   aos_pool_t *tmp_aos_pool = nullptr;
   oss_request_options_t *tmp_oss_option = nullptr;
@@ -1753,6 +1808,7 @@ int ObStorageOssReader::pread(
         ret = OB_OBJECT_STORAGE_IO_ERROR;
         OB_LOG(WARN, "fail to make oss headers", K(ret));
       } else {
+        apr_table_set(headers, OSS_RANGE_BEHAVIOR_KEY, OSS_RANGE_BEHAVIOR_VALUE_STANDARD);
         if (is_range_read) {
           // oss read size is [10, 100] include the 10 and 100 bytes
           // we except is [10, 100) not include the end, so we subtraction 1 to the end
@@ -2313,6 +2369,7 @@ int ObStorageOssUtil::list_files(
     OB_LOG(WARN, "uri is not terminated with '/'", K(ret), K(uri), K(full_dir_path));
   } else {
     ObString object_path;
+    ObString last_modified_time_obstr;
     const char *next_marker = "";
     const int64_t full_dir_path_len = get_safe_str_len(full_dir_path);
     oss_list_object_content_t *content = NULL;
@@ -2324,10 +2381,12 @@ int ObStorageOssUtil::list_files(
             K(ret), K(bucket_str), K(full_dir_path), K(next_marker));
       } else {
         object_path.reset();
+        last_modified_time_obstr.reset();
         aos_list_for_each_entry(oss_list_object_content_t, content, &params->object_list, node) {
           //key.data has prefix object_str, we only get the file name
           object_path.assign(content->key.data, content->key.len);
           int64_t object_size = -1;
+          ObFileExtraInfo file_extra_info;
 
           if (OB_ISNULL(object_path) || OB_UNLIKELY(false == object_path.prefix_match(full_dir_path))) {
             ret = OB_OBJECT_STORAGE_IO_ERROR;
@@ -2337,13 +2396,30 @@ int ObStorageOssUtil::list_files(
             // skip
             OB_LOG(INFO, "exist object path length is same with dir path length",
                 K(object_path), K(full_dir_path), K(full_dir_path_len));
-          } else if (OB_FAIL(c_str_to_int(content->size.data, content->size.len, object_size))) {
-            OB_LOG(WARN, "fail to get object size", K(ret), K(content->size.data), K(object_path));
-          } else if (OB_FAIL(handle_listed_object(op, content->key.data + full_dir_path_len,
-                                                  content->key.len - full_dir_path_len,
-                                                  object_size))) {
-            OB_LOG(WARN, "fail to handle oss file name",
-                K(ret), K(object_path), K(full_dir_path), K(content->size.data), K(object_size));
+          } else {
+            if (op.need_get_file_meta()) {
+              last_modified_time_obstr.assign(content->last_modified.data,
+                                              content->last_modified.len);
+              int64_t last_modified_time_s = -1;
+              file_extra_info.etag_ = content->etag.data;
+              file_extra_info.etag_len_ = content->etag.len;
+              if (OB_FAIL(c_str_to_int(content->size.data, content->size.len, object_size))) {
+                OB_LOG(WARN, "fail to get object size", K(ret), K(content->size.data),
+                       K(object_path));
+              } else if (OB_FAIL(ob_strtotime(last_modified_time_obstr, last_modified_time_s))) {
+                OB_LOG(WARN, "fail to parse last modified time", K(ret), K(uri), K(object_path),
+                       K(last_modified_time_obstr));
+              } else {
+                file_extra_info.last_modified_time_ms_ = last_modified_time_s * 1000LL;
+              }
+            }
+
+            if (FAILEDx(handle_listed_object(op, content->key.data + full_dir_path_len,
+                                             content->key.len - full_dir_path_len, object_size,
+                                             &file_extra_info))) {
+              OB_LOG(WARN, "fail to handle oss file name", K(ret), K(file_extra_info),
+                     K(object_path), K(full_dir_path), K(content->size.data), K(object_size));
+            }
           }
 
           if (OB_FAIL(ret)) {
@@ -2431,7 +2507,8 @@ int ObStorageOssUtil::list_files(
           // skip
           OB_LOG(INFO, "exist object path length is same with dir path length",
               K(object_path), K(full_dir_path), K(full_dir_path_len));
-        } else if (OB_FAIL(c_str_to_int(content->size.data, content->size.len, object_size))) {
+        } else if (list_ctx.need_meta_
+            && OB_FAIL(c_str_to_int(content->size.data, content->size.len, object_size))) {
           OB_LOG(WARN, "fail to get object size", K(ret), K(content->size.data), K(object_path));
         } else if (OB_FAIL(list_ctx.handle_object(content->key.data,
                                                   content->key.len,
@@ -2454,35 +2531,6 @@ int ObStorageOssUtil::del_dir(const common::ObString &uri)
 {
   int ret = OB_SUCCESS;
   UNUSED(uri);
-  return ret;
-}
-
-//datetime formate : Tue, 09 Apr 2019 06:24:00 GMT
-//time unit is second
-int ob_strtotime(const char *date_time, int64_t &time_s)
-{
-  int ret = OB_SUCCESS;
-  time_s = -1;
-  if (OB_ISNULL(date_time)) {
-    ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "ob_strtotime get invalid argument", K(ret), KP(date_time));
-  } else {
-    try {
-      // Parses the date-time string into a current-time-zone timestamp using Aws::Utils::DateTime
-      // to ensure consistency with S3/OBDAL parsing results.
-      time_s = Aws::Utils::DateTime(date_time, Aws::Utils::DateFormat::RFC822).Seconds();
-      if (OB_UNLIKELY(time_s < 0)) {
-        ret = OB_INVALID_ARGUMENT;
-        OB_LOG(WARN, "date time is invalid", K(ret), K(date_time), K(time_s));
-      }
-    } catch (const std::exception &e) {
-      ret = OB_ERR_UNEXPECTED;
-      OB_LOG(WARN, "fail to parse date time", K(ret), K(e.what()), K(date_time));
-    } catch (...) {
-      ret = OB_ERR_UNEXPECTED;
-      OB_LOG(WARN, "fail to parse date time", K(ret), K(date_time));
-    }
-  }
   return ret;
 }
 

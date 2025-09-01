@@ -58,7 +58,8 @@ public:
       external_routine_type_(ObExternalRoutineType::INTERNAL_ROUTINE),
       external_routine_entry_(),
       external_routine_url_(),
-      external_routine_resource_()
+      external_routine_resource_(),
+      is_mysql_udtf_(false)
   {
   }
 
@@ -67,6 +68,11 @@ public:
                         ObIExprExtraInfo *&copied_info) const override;
 
   template <typename RE> int from_raw_expr(RE &expr);
+
+  inline bool is_py_udf() {
+    return external_routine_type_ == ObExternalRoutineType::EXTERNAL_PY_UDF_FROM_URL
+        || external_routine_type_ == ObExternalRoutineType::EXTERNAL_PY_UDF_FROM_RES;
+  }
 
   int64_t udf_id_;
   int64_t udf_package_id_;
@@ -87,6 +93,7 @@ public:
   common::ObString external_routine_entry_;
   common::ObString external_routine_url_;
   common::ObString external_routine_resource_;
+  bool is_mysql_udtf_;
 };
 
 class ObExprUDFEnvGuard
@@ -152,6 +159,8 @@ public:
                                       ObEvalCtx &ctx,
                                       const ObBitVector &skip,
                                       const EvalBound &bound);
+
+  static int eval_mysql_udtf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
 
   inline void set_udf_id(int64_t udf_id) { udf_id_ = udf_id; }
   inline int64_t get_udf_id() const { return udf_id_;}

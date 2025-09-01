@@ -45,7 +45,7 @@ public:
       const share::ObLSID &id,
       const int64_t proposal_id,
       const palf::LSN &group_start_lsn,
-      const palf::LogGroupEntry &group_entry,
+      const ipalf::IGroupEntry &group_entry,
       const char *buffer,
       void *ls_fetch_ctx,
       logfetcher::KickOutInfo &kick_out_info,

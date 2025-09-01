@@ -116,7 +116,7 @@ int ObArchivePathUtil::get_pieces_dir_path(const ObBackupDest &dest, ObBackupPat
   return ret;
 }
 
-// // oss://archive/pieces/piece_d[dest_id]r[round_id]p[piece_id]_start_20220601T120000.obarc
+// oss://archive/pieces/piece_d[dest_id]r[round_id]p[piece_id]_start_20220601T120000.obarc
 int ObArchivePathUtil::get_piece_start_file_path(const ObBackupDest &dest, const int64_t dest_id, 
     const int64_t round_id, const int64_t piece_id, const SCN &start_scn,
     ObBackupPath &path)

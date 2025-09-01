@@ -372,7 +372,11 @@ int ObPLPackage::execute_init_routine(ObIAllocator &allocator, ObExecContext &ex
       ObObj result;
       int status;
       ObSEArray<int64_t, 2> subp_path;
-      ObCacheObjGuard cacheobj_guard(PL_ROUTINE_HANDLE);
+      pl::ObPLExecuteArg pl_execute_arg;
+      OZ (pl_execute_arg.obtain_routine(exec_ctx,
+                                        init_routine->get_package_id(),
+                                        init_routine->get_routine_id(),
+                                        subp_path));
       OZ (pl_engine->execute(exec_ctx,
                              exec_ctx.get_allocator(),
                              init_routine->get_package_id(),
@@ -381,7 +385,7 @@ int ObPLPackage::execute_init_routine(ObIAllocator &allocator, ObExecContext &ex
                              params,
                              nocopy_param,
                              result,
-                             cacheobj_guard,
+                             pl_execute_arg,
                              &status,
                              false,
                              init_routine->is_function()));

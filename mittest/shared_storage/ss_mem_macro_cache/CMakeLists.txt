@@ -1,0 +1,13 @@
+function(ss_mem_macro_cache_mittest case)
+  mit_shared_storage_unittest(${case})
+  target_compile_definitions(${case} PRIVATE UNITTEST_DEBUG)
+  target_link_libraries(${case} PRIVATE observer_test)
+  if (case MATCHES "^test_.*")
+    set_tests_properties(${case} PROPERTIES TIMEOUT 600)
+  endif()
+endfunction()
+
+if(OB_BUILD_CLOSE_MODULES)
+ss_mem_macro_cache_mittest(test_ss_mem_macro_cache_struct)
+ss_mem_macro_cache_mittest(test_ss_mem_macro_cache)
+endif()

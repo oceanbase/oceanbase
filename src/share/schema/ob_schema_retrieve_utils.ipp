@@ -1555,6 +1555,8 @@ int ObSchemaRetrieveUtils::fill_table_schema(
                                                         uint64_t, true, true, common::OB_INVALID_ID);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
       result, external_sub_path, table_schema, true/*skip null*/, true/*ignore column error*/, empty_str);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+      result, semistruct_properties, table_schema, true/*skip null*/, true/*ignore column error*/, "");
     if (OB_SUCC(ret)) {
       bool with_dynamic_partition_policy = !table_schema.get_dynamic_partition_policy().empty();
       table_schema.set_with_dynamic_partition_policy(with_dynamic_partition_policy);
@@ -1969,6 +1971,10 @@ int ObSchemaRetrieveUtils::fill_user_schema(
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_CREATE_CATALOG) != 0 ? OB_PRIV_CREATE_CATALOG : 0);
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_USE_CATALOG) != 0 ? OB_PRIV_USE_CATALOG : 0);
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_CREATE_LOCATION) != 0 ? OB_PRIV_CREATE_LOCATION : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_CREATE_AI_MODEL) != 0 ? OB_PRIV_CREATE_AI_MODEL : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_ALTER_AI_MODEL) != 0 ? OB_PRIV_ALTER_AI_MODEL : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_DROP_AI_MODEL) != 0 ? OB_PRIV_DROP_AI_MODEL : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_ACCESS_AI_MODEL) != 0 ? OB_PRIV_ACCESS_AI_MODEL : 0);
     if (OB_SUCC(ret)) {
       int64_t default_flags = 0;
       //In user schema def, flag is a int column.
@@ -6374,6 +6380,49 @@ int ObSchemaRetrieveUtils::retrieve_external_resource_schema(const uint64_t tena
   return ret;
 }
 
+template <typename T>
+int ObSchemaRetrieveUtils::retrieve_ai_model_schema(const uint64_t tenant_id,
+                                                    T &result,
+                                                    ObIArray<ObAiModelSchema> &schema_array)
+{
+  int ret = OB_SUCCESS;
+
+  ObArenaAllocator allocator(ObMemAttr(tenant_id, "SchAiModel"));
+  ObAiModelSchema schema(&allocator);
+
+  uint64_t pre_ai_model_id = OB_INVALID_ID;
+
+  while (OB_SUCC(ret) && OB_SUCC(result.next())) {
+    schema.reset();
+    allocator.reuse();
+
+    bool is_deleted = false;
+
+    if (OB_FAIL(fill_ai_model_schema(tenant_id, result, schema, is_deleted))) {
+      SHARE_SCHEMA_LOG(WARN, "failed to fill_ai_model_schema", K(ret), K(schema));
+    } else if (schema.get_model_id() == pre_ai_model_id) {
+      // do nothing
+    } else if (is_deleted) {
+      SHARE_SCHEMA_LOG(INFO, "ai_model is deleted, don't add", K(schema));
+    } else if (OB_FAIL(schema_array.push_back(schema))) {
+      SHARE_SCHEMA_LOG(WARN, "failed to push back", K(ret), K(schema));
+    }
+
+    if (OB_SUCC(ret)) {
+      pre_ai_model_id = schema.get_model_id();
+    }
+  }
+
+  if (ret != common::OB_ITER_END) {
+    SHARE_SCHEMA_LOG(WARN, "fail to get all ai model schema. iter quit. ", K(ret));
+  } else {
+    ret = common::OB_SUCCESS;
+    SHARE_SCHEMA_LOG(INFO, "retrieve ai model schemas succeed", K(tenant_id));
+  }
+
+  return ret;
+}
+
 template<typename T>
 int ObSchemaRetrieveUtils::fill_external_resource_schema(const uint64_t tenant_id,
                                                          T &result,
@@ -6394,6 +6443,36 @@ int ObSchemaRetrieveUtils::fill_external_resource_schema(const uint64_t tenant_i
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID(result, database_id, schema, tenant_id);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, name, schema);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, type, schema, ObSimpleExternalResourceSchema::ResourceType);
+  }
+
+  return ret;
+}
+
+template<typename T>
+int ObSchemaRetrieveUtils::fill_ai_model_schema(const uint64_t tenant_id,
+                                                T &result,
+                                                ObAiModelSchema &schema,
+                                                bool &is_deleted)
+{
+  int ret = OB_SUCCESS;
+
+  schema.reset();
+
+  schema.set_tenant_id(tenant_id);
+  int64_t type = 0;
+
+  EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID(result, model_id, schema, tenant_id);
+  EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
+
+  if (OB_SUCC(ret) && !is_deleted) {
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, schema_version, schema, int64_t);
+    EXTRACT_INT_FIELD_MYSQL(result, "type", type, int64_t);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, name, schema);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, model_name, schema);
+  }
+
+  if (OB_SUCC(ret)) {
+    schema.set_type(EndpointType::convert_type_from_int(type));
   }
 
   return ret;

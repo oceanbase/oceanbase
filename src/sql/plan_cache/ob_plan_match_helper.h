@@ -22,7 +22,6 @@ namespace sql {
 class ObPhysicalPlan;
 class ObPlanCacheCtx;
 class ObTableLocation;
-class ObPhyTableLocation;
 class ObSqlPlanSet;
 
 class ObPlanMatchHelper

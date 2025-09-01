@@ -22,6 +22,20 @@ namespace oceanbase
 
 namespace pl
 {
+
+class ObPLPakcageUdfKey
+{
+public:
+  ObPLPakcageUdfKey() : package_id_(OB_INVALID_ID), func_id_(OB_INVALID_ID) {}
+  int hash(uint64_t &hash_val) const;
+  bool operator==(const ObPLPakcageUdfKey &other) const;
+
+  TO_STRING_KV(K_(package_id), K_(func_id));
+  uint64_t package_id_;
+  uint64_t func_id_;
+};
+
+class ObPLFunction;
 class ObPLPackageGuard
 {
 public:
@@ -39,7 +53,7 @@ public:
   virtual ~ObPLPackageGuard();
 
   int init();
-  inline bool is_inited() { return map_.created(); }
+  inline bool is_inited() { return map_.created() && package_udf_map_.created(); }
   inline int put(uint64_t package_id, sql::ObCacheObjGuard *package)
   {
     return map_.set_refactored(package_id, package);
@@ -48,11 +62,21 @@ public:
   {
     return map_.get_refactored(package_id, package);
   }
+
+  inline int put_package_udf(ObPLPakcageUdfKey &key, ObPLFunction *func)
+  {
+    return package_udf_map_.set_refactored(key, func);
+  }
+  inline int get_package_udf(ObPLPakcageUdfKey &key, ObPLFunction *&func)
+  {
+    return package_udf_map_.get_refactored(key, func);
+  }
   common::ObArenaAllocator alloc_;
   ObPLDbLinkGuard dblink_guard_;
 private:
   common::hash::ObHashMap<uint64_t, sql::ObCacheObjGuard*> map_;
   observer::ObReqTimeGuard req_time_guard_;
+  common::hash::ObHashMap<ObPLPakcageUdfKey, ObPLFunction*> package_udf_map_;
 };
 
 }

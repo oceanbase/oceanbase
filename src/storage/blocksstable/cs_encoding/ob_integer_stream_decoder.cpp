@@ -9,6 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+#include "storage/blocksstable/cs_encoding/ob_column_encoding_struct.h"
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_integer_stream_decoder.h"
@@ -26,7 +27,8 @@ ObMultiDimArray_T<ConvertUnitToDatumFunc,
                   ObRefStoreWidthV::MAX_WIDTH_V,
                   4,
                   ObBaseColumnDecoderCtx::ObNullFlag::MAX,
-                  2> convert_uint_to_datum_funcs;
+                  2>
+    convert_uint_to_datum_funcs;
 template< int32_t store_len_V,
          int32_t ref_store_width_V,
          int32_t datum_width_V,
@@ -100,7 +102,7 @@ template<int32_t store_len_V, int32_t ref_store_width_V, int32_t datum_width_V, 
 struct ConvertUintToDatum_T<store_len_V,
                             ref_store_width_V,
                             datum_width_V,
-                            ObBaseColumnDecoderCtx::ObNullFlag::HAS_NO_NULL,
+                            ObBaseColumnDecoderCtx::ObNullFlag::HAS_NO_NULL_OR_NOP,
                             is_decimal_V>
 {
   static void process(
@@ -158,7 +160,7 @@ struct ConvertUintToDatum_T<store_len_V,
     uint64_t value = 0;
     for (int64_t i = 0; i < row_cap; i++) {
       common::ObDatum &datum = datums[i];
-      //row_id is stored int datum.pack_
+      //row_id is stored in datum.pack_
       if (datum.pack_ == base_col_ctx.null_replaced_ref_) {
         datum.set_null();
         // must enter next loop, row_id maybe out of range of store_uint_arr
@@ -181,7 +183,7 @@ template<int32_t store_len_V, int32_t datum_width_V, bool is_decimal_V>
 struct ConvertUintToDatum_T<store_len_V,
                             ObRefStoreWidthV::REF_IN_DATUMS,
                             datum_width_V,
-                            ObBaseColumnDecoderCtx::ObNullFlag::HAS_NO_NULL,
+                            ObBaseColumnDecoderCtx::ObNullFlag::HAS_NO_NULL_OR_NOP,
                             is_decimal_V>
 {
   static void process(
@@ -218,7 +220,7 @@ template<int32_t store_len_V, int32_t datum_width_V, bool is_decimal_V>
 struct ConvertUintToDatum_T<store_len_V,
                             ObRefStoreWidthV::NOT_REF,
                             datum_width_V,
-                            ObBaseColumnDecoderCtx::ObNullFlag::HAS_NULL_BITMAP,
+                            ObBaseColumnDecoderCtx::ObNullFlag::HAS_NULL_OR_NOP_BITMAP,
                             is_decimal_V>
 {
   static void process(
@@ -240,7 +242,7 @@ struct ConvertUintToDatum_T<store_len_V,
     for (int64_t i = 0; i < row_cap; i++) {
       common::ObDatum &datum = datums[i];
       row_id = row_ids[i];
-      if (ObCSDecodingUtil::test_bit(base_col_ctx.null_bitmap_, row_id)) {
+      if (ObCSDecodingUtil::test_bit(base_col_ctx.null_or_nop_bitmap_, row_id)) {
         datum.set_null();
       } else {
         value = store_uint_arr[row_id] + base;
@@ -282,7 +284,8 @@ struct ConvertUintToDatum_T<store_len_V,
 
     for (int64_t i = 0; i < row_cap; i++) {
       common::ObDatum &datum = datums[i];
-      value = store_uint_arr[row_ids[i]] + base;
+      row_id = row_ids[i];
+      value = store_uint_arr[row_id] + base;
 
       if (value == base_col_ctx.null_replaced_value_) {
         datum.set_null();
@@ -301,7 +304,7 @@ template<int32_t store_len_V, int32_t datum_width_V, bool is_decimal_V>
 struct ConvertUintToDatum_T<store_len_V,
                             ObRefStoreWidthV::NOT_REF,
                             datum_width_V,
-                            ObBaseColumnDecoderCtx::ObNullFlag::HAS_NO_NULL,
+                            ObBaseColumnDecoderCtx::ObNullFlag::HAS_NO_NULL_OR_NOP,
                             is_decimal_V>
 {
   static void process(
@@ -355,8 +358,13 @@ struct ConvertUintToDatumInit
   }
 };
 
-static bool convert_uint_to_datum_funcs_inited
-    = ObNDArrayIniter<ConvertUintToDatumInit, 4, ObRefStoreWidthV::MAX_WIDTH_V, 4, ObBaseColumnDecoderCtx::ObNullFlag::MAX, 2>::apply();
+static bool convert_uint_to_datum_funcs_inited =
+    ObNDArrayIniter<ConvertUintToDatumInit,
+                    4,
+                    ObRefStoreWidthV::MAX_WIDTH_V,
+                    4,
+                    ObBaseColumnDecoderCtx::ObNullFlag::MAX,
+                    2>::apply();
 
 int ObIntegerStreamDecoder::decode_stream_meta(
     const ObStreamData &data,

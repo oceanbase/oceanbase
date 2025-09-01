@@ -370,6 +370,7 @@ struct ObResolverParams
        tg_timing_event_(-1),
        is_column_ref_(true),
        outline_parse_result_(NULL),
+       outline_state_(NULL),
        is_execute_call_stmt_(false),
        enable_res_map_(false),
        need_check_col_dup_(true),
@@ -443,6 +444,7 @@ public:
   int64_t tg_timing_event_;      // mysql mode, trigger的触发时机和类型
   bool is_column_ref_;                   // used to mark normal column ref
   ParseResult *outline_parse_result_;
+  ObOutlineState *outline_state_;
   bool is_execute_call_stmt_;
   bool enable_res_map_;
   bool need_check_col_dup_;

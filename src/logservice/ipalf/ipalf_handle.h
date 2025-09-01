@@ -113,7 +113,8 @@ public:
 
   virtual int seek(const palf::LSN &lsn, palf::PalfGroupBufferIterator &iter) = 0;
 
-  virtual int seek(const palf::LSN &lsn, ipalf::IPalfLogIterator &iter) = 0;
+  virtual int seek(const palf::LSN &lsn, ipalf::IPalfIterator<ILogEntry> &iter) = 0;
+  virtual int seek(const palf::LSN &lsn, ipalf::IPalfIterator<IGroupEntry> &iter) = 0;
 
   // @desc: seek a buffer(group buffer) iterator by scn, the first log A in iterator must meet
   // one of the following conditions:
@@ -132,6 +133,8 @@ public:
   // - others: bug
   virtual int seek(const share::SCN &scn, palf::PalfGroupBufferIterator &iter) = 0;
   virtual int seek(const share::SCN &scn, palf::PalfBufferIterator &iter) = 0;
+  virtual int seek(const share::SCN &scn, ipalf::IPalfIterator<ILogEntry> &iter) = 0;
+  virtual int seek(const share::SCN &scn, ipalf::IPalfIterator<IGroupEntry> &iter) = 0;
 
   // @desc: query coarse lsn by scn, that means there is a LogGroupEntry in disk,
   // its lsn and scn are result_lsn and result_scn, and result_scn <= scn.

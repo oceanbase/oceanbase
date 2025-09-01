@@ -151,7 +151,7 @@ public:
   ObSSTableDataBlockReader();
   virtual ~ObSSTableDataBlockReader();
 
-  int init(const char *data, const int64_t size, const bool hex_print = false, FILE *fd = NULL);
+  int init(const char *data, const int64_t size, const int64_t hex_length, const bool hex_print = false, FILE *fd = NULL);
   void reset();
   int dump(const uint64_t tablet_id, const int64_t scn);
 private:
@@ -202,6 +202,7 @@ private:
   bool is_inited_;
   int64_t column_type_array_cnt_;
   ObSSTablePrinter printer_;
+  int64_t print_hex_length_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSSTableDataBlockReader);
 };

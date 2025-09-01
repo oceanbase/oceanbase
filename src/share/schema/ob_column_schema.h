@@ -101,6 +101,7 @@ int assign(const ObColumnSchemaV2 &src_schema);
   //is table PARTITION_LEVEL_TWO partition key column
   inline bool is_subpart_key_column() const { return part_pos_.subpart_key_pos_ > 0; }
   bool is_prefix_column() const;
+  bool is_prefix_index_column() const;
   bool is_func_idx_column() const;
   inline void set_data_type(const common::ColumnType type) { meta_type_.set_type(type); }
   inline void set_meta_type(const common::ObObjMeta type) { meta_type_ = type; }

@@ -174,7 +174,7 @@ public:
 
   // must ensure all or nothing at all.
   bool is_valid() const;
-  bool need_old_row() const;
+  bool has_old_row() const;
   int64_t get_row_count() const;
   bool need_check_exist() const;
   blocksstable::ObDmlFlag get_dml_flag() const;

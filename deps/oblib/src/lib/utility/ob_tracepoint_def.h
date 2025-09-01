@@ -327,6 +327,7 @@ GLOBAL_ERRSIM_POINT_DEF(365, EN_ENABLE_THREE_STAGE_AGGREGATE, "");
 GLOBAL_ERRSIM_POINT_DEF(366, EN_ROLLUP_ADAPTIVE_KEY_NUM, "");
 GLOBAL_ERRSIM_POINT_DEF(367, EN_ENABLE_OP_OUTPUT_DATUM_CHECK, "Used to check whether the datum ptr of the operator output is valid");
 GLOBAL_ERRSIM_POINT_DEF(368, EN_LEADER_STORAGE_ESTIMATION, "");
+GLOBAL_ERRSIM_POINT_DEF(369, EN_ENABLE_ENGINE_CHECK, "Used to check expr has_null and all_rows_active flag and check brs of child op");
 
 // SQL table_scan, index_look_up and other dml_op 400-500
 GLOBAL_ERRSIM_POINT_DEF(400, EN_TABLE_LOOKUP_BATCH_ROW_COUNT, "");

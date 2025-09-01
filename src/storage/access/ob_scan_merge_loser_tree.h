@@ -62,19 +62,21 @@ private:
   bool is_inited_;
 };
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-class ObMergeLoserTree : public ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>
+template <typename T, typename CompareFunctor>
+class ObMergeLoserTree : public ObLoserTree<T, CompareFunctor>
 {
 public:
   ObMergeLoserTree(CompareFunctor &cmp)
-      : ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>(cmp),
+      : ObLoserTree<T, CompareFunctor>(cmp),
         has_king_(false),
         is_king_eq_champion_(false),
         king_()
   {
   }
   virtual ~ObMergeLoserTree() { reset(); }
-  virtual int init(const int64_t total_player_cnt, common::ObIAllocator &allocator) override;
+  virtual int init(const int64_t max_player_cnt,
+                   const int64_t total_player_cnt,
+                   common::ObIAllocator &allocator) override;
   virtual int open(const int64_t total_player_cnt) override;
   virtual void reset() override;
   virtual void reuse() override;
@@ -89,19 +91,19 @@ public:
   virtual int push_top(const T &player) override;
   virtual OB_INLINE int count() const override
   {
-    const int64_t tree_cnt = ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::count();
+    const int64_t tree_cnt = ObLoserTree<T, CompareFunctor>::count();
     return has_king_ ? tree_cnt + 1 : tree_cnt;
   }
   virtual OB_INLINE bool empty() const override
   {
-    return !has_king_ && ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::empty();
+    return !has_king_ && ObLoserTree<T, CompareFunctor>::empty();
   }
   virtual OB_INLINE bool is_unique_champion() const override
   {
     return has_king_ ? !is_king_eq_champion_ : this->is_unique_champion_;
   }
 
-  typedef ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT> LoserTree;
+  typedef ObLoserTree<T, CompareFunctor> LoserTree;
 
 protected:
   virtual int duel(
@@ -118,16 +120,17 @@ private:
   T king_;
 };
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-int ObMergeLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::init(const int64_t total_player_cnt,
-                                                              ObIAllocator &allocator)
+template <typename T, typename CompareFunctor>
+int ObMergeLoserTree<T, CompareFunctor>::init(const int64_t max_player_cnt,
+                                              const int64_t player_cnt,
+                                              ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   if (this->is_inited_) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "init twice", K(ret));
   } else {
-    if (OB_FAIL(LoserTree::init(total_player_cnt, allocator))) {
+    if (OB_FAIL(LoserTree::init(max_player_cnt, player_cnt, allocator))) {
       STORAGE_LOG(WARN, "init ObLoserTree init fail", K(ret));
     } else {
       has_king_ = false;
@@ -137,8 +140,8 @@ int ObMergeLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::init(const int64_t tota
   return ret;
 }
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-int ObMergeLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::open(const int64_t total_player_cnt)
+template <typename T, typename CompareFunctor>
+int ObMergeLoserTree<T, CompareFunctor>::open(const int64_t total_player_cnt)
 {
   int ret = OB_SUCCESS;
   if (!this->is_inited_) {
@@ -153,24 +156,24 @@ int ObMergeLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::open(const int64_t tota
   return ret;
 }
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-void ObMergeLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::reuse()
+template <typename T, typename CompareFunctor>
+void ObMergeLoserTree<T, CompareFunctor>::reuse()
 {
   has_king_ = false;
   is_king_eq_champion_ = false;
   LoserTree::reuse();
 }
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-void ObMergeLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::reset()
+template <typename T, typename CompareFunctor>
+void ObMergeLoserTree<T, CompareFunctor>::reset()
 {
   has_king_ = false;
   is_king_eq_champion_ = false;
   LoserTree::reset();
 }
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-int ObMergeLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::top(const T *&player)
+template <typename T, typename CompareFunctor>
+int ObMergeLoserTree<T, CompareFunctor>::top(const T *&player)
 {
   int ret = OB_SUCCESS;
   if (!this->is_inited_) {
@@ -184,8 +187,8 @@ int ObMergeLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::top(const T *&player)
   return ret;
 }
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-int ObMergeLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::pop()
+template <typename T, typename CompareFunctor>
+int ObMergeLoserTree<T, CompareFunctor>::pop()
 {
   int ret = OB_SUCCESS;
   if (!this->is_inited_) {
@@ -203,8 +206,8 @@ int ObMergeLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::pop()
   return ret;
 }
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-int ObMergeLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::push(const T &player)
+template <typename T, typename CompareFunctor>
+int ObMergeLoserTree<T, CompareFunctor>::push(const T &player)
 {
   int ret = OB_SUCCESS;
   if (!this->is_inited_) {
@@ -219,8 +222,8 @@ int ObMergeLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::push(const T &player)
   return ret;
 }
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-int ObMergeLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::rebuild()
+template <typename T, typename CompareFunctor>
+int ObMergeLoserTree<T, CompareFunctor>::rebuild()
 {
   int ret = OB_SUCCESS;
   if (!this->is_inited_) {
@@ -248,8 +251,8 @@ int ObMergeLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::rebuild()
   return ret;
 }
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-int ObMergeLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::push_top(const T &player)
+template <typename T, typename CompareFunctor>
+int ObMergeLoserTree<T, CompareFunctor>::push_top(const T &player)
 {
   int ret = OB_SUCCESS;
   if (!this->is_inited_) {
@@ -308,8 +311,8 @@ int ObMergeLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::push_top(const T &playe
   return ret;
 }
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-int ObMergeLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::duel(
+template <typename T, typename CompareFunctor>
+int ObMergeLoserTree<T, CompareFunctor>::duel(
     T &offender,
     T &defender,
     const int64_t match_idx,
@@ -337,7 +340,7 @@ int ObMergeLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::duel(
   return ret;
 }
 
-typedef ObMergeLoserTree<ObScanMergeLoserTreeItem, ObScanMergeLoserTreeCmp, 2*common::MAX_TABLE_CNT_IN_STORAGE> ObScanMergeLoserTree;
+typedef ObMergeLoserTree<ObScanMergeLoserTreeItem, ObScanMergeLoserTreeCmp> ObScanMergeLoserTree;
 } //namespace storage
 } //namespace oceanbase
 #endif /* OB_SCAN_MERGE_LOSER_TREE_H_ */

@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/tmp_file/ob_tmp_file_io_info.h"
+#include "share/config/ob_server_config.h"
 
 namespace oceanbase
 {
@@ -24,7 +25,7 @@ namespace tmp_file
 ObTmpFileIOInfo::ObTmpFileIOInfo()
     : fd_(ObTmpFileGlobal::INVALID_TMP_FILE_FD), buf_(nullptr), size_(0),
       disable_page_cache_(false), prefetch_(false),
-      io_desc_(), io_timeout_ms_(DEFAULT_IO_WAIT_TIME_MS)
+      io_desc_(), io_timeout_ms_(GCONF._data_storage_io_timeout / 1000L)
 {}
 
 ObTmpFileIOInfo::~ObTmpFileIOInfo()
@@ -36,7 +37,7 @@ void ObTmpFileIOInfo::reset()
 {
   fd_ = ObTmpFileGlobal::INVALID_TMP_FILE_FD;
   size_ = 0;
-  io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
   buf_ = nullptr;
   io_desc_.reset();
   disable_page_cache_ = false;

@@ -2014,6 +2014,22 @@ int ObArrayExprUtils::get_collection_raw_data(ObIAllocator &allocator, const ObO
   return ret;
 }
 
+int ObArrayExprUtils::convert_to_string(common::ObIAllocator &allocator, ObEvalCtx &ctx, const uint16_t subschema_id, const common::ObString &data, ObString &res_str)
+{
+  int ret = OB_SUCCESS;
+  common::ObArenaAllocator tmp_allocator;
+  ObIArrayType *arr_obj = NULL;
+  ObStringBuffer buf(&allocator);
+  if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, data, arr_obj))) {
+    LOG_WARN("get array failed", K(ret));
+  } else if (OB_FAIL(arr_obj->print(buf))) {
+    LOG_WARN("failed to format array", K(ret));
+  } else {
+    res_str.assign_ptr(buf.ptr(), buf.length());
+  }
+  return ret;
+}
+
 template <typename ColumnFmt>
 static int inner_cast_compact2vector_fmt(ColumnFmt *column, ObExpr *coll_expr, ObEvalCtx *eval_ctx,
                                          const int64_t size, const ObBitVector &skip)
@@ -2086,21 +2102,41 @@ int ObArrayExprUtils::calc_collection_hash_val(const ObObjMeta &meta, const void
 
 template <typename ColumnFmt>
 static int inner_cast_vector2compact_fmt(ColumnFmt *column, ObExpr *coll_expr, ObEvalCtx *eval_ctx,
-                                         const int64_t size, const ObBitVector &skip)
+                                    const int64_t start, const int64_t end, const ObBitVector *skip)
 {
   int ret = OB_SUCCESS;
   int32_t len = 0;
   bool is_null = false;
   const char *payload = nullptr;
   bool has_null = false;
-  for (int i = 0; OB_SUCC(ret) && i < size; i++) {
-    if (skip.at(i)) { continue; }
+  common::ObArenaAllocator tmp_allocator;
+  for (int i = start; OB_SUCC(ret) && i < end; i++) {
+    if (skip != nullptr && skip->at(i)) { continue; }
     column->get_payload(i, is_null, payload, len);
     if (is_null) {
       has_null = true;
     } else if (ObCollectionExprUtil::is_vector_fmt_cell(payload)) {
       // tonghui TODO: read attr expr and assemble lob
       // call set_payload_shallow to shadow copy
+      const uint16_t meta_id = coll_expr->obj_meta_.get_subschema_id();
+      ObIArrayType *arr_obj = NULL;
+      const ObCollectionExprCell* coll_cell = reinterpret_cast<const ObCollectionExprCell*>(payload);
+      if (len != sizeof(ObCollectionExprCell)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected data", K(ret), K(len));
+      } else if (OB_ISNULL(coll_cell->eval_ctx_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("eval_ctx is null", K(ret), K(coll_cell->row_idx_));
+      } else if (OB_ISNULL(coll_cell->expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is null", K(ret), K(coll_cell->row_idx_));
+      } else if (OB_FAIL(ObNestedVectorFunc::construct_attr_param(tmp_allocator, *coll_cell->eval_ctx_, *coll_cell->expr_,
+                         meta_id, coll_cell->row_idx_, arr_obj))) {
+        LOG_WARN("construct array failed", K(ret), K(coll_cell->row_idx_));
+      } else if (OB_FAIL(ObArrayExprUtils::set_array_res<ColumnFmt>(arr_obj, *coll_expr, *eval_ctx, static_cast<ColumnFmt *>(column), i))) {
+        LOG_WARN("set array res failed", K(ret));
+      }
+      tmp_allocator.reuse();
     }
   }
   if (OB_SUCC(ret)) {
@@ -2196,7 +2232,8 @@ int ObArrayExprUtils::get_collection_obj(ObEvalCtx &ctx, const uint16_t subschem
   return ret;
 }
 
-int ObCollectionExprUtil::cast_vector2compact_fmt(ObIVector *column, const int64_t size, const ObBitVector &skip)
+int ObCollectionExprUtil::cast_vector2compact_fmt(ObIVector *column, const int64_t start,
+                                                  const int64_t end, const ObBitVector *skip)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(column)) {
@@ -2210,6 +2247,22 @@ int ObCollectionExprUtil::cast_vector2compact_fmt(ObIVector *column, const int64
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid ivector", K(ret), K(array_expr), K(eval_ctx));
     } else {
+      switch (fmt) {
+      case common::VEC_UNIFORM: {
+        ret = inner_cast_vector2compact_fmt(static_cast<ObUniformFormat<false> *>(column),
+                                            array_expr, eval_ctx, start, end, skip);
+        break;
+      }
+      case common::VEC_DISCRETE: {
+        ret = inner_cast_vector2compact_fmt(static_cast<ObDiscreteFormat *>(column), array_expr,
+                                            eval_ctx, start, end, skip);
+        break;
+      }
+      default: {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not supported format", K(ret));
+      }
+      }
     }
   }
   return ret;

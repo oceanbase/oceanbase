@@ -273,6 +273,9 @@ public:
        const uint64_t tenant_id,
        const share::ObLSID &ls_id);
 
+    int get_logservice_model_info(
+        ObLogserviceModelInfo &logservice_model_info);
+
 private:
   int get_ls_svr_list_(const ObLSRouterKey &router_key,
       LSSvrList &svr_list);
@@ -395,6 +398,7 @@ private:
   int64_t blacklist_history_overdue_time_min_;
   int64_t blacklist_history_clear_interval_min_;
   int64_t ls_svr_list_last_update_time_;
+  ObLogserviceModelInfo logservice_model_info_;
 
   DISALLOW_COPY_AND_ASSIGN(ObLogRouteService);
 };

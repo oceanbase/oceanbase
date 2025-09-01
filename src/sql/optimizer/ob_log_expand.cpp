@@ -24,60 +24,47 @@ namespace oceanbase
 namespace sql
 {
 
+#define DUP_EXPR_IDX 1
+#define ORG_EXPR_IDX 0
+
 int ObLogExpand::get_plan_item_info(PlanText &plan_text, ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(hash_rollup_info_)) {
-    ret  = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null rollup info", K(ret));
-  } else if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
-    LOG_WARN("get plan item info failed", K(ret));
-  } else if (OB_UNLIKELY(hash_rollup_info_->expand_exprs_.count() <= 0)) {
+  if (OB_ISNULL(grouping_set_info_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected expand exprs", K(ret));
+    LOG_WARN("invalid null grouping set info", K(ret));
   } else {
-    ObSEArray<ObRawExpr *, 8> uniq_rollup_exprs;
-    if (OB_FAIL(append_array_no_dup(uniq_rollup_exprs, hash_rollup_info_->expand_exprs_))) {
-      LOG_WARN("append array failed", K(ret));
-    }
-    BEGIN_BUF_PRINT;
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(BUF_PRINTF("repeat(%ld)[", hash_rollup_info_->expand_exprs_.count() + 1))) {
-      LOG_WARN("printf failed", K(ret));
+    if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+      LOG_WARN("get plan item info failed", K(ret));
     } else {
-      // output origin exprs
-      OX(gen_duplicate_expr_text(plan_text, uniq_rollup_exprs));
-      OX(BUF_PRINTF(", "))
-      int nil_idx = uniq_rollup_exprs.count();
-      for (int i = hash_rollup_info_->expand_exprs_.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
-        bool exists_dup = false;
-        for (int j = i - 1; OB_SUCC(ret) && !exists_dup && j >= 0; j--) {
-          if (hash_rollup_info_->expand_exprs_.at(i) == hash_rollup_info_->expand_exprs_.at(j)) {
-            // duplicate expr exists, output current duplicate exprs
-            exists_dup = true;
-          }
+      BEGIN_BUF_PRINT;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(BUF_PRINTF("repeat(%ld)[", grouping_set_info_->groupset_exprs_.count()))) {
+        LOG_WARN("printf failed", K(ret));
+      }
+      for (int i = grouping_set_info_->groupset_exprs_.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
+        if (OB_FAIL(gen_grouping_set_text(plan_text, i))) {
+          LOG_WARN("gen nth group text failed", K(ret));
         }
-        bool is_const_expr = hash_rollup_info_->expand_exprs_.at(i)->is_const_expr();
-        bool is_real_static_const =
-          (hash_rollup_info_->expand_exprs_.at(i)->get_expr_type() == T_FUN_SYS_REMOVE_CONST
-          && hash_rollup_info_->expand_exprs_.at(i)->get_param_expr(0)->is_static_const_expr());
-        if (exists_dup
-            || is_const_expr
-            || (lib::is_oracle_mode() && is_real_static_const)
-            || has_exist_in_array(hash_rollup_info_->gby_exprs_, hash_rollup_info_->expand_exprs_.at(i))) {
-          ret = gen_duplicate_expr_text(plan_text, uniq_rollup_exprs);
-          if (!exists_dup) { nil_idx--; }
-        } else {
-          uniq_rollup_exprs.at(--nil_idx) = nullptr;
-          ret = gen_duplicate_expr_text(plan_text, uniq_rollup_exprs);
-        }
-        if (i > 0) {
-          OX(BUF_PRINTF(", "))
+        if (OB_SUCC(ret) && i > 0) {
+          OX(BUF_PRINTF(","));
         }
       }
       OX(BUF_PRINTF("]"));
+      if (OB_SUCC(ret) && grouping_set_info_->pruned_groupset_exprs_.count() > 0) {
+        OX(BUF_PRINTF(", pruned(%ld)[", grouping_set_info_->pruned_groupset_exprs_.count()));
+        for (int i = 0; OB_SUCC(ret) && i < grouping_set_info_->pruned_groupset_exprs_.count(); i++) {
+          if (OB_FAIL(gen_pruned_grouping_set_text(
+                plan_text, grouping_set_info_->pruned_groupset_exprs_.at(i).groupby_exprs_))) {
+            LOG_WARN("gen pruned grouping sets failed", K(ret));
+          } else if (i < grouping_set_info_->pruned_groupset_exprs_.count() - 1) {
+            BUF_PRINTF(",");
+          }
+        }
+        OX(BUF_PRINTF("]"));
+      }
+      END_BUF_PRINT(plan_item.special_predicates_, plan_item.special_predicates_len_);
     }
-    END_BUF_PRINT(plan_item.special_predicates_, plan_item.special_predicates_len_);
   }
   return ret;
 }
@@ -101,26 +88,85 @@ int ObLogExpand::gen_duplicate_expr_text(PlanText &plan_text, ObIArray<ObRawExpr
   return ret;
 }
 
+int ObLogExpand::gen_grouping_set_text(PlanText &plan_text, const int64_t n_group)
+{
+  int ret = OB_SUCCESS;
+  BEGIN_BUF_PRINT;
+  if (OB_ISNULL(grouping_set_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid null grouping set info", K(ret));
+  } else if (OB_UNLIKELY(n_group >= grouping_set_info_->groupset_exprs_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid group idx", K(ret), K(n_group), K(grouping_set_info_->groupset_exprs_.count()));
+  } else {
+    BUF_PRINTF("(");
+    ObIArray<ObRawExpr *> &group_exprs = grouping_set_info_->groupset_exprs_.at(n_group).groupby_exprs_;
+    for (int i = 0; OB_SUCC(ret) && i < grouping_set_info_->group_exprs_.count(); i++) {
+      ObRawExpr *gby_expr = grouping_set_info_->group_exprs_.at(i);
+      if (OB_ISNULL(gby_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid null expr", K(ret));
+      } else if (has_exist_in_array(group_exprs, gby_expr)) {
+        if (OB_FAIL(gby_expr->get_name(buf, buf_len, pos, type))) {
+          LOG_WARN("get expr name failed", K(ret));
+        }
+      } else if (OB_FAIL(BUF_PRINTF("NULL"))) {
+        LOG_WARN("buf printf failed", K(ret));
+      }
+      if (OB_SUCC(ret) && i < grouping_set_info_->group_exprs_.count() - 1) {
+        OX(BUF_PRINTF(","))
+      }
+    }
+    OX(BUF_PRINTF(")"));
+  }
+  return ret;
+}
+
+int ObLogExpand::gen_pruned_grouping_set_text(PlanText &plan_text, ObIArray<ObRawExpr *> &pruned_gby_exprs)
+{
+  int ret = OB_SUCCESS;
+  BEGIN_BUF_PRINT;
+  BUF_PRINTF("(");
+  for (int i = 0; OB_SUCC(ret) && i < pruned_gby_exprs.count(); i++) {
+    ObRawExpr *expr = pruned_gby_exprs.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid null expr", K(ret));
+    } else if (OB_FAIL(expr->get_name(buf, buf_len, pos, type))) {
+      LOG_WARN("get expr name failed", K(ret));
+    } else if (i < pruned_gby_exprs.count() - 1) {
+      BUF_PRINTF(",");
+    }
+  }
+  OX(BUF_PRINTF(")"));
+  return ret;
+}
+
 int ObLogExpand::est_cost()
 {
   int ret = OB_SUCCESS;
   ObLogicalOperator *child = get_child(ObLogicalOperator::first_child);
   int64_t parallel = 0;
-  if (OB_ISNULL(hash_rollup_info_) || OB_ISNULL(child) || OB_ISNULL(get_plan())) {
+  int64_t dup_cnt = 0;
+  if (OB_ISNULL(grouping_set_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid null grouping set info", K(ret));
+  } else if (OB_ISNULL(child) || OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null parameters", K(ret), K(child), K(get_plan()));
   } else if (OB_UNLIKELY((parallel = get_parallel()) < 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected parallel degree", K(ret), K(parallel));
-  } else if (OB_UNLIKELY(hash_rollup_info_->expand_exprs_.count() <= 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected expand exprs", K(ret), K(hash_rollup_info_->expand_exprs_));
+  } else if (grouping_set_info_ != NULL) {
+    dup_cnt = grouping_set_info_->groupset_exprs_.count();
+  }
+  if (OB_FAIL(ret)) {
   } else {
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     double op_cost = ObOptEstCost::cost_get_rows(child->get_card() / parallel, opt_ctx);
     set_op_cost(op_cost);
     set_cost(child->get_cost() + op_cost);
-    set_card(child->get_card() * (hash_rollup_info_->expand_exprs_.count() + 1));
+    set_card(child->get_card() * dup_cnt);
   }
   return ret;
 }
@@ -131,22 +177,24 @@ int ObLogExpand::do_re_est_cost(EstimateCostInfo &param, double &card, double &o
   const int64_t parallel = param.need_parallel_;
   double child_card = 0.0;
   double child_cost = 0.0;
+  int64_t dup_cnt = 0;
   ObLogicalOperator *child = get_child(ObLogicalOperator::first_child);
-  if (OB_ISNULL(child) || OB_ISNULL(get_plan()) || OB_ISNULL(hash_rollup_info_)) {
+  if (OB_ISNULL(grouping_set_info_) || OB_ISNULL(child) || OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null parameters", K(ret), K(child), K(get_plan()));
   } else if (OB_UNLIKELY(parallel < 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expected parallel degree", K(ret), K(parallel));
-  } else if (OB_UNLIKELY(hash_rollup_info_->expand_exprs_.count() <= 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected expand exprs", K(ret), K(hash_rollup_info_->expand_exprs_));
+  } else if (grouping_set_info_ != NULL) {
+    dup_cnt = grouping_set_info_->groupset_exprs_.count();
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
     LOG_WARN("re-estimate cost failed", K(ret));
   } else {
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     op_cost = ObOptEstCost::cost_get_rows(child_card / parallel, opt_ctx);
-    card = child_card * (hash_rollup_info_->expand_exprs_.count() + 1);
+    card = child_card * dup_cnt;
     cost = op_cost + child_cost;
   }
   return ret;
@@ -155,21 +203,25 @@ int ObLogExpand::do_re_est_cost(EstimateCostInfo &param, double &card, double &o
 int ObLogExpand::get_op_exprs(ObIArray<ObRawExpr *> &all_exprs)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(hash_rollup_info_) || OB_ISNULL(hash_rollup_info_->rollup_grouping_id_)) {
+  if (OB_ISNULL(grouping_set_info_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid null grouping id expr", K(ret));
-  } else if (OB_FAIL(all_exprs.push_back(hash_rollup_info_->rollup_grouping_id_))) {
-    LOG_WARN("append element failed", K(ret));
-  } else if (OB_FAIL(append_array_no_dup(all_exprs, hash_rollup_info_->expand_exprs_))) {
-    LOG_WARN("append elements failed", K(ret));
-  }
-  for (int i = 0; OB_SUCC(ret) && i < hash_rollup_info_->dup_expr_pairs_.count(); i++) {
-    if (OB_FAIL(all_exprs.push_back(hash_rollup_info_->dup_expr_pairs_.at(i).element<1>()))) {
-      LOG_WARN("push back element failed", K(ret));
+    LOG_WARN("invalid null grouping set info", K(ret));
+  } else if (grouping_set_info_ != NULL) {
+    if (OB_ISNULL(grouping_set_info_->grouping_set_id_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid null grouping id expr", K(ret));
+    } else if (OB_FAIL(all_exprs.push_back(grouping_set_info_->grouping_set_id_))) {
+      LOG_WARN("push back element faield", K(ret));
+    } else if (OB_FAIL(append_array_no_dup(all_exprs, grouping_set_info_->group_exprs_))) {
+      LOG_WARN("append array no dup failed", K(ret));
     }
-  }
-  if (OB_SUCC(ret) && OB_FAIL(append(all_exprs, hash_rollup_info_->gby_exprs_))) {
-    LOG_WARN("append array failed", K(ret));
+    for (int i = 0; OB_SUCC(ret) && i < grouping_set_info_->dup_expr_pairs_.count(); i++) {
+      if (OB_FAIL(all_exprs.push_back(grouping_set_info_->dup_expr_pairs_.at(i).element<ORG_EXPR_IDX>()))) {
+        LOG_WARN("push back failed", K(ret));
+      } else if (OB_FAIL(all_exprs.push_back(grouping_set_info_->dup_expr_pairs_.at(i).element<DUP_EXPR_IDX>()))) {
+        LOG_WARN("push back element failed", K(ret));
+      }
+    }
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
@@ -181,16 +233,17 @@ int ObLogExpand::get_op_exprs(ObIArray<ObRawExpr *> &all_exprs)
 int ObLogExpand::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(hash_rollup_info_)) {
+  if (OB_ISNULL(grouping_set_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null rollup info", K(ret));
   } else {
-    is_fixed = (expr == hash_rollup_info_->rollup_grouping_id_);
-    for (int i = 0; !is_fixed && i < hash_rollup_info_->expand_exprs_.count(); i++) {
-      is_fixed = (expr == hash_rollup_info_->expand_exprs_.at(i));
+    is_fixed = (expr == grouping_set_info_->grouping_set_id_);
+    bool is_common_gby = has_exist_in_array(grouping_set_info_->common_group_exprs_, const_cast<ObRawExpr *>(expr));
+    for (int i = 0; !is_fixed && i < grouping_set_info_->group_exprs_.count(); i++) {
+      is_fixed = (expr == grouping_set_info_->group_exprs_.at(i) && !is_common_gby);
     }
-    for (int i = 0; !is_fixed && i < hash_rollup_info_->dup_expr_pairs_.count(); i++) {
-      is_fixed = (expr == hash_rollup_info_->dup_expr_pairs_.at(i).element<1>());
+    for (int i = 0; !is_fixed && i < grouping_set_info_->dup_expr_pairs_.count(); i++) {
+      is_fixed = (expr == grouping_set_info_->dup_expr_pairs_.at(i).element<DUP_EXPR_IDX>());
     }
   }
   return ret;
@@ -201,61 +254,55 @@ int ObLogExpand::dup_and_replace_exprs_within_aggrs(ObRawExprFactory &factory,
                                                     ObIArray<ObExprConstraint> &constraints,
                                                     const ObIArray<ObRawExpr *> &rollup_exprs,
                                                     const ObIArray<ObAggFunRawExpr *> &aggr_items,
-                                                    ObIArray<DupRawExprPair> &dup_expr_pairs)
+                                                    ObIArray<ObAggFunRawExpr *> &new_agg_items,
+                                                    ObIArray<DupRawExprPair> &dup_expr_pairs,
+                                                    ObIArray<DupRawExprPair> &replaced_aggr_pairs)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 8> uniq_expand_exprs;
   ObRawExprCopier copier(factory);
+  ObAggFunRawExpr *new_agg = nullptr;
+  ObSqlBitSet<> replace_aggr_idx;
   if (OB_UNLIKELY(rollup_exprs.count() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid expand exprs", K(ret));
   } else if (OB_FAIL(append_array_no_dup(uniq_expand_exprs, rollup_exprs))) {
     LOG_WARN("append elements failed", K(ret));
   }
-  for (int i = 0; OB_SUCC(ret) && i < uniq_expand_exprs.count(); i++) {
+  for(int64_t i = 0; OB_SUCC(ret) && i < aggr_items.count(); i++) {
+    if (replace_aggr_idx.has_member(i)
+        || aggr_items.at(i)->get_expr_type() == T_FUN_GROUPING
+        || aggr_items.at(i)->get_expr_type() == T_FUN_GROUPING_ID) {
+      continue;
+    }
     bool found = false;
-    for (int j = 0; OB_SUCC(ret) && !found && j < aggr_items.count(); j++) {
-      if (aggr_items.at(j)->get_expr_type() == T_FUN_GROUPING
-                 || aggr_items.at(j)->get_expr_type() == T_FUN_GROUPING_ID) {
-        // do nothing
-      } else if (OB_FAIL(find_expr_within_aggr_item(aggr_items.at(j), uniq_expand_exprs.at(i), found))) {
+    for (int j = 0; OB_SUCC(ret) && !found && j < uniq_expand_exprs.count(); j++) {
+     if (OB_FAIL(find_expr_within_aggr_item(aggr_items.at(i), uniq_expand_exprs.at(j), found))) {
         LOG_WARN("found expr failed", K(ret));
       }
     }
-    if (OB_FAIL(ret)) {
-    } else if (found) {
-      ObRawExpr *dup_expr = nullptr;
-      ObRawExpr *new_const_expr = nullptr;
-      if (OB_FAIL(ObRawExprUtils::build_dup_data_expr(factory, uniq_expand_exprs.at(i), dup_expr))) {
-        LOG_WARN("build duplicate expr failed", K(ret));
-      } else if (OB_FAIL(dup_expr->formalize(sess))) {
-        LOG_WARN("formalize expr failed", K(ret));
-      } else if (OB_FAIL(dup_expr_pairs.push_back(DupRawExprPair(uniq_expand_exprs.at(i), dup_expr)))) {
-        LOG_WARN("push back element failed", K(ret));
-      } else if (!uniq_expand_exprs.at(i)->is_static_scalar_const_expr()) {
-      } else if (OB_FAIL(copier.copy(uniq_expand_exprs.at(i), new_const_expr))) {
-        LOG_WARN("copy expr failed", K(ret));
-      }
+    if (OB_SUCC(ret) && found) {
+      ret = replace_aggr_idx.add_member(i);
     }
   }
-  // before replacing rollup exprs in place, it is necessary to unshare the related expr constraints to avoid incorrect replacements.
-  if (OB_SUCC(ret) && OB_FAIL(ObLogExpand::unshare_constraints(copier, constraints))) {
-    LOG_WARN("unshare constraints failed", K(ret));
+  if (OB_SUCC(ret) && OB_FAIL(new_agg_items.assign(aggr_items))) {
+    LOG_WARN("assign array failed", K(ret));
   }
-  for (int i = 0; OB_SUCC(ret) && i < dup_expr_pairs.count(); i++) {
-    for (int j = 0; OB_SUCC(ret) && j < aggr_items.count(); j++) {
-      ObAggFunRawExpr *aggr_item = aggr_items.at(j);
-      if (OB_ISNULL(aggr_item)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid null aggr item", K(ret));
-      } else if (aggr_item->get_expr_type() == T_FUN_GROUPING
-                 || aggr_item->get_expr_type() == T_FUN_GROUPING_ID) {
-      } else if (OB_FAIL(replace_expr_with_aggr_item(aggr_item, dup_expr_pairs.at(i).element<0>(),
-                                                     dup_expr_pairs.at(i).element<1>()))) {
-        LOG_WARN("replace expr failed", K(ret));
-      }
+  for(int64_t i = 0; OB_SUCC(ret) && i < aggr_items.count(); i++) {
+    new_agg = nullptr;
+    if (!replace_aggr_idx.has_member(i)) { continue; }
+    if (OB_FAIL(factory.create_raw_expr(aggr_items.at(i)->get_expr_type(), new_agg))) {
+      LOG_WARN("create raw expr failed", K(ret));
+    } else if (OB_FAIL(create_aggr_with_dup_params(factory, aggr_items.at(i), sess, dup_expr_pairs, new_agg))) {
+      LOG_WARN("create aggr failed", K(ret));
+    } else if (OB_FAIL(replaced_aggr_pairs.push_back(DupRawExprPair(aggr_items.at(i), new_agg)))) {
+      LOG_WARN("push back failed", K(ret));
+    } else {
+      // const_cast<ObIArray<ObAggFunRawExpr *> &>(aggr_items).at(i) = new_agg;
+      new_agg_items.at(i) = new_agg;
     }
   }
+  LOG_TRACE("replace agg items", K(ret), K(replaced_aggr_pairs), K(aggr_items));
   return ret;
 }
 
@@ -283,138 +330,52 @@ int ObLogExpand::find_expr_within_aggr_item(ObAggFunRawExpr *aggr_item, const Ob
   return ret;
 }
 
-int ObLogExpand::replace_expr(ObRawExpr *&root, const ObRawExpr *from, ObRawExpr *to)
-{
-  int ret = OB_SUCCESS;
-  if (root == from) { root = to; }
-  for (int i = 0; OB_SUCC(ret) && i < root->get_param_count(); i++) {
-    ret = SMART_CALL(replace_expr(root->get_param_expr(i), from, to));
-  }
-  return ret;
-}
-
-int ObLogExpand::replace_expr_with_aggr_item(ObAggFunRawExpr *aggr_item, const ObRawExpr *from, ObRawExpr *to)
-{
-  int ret = OB_SUCCESS;
-  ObIArray<ObRawExpr *> &real_param_exprs = aggr_item->get_real_param_exprs_for_update();
-  for (int i = 0; OB_SUCC(ret) && i < real_param_exprs.count(); i++) {
-    if (aggr_item->get_expr_type() == T_FUN_GROUP_CONCAT
-        && lib::is_oracle_mode()
-        && i == real_param_exprs.count() - 1) {
-      // do not replace seperator expr with duplicated expr
-      // do nothing
-    } else {
-      ret = replace_expr(real_param_exprs.at(i), from, to);
-    }
-  }
-  ObIArray<OrderItem> &order_items = aggr_item->get_order_items_for_update();
-  for (int i = 0; OB_SUCC(ret) && i < order_items.count(); i++) {
-    ret = replace_expr(order_items.at(i).expr_, from, to);
-  }
-  return ret;
-}
-
-int ObLogExpand::gen_expand_exprs(ObRawExprFactory &factory, ObSQLSessionInfo *sess,
-                                  ObIArray<ObExprConstraint> &constraints,
-                                  ObIArray<ObRawExpr *> &rollup_exprs,
-                                  ObIArray<ObRawExpr *> &gby_exprs,
-                                  ObIArray<DupRawExprPair> &dup_expr_pairs)
-{
-  int ret = OB_SUCCESS;
-  ObRawExprCopier copier(factory);
-  int64_t origin_size = dup_expr_pairs.count();
-  if (OB_ISNULL(sess)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid null arguments", K(ret));
-  } else if (lib::is_oracle_mode()) {
-    // `sum(b) from t group by a, b, rollup(b)`
-    // result of rollup b is same as `sum(b) from t group by a, b`
-    //
-    // `group by a, length(b), rollup(b)`
-    // result of rollup b is same as `sum(NULL) from t group by a, length(dup(b))`
-    for (int i = 0; OB_SUCC(ret) && i < rollup_exprs.count(); i++) {
-      if (has_exist_in_array(gby_exprs, rollup_exprs.at(i))) { // do nothing
-      } else {
-        bool found = false;
-        ObRawExpr *rollup_expr = rollup_exprs.at(i);
-        ObRawExpr *new_const_expr = nullptr;
-        for (int j = 0; !found && OB_SUCC(ret) && j < gby_exprs.count(); j++) {
-          if (OB_FAIL(ObRawExprUtils::find_expr(gby_exprs.at(j), rollup_expr, found))) {
-            LOG_WARN("find expr failed", K(ret));
-          }
-        }
-        if (OB_SUCC(ret) && found) {
-          ObRawExpr *new_expr = nullptr;
-          if (OB_FAIL(ObRawExprUtils::build_dup_data_expr(factory, rollup_expr, new_expr))) {
-            LOG_WARN("build dup data expr failed", K(ret));
-          } else if (OB_ISNULL(new_expr)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("invalid null expr", K(ret));
-          } else if (OB_FAIL(new_expr->formalize(sess))) {
-            LOG_WARN("formalize failed", K(ret));
-          } else if (OB_FAIL(dup_expr_pairs.push_back(DupRawExprPair(rollup_expr, new_expr)))) {
-            LOG_WARN("push back element failed", K(ret));
-          } else if (!rollup_expr->is_static_scalar_const_expr()) {
-          } else if (OB_FAIL(copier.copy(rollup_expr, new_const_expr))) {
-            LOG_WARN("copy expr failed", K(ret));
-          }
-        }
-      }
-    }
-    // before replacing rollup exprs in place, it is necessary to unshare the related expr constraints to avoid incorrect replacements.
-    if (OB_SUCC(ret) && OB_FAIL(ObLogExpand::unshare_constraints(copier, constraints))) {
-      LOG_WARN("unshare constraints failed", K(ret));
-    }
-    for (int i = 0; OB_SUCC(ret) && i < gby_exprs.count(); i++) {
-      for (int j = origin_size; OB_SUCC(ret) && j < dup_expr_pairs.count(); j++) {
-        if (OB_FAIL(replace_expr(gby_exprs.at(i),
-                                dup_expr_pairs.at(j).element<0>(),
-                                dup_expr_pairs.at(j).element<1>()))) {
-          LOG_WARN("replace expr failed", K(ret));
-        }
-      }
-    }
-  } else {
-    // do nothing
-  }
-  return ret;
-}
-
 int ObLogExpand::inner_replace_op_exprs(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(get_plan()) || OB_ISNULL(hash_rollup_info_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null plan", K(ret));
-  } else if (OB_FAIL(replace_exprs_action(replacer, hash_rollup_info_->gby_exprs_))) {
-    LOG_WARN("replace exprs failed", K(ret));
-  } else if (OB_FAIL(replace_exprs_action(replacer, hash_rollup_info_->expand_exprs_))) {
-    LOG_WARN("replace exprs failed", K(ret));
+  if (grouping_set_info_ != NULL) {
+    if (OB_FAIL(replace_exprs_action(replacer, grouping_set_info_->group_exprs_))) {
+      LOG_WARN("replace exprs failed", K(ret));
+    }
+    for (int i = 0; OB_SUCC(ret) && i < grouping_set_info_->groupset_exprs_.count(); i++) {
+      if (OB_FAIL(replace_exprs_action(replacer, grouping_set_info_->groupset_exprs_.at(i).groupby_exprs_))) {
+        LOG_WARN("replace exprs action failed", K(ret));
+      }
+    }
+    for (int i = 0; OB_SUCC(ret) && i < grouping_set_info_->pruned_groupset_exprs_.count(); i++) {
+      if (OB_FAIL(replace_exprs_action(replacer, grouping_set_info_->pruned_groupset_exprs_.at(i).groupby_exprs_))) {
+        LOG_WARN("replace exprs action failed", K(ret));
+      }
+    }
   }
-  constexpr int name_buf_len = 128;
-  char name_buf[name_buf_len] = {0};
-  char * replaced_name = nullptr;
-  int64_t pos = 0;
-  for (int i = 0; OB_SUCC(ret) && i < hash_rollup_info_->dup_expr_pairs_.count(); i++) {
-    ObRawExpr *&expr = hash_rollup_info_->dup_expr_pairs_.at(i).element<0>();
-    ObRawExpr *dup_expr = hash_rollup_info_->dup_expr_pairs_.at(i).element<1>();
-    pos = 0;
-    if (OB_FAIL(replace_expr_action(replacer, expr))) {
-      LOG_WARN("replace expr failed", K(ret));
-    } else if (OB_FAIL(databuff_printf(name_buf, name_buf_len, pos, "dup("))) {
-      LOG_WARN("buf printf failed", K(ret));
-    } else if (OB_FAIL(expr->get_name(name_buf, name_buf_len, pos))) {
-      LOG_WARN("get expr name failed", K(ret));
-    } else {
-      ObIAllocator &allocator = get_plan()->get_optimizer_context().get_expr_factory().get_allocator();
-      if (OB_ISNULL(replaced_name = (char *)allocator.alloc(pos + 2))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("allocate memory failed", K(ret));
+  if (OB_SUCC(ret)) {
+    ObIArray<DupRawExprPair> *dup_expr_pairs = &grouping_set_info_->dup_expr_pairs_;
+    constexpr int name_buf_len = 128;
+    char name_buf[name_buf_len] = {0};
+    char *replaced_name = nullptr;
+    int64_t pos = 0;
+    for (int i = 0; OB_SUCC(ret) && i < dup_expr_pairs->count(); i++) {
+      ObRawExpr *&expr = dup_expr_pairs->at(i).element<ORG_EXPR_IDX>();
+      ObRawExpr *dup_expr = dup_expr_pairs->at(i).element<DUP_EXPR_IDX>();
+      pos = 0;
+      if (OB_FAIL(replace_expr_action(replacer, expr))) {
+        LOG_WARN("replace expr failed", K(ret));
+      } else if (OB_FAIL(databuff_printf(name_buf, name_buf_len, pos, "dup("))) {
+        LOG_WARN("buf printf failed", K(ret));
+      } else if (OB_FAIL(expr->get_name(name_buf, name_buf_len, pos))) {
+        LOG_WARN("get expr name failed", K(ret));
       } else {
-        MEMCPY(replaced_name, name_buf, pos);
-        replaced_name[pos] = ')';
-        replaced_name[pos + 1] = '\0';
-        static_cast<ObOpPseudoColumnRawExpr *>(dup_expr)->set_name(replaced_name);
+        ObIAllocator &allocator =
+          get_plan()->get_optimizer_context().get_expr_factory().get_allocator();
+        if (OB_ISNULL(replaced_name = (char *)allocator.alloc(pos + 2))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate memory failed", K(ret));
+        } else {
+          MEMCPY(replaced_name, name_buf, pos);
+          replaced_name[pos] = ')';
+          replaced_name[pos + 1] = '\0';
+          static_cast<ObOpPseudoColumnRawExpr *>(dup_expr)->set_name(replaced_name);
+        }
       }
     }
   }
@@ -425,21 +386,24 @@ int ObLogExpand::compute_const_exprs()
 {
   int ret = OB_SUCCESS;
   ObLogicalOperator *child = NULL;
-  if (OB_ISNULL(child = get_child(0)) || OB_ISNULL(hash_rollup_info_)) {
+  ObIArray<ObRawExpr *> &output_const_exprs = get_output_const_exprs();
+  if (OB_ISNULL(child = get_child(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid null child", K(ret));
-  } else {
+  } else if (grouping_set_info_ != NULL) {
     ObIArray<ObRawExpr *> &child_const_exprs = child->get_output_const_exprs();
     ObIArray<ObRawExpr *> &output_const_exprs = get_output_const_exprs();
     for (int i = 0; OB_SUCC(ret) && i < child_const_exprs.count(); i++) {
-      if (has_exist_in_array(hash_rollup_info_->expand_exprs_, child_const_exprs.at(i))) {
+      if (has_exist_in_array(grouping_set_info_->group_exprs_, child_const_exprs.at(i))
+          && !has_exist_in_array(grouping_set_info_->common_group_exprs_, child_const_exprs.at(i))) {
+        // do nothing
       } else if (OB_FAIL(output_const_exprs.push_back(child_const_exprs.at(i)))) {
         LOG_WARN("push back element failed", K(ret));
       }
     }
-    if (OB_SUCC(ret) && OB_FAIL(ObOptimizerUtil::compute_const_exprs(get_filter_exprs(), output_const_exprs))) {
-      LOG_WARN("compute const exprs failed", K(ret));
-    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(ObOptimizerUtil::compute_const_exprs(get_filter_exprs(), output_const_exprs))) {
+    LOG_WARN("compute const exprs failed", K(ret));
   }
   return ret;
 }
@@ -494,6 +458,80 @@ int ObLogExpand::unshare_constraints(ObRawExprCopier &copier, ObIArray<ObExprCon
     if (OB_FAIL(copier.copy_on_replace(constraint.pre_calc_expr_, constraint.pre_calc_expr_))) {
       LOG_WARN("failed to unshare expr", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObLogExpand::create_aggr_with_dup_params(ObRawExprFactory &factory, ObAggFunRawExpr *aggr_item,
+                                             ObSQLSessionInfo *sess,
+                                             ObIArray<DupRawExprPair> &dup_expr_pairs,
+                                             ObAggFunRawExpr *&new_agg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(factory.create_raw_expr(aggr_item->get_expr_type(), new_agg))) {
+    LOG_WARN("create expr failed", K(ret));
+  } else if (OB_ISNULL(new_agg)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid null raw expr", K(ret));
+  } else if (OB_FAIL(new_agg->assign(*aggr_item))) {
+    LOG_WARN("assign expr failed", K(ret));
+  } else {
+    ObIArray<ObRawExpr *> &real_param_exprs = new_agg->get_real_param_exprs_for_update();
+    for (int i = 0; OB_SUCC(ret) && i < real_param_exprs.count(); i++) {
+      ObRawExpr *dup_expr = nullptr;
+      if (aggr_item->get_expr_type() == T_FUN_GROUP_CONCAT
+          && lib::is_oracle_mode()
+          && i == real_param_exprs.count() - 1) {
+        // do not replace seperator expr with duplicated expr
+        // do nothing
+        continue;
+      }
+      if (real_param_exprs.at(i)->is_const_expr()) {
+        continue;
+      }
+      if (OB_FAIL(build_dup_expr(factory, sess, real_param_exprs.at(i), dup_expr_pairs, dup_expr))) {
+      } else if (OB_ISNULL(dup_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid null dup expr", K(ret));
+      } else {
+        real_param_exprs.at(i) = dup_expr;
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < new_agg->get_order_items().count(); i++) {
+      ObRawExpr *expr = new_agg->get_order_items().at(i).expr_;
+      ObRawExpr *dup_expr = nullptr;
+      if (expr->is_const_expr()) {// do nothing
+      } else if (OB_FAIL(build_dup_expr(factory, sess, expr, dup_expr_pairs, dup_expr))) {
+        LOG_WARN("build dup expr failed", K(ret));
+      } else if (OB_ISNULL(dup_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid null dup expr", K(ret));
+      } else {
+        new_agg->get_order_items_for_update().at(i).expr_ = dup_expr;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogExpand::build_dup_expr(ObRawExprFactory &factory, ObSQLSessionInfo *sess,
+                                ObRawExpr *input, ObIArray<DupRawExprPair> &dup_expr_pairs,
+                                ObRawExpr *&output)
+{
+  int ret = OB_SUCCESS;
+  output = nullptr;
+  for (int64_t j = 0; OB_SUCC(ret) && output == nullptr && j < dup_expr_pairs.count(); j++) {
+    if (input == dup_expr_pairs.at(j).element<ORG_EXPR_IDX>()) {
+      output = dup_expr_pairs.at(j).element<DUP_EXPR_IDX>();
+    }
+  }
+  if (output != nullptr) {
+  } else if (OB_FAIL(ObRawExprUtils::build_dup_data_expr(factory, input, output))) {
+    LOG_WARN("build duplicate expr failed", K(ret));
+  } else if (OB_FAIL(output->formalize(sess))) {
+    LOG_WARN("formalize failed", K(ret));
+  } else if (OB_FAIL(dup_expr_pairs.push_back(DupRawExprPair(input, output)))) {
+    LOG_WARN("push back failed", K(ret));
   }
   return ret;
 }

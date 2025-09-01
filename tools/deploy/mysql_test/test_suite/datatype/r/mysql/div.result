@@ -198610,8 +198610,8 @@ Outputs & filters:
       group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
   4 - output([T_FUN_COUNT(*)]), filter(nil), rowset=16
       force partition granule
-  5 - output([T_FUN_COUNT(*)]), filter([table1000_key_pk_parts_2.col_double > cast(Floor(cast(-360448000, DECIMAL_INT(44, 28)) / cast(1458241536, DECIMAL_INT(16,
-       0))), DOUBLE(-1, -1))]), rowset=16
+  5 - output([T_FUN_COUNT(*)]), filter([table1000_key_pk_parts_2.col_double > cast(Floor(cast(-360448000, DECIMAL_INT(44, 28)) / 1458241536), DOUBLE(-1,
+       -1))]), rowset=16
       access([table1000_key_pk_parts_2.col_double]), partitions(p[0-1])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([table1000_key_pk_parts_2.__pk_increment]), range(MIN ; MAX)always true, 

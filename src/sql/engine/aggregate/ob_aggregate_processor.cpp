@@ -26,6 +26,7 @@
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
 #include "sql/engine/expr/ob_expr_rb_func_helper.h"
 #include "pl/ob_pl.h"
+#include "pl/external_routine/ob_java_udaf.h"
 
 namespace oceanbase
 {
@@ -105,7 +106,6 @@ OB_DEF_SERIALIZE(ObAggrInfo)
   if (grouping_set_info_ != nullptr) {
     OB_UNIS_ENCODE(*grouping_set_info_);
   }
-
   return ret;
 }
 
@@ -191,7 +191,6 @@ OB_DEF_DESERIALIZE(ObAggrInfo)
       }
     }
   }
-
   return ret;
 }
 
@@ -250,7 +249,6 @@ OB_DEF_SERIALIZE_SIZE(ObAggrInfo)
   if (grouping_set_info_ != nullptr) {
     OB_UNIS_ADD_LEN(*grouping_set_info_);
   }
-
   return len;
 }
 
@@ -283,7 +281,9 @@ int64_t ObAggrInfo::to_string(char *buf, const int64_t buf_len) const
        K_(external_routine_type),
        K_(external_routine_entry),
        K_(external_routine_url),
-       K_(external_routine_resource)
+       K_(external_routine_resource),
+       KP_(hash_rollup_info),
+       KP_(grouping_set_info)
        );
   J_OBJ_END();
   return pos;
@@ -337,10 +337,12 @@ int ObAggrInfo::assign(const ObAggrInfo &rhs)
     LOG_WARN("fail to assign group_idxs_", K(ret));
   } else if (OB_FAIL(distinct_hash_funcs_.assign(rhs.distinct_hash_funcs_))) {
     LOG_WARN("fail to assign distinct_hash_funcs_", K(ret));
+  }
+  if (OB_FAIL(ret)) {
   } else if (rhs.hash_rollup_info_ != nullptr) {
     hash_rollup_info_ = OB_NEWx(HashRollupRTInfo, alloc_, (*alloc_));
     if (OB_ISNULL(hash_rollup_info_)) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret));
     } else if (OB_FAIL(hash_rollup_info_->assign(*rhs.hash_rollup_info_))) {
       LOG_WARN("assign hash rollup info failed", K(ret));
@@ -356,6 +358,16 @@ int ObAggrInfo::assign(const ObAggrInfo &rhs)
     external_routine_resource_ = rhs.external_routine_resource_;
   }
 
+  if (OB_FAIL(ret)) {
+  } else if (rhs.grouping_set_info_ != nullptr) {
+    grouping_set_info_ = OB_NEWx(GroupingSetRTInfo, alloc_, (*alloc_));
+    if (OB_ISNULL(grouping_set_info_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
+    } else if (OB_FAIL(grouping_set_info_->assign(*rhs.grouping_set_info_))) {
+      LOG_WARN("assign grouping set info failed", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -1481,6 +1493,10 @@ int ObAggregateProcessor::init()
     if (OB_ISNULL(aggr_info.expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr node is null", K(aggr_info), K(i), K(ret));
+    } else if (T_FUN_ARG_MIN == aggr_info.get_expr_type() ||
+               T_FUN_ARG_MAX == aggr_info.get_expr_type()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("this agg func not supported vec1.0", K(aggr_info.get_expr_type()));
     } else {
       has_distinct_ |= aggr_info.has_distinct_;
       has_group_concat_ |= (T_FUN_GROUP_CONCAT == aggr_info.get_expr_type() ||
@@ -3560,15 +3576,23 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
             aggr_info.hash_rollup_info_->rollup_grouping_id_->locate_expr_datum(eval_ctx_);
           aggr_cell.set_tiny_num_int(share::aggregate::is_grouping(aggr_info, grouping_val.get_int()));
           aggr_cell.set_is_evaluated(true);
+        } else if (aggr_info.grouping_set_info_ != nullptr) {
+          ObDatum grouping_val = aggr_info.grouping_set_info_->grouping_set_id_->locate_expr_datum(eval_ctx_);
+          aggr_cell.set_tiny_num_int(share::aggregate::is_grouping(aggr_info, grouping_val.get_int()));
+          aggr_cell.set_is_evaluated(true);
         } else {
           aggr_cell.set_tiny_num_int(0);
         }
         break;
       }
       case T_FUN_GROUPING_ID: {
-        if (aggr_info.hash_rollup_info_ != nullptr) {
-          ObDatum grouping_val =
-            aggr_info.hash_rollup_info_->rollup_grouping_id_->locate_expr_datum(eval_ctx_);
+        if (aggr_info.hash_rollup_info_ != nullptr || aggr_info.grouping_set_info_ != nullptr) {
+          ObDatum grouping_val;
+          if (aggr_info.hash_rollup_info_ != nullptr) {
+            grouping_val = aggr_info.hash_rollup_info_->rollup_grouping_id_->locate_expr_datum(eval_ctx_);
+          } else {
+            grouping_val = aggr_info.grouping_set_info_->grouping_set_id_->locate_expr_datum(eval_ctx_);
+          }
           if (lib::is_oracle_mode()) {
             char num_buf[number::ObNumber::MAX_CALC_BYTE_LEN] = {0};
             ObDatum tmp_datum;
@@ -3899,7 +3923,8 @@ int ObAggregateProcessor::process_aggr_batch_result(
       break;
     }
     case T_FUN_GROUPING: {
-      if (aggr_info.hash_rollup_info_!= nullptr && !aggr_cell.get_is_evaluated()) {
+      if ((aggr_info.hash_rollup_info_ != nullptr || aggr_info.grouping_set_info_ != nullptr)
+          && !aggr_cell.get_is_evaluated()) {
         if (OB_FAIL(grouping_calc_batch(aggr_info, aggr_cell, selector))) {
           LOG_WARN("calc grouping failed", K(ret));
         }
@@ -3907,7 +3932,8 @@ int ObAggregateProcessor::process_aggr_batch_result(
       break;
     }
     case T_FUN_GROUPING_ID: {
-      if (aggr_info.hash_rollup_info_ != nullptr && !aggr_cell.get_is_evaluated()) {
+      if ((aggr_info.hash_rollup_info_ != nullptr || aggr_info.grouping_set_info_ != nullptr)
+          && !aggr_cell.get_is_evaluated()) {
         if (OB_FAIL(grouping_id_calc_batch(aggr_info, aggr_cell, selector))) {
           LOG_WARN("calc grouping id failed", K(ret));
         }
@@ -4478,7 +4504,7 @@ int ObAggregateProcessor::collect_aggr_result(
     case T_FUN_GROUPING: {
       bool null_result = false;
       int64_t new_value = aggr_cell.get_tiny_num_int();
-      if (aggr_info.hash_rollup_info_) {
+      if (aggr_info.hash_rollup_info_ != nullptr || aggr_info.grouping_set_info_ != nullptr) {
         if (OB_UNLIKELY(!aggr_cell.get_is_evaluated())) {
           null_result = true;
         }
@@ -4508,7 +4534,7 @@ int ObAggregateProcessor::collect_aggr_result(
       break;
     }
     case T_FUN_GROUPING_ID: {
-      if (aggr_info.hash_rollup_info_) {
+      if (aggr_info.hash_rollup_info_ != nullptr || aggr_info.grouping_set_info_ != nullptr) {
         if (OB_UNLIKELY(!aggr_cell.get_is_evaluated())) {
           result.set_null();
         } else if (lib::is_mysql_mode()) {
@@ -6727,8 +6753,10 @@ template<typename T>
 int ObAggregateProcessor::grouping_calc_batch(const ObAggrInfo &aggr_info, AggrCell &aggr_cell, const T &selector)
 {
   int ret = OB_SUCCESS;
-  ObExpr *rollup_grouping_id = aggr_info.hash_rollup_info_->rollup_grouping_id_;
-  ObDatumVector src = rollup_grouping_id->locate_expr_datumvector(eval_ctx_);
+  ObExpr *grouping_id = (aggr_info.hash_rollup_info_ != nullptr ?
+                                 aggr_info.hash_rollup_info_->rollup_grouping_id_ :
+                                 aggr_info.grouping_set_info_->grouping_set_id_);
+  ObDatumVector src = grouping_id->locate_expr_datumvector(eval_ctx_);
   for (decltype(selector.begin()) it = selector.begin();
        OB_SUCC(ret) && !aggr_cell.get_is_evaluated() && it < selector.end();
        selector.next(it)) {
@@ -6743,8 +6771,10 @@ template<typename T>
 int ObAggregateProcessor::grouping_id_calc_batch(const ObAggrInfo &aggr_info, AggrCell &aggr_cell, const T &selector)
 {
   int ret = OB_SUCCESS;
-  ObExpr *rollup_grouping_id = aggr_info.hash_rollup_info_->rollup_grouping_id_;
-  ObDatumVector src = rollup_grouping_id->locate_expr_datumvector(eval_ctx_);
+  ObExpr *grouping_id = aggr_info.hash_rollup_info_ != nullptr ?
+                                 aggr_info.hash_rollup_info_->rollup_grouping_id_ :
+                                 aggr_info.grouping_set_info_->grouping_set_id_;
+  ObDatumVector src = grouping_id->locate_expr_datumvector(eval_ctx_);
   if (lib::is_oracle_mode()) {
     char nmb_buf[number::ObNumber::MAX_CALC_BYTE_LEN] = {0};
     number::ObCompactNumber *res_cnum = reinterpret_cast<number::ObCompactNumber *>(nmb_buf);
@@ -7602,6 +7632,20 @@ int ObAggregateProcessor::get_pl_agg_udf_result(const ObAggrInfo &aggr_info,
     LOG_WARN("rewind failed", KPC(extra), K(ret));
   } else if (!extra->is_iterated() && OB_FAIL(extra->finish_add_row())) {
     LOG_WARN("finish_add_row failed", KPC(extra), K(ret));
+  } else if (ObExternalRoutineType::INTERNAL_ROUTINE != aggr_info.external_routine_type_) {  // external UDAF
+    if (is_java_external_routine(aggr_info.external_routine_type_)) {
+      pl::ObJavaUDAFExecutor executor(aggr_info, eval_ctx_, *extra);
+
+      if (OB_FAIL(executor.init())) {
+        LOG_WARN("failed to init java udaf executor", K(ret), K(aggr_info));
+      } else if (OB_FAIL(executor.execute(result))) {
+        LOG_WARN("failed to execute java UDAF", K(ret));
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported external UDAF", K(ret), K(aggr_info.external_routine_type_));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "not supported external UDAF");
+    }
   } else if (OB_FAIL(pl_agg_udf_func.init(eval_ctx_.exec_ctx_.get_my_session(),
                                           &(eval_ctx_.exec_ctx_.get_allocator()),
                                           &eval_ctx_.exec_ctx_,

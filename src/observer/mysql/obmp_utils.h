@@ -42,6 +42,7 @@ namespace observer
 class ObMPUtils
 {
 public:
+  static int try_add_changed_package_info(sql::ObSQLSessionInfo &session);
   static int add_changed_session_info(obmysql::OMPKOK &ok_pkt, sql::ObSQLSessionInfo &session);
   static int append_modfied_sess_info(common::ObIAllocator &allocator,
                                       sql::ObSQLSessionInfo &sess,

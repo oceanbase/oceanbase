@@ -42,6 +42,7 @@ ObLogTenant::ObLogTenant() :
     tenant_id_(OB_INVALID_TENANT_ID),
     compat_mode_(lib::Worker::CompatMode::INVALID),
     start_schema_version_(OB_INVALID_VERSION),
+    tenant_checkpoint_(tenant_id_),
     task_queue_(NULL),
     ls_mgr_(*this),
     part_mgr_(*this),
@@ -75,6 +76,7 @@ int ObLogTenant::init(
     const int64_t start_tstamp_ns,
     const int64_t start_seq,
     const int64_t start_schema_version,
+    const TenantCheckpoint &tenant_checkpoint,
     void *redo_cf_handle,
     void *lob_storage_cf_handle,
     ObLogTenantMgr &tenant_mgr)
@@ -118,6 +120,11 @@ int ObLogTenant::init(
     LOG_ERROR("fail to init tenant timezone info", KR(ret), K(tenant_id));
   } else if (OB_FAIL(init_all_ddl_operation_table_schema_info_())) {
     LOG_ERROR("init_all_ddl_operation_table_schema_info_ failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(tenant_checkpoint_.set_tenant_id(tenant_id_))) {
+    LOG_ERROR("set tenant_id of tenant_checkpoint failed", KR(ret), K_(tenant_id), K_(tenant_checkpoint));
+  } else if (OB_FAIL(tenant_checkpoint_.assign(tenant_checkpoint))) {
+    LOG_ERROR("assign tenant_checkpiont failed", KR(ret),
+        "target_checkpoint", tenant_checkpoint, "current_checkpoint", tenant_checkpoint_);
   }
 
   if (OB_SUCC(ret)) {
@@ -148,7 +155,7 @@ int ObLogTenant::init(
     inited_ = true;
 
     LOG_INFO("init tenant succ", K(tenant_id), K(tenant_name), K_(compat_mode), K(start_schema_version),
-        K(start_tstamp_ns), K(start_seq));
+        K(start_tstamp_ns), K(start_seq), K_(tenant_checkpoint));
   }
 
   return ret;
@@ -246,6 +253,7 @@ void ObLogTenant::reset()
   committer_global_heartbeat_ = OB_INVALID_VERSION;
   committer_cur_schema_version_ = OB_INVALID_VERSION;
   committer_next_trans_schema_version_ = OB_INVALID_VERSION;
+  tenant_checkpoint_.destroy();
   lob_storage_clean_task_.reset();
   IObStoreService *store_service = TCTX.store_service_;
   if (OB_NOT_NULL(store_service)) {
@@ -981,6 +989,18 @@ void ObLogTenant::compact_storage()
     } else {
       LOG_INFO("compact tenant redo column_family succ", K_(tenant_id));
     }
+  }
+}
+
+void ObLogTenant::refresh_tenant_checkpoint(const int64_t timeout)
+{
+  int ret = OB_SUCCESS;
+  if (! is_user_tenant(tenant_id_)) {
+    LOG_DEBUG("won't refresh_tenant_checkpoint for non-user tenant", K_(tenant_id));
+  } else if (OB_FAIL(tenant_checkpoint_.refresh(timeout))) {
+    LOG_ERROR("refresh tenant checkpoint failed", KR(ret), K_(tenant_id), K(timeout));
+  } else {
+    LOG_INFO("[REFRESH_TENANT_CHECKPOINT]", K_(tenant_checkpoint));
   }
 }
 

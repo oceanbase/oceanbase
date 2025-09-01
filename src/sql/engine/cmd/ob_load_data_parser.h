@@ -1153,6 +1153,9 @@ struct ObExternalFileFormat
   int to_string(char* buf, const int64_t buf_len, int64_t &pos, bool into_outfile = false) const;
   int64_t to_string(char* buf, const int64_t buf_len, bool into_outfile = false) const;
   int load_from_string(const common::ObString &str, common::ObIAllocator &allocator);
+  int mock_gen_bool_tinyint_column_def(const share::schema::ObColumnSchemaV2 &column,
+                                       common::ObIAllocator &allocator,
+                                       common::ObString &def);
   int mock_gen_column_def(const share::schema::ObColumnSchemaV2 &column, common::ObIAllocator &allocator, common::ObString &def);
   int get_format_file_extension(FormatType format_type, ObString &file_extension);
 

@@ -456,21 +456,7 @@ int Processor::setup_rt_info(AggrRowPtr row,
     char *cell = nullptr;
     int32_t cell_len = 0;
     agg_ctx.row_meta().locate_cell_payload(col_id, row, cell, cell_len);
-    // oracle mode use ObNumber as result type for count aggregation
-    // we use int64_t as result type for count aggregation in aggregate row
-    // and cast int64_t to ObNumber during `collect_group_result`
-    if (res_tc == VEC_TC_NUMBER && agg_ctx.aggr_infos_.at(col_id).get_expr_type() != T_FUN_COUNT &&
-        agg_ctx.aggr_infos_.at(col_id).get_expr_type() != T_FUN_SUM_OPNSIZE) {
-      ObNumberDesc &d = *reinterpret_cast<ObNumberDesc *>(cell);
-      // set zero number
-      d.len_ = 0;
-      d.sign_ = number::ObNumber::POSITIVE;
-      d.exp_ = 0;
-    } else if (res_tc == VEC_TC_FLOAT) {
-      *reinterpret_cast<float *>(cell) = float();
-    } else if (res_tc == VEC_TC_DOUBLE || res_tc == VEC_TC_FIXED_DOUBLE) {
-      *reinterpret_cast<double *>(cell) = double();
-    }
+    helper::init_cell_value(res_tc, cell, agg_ctx.aggr_infos_.at(col_id));
 
     if (T_FUN_SYS_RB_BUILD_AGG == agg_ctx.aggr_infos_.at(col_id).get_expr_type()) {
       // rb_build_agg does not have extra, but need advance collect to save memory
@@ -570,6 +556,8 @@ int Processor::init_aggr_row_extra_info(RuntimeContext &agg_ctx, char *extra_arr
     ObAggrInfo &aggr_info = agg_ctx.locate_aggr_info(i);
     bool extra_store_inited = false;
     switch (aggr_info.get_expr_type()) {
+    case T_FUN_WM_CONCAT:
+    case T_FUN_KEEP_WM_CONCAT:
     case T_FUN_GROUP_CONCAT: {
       if (aggr_info.has_order_by_) {
         agg_ctx.need_advance_collect_ = true;
@@ -663,8 +651,6 @@ int Processor::init_aggr_row_extra_info(RuntimeContext &agg_ctx, char *extra_arr
     case T_FUN_KEEP_MIN:
     case T_FUN_KEEP_SUM:
     case T_FUN_KEEP_COUNT:
-    case T_FUN_KEEP_WM_CONCAT:
-    case T_FUN_WM_CONCAT:
     case T_FUN_PL_AGG_UDF:
     case T_FUN_JSON_ARRAYAGG:
     case T_FUN_ORA_JSON_ARRAYAGG:
@@ -1095,31 +1081,7 @@ int Processor::reuse_agg_row(AggrRowPtr agg_row, RuntimeContext &agg_ctx, ReuseA
     char *cell = nullptr;
     int32_t cell_len = 0;
     agg_ctx.row_meta().locate_cell_payload(col_id, agg_row, cell, cell_len);
-    switch (res_tc) {
-    case VEC_TC_NUMBER: {
-      if (aggr_info.get_expr_type() != T_FUN_COUNT
-          && aggr_info.get_expr_type() != T_FUN_SUM_OPNSIZE) {
-        ObNumberDesc &d = *reinterpret_cast<ObNumberDesc *>(cell);
-        // set zero number
-        d.len_ = 0;
-        d.sign_ = number::ObNumber::POSITIVE;
-        d.exp_ = 0;
-      }
-      break;
-    }
-    case VEC_TC_FLOAT: {
-      *reinterpret_cast<float *>(cell) = float();
-      break;
-    }
-    case VEC_TC_DOUBLE:
-    case VEC_TC_FIXED_DOUBLE: {
-      *reinterpret_cast<double *>(cell) = double();
-      break;
-    }
-    default: {
-      break;
-    }
-    }
+    helper::init_cell_value(res_tc, cell, aggr_info);
   }
   if (OB_SUCC(ret) && OB_FAIL(reuse_mgr.restore(agg_ctx, agg_row))) {
     LOG_WARN("restore cell infos failed", K(ret));

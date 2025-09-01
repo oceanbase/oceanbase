@@ -24,6 +24,7 @@
 #include "share/schema/ob_schema_getter_guard.h"
 #include "storage/tx/ob_trans_define.h"
 #include "sql/engine/cmd/ob_load_data_parser.h"
+#include "share/catalog/ob_catalog_properties.h"
 namespace oceanbase
 {
 namespace share
@@ -480,18 +481,20 @@ ObVTableScanParam() :
       row2exprs_projector_(NULL),
       table_scan_opt_(),
       ext_file_column_exprs_(NULL),
-      ext_column_convert_exprs_(NULL),
+      ext_column_dependent_exprs_(NULL),
       partition_infos_(NULL),
       external_object_ctx_(NULL),
       external_pushdown_filters_(NULL),
       ext_mapping_column_exprs_(NULL),
       ext_mapping_column_ids_(NULL),
+      lake_table_format_(share::ObLakeTableFormat::INVALID),
       schema_guard_(NULL),
       auto_split_filter_type_(OB_INVALID_ID),
       auto_split_filter_(NULL),
       auto_split_params_(NULL),
       is_tablet_spliting_(false),
-      ext_tbl_filter_pd_level_(0)
+      ext_tbl_filter_pd_level_(0),
+      ext_enable_late_materialization_(false)
   { }
 
   virtual ~ObVTableScanParam()
@@ -567,7 +570,7 @@ ObVTableScanParam() :
 
   // external table
   const sql::ExprFixedArray *ext_file_column_exprs_;
-  const sql::ExprFixedArray *ext_column_convert_exprs_;
+  const sql::ExprFixedArray *ext_column_dependent_exprs_;
   sql::ObExternalFileFormat external_file_format_;
   ObString external_file_location_;
   ObString external_file_access_info_;
@@ -576,6 +579,7 @@ ObVTableScanParam() :
   const ObIArray<ObString> *external_pushdown_filters_;
   const sql::ExprFixedArray *ext_mapping_column_exprs_;
   const common::ObFixedArray<uint64_t, ObIAllocator> *ext_mapping_column_ids_;
+  share::ObLakeTableFormat lake_table_format_;
 
   virtual bool is_valid() const {
     return (tablet_id_.is_valid()
@@ -621,6 +625,7 @@ public:
   sql::ExprFixedArray *auto_split_params_;
   bool is_tablet_spliting_;
   int64_t ext_tbl_filter_pd_level_;
+  bool ext_enable_late_materialization_;
 };
 
 class ObITabletScan

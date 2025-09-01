@@ -1258,7 +1258,21 @@ int ObExpr::eval_vector(ObEvalCtx &ctx,
 {
   int ret = common::OB_SUCCESS;
   #define BATCH_SIZE() batch_result_ ? bound.batch_size() : 1
-  //TODO shengle CHECK_BOUND(bound); check skip and all_rows_active wheth match
+  bool need_check = false;
+  int tmp_ret = common::OB_SUCCESS;
+  tmp_ret = OB_E(EventTable::EN_ENABLE_ENGINE_CHECK) tmp_ret;
+  if (OB_FAIL(tmp_ret)) {
+    need_check = true;
+  }
+  if (need_check) {
+    // check all_rows_active flag
+    if (OB_UNLIKELY((skip.accumulate_bit_cnt(bound) != 0 && bound.get_all_rows_active()))) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_LOG(WARN, "all_rows_active check failed", K(ret), K(skip.accumulate_bit_cnt(bound)),
+                                                    K(bound.get_all_rows_active()), K(BATCH_SIZE()));
+    }
+  }
+
   ObEvalInfo &info = get_eval_info(ctx);
   char *frame = ctx.frames_[frame_idx_];
   int64_t const_skip = 0;
@@ -1294,6 +1308,35 @@ int ObExpr::eval_vector(ObEvalCtx &ctx,
         *rt_skip, evaluated_vec, BATCH_SIZE(),
         [](const uint64_t l, const uint64_t r) { return ~(l | r); });
   }
+
+  if (need_check && need_evaluate) {
+    // check has_null flag
+    ObIVector *vector = get_vector(ctx);
+    if (OB_UNLIKELY(NULL == vector)) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_LOG(WARN, "Unexpected null vector", K(ret));
+    } else {
+      VectorFormat format = vector->get_format();
+      if (is_uniform_format(format)) {
+        // do_nothing
+      } else {
+        ObBitVector *null_bitmap = static_cast<ObBitmapNullVectorBase *>(vector)->get_nulls();
+        for (int64_t i = 0; OB_SUCC(ret) && i < bound.batch_size(); i++) {
+          if (skip.at(i)) {
+            continue;
+          }
+          if (null_bitmap->at(i) && !vector->has_null()) {
+            ret = OB_ERR_UNEXPECTED;
+            SQL_LOG(WARN, "has_null check failed", K(ret), K(vector->has_null()),
+                    "null bitmap", ObLogPrintHex(reinterpret_cast<char *>(null_bitmap),
+                                                 ObBitVector::memory_size(bound.batch_size())),
+                    K(BATCH_SIZE()));
+          }
+        }
+      }
+    }
+  }
+
   LOG_DEBUG("need evaluate", K(need_evaluate), KP(this));
   if (OB_SUCC(ret) && need_evaluate) {
     if (OB_UNLIKELY(need_stack_check_) && OB_FAIL(check_stack_overflow())) {

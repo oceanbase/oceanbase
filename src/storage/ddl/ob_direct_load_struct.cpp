@@ -3910,6 +3910,7 @@ int ObVectorIndexSliceStore::init(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KPC(tablet_direct_load_mgr));
   } else {
+    const ObIArray<share::schema::ObColDesc> &col_desc_array = tablet_direct_load_mgr->get_sqc_build_ctx().data_block_desc_.get_desc().get_col_desc_array();
     is_inited_ = true;
     ctx_.ls_id_ = tablet_direct_load_mgr->get_ls_id();
     tablet_id_ = tablet_direct_load_mgr->get_tablet_id();
@@ -3940,8 +3941,14 @@ int ObVectorIndexSliceStore::init(
     for (int64_t i = 0; OB_SUCC(ret) && i < col_array.count(); i++) {
       // version control col is not valid
       if (!col_array.at(i).is_valid_) {
-      } else if (ObSchemaUtils::is_vec_hnsw_vid_column(col_array.at(i).column_flags_)) {
-        vector_vid_col_idx_ = i;
+      } else if (ObSchemaUtils::is_vec_hnsw_vid_column(col_array.at(i).column_flags_) ||
+                 col_desc_array.at(i).col_id_ == OB_HIDDEN_PK_INCREMENT_COLUMN_ID) {
+        if (vector_vid_col_idx_ == -1) {
+          vector_vid_col_idx_ = i;
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to get valid vector index col idx", K(ret), K(vector_vid_col_idx_), K(i));
+        }
       } else if (ObSchemaUtils::is_vec_hnsw_vector_column(col_array.at(i).column_flags_)) {
         vector_col_idx_ = i;
       } else if (ObSchemaUtils::is_vec_hnsw_key_column(col_array.at(i).column_flags_)) {
@@ -3954,6 +3961,7 @@ int ObVectorIndexSliceStore::init(
         }
       }
     }
+
     if (OB_SUCC(ret)) {
       if (vector_vid_col_idx_ == -1 || vector_col_idx_ == -1 || vector_key_col_idx_ == -1 || vector_data_col_idx_ == -1) {
         ret = OB_ERR_UNEXPECTED;

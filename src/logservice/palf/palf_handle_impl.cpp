@@ -3260,7 +3260,7 @@ int PalfHandleImpl::receive_batch_log(const common::ObAddr &server,
   auto get_file_end_lsn = [curr_lsn, buf_len] () { return curr_lsn + buf_len; };
   if (OB_FAIL(iterator.init(curr_lsn, get_file_end_lsn, &storage))) {
     PALF_LOG(ERROR, "init iterator failed", K(ret), KPC(this));
-  } else if (OB_FAIL(storage.init(curr_lsn))) {
+  } else if (OB_FAIL(storage.init(curr_lsn, false))) {
     PALF_LOG(ERROR, "init storage failed", K(ret), KPC(this));
   } else if (OB_FAIL(storage.append(buf, buf_len))) {
     PALF_LOG(ERROR, "storage append failed", K(ret), KPC(this));
@@ -5791,6 +5791,22 @@ int PalfHandleImpl::force_set_member_list_(const common::ObMemberList &new_membe
     report_force_set_member_list(prev_replica_num, new_replica_num, new_member_list);
   }
 
+  return ret;
+}
+
+int PalfHandleImpl::get_io_statistic_info(int64_t &last_working_time,
+                                          int64_t &last_write_size,
+                                          int64_t &accum_write_size,
+                                          int64_t &accum_write_count,
+                                          int64_t &accum_write_rt) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    ret = log_engine_.get_io_statistic_info(last_working_time,
+        last_write_size, accum_write_size, accum_write_count, accum_write_rt);
+  }
   return ret;
 }
 

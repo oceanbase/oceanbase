@@ -73,7 +73,6 @@ private:
   int start_sys_backup_data_(const share::ObBackupJobAttr &job_attr);
   int check_log_archive_status_(const uint64_t tenant_id, bool &is_doing);
   int check_initiate_twice_by_same_tenant_(const uint64_t tenant_id, const uint64_t initiator_tenant_id);
-  int check_tenant_set_backup_dest_(const uint64_t tenant_id, bool &is_setted);
   int get_all_tenants_(const bool with_backup_dest, ObIArray<uint64_t> &tenants);
 
   int start_tenant_backup_data_(const share::ObBackupJobAttr &job_attr);

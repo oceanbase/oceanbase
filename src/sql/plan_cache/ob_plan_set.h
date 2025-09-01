@@ -179,7 +179,8 @@ public:
         can_skip_params_match_(false),
         can_delay_init_datum_store_(false),
         resource_map_rule_(),
-        is_cli_return_rowid_(false)
+        is_cli_return_rowid_(false),
+        params_constraint_(alloc_)
   {}
   virtual ~ObPlanSet();
 
@@ -316,6 +317,7 @@ public:
   //variable for resource map rule
   ObPCResourceMapRule resource_map_rule_;
   bool is_cli_return_rowid_;
+  common::ObFixedArray<ObPCParamConstraint *, common::ObIAllocator> params_constraint_;
 };
 
 class ObSqlPlanSet : public ObPlanSet
@@ -367,6 +369,10 @@ public:
   inline bool has_duplicate_table() const { return has_duplicate_table_; }
   //inline bool has_array_binding() const { return has_array_binding_; }
   inline bool enable_inner_part_parallel() const { return enable_inner_part_parallel_exec_; }
+  int get_plan_type(const ObIArray<ObTableLocation> &table_locations,
+                    const bool is_contain_uncertain_op,
+                    ObPlanCacheCtx &pc_ctx,
+                    ObPhyPlanType &plan_type);
 #ifdef OB_BUILD_SPM
   int add_evolution_plan_for_spm(ObPhysicalPlan *plan, ObPlanCacheCtx &ctx);
   int get_evolving_evolution_task(EvolutionPlanList &evo_task_list);
@@ -431,11 +437,6 @@ private:
   int set_concurrent_degree(int64_t outline_param_idx,
                             ObPhysicalPlan &plan);
 
-  int get_plan_type(const ObIArray<ObTableLocation> &table_locations,
-                    const bool is_contain_uncertain_op,
-                    ObPlanCacheCtx &pc_ctx,
-                    ObIArray<ObCandiTableLoc> &candi_table_locs,
-                    ObPhyPlanType &plan_type);
   ObPhysicalPlan* get_local_plan(ObPlanCacheCtx &pc_ctx);
   bool is_exist_local_plan();
   int add_local_plan(ObPlanCacheCtx &pc_ctx, ObPhysicalPlan &plan);

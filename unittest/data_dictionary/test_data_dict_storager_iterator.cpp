@@ -56,7 +56,7 @@ public:
     int ret = OB_SUCCESS;
     if (all_palf_len_ <= 0) {
       ret = OB_ERR_UNEXPECTED;
-      DDLOG(ERROR, "all_palf_len_ shoule be valid", KR(ret), K_(all_palf_len));
+      DATA_DICT_LOG(ERROR, "all_palf_len_ shoule be valid", KR(ret), K_(all_palf_len));
     } else if (all_palf_pos_ >= all_palf_len_) {
       ret = OB_ITER_END;
     } else {
@@ -71,7 +71,7 @@ public:
       }
       if (buf_len <= 0) {
         ret = OB_ERR_UNEXPECTED;
-        DDLOG(ERROR, "buf_len shoule be valid", KR(ret), K(buf_len), K_(all_palf_len),
+        DATA_DICT_LOG(ERROR, "buf_len shoule be valid", KR(ret), K(buf_len), K_(all_palf_len),
             K_(all_palf_pos), K(tmp_palf_pos));
       }
     }
@@ -80,7 +80,7 @@ public:
 public:
   int submit_to_palf_() override
   {
-    DDLOG(DEBUG, "submit_to_palf_", K_(palf_pos), K_(all_palf_len), K_(all_palf_pos));
+    DATA_DICT_LOG(DEBUG, "submit_to_palf_", K_(palf_pos), K_(all_palf_len), K_(all_palf_pos));
     MEMCPY(all_palf_buf_ + all_palf_len_, palf_buf_, palf_pos_);
     all_palf_len_ += palf_pos_;
     palf_pos_ = 0;
@@ -118,7 +118,7 @@ TEST(ObDataDictStorage, test_storage_in_palf)
   ObDataDictIterator iterator;
 
   if (OB_FAIL(iterator.init(OB_SYS_TENANT_ID))) {
-    DDLOG(ERROR, "iterator init failed", KR(ret));
+    DATA_DICT_LOG(ERROR, "iterator init failed", KR(ret));
   }
   char *itr_buf = NULL;
   int64_t itr_buf_len = 0;
@@ -128,18 +128,18 @@ TEST(ObDataDictStorage, test_storage_in_palf)
   while (OB_SUCC(ret)) {
     if (OB_FAIL(storage.next_palf_buf_for_iterator_(itr_buf, itr_buf_len))) {
       if (OB_ITER_END != ret) {
-        DDLOG(ERROR, "next_palf_buf_for_iterator_ ", KR(ret), K(itr_buf_len));
+        DATA_DICT_LOG(ERROR, "next_palf_buf_for_iterator_ ", KR(ret), K(itr_buf_len));
       }
     } else if (OB_FAIL(iterator.append_log_buf_with_base_header_(itr_buf, itr_buf_len))) {
-      DDLOG(ERROR, "append_log_buf for test failed", KR(ret));
+      DATA_DICT_LOG(ERROR, "append_log_buf for test failed", KR(ret));
     } else if (OB_FAIL(iterator.next_dict_header(header_after))) {
       if (OB_ITER_END == ret) {
         ret = OB_SUCCESS;
       } else {
-        DDLOG(ERROR, "next_dict_header failed", KR(ret), K(header));
+        DATA_DICT_LOG(ERROR, "next_dict_header failed", KR(ret), K(header));
       }
     } else if (OB_FAIL(iterator.next_dict_entry(header, tb_meta_after))) {
-      DDLOG(ERROR, "next_dict_entry failed", KR(ret), K(header));
+      DATA_DICT_LOG(ERROR, "next_dict_entry failed", KR(ret), K(header));
     } else {
       EXPECT_TRUE(*tb_meta == tb_meta_after);
       EXPECT_TRUE(header == header_after);
@@ -151,7 +151,7 @@ TEST(ObDataDictStorage, test_storage_in_palf)
 
 TEST(ObDataDictStorage, test_storage_in_dict)
 {
-  DDLOG(INFO, "test_storage_in_dict");
+  DATA_DICT_LOG(INFO, "test_storage_in_dict");
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator;
   logservice::ObLogBaseHeader base_header;
@@ -169,7 +169,7 @@ TEST(ObDataDictStorage, test_storage_in_dict)
   int64_t block_size = 2 * _M_;
   int64_t seg_cnt = tb_meta_size / block_size + 1;
   int64_t total_serialize_size = seg_cnt * (base_header.get_serialize_size() + header_size) + tb_meta_size;
-  DDLOG(DEBUG, "serialize tb_meta", K(seg_cnt), K(header_size), K(tb_meta_size),
+  DATA_DICT_LOG(DEBUG, "serialize tb_meta", K(seg_cnt), K(header_size), K(tb_meta_size),
       K(total_serialize_size), K(block_size), K(header), KPC(tb_meta));
   EXPECT_TRUE(header.is_valid());
   EXPECT_EQ(storage.dict_pos_, tb_meta_size);
@@ -180,7 +180,7 @@ TEST(ObDataDictStorage, test_storage_in_dict)
   ObDataDictIterator iterator;
 
   if (OB_FAIL(iterator.init(OB_SYS_TENANT_ID))) {
-    DDLOG(ERROR, "iterator init failed", KR(ret));
+    DATA_DICT_LOG(ERROR, "iterator init failed", KR(ret));
   }
   char *itr_buf = NULL;
   int64_t itr_buf_len = 0;
@@ -191,18 +191,18 @@ TEST(ObDataDictStorage, test_storage_in_dict)
     header_after.reset();
     if (OB_FAIL(storage.next_palf_buf_for_iterator_(itr_buf, itr_buf_len))) {
       if (OB_ITER_END != ret) {
-        DDLOG(ERROR, "next_palf_buf_for_iterator_ ", KR(ret), K(itr_buf_len));
+        DATA_DICT_LOG(ERROR, "next_palf_buf_for_iterator_ ", KR(ret), K(itr_buf_len));
       }
     } else if (OB_FAIL(iterator.append_log_buf_with_base_header_(itr_buf, itr_buf_len))) {
-      DDLOG(ERROR, "append_log_buf for test failed", KR(ret));
+      DATA_DICT_LOG(ERROR, "append_log_buf for test failed", KR(ret));
     } else if (OB_FAIL(iterator.next_dict_header(header_after))) {
       if (OB_ITER_END == ret) {
         ret = OB_SUCCESS;
       } else {
-        DDLOG(ERROR, "next_dict_header failed", KR(ret), K(header));
+        DATA_DICT_LOG(ERROR, "next_dict_header failed", KR(ret), K(header));
       }
     } else if (OB_FAIL(iterator.next_dict_entry(header, tb_meta_after))) {
-      DDLOG(ERROR, "next_dict_entry failed", KR(ret), K(header));
+      DATA_DICT_LOG(ERROR, "next_dict_entry failed", KR(ret), K(header));
     } else {
       EXPECT_TRUE(*tb_meta == tb_meta_after);
       EXPECT_TRUE(header == header_after);
@@ -213,7 +213,7 @@ TEST(ObDataDictStorage, test_storage_in_dict)
 
 TEST(ObDataDictStorage, test_empty_schema)
 {
-  DDLOG(INFO, "test_empty_schema");
+  DATA_DICT_LOG(INFO, "test_empty_schema");
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator("DictTest");
   char *buf = NULL;
@@ -228,7 +228,7 @@ TEST(ObDataDictStorage, test_empty_schema)
   EXPECT_TRUE(pos > 0);
   EXPECT_TRUE(buf_len >= pos);
   EXPECT_EQ(0, strcmp(buf, "ddl_trans commit"));
-  DDLOG(INFO, "generate meta buf", KCSTRING(buf), K(buf_len), K(pos));
+  DATA_DICT_LOG(INFO, "generate meta buf", KCSTRING(buf), K(buf_len), K(pos));
   ObSEArray<const ObDictTenantMeta*, 8> tenant_metas;
   ObSEArray<const ObDictDatabaseMeta*, 8> db_metas;
   ObSEArray<const ObDictTableMeta*, 8> tb_metas;
@@ -240,7 +240,7 @@ TEST(ObDataDictStorage, test_empty_schema)
 
 TEST(ObDataDictStorage, test_schema_storage)
 {
-  DDLOG(INFO, "test_schema_storage");
+  DATA_DICT_LOG(INFO, "test_schema_storage");
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator("DictTest");
   ObMockSchemaBuilder schema_builder;
@@ -282,7 +282,7 @@ TEST(ObDataDictStorage, test_schema_storage)
   EXPECT_TRUE(pos > 0);
   EXPECT_TRUE(buf_len >= pos);
   EXPECT_TRUE(buf_len > 2 * _M_);
-  DDLOG(INFO, "generate meta buf", KP(buf), K(buf_len), K(pos));
+  DATA_DICT_LOG(INFO, "generate meta buf", KP(buf), K(buf_len), K(pos));
   ObSEArray<const ObDictTenantMeta*, 8> tenant_metas;
   ObSEArray<const ObDictDatabaseMeta*, 8> db_metas;
   ObSEArray<const ObDictTableMeta*, 8> tb_metas;

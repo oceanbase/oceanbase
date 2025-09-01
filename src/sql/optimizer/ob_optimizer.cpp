@@ -34,14 +34,12 @@ int ObOptimizer::optimize(ObDMLStmt &stmt, ObLogPlan *&logical_plan)
   int64_t last_mem_usage = ctx_.get_allocator().total();
   int64_t optimizer_mem_usage = 0;
   ObDMLStmt *target_stmt = &stmt;
-  ObTaskExecutorCtx *task_exec_ctx = ctx_.get_task_exec_ctx();
   if (stmt.is_explain_stmt()) {
     target_stmt = static_cast<ObExplainStmt*>(&stmt)->get_explain_query_stmt();
   }
-  if (OB_ISNULL(query_ctx) || OB_ISNULL(session) ||
-      OB_ISNULL(target_stmt)|| OB_ISNULL(task_exec_ctx)) {
+  if (OB_ISNULL(query_ctx) || OB_ISNULL(session) || OB_ISNULL(target_stmt)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(query_ctx), K(session), K(target_stmt), K(task_exec_ctx));
+    LOG_WARN("invalid arguments", K(ret), K(query_ctx), K(session), K(target_stmt));
   } else if (OB_FAIL(init_env_info(*target_stmt))) {
     LOG_WARN("failed to init px info", K(ret));
   } else if (!target_stmt->is_reverse_link() &&
@@ -62,8 +60,6 @@ int ObOptimizer::optimize(ObDMLStmt &stmt, ObLogPlan *&logical_plan)
       ObSEArray<ObTablePartitionInfo*, 8> table_partitions;
       if (OB_FAIL(plan->get_global_table_partition_info(table_partitions))) {
         LOG_WARN("failed to get global table partition info", K(ret));
-      } else if (OB_FAIL(task_exec_ctx->set_table_locations(table_partitions))) {
-        LOG_WARN("failed to set table locations", K(ret));
       }
 
       if (OB_SUCC(ret)) {
@@ -809,6 +805,15 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
   bool enable_adj_index_cost = false;
   int64_t optimizer_index_cost_adj = 0;
   bool is_skip_scan_enable = session.is_index_skip_scan_enabled();
+  bool is_partial_group_by_pushdown_enabled = false;
+  bool is_partial_distinct_pushdown_enabled = false;
+  if (OB_SUCC(OB_E(EventTable::EN_EXPLAIN_GENERATE_PLAN_WITH_OUTLINE) OB_SUCCESS)) {
+  } else {
+    is_partial_group_by_pushdown_enabled = true;
+    is_partial_distinct_pushdown_enabled = true;
+  }
+  bool is_partial_limit_pushdown_enabled = true;
+  int64_t pushdown_storage_level = tenant_config.is_valid() ? tenant_config->_pushdown_storage_level : INT64_MAX;
   bool enable_use_batch_nlj = false;
   bool better_inlist_costing = false;
   bool enable_spf_batch_rescan = session.is_spf_mlj_group_rescan_enabled();
@@ -817,6 +822,8 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
   bool enable_distributed_das_scan = tenant_config.is_valid() ? tenant_config->_enable_distributed_das_scan : true;
   bool enable_index_merge = tenant_config.is_valid() ? tenant_config->_enable_index_merge : false;
   const ObOptParamHint &opt_params = ctx_.get_global_hint().opt_params_;
+  bool aggr_pushdown_allowed = false;
+
   if (OB_ISNULL(query_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null query ctx");
@@ -838,6 +845,14 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     LOG_WARN("failed to find dblink in stmt", K(ret));
   } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ROWSETS_ENABLED, rowsets_enabled))) {
     LOG_WARN("fail to check rowsets enabled", K(ret));
+  } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ENABLE_PARTIAL_GROUP_BY_PUSHDOWN, is_partial_group_by_pushdown_enabled))) {
+    LOG_WARN("fail to check pushdown partial group by enabled", K(ret));
+  } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ENABLE_PARTIAL_LIMIT_PUSHDOWN, is_partial_limit_pushdown_enabled))) {
+    LOG_WARN("fail to check pushdown partial limit enabled", K(ret));
+  } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ENABLE_PARTIAL_DISTINCT_PUSHDOWN, is_partial_distinct_pushdown_enabled))) {
+    LOG_WARN("fail to check pushdown partial distinct enabled", K(ret));
+  } else if (OB_FAIL(opt_params.get_integer_opt_param(ObOptParamHint::PUSHDOWN_STORAGE_LEVEL, pushdown_storage_level))) {
+    LOG_WARN("failed to get pushdown storage level opt param", K(ret));
   } else if (OB_FAIL(stmt.check_has_cursor_expression(has_cursor_expr))) {
     LOG_WARN("fail to check cursor expression info", K(ret));
   } else if (OB_FAIL(session.is_storage_estimation_enabled(storage_estimation_enabled))) {
@@ -882,6 +897,8 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     LOG_WARN("failed to get das batch rescan flag", K(ret));
   } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ENABLE_INDEX_MERGE, enable_index_merge))) {
     LOG_WARN("failed to get opt param enable index merge", K(ret));
+  } else if(OB_FAIL(session.if_aggr_pushdown_allowed(aggr_pushdown_allowed))) {
+    LOG_WARN("failed to get sys var enable aggr pushdown", K(ret));
   } else {
     ctx_.init_batch_rescan_flags(enable_use_batch_nlj, enable_spf_batch_rescan,
       query_ctx->optimizer_features_enable_version_, das_batch_rescan_flag);
@@ -906,6 +923,19 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     }
     ctx_.set_enable_px_ordered_coord(enable_px_ordered_coord);
     ctx_.set_enable_distributed_das_scan(enable_distributed_das_scan);
+
+    ctx_.set_enable_partial_group_by_pushdown(ctx_.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_1)
+                                              && is_partial_group_by_pushdown_enabled
+                                              && aggr_pushdown_allowed);
+    ctx_.set_enable_partial_limit_pushdown(ctx_.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_1)
+                                           && is_partial_limit_pushdown_enabled);
+    ctx_.set_enable_partial_distinct_pushdown(ctx_.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_1)
+                                              && is_partial_distinct_pushdown_enabled
+                                              && aggr_pushdown_allowed);
+    ctx_.set_rowsets_enabled(rowsets_enabled);
+    ctx_.set_enable_storage_groupby_pushdown(ObPushdownFilterUtils::is_group_by_pushdown_enabled(pushdown_storage_level) && rowsets_enabled);
+    ctx_.set_enable_storage_aggr_pushdown(ObPushdownFilterUtils::is_aggregate_pushdown_enabled(pushdown_storage_level));
+    ctx_.set_enable_rich_vector_format(rowsets_enabled && session.use_rich_format());
     if (!hash_join_enabled
         && !optimizer_sortmerge_join_enabled
         && !nested_loop_join_enabled) {
@@ -935,7 +965,6 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
   }
   return ret;
 }
-
 /* parallel policy priority:
     1. not support parallel: pl udf, dblink
     2. global parallel hint:

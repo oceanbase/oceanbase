@@ -82,10 +82,16 @@ int ObIntegerColumnEncoder::do_init_()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (row_count_ == ctx_->null_cnt_) { // all datums is null
+  } else if (row_count_ == ctx_->null_or_nop_cnt_) { // all datums is null or nop
     if (OB_FAIL(enc_ctx_.build_signed_stream_meta(
-        0, 0, true/*is_replace_null*/, 0, precision_width_size_, is_force_raw_,
-        ctx_->encoding_ctx_->major_working_cluster_version_, integer_range_))) {
+            0,
+            0,
+            true /*is_replace_null*/,
+            0,
+            precision_width_size_,
+            is_force_raw_,
+            ctx_->encoding_ctx_->major_working_cluster_version_,
+            integer_range_))) {
       LOG_WARN("fail to build_signed_stream_meta", K(ret));
     }
   } else if (ObIntSC == store_class_ || ObDecimalIntSC == store_class_) {
@@ -102,9 +108,15 @@ int ObIntegerColumnEncoder::do_init_()
   }
 
   if (OB_SUCC(ret)) {
-    if (ctx_->null_cnt_ > 0) {
+    if (ctx_->null_or_nop_cnt_ > 0) {
       if (!enc_ctx_.meta_.is_use_null_replace_value()) {
-        column_header_.set_has_null_bitmap();
+        column_header_.set_has_null_or_nop_bitmap();
+      }
+      if (ctx_->nop_cnt_ > 0) {
+        column_header_.set_has_nop();
+        if (ctx_->nop_cnt_ < ctx_->null_or_nop_cnt_) {
+          column_header_.set_has_nop_bitmap();
+        }
       }
     }
     int_stream_count_ = 1;
@@ -112,7 +124,7 @@ int ObIntegerColumnEncoder::do_init_()
     if (OB_FAIL(get_previous_cs_encoding(pre_col_encoding))) {
       LOG_WARN("get_previous_cs_encoding fail", K(ret));
     } else if (OB_FAIL(enc_ctx_.build_stream_encoder_info(
-        ctx_->null_cnt_ > 0/*has_null*/,
+        ctx_->null_or_nop_cnt_ > 0/*has_null*/,
         false/*not monotonic*/,
         &ctx_->encoding_ctx_->cs_encoding_opt_,
         pre_col_encoding,
@@ -155,6 +167,8 @@ int ObIntegerColumnEncoder::store_column_meta(ObMicroBufferWriter &buf_writer)
   int ret = OB_SUCCESS;
   if (OB_FAIL(store_null_bitamp(buf_writer))) {
     LOG_WARN("fail to store null bitmap", K(ret));
+  } else if (OB_FAIL(store_nop_bitmap(buf_writer))) {
+    LOG_WARN("fail to store nop bitmap", K(ret));
   }
 
   return ret;
@@ -180,7 +194,7 @@ int ObIntegerColumnEncoder::build_signed_stream_meta_()
     bool is_replace_null = false;
     int64_t null_replaced_value = 0;
 
-    if (ctx_->null_cnt_ > 0) { // has null
+    if (ctx_->null_or_nop_cnt_ > 0) { // has null
       if (0 == int_min) {
         // In case int_min minus 1 turns negative, the largest not existed value is preferred
         if (int_max != type_store_max) {
@@ -212,9 +226,15 @@ int ObIntegerColumnEncoder::build_signed_stream_meta_()
       }
     }
 
-    if (OB_FAIL(enc_ctx_.build_signed_stream_meta(new_int_min, new_int_max, is_replace_null,
-        null_replaced_value, precision_width_size_, is_force_raw_,
-        ctx_->encoding_ctx_->major_working_cluster_version_, integer_range_))) {
+    if (OB_FAIL(enc_ctx_.build_signed_stream_meta(
+            new_int_min,
+            new_int_max,
+            is_replace_null,
+            null_replaced_value,
+            precision_width_size_,
+            is_force_raw_,
+            ctx_->encoding_ctx_->major_working_cluster_version_,
+            integer_range_))) {
       LOG_WARN("fail to build_signed_stream_meta", K(ret));
     }
   }
@@ -240,7 +260,7 @@ int ObIntegerColumnEncoder::build_unsigned_encoder_ctx_()
     bool is_replace_null = false;
     int64_t null_replaced_value = 0;
 
-    if (ctx_->null_cnt_ > 0) {
+    if (ctx_->null_or_nop_cnt_ > 0) {
       if (uint_min == 0) {
         if (uint_max != type_store_max) {
           new_uint_max = uint_max + 1;
@@ -259,8 +279,13 @@ int ObIntegerColumnEncoder::build_unsigned_encoder_ctx_()
     }
 
     if (OB_FAIL(enc_ctx_.build_unsigned_stream_meta(
-        new_uint_min, new_uint_max, is_replace_null, null_replaced_value,
-        is_force_raw_, ctx_->encoding_ctx_->major_working_cluster_version_, integer_range_))) {
+            new_uint_min,
+            new_uint_max,
+            is_replace_null,
+            null_replaced_value,
+            is_force_raw_,
+            ctx_->encoding_ctx_->major_working_cluster_version_,
+            integer_range_))) {
       LOG_WARN("fail to build_unsigned_stream_meta", K(ret));
     }
   }
@@ -276,8 +301,12 @@ int64_t ObIntegerColumnEncoder::estimate_store_size() const
   } else {
     size = ObCSEncodingUtil::get_bit_size(integer_range_) * row_count_ / CHAR_BIT;
     // has null datum and can't replace null value, need use bitmap
-    if (column_header_.has_null_bitmap()) {
-      size += ObCSEncodingUtil::get_bitmap_byte_size(row_count_);
+    int64_t bitmap_size = ObCSEncodingUtil::get_bitmap_byte_size(row_count_);
+    if (column_header_.has_null_or_nop_bitmap()) {
+      size += bitmap_size;
+    }
+    if (column_header_.has_nop_bitmap()) {
+      size += bitmap_size;
     }
   }
 
@@ -307,8 +336,12 @@ int ObIntegerColumnEncoder::get_maximal_encoding_store_size(int64_t &size) const
   } else {
     size = sizeof(ObIntegerStreamMeta) +
         common::ObCodec::get_moderate_encoding_size(enc_ctx_.meta_.get_uint_width_size() * row_count_);
-    if (column_header_.has_null_bitmap()) {
-      size += ObCSEncodingUtil::get_bitmap_byte_size(row_count_);
+    int64_t bitmap_size = ObCSEncodingUtil::get_bitmap_byte_size(row_count_);
+    if (column_header_.has_null_or_nop_bitmap()) {
+      size += bitmap_size;
+    }
+    if (column_header_.has_nop_bitmap()) {
+      size += bitmap_size;
     }
     size = std::min(size, ObCSEncodingUtil::MAX_COLUMN_ENCODING_STORE_SIZE);
   }

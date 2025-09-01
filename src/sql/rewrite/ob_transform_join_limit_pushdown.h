@@ -107,10 +107,6 @@ private:
                              bool &is_valid,
                              bool &has_cartesian);
 
-  int check_contain_correlated_function_table(ObDMLStmt *stmt, bool &is_contain);
-
-  int check_contain_correlated_json_table(ObDMLStmt *stmt, bool &is_contain);
-
   int check_cartesian(ObSelectStmt *stmt, UnionFind &uf, bool &is_valid);
 
   int collect_cartesian_infos(ObSelectStmt *stmt,

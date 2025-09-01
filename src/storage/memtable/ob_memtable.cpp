@@ -2865,7 +2865,10 @@ int ObMemtable::batch_mvcc_write_(const storage::ObTableIterParam &param,
   const bool check_exist = memtable_set_arg.check_exist_;
   ObTxSEQ write_seq;
   int64_t write_epoch = 0;
-
+  bool is_insert = (blocksstable::ObDmlFlag::DF_INSERT == writer_dml_flag && !rows_info.need_find_all_duplicate_key()) ||
+                    // in tableapi, it means the dml is a put operation, we use as insert for perf opt
+                    (ctx.mvcc_acc_ctx_.write_flag_.is_table_api() &&
+                     blocksstable::ObDmlFlag::DF_UPDATE == writer_dml_flag && !memtable_set_arg.has_old_row());
   // Step1: create or get all memtable keys and mvcc rows from the hash table
   // which ensuring the unqiueness of the key and value
   if (OB_FAIL(row_writer.init(micro_block_format_version_))) {
@@ -2874,9 +2877,7 @@ int ObMemtable::batch_mvcc_write_(const storage::ObTableIterParam &param,
     TRANS_LOG(WARN, "reserce kvs failed", K(ret));
   } else if (OB_FAIL(mvcc_engine_.create_kvs(memtable_set_arg,
                                              memtable_key_generator,
-                                             // is_normal_insert
-                                             blocksstable::ObDmlFlag::DF_INSERT == writer_dml_flag
-                                                && !rows_info.need_find_all_duplicate_key(),
+                                             is_insert,
                                              stored_kvs))) {
     TRANS_LOG(WARN, "create kv failed", K(ret), K(tx_node_args));
   }
@@ -3017,12 +3018,14 @@ int ObMemtable::mvcc_write_(ObStoreCtx &ctx,
   ObMvccRow *value = NULL;
   ObMemtableCtx *mem_ctx = ctx.mvcc_acc_ctx_.get_mem_ctx();
   transaction::ObTxSnapshot &snapshot = ctx.mvcc_acc_ctx_.snapshot_;
-
+  bool is_insert = blocksstable::ObDmlFlag::DF_INSERT == tx_node_arg.data_->dml_flag_ ||
+              // in tableapi, it means the dml is a put operation, we use as insert for perf opt
+              (ctx.mvcc_acc_ctx_.write_flag_.is_table_api() &&
+              blocksstable::ObDmlFlag::DF_UPDATE == tx_node_arg.data_->dml_flag_ && tx_node_arg.old_row_.data_ == nullptr);
   // Step1: create or get the memtable key and mvcc row from the hash table
   // which ensuring the unqiueness of the key and value
   if (OB_FAIL(mvcc_engine_.create_kv(&memtable_key,
-                                     // is_insert
-                                     blocksstable::ObDmlFlag::DF_INSERT == tx_node_arg.data_->dml_flag_,
+                                     is_insert, /* is_normal_insert */
                                      &stored_key,
                                      value))) {
     TRANS_LOG(WARN, "create kv failed", K(ret), K(tx_node_arg), K(memtable_key));
@@ -3399,7 +3402,7 @@ bool ObMemtableSetArg::is_valid() const
     columns_ != nullptr;
 }
 
-bool ObMemtableSetArg::need_old_row() const
+bool ObMemtableSetArg::has_old_row() const
 {
   return old_row_ != nullptr;
 }

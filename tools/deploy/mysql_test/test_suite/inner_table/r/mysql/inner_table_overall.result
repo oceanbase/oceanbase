@@ -343,6 +343,10 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 553	__all_tenant_objauth_mysql_history	0	201001	1
 554	__all_external_resource	0	201001	1
 555	__all_external_resource_history	0	201001	1
+569	__all_tenant_ss_storage_stat	0	201001	1
+570	__all_ai_model	0	201001	1
+571	__all_ai_model_history	0	201001	1
+572	__all_ai_model_endpoint	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1
@@ -876,7 +880,12 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12551	__all_virtual_logservice_cluster_info	2	201001	1
 12552	__all_virtual_ss_gc_status	2	201001	1
 12553	__all_virtual_ss_gc_detect_info	2	201001	1
+12569	__all_virtual_tenant_ss_storage_stat	2	201001	1
+12570	__all_virtual_hms_client_pool_stat	2	201001	1
 12571	__all_virtual_dba_source_v1	2	201001	1
+12572	__all_virtual_ai_model	2	201001	1
+12573	__all_virtual_ai_model_history	2	201001	1
+12574	__all_virtual_ai_model_endpoint	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
@@ -1432,6 +1441,18 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21660	V$OB_SS_SSTABLES	1	201001	1
 21661	GV$OB_VECTOR_MEMORY	1	201001	1
 21662	V$OB_VECTOR_MEMORY	1	201001	1
+21681	GV$OB_HNSW_INDEX_INFO	1	201001	1
+21682	V$OB_HNSW_INDEX_INFO	1	201001	1
+21683	GV$OB_IVF_INDEX_INFO	1	201001	1
+21684	V$OB_IVF_INDEX_INFO	1	201001	1
+21685	CDB_OB_SS_SPACE_USAGE	1	201001	1
+21686	DBA_OB_SS_SPACE_USAGE	1	201001	1
+21687	GV$OB_HMS_CLIENT_POOL_STAT	1	201001	1
+21688	V$OB_HMS_CLIENT_POOL_STAT	1	201001	1
+21689	DBA_OB_AI_MODELS	1	201001	1
+21690	DBA_OB_AI_MODEL_ENDPOINTS	1	201001	1
+21691	CDB_OB_AI_MODELS	1	201001	1
+21692	CDB_OB_AI_MODEL_ENDPOINTS	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

@@ -96,6 +96,8 @@ struct ObUpdateTableStoreParam;
 struct ObMigrationTabletParam;
 class ObTableScanRange;
 class ObTabletCreateDeleteMdsUserData;
+class ObBlockStatScanParam;
+class ObBlockStatIterator;
 
 
 class ObLSTabletService : public logservice::ObIReplaySubHandler,
@@ -441,6 +443,10 @@ public:
       const common::ObIArray<uint64_t> &sample_count,
       common::ObIArray<double> &sortedness,
       common::ObIArray<uint64_t> &res_sample_counts);
+  int scan_block_stat(
+      const ObTabletHandle &tablet_handle,
+      ObBlockStatScanParam &scan_param,
+      ObBlockStatIterator &iter);
 
   // iterator
   int build_tablet_iter(ObLSTabletIterator &iter, const bool except_ls_inner_tablet = false);
@@ -498,6 +504,7 @@ public:
     const ObTabletMapKey &tablet_key,
     const ObMetaDiskAddr &old_addr);
 
+  int alloc_private_tablet_meta_version_with_lock(const ObTabletMapKey &key, int64_t &tablet_meta_version);
 protected:
   virtual int prepare_dml_running_ctx(
       const common::ObIArray<uint64_t> *column_ids,
@@ -725,6 +732,11 @@ private:
       const bool allow_no_ready_read);
 
   int mock_duplicated_rows_(blocksstable::ObDatumRowIterator *&duplicated_rows);
+
+  int alloc_private_tablet_meta_version_without_lock(const ObTabletMapKey &key, int64_t &tablet_meta_version);
+  int update_private_tablet_last_match_meta_version_without_lock(
+    const common::ObTabletID &tablet_id,
+    ObTimeGuard &time_guard);
 
 #ifdef OB_BUILD_SHARED_STORAGE
   int register_all_sstables_upload_(ObTabletHandle &new_tablet_handle);

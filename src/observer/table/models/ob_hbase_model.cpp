@@ -118,11 +118,17 @@ int ObHBaseModel::check_mode_defense(ObTableExecCtx &ctx, const ObTableQueryRequ
       LOG_WARN("hbase series mode is not supported allow partial results query", K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "timeseries hbase table with allow partial results query");
     }
-  } else if (ctx.get_schema_cache_guard().get_schema_flags().is_secondary_part_ &&
-             req.query_.get_scan_order() != common::ObQueryFlag::Forward) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("secondary partitioned hbase table with reverse query is not supported", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "secondary partitioned hbase table with reverse query");
+  } else if (ctx.get_schema_cache_guard().get_schema_flags().is_secondary_part_
+             && req.query_.get_scan_order() != common::ObQueryFlag::Forward) {
+    // secondary partitioned hbase table with reverse query is enabled after 4_4_1_0
+    uint64_t data_version = 0;
+    if (GET_MIN_DATA_VERSION(MTL_ID(), data_version)) {
+      LOG_WARN("get data version failed", K(ret));
+    } else if (data_version < DATA_VERSION_4_4_1_0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("secondary partitioned hbase table with reverse query is not supported before 4_4_1_0", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "secondary partitioned hbase table with reverse query before 4_4_1_0");
+    }
   }
   return ret;
 }
@@ -757,7 +763,7 @@ int ObHBaseModel::modify_htable_timestamp(ObHbaseTabletCells *tablet_cell)
     LOG_WARN("tablet cell is null", K(ret));
   } else {
     for (int i = 0; OB_SUCC(ret) && i < tablet_cell->get_cells().count(); i++) {
-      ObITableEntity *entity = tablet_cell->get_cells().at(i);
+      const ObITableEntity *entity = tablet_cell->get_cells().at(i);
       if (OB_ISNULL(entity)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid cell", K(ret), K(entity));
@@ -942,7 +948,7 @@ int ObHBaseModel::process_query_and_mutate_group(ObTableExecCtx &ctx,
     const LSOPGrouper::OpInfo &op_info = group.ops_.at(i);
     if (OB_ISNULL(op_info.op_->get_query())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("query is null", K(ret), K(op_info));
+      LOG_WARN("query is null", K(ret), K(op_info), K(i));
     } else {
       ObHbaseQuery *query = nullptr;
       if (OB_ISNULL(query = OB_NEWx(ObHbaseQuery, &ctx.get_allocator(),
@@ -951,11 +957,11 @@ int ObHBaseModel::process_query_and_mutate_group(ObTableExecCtx &ctx,
                                    *op_info.op_->get_query(),
                                    is_multi_cf_req_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to create query", K(ret));
+        LOG_WARN("failed to create query", K(ret), K(i));
       } else if (OB_FAIL(queries.push_back(query))) {
         query->~ObHbaseQuery();
         ctx.get_allocator().free(query);
-        LOG_WARN("failed to add query", K(ret), K(queries));
+        LOG_WARN("failed to add query", K(ret), K(queries), K(i));
       }
     }
   }
@@ -964,7 +970,7 @@ int ObHBaseModel::process_query_and_mutate_group(ObTableExecCtx &ctx,
     for (int64_t i = 0; OB_SUCC(ret) && i < queries.count(); ++i) {
       if (!is_multi_cf_req_) {
         if (OB_FAIL(cf_service.del(*queries.at(i), ctx))) {
-          LOG_WARN("failed to process query", K(ret), K(*queries.at(i)));
+          LOG_WARN("failed to process query", K(ret), K(*queries.at(i)), K(i));
         }
       } else {
         // Note: This object is a copy of ObHbaseCFIterator::iterable_result_
@@ -975,12 +981,12 @@ int ObHBaseModel::process_query_and_mutate_group(ObTableExecCtx &ctx,
         ObNewRow cell;
         ObHbaseQueryResultIterator *hbase_result_iter = nullptr;
         if (OB_FAIL(cf_service.query(*queries.at(i), ctx, hbase_result_iter))) {
-          LOG_WARN("failed to query", K(ret), K(*queries.at(i)));
+          LOG_WARN("failed to query", K(ret), K(*queries.at(i)), K(i));
         } else {
           while (OB_SUCC(ret)) {
             if (OB_FAIL(hbase_result_iter->get_next_result(wide_row))) {
               if (ret != OB_ITER_END) {
-                LOG_WARN("failed to get next result", K(ret), K(*queries.at(i)));
+                LOG_WARN("failed to get next result", K(ret), K(*queries.at(i)), K(i));
               }
             }
             if (ret == OB_ITER_END && wide_row.rows_.count() > 0) {
@@ -1025,7 +1031,7 @@ int ObHBaseModel::process_query_and_mutate_group(ObTableExecCtx &ctx,
                   // set real table id and invalid tablet id to avoid 4377
                   new_query.set_table_id(real_simple_schema->get_table_id());
                   if (OB_FAIL(cf_service.del(new_query, cell, ctx))) {
-                    LOG_WARN("failed to delete cell", K(ret), K(new_query), K(cell));
+                    LOG_WARN("failed to delete cell", K(ret), K(new_query), K(cell), K(i));
                   }
                 }
               }
@@ -1287,9 +1293,9 @@ int ObHBaseModel::construct_del_query(ObHbaseTableCells &table_cells,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null tablet cells", K(ret));
     } else {
-      const ObIArray<ObITableEntity *> &cells = tablet_cells->get_cells();
+      const ObIArray<const ObITableEntity *> &cells = tablet_cells->get_cells();
       for (int64_t j = 0; OB_SUCC(ret) && j < cells.count(); j++) {
-        ObITableEntity *cell = cells.at(j);
+        const ObITableEntity *cell = cells.at(j);
         if (OB_ISNULL(cell)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null cell", K(ret));
@@ -1428,7 +1434,7 @@ int ObHBaseModel::process_increment_append(ObTableExecCtx &ctx,
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("tablet cells is null", K(ret));
           } else {
-            tablet_cells->get_cells().at(i)->set_tablet_id(tablet_id);
+            const_cast<ObITableEntity*>(tablet_cells->get_cells().at(i))->set_tablet_id(tablet_id);
           }
         }
       }
@@ -1548,7 +1554,7 @@ int ObHBaseModel::generate_new_incr_append_table_cells(ObTableExecCtx &ctx,
 {
   int ret = OB_SUCCESS;
   ObITableEntityFactory *entity_factory = ctx.get_entity_factory();
-  ObSEArray<ObITableEntity*, 8> entities;
+  ObSEArray<const ObITableEntity*, 8> entities;
   ObSEArray<std::pair<common::ObString, int32_t>, OB_DEFAULT_SE_ARRAY_COUNT> columns;
   const ObTableBatchOperation &mutations = req.query_and_mutate_.get_mutations();
   if (OB_ISNULL(entity_factory)) {
@@ -1559,7 +1565,7 @@ int ObHBaseModel::generate_new_incr_append_table_cells(ObTableExecCtx &ctx,
   } else if (OB_FAIL(wide_rows->get_htable_all_entity(entities))) {
     LOG_WARN("failed to get all entity", K(ret));
   }
-  ObITableEntity *old_entity = nullptr;
+  const ObITableEntity *old_entity = nullptr;
   ObIArray<table::ObHbaseTabletCells *> &tablet_cells_array = table_cells.get_tablet_cells_array();
   for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); i++) {
     old_entity = nullptr;

@@ -178,7 +178,7 @@ class ObDDLMergeBlockRowIterator : public ObIndexBlockRowIterator
 public:
   static const int64_t MAX_SSTABLE_COUNT = 4096;
   typedef ObSimpleRowsMerger<ObDDLSSTableMergeLoserTreeItem, ObDDLSSTableMergeLoserTreeCompare> SimpleMerger;
-  typedef common::ObLoserTree<ObDDLSSTableMergeLoserTreeItem, ObDDLSSTableMergeLoserTreeCompare, MAX_SSTABLE_COUNT> MergeLoserTree;
+  typedef common::ObLoserTree<ObDDLSSTableMergeLoserTreeItem, ObDDLSSTableMergeLoserTreeCompare> MergeLoserTree;
   ObDDLMergeBlockRowIterator();
   virtual ~ObDDLMergeBlockRowIterator();
   virtual int init(const ObMicroBlockData &idx_block_data,

@@ -22,6 +22,7 @@
 #include "lib/hash/ob_hashmap.h"
 #include "lib/allocator/page_arena.h"
 #include "lib/string/ob_string.h"
+#include <type_traits>
 
 namespace oceanbase
 {
@@ -295,6 +296,28 @@ protected:
   int set_delete_mode_(const char *delete_mode);
   int set_addressing_model_(const char *addressing_model);
   int set_checksum_type_(const char *checksum_type_str);
+
+  template <typename T>
+  static int clone_impl_(ObIAllocator &allocator, const T &src, T *&dst)
+  {
+    static_assert(
+        std::is_base_of<ObObjectStorageInfo, T>::value,
+        "T must be ObObjectStorageInfo or its derived class");
+    int ret = OB_SUCCESS;
+    dst = nullptr;
+    if (OB_UNLIKELY(!src.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      OB_LOG(WARN, "src info is invalid", K(ret), K(src));
+    } else if (OB_ISNULL(dst = OB_NEWx(T, &allocator))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      OB_LOG(WARN, "fail to alloc dst", K(ret), K(src));
+    } else if (OB_FAIL(dst->assign(src))) {
+      OB_LOG(WARN, "fail to assign storage info", K(ret), K(src));
+      OB_DELETEx(T, &allocator, dst);
+      dst = nullptr;
+    }
+    return ret;
+  }
 
 public:
   // TODO: Rename device_type_ to storage_protocol_type_ for better clarity

@@ -9,15 +9,16 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#define USING_LOG_PREFIX OBLOG
+#define USING_LOG_PREFIX DATA_DICT
 
 #include "ob_log_meta_data_replayer.h"
 #include "ob_log_part_trans_task.h"
 #include "ob_log_instance.h"
 #include "ob_log_resource_collector.h"
+#include "ob_log_trace_id.h"
 
-#define _STAT(level, fmt, args...) _OBLOG_LOG(level, "[LOG_META_DATA] [REPLAYER] " fmt, ##args)
-#define STAT(level, fmt, args...) OBLOG_LOG(level, "[LOG_META_DATA] [REPLAYER] " fmt, ##args)
+#define _STAT(level, fmt, args...) _DATA_DICT_LOG(level, "[LOG_META_DATA] [REPLAYER] " fmt, ##args)
+#define STAT(level, fmt, args...) DATA_DICT_LOG(level, "[LOG_META_DATA] [REPLAYER] " fmt, ##args)
 #define _ISTAT(fmt, args...) _STAT(INFO, fmt, ##args)
 #define ISTAT(fmt, args...) STAT(INFO, fmt, ##args)
 #define _DSTAT(fmt, args...) _STAT(DEBUG, fmt, ##args)
@@ -29,6 +30,9 @@ namespace libobcdc
 {
 ObLogMetaDataReplayer::ObLogMetaDataReplayer() :
     is_inited_(false),
+    stop_flag_(true),
+    replay_tenant_id_(OB_INVALID_TENANT_ID),
+    start_timestamp_ns_(OB_INVALID_TIMESTAMP),
     queue_(),
     schema_inc_replay_(),
     part_trans_parser_(NULL)
@@ -40,17 +44,24 @@ ObLogMetaDataReplayer::~ObLogMetaDataReplayer()
   destroy();
 }
 
-int ObLogMetaDataReplayer::init(IObLogPartTransParser &part_trans_parser)
+int ObLogMetaDataReplayer::init(const int64_t start_timestamp_ns, IObLogPartTransParser &part_trans_parser)
 {
   int ret = OB_SUCCESS;
 
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_ERROR("init twice", KR(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP >= start_timestamp_ns)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid start_timestamp_ns", KR(ret), K(start_timestamp_ns));
+  } else if (OB_FAIL(lib::ThreadPool::set_thread_count(1 /* thread num */))) {
+    LOG_ERROR("init thread pool failed", KR(ret), K(start_timestamp_ns));
   } else if (OB_FAIL(schema_inc_replay_.init(true/*is_start_progress*/))) {
-    LOG_ERROR("schema_inc_replay_ init failed", KR(ret));
+    LOG_ERROR("schema_inc_replay_ init failed", KR(ret), K(start_timestamp_ns));
   } else {
     part_trans_parser_ = &part_trans_parser;
+    start_timestamp_ns_ = start_timestamp_ns;
+    stop_flag_ = false;
     is_inited_ = true;
   }
 
@@ -60,9 +71,12 @@ int ObLogMetaDataReplayer::init(IObLogPartTransParser &part_trans_parser)
 void ObLogMetaDataReplayer::destroy()
 {
   if (IS_INIT) {
+    replay_tenant_id_ = OB_INVALID_TENANT_ID;
+    start_timestamp_ns_ = OB_INVALID_TIMESTAMP;
     queue_.reset();
     schema_inc_replay_.destroy();
     part_trans_parser_ = NULL;
+    stop_flag_ = true;
     is_inited_ = false;
   }
 }
@@ -86,46 +100,105 @@ int ObLogMetaDataReplayer::push(PartTransTask *task, const int64_t timeout)
   return ret;
 }
 
-int ObLogMetaDataReplayer::replay(
-    const uint64_t tenant_id,
-    const int64_t start_timestamp_ns,
-    ObDictTenantInfo &tenant_info)
+int ObLogMetaDataReplayer::replay(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_ERROR("ObLogMetaDataSQLQueryer is not initialized", KR(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID != replay_tenant_id_)
+      || OB_UNLIKELY(OB_INVALID_TIMESTAMP == start_timestamp_ns_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid args to replay meta data", KR(ret), K(tenant_id), K_(start_timestamp_ns));
   } else {
-    ISTAT("BEGIN", K(tenant_id), K(start_timestamp_ns), "start_timestamp", NTS_TO_STR(start_timestamp_ns));
+    replay_tenant_id_ = tenant_id;
+
+    if (OB_FAIL(lib::ThreadPool::start())) {
+      LOG_ERROR("meta data replayer start failed", KR(ret), K_(replay_tenant_id), K_(start_timestamp_ns));
+    } else {
+      LOG_INFO("[REPLAY] start incremental replay meta data", K_(replay_tenant_id), K_(start_timestamp_ns));
+    }
+  }
+
+  return ret;
+}
+
+int ObLogMetaDataReplayer::wait_replay_end()
+{
+  int ret = OB_SUCCESS;
+  const int64_t WAIT_INTERVAL = 500 * 1000; // 500ms
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogMetaDataSQLQueryer is not initialized", KR(ret));
+  } else {
+    while (!lib::ThreadPool::has_set_stop()) {
+      ob_usleep(WAIT_INTERVAL);
+    }
+
+    if (OB_UNLIKELY(queue_.size() != 0)) {
+      ret = OB_STATE_NOT_MATCH;
+      LOG_ERROR("expect trans_queue empty after replay finish");
+    } else {
+      LOG_INFO("[REPLAY] wait replay thread exit", K_(replay_tenant_id), K_(start_timestamp_ns));
+      lib::ThreadPool::wait();
+      replay_tenant_id_ = OB_INVALID_TENANT_ID;
+    }
+  }
+
+  return ret;
+}
+
+void ObLogMetaDataReplayer::run1()
+{
+  int ret = OB_SUCCESS;
+  ObDictTenantInfoGuard dict_tenant_info_guard;
+  ObDictTenantInfo *tenant_info = nullptr;
+  ObLogTraceIdGuard trace_guard;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogMetaDataSQLQueryer is not initialized", KR(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == replay_tenant_id_)
+      || OB_UNLIKELY(OB_INVALID_TIMESTAMP == start_timestamp_ns_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid args to tun meta_data replay task", KR(ret), K_(replay_tenant_id), K_(start_timestamp_ns));
+  } else if (OB_FAIL(GLOGMETADATASERVICE.get_tenant_info_guard(replay_tenant_id_, dict_tenant_info_guard))) {
+    LOG_ERROR("get_tenant_info_guard failed", KR(ret), K_(replay_tenant_id));
+  } else if (OB_ISNULL(tenant_info = dict_tenant_info_guard.get_tenant_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid tenant dict info", KR(ret), K_(replay_tenant_id), K_(start_timestamp_ns));
+  } else {
+    ISTAT("[REPLAY] BEGIN", K_(replay_tenant_id), K_(start_timestamp_ns), "start_timestamp", NTS_TO_STR(start_timestamp_ns_));
     bool is_done = false;
     ReplayInfoStat replay_info_stat;
 
-    while (OB_SUCC(ret) && ! is_done) {
+    while (OB_SUCC(ret) && ! is_done && OB_LIKELY(! stop_flag_)) {
       PartTransTask *part_trans_task = queue_.pop();
 
       if (nullptr == part_trans_task) {
-        ISTAT("Current The PartTransTask has not been received, need wait", K(tenant_id), K(start_timestamp_ns));
+        ISTAT("Current The PartTransTask has not been received, need wait", K_(replay_tenant_id), K_(start_timestamp_ns));
         usec_sleep(50 * 1000L);
       } else {
         const uint64_t task_tenant_id = part_trans_task->get_tenant_id();
         replay_info_stat.total_part_trans_task_count_++;
 
-        if (OB_UNLIKELY(tenant_id != task_tenant_id)) {
+        if (OB_UNLIKELY(replay_tenant_id_ != task_tenant_id)) {
           ret = OB_STATE_NOT_MATCH;
-          LOG_ERROR("tenant_id is not equal to task_tenant_id", KR(ret), K(tenant_id), K(task_tenant_id),
+          LOG_ERROR("tenant_id is not equal to task_tenant_id", KR(ret), K_(replay_tenant_id), K(task_tenant_id),
               KPC(part_trans_task));
         } else if (part_trans_task->is_ddl_trans()) {
-          if (OB_FAIL(handle_ddl_trans_(start_timestamp_ns, tenant_info, *part_trans_task, replay_info_stat))) {
-            LOG_ERROR("handle_ddl_trans_ failed", KR(ret), K(tenant_id), K(start_timestamp_ns), K(tenant_info),
+          if (OB_FAIL(handle_ddl_trans_(*tenant_info, *part_trans_task, replay_info_stat))) {
+            LOG_ERROR("handle_ddl_trans_ failed", KR(ret), K_(replay_tenant_id), K_(start_timestamp_ns), K(tenant_info),
                 KPC(part_trans_task));
           }
         } else if (part_trans_task->is_ls_op_trans()) {
-          if (OB_FAIL(handle_ls_op_trans_(start_timestamp_ns, tenant_info, *part_trans_task, replay_info_stat))) {
-            LOG_ERROR("handle_ls_op_trans_ failed", KR(ret), K(tenant_id), K(start_timestamp_ns), K(tenant_info),
+          if (OB_FAIL(handle_ls_op_trans_(*tenant_info, *part_trans_task, replay_info_stat))) {
+            LOG_ERROR("handle_ls_op_trans_ failed", KR(ret), K_(replay_tenant_id), K_(start_timestamp_ns), K(tenant_info),
                 KPC(part_trans_task));
           } else {
-            LOG_TRACE("handle_ls_op_trans_ succ", K(tenant_id), KPC(part_trans_task), K(tenant_info));
+            LOG_TRACE("handle_ls_op_trans_ succ", K_(replay_tenant_id), KPC(part_trans_task), K(tenant_info));
           }
         } else if (part_trans_task->is_offline_ls_task()) {
           is_done = true;
@@ -140,20 +213,24 @@ int ObLogMetaDataReplayer::replay(
       }
     } // while
 
-    _ISTAT("END tenant_id=%ld start_timestamp_ns=%ld(%s) "
+    _ISTAT("[REPLAY] END tenant_id=%ld start_timestamp_ns=%ld(%s) "
         "TRANS_COUNT(TOTAL=%ld DDL_TRANS=%ld/%ld LS_OP=%ld)",
-        tenant_id, start_timestamp_ns, NTS_TO_STR(start_timestamp_ns),
+        replay_tenant_id_, start_timestamp_ns_, NTS_TO_STR(start_timestamp_ns_),
         replay_info_stat.total_part_trans_task_count_,
         replay_info_stat.ddl_part_trans_task_replayed_count_,
         replay_info_stat.ddl_part_trans_task_toal_count_,
         replay_info_stat.ls_op_part_trans_task_count_);
+
+    if (stop_flag_) {
+      ret = OB_IN_STOP_STATE;
+      LOG_WARN("ObLogMetaDataReplayer is in stop state", KR(ret));
+    }
   }
 
-  return ret;
+  lib::ThreadPool::stop();
 }
 
 int ObLogMetaDataReplayer::handle_ddl_trans_(
-    const int64_t start_timestamp_ns,
     ObDictTenantInfo &tenant_info,
     PartTransTask &part_trans_task,
     ReplayInfoStat &replay_info_stat)
@@ -169,7 +246,7 @@ int ObLogMetaDataReplayer::handle_ddl_trans_(
     const int64_t trans_commit_version = part_trans_task.get_trans_commit_version();
 
     // Only DDL transactions less than or equal to the start timestamp need to be replayed
-    if (trans_commit_version <= start_timestamp_ns) {
+    if (trans_commit_version <= start_timestamp_ns_) {
       DSTAT("handle DDL_TRANS to be replayed", K(part_trans_task));
       replay_info_stat.ddl_part_trans_task_replayed_count_++;
 
@@ -195,7 +272,7 @@ int ObLogMetaDataReplayer::handle_ddl_trans_(
           } else {
             // Iterate through each statement of the DDL
             IStmtTask *stmt_task = part_trans_task.get_stmt_list().head_;
-            while (NULL != stmt_task && OB_SUCCESS == ret) {
+            while (NULL != stmt_task && OB_SUCCESS == ret && ! stop_flag_) {
               DdlStmtTask *ddl_stmt = dynamic_cast<DdlStmtTask *>(stmt_task);
               if (OB_UNLIKELY(! stmt_task->is_ddl_stmt()) || OB_ISNULL(ddl_stmt)) {
                 ret = OB_ERR_UNEXPECTED;
@@ -250,7 +327,7 @@ int ObLogMetaDataReplayer::handle_ddl_trans_(
       ISTAT("ignore DDL_TRANS PartTransTask which trans commit verison is greater than start_timestamp_ns",
           "tenant_id", part_trans_task.get_tenant_id(),
           "trans_id", part_trans_task.get_trans_id(),
-          K(trans_commit_version), K(start_timestamp_ns));
+          K(trans_commit_version), K_(start_timestamp_ns));
     }
   }
 
@@ -258,7 +335,6 @@ int ObLogMetaDataReplayer::handle_ddl_trans_(
 }
 
 int ObLogMetaDataReplayer::handle_ls_op_trans_(
-    const int64_t start_timestamp_ns,
     ObDictTenantInfo &tenant_info,
     PartTransTask &part_trans_task,
     ReplayInfoStat &replay_info_stat)
@@ -274,7 +350,7 @@ int ObLogMetaDataReplayer::handle_ls_op_trans_(
     const share::ObLSAttrArray &ls_attr_arr = part_trans_task.get_ls_attr_arr();
     int64_t idx = 0;
     int64_t ls_attr_cnt = 0;
-    if (part_trans_commit_version <= start_timestamp_ns) {
+    if (part_trans_commit_version <= start_timestamp_ns_) {
       ARRAY_FOREACH_N(ls_attr_arr, idx, ls_attr_cnt)
       {
         const share::ObLSAttr &ls_attr = ls_attr_arr.at(idx);
@@ -290,7 +366,7 @@ int ObLogMetaDataReplayer::handle_ls_op_trans_(
       ISTAT("ignore LS_OP_TRANS PartTransTask which trans commit verison is greater than start_timestamp_ns",
           "tenant_id", part_trans_task.get_tenant_id(),
           "trans_id", part_trans_task.get_trans_id(),
-          K(ls_attr_arr), K(part_trans_commit_version), K(start_timestamp_ns));
+          K(ls_attr_arr), K(part_trans_commit_version), K_(start_timestamp_ns));
     }
   }
 

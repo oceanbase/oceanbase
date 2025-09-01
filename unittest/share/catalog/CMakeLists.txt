@@ -1,1 +1,4 @@
 #ob_unittest(test_odps_catalog)
+ob_unittest(test_filesystem_catalog)
+ob_unittest(test_hms_catalog)
+add_subdirectory(iceberg)

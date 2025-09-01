@@ -102,6 +102,7 @@
 #include "sql/resolver/cmd/ob_anonymous_block_resolver.h"
 #include "sql/resolver/cmd/ob_call_procedure_resolver.h"
 #include "sql/resolver/cmd/ob_load_data_resolver.h"
+#include "sql/resolver/cmd/ob_backup_clean_resolver.h"
 #include "sql/resolver/prepare/ob_execute_resolver.h"
 #include "sql/resolver/prepare/ob_deallocate_resolver.h"
 #include "sql/resolver/ddl/ob_flashback_resolver.h"
@@ -154,6 +155,7 @@
 #ifdef OB_BUILD_ORACLE_PL
 #include "sql/resolver/ddl/ob_create_udt_resolver.h"
 #include "sql/resolver/ddl/ob_drop_udt_resolver.h"
+#include "sql/resolver/ddl/ob_alter_udt_resolver.h"
 #include "sql/resolver/ddl/ob_audit_resolver.h"
 #include "sql/resolver/ddl/ob_create_wrapped_resolver.h"
 #endif
@@ -448,7 +450,11 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(FlushSSMicroCache);
         break;
       }
-       case T_TRIGGER_STORAGE_CACHE: {
+      case T_FLUSH_SS_LOCAL_CACHE: {
+        REGISTER_STMT_RESOLVER(FlushSSLocalCache);
+        break;
+      }
+      case T_TRIGGER_STORAGE_CACHE: {
         REGISTER_STMT_RESOLVER(TriggerStorageCache);
         break;
       }
@@ -969,6 +975,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_SP_DROP_TYPE: {
         REGISTER_STMT_RESOLVER(DropUDT);
+        break;
+      }
+      case T_TYPE_ALTER: {
+        REGISTER_STMT_RESOLVER(AlterUDT);
         break;
       }
 #endif

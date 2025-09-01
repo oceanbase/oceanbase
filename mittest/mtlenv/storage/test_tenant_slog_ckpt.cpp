@@ -940,7 +940,7 @@ public:
           return ret;
         }
         const ObTabletPersisterParam persist_param(data_version, ls->get_ls_id(), ls->get_ls_epoch(), tablet_id,
-            tablet->get_transfer_seq());
+            tablet->get_transfer_seq(), 0);
         ObTabletHandle tmp_handle;
         ret = ObTabletPersister::persist_and_transform_tablet(persist_param, *tablet, tmp_handle);
         if (OB_SUCCESS != ret) {

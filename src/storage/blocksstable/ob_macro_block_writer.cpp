@@ -2289,7 +2289,7 @@ int ObMacroBlockWriter::build_micro_writer(const ObDataStoreDesc *data_store_des
     encoding_ctx.compressor_type_ = data_store_desc->get_compressor_type();
     encoding_ctx.encoding_granularity_ = data_store_desc->static_desc_->encoding_granularity_ > 0 ?
                     data_store_desc->static_desc_->encoding_granularity_ : UINT64_MAX;
-    encoding_ctx.semistruct_encoding_type_ = data_store_desc->get_semistruct_encoding_type();
+    encoding_ctx.semistruct_properties_ = data_store_desc->get_semistruct_properties();
     if (data_store_desc->is_for_index_or_meta()) {
       /* single row index micro block will cause infinite recursion when building index tree and meta tree */
       encoding_ctx.minimum_rows_ = 2;
@@ -2400,11 +2400,21 @@ int ObMacroBlockWriter::init_pre_agg_util(const ObDataStoreDesc &data_store_desc
   int ret = OB_SUCCESS;
   const ObIArray<ObSkipIndexColMeta> &full_agg_metas = data_store_desc.get_agg_meta_array();
   const bool need_pre_aggregation =
-      data_store_desc.is_major_or_meta_merge_type()
-      && nullptr != data_store_desc.sstable_index_builder_
+      nullptr != data_store_desc.sstable_index_builder_
       && full_agg_metas.count() > 0;
+  bool agg_meta_valid_for_minor = true;
+  for (int64_t i = 0; i < full_agg_metas.count(); ++i) {
+    const ObSkipIndexColMeta &agg_meta = full_agg_metas.at(i);
+    if (!non_baseline_enabled_agg_type(agg_meta.get_col_type())) {
+      agg_meta_valid_for_minor = false;
+    }
+  }
+
   if (!need_pre_aggregation) {
     // Skip
+  } else if (OB_UNLIKELY(!data_store_desc.is_major_or_meta_merge_type() && !agg_meta_valid_for_minor)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid agg meta for mini / minor sstable", K(ret));
   } else {
     char *row_buf = nullptr;
     char *aggregator_buf = nullptr;
@@ -2418,6 +2428,7 @@ int ObMacroBlockWriter::init_pre_agg_util(const ObDataStoreDesc &data_store_desc
     } else {
       data_aggregator_ = new (aggregator_buf) ObSkipIndexDataAggregator();
       if (OB_FAIL(data_aggregator_->init(
+          data_store_desc.is_major_or_meta_merge_type(),
           full_agg_metas,
           data_store_desc.get_col_desc_array(),
           data_store_desc.get_major_working_cluster_version(),

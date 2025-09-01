@@ -412,9 +412,8 @@ int ObPushDownTopNFilterMsg::update_filter_data(ObChunkDatumStore::StoredRow *st
 
 bool ObPushDownTopNFilterMsg::check_has_null(ObCompactRow *compact_row)
 {
-  int ret = OB_SUCCESS;
   bool has_null = false;
-  for (int64_t i = 0; i < heap_top_datums_.count() && OB_SUCC(ret); ++i) {
+  for (int64_t i = 0; i < heap_top_datums_.count(); ++i) {
     if (compact_row->is_null(i)) {
       has_null = true;
       break;
@@ -425,16 +424,15 @@ bool ObPushDownTopNFilterMsg::check_has_null(ObCompactRow *compact_row)
 
 bool ObPushDownTopNFilterMsg::check_has_null(ObChunkDatumStore::StoredRow *store_row)
 {
-  int ret = OB_SUCCESS;
   bool has_null = false;
   const common::ObDatum *incomming_datums = store_row->cells();
-  for (int64_t i = 0; i < heap_top_datums_.count() && OB_SUCC(ret); ++i) {
+  for (int64_t i = 0; i < heap_top_datums_.count(); ++i) {
     if (incomming_datums[i].is_null()) {
       has_null = true;
       break;
     }
   }
-  return ret;
+  return has_null;
 }
 
 int ObPushDownTopNFilterMsg::prepare_storage_white_filter_data(

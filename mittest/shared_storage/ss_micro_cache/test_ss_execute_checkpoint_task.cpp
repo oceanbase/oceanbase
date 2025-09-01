@@ -21,6 +21,7 @@
 #include "storage/shared_storage/micro_cache/ckpt/ob_ss_ckpt_phy_block_reader.h"
 #include "storage/shared_storage/micro_cache/ckpt/ob_ss_ckpt_phy_block_writer.h"
 #include "storage/shared_storage/micro_cache/ob_ss_micro_range_manager.h"
+#include "storage/shared_storage/micro_cache/ob_ss_micro_cache_util.h"
 
 namespace oceanbase
 {
@@ -86,6 +87,7 @@ void TestSSExecuteCheckpointTask::SetUp()
   ASSERT_NE(nullptr, phy_blk_mgr_);
   micro_meta_mgr_ = &micro_cache_->micro_meta_mgr_;
   ASSERT_NE(nullptr, micro_meta_mgr_);
+  micro_meta_mgr_->enable_save_meta_mem_ = false; // disable save meta memory
   release_cache_task_ = &micro_cache_->task_runner_.release_cache_task_;
   ASSERT_NE(nullptr, release_cache_task_);
   persist_meta_task_ = &micro_cache_->task_runner_.persist_meta_task_;
@@ -322,12 +324,14 @@ int TestSSExecuteCheckpointTask::check_super_block(const ObSSMicroCacheSuperBlk 
 TEST_F(TestSSExecuteCheckpointTask, test_micro_ckpt_lack_phy_blk)
 {
   LOG_INFO("TEST: start test_micro_ckpt_lack_phy_blk");
+  const uint64_t tenant_id = MTL_ID();
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
   ASSERT_NE(nullptr, micro_cache);
   const int64_t block_size = micro_cache->phy_blk_size_;
   ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
   ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
   ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
+  ObSSMicroRangeManager &micro_range_mgr = micro_cache->micro_range_mgr_;
 
   // add block
   const int64_t WRITE_BLK_CNT = 50;
@@ -369,6 +373,41 @@ TEST_F(TestSSExecuteCheckpointTask, test_micro_ckpt_lack_phy_blk)
   ASSERT_EQ(1, phy_blk_mgr.super_blk_.micro_ckpt_info_.get_total_used_blk_cnt());
   ASSERT_LT(0, cache_stat.task_stat().micro_ckpt_item_cnt_);
   ASSERT_LT(cache_stat.task_stat().micro_ckpt_item_cnt_, block_size / SS_AVG_MICRO_META_PERSIST_SIZE);
+
+  ObArray<ObSSMicroSubRangeInfo *> persisted_sub_rngs;
+  const int64_t init_rng_cnt = micro_range_mgr.init_range_cnt_;
+  ObSSMicroInitRangeInfo **init_rng_arr = micro_range_mgr.init_range_arr_;
+  ASSERT_LT(0, init_rng_cnt);
+  ASSERT_NE(nullptr, init_rng_arr);
+  for (int64_t i = 0; i < init_rng_cnt; ++i) {
+    ObSSMicroSubRangeInfo *cur_sub_rng = init_rng_arr[i]->next_;
+    while (nullptr != cur_sub_rng) {
+      if (cur_sub_rng->phy_blk_idx_ != -1) {
+        ASSERT_EQ(OB_SUCCESS, persisted_sub_rngs.push_back(cur_sub_rng));
+      }
+      cur_sub_rng = cur_sub_rng->next_;
+    }
+  }
+  ASSERT_LT(0, persisted_sub_rngs.count());
+
+  char *range_buf = static_cast<char *>(allocator.alloc(block_size));
+  ASSERT_NE(nullptr, range_buf);
+  ObArray<ObSSMicroBlockMetaInfo> micro_infos;
+  for (int64_t i = 0; i < persisted_sub_rngs.count(); ++i) {
+    ObSSMicroSubRangeInfo *cur_sub_rng = persisted_sub_rngs.at(i);
+    const int64_t phy_blk_idx = cur_sub_rng->phy_blk_idx_;
+    const int64_t offset = cur_sub_rng->offset_;
+    const int64_t size = cur_sub_rng->length_;
+    const uint64_t reuse_version = cur_sub_rng->reuse_version_;
+    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.read_persisted_sub_range(range_buf, phy_blk_idx, offset, size, reuse_version));
+    ASSERT_EQ(OB_SUCCESS, ObSSMicroCacheUtil::parse_range_micro_metas(tenant_id, range_buf, block_size, block_size, micro_infos));
+    ASSERT_LT(0, micro_infos.count());
+    for (int64_t j = 0; j < micro_infos.count(); ++j) {
+      const ObSSMicroBlockMetaInfo &micro_info = micro_infos.at(j);
+      ASSERT_LT(0, micro_info.access_time_s_);
+      ASSERT_GE(cur_sub_rng->end_hval_, micro_info.get_micro_key().micro_hash());
+    }
+  }
 }
 
 TEST_F(TestSSExecuteCheckpointTask, test_persist_micro_meta_parallel_with_add)

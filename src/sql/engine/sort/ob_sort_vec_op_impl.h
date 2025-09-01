@@ -28,6 +28,7 @@
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "sql/engine/sort/ob_pd_topn_sort_filter.h"
+#include "sql/engine/sort/ob_partition_topn_sort_vec_op.h"
 
 namespace oceanbase {
 namespace sql {
@@ -59,8 +60,9 @@ public:
     next_stored_row_func_(&ObSortVecOpImpl::array_next_stored_row), exec_ctx_(nullptr),
     sk_rows_(nullptr), addon_rows_(nullptr), buckets_(nullptr), max_bucket_cnt_(0),
     part_hash_nodes_(nullptr), max_node_cnt_(0), part_cnt_(0), topn_cnt_(INT64_MAX),
-    outputted_rows_cnt_(0), use_heap_sort_(false), is_fetch_with_ties_(false), topn_heap_(nullptr),
-    ties_array_pos_(0), ties_array_(), sorted_dumped_rows_ptrs_(), last_ties_row_(nullptr), rows_(nullptr),
+    outputted_rows_cnt_(0), use_heap_sort_(false), is_fetch_with_ties_(false), is_aggregate_keep_(false), topn_heap_(nullptr),
+    ties_array_pos_(0), ties_array_(), use_partition_topn_sort_(false), partition_topn_sort_(nullptr),
+    sorted_dumped_rows_ptrs_(), last_ties_row_(nullptr), rows_(nullptr),
     sort_exprs_getter_(allocator_),
     store_row_factory_(allocator_, sql_mem_processor_, sk_row_meta_, addon_row_meta_, inmem_row_size_, topn_cnt_),
     topn_filter_(nullptr), is_topn_filter_enabled_(false), is_fixed_key_sort_enabled_(false), fixed_sort_key_len_(0),
@@ -197,6 +199,7 @@ protected:
   int ems_heap_next(SortVecOpChunk *&chunk);
   int imms_heap_next(const Store_Row *&sk_row);
   int array_next_stored_row(const Store_Row *&sk_row);
+  int part_topn_next_stored_row(const Store_Row *&sk_row);
   int imms_heap_next_stored_row(const Store_Row *&sr);
   int ems_heap_next_stored_row(const Store_Row *&sr);
   int array_next_dump_stored_row(const Store_Row *&sk_row);
@@ -265,7 +268,7 @@ protected:
   int attach_rows(const int64_t read_rows);
   bool need_imms() const
   {
-    return !use_heap_sort_ && rows_->count() > sk_store_.get_row_cnt();
+    return !use_heap_sort_ && !use_partition_topn_sort_ && rows_->count() > sk_store_.get_row_cnt();
   }
   OB_INLINE bool is_separate_encode_sk() const
   {
@@ -279,6 +282,7 @@ protected:
   int eager_topn_filter_update(const common::ObIArray<Store_Row *> *sorted_dumped_rows);
   int init_fixed_key_sort();
   int do_fixed_key_sort(int64_t begin);
+  int init_partition_topn_sort(ObSortVecOpContext &ctx);
   template <typename Input>
   int build_chunk(const int64_t level, Input &input)
   {
@@ -308,7 +312,7 @@ protected:
       SQL_ENG_LOG(WARN, "failed to init temp row store", K(ret));
     } else {
       while (OB_SUCC(ret)) {
-        if (!is_fetch_with_ties_ && stored_row_cnt >= topn_cnt_) {
+        if (use_heap_sort_ && !is_fetch_with_ties_ && stored_row_cnt >= topn_cnt_) {
           break;
         } else if (OB_FAIL(input(sort_key_row, addon_field_row))) {
           if (OB_ITER_END != ret) {
@@ -482,9 +486,14 @@ protected:
   // for topn sort
   bool use_heap_sort_;
   bool is_fetch_with_ties_;
+  bool is_aggregate_keep_;
   TopnHeap *topn_heap_;
   int64_t ties_array_pos_;
   common::ObArray<Store_Row *> ties_array_;
+  // for partition topn sort
+  bool use_partition_topn_sort_;
+  ObPartitionTopNSort<Compare, Store_Row, has_addon> *partition_topn_sort_;
+
   common::ObArray<Store_Row *> sorted_dumped_rows_ptrs_;
   Store_Row *last_ties_row_;
   common::ObIArray<Store_Row *> *rows_;

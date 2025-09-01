@@ -302,17 +302,17 @@ int ObTableQueryAsyncP::get_inner_htable_result_iterator(ObIAllocator *allocator
       LOG_WARN("table info is NULL", K(ret));
     } else if (!family_addfamily_flag_pairs.empty()) { // Only when there is a qualifier parameter
       std::pair<ObString, bool> is_add_family;
-      if (OB_FAIL(check_family_existence_with_base_name(table_info->schema_cache_guard_.get_table_name_str(),
-                                                      arg_table_name,
-                                                      entity_type,
-                                                      family_addfamily_flag_pairs,
-                                                      is_add_family,
-                                                      is_found))) {
+      if (OB_FAIL(ObHTableUtils::check_family_existence_with_base_name(table_info->schema_cache_guard_.get_table_name_str(),
+                                                                       arg_table_name,
+                                                                       entity_type,
+                                                                       family_addfamily_flag_pairs,
+                                                                       is_add_family,
+                                                                       is_found))) {
         LOG_WARN("fail to check family exist", K(ret));
       } else if (is_found && OB_FAIL(process_table_info(table_info,
-                                                family_addfamily_flag_pairs,
-                                                real_columns,
-                                                is_add_family))) {
+                                                        family_addfamily_flag_pairs,
+                                                        real_columns,
+                                                        is_add_family))) {
         LOG_WARN("fail to process table info", K(ret));
       }
     }
@@ -434,49 +434,6 @@ int ObTableQueryAsyncP::update_table_info_columns(ObTableSingleQueryInfo* table_
         }
       }
     }
-  }
-  return ret;
-}
-
-int ObTableQueryAsyncP::check_family_existence_with_base_name(const ObString& table_name,
-                        const ObString& base_tablegroup_name,
-                        table::ObTableEntityType entity_type,
-                        const ObArray<std::pair<ObString, bool>>& family_addfamily_flag_pairs,
-                        std::pair<ObString, bool>& flag,
-                        bool &exist)
-{
-  int ret = OB_SUCCESS;
-  ObSqlString tmp_name;
-  bool is_found = false;
-  for (int i = 0; !is_found && i < family_addfamily_flag_pairs.count(); ++i) {
-    std::pair<ObString, bool> family_addfamily_flag = family_addfamily_flag_pairs.at(i);
-    if (!ObHTableUtils::is_tablegroup_req(base_tablegroup_name, entity_type)) {
-      // here is for ls batch hbase get
-      // ls batch hbsae get will carry family in its qualifier
-      // to determine whether this get is a tablegroup operation or not
-      // the base_tablegroup_name will be a real table name like: "test$family1"
-        if (OB_FAIL(tmp_name.append(base_tablegroup_name))) {
-          LOG_WARN("fail to append", K(ret), K(base_tablegroup_name));
-        }
-    } else {
-      if (OB_FAIL(tmp_name.append(base_tablegroup_name))) {
-      LOG_WARN("fail to append", K(ret), K(base_tablegroup_name));
-      } else if (OB_FAIL(tmp_name.append("$"))) {
-        LOG_WARN("fail to append", K(ret));
-      } else if (OB_FAIL(tmp_name.append(family_addfamily_flag.first))) {
-        LOG_WARN("fail to append", K(ret), K(family_addfamily_flag.first));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (table_name == tmp_name.string()) {
-        flag = family_addfamily_flag;
-        is_found = true;
-      }
-    }
-    tmp_name.reuse();
-    }
-  if (OB_SUCC(ret)) {
-    exist = is_found;
   }
   return ret;
 }
@@ -815,6 +772,39 @@ int ObTableQueryAsyncP::query_scan_without_init(ObTableCtx &tb_ctx)
   return ret;
 }
 
+int ObTableQueryAsyncP::modify_ret_for_session_not_exist(const ObQueryOperationType &query_type)
+{
+  int ret = OB_HASH_NOT_EXIST;
+  int tmp_ret = OB_SUCCESS;
+  // if OB_HASH_NOT_EXIST and query_type is QUERY_NEXT, get simple_table_schema and part type
+  // if range part, change OB_HASH_NOT_EXIST to OB_KV_SESS_NOT_EXIST to inform client
+  // else if key, keep ret code
+  // if OB_HASH_NOT_EXIST and query_type is QUERY_END, do nothing
+  // if OB_HASH_NOT_EXIST and query_type is QUERY_RENEW, keep ret code to inform client
+  if (ObQueryOperationType::QUERY_NEXT == arg_.query_type_) {
+    LOG_WARN("fail to get query session, query_next check part type", K(ret), K(arg_));
+    if (OB_TMP_FAIL(init_schema_info(arg_.table_name_))) {
+      ret = tmp_ret;
+      LOG_WARN("fail to init schema info", K(ret), K(arg_.table_name_));
+    } else if (OB_ISNULL(simple_table_schema_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("simple table schema is NULL", K(ret));
+    } else if (share::schema::is_range_part(simple_table_schema_->get_part_option().get_part_func_type())) {
+      ret = OB_KV_SESS_NOT_EXIST;
+      LOG_WARN("fail to get query session, rebuild start query for range part table", K(ret));
+    } else {
+      LOG_WARN("fail to get query session, table is not range partitioned", K(ret));
+    }
+  } else if (ObQueryOperationType::QUERY_END == arg_.query_type_) {
+    // overwrite ret
+    LOG_WARN("fail to get query session, query_end do nothing", K(ret), K(arg_));
+    ret = OB_SUCCESS;
+    result_.is_end_ = true;
+  } else {
+    LOG_WARN("fail to get query session", K(ret), K_(arg));
+  }
+  return ret;
+}
 
 int ObTableQueryAsyncP::init_query_async_ctx(ObIAllocator *allocator,
                                             table::ObTableQuery &arg_query,
@@ -1021,6 +1011,7 @@ int ObTableQueryAsyncP::process_query_next()
 int ObTableQueryAsyncP::before_process()
 {
   is_tablegroup_req_ = ObHTableUtils::is_tablegroup_req(arg_.table_name_, arg_.entity_type_);
+  retry_policy_.allow_route_retry_ = arg_.server_can_retry();
   // In HBase model, scan range columns only for odp routing, useless in server
   if (arg_.entity_type_ == ObTableEntityType::ET_HKV) {
     arg_.query_.get_scan_range_columns().reset();
@@ -1067,7 +1058,12 @@ int ObTableQueryAsyncP::old_try_process()
   } else if (OB_FAIL(MTL(ObTableQueryASyncMgr*)->get_session_id(query_session_id_, arg_.query_session_id_, arg_.query_type_))) {
     LOG_WARN("fail to get query session id", K(ret), K(arg_.query_session_id_));
   } else if (OB_FAIL(get_old_session(query_session_id_, query_session_))) {
-    LOG_WARN("fail to get query session", K(ret), K(query_session_id_));
+    if (ret == OB_HASH_NOT_EXIST) {
+      // overwrite ret
+      ret = modify_ret_for_session_not_exist(arg_.query_type_);
+    } else {
+      LOG_WARN("fail to get query session", K(ret), K(query_session_id_));
+    }
   } else if (FALSE_IT(timeout_ts_ = get_trans_timeout_ts())) {
   } else {
     WITH_CONTEXT(query_session_->get_memory_ctx()) {
@@ -1113,7 +1109,7 @@ int ObTableQueryAsyncP::old_try_process()
              K_(retry_count), K_(result_row_count));
   #else
     // release mode
-    FLOG_INFO("[TABLE] execute query", K(ret), K_(arg), K_(timeout_ts), K_(retry_count), K(result_.is_end_),
+    LOG_TRACE("[TABLE] execute query", K(ret), K_(arg), K_(timeout_ts), K_(retry_count), K(result_.is_end_),
               "receive_ts", get_receive_timestamp(), K_(result_row_count));
   #endif
   return ret;
@@ -1137,7 +1133,12 @@ int ObTableQueryAsyncP::new_try_process()
     LOG_WARN("model is null", K(ret));
   } else if (OB_FAIL(model->prepare(exec_ctx_, arg_, result_, ctx))) {
     if (ret != OB_ITER_END) {
-      LOG_WARN("fail to prepare model", K(ret), K_(exec_ctx), K_(arg));
+      if (ret == OB_HASH_NOT_EXIST) {
+        // overwrite ret
+        ret = modify_ret_for_session_not_exist(arg_.query_type_);
+      } else {
+        LOG_WARN("fail to prepare model", K(ret), K_(exec_ctx), K_(arg));
+      }
     } else {
       result_.is_end_ = true;
     }

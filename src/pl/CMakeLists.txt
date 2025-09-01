@@ -69,10 +69,13 @@ ob_set_subtarget(ob_pl sys_package
   sys_package/ob_dbms_balance.cpp
   sys_package/ob_dbms_limit_calculator_mysql.cpp
   sys_package/ob_dbms_vector_mysql.cpp
+  sys_package/ob_dbms_hybrid_vector_mysql.cpp
   sys_package/ob_dbms_external_table.cpp
   sys_package/ob_dbms_partition.cpp
   sys_package/ob_dbms_java.cpp
+  sys_package/ob_dbms_ai_service.cpp
   sys_package/ob_dbms_data_dict.cpp
+  sys_package/ob_dbms_python.cpp
 )
 
 ob_set_subtarget(ob_pl pl_recompile
@@ -84,9 +87,14 @@ ob_set_subtarget(ob_pl dblink
 )
 
 ob_set_subtarget(ob_pl external_routine
+  external_routine/proto/ob_pl_java_udf.pb-c.c
   external_routine/ob_external_resource.cpp
   external_routine/ob_java_utils.cpp
   external_routine/ob_java_udf.cpp
+  external_routine/cpython/ob_py_helper.cpp
+  external_routine/ob_py_utils.cpp
+  external_routine/ob_py_udf.cpp
+  external_routine/ob_java_udaf.cpp
 )
 
 ob_server_add_target(ob_pl)

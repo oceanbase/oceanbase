@@ -101,6 +101,7 @@ public:
     DASIDService,
     SSLogGTS,  // FARM COMPAT WHITELIST
     SSLogUID,  // FARM COMPAT WHITELIST
+    TableSessIDService,  // FARM COMPAT WHITELIST
     MAX_SERVICE_TYPE,
   };
 

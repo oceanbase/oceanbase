@@ -185,14 +185,13 @@ struct ObIndexBlockRowHeader
   void reset();
   OB_INLINE bool is_valid() const
   {
-    bool aggregation_valid = (is_pre_aggregated() && is_major_node()) || !is_pre_aggregated();
     bool version_valid = INDEX_BLOCK_HEADER_V1 == version_ || INDEX_BLOCK_HEADER_V2 == version_;
     bool macro_id_valid
         = (get_macro_id() == DEFAULT_IDX_ROW_MACRO_ID) || !is_data_block() || !is_data_index()
           || (get_macro_id() != DEFAULT_IDX_ROW_MACRO_ID && is_data_block() && is_data_index() /* clustered index */);
     bool logic_id_valid = !(has_logic_micro_id() && has_shared_data_macro_id());
     bool bloom_filter_valid = (!has_macro_block_bloom_filter() || is_macro_node());
-    return aggregation_valid && version_valid && macro_id_valid && logic_id_valid && bloom_filter_valid;
+    return version_valid && macro_id_valid && logic_id_valid && bloom_filter_valid;
   }
 
   OB_INLINE uint64_t get_version() const { return version_; }

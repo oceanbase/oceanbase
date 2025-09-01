@@ -288,6 +288,8 @@ int ObTableTransUtils::async_commit_trans(ObTableTransParam &trans_param)
       callback->set_lock_handle(trans_param.lock_handle_);
       callback->handout();
       callback->set_tx_desc(trans_param.trans_desc_);
+      callback->set_require_rerouting(trans_param.require_rerouting_);
+      callback->set_require_refresh_kv_meta(trans_param.require_refresh_kv_meta_);
       const int64_t stmt_timeout_ts = trans_param.timeout_ts_;
       // clear thread local variables used to wait in queue
       request_finish_callback();

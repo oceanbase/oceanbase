@@ -103,13 +103,14 @@ int ObSemistructProperties::check_alter_encoding_type(const common::ObString &or
 }
 
 
-int ObSemistructProperties::resolve_semistruct_properties(const common::ObString &semistruct_properties)
+int ObSemistructProperties::resolve_semistruct_properties(uint8_t mode, const common::ObString &semistruct_properties)
 {
   int ret = OB_SUCCESS;
   ObIJsonBase *j_tree = nullptr;
   ObArenaAllocator allocator;
   if (semistruct_properties.empty()) {
     reset();
+    mode_ = mode;
   } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(
                  &allocator, semistruct_properties, ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree))) {
     LOG_WARN("fail to get json base", K(ret), K(semistruct_properties));
@@ -127,15 +128,16 @@ int ObSemistructProperties::resolve_semistruct_properties(const common::ObString
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("node is null", K(ret));
       } else if (key.case_compare_equal("encoding_type")) {
-        if (node->json_type() != ObJsonNodeType::J_INT) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected encoding_type node type", K(ret), K(key), K(node->json_type()));
-        } else if (!ObSemistructProperties::is_mode_valid(node->get_int())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected encoding_type value", K(ret), K(key), K(node->get_int()));
-        } else {
-          mode_ = node->get_int();
-        }
+        // if (node->json_type() != ObJsonNodeType::J_INT) {
+        //   ret = OB_ERR_UNEXPECTED;
+        //   LOG_WARN("unexpected encoding_type node type", K(ret), K(key), K(node->json_type()));
+        // } else if (!ObSemistructProperties::is_mode_valid(node->get_int())) {
+        //   ret = OB_ERR_UNEXPECTED;
+        //   LOG_WARN("unexpected encoding_type value", K(ret), K(key), K(node->get_int()));
+        // } else {
+        //   mode_ = node->get_int();
+        // }
+        mode_ = mode; // compat old version
       } else if (key.case_compare_equal("freq_threshold")) {
         if (node->json_type() != ObJsonNodeType::J_INT) {
           ret = OB_ERR_UNEXPECTED;

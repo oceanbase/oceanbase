@@ -2803,6 +2803,7 @@ COMPATIBLE	varchar(65536)	NO
 MAX_LS_ID	bigint(20)	NO			
 RESTORE_DATA_MODE	varchar(128)	NO			
 FLASHBACK_LOG_SCN	bigint(20) unsigned	NO			
+INFO	varchar(4096)	NO		NULL	
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_TENANTS|%') then 2
@@ -3603,6 +3604,8 @@ SERVICE_NAME	varchar(64)	YES		NULL
 TOTAL_CPU_TIME	bigint(21)	NO		NULL	
 TOP_INFO	varchar(262143)	YES		NULL	
 MEMORY_USAGE	bigint(20)	YES		NULL	
+TOP_TIME	double	NO		NULL	
+TOP_TRACE_ID	varchar(64)	YES			
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_PROCESSLIST|%') then 2
@@ -3657,6 +3660,8 @@ SERVICE_NAME	varchar(64)	NO
 TOTAL_CPU_TIME	bigint(21)	NO			
 TOP_INFO	varchar(262143)	NO			
 MEMORY_USAGE	bigint(20)	NO			
+TOP_TIME	double	NO			
+TOP_TRACE_ID	varchar(64)	NO			
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_PROCESSLIST|%') then 2
@@ -4144,12 +4149,12 @@ PARTITION_POSITION	decimal(10,0)	NO
 SUBPARTITION_NAME	varchar(128)	NO			
 SUBPARTITION_POSITION	decimal(10,0)	NO			
 OBJECT_TYPE	varchar(12)	NO			
-NUM_ROWS	decimal(20,0)	NO		NULL	
+NUM_ROWS	decimal(20,0)	NO			
 BLOCKS	decimal(10,0)	NO			
 EMPTY_BLOCKS	decimal(10,0)	NO			
 AVG_SPACE	decimal(10,0)	NO			
 CHAIN_CNT	decimal(10,0)	NO			
-AVG_ROW_LEN	decimal(10,0)	NO		NULL	
+AVG_ROW_LEN	decimal(10,0)	NO			
 AVG_SPACE_FREELIST_BLOCKS	decimal(10,0)	NO			
 NUM_FREELIST_BLOCKS	decimal(10,0)	NO			
 AVG_CACHED_BLOCKS	decimal(10,0)	NO			
@@ -4158,8 +4163,8 @@ IM_IMCU_COUNT	decimal(10,0)	NO
 IM_BLOCK_COUNT	decimal(10,0)	NO			
 IM_STAT_UPDATE_TIME	datetime	NO			
 SCAN_RATE	decimal(10,0)	NO			
-SAMPLE_SIZE	decimal(20,0)	YES		NULL	
-LAST_ANALYZED	datetime(6)	NO		NULL	
+SAMPLE_SIZE	decimal(20,0)	NO			
+LAST_ANALYZED	datetime(6)	NO			
 GLOBAL_STATS	varchar(3)	NO			
 USER_STATS	varchar(3)	NO			
 STATTYPE_LOCKED	varchar(5)	NO			
@@ -5039,7 +5044,7 @@ INITIATOR_TENANT_ID	bigint(20)	NO		NULL
 INITIATOR_JOB_ID	bigint(20)	NO		NULL	
 EXECUTOR_TENANT_ID	varchar(65536)	NO		NULL	
 TYPE	varchar(64)	NO		NULL	
-PARAMETER	timestamp(6)	NO		NULL	
+PARAMETER	varchar(1042)	NO			
 JOB_LEVEL	varchar(64)	NO		NULL	
 START_TIMESTAMP	timestamp(6)	NO		NULL	
 END_TIMESTAMP	timestamp(6)	NO			
@@ -5066,7 +5071,7 @@ INITIATOR_TENANT_ID	bigint(20)	NO		NULL
 INITIATOR_JOB_ID	bigint(20)	NO		NULL	
 EXECUTOR_TENANT_ID	varchar(65536)	NO		NULL	
 TYPE	varchar(64)	NO		NULL	
-PARAMETER	timestamp(6)	NO		NULL	
+PARAMETER	varchar(1042)	NO			
 JOB_LEVEL	varchar(64)	NO		NULL	
 START_TIMESTAMP	timestamp(6)	NO		NULL	
 END_TIMESTAMP	timestamp(6)	NO			
@@ -5791,6 +5796,7 @@ OBJECT_ID	bigint(20)	NO
 TABLEGROUP_NAME	varchar(128)	NO		NULL	
 TABLEGROUP_ID	bigint(20)	NO		NULL	
 SHARDING	varchar(10)	NO			
+INDEX_TYPE	varchar(6)	NO			
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_TABLE_LOCATIONS|%') then 2
@@ -10769,6 +10775,7 @@ TASK_TYPE	bigint(20)	NO		NULL
 TASK_SCN	bigint(20)	NO		NULL	
 RET_CODE	bigint(20)	NO		NULL	
 TRACE_ID	varchar(512)	NO		NULL	
+PROGRESS_INFO	varchar(512)	YES		NULL	
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_VECTOR_INDEX_TASKS|%') then 2
@@ -11113,6 +11120,215 @@ when ('|V$OB_SS_SSTABLES|' like '%|V$OB_VECTOR_MEMORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_VECTOR_MEMORY limit 1);
+cnt
+1
+desc oceanbase.GV$OB_HNSW_INDEX_INFO;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+TENANT_ID	bigint(20)	NO		NULL	
+DATA_TABLE_ID	bigint(20)	NO		NULL	
+DATA_TABLET_ID	bigint(20)	NO		NULL	
+TABLE_NAME	varchar(256)	NO			
+INDEX_NAME	varchar(256)	NO			
+ROLE	varchar(8)	NO		NULL	
+INDEX_PARAM	varchar(512)	YES		NULL	
+MEMORY_USED	bigint(22)	NO			
+MEMORY_HOLD	bigint(22)	NO			
+INCR_MEM_HOLD	bigint(21)	YES		NULL	
+SNAP_MEM_HOLD	bigint(21)	YES		NULL	
+INCR_INDEX_CNT	bigint(21)	YES		NULL	
+SNAP_INDEX_CNT	bigint(21)	YES		NULL	
+INCR_DATA_SCN	bigint(21) unsigned	YES		NULL	
+SNAP_DATA_SCN	bigint(21) unsigned	YES		NULL	
+LAST_SUCC_SYNC_TIME	timestamp(6)	NO			
+LAST_FAILED_SYNC_TIME	timestamp(6)	NO			
+LAST_FAILED_CODE	bigint(21)	YES		NULL	
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_HNSW_INDEX_INFO|%') then 2
+when ('' like '%|GV$OB_HNSW_INDEX_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_HNSW_INDEX_INFO|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_HNSW_INDEX_INFO limit 1);
+cnt
+1
+desc oceanbase.V$OB_HNSW_INDEX_INFO;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO			
+SVR_PORT	bigint(20)	NO			
+TENANT_ID	bigint(20)	NO			
+DATA_TABLE_ID	bigint(20)	NO			
+DATA_TABLET_ID	bigint(20)	NO			
+TABLE_NAME	varchar(256)	NO			
+INDEX_NAME	varchar(256)	NO			
+ROLE	varchar(8)	NO			
+INDEX_PARAM	varchar(512)	NO			
+MEMORY_USED	bigint(22)	NO			
+MEMORY_HOLD	bigint(22)	NO			
+INCR_MEM_HOLD	bigint(21)	NO			
+SNAP_MEM_HOLD	bigint(21)	NO			
+INCR_INDEX_CNT	bigint(21)	NO			
+SNAP_INDEX_CNT	bigint(21)	NO			
+INCR_DATA_SCN	bigint(21) unsigned	NO			
+SNAP_DATA_SCN	bigint(21) unsigned	NO			
+LAST_SUCC_SYNC_TIME	timestamp(6)	NO			
+LAST_FAILED_SYNC_TIME	timestamp(6)	NO			
+LAST_FAILED_CODE	bigint(21)	NO			
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|V$OB_HNSW_INDEX_INFO|%') then 2
+when ('' like '%|V$OB_HNSW_INDEX_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_HNSW_INDEX_INFO|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_HNSW_INDEX_INFO limit 1);
+cnt
+1
+desc oceanbase.GV$OB_IVF_INDEX_INFO;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+TENANT_ID	bigint(20)	NO		NULL	
+DATA_TABLE_ID	bigint(20)	NO		NULL	
+TABLE_NAME	varchar(256)	NO			
+INDEX_NAME	varchar(256)	NO			
+INDEX_TABLE_ID	bigint(20)	NO		NULL	
+INDEX_TABLET_ID	bigint(20)	NO		NULL	
+INDEX_PARAM	varchar(512)	YES		NULL	
+CACHE_TYPE	varchar(29)	NO			
+IS_INIT	varchar(5)	NO			
+MEMORY_USED	bigint(10)	NO			
+MEMORY_HOLD	bigint(10)	NO			
+CACHE_INFO	varchar(512)	YES		NULL	
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_IVF_INDEX_INFO|%') then 2
+when ('' like '%|GV$OB_IVF_INDEX_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_IVF_INDEX_INFO|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_IVF_INDEX_INFO limit 1);
+cnt
+1
+desc oceanbase.V$OB_IVF_INDEX_INFO;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO			
+SVR_PORT	bigint(20)	NO			
+TENANT_ID	bigint(20)	NO			
+DATA_TABLE_ID	bigint(20)	NO			
+TABLE_NAME	varchar(256)	NO			
+INDEX_NAME	varchar(256)	NO			
+INDEX_TABLE_ID	bigint(20)	NO			
+INDEX_TABLET_ID	bigint(20)	NO			
+INDEX_PARAM	varchar(512)	NO			
+CACHE_TYPE	varchar(29)	NO			
+IS_INIT	varchar(5)	NO			
+MEMORY_USED	bigint(10)	NO			
+MEMORY_HOLD	bigint(10)	NO			
+CACHE_INFO	varchar(512)	NO			
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|V$OB_IVF_INDEX_INFO|%') then 2
+when ('' like '%|V$OB_IVF_INDEX_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_IVF_INDEX_INFO|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_IVF_INDEX_INFO limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_SS_SPACE_USAGE;
+Field	Type	Null	Key	Default	Extra
+ENDPOINT	varchar(128)	NO		NULL	
+PATH	varchar(128)	NO		NULL	
+STORAGE_TYPE	varchar(32)	NO		NULL	
+VALUE	bigint(20)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_SS_SPACE_USAGE|%') then 2
+when ('' like '%|DBA_OB_SS_SPACE_USAGE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_SS_SPACE_USAGE|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_SS_SPACE_USAGE limit 1);
+cnt
+1
+desc oceanbase.GV$OB_HMS_CLIENT_POOL_STAT;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+TENANT_ID	bigint(20)	NO		NULL	
+CATALOG_ID	bigint(20)	NO		NULL	
+TOTAL_CLIENTS	bigint(20)	NO		NULL	
+IN_USE_CLIENTS	bigint(20)	NO		NULL	
+IDLE_CLIENTS	bigint(20)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_HMS_CLIENT_POOL_STAT|%') then 2
+when ('' like '%|GV$OB_HMS_CLIENT_POOL_STAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_HMS_CLIENT_POOL_STAT|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_HMS_CLIENT_POOL_STAT limit 1);
+cnt
+1
+desc oceanbase.V$OB_HMS_CLIENT_POOL_STAT;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO			
+SVR_PORT	bigint(20)	NO			
+TENANT_ID	bigint(20)	NO			
+CATALOG_ID	bigint(20)	NO			
+TOTAL_CLIENTS	bigint(20)	NO			
+IN_USE_CLIENTS	bigint(20)	NO			
+IDLE_CLIENTS	bigint(20)	NO			
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|V$OB_HMS_CLIENT_POOL_STAT|%') then 2
+when ('' like '%|V$OB_HMS_CLIENT_POOL_STAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_HMS_CLIENT_POOL_STAT|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_HMS_CLIENT_POOL_STAT limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_AI_MODELS;
+Field	Type	Null	Key	Default	Extra
+MODEL_ID	bigint(20)	NO		NULL	
+NAME	varchar(128)	NO		NULL	
+TYPE	varchar(16)	NO		NULL	
+MODEL_NAME	varchar(128)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_AI_MODELS|%') then 2
+when ('' like '%|DBA_OB_AI_MODELS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_AI_MODELS|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_AI_MODELS limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_AI_MODEL_ENDPOINTS;
+Field	Type	Null	Key	Default	Extra
+ENDPOINT_ID	bigint(20)	NO		NULL	
+ENDPOINT_NAME	varchar(128)	NO		NULL	
+AI_MODEL_NAME	varchar(128)	NO		NULL	
+SCOPE	varchar(128)	NO		NULL	
+URL	varchar(2048)	YES		NULL	
+ACCESS_KEY	varchar(2048)	YES		NULL	
+PROVIDER	varchar(128)	YES		NULL	
+REQUEST_MODEL_NAME	varchar(128)	YES		NULL	
+PARAMETERS	varchar(2048)	YES		NULL	
+REQUEST_TRANSFORM_FN	varchar(64)	YES		NULL	
+RESPONSE_TRANSFORM_FN	varchar(64)	YES		NULL	
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_AI_MODEL_ENDPOINTS|%') then 2
+when ('' like '%|DBA_OB_AI_MODEL_ENDPOINTS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_AI_MODEL_ENDPOINTS|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_AI_MODEL_ENDPOINTS limit 1);
 cnt
 1
 select case cnt when 0 then NULL else 'UNEXPECTED ERROR: It is expected to be an empty set, which means that all GV$ and V$ view column names are defined consistently' end ERROR_INFO from (select /*+no_rewrite*/ count(*) cnt from

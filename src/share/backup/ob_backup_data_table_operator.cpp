@@ -14,6 +14,9 @@
 #include "ob_backup_data_table_operator.h"
 #include "src/share/inner_table/ob_inner_table_schema_constants.h"
 #include "lib/mysqlclient/ob_mysql_transaction.h"
+#include "share/backup/ob_tenant_archive_mgr.h"
+#include "share/backup/ob_archive_store.h"
+#include "share/backup/ob_archive_persist_helper.h"
 
 namespace oceanbase
 { 
@@ -158,7 +161,7 @@ int ObBackupSetFileOperator::get_backup_set_files(
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
-  if(!is_valid_tenant_id(tenant_id)) {
+  if (!is_valid_tenant_id(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id));
   } else {
@@ -189,7 +192,8 @@ int ObBackupSetFileOperator::get_backup_set_files_specified_dest(
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
-  if(!is_valid_tenant_id(tenant_id)) {
+  backup_set_infos.reset();
+  if (!is_valid_tenant_id(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id));
   } else {
@@ -233,6 +237,177 @@ int ObBackupSetFileOperator::parse_backup_set_info_result_(
       LOG_WARN("[DATA_BACKUP]failed to push back job", K(ret), K(backup_set_desc));
     }
   }
+  return ret;
+}
+
+int ObBackupSetFileOperator::get_latest_full_backup_set(
+    common::ObISQLClient &proxy,
+    const uint64_t tenant_id,
+    const char *backup_path_str,
+    ObBackupSetFileDesc &latest_backup_desc)
+{
+  int ret = OB_SUCCESS;
+  latest_backup_desc.reset();
+  if (OB_FAIL(get_latest_valid_full_backup_set_(proxy, tenant_id, backup_path_str, latest_backup_desc))) {
+    LOG_WARN("failed to get latest full backup set", K(ret), K(tenant_id), K(backup_path_str));
+  }
+  return ret;
+}
+
+int ObBackupSetFileOperator::get_oldest_full_backup_set(
+    common::ObISQLClient &proxy,
+    const uint64_t tenant_id,
+    const char *backup_path_str,
+    ObBackupSetFileDesc &oldest_backup_desc)
+{
+  int ret = OB_SUCCESS;
+  oldest_backup_desc.reset();
+  if (OB_FAIL(get_boundary_full_backup_set_(proxy, tenant_id, backup_path_str, false /* oldest */, oldest_backup_desc))) {
+    LOG_WARN("failed to get oldest full backup set", K(ret), K(tenant_id), K(backup_path_str));
+  }
+  return ret;
+}
+
+int ObBackupSetFileOperator::get_boundary_full_backup_set_(
+    common::ObISQLClient &proxy,
+    const uint64_t tenant_id,
+    const char *backup_path_str,
+    const bool get_latest, // true: get latest, false: get oldest
+    ObBackupSetFileDesc &boundary_desc)
+{
+  int ret = OB_SUCCESS;
+  boundary_desc.reset();
+  ObSqlString sql;
+  if (OB_INVALID_TENANT_ID == tenant_id || NULL == backup_path_str) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), KP(backup_path_str));
+  } else if (OB_FAIL(sql.assign_fmt(
+               "SELECT * FROM %s WHERE %s = %lu AND path = '%s' "
+               "AND backup_type = 'FULL' AND status = 'SUCCESS' AND file_status = 'AVAILABLE' "
+               "ORDER BY start_ts %s LIMIT 1",
+               OB_ALL_BACKUP_SET_FILES_TNAME, OB_STR_TENANT_ID, tenant_id, backup_path_str,
+               get_latest ? "DESC" : "ASC"))) {
+    LOG_WARN("failed to assign fmt", K(ret));
+  } else {
+    HEAP_VAR(ObMySQLProxy::ReadResult, res) {
+      ObMySQLResult *result = NULL;
+      if (OB_FAIL(proxy.read(res, get_exec_tenant_id(tenant_id), sql.ptr()))) {
+        LOG_WARN("failed to exec sql", K(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", K(ret), K(sql));
+      } else if (OB_FAIL(result->next())) {
+        if (OB_ITER_END == ret) {
+          ret = OB_ENTRY_NOT_EXIST;
+          LOG_WARN("no valid full backup set found", K(ret), K(sql));
+        } else {
+          LOG_WARN("failed to get next result", K(ret), K(sql));
+        }
+      } else if (OB_FAIL(do_parse_backup_set_(*result, boundary_desc))) {
+        LOG_WARN("failed to parse backup set", K(ret), K(sql));
+      } else if (OB_SUCC(result->next())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("LIMIT 1 query returned more than one row, unexpected", K(ret), K(sql));
+      } else if (OB_ITER_END != ret) {
+        LOG_WARN("failed to get next result", K(ret), K(sql));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    }
+  }
+  LOG_INFO("get boundary full backup set", K(ret), K(sql), K(boundary_desc));
+  return ret;
+}
+
+int ObBackupSetFileOperator::get_latest_valid_full_backup_set_(
+    common::ObISQLClient &proxy,
+    const uint64_t tenant_id,
+    const char *backup_path_str,
+    ObBackupSetFileDesc &boundary_desc)
+{
+  int ret = OB_SUCCESS;
+  bool can_used_to_restore = false;
+  int64_t max_backup_set_id = INT64_MAX;
+  ObArchiveStore archive_store;
+  ObBackupDest archive_dest;
+  common::ObArray<std::pair<int64_t, int64_t>> dest_array;
+  ObArchivePersistHelper archive_helper;
+  ObBackupPathString archive_path_str;
+  ObArray<ObRestoreLogPieceBriefInfo> pieces;
+  boundary_desc.reset();
+  ObSqlString sql;
+  if (OB_INVALID_TENANT_ID == tenant_id || nullptr == backup_path_str) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), KP(backup_path_str));
+  } else if (OB_FAIL(archive_helper.init(tenant_id))) {
+    LOG_WARN("failed to init archive helper", K(ret), K(tenant_id));
+  } else if (OB_FAIL(archive_helper.get_valid_dest_pairs(proxy, dest_array))) {
+    LOG_WARN("failed to get valid dest pairs", K(ret), K(tenant_id));
+  } else if (OB_FAIL(archive_helper.get_archive_dest(proxy, false/*need_lock*/, dest_array.at(0).first, archive_path_str))) {
+    LOG_WARN("failed to get archive dest", K(ret), K(tenant_id), K(dest_array.at(0).first));
+  } else if (OB_FAIL(archive_dest.set(archive_path_str))) {
+    LOG_WARN("failed to set archive dest", K(ret), K(archive_path_str));
+  } else if (OB_FAIL(archive_store.init(archive_dest))) {
+    LOG_WARN("failed to init archive store", K(ret), K(archive_dest));
+  }
+
+  while(OB_SUCC(ret) && !can_used_to_restore) {
+    sql.reset();
+    if (OB_FAIL(sql.assign_fmt(
+                "SELECT * FROM %s WHERE %s = %lu AND path = '%s' "
+                "AND backup_type = 'FULL' AND status = 'SUCCESS' AND file_status = 'AVAILABLE' "
+                "AND backup_set_id < %ld ORDER BY start_ts DESC LIMIT 1",
+                OB_ALL_BACKUP_SET_FILES_TNAME, OB_STR_TENANT_ID, tenant_id, backup_path_str,
+                max_backup_set_id))) {
+      LOG_WARN("failed to assign fmt", K(ret));
+    } else {
+      LOG_INFO("get boundary full backup set sql", K(sql), K(tenant_id), K(backup_path_str));
+      HEAP_VAR(ObMySQLProxy::ReadResult, res) {
+        ObMySQLResult *result = NULL;
+        if (OB_FAIL(proxy.read(res, get_exec_tenant_id(tenant_id), sql.ptr()))) {
+          LOG_WARN("failed to exec sql", K(ret), K(sql));
+        } else if (OB_ISNULL(result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("result is null", K(ret), K(sql));
+        } else if (OB_FAIL(result->next())) {
+          if (OB_ITER_END == ret) {
+            ret = OB_ENTRY_NOT_EXIST;
+            LOG_WARN("no valid full backup set found", K(ret), K(sql));
+          } else {
+            LOG_WARN("failed to get next result", K(ret), K(sql));
+          }
+        } else if (OB_FAIL(do_parse_backup_set_(*result, boundary_desc))) {
+          LOG_WARN("failed to parse backup set", K(ret), K(sql));
+        } else if (OB_SUCC(result->next())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("LIMIT 1 query returned more than one row, unexpected", K(ret), K(sql));
+        } else if (OB_ITER_END != ret) {
+          LOG_WARN("failed to get next result", K(ret), K(sql));
+        } else {
+          ret = OB_SUCCESS;
+        }
+      }
+
+      // check if the backup set can be used to restore
+      if (OB_FAIL(ret)) {
+      } else if (boundary_desc.plus_archivelog_) {
+        can_used_to_restore = true;
+      } else {
+        pieces.reset();
+        if (OB_FAIL(archive_store.get_piece_paths_in_range(boundary_desc.start_replay_scn_, boundary_desc.min_restore_scn_, pieces))) {
+          LOG_WARN("failed to get piece paths in range", K(ret), K(boundary_desc));
+          if (OB_ENTRY_NOT_EXIST == ret) { // no enough pieces to restore, so we cannot use this backup set to restore
+            ret = OB_SUCCESS;
+            max_backup_set_id = boundary_desc.backup_set_id_;
+            can_used_to_restore = false;
+          }
+        } else {
+          can_used_to_restore = true;
+        }
+      }
+    }
+  }
+  LOG_INFO("get valid full backup set", K(ret), K(sql), K(boundary_desc));
   return ret;
 }
 

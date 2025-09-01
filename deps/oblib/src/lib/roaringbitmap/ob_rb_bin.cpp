@@ -440,7 +440,7 @@ int ObRoaringBin::calc_andnot(ObRoaringBin *rb, ObStringBuffer &res_buf, uint64_
         if (OB_NOT_NULL(r_container)) {
           roaring::internal::container_free(r_container, r_container_type);
         }
-      } else {
+      } else if (l_key < r_key) {
         uint8_t res_container_type = 0;
         roaring::api::container_s *res_container = nullptr;
         int res_container_card = 0;
@@ -456,6 +456,9 @@ int ObRoaringBin::calc_andnot(ObRoaringBin *rb, ObStringBuffer &res_buf, uint64_
           roaring::internal::container_free(res_container, res_container_type);
         }
         l_idx++;
+      } else {
+        // l_key > r_key
+        r_idx = rb->key_advance_until(r_idx, l_key);
       }
     } // end while
     while (OB_SUCC(ret) && l_idx < size_) {
@@ -901,21 +904,24 @@ int ObRoaring64Bin::calc_andnot(ObRoaring64Bin *rb, ObStringBuffer &res_buf, uin
         }
         l_idx++;
         r_idx++;
-      } else {
+      } else if (l_high32 < r_high32){
         if (OB_FAIL(res_buf.append(reinterpret_cast<const char*>(&l_high32), sizeof(uint32_t)))) {
           LOG_WARN("fail to append high32", K(ret), K(l_idx), K(l_high32));
-        } else if (OB_FAIL(res_buf.append(roaring_bufs_[l_idx]->get_bin()))) {
+        } else if (OB_FAIL(res_buf.append(roaring_bufs_[l_idx]->get_bin_ptr(), roaring_bufs_[l_idx]->get_bin_length()))) {
           LOG_WARN("fail to append roaring_bin", K(ret), K(l_idx));
         }
         l_idx++;
         buckets++;
+      } else {
+        // l_high32 > r_high32
+        r_idx = rb->high32_advance_until(r_idx, l_high32);
       }
     } // end while
     while(OB_SUCC(ret) && l_idx < buckets_) {
       uint32_t l_high32 = high32_[l_idx];
       if (OB_FAIL(res_buf.append(reinterpret_cast<const char*>(&l_high32), sizeof(uint32_t)))) {
         LOG_WARN("fail to append high32", K(ret), K(l_idx), K(l_high32));
-      } else if (OB_FAIL(res_buf.append(roaring_bufs_[l_idx]->get_bin()))) {
+      } else if (OB_FAIL(res_buf.append(roaring_bufs_[l_idx]->get_bin_ptr(), roaring_bufs_[l_idx]->get_bin_length()))) {
         LOG_WARN("fail to append roaring _bin", K(ret), K(l_idx));
       }
       l_idx++;

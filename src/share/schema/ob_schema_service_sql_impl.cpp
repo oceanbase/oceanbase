@@ -257,6 +257,7 @@ ObSchemaServiceSQLImpl::ObSchemaServiceSQLImpl()
       rls_service_(*this),
       catalog_service_(*this),
       external_resource_service_(*this),
+      ai_model_service_(*this),
       ccl_rule_service_(*this),
       cluster_schema_status_(ObClusterSchemaStatus::NORMAL_STATUS),
       gen_schema_version_map_(),
@@ -1366,6 +1367,7 @@ GET_ALL_SCHEMA_FUNC_DEFINE(catalog, ObCatalogSchema);
 GET_ALL_SCHEMA_FUNC_DEFINE(catalog_priv, ObCatalogPriv);
 GET_ALL_SCHEMA_FUNC_DEFINE(external_resource, ObSimpleExternalResourceSchema);
 GET_ALL_SCHEMA_FUNC_DEFINE(location, ObLocationSchema);
+GET_ALL_SCHEMA_FUNC_DEFINE(ai_model, ObAiModelSchema);
 GET_ALL_SCHEMA_FUNC_DEFINE(ccl_rule, ObSimpleCCLRuleSchema);
 
 int ObSchemaServiceSQLImpl::get_all_db_privs(ObISQLClient &client,
@@ -3248,6 +3250,7 @@ FETCH_NEW_SCHEMA_ID(RLS_CONTEXT, rls_context);
 FETCH_NEW_SCHEMA_ID(CATALOG, catalog);
 FETCH_NEW_SCHEMA_ID(EXTERNAL_RESOURCE, external_resource);
 FETCH_NEW_SCHEMA_ID(LOCATION, location);
+FETCH_NEW_SCHEMA_ID(AI_MODEL, ai_model);
 FETCH_NEW_SCHEMA_ID(CCL_RULE, ccl_rule);
 
 #undef FETCH_NEW_SCHEMA_ID
@@ -3663,6 +3666,7 @@ GET_BATCH_SCHEMAS_FUNC_DEFINE(catalog, ObCatalogSchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(external_resource, ObSimpleExternalResourceSchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(location, ObLocationSchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(obj_mysql_priv, ObObjMysqlPriv);
+GET_BATCH_SCHEMAS_FUNC_DEFINE(ai_model, ObAiModelSchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(ccl_rule, ObSimpleCCLRuleSchema);
 
 int ObSchemaServiceSQLImpl::sql_append_pure_ids(
@@ -11016,70 +11020,6 @@ int ObSchemaServiceSQLImpl::get_table_schema_versions(
   return ret;
 }
 
-int ObSchemaServiceSQLImpl::get_mock_fk_parent_table_schema_versions(
-    common::ObISQLClient &sql_client,
-    const uint64_t tenant_id,
-    const common::ObIArray<uint64_t> &table_ids,
-    common::ObIArray<ObSchemaIdVersion> &versions)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!check_inner_stat())) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("check inner stat fail", KR(ret));
-  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
-             || table_ids.count() <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), "cnt", table_ids.count());
-  } else {
-    ObSqlString sql;
-    ObMySQLResult *result = NULL;
-    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-      if (OB_FAIL(sql.append_fmt(
-          "SELECT mock_fk_parent_table_id, schema_version FROM %s "
-          "WHERE tenant_id = 0 AND mock_fk_parent_table_id IN (",
-          OB_ALL_MOCK_FK_PARENT_TABLE_TNAME))) {
-        LOG_WARN("fail to append sql", KR(ret));
-      }
-
-      for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); i++) {
-        if (OB_FAIL(sql.append_fmt("%lu%s", table_ids.at(i),
-                                   table_ids.count() - 1 == i ? ")" : ","))) {
-          LOG_WARN("fail to append table_id", KR(ret), K(tenant_id), "table_id", table_ids.at(i));
-        }
-      } // end for
-
-      if (FAILEDx(sql_client.read(res, tenant_id, sql.ptr()))) {
-        LOG_WARN("fail to read", KR(ret), K(tenant_id), K(sql));
-      } else if (OB_ISNULL(result = res.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("result is null", KR(ret), K(tenant_id));
-      }
-
-      uint64_t table_id = OB_INVALID_ID;
-      int64_t schema_version = OB_INVALID_VERSION;
-      ObSchemaIdVersion pair;
-      while (OB_SUCC(ret)) {
-        if (OB_FAIL(result->next())) {
-          if (OB_ITER_END == ret) {
-            ret = OB_SUCCESS;
-            break;
-          } else {
-            LOG_WARN("fail to get next", KR(ret), K(tenant_id), K(sql));
-          }
-        } else {
-          EXTRACT_INT_FIELD_MYSQL(*result, "mock_fk_parent_table_id", table_id, uint64_t);
-          EXTRACT_INT_FIELD_MYSQL(*result, "schema_version", schema_version, int64_t);
-          if (FAILEDx(pair.init(table_id, schema_version))) {
-            LOG_WARN("fail to init pair", KR(ret), K(tenant_id), K(table_id), K(schema_version));
-          } else if (OB_FAIL(versions.push_back(pair))) {
-            LOG_WARN("fail to push back pair", KR(ret), K(tenant_id), K(pair));
-          }
-        }
-      } // end while
-    } // end SMART_VAR
-  }
-  return ret;
-}
 
 int ObSchemaServiceSQLImpl::get_audits_in_owner(
     common::ObISQLClient &sql_client,
@@ -11249,9 +11189,82 @@ int ObSchemaServiceSQLImpl::fetch_external_resources(ObISQLClient &sql_client,
       }
     }
   }
-
   return ret;
 }
+
+#ifndef GET_OBJ_SCHEMA_VERSIONS_SQL
+#define GET_OBJ_SCHEMA_VERSIONS_SQL(OBJECT_NAME, OBJECT_ID, TABLE_NAME) \
+    int ObSchemaServiceSQLImpl::get_##OBJECT_NAME##_schema_versions( \
+      common::ObISQLClient &sql_client, \
+      const uint64_t tenant_id, \
+      const common::ObIArray<uint64_t> &object_ids, \
+      common::ObIArray<ObSchemaIdVersion> &versions) \
+  { \
+    int ret = OB_SUCCESS; \
+    if (OB_UNLIKELY(!check_inner_stat())) { \
+      ret = OB_NOT_INIT; \
+      LOG_WARN("check inner stat fail", KR(ret)); \
+    } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id \
+               || object_ids.count() <= 0)) { \
+      ret = OB_INVALID_ARGUMENT; \
+      LOG_WARN("invalid argument", KR(ret), K(tenant_id), "cnt", object_ids.count()); \
+    } else { \
+      ObSqlString sql; \
+      ObMySQLResult *result = NULL; \
+      SMART_VAR(ObMySQLProxy::MySQLResult, res) { \
+        if (OB_FAIL(sql.append_fmt( \
+            "SELECT " #OBJECT_ID " , schema_version FROM %s " \
+            "WHERE tenant_id = 0 AND " #OBJECT_ID " IN (", \
+            TABLE_NAME))) { \
+          LOG_WARN("fail to append sql", KR(ret)); \
+        } \
+        for (int64_t i = 0; OB_SUCC(ret) && i < object_ids.count(); i++) { \
+          if (OB_FAIL(sql.append_fmt("%lu%s", object_ids.at(i), \
+                                     object_ids.count() - 1 == i ? ")" : ","))) { \
+            LOG_WARN("fail to append table_id", KR(ret), K(tenant_id), "table_id", object_ids.at(i)); \
+          } \
+        } \
+        if (FAILEDx(sql_client.read(res, tenant_id, sql.ptr()))) { \
+          LOG_WARN("fail to read", KR(ret), K(tenant_id), K(sql)); \
+        } else if (OB_ISNULL(result = res.get_result())) { \
+          ret = OB_ERR_UNEXPECTED; \
+          LOG_WARN("result is null", KR(ret), K(tenant_id)); \
+        } \
+        uint64_t object_id = OB_INVALID_ID; \
+        int64_t schema_version = OB_INVALID_VERSION; \
+        ObSchemaIdVersion pair; \
+        while (OB_SUCC(ret)) { \
+          if (OB_FAIL(result->next())) { \
+            if (OB_ITER_END == ret) { \
+              ret = OB_SUCCESS; \
+              break; \
+            } else { \
+              LOG_WARN("fail to get next", KR(ret), K(tenant_id), K(sql)); \
+            } \
+          } else { \
+            EXTRACT_INT_FIELD_MYSQL(*result, #OBJECT_ID, object_id, uint64_t); \
+            EXTRACT_INT_FIELD_MYSQL(*result, "schema_version", schema_version, int64_t); \
+            if (FAILEDx(pair.init(object_id, schema_version))) { \
+              LOG_WARN("fail to init pair", KR(ret), K(tenant_id), K(object_id), K(schema_version)); \
+            } else if (OB_FAIL(versions.push_back(pair))) { \
+              LOG_WARN("fail to push back pair", KR(ret), K(tenant_id), K(pair)); \
+            } \
+          } \
+        } \
+      } \
+    } \
+    return ret; \
+  }
+
+  GET_OBJ_SCHEMA_VERSIONS_SQL(mock_fk_parent_table, mock_fk_parent_table_id, OB_ALL_MOCK_FK_PARENT_TABLE_TNAME);
+  GET_OBJ_SCHEMA_VERSIONS_SQL(routine, routine_id, OB_ALL_ROUTINE_TNAME);
+  GET_OBJ_SCHEMA_VERSIONS_SQL(synonym, synonym_id, OB_ALL_SYNONYM_TNAME);
+  GET_OBJ_SCHEMA_VERSIONS_SQL(package, package_id, OB_ALL_PACKAGE_TNAME);
+  GET_OBJ_SCHEMA_VERSIONS_SQL(type, type_id, OB_ALL_TYPE_TNAME);
+  GET_OBJ_SCHEMA_VERSIONS_SQL(sequence, sequence_id, OB_ALL_SEQUENCE_OBJECT_TNAME);
+#undef GET_OBJ_SCHEMA_VERSIONS_SQL
+#endif
+
 int ObSchemaServiceSQLImpl::get_obj_priv_with_obj_id(
                             common::ObISQLClient &sql_client,
                             const uint64_t tenant_id,
@@ -11426,6 +11439,55 @@ int ObSchemaServiceSQLImpl::get_table_id_and_table_name_in_tablegroup(
       }
     }
   }
+  return ret;
+}
+
+int ObSchemaServiceSQLImpl::fetch_ai_models(ObISQLClient &sql_client,
+                                            const ObRefreshSchemaStatus &schema_status,
+                                            const int64_t schema_version,
+                                            const uint64_t tenant_id,
+                                            ObIArray<ObAiModelSchema> &schema_array,
+                                            const SchemaKey *schema_keys,
+                                            const int64_t schema_key_size)
+{
+  int ret = OB_SUCCESS;
+
+  const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
+
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObMySQLResult *result = nullptr;
+    ObSqlString sql;
+
+    if (OB_FAIL(sql.append_fmt("SELECT * FROM %s WHERE tenant_id=0",
+                               OB_ALL_AI_MODEL_HISTORY_TNAME))) {
+      LOG_WARN("failed to append_fmt to sql", K(ret), K(sql));
+    } else if (OB_FAIL(sql.append_fmt(" AND schema_version <= %ld", schema_version))) {
+      LOG_WARN("failed to append_fmt to sql", K(ret), K(sql));
+    } else if (OB_NOT_NULL(schema_keys) && schema_key_size > 0) {
+      if (OB_FAIL(sql.append(" AND model_id IN"))) {
+        LOG_WARN("failed to append_fmt to sql", K(ret), K(sql));
+      } else if (OB_FAIL(SQL_APPEND_SCHEMA_ID(ai_model, schema_keys, schema_key_size, sql))) {
+        LOG_WARN("failed to append ai_model id to sql", K(ret), K(sql));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      const int64_t snapshot_timestamp = schema_status.snapshot_timestamp_;
+      DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
+
+      if (OB_FAIL(sql.append(" ORDER BY tenant_id DESC, model_id DESC, schema_version DESC"))) {
+        LOG_WARN("failed to append_fmt to sql", K(ret), K(sql));
+      } else if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
+        LOG_WARN("failed to execute sql", K(ret), K(tenant_id), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected NULL result", K(ret), K(sql));
+      } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_ai_model_schema(tenant_id, *result, schema_array))) {
+        LOG_WARN("failed to ObSchemaRetrieveUtils::retrieve_ai_model_schema", K(ret), K(tenant_id), K(sql));
+      }
+    }
+  }
+
   return ret;
 }
 

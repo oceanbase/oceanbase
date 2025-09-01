@@ -306,12 +306,13 @@ struct ObPairStoreAndDatumRange
 struct ObRangeInfo
 {
   ObRangeInfo() = default;
-  ObRangeInfo(const ObDatumRange *range) : range_(range), row_count_(0) {}
+  ObRangeInfo(const ObDatumRange *range) : range_(range), row_count_(0), macro_block_count_(0) {}
 
-  TO_STRING_KV(KPC_(range), K_(row_count));
+  TO_STRING_KV(KPC_(range), K_(row_count), K_(macro_block_count));
 
   const ObDatumRange *range_;
   int64_t row_count_;
+  int64_t macro_block_count_;
 };
 
 /**
@@ -347,6 +348,9 @@ struct ObRangeCompartor
     return operator()(a.datum_range_, b.datum_range_);
   }
 
+  template <typename Range>
+  static int is_sorted(const ObIArray<Range> &ranges, ObRangeCompartor &compartor, bool &is_sorted);
+
   const ObITableReadInfo *read_info_;
   mutable int sort_ret_;
 };
@@ -369,7 +373,8 @@ public:
   int init(const ObIArray<ObPairStoreAndDatumRange> &ranges,
            const ObITableReadInfo &read_info,
            const bool need_sort = true,
-           const ObRangePrecision &range_precision = ObRangePrecision(10000));
+           const ObRangePrecision &range_precision = ObRangePrecision(10000),
+           const bool can_goto_micro_level = false);
 
   bool is_valid() const override { return is_inited_; }
 
@@ -396,9 +401,16 @@ public:
 
   int64_t get_row_count_sum() const;
 
+  int64_t get_macro_block_count_sum() const;
+
   const ObIArray<ObRangeInfo> &get_ranges() const { return ranges_; }
 
   void reuse();
+
+  OB_INLINE void set_can_goto_micro_level(const bool can_goto_micro_level)
+  {
+    can_goto_micro_level_ = can_goto_micro_level;
+  }
 
   VIRTUAL_TO_STRING_KV(K_(ranges), K_(curr_range_idx), K_(is_inited));
 
@@ -407,6 +419,7 @@ protected:
   uint64_t curr_range_idx_;
   ObRangePrecision range_precision_;
   int64_t sample_step_;
+  bool can_goto_micro_level_;
   bool is_inited_;
 };
 
@@ -443,7 +456,8 @@ public:
            const ObIArray<ObRangeInfo> &range_infos,
            ObIArray<ObSplitRangeInfo> &split_ranges,
            const bool need_sort = true,
-           const ObRangePrecision &range_precision = ObRangePrecision(10000));
+           const ObRangePrecision &range_precision = ObRangePrecision(10000),
+           const bool can_goto_micro_level = false);
 
   virtual ~ObMultiRangeSplitContext() = default;
 

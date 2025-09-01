@@ -13,6 +13,8 @@
 * This file defines Struct of Meta Dict
 */
 
+#define USING_LOG_PREFIX DATA_DICT
+
 #include "ob_data_dict_utils.h"
 
 #include "logservice/ob_log_handler.h"        // ObLogHandler
@@ -53,9 +55,9 @@ int deserialize_string_array(
     || OB_UNLIKELY(pos < 0)
     || OB_UNLIKELY(data_len <= pos)) {
     ret = OB_INVALID_ARGUMENT;
-    DDLOG(WARN, "invalid arguments", KR(ret), K(buf), K(data_len), K(pos));
+    LOG_WARN("invalid arguments", KR(ret), K(buf), K(data_len), K(pos));
   } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &count))) {
-    DDLOG(WARN, "deserialize count failed", KR(ret));
+    LOG_WARN("deserialize count failed", KR(ret));
   } else if (0 == count) {
     //do nothing
   } else {
@@ -64,17 +66,17 @@ int deserialize_string_array(
 
     if (NULL == (array_buf = allocator.alloc(alloc_size))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      DDLOG(WARN, "alloc memory failed", KR(ret), K(alloc_size));
+      LOG_WARN("alloc memory failed", KR(ret), K(alloc_size));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
         ObString tmp_str;
         ObString str;
         if (OB_FAIL(tmp_str.deserialize(buf, data_len, pos))) {
-          DDLOG(WARN, "string deserialize failed", KR(ret));
+          LOG_WARN("string deserialize failed", KR(ret));
         } else if (OB_FAIL(deep_copy_str(tmp_str, str, allocator))) {
-          DDLOG(WARN, "deep_copy_str failed", KR(ret));
+          LOG_WARN("deep_copy_str failed", KR(ret));
         } else if (OB_FAIL(string_array.push_back(str))) {
-          DDLOG(WARN, "push_back failed", KR(ret), K(str));
+          LOG_WARN("push_back failed", KR(ret), K(str));
         }
       }
     }
@@ -94,7 +96,7 @@ int deep_copy_str(const ObString &src,
     int64_t len = src.length() + 1;
     if (OB_ISNULL(buf = static_cast<char*>(allocator.alloc(len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      DDLOG(ERROR, "allocate memory fail", KR(ret), K(len));
+      LOG_ERROR("allocate memory fail", KR(ret), K(len));
     } else {
       MEMCPY(buf, src.ptr(), len - 1);
       buf[len - 1] = '\0';
@@ -119,9 +121,9 @@ int deep_copy_str_array(
     const ObString &src_str = src_arr.at(i);
     ObString dst_str;
     if (OB_FAIL(deep_copy_str(src_str, dst_str, allocator))) {
-      DDLOG(WARN, "deep copy obstring failed", KR(ret), K(src_str), K(src_arr_size), K(i));
+      LOG_WARN("deep copy obstring failed", KR(ret), K(src_str), K(src_arr_size), K(i));
     } else if (OB_FAIL(dest_arr.push_back(dst_str))) {
-      DDLOG(WARN, "dest str arr push back dst_str failded", KR(ret), K(src_str), K(dst_str), K(i));
+      LOG_WARN("dest str arr push back dst_str failded", KR(ret), K(src_str), K(dst_str), K(i));
     }
   }
   return ret;
@@ -135,9 +137,9 @@ int check_ls_leader(logservice::ObLogHandler *log_handler, bool &is_leader, int6
 
   if (OB_ISNULL(log_handler)) {
     ret = OB_ERR_UNEXPECTED;
-    DDLOG(WARN, "log_handler_ is invalid", KR(ret));
+    LOG_WARN("log_handler_ is invalid", KR(ret));
   } else if (OB_FAIL(log_handler->get_role(role, proposal_id))) {
-    DDLOG(WARN, "get ls role fail", K(ret), K(proposal_id));
+    LOG_WARN("get ls role fail", K(ret), K(proposal_id));
   } else {
     is_leader = is_strong_leader(role);
   }

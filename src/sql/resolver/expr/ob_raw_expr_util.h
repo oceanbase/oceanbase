@@ -971,11 +971,11 @@ public:
                                      ObUDFInfo &udf_info,
                                      uint64_t dblink_id,
                                      const ObString &dblink_name,
-                                     ObExternalRoutineType external_routine_type);
+                                     ObExternalRoutineType external_routine_type,
+                                     bool is_mysql_udtf);
   static int resolve_udf_param_types(const share::schema::ObIRoutineInfo* func_info,
                                      share::schema::ObSchemaGetterGuard &schema_guard,
                                      sql::ObSQLSessionInfo &session_info,
-                                     common::ObIAllocator &allocator,
                                      common::ObMySQLProxy &sql_proxy,
                                      ObUDFInfo &udf_info,
                                      pl::ObPLDbLinkGuard &dblink_guard,
@@ -1182,6 +1182,7 @@ public:
                               const ObIArray<ObRawExpr *> &rowkey_exprs,
                               ObRawExpr *part_expr,
                               ObRawExpr *subpart_expr,
+                              bool copy_part_expr,
                               ObSysFunRawExpr *&rowid_expr);
   static int build_empty_rowid_expr(ObRawExprFactory &expr_factory,
                                     const TableItem &table_item,
@@ -1381,6 +1382,20 @@ public:
                                 ObIArray<ObRawExpr *> &param_exprs,
                                 ObRawExpr *&unpivot_expr,
                                 bool is_label_expr);
+  static bool is_auxiliary_generated_column(const ObColumnRefRawExpr &col_ref);
+  static int resolve_identifier(ObIAllocator &allocator,
+      sql::ObSQLSessionInfo &session,
+      const common::ObObj &param,
+      const char* const param_name,
+      ObString &value,
+      bool nullable = true,
+      bool check_length = true);
+  static int resolve_qualified_names(ObIAllocator &allocator,
+      sql::ObSQLSessionInfo &session,
+      const common::ObObj &param,
+      const char* const param_name,
+      common::ObIArray<sql::ObQualifiedName> &q_name,
+      bool nullable);
 private:
   static int need_extra_cast_for_enumset(const ObRawExprResType &src_type,
                                          const ObRawExprResType &dst_type,

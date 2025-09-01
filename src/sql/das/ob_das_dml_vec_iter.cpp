@@ -262,7 +262,7 @@ int ObSparseVecIndexDMLIterator::generate_domain_rows(const ObChunkDatumStore::S
     int64_t dim_idx = OB_INVALID_ID;
     int64_t value_idx = OB_INVALID_ID;
 
-    ObString docid;
+    ObDatum docid;
     ObString sparse_vec;
 
     if (OB_FAIL(get_sparse_vector_index_column_idxs(sparce_vec_idx, dim_idx, docid_idx, value_idx))) {
@@ -297,8 +297,14 @@ int ObSparseVecIndexDMLIterator::get_sparse_vector_index_column_idxs(
     const ObColDesc &col_desc = das_ctdef_->table_param_.get_col_descs().at(i);
     if (col_desc.col_type_.is_uint32()) {
       dim_idx = i;
-    } else if (col_desc.col_type_.is_varbinary()) {
-      docid_idx = i;
+    } else if (col_desc.col_type_.is_varbinary() || col_desc.col_type_.is_uint64()) {
+      // varbinary: normal docid, uint64: pk_increment
+      if (OB_UNLIKELY(docid_idx != OB_INVALID_INDEX)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("duplicate docid column", K(i), K(docid_idx));
+      } else {
+        docid_idx = i;
+      }
     } else if (col_desc.col_type_.is_float()) {
       value_idx = i;
     } else if (col_desc.col_type_.is_collection_sql_type()) {
@@ -317,7 +323,7 @@ int ObSparseVecIndexDMLIterator::get_sparse_vec_data(
     const ObChunkDatumStore::StoredRow *store_row,
     const int64_t docid_idx,
     const int64_t sparse_vec_idx,
-    ObString &docid,
+    ObDatum &docid,
     ObString &sparse_vec)
 {
   int ret = OB_SUCCESS;
@@ -326,17 +332,14 @@ int ObSparseVecIndexDMLIterator::get_sparse_vec_data(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid sparse vector index column idx", K(ret), K(docid_idx), K(sparse_vec_idx), KPC(row_projector_));
   } else {
-    docid = store_row->cells()[row_projector_->at(docid_idx)].get_string();
+    docid = store_row->cells()[row_projector_->at(docid_idx)];
     sparse_vec = store_row->cells()[row_projector_->at(sparse_vec_idx)].get_string();
 
-    if (OB_UNLIKELY(docid.length() != sizeof(ObDocId)) || OB_ISNULL(docid.ptr())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid binary document id", K(ret), K(docid));
-    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator_,
-                                                                ObLongTextType,
-                                                                CS_TYPE_BINARY,
-                                                                true,
-                                                                sparse_vec))) {
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator_,
+                                                          ObLongTextType,
+                                                          CS_TYPE_BINARY,
+                                                          true,
+                                                          sparse_vec))) {
       LOG_WARN("fail to get real sparse vec data.", K(ret), K(sparse_vec));
     }
   }
@@ -348,7 +351,7 @@ int ObSparseVecIndexDMLIterator::get_sparse_vec_data_for_update(
     const ObChunkDatumStore::StoredRow *store_row,
     const int64_t docid_idx,
     const int64_t sparse_vec_idx,
-    ObString &docid,
+    ObDatum &docid,
     ObString &sparse_vec)
 {
   int ret = OB_SUCCESS;
@@ -362,13 +365,10 @@ int ObSparseVecIndexDMLIterator::get_sparse_vec_data_for_update(
   } else {
     const int64_t docid_proj_idx = row_projector_->at(docid_idx);
     const int64_t sparse_vec_proj_idx = row_projector_->at(sparse_vec_idx);
-    docid = store_row->cells()[docid_proj_idx].get_string();
+    docid = store_row->cells()[docid_proj_idx];
     sparse_vec = store_row->cells()[sparse_vec_proj_idx].get_string();
 
-    if (OB_UNLIKELY(docid.length() != sizeof(ObDocId)) || OB_ISNULL(docid.ptr())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid binary document id", K(ret), K(docid));
-    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator_,
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator_,
                                                           ObLongTextType,
                                                           CS_TYPE_BINARY,
                                                           true,
@@ -387,7 +387,7 @@ int ObSparseVecIndexDMLIterator::generate_sparse_vec_index_row(
     const int64_t docid_idx,
     const int64_t value_idx,
     const int64_t vec_idx,
-    const ObString &docid,
+    const ObDatum &docid,
     ObString &sparse_vec,
     ObDomainIndexRow &spiv_rows)
 {
@@ -427,7 +427,7 @@ int ObSparseVecIndexDMLIterator::generate_sparse_vec_index_row(
           LOG_WARN("init datum row failed", K(ret), K(SPIV_DIM_DOCID_VALUE_CNT));
         } else {
           rows[i].storage_datums_[dim_idx].set_uint32(dim);
-          rows[i].storage_datums_[docid_idx].set_string(docid);
+          rows[i].storage_datums_[docid_idx].shallow_copy_from_datum(docid);
           rows[i].storage_datums_[value_idx].set_float(value);
           rows[i].storage_datums_[vec_idx].set_nop();
           if (OB_FAIL(spiv_rows.push_back(&rows[i]))) {

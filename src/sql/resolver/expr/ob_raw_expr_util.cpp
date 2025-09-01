@@ -777,7 +777,8 @@ int ObRawExprUtils::resolve_udf_common_info(const ObString &db_name,
                                             ObUDFInfo &udf_info,
                                             uint64_t dblink_id,
                                             const ObString &dblink_name,
-                                            ObExternalRoutineType external_routine_type)
+                                            ObExternalRoutineType external_routine_type,
+                                            bool is_mysql_udtf)
 {
   int ret = OB_SUCCESS;
   ObUDFRawExpr *udf_raw_expr = udf_info.ref_expr_;
@@ -797,13 +798,13 @@ int ObRawExprUtils::resolve_udf_common_info(const ObString &db_name,
   OX (udf_raw_expr->set_dblink_id(dblink_id));
   OX (udf_raw_expr->set_dblink_name(dblink_name));
   OX (udf_raw_expr->set_external_routine_type(external_routine_type));
+  OX (udf_raw_expr->set_mysql_udtf(is_mysql_udtf));
   return ret;
 }
 
 int ObRawExprUtils::resolve_udf_param_types(const ObIRoutineInfo* func_info,
                                             share::schema::ObSchemaGetterGuard &schema_guard,
                                             sql::ObSQLSessionInfo &session_info,
-                                            common::ObIAllocator &allocator,
                                             common::ObMySQLProxy &sql_proxy,
                                             ObUDFInfo &udf_info,
                                             pl::ObPLDbLinkGuard &dblink_guard,
@@ -848,7 +849,6 @@ int ObRawExprUtils::resolve_udf_param_types(const ObIRoutineInfo* func_info,
       OZ (pl::ObPLDataType::transform_from_iparam(iparam,
                                                   schema_guard,
                                                   session_info,
-                                                  allocator,
                                                   sql_proxy,
                                                   ret_pl_type,
                                                   NULL,
@@ -902,7 +902,6 @@ int ObRawExprUtils::resolve_udf_param_types(const ObIRoutineInfo* func_info,
       OZ (pl::ObPLDataType::transform_from_iparam(rparam,
                                                   schema_guard,
                                                   session_info,
-                                                  allocator,
                                                   sql_proxy,
                                                   param_pl_type,
                                                   NULL,
@@ -1223,7 +1222,6 @@ do {                                                                            
                 OZ (pl::ObPLDataType::transform_from_iparam(param,
                                                           *(params.schema_checker_->get_schema_guard()),
                                                           *(params.session_info_),
-                                                          *(params.allocator_),
                                                           *(params.sql_proxy_),
                                                           param_type,
                                                           nullptr,
@@ -5193,6 +5191,16 @@ int ObRawExprUtils::build_column_conv_expr(ObRawExprFactory &expr_factory,
   return ret;
 }
 
+// Some generated columns are auxiliary columns for internal special indexes, and in certain scenarios,
+// they need to be extracted and processed separately.
+bool ObRawExprUtils::is_auxiliary_generated_column(const ObColumnRefRawExpr &col_ref) {
+  return col_ref.is_fulltext_column() ||
+         col_ref.is_vec_index_column() ||
+         col_ref.is_spatial_generated_column() ||
+         col_ref.is_multivalue_generated_column() ||
+         col_ref.is_multivalue_generated_array_column();
+}
+
 int ObRawExprUtils::build_column_conv_expr(ObRawExprFactory &expr_factory,
                                            common::ObIAllocator &allocator,
                                            const ObColumnRefRawExpr &col_ref,
@@ -5256,11 +5264,7 @@ int ObRawExprUtils::build_column_conv_expr(ObRawExprFactory &expr_factory,
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (col_ref.is_fulltext_column() ||
-        col_ref.is_spatial_generated_column() ||
-        col_ref.is_multivalue_generated_column() ||
-        col_ref.is_multivalue_generated_array_column() ||
-        col_ref.is_vec_index_column()) {
+    } else if (ObRawExprUtils::is_auxiliary_generated_column(col_ref)) {
       // 全文列不会破坏约束性，且数据不会存储，跳过强转
       // 空间索引列是虚拟列，跳过强转
     } else if (OB_FAIL(build_column_conv_expr(session_info,
@@ -9262,6 +9266,7 @@ int ObRawExprUtils::build_rowid_expr(ObRawExprFactory &expr_factory,
                                      const ObIArray<ObRawExpr *> &rowkey_exprs,
                                      ObRawExpr *part_expr,
                                      ObRawExpr *subpart_expr,
+                                     bool copy_part_expr,
                                      ObSysFunRawExpr *&rowid_expr)
 {
   int ret = OB_SUCCESS;
@@ -9292,6 +9297,16 @@ int ObRawExprUtils::build_rowid_expr(ObRawExprFactory &expr_factory,
     OX(calc_urowid_expr->set_func_name(ObString::make_string(N_CALC_UROWID)));
     OZ(calc_urowid_expr->init_param_exprs(rowkey_exprs.count() + 2));
     OZ(calc_urowid_expr->add_param_expr(version_expr));
+    // copy part expr if need (deshare part expr to avoid unexpected modification)
+    if (OB_SUCC(ret) && copy_part_expr) {
+      ObRawExprCopier copier(expr_factory);
+      ObSEArray<ObRawExpr*, 4> part_expr_cols;
+      OZ(OB_NOT_NULL(part_expr) && extract_column_exprs(part_expr, part_expr_cols));
+      OZ(OB_NOT_NULL(subpart_expr) && extract_column_exprs(subpart_expr, part_expr_cols));
+      OZ(copier.add_skipped_expr(part_expr_cols));
+      OZ(OB_NOT_NULL(part_expr) && copier.copy(part_expr, part_expr));
+      OZ(OB_NOT_NULL(subpart_expr) && copier.copy(subpart_expr, subpart_expr));
+    }
     if (OB_SUCC(ret) && table_schema.is_external_table()) {
       ObRawExpr *calc_part_id_expr = nullptr;
       OZ(build_calc_part_id_expr(expr_factory,
@@ -10431,6 +10446,113 @@ int ObRawExprUtils::find_expr(ObRawExpr *root, const ObRawExpr *expected, bool &
   } else {
     for (int i = 0; OB_SUCC(ret) && !found && i < root->get_param_count(); i++) {
       ret = SMART_CALL(find_expr(root->get_param_expr(i), expected, found));
+    }
+  }
+  return ret;
+}
+
+int ObRawExprUtils::resolve_identifier(ObIAllocator &allocator,
+                                      sql::ObSQLSessionInfo &session,
+                                      const ObObj &param,
+                                      const char* const param_name,
+                                      ObString &value,
+                                      bool nullable,
+                                      bool check_length)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObQualifiedName, 1> q_names;
+  if (OB_FAIL(resolve_qualified_names(allocator, session, param, param_name, q_names, nullable))) {
+    LOG_WARN("failed to resolve qualified names");
+  } else if (q_names.count() != 1) {
+    if (OB_LIKELY(0 == q_names.count() && nullable)) {
+      // do nothing
+    } else {
+      ret = OB_ERR_INVALID_INPUT_STRING;
+      LOG_WARN("qualified name count not equal 1", K(ret));
+      LOG_USER_ERROR(OB_ERR_INVALID_INPUT_STRING, param_name);
+    }
+  } else if (OB_UNLIKELY(!q_names.at(0).database_name_.empty() || !q_names.at(0).tbl_name_.empty())) {
+    ret = OB_ERR_INVALID_INPUT_STRING;
+    LOG_WARN("invalid qualified name", "q_name", q_names.at(0), K(ret));
+    LOG_USER_ERROR(OB_ERR_INVALID_INPUT_STRING, param_name);
+  } else if (OB_UNLIKELY(q_names.at(0).col_name_.length() > OB_MAX_TABLE_NAME_LENGTH
+                         && check_length)) {
+    ret = OB_ERR_INVALID_INPUT_STRING;
+    LOG_WARN("identifier is too long", K(ret));
+    LOG_USER_ERROR(OB_ERR_INVALID_INPUT_STRING, param_name);
+  } else {
+    value = q_names.at(0).col_name_;
+  }
+  return ret;
+}
+
+int ObRawExprUtils::resolve_qualified_names(ObIAllocator &allocator,
+                                            sql::ObSQLSessionInfo &session,
+                                            const ObObj &param,
+                                            const char* const param_name,
+                                            ObIArray<ObQualifiedName> &q_names,
+                                            bool nullable)
+{
+  int ret = OB_SUCCESS;
+  ObString input_str;
+  const ParseNode *expr_list_node = NULL;
+  ObNameCaseMode case_mode = OB_NAME_CASE_INVALID;
+  if (param.is_null_oracle()) {
+    if (!nullable) {
+      ret = OB_ERR_INVALID_INPUT_STRING;
+      LOG_WARN("input string is null", K(param_name), K(param), K(ret));
+      LOG_USER_ERROR(OB_ERR_INVALID_INPUT_STRING, param_name);
+    }
+  } else if (OB_FAIL(session.get_name_case_mode(case_mode))) {
+    LOG_WARN("fail to get name case mode", K(ret));
+  } else if (OB_FAIL(param.get_string(input_str))) {
+    LOG_WARN("fail to get string", K(param), K(ret));
+  } else if (OB_FAIL(parse_expr_list_node_from_str(input_str,
+      session.get_charsets4parser(), allocator, expr_list_node,
+      session.get_sql_mode()))) {
+    ret = OB_ERR_INVALID_INPUT_STRING;
+    LOG_WARN("parse expr node from string failed", K(input_str), K(ret));
+    LOG_USER_ERROR(OB_ERR_INVALID_INPUT_STRING, param_name);
+  } else if (OB_ISNULL(expr_list_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr node is null", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr_list_node->num_child_; ++i) {
+      const ParseNode *select_expr = expr_list_node->children_[i];
+      const ParseNode *node = NULL;
+      ObQualifiedName q_name;
+      if (OB_ISNULL(select_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr node is null", K(ret));
+      } else if (T_PROJECT_STRING != select_expr->type_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("internal arg is not correct", K(select_expr->type_), K(ret));
+      } else {
+        node = select_expr->children_[0];
+      }
+      while (OB_SUCC(ret) && node != NULL) {
+        if (OB_UNLIKELY(node->type_ != T_OBJ_ACCESS_REF)) {
+          ret = OB_ERR_INVALID_INPUT_STRING;
+          LOG_WARN("input string is not identifier", K(param_name), K(param), K(ret));
+          LOG_USER_ERROR(OB_ERR_INVALID_INPUT_STRING, param_name);
+        } else if (OB_UNLIKELY(node->num_child_ != 2)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid node type", K_(node->type), K(node->num_child_), K(ret));
+        } else if (OB_UNLIKELY(node->children_[0]->type_ != T_IDENT)) {
+          ret = OB_ERR_INVALID_INPUT_STRING;
+          LOG_WARN("input string is not identifier", K(param_name), K(param), K(ret));
+          LOG_USER_ERROR(OB_ERR_INVALID_INPUT_STRING, param_name);
+        } else {
+          const ParseNode *indent_node = node->children_[0];
+          ObString ident_name(static_cast<int32_t>(indent_node->str_len_), indent_node->str_value_);
+          OZ (q_name.access_idents_.push_back(ObObjAccessIdent(ident_name, OB_INVALID_INDEX)), q_name);
+        }
+        if (OB_SUCC(ret)) {
+          node = node->children_[1];
+        }
+      }
+      OX (q_name.format_qualified_name(case_mode));
+      OZ (q_names.push_back(q_name));
     }
   }
   return ret;

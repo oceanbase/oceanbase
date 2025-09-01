@@ -784,7 +784,9 @@ int ObWindowFunctionVecOp::init()
         case T_FUN_ORA_XMLAGG:
         case T_FUNC_SYS_ARRAY_AGG:
         case T_FUN_SYS_RB_OR_CARDINALITY_AGG:
-        case T_FUN_SYS_RB_AND_CARDINALITY_AGG: {
+        case T_FUN_SYS_RB_AND_CARDINALITY_AGG:
+        case T_FUN_ARG_MAX:
+        case T_FUN_ARG_MIN: {
           aggregate::IAggregate *agg_func = nullptr;
           winfunc::AggrExpr *aggr_expr = nullptr;
           if (OB_FAIL(alloc_expr<winfunc::AggrExpr>(*local_allocator_, aggr_expr))) {

@@ -19,29 +19,41 @@ namespace oceanbase
 namespace blocksstable
 {
 
-int ObSemiStructColumnDecoder::decode(
-  const ObColumnCSDecoderCtx &ctx, const int32_t row_id, common::ObDatum &datum) const
+int ObSemiStructColumnDecoder::decode(const ObColumnCSDecoderCtx &ctx, const int32_t row_id, ObStorageDatum &datum) const
 {
   int ret = OB_SUCCESS;
   const ObSemiStructColumnDecoderCtx &semistruct_ctx = ctx.semistruct_ctx_;
-  ObSemiStructDecodeHandler *handler = semistruct_ctx.handler_;
   int64_t sub_col_cnt = semistruct_ctx.semistruct_header_->column_cnt_;
-  ObDatumRow& sub_row = handler->get_sub_row();
   ObString result;
   bool need_check_null = false;
-  sub_row.reuse();
-  if (OB_UNLIKELY(ObBaseColumnDecoderCtx::ObNullFlag::IS_NULL_REPLACED == semistruct_ctx.null_flag_
+  if (OB_UNLIKELY(semistruct_ctx.nop_flag_ != ObBaseColumnDecoderCtx::ObNopFlag::HAS_NO_NOP)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support nop encode", K(ret), K(semistruct_ctx.nop_flag_));
+  } else if (OB_UNLIKELY(ObBaseColumnDecoderCtx::ObNullFlag::IS_NULL_REPLACED == semistruct_ctx.null_flag_
       || ObBaseColumnDecoderCtx::ObNullFlag::IS_NULL_REPLACED_REF == semistruct_ctx.null_flag_)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support null encode", K(ret), K(semistruct_ctx.null_flag_));
-  } else if (ObBaseColumnDecoderCtx::ObNullFlag::HAS_NULL_BITMAP == semistruct_ctx.null_flag_) {
+  } else if (ObBaseColumnDecoderCtx::ObNullFlag::HAS_NULL_OR_NOP_BITMAP == semistruct_ctx.null_flag_) {
     need_check_null = true;
   }
 
   if (OB_FAIL(ret)) {
-  } else if (need_check_null && ObCSDecodingUtil::test_bit(semistruct_ctx.null_bitmap_, row_id)) {
+  } else if (need_check_null && ObCSDecodingUtil::test_bit(semistruct_ctx.null_or_nop_bitmap_, row_id)) {
     datum.set_null();
+    // currently semistruct column is only stored in major, should not be nop
+    // semistruct_ctx.set_nop_if_is_null(row_id, datum);
   } else {
+    ObSemiStructDecodeHandler *handler = semistruct_ctx.handler_;
+    if (OB_ISNULL(handler->reassembler_)) {
+      if (OB_ISNULL(handler->reassembler_ = OB_NEWx(ObJsonReassembler, &handler->allocator_, handler->sub_schema_, &handler->allocator_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc reassembler fail", K(ret), "size", sizeof(ObJsonReassembler));
+      } else if (OB_FAIL(handler->reassembler_->init())) {
+        LOG_WARN("init reassembler fail", K(ret));
+      }
+    }
+    ObDatumRow &sub_row = handler->get_sub_row();
+    sub_row.reuse();
     for (int i = 0; OB_SUCC(ret) && i < sub_col_cnt; ++i) {
       const ObCSColumnHeader &sub_col_header = semistruct_ctx.sub_col_headers_[i];
       ObColumnCSDecoderCtx &sub_col_ctx =  semistruct_ctx.sub_col_ctxs_[i];
@@ -71,8 +83,11 @@ int ObSemiStructColumnDecoder::batch_decode(const ObColumnCSDecoderCtx &ctx,
   const ObSemiStructColumnDecoderCtx &semistruct_ctx = ctx.semistruct_ctx_;
   for (int32_t i = 0; OB_SUCC(ret) && i < row_cap; ++i) {
     int32_t row_id = row_ids[i];
-    if (OB_FAIL(decode(ctx, row_id, datums[i]))) {
+    ObStorageDatum datum;
+    if (OB_FAIL(decode(ctx, row_id, datum))) {
       LOG_WARN("decode fail", K(ret), K(i), K(row_id), K(row_cap));
+    } else if (OB_FAIL(datums[i].from_storage_datum(datum, ObDatum::get_obj_datum_map_type(ObJsonType)))) {
+      LOG_WARN("from storage datum fail", K(ret), K(i), K(row_id), K(datum));
     }
   }
   return ret;
@@ -98,7 +113,7 @@ int ObSemiStructColumnDecoder::decode_vector(
         for (int64_t i = 0; OB_SUCC(ret) && i < vector_ctx.row_cap_; ++i) {
           const int32_t row_id = vector_ctx.row_ids_[i];
           const int64_t curr_vec_offset = vector_ctx.vec_offset_ + i;
-          ObDatum datum;
+          ObStorageDatum datum;
           if (OB_FAIL(decode(ctx, row_id, datum))) {
             LOG_WARN("decode fail", K(ret), K(i), K(row_id), K(vector_ctx));
           } else if (datum.is_null()) {
@@ -120,10 +135,13 @@ int ObSemiStructColumnDecoder::decode_vector(
           const int32_t row_id = vector_ctx.row_ids_[i];
           const int64_t curr_vec_offset = vector_ctx.vec_offset_ + i;
           ObDatum &datum = uni_vec->get_datum(curr_vec_offset);
-          if (OB_FAIL(decode(ctx, row_id, datum))) {
+          ObStorageDatum storage_datum;
+          if (OB_FAIL(decode(ctx, row_id, storage_datum))) {
             LOG_WARN("decode fail", K(ret), K(i), K(row_id), K(vector_ctx));
-          } else if (datum.is_null()) {
+          } else if (storage_datum.is_null()) {
             uni_vec->set_null(curr_vec_offset);
+          } else if (OB_FAIL(datum.from_storage_datum(storage_datum, ObDatum::get_obj_datum_map_type(ObJsonType)))) {
+            LOG_WARN("from storage datum fail", K(ret), K(i), K(row_id), K(storage_datum));
           }
         }
         break;
@@ -136,7 +154,7 @@ int ObSemiStructColumnDecoder::decode_vector(
   return ret;
 }
 
-int ObSemiStructColumnDecoder::get_null_count(const ObColumnCSDecoderCtx &col_ctx,
+int ObSemiStructColumnDecoder::inner_get_null_count(const ObColumnCSDecoderCtx &col_ctx,
     const int32_t *row_ids, const int64_t row_cap, int64_t &null_count) const
 {
   int ret = OB_SUCCESS;
@@ -146,9 +164,9 @@ int ObSemiStructColumnDecoder::get_null_count(const ObColumnCSDecoderCtx &col_ct
   } else {
     const ObSemiStructColumnDecoderCtx &semistruct_ctx = col_ctx.semistruct_ctx_;
     null_count = 0;
-    if (semistruct_ctx.has_null_bitmap()) {
+    if (semistruct_ctx.has_null_or_nop_bitmap()) {
       for (int64_t i = 0; i < row_cap; ++i) {
-        if (ObCSDecodingUtil::test_bit(semistruct_ctx.null_bitmap_, row_ids[i])) {
+        if (ObCSDecodingUtil::test_bit(semistruct_ctx.null_or_nop_bitmap_, row_ids[i])) {
           ++null_count;
         }
       }
@@ -184,15 +202,12 @@ int ObSemiStructColumnDecoder::pushdown_operator(
     ObSemiStructDecodeHandler *handler = semistruct_ctx.handler_;
     int64_t sub_col_cnt = semistruct_ctx.semistruct_header_->column_cnt_;
     bool can_pushdown = false;
-    int64_t sub_col_idx = -1;
+    uint16_t sub_col_idx = 0;
     if (OB_FAIL(handler->check_can_pushdown(semistruct_node, can_pushdown, sub_col_idx))) {
       LOG_WARN("check_can_pushdown fail", K(ret), K(semistruct_node), KPC(handler));
     } else if (OB_UNLIKELY(! can_pushdown)) {
       ret = OB_NOT_SUPPORTED;
       LOG_INFO("pushdown not support for current filter", K(semistruct_node), KPC(handler));
-    } else if (OB_UNLIKELY(sub_col_idx < 0 || sub_col_idx >= sub_col_cnt)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid sub_col_idx", K(ret), K(sub_col_idx), K(semistruct_node), KPC(handler));
     } else {
       const ObIColumnCSDecoder *sub_decoder = semistruct_ctx.sub_col_decoders_[sub_col_idx];
       ObColumnCSDecoderCtx &sub_col_ctx =  semistruct_ctx.sub_col_ctxs_[sub_col_idx];

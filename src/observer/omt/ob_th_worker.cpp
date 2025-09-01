@@ -544,3 +544,26 @@ int ObThWorker::acquire_diagnostic_info(ObDiagnosticInfo *&di, rpc::ObRequest *r
   }
   return ret;
 }
+
+int ObThWorker::try_add_stream_rpc_session_wait_cnt(int cnt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(tenant_)) {
+    if (cnt <= 0) {
+      IGNORE_RETURN ATOMIC_FAA(&tenant_->stream_rpc_wait_cnt_, cnt);
+    } else {
+      int64_t cur_wait_cnt = ATOMIC_FAA(&tenant_->stream_rpc_wait_cnt_, cnt);
+      int64_t limit = ATOMIC_LOAD(&tenant_->stream_rpc_wait_cnt_limit_);
+      if (cur_wait_cnt > limit) {
+        ret = OB_EAGAIN;
+        ATOMIC_FAA(&tenant_->stream_rpc_wait_cnt_, -cnt);
+        LOG_WARN("current stream rpc wait thread count is over the limit,",
+                "need to expand the max_cpu of tenant config or reduce the concurrency of remote sql"
+                K(tenant_->id()), K(cur_wait_cnt), K(limit));
+      }
+    }
+  } else {
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "tenant is NULL, unexpected");
+  }
+  return ret;
+}

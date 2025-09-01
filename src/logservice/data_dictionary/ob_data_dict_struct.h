@@ -141,7 +141,7 @@ public:
       const share::schema::ObTenantSchema &tenant_schema,
       const share::ObLSArray &ls_array);
   // For incremental data update
-  int incremental_data_update(const ObDictTenantMeta &new_tenant_meta);
+  int incremental_data_update(const ObDictTenantMeta &new_tenant_meta, const bool update_tenant_name = true);
   int incremental_data_update(const share::ObLSAttr &ls_attr);
 
 public:
@@ -155,6 +155,11 @@ public:
   OB_INLINE uint64_t get_tenant_id() const { return tenant_id_; }
   OB_INLINE void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
   OB_INLINE const char *get_tenant_name() const { return extract_str(tenant_name_); }
+  // set_tenant_name will overwrite tenant_name already in ObDictTenantMeta
+  // currently only used for obcdc while sync data from standby tenant
+  // (should use tenant_name of standby_tenant,
+  // however tenant_name in data_dict of standby tenant is tenant_name of its primary tenant)
+  int set_tenant_name(const char *tenant_name, bool &is_tenant_name_not_change);
   OB_INLINE int64_t get_schema_version() const { return schema_version_; }
   OB_INLINE common::ObCompatibilityMode get_compatibility_mode() const { return compatibility_mode_; }
   OB_INLINE share::schema::ObTenantStatus get_status() const { return tenant_status_; }

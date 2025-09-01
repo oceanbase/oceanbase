@@ -131,26 +131,29 @@ typedef ObDefaultSSMetaSSLogValue<ObSSLSMeta> ObSSLSMetaSSLogValue;
 
 #define CREATE_SSTABLE_LIST_ADD_OP(op_handle) \
   ObAtomicOpHandle<ObAtomicSSTableListAddOp> op_handle; \
-  ASSERT_EQ(OB_SUCCESS, sstablelist_file->create_op(op_handle));               \
+  ASSERT_EQ(OB_SUCCESS, sstablelist_file->create_op(op_handle, true, ObString()));               \
   ASSERT_NE(nullptr, op_handle.get_atomic_op());                                               \
   ASSERT_NE(nullptr, sstablelist_file->current_op_handle_.get_atomic_op());                    \
   ASSERT_EQ(op_handle.get_atomic_op(), sstablelist_file->current_op_handle_.get_atomic_op());  \
   tablet_cur_op_id += 1;
 
-#define CREATE_SSTABLE_LIST_ADD_OP_WITH_SUFFIX(op_handle, suffix) \
+#define CREATE_SSTABLE_LIST_ADD_OP_WITH_GC_INFO(op_handle, suffix, gc_info) \
   ObAtomicOpHandle<ObAtomicSSTableListAddOp> op_handle; \
-  ASSERT_EQ(OB_SUCCESS, sstablelist_file##suffix->create_op(op_handle));               \
+  ASSERT_EQ(OB_SUCCESS, sstablelist_file##suffix->create_op(op_handle, true, gc_info));               \
   ASSERT_NE(nullptr, op_handle.get_atomic_op());                                               \
   ASSERT_NE(nullptr, sstablelist_file##suffix->current_op_handle_.get_atomic_op());                    \
   ASSERT_EQ(op_handle.get_atomic_op(), sstablelist_file##suffix->current_op_handle_.get_atomic_op());  \
   tablet_cur_op_id += 1;
 
-#define CREATE_LS_META_WRITE_OP_WITH_RECONFIRM(op_handle, need_check_lease) \
-  CREATE_LS_META_WRITE_OP(op_handle, need_check_lease)
+#define CREATE_SSTABLE_LIST_ADD_OP_WITH_SUFFIX(op_handle, suffix) \
+  CREATE_SSTABLE_LIST_ADD_OP_WITH_GC_INFO(op_handle, suffix, ObString())
 
-#define CREATE_LS_META_WRITE_OP(op_handle, need_check_lease) \
+#define CREATE_LS_META_WRITE_OP_WITH_RECONFIRM(op_handle, need_check_sswriter) \
+  CREATE_LS_META_WRITE_OP(op_handle, need_check_sswriter)
+
+#define CREATE_LS_META_WRITE_OP(op_handle, need_check_sswriter) \
   ObAtomicOpHandle<ObAtomicOverwriteOp> op_handle; \
-  ASSERT_EQ(OB_SUCCESS, ls_meta_file->create_op(op_handle, need_check_lease));               \
+  ASSERT_EQ(OB_SUCCESS, ls_meta_file->create_op(op_handle, need_check_sswriter, ObString()));               \
   ASSERT_NE(nullptr, op_handle.get_atomic_op());                                               \
   ASSERT_NE(nullptr, ls_meta_file->current_op_handle_.get_atomic_op());                    \
   ASSERT_EQ(op_handle.get_atomic_op(), ls_meta_file->current_op_handle_.get_atomic_op()); \
@@ -162,7 +165,7 @@ typedef ObDefaultSSMetaSSLogValue<ObSSLSMeta> ObSSLSMetaSSLogValue;
 
 #define CREATE_TABLET_META_WRITE_OP(op_handle)                              \
   ObAtomicOpHandle<ObAtomicTabletMetaOp> op_handle;                         \
-  ASSERT_EQ(OB_SUCCESS, tablet_meta_file->create_op(op_handle));            \
+  ASSERT_EQ(OB_SUCCESS, tablet_meta_file->create_op(op_handle, true, ObString()));            \
   ASSERT_NE(nullptr, op_handle.get_atomic_op());                            \
   ASSERT_NE(nullptr, tablet_meta_file->current_op_handle_.get_atomic_op()); \
   ASSERT_EQ(op_handle.get_atomic_op(), tablet_meta_file->current_op_handle_.get_atomic_op());
@@ -177,7 +180,7 @@ typedef ObDefaultSSMetaSSLogValue<ObSSLSMeta> ObSSLSMetaSSLogValue;
   INJECT_STMT(1, inject_stmt_pos, inject_stmt) \
   bool need_abort = false; \
   ObAtomicOpHandle<ObAtomicSSTableListAddOp> op_handle##suffix; \
-  OZ(sstablelist_file->create_op(op_handle##suffix)); \
+  OZ(sstablelist_file->create_op(op_handle##suffix, true, ObString())); \
   tablet_cur_op_id += 1; \
   if (ret == OB_SUCCESS) { \
     need_abort = true; \
@@ -369,6 +372,22 @@ typedef ObDefaultSSMetaSSLogValue<ObSSLSMeta> ObSSLSMetaSSLogValue;
   if (ret == OB_SUCCESS) { \
     ASSERT_EQ(OB_SUCCESS, sstablelist_file->fail_op(op_handle##suffix)); \
   }
+
+#define CREATE_SSTABLELIST_ADD_PARALLEL_OP(op_handle, suffix, need_check_sswriter, gc_info) \
+  ObAtomicOpHandle<ObAtomicSSTableListAddOp> op_handle; \
+  auto last_cnt##op_handle = sstablelist_file##suffix->op_handle_array_.count(); \
+  ASSERT_EQ(OB_SUCCESS, sstablelist_file##suffix->create_op_parallel(op_handle, need_check_sswriter, gc_info)); \
+  ASSERT_NE(nullptr, op_handle.get_atomic_op());                                               \
+  ASSERT_EQ(last_cnt##op_handle+1, sstablelist_file##suffix->op_handle_array_.count());                    \
+
+#define FINISH_SSTABLELIST_ADD_PARALLEL_OP(suffix, op_handle) \
+  ASSERT_EQ(OB_SUCCESS, sstablelist_file##suffix->finish_op_parallel(op_handle));
+
+#define FAIL_SSTABLELIST_ADD_PARALLEL_OP(suffix, op_handle) \
+  ASSERT_EQ(OB_SUCCESS, sstablelist_file##suffix->fail_op_parallel(op_handle));
+
+#define ABORT_SSTABLELIST_ADD_PARALLEL_OP(suffix, op_handle) \
+  ASSERT_EQ(OB_SUCCESS, sstablelist_file##suffix->abort_op_parallel(op_handle));
 
 const int MINI_OP_ID = 0;
 const int MINI_CURRENT = 1;

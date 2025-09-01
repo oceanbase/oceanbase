@@ -119,6 +119,7 @@ void ObTableQueryAndMutateP::reset_ctx()
 int ObTableQueryAndMutateP::before_process()
 {
   is_tablegroup_req_ = ObHTableUtils::is_tablegroup_req(arg_.table_name_, arg_.entity_type_);
+  retry_policy_.allow_route_retry_ = arg_.server_can_retry();
   return ParentType::before_process();
 }
 
@@ -159,6 +160,18 @@ int32_t ObTableQueryAndMutateP::get_stat_process_type(bool is_hkv, bool is_check
   return process_type;
 }
 
+int ObTableQueryAndMutateP::check_heap_table()
+{
+  int ret = OB_SUCCESS;
+  bool is_check_and_execute = arg_.query_and_mutate_.is_check_and_execute();
+  if (schema_cache_guard_.get_schema_flags().is_heap_table_ && is_check_and_execute) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "heap table use checkAndInsUp");
+    LOG_WARN("heap table use checkAndInsUp is not supported", K(ret));
+  }
+  return ret;
+}
+
 int ObTableQueryAndMutateP::old_try_process()
 {
   int ret = OB_SUCCESS;
@@ -182,6 +195,8 @@ int ObTableQueryAndMutateP::old_try_process()
     ret = OB_SCHEMA_ERROR;
     LOG_WARN("arg table id is not equal to schema table id", K(ret), K(table_id_),
       K(simple_table_schema_->get_table_id()));
+  } else if (OB_FAIL(check_heap_table())) {
+    LOG_WARN("fail to check heap table", K(ret));
   } else if (OB_FAIL(check_mode_type(schema_cache_guard_))) {
     LOG_WARN("fail to check mode type", K(ret));
   } else if (OB_FAIL(get_tablet_id(simple_table_schema_, arg_.tablet_id_, arg_.table_id_, tablet_id_))) {
@@ -244,6 +259,8 @@ int ObTableQueryAndMutateP::new_try_process()
 
   if (OB_FAIL(init_table_schema_info(arg_.table_name_, table_id_))) {
     LOG_WARN("fail to init schema info", K(ret), K(arg_.table_name_));
+  } else if (OB_FAIL(check_heap_table())) {
+    LOG_WARN("fail to check heap table", K(ret));
   } else if (schema_cache_guard_.get_hbase_mode_type() == OB_HBASE_SERIES_TYPE) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("hbase series type not support query and mutate", K(ret));

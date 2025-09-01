@@ -2600,6 +2600,7 @@ int ObSplitDownloadSSTableTask::get_shared_tablet_versions_iter(
     ObSSMetaReadParam read_param;
     read_param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
                                       ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                      false, /*try read local*/
                                       ObSSLogMetaType::SSLOG_TABLET_META,
                                       ls_id_,
                                       dst_tablet_id,
@@ -2685,6 +2686,7 @@ int ObSplitDownloadSSTableTask::get_shared_tablet_for_split_mds(
   ObSSMetaReadParam read_param;
   read_param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
                                     ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                    true, /*try read local*/
                                     ObSSLogMetaType::SSLOG_TABLET_META,
                                     ls_id_,
                                     dst_tablet_id,
@@ -2772,6 +2774,7 @@ int ObSplitDownloadSSTableTask::get_shared_tablet_for_split_minor(
   ObSSMetaReadParam read_param;
   read_param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
                                     ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                    true, /*try read local*/
                                     ObSSLogMetaType::SSLOG_TABLET_META,
                                     ls_id_,
                                     dst_tablet_id,
@@ -3096,6 +3099,7 @@ int ObSplitDownloadSSTableTask::download_sstables_and_update_local(
           ObSSMetaReadParam read_param;
           read_param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
                                             ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                            true, /*try read local*/
                                             ObSSLogMetaType::SSLOG_TABLET_META,
                                             ls_id_,
                                             dst_tablet_id,

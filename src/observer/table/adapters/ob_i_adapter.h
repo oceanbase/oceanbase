@@ -33,7 +33,8 @@ public:
 
   virtual ~ObIHbaseAdapter() {}
   virtual int put(ObTableExecCtx &ctx, const ObITableEntity &cell) = 0;
-  virtual int multi_put(ObTableExecCtx &ctx, const ObIArray<ObITableEntity *> &cells) = 0;
+  virtual int put(ObTableCtx &ctx, const ObHCfRows &rows) = 0;
+  virtual int multi_put(ObTableExecCtx &ctx, const ObIArray<const ObITableEntity *> &cells) = 0;
   virtual int del(ObTableExecCtx &ctx, const ObITableEntity &cell) = 0;
   virtual int scan(ObIAllocator &alloc, ObTableExecCtx &ctx, const ObTableQuery &query, ObHbaseICellIter *&iter) = 0;
   virtual void reuse();

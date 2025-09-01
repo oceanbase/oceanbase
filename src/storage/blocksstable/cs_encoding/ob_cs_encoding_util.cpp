@@ -57,7 +57,8 @@ int ObCSEncodingUtil::build_column_encoding_ctx_with_hash_table_(
     ObColumnCSEncodingCtx &col_ctx)
 {
   int ret = OB_SUCCESS;
-  col_ctx.null_cnt_ = col_ctx.ht_->get_null_cnt();
+  col_ctx.null_or_nop_cnt_ = col_ctx.ht_->get_null_cnt() + col_ctx.ht_->get_nop_cnt();
+  col_ctx.nop_cnt_ = col_ctx.ht_->get_nop_cnt();
   switch (store_class) {
   case ObIntSC: {
     int64_t int_min = INT64_MAX;
@@ -244,7 +245,7 @@ int ObCSEncodingUtil::build_column_encoding_ctx_with_col_datums_(
     ObColumnCSEncodingCtx &col_ctx)
 {
   int ret = OB_SUCCESS;
-  int64_t null_cnt = 0;
+  int64_t null_cnt = 0, nop_cnt = 0;
   int64_t row_count = col_ctx.col_datums_->count();
 
   switch (store_class) {
@@ -256,6 +257,8 @@ int ObCSEncodingUtil::build_column_encoding_ctx_with_col_datums_(
       const ObDatum &datum = col_ctx.col_datums_->at(row_idx);
       if (datum.is_null()) {
         null_cnt++;
+      } else if (datum.is_nop()) {
+        nop_cnt++;
       } else {
         value = datum.get_int();
         if (value < int_min) {
@@ -279,6 +282,8 @@ int ObCSEncodingUtil::build_column_encoding_ctx_with_col_datums_(
       const ObDatum &datum = col_ctx.col_datums_->at(row_idx);
       if (datum.is_null()) {
         null_cnt++;
+      } else if (datum.is_nop()) {
+        nop_cnt++;
       } else {
         value = datum.get_uint64();
         if (value < uint_min) {
@@ -303,10 +308,13 @@ int ObCSEncodingUtil::build_column_encoding_ctx_with_col_datums_(
     col_ctx.fix_data_size_ = -1;
     col_ctx.is_wide_int_ = false;
     decint_cmp_fp cmp = wide::ObDecimalIntCmpSet::get_decint_decint_cmp_func(precision_bytes, sizeof(int64_t));
-    for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < row_count; ++row_idx) {
+    int64_t row_idx = 0;
+    for (; OB_SUCC(ret) && row_idx < row_count; ++row_idx) {
       const ObDatum &datum = col_ctx.col_datums_->at(row_idx);
       if (datum.is_null()) {
         null_cnt++;
+      } else if (datum.is_nop()) {
+        nop_cnt++;
       } else if (OB_UNLIKELY(datum.len_ != precision_bytes)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("datum len is not match with precision bytes", K(ret), K(datum), K(precision_bytes));
@@ -331,12 +339,13 @@ int ObCSEncodingUtil::build_column_encoding_ctx_with_col_datums_(
 
     if (OB_SUCC(ret)) {
       if (col_ctx.is_wide_int_) { // store as fixed len string
-        null_cnt = 0;
         col_ctx.fix_data_size_ = precision_bytes;
-        for (int64_t row_idx = 0; row_idx < row_count; ++row_idx) {
+        for (; row_idx < row_count; ++row_idx) {
           const ObDatum &datum = col_ctx.col_datums_->at(row_idx);
           if (datum.is_null()) {
             null_cnt++;
+          } else if (datum.is_nop()) {
+            nop_cnt++;
           } else {
             col_ctx.var_data_size_ += datum.len_;
           }
@@ -356,6 +365,8 @@ int ObCSEncodingUtil::build_column_encoding_ctx_with_col_datums_(
       const ObDatum &datum = col_ctx.col_datums_->at(row_idx);
       if (datum.is_null()) {
         null_cnt++;
+      } else if (datum.is_nop()) {
+        nop_cnt++;
       } else {
         const int64_t len = sizeof(ObNumberDesc) + datum.num_->desc_.len_ * sizeof(datum.num_->digits_[0]);
         col_ctx.var_data_size_ += len;
@@ -383,6 +394,8 @@ int ObCSEncodingUtil::build_column_encoding_ctx_with_col_datums_(
       const ObDatum &datum = col_ctx.col_datums_->at(row_idx);
       if (datum.is_null()) {
         null_cnt++;
+      } else if (datum.is_nop()) {
+        nop_cnt++;
       } else {
         const int64_t len = datum.len_;
         col_ctx.max_string_size_ = len > col_ctx.max_string_size_ ? len : col_ctx.max_string_size_;
@@ -410,6 +423,8 @@ int ObCSEncodingUtil::build_column_encoding_ctx_with_col_datums_(
       const ObDatum &datum = col_ctx.col_datums_->at(row_idx);
       if (datum.is_null()) {
         null_cnt++;
+      } else if (datum.is_nop()) {
+        nop_cnt++;
       } else {
         const int64_t len = datum.len_;
         col_ctx.var_data_size_ += len;
@@ -433,6 +448,8 @@ int ObCSEncodingUtil::build_column_encoding_ctx_with_col_datums_(
       const ObDatum &datum = col_ctx.col_datums_->at(row_idx);
       if (datum.is_null()) {
         null_cnt++;
+      } else if (datum.is_nop()) {
+        nop_cnt++;
       } else {
         const int64_t len = datum.len_;
         col_ctx.var_data_size_ += len;
@@ -455,7 +472,8 @@ int ObCSEncodingUtil::build_column_encoding_ctx_with_col_datums_(
   }
 
   if (OB_SUCC(ret)) {
-    col_ctx.null_cnt_ = null_cnt;
+    col_ctx.null_or_nop_cnt_ = null_cnt + nop_cnt;
+    col_ctx.nop_cnt_ = nop_cnt;
   }
   return ret;
 }

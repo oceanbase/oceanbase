@@ -45,7 +45,6 @@ static const int64_t MAX_CACHED_TRANS_CTX_COUNT = 10 * 10000;
 static const int64_t RELOAD_CONFIG_INTERVAL = 10 * 1000 * 1000;
 static const int64_t PRINT_GLOBAL_FLOW_CONTROL_INTERVAL = 5 * 1000 * 1000;
 static const int64_t SINGLE_INSTANCE_NUMBER = 1;                  // single instance
-static const int64_t GET_SCHEMA_TIMEOUT_ON_START_UP = 7200LL * 1000 * 1000;     // Start moment, get schema timeout
 
 // column id of table __all_ddl_operation(used by libobcdc)
 static const uint64_t ALL_DDL_OPERATION_TABLE_SCHEMA_VERSION_COLUMN_ID = 18;

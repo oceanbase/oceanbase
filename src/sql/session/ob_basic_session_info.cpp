@@ -154,7 +154,9 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       config_use_rich_format_(true),
       sys_var_config_hash_val_(0),
       is_real_inner_session_(false),
-      sql_mem_used_(0)
+      sql_mem_used_(0),
+      shadow_top_query_string_(false),
+      use_pl_inner_info_string_(false)
 {
   thread_data_.reset();
   MEMSET(sys_vars_, 0, sizeof(sys_vars_));
@@ -493,6 +495,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   current_execution_id_ = -1;
   last_trace_id_.reset();
   curr_trace_id_.reset();
+  top_trace_id_.reset();
   app_trace_id_.reset();
   database_id_ = OB_INVALID_ID;
   retry_info_.reset();
@@ -546,6 +549,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   sys_var_config_hash_val_ = 0;
   is_real_inner_session_ = false;
   sql_mem_used_ = 0;
+  use_pl_inner_info_string_ = false;
 }
 
 int ObBasicSessionInfo::reset_timezone()
@@ -3568,7 +3572,7 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
     case SYS_VAR_ENABLE_SQL_PLAN_MONITOR: {
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
-      OX (sys_vars_cache.set_enable_sql_plan_monitor(int_val != 0));
+      OX (sys_vars_cache.set_base_enable_sql_plan_monitor(int_val != 0));
       break;
     }
     case SYS_VAR_OB_ENABLE_PS_PARAMETER_ANONYMOUS_BLOCK: {
@@ -3580,7 +3584,7 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
     case SYS_VAR__CURRENT_DEFAULT_CATALOG: {
       uint64_t uint_val = 0;
       OZ (val.get_uint64(uint_val), val);
-      OX (sys_vars_cache.set_current_default_catalog(uint_val));
+      OX (sys_vars_cache.set_base_current_default_catalog(uint_val));
     }
     default: {
       //do nothing
@@ -4722,6 +4726,7 @@ OB_SERIALIZE_MEMBER(ObDiagnosisInfo, is_enabled_, limit_num_, log_file_, bad_fil
 
 OB_DEF_SERIALIZE(ObBasicSessionInfo::SysVarsCacheData)
 {
+  // don't serialize sys_vars_cache_data_
   int ret = OB_SUCCESS;
   LST_DO_CODE(OB_UNIS_ENCODE,
               autocommit_,
@@ -4756,38 +4761,62 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo::SysVarsCacheData)
 OB_DEF_DESERIALIZE(ObBasicSessionInfo::SysVarsCacheData)
 {
   int ret = OB_SUCCESS;
+  // don't deserialize to sys_vars_cache_data_,
+  // inc flag for session variable in sys_vars_cache_data_ may be true.
+  bool autocommit;
+  bool ob_enable_trace_log;
+  int64_t ob_org_cluster_id;
+  int64_t ob_query_timeout;
+  int64_t ob_trx_timeout;
+  int64_t collation_connection;
+  ObSQLMode sql_mode;
+  int64_t ob_trx_idle_timeout;
+  ObCollationType nls_collation;
+  ObCollationType nls_nation_collation;
+  bool ob_enable_sql_audit;
+  ObLengthSemantics nls_length_semantics;
+  ObString nls_format_date;
+  ObString nls_format_timestamp;
+  ObString nls_format_timestamp_tz;
+  int64_t ob_trx_lock_timeout;
+  ObString ob_trace_info;
+  ObString ob_plsql_ccflags;
+  int64_t ob_max_read_stale_time;
+  int64_t runtime_filter_type;
+  int64_t runtime_filter_wait_time_ms;
+  int64_t runtime_filter_max_in_num;
+  int64_t runtime_bloom_filter_max_size;
+  bool enable_rich_vector_format;
+  bool enable_sql_plan_monitor;
+  uint64_t current_default_catalog;
+
   LST_DO_CODE(OB_UNIS_DECODE,
-              autocommit_,
-              ob_enable_trace_log_,
-              ob_org_cluster_id_,
-              ob_query_timeout_,
-              ob_trx_timeout_,
-              collation_connection_,
-              sql_mode_,
-              ob_trx_idle_timeout_,
-              nls_collation_,
-              nls_nation_collation_,
-              ob_enable_sql_audit_,
-              nls_length_semantics_,
-              nls_formats_[NLS_DATE],
-              nls_formats_[NLS_TIMESTAMP],
-              nls_formats_[NLS_TIMESTAMP_TZ],
-              ob_trx_lock_timeout_,
-              ob_trace_info_,
-              ob_plsql_ccflags_,
-              ob_max_read_stale_time_,
-              runtime_filter_type_,
-              runtime_filter_wait_time_ms_,
-              runtime_filter_max_in_num_,
-              runtime_bloom_filter_max_size_,
-              enable_rich_vector_format_,
-              enable_sql_plan_monitor_,
-              current_default_catalog_);
-  set_nls_date_format(nls_formats_[NLS_DATE]);
-  set_nls_timestamp_format(nls_formats_[NLS_TIMESTAMP]);
-  set_nls_timestamp_tz_format(nls_formats_[NLS_TIMESTAMP_TZ]);
-  set_ob_trace_info(ob_trace_info_);
-  set_plsql_ccflags(ob_plsql_ccflags_);
+              autocommit,
+              ob_enable_trace_log,
+              ob_org_cluster_id,
+              ob_query_timeout,
+              ob_trx_timeout,
+              collation_connection,
+              sql_mode,
+              ob_trx_idle_timeout,
+              nls_collation,
+              nls_nation_collation,
+              ob_enable_sql_audit,
+              nls_length_semantics,
+              nls_format_date,
+              nls_format_timestamp,
+              nls_format_timestamp_tz,
+              ob_trx_lock_timeout,
+              ob_trace_info,
+              ob_plsql_ccflags,
+              ob_max_read_stale_time,
+              runtime_filter_type,
+              runtime_filter_wait_time_ms,
+              runtime_filter_max_in_num,
+              runtime_bloom_filter_max_size,
+              enable_rich_vector_format,
+              enable_sql_plan_monitor,
+              current_default_catalog);
   return ret;
 }
 
@@ -5009,6 +5038,7 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
   OB_UNIS_ENCODE(diagnosis_limit_num_);
   OB_UNIS_ENCODE(client_sessid_);
   OB_UNIS_ENCODE(diagnosis_info_);
+  OB_UNIS_ENCODE(client_create_time_);
   return ret;
 }
 
@@ -5299,6 +5329,7 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
   OB_UNIS_DECODE(diagnosis_limit_num_);
   OB_UNIS_DECODE(client_sessid_);
   OB_UNIS_DECODE(diagnosis_info_);
+  OB_UNIS_DECODE(client_create_time_);
   return ret;
 }
 
@@ -5588,6 +5619,7 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
   OB_UNIS_ADD_LEN(diagnosis_limit_num_);
   OB_UNIS_ADD_LEN(client_sessid_);
   OB_UNIS_ADD_LEN(diagnosis_info_);
+  OB_UNIS_ADD_LEN(client_create_time_);
   return len;
 }
 
@@ -6267,6 +6299,13 @@ int ObBasicSessionInfo::store_top_query_string(const ObString &stmt)
   return store_query_string_(stmt, thread_data_.top_query_buf_len_, thread_data_.top_query_, thread_data_.top_query_len_);
 }
 
+void ObBasicSessionInfo::reset_pl_spi_query_info(int64_t time) {
+  LockGuard lock_guard(thread_data_mutex_);
+  thread_data_.cur_query_start_time_ = time;
+  thread_data_.pl_internal_time_split_point_ =  ObTimeUtility::current_time();
+  use_pl_inner_info_string_ = true;
+}
+
 int ObBasicSessionInfo::store_query_string_(const ObString &stmt, int64_t& buf_len, char *& query,  volatile int64_t& query_len)
 {
   int ret = OB_SUCCESS;
@@ -6352,6 +6391,7 @@ void ObBasicSessionInfo::reset_top_query_string()
   if (thread_data_.top_query_ != nullptr) {
     thread_data_.top_query_[0] = '\0';
     thread_data_.top_query_len_ = 0;
+    shadow_top_query_string_ = false;
   }
 }
 

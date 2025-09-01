@@ -108,6 +108,8 @@ public:
   void destroy_cb();
   void set_tx_desc(transaction::ObTxDesc *tx_desc) { tx_desc_ = tx_desc; }
   void set_lock_handle(ObHTableLockHandle *lock_handle);
+  void set_require_rerouting(bool require_rerouting) { require_rerouting_ = require_rerouting; }
+  void set_require_refresh_kv_meta(bool require_refresh_kv_meta) { require_refresh_kv_meta_ = require_refresh_kv_meta; }
 protected:
   void check_callback_timeout();
 protected:
@@ -115,6 +117,8 @@ protected:
   ObCurTraceId::TraceId trace_id_;
   transaction::ObTxDesc *tx_desc_;
   ObHTableLockHandle *lock_handle_; // hbase row lock handle
+  bool require_rerouting_;
+  bool require_refresh_kv_meta_;
 private:
   int32_t ref_count_;
   // disallow copy
@@ -145,6 +149,47 @@ private:
   common::ObArenaAllocator allocator_;
   ObTableOperationResult result_;
   obrpc::ObTableRpcResponseSender response_sender_;
+};
+
+class ObHbaseExecuteEndTransCb: public ObTableAPITransCb
+{
+public:
+  ObHbaseExecuteEndTransCb(rpc::ObRequest *req)
+    : allocator_(ObMemAttr(MTL_ID(), "HbaseExeCbAlloc")),
+      response_sender_(req, &result_)
+  {
+  }
+  virtual ~ObHbaseExecuteEndTransCb() = default;
+
+  virtual void callback(int cb_param) override;
+  virtual void callback(int cb_param, const transaction::ObTransID &trans_id) override;
+  virtual const char *get_type() const override { return "ObHbaseExecuteEndTransCallback"; }
+  virtual sql::ObEndTransCallbackType get_callback_type() const override { return sql::ASYNC_CALLBACK_TYPE; }
+  int assign_hbase_execute_result(const ObHbaseResult &result);
+private:
+  // disallow copy
+  DISALLOW_COPY_AND_ASSIGN(ObHbaseExecuteEndTransCb);
+private:
+  ObHbaseRpcRequest request_;
+  ObHbaseResult result_;
+  common::ObArenaAllocator allocator_;
+  obrpc::ObTableRpcResponseSender response_sender_;
+};
+
+class ObHbaseExecuteCreateCbFunctor : public ObTableCreateCbFunctor
+{
+public:
+  ObHbaseExecuteCreateCbFunctor()
+      : req_(nullptr),
+        result_(nullptr)
+  {}
+  virtual ~ObHbaseExecuteCreateCbFunctor() = default;
+public:
+  int init(rpc::ObRequest *req, const ObHbaseResult *result);
+  virtual ObTableAPITransCb* new_callback() override;
+private:
+  rpc::ObRequest *req_;
+  const ObHbaseResult *result_;
 };
 
 class ObTableBatchExecuteEndTransCb: public ObTableAPITransCb

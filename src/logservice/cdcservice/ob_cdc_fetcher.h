@@ -116,7 +116,7 @@ private:
   // return OB_ITER_END when no more log could be iterated
   template <class LogEntryType>
   int fetch_log_in_palf_(const ObLSID &ls_id,
-      palf::PalfIterator<LogEntryType> &iter,
+      ipalf::IPalfIterator<LogEntryType> &iter,
       const LSN &start_lsn,
       const bool need_init_iter,
       const SCN &replayable_point_scn,
@@ -177,7 +177,7 @@ private:
   }
   // Check the next LogGroupEntry to determine whether need to continue fetching logs.
   void check_next_group_entry_(const LSN &next_lsn,
-      const LogGroupEntry &next_log_group_entry,
+      const ipalf::IGroupEntry &next_log_group_entry,
       const int64_t fetched_log_count,
       obrpc::ObCdcLSFetchLogResp &resp,
       FetchRunTime &frt,
@@ -187,7 +187,7 @@ private:
   // TODO Consider compression and decryption
   int prefill_resp_with_group_entry_(const ObLSID &ls_id,
       const LSN &lsn,
-      LogGroupEntry &log_group_entry,
+      ipalf::IGroupEntry &log_group_entry,
       obrpc::ObCdcLSFetchLogResp &resp,
       ObCdcFetchLogTimeStats &fetch_time_stat);
   void handle_when_buffer_full_(FetchRunTime &frt);
@@ -216,14 +216,14 @@ private:
       ClientLSCtx &ctx);
   // Check the next LogEntry to determine whether need to continue fetching logs.
   void check_next_entry_(const LSN &next_lsn,
-      const LogEntry &next_log_entry,
+      const ipalf::ILogEntry &next_log_entry,
       obrpc::ObCdcLSFetchLogResp &resp,
       FetchRunTime &frt);
   // Fill Log Entry directly into resp_buf.
   // TODO Consider compression and decryption
   int prefill_resp_with_log_entry_(const ObLSID &ls_id,
       const LSN &lsn,
-      LogEntry &log_entry,
+      ipalf::ILogEntry &log_entry,
       obrpc::ObCdcLSFetchLogResp &resp);
   int prepare_berfore_fetch_missing_(const ObLSID &ls_id,
       ClientLSCtx &ctx,

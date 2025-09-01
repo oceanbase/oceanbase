@@ -225,10 +225,14 @@ struct ObOptParamHint
     DEF(ENABLE_TOPN_RUNTIME_FILTER, )               \
     DEF(PRESERVE_ORDER_FOR_GROUPBY,)                \
     DEF(ENABLE_PDML_INSERT_UP,)                     \
+    DEF(ENABLE_PARTIAL_LIMIT_PUSHDOWN,)             \
     DEF(PARQUET_FILTER_PUSHDOWN_LEVEL,)             \
     DEF(ORC_FILTER_PUSHDOWN_LEVEL,)                 \
     DEF(ENABLE_INDEX_MERGE,)                        \
+    DEF(ENABLE_PARTIAL_GROUP_BY_PUSHDOWN,)          \
+    DEF(ENABLE_PARTIAL_DISTINCT_PUSHDOWN,)          \
     DEF(ENABLE_RUNTIME_FILTER_ADAPTIVE_APPLY, )     \
+    DEF(ENABLE_GROUPING_SETS_EXPANSION,)            \
     DEF(EXTENDED_SQL_PLAN_MONITOR_METRICS, )        \
     DEF(APPROX_COUNT_DISTINCT_PRECISION,)           \
 
@@ -252,6 +256,7 @@ struct ObOptParamHint
   int get_hash_rollup_param(ObObj &val, bool &has_opt_param) const;
   int get_enum_opt_param(const OptParamType param_type, int64_t &val) const;
   int has_opt_param(const OptParamType param_type, bool &has_hint) const;
+  int get_disable_op_rich_format_flags(int64_t &disable_op_flags) const;
 
   template<typename T>
   using GET_PARAM_FUNC = int (ObOptParamHint::*)(const OptParamType, T&) const;
@@ -326,6 +331,26 @@ struct ObPxNodeHint {
   ObPxNodePolicy px_node_policy_;
   common::ObSArray<common::ObAddr> px_node_addrs_;
   int64_t px_node_count_;
+};
+
+struct DisableOpRichFormatHint
+{
+  DisableOpRichFormatHint(): op_list_(), op_flags_(0) {}
+  int merge_op_list(const common::ObIArray<common::ObString> &op_list);
+  int merge_hint(const DisableOpRichFormatHint &other_hint)
+  {
+    return merge_op_list(other_hint.op_list_);
+  }
+  int print(PlanText &plan_text) const;
+  int64_t get_op_flags() const { return op_flags_; }
+  void reset()
+  {
+    op_list_.reset();
+    op_flags_ = 0;
+  }
+  TO_STRING_KV(K_(op_list), K_(op_flags));
+  common::ObSEArray<common::ObString, 8> op_list_;
+  int64_t op_flags_;
 };
 
 struct ObGlobalHint {
@@ -406,7 +431,8 @@ struct ObGlobalHint {
   void merge_direct_load_hint(const ObDirectLoadHint &other);
   void merge_resource_group_hint(const ObString &resource_group);
 
-  bool has_hint_exclude_concurrent() const;
+  void set_has_hint_exclude_concurrent()  { has_hint_exclude_concurrent_ = true;  }
+  bool has_hint_exclude_concurrent() const  { return has_hint_exclude_concurrent_;  }
   int print_global_hint(PlanText &plan_text) const;
   int print_alloc_op_hints(PlanText &plan_text) const;
 
@@ -497,7 +523,8 @@ struct ObGlobalHint {
                K_(dynamic_sampling),
                K_(alloc_op_hints),
                K_(dblink_hints),
-               K_(px_node_hint));
+               K_(px_node_hint),
+               K_(disable_op_rich_format_hint));
 
   int64_t frozen_version_;
   int64_t topk_precision_;
@@ -531,6 +558,9 @@ struct ObGlobalHint {
   ObDBLinkHit dblink_hints_;
   common::ObString resource_group_;
   ObPxNodeHint px_node_hint_;
+  DisableOpRichFormatHint disable_op_rich_format_hint_;
+private:
+  bool has_hint_exclude_concurrent_;  // not hint, used to mark weather exists hint exclude max_concurrent
 };
 
 // used in physical plan
@@ -677,7 +707,7 @@ public:
       HINT_JOIN_FILTER,
       HINT_TABLE_DYNAMIC_SAMPLING,
       HINT_PQ,
-      HINT_UNION_MERGE
+      HINT_INDEX_MERGE
     };
 
   static const int64_t MAX_EXPR_STR_LENGTH_IN_HINT = 1024;
@@ -754,7 +784,7 @@ public:
   bool is_coalesce_aggr_hint() const {return HINT_COALESCE_AGGR == hint_class_; }
   bool is_trans_added() const { return is_trans_added_; }
   bool set_trans_added(bool is_trans_added) { return is_trans_added_ = is_trans_added; }
-  bool is_union_merge_hint() const { return T_UNION_MERGE_HINT == hint_type_; }
+  bool is_index_merge_hint() const { return HINT_INDEX_MERGE == hint_class_; }
 
   VIRTUAL_TO_STRING_KV("hint_type", get_type_name(hint_type_),
                        K_(hint_class), K_(qb_name),
@@ -1158,22 +1188,23 @@ private:
   int64_t index_prefix_;
 };
 
-class ObUnionMergeHint : public ObOptHint
+class ObIndexMergeHint : public ObOptHint
 {
 public:
-  ObUnionMergeHint(ObItemType hint_type = T_UNION_MERGE_HINT)
+  ObIndexMergeHint(ObItemType hint_type = T_INDEX_MERGE_HINT)
     : ObOptHint(hint_type)
   {
-    set_hint_class(HINT_UNION_MERGE);
+    set_hint_class(HINT_INDEX_MERGE);
   }
-  int assign(const ObUnionMergeHint &other);
-  virtual ~ObUnionMergeHint() {}
+  int assign(const ObIndexMergeHint &other);
+  virtual ~ObIndexMergeHint() {}
   virtual int get_all_table_in_hint(ObIArray<ObTableInHint*> &all_tables) override { return all_tables.push_back(&table_); }
   virtual int print_hint_desc(PlanText &plan_text) const override;
-  ObTableInHint &get_table() { return table_; }
-  const ObTableInHint &get_table() const { return table_; }
-  common::ObIArray<common::ObString> &get_index_name_list() { return index_name_list_; }
-  const common::ObIArray<common::ObString> &get_index_name_list() const { return index_name_list_; }
+  inline ObTableInHint &get_table() { return table_; }
+  inline const ObTableInHint &get_table() const { return table_; }
+  inline common::ObIArray<common::ObString> &get_index_name_list() { return index_name_list_; }
+  inline const common::ObIArray<common::ObString> &get_index_name_list() const { return index_name_list_; }
+  inline int64_t get_index_list_count() const { return index_name_list_.count(); }
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table), K_(index_name_list));
 private:
   ObTableInHint table_;

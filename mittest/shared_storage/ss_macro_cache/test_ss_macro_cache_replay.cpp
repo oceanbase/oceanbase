@@ -325,6 +325,21 @@ TEST_F(TestSSMacroCacheReplay, replay_in_background)
   macro_cache_mgr->tablet_stat_task_.runTimerTask();
   cur_run_cnt = macro_cache_mgr->tablet_stat_task_.run_cnt_;
   ASSERT_EQ(ori_run_cnt + 1, cur_run_cnt);
+  // decrease _ss_disk_space_calibration_time_interval
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  ASSERT_EQ(true, tenant_config.is_valid());
+  tenant_config->_ss_disk_space_calibration_time_interval = 1 * 1000L * 1000L; // 1s
+  // wait parameter to be refreshed
+  ObSSLocalCacheService *local_cache_service = MTL(ObSSLocalCacheService *);
+  ASSERT_NE(nullptr, local_cache_service);
+  const int64_t start_us = ObTimeUtility::current_time_us();
+  while (local_cache_service->get_disk_space_cal_interval_us() > 1 * 1000L * 1000L) {
+    usleep(500L * 1000L); // sleep 500ms
+    if ((ObTimeUtility::current_time_us() - start_us) > 10 * 1000L * 1000L) { // 10s
+      LOG_WARN("wait too long for refresh disk_space_cal_interval_us");
+      break;
+    }
+  }
   ori_run_cnt = file_manager->calibrate_disk_space_task_.run_cnt_;
   file_manager->calibrate_disk_space_task_.runTimerTask();
   cur_run_cnt = file_manager->calibrate_disk_space_task_.run_cnt_;

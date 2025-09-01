@@ -1,7 +1,6 @@
 #ob_unittest(test_manage_tenant omt/test_manage_tenant.cpp)
 storage_unittest(test_hfilter_parser table/test_hfilter_parser.cpp)
 storage_unittest(test_query_response_time mysql/test_query_response_time.cpp)
-storage_unittest(test_create_executor table/test_create_executor.cpp)
 storage_unittest(test_series_convert table/test_series_convert.cpp)
 storage_unittest(test_table_audit table/test_table_audit.cpp)
 storage_unittest(test_table_aggregation table/test_table_aggregation.cpp)

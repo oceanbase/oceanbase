@@ -49,7 +49,15 @@ public:
 
   int perform_late_materialization(ObSelectStmt *stmt,
                                    ObLogicalOperator *&op);
-
+  int allocate_distinct_as_top(ObLogicalOperator *&top,
+                               const AggregateAlgo algo,
+                               const DistAlgo dist_algo,
+                               const ObIArray<ObRawExpr*> &distinct_exprs,
+                               const double total_ndv,
+                               const bool is_partition_wise = false,
+                               const bool is_pushed_down = false,
+                               const bool is_partition_gi = false,
+                               const AggregatePathType step = AggregatePathType::SINGLE);
 protected:
   virtual int generate_normal_raw_plan() override;
   virtual int generate_dblink_raw_plan() override;
@@ -71,6 +79,42 @@ private:
                                common::ObIArray<ObRawExpr *> &rollup_exprs,
                                common::ObIArray<ObOrderDirection> &group_directions,
                                common::ObIArray<ObOrderDirection> &rollup_directions);
+
+  int get_groupby_groupset_exprs(const ObLogicalOperator *op,
+                                 const bool is_pruned_sets,
+                                 common::ObIArray<ObGroupbyExpr> &groupby_sets);
+
+  int candi_allocate_groupingset_group_by(ObLogicalOperator &top,
+                                          const ObIArray<ObGroupbyExpr> &groupset_exprs,
+                                          const ObIArray<ObGroupbyExpr> &pruned_groupset_exprs,
+                                          const ObIArray<ObAggFunRawExpr *> &agg_items,
+                                          const ObIArray<ObRawExpr *> &having_exprs,
+                                          const bool is_from_pivot,
+                                          ObIArray<CandidatePlan> &groupby_plans);
+
+  int can_transform_distinct_agg(GroupingOpHelper &groupby_helper,
+                                 const ObIArray<ObAggFunRawExpr *> &agg_items,
+                                 ObIArray<ObRawExpr *> &distinct_params,
+                                 bool &can_trans_distinct_agg);
+
+  int create_transform_distinct_agg_plan(GroupingOpHelper &groupby_helper,
+                                         const ObIArray<ObAggFunRawExpr *> &agg_items,
+                                         const ObIArray<ObRawExpr *> &distinct_params,
+                                         const ObIArray<ObRawExpr *> &reduce_exprs,
+                                         const ObIArray<ObRawExpr *> &groupby_exprs,
+                                         const ObIArray<ObOrderDirection> &group_directions,
+                                         const ObIArray<ObRawExpr *> &having_exprs,
+                                         ObIArray<CandidatePlan> &candi_plans,
+                                         ObIArray<CandidatePlan> &groupby_plans);
+
+  int generate_new_agg_items_for_distinct_pushdown(const ObIArray<ObAggFunRawExpr *> &org_agg_items,
+                                              const bool remove_param_distinct,
+                                              const bool final_non_distinct,
+                                              ObRawExprFactory &expr_factory,
+                                              ObSQLSessionInfo &session_info,
+                                              ObIArray<ObTuple<ObRawExpr *, ObRawExpr *>> &distinct_pairs,
+                                              ObIArray<ObAggFunRawExpr *> &new_all_agg_items,
+                                              ObIArray<ObAggFunRawExpr *> &new_non_distinct_agg_items);
 
   int candi_allocate_rollup_group_by(const ObIArray<ObRawExpr*> &reduce_exprs,
                                      const ObIArray<ObRawExpr*> &group_by_exprs,
@@ -121,16 +165,7 @@ private:
                                     const DistAlgo algo,
                                     bool &ignore_plan,
                                     bool can_ignore_merge);
-  int candi_allocate_hash_rollup(const ObIArray<ObRawExpr*> &reduce_exprs,
-                                  const ObIArray<ObRawExpr*> &group_by_exprs,
-                                  const ObIArray<ObOrderDirection> &group_directions,
-                                  const ObIArray<ObRawExpr*> &rollup_exprs,
-                                  const ObIArray<ObOrderDirection> &rollup_directions,
-                                  const ObIArray<ObRawExpr*> &having_exprs,
-                                  const ObIArray<ObAggFunRawExpr*> &agg_items,
-                                  const bool is_from_povit,
-                                  GroupingOpHelper &groupby_helper,
-                                  ObIArray<CandidatePlan> &groupby_plans);
+
   int candi_allocate_normal_group_by(const ObIArray<ObRawExpr*> &reduce_exprs,
                                      const ObIArray<ObRawExpr*> &group_by_exprs,
                                      const ObIArray<ObOrderDirection> &group_directions,
@@ -148,7 +183,8 @@ private:
                           bool &part_sort_valid,
                           bool &normal_sort_valid);
   int update_part_sort_method(bool &part_sort_valid, bool &normal_sort_valid);
-  int candi_allocate_normal_group_by(const ObIArray<ObRawExpr*> &reduce_exprs,
+  int candi_allocate_normal_group_by(const bool ignore_transform_distinct_agg,
+                                     const ObIArray<ObRawExpr*> &reduce_exprs,
                                      const ObIArray<ObRawExpr*> &group_by_exprs,
                                      const ObIArray<ObOrderDirection> &group_directions,
                                      const ObIArray<ObRawExpr*> &having_exprs,
@@ -209,8 +245,10 @@ private:
   // @brief Allocate DISTINCT by on top of plan candidates
   int candi_allocate_distinct();
 
-  // @brief Get all the distinct exprs
+  int candi_allocate_distinct(ObIArray<ObRawExpr *> &distinct_exprs, ObIArray<ObRawExpr *> &reduce_exprs);
 
+  // @brief Get all the distinct exprs
+  int set_distinct_final(ObLogicalOperator *&top);
   int get_distinct_exprs(const ObLogicalOperator *top,
                          common::ObIArray <ObRawExpr *> &reduce_exprs,
                          common::ObIArray <ObRawExpr *> &distinct_exprs);
@@ -248,14 +286,6 @@ private:
                                  ObIArray<OrderItem> &sort_keys,
                                  const DistAlgo algo);
 
-  int allocate_distinct_as_top(ObLogicalOperator *&top,
-                               const AggregateAlgo algo,
-                               const DistAlgo dist_algo,
-                               const ObIArray<ObRawExpr*> &distinct_exprs,
-                               const double total_ndv,
-                               const bool is_partition_wise = false,
-                               const bool is_pushed_down = false,
-                               const bool is_partition_gi = false);
   /**
    *  @brief  GENERATE the PLAN tree FOR "SET" operator (UNION/INTERSECT/EXCEPT)
    *  Warning:
@@ -310,7 +340,8 @@ private:
 
   int allocate_union_all_as_top(const ObIArray<ObLogicalOperator*> &child_plans,
                                 DistAlgo dist_set_method,
-                                ObLogicalOperator *&top);
+                                ObLogicalOperator *&top,
+                                bool is_distinct_pushed_down = false);
 
   int allocate_set_distinct_as_top(ObLogicalOperator *&top);
 
@@ -486,7 +517,8 @@ private:
                                    DistAlgo dist_set_method,
                                    ObLogicalOperator *&top,
                                    const ObIArray<ObOrderDirection> *order_directions = NULL,
-                                   const ObIArray<int64_t> *map_array = NULL);
+                                   const ObIArray<int64_t> *map_array = NULL,
+                                   bool is_distinct_pushed_down = false);
 
   int get_distributed_set_methods(const EqualSets &equal_sets,
                                   const ObIArray<ObRawExpr*> &left_set_keys,

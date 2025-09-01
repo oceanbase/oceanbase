@@ -237,7 +237,7 @@ int ObAllVirtualVectorIndexInfo::process_curr_tenant(ObNewRow *&row)
       cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
       break;
     case INDEX_TYPE:
-      cells[i].set_null();
+      cells[i].set_int(info_.index_type_);
       break;
     default:
       ret = OB_ERR_UNEXPECTED;

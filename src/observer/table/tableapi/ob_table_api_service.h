@@ -46,41 +46,54 @@ public:
 
 // batch operation interface
 public:
-  static int multi_insert(ObTableCtx &ctx, const ObIArray<ObITableEntity*> &entities, ObIArray<ObTableOperationResult> *results = nullptr);
-  static int multi_update(ObTableCtx &ctx, const ObIArray<ObITableEntity*> &entities, ObIArray<ObTableOperationResult> *results = nullptr);
-  static int multi_insert_or_update(ObTableCtx &ctx, const ObIArray<ObITableEntity*> &entities, ObIArray<ObTableOperationResult> *results = nullptr);
-  static int multi_put(ObTableCtx &ctx, const ObIArray<ObITableEntity*> &entities, ObIArray<ObTableOperationResult> *results = nullptr);
-  static int multi_get(ObTableCtx &ctx, const ObIArray<ObITableEntity*> &entities, ObIArray<ObTableOperationResult> *results = nullptr);
-  static int multi_delete(ObTableCtx &ctx, const ObIArray<ObITableEntity*> &entities, ObIArray<ObTableOperationResult> *results = nullptr);
-  static int multi_replace(ObTableCtx &ctx, const ObIArray<ObITableEntity*> &entities, ObIArray<ObTableOperationResult> *results = nullptr);
+  static int multi_insert(ObTableCtx &ctx, const ObIArray<const ObITableEntity*> &entities, ObIArray<ObTableOperationResult> *results = nullptr);
+  static int multi_update(ObTableCtx &ctx, const ObIArray<const ObITableEntity*> &entities, ObIArray<ObTableOperationResult> *results = nullptr);
+  static int multi_insert_or_update(ObTableCtx &ctx, const ObIArray<const ObITableEntity*> &entities, ObIArray<ObTableOperationResult> *results = nullptr);
+  static int multi_put(ObTableCtx &ctx, const ObIArray<const ObITableEntity*> &entities, ObIArray<ObTableOperationResult> *results = nullptr);
+  static int multi_get(ObTableCtx &ctx, const ObIArray<const ObITableEntity*> &entities, ObIArray<ObTableOperationResult> *results = nullptr);
+  static int multi_delete(ObTableCtx &ctx, const ObIArray<const ObITableEntity*> &entities, ObIArray<ObTableOperationResult> *results = nullptr);
+  static int multi_replace(ObTableCtx &ctx, const ObIArray<const ObITableEntity*> &entities, ObIArray<ObTableOperationResult> *results = nullptr);
   static int construct_entities_from_row(ObIAllocator &allocator,
                                          ObKvSchemaCacheGuard &schema_cache_guard,
                                          ObNewRow &row,
-                                         const ObIArray<ObITableEntity*> &entities,
+                                         const ObIArray<const ObITableEntity*> &entities,
                                          ObIArray<ObTableOperationResult> &results);
   static int get_result_index(const ObNewRow &row,
-                              const ObIArray<ObITableEntity*> &entities,
+                              const ObIArray<const ObITableEntity*> &entities,
                               const ObIArray<uint64_t> &rowkey_ids,
                               ObObj *rowkey_cells,
                               ObIArray<int64_t> &indexs);
   static int generate_scan_ranges_by_entities(const uint64_t table_id,
-                                              const ObIArray<ObITableEntity*> &entities,
+                                              const ObIArray<const ObITableEntity*> &entities,
                                               ObIArray<common::ObNewRange> &ranges);
   static int compare_rowkey(ObRowkey &storage_rowkey, ObRowkey &request_rowkey, bool &is_equal);
+  static int extract_hbase_cells(ObTableCtx &ctx, const ObHCfRows &cf_rows);
+  // Helper methods for hbase_batch_put
+  static int get_appropriate_spec(ObTableCtx &ctx,
+                                 ObTableApiCacheGuard &cache_guard,
+                                 ObTableApiSpec *&spec);
+  static int execute_batch_put(ObTableCtx &ctx, ObTableApiSpec *spec);
+  static int execute_single_put(ObTableCtx &ctx, ObTableApiSpec *spec);
+  static int execute_multi_put_within_executor(ObTableCtx &ctx, ObTableApiSpec *spec);
+  static int execute_multi_put_with_same_spec(ObTableCtx &ctx,
+                                              ObTableApiSpec *spec);
+  static int execute_and_cleanup_executor(ObTableCtx &ctx,
+                                         ObTableApiSpec *spec,
+                                         ObTableApiExecutor *executor);
 // query interface
 public:
   static int query(ObTableCtx &ctx, ObTableApiRowIterator &iter);
 
 // for service inner use
 private:
-  static int check_batch_args(ObTableCtx &ctx, const ObIArray<ObITableEntity*> &entities, ObIArray<ObTableOperationResult> *results);
-  static int adjust_entities(ObTableCtx &ctx, const common::ObIArray<ObITableEntity *> &entities);
-  static bool need_calc_tablet_id(const common::ObIArray<ObTabletID> *tablet_ids, const common::ObIArray<ObITableEntity *> &entities);
+  static int check_batch_args(ObTableCtx &ctx, const ObIArray<const ObITableEntity*> &entities, ObIArray<ObTableOperationResult> *results);
+  static int adjust_entities(ObTableCtx &ctx, const common::ObIArray<const ObITableEntity *> &entities);
+  static bool need_calc_tablet_id(const common::ObIArray<ObTabletID> *tablet_ids, const common::ObIArray<const ObITableEntity *> &entities);
   static bool need_calc_tablet_id(const common::ObIArray<ObTabletID> *tablet_ids);
   static int calc_tablet_ids(ObTableCtx &ctx, const ObIArray<ObNewRange> &ranges, ObIArray<ObTabletID> *&tablet_ids);
   static int process_executor(ObTableCtx &ctx, ObTableApiExecutor *executor, ObTableOperationResult &result);
   static int process_dml_result(ObTableCtx &ctx, ObTableApiExecutor &executor, ObTableOperationResult &result);
-  static bool is_same_plan(ObTableOperationType::Type op_type, ObITableEntity &src_entity, ObITableEntity &dest_entity);
+  static bool is_same_plan(ObTableOperationType::Type op_type, const ObITableEntity &src_entity, const ObITableEntity &dest_entity);
   static int init_tablet_ids_array(ObTableCtx &ctx, const int64_t array_size, ObIArray<ObTabletID> *&tablet_ids);
 private:
   template<int SPEC_TYPE>
@@ -153,7 +166,7 @@ private:
   }
 
   template<int SPEC_TYPE, ObTableOperationType::Type OP_TYPE, sql::stmt::StmtType STMT_TYPE>
-  static int process_batch_in_executor(ObTableCtx &ctx, const ObIArray<ObITableEntity*> &entities, ObIArray<ObTableOperationResult> *results)
+  static int process_batch_in_executor(ObTableCtx &ctx, const ObIArray<const ObITableEntity*> &entities, ObIArray<ObTableOperationResult> *results)
   {
     int ret = OB_SUCCESS;
     ObTableAuditMultiOp multi_op(OP_TYPE, &entities);
@@ -217,7 +230,7 @@ private:
 
   template<int SPEC_TYPE, ObTableOperationType::Type OP_TYPE, sql::stmt::StmtType STMT_TYPE>
   static int process_batch_with_same_spec(ObTableCtx &ctx,
-                                          const common::ObIArray<ObITableEntity*> &entities,
+                                          const common::ObIArray<const ObITableEntity*> &entities,
                                           common::ObIArray<ObTableOperationResult> *results)
   {
     int ret = OB_SUCCESS;

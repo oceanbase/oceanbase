@@ -273,6 +273,43 @@ int ObLogSysTableQueryer::get_all_zone_type_info(
   return ret;
 }
 
+////////////////////////////////////// QueryLogserviceModelInfo /////////////////////////////////
+int ObLogSysTableQueryer::get_logservice_model_info(
+    const uint64_t tenant_id,
+    ObLogserviceModelInfo &logservice_model)
+{
+  int ret = OB_SUCCESS;
+  const char *select_fields = "VALUE";
+  const char *zone_type = "enable_logservice";
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObLogSysTableQueryer not init", KR(ret));
+  } else {
+    ObSqlString sql;
+    int64_t record_count;
+
+    SMART_VAR(ObISQLClient::ReadResult, result) {
+      if (OB_FAIL(sql.assign_fmt(
+          "SELECT %s FROM %s "
+          "WHERE name = \'%s\'",
+          select_fields, OB_GV_OB_PARAMETERS_TNAME, zone_type))) {
+        LOG_WARN("assign sql string failed", KR(ret), K(cluster_id_), K(tenant_id));
+      } else if (OB_FAIL(do_query_(OB_SYS_TENANT_ID, sql, result))) {
+        LOG_WARN("do_query_ failed", KR(ret), K(cluster_id_), K(tenant_id), "sql", sql.ptr());
+      } else if (OB_ISNULL(result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get mysql result failed", KR(ret));
+      } else if (OB_FAIL(get_records_template_(*result.get_result(), logservice_model,
+      "ObAllZoneTypeInfo", record_count))) {
+        LOG_WARN("get_records_template_ ObAllZoneTypeInfo failed", KR(ret), K(logservice_model));
+      } else {
+        LOG_INFO("get_records_template_ success", KR(ret), K(logservice_model));
+      }
+    }
+  }
+  return ret;
+}
 ERRSIM_POINT_DEF(ERRSIM_FETCH_LOG_SYS_QUERY_FAILED);
 int ObLogSysTableQueryer::do_query_(const uint64_t tenant_id,
     ObSqlString &sql,
@@ -501,6 +538,21 @@ int ObLogSysTableQueryer::parse_record_from_row_(common::sqlclient::ObMySQLResul
     LOG_DEBUG("query all zone info record", KR(ret), K(all_zone_type_record));
   }
 
+  return ret;
+}
+
+int ObLogSysTableQueryer::parse_record_from_row_(common::sqlclient::ObMySQLResult &res,
+  ObLogserviceModelInfo &logservice_model_info)
+{
+  int ret = OB_SUCCESS;
+  ObString enable_logservice_;
+
+  (void)GET_COL_IGNORE_NULL(res.get_varchar, "VALUE", enable_logservice_);
+  if (enable_logservice_ == "True") {
+    logservice_model_info.reset(true);
+  } else {
+    logservice_model_info.reset(false);
+  }
   return ret;
 }
 

@@ -53,6 +53,20 @@ int ObHDFSStorageInfo::assign(const ObObjectStorageInfo &storage_info)
   return ret;
 }
 
+int ObHDFSStorageInfo::clone(
+    common::ObIAllocator &allocator,
+    common::ObObjectStorageInfo *&storage_info) const
+{
+  int ret = OB_SUCCESS;
+  ObHDFSStorageInfo *tmp_storage_info = nullptr;
+  if (OB_FAIL(clone_impl_<ObHDFSStorageInfo>(allocator, *this, tmp_storage_info))) {
+    LOG_WARN("fail to clone backup storage info", KR(ret), KPC(this));
+  } else {
+    storage_info = tmp_storage_info;
+  }
+  return ret;
+}
+
 void ObHDFSStorageInfo::reset()
 {
   common::ObObjectStorageInfo::reset();

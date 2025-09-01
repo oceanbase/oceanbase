@@ -229,7 +229,7 @@ private:
       const logservice::TenantLSID &tls_id,
       KickOutReason kick_out_reason);
   int read_group_entry_(
-      palf::LogGroupEntry &group_entry,
+      ipalf::IGroupEntry &group_entry,
       palf::LSN &group_start_lsn,
       volatile bool &stop_flag,
       KickOutInfo &kick_out_info,

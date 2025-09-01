@@ -192,6 +192,18 @@ int ObStorageFileUtil::head_object_meta(const common::ObString &uri, ObStorageOb
     obj_meta.length_ = file_info.st_size;
     obj_meta.type_ = ObStorageObjectMetaType::OB_FS_FILE;
     obj_meta.mtime_s_ = static_cast<int64_t>(file_info.st_mtime);
+
+    int tmp_ret = OB_SUCCESS;
+    const int64_t last_modified_time_ns =
+        file_info.st_mtim.tv_sec * 1000LL * 1000LL * 1000LL + file_info.st_mtim.tv_nsec;
+    char digest_buf[32] = {0};
+    if (OB_TMP_FAIL(databuff_printf(digest_buf, sizeof(digest_buf), "%ld", last_modified_time_ns))) {
+      OB_LOG(WARN, "fail to convert last modified time to string",
+          K(ret), K(tmp_ret), K(uri), K(obj_meta), K(last_modified_time_ns));
+    } else if (OB_TMP_FAIL(obj_meta.digest_.set(digest_buf))) {
+      OB_LOG(WARN, "fail to set digest", K(ret), K(tmp_ret),
+          K(uri), K(obj_meta), K(last_modified_time_ns));
+    }
   }
 
   return ret;
@@ -371,9 +383,9 @@ int ObStorageFileUtil::list_files(const common::ObString &uri, common::ObBaseDir
     } else if (NULL != result) {
       if (0 == strcmp(entry.d_name, ".") || 0 == strcmp(entry.d_name, "..")) {
         is_file = false;
-      } else if (DT_REG == entry.d_type && !op.need_get_file_size()) {
+      } else if (DT_REG == entry.d_type && !op.need_get_file_meta()) {
         is_file = true;
-      } else if ((DT_REG == entry.d_type && op.need_get_file_size()) || DT_UNKNOWN == entry.d_type) {
+      } else if ((DT_REG == entry.d_type && op.need_get_file_meta()) || DT_UNKNOWN == entry.d_type) {
         int pret = snprintf(sub_dir_path, OB_MAX_URI_LENGTH, "%s/%s", dir_path, entry.d_name);
         if (pret < 0 || pret >= OB_MAX_URI_LENGTH) {
           ret = OB_BUF_NOT_ENOUGH;
@@ -389,13 +401,18 @@ int ObStorageFileUtil::list_files(const common::ObString &uri, common::ObBaseDir
           } else {
             is_file = true;
             size = static_cast<int64_t>(sb.st_size);
+            if (op.need_get_file_meta()) {
+              const int64_t last_modified_time_ns =
+                  sb.st_mtim.tv_sec * 1000LL * 1000LL * 1000LL + sb.st_mtim.tv_nsec;
+              ObFileExtraInfo file_extra_info;
+              file_extra_info.last_modified_time_ms_ = last_modified_time_ns / 1000LL / 1000LL;
+              op.set_extra_info(file_extra_info);
+              op.set_size(size);
+            }
           }
         }
       }
       if (OB_SUCC(ret) && is_file) {
-        if (op.need_get_file_size()) {
-          op.set_size(size);
-        }
         if (OB_FAIL(op.func(&entry))) {
           SHARE_LOG(WARN, "fail to operate dir entry", K(ret), KCSTRING(entry.d_name));
         }
@@ -470,9 +487,9 @@ int ObStorageFileUtil::list_files(const common::ObString &uri, ObStorageListCtxB
           } else if (is_appendable_file) {
             is_file = true;
           }
-        } else if (DT_REG == list_ctx.next_entry_.d_type && !list_ctx.need_size_) {
+        } else if (DT_REG == list_ctx.next_entry_.d_type && !list_ctx.need_meta_) {
           is_file = true;
-        } else if ((DT_REG == list_ctx.next_entry_.d_type && list_ctx.need_size_) || DT_UNKNOWN == list_ctx.next_entry_.d_type) {
+        } else if ((DT_REG == list_ctx.next_entry_.d_type && list_ctx.need_meta_) || DT_UNKNOWN == list_ctx.next_entry_.d_type) {
           int pret = snprintf(sub_dir_path, OB_MAX_URI_LENGTH, "%s/%s", dir_path, list_ctx.next_entry_.d_name);
           if (pret < 0 || pret >= OB_MAX_URI_LENGTH) {
             ret = OB_BUF_NOT_ENOUGH;
@@ -504,7 +521,7 @@ int ObStorageFileUtil::list_files(const common::ObString &uri, ObStorageListCtxB
             } else {
               list_ctx.name_arr_[list_ctx.rsp_num_][name_len] = '\0';
             }
-            if (list_ctx.need_size_) {
+            if (list_ctx.need_meta_) {
               list_ctx.size_arr_[list_ctx.rsp_num_] = size;
             }
             ++list_ctx.rsp_num_;

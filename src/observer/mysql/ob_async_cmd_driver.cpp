@@ -107,6 +107,8 @@ int ObAsyncCmdDriver::response_result(ObMySQLResultSet &result)
       LOG_WARN("close result failed", K(close_ret));
     }
   }
+  OX (session_.reset_top_query_string());
+  session_.set_top_trace_id(nullptr);
   return ret;
 }
 

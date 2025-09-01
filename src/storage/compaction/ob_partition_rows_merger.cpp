@@ -225,7 +225,8 @@ int ObPartitionMergeLoserTreeCmp::compare(
 /**
  * ---------------------------------------------------------ObPartitionMajorRowsMerger--------------------------------------------------------------
  */
-int ObPartitionMajorRowsMerger::init(const int64_t total_player_cnt,
+int ObPartitionMajorRowsMerger::init(const int64_t max_player_cnt,
+                                     const int64_t total_player_cnt,
                                      common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
@@ -237,7 +238,7 @@ int ObPartitionMajorRowsMerger::init(const int64_t total_player_cnt,
     STORAGE_LOG(WARN, "total_player_cnt invailid", K(ret), K(total_player_cnt));
   } else {
     allocator_ = &allocator;
-    if (OB_FAIL(init_rows_merger(total_player_cnt))) {
+    if (OB_FAIL(init_rows_merger(max_player_cnt, total_player_cnt))) {
       STORAGE_LOG(WARN, "init rows merger failed", K(ret), K(total_player_cnt));
     } else {
       merger_state_ = LOSER_TREE_WIN;
@@ -442,7 +443,7 @@ bool ObPartitionMajorRowsMerger::is_unique_champion() const
   return is_unique_champion;
 }
 
-int ObPartitionMajorRowsMerger::init_rows_merger(const int64_t total_player_cnt)
+int ObPartitionMajorRowsMerger::init_rows_merger(const int64_t max_player_cnt, const int64_t total_player_cnt)
 {
   int ret = OB_SUCCESS;
   if (total_player_cnt <= ObSimpleRowsPartitionMerger::USE_SIMPLE_MERGER_MAX_TABLE_CNT + 1) {
@@ -456,7 +457,7 @@ int ObPartitionMajorRowsMerger::init_rows_merger(const int64_t total_player_cnt)
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(rows_merger_->init(total_player_cnt, *allocator_))){
+  } else if (OB_FAIL(rows_merger_->init(max_player_cnt, total_player_cnt, *allocator_))){
     STORAGE_LOG(WARN, "failed to init rows merger", K(ret), KPC(rows_merger_));
   }
 
@@ -664,6 +665,7 @@ int ObPartitionMergeHelper::prepare_rows_merger()
   } else {
     void *buf = nullptr;
     int64_t iters_cnt = merge_iters_.count();
+    const int64_t max_table_cnt = common::MAX_TABLE_CNT_IN_STORAGE;
     ObPartitionMergeIter *merge_iter = nullptr;
 
     if (OB_ISNULL(merge_iter = merge_iters_.at(iters_cnt - 1))) {
@@ -686,7 +688,7 @@ int ObPartitionMergeHelper::prepare_rows_merger()
     } else if (OB_UNLIKELY(nullptr == rows_merger_)) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "Failed to alloc rows merger", K(ret));
-    } else if (OB_FAIL(rows_merger_->init(iters_cnt, allocator_))) {
+    } else if (OB_FAIL(rows_merger_->init(max_table_cnt, iters_cnt, allocator_))) {
       STORAGE_LOG(WARN, "Failed to init rows merger", K(ret), K(iters_cnt));
     } else if (OB_FAIL(build_rows_merger())) {
       STORAGE_LOG(WARN, "failed to build rows merge", K(ret));

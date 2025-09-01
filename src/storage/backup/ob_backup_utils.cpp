@@ -25,6 +25,7 @@
 #include "share/backup/ob_backup_tablet_reorganize_helper.h"
 #include "share/ob_tablet_reorganize_history_table_operator.h"
 #include "lib/wait_event/ob_wait_event.h"
+#include "share/backup/ob_backup_helper.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -57,6 +58,26 @@ int ObBackupUtils::calc_start_replay_scn(
   if (OB_SUCC(ret)) {
     start_replay_scn = SCN::max(tmp_start_replay_scn, round_attr.start_scn_);
     LOG_INFO("calculate start replay scn finish", K(start_replay_scn), K(ls_meta_infos), K(round_attr));
+  }
+  return ret;
+}
+
+int ObBackupUtils::check_tenant_backup_dest_exists(const uint64_t tenant_id, bool &exists, common::ObISQLClient &sql_proxy)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupHelper backup_helper;
+  ObBackupPathString backup_dest_str;
+  exists = false;
+  if (OB_FAIL(backup_helper.init(tenant_id, sql_proxy))) {
+    LOG_WARN("fail to init backup help", K(ret));
+  } else if (OB_FAIL(backup_helper.get_backup_dest(backup_dest_str))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to get backup dest", K(ret), K(tenant_id));
+    }
+  } else if (!backup_dest_str.is_empty()) {
+    exists = true;
   }
   return ret;
 }

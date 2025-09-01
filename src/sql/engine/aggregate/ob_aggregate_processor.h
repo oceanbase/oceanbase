@@ -169,6 +169,10 @@ public:
     distinct_hash_funcs_(),
     max_disuse_param_expr_(NULL),
     hash_rollup_info_(nullptr),
+    external_routine_type_(ObExternalRoutineType::INTERNAL_ROUTINE),
+    external_routine_entry_(),
+    external_routine_url_(),
+    external_routine_resource_(),
     grouping_set_info_(nullptr)
   {}
   ObAggrInfo(common::ObIAllocator &alloc)
@@ -263,6 +267,8 @@ public:
   bool is_need_deserialize_row_;
 
   //for pl agg udf
+  //AGGREGATE USING type id for Oracle mode
+  //UDF id for MySQL mode external UDAF
   int64_t pl_agg_udf_type_id_;
   common::ObFixedArray<ObExprResType, common::ObIAllocator> pl_agg_udf_params_type_;
   ObExprResType pl_result_type_;

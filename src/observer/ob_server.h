@@ -79,6 +79,7 @@
 #include "share/wr/ob_wr_service.h"
 
 #include "sql/engine/table/ob_external_table_access_service.h"
+#include "sql/engine/table/ob_pcached_external_file_service.h"
 #include "share/external_table/ob_external_table_file_rpc_proxy.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/shared_storage/ob_tenant_gc_task.h"

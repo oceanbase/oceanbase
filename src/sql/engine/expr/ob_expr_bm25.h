@@ -50,6 +50,17 @@ public:
 
   static int eval_bm25_relevance_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
   static int eval_batch_bm25_relevance_expr(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const int64_t size);
+  static double eval(const int64_t token_freq, const int64_t doc_length, const int64_t doc_freq, const int64_t doc_cnt)
+  {
+    // TODO: use accurate norm_len
+    const double avg_doc_length = 10.0;
+    const double norm_len = doc_length / avg_doc_length;
+    const double score = query_token_weight(doc_freq, doc_cnt) * doc_token_weight(token_freq, norm_len);
+    // STORAGE_LOG(INFO, "eval bm25", K(token_freq), K(doc_length), K(doc_freq), K(doc_cnt), K(norm_len), K(score));
+    return score;
+  }
+  static double doc_token_weight(const int64_t token_freq, const double norm_len);
+  static double query_token_weight(const int64_t doc_freq, const int64_t doc_cnt);
 public:
   static constexpr int TOKEN_DOC_CNT_PARAM_IDX = 0;
   static constexpr int TOTAL_DOC_CNT_PARAM_IDX = 1;
@@ -57,8 +68,6 @@ public:
   static constexpr int AVG_DOC_CNT_PARAM_IDX = 3;
   static constexpr int RELATED_TOKEN_CNT_PARAM_IDX = 4;
 private:
-  static double doc_token_weight(const int64_t token_freq, const double norm_len);
-  static double query_token_weight(const int64_t doc_freq, const int64_t doc_cnt);
   static constexpr double p_k1 = 1.2;
   static constexpr double p_b = 0.75;
   static constexpr double p_epsilon = 0.25;

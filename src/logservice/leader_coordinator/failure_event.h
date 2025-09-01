@@ -150,10 +150,7 @@ public:
     return info_.assign(rhs.info_);
   }
   bool operator==(const FailureEvent &rhs) {
-    bool ret = false;
-    if (type_ == rhs.type_ && module_ == rhs.module_ && level_ == rhs.level_) {
-      ret = (0 == info_.get_ob_string().case_compare(rhs.info_.get_ob_string()));
-    }
+    bool ret = (type_ == rhs.type_ && module_ == rhs.module_ && level_ == rhs.level_);
     return ret;
   }
   int64_t to_string(char *buf, const int64_t buf_len) const

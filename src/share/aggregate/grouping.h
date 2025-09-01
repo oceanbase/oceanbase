@@ -26,6 +26,8 @@ bool is_grouping(const ObAggrInfo &aggr_info, const int64_t val);
 int get_grouping_id(const ObAggrInfo &aggr_info, const int64_t val, number::ObCompactNumber *grouping_id);
 int get_grouping_id(const ObAggrInfo &aggr_info, const int64_t val, int64_t *grouping_id);
 
+int get_group_id(const ObAggrInfo &aggr_info, const int64_t seq, number::ObCompactNumber *nmb_group_id);
+
 template<ObExprOperatorType agg_func, VecValueTypeClass out_tc>
 class GroupingAggregate final: public BatchAggregateWrapper<GroupingAggregate<agg_func, out_tc>>
 {
@@ -47,12 +49,18 @@ public:
     helper::print_input_rows(row_sel, skip, bound, agg_ctx.aggr_infos_.at(agg_col_idx), false,
                              agg_ctx.eval_ctx_, this, agg_col_idx);
 #endif
-    if (OB_ISNULL(aggr_info.hash_rollup_info_)) {
+    if (OB_ISNULL(aggr_info.hash_rollup_info_) && OB_ISNULL(aggr_info.grouping_set_info_)
+        && T_FUN_GROUP_ID != agg_func) {
       ret = OB_ERR_UNEXPECTED;
       SQL_LOG(WARN, "unexpected null rollup grouping id", K(ret));
-    } else if (not_nulls.at(agg_col_idx)) {// already calculated, do nothing
+    } else if (not_nulls.at(agg_col_idx)) { // already calculated, do nothing
     } else if (row_sel.is_empty()) {
-      ObIVector *grouping_vec = aggr_info.hash_rollup_info_->rollup_grouping_id_->get_vector(agg_ctx.eval_ctx_);
+      ObIVector *grouping_vec = nullptr;
+      if (aggr_info.hash_rollup_info_ != nullptr) {
+        grouping_vec =  aggr_info.hash_rollup_info_->rollup_grouping_id_->get_vector(agg_ctx.eval_ctx_);
+      } else if (aggr_info.grouping_set_info_ != nullptr) {
+        grouping_vec = aggr_info.grouping_set_info_->grouping_set_id_->get_vector(agg_ctx.eval_ctx_);
+      }
       bool found = false;
       for (int i = bound.start(); !found && i < bound.end(); i++) {
         if (skip.at(i)) {
@@ -72,6 +80,18 @@ public:
           } else {
             found = true;
           }
+        } else if (agg_func == T_FUN_GROUP_ID) {
+          if (OB_UNLIKELY(out_tc != VEC_TC_NUMBER)) {
+            ret = OB_ERR_UNEXPECTED;
+            SQL_LOG(WARN, "invalid output type", K(ret));
+          } else if (OB_FAIL(get_group_id(
+                       aggr_info,
+                       aggr_info.grouping_set_info_ == nullptr ? 0 : grouping_vec->get_int(i),
+                       reinterpret_cast<number::ObCompactNumber *>(agg_cell)))) {
+            SQL_LOG(WARN, "get group id failed", K(ret));
+          } else {
+            found = true;
+          }
         } else {
           ob_assert(false);
         }
@@ -80,7 +100,12 @@ public:
         not_nulls.set(agg_col_idx);
       }
     } else {
-      ObIVector *grouping_vec = aggr_info.hash_rollup_info_->rollup_grouping_id_->get_vector(agg_ctx.eval_ctx_);
+      ObIVector *grouping_vec = nullptr;
+      if (aggr_info.hash_rollup_info_ != nullptr) {
+        grouping_vec =  aggr_info.hash_rollup_info_->rollup_grouping_id_->get_vector(agg_ctx.eval_ctx_);
+      } else {
+        grouping_vec = aggr_info.grouping_set_info_->grouping_set_id_->get_vector(agg_ctx.eval_ctx_);
+      }
       bool found = false;
       for (int i = 0; OB_SUCC(ret) && !found && i < row_sel.size(); i++) {
         if (agg_func == T_FUN_GROUPING) {
@@ -117,12 +142,20 @@ public:
     int ret = OB_SUCCESS;
     NotNullBitVector &not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_idx, agg_cell);
     ObAggrInfo &aggr_info = agg_ctx.aggr_infos_.at(agg_col_idx);
-    if (OB_ISNULL(aggr_info.hash_rollup_info_)) {
+    if (OB_ISNULL(aggr_info.hash_rollup_info_) && OB_ISNULL(aggr_info.grouping_set_info_)
+        && agg_func != T_FUN_GROUP_ID) {
+      // select c1,c2,c3,c4,group_id() id from t1 group by c1,grouping sets((c1,c2,c3,c4)) order by c1,c2,c3,c4,id;
+      // group_id = 0, hash rollup info & grouping set info are all null
       ret = OB_ERR_UNEXPECTED;
-      SQL_LOG(WARN, "invalid null rollup grouping id", K(ret));
+      SQL_LOG(WARN, "invalid null rollup grouping id", K(ret), K(agg_func));
     } else if (not_nulls.at(agg_col_idx)) { // already calculated, do nothing
     } else {
-      ObIVector *grouping_vec = aggr_info.hash_rollup_info_->rollup_grouping_id_->get_vector(agg_ctx.eval_ctx_);
+      ObIVector *grouping_vec = nullptr;
+      if (aggr_info.hash_rollup_info_ != nullptr) {
+        grouping_vec =  aggr_info.hash_rollup_info_->rollup_grouping_id_->get_vector(agg_ctx.eval_ctx_);
+      } else if (aggr_info.grouping_set_info_ != nullptr) {
+        grouping_vec = aggr_info.grouping_set_info_->grouping_set_id_->get_vector(agg_ctx.eval_ctx_);
+      }
       if (agg_func == T_FUN_GROUPING) {
         *reinterpret_cast<int64_t *>(agg_cell) = is_grouping(aggr_info, grouping_vec->get_int(batch_idx));
         not_nulls.set(agg_col_idx);
@@ -136,6 +169,19 @@ public:
         } else if (out_tc == VEC_TC_INTEGER && OB_FAIL(get_grouping_id(aggr_info, grouping_vec->get_int(batch_idx),
                                                                        reinterpret_cast<int64_t *>(agg_cell)))) {
           SQL_LOG(WARN, "get grouping id failed", K(ret));
+        } else {
+          not_nulls.set(agg_col_idx);
+        }
+      } else if (agg_func == T_FUN_GROUP_ID) {
+        if (OB_UNLIKELY(out_tc != VEC_TC_NUMBER)) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_LOG(WARN, "invalid output type", K(ret));
+        } else if (out_tc == VEC_TC_NUMBER
+                   && OB_FAIL(get_group_id(
+                     aggr_info,
+                     aggr_info.grouping_set_info_ == nullptr ? 0 : grouping_vec->get_int(batch_idx),
+                     reinterpret_cast<number::ObCompactNumber *>(agg_cell)))) {
+          SQL_LOG(WARN, "get group id failed", K(ret));
         } else {
           not_nulls.set(agg_col_idx);
         }
@@ -188,7 +234,7 @@ public:
       } else {
         ob_assert(false);
       }
-    } else if (agg_func == T_FUN_GROUPING_ID) {
+    } else if (agg_func == T_FUN_GROUPING_ID || agg_func == T_FUN_GROUP_ID) {
       if (out_tc == VEC_TC_NUMBER) {
         const number::ObCompactNumber *res_cnum = reinterpret_cast<const number::ObCompactNumber *>(data);
         number::ObNumber res_num(*res_cnum);

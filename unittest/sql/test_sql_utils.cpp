@@ -491,6 +491,7 @@ int TestSqlUtils::create_system_table()
   const schema_init_func *creator_ptr_array[] = { core_table_schema_creators,
     sys_table_schema_creators,
     virtual_table_schema_creators,
+    virtual_table_index_schema_creators,
     NULL };
   const ObTenantSchema *tenant_schema = NULL;
   if (OB_FAIL(schema_guard_.get_tenant_info(sys_tenant_id_, tenant_schema))) {

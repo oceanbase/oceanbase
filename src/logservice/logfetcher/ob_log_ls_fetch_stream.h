@@ -277,7 +277,7 @@ private:
   // @retval OB_NEED_RETRY       Need retry
   // @retval Other error codes   Failed
   int read_group_entry_(
-      const palf::LogGroupEntry &group_entry,
+      const ipalf::IGroupEntry &group_entry,
       const palf::LSN &group_start_lsn,
       const char *buffer,
       KickOutInfo &kick_out_info,

@@ -118,15 +118,15 @@ Query Plan
 |ID|OPERATOR                         |NAME                 |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------------
 |0 |UNION ALL                        |                     |3       |90          |
-|1 |├─TOP-N SORT                     |                     |2       |88          |
-|2 |│ └─HASH EXCEPT DISTINCT         |                     |2       |88          |
+|1 |├─TOP-N SORT                     |                     |2       |87          |
+|2 |│ └─HASH EXCEPT DISTINCT         |                     |2       |87          |
 |3 |│   ├─PX COORDINATOR             |                     |2       |44          |
-|4 |│   │ └─EXCHANGE OUT DISTR       |:EX10000             |2       |44          |
+|4 |│   │ └─EXCHANGE OUT DISTR       |:EX10000             |2       |43          |
 |5 |│   │   └─HASH DISTINCT          |                     |2       |43          |
 |6 |│   │     └─PX PARTITION ITERATOR|                     |2       |43          |
 |7 |│   │       └─TABLE FULL SCAN    |t8                   |2       |43          |
 |8 |│   └─PX COORDINATOR             |                     |2       |44          |
-|9 |│     └─EXCHANGE OUT DISTR       |:EX20000             |2       |44          |
+|9 |│     └─EXCHANGE OUT DISTR       |:EX20000             |2       |43          |
 |10|│       └─HASH DISTINCT          |                     |2       |43          |
 |11|│         └─PX PARTITION ITERATOR|                     |2       |43          |
 |12|│           └─TABLE FULL SCAN    |t8                   |2       |43          |
@@ -142,7 +142,7 @@ Outputs & filters:
   4 - output([t8.c15]), filter(nil), rowset=16
       dop=1
   5 - output([t8.c15]), filter(nil), rowset=16
-      distinct([t8.c15])
+      distinct([t8.c15]), partial
   6 - output([t8.c15]), filter(nil), rowset=16
       force partition granule
   7 - output([t8.c15]), filter(nil), rowset=16
@@ -153,7 +153,7 @@ Outputs & filters:
   9 - output([t8.c15]), filter(nil), rowset=16
       dop=1
  10 - output([t8.c15]), filter(nil), rowset=16
-      distinct([t8.c15])
+      distinct([t8.c15]), partial
  11 - output([t8.c15]), filter(nil), rowset=16
       force partition granule
  12 - output([t8.c15]), filter(nil), rowset=16
@@ -173,15 +173,15 @@ Query Plan
 |ID|OPERATOR                         |NAME                 |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------------
 |0 |UNION ALL                        |                     |3       |90          |
-|1 |├─TOP-N SORT                     |                     |2       |88          |
-|2 |│ └─HASH INTERSECT DISTINCT      |                     |2       |88          |
+|1 |├─TOP-N SORT                     |                     |2       |87          |
+|2 |│ └─HASH INTERSECT DISTINCT      |                     |2       |87          |
 |3 |│   ├─PX COORDINATOR             |                     |2       |44          |
-|4 |│   │ └─EXCHANGE OUT DISTR       |:EX10000             |2       |44          |
+|4 |│   │ └─EXCHANGE OUT DISTR       |:EX10000             |2       |43          |
 |5 |│   │   └─HASH DISTINCT          |                     |2       |43          |
 |6 |│   │     └─PX PARTITION ITERATOR|                     |2       |43          |
 |7 |│   │       └─TABLE FULL SCAN    |t8                   |2       |43          |
 |8 |│   └─PX COORDINATOR             |                     |2       |44          |
-|9 |│     └─EXCHANGE OUT DISTR       |:EX20000             |2       |44          |
+|9 |│     └─EXCHANGE OUT DISTR       |:EX20000             |2       |43          |
 |10|│       └─HASH DISTINCT          |                     |2       |43          |
 |11|│         └─PX PARTITION ITERATOR|                     |2       |43          |
 |12|│           └─TABLE FULL SCAN    |t8                   |2       |43          |
@@ -197,7 +197,7 @@ Outputs & filters:
   4 - output([t8.c15]), filter(nil), rowset=16
       dop=1
   5 - output([t8.c15]), filter(nil), rowset=16
-      distinct([t8.c15])
+      distinct([t8.c15]), partial
   6 - output([t8.c15]), filter(nil), rowset=16
       force partition granule
   7 - output([t8.c15]), filter(nil), rowset=16
@@ -208,7 +208,7 @@ Outputs & filters:
   9 - output([t8.c15]), filter(nil), rowset=16
       dop=1
  10 - output([t8.c15]), filter(nil), rowset=16
-      distinct([t8.c15])
+      distinct([t8.c15]), partial
  11 - output([t8.c15]), filter(nil), rowset=16
       force partition granule
  12 - output([t8.c15]), filter(nil), rowset=16

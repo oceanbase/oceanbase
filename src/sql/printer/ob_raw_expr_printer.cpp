@@ -777,7 +777,9 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
       int64_t start = access_idxs.count() - 1;
       for (;start > 0; --start) {
         if (OB_NOT_NULL(access_idxs.at(start).get_sysfunc_)
-            && T_FUN_UDF == access_idxs.at(start).get_sysfunc_->get_expr_type()) {
+          && (T_FUN_UDF == access_idxs.at(start).get_sysfunc_->get_expr_type()
+              || T_OP_GET_PACKAGE_VAR == access_idxs.at(start).get_sysfunc_->get_expr_type()
+              || T_OP_GET_SUBPROGRAM_VAR == access_idxs.at(start).get_sysfunc_->get_expr_type())) {
           break;
         }
       }
@@ -790,10 +792,10 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
         }
         if (OB_NOT_NULL(current_idx.get_sysfunc_)) {
           PRINT_EXPR(current_idx.get_sysfunc_);
-        } else if (!current_idx.var_name_.empty()) {
-          DATA_PRINTF("%.*s", current_idx.var_name_.length(), current_idx.var_name_.ptr());
         } else if (current_idx.is_local()) {
           DATA_PRINTF(":%ld", current_idx.var_index_);
+        } else if (!current_idx.var_name_.empty()) {
+          DATA_PRINTF("%.*s", current_idx.var_name_.length(), current_idx.var_name_.ptr());
         } else if (current_idx.is_const()) {
           DATA_PRINTF("%ld", current_idx.var_index_);
         } else {
@@ -803,7 +805,7 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
         if (parent_is_table) {
           DATA_PRINTF(")");
         }
-        parent_is_table = current_idx.elem_type_.is_nested_table_type();
+        parent_is_table = current_idx.elem_type_.is_collection_type();
       }
       break;
     }
@@ -1216,6 +1218,10 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
       SET_SYMBOL_IF_EMPTY("json_arrayagg");
     case T_FUN_JSON_OBJECTAGG:
       SET_SYMBOL_IF_EMPTY("json_objectagg");
+    case T_FUN_ARG_MIN:
+      SET_SYMBOL_IF_EMPTY("arg_min");
+    case T_FUN_ARG_MAX:
+      SET_SYMBOL_IF_EMPTY("arg_max");
     case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS:
       SET_SYMBOL_IF_EMPTY("approx_count_distinct_synopsis");
     case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE:
@@ -3922,6 +3928,10 @@ int ObRawExprPrinter::print(ObWinFunRawExpr *expr)
         SET_SYMBOL_IF_EMPTY("json_arrayagg");
       case T_FUN_JSON_OBJECTAGG:
         SET_SYMBOL_IF_EMPTY("json_objectagg");
+      case T_FUN_ARG_MAX:
+        SET_SYMBOL_IF_EMPTY("arg_max");
+      case T_FUN_ARG_MIN:
+        SET_SYMBOL_IF_EMPTY("arg_min");
       case T_FUN_PL_AGG_UDF: {
         ObString database;
         if (OB_ISNULL(expr->get_agg_expr())) {
@@ -4341,7 +4351,39 @@ int ObRawExprPrinter::print(ObMatchFunRawExpr *expr)
   if (OB_ISNULL(buf_) || OB_ISNULL(pos_) || OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(buf_), K(pos_), K(expr));
-  } else if (is_mysql_mode()) {
+  } else if (is_mysql_mode() && expr->is_es_match()) {
+    DATA_PRINTF("MATCH('");
+    int64_t i = 0;
+    for (; OB_SUCC(ret) && i < expr->get_match_columns().count() - 1; ++i) {
+      if (OB_ISNULL(expr->get_match_columns().at(i)) || OB_ISNULL(expr->get_columns_boosts().at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else {
+        PRINT_EXPR(expr->get_match_columns().at(i));
+        DATA_PRINTF("^");
+        PRINT_EXPR(expr->get_columns_boosts().at(i));
+        DATA_PRINTF(",");
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(expr->get_match_columns().at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (OB_ISNULL(expr->get_search_key())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else {
+        PRINT_EXPR(expr->get_match_columns().at(i));
+        DATA_PRINTF("^");
+        PRINT_EXPR(expr->get_columns_boosts().at(i));
+        DATA_PRINTF("', '");
+        PRINT_EXPR(expr->get_search_key());
+        DATA_PRINTF("', '");
+        DATA_PRINTF(expr->get_param_text_expr());
+        DATA_PRINTF("')");
+      }
+    }
+  } else if (is_mysql_mode() && !expr->is_es_match()) {
     DATA_PRINTF("MATCH(");
     int64_t i = 0;
     for (; OB_SUCC(ret) && i < expr->get_match_columns().count() - 1; ++i) {

@@ -106,8 +106,7 @@ private:
   virtual bool is_error_need_retry(const int ret_code) override
   {
     //we should always retry when the redefinition task is split recovery redefinition
-    return is_partition_split_recovery_table_redefinition(task_type_) ? (task_status_ <= share::ObDDLTaskStatus::TAKE_EFFECT)
-        : ObDDLTask::is_error_need_retry(ret_code);
+    return is_partition_split_recovery_table_redefinition(task_type_) || ObDDLTask::is_error_need_retry(ret_code);
   }
 private:
   static const int64_t OB_TABLE_REDEFINITION_TASK_VERSION = 1L;

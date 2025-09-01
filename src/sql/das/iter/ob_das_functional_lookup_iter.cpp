@@ -211,22 +211,8 @@ int ObDASFuncLookupIter::add_rowkey()
 {
   int ret = OB_SUCCESS;
   OB_ASSERT(data_table_iter_->get_type() == DAS_ITER_FUNC_DATA);
-  if (OB_ISNULL(eval_ctx_) || OB_UNLIKELY(1 != rowkey_exprs_.count())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid eval ctx or rowkey exprs", K_(eval_ctx), K_(rowkey_exprs), K(ret));
-  } else {
-    ObDASFuncDataIter *merge_iter = static_cast<ObDASFuncDataIter *>(data_table_iter_);
-    ObDocId doc_id;
-    const ObExpr *expr = rowkey_exprs_.at(0);
-    ObDatum &col_datum = expr->locate_expr_datum(*eval_ctx_);
-    doc_id.from_string(col_datum.get_string());
-    if (OB_UNLIKELY(!doc_id.is_valid())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid doc id", K(doc_id));
-    } else if (OB_FAIL(merge_iter->add_doc_id(doc_id))) {
-      LOG_WARN("failed to add doc id", K(ret));
-    }
-    LOG_DEBUG("push doc id to tr iter", K(doc_id), K(ret));
+  if (OB_FAIL(data_table_iter_->set_scan_rowkey(eval_ctx_, rowkey_exprs_, nullptr, nullptr, 0))) {
+    LOG_WARN("failed to set scan rowkey of data table iter", K(ret));
   }
   return ret;
 }
@@ -322,6 +308,19 @@ void ObDASFuncLookupIter::clear_evaluated_flag()
 {
   index_table_iter_->clear_evaluated_flag();
   data_table_iter_->clear_evaluated_flag();
+}
+
+int ObDASFuncLookupIter::set_scan_rowkey(ObEvalCtx *eval_ctx,
+                                         const ObIArray<ObExpr *> &rowkey_exprs,
+                                         const ObDASScanCtDef *lookup_ctdef,
+                                         ObIAllocator *alloc,
+                                         int64_t group_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(index_table_iter_->set_scan_rowkey(eval_ctx, rowkey_exprs, lookup_ctdef, alloc, group_id))) {
+    LOG_WARN("failed to set scan rowkey of index table iter", K(ret));
+  }
+  return ret;
 }
 
 }  // namespace sql

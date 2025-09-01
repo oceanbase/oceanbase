@@ -50,7 +50,6 @@ class ObPCVSet;
 class ObPhysicalPlan;
 struct ObSqlCtx;
 class ObTableLocation;
-class ObPhyTableLocation;
 class ObCandiTableLoc;
 class ObTablePartitionInfo;
 class ObPlanCacheValue;
@@ -710,6 +709,7 @@ struct ObPlanStat
   ObVecIndexExecCtx vec_index_exec_ctx_;
   ObPlanExecutingStat executing_stat_;
   uint64_t gen_plan_usec_;  // plan generation time cost
+  ObCollationType collation_connection_;
 
   ObPlanStat()
     : plan_id_(0),
@@ -792,7 +792,8 @@ struct ObPlanStat
       adaptive_pc_info_(),
       vec_index_exec_ctx_(),
       executing_stat_(),
-      gen_plan_usec_(0)
+      gen_plan_usec_(0),
+      collation_connection_(CS_TYPE_INVALID)
 {
   exact_mode_sql_id_[0] = '\0';
 }
@@ -877,7 +878,8 @@ struct ObPlanStat
       adaptive_pc_info_(rhs.adaptive_pc_info_),
       vec_index_exec_ctx_(rhs.vec_index_exec_ctx_),
       executing_stat_(rhs.executing_stat_),
-      gen_plan_usec_(rhs.gen_plan_usec_)
+      gen_plan_usec_(rhs.gen_plan_usec_),
+      collation_connection_(rhs.collation_connection_)
   {
     exact_mode_sql_id_[0] = '\0';
     MEMCPY(plan_sel_info_str_, rhs.plan_sel_info_str_, rhs.plan_sel_info_str_len_);
@@ -991,6 +993,15 @@ struct ObPlanStat
   {
     if (is_evolution_) {
       executing_stat_.erase_executing_record(exec_start_timestamp);
+    }
+  }
+
+  inline void get_evo_records(ObEvoRecordsGuard &guard)
+  {
+    guard.reset();
+    ObEvolutionRecords *evo_records = ATOMIC_LOAD(&(evolution_stat_.records_));
+    if (ATOMIC_LOAD(&is_evolution_)) {
+      guard.set_evo_records(evo_records);
     }
   }
 

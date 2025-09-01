@@ -32,7 +32,9 @@ public:
        result_(result),
        exec_ret_code_(exec_ret_code),
        pcode_(ObRpcPacketCode::OB_INVALID_RPC_CODE),
-       using_buffer_(NULL)
+       using_buffer_(NULL),
+       require_rerouting_(false),
+       require_refresh_kv_meta_(false)
   {
     if (OB_NOT_NULL(req_)) {
       const ObRpcPacket *rpc_pkt = &reinterpret_cast<const ObRpcPacket&>(req_->get_packet());
@@ -44,7 +46,9 @@ public:
         result_(nullptr),
         exec_ret_code_(common::OB_SUCCESS),
         pcode_(ObRpcPacketCode::OB_INVALID_RPC_CODE),
-        using_buffer_(nullptr)
+        using_buffer_(nullptr),
+        require_rerouting_(false),
+        require_refresh_kv_meta_(false)
   {
   }
   virtual ~ObTableRpcResponseSender() = default;
@@ -60,9 +64,11 @@ public:
   }
   OB_INLINE const rpc::ObRequest* get_req() const { return req_; }
   OB_INLINE void set_result(table::ObITableResult *result) { result_ = result; }
+  OB_INLINE void set_require_rerouting(bool require_rerouting) { require_rerouting_ = require_rerouting; }
+  OB_INLINE void set_require_refresh_kv_meta(bool require_refresh_kv_meta) { require_refresh_kv_meta_ = require_refresh_kv_meta; }
 private:
   int serialize();
-  int do_response(ObRpcPacket *response_pkt, bool require_rerouting);
+  int do_response(ObRpcPacket *response_pkt, bool require_rerouting, bool require_refresh_kv_meta);
   char *easy_alloc(int64_t size) const;
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObTableRpcResponseSender);
@@ -72,6 +78,8 @@ private:
   const int exec_ret_code_; // processor执行的返回码
   ObRpcPacketCode pcode_;
   common::ObDataBuffer *using_buffer_;
+  bool require_rerouting_;
+  bool require_refresh_kv_meta_;
 };
 
 } // end namespace obrpc

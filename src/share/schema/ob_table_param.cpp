@@ -1260,7 +1260,8 @@ int ObTableParam::construct_columns_and_projector(
           LOG_WARN("push back failed", K(ret));
         }
       }
-      if (OB_SUCC(ret) && 0 == output_count && 0 < tmp_output_sel_mask.count()) {
+      if (OB_SUCC(ret) && 0 == output_count && 0 < tmp_output_sel_mask.count() &&
+          !table_schema.is_external_table()) {
         // make sure one output expr at least
         tmp_output_sel_mask.at(0) = true;
       }

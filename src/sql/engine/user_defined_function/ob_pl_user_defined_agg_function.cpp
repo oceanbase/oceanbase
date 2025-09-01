@@ -139,8 +139,10 @@ int ObPlAggUdfFunction::call_pl_engine_exectue_udf(ParamStore& udf_params,
   pl::ObPL *pl_engine = NULL;
   ObSEArray<int64_t, 8> empty_subprogram_path;
   ObSEArray<int64_t, 8> empty_nocopy_params;
-  ObCacheObjGuard cacheobj_guard(PL_ROUTINE_HANDLE);
+  pl::ObPLExecuteArg pl_execute_arg;
   uint64_t loc = 0;
+  int64_t obj_id = OB_INVALID_ID;
+  int64_t sub_udf_id = OB_INVALID_ID;
   if (OB_ISNULL(routine_info) || OB_ISNULL(session_info_) ||
       OB_ISNULL(pl_engine = session_info_->get_pl_engine()) || OB_ISNULL(allocator_) ||
       OB_ISNULL(exec_ctx_)) {
@@ -151,16 +153,23 @@ int ObPlAggUdfFunction::call_pl_engine_exectue_udf(ParamStore& udf_params,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("udf parameter number is not equal to params desc count",
                                  K(ret), K(udf_params.count()), K(routine_info->get_param_count()));
+  } else if (FALSE_IT(obj_id = share::schema::ObUDTObjectType::mask_object_id(routine_info->get_package_id()))){
+  } else if (FALSE_IT(sub_udf_id = (OB_INVALID_ID != routine_info->get_package_id()) ? routine_info->get_subprogram_id()
+                                                                                     : routine_info->get_routine_id())) {
+  } else if (OB_FAIL(pl_execute_arg.obtain_routine(*exec_ctx_,
+                                                   obj_id,
+                                                   sub_udf_id,
+                                                   empty_subprogram_path))) {
+    LOG_WARN("failed to obtain routine", K(ret), K(routine_info->get_package_id()), K(routine_info->get_subprogram_id()), K(empty_subprogram_path));
   } else if (OB_FAIL(pl_engine->execute(*exec_ctx_,
                                         exec_ctx_->get_allocator(),
-                                        share::schema::ObUDTObjectType::mask_object_id(routine_info->get_package_id()),
-                                        OB_INVALID_ID != routine_info->get_package_id() ? routine_info->get_subprogram_id()
-                                                                                        : routine_info->get_routine_id(),
+                                        obj_id,
+                                        sub_udf_id,
                                         empty_subprogram_path,
                                         udf_params,
                                         empty_nocopy_params,
                                         result,
-                                        cacheobj_guard,
+                                        pl_execute_arg,
                                         NULL,
                                         false,
                                         true,

@@ -3104,6 +3104,8 @@ int ObTableSqlService::gen_table_dml_without_check(
   const ObString parser_properties = table.get_parser_property_str().empty() ? empty_str : table.get_parser_property_str();
   const char *dynamic_partition_policy = table.get_dynamic_partition_policy().empty() ?
       "" : table.get_dynamic_partition_policy().ptr();
+  const char *semistruct_properties = table.get_semistruct_properties().empty() ?
+      "" : table.get_semistruct_properties().ptr();
   ObString local_session_var;
   ObArenaAllocator allocator(ObModIds::OB_SCHEMA_OB_SCHEMA_ARENA);
   if (table.is_materialized_view() && data_version >= DATA_VERSION_4_3_3_0
@@ -3245,6 +3247,8 @@ int ObTableSqlService::gen_table_dml_without_check(
       || (data_version >= DATA_VERSION_4_4_0_0
           && OB_FAIL(dml.add_column("external_sub_path", ObHexEscapeSqlStr(table.get_external_sub_path()))))
       || (data_version >= DATA_VERSION_4_4_1_0
+        && OB_FAIL(dml.add_column("semistruct_properties", ObHexEscapeSqlStr(semistruct_properties))))
+      || (data_version >= DATA_VERSION_4_4_1_0
           && OB_FAIL(dml.add_column("micro_block_format_version", table.get_micro_block_format_version())))
       ) {
         LOG_WARN("add column failed", K(ret));
@@ -3332,6 +3336,10 @@ int ObTableSqlService::gen_table_dml(
     LOG_WARN("semistruct encodin is not supported in version less than 4.3.5.2",
         "semistruct_encoding_flags", table.get_semistruct_encoding_flags(),
         "semistruct_encoding_type", table.get_semistruct_encoding_type());
+  } else if (data_version < DATA_VERSION_4_4_1_0 &&
+              !table.get_semistruct_properties().empty()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("semistruct properties is not supported in version less than 4.4.1.0", K(table.get_semistruct_properties()));
   } else if (not_compat_for_queuing_mode(data_version) && table.is_new_queuing_table_mode()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN(QUEUING_MODE_NOT_COMPAT_WARN_STR, K(ret), K(table));

@@ -40,9 +40,13 @@ typedef void (*ConvertUnitToDatumFunc)(
       const int64_t row_cap,
       common::ObDatum *datums);
 
-extern  ObMultiDimArray_T<ConvertUnitToDatumFunc,
-    4, ObRefStoreWidthV::MAX_WIDTH_V, 4, ObBaseColumnDecoderCtx::ObNullFlag::MAX, 2> convert_uint_to_datum_funcs;
-
+extern ObMultiDimArray_T<ConvertUnitToDatumFunc,
+                         4,
+                         ObRefStoreWidthV::MAX_WIDTH_V,
+                         4,
+                         ObBaseColumnDecoderCtx::ObNullFlag::MAX,
+                         2>
+    convert_uint_to_datum_funcs;
 
 class ObIntegerStreamDecoder
 {

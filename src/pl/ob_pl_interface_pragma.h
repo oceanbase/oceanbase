@@ -68,6 +68,8 @@
 #include "pl/sys_package/ob_dbms_profiler.h"
 #include "pl/sys_package/ob_utl_tcp.h"
 #include "pl/sys_package/ob_utl_smtp.h"
+#include "pl/sys_package/ob_utl_http.h"
+#include "pl/sys_package/ob_dbms_plsql_code_coverage.h"
 #endif
 #include "pl/sys_package/ob_dbms_xplan.h"
 #include "pl/sys_package/ob_pl_dbms_resource_manager.h"
@@ -81,11 +83,14 @@
 #include "pl/sys_package/ob_dbms_balance.h"
 #include "pl/sys_package/ob_dbms_external_table.h"
 #include "pl/sys_package/ob_dbms_vector_mysql.h"
+#include "pl/sys_package/ob_dbms_hybrid_vector_mysql.h"
 #include "pl/pl_recompile/ob_pl_recompile_task_helper.h"
 #include "pl/sys_package/ob_dbms_partition.h"
 #include "pl/sys_package/ob_dbms_java.h"
+#include "pl/sys_package/ob_dbms_ai_service.h"
 #include "pl/sys_package/ob_dbms_xprofile.h"
 #include "pl/sys_package/ob_dbms_data_dict.h"
+#include "pl/sys_package/ob_dbms_python.h"
 
 #ifdef INTERFACE_DEF
   INTERFACE_DEF(INTERFACE_START, "TEST", (ObPLInterfaceImpl::call))
@@ -589,6 +594,21 @@
   INTERFACE_DEF(INTERFACE_UTL_FILE_FIS_OPEN, "UTL_FILE_FIS_OPEN", (ObPLUtlFile::fis_open))
   //end of utl_file
 
+  //start of utl_http
+  INTERFACE_DEF(INTERFACE_UTL_HTTP_BEGIN_REQUEST, "UTL_HTTP_BEGIN_REQUEST", (ObPLUtlHttp::begin_request))
+  INTERFACE_DEF(INTERFACE_UTL_HTTP_END_REQUEST, "UTL_HTTP_END_REQUEST", (ObPLUtlHttp::end_request))
+  INTERFACE_DEF(INTERFACE_UTL_HTTP_GET_RESPONSE, "UTL_HTTP_GET_RESPONSE", (ObPLUtlHttp::get_response))
+  INTERFACE_DEF(INTERFACE_UTL_HTTP_END_RESPONSE, "UTL_HTTP_END_RESPONSE", (ObPLUtlHttp::end_response))
+  INTERFACE_DEF(INTERFACE_UTL_HTTP_READ_LINE, "UTL_HTTP_READ_LINE", (ObPLUtlHttp::read_line))
+  INTERFACE_DEF(INTERFACE_UTL_HTTP_READ_RAW, "UTL_HTTP_READ_RAW", (ObPLUtlHttp::read_raw))
+  INTERFACE_DEF(INTERFACE_UTL_HTTP_READ_TEXT, "UTL_HTTP_READ_TEXT", (ObPLUtlHttp::read_text))
+  INTERFACE_DEF(INTERFACE_UTL_HTTP_WRITE_LINE, "UTL_HTTP_WRITE_LINE", (ObPLUtlHttp::write_line))
+  INTERFACE_DEF(INTERFACE_UTL_HTTP_WRITE_RAW, "UTL_HTTP_WRITE_RAW", (ObPLUtlHttp::write_raw))
+  INTERFACE_DEF(INTERFACE_UTL_HTTP_WRITE_TEXT, "UTL_HTTP_WRITE_TEXT", (ObPLUtlHttp::write_text))
+  INTERFACE_DEF(INTERFACE_UTL_HTTP_SET_TRANSFER_TIMEOUT, "UTL_HTTP_SET_TRANSFER_TIMEOUT", (ObPLUtlHttp::set_transfer_timeout))
+  INTERFACE_DEF(INTERFACE_UTL_HTTP_GET_TRANSFER_TIMEOUT, "UTL_HTTP_GET_TRANSFER_TIMEOUT", (ObPLUtlHttp::get_transfer_timeout))
+  //end of utl_http
+
   //start of utl_tcp
   INTERFACE_DEF(INTERFACE_UTL_TCP_OPEN_CONNECTION, "UTL_TCP_OPEN_CONNECTION", (ObPLUtlTcp::open_connection))
   INTERFACE_DEF(INTERFACE_UTL_TCP_CLOSE_CONNECTION, "UTL_TCP_CLOSE_CONNECTION", (ObPLUtlTcp::close_connection))
@@ -676,6 +696,9 @@
   INTERFACE_DEF(INTERFACE_DBMS_SESSION_SET_CONTEXT, "SET_CONTEXT", (ObDBMSSession::set_context))
   INTERFACE_DEF(INTERFACE_DBMS_SESSION_SET_IDENTIFIER, "SET_IDENTIFIER", (ObDBMSSession::set_identifier))
   INTERFACE_DEF(INTERFACE_DBMS_SESSION_RESET_PACKAGE, "RESET_PACKAGE", (ObDBMSSession::reset_package))
+  INTERFACE_DEF(INTERFACE_DBMS_SESSION_IS_ROLE_ENABLED, "IS_ROLE_ENABLED", (ObDBMSSession::is_role_enabled))
+  INTERFACE_DEF(INTERFACE_DBMS_SESSION_SESSION_IS_ROLE_ENABLED, "SESSION_IS_ROLE_ENABLED", (ObDBMSSession::session_is_role_enabled))
+  INTERFACE_DEF(INTERFACE_DBMS_SESSION_CURRENT_IS_ROLE_ENABLED, "CURRENT_IS_ROLE_ENABLED", (ObDBMSSession::current_is_role_enabled))
   // end of dbms_session
 
   // start of dbms_space
@@ -843,6 +866,13 @@
   // end of dbms_profiler
 #endif // OB_BUILD_ORACLE_PL
 
+#ifdef OB_BUILD_ORACLE_PL
+  // start of dbms_plsql_code_coverage
+  INTERFACE_DEF(INTERFACE_DBMS_PLSQL_CODE_COVERAGE_START, "DBMS_PLSQL_CODE_COVERAGE_START_CODE_COVERAGE", (ObDBMSPlsqlCodeCoverage::start_plsql_code_coverage))
+  INTERFACE_DEF(INTERFACE_DBMS_PLSQL_CODE_COVERAGE_STOP, "DBMS_PLSQL_CODE_COVERAGE_STOP_CODE_COVERAGE", (ObDBMSPlsqlCodeCoverage::stop_plsql_code_coverage))
+  // end of dbms_pl_sqlcode_coverage
+#endif // OB_BUILD_ORACLE_PL
+
     // start of dbms_vector_mysql
 #define DEFINE_DBMS_VECTOR_MYSQL_INTERFACE(symbol, func) \
   INTERFACE_DEF(INTERFACE_##symbol, #symbol, (func))
@@ -903,6 +933,14 @@
   INTERFACE_DEF(INTERFACE_DBMS_JAVA_DROPJAVA_MYSQL, "DBMS_JAVA_DROPJAVA_MYSQL", (ObDBMSJava::dropjava_mysql))
   // end of dbms_java
 
+  // start of dbms_ai_service
+  INTERFACE_DEF(INTERFACE_DBMS_AI_SERVICE_CREATE_AI_MODEL_MYSQL, "DBMS_AI_SERVICE_CREATE_AI_MODEL_MYSQL", (ObDBMSAiService::create_ai_model))
+  INTERFACE_DEF(INTERFACE_DBMS_AI_SERVICE_DROP_AI_MODEL_MYSQL, "DBMS_AI_SERVICE_DROP_AI_MODEL_MYSQL", (ObDBMSAiService::drop_ai_model))
+  INTERFACE_DEF(INTERFACE_DBMS_AI_SERVICE_CREATE_AI_MODEL_ENDPOINT_MYSQL, "DBMS_AI_SERVICE_CREATE_AI_MODEL_ENDPOINT_MYSQL", (ObDBMSAiService::create_ai_model_endpoint))
+  INTERFACE_DEF(INTERFACE_DBMS_AI_SERVICE_ALTER_AI_MODEL_ENDPOINT_MYSQL, "DBMS_AI_SERVICE_ALTER_AI_MODEL_ENDPOINT_MYSQL", (ObDBMSAiService::alter_ai_model_endpoint))
+  INTERFACE_DEF(INTERFACE_DBMS_AI_SERVICE_DROP_AI_MODEL_ENDPOINT_MYSQL, "DBMS_AI_SERVICE_DROP_AI_MODEL_ENDPOINT_MYSQL", (ObDBMSAiService::drop_ai_model_endpoint))
+  // end of dbms_ai_service
+
   // start of dbms_data_dict
   INTERFACE_DEF(INTERFACE_DBMS_DATA_DICT_TRIGGER_DUMP, "DBMS_DATA_DICT_TRIGGER_DUMP", (ObDBMSDataDict::trigger_dump_data_dict))
   INTERFACE_DEF(INTERFACE_DBMS_DATA_DICT_ENABLE_DUMP, "DBMS_DATA_DICT_ENABLE", (ObDBMSDataDict::enable_dump))
@@ -912,6 +950,21 @@
   INTERFACE_DEF(INTERFACE_DBMS_DATA_DICT_MODIFY_DICT_ITEM_RETENTION, "DBMS_DATA_DICT_MODIFY_RETENTION", (ObDBMSDataDict::modify_retention))
 
   // end of dbms_data_dict
+
+  // start of dbms_python
+  INTERFACE_DEF(INTERFACE_DBMS_PYTHON_LOADPYTHON_MYSQL, "DBMS_PYTHON_LOADPYTHON_MYSQL", (ObDBMSPython::loadpython_mysql))
+  INTERFACE_DEF(INTERFACE_DBMS_PYTHON_DROPPYTHON_MYSQL, "DBMS_PYTHON_DROPPYTHON_MYSQL", (ObDBMSPython::droppython_mysql))
+  // end of dbms_python
+
+  // start of dbms_hybrid_search
+#define DEFINE_DBMS_HYBRID_VECTOR_MYSQL_INTERFACE(symbol, func) \
+INTERFACE_DEF(INTERFACE_##symbol, #symbol, (func))
+
+DEFINE_DBMS_HYBRID_VECTOR_MYSQL_INTERFACE(DBMS_HYBRID_VECTOR_MYSQL_SEARCH, ObDBMSHybridVectorMySql::search)
+DEFINE_DBMS_HYBRID_VECTOR_MYSQL_INTERFACE(DBMS_HYBRID_VECTOR_MYSQL_GET_SQL, ObDBMSHybridVectorMySql::get_sql)
+
+#undef DEFINE_DBMS_HYBRID_VECTOR_MYSQL_INTERFACE
+  // end of dbms_hybrid_search
 
   INTERFACE_DEF(INTERFACE_END, "INVALID", (nullptr))
 #endif

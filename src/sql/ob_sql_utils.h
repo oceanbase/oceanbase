@@ -53,7 +53,6 @@ class ObOpRawExpr;
 class OrderItem;
 class ObTaskExecutorCtx;
 class ObTableLocation;
-class ObPhyTableLocation;
 class ObQueryRange;
 class ObSqlExpression;
 class ObPhysicalPlan;

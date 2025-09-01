@@ -488,6 +488,7 @@ int ObWhereSubQueryPullup::do_transform_pullup_subquery(ObDMLStmt *stmt,
     if (OB_FAIL(ObTransformUtils::create_spj_and_pullup_correlated_exprs(query_ref->get_exec_params(),
                                                                          subquery,
                                                                          ctx_,
+                                                                         false,
                                                                          skip_const_in_select))) {
       LOG_WARN("failed to create spj and pullup correlated exprs", K(ret));
     } else {
@@ -1850,24 +1851,11 @@ int ObWhereSubQueryPullup::check_can_split(ObSelectStmt *subquery,
   } else if (is_contain) {
     can_split = false;
     OPT_TRACE("can not split cartesian tables, contain can not duplicate function");
-  } else if (OB_FAIL(ObTransformUtils::check_contain_correlated_function_table(subquery,
-                                                                               is_contain))) {
-    LOG_WARN("failed to check contain correlated function table", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::check_contain_correlated_table(subquery, is_contain))) {
+    LOG_WARN("failed to check contain correlated table", K(ret));
   } else if (is_contain) {
     can_split = false;
-    OPT_TRACE("can not split cartesian tables, contain correlated function table");
-  } else if (OB_FAIL(ObTransformUtils::check_contain_correlated_json_table(subquery,
-                                                                           is_contain))) {
-    LOG_WARN("failed to check contain correlated json table", K(ret));
-  } else if (is_contain) {
-    can_split = false;
-    OPT_TRACE("can not split cartesian tables, contain correlated json table");
-  } else if (OB_FAIL(ObTransformUtils::check_contain_correlated_lateral_table(subquery,
-                                                                              is_contain))) {
-    LOG_WARN("failed to check contain correlated lateral table", K(ret));
-  } else if (is_contain) {
-    can_split = false;
-    OPT_TRACE("can not split cartesian tables, contain correlated lateral derived table");
+    OPT_TRACE("can not split cartesian tables, contain correlated derived table");
   } else if (OB_FAIL(ObTransformUtils::cartesian_tables_pre_split(subquery,
                                     semi_conditions, helper.connected_tables_))){
     LOG_WARN("fail to pre split cartesian tables", K(ret));

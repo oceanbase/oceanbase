@@ -32,6 +32,8 @@ enum IndexType {
   // IVF_PQ_TYPE,
   HNSW_BQ_TYPE = 5,
   HGRAPH_TYPE = 6,
+  // SPIV_TYPE,
+  IPIVF_TYPE = 8,
   MAX_INDEX_TYPE
 };
 

@@ -16,6 +16,7 @@
 #include "share/ob_truncated_string.h"
 #include "sql/code_generator/ob_static_engine_cg.h"
 #include "sql/monitor/ob_sql_plan.h"
+#include "sql/code_generator/ob_enable_rich_format_flags.h"
 
 namespace oceanbase
 {
@@ -582,9 +583,10 @@ void ObPhysicalPlan::update_evolution_stat(const ObAuditRecordData &record)
     ATOMIC_AAF(&(stat_.evolution_stat_.cpu_time_), record.exec_timestamp_.executor_t_);
     ATOMIC_AAF(&(stat_.evolution_stat_.elapsed_time_), record.get_elapsed_time());
     ATOMIC_STORE(&(stat_.evolution_stat_.last_exec_ts_), record.exec_timestamp_.executor_end_ts_);
-    ObEvolutionRecords *evo_records = ATOMIC_LOAD(&(stat_.evolution_stat_.records_));
-    if (NULL != evo_records) {
-      evo_records->set_record_for_finish_plan(record.exec_timestamp_.receive_ts_, record.get_elapsed_time());
+    ObEvoRecordsGuard guard;
+    stat_.get_evo_records(guard);
+    if (NULL != guard.get_evo_records()) {
+      guard.get_evo_records()->set_record_for_finish_plan(record.exec_timestamp_.receive_ts_, record.get_elapsed_time());
     }
   }
 }
@@ -931,7 +933,8 @@ int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
   for (int64_t i = 0; OB_SUCC(ret) && i < infos.count(); ++i) {
     ObTableLocation &tl = infos.at(i)->get_table_location();
     const ObTableSchema *table_schema = nullptr;
-    if (tl.use_das()) {
+    if (infos.at(i)->is_lake_table_partition_info()) {
+    } else if (tl.use_das()) {
       if (OB_FAIL(das_table_locations_.push_back(tl))) {
         LOG_WARN("fail to push das table location", K(ret), K(i));
       }
@@ -1154,7 +1157,8 @@ int ObPhysicalPlan::alloc_op_spec(const ObPhyOperatorType type,
 
 int ObPhysicalPlan::alloc_op_spec_for_cg(ObLogicalOperator *op, ObSqlSchemaGuard *schema_guard,
                                          const ObPhyOperatorType type, const int64_t child_cnt,
-                                         ObOpSpec *&spec, const uint64_t op_id)
+                                         ObOpSpec *&spec, const uint64_t op_id,
+                                         const EnableOpRichFormat &enable_rich_format)
 {
   int ret = OB_SUCCESS;
   bool disable_vectorize = false;
@@ -1165,7 +1169,10 @@ int ObPhysicalPlan::alloc_op_spec_for_cg(ObLogicalOperator *op, ObSqlSchemaGuard
   } else if (disable_vectorize) {
     spec->max_batch_size_ = 0;
     spec->use_rich_format_ = false;
+  } else if (!enable_rich_format.check(type)) {
+    spec->use_rich_format_ = false;
   }
+
   if (OB_SUCC(ret)) {
     LOG_TRACE("alloc op spec for cg", K(disable_vectorize), K(spec->max_batch_size_),
               K(spec->use_rich_format_), K(*spec));
@@ -1374,6 +1381,7 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
       SQL_PC_LOG(DEBUG, "fail to copy raw sql", "plan_id", get_plan_id(), K(ret));
     } else {
       stat_.sql_cs_type_ = pc_ctx.sql_ctx_.session_info_->get_local_collation_connection();
+      stat_.collation_connection_ = pc_ctx.fp_result_.pc_key_.collation_connection_;
     }
 
     if (OB_FAIL(ret)) {

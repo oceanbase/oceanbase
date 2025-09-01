@@ -116,9 +116,14 @@ public:
   int add_unaccepted_baseline(ObSpmCacheCtx& spm_ctx,
                               ObPlanCacheCtx& pc_ctx,
                               ObPhysicalPlan* plan);
+  int add_unaccepted_baseline(ObSpmCacheCtx &spm_ctx,
+                              const ObPhysicalPlan *plan,
+                              ObCacheObjGuard &guard);
   int check_and_update_plan_baseline(ObPlanCacheCtx &pc_ctx, ObPhysicalPlan &plan);
-  int update_plan_baseline_statistic(EvolutionTaskResult& result);
-  int update_statistic_for_baseline(EvolutionTaskResult& result);
+  int update_plan_baseline_statistic(const ObPhysicalPlan *evo_plan,
+                                     EvolutionTaskResult& result);
+  int update_statistic_for_baseline(const ObPhysicalPlan *evo_plan,
+                                    EvolutionTaskResult& result);
   static int update_baseline_item(const ObEvolutionStat &stat,
                                   const bool is_verified,
                                   ObPlanBaselineItem *item);

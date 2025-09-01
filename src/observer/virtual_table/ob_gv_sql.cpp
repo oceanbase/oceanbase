@@ -437,6 +437,7 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::SYS_VARS: {
+      ObSqlString sql_influence_str;
       if (!cache_stat_updated) {
         cells[i].set_null();
       } else if (cache_obj->is_sql_crsr() ||
@@ -444,7 +445,13 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
                  cache_obj->is_result()) {
         ObString sys_vars_str, origin_str;
         if (cache_obj->is_sql_crsr()) {
-          origin_str = plan->stat_.sys_vars_str_;
+          if (OB_FAIL(sql_influence_str.assign_fmt("%u,%.*s", plan->stat_.collation_connection_,
+                                                              plan->stat_.sys_vars_str_.length(),
+                                                              plan->stat_.sys_vars_str_.ptr()))) {
+            SERVER_LOG(ERROR, "assign sql_influence_str failed", K(ret));
+          } else {
+            origin_str = sql_influence_str.string();
+          }
         } else if (cache_obj->is_result()) {
           origin_str = result_object->get_stat().sys_vars_str_;
         } else {
@@ -455,7 +462,8 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
             origin_str.length() > OB_MAX_COMMAND_LENGTH
                 ? OB_MAX_COMMAND_LENGTH
                 : origin_str.length();
-        if (buf_len > 0 && OB_ISNULL(buf = static_cast<char *>(allocator_->alloc(buf_len)))) {
+        if (OB_FAIL(ret)) {
+        } else if (buf_len > 0 && OB_ISNULL(buf = static_cast<char *>(allocator_->alloc(buf_len)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           SERVER_LOG(ERROR, "allocate memory failed!", K(ret), K(buf_len));
         } else if (OB_FALSE_IT(origin_str.to_string(buf, buf_len))) {

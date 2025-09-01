@@ -969,7 +969,13 @@ int ObLogService::diagnose_arb_srv(const share::ObLSID &id,
 }
 #endif
 
-int ObLogService::get_io_start_time(int64_t &last_working_time)
+int ObLogService::get_io_statistic_info(int64_t &last_working_time,
+                                        int64_t &pending_write_size,
+                                        int64_t &pending_write_count,
+                                        int64_t &pending_write_rt,
+                                        int64_t &accum_write_size,
+                                        int64_t &accum_write_count,
+                                        int64_t &accum_write_rt)
 {
   int ret = OB_SUCCESS;
   palf::PalfEnv *palf_env = static_cast<palf::PalfEnv*>(palf_env_);
@@ -978,8 +984,16 @@ int ObLogService::get_io_start_time(int64_t &last_working_time)
     CLOG_LOG(WARN, "log_service is not inited", K(ret));
   } else if (enable_logservice_) {
     last_working_time = OB_INVALID_TIMESTAMP;
-  } else if (OB_FAIL(palf_env->get_io_start_time(last_working_time))) {
-    CLOG_LOG(WARN, "palf_env get_io_start_time failed", K(ret));
+    pending_write_size = 0;
+    pending_write_count = 0;
+    pending_write_rt = 0;
+    accum_write_size = 0;
+    accum_write_count = 0;
+    accum_write_rt = 0;
+  } else if (OB_FAIL(palf_env->get_io_statistic_info(last_working_time,
+      pending_write_size, pending_write_count, pending_write_rt,
+      accum_write_size, accum_write_count, accum_write_rt))) {
+    CLOG_LOG(WARN, "palf_env get_io_statistic_info failed", K(ret));
   } else {
     // do nothing
   }

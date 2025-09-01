@@ -504,7 +504,7 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
     }
     if (parent_dfo->need_p2p_info_ && parent_dfo->get_p2p_dh_addrs().empty()) {
       ObDASTableLoc *table_loc = nullptr;
-      if (!tsc_op->is_external_table_) {
+      if (!tsc_op->is_ob_external_table()) {
         if (OB_ISNULL(table_loc = DAS_CTX(exec_ctx).get_table_loc_by_id(
               tsc_op->get_table_loc_id(), tsc_op->get_loc_ref_table_id()))) {
           OZ(ObTableLocation::get_full_leader_table_loc(DAS_CTX(exec_ctx).get_location_router(),

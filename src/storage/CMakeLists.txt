@@ -47,6 +47,8 @@ ob_set_subtarget(ob_storage blocksstable
   blocksstable/ob_logic_macro_id.cpp
   blocksstable/ob_sstable_printer.cpp
   blocksstable/ob_storage_cache_suite.cpp
+  blocksstable/ob_storage_object_type.cpp
+  blocksstable/ob_ss_obj_util.cpp
   blocksstable/ob_super_block_buffer_holder.cpp
   blocksstable/ob_storage_datum.cpp
   blocksstable/ob_datum_row.cpp
@@ -157,10 +159,16 @@ ob_set_subtarget(ob_storage blocksstable_index_block
   blocksstable/index_block/ob_index_block_tree_cursor.cpp
   blocksstable/index_block/ob_index_block_util.cpp
   blocksstable/index_block/ob_skip_index_filter_executor.cpp
+  blocksstable/index_block/ob_sstable_index_scanner.cpp
   blocksstable/index_block/ob_sstable_meta_info.cpp
   blocksstable/index_block/ob_sstable_sec_meta_iterator.cpp
   blocksstable/index_block/ob_clustered_index_block_writer.cpp
   blocksstable/index_block/ob_index_block_bare_iterator.cpp
+)
+
+ob_set_subtarget(ob_storage macro_cache
+  macro_cache/ob_storage_disk_space_meta.cpp
+  macro_cache/ob_ext_table_disk_cache_common_meta.cpp
 )
 
 ob_set_subtarget(ob_storage meta_store
@@ -1077,6 +1085,22 @@ ob_set_subtarget(ob_storage reorganization_info_table
   reorganization_info_table/ob_tablet_reorg_info_table_operation.cpp
   reorganization_info_table/ob_tablet_reorg_info_table_iterator.cpp
   reorganization_info_table/ob_tablet_reorg_info_service.cpp
+)
+
+ob_set_subtarget(ob_storage retrieval
+  retrieval/ob_block_max_iter.cpp
+  retrieval/ob_block_stat_collector.cpp
+  retrieval/ob_block_stat_iter.cpp
+  retrieval/ob_sparse_bmw_iter.cpp
+  retrieval/ob_sparse_daat_iter.cpp
+  retrieval/ob_sparse_taat_iter.cpp
+  retrieval/ob_sparse_utils.cpp
+  retrieval/ob_sparse_lookup_iter.cpp
+  retrieval/ob_text_retrieval_token_iter.cpp
+  retrieval/ob_text_daat_iter.cpp
+  retrieval/ob_text_taat_iter.cpp
+  retrieval/ob_spiv_daat_iter.cpp
+  retrieval/ob_spiv_dim_iter.cpp
 )
 
 ob_add_new_object_target(ob_storage ob_storage)

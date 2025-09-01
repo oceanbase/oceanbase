@@ -152,16 +152,16 @@ Query Plan
 |ID|OPERATOR                                   |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------------
 |0 |PX COORDINATOR                             |        |2       |43          |
-|1 |└─EXCHANGE OUT DISTR                       |:EX10003|2       |42          |
-|2 |  └─HASH UNION DISTINCT                    |        |2       |39          |
+|1 |└─EXCHANGE OUT DISTR                       |:EX10003|2       |41          |
+|2 |  └─HASH UNION DISTINCT                    |        |2       |38          |
 |3 |    ├─HASH JOIN                            |        |1       |18          |
 |4 |    │ ├─PX PARTITION ITERATOR              |        |1       |11          |
 |5 |    │ │ └─TABLE FULL SCAN                  |a       |1       |11          |
 |6 |    │ └─EXCHANGE IN DISTR                  |        |3       |7           |
 |7 |    │   └─EXCHANGE OUT DISTR (PKEY)        |:EX10000|3       |6           |
 |8 |    │     └─TABLE FULL SCAN                |s       |3       |3           |
-|9 |    └─EXCHANGE IN DISTR                    |        |1       |21          |
-|10|      └─EXCHANGE OUT DISTR (PKEY)          |:EX10002|1       |20          |
+|9 |    └─EXCHANGE IN DISTR                    |        |1       |20          |
+|10|      └─EXCHANGE OUT DISTR (PKEY)          |:EX10002|1       |19          |
 |11|        └─HASH DISTINCT                    |        |1       |18          |
 |12|          └─MERGE JOIN                     |        |1       |18          |
 |13|            ├─SORT                         |        |1       |16          |
@@ -198,7 +198,7 @@ Outputs & filters:
  10 - output([s.acctnbr], [s.balcatcd], [s.baltypcd], [a.acctnbr], [a.curracctstatcd]), filter(nil), rowset=16
       (#keys=1, [s.acctnbr]), is_single, dop=1
  11 - output([s.acctnbr], [s.balcatcd], [s.baltypcd], [a.acctnbr], [a.curracctstatcd]), filter(nil), rowset=16
-      distinct([s.acctnbr], [s.balcatcd], [s.baltypcd], [a.acctnbr], [a.curracctstatcd])
+      distinct([s.acctnbr], [s.balcatcd], [s.baltypcd]), partial
  12 - output([s.acctnbr], [s.balcatcd], [s.baltypcd], [a.acctnbr], [a.curracctstatcd]), filter(nil), rowset=16
       equal_conds([s.acctnbr = a.acctnbr]), other_conds(nil)
       merge_directions([ASC])

@@ -213,6 +213,8 @@ private:
   }
 
 private:
+  static ObObj NOP;
+
   compaction::ObLocalArena allocator_;
   ObMicroBlockEncodingCtx ctx_;
   ObMicroBufferWriter row_buf_holder_;

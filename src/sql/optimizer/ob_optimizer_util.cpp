@@ -1005,7 +1005,7 @@ int ObOptimizerUtil::get_expr_monotonicity_recursively(const ObRawExpr* expr,
   if (OB_ISNULL(expr) || OB_ISNULL(var)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected expression input is null error", K(ret));
-  } else if (expr->is_const_raw_expr()) {
+  } else if (expr->is_const_expr()) {
     // here if cannot merge into upperline
     // select x + 10(:?) 通过返回结果看 + int 或者+ null都会被解析为const raw expr 只有返回类型能够区分
     if (!static_cast<const ObConstRawExpr*>(expr)->get_param().is_null_oracle()) {
@@ -1714,7 +1714,127 @@ int ObOptimizerUtil::classify_equal_conds(const ObIArray<ObRawExpr *> &conds,
   }
   return ret;
 }
+int ObOptimizerUtil::contains_group_by(const ObLogicalOperator *root, bool & contains)
+{
+  int ret = OB_SUCCESS;
+  const ObDMLStmt *stmt = NULL;
+  contains = false;
+  const ObSelectStmt *select_stmt = NULL;
+  if (OB_ISNULL(root) ||
+      OB_ISNULL(root->get_plan()) ||
+      OB_ISNULL(stmt = root->get_plan()->get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(root), K(stmt));
+  } else if (OB_UNLIKELY(!stmt->is_select_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("child stmt is not select stmt", K(ret), KPC(stmt));
+  } else if (OB_ISNULL(select_stmt = static_cast<const ObSelectStmt *>(stmt))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to cast select stmt", K(ret));
+  } else {
+    contains = select_stmt->get_aggr_item_size() > 0;
+  }
+  return ret;
+}
 
+int ObOptimizerUtil::contains_virtual_column(const ObLogicalOperator *root, bool & contains)
+{
+  int ret = OB_SUCCESS;
+  const ObDMLStmt *stmt = NULL;
+  contains = false;
+  const ObSelectStmt *select_stmt = NULL;
+  if (OB_ISNULL(root) ||
+      OB_ISNULL(root->get_plan()) ||
+      OB_ISNULL(stmt = root->get_plan()->get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(root), K(stmt));
+  } else if (OB_UNLIKELY(!stmt->is_select_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("child stmt is not select stmt", K(ret), KPC(stmt));
+  } else if (OB_ISNULL(select_stmt = static_cast<const ObSelectStmt *>(stmt))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to cast select stmt", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !contains && i < select_stmt->get_select_items().count() && OB_SUCC(ret); ++i) {
+      if (select_stmt->get_select_item(i).expr_->has_flag(CNT_PSEUDO_COLUMN)) {
+        contains = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObOptimizerUtil::contains_lob_type(const ObIArray<ObRawExpr*> &exprs,
+                                       bool & contains)
+{
+  int ret = OB_SUCCESS;
+  contains = false;
+  for (int64_t j = 0; !contains && j < exprs.count(); j++) {
+    if (OB_ISNULL(exprs.at(j))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret), K(j));
+    } else if (exprs.at(j)->get_result_meta().is_lob_storage()) {
+      contains = true;
+    }
+  }
+  return ret;
+}
+
+/*
+ * can only be used for hash join
+ */
+int ObOptimizerUtil::get_strict_equal_keys(const ObIArray<ObRawExpr*> &exprs,
+                                           const ObRelIds &left_table_sets,
+                                           ObIArray<ObRawExpr*> &left_keys,
+                                           ObIArray<ObRawExpr*> &right_keys,
+                                           common::ObIArray<ObRawExpr*> &left_exprs,
+                                           common::ObIArray<ObRawExpr*> &right_exprs,
+                                           bool & has_other_conditions)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *temp_expr = NULL;
+  ObRawExpr *left_expr = NULL;
+  ObRawExpr *right_expr = NULL;
+  has_other_conditions = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
+    if (OB_ISNULL(temp_expr = exprs.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (!temp_expr->has_flag(IS_JOIN_COND)) {
+      /*do nothing*/
+      has_other_conditions = true;
+    } else if (!temp_expr->get_relation_ids().overlap(left_table_sets)) {
+      /*do nothing*/
+      has_other_conditions = true;
+    } else if (OB_ISNULL(left_expr = temp_expr->get_param_expr(0)) ||
+               OB_ISNULL(right_expr = temp_expr->get_param_expr(1))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(left_expr), K(right_expr), K(ret));
+    } else {
+      bool is_null_safe = (temp_expr->get_expr_type() == T_OP_NSEQ ||
+                           temp_expr->get_expr_type() == T_OP_SQ_NSEQ);
+      bool is_equal = (temp_expr->get_expr_type() == T_OP_EQ ||
+                      temp_expr->get_expr_type() == T_OP_SQ_EQ);
+      if (!is_null_safe && !is_equal) {
+        has_other_conditions = true;
+        break;
+      }
+      if (!left_expr->get_relation_ids().is_subset(left_table_sets)) {
+        std::swap(left_expr, right_expr);
+      }
+      if (OB_FAIL(left_exprs.push_back(left_expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      } else if (OB_FAIL(right_exprs.push_back(right_expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      } else if (!is_null_safe && OB_FAIL(left_keys.push_back(left_expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      } else if (!is_null_safe && OB_FAIL(right_keys.push_back(right_expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      } else { /*do nothing*/ }
+    }
+  }
+  return ret;
+}
 int ObOptimizerUtil::get_equal_keys(const ObIArray<ObRawExpr*> &exprs,
                                     const ObRelIds &left_table_sets,
                                     ObIArray<ObRawExpr*> &left_keys,
@@ -3731,6 +3851,37 @@ int ObOptimizerUtil::try_add_fd_item(const ObDMLStmt *stmt,
         }
       }
     }
+  }
+  return ret;
+}
+
+/*
+ * output to input map may be a many to one map
+ */
+ int ObOptimizerUtil::get_subplan_scan_output_to_input_mapping(const ObSelectStmt &child_stmt,
+                                                               const ObIArray<ObRawExpr*> &output_exprs,
+                                                               ObIArray<ObRawExpr*> &mapped_input_cols,
+                                                               ObIArray<ObRawExpr*> &mapped_output_cols)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = true;
+  if (OB_FAIL(ObRawExprUtils::extract_column_exprs(output_exprs, mapped_output_cols))) {
+    LOG_WARN("extract column exprs failed", K(ret), K(output_exprs));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < mapped_output_cols.count(); ++i) {
+    const ObRawExpr *dep_column = mapped_output_cols.at(i);
+    if (OB_ISNULL(dep_column)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("deps_column is null");
+    } else if (!dep_column->is_column_ref_expr()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("dep column is invalid", K(ret), KPC(dep_column));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  // do nothing
+  } else if (OB_FAIL(ObTransformUtils::convert_column_expr_to_select_expr(mapped_output_cols, child_stmt, mapped_input_cols))) {
+    LOG_WARN("failed to convert column expr to select expr", K(ret));
   }
   return ret;
 }
@@ -7001,6 +7152,142 @@ int ObOptimizerUtil::add_cast_to_set_select_expr(ObSQLSessionInfo *session_info,
   return ret;
 }
 
+int ObOptimizerUtil::create_new_column_expr(ObSQLSessionInfo *session_info,
+                                            ObRawExprFactory *expr_factory,
+                                            ObPhysicalPlanCtx *plan_ctx,
+                                            const TableItem &table_item,
+                                            const int64_t column_id,
+                                            const SelectItem &select_item,
+                                            ObDMLStmt &stmt,
+                                            ObColumnRefRawExpr *&new_expr)
+{
+  int ret = OB_SUCCESS;
+  ObColumnRefRawExpr *new_column_ref = NULL;
+  uint64_t base_table_id = OB_INVALID_ID;
+  uint64_t base_column_id = OB_INVALID_ID;
+  if (OB_ISNULL(expr_factory) ||
+      OB_ISNULL(plan_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params have null", K(ret), K(stmt));
+  } else if (OB_FAIL(expr_factory->create_raw_expr(T_REF_COLUMN, new_column_ref))) {
+    LOG_WARN("failed to create a new column ref expr", K(ret));
+  } else if (OB_ISNULL(new_column_ref)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("new_column_ref should not be null", K(ret));
+  } else {
+    ObRawExpr *select_expr = select_item.expr_;
+    new_column_ref->set_table_name(table_item.alias_name_);
+    new_column_ref->set_column_name(select_item.alias_name_);
+    new_column_ref->set_ref_id(table_item.table_id_, column_id);//only one column
+    new_column_ref->set_collation_type(select_expr->get_collation_type());
+    new_column_ref->set_collation_level(select_expr->get_collation_level());
+    new_column_ref->set_result_type(select_expr->get_result_type());
+    if (OB_FAIL(new_column_ref->add_relation_id(stmt.get_table_bit_index(table_item.table_id_)))) {
+      LOG_WARN("failed to add relation id", K(ret), K(table_item));
+    } else if (select_expr->is_column_ref_expr()) {
+      const ObColumnRefRawExpr *old_col = static_cast<const ObColumnRefRawExpr *>(select_expr);
+      const ColumnItem *old_col_item = NULL;
+      if (OB_ISNULL(table_item.ref_query_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table item is invalid", K(ret));
+      } else if (OB_ISNULL(old_col_item = table_item.ref_query_->get_column_item_by_id(
+                             old_col->get_table_id(), old_col->get_column_id()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get column item", K(ret));
+      } else {
+        base_table_id = old_col_item->base_tid_;
+        base_column_id = old_col_item->base_cid_;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ColumnItem column_item;
+      column_item.column_name_ = select_item.alias_name_;
+      column_item.expr_ = new_column_ref;
+      column_item.table_id_ = table_item.table_id_;
+      column_item.column_id_ = column_id;
+      column_item.base_tid_ = base_table_id;
+      column_item.base_cid_ = base_column_id;
+      if (OB_FAIL(stmt.add_column_item(column_item))) {
+        LOG_WARN("failed to add column item", K(column_item), K(ret));
+      } else if (OB_FAIL(new_column_ref->formalize(session_info))) {
+        LOG_WARN("failed to formalize a new expr", K(ret));
+      } else {
+        new_expr = new_column_ref;
+      }
+    }
+  }
+  return ret;
+}
+int ObOptimizerUtil::add_new_select_items_to_view(ObSQLSessionInfo *session_info,
+                                                  ObIAllocator &allocator,
+                                                  ObRawExprFactory *expr_factory,
+                                                  ObPhysicalPlanCtx *plan_ctx,
+                                                  TableItem &view_table_item,
+                                                  ObDMLStmt &stmt,
+                                                  ObIArray<ObRawExpr *> &new_select_list,
+                                                  ObIArray<ObRawExpr *> &new_column_list,
+                                                  bool ignore_dup_select_expr,
+                                                  bool repeated_select)
+{
+  int ret = OB_SUCCESS;
+  ObSelectStmt *view_stmt = NULL;
+  if (OB_ISNULL(view_stmt = view_table_item.ref_query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params have null", K(ret), K(stmt), K(view_table_item.ref_query_));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < new_select_list.count(); ++i) {
+    ObRawExpr *expr = NULL;
+    ObColumnRefRawExpr *col = NULL;
+    int64_t idx = -1;
+    if (OB_ISNULL(expr = new_select_list.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expr is null", K(ret), K(expr));
+    } else if (OB_FAIL(expr->formalize(session_info))) {
+      LOG_WARN("failed to formalize expr", K(ret), K(expr));
+    }
+    for (idx = (repeated_select ? view_stmt->get_select_item_size() : 0);
+         OB_SUCC(ret) && idx < view_stmt->get_select_item_size() &&
+         (expr != view_stmt->get_select_item(idx).expr_ || !ignore_dup_select_expr);
+         ++idx);
+
+    if (OB_SUCC(ret)) {
+      uint64_t column_id = OB_APP_MIN_COLUMN_ID + idx;
+      if (idx >= 0 && idx < view_stmt->get_select_item_size()) {
+        if (OB_NOT_NULL(col = stmt.get_column_expr_by_id(view_table_item.table_id_, column_id))) {
+          //do nothing
+        } else if (OB_FAIL(ObOptimizerUtil::create_new_column_expr(session_info,
+                                                                   expr_factory,
+                                                                   plan_ctx,
+                                                                   view_table_item,
+                                                                   column_id,
+                                                                   view_stmt->get_select_item(idx),
+                                                                   stmt,
+                                                                   col))) {
+          LOG_WARN("failed to create new column expr", K(ret));
+        }
+      } else {
+        if (OB_FAIL(ObTransformUtils::create_select_item(allocator, expr, view_stmt))) {
+          LOG_WARN("failed to create select item", K(ret));
+        } else if (OB_FAIL(ObOptimizerUtil::create_new_column_expr(session_info,
+                                                                   expr_factory,
+                                                                   plan_ctx,
+                                                                   view_table_item,
+                                                                   column_id,
+                                                                   view_stmt->get_select_item(idx),
+                                                                   stmt,
+                                                                   col))) {
+          LOG_WARN("failed to create new column expr", K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(new_column_list.push_back(col))) {
+        LOG_WARN("failed to push back column expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
 int ObOptimizerUtil::add_column_conv_to_set_list(ObSQLSessionInfo *session_info,
                                                  ObRawExprFactory *expr_factory,
                                                  ObIArray<ObSelectStmt*> &stmts,
@@ -8629,11 +8916,11 @@ ObPQDistributeMethod::Type ObOptimizerUtil::get_right_dist_method(const ObShardi
 int ObOptimizerUtil::generate_pullup_aggr_expr(ObRawExprFactory &expr_factory,
                                                ObSQLSessionInfo *session_info,
                                                ObItemType aggr_type,
-                                               ObRawExpr *origin_expr,
+                                               ObAggFunRawExpr *origin_expr,
+                                               ObRawExpr *pushdown_expr,
                                                ObAggFunRawExpr *&pullup_aggr)
 {
   int ret = OB_SUCCESS;
-  ObAggFunRawExpr *origin_aggr = NULL;
   pullup_aggr = NULL;
   if (OB_ISNULL(origin_expr)) {
     ret = OB_ERR_UNEXPECTED;
@@ -8665,17 +8952,13 @@ int ObOptimizerUtil::generate_pullup_aggr_expr(ObRawExprFactory &expr_factory,
     if (OB_FAIL(ObRawExprUtils::build_common_aggr_expr(expr_factory,
                                                        session_info,
                                                        pullup_aggr_type,
-                                                       origin_expr,
+                                                       pushdown_expr,
                                                        pullup_aggr))) {
       LOG_WARN("failed to build common aggr expr", K(ret));
     }
-  } else if (OB_UNLIKELY(!origin_expr->is_aggr_expr())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected aggr type", K(ret), KPC(origin_expr));
-  } else if (OB_FALSE_IT(origin_aggr = static_cast<ObAggFunRawExpr*>(origin_expr))) {
   } else if (T_FUN_GROUPING == aggr_type &&
-             origin_aggr->get_real_param_count() == 1) {
-    ObRawExpr *param_expr = origin_aggr->get_real_param_exprs_for_update().at(0);
+             origin_expr->get_real_param_count() == 1) {
+    ObRawExpr *param_expr = origin_expr->get_real_param_exprs_for_update().at(0);
     if (OB_FAIL(ObRawExprUtils::build_common_aggr_expr(expr_factory,
                                                        session_info,
                                                        T_FUN_GROUPING,
@@ -8683,34 +8966,43 @@ int ObOptimizerUtil::generate_pullup_aggr_expr(ObRawExprFactory &expr_factory,
                                                        pullup_aggr))) {
       LOG_WARN("failed to pullup grouping aggr expr", K(ret));
     }
-  } else if (T_FUN_GROUPING_ID == aggr_type && origin_aggr->get_real_param_count() > 0) {
-    ObRawExpr *param_expr = origin_aggr->get_real_param_exprs().at(0);
+  } else if (T_FUN_GROUPING_ID == aggr_type && origin_expr->get_real_param_count() > 0) {
+    ObRawExpr *param_expr = origin_expr->get_real_param_exprs().at(0);
     if (OB_FAIL(ObRawExprUtils::build_common_aggr_expr(
           expr_factory, session_info, T_FUN_GROUPING_ID, param_expr, pullup_aggr))) {
       LOG_WARN("build aggr expr failed", K(ret));
     }
-    for (int i = 1; OB_SUCC(ret) && i < origin_aggr->get_real_param_count(); i++) {
-      if (OB_FAIL(pullup_aggr->add_real_param_expr(origin_aggr->get_real_param_exprs().at(i)))) {
+    for (int i = 1; OB_SUCC(ret) && i < origin_expr->get_real_param_count(); i++) {
+      if (OB_FAIL(pullup_aggr->add_real_param_expr(origin_expr->get_real_param_exprs().at(i)))) {
         LOG_WARN("add param expr failed", K(ret));
       }
     }
+  } else if (T_FUN_GROUP_ID == aggr_type) {
+    if (OB_UNLIKELY(origin_expr->get_real_param_count() != 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid param cnt", K(ret));
+    } else if (OB_FAIL(expr_factory.create_raw_expr(origin_expr->get_expr_type(), pullup_aggr))) {
+      LOG_WARN("create raw expr failed", K(ret));
+    } else if (OB_FAIL(pullup_aggr->assign(*origin_expr))) {
+      LOG_WARN("assign expr failed", K(ret));
+    }
   } else if (T_FUN_TOP_FRE_HIST == aggr_type) {
-    if (OB_UNLIKELY(4 != origin_aggr->get_real_param_count())) {
+    if (OB_UNLIKELY(4 != origin_expr->get_real_param_count())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("real param count is invalid", K(ret));
     } else if (OB_FAIL(expr_factory.create_raw_expr(T_FUN_TOP_FRE_HIST, pullup_aggr))) {
       LOG_WARN("failed to create top frequency expr", K(ret));
     } else if (OB_FAIL(pullup_aggr->add_real_param_expr(
-                         origin_aggr->get_real_param_exprs_for_update().at(0)))) {
+                         origin_expr->get_real_param_exprs_for_update().at(0)))) {
       LOG_WARN("failed to add real param expr", K(ret));
     } else if (OB_FAIL(pullup_aggr->add_real_param_expr(
-                         origin_aggr))) {
+                         pushdown_expr))) {
       LOG_WARN("failed to add real param expr", K(ret));
     } else if (OB_FAIL(pullup_aggr->add_real_param_expr(
-                         origin_aggr->get_real_param_exprs_for_update().at(2)))) {
+                         origin_expr->get_real_param_exprs_for_update().at(2)))) {
       LOG_WARN("failed to add real param expr", K(ret));
     } else if (OB_FAIL(pullup_aggr->add_real_param_expr(
-                         origin_aggr->get_real_param_exprs_for_update().at(3)))) {
+                         origin_expr->get_real_param_exprs_for_update().at(3)))) {
       LOG_WARN("failed to add real param expr", K(ret));
     } else if (FALSE_IT(pullup_aggr->set_is_need_deserialize_row(true))) {
       // do nothing
@@ -8731,9 +9023,9 @@ int ObOptimizerUtil::check_filter_before_indexback(const ObIArray<ObRawExpr*> &f
   int ret = OB_SUCCESS;
   bool contains = false;
   ObRawExpr *expr = NULL;
-  ObSEArray<uint64_t, 8> filter_ids;
+  ObSEArray<ObRawExpr*, 8> filter_cols;
   for (int64_t i = 0; OB_SUCC(ret) && i < filter_exprs.count(); i++) {
-    filter_ids.reuse();
+    filter_cols.reuse();
     if (OB_ISNULL(expr = filter_exprs.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
@@ -8747,13 +9039,52 @@ int ObOptimizerUtil::check_filter_before_indexback(const ObIArray<ObRawExpr*> &f
       if (OB_FAIL(filter_before_index_back.push_back(false))) {
         LOG_WARN("failed to push back expr", K(ret));
       }
-    } else if (OB_FAIL(ObRawExprUtils::extract_column_ids(expr, filter_ids))) {
-      LOG_WARN("failed to extract column ids", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr, filter_cols))) {
+      LOG_WARN("failed to extract column exprs", K(ret));
     } else {
-      contains = ObOptimizerUtil::is_subset(filter_ids, index_columns);
-      if (OB_FAIL(filter_before_index_back.push_back(contains))) {
+      bool all_found = true;
+      ObSEArray<ObRawExpr*, 4> dep_cols_of_gen_col;
+      // For runtime filter, once designated as an pre-lookup filter, will be copied with a fixed form.
+      // No further generated column replacement is allowed. (special handling)
+      bool skip_expand_check = expr->get_expr_type() == T_OP_RUNTIME_FILTER
+                               || expr->get_expr_type() == T_OP_PUSHDOWN_TOPN_FILTER;
+      for (int64_t j = 0; OB_SUCC(ret) && all_found && j < filter_cols.count(); j++) {
+        if (OB_ISNULL(filter_cols.at(j))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (OB_UNLIKELY(!filter_cols.at(j)->is_column_ref_expr())) {
+          all_found = false;
+        } else if (expr->has_flag(CNT_DYNAMIC_PARAM) &&
+                   static_cast<ObColumnRefRawExpr*>(filter_cols.at(j))->is_virtual_generated_column()) {
+          all_found = false;
+          // in group rescan, filter with virtual gen col can't be evaluated before index back.
+          // it will always be treated as lookup filters. (special handling)
+        } else if (ObOptimizerUtil::find_item(index_columns,
+                      static_cast<ObColumnRefRawExpr*>(filter_cols.at(j))->get_column_id())) {
+          // find, check next
+        } else if (static_cast<ObColumnRefRawExpr*>(filter_cols.at(j))->is_virtual_generated_column() &&
+                   !skip_expand_check) {
+          dep_cols_of_gen_col.reuse();
+          if (OB_FAIL(ObRawExprUtils::extract_column_exprs(static_cast<ObColumnRefRawExpr*>(filter_cols.at(j))->get_dependant_expr(),
+                                                           dep_cols_of_gen_col))) {
+            LOG_WARN("failed to extract column exprs", K(ret));
+          } else {
+            for (int64_t k = 0; OB_SUCC(ret) && all_found && k < dep_cols_of_gen_col.count(); k++) {
+              if (ObOptimizerUtil::find_item(index_columns,
+                    static_cast<ObColumnRefRawExpr*>(dep_cols_of_gen_col.at(k))->get_column_id())) {
+                // find, check next
+              } else {
+                all_found = false;
+              }
+            }
+          }
+        } else {
+          all_found = false;
+        }
+      }
+      if (FAILEDx(filter_before_index_back.push_back(all_found))) {
         LOG_WARN("failed to push back element", K(ret));
-      } else { /*do nothjing*/ }
+      } else { /*do nothing*/ }
     }
   }
   return ret;

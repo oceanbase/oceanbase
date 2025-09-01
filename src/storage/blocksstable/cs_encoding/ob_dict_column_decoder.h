@@ -30,7 +30,7 @@ public:
   virtual ~ObDictColumnDecoder() {}
   ObDictColumnDecoder(const ObDictColumnDecoder &) = delete;
   ObDictColumnDecoder &operator=(const ObDictColumnDecoder &) = delete;
-  virtual int get_null_count(const ObColumnCSDecoderCtx &ctx, const int32_t *row_ids,
+  virtual int inner_get_null_count(const ObColumnCSDecoderCtx &ctx, const int32_t *row_ids,
     const int64_t row_cap, int64_t &null_count) const override;
 
   virtual int pushdown_operator(

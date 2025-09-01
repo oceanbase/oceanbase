@@ -20,6 +20,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "lib/jni_env/ob_java_env.h"
 #include "lib/jni_env/ob_jni_connector.h"
+#include "pl/external_routine/ob_py_utils.h"
 
 namespace oceanbase
 {
@@ -94,6 +95,7 @@ public:
   // the only way to check whether the jar file is changed is to fetch it again.
   // but fetching is too expensive, so we cache the jar in ObExecContext and assume it is always valid.
   int check_valid_impl() { return OB_SUCCESS; }
+  static int curl_fetch(const ObString &url, ObSqlString &jar);
 
   ~ObExternalURLJar()
   {
@@ -107,7 +109,6 @@ private:
   explicit ObExternalURLJar(ObIAllocator &alloc) : ObExternalResourceBase(alloc)
   {  }
 
-  static int curl_fetch(const ObString &url, ObSqlString &jar);
   static size_t curl_write_callback(const void *ptr, size_t size, size_t nmemb, void *buffer);
 };
 
@@ -143,6 +144,85 @@ private:
   uint64_t resource_id_ = OB_INVALID_ID;
   int64_t schema_version_ = OB_INVALID_VERSION;
 };
+
+/**
+ * Python external source
+*/
+class ObExternalURLPy: public ObExternalResourceBase<ObString, ObPyObject*, ObExternalURLPy>
+{
+public:
+  static int fetch_impl(ObIAllocator &alloc,
+                        const ResourceKey &key,
+                        Self *&node,
+                        ObPyThreadState *tstate,
+                        const ObString &func_name,
+                        const int64_t udf_id);
+
+  // the only way to check whether the python file is changed is to fetch it again.
+  // but fetching is too expensive, so we cache the python in ObExecContext and assume it is always valid.
+  int check_valid_impl(ObPyThreadState *tstate, const ObString &func_name, const int64_t udf_id) { return OB_SUCCESS; }
+
+  ~ObExternalURLPy()
+  {
+    if (OB_NOT_NULL(data_)) {
+      ObPyUtils::xdec_ref(*data_);
+      // data free by python gc
+      // alloc_.free(static_cast<void*>(data_));
+      data_ = nullptr;
+    }
+  }
+private:
+  ObExternalURLPy(ObIAllocator &alloc) : ObExternalResourceBase(alloc)
+  {  }
+};
+
+
+class ObExternalSchemaPy: public ObExternalResourceBase<std::pair<uint64_t, ObString>, ObPyObject*, ObExternalSchemaPy>
+{
+public:
+  static int fetch_impl(ObIAllocator &alloc,
+                        const ResourceKey &key,
+                        Self *&node,
+                        share::schema::ObSchemaGetterGuard &schema_guard,
+                        ObPyThreadState *tstate,
+                        const ObString &func_name,
+                        const int64_t udf_id);
+
+  int check_valid_impl(share::schema::ObSchemaGetterGuard &schema_guard,
+                       ObPyThreadState *tstate,
+                       const ObString &func_name,
+                       const int64_t udf_id);
+
+  bool is_inited() const { return OB_INVALID_ID != resource_id_ && OB_INVALID_VERSION != schema_version_; }
+
+  ~ObExternalSchemaPy()
+  {
+    if (OB_NOT_NULL(data_)) {
+      ObPyUtils::xdec_ref(*data_);
+      // data free by python gc
+      // alloc_.free(static_cast<void*>(data_));
+      data_ = nullptr;
+    }
+  }
+
+private:
+  ObExternalSchemaPy(ObIAllocator &alloc, uint64_t resource_id, int64_t schema_version)
+    : ObExternalResourceBase(alloc),
+      resource_id_(resource_id),
+      schema_version_(schema_version)
+  {  }
+
+  int fetch_from_inner_table(ObSqlString &py) const;
+
+private:
+  uint64_t resource_id_ = OB_INVALID_ID;
+  int64_t schema_version_ = OB_INVALID_VERSION;
+};
+
+
+/**
+ * Python external source
+*/
 
 template<typename Node>
 class ObExternalResourceCache

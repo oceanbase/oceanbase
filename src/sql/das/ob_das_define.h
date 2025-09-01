@@ -16,7 +16,7 @@
 #include "share/ob_ls_id.h"
 #include "share/location_cache/ob_location_struct.h"
 #include "common/ob_tablet_id.h"
-#include "sql/ob_phy_table_location.h"
+#include "sql/optimizer/ob_phy_table_location_info.h"
 #include "rpc/obrpc/ob_rpc_result_code.h"
 
 #define DAS_SCAN_OP(_task_op) \
@@ -92,6 +92,8 @@ enum ObDASOpType
   DAS_OP_FUNC_LOOKUP,
   DAS_OP_INDEX_PROJ_LOOKUP,
   DAS_OP_DOMAIN_ID_MERGE,
+  DAS_OP_IR_ES_MATCH,
+  DAS_OP_IR_ES_SCORE,
   //append OpType before me
   DAS_OP_MAX
 };
@@ -226,6 +228,7 @@ static const int64_t DAS_TABLET_LOC_MAP_BUCKET_SIZE = 5000;
 
 typedef common::ObList<ObDASTabletLoc*, common::ObIAllocator> DASTabletLocList;
 typedef common::ObList<ObDASTabletLoc*, common::ObIAllocator>::iterator DASTabletLocListIter;
+typedef common::ObList<ObDASTabletLoc*, common::ObIAllocator>::const_iterator ConstDASTabletLocListIter;
 typedef common::ObIArray<ObDASTabletLoc*> DASTabletLocIArray;
 typedef common::ObSEArray<ObDASTabletLoc*, 1> DASTabletLocSEArray;
 typedef common::ObArray<ObDASTabletLoc*> DASTabletLocArray;
@@ -451,6 +454,8 @@ enum ObTSCIRScanType : uint16_t
   OB_VEC_IVF_SPECIAL_AUX_SCAN,// for pq is pq id, for sq is sq meta
   OB_VEC_SPIV_INDEX_SCAN,
   OB_VEC_EMBEDDED_SCAN,
+  OB_IR_BLOCK_MAX_SCAN,
+  OB_VEC_SPIV_BLOCK_MAX_SCAN
   // OB_VEC_SPIV_INDEX_AGG,
 };
 

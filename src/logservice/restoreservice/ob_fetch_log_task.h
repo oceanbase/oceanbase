@@ -72,8 +72,9 @@ public:
   palf::LSN end_lsn_;
   share::SCN max_fetch_scn_;     // 拉取日志最大scn
   share::SCN max_submit_scn_;    // 提交日志最大scn
-  ObRemoteLogGroupEntryIterator iter_;
+
   ObRemoteFetchTaskStat task_stat_;
+  ObRemoteIGroupEntryIterator iter_;
 };
 
 struct FetchLogTaskCompare final

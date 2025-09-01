@@ -287,6 +287,7 @@ int ObPLCompiler::compile(
     }
     resolve_end = ObTimeUtility::current_time();
     FLT_SET_TAG(pl_compile_resolve_time, resolve_end - init_end);
+    LOG_INFO(">>>>>>>>Final Compile Anonymous Block Time: ", K(ret), K(resolve_end - init_end));
     //Step 3：Code Generator
     if (OB_SUCC(ret)) {
   #ifdef USE_MCJIT
@@ -464,7 +465,6 @@ int ObPLCompiler::compile(
       OZ (pl::ObPLDataType::transform_from_iparam(param,
                                                   schema_guard_,
                                                   session_info_,
-                                                  allocator_,
                                                   sql_proxy_,
                                                   param_type,
                                                   &deps));
@@ -499,14 +499,16 @@ int ObPLCompiler::compile(
 
   //Step 2: Parser
   ObStmtNodeTree *parse_tree = NULL;
+  bool is_wrap = false;
   if (OB_SUCC(ret)) {
     ObString body = routine.get_routine_body();
     ObDataTypeCastParams dtc_params = session_info_.get_dtc_params();
     ObPLParser parser(allocator_, session_info_.get_charsets4parser(), session_info_.get_sql_mode());
     OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(allocator_, dtc_params, body), K(body));
-    OZ (parser.parse_routine_body(body, parse_tree, session_info_.is_for_trigger_package()), K(body));
+    OZ (parser.parse_routine_body(body, parse_tree, session_info_.is_for_trigger_package(), is_wrap), K(body));
   }
 
+  func.set_is_wrap(is_wrap);
   int64_t parse_end = ObTimeUtility::current_time();
   LOG_INFO(">>>>>>>>Parse Time: ", K(routine.get_routine_id()), K(routine.get_routine_name()), K(parse_end - init_end));
   FLT_SET_TAG(pl_compile_parser_time, parse_end - init_end);
@@ -570,6 +572,7 @@ int ObPLCompiler::compile(
                                && !func_ast.has_incomplete_rt_dep_error()
                                && !cg.get_debug_mode()
                                && !cg.get_profile_mode()
+                               && !cg.get_code_coverage_mode()
                                && (!func_ast.get_is_all_sql_stmt() || !func_ast.get_obj_access_exprs().empty());
       FLT_SET_TAG(pl_compile_is_persist, enable_persistent);
       OZ (cg.init());
@@ -788,7 +791,8 @@ int ObPLCompiler::check_package_body_legal(const ObPLBlockNS *parent_ns,
 int ObPLCompiler::analyze_package(const ObString &source,
                                   const ObPLBlockNS *parent_ns,
                                   ObPLPackageAST &package_ast,
-                                  bool is_for_trigger)
+                                  bool is_for_trigger,
+                                  bool &is_wrap)
 {
   int ret = OB_SUCCESS;
   bool origin_is_for_trigger = session_info_.is_for_trigger_package();
@@ -851,7 +855,7 @@ int ObPLCompiler::analyze_package(const ObString &source,
       }
     }
     OZ (parser.parse_package(source, parse_tree, session_info_.get_dtc_params(), 
-                             &schema_guard_, is_for_trigger, trg_info));
+                             &schema_guard_, is_for_trigger, is_wrap, trg_info));
     OZ (resolver.init(package_ast));
     OZ (resolver.resolve(parse_tree, package_ast));
     if (OB_SUCC(ret) && PL_PACKAGE_SPEC == package_ast.get_package_type()) {
@@ -902,6 +906,7 @@ int ObPLCompiler::generate_package(const ObString &exec_env, ObPLPackageAST &pac
         bool enable_persistent = GCONF._enable_persistent_compiled_routine
                                   && package_ast.get_can_cached()
                                   && session_info_.get_pl_profiler() == nullptr
+                                  && session_info_.get_pl_code_coverage() == nullptr
                                   && (!session_info_.is_pl_debug_on() || get_tenant_id_by_object_id(package.get_id()) == OB_SYS_TENANT_ID);
         FLT_SET_TAG(pl_compile_is_persist, enable_persistent);
         if (enable_persistent) {
@@ -949,7 +954,7 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
   bool saved_trigger_flag = session_info_.is_for_trigger_package();
   ObString source;
   ObString copy_exec_env;
-
+  bool is_wrap = false;
   int64_t compile_start = ObTimeUtility::current_time();
 
   ObPLCompilerEnvGuard guard(package_info, session_info_, schema_guard_, package_ast, ret, parent_ns);
@@ -988,7 +993,8 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
   OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(
         allocator_, session_info_.get_dtc_params(), source));
   OZ (analyze_package(source, parent_ns,
-                      package_ast, package_info.is_for_trigger()));
+                      package_ast, package_info.is_for_trigger(), is_wrap));
+  OX (package.set_is_wrap(is_wrap));
   int64_t resolve_end = ObTimeUtility::current_time();
   FLT_SET_TAG(pl_compile_resolve_time, resolve_end - compile_start);
 
@@ -1221,6 +1227,7 @@ int ObPLCompiler::init_function(const share::schema::ObRoutineInfo *routine, ObP
         }
       }
       ObString database_name, package_name;
+      uint64_t priv_user_id = OB_INVALID_ID;
       OZ (format_object_name(schema_guard_,
                              routine->get_tenant_id(),
                              routine->get_database_id(),
@@ -1230,6 +1237,13 @@ int ObPLCompiler::init_function(const share::schema::ObRoutineInfo *routine, ObP
       OZ (func.set_database_name(database_name));
       OZ (func.set_package_name(package_name));
       OZ (func.set_function_name(routine->get_routine_name()));
+      OZ (schema_guard_.get_user_id(routine->get_tenant_id(),
+                                    database_name,
+                                    ObString(OB_DEFAULT_HOST_NAME),
+                                    priv_user_id,
+                                    false));
+      OX (func.set_definer_user_id(priv_user_id));
+      OZ (func.set_special_pkg_invoke_right(schema_guard_));
     }
   }
   return ret;
@@ -1273,6 +1287,7 @@ int ObPLCompiler::init_function(share::schema::ObSchemaGetterGuard &schema_guard
     }
   }
   ObString database_name, package_name;
+  uint64_t priv_user_id = OB_INVALID_ID;
   OZ (format_object_name(schema_guard,
                          routine_info.get_tenant_id(),
                          routine_info.get_db_id(),
@@ -1282,6 +1297,13 @@ int ObPLCompiler::init_function(share::schema::ObSchemaGetterGuard &schema_guard
   OZ (routine.set_database_name(database_name));
   OZ (routine.set_package_name(package_name));
   OZ (routine.set_function_name(routine_info.get_name()));
+  OZ (schema_guard.get_user_id(routine_info.get_tenant_id(),
+                                database_name,
+                                ObString(OB_DEFAULT_HOST_NAME),
+                                priv_user_id,
+                                false));
+  OX (routine.set_definer_user_id(priv_user_id));
+  OZ (routine.set_special_pkg_invoke_right(schema_guard));
   return ret;
 }
 
@@ -1600,7 +1622,7 @@ int ObPLCompiler::compile_subprogram_table(common::ObIAllocator &allocator,
         new (routine) ObPLFunction(compile_unit.get_mem_context());
         OZ (init_function(schema_guard, exec_env, *routine_info, *routine));
         if (OB_SUCC(ret)) {
-
+          routine->set_is_wrap(compile_unit.get_is_wrap());
 #ifdef USE_MCJIT
           HEAP_VAR(ObPLCodeGenerator, cg ,allocator_, session_info) {
 #else

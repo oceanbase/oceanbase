@@ -861,7 +861,7 @@ void ObStorageSchema::reset()
   if (nullptr != allocator_) {
     reset_string(encryption_);
     reset_string(encrypt_key_);
-
+    reset_string(semistruct_properties_);
     rowkey_array_.reset();
     for (int i = 0; i < column_array_.count(); ++i) {
       column_array_.at(i).destroy(*allocator_);

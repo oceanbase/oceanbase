@@ -175,7 +175,7 @@ int ObCSEncodingTestBase::prepare(const ObObjType *col_types, const int64_t rowk
     ctx_.column_cnt_ = column_cnt;
     ctx_.col_descs_ = &col_descs_;
     //ctx_.major_working_cluster_version_ = cal_version(4, 1, 0, 0);
-    ctx_.major_working_cluster_version_ = cal_version(4, 3, 5, 3);
+    ctx_.major_working_cluster_version_ = cal_version(4, 4, 1, 0);
     ctx_.row_store_type_ = common::CS_ENCODING_ROW_STORE;
     ctx_.compressor_type_ = compressor_type;
     ctx_.need_calc_column_chksum_ = true;
@@ -379,7 +379,7 @@ int ObCSEncodingTestBase::check_decode_vector(ObMicroBlockCSDecoder &decoder,
         }
 
         for (int64_t vec_idx = 0;  OB_SUCC(ret) && vec_idx < row_cnt; ++vec_idx) {
-          if (false == VectorDecodeTestUtil::verify_vector_and_datum_match(
+          if (false == VectorDecodeTestUtil::verify_vector_and_datum_match_nop(
               *vector_ctx.get_vector(), vec_idx, row_arr[vec_idx].storage_datums_[col_idx])) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("decode vector result mismatch",

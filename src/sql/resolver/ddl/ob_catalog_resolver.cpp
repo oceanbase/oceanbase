@@ -224,26 +224,53 @@ int ObCatalogResolver::resolve_catalog_name(const ParseNode &name_node, obrpc::O
 int ObCatalogResolver::resolve_catalog_properties(const ParseNode &properties_node, obrpc::ObCatalogDDLArg &arg)
 {
   int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
   ObCatalogProperties::CatalogType type;
   ObString catalog_properties;
-  if (OB_ISNULL(allocator_)) {
+  if (OB_ISNULL(allocator_) || OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), data_version))) {
+    LOG_WARN("failed to get data version", K(ret));
   } else if (OB_FAIL(ObCatalogProperties::resolve_catalog_type(properties_node, type))) {
     LOG_WARN("failed to resolve catalog type", K(ret));
   } else {
-    switch (type)
-    {
-      case ObCatalogProperties::CatalogType::ODPS_TYPE:
-      {
+    switch (type) {
+      case ObCatalogProperties::CatalogType::ODPS_TYPE: {
         ObODPSCatalogProperties properties;
         OZ(properties.resolve_catalog_properties(properties_node));
         OZ(properties.encrypt(*allocator_));
         OZ(properties.to_string_with_alloc(catalog_properties, *allocator_));
         break;
       }
-      default:
-      {
+      case ObCatalogProperties::CatalogType::FILESYSTEM_TYPE: {
+        if (!GCONF._enable_filesystem_catalog) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("filesystem catalog is disabled", K(ret));
+        } else if (data_version < DATA_VERSION_4_4_1_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("filesystem catalog supported in 4.4.1", K(data_version));
+        } else {
+          ObFilesystemCatalogProperties properties;
+          OZ(properties.resolve_catalog_properties(properties_node));
+          OZ(properties.encrypt(*allocator_));
+          OZ(properties.to_string_with_alloc(catalog_properties, *allocator_));
+        }
+        break;
+      }
+      case ObCatalogProperties::CatalogType::HMS_TYPE: {
+        if (data_version < DATA_VERSION_4_4_1_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("hms catalog supported in 4.4.1", K(data_version));
+        } else {
+          ObHMSCatalogProperties properties;
+          OZ(properties.resolve_catalog_properties(properties_node));
+          OZ(properties.encrypt(*allocator_));
+          OZ(properties.to_string_with_alloc(catalog_properties, *allocator_));
+        }
+        break;
+      }
+      default: {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not supported catalog type", K(type));
       }

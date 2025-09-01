@@ -1,0 +1,3 @@
+ob_unittest(test_conversions)
+ob_unittest(test_delete_file_index)
+ob_unittest(test_partition_transform)

@@ -729,6 +729,10 @@ void ObKVGlobalCache::reload_priority()
         priority = common::ObServerConfig::get_instance().fuse_row_cache_priority;
       } else if (0 == STRNCMP(configs_[i].cache_name_, "bf_cache", MAX_CACHE_NAME_LENGTH)) {
         priority = common::ObServerConfig::get_instance().bf_cache_priority;
+      } else if (0 == STRNCMP(configs_[i].cache_name_, "opt_external_table_stat_cache", MAX_CACHE_NAME_LENGTH)) {
+        priority = common::ObServerConfig::get_instance().opt_tab_stat_cache_priority;
+      } else if (0 == STRNCMP(configs_[i].cache_name_, "opt_external_column_stat_cache", MAX_CACHE_NAME_LENGTH)) {
+        priority = common::ObServerConfig::get_instance().opt_tab_stat_cache_priority;
       } else {
         priority = 0;
       }

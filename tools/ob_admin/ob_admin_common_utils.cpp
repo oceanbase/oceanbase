@@ -29,7 +29,7 @@ int ObAdminCommonUtils::dump_single_macro_block(
   if (OB_ISNULL(buf) || size <= 0) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(ERROR, "invalid argument", K(ret), KP(buf), K(size));
-  } else if (OB_FAIL(macro_reader.init(buf, size, param.hex_print_))) {
+  } else if (OB_FAIL(macro_reader.init(buf, size, param.macro_context_.hex_length_, param.hex_print_))) {
     STORAGE_LOG(ERROR, "failed to init macro reader", K(ret), KP(buf), K(size), "hex_print", param.hex_print_);
   } else if (OB_FAIL(macro_reader.dump(param.macro_context_.tablet_id_, param.macro_context_.scn_))) {
     STORAGE_LOG(ERROR, "failed dump macro block", K(ret), KP(buf), K(size));

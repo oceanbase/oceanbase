@@ -398,7 +398,11 @@ int ObPartitionSplitTask::init(
         (partition_split_arg.local_index_table_ids_.count() !=
          partition_split_arg.src_local_index_tablet_ids_.count()) &&
         (partition_split_arg.lob_table_ids_.count() !=
-         partition_split_arg.src_lob_tablet_ids_.count()))) {
+         partition_split_arg.src_lob_tablet_ids_.count()) &&
+        (partition_split_arg.local_index_table_schemas_.count() !=
+         partition_split_arg.local_index_table_ids_.count()) &&
+        (partition_split_arg.lob_table_schemas_.count() !=
+         partition_split_arg.lob_table_ids_.count()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(partition_split_arg),
         K(task_status), K(task_id));
@@ -427,7 +431,6 @@ int ObPartitionSplitTask::init(
     if (OB_FAIL(src_table_schema_.assign(*src_table_schema))) {
       LOG_WARN("failed to assign src table schema", K(ret), K(*src_table_schema));
     } else if (OB_FALSE_IT(src_table_schema_.reset_partition_schema())) {
-      LOG_WARN("failed to reset partition schema", K(ret), K(*src_table_schema));
     } else if (OB_FAIL(init_ddl_task_monitor_info(table_id))) {
       LOG_WARN("init ddl task monitor info failed", K(ret));
     } else {
@@ -2863,7 +2866,7 @@ int ObPartitionSplitTask::register_split_info_mds(const share::ObDDLTaskStatus n
       LOG_WARN("failed to assign lob_schema_versions", K(ret));
     } else if (OB_FAIL(prepare_tablet_split_infos(ls_id, leader_addr, split_info_array))) {
       LOG_WARN("prepare tablet split infos failed", K(ret));
-    } else if (OB_FAIL(ObTabletSplitUtil::register_split_info_mds(root_service_->get_ddl_service(), arg))) {
+    } else if (OB_FAIL(ObTabletSplitUtil::register_split_info_mds(arg, partition_split_arg_, data_format_version_, root_service_->get_ddl_service()))) {
       LOG_WARN("register split info mds failed", KR(ret), K(arg));
     } else if (OB_FAIL(switch_status(next_task_status, true/*enable_flt_tracing*/, ret))) {
       LOG_WARN("fail to switch task status", K(ret), K(next_task_status));

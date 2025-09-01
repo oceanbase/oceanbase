@@ -58,7 +58,7 @@ public:
   virtual int add_tenant(
       const int64_t start_tstamp_ns,
       const int64_t sys_schema_version,
-      const char *&tenant_name,
+      ObFixedLengthString<OB_MAX_TENANT_NAME_LENGTH + 1> &tenant_name,
       const int64_t timeout,
       bool &add_tenant_succ) = 0;
 
@@ -75,7 +75,7 @@ public:
       const int64_t start_tstamp_ns,
       const int64_t sys_schema_version,
       ObLogSchemaGuard &schema_guard,
-      const char *&tenant_name,
+      ObFixedLengthString<OB_MAX_TENANT_NAME_LENGTH + 1> &tenant_name,
       const int64_t timeout,
       bool &add_tenant_succ) = 0;
 
@@ -165,6 +165,7 @@ public:
   virtual int update_committer_global_heartbeat(const int64_t global_heartbeat) = 0;
   // get min output_checkpoint among all tenant in obcdc.
   virtual int get_min_output_checkpoint_for_all_tenant(int64_t &min_output_checkpoint) = 0;
+  virtual void refresh_tenant_checkpoint(const int64_t timeout) = 0;
 
 };
 
@@ -192,7 +193,7 @@ public:
   int add_tenant(
       const int64_t start_tstamp_ns,
       const int64_t sys_schema_version,
-      const char *&tenant_name,
+      ObFixedLengthString<OB_MAX_TENANT_NAME_LENGTH + 1> &tenant_name,
       const int64_t timeout,
       bool &add_tenant_succ);
 
@@ -203,7 +204,7 @@ public:
       const int64_t start_tstamp_ns,
       const int64_t sys_schema_version,
       ObLogSchemaGuard &schema_guard,
-      const char *&tenant_name,
+      ObFixedLengthString<OB_MAX_TENANT_NAME_LENGTH + 1> &tenant_name,
       const int64_t timeout,
       bool &add_tenant_succ);
   // drop tenant
@@ -253,6 +254,7 @@ public:
   // advance tenant output_checkpoint by global_heartbeat to at least target_checkpoint.
   int update_committer_global_heartbeat(const int64_t global_heartbeat);
   int get_min_output_checkpoint_for_all_tenant(int64_t &min_output_checkpoint) override;
+  void refresh_tenant_checkpoint(const int64_t timeout) override;
 
 private:
   static const int64_t DATA_OP_TIMEOUT = 1 * _SEC_;
@@ -365,6 +367,14 @@ private:
     bool operator()(const TenantID &tid, ObLogTenant *tenant);
   };
 
+  // operator to refresh TenantCheckpoint
+  struct TenantCheckpointRefreshFunc
+  {
+    int64_t timeout_;
+    explicit TenantCheckpointRefreshFunc(const int64_t timeout) : timeout_(timeout) {}
+    bool operator()(const TenantID &tid, ObLogTenant *tenant);
+  };
+
 private:
   int get_tenant_ids_(
       const int64_t start_tstamp_ns,
@@ -403,6 +413,7 @@ private:
       const bool is_tenant_served,
       const int64_t start_tstamp_ns,
       const int64_t sys_schema_version,
+      const TenantCheckpoint &tenant_checkpoint,
       const int64_t timeout);
   int drop_served_tenant_for_stat_(const uint64_t tenant_id);
   int drop_served_tenant_from_set_(const uint64_t tenant_id);
@@ -419,6 +430,17 @@ private:
   int get_min_add_tenant_start_ddl_commit_version_(int64_t &commit_version);
   void try_del_tenant_start_ddl_info_(const uint64_t tenant_id);
   int filter_by_current_tenant_status_(common::ObIArray<uint64_t> &tenant_id_list);
+  // check tenant is served and in sync
+  // is_tenant_served: tenant_name is in tb_white_list
+  // need_add_tenant: is_tenant_served or sys tenant not filted
+  template<class TENANT_INFO>
+  int check_tenant_served_(
+      const TENANT_INFO &tenant_info,
+      const bool is_current_tenant_info,
+      const char *check_reason,
+      bool &need_add_tenant,
+      bool &is_tenant_served);
+
 private:
   bool                inited_;
   RefreshMode         refresh_mode_;

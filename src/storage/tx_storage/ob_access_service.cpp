@@ -15,6 +15,7 @@
 #include "ob_access_service.h"
 #include "storage/ob_query_iterator_factory.h"
 #include "storage/access/ob_table_scan_iterator.h"
+#include "storage/retrieval/ob_block_stat_iter.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "src/sql/engine/ob_exec_context.h"
@@ -1603,6 +1604,55 @@ int ObAccessService::do_table_scan_(
     }
   } else {
     NG_TRACE(storage_table_scan_end);
+  }
+  return ret;
+}
+
+int ObAccessService::scan_block_stat(ObBlockStatScanParam &scan_param, ObBlockStatIterator &iter)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_UNLIKELY(!scan_param.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(scan_param));
+  } else {
+    ObTableScanParam &table_scan_param = *scan_param.get_scan_param();
+    ObStoreCtxGuard &ctx_guard = iter.get_ctx_guard();
+    ObLSID ls_id = table_scan_param.ls_id_;
+    ObTabletID tablet_id = table_scan_param.tablet_id_;
+    ObLS *ls = nullptr;
+    ObLSTabletService *tablet_service = nullptr;
+    ObTabletHandle tablet_handle;
+    ObStoreAccessType access_type = table_scan_param.scan_flag_.is_read_latest() ?
+        ObStoreAccessType::READ_LATEST : ObStoreAccessType::READ;
+    SCN user_specified_snapshot_scn;
+    if (ObAccessTypeCheck::is_read_access_type(access_type) && table_scan_param.fb_snapshot_.is_valid()) {
+      user_specified_snapshot_scn = table_scan_param.fb_snapshot_;
+    }
+    if (OB_FAIL(check_read_allowed_(
+        ls_id,
+        tablet_id,
+        access_type,
+        table_scan_param,
+        tablet_handle,
+        ctx_guard,
+        user_specified_snapshot_scn))) {
+      if (OB_UNLIKELY(OB_TABLET_NOT_EXIST != ret)) {
+        LOG_WARN("fail to check read allowed", K(ret), K(ls_id), K(tablet_id), K(access_type));
+      }
+    } else if (OB_ISNULL(ls = ctx_guard.get_ls_handle().get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("unexpected nullptr to ls", K(ret), K(ls_id));
+    } else if (OB_ISNULL(tablet_service = ls->get_tablet_svr())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("unexpected nullptr to tablet service", K(ret), K(ls_id));
+    } else if (OB_FAIL(tablet_service->scan_block_stat(tablet_handle, scan_param, iter))) {
+      if (OB_UNLIKELY(OB_TABLET_NOT_EXIST != ret)) {
+        LOG_WARN("fail to scan block stat", K(ret), K(ls_id), K(tablet_id), K(scan_param));
+      }
+    }
   }
   return ret;
 }

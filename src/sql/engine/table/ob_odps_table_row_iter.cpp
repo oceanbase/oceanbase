@@ -2071,7 +2071,7 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
     }
     for (int i = 0; OB_SUCC(ret) && i < column_exprs_.count(); i++) {
       ObExpr *column_expr = column_exprs_.at(i);
-      ObExpr *column_convert_expr = scan_param_->ext_column_convert_exprs_->at(i);
+      ObExpr *column_convert_expr = scan_param_->ext_column_dependent_exprs_->at(i);
       OZ (column_convert_expr->eval_batch(ctx, *bit_vector_cache_, count));
       if (OB_SUCC(ret)) {
         MEMCPY(column_expr->locate_batch_datums(ctx),
@@ -2789,7 +2789,7 @@ int ObODPSTableRowIterator::inner_get_next_row(bool &need_retry)
     }
     for (int i = 0; OB_SUCC(ret) && i < column_exprs_.count(); i++) {
       ObExpr *column_expr = column_exprs_.at(i);
-      ObExpr *column_convert_expr = scan_param_->ext_column_convert_exprs_->at(i);
+      ObExpr *column_convert_expr = scan_param_->ext_column_dependent_exprs_->at(i);
       ObDatum *convert_datum = NULL;
       OZ (column_convert_expr->eval(ctx, convert_datum));
       if (OB_SUCC(ret)) {

@@ -14,6 +14,7 @@
 #define OCEANBASE_SQL_OB_EXPR_UDF_CTX_H_
 
 #include "common/object/ob_object.h"
+#include "lib/allocator/page_arena.h"
 #include "lib/container/ob_2d_array.h"
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "sql/engine/expr/ob_i_expr_extra_info.h"
@@ -100,7 +101,9 @@ public:
     ctx_allocator_("UDFCtxAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     arg_count_(0),
     result_cache_max_result_(0),
-    result_cache_max_size_(0) {}
+    result_cache_max_size_(0),
+    is_first_execute_(true),
+    pl_execute_arg_() {}
 
   ~ObExprUDFCtx();
 
@@ -132,6 +135,10 @@ public:
     cacheobj_guard_.~ObCacheObjGuard();
     new (&cacheobj_guard_) ObCacheObjGuard(PL_ROUTINE_HANDLE);
   }
+
+  bool is_first_execute() { return is_first_execute_; }
+
+  pl::ObPLExecuteArg &get_pl_execute_arg() { return pl_execute_arg_; }
 
 private:
   int check_types(const ObExpr &expr);
@@ -192,6 +199,33 @@ private:
   int64_t arg_count_;
   int64_t result_cache_max_result_;
   int64_t result_cache_max_size_;
+  bool is_first_execute_;
+  pl::ObPLExecuteArg pl_execute_arg_;
+};
+
+struct ObExprUDTFCtx : public ObExprOperatorCtx
+{
+public:
+  ObExprUDTFCtx()
+    : ObExprOperatorCtx(),
+      allocator_("UDTFCtxAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      buffer_(),
+      curr_(OB_INVALID_INDEX)
+  {  }
+
+  void reset()
+  {
+    curr_ = OB_INVALID_INDEX;
+    buffer_.reuse();
+    allocator_.reset();
+  }
+
+  TO_STRING_KV(K_(buffer), K_(curr));
+
+public:
+  ObArenaAllocator allocator_;
+  ObSEArray<ObObj, 64> buffer_;
+  int64_t curr_;
 };
 
 }

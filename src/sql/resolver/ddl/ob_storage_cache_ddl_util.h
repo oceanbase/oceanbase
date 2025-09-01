@@ -22,6 +22,7 @@ namespace sql
 class ObStorageCacheUtil
 {
 public:
+  static int print_storage_cache_policy_element(const ObBasePartition *partition, char* buf, const int64_t &buf_len, int64_t &pos);
   static int print_table_storage_cache_policy(const ObTableSchema &table_schema, char* buf, const int64_t &buf_len, int64_t &pos);
   static int check_alter_column_validation(const AlterColumnSchema *alter_column_schema, const ObTableSchema &orig_table_schema);
   static int get_tenant_table_ids(const uint64_t tenant_id, common::ObIArray<uint64_t> &table_id_array);

@@ -11,6 +11,7 @@
  */
 
 #include "lib/container/ob_se_array.h"
+#include "share/ob_errno.h"
 #define USING_LOG_PREFIX SQL_DAS
 
 #include "ob_das_domain_utils.h"
@@ -75,23 +76,27 @@ int ObFTIndexRowCache::init(
   return ret;
 }
 
-int ObFTIndexRowCache::segment(
-    const common::ObObjMeta &ft_obj_meta,
-    const ObString &doc_id,
-    const ObString &fulltext)
+int ObFTIndexRowCache::segment(const common::ObObjMeta &ft_obj_meta,
+                               const ObDatum &doc_id_datum,
+                               const ObString &fulltext)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObFTIndexRowCache hasn't be initialized", K(ret), K(is_inited_));
   } else if (FALSE_IT(reuse())) {
-  } else if (OB_FAIL(ObDASDomainUtils::generate_fulltext_word_rows(merge_memctx_->get_arena_allocator(), &helper_,
-          ft_obj_meta, doc_id, fulltext, is_fts_index_aux_, rows_))) {
+  } else if (OB_FAIL(ObDASDomainUtils::generate_fulltext_word_rows(merge_memctx_->get_arena_allocator(),
+                                                                   &helper_,
+                                                                   ft_obj_meta,
+                                                                   doc_id_datum,
+                                                                   fulltext,
+                                                                   is_fts_index_aux_,
+                                                                   rows_))) {
     LOG_WARN("fail to generate fulltext word rows", K(ret), K(helper_), K(is_fts_index_aux_));
   } else {
     row_idx_ = 0;
   }
-  LOG_TRACE("word segment", K(ret), K(row_idx_), K(rows_.count()), K(doc_id), K(fulltext));
+  LOG_TRACE("word segment", K(ret), K(row_idx_), K(rows_.count()), K(doc_id_datum), K(fulltext));
   return ret;
 }
 
@@ -297,14 +302,13 @@ int ObDASDomainUtils::build_ft_doc_word_infos(
   return ret;
 }
 
-/*static*/ int ObDASDomainUtils::generate_fulltext_word_rows(
-    common::ObIAllocator &allocator,
-    storage::ObFTParseHelper *helper,
-    const common::ObObjMeta &ft_obj_meta,
-    const ObString &doc_id,
-    const ObString &fulltext,
-    const bool is_fts_index_aux,
-    ObDomainIndexRow &word_rows)
+/*static*/ int ObDASDomainUtils::generate_fulltext_word_rows(common::ObIAllocator &allocator,
+                                                             storage::ObFTParseHelper *helper,
+                                                             const common::ObObjMeta &ft_obj_meta,
+                                                             const ObDatum &doc_id_datum,
+                                                             const ObString &fulltext,
+                                                             const bool is_fts_index_aux,
+                                                             ObDomainIndexRow &word_rows)
 {
   int ret = OB_SUCCESS;
   static int64_t FT_WORD_DOC_COL_CNT = 4;
@@ -314,22 +318,25 @@ int ObDASDomainUtils::build_ft_doc_word_infos(
   ObFTWordMap ft_word_map;
   void *rows_buf = nullptr;
   blocksstable::ObDatumRow *rows = nullptr;
-  if (OB_ISNULL(helper)
-      || OB_UNLIKELY(!ft_obj_meta.is_valid())
-      || OB_UNLIKELY(doc_id.length() != sizeof(ObDocId) || doc_id.empty()) ) {
+  if (OB_ISNULL(helper) || OB_UNLIKELY(!ft_obj_meta.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KPC(helper), K(ft_obj_meta), K(doc_id));
+    LOG_WARN("invalid arguments", K(ret), KPC(helper), K(ft_obj_meta), K(doc_id_datum));
   } else if (0 == fulltext.length()) {
     ret = OB_ITER_END;
   } else if (OB_FAIL(ft_word_map.create(ft_word_bkt_cnt, common::ObMemAttr(MTL_ID(), "FTWordMap")))) {
     LOG_WARN("fail to create ft word map", K(ret), K(ft_word_bkt_cnt));
-  } else if (OB_FAIL(segment_and_calc_word_count(allocator, helper, ft_obj_meta, fulltext, doc_length, ft_word_map))) {
+  } else if (OB_FAIL(segment_and_calc_word_count(allocator,
+                                                 helper,
+                                                 ft_obj_meta,
+                                                 fulltext,
+                                                 doc_length,
+                                                 ft_word_map))) {
     LOG_WARN("fail to segment and calculate word count", K(ret), KPC(helper),
         K(ft_obj_meta.get_collation_type()), K(fulltext));
   } else if (0 == ft_word_map.size()) {
     ret = OB_ITER_END;
-  } else if (OB_ISNULL(rows_buf = reinterpret_cast<char *>
-                           (allocator.alloc(ft_word_map.size() * sizeof(blocksstable::ObDatumRow))))) {
+  } else if (OB_ISNULL(rows_buf = reinterpret_cast<char *>(
+                           allocator.alloc(ft_word_map.size() * sizeof(blocksstable::ObDatumRow))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory for full text index rows buffer", K(ret));
   } else {
@@ -351,17 +358,13 @@ int ObDASDomainUtils::build_ft_doc_word_infos(
         const int64_t word_cnt_idx = 2;
         const int64_t doc_len_idx = 3;
         rows[i].storage_datums_[word_idx].set_datum(ft_word.get_word());
-        rows[i].storage_datums_[doc_id_idx].set_string(doc_id);
+        rows[i].storage_datums_[doc_id_idx].shallow_copy_from_datum(doc_id_datum);
         rows[i].storage_datums_[word_cnt_idx].set_uint(word_cnt);
         rows[i].storage_datums_[doc_len_idx].set_uint(doc_length);
         if (OB_FAIL(word_rows.push_back(&rows[i]))) {
           LOG_WARN("fail to push back row", K(ret), K(rows[i]));
         } else {
-          ObDocId tmp_doc_id;
-          tmp_doc_id.tablet_id_ = ((const uint64_t *)doc_id.ptr())[0];
-          tmp_doc_id.seq_id_ = ((const uint64_t *)doc_id.ptr())[1];
-          STORAGE_FTS_LOG(DEBUG, "succeed to add word row", K(ret), K(is_fts_index_aux), "doc_id", tmp_doc_id,
-              K(ft_word), K(word_cnt), K(i), K(rows[i]));
+          LOG_DEBUG("succeed to add word row", K(ret), K(is_fts_index_aux), K(ft_word), K(word_cnt), K(i), K(rows[i]));
           ++i;
         }
       }
@@ -491,36 +494,33 @@ int ObDASDomainUtils::generate_multivalue_index_rows(ObIAllocator &allocator,
                                                ObDomainIndexRow &mvi_rows)
 {
   int ret = OB_SUCCESS;
-  bool is_save_rowkey = true;
-  const int64_t index_rowkey_cnt = das_ctdef.table_param_.get_data_table().get_rowkey_column_num();
-  bool is_unique_index = das_ctdef.table_param_.get_data_table().get_index_type() == ObIndexType::INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL;
-  const int64_t data_table_rowkey_cnt = das_ctdef.table_param_.get_data_table().get_data_table_rowkey_column_num();
   const char* data = nullptr;
   int64_t data_len = 0;
   uint32_t record_num = 0;
+  bool is_unique_index = das_ctdef.table_param_.get_data_table().get_index_type() == ObIndexType::INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL;
 
-  bool is_none_unique_done = false;
-  uint64_t column_num = das_ctdef.column_ids_.count();
-  // -1 : doc id column
-  uint64_t rowkey_column_start = column_num - 1 - data_table_rowkey_cnt;
-  uint64_t rowkey_column_end = column_num - 1;
-
-  void *rows_buf = nullptr;
   if (OB_FAIL(get_pure_mutivalue_data(json_str, data, data_len, record_num))) {
     LOG_WARN("failed to parse binary.", K(ret), K(json_str));
   } else if (record_num == 0 && is_unique_index) {
-  } else if (OB_FAIL(calc_save_rowkey_policy(allocator, das_ctdef, row_projector, dml_row, record_num, is_save_rowkey))) {
-    LOG_WARN("failed to calc store policy.", K(ret), K(data_table_rowkey_cnt));
   } else {
-    uint32_t real_record_num = record_num;
-    if (record_num == 0 && !is_unique_index) {
-      real_record_num = 1;
-    }
+    uint32_t real_record_num = (record_num == 0 && !is_unique_index) ? 1 : record_num;
+    const int64_t data_table_rowkey_cnt = das_ctdef.table_param_.get_data_table().get_data_table_rowkey_column_num();
+    uint64_t column_num = das_ctdef.column_ids_.count();
+    // for normal multivalue index, column_ids: [multivalue_col, rowkeys, docid]
+    // when doc id optimization is enabled, column_ids: [multivalue_col, pk_increment]
+    bool use_docid = !(data_table_rowkey_cnt == 1 && column_num == 2);
 
+    void *rows_buf = nullptr;
+    bool is_save_rowkey = true;
     if (OB_ISNULL(rows_buf = reinterpret_cast<char *>(allocator.alloc(real_record_num * sizeof(blocksstable::ObDatumRow))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory for multi value index rows buffer", K(ret));
+    } else if (use_docid && OB_FAIL(calc_save_rowkey_policy(allocator, das_ctdef, row_projector, dml_row, record_num, is_save_rowkey))) {
+      LOG_WARN("failed to calc store policy.", K(ret), K(data_table_rowkey_cnt));
     } else {
+      uint64_t rowkey_column_start = column_num - 1 - data_table_rowkey_cnt; // only used when use_docid
+      uint64_t rowkey_column_end = column_num - 1;  // only used when use_docid
+      bool is_none_unique_done = false;
       int64_t pos = sizeof(uint32_t);
       blocksstable::ObDatumRow *rows = new (rows_buf) blocksstable::ObDatumRow[real_record_num];
 
@@ -534,7 +534,6 @@ int ObDASDomainUtils::generate_multivalue_index_rows(ObIAllocator &allocator,
             int64_t projector_idx = row_projector.at(j);
 
             if (multivalue_idx == projector_idx) {
-              // TODO: change obj to datum when do deserialize@xuanxi
               ObObj obj;
               obj.set_nop_value();
               if (OB_FAIL(obj.deserialize(data, data_len, pos))) {
@@ -1063,7 +1062,7 @@ int ObFTDMLIterator::generate_domain_rows(const ObChunkDatumStore::StoredRow *st
   } else {
     switch (mode_) {
       case ObDomainDMLMode::DOMAIN_DML_MODE_DEFAULT: {
-        if (OB_FAIL(generate_ft_word_rows(store_row))) {
+        if (OB_FAIL(generate_ft_word_rows(store_row)) &&(ret != OB_ITER_END)) {
           LOG_WARN("fail to generate ft word rows", K(ret), KPC(store_row));
         }
         break;
@@ -1087,19 +1086,33 @@ int ObFTDMLIterator::generate_domain_rows(const ObChunkDatumStore::StoredRow *st
 int ObFTDMLIterator::generate_ft_word_rows(const ObChunkDatumStore::StoredRow *store_row)
 {
   int ret = OB_SUCCESS;
-  ObString doc_id;
-  ObString ft;
   common::ObObjMeta ft_meta;
+  ObString ft;
+  ObDatum doc_id_datum;
   const bool is_fts_index_aux = das_ctdef_->table_param_.get_data_table().is_fts_index_aux();
-  if (!is_update_ && OB_FAIL(get_ft_and_doc_id(store_row, doc_id, ft, ft_meta))) {
+
+  if (!is_update_ && OB_FAIL(get_ft_and_doc_id(store_row, doc_id_datum, ft, ft_meta))) {
     LOG_WARN("fail to get fulltext and doc id", K(ret), KPC(store_row));
-  } else if (is_update_ && OB_FAIL(get_ft_and_doc_id_for_update(store_row, doc_id, ft, ft_meta))) {
+  } else if (is_update_ && OB_FAIL(get_ft_and_doc_id_for_update(store_row, doc_id_datum, ft, ft_meta))) {
     LOG_WARN("fail to get fulltext and doc id for update", K(ret), KPC(store_row));
-  } else if (OB_FAIL(ObDASDomainUtils::generate_fulltext_word_rows(allocator_, &ft_parse_helper_, ft_meta,
-          doc_id, ft, is_fts_index_aux, rows_))) {
+  } else if (OB_FAIL(ObDASDomainUtils::generate_fulltext_word_rows(allocator_,
+                                                                   &ft_parse_helper_,
+                                                                   ft_meta,
+                                                                   doc_id_datum,
+                                                                   ft,
+                                                                   is_fts_index_aux,
+                                                                   rows_))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
-      LOG_WARN("fail to generate fulltext word rows", K(ret), K(doc_id), K(ft_parse_helper_),
-          K(ft_meta), K(ft), KPC(store_row), K(is_fts_index_aux), K(rows_), KPC(main_ctdef_));
+      LOG_WARN("fail to generate fulltext word rows",
+               K(ret),
+               K(doc_id_datum),
+               K(ft_parse_helper_),
+               K(ft_meta),
+               K(ft),
+               KPC(store_row),
+               K(is_fts_index_aux),
+               K(rows_),
+               KPC(main_ctdef_));
     }
   }
   return ret;
@@ -1108,19 +1121,22 @@ int ObFTDMLIterator::generate_ft_word_rows(const ObChunkDatumStore::StoredRow *s
 int ObFTDMLIterator::scan_ft_word_rows(const ObChunkDatumStore::StoredRow *store_row)
 {
   int ret = OB_SUCCESS;
-  const uint64_t doc_id_col_id = das_ctdef_->table_param_.get_data_table().get_doc_id_col_id();
-  if (OB_UNLIKELY(OB_INVALID_ID == doc_id_col_id)) {
+  uint64_t doc_id_col_id = OB_INVALID_ID; // get to check
+  ObDocIDType type;
+  if (OB_FAIL(das_ctdef_->table_param_.get_data_table().get_typed_doc_id_col_id(doc_id_col_id, type))) {
+    LOG_WARN("Failed to get doc id", K(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_ID == doc_id_col_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid doc id column id", K(ret), K(doc_id_col_id));
   } else {
     const bool is_fts_index_aux = das_ctdef_->table_param_.get_data_table().is_fts_index_aux();
     const int64_t doc_id_idx = !is_fts_index_aux ? 0 : 1;
-    ObString doc_id_str = store_row->cells()[row_projector_->at(doc_id_idx)].get_string();
-    common::ObDocId doc_id;
-    if (OB_FAIL(doc_id.from_string(doc_id_str))) {
-      LOG_WARN("fail to parse doc id from string", K(ret), K(doc_id_str));
-    } else if (OB_FAIL(ft_doc_word_iter_.do_scan(doc_word_info_->doc_word_table_id_, doc_id))) {
-      LOG_WARN("fail to do scan", K(ret), KPC(doc_word_info_), K(doc_id));
+
+    ObDatum doc_id_datum = store_row->cells()[row_projector_->at(doc_id_idx)];
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ft_doc_word_iter_.do_scan(doc_word_info_->doc_word_table_id_, doc_id_datum))) {
+      LOG_WARN("fail to do scan", K(ret), KPC(doc_word_info_), K(doc_id_datum));
     } else {
       // gather ft word rows
       ObDomainIndexRow tmp_rows;
@@ -1146,9 +1162,7 @@ int ObFTDMLIterator::scan_ft_word_rows(const ObChunkDatumStore::StoredRow *store
         blocksstable::ObDatumRow *row_array = nullptr;
         if (0 == tmp_rows.count()) {
           // do nothing
-        } else if (OB_ISNULL(
-                       row_array
-                       = OB_NEW_ARRAY(blocksstable::ObDatumRow, &allocator_, tmp_rows.count()))) {
+        } else if (OB_ISNULL(row_array = OB_NEW_ARRAY(blocksstable::ObDatumRow, &allocator_, tmp_rows.count()))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("allocate memory failed", K(ret));
         } else {
@@ -1164,7 +1178,7 @@ int ObFTDMLIterator::scan_ft_word_rows(const ObChunkDatumStore::StoredRow *store
           }
 
           if (OB_SUCC(ret)) {
-            LOG_TRACE("succeed to scan ft word rows", K(doc_id), K(rows_.count()), K(doc_id_str));
+            LOG_TRACE("succeed to scan ft word rows", K(rows_.count()));
           }
         }
       }
@@ -1175,6 +1189,7 @@ int ObFTDMLIterator::scan_ft_word_rows(const ObChunkDatumStore::StoredRow *store
     const common::ObString &parser_str = das_ctdef_->table_param_.get_data_table().get_fts_parser_name();
     const common::ObString &parser_property_str = das_ctdef_->table_param_.get_data_table().get_fts_parser_property();
     storage::ObFTParseHelper ft_parse_helper;
+    ObDatum check_id_datum;
     ObString doc_id;
     ObString ft;
     common::ObObjMeta ft_meta;
@@ -1182,15 +1197,28 @@ int ObFTDMLIterator::scan_ft_word_rows(const ObChunkDatumStore::StoredRow *store
     const bool is_fts_index_aux = das_ctdef_->table_param_.get_data_table().is_fts_index_aux();
     if (OB_FAIL(ft_parse_helper.init(&allocator, parser_str, parser_property_str))) {
       LOG_WARN("fail to init fulltext parse helper", K(ret), K(parser_str), K(parser_property_str));
-    } else if (!is_update_ && OB_FAIL(get_ft_and_doc_id(store_row, doc_id, ft, ft_meta))) {
+    } else if (!is_update_ && OB_FAIL(get_ft_and_doc_id(store_row, check_id_datum, ft, ft_meta))) {
       LOG_WARN("fail to get fulltext and doc id", K(ret), KPC(store_row));
-    } else if (is_update_ && OB_FAIL(get_ft_and_doc_id_for_update(store_row, doc_id, ft, ft_meta))) {
+    } else if (is_update_ && OB_FAIL(get_ft_and_doc_id_for_update(store_row, check_id_datum, ft, ft_meta))) {
       LOG_WARN("fail to get fulltext and doc id for update", K(ret), KPC(store_row));
-    } else if (OB_FAIL(ObDASDomainUtils::generate_fulltext_word_rows(allocator, &ft_parse_helper, ft_meta,
-            doc_id, ft, is_fts_index_aux, rows))) {
+    } else if (OB_FAIL(ObDASDomainUtils::generate_fulltext_word_rows(allocator,
+                                                                     &ft_parse_helper,
+                                                                     ft_meta,
+                                                                     check_id_datum,
+                                                                     ft,
+                                                                     is_fts_index_aux,
+                                                                     rows))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
-        LOG_WARN("fail to generate fulltext word rows", K(ret), K(doc_id), K(ft_parse_helper),
-            K(ft_meta), K(ft), KPC(store_row), K(is_fts_index_aux), K(rows), KPC(main_ctdef_));
+        LOG_WARN("fail to generate fulltext word rows",
+                 K(ret),
+                 K(check_id_datum),
+                 K(ft_parse_helper),
+                 K(ft_meta),
+                 K(ft),
+                 KPC(store_row),
+                 K(is_fts_index_aux),
+                 K(rows),
+                 KPC(main_ctdef_));
       }
     }
     if (OB_ITER_END == ret || OB_SUCC(ret)) {
@@ -1263,47 +1291,42 @@ int ObFTDMLIterator::build_ft_word_row(
   return ret;
 }
 
-int ObFTDMLIterator::get_ft_and_doc_id(
-    const ObChunkDatumStore::StoredRow *store_row,
-    ObString &doc_id,
-    ObString &ft,
-    common::ObObjMeta &ft_meta)
+int ObFTDMLIterator::get_ft_and_doc_id(const ObChunkDatumStore::StoredRow *store_row,
+                                       ObDatum &doc_id_datum,
+                                       ObString &ft,
+                                       common::ObObjMeta &ft_meta)
 {
   int ret = OB_SUCCESS;
-  const uint64_t doc_id_col_id = das_ctdef_->table_param_.get_data_table().get_doc_id_col_id();
   const uint64_t fts_col_id = das_ctdef_->table_param_.get_data_table().get_fulltext_col_id();
-  if (OB_UNLIKELY(OB_INVALID_ID == doc_id_col_id || OB_INVALID_ID == fts_col_id)) {
+  if (OB_UNLIKELY(OB_INVALID_ID == fts_col_id)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid doc id or fulltext column id", K(ret), K(doc_id_col_id), K(fts_col_id));
+    LOG_WARN("invalid doc id or fulltext column id", K(ret), K(fts_col_id));
   } else {
     const bool is_fts_index_aux = das_ctdef_->table_param_.get_data_table().is_fts_index_aux();
     const int64_t doc_id_idx = !is_fts_index_aux ? 0 : 1;
     const int64_t ft_idx = !is_fts_index_aux ? 1 : 0;
-    doc_id = store_row->cells()[row_projector_->at(doc_id_idx)].get_string();
+
     ft = store_row->cells()[row_projector_->at(ft_idx)].get_string();
     ft_meta = das_ctdef_->column_types_.at(ft_idx);
-    if (OB_FAIL(ret)) {
-    } else if (OB_UNLIKELY(doc_id.length() != sizeof(ObDocId)) || OB_ISNULL(doc_id.ptr())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid binary document id", K(ret), K(doc_id));
-    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator_,
+    doc_id_datum = store_row->cells()[row_projector_->at(doc_id_idx)];
+
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator_,
                                                           ft_meta.get_type(),
                                                           ft_meta.get_collation_type(),
                                                           ft_meta.has_lob_header(),
                                                           ft))) {
       LOG_WARN("fail to get real text data", K(ret));
     } else {
-      STORAGE_FTS_LOG(DEBUG, "succeed to get fulltext and doc id", K(doc_id), K(ft_meta), K(ft));
+      STORAGE_FTS_LOG(DEBUG, "succeed to get fulltext and doc id", K(doc_id_datum), K(ft_meta), K(ft));
     }
   }
   return ret;
 }
 
-int ObFTDMLIterator::get_ft_and_doc_id_for_update(
-    const ObChunkDatumStore::StoredRow *store_row,
-    ObString &doc_id,
-    ObString &ft,
-    common::ObObjMeta &ft_meta)
+int ObFTDMLIterator::get_ft_and_doc_id_for_update(const ObChunkDatumStore::StoredRow *store_row,
+                                                  ObDatum &doc_id_datum,
+                                                  ObString &ft,
+                                                  common::ObObjMeta &ft_meta)
 {
   int ret = OB_SUCCESS;
   const uint64_t rowkey_col_cnt = das_ctdef_->table_param_.get_data_table().get_rowkey_column_num();
@@ -1316,13 +1339,12 @@ int ObFTDMLIterator::get_ft_and_doc_id_for_update(
     const bool is_fts_index_aux = das_ctdef_->table_param_.get_data_table().is_fts_index_aux();
     const int64_t doc_id_idx = !is_fts_index_aux ? 0 : 1;
     const int64_t ft_idx = !is_fts_index_aux ? 1 : 0;
-    doc_id = store_row->cells()[row_projector_->at(doc_id_idx)].get_string();
+
+    doc_id_datum = store_row->cells()[row_projector_->at(doc_id_idx)];
+
     ft = store_row->cells()[row_projector_->at(ft_idx)].get_string();
     ft_meta = das_ctdef_->column_types_.at(ft_idx);
     if (OB_FAIL(ret)) {
-    } else if (OB_UNLIKELY(doc_id.length() != sizeof(ObDocId)) || OB_ISNULL(doc_id.ptr())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid binary document id", K(ret), K(doc_id));
     } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator_,
                                                                  ft_meta.get_type(),
                                                                  ft_meta.get_collation_type(),
@@ -1330,7 +1352,7 @@ int ObFTDMLIterator::get_ft_and_doc_id_for_update(
                                                                  ft))) {
       LOG_WARN("fail to get real text data", K(ret));
     } else {
-      STORAGE_FTS_LOG(DEBUG, "succeed to get fulltext and doc id", K(doc_id), K(ft_meta), K(ft));
+      STORAGE_FTS_LOG(DEBUG, "succeed to get fulltext and doc id", K(doc_id_datum), K(ft_meta), K(ft));
     }
   }
   return ret;

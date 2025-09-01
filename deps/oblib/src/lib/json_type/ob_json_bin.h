@@ -158,6 +158,7 @@ public:
   static bool is_opaque_or_string(ObJsonNodeType type);
   static ObJBVerType get_json_vertype(ObJsonNodeType type);
   static bool is_array(ObJBVerType type);
+  static bool is_semi_hete_col(ObJBVerType type);
   static bool is_object(ObJBVerType type);
   static bool is_custom(ObJBVerType type);
   static bool is_scalar(ObJBVerType type);
@@ -627,6 +628,7 @@ public:
   static OB_INLINE ObJBVerType get_string_vertype() { return J_STRING_V0; }
   static OB_INLINE ObJBVerType get_object_vertype() { return J_OBJECT_V0; }
   static OB_INLINE ObJBVerType get_array_vertype() { return J_ARRAY_V0; }
+  static OB_INLINE ObJBVerType get_semi_hete_vertype() { return J_SEMI_HETE_COL_V0; }
   static OB_INLINE ObJBVerType get_boolean_vertype() { return J_BOOLEAN_V0; }
   static OB_INLINE ObJBVerType get_date_vertype() { return J_DATE_V0; }
   static OB_INLINE ObJBVerType get_mdate_vertype() { return J_MYSQL_DATE_V0; }
@@ -1029,6 +1031,7 @@ private:
   {
     return value_type == ObJBVerType::J_ARRAY_V0 ||
         value_type == ObJBVerType::J_OBJECT_V0 ||
+        value_type == ObJBVerType::J_SEMI_HETE_COL_V0 ||
         ObJsonVerType::is_opaque_or_string(static_cast<ObJBVerType>(value_type));
   }
 

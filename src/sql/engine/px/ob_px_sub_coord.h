@@ -78,6 +78,7 @@ public:
       const DASTabletLocIArray &tsc_locations,
       const ObIArray<ObSqcTableLocationKey> &tsc_location_keys);
   int rebuild_sqc_access_table_locations();
+  int rebuild_sqc_lake_table_file_map();
   void set_is_single_tsc_leaf_dfo(bool flag) { is_single_tsc_leaf_dfo_ = flag; }
   int get_participants(ObPxSqcMeta &sqc,
                        const int64_t table_id,

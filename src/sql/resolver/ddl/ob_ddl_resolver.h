@@ -193,14 +193,8 @@ public:
       ObIArray<ObPartitionResolveResult> &resolve_results,
       ObIArray<obrpc::ObCreateIndexArg> &index_arg_list,
       ObIAllocator *allocator);
-    static int append_multivalue_args(
-      const ObPartitionResolveResult &resolve_result,
-      const obrpc::ObCreateIndexArg *index_arg,
-      bool &fts_common_aux_table_exist,
-      ObIArray<ObPartitionResolveResult> &resolve_results,
-      ObIArray<obrpc::ObCreateIndexArg *> &index_arg_list,
-      ObIAllocator *arg_allocator);
   static int append_multivalue_args(
+      const share::schema::ObTableSchema &data_schema,
       const ObPartitionResolveResult &resolve_result,
       const obrpc::ObCreateIndexArg &index_arg,
       bool &fts_common_aux_table_exist,
@@ -474,7 +468,7 @@ public:
   static int resolve_file_prefix(ObString &url,
                                  ObSqlString &prefix_str,
                                  common::ObStorageType &device_type,
-                                 ObResolverParams &params);
+                                 ObIAllocator *allocator);
   static int resolve_external_file_format(const ParseNode *format_node,
                                           ObResolverParams &params,
                                           ObExternalFileFormat& format,
@@ -489,10 +483,17 @@ public:
                                             ObTableSchema &table_schema,
                                             common::ObString table_location);
 
+  static int resolve_external_file_location(ObIAllocator *allocator,
+                                            const common::ObString &table_location,
+                                            common::ObString &resolved_table_location,
+                                            common::ObString &resolved_access_info);
+
   static int resolve_external_file_location_object(ObResolverParams &params,
                                                   ObTableSchema &table_schema,
                                                   common::ObString location_obj,
                                                   common::ObString sub_path);
+
+
 
   static int mask_properties_sensitive_info(const ParseNode *node,
                                             const ObExternalFileFormat &format,
@@ -719,7 +720,8 @@ protected:
   int resolve_lob_storage_parameter(share::schema::ObColumnSchemaV2 &column, const ParseNode &param_node);
   int resolve_lob_chunk_size(const ParseNode &size_node, int64_t &lob_chunk_size);
   int resolve_lob_chunk_size(share::schema::ObColumnSchemaV2 &column, const ParseNode &lob_chunk_size_node);
-  int resolve_semistruct_encoding_type(const ParseNode *option_node, const bool is_index_option);
+  int resolve_semistruct_properties(const ParseNode *option_node, const bool is_index_option);
+  int resolve_semistruct_child_node(ObArenaAllocator &semi_allocator, const ParseNode *option_node, const uint64_t tenant_data_version, ObIJsonBase *&root);
   /*
   int resolve_generated_column_definition(
       share::schema::ObColumnSchemaV2 &column,
@@ -1083,6 +1085,10 @@ protected:
   int resolve_storage_cache_attribute(const ParseNode *node, ObResolverParams &params);
   int resolve_storage_cache_time_attribute(const ParseNode *node, ObResolverParams &params, ObStorageCachePolicy &cache_policy);
   int get_storage_cache_tbl_schema(const ObTableSchema *&tbl_schema);
+  int resolve_partition_storage_cache_policy(const ParseNode &node, ObBasePartition &partition);
+  int resolve_partition_storage_cache_policy_element(const ObString &storage_cache_policy_str, ObStorageCachePolicyType &storage_cache_policy_type);
+  int resolve_storage_cache_policy_in_part_list(const ParseNode *node, const int64_t tenant_id, const bool is_template_subpartition, ObBasePartition &partition);
+
   void reset();
 
   // for alter table: there may be some index_arg.
@@ -1189,6 +1195,7 @@ protected:
   bool enable_macro_block_bloom_filter_;
   ObSemiStructEncodingType semistruct_encoding_type_;
   common::ObString dynamic_partition_policy_;
+  common::ObString semistruct_properties_;
 private:
   template <typename STMT>
   DISALLOW_COPY_AND_ASSIGN(ObDDLResolver);

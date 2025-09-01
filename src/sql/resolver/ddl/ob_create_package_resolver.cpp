@@ -242,6 +242,7 @@ int ObCreatePackageResolver::resolve(const ParseNode &parse_tree)
                                                 package_body_info));
           if (OB_SUCC(ret) && OB_NOT_NULL(package_body_info) && !package_body_info->is_for_trigger()) {
             ObString source = package_body_info->get_source();
+            bool is_wrap = false;
             OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(
                   *allocator_, session_info_->get_dtc_params(), source));
             OZ (package_body_ast.init(db_name,
@@ -257,7 +258,8 @@ int ObCreatePackageResolver::resolve(const ParseNode &parse_tree)
             OZ (compiler.analyze_package(source,
                                          &(package_ast.get_body()->get_namespace()),
                                          package_body_ast,
-                                         false));
+                                         false,
+                                         is_wrap));
             if (OB_SUCC(ret)) {
               obrpc::ObCreatePackageArg &create_package_arg = stmt->get_create_package_arg();
               ObIArray<ObRoutineInfo> &routine_list = create_package_arg.public_routine_infos_;
@@ -669,7 +671,8 @@ int ObCreatePackageBodyResolver::resolve(const ParseNode &parse_tree)
 
           OX (source = package_spec_info->get_source());
           OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(tmp_allocator, session_info_->get_dtc_params(), source));
-          OZ (compiler.analyze_package(source,NULL, package_spec_ast, false));
+          bool is_wrap = false;
+          OZ (compiler.analyze_package(source,NULL, package_spec_ast, false, is_wrap));
 
           OZ (package_body_ast.init(db_name,
                                     package_name,
@@ -682,7 +685,8 @@ int ObCreatePackageBodyResolver::resolve(const ParseNode &parse_tree)
           OZ (compiler.analyze_package(package_body_src,
                                     &(package_spec_ast.get_body()->get_namespace()),
                                     package_body_ast,
-                                    false));
+                                    false,
+                                    is_wrap));
 
           if (OB_SUCC(ret)) {
             if (package_body_ast.get_serially_reusable()

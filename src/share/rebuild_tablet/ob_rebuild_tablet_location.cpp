@@ -206,6 +206,8 @@ int64_t ObRebuildTabletLocation::to_string(char *buffer, const int64_t size) con
   pos = snprintf(buffer, size, "[type = %d], [address = %s]", type_, location_);
   if (pos < 0) {
     pos = 0;
+  } else if (pos >= size) {
+    pos = size - 1;
   }
   return pos;
 }

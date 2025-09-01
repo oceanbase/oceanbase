@@ -34,7 +34,7 @@ class ObRowsMerger
 public:
   virtual ~ObRowsMerger() = default;
   virtual ObRowMergerType type() = 0;
-  virtual int init(const int64_t table_cnt, common::ObIAllocator &allocator) = 0;
+  virtual int init(const int64_t max_table_cnt, const int64_t table_cnt, common::ObIAllocator &allocator) = 0;
   virtual bool is_inited() const = 0;
   virtual int open(const int64_t table_cnt) = 0;
   virtual void reset() = 0;
@@ -50,7 +50,7 @@ public:
   TO_STRING_KV("name", "ObRowsMerger")
 };
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
+template <typename T, typename CompareFunctor>
 class ObLoserTree : public ObRowsMerger<T, CompareFunctor>
 {
 public:
@@ -58,7 +58,7 @@ public:
   explicit ObLoserTree(CompareFunctor &cmp);
   virtual ~ObLoserTree() { reset(); };
 
-  virtual int init(const int64_t total_player_cnt, common::ObIAllocator &allocator);
+  virtual int init(const int64_t max_player_cnt, const int64_t player_cnt, common::ObIAllocator &allocator);
   virtual bool is_inited() const { return is_inited_; }
   virtual int open(const int64_t total_player_cnt);
   virtual void reset();
@@ -105,7 +105,7 @@ protected:
     int set_replay_type(const int64_t player);
   };
 
-  int alloc_max_space();
+  int alloc_max_space(const int64_t player_cnt);
   int inner_rebuild();
   int update_champion_path(const int64_t idx);
   int get_match_result(
@@ -132,7 +132,7 @@ private:
 protected:
   static const int64_t INVALID_IDX = -1;
 
-  bool is_inited_;
+  int64_t max_player_cnt_;
   int64_t player_cnt_;
   int64_t match_cnt_;
   int64_t leaf_offset_;
@@ -142,12 +142,13 @@ protected:
   int64_t cur_free_cnt_;
   bool need_rebuild_;
   bool is_unique_champion_; //if the champion has draw game in the tree
+  bool is_inited_;
   CompareFunctor &cmp_;
   common::ObIAllocator *allocator_;
 };
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-int ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::MatchResult::set_replay_type(
+template <typename T, typename CompareFunctor>
+int ObLoserTree<T, CompareFunctor>::MatchResult::set_replay_type(
     const int64_t player)
 {
   int ret = OB_SUCCESS;
@@ -189,18 +190,17 @@ int ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::MatchResult::set_replay_type
   return ret;
 }
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::ObLoserTree(CompareFunctor &cmp)
-  :is_inited_(false), player_cnt_(0), match_cnt_(0), leaf_offset_(0),
+template <typename T, typename CompareFunctor>
+ObLoserTree<T, CompareFunctor>::ObLoserTree(CompareFunctor &cmp)
+  :max_player_cnt_(0), player_cnt_(0), match_cnt_(0), leaf_offset_(0),
    players_(nullptr), matches_(nullptr), free_players_(nullptr), cur_free_cnt_(0),
-   need_rebuild_(false), is_unique_champion_(true), cmp_(cmp), allocator_(nullptr)
+   need_rebuild_(false), is_unique_champion_(true), is_inited_(false), cmp_(cmp), allocator_(nullptr)
 {
-  STATIC_ASSERT(MAX_PLAYER_CNT > 0, "invalid player count");
   STATIC_ASSERT(std::is_trivially_copyable<T>::value, "class is not supported");
 }
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-int64_t ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::get_match_cnt(
+template <typename T, typename CompareFunctor>
+int64_t ObLoserTree<T, CompareFunctor>::get_match_cnt(
     const int64_t player_cnt)
 {
   int64_t match_cnt = 0;
@@ -214,13 +214,15 @@ int64_t ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::get_match_cnt(
   return match_cnt;
 }
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-int ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::alloc_max_space()
+template <typename T, typename CompareFunctor>
+int ObLoserTree<T, CompareFunctor>::alloc_max_space(const int64_t player_cnt)
 {
   int ret = OB_SUCCESS;
-  int64_t player_cnt = MAX_PLAYER_CNT;
-  int64_t match_cnt = get_match_cnt(MAX_PLAYER_CNT);
-  if (nullptr == (players_ = static_cast<T*>(allocator_->alloc(sizeof(T) * player_cnt)))) {
+  const int64_t match_cnt = get_match_cnt(player_cnt);
+  if (OB_UNLIKELY(player_cnt <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LIB_LOG(WARN, "invalid player count", K(ret), K(player_cnt));
+  } else if (nullptr == (players_ = static_cast<T*>(allocator_->alloc(sizeof(T) * player_cnt)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LIB_LOG(WARN, "allocate players failed", K(ret), K(player_cnt), K(match_cnt));
   } else if (nullptr == (matches_ = static_cast<MatchResult*>(allocator_->alloc(sizeof(MatchResult) * match_cnt)))) {
@@ -233,9 +235,10 @@ int ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::alloc_max_space()
   return ret;
 }
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-int ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::init(
-    const int64_t total_player_cnt,
+template <typename T, typename CompareFunctor>
+int ObLoserTree<T, CompareFunctor>::init(
+    const int64_t max_player_cnt,
+    const int64_t player_cnt,
     ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
@@ -244,10 +247,11 @@ int ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::init(
     LIB_LOG(WARN, "init twice", K(ret));
   } else {
     allocator_ = &allocator;
-    if (OB_FAIL(alloc_max_space())) {
+    max_player_cnt_ = max_player_cnt;
+    if (OB_FAIL(alloc_max_space(max_player_cnt))) {
       LIB_LOG(WARN, "alloc space fail,", K(ret));
-    } else if (OB_FAIL(init_basic_info(total_player_cnt))) {
-      LIB_LOG(WARN, "fail to init basic info", K(ret), K(total_player_cnt));
+    } else if (OB_FAIL(init_basic_info(player_cnt))) {
+      LIB_LOG(WARN, "fail to init basic info", K(ret), K(max_player_cnt));
     } else {
       is_inited_ = true;
     }
@@ -259,24 +263,27 @@ int ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::init(
   return ret;
 }
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-int ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::open(const int64_t total_player_cnt)
+template <typename T, typename CompareFunctor>
+int ObLoserTree<T, CompareFunctor>::open(const int64_t total_player_cnt)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LIB_LOG(WARN, "not init", K(ret));
+  } else if (OB_UNLIKELY(total_player_cnt > max_player_cnt_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LIB_LOG(WARN, "invalid total player count", K(ret), K(total_player_cnt), K_(max_player_cnt));
   } else if (OB_FAIL(init_basic_info(total_player_cnt))) {
     LIB_LOG(WARN, "fail to init basic info", K(ret), K(total_player_cnt));
   }
   return ret;
 }
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-int ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::init_basic_info(const int64_t total_player_cnt)
+template <typename T, typename CompareFunctor>
+int ObLoserTree<T, CompareFunctor>::init_basic_info(const int64_t total_player_cnt)
 {
   int ret = OB_SUCCESS;
-  if (total_player_cnt <= 0 || total_player_cnt > MAX_PLAYER_CNT) {
+  if (total_player_cnt <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LIB_LOG(WARN, "total player count is invalid", K(ret), K(total_player_cnt));
   } else {
@@ -295,8 +302,8 @@ int ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::init_basic_info(const int64_
   return ret;
 }
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-void ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::reuse()
+template <typename T, typename CompareFunctor>
+void ObLoserTree<T, CompareFunctor>::reuse()
 {
   player_cnt_ = 0;
   match_cnt_ = 0;
@@ -306,8 +313,8 @@ void ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::reuse()
   is_unique_champion_= true;
 }
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-void ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::reset()
+template <typename T, typename CompareFunctor>
+void ObLoserTree<T, CompareFunctor>::reset()
 {
   if (nullptr != allocator_) {
     if (nullptr != players_) {
@@ -320,6 +327,7 @@ void ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::reset()
       allocator_->free(free_players_);
     }
   }
+  max_player_cnt_ = 0;
   player_cnt_ = 0;
   match_cnt_ = 0;
   leaf_offset_ = 0;
@@ -333,8 +341,8 @@ void ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::reset()
   is_inited_ = false;
 }
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-int ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::get_match_result(
+template <typename T, typename CompareFunctor>
+int ObLoserTree<T, CompareFunctor>::get_match_result(
     const int64_t offender,
     const int64_t defender,
     const int64_t match_idx)
@@ -361,8 +369,8 @@ int ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::get_match_result(
   return ret;
 }
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-int ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::duel(
+template <typename T, typename CompareFunctor>
+int ObLoserTree<T, CompareFunctor>::duel(
     T &offender, T &defender, const int64_t match_idx, bool &is_offender_win)
 {
   int ret = OB_SUCCESS;
@@ -376,8 +384,8 @@ int ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::duel(
   return ret;
 }
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-void ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::set_unique_champion()
+template <typename T, typename CompareFunctor>
+void ObLoserTree<T, CompareFunctor>::set_unique_champion()
 {
   is_unique_champion_ = true;
   const int64_t champion = matches_[0].winner_idx_;
@@ -394,8 +402,8 @@ void ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::set_unique_champion()
   }
 }
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-int ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::rebuild()
+template <typename T, typename CompareFunctor>
+int ObLoserTree<T, CompareFunctor>::rebuild()
 {
   int ret = OB_SUCCESS;
   if (is_single_player()) {
@@ -412,8 +420,8 @@ int ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::rebuild()
   return ret;
 }
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-int ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::inner_rebuild()
+template <typename T, typename CompareFunctor>
+int ObLoserTree<T, CompareFunctor>::inner_rebuild()
 {
   int ret = OB_SUCCESS;
   int64_t l_player = INVALID_IDX;
@@ -450,8 +458,8 @@ int ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::inner_rebuild()
   return ret;
 }
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-int ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::update_champion_path(
+template <typename T, typename CompareFunctor>
+int ObLoserTree<T, CompareFunctor>::update_champion_path(
     const int64_t idx)
 {
   int ret = OB_SUCCESS;
@@ -481,8 +489,8 @@ int ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::update_champion_path(
   return ret;
 }
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-int ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::top(const T *&player)
+template <typename T, typename CompareFunctor>
+int ObLoserTree<T, CompareFunctor>::top(const T *&player)
 {
   int ret = OB_SUCCESS;
   if (!IS_INIT) {
@@ -508,8 +516,8 @@ int ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::top(const T *&player)
   return ret;
 }
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-int ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::push(const T &player)
+template <typename T, typename CompareFunctor>
+int ObLoserTree<T, CompareFunctor>::push(const T &player)
 {
   int ret = OB_SUCCESS;
   if (!IS_INIT) {
@@ -540,15 +548,15 @@ int ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::push(const T &player)
   return ret;
 }
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-int ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::push_top(const T &player)
+template <typename T, typename CompareFunctor>
+int ObLoserTree<T, CompareFunctor>::push_top(const T &player)
 {
   UNUSED(player);
   return OB_NOT_SUPPORTED;
 }
 
-template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
-int ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::pop()
+template <typename T, typename CompareFunctor>
+int ObLoserTree<T, CompareFunctor>::pop()
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {

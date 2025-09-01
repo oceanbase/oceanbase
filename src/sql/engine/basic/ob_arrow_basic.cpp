@@ -89,44 +89,48 @@ void ObArrowMemPool::init(uint64_t tenant_id)
   mem_attr_ = ObMemAttr(tenant_id, "ArrowMemPool");
 }
 
-arrow::Status ObArrowMemPool::Allocate(int64_t size, uint8_t** out)
+arrow::Status ObArrowMemPool::Allocate(int64_t size, int64_t alignment, uint8_t** out)
 {
   int ret = OB_SUCCESS;
   arrow::Status status_ret = arrow::Status::OK();
   if (0 == size) {
     *out = NULL;
   } else {
-    void *buf = ob_malloc_align(64, size, mem_attr_);
+    void *buf = ob_malloc_align(alignment, size, mem_attr_);
     if (OB_ISNULL(buf)) {
       status_ret = arrow::Status::Invalid("allocate memory failed");
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate memory", K(size), K(lbt()));
     } else {
       *out = static_cast<uint8_t*>(buf);
+      ++num_allocations_;
       total_alloc_size_ += size;
+      total_hold_size_ += size;
     }
   }
   LOG_DEBUG("ObArrowMemPool::Allocate", K(size), "stack", lbt());
   return status_ret;
 }
 
-arrow::Status ObArrowMemPool::Reallocate(int64_t old_size, int64_t new_size, uint8_t** ptr)
+arrow::Status ObArrowMemPool::Reallocate(int64_t old_size, int64_t new_size, int64_t alignment,
+  uint8_t **ptr)
 {
   int ret = OB_SUCCESS;
   uint8_t* old = *ptr;
-  arrow::Status status_ret = Allocate(new_size, ptr);
+  arrow::Status status_ret = Allocate(new_size, alignment, ptr);
   if (arrow::Status::OK() == status_ret) {
-    MEMCPY(*ptr, old, std::min(old_size, new_size));
-    Free(old, old_size);
+  MEMCPY(*ptr, old, std::min(old_size, new_size));
+  Free(old, old_size, alignment);
   }
   LOG_DEBUG("ObArrowMemPool::Reallocate", K(old_size), K(new_size), "stack", lbt());
   return status_ret;
 }
 
-void ObArrowMemPool::Free(uint8_t* buffer, int64_t size) {
+void ObArrowMemPool::Free(uint8_t* buffer, int64_t size, int64_t alignment) {
+  UNUSED(alignment);
   int ret = OB_SUCCESS;
   ob_free_align(buffer);
-  total_alloc_size_ -= size;
+  total_hold_size_ -= size;
   LOG_DEBUG("ObArrowMemPool::Free", K(size), "stack", lbt());
 }
 
@@ -136,7 +140,17 @@ void ObArrowMemPool::ReleaseUnused() {
 
 int64_t ObArrowMemPool::bytes_allocated() const {
   LOG_DEBUG("ObArrowMemPool::bytes_allocated", "stack", lbt());
+  return total_hold_size_;
+}
+
+int64_t ObArrowMemPool::total_bytes_allocated() const {
+  LOG_DEBUG("ObArrowMemPool::total_bytes_allocated", "stack", lbt());
   return total_alloc_size_;
+}
+
+int64_t ObArrowMemPool::num_allocations() const {
+  LOG_DEBUG("ObArrowMemPool::num_allocations", "stack", lbt());
+  return num_allocations_;
 }
 
 /* ObArrowFile */
@@ -156,7 +170,7 @@ arrow::Result<int64_t> ObArrowFile::Read(int64_t nbytes, void *out)
   bool is_hit_cache = false;
   arrow::Result<int64_t> ret_code;
   int64_t read_size = -1;
-  const int64_t io_timeout_ms = (timeout_ts_ - ObTimeUtility::current_time()) / 1000;
+  const int64_t io_timeout_ms = MAX(0, (timeout_ts_ - ObTimeUtility::current_time()) / 1000);
   ObExternalReadInfo read_info(position_, out, nbytes, io_timeout_ms);
   if (OB_FAIL(read_from_cache(position_, nbytes, out, is_hit_cache))) {
     LOG_WARN("failed to read from cache", K(ret));
@@ -192,7 +206,7 @@ arrow::Result<int64_t> ObArrowFile::ReadAt(int64_t position, int64_t nbytes, voi
   bool is_hit_cache = false;
   arrow::Result<int64_t> ret_code;
   int64_t read_size = -1;
-  const int64_t io_timeout_ms = (timeout_ts_ - ObTimeUtility::current_time()) / 1000;
+  const int64_t io_timeout_ms = MAX(0, (timeout_ts_ - ObTimeUtility::current_time()) / 1000);
   ObExternalReadInfo read_info(position, out, nbytes, io_timeout_ms);
   if (OB_FAIL(read_from_cache(position, nbytes, out, is_hit_cache))) {
     LOG_WARN("failed to read from cache", K(ret));

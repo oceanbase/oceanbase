@@ -48,7 +48,8 @@ int ObRemoteLogIterator<LogEntryType>::init(const uint64_t tenant_id,
     const LSN &end_lsn,
     archive::LargeBufferPool *buffer_pool,
     logservice::ObLogExternalStorageHandler *log_ext_handler,
-    const int64_t single_read_size)
+    const int64_t single_read_size,
+    const bool enable_logservice)
 {
   int ret = OB_SUCCESS;
   ObRemoteLogParent *source = NULL;
@@ -89,7 +90,7 @@ int ObRemoteLogIterator<LogEntryType>::init(const uint64_t tenant_id,
     ret = build_data_generator_(pre_scn, source, refresh_storage_info_func_);
     CLOG_LOG(INFO, "ObRemoteLogIterator init", K(ret), K(tenant_id), K(id), K(pre_scn), K(start_lsn), K(end_lsn));
   }
-
+  data_buffer_.iter_.set_logservice_mode(enable_logservice);
   if (OB_SUCC(ret)) {
     inited_ = true;
   }
@@ -266,7 +267,7 @@ int ObRemoteLogIterator<LogEntryType>::next_entry_(LogEntryType &entry, LSN &lsn
         CLOG_LOG(WARN, "get entry failed", K(ret), KPC(this));
       }
     } else {
-      cur_lsn_ = lsn + entry.get_serialize_size();
+      cur_lsn_ = lsn + entry.get_serialize_size(lsn);
       cur_scn_ = entry.get_scn();
       advance_data_gen_lsn_();
       if (lsn < start_lsn_) {

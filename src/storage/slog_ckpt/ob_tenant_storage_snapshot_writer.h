@@ -113,6 +113,7 @@ private:
       blocksstable::MacroBlockId &wait_gc_tablet_entry,
       ObSlogCheckpointFdDispenser *fd_dispenser);
   int copy_tablet(
+      ObLS &ls,
       const uint64_t data_version,
       const ObTabletMapKey &tablet_key,
       const int64_t ls_epoch,

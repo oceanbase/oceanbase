@@ -60,6 +60,7 @@ class ObStaticEngineCG;
 class ObPushdownOperator;
 struct ObExprFrameInfo;
 struct PushdownFilterInfo;
+struct ObRawFilterMonotonicity;
 typedef common::ObFixedArray<const share::schema::ObColumnParam*, common::ObIAllocator> ColumnParamFixedArray;
 
 enum PushdownFilterType //FARM COMPAT WHITELIST
@@ -551,13 +552,15 @@ class ObPushdownFilterConstructor
 public:
   ObPushdownFilterConstructor(common::ObIAllocator *alloc,
                               ObStaticEngineCG &static_cg,
-                              const ObLogTableScan *op,
+                              const ObIArray<ObRawFilterMonotonicity> *filter_monotonicity,
                               bool use_column_store,
+                              share::schema::ObTableType table_type,
                               bool enable_semistruct_pushdown = false)
-      : alloc_(alloc), factory_(alloc), static_cg_(static_cg), op_(op), use_column_store_(use_column_store),
+      : alloc_(alloc), factory_(alloc), static_cg_(static_cg), filter_monotonicity_(filter_monotonicity),
+        use_column_store_(use_column_store), table_type_(table_type),
         enable_semistruct_pushdown_(enable_semistruct_pushdown)
   {}
-  int apply(common::ObIArray<ObRawExpr*> &exprs, ObPushdownFilterNode *&filter_tree);
+  int apply(const common::ObIArray<ObRawExpr*> &exprs, ObPushdownFilterNode *&filter_tree);
 
 private:
   int is_white_mode(const ObRawExpr* raw_expr, bool &is_white, bool &is_semistruct_white);
@@ -588,8 +591,9 @@ private:
   common::ObIAllocator *alloc_;
   ObPushdownFilterFactory factory_;
   ObStaticEngineCG &static_cg_;
-  const ObLogTableScan *op_;
+  const ObIArray<ObRawFilterMonotonicity> *filter_monotonicity_;
   bool use_column_store_;
+  share::schema::ObTableType table_type_;
   bool enable_semistruct_pushdown_;
 };
 
@@ -629,6 +633,13 @@ enum ObCommonFilterTreeStatus : uint8_t
   SINGLE_BLACK = 2,
   MULTI_BLACK = 3,
   MAX_STATUS = 4
+};
+
+class ObFilterColumnLoader {
+public:
+  ObFilterColumnLoader() {}
+  virtual ~ObFilterColumnLoader() {}
+  virtual int load(const common::ObIArray<uint64_t> &col_ids) = 0;
 };
 
 // executor interface
@@ -793,6 +804,7 @@ public:
   }
   ObPushdownFilterExecutor **get_childs() const { return childs_; }
   const common::ObBitmap *get_result() const { return filter_bitmap_; }
+  common::ObBitmap *get_result() { return filter_bitmap_; }
   int init_bitmap(const int64_t row_count, common::ObBitmap *&bitmap);
   int init_filter_param(
       const common::ObIArray<share::schema::ObColumnParam *> &col_params,
@@ -809,6 +821,12 @@ public:
       PushdownFilterInfo &filter_info,
       blocksstable::ObIMicroBlockRowScanner *micro_scanner,
       const bool use_vectorize);
+  int execute(
+      ObPushdownFilterExecutor *parent,
+      ObFilterColumnLoader *filter_column_loader,
+      const int64_t start,
+      const int64_t count);
+
   int execute_skipping_filter(ObBoolMask &bm);
   virtual void clear(); // release array and set memory used by WHITE_OP_IN filter.
   void inc_ref() { ++ref_cnt_; }
@@ -911,6 +929,10 @@ public:
   int filter_batch(ObPushdownFilterExecutor *parent,
                    const int64_t start,
                    const int64_t end,
+                   common::ObBitmap &result_bitmap);
+  int filter_batch(const int64_t start,
+                   const int64_t end,
+                   ObBitVector &skip,
                    common::ObBitmap &result_bitmap);
   int get_datums_from_column(common::ObIArray<blocksstable::ObSqlDatumInfo> &datum_infos);
   INHERIT_TO_STRING_KV("ObPushdownBlackFilterExecutor", ObPhysicalFilterExecutor,
@@ -1347,7 +1369,7 @@ public:
                KPC_(trans_info_expr),
                K_(ext_tbl_filter_pd_level));
 
-  int set_calc_exprs(const ExprFixedArray &calc_exprs, int64_t max_batch_size)
+  int set_calc_exprs(const ObIArray<ObExpr*> &calc_exprs, int64_t max_batch_size)
   {
     max_batch_size_ = max_batch_size;
     return calc_exprs_.assign(calc_exprs);

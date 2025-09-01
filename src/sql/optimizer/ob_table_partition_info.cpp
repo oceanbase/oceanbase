@@ -143,13 +143,6 @@ int ObTablePartitionInfo::calc_phy_table_loc_and_select_leader(ObExecContext &ex
           LOG_WARN("fail to set selected replica index", KR(ret));
         }
       }
-
-      if (OB_SUCCESS != tmp_ret) {
-        //nothing todo
-      } else if (OB_SUCCESS != (tmp_ret = task_exec_ctx
-                         ->append_table_location(candi_table_loc))) {
-        LOG_WARN("fail append table locaion info", K(ret), K(tmp_ret));
-      }
     }
   }
   return ret;
@@ -208,9 +201,32 @@ int ObTablePartitionInfo::replace_final_location_key(ObExecContext &exec_ctx,
 
 int ObTablePartitionInfo::get_location_type(const common::ObAddr &server, ObTableLocationType &type) const
 {
-  const ObCandiTabletLocIArray &phy_part_loc_info_list =
-      candi_table_loc_.get_phy_part_loc_info_list();
-  return table_location_.get_location_type(server, phy_part_loc_info_list, type);
+  return get_location_type(server, candi_table_loc_.get_phy_part_loc_info_list(), type);
+}
+
+int ObTablePartitionInfo::get_location_type(const common::ObAddr &server,
+                                            const ObCandiTabletLocIArray &phy_part_loc_info_list,
+                                            ObTableLocationType &type)
+{
+  int ret = OB_SUCCESS;
+  type = OB_TBL_LOCATION_UNINITIALIZED;
+  const TableItem *table_item = NULL;
+  if (0 == phy_part_loc_info_list.count()) {
+    type = OB_TBL_LOCATION_LOCAL;
+  } else if (1 == phy_part_loc_info_list.count()) {
+    share::ObLSReplicaLocation replica_location;
+    if (OB_FAIL(phy_part_loc_info_list.at(0).get_selected_replica(replica_location))) {
+      LOG_WARN("fail to get selected replica", K(phy_part_loc_info_list.at(0)));
+    } else if (!replica_location.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("replica location is invalid", K(ret), K(replica_location));
+    } else {
+      type = ((server == replica_location.get_server()) ? OB_TBL_LOCATION_LOCAL : OB_TBL_LOCATION_REMOTE);
+    }
+  } else {
+    type = OB_TBL_LOCATION_DISTRIBUTED;
+  }
+  return ret;
 }
 
 int ObTablePartitionInfo::get_all_servers(ObIArray<common::ObAddr> &servers) const

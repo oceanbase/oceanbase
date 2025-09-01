@@ -1285,6 +1285,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
         break;
       case DDL_CREATE_FTS_INDEX:
       case DDL_CREATE_MULTIVALUE_INDEX:
+      case DDL_CREATE_VEC_SPIV_INDEX:
         create_index_arg = static_cast<const obrpc::ObCreateIndexArg *>(param.ddl_arg_);
         if (OB_FAIL(create_build_fts_index_task(proxy,
                                                 param.src_table_schema_,
@@ -2134,7 +2135,6 @@ int ObDDLScheduler::create_build_fts_index_task(
 {
   int ret = OB_SUCCESS;
   int64_t task_id = 0;
-  bool in_table_restore = false;
   SMART_VAR(ObFtsIndexBuildTask, index_task) {
     if (OB_UNLIKELY(!is_inited_)) {
       ret = OB_NOT_INIT;
@@ -2147,11 +2147,9 @@ int ObDDLScheduler::create_build_fts_index_task(
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), KPC(create_index_arg),
           KPC(data_table_schema), KPC(index_schema), K(tenant_data_version), KP(GCTX.sql_proxy_));
-    } else if (OB_FAIL(ObDDLUtil::check_is_table_restore_task(create_index_arg->tenant_id_, parent_task_id, in_table_restore))) {
-      LOG_WARN("fail to check is table restore task", K(ret));
-    } else if ((create_index_arg->is_offline_rebuild_ || in_table_restore)
-        && OB_FAIL(ObDDLUtil::get_domain_index_share_table_snapshot(data_table_schema, index_schema, create_index_arg->tenant_id_, snapshot_version))) {
-      LOG_WARN("failed to get rowkey doc table snapshot", K(ret), K(data_table_schema), K(index_schema));
+    } else if (OB_FAIL(ObDDLUtil::get_domain_index_share_table_snapshot(
+                   data_table_schema, index_schema, parent_task_id, *create_index_arg, snapshot_version))) {
+      LOG_WARN("fail to update domain index share table snapshot", K(ret));
     } else if (OB_FAIL(ObFtsIndexBuilderUtil::check_supportability_for_building_index(data_table_schema, create_index_arg))) {
       LOG_WARN("fail to check supportability for building index", K(ret));
     } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(*GCTX.sql_proxy_, data_table_schema->get_tenant_id(), task_id))) {
@@ -2258,11 +2256,9 @@ int ObDDLScheduler::create_build_vec_index_task(
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), KPC(create_index_arg),
           KPC(data_table_schema), KPC(index_schema));
-    } else if (OB_FAIL(ObDDLUtil::check_is_table_restore_task(create_index_arg->tenant_id_, parent_task_id, in_table_restore))) {
-      LOG_WARN("fail to check is table restore task", K(ret));
-    } else if ((create_index_arg->is_offline_rebuild_ || in_table_restore)
-        && OB_FAIL(ObDDLUtil::get_domain_index_share_table_snapshot(data_table_schema, index_schema, create_index_arg->tenant_id_, snapshot_version))) {
-      LOG_WARN("failed to get rowkey doc table snapshot", K(ret), K(data_table_schema), K(index_schema));
+    } else if (OB_FAIL(ObDDLUtil::get_domain_index_share_table_snapshot(
+                   data_table_schema, index_schema, parent_task_id, *create_index_arg, snapshot_version))) {
+      LOG_WARN("fail to update domain index share table snapshot", K(ret));
     } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(*GCTX.sql_proxy_, data_table_schema->get_tenant_id(), task_id))) {
       LOG_WARN("fetch new task id failed", K(ret));
     } else if (OB_FAIL(index_task.init(data_table_schema->get_tenant_id(),
@@ -2309,7 +2305,7 @@ int ObDDLScheduler::create_build_index_task(
   int64_t task_id = 0;
 
   share::ObDDLTaskStatus task_status =
-    (index_schema->is_rowkey_doc_id() || index_schema->is_vec_rowkey_vid_type()) ?
+    (index_schema->is_rowkey_doc_id() || index_schema->is_vec_rowkey_vid_type()) && !create_index_arg->is_offline_rebuild_ ?
     share::ObDDLTaskStatus::REDEFINITION : share::ObDDLTaskStatus::PREPARE;
 
   SMART_VAR(ObIndexBuildTask, index_task) {
@@ -2427,7 +2423,7 @@ int ObDDLScheduler::create_drop_fts_index_task(
     LOG_WARN("invalid argument", K(ret), KP(index_schema), KP(drop_index_arg), KP(GCTX.sql_proxy_));
   } else if (FALSE_IT(is_fts_index = (index_schema->is_fts_index_aux() || drop_index_arg->is_parent_task_dropping_fts_index_))) {
   } else if (FALSE_IT(is_multivalue_index = (index_schema->is_multivalue_index_aux() || drop_index_arg->is_parent_task_dropping_multivalue_index_))) {
-  } else if (FALSE_IT(is_vec_spiv_index = index_schema->is_vec_spiv_index_aux())) {
+  } else if (FALSE_IT(is_vec_spiv_index = (index_schema->is_vec_spiv_index_aux() || drop_index_arg->is_parent_task_dropping_spiv_index_))) {
   } else if (OB_UNLIKELY(schema_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(index_schema), K(schema_version));
@@ -3263,6 +3259,7 @@ int ObDDLScheduler::schedule_ddl_task(const ObDDLTaskRecord &record)
         break;
       case ObDDLType::DDL_CREATE_FTS_INDEX:
       case ObDDLType::DDL_CREATE_MULTIVALUE_INDEX:
+      case ObDDLType::DDL_CREATE_VEC_SPIV_INDEX:
         ret = schedule_build_fts_index_task(record);
         break;
       case ObDDLType::DDL_DROP_VEC_IVFFLAT_INDEX:

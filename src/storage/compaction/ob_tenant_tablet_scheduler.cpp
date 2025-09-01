@@ -1847,25 +1847,22 @@ int ObTenantTabletScheduler::try_schedule_adaptive_merge(
 }
 
 #ifdef OB_BUILD_SHARED_STORAGE
+ERRSIM_POINT_DEF(EN_COMPACTION_SS_MINOR_MERGE_FAST_SKIP);
 static bool fast_check_skip_ss_minor(ObTabletHandle &tablet_handle)
 {
   bool bret = false;
   int ret = OB_SUCCESS;
-  int64_t minor_compact_trigger = ObPartitionMergePolicy::DEFAULT_MINOR_COMPACT_TRIGGER;
-  {
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-    if (tenant_config.is_valid()) {
-      minor_compact_trigger = tenant_config->minor_compact_trigger;
-    }
-  }
-  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
-  const ObTabletTableStore *table_store = nullptr;
-  if (OB_FAIL(tablet_handle.get_obj()->fetch_table_store(table_store_wrapper))) {
-    LOG_WARN("failed to get table store", K(ret));
-  } else if (OB_FAIL(table_store_wrapper.get_member(table_store))) {
-    LOG_WARN("failed to get table store", K(ret));
-  } else if (table_store->get_minor_sstables().count() <= minor_compact_trigger
-             && table_store->get_mds_sstables().count() <= minor_compact_trigger) {
+  ObTabletPointer *tablet_pointer = tablet_handle.get_obj()->get_pointer_handle().get_tablet_pointer();
+  if (OB_FAIL(EN_COMPACTION_SS_MINOR_MERGE_FAST_SKIP)) {
+    bret = false;
+    LOG_INFO("ERRSIM EN_COMPACTION_SS_MINOR_MERGE_FAST_SKIP", "ret", EN_COMPACTION_SS_MINOR_MERGE_FAST_SKIP, K(tablet_handle));
+  } else if (OB_ISNULL(tablet_pointer)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet pointer should not be NULL", K(ret), K(tablet_handle));
+  } else if (tablet_pointer->get_ss_minor_version() >= tablet_pointer->get_notify_ss_change_version()) {
+    LOG_TRACE("no need minor merge, ss minor version >= notify ss change version",
+              "tablet_id", tablet_handle.get_obj()->get_tablet_id(),
+              KPC(tablet_pointer));
     bret = true;
   }
   return bret;
@@ -1885,6 +1882,7 @@ int ObTenantTabletScheduler::schedule_tablet_ss_minor_merge(
   bool skip = false;
   bool can_exec_ss_minor = false;
   ObSSMetaUpdateMetaInfo meta_info;
+  share::SCN ss_tablet_version;
   if (!ObTabletSSMinorMergeHelper::can_schedule(ls_id, tablet_id)) {
     skip = true;
   } else if (fast_check_skip_ss_minor(local_tablet_handle)) {
@@ -1894,7 +1892,8 @@ int ObTenantTabletScheduler::schedule_tablet_ss_minor_merge(
                                                        transfer_scn,
                                                        allocator,
                                                        tablet_handle,
-                                                       meta_info))) {
+                                                       meta_info,
+                                                       ss_tablet_version))) {
     LOG_WARN("get ss tablet fail", K(ret));
   } else if (!tablet_handle.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
@@ -1905,20 +1904,30 @@ int ObTenantTabletScheduler::schedule_tablet_ss_minor_merge(
     skip = true;
     LOG_INFO("tablet can not exec ss minor compaction", K(ret), K(ls_id), K(tablet_id), K(transfer_scn));
   } else {
+    bool all_no_need_merge = true;
     const ObSSTabletTableStoreMetaInfo &table_store_meta_info = meta_info.table_store_meta_info_;
     const ObMergeType merge_types[] = { MINOR_MERGE, MDS_MINOR_MERGE };
     for (int i = 0; OB_SUCC(ret) && i < sizeof(merge_types); i++) {
       bool scheduled = false;
+      bool no_need_merge = false;
       if (OB_FAIL(schedule_tablet_ss_minor_merge(merge_types[i], ls_handle, tablet_handle, table_store_meta_info, scheduled))) {
-        LOG_WARN("schedule shared tablet minor fail", K(ret), K(merge_types[i]));
+        if (OB_NO_NEED_MERGE == ret) {
+          LOG_TRACE("tablet no need merge", K(ret), K(merge_types[i]), K(ls_id), K(tablet_id), K(tablet_handle));
+          no_need_merge = true;
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("schedule shared tablet minor fail", K(ret), K(merge_types[i]));
+        }
       }
+      all_no_need_merge &= no_need_merge;
       scheduled_dag |= scheduled;
     }
+    if (all_no_need_merge) {
+      LOG_TRACE("all ss minor merge are no need", K(ret), K(ls_id), K(tablet_id), K(tablet_handle));
+      local_tablet_handle.get_obj()->get_pointer_handle().get_tablet_pointer()->set_ss_minor_version(ss_tablet_version);
+    }
   }
-  if (OB_SUCC(ret) && !skip && !scheduled_dag && !tablet_id.is_special_merge_tablet()) {
-    // try gc sstables for tablet
-    ObTabletSSMinorMergeHelper::try_gc_sstables(ls_handle, tablet_handle, meta_info.table_store_meta_info_);
-  }
+
   if (!skip) {
     LOG_INFO("sched ss minor", K(ret), K(ls_id), K(tablet_id), K(scheduled_dag));
   }
@@ -1968,8 +1977,7 @@ int ObTenantTabletScheduler::schedule_tablet_ss_minor_merge(const ObMergeType &m
     LOG_WARN("not support this type of merge", K(ret), K(merge_type));
   }
   if (OB_NO_NEED_MERGE == ret) {
-    ret = OB_SUCCESS;
-    LOG_DEBUG("tablet no need merge", K(ret), K(merge_type), K(ls_id), K(tablet_id), K(tablet_handle));
+    LOG_TRACE("tablet no need merge", K(ret), K(merge_type), K(ls_id), K(tablet_id), K(tablet_handle));
   } else if (OB_FAIL(ret)) {
     LOG_WARN("failed to check need merge", K(ret), K(merge_type), K(ls_id), K(tablet_id), K(tablet_handle));
   } else {

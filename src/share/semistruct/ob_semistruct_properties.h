@@ -54,7 +54,7 @@ public:
   uint8_t get_freq_threshold() const { return freq_threshold_; }
   uint8_t get_mode() const { return mode_; }
 
-  int resolve_semistruct_properties(const common::ObString &semistruct_properties);
+  int resolve_semistruct_properties(uint8_t mode, const common::ObString &semistruct_properties);
 
   TO_STRING_KV(K_(mode), K_(freq_threshold));
 

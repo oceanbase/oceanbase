@@ -811,14 +811,15 @@ int ObTabletMemtableMgr::release_head_memtable_(ObIMemtable *imemtable,
       }
       memtable->set_frozen();
       memtable->report_memtable_diagnose_info(UpdateReleaseTime());
+
+      FLOG_INFO("succeed to release head data memtable", K(ret), K(occupy_size), KPC(memtable));
       release_head_memtable();
+
       ObITabletMemtable *active_memtable = get_active_memtable_();
       if (OB_NOT_NULL(active_memtable) && !active_memtable->allow_freeze()) {
         active_memtable->set_allow_freeze(true);
         FLOG_INFO("allow active memtable to be freezed", K(ls_id), KPC(active_memtable));
       }
-
-      FLOG_INFO("succeed to release head data memtable", K(ret), K(occupy_size), KPC(memtable));
     }
   }
 

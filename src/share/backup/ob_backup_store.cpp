@@ -23,7 +23,6 @@
 using namespace oceanbase;
 using namespace common;
 using namespace share;
-
 /**
  * ------------------------------ObBackupFormatDesc---------------------
  */

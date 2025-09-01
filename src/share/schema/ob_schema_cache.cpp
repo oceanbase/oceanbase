@@ -17,6 +17,7 @@
 #include "share/cache/ob_cache_name_define.h"
 #include "observer/ob_server_struct.h"
 #include "share/inner_table/ob_sslog_table_schema.h"
+#include "share/schema/ob_iceberg_table_schema.h"
 namespace oceanbase
 {
 using namespace common;
@@ -230,6 +231,10 @@ int ObSchemaCacheValue::deep_copy(char *buf,
     }
     case CCL_RULE_SCHEMA: {
       DEEP_COPY_SCHEMA(ObCCLRuleSchema);
+      break;
+    }
+    case ICEBERG_TABLE_SCHEMA: {
+      DEEP_COPY_SCHEMA(ObIcebergTableSchema);
       break;
     }
     default: {

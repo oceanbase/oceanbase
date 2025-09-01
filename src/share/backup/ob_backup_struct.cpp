@@ -1274,6 +1274,20 @@ int ObBackupStorageInfo::set_endpoint(const common::ObStorageType device_type, c
   return ret;
 }
 
+int ObBackupStorageInfo::clone(
+    common::ObIAllocator &allocator,
+    common::ObObjectStorageInfo *&storage_info) const
+{
+  int ret = OB_SUCCESS;
+  ObBackupStorageInfo *tmp_storage_info = nullptr;
+  if (OB_FAIL(clone_impl_<ObBackupStorageInfo>(allocator, *this, tmp_storage_info))) {
+    LOG_WARN("fail to clone backup storage info", KR(ret), KPC(this));
+  } else {
+    storage_info = tmp_storage_info;
+  }
+  return ret;
+}
+
 int ObBackupStorageInfo::get_storage_info_str(char *storage_info, const int64_t info_len) const
 {
   int ret = OB_SUCCESS;
@@ -1890,6 +1904,7 @@ int ObBackupDest::get_backup_path_str(char *buf, const int64_t buf_size) const
       LOG_WARN("failed to set backup path", K(ret), K(storage_info_->endpoint_));
     }
   }
+  LOG_INFO("[backup]get_backup_path_str ret", K(ret), K(buf), K(buf_size));
   return ret;
 }
 
@@ -2626,8 +2641,13 @@ int ObBackupUtils::get_tenant_alive_servers_in_zone_(
   } else if (OB_ISNULL(locality_manager)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("locality manager is null", K(ret));
+  } else if (OB_FAIL(SVR_TRACER.renew_tenant_servers_cache_by_id(tenant_id))) {
+    LOG_WARN("fail to renew tenant servers cache by tenant id", K(ret), K(tenant_id));
   } else if (OB_FAIL(SVR_TRACER.get_alive_tenant_servers(tenant_id, alive_servers, renew_time))) {
     LOG_WARN("fail to get tenant alive servers", K(ret), K(tenant_id));
+  } else if (alive_servers.empty()) {
+    ret = OB_EMPTY_RESULT;
+    LOG_WARN("tenant does not have any alive server after refreshing", K(ret), K(tenant_id));
   } else if (OB_FAIL(locality_manager->get_server_locality_array(all_server_locality, has_read_only_zone))) {
     LOG_WARN("fail to get server locality array", K(ret));
   } else {

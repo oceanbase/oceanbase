@@ -2935,7 +2935,9 @@ typedef enum ObItemType
   T_FORMAT_OBJECT_NAME_DISPLAY = 4909,
   T_CACHE_REFRESH_INTERVAL_SEC = 4910,
   T_BACKUP_VALIDATE = 4911,
-
+  T_TRANSITION = 4912,
+  T_FUN_ES_SCORE = 4913, // fulltext index for ES SQL
+  T_FUN_ES_MATCH = 4914, // fulltext index for ES SQL
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
@@ -3107,7 +3109,8 @@ extern const char *get_type_name(int type);
                          (op) == T_FUNC_SYS_ARRAY_AGG ||\
                          ((op) >= T_FUN_SYS_BIT_AND && (op) <= T_FUN_SYS_BIT_XOR) || \
                          (op) == T_FUN_INNER_PREFIX_MAX || \
-                         (op) == T_FUN_INNER_PREFIX_MIN)
+                         (op) == T_FUN_INNER_PREFIX_MIN || \
+                         ((op) >= T_FUN_ARG_MIN && (op) <= T_FUN_ARG_MAX))
 #define MAYBE_ROW_OP(op) ((op) >= T_OP_EQ && (op) <= T_OP_NE)
 #define IS_PSEUDO_COLUMN_TYPE(op) \
   ((op) == T_LEVEL || (op) == T_CONNECT_BY_ISLEAF || (op) == T_CONNECT_BY_ISCYCLE || (op) == T_ORA_ROWSCN)

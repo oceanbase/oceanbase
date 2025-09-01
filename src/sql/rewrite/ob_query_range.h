@@ -461,6 +461,7 @@ public:
                                          common::ObIAllocator &allocator,
                                          ObExecContext &exec_ctx,
                                          const ParamStore &param_store,
+                                         int64_t range_buffer_idx,
                                          void *range_buffer,
                                          ObQueryRangeArray &ranges,
                                          const common::ObDataTypeCastParams &dtc_params) const;
@@ -1029,6 +1030,7 @@ private:
                                bool &use_ori_cmp_type);
 
   virtual int get_total_range_sizes(common::ObIArray<uint64_t> &total_range_sizes) const;
+  virtual bool enable_new_false_range() const { return false; }
 private:
   static const int64_t RANGE_BUCKET_SIZE = 1000;
   static const int64_t MAX_RANGE_SIZE_OLD = 10000;

@@ -58,7 +58,7 @@ public:
     LogRpc *log_rpc = log_engine_->log_net_service_.log_rpc_;
     LogIOWorker *log_io_worker = log_engine_->log_io_worker_;
     LogSharedQueueTh *log_shared_queue_th = log_engine_->log_shared_queue_th_;
-    LogPlugins *plugins = log_engine_->plugins_;
+    palf::LogPlugins *plugins = log_engine_->plugins_;
     LogEngine log_engine;
     ILogBlockPool *log_block_pool = log_engine_->log_storage_.block_mgr_.log_block_pool_;
     LogIOAdapter io_adapter;

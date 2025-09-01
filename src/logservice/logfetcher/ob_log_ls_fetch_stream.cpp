@@ -25,6 +25,7 @@
 #include "ob_log_part_progress_controller.h"      // PartProgressController
 #include "ob_log_trace_id.h"                      // ObLogTraceIdGuard
 #include "ob_log_fetch_log_rpc_result.h"
+#include "logservice/ipalf/ipalf_log_group_entry.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::obrpc;
@@ -958,7 +959,7 @@ int FetchStream::handle_fetch_log_task_(volatile bool &stop_flag)
 }
 
 int FetchStream::read_group_entry_(
-    const palf::LogGroupEntry &group_entry,
+    const ipalf::IGroupEntry &group_entry,
     const palf::LSN &group_start_lsn,
     const char *buffer,
     KickOutInfo &kick_out_info,
@@ -1052,7 +1053,8 @@ int FetchStream::handle_fetch_archive_task_(volatile bool &stop_flag)
     int64_t fetch_remote_time = 0;
 
     while (OB_SUCC(ret) && need_fetch_log) {
-      palf::LogGroupEntry log_group_entry;
+      bool enable_logservice = ls_fetch_ctx_->get_logservice_model();
+      ipalf::IGroupEntry log_group_entry(enable_logservice);
       palf::LSN lsn;
       const char *buf = NULL;
       int64_t buf_size = 0;
@@ -1108,7 +1110,7 @@ int FetchStream::handle_fetch_archive_task_(volatile bool &stop_flag)
         if (submit_ts > upper_limit_) {
           check_need_fetch_log_with_upper_limit_(need_fetch_log);
         }
-        fetched_group_entry_size += log_group_entry.get_serialize_size();
+        fetched_group_entry_size += log_group_entry.get_serialize_size(lsn);
         // update fetch state every 100 group entries
         if ((++fetched_group_entry_cnt % UPDATE_FETCH_STATE_INTERVAL) == 0) {
           int64_t flush_time = 0;
@@ -1677,8 +1679,9 @@ int FetchStream::read_log_(const char *data,
     for (log_num = 0; OB_SUCC(ret); ++log_num) {
       int64_t begin_time = get_timestamp();
       palf::LSN group_start_lsn;
-      palf::LogGroupEntry group_entry;
-      palf::MemPalfBufferIterator entry_iter;
+      bool enable_logservice = ls_fetch_ctx_->get_logservice_model();
+      ipalf::IGroupEntry group_entry(enable_logservice);
+      ipalf::IPalfIterator<ipalf::ILogEntry> entry_iter(enable_logservice);
       const char *buffer = nullptr;
 
       if (OB_FAIL(ls_fetch_ctx_->get_next_group_entry(group_entry, group_start_lsn,
@@ -1696,7 +1699,7 @@ int FetchStream::read_log_(const char *data,
       } else {
         // GroupLogEntry deserialize time
         decode_log_entry_time += (get_timestamp() - begin_time);
-        read_len += group_entry.get_group_entry_size();
+        read_len += group_entry.get_group_entry_size(group_start_lsn);
 
         if (OB_FAIL(read_group_entry_(group_entry, group_start_lsn, buffer, kick_out_info, tsi, stop_flag))) {
           if (OB_IN_STOP_STATE != ret && OB_NEED_RETRY != ret) {

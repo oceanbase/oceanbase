@@ -155,6 +155,7 @@ public:
 
   // Tenant Meta
   datadict::ObDictTenantMeta &get_dict_tenant_meta() { return dict_tenant_meta_; }
+  int update_tenant_name(const char* tenant_name);
   common::ObCompatibilityMode get_compatibility_mode() const { return dict_tenant_meta_.get_compatibility_mode(); }
   uint64_t get_tenant_id() const { return dict_tenant_meta_.get_tenant_id(); }
   const char *get_tenant_name() const { return dict_tenant_meta_.get_tenant_name(); }

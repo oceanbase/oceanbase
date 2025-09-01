@@ -30,15 +30,29 @@ enum class WashTabletPriority : int8_t
 };
 class ObTablet;
 
-class ObTabletHandle : protected ObMetaObjGuard<ObTablet>
+class ObTabletHandle final
 {
+public:
+  ObTabletHandle(const char *file = __builtin_FILE(),
+                 const int line = __builtin_LINE(),
+                 const char *func = __builtin_FUNCTION());
+  ObTabletHandle(const ObTabletHandle& other) = delete;
+  ObTabletHandle &operator= (const ObTabletHandle& other) = delete;
+  ~ObTabletHandle();
+  int assign(const ObTabletHandle &other);
+  OB_INLINE ObTablet *get_obj() const { return obj_; }
+  void reset();
+  bool is_valid() const;
+  int64_t get_buf_len() const { return get_buf_header().buf_len_; }
+  DECLARE_TO_STRING;
+private:
   friend class ObTenantMetaMemMgr;
   friend class ObSSMetaService;
   friend class ObSSTabletCreateHelper;
   friend class ObTabletPointer;
+  friend class ObSSTabletDummyPointer;
   friend class ObTabletPointerMap;
-private:
-  typedef ObMetaObjGuard<ObTablet> Base;
+  friend class ObTabletPersister;
   enum class ObTabletHdlType : int8_t
   {
     FROM_T3M       = 0, // get_tablet from t3m, memory may from full_allocator or pool of t3m;
@@ -46,30 +60,13 @@ private:
     STANDALONE     = 2, // for acuqired/create_tmp_tablet and ss_tablet in local
     MAX            = 3
   };
-
-public:
-  ObTabletHandle(const char *file = __builtin_FILE(),
-                 const int line = __builtin_LINE(),
-                 const char *func = __builtin_FUNCTION());
-  ObTabletHandle(const ObTabletHandle& other) = delete;
-  ObTabletHandle &operator= (const ObTabletHandle& other) = delete;
-  virtual ~ObTabletHandle();
-  int assign(const ObTabletHandle &other);
-  OB_INLINE ObTablet *get_obj() const { return Base::get_obj(); }
-  OB_INLINE void get_obj(ObMetaObj<ObTablet> &obj) const { Base::get_obj(obj); }
-  virtual void reset() override;
-  virtual bool need_hold_time_check() const override { return true; }
-  virtual bool is_valid() const override;
-  void set_wash_priority(const WashTabletPriority priority) { wash_priority_ = priority; }
-  common::ObArenaAllocator *get_allocator() { return static_cast<common::ObArenaAllocator *>(allocator_); }
-  char *get_buf() { return reinterpret_cast<char *>(obj_); }
-  int64_t get_buf_len() const { return get_buf_header().buf_len_; }
-  DECLARE_VIRTUAL_TO_STRING;
-private:
   void set_obj(const ObTabletHdlType type, ObMetaObj<ObTablet> &obj);
   void set_obj(const ObTabletHdlType type, ObTablet *obj, common::ObIAllocator *allocator, ObTenantMetaMemMgr *t3m);
-  virtual void set_obj(ObMetaObj<ObTablet> &obj) override;
-  virtual void set_obj(ObTablet *obj, common::ObIAllocator *allocator, ObTenantMetaMemMgr *t3m) override;
+  void set_wash_priority(const WashTabletPriority priority) { wash_priority_ = priority; }
+  common::ObArenaAllocator *get_allocator() { return static_cast<common::ObArenaAllocator *>(allocator_); }
+  char *get_buf() { return reinterpret_cast<char *>(obj_); } // for ObTabletPersister
+  bool need_hold_time_check() const { return true; }
+  OB_INLINE void get_obj(ObMetaObj<ObTablet> &obj) const {obj.pool_ = obj_pool_; obj.allocator_ = allocator_; obj.ptr_ = obj_; obj.t3m_ = t3m_;} // for ObTabletPointer
   int register_into_leak_checker(const char *file, const int line, const char *func);
   int inc_ref_in_leak_checker(ObTenantMetaMemMgr *t3m);
   int dec_ref_in_leak_checker(ObTenantMetaMemMgr *t3m);
@@ -79,9 +76,17 @@ private:
     return ObMetaObjBufferHelper::get_buffer_header(reinterpret_cast<char *>(obj_));
   }
 private:
-  ObTabletHdlType type_;
-  int32_t index_;  // initialize as -1
-  WashTabletPriority wash_priority_;
+  static const int64_t HOLD_OBJ_MAX_TIME = 2 * 60 * 60 * 1000 * 1000L; // 2h
+
+  ObTabletHdlType type_;                // 1B
+  WashTabletPriority wash_priority_;    // 1B
+  int32_t index_;                       // 4B  initialize as -1
+  ObTablet *obj_;                       // 8B
+  ObITenantMetaObjPool *obj_pool_;      // 8B
+  common::ObIAllocator *allocator_;     // 8B
+  ObTenantMetaMemMgr *t3m_;             // 8B
+  int64_t hold_start_time_;             // 8B
+
   DEFINE_OBJ_LEAK_DEBUG_NODE(node_);
 };
 

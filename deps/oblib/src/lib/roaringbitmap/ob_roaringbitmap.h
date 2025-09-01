@@ -98,6 +98,7 @@ public:
   inline bool is_bitmap_type() { return ObRbType::BITMAP == type_; }
 
   uint64_t get_cardinality();
+  uint64_t get_range_cardinality(uint64_t range_start, uint64_t range_end);
   uint64_t get_max();
   bool is_contains(uint64_t value);
 

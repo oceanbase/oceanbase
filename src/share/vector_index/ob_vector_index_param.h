@@ -29,7 +29,8 @@ public:
   ObVectorIndexQueryParam():
     flags_(0),
     ef_search_(0),
-    refine_k_(0)
+    refine_k_(0),
+    ob_sparse_drop_ratio_search_(0)
   {}
   virtual ~ObVectorIndexQueryParam() {}
   int assign(const ObVectorIndexQueryParam &other);
@@ -40,14 +41,16 @@ public:
     struct {
       uint64_t is_set_ef_search_            : 1;
       uint64_t is_set_refine_k_             : 1;
+      uint64_t is_set_drop_ratio_search_    : 1;
       uint64_t reserved_                    : 62;
     };
   };
   int32_t ef_search_;
   float refine_k_;
+  float ob_sparse_drop_ratio_search_;
 
   TO_STRING_KV(K_(is_set_ef_search), K_(ef_search),
-      K_(is_set_refine_k), K_(refine_k), K_(reserved));
+      K_(is_set_refine_k), K_(refine_k), K_(ob_sparse_drop_ratio_search), K_(reserved));
 
 };
 

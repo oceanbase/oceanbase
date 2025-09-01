@@ -67,7 +67,14 @@ int ObDictColumnEncoder::build_ref_encoder_ctx_()
 {
   int ret = OB_SUCCESS;
 
-  if (row_count_ == ctx_->null_cnt_) { // has no dict value
+  if (ctx_->nop_cnt_ > 0) {
+    column_header_.set_has_nop();
+    if (ctx_->nop_cnt_ < ctx_->null_or_nop_cnt_) {
+      column_header_.set_has_nop_bitmap();
+    }
+  }
+
+  if (row_count_ == ctx_->null_or_nop_cnt_) { // has no dict value
     dict_encoding_meta_.ref_row_cnt_ = 0;
     if (dict_encoding_meta_.distinct_val_cnt_ != 0) {
       ret = OB_ERR_UNEXPECTED;
@@ -78,23 +85,33 @@ int ObDictColumnEncoder::build_ref_encoder_ctx_()
     uint64_t null_replaced_value = 0;
 
     max_ref_ = dict_encoding_meta_.distinct_val_cnt_ - 1;
-    if (ctx_->null_cnt_ > 0) {
+    if (ctx_->null_or_nop_cnt_ > 0) {
       max_ref_ = dict_encoding_meta_.distinct_val_cnt_;
     }
 
     uint64_t range = 0;
     if (is_force_raw_) {
       if (OB_FAIL(ref_enc_ctx_.build_unsigned_stream_meta(
-          0, max_ref_, is_replace_null, null_replaced_value, true,
-          ctx_->encoding_ctx_->major_working_cluster_version_, range))) {
+              0,
+              max_ref_,
+              is_replace_null,
+              null_replaced_value,
+              true,
+              ctx_->encoding_ctx_->major_working_cluster_version_,
+              range))) {
         LOG_WARN("fail to build_unsigned_stream_meta", K(ret));
       }
     } else {
       if (OB_FAIL(try_const_encoding_ref_())) {
         LOG_WARN("fail to try_use_const_ref", K(ret));
-      } else if (OB_FAIL(ref_enc_ctx_.build_unsigned_stream_meta(0, ref_stream_max_value_,
-          is_replace_null, null_replaced_value, false,
-          ctx_->encoding_ctx_->major_working_cluster_version_, range))) {
+      } else if (OB_FAIL(ref_enc_ctx_.build_unsigned_stream_meta(
+                     0,
+                     ref_stream_max_value_,
+                     is_replace_null,
+                     null_replaced_value,
+                     false,
+                     ctx_->encoding_ctx_->major_working_cluster_version_,
+                     range))) {
         LOG_WARN("fail to build_unsigned_stream_meta", K(ret));
       }
     }
@@ -137,9 +154,9 @@ int ObDictColumnEncoder::try_const_encoding_ref_()
       const_node_ = *node; //copy the node for the node ptr will change when sort.
     }
   }
-  if (ctx_->null_cnt_ > 0) {
-    if (ctx_->null_cnt_ > max_const_cnt) {
-      max_const_cnt = ctx_->null_cnt_;
+  if (ctx_->null_or_nop_cnt_ > 0) {
+    if (ctx_->null_or_nop_cnt_ > max_const_cnt) {
+      max_const_cnt = ctx_->null_or_nop_cnt_;
       const_node_ = *ctx_->ht_->get_null_node();
     }
   }

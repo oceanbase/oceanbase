@@ -206,11 +206,11 @@ int ObHKVTable::Entity::get_properties_names(ObIArray<ObString> &properties) con
   return ret;
 }
 
-int ObHKVTable::Entity::get_properties_values(ObIArray<ObObj> &values) const
+int ObHKVTable::Entity::get_properties_values(ObIArray<ObObj*> &values) const
 {
   int ret = OB_SUCCESS;
   if (has_property_set_) {
-    ret = values.push_back(value_);
+    ret = values.push_back(const_cast<ObObj*>(&value_));
   }
   return ret;
 }

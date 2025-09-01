@@ -52,7 +52,12 @@ public:
   // spiv
   static const char * SPIV_DIM_DOCID_VALUE_TABLE_NAME_SUFFIX;
 public:
+
+  static int get_vec_rowkey_col(
+      const ObTableSchema &data_schema,
+      const ObColumnSchemaV2 *&rowkey_col);
   static int append_vec_args(
+      const share::schema::ObTableSchema &data_schema,
       const sql::ObPartitionResolveResult &resolve_result,
       const obrpc::ObCreateIndexArg &index_arg,
       bool &vec_common_aux_table_exist,
@@ -66,6 +71,7 @@ public:
       const ObTableSchema &data_schema,
       ObTableSchema &index_schema);
   static int check_vec_index_allowed(
+      const share::schema::ObIndexType index_type,
       ObTableSchema &data_schema);
   static int adjust_vec_args(
       obrpc::ObCreateIndexArg &index_arg,
@@ -156,6 +162,7 @@ public:
       const ObTableSchema &data_schema,
       ObVectorIndexParam &index_param,
       ObTableSchema &index_schema);
+  static void add_skip_index_for_spiv_column(schema::ObColumnSchemaV2 &column_schema);
   static int check_alter_column_is_offline(
       const ObTableSchema &orig_table_schema,
       const ObColumnSchemaV2 *src_column,
@@ -165,6 +172,7 @@ public:
 
 private:
   static int append_vec_hnsw_args(
+      const share::schema::ObTableSchema &data_schema,
       const sql::ObPartitionResolveResult &resolve_result,
       const obrpc::ObCreateIndexArg &index_arg,
       bool &vec_common_aux_table_exist,
@@ -173,6 +181,7 @@ private:
       ObIAllocator *allocator,
       const sql::ObSQLSessionInfo *session_info);
   static int append_vec_spiv_args(
+      const share::schema::ObTableSchema &data_schema,
       const sql::ObPartitionResolveResult &resolve_result,
       const obrpc::ObCreateIndexArg &index_arg,
       bool &common_aux_table_exist,

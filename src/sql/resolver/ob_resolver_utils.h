@@ -797,6 +797,9 @@ public:
                                           int64_t table_id,
                                           int64_t column_idx,
                                           const ObString &expr_name);
+  static ObRawExpr *find_file_column_expr(ObIArray<ObRawExpr *> &pseudo_exprs,
+                                          int64_t table_id,
+                                          int64_t mapped_column_id);
   static int calc_file_column_idx(const ObString &column_name, uint64_t &file_column_idx);
   static int calc_file_column_external_name(const ObString &column_name, ObString &external_column_name);
   static int build_file_column_expr_for_odps(
@@ -808,7 +811,15 @@ public:
     int64_t column_idx,
     const ObColumnSchemaV2 *column_schema,
     ObRawExpr *&expr);
-
+  static int build_file_column_expr_for_iceberg(
+    ObRawExprFactory &expr_factory,
+    const ObSQLSessionInfo &session_info,
+    const uint64_t table_id,
+    const ObString &table_name,
+    const ObString &column_name,
+    int64_t column_idx,
+    const ObColumnSchemaV2 *generated_column,
+    ObRawExpr *&expr);
   static int build_file_column_expr_for_csv(
     ObRawExprFactory &expr_factory,
     const ObSQLSessionInfo &session_info,
@@ -851,7 +862,7 @@ public:
     ObRawExpr *get_path_expr,
     ObRawExpr *cast_expr,
     const ObColumnSchemaV2 *generated_column,
-    bool is_index_by_pos,
+    sql::ColumnIndexType column_index_type,
     uint64_t column_idx,
     ObRawExpr *&expr);
   //only used for DDL resolver, resolve a PSEUDO column expr for validation and printer not for execution

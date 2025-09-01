@@ -226,7 +226,7 @@ int ObRemoteLogWriter::foreach_ls_(const ObLSID &id)
 int ObRemoteLogWriter::submit_entries_(ObFetchLogTask &task)
 {
   int ret = OB_SUCCESS;
-  LogGroupEntry entry;
+  ipalf::IGroupEntry entry;
   const char *buf = NULL;
   int64_t size = 0;
   LSN lsn;
@@ -246,7 +246,7 @@ int ObRemoteLogWriter::submit_entries_(ObFetchLogTask &task)
       } else {
         LOG_TRACE("ObRemoteLogIterator to end", K(task.iter_));
       }
-    } else if (OB_UNLIKELY(! entry.check_integrity())) {
+    } else if (OB_UNLIKELY(! entry.check_integrity(lsn))) {
       ret = OB_INVALID_DATA;
       LOG_WARN("entry is invalid", K(entry), K(lsn), K(task));
     } else if (! entry.check_compatibility()) {
@@ -256,7 +256,7 @@ int ObRemoteLogWriter::submit_entries_(ObFetchLogTask &task)
       }
     } else if (task.cur_lsn_ > lsn) {
       LOG_INFO("repeated log, just skip", K(lsn), K(entry), K(task));
-    } else if (FALSE_IT(entry_size = entry.get_serialize_size())) {
+    } else if (FALSE_IT(entry_size = entry.get_serialize_size(lsn))) {
     } else if (OB_FAIL(submit_log_(id, proposal_id, lsn,
             entry.get_scn(), buf, entry_size))) {
       LOG_WARN("submit log failed", K(buf), K(entry), K(lsn), K(task));

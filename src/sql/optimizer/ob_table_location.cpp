@@ -757,33 +757,6 @@ int ObPLGatherStatNode::add_part_calc_node(common::ObIArray<ObPartLocCalcNode*> 
   return calc_nodes.push_back(this);
 }
 
-
-int ObTableLocation::get_location_type(const common::ObAddr &server,
-                                       const ObCandiTabletLocIArray &phy_part_loc_info_list,
-                                       ObTableLocationType &location_type) const
-{
-  int ret = OB_SUCCESS;
-  location_type = OB_TBL_LOCATION_UNINITIALIZED;
-  const TableItem *table_item = NULL;
-  if (0 == phy_part_loc_info_list.count()) {
-    location_type = OB_TBL_LOCATION_LOCAL;
-  } else if (1 == phy_part_loc_info_list.count()) {
-    share::ObLSReplicaLocation replica_location;
-    if (OB_FAIL(phy_part_loc_info_list.at(0).get_selected_replica(replica_location))) {
-      LOG_WARN("fail to get selected replica", K(phy_part_loc_info_list.at(0)));
-    } else if (!replica_location.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("replica location is invalid", K(ret), K(replica_location));
-    } else {
-      location_type = ((server == replica_location.get_server()) ? OB_TBL_LOCATION_LOCAL
-                                                                 : OB_TBL_LOCATION_REMOTE);
-    }
-  } else {
-    location_type = OB_TBL_LOCATION_DISTRIBUTED;
-  }
-  return ret;
-}
-
 int ObTableLocation::assign(const ObTableLocation &other)
 {
   int ret = OB_SUCCESS;
@@ -1368,6 +1341,9 @@ int ObTableLocation::init(
              || OB_ISNULL(session_info = exec_ctx->get_my_session())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Input arguments error", K(table_id), K(ref_table_id), K(session_info), K(ret));
+  } else if (OB_UNLIKELY(!can_use_table_location(table_schema->get_lake_table_format()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected lake table type", K(table_schema->get_lake_table_format()));
   } else if (OB_FAIL(session_info->get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy))) {
     LOG_WARN("fail to get sys variable", K(ret));
   } else {
@@ -3762,6 +3738,9 @@ int ObTableLocation::calc_pre_range_graph_partition_ids(ObExecContext &exec_ctx,
     if (OB_FAIL(calc_node->pre_range_graph_.get_tablet_ranges(allocator, exec_ctx, query_ranges,
                                                               is_all_single_value_ranges, dtc_params))) {
       LOG_WARN("get tablet ranges failed", K(ret));
+    } else if (calc_node->pre_range_graph_.enable_new_false_range() &&
+               query_ranges.empty()) {
+      //do nothing. partition ids will be empty
     } else if (OB_UNLIKELY(query_ranges.count() == 0)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Query ranges' count should not be 0",
@@ -6524,4 +6503,9 @@ int ObTableLocation::calc_gather_stat_partition_ids(
     }
   }
   return ret;
+}
+
+bool ObTableLocation::can_use_table_location(ObLakeTableFormat format)
+{
+  return !(ObLakeTableFormat::ICEBERG == format || ObLakeTableFormat::HIVE == format);
 }

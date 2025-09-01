@@ -766,6 +766,11 @@ ident:
     {
       $$ = $1;
       $$->pl_str_off_ = @1.first_column;
+      // Check if this identifier is create_ai_model_endpoint or alter_ai_model_endpoint and set sensitive data flag
+      if (($$->str_len_ == 24 && !strncasecmp($$->str_value_, "create_ai_model_endpoint", 24))
+        || ($$->str_len_ == 23 &&  !strncasecmp($$->str_value_, "alter_ai_model_endpoint", 23))) {
+        parse_ctx->contain_sensitive_data_ = 1;
+      }
     }
   | unreserved_keyword
     {
@@ -1354,6 +1359,14 @@ create_function_stmt:
 
       merge_nodes(property_list, parse_ctx->mem_pool_, T_UDF_PROPERTY_LIST, $13);
       check_ptr(property_list);
+
+      if (NULL != $7) {
+        const char *param_str = parse_ctx->stmt_str_ + @6.first_column + 1;
+        int32_t param_len = @8.last_column - @6.last_column - 1;
+        $7->str_value_ = parse_strndup(param_str, param_len, parse_ctx->mem_pool_);
+        check_ptr($7->str_value_);
+        $7->str_len_ = param_len;
+      }
 
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SF_CREATE, 7, $2, $5, $7, $10, NULL, body_node, property_list);
       $$->value_ = $4;

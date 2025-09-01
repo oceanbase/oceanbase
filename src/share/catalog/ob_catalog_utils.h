@@ -24,6 +24,8 @@ class ObBasicSessionInfo;
 namespace share
 {
 
+class ObILakeTableMetadata;
+
 class ObCatalogUtils
 {
 public:
@@ -32,6 +34,9 @@ public:
   // 使用的名字来源于 CatalogSchema，名字大小写已经转换好了
   static bool is_internal_catalog_name(const common::ObString &name_from_meta);
 
+  template <typename T>
+  static typename std::enable_if_t<std::is_base_of_v<ObILakeTableMetadata, T>, int>
+  deep_copy_lake_table_metadata(char *buf, const T &old_var, T *&new_var);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCatalogUtils);
 };

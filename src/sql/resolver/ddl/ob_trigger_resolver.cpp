@@ -1003,6 +1003,7 @@ int ObTriggerResolver::resolve_trigger_body(const ParseNode &parse_node,
   int ret = OB_SUCCESS;
   ObTriggerInfo &trigger_info = trigger_arg.trigger_info_;
   ObString tg_body;
+  bool is_wrap = false;
   if (lib::is_oracle_mode()) {
     OV (parse_node.type_ == T_SP_BLOCK_CONTENT || parse_node.type_ == T_SP_LABELED_BLOCK);
   }
@@ -1024,7 +1025,7 @@ int ObTriggerResolver::resolve_trigger_body(const ParseNode &parse_node,
                                           parse_node,
                                           session_info_->get_dtc_params(),
                                           procedure_source));
-    OZ (parser.parse_package(procedure_source, parse_tree, session_info_->get_dtc_params(), NULL, true));
+    OZ (parser.parse_package(procedure_source, parse_tree, session_info_->get_dtc_params(), NULL, true, is_wrap));
     if (OB_SUCC(ret)) {
       params_.tg_timing_event_ = static_cast<int64_t>(trigger_info.get_timing_event());
       HEAP_VAR(ObCreateProcedureResolver, resolver, params_) {
@@ -1357,6 +1358,7 @@ int ObTriggerResolver::analyze_trigger(ObSchemaGetterGuard &schema_guard,
   CK (OB_LIKELY(OB_NOT_NULL(session_info)));
   CK (OB_LIKELY(OB_NOT_NULL(sql_proxy)));
   if (OB_SUCC(ret)) {
+    bool is_wrap = false;
     HEAP_VARS_2((ObPLPackageAST, package_spec_ast, allocator),
                   (ObPLPackageAST, package_body_ast, allocator)) {
       ObPLPackageGuard package_guard(session_info->get_effective_tenant_id());
@@ -1406,7 +1408,7 @@ int ObTriggerResolver::analyze_trigger(ObSchemaGetterGuard &schema_guard,
       OZ (ObTriggerInfo::gen_package_source(trigger_info.get_tenant_id(),
                                             trigger_info.get_trigger_spec_package_id(trigger_info.get_trigger_id()),
                                             source, true, schema_guard, allocator));
-      OZ (compiler.analyze_package(source, NULL, package_spec_ast, true));
+      OZ (compiler.analyze_package(source, NULL, package_spec_ast, true, is_wrap));
       OZ (package_body_ast.init(db_name,
                                 pkg_name,
                                 PL_PACKAGE_BODY,
@@ -1420,7 +1422,8 @@ int ObTriggerResolver::analyze_trigger(ObSchemaGetterGuard &schema_guard,
       OZ (compiler.analyze_package(source,
                                    &(package_spec_ast.get_body()->get_namespace()),
                                    package_body_ast,
-                                   true));
+                                   true,
+                                   is_wrap));
       if (OB_SUCC(ret)) {
         uint64_t data_version = 0;
         if (OB_FAIL(GET_MIN_DATA_VERSION(trigger_info.get_tenant_id(), data_version))) {

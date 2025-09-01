@@ -132,6 +132,8 @@ service_name	varchar(64)	YES		NULL
 total_cpu_time	double	NO		NULL	
 top_info	varchar(262143)	YES		NULL	
 memory_usage	bigint(20)	YES		NULL	
+top_time	double	NO		NULL	
+top_trace_id	varchar(64)	YES			
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_processlist;
 IF(count(*) >= 0, 1, 0)
 1
@@ -1559,10 +1561,17 @@ desc oceanbase.__all_virtual_ss_ls_meta;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	
 ls_id	bigint(20)	NO	PRI	NULL	
-meta_version	bigint(20)	NO		NULL	
-ss_checkpoint_scn	bigint(20)	NO		NULL	
+meta_version	bigint(20) unsigned	NO		NULL	
+ss_checkpoint_scn	bigint(20) unsigned	NO		NULL	
 ss_checkpoint_lsn	bigint(20)	NO		NULL	
 ss_clog_accum_checksum	bigint(20)	NO		NULL	
+transfer_scn	bigint(20) unsigned	NO		NULL	
+active_transfer_scn	bigint(20) unsigned	NO		NULL	
+active_transfer_src	bigint(20)	NO		NULL	
+active_transfer_status	bigint(20)	NO		NULL	
+active_transfer_tablet_cnt	bigint(20)	NO		NULL	
+gc_state	bigint(20)	NO		NULL	
+offline_scn	bigint(20) unsigned	NO		NULL	
 desc oceanbase.__all_virtual_ss_sstable_mgr;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	
@@ -6118,6 +6127,32 @@ svr_port	bigint(20)	NO		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ss_gc_detect_info;
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_tenant_ss_storage_stat;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+storage_type	varchar(32)	NO	PRI	NULL	
+endpoint	varchar(128)	NO	PRI	NULL	
+path	varchar(128)	NO	PRI	NULL	
+value	bigint(20)	NO		NULL	
+update_time	timestamp(6)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_ss_storage_stat;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_hms_client_pool_stat;
+Field	Type	Null	Key	Default	Extra
+svr_ip	varchar(46)	NO	PRI	NULL	
+svr_port	bigint(20)	NO	PRI	NULL	
+tenant_id	bigint(20)	NO	PRI	NULL	
+catalog_id	bigint(20)	NO		NULL	
+total_clients	bigint(20)	NO		NULL	
+in_use_clients	bigint(20)	NO		NULL	
+idle_clients	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_hms_client_pool_stat;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_hms_client_pool_stat runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_dba_source_v1;
 Field	Type	Null	Key	Default	Extra
 owner	varchar(128)	NO		NULL	
@@ -6129,5 +6164,25 @@ origin_con_id	decimal(38,0)	NO		NULL
 object_id	decimal(38,0)	NO		NULL	
 database_id	decimal(38,0)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_dba_source_v1;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_ai_model_endpoint;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+endpoint_id	bigint(20)	NO	PRI	NULL	
+scope	varchar(128)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+version	bigint(20)	NO		NULL	
+endpoint_name	varchar(128)	NO		NULL	
+ai_model_name	varchar(128)	NO		NULL	
+url	varchar(2048)	YES		NULL	
+access_key	varchar(2048)	YES		NULL	
+provider	varchar(128)	YES		NULL	
+request_model_name	varchar(128)	YES		NULL	
+parameters	varchar(2048)	YES		NULL	
+request_transform_fn	varchar(64)	YES		NULL	
+response_transform_fn	varchar(64)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ai_model_endpoint;
 IF(count(*) >= 0, 1, 0)
 1

@@ -223,6 +223,7 @@ int ObAllVirtualSSSSTableMgr::get_next_tablet_()
     SCN read_snapshot; // tablets with commit scn less than read_snapshot will be selected.
     param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_PREFIX,
                                  ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                 false, /*try read local*/
                                  ObSSLogMetaType::SSLOG_TABLET_META,
                                  ls_id_,
                                  tablet_id_,

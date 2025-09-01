@@ -214,7 +214,7 @@ int ObLogGranuleIterator::is_partition_gi(bool &partition_granule) const
     LOG_WARN("failed to get sys variable px partition scan threshold", K(ret));
   } else if (OB_FAIL(session_info->get_sys_variable(share::SYS_VAR__PX_MIN_GRANULES_PER_SLAVE, hash_partition_scan_hold))) {
     LOG_WARN("failed to get sys variable px min granule per slave", K(ret));
-  } else if (is_used_by_external_table()) {
+  } else if (is_used_by_external_table() && !is_used_by_lake_table()) {
   //external table only support block iter
     partition_granule = false;
   } else {

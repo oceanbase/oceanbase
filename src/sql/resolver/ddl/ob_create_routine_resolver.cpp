@@ -777,7 +777,6 @@ int ObCreateRoutineResolver::resolve_param_list(const ParseNode *param_list, obr
             OZ (pl::ObPLDataType::transform_from_iparam(&(routine_param),
                                                         *(schema_checker_->get_schema_guard()),
                                                         *(session_info_),
-                                                        *(allocator_),
                                                         *(params_.sql_proxy_),
                                                         pl_type));
             // 默认值在CreateRoutine阶段不需要计算,执行时计算,但是这里要resolve下,避免用户使用非法变量
@@ -843,7 +842,6 @@ int ObCreateRoutineResolver::resolve_clause_list(
       OZ (pl::ObPLDataType::transform_from_iparam(routine_param,
                                                   *schema_checker_->get_schema_guard(),
                                                   *session_info_,
-                                                  *allocator_,
                                                   *params_.sql_proxy_,
                                                   ret_type));
     }
@@ -1247,8 +1245,6 @@ int ObCreateRoutineResolver::resolve_external_udf(const ParseNode &parse_tree,
   constexpr int64_t PROPERTY_IDX = 6;
 
   int64_t tenant_id = MTL_ID();
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  uint64_t data_version = 0;
 
   uint64_t database_id = OB_INVALID_ID;
   const share::schema::ObDatabaseSchema *database_schema = nullptr;
@@ -1263,17 +1259,6 @@ int ObCreateRoutineResolver::resolve_external_udf(const ParseNode &parse_tree,
 
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (!tenant_config.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected invalid tenant_config", K(ret), K(tenant_id));
-  } else if (!tenant_config->ob_enable_java_udf) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("ob_enable_java_udf is not enabled", K(ret));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
-    LOG_WARN("failed to GET_MIN_DATA_VERSION", K(ret), K(tenant_id));
-  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_0_0 || data_version < DATA_VERSION_4_4_0_0) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("Java UDF is only supported after 4.4.0", K(ret));
   } else if (OB_FAIL(resolve_sp_definer(parse_tree.children_[DEFINER_IDX],
                                         crt_routine_arg.routine_info_))) {
     LOG_WARN("failed to resolve sp definer",K(ret), K(crt_routine_arg));
@@ -1335,11 +1320,10 @@ int ObCreateRoutineResolver::resolve_external_udf(const ParseNode &parse_tree,
       const ObString type_key = "type";
       const ObString file_key = "file";
 
-      const ObString odps_jar_type = "OdpsJar";
-
       ObString entry_name;
       ObString udf_type;
       ObString file;
+      bool is_py = false;
 
       CK (T_UDF_PROPERTY_LIST == property_node->type_);
 
@@ -1371,49 +1355,18 @@ int ObCreateRoutineResolver::resolve_external_udf(const ParseNode &parse_tree,
       } else if (entry_name.empty() || udf_type.empty() || file.empty()) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid argument to create external UDF", K(ret), K(entry_name), K(udf_type), K(file));
-      } else if (0 != udf_type.case_compare(odps_jar_type)) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("udf type not supported", K(ret), K(udf_type));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "udf type");
       } else if (OB_FAIL(routine_info.set_external_routine_entry(entry_name))) {
         LOG_WARN("failed to set external routine entry", K(ret), K(entry_name));
-      }
-
-      if (OB_FAIL(ret)) {
-        // do nothing
-      } else if (file.prefix_match_ci("http://") || file.prefix_match_ci("https://") || file.prefix_match_ci("file://")) {
-        if (OB_FAIL(routine_info.set_external_routine_url(file))) {
-          LOG_WARN("failed to set external routine url", K(ret), K(file));
-        } else {
-          routine_info.set_external_routine_type(ObExternalRoutineType::EXTERNAL_JAVA_UDF_FROM_URL);
-        }
-      } else {
-        // make sure there is no "://" protocol pattern in file string, in case user uses other protocols
-        for (int64_t i = 0; OB_SUCC(ret) && i < file.length() - 2; ++i) {
-          char *curr = file.ptr() + i;
-          if (':' == *curr && '/' == *(curr + 1) && '/' == *(curr + 2)) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("unknow jar file protocol", K(ret), K(file));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "external UDF file protocol");
-          }
-        }
-
-        if (OB_SUCC(ret)) {
-          // jar from __all_external_resource
-          if (OB_FAIL(routine_info.set_external_routine_resource(file))) {
-            LOG_WARN("failed to set external routine resource", K(ret), K(file));
-          } else {
-            routine_info.set_external_routine_type(ObExternalRoutineType::EXTERNAL_JAVA_UDF_FROM_RES);
-          }
-        }
+      } else if (OB_FAIL(resolve_external_routine_type(udf_type, file, routine_info))) {
+        LOG_WARN("failed to resolve external routine type", K(ret), K(udf_type), K(file), K(routine_info));
       }
 
       LOG_INFO("finished to resolve external UDF", K(ret), K(entry_name), K(udf_type), K(file), K(routine_info));
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected parse_tree of external UDF",
-              K(ret),
-              K(parse_tree.children_[PROPERTY_IDX]));
+               K(ret),
+               K(parse_tree.children_[PROPERTY_IDX]));
     }
   }
 
@@ -1428,6 +1381,125 @@ int ObCreateRoutineResolver::resolve_external_udf(const ParseNode &parse_tree,
       LOG_ERROR("failed to reset default database", K(ret), K(tmp_ret), K(old_database_name));
     } else {
       session_info_->set_database_id(old_database_id);
+    }
+  }
+
+  return ret;
+}
+
+int ObCreateRoutineResolver::resolve_external_routine_type(const ObString &udf_type,
+                                                           const ObString &file,
+                                                           ObRoutineInfo &routine_info)
+{
+  int ret = OB_SUCCESS;
+
+  int64_t tenant_id = MTL_ID();
+
+  const ObString odps_jar_type = "OdpsJar";
+  const ObString udaf_type = "UdafJar";
+  const ObString udtf_type = "UdtfJar";
+
+  const ObString py_type = "Python";
+
+  bool is_udf = false;
+  bool is_udaf = false;
+  bool is_udtf = false;
+  bool is_py = false;
+
+  if (0 == udf_type.case_compare(odps_jar_type)) {
+    is_udf = true;
+  } else if (0 == udf_type.case_compare(udaf_type)) {
+    is_udaf = true;
+    routine_info.set_is_aggregate();
+  } else if (0 == udf_type.case_compare(udtf_type)) {
+    is_udtf = true;
+    routine_info.set_mysql_udtf();
+  } else if (0 == udf_type.case_compare(py_type)) {
+    is_py = true;
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("udf type not supported", K(ret), K(udf_type));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "udf type");
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (file.prefix_match_ci("http://") || file.prefix_match_ci("https://") || file.prefix_match_ci("file://")) {
+    if (OB_FAIL(routine_info.set_external_routine_url(file))) {
+      LOG_WARN("failed to set external routine url", K(ret), K(file));
+    } else {
+      routine_info.set_external_routine_type(is_py ? ObExternalRoutineType::EXTERNAL_PY_UDF_FROM_URL :
+                                                     ObExternalRoutineType::EXTERNAL_JAVA_UDF_FROM_URL);
+    }
+  } else {
+    // make sure there is no "://" protocol pattern in file string, in case user uses other protocols
+    for (int64_t i = 0; OB_SUCC(ret) && i < file.length() - 2; ++i) {
+      const char *curr = file.ptr() + i;
+      if (':' == *curr && '/' == *(curr + 1) && '/' == *(curr + 2)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("unknow jar file protocol", K(ret), K(file));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "external UDF file protocol");
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      // jar from __all_external_resource
+      if (OB_FAIL(routine_info.set_external_routine_resource(file))) {
+        LOG_WARN("failed to set external routine resource", K(ret), K(file));
+      } else {
+        routine_info.set_external_routine_type(is_py ? ObExternalRoutineType::EXTERNAL_PY_UDF_FROM_RES :
+                                                       ObExternalRoutineType::EXTERNAL_JAVA_UDF_FROM_RES);
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(check_external_udf_version(tenant_id, is_py, routine_info.is_aggregate() || routine_info.is_mysql_udtf()))) {
+    LOG_WARN("failed to check external udf version", K(ret), K(tenant_id), K(is_py), K(routine_info));
+  }
+
+  return ret;
+}
+
+int ObCreateRoutineResolver::check_external_udf_version(uint64_t tenant_id,
+                                                        bool is_py,
+                                                        bool is_af_or_tf)
+{
+  int ret = OB_SUCCESS;
+
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  uint64_t data_version = 0;
+  uint64_t udf_data_version = is_py ? CLUSTER_VERSION_4_4_1_0 : CLUSTER_VERSION_4_4_0_0;
+  uint64_t udf_cluster_version = is_py ? DATA_VERSION_4_4_1_0 : DATA_VERSION_4_4_0_0;
+
+  if (!tenant_config.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected invalid tenant_config", K(ret), K(tenant_id));
+  } else if (is_py && !tenant_config->ob_enable_python_udf) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                   "ob_enable_python_udf is not enabled, create or drop python external resource/udf is");
+  } else if (!is_py && !tenant_config->ob_enable_java_udf) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "ob_enable_java_udf is not enabled, create or drop java external resource/udf is");
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("failed to GET_MIN_DATA_VERSION", K(ret), K(tenant_id));
+  } else if (GET_MIN_CLUSTER_VERSION() < udf_data_version || data_version < udf_cluster_version) {
+    ret = OB_NOT_SUPPORTED;
+    if (is_py) {
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "before version 4.4.1, create or drop python external resource/udf is");
+    } else {
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "before version 4.4.0, create or drop java external resource/udf is");
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (is_af_or_tf) {
+    if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0 || data_version < DATA_VERSION_4_4_1_0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("external UDAF or UDTF is only supported after 4.4.1", K(ret), K(lbt()));
     }
   }
 

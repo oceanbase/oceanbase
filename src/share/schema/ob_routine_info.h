@@ -113,6 +113,12 @@ enum class ObExternalRoutineType
   EXTERNAL_PY_UDF_FROM_RES = 4,
 };
 
+OB_INLINE bool is_java_external_routine(ObExternalRoutineType type)
+{
+  return type == ObExternalRoutineType::EXTERNAL_JAVA_UDF_FROM_URL
+           || type == ObExternalRoutineType::EXTERNAL_JAVA_UDF_FROM_RES;
+}
+
 class ObIRoutineParam
 {
 public:
@@ -549,7 +555,8 @@ public:
   OB_INLINE void set_rps() { flag_ |= SP_FLAG_RPS;}
   OB_INLINE void set_has_sequence() { flag_ |= SP_FLAG_HAS_SEQUENCE;}
   OB_INLINE void set_has_out_param() { flag_ |= SP_FLAG_HAS_OUT_PARAM;}
-  OB_INLINE void set_external_state() { flag_ |= SP_FLAG_EXTERNAL_STATE;}
+  OB_INLINE void set_external_state() { flag_ |= SP_FLAG_EXTERNAL_STATE; }
+  OB_INLINE void set_mysql_udtf() { flag_ |= SP_FLAG_MYSQL_UDTF; }
 
   OB_INLINE bool is_aggregate() const { return SP_FLAG_AGGREGATE == (flag_ & SP_FLAG_AGGREGATE); }
 
@@ -613,8 +620,17 @@ public:
     return is_udt_routine() && SP_FLAG_STATIC == (flag_ & SP_FLAG_STATIC);
   }
 
+  OB_INLINE bool is_mysql_udtf() const {
+    return SP_FLAG_MYSQL_UDTF == (flag_ & SP_FLAG_MYSQL_UDTF);
+  }
+
   OB_INLINE bool is_dblink_routine() const {
     return dblink_id_ != OB_INVALID_ID;
+  }
+
+  OB_INLINE bool is_py_external_routine() const {
+    return ObExternalRoutineType::EXTERNAL_PY_UDF_FROM_URL == external_routine_type_
+           || ObExternalRoutineType::EXTERNAL_PY_UDF_FROM_RES == external_routine_type_;
   }
 
   TO_STRING_KV(K_(tenant_id),

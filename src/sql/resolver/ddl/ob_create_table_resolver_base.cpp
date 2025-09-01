@@ -281,13 +281,15 @@ int ObCreateTableResolverBase::set_table_option_to_schema(ObTableSchema &table_s
       table_schema.set_auto_increment_cache_size(auto_increment_cache_size_);
     }
     if (OB_SUCC(ret)) {
-      if (table_schema.get_row_store_type() != CS_ENCODING_ROW_STORE
-          && semistruct_encoding_type_.is_enable_semistruct_encoding()) {
+      if (semistruct_encoding_type_.is_enable_semistruct_encoding() && table_schema.get_row_store_type() != CS_ENCODING_ROW_STORE) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("semistruct_encoding is not support if cs encoding is not set", K(ret), K(table_schema.get_row_store_type()), K(semistruct_encoding_type_));
+        LOG_WARN("semistruct_encoding is not support if cs encoding is not set", K(ret),
+                                                                                  K(table_schema.get_row_store_type()),
+                                                                                  K(semistruct_encoding_type_));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "semistruct_encoding is not support if cs encoding is not set");
-      } else {
-        table_schema.set_semistruct_encoding_type(semistruct_encoding_type_);
+      } else if (OB_FALSE_IT(table_schema.set_semistruct_encoding_type(semistruct_encoding_type_))) {
+      } else if (OB_FAIL(table_schema.set_semistruct_properties(semistruct_properties_))) {
+        LOG_WARN("failed to set semistruct properties", K(ret));
       }
     }
   }

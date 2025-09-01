@@ -425,6 +425,7 @@ int ObSortVecOp::init_sort(int64_t tenant_id, int64_t row_count, int64_t topn_cn
   }
   int aqs_head =
     MY_SPEC.enable_encode_sortkey_opt_ ? sizeof(oceanbase::sql::ObSortOpImpl::AQSItem) : 0;
+  context.est_rows_ = row_count;
   if (OB_FAIL(sort_op_provider_.init(context))) {
     LOG_WARN("failed to init sort operator provider", K(ret));
   } else {
@@ -469,10 +470,6 @@ int ObSortVecOp::inner_get_next_batch(const int64_t max_row_cnt)
     } else {
       ret_row_count_ += brs_.size_;
       if (brs_.end_) {
-        if (ctx_.get_my_session()->get_ddl_info().is_ddl() && ret_row_count_ != sort_row_count_) {
-          ret = OB_CHECKSUM_ERROR;
-          LOG_WARN("output row count not match", K(ret), K(sort_row_count_), K(ret_row_count_));
-        }
         LOG_DEBUG("finish ObSortVecOp::inner_get_next_batch", K(MY_SPEC.output_), K(brs_),
                   K(ret_row_count_));
       }

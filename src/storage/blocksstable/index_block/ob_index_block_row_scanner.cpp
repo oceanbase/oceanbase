@@ -709,14 +709,12 @@ int ObRAWIndexBlockRowIterator::get_next(const ObIndexBlockRowHeader *&idx_row_h
   } else if (OB_UNLIKELY(nullptr == idx_row_header || !endkey.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null index block row header/endkey", K(ret), KP(idx_row_header), K(endkey));
+  } else if (idx_row_header->is_pre_aggregated() && OB_FAIL(idx_row_parser_.get_agg_row(agg_row_buf, agg_buf_size))) {
+    LOG_WARN("Fail to get aggregate", K(ret), KPC(idx_row_header));
   } else if (idx_row_header->is_data_index() && !idx_row_header->is_major_node()) {
     if (OB_FAIL(idx_row_parser_.get_minor_meta(idx_minor_info))) {
       LOG_WARN("Fail to get minor meta info", K(ret));
     }
-  } else if (!idx_row_header->is_major_node() || !idx_row_header->is_pre_aggregated()) {
-    // Do not have aggregate data
-  } else if (OB_FAIL(idx_row_parser_.get_agg_row(agg_row_buf, agg_buf_size))) {
-    LOG_WARN("Fail to get aggregate", K(ret));
   }
   if (OB_SUCC(ret)) {
     row_offset = idx_row_parser_.get_row_offset();
@@ -1000,14 +998,12 @@ int ObTFMIndexBlockRowIterator::get_next(const ObIndexBlockRowHeader *&idx_row_h
   } else if (OB_UNLIKELY(nullptr == idx_row_header || !endkey.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null index block row header/endkey", K(ret), KP(idx_row_header), K(endkey));
+  } else if (idx_row_header->is_pre_aggregated() && OB_FAIL(idx_row_parser_.get_agg_row(agg_row_buf, agg_buf_size))) {
+    LOG_WARN("Fail to get aggregate", K(ret), KPC(idx_row_header));
   } else if (idx_row_header->is_data_index() && !idx_row_header->is_major_node()) {
     if (OB_FAIL(idx_row_parser_.get_minor_meta(idx_minor_info))) {
       LOG_WARN("Fail to get minor meta info", K(ret));
     }
-  } else if (!idx_row_header->is_major_node() || !idx_row_header->is_pre_aggregated()) {
-    // Do not have aggregate data
-  } else if (OB_FAIL(idx_row_parser_.get_agg_row(agg_row_buf, agg_buf_size))) {
-    LOG_WARN("Fail to get aggregate", K(ret));
   }
   if (OB_SUCC(ret)) {
     row_offset = idx_row_parser_.get_row_offset();

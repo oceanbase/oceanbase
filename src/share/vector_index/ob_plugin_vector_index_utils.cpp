@@ -143,7 +143,8 @@ int ObPluginVectorIndexUtils::read_object_from_data_table_iter(ObObj *&input_obj
         ret = OB_SUCCESS;
       }
     } else {
-      if (datum_row->get_column_count() != 1 + extra_column_count) { // at least vector columsn
+      if (datum_row->get_column_count() != 1 + extra_column_count &&  // at least vector col
+          datum_row->get_column_count() != 2) {  // vector col and pk_increrment
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get row column cnt invalid.", K(ret), K(extra_column_count), K(datum_row->get_column_count()));
       } else {
@@ -283,6 +284,13 @@ int ObPluginVectorIndexUtils::get_data_table_out_column_id(
     LOG_WARN("get vector column id count invalid.", K(ret), K(vector_column_ids.count()));
   } else if (OB_FAIL(adapter->get_extra_info_actual_size(extra_info_actual_size))) {
     LOG_WARN("failed to get extra info actual size.", K(ret));
+  } else if (!adapter->get_is_need_vid()) {
+    if (extra_info_actual_size > 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("extra info actual size is not 0 for table without pk.", K(ret), K(extra_info_actual_size));
+    } else if (OB_FAIL(table_schema->get_rowkey_column_ids(vector_column_ids))){
+      LOG_WARN("failed to get pk increment column id.", K(ret));
+    }
   } else if (extra_info_actual_size > 0) {
     adapter->set_extra_column_count(0);
     ObSEArray<uint64_t, 4> extra_column_ids;
@@ -334,7 +342,7 @@ int ObPluginVectorIndexUtils::read_vector_info(ObPluginVectorIndexAdaptor *adapt
     } else if (OB_ISNULL(output_vec_obj = static_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * alloc_size)))) { // use lots of memory
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc mem.", K(ret));
-    } else if (OB_FAIL(read_local_tablet(ls_id,
+    } else if (adapter->get_is_need_vid() && OB_FAIL(read_local_tablet(ls_id,
                                         adapter,
                                         target_scn,
                                         type,
@@ -363,7 +371,7 @@ int ObPluginVectorIndexUtils::read_vector_info(ObPluginVectorIndexAdaptor *adapt
     }
 
     if (OB_FAIL(ret)) {
-    } else {
+    } else if (adapter->get_is_need_vid()) {
       bool get_data = false;
       void *buf = nullptr;
       ObObj *obj_ptr =  nullptr;
@@ -432,6 +440,43 @@ int ObPluginVectorIndexUtils::read_vector_info(ObPluginVectorIndexAdaptor *adapt
             LOG_WARN("failed to complete delta buffer", KR(ret));
           } else {
             // do nothing, ada_ctx.do_next_batch already called in complete_delta_buffer_table_data
+          }
+        }
+      }
+    } else if (!adapter->get_is_need_vid()) {
+      bool get_data = false;
+      int32_t data_table_rowkey_count = 1;
+
+      for (int64_t j = 0; OB_SUCC(ret) && j < ada_ctx.get_count(); j += ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE) {
+        batch_temp_allocator.reuse();
+        int64_t vec_cnt = ada_ctx.get_vec_cnt();
+        for (int64_t i = 0; OB_SUCC(ret) && i < vec_cnt; i++) {
+          data_scan_param.key_ranges_.pop_back();
+          ObObj *input_obj = &(ada_ctx.get_vids()[i+j]);
+          input_obj->meta_.set_uint64();
+          if (OB_FAIL(read_object_from_data_table_iter(input_obj,
+                                                       data_table_rowkey_count,
+                                                       data_table_table_id,
+                                                       data_scan_param,
+                                                       data_iter,
+                                                       INDEX_TYPE_IS_NOT,
+                                                       batch_temp_allocator,
+                                                       output_vec_obj[i],
+                                                       extra_column_count,
+                                                       nullptr,
+                                                       get_data))) {
+            LOG_WARN("failed to read obj from data table.", K(ret));
+          }
+        }
+
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        }
+
+        if (OB_SUCC(ret)) {
+          ada_ctx.set_vectors(output_vec_obj);
+          if (OB_FAIL(adapter->complete_delta_buffer_table_data(&ada_ctx))) {
+            LOG_WARN("failed to complete delta buffer", KR(ret));
           }
         }
       }
@@ -771,7 +816,25 @@ int ObPluginVectorIndexUtils::refresh_adp_from_table(
   return ret;
 }
 
-int ObPluginVectorIndexUtils::query_need_refresh_memdata(ObPluginVectorIndexAdaptor *adapter, ObLSID &ls_id)
+int ObPluginVectorIndexUtils::get_read_scn(bool is_leader, ObLSID &ls_id, SCN &target_scn)
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  // ObLSWRSHandler::get_ls_weak_read_ts
+  storage::ObLSService *ls_svr = MTL(storage::ObLSService*);
+  if (OB_ISNULL(ls_svr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret), KP(ls_svr), K(ls_id));
+  } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::SHARE_MOD))) {
+    LOG_WARN("failed to get log stream", K(ret), K(ls_id));
+  } else  if (is_leader && OB_FAIL(target_scn.convert_from_ts(ObTimeUtility::fast_current_time()))) {
+    LOG_WARN("failed to convert ts to scn", K(ret));
+  } else if (!is_leader && FALSE_IT(target_scn = ls_handle.get_ls()->get_ls_wrs_handler()->get_ls_weak_read_ts())) {
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexUtils::query_need_refresh_memdata(ObPluginVectorIndexAdaptor *adapter, ObLSID &ls_id, bool is_leader)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
@@ -784,8 +847,8 @@ int ObPluginVectorIndexUtils::query_need_refresh_memdata(ObPluginVectorIndexAdap
     common::ObSpinLockGuard ctx_guard(adapter->get_reload_lock());
     if (adapter->get_reload_finish()) {
       need_retry = true;
-    } else if (OB_FAIL(target_scn.convert_from_ts(ObTimeUtility::fast_current_time()))) {
-      LOG_WARN("failed to convert ts to scn", K(ret));
+    } else if (OB_FAIL(get_read_scn(is_leader, ls_id, target_scn))) {
+      LOG_WARN("failed to get weak read scn", K(ret), K(is_leader));
     } else if (OB_FAIL(ObPluginVectorIndexUtils::refresh_memdata(ls_id, adapter, target_scn, allocator))) {
       LOG_WARN("fail to refresh adapter", K(ret));
     } else if (OB_FALSE_IT(adapter->set_reload_finish(true))) {
@@ -940,7 +1003,7 @@ int ObPluginVectorIndexUtils::read_local_tablet(ObLSID &ls_id,
                                                                  0, // timeout
                                                                  ObMDSGetTabletMode::READ_READABLE_COMMITED,
                                                                  target_scn))) {
-    LOG_WARN("fail to get tablet handle", KR(ret), K(tablet_id));
+    LOG_WARN("fail to get tablet handle", KR(ret), K(tablet_id), K(type));
   } else {
     scan_param.ls_id_ = ls_id;
     scan_param.tablet_id_ = tablet_id;
@@ -1165,8 +1228,13 @@ int ObPluginVectorIndexUtils::init_table_param(ObTableParam *table_param,
         if (OB_ISNULL(col_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null column schema ptr", K(ret));
-        } else if (col_schema->is_vec_hnsw_vid_column()) {
-          vid_column_id = col_schema->get_column_id();
+        } else if (col_schema->is_vec_hnsw_vid_column() || col_schema->is_hidden_pk_column_id(col_schema->get_column_id())) {
+          if (vid_column_id != 0) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("vid col and pk increment col both exist", K(ret), K(vid_column_id), K(col_schema->get_column_id()));
+          } else {
+            vid_column_id = col_schema->get_column_id();
+          }
         } else if (col_schema->is_vec_hnsw_type_column()) {
           type_column_id = col_schema->get_column_id();
         } else if (col_schema->is_vec_hnsw_vector_column()) {
@@ -1230,8 +1298,13 @@ int ObPluginVectorIndexUtils::init_table_param(ObTableParam *table_param,
           LOG_WARN("unexpected null column schema ptr", K(ret));
         } else if (col_schema->is_vec_hnsw_scn_column()) {
           scn_column_id = col_schema->get_column_id();
-        } else if (col_schema->is_vec_hnsw_vid_column()) {
-          vid_column_id = col_schema->get_column_id();
+        } else if (col_schema->is_vec_hnsw_vid_column() || col_schema->is_hidden_pk_column_id(col_schema->get_column_id())) {
+          if (vid_column_id != 0) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("vid col and pk increment col both exist", K(ret), K(vid_column_id), K(col_schema->get_column_id()));
+          } else {
+            vid_column_id = col_schema->get_column_id();
+          }
         } else if (col_schema->is_vec_hnsw_type_column()) {
           type_column_id = col_schema->get_column_id();
         } else if (col_schema->is_vec_hnsw_vector_column()) {

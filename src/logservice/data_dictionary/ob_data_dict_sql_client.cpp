@@ -11,6 +11,7 @@
 *
 */
 
+#define USING_LOG_PREFIX DATA_DICT
 
 #include "ob_data_dict_sql_client.h"
 
@@ -19,10 +20,10 @@
 #define IF_CLIENT_VALID \
     if (IS_NOT_INIT) { \
       ret = common::OB_NOT_INIT; \
-      DDLOG(WARN, "ObDataDictSqlClient not init", KR(ret)); \
+      LOG_WARN("ObDataDictSqlClient not init", KR(ret)); \
     } else if (OB_ISNULL(sql_proxy_)) { \
       ret = oceanbase::common::OB_ERR_UNEXPECTED; \
-      DDLOG(WARN, "expect valid sql_proxy for ObDataDictSqlClient", KR(ret)); \
+      LOG_WARN("expect valid sql_proxy for ObDataDictSqlClient", KR(ret)); \
     } else
 
 using namespace oceanbase::common;
@@ -53,7 +54,7 @@ int ObDataDictSqlClient::init(ObMySQLProxy *mysql_client)
 
   if (OB_ISNULL(mysql_client)) {
     ret = OB_INVALID_ARGUMENT;
-    DDLOG(WARN, "invalid mysql_client for ObDataDictSqlClient", KR(ret));
+    LOG_WARN("invalid mysql_client for ObDataDictSqlClient", KR(ret));
   } else {
     sql_proxy_ = mysql_client;
     is_inited_ = true;
@@ -83,14 +84,14 @@ int ObDataDictSqlClient::get_ls_info(
         snapshot_scn,
         ls_attr_arr,
         true/*only_existing_ls*/))) {
-      DDLOG(WARN, "load_all_ls_and_snapshot failed", KR(ret), K(tenant_id), K(snapshot_scn));
+      LOG_WARN("load_all_ls_and_snapshot failed", KR(ret), K(tenant_id), K(snapshot_scn));
     } else {
       ARRAY_FOREACH(ls_attr_arr, ls_attr_idx) {
         share::ObLSAttr &ls_attr = ls_attr_arr[ls_attr_idx];
         if (ls_attr.is_valid()
             && ! ls_attr.ls_is_creating() // load_all_ls_and_snapshot will filter abort and dropped ls
             && OB_FAIL(ls_array.push_back(ls_attr.get_ls_id()))) {
-          DDLOG(WARN, "push_back normal ls into ls_array failed", KR(ret),
+          LOG_WARN("push_back normal ls into ls_array failed", KR(ret),
               K(tenant_id), K(snapshot_scn), K(ls_attr), K(ls_attr_idx), K(ls_attr_arr));
         }
       }
@@ -110,7 +111,7 @@ int ObDataDictSqlClient::get_schema_version(
   IF_CLIENT_VALID {
     if (OB_UNLIKELY(! snapshot_scn.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
-      DDLOG(WARN, "invalid snapshot_scn to get_schema_version", KR(ret), K(snapshot_scn));
+      LOG_WARN("invalid snapshot_scn to get_schema_version", KR(ret), K(snapshot_scn));
     } else {
       ObSqlString sql;
       int64_t record_count;
@@ -119,19 +120,19 @@ int ObDataDictSqlClient::get_schema_version(
       SMART_VAR(ObISQLClient::ReadResult, result) {
         if (OB_FAIL(sql.assign_fmt(query_tenant_schema_version_sql_format,
             OB_ALL_DDL_OPERATION_TNAME, gts_ts))) {
-          DDLOG(WARN, "assign_fmt to sql_string failed", KR(ret),
+          LOG_WARN("assign_fmt to sql_string failed", KR(ret),
               K(tenant_id), K(snapshot_scn), K(gts_ts));
         } else if (OB_FAIL(sql_proxy_->read(result, tenant_id, sql.ptr()))) {
-          DDLOG(WARN, "read from sql_proxy_ for schema_version failed", KR(ret),
+          LOG_WARN("read from sql_proxy_ for schema_version failed", KR(ret),
               K(tenant_id), "sql", sql.ptr());
         } else if (OB_ISNULL(result.get_result())) {
           ret = OB_ERR_UNEXPECTED;
-          DDLOG(WARN, "get sql result failed", KR(ret), "sql", sql.ptr());
+          LOG_WARN("get sql result failed", KR(ret), "sql", sql.ptr());
         } else if (OB_FAIL(parse_record_from_row_(*result.get_result(), record_count, schema_version))) {
-          DDLOG(WARN, "parse_record_from_row_ for schema_version failed", KR(ret),
+          LOG_WARN("parse_record_from_row_ for schema_version failed", KR(ret),
               K(tenant_id), K(snapshot_scn), "sql", sql.ptr());
         } else {
-          DDLOG(INFO, "get_schema_version", K(tenant_id), K(schema_version));
+          LOG_INFO("get_schema_version", K(tenant_id), K(schema_version));
         }
       }
     }
@@ -153,7 +154,7 @@ int ObDataDictSqlClient::report_data_dict_persist_info(
         || OB_UNLIKELY(! start_lsn.is_valid())
         || OB_UNLIKELY(! end_lsn.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
-      DDLOG(WARN, "invalid args used for reporting to DATA_DICT_PERSIST_INFO", KR(ret),
+      LOG_WARN("invalid args used for reporting to DATA_DICT_PERSIST_INFO", KR(ret),
           K(tenant_id), K(snapshot_scn), K(start_lsn), K(end_lsn));
     } else {
       ObSqlString sql;
@@ -162,14 +163,14 @@ int ObDataDictSqlClient::report_data_dict_persist_info(
 
       if (OB_FAIL(sql.assign_fmt(report_data_dict_persist_info_sql_format,
           OB_ALL_DATA_DICTIONARY_IN_LOG_TNAME, gts_ts, start_lsn.val_, end_lsn.val_))) {
-        DDLOG(WARN, "assign_fmt to sql_string failed", KR(ret),
+        LOG_WARN("assign_fmt to sql_string failed", KR(ret),
             K(tenant_id), K(snapshot_scn), K(gts_ts), K(start_lsn), K(end_lsn));
       } else if (OB_FAIL(sql_proxy_->write(tenant_id, sql.ptr(), affected_rows))) {
-        DDLOG(WARN, "write to all_data_dictionary_in_log failed", KR(ret),
+        LOG_WARN("write to all_data_dictionary_in_log failed", KR(ret),
             K(tenant_id), "sql", sql.ptr());
       } else if (OB_UNLIKELY(affected_rows <= 0)) {
         ret = OB_ERR_UNEXPECTED;
-        DDLOG(WARN, "write affected_rows should not be zero", KR(ret), K(tenant_id), "sql", sql.ptr(), K(snapshot_scn));
+        LOG_WARN("write affected_rows should not be zero", KR(ret), K(tenant_id), "sql", sql.ptr(), K(snapshot_scn));
       }
     }
   }
@@ -188,14 +189,14 @@ int ObDataDictSqlClient::parse_record_from_row_(
     while (OB_SUCC(ret)) {
       if (OB_FAIL(result.next())) {
         if (OB_ITER_END != ret) {
-          DDLOG(WARN, "get next result failed", KR(ret), K(record_count));
+          LOG_WARN("get next result failed", KR(ret), K(record_count));
         }
       } else {
         (void)GET_COL_IGNORE_NULL(result.get_int, "SCHEMA_VERSION", schema_version);
 
         if (OB_UNLIKELY(0 >= schema_version)) {
           ret = OB_ERR_UNEXPECTED;
-          DDLOG(WARN, "invalid schema_version get from __all_ddl_operation", KR(ret), K(schema_version), K(record_count));
+          LOG_WARN("invalid schema_version get from __all_ddl_operation", KR(ret), K(schema_version), K(record_count));
         } else {
           record_count++;
         }
@@ -222,17 +223,17 @@ int ObDataDictSqlClient::recycle_hisotry_dict_info(
     if (OB_UNLIKELY(!is_user_tenant(tenant_id))
         || OB_UNLIKELY(! recycle_until_scn.is_valid_and_not_min())) {
       ret = OB_INVALID_ARGUMENT;
-      DDLOG(WARN, "invalid argument for recycle_hisotry_dict_info", KR(ret), K(tenant_id), K(recycle_until_scn));
+      LOG_WARN("invalid argument for recycle_hisotry_dict_info", KR(ret), K(tenant_id), K(recycle_until_scn));
     } else {
       ObSqlString sql;
       uint64_t recycle_until_scn_val = recycle_until_scn.get_val_for_inner_table_field();
       if (OB_FAIL(sql.assign_fmt(recycle_dict_history_sql_format,
           OB_ALL_DATA_DICTIONARY_IN_LOG_TNAME, recycle_until_scn_val))) {
-        DDLOG(WARN, "assign_fmt to sql_string failed", KR(ret), K(tenant_id), K(recycle_until_scn));
+        LOG_WARN("assign_fmt to sql_string failed", KR(ret), K(tenant_id), K(recycle_until_scn));
       } else if (OB_FAIL(sql_proxy_->write(tenant_id, sql.ptr(), recycle_count))) {
-        DDLOG(WARN, "execute recycle_history_dict_info failed", KR(ret), K(tenant_id), K(sql), K(recycle_until_scn), K(recycle_until_scn_val));
+        LOG_WARN("execute recycle_history_dict_info failed", KR(ret), K(tenant_id), K(sql), K(recycle_until_scn), K(recycle_until_scn_val));
       } else {
-        DDLOG(INFO, "recycle_hisotry_dict_info done", K(tenant_id), K(recycle_count));
+        LOG_INFO("recycle_hisotry_dict_info done", K(tenant_id), K(recycle_count));
       }
     }
   }

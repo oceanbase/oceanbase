@@ -92,7 +92,14 @@ int ObFtsEvalNode::fts_boolean_eval(ObFtsEvalNode *node, const common::ObIArray<
   return ret;
 }
 
-int ObFtsEvalNode::fts_boolean_node_create(ObFtsEvalNode *&parant_node, const FtsNode *cur_node, const ObCollationType &cs_type, ObIAllocator &allocator, ObArray<ObString> &tokens, hash::ObHashMap<ObString, int32_t> &tokens_map) // TODO: tokens maybe repeat
+int ObFtsEvalNode::fts_boolean_node_create(
+    ObFtsEvalNode *&parant_node,
+    const FtsNode *cur_node,
+    const ObCollationType &cs_type,
+    ObIAllocator &allocator,
+    ObArray<ObString> &tokens,
+    hash::ObHashMap<ObString, int32_t> &tokens_map,
+    bool &has_duplicate_tokens) // TODO: tokens maybe repeat
 {
   int ret = OB_SUCCESS;
   ObFtsEvalNode *node = nullptr;
@@ -122,7 +129,7 @@ int ObFtsEvalNode::fts_boolean_node_create(ObFtsEvalNode *&parant_node, const Ft
       }
       if (OB_FAIL(parant_node->child_flags_.push_back(flag))) {
         LOG_WARN("failed to append flag", K(ret));
-      } else if (OB_FAIL(fts_boolean_node_create(node, tail, cs_type, allocator, tokens, tokens_map))) {
+      } else if (OB_FAIL(fts_boolean_node_create(node, tail, cs_type, allocator, tokens, tokens_map, has_duplicate_tokens))) {
         LOG_WARN("failed to create fts compute node", K(ret));
       } else if (OB_FAIL(parant_node->child_nodes_.push_back(node))) {
         LOG_WARN("failed to append node", K(ret));
@@ -154,7 +161,7 @@ int ObFtsEvalNode::fts_boolean_node_create(ObFtsEvalNode *&parant_node, const Ft
       if (FTS_NODE_TERM == feak_head->type) {
         if (OB_FAIL(re_node->child_flags_.push_back(NO_OPERATOR))) {
           LOG_WARN("failed to append flag", K(ret));
-        } else if (OB_FAIL(fts_boolean_node_create(node, feak_head, cs_type, allocator, tokens, tokens_map))) {
+        } else if (OB_FAIL(fts_boolean_node_create(node, feak_head, cs_type, allocator, tokens, tokens_map, has_duplicate_tokens))) {
           LOG_WARN("failed to create fts compute node", K(ret));
         } else if (OB_FAIL(re_node->child_nodes_.push_back(node))) {
           LOG_WARN("failed to append node", K(ret));
@@ -187,7 +194,7 @@ int ObFtsEvalNode::fts_boolean_node_create(ObFtsEvalNode *&parant_node, const Ft
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected fts compute node type", K(feak_head->type));
           } else if (FTS_NODE_TERM == feak_head->type || FTS_NODE_SUBEXP_LIST == feak_head->type) {
-            if (OB_FAIL(fts_boolean_node_create(node, feak_head, cs_type, allocator, tokens, tokens_map))) {
+            if (OB_FAIL(fts_boolean_node_create(node, feak_head, cs_type, allocator, tokens, tokens_map, has_duplicate_tokens))) {
               LOG_WARN("failed to create fts compute node", K(ret));
             } else if (OB_FAIL(re_node->child_nodes_.push_back(node))) {
               LOG_WARN("failed to append node", K(ret));
@@ -200,7 +207,7 @@ int ObFtsEvalNode::fts_boolean_node_create(ObFtsEvalNode *&parant_node, const Ft
           }
         }
       } else if (FTS_NODE_SUBEXP_LIST == feak_head->type || FTS_NODE_SUBEXP_LIST == cur_node->type) {
-        if (OB_FAIL(fts_boolean_node_create(node, feak_head, cs_type, allocator, tokens, tokens_map))) {
+        if (OB_FAIL(fts_boolean_node_create(node, feak_head, cs_type, allocator, tokens, tokens_map, has_duplicate_tokens))) {
           LOG_WARN("failed to create fts compute node", K(ret));
         } else if (OB_FAIL(re_node->child_flags_.push_back(OR))) {
           LOG_WARN("failed to append flag", K(ret));
@@ -210,7 +217,7 @@ int ObFtsEvalNode::fts_boolean_node_create(ObFtsEvalNode *&parant_node, const Ft
           node = nullptr;
         }
       } else if (FTS_NODE_LIST == feak_head->type) {
-        if (OB_FAIL(fts_boolean_node_create(re_node, feak_head, cs_type, allocator, tokens, tokens_map))) {
+        if (OB_FAIL(fts_boolean_node_create(re_node, feak_head, cs_type, allocator, tokens, tokens_map, has_duplicate_tokens))) {
           LOG_WARN("failed to create fts compute node", K(ret));
         } else {
           node = nullptr;
@@ -248,6 +255,8 @@ int ObFtsEvalNode::fts_boolean_node_create(ObFtsEvalNode *&parant_node, const Ft
           token_idx = map_size;
           ret = OB_SUCCESS;
         }
+      } else {
+        has_duplicate_tokens = true;
       }
       node->postion_ = token_idx;
       node->leaf_node_ = true;

@@ -52,14 +52,14 @@ int ObAllVirtualSSLSMeta::inner_get_next_row(common::ObNewRow *&row)
   } else if (false == start_to_read_) {
     if (OB_FAIL(get_primary_key_())) {
       SERVER_LOG(WARN, "get primary key failed", KR(ret));
-    } else if (OB_FAIL(generate_virtual_row_(tablet_meta_row_))) {
+    } else if (OB_FAIL(generate_virtual_row_(ls_meta_row_))) {
       if (OB_ITER_END == ret) {
       } else if (OB_TABLET_NOT_EXIST == ret) {
         ret = OB_ITER_END;
       } else {
         SERVER_LOG(WARN, "generate virtual tablet meta row failed", KR(ret));
       }
-    } else if (OB_FAIL(fill_in_row_(tablet_meta_row_, row))) {
+    } else if (OB_FAIL(fill_in_row_(ls_meta_row_, row))) {
       SERVER_LOG(WARN, "fill in row failed", KR(ret));
     } else {
       start_to_read_ = true;
@@ -143,11 +143,11 @@ int ObAllVirtualSSLSMeta::fill_in_row_(const VirtualSSLSMetaRow &row_data, commo
       cur_row_.cells_[i].set_int(ls_id_.id());
       break;
     case META_VERSION:
-      cur_row_.cells_[i].set_int(row_data.version_.get_val_for_inner_table_field());
+      cur_row_.cells_[i].set_uint64(row_data.version_.get_val_for_inner_table_field());
       break;
     case SS_CHECKPOINT_SCN: {
-      int64_t v = row_data.ss_checkpoint_scn_.get_val_for_inner_table_field();
-      cur_row_.cells_[i].set_int(v);
+      uint64_t v = row_data.ss_checkpoint_scn_.get_val_for_inner_table_field();
+      cur_row_.cells_[i].set_uint64(v);
       break;
     }
     case SS_CHECKPOINT_LSN: {
@@ -157,6 +157,27 @@ int ObAllVirtualSSLSMeta::fill_in_row_(const VirtualSSLSMetaRow &row_data, commo
     }
     case SS_CLOG_ACCUM_CHECKSUM:
       cur_row_.cells_[i].set_int(row_data.clog_checksum_);
+      break;
+    case TRANSFER_SCN:
+      cur_row_.cells_[i].set_uint64(row_data.transfer_scn_.get_val_for_inner_table_field());
+      break;
+    case TRANSFER_IN_SCN:
+      cur_row_.cells_[i].set_uint64(row_data.active_transfer_scn_.get_val_for_inner_table_field());
+      break;
+    case ACTIVE_TRANSFER_SRC:
+      cur_row_.cells_[i].set_int(row_data.active_transfer_src_.id());
+      break;
+    case ACTIVE_TRANSFER_STATUS:
+      cur_row_.cells_[i].set_int(row_data.active_transfer_status_);
+      break;
+    case ACTIVE_TRANSFER_TABLET_CNT:
+      cur_row_.cells_[i].set_int(row_data.active_transfer_tablet_cnt_);
+      break;
+    case GC_STATE:
+      cur_row_.cells_[i].set_int(row_data.gc_state_);
+      break;
+    case OFFLINE_SCN:
+      cur_row_.cells_[i].set_uint64(row_data.offline_scn_.get_val_for_inner_table_field());
       break;
     default:
       ret = OB_ERR_UNEXPECTED;
@@ -177,22 +198,45 @@ int ObAllVirtualSSLSMeta::extract_result_(
   int ret = OB_SUCCESS;
   int64_t tenant_id = 0;
   int64_t ls_id = ObLSID::INVALID_LS_ID;
-  int64_t meta_version = 0;
-  int64_t ss_checkpoint_scn = 0;
+  uint64_t meta_version = 0;
+  uint64_t ss_checkpoint_scn = 0;
   int64_t ss_checkpoint_lsn = 0;
   int64_t ss_clog_accum_checksum = 0;
+  uint64_t transfer_scn = 0;
+  uint64_t active_transfer_scn = 0;
+  int64_t active_transfer_src = ObLSID::INVALID_LS_ID;
+  int64_t active_transfer_status = 0;
+  int64_t active_transfer_tablet_cnt = 0;
+  int64_t gc_state = static_cast<int64_t>(logservice::LSGCState::INVALID_LS_GC_STATE);
+  uint64_t offline_scn = 0;
+
   (void)GET_COL_IGNORE_NULL(res.get_int, "tenant_id", tenant_id);
   (void)GET_COL_IGNORE_NULL(res.get_int, "ls_id", ls_id);
-  (void)GET_COL_IGNORE_NULL(res.get_int, "meta_version", meta_version);
-  (void)GET_COL_IGNORE_NULL(res.get_int, "ss_checkpoint_scn", ss_checkpoint_scn);
+  (void)GET_COL_IGNORE_NULL(res.get_uint, "meta_version", meta_version);
+  (void)GET_COL_IGNORE_NULL(res.get_uint, "ss_checkpoint_scn", ss_checkpoint_scn);
   (void)GET_COL_IGNORE_NULL(res.get_int, "ss_checkpoint_lsn", ss_checkpoint_lsn);
   (void)GET_COL_IGNORE_NULL(res.get_int, "ss_clog_accum_checksum", ss_clog_accum_checksum);
+  (void)GET_COL_IGNORE_NULL(res.get_uint, "transfer_scn", transfer_scn);
+  (void)GET_COL_IGNORE_NULL(res.get_uint, "active_transfer_scn", active_transfer_scn);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "active_transfer_src", active_transfer_src);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "active_transfer_status", active_transfer_status);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "active_transfer_tablet_cnt", active_transfer_tablet_cnt);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "gc_state", gc_state);
+  (void)GET_COL_IGNORE_NULL(res.get_uint, "offline_scn", offline_scn);
+
   if (OB_FAIL(ret)) {
   } else {
     row.version_ = SCN::min_scn();   // TODO: use the real version
     row.ss_checkpoint_scn_.convert_for_sql(ss_checkpoint_scn);
     row.ss_checkpoint_lsn_.val_ = ss_checkpoint_lsn;
     row.clog_checksum_ = ss_clog_accum_checksum;
+    row.transfer_scn_.convert_for_sql(transfer_scn);
+    row.active_transfer_scn_.convert_for_sql(active_transfer_scn);
+    row.active_transfer_src_ = ObLSID(active_transfer_src);
+    row.active_transfer_status_ = active_transfer_status;
+    row.active_transfer_tablet_cnt_ = active_transfer_tablet_cnt;
+    row.gc_state_ = gc_state;
+    row.offline_scn_.convert_for_sql(offline_scn);
     SERVER_LOG(DEBUG, "generate row succeed", K(row));
   }
   return ret;
@@ -280,6 +324,20 @@ int ObAllVirtualSSLSMeta::generate_virtual_row_(VirtualSSLSMetaRow &row)
           palf::PalfBaseInfo palf_meta;
           (void)ls_meta.get_palf_meta(palf_meta);
           row.clog_checksum_ = palf_meta.prev_log_info_.accum_checksum_;
+
+          ObLSTransferMetaInfo transfer_meta_info;
+          row.transfer_scn_ = ls_meta.get_transfer_scn();
+          (void)ls_meta.get_transfer_meta_info(transfer_meta_info);
+          row.active_transfer_scn_ = transfer_meta_info.src_scn_;
+          row.active_transfer_src_ = transfer_meta_info.src_ls_;
+          row.active_transfer_status_ = static_cast<int64_t>(transfer_meta_info.trans_status_);
+          row.active_transfer_tablet_cnt_ = transfer_meta_info.tablet_id_array_.count();
+
+          logservice::LSGCState gc_state = logservice::LSGCState::INVALID_LS_GC_STATE;
+          (void)ls_meta.get_gc_state(gc_state);
+          row.gc_state_ = static_cast<int64_t>(gc_state);
+          (void)ls_meta.get_offline_scn(row.offline_scn_);
+
           SERVER_LOG(DEBUG, "generate row succeed", K(ls_meta), K(row));
         }
       }

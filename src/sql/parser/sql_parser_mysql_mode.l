@@ -1007,6 +1007,8 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>INDEX_DESC { return INDEX_DESC_HINT; }
 <hint>NO_INDEX { return NO_INDEX_HINT; }
 <hint>UNION_MERGE { return UNION_MERGE_HINT; }
+<hint>INDEX_MERGE { return INDEX_MERGE_HINT; }
+<hint>NO_INDEX_MERGE { return NO_INDEX_MERGE_HINT; }
 <hint>USE_DAS { return USE_DAS_HINT; }
 <hint>NO_USE_DAS { return NO_USE_DAS_HINT; }
 <hint>INDEX_SS { return INDEX_SS_HINT; }
@@ -1204,6 +1206,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>PX_NODE_POLICY {return PX_NODE_POLICY; }
 <hint>PX_NODE_ADDRS {return PX_NODE_ADDRS; }
 <hint>PX_NODE_COUNT {return PX_NODE_COUNT; }
+<hint>DISABLE_OP_RICH_FORMAT { return DISABLE_OP_RICH_FORMAT; }
 <hint>{identifier} {
   if (!(IS_FAST_PARAMETERIZE)) {
     check_value(yylval);

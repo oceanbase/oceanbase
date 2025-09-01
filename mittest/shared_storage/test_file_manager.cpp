@@ -511,72 +511,6 @@ TEST_F(TestFileManager, test_path_convert)
   CHECK_MACRO_ID_TO_PATH(UNSEALED_REMOTE_SEG_FILE, true/*is_in_local*/, OB_NOT_SUPPORTED, "");
   CHECK_MACRO_ID_TO_PATH(UNSEALED_REMOTE_SEG_FILE, false/*is_in_local*/, OB_SUCCESS, "cluster_1/server_1/1_0/tmp_data/3/seg2len5.T21");
 
-  // 40. SHARED_MINI_SSTABLE_LIST_CURRENT
-  CHECK_MACRO_ID_TO_PATH(SHARED_MINI_SSTABLE_LIST_CURRENT, true/*is_in_local*/, OB_NOT_SUPPORTED, "");
-  // inner tablet: cluster_id/tenant_id/ls/ls_id/tablet_name/mini/meta/current
-  inc_file_id.set_second_id(49401); // TX_CTX
-  inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
-  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINI_SSTABLE_LIST_CURRENT, false/*is_in_local*/, true/*is_inner_tablet*/, "cluster_1/tenant_1/ls/1001/TX_CTX/mini/meta/SHARED_MINI_SSTABLE_LIST_CURRENT.T29");
-  // user tablet: cluster_id/tenant_id/tablet/tablet_id/mini/meta/current
-  inc_file_id.set_second_id(200001);
-  inc_file_id.set_ss_fourth_id(false/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
-  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINI_SSTABLE_LIST_CURRENT, false/*is_in_local*/, false/*is_inner_tablet*/, "cluster_1/tenant_1/tablet/200001/0/mini/meta/SHARED_MINI_SSTABLE_LIST_CURRENT.T29");
-
-  // 41. SHARED_MINOR_SSTABLE_LIST_CURRENT
-  CHECK_MACRO_ID_TO_PATH(SHARED_MINOR_SSTABLE_LIST_CURRENT, true/*is_in_local*/, OB_NOT_SUPPORTED, "");
-  // inner tablet: cluster_id/tenant_id/ls/ls_id/tablet_name/minor/meta/current
-  inc_file_id.set_second_id(49401); // TX_CTX
-  inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
-  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINOR_SSTABLE_LIST_CURRENT, false/*is_in_local*/, true/*is_inner_tablet*/, "cluster_1/tenant_1/ls/1001/TX_CTX/minor/meta/SHARED_MINOR_SSTABLE_LIST_CURRENT.T34");
-  // user tablet: cluster_id/tenant_id/tablet/tablet_id/minor/meta/current
-  inc_file_id.set_second_id(200001);
-  inc_file_id.set_ss_fourth_id(false/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
-  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINOR_SSTABLE_LIST_CURRENT, false/*is_in_local*/, false/*is_inner_tablet*/, "cluster_1/tenant_1/tablet/200001/0/minor/meta/SHARED_MINOR_SSTABLE_LIST_CURRENT.T34");
-
-  inc_file_id.set_second_id(49401);
-  // 42. SHARED_LS_META_CURRENT
-  CHECK_MACRO_ID_TO_PATH(SHARED_LS_META_CURRENT, true/*is_in_local*/, OB_NOT_SUPPORTED, "");
-  // cluster_id/tenant_id/ls/ls_id/meta/type
-  CHECK_INC_MACRO_ID_TO_PATH(SHARED_LS_META_CURRENT, false/*is_in_local*/, false/*is_inner_tablet*/, "cluster_1/tenant_1/ls/49401/meta/SHARED_LS_META_CURRENT.T39");
-
-  // 43. SHARED_MINI_OLDEST
-  // 44. SHARED_MINOR_OLDEST
-  // 45. SHARED_LS_META_OLDEST
-  // @wx372254
-
-  // 46. SHARED_MINI_SSTABLE_LIST_OP_ID
-  CHECK_MACRO_ID_TO_PATH(SHARED_MINI_SSTABLE_LIST_OP_ID, true/*is_in_local*/, OB_NOT_SUPPORTED, "");
-  // inner tablet: cluster_id/tenant_id/ls/ls_id/tablet_name/mini/meta/op_id_type
-  inc_file_id.set_second_id(49401); // TX_CTX
-  inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
-  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINI_SSTABLE_LIST_OP_ID, false/*is_in_local*/, true/*is_inner_tablet*/, "cluster_1/tenant_1/ls/1001/TX_CTX/mini/meta/4294967297_SHARED_MINI_SSTABLE_LIST_OP_ID.T28");
-  // user tablet: cluster_id/tenant_id/tablet/tablet_id/mini/meta/op_id_type
-  inc_file_id.set_second_id(200001);
-  inc_file_id.set_ss_fourth_id(false/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
-  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINI_SSTABLE_LIST_OP_ID, false/*is_in_local*/, false/*is_inner_tablet*/, "cluster_1/tenant_1/tablet/200001/0/mini/meta/4294967297_SHARED_MINI_SSTABLE_LIST_OP_ID.T28");
-
-  // 47. SHARED_MINOR_SSTABLE_LIST_OP_ID
-  CHECK_MACRO_ID_TO_PATH(SHARED_MINOR_SSTABLE_LIST_OP_ID, true/*is_in_local*/, OB_NOT_SUPPORTED, "");
-  // inner tablet: cluster_id/tenant_id/ls/ls_id/tablet_name/minor/meta/op_id_type
-  inc_file_id.set_second_id(49402); // TX_DATA
-  inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
-  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINOR_SSTABLE_LIST_OP_ID, false/*is_in_local*/, true/*is_inner_tablet*/, "cluster_1/tenant_1/ls/1001/TX_DATA/minor/meta/4294967297_SHARED_MINOR_SSTABLE_LIST_OP_ID.T33");
-  // user tablet: cluster_id/tenant_id/tablet/tablet_id/minor/meta/op_id_type
-  inc_file_id.set_second_id(200001);
-  inc_file_id.set_ss_fourth_id(false/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
-  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINOR_SSTABLE_LIST_OP_ID, false/*is_in_local*/, false/*is_inner_tablet*/, "cluster_1/tenant_1/tablet/200001/0/minor/meta/4294967297_SHARED_MINOR_SSTABLE_LIST_OP_ID.T33");
-
-  // 48. SHARED_LS_META_OP_ID
-  // 49. SHARED_MINI_SSTABLE_LIST
-  // 50. SHARED_MINOR_SSTABLE_LIST
-  // @wx372254
-
-  // 51. SHARED_LS_META
-  inc_file_id.set_second_id(49402);
-  CHECK_MACRO_ID_TO_PATH(SHARED_LS_META, true/*is_in_local*/, OB_NOT_SUPPORTED, "");
-  // cluster_id/tenant_id/ls/ls_id/meta/op_id_type
-  CHECK_INC_MACRO_ID_TO_PATH(SHARED_LS_META, false/*is_in_local*/, false/*is_inner_tablet*/, "cluster_1/tenant_1/ls/49402/meta/4294967297_SHARED_LS_META.T36");
-
   // MDS: 55-68
   // -- MDS mini and MDS minor -- //
   inc_file_id.set_second_id(3);
@@ -598,24 +532,6 @@ TEST_F(TestFileManager, test_path_convert)
   CHECK_INC_MACRO_ID_TO_PATH(SHARED_MDS_MINOR_META_MACRO, false/*is_in_local*/, false/*is_inner_tablet*/, "cluster_1/tenant_1/tablet/3/0/mds/minor/sstable/op_1/meta/seq1.T25");
   // --- Atomic protocol files -- //
   inc_file_id.set_third_id(1); // set op_id = 1
-  //// mds mini
-  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MDS_MINI_SSTABLE_LIST_CURRENT, false/*is_in_local*/, false/*is_inner_tablet*/, "cluster_1/tenant_1/tablet/3/0/mds/mini/meta/SHARED_MDS_MINI_SSTABLE_LIST_CURRENT.T49");
-  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MDS_MINI_SSTABLE_LIST_OLDEST, false/*is_in_local*/, false/*is_inner_tablet*/, "cluster_1/tenant_1/tablet/3/0/mds/mini/meta/SHARED_MDS_MINI_SSTABLE_LIST_OLDEST.T50");
-  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MDS_MINI_SSTABLE_LIST_OP_ID, false/*is_in_local*/, false/*is_inner_tablet*/, "cluster_1/tenant_1/tablet/3/0/mds/mini/meta/1_SHARED_MDS_MINI_SSTABLE_LIST_OP_ID.T48");
-  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MDS_MINI_SSTABLE_LIST, false/*is_in_local*/, false/*is_inner_tablet*/, "cluster_1/tenant_1/tablet/3/0/mds/mini/meta/1_SHARED_MDS_MINI_SSTABLE_LIST.T46");
-  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MDS_MINI_SSTABLE_LIST_TASK, false/*is_in_local*/, false/*is_inner_tablet*/, "cluster_1/tenant_1/tablet/3/0/mds/mini/meta/1_SHARED_MDS_MINI_SSTABLE_LIST_TASK.T47");
-  //// mds minor
-  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MDS_MINOR_SSTABLE_LIST_CURRENT, false/*is_in_local*/, false/*is_inner_tablet*/, "cluster_1/tenant_1/tablet/3/0/mds/minor/meta/SHARED_MDS_MINOR_SSTABLE_LIST_CURRENT.T54");
-  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MDS_MINOR_SSTABLE_LIST_OLDEST, false/*is_in_local*/, false/*is_inner_tablet*/, "cluster_1/tenant_1/tablet/3/0/mds/minor/meta/SHARED_MDS_MINOR_SSTABLE_LIST_OLDEST.T55");
-  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MDS_MINOR_SSTABLE_LIST_OP_ID, false/*is_in_local*/, false/*is_inner_tablet*/, "cluster_1/tenant_1/tablet/3/0/mds/minor/meta/1_SHARED_MDS_MINOR_SSTABLE_LIST_OP_ID.T53");
-  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MDS_MINOR_SSTABLE_LIST, false/*is_in_local*/, false/*is_inner_tablet*/, "cluster_1/tenant_1/tablet/3/0/mds/minor/meta/1_SHARED_MDS_MINOR_SSTABLE_LIST.T51");
-  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MDS_MINOR_SSTABLE_LIST_TASK, false/*is_in_local*/, false/*is_inner_tablet*/, "cluster_1/tenant_1/tablet/3/0/mds/minor/meta/1_SHARED_MDS_MINOR_SSTABLE_LIST_TASK.T52");
-
-  // 69. SHARED_TABLET_META
-  // 70. SHARED_TABLET_META_TASK
-  // 71. SHARED_TABLET_META_CURRENT
-  // 72. SHARED_TABLET_META_OLDEST
-  // 73. SHARED_TABLET_META_OP_ID
 
   // 74. SHARED_TABLET_SUB_META
   // user_tablet : cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/tablet_meta/data/op_id_data_seq
@@ -635,7 +551,6 @@ TEST_F(TestFileManager, test_path_convert)
   inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
   CHECK_INC_MACRO_ID_TO_PATH(SHARED_TABLET_SUB_META, false/*is_in_local*/, true/*is_inner_tablet*/, "cluster_1/tenant_1/ls/1001/TX_LOCK/meta/op1seq1.T76");
 
-  // @wx372254
 }
 
 TEST_F(TestFileManager, test_get_file_parent_dir)
@@ -686,19 +601,6 @@ TEST_F(TestFileManager, test_get_file_parent_dir)
   CHECK_MACRO_ID_PARENT_DIR(TENANT_DISK_SPACE_META, OB_SUCCESS, "3_2");
   // 28. IS_SHARED_TENANT_DELETED
   CHECK_MACRO_ID_PARENT_DIR(IS_SHARED_TENANT_DELETED, OB_NOT_SUPPORTED, "");
-
-  // 29. SHARED_MINI_SSTABLE_LIST_CURRENT
-  CHECK_MACRO_ID_PARENT_DIR(SHARED_MINI_SSTABLE_LIST_CURRENT, OB_NOT_SUPPORTED, "");
-
-  // 30. SHARED_MINI_SSTABLE_LIST
-  CHECK_MACRO_ID_PARENT_DIR(SHARED_MINI_SSTABLE_LIST_CURRENT, OB_NOT_SUPPORTED, "");
-
-  // 31. SHARED_LS_META_OP_ID
-  CHECK_MACRO_ID_PARENT_DIR(SHARED_LS_META_OP_ID, OB_NOT_SUPPORTED, "");
-
-  // 32. SHARED_LS_META_CURRENT
-  CHECK_MACRO_ID_PARENT_DIR(SHARED_LS_META_CURRENT, OB_NOT_SUPPORTED, "");
-
 }
 
 TEST_F(TestFileManager, test_private_macro_file_operator)
@@ -1051,6 +953,142 @@ TEST_F(TestFileManager, test_meta_file_operator)
   calibrate_res.reset();
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->calc_meta_file_disk_space(start_calc_size_time_s, calibrate_res));
   ASSERT_EQ(ls_id_dir_size, calibrate_res.total_file_size_);
+}
+
+TEST_F(TestFileManager, test_list_private_tablet_meta)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFileManager* tenant_file_mgr = MTL(ObTenantFileManager*);
+  ASSERT_NE(nullptr, tenant_file_mgr);
+  // step 0: construct MacroBlockId
+  MacroBlockId meta_file_1;
+  const int64_t ls_id = 6;
+  const int64_t ls_epoch_id = 0;
+  const int64_t tablet_id = 8;
+  const int64_t meta_transfer_seq = 0;
+  const int64_t meta_version_id_1 = 1;
+  ObLinkedMacroBlockItemWriter tablet_meta_writer;
+  ObSEArray<int64_t, ObBaseFileManager::OB_DEFAULT_ARRAY_CAPACITY> meta_vers_array;
+  ObIArray<int64_t> &tablet_meta_vers = meta_vers_array;
+  meta_file_1.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+  meta_file_1.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_TABLET_META));
+  meta_file_1.set_second_id(ls_id);
+  meta_file_1.set_third_id(tablet_id);
+  meta_file_1.set_meta_transfer_seq(meta_transfer_seq);
+  meta_file_1.set_meta_version_id(meta_version_id_1);
+
+  MacroBlockId meta_file_2;
+  const int64_t meta_version_id_2 = 2;
+  meta_file_2.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+  meta_file_2.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_TABLET_META));
+  meta_file_2.set_second_id(ls_id);
+  meta_file_2.set_third_id(tablet_id);
+  meta_file_2.set_meta_transfer_seq(meta_transfer_seq);
+  meta_file_2.set_meta_version_id(meta_version_id_2);
+
+  ObStorageObjectHandle write_object_handle_1;
+  ASSERT_EQ(OB_SUCCESS, write_object_handle_1.set_macro_block_id(meta_file_1));
+  ObStorageObjectHandle write_object_handle_2;
+  ASSERT_EQ(OB_SUCCESS, write_object_handle_2.set_macro_block_id(meta_file_2));
+  const int64_t write_io_size = 4096 * 2; // 8KB
+  char write_buf[write_io_size] = { 0 };
+  memset(write_buf, 'a', write_io_size);
+  ObStorageObjectWriteInfo write_info;
+  write_info.io_desc_.set_wait_event(1);
+  write_info.buffer_ = write_buf;
+  write_info.offset_ = 0;
+  write_info.size_ = write_io_size;
+  write_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  write_info.mtl_tenant_id_ = MTL_ID();
+
+
+  // step 1: test .tmp.seq private tablet meta
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle_1));
+  ObPathContext ctx;
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(meta_file_1, ls_epoch_id, true/*is_local_cache*/));
+  char tmp_seq_path[MAX_PATH_SIZE] = {0};
+  ASSERT_EQ(OB_SUCCESS, databuff_printf(tmp_seq_path, sizeof(tmp_seq_path), "%s.tmp.100", ctx.get_path()));
+  ::rename(ctx.get_path(), tmp_seq_path); // rename filename to filename.tmp.seq
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_private_tablet_meta(ls_id, ls_epoch_id, tablet_id, meta_transfer_seq, tablet_meta_vers));
+  ASSERT_EQ(0, tablet_meta_vers.count());
+  ::rename(tmp_seq_path, ctx.get_path()); // rename filename.tmp.seq to filename
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_file(meta_file_1));
+  bool is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_file(meta_file_1, ls_epoch_id, is_exist));
+  ASSERT_FALSE(is_exist);
+
+
+  // step 2: test private tablet meta exists only in local cache
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle_1));
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_private_tablet_meta(ls_id, ls_epoch_id, tablet_id, meta_transfer_seq, tablet_meta_vers));
+  ASSERT_EQ(1, tablet_meta_vers.count());
+  ASSERT_EQ(meta_version_id_1, tablet_meta_vers.at(0));
+
+  // step 3: test private tablet meta only exists in object storage
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_file(meta_file_1));
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_file(meta_file_1, ls_epoch_id, is_exist));
+  ASSERT_FALSE(is_exist);
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_local_file(meta_file_1, ls_epoch_id, is_exist));
+  ASSERT_FALSE(is_exist);
+  ASSERT_TRUE(meta_file_2.is_macro_write_cache_ctrl_obj_type());
+  ASSERT_FALSE(is_macro_write_cache_disabled());
+  ObSSLocalCacheService *local_cache_service = MTL(ObSSLocalCacheService *);
+  ObSSLocalCacheControlMode control_mode;
+  control_mode.set_micro_cache_mode(ObSSLocalCacheControlMode::MODE_OFF);
+  control_mode.set_macro_write_cache_mode(ObSSLocalCacheControlMode::MODE_OFF);
+  local_cache_service->set_local_cache_control_mode(control_mode);
+  ASSERT_TRUE(local_cache_service->is_macro_write_cache_disabled());
+  ASSERT_TRUE(is_macro_write_cache_disabled());
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle_2));
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_local_file(meta_file_2, ls_epoch_id, is_exist));
+  ASSERT_FALSE(is_exist);
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(meta_file_2, ls_epoch_id, is_exist));
+  ASSERT_TRUE(is_exist);
+  tablet_meta_vers.reset();
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_private_tablet_meta(ls_id, ls_epoch_id, tablet_id, meta_transfer_seq, tablet_meta_vers));
+  ASSERT_EQ(1, tablet_meta_vers.count());
+  ASSERT_EQ(meta_version_id_2, tablet_meta_vers.at(0));
+
+  // step 4: test private tablet meta exists in local cache and object storage
+  tablet_meta_vers.reset();
+  ASSERT_EQ(0, tablet_meta_vers.count());
+  is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_local_file(meta_file_1, ls_epoch_id, is_exist));
+  ASSERT_FALSE(is_exist);
+  control_mode.set_micro_cache_mode(ObSSLocalCacheControlMode::MODE_ON);
+  control_mode.set_macro_write_cache_mode(ObSSLocalCacheControlMode::MODE_ON);
+  local_cache_service->set_local_cache_control_mode(control_mode);
+  ASSERT_FALSE(local_cache_service->is_macro_write_cache_disabled());
+  ASSERT_FALSE(is_macro_write_cache_disabled());
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle_1));
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_local_file(meta_file_1, ls_epoch_id, is_exist));
+  ASSERT_TRUE(is_exist);
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(meta_file_1, ls_epoch_id, is_exist));
+  ASSERT_FALSE(is_exist);
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_local_file(meta_file_2, ls_epoch_id, is_exist));
+  ASSERT_FALSE(is_exist);
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(meta_file_2, ls_epoch_id, is_exist));
+  ASSERT_TRUE(is_exist);
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_private_tablet_meta(ls_id, ls_epoch_id, tablet_id, meta_transfer_seq, tablet_meta_vers));
+  ASSERT_EQ(2, tablet_meta_vers.count());
+  ASSERT_TRUE(
+    tablet_meta_vers.at(0) == meta_version_id_1 ||
+    tablet_meta_vers.at(0) == meta_version_id_2
+  );
+  ASSERT_TRUE(
+    tablet_meta_vers.at(1) == meta_version_id_1 ||
+    tablet_meta_vers.at(1) == meta_version_id_2
+  );
+
+  // step 5: test delete private tablet meta
+  is_exist = true;
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_file(meta_file_1));
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_file(meta_file_1, ls_epoch_id, is_exist));
+  ASSERT_FALSE(is_exist);
+  is_exist = true;
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_file(meta_file_2));
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_file(meta_file_2, ls_epoch_id, is_exist));
+  ASSERT_FALSE(is_exist);
 }
 
 TEST_F(TestFileManager, test_tenant_disk_space_meta)

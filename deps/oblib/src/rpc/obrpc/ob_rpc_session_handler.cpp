@@ -26,9 +26,7 @@ ObRpcSessionHandler::ObRpcSessionHandler()
   sessid_ = ObTimeUtility::current_time();
   ObMemAttr attr(OB_SERVER_TENANT_ID, ObModIds::OB_HASH_NODE_NEXT_WAIT_MAP);
   SET_USE_500(attr);
-  next_wait_map_.create(MAX_COND_COUNT, attr, attr);
-  max_waiting_thread_count_ = MAX_WAIT_THREAD_COUNT;
-  waiting_thread_count_ = 0;
+  next_wait_map_.create(WAIT_MAP_BUCKET_COUNT, attr, attr);
 
   for (int64_t i = 0; i < MAX_COND_COUNT; ++i) {
     next_cond_[i].init(ObWaitEventIds::RPC_SESSION_HANDLER_COND_WAIT);
@@ -186,16 +184,10 @@ int ObRpcSessionHandler::wait_for_next_request(int64_t sessid,
   int64_t thid = get_itid();
 
   req = NULL;
-  bool continue_loop = true;
-  while (OB_SUCCESS == ret && continue_loop) {
-    //waiting_thread_count_ The number of threads waiting for packets of the streaming interface
-    oldv = waiting_thread_count_;
-    if (oldv > max_waiting_thread_count_) {
-      ret = OB_EAGAIN;
-      LOG_INFO("current wait thread  >= max wait",
-               K(ret), K(oldv), K_(max_waiting_thread_count));
-    } else if (ATOMIC_BCAS(&waiting_thread_count_, oldv, oldv + 1)) {
-      continue_loop = false;
+
+  if (OB_FAIL(THIS_WORKER.try_add_stream_rpc_session_wait_cnt(1))) {
+    LOG_WARN("failed to add stream rpc session wait cnt", K(ret));
+  } else {
       get_next_cond_(thid).lock();
       hash_ret = next_wait_map_.get_refactored(sessid, wait_object);
       if (OB_HASH_NOT_EXIST == hash_ret) {
@@ -283,10 +275,7 @@ int ObRpcSessionHandler::wait_for_next_request(int64_t sessid,
       }
 
       get_next_cond_(thid).unlock();
-      ATOMIC_DEC(&waiting_thread_count_);
-    } else {
-      //do nothing
-    }
+      IGNORE_RETURN THIS_WORKER.try_add_stream_rpc_session_wait_cnt(-1);
   }
   return ret;
 }

@@ -179,6 +179,8 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet &result)
       LOG_WARN("prexecute response query head fail. ", K(ret));
     }
   }
+  OX (session_.reset_top_query_string());
+  session_.set_top_trace_id(nullptr);
 
   if (OB_SUCC(ret)) {
     // for CRUD SQL

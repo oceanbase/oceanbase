@@ -592,6 +592,8 @@ public:
   int get_updating_tablet_pointer_param(
       ObUpdateTabletPointerParam &param,
       const bool need_tablet_attr_and_cache = true) const;
+  /// @brief: only used for SS private tablet meta
+  int get_updating_tablet_pointer_param_for_meta_version(ObUpdateTabletPointerParam &param) const;
 
   int submit_medium_compaction_clog(
       compaction::ObMediumCompactionInfo &medium_info,
@@ -1003,6 +1005,7 @@ private:
       storage::ObMetaDiskAddr &addr,
       char *&buf);
   int get_kept_snapshot_for_split(int64_t &min_split_snapshot) const;
+
 public:
   static constexpr int32_t VERSION_V1 = 1;
   static constexpr int32_t VERSION_V2 = 2;

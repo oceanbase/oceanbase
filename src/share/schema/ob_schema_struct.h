@@ -343,13 +343,16 @@ const int64_t OB_MAX_AUX_TABLE_PER_MAIN_TABLE = OB_MAX_INDEX_PER_TABLE * OB_MAX_
 // The max tablet count of a transfer is one data table tablet with max aux tablets bound together.
 const int64_t OB_MAX_TRANSFER_BINDING_TABLET_CNT = OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1; // 518
 
-// Note: When adding new index type, you should modifiy "tools/obtest/t/quick/partition_balance.test" and
+// Note:
+// - When adding new index type, you should modifiy "tools/obtest/t/quick/partition_balance.test" and
 //       "tools/obtest/t/shared_storage/local_cache/partition_balance.test" to verify that all aux tables of the new index
 //       can be properly distributed after table creation and partition rebalanceing.
 //
 //       If the new index has multiple aux tables, you need to make sure that OB_MAX_AUX_TABLE_PER_MAIN_TABLE is correct and
 //       modify "tools/obtest/t/quick/include/transfer_max_aux.test" to verify that a partition with
 //       max aux tables can be transferred.
+// - When adding a new index type, make sure to add it to INDEX_TYPE field of DBA_OB_TABLE_LOCATIONS and CDB_OB_TABLE_LOCATIONS
+//   to distinguish between global and local index
 enum ObIndexType
 {
   INDEX_TYPE_IS_NOT = 0,//is not index table
@@ -1342,6 +1345,7 @@ typedef enum {
   OBJ_MYSQL_PRIV = 46,
   EXTERNAL_RESOURCE_SCHEMA = 47,
   AI_MODEL_SCHEMA = 48,
+  ICEBERG_TABLE_SCHEMA = 49,
   ///<<< add schema type before this line
   OB_MAX_SCHEMA
 } ObSchemaType;
@@ -6427,6 +6431,9 @@ public:
   int add_param(const ObMaxConcurrentParam& param);
   int has_param(const ObMaxConcurrentParam& param, bool &has_param) const;
   int has_concurrent_limit_param(bool &has) const;
+  int get_concurrent_limit_param(const ParamStore &const_param_store,
+                                 int64_t &param_idx,
+                                 int64_t &concurrent_num) const;
   int64_t get_param_count() const {return outline_params_.count();}
   void reset_allocator() { allocator_ = NULL; mem_attr_ = common::ObMemAttr(); }
   void set_mem_attr(const common::ObMemAttr &attr) { mem_attr_ = attr; };
@@ -9844,11 +9851,18 @@ public:
   inline void set_column_attr(uint64_t column_attr) { pack_ = column_attr; }
   inline void set_min_max() { min_max_ = 1; }
   inline void set_sum() { sum_ = 1; }
+  inline void set_loose_min_max() { loose_min_max_ =1; }
+  inline void set_bm25_token_freq_param() { bm25_token_freq_param_ = 1; }
+  inline void set_bm25_doc_len_param() { bm25_doc_len_param_ = 1; }
   inline bool has_skip_index() const { return OB_DEFAULT_SKIP_INDEX_COLUMN_ATTR != pack_; }
+  inline bool has_loose_skip_index() const { return has_loose_min_max(); }
   inline bool has_min_max() const { return 1 == min_max_; }
   inline bool has_sum() const { return 1 == sum_; }
+  inline bool has_loose_min_max() const { return 1 == loose_min_max_; }
+  inline bool has_bm25_token_freq_param() const { return 1 == bm25_token_freq_param_; }
+  inline bool has_bm25_doc_len_param() const { return 1 == bm25_doc_len_param_; }
   inline bool operator==(const ObSkipIndexColumnAttr &other) const { return pack_ == other.pack_; }
-  TO_STRING_KV(K_(pack), K_(min_max), K_(sum));
+  TO_STRING_KV(K_(pack), K_(min_max), K_(sum), K_(loose_min_max), K_(bm25_token_freq_param), K_(bm25_doc_len_param));
 
   union
   {

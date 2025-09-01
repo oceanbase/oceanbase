@@ -295,7 +295,7 @@ int ObSerialDfoScheduler::init_all_dfo_channel(ObExecContext &ctx) const
         }
         LOG_TRACE("alloc_by_data_distribution", K(*parent));
       } else if (has_reference_child) {
-        if (OB_FAIL(ObPXServerAddrUtil::alloc_by_reference_child_distribution(*parent))) {
+        if (OB_FAIL(ObPXServerAddrUtil::alloc_by_reference_child_distribution(ctx, *parent))) {
           LOG_WARN("fail alloc addr by data distribution", K(parent), K(child), K(ret));
         }
         LOG_TRACE("alloc_by_reference_child_distribution", K(*parent));
@@ -1434,7 +1434,7 @@ int ObParallelDfoScheduler::schedule_pair(ObExecContext &exec_ctx,
           }
           LOG_TRACE("alloc_by_local_distribution", K(parent));
         } else if (has_reference_child) {
-          if (OB_FAIL(ObPXServerAddrUtil::alloc_by_reference_child_distribution(parent))) {
+          if (OB_FAIL(ObPXServerAddrUtil::alloc_by_reference_child_distribution(exec_ctx, parent))) {
             LOG_WARN("fail alloc addr by data distribution", K(parent), K(child), K(ret));
           }
         } else if (OB_FAIL(ObPXServerAddrUtil::alloc_by_random_distribution(exec_ctx, child, parent, px_node_pool_))) {

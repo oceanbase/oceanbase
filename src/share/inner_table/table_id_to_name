@@ -406,6 +406,11 @@
 # 554: __all_external_resource
 # 555: __all_external_resource_history
 # 555: __all_external_resource  # BASE_TABLE_NAME
+# 569: __all_tenant_ss_storage_stat
+# 570: __all_ai_model
+# 571: __all_ai_model_history
+# 571: __all_ai_model  # BASE_TABLE_NAME
+# 572: __all_ai_model_endpoint
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
 # 10003: __tenant_virtual_table_index
@@ -1298,7 +1303,17 @@
 # 12551: __all_virtual_logservice_cluster_info
 # 12552: __all_virtual_ss_gc_status
 # 12553: __all_virtual_ss_gc_detect_info
+# 12569: __all_virtual_tenant_ss_storage_stat
+# 12569: __all_tenant_ss_storage_stat  # BASE_TABLE_NAME
+# 12570: __all_virtual_hms_client_pool_stat
 # 12571: __all_virtual_dba_source_v1
+# 12572: __all_virtual_ai_model
+# 12572: __all_ai_model  # BASE_TABLE_NAME
+# 12573: __all_virtual_ai_model_history
+# 12573: __all_ai_model  # BASE_TABLE_NAME
+# 12573: __all_ai_model_history  # BASE_TABLE_NAME1
+# 12574: __all_virtual_ai_model_endpoint
+# 12574: __all_ai_model_endpoint  # BASE_TABLE_NAME
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -2024,6 +2039,11 @@
 # 15522: __all_virtual_ss_existing_tablet_meta  # BASE_TABLE_NAME
 # 15523: ALL_VIRTUAL_SS_EXISTING_SSTABLE_MGR
 # 15523: __all_virtual_ss_existing_sstable_mgr  # BASE_TABLE_NAME
+# 15531: ALL_VIRTUAL_TENANT_SS_STORAGE_STAT
+# 15531: __all_tenant_ss_storage_stat  # BASE_TABLE_NAME
+# 15531: __all_virtual_tenant_ss_storage_stat  # BASE_TABLE_NAME1
+# 15532: ALL_VIRTUAL_HMS_CLIENT_POOL_STAT
+# 15532: __all_virtual_hms_client_pool_stat  # BASE_TABLE_NAME
 # 15533: ALL_VIRTUAL_DBA_SOURCE_V1
 # 15533: __all_virtual_dba_source_v1  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
@@ -2581,6 +2601,18 @@
 # 21660: V$OB_SS_SSTABLES
 # 21661: GV$OB_VECTOR_MEMORY
 # 21662: V$OB_VECTOR_MEMORY
+# 21681: GV$OB_HNSW_INDEX_INFO
+# 21682: V$OB_HNSW_INDEX_INFO
+# 21683: GV$OB_IVF_INDEX_INFO
+# 21684: V$OB_IVF_INDEX_INFO
+# 21685: CDB_OB_SS_SPACE_USAGE
+# 21686: DBA_OB_SS_SPACE_USAGE
+# 21687: GV$OB_HMS_CLIENT_POOL_STAT
+# 21688: V$OB_HMS_CLIENT_POOL_STAT
+# 21689: DBA_OB_AI_MODELS
+# 21690: DBA_OB_AI_MODEL_ENDPOINTS
+# 21691: CDB_OB_AI_MODELS
+# 21692: CDB_OB_AI_MODEL_ENDPOINTS
 # 25001: DBA_SYNONYMS
 # 25002: DBA_OBJECTS
 # 25003: ALL_OBJECTS
@@ -2873,6 +2905,7 @@
 # 25308: DBA_MVIEW_RUNNING_JOBS
 # 25309: DBA_MVIEW_DEPS
 # 25310: DBA_OB_DYNAMIC_PARTITION_TABLES
+# 25315: DBA_OB_SS_SPACE_USAGE
 # 25316: DBA_SOURCE_V1
 # 25317: ALL_SOURCE_V1
 # 25318: USER_SOURCE_V1
@@ -3112,6 +3145,8 @@
 # 28277: ALL_LOCATIONS
 # 28278: V$OB_SS_SSTABLES
 # 28279: DBA_OB_PL_OBJ_CACHE_STATUS
+# 28283: GV$OB_HMS_CLIENT_POOL_STAT
+# 28284: V$OB_HMS_CLIENT_POOL_STAT
 # 14999: __idx_11003_all_virtual_plan_cache_stat_i1
 # 14999: all_virtual_plan_cache_stat_i1  # INDEX_NAME
 # 14999: __all_virtual_plan_cache_stat  # DATA_BASE_TABLE_NAME
@@ -3565,6 +3600,12 @@
 # 101119: __idx_554_idx_name_dbid_external_resource
 # 101119: idx_name_dbid_external_resource  # INDEX_NAME
 # 101119: __all_external_resource  # DATA_BASE_TABLE_NAME
+# 101120: __idx_572_idx_endpoint_name
+# 101120: idx_endpoint_name  # INDEX_NAME
+# 101120: __all_ai_model_endpoint  # DATA_BASE_TABLE_NAME
+# 101121: __idx_572_idx_ai_model_name
+# 101121: idx_ai_model_name  # INDEX_NAME
+# 101121: __all_ai_model_endpoint  # DATA_BASE_TABLE_NAME
 # 101104: __idx_482_idx_tablet_his_table_id_dest
 # 101104: idx_tablet_his_table_id_dest  # INDEX_NAME
 # 101104: __all_tablet_reorganize_history  # DATA_BASE_TABLE_NAME

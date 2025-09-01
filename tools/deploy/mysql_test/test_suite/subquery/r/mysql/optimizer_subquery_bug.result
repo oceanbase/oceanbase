@@ -1173,20 +1173,24 @@ SELECT pk FROM table300_bigint WHERE col_char_20 <> (SELECT ( SELECT MIN((SELECT
 ## bug 
 EXPLAIN SELECT * FROM tt AS table1 WHERE table1 . pk <> (SELECT coalesce((SELECT MAX((SELECT SUM(-100) FROM tt WHERE NOT EXISTS (SELECT * FROM tt AS table3 LEFT OUTER JOIN tt AS table4 USING (pk) WHERE table1 . pk <> 99 LIMIT 8) )) FROM tt ), 99)) ;
 Query Plan
-=============================================================
-|ID|OPERATOR                   |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------
-|0 |SUBPLAN FILTER             |      |1       |56          |
-|1 |├─TABLE FULL SCAN          |table1|1       |3           |
-|2 |└─SUBPLAN FILTER           |      |1       |54          |
-|3 |  ├─SCALAR GROUP BY        |      |1       |36          |
-|4 |  │ └─SUBPLAN SCAN         |VIEW1 |1       |36          |
-|5 |  │   └─SCALAR GROUP BY    |      |1       |36          |
-|6 |  │     └─SUBPLAN FILTER   |      |1       |36          |
-|7 |  │       ├─TABLE FULL SCAN|tt    |1       |18          |
-|8 |  │       └─TABLE FULL SCAN|table3|1       |18          |
-|9 |  └─TABLE FULL SCAN        |tt    |1       |18          |
-=============================================================
+===================================================================
+|ID|OPERATOR                         |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------
+|0 |SUBPLAN FILTER                   |      |1       |75          |
+|1 |├─TABLE FULL SCAN                |table1|1       |3           |
+|2 |└─SUBPLAN FILTER                 |      |1       |73          |
+|3 |  ├─SCALAR GROUP BY              |      |1       |55          |
+|4 |  │ └─SUBPLAN SCAN               |VIEW2 |1       |55          |
+|5 |  │   └─SCALAR GROUP BY          |      |1       |55          |
+|6 |  │     └─SUBPLAN FILTER         |      |1       |55          |
+|7 |  │       ├─TABLE FULL SCAN      |tt    |1       |18          |
+|8 |  │       └─LIMIT                |      |1       |37          |
+|9 |  │         └─HASH OUTER JOIN    |      |1       |37          |
+|10|  │           ├─SUBPLAN SCAN     |VIEW1 |1       |18          |
+|11|  │           │ └─TABLE FULL SCAN|table3|1       |18          |
+|12|  │           └─TABLE FULL SCAN  |table4|1       |18          |
+|13|  └─TABLE FULL SCAN              |tt    |1       |18          |
+===================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([table1.pk]), filter([cast(table1.pk, DECIMAL_INT(42, 0)) != subquery(1)]), rowset=16
@@ -1196,11 +1200,11 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, 
       range_key([table1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([coalesce(subquery(1), cast(99, DECIMAL_INT(42, 0)))]), filter(nil), rowset=16
-      exec_params_([T_FUN_MAX(VIEW1.SUM(-100))(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
-  3 - output([T_FUN_MAX(VIEW1.SUM(-100))]), filter(nil), rowset=16
-      group(nil), agg_func([T_FUN_MAX(VIEW1.SUM(-100))])
-  4 - output([VIEW1.SUM(-100)]), filter(nil), rowset=16
-      access([VIEW1.SUM(-100)])
+      exec_params_([T_FUN_MAX(VIEW2.SUM(-100))(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  3 - output([T_FUN_MAX(VIEW2.SUM(-100))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_MAX(VIEW2.SUM(-100))])
+  4 - output([VIEW2.SUM(-100)]), filter(nil), rowset=16
+      access([VIEW2.SUM(-100)])
   5 - output([T_FUN_SUM(-100)]), filter(nil), rowset=16
       group(nil), agg_func([T_FUN_SUM(-100)])
   6 - output(nil), filter(nil), rowset=16
@@ -1210,10 +1214,20 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, 
       range_key([tt.__pk_increment]), range(MIN ; MAX)always true
   8 - output([1]), filter(nil), startup_filter([:0 != 99]), rowset=16
-      access(nil), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false, 
+      limit(CASE WHEN 1 >= 8 THEN 8 ELSE 1 END), offset(nil)
+  9 - output(nil), filter(nil), rowset=16
+      equal_conds([VIEW1.table3.pk = table4.pk]), other_conds(nil)
+ 10 - output([VIEW1.table3.pk]), filter(nil), rowset=16
+      access([VIEW1.table3.pk])
+ 11 - output([table3.pk]), filter(nil), rowset=16
+      access([table3.pk]), partitions(p0)
+      limit(8), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([table3.__pk_increment]), range(MIN ; MAX)always true
-  9 - output([:1]), filter(nil), rowset=16
+ 12 - output([table4.pk]), filter(nil), rowset=16
+      access([table4.pk]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([table4.__pk_increment]), range(MIN ; MAX)always true
+ 13 - output([:1]), filter(nil), rowset=16
       access(nil), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([tt.__pk_increment]), range(MIN ; MAX)always true

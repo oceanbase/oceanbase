@@ -755,6 +755,8 @@ ObTenant::ObTenant(const int64_t id,
       token_usage_(.0),
       token_usage_check_ts_(0),
       token_change_ts_(0),
+      stream_rpc_wait_cnt_(0),
+      stream_rpc_wait_cnt_limit_(100),
       ctx_(nullptr),
       st_metrics_(),
       sql_limiter_(),
@@ -1849,6 +1851,16 @@ void ObTenant::check_worker_count()
       ATOMIC_STORE(&shrink_, true);
       LOG_INFO("worker thread began to shrink", K(id_), K(token));
     }
+
+    int64_t stream_limit = 0;
+    {
+      ObTenantConfigGuard tenant_config(TENANT_CONF(id_));
+      stream_limit =  static_cast<int64_t>(unit_max_cpu() * (tenant_config.is_valid() ? tenant_config->cpu_quota_concurrency : 4));
+    }
+    // To avoid the regression of stability, making the stream_rpc_wait_cnt_limit_ of stream rpc is not less than 100
+    stream_limit = std::max(stream_limit, 100L);
+    ATOMIC_STORE(&stream_rpc_wait_cnt_limit_, stream_limit);
+
     IGNORE_RETURN workers_lock_.unlock();
   }
 

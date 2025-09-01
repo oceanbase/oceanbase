@@ -406,17 +406,34 @@ int ObTransformSubqueryCoalesce::coalesce_same_any_all_exprs(ObDMLStmt *stmt,
   bool force_trans = false;
   bool force_no_trans = false;
   bool is_select_same = false;
-  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params have null", K(ret), K(stmt), K(ctx_));
   } else {
+    ObSEArray<bool, 4> can_cmp_by_set_semantics;
+    for (int64_t i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
+      bool bret = false;
+      ObQueryRefRawExpr *query_ref = NULL;
+      if (OB_ISNULL(query_ref = get_any_all_query_expr(filters.at(i)))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("query ref is null", K(ret));
+      } else if (OB_FAIL(ObStmtComparer::can_compare_by_set_semantics(query_ref->get_ref_stmt(),
+                                                                      type == T_ANY, bret))) {
+        LOG_WARN("failed to check if need row semantics", K(ret));
+      } else if (OB_FAIL(can_cmp_by_set_semantics.push_back(bret))) {
+        LOG_WARN("failed to push back can cmp by set semantics", K(ret));
+      }
+    }
+
     for (int64_t i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
       first_left_expr = get_any_all_left_hand_expr(filters.at(i));
       first_query_ref = get_any_all_query_expr(filters.at(i));
       for (int64_t j = i + 1; OB_SUCC(ret) && !removed_items.has_member(i) && j < filters.count(); ++j) {
+        bool cmp_by_set_semantics = can_cmp_by_set_semantics.at(i)
+                                    && can_cmp_by_set_semantics.at(j)
+                                    && stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_1);
         second_left_expr = get_any_all_left_hand_expr(filters.at(j));
         second_query_ref = get_any_all_query_expr(filters.at(j));
-        map_info.reset();
         remove_index = -1;
         OPT_TRACE("try to coalesce same any/all exprs");
         OPT_TRACE("left:", filters.at(i));
@@ -440,22 +457,47 @@ int ObTransformSubqueryCoalesce::coalesce_same_any_all_exprs(ObDMLStmt *stmt,
         } else if (force_no_trans) {
           //do nothing
           OPT_TRACE("hint reject transform");
-        } else if (OB_FAIL(ObStmtComparer::check_stmt_containment(first_query_ref->get_ref_stmt(),
-                                                                  second_query_ref->get_ref_stmt(),
-                                                                  map_info,
-                                                                  relation,
-                                                                  true))) {
-          LOG_WARN("failed to check stmt containment", K(ret));
-        } else if (!map_info.is_select_item_equal_) {
-          OPT_TRACE("stmts have different select items, can not coalesce");
-        } else if (relation == QUERY_LEFT_SUBSET || relation == QUERY_EQUAL) {
-          remove_index = (type == T_ANY ? j : i);
-          OPT_TRACE("right query contain left query, will coalesce suqbeury");
-        } else if (relation == QUERY_RIGHT_SUBSET) {
-          remove_index = (type == T_ANY ? i : j);
-          OPT_TRACE("left query contain right query, will coalesce suqbeury");
         } else {
-          OPT_TRACE("stmt not contain each other, can not coalesce");
+          if (cmp_by_set_semantics) {
+            OPT_TRACE("check stmt containment by set semantics");
+            map_info.reset();
+            if (OB_FAIL(ObStmtComparer::check_stmt_set_containment(first_query_ref->get_ref_stmt(),
+                                                                   second_query_ref->get_ref_stmt(),
+                                                                   map_info, relation))) {
+              LOG_WARN("failed to check stmt set containment", K(ret));
+            } else if (!map_info.is_select_item_equal_) {
+              OPT_TRACE("stmts have different select items by set semantics, can not coalesce");
+              relation = QUERY_UNCOMPARABLE;
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (!cmp_by_set_semantics || relation == QUERY_UNCOMPARABLE) {
+            OPT_TRACE("check stmt containment by row semantics");
+            map_info.reset();
+            if (OB_FAIL(ObStmtComparer::check_stmt_containment(first_query_ref->get_ref_stmt(),
+                                                              second_query_ref->get_ref_stmt(),
+                                                              map_info, relation, true))) {
+              LOG_WARN("failed to check stmt containment", K(ret));
+            } else if (!map_info.is_select_item_equal_) {
+              OPT_TRACE("stmts have different select items by row semantics, can not coalesce");
+              relation = QUERY_UNCOMPARABLE;
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (relation == QUERY_EQUAL) {
+            // remove the stmt with more table items if they are equal (for cost consideration)
+            remove_index = (first_query_ref->get_ref_stmt()->get_table_items().count() >
+                            second_query_ref->get_ref_stmt()->get_table_items().count() ? i : j);
+            OPT_TRACE("queries are equal, will coalesce subquery");
+          } else if (relation == QUERY_LEFT_SUBSET) {
+            remove_index = (type == T_ANY ? j : i);
+            OPT_TRACE("right query contain left query, will coalesce subquery");
+          } else if (relation == QUERY_RIGHT_SUBSET) {
+            remove_index = (type == T_ANY ? i : j);
+            OPT_TRACE("left query contain right query, will coalesce subquery");
+          } else {
+            OPT_TRACE("stmt not contain each other, can not coalesce");
+          }
         }
         if (OB_SUCC(ret) && remove_index != -1) {
           if (OB_FAIL(removed_items.add_member(remove_index))) {

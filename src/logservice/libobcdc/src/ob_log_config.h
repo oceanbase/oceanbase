@@ -106,6 +106,7 @@ public:
 #endif
 #define OB_CLUSTER_PARAMETER(args...) args
   // Liboblog config.
+  DEF_TIME(init_timeout, OB_CLUSTER_PARAMETER, "2h", "[0s,1d]", "obcdc init timeout, 0s means never");
   // max memory occupied by libobcdc: 20G
   DEF_CAP(memory_limit, OB_CLUSTER_PARAMETER, "8G", "[2G,]", "memory limit");
   // Preserve the lower bound of system memory in %, in the range of 10% ~ 80%
@@ -621,6 +622,7 @@ public:
   T_DEF_INT_INFT(direct_load_inc_queue_backlog_lowest_tolerance, OB_CLUSTER_PARAMETER, 0, 0, "lowest threshold of queue_backlog that will touch parser flow control in direct load inc case");
   T_DEF_INT_INFT(sorted_list_auto_treeify_threshold, OB_CLUSTER_PARAMETER, 32, 0, "treeify list auto-treeify mode treeify threshold");
   T_DEF_INT_INFT(sorted_list_auto_untreeify_threshold, OB_CLUSTER_PARAMETER, 30, 0, "treeify list auto-treeify mode treeify threshold");
+  DEF_CAP(meta_data_inc_trans_size_upper_limit, OB_CLUSTER_PARAMETER, "4G", "[0M,]", "meta data increment part_trans_task size upper limit");
 
 #undef OB_CLUSTER_PARAMETER
 

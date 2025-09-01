@@ -70,6 +70,7 @@ public:
       OK(get_curr_simple_server().init_sql_proxy2());
       scp_tenant_created = true;
     }
+    storage::ObSSBasePrewarmer::OB_SS_PREWARM_CACHE_THRESHOLD = 0;
   }
 
   static void TearDownTestCase()

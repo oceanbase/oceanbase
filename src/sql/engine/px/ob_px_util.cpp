@@ -214,7 +214,7 @@ int ObPXServerAddrUtil::get_external_table_loc(
   } else {
     tenant_id = ctx.get_my_session()->get_effective_tenant_id();
     is_external_files_on_disk = local_loc->loc_meta_->is_external_files_on_disk_;
-    if (OB_FAIL(GCTX.location_service_->external_table_get(tenant_id, ref_table_id, all_locations))) {
+    if (OB_FAIL(GCTX.location_service_->external_table_get(tenant_id, all_locations))) {
       LOG_WARN("fail to get external table location", K(ret));
     }
   }
@@ -448,6 +448,39 @@ int ObPXServerAddrUtil::assign_external_files_to_sqc(
   return ret;
 }
 
+int ObPXServerAddrUtil::assign_lake_table_files_to_sqc(const DASTabletLocList &locations,
+                                                       ObExecContext &exec_ctx,
+                                                       ObIArray<ObPxSqcMeta> &sqcs)
+{
+  int ret = OB_SUCCESS;
+  ObLakeTableFileMap *lake_table_file_map = nullptr;
+  if (OB_FAIL(exec_ctx.get_lake_table_file_map(lake_table_file_map))) {
+    LOG_WARN("failed to get lake table file map");
+  } else if (OB_ISNULL(lake_table_file_map)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null");
+  } else {
+    for (int i = 0; OB_SUCC(ret) && i < sqcs.count(); i++) {
+      ObAddr addr = sqcs.at(i).get_exec_addr();
+      ObLakeTableFileDesc &lake_table_file_desc = sqcs.at(i).get_lake_table_file_desc();
+      for (ConstDASTabletLocListIter iter = locations.begin(); OB_SUCC(ret) && iter != locations.end(); ++iter) {
+        if (addr == (*iter)->server_) {
+          ObLakeTableFileMapKey key;
+          key.table_loc_id_ = (*iter)->loc_meta_->table_loc_id_;
+          key.tablet_id_ = (*iter)->tablet_id_;
+          ObLakeTableFileArray *lake_table_file_array = nullptr;
+          if (OB_FAIL(lake_table_file_map->get_refactored(key, lake_table_file_array))) {
+            LOG_WARN("failed to get lake table file array", K(key));
+          } else if (OB_FAIL(lake_table_file_desc.add_lake_table_file_desc(key, lake_table_file_array))) {
+            LOG_WARN("failed to add lake table file desc");
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObPXServerAddrUtil::alloc_by_data_distribution_inner(
     const ObIArray<ObTableLocation> *table_locations,
     ObExecContext &ctx,
@@ -519,7 +552,7 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(
     } else {
       // 通过TSC或者DML获得当前的DFO的partition对应的location信息
       // 后续利用location信息构建对应的SQC meta
-      if (OB_ISNULL(scan_op) || !scan_op->is_external_table_) {
+      if (OB_ISNULL(scan_op) || !scan_op->is_ob_external_table()) {
         // scan_ops is empty
         if (OB_ISNULL(table_loc = DAS_CTX(ctx).get_table_loc_by_id(table_location_key, ref_table_id))) {
           ret = OB_ERR_UNEXPECTED;
@@ -798,11 +831,21 @@ int ObPXServerAddrUtil::build_dfo_sqc(ObExecContext &ctx,
       sqcs.at(i).set_total_task_count(total_task_count);
       sqcs.at(i).set_total_part_count(total_part_cnt);
     }
-    if (OB_SUCC(ret) && !locations.empty()
-        && (*locations.begin())->loc_meta_->is_external_table_) {
-      if (OB_FAIL(assign_external_files_to_sqc(dfo, ctx,
-                    (*locations.begin())->loc_meta_->is_external_files_on_disk_, sqcs, parallel))) {
-        LOG_WARN("fail to assign external files to sqc", K(ret));
+    if (OB_SUCC(ret) && !locations.empty() && (*locations.begin())->loc_meta_->is_external_table_) {
+      if (!(*locations.begin())->loc_meta_->is_lake_table_) {
+        if (OB_FAIL(assign_external_files_to_sqc(dfo, ctx,
+                      (*locations.begin())->loc_meta_->is_external_files_on_disk_, sqcs, parallel))) {
+          LOG_WARN("fail to assign external files to sqc", K(ret));
+        }
+      } else {
+        if (OB_FAIL(assign_lake_table_files_to_sqc(locations, ctx, sqcs))) {
+          LOG_WARN("fail to assign lake table files to sqc", K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(assign_extra_lake_table_files_to_sqc(ctx, dfo))) {
+        LOG_WARN("failed to assign extra lake table files to sqc");
       }
     }
   }
@@ -926,10 +969,17 @@ int ObPXServerAddrUtil::alloc_by_temp_child_distribution_inner(ObExecContext &ex
       LOG_WARN("fail to set all table partition for tsc", K(ret));
     }
   }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(assign_extra_lake_table_files_to_sqc(exec_ctx, child))) {
+      LOG_WARN("failed to assign extra lake table files to sqc");
+    }
+  }
   return ret;
 }
 
-int ObPXServerAddrUtil::alloc_by_child_distribution(const ObDfo &child, ObDfo &parent)
+int ObPXServerAddrUtil::alloc_by_child_distribution(ObExecContext &exec_ctx,
+                                                    const ObDfo &child,
+                                                    ObDfo &parent)
 {
   int ret = OB_SUCCESS;
   const ObIArray<ObPxSqcMeta> &sqcs = child.get_sqcs();
@@ -968,6 +1018,11 @@ int ObPXServerAddrUtil::alloc_by_child_distribution(const ObDfo &child, ObDfo &p
         }
       }
     }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(assign_extra_lake_table_files_to_sqc(exec_ctx, parent))) {
+        LOG_WARN("failed to assign extra lake table files to sqc");
+      }
+    }
     LOG_TRACE("allocate by child distribution", K(sqcs));
   }
   return ret;
@@ -991,7 +1046,7 @@ int ObPXServerAddrUtil::alloc_by_random_distribution(ObExecContext &exec_ctx,
   } else if (px_node_pool.data_node_empty()) {
     // a defensive code, if this SQL does not have a location, still alloc by child
     // this kind of plan is not common
-    if (OB_FAIL(alloc_by_child_distribution(child, parent))) {
+    if (OB_FAIL(alloc_by_child_distribution(exec_ctx, child, parent))) {
       LOG_WARN("fail to alloc by child distribution", K(ret));
     }
   } else {
@@ -1092,6 +1147,11 @@ int ObPXServerAddrUtil::alloc_by_random_distribution(ObExecContext &exec_ctx,
         }
       }
     }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(assign_extra_lake_table_files_to_sqc(exec_ctx, parent))) {
+        LOG_WARN("failed to assign extra lake table files to sqc");
+      }
+    }
   }
   return ret;
 }
@@ -1134,6 +1194,11 @@ int ObPXServerAddrUtil::alloc_by_local_distribution(ObExecContext &exec_ctx,
       }
       OZ(dfo.add_sqc(sqc));
     }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(assign_extra_lake_table_files_to_sqc(exec_ctx, dfo))) {
+        LOG_WARN("failed to assign extra lake table files to sqc");
+      }
+    }
   }
   return ret;
 }
@@ -1155,7 +1220,7 @@ int ObPXServerAddrUtil::alloc_by_local_distribution(ObExecContext &exec_ctx,
  *
  */
 int ObPXServerAddrUtil::alloc_by_reference_child_distribution(
-    ObDfo &parent)
+    ObExecContext &exec_ctx, ObDfo &parent)
 {
   int ret = OB_SUCCESS;
   ObDfo *reference_child = nullptr;
@@ -1164,7 +1229,7 @@ int ObPXServerAddrUtil::alloc_by_reference_child_distribution(
   } else if (OB_ISNULL(reference_child)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null child", K(ret));
-  } else if (OB_FAIL(alloc_by_child_distribution(*reference_child, parent))) {
+  } else if (OB_FAIL(alloc_by_child_distribution(exec_ctx, *reference_child, parent))) {
     LOG_WARN("failed to alloc by child distribution", K(ret));
   }
   return ret;
@@ -1337,7 +1402,7 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(ObExecContext &ctx,
     } else if (FALSE_IT(table_location_key = scan_op->get_table_loc_id())) {
     } else if (FALSE_IT(ref_table_id = scan_op->get_loc_ref_table_id())) {
     } else {
-      if (!scan_op->is_external_table_) {
+      if (!scan_op->is_ob_external_table()) {
         if (OB_ISNULL(table_loc = DAS_CTX(ctx).get_table_loc_by_id(table_location_key, ref_table_id))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to get phy table location", K(ret));
@@ -2015,11 +2080,20 @@ int ObPxTreeSerializer::serialize_expr_frame_info(char *buf,
     }
   }
   // frames
-  OB_UNIS_ENCODE(ctx.get_frame_cnt());
-  OZ(serialize_frame_info<SERIALIZE_PLAN_PART>(buf, buf_len, pos, expr_frame_info.const_frame_, ctx.get_frames(), ctx.get_frame_cnt()));
-  OZ(serialize_frame_info<SERIALIZE_PLAN_PART>(buf, buf_len, pos, expr_frame_info.param_frame_, ctx.get_frames(), ctx.get_frame_cnt()));
-  OZ(serialize_frame_info<SERIALIZE_PLAN_PART>(buf, buf_len, pos, expr_frame_info.dynamic_frame_, ctx.get_frames(), ctx.get_frame_cnt()));
-  OZ(serialize_frame_info<SERIALIZE_PLAN_PART>(buf, buf_len, pos, expr_frame_info.datum_frame_, ctx.get_frames(), ctx.get_frame_cnt(), true));
+  int64_t frame_count = 0;
+  char **frames = nullptr;
+  if (ctx.get_ori_frame_cnt() != 0 && ctx.get_ori_frames() != nullptr) {
+    frame_count = ctx.get_ori_frame_cnt();
+    frames = ctx.get_ori_frames();
+  } else {
+    frame_count = ctx.get_frame_cnt();
+    frames = ctx.get_frames();
+  }
+  OB_UNIS_ENCODE(frame_count);
+  OZ(serialize_frame_info<SERIALIZE_PLAN_PART>(buf, buf_len, pos, expr_frame_info.const_frame_, frames, frame_count));
+  OZ(serialize_frame_info<SERIALIZE_PLAN_PART>(buf, buf_len, pos, expr_frame_info.param_frame_, frames, frame_count));
+  OZ(serialize_frame_info<SERIALIZE_PLAN_PART>(buf, buf_len, pos, expr_frame_info.dynamic_frame_, frames, frame_count));
+  OZ(serialize_frame_info<SERIALIZE_PLAN_PART>(buf, buf_len, pos, expr_frame_info.datum_frame_, frames, frame_count, true));
   LOG_DEBUG("trace end ser expr frame info", K(ret), K(buf_len), K(pos));
   return ret;
 }
@@ -2208,6 +2282,8 @@ int ObPxTreeSerializer::deserialize_expr_frame_info(const char *buf,
   } else {
     ctx.set_frames(frames);
     ctx.set_frame_cnt(frame_cnt);
+    ctx.set_ori_frames(frames);
+    ctx.set_ori_frame_cnt(frame_cnt);
     // init const vector
     ObEvalCtx eval_ctx(ctx);
     const ObIArray<ObExpr> &exprs = expr_frame_info.rt_exprs_;
@@ -2327,11 +2403,20 @@ int64_t ObPxTreeSerializer::get_serialize_expr_frame_info_size(
       }
     }
   }
-  OB_UNIS_ADD_LEN(ctx.get_frame_cnt());
-  len += get_serialize_frame_info_size<SERIALIZE_PLAN_PART>(expr_frame_info.const_frame_, ctx.get_frames(), ctx.get_frame_cnt());
-  len += get_serialize_frame_info_size<SERIALIZE_PLAN_PART>(expr_frame_info.param_frame_, ctx.get_frames(), ctx.get_frame_cnt());
-  len += get_serialize_frame_info_size<SERIALIZE_PLAN_PART>(expr_frame_info.dynamic_frame_, ctx.get_frames(), ctx.get_frame_cnt());
-  len += get_serialize_frame_info_size<SERIALIZE_PLAN_PART>(expr_frame_info.datum_frame_, ctx.get_frames(), ctx.get_frame_cnt(), true);
+  int64_t frame_count = 0;
+  char **frames = nullptr;
+  if (ctx.get_ori_frame_cnt() != 0 && ctx.get_ori_frames() != nullptr) {
+    frame_count = ctx.get_ori_frame_cnt();
+    frames = ctx.get_ori_frames();
+  } else {
+    frame_count = ctx.get_frame_cnt();
+    frames = ctx.get_frames();
+  }
+  OB_UNIS_ADD_LEN(frame_count);
+  len += get_serialize_frame_info_size<SERIALIZE_PLAN_PART>(expr_frame_info.const_frame_, frames, frame_count);
+  len += get_serialize_frame_info_size<SERIALIZE_PLAN_PART>(expr_frame_info.param_frame_, frames, frame_count);
+  len += get_serialize_frame_info_size<SERIALIZE_PLAN_PART>(expr_frame_info.dynamic_frame_, frames, frame_count);
+  len += get_serialize_frame_info_size<SERIALIZE_PLAN_PART>(expr_frame_info.datum_frame_, frames, frame_count, true);
   LOG_DEBUG("trace end get ser expr frame info size", K(ret), K(len));
   return len;
 }
@@ -5360,6 +5445,58 @@ int ObPXServerAddrUtil::check_slave_mapping_location_constraint(ObDfo &child, Ob
       if (OB_UNLIKELY(!match)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("sqc addr not match", K(child.get_dfo_id()), K(parent.get_dfo_id()));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPXServerAddrUtil::assign_extra_lake_table_files_to_sqc(ObExecContext &exec_ctx, ObDfo &dfo)
+{
+  int ret = OB_SUCCESS;
+  // handle nested QC
+  if (dfo.get_sqcs_count() == 1 && dfo.is_fulltree() && exec_ctx.has_lake_table_file_map()) {
+    ObSEArray<const ObTableScanSpec*, 2> scan_ops;
+    const ObOpSpec *root_op = dfo.get_root_op_spec();
+    ObPxSqcMeta &sqc = dfo.get_sqcs().at(0);
+    ObLakeTableFileMap *lake_table_file_map = nullptr;
+    if (OB_ISNULL(root_op)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null op spec", K(dfo));
+    } else if (OB_FAIL(ObTaskSpliter::find_scan_ops_under_qc(scan_ops, *root_op))) {
+      LOG_WARN("fail find scan ops in dfo", K(dfo), K(ret));
+    } else if (OB_FAIL(exec_ctx.get_lake_table_file_map(lake_table_file_map))) {
+      LOG_WARN("failed to get lake table file map");
+    } else if (OB_ISNULL(lake_table_file_map)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null");
+    } else {
+      ObLakeTableFileDesc &lake_table_file_desc = sqc.get_lake_table_file_desc();
+      for (int64_t i = 0; OB_SUCC(ret) && i < scan_ops.count(); ++i) {
+        const ObTableScanSpec *scan_op = scan_ops.at(i);
+        ObDASTableLoc *table_loc = NULL;
+        if (OB_ISNULL(scan_op)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null scan op");
+        } else if (!scan_op->is_lake_external_table()) {
+          // do nothing
+        } else if (OB_ISNULL(table_loc = DAS_CTX(exec_ctx).get_table_loc_by_id(scan_op->get_table_loc_id(),
+                                                                               scan_op->get_loc_ref_table_id()))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null table loc");
+        } else {
+          const DASTabletLocList &locations = table_loc->get_tablet_locs();
+          for (DASTabletLocListIter iter = table_loc->tablet_locs_begin();
+               OB_SUCC(ret) && iter != table_loc->tablet_locs_end(); ++iter) {
+            ObLakeTableFileMapKey key((*iter)->loc_meta_->table_loc_id_, (*iter)->tablet_id_);
+            ObLakeTableFileArray *lake_table_file_array = nullptr;
+            if (OB_FAIL(lake_table_file_map->get_refactored(key, lake_table_file_array))) {
+              LOG_WARN("failed to get lake table file array", K(key));
+            } else if (OB_FAIL(lake_table_file_desc.add_lake_table_file_desc(key, lake_table_file_array))) {
+              LOG_WARN("failed to add lake table file desc");
+            }
+          }
+        }
       }
     }
   }

@@ -87,7 +87,9 @@ const int64_t MAXIMUM_ROWS_OF_ROW_SAMPLE_GATHER_HYBRID_HIST = 10000000;
 const int64_t MINIMUM_BLOCK_CNT_OF_BLOCK_SAMPLE_HYBRID_HIST = 16;
 const static int64_t DEFAULT_AUTO_SAMPLE_ROW_COUNT = 0;
 const static int64_t DEFAULT_ASYNC_SAMPLE_ROW_COUNT = 5000000;
-const static int64_t MAX_GATHER_COLUMN_COUNT_PER_QUERY = 128;
+const static int64_t MAX_GATHER_COLUMN_COUNT_PER_QUERY_FOR_SMALL_TENANT = 24;
+
+const static int64_t MAX_GATHER_COLUMN_COUNT_PER_QUERY_FOR_LARGE_TENANT = 96;
 const static int64_t MAX_SKIP_RATE_SAMPLE_COUNT = 100000;
 
 const static int64_t DEFAULT_SKIP_RATE_SAMPLE_COUNT = 0;
@@ -598,7 +600,8 @@ struct ObTableStatParam {
     min_iops_(-1),
     max_iops_(-1),
     weight_iops_(-1),
-    skip_rate_sample_cnt_(DEFAULT_SKIP_RATE_SAMPLE_COUNT)
+    skip_rate_sample_cnt_(DEFAULT_SKIP_RATE_SAMPLE_COUNT),
+    use_part_derive_global_(false)
   {}
 
   int assign(const ObTableStatParam &other);
@@ -697,6 +700,9 @@ struct ObTableStatParam {
   int64_t max_iops_;
   int64_t weight_iops_;
   int64_t skip_rate_sample_cnt_;
+
+  bool use_part_derive_global_;
+
   TO_STRING_KV(K(tenant_id_),
                K(db_name_),
                K(db_id_),
@@ -753,7 +759,9 @@ struct ObTableStatParam {
                K(min_iops_),
                K(max_iops_),
                K(weight_iops_),
-               K(skip_rate_sample_cnt_));
+               K(skip_rate_sample_cnt_),
+               K(use_part_derive_global_)
+               );
 };
 
 struct ObOptStatGatherParam {
@@ -793,7 +801,8 @@ struct ObOptStatGatherParam {
     part_level_(share::schema::ObPartitionLevel::PARTITION_LEVEL_ZERO),
     consumer_group_id_(0),
     partition_id_skip_rate_map_(NULL),
-    all_column_params_()
+    all_column_params_(),
+    use_part_derive_global_(false)
   {}
   int assign(const ObOptStatGatherParam &other);
   int64_t get_need_gather_column() const;
@@ -834,6 +843,8 @@ struct ObOptStatGatherParam {
   const PartitionIdSkipRateMap *partition_id_skip_rate_map_;
   ObSEArray<ObColumnStatParam, 4> all_column_params_;
 
+  bool use_part_derive_global_;
+
   TO_STRING_KV(K(tenant_id_),
                K(db_name_),
                K(tab_name_),
@@ -865,7 +876,8 @@ struct ObOptStatGatherParam {
                K(data_table_id_),
                K(is_global_index_),
                K(consumer_group_id_),
-               K(all_column_params_));
+               K(all_column_params_),
+               K(use_part_derive_global_));
 };
 
 struct ObOptStat

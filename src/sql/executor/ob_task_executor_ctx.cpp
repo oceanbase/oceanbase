@@ -92,45 +92,6 @@ int ObTaskExecutorCtx::get_addr_by_virtual_partition_id(int64_t partition_id, Ob
   return ret;
 }
 
-int ObTaskExecutorCtx::set_table_locations(const ObTablePartitionInfoArray &table_partition_infos)
-{
-  int ret = OB_SUCCESS;
-  //table_locations_在这里必须先reset，确保table partition infos没有被重复添加
-  table_locations_.reset();
-  ObPhyTableLocation phy_table_loc;
-  int64_t N = table_partition_infos.count();
-  if (OB_FAIL(table_locations_.reserve(N))) {
-    LOG_WARN("fail reserve locations", K(ret), K(N));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
-    phy_table_loc.reset();
-    ObTablePartitionInfo *partition_info = table_partition_infos.at(i);
-    if (OB_ISNULL(partition_info)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected error. table partition info is null", K(ret), K(i));
-    } else if (partition_info->get_table_location().use_das()) {
-      //do nothing,DAS的location由自己维护和计算
-    } else if (OB_FAIL(phy_table_loc.assign_from_phy_table_loc_info(partition_info->get_phy_tbl_location_info()))) {
-      LOG_WARN("fail to assign_from_phy_table_loc_info", K(ret), K(i), K(partition_info->get_phy_tbl_location_info()), K(N));
-    } else if (OB_FAIL(table_locations_.push_back(phy_table_loc))) {
-      LOG_WARN("fail to push back into table locations", K(ret), K(i), K(phy_table_loc), K(N));
-    }
-  }
-  return ret;
-}
-
-int ObTaskExecutorCtx::append_table_location(const ObCandiTableLoc &phy_location_info)
-{
-  int ret = OB_SUCCESS;
-  ObPhyTableLocation phy_table_loc;
-  if (OB_FAIL(phy_table_loc.assign_from_phy_table_loc_info(phy_location_info))) {
-    LOG_WARN("assign from physical table location info failed", K(ret));
-  } else if (OB_FAIL(table_locations_.push_back(phy_table_loc))) {
-    LOG_WARN("store table location failed", K(ret));
-  }
-  return ret;
-}
-
 //
 //
 //  Utility

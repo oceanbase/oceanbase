@@ -202,7 +202,8 @@ public:
   static int alloc_by_data_distribution_inner(
       const ObIArray<ObTableLocation> *table_locations,
       ObExecContext &ctx, ObDfo &dfo);
-  static int alloc_by_child_distribution(const ObDfo &child,
+  static int alloc_by_child_distribution(ObExecContext &exec_ctx,
+                                         const ObDfo &child,
                                          ObDfo &parent);
   static int alloc_by_random_distribution(ObExecContext &exec_ctx,
                                           const ObDfo &child,
@@ -214,7 +215,7 @@ public:
                                                     ObDfo &child);
   static int alloc_by_local_distribution(ObExecContext &exec_ctx,
                                          ObDfo &root);
-  static int alloc_by_reference_child_distribution(ObDfo &parent);
+  static int alloc_by_reference_child_distribution(ObExecContext &exec_ctx, ObDfo &parent);
   static int alloc_distribution_of_reference_child(const ObIArray<ObTableLocation> *table_locations,
                                                    ObExecContext &exec_ctx,
                                                    ObDfo &parent);
@@ -362,6 +363,10 @@ private:
                                           bool is_file_on_disk,
                                           common::ObIArray<ObPxSqcMeta> &sqcs,
                                           int64_t parallel);
+  static int assign_lake_table_files_to_sqc(const DASTabletLocList &locations,
+                                            ObExecContext &exec_ctx,
+                                            ObIArray<ObPxSqcMeta> &sqcs);
+  static int assign_extra_lake_table_files_to_sqc(ObExecContext &exec_ctx, ObDfo &dfo);
 private:
   static int generate_dh_map_info(ObDfo &dfo);
   DISALLOW_COPY_AND_ASSIGN(ObPXServerAddrUtil);
