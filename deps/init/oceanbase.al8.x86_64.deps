@@ -35,7 +35,7 @@ devdeps-cloud-qpl-1.1.0-312024092814.al8.x86_64.rpm
 devdeps-s3-cpp-sdk-1.11.156-222024100811.al8.x86_64.rpm
 devdeps-protobuf-c-1.5.1-100000052025032810.al8.x86_64.rpm
 devdeps-roaringbitmap-croaring-3.0.0-92024092815.al8.x86_64.rpm
-devdeps-apache-arrow-20.0.0-22025060511.al8.x86_64.rpm
+devdeps-apache-arrow-20.0.0-42025082815.al8.x86_64.rpm
 devdeps-hyperscan-5.4.2-252024092817.al8.x86_64.rpm
 devdeps-vsag-1.1.0-312025071511.al8.x86_64.rpm
 devdeps-apache-orc-2.1.1-82025081116.al8.x86_64.rpm
