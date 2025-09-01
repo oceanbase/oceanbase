@@ -1152,7 +1152,8 @@ public:
                                   ObIArray<ObRawExpr*> &exprs,
                                   const ObRawExprResType &res_type,
                                   const int64_t column_idx,
-                                  const int64_t row_cnt);
+                                  const int64_t row_cnt,
+                                  const int64_t cast_row_cnt);
   static int add_column_conv_to_set_list(ObSQLSessionInfo *session_info,
                                          ObRawExprFactory *expr_factory,
                                          ObIArray<ObSelectStmt*> &stmts,

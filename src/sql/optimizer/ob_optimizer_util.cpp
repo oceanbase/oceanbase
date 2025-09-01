@@ -6916,21 +6916,26 @@ int ObOptimizerUtil::add_cast_to_set_list(ObSQLSessionInfo *session_info,
                                           ObIArray<ObRawExpr*> &exprs,
                                           const ObRawExprResType &res_type,
                                           const int64_t column_idx,
-                                          const int64_t row_cnt)
+                                          const int64_t row_cnt,
+                                          const int64_t cast_row_cnt)
 {
   int ret = OB_SUCCESS;
   ObRawExpr *src_expr = NULL;
   ObRawExpr *new_expr = NULL;
   int64_t column_cnt = 0;
   if (OB_ISNULL(session_info) || OB_ISNULL(expr_factory) ||
-      OB_UNLIKELY(exprs.empty() || row_cnt <= 0 || column_idx < 0 || exprs.count() % row_cnt != 0 ||
-                  exprs.count() / row_cnt <= column_idx)) {
+      OB_UNLIKELY(exprs.empty()
+                  || row_cnt <= 0
+                  || column_idx < 0
+                  || exprs.count() % row_cnt != 0
+                  || exprs.count() / row_cnt <= column_idx
+                  || cast_row_cnt < 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected param", K(ret));
   } else {
     column_cnt = exprs.count() / row_cnt;
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < row_cnt; ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < cast_row_cnt; ++i) {
     if (OB_ISNULL(exprs.at(column_idx + column_cnt * i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected expr", K(ret));
@@ -7084,10 +7089,10 @@ int ObOptimizerUtil::try_add_cast_to_select_list(ObIAllocator *allocator,
               ret = OB_ERR_INVALID_TYPE_FOR_OP;
               LOG_WARN("column type incompatible", K(ret), K(result_type));
             } else if (left_type != result_type &&
-                       OB_FAIL(add_cast_to_set_list(session_info, expr_factory, select_exprs, result_type, i, row_cnt))) {
+                       OB_FAIL(add_cast_to_set_list(session_info, expr_factory, select_exprs, result_type, i, row_cnt, j))) {
               LOG_WARN("failed to add add cast to set list", K(ret));
             } else if (right_type != result_type &&
-                       OB_FAIL(add_cast_to_set_list(session_info, expr_factory, select_exprs, result_type, i, row_cnt))) {
+                       OB_FAIL(add_cast_to_set_select_expr(session_info, *expr_factory, result_type, select_exprs.at(i + j * column_cnt)))) {
               LOG_WARN("failed to add add cast to set list", K(ret));
             }
           }
