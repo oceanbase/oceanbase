@@ -2769,8 +2769,7 @@ int ObLogPlan::generate_subplan_for_query_ref(ObQueryRefRawExpr *query_ref,
   bool has_ref_assign_user_var = false;
   SubPlanInfo *info = NULL;
   bool is_initplan = false;
-  bool is_partial_limit_enabled = get_optimizer_context().get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_0)
-                                  && get_optimizer_context().enable_partial_limit_pushdown();
+  bool is_partial_limit_enabled = get_optimizer_context().enable_partial_limit_pushdown();
   OPT_TRACE_TITLE("start generate subplan for subquery expr");
   OPT_TRACE_BEGIN_SECTION;
   if (OB_ISNULL(subquery = query_ref->get_ref_stmt())) {
@@ -2799,9 +2798,6 @@ int ObLogPlan::generate_subplan_for_query_ref(ObQueryRefRawExpr *query_ref,
                                         logical_plan->get_update_table_metas(),
                                         logical_plan->get_selectivity_ctx()))) {
     LOG_WARN("failed to add expr meta", K(ret));
-  } else if (OB_ISNULL(info = static_cast<SubPlanInfo *>(get_allocator().alloc(sizeof(SubPlanInfo))))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("failed to alloc semi info", K(ret));
   } else {
       /**
            * 作为initplan的条件:
@@ -2836,6 +2832,9 @@ int ObLogPlan::generate_subplan_for_query_ref(ObQueryRefRawExpr *query_ref,
     }
     if (OB_FAIL(ret)) {
       /*do nothing*/
+    } else if (OB_ISNULL(info = static_cast<SubPlanInfo *>(get_allocator().alloc(sizeof(SubPlanInfo))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("failed to alloc semi info", K(ret));
     } else if (OB_FALSE_IT(info = new(info)SubPlanInfo(query_ref, logical_plan, is_initplan))) {
     } else if (OB_FAIL(add_subplan(info))) {
       LOG_WARN("failed to add sp params to rel", K(ret));
