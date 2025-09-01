@@ -953,9 +953,7 @@ int ObPluginVectorIndexLoadScheduler::log_tablets_need_memdata_sync(ObPluginVect
 
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (!need_submit_log) {
-    // do nothing
-  } else if (is_leader_) {
+  } else if (need_submit_log) {
     if (need_refresh_) {
       if (OB_FAIL(mgr->get_mem_sync_info().add_task_to_waiting_map(mgr->get_complete_adapter_map()))) {
         TRANS_LOG(WARN, "fail to add complete adaptor to waiting map",KR(ret), K(tenant_id_));
