@@ -2276,8 +2276,7 @@ int ObLogicalOperator::check_need_pushdown_expr(const uint64_t producer_id,
     // do nothing
   } else if (child_.empty()) {
     // do nothing
-  } else if (ObLogOpType::LOG_GROUP_BY == get_type() ||
-             ObLogOpType::LOG_SORT == get_type() ||
+  } else if (ObLogOpType::LOG_SORT == get_type() ||
              ObLogOpType::LOG_JOIN == get_type() ||
              ObLogOpType::LOG_DISTINCT == get_type() ||
              ObLogOpType::LOG_UPDATE == get_type() ||
@@ -2289,6 +2288,12 @@ int ObLogicalOperator::check_need_pushdown_expr(const uint64_t producer_id,
              ObLogOpType::LOG_COUNT == get_type() ||
              ObLogOpType::LOG_MERGE == get_type()) {
     need_pushdown = true;
+  } else if (ObLogOpType::LOG_GROUP_BY == get_type()) {
+    /**
+    * Select expr should not be calculated before scalar group by.
+    * The result might be different if the input is empty.
+    */
+    need_pushdown = static_cast<ObLogGroupBy *>(this)->get_algo() != SCALAR_AGGREGATE;
   }
   return ret;
 }
