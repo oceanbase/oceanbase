@@ -3867,9 +3867,9 @@ int ObLogicalOperator::check_sharding_compatible_with_reduce_expr(
   ObSEArray<ObRawExpr*, 4> part_exprs;
   ObSEArray<ObRawExpr*, 4> part_column_exprs;
   compatible = false;
-  bool is_groupby_with_hash_rollup =
+  bool is_groupby_from_expansion =
     dynamic_cast<const ObLogGroupBy *>(this) != nullptr
-    && static_cast<const ObLogGroupBy *>(this)->is_hash_rollup_groupby();
+    && static_cast<const ObLogGroupBy *>(this)->is_gby_from_expansion();
   if (NULL == strong_sharding_) {
     /*do nothing*/
   } else if (OB_FAIL(strong_sharding_->get_all_partition_keys(part_exprs, true))) {
@@ -3884,7 +3884,7 @@ int ObLogicalOperator::check_sharding_compatible_with_reduce_expr(
     /*do nothing*/
   } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(part_exprs,
                                                           part_column_exprs,
-                                                          is_groupby_with_hash_rollup))) {
+                                                          is_groupby_from_expansion))) {
     LOG_WARN("failed to extract column exprs", K(ret));
   } else if (ObOptimizerUtil::subset_exprs(part_column_exprs,
                                            reduce_exprs,
