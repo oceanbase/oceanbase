@@ -788,17 +788,6 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
         need_response_error = true;
         LOG_WARN("fail to execute trans ctrl cmd", KR(ret), K(sql));
       }
-
-      // 如果没有异步提交，且执行成功，则发送ok包给客户端
-      if (!async_resp_used && OB_SUCC(ret)) {
-        ObOKPParam ok_param;
-        ok_param.affected_rows_ = 0;
-        ok_param.is_partition_hit_ = session.partition_hit().get_bool();
-        ok_param.has_more_result_ = has_more_result;
-        if (OB_FAIL(send_ok_packet(session, ok_param))) {
-          LOG_WARN("fail to send ok packt", KR(ret), K(ok_param));
-        }
-      }
     }
 
     //注意: 在response_result接口调用后不要再使用sql_这个成员变量，这是因为sql_指向的内存来自于ObReqPacket
@@ -918,6 +907,17 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
   }
   bool is_need_retry = false;
   (void)ObSQLUtils::handle_audit_record(is_need_retry, EXECUTE_LOCAL, session, ctx_.is_sensitive_);
+
+  // 如果没有异步提交，且执行成功，则发送ok包给客户端
+  if (!async_resp_used && OB_SUCC(ret)) {
+    ObOKPParam ok_param;
+    ok_param.affected_rows_ = 0;
+    ok_param.is_partition_hit_ = session.partition_hit().get_bool();
+    ok_param.has_more_result_ = has_more_result;
+    if (OB_FAIL(send_ok_packet(session, ok_param))) {
+      LOG_WARN("fail to send ok packt", KR(ret), K(ok_param));
+    }
+  }
 
   return ret;
 }
