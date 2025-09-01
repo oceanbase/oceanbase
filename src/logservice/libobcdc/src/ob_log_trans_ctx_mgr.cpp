@@ -35,7 +35,7 @@ namespace oceanbase
 {
 namespace libobcdc
 {
-void ObLogTransCtxMgr::Scanner::operator() (const TenantTransID &tenant_trans_id, TransCtx *trans_ctx)
+bool ObLogTransCtxMgr::Scanner::operator() (const TenantTransID &tenant_trans_id, TransCtx *trans_ctx)
 {
   int ret = OB_SUCCESS;
 
@@ -91,6 +91,7 @@ void ObLogTransCtxMgr::Scanner::operator() (const TenantTransID &tenant_trans_id
 
     (void)trans_ctx->unlock();
   }
+  return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -113,17 +114,15 @@ ObLogTransCtxMgr::~ObLogTransCtxMgr()
   destroy();
 }
 
-int ObLogTransCtxMgr::init(const int64_t max_cached_trans_ctx_count,
-    const bool need_sort_participant)
+int ObLogTransCtxMgr::init(const bool need_sort_participant)
 {
   int ret = OB_SUCCESS;
+  const ObMemAttr attr(OB_SERVER_TENANT_ID, ObModIds::OB_LOG_TRANS_CTX);
 
   if (inited_) {
     ret = OB_INIT_TWICE;
-  } else if (max_cached_trans_ctx_count <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(map_.init(max_cached_trans_ctx_count, BLOCK_SIZE, ObModIds::OB_LOG_TRANS_CTX))) {
-    LOG_ERROR("init TransCtxMap fail", KR(ret), K(max_cached_trans_ctx_count));
+  } else if (OB_FAIL(map_.init(attr))) {
+    LOG_ERROR("init TransCtxMap fail", KR(ret));
   } else {
     inited_ = true;
 
@@ -169,19 +168,39 @@ int ObLogTransCtxMgr::get_trans_ctx(
   } else if (OB_UNLIKELY(!key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid trans_id", KR(ret), K(key));
-  } else if (OB_FAIL(map_.get(key, trans_ctx, enable_create))) {
+  } else if (OB_FAIL(map_.get(key, trans_ctx))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_ERROR("get TransCtx from map fail", KR(ret), K(key), K(enable_create));
-    }
-  } else {
-    if (enable_create) {
-      if (OB_FAIL(trans_ctx->init(this))) {
-        LOG_ERROR("trans_ctx init fail", KR(ret));
+    } else if (enable_create) {
+      // alloc -> init-> insert_and_get
+      // 1) OB_SUCCESS: do nothing
+      // 2) OB_ENTRY_EXIST: revert -> get
+      TransCtx *tmp_trans_ctx = nullptr;
+      if (OB_FAIL(map_.alloc_value(tmp_trans_ctx))) {
+        LOG_ERROR("alloc TransCtx fail", KR(ret), K(key), K(enable_create));
+      } else if (OB_ISNULL(tmp_trans_ctx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("tmp_trans_ctx is NULL", KR(ret), K(key), K(enable_create));
+      } else if (OB_FAIL(tmp_trans_ctx->init(this))) {
+        LOG_ERROR("tmp_trans_ctx init fail", KR(ret), K(key), K(enable_create));
+      } else if (OB_FAIL(map_.insert_and_get(key, tmp_trans_ctx))) {
+        if (OB_ENTRY_EXIST == ret) {
+          // TransCtx already created by other thread, free tmp_trans_ctx and get the existing one
+          tmp_trans_ctx->~TransCtx();
+          map_.free_value(tmp_trans_ctx);
+          tmp_trans_ctx = nullptr;
+          if (OB_FAIL(map_.get(key, trans_ctx))) {
+            LOG_ERROR("get TransCtx fail", KR(ret), K(key), K(enable_create));
+          }
+        } else {
+          LOG_ERROR("insert_and_get TransCtx fail", KR(ret), K(key), K(enable_create));
+        }
+      } else {
+        trans_ctx = tmp_trans_ctx;
       }
     }
-
-    TCTX_STAT_DEBUG("get_trans_ctx", K(key), K(trans_ctx));
   }
+  TCTX_STAT_DEBUG("get_trans_ctx", KR(ret), K(key), K(enable_create), KP(trans_ctx));
 
   return ret;
 }
@@ -195,13 +214,8 @@ int ObLogTransCtxMgr::revert_trans_ctx(TransCtx *trans_ctx)
     ret = OB_INVALID_ARGUMENT;
   } else {
     TCTX_STAT_DEBUG("revert_trans_ctx", "key", trans_ctx->get_trans_id(), K(trans_ctx));
-
-    if (OB_FAIL(map_.revert(trans_ctx))) {
-      LOG_ERROR("revert TransCtx fail", KR(ret), K(trans_ctx));
-    } else {
-      // succ
-      trans_ctx = NULL;
-    }
+    map_.revert(trans_ctx);
+    trans_ctx = nullptr;
   }
   return ret;
 }
@@ -219,7 +233,7 @@ int ObLogTransCtxMgr::remove_trans_ctx(const uint64_t tenant_id, const transacti
   } else {
     TCTX_STAT_DEBUG("remove_trans_ctx", K(key));
 
-    if (OB_FAIL(map_.remove(key))) {
+    if (OB_FAIL(map_.del(key))) {
       if (OB_ENTRY_NOT_EXIST != ret) {
         LOG_ERROR("remove TransCtx fail", KR(ret), K(key));
       }
@@ -295,8 +309,6 @@ void ObLogTransCtxMgr::print_stat_info()
       trans_count_[TransCtx::TRANS_CTX_STATE_DATA_READY],
       trans_count_[TransCtx::TRANS_CTX_STATE_COMMITTED],
       trans_count_[TransCtx::TRANS_CTX_STATE_PARTICIPANT_REVERTED]);
-
-  map_.print_state(STAT_STR);
 }
 
 int64_t ObLogTransCtxMgr::get_trans_count(const int trans_ctx_state) const
