@@ -156,6 +156,7 @@ large_query_threshold
 large_query_worker_percentage
 leak_mod_to_check
 lease_time
+load_vector_index_on_follower
 lob_enable_block_cache_threshold
 local_ip
 location_cache_cpu_quota
@@ -313,6 +314,7 @@ user_row_cache_priority
 use_ipv6
 use_large_pages
 utl_file_open_max
+vector_index_memory_saving_mode
 vector_index_optimize_duty_time
 virtual_table_location_cache_expire_time
 weak_read_version_refresh_interval

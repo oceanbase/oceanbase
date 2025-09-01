@@ -2505,6 +2505,12 @@ DEF_INT(ob_vector_memory_limit_percentage, OB_TENANT_PARAMETER, "0",
         "Used to control the upper limit percentage of memory resources that the vector_index module can use. Range:[0, 100)."
         "The system will adjust automatically if ob_vector_memory_limit_percentage set to 0(by default).",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(vector_index_memory_saving_mode, OB_TENANT_PARAMETER, "True",
+        "Specifies whether to enable the vector index memory saving mode. This can reduce the memory used by the partition table vector index rebuild.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(load_vector_index_on_follower, OB_TENANT_PARAMETER, "True",
+        "Specifies whether the follower automatically loads the memory vector index.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_STR_WITH_CHECKER(ob_storage_s3_url_encode_type, OB_CLUSTER_PARAMETER, "default",
                      common::ObConfigS3URLEncodeTypeChecker,
