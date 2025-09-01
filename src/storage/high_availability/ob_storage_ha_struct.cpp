@@ -406,7 +406,7 @@ int ObMigrationStatusHelper::set_ls_migrate_gc_status_(
     LOG_WARN("failed to set migration status", K(ret));
   } else if (!allow_gc) {
     LOG_INFO("ls is not allow gc", K(ret), K(ls));
-  } else if (OB_FAIL(ls.get_log_handler()->disable_sync())) {
+  } else if (!ls.get_log_handler()->is_in_stop_state() && OB_FAIL(ls.get_log_handler()->disable_sync())) {
     LOG_WARN("failed to disable replay", K(ret));
   }
   return ret;

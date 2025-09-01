@@ -50,7 +50,7 @@ public:
                                                      const char *reason);
   int change_leader_to(const common::ObAddr &dst_addr);
   int get_role_atomically(common::ObRole &role) const;
-
+  bool is_in_stop_state() const;
 protected:
   // @brief query role and proposal_id from ObLogHandler or ObLogRestoreHandler
   // @param[out], role:
