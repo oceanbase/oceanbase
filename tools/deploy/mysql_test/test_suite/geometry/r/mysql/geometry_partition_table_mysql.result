@@ -10,10 +10,10 @@ Query Plan
 ======================================================================
 |ID|OPERATOR                 |NAME             |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------
-|0 |PX COORDINATOR           |                 |1       |372         |
-|1 |└─EXCHANGE OUT DISTR     |:EX10000         |1       |372         |
-|2 |  └─PX PARTITION ITERATOR|                 |1       |370         |
-|3 |    └─TABLE RANGE SCAN   |partition_t1(idx)|1       |370         |
+|0 |PX COORDINATOR           |                 |1       |289         |
+|1 |└─EXCHANGE OUT DISTR     |:EX10000         |1       |289         |
+|2 |  └─PX PARTITION ITERATOR|                 |1       |288         |
+|3 |    └─TABLE RANGE SCAN   |partition_t1(idx)|1       |288         |
 ======================================================================
 Outputs & filters:
 -------------------------------------
@@ -61,10 +61,10 @@ Query Plan
 =============================================================
 |ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |PX COORDINATOR           |        |1       |372         |
-|1 |└─EXCHANGE OUT DISTR     |:EX10000|1       |372         |
-|2 |  └─PX PARTITION ITERATOR|        |1       |370         |
-|3 |    └─TABLE RANGE SCAN   |t1(idx) |1       |370         |
+|0 |PX COORDINATOR           |        |1       |289         |
+|1 |└─EXCHANGE OUT DISTR     |:EX10000|1       |289         |
+|2 |  └─PX PARTITION ITERATOR|        |1       |288         |
+|3 |    └─TABLE RANGE SCAN   |t1(idx) |1       |288         |
 =============================================================
 Outputs & filters:
 -------------------------------------
@@ -177,12 +177,12 @@ Query Plan
 ========================================================================================
 |ID|OPERATOR                     |NAME                           |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------------------
-|0 |SCALAR GROUP BY              |                               |1       |32366       |
-|1 |└─PX COORDINATOR             |                               |1       |32366       |
-|2 |  └─EXCHANGE OUT DISTR       |:EX10000                       |1       |32366       |
-|3 |    └─MERGE GROUP BY         |                               |1       |32366       |
-|4 |      └─PX PARTITION ITERATOR|                               |1       |32365       |
-|5 |        └─TABLE RANGE SCAN   |geo_maxpt_coords_100y(geo_pwkt)|1       |32365       |
+|0 |SCALAR GROUP BY              |                               |1       |32284       |
+|1 |└─PX COORDINATOR             |                               |1       |32284       |
+|2 |  └─EXCHANGE OUT DISTR       |:EX10000                       |1       |32284       |
+|3 |    └─MERGE GROUP BY         |                               |1       |32284       |
+|4 |      └─PX PARTITION ITERATOR|                               |1       |32284       |
+|5 |        └─TABLE RANGE SCAN   |geo_maxpt_coords_100y(geo_pwkt)|1       |32284       |
 ========================================================================================
 Outputs & filters:
 -------------------------------------
@@ -216,12 +216,12 @@ Query Plan
 ========================================================================================
 |ID|OPERATOR                     |NAME                           |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------------------
-|0 |SCALAR GROUP BY              |                               |1       |32366       |
-|1 |└─PX COORDINATOR             |                               |1       |32366       |
-|2 |  └─EXCHANGE OUT DISTR       |:EX10000                       |1       |32366       |
-|3 |    └─MERGE GROUP BY         |                               |1       |32366       |
-|4 |      └─PX PARTITION ITERATOR|                               |1       |32365       |
-|5 |        └─TABLE RANGE SCAN   |geo_maxpt_coords_100y(geo_pwkt)|1       |32365       |
+|0 |SCALAR GROUP BY              |                               |1       |32284       |
+|1 |└─PX COORDINATOR             |                               |1       |32284       |
+|2 |  └─EXCHANGE OUT DISTR       |:EX10000                       |1       |32284       |
+|3 |    └─MERGE GROUP BY         |                               |1       |32284       |
+|4 |      └─PX PARTITION ITERATOR|                               |1       |32284       |
+|5 |        └─TABLE RANGE SCAN   |geo_maxpt_coords_100y(geo_pwkt)|1       |32284       |
 ========================================================================================
 Outputs & filters:
 -------------------------------------
@@ -255,12 +255,12 @@ Query Plan
 =====================================================================================
 |ID|OPERATOR                  |NAME                           |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------------------
-|0 |SCALAR GROUP BY           |                               |1       |10789       |
-|1 |└─PX COORDINATOR          |                               |1       |10789       |
-|2 |  └─EXCHANGE OUT DISTR    |:EX10000                       |1       |10789       |
-|3 |    └─MERGE GROUP BY      |                               |1       |10789       |
-|4 |      └─PX BLOCK ITERATOR |                               |1       |10789       |
-|5 |        └─TABLE RANGE SCAN|geo_maxpt_coords_100y(geo_pwkt)|1       |10789       |
+|0 |SCALAR GROUP BY           |                               |1       |10762       |
+|1 |└─PX COORDINATOR          |                               |1       |10762       |
+|2 |  └─EXCHANGE OUT DISTR    |:EX10000                       |1       |10762       |
+|3 |    └─MERGE GROUP BY      |                               |1       |10762       |
+|4 |      └─PX BLOCK ITERATOR |                               |1       |10762       |
+|5 |        └─TABLE RANGE SCAN|geo_maxpt_coords_100y(geo_pwkt)|1       |10762       |
 =====================================================================================
 Outputs & filters:
 -------------------------------------
@@ -293,8 +293,8 @@ Query Plan
 ===============================================================================
 |ID|OPERATOR          |NAME                             |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------------
-|0 |SCALAR GROUP BY   |                                 |1       |235         |
-|1 |└─TABLE RANGE SCAN|geo_maxpt_coords_100y_2(geo_pwkt)|1       |235         |
+|0 |SCALAR GROUP BY   |                                 |1       |154         |
+|1 |└─TABLE RANGE SCAN|geo_maxpt_coords_100y_2(geo_pwkt)|1       |154         |
 ===============================================================================
 Outputs & filters:
 -------------------------------------
@@ -321,8 +321,8 @@ Query Plan
 ===============================================================================
 |ID|OPERATOR          |NAME                             |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------------
-|0 |SCALAR GROUP BY   |                                 |1       |235         |
-|1 |└─TABLE RANGE SCAN|geo_maxpt_coords_100y_2(geo_pwkt)|1       |235         |
+|0 |SCALAR GROUP BY   |                                 |1       |154         |
+|1 |└─TABLE RANGE SCAN|geo_maxpt_coords_100y_2(geo_pwkt)|1       |154         |
 ===============================================================================
 Outputs & filters:
 -------------------------------------
@@ -349,8 +349,8 @@ Query Plan
 ===============================================================================
 |ID|OPERATOR          |NAME                             |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------------
-|0 |SCALAR GROUP BY   |                                 |1       |235         |
-|1 |└─TABLE RANGE SCAN|geo_maxpt_coords_100y_2(geo_pwkt)|1       |235         |
+|0 |SCALAR GROUP BY   |                                 |1       |154         |
+|1 |└─TABLE RANGE SCAN|geo_maxpt_coords_100y_2(geo_pwkt)|1       |154         |
 ===============================================================================
 Outputs & filters:
 -------------------------------------
@@ -396,10 +396,10 @@ Query Plan
 ====================================================================
 |ID|OPERATOR                 |NAME           |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------------
-|0 |PX COORDINATOR           |               |1       |502         |
-|1 |└─EXCHANGE OUT DISTR     |:EX10000       |1       |502         |
-|2 |  └─PX PARTITION ITERATOR|               |1       |500         |
-|3 |    └─TABLE RANGE SCAN   |ptgeom1(pgidx1)|1       |500         |
+|0 |PX COORDINATOR           |               |1       |419         |
+|1 |└─EXCHANGE OUT DISTR     |:EX10000       |1       |419         |
+|2 |  └─PX PARTITION ITERATOR|               |1       |418         |
+|3 |    └─TABLE RANGE SCAN   |ptgeom1(pgidx1)|1       |418         |
 ====================================================================
 Outputs & filters:
 -------------------------------------
@@ -449,7 +449,7 @@ Query Plan
 =======================================================================
 |ID|OPERATOR        |NAME                       |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------
-|0 |TABLE RANGE SCAN|group_change_info(idx_geom)|1       |196         |
+|0 |TABLE RANGE SCAN|group_change_info(idx_geom)|1       |147         |
 =======================================================================
 Outputs & filters:
 -------------------------------------
@@ -483,7 +483,7 @@ Query Plan
 =======================================================================
 |ID|OPERATOR        |NAME                       |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------
-|0 |TABLE RANGE SCAN|group_change_info(idx_geom)|1       |170         |
+|0 |TABLE RANGE SCAN|group_change_info(idx_geom)|1       |140         |
 =======================================================================
 Outputs & filters:
 -------------------------------------
@@ -517,7 +517,7 @@ Query Plan
 =======================================================================
 |ID|OPERATOR        |NAME                       |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------
-|0 |TABLE RANGE SCAN|group_change_info(idx_geom)|1       |169         |
+|0 |TABLE RANGE SCAN|group_change_info(idx_geom)|1       |140         |
 =======================================================================
 Outputs & filters:
 -------------------------------------
@@ -551,7 +551,7 @@ Query Plan
 =======================================================================
 |ID|OPERATOR        |NAME                       |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------
-|0 |TABLE RANGE SCAN|group_change_info(idx_geom)|1       |169         |
+|0 |TABLE RANGE SCAN|group_change_info(idx_geom)|1       |140         |
 =======================================================================
 Outputs & filters:
 -------------------------------------

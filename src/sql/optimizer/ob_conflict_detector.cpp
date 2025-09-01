@@ -1834,7 +1834,7 @@ int ObConflictDetectorGenerator::push_back_join_cond_if_needed(ObIArray<ObRawExp
   int ret = OB_SUCCESS;
   if (OB_ISNULL(query_ctx_) || OB_ISNULL(cond)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(query_ctx_), K(cond));
+    LOG_WARN("get unexpected null", K(ret), K(query_ctx_), K(cond));
   } else if (query_ctx_->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP7, COMPAT_VERSION_4_3_0,
                                                   COMPAT_VERSION_4_3_5_BP4)
              && ObOptimizerUtil::find_item(new_or_quals_, cond)) {
