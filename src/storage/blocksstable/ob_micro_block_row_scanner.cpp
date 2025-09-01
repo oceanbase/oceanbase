@@ -938,8 +938,8 @@ int ObIMicroBlockRowScanner::filter_micro_block_in_blockscan(sql::PushdownFilter
       }
     }
     if (OB_SUCC(ret)) {
-      int64_t bitmap_cnt = pd_filter_info.filter_->get_result()->size();
-      int64_t select_cnt = pd_filter_info.filter_->get_result()->popcnt();
+      const int64_t bitmap_cnt = use_private_bitmap_ ? filter_bitmap_->size() : pd_filter_info.filter_->get_result()->size();
+      const int64_t select_cnt = use_private_bitmap_ ? filter_bitmap_->popcnt() : pd_filter_info.filter_->get_result()->popcnt();
       EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, bitmap_cnt - select_cnt);
     }
   }
