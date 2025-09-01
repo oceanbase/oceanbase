@@ -244,6 +244,7 @@ int ObJsonDataFlatter::init(const ObSemiStructSubSchema& sub_schema, ObArray<ObC
   sub_schema_ = &sub_schema;
   sub_col_datums_ = &sub_col_datums;
   if (sub_col_datums.count() != sub_schema.get_store_column_count()) {
+    ret = OB_SEMISTRUCT_SCHEMA_NOT_MATCH;
     LOG_WARN("sub column count is not match", K(ret),
       "sub_col_datum_count", sub_col_datums.count(), "sub_col_count", sub_schema.get_store_column_count());
   }
