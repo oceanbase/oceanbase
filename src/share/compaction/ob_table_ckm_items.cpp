@@ -681,17 +681,23 @@ int ObTableCkmItems::check_schema_change_after_major_freeze(
     } else {
       LOG_WARN("fail to get table schema", KR(ret), K(index_ckm));
     }
-  } else if (old_table_schema->get_partition_num() != data_ckm.tablet_pairs_.count()) {
-    FLOG_INFO("[IGNORE CHECKSUM_ERROR] partition num changed in data table", KR(ret),
-      "old_partition_num", old_table_schema->get_partition_num(),
-      "new_partition_num", data_ckm.tablet_pairs_.count(),
-      K(data_ckm));
-#ifdef ERRSIM
-    SERVER_EVENT_SYNC_ADD("merge_errsim", "ignore_checksum_error", K(tenant_id), "reason", "partition_num_changed");
-#endif
   } else {
-    ret = OB_CHECKSUM_ERROR;
-    LOG_WARN("schema not changed after major freeze", KR(ret), K(data_ckm), K(index_ckm));
+    const int64_t old_part_num = old_table_schema->get_all_part_num();
+    if (OB_UNLIKELY(-1 == old_part_num)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("get_all_part_num returned unexpected value", KR(ret), K(old_part_num), K(data_ckm));
+    } else if (old_part_num != data_ckm.tablet_pairs_.count()) {
+      FLOG_INFO("[IGNORE CHECKSUM_ERROR] partition num changed in data table", KR(ret),
+        "old_partition_num", old_part_num,
+        "new_partition_num", data_ckm.tablet_pairs_.count(),
+        K(data_ckm));
+#ifdef ERRSIM
+      SERVER_EVENT_SYNC_ADD("merge_errsim", "ignore_checksum_error", K(tenant_id), "reason", "partition_num_changed");
+#endif
+    } else {
+      ret = OB_CHECKSUM_ERROR;
+      LOG_WARN("schema not changed after major freeze", KR(ret), K(data_ckm), K(index_ckm));
+    }
   }
   return ret;
 }
