@@ -2640,6 +2640,9 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
         } else if (OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_3)
                   && OB_FAIL(index_dim.add_sharding_info_dim(index_info_entry->get_sharding_info(),
                                                              is_get && 1 == range_cnt,
+                                                             index_info_entry->is_index_global(),
+                                                             is_index_back,
+                                                             can_extract_range,
                                                              *allocator_))) {
           LOG_WARN("add partition num dimension failed");
         } else {
@@ -2724,7 +2727,7 @@ int ObJoinOrder::skyline_prunning_index(const uint64_t table_id,
                                             *index_dim, index_info_cache,
                                             restrict_infos,
                                             use_unique_index,
-                                            use_unique_index, /*ignore intersting order*/
+                                            use_unique_index, /*ignore interesting order*/
                                             ignore_index_back_dim))) {
         LOG_WARN("Failed to cal dimension info", K(ret), "index_id", candidate_index_ids, K(i));
       } else if (stmt->has_vec_approx()) {
