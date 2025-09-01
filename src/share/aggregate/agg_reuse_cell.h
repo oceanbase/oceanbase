@@ -94,16 +94,20 @@ struct ReuseAggCell<T_FUN_APPROX_COUNT_DISTINCT>
   static int restore(const RuntimeContext &agg_ctx, const int64_t agg_col_id, char *agg_row, void *store_v)
   {
     int ret = OB_SUCCESS;
-    constexpr int64_t llc_num_buckets =
-      ApproxCountDistinct<T_FUN_APPROX_COUNT_DISTINCT, VEC_TC_INTEGER,
-                          VEC_TC_INTEGER>::LLC_NUM_BUCKETS;
-    StoredValue *store = reinterpret_cast<StoredValue *>(store_v);
-    char *agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_id, agg_row);
-    int cell_len = agg_ctx.row_meta().get_cell_len(agg_col_id, agg_row);
-    *reinterpret_cast<const char **>(agg_cell + cell_len) = store->bucket_buf_;
-    NotNullBitVector &not_nulls = agg_ctx.row_meta().locate_notnulls_bitmap(agg_row);
-    if (not_nulls.at(agg_col_id) && store->bucket_buf_ != nullptr) {
-      MEMSET(const_cast<char *>(store->bucket_buf_), 0, llc_num_buckets);
+    ObExpr *agg_expr = agg_ctx.aggr_infos_.at(agg_col_id).expr_;
+    int64_t llc_num_buckets = ObAggrInfo::get_approx_cnt_llc_buck_num(agg_expr->extra_);
+    if (OB_UNLIKELY(!ObExprEstimateNdv::llc_is_num_buckets_valid(llc_num_buckets))) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_LOG(WARN, "invalid llc buckets number", K(ret));
+    } else {
+      StoredValue *store = reinterpret_cast<StoredValue *>(store_v);
+      char *agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_id, agg_row);
+      int cell_len = agg_ctx.row_meta().get_cell_len(agg_col_id, agg_row);
+      *reinterpret_cast<const char **>(agg_cell + cell_len) = store->bucket_buf_;
+      NotNullBitVector &not_nulls = agg_ctx.row_meta().locate_notnulls_bitmap(agg_row);
+      if (store->bucket_buf_ != nullptr) {
+        MEMSET(const_cast<char *>(store->bucket_buf_), 0, llc_num_buckets);
+      }
     }
     return ret;
   }
@@ -129,16 +133,20 @@ struct ReuseAggCell<T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS>
   }
   static int restore(const RuntimeContext &agg_ctx, const int64_t agg_col_id, char *agg_row, void *store_v)
   {
-    constexpr int64_t llc_num_buckets =
-      ApproxCountDistinct<T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS, VEC_TC_INTEGER,
-                          VEC_TC_STRING>::LLC_NUM_BUCKETS;
     int ret = OB_SUCCESS;
-    char *agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_id, agg_row);
-    StoredValue *store = reinterpret_cast<StoredValue *>(store_v);
-    *reinterpret_cast<const char **>(agg_cell) = store->res_buf_;
-    NotNullBitVector &not_nulls = agg_ctx.row_meta().locate_notnulls_bitmap(agg_row);
-    if (not_nulls.at(agg_col_id) && store->res_buf_ != nullptr) {
-      MEMSET(const_cast<char *>(store->res_buf_), 0, llc_num_buckets);
+    ObExpr *agg_expr = agg_ctx.aggr_infos_.at(agg_col_id).expr_;
+    int64_t llc_num_buckets = ObAggrInfo::get_approx_cnt_llc_buck_num(agg_expr->extra_);
+    if (OB_UNLIKELY(!ObExprEstimateNdv::llc_is_num_buckets_valid(llc_num_buckets))) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_LOG(WARN, "invalid llc buckets number", K(ret));
+    } else {
+      char *agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_id, agg_row);
+      StoredValue *store = reinterpret_cast<StoredValue *>(store_v);
+      *reinterpret_cast<const char **>(agg_cell) = store->res_buf_;
+      NotNullBitVector &not_nulls = agg_ctx.row_meta().locate_notnulls_bitmap(agg_row);
+      if (store->res_buf_ != nullptr) {
+        MEMSET(const_cast<char *>(store->res_buf_), 0, llc_num_buckets);
+      }
     }
     return ret;
   }

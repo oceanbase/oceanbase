@@ -65,6 +65,7 @@ int ObCodeGenerator::generate_exprs(const ObLogPlan &log_plan,
         min_cluster_version_);
     // init ctx for operator cg
     expr_cg.set_batch_size(phy_plan.get_batch_size());
+    expr_cg.set_log_plan(&log_plan);
     if (OB_FAIL(expr_cg.generate(log_plan.get_optimizer_context().get_all_exprs(),
                                  phy_plan.get_expr_frame_info()))) {
       LOG_WARN("fail to generate expr", K(ret));

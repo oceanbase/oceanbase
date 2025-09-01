@@ -2760,3 +2760,7 @@ DEF_INT_WITH_CHECKER(_hnsw_max_scan_vectors, OB_TENANT_PARAMETER, "20000",
 DEF_BOOL(_enable_sql_ccl_rule, OB_TENANT_PARAMETER, "True",
          "Enable or disable sql ccl rule.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(approx_count_distinct_precision, OB_TENANT_PARAMETER, "10", "[4, 16]",
+        "specify the result accuracy of approx_count_distinct",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

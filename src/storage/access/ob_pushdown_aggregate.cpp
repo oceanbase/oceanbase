@@ -1177,7 +1177,8 @@ int ObHyperLogLogAggCell::init(const bool is_group_by, sql::ObEvalCtx *eval_ctx)
     LOG_WARN("Failed to alloc memory for hyperloglog calculator", K(ret));
   } else {
     ndv_calculator_ = new (buf) ObHyperLogLogCalculator();
-    if (OB_FAIL(ndv_calculator_->init(&allocator_, LLC_BUCKET_BITS))) {
+    if (OB_FAIL(ndv_calculator_->init(
+          &allocator_, ObAggrInfo::get_valid_approx_cnt_prec(basic_info_.agg_expr_->extra_)))) {
       LOG_WARN("Failed to init ndv calculator", K(ret));
     } else {
       hash_func_ = basic_info_.agg_expr_->args_[0]->basic_funcs_->murmur_hash_;
