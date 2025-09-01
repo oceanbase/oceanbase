@@ -3682,7 +3682,7 @@ int ObExprRangeConverter::convert_domain_expr(const ObRawExpr *domain_expr,
                                             range_node))) {
         LOG_WARN("failed to get geo range node", K(ret));
       } else {
-        ctx_.cur_is_precise_ = false;
+        ctx_.cur_is_precise_ = op_type == ObDomainOpType::T_JSON_MEMBER_OF;
       }
     }
   }
