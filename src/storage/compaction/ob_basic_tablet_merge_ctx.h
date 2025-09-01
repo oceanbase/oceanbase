@@ -240,6 +240,7 @@ public:
   int generate_participant_table_info(PartTableInfo &info) const;
   int generate_macro_id_list(char *buf, const int64_t buf_len, const blocksstable::ObSSTable *&sstable) const;
   void generator_mds_filter_info(ObMergeStaticInfo &static_info) const;
+  int swap_tablet();
   /* GET FUNC */
   #define CTX_DEFINE_FUNC(var_type, param, var_name) \
     OB_INLINE var_type get_##var_name() const { return param. var_name##_; }
@@ -331,7 +332,6 @@ protected:
   }
   virtual void after_update_tablet_for_major();
   virtual int collect_running_info() = 0;
-  int swap_tablet();
   int prepare_from_medium_compaction_info(const ObMediumCompactionInfo *medium_info); // for major
   int swap_tablet(ObGetMergeTablesResult &get_merge_table_result); // for major
   int get_meta_compaction_info(); // for meta major

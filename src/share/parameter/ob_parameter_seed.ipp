@@ -1174,7 +1174,7 @@ DEF_BOOL(_ob_enable_fast_freeze, OB_TENANT_PARAMETER, "True",
          "specifies whether the tenant's fast freeze is enabled"
          "Value: True:turned on;  False: turned off",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(_enable_adaptive_merge_schedule, OB_TENANT_PARAMETER, "False",
+DEF_BOOL(_enable_adaptive_merge_schedule, OB_TENANT_PARAMETER, "True",
          "specifies whether the tenant's adaptive merge scheduling is enabled"
          "Value: True:turned on;  False: turned off",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

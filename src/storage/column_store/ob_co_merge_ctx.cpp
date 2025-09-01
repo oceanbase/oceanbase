@@ -21,6 +21,7 @@ namespace oceanbase
 {
 namespace compaction
 {
+ERRSIM_POINT_DEF(EN_CO_MERGE_WITH_MINOR);
 ObCOTabletMergeCtx::ObCOTabletMergeCtx(
     ObCOMergeDagNet &dag_net,
     ObTabletMergeDagParam &param,
@@ -91,6 +92,12 @@ int ObCOTabletMergeCtx::schedule_minor_errsim(bool &schedule_minor) const
   SCHEDULE_MINOR_ERRSIM(EN_SWAP_TABLET_IN_COMPACTION);
   SCHEDULE_MINOR_ERRSIM(EN_COMPACTION_SCHEDULE_MINOR_FAIL);
   SCHEDULE_MINOR_ERRSIM(EN_COMPACTION_CO_MERGE_SCHEDULE_FAILED);
+
+  if (EN_CO_MERGE_WITH_MINOR) {
+    STORAGE_LOG(INFO, "ERRSIM EN_CO_MERGE_WITH_MINOR");
+    SERVER_EVENT_SYNC_ADD("merge_errsim", "co_merge_with_minor", "ret_code", ret);
+    schedule_minor = get_tables_handle().get_count() > 1;
+  }
 #endif
   return ret;
 }
