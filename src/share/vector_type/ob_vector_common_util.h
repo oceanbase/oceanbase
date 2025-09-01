@@ -142,8 +142,9 @@ struct ObCentersBuffer
   explicit ObCentersBuffer()
     : dim_(0),
       total_cnt_(0),
+      capacity_(0),
       ivf_build_mem_ctx_(nullptr),
-      vectors_()
+      vectors_(nullptr)
   {}
   ~ObCentersBuffer() { destroy(); }
   int init(const int64_t dim, const int64_t capacity, ObIvfMemContext &ivf_build_mem_ctx);
@@ -151,7 +152,7 @@ struct ObCentersBuffer
 
   T* at(const int64_t idx)
   {
-    return vectors_.at(idx);
+    return vectors_ + idx * dim_;
   }
   int push_back(const int64_t dim, T *vector);
   int add(const int64_t idx, const int64_t dim, T *vector);
@@ -164,9 +165,9 @@ struct ObCentersBuffer
 
   int64_t dim_;
   int32_t total_cnt_;
+  int64_t capacity_;
   ObIvfMemContext *ivf_build_mem_ctx_; // from ObIvfBuildHelper, used for alloc memory for kmeans build process
-  // T *vectors_; // dim_ * capacity_
-  common::ObArrayWrap<T*> vectors_;
+  T *vectors_; // Continuous memory stores all vectors: capacity_ * dim_
 };
 
 class ObVectorClusterHelper
@@ -438,37 +439,15 @@ int ObCentersBuffer<T>::init(const int64_t dim, const int64_t capacity, ObIvfMem
     SHARE_LOG(WARN, "invalid argument", K(ret), K(dim), K(capacity));
   } else if (OB_FALSE_IT(ivf_build_mem_ctx_ = &ivf_build_mem_ctx)) {
   } else {
-    T **tmp_data = nullptr;
-    void *tmp_buf = nullptr;
-    int64_t size = capacity * sizeof(T *);
-    if (OB_ISNULL(tmp_buf = ivf_build_mem_ctx_->Allocate(size))) {
+    int64_t total_size = capacity * dim * sizeof(T);
+    if (OB_ISNULL(vectors_ = static_cast<T*>(ivf_build_mem_ctx_->Allocate(total_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      SHARE_LOG(WARN, "failed to alloc tmp_buf", K(ret), K(ivf_build_mem_ctx_->get_all_vsag_use_mem_byte()));
+      SHARE_LOG(WARN, "failed to alloc vectors memory", K(ret), K(total_size), K(ivf_build_mem_ctx_->get_all_vsag_use_mem_byte()));
     } else {
-      tmp_data = new (tmp_buf) T *[capacity];
-      common::ObArrayWrap<T*> tmp_vectors(tmp_data, capacity);
-      if (OB_FAIL(vectors_.assign(tmp_vectors))) {
-        SHARE_LOG(WARN, "failed to assign array", K(ret), K(dim), K(capacity));
-      } else {
-        memset(vectors_.get_data(), 0, vectors_.count() * sizeof(T *));
-        for (int64_t i = 0; OB_SUCC(ret) && i < capacity; ++i) {
-          T *vector = nullptr;
-          if (OB_ISNULL(vector = static_cast<T*>(ivf_build_mem_ctx_->Allocate(dim * sizeof(T))))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            SHARE_LOG(WARN, "failed to alloc memory", K(ret), K(dim), K(ivf_build_mem_ctx_->get_all_vsag_use_mem_byte()));
-          } else {
-            MEMSET(vector, 0, sizeof(T) * dim);
-            vectors_.at(i) = vector;
-          }
-        }
-        if (OB_SUCC(ret)) {
-          dim_ = dim;
-          total_cnt_ = 0;
-        } else {
-          // need release
-          destroy();
-        }
-      }
+      MEMSET(vectors_, 0, total_size);
+      dim_ = dim;
+      capacity_ = capacity;
+      total_cnt_ = 0;
     }
   }
   return ret;
@@ -477,49 +456,38 @@ int ObCentersBuffer<T>::init(const int64_t dim, const int64_t capacity, ObIvfMem
 template <typename T>
 void ObCentersBuffer<T>::destroy()
 {
-  if (OB_NOT_NULL(ivf_build_mem_ctx_)) {
-    for (int64_t i = 0; i < vectors_.count(); ++i) {
-      T *&vector = vectors_.at(i);
-      if (OB_NOT_NULL(vector)) {
-        ivf_build_mem_ctx_->Deallocate(vector);
-        vector = nullptr;
-      }
-    }
-    char *data = reinterpret_cast<char *>(vectors_.get_data());
-    if (OB_NOT_NULL(data)) {
-      vectors_.release_array();
-      ivf_build_mem_ctx_->Deallocate(data);
-    }
+  if (OB_NOT_NULL(ivf_build_mem_ctx_) && OB_NOT_NULL(vectors_)) {
+    ivf_build_mem_ctx_->Deallocate(vectors_);
+    vectors_ = nullptr;
   }
 
   dim_ = 0;
   total_cnt_ = 0;
+  capacity_ = 0;
   ivf_build_mem_ctx_ = nullptr;
 }
 
 template <typename T>
 void ObCentersBuffer<T>::clear()
 {
-  for (int64_t i = 0; i < vectors_.count(); ++i) {
-    T *vector = vectors_.at(i);
-    MEMSET(vector, 0, sizeof(T) * dim_);
+  if (OB_NOT_NULL(vectors_)) {
+    MEMSET(vectors_, 0, capacity_ * dim_ * sizeof(T));
   }
-  total_cnt_ = vectors_.count();
+  total_cnt_ = capacity_;
 }
 
 template <typename T>
 int ObCentersBuffer<T>::push_back(const int64_t dim, T *vector)
 {
   int ret = OB_SUCCESS;
-  const int64_t capacity = vectors_.count();
-  if (total_cnt_ >= capacity) {
+  if (total_cnt_ >= capacity_) {
     ret = OB_ERR_UNEXPECTED;
-    SHARE_LOG(WARN, "buffer full", K(ret), K(capacity));
+    SHARE_LOG(WARN, "buffer full", K(ret), K(capacity_));
   } else if (dim != dim_ || nullptr == vector) {
     ret = OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "invalid argument", K(ret), K(dim), KP(vector));
   } else {
-    T *raw_vector = vectors_.at(total_cnt_);
+    T *raw_vector = vectors_ + total_cnt_ * dim_;
     MEMCPY(raw_vector, vector, dim * sizeof(T));
     ++total_cnt_;
   }
@@ -534,7 +502,7 @@ int ObCentersBuffer<T>::add(const int64_t idx, const int64_t dim, T *vector)
     ret = OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "invalid argument", K(ret), K(dim), KP(vector), K(idx), K_(total_cnt));
   } else {
-    T *raw_vector = vectors_.at(idx);
+    T *raw_vector = vectors_ + idx * dim_;
     for (int64_t i = 0; i < dim_; ++i) {
       raw_vector[i] += vector[i];
     }
@@ -553,7 +521,7 @@ int ObCentersBuffer<T>::divide(const int64_t idx, const int64_t count)
     ret = OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "invalid argument", K(ret), K(idx), K(count), K_(total_cnt));
   } else {
-    T *raw_vector = vectors_.at(idx);
+    T *raw_vector = vectors_ + idx * dim_;
     for (int64_t i = 0; i < dim_; ++i) {
       raw_vector[i] /= count;
     }
