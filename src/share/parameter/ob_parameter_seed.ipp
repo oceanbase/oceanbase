@@ -2172,11 +2172,11 @@ DEF_STR_WITH_CHECKER(global_index_auto_split_policy, OB_TENANT_PARAMETER, "DISTR
 DEF_STR_WITH_CHECKER(global_index_auto_split_policy, OB_TENANT_PARAMETER, "ALL",
 #endif
          common::ObConfigGlobalIndexAutoSplitPolicyChecker,
-         "if the auto-partition clause is not used"
-         "this config judge whether to enable auto-partition for creating global index."\
+         "if the auto-partition clause is not used, "
+         "this config judge whether to enable auto-partition for global index."\
          "DISTRIBUTED: enable auto-partition for creating global index if tenant has multiple nodes, e.g., multiple primary zones or multiple units;"\
          "ALL: enable auto-partition for creating all global index;"\
-         "OFF: disable auto-partition for creating all global index.",
+         "OFF: disable auto-partition for all global index.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
          "DISTRIBUTED, ALL, OFF");
 DEF_INT(_inlist_rewrite_threshold, OB_TENANT_PARAMETER, "1000", "[1, 2147483647]"
