@@ -137,7 +137,7 @@ public:
                          const uint64_t parallel,
                          int64_t &baseline_affected);
   int load_baseline(ObSpmBaselineLoader &baseline_loader);
-  int purge_baselines(const uint64_t tenant_id, int64_t baseline_affected);
+  int purge_baselines(const uint64_t tenant_id, int64_t& baseline_affected);
   int check_evolution_task();
   int handle_spm_evo_record(const uint64_t tenant_id);
 private:
