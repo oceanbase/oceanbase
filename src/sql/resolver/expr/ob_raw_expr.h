@@ -2278,6 +2278,10 @@ public:
   { return may_add_interval_part_;}
   RuntimeFilterType get_runtime_filter_type() const { return extra_.runtime_filter_type_; }
   void set_runtime_filter_type(RuntimeFilterType type) { extra_.runtime_filter_type_ = type; }
+  inline bool is_runtime_filter() const
+  {
+    return RuntimeFilterType::NOT_INIT_RUNTIME_FILTER_TYPE != extra_.runtime_filter_type_;
+  }
   inline bool with_null_equal_cond() const { return extra_.with_null_equal_cond_; }
   inline void set_with_null_equal_cond(bool val) { extra_.with_null_equal_cond_ = val; }
   VIRTUAL_TO_STRING_KVP(N_ITEM_TYPE, type_,
