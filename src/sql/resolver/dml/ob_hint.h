@@ -640,6 +640,7 @@ struct ObTableInHint
   DECLARE_TO_STRING;
 
   common::ObString qb_name_;
+  common::ObString catalog_name_;
   common::ObString db_name_;
   common::ObString table_name_;
 };

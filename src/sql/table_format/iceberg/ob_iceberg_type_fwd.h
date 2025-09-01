@@ -43,7 +43,8 @@ class DataFile;
 enum class DataFileContent;
 enum class DataFileFormat
 {
-  AVRO = 0,
+  INVALID = 0,
+  AVRO,
   ORC,
   PARQUET,
   PUFFIN

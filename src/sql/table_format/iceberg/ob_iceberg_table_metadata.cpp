@@ -179,11 +179,30 @@ int ObIcebergTableMetadata::do_build_table_schema(share::schema::ObTableSchema *
     iceberg_table_schema->set_lake_table_format(share::ObLakeTableFormat::ICEBERG);
 
     ObExternalFileFormat format;
+    DataFileFormat default_write_format = DataFileFormat::INVALID;
+    if (OB_FAIL(table_metadata_.get_table_default_write_format(default_write_format))) {
+      LOG_WARN("get default.write.format failed", K(ret));
+    } else {
+      switch (default_write_format) {
+        case DataFileFormat::PARQUET:
+          format.format_type_ = ObExternalFileFormat::FormatType::PARQUET_FORMAT;
+          break;
+        case DataFileFormat::ORC:
+          format.format_type_ = ObExternalFileFormat::FormatType::ORC_FORMAT;
+          break;
+        default:
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("unsupported data file type", K(ret), K(default_write_format));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Unsupported data file type");
+          break;
+      }
+    }
+
     ObString format_str;
     ObArenaAllocator tmp_allocator;
-    format.format_type_ = ObExternalFileFormat::FormatType::ICEBERG_FORMAT;
-
-    if (OB_FAIL(format.to_string_with_alloc(format_str, tmp_allocator))) {
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(format.to_string_with_alloc(format_str, tmp_allocator))) {
       LOG_WARN("string alloc failed", K(ret));
     } else if (OB_FAIL(iceberg_table_schema->set_external_file_format(format_str))) {
       LOG_WARN("failed to set external file format", K(ret));

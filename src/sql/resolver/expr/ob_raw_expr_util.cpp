@@ -2188,7 +2188,13 @@ int ObRawExprUtils::build_generated_column_expr(const obrpc::ObCreateIndexArg *a
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObResolverUtils::resolve_external_table_column_def(expr_factory, session_info, q_name, real_exprs, expr, column_schema))) {
+      } else if (OB_FAIL(ObResolverUtils::resolve_external_table_column_def(expr_factory,
+                                                                            table_schema,
+                                                                            session_info,
+                                                                            q_name,
+                                                                            real_exprs,
+                                                                            expr,
+                                                                            column_schema))) {
         LOG_WARN("fail to resolve external table column def", K(ret));
       }
     } else {

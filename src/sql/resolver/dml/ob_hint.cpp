@@ -12,9 +12,11 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "ob_hint.h"
+
+#include "share/catalog/ob_catalog_utils.h"
+#include "sql/code_generator/ob_enable_rich_format_flags.h"
 #include "sql/optimizer/ob_log_plan.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
-#include "sql/code_generator/ob_enable_rich_format_flags.h"
 
 namespace oceanbase
 {
@@ -3085,6 +3087,7 @@ int ObTableInHint::assign(const ObTableInHint &other)
 {
   int ret = OB_SUCCESS;
   qb_name_ = other.qb_name_;
+  catalog_name_ = other.catalog_name_;
   db_name_ = other.db_name_;
   table_name_ = other.table_name_;
   return ret;
@@ -3093,6 +3096,7 @@ int ObTableInHint::assign(const ObTableInHint &other)
 bool ObTableInHint::equal(const ObTableInHint& other) const
 {
   return qb_name_.case_compare(other.qb_name_) == 0 &&
+         catalog_name_.case_compare(other.catalog_name_) == 0 &&
          db_name_.case_compare(other.db_name_) == 0 &&
          table_name_.case_compare(other.table_name_) == 0;
 }
@@ -3103,6 +3107,10 @@ DEF_TO_STRING(ObTableInHint)
   J_OBJ_START();
   if (!qb_name_.empty()) {
     J_KV(K_(qb_name));
+  }
+  if (!catalog_name_.empty()) {
+    J_KV(K_(catalog_name));
+    J_COMMA();
   }
   if (!db_name_.empty()) {
     J_KV(K_(db_name));
@@ -3140,6 +3148,9 @@ int ObTableInHint::print_table_in_hint(PlanText &plan_text,
   if (OB_UNLIKELY(table_name_.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get empty table name for table in hint", K(ret), K(table_name_));
+  } else if (!catalog_name_.empty()
+             && OB_FAIL(BUF_PRINTF("\"%.*s\".", catalog_name_.length(), catalog_name_.ptr()))) {
+    LOG_WARN("fail to print catalog_name", K(ret), K(catalog_name_), K(buf), K(buf_len), K(pos));
   } else if (!db_name_.empty() &&
              OB_FAIL(BUF_PRINTF("\"%.*s\".", db_name_.length(), db_name_.ptr()))) {
     LOG_WARN("fail to print db_name", K(ret), K(db_name_), K(buf), K(buf_len), K(pos));
@@ -3156,13 +3167,15 @@ int ObTableInHint::print_table_in_hint(PlanText &plan_text,
 bool ObTableInHint::is_match_table_item(ObCollationType cs_type, const TableItem &table_item) const
 {
   return 0 == ObCharset::strcmp(cs_type, table_name_, table_item.get_object_name()) &&
-         (db_name_.empty() || 0 == ObCharset::strcmp(cs_type, db_name_, table_item.get_object_db_name()));
+         (db_name_.empty() || 0 == ObCharset::strcmp(cs_type, db_name_, table_item.get_object_db_name())) &&
+         (catalog_name_.empty() || 0 == ObCharset::strcmp(cs_type, catalog_name_, table_item.get_catalog_name()));
 }
 
 bool ObTableInHint::is_match_physical_table_item(ObCollationType cs_type, const TableItem &table_item) const
 {
   return 0 == ObCharset::strcmp(cs_type, table_name_, table_item.table_name_) &&
-         (db_name_.empty() || 0 == ObCharset::strcmp(cs_type, db_name_, table_item.database_name_));
+         (db_name_.empty() || 0 == ObCharset::strcmp(cs_type, db_name_, table_item.database_name_)) &&
+         (catalog_name_.empty() || 0 == ObCharset::strcmp(cs_type, catalog_name_, table_item.get_catalog_name()));
 }
 
 bool ObTableInHint::is_match_table_item(ObCollationType cs_type,
@@ -3282,6 +3295,7 @@ bool ObTableInHint::is_match_table_items(ObCollationType cs_type,
 void ObTableInHint::set_table(const TableItem& table)
 {
   qb_name_.assign_ptr(table.qb_name_.ptr(), table.qb_name_.length());
+  catalog_name_.reset();
   db_name_.reset(); // for alias table or generated table, db_name_ should be empty
   if (!table.alias_name_.empty()) {
     table_name_.assign_ptr(table.alias_name_.ptr(), table.alias_name_.length());
@@ -3291,6 +3305,10 @@ void ObTableInHint::set_table(const TableItem& table)
   } else {
     table_name_.assign_ptr(table.table_name_.ptr(), table.table_name_.length());
     if (table.is_basic_table()) {
+      if (!ObCatalogUtils::is_internal_catalog_name(table.catalog_name_)) {
+        // 只有当外表的 catalog_name 才会拷贝，INTERNAL catalog_name 不拷贝，保持以往的兼容性
+        catalog_name_.assign_ptr(table.catalog_name_.ptr(), table.catalog_name_.length());
+      }
       db_name_.assign_ptr(table.database_name_.ptr(), table.database_name_.length());
     }
   }

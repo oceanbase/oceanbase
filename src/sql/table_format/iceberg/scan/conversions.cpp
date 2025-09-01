@@ -45,6 +45,10 @@ int Conversions::convert_statistics_binary_to_ob_obj(
   }
 
   if (OB_SUCC(ret)) {
+    // https://iceberg.apache.org/spec/#schema-evolution
+    // 需要考虑 schema evolution type promotion 情况
+    // 比如原本是 int，avro 写的 lower/upper bound 是 4 byte
+    // schema evolution 变成 long 后，老的 avro lower/upper bound 还是 4 bytes
     switch (ob_obj_type) {
       case ObTinyIntType: {
         // aka boolean
@@ -53,33 +57,70 @@ int Conversions::convert_statistics_binary_to_ob_obj(
       }
       case ObInt32Type: {
         // aka int
-        int32_t val
-            = boost::endian::endian_load<int32_t, sizeof(int32_t), boost::endian::order::little>(
-                reinterpret_cast<unsigned char const *>(binary.ptr()));
-        ob_obj.set_int32(val);
+        if (OB_UNLIKELY(binary.length() != sizeof(int32_t))) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid statistics bound", K(ret), K(binary));
+        } else {
+          int32_t val
+              = boost::endian::endian_load<int32_t, sizeof(int32_t), boost::endian::order::little>(
+                  reinterpret_cast<unsigned char const *>(binary.ptr()));
+          ob_obj.set_int32(val);
+        }
         break;
       }
       case ObIntType: {
         // aka long
-        int64_t val
-            = boost::endian::endian_load<int64_t, sizeof(int64_t), boost::endian::order::little>(
-                reinterpret_cast<unsigned char const *>(binary.ptr()));
-        ob_obj.set_int(val);
+        int64_t val = 0;
+        if (OB_UNLIKELY(binary.length() != sizeof(int32_t) && binary.length() != sizeof(int64_t))) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid statistics bound", K(ret), K(binary));
+        } else if (binary.length() == sizeof(int32_t)) {
+          // previous is int
+          int32_t tmp
+              = boost::endian::endian_load<int32_t, sizeof(int32_t), boost::endian::order::little>(
+                  reinterpret_cast<unsigned char const *>(binary.ptr()));
+          val = static_cast<int64_t>(tmp);
+        } else {
+          val = boost::endian::endian_load<int64_t, sizeof(int64_t), boost::endian::order::little>(
+              reinterpret_cast<unsigned char const *>(binary.ptr()));
+        }
+        if (OB_SUCC(ret)) {
+          ob_obj.set_int(val);
+        }
         break;
       }
       case ObFloatType: {
         // aka float
-        float val = boost::endian::endian_load<float, sizeof(float), boost::endian::order::little>(
-            reinterpret_cast<unsigned char const *>(binary.ptr()));
-        ob_obj.set_float(val);
+        if (OB_UNLIKELY(binary.length() != sizeof(float))) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid statistics bound", K(ret), K(binary));
+        } else {
+          float val
+              = boost::endian::endian_load<float, sizeof(float), boost::endian::order::little>(
+                  reinterpret_cast<unsigned char const *>(binary.ptr()));
+          ob_obj.set_float(val);
+        }
         break;
       }
       case ObDoubleType: {
         // aka double
-        double val
-            = boost::endian::endian_load<double, sizeof(double), boost::endian::order::little>(
-                reinterpret_cast<unsigned char const *>(binary.ptr()));
-        ob_obj.set_double(val);
+        double val = 0;
+        if (OB_UNLIKELY(binary.length() != sizeof(float) && binary.length() != sizeof(double))) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid statistics bound", K(ret), K(binary));
+        } else if (binary.length() == sizeof(float)) {
+          // previous is float
+          float tmp
+              = boost::endian::endian_load<float, sizeof(float), boost::endian::order::little>(
+                  reinterpret_cast<unsigned char const *>(binary.ptr()));
+          val = static_cast<double>(tmp);
+        } else {
+          val = boost::endian::endian_load<double, sizeof(double), boost::endian::order::little>(
+              reinterpret_cast<unsigned char const *>(binary.ptr()));
+        }
+        if (OB_SUCC(ret)) {
+          ob_obj.set_double(val);
+        }
         break;
       }
       case ObDecimalIntType: {
@@ -110,34 +151,55 @@ int Conversions::convert_statistics_binary_to_ob_obj(
       }
       case ObDateType: {
         // aka date
-        int32_t val
-            = boost::endian::endian_load<int32_t, sizeof(int32_t), boost::endian::order::little>(
-                reinterpret_cast<unsigned char const *>(binary.ptr()));
-        ob_obj.set_date(val);
+        if (OB_UNLIKELY(binary.length() != sizeof(int32_t))) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid statistics bound", K(ret), K(binary));
+        } else {
+          int32_t val
+              = boost::endian::endian_load<int32_t, sizeof(int32_t), boost::endian::order::little>(
+                  reinterpret_cast<unsigned char const *>(binary.ptr()));
+          ob_obj.set_date(val);
+        }
         break;
       }
       case ObTimeType: {
         // aka time
-        int64_t val
-            = boost::endian::endian_load<int64_t, sizeof(int64_t), boost::endian::order::little>(
-                reinterpret_cast<unsigned char const *>(binary.ptr()));
-        ob_obj.set_time(val);
+        if (OB_UNLIKELY(binary.length() != sizeof(int64_t))) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid statistics bound", K(ret), K(binary));
+        } else {
+          int64_t val
+              = boost::endian::endian_load<int64_t, sizeof(int64_t), boost::endian::order::little>(
+                  reinterpret_cast<unsigned char const *>(binary.ptr()));
+          ob_obj.set_time(val);
+        }
         break;
       }
       case ObDateTimeType: {
         // aka timestamp
-        int64_t val
-            = boost::endian::endian_load<int64_t, sizeof(int64_t), boost::endian::order::little>(
-                reinterpret_cast<unsigned char const *>(binary.ptr()));
-        ob_obj.set_datetime(val);
+        // todo: iceberg v3 spec 里面允许从 date -> timestamp，但是 spark
+        // 不行，所以这里也先不考虑这种情况
+        if (OB_UNLIKELY(binary.length() != sizeof(int64_t))) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid statistics bound", K(ret), K(binary));
+        } else {
+          int64_t val
+              = boost::endian::endian_load<int64_t, sizeof(int64_t), boost::endian::order::little>(
+                  reinterpret_cast<unsigned char const *>(binary.ptr()));
+          ob_obj.set_datetime(val);
+        }
         break;
       }
       case ObTimestampType: {
         // aka timestamp_tz
-        int64_t val
-            = boost::endian::endian_load<int64_t, sizeof(int64_t), boost::endian::order::little>(
-                reinterpret_cast<unsigned char const *>(binary.ptr()));
-        ob_obj.set_timestamp(val);
+        if (binary.length() != sizeof(int64_t)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid statistics bound", K(ret), K(binary));
+        } else {
+          int64_t val = boost::endian::endian_load<int64_t, sizeof(int64_t), boost::endian::order::little>(
+              reinterpret_cast<unsigned char const *>(binary.ptr()));
+          ob_obj.set_timestamp(val);
+        }
         break;
       }
       case ObVarcharType: {

@@ -846,7 +846,7 @@ public:
     const common::ObString &column_name,
     ObRawExpr *&expr);
 
-  static int build_file_row_expr_for_parquet(
+  static int build_file_row_expr_for_parquet_orc(
     ObRawExprFactory &expr_factory,
     const ObSQLSessionInfo &session_info,
     const uint64_t table_id,
@@ -867,14 +867,18 @@ public:
     ObRawExpr *&expr);
   //only used for DDL resolver, resolve a PSEUDO column expr for validation and printer not for execution
   static int resolve_external_table_column_def(ObRawExprFactory &expr_factory,
+                                               const ObTableSchema &external_table_schema,
                                                const ObSQLSessionInfo &session_info,
                                                const ObQualifiedName &q_name,
                                                common::ObIArray<ObRawExpr*> &real_exprs,
                                                ObRawExpr *&expr,
                                                const ObColumnSchemaV2 *gen_col_schema = NULL);
-  static bool is_external_file_column_name(const common::ObString &name);
   static bool is_external_pseudo_column_name(const common::ObString &name);
-  static ObExternalFileFormat::FormatType resolve_external_file_column_type(const common::ObString &name);
+  static bool check_external_pseudo_column_is_valid(
+      const ObExternalFileFormat::FormatType format_type,
+      const common::ObString &column_name);
+  static ObExternalFileFormat::FormatType deduce_external_file_format_from_pseudo_column_name(
+      const common::ObString &column_name);
   static int resolve_file_size_node(const ParseNode *file_size_node, int64_t &parse_int_value);
   static int resolve_varchar_file_size(const ParseNode *child, int64_t &parse_int_value);
   struct FileFormatContext {

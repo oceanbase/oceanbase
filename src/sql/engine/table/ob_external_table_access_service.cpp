@@ -590,7 +590,6 @@ int ObExternalTableAccessService::table_rescan(ObVTableScanParam &param, ObNewRo
     switch (param.external_file_format_.format_type_) {
       case ObExternalFileFormat::CSV_FORMAT:
       case ObExternalFileFormat::PARQUET_FORMAT:
-      case ObExternalFileFormat::ICEBERG_FORMAT:
       case ObExternalFileFormat::ORC_FORMAT:
         result->reset();
         break;

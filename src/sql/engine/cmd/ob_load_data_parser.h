@@ -1138,8 +1138,6 @@ struct ObExternalFileFormat
     ODPS_FORMAT,
     ORC_FORMAT,
     PLUGIN_FORMAT,
-    ICEBERG_FORMAT,
-    HIVE_FORMAT,
     MAX_FORMAT
   };
 

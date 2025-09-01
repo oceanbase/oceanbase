@@ -149,7 +149,7 @@ void ObOptIcebergFile::reset()
   file_url_.reset();
   file_size_ = 0;
   modification_time_ = 0;
-  file_format_ = iceberg::DataFileFormat::AVRO;
+  file_format_ = iceberg::DataFileFormat::INVALID;
   delete_files_.reset();
 }
 

@@ -42,8 +42,6 @@ const char * ObExternalFileFormat::FORMAT_TYPE_STR[] = {
   "ODPS",
   "ORC",
   "PLUGIN",
-  "ICEBERG",
-  "HIVE"
 };
 static_assert(array_elements(ObExternalFileFormat::FORMAT_TYPE_STR) == ObExternalFileFormat::MAX_FORMAT, "Not enough initializer for ObExternalFileFormat");
 
@@ -1200,9 +1198,6 @@ int ObExternalFileFormat::load_from_string_(const ObString &str, ObIAllocator &a
             OZ (plugin_format_.init(allocator));
             OZ (plugin_format_.load_from_json_node(format_type_node));
             break;
-          case ICEBERG_FORMAT:
-            // todo nothing
-            break;
           default:
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("invalid format type", K(ret), K(format_type_str));
@@ -1339,13 +1334,6 @@ int ObExternalFileFormat::mock_gen_column_def(
                                       N_EXTERNAL_FILE_ROW,
                                       column.get_column_name_str().length(),
                                       column.get_column_name_str().ptr()))) {
-        LOG_WARN("fail to append sql str", K(ret));
-      }
-      break;
-    }
-    case ICEBERG_FORMAT: {
-      int32_t field_id = iceberg::ObIcebergUtils::get_iceberg_field_id(column.get_column_id());
-      if (OB_FAIL(temp_str.append_fmt("%s%d", N_EXTERNAL_TABLE_COLUMN_ID, field_id))) {
         LOG_WARN("fail to append sql str", K(ret));
       }
       break;

@@ -10508,17 +10508,11 @@ int ObDMLResolver::resolve_external_table_generated_column(
                                             table_schema->get_external_file_format();
     if (OB_FAIL(format.load_from_string(table_format_or_properties, *params_.allocator_))) {
       LOG_WARN("load from string failed", K(ret));
-    }
-    if (OB_SUCC(ret) && format.format_type_ != ObResolverUtils::resolve_external_file_column_type(col.col_name_)) {
-      if (format.format_type_ == ObExternalFileFormat::ORC_FORMAT &&
-          ObExternalFileFormat::PARQUET_FORMAT != ObResolverUtils::resolve_external_file_column_type(col.col_name_)) {
-        ret = OB_WRONG_COLUMN_NAME;
-        LOG_WARN("wrong column name", K(format.format_type_));
-        LOG_USER_ERROR(OB_WRONG_COLUMN_NAME, col.col_name_.length(), col.col_name_.ptr());
-      }
-    }
-
-    if (OB_FAIL(ret)) {
+    } else if (!ObResolverUtils::check_external_pseudo_column_is_valid(format.format_type_,
+                                                                       col.col_name_)) {
+      ret = OB_WRONG_COLUMN_NAME;
+      LOG_WARN("wrong column name", K(format.format_type_));
+      LOG_USER_ERROR(OB_WRONG_COLUMN_NAME, col.col_name_.length(), col.col_name_.ptr());
     } else if (ObExternalFileFormat::CSV_FORMAT == format.format_type_) {
       if (OB_FAIL(ObResolverUtils::calc_file_column_idx(col.col_name_, file_column_idx))) {
         LOG_WARN("fail to calc file column idx", K(ret));

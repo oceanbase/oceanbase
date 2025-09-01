@@ -435,13 +435,12 @@ int Schema::set_column_properties_(schema::ObColumnSchemaV2 &column_schema)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator tmp_allocator;
-  sql::ObExternalFileFormat format;
-  format.format_type_ = sql::ObExternalFileFormat::ICEBERG_FORMAT;
-  ObString mock_gen_column_str;
-  if (OB_FAIL(format.mock_gen_column_def(column_schema, tmp_allocator, mock_gen_column_str))) {
-    LOG_WARN("fail to mock gen column def", K(ret));
+  ObSqlString temp_str;
+  int32_t field_id = iceberg::ObIcebergUtils::get_iceberg_field_id(column_schema.get_column_id());
+  if (OB_FAIL(temp_str.append_fmt("%s%d", N_EXTERNAL_TABLE_COLUMN_ID, field_id))) {
+    LOG_WARN("fail to append sql str", K(ret));
   } else if (OB_FAIL(
-                 ObDMLResolver::set_basic_column_properties(column_schema, mock_gen_column_str))) {
+                 ObDMLResolver::set_basic_column_properties(column_schema, temp_str.string()))) {
     LOG_WARN("fail to set properties for column", K(ret));
   } else {
     // reset properties from ObDMLResolver::set_basic_column_properties()

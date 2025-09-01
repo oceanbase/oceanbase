@@ -144,6 +144,8 @@ public:
   int get_current_snapshot(const Snapshot *&snapshot) const;
   int get_schema(int32_t schema_id, const Schema *&schema) const;
   int get_partition_spec(int32_t partition_spec_id, const PartitionSpec *&partition_spec) const;
+  int get_table_property(const char *table_property_key, ObString &value) const;
+  int get_table_default_write_format(DataFileFormat &data_file_format) const;
 
   static constexpr const char *FORMAT_VERSION = "format-version";
   static constexpr const char *TABLE_UUID = "table-uuid";
@@ -168,6 +170,11 @@ public:
   static constexpr const char *REFS = "refs";
   static constexpr const char *STATISTICS = "statistics";
   static constexpr const char *PARTITION_STATISTICS = "partition-statistics";
+
+
+  // Below is table properties
+  // https://iceberg.apache.org/docs/1.9.1/configuration/#table-properties
+  static constexpr const char *WRITE_FORMAT_DEFAULT = "write.format.default";
 
 private:
   int parse_schemas_(const ObJsonObject &json_object);

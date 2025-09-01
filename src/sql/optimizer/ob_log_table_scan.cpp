@@ -1156,9 +1156,9 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
         }
       } else if (get_plan()->get_optimizer_context().get_min_cluster_version()
                  >= CLUSTER_VERSION_4_4_1_0) {
-        if (external_table_type == ObExternalFileFormat::FormatType::ICEBERG_FORMAT ||
-            external_table_type == ObExternalFileFormat::FormatType::PARQUET_FORMAT ||
+        if (external_table_type == ObExternalFileFormat::FormatType::PARQUET_FORMAT ||
             external_table_type == ObExternalFileFormat::FormatType::ORC_FORMAT) {
+          // todo 后续要支持 iceberg(不同 datafile 类型的时候)，这里需要重新考虑
           need_dup_filter = false;
           // for iceberg, parquet and orc, we need to check if the filter need to be duplicated
           int64_t file_column_count = 0;

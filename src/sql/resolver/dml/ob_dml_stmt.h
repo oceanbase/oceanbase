@@ -287,6 +287,10 @@ struct TableItem
   {
     return synonym_name_.empty() ? database_name_ : synonym_db_name_;
   }
+  const common::ObString &get_catalog_name() const
+  {
+    return catalog_name_;
+  }
   // only can be used in resolve phase
   const TableItem &get_base_table_item() const
   {

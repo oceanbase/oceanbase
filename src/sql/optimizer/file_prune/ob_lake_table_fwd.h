@@ -92,7 +92,7 @@ public:
   ObOptIcebergFile()
   : ObIOptLakeTableFile(LakeFileType::ICEBERG),
     file_url_(), file_size_(0), modification_time_(0),
-    file_format_(iceberg::DataFileFormat::AVRO), delete_files_()
+    file_format_(iceberg::DataFileFormat::INVALID), delete_files_()
   {}
   virtual int assign(const ObIOptLakeTableFile &other) override;
   virtual void reset() override;
@@ -156,7 +156,7 @@ public:
   explicit ObIcebergFile(ObIAllocator &allocator)
   : ObILakeTableFile(allocator, LakeFileType::ICEBERG),
     file_url_(), file_size_(0), modification_time_(0),
-    file_format_(iceberg::DataFileFormat::AVRO), delete_files_(allocator)
+    file_format_(iceberg::DataFileFormat::INVALID), delete_files_(allocator)
   {}
   virtual int init_with_opt_lake_table_file(ObIAllocator &allocator, const ObIOptLakeTableFile &opt_table_file);
   VIRTUAL_TO_STRING_KV(K_(type), K_(file_url), K_(file_size), K_(modification_time), K_(delete_files));
