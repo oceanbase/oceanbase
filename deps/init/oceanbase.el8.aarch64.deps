@@ -35,7 +35,7 @@ devdeps-s3-cpp-sdk-1.11.156-102023122011.el8.aarch64.rpm
 devdeps-protobuf-c-1.5.1-100000052025032810.el8.aarch64.rpm
 devdeps-roaringbitmap-croaring-3.0.0-42024042816.el8.aarch64.rpm
 devdeps-apache-arrow-9.0.0-322024052923.el8.aarch64.rpm
-devdeps-vsag-1.1.0-142025062622.el8.aarch64.rpm
+devdeps-vsag-1.1.0-532025082110.el8.aarch64.rpm
 devdeps-apache-orc-1.8.8-32025011711.el8.aarch64.rpm
 devdeps-fast-float-6.1.3-42024112122.el8.aarch64.rpm
 devdeps-hdfs-sdk-3.3.6-112024123116.el8.aarch64.rpm
