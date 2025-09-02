@@ -8818,7 +8818,7 @@ Outputs & filters:
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   6 - output([1]), filter(nil)
       values({1})
-  7 - output([t4.a], [t4.b], [t4.c]), filter([1 = t4.a]), rowset=16
+  7 - output([t4.a], [t4.b], [t4.c]), filter([t4.a = 1]), rowset=16
       access([t4.a], [t4.b], [t4.c]), partitions(p1)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t4.__pk_increment]), range(MIN ; MAX)always true
@@ -9635,31 +9635,29 @@ Query Plan
 ---------------------------------------------------------------
 |0 |PX COORDINATOR             |        |1       |22          |
 |1 |└─EXCHANGE OUT DISTR       |:EX10000|1       |21          |
-|2 |  └─NESTED-LOOP OUTER JOIN |        |1       |20          |
-|3 |    ├─PX PARTITION ITERATOR|        |1       |19          |
-|4 |    │ └─TABLE FULL SCAN    |t1      |1       |19          |
-|5 |    └─MATERIAL             |        |1       |1           |
-|6 |      └─SUBPLAN SCAN       |t2      |1       |1           |
-|7 |        └─EXPRESSION       |        |1       |1           |
+|2 |  └─HASH RIGHT OUTER JOIN  |        |1       |20          |
+|3 |    ├─SUBPLAN SCAN         |t2      |1       |1           |
+|4 |    │ └─EXPRESSION         |        |1       |1           |
+|5 |    └─PX PARTITION ITERATOR|        |1       |19          |
+|6 |      └─TABLE FULL SCAN    |t1      |1       |19          |
 ===============================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t2.c1, t2.c2, t1.a, t1.b, t1.c)]), filter(nil), rowset=16
   1 - output([INTERNAL_FUNCTION(t2.c1, t2.c2, t1.a, t1.b, t1.c)]), filter(nil), rowset=16
       dop=1
-  2 - output([t1.a], [t1.b], [t1.c], [t2.c1], [t2.c2]), filter(nil), rowset=16
-      conds([1 = t1.a]), nl_params_(nil), use_batch=false
-  3 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
+  2 - output([t2.c1], [t1.a], [t2.c2], [t1.b], [t1.c]), filter(nil), rowset=16
+      equal_conds([t2.c1 = t1.a]), other_conds(nil)
+  3 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2])
+  4 - output([1], [1]), filter(nil)
+      values({1, 1})
+  5 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       force partition granule
-  4 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
+  6 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
-  5 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
-  6 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
-      access([t2.c1], [t2.c2])
-  7 - output([1], [1]), filter(nil)
-      values({1, 1})
 explain select * from (select 1 c1, 1 c2) t2 full join t1 on t2.c1 = t1.a;
 Query Plan
 =====================================================================
@@ -9724,31 +9722,29 @@ Query Plan
 ---------------------------------------------------------------
 |0 |PX COORDINATOR             |        |1       |22          |
 |1 |└─EXCHANGE OUT DISTR       |:EX10000|1       |21          |
-|2 |  └─NESTED-LOOP OUTER JOIN |        |1       |20          |
-|3 |    ├─PX PARTITION ITERATOR|        |1       |19          |
-|4 |    │ └─TABLE FULL SCAN    |t1      |1       |19          |
-|5 |    └─MATERIAL             |        |1       |1           |
-|6 |      └─SUBPLAN SCAN       |t2      |1       |1           |
-|7 |        └─EXPRESSION       |        |1       |1           |
+|2 |  └─HASH RIGHT OUTER JOIN  |        |1       |20          |
+|3 |    ├─SUBPLAN SCAN         |t2      |1       |1           |
+|4 |    │ └─EXPRESSION         |        |1       |1           |
+|5 |    └─PX PARTITION ITERATOR|        |1       |19          |
+|6 |      └─TABLE FULL SCAN    |t1      |1       |19          |
 ===============================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.c1, t2.c2)]), filter(nil), rowset=16
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.c1, t2.c2)]), filter(nil), rowset=16
       dop=1
-  2 - output([t1.a], [t1.b], [t1.c], [t2.c1], [t2.c2]), filter(nil), rowset=16
-      conds([1 = t1.a]), nl_params_(nil), use_batch=false
-  3 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
+  2 - output([t2.c1], [t1.a], [t2.c2], [t1.b], [t1.c]), filter(nil), rowset=16
+      equal_conds([t2.c1 = t1.a]), other_conds(nil)
+  3 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2])
+  4 - output([1], [1]), filter(nil)
+      values({1, 1})
+  5 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       force partition granule
-  4 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
+  6 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
-  5 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
-  6 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
-      access([t2.c1], [t2.c2])
-  7 - output([1], [1]), filter(nil)
-      values({1, 1})
 explain select * from t1 right join (select 1 c1, 1 c2) t2 on t2.c1 = t1.a;
 Query Plan
 =================================================================

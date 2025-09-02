@@ -401,6 +401,10 @@ int ObExprRangeConverter::gen_column_cmp_node(const ObRawExpr &l_expr,
   if (!is_range_key(column_expr->get_column_id(), key_idx) ||
       OB_UNLIKELY(!const_expr->is_const_expr())) {
     always_true = true;
+  } else if ((ctx_.column_flags_[key_idx] & RANGE_EXPR_EQUAL) != 0 &&
+              const_expr->has_flag(CNT_DYNAMIC_PARAM)) {
+    // Do not extract range for dynamic parameters when an equal range already exists for this column
+    always_true = true;
   } else if (OB_ISNULL(column_meta = get_column_meta(key_idx))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null column meta");
@@ -2651,16 +2655,20 @@ struct RangeExprCategoryCmp
     if (left != nullptr && right != nullptr) {
       int64_t l_catagory = ObExprRangeConverter::get_expr_category(left->get_expr_type());
       int64_t r_catagory = ObExprRangeConverter::get_expr_category(right->get_expr_type());
-      if (l_catagory == r_catagory &&
-          (l_catagory == RANGE_EXPR_IN ||
-           r_catagory == RANGE_EXPR_NOT_IN)) {
+      if (l_catagory != r_catagory) {
+        bret = l_catagory < r_catagory;
+      } else if (l_catagory == RANGE_EXPR_IN ||
+                 r_catagory == RANGE_EXPR_NOT_IN) {
         if (left->get_param_expr(1) != nullptr &
             right->get_param_expr(1) != nullptr) {
           bret = left->get_param_expr(1)->get_param_count() <
                  right->get_param_expr(1)->get_param_count();
         }
+      } else if (left->has_flag(CNT_DYNAMIC_PARAM) || right->has_flag(CNT_DYNAMIC_PARAM)) {
+        bret = !left->has_flag(CNT_DYNAMIC_PARAM) &&
+               right->has_flag(CNT_DYNAMIC_PARAM);
       } else {
-        bret = l_catagory < r_catagory;
+        bret = false;
       }
     }
     return bret;

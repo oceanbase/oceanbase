@@ -226,14 +226,14 @@ Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_COUNT(a.c1)], [T_FUN_SUM(b.d1 * b.d2 - a.c2)]), filter(nil), rowset=16
       group(nil), agg_func([T_FUN_COUNT(a.c1)], [T_FUN_SUM(b.d1 * b.d2 - a.c2)])
-  1 - output([b.d1], [b.d2], [a.c1], [a.c2]), filter(nil), rowset=16
+  1 - output([b.d1], [a.c1], [b.d2], [a.c2]), filter(nil), rowset=16
       equal_conds([b.d1 = c.c1], [d.c2 = c.c2]), other_conds(nil)
   2 - output([c.c1], [c.c2]), filter(nil), rowset=16
       access([c.c1], [c.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([c.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([b.d1], [b.d2], [a.c1], [d.c2], [a.c2]), filter(nil), rowset=16
-      equal_conds([b.d2 = a.c1]), other_conds(nil)
+  3 - output([b.d1], [a.c1], [b.d2], [d.c2], [a.c2]), filter(nil), rowset=16
+      equal_conds([a.c1 = b.d2]), other_conds(nil)
   4 - output([a.c1], [d.c2], [a.c2]), filter(nil), rowset=16
       equal_conds([d.c2 = a.c1]), other_conds(nil)
   5 - output([a.c1], [a.c2]), filter([a.c2 < 5]), rowset=16
@@ -309,8 +309,8 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |SCALAR GROUP BY            |    |1       |65          |
-|1 |└─HASH JOIN                |    |41      |64          |
+|0 |SCALAR GROUP BY            |    |1       |66          |
+|1 |└─HASH JOIN                |    |41      |65          |
 |2 |  ├─HASH JOIN              |    |14      |39          |
 |3 |  │ ├─HASH JOIN            |    |7       |24          |
 |4 |  │ │ ├─HASH JOIN          |    |5       |18          |
@@ -1052,8 +1052,8 @@ Query Plan
 =============================================================
 |ID|OPERATOR                     |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |SCALAR GROUP BY              |    |1       |70          |
-|1 |└─HASH JOIN                  |    |3       |70          |
+|0 |SCALAR GROUP BY              |    |1       |71          |
+|1 |└─HASH JOIN                  |    |3       |71          |
 |2 |  ├─HASH JOIN                |    |4       |64          |
 |3 |  │ ├─HASH JOIN              |    |11      |49          |
 |4 |  │ │ ├─TABLE FULL SCAN      |t9  |11      |5           |
@@ -1075,19 +1075,19 @@ Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_COUNT(*)], [T_FUN_SUM(t9.c1 - t5.c1 + t4.d2 - t1.c1)]), filter(nil), rowset=16
       group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(t9.c1 - t5.c1 + t4.d2 - t1.c1)])
-  1 - output([t1.c1], [t5.c1], [t9.c1], [t4.d2]), filter(nil), rowset=16
+  1 - output([t1.c1], [t5.c1], [t4.d2], [t9.c1]), filter(nil), rowset=16
       equal_conds([t1.c1 % 3 = t2.d2 % 2], [t2.d1 % 5 = t3.c1 % 4], [t2.d2 % 5 = t5.c1 % 6], [t2.d1 % 7 = t8.d1 % 3]), other_conds(nil)
-  2 - output([t1.c1], [t5.c1], [t5.c1 % 6], [t8.d1 % 3], [t9.c1], [t4.d2], [t3.c1 % 4], [t1.c1 % 3]), filter(nil), rowset=16
+  2 - output([t1.c1], [t5.c1], [t5.c1 % 6], [t8.d1 % 3], [t4.d2], [t9.c1], [t3.c1 % 4], [t1.c1 % 3]), filter(nil), rowset=16
       equal_conds([t1.c2 % 7 = t4.d1 % 3], [t1.c2 % 5 = t5.c1 % 6], [t1.c1 % 4 = t7.c1 % 3], [t1.c1 % 7 = t8.d1 % 3], [t3.c2 % 7 = t4.d1 % 3], [t3.c2 % 
       5 = t5.c1 % 6], [t3.c1 % 7 = t8.d1 % 3]), other_conds(nil)
-  3 - output([t5.c1], [t5.c1 % 6], [t8.d1 % 3], [t4.d1 % 3], [t9.c1], [t4.d2], [t7.c1 % 3]), filter(nil), rowset=16
-      equal_conds([t7.c2 % 5 = t9.c1 % 4], [t8.d2 % 5 = t9.c1 % 14], [t5.c1 % 6 = t9.c1 % 4]), other_conds(nil)
+  3 - output([t5.c1], [t5.c1 % 6], [t8.d1 % 3], [t4.d1 % 3], [t4.d2], [t9.c1], [t7.c1 % 3]), filter(nil), rowset=16
+      equal_conds([t4.d2 % 5 = t9.c1 % 4], [t7.c2 % 5 = t9.c1 % 4], [t8.d2 % 5 = t9.c1 % 14]), other_conds(nil)
   4 - output([t9.c1]), filter(nil), rowset=16
       access([t9.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t9.__pk_increment]), range(MIN ; MAX)always true
-  5 - output([t5.c1], [t5.c1 % 6], [t8.d1 % 3], [t4.d1 % 3], [t4.d2], [t7.c1 % 3], [t8.d2], [t7.c2]), filter(nil), rowset=16
-      equal_conds([t4.d2 % 5 = t5.c1 % 6], [t4.d1 % 4 = t7.c1 % 3], [t4.d1 % 7 = t8.d1 % 3], [t4.d1 % 3 = t6.d2 % 2]), other_conds(nil)
+  5 - output([t5.c1], [t5.c1 % 6], [t8.d1 % 3], [t4.d1 % 3], [t4.d2], [t4.d2 % 5], [t7.c1 % 3], [t8.d2], [t7.c2]), filter(nil), rowset=16
+      equal_conds([t4.d2 % 5 = t5.c1 % 6], [t4.d1 % 3 = t6.d2 % 2], [t4.d1 % 4 = t7.c1 % 3], [t4.d1 % 7 = t8.d1 % 3]), other_conds(nil)
   6 - output([t5.c1], [t5.c1 % 6], [t8.d1 % 3], [t7.c1 % 3], [t8.d2], [t7.c2], [t6.d2]), filter(nil), rowset=16
       equal_conds([t5.c1 % 4 = t7.c1 % 1], [t5.c1 % 7 = t8.d1 % 6], [t6.d1 % 4 = t7.c1 % 3], [t6.d1 % 7 = t8.d1 % 3]), other_conds(nil)
   7 - output([t8.d1 % 3], [t7.c1], [t8.d1], [t8.d2], [t7.c2]), filter(nil), rowset=16
@@ -1647,12 +1647,12 @@ Query Plan
 =============================================================
 |ID|OPERATOR                     |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |SCALAR GROUP BY              |    |1       |66          |
-|1 |└─HASH JOIN                  |    |51      |65          |
-|2 |  ├─HASH JOIN                |    |36      |51          |
-|3 |  │ ├─HASH JOIN              |    |25      |40          |
-|4 |  │ │ ├─HASH JOIN            |    |18      |31          |
-|5 |  │ │ │ ├─HASH JOIN          |    |21      |20          |
+|0 |SCALAR GROUP BY              |    |1       |67          |
+|1 |└─HASH JOIN                  |    |51      |66          |
+|2 |  ├─HASH JOIN                |    |36      |52          |
+|3 |  │ ├─HASH JOIN              |    |25      |41          |
+|4 |  │ │ ├─HASH JOIN            |    |18      |32          |
+|5 |  │ │ │ ├─HASH JOIN          |    |21      |21          |
 |6 |  │ │ │ │ ├─HASH JOIN        |    |15      |12          |
 |7 |  │ │ │ │ │ ├─TABLE FULL SCAN|t2  |11      |5           |
 |8 |  │ │ │ │ │ └─TABLE FULL SCAN|t1  |11      |5           |
@@ -1825,7 +1825,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, 
       range_key([c.__pk_increment]), range(MIN ; MAX)always true
   3 - output([b.d2], [a.c1], [d.c2], [b.d1]), filter(nil), rowset=16
-      equal_conds([b.d2 = a.c1]), other_conds(nil)
+      equal_conds([a.c1 = b.d2]), other_conds(nil)
   4 - output([a.c1]), filter([a.c2 < 5]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
@@ -1881,7 +1881,7 @@ Query Plan
 |ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
 |0 |SCALAR GROUP BY          |    |1       |82          |
-|1 |└─HASH JOIN              |    |105     |78          |
+|1 |└─HASH JOIN              |    |105     |79          |
 |2 |  ├─HASH JOIN            |    |36      |44          |
 |3 |  │ ├─HASH JOIN          |    |13      |19          |
 |4 |  │ │ ├─TABLE FULL SCAN  |t2  |11      |5           |
@@ -1970,11 +1970,11 @@ Query Plan
 =============================================================
 |ID|OPERATOR                     |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |SCALAR GROUP BY              |    |1       |113         |
+|0 |SCALAR GROUP BY              |    |1       |114         |
 |1 |└─HASH JOIN                  |    |105     |110         |
 |2 |  ├─HASH JOIN                |    |73      |80          |
-|3 |  │ ├─HASH JOIN              |    |51      |59          |
-|4 |  │ │ ├─HASH JOIN            |    |36      |43          |
+|3 |  │ ├─HASH JOIN              |    |51      |60          |
+|4 |  │ │ ├─HASH JOIN            |    |36      |44          |
 |5 |  │ │ │ ├─HASH JOIN          |    |13      |19          |
 |6 |  │ │ │ │ ├─TABLE FULL SCAN  |t2  |11      |5           |
 |7 |  │ │ │ │ └─HASH JOIN        |    |9       |12          |
@@ -2157,8 +2157,8 @@ Query Plan
 |ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
 |0 |SCALAR GROUP BY          |    |1       |85          |
-|1 |└─HASH JOIN              |    |105     |81          |
-|2 |  ├─HASH JOIN            |    |36      |45          |
+|1 |└─HASH JOIN              |    |105     |82          |
+|2 |  ├─HASH JOIN            |    |36      |46          |
 |3 |  │ ├─HASH JOIN          |    |13      |19          |
 |4 |  │ │ ├─TABLE FULL SCAN  |t2  |11      |5           |
 |5 |  │ │ └─HASH JOIN        |    |9       |12          |
@@ -2285,12 +2285,12 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   6 - output([t2.c1]), filter(nil), rowset=16
-      equal_conds([t2.c1 = t3.c2]), other_conds(nil)
+      equal_conds([t2.c1 = t3.c1]), other_conds(nil)
   7 - output([t2.c1]), filter(nil), rowset=16
       access([t2.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
-  8 - output([t3.c2]), filter([t3.c2 = t3.c1]), rowset=16
+  8 - output([t3.c1]), filter([t3.c2 = t3.c1]), rowset=16
       access([t3.c2], [t3.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
@@ -2341,11 +2341,11 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                       |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |SCALAR GROUP BY                |    |1       |128         |
-|1 |└─HASH JOIN                    |    |105     |124         |
-|2 |  ├─HASH JOIN                  |    |73      |95          |
-|3 |  │ ├─HASH JOIN                |    |51      |73          |
-|4 |  │ │ ├─HASH JOIN              |    |36      |56          |
+|0 |SCALAR GROUP BY                |    |1       |129         |
+|1 |└─HASH JOIN                    |    |105     |126         |
+|2 |  ├─HASH JOIN                  |    |73      |96          |
+|3 |  │ ├─HASH JOIN                |    |51      |74          |
+|4 |  │ │ ├─HASH JOIN              |    |36      |57          |
 |5 |  │ │ │ ├─HASH JOIN            |    |42      |38          |
 |6 |  │ │ │ │ ├─TABLE FULL SCAN    |t2  |11      |5           |
 |7 |  │ │ │ │ └─HASH JOIN          |    |30      |29          |

@@ -99,7 +99,7 @@ int ObPredicateDeduce::deduce_simple_predicates(ObTransformerCtx &ctx,
       LOG_WARN("failed to choose equal predicates", K(ret));
     } else if (OB_FAIL(choose_unequal_preds(ctx, chosen, expr_equal_with_const))) {
       LOG_WARN("failed to choose unequal predicates", K(ret));
-    } else if (OB_FAIL(choose_input_preds(chosen, result))) {
+    } else if (OB_FAIL(choose_input_preds(chosen, result, expr_equal_with_const))) {
       LOG_WARN("failed to choose input preds", K(ret));
     } else if (OB_FAIL(create_simple_preds(ctx, chosen, result))) {
       LOG_WARN("failed to create simple predicates", K(ret));
@@ -284,17 +284,139 @@ int ObPredicateDeduce::check_index_part_cond(ObTransformerCtx &ctx,
   return ret;
 }
 
+int ObPredicateDeduce::get_basic_table_id(const int64_t node,
+                                          bool &is_basic_col,
+                                          uint64_t &table_id) const {
+  int ret = OB_SUCCESS;
+  ObRawExpr *expr = NULL;
+  if (OB_ISNULL(expr = input_exprs_.at(node))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret), K(expr));
+  } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(expr, expr))) {
+    LOG_WARN("failed to get expr without lossless cast", K(ret));
+  } else if (!expr->is_column_ref_expr()) {
+    is_basic_col = false;
+  } else {
+    ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr *>(expr);
+    TableItem *table_item = stmt_.get_table_item_by_id(col_expr->get_table_id());
+    if (OB_ISNULL(table_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table is null", K(ret), K(table_item));
+    } else if (!table_item->is_basic_table()) {
+      is_basic_col = false;
+    } else {
+      is_basic_col = true;
+      table_id = table_item->table_id_;
+    }
+  }
+  return ret;
+}
+
+/**
+ * check if the redundant predicate 'expr_left = expr_right' should be removed
+ *
+ * for redundant predicate like 't1.c1=t2.c1 and t1.c1=1 and t2.c1=1', we can
+ * remove 't1.c1=t2.c1' to convenient join order enumeration, but if there isn't
+ * another join condition between t1 and t2, it will become a cartesian product,
+ * and may cause bad join order, which we should avoid. Therefore, we need this
+ * function to check if the redundant predicate should be removed.
+ *
+ * conditions for removing redundant predicate:
+ *  1. expr_left and expr_right are both equal with a const
+ *  2. expr_left and expr_right are both basic table columns
+ *  3. exist other join conditions that connect tables of expr_left and
+ * expr_right
+ *
+ * for example:
+ *
+ * In sql 'select * from t1, t2 where t1.c1 = t2.c1 and t1.c1 = 1 and t2.c1 = 1
+ * and t1.c2 = t2.c2', we can remove 't1.c1 = t2.c1' because 't1.c1 = t2.c1' is
+ * redundant, and there is another join condition 't1.c2 = t2.c2' so that join
+ * won't become a cartesian product and cause bad join order.
+ *
+ * In sql 'select * from (select * from t1, t2 where t1.c1 = t2.c1) v, t3 where
+ * v.t1.c1 = t3.c1 and t3.c1 = 1 and v.t2.c2 = t3.c2', we can't remove
+ * 'v.t1.c1 = t3.c1', though 'v.t1.c1 = t3.c1' is redundant and v is connected
+ * to t3 by 'v.t2.c2 = t3.c2'. This is because v is a view and may be merged
+ * in the future, and then we need join condition 't1.c1 = t3.c1' to avoid a
+ * cartesian product.
+ */
+int ObPredicateDeduce::check_input_should_remove(const int64_t left,
+                                                 const int64_t right,
+                                                 const Type type,
+                                                 const ObIArray<uint8_t> &graph,
+                                                 ObSqlBitSet<> &expr_equal_with_const,
+                                                 bool &should_remove)
+{
+  int ret = OB_SUCCESS;
+  uint64_t l_table_id = 0;
+  uint64_t r_table_id = 0;
+  bool is_basic_col;
+  should_remove = false;
+  if (!expr_equal_with_const.has_member(left) ||
+      !expr_equal_with_const.has_member(right) ||
+      type != EQ) {
+    // do nothing
+  } else if (OB_FAIL(get_basic_table_id(left, is_basic_col, l_table_id))) {
+    LOG_WARN("failed to get basic table id", K(ret));
+  } else if (!is_basic_col) {
+    // do nothing
+  } else if (OB_FAIL(get_basic_table_id(right, is_basic_col, r_table_id))) {
+    LOG_WARN("failed to get basic table id", K(ret));
+  } else if (!is_basic_col) {
+    // do nothing
+  } else if (l_table_id == r_table_id) {
+    should_remove = true;
+  } else {
+    // Check if there are other join conditions that connect l_table and r_table
+    uint64_t i_table_id = 0;
+    uint64_t j_table_id = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && !should_remove && i < N; ++i) {
+      for (int64_t j = i + 1; OB_SUCC(ret) && !should_remove && j < N; ++j) {
+        if ((i == left && j == right) || (i == right && j == left)) {
+          // do nothing
+        } else if (!has(graph, i, j, EQ)) {
+          // do nothing
+        } else if (OB_FAIL(get_basic_table_id(i, is_basic_col, i_table_id))) {
+          LOG_WARN("failed to get basic table id", K(ret));
+        } else if (!is_basic_col) {
+          // do nothing
+        } else if (OB_FAIL(get_basic_table_id(j, is_basic_col, j_table_id))) {
+          LOG_WARN("failed to get basic table id", K(ret));
+        } else if (!is_basic_col) {
+          // do nothing
+        } else if ((i_table_id == l_table_id && j_table_id == r_table_id) ||
+                   (i_table_id == r_table_id && j_table_id == l_table_id)) {
+          // l_table and r_table is connected by 'expr_i = expr_j' in join graph
+          // should remove redundant predicate 'expr_left = expr_right'
+          should_remove = true;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObPredicateDeduce::choose_input_preds(ObIArray<uint8_t> &chosen,
-                                          ObIArray<ObRawExpr *> &output_exprs)
+                                          ObIArray<ObRawExpr *> &output_exprs,
+                                          ObSqlBitSet<> &expr_equal_with_const)
 {
   int ret = OB_SUCCESS;
   int64_t left = -1;
   int64_t right = -1;
   Type type = EQ;
+  bool use_new_version = false;
   ObArray<uint8_t> deduced;
-  ObArray<bool> keep;
-  if (OB_FAIL(deduced.assign(chosen))) {
+  ObSEArray<bool, 16> remove;
+  if (OB_ISNULL(stmt_.get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("query ctx is null", K(ret));
+  } else if (OB_FAIL(deduced.assign(chosen))) {
     LOG_WARN("failed to assign array", K(ret));
+  } else {
+    uint64_t version = GET_MIN_CLUSTER_VERSION();
+    bool opt_enable = stmt_.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP7);
+    use_new_version = CLUSTER_VERSION_4_2_5_7 <= version && opt_enable;
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
     if (i * N + i >= chosen.count()) {
@@ -307,35 +429,74 @@ int ObPredicateDeduce::choose_input_preds(ObIArray<uint8_t> &chosen,
   if (OB_SUCC(ret)) {
     deduce(deduced);
   }
+
+  // Perform expand_graph based on equal predicates where both left and right
+  // params are not equal to const
+  for (int64_t i = 0; OB_SUCC(ret) && i < input_preds_.count(); ++i) {
+    bool should_remove = false;
+    ObRawExpr *pred = input_preds_.at(i);
+    if (OB_FAIL(remove.push_back(false)))  {
+      LOG_WARN("failed to init array", K(ret));
+    } else if (OB_FAIL(convert_pred(pred, left, right, type))) {
+      LOG_WARN("failed to convert predicate", K(ret));
+    } else if (EQ != type) {
+      // do nothing
+    } else if (expr_equal_with_const.has_member(left) ||
+               expr_equal_with_const.has_member(right)) {
+      // do nothing
+    } else if (has(chosen, left, right, type)) {
+      clear(chosen, left, right, type);
+    } else if (!has(deduced, left, right, type)) {
+      set(deduced, left, right, type);
+      expand_graph(deduced, left, right);
+      expand_graph(deduced, right, left);
+    } else if (use_new_version) {
+      // do nothing
+    } else {
+      remove.at(i) = true;
+    }
+  }
+
   const Type types[3] = {EQ, GT, GE};
   for (int64_t op_type = 0; OB_SUCC(ret) && op_type <= 2; ++op_type) {
     const Type check_type = types[op_type];
     for (int64_t i = 0; OB_SUCC(ret) && i < input_preds_.count(); ++i) {
       ObRawExpr *pred = input_preds_.at(i);
-      if (op_type == 0 && OB_FAIL(keep.push_back(false)))  {
-        LOG_WARN("failed to init array", K(ret));
-      } else if (OB_FAIL(convert_pred(pred, left, right, type))) {
+      if (OB_FAIL(convert_pred(pred, left, right, type))) {
         LOG_WARN("failed to convert predicate", K(ret));
       } else if (check_type == type) {
-        if (has(chosen, left, right, type)) {
-          keep.at(i) = true;
+        if (type == EQ && !(expr_equal_with_const.has_member(left) ||
+                            expr_equal_with_const.has_member(right))) {
+          // do nothing
+        } else if (has(chosen, left, right, type)) {
           clear(chosen, left, right, type);
         } else if (!has(deduced, left, right, type)) {
-          keep.at(i) = true;
           set(deduced, left, right, type);
           expand_graph(deduced, left, right);
           if (type == EQ) {
             expand_graph(deduced, right, left);
           }
+        } else if (use_new_version) {
+          bool should_remove = true;
+          if (EQ == type && OB_FAIL(check_input_should_remove(
+                                left, right, type, deduced,
+                                expr_equal_with_const, should_remove))) {
+            LOG_WARN("failed to check input should remove", K(ret));
+          } else {
+            remove.at(i) = should_remove;
+          }
+        } else {
+          remove.at(i) = true;
         }
       }
     }
   }
+
   // we do not want to change the order of input preds
   // hence, all selected input preds are added into output in the order.
   for (int64_t i = 0; OB_SUCC(ret) && i < input_preds_.count(); ++i) {
-    if (!keep.at(i)) {
-      // do nothing
+    if (remove.at(i)) {
+      LOG_TRACE("remove input predicate", K(ret), K(i), KPC(input_preds_.at(i)));
     } else if (OB_FAIL(output_exprs.push_back(input_preds_.at(i)))) {
       LOG_WARN("failed to push back input predicate", K(ret));
     }
