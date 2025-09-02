@@ -583,6 +583,8 @@ private:
                                      bool &has_redo,
                                      memtable::ObRedoLogSubmitHelper &helper);
   int submit_redo_if_parallel_logging_();
+  int submit_parallel_redo_();
+  int submit_parallel_redo_before_commit_();
   int submit_redo_commit_info_log_(ObTxLogBlock &log_block,
                                    bool &has_redo,
                                    memtable::ObRedoLogSubmitHelper &helper,

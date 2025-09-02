@@ -1003,6 +1003,10 @@ public:
   void set_transfer_blocking() { flag_.transfer_blocking_ = 1; }
   void clear_transfer_blocking() { flag_.transfer_blocking_ = 0; }
 
+  bool is_commit_submitting_redo() const { return flag_.commit_submitting_redo_; }
+  void set_commit_submitting_redo() { flag_.commit_submitting_redo_ = 1; }
+  void clear_commit_submitting_redo() { flag_.commit_submitting_redo_ = 0; }
+
   DECLARE_ON_DEMAND_TO_STRING
   TO_STRING_KV("info_log_submitted",
                flag_.info_log_submitted_,
@@ -1017,7 +1021,9 @@ public:
                "force_abort",
                flag_.force_abort_,
                "transfer_blocking",
-               flag_.transfer_blocking_);
+               flag_.transfer_blocking_,
+               "commit_submitting_redo",
+               flag_.commit_submitting_redo_);
 
   bool is_valid() const { return flag_.is_valid(); }
 private:
@@ -1030,6 +1036,7 @@ private:
     unsigned int prepare_notify_ : 1;
     unsigned int force_abort_ : 1;
     unsigned int transfer_blocking_ : 1;
+    unsigned int commit_submitting_redo_ : 1;
 
     void reset()
     {
@@ -1040,13 +1047,14 @@ private:
       prepare_notify_ = 0;
       force_abort_ = 0;
       transfer_blocking_ = 0;
+      commit_submitting_redo_ = 0;
     }
 
     bool is_valid() const
     {
       return info_log_submitted_ > 0 || gts_waiting_ > 0 || state_log_submitted_ > 0
           || state_log_submitting_ > 0 || prepare_notify_ > 0 || force_abort_ > 0
-          || transfer_blocking_ > 0;
+          || transfer_blocking_ > 0 || commit_submitting_redo_ > 0;
     }
 
     BitFlag() { reset(); }

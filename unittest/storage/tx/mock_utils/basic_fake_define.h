@@ -517,6 +517,7 @@ public:
       share::SCN scn;
       scn.convert_for_gts(ts);
       int64_t queue_idx = replay_hint % TASK_QUEUE_CNT;
+
       if (!ATOMIC_LOAD(&log_drop_)) {
         const palf::LSN lsn = palf::LSN(++lsn_);
         cb->set_log_ts(scn);

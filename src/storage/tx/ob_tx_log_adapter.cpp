@@ -137,6 +137,7 @@ OB_NOINLINE int ObLSTxLogAdapter::append_log_errsim_(ObTxBaseLogCb *cb)
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_TX_NONBLOCK_SUBMIT_LOG);
 int ObLSTxLogAdapter::submit_log(const char *buf,
                                  const int64_t size,
                                  const SCN &base_scn,
@@ -165,6 +166,15 @@ int ObLSTxLogAdapter::submit_log(const char *buf,
   } else if (OB_ISNULL(log_handler_) || !log_handler_->is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), KP(log_handler_));
+  } else if (OB_UNLIKELY(OB_EAGAIN == ERRSIM_TX_NONBLOCK_SUBMIT_LOG)) {
+    if (REACH_TIME_INTERVAL(1_s)) {
+      TRANS_LOG(WARN, "errsim OB_EGAGAIN to nonblock submit log", K(ret));
+    }
+    ret = OB_EAGAIN;
+  } else if (OB_UNLIKELY(OB_NEED_RETRY == ERRSIM_TX_NONBLOCK_SUBMIT_LOG
+                      && !REACH_TIME_INTERVAL(10_ms))) {
+    ret = OB_EAGAIN;
+    TRANS_LOG(WARN, "errsim nonblock submit 100 log in 1s", K(ret));
   } else {
     static const int64_t MAX_SLEEP_US = 100;
     int64_t retry_cnt = 0;

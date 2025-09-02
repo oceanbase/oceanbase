@@ -129,7 +129,7 @@ public:
         if (!fake_fill) {
           ctx_.fill_count_++;
         }
-        data_size_ += iter->get_data_size();
+        data_size_ += iter->get_data_size() + iter->get_old_row_data_size();;
         max_seq_no_ = MAX(max_seq_no_, iter->get_seq_no());
       }
     }

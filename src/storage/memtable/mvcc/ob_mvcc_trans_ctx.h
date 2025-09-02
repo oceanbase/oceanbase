@@ -503,6 +503,10 @@ public:
   virtual int before_append(const bool is_replay) override;
   virtual int log_submitted(const share::SCN scn, storage::ObIMemtable *&last_mt) override;
   virtual void after_append_fail(const bool is_replay) override;
+  virtual int64_t get_old_row_data_size() override
+  {
+    return old_row_.size_;
+  }
   int64_t get_data_size()
   {
     return data_size_;
