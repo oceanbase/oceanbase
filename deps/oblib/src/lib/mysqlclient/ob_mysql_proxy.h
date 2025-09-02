@@ -306,10 +306,17 @@ public:
   int clean_dblink_connection(uint64_t tenant_id);
   static int execute_init_sql(const sqlclient::dblink_param_ctx &param_ctx,
                               sqlclient::ObISQLConnection *dblink_conn);
-private:
   int prepare_enviroment(const sqlclient::dblink_param_ctx &param_ctx,
                          sqlclient::ObISQLConnection *dblink_conn);
-  static int init_conn_character_set(sqlclient::ObMySQLConnection &mysql_conn, sqlclient::ObMySQLStatement &stmt, ObCharsetType charset_type);
+private:
+  static int init_conn_character_set(sqlclient::ObMySQLConnection &mysql_conn,
+                                     sqlclient::ObMySQLStatement &stmt, ObCharsetType charset_type);
+  static int init_conn_sql_mode(sqlclient::ObMySQLConnection &mysql_conn, sqlclient::ObMySQLStatement &stmt,
+                                const char *set_sql_mode_cstr);
+  static int init_conn_trans_isolation(sqlclient::ObMySQLConnection &mysql_conn, sqlclient::ObMySQLStatement &stmt,
+                                const char *trans_isolation_str);
+  static int init_conn_query_timeout(sqlclient::ObMySQLConnection &mysql_conn, sqlclient::ObMySQLStatement &stmt,
+                                     int64_t query_timeout);
 private:
   sqlclient::ObDbLinkConnectionPool *link_pool_;
 };

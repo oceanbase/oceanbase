@@ -517,18 +517,81 @@ int ObDbLinkProxy::prepare_enviroment(const sqlclient::dblink_param_ctx &param_c
   return ret;
 }
 
-int ObDbLinkProxy::init_conn_character_set(ObMySQLConnection &mysql_conn, ObMySQLStatement &stmt, ObCharsetType charset_type)
+int ObDbLinkProxy::init_conn_character_set(ObMySQLConnection &mysql_conn, ObMySQLStatement &stmt,
+                                           ObCharsetType charset_type)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   const char *charset_name = ObCharset::charset_name(charset_type);
-  if (OB_FAIL(sql.append_fmt("set names %s", charset_name))) {
+  if (mysql_conn.get_last_set_conn_charset_type() == charset_type) {
+    // do nothing.
+  } else if (OB_FAIL(sql.append_fmt("set names %s", charset_name))) {
     LOG_WARN("fail to assign sql", K(ret), K(charset_type));
   } else if (OB_FAIL(stmt.init(mysql_conn, sql.string()))) {
     LOG_WARN("create statement failed", K(ret));
   } else if (OB_FAIL(stmt.execute_update())) {
     LOG_WARN("execute sql failed", K(sql), K(ret), K(charset_type));
+    mysql_conn.set_last_set_conn_charset_type(CHARSET_INVALID);
+  } else {
+    mysql_conn.set_last_set_conn_charset_type(charset_type);
   }
+  return ret;
+}
+
+int ObDbLinkProxy::init_conn_sql_mode(ObMySQLConnection &mysql_conn, ObMySQLStatement &stmt,
+                                      const char *sql_mode_cstr)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  if (0 == ObString(sql_mode_cstr).compare(mysql_conn.get_last_set_sql_mode_cstr())) {
+    // do nothing.
+  } else if (OB_FAIL(stmt.init(mysql_conn, sql_mode_cstr))) {
+    LOG_WARN("create statement failed", K(ret));
+  } else if (OB_FAIL(stmt.execute_update())) {
+    LOG_WARN("execute sql failed", K(sql), K(ret), K(sql_mode_cstr));
+    mysql_conn.save_last_set_sql_mode_cstr("\0");
+  } else {
+    mysql_conn.save_last_set_sql_mode_cstr(sql_mode_cstr);
+  }
+  return ret;
+}
+
+int ObDbLinkProxy::init_conn_trans_isolation(ObMySQLConnection &mysql_conn, ObMySQLStatement &stmt,
+                                             const char *trans_isolation_str)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  if (trans_isolation_str == mysql_conn.get_last_set_transaction_isolation_cstr()) {
+    // do nothing.
+  } else if (OB_FAIL(stmt.init(mysql_conn, trans_isolation_str))) {
+    LOG_WARN("create statement failed", K(ret));
+  } else if (OB_FAIL(stmt.execute_update())) {
+    LOG_WARN("execute sql failed", K(sql), K(ret), K(trans_isolation_str));
+    mysql_conn.set_last_set_transaction_isolation_cstr(NULL);
+  } else {
+    mysql_conn.set_last_set_transaction_isolation_cstr(trans_isolation_str);
+  }
+  return ret;
+}
+
+int ObDbLinkProxy::init_conn_query_timeout(ObMySQLConnection &mysql_conn, ObMySQLStatement &stmt,
+                                           int64_t query_timeout)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  if (query_timeout == mysql_conn.get_ob_query_timeout()) {
+    // do nothing.
+  } else if (OB_FAIL(sql.append_fmt("set ob_query_timeout = %ld", query_timeout))) {
+    LOG_WARN("fail to assign sql", K(ret), K(query_timeout));
+  } else if (OB_FAIL(stmt.init(mysql_conn, sql.string()))) {
+    LOG_WARN("create statement failed", K(ret));
+  } else if (OB_FAIL(stmt.execute_update())) {
+    LOG_WARN("execute sql failed", K(sql), K(ret), K(query_timeout));
+    mysql_conn.set_ob_query_timeout(0);
+  } else {
+    mysql_conn.set_ob_query_timeout(query_timeout);
+  }
+  return ret;
   return ret;
 }
 
@@ -541,27 +604,19 @@ int ObDbLinkProxy::execute_init_sql(const sqlclient::dblink_param_ctx &param_ctx
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dblink conn is null", K(ret));
   } else if (!lib::is_oracle_mode()) {
-    sql_ptr_type sql_ptr[] = {param_ctx.set_sql_mode_cstr_,
-                              param_ctx.set_transaction_isolation_cstr_};
     ObMySQLStatement stmt;
     ObMySQLConnection *mysql_conn = static_cast<ObMySQLConnection *>(dblink_conn);
     if (OB_FAIL(init_conn_character_set(*mysql_conn, stmt, param_ctx.set_conn_charset_type_))) {
       LOG_WARN("init connection character set failed", K(ret));
-    }
-    for (int i = 0; OB_SUCC(ret) && i < sizeof(sql_ptr) / sizeof(sql_ptr_type); ++i) {
-      if (OB_ISNULL(sql_ptr[i])) {
-        //do nothing
-      } else if (OB_FAIL(stmt.init(*mysql_conn, sql_ptr[i]))) {
-        LOG_WARN("create statement failed", K(ret), K(param_ctx));
-      } else if (OB_FAIL(stmt.execute_update())) {
-        LOG_WARN("execute sql failed",  K(ret), K(param_ctx));
-      } else {
-        LOG_TRACE("succ to excute initial dblink sql", K(sql_ptr[i]), K(ret));
-      }
+    } else if (OB_FAIL(init_conn_sql_mode(*mysql_conn, stmt, param_ctx.set_sql_mode_cstr_))) {
+      LOG_WARN("init connection sql mode failed", K(ret));
+    } else if (OB_FAIL(init_conn_trans_isolation(*mysql_conn, stmt, param_ctx.set_transaction_isolation_cstr_))) {
+      LOG_WARN("init connection trans isolation failed", K(ret));
+    } else if (OB_FAIL(init_conn_query_timeout(*mysql_conn, stmt, param_ctx.ob_query_timeout_))) {
+      LOG_WARN("init connection ob query timeout failed", K(ret));
     }
   } else if (DBLINK_DRV_OB == param_ctx.link_type_) {
     sql_ptr_type sql_ptr[] = {
-      param_ctx.set_transaction_isolation_cstr_,
       "set nls_date_format='YYYY-MM-DD HH24:MI:SS'",
       "set nls_timestamp_format = 'YYYY-MM-DD HH24:MI:SS.FF'",
       "set nls_timestamp_tz_format = 'YYYY-MM-DD HH24:MI:SS.FF TZR TZD'"
@@ -571,6 +626,10 @@ int ObDbLinkProxy::execute_init_sql(const sqlclient::dblink_param_ctx &param_ctx
     ObMySQLConnection *mysql_conn = static_cast<ObMySQLConnection *>(dblink_conn);
     if (OB_FAIL(init_conn_character_set(*mysql_conn, stmt, param_ctx.set_conn_charset_type_))) {
       LOG_WARN("init connection character set failed", K(ret));
+    } else if (OB_FAIL(init_conn_trans_isolation(*mysql_conn, stmt, param_ctx.set_transaction_isolation_cstr_))) {
+      LOG_WARN("init connection trans isolation failed", K(ret));
+    } else if (OB_FAIL(init_conn_query_timeout(*mysql_conn, stmt, param_ctx.ob_query_timeout_))) {
+      LOG_WARN("init connection ob query timeout failed", K(ret));
     }
     for (int i = 0; OB_SUCC(ret) && i < sizeof(sql_ptr) / sizeof(sql_ptr_type); ++i) {
       if (OB_ISNULL(sql_ptr[i])) {
