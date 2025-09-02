@@ -72,7 +72,8 @@ int ObDDLIncLogBasic::hash(uint64_t &hash_val) const
 OB_SERIALIZE_MEMBER(ObDDLIncLogBasic, tablet_id_, lob_meta_tablet_id_, direct_load_type_, trans_id_, seq_no_);
 
 ObDDLIncStartLog::ObDDLIncStartLog()
-  : log_basic_()
+  : log_basic_(),
+    has_cs_replica_(false)
 {
 }
 
@@ -84,12 +85,13 @@ int ObDDLIncStartLog::init(const ObDDLIncLogBasic &log_basic)
     LOG_WARN("invalid argument", KR(ret), K(log_basic));
   } else {
     log_basic_ = log_basic;
+    has_cs_replica_ = false;
   }
 
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLIncStartLog, log_basic_);
+OB_SERIALIZE_MEMBER(ObDDLIncStartLog, log_basic_, has_cs_replica_);
 
 ObDDLIncCommitLog::ObDDLIncCommitLog()
   : log_basic_()
