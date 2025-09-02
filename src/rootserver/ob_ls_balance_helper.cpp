@@ -170,7 +170,7 @@ int ObLSBalanceTaskHelper::init(
     if (OB_SUCC(ret)) {
       primary_zone_num_ = primary_zone_num;
       tenant_id_ = tenant_id;
-      enable_transfer_ = tenant_config->enable_transfer;
+      enable_transfer_ = ObShareUtil::is_tenant_enable_transfer(tenant_id);
       balance_strategy_.reset();
       sql_proxy_ = sql_proxy;
       job_.reset();
