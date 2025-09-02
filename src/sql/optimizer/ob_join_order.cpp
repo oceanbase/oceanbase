@@ -10182,7 +10182,9 @@ int JoinPath::cost_nest_loop_join(int64_t join_parallel,
       const int64_t right_real_parallel = is_partition_wise() ? in_parallel : right_out_parallel;
       right_cost = right_cost * right_real_parallel / right_part_cnt;
     }
-    if (query_ctx->check_opt_compat_version(COMPAT_VERSION_4_4_1)) {
+    if (query_ctx->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP7, COMPAT_VERSION_4_3_0,
+                                            COMPAT_VERSION_4_3_5_BP4, COMPAT_VERSION_4_4_0,
+                                            COMPAT_VERSION_4_4_1)) {
       if (1.0 > left_rows
           && (!right_path_->is_access_path()
               || ObJoinOrder::PRUNING_ROW_COUNT_THRESHOLD <= static_cast<const AccessPath*>(right_path_)->get_phy_query_range_row_count())) {

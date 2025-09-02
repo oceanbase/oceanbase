@@ -813,7 +813,9 @@ int ObConflictDetectorGenerator::generate_inner_join_detectors(const ObDMLStmt *
       LOG_WARN("unexpect null expr", K(ret));
     } else if (ObOptimizerUtil::find_item(all_table_filters, expr)) {
       // do nothing
-    } else if (query_ctx_->check_opt_compat_version(COMPAT_VERSION_4_4_1)
+    } else if (query_ctx_->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP7, COMPAT_VERSION_4_3_0,
+                                                    COMPAT_VERSION_4_3_5_BP4, COMPAT_VERSION_4_4_0,
+                                                    COMPAT_VERSION_4_4_1)
                && ObOptimizerUtil::find_item(new_or_quals_, expr)) {
       // do nothing, no need to gen detector for new or quals
     } else if (OB_FAIL(join_conditions.push_back(expr))) {
@@ -1405,7 +1407,9 @@ int ObConflictDetectorGenerator::pushdown_semi_conditions(const ObDMLStmt *stmt,
   } else if (OB_UNLIKELY(new_conditions.count() != info->semi_conditions_.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr count mismatch", K(ret), K(new_conditions.count()), K(info->semi_conditions_.count()));
-  } else if (!query_ctx_->check_opt_compat_version(COMPAT_VERSION_4_4_1)) {
+  } else if (!query_ctx_->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP7, COMPAT_VERSION_4_3_0,
+                                                   COMPAT_VERSION_4_3_5_BP4, COMPAT_VERSION_4_4_0,
+                                                   COMPAT_VERSION_4_4_1)) {
     if (OB_FAIL(semi_conds.assign(new_conditions))) {
       LOG_WARN("failed to assign semi conditions", K(ret));
     }
@@ -1832,8 +1836,10 @@ int ObConflictDetectorGenerator::push_back_join_cond_if_needed(ObIArray<ObRawExp
   int ret = OB_SUCCESS;
   if (OB_ISNULL(query_ctx_) || OB_ISNULL(cond)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(query_ctx_), K(cond));
-  } else if (query_ctx_->check_opt_compat_version(COMPAT_VERSION_4_4_1)
+    LOG_WARN("get unexpected null", K(ret), K(query_ctx_), K(cond));
+  } else if (query_ctx_->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP7, COMPAT_VERSION_4_3_0,
+                                                  COMPAT_VERSION_4_3_5_BP4, COMPAT_VERSION_4_4_0,
+                                                  COMPAT_VERSION_4_4_1)
              && ObOptimizerUtil::find_item(new_or_quals_, cond)) {
     // do nothing, no need to keep new or quals on join conds or filters
   } else if (OB_FAIL(join_conds.push_back(cond))) {

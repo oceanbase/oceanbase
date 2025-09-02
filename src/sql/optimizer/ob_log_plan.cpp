@@ -8007,7 +8007,9 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
     } else if (!need_further_sort) {
       // do nothing
     } else if ((exch_info.is_pq_local() || !exch_info.need_exchange()
-                || (query_ctx->check_opt_compat_version(COMPAT_VERSION_4_4_1) && NULL != topn_expr))
+                || (query_ctx->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP4, COMPAT_VERSION_4_4_0,
+                                                        COMPAT_VERSION_4_4_1)
+                    && NULL != topn_expr))
                && !sort_keys.empty() && (need_sort || is_local_order)) {
       int64_t real_prefix_pos = need_sort && !is_local_order ? prefix_pos : 0;
       bool real_local_order = need_sort ? false : is_local_order;
