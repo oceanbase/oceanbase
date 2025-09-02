@@ -23,6 +23,7 @@ namespace oceanbase
 namespace common
 {
 extern ObBlockAllocMgr default_blk_alloc;
+class ObVSliceAlloc;
 class ObBlockVSlicer
 {
   friend class ObVSliceAlloc;
@@ -103,8 +104,12 @@ public:
   } CACHE_ALIGNED;
 public:
   ObVSliceAlloc(): nway_(0), bsize_(0), blk_alloc_(default_blk_alloc) {}
-  ObVSliceAlloc(const ObMemAttr &attr, const int64_t block_size = DEFAULT_BLOCK_SIZE, BlockAlloc &blk_alloc = default_blk_alloc)
-    : nway_(1), bsize_(block_size), mattr_(attr), blk_alloc_(blk_alloc) {}
+  ObVSliceAlloc(const ObMemAttr &attr, const int64_t block_size = DEFAULT_BLOCK_SIZE,
+      BlockAlloc &blk_alloc = default_blk_alloc, int nway = 1)
+    : bsize_(block_size), mattr_(attr), blk_alloc_(blk_alloc)
+  {
+    set_nway(nway);
+  }
   virtual ~ObVSliceAlloc() override { destroy(); }
   int init(int64_t block_size, BlockAlloc& block_alloc, const ObMemAttr& attr) {
     int ret = OB_SUCCESS;

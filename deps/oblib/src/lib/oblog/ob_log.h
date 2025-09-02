@@ -60,9 +60,6 @@ namespace oceanbase
 {
 namespace common
 {
-class ObVSliceAlloc;
-class ObBlockAllocMgr;
-class ObFIFOAllocator;
 class ObPLogItem;
 class ObLogCompressor;
 
@@ -900,9 +897,6 @@ private:
   int64_t dropped_count_[MAX_TASK_LOG_TYPE + 1];//last one is force allow count
   int64_t written_count_[MAX_TASK_LOG_TYPE + 1];
   int64_t current_written_count_[MAX_TASK_LOG_TYPE + 1];
-  ObBlockAllocMgr* log_mem_limiter_;
-  ObVSliceAlloc* allocator_;
-  ObFIFOAllocator* error_allocator_;
   ObLogCompressor* log_compressor_;
   // juse use it for test promise log print
   bool enable_log_limit_;
