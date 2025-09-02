@@ -2356,6 +2356,9 @@ int ObPluginVectorIndexAdaptor::renew_single_snap_index()
         LOG_WARN("fail to set snapshot key prefix", K(ret));
       }
     }
+  // snap_data_->index_ is null for empty table
+  } else if (OB_NOT_NULL(snap_data_->index_) && OB_FAIL(obvectorutil::immutable_optimize(snap_data_->index_))) {
+    LOG_WARN("fail to index immutable_optimize", K(ret), K(index_type));
   } else {
     // do nothing
   }
@@ -3072,6 +3075,8 @@ int ObPluginVectorIndexAdaptor::deserialize_snap_data(ObVectorQueryConditions *q
       // skip deserialize, already been deserialized by other concurrent thread
     } else if (OB_FAIL(index_seri.deserialize(snap_data_->index_, param, cb, tenant_id_))) {
       LOG_WARN("serialize index failed.", K(ret));
+    } else if (OB_FAIL(obvectorutil::immutable_optimize(snap_data_->index_))) {
+      LOG_WARN("fail to index immutable_optimize", K(ret));
     } else if (OB_FALSE_IT(index_type = get_snap_index_type())) {
     } else if (OB_FAIL(ObPluginVectorIndexUtils::get_split_snapshot_prefix(index_type, key_prefix, target_prefix))) {
       LOG_WARN("fail to get split snapshot prefix", K(ret), K(index_type), K(key_prefix));

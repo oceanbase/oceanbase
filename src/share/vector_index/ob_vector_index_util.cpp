@@ -258,14 +258,6 @@ int ObVectorIndexUtil::parser_params_from_string(
         }
       }
     }
-    if (OB_SUCC(ret)) {
-      if (ObVectorIndexAlgorithmType::VIAT_HNSW_BQ == param.type_
-          && ObVectorIndexDistAlgorithm::VIDA_L2 != param.dist_algorithm_) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not support distance algorithm for hnsw bq index", K(ret), K(param));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "current distance algorithm for hnsw bq index is");
-      }
-    }
 
     if (OB_SUCC(ret) && set_default) {  // if vector param is not set, use default
       if (index_type == ObVectorIndexType::VIT_HNSW_INDEX) {
@@ -2366,6 +2358,7 @@ int ObVectorIndexUtil::check_index_param(
     // [4.3.5.3, 4.4.0.0) or [4.4.1.0, )
     bool is_enable_bp_param = (tenant_data_version >= MOCK_DATA_VERSION_4_3_5_3 && tenant_data_version < DATA_VERSION_4_4_0_0)
         || (tenant_data_version >= DATA_VERSION_4_4_1_0);
+    bool is_enable_bp_cosine_and_ip = is_enable_bp_param;
 
     const int64_t default_m_value = 16;
     const int64_t default_ef_construction_value = 200;
@@ -2586,7 +2579,7 @@ int ObVectorIndexUtil::check_index_param(
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("for hnsw bq index current version is not support", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "for hnsw bq index current version is");
-      } else if (type_hnsw_bq_is_set && distance_name != "L2") {
+      } else if (type_hnsw_bq_is_set && ! is_enable_bp_cosine_and_ip && distance_name != "L2") {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not support distance algorithm for hnsw bq index", K(ret), K(distance_name));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "current distance algorithm for hnsw bq index is");
