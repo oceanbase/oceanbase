@@ -1019,7 +1019,8 @@ public:
                             sql::ObSQLSessionInfo *session_info,
                             const ObString &dblink_name,
                             bool is_reverse_link,
-                            uint64_t *current_scn);
+                            uint64_t *current_scn,
+                            bool &is_under_oracle12c);
   // dblink function end
 
   // directory function begin

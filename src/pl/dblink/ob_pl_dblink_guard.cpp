@@ -640,7 +640,8 @@ int ObPLDbLinkGuard::get_dblink_table_by_name(sql::ObSQLSessionInfo &session_inf
   if (OB_SUCC(ret) && OB_ISNULL(table_schema)) {
     ObTableSchema *tmp_schema = NULL;
     uint64_t *scn = NULL;
-    OZ (schema_guard.get_link_table_schema(tenant_id,
+    bool dummy_val = false;
+    OZ (schema_guard.get_link_table_schema(tenant_id,//lcqlog
                                            dblink_id,
                                            db_name,
                                            table_name,
@@ -649,7 +650,8 @@ int ObPLDbLinkGuard::get_dblink_table_by_name(sql::ObSQLSessionInfo &session_inf
                                            &session_info,
                                            dblink_name,
                                            false/*is_reverse_link*/,
-                                           scn));
+                                           scn,
+                                           dummy_val));
     if (OB_SUCC(ret)) {
       if (OB_ISNULL(tmp_schema)) {
         ObSqlString object_name;
