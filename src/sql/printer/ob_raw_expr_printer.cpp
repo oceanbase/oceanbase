@@ -767,7 +767,9 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
       int64_t start = access_idxs.count() - 1;
       for (;start > 0; --start) {
         if (OB_NOT_NULL(access_idxs.at(start).get_sysfunc_)
-            && T_FUN_UDF == access_idxs.at(start).get_sysfunc_->get_expr_type()) {
+          && (T_FUN_UDF == access_idxs.at(start).get_sysfunc_->get_expr_type()
+              || T_OP_GET_PACKAGE_VAR == access_idxs.at(start).get_sysfunc_->get_expr_type()
+              || T_OP_GET_SUBPROGRAM_VAR == access_idxs.at(start).get_sysfunc_->get_expr_type())) {
           break;
         }
       }
@@ -780,10 +782,10 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
         }
         if (OB_NOT_NULL(current_idx.get_sysfunc_)) {
           PRINT_EXPR(current_idx.get_sysfunc_);
-        } else if (!current_idx.var_name_.empty()) {
-          DATA_PRINTF("%.*s", current_idx.var_name_.length(), current_idx.var_name_.ptr());
         } else if (current_idx.is_local()) {
           DATA_PRINTF(":%ld", current_idx.var_index_);
+        } else if (!current_idx.var_name_.empty()) {
+          DATA_PRINTF("%.*s", current_idx.var_name_.length(), current_idx.var_name_.ptr());
         } else if (current_idx.is_const()) {
           DATA_PRINTF("%ld", current_idx.var_index_);
         } else {
@@ -793,7 +795,7 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
         if (parent_is_table) {
           DATA_PRINTF(")");
         }
-        parent_is_table = current_idx.elem_type_.is_nested_table_type();
+        parent_is_table = current_idx.elem_type_.is_collection_type();
       }
       break;
     }
