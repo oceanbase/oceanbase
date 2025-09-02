@@ -694,9 +694,6 @@ int ObPxTaskProcess::OpPreparation::apply(ObExecContext &ctx,
       if (OB_ISNULL(input)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("input not found for op", "op_id", op.id_, K(ret));
-      } else if (ObGranuleUtil::pwj_gi(gi->gi_attri_flag_) && on_set_tscs_) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("the partition-wise join's subplan contain a gi operator", K(*gi), K(ret));
       } else {
         input->set_worker_id(task_id_);
         input->set_px_sequence_id(task_->px_int_id_.px_interrupt_id_.first_);
@@ -705,28 +702,8 @@ int ObPxTaskProcess::OpPreparation::apply(ObExecContext &ctx,
         }
         if (ObGranuleUtil::pwj_gi(gi->gi_attri_flag_)) {
           pw_gi_spec_ = gi;
-          on_set_tscs_ = true;
         }
       }
-    }
-  } else if ((PHY_TABLE_SCAN == op.type_ ||
-              PHY_ROW_SAMPLE_SCAN == op.type_ ||
-              PHY_BLOCK_SAMPLE_SCAN == op.type_) && on_set_tscs_) {
-    if (OB_ISNULL(pw_gi_spec_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("gi is null", K(ret));
-    } else if (static_cast<const ObTableScanSpec&>(op).use_dist_das()) {
-      // avoid das tsc collected and processed by gi
-    } else if (OB_FAIL(tsc_op_specs_.push_back(static_cast<const ObTableScanSpec *>(&op)))) {
-      LOG_WARN("add tsc to gi failed", K(ret));
-    }
-  } else if (IS_DML(op.type_) && on_set_tscs_) {
-    if (OB_ISNULL(pw_gi_spec_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("gi is null", K(ret));
-    } else  {
-      LOG_TRACE("set partition wise insert op");
-      dml_spec_ = static_cast<const ObTableModifySpec *>(&op);
     }
   } else if (IS_PX_MODIFY(op.get_type())) {
     if (OB_ISNULL(kit->input_)) {
@@ -837,9 +814,9 @@ int ObPxTaskProcess::OpPreparation::reset(const ObOpSpec &op)
   if (PHY_GRANULE_ITERATOR == op.type_) {
     const ObGranuleIteratorSpec *gi = static_cast<const ObGranuleIteratorSpec *>(&op);
     if ((ObGranuleUtil::pwj_gi(gi->gi_attri_flag_))) {
-      if (pw_gi_spec_ == nullptr || !on_set_tscs_) {
+      if (pw_gi_spec_ == nullptr) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Invalid state", K(pw_gi_spec_), K(on_set_tscs_));
+        LOG_WARN("Invalid state", K(pw_gi_spec_));
       } else {
         ObOperatorKit *kit = ctx_->get_operator_kit(op.id_);
         if (OB_ISNULL(kit) || OB_ISNULL(kit->op_)) {
@@ -848,20 +825,9 @@ int ObPxTaskProcess::OpPreparation::reset(const ObOpSpec &op)
         } else if (PHY_GRANULE_ITERATOR != kit->spec_->type_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("operator is NULL", K(ret), KP(kit->spec_->type_));
-        } else {
-          ObGranuleIteratorOp *gi_op = static_cast<ObGranuleIteratorOp*>(kit->op_);
-          int64_t expected_cnt = tsc_op_specs_.count() + (NULL == dml_spec_ ? 0 : 1);
-          if (OB_UNLIKELY(gi_op->get_pw_dml_tsc_ids().count() != expected_cnt)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected pw dml tsc ids count", K(ret), K(gi_op->get_pw_dml_tsc_ids()),
-                    K(tsc_op_specs_.count()), K(dml_spec_));
-          }
         }
       }
-      tsc_op_specs_.reset();
-      dml_spec_ = nullptr;
       pw_gi_spec_ = nullptr;
-      on_set_tscs_ = false;
     }
   }
   return ret;
