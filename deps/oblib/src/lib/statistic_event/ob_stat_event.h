@@ -877,6 +877,10 @@ STAT_EVENT_ADD_DEF(SS_SSTABLE_MINOR_MERGE_TOTAL_MACRO_BLOCK_COUNT, "The total mi
 STAT_EVENT_ADD_DEF(SS_SSTABLE_MINOR_MERGE_REUSE_MACRO_BLOCK_COUNT, "The total minor sstable merge reuse macro block count", ObStatClassIds::STORAGE, 240134, false, true, true, "")
 STAT_EVENT_ADD_DEF(SS_SSTABLE_MAJOR_MERGE_TOTAL_MACRO_BLOCK_COUNT, "The total major sstable merge total macro block count", ObStatClassIds::STORAGE, 240135, false, true, true, "")
 STAT_EVENT_ADD_DEF(SS_SSTABLE_MAJOR_MERGE_REUSE_MACRO_BLOCK_COUNT, "The total major sstable merge reuse macro block count", ObStatClassIds::STORAGE, 240136, false, true, true, "")
+STAT_EVENT_ADD_DEF(SS_SSLOG_NOTIFY_WAIT_ENQUEUE_COUNT, "The total enqueue count of sslog notify wait queue", ObStatClassIds::STORAGE, 240137, false, true, true, "")
+STAT_EVENT_ADD_DEF(SS_SSLOG_NOTIFY_WAIT_DEQUEUE_COUNT, "The total dequeue count of sslog notify wait queue", ObStatClassIds::STORAGE, 240138, false, true, true, "")
+STAT_EVENT_ADD_DEF(SS_SSLOG_NOTIFY_READY_ENQUEUE_COUNT, "The total enqueue count of sslog notify eady queue", ObStatClassIds::STORAGE, 240139, false, true, true, "")
+STAT_EVENT_ADD_DEF(SS_SSLOG_NOTIFY_READY_DEQUEUE_COUNT, "The total dequeue count of sslog notify ready queue", ObStatClassIds::STORAGE, 240140, false, true, true, "")
 
 // external table cache(2402xx)
 STAT_EVENT_ADD_DEF(OPT_EXTERNAL_TABLE_STAT_CACHE_HIT, "opt external table stat cache hit", ObStatClassIds::CACHE, 240201, false, true, true, "")
