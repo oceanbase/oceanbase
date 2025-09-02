@@ -41,7 +41,7 @@ int ObLicenseUtils::check_add_server_allowed(int64_t add_num, obrpc::ObAdminServ
   return OB_SUCCESS;
 }
 
-int ObLicenseUtils::check_olap_allowed()
+int ObLicenseUtils::check_olap_allowed(const int64_t tenant_id)
 {
   return OB_SUCCESS;
 }

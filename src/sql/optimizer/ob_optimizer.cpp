@@ -856,7 +856,7 @@ int ObOptimizer::init_parallel_policy(ObDMLStmt &stmt, const ObSQLSessionInfo &s
 
   if (OB_FAIL(ret)) {
   } else if (!ctx_.get_session_info()->is_user_session() || ctx_.force_disable_parallel()) {
-  } else if (OB_FAIL(ObLicenseUtils::check_olap_allowed())) {
+  } else if (OB_FAIL(ObLicenseUtils::check_olap_allowed(session.get_effective_tenant_id()))) {
     ret = OB_SUCCESS;
     if ((ctx_.get_parallel() > 1
               && (ctx_.get_parallel_rule() == PXParallelRule::SESSION_FORCE_PARALLEL

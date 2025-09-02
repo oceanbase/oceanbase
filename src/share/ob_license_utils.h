@@ -30,7 +30,7 @@ public:
   static int get_login_message(char *buf, int64_t buf_len);
   static int check_add_server_allowed(int64_t add_num, obrpc::ObAdminServerArg::AdminServerOp arg = obrpc::ObAdminServerArg::ADD);
   static int check_standby_allowed();
-  static int check_olap_allowed();
+  static int check_olap_allowed(const int64_t tenant_id);
   static int check_add_tenant_allowed(int current_user_tenant_num);
   static int check_for_create_tenant(int current_user_tenant_num, bool is_create_standby);
   static void clear_license_table_if_need();
