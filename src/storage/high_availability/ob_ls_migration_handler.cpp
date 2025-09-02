@@ -1847,7 +1847,8 @@ int ObLSMigrationHandler::wait_notified_switch_to_leader(
     ret = OB_NOT_INIT;
     LOG_WARN("ls migration handler do not init", K(ret));
   }
-
+  FLOG_INFO("start wait elect leader");
+  const int64_t start_time = ObTimeUtility::fast_current_time();
   while(OB_SUCC(ret)) {
     if (timeout_ctx.is_timeouted()) {
       ret = OB_WAIT_ELEC_LEADER_TIMEOUT;
@@ -1864,7 +1865,8 @@ int ObLSMigrationHandler::wait_notified_switch_to_leader(
       }
     }
   }
-
+  const int64_t cost = ObTimeUtility::fast_current_time() - start_time;
+  FLOG_INFO("finish wait elect leader", KR(ret), K(cost));
   return ret;
 }
 #endif

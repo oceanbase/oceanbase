@@ -1573,6 +1573,8 @@ int ObBootstrap::init_system_data()
     LOG_WARN("create system tenant failed", KR(ret));
   } else if (OB_FAIL(init_all_zone_table())) {
     LOG_WARN("failed to init all zone table", KR(ret));
+  } else if (GCTX.is_shared_storage_mode() && OB_FAIL(init_palf_kv_system_data_())) {
+    LOG_WARN("failed to init palf kv system data", KR(ret));
   }
   if (OB_FAIL(ret)) {
     LOG_DBA_ERROR_V2(OB_BOOTSTRAP_CREATE_SYS_TENANT_FAIL, ret,
@@ -1585,6 +1587,39 @@ int ObBootstrap::init_system_data()
                     "bootstrap create sys tenant success.");
   }
   BOOTSTRAP_CHECK_SUCCESS();
+  return ret;
+}
+
+int ObBootstrap::init_palf_kv_system_data_()
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_SHARED_STORAGE
+   if (!GCTX.is_shared_storage_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported", KR(ret));
+   } else {
+    common::ObSEArray<uint64_t, 128> init_server_ids;
+    if (OB_FAIL(ObServerZoneOpService::store_data_version_in_palf_kv(OB_SYS_TENANT_ID, DATA_CURRENT_VERSION))) {
+      LOG_WARN("fail to store data version in palf kv", KR(ret), K(DATA_CURRENT_VERSION));
+    } else if (OB_FAIL(ObServerZoneOpService::store_server_ids_in_palf_kv(init_server_ids/*empty*/, OB_INIT_SERVER_ID - 1))) { // OB_INIT_SERVER_ID = 1
+      LOG_WARN("fail to store server_ids in palf kv", KR(ret));
+    } else if (OB_FAIL(ObServerZoneOpService::store_max_unit_id_in_palf_kv(OB_USER_UNIT_ID))) { // OB_USER_UNIT_ID = 1000
+      LOG_WARN("fail to store unit_id in palf kv", KR(ret));
+    } else if (OB_FAIL(ObMasterKeyUtil::store_sys_root_key_in_palf_kv())) {
+      LOG_WARN("fail to store sys root key in palf kv", KR(ret));
+    } else {
+      common::ObSEArray<ObZone, DEFAULT_ZONE_COUNT> zone_names;
+      for (int64_t i = 0; OB_SUCC(ret) && i < rs_list_.count(); ++i) {
+        if (OB_FAIL(zone_names.push_back(rs_list_[i].zone_))) {
+          LOG_WARN("fail to push back", KR(ret));
+        }
+      }
+      if (FAILEDx(ObServerZoneOpService::store_all_zone_in_palf_kv(zone_names))) {
+        LOG_WARN("fail to store all zone in palf kv", KR(ret), K(zone_names));
+      }
+    }
+  }
+#endif
   return ret;
 }
 
@@ -1625,7 +1660,7 @@ int ObBootstrap::gen_sys_resource_pool(
 {
   int ret = OB_SUCCESS;
   pool.resource_pool_id_ = OB_SYS_RESOURCE_POOL_ID;
-  pool.name_ = "sys_pool";
+  pool.name_ = share::ObResourcePool::SYS_RESOURCE_POOL_NAME;
   pool.unit_count_ = 1;
   pool.unit_config_id_ = ObUnitConfig::SYS_UNIT_CONFIG_ID;
   pool.tenant_id_ = OB_INVALID_ID;

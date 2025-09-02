@@ -85,6 +85,7 @@ void oceanbase::observer::init_srv_xlator_for_partition(ObSrvRpcXlator *xlator) 
   RPC_PROCESSOR(ObAddDiskP, gctx_);
   RPC_PROCESSOR(ObDropDiskP, gctx_);
   RPC_PROCESSOR(ObForceSetServerListP, gctx_);
+  RPC_PROCESSOR(ObCheckServerAliveP, gctx_);
 #ifdef OB_BUILD_TDE_SECURITY
   RPC_PROCESSOR(ObSetMasterKeyP, gctx_);
   RPC_PROCESSOR(ObGetMasterKeyP, gctx_);

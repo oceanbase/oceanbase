@@ -115,6 +115,24 @@ OB_SERIALIZE_MEMBER(ObServerInfo,
                     server_,
                     region_);
 
+int ObServerInfo::init(
+    const common::ObZone &zone,
+    const common::ObAddr &server,
+    const common::ObRegion &region) {
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(zone.is_empty() || !server.is_valid() || region.is_empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(zone), K(server), K(region));
+  } else if (OB_FAIL(zone_.assign(zone))) {
+    LOG_WARN("failed to assign zone", KR(ret), K(zone));
+  } else if (OB_FAIL(region_.assign(region))) {
+    LOG_WARN("failed to assign region", KR(ret), K(region));
+  } else {
+    server_ = server;
+  }
+  return ret;
+}
+
 DEF_TO_STRING(ObPartitionId)
 {
   int64_t pos = 0;
@@ -11305,6 +11323,40 @@ void ObDetectSSlogLSArg::reset()
   addr_.reset();
 }
 
+OB_SERIALIZE_MEMBER(ObCheckServerAliveArg, addr_);
+
+int ObCheckServerAliveArg::assign(const ObCheckServerAliveArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else {
+    addr_ = other.addr_;
+  }
+  return ret;
+}
+
+int ObCheckServerAliveArg::init(
+   const ObAddr &addr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!addr.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(addr));
+  } else {
+    addr_ = addr;
+  }
+  return ret;
+}
+
+void ObCheckServerAliveArg::reset()
+{
+  addr_.reset();
+}
+
+bool ObCheckServerAliveArg::is_valid() const
+{
+  return addr_.is_valid();
+}
 
 OB_SERIALIZE_MEMBER(ObDetectMasterRsLSResult, role_, master_rs_, replica_, ls_info_);
 ObDetectMasterRsLSResult::ObDetectMasterRsLSResult()

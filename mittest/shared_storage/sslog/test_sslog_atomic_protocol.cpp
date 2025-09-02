@@ -42,6 +42,7 @@ static const char *RESTART_CASE_NAME = "ObSSLogAfterRestartTest";
 
 namespace oceanbase
 {
+OB_MOCK_PALF_KV_FOR_REPLACE_SYS_TENANT
 namespace sslog
 {
 

@@ -31,6 +31,7 @@
 #include "rootserver/ob_tenant_event_def.h"
 #include "rootserver/ob_disaster_recovery_worker.h" // ObDRWorker
 #include "rootserver/ob_disaster_recovery_task_utils.h" // DisasterRecoveryUtils
+#include "rootserver/ob_disaster_recovery_replace_tenant.h" // ObDRReplaceTenant
 #include "rootserver/backup/ob_backup_param_operator.h" // ObBackupParamOperator
 #include "share/table/ob_redis_importer.h"
 #include "share/ob_timezone_importer.h"
@@ -1552,6 +1553,23 @@ int ObMigrateUnitExecutor::execute(ObExecContext &ctx, ObMigrateUnitStmt &stmt)
 		LOG_WARN("migrate unit rpc failed", K(ret), "rpc_arg", stmt.get_rpc_arg());
 	}
 	return ret;
+}
+
+int ObReplaceTenantExecutor::execute(ObExecContext &ctx, ObReplaceTenantStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_SHARED_STORAGE
+  ObDRReplaceTenant replace_tenant;
+  if (OB_UNLIKELY(!stmt.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret));
+  } else if (OB_FAIL(replace_tenant.init(stmt))) {
+    LOG_WARN("failed to init replace tenant", KR(ret));
+  } else if (OB_FAIL(replace_tenant.do_replace_tenant())) {
+    LOG_WARN("failed to replace tenant", KR(ret));
+  }
+#endif
+  return ret;
 }
 
 int ObAlterLSReplicaExecutor::execute(ObExecContext &ctx, ObAlterLSReplicaStmt &stmt)

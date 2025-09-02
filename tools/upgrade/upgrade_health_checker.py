@@ -371,6 +371,18 @@ def check_major_merge(query_cur, timeout):
     sql2 = """select /*+ query_timeout(1000000000) */ count(1) from oceanbase.__all_virtual_tablet_compaction_info where max_received_scn > finished_scn and max_received_scn > 0"""
     check_until_timeout(query_cur, sql2, 0, wait_timeout)
 
+# 5. 检查sys租户的unit num
+def check_sys_unit_num(query_cur, timeout):
+  sql = """select count(*) from oceanbase.__all_resource_pool where (tenant_id = 1 and unit_count != 1)"""
+  (desc, results) = query_cur.exec_query(sql)
+  if len(results) != 1 or len(results[0]) != 1:
+    raise MyError("unmatched row/column cnt")
+  elif results[0][0] == 0:
+    logging.info("check sys unit num success")
+  else:
+    raise MyError("sys unit num not 1")
+
+
 def check_until_timeout(query_cur, sql, value, timeout):
   times = timeout / 10
   while times >= 0:
@@ -406,6 +418,7 @@ def do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, need
       check_zone_valid(query_cur, zone)
       check_observer_status(query_cur, zone, timeout)
       check_paxos_replica(query_cur, timeout)
+      check_sys_unit_num(query_cur, timeout)
       check_schema_status(query_cur, timeout)
       check_server_version_by_zone(query_cur, zone)
       if True == need_check_major_status:

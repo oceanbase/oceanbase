@@ -733,6 +733,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObMigrateUnitStmt, ObMigrateUnitExecutor);
         break;
       }
+      case stmt::T_REPLACE_TENANT: {
+        DEFINE_EXECUTE_CMD(ObReplaceTenantStmt, ObReplaceTenantExecutor);
+        break;
+      }
       case stmt::T_ALTER_LS_REPLICA: {
         DEFINE_EXECUTE_CMD(ObAlterLSReplicaStmt, ObAlterLSReplicaExecutor);
         break;

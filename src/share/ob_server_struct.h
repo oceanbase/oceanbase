@@ -283,6 +283,7 @@ struct ObGlobalContext
   share::ObWorkloadRepositoryService *wr_service_;
   observer::ObStartupAccelTaskHandler* startup_accel_handler_;
   bool in_bootstrap_;
+  bool in_replace_sys_;
   plugin::ObPluginMgr *plugin_mgr_ = nullptr;
 
   static ObGlobalContext& get_instance();
@@ -299,6 +300,10 @@ struct ObGlobalContext
   */
   inline uint64_t get_server_id() const { return ATOMIC_LOAD(&server_id_); }
   inline void set_server_id(const uint64_t id) { ATOMIC_SET(&server_id_, id); }
+  inline uint64_t in_replace_sys() const { return ATOMIC_LOAD(&in_replace_sys_); }
+  inline bool atomic_set_replace_sys(const bool orig_in_replace, const bool in_replace) {
+    return ATOMIC_BCAS(&in_replace_sys_, orig_in_replace, in_replace);
+  }
   /*
   Returns a currently unique server index within the cluster.
   This index is unique among current servers in the cluster, but may be reused if a server is removed from the cluster.

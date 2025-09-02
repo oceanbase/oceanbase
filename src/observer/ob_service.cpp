@@ -2001,6 +2001,7 @@ int ObService::do_replace_ls_replica(const obrpc::ObLSReplaceReplicaArg &arg)
     LOG_ERROR("ObRpcLSReplaceReplicaP::process tenant not match", KR(ret), K(tenant_id));
   }
   ObCurTraceId::set(arg.get_task_id());
+  FLOG_INFO("start schedule ls replace task", K(arg));
   if (OB_SUCC(ret)) {
     SERVER_EVENT_ADD("storage_ha", "schedule_ls_replace start",
                      "tenant_id", tenant_id,
@@ -2031,6 +2032,7 @@ int ObService::do_replace_ls_replica(const obrpc::ObLSReplaceReplicaArg &arg)
   if (OB_FAIL(ret)) {
     SERVER_EVENT_ADD("storage_ha", "schedule_ls_replace failed", "ls_id", ls_id.id(), "result", ret);
   }
+  FLOG_INFO("finish schedule ls replace task", KR(ret), K(arg));
   return ret;
 }
 

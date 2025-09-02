@@ -40,6 +40,7 @@ public:
       KP_(schema_service), KP_(lst_operator), KP_(location_service), K_(ctx),
       K_(create_tenant_schema_result), K(user_tenant_schema_), K(meta_tenant_schema_));
 private:
+  int save_data_version_in_palf_kv_();
   int create_user_ls_(ObParallelCreateNormalTenantProxy &proxy);
 
   int wait_all_(ObParallelCreateNormalTenantProxy &proxy, const int ret_code);

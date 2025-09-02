@@ -20746,6 +20746,12 @@ alter_with_opt_hint SYSTEM CANCEL MIGRATE UNIT INTNUM
    malloc_non_terminal_node($$, result->malloc_pool_, T_MIGRATE_UNIT, 2, $6, NULL);
 }
 |
+alter_with_opt_hint SYSTEM REPLACE tenant_name server_info logservice_access_point shared_storage_info
+{
+  (void)($1);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_REPLACE_TENANT, 4, $4, $5, $6, $7);
+}
+|
 alter_with_opt_hint SYSTEM ADD REPLICA ls SERVER opt_equal_mark STRING_VALUE REPLICA_TYPE opt_equal_mark STRING_VALUE opt_data_source opt_paxos_replica_num opt_tenant_name
 {
   (void)($1);

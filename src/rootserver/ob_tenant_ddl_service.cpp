@@ -2613,7 +2613,8 @@ int ObTenantDDLService::try_modify_tenant_locality(
     } else if (OB_FAIL(ObLocalityCheckHelp::check_alter_locality(
             pre_zone_locality, cur_zone_locality,
             alter_paxos_tasks, non_paxos_locality_modified,
-            pre_paxos_num, cur_paxos_num, new_tenant_schema.get_arbitration_service_status()))) {
+            pre_paxos_num, cur_paxos_num, new_tenant_schema.get_arbitration_service_status(),
+            orig_tenant_schema.get_tenant_id()))) {
       LOG_WARN("fail to check and get paxos replica task",
                K(ret), K(pre_zone_locality), K(cur_zone_locality), "arbitration service status",
                new_tenant_schema.get_arbitration_service_status());
@@ -2674,7 +2675,8 @@ int ObTenantDDLService::try_rollback_modify_tenant_locality(
     } else if (OB_FAIL(ObLocalityCheckHelp::check_alter_locality(
             pre_zone_locality, cur_zone_locality,
             alter_paxos_tasks, non_paxos_locality_modified,
-            pre_paxos_num, cur_paxos_num, new_schema.get_arbitration_service_status()))) {
+            pre_paxos_num, cur_paxos_num, new_schema.get_arbitration_service_status(),
+            orig_schema.get_tenant_id()))) {
       LOG_WARN("fail to check and get paxos replica task", K(ret), K(pre_zone_locality), K(cur_zone_locality),
                "arbitration service status", new_schema.get_arbitration_service_status());
     } else if (0 < alter_paxos_tasks.count() || non_paxos_locality_modified) {

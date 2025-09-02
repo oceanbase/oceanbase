@@ -301,10 +301,12 @@ int ObRpcLSTable::update(
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (!replica.is_valid()
       || !is_sys_tenant(replica.get_tenant_id())
-      || !replica.get_ls_id().is_sys_ls() // only surport SYS LS, not surport SSLOG LS
+      || (!replica.get_ls_id().is_sys_ls() && !replica.get_ls_id().is_sslog_ls())
       || inner_table_only) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(replica), K(inner_table_only));
+  } else if (is_sys_tenant(replica.get_tenant_id()) && replica.get_ls_id().is_sslog_ls()) {
+    LOG_INFO("sslog ls no need process", K(replica));
   } else if(OB_FAIL(rs_mgr_->get_master_root_server(rs_addr))) {
     LOG_WARN("get master root service failed", KR(ret));
   } else {
@@ -521,12 +523,14 @@ int ObRpcLSTable::remove(
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_UNLIKELY(!is_sys_tenant(tenant_id)
-      || !ls_id.is_sys_ls() // only surport SYS LS, not surport SSLOG LS
+      || (!ls_id.is_sys_ls() && !ls_id.is_sslog_ls())
       || !server.is_valid())
       || inner_table_only) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id),
              K(ls_id), K(server), K(inner_table_only));
+  } else if (is_sys_tenant(tenant_id) && ls_id.is_sslog_ls()) {
+    LOG_INFO("sslog ls no need process", K(tenant_id), K(ls_id));
   } else if(OB_FAIL(rs_mgr_->get_master_root_server(rs_addr))) {
     LOG_WARN("get master root service failed", KR(ret));
   } else {

@@ -1359,7 +1359,7 @@ int ObLSService::create_ls_for_ha(
     LOG_WARN("failed to get restore status", K(ret), K(arg), K(task_id));
   }
 #ifdef OB_BUILD_SHARED_STORAGE
-  else if (OB_FAIL(check_sslog_ls_exist_(arg))) {
+  else if (!is_tenant_sslog_ls(MTL_ID(), arg.ls_id_) && OB_FAIL(check_sslog_ls_exist())) {
     LOG_WARN("failed to check sslog ls exist", K(ret), K(arg));
   }
 #endif
@@ -1728,15 +1728,12 @@ int ObLSService::get_replica_type_(
 }
 
 #ifdef OB_BUILD_SHARED_STORAGE
-int ObLSService::check_sslog_ls_exist_(
-    const ObMigrationOpArg &arg)
+int ObLSService::check_sslog_ls_exist()
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
   bool is_exist = false;
-  const bool is_shared_storage = GCTX.is_shared_storage_mode();
-
-  if (!is_shared_storage || is_tenant_sslog_ls(tenant_id, arg.ls_id_)) {
+  if (!GCTX.is_shared_storage_mode()) {
     is_exist = true;
   } else {
     const ObLSID sslog_ls_id(ObLSID::SSLOG_LS_ID);
