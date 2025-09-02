@@ -412,7 +412,9 @@ public:
       const share::schema::ObTableSchema &table_schema,
       const ObString &column_name,
       ObAlterTableStmt *alter_table_stmt);
-  int check_is_json_contraint(ObTableSchema &tmp_table_schema, ObIArray<ObConstraint> &csts, ParseNode *cst_check_expr_node);
+  int check_is_json_contraint(const share::schema::ObTableSchema &tmp_table_schema,
+                              ObIArray<ObConstraint> &csts,
+                              ParseNode *cst_check_expr_node);
 
   int check_column_in_check_constraint(
       const share::schema::ObTableSchema &table_schema,
@@ -437,7 +439,7 @@ public:
   static int resolve_check_constraint_expr(
         ObResolverParams &params,
         const ParseNode *node,
-        share::schema::ObTableSchema &table_schema,
+        const share::schema::ObTableSchema &table_schema,
         share::schema::ObConstraint &constraint,
         ObRawExpr *&check_expr,
         const share::schema::ObColumnSchemaV2 *column_schema = NULL);
@@ -565,7 +567,7 @@ protected:
       bool check_column_exist = true,
       bool is_hidden = false,
       bool *has_invalid_types = NULL);
-  virtual int get_table_schema_for_check(share::schema::ObTableSchema &table_schema)
+  virtual int get_table_schema_for_check(const share::schema::ObTableSchema *&table_schema)
   {
     UNUSED(table_schema);
     return common::OB_SUCCESS;

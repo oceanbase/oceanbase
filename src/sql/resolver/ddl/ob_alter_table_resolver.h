@@ -178,7 +178,7 @@ private:
                                    const share::schema::ObTableSchema &origin_table_schema);
   int resolve_split_partition(const ParseNode *node,
                               const share::schema::ObTableSchema &origin_table_schema);
-  virtual int get_table_schema_for_check(share::schema::ObTableSchema &table_schema) override;
+  virtual int get_table_schema_for_check(const share::schema::ObTableSchema *&table_schema) override;
   //int generate_new_schema(const share::schema::ObTableSchema &origin_table_schema,
   //                        share::schema::AlterTableSchema &new_table_schema);
   int check_column_definition_node(const ParseNode *node);

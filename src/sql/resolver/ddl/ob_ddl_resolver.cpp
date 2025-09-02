@@ -1618,19 +1618,21 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
           if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::TABLE_MODE))) {
             SQL_RESV_LOG(WARN, "failed to add member to bitset!", K(ret));
           } else {
-            HEAP_VAR(ObTableSchema, tmp_table_schema) {
-              if (OB_FAIL(get_table_schema_for_check(tmp_table_schema))) {
-                LOG_WARN("get table schema failed", K(ret));
-              } else if ((tmp_table_schema.is_primary_aux_vp_table() || tmp_table_schema.is_aux_vp_table())
-                  && is_queuing_table_mode(static_cast<ObTableModeFlag>(table_mode_.mode_flag_))) {
-                ret = OB_NOT_SUPPORTED;
-                LOG_USER_ERROR(OB_NOT_SUPPORTED, "set vertical partition table as queuing table mode");
-                SQL_RESV_LOG(WARN, "Vertical partition table cannot set queuing table mode", K(ret));
-              } else { // 暂不支持用户在alter table时变更PK_MODE
-                // 设置Table当前的PK_MODE，组装最终态TableMode
-                table_mode_.pk_mode_ = tmp_table_schema.get_table_mode_struct().pk_mode_;
-                table_mode_.organization_mode_ = tmp_table_schema.get_table_mode_struct().organization_mode_;
-              }
+            const ObTableSchema *tmp_table_schema = nullptr;
+            if (OB_FAIL(get_table_schema_for_check(tmp_table_schema))) {
+              LOG_WARN("get table schema failed", K(ret));
+            } else if (OB_ISNULL(tmp_table_schema)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("table schema is NULL", K(ret));
+            } else if ((tmp_table_schema->is_primary_aux_vp_table() || tmp_table_schema->is_aux_vp_table())
+                && is_queuing_table_mode(static_cast<ObTableModeFlag>(table_mode_.mode_flag_))) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "set vertical partition table as queuing table mode");
+              SQL_RESV_LOG(WARN, "Vertical partition table cannot set queuing table mode", K(ret));
+            } else { // 暂不支持用户在alter table时变更PK_MODE
+              // 设置Table当前的PK_MODE，组装最终态TableMode
+              table_mode_.pk_mode_ = tmp_table_schema->get_table_mode_struct().pk_mode_;
+              table_mode_.organization_mode_ = tmp_table_schema->get_table_mode_struct().organization_mode_;
             }
           }
         }
@@ -1931,15 +1933,17 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
           }
         }
         if (OB_SUCCESS == ret && stmt::T_ALTER_TABLE ==stmt_->get_stmt_type()) {
-          HEAP_VAR(ObTableSchema, tmp_table_schema) {
-            if (OB_FAIL(get_table_schema_for_check(tmp_table_schema))) {
-              LOG_WARN("get table schema failed", K(ret));
-            } else if (table_mode_.auto_increment_mode_ ==
-                         tmp_table_schema.get_table_auto_increment_mode()) {
-              // same as the original auto_increment_mode, do nothing
-            } else if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::INCREMENT_MODE))) {
-              SQL_RESV_LOG(WARN, "failed to add member to bitset!", K(ret));
-            }
+          const ObTableSchema *tbl_schema = nullptr;
+          if (OB_FAIL(get_table_schema_for_check(tbl_schema))) {
+            LOG_WARN("get table schema failed", K(ret));
+          } else if (OB_ISNULL(tbl_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("table schema is NULL", K(ret));
+          } else if (table_mode_.auto_increment_mode_ ==
+                     tbl_schema->get_table_auto_increment_mode()) {
+            // same as the original auto_increment_mode, do nothing
+          } else if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::INCREMENT_MODE))) {
+            SQL_RESV_LOG(WARN, "failed to add member to bitset!", K(ret));
           }
         }
         break;
@@ -1969,15 +1973,17 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
           }
         }
         if (OB_SUCCESS == ret && stmt::T_ALTER_TABLE ==stmt_->get_stmt_type()) {
-          HEAP_VAR(ObTableSchema, tmp_table_schema) {
-            if (OB_FAIL(get_table_schema_for_check(tmp_table_schema))) {
-              LOG_WARN("get table schema failed", K(ret));
-            } else if (auto_increment_cache_size_ ==
-                         tmp_table_schema.get_auto_increment_cache_size()) {
-              // same as the original auto_increment_mode, do nothing
-            } else if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::INCREMENT_CACHE_SIZE))) {
-              SQL_RESV_LOG(WARN, "failed to add member to bitset!", K(ret));
-            }
+          const ObTableSchema *tbl_schema = nullptr;
+          if (OB_FAIL(get_table_schema_for_check(tbl_schema))) {
+            LOG_WARN("get table schema failed", K(ret));
+          } else if (OB_ISNULL(tbl_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("table schema is NULL", K(ret));
+          } else if (auto_increment_cache_size_ ==
+                     tbl_schema->get_auto_increment_cache_size()) {
+            // same as the original auto_increment_mode, do nothing
+          } else if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::INCREMENT_CACHE_SIZE))) {
+            SQL_RESV_LOG(WARN, "failed to add member to bitset!", K(ret));
           }
         }
         break;
@@ -1992,14 +1998,16 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
                                                           : ObTableRowidMode::ROWID_NORMAL;
           if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
             if (enable_extended_rowid) {
-              HEAP_VAR(ObTableSchema, tmp_table_schema) {
-                if (OB_FAIL(get_table_schema_for_check(tmp_table_schema))) {
-                  LOG_WARN("get table schema failed", K(ret));
-                } else if (table_mode_.rowid_mode_ == tmp_table_schema.get_table_rowid_mode()) {
-                  // same as the original rowid_mode, do nothing
-                } else if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::ENABLE_EXTENDED_ROWID))) {
-                  SQL_RESV_LOG(WARN, "failed to add member to bitset!", K(ret));
-                }
+              const ObTableSchema *tbl_schema = nullptr;
+              if (OB_FAIL(get_table_schema_for_check(tbl_schema))) {
+                LOG_WARN("get table schema failed", K(ret));
+              } else if (OB_ISNULL(tbl_schema)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("table schema is NULL", K(ret));
+              } else if (table_mode_.rowid_mode_ == tbl_schema->get_table_rowid_mode()) {
+                // same as the original rowid_mode, do nothing
+              } else if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::ENABLE_EXTENDED_ROWID))) {
+                SQL_RESV_LOG(WARN, "failed to add member to bitset!", K(ret));
               }
             } else {
               ret = OB_NOT_SUPPORTED;
@@ -7954,18 +7962,21 @@ int ObDDLResolver::resolve_check_constraint_node(
       } while (OB_SUCC(ret) && need_reset_generated_name);
       if (OB_SUCC(ret)) {
         ObConstraint cst;
-        ObTableSchema tmp_table_schema;
         ObRawExpr* check_expr = NULL;
-        if (OB_FAIL(get_table_schema_for_check(tmp_table_schema))) {
-          LOG_WARN("get table schema failed", K(ret), K(cst_name));
+        const ObTableSchema *tbl_schema = nullptr;
+        if (OB_FAIL(get_table_schema_for_check(tbl_schema))) {
+          LOG_WARN("get table schema failed", K(ret));
+        } else if (OB_ISNULL(tbl_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("table schema is NULL", K(ret));
         } else {
-          if (OB_FAIL(check_is_json_contraint(tmp_table_schema, csts, cst_check_expr_node))) {
+          if (OB_FAIL(check_is_json_contraint(*tbl_schema, csts, cst_check_expr_node))) {
             LOG_WARN("repeate is json check", K(ret));
           } else if (OB_FAIL(cst.set_constraint_name(cst_name))) {
             LOG_WARN("set constraint name failed", K(ret), K(cst_name));
           } else if (OB_FAIL(resolve_check_constraint_expr(params_,
                                                            cst_check_expr_node,
-                                                           tmp_table_schema,
+                                                           *tbl_schema,
                                                            cst,
                                                            check_expr,
                                                            column_schema))) {
@@ -7994,7 +8005,9 @@ int ObDDLResolver::resolve_check_constraint_node(
   return ret;
 }
 
-int ObDDLResolver::check_is_json_contraint(ObTableSchema &t_table_schema, ObIArray<ObConstraint> &csts, ParseNode *cst_check_expr_node)
+int ObDDLResolver::check_is_json_contraint(const ObTableSchema &t_table_schema,
+                                           ObIArray<ObConstraint> &csts,
+                                           ParseNode *cst_check_expr_node)
 {
   INIT_SUCC(ret);
   const share::schema::ObColumnSchemaV2 *column_schema = NULL;
@@ -8181,7 +8194,7 @@ int ObDDLResolver::resolve_pk_constraint_node(const ParseNode &pk_cst_node,
 int ObDDLResolver::resolve_check_constraint_expr(
     ObResolverParams &params,
     const ParseNode *node,
-    ObTableSchema &table_schema,
+    const ObTableSchema &table_schema,
     ObConstraint &constraint,
     ObRawExpr *&check_expr,
     const share::schema::ObColumnSchemaV2 *column_schema)
