@@ -360,6 +360,14 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline ObLogPlanFactory &get_log_plan_factory() { return log_plan_factory_; }
   inline bool can_use_pdml() const { return can_use_pdml_; }
   inline bool is_online_ddl() const { return is_online_ddl_; }
+  inline bool is_insert_stmt_in_online_ddl() const
+  {
+    bool bret = false;
+    if (OB_NOT_NULL(root_stmt_)) {
+      bret = is_online_ddl_ && root_stmt_->is_insert_stmt() && root_stmt_->get_table_items().count() > 0;
+    }
+    return bret;
+  }
   inline int64_t get_ddl_sample_column_count() const { return ddl_sample_column_count_; }
   inline bool is_heap_table_ddl() const { return is_heap_table_ddl_; }
   inline bool is_pdml_heap_table() const { return is_pdml_heap_table_; }
