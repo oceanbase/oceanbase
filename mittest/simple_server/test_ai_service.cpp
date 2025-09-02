@@ -222,7 +222,7 @@ TEST_F(TestAiService, test_get_increment_ai_model_keys_reversely)
     const ObAiModelSchema *schema = nullptr;
     ASSERT_EQ(OB_SUCCESS, schema_guard.get_ai_model_schema(tenant_id, id, schema));
     ASSERT_TRUE(OB_NOT_NULL(schema));
-    ASSERT_EQ(schema->get_model_id(), id);
+    ASSERT_EQ(schema->get_ai_model_id(), id);
     ASSERT_EQ(schema->get_tenant_id(), tenant_id);
     ASSERT_EQ(schema->get_schema_version(), version);
     ASSERT_EQ(schema->get_name(), "my_ai_model");

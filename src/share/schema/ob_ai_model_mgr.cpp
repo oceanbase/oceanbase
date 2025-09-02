@@ -296,8 +296,8 @@ int ObAiModelMgr::del_schemas_in_tenant(const uint64_t tenant_id)
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected NULL schema", K(ret), K(i), K(schemas));
         } else {
-          if (OB_FAIL(del_ai_model(ObTenantAiModelId(tenant_id, curr->get_model_id())))) {
-            LOG_WARN("failed to del_ai_model", K(ret), K(tenant_id), K(curr->get_model_id()));
+          if (OB_FAIL(del_ai_model(ObTenantAiModelId(tenant_id, curr->get_ai_model_id())))) {
+            LOG_WARN("failed to del_ai_model", K(ret), K(tenant_id), K(curr->get_ai_model_id()));
           }
         }
       }
@@ -339,7 +339,7 @@ int ObAiModelMgr::add_ai_model(const ObAiModelSchema &ai_model_schema, common::O
                                       new_schema->get_name(),
                                       new_schema->get_case_mode());
 
-    if (OB_FAIL(ai_model_id_map_.set_refactored(new_schema->get_model_id(), new_schema, overwrite))) {
+    if (OB_FAIL(ai_model_id_map_.set_refactored(new_schema->get_ai_model_id(), new_schema, overwrite))) {
       LOG_WARN("failed to set_refactored to ai_model_id_map_", K(ret), KPC(new_schema));
     } else if (OB_FAIL(ai_model_name_map_.set_refactored(hash_wrapper, new_schema, overwrite))) {
       LOG_WARN("failed to set_refactored to ai_model_name_map_", K(ret), KPC(new_schema));
@@ -390,11 +390,11 @@ int ObAiModelMgr::del_ai_model(const ObTenantAiModelId &tenant_ai_model_id)
                                       schema->get_name(),
                                       schema->get_case_mode());
 
-    if (OB_SUCCESS != (hash_ret = ai_model_id_map_.erase_refactored(schema->get_model_id()))) {
+    if (OB_SUCCESS != (hash_ret = ai_model_id_map_.erase_refactored(schema->get_ai_model_id()))) {
       LOG_WARN("failed erase_refactored from id hashmap",
                K(ret),
                K(hash_ret),
-               K(schema->get_model_id()));
+               K(schema->get_ai_model_id()));
       ret = OB_HASH_NOT_EXIST != hash_ret ? hash_ret : ret;
     } else if (OB_SUCCESS != (hash_ret = ai_model_name_map_.erase_refactored(hash_wrapper))) {
       LOG_WARN("failed erase_refactored from name hashmap",
@@ -482,7 +482,7 @@ int ObAiModelMgr::rebuild_ai_model_hashmap()
                                           schema->get_name(),
                                           schema->get_case_mode());
 
-        if (OB_FAIL(ai_model_id_map_.set_refactored(schema->get_model_id(), schema, overwrite))) {
+        if (OB_FAIL(ai_model_id_map_.set_refactored(schema->get_ai_model_id(), schema, overwrite))) {
           LOG_WARN("failed to set_refactored to ai_model_id_map_", K(ret), KPC(schema));
         } else if (OB_FAIL(ai_model_name_map_.set_refactored(hash_wrapper, schema, overwrite))) {
           LOG_WARN("failed to set_refactored to ai_model_name_map_", K(ret), KPC(schema));

@@ -46,7 +46,7 @@ int ObAiModelSqlService::create_ai_model(const ObAiModelSchema &new_schema,
     LOG_WARN("invalid argument", K(ret), K(new_schema));
   } else if (OB_FAIL(sql.add_pk_column("tenant_id", 0))) {
     LOG_WARN("failed to add column", K(ret), K(new_schema));
-  } else if (OB_FAIL(sql.add_pk_column("model_id", new_schema.get_model_id()))) {
+  } else if (OB_FAIL(sql.add_pk_column("model_id", new_schema.get_ai_model_id()))) {
     LOG_WARN("failed to add column", K(ret), K(new_schema), K(tenant_id));
   } else if (OB_FAIL(sql.add_column("name", ObHexEscapeSqlStr(new_schema.get_name())))) {
     LOG_WARN("failed to add column", K(ret), K(new_schema));
@@ -76,7 +76,7 @@ int ObAiModelSqlService::create_ai_model(const ObAiModelSchema &new_schema,
   } else {
     ObSchemaOperation opt;
     opt.tenant_id_ = new_schema.get_tenant_id();
-    opt.ai_model_id_ = new_schema.get_model_id();
+    opt.ai_model_id_ = new_schema.get_ai_model_id();
     opt.op_type_ = OB_DDL_CREATE_AI_MODEL;
     opt.schema_version_ = new_schema.get_schema_version();
     opt.ai_model_name_ = new_schema.get_name();
@@ -113,7 +113,7 @@ int ObAiModelSqlService::drop_ai_model(const ObAiModelSchema &schema,
     LOG_WARN("invalid argument", K(ret), K(schema));
   } else if (OB_FAIL(sql.add_pk_column("tenant_id", 0))) {
     LOG_WARN("failed to add column", K(ret), K(schema));
-  } else if (OB_FAIL(sql.add_pk_column("model_id", schema.get_model_id()))) {
+  } else if (OB_FAIL(sql.add_pk_column("model_id", schema.get_ai_model_id()))) {
     LOG_WARN("failed to add column", K(ret), K(schema));
   } else if (OB_FAIL(sql.splice_delete_sql(OB_ALL_AI_MODEL_TNAME, buffer))) {
     LOG_WARN("failed to splice_delete_sql", K(ret));
@@ -127,7 +127,7 @@ int ObAiModelSqlService::drop_ai_model(const ObAiModelSchema &schema,
     sql.reuse();
     if (OB_FAIL(sql.add_pk_column("tenant_id", 0))) {
       LOG_WARN("failed to add column", K(ret), K(schema));
-    } else if (OB_FAIL(sql.add_pk_column("model_id", schema.get_model_id()))) {
+    } else if (OB_FAIL(sql.add_pk_column("model_id", schema.get_ai_model_id()))) {
       LOG_WARN("failed to add column", K(ret), K(schema), K(tenant_id));
     } else if (OB_FAIL(sql.add_pk_column("schema_version", new_schema_version))) {
       LOG_WARN("failed to add column", K(ret), K(new_schema_version));
@@ -152,7 +152,7 @@ int ObAiModelSqlService::drop_ai_model(const ObAiModelSchema &schema,
   if (OB_SUCC(ret)) {
     ObSchemaOperation opt;
     opt.tenant_id_ = schema.get_tenant_id();
-    opt.ai_model_id_ = schema.get_model_id();
+    opt.ai_model_id_ = schema.get_ai_model_id();
     opt.op_type_ = OB_DDL_DROP_AI_MODEL;
     opt.schema_version_ = new_schema_version;
     opt.ai_model_name_ = schema.get_name();

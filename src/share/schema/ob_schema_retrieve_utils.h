@@ -466,12 +466,10 @@ public:
   //RETRIEVE_SCHEMA_FUNC_DECLARE(proxy_role);
   RETRIEVE_SCHEMA_FUNC_DECLARE(catalog);
   RETRIEVE_SCHEMA_FUNC_DECLARE(ccl_rule);
+  RETRIEVE_SCHEMA_FUNC_DECLARE(ai_model);
 
   template <typename T>
   static int retrieve_external_resource_schema(const uint64_t tenant_id, T &result, ObIArray<ObSimpleExternalResourceSchema> &schema_array);
-
-  template<typename T>
-  static int retrieve_ai_model_schema(const uint64_t tenant_id, T &result, ObIArray<ObAiModelSchema> &schema_array);
 
   template<typename T>
   static int retrieve_object_list(const uint64_t tenant_id, T &result, common::ObIArray<uint64_t> &trigger_list);
