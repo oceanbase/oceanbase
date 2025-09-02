@@ -21212,7 +21212,7 @@ int ObJoinOrder::add_valid_fts_index_ids_for_dml_and_es_match(const PathHelper &
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(stmt->get_match_expr_on_table(table_id, match_exprs_on_table))) {
     LOG_WARN("failed to get match expr on table", K(ret));
-  } else {
+  } else if (!match_exprs_on_table.empty()) {
     const MatchExprInfo *match_expr_info = NULL;
     if (OB_FAIL(find_match_expr_info(helper.match_expr_infos_, match_exprs_on_table.at(0), match_expr_info))) {
       LOG_WARN("failed to find match expr info", K(ret));
