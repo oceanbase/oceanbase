@@ -787,7 +787,6 @@ public:
   common::ObString raw_sql_;
   uint64_t ccl_rule_id_;
   uint64_t ccl_match_time_;
-  common::ObString reconstruct_ps_sql_;
   common::ObSEArray<ObCCLRuleConcurrencyValueWrapper*, 4> matched_ccl_rule_level_values_;
   common::ObSEArray<ObCCLRuleConcurrencyValueWrapper*, 4> matched_ccl_format_sqlid_level_values_;
   TO_STRING_KV(K(stmt_type_));

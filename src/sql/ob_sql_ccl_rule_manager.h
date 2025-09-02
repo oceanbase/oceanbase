@@ -238,7 +238,8 @@ public:
                               ObCCLAffectDMLType sql_dml_type,
                               const common::hash::ObHashSet<ObCCLDatabaseTableHashWrapper> &sql_relate_databases,
                               const common::hash::ObHashSet<ObCCLDatabaseTableHashWrapper> &sql_relate_tables,
-                              uint64_t &limited_by_ccl_rule_id);
+                              uint64_t &limited_by_ccl_rule_id,
+                              ObSqlString &rconstruct_sql);
 
   void dec_rule_level_concurrency(ObCCLRuleConcurrencyValueWrapper* p_value_wrapper);
   void dec_format_sqlid_level_concurrency(ObCCLRuleConcurrencyValueWrapper* p_value_wrapper);

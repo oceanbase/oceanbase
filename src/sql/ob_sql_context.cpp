@@ -276,7 +276,6 @@ void ObSqlCtx::reset()
   ins_opt_ctx_.reset();
   ccl_rule_id_ = 0;
   ccl_match_time_ = 0;
-  reconstruct_ps_sql_.reset();
   matched_ccl_rule_level_values_.reset();
   matched_ccl_format_sqlid_level_values_.reset();
 }
