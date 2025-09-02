@@ -538,6 +538,7 @@ int ObConfigInfoInPC::load_influence_plan_config()
     enable_topn_runtime_filter_ = tenant_config->_enable_topn_runtime_filter;
     min_const_integer_precision_ = static_cast<int8_t>(tenant_config->_min_const_integer_precision);
     enable_px_task_rebalance_ = tenant_config->_enable_px_task_rebalance;
+    enable_runtime_filter_adaptive_apply_ = tenant_config->_enable_runtime_filter_adaptive_apply;
   }
 
   return ret;
@@ -635,6 +636,8 @@ int ObConfigInfoInPC::serialize_configs(char *buf, int buf_len, int64_t &pos)
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(min_const_integer_precision_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%d,", enable_px_task_rebalance_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_px_task_rebalance_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%d,", enable_runtime_filter_adaptive_apply_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_runtime_filter_adaptive_apply_));
   } else {
     // do nothing
   }

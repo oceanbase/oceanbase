@@ -2643,7 +2643,7 @@ int ObStaticEngineCG::prepare_topn_runtime_filter_info(ObLogSort &op, ObOpSpec &
                    op.get_p2p_sequence_id(), effective_sk_cnt, total_sk_cnt, cmp_metas,
                    ObP2PDatahubMsgBase::PD_TOPN_FILTER_MSG, pd_topn_filter_rt_expr->expr_ctx_id_,
                    is_shared_pd_topn_filter, is_shuffle_pd_topn_filter, max_batch_size,
-                   adaptive_filter_ratio))) {
+                   op.enable_runtime_filter_adaptive_apply(), adaptive_filter_ratio))) {
       LOG_WARN("failed to init topn_filter_info");
     }
   }
@@ -4082,6 +4082,7 @@ int ObStaticEngineCG::generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec,
   spec.set_filter_length(op.get_filter_length());
   spec.set_shared_filter_type(op.get_filter_type());
   spec.is_shuffle_ = op.is_use_filter_shuffle();
+  spec.enable_runtime_filter_adaptive_apply_ = op.enable_runtime_filter_adaptive_apply();
   bool enable_rich_format = spec.use_rich_format_;
   if (enable_rich_format) {
     spec.jf_material_control_info_ = op.get_jf_material_control_info();

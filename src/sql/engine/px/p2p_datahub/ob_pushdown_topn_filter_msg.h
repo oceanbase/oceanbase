@@ -90,7 +90,8 @@ public:
   int init(int64_t p2p_dh_id, int64_t effective_sk_cnt, int64_t total_sk_cnt,
            const ObIArray<ObTopNFilterCmpMeta> &cmp_metas,
            ObP2PDatahubMsgBase::ObP2PDatahubMsgType dh_msg_type, uint32_t expr_ctx_id,
-           bool is_shared, bool is_shuffle, int64_t max_batch_size, double adaptive_filter_ratio);
+           bool is_shared, bool is_shuffle, int64_t max_batch_size,
+           bool enable_runtime_filter_adaptive_apply, double adaptive_filter_ratio);
   int assign(const ObPushDownTopNFilterInfo &src);
 
 public:
@@ -105,8 +106,10 @@ public:
   bool is_shuffle_; // whether need shuffle topn msg between different dfos
   int64_t max_batch_size_;
   double adaptive_filter_ratio_;
+  bool enable_runtime_filter_adaptive_apply_;
   TO_STRING_KV(K(enabled_), K(p2p_dh_id_), K(dh_msg_type_), K(expr_ctx_id_), K(is_shared_),
-               K(is_shuffle_), K(max_batch_size_), K(adaptive_filter_ratio_));
+               K(is_shuffle_), K(max_batch_size_), K(adaptive_filter_ratio_),
+               K(enable_runtime_filter_adaptive_apply_));
 };
 
 class ObPushDownTopNFilterMsg final : public ObP2PDatahubMsgBase

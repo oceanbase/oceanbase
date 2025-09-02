@@ -1183,6 +1183,7 @@ public:
     enable_topn_runtime_filter_(false),
     enable_px_task_rebalance_(false),
     min_const_integer_precision_(1),
+    enable_runtime_filter_adaptive_apply_(false),
     cluster_config_version_(-1),
     tenant_config_version_(-1),
     tenant_id_(0)
@@ -1242,6 +1243,7 @@ public:
   bool enable_topn_runtime_filter_;
   bool enable_px_task_rebalance_;
   int8_t min_const_integer_precision_;
+  bool enable_runtime_filter_adaptive_apply_;
 
 private:
   // current cluster config version_

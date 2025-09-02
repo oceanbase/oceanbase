@@ -238,6 +238,7 @@ namespace sql
     int init_table_access_policy(ObDMLStmt &stmt, const ObSQLSessionInfo &session);
     int init_px_node_opt_info(int64_t tenant_id);
     int check_enable_topn_runtime_filter();
+    int check_enable_runtime_filter_adaptive_apply();
 
   private:
     ObOptimizerContext &ctx_;

@@ -5663,6 +5663,8 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
       && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0) {
     can_join_filter_material = true;
   }
+  bool enable_runtime_filter_adaptive_apply =
+      get_plan()->get_optimizer_context().enable_runtime_filter_adaptive_apply();
   int64_t last_valid_join_filter_info_idx = -1;
   if (OB_SUCC(ret)) {
     for (int i = 0; i < infos.count() && OB_SUCC(ret); ++i) {
@@ -5771,9 +5773,16 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
                                                            node, info))) {
           LOG_WARN("failed to prepare_rf_query_range_info");
         }
-        if (OB_SUCC(ret) && LOG_TABLE_SCAN == node->get_type()) {
+        if (OB_FAIL(ret)) {
+        } else if (!enable_runtime_filter_adaptive_apply) {
+          join_filter_use->set_runtime_filter_adaptive_apply(false);
+        } else if (LOG_TABLE_SCAN == node->get_type()) {
           ObLogTableScan *scan = static_cast<ObLogTableScan*>(node);
           scan->set_use_column_store(info.use_column_store_);
+          if (scan->get_scan_order() == common::ObQueryFlag::ScanOrder::NoOrder) {
+            // for table engine delete insert, we should disable runtime filter adaptive apply
+            join_filter_use->set_runtime_filter_adaptive_apply(false);
+          }
         }
 
         if (OB_SUCC(ret) && can_join_filter_material) {

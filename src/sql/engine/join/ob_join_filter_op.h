@@ -281,6 +281,7 @@ public:
   common::ObFixedArray<bool, common::ObIAllocator> hash_join_is_ns_equal_cond_;
   int64_t rf_max_wait_time_ms_{0};
   bool use_ndv_runtime_bloom_filter_size_{false}; //whether use ndv size build bloom filter
+  bool enable_runtime_filter_adaptive_apply_{true};
 };
 
 class ObJoinFilterMaterialGroupController

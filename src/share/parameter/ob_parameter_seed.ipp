@@ -2800,3 +2800,6 @@ DEF_STR_WITH_CHECKER(_server_full_schema_refresh_parallelism, OB_TENANT_PARAMETE
                      "specifies whether observer's full schema refresh is request-level parallelism or object-level parallelism."
                      "values: REQUEST, OBJECT",
                      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_runtime_filter_adaptive_apply, OB_TENANT_PARAMETER, "True",
+         "Enable or disable runtime filter adaptive apply.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
