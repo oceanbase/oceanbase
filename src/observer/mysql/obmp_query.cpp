@@ -788,6 +788,17 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
         need_response_error = true;
         LOG_WARN("fail to execute trans ctrl cmd", KR(ret), K(sql));
       }
+
+      // 如果没有异步提交，且执行成功，则发送ok包给客户端
+      if (!async_resp_used && OB_SUCC(ret)) {
+        ObOKPParam ok_param;
+        ok_param.affected_rows_ = 0;
+        ok_param.is_partition_hit_ = session.partition_hit().get_bool();
+        ok_param.has_more_result_ = has_more_result;
+        if (OB_FAIL(send_ok_packet(session, ok_param))) {
+          LOG_WARN("fail to send ok packt", KR(ret), K(ok_param));
+        }
+      }
     }
 
     //注意: 在response_result接口调用后不要再使用sql_这个成员变量，这是因为sql_指向的内存来自于ObReqPacket
@@ -866,8 +877,8 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
     MEMCPY(audit_record.sql_id_, ctx_.sql_id_, (int32_t)sizeof(audit_record.sql_id_));
     MEMCPY(audit_record.format_sql_id_, ctx_.format_sql_id_, (int32_t)sizeof(audit_record.format_sql_id_));
     audit_record.format_sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
-    audit_record.sql_ = const_cast<char *>(sql.ptr());
-    audit_record.sql_len_ = min(sql.length(), session.get_tenant_query_record_size_limit());
+    audit_record.sql_ = const_cast<char *>(session.get_current_query_string().ptr());
+    audit_record.sql_len_ = min(session.get_current_query_string().length(), session.get_tenant_query_record_size_limit());
     audit_record.sql_cs_type_ = session.get_local_collation_connection();
 
     if (OB_FAIL(ret) && audit_record.trans_id_ == 0) {
@@ -907,17 +918,6 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
   }
   bool is_need_retry = false;
   (void)ObSQLUtils::handle_audit_record(is_need_retry, EXECUTE_LOCAL, session, ctx_.is_sensitive_);
-
-  // 如果没有异步提交，且执行成功，则发送ok包给客户端
-  if (!async_resp_used && OB_SUCC(ret)) {
-    ObOKPParam ok_param;
-    ok_param.affected_rows_ = 0;
-    ok_param.is_partition_hit_ = session.partition_hit().get_bool();
-    ok_param.has_more_result_ = has_more_result;
-    if (OB_FAIL(send_ok_packet(session, ok_param))) {
-      LOG_WARN("fail to send ok packt", KR(ret), K(ok_param));
-    }
-  }
 
   return ret;
 }
