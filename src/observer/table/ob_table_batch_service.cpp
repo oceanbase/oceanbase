@@ -993,7 +993,7 @@ int ObTableBatchService::process_insert(ObTableCtx &tb_ctx, ObTableOperationResu
                        tb_ctx.get_table_name(),
                        tb_ctx.get_audit_ctx(), op);
   if (OB_FAIL(ObTableOpWrapper::process_insert_op(tb_ctx, result))) {
-    LOG_WARN("fail to process insert", K(ret));
+    LOG_WARN("fail to process insert", K(ret), KPC(tb_ctx.get_entity()));
   }
   OB_TABLE_END_AUDIT(ret_code, ret,
                      snapshot, tb_ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
@@ -1012,7 +1012,7 @@ int ObTableBatchService::process_delete(ObTableCtx &tb_ctx, ObTableOperationResu
                        tb_ctx.get_table_name(),
                        tb_ctx.get_audit_ctx(), op);
   if (OB_FAIL(ObTableOpWrapper::process_op<TABLE_API_EXEC_DELETE>(tb_ctx, result))) {
-    LOG_WARN("fail to process delete", K(ret));
+    LOG_WARN("fail to process delete", K(ret), KPC(tb_ctx.get_entity()));
   }
   OB_TABLE_END_AUDIT(ret_code, ret,
                      snapshot, tb_ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
@@ -1031,7 +1031,7 @@ int ObTableBatchService::process_update(ObTableCtx &tb_ctx, ObTableOperationResu
                        tb_ctx.get_table_name(),
                        tb_ctx.get_audit_ctx(), op);
   if (OB_FAIL(ObTableOpWrapper::process_op<TABLE_API_EXEC_UPDATE>(tb_ctx, result))) {
-    LOG_WARN("fail to process update", K(ret));
+    LOG_WARN("fail to process update", K(ret), KPC(tb_ctx.get_entity()));
   }
   OB_TABLE_END_AUDIT(ret_code, ret,
                      snapshot, tb_ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
@@ -1050,7 +1050,7 @@ int ObTableBatchService::process_replace(ObTableCtx &tb_ctx, ObTableOperationRes
                        tb_ctx.get_table_name(),
                        tb_ctx.get_audit_ctx(), op);
   if (OB_FAIL(ObTableOpWrapper::process_op<TABLE_API_EXEC_REPLACE>(tb_ctx, result))) {
-    LOG_WARN("fail to process replace", K(ret));
+    LOG_WARN("fail to process replace", K(ret), KPC(tb_ctx.get_entity()));
   }
   OB_TABLE_END_AUDIT(ret_code, ret,
                      snapshot, tb_ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
@@ -1069,7 +1069,7 @@ int ObTableBatchService::process_insert_up(ObTableCtx &tb_ctx, ObTableOperationR
                        tb_ctx.get_table_name(),
                        tb_ctx.get_audit_ctx(), op);
   if (OB_FAIL(ObTableOpWrapper::process_insert_up_op(tb_ctx, result))) {
-    LOG_WARN("fail to process insert or update", K(ret));
+    LOG_WARN("fail to process insert or update", K(ret), KPC(tb_ctx.get_entity()));
   }
   OB_TABLE_END_AUDIT(ret_code, ret,
                      snapshot, tb_ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
@@ -1088,7 +1088,7 @@ int ObTableBatchService::process_put(ObTableCtx &tb_ctx, ObTableOperationResult 
                        tb_ctx.get_table_name(),
                        tb_ctx.get_audit_ctx(), op);
   if (OB_FAIL(ObTableOpWrapper::process_put_op(tb_ctx, result))) {
-    LOG_WARN("fail to process put", K(ret));
+    LOG_WARN("fail to process put", K(ret), KPC(tb_ctx.get_entity()));
   }
 
   OB_TABLE_END_AUDIT(ret_code, ret,
@@ -1108,7 +1108,7 @@ int ObTableBatchService::process_increment_or_append(ObTableCtx &tb_ctx, ObTable
                        tb_ctx.get_table_name(),
                        tb_ctx.get_audit_ctx(), op);
   if (OB_FAIL(ObTableOpWrapper::process_incr_or_append_op(tb_ctx, result))) {
-    LOG_WARN("fail to process increment or append", K(ret));
+    LOG_WARN("fail to process increment or append", K(ret), KPC(tb_ctx.get_entity()));
   }
 
   StmtType stmt_type = tb_ctx.is_inc() ? StmtType::T_KV_INCREMENT : StmtType::T_KV_APPEND;

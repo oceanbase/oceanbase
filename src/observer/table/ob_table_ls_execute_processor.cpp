@@ -1584,7 +1584,7 @@ int ObTableLSExecuteP::execute_tablet_op(const ObTableTabletOp &tablet_op,
                                           schema_cache_guard,
                                           simple_table_schema,
                                           tablet_result))) {
-        LOG_WARN("fail to execute tablet batch operations", K(ret));
+        LOG_WARN("fail to execute tablet batch operations", K(ret), K(tablet_op));
       }
     }
   }
@@ -1663,7 +1663,7 @@ int ObTableLSExecuteP::execute_tablet_batch_ops(const ObTableTabletOp &tablet_op
                                  batch_ctx))) {
         LOG_WARN("fail to init batch ctx", K(ret));
       } else if (OB_FAIL(ObTableBatchService::execute(batch_ctx, table_operations, tablet_result))) {
-        LOG_WARN("fail to execute batch operation", K(ret));
+        LOG_WARN("fail to execute batch operation", K(ret), K(table_operations));
       } else if (OB_ISNULL(arg_.ls_op_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ls op is null", K(ret));

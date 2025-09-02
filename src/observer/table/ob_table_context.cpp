@@ -811,7 +811,8 @@ int ObTableCtx::adjust_hkv_v2_entity()
     LOG_WARN("entity type is not hkv_v2", K(ret), K(entity_->get_entity_type()));
   } else {
     ObHCell *hcell = const_cast<ObHCell *>(static_cast<const ObHCell *>(entity_));
-    ObSEArray<const ObTableColumnInfo *, 4> hbase_col_infos;
+    ObSEArray<const ObTableColumnInfo*, 6> hbase_col_infos;
+    hbase_col_infos.set_attr(ObMemAttr(MTL_ID(), "HColInfos"));
     if (OB_FAIL(schema_cache_guard_->get_hbase_column_infos(hbase_col_infos))) {
       LOG_WARN("fail to get hbase column infos", K(ret));
     } else if (hbase_col_infos.count() < hcell->count()) {
