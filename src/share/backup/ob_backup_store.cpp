@@ -581,10 +581,11 @@ int ObBackupDestMgr::remote_execute_if_need_(obrpc::ObSrvRpcProxy &rpc_proxy,
   if (!is_valid_type(type)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid remote execute type", K(ret), K(type));
-  } else if (OB_FAIL(ObBackupUtils::get_tenant_backup_servers(tenant_id_,
+  } else if (OB_FAIL(ObBackupUtils::get_tenant_backup_servers(backup_dest_.get_storage_info()->extension_,
+                                                             tenant_id_,
                                                              server_list,
                                                              is_self_tenant_server))) {
-    LOG_WARN("fail to get tenant alive servers", K(ret), K_(tenant_id));
+    LOG_WARN("fail to get tenant alive servers", K(ret), K_(tenant_id), K(backup_dest_));
   } else if (OB_FALSE_IT(need_remote_execute = !is_self_tenant_server)) {
   } else if (need_remote_execute) {  // then forward request to a tenant server
     if (is_remote_execute_) { // but reciever can not foward this request again

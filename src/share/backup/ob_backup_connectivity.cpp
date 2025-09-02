@@ -183,8 +183,9 @@ int ObBackupConnectivityCheckManager::schedule_check_read_write_consistency_(con
   } else if (!backup_dest.is_valid() || !backup_dest.get_storage_info()->is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("backup dest is valid", K(ret), K_(tenant_id));
-  } else if (OB_FAIL(ObBackupUtils::get_tenant_backup_servers(tenant_id_, server_list, is_self_tenant_server))) {
-    LOG_WARN("fail to get tenant alive servers", K(ret), K_(tenant_id));
+  } else if (OB_FAIL(ObBackupUtils::get_tenant_backup_servers(backup_dest.get_storage_info()->extension_,
+                                                                  tenant_id_, server_list, is_self_tenant_server))) {
+    LOG_WARN("fail to get tenant alive servers", K(ret), K_(tenant_id), K(backup_dest));
   } else if (!is_self_tenant_server) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("this server is not in tenant's server list", KR(ret), "curr_server", GCONF.self_addr_, K(server_list));
@@ -1915,14 +1916,13 @@ int ObBackupDestIOPermissionMgr::refresh_and_get_dest_ids_in_map_(ObIArray<int64
 }
 
 int ObBackupDestIOPermissionMgr::get_server_locality_info_(
+    const ObAddr &addr,
     common::ObRegion &region,
     common::ObIDC &idc,
-    common::ObZone &zone) const
+    common::ObZone &zone)
 {
   int ret = OB_SUCCESS;
-  const ObAddr addr = GCTX.self_addr();
   ObLocalityManager * locality_manager = GCTX.locality_manager_;
-  const ObAddr &self_addr = GCTX.self_addr();
   zone.reset();
   idc.reset();
   region.reset();
@@ -1930,16 +1930,17 @@ int ObBackupDestIOPermissionMgr::get_server_locality_info_(
   if (OB_ISNULL(locality_manager)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("local manager is null", K(ret));
-  } else if (OB_FAIL(locality_manager->get_server_region(self_addr, region))) {
-    LOG_WARN("failed to get self region", K(ret), K(self_addr));
-  } else if (OB_FAIL(locality_manager->get_server_idc(self_addr, idc))) {
-    LOG_WARN("failed to get self idc", K(ret), K(self_addr));
-  } else if (OB_FAIL(locality_manager->get_server_zone(self_addr, zone))) {
+  } else if (OB_FAIL(locality_manager->get_server_region(addr, region))) {
+    LOG_WARN("failed to get self region", K(ret), K(addr));
+  } else if (OB_FAIL(locality_manager->get_server_idc(addr, idc))) {
+    LOG_WARN("failed to get self idc", K(ret), K(addr));
+  } else if (OB_FAIL(locality_manager->get_server_zone(addr, zone))) {
+    LOG_WARN("failed to get self zone", K(ret), K(addr));
+  }
+  if (OB_FAIL(ret)) {
     if (OB_ENTRY_NOT_EXIST == ret) {
+      LOG_INFO("not set locality info, default same.", K(ret), K(addr), K(region), K(idc), K(zone));
       ret = OB_SUCCESS;
-      LOG_INFO("not set zone, default same.", K(zone));
-    } else {
-      LOG_WARN("failed to get src idc", K(ret), K(addr));
     }
   } else {
     LOG_INFO("succeed to get region and idc", K(addr), K(region), K(idc), K(zone));
@@ -2094,10 +2095,11 @@ int ObBackupDestIOPermissionMgr::refresh_io_permission()
   const int64_t now_time = ObTimeUtility::current_time();
   ObDestIOProhibitedInfo prohibited_info;
   share::ObBackupSrcType src_type;
+  const ObAddr &self_addr = GCTX.self_addr();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObBackupDestIOPermissionMgr not init", K(ret));
-  } else if (OB_FAIL(get_server_locality_info_(region_, idc_, zone_))) {
+  } else if (OB_FAIL(get_server_locality_info_(self_addr, region_, idc_, zone_))) {
     LOG_WARN("failed to get server geography info", K(ret));
   } else if (OB_FAIL(refresh_and_get_dest_ids_in_map_(dest_ids))) {
     LOG_WARN("failed to statistic dest ids need refresh", K(ret));
@@ -2534,7 +2536,7 @@ int ObBackupDestIOPermissionMgr::check_idc_valid(const char *src_info)
 int ObBackupChangeExternalStorageDestUtil::change_src_info(
     common::ObISQLClient &proxy,
     const uint64_t tenant_id,
-    ObBackupDestAttribute &option,
+    const ObBackupDestAttribute &option,
     const ObBackupDest &backup_dest)
 {
   int ret = OB_SUCCESS;
@@ -2542,10 +2544,10 @@ int ObBackupChangeExternalStorageDestUtil::change_src_info(
 
   if (OB_INVALID_ID == tenant_id || !backup_dest.is_valid() || OB_ISNULL(option.src_info_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(backup_dest));
+    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(backup_dest), KP(option.src_info_));
   } else {
     char extension[OB_MAX_BACKUP_EXTENSION_LENGTH] = { 0 };
-    char *src_info = option.src_info_;
+    const char *src_info = option.src_info_;
     if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest_extension(
               proxy, tenant_id, backup_dest, extension, sizeof(extension)))) {
       if (OB_ITER_END == ret) {
@@ -2723,6 +2725,65 @@ int ObBackupDestIOPermissionMgr::separate_locality_info_from_dest_string(
                 K(dest_string_length), K(token), KP(dest_string));
           }
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBackupDestIOPermissionMgr::filter_server_list_by_src_info(
+  const common::ObArray<ObAddr> &server_list,
+  const char *extension,
+  common::ObArray<ObAddr> &filtered_server_list)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(extension)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(extension));
+  } else {
+    ObBackupSrcInfo src_info;
+    common::ObRegion region;
+    common::ObIDC idc;
+    common::ObZone zone;
+    bool locality_valid = false;
+    if (OB_FAIL(get_src_info_from_extension(extension, src_info))) {
+      LOG_WARN("failed to get src info from extension", K(ret), K(extension));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < server_list.count(); ++i) {
+      const ObAddr &server = server_list.at(i);
+      zone.reset();
+      idc.reset();
+      region.reset();
+      locality_valid = false;
+      if (OB_FAIL(get_server_locality_info_(server, region, idc, zone))) {
+        LOG_WARN("failed to get server locality info", K(ret), K(server));
+      } else if (OB_FAIL(src_info.check_locality_info_valid(region, idc, zone, locality_valid))) {
+        LOG_WARN("failed to check locality info valid", K(ret), K(server), K(region), K(idc), K(zone));
+      } else if (locality_valid) {
+        if (OB_FAIL(filtered_server_list.push_back(server))) {
+          LOG_WARN("failed to push back server", K(ret), K(server));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBackupDestIOPermissionMgr::get_src_info_from_extension(const char *extension, ObBackupSrcInfo &src_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(extension)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(extension));
+  } else {
+    src_info.reset();
+    char locality_info_str[OB_MAX_BACKUP_SRC_INFO_LENGTH] = {0};
+    if (OB_FAIL(get_src_info_from_extension(ObString(extension), locality_info_str,
+                                              sizeof(locality_info_str), src_info.src_type_))) {
+      LOG_WARN("failed to get src info from extension", K(ret), K(extension));
+    } else if ('\0' !=  locality_info_str[0]) {
+      if (OB_FAIL(ObBackupUtils::parse_backup_format_input(ObString(locality_info_str), src_info.locality_list_))) {
+        LOG_WARN("failed to parse backup format input", K(ret), K(locality_info_str));
       }
     }
   }

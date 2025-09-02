@@ -2561,8 +2561,8 @@ int ObBackupUtils::check_is_tmp_file(const common::ObString &file_name, bool &is
   return ret;
 }
 
-//TODO(xingzhi): adapt backup zone
 int ObBackupUtils::get_tenant_backup_servers(
+    const char *extension,
     const uint64_t tenant_id,
     common::ObArray<ObAddr> &server_list,
     bool &is_self_tenant_server)
@@ -2571,19 +2571,25 @@ int ObBackupUtils::get_tenant_backup_servers(
   server_list.reuse();
   is_self_tenant_server = false;
   ObArray<ObZone> full_zones;
+  ObArray<ObAddr> tmp_server_list;
 
   if (!is_valid_tenant_id(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant id", K(ret), K(tenant_id));
-  } else if (OB_FAIL(get_full_type_zones_in_locality_(tenant_id, full_zones))) {
-    LOG_WARN("fail to get F zones in locality", K(ret), K(tenant_id));
-  } else if (OB_FAIL(get_tenant_alive_servers_in_zone_(tenant_id, full_zones, server_list, is_self_tenant_server))) {
-    LOG_WARN("fail to get tenant alive servers", K(ret), K(tenant_id), K(full_zones));
+  } else {
+    if (OB_FAIL(get_full_type_zones_in_locality_(tenant_id, full_zones))) {
+      LOG_WARN("fail to get F zones in locality", K(ret), K(tenant_id));
+    } else if (OB_FAIL(get_tenant_alive_servers_in_zone_(tenant_id, full_zones,
+                                                              tmp_server_list, is_self_tenant_server))) {
+      LOG_WARN("fail to get tenant alive servers", K(ret), K(tenant_id), K(full_zones));
+    } else if (OB_FAIL(ObBackupDestIOPermissionMgr::filter_server_list_by_src_info(tmp_server_list,
+                                                                                      extension, server_list))) {
+      LOG_WARN("fail to filter server list by src info", K(ret), K(tenant_id), K(tmp_server_list));
+    }
   }
+
   return ret;
 }
-
-
 
 int ObBackupUtils::get_full_type_zones_in_locality_(const uint64_t tenant_id, ObArray<ObZone> &full_zones)
 {
@@ -5381,4 +5387,48 @@ ObBackupDestType::TYPE ObBackupDestType::get_type(const char *type_str)
     }
   }
   return type;
+}
+void ObBackupSrcInfo::reset()
+{
+  src_type_ = ObBackupSrcType::MAX;
+  locality_list_.reset();
+}
+
+ObBackupSrcInfo::ObBackupSrcInfo()
+  : src_type_(ObBackupSrcType::MAX),
+    locality_list_()
+{
+}
+
+ObBackupSrcInfo::~ObBackupSrcInfo()
+{
+  reset();
+}
+
+int ObBackupSrcInfo::check_locality_info_valid(const ObRegion &region, const ObIDC &idc,
+    const ObZone &zone, bool &locality_valid) const
+{
+  int ret = OB_SUCCESS;
+  locality_valid = false;
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(ret), K(region), K(idc), K(zone), K_(src_type), K_(locality_list));
+  } else if (is_empty()) {
+    locality_valid = true;
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < locality_list_.count(); ++i) {
+      const ObBackupZone &locality = locality_list_.at(i);
+      if (is_zone() && locality.locality_equal(zone)) {
+        locality_valid = true;
+        break;
+      } else if (is_region() && locality.locality_equal(region)) {
+        locality_valid = true;
+        break;
+      } else if (is_idc() && locality.locality_equal(idc)) {
+        locality_valid = true;
+        break;
+      }
+    }
+  }
+  return ret;
 }
