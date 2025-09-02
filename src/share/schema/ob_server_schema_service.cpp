@@ -6419,10 +6419,7 @@ int ObServerSchemaService::refresh_full_schema(
             sys_schema_change = true;
             LOG_WARN("core schema version change, try again",
                      KR(ret), K(schema_status), K(core_schema_version), K(schema_version));
-          } else if (OB_FAIL(check_sys_schema_change(sql_client, schema_status,
-              local_schema_version, schema_version, sys_schema_change))) {
-            LOG_WARN("check_sys_schema_change failed", KR(ret), K(schema_status), K(schema_version));
-          } else if (sys_schema_change) {
+          } else {
             // for sys table schema, we publish as sys_temp_version
             const int64_t sys_formal_version = std::max(core_schema_version, schema_version);
             int64_t publish_version = 0;
