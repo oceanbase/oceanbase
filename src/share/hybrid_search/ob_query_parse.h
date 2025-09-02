@@ -162,7 +162,7 @@ private :
                                  QueryStringMinShouldMatchInfo &qs_min_should_match_info,
                                  ObReqScoreType score_type, const ObItemType opr = T_OP_OR);
   int construct_all_query(ObQueryReqFromJson *&query_req);
-  int parse_const(ObIJsonBase &val_node, ObReqConstExpr *&var);
+  int parse_const(ObIJsonBase &val_node, ObReqConstExpr *&var, bool is_numeric = false);
   int wrap_sub_query(ObString &sub_query_name, ObQueryReqFromJson *&query_req);
   int wrap_json_result(ObQueryReqFromJson *&query_res);
   int construct_query_with_similarity(ObReqExpr *dist, ObReqConstExpr *similar, ObQueryReqFromJson *&query_req);
