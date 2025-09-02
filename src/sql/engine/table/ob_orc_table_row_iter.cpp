@@ -328,10 +328,7 @@ int ObOrcTableRowIterator::init(const storage::ObTableScanParam *scan_param)
       if (scan_param_->ext_enable_late_materialization_ &&
           scan_param->pd_storage_filters_ != nullptr) {
         // build filter expr rels for late materialization
-        OZ (build_filter_expr_rels(scan_param->pd_storage_filters_, column_exprs_,
-                                   *(scan_param_->ext_column_dependent_exprs_), file_column_exprs_,
-                                   file_meta_column_exprs_,
-                                   column_sel_mask_));
+        OZ (build_filter_expr_rels(scan_param->pd_storage_filters_, this));
       }
     }
 
@@ -1317,9 +1314,15 @@ int ObOrcTableRowIterator::load_filter_column(const common::ObIArray<uint64_t> &
       eager_reader.orc_batch_->numElements : eval_ctx.max_batch_size_;
       bool column_need_conv = true;
       if (filter_expr_rel->is_file_meta_column_) {
-        ObExpr *meta_expr = file_meta_column_exprs_.at(file_col_expr_idx);
-        if (OB_FAIL(fill_file_meta_column(eval_ctx, meta_expr, row_count))) {
-          LOG_WARN("fail to fill file meta column", K(ret));
+        if (file_col_expr_idx == -1) {
+          // the file meta column is the row id column
+          OZ (calc_exprs_for_rowid(row_count, state_, false /* update_state */));
+          column_need_conv = false;
+        } else {
+          ObExpr *meta_expr = file_meta_column_exprs_.at(file_col_expr_idx);
+          if (OB_FAIL(fill_file_meta_column(eval_ctx, meta_expr, row_count))) {
+            LOG_WARN("fail to fill file meta column", K(ret));
+          }
         }
       } else {
         DataLoader &data_loader = eager_reader.data_loaders_.at(file_col_expr_idx);

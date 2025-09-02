@@ -241,6 +241,7 @@ struct ObColumnDefaultValue {
 
 class ObExternalTableRowIterator : public common::ObNewRowIterator, public ObDiagnosisInfoProvider {
 public:
+  friend class ObExternalTablePushdownFilter;
   ObExternalTableRowIterator() :
     scan_param_(nullptr), line_number_expr_(NULL), file_id_expr_(NULL), file_name_expr_(NULL),
     delete_bitmap_(nullptr), delete_bitmap_builder_(nullptr), reader_profile_(),
@@ -267,7 +268,8 @@ protected:
                                         const share::ObExternalTablePartInfoArray *partition_array,
                                         common::ObNewRow &value);
   int fill_file_partition_expr(ObExpr *expr, common::ObNewRow &value, const int64_t row_count);
-  int calc_exprs_for_rowid(const int64_t read_count, ObExternalIteratorState &state);
+  int calc_exprs_for_rowid(const int64_t read_count, ObExternalIteratorState &state,
+                           const bool update_state = true);
   bool is_dummy_file(const ObString &file_url);
   static inline bool text_type_length_is_valid_at_runtime(ObObjType type, int64_t text_data_length) {
     bool is_valid = false;

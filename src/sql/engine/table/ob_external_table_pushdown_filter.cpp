@@ -404,19 +404,15 @@ int ObExternalTablePushdownFilter::extract_skipping_filter_from_tree(
 
 int ObExternalTablePushdownFilter::build_filter_expr_rels(
     sql::ObPushdownFilterExecutor *root,
-    const common::ObIArray<ObExpr*> &column_exprs,
-    const common::ObIArray<ObExpr*> &column_conv_exprs,
-    const common::ObIArray<ObExpr*> &file_column_exprs,
-    const common::ObIArray<ObExpr*> &file_meta_column_exprs,
-    const common::ObIArray<bool> &column_sel_mask)
+    const ObExternalTableRowIterator *row_iter)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(root)) {
+  if (OB_ISNULL(root) || OB_ISNULL(row_iter)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret));
-  } else if (OB_FAIL(is_eager_column_.prepare_allocate(file_column_exprs.count()))) {
+    LOG_WARN("invalid argument", K(ret), KP(root), KP(row_iter));
+  } else if (OB_FAIL(is_eager_column_.prepare_allocate(row_iter->file_column_exprs_.count()))) {
     LOG_WARN("fail to prepare allocate array", K(ret));
-  } else if (OB_FAIL(is_dup_project_.prepare_allocate(file_column_exprs.count()))) {
+  } else if (OB_FAIL(is_dup_project_.prepare_allocate(row_iter->file_column_exprs_.count()))) {
     LOG_WARN("fail to prepare allocate array", K(ret));
   } else if (OB_FAIL(filter_expr_rels_.create(64, ObMemAttr(MTL_ID(), "ExtTblFtPD")))) {
     LOG_WARN("fail to create hash map", K(ret));
@@ -425,9 +421,7 @@ int ObExternalTablePushdownFilter::build_filter_expr_rels(
       is_eager_column_.at(i) = false;
       is_dup_project_.at(i) = false;
     }
-    if (OB_FAIL(build_filter_expr_rels_recursive(root, column_exprs, column_conv_exprs,
-                                                 file_column_exprs, file_meta_column_exprs,
-                                                 column_sel_mask))) {
+    if (OB_FAIL(build_filter_expr_rels_recursive(root, row_iter))) {
       LOG_WARN("fail to build filter expr rels", K(ret));
     }
   }
@@ -436,11 +430,7 @@ int ObExternalTablePushdownFilter::build_filter_expr_rels(
 
 int ObExternalTablePushdownFilter::build_filter_expr_rels_recursive(
     sql::ObPushdownFilterExecutor *filter,
-    const common::ObIArray<ObExpr*> &column_exprs,
-    const common::ObIArray<ObExpr*> &column_conv_exprs,
-    const common::ObIArray<ObExpr*> &file_column_exprs,
-    const common::ObIArray<ObExpr*> &file_meta_column_exprs,
-    const common::ObIArray<bool> &column_sel_mask)
+    const ObExternalTableRowIterator *row_iter)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(filter)) {
@@ -452,8 +442,7 @@ int ObExternalTablePushdownFilter::build_filter_expr_rels_recursive(
       if (OB_ISNULL(children[i])) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected null child filter", K(ret));
-      } else if (OB_FAIL(build_filter_expr_rels_recursive(children[i], column_exprs,
-          column_conv_exprs, file_column_exprs, file_meta_column_exprs, column_sel_mask))) {
+      } else if (OB_FAIL(build_filter_expr_rels_recursive(children[i], row_iter))) {
         LOG_WARN("Fail to build filter expr rels", K(ret), K(i), KP(children[i]));
       }
     }
@@ -473,9 +462,7 @@ int ObExternalTablePushdownFilter::build_filter_expr_rels_recursive(
         for (int64_t i = 0; OB_SUCC(ret) && i < col_ids.count(); ++i) {
           const uint64_t col_id = col_ids.at(i);
           const ObExpr *col_expr = col_exprs->at(i);
-          if (OB_FAIL(build_filter_expr_rel(col_id, col_expr, column_exprs, column_conv_exprs,
-                                            file_column_exprs, file_meta_column_exprs,
-                                            column_sel_mask))) {
+          if (OB_FAIL(build_filter_expr_rel(col_id, col_expr, row_iter))) {
             LOG_WARN("fail to build filter expr rel", K(ret), K(i), K(col_id), KP(col_expr));
           }
         }
@@ -486,12 +473,7 @@ int ObExternalTablePushdownFilter::build_filter_expr_rels_recursive(
 }
 
 int ObExternalTablePushdownFilter::build_filter_expr_rel(
-    const uint64_t col_id, const ObExpr *col_expr,
-    const common::ObIArray<ObExpr*> &column_exprs,
-    const common::ObIArray<ObExpr*> &column_conv_exprs,
-    const common::ObIArray<ObExpr*> &file_column_exprs,
-    const common::ObIArray<ObExpr*> &file_meta_column_exprs,
-    const common::ObIArray<bool> &column_sel_mask)
+    const uint64_t col_id, const ObExpr *col_expr, const ObExternalTableRowIterator *row_iter)
 {
   int ret = OB_SUCCESS;
   FilterExprRel rel;
@@ -505,24 +487,29 @@ int ObExternalTablePushdownFilter::build_filter_expr_rel(
     const ObExpr *column_conv_expr = nullptr;
     // step 1: find the index of column_expr in column_exprs
     int64_t index = -1;
-    for (int64_t i = 0; i < column_exprs.count(); ++i) {
-      if (column_exprs.at(i) == column_expr) {
-        index = i;
-        break;
-      }
-    }
-    if (OB_UNLIKELY(index < 0)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("column expr not found", K(ret), K(col_id), K(col_expr));
+    bool is_file_meta_column = false;
+    if (col_expr == row_iter->line_number_expr_ || col_expr == row_iter->file_id_expr_) {
+      is_file_meta_column = true;
     } else {
-      column_conv_expr = column_conv_exprs.at(index);
+      for (int64_t i = 0; i < row_iter->column_exprs_.count(); ++i) {
+        if (row_iter->column_exprs_.at(i) == column_expr) {
+          index = i;
+          break;
+        }
+      }
+      if (OB_UNLIKELY(index < 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("file column expr not found", K(ret));
+      } else {
+        column_conv_expr = row_iter->scan_param_->ext_column_dependent_exprs_->at(index);
+      }
     }
     if (OB_SUCC(ret)) {
       // step 2: find the file column expr in column convert.
       int64_t file_col_expr_index = -1;
-      bool is_file_meta_column = false;
-      if (OB_FAIL(find_ext_tbl_expr_index(column_conv_expr, file_column_exprs,
-          file_meta_column_exprs, file_col_expr_index, is_file_meta_column))) {
+      if (!is_file_meta_column && OB_FAIL(find_ext_tbl_expr_index(column_conv_expr,
+          row_iter->file_column_exprs_, row_iter->file_meta_column_exprs_, file_col_expr_index,
+          is_file_meta_column))) {
         LOG_WARN("fail to find ext tbl expr index", K(ret), K(col_id), K(col_expr));
       } else {
         // step 3: insert filter relation item to hash map
@@ -538,7 +525,7 @@ int ObExternalTablePushdownFilter::build_filter_expr_rel(
         } else if (!is_file_meta_column) {
           // update eager column flag
           is_eager_column_.at(file_col_expr_index) = true;
-          is_dup_project_.at(file_col_expr_index) = column_sel_mask.at(index);
+          is_dup_project_.at(file_col_expr_index) = row_iter->column_sel_mask_.at(index);
         }
       }
     }
