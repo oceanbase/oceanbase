@@ -1541,6 +1541,8 @@ int ObDbmsStatsExecutor::update_online_stat(ObExecContext &ctx,
       bool need_reset_trx_lock_timeout = false;
       common::sqlclient::ObISQLConnection *conn = NULL;
       ctx.set_is_online_stats_gathering(true);
+      const ObString stash_savepoint_name("online stat stash savepoint");
+      bool has_stash_savepoint = false;
       //lib::CompatModeGuard guard(lib::Worker::CompatMode::MYSQL);
       if (OB_FAIL(ObDbmsStatsUtils::cancel_async_gather_stats(ctx))) {
         LOG_WARN("failed to cancel async gather stats", K(ret));
@@ -1554,8 +1556,6 @@ int ObDbmsStatsExecutor::update_online_stat(ObExecContext &ctx,
                                                                          need_reset_trx_lock_timeout,
                                                                          conn))) {
         LOG_WARN("failed to prepare conn and store session for online stats", K(ret));
-      } else if (nullptr != dml_stats && ObOptStatMonitorManager::update_dml_stat_info_from_direct_load(*dml_stats, conn)) {
-        LOG_WARN("fail to update dml stat info", K(ret));
       } else if (OB_FAIL(ObDbmsStatsUtils::get_current_opt_stats(allocator,
                                                                  conn,
                                                                  param,
@@ -1577,6 +1577,11 @@ int ObDbmsStatsExecutor::update_online_stat(ObExecContext &ctx,
                                                            table_stats,
                                                            column_stats))) {
         LOG_WARN("failed to scale col stats", K(ret));
+      } else if (OB_FAIL(ObSqlTransControl::create_stash_savepoint(ctx, stash_savepoint_name))) {
+        LOG_WARN("failed to create stash savepoint", K(ret));
+      } else if (OB_FALSE_IT(has_stash_savepoint = true)) {
+      } else if (nullptr != dml_stats && ObOptStatMonitorManager::update_dml_stat_info_from_direct_load(*dml_stats, conn)) {
+        LOG_WARN("fail to update dml stat info", K(ret));
       } else if (OB_FAIL(ObDbmsStatsUtils::split_batch_write(ctx, conn, table_stats, column_stats, false, true))) {
         LOG_WARN("fail to update stat", K(ret), K(table_stats), K(column_stats));
       } else if (OB_FAIL(ObBasicStatsEstimator::update_last_modified_count(conn, param))) {
@@ -1591,6 +1596,13 @@ int ObDbmsStatsExecutor::update_online_stat(ObExecContext &ctx,
       //release source
       //guard.~CompatModeGuard();
       ctx.set_is_online_stats_gathering(false);
+      if (has_stash_savepoint) {
+        int pop_ret = ObSqlTransControl::release_stash_savepoint(ctx, stash_savepoint_name);
+        if (OB_SUCCESS != pop_ret) {
+          LOG_WARN("fail to release stash savepoint", K(pop_ret));
+          ret = OB_SUCCESS == ret ? pop_ret : ret;
+        }
+      }
       if (OB_NOT_NULL(conn)) {
         int tmp_ret = OB_SUCCESS;
         ctx.get_sql_proxy()->close(conn, tmp_ret);
