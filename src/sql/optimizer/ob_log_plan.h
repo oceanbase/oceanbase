@@ -333,6 +333,9 @@ public:
   int get_table_ids(TableItem *table_item,
                     ObRelIds& table_ids);
 
+  int get_table_ids(const uint64_t table_id,
+                    ObRelIds& rel_ids);
+
   int get_table_ids(const ObIArray<uint64_t> &table_ids,
                     ObRelIds& rel_ids);
 
@@ -349,6 +352,9 @@ public:
   int find_inner_conflict_detector(const ObIArray<ConflictDetector*> &inner_conflict_detectors,
                                   const ObRelIds &rel_ids,
                                   ConflictDetector* &detector);
+
+  int push_back_join_cond_if_needed(ObIArray<ObRawExpr*> &join_conds,
+                                    ObRawExpr *cond);
 
   int satisfy_associativity_rule(const ConflictDetector &left,
                                 const ConflictDetector &right,
@@ -1529,6 +1535,7 @@ protected:
 
   int generate_semi_join_detectors(const ObIArray<SemiInfo*> &semi_infos,
                                   ObRelIds &left_rel_ids,
+                                  ObIArray<ObJoinOrder *> &baserels,
                                   const ObIArray<ConflictDetector*> &inner_join_detectors,
                                   ObIArray<ConflictDetector*> &semi_join_detectors);
 
@@ -1544,9 +1551,9 @@ protected:
 
   int mock_base_rel_detectors(ObJoinOrder *&base_rel);
 
-  int distribute_quals(TableItem *table_item,
-                      const ObIArray<ObRawExpr*> &table_filter,
-                      ObIArray<ObJoinOrder *> &baserels);
+  int distribute_quals(uint64_t table_id,
+                       const ObIArray<ObRawExpr*> &table_filter,
+                       ObIArray<ObJoinOrder *> &baserels);
 
   int flatten_inner_join(TableItem *table_item,
                         ObIArray<ObRawExpr*> &table_filter,
@@ -1566,6 +1573,10 @@ protected:
                             ObIArray<ObRawExpr*> &left_quals,
                             ObIArray<ObRawExpr*> &right_quals,
                             ObIArray<ObRawExpr*> &join_quals);
+
+  int pushdown_semi_conditions(SemiInfo *info,
+                               ObIArray<ObRawExpr*> &right_quals,
+                               ObIArray<ObRawExpr*> &semi_conds);
 
   int generate_cross_product_detector(const ObIArray<TableItem*> &table_items,
                                       ObIArray<ObRawExpr*> &quals,

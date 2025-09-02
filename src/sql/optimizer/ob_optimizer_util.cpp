@@ -4661,13 +4661,8 @@ int ObOptimizerUtil::split_or_qual_on_table(const ObDMLStmt *stmt,
   bool is_valid = false;
   new_expr = NULL;
   ObSEArray<ObSEArray<ObRawExpr *, 16>, 8> sub_exprs;
-  for (int64_t i = 0; OB_SUCC(ret) && i < or_qual.get_param_count(); ++i) {
-    ObSEArray<ObRawExpr *, 16> exprs;
-    if (OB_FAIL(sub_exprs.push_back(exprs))) {
-      LOG_WARN("failed to push back se array", K(ret));
-    }
-  }
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(sub_exprs.prepare_allocate(or_qual.get_param_count()))) {
+    LOG_WARN("failed to prepare allocate", K(ret), K(or_qual.get_param_count()));
   } else if (OB_FAIL(check_push_down_expr(table_ids, or_qual, sub_exprs, is_valid))) {
     LOG_WARN("failed to check push down expr", K(ret));
   } else if (!is_valid) {
