@@ -2513,9 +2513,12 @@ int ObPLExecuteArg::obtain_routine(ObExecContext &ctx,
 {
   int ret = OB_SUCCESS;
   ObPLFunction *local_routine = NULL;
+  ObPLPackageGuard *package_guard = nullptr;
+  OZ (ctx.get_package_guard(package_guard));
+  CK (OB_NOT_NULL(package_guard));
 
   OZ (GCTX.pl_engine_->get_pl_function(ctx,
-                                        *ctx.get_package_guard(),
+                                        *package_guard,
                                         package_id,
                                         routine_id,
                                         subprogram_path,
