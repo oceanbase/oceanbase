@@ -421,7 +421,8 @@ int ObSQLCCLRuleManager::match_ccl_rule_with_sql(ObIAllocator &alloc,
                                                  ObCCLAffectDMLType sql_dml_type,
                                                  const common::hash::ObHashSet<ObCCLDatabaseTableHashWrapper> &sql_relate_databases,
                                                  const common::hash::ObHashSet<ObCCLDatabaseTableHashWrapper> &sql_relate_tables,
-                                                 uint64_t &limited_by_ccl_rule_id)
+                                                 uint64_t &limited_by_ccl_rule_id,
+                                                 ObSqlString &reconstruct_sql)
 {
   int ret = OB_SUCCESS;
   LOG_TRACE("current ccl instrest : ", K(user_name), K(sql), K(is_ps_mode), K(format_sqlid), K(contians_info), K(sql_dml_type));
@@ -431,29 +432,16 @@ int ObSQLCCLRuleManager::match_ccl_rule_with_sql(ObIAllocator &alloc,
   ObCCLRuleMgr::CCLRuleInfos *candidate_ccl_rules = NULL;
   if (OB_ISNULL(sql_ctx.schema_guard_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql_ctx.shcema_guard_ is null ", K(ret));
+    LOG_WARN("sql_ctx.schema_guard_ is null ", K(ret));
   } else if (!sql_ctx.schema_guard_->is_inited()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql_ctx.shcema_guard_ is not init ", K(ret));
+    LOG_WARN("sql_ctx.schema_guard_ is not init ", K(ret));
   } else if (OB_FAIL(sql_ctx.schema_guard_->get_ccl_rule_infos(MTL_ID(), contians_info, candidate_ccl_rules))) {
     LOG_WARN("fail to get ccl_rule_infos from sql_ctx.schema_guard_", K(ret));
   } else {
-    ObSqlString reconstruct_sql;
     if (is_ps_mode) {
-      //For performence, we only reconstruct ps sql once and store it in ObSqlCtx
-      //Put this code after check ccl's dml, database&table if we get a performence problem
-      if (sql_ctx.reconstruct_ps_sql_.empty()) {
-        if (OB_FAIL(ObSQLUtils::reconstruct_ps_sql(reconstruct_sql, sql, param_store))) {
-          LOG_WARN("fail to reconstruct ps sql", K(ret));
-        } else if (OB_FAIL(ob_write_string(alloc, reconstruct_sql.string(), sql_ctx.reconstruct_ps_sql_))) {
-          LOG_WARN("fail to write construct ps sql in sql_ctx", K(ret));
-        } else {
-          LOG_TRACE("orignal ps sql:", K(sql));
-          LOG_TRACE("after ccl reconstruct: ", K(reconstruct_sql));
-        }
-      } else {
-        reconstruct_sql.assign(sql_ctx.reconstruct_ps_sql_);
-      }
+      LOG_TRACE("orignal ps sql:", K(sql));
+      LOG_TRACE("after ccl reconstruct: ", K(reconstruct_sql));
     }
 
     bool match = false;
