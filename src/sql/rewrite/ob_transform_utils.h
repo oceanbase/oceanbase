@@ -1633,6 +1633,7 @@ public:
                                          int &pos,
                                          ObIArray<ObRawExpr*> &new_column_list,
                                          const bool skip_const = true);
+  static bool is_param_always_a_const_expr(const ObRawExpr &expr, const int64_t param_idx);
 
   static int pullup_correlated_exprs(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                      ObIArray<ObRawExpr*> &exprs,
