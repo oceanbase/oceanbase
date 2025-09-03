@@ -711,7 +711,7 @@ int ObMajorMergeScheduler::get_epoch_with_retry(int64_t &freeze_service_epoch)
     FREEZE_TIME_GUARD;
     if (OB_FAIL(ObServiceEpochProxy::get_service_epoch(*sql_proxy_, tenant_id_,
                 ObServiceEpochProxy::FREEZE_SERVICE_EPOCH, freeze_service_epoch))) {
-      const int64_t idle_time_us = 100 * 1000 * (i + 1);
+      const int32_t idle_time_us = 100 * 1000 * (i + 1);
       LOG_WARN("fail to get freeze_service_epoch, will retry", KR(ret), K_(tenant_id),
                K(idle_time_us), "cur_retry_count", i + 1, K(MAX_RETRY_COUNT));
       ob_throttle_usleep(idle_time_us, ret, i + 1);
