@@ -216,6 +216,10 @@ public:
 
   virtual void destroy() override
   {
+    if (saved_session_ != nullptr) {
+      saved_session_->ObSQLSessionInfo::StmtSavedValue::~StmtSavedValue();
+      saved_session_ = nullptr;
+    }
     dml_rtctx_.cleanup();
     trigger_clear_exprs_.reset();
     fk_checkers_.reset();
