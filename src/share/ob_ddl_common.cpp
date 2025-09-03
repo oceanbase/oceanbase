@@ -2087,8 +2087,12 @@ int ObDDLUtil::check_need_update_domain_index_share_table_snapshot(
   } else if ((is_index_with_docid && OB_FAIL(table_schema->get_rowkey_doc_tid(domain_index_share_tid))) ||
              (is_index_with_vid && OB_FAIL(table_schema->get_rowkey_vid_tid(domain_index_share_tid)))) {
     if (OB_ERR_INDEX_KEY_NOT_FOUND == ret) {
-      FLOG_INFO("There may be no rowkey_doc/vid table in origin index, skip update.", K(ret), K(is_index_with_docid), K(is_index_with_vid));
-      ret = OB_SUCCESS;
+      if (!in_table_restore) { // only for primary key change in offline rebuild task
+        FLOG_INFO("There may be no rowkey_doc/vid table in origin index, skip update.", K(ret), K(is_index_with_docid), K(is_index_with_vid));
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to get rowkey_doc/vid table id", K(ret), K(is_index_with_docid), K(is_index_with_vid));
+      }
     }
   } else {
     need_update_snapshot = true;
