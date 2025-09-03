@@ -669,8 +669,6 @@ int ObDASTRMergeIter::set_children_iter_rangekey()
       } else if (topk_mode_ && ir_ctdef_->need_block_max_scan()
           && OB_FAIL(block_max_scan_params_[i]->key_ranges_.push_back(inv_idx_scan_range))) {
         LOG_WARN("failed to push back lookup range", K(ret));
-      } else if (ir_ctdef_->need_fwd_idx_agg() && OB_FAIL(fwd_scan_params_[i]->key_ranges_.push_back(fwd_idx_agg_range))) {
-        LOG_WARN("failed to push back lookup range", K(ret));
       }
     }
   }
