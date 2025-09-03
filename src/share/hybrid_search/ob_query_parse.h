@@ -180,6 +180,7 @@ private :
   int construct_weighted_expr(ObReqExpr *base_expr, double weight, ObReqExpr *&weighted_expr);
   int construct_ip_expr(ObReqColumnExpr *vec_field, ObReqConstExpr *query_vec, ObReqOpExpr *div_expr/* score */,
                         ObReqOpExpr *minus_expr/* distance */, ObReqExpr *&order_by_vec);
+  int set_fts_limit_expr(ObQueryReqFromJson *query, const ObReqConstExpr *size_expr, const ObReqConstExpr *from_expr);
   int get_distance_algor_type(const ObReqColumnExpr &vec_field, ObVectorIndexDistAlgorithm &alg_type);
   int get_match_idx_name(const ObString &match_field, ObString &idx_name);
   int set_distance_score_expr(const ObVectorIndexDistAlgorithm alg_type, ObReqConstExpr *norm_const, ObReqExpr *dist_vec,

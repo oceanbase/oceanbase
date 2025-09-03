@@ -76,7 +76,9 @@ int ObESQueryParser::parse(const common::ObString &req_str, ObQueryReqFromJson *
     if (OB_SUCC(ret)) {
       out_cols_ = source_cols_.empty() ? &user_cols_ : &source_cols_;
       if (query != NULL && knn != NULL) {
-        if (OB_FAIL(construct_hybrid_query(query, knn, query_res))) {
+        if (OB_FAIL(set_fts_limit_expr(query, size_expr, from_expr))) {
+          LOG_WARN("fail to set limit expr to fts query", K(ret));
+        } else if (OB_FAIL(construct_hybrid_query(query, knn, query_res))) {
           LOG_WARN("fail to construct hybrid query", K(ret));
         }
       } else {
@@ -2561,6 +2563,39 @@ int ObESQueryParser::construct_ip_expr(ObReqColumnExpr *vec_field, ObReqConstExp
     one_const->expr_name = "1";
   }
 
+  return ret;
+}
+
+int ObESQueryParser::set_fts_limit_expr(ObQueryReqFromJson *query, const ObReqConstExpr *size_expr, const ObReqConstExpr *from_expr)
+{
+  // add limit for fts query
+  int ret = OB_SUCCESS;
+  if (size_expr != NULL) {
+    const uint64_t FTS_LIMIT_FACTOR = 100;
+    uint64_t size_val = 0;
+    uint64_t from_val = 0;
+    char *buf = NULL;
+    if (OB_FAIL(convert_const_numeric(size_expr->expr_name, size_val))) {
+      LOG_WARN("fail to convert size expr", K(ret));
+    } else if (from_expr != NULL && OB_FAIL(convert_const_numeric(from_expr->expr_name, from_val))) {
+      LOG_WARN("fail to convert from expr", K(ret));
+    } else {
+      uint64_t limit_val = (size_val + from_val) * FTS_LIMIT_FACTOR;
+      ObReqConstExpr *fts_limit_expr = NULL;
+      if (OB_ISNULL(fts_limit_expr = OB_NEWx(ObReqConstExpr, &alloc_, ObIntType))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to create fts limit expr", K(ret));
+      } else if (OB_ISNULL(buf = reinterpret_cast<char*>(alloc_.alloc(ObFastFormatInt::MAX_DIGITS10_STR_SIZE)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate memory", K(ret));
+      } else {
+        MEMSET(buf, 0, ObFastFormatInt::MAX_DIGITS10_STR_SIZE);
+        int64_t len = ObFastFormatInt::format_unsigned(limit_val, buf);
+        fts_limit_expr->expr_name.assign_ptr(buf, len);
+        query->set_limit(fts_limit_expr);
+      }
+    }
+  }
   return ret;
 }
 
