@@ -1813,7 +1813,7 @@ desc oceanbase.__all_virtual_table_mgr;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO		NULL	
 svr_port	bigint(20)	NO		NULL	
-tenant_id	bigint(20)	NO		NULL	
+tenant_id	bigint(20)	NO	MUL	NULL	
 ls_id	bigint(20)	NO		NULL	
 table_type	bigint(20)	NO		NULL	
 tablet_id	bigint(20)	NO		NULL	

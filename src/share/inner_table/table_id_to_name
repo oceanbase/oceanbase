@@ -3171,6 +3171,12 @@
 # 14992: __idx_11031_all_virtual_sql_audit_i1
 # 14992: all_virtual_sql_audit_i1  # INDEX_NAME
 # 14992: __all_virtual_sql_audit  # DATA_BASE_TABLE_NAME
+# 14988: __idx_11056_all_virtual_tablet_sstable_macro_info_i1
+# 14988: all_virtual_tablet_sstable_macro_info_i1  # INDEX_NAME
+# 14988: __all_virtual_tablet_sstable_macro_info  # DATA_BASE_TABLE_NAME
+# 14987: __idx_12034_all_virtual_table_mgr_i1
+# 14987: all_virtual_table_mgr_i1  # INDEX_NAME
+# 14987: __all_virtual_table_mgr  # DATA_BASE_TABLE_NAME
 # 14991: __idx_12185_all_virtual_sql_plan_monitor_i1
 # 14991: all_virtual_sql_plan_monitor_i1  # INDEX_NAME
 # 14991: __all_virtual_sql_plan_monitor  # DATA_BASE_TABLE_NAME
@@ -3208,6 +3214,10 @@
 # 19993: all_virtual_system_event_i1  # INDEX_NAME
 # 19993: __all_virtual_system_event  # DATA_BASE_TABLE_NAME
 # 19993: ALL_VIRTUAL_SYSTEM_EVENT  # DATA_BASE_TABLE_NAME1
+# 19990: __idx_15094_all_virtual_table_mgr_i1
+# 19990: all_virtual_table_mgr_i1  # INDEX_NAME
+# 19990: __all_virtual_table_mgr  # DATA_BASE_TABLE_NAME
+# 19990: ALL_VIRTUAL_TABLE_MGR  # DATA_BASE_TABLE_NAME1
 # 19992: __idx_15100_all_virtual_sql_plan_monitor_i1
 # 19992: all_virtual_sql_plan_monitor_i1  # INDEX_NAME
 # 19992: __all_virtual_sql_plan_monitor  # DATA_BASE_TABLE_NAME

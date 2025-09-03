@@ -1822,14 +1822,16 @@ def def_table_schema(**keywords):
       if keywords.has_key('real_vt') and True == keywords['real_vt']:
         index_name_ids.append([keywords['index_name'], int(keywords['index_table_id']), keywords['table_name'] + keywords['name_postfix'], keywords['tenant_id'], keywords['table_id'], keywords['base_table_name'], keywords['base_table_name1']])
       else:
-        index_name_ids.append([keywords['index_name'], int(ora_virtual_index_table_id), keywords['table_name'] + keywords['name_postfix'], keywords['tenant_id'], keywords['table_id'], keywords['base_table_name'], keywords['base_table_name1']])
-        ora_virtual_index_table_id -= 1
+        if not keywords.has_key('index_table_id_ora'):
+          raise Exception("must specific index_table_id_ora", int(keywords['table_id']), keywords['table_name'])
+        index_name_ids.append([keywords['index_name'], int(keywords['index_table_id_ora']), keywords['table_name'] + keywords['name_postfix'], keywords['tenant_id'], keywords['table_id'], keywords['base_table_name'], keywords['base_table_name1']])
     elif True == is_mysql_virtual_table(int(keywords['table_id'])):
-      index_name_ids.append([keywords['index_name'], int(ob_virtual_index_table_id), keywords['table_name'] + keywords['name_postfix'], keywords['tenant_id'], keywords['table_id'], keywords['base_table_name'], keywords['base_table_name1']])
-      ob_virtual_index_table_id -= 1
+      if not keywords.has_key('index_table_id'):
+        raise Exception("must specific index_table_id", int(keywords['table_id']), keywords['table_name'])
+      index_name_ids.append([keywords['index_name'], keywords['index_table_id'], keywords['table_name'] + keywords['name_postfix'], keywords['tenant_id'], keywords['table_id'], keywords['base_table_name'], keywords['base_table_name1']])
     elif True == is_sys_table(int(keywords['table_id'])):
       if not keywords.has_key('index_table_id'):
-        raise Exception("must specific index_table_id", int(keywords['table_id']))
+        raise Exception("must specific index_table_id", int(keywords['table_id']), keywords['table_name'])
       index_name_ids.append([keywords['index_name'], int(keywords['index_table_id']), keywords['table_name'] + keywords['name_postfix'], keywords['tenant_id'], keywords['table_id'], keywords['base_table_name'], keywords['base_table_name1']])
   else:
     print_method_start(keywords['table_name'] + keywords['name_postfix'])
@@ -1992,6 +1994,8 @@ def def_table_schema(**keywords):
               keywords['index_table_id'] = v['index_table_id']
           if v.has_key('index_using_type'):
               keywords['index_using_type'] = v['index_using_type']
+          if v.has_key('index_table_id_ora'):
+              keywords['index_table_id_ora'] = v['index_table_id_ora']
           keywords['table_type'] = 'USER_INDEX'
           keywords['index_status'] = 'INDEX_STATUS_AVAILABLE'
           keywords['index_type'] = 'INDEX_TYPE_NORMAL_LOCAL';

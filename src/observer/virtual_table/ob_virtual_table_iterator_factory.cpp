@@ -914,6 +914,14 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             } else if (OB_FAIL(table_mgr->init(&allocator))) {
               SERVER_LOG(WARN, "failed to init all virtual table mgr", K(ret));
             } else {
+              bool is_index = false;
+              ObAllVirtualTableMgr::INDEX_TYPE index_type = ObAllVirtualTableMgr::INDEX_TYPE_MAX;
+              if (OB_FAIL(check_is_index(*index_schema, "i1", is_index))) {
+                LOG_WARN("check is index failed", K(ret));
+              } else if (is_index) {
+                index_type = ObAllVirtualTableMgr::INDEX_TYPE_I1;
+              }
+              table_mgr->use_index_scan(index_type);
               table_mgr->set_addr(addr_);
               vt_iter = static_cast<ObVirtualTableIterator *>(table_mgr);
             }
@@ -1945,6 +1953,14 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               if (OB_FAIL(sstable_macro_info->init(&allocator, addr_))) {
                 SERVER_LOG(WARN, "fail to init ObAllVirtualPartitionSSTableMergeInfo, ", K(ret));
               } else {
+                bool is_index = false;
+                ObAllVirtualTabletSSTableMacroInfo::INDEX_TYPE index_type = ObAllVirtualTabletSSTableMacroInfo::INDEX_TYPE_MAX;
+                if (OB_FAIL(check_is_index(*index_schema, "i1", is_index))) {
+                  LOG_WARN("check is index failed", K(ret));
+                } else if (is_index) {
+                  index_type = ObAllVirtualTabletSSTableMacroInfo::INDEX_TYPE_I1;
+                }
+                sstable_macro_info->use_index_scan(index_type);
                 vt_iter = static_cast<ObVirtualTableIterator *>(sstable_macro_info);
               }
             }

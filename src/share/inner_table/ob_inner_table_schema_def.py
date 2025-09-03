@@ -8963,7 +8963,7 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
   index = {'all_virtual_plan_cache_stat_i1' :  { 'index_columns' : ['tenant_id'],
-                     'index_using_type' : 'USING_HASH'}},
+                     'index_using_type' : 'USING_HASH','index_table_id' : '14999','index_table_id_ora' : '19998'}},
 )
 
 def_table_schema(
@@ -9212,7 +9212,7 @@ def_table_schema(
   vtable_route_policy = 'distributed',
   partition_columns = ['svr_ip', 'svr_port'],
   index = {'all_virtual_session_event_i1' : { 'index_columns' : ['session_id'],
-                    'index_using_type' : 'USING_HASH'}},
+                    'index_using_type' : 'USING_HASH','index_table_id' : '14998'}},
 )
 
 def_table_schema(
@@ -9250,7 +9250,7 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
   index = {'all_virtual_session_wait_i1' : { 'index_columns' : ['session_id'],
-                    'index_using_type' : 'USING_HASH'}},
+                    'index_using_type' : 'USING_HASH','index_table_id' : '14997','index_table_id_ora' : '19997'}},
 )
 
 
@@ -9286,7 +9286,7 @@ normal_columns = [
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
   index = {'all_virtual_session_wait_history_i1' : { 'index_columns' : ['session_id'],
-                    'index_using_type' : 'USING_HASH'}},
+                    'index_using_type' : 'USING_HASH','index_table_id' : '14996','index_table_id_ora' : '19996'}},
 )
 
 def_table_schema(
@@ -9319,7 +9319,7 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
   index = {'all_virtual_system_event_i1' : { 'index_columns' : ['tenant_id'],
-                    'index_using_type' : 'USING_HASH'}},
+                    'index_using_type' : 'USING_HASH','index_table_id' : '14995', 'index_table_id_ora' : '19993'}},
 )
 
 
@@ -9393,7 +9393,7 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
   index = {'all_virtual_sesstat_i1' : { 'index_columns' : ['session_id'],
-                    'index_using_type' : 'USING_HASH'}},
+                    'index_using_type' : 'USING_HASH','index_table_id' : '14994', 'index_table_id_ora' : '19995'}},
 )
 
 
@@ -9424,7 +9424,7 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
   index = {'all_virtual_sysstat_i1' : { 'index_columns' : ['tenant_id'],
-                    'index_using_type' : 'USING_HASH'}},
+                    'index_using_type' : 'USING_HASH','index_table_id' : '14993', 'index_table_id_ora' : '19994'}},
 )
 
 ##11022:__all_virtual_storage_stat obsolated in 4.0
@@ -9763,7 +9763,7 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
   index = {'all_virtual_sql_audit_i1' :  { 'index_columns' : ['tenant_id', 'request_id'],
-                     'index_using_type' : 'USING_BTREE'}},
+                     'index_using_type' : 'USING_BTREE','index_table_id' : '14992','index_table_id_ora' : '19999'}},
 )
 
 # 11033: __all_virtual_partition_sstable_image_info # abandoned in 4.0
@@ -10123,6 +10123,9 @@ def_table_schema(
    ],
     partition_columns = ['svr_ip', 'svr_port'],
     vtable_route_policy = 'distributed',
+    index = {'all_virtual_tablet_sstable_macro_info_i1' :  { 'index_columns' : ['tenant_id', 'ls_id', 'tablet_id', 'end_log_scn'],
+                     'index_using_type' : 'USING_HASH','index_table_id' : '14988'},
+    }
 )
 
 def_table_schema(
@@ -11702,6 +11705,8 @@ def_table_schema(
     ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
+  index = {'all_virtual_table_mgr_i1' :  { 'index_columns' : ['tenant_id', 'ls_id', 'tablet_id'],
+                     'index_using_type' : 'USING_HASH','index_table_id' : '14987', 'index_table_id_ora' : '19990'}},
 )
 
 def_table_schema(**gen_iterate_virtual_table_def(
@@ -12699,7 +12704,7 @@ def_table_schema(
   partition_columns = ['SVR_IP', 'SVR_PORT'],
   vtable_route_policy = 'distributed',
   index = {'all_virtual_sql_plan_monitor_i1' :  { 'index_columns' : ['TENANT_ID', 'REQUEST_ID'],
-                     'index_using_type' : 'USING_BTREE'}},
+                     'index_using_type' : 'USING_BTREE','index_table_id' : '14991', 'index_table_id_ora' : '19992'}},
 )
 
 
@@ -13982,7 +13987,7 @@ def_table_schema(
   partition_columns = ['SVR_IP', 'SVR_PORT'],
   vtable_route_policy = 'distributed',
   index = {'all_virtual_ash_i1' : { 'index_columns' : ['SAMPLE_TIME'],
-                    'index_using_type' : 'USING_BTREE'}},
+                    'index_using_type' : 'USING_BTREE','index_table_id' : '14990', 'index_table_id_ora' : '19991'}},
 )
 
 def_table_schema(
@@ -16509,7 +16514,7 @@ def_table_schema(
   ],
   vtable_route_policy = 'only_rs',
   index = {'all_virtual_ddl_diagnose_info_i1' : { 'index_columns' : ['ddl_task_id'],
-                    'index_using_type' : 'USING_HASH'}},
+                    'index_using_type' : 'USING_HASH','index_table_id' : '14989'}},
 )
 
 # 12515: __all_virtual_plugin_info
