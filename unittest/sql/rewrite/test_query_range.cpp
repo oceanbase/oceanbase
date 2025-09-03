@@ -1322,7 +1322,7 @@ int main(int argc, char **argv)
   init_sql_factories();
   system("rm -rf test_query_range.log*");
   OB_LOGGER.set_file_name("test_query_range.log", true);
-  OB_LOGGER.set_log_level("TRACE");
+  OB_LOGGER.set_log_level("WARN");
   int ret = 0;
   ContextParam param;
   param.set_mem_attr(1001, "QueryRange", ObCtxIds::WORK_AREA)
