@@ -451,6 +451,8 @@ int ObColMaxAggregator::cmp_with_prefix(
         if (left_char_num == right_char_num
             || (left_char_num < right_char_num && tmp_res > 0)
             || (left_char_num > right_char_num && tmp_res > 0)) {
+            // TODO: fix this case on new observer version with compatible ensurance by data version
+            // || (left_char_num > right_char_num && tmp_res < 0)) {
           cmp_res = tmp_res;
         } else {
           const bool left_shorter = left_char_num < right_char_num;
