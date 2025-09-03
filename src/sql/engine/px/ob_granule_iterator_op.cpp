@@ -924,9 +924,12 @@ int ObGranuleIteratorOp::get_gi_task_consumer_node(ObOperator *cur,
     if (PHY_TABLE_SCAN == cur->get_spec().type_
         || PHY_BLOCK_SAMPLE_SCAN == cur->get_spec().type_
         || PHY_ROW_SAMPLE_SCAN == cur->get_spec().type_) {
-      consumer = cur;
-      LOG_TRACE("find the gi_task consumer node", K(cur->get_spec().id_),
-                K(cur->get_spec().type_));
+      const ObTableScanSpec &tsc_spec = static_cast<const ObTableScanSpec&>(cur->get_spec());
+      if (!tsc_spec.use_dist_das_) {
+        consumer = cur;
+        LOG_TRACE("find the gi_task consumer node", K(cur->get_spec().id_),
+                  K(cur->get_spec().type_));
+      }
     }
   } else {
     ObOperator *child = nullptr;

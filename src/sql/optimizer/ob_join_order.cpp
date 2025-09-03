@@ -711,7 +711,8 @@ int ObJoinOrder::compute_parallel_and_server_info_for_base_paths(ObIArray<Access
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < access_paths.count(); i++) {
       if (OB_FAIL(compute_base_table_parallel_and_server_info(op_parallel_rule,
-                                                              parallel, access_paths.at(i)))) {
+                                                              parallel,
+                                                              access_paths.at(i)))) {
         LOG_WARN("failed to compute base table parallel and server info", K(ret));
       }
     }
@@ -881,7 +882,7 @@ int ObJoinOrder::compute_base_table_parallel_and_server_info(const OpParallelRul
     path->op_parallel_rule_ = OpParallelRule::OP_DAS_DOP;
     path->parallel_ = ObGlobalHint::DEFAULT_PARALLEL;
     path->server_cnt_ = path->server_list_.count();
-    path->available_parallel_ = ObGlobalHint::DEFAULT_PARALLEL;
+    path->available_parallel_ = get_plan()->get_optimizer_context().get_parallel();
   } else if (OB_FAIL(schema_guard->get_table_schema(path->index_id_, index_schema))) {
     LOG_WARN("failed to get table schema", K(ret));
   } else if (OB_ISNULL(index_schema)) {
@@ -5175,7 +5176,8 @@ int ObJoinOrder::need_compare_batch_rescan(const JoinPath &first_path,
   if (OB_ISNULL(first_path.right_path_) || OB_ISNULL(second_path.right_path_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(first_path.right_path_), K(second_path.right_path_));
-  } else if (first_path.left_path_ != second_path.left_path_) {
+  } else if (first_path.left_path_ != second_path.left_path_ ||
+             first_path.parallel_ != second_path.parallel_) {
     /* do nothing */
   } else {
     bool simple_rescan_path = false;
@@ -5498,7 +5500,7 @@ int oceanbase::sql::Path::set_parallel_and_server_info_for_match_all()
     ObOptimizerContext &opt_ctx = parent_->get_plan()->get_optimizer_context();
     parallel_ = ObGlobalHint::DEFAULT_PARALLEL;
     op_parallel_rule_ = OpParallelRule::OP_DAS_DOP;
-    available_parallel_ = ObGlobalHint::DEFAULT_PARALLEL;
+    available_parallel_ = MAX(ObGlobalHint::DEFAULT_PARALLEL, opt_ctx.get_parallel());
     server_cnt_ = 1;
     server_list_.reuse();
     if (OB_FAIL(server_list_.push_back(opt_ctx.get_local_server_addr()))) {
@@ -6602,7 +6604,9 @@ int JoinPath::compute_join_path_ordering()
           LOG_WARN("failed to check all interesting order", K(ret));
         } else {
           add_interesting_order_flag(interesting_order_info);
-          is_local_order_ = is_fully_partition_wise() || join_dist_algo_ == DIST_NONE_ALL;
+          is_local_order_ = is_fully_partition_wise() ||
+                            join_dist_algo_ == DIST_NONE_ALL ||
+                            join_dist_algo_ == DIST_ALL_NONE;
         }
       }
     } else { /*do nothing*/ }
@@ -6871,6 +6875,10 @@ int JoinPath::compute_join_path_parallel_and_server_info(ObOptimizerContext *opt
       all_server_list.set_max();
       if (OB_FAIL(server_list.push_back(all_server_list))) {
         LOG_WARN("failed to assign all server list", K(ret));
+      } else if (opt_ctx->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP7)) {
+        parallel = std::max(left_path->available_parallel_, right_path->available_parallel_);
+        server_cnt = left_path->server_cnt_;
+        available_parallel = std::max(left_path->available_parallel_, right_path->available_parallel_);
       } else {
         parallel = left_path->parallel_;
         server_cnt = left_path->server_cnt_;
@@ -6908,6 +6916,8 @@ int JoinPath::compute_join_path_parallel_and_server_info(ObOptimizerContext *opt
     } else if (DistAlgo::DIST_BROADCAST_NONE == join_dist_algo
                || DistAlgo::DIST_BC2HOST_NONE == join_dist_algo) {
       parallel = right_path->parallel_;
+      parallel = (has_nl_param && !right_path->is_single() && opt_ctx->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP7)) ?
+                 std::max(left_path->parallel_, right_path->parallel_) : parallel;
       server_cnt = right_path->server_cnt_;
       if (OB_FAIL(server_list.assign(right_path->server_list_))) {
         LOG_WARN("failed to assign server list", K(ret));
@@ -6933,6 +6943,8 @@ int JoinPath::compute_join_path_parallel_and_server_info(ObOptimizerContext *opt
       }
     } else if (DistAlgo::DIST_PARTITION_NONE == join_dist_algo) {
       parallel = right_path->parallel_;
+      parallel = (has_nl_param && opt_ctx->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP7)) ?
+                 std::max(left_path->parallel_, right_path->parallel_) : parallel;
       server_cnt = right_path->server_cnt_;
       if (OB_FAIL(server_list.assign(right_path->server_list_))) {
         LOG_WARN("failed to assign server list", K(ret));
@@ -10485,8 +10497,11 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
                                     && (distributed_methods == get_dist_algo(distributed_methods));
   bool use_shared_hash_join = false;
   ObSQLSessionInfo *session = NULL;
+  ObQueryCtx *query_ctx = NULL;
+  bool is_single_all_nlj = false;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(left_sharding = left_path.get_sharding()) ||
       OB_ISNULL(session = get_plan()->get_optimizer_context().get_session_info()) ||
+      OB_ISNULL(query_ctx = get_plan()->get_optimizer_context().get_query_ctx()) ||
       OB_ISNULL(right_sharding = right_path.get_sharding()) ||
       OB_ISNULL(left_path.parent_) || OB_ISNULL(right_path.parent_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -10551,7 +10566,9 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
       }
     } else if (!is_push_down) {
       distributed_methods &= ~DIST_BC2HOST_NONE;
-      distributed_methods &= ~DIST_ALL_NONE;
+      if (!query_ctx->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP7)) {
+        distributed_methods &= ~DIST_ALL_NONE;
+      }
       // @guoping.wgp release this constraint in future
       distributed_methods &= ~DIST_HASH_HASH;
       distributed_methods &= ~DIST_HASH_NONE;
@@ -10570,6 +10587,7 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
         distributed_methods &= ~DIST_PARTITION_WISE;
         distributed_methods &= ~DIST_EXT_PARTITION_WISE;
       }
+      is_single_all_nlj = left_sharding->is_single() && right_sharding->is_match_all();
       if (OB_FAIL(right_path.check_is_base_table(right_is_base_table))) {
         LOG_WARN("failed to check is base table", K(ret));
       } else if (!right_is_base_table ||
@@ -10587,10 +10605,14 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
     if (left_sharding->is_local() || left_sharding->is_match_all()) {
       distributed_methods &= ~DIST_NONE_BROADCAST;
       distributed_methods &= ~DIST_NONE_ALL;
-      distributed_methods &= ~DIST_RANDOM_ALL;
+      if (!query_ctx->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP7)) {
+        distributed_methods &= ~DIST_RANDOM_ALL;
+      }
     }
     if (left_sharding->is_match_all()) {
-      distributed_methods &= ~DIST_BC2HOST_NONE;
+      if (!query_ctx->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP7)) {
+        distributed_methods &= ~DIST_BC2HOST_NONE;
+      }
       distributed_methods &= ~DIST_BROADCAST_NONE;
     }
     if (right_sharding->is_match_all()) {
@@ -10609,7 +10631,13 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
 
   // if match none_all, check whether can use random all
   if (OB_SUCC(ret) && (distributed_methods & DistAlgo::DIST_RANDOM_ALL)) {
-    if (join_algo == NESTED_LOOP_JOIN && left_path.is_access_path()
+    if (is_single_all_nlj) {
+      if (left_path.available_parallel_ <= ObGlobalHint::DEFAULT_PARALLEL &&
+          right_path.available_parallel_ <= ObGlobalHint::DEFAULT_PARALLEL) {
+        distributed_methods &= ~DIST_RANDOM_ALL;
+        OPT_TRACE("single parallel match all nlj plan will not use random all method");
+      }
+    } else if (join_algo == NESTED_LOOP_JOIN && left_path.is_access_path()
         && left_sharding->is_distributed() && right_sharding->is_match_all()) {
       if (distributed_methods == DistAlgo::DIST_RANDOM_ALL) {
         distributed_methods = DistAlgo::DIST_RANDOM_ALL;
@@ -10658,8 +10686,7 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   // check if match all_none sharding info
   if (OB_SUCC(ret) && (distributed_methods & DIST_ALL_NONE)) {
     if (right_sharding->is_distributed() && left_sharding->is_match_all() &&
-        !left_path.contain_das_op()) {
-      // all side is allowed for only EXPRESSION
+        (!left_path.contain_das_op() || query_ctx->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP7))) {
       distributed_methods = DIST_ALL_NONE;
     } else {
       distributed_methods &= ~DIST_ALL_NONE;
@@ -10669,8 +10696,25 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   if (OB_SUCC(ret) && (distributed_methods & DIST_BASIC_METHOD)) {
     OPT_TRACE("check basic method");
     ObSEArray<ObShardingInfo*, 2> input_shardings;
-    if (OB_FAIL(input_shardings.push_back(left_sharding)) ||
-        OB_FAIL(input_shardings.push_back(right_sharding))) {
+    if (is_single_all_nlj) {
+      /** For nlj between match all tables, we need
+       *   1. random all method for values table:
+       *                   NLJ
+       *               /       \
+       *      RANDOM SHUFFLE   DAS
+       *              |
+       *        VALUES TABLE
+       *   2. basic method for rescan:
+       *                  SPF
+       *            /             \
+       *      PARALLEL PLAN    BASIC NLJ
+       *                          / \
+       *                        DAS  DAS
+       */
+       distributed_methods &= (DIST_BASIC_METHOD | DIST_RANDOM_ALL);
+       OPT_TRACE("plan will use basic/random all method");
+    } else if (OB_FAIL(input_shardings.push_back(left_sharding)) ||
+               OB_FAIL(input_shardings.push_back(right_sharding))) {
       LOG_WARN("failed to push back shardings", K(ret));
     } else if (OB_FAIL(ObOptimizerUtil::check_basic_sharding_info(
                                  get_plan()->get_optimizer_context().get_local_server_addr(),
