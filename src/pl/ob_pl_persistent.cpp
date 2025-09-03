@@ -521,8 +521,10 @@ int ObRoutinePersistentInfo::check_dep_schema(ObSchemaGetterGuard &schema_guard,
         match = false;
       } else if (new_version <= merge_version) {
         match = true;
-      } else if (SEQUENCE_SCHEMA != dep_schema_objs.at(i).get_schema_type()) {
-        // new_version > merge_version, sequence schema do not considered
+      } else if (!is_check_package_state
+                 && SEQUENCE_SCHEMA == dep_schema_objs.at(i).get_schema_type()) {
+        // do nothing when check disk cache for sequence schema
+      } else {
         match = false;
       }
     } else {
