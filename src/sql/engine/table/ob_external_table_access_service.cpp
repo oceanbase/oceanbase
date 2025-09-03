@@ -590,7 +590,6 @@ int ObExternalTableAccessService::table_rescan(ObVTableScanParam &param, ObNewRo
     switch (param.external_file_format_.format_type_) {
       case ObExternalFileFormat::CSV_FORMAT:
       case ObExternalFileFormat::PARQUET_FORMAT:
-      case ObExternalFileFormat::ICEBERG_FORMAT:
       case ObExternalFileFormat::ORC_FORMAT:
         result->reset();
         break;
@@ -886,7 +885,9 @@ int ObExternalTableRowIterator::calc_file_part_list_value_by_array(
   return ret;
 }
 
-int ObExternalTableRowIterator::calc_exprs_for_rowid(const int64_t read_count, ObExternalIteratorState &state)
+int ObExternalTableRowIterator::calc_exprs_for_rowid(const int64_t read_count,
+                                                     ObExternalIteratorState &state,
+                                                     const bool update_state)
 {
   int ret = OB_SUCCESS;
   ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
@@ -920,8 +921,10 @@ int ObExternalTableRowIterator::calc_exprs_for_rowid(const int64_t read_count, O
     }
     OX (line_number_expr_->set_evaluated_flag(eval_ctx));
   }
-  state.cur_line_number_ += read_count;
-  state.batch_first_row_line_num_ = state.cur_line_number_ - read_count;
+  if (update_state) {
+    state.cur_line_number_ += read_count;
+    state.batch_first_row_line_num_ = state.cur_line_number_ - read_count;
+  }
   return ret;
 }
 

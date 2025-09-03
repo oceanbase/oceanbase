@@ -75,7 +75,9 @@ int ObParallelCreateTenantExecutor::execute(obrpc::UInt64 &tenant_id)
     }
   } else if (OB_FAIL(init_after_create_tenant_schema_())) {
     LOG_WARN("failed to init after create tenant schema", KR(ret));
-    // 2. create tenant sys ls
+  } else if (OB_FAIL(save_data_version_in_palf_kv_())) {
+    LOG_WARN("failed to store data version in palf kv", KR(ret));
+     // 2. create tenant sys ls
   } else if (CLICK_FAIL(create_tenant_sys_ls_())) {
     LOG_WARN("failed to create tenant sys ls", KR(ret));
   } else {
@@ -105,6 +107,27 @@ int ObParallelCreateTenantExecutor::execute(obrpc::UInt64 &tenant_id)
   }
   FLOG_INFO("[CREATE_TENANT] finish create tenant", KR(ret), K(tenant_id), K(create_tenant_arg_),
       "cost", ObTimeUtility::fast_current_time() - start_time);
+  return ret;
+}
+
+int ObParallelCreateTenantExecutor::save_data_version_in_palf_kv_()
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_SHARED_STORAGE
+  // tenant data_version has publish in create_tenant_scheama(include backup and recovery tenant)
+  // no need check data_version.
+  const uint64_t user_tenant_id = user_tenant_schema_.get_tenant_id();
+  const uint64_t meta_tenant_id = gen_meta_tenant_id(user_tenant_id);
+  uint64_t user_data_version = (create_tenant_arg_.is_restore_tenant() || create_tenant_arg_.is_clone_tenant())
+                               ? create_tenant_arg_.compatible_version_ : DATA_CURRENT_VERSION;
+  if (!GCTX.is_shared_storage_mode()) {
+  } else if (OB_FAIL(ObServerZoneOpService::store_data_version_in_palf_kv(user_tenant_id, user_data_version))) {
+    LOG_WARN("fail to store data version in palf kv", KR(ret), K(user_tenant_id));
+  } else if (OB_FAIL(ObServerZoneOpService::store_data_version_in_palf_kv(meta_tenant_id, DATA_CURRENT_VERSION))) {
+    LOG_WARN("fail to store data version in palf kv", KR(ret), K(meta_tenant_id));
+  }
+  FLOG_INFO("[CREATE_TENANT] store data version in palf kv", KR(ret), K(user_tenant_id), KDV(user_data_version), KDV(DATA_CURRENT_VERSION));
+#endif
   return ret;
 }
 

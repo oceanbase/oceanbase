@@ -586,7 +586,7 @@ int ObOptStatSqlService::update_column_stat(share::schema::ObSchemaGetterGuard *
     LOG_WARN("failed to construct column stat sql", K(ret));
   // construct histogram delete column
   } else if (!only_update_col_stat &&
-             construct_delete_column_histogram_sql(exec_tenant_id, column_stats, delete_histogram)) {
+             OB_FAIL(construct_delete_column_histogram_sql(exec_tenant_id, column_stats, delete_histogram))) {
     LOG_WARN("failed to construc delete column histogram sql", K(ret));
   // construct histogram insert sql
   } else if (!only_update_col_stat &&

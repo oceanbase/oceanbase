@@ -969,6 +969,7 @@ typedef enum ObItemType
   T_FUN_SYS_HYBRID_VEC_CHUNK = 1926, // hybrid vector index
   T_FUN_SYS_FORMAT_PROFILE = 1927, // format query profile
   T_FUN_SYS_EMBEDDED_VEC = 1928,
+  T_FUN_SYS_AI_PROMPT = 1929,
 
   ///< @note add new sys function type before this line
   T_FUN_SYS_END = 2000,

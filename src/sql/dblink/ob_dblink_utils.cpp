@@ -261,7 +261,7 @@ int ObDblinkService::get_set_transaction_isolation_cstr(sql::ObSQLSessionInfo *s
   return ret;
 }
 //const char *charset_name(ObCharsetType charset_type);
-int ObDblinkService::get_set_names_cstr(sql::ObSQLSessionInfo *session_info, ObCharsetType &charset_type)
+int ObDblinkService::get_set_names_charset_type(sql::ObSQLSessionInfo *session_info, ObCharsetType &charset_type)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(session_info)) {
@@ -270,6 +270,18 @@ int ObDblinkService::get_set_names_cstr(sql::ObSQLSessionInfo *session_info, ObC
   } else {
     ObCollationType tenant_collation = is_oracle_mode() ? session_info->get_nls_collation() : ObCollationType::CS_TYPE_UTF8MB4_BIN;
     charset_type = ObCharset::charset_type_by_coll(tenant_collation);
+  }
+  return ret;
+}
+
+int ObDblinkService::get_ob_query_timeout_value(sql::ObSQLSessionInfo *session_info, int64_t &timeout)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
+  } else if (OB_FAIL(session_info->get_query_timeout(timeout))) {
+    LOG_WARN("get query timeout failed", K(ret));
   }
   return ret;
 }
@@ -284,8 +296,10 @@ int ObDblinkService::get_local_session_vars(sql::ObSQLSessionInfo *session_info,
   } else if (OB_FAIL(get_set_transaction_isolation_cstr(session_info,
                                                         param_ctx.set_transaction_isolation_cstr_))) {
     LOG_WARN("failed to get set_transaction_isolation_cstr", K(ret));
-  } else if (OB_FAIL(get_set_names_cstr(session_info, param_ctx.set_conn_charset_type_))) {
+  } else if (OB_FAIL(get_set_names_charset_type(session_info, param_ctx.set_conn_charset_type_))) {
     LOG_WARN("failed to get set_names_cstr", K(ret));
+  } else if (OB_FAIL(get_ob_query_timeout_value(session_info, param_ctx.ob_query_timeout_))) {
+    LOG_WARN("failed to get ob_query_timeout sys var", K(ret));
   } else {
     LOG_TRACE("succ to get local session vars", K(param_ctx.set_conn_charset_type_),
                                                 K(param_ctx.set_sql_mode_cstr_),

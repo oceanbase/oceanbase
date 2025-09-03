@@ -78,9 +78,10 @@ public:
   int init(const ObDDLIncLogBasic &log_basic);
   bool is_valid() const { return log_basic_.is_valid(); }
   const ObDDLIncLogBasic &get_log_basic() const { return log_basic_; }
-  TO_STRING_KV(K_(log_basic));
+  TO_STRING_KV(K_(log_basic), K_(has_cs_replica));
 private:
   ObDDLIncLogBasic log_basic_;
+  bool has_cs_replica_;
 };
 
 class ObDDLIncCommitLog final

@@ -158,6 +158,22 @@ int ObLogJoinFilter::get_plan_item_info(PlanText &plan_text,
         }
       }
     }
+    if (OB_SUCC(ret)) {
+      if (plan_text.type_ == EXPLAIN_EXTENDED || plan_text.type_ == EXPLAIN_EXTENDED_NOADDR) {
+        // print filter merge and shuffle attribution
+        bool is_shared =
+            (SHARED_JOIN_FILTER == filter_type_ || SHARED_PARTITION_JOIN_FILTER == filter_type_);
+        if (is_shared && OB_FAIL(BUF_PRINTF(", merge required"))) {
+          LOG_WARN("fail to print rf", K(ret));
+        } else if (!is_shared && OB_FAIL(BUF_PRINTF(", independent"))) {
+          LOG_WARN("fail to print rf", K(ret));
+        } else if (is_use_filter_shuffle_ && OB_FAIL(BUF_PRINTF(", global"))) {
+          LOG_WARN("fail to print rf", K(ret));
+        } else if (!is_use_filter_shuffle_ && OB_FAIL(BUF_PRINTF(", local"))) {
+          LOG_WARN("fail to print rf", K(ret));
+        }
+      }
+    }
     END_BUF_PRINT(plan_item.special_predicates_,
                   plan_item.special_predicates_len_);
   }

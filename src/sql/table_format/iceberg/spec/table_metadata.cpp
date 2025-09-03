@@ -281,6 +281,56 @@ int TableMetadata::get_partition_spec(int32_t partition_spec_id,
   return ret;
 }
 
+int TableMetadata::get_table_property(const char *table_property_key, ObString &value) const
+{
+  int ret = OB_SUCCESS;
+  value.reset();
+  if (OB_ISNULL(table_property_key)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid key", K(ret), K(table_property_key));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && value.empty() && i < properties.count(); i++) {
+      if (properties[i].first.case_compare_equal(table_property_key)) {
+        value = properties[i].second;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (value.empty()) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("specific table property key not found", K(ret), K(table_property_key));
+    }
+  }
+  return ret;
+}
+
+int TableMetadata::get_table_default_write_format(DataFileFormat &data_file_format) const
+{
+  int ret = OB_SUCCESS;
+  ObString value;
+  if (OB_FAIL(get_table_property(WRITE_FORMAT_DEFAULT, value))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      data_file_format = DataFileFormat::PARQUET;
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("get default.write.format failed", K(ret));
+    }
+  } else {
+    if (value.case_compare_equal("PARQUET")) {
+      data_file_format = DataFileFormat::PARQUET;
+    } else if (value.case_compare_equal("ORC")) {
+      data_file_format = DataFileFormat::ORC;
+    } else if (value.case_compare_equal("AVRO")) {
+      data_file_format = DataFileFormat::AVRO;
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid default.write.format", K(ret), K(value));
+    }
+  }
+  return ret;
+}
+
 int TableMetadata::parse_schemas_(const ObJsonObject &json_object)
 {
   int ret = OB_SUCCESS;

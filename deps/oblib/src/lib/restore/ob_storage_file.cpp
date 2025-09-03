@@ -137,26 +137,20 @@ int ObStorageFileUtil::is_exist(const common::ObString &uri, bool &exist)
 int ObStorageFileUtil::get_file_length(const common::ObString &uri, int64_t &file_length)
 {
   int ret = OB_SUCCESS;
-  char path[OB_MAX_URI_LENGTH];
-  char errno_buf[OB_MAX_ERROR_MSG_LEN] = "";
-  struct stat64 file_info;
+  ObStorageObjectMetaBase obj_meta;
 
   file_length = -1;
 
-  if (uri.empty()) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid args", K(ret), K(uri));
-  } else if (OB_FAIL(get_file_path(uri, path, sizeof(path)))) {
-    STORAGE_LOG(WARN, "failed to fill path", K(ret), K(uri));
-  } else if (0 != ::stat64(path, &file_info)) {
-    convert_io_error(errno, ret);
-    STORAGE_LOG(WARN, "file not exist",
-        K(ret), K(path), K(errno), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
-  } else if (S_ISDIR(file_info.st_mode)) {
-    ret = OB_IO_ERROR;
-    STORAGE_LOG(WARN, "uri is a dir", K(ret), KCSTRING(path));
+  if (OB_FAIL(head_object_meta(uri, obj_meta))) {
+    STORAGE_LOG(WARN, "failed to get object meta", K(ret), K(uri));
+  } else if (!obj_meta.is_exist_) {
+    ret = OB_OBJECT_NOT_EXIST;
+    STORAGE_LOG(WARN, "file not exist", K(ret), K(uri));
+  } else if (ObStorageObjectMetaType::OB_FS_DIR == obj_meta.type_) {
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
+    STORAGE_LOG(WARN, "uri is a dir", K(ret), K(uri));
   } else {
-    file_length = file_info.st_size;
+    file_length = obj_meta.length_;
   }
 
   return ret;
@@ -168,6 +162,7 @@ int ObStorageFileUtil::head_object_meta(const common::ObString &uri, ObStorageOb
   char path[OB_MAX_URI_LENGTH];
   char errno_buf[OB_MAX_ERROR_MSG_LEN] = "";
   struct stat64 file_info;
+  int fd = -1;
   obj_meta.reset();
 
   if (uri.empty()) {
@@ -188,21 +183,42 @@ int ObStorageFileUtil::head_object_meta(const common::ObString &uri, ObStorageOb
     obj_meta.type_ = ObStorageObjectMetaType::OB_FS_DIR;
     obj_meta.mtime_s_ = static_cast<int64_t>(file_info.st_mtime);
   } else {
-    obj_meta.is_exist_ = true;
-    obj_meta.length_ = file_info.st_size;
-    obj_meta.type_ = ObStorageObjectMetaType::OB_FS_FILE;
-    obj_meta.mtime_s_ = static_cast<int64_t>(file_info.st_mtime);
+    // If not directory, use fstat64 again to get the file attr to avoid reading old attr due to NFS attr cache.
+    if (-1 == (fd = ::open(path, O_RDONLY))) {
+      convert_io_error(errno, ret);
+      STORAGE_LOG(WARN, "failed to open read file",
+          K(ret), KCSTRING(path), K(errno), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
+    } else {
+      if (0 != ::fstat64(fd, &file_info)) {
+        convert_io_error(errno, ret);
+        STORAGE_LOG(WARN, "failed to stat file",
+            K(ret), K(fd), KCSTRING(path), K(errno), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
+      } else {
+        obj_meta.is_exist_ = true;
+        obj_meta.length_ = file_info.st_size;
+        obj_meta.type_ = ObStorageObjectMetaType::OB_FS_FILE;
+        obj_meta.mtime_s_ = static_cast<int64_t>(file_info.st_mtime);
 
-    int tmp_ret = OB_SUCCESS;
-    const int64_t last_modified_time_ns =
-        file_info.st_mtim.tv_sec * 1000LL * 1000LL * 1000LL + file_info.st_mtim.tv_nsec;
-    char digest_buf[32] = {0};
-    if (OB_TMP_FAIL(databuff_printf(digest_buf, sizeof(digest_buf), "%ld", last_modified_time_ns))) {
-      OB_LOG(WARN, "fail to convert last modified time to string",
-          K(ret), K(tmp_ret), K(uri), K(obj_meta), K(last_modified_time_ns));
-    } else if (OB_TMP_FAIL(obj_meta.digest_.set(digest_buf))) {
-      OB_LOG(WARN, "fail to set digest", K(ret), K(tmp_ret),
-          K(uri), K(obj_meta), K(last_modified_time_ns));
+        int tmp_ret = OB_SUCCESS;
+        const int64_t last_modified_time_ns =
+            file_info.st_mtim.tv_sec * 1000LL * 1000LL * 1000LL + file_info.st_mtim.tv_nsec;
+        char digest_buf[32] = {0};
+        if (OB_TMP_FAIL(databuff_printf(digest_buf, sizeof(digest_buf), "%ld", last_modified_time_ns))) {
+          OB_LOG(WARN, "fail to convert last modified time to string",
+              K(ret), K(tmp_ret), K(uri), K(obj_meta), K(last_modified_time_ns));
+        } else if (OB_TMP_FAIL(obj_meta.digest_.set(digest_buf))) {
+          OB_LOG(WARN, "fail to set digest", K(ret), K(tmp_ret),
+              K(uri), K(obj_meta), K(last_modified_time_ns));
+        }
+      }
+
+      if (0 != ::close(fd)) {
+        int tmp_ret = OB_SUCCESS;
+        convert_io_error(errno, tmp_ret);
+        ret = COVER_SUCC(tmp_ret);
+        STORAGE_LOG(WARN, "failed to close read file", K(ret), K(tmp_ret), KCSTRING(path),
+            K(errno), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
+      }
     }
   }
 

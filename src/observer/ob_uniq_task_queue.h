@@ -38,7 +38,6 @@ public:
   explicit ObHighPrioMemAllocator(const char *label = common::ObModIds::OB_PARTITION_TABLE_TASK)
   {
     attr_.label_ = label;
-    attr_.prio_ = lib::OB_HIGH_ALLOC;
   }
 
   void *alloc(const int64_t sz);

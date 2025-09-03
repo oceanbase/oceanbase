@@ -22,6 +22,7 @@
 #include "lib/thread/ob_work_queue.h"
 #include "lib/lock/ob_mutex.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
+#include "lib/mysqlclient/ob_mysql_transaction.h"
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "share/ob_dml_sql_splicer.h"
 #include "share/ob_occam_timer.h"
@@ -112,6 +113,10 @@ public:
   // if number of others is not 13, should be even, every odd of them are name, every even of them are value 
   template <typename ...Rest>
   int sync_add_event(const char *module, const char *event, Rest &&...others);
+  template <typename ...Rest>
+  int sync_add_event_with_proxy(common::ObMySQLTransaction &proxy, const char *module, const char *event, Rest &&...others);
+  template <typename ProxyType, typename ...Rest>
+  int do_sync_add_event(ProxyType &proxy, const char *module, const char *event, Rest &&...others);
   // number of others should not less than 0, or more than 13
   // if number of others is not 13, should be even, every odd of them are name, every even of them are value
   template <typename ...Rest>
@@ -268,7 +273,30 @@ int ObEventHistoryTableOperator::add_event(const char *module, const char *event
 }
 
 template <typename ...Rest>
+int ObEventHistoryTableOperator::sync_add_event_with_proxy(common::ObMySQLTransaction &proxy, const char *module, const char *event, Rest &&...others)
+{
+  int ret = common::OB_SUCCESS;
+  if (OB_FAIL(do_sync_add_event(proxy, module, event, std::forward<Rest>(others)...))) {
+    SHARE_LOG(WARN, "fail to sync add event", KR(ret));
+  }
+  return ret;
+}
+
+template <typename ...Rest>
 int ObEventHistoryTableOperator::sync_add_event(const char *module, const char *event, Rest &&...others)
+{
+  int ret = common::OB_SUCCESS;
+  if (OB_ISNULL(proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SHARE_LOG(WARN, "proxy_ is null", KR(ret), KP(proxy_));
+  } else if (OB_FAIL(do_sync_add_event(*proxy_, module, event, std::forward<Rest>(others)...))) {
+    SHARE_LOG(WARN, "fail to sync add event", KR(ret));
+  }
+  return ret;
+}
+
+template <typename ProxyType, typename ...Rest>
+int ObEventHistoryTableOperator::do_sync_add_event(ProxyType &proxy, const char *module, const char *event, Rest &&...others)
 {
   static_assert(sizeof...(others) >= 0 && sizeof...(others) <= 13 &&
                 (sizeof...(others) == 13 || (sizeof...(others) % 2 == 0)),
@@ -312,7 +340,7 @@ int ObEventHistoryTableOperator::sync_add_event(const char *module, const char *
   if (OB_SUCC(ret)) {
     if (OB_FAIL(dml.splice_insert_sql(event_table_name_, sql))) {
         SHARE_LOG(WARN, "splice_insert_sql failed", K(ret));
-    } else if (OB_FAIL(proxy_->write(sql.ptr(), affected_rows))) {
+    } else if (OB_FAIL(proxy.write(sql.ptr(), affected_rows))) {
       SHARE_LOG(WARN, "sync execute sql failed", K(sql), K(ret));
     } else if (!is_single_row(affected_rows)) {
       ret = OB_ERR_UNEXPECTED;

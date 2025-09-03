@@ -38,6 +38,7 @@ int QSchedCallback::handle(TCRequest* tc_req)
   } else if (OB_ISNULL(result)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("io result is null", K(ret), K(req));
+  } else if (FALSE_IT(result->time_log_.dequeue_ts_ = ObTimeUtility::fast_current_time())) {
   } else if (OB_UNLIKELY(req.is_canceled())) {
     ret = OB_CANCELED;
   } else {
@@ -49,7 +50,6 @@ int QSchedCallback::handle(TCRequest* tc_req)
       LOG_WARN("prepare io request failed", K(ret), K(req));
     } else if (OB_FAIL(OB_IO_MANAGER.get_device_channel(req, device_channel))) {
       LOG_WARN("get device channel failed", K(ret), K(req));
-    } else if (FALSE_IT(result->time_log_.dequeue_ts_ = ObTimeUtility::fast_current_time())) {
     } else if (OB_FAIL(device_channel->submit(req))) {
       LOG_WARN("submit io to device failed");
     } else if (REACH_TIME_INTERVAL(5 * 1000L * 1000L)) {
@@ -339,7 +339,6 @@ int ObTenantIOSchedulerV2::schedule_request(ObIORequest &req)
   if (OB_ISNULL(req.io_result_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("io result is null", K(ret), K(req));
-  } else if (FALSE_IT(req.io_result_->time_log_.enqueue_ts_ = ObTimeUtility::fast_current_time())) {
   } else if (OB_UNLIKELY(is_default_q)) {
     if (0 != qsched_submit(root, &req.qsched_req_, assign_chan_id())) {
       ret = OB_ERR_UNEXPECTED;
@@ -347,6 +346,7 @@ int ObTenantIOSchedulerV2::schedule_request(ObIORequest &req)
     }
   } else if (OB_FAIL(OB_IO_MANAGER.get_tc().register_bucket(req, qid))) {
     LOG_WARN("register bucket fail", K(ret), K(req));
+  } else if (FALSE_IT(req.io_result_->time_log_.enqueue_ts_ = ObTimeUtility::fast_current_time())) {
   } else if (0 != qsched_submit(root, &req.qsched_req_, assign_chan_id())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("qsched_submit fail", K(ret), K(req));

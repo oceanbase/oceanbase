@@ -129,3 +129,52 @@ int ObAddRestoreSourceStmt::add_restore_source(const common::ObString &source)
   COMMON_LOG(INFO, "add restore source", KR(ret), K(source), K(restore_source_array_));
   return ret;
 }
+
+int ObReplaceTenantStmt::init(
+    const common::ObString &tenant_name,
+    const common::ObRegion& region,
+    const common::ObZone &zone,
+    const common::ObAddr& server_addr,
+    const common::ObString &logservice_access_point,
+    const common::ObString &shared_storage_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(tenant_name.empty()
+               || zone.is_empty()
+               || !server_addr.is_valid()
+               || region.is_empty()
+               || logservice_access_point.empty()
+               || shared_storage_info.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_name), K(zone), K(server_addr), K(region), K(logservice_access_point), K(shared_storage_info));
+  } else if (OB_FAIL(tenant_name_.assign(tenant_name))) {
+    LOG_WARN("failed to assign tenant_name", KR(ret), K(tenant_name));
+  } else if (OB_FAIL(logservice_access_point_.assign(logservice_access_point))) {
+    LOG_WARN("failed to assign logservice_access_point", KR(ret));
+  } else if (OB_FAIL(shared_storage_info_.assign(shared_storage_info))) {
+    LOG_WARN("failed to assign shared_storage_info", KR(ret));
+  } else if (OB_FAIL(server_info_.init(zone, server_addr, region))) {
+    LOG_WARN("failed to init server_info", KR(ret), K(zone), K(server_addr), K(region));
+  }
+  return ret;
+}
+
+int ObReplaceTenantStmt::assign(const sql::ObReplaceTenantStmt &that)
+{
+  int ret = OB_SUCCESS;
+  if (this == &that) {
+  } else if (OB_FAIL(tenant_name_.assign(that.tenant_name_))) {
+    LOG_WARN("tenant_name_ assign failed", KR(ret), K(that.tenant_name_));
+  } else if (OB_FAIL(server_info_.zone_.assign(that.server_info_.zone_))) {
+    LOG_WARN("zone_ assign failed", KR(ret), K(that.server_info_));
+  } else if (OB_FAIL(server_info_.region_.assign(that.server_info_.region_))) {
+    LOG_WARN("region_ assign failed", KR(ret), K(that.server_info_));
+  } else if (OB_FAIL(logservice_access_point_.assign(that.logservice_access_point_))) {
+    LOG_WARN("logservice_access_point assign failed", KR(ret));
+  } else if (OB_FAIL(shared_storage_info_.assign(that.shared_storage_info_))) {
+    LOG_WARN("shared_storage_info assign failed", KR(ret));
+  } else {
+    server_info_.server_ = that.server_info_.server_;
+  }
+  return ret;
+}

@@ -39,6 +39,7 @@ oceanbase::unittest::ObMockPalfKV PALF_KV;
 
 namespace oceanbase
 {
+OB_MOCK_PALF_KV_FOR_REPLACE_SYS_TENANT
 namespace sslog
 {
 

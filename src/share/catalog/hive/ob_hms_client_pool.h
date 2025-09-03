@@ -33,7 +33,7 @@ namespace share
 class ObHiveMetastoreClient;
 
 static constexpr int64_t MAX_HMS_CATALOG_CONNECTIONS = 100;
-static constexpr int64_t DEFAULT_HMS_CLIENT_POOL_SIZE = 2;
+static constexpr int64_t DEFAULT_HMS_CLIENT_POOL_SIZE = 20;
 static constexpr int64_t DEFAULT_HMS_CLIENT_SOCKET_TIMEOUT_US = 10LL * 1000LL * 1000LL; // 10 seconds
 static constexpr int64_t MAX_POOL_SIZE = 100;
 static constexpr int64_t POOL_CLEANUP_INTERVAL_US = 5LL * 60LL * 1000LL * 1000LL; // 5 minutes
@@ -106,6 +106,8 @@ private:
   // Currently, we only use it in get_client, so we can use a global lock to protect it.
   bool is_pool_full_unlocked_();
   bool idle_clients_available_unlocked_();
+  bool can_create_client_unlocked_();
+  bool can_destroy_client_unlocked_();
   // Note: this function is not thread safe, so we need to call it in a thread safe way.
   // Currently, we only use it in get_client, so we can use a global lock to protect it.
   int create_new_client_unlocked_();

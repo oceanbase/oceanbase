@@ -264,7 +264,8 @@ int ObDbLinkSqlService::get_link_table_schema(const ObDbLinkSchema *dblink_schem
                                               sql::ObSQLSessionInfo *session_info,
                                               const ObString &dblink_name,
                                               bool is_reverse_link,
-                                              uint64_t *current_scn)
+                                              uint64_t *current_scn,
+                                              bool &is_under_oracle12c)
 {
   int ret = OB_SUCCESS;
   ObTableSchema *tmp_schema = NULL;
@@ -347,7 +348,8 @@ int ObDbLinkSqlService::get_link_table_schema(const ObDbLinkSchema *dblink_schem
                                            session_info,
                                            dblink_name_for_meta,
                                            reverse_link,
-                                           current_scn))) {
+                                           current_scn,
+                                           is_under_oracle12c))) {
     LOG_WARN("fetch link table info failed", K(ret), K(dblink_schema), K(database_name), K(table_name));
   } else if (OB_ISNULL(tmp_schema)) {
     ret = OB_ERR_UNEXPECTED;
@@ -373,7 +375,8 @@ int ObDbLinkSqlService::fetch_link_table_info(dblink_param_ctx &param_ctx,
                                                   sql::ObSQLSessionInfo *session_info,
                                                   const ObString &dblink_name,
                                                   sql::ObReverseLink *reverse_link,
-                                                  uint64_t *current_scn)
+                                                  uint64_t *current_scn,
+                                                  bool &is_under_oracle12c)
 {
   int ret = OB_SUCCESS;
   int dblink_read_ret = OB_SUCCESS;
@@ -474,6 +477,41 @@ int ObDbLinkSqlService::fetch_link_table_info(dblink_param_ctx &param_ctx,
         LOG_WARN("fetch link current scn failed", K(ret));
       }
     }
+
+#ifdef OB_BUILD_DBLINK
+    if (DBLINK_DRV_OCI == param_ctx.link_type_ && OB_NOT_NULL(dblink_conn)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = static_cast<ObOciConnection *>(dblink_conn)->free_oci_stmt())) {
+        LOG_WARN("failed to close oci result", K(tmp_ret));
+      }
+      if (OB_SUCC(ret)) {
+        SMART_VAR(ObMySQLProxy::MySQLResult, version_res) {
+          const char* check_version_sql = "select version, product from product_component_version where product LIKE 'Oracle%' and version < '12.1.0.1'";
+          ObMySQLResult *version_result = NULL;
+          if (OB_FAIL(dblink_proxy_->dblink_read(dblink_conn, version_res, check_version_sql))) {
+            LOG_WARN("read link failed", K(ret), K(param_ctx), K(sql.ptr()));
+          } else if (OB_ISNULL(version_result = version_res.get_result())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fail to get result", K(ret));
+          } else if (OB_FAIL(version_result->set_expected_charset_id(static_cast<uint16_t>(common::ObNlsCharsetId::CHARSET_AL32UTF8_ID),
+                                                                     static_cast<uint16_t>(common::ObNlsCharsetId::CHARSET_AL32UTF8_ID)))) {
+            LOG_WARN("failed to set expected charset id", K(ret));
+          } else if (OB_FAIL(version_result->next())) {
+            if (OB_ITER_END != ret) {
+              LOG_WARN("failed to get next row", K(ret));
+            } else {
+              ret = OB_SUCCESS;
+            }
+          } else {
+            is_under_oracle12c = true;
+          }
+          if (OB_SUCCESS != (tmp_ret = static_cast<ObOciConnection *>(dblink_conn)->free_oci_stmt())) {
+            LOG_WARN("failed to close oci result", K(tmp_ret));
+          }
+        }
+      }
+    }
+#endif
     if (NULL != dblink_conn) {
       int tmp_ret = OB_SUCCESS;
       if (DBLINK_DRV_OB == param_ctx.link_type_ &&
@@ -481,12 +519,6 @@ int ObDbLinkSqlService::fetch_link_table_info(dblink_param_ctx &param_ctx,
           OB_SUCCESS != (tmp_ret = result->close())) {
         LOG_WARN("failed to close result", K(tmp_ret));
       }
-#ifdef OB_BUILD_DBLINK
-      if (DBLINK_DRV_OCI == param_ctx.link_type_ &&
-          OB_SUCCESS != (tmp_ret = static_cast<ObOciConnection *>(dblink_conn)->free_oci_stmt())) {
-        LOG_WARN("failed to close oci result", K(tmp_ret));
-      }
-#endif
       if (OB_SUCCESS != (tmp_ret = dblink_proxy_->release_dblink(param_ctx.link_type_, dblink_conn))) {
         LOG_WARN("failed to relese connection", K(tmp_ret));
       }

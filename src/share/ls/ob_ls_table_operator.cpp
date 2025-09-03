@@ -228,11 +228,7 @@ int ObLSTableOperator::get_ls_table_(
     } else if (ls_id.is_sslog_ls()) {
       // 1. The information of the SYS tenant SSLOG LS is persisted in the inner table of 1 LS.
       // 2. In order to solve the circular dependency problem, the SYS tenant SSLOG LS information is obtained based on RPC by default.
-      if (is_for_get) {
-        ls_table = static_cast<ObLSTable *>(&rpc_ls_);
-      } else {
-        ls_table = static_cast<ObLSTable *>(&persistent_ls_);
-      }
+      ls_table = static_cast<ObLSTable *>(&rpc_ls_);
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("sys tenant unexpected ls", KR(ret), K(tenant_id), K(ls_id));

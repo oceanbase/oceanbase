@@ -1527,8 +1527,9 @@ int ObLogicalOperator::do_pre_traverse_operation(const TraverseOp &op, void *ctx
         }
         if (OB_FAIL(allocate_granule_pre(*alloc_gi_ctx))) {
           LOG_WARN("allocate granule pre failed", K(ret));
-        } else if (alloc_gi_ctx->alloc_gi_ && OB_FAIL(allocate_granule_nodes_above(*alloc_gi_ctx))) {
-          LOG_WARN("allocate granule iterator failed", K(ret));
+        } else if (OB_UNLIKELY(alloc_gi_ctx->alloc_gi_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("should not allocate granule iterator after allocate granule pre", K(ret));
         }
       }
       break;
@@ -1669,7 +1670,7 @@ int ObLogicalOperator::do_post_traverse_operation(const TraverseOp &op, void *ct
     	      LOG_WARN("failed to allocate granule post", K(ret));
     	    } else if (alloc_gi_ctx->alloc_gi_ &&
     	               OB_FAIL(allocate_granule_nodes_above(*alloc_gi_ctx))) {
-    	      LOG_WARN("failed to allcoate granule nodes", K(ret));
+	      LOG_WARN("failed to allocate granule nodes", K(ret));
     	    }
     	  }
     		break;
@@ -2276,8 +2277,7 @@ int ObLogicalOperator::check_need_pushdown_expr(const uint64_t producer_id,
     // do nothing
   } else if (child_.empty()) {
     // do nothing
-  } else if (ObLogOpType::LOG_GROUP_BY == get_type() ||
-             ObLogOpType::LOG_SORT == get_type() ||
+  } else if (ObLogOpType::LOG_SORT == get_type() ||
              ObLogOpType::LOG_JOIN == get_type() ||
              ObLogOpType::LOG_DISTINCT == get_type() ||
              ObLogOpType::LOG_UPDATE == get_type() ||
@@ -2289,6 +2289,12 @@ int ObLogicalOperator::check_need_pushdown_expr(const uint64_t producer_id,
              ObLogOpType::LOG_COUNT == get_type() ||
              ObLogOpType::LOG_MERGE == get_type()) {
     need_pushdown = true;
+  } else if (ObLogOpType::LOG_GROUP_BY == get_type()) {
+    /**
+    * Select expr should not be calculated before scalar group by.
+    * The result might be different if the input is empty.
+    */
+    need_pushdown = static_cast<ObLogGroupBy *>(this)->get_algo() != SCALAR_AGGREGATE;
   }
   return ret;
 }
@@ -3867,9 +3873,9 @@ int ObLogicalOperator::check_sharding_compatible_with_reduce_expr(
   ObSEArray<ObRawExpr*, 4> part_exprs;
   ObSEArray<ObRawExpr*, 4> part_column_exprs;
   compatible = false;
-  bool is_groupby_with_hash_rollup =
+  bool is_groupby_from_expansion =
     dynamic_cast<const ObLogGroupBy *>(this) != nullptr
-    && static_cast<const ObLogGroupBy *>(this)->is_hash_rollup_groupby();
+    && static_cast<const ObLogGroupBy *>(this)->is_gby_from_expansion();
   if (NULL == strong_sharding_) {
     /*do nothing*/
   } else if (OB_FAIL(strong_sharding_->get_all_partition_keys(part_exprs, true))) {
@@ -3884,7 +3890,7 @@ int ObLogicalOperator::check_sharding_compatible_with_reduce_expr(
     /*do nothing*/
   } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(part_exprs,
                                                           part_column_exprs,
-                                                          is_groupby_with_hash_rollup))) {
+                                                          is_groupby_from_expansion))) {
     LOG_WARN("failed to extract column exprs", K(ret));
   } else if (ObOptimizerUtil::subset_exprs(part_column_exprs,
                                            reduce_exprs,
@@ -4342,7 +4348,7 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
   } else if (has_temp_table_access || get_contains_fake_cte()) {
     // do not allocate granule nodes above temp table access now
     LOG_TRACE("do not allocate granule iterator due to temp table", K(get_name()));
-  } else if (LOG_TABLE_SCAN != get_type()
+  } else if (OB_UNLIKELY(LOG_TABLE_SCAN != get_type()
              && LOG_JOIN != get_type()
              && LOG_SET != get_type()
              && LOG_GROUP_BY != get_type()
@@ -4353,9 +4359,9 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
              && LOG_DELETE != get_type()
              && LOG_INSERT != get_type()
              && LOG_MERGE != get_type()
-             && LOG_FOR_UPD != get_type()) {
+             && LOG_FOR_UPD != get_type())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Only special op can allocate a granule iterator", K(get_type()));
+    LOG_WARN("only special op can allocate a granule iterator", K(ret), K(get_type()));
   } else {
     ObLogicalOperator *log_op = NULL;
     ObLogOperatorFactory &factory = get_plan()->get_log_op_factory();
@@ -4399,25 +4405,24 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
         gi_op->add_flag(GI_AFFINITIZE);
         gi_op->add_flag(GI_PARTITION_WISE);
       }
-      if (LOG_TABLE_SCAN == get_type()) {
-        if (static_cast<ObLogTableScan*>(this)->is_text_retrieval_scan() ||
-            static_cast<ObLogTableScan*>(this)->is_vec_idx_scan_post_filter() ||
-            static_cast<ObLogTableScan*>(this)->use_index_merge()) {
-          gi_op->add_flag(GI_FORCE_PARTITION_GRANULE);
+
+      if (LOG_TABLE_SCAN == get_type() &&
+          static_cast<ObLogTableScan *>(this)->get_join_filter_info().is_inited_) {
+        ObLogTableScan *table_scan = static_cast<ObLogTableScan*>(this);
+        ObOpPseudoColumnRawExpr *tablet_id_expr = NULL;
+        if (OB_FAIL(generate_pseudo_partition_id_expr(tablet_id_expr))) {
+          LOG_WARN("fail alloc partition id expr", K(ret));
+        } else {
+          gi_op->set_tablet_id_expr(tablet_id_expr);
+          gi_op->set_join_filter_info(table_scan->get_join_filter_info());
+          ObLogJoinFilter *jf_create_op = gi_op->get_join_filter_info().log_join_filter_create_op_;
+          jf_create_op->set_paired_join_filter(gi_op);
+          gi_op->add_flag(GI_USE_PARTITION_FILTER);
         }
-        if (static_cast<ObLogTableScan *>(this)->get_join_filter_info().is_inited_) {
-          ObLogTableScan *table_scan = static_cast<ObLogTableScan*>(this);
-          ObOpPseudoColumnRawExpr *tablet_id_expr = NULL;
-          if (OB_FAIL(generate_pseudo_partition_id_expr(tablet_id_expr))) {
-            LOG_WARN("fail alloc partition id expr", K(ret));
-          } else {
-            gi_op->set_tablet_id_expr(tablet_id_expr);
-            gi_op->set_join_filter_info(table_scan->get_join_filter_info());
-            ObLogJoinFilter *jf_create_op = gi_op->get_join_filter_info().log_join_filter_create_op_;
-            jf_create_op->set_paired_join_filter(gi_op);
-            gi_op->add_flag(GI_USE_PARTITION_FILTER);
-          }
-        }
+      }
+
+      if (OB_FAIL(ret)) {
+        /* do nothing */
       } else if (LOG_GROUP_BY == get_type()) {
         if (static_cast<ObLogGroupBy*>(this)->force_partition_gi()) {
           gi_op->add_flag(GI_PARTITION_WISE);
@@ -4432,7 +4437,7 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
 
       if (OB_SUCC(ret) && LOG_TABLE_SCAN == get_type()
           && EXTERNAL_TABLE == static_cast<ObLogTableScan *>(this)->get_table_type()) {
-        if (ctx.force_partition()) {
+        if (OB_UNLIKELY(ctx.is_force_partition())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("external table do not support partition GI", K(ret));
         } else {
@@ -4444,13 +4449,11 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
         }
       }
 
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(gi_op->is_partition_gi(partition_granule))) {
-          LOG_WARN("failed judge partition granule", K(ret));
-        }
-      }
-
-      if (ctx.force_partition() || partition_granule) {
+      if (OB_FAIL(ret)) {
+        /* do nothing */
+      } else if (OB_FAIL(gi_op->is_partition_gi(partition_granule))) {
+        LOG_WARN("failed judge partition granule", K(ret));
+      } else if (ctx.is_force_partition() || partition_granule) {
         gi_op->add_flag(GI_FORCE_PARTITION_GRANULE);
       }
 
@@ -4488,6 +4491,7 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
 	 * if we forget reset this var, may get some wrong log plan.
 	 * */
   ctx.alloc_gi_ = false;
+  ctx.is_force_partition_ = false; // force partition is only relevant to one layer of GI, hence reset it together with alloc_gi_
   return ret;
 }
 
@@ -4549,6 +4553,7 @@ int ObLogicalOperator::allocate_gi_recursively(AllocGIContext &ctx)
       ctx.alloc_gi_ = true;
     } else {
       ctx.alloc_gi_ = false;
+      ctx.is_force_partition_ = false; // force partition is only relevant to one layer of GI, hence reset it together with alloc_gi_
     }
     if (OB_FAIL(allocate_granule_nodes_above(ctx))) {
       LOG_WARN("allocate gi above table scan failed", K(ret));

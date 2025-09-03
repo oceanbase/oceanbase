@@ -65,4 +65,3 @@ body:
       placeholder: Include any other information that might help us understand and implement this enhancement.
     validations:
       required: false
-

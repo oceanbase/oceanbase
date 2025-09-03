@@ -7869,6 +7869,7 @@ int ObRootService::add_server(const obrpc::ObAdminServerArg &arg)
 {
   int ret = OB_SUCCESS;
   ObTimeoutCtx ctx;
+  uint64_t sys_data_version = 0;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(inited_));
@@ -7883,6 +7884,11 @@ int ObRootService::add_server(const obrpc::ObAdminServerArg &arg)
     LOG_WARN("in standalone mode, add server is not allowed", KR(ret));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "add server in standalone mode");
 #endif
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_data_version))) {
+    LOG_WARN("failed to get sys tenant data version", KR(ret));
+  } else if (GCTX.is_shared_storage_mode() && sys_data_version < DATA_VERSION_4_4_1_0) {
+    ret= OB_NOT_SUPPORTED;
+    LOG_WARN("not support add server when sys_data_version < 4410 in ss", KR(ret), KDV(sys_data_version));
   }
   if (OB_SUCC(ret)) {
     if (!ObHeartbeatService::is_service_enabled()) { // the old logic
@@ -8546,19 +8552,51 @@ int ObRootService::add_storage(const obrpc::ObAdminStorageArg &arg)
     LOG_ERROR("shared nothing do not support shared storage operation", KR(ret));
   } else if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy is null", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(arg), K(ret));
+    LOG_WARN("invalid arg", K(arg), KR(ret));
   } else if (!zone_storage_manager_.is_reload() && OB_FAIL(zone_storage_manager_.reload())) {
-    LOG_WARN("failed to reload zone storage manager", K(ret));
-  } else if (OB_FAIL(zone_storage_manager_.add_storage(arg.path_.str(), arg.access_info_.str(),
-                     arg.attribute_.str(), arg.use_for_, arg.zone_, arg.wait_type_))) {
-    LOG_WARN("failed to add storage", K(ret), K(arg));
+    LOG_WARN("failed to reload zone storage manager", KR(ret));
+  } else {
+    ObMySQLTransaction trans;
+    if (OB_FAIL(trans.start(GCTX.sql_proxy_, OB_SYS_TENANT_ID))) {
+      LOG_WARN("start transaction failed", KR(ret));
+    } else if (OB_FAIL(add_storage_in_trans(arg, trans))) {
+      LOG_WARN("failed to add storage", KR(ret), K(arg));
+    }
+    int tmp_ret = trans.end(OB_SUCC(ret));
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("end transaction failed", KR(ret), K(tmp_ret));
+      ret = (OB_SUCCESS == ret ? tmp_ret : ret);
+    }
   }
   if (OB_SUCC(ret)) {
     LOG_INFO("add storage ok", K(arg));
   }
+  return ret;
+}
+
+int ObRootService::add_storage_in_trans(const obrpc::ObAdminStorageArg &arg, common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!GCTX.is_shared_storage_mode())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_ERROR("shared nothing do not support shared storage operation", KR(ret));
+  } else if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_FAIL(zone_storage_manager_.add_storage(arg.path_.str(), arg.access_info_.str(),
+                     arg.attribute_.str(), arg.use_for_, arg.zone_, arg.wait_type_, trans))) {
+    LOG_WARN("failed to add storage", KR(ret), K(arg));
+  }
+  FLOG_INFO("add storage in trans", KR(ret), K(arg));
   return ret;
 }
 

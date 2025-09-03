@@ -328,6 +328,9 @@ int ObMPConnect::process()
     } else if (SS_STOPPING == GCTX.status_) {
       ret = OB_SERVER_IS_STOPPING;
       LOG_WARN("server is stopping", K(ret));
+    } else if (GCTX.in_replace_sys()) {
+      ret = OB_SERVER_IS_INIT;
+      LOG_WARN("server is replacing sys tenant", KR(ret));
     } else if (OB_FAIL(extract_service_name(*conn, service_name, failover_mode))) {
       LOG_WARN("fail to extraxt service name", KR(ret));
     } else if (OB_FAIL(check_update_tenant_id(*conn, tenant_id))) {

@@ -33,8 +33,8 @@ devdeps-icu-69.1-72022112416.el7.aarch64.rpm
 devdeps-s3-cpp-sdk-1.11.156-102023122011.el7.aarch64.rpm
 devdeps-protobuf-c-1.5.1-100000052025032810.el7.aarch64.rpm
 devdeps-roaringbitmap-croaring-3.0.0-42024042816.el7.aarch64.rpm
-devdeps-apache-arrow-20.0.0-22025060511.el7.aarch64.rpm
-devdeps-vsag-1.1.0-312025071511.el7.aarch64.rpm
+devdeps-apache-arrow-20.0.0-42025082815.el7.aarch64.rpm
+devdeps-vsag-1.1.0-532025082110.el7.aarch64.rpm
 devdeps-apache-orc-2.1.1-82025081116.el7.aarch64.rpm
 devdeps-fast-float-6.1.3-42024112122.el7.aarch64.rpm
 devdeps-hdfs-sdk-3.3.6-112024123116.el7.aarch64.rpm

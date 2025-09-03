@@ -209,7 +209,8 @@ public:
                               sql::ObSQLSessionInfo *session_info,
                               const ObString &dblink_name,
                               bool is_reverse_link,
-                              uint64_t *current_scn);
+                              uint64_t *current_scn,
+                              bool &is_under_oracle12c); // for dblink connect to Oracle, if Oracle is under 12.1.0.1, is_under_oracle12c will be true
 
   // get the latest schema version
   // if core_schema_version = false, return user schema version

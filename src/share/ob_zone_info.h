@@ -134,6 +134,11 @@ public:
   ObZoneInfo &operator =(const ObZoneInfo &other);
   void reset();
   bool is_valid() const;
+  int init(
+      const common::ObZone &zone,
+      const common::ObRegion &region,
+      const ObZoneStatus::Status &zone_status,
+      const share::ObZoneInfo::StorageType &storage_type);
   DECLARE_TO_STRING;
 
   int get_region(common::ObRegion &region) const;

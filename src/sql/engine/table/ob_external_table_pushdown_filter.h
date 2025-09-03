@@ -17,6 +17,7 @@
 #include "storage/access/ob_dml_param.h"
 #include "storage/access/ob_sstable_index_filter.h"
 #include "storage/blocksstable/index_block/ob_skip_index_filter_executor.h"
+#include "sql/engine/table/ob_external_table_access_service.h"
 
 namespace oceanbase
 {
@@ -99,8 +100,8 @@ protected:
     virtual ~FilterExprRel() {}
 
     OB_INLINE bool is_valid() const {
-      return column_expr_ != nullptr && column_conv_expr_ != nullptr &&
-        file_col_expr_index_ >= 0;
+      return column_expr_ != nullptr && ((column_conv_expr_ != nullptr &&
+        file_col_expr_index_ >= 0) || is_file_meta_column_);
     }
 
     const ObExpr *column_expr_;  // column ref expr for filter calculation.
@@ -158,11 +159,7 @@ public:
 protected:
   // build the filter expr relationships and mark which column is eager.
   int build_filter_expr_rels(sql::ObPushdownFilterExecutor *root,
-                             const common::ObIArray<ObExpr*> &column_exprs,
-                             const common::ObIArray<ObExpr*> &column_conv_exprs,
-                             const common::ObIArray<ObExpr*> &file_column_exprs,
-                             const common::ObIArray<ObExpr*> &file_meta_column_exprs,
-                             const common::ObIArray<bool> &column_sel_mask);
+                             const ObExternalTableRowIterator *row_iter);
 
 private:
   int build_skipping_filter_nodes(sql::ObPushdownFilterExecutor &filter);
@@ -173,18 +170,10 @@ private:
   }
 
   int build_filter_expr_rels_recursive(sql::ObPushdownFilterExecutor *filter,
-                                       const common::ObIArray<ObExpr*> &column_exprs,
-                                       const common::ObIArray<ObExpr*> &column_conv_exprs,
-                                       const common::ObIArray<ObExpr*> &file_column_exprs,
-                                       const common::ObIArray<ObExpr*> &file_meta_column_exprs,
-                                       const common::ObIArray<bool> &column_sel_mask);
+                                       const ObExternalTableRowIterator *row_iter);
 
   int build_filter_expr_rel(const uint64_t col_id, const ObExpr *col_expr,
-                            const common::ObIArray<ObExpr*> &column_exprs,
-                            const common::ObIArray<ObExpr*> &column_conv_exprs,
-                            const common::ObIArray<ObExpr*> &file_column_exprs,
-                            const common::ObIArray<ObExpr*> &file_meta_column_exprs,
-                            const common::ObIArray<bool> &column_sel_mask);
+                            const ObExternalTableRowIterator *row_iter);
 
   int find_ext_tbl_expr_index(const ObExpr *expr,
                               const common::ObIArray<ObExpr*> &file_column_exprs,

@@ -36,7 +36,7 @@ public:
   }
   bool is_valid() const { return tenant_id_ != OB_INVALID_TENANT_ID && ai_model_id_ != OB_INVALID_ID; }
   OB_INLINE uint64_t get_tenant_id() const { return tenant_id_; }
-  OB_INLINE uint64_t get_model_id() const { return ai_model_id_; }
+  OB_INLINE uint64_t get_ai_model_id() const { return ai_model_id_; }
   TO_STRING_KV(K_(tenant_id), K_(ai_model_id));
 
 private:
@@ -77,7 +77,7 @@ public:
   int assign(const uint64_t tenant_id, const ObAiServiceModelInfo &model_info);
   int64_t get_convert_size() const override;
 
-  OB_INLINE uint64_t get_model_id() const { return model_id_; }
+  OB_INLINE uint64_t get_ai_model_id() const { return model_id_; }
   OB_INLINE uint64_t get_tenant_id() const { return tenant_id_; }
   OB_INLINE ObString get_name() const { return name_; }
   OB_INLINE EndpointType::TYPE get_type() const { return type_; }
@@ -171,7 +171,7 @@ struct ObGetAiModelKey<uint64_t, ObAiModelSchema*>
 {
   uint64_t operator()(const ObAiModelSchema *ai_model_schema) const
   {
-    return nullptr == ai_model_schema ? OB_INVALID_ID : ai_model_schema->get_model_id();
+    return nullptr == ai_model_schema ? OB_INVALID_ID : ai_model_schema->get_ai_model_id();
   }
 };
 
@@ -223,17 +223,17 @@ private:
 
   OB_INLINE static bool compare_ai_model(const ObAiModelSchema *lhs, const ObAiModelSchema *rhs)
   {
-    return lhs->get_model_id() < rhs->get_model_id();
+    return lhs->get_ai_model_id() < rhs->get_ai_model_id();
   }
 
   OB_INLINE static bool equal_ai_model(const ObAiModelSchema *lhs, const ObAiModelSchema *rhs) {
-    return lhs->get_model_id() == rhs->get_model_id();
+    return lhs->get_ai_model_id() == rhs->get_ai_model_id();
   }
   OB_INLINE static bool equal_to_tenant_ai_model_id(const ObAiModelSchema *lhs, const ObTenantAiModelId &rhs) {
-    return lhs->get_tenant_id() == rhs.get_tenant_id() && lhs->get_model_id() == rhs.get_model_id();
+    return lhs->get_tenant_id() == rhs.get_tenant_id() && lhs->get_ai_model_id() == rhs.get_ai_model_id();
   }
   OB_INLINE static bool compare_with_tenant_ai_model_id(const ObAiModelSchema *lhs, const ObTenantAiModelId &rhs) {
-    return lhs->get_tenant_id() < rhs.get_tenant_id() || (lhs->get_tenant_id() == rhs.get_tenant_id() && lhs->get_model_id() < rhs.get_model_id());
+    return lhs->get_tenant_id() < rhs.get_tenant_id() || (lhs->get_tenant_id() == rhs.get_tenant_id() && lhs->get_ai_model_id() < rhs.get_ai_model_id());
   }
 private:
   bool is_inited_;

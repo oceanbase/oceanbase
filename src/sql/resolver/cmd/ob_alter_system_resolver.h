@@ -87,6 +87,10 @@ public:
                                            ObSchemaChecker *schema_checker,
                                            ObSQLSessionInfo *session_info,
                                            uint64_t &target_tenant_id);
+  static int resolve_logservice_access_point(const ParseNode *parse_tree,
+                                             ObString &logservice_access_point);
+  static int resolve_shared_storage_info(const ParseNode *parse_tree,
+                                         ObString &shared_storage_info);
 };
 
 typedef common::ObFixedLengthString<common::OB_MAX_TRACE_ID_BUFFER_SIZE + 1> Task_Id;
@@ -155,6 +159,8 @@ DEF_SIMPLE_CMD_RESOLVER(ObRemoveArbitrationServiceResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObReplaceArbitrationServiceResolver);
 
 DEF_SIMPLE_CMD_RESOLVER(ObMigrateUnitResolver);
+
+DEF_SIMPLE_CMD_RESOLVER(ObReplaceTenantResolver);
 
 DEF_SIMPLE_CMD_RESOLVER(ObAddLSReplicaResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObRemoveLSReplicaResolver);

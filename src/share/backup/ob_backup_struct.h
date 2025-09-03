@@ -950,7 +950,7 @@ public:
 
   virtual int clone(
       common::ObIAllocator &allocator,
-      common::ObObjectStorageInfo *&storage_info) const override;
+    common::ObObjectStorageInfo *&storage_info) const override;
   virtual void reset() override;
   int set(
       const common::ObStorageType device_type,
@@ -1152,6 +1152,7 @@ public:
                                            ObFixedLengthString<common::OB_MAX_TIMESTAMP_TZ_LENGTH> &time_zone,
                                            ObTimeZoneInfoWrap &time_zone_info_wrap);
   static int get_tenant_backup_servers(
+      const char *backup_dest_str,
       const uint64_t tenant_id,
       common::ObArray<ObAddr> &server_list,
       bool &is_self_tenant_server);
@@ -1276,11 +1277,28 @@ struct ObBackupZone final
   ~ObBackupZone();
   void reset();
   int set(const ObString &zone, const int64_t priority);
+  bool locality_equal(const ObZone &zone) const { return zone_ == zone; }
 
   bool is_valid() const { return !zone_.is_empty() && priority_ >= 0; }
   TO_STRING_KV(K_(zone), K_(priority));
   ObZone zone_;
   int64_t priority_;
+};
+
+struct ObBackupSrcInfo final
+{
+  ObBackupSrcInfo();
+  ~ObBackupSrcInfo();
+  void reset();
+  bool is_zone() const { return ObBackupSrcType::ZONE == src_type_ && !locality_list_.empty(); }
+  bool is_region() const { return ObBackupSrcType::REGION == src_type_ && !locality_list_.empty(); }
+  bool is_idc() const { return ObBackupSrcType::IDC == src_type_ && !locality_list_.empty(); }
+  bool is_empty() const { return ObBackupSrcType::EMPTY == src_type_ && locality_list_.empty(); }
+  int check_locality_info_valid(const ObRegion &region, const ObIDC &idc, const ObZone &zone, bool &is_valid) const;
+  bool is_valid() const { return src_type_ < ObBackupSrcType::MAX && src_type_ >= ObBackupSrcType::EMPTY; }
+  TO_STRING_KV(K_(src_type), K_(locality_list));
+  ObBackupSrcType src_type_;
+  ObSArray<ObBackupZone> locality_list_;
 };
 
 //-----------------------------ObBackupUtils---------------------------

@@ -1492,7 +1492,10 @@ int ObVecIndexAsyncTask::optimize_vector_index(ObPluginVectorIndexAdaptor &adapt
         } else if (OB_ISNULL(datum_row) || !datum_row->is_valid()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get row invalid.", K(ret));
-        } else if (datum_row->get_column_count() != extra_column_count + 1) {
+        } else if (adaptor.get_is_need_vid() && datum_row->get_column_count() != extra_column_count + 1) {  // extra col + vec col
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get row column cnt invalid.", K(ret), K(datum_row->get_column_count()));
+        } else if (!adaptor.get_is_need_vid() && datum_row->get_column_count() != data_table_rowkey_count + 1) {  // pk col + vec col
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get row column cnt invalid.", K(ret), K(datum_row->get_column_count()));
         } else {

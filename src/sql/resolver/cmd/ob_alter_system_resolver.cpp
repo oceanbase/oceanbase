@@ -30,6 +30,7 @@
 #include "observer/mysql/ob_query_response_time.h"
 #include "share/restore/ob_import_util.h"
 #include "share/table/ob_table_config_util.h"
+#include "sql/resolver/cmd/ob_bootstrap_resolver.h"
 #include "share/ob_license_utils.h"
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
 #include "close_modules/shared_log_service/logservice/libpalf/libpalf_env_ffi_instance.h"
@@ -240,6 +241,44 @@ int ObAlterSystemResolverUtil::resolve_zone(const ParseNode *parse_tree, ObZone 
         LOG_WARN("assign zone string failed", K(zone_name), K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObAlterSystemResolverUtil::resolve_logservice_access_point(
+    const ParseNode *parse_tree,
+    ObString &logservice_access_point)
+{
+  int ret = OB_SUCCESS;
+  logservice_access_point.reset();
+  if (OB_ISNULL(parse_tree)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node should not be null", KR(ret));
+  } else if (parse_tree->value_ <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("empty parse tree string", KR(ret));
+  } else {
+    logservice_access_point.assign_ptr((char *)(parse_tree->str_value_),
+                                       static_cast<int32_t>(parse_tree->str_len_));
+  }
+  return ret;
+}
+
+int ObAlterSystemResolverUtil::resolve_shared_storage_info(
+    const ParseNode *parse_tree,
+    ObString &shared_storage_info)
+{
+  int ret = OB_SUCCESS;
+  shared_storage_info.reset();
+  if (OB_ISNULL(parse_tree)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node should not be null", KR(ret));
+  } else if (parse_tree->value_ <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("empty parse tree string", KR(ret));
+  } else {
+    shared_storage_info.assign_ptr((char *)(parse_tree->str_value_),
+                                   static_cast<int32_t>(parse_tree->str_len_));
   }
   return ret;
 }
@@ -3492,6 +3531,83 @@ int ObAlterSystemResolverUtil::do_check_for_alter_ls_replica(
               K(session_info->get_user_id()));
     }
   }
+  return ret;
+}
+
+int ObReplaceTenantResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("resolve replace tenant");
+  ObReplaceTenantStmt *stmt = NULL;
+  ParseNode *server_infos_node = NULL;
+  if (!GCTX.is_shared_storage_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("non-ss not support replace tenant", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Not in shared storage mode, replace tenant is");
+  } else if (OB_UNLIKELY(T_REPLACE_TENANT != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_ADD_LS_REPLICA", KR(ret), "type", get_type_name(parse_tree.type_));
+  } else if (OB_ISNULL(parse_tree.children_) || OB_UNLIKELY(parse_tree.num_child_ != 4)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", KR(ret), "type", get_type_name(parse_tree.type_),
+             "child_num", parse_tree.num_child_);
+  } else if (OB_ISNULL(parse_tree.children_[0])
+          || OB_ISNULL(parse_tree.children_[1])
+          || OB_ISNULL(parse_tree.children_[2])
+          || OB_ISNULL(parse_tree.children_[3])
+          || OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parse tree", KR(ret), KP(session_info_),
+              KP(parse_tree.children_[0]), KP(parse_tree.children_[1]), KP(parse_tree.children_[2]), KP(parse_tree.children_[3]));
+  } else if (OB_ISNULL(stmt = create_stmt<ObReplaceTenantStmt>())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("create ObReplaceTenantStmt failed", KR(ret));
+  } else if (FALSE_IT(server_infos_node = parse_tree.children_[1])) {
+  } else if (OB_UNLIKELY(server_infos_node->num_child_ != 3)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", KR(ret), "child_num", server_infos_node->num_child_);
+  } else {
+    stmt_ = stmt;
+    ParseNode *tenant_name_node = parse_tree.children_[0];
+    ParseNode *region_node = server_infos_node->children_[0];
+    ParseNode *zone_node = server_infos_node->children_[1];
+    ParseNode *server_node = server_infos_node->children_[2];
+    ParseNode *logservice_access_point_node = parse_tree.children_[2];
+    ParseNode *shared_storage_info_node = parse_tree.children_[3];
+    ObString tenant_name;
+    common::ObRegion region_name;
+    common::ObZone zone_name;
+    common::ObAddr server_addr;
+    ObString logservice_access_point;
+    ObString shared_storage_info;
+    ObString region_str;
+    ObString zone_str;
+    ObString ip_port_str;
+    if (OB_ISNULL(region_node) || OB_ISNULL(zone_node) || OB_ISNULL(server_node)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid parse tree", KR(ret), KP(region_node), KP(zone_node), KP(server_node));
+    } else {
+      region_str.assign_ptr(region_node->str_value_, static_cast<int32_t>(region_node->str_len_));
+      zone_str.assign_ptr(zone_node->str_value_, static_cast<int32_t>(zone_node->str_len_));
+      ip_port_str.assign_ptr(server_node->str_value_, static_cast<int32_t>(server_node->str_len_));
+      if (OB_FAIL(region_name.assign(region_str))) {
+        LOG_WARN("assign region name failed", KR(ret), K(region_str));
+      } else if (OB_FAIL(zone_name.assign(zone_str))) {
+        LOG_WARN("assign zone name failed", KR(ret), K(zone_str));
+      } else if (OB_FAIL(server_addr.parse_from_string(ip_port_str))) {
+        LOG_WARN("Invalid server address", "ip:port", ip_port_str, KR(ret));
+      } else if (OB_FAIL(resolve_tenant_name(tenant_name_node, session_info_->get_effective_tenant_id(), tenant_name))) {
+        LOG_WARN("resolve tenant failed", KR(ret));
+      } else if (OB_FAIL(Util::resolve_logservice_access_point(logservice_access_point_node, logservice_access_point))) {
+        LOG_WARN("resolve log service failed", KR(ret));
+      } else if (OB_FAIL(Util::resolve_shared_storage_info(shared_storage_info_node, shared_storage_info))) {
+        LOG_WARN("resolve shared storage info failed", KR(ret));
+      } else if (OB_FAIL(stmt->init(tenant_name, region_name, zone_name, server_addr, logservice_access_point, shared_storage_info))) {
+        LOG_WARN("init stmt failed", KR(ret), K(tenant_name), K(region_name), K(zone_name), K(server_addr));
+      }
+    }
+  }
+  LOG_INFO("resolve replace tenant over", KR(ret));
   return ret;
 }
 

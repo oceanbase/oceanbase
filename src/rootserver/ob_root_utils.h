@@ -440,7 +440,8 @@ public:
       bool &non_paxos_locality_modified,
       int64_t &pre_paxos_num,
       int64_t &cur_paxos_num,
-      const share::ObArbitrationServiceStatus &arb_service_status);
+      const share::ObArbitrationServiceStatus &arb_service_status,
+      const uint64_t tenant_id);
   static int calc_paxos_replica_num(
       const common::ObIArray<share::ObZoneReplicaAttrSet> &zone_locality,
       int64_t &paxos_num);
@@ -474,7 +475,7 @@ private:
       return cmp;
     }
   };
-
+  static int set_data_version_from_palf_kv_(const uint64_t tenant_id);
   static int get_alter_paxos_replica_number_replica_task(
       const common::ObIArray<share::ObZoneReplicaAttrSet> &pre_zone_locality,
       const common::ObIArray<share::ObZoneReplicaAttrSet> &cur_zone_locality,

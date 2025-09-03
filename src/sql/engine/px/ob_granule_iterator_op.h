@@ -133,7 +133,6 @@ public:
   // GI的属性都通过这个flag来进行判断。
   uint64_t gi_attri_flag_;
   // FULL PARTITION WISE情况下，GI可以分配在INSERT/REPLACE算子上，GI会控制insert/REPLACE表的任务划分
-  ObTableModifySpec *dml_op_;
   // for partition join filter
   ObPxBFStaticInfo bf_info_;
   ObHashFunc hash_func_;

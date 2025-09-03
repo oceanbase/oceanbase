@@ -153,6 +153,7 @@
   RPC_S(PR5 update_tenant_memory, OB_UPDATE_TENANT_MEMORY, (obrpc::ObTenantMemoryArg));
   RPC_S(PR5 renew_in_zone_hb, OB_RENEW_IN_ZONE_HB, (share::ObInZoneHbRequest), share::ObInZoneHbResponse);
   RPC_S(PR5 pre_process_server_status, OB_PRE_PROCESS_SERVER, (obrpc::ObPreProcessServerArg));
+  RPC_S(PR5 check_server_alive, OB_CHECK_SERVER_ALIVE, (obrpc::ObCheckServerAliveArg));
 #ifdef OB_BUILD_TDE_SECURITY
   RPC_S(PR5 set_master_key, OB_SET_MASTER_KEY, (obrpc::ObSetMasterKeyArg));
   RPC_S(PR5 get_master_key, OB_GET_MASTER_KEY, (obrpc::Int64), ObGetMasterKeyResultArg);

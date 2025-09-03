@@ -235,7 +235,10 @@ int ObExprUDF::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObEx
       rt_expr.eval_func_ = eval_mysql_udtf;
     } else {
       rt_expr.eval_func_ = eval_external_udf;
-      rt_expr.eval_vector_func_ = eval_external_udf_vector;
+
+      if (!info->is_py_udf()) {
+        rt_expr.eval_vector_func_ = eval_external_udf_vector;
+      }
     }
   } else {
     rt_expr.eval_func_ = eval_udf;

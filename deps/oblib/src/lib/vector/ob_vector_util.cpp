@@ -276,6 +276,16 @@ uint64_t estimate_memory(obvsag::VectorIndexPtr& index_handler, const uint64_t r
 
 }
 
+int immutable_optimize(obvsag::VectorIndexPtr& index_handler)
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_CDC_DISABLE_VSAG
+    return ret;
+#else
+  return obvsag::immutable_optimize(index_handler);
+#endif
+}
+
 } //namespace obvectorlib
 } //namespace common
 } //namespace oceanbase

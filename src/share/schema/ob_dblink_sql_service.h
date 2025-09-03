@@ -53,7 +53,8 @@ public:
                             sql::ObSQLSessionInfo *session_info,
                             const ObString &dblink_name,
                             bool is_reverse_link,
-                            uint64_t *current_scn);
+                            uint64_t *current_scn,
+                            bool &is_under_oracle12c);
   template<typename T>
   int fetch_link_table_info(common::sqlclient::dblink_param_ctx &param_ctx,
                             sql::DblinkGetConnType conn_type,
@@ -64,7 +65,8 @@ public:
                             sql::ObSQLSessionInfo *session_info,
                             const ObString &dblink_name,
                             sql::ObReverseLink *reverse_link,
-                            uint64_t *current_scn);
+                            uint64_t *current_scn,
+                            bool &is_under_oracle12c);
   template<typename T>
   int generate_link_table_schema(const common::sqlclient::dblink_param_ctx &param_ctx,
                                  sql::DblinkGetConnType conn_type,

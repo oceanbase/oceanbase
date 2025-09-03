@@ -17,11 +17,26 @@
 #include "lib/ob_errno.h"
 #include "lib/oblog/ob_log_module.h"
 #include "storage/incremental/sslog/ob_sslog_kv_define.h"
+#include "src/rootserver/ob_server_zone_op_service.h"
+#include "share/ob_master_key_getter.h"
 #include <cstring>
 #include <unordered_map>
 #include <vector>
 namespace oceanbase
 {
+
+#define OB_MOCK_PALF_KV_FOR_REPLACE_SYS_TENANT                                                                                                                                              \
+namespace rootserver {                                                                                                                                                                      \
+  int ObServerZoneOpService::store_data_version_in_palf_kv(const uint64_t tenant_id, const uint64_t data_version) { int ret = OB_SUCCESS; return ret; }                                     \
+  int ObServerZoneOpService::store_server_ids_in_palf_kv(common::ObSEArray<uint64_t, 128> &server_ids, const uint64_t input_max_server_id) { int ret = OB_SUCCESS; return ret; }            \
+  int ObServerZoneOpService::store_max_unit_id_in_palf_kv(const uint64_t max_unit_id) { int ret = OB_SUCCESS; return ret; }                                                                 \
+  int ObServerZoneOpService::generate_new_server_id_from_palf_kv(uint64_t &new_server_id) { int ret = OB_SUCCESS; new_server_id = 1; return ret; }                                          \
+  int ObServerZoneOpService::insert_zone_in_palf_kv(const ObZone &zone) { int ret = OB_SUCCESS; return ret; }                                                                               \
+  int ObServerZoneOpService::store_all_zone_in_palf_kv(const ZoneNameArray &zone_list) { int ret = OB_SUCCESS; return ret; }                                                                \
+}                                                                                                                                                                                           \
+namespace share {                                                                                                                                                                           \
+  int ObMasterKeyUtil::store_sys_root_key_in_palf_kv() { int ret = OB_SUCCESS; return ret; }                                                                                                \
+}                                                                                                                                                                                           \
 
 namespace unittest
 {

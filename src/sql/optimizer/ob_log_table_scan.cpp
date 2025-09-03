@@ -1156,9 +1156,9 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
         }
       } else if (get_plan()->get_optimizer_context().get_min_cluster_version()
                  >= CLUSTER_VERSION_4_4_1_0) {
-        if (external_table_type == ObExternalFileFormat::FormatType::ICEBERG_FORMAT ||
-            external_table_type == ObExternalFileFormat::FormatType::PARQUET_FORMAT ||
+        if (external_table_type == ObExternalFileFormat::FormatType::PARQUET_FORMAT ||
             external_table_type == ObExternalFileFormat::FormatType::ORC_FORMAT) {
+          // todo 后续要支持 iceberg(不同 datafile 类型的时候)，这里需要重新考虑
           need_dup_filter = false;
           // for iceberg, parquet and orc, we need to check if the filter need to be duplicated
           int64_t file_column_count = 0;
@@ -3174,6 +3174,18 @@ int ObLogTableScan::allocate_granule_post(AllocGIContext &ctx)
     ctx.tablet_size_ = (NULL == table_partition_info_) ? 0 : table_schema->get_tablet_size();
   }
 
+  // set force partition GI
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (is_text_retrieval_scan() || is_vec_idx_scan_post_filter() || use_index_merge()
+             || (NULL != table_schema
+                 && (share::is_oracle_mapping_real_virtual_table(table_schema->get_table_id())
+                     || table_schema->is_spatial_index() || table_schema->is_vec_index()))) {
+    // block GI is not supported for text retrieval scan, vec idx scan post filter and index merge
+    // before GI is adapted to the real agent table, block GI cannot be assigned to it
+    ctx.set_force_partition();
+  }
+
   if (OB_FAIL(ret)) {
   } else if (use_das()) {
     // do nothing
@@ -3190,11 +3202,6 @@ int ObLogTableScan::allocate_granule_post(AllocGIContext &ctx)
     ctx.partition_count_ = table_partition_info_->get_phy_tbl_location_info().get_phy_part_loc_info_list().count();
     ctx.hash_part_ = table_schema->is_hash_part() || table_schema->is_hash_subpart()
                      || table_schema->is_key_subpart() || table_schema->is_key_subpart();
-    //Before GI is adapted to the real agent table, block gi cannot be assigned to it
-    if (share::is_oracle_mapping_real_virtual_table(table_schema->get_table_id())
-        || table_schema->is_spatial_index() || table_schema->is_vec_index()) {
-      ctx.set_force_partition();
-    }
   } else { /*do nothing*/ }
 
   return ret;

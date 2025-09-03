@@ -166,6 +166,7 @@ public:
   int dump_ls_info();
 
 #ifdef OB_BUILD_SHARED_STORAGE
+  int check_sslog_ls_exist();
   void report_tablet_id_for_tablet_version_gc(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id)
@@ -252,9 +253,6 @@ private:
       const GlobalLearnerList &learner_list,
       const common::ObLSStoreFormat &ls_store_format,
       ObReplicaType &replica_type);
-#ifdef OB_BUILD_SHARED_STORAGE
-  int check_sslog_ls_exist_(const ObMigrationOpArg &arg);
-#endif
 
 private:
   bool is_inited_;

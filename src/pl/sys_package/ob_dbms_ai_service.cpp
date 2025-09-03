@@ -282,7 +282,7 @@ int ObDBMSAiService::create_ai_model(ObPLExecCtx &ctx, sql::ParamStore &params, 
   } else if (OB_ISNULL(ctx.exec_ctx_)) {
     ret =  OB_ERR_UNEXPECTED;
     LOG_WARN("exec context is null", K(ret));
-  } else if (OB_ISNULL(ctx.exec_ctx_->get_my_session())) {
+  } else if (OB_ISNULL(ctx.exec_ctx_->get_sql_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
   } else {
@@ -295,7 +295,7 @@ int ObDBMSAiService::create_ai_model(ObPLExecCtx &ctx, sql::ParamStore &params, 
       LOG_WARN("failed to parse ai model info", K(ret), K(model_name));
     } else {
       ObCreateAiModelArg arg(tenant_id, model_info);
-      arg.ddl_stmt_str_ = ctx.exec_ctx_->get_my_session()->get_top_query_string();
+      arg.ddl_stmt_str_ = ctx.exec_ctx_->get_sql_ctx()->cur_sql_;
       ObTaskExecutorCtx *task_exec_ctx = GET_TASK_EXECUTOR_CTX(*ctx.exec_ctx_);
       obrpc::ObCommonRpcProxy *common_rpc_proxy = nullptr;
       if (OB_ISNULL(task_exec_ctx)) {
@@ -356,12 +356,12 @@ int ObDBMSAiService::drop_ai_model(ObPLExecCtx &ctx, sql::ParamStore &params, co
   } else if (OB_ISNULL(ctx.exec_ctx_)) {
     ret =  OB_ERR_UNEXPECTED;
     LOG_WARN("exec context is null", K(ret));
-  } else if (OB_ISNULL(ctx.exec_ctx_->get_my_session())) {
+  } else if (OB_ISNULL(ctx.exec_ctx_->get_sql_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
   } else {
     ObDropAiModelArg arg(tenant_id, model_name);
-    arg.ddl_stmt_str_ = ctx.exec_ctx_->get_my_session()->get_top_query_string();
+    arg.ddl_stmt_str_ = ctx.exec_ctx_->get_sql_ctx()->cur_sql_;
     ObTaskExecutorCtx *task_exec_ctx = GET_TASK_EXECUTOR_CTX(*ctx.exec_ctx_);
     obrpc::ObCommonRpcProxy *common_rpc_proxy = nullptr;
     if (OB_ISNULL(task_exec_ctx)) {

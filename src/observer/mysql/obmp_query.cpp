@@ -877,8 +877,8 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
     MEMCPY(audit_record.sql_id_, ctx_.sql_id_, (int32_t)sizeof(audit_record.sql_id_));
     MEMCPY(audit_record.format_sql_id_, ctx_.format_sql_id_, (int32_t)sizeof(audit_record.format_sql_id_));
     audit_record.format_sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
-    audit_record.sql_ = const_cast<char *>(sql.ptr());
-    audit_record.sql_len_ = min(sql.length(), session.get_tenant_query_record_size_limit());
+    audit_record.sql_ = const_cast<char *>(session.get_current_query_string().ptr());
+    audit_record.sql_len_ = min(session.get_current_query_string().length(), session.get_tenant_query_record_size_limit());
     audit_record.sql_cs_type_ = session.get_local_collation_connection();
 
     if (OB_FAIL(ret) && audit_record.trans_id_ == 0) {

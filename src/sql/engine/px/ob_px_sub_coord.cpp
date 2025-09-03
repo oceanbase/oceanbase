@@ -1083,6 +1083,7 @@ int ObPxSubCoord::rebuild_sqc_access_table_locations()
   ObDASCtx &das_ctx = DAS_CTX(*sqc_arg_.exec_ctx_);
   // FIXME @yishen Performance?
   ObDASTableLoc *table_loc = NULL;
+  bool loc_uncertain = false;
   if (!access_locations.empty()) {
     // do nothing
     // it means that it's rebuilded by pre_setup_op_input
@@ -1095,6 +1096,7 @@ int ObPxSubCoord::rebuild_sqc_access_table_locations()
     for (int i = 0; i < location_keys.count() && OB_SUCC(ret); ++i) {
       // dml location always at first
       if (OB_ISNULL(table_loc) && location_keys.at(i).is_loc_uncertain_) {
+        loc_uncertain = true;
         ObDASLocationRouter &loc_router = DAS_CTX(*sqc_arg_.exec_ctx_).get_location_router();
         OZ(ObTableLocation::get_full_leader_table_loc(loc_router,
            sqc_arg_.exec_ctx_->get_allocator(),
@@ -1130,7 +1132,7 @@ int ObPxSubCoord::rebuild_sqc_access_table_locations()
     }
   }
   if (OB_SUCC(ret) && location_keys.count() != access_locations.count()) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = loc_uncertain ? OB_SCHEMA_ERROR : OB_ERR_UNEXPECTED;
     LOG_WARN("invalid location key count", K(ret),
         K(location_keys.count()),
         K(access_locations.count()));

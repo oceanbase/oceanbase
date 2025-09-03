@@ -4450,7 +4450,8 @@ int ObMultiVersionSchemaService::fetch_link_table_schema(const ObDbLinkSchema *d
                                                          sql::ObSQLSessionInfo *session_info,
                                                          const ObString &dblink_name,
                                                          bool is_reverse_link,
-                                                         uint64_t *current_scn)
+                                                         uint64_t *current_scn,
+                                                         bool &is_under_oracle12c)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(schema_service_)) {
@@ -4462,7 +4463,8 @@ int ObMultiVersionSchemaService::fetch_link_table_schema(const ObDbLinkSchema *d
                                                             session_info,
                                                             dblink_name,
                                                             is_reverse_link,
-                                                            current_scn))) {
+                                                            current_scn,
+                                                            is_under_oracle12c))) {
     LOG_WARN("get link table schema failed", K(ret), K(is_reverse_link));
   }
   return ret;

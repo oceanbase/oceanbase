@@ -24,6 +24,7 @@ namespace oceanbase
 namespace share
 {
 typedef common::ObFixedLengthString<common::MAX_RESOURCE_POOL_LENGTH> ObResourcePoolName;
+typedef common::ObSEArray<common::ObZone, DEFAULT_ZONE_COUNT> ObZoneListArr;
 struct ObResourcePool
 {
   OB_UNIS_VERSION(1);
@@ -31,9 +32,17 @@ struct ObResourcePool
 public:
   ObResourcePool();
   ~ObResourcePool() {}
+  static const char *SYS_RESOURCE_POOL_NAME;
   void reset();
   bool is_valid() const;
   int assign(const ObResourcePool &other);
+  int init(const uint64_t resource_pool_id,
+           const ObResourcePoolName& name,
+           const int64_t unit_count,
+           const uint64_t unit_config_id,
+           const ObZoneListArr& zone_list,
+           const uint64_t tenant_id,
+           const common::ObReplicaType &replica_type);
   bool is_granted_to_tenant() const { return is_valid_tenant_id(tenant_id_); }
   DECLARE_TO_STRING;
 
@@ -41,7 +50,7 @@ public:
   ObResourcePoolName name_;
   int64_t unit_count_;
   uint64_t unit_config_id_;
-  common::ObSEArray<common::ObZone, DEFAULT_ZONE_COUNT> zone_list_;
+  ObZoneListArr zone_list_;
   uint64_t tenant_id_;
   common::ObReplicaType replica_type_;
 private:

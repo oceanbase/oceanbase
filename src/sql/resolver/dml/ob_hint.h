@@ -378,6 +378,7 @@ struct ObGlobalHint {
 #define COMPAT_VERSION_4_2_5_BP4  (oceanbase::common::cal_version(4, 2, 5, 4))
 #define COMPAT_VERSION_4_2_5_BP5  (oceanbase::common::cal_version(4, 2, 5, 5))
 #define COMPAT_VERSION_4_2_5_BP6  (oceanbase::common::cal_version(4, 2, 5, 6))
+#define COMPAT_VERSION_4_2_5_BP7  (oceanbase::common::cal_version(4, 2, 5, 7))
 #define COMPAT_VERSION_4_3_0      (oceanbase::common::cal_version(4, 3, 0, 0))
 #define COMPAT_VERSION_4_3_1      (oceanbase::common::cal_version(4, 3, 1, 0))
 #define COMPAT_VERSION_4_3_2      (oceanbase::common::cal_version(4, 3, 2, 0))
@@ -640,6 +641,7 @@ struct ObTableInHint
   DECLARE_TO_STRING;
 
   common::ObString qb_name_;
+  common::ObString catalog_name_;
   common::ObString db_name_;
   common::ObString table_name_;
 };

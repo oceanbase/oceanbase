@@ -139,7 +139,7 @@ public:
 class ObHMSCatalogProperties : public ObCatalogProperties
 {
 private:
-  static constexpr int64_t DEFAULT_HMS_CLIENT_POOL_SIZE = 2;
+  static constexpr int64_t DEFAULT_HMS_CLIENT_POOL_SIZE = 20;
   static constexpr int64_t DEFAULT_HMS_CLIENT_SOCKET_TIMEOUT_US = 10LL * 1000LL * 1000LL; // 10 seconds
   static constexpr int64_t DEFAULT_CACHE_REFRESH_INTERVAL_SEC = 10 * 60L; // 10 min
   static constexpr int64_t INVALID_CACHE_REFRESH_INTERVAL_SEC = -1;

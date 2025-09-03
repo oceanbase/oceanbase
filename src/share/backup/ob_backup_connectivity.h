@@ -245,11 +245,16 @@ public:
   void wait();
   void destroy();
 public:
+  static int filter_server_list_by_src_info(
+      const common::ObArray<ObAddr> &server_list,
+      const char *extension,
+      common::ObArray<ObAddr> &filtered_server_list);
   static int check_backup_src_info_valid(const char *backup_src_info, const ObBackupSrcType &backup_src_type);
   static int check_zone_valid(const char *src_info);
   static int check_region_valid(const char *src_info);
   static int check_idc_valid(const char *src_info);
   static int delete_locality_info_in_backup_dest_str(char *backup_dest_str);
+  static int get_src_info_from_extension(const char *extension, ObBackupSrcInfo &src_info);
   static int get_src_info_from_extension(
       const ObString &extension,
       char *src_locality,
@@ -260,6 +265,11 @@ public:
       const int64_t dest_string_length,
       char *locality_info,
       const int64_t localit_info_max_length);
+  static int get_server_locality_info_(
+      const ObAddr &addr,
+      common::ObRegion &region,
+      common::ObIDC &idc,
+      common::ObZone &zone);
 public:
   int refresh_io_permission();
   int is_io_prohibited(const common::ObObjectStorageInfo *storage_info, bool &is_io_prohibited);
@@ -271,7 +281,6 @@ private:
   int update_last_access_time_(const int64_t dest_id, const bool is_io_prohibited);
   int get_backup_and_archive_path_dest_id_(int64_t &backup_dest_id, int64_t &archive_dest_id) const;
   int refresh_and_get_dest_ids_in_map_(ObIArray<int64_t> &dest_ids);
-  int get_server_locality_info_(common::ObRegion &region, common::ObIDC &idc, common::ObZone &zone) const;
   int check_zone_in_src_info_(
       const char *src_info,
       const ObZone &zone,
@@ -330,7 +339,7 @@ public:
   static int change_src_info(
       common::ObISQLClient &proxy,
       const uint64_t tenant_id,
-      share::ObBackupDestAttribute &option,
+      const share::ObBackupDestAttribute &option,
       const share::ObBackupDest &backup_dest);
   static int process_src_info_in_extension_before_update(
       const char *src_info,

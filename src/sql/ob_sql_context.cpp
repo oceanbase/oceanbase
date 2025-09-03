@@ -311,6 +311,7 @@ void ObSqlSchemaGuard::reset()
   next_link_table_id_ = 1;
   dblink_scn_.reuse();
   mocked_schema_id_counter_ = OB_MIN_EXTERNAL_OBJECT_ID;
+  dblink_ids_under_oracle12c_.reset();
 }
 
 TableItem *ObSqlSchemaGuard::get_table_item_by_ref_id(const ObDMLStmt *stmt, uint64_t ref_table_id)
@@ -401,6 +402,7 @@ int ObSqlSchemaGuard::get_table_schema(uint64_t dblink_id,
     OV (OB_NOT_NULL(schema_guard_), OB_NOT_INIT);
     uint64_t current_scn = OB_INVALID_ID;
     uint64_t *scn = NULL;
+    bool is_under_oracle12c = false;
     if (OB_SUCC(ret)) {
       if (OB_ISNULL(session_info)) {
         ret = OB_ERR_UNEXPECTED;
@@ -426,13 +428,17 @@ int ObSqlSchemaGuard::get_table_schema(uint64_t dblink_id,
                                              session_info,
                                              dblink_name,
                                              is_reverse_link,
-                                             scn));
+                                             scn,
+                                             is_under_oracle12c));
     if (OB_SUCC(ret) && (NULL != scn)) {
       if (OB_FAIL(dblink_scn_.set_refactored(dblink_id, *scn))) {
         LOG_WARN("set refactored failed", K(ret));
       } else {
         LOG_TRACE("set dblink current scn", K(dblink_id), K(*scn));
       }
+    }
+    if (OB_SUCC(ret) && is_under_oracle12c && OB_FAIL(dblink_ids_under_oracle12c_.push_back(dblink_id))) {
+      LOG_WARN("failed to save dblink id which is OCI type and version of Oracle is under 12c", K(ret));
     }
     OV (OB_NOT_NULL(tmp_schema));
     OX (tmp_schema->set_table_id(next_link_table_id_++));
@@ -441,6 +447,18 @@ int ObSqlSchemaGuard::get_table_schema(uint64_t dblink_id,
         OB_ERR_UNEXPECTED, dblink_id, next_link_table_id_);
     OZ (table_schemas_.push_back(tmp_schema));
     OX (table_schema = tmp_schema);
+  }
+  return ret;
+}
+
+bool ObSqlSchemaGuard::check_is_under_oracle12c(uint64_t dblink_id)
+{
+  bool ret = false;
+  for (int64_t i = 0; i < dblink_ids_under_oracle12c_.count(); ++i) {
+    if (dblink_id == dblink_ids_under_oracle12c_.at(i)) {
+      ret = true;
+      break;
+    }
   }
   return ret;
 }

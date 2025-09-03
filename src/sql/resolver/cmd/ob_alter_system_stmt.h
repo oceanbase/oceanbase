@@ -491,6 +491,50 @@ private:
   obrpc::ObAdminMigrateUnitArg rpc_arg_;
 };
 
+class ObReplaceTenantStmt : public ObSystemCmdStmt
+{
+public:
+  ObReplaceTenantStmt() : ObSystemCmdStmt(stmt::T_REPLACE_TENANT),
+                          tenant_name_(),
+                          server_info_(),
+                          logservice_access_point_(),
+                          shared_storage_info_() {}
+  virtual ~ObReplaceTenantStmt() {}
+
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_),
+                            K_(tenant_name),
+                            K_(server_info),
+                            K_(logservice_access_point),
+                            K_(shared_storage_info));
+public:
+  int init(const common::ObString &tenant_name,
+           const common::ObRegion& region,
+           const common::ObZone &zone,
+           const common::ObAddr& server_addr,
+           const common::ObString &logservice_access_point,
+           const common::ObString &shared_storage_info);
+  bool is_valid() const {
+    return !tenant_name_.empty()
+        && !server_info_.zone_.is_empty()
+        && server_info_.server_.is_valid()
+        && !server_info_.region_.is_empty()
+        && !logservice_access_point_.empty()
+        && !shared_storage_info_.empty();
+  }
+  int assign(const sql::ObReplaceTenantStmt &that);
+  const common::ObSqlString &get_tenant_name() const { return tenant_name_; }
+  const common::ObZone &get_zone() const { return server_info_.zone_; }
+  const common::ObAddr &get_server() const { return server_info_.server_; }
+  const common::ObRegion &get_region() const { return server_info_.region_; }
+  const common::ObSqlString &get_logservice_access_point() const { return logservice_access_point_; }
+  const common::ObSqlString &get_shared_storage_info() const { return shared_storage_info_; }
+private:
+  common::ObSqlString tenant_name_;
+  obrpc::ObServerInfo server_info_;
+  common::ObSqlString logservice_access_point_;
+  common::ObSqlString shared_storage_info_;
+};
+
 class ObAlterLSReplicaStmt : public ObSystemCmdStmt
 {
 public:

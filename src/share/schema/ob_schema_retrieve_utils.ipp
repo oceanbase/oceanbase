@@ -6380,48 +6380,6 @@ int ObSchemaRetrieveUtils::retrieve_external_resource_schema(const uint64_t tena
   return ret;
 }
 
-template <typename T>
-int ObSchemaRetrieveUtils::retrieve_ai_model_schema(const uint64_t tenant_id,
-                                                    T &result,
-                                                    ObIArray<ObAiModelSchema> &schema_array)
-{
-  int ret = OB_SUCCESS;
-
-  ObArenaAllocator allocator(ObMemAttr(tenant_id, "SchAiModel"));
-  ObAiModelSchema schema(&allocator);
-
-  uint64_t pre_ai_model_id = OB_INVALID_ID;
-
-  while (OB_SUCC(ret) && OB_SUCC(result.next())) {
-    schema.reset();
-    allocator.reuse();
-
-    bool is_deleted = false;
-
-    if (OB_FAIL(fill_ai_model_schema(tenant_id, result, schema, is_deleted))) {
-      SHARE_SCHEMA_LOG(WARN, "failed to fill_ai_model_schema", K(ret), K(schema));
-    } else if (schema.get_model_id() == pre_ai_model_id) {
-      // do nothing
-    } else if (is_deleted) {
-      SHARE_SCHEMA_LOG(INFO, "ai_model is deleted, don't add", K(schema));
-    } else if (OB_FAIL(schema_array.push_back(schema))) {
-      SHARE_SCHEMA_LOG(WARN, "failed to push back", K(ret), K(schema));
-    }
-
-    if (OB_SUCC(ret)) {
-      pre_ai_model_id = schema.get_model_id();
-    }
-  }
-
-  if (ret != common::OB_ITER_END) {
-    SHARE_SCHEMA_LOG(WARN, "fail to get all ai model schema. iter quit. ", K(ret));
-  } else {
-    ret = common::OB_SUCCESS;
-    SHARE_SCHEMA_LOG(INFO, "retrieve ai model schemas succeed", K(tenant_id));
-  }
-
-  return ret;
-}
 
 template<typename T>
 int ObSchemaRetrieveUtils::fill_external_resource_schema(const uint64_t tenant_id,
@@ -6448,6 +6406,7 @@ int ObSchemaRetrieveUtils::fill_external_resource_schema(const uint64_t tenant_i
   return ret;
 }
 
+RETRIEVE_SCHEMA_FUNC_DEFINE(ai_model);
 template<typename T>
 int ObSchemaRetrieveUtils::fill_ai_model_schema(const uint64_t tenant_id,
                                                 T &result,

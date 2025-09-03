@@ -450,6 +450,7 @@ public:
   share::ObLSTableOperator &get_lst_operator() { return *lst_operator_; }
   share::schema::ObMultiVersionSchemaService &get_schema_service() { return *schema_service_; }
   ObServerManager &get_server_mgr() { return server_manager_; }
+  ObServerZoneOpService &get_server_zone_op_service() { return server_zone_op_service_; }
   ObZoneManager &get_zone_mgr() { return zone_manager_; }
   ObUnitManager &get_unit_mgr() { return unit_manager_; }
   ObRootBalancer &get_root_balancer() { return root_balancer_; }
@@ -799,6 +800,7 @@ public:
 
   // storage related
   int add_storage(const obrpc::ObAdminStorageArg &arg);
+  int add_storage_in_trans(const obrpc::ObAdminStorageArg &arg, common::ObMySQLTransaction &trans);
   int drop_storage(const obrpc::ObAdminStorageArg &arg);
   int alter_storage(const obrpc::ObAdminStorageArg &arg);
 

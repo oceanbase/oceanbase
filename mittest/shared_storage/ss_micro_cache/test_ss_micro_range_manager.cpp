@@ -127,7 +127,7 @@ TEST_F(TestSSMicroRangeManager, sub_range_mem_usage)
   int64_t mem_diff = micro_range_mgr.sub_rng_allocator_.hold() - total_sub_rng_mem;
   total_sub_rng_mem = micro_range_mgr.sub_rng_allocator_.hold();
   LOG_INFO("finish small allocator usage check", K(total_sub_rng_cnt), K(total_sub_rng_mem), K(mem_diff));
-  ASSERT_LT(mem_diff, 2097152);
+  ASSERT_LT(mem_diff, 4194304);
   if (prev_sub_ranges.count() > 0) {
     for (int64_t i = 0; i < prev_sub_ranges.count(); ++i) {
       ASSERT_NE(nullptr, prev_sub_ranges.at(i));

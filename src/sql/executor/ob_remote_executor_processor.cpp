@@ -212,11 +212,18 @@ int ObRemoteBaseExecuteP<T>::auto_start_phy_trans()
     // NOTE: autocommit modfied by PL cannot sync to remote,
     // use has_start_stmt to test transaction prepared on original node
     if (false == my_session->has_start_stmt()) {
-      ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
-      //start Tx on remote node, we need release txDesc deserilized by session
-      if (OB_NOT_NULL(my_session->get_tx_desc())) {
-        MTL(transaction::ObTransService*)->release_tx(*my_session->get_tx_desc());
+      // NOTE that inner sql may be exueceted in start stmt (for snapshot),
+      // data_lock in session must be released before start_stmt
+      transaction::ObTxDesc *tx_desc = NULL;
+      {
+        ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
+        tx_desc = my_session->get_tx_desc();
         my_session->get_tx_desc() = NULL;
+      }
+      //start Tx on remote node, we need release txDesc deserilized by session
+      if (OB_NOT_NULL(tx_desc)) {
+        MTL(transaction::ObTransService*)->release_tx(*tx_desc);
+        tx_desc = NULL;
       }
       if (trans_state_.is_start_stmt_executed()) {
         ret = OB_ERR_UNEXPECTED;

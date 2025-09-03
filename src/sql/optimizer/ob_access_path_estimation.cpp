@@ -1347,7 +1347,9 @@ int ObAccessPathEstimation::fill_cost_table_scan_info(ObOptimizerContext &ctx,
 
     double block_sample_ratio = est_cost_info.sample_info_.is_block_sample() ?
             0.01 * est_cost_info.sample_info_.percent_ : 1.0;
-    if (ctx.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_1)) {
+    if (ctx.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP7, COMPAT_VERSION_4_3_0,
+                                                      COMPAT_VERSION_4_3_5_BP4, COMPAT_VERSION_4_4_0,
+                                                      COMPAT_VERSION_4_4_1)) {
       // refine row count
       if (0 >= logical_row_count) {
         logical_row_count = 1.0 * est_cost_info.prefix_filter_sel_ * est_cost_info.pushdown_prefix_filter_sel_;
@@ -2887,7 +2889,9 @@ int ObAccessPathEstimation::estimate_path_rowcount_by_dynamic_sampling(ObOptimiz
                                           all_predicate_sel))) {
       LOG_WARN("failed to get non ds sel", K(ret), KPC(all_filter_item));
     } else {
-      if (ctx.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_1)) {
+      if (ctx.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP7, COMPAT_VERSION_4_3_0,
+                                                        COMPAT_VERSION_4_3_5_BP4, COMPAT_VERSION_4_4_0,
+                                                        COMPAT_VERSION_4_4_1)) {
         output_rowcnt *= output_non_ds_sel;
         if (0 >= output_rowcnt) {
           output_rowcnt = 1.0 * output_total_sel;
@@ -2952,7 +2956,9 @@ int ObAccessPathEstimation::estimate_path_rowcount_by_dynamic_sampling(ObOptimiz
                                           dummy_row_count;
           double block_sample_ratio = est_cost_info.sample_info_.is_block_sample() ?
                   0.01 * est_cost_info.sample_info_.percent_ : 1.0;
-          if (ctx.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_1)) {
+          if (ctx.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP7, COMPAT_VERSION_4_3_0,
+                                                            COMPAT_VERSION_4_3_5_BP4, COMPAT_VERSION_4_4_0,
+                                                            COMPAT_VERSION_4_4_1)) {
             // calculate logical row count
             if (index_range_result_item == NULL || index_range_result_item->exprs_.empty()) {
               logical_row_count = est_cost_info.table_meta_info_->table_row_count_;

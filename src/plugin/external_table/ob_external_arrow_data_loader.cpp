@@ -273,7 +273,7 @@ int ObArrowDataLoaderFactory::select_loader(ObIAllocator &allocator,
       }
     } break;
     case Type::BINARY: {
-      if (ob_is_geometry(out_type) && false) { // enable gis loader in future(not tested yet)
+      if (ob_is_geometry(out_type)) {
         ObBinaryToGisArrowDataLoader<BinaryType> *binary_loader =
             OB_NEWx(ObBinaryToGisArrowDataLoader<BinaryType>, &allocator);
         if (OB_ISNULL(binary_loader)) {
@@ -294,7 +294,7 @@ int ObArrowDataLoaderFactory::select_loader(ObIAllocator &allocator,
       }
     } break;
     case Type::LARGE_BINARY: {
-      if (ob_is_geometry(out_type) && false) { // enable gis loader in future(not tested yet)
+      if (ob_is_geometry(out_type)) {
         ObBinaryToGisArrowDataLoader<LargeBinaryType> *binary_loader =
             OB_NEWx(ObBinaryToGisArrowDataLoader<LargeBinaryType>, &allocator);
         if (OB_ISNULL(binary_loader)) {

@@ -20,6 +20,7 @@
 #include "rootserver/ddl_task/ob_sys_ddl_util.h"  // for ObSysDDLServiceUtil
 #include "rootserver/ob_root_service.h"
 #include "rootserver/ob_disaster_recovery_task_utils.h"
+#include "rootserver/ob_server_zone_op_service.h"
 #include "rootserver/ob_heartbeat_service.h"
 
 namespace oceanbase
@@ -2555,6 +2556,9 @@ int ObUnitManager::alter_resource_tenant(
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || new_unit_num <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(new_unit_num));
+  } else if (OB_SYS_TENANT_ID == tenant_id && 1 != new_unit_num) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "alter resource tenant for sys tenant");
   } else if (OB_FAIL(get_pools_by_tenant_(tenant_id, pools))) {
     LOG_WARN("fail to get pools by tenant", KR(ret), K(tenant_id));
   } else if (OB_UNLIKELY(nullptr == pools)) {
@@ -5321,10 +5325,8 @@ int ObUnitManager::build_notify_create_unit_resource_rpc_arg_(
     }
   } else {
     // init rpc arg for user tenant with data version
-    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
-      LOG_WARN("fail to get tenant data version", KR(ret), K(tenant_id), K(is_delete));
-    } else if (OB_FAIL(GET_MIN_DATA_VERSION(gen_meta_tenant_id(tenant_id), meta_tenant_data_version))) {
-      LOG_WARN("fail to get meta tenant data version", KR(ret), K(tenant_id), K(is_delete));
+    if (OB_FAIL(get_meta_and_user_data_version_(tenant_id, data_version, meta_tenant_data_version))) {
+      LOG_WARN("fail to get meta and user data version", KR(ret), K(tenant_id), K(is_delete));
     } else if (OB_FAIL(rpc_arg.init(tenant_id,
                                     unit.unit_id_,
                                     compat_mode,
@@ -5342,6 +5344,46 @@ int ObUnitManager::build_notify_create_unit_resource_rpc_arg_(
     }
   }
 
+  return ret;
+}
+
+int ObUnitManager::get_meta_and_user_data_version_(
+    const uint64_t tenant_id,
+    uint64_t &user_data_version,
+    uint64_t &meta_data_version) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (!GCTX.is_shared_storage_mode()) {
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, user_data_version))) {
+      LOG_WARN("fail to get tenant data version", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(gen_meta_tenant_id(tenant_id), meta_data_version))) {
+      LOG_WARN("fail to get meta tenant data version", KR(ret), K(tenant_id));
+    }
+  } else {
+#ifdef OB_BUILD_SHARED_STORAGE
+    uint64_t data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, data_version))) {
+      LOG_WARN("fail to get data version", KR(ret));
+    } else if (data_version >= DATA_VERSION_4_4_1_0) {
+      LOG_INFO("get data version in palf kv", KR(ret), K(data_version));
+      if (OB_FAIL(ObServerZoneOpService::get_data_version_in_palf_kv(tenant_id, user_data_version))) {
+        LOG_WARN("fail to get data version in palf kv", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(ObServerZoneOpService::get_data_version_in_palf_kv(gen_meta_tenant_id(tenant_id), meta_data_version))) {
+        LOG_WARN("fail to get meta tenant data version in palf kv", KR(ret), K(tenant_id));
+      }
+    } else {
+      if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, user_data_version))) {
+        LOG_WARN("fail to get tenant data version", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(gen_meta_tenant_id(tenant_id), meta_data_version))) {
+        LOG_WARN("fail to get meta tenant data version", KR(ret), K(tenant_id));
+      }
+    }
+#endif
+  }
+  FLOG_INFO("get meta and user data version", KR(ret), K(tenant_id), KDV(user_data_version), KDV(meta_data_version));
   return ret;
 }
 
@@ -11631,6 +11673,11 @@ int ObUnitManager::fetch_new_unit_id(uint64_t &unit_id)
       LOG_WARN("fetch_new_max_id failed", "id_type", OB_MAX_USED_UNIT_ID_TYPE, K(ret));
     } else {
       unit_id = combine_id;
+#ifdef OB_BUILD_SHARED_STORAGE
+      if (GCTX.is_shared_storage_mode() && OB_FAIL(ObServerZoneOpService::store_max_unit_id_in_palf_kv(combine_id))) {
+        LOG_WARN("fail to store max unit id in palf kv", KR(ret), K(combine_id));
+      }
+#endif
     }
   }
   return ret;

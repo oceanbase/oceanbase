@@ -711,6 +711,8 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
           TCWLockGuard lock_guard(snap_memdata->mem_data_rwlock_);
           if (OB_FAIL(index_seri.deserialize(snap_memdata->index_, param, cb, MTL_ID()))) {
             LOG_WARN("serialize index failed.", K(ret));
+          } else if (OB_FAIL(obvectorutil::immutable_optimize(snap_memdata->index_))) {
+            LOG_WARN("fail to index immutable_optimize", K(ret));
           } else if (OB_FALSE_IT(index_type = new_adapter->get_snap_index_type())) {
           } else if (OB_FAIL(get_split_snapshot_prefix(index_type, key_prefix, target_prefix))) {
             LOG_WARN("fail to get split snapshot prefix", K(ret), K(index_type), K(key_prefix));

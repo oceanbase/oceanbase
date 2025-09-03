@@ -109,11 +109,21 @@ int ObLSMeta::set_finish_ha_state()
   return ls_persistent_state_.finish_ha(ls_id_);
 }
 
-int ObLSMeta::set_remove_state()
+
+int ObLSMeta::set_remove_state(const bool write_slog)
 {
+  int ret = OB_SUCCESS;
   ObReentrantWLockGuard update_guard(update_lock_);
   ObReentrantWLockGuard guard(rw_lock_);
-  return ls_persistent_state_.remove(ls_id_);
+  if (OB_FAIL(ls_persistent_state_.remove(ls_id_))) {
+    LOG_WARN("set remove_state for ls failed", K(ret), K(ls_id_), K(ls_persistent_state_));
+  } else if (write_slog) {
+    ObLSMeta tmp(*this);
+    if (OB_FAIL(write_slog_(tmp))) {
+      LOG_WARN("write remove_state to slog failed", K(ret), K(ls_id_), K(ls_persistent_state_));
+    }
+  }
+  return ret;
 }
 
 const ObLSPersistentState &ObLSMeta::get_persistent_state() const

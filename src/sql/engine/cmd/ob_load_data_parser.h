@@ -516,8 +516,8 @@ public:
     }
     find_new_line = true;
     if (field_idx < format_.file_column_nums_) {
-      if ((!SKIP_BLANK_LINES || field_idx > 0) &&
-          (str > ori_field_begin || !IGNORE_LAST_EMPTY_COLUMN)) {
+      if ((str > ori_field_begin) ||
+          (!SKIP_BLANK_LINES && !IGNORE_LAST_EMPTY_COLUMN)) {
         ++field_idx;
         if (USE_HANDLE_BATCH_LINES) {
           gen_new_field(false, ori_field_begin, str, field_begin, str, field_idx, output_line_no);
@@ -1138,8 +1138,6 @@ struct ObExternalFileFormat
     ODPS_FORMAT,
     ORC_FORMAT,
     PLUGIN_FORMAT,
-    ICEBERG_FORMAT,
-    HIVE_FORMAT,
     MAX_FORMAT
   };
 

@@ -271,7 +271,7 @@ const char* ObCompactionSuggestionMgr::get_suggestion_reason(const int64_t reaso
   const char *str = "";
   if (ObCompactionSuggestionReason::DAG_FULL > reason || ObCompactionSuggestionReason::MAX_REASON <= reason) {
     str = "invalid_reason";
-  } else {
+  } else if(ObCompactionSuggestionReasonStr[reason] != NULL) {
     str = ObCompactionSuggestionReasonStr[reason];
   }
   return str;
@@ -279,14 +279,9 @@ const char* ObCompactionSuggestionMgr::get_suggestion_reason(const int64_t reaso
 
 const char *ObCompactionSuggestionMgr::ObAddWorkerThreadSuggestion[share::ObDagPrio::DAG_PRIO_MAX] =
 {
-  "increase compaction_high_thread_score",
-  "",
-  "increase compaction_mid_thread_score",
-  "",
-  "increase compaction_low_thread_score",
-  "",
-  "",
-  ""
+  [share::ObDagPrio::DAG_PRIO_COMPACTION_HIGH] = "increase compaction_high_thread_score",
+  [share::ObDagPrio::DAG_PRIO_COMPACTION_MID] = "increase compaction_mid_thread_score",
+  [share::ObDagPrio::DAG_PRIO_COMPACTION_LOW] = "increase compaction_low_thread_score",
 };
 
 const char* ObCompactionSuggestionMgr::get_add_thread_suggestion(const int64_t priority)
@@ -296,7 +291,7 @@ const char* ObCompactionSuggestionMgr::get_add_thread_suggestion(const int64_t p
   const char *str = "";
   if (share::ObDagPrio::DAG_PRIO_MAX <= priority|| share::ObDagPrio::DAG_PRIO_COMPACTION_HIGH > priority) {
     str = "invalid_priority";
-  } else {
+  } else if(ObAddWorkerThreadSuggestion[priority] != NULL) {
     str = ObAddWorkerThreadSuggestion[priority];
   }
   return str;
@@ -326,6 +321,13 @@ int ObCompactionSuggestionMgr::get_suggestion_list(ObIArray<ObCompactionSuggesti
     STORAGE_LOG(WARN, "not init", K(ret));
   } else if (OB_FAIL(array_.get_list(input_array))) {
     STORAGE_LOG(WARN, "failed to get suggestion list", K(ret));
+  } else {
+    ObMutexGuard guard(lock_);
+    for (int64_t i = 0; i < share::ObDagPrio::DAG_PRIO_MAX; ++i) {
+      if (prio_array_[i].merge_type_ != INVALID_MERGE_TYPE) {
+        input_array.push_back(prio_array_[i]);
+      }
+    }
   }
   return ret;
 }
@@ -417,8 +419,9 @@ int ObCompactionSuggestionMgr::analyze_for_suggestion(
     suggestion.tablet_id_ = UNKNOW_TABLET_ID.id();
     suggestion.merge_start_time_ = common::ObTimeUtility::fast_current_time();
     suggestion.merge_finish_time_ = suggestion.merge_start_time_;
-    if (OB_FAIL(array_.add(suggestion))) {
-      STORAGE_LOG(WARN, "failed to add suggestion", K(ret), K(suggestion));
+    {
+      ObMutexGuard guard(lock_);
+      prio_array_[priority] = suggestion;
     }
   }
   #undef ADD_COMPACTION_DAG_INFO_PARAM

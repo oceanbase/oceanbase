@@ -61,11 +61,11 @@ int ObESQueryParser::parse(const common::ObString &req_str, ObQueryReqFromJson *
           LOG_WARN("fail to get value", K(ret), K(i));
         }
       } else if (key.case_compare("from") == 0) {
-        if (OB_FAIL(parse_const(*req_node, from_expr))) {
+        if (OB_FAIL(parse_const(*req_node, from_expr, true))) {
           LOG_WARN("fail to get value", K(ret), K(i));
         }
       } else if (key.case_compare("size") == 0) {
-        if (OB_FAIL(parse_const(*req_node, size_expr))) {
+        if (OB_FAIL(parse_const(*req_node, size_expr, true))) {
           LOG_WARN("fail to get value", K(ret), K(i));
         }
       } else {
@@ -1471,7 +1471,7 @@ int ObESQueryParser::parse_range_condition(ObIJsonBase &req_node, ObReqExpr *&ex
       LOG_WARN("fail to get key", K(ret), K(i));
     } else if (OB_FAIL(sub_node->get_object_value(i, var_node))) {
       LOG_WARN("fail to get value", K(ret), K(i));
-    } else if (OB_FAIL(parse_const(*var_node, var))) {
+    } else if (OB_FAIL(parse_const(*var_node, var, true))) {
       LOG_WARN("fail to parse const value", K(ret), K(i));
     } else if (key.case_compare("gt") == 0) {
       type = T_OP_GT;
@@ -1759,6 +1759,7 @@ int ObESQueryParser::parse_match_expr(ObIJsonBase &req_node, ObQueryReqFromJson 
     LOG_WARN("unexpectd json type", K(ret), K(val_node->json_type()));
   } else {
     ObString query_text(val_node->get_data_length(), val_node->get_data());
+    query_text = query_text.trim();
     ObReqColumnExpr *col_para = NULL;
     ObReqConstExpr *text_para = NULL;
     if (OB_ISNULL(match_expr = OB_NEWx(ObReqMatchExpr, &alloc_))) {
@@ -1979,7 +1980,7 @@ int ObESQueryParser::parse_query_string_boost(ObIJsonBase &req_node, ObReqExpr *
              boost_node->json_type() != ObJsonNodeType::J_STRING) {
     ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
     LOG_WARN("boost field should be number or string", K(ret), K(boost_node->json_type()));
-  } else if (OB_FAIL(parse_const(*boost_node, boost_expr))) {
+  } else if (OB_FAIL(parse_const(*boost_node, boost_expr, true))) {
     LOG_WARN("fail to parse boost value", K(ret));
   }
 
@@ -2070,49 +2071,49 @@ int ObESQueryParser::parse_query_string_expr(ObIJsonBase &req_node, ObReqExpr *&
 int ObESQueryParser::parse_field(ObIJsonBase &val_node, ObReqColumnExpr *&field)
 {
   int ret = OB_SUCCESS;
+  ObString field_name;
   if (val_node.json_type() != ObJsonNodeType::J_STRING) {
     ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
     LOG_WARN("unexpectd json type", K(ret), K(val_node.json_type()));
+  } else if (OB_FALSE_IT(field_name = ObString(val_node.get_data_length(), val_node.get_data()))) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("field name is null", K(ret));
+  } else if (OB_ISNULL(field = OB_NEWx(ObReqColumnExpr, &alloc_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to create field(s) expr", K(ret));
   } else {
-    ObString field_name(val_node.get_data_length(), val_node.get_data());
-    if (OB_ISNULL(field = OB_NEWx(ObReqColumnExpr, &alloc_))) {
+    char *field_str = static_cast<char *>(alloc_.alloc(field_name.length() + 1));
+    int64_t str_len = 0;
+    if (OB_ISNULL(field_str)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to create field(s) expr", K(ret));
     } else {
-      const char *caret_ptr = field_name.find('^');
-      if (caret_ptr != nullptr && caret_ptr > field_name.ptr()) {
-        int64_t field_len = caret_ptr - field_name.ptr();
-        ObString pure_field_name(field_len, field_name.ptr());
+      for (int64_t i = 0; i < field_name.length(); i++) {
+        if (field_name.ptr()[i] != ' ') {
+          field_str[str_len++] = field_name.ptr()[i];
+        }
+      }
+      field_str[str_len] = '\0';
+    }
+    if (OB_SUCC(ret)) {
+      const char *caret_ptr = strchr(field_str, '^');
+      if (caret_ptr != nullptr && caret_ptr > field_str) {
+        int64_t field_len = caret_ptr - field_str;
+        ObString pure_field_name(field_len, field_str);
         field->expr_name = pure_field_name;
         const char *weight_start = caret_ptr + 1;
-        int64_t weight_len = field_name.length() - field_len - 1;
-        if (weight_len > 0) {
-          // Make a null-terminated copy to safely use strtod
-          char *tmp = static_cast<char *>(alloc_.alloc(static_cast<int32_t>(weight_len + 1)));
-          if (OB_ISNULL(tmp)) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("fail to allocate memory for field weight", K(ret), K(weight_len));
+        if (*weight_start != '\0') {
+          char *end_ptr = nullptr;
+          double weight = strtod(weight_start, &end_ptr);
+          if (end_ptr > weight_start && weight >= 0) {
+            field->weight_ = weight;
           } else {
-            MEMCPY(tmp, weight_start, weight_len);
-            tmp[weight_len] = '\0';
-            char *end_ptr = nullptr;
-            double weight = strtod(tmp, &end_ptr);
-            // Skip trailing whitespace
-            const char *end_limit = tmp + weight_len;
-            while (end_ptr != nullptr && end_ptr < end_limit && (*end_ptr == ' ' || *end_ptr == '\t' || *end_ptr == '\r' || *end_ptr == '\n')) {
-              end_ptr++;
-            }
-            int error = (end_ptr == end_limit) ? 0 : 1;
-            if (OB_UNLIKELY(error != 0 || weight < 0)) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("invalid field weight", K(weight));
-            } else {
-              field->weight_ = weight;
-            }
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid field weight", K(weight));
           }
         }
       } else {
-        field->expr_name = field_name;
+        field->expr_name = ObString(str_len, field_str);
       }
     }
   }
@@ -2125,15 +2126,33 @@ int ObESQueryParser::parse_keyword(const ObString &query_text, common::ObIArray<
   if (query_text.empty()) {
     return ret;
   }
+
+  const char *start = nullptr;
+  const char *end = nullptr;
+  const char *current = nullptr;
+  char *query_str = static_cast<char *>(alloc_.alloc(query_text.length() + 1));
+  if (OB_ISNULL(query_str)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate memory for query copy", K(ret));
+  } else {
+    MEMCPY(query_str, query_text.ptr(), query_text.length());
+    query_str[query_text.length()] = '\0';
+    start = query_str;
+    end = start + query_text.length();
+    current = start;
+  }
+
   common::ObSEArray<ObReqConstExpr *, 4, common::ModulePageAllocator, true> raw_keywords;
-  const char *start = query_text.ptr();
-  const char *end = start + query_text.length();
-  const char *current = start;
-  while (current < end && OB_SUCC(ret)) {
+  while (OB_SUCC(ret) && current < end) {
     while (current < end && *current == ' ') {
       current++;
     }
     if (current >= end) {
+      break;
+    }
+    if (*current == '^') {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid keyword in query", K(ret));
       break;
     }
     const char *keyword_start = current;
@@ -2149,31 +2168,24 @@ int ObESQueryParser::parse_keyword(const ObString &query_text, common::ObIArray<
         LOG_WARN("fail to create keyword expr", K(ret));
       } else {
         keyword->expr_name = keyword_str;
+        while (current < end && *current == ' ') {
+          current++;
+        }
         if (current < end && *current == '^') {
           current++;
-          const char *weight_start = current;
-          while (current < end && *current != ' ') {
-            current++;
-          }
-          if (current > weight_start) {
+          if (current >= end || !isdigit(*current)) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("weight must follow ^ immediately", K(current < end ? *current : 'E'));
+          } else {
+            const char *weight_start = current;
             char *end_ptr = nullptr;
-            char temp_weight[32];
-            int64_t weight_len = current - weight_start;
-            if (weight_len >= sizeof(temp_weight)) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("weight string too long", K(weight_len));
+            double weight = strtod(current, &end_ptr);
+            if (end_ptr > current && weight >= 0) {
+              keyword->weight_ = weight;
+              current = end_ptr;
             } else {
-              MEMCPY(temp_weight, weight_start, weight_len);
-              temp_weight[weight_len] = '\0';
-              ObString weight_str(weight_len, temp_weight);
-              double weight = strtod(weight_str.ptr(), &end_ptr);
-              int error = end_ptr == weight_str.ptr() + weight_str.length() ? 0 : 1;
-              if (OB_UNLIKELY(error != 0 || weight < 0)) {
-                ret = OB_INVALID_ARGUMENT;
-                LOG_WARN("invalid keyword weight", K(weight));
-              } else {
-                keyword->weight_ = weight;
-              }
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("invalid keyword weight", K(weight));
             }
           }
         }
@@ -2254,19 +2266,38 @@ int ObESQueryParser::parse_keyword(const ObString &query_text, common::ObIArray<
   return ret;
 }
 
-int ObESQueryParser::parse_const(ObIJsonBase &val_node, ObReqConstExpr *&var)
+int ObESQueryParser::parse_const(ObIJsonBase &val_node, ObReqConstExpr *&var, bool is_numeric /*=false*/)
 {
   int ret = OB_SUCCESS;
-    ObObjType var_type = val_node.is_json_number(val_node.json_type()) ? ObNumberType : ObVarcharType;
-    if (OB_ISNULL(var = OB_NEWx(ObReqConstExpr, &alloc_, var_type))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
+  ObObjType var_type = (is_numeric || val_node.is_json_number(val_node.json_type())) ? ObNumberType : ObVarcharType;
+  if (OB_ISNULL(var = OB_NEWx(ObReqConstExpr, &alloc_, var_type))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to create const expr", K(ret));
+  } else {
+    ObJsonBuffer j_buffer(&alloc_);
+    if (OB_FAIL(val_node.print(j_buffer, false))) {
       LOG_WARN("fail to create const expr", K(ret));
     } else {
-      ObJsonBuffer j_buffer(&alloc_);
-      if (OB_FAIL(val_node.print(j_buffer, false))) {
-        LOG_WARN("fail to create const expr", K(ret));
-      } else {
-        j_buffer.get_result_string(var->expr_name);
+      j_buffer.get_result_string(var->expr_name);
+      if (is_numeric) {
+        var->expr_name = var->expr_name.trim();
+        int64_t str_len = var->expr_name.length();
+        char *temp_str = static_cast<char *>(alloc_.alloc(str_len + 1));
+        if (OB_ISNULL(temp_str)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocate memory for temp string", K(ret));
+        } else {
+          MEMCPY(temp_str, var->expr_name.ptr(), str_len);
+          temp_str[str_len] = '\0';
+          char *end_ptr = nullptr;
+          (void) strtod(temp_str, &end_ptr);
+          if (end_ptr != temp_str && end_ptr == temp_str + str_len) {
+          } else {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid numeric string", K(var->expr_name));
+          }
+        }
+      }
     }
   }
   return ret;
@@ -2338,7 +2369,7 @@ int ObESQueryParser::parse_knn(ObIJsonBase &req_node, ObQueryReqFromJson *&query
         LOG_WARN("fail to erase set", K(ret));
       }
     } else if (key.case_compare("k") == 0) {
-      if (OB_FAIL(parse_const(*sub_node, K))) {
+      if (OB_FAIL(parse_const(*sub_node, K, true))) {
         LOG_WARN("fail to parse k constant", K(ret), K(i));
       } else if (OB_FAIL(required_params.erase_refactored("k"))) {
         LOG_WARN("fail to erase set", K(ret));
@@ -2350,11 +2381,11 @@ int ObESQueryParser::parse_knn(ObIJsonBase &req_node, ObQueryReqFromJson *&query
         LOG_WARN("fail to erase set", K(ret));
       }
     } else if (key.case_compare("boost") == 0) {
-      if (OB_FAIL(parse_const(*sub_node, boost))) {
+      if (OB_FAIL(parse_const(*sub_node, boost, true))) {
         LOG_WARN("fail to parse boost clauses", K(ret), K(i));
       }
     } else if (key.case_compare("similarity") == 0 ) {
-      if (OB_FAIL(parse_const(*sub_node, similar))) {
+      if (OB_FAIL(parse_const(*sub_node, similar, true))) {
         LOG_WARN("fail to parse similarity clauses", K(ret), K(i));
       }
     } else if (key.case_compare("rank_feature") == 0) {

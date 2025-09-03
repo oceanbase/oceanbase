@@ -389,6 +389,7 @@ public:
   virtual int post_upgrade() override;
   virtual int finish_upgrade() override { return common::OB_SUCCESS; }
 private:
+  int post_upgrade_for_replace_tenant_();
   int post_upgrade_for_scheduled_trigger_partition_balance();
   int post_upgrade_for_scheduled_trigger_dump_data_dict();
 };

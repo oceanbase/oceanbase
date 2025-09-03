@@ -2529,7 +2529,9 @@ int ObOptSelectivity::get_column_basic_sel(const OptTableMetas &table_metas,
   } else {
     double null_sel = row_count <= OB_DOUBLE_EPSINON ? 0.0 : revise_between_0_1(num_null / row_count);
     double distinct_sel = ndv <= OB_DOUBLE_EPSINON ? 0.0 : revise_between_0_1((1 - null_sel) / ndv);
-    if (1.0 == ndv && 1.0 == row_count && ctx.check_opt_compat_version(COMPAT_VERSION_4_4_1)) {
+    if (1.0 == ndv && 1.0 == row_count && ctx.check_opt_compat_version(COMPAT_VERSION_4_2_5_BP7, COMPAT_VERSION_4_3_0,
+                                                                       COMPAT_VERSION_4_3_5_BP4, COMPAT_VERSION_4_4_0,
+                                                                       COMPAT_VERSION_4_4_1)) {
       distinct_sel = DEFAULT_EQ_SEL;
     }
     assign_value(distinct_sel, distinct_sel_ptr);

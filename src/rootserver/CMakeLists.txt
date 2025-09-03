@@ -36,6 +36,7 @@ ob_set_subtarget(ob_rootserver common
   ob_disaster_recovery_info.cpp
   ob_disaster_recovery_worker.cpp
   ob_disaster_recovery_service.cpp
+  ob_disaster_recovery_replace_tenant.cpp
   ob_disaster_recovery_task.cpp
   ob_disaster_recovery_task_mgr.cpp
   ob_disaster_recovery_task_utils.cpp

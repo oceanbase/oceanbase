@@ -116,7 +116,7 @@ public:
   int init(const int64_t max_cnt);
   void clear()
   {
-    SpinRLockGuard guard(lock_);
+    SpinWLockGuard guard(lock_);
     pos_ = 0;
   }
   void destroy()
@@ -213,7 +213,8 @@ public:
       allocator_("CompSuggestMgr"),
       lock_(ObLatchIds::COMPACTION_DIAGNOSE_LOCK),
       compaction_dag_status_(),
-      array_(allocator_)
+      array_(allocator_),
+      prio_array_()
   {
   }
   ~ObCompactionSuggestionMgr() { destroy(); }
@@ -278,6 +279,7 @@ private:
   lib::ObMutex lock_;
   ObCompactionDagStatus compaction_dag_status_;
   ObInfoRingArray<ObCompactionSuggestion> array_;
+  ObCompactionSuggestion prio_array_[share::ObDagPrio::DAG_PRIO_MAX];
 };
 
 /*

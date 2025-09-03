@@ -115,6 +115,7 @@ int fserialize(obvsag::VectorIndexPtr index_handler, std::ostream& out_stream);
 int fdeserialize(obvsag::VectorIndexPtr& index_handler, std::istream& in_stream);
 int delete_index(obvsag::VectorIndexPtr& index_handler);
 void delete_iter_ctx(void *iter_ctx);
+int immutable_optimize(obvsag::VectorIndexPtr& index_handler);
 } // namesapce obvectorutil
 } // namespace common
 } // namespace oceanbase

@@ -2336,6 +2336,16 @@ int ObPreProcessServerP::process()
   return ret;
 }
 
+int ObCheckServerAliveP::process()
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("receive check server alive requisition", K_(arg));
+  // This RPC function is used to check whether the target machine is alive.
+  // It only checks network connectivity, i.e., whether the server can receive and reply to RPC requests normally.
+  // No further processing is required here.
+  return ret;
+}
+
 #ifdef OB_BUILD_TDE_SECURITY
 
 int ObSetMasterKeyP::process()

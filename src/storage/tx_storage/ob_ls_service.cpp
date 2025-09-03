@@ -887,7 +887,7 @@ int ObLSService::replay_remove_ls_(const share::ObLSID &ls_id)
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls is null", K(ls_id));
-  } else if (OB_FAIL(ls->set_remove_state())) {
+  } else if (OB_FAIL(ls->set_remove_state(false /*write_slog*/))) {
     LOG_ERROR("ls set remove state failed", KR(ret), K(ls_id));
   } else {
   }
@@ -1141,7 +1141,7 @@ int ObLSService::safe_remove_ls_(ObLSHandle handle, const bool remove_from_disk)
     } else if (FALSE_IT(task = new(task) ObLSSafeDestroyTask())) {
     } else if (OB_BREAK_FAIL(ret)) {
       LOG_WARN("break fail for malloc", K(ret));
-    } else if (remove_from_disk && OB_BREAK_FAIL(ls->set_remove_state())) {
+    } else if (remove_from_disk && OB_BREAK_FAIL(ls->set_remove_state(write_slog))) {
       LOG_WARN("ls set remove state failed", KR(ret), K(ls_id));
     } else if (OB_BREAK_FAIL(task->init(MTL_ID(),
                                         handle,
@@ -1359,7 +1359,7 @@ int ObLSService::create_ls_for_ha(
     LOG_WARN("failed to get restore status", K(ret), K(arg), K(task_id));
   }
 #ifdef OB_BUILD_SHARED_STORAGE
-  else if (OB_FAIL(check_sslog_ls_exist_(arg))) {
+  else if (!is_tenant_sslog_ls(MTL_ID(), arg.ls_id_) && OB_FAIL(check_sslog_ls_exist())) {
     LOG_WARN("failed to check sslog ls exist", K(ret), K(arg));
   }
 #endif
@@ -1429,7 +1429,7 @@ void ObLSService::del_ls_after_create_ls_failed_(ObLSCreateState& in_ls_create_s
         }
         if (OB_TMP_FAIL(tmp_ret)) {
         } else if (ls_create_state >= ObLSCreateState::CREATE_STATE_WRITE_PREPARE_SLOG) {
-          if (OB_TMP_FAIL(ls->set_remove_state())) {
+          if (OB_TMP_FAIL(ls->set_remove_state(remove_from_disk))) {
             need_retry = true;
             LOG_ERROR("fail to set ls remove state", K(tmp_ret), KPC(ls));
           } else if (OB_TMP_FAIL(TENANT_STORAGE_META_SERVICE.abort_create_ls(ls->get_ls_id(), ls->get_ls_epoch()))) {
@@ -1728,15 +1728,12 @@ int ObLSService::get_replica_type_(
 }
 
 #ifdef OB_BUILD_SHARED_STORAGE
-int ObLSService::check_sslog_ls_exist_(
-    const ObMigrationOpArg &arg)
+int ObLSService::check_sslog_ls_exist()
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
   bool is_exist = false;
-  const bool is_shared_storage = GCTX.is_shared_storage_mode();
-
-  if (!is_shared_storage || is_tenant_sslog_ls(tenant_id, arg.ls_id_)) {
+  if (!GCTX.is_shared_storage_mode()) {
     is_exist = true;
   } else {
     const ObLSID sslog_ls_id(ObLSID::SSLOG_LS_ID);

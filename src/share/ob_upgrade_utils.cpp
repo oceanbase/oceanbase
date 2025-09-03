@@ -14,9 +14,17 @@
 
 #include "ob_upgrade_utils.h"
 #include "share/ob_service_epoch_proxy.h"
+#include "share/ob_max_id_fetcher.h"
+#ifdef OB_BUILD_TDE_SECURITY
+#include "share/ob_master_key_getter.h"
+#endif
 #include "rootserver/ob_root_service.h"
+#include "rootserver/ob_server_zone_op_service.h"
 #include "src/pl/ob_pl.h"
 #include "share/stat/ob_dbms_stats_maintenance_window.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/shared_storage/ob_ss_format_util.h"
+#endif
 #include "share/ncomp_dll/ob_flush_ncomp_dll_task.h"
 #include "rootserver/ob_tenant_ddl_service.h"
 #include "share/ob_scheduled_manage_dynamic_partition.h"
@@ -2028,11 +2036,66 @@ int ObUpgradeFor4410Processor::post_upgrade()
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_replace_tenant_())) {
+    LOG_WARN("fail to post upgrade for replace tenant", KR(ret));
   } else if (OB_FAIL(post_upgrade_for_scheduled_trigger_partition_balance())) {
     LOG_WARN("post for upgrade scheduled trigger partition balance failed", KR(ret));
   } else if (OB_FAIL(post_upgrade_for_scheduled_trigger_dump_data_dict())) {
     LOG_WARN("fail to post upgrade for scheduled trigger dump data dict", KR(ret));
   }
+  return ret;
+}
+
+/*
+  store all related info to ss for replace tenant, include:
+  1. all server id.
+  2. max server_id in __all_sys_stat.
+  3. max unit_id int __all_sys_stat.
+  4. sys root_key. (user root_key has been stored in ss in 4.4.0)
+  5. all tenant master_key.
+*/
+int ObUpgradeFor4410Processor::post_upgrade_for_replace_tenant_()
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_SHARED_STORAGE
+#ifdef OB_BUILD_TDE_SECURITY
+  if (!GCTX.is_shared_storage_mode()) {
+    LOG_INFO("not shared storage mode, ignore");
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (!is_sys_tenant(tenant_id_)) {
+    // only sys tenant need do this
+    LOG_INFO("not sys tenant, ignore");
+  } else {
+    // server_id and unit_id related
+    ObMaxIdFetcher id_fetcher(*GCTX.sql_proxy_);
+    uint64_t max_server_id = OB_INVALID_ID;
+    uint64_t max_unit_id = OB_INVALID_ID;
+    common::ObSEArray<uint64_t, 128> server_id_in_cluster;
+    common::ObSEArray<common::ObZone, DEFAULT_ZONE_COUNT> zone_list;
+    if (OB_FAIL(id_fetcher.fetch_max_id(*GCTX.sql_proxy_, OB_SYS_TENANT_ID, OB_MAX_USED_SERVER_ID_TYPE, max_server_id))) {
+      LOG_WARN("fail to get max server id", KR(ret));
+    } else if (OB_FAIL(id_fetcher.fetch_max_id(*GCTX.sql_proxy_, OB_SYS_TENANT_ID, OB_MAX_USED_UNIT_ID_TYPE, max_unit_id))) {
+      LOG_WARN("fail to get max unit id", KR(ret));
+    } else if (OB_FAIL(ObZoneTableOperation::get_zone_list(*GCTX.sql_proxy_, zone_list))) {
+      LOG_WARN("fail to get zone list", KR(ret));
+    } else if (OB_FAIL(ObServerTableOperator::get_clusters_server_id(*GCTX.sql_proxy_, server_id_in_cluster))) {
+      LOG_WARN("fail to get servers id in the cluster", KR(ret));
+    } else if (OB_FAIL(ObServerZoneOpService::store_max_unit_id_in_palf_kv(max_unit_id))) {
+      LOG_WARN("fail to store max unit id in palf kv", KR(ret), K(max_unit_id));
+    } else if (OB_FAIL(ObServerZoneOpService::store_server_ids_in_palf_kv(server_id_in_cluster, max_server_id))) {
+      LOG_WARN("fail to store max server id in palf kv", KR(ret), K(server_id_in_cluster), K(max_server_id));
+    } else if (OB_FAIL(ObServerZoneOpService::store_all_zone_in_palf_kv(zone_list))) {
+      LOG_WARN("fail to store all zone in palf kv", KR(ret), K(zone_list));
+    } else if (OB_FAIL(ObMasterKeyUtil::store_sys_root_key_in_palf_kv())) {
+      LOG_WARN("fail to store sys root key in palf kv", KR(ret));
+    } else if (OB_FAIL(ObMasterKeyGetter::instance().ss_dump_master_key())) {
+      LOG_WARN("fail to store master key in palf kv", KR(ret));
+    }
+  }
+#endif
+#endif
   return ret;
 }
 

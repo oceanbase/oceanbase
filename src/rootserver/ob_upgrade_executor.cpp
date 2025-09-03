@@ -18,6 +18,8 @@
 #include "share/ob_global_stat_proxy.h"
 #include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
 #include "rootserver/standby/ob_standby_service.h" // ObStandbyService
+#include "rootserver/standby/ob_recovery_ls_service.h"
+#include "rootserver/ob_server_zone_op_service.h"
 #include "observer/ob_service.h"
 
 namespace oceanbase
@@ -1503,6 +1505,44 @@ int ObUpgradeExecutor::run_upgrade_end_action_(
   return ret;
 }
 
+int ObUpgradeExecutor::check_data_version_compliance_(
+    const uint64_t tenant_id,
+    const uint64_t data_version,
+    bool &is_compliance)
+{
+  int ret = OB_SUCCESS;
+  // First push data version to palf kv, then update the config inner table.
+  // If the cluster crashes after palf kv is updated but before the config inner table is updated,
+  // the replace sys process can recover by loading the higher data version from palf kv into memory.
+  // After recovery, the upgrade process will retry, and must be able to push up the compatible version
+  // in the config inner table. Therefore, we cannot only check the in-memory value here,
+  // but must also check the value in the config inner table.
+  is_compliance = false;
+  uint64_t data_version_in_mem = 0;
+  uint64_t data_version_in_table = 0;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version_in_mem))) {
+    LOG_WARN("fail to get min data version", KR(ret), K(tenant_id));
+  } else if (data_version_in_mem < data_version) {
+    LOG_INFO("[UPGRADE] mem data version is less than target data version",
+              K(tenant_id), KDV(data_version_in_mem), KDV(data_version));
+  } else if (OB_FAIL(ObShareUtil::fetch_current_data_version(*sql_proxy_, tenant_id, data_version_in_table))) {
+    LOG_WARN("fail to get min data version", KR(ret), K(tenant_id));
+  } else if (data_version_in_table < data_version) {
+    LOG_INFO("[UPGRADE] table data version is less than target data version",
+              K(tenant_id), KDV(data_version_in_table), KDV(data_version));
+  } else {
+    is_compliance = true;
+    LOG_INFO("[UPGRADE] current data version is not less than target data version, skip",
+              K(tenant_id), KDV(data_version_in_table), KDV(data_version));
+  }
+  return ret;
+}
+
 int ObUpgradeExecutor::run_upgrade_end_action_(
     const uint64_t tenant_id)
 {
@@ -1531,11 +1571,16 @@ int ObUpgradeExecutor::run_upgrade_end_action_(
                KR(ret), K(tenant_id), KDV(target_data_version), KDV(current_data_version));
     } else {
       // target_data_version == current_data_version == DATA_CURRENT_VERSION
-      if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
-        LOG_WARN("fail to get min data version", KR(ret), K(tenant_id));
-      } else if (data_version >= current_data_version) {
+      bool is_compliance = false;
+      if (OB_FAIL(check_data_version_compliance_(tenant_id, current_data_version, is_compliance))) {
+        LOG_WARN("failed to check data version compliance", KR(ret), K(tenant_id), K(current_data_version));
+      } else if (is_compliance) {
         LOG_INFO("[UPGRADE] data version is not less than current data version, just skip",
-                 K(tenant_id), KDV(data_version), KDV(current_data_version));
+                  K(tenant_id), KDV(current_data_version));
+#ifdef OB_BUILD_SHARED_STORAGE
+      } else if (GCTX.is_shared_storage_mode() && OB_FAIL(ObServerZoneOpService::store_data_version_in_palf_kv(tenant_id, current_data_version))) {
+        LOG_WARN("fail to store data version in palf kv", KR(ret), K(tenant_id), KDV(current_data_version));
+#endif
       } else {
         HEAP_VAR(obrpc::ObAdminSetConfigItem, item) {
         ObSchemaGetterGuard guard;

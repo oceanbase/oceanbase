@@ -244,7 +244,10 @@ public:
   common::ObZone zone_;
   common::ObAddr server_;
   common::ObRegion region_;
-
+public:
+  int init(const common::ObZone &zone,
+           const common::ObAddr &server,
+           const common::ObRegion &region);
   // FIXME: (xiaochu.yh) Do you need to consider region_ comparison after adding region_? I don’t need to consider it for the time being
   bool operator <(const ObServerInfo &r) const { return zone_ < r.zone_; }
   DECLARE_TO_STRING;
@@ -11431,6 +11434,21 @@ public:
 typedef ObDumpCacheMasterKeyResultArg ObSetMasterKeyArg;
 
 #endif
+
+struct ObCheckServerAliveArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCheckServerAliveArg() : addr_() {}
+  ~ObCheckServerAliveArg() {}
+  int init(const ObAddr &addr);
+  int assign(const ObCheckServerAliveArg &other);
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(addr));
+private:
+  ObAddr addr_;
+};
 
 struct ObDetectMasterRsArg
 {

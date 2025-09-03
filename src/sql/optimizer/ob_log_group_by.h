@@ -288,9 +288,9 @@ public:
   {
     return hash_rollup_info_;
   }
-  bool is_hash_rollup_groupby() const
+  bool is_gby_from_expansion() const
   {
-    return NULL != hash_rollup_info_;
+    return NULL != hash_rollup_info_ || NULL != grouping_set_info_;
   }
   const ObGroupingSetInfo *get_grouping_set_info() const
   {

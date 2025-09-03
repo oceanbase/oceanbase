@@ -51,4 +51,16 @@ private:
     } \
   }
 
+#define CLUSTER_EVENT_SYNC_ADD_WITH_PROXY(proxy, args...) \
+  if (OB_SUCC(ret)) { \
+    uint64_t data_version = 0; \
+    if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, data_version))) { \
+      SHARE_LOG(WARN, "fail to get data version", KR(ret), "tenant_id", OB_SYS_TENANT_ID); \
+    } else if (data_version < DATA_VERSION_4_1_0_0) { \
+      /* inner table is not ready, just skip */ \
+    } else if (OB_FAIL(CLUSTER_EVENT_INSTANCE.sync_add_event_with_proxy(proxy, args))) { \
+      SHARE_LOG(WARN, "fail to sync add event", KR(ret)); \
+    } \
+  }
+
 #endif /* _OB_CLUSTER_EVENT_HISTORY_TABLE_OPERATOR_H */

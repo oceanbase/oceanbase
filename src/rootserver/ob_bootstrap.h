@@ -183,6 +183,7 @@ private:
       const int64_t begin, const int64_t end);
   virtual int check_is_already_bootstrap(bool &is_bootstrap);
   virtual int init_global_stat();
+  virtual int init_palf_kv_system_data_();
   virtual int init_system_data();
   virtual int init_all_zone_table();
   virtual int init_multiple_zone_deployment_table(common::ObISQLClient &sql_client);

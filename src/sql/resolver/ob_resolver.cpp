@@ -589,6 +589,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(MigrateUnit);
         break;
       }
+      case T_REPLACE_TENANT: {
+        REGISTER_STMT_RESOLVER(ReplaceTenant);
+        break;
+      }
       case T_ADD_LS_REPLICA: {
         REGISTER_STMT_RESOLVER(AddLSReplica);
         break;

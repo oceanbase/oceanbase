@@ -17,6 +17,7 @@
 #include "share/backup/ob_backup_io_adapter.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "share/ob_define.h"
+#include "sql/engine/cmd/ob_load_data_file_reader.h"
 #include "sql/engine/table/ob_external_table_access_service.h"
 
 namespace oceanbase
@@ -114,43 +115,89 @@ int ObIcebergFileIOUtils::read_table_metadata(ObIAllocator &allocator,
     LOG_WARN("invalid table metadata file", K(ret), K(filename));
   }
 
-  // todo 后面可以采用 csv 滚动 buf 的方式进行优化
-  int64_t next_buf_size = 0;
-  bool is_finished = false; // 对于 uncompressed，一轮读取就完成了，对于 compressed，我们需要 guess
-                            // 解压后的 buff 大小，所以可能需要多次重试
-  while (OB_SUCC(ret) && !is_finished) {
-    sql::ObExternalStreamFileReader file_reader;
+  int64_t file_size = -1;
+  if (OB_SUCC(ret)) {
     ObArenaAllocator tmp_allocator;
-    if (OB_FAIL(file_reader.init(filename, access_info, compression, tmp_allocator))) {
-      LOG_WARN("fail to init file reader", K(ret), K(filename));
-    } else if (OB_FAIL(file_reader.open(filename))) {
-      LOG_WARN("fail to open file reader", K(ret), K(filename));
-    }
-
-    if (OB_SUCC(ret)) {
-      if (next_buf_size == 0) {
-        // 第一次用文件大小来当 buf size
-        next_buf_size = file_reader.get_file_size();
-        next_buf_size = compression == sql::ObCSVGeneralFormat::ObCSVCompression::NONE
-                            ? next_buf_size
-                            : next_buf_size * 10;
-      } else if (next_buf_size >= 1024 * 1024 * 1024) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("too large next_buf_size", K(ret), K(next_buf_size));
-      } else {
-        next_buf_size = next_buf_size * 2;
+    SMART_VAR(ObExternalFileInfoCollector, collector, tmp_allocator)
+    {
+      if (OB_FAIL(collector.init(filename, access_info))) {
+        LOG_WARN("failed to init collector", K(ret));
+      } else if (OB_FAIL(collector.collect_file_size(filename, file_size))) {
+        LOG_WARN("failed to get file size", K(ret));
       }
     }
+  }
 
-    if (OB_SUCC(ret)) {
-      if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(next_buf_size)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to allocate memory for file reader", K(ret), K(next_buf_size));
-      } else if (OB_FAIL(file_reader.read(buf, next_buf_size, read_size))) {
-        LOG_WARN("fail to read table metadata file", K(ret), K(next_buf_size), K(read_size));
-      } else {
-        is_finished = file_reader.eof();
-        file_reader.close();
+  if (OB_SUCC(ret)) {
+    ObExternalFileAccess file_reader;
+    ObExternalFileUrlInfo file_info(filename,
+                                    access_info,
+                                    filename,
+                                    ObString::make_empty_string(),
+                                    file_size,
+                                    INT64_MAX);
+    ObExternalTableAccessOptions options = ObExternalTableAccessOptions::lazy_defaults();
+    ObExternalFileCacheOptions cache_options(options.enable_page_cache_,
+                                             options.enable_disk_cache_);
+
+    if (OB_FAIL(file_reader.open(file_info, cache_options))) {
+      LOG_WARN("fail to open file reader", K(ret), K(filename));
+    } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(file_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory for file reader", K(ret), K(file_size));
+    } else {
+      const int64_t io_timeout_ms = THIS_WORKER.get_timeout_ts() / 1000;
+      ObExternalReadInfo read_info(0, buf, file_size, io_timeout_ms);
+      if (OB_FAIL(file_reader.pread(read_info, read_size))) {
+        LOG_WARN("failed to read file", K(ret), K(filename), K(file_size), K(read_size));
+      }
+    }
+    file_reader.close();
+  }
+
+  if (OB_SUCC(ret)) {
+    // need to decompress
+    if (sql::ObCSVGeneralFormat::ObCSVCompression::GZIP == compression) {
+      ObArenaAllocator tmp_allocator;
+      int64_t next_buf_size = file_size * 10;
+      bool is_finished = false; // 对于 uncompressed，一轮读取就完成了，对于 compressed，我们需要
+                                // guess 解压后的 buff 大小，所以可能需要多次重试
+      while (OB_SUCC(ret) && !is_finished) {
+        ObDecompressor *decompressor = NULL;
+        char *decompressed_buf = NULL;
+        int64_t consumed_size = 0;
+        int64_t decompressed_size = 0;
+        if (OB_FAIL(ObDecompressor::create(sql::ObCSVGeneralFormat::ObCSVCompression::GZIP,
+                                           tmp_allocator,
+                                           decompressor))) {
+          LOG_WARN("failed to create decompressor", K(ret));
+        } else if (OB_ISNULL(decompressor)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to get decompressor", K(ret));
+        } else if (OB_FALSE_IT(decompressed_buf = static_cast<char *>(allocator.alloc(next_buf_size)))) {
+        } else if (OB_ISNULL(decompressed_buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory", K(ret));
+        } else if (OB_FAIL(decompressor->decompress(buf,
+                                                    file_size,
+                                                    consumed_size,
+                                                    decompressed_buf,
+                                                    next_buf_size,
+                                                    decompressed_size))) {
+          LOG_WARN("failed to decompress data", K(ret));
+        } else {
+          if (consumed_size >= file_size) {
+            is_finished = true;
+            buf = decompressed_buf;
+            read_size = decompressed_size;
+          } else {
+            next_buf_size *= 2;
+          }
+        }
+
+        if (OB_NOT_NULL(decompressor)) {
+          ObDecompressor::destroy(decompressor);
+        }
       }
     }
   }

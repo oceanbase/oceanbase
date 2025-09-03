@@ -77,6 +77,21 @@ TEST_F(TestIcebergConversions, test_int)
   ASSERT_EQ(result_obj, obj);
 }
 
+TEST_F(TestIcebergConversions, test_int_2_long)
+{
+  std::vector<uint8_t> data{0xF4, 0x01, 0x00, 0x00};
+  ObString binary(data.size(), reinterpret_cast<const char *>(data.data()));
+  schema::ObColumnSchemaV2 column_schema;
+  Schema::set_column_schema_type_by_type_str(Schema::TYPE_LONG, column_schema);
+  ObObj obj;
+  ASSERT_EQ(
+      OB_SUCCESS,
+      Conversions::convert_statistics_binary_to_ob_obj(allocator, binary, column_schema, obj));
+  ObObj result_obj;
+  result_obj.set_int(500);
+  ASSERT_EQ(result_obj, obj);
+}
+
 TEST_F(TestIcebergConversions, test_long)
 {
   std::vector<uint8_t> data{0xF4, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
@@ -104,6 +119,21 @@ TEST_F(TestIcebergConversions, test_float)
       Conversions::convert_statistics_binary_to_ob_obj(allocator, binary, column_schema, obj));
   ObObj result_obj;
   result_obj.set_float(1.23);
+  ASSERT_EQ(result_obj, obj);
+}
+
+TEST_F(TestIcebergConversions, test_float_2_double)
+{
+  std::vector<uint8_t> data{0xA4, 0x70, 0x9D, 0x3F};
+  ObString binary(data.size(), reinterpret_cast<const char *>(data.data()));
+  schema::ObColumnSchemaV2 column_schema;
+  Schema::set_column_schema_type_by_type_str(Schema::TYPE_DOUBLE, column_schema);
+  ObObj obj;
+  ASSERT_EQ(
+      OB_SUCCESS,
+      Conversions::convert_statistics_binary_to_ob_obj(allocator, binary, column_schema, obj));
+  ObObj result_obj;
+  result_obj.set_double(1.23f);
   ASSERT_EQ(result_obj, obj);
 }
 

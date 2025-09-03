@@ -300,6 +300,29 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
       }
     }
   }
+
+  // add USING ICEBERG/HIVE
+  if (OB_SUCC(ret)) {
+    switch (table_schema.get_lake_table_format()) {
+      case ObLakeTableFormat::ICEBERG: {
+        if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\nUSING ICEBERG\n"))) {
+          SHARE_SCHEMA_LOG(WARN, "fail to print using iceberg", K(ret));
+        }
+        break;
+      }
+      case ObLakeTableFormat::HIVE: {
+        if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\nUSING HIVE\n"))) {
+          SHARE_SCHEMA_LOG(WARN, "fail to print using hive", K(ret));
+        }
+        break;
+      }
+      default: {
+        // 以前的文件外部表不会被设置 LakeTableFormat
+        // odps 暂时也不考虑
+        // do nothing
+      }
+    }
+  }
   return ret;
 }
 
