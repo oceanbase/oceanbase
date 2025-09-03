@@ -497,11 +497,22 @@ private:
       ObSSTable *&copied_sstable);
 #ifdef OB_BUILD_SHARED_STORAGE
   int process_minor_sstables_for_ss_(
-    ObArenaAllocator &allocator,
-    const UpdateUpperTransParam &upper_trans_param,
-    ObArray<ObITable *> &sstables,
-    const int64_t inc_base_snapshot_version,
-    int64_t &inc_pos);
+      ObArenaAllocator &allocator,
+      const UpdateUpperTransParam &upper_trans_param,
+      ObArray<ObITable *> &sstables,
+      const int64_t inc_base_snapshot_version,
+      int64_t &inc_pos);
+  int cut_minor_sstables_for_ss_(
+      ObArenaAllocator &allocator,
+      const share::SCN &cut_scn,
+      ObArray<ObITable *> &sstables,
+      int64_t &inc_pos);
+  int process_minor_sstables_upper_trans_for_ss_(
+      ObArenaAllocator &allocator,
+      const ObIArray<UpdateUpperTransParam::SCNAndVersion> &new_upper_trans,
+      ObArray<ObITable *> &sstables,
+      const int64_t inc_base_snapshot_version,
+      int64_t &inc_pos);
 #endif
 
 public:

@@ -286,73 +286,110 @@ int ObTabletTableStore::process_minor_sstables_for_ss_(
   int ret = OB_SUCCESS;
   const ObIArray<UpdateUpperTransParam::SCNAndVersion> *new_upper_trans = upper_trans_param.ss_new_upper_trans_;
   if (inc_pos < 0 || OB_ISNULL(new_upper_trans) || new_upper_trans->empty() || sstables.empty()) {
+    // skip, inc_pos < 0 means has been processed by others
   } else if (new_upper_trans->count() == 1 && new_upper_trans->at(0).upper_trans_version_ == 0) {
-    // use scn to recycle minor
-    share::SCN recycle_scn = new_upper_trans->at(0).scn_;
-    for (int i = inc_pos; i < sstables.count(); i++) {
-      if (sstables.at(i)->is_sstable()
-          && sstables.at(i)->get_end_scn() <= recycle_scn) {
+    if (OB_FAIL(cut_minor_sstables_for_ss_(allocator, new_upper_trans->at(0).scn_, sstables, inc_pos))) {
+      LOG_WARN("failed to cut minor sstables", K(ret));
+    }
+  } else if (OB_FAIL(process_minor_sstables_upper_trans_for_ss_(allocator, *new_upper_trans, sstables, inc_base_snapshot_version, inc_pos))) {
+    LOG_WARN("failed to set minor sstables upper trans", K(ret));
+  }
+  return ret;
+}
+
+int ObTabletTableStore::cut_minor_sstables_for_ss_(
+    ObArenaAllocator &allocator,
+    const share::SCN &cut_scn,
+    ObArray<ObITable *> &sstables,
+    int64_t &inc_pos)
+{
+  int ret = OB_SUCCESS;
+  for (int i = inc_pos; OB_SUCC(ret) && i < sstables.count(); i++) {
+    if (sstables.at(i)->is_sstable()) {
+      if (sstables.at(i)->get_start_scn() >= cut_scn) {
+        break;
+      } else if (sstables.at(i)->get_end_scn() <= cut_scn) {
         inc_pos = i + 1;
-        FLOG_INFO("recycle minor by shared-min-scn", KPC(sstables.at(i)), K(i), K(recycle_scn));
+        FLOG_INFO("recycle minor by shared-min-scn", KPC(sstables.at(i)), K(i), K(cut_scn));
+      } else if (sstables.at(i)->get_end_scn() > cut_scn) {
+        // cross with cut_scn, modify start_scn to cut_scn
+        ObSSTable *sstable = static_cast<ObSSTable*>(sstables.at(i));
+        ObSSTable *copied_sstable = NULL;
+        if (OB_FAIL(adjust_sstable_start_scn_(*sstable, allocator, cut_scn, copied_sstable))) {
+          LOG_WARN("adjust start scn of local sstable fail", K(ret));
+        } else {
+          sstables.at(i) = copied_sstable;
+          FLOG_INFO("adjust start scn of local sstable to cut_scn success", KPC(sstables.at(i)), K(i), K(cut_scn));
+        }
       }
     }
-  } else {
-    int j = 0;
-    bool found_first = false;
-    bool need_chg_upper_trans_version = false;
-    ObSSTableArray &new_sstables = minor_tables_;
-    for(int i = inc_pos; i < sstables.count(); i++) {
-      if (sstables.at(i)->is_sstable()) {
-        ObSSTable *sstable = static_cast<ObSSTable*>(sstables.at(i));
+  }
+  return ret;
+}
+
+int ObTabletTableStore::process_minor_sstables_upper_trans_for_ss_(
+    ObArenaAllocator &allocator,
+    const ObIArray<UpdateUpperTransParam::SCNAndVersion> &new_upper_trans,
+    ObArray<ObITable *> &sstables,
+    const int64_t inc_base_snapshot_version,
+    int64_t &inc_pos)
+{
+  int ret = OB_SUCCESS;
+  int j = 0;
+  bool found_first = false;
+  bool need_chg_upper_trans_version = false;
+  ObSSTableArray &new_sstables = minor_tables_;
+  for(int i = inc_pos; i < sstables.count(); i++) {
+    if (sstables.at(i)->is_sstable()) {
+      ObSSTable *sstable = static_cast<ObSSTable*>(sstables.at(i));
+      if (sstable->get_upper_trans_version() == INT64_MAX) {
+        bool hit = false;
+        for (; j < new_upper_trans.count(); j++) {
+          if (new_upper_trans.at(j).scn_ == sstable->get_end_scn()) {
+            hit = true;
+            if (new_upper_trans.at(j).upper_trans_version_ <= inc_base_snapshot_version) {
+              if (!found_first) { inc_pos = i + 1; } // remove this minor
+            } else {
+              found_first = true;
+              need_chg_upper_trans_version |= new_upper_trans.at(j).upper_trans_version_ != INT64_MAX;
+            }
+          } else if (new_upper_trans.at(j).scn_ > sstable->get_end_scn()) {
+            break;
+          }
+        }
+        if (!hit) {
+          found_first = true;
+        }
+      } else if (sstable->get_upper_trans_version() <= inc_base_snapshot_version) {
+        if (!found_first) { inc_pos = i + 1; } // remove this minor
+      } else {
+        found_first = true;
+      }
+    }
+  }
+  if (need_chg_upper_trans_version) {
+    if (OB_FAIL(init_minor_sstable_array_with_check(new_sstables, allocator, sstables, inc_pos))) {
+      LOG_WARN("failed to init minor_tables", K(ret));
+    } else {
+      int j = 0;
+      for (int64_t i = 0; i < new_sstables.count(); i++) {
+        ObSSTable *sstable = new_sstables.at(i);
         if (sstable->get_upper_trans_version() == INT64_MAX) {
-          bool hit = false;
-          for (; j < new_upper_trans->count(); j++) {
-            if (new_upper_trans->at(j).scn_ == sstable->get_end_scn()) {
-              hit = true;
-              if (new_upper_trans->at(j).upper_trans_version_ <= inc_base_snapshot_version) {
-                if (!found_first) { inc_pos = i + 1; } // remove this minor
-              } else {
-                found_first = true;
-                need_chg_upper_trans_version |= new_upper_trans->at(j).upper_trans_version_ != INT64_MAX;
+          for (;  j < new_upper_trans.count(); j++) {
+            if (new_upper_trans.at(j).scn_ == sstable->get_end_scn()) {
+              if (new_upper_trans.at(j).upper_trans_version_ != INT64_MAX) {
+                sstable->set_upper_trans_version(allocator, new_upper_trans.at(j).upper_trans_version_);
               }
-            } else if (new_upper_trans->at(j).scn_ > sstable->get_end_scn()) {
+            } else if (new_upper_trans.at(j).scn_ > sstable->get_end_scn()) {
               break;
             }
           }
-          if (!hit) {
-            found_first = true;
-          }
-        } else if (sstable->get_upper_trans_version() <= inc_base_snapshot_version) {
-          if (!found_first) { inc_pos = i + 1; } // remove this minor
-        } else {
-          found_first = true;
         }
       }
     }
-    if (need_chg_upper_trans_version) {
-      if (OB_FAIL(init_minor_sstable_array_with_check(new_sstables, allocator, sstables, inc_pos))) {
-        LOG_WARN("failed to init minor_tables", K(ret));
-      } else {
-        int j = 0;
-        for (int64_t i = 0; i < new_sstables.count(); i++) {
-          ObSSTable *sstable = new_sstables.at(i);
-          if (sstable->get_upper_trans_version() == INT64_MAX) {
-            for (;  j < new_upper_trans->count(); j++) {
-              if (new_upper_trans->at(j).scn_ == sstable->get_end_scn()) {
-                if (new_upper_trans->at(j).upper_trans_version_ != INT64_MAX) {
-                  sstable->set_upper_trans_version(allocator, new_upper_trans->at(j).upper_trans_version_);
-                }
-              } else if (new_upper_trans->at(j).scn_ > sstable->get_end_scn()) {
-                break;
-              }
-            }
-          }
-        }
-      }
-      inc_pos = -1; // has created minor_sstables, skip process in caller
-    } else if (inc_pos == sstables.count()) {
-      inc_pos = -1; // all minor removed
-    }
+    inc_pos = -1; // has created minor_sstables, skip process in caller
+  } else if (inc_pos == sstables.count()) {
+    inc_pos = -1; // all minor removed
   }
   return ret;
 }
