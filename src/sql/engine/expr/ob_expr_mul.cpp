@@ -146,11 +146,13 @@ int ObExprMul::calc_result_type2(ObExprResType &type,
           if (ObRawExprUtils::decimal_int_need_cast(type1.get_accuracy(), l_dst_acc)) {
             type.set_result_flag(DECIMAL_INT_ADJUST_FLAG);
             type1.set_calc_accuracy(l_dst_acc);
+            type1.set_calc_type(ObDecimalIntType);
           }
           ObAccuracy r_dst_acc(type.get_precision(), type2.get_scale());
           if (ObRawExprUtils::decimal_int_need_cast(type2.get_accuracy(), r_dst_acc)) {
             type.set_result_flag(DECIMAL_INT_ADJUST_FLAG);
             type2.set_calc_accuracy(r_dst_acc);
+            type2.set_calc_type(ObDecimalIntType);
           }
         }
         LOG_DEBUG("calc_result_type2", K(type.get_accuracy()), K(type1.get_accuracy()),
