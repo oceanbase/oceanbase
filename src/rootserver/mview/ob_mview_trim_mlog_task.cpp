@@ -309,11 +309,11 @@ int ObMViewTrimMLogTask::replace_mlog(const ObIArray<uint64_t> &relevent_mviews,
     for (int64_t i = 0; OB_SUCC(ret) && !need_replace_mlog && i < orig_column_ids.count(); ++i) {
       uint64_t column_id = orig_column_ids.at(i);
       if (column_id < OB_MLOG_SEQ_NO_COLUMN_ID) {
-        const ObColumnSchemaV2 *column_schema = base_table_schema->get_column_schema(column_id);
+        const ObColumnSchemaV2 *column_schema = mlog_schema->get_column_schema(column_id);
         if (OB_ISNULL(column_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("column schema is null", KR(ret), K(column_id));
-        } else if (column_schema->is_rowkey_column() || column_schema->is_heap_table_primary_key_column()) {
+        } else if (column_schema->is_rowkey_column()) {
           // rowkey should not be trimmed
         } else if (OB_FAIL(referenced_column_set.exist_refactored(column_id))) {
           if (OB_HASH_EXIST == ret) {
@@ -339,7 +339,7 @@ int ObMViewTrimMLogTask::replace_mlog(const ObIArray<uint64_t> &relevent_mviews,
       if (OB_ISNULL(column_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("column schema is null", KR(ret), K(column_id));
-      } else if (column_schema->is_rowkey_column()) {
+      } else if (column_schema->is_rowkey_column() || column_schema->is_heap_table_primary_key_column()) {
         // rowkey columns will be added automatically, ignore
       } else if (column_schema->is_generated_column()) {
         // mlog can not be built for generated columns, ignore
