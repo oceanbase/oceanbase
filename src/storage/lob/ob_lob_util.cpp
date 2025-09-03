@@ -338,6 +338,8 @@ int ObInsertLobColumnHelper::delete_lob_column(ObIAllocator &allocator,
           LOG_WARN("invalid src lob locator.", K(ret));
         } else if (OB_FAIL(lob_mngr->build_lob_param(lob_param, allocator, collation_type, 0, UINT64_MAX, timeout_ts, lob))) {
           LOG_WARN("fail to build lob param.", K(ret));
+        } else if (OB_FAIL(lob_param.snapshot_.assign(snapshot))) {
+          LOG_WARN("fail to assign snapshot", K(ret), K(snapshot));
         } else if (OB_FAIL(lob_mngr->erase(lob_param))) {
           LOG_WARN("lob meta row delete failed.", K(ret));
         } else {

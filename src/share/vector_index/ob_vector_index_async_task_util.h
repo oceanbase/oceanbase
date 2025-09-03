@@ -372,7 +372,8 @@ private:
       int64_t vector_col_idx,
       ObSEArray<int64_t, 4> &extra_column_idxs,
       storage::ObTableScanIterator *table_scan_iter,
-      storage::ObValueRowIterator &delete_row_iter);
+      storage::ObValueRowIterator &delete_row_iter,
+      transaction::ObTxReadSnapshot &snapshot);
   int delete_tablet_data(
       ObPluginVectorIndexAdaptor &adaptor,
       ObTabletID& tablet_id,
