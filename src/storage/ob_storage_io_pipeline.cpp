@@ -119,6 +119,12 @@ int ObStorageIOPipelineTaskInfo::set_macro_block_id(
   return handle.set_macro_block_id(macro_id);
 }
 
+int ObStorageIOPipelineTaskInfo::set_macro_block_id(
+    blocksstable::ObMacroBlockHandle &handle, const MacroBlockId &macro_id)
+{
+  return handle.set_macro_block_id(macro_id);
+}
+
 /*-----------------------------------------TaskInfoWithRWHandle-----------------------------------------*/
 TaskInfoWithRWHandle::TaskInfoWithRWHandle()
     : ObStorageIOPipelineTaskInfo(),

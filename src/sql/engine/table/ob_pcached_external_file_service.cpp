@@ -792,6 +792,38 @@ bool ObPCachedExtLRU::ObPCachedExtLRUDeletePred::operator()(
   return OB_SUCC(ret);
 }
 
+ObPCachedExtLRU::ObPCachedExtLRUEvictUnusedMacroDeletePred::ObPCachedExtLRUEvictUnusedMacroDeletePred(
+    ObPCachedExtLRU &lru)
+    : ObPCachedExtLRUDeletePred(lru)
+{
+}
+
+ObPCachedExtLRU::ObPCachedExtLRUEvictUnusedMacroDeletePred::~ObPCachedExtLRUEvictUnusedMacroDeletePred()
+{
+}
+
+bool ObPCachedExtLRU::ObPCachedExtLRUEvictUnusedMacroDeletePred::operator()(
+    const ObPCachedExtLRUMapPairType &map_entry)
+{
+  int ret = OB_SUCCESS;
+  int64_t ref_cnt = -1;
+  bool can_evict = false;
+  const blocksstable::MacroBlockId &macro_id = map_entry.first;
+  if (OB_FAIL(OB_SERVER_BLOCK_MGR.get_macro_block_ref_cnt(macro_id, ref_cnt))) {
+    LOG_WARN("fail to get macro block ref cnt", KR(ret), K(macro_id));
+  } else if (ref_cnt == 1) {
+    // When ref_cnt == 1, it means only LRU holds the reference to this macro block.
+    // This indicates no active IO requests are using the block, making it safe to evict.
+    can_evict = ObPCachedExtLRUDeletePred::operator()(map_entry);
+    if (OB_FAIL(get_ret())) {
+      LOG_WARN("fail to delete lru entry", KR(ret), K(macro_id));
+    }
+  }
+
+  ret_ = ret;
+  return OB_SUCC(ret) && can_evict;
+}
+
 ObPCachedExtLRU::ObPCachedExtLRUReadCB::ObPCachedExtLRUReadCB(
     ObPCachedExtLRU &lru, blocksstable::ObStorageObjectHandle &macro_handle)
     : ObPCachedExtLRUBaseCB(lru), macro_handle_(macro_handle), data_size_(0)
@@ -1265,6 +1297,71 @@ int ObPCachedExtLRU::expire(const int64_t expire_before_time_us, int64_t &actual
   return ret;
 }
 
+template<typename MacroHandleType>
+int ObPCachedExtLRU::evict_one_cached_macro(
+    MacroHandleType &macro_handle, bool &is_evicted)
+{
+  int ret = OB_SUCCESS;
+  macro_handle.reset_macro_id();
+  is_evicted = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObPCachedExtLRU is not inited", KR(ret));
+  } else if (cached_macro_count() <= 0) {
+    is_evicted = false;
+    LOG_INFO("ObPCachedExtLRU has no cached macro", KR(ret));
+  } else {
+    ObPCachedExtLRUEvictUnusedMacroDeletePred delete_pred(*this);
+    ObSEArray<MacroBlockId, 64> macro_ids;
+    macro_ids.set_attr(ObMemAttr(MTL_ID(), EXT_LRU_ALLOC_TAG));
+
+    for (ObPCachedExtLRUMap::bucket_iterator bucket_iter = macro_map_.bucket_begin();
+        OB_SUCC(ret) && !is_evicted && bucket_iter != macro_map_.bucket_end();
+        bucket_iter++) {
+      macro_ids.reset();
+      {
+        ObPCachedExtLRUMap::hashtable::bucket_lock_cond blk(*bucket_iter);
+        ObPCachedExtLRUMap::hashtable::readlocker locker(blk.lock());
+        for (ObPCachedExtLRUMap::hashtable::hashbucket::const_iterator node_iter = bucket_iter->node_begin();
+            OB_SUCC(ret) && node_iter != bucket_iter->node_end();
+            node_iter++) {
+          if (OB_FAIL(macro_ids.push_back(node_iter->first))) {
+            LOG_WARN("fail to push back", KR(ret), "macro_id", node_iter->first, K(macro_ids.count()));
+          }
+        }
+      }
+
+      for (int64_t i = 0; OB_SUCC(ret) && !is_evicted && i < macro_ids.count(); i++) {
+        const MacroBlockId &macro_id = macro_ids.at(i);
+        bool is_erased = false;
+        if (OB_FAIL(macro_map_.erase_if(macro_id, delete_pred, is_erased))) {
+          if (OB_HASH_NOT_EXIST == ret) {
+            ret = OB_SUCCESS; // ignore ret
+          } else {
+            LOG_WARN("fail to erase macro_id from lru", KR(ret), K(macro_id));
+          }
+        } else if (OB_FAIL(delete_pred.get_ret())) {
+          LOG_WARN("fail to erase macro", KR(ret), K(macro_id));
+        } else if (is_erased) {
+          if (OB_FAIL(ObStorageIOPipelineTaskInfo::set_macro_block_id(macro_handle, macro_id))) {
+            LOG_WARN("fail to set macro id", KR(ret), K(macro_id));
+            // Still need to release the macro block reference count to avoid macro leak
+            int tmp_ret = OB_SUCCESS;
+            if (OB_TMP_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_id))) {
+              LOG_WARN("fail to dec macro ref", KR(ret), KR(tmp_ret), K(macro_id));
+            }
+          } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_id))) {
+            LOG_WARN("fail to dec macro ref", KR(ret), K(macro_id));
+          } else {
+            is_evicted = true;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 /*-----------------------------------------ObExternalFileDiskSpaceMgr-----------------------------------------*/
 void ObExternalFileDiskSpaceMgr::ObExternalFileCheckDiskUsageTask::runTimerTask()
 {
@@ -1388,6 +1485,7 @@ bool ObExternalFileDiskSpaceMgr::is_total_disk_usage_exceed_limit_() const
   const int64_t max_disk_usage_percentage = MAX(
       MAX_DISK_USAGE_PERCENT, GCONF.external_table_disk_cache_max_percentage);
   return OB_STORAGE_OBJECT_MGR.get_used_macro_block_count()
+      - OB_SERVER_BLOCK_MGR.get_pending_free_macro_block_count()
       >= OB_STORAGE_OBJECT_MGR.get_total_macro_block_count() * max_disk_usage_percentage / 100;
 }
 
@@ -1399,22 +1497,27 @@ bool ObExternalFileDiskSpaceMgr::is_external_file_disk_space_full_() const
   return cached_macro_count() >= max_external_file_macro_count;
 }
 
-int ObExternalFileDiskSpaceMgr::check_disk_usage_and_evict_if_needed()
+int ObExternalFileDiskSpaceMgr::check_disk_usage_and_evict_if_needed(const bool trigger_force_evict)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObExternalFileDiskSpaceMgr is not inited", KR(ret));
+  } else if (cached_macro_count() <= 0) {
+    LOG_INFO("ObExternalFileDiskSpaceMgr has no cached macro", KR(ret), K(trigger_force_evict));
   } else {
     const int64_t start_time_us = ObTimeUtility::fast_current_time();
     const int64_t total_macro_count = OB_STORAGE_OBJECT_MGR.get_total_macro_block_count();
     const int64_t used_macro_count = OB_STORAGE_OBJECT_MGR.get_used_macro_block_count();
+    const int64_t pending_free_macro_count = OB_SERVER_BLOCK_MGR.get_pending_free_macro_block_count();
     int64_t expect_total_evict_num = 0;
     int64_t actual_evict_num = 0;
     const bool need_evict =
-        ((used_macro_count >= total_macro_count * EVICT_TRIGGER_PERCENT / 100)
+        (trigger_force_evict
+        || (used_macro_count - pending_free_macro_count >= total_macro_count * EVICT_TRIGGER_PERCENT / 100)
         || is_external_file_disk_space_full_());
-    const bool force_evict = is_total_disk_usage_exceed_limit_();
+    const bool force_evict =
+        (trigger_force_evict || (need_evict && is_total_disk_usage_exceed_limit_()));
 
     if (need_evict) {
       expect_total_evict_num =
@@ -1447,7 +1550,8 @@ int ObExternalFileDiskSpaceMgr::check_disk_usage_and_evict_if_needed()
     const int64_t used_time_us = ObTimeUtility::fast_current_time() - start_time_us;
     LOG_INFO("ObExternalFileDiskSpaceMgr: check disk usage", KR(ret), K(used_time_us),
         K(total_macro_count), K(used_macro_count), K(cached_macro_count()),
-        K(expect_total_evict_num), K(actual_evict_num), K(need_evict), K(force_evict));
+        K(pending_free_macro_count), K(expect_total_evict_num), K(actual_evict_num),
+        K(need_evict), K(force_evict), K(trigger_force_evict));
   }
   return ret;
 }
@@ -1558,6 +1662,60 @@ int ObExternalFileDiskSpaceMgr::evict_cached_macro_by_tenant_(
   }
   return ret;
 }
+
+template<typename MacroHandleType>
+int ObExternalFileDiskSpaceMgr::evict_one_cached_macro(
+    MacroHandleType &macro_handle, bool &is_evicted)
+{
+  int ret = OB_SUCCESS;
+  macro_handle.reset_macro_id();
+  is_evicted = false;
+  omt::ObMultiTenant *omt = GCTX.omt_;
+  TenantUnits tenant_units;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObExternalFileDiskSpaceMgr is not inited", KR(ret));
+  } else if (cached_macro_count() <= 0) {
+    is_evicted = false;
+    LOG_INFO("ObExternalFileDiskSpaceMgr has no cached macro", KR(ret));
+  } else if (OB_ISNULL(omt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("omt is null", KR(ret));
+  } else if (OB_FAIL(omt->get_tenant_units(tenant_units, true/*include_hidden_sys*/))) {
+    LOG_WARN("fail to get tenant units", KR(ret));
+  } else if (OB_UNLIKELY(tenant_units.count() <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant units is empty", KR(ret));
+  } else {
+    const int64_t start_idx = (rand() % tenant_units.count());
+    for (int64_t i = 0; OB_SUCC(ret) && !is_evicted && i < tenant_units.count(); i++) {
+      const uint64_t tenant_id = tenant_units.at((start_idx + i) % tenant_units.count()).tenant_id_;
+      if (is_sys_tenant(tenant_id) || is_user_tenant(tenant_id)) {
+        MTL_SWITCH(tenant_id)
+        {
+          ObPCachedExternalFileService *ext_file_service = nullptr;
+          if (OB_ISNULL(ext_file_service = MTL(ObPCachedExternalFileService*))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("ObPCachedExternalFileService is NULL", KR(ret), K(tenant_id));
+          } else if (OB_FAIL(ext_file_service->evict_one_cached_macro(macro_handle, is_evicted))) {
+            LOG_WARN("fail to evict one unused macro", KR(ret), K(tenant_id));
+          }
+        }
+      }
+    }
+
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(check_disk_usage_and_evict_if_needed(true/*trigger_force_evict*/))) {
+      LOG_WARN("fail to trigger force evict", KR(ret), KR(tmp_ret), K(cached_macro_count()));
+    }
+  }
+  return ret;
+}
+
+template int ObExternalFileDiskSpaceMgr::evict_one_cached_macro<ObStorageObjectHandle>(
+    ObStorageObjectHandle &macro_handle, bool &is_evicted);
+template int ObExternalFileDiskSpaceMgr::evict_one_cached_macro<ObMacroBlockHandle>(
+    ObMacroBlockHandle &macro_handle, bool &is_evicted);
 
 /*-----------------------------------------ObPCachedExternalFileService callbacks-----------------------------------------*/
 ObPCachedExternalFileService::SNAddPrefetchTaskSetCb::SNAddPrefetchTaskSetCb(
@@ -2325,6 +2483,27 @@ int ObPCachedExternalFileService::evict_cached_macro(
       K(used_time_us), K(start_time_us), K(expect_evict_num), K(force_evict), K(actual_evict_num));
   return ret;
 }
+
+template<typename MacroHandleType>
+int ObPCachedExternalFileService::evict_one_cached_macro(
+    MacroHandleType &macro_handle, bool &is_evicted)
+{
+  int ret = OB_SUCCESS;
+  macro_handle.reset_macro_id();
+  is_evicted = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObExternalFileDiskSpaceMgr is not inited", KR(ret));
+  } else if (OB_FAIL(lru_.evict_one_cached_macro(macro_handle, is_evicted))) {
+    LOG_WARN("fail to evict one unused macro", KR(ret), K(tenant_id_));
+  }
+  return ret;
+}
+
+template int ObPCachedExternalFileService::evict_one_cached_macro<ObStorageObjectHandle>(
+    ObStorageObjectHandle &macro_handle, bool &is_evicted);
+template int ObPCachedExternalFileService::evict_one_cached_macro<ObMacroBlockHandle>(
+    ObMacroBlockHandle &macro_handle, bool &is_evicted);
 
 int ObPCachedExternalFileService::cleanup_orphaned_path()
 {
