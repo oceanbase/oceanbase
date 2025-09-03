@@ -384,11 +384,6 @@ int ObMacroBlock::flush(ObStorageObjectHandle &macro_handle,
         object_info.size_ = data_.capacity();
       } else {
         object_info.size_ = data_.upper_align_length();
-#ifdef OB_BUILD_SHARED_STORAGE
-        if (object_info.size_ - data_.length() > 0 && GCTX.is_shared_storage_mode()) {
-          MEMSET(data_.current(), '\0', object_info.size_ - data_.length());
-        }
-#endif
       }
       object_info.mtl_tenant_id_ = MTL_ID();
       object_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
@@ -465,7 +460,7 @@ int ObMacroBlock::reserve_header(const ObDataStoreDesc &spec, const int64_t &cur
   if (OB_FAIL(common_header_.set_attr(spec.data_store_type_))) {
     STORAGE_LOG(WARN, "fail to set attr for common header", K(ret));
   } else if (FALSE_IT(common_header_size = common_header_.get_serialize_size())) {
-  // } else if (FALSE_IT(MEMSET(data_.data(), 0, data_.capacity()))) { // no need memset
+  } else if (GCTX.is_shared_storage_mode() && FALSE_IT(MEMSET(data_.data(), 0, data_.capacity()))) {
   } else if (OB_FAIL(data_.advance(common_header_size))) {
     STORAGE_LOG(WARN, "data buffer is not enough for common header.", K(ret), K(common_header_size));
   } else {
