@@ -501,15 +501,15 @@ int ObTimerService::mtl_start(ObTimerService *&timer_service)
 
 void ObTimerService::mtl_stop(ObTimerService *&timer_service)
 {
-  if (nullptr != timer_service) {
-    timer_service->stop();
-    OB_LOG(INFO, "success to stop timer service");
-  }
+  UNUSED(timer_service);
+  OB_LOG(INFO, "delay to stop timer service");
 }
 
 void ObTimerService::mtl_wait(ObTimerService *&timer_service)
 {
   if (nullptr != timer_service) {
+    timer_service->stop();
+    OB_LOG(INFO, "success to stop timer service");
     timer_service->wait();
     OB_LOG(INFO, "success to wait timer service");
   }
