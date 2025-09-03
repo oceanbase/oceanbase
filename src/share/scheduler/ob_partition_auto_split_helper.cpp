@@ -19,7 +19,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "rootserver/ddl_task/ob_ddl_scheduler.h"
-
+#include "rootserver/ob_split_partition_helper.h"
 
 namespace oceanbase
 {
@@ -2046,6 +2046,8 @@ int ObAutoSplitArgBuilder::build_arg(const uint64_t tenant_id,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(table_schema->check_validity_for_auto_partition())) {
     LOG_WARN("table is invalid for auto partition", KR(ret), K(tenant_id), K(tablet_id), KPC(table_schema));
+  } else if (OB_FAIL(rootserver::ObSplitPartitionHelper::check_allow_split(guard, *table_schema))) {
+    LOG_WARN("failed to check allow split", KR(ret), K(tenant_id), K(tablet_id), KPC(table_schema));
   } else if (OB_FAIL(sampler.query_ranges(tenant_id,
                                           db_schema->get_database_name_str(),
                                           *table_schema,

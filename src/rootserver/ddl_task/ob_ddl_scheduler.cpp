@@ -1812,7 +1812,7 @@ int ObDDLScheduler::schedule_auto_split_task()
       } else if (FALSE_IT(single_arg = new (buf) obrpc::ObAlterTableArg())) {
       } else if (OB_TMP_FAIL(split_helper.build_arg(task.tenant_id_, task.ls_id_, task.tablet_id_,
           task.auto_split_tablet_size_, task.used_disk_space_, *single_arg))) {
-        if (OB_OP_NOT_ALLOW == ret) {
+        if (OB_OP_NOT_ALLOW == tmp_ret || OB_NOT_SUPPORTED == tmp_ret) {
           ignore_this_task = true;
         } else {
           LOG_WARN("fail to build arg", K(tmp_ret), K(task));
