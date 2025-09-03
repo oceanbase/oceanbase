@@ -41,7 +41,27 @@ int ObKillSessionArg::init(ObExecContext &ctx, const ObKillStmt &stmt)
     tenant_id_ = session->get_priv_tenant_id();
     user_id_ = session->get_user_id();
     is_query_ = stmt.is_query();
-    has_user_super_privilege_ = session->has_user_super_privilege();
+    if (lib::is_mysql_mode()) {
+      has_user_super_privilege_ = session->has_user_super_privilege();
+    } else if (ObSchemaChecker::is_ora_priv_check()) {
+      // oracle mode should check alter system privilege 
+      // rather than super privilege to kill other user's session
+      ObSchemaChecker schema_checker;
+      ObSchemaGetterGuard *schema_guard = ctx.get_sql_ctx()->schema_guard_;
+      schema_checker.init(*schema_guard);
+      int tmp_ret = OB_SUCCESS;
+      tmp_ret = schema_checker.check_ora_ddl_priv(
+          session->get_effective_tenant_id(), session->get_priv_user_id(),
+          ObString(""), stmt::T_KILL, session->get_enable_role_array());
+      if (OB_ERR_NO_SYS_PRIVILEGE == tmp_ret) {
+        has_user_super_privilege_ = false;
+      } else if(OB_SUCC(tmp_ret)) {
+        has_user_super_privilege_ = true;
+      } else {
+        ret = tmp_ret;
+        LOG_WARN("fail to check ora ddl priv", K(tmp_ret));
+      }
+    }
   }
   return ret;
 }
