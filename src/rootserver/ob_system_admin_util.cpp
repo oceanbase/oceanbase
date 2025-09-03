@@ -1871,8 +1871,7 @@ int ObAdminUpgradeVirtualSchema::batch_upgrade_(const uint64_t tenant_id,
   if (OB_UNLIKELY(!ctx_.is_inited())) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_ISNULL(ctx_.root_inspection_) || OB_ISNULL(ctx_.ddl_service_)
-      || OB_ISNULL(ctx_.schema_service_) || OB_ISNULL(ctx_.sql_proxy_)) {
+  } else if (OB_ISNULL(ctx_.ddl_service_) || OB_ISNULL(ctx_.schema_service_) || OB_ISNULL(ctx_.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ptr is null", KR(ret), KP(ctx_.root_inspection_), KP(ctx_.ddl_service_),
         KP(ctx_.schema_service_), KP(ctx_.sql_proxy_));
@@ -1885,7 +1884,7 @@ int ObAdminUpgradeVirtualSchema::batch_upgrade_(const uint64_t tenant_id,
     int64_t refreshed_schema_version = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < hard_code_tables.count(); i++) {
       const share::schema::ObTableSchema &hard_code_table = hard_code_tables.at(i);
-      if (OB_FAIL(ctx_.root_inspection_->check_table_schema(tenant_id, hard_code_table))) {
+      if (OB_FAIL(ObSysTableInspection::check_table_schema(tenant_id, hard_code_table))) {
         if (OB_SCHEMA_ERROR != ret) {
           LOG_WARN("check table schema failed", KR(ret), K(tenant_id), K(hard_code_table));
         } else {

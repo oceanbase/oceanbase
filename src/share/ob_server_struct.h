@@ -238,6 +238,7 @@ struct ObGlobalContext
   obrpc::ObLoadDataRpcProxy *load_data_proxy_;
   sql::ObExecutorRpcImpl *executor_rpc_;
   common::ObMySQLProxy *sql_proxy_;
+  common::ObOracleSqlProxy *oracle_sql_proxy_;
   common::ObMySQLProxy *ddl_sql_proxy_;
   common::ObOracleSqlProxy *ddl_oracle_sql_proxy_;
   common::ObDbLinkProxy *dblink_proxy_;

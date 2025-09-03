@@ -1299,6 +1299,72 @@ bool ObParallelCreateNormalTenantArg::is_valid() const
   return valid;
 }
 
+OB_SERIALIZE_MEMBER(ObCheckSysTableSchemaArg, tenant_id_, data_current_version_, rs_addr_);
+
+ObCheckSysTableSchemaArg::ObCheckSysTableSchemaArg() :
+  tenant_id_(OB_INVALID_TENANT_ID),
+  data_current_version_(OB_INVALID_VERSION),
+  rs_addr_() {}
+
+int ObCheckSysTableSchemaArg::init(uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid_tenant_id(tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else {
+    tenant_id_ = tenant_id;
+    data_current_version_ = DATA_CURRENT_VERSION;
+    rs_addr_ = GCONF.self_addr_;
+  }
+  return ret;
+}
+
+int ObCheckSysTableSchemaArg::assign(const ObCheckSysTableSchemaArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    tenant_id_ = other.tenant_id_;
+    data_current_version_ = other.data_current_version_;
+    rs_addr_ = other.rs_addr_;
+  }
+  return ret;
+}
+
+bool ObCheckSysTableSchemaArg::is_valid() const
+{
+  bool valid = true;
+  if (!is_valid_tenant_id(tenant_id_)) {
+    valid = false;
+  } else if (data_current_version_ != DATA_CURRENT_VERSION) {
+    valid = false;
+  } else if (!rs_addr_.is_valid()) {
+    valid = false;
+  }
+  return valid;
+}
+
+OB_SERIALIZE_MEMBER(ObCheckSysTableSchemaResult, error_table_ids_);
+
+int ObCheckSysTableSchemaResult::init(ObIArray<uint64_t> &error_table_ids)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(error_table_ids_.assign(error_table_ids))) {
+    LOG_WARN("failed to assign", KR(ret), K(error_table_ids));
+  }
+  return ret;
+}
+
+int ObCheckSysTableSchemaResult::assign(const ObCheckSysTableSchemaResult &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else if (OB_FAIL(error_table_ids_.assign(other.error_table_ids_))) {
+    LOG_WARN("failed to assign", KR(ret));
+  }
+  return ret;
+}
+
 DEF_TO_STRING(ObCreateTenantArg)
 {
   int64_t pos = 0;

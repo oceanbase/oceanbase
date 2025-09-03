@@ -23,6 +23,7 @@
 #include "share/ob_common_rpc_proxy.h"
 #include "share/ob_schema_status_proxy.h"
 #include "observer/ob_server_struct.h"
+#include "src/rootserver/ob_rs_async_rpc_proxy.h"
 
 namespace oceanbase
 {
@@ -134,6 +135,76 @@ private:
   ObRootService &root_service_;
 };
 
+class ObInspectionCancelChecker
+{
+public:
+  virtual int check_cancel() = 0;
+  int operator() () { return check_cancel(); }
+};
+
+class ObInspectionCheckSelfRS : public ObInspectionCancelChecker
+{
+public:
+  virtual int check_cancel() override;
+};
+
+class ObInspectionCheckRemoteRS : public ObInspectionCancelChecker
+{
+public:
+  ObInspectionCheckRemoteRS(const obrpc::ObCheckSysTableSchemaArg &arg);
+  virtual int check_cancel() override;
+private:
+  const obrpc::ObCheckSysTableSchemaArg &arg_;
+};
+
+class ObSysTableInspection
+{
+public:
+  ObSysTableInspection(ObInspectionCancelChecker &checker) : check_cancel(checker) {}
+  // return OB_SCHEMA_ERROR for table schema mismatch
+  static int check_table_schema(const uint64_t tenant_id,
+      const share::schema::ObTableSchema &hard_code_table);
+
+  static int check_table_schema(const share::schema::ObTableSchema &hard_code_table,
+                                const share::schema::ObTableSchema &inner_table);
+
+  // For system tables, check and get column schemas' difference
+  // between table schema in memory and hard code table schema.
+  // 1. Drop column: Not supported.
+  // 2. Add column: Can only add columns at last.
+  // 3. Alter column: Can only alter columns online.
+  static int check_and_get_system_table_column_diff(
+             const share::schema::ObTableSchema &table_schema,
+             const share::schema::ObTableSchema &hard_code_schema,
+             common::ObIArray<uint64_t> &add_column_ids,
+             common::ObIArray<uint64_t> &alter_column_ids);
+  // !!! ATTENTION !!!
+  // this function will return SUCCESS if inner table schema has error
+  // remember to check result.error_table_ids to get all error tables
+  static int check_sys_table_schema(const obrpc::ObCheckSysTableSchemaArg &arg,
+      obrpc::ObCheckSysTableSchemaResult &result);
+  // if OB_SCHEMA_ERROR, will add table_id in error_table_ids and ignore errcode
+  int check_sys_table_schemas(const uint64_t tenant_id, ObIArray<uint64_t> &error_table_ids);
+private:
+
+  int check_single_table(const uint64_t tenant_id, const ObTableSchema &hard_code_table,
+      ObIArray<uint64_t> &error_table_ids);
+
+  static int check_table_options_(const share::schema::ObTableSchema &table,
+                                  const share::schema::ObTableSchema &hard_code_table);
+  static int check_column_schema_(const common::ObString &table_name,
+                                  const share::schema::ObColumnSchemaV2 &column,
+                                  const share::schema::ObColumnSchemaV2 &hard_code_column);
+  int check_sys_view_(const uint64_t tenant_id,
+                      const share::schema::ObTableSchema &hard_code_table);
+  int check_tenant_status_(const uint64_t tenant_id);
+  bool check_str_with_lower_case_(const ObString &str);
+  void check_add_to_error_table_ids_(const int tmp_ret, const uint64_t &table_id,
+      ObIArray<uint64_t> &error_table_ids, int &back_ret);
+private:
+  ObInspectionCancelChecker &check_cancel;
+};
+
 // class 2: trigger inspection by ALTER SYSTEM RUN JOB 'ROOT_INSPECTION'
 class ObRootInspection: public ObInspectionTask
 {
@@ -150,7 +221,14 @@ public:
   void start() { stopped_ = false; }
   void stop() { stopped_ = true; }
   virtual int check_all();
-  int check_tenant(const uint64_t tenant_id);
+  // only called in upgrade status.
+  // due to performance issues, not check sys table schema
+  // the caller should call check sys table schema manually
+  int check_tenant_in_upgrade(const uint64_t tenant_id);
+
+  static int check_tenant_status(const uint64_t tenant_id, ObMultiVersionSchemaService *schema_service);
+
+  static bool need_ignore_error_message(const int64_t &tenant_id);
 
   inline bool is_zone_passed() const { return zone_passed_; }
   inline bool is_sys_param_passed() const { return sys_param_passed_; }
@@ -159,25 +237,7 @@ public:
   inline bool is_data_version_passed() const { return data_version_passed_; }
   inline bool is_all_checked() const { return all_checked_; }
   inline bool is_all_passed() const { return all_passed_; }
-  inline bool can_retry() const { return can_retry_ && !stopped_; }
-
-  // return OB_SCHEMA_ERROR for table schema mismatch
-  virtual int check_table_schema(const uint64_t tenant_id,
-                                 const share::schema::ObTableSchema &hard_code_table);
-
-  static int check_table_schema(const share::schema::ObTableSchema &hard_code_table,
-                                const share::schema::ObTableSchema &inner_table);
-
-  // For system tables, check and get column schemas' difference
-  // between table schema in memory and hard code table schema.
-  // 1. Drop column: Not supported.
-  // 2. Add column: Can only add columns at last.
-  // 3. Alter column: Can only alter columns online.
-  static int check_and_get_system_table_column_diff(
-             const share::schema::ObTableSchema &table_schema,
-             const share::schema::ObTableSchema &hard_code_schema,
-             common::ObIArray<uint64_t> &add_column_ids,
-             common::ObIArray<uint64_t> &alter_column_ids);
+  int check_sys_table_schemas(const ObIArray<uint64_t> &tenant_ids);
 private:
   static const int64_t NAME_BUF_LEN = 64;
   typedef common::ObFixedLengthString<NAME_BUF_LEN> Name;
@@ -204,23 +264,20 @@ private:
                       common::ObIArray<Name> &miss_names /* inner table less than hard code*/);
 
   int check_sys_table_schemas_();
-  int check_sys_table_schemas_(const uint64_t tenant_id);
-  static int check_table_options_(const share::schema::ObTableSchema &table,
-                                  const share::schema::ObTableSchema &hard_code_table);
-  static int check_column_schema_(const common::ObString &table_name,
-                                  const share::schema::ObColumnSchemaV2 &column,
-                                  const share::schema::ObColumnSchemaV2 &hard_code_column);
+  int check_sys_table_schemas_(const uint64_t tenant_ids);
+  int check_sys_table_schema_(const uint64_t tenant_id,
+      rootserver::ObCheckSysTableSchemaProxy &proxy);
+
+  int wait_and_check_rpc_response(rootserver::ObCheckSysTableSchemaProxy &proxy);
+
+  int check_error_table_ids_(const uint64_t tenant_id, const ObIArray<uint64_t> &table_ids);
 
   int check_data_version_();
   int check_data_version_(const uint64_t tenant_id);
 
-  bool check_str_with_lower_case_(const ObString &str);
-  int check_sys_view_(const uint64_t tenant_id,
-                      const share::schema::ObTableSchema &hard_code_table);
   int check_cancel();
   int check_tenant_status_(const uint64_t tenant_id);
-  int check_in_compatibility_mode_(const int64_t &tenant_id, bool &in_compatibility_mode);
-  bool need_ignore_error_message_(const int64_t &tenant_id);
+  static int check_in_compatibility_mode_(const int64_t &tenant_id, bool &in_compatibility_mode);
 private:
   bool inited_;
   volatile bool stopped_;
@@ -233,7 +290,6 @@ private:
 
   bool all_checked_;
   bool all_passed_;
-  bool can_retry_;  // only execute sql fail can retry
   common::ObMySQLProxy *sql_proxy_;
   obrpc::ObCommonRpcProxy *rpc_proxy_;
   share::schema::ObMultiVersionSchemaService *schema_service_;

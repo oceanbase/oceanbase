@@ -612,6 +612,38 @@ public:
   uint64_t tenant_id_;
 };
 
+struct ObCheckSysTableSchemaArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCheckSysTableSchemaArg();
+  ~ObCheckSysTableSchemaArg() {}
+  int init(uint64_t tenant_id);
+  int assign(const ObCheckSysTableSchemaArg &other);
+  bool is_valid() const;
+  TO_STRING_KV(K_(tenant_id), KDV_(data_current_version), K_(rs_addr));
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  ObAddr get_rs_addr() const { return rs_addr_; }
+private:
+  uint64_t tenant_id_;
+  uint64_t data_current_version_;
+  ObAddr rs_addr_;
+};
+
+struct ObCheckSysTableSchemaResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCheckSysTableSchemaResult() : error_table_ids_() {}
+  ~ObCheckSysTableSchemaResult() {}
+  int assign(const ObCheckSysTableSchemaResult &other);
+  int init(ObIArray<uint64_t> &error_table_ids);
+  const ObIArray<uint64_t> &get_error_table_ids() const { return error_table_ids_; }
+  TO_STRING_KV(K_(error_table_ids));
+private:
+  ObSArray<uint64_t> error_table_ids_;
+};
+
 struct ObCreateTenantEndArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);

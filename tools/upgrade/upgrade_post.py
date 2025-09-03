@@ -1480,7 +1480,7 @@
 #
 #def run_root_inspection(cur, timeout):
 #
-#  query_timeout = actions.set_default_timeout_by_tenant(cur, timeout, 10, 600)
+#  query_timeout = actions.set_default_timeout_by_tenant(cur, timeout, 100, 600)
 #
 #  with SetSessionTimeout(cur, query_timeout):
 #    sql = "alter system run job 'root_inspection'"

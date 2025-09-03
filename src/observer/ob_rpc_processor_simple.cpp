@@ -4794,5 +4794,17 @@ int ObRPcTriggerDumpDataDictP::process()
   return ret;
 }
 
+int ObCheckSysTableSchemaP::process()
+{
+  int ret = OB_SUCCESS;
+  if (!arg_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K_(arg));
+  } else if (OB_FAIL(rootserver::ObSysTableInspection::check_sys_table_schema(arg_, result_))) {
+    LOG_WARN("failed to check_sys_table_schema", KR(ret), K_(arg), K_(result));
+  }
+  return ret;
+}
+
 } // end of namespace observer
 } // end of namespace oceanbase

@@ -135,7 +135,7 @@ ObServer::ObServer()
     prepare_stop_(true), stop_(true), has_stopped_(true), has_destroy_(false),
     net_frame_(gctx_), sql_conn_pool_(), ddl_conn_pool_(), dblink_conn_pool_(),
     res_inner_conn_pool_(), restore_ctx_(), srv_rpc_proxy_(),
-    storage_rpc_proxy_(), rs_rpc_proxy_(), sql_proxy_(),
+    storage_rpc_proxy_(), rs_rpc_proxy_(), sql_proxy_(), oracle_sql_proxy_(),
     dblink_proxy_(),
     executor_proxy_(), executor_rpc_(), dbms_job_rpc_proxy_(), dbms_sched_job_rpc_proxy_(), interrupt_proxy_(),
     config_(ObServerConfig::get_instance()),
@@ -2491,6 +2491,8 @@ int ObServer::init_sql_proxy()
     LOG_ERROR("init sql connection pool failed", KR(ret));
   } else if (OB_FAIL(sql_proxy_.init(&sql_conn_pool_))) {
     LOG_ERROR("init sql proxy failed", KR(ret));
+  } else if (OB_FAIL(oracle_sql_proxy_.init(&sql_conn_pool_) )) {
+    LOG_ERROR("init oracle sql proxy failed", KR(ret));
   } else if (OB_FAIL(res_inner_conn_pool_.init(&schema_service_,
                                   &sql_engine_,
                                   &vt_data_service_.get_vt_iter_factory().get_vt_iter_creator(),
@@ -3016,6 +3018,7 @@ int ObServer::init_global_context()
   gctx_.load_data_proxy_ = &load_data_proxy_;
   gctx_.external_table_proxy_ = &external_table_proxy_;
   gctx_.sql_proxy_ = &sql_proxy_;
+  gctx_.oracle_sql_proxy_ = &oracle_sql_proxy_;
   gctx_.ddl_sql_proxy_ = &ddl_sql_proxy_;
   gctx_.ddl_oracle_sql_proxy_ = &ddl_oracle_sql_proxy_;
   gctx_.dblink_proxy_ = &dblink_proxy_;
