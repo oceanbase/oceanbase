@@ -1439,6 +1439,10 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprBucket::calc_bucket_expr,                                     /* 868 */
   NULL, // ObExprSemanticVectorDistance::calc_semantic_vector_distance, /* 869 */
   NULL, // ObExprAIPrompt::eval_ai_prompt,                             /* 870 */
+  NULL, // ObExprVectorL2Similarity::calc_l2_similarity               /* 871 */
+  NULL, // ObExprVectorCosineSimilarity::calc_cosine_similarity       /* 872 */
+  NULL, // ObExprVectorIPSimilarity::calc_ip_similarity               /* 873 */
+  NULL, // ObExprVectorSimilarity::calc_similarity                    /* 874 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

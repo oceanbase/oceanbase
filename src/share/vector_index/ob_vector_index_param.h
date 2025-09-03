@@ -42,15 +42,17 @@ public:
       uint64_t is_set_ef_search_            : 1;
       uint64_t is_set_refine_k_             : 1;
       uint64_t is_set_drop_ratio_search_    : 1;
-      uint64_t reserved_                    : 62;
+      uint64_t is_set_similarity_threshold_ : 1;
+      uint64_t reserved_                    : 60;
     };
   };
   int32_t ef_search_;
   float refine_k_;
   float ob_sparse_drop_ratio_search_;
+  float similarity_threshold_;
 
   TO_STRING_KV(K_(is_set_ef_search), K_(ef_search),
-      K_(is_set_refine_k), K_(refine_k), K_(ob_sparse_drop_ratio_search), K_(reserved));
+      K_(is_set_refine_k), K_(refine_k), K_(ob_sparse_drop_ratio_search), K_(is_set_similarity_threshold), K_(similarity_threshold), K_(reserved));
 
 };
 
