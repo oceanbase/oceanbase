@@ -2466,6 +2466,63 @@ int ObDDLUtil::get_tablet_paxos_member_list(
   }
   return ret;
 }
+
+int ObDDLUtil::get_tablet_physical_row_cnt_remote(
+  const uint64_t tenant_id,
+  const share::ObLSID &ls_id,
+  const ObTabletID &tablet_id,
+  const bool calc_sstable,
+  const bool calc_memtable,
+  int64_t &physical_row_count /*OUT*/)
+{
+  int ret = OB_SUCCESS;
+  physical_row_count = 0;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || !ls_id.is_valid() || !tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("there are invalid arg", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
+  } else {
+    common::ObAddr leader_addr;
+    share::ObLocationService *location_service = nullptr;
+    obrpc::ObSrvRpcProxy *srv_rpc_proxy = nullptr;
+    obrpc::ObFetchTabletPhysicalRowCntArg arg;
+    obrpc::ObFetchTabletPhysicalRowCntRes result;
+    arg.tenant_id_ = tenant_id;
+    arg.ls_id_ = ls_id;
+    arg.tablet_id_ = tablet_id;
+    arg.calc_sstable_ = calc_sstable;
+    arg.calc_memtable_ = calc_memtable;
+    const int64_t rpc_timeout = ObDDLUtil::get_default_ddl_rpc_timeout();
+    const int64_t retry_interval_us = 200 * 1000; // 200ms
+    MTL_SWITCH(OB_SYS_TENANT_ID) {
+      if (OB_ISNULL(location_service = GCTX.location_service_)) {
+        ret = OB_ERR_SYS;
+        LOG_WARN("location_cache is null", K(ret), KP(location_service));
+      } else if (OB_FAIL(location_service->get_leader_with_retry_until_timeout(GCONF.cluster_id,
+                                                                               tenant_id,
+                                                                               ls_id,
+                                                                               leader_addr,
+                                                                               rpc_timeout,
+                                                                               retry_interval_us))) {
+        LOG_WARN("fail to get ls locaiton leader", K(ret), K(tenant_id), K(ls_id));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(srv_rpc_proxy = GCTX.srv_rpc_proxy_)) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("storage_rpc_proxy is null", K(ret), KP(srv_rpc_proxy));
+    } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr)
+                                      .by(tenant_id)
+                                      .timeout(GCONF._ob_ddl_timeout)
+                                      .fetch_tablet_physical_row_cnt(arg, result))) {
+      LOG_WARN("failed to fetch tablet physical row cnt", K(ret), K(arg));
+    } else {
+      physical_row_count = result.physical_row_cnt_;
+    }
+  }
+  return ret;
+}
+
 int ObDDLUtil::get_tablet_physical_row_cnt(
   const share::ObLSID &ls_id,
   const ObTabletID &tablet_id,

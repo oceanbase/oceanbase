@@ -2424,15 +2424,18 @@ int ObTabletLobSplitUtil::process_tablet_split_request(
   if (OB_SUCC(ret)) {
     // try add dag, and get progress.
     int64_t unused_row_inserted = 0;
+    int64_t unused_cg_row_inserted = 0;
     int64_t unused_phy_row_cnt = 0;
     int64_t &row_inserted = is_start_request ?
         static_cast<ObDDLBuildSingleReplicaRequestResult*>(request_res)->row_inserted_ : unused_row_inserted;
+    int64_t &cg_row_inserted = is_start_request ?
+        static_cast<ObDDLBuildSingleReplicaRequestResult*>(request_res)->cg_row_inserted_ : unused_cg_row_inserted;
     int64_t &physical_row_count = is_start_request ?
         static_cast<ObDDLBuildSingleReplicaRequestResult*>(request_res)->physical_row_count_ : unused_phy_row_cnt;
     static_cast<ObDDLBuildSingleReplicaRequestResult*>(request_res)->is_data_split_finished_ =
         is_lob_tablet ? lob_split_dag->get_context().is_split_finish_with_meta_flag_ : data_split_dag->get_context().is_split_finish_with_meta_flag_;
     if (is_lob_tablet) {
-      if (OB_FAIL(add_dag_and_get_progress<ObTabletLobSplitDag>(lob_split_dag, row_inserted, physical_row_count))) {
+      if (OB_FAIL(add_dag_and_get_progress<ObTabletLobSplitDag>(lob_split_dag, row_inserted, cg_row_inserted/*unused*/, physical_row_count))) {
         if (OB_EAGAIN == ret) { // dag exists.
           ret = OB_SUCCESS;
         } else if (OB_SIZE_OVERFLOW == ret) { // add dag failed.
@@ -2444,7 +2447,7 @@ int ObTabletLobSplitUtil::process_tablet_split_request(
         stored_dag = nullptr; // to avoid free.
       }
     } else {
-      if (OB_FAIL(add_dag_and_get_progress<ObTabletSplitDag>(data_split_dag, row_inserted, physical_row_count))) {
+      if (OB_FAIL(add_dag_and_get_progress<ObTabletSplitDag>(data_split_dag, row_inserted, cg_row_inserted, physical_row_count))) {
         if (OB_EAGAIN == ret) {
           ret = OB_SUCCESS;
         } else if (OB_SIZE_OVERFLOW == ret) {

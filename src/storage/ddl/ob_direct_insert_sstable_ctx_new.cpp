@@ -2257,7 +2257,7 @@ void ObTabletDirectLoadMgr::calc_cg_idx(const int64_t thread_cnt, const int64_t 
   }
 }
 
-int ObTabletDirectLoadMgr::fill_column_group(const int64_t thread_cnt, const int64_t thread_id)
+int ObTabletDirectLoadMgr::fill_column_group(const int64_t thread_cnt, const int64_t thread_id, ObInsertMonitor *insert_monitor)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -2291,7 +2291,7 @@ int ObTabletDirectLoadMgr::fill_column_group(const int64_t thread_cnt, const int
       if (OB_ISNULL(cur_writer = OB_NEWx(ObCOSliceWriter, &arena_allocator))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate memory for co writer failed", K(ret));
-      } else if (OB_FAIL(fill_aggregated_column_group(thread_id, start_idx, last_idx, sqc_build_ctx_.storage_schema_, cur_writer, fill_cg_finish_count, row_cnt))) {
+      } else if (OB_FAIL(fill_aggregated_column_group(thread_id, start_idx, last_idx, sqc_build_ctx_.storage_schema_, cur_writer, fill_cg_finish_count, row_cnt, insert_monitor))) {
         LOG_WARN("fail to fill aggregated cg", K(ret), KPC(cur_writer));
       }
       // free writer anyhow
@@ -2343,7 +2343,8 @@ int ObTabletDirectLoadMgr::fill_aggregated_column_group(
     const ObStorageSchema *storage_schema,
     ObCOSliceWriter *cur_writer,
     int64_t &fill_cg_finish_count,
-    int64_t &fill_row_cnt)
+    int64_t &fill_row_cnt,
+    ObInsertMonitor *insert_monitor)
 {
   int ret = OB_SUCCESS;
   fill_cg_finish_count = -1;
@@ -2375,7 +2376,7 @@ int ObTabletDirectLoadMgr::fill_aggregated_column_group(
             if (OB_ISNULL(slice_writer)) { /* complement dag path may not exec prepare_slice_store ignore check need_column_store */
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("wrong slice writer",  K(ret));
-            } else if (OB_FAIL(slice_writer->fill_aggregated_column_group(cg_idx, cur_writer))) {
+            } else if (OB_FAIL(slice_writer->fill_aggregated_column_group(cg_idx, cur_writer, insert_monitor))) {
               LOG_WARN("slice writer rescan failed", K(ret), K(cg_idx), KPC(cur_writer));
             } else if (cg_idx == cg_schemas.count() - 1) {
               // after fill last cg, inc finish cnt

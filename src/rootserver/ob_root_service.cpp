@@ -11463,6 +11463,7 @@ int ObRootService::build_ddl_single_replica_response(const obrpc::ObDDLBuildSing
   ObDDLTaskInfo info;
   info.row_scanned_ = arg.row_scanned_;
   info.row_inserted_ = arg.row_inserted_;
+  info.cg_row_inserted_ = arg.cg_row_inserted_;
   info.physical_row_count_ = arg.physical_row_count_;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;

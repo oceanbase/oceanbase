@@ -10961,17 +10961,18 @@ struct ObDDLBuildSingleReplicaRequestResult final
   OB_UNIS_VERSION(1);
 public:
   ObDDLBuildSingleReplicaRequestResult()
-    : ret_code_(OB_SUCCESS), row_inserted_(0), row_scanned_(0), physical_row_count_(0), is_data_split_finished_(false)
+    : ret_code_(OB_SUCCESS), row_inserted_(0), row_scanned_(0), physical_row_count_(0), is_data_split_finished_(false), cg_row_inserted_(0)
   {}
   ~ObDDLBuildSingleReplicaRequestResult() = default;
   int assign(const ObDDLBuildSingleReplicaRequestResult &other);
-  TO_STRING_KV(K_(ret_code), K_(row_inserted), K_(row_scanned), K_(physical_row_count), K_(is_data_split_finished))
+  TO_STRING_KV(K_(ret_code), K_(row_inserted), K_(row_scanned), K_(physical_row_count), K_(is_data_split_finished), K_(cg_row_inserted))
 public:
   int64_t ret_code_;
   int64_t row_inserted_;
   int64_t row_scanned_;
   int64_t physical_row_count_;
   bool is_data_split_finished_;
+  int64_t cg_row_inserted_;
 };
 
 struct ObDDLBuildSingleReplicaResponseArg final
@@ -10995,7 +10996,8 @@ public:
       dest_ls_id_(),
       dest_schema_version_(0),
       server_addr_(),
-      physical_row_count_(0)
+      physical_row_count_(0),
+      cg_row_inserted_(0)
   {}
   ~ObDDLBuildSingleReplicaResponseArg() = default;
   bool is_valid() const {
@@ -11017,7 +11019,8 @@ public:
   TO_STRING_KV(K_(tenant_id), K_(dest_tenant_id), K_(ls_id), K_(dest_ls_id),
                K_(tablet_id), K_(source_table_id), K_(dest_schema_id), K_(ret_code),
                K_(snapshot_version), K_(schema_version), K_(dest_schema_version), K_(task_id),
-               K_(execution_id), K_(row_scanned), K_(row_inserted), K_(server_addr), K_(physical_row_count));
+               K_(execution_id), K_(row_scanned), K_(row_inserted), K_(server_addr), K_(physical_row_count),
+               K_(cg_row_inserted));
 public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -11036,6 +11039,7 @@ public:
   int64_t dest_schema_version_;
   common::ObAddr server_addr_;
   int64_t physical_row_count_;
+  int64_t cg_row_inserted_;
 };
 
 // === RPC for tablet split start. ===
@@ -11327,6 +11331,36 @@ public:
 
 
 // === RPC for tablet split end. ===
+
+struct ObFetchTabletPhysicalRowCntArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObFetchTabletPhysicalRowCntArg() : tenant_id_(OB_INVALID_TENANT_ID), ls_id_(), tablet_id_(), calc_sstable_(true), calc_memtable_(true) {}
+  ~ObFetchTabletPhysicalRowCntArg() = default;
+  bool is_valid() const { return tenant_id_ != OB_INVALID_TENANT_ID && ls_id_.is_valid() && tablet_id_.is_valid(); }
+  int assign(const ObFetchTabletPhysicalRowCntArg &other);
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id));
+public:
+  int64_t tenant_id_;
+  share::ObLSID ls_id_;
+  ObTabletID tablet_id_;
+  bool calc_sstable_;
+  bool calc_memtable_;
+};
+
+struct ObFetchTabletPhysicalRowCntRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObFetchTabletPhysicalRowCntRes() : physical_row_cnt_(OB_INVALID_COUNT) {}
+  ~ObFetchTabletPhysicalRowCntRes() = default;
+  bool is_valid() const { return physical_row_cnt_ != OB_INVALID_COUNT; }
+  int assign(const ObFetchTabletPhysicalRowCntRes &other);
+  TO_STRING_KV(K_(physical_row_cnt));
+public:
+  int64_t physical_row_cnt_;
+};
 
 struct ObLogReqLoadProxyRequest
 {

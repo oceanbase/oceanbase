@@ -9330,13 +9330,15 @@ int ObDDLBuildSingleReplicaRequestArg::assign(const ObDDLBuildSingleReplicaReque
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaRequestResult, ret_code_, row_inserted_, row_scanned_, physical_row_count_, is_data_split_finished_);
+OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaRequestResult, ret_code_, row_inserted_, row_scanned_, physical_row_count_, is_data_split_finished_,
+  cg_row_inserted_);
 
 int ObDDLBuildSingleReplicaRequestResult::assign(const ObDDLBuildSingleReplicaRequestResult &other)
 {
   int ret = OB_SUCCESS;
   ret_code_ = other.ret_code_;
   row_inserted_ = other.row_inserted_;
+  cg_row_inserted_ = other.cg_row_inserted_;
   row_scanned_ = other.row_scanned_;
   physical_row_count_ = other.physical_row_count_;
   is_data_split_finished_ = other.is_data_split_finished_;
@@ -9346,7 +9348,7 @@ int ObDDLBuildSingleReplicaRequestResult::assign(const ObDDLBuildSingleReplicaRe
 OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaResponseArg, tenant_id_, ls_id_, tablet_id_,
                     source_table_id_, dest_schema_id_, ret_code_, snapshot_version_, schema_version_,
                     task_id_, execution_id_, row_scanned_, row_inserted_, dest_tenant_id_, dest_ls_id_, dest_schema_version_,
-                    server_addr_, physical_row_count_);
+                    server_addr_, physical_row_count_, cg_row_inserted_);
 
 int ObDDLBuildSingleReplicaResponseArg::assign(const ObDDLBuildSingleReplicaResponseArg &other)
 {
@@ -9368,6 +9370,7 @@ int ObDDLBuildSingleReplicaResponseArg::assign(const ObDDLBuildSingleReplicaResp
   row_inserted_ = other.row_inserted_;
   server_addr_ = other.server_addr_;
   physical_row_count_ = other.physical_row_count_;
+  cg_row_inserted_ = other.cg_row_inserted_;
   return ret;
 }
 
@@ -9715,6 +9718,38 @@ int ObFetchSplitTabletInfoRes::assign(const ObFetchSplitTabletInfoRes &other)
 OB_SERIALIZE_MEMBER(ObFetchSplitTabletInfoRes, tablet_sizes_, create_commit_versions_);
 
 // === Functions for tablet split end. ===
+
+int ObFetchTabletPhysicalRowCntArg::assign(const ObFetchTabletPhysicalRowCntArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!other.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(other));
+  } else {
+    tenant_id_ = other.tenant_id_;
+    ls_id_ = other.ls_id_;
+    tablet_id_ = other.tablet_id_;
+    calc_sstable_ = other.calc_sstable_;
+    calc_memtable_ = other.calc_memtable_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObFetchTabletPhysicalRowCntArg, tenant_id_, ls_id_, tablet_id_, calc_sstable_, calc_memtable_);
+
+int ObFetchTabletPhysicalRowCntRes::assign(const ObFetchTabletPhysicalRowCntRes &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!other.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(other));
+  } else {
+    physical_row_cnt_ = other.physical_row_cnt_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObFetchTabletPhysicalRowCntRes, physical_row_cnt_);
 
 int ObCreateDirectoryArg::assign(const ObCreateDirectoryArg &other)
 {

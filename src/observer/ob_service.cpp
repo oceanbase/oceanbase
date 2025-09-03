@@ -1560,6 +1560,30 @@ int ObService::broadcast_consensus_version(
   return OB_SUCCESS;
 }
 
+int ObService::fetch_tablet_physical_row_cnt(
+  const obrpc::ObFetchTabletPhysicalRowCntArg &arg,
+  obrpc::ObFetchTabletPhysicalRowCntRes &result)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = arg.tenant_id_;
+  if (tenant_id != MTL_ID()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ObRpcLSAddReplicaP::process tenant not match", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(arg));
+  } else if (OB_FAIL(ObDDLUtil::get_tablet_physical_row_cnt(arg.ls_id_,
+                                                            arg.tablet_id_,
+                                                            arg.calc_sstable_,
+                                                            arg.calc_memtable_,
+                                                            result.physical_row_cnt_))) {
+    LOG_WARN("failed to calc row count", K(ret), K(arg));
+  } else {
+    LOG_INFO("fetch_tablet_physical_row_cnt", K(ret), K(arg), K(result));
+  }
+  return ret;
+}
+
 int ObService::bootstrap(const obrpc::ObBootstrapArg &arg)
 {
   int ret = OB_SUCCESS;
@@ -3078,7 +3102,7 @@ int ObService::build_ddl_single_replica_request(const ObDDLBuildSingleReplicaReq
         LOG_WARN("fail to init complement data dag", K(ret), K(arg));
       } else if (OB_FAIL(dag->create_first_task())) {
         LOG_WARN("create first task failed", K(ret));
-      } else if (OB_FAIL(add_dag_and_get_progress<ObComplementDataDag>(dag, res.row_inserted_, res.physical_row_count_))) {
+      } else if (OB_FAIL(add_dag_and_get_progress<ObComplementDataDag>(dag, res.row_inserted_, res.cg_row_inserted_, res.physical_row_count_))) {
         saved_ret = ret;
         if (OB_EAGAIN == ret) {
           ret = OB_SUCCESS;

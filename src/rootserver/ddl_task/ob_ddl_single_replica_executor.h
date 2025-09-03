@@ -47,7 +47,8 @@ public:
       can_reuse_macro_blocks_(),
       parallel_datum_rowkey_list_(),
       min_split_start_scn_(),
-      is_no_logging_(false)
+      is_no_logging_(false),
+      dest_cg_cnt_(0)
   {}
   ~ObDDLReplicaBuildExecutorParam () = default;
   bool is_valid() const {
@@ -71,6 +72,10 @@ public:
     } else {
       is_valid = (is_valid && compaction_scns_.count() == 0);
     }
+    if (share::is_recover_table_task(ddl_type_)) {
+      is_valid = is_valid && dest_cg_cnt_ > 0;
+    }
+
     return is_valid;
   }
 
@@ -79,7 +84,8 @@ public:
                K_(source_schema_versions), K_(dest_schema_versions), K_(snapshot_version),
                K_(task_id), K_(parallelism), K_(execution_id),
                K_(data_format_version), K_(consumer_group_id), K_(can_reuse_macro_blocks),
-               K_(parallel_datum_rowkey_list), K(min_split_start_scn_), K_(is_no_logging));
+               K_(parallel_datum_rowkey_list), K(min_split_start_scn_), K_(is_no_logging),
+               K_(dest_cg_cnt));
 public:
   uint64_t tenant_id_;
   uint64_t dest_tenant_id_;
@@ -102,6 +108,7 @@ public:
   common::ObSEArray<common::ObSEArray<blocksstable::ObDatumRowkey, 8>, 8> parallel_datum_rowkey_list_;
   share::SCN min_split_start_scn_;
   int64_t is_no_logging_;
+  int64_t dest_cg_cnt_;
 };
 
 enum class ObReplicaBuildStat
@@ -135,6 +142,7 @@ public:
       ret_code_(OB_SUCCESS),
       heart_beat_time_(0),
       row_inserted_(0),
+      cg_row_inserted_(0),
       row_scanned_(0),
       physical_row_count_(0),
       sess_not_found_times_(0)
@@ -161,7 +169,7 @@ public:
                K(dest_table_id_), K(tablet_task_id_), K(compaction_scn_),
                K(src_tablet_id_), K(dest_tablet_id_), K_(can_reuse_macro_block),
                K(parallel_datum_rowkey_list_), K(stat_), K(ret_code_),
-               K(heart_beat_time_), K(row_inserted_), K(row_scanned_), K(physical_row_count_),
+               K(heart_beat_time_), K(row_inserted_), K(cg_row_inserted_), K(row_scanned_), K(physical_row_count_),
                K(sess_not_found_times_));
 
 public:
@@ -182,6 +190,7 @@ public:
   int64_t ret_code_;
   int64_t heart_beat_time_;
   int64_t row_inserted_;
+  int64_t cg_row_inserted_;
   int64_t row_scanned_;
   int64_t physical_row_count_;
   /* special variable is only used to reduce table recovery retry parallelism
@@ -203,6 +212,7 @@ public:
       execution_id_(0),
       data_format_version_(0),
       consumer_group_id_(0),
+      dest_cg_cnt_(0),
       lob_col_idxs_(),
       src_tablet_ids_(),
       dest_tablet_ids_(),
@@ -218,11 +228,16 @@ public:
                             const int ret_code,
                             const int64_t row_scanned,
                             const int64_t row_inserted,
+                            const int64_t cg_row_inserted,
                             const int64_t physical_row_count);
-  int get_progress(int64_t &row_inserted, int64_t &physical_row_count_, double& percent);
+  int get_progress(int64_t &physical_row_count,
+                   int64_t &row_inserted,
+                   int64_t &cg_row_inserted,
+                   double &row_percent,
+                   double &cg_row_percent);
   TO_STRING_KV(K(is_inited_), K(tenant_id_), K(dest_tenant_id_), K(ddl_type_),
                K(ddl_task_id_), K(snapshot_version_), K(parallelism_),
-               K(execution_id_), K(data_format_version_), K(consumer_group_id_),
+               K(execution_id_), K(data_format_version_), K(consumer_group_id_), K_(dest_cg_cnt),
                K(lob_col_idxs_), K(src_tablet_ids_), K(dest_tablet_ids_),
                K(replica_build_ctxs_), K(min_split_start_scn_));
 private:
@@ -254,6 +269,7 @@ private:
       const int64_t ret_code,
       const int64_t row_scanned,
       const int64_t row_inserted,
+      const int64_t cg_row_inserted,
       const int64_t row_count,
       const bool is_rpc_request,
       const bool is_observer_report);
@@ -277,6 +293,7 @@ private:
   int64_t execution_id_;
   int64_t data_format_version_;
   int64_t consumer_group_id_;
+  int64_t dest_cg_cnt_;
   ObSArray<uint64_t> lob_col_idxs_;
   ObArray<ObTabletID> src_tablet_ids_;
   ObSArray<ObTabletID> dest_tablet_ids_;

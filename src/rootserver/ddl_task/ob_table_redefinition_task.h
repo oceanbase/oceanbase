@@ -108,6 +108,8 @@ private:
     //we should always retry when the redefinition task is split recovery redefinition
     return is_partition_split_recovery_table_redefinition(task_type_) || ObDDLTask::is_error_need_retry(ret_code);
   }
+  int collect_longops_stat_redefinition(int64_t &pos);
+  int collect_longops_stat_redefinition_recv_tbl(int64_t &pos);
 private:
   static const int64_t OB_TABLE_REDEFINITION_TASK_VERSION = 1L;
   bool has_rebuild_index_;

@@ -687,7 +687,7 @@ int ObComplementDataDag::init(const ObDDLBuildSingleReplicaRequestArg &arg)
 int ObComplementDataDag::calc_total_row_count()
 {
   int ret = OB_SUCCESS;
-
+  const bool is_remote_exec = param_.orig_tenant_id_ != param_.dest_tenant_id_; // task type
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("has not been inited ", K(ret));
@@ -697,10 +697,15 @@ int ObComplementDataDag::calc_total_row_count()
   } else if (context_.physical_row_count_ != 0) {
     ret =  OB_INIT_TWICE;
     LOG_WARN("has calculated the row_count", K(ret), K(context_.physical_row_count_));
-  } else if (param_.orig_tenant_id_ != param_.dest_tenant_id_) {
-    // FIXME(YIREN), How to calc the row count of the source tablet for restore table.
-    // RPC?
-  } else if (OB_FAIL(ObDDLUtil::get_tablet_physical_row_cnt(
+  } else if (is_remote_exec && OB_FAIL(ObDDLUtil::get_tablet_physical_row_cnt_remote(
+                                  param_.orig_tenant_id_,
+                                  param_.orig_ls_id_,
+                                  param_.orig_tablet_id_,
+                                  true, // calc_sstable = true
+                                  true, // calc_memtable = true
+                                  context_.physical_row_count_))) {
+    LOG_WARN("failed to calc row count remote", K(ret), K(param_), K(context_));
+  } else if (!is_remote_exec && OB_FAIL(ObDDLUtil::get_tablet_physical_row_cnt(
                                   param_.orig_ls_id_,
                                   param_.orig_tablet_id_,
                                   true, // calc_sstable = true
@@ -954,6 +959,7 @@ int ObComplementDataDag::report_replica_build_status()
     arg.task_id_ = param_.task_id_;
     arg.execution_id_ = param_.execution_id_;
     arg.row_inserted_ = context_.row_inserted_;
+    arg.cg_row_inserted_ = context_.cg_row_inserted_;
     arg.physical_row_count_ = context_.physical_row_count_;
     arg.server_addr_ = GCTX.self_addr();
     FLOG_INFO("send replica build status response to RS", K(ret), K(context_), K(arg));
@@ -1532,14 +1538,14 @@ int ObComplementWriteTask::append_row(ObScan *scan)
   }
   int64_t total_time = ObTimeUtility::current_time() - process_start_time;
   if (param_->orig_tenant_id_ == param_->dest_tenant_id_) {
-    SERVER_EVENT_ADD("alter_table", "drop_column_data_complement",
+    SERVER_EVENT_ADD("alter_table", "data_complement_task",
       "tenant_id", param_->dest_tenant_id_,
       "task_id", param_->task_id_,
       "complement_task_id", task_id_,
       "total_cost", total_time
     );
   } else {
-    SERVER_EVENT_ADD("recover_table", "recover_table_complement_task",
+    SERVER_EVENT_ADD("recover_table", "data_complement_task",
       "tenant_id", param_->dest_tenant_id_,
       "task_id", param_->task_id_, /** import table task id */
       "complement_task_id", task_id_,
@@ -1826,8 +1832,11 @@ int ObComplementRescanWriteTask::process()
     LOG_WARN("invalid param", K(ret),  KPC_(param));
   } else if (OB_FAIL(guard.switch_to(param_->dest_tenant_id_, false))) {
     LOG_WARN("switch to tenant failed", K(ret), KPC_(param));
-  } else if (OB_FAIL(context_->ddl_agent_.fill_column_group(param_->concurrent_cnt_, task_id_))) {
-    LOG_WARN("fill_column_group failed", K(ret), KPC_(param), K_(task_id));
+  } else {
+    ObInsertMonitor insert_monitor(context_->row_scanned_, context_->row_inserted_, context_->cg_row_inserted_);
+    if (OB_FAIL(context_->ddl_agent_.fill_column_group(param_->concurrent_cnt_, task_id_, &insert_monitor))) {
+      LOG_WARN("fill_column_group failed", K(ret), KPC_(param), K_(task_id));
+    }
   }
 
   if (OB_FAIL(ret) && OB_NOT_NULL(context_)) {

@@ -468,6 +468,10 @@ static inline bool is_direct_load_task(const ObDDLType type)
   return DDL_DIRECT_LOAD == type || DDL_DIRECT_LOAD_INSERT == type;
 }
 
+static bool is_recover_table_task(const ObDDLType ddl_type) {
+  return DDL_TABLE_RESTORE == ddl_type;
+}
+
 static inline bool is_complement_data_relying_on_dag(const ObDDLType type)
 {
   return DDL_DROP_COLUMN == type
@@ -1369,6 +1373,13 @@ public:
       share::schema::ObSchemaGetterGuard &hold_buf_dst_tenant_schema_guard,
       share::schema::ObSchemaGetterGuard *&src_tenant_schema_guard,
       share::schema::ObSchemaGetterGuard *&dst_tenant_schema_guard);
+  static int get_tablet_physical_row_cnt_remote(
+        const uint64_t tenant_id,
+        const share::ObLSID &ls_id,
+        const ObTabletID &tablet_id,
+        const bool calc_sstable,
+        const bool calc_memtable,
+        int64_t &physical_row_count /*OUT*/);
   static int get_tablet_physical_row_cnt(
       const share::ObLSID &ls_id,
       const ObTabletID &tablet_id,

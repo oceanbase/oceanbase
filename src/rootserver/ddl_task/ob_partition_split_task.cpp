@@ -1137,8 +1137,13 @@ int ObPartitionSplitTask::update_complete_sstable_job_status(
   } else if (execution_id < execution_id_) {
     LOG_INFO("receive a mismatch execution result, ignore", K(ret_code),
         K(execution_id), K(execution_id_));
-  } else if (OB_FAIL(replica_builder_.update_build_progress(tablet_id, svr,
-          ret_code, addition_info.row_scanned_, addition_info.row_inserted_, addition_info.physical_row_count_))) {
+  } else if (OB_FAIL(replica_builder_.update_build_progress(tablet_id,
+                                                            svr,
+                                                            ret_code,
+                                                            addition_info.row_scanned_,
+                                                            addition_info.row_inserted_,
+                                                            addition_info.cg_row_inserted_,
+                                                            addition_info.physical_row_count_))) {
     LOG_WARN("fail to update replica build status", K(ret));
   }
   return ret;
@@ -2264,29 +2269,32 @@ int ObPartitionSplitTask::update_message_row_progress_(const oceanbase::share::O
   } else {
     ObString str;
     int64_t row_inserted = 0;
-    int64_t physical_row_count_ = 0;
-    double percent = 0.0;
-    replica_builder_.get_progress(row_inserted, physical_row_count_, percent);
-    if (ObDDLTaskStatus::WAIT_DATA_TABLE_SPLIT_END == status
+    int64_t unused_cg_row_inserted = 0;
+    int64_t physical_row_count = 0;
+    double row_percent = 0.0;
+    double unused_cg_row_percent = 0.0;
+    if (OB_FAIL(replica_builder_.get_progress(physical_row_count, row_inserted, unused_cg_row_inserted, row_percent, unused_cg_row_percent))) {
+      LOG_WARN("failed to gather partition split task stats", K(ret));
+    } else if (ObDDLTaskStatus::WAIT_DATA_TABLE_SPLIT_END == status
       && OB_FAIL(databuff_printf(stat_info_.message_,
                          MAX_LONG_OPS_MESSAGE_LENGTH,
                          pos,
                          "STATUS: DATA TABLET SPLITTING, TOTAL_ROWS: %ld, ROW_PROCESSED: %ld, ROW_PROGRESS: %0.1lf%%; LOCAL INDEX TABLET 0.0%%; LOB TEBLET 0.0%%;",
-                         physical_row_count_, row_inserted, percent))) {
+                         physical_row_count, row_inserted, row_percent))) {
       LOG_WARN("failed to print", K(ret));
     } else if (ObDDLTaskStatus::WAIT_LOCAL_INDEX_SPLIT_END == status
             && OB_FAIL(databuff_printf(stat_info_.message_,
                                MAX_LONG_OPS_MESSAGE_LENGTH,
                                pos,
                                "STATUS: DATA TABLET SPLITTED 100.0%%; LOCAL INDEX TABLET SPLITTING, TOTAL_ROWS: %ld, ROW_PROCESSED: %ld, ROW_PROGRESS: %0.1lf%%; LOB TEBLET 0.0%%;",
-                               physical_row_count_, row_inserted, percent))) {
+                               physical_row_count, row_inserted, row_percent))) {
       LOG_WARN("failed to print", K(ret));
     } else if (ObDDLTaskStatus::WAIT_LOB_TABLE_SPLIT_END == status
             && OB_FAIL(databuff_printf(stat_info_.message_,
                                MAX_LONG_OPS_MESSAGE_LENGTH,
                                pos,
                                "STATUS: DATA TABLET SPLITTED 100.0%%; LOCAL INDEX TABLET SPLITTED 100.0%%; LOB TABLET SPLITTING, TOTAL_ROWS: %ld, ROW_PROCESSED: %ld, ROW_PROGRESS: %0.1lf%%",
-                               physical_row_count_, row_inserted, percent)))  {
+                               physical_row_count, row_inserted, row_percent)))  {
       LOG_WARN("failed to print", K(ret));
     }
   }

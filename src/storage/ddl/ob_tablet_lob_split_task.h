@@ -148,7 +148,7 @@ public:
     m_allocator_(allocator_), new_main_tablet_ids_(OB_MALLOC_NORMAL_BLOCK_SIZE, m_allocator_),
     new_lob_tablet_ids_(OB_MALLOC_NORMAL_BLOCK_SIZE, m_allocator_),
     cmp_ret_(0), comparer_(cmp_ret_), total_map_(nullptr), sub_maps_(),
-    skipped_split_major_keys_(), row_inserted_(0), physical_row_count_(0),
+    skipped_split_major_keys_(), row_inserted_(0), cg_row_inserted_(0), physical_row_count_(0),
     split_scn_(), reorg_scn_(), ls_rebuild_seq_(-1),
     dst_major_snapshot_(-1)
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -165,7 +165,7 @@ public:
     K_(ls_handle), K_(main_tablet_id), K_(main_tablet_handle),
     K_(lob_meta_tablet_handle), K_(new_main_tablet_ids),
     K_(new_lob_tablet_ids), KPC_(total_map), K_(sub_maps), K_(main_table_ranges),
-    K_(skipped_split_major_keys), K_(row_inserted), K_(physical_row_count),
+    K_(skipped_split_major_keys), K_(row_inserted), K_(cg_row_inserted), K_(physical_row_count),
     K_(split_scn), K_(reorg_scn), K_(ls_rebuild_seq),
     K_(dst_major_snapshot)
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -200,6 +200,7 @@ public:
   ObArray<ObDatumRange> main_table_ranges_;
   ObArray<ObITable::TableKey> skipped_split_major_keys_;
   int64_t row_inserted_;
+  int64_t cg_row_inserted_; // unused
   int64_t physical_row_count_;
   share::SCN split_scn_;
   share::SCN reorg_scn_;
