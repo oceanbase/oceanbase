@@ -52,7 +52,13 @@ public:
   inline static int64_t memory_size(const int64_t size);
   // The unit of "size" is bit.
   void init(const int64_t size) { MEMSET(data_, 0, memory_size(size)); }
-  void reset(const int64_t size) { init(size); }
+  void reset(const int64_t size)
+  {
+    MEMSET(data_, 0, BYTES_PER_WORD * (size / WORD_BITS));
+    if (0 != size % WORD_BITS) {
+      data_[size/WORD_BITS] &= ~((1UL << (size%WORD_BITS)) - 1);
+    }
+  }
 
   inline bool at(const int64_t idx) const;
   bool contain(const int64_t idx) const { return at(idx); }
