@@ -158,6 +158,8 @@ int ObOuterJoinMJVPrinter::update_table_idx_array(const int64_t delta_table_idx,
         // do nothing
       } else if (OB_FAIL(right_table_idxs_.at(i).add_member(delta_table_idx))) {
         LOG_WARN("failed to add member", K(ret), K(delta_table_idx));
+      } else if (OB_FAIL(right_table_idxs_.at(i).add_members(right_table_idxs_.at(delta_table_idx)))) {
+        LOG_WARN("failed to add members", K(ret), K(delta_table_idx));
       }
     }
   }
