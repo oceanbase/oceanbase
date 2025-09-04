@@ -255,6 +255,7 @@ struct ObPLObjectKey : public ObILibCacheKey
     NORMAL = 0,
     PROFILE = 1,
     CODE_COVERAGE = 2,
+    DEBUG = 4,
   };
 
   uint64_t  db_id_;
