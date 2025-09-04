@@ -50,6 +50,7 @@ public:
           is_first_ = true;
           is_partition_wise_jf_ = false;
           is_active_ = true;
+          skip_during_rescan_ = false;
         }
       virtual ~ObExprJoinFilterContext();
     public:
@@ -121,11 +122,11 @@ public:
       int64_t by_pass_count_before_ready_;
 
       ObAdaptiveFilterSlideWindow slide_window_;
- 
+
       union {
         uint64_t flag_;
         struct { // FARM COMPAT WHITELIST
-          bool is_ready_:1; 
+          bool is_ready_:1;
           bool is_first_:1;
           // whether need to sync wait
           bool need_wait_rf_:1;
@@ -136,7 +137,8 @@ public:
           bool is_partition_wise_jf_ : 1;
           bool is_active_ : 1;
           bool enable_slide_window_ : 1;
-          uint64_t reserved_:57;
+          bool skip_during_rescan_ : 1;
+          uint64_t reserved_:56;
         };
       };
       int64_t max_wait_time_ms_;

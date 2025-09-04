@@ -337,7 +337,7 @@ public:
 
   virtual int inner_open() override;
   virtual int inner_close() override;
-  virtual int inner_rescan() override;
+  virtual int rescan() override;
   virtual int inner_get_next_row() override;
   virtual int inner_get_next_batch(const int64_t max_row_cnt) override; // for batch
   virtual int inner_drain_exch() override;
@@ -368,7 +368,10 @@ private:
   int insert_by_row_batch(const ObBatchRows *child_brs);
   int calc_expr_values(ObDatum *&datum);
   int do_create_filter_rescan();
-  int do_use_filter_rescan();
+  int do_use_filter_rescan_pre();
+
+  int do_use_filter_rescan_post();
+  int do_use_filter_rescan(bool skip_during_rescan);
   int try_send_join_filter();
   int try_merge_join_filter();
   int calc_each_bf_group_size(int64_t &);
