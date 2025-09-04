@@ -8816,7 +8816,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_VIRTUAL_SS_GC_DETECT_INFO_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SS_GC_DETECT_INFO_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_TENANT_SS_STORAGE_STAT_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_TENANT_SS_STORAGE_STAT_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_HMS_CLIENT_POOL_STAT_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_HMS_CLIENT_POOL_STAT_SCHEMA_VERSION); break;
-    case OB_ALL_VIRTUAL_DBA_SOURCE_V1_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_DBA_SOURCE_V1_SCHEMA_VERSION); break;
+    case OB_ALL_VIRTUAL_SOURCE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SOURCE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_AI_MODEL_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_AI_MODEL_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_AI_MODEL_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_AI_MODEL_HISTORY_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_AI_MODEL_ENDPOINT_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_AI_MODEL_ENDPOINT_SCHEMA_VERSION); break;
@@ -9160,7 +9160,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_VIRTUAL_SS_EXISTING_SSTABLE_MGR_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SS_EXISTING_SSTABLE_MGR_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_TENANT_SS_STORAGE_STAT_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_TENANT_SS_STORAGE_STAT_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_HMS_CLIENT_POOL_STAT_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_HMS_CLIENT_POOL_STAT_ORACLE_SCHEMA_VERSION); break;
-    case OB_ALL_VIRTUAL_DBA_SOURCE_V1_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_DBA_SOURCE_V1_ORACLE_SCHEMA_VERSION); break;
+    case OB_ALL_VIRTUAL_SOURCE_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SOURCE_ORACLE_SCHEMA_VERSION); break;
     case OB_GV_OB_PLAN_CACHE_STAT_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_GV_OB_PLAN_CACHE_STAT_SCHEMA_VERSION); break;
     case OB_GV_OB_PLAN_CACHE_PLAN_STAT_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_GV_OB_PLAN_CACHE_PLAN_STAT_SCHEMA_VERSION); break;
     case OB_SCHEMATA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_SCHEMATA_SCHEMA_VERSION); break;
@@ -10021,9 +10021,9 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_DBA_MVIEW_DEPS_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_MVIEW_DEPS_ORACLE_SCHEMA_VERSION); break;
     case OB_DBA_OB_DYNAMIC_PARTITION_TABLES_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_OB_DYNAMIC_PARTITION_TABLES_ORACLE_SCHEMA_VERSION); break;
     case OB_DBA_OB_SS_SPACE_USAGE_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_OB_SS_SPACE_USAGE_ORACLE_SCHEMA_VERSION); break;
-    case OB_DBA_SOURCE_V1_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_SOURCE_V1_ORACLE_SCHEMA_VERSION); break;
-    case OB_ALL_SOURCE_V1_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_SOURCE_V1_ORACLE_SCHEMA_VERSION); break;
-    case OB_USER_SOURCE_V1_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_USER_SOURCE_V1_ORACLE_SCHEMA_VERSION); break;
+    case OB_DBA_OB_SOURCE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_OB_SOURCE_ORACLE_SCHEMA_VERSION); break;
+    case OB_ALL_OB_SOURCE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_OB_SOURCE_ORACLE_SCHEMA_VERSION); break;
+    case OB_USER_OB_SOURCE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_USER_OB_SOURCE_ORACLE_SCHEMA_VERSION); break;
     case OB_GV_OB_SQL_AUDIT_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_GV_OB_SQL_AUDIT_ORACLE_SCHEMA_VERSION); break;
     case OB_V_OB_SQL_AUDIT_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_V_OB_SQL_AUDIT_ORACLE_SCHEMA_VERSION); break;
     case OB_GV_INSTANCE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_GV_INSTANCE_ORACLE_SCHEMA_VERSION); break;

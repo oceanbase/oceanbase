@@ -882,7 +882,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12553	__all_virtual_ss_gc_detect_info	2	201001	1
 12569	__all_virtual_tenant_ss_storage_stat	2	201001	1
 12570	__all_virtual_hms_client_pool_stat	2	201001	1
-12571	__all_virtual_dba_source_v1	2	201001	1
+12571	__all_virtual_source	2	201001	1
 12572	__all_virtual_ai_model	2	201001	1
 12573	__all_virtual_ai_model_history	2	201001	1
 12574	__all_virtual_ai_model_endpoint	2	201001	1

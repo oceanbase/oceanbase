@@ -1306,7 +1306,7 @@
 # 12569: __all_virtual_tenant_ss_storage_stat
 # 12569: __all_tenant_ss_storage_stat  # BASE_TABLE_NAME
 # 12570: __all_virtual_hms_client_pool_stat
-# 12571: __all_virtual_dba_source_v1
+# 12571: __all_virtual_source
 # 12572: __all_virtual_ai_model
 # 12572: __all_ai_model  # BASE_TABLE_NAME
 # 12573: __all_virtual_ai_model_history
@@ -2044,8 +2044,8 @@
 # 15531: __all_virtual_tenant_ss_storage_stat  # BASE_TABLE_NAME1
 # 15532: ALL_VIRTUAL_HMS_CLIENT_POOL_STAT
 # 15532: __all_virtual_hms_client_pool_stat  # BASE_TABLE_NAME
-# 15533: ALL_VIRTUAL_DBA_SOURCE_V1
-# 15533: __all_virtual_dba_source_v1  # BASE_TABLE_NAME
+# 15533: ALL_VIRTUAL_SOURCE
+# 15533: __all_virtual_source  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA
@@ -2906,9 +2906,9 @@
 # 25309: DBA_MVIEW_DEPS
 # 25310: DBA_OB_DYNAMIC_PARTITION_TABLES
 # 25315: DBA_OB_SS_SPACE_USAGE
-# 25316: DBA_SOURCE_V1
-# 25317: ALL_SOURCE_V1
-# 25318: USER_SOURCE_V1
+# 25316: DBA_OB_SOURCE
+# 25317: ALL_OB_SOURCE
+# 25318: USER_OB_SOURCE
 # 28002: GV$OB_SQL_AUDIT
 # 28003: V$OB_SQL_AUDIT
 # 28004: GV$INSTANCE

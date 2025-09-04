@@ -931,7 +931,7 @@ int ObInnerTableSchema::all_virtual_hms_client_pool_stat_schema(ObTableSchema &t
   return ret;
 }
 
-int ObInnerTableSchema::all_virtual_dba_source_v1_schema(ObTableSchema &table_schema)
+int ObInnerTableSchema::all_virtual_source_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
   uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
@@ -940,18 +940,18 @@ int ObInnerTableSchema::all_virtual_dba_source_v1_schema(ObTableSchema &table_sc
   table_schema.set_tenant_id(OB_SYS_TENANT_ID);
   table_schema.set_tablegroup_id(OB_INVALID_ID);
   table_schema.set_database_id(OB_SYS_DATABASE_ID);
-  table_schema.set_table_id(OB_ALL_VIRTUAL_DBA_SOURCE_V1_TID);
+  table_schema.set_table_id(OB_ALL_VIRTUAL_SOURCE_TID);
   table_schema.set_rowkey_split_pos(0);
   table_schema.set_is_use_bloomfilter(false);
   table_schema.set_progressive_merge_num(0);
-  table_schema.set_rowkey_column_num(0);
+  table_schema.set_rowkey_column_num(3);
   table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
   table_schema.set_table_type(VIRTUAL_TABLE);
   table_schema.set_index_type(INDEX_TYPE_IS_NOT);
   table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_table_name(OB_ALL_VIRTUAL_DBA_SOURCE_V1_TNAME))) {
+    if (OB_FAIL(table_schema.set_table_name(OB_ALL_VIRTUAL_SOURCE_TNAME))) {
       LOG_ERROR("fail to set table_name", K(ret));
     }
   }
@@ -968,7 +968,7 @@ int ObInnerTableSchema::all_virtual_dba_source_v1_schema(ObTableSchema &table_sc
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA("owner", //column_name
       ++column_id, //column_id
-      0, //rowkey_id
+      1, //rowkey_id
       0, //index_id
       0, //part_key_pos
       ObVarcharType, //column_type
@@ -983,7 +983,7 @@ int ObInnerTableSchema::all_virtual_dba_source_v1_schema(ObTableSchema &table_sc
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA("name", //column_name
       ++column_id, //column_id
-      0, //rowkey_id
+      2, //rowkey_id
       0, //index_id
       0, //part_key_pos
       ObVarcharType, //column_type
@@ -998,7 +998,7 @@ int ObInnerTableSchema::all_virtual_dba_source_v1_schema(ObTableSchema &table_sc
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA("type", //column_name
       ++column_id, //column_id
-      0, //rowkey_id
+      3, //rowkey_id
       0, //index_id
       0, //part_key_pos
       ObVarcharType, //column_type
