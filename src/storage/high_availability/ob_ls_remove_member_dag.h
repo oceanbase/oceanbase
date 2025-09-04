@@ -98,6 +98,7 @@ private:
   int modify_member_number_(ObLS *ls);
   int transform_member_(ObLS *ls);
   int switch_learner_to_acceptor_(ObLS *ls);
+  int verify_addr_for_transform_member_();
 
   int report_to_disaster_recovery_();
 private:
