@@ -1519,7 +1519,11 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx, bool need_sort)
   } else if (MY_CTDEF.scan_ctdef_.is_lake_external_table()) {
     uint64_t table_loc_id = MY_SPEC.get_table_loc_id();
     ObDASTableLoc *tab_loc = DAS_CTX(ctx_).get_table_loc_by_id(table_loc_id, MY_CTDEF.scan_ctdef_.ref_table_id_);
-    if (OB_FAIL(ObExternalTableUtils::prepare_lake_table_single_scan_range(ctx_, tab_loc, range_allocator, key_ranges))) {
+    if (OB_FAIL(ObExternalTableUtils::prepare_lake_table_single_scan_range(ctx_,
+                                                                           tab_loc,
+                                                                           MY_INPUT.tablet_loc_,
+                                                                           range_allocator,
+                                                                           key_ranges))) {
       LOG_WARN("fail to prepare lake table single scan range");
     }
   } else if (MY_CTDEF.enable_new_false_range_ && key_ranges.empty()) {

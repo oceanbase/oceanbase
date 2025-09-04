@@ -24,10 +24,13 @@ namespace schema
 class ObExternalTableColumnSchemaHelper
 {
 public:
+  static int setup_bool(const bool &is_oracle_mode, ObColumnSchemaV2 &column_schema);
   static int setup_tinyint(const bool &is_oracle_mode, ObColumnSchemaV2 &column_schema);
   static int setup_smallint(const bool &is_oracle_mode, ObColumnSchemaV2 &column_schema);
   static int setup_int(const bool &is_oracle_mode, ObColumnSchemaV2 &column_schema);
+  static int setup_uint(const bool &is_oracle_mode, ObColumnSchemaV2 &column_schema);
   static int setup_bigint(const bool &is_oracle_mode, ObColumnSchemaV2 &column_schema);
+  static int setup_ubigint(const bool &is_oracle_mode, ObColumnSchemaV2 &column_schema);
   static int setup_float(const bool &is_oracle_mode, ObColumnSchemaV2 &column_schema);
   static int setup_double(const bool &is_oracle_mode, ObColumnSchemaV2 &column_schema);
   static int setup_decimal(const bool &is_oracle_mode,
@@ -36,14 +39,22 @@ public:
                            ObColumnSchemaV2 &column_schema);
   static int setup_varchar(const bool &is_oracle_mode,
                            const int64_t &length,
+                           ObCharsetType cs_type,
+                           ObCollationType collation,
                            ObColumnSchemaV2 &column_schema);
   static int setup_char(const bool &is_oracle_mode,
                         const int64_t &length,
+                        ObCharsetType cs_type,
+                        ObCollationType collation,
                         ObColumnSchemaV2 &column_schema);
   static int setup_timestamp(const bool &is_oracle_mode,
                              ObColumnSchemaV2 &column_schema);
+  static int setup_datetime(const bool &is_oracle_mode, ObColumnSchemaV2 &column_schema);
   static int setup_date(const bool &is_oracle_mode,
                         ObColumnSchemaV2 &column_schema);
+  static int setup_time(const bool &is_oracle_mode, ObColumnSchemaV2 &column_schema);
+  static int setup_timestamp_ns(const bool &is_oracle_mode, ObColumnSchemaV2 &column_schema);
+  static int setup_timestamp_tz_ns(const bool &is_oracle_mode, ObColumnSchemaV2 &column_schema);
 };
 
 } // namespace schema

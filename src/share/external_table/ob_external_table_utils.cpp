@@ -728,60 +728,59 @@ int ObExternalTableUtils::prepare_single_scan_range(const uint64_t tenant_id,
 
 int ObExternalTableUtils::prepare_lake_table_single_scan_range(ObExecContext &exec_ctx,
                                                                ObDASTableLoc *tab_loc,
+                                                               ObDASTabletLoc *tablet_loc,
                                                                ObIAllocator &range_allocator,
                                                                ObIArray<ObNewRange *> &new_ranges)
 {
   int ret = OB_SUCCESS;
   new_ranges.reset();
   ObLakeTableFileMap *map = nullptr;
-  if (OB_ISNULL(tab_loc)) {
+  if (OB_ISNULL(tab_loc) || OB_ISNULL(tablet_loc) || OB_ISNULL(tablet_loc->loc_meta_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get null table loc");
+    LOG_WARN("get null table loc or tablet loc", KP(tab_loc), K(tablet_loc));
   } else if (OB_FAIL(exec_ctx.get_lake_table_file_map(map))) {
     LOG_WARN("failed to get lake table file map");
   } else if (OB_ISNULL(map)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null lake talbe file map");
   } else {
-    for (DASTabletLocListIter iter = tab_loc->tablet_locs_begin(); OB_SUCC(ret) && iter != tab_loc->tablet_locs_end(); ++iter) {
-      ObLakeTableFileArray* files = nullptr;
-      if (OB_FAIL(map->get_refactored(ObLakeTableFileMapKey((*iter)->loc_meta_->table_loc_id_, (*iter)->tablet_id_),
-                                      files))) {
-        LOG_WARN("failed to get refactored");
-      } else if (OB_ISNULL(files)) {
+    ObLakeTableFileArray* files = nullptr;
+    if (OB_FAIL(map->get_refactored(ObLakeTableFileMapKey(tablet_loc->loc_meta_->table_loc_id_, tablet_loc->tablet_id_),
+                                    files))) {
+      LOG_WARN("failed to get refactored", K(tablet_loc->loc_meta_->table_loc_id_), K(tablet_loc->tablet_id_), KP(map), K(map->size()));
+    } else if (OB_ISNULL(files)) {
+      ObNewRange *range = NULL;
+      if (OB_UNLIKELY(tab_loc->get_tablet_locs().size() != 1)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected tablets counts", K(tab_loc->get_tablet_locs()));
+      } else if (OB_ISNULL(range = OB_NEWx(ObNewRange, (&range_allocator)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory for ObNewRange");
+      } else if (OB_FAIL(ObExternalTableUtils::convert_lake_table_new_range(nullptr,
+                                                                            0, // file_id
+                                                                            tablet_loc->partition_id_, // part_id
+                                                                            range_allocator,
+                                                                            *range))) {
+        LOG_WARN("failed to make lake table range");
+      }
+    } else {
+      for (int64_t j = 0; OB_SUCC(ret) && j < files->count(); ++j) {
+        sql::ObILakeTableFile* file = files->at(j);
         ObNewRange *range = NULL;
-        if (OB_UNLIKELY(tab_loc->get_tablet_locs().size() != 1)) {
+        if (OB_ISNULL(file)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected tablets counts", K(tab_loc->get_tablet_locs()));
+          LOG_WARN("get null file");
         } else if (OB_ISNULL(range = OB_NEWx(ObNewRange, (&range_allocator)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to allocate memory for ObNewRange");
-        } else if (OB_FAIL(ObExternalTableUtils::convert_lake_table_new_range(nullptr,
-                                                                              0, // file_id
-                                                                              (*iter)->partition_id_, // part_id
+        } else if (OB_FAIL(ObExternalTableUtils::convert_lake_table_new_range(file,
+                                                                              j, // file_id
+                                                                              tablet_loc->partition_id_, // part_id
                                                                               range_allocator,
                                                                               *range))) {
           LOG_WARN("failed to make lake table range");
-        }
-      } else {
-        for (int64_t j = 0; OB_SUCC(ret) && j < files->count(); ++j) {
-          sql::ObILakeTableFile* file = files->at(j);
-          ObNewRange *range = NULL;
-          if (OB_ISNULL(file)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get null file");
-          } else if (OB_ISNULL(range = OB_NEWx(ObNewRange, (&range_allocator)))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("failed to allocate memory for ObNewRange");
-          } else if (OB_FAIL(ObExternalTableUtils::convert_lake_table_new_range(file,
-                                                                                j, // file_id
-                                                                                (*iter)->partition_id_, // part_id
-                                                                                range_allocator,
-                                                                                *range))) {
-            LOG_WARN("failed to make lake table range");
-          } else if (OB_FAIL(new_ranges.push_back(range))) {
-            LOG_WARN("failed to push back range");
-          }
+        } else if (OB_FAIL(new_ranges.push_back(range))) {
+          LOG_WARN("failed to push back range");
         }
       }
     }

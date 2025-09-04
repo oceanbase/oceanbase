@@ -763,6 +763,8 @@ int ObHiveTableMetadata::handle_column_types(const FieldSchemas &cols,
         LOG_WARN("failed to extract varchar length", K(ret), K(varchar_len));
       } else if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_varchar(is_oracle_mode,
                                                                           varchar_len,
+                                                                          ObCharsetType::CHARSET_UTF8MB4,
+                                                                          ObCollationType::CS_TYPE_UTF8MB4_BIN,
                                                                           column_schema))) {
         LOG_WARN("failed to setup varchar", K(ret), K(varchar_len));
       }
@@ -778,6 +780,8 @@ int ObHiveTableMetadata::handle_column_types(const FieldSchemas &cols,
         LOG_WARN("failed to extract char length", K(ret), K(char_len));
       } else if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_char(is_oracle_mode,
                                                                        char_len,
+                                                                       ObCharsetType::CHARSET_UTF8MB4,
+                                                                       ObCollationType::CS_TYPE_UTF8MB4_BIN,
                                                                        column_schema))) {
         LOG_WARN("failed to setup char", K(ret), K(char_len));
       }

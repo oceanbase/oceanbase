@@ -230,6 +230,7 @@ class ObExternalTableUtils {
                                        ObExecContext &ctx);
   static int prepare_lake_table_single_scan_range(ObExecContext &exec_ctx,
                                                   ObDASTableLoc *tab_loc,
+                                                  ObDASTabletLoc *tablet_loc,
                                                   ObIAllocator &range_allocator,
                                                   ObIArray<ObNewRange *> &new_ranges);
   static int calc_assigned_files_to_sqcs(

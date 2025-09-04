@@ -100,7 +100,7 @@ int ObTaskSpliter::find_all_scan_ops(common::ObIArray<const ObTableScanSpec*> &s
     const ObOpSpec *child_op = op.get_child(i);
     if (OB_ISNULL(child_op)) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(ObTaskSpliter::find_scan_ops(scan_ops, *child_op))) {
+    } else if (OB_FAIL(ObTaskSpliter::find_all_scan_ops(scan_ops, *child_op))) {
       LOG_WARN("fail to find child scan ops",
                K(ret), K(i), "op_id", op.get_id(), "child_id", child_op->get_id());
     }

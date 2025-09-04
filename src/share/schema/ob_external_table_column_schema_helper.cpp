@@ -21,6 +21,19 @@ namespace share
 namespace schema
 {
 
+int ObExternalTableColumnSchemaHelper::setup_bool(const bool &is_oracle_mode,
+                                                  ObColumnSchemaV2 &column_schema)
+{
+  int ret = OB_SUCCESS;
+  if (is_oracle_mode) {
+    column_schema.set_data_type(ObDecimalIntType);
+  } else {
+    column_schema.set_data_type(ObTinyIntType);
+  }
+  column_schema.set_accuracy(ObAccuracy(1, 0));
+  return ret;
+}
+
 int ObExternalTableColumnSchemaHelper::setup_tinyint(const bool &is_oracle_mode,
                                                      ObColumnSchemaV2 &column_schema)
 {
@@ -63,6 +76,20 @@ int ObExternalTableColumnSchemaHelper::setup_int(const bool &is_oracle_mode,
   return ret;
 }
 
+int ObExternalTableColumnSchemaHelper::setup_uint(const bool &is_oracle_mode,
+                                                 ObColumnSchemaV2 &column_schema)
+{
+  int ret = OB_SUCCESS;
+  if (is_oracle_mode) {
+    column_schema.set_data_type(ObDecimalIntType);
+    column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObUInt32Type]);
+  } else {
+    column_schema.set_data_type(ObUInt32Type);
+    column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[MYSQL_MODE][ObUInt32Type]);
+  }
+  return ret;
+}
+
 int ObExternalTableColumnSchemaHelper::setup_bigint(const bool &is_oracle_mode,
                                                     ObColumnSchemaV2 &column_schema)
 {
@@ -73,6 +100,20 @@ int ObExternalTableColumnSchemaHelper::setup_bigint(const bool &is_oracle_mode,
   } else {
     column_schema.set_data_type(ObIntType);
     column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[MYSQL_MODE][ObIntType]);
+  }
+  return ret;
+}
+
+int ObExternalTableColumnSchemaHelper::setup_ubigint(const bool &is_oracle_mode,
+                                                    ObColumnSchemaV2 &column_schema)
+{
+  int ret = OB_SUCCESS;
+  if (is_oracle_mode) {
+    column_schema.set_data_type(ObDecimalIntType);
+    column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObUInt64Type]);
+  } else {
+    column_schema.set_data_type(ObUInt64Type);
+    column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[MYSQL_MODE][ObUInt64Type]);
   }
   return ret;
 }
@@ -128,6 +169,8 @@ int ObExternalTableColumnSchemaHelper::setup_decimal(const bool &is_oracle_mode,
 
 int ObExternalTableColumnSchemaHelper::setup_varchar(const bool &is_oracle_mode,
                                                      const int64_t &length,
+                                                     ObCharsetType cs_type,
+                                                     ObCollationType collation,
                                                      ObColumnSchemaV2 &column_schema)
 {
   int ret = OB_SUCCESS;
@@ -139,11 +182,15 @@ int ObExternalTableColumnSchemaHelper::setup_varchar(const bool &is_oracle_mode,
     column_schema.set_data_length(length);
   }
   column_schema.set_length_semantics(LS_CHAR);
+  column_schema.set_charset_type(cs_type);
+  column_schema.set_collation_type(collation);
   return ret;
 }
 
 int ObExternalTableColumnSchemaHelper::setup_char(const bool &is_oracle_mode,
                                                   const int64_t &length,
+                                                  ObCharsetType cs_type,
+                                                  ObCollationType collation,
                                                   ObColumnSchemaV2 &column_schema)
 {
   int ret = OB_SUCCESS;
@@ -155,6 +202,8 @@ int ObExternalTableColumnSchemaHelper::setup_char(const bool &is_oracle_mode,
     column_schema.set_data_length(length);
   }
   column_schema.set_length_semantics(LS_CHAR);
+  column_schema.set_charset_type(cs_type);
+  column_schema.set_collation_type(collation);
   return ret;
 }
 
@@ -162,14 +211,34 @@ int ObExternalTableColumnSchemaHelper::setup_timestamp(const bool &is_oracle_mod
                                                         ObColumnSchemaV2 &column_schema)
 {
   int ret = OB_SUCCESS;
-  if (OB_LIKELY(is_oracle_mode)) {
+  if (is_oracle_mode) {
     column_schema.set_data_type(ObTimestampLTZType);
-    column_schema.set_accuracy(
-        ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObTimestampLTZType]);
+    ObAccuracy default_accuracy = ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObTimestampLTZType];
+    default_accuracy.set_precision(static_cast<int16_t>(default_accuracy.get_precision() + static_cast<int16_t>(default_accuracy.get_scale())));
+    column_schema.set_accuracy(default_accuracy);
   } else {
     column_schema.set_data_type(ObTimestampType);
-    column_schema.set_data_scale(6); // Ensure scale >= 6
-    column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[MYSQL_MODE][ObTimestampType]);
+    ObAccuracy default_accuracy = ObAccuracy::DDL_DEFAULT_ACCURACY2[MYSQL_MODE][ObTimestampType];
+    default_accuracy.set_precision(static_cast<int16_t>(default_accuracy.get_precision() + static_cast<int16_t>(default_accuracy.get_scale())));
+    column_schema.set_accuracy(default_accuracy);
+  }
+  return ret;
+}
+
+int ObExternalTableColumnSchemaHelper::setup_datetime(const bool &is_oracle_mode,
+                                                      ObColumnSchemaV2 &column_schema)
+{
+  int ret = OB_SUCCESS;
+  if (is_oracle_mode) {
+    column_schema.set_data_type(ObTimestampNanoType);
+    ObAccuracy default_accuracy = ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObTimestampNanoType];
+    default_accuracy.set_precision(static_cast<int16_t>(default_accuracy.get_precision() + static_cast<int16_t>(default_accuracy.get_scale())));
+    column_schema.set_accuracy(default_accuracy);
+  } else {
+    column_schema.set_data_type(ObDateTimeType);
+    ObAccuracy default_accuracy = ObAccuracy::DDL_DEFAULT_ACCURACY2[MYSQL_MODE][ObDateTimeType];
+    default_accuracy.set_precision(static_cast<int16_t>(default_accuracy.get_precision() + static_cast<int16_t>(default_accuracy.get_scale())));
+    column_schema.set_accuracy(default_accuracy);
   }
   return ret;
 }
@@ -178,12 +247,58 @@ int ObExternalTableColumnSchemaHelper::setup_date(const bool &is_oracle_mode,
                                                   ObColumnSchemaV2 &column_schema)
 {
   int ret = OB_SUCCESS;
-  if (OB_LIKELY(is_oracle_mode)) {
+  if (is_oracle_mode) {
     column_schema.set_data_type(ObDateTimeType);
     column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObDateTimeType]);
   } else {
     column_schema.set_data_type(ObDateType);
     column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[MYSQL_MODE][ObDateType]);
+  }
+  return ret;
+}
+
+int ObExternalTableColumnSchemaHelper::setup_time(const bool &is_oracle_mode,
+                                                  ObColumnSchemaV2 &column_schema)
+{
+  int ret = OB_SUCCESS;
+  if (is_oracle_mode) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "time type in oracle mode");
+  } else {
+    column_schema.set_data_type(ObTimeType);
+    column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[MYSQL_MODE][ObTimeType]);
+  }
+  return ret;
+}
+
+int ObExternalTableColumnSchemaHelper::setup_timestamp_ns(const bool &is_oracle_mode,
+                                                          ObColumnSchemaV2 &column_schema)
+{
+  int ret = OB_SUCCESS;
+  if (is_oracle_mode) {
+    column_schema.set_data_type(ObTimestampNanoType);
+    ObAccuracy default_accuracy = ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObTimestampNanoType];
+    default_accuracy.set_precision(static_cast<int16_t>(default_accuracy.get_precision() + static_cast<int16_t>(default_accuracy.get_scale())));
+    column_schema.set_accuracy(default_accuracy);
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "timestamp_ns not supported yet");
+  }
+  return ret;
+}
+
+int ObExternalTableColumnSchemaHelper::setup_timestamp_tz_ns(const bool &is_oracle_mode,
+                                                             ObColumnSchemaV2 &column_schema)
+{
+  int ret = OB_SUCCESS;
+  if (is_oracle_mode) {
+    column_schema.set_data_type(ObTimestampLTZType);
+    ObAccuracy default_accuracy = ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObTimestampLTZType];
+    default_accuracy.set_precision(static_cast<int16_t>(default_accuracy.get_precision() + static_cast<int16_t>(default_accuracy.get_scale())));
+    column_schema.set_accuracy(default_accuracy);
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "timestamp_tz_ns not supported yet");
   }
   return ret;
 }
