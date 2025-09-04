@@ -2044,7 +2044,7 @@ int ObIndexBlockAggregator::get_index_row_agg_info(ObIndexRowAggInfo &index_row_
   }
   if (OB_SUCC(ret)) {
     index_row_agg_info.aggregate_info_ = aggregate_info_;
-    index_row_agg_info.need_data_aggregate_ = need_data_aggregate_;
+    index_row_agg_info.need_data_aggregate_ = need_data_aggregate();
   }
   return ret;
 }
