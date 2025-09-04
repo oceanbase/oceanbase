@@ -321,7 +321,8 @@ ObCopyTabletSSTableInfoArg::ObCopyTabletSSTableInfoArg()
   : tablet_id_(),
     max_major_sstable_snapshot_(0),
     minor_sstable_scn_range_(),
-    ddl_sstable_scn_range_()
+    ddl_sstable_scn_range_(),
+    inc_major_ddl_sstable_scn_range_()
 {
 }
 
@@ -335,6 +336,7 @@ void ObCopyTabletSSTableInfoArg::reset()
   max_major_sstable_snapshot_ = 0;
   minor_sstable_scn_range_.reset();
   ddl_sstable_scn_range_.reset();
+  inc_major_ddl_sstable_scn_range_.reset();
 }
 
 bool ObCopyTabletSSTableInfoArg::is_valid() const
@@ -346,7 +348,8 @@ bool ObCopyTabletSSTableInfoArg::is_valid() const
 }
 
 OB_SERIALIZE_MEMBER(ObCopyTabletSSTableInfoArg,
-    tablet_id_, max_major_sstable_snapshot_, minor_sstable_scn_range_, ddl_sstable_scn_range_);
+    tablet_id_, max_major_sstable_snapshot_, minor_sstable_scn_range_,
+    ddl_sstable_scn_range_, inc_major_ddl_sstable_scn_range_);
 
 ObCopyTabletsSSTableInfoArg::ObCopyTabletsSSTableInfoArg()
   : tenant_id_(OB_INVALID_ID),
