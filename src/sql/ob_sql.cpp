@@ -5987,7 +5987,8 @@ int ObSql::handle_text_execute(const ObStmt *basic_stmt,
   int ret = OB_SUCCESS;
   const ObExecuteStmt *exec_stmt = static_cast<const ObExecuteStmt*>(basic_stmt);
   sql_ctx.is_text_ps_mode_ = true;
-  if (OB_ISNULL(exec_stmt)) {
+  ObSQLSessionInfo *session_info = result.get_exec_context().get_my_session();
+  if (OB_ISNULL(exec_stmt) || OB_ISNULL(session_info)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt is NULL", K(ret), KPC(exec_stmt), KPC(basic_stmt));
   } else {
@@ -6029,6 +6030,13 @@ int ObSql::handle_text_execute(const ObStmt *basic_stmt,
         LOG_WARN("ps execute failed", K(ret));
       } else if (OB_FAIL(construct_param_store(param_store, result.get_ps_params()))) {
         LOG_WARN("construct ps params failed", K(ret));
+      } else if (GCONF.enable_sql_audit && session_info->get_local_ob_enable_sql_audit()) {
+        ObAuditRecordData &audit_record = session_info->get_raw_audit_record();
+        ObString exec_sql;
+        OZ (ob_write_string(result.get_exec_context().get_allocator(), sql_ctx.raw_sql_, exec_sql));
+        OX (audit_record.sql_ = const_cast<char *>(exec_sql.ptr()));
+        OX (audit_record.sql_len_ = exec_sql.length());
+        OX (audit_record.sql_cs_type_ = session_info->get_local_collation_connection());
       }
     }
     LOG_DEBUG("handle text execute done", K(ret), KPC(exec_stmt), K(param_store));
