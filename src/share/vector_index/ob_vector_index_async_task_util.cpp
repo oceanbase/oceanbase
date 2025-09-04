@@ -1485,7 +1485,7 @@ int ObVecIndexAsyncTask::optimize_vector_index(ObPluginVectorIndexAdaptor &adapt
         } else if (OB_FAIL(table_scan_iter->get_next_row(datum_row))) {
           if (OB_ITER_END != ret) {
             LOG_WARN("get next row failed.", K(ret));
-          } else {
+          } else if (adaptor.get_is_need_vid()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("data table row count mismatched", K(ret));
           }
