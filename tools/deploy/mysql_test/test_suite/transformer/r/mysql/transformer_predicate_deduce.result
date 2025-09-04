@@ -27,7 +27,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c1 = 2]), rowset=16
+  0 - output([a.c1], [a.c2]), filter([a.c1 = 2], [a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
@@ -62,7 +62,7 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |UPDATE           |    |1       |36          |
+|0 |UPDATE           |    |1       |28          |
 |1 |└─TABLE FULL SCAN|a   |1       |4           |
 =================================================
 Outputs & filters:
@@ -82,7 +82,7 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |DELETE           |    |1       |16          |
+|0 |DELETE           |    |1       |11          |
 |1 |└─TABLE FULL SCAN|a   |1       |4           |
 =================================================
 Outputs & filters:
@@ -101,7 +101,7 @@ Query Plan
 ==============================================================
 |ID|OPERATOR           |NAME           |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |INSERT             |               |1       |17          |
+|0 |INSERT             |               |1       |11          |
 |1 |└─SUBPLAN SCAN     |ANONYMOUS_VIEW1|1       |4           |
 |2 |  └─TABLE FULL SCAN|a              |1       |4           |
 ==============================================================
@@ -714,7 +714,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c1 IN (2, 3)]), rowset=16
+  0 - output([a.c1], [a.c2]), filter([a.c1 IN (2, 3)], [a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
@@ -732,7 +732,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c1 IN (2, 3)], [a.c2 IN (2, 3)]), rowset=16
+  0 - output([a.c1], [a.c2]), filter([a.c1 IN (2, 3)], [a.c2 IN (2, 3)], [a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
@@ -747,7 +747,7 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |UPDATE           |    |1       |36          |
+|0 |UPDATE           |    |1       |28          |
 |1 |└─TABLE FULL SCAN|a   |1       |4           |
 =================================================
 Outputs & filters:
@@ -755,7 +755,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       table_columns([{a: ({t1: (a.__pk_increment, a.c1, a.c2)})}]),
       update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
-  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c1 IN (2, 3)], [a.c2 IN (2, 3)]), rowset=16
+  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 IN (2, 3)], [a.c2 IN (2, 3)], [a.c1 = a.c2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
@@ -765,14 +765,14 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |DELETE           |    |1       |16          |
+|0 |DELETE           |    |1       |11          |
 |1 |└─TABLE FULL SCAN|a   |1       |4           |
 =================================================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{a: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
-  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c1 IN (2, 3)], [a.c2 IN (2, 3)]), rowset=16
+  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 IN (2, 3)], [a.c2 IN (2, 3)], [a.c1 = a.c2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
@@ -782,7 +782,7 @@ Query Plan
 ==============================================================
 |ID|OPERATOR           |NAME           |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |INSERT             |               |1       |17          |
+|0 |INSERT             |               |1       |11          |
 |1 |└─SUBPLAN SCAN     |ANONYMOUS_VIEW1|1       |4           |
 |2 |  └─TABLE FULL SCAN|a              |1       |4           |
 ==============================================================
@@ -793,7 +793,7 @@ Outputs & filters:
       column_values([T_HIDDEN_PK], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)])
   1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2]), filter(nil), rowset=16
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2])
-  2 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c1 IN (2, 3)], [a.c2 IN (2, 3)]), rowset=16
+  2 - output([a.c1], [a.c2]), filter([a.c1 IN (2, 3)], [a.c2 IN (2, 3)], [a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
@@ -931,7 +931,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([a.c1], [a.c2]), filter([round(cast(a.c1, BIGINT(-1, 0))) = 1], [a.c2 = 1]), rowset=16
+  0 - output([a.c1], [a.c2]), filter([a.c2 = 1], [round(cast(a.c1, BIGINT(-1, 0))) = 1]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
@@ -956,7 +956,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       table_columns([{a: ({t1: (a.__pk_increment, a.c1, a.c2)})}]),
       update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(cast(1, INT(11, 0)) + 1, INT(-1, 0)))])
-  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([round(cast(a.c1, BIGINT(-1, 0))) = 1], [a.c2 = 1]), rowset=16
+  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c2 = 1], [round(cast(a.c1, BIGINT(-1, 0))) = 1]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
@@ -975,7 +975,7 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{a: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
-  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([round(cast(a.c1, BIGINT(-1, 0))) = 1], [a.c2 = 1]), rowset=16
+  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c2 = 1], [round(cast(a.c1, BIGINT(-1, 0))) = 1]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
@@ -998,7 +998,7 @@ Outputs & filters:
       column_values([T_HIDDEN_PK], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)])
   1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2]), filter(nil), rowset=16
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2])
-  2 - output([a.c1], [a.c2]), filter([round(cast(a.c1, BIGINT(-1, 0))) = 1], [a.c2 = 1]), rowset=16
+  2 - output([a.c1], [a.c2]), filter([a.c2 = 1], [round(cast(a.c1, BIGINT(-1, 0))) = 1]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
@@ -1044,26 +1044,26 @@ Query Plan
 |ID|OPERATOR                   |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------
 |0 |NESTED-LOOP JOIN CARTESIAN |     |1       |8           |
-|1 |├─TABLE FULL SCAN          |a    |1       |4           |
-|2 |└─MATERIAL                 |     |1       |4           |
-|3 |  └─SUBPLAN SCAN           |VIEW1|1       |4           |
-|4 |    └─TABLE FULL SCAN      |b    |1       |4           |
+|1 |├─SUBPLAN SCAN             |VIEW1|1       |4           |
+|2 |│ └─TABLE FULL SCAN        |b    |1       |4           |
+|3 |└─MATERIAL                 |     |1       |4           |
+|4 |  └─TABLE FULL SCAN        |a    |1       |4           |
 ============================================================
 Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  1 - output([a.c1], [a.c2]), filter([a.c1 = 1]), rowset=16
-      access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([a.__pk_increment]), range(MIN ; MAX)always true
-  2 - output(nil), filter(nil), rowset=16
-  3 - output(nil), filter(nil), rowset=16
+  1 - output(nil), filter(nil), rowset=16
       access(nil)
-  4 - output([1]), filter([b.c1 = 1]), rowset=16
+  2 - output([1]), filter([b.c1 = 1]), rowset=16
       access([b.c1]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([a.c1], [a.c2]), filter(nil), rowset=16
+  4 - output([a.c1], [a.c2]), filter([a.c1 = 1]), rowset=16
+      access([a.c1], [a.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([a.__pk_increment]), range(MIN ; MAX)always true
   Expr Constraints:
       cast(1, INT(11, 0)) = 1 result is TRUE
 select * from t1 a where exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
@@ -1077,12 +1077,12 @@ Query Plan
 ==============================================================
 |ID|OPERATOR                     |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |UPDATE                       |     |1       |40          |
+|0 |UPDATE                       |     |1       |32          |
 |1 |└─NESTED-LOOP JOIN CARTESIAN |     |1       |8           |
-|2 |  ├─TABLE FULL SCAN          |a    |1       |4           |
-|3 |  └─MATERIAL                 |     |1       |4           |
-|4 |    └─SUBPLAN SCAN           |VIEW1|1       |4           |
-|5 |      └─TABLE FULL SCAN      |b    |1       |4           |
+|2 |  ├─SUBPLAN SCAN             |VIEW1|1       |4           |
+|3 |  │ └─TABLE FULL SCAN        |b    |1       |4           |
+|4 |  └─MATERIAL                 |     |1       |4           |
+|5 |    └─TABLE FULL SCAN        |a    |1       |4           |
 ==============================================================
 Outputs & filters:
 -------------------------------------
@@ -1091,17 +1091,17 @@ Outputs & filters:
       update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  2 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = 1]), rowset=16
-      access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([a.__pk_increment]), range(MIN ; MAX)always true
-  3 - output(nil), filter(nil), rowset=16
-  4 - output(nil), filter(nil), rowset=16
+  2 - output(nil), filter(nil), rowset=16
       access(nil)
-  5 - output([1]), filter([b.c1 = 1]), rowset=16
+  3 - output([1]), filter([b.c1 = 1]), rowset=16
       access([b.c1]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([a.__pk_increment], [a.c1], [a.c2]), filter(nil), rowset=16
+  5 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = 1]), rowset=16
+      access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([a.__pk_increment]), range(MIN ; MAX)always true
   Expr Constraints:
       cast(1, INT(11, 0)) = 1 result is TRUE
 update t1 a set a.c1 = a.c2 + 1 where exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
@@ -1110,12 +1110,12 @@ Query Plan
 ==============================================================
 |ID|OPERATOR                     |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |DELETE                       |     |1       |20          |
+|0 |DELETE                       |     |1       |15          |
 |1 |└─NESTED-LOOP JOIN CARTESIAN |     |1       |8           |
-|2 |  ├─TABLE FULL SCAN          |a    |1       |4           |
-|3 |  └─MATERIAL                 |     |1       |4           |
-|4 |    └─SUBPLAN SCAN           |VIEW1|1       |4           |
-|5 |      └─TABLE FULL SCAN      |b    |1       |4           |
+|2 |  ├─SUBPLAN SCAN             |VIEW1|1       |4           |
+|3 |  │ └─TABLE FULL SCAN        |b    |1       |4           |
+|4 |  └─MATERIAL                 |     |1       |4           |
+|5 |    └─TABLE FULL SCAN        |a    |1       |4           |
 ==============================================================
 Outputs & filters:
 -------------------------------------
@@ -1123,17 +1123,17 @@ Outputs & filters:
       table_columns([{a: ({t1: (a.__pk_increment, a.c1, a.c2)}), hash_distinct}])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  2 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = 1]), rowset=16
-      access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([a.__pk_increment]), range(MIN ; MAX)always true
-  3 - output(nil), filter(nil), rowset=16
-  4 - output(nil), filter(nil), rowset=16
+  2 - output(nil), filter(nil), rowset=16
       access(nil)
-  5 - output([1]), filter([b.c1 = 1]), rowset=16
+  3 - output([1]), filter([b.c1 = 1]), rowset=16
       access([b.c1]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([a.__pk_increment], [a.c1], [a.c2]), filter(nil), rowset=16
+  5 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = 1]), rowset=16
+      access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([a.__pk_increment]), range(MIN ; MAX)always true
   Expr Constraints:
       cast(1, INT(11, 0)) = 1 result is TRUE
 delete from t1 a where exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
@@ -1142,13 +1142,13 @@ Query Plan
 ==========================================================================
 |ID|OPERATOR                       |NAME           |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------------------
-|0 |INSERT                         |               |1       |21          |
+|0 |INSERT                         |               |1       |15          |
 |1 |└─SUBPLAN SCAN                 |ANONYMOUS_VIEW1|1       |8           |
 |2 |  └─NESTED-LOOP JOIN CARTESIAN |               |1       |8           |
-|3 |    ├─TABLE FULL SCAN          |a              |1       |4           |
-|4 |    └─MATERIAL                 |               |1       |4           |
-|5 |      └─SUBPLAN SCAN           |VIEW1          |1       |4           |
-|6 |        └─TABLE FULL SCAN      |b              |1       |4           |
+|3 |    ├─SUBPLAN SCAN             |VIEW1          |1       |4           |
+|4 |    │ └─TABLE FULL SCAN        |b              |1       |4           |
+|5 |    └─MATERIAL                 |               |1       |4           |
+|6 |      └─TABLE FULL SCAN        |a              |1       |4           |
 ==========================================================================
 Outputs & filters:
 -------------------------------------
@@ -1159,17 +1159,17 @@ Outputs & filters:
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2])
   2 - output([a.c1], [a.c2]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  3 - output([a.c1], [a.c2]), filter([a.c1 = 1]), rowset=16
-      access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([a.__pk_increment]), range(MIN ; MAX)always true
-  4 - output(nil), filter(nil), rowset=16
-  5 - output(nil), filter(nil), rowset=16
+  3 - output(nil), filter(nil), rowset=16
       access(nil)
-  6 - output([1]), filter([b.c1 = 1]), rowset=16
+  4 - output([1]), filter([b.c1 = 1]), rowset=16
       access([b.c1]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([a.c1], [a.c2]), filter(nil), rowset=16
+  6 - output([a.c1], [a.c2]), filter([a.c1 = 1]), rowset=16
+      access([a.c1], [a.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([a.__pk_increment]), range(MIN ; MAX)always true
   Expr Constraints:
       cast(1, INT(11, 0)) = 1 result is TRUE
 insert into is_t2 select * from t1 a where exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
@@ -1239,7 +1239,7 @@ Query Plan
 ===================================================
 |ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------
-|0 |UPDATE             |    |1       |40          |
+|0 |UPDATE             |    |1       |32          |
 |1 |└─SUBPLAN FILTER   |    |1       |8           |
 |2 |  ├─TABLE FULL SCAN|a   |1       |4           |
 |3 |  └─TABLE FULL SCAN|b   |1       |4           |
@@ -1267,7 +1267,7 @@ Query Plan
 ===================================================
 |ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------
-|0 |DELETE             |    |1       |20          |
+|0 |DELETE             |    |1       |15          |
 |1 |└─SUBPLAN FILTER   |    |1       |8           |
 |2 |  ├─TABLE FULL SCAN|a   |1       |4           |
 |3 |  └─TABLE FULL SCAN|b   |1       |4           |
@@ -1387,7 +1387,7 @@ Query Plan
 ===================================================================
 |ID|OPERATOR                          |NAME |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
-|0 |UPDATE                            |     |1       |40          |
+|0 |UPDATE                            |     |1       |32          |
 |1 |└─NESTED-LOOP SEMI JOIN CARTESIAN |     |1       |8           |
 |2 |  ├─TABLE FULL SCAN               |a    |1       |4           |
 |3 |  └─MATERIAL                      |     |1       |4           |
@@ -1418,7 +1418,7 @@ Query Plan
 ===================================================================
 |ID|OPERATOR                          |NAME |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
-|0 |DELETE                            |     |1       |20          |
+|0 |DELETE                            |     |1       |15          |
 |1 |└─NESTED-LOOP SEMI JOIN CARTESIAN |     |1       |8           |
 |2 |  ├─TABLE FULL SCAN               |a    |1       |4           |
 |3 |  └─MATERIAL                      |     |1       |4           |
@@ -1491,8 +1491,8 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t3.c1], [t3.c2], [t3.c3]), filter([cast(t3.c1, DECIMAL(20, 0)) = cast(t3.c2, DECIMAL(-1, -1))], [cast(t3.c1, MYSQL_DATETIME(-1, -1)) = cast('2010-10-10 
-      00:00:00', DATETIME(0, 0))]), rowset=16
+  0 - output([t3.c1], [t3.c2], [t3.c3]), filter([cast(t3.c1, MYSQL_DATETIME(-1, -1)) = cast('2010-10-10 00:00:00', DATETIME(0, 0))], [cast(t3.c1, DECIMAL(20,
+       0)) = cast(t3.c2, DECIMAL(-1, -1))]), rowset=16
       access([t3.c1], [t3.c2], [t3.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
@@ -1511,8 +1511,8 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t3.c1], [t3.c2], [t3.c3]), filter([cast(t3.c1, DECIMAL(20, 0)) = cast(t3.c2, DECIMAL(-1, -1))], [cast(t3.c1, MYSQL_DATETIME(-1, -1)) = cast('2010-10-10 
-      00:00:00', DATETIME(0, 0))]), rowset=16
+  0 - output([t3.c1], [t3.c2], [t3.c3]), filter([cast(t3.c1, MYSQL_DATETIME(-1, -1)) = cast('2010-10-10 00:00:00', DATETIME(0, 0))], [cast(t3.c1, DECIMAL(20,
+       0)) = cast(t3.c2, DECIMAL(-1, -1))]), rowset=16
       access([t3.c1], [t3.c2], [t3.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
@@ -1528,7 +1528,7 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |UPDATE           |    |1       |36          |
+|0 |UPDATE           |    |1       |28          |
 |1 |└─TABLE FULL SCAN|t3  |1       |4           |
 =================================================
 Outputs & filters:
@@ -1536,8 +1536,8 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       table_columns([{t3: ({t3: (t3.__pk_increment, t3.c1, t3.c2, t3.c3)})}]),
       update([t3.c1=column_conv(BIGINT,PS:(20,0),NULL,1)])
-  1 - output([t3.__pk_increment], [t3.c1], [t3.c2], [t3.c3]), filter([cast(t3.c1, DECIMAL(20, 0)) = cast(t3.c2, DECIMAL(-1, -1))], [cast(t3.c1, MYSQL_DATETIME(-1,
-       -1)) = cast('2010-10-10 00:00:00', DATETIME(0, 0))]), rowset=16
+  1 - output([t3.__pk_increment], [t3.c1], [t3.c2], [t3.c3]), filter([cast(t3.c1, MYSQL_DATETIME(-1, -1)) = cast('2010-10-10 00:00:00', DATETIME(0, 0))],
+       [cast(t3.c1, DECIMAL(20, 0)) = cast(t3.c2, DECIMAL(-1, -1))]), rowset=16
       access([t3.__pk_increment], [t3.c1], [t3.c2], [t3.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
@@ -2089,7 +2089,7 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |UPDATE           |    |1       |36          |
+|0 |UPDATE           |    |1       |28          |
 |1 |└─TABLE FULL SCAN|a   |1       |4           |
 =================================================
 Outputs & filters:
@@ -2110,7 +2110,7 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |DELETE           |    |1       |16          |
+|0 |DELETE           |    |1       |11          |
 |1 |└─TABLE FULL SCAN|a   |1       |4           |
 =================================================
 Outputs & filters:
@@ -2130,7 +2130,7 @@ Query Plan
 ==============================================================
 |ID|OPERATOR           |NAME           |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |INSERT             |               |1       |17          |
+|0 |INSERT             |               |1       |11          |
 |1 |└─SUBPLAN SCAN     |ANONYMOUS_VIEW1|1       |4           |
 |2 |  └─TABLE FULL SCAN|a              |1       |4           |
 ==============================================================
@@ -2198,7 +2198,7 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |UPDATE           |    |1       |32          |
+|0 |UPDATE           |    |1       |36          |
 |1 |└─TABLE FULL SCAN|a   |1       |4           |
 =================================================
 Outputs & filters:
@@ -2219,7 +2219,7 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |DELETE           |    |1       |13          |
+|0 |DELETE           |    |1       |16          |
 |1 |└─TABLE FULL SCAN|a   |1       |4           |
 =================================================
 Outputs & filters:
@@ -2239,7 +2239,7 @@ Query Plan
 ==============================================================
 |ID|OPERATOR           |NAME           |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |INSERT             |               |1       |14          |
+|0 |INSERT             |               |1       |17          |
 |1 |└─SUBPLAN SCAN     |ANONYMOUS_VIEW1|1       |4           |
 |2 |  └─TABLE FULL SCAN|a              |1       |4           |
 ==============================================================
@@ -2402,7 +2402,7 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |UPDATE           |    |1       |32          |
+|0 |UPDATE           |    |1       |36          |
 |1 |└─TABLE FULL SCAN|a   |1       |4           |
 =================================================
 Outputs & filters:
@@ -2420,7 +2420,7 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |DELETE           |    |1       |13          |
+|0 |DELETE           |    |1       |16          |
 |1 |└─TABLE FULL SCAN|a   |1       |4           |
 =================================================
 Outputs & filters:
@@ -2437,7 +2437,7 @@ Query Plan
 ==============================================================
 |ID|OPERATOR           |NAME           |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |INSERT             |               |1       |14          |
+|0 |INSERT             |               |1       |17          |
 |1 |└─SUBPLAN SCAN     |ANONYMOUS_VIEW1|1       |4           |
 |2 |  └─TABLE FULL SCAN|a              |1       |4           |
 ==============================================================
@@ -2492,7 +2492,7 @@ Query Plan
 =======================================================
 |ID|OPERATOR              |NAME |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------
-|0 |NESTED-LOOP ANTI JOIN |     |0       |8           |
+|0 |NESTED-LOOP ANTI JOIN |     |1       |8           |
 |1 |├─TABLE FULL SCAN     |a    |1       |4           |
 |2 |└─MATERIAL            |     |1       |4           |
 |3 |  └─SUBPLAN SCAN      |VIEW1|1       |4           |
@@ -2527,8 +2527,8 @@ Query Plan
 =========================================================
 |ID|OPERATOR                |NAME |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |UPDATE                  |     |0       |32          |
-|1 |└─NESTED-LOOP ANTI JOIN |     |0       |8           |
+|0 |UPDATE                  |     |1       |40          |
+|1 |└─NESTED-LOOP ANTI JOIN |     |1       |8           |
 |2 |  ├─TABLE FULL SCAN     |a    |1       |4           |
 |3 |  └─MATERIAL            |     |1       |4           |
 |4 |    └─SUBPLAN SCAN      |VIEW1|1       |4           |
@@ -2560,8 +2560,8 @@ Query Plan
 =========================================================
 |ID|OPERATOR                |NAME |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |DELETE                  |     |0       |15          |
-|1 |└─NESTED-LOOP ANTI JOIN |     |0       |8           |
+|0 |DELETE                  |     |1       |20          |
+|1 |└─NESTED-LOOP ANTI JOIN |     |1       |8           |
 |2 |  ├─TABLE FULL SCAN     |a    |1       |4           |
 |3 |  └─MATERIAL            |     |1       |4           |
 |4 |    └─SUBPLAN SCAN      |VIEW1|1       |4           |
@@ -2592,9 +2592,9 @@ Query Plan
 =====================================================================
 |ID|OPERATOR                  |NAME           |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------
-|0 |INSERT                    |               |0       |15          |
-|1 |└─SUBPLAN SCAN            |ANONYMOUS_VIEW1|0       |8           |
-|2 |  └─NESTED-LOOP ANTI JOIN |               |0       |8           |
+|0 |INSERT                    |               |1       |21          |
+|1 |└─SUBPLAN SCAN            |ANONYMOUS_VIEW1|1       |8           |
+|2 |  └─NESTED-LOOP ANTI JOIN |               |1       |8           |
 |3 |    ├─TABLE FULL SCAN     |a              |1       |4           |
 |4 |    └─MATERIAL            |               |1       |4           |
 |5 |      └─SUBPLAN SCAN      |VIEW1          |1       |4           |
@@ -2689,7 +2689,7 @@ Query Plan
 ===================================================
 |ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------
-|0 |UPDATE             |    |1       |40          |
+|0 |UPDATE             |    |1       |32          |
 |1 |└─SUBPLAN FILTER   |    |1       |8           |
 |2 |  ├─TABLE FULL SCAN|a   |1       |4           |
 |3 |  └─TABLE FULL SCAN|b   |1       |4           |
@@ -2717,7 +2717,7 @@ Query Plan
 ===================================================
 |ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------
-|0 |DELETE             |    |1       |20          |
+|0 |DELETE             |    |1       |15          |
 |1 |└─SUBPLAN FILTER   |    |1       |8           |
 |2 |  ├─TABLE FULL SCAN|a   |1       |4           |
 |3 |  └─TABLE FULL SCAN|b   |1       |4           |
@@ -2839,7 +2839,7 @@ Query Plan
 ===================================================================
 |ID|OPERATOR                          |NAME |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
-|0 |UPDATE                            |     |1       |40          |
+|0 |UPDATE                            |     |1       |32          |
 |1 |└─NESTED-LOOP ANTI JOIN CARTESIAN |     |1       |8           |
 |2 |  ├─TABLE FULL SCAN               |a    |1       |4           |
 |3 |  └─MATERIAL                      |     |1       |4           |
@@ -2872,7 +2872,7 @@ Query Plan
 ===================================================================
 |ID|OPERATOR                          |NAME |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
-|0 |DELETE                            |     |1       |20          |
+|0 |DELETE                            |     |1       |15          |
 |1 |└─NESTED-LOOP ANTI JOIN CARTESIAN |     |1       |8           |
 |2 |  ├─TABLE FULL SCAN               |a    |1       |4           |
 |3 |  └─MATERIAL                      |     |1       |4           |
@@ -2904,7 +2904,7 @@ Query Plan
 ===============================================================================
 |ID|OPERATOR                            |NAME           |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------------
-|0 |INSERT                              |               |1       |21          |
+|0 |INSERT                              |               |1       |15          |
 |1 |└─SUBPLAN SCAN                      |ANONYMOUS_VIEW1|1       |8           |
 |2 |  └─NESTED-LOOP ANTI JOIN CARTESIAN |               |1       |8           |
 |3 |    ├─TABLE FULL SCAN               |a              |1       |4           |
