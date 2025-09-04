@@ -118,8 +118,6 @@ int get_log_base_directory(char *log_file_name, const int64_t log_file_name_len,
 int main(int argc, char *argv[])
 {
   init_malloc_hook();
-  oceanbase::ObPLogWriterCfg log_cfg;
-  OB_LOGGER.init(log_cfg, false);
   int ret = 0;
   char log_file_name[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
   char log_file_rs_name[OB_MAX_FILE_NAME_LENGTH] = {'\0'};

@@ -68,6 +68,15 @@ static const int64_t MAX_BUFFER_ITEM_CNT = 512 << 10;
 
 static const int64_t POP_COMPENSATED_TIME[5] = {0, 1, 2, 3, 4};//for pop timeout
 
+static ObVSliceAlloc &get_allocator()
+{
+  static ObBlockAllocMgr log_mem_limiter(ObBaseLogWriterCfg::DEFAULT_MAX_BUFFER_ITEM_CNT * OB_MALLOC_BIG_BLOCK_SIZE / 8);
+  static ObVSliceAlloc allocator(
+      SET_USE_500(ObMemAttr(OB_SERVER_TENANT_ID, "Logger", ObCtxIds::LOGGER_CTX_ID, OB_HIGH_ALLOC)),
+      OB_MALLOC_BIG_BLOCK_SIZE, log_mem_limiter, 8);
+  return allocator;
+}
+
 ObPLogFDType get_fd_type(const char *mod_name)
 {
   ObPLogFDType type = FD_SVR_FILE;
@@ -488,7 +497,7 @@ ObLogger::ObLogger()
     disable_thread_log_level_(false), force_check_(false), redirect_flag_(false), open_wf_flag_(false),
     enable_wf_flag_(false), rec_old_file_flag_(false), can_print_(true),
     enable_async_log_(true), use_multi_flush_(false), stop_append_log_(false), enable_perf_mode_(false),
-    last_async_flush_count_per_sec_(0), log_compressor_(nullptr), enable_log_limit_(true),
+    last_async_flush_count_per_sec_(0), log_allocator_(&get_allocator()), log_compressor_(nullptr), enable_log_limit_(true),
     is_arb_replica_(false), new_file_info_(nullptr), info_as_wdiag_(true)
 {
   id_level_map_.set_level(OB_LOG_LEVEL_DBA_ERROR);
@@ -1847,15 +1856,6 @@ int ObLogger::async_audit_dump(const common::ObBasebLogPrint &info)
 }
 #endif
 
-static ObVSliceAlloc &get_allocator()
-{
-  static ObBlockAllocMgr log_mem_limiter(ObBaseLogWriterCfg::DEFAULT_MAX_BUFFER_ITEM_CNT * OB_MALLOC_BIG_BLOCK_SIZE / 8);
-  static ObVSliceAlloc allocator(
-      SET_USE_500(ObMemAttr(OB_SERVER_TENANT_ID, "Logger", ObCtxIds::LOGGER_CTX_ID, OB_HIGH_ALLOC)),
-      OB_MALLOC_BIG_BLOCK_SIZE, log_mem_limiter, 8);
-  return allocator;
-}
-
 int ObLogger::alloc_log_item(const int32_t level, const int64_t size, ObPLogItem *&log_item)
 {
   ObDisableDiagnoseGuard disable_diagnose_guard;
@@ -1864,11 +1864,11 @@ int ObLogger::alloc_log_item(const int32_t level, const int64_t size, ObPLogItem
   log_item = NULL;
   if (!stop_append_log_) {
     char *buf = nullptr;
-    if (OB_UNLIKELY(nullptr == (buf = (char*)get_allocator().alloc(size)))) {
+    if (OB_UNLIKELY(nullptr == (buf = (char*)log_allocator_->alloc(size)))) {
       int64_t wait_us = get_wait_us(level);
       const int64_t per_us = MIN(wait_us, 10);
       while (wait_us > 0) {
-        if (nullptr != (buf = (char*)get_allocator().alloc(size))) {
+        if (nullptr != (buf = (char*)log_allocator_->alloc(size))) {
           break;
         } else {
           ob_usleep(per_us);
@@ -1898,7 +1898,7 @@ void ObLogger::free_log_item(ObPLogItem *log_item)
   if (NULL != log_item) {
     const int level = log_item->get_log_level();
     log_item->~ObPLogItem();
-    get_allocator().free(log_item);
+    log_allocator_->free(log_item);
   }
 }
 
