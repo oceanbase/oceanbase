@@ -49,9 +49,10 @@ protected:
 
   int pack(ObSqlString &raw_sql_str);
 
-  int add_from_table(common::ObIAllocator &allocator,
-                     const ObString &db_name,
-                     const ObString &table_name);
+  inline void set_from_table(const ObString &from_table) { from_table_ = from_table; }
+
+  int init_escape_char_names(common::ObIAllocator &allocator,
+                             const ObOptStatGatherParam &param);
 
   int add_partition_hint(const ObString &partition);
 
@@ -102,6 +103,8 @@ protected:
   ObIAllocator &allocator_;
 
   ObString db_name_;
+  ObString tab_name_;
+  ObString data_table_name_;
   ObString from_table_;
   ObString partition_hint_;
   ObSqlString select_fields_;

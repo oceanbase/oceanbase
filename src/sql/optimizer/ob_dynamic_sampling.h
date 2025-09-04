@@ -307,7 +307,7 @@ private:
                                      ObOptDSStatHandle &ds_stat_handle,
                                      int64_t &cur_modified_dml_cnt);
   int do_estimate_rowcount(ObSQLSessionInfo *session_info, const ObSqlString &raw_sql);
-  int estimte_rowcount(int64_t max_ds_timeout, int64_t degree, bool &throw_ds_error);
+  int estimate_rowcount(int64_t max_ds_timeout, int64_t degree, bool &throw_ds_error);
   int pack(ObSqlString &raw_sql_str);
   int gen_select_filed(ObSqlString &select_fields);
   int estimate_table_block_count_and_row_count(const ObDSTableParam &param);

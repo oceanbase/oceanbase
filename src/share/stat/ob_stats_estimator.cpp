@@ -55,28 +55,28 @@ int ObStatsEstimator::gen_select_filed()
   return ret;
 }
 
-int ObStatsEstimator::add_from_table(common::ObIAllocator &allocator,
-                                     const ObString &db_name,
-                                     const ObString &table_name)
+int ObStatsEstimator::init_escape_char_names(common::ObIAllocator &allocator,
+                                             const ObOptStatGatherParam &param)
 {
   int ret = OB_SUCCESS;
-  ObString new_db_name;
-  ObString new_tbl_name;
   if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
               allocator,
-              db_name,
-              new_db_name,
+              param.db_name_,
+              db_name_,
               lib::is_oracle_mode()))) {
-    LOG_WARN("fail to generate new name with escape character", K(ret), K(db_name));
+    LOG_WARN("failed to generate new name with escape character", K(ret), K(param.db_name_));
   } else if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
-                    allocator,
-                    table_name,
-                    new_tbl_name,
-                    lib::is_oracle_mode()))) {
-    LOG_WARN("fail to generate new name with escape character", K(ret), K(table_name));
-  } else {
-    db_name_ = new_db_name;
-    from_table_ = new_tbl_name;
+                     allocator,
+                     param.tab_name_,
+                     tab_name_,
+                     lib::is_oracle_mode()))) {
+    LOG_WARN("failed to generate new name with escape character", K(ret), K(param.tab_name_));
+  } else if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
+                     allocator,
+                     param.data_table_name_,
+                     data_table_name_,
+                     lib::is_oracle_mode()))) {
+    LOG_WARN("failed to generate new name with escape character", K(ret), K(param.data_table_name_));
   }
   return ret;
 }
@@ -371,13 +371,13 @@ int ObStatsEstimator::fill_group_by_info(ObIAllocator &allocator,
     LOG_WARN("get unexpected type", K(param.stat_level_), K(ret));
   }
   if (OB_SUCC(ret)) {
-    const int64_t len = strlen(fmt_str) + param.tab_name_.length() + type_str.length();
+    const int64_t len = strlen(fmt_str) + from_table_.length() + type_str.length();
     int32_t real_len = -1;
     if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory", K(ret), K(len));
     } else {
-      real_len = sprintf(buf, fmt_str, param.tab_name_.length(), param.tab_name_.ptr(), type_str.length(), type_str.ptr());
+      real_len = sprintf(buf, fmt_str, from_table_.length(), from_table_.ptr(), type_str.length(), type_str.ptr());
       if (OB_UNLIKELY(real_len < 0 || real_len >= len)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to print partition hint", K(ret), K(real_len), K(len));

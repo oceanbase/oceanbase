@@ -531,15 +531,15 @@ int ObDynamicSampling::do_estimate_table_rowcount(const ObDSTableParam &param, b
     LOG_WARN("failed to calc sample block ratio", K(ret));
   } else if (OB_FAIL(add_block_info_for_stat_items())) {
     LOG_WARN("failed to add block info for stat items", K(ret));
-  } else if (OB_FAIL(estimte_rowcount(param.max_ds_timeout_, param.degree_, throw_ds_error))) {
+  } else if (OB_FAIL(estimate_rowcount(param.max_ds_timeout_, param.degree_, throw_ds_error))) {
     LOG_WARN("failed to estimate rowcount", K(ret));
   }
   return ret;
 }
 
-int ObDynamicSampling::estimte_rowcount(int64_t max_ds_timeout,
-                                        int64_t degree,
-                                        bool &throw_ds_error)
+int ObDynamicSampling::estimate_rowcount(int64_t max_ds_timeout,
+                                         int64_t degree,
+                                         bool &throw_ds_error)
 {
   int ret = OB_SUCCESS;
   ObSqlString raw_sql_str;
@@ -1915,7 +1915,7 @@ bool ObDynamicSamplingUtils::is_valid_ds_col_type(const ObObjType type)
 //     LOG_WARN("failed to add where condition", K(ret));
 //   } else if (OB_FAIL(calc_join_sample_block_ratio(param))) {
 //     LOG_WARN("failed to calc sample block ratio", K(ret));
-//   } else if (OB_FAIL(estimte_rowcount(get_result, ObDynamicSamplingLevel::ADS_DYNAMIC_SAMPLING))) {
+//   } else if (OB_FAIL(estimate_rowcount(get_result, ObDynamicSamplingLevel::ADS_DYNAMIC_SAMPLING))) {
 //     LOG_WARN("failed to estimate rowcount", K(ret));
 //   } else if (get_result) {
 //     ds_stat.set_stat_expired_time(ObTimeUtility::current_time() + ObOptStatMonitorCheckTask::CHECK_INTERVAL);
