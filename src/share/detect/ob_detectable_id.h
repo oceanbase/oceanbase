@@ -57,6 +57,12 @@ public:
     return (0 == first_ && 0 == second_);
   }
 
+  void reset()
+  {
+    first_ = 0;
+    second_ = 0;
+  }
+
 public:
   uint64_t first_;
   uint64_t second_;

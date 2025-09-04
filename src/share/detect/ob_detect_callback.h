@@ -25,6 +25,7 @@ namespace oceanbase {
 namespace sql {
 class ObDfo;
 class ObPxSqcMeta;
+class ObSQLSessionInfo;
 namespace dtl {
 class ObDtlChannel;
 }
@@ -58,16 +59,18 @@ struct ObPeerTaskState {
   ObTaskState peer_state_;
 };
 
-enum class DetectCallBackType
-{
-  VIRTUAL = 0,
-  QC_DETECT_CB = 1,
-  SQC_DETECT_CB = 2,
-  SINGLE_DFO_DETECT_CB = 3,
-  TEMP_TABLE_DETECT_CB = 4,
-  P2P_DATAHUB_DETECT_CB = 5,
-  DAS_REMOTE_TASK_DETECT_CB = 6,
-};
+#define DETECT_CALLBACK_TYPE(ACT)                                                                  \
+  ACT(VIRTUAL, = 0)                                                                                \
+  ACT(QC_DETECT_CB, )                                                                              \
+  ACT(SQC_DETECT_CB, )                                                                             \
+  ACT(SINGLE_DFO_DETECT_CB, )                                                                      \
+  ACT(TEMP_TABLE_DETECT_CB, )                                                                      \
+  ACT(P2P_DATAHUB_DETECT_CB, )                                                                     \
+  ACT(DAS_REMOTE_TASK_DETECT_CB, )                                                                 \
+  ACT(REMOTE_SQL_EXECUTION_DETECT_CB, )                                                            \
+  ACT(MAX_TYPE, )
+
+DECLARE_ENUM(DetectCallBackType, detect_callback_type, DETECT_CALLBACK_TYPE);
 
 // detectable id with activate time, used for delay detect
 class ObDetectableIdDNode : public common::ObDLinkBase<ObDetectableIdDNode>
@@ -89,7 +92,7 @@ public:
     peer_states_.reset();
   }
   virtual int do_callback() = 0;
-  virtual int64_t get_detect_callback_type() const = 0;
+  virtual const char *get_type() const = 0;
   virtual bool reentrant() const { return false; }
 
   ObIArray<ObPeerTaskState> &get_peer_states() { return peer_states_; }
@@ -134,7 +137,10 @@ public:
       const ObIArray<sql::dtl::ObDtlChannel *> &dtl_channels);
   void destroy() override;
   int do_callback() override;
-  int64_t get_detect_callback_type() const override { return (int64_t)DetectCallBackType::QC_DETECT_CB; }
+  const char *get_type() const override
+  {
+    return get_detect_callback_type_string(DetectCallBackType::QC_DETECT_CB);
+  }
   // this DetectCallback is reentrant, because several sqcs can be detected as finished and should set_need_report(false)
   bool reentrant() const override { return true; }
   int atomic_set_finished(const common::ObAddr &addr, ObTaskState *state=nullptr) override;
@@ -152,7 +158,10 @@ public:
       : ObIDetectCallback(tenant_id, peer_states), tid_(tid) {}
 
   int do_callback() override;
-  int64_t get_detect_callback_type() const override { return (int64_t)DetectCallBackType::SQC_DETECT_CB; }
+  const char *get_type() const override
+  {
+    return get_detect_callback_type_string(DetectCallBackType::SQC_DETECT_CB);
+  }
 private:
   ObInterruptibleTaskID tid_;
 };
@@ -164,7 +173,10 @@ public:
     : ObIDetectCallback(tenant_id, peer_states), key_(key) {}
 
   int do_callback() override;
-  int64_t get_detect_callback_type() const override { return (int64_t)DetectCallBackType::SINGLE_DFO_DETECT_CB; }
+  const char *get_type() const override
+  {
+    return get_detect_callback_type_string(DetectCallBackType::SINGLE_DFO_DETECT_CB);
+  }
 private:
   sql::dtl::ObDTLIntermResultKey key_;
 };
@@ -176,19 +188,25 @@ public:
       : ObIDetectCallback(tenant_id, peer_states), key_(key) {}
 
   int do_callback() override;
-  int64_t get_detect_callback_type() const override { return (int64_t)DetectCallBackType::TEMP_TABLE_DETECT_CB; }
+  const char *get_type() const override
+  {
+    return get_detect_callback_type_string(DetectCallBackType::TEMP_TABLE_DETECT_CB);
+  }
 private:
   sql::dtl::ObDTLIntermResultKey key_;
 };
 
 class ObP2PDataHubDetectCB : public ObIDetectCallback
 {
-  public:
+public:
   ObP2PDataHubDetectCB(uint64_t tenant_id, const ObIArray<ObPeerTaskState> &peer_states, const sql::ObP2PDhKey &key)
       : ObIDetectCallback(tenant_id, peer_states), key_(key) {}
 
   int do_callback() override;
-  int64_t get_detect_callback_type() const override { return (int64_t)DetectCallBackType::P2P_DATAHUB_DETECT_CB; }
+  const char *get_type() const override
+  {
+    return get_detect_callback_type_string(DetectCallBackType::P2P_DATAHUB_DETECT_CB);
+  }
 private:
   sql::ObP2PDhKey key_;
 };
@@ -201,10 +219,32 @@ class ObDASRemoteTaskDetectCB : public ObIDetectCallback
       : ObIDetectCallback(tenant_id, peer_states), key_(key), tid_(tid) {}
 
   int do_callback() override;
-  int64_t get_detect_callback_type() const override { return (int64_t)DetectCallBackType::DAS_REMOTE_TASK_DETECT_CB; }
+  const char *get_type() const override
+  {
+    return get_detect_callback_type_string(DetectCallBackType::DAS_REMOTE_TASK_DETECT_CB);
+  }
 private:
   sql::DASTCBInfo key_;
   ObInterruptibleTaskID tid_;
+};
+
+class ObRemoteSqlDetectCB : public ObIDetectCallback
+{
+public:
+  ObRemoteSqlDetectCB(uint64_t tenant_id, const ObIArray<ObPeerTaskState> &peer_states,
+                      ObSQLSessionInfo *session)
+      : ObIDetectCallback(tenant_id, peer_states), session_(session)
+  {}
+
+  const char *get_type() const override
+  {
+    return get_detect_callback_type_string(DetectCallBackType::REMOTE_SQL_EXECUTION_DETECT_CB);
+  }
+
+  int do_callback() override;
+
+private:
+  ObSQLSessionInfo *session_;
 };
 
 } // end namespace common

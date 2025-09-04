@@ -15,11 +15,21 @@
 
 #include "ob_executor_rpc_impl.h"
 #include "sql/executor/ob_remote_executor_processor.h"
+#include "share/detect/ob_detect_manager_utils.h"
 using namespace oceanbase::common;
 namespace oceanbase
 {
 namespace sql
 {
+
+RemoteExecuteStreamHandle::~RemoteExecuteStreamHandle()
+{
+  if (!dm_detectable_id_.is_invalid()) {
+    RemoteExecutionDMUtils::unregister_detectable_id(dm_detectable_id_);
+    dm_detectable_id_.reset();
+  }
+}
+
 
 int ObExecutorRpcImpl::init(obrpc::ObExecutorRpcProxy *rpc_proxy, obrpc::ObBatchRpc *batch_rpc)
 {
@@ -49,6 +59,7 @@ int ObExecutorRpcImpl::task_execute(ObExecutorRpcCtx &rpc_ctx,
   RemoteStreamHandle &real_handler = handler.get_remote_stream_handle();
   RemoteStreamHandle::MyHandle &h = real_handler.get_handle();
   int64_t timeout_timestamp = rpc_ctx.get_timeout_timestamp();
+  bool has_reg_dm = false;
   const int32_t group_id = rpc_ctx.get_group_id();
   if (OB_ISNULL(proxy_) || OB_ISNULL(real_handler.get_result())) {
     ret = OB_ERR_UNEXPECTED;
@@ -64,6 +75,11 @@ int ObExecutorRpcImpl::task_execute(ObExecutorRpcCtx &rpc_ctx,
                K(timeout),
                K(timeout_timestamp));
     } else if (FALSE_IT(has_sent_task = true)) {
+    } else if (OB_FAIL(RemoteExecutionDMUtils::register_detectable_id(
+        task.get_detectable_id(), has_reg_dm, tenant_id))) {
+      LOG_WARN("failed to register detectable id into dm");
+    } else if (has_reg_dm && OB_FAIL(handler.set_dm_detectable_id(task.get_detectable_id()))) {
+      LOG_WARN("failed to set dm detectable id");
     } else if (OB_FAIL(to_proxy
                        .by(tenant_id)
                        .timeout(timeout)
@@ -125,11 +141,17 @@ int ObExecutorRpcImpl::task_execute_v2(ObExecutorRpcCtx &rpc_ctx,
   } else {
     int64_t timeout = timeout_timestamp - ::oceanbase::common::ObTimeUtility::current_time();
     obrpc::ObExecutorRpcProxy to_proxy = proxy_->to(svr);
+    bool has_reg_dm = false;
     if (OB_UNLIKELY(timeout <= 0)) {
       ret = OB_TIMEOUT;
       LOG_WARN("task_execute timeout before rpc",
                K(ret), K(svr), K(timeout), K(timeout_timestamp));
     } else if (FALSE_IT(has_sent_task = true)) {
+    } else if (OB_FAIL(RemoteExecutionDMUtils::register_detectable_id(
+        task.get_detectable_id(), has_reg_dm, tenant_id))) {
+      LOG_WARN("failed to register detectable id into dm");
+    } else if (has_reg_dm && OB_FAIL(handler.set_dm_detectable_id(task.get_detectable_id()))) {
+      LOG_WARN("failed to set dm detectable id");
     } else if (OB_FAIL(to_proxy
                        .by(tenant_id)
                        .timeout(timeout)

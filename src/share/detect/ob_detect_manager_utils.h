@@ -23,6 +23,7 @@ class ObDfo;
 class ObPxSqcHandler;
 class ObPxSqcMeta;
 class ObPxCoordInfo;
+class ObSQLSessionInfo;
 namespace dtl {
 class ObDTLIntermResultKey;
 class ObDTLIntermResultInfo;
@@ -87,6 +88,22 @@ public:
   static void das_task_unregister_check_item_from_dm(const common::ObDetectableId &detectable_id,
                                                      uint64_t node_sequence_id);
 
+};
+
+class RemoteExecutionDMUtils
+{
+public:
+  static int register_detectable_id(common::ObDetectableId &detectable_id, bool &has_registered,
+                                    uint64_t tenant_id);
+
+  static void unregister_detectable_id(const common::ObDetectableId &detectable_id);
+
+  static int register_check_item(const common::ObDetectableId &detectable_id,
+                                 const common::ObAddr &control_addr, sql::ObSQLSessionInfo *session,
+                                 uint64_t &node_sequence_id);
+
+  static void unregister_check_item(const common::ObDetectableId &detectable_id,
+                                    uint64_t node_sequence_id);
 };
 
 } // end namespace common

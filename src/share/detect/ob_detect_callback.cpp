@@ -15,11 +15,11 @@
 #include "src/share/detect/ob_detect_rpc_proxy.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
 #include "sql/dtl/ob_dtl_rpc_channel.h"
+#include "sql/session/ob_sql_session_mgr.h"
 
 namespace oceanbase {
 namespace common {
-
-const int64_t DM_INTERRUPT_MSG_MAX_LENGTH = 128;
+DEFINE_ENUM_FUNC(DetectCallBackType, detect_callback_type, DETECT_CALLBACK_TYPE);
 
 ObIDetectCallback::ObIDetectCallback(uint64_t tenant_id, const ObIArray<ObPeerTaskState> &peer_states)
     : ref_count_(0), sequence_id_(0), executed_(false), d_node_()
@@ -300,7 +300,6 @@ int ObP2PDataHubDetectCB::do_callback()
   return ret;
 }
 
-
 int ObDASRemoteTaskDetectCB::do_callback()
 {
   int ret = OB_SUCCESS;
@@ -316,6 +315,17 @@ int ObDASRemoteTaskDetectCB::do_callback()
     LIB_LOG(WARN, "[DM] fail to send interrupt message", K(int_code), K(tid_), K_(trace_id));
   }
   LIB_LOG(WARN, "[DM] interrupt das task and erase extra result", K(ret), K(tid_), K(key_), K(trace_id_));
+  return ret;
+}
+
+int ObRemoteSqlDetectCB::do_callback()
+{
+  int ret = OB_SUCCESS;
+  sql::ObSQLSessionMgr *session_mgr = GCTX.session_mgr_;
+  if (OB_NOT_NULL(session_mgr)) {
+    ret = session_mgr->kill_query(*session_);
+  }
+  LIB_LOG(WARN, "[DM] Remote Sql kill session", K(ret), K(session_->get_server_sid()), K_(trace_id));
   return ret;
 }
 

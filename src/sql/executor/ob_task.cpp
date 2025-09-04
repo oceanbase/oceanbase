@@ -32,7 +32,8 @@ ObTask::ObTask()
       ctrl_svr_(),
       ob_task_id_(),
       location_idx_(OB_INVALID_INDEX),
-      max_sql_no_(-1)
+      max_sql_no_(-1),
+      detectable_id_()
 {
   sql_string_[0] = '\0';
 }
@@ -87,6 +88,7 @@ OB_DEF_SERIALIZE(ObTask)
   LST_DO_CODE(OB_UNIS_ENCODE, ranges_);
   LST_DO_CODE(OB_UNIS_ENCODE, max_sql_no_);
   OB_UNIS_ENCODE(ObString(sql_string_));
+  OB_UNIS_ENCODE(detectable_id_);
   return ret;
 }
 
@@ -153,6 +155,7 @@ OB_DEF_DESERIALIZE(ObTask)
   if(OB_SUCC(ret)) {
     set_sql_string(sql_string);
   }
+  OB_UNIS_DECODE(detectable_id_);
   return ret;
 }
 
@@ -185,6 +188,7 @@ OB_DEF_SERIALIZE_SIZE(ObTask)
   }
   LST_DO_CODE(OB_UNIS_ADD_LEN, max_sql_no_);
   OB_UNIS_ADD_LEN(ObString(sql_string_));
+  OB_UNIS_ADD_LEN(detectable_id_);
   return len;
 }
 
@@ -340,6 +344,8 @@ OB_DEF_SERIALIZE(ObRemoteTask)
   }
   OB_UNIS_ENCODE(remote_sql_info_->is_original_ps_mode_);
   OB_UNIS_ENCODE(remote_sql_info_->sql_from_pl_);
+  OB_UNIS_ENCODE(ls_list_);
+  OB_UNIS_ENCODE(detectable_id_);
   return ret;
 }
 
@@ -384,6 +390,8 @@ OB_DEF_SERIALIZE_SIZE(ObRemoteTask)
     }
     OB_UNIS_ADD_LEN(remote_sql_info_->is_original_ps_mode_);
     OB_UNIS_ADD_LEN(remote_sql_info_->sql_from_pl_);
+    OB_UNIS_ADD_LEN(ls_list_);
+    OB_UNIS_ADD_LEN(detectable_id_);
   }
   return len;
 }
@@ -468,6 +476,8 @@ OB_DEF_DESERIALIZE(ObRemoteTask)
       }
       OB_UNIS_DECODE(remote_sql_info_->is_original_ps_mode_);
       OB_UNIS_DECODE(remote_sql_info_->sql_from_pl_);
+      OB_UNIS_DECODE(ls_list_);
+      OB_UNIS_DECODE(detectable_id_);
     }
   }
   return ret;

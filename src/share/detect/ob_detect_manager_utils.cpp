@@ -419,5 +419,93 @@ void ObDetectManagerUtils::das_task_unregister_check_item_from_dm(const common::
   }
 }
 
+int RemoteExecutionDMUtils::register_detectable_id(common::ObDetectableId &detectable_id,
+                                                   bool &has_registered, uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDetectManagerUtils::generate_detectable_id(detectable_id, tenant_id))) {
+    LIB_LOG(WARN, "[DM] failed to generate_detectable_id", K(tenant_id));
+  } else {
+    ObDetectManager *dm = MTL(ObDetectManager *);
+    if (OB_ISNULL(dm)) {
+      ret = OB_ERR_UNEXPECTED;
+      LIB_LOG(WARN, "[DM] dm is null", K(tenant_id));
+    } else if (OB_FAIL(dm->register_detectable_id(detectable_id))) {
+      LIB_LOG(WARN, "[DM] Remote execution fail to register detectable_id", K(ret),
+              K(detectable_id), K(tenant_id));
+    } else {
+      has_registered = true;
+    }
+    LIB_LOG(TRACE, "[DM] Remote execution register detectable_id_", K(ret), K(detectable_id),
+            K(tenant_id));
+  }
+  return ret;
+}
+
+void RemoteExecutionDMUtils::unregister_detectable_id(const common::ObDetectableId &detectable_id)
+{
+  int ret = OB_SUCCESS;
+  ObDetectManager *dm = MTL(ObDetectManager *);
+  if (OB_ISNULL(dm)) {
+    ret = OB_ERR_UNEXPECTED;
+    LIB_LOG(WARN, "[DM] dm is null", K(detectable_id));
+  } else {
+    ret = dm->unregister_detectable_id(detectable_id);
+  }
+  if (OB_SUCCESS != ret && OB_HASH_NOT_EXIST != ret) {
+    LIB_LOG(WARN, "[DM] Remote execution failed to unregister_detectable_id", K(ret),
+            K(detectable_id));
+  }
+  LIB_LOG(TRACE, "[DM] Remote execution unregister detectable_id_", K(ret), K(detectable_id));
+}
+
+int RemoteExecutionDMUtils::register_check_item(const common::ObDetectableId &detectable_id,
+                                                const common::ObAddr &control_addr,
+                                                sql::ObSQLSessionInfo *session,
+                                                uint64_t &node_sequence_id)
+{
+  int ret = OB_SUCCESS;
+  ObRemoteSqlDetectCB *cb = nullptr;
+
+  ObSEArray<ObPeerTaskState, 1> peer_states;
+  if (OB_FAIL(peer_states.push_back(ObPeerTaskState{control_addr}))) {
+    LIB_LOG(WARN, "[DM] failed to push_back", K(ret), K(detectable_id), K(control_addr));
+  } else {
+    ObDetectManager *dm = MTL(ObDetectManager *);
+    if (OB_ISNULL(dm)) {
+      ret = OB_ERR_UNEXPECTED;
+      LIB_LOG(WARN, "[DM] dm is null", K(detectable_id));
+    } else if (OB_SUCC(dm->register_check_item(detectable_id, cb, node_sequence_id, false,
+                                               peer_states, session))) {
+    } else {
+      LIB_LOG(WARN, "[DM] Remote execution failed to register check item", K(detectable_id));
+    }
+  }
+  return ret;
+}
+
+void RemoteExecutionDMUtils::unregister_check_item(const common::ObDetectableId &detectable_id,
+                                                   uint64_t node_sequence_id)
+{
+  int ret = OB_SUCCESS;
+  if (!detectable_id.is_invalid() && 0 != node_sequence_id) {
+    uint64_t tenant_id = detectable_id.tenant_id_;
+    MTL_SWITCH(tenant_id)
+    {
+      ObDetectManager *dm = MTL(ObDetectManager *);
+      if (OB_ISNULL(dm)) {
+        ret = OB_ERR_UNEXPECTED;
+        LIB_LOG(WARN, "[DM] dm is null", K(tenant_id));
+      } else {
+        ret = dm->unregister_check_item(detectable_id, node_sequence_id);
+        if (OB_SUCCESS != ret && OB_HASH_NOT_EXIST != ret) {
+          LIB_LOG(WARN, "[DM] Remote execution failed to unregister_check_item ", K(ret),
+                  K(detectable_id));
+        }
+      }
+    }
+  }
+}
+
 } // end namespace common
 } // end namespace oceanbase
