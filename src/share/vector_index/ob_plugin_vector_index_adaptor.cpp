@@ -2335,11 +2335,11 @@ int ObPluginVectorIndexAdaptor::serialize(ObIAllocator *allocator, ObOStreamBuf:
   return ret;
 }
 
-int ObPluginVectorIndexAdaptor::renew_single_snap_index()
+int ObPluginVectorIndexAdaptor::renew_single_snap_index(bool mem_saving_mode)
 {
   int ret = OB_SUCCESS;
   ObVectorIndexAlgorithmType index_type = get_snap_index_type();
-  if (index_type == VIAT_HNSW_BQ) {
+  if (mem_saving_mode) {
     ObString invalid_prefix("renew");
     if (OB_ISNULL(snap_data_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -3438,7 +3438,7 @@ bool ObPluginVectorIndexAdaptor::dec_ref_and_check_release()
   return (ref_count <= 0);
 }
 
-int ObPluginVectorIndexAdaptor::check_need_sync_to_follower_or_do_opt_task(bool &need_sync)
+int ObPluginVectorIndexAdaptor::check_need_sync_to_follower_or_do_opt_task(ObPluginVectorIndexMgr *mgr, bool is_leader, bool &need_sync)
 {
   int ret = OB_SUCCESS;
   need_sync = false;
@@ -3490,6 +3490,10 @@ int ObPluginVectorIndexAdaptor::check_need_sync_to_follower_or_do_opt_task(bool 
         K(follower_sync_statistics_), K(current_incr_count), K(current_bitmap_count),
         K(current_snapshot_count), KPC(this));
     }
+    if (is_leader && OB_FAIL(check_can_sync_to_follower(mgr, current_snapshot_count, need_sync))) {
+      LOG_WARN("fail to check can sync to follower", K(ret));
+      ret = OB_SUCCESS;
+    }
 
     if (need_sync) { // if need sync, update statistics, otherwise use current statistics and check next loop
       follower_sync_statistics_.incr_count_ = current_incr_count;
@@ -3500,6 +3504,36 @@ int ObPluginVectorIndexAdaptor::check_need_sync_to_follower_or_do_opt_task(bool 
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(check_if_need_optimize())) {
       LOG_WARN("failed to check if vector index need optimize", K(tmp_ret));
+    }
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexAdaptor::check_can_sync_to_follower(ObPluginVectorIndexMgr *mgr, int64_t current_snapshot_count, bool &need_sync)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *snapshot_table_schema;
+  if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id_));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, get_snapshot_table_id(), snapshot_table_schema))) {
+    LOG_WARN("failed to get simple schema", KR(ret), K(tenant_id_), K(get_snapshot_table_id()));
+  } else if (OB_ISNULL(snapshot_table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("snapshot table not exist", K(ret), K(snapshot_table_schema));
+  } else {
+    if (need_sync && !snapshot_table_schema->can_read_index()) {
+      need_sync = false;
+      LOG_INFO("snapshot table not ready, not need sync to follower", KPC(this));
+    }
+    if (current_snapshot_count == 0 && snapshot_table_schema->can_read_index()) {
+      if (OB_FAIL(mgr->get_mem_sync_info().add_task_to_waiting_map(get_inc_tablet_id(), get_inc_table_id()))) {
+        if (OB_HASH_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          TRANS_LOG(WARN, "fail to add complete adaptor to waiting map",KR(ret), K(tenant_id_));
+        }
+      }
     }
   }
   return ret;
