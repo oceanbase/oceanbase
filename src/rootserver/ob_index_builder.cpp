@@ -509,6 +509,12 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &const_arg, obrpc::ObDropInd
                         arg.task_id_, *index_table_schema, res.task_id_, res.task_id_,
                         ObDDLUpdateParentTaskIDType::UPDATE_VEC_REBUILD_DROP_INDEX_TASK_ID, allocator, trans))) {
             LOG_WARN("fail to update parent task message", K(ret), K(arg.task_id_), K(res.task_id_));
+          } else if (index_table_schema->is_fts_index() &&
+                     ObDDLType::DDL_DROP_INDEX == task_record.ddl_type_ &&
+                     OB_FAIL(ObDDLTaskRecordOperator::update_parent_task_message(tenant_id,
+                                arg.task_id_, *index_table_schema, 0/*target_table_id*/, res.task_id_,
+                                ObDDLUpdateParentTaskIDType::UPDATE_DROP_INDEX_TASK_ID, allocator, trans))) {
+            LOG_WARN("fail to update drop fulltext index parent task message", K(ret), K(arg.task_id_), K(res.task_id_));
           }
         }
       }
@@ -1238,7 +1244,7 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
                                  &arg,
                                  parent_task_id);
       if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {
-        if (OB_HASH_EXIST == ret) {
+        if (OB_HASH_EXIST == ret || OB_ENTRY_EXIST == ret) {
           task_has_exist = true;
           ret = OB_SUCCESS;
         } else {
