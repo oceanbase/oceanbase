@@ -156,6 +156,157 @@ void TestSSPhysicalBlockManager::check_super_block_identical(
   ASSERT_EQ(super_blk1.blk_ckpt_info_, super_blk2.blk_ckpt_info_);
 }
 
+// test data_blk allocation performance
+TEST_F(TestSSPhysicalBlockManager, test_data_blk_allocation_performance)
+{
+  LOG_INFO("TEST_CASE: start test test_phy_blk_allocation_performance");
+  ObTenantBase *tenant_base = MTL_CTX();
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
+  std::atomic<int64_t> total_cost_us = 0;
+  std::atomic<int64_t> total_alloc_cnt = 0;
+  int64_t reorgan_blk_cnt = phy_blk_mgr.blk_cnt_info_.reorgan_blk_cnt_;
+  LOG_INFO("blk cnt before test", K(phy_blk_mgr.blk_cnt_info_), K(reorgan_blk_cnt));
+
+  auto alloc_phy_blk = [&](const int64_t thread_index, const int64_t alloc_num, const ObSSPhyBlockType block_type,
+                           std::atomic<int64_t> &total_cost_us, std::atomic<int64_t> &total_alloc_cnt) {
+    ObTenantEnv::set_tenant(tenant_base);
+    int64_t phy_blk_idx = -1;
+    ObSSPhyBlockHandle phy_blk_handle;
+
+    for (int i = 0; i < alloc_num; ++i) {
+      const int64_t start_us = ObTimeUtility::current_time_us();
+      int ret = phy_blk_mgr.alloc_block(phy_blk_idx, phy_blk_handle, block_type);
+      const int64_t cost_us = ObTimeUtility::current_time_us() - start_us;
+      if (OB_SUCC(ret)) {
+        LOG_INFO("succ to alloc free phy_block", K(thread_index), KR(ret), K(block_type), K(phy_blk_idx), K(cost_us));
+        total_cost_us.fetch_add(cost_us);
+        total_alloc_cnt.fetch_add(1);
+      } else if (OB_EAGAIN == ret) {
+        LOG_WARN("no block to alloc free phy_block", K(thread_index), KR(ret), K(block_type));
+      } else {
+        LOG_WARN("some error when alloc free phy_block", K(thread_index), KR(ret), K(block_type));
+      }
+    }
+  };
+  // each thread apply to alloc max_cnt/2 data_blk
+  std::vector<std::thread> th_alloc_blk;
+  const int64_t thread_num = 9;
+  ObSSPhyBlockType block_type = ObSSPhyBlockType::SS_MICRO_DATA_BLK;
+  const int64_t data_blk_max_cnt = phy_blk_mgr.blk_cnt_info_.data_blk_.max_cnt_;
+  const int64_t alloc_num = data_blk_max_cnt / 2;
+
+  for (int64_t i = 0; i < thread_num; ++i) {
+    std::thread th(alloc_phy_blk, i, alloc_num, block_type, std::ref(total_cost_us), std::ref(total_alloc_cnt));
+    th_alloc_blk.push_back(std::move(th));
+  }
+  for (int64_t i = 0; i < thread_num; ++i) {
+    th_alloc_blk[i].join();
+  }
+
+  ASSERT_NE(0, total_alloc_cnt);
+  ASSERT_EQ(total_alloc_cnt + reorgan_blk_cnt, data_blk_max_cnt);
+  int64_t avg_time_us = total_cost_us / total_alloc_cnt;
+  LOG_INFO("blk cnt after test", K(phy_blk_mgr.blk_cnt_info_), K(reorgan_blk_cnt));
+  LOG_INFO("allocation performance", K(total_alloc_cnt.load()), K(avg_time_us));
+  // phy_blk alloc time should not exceed 70, otherwise it will be considered as performance regression.
+  ASSERT_LT(avg_time_us, 400);
+
+  LOG_INFO("TEST_CASE: finsih test test_phy_blk_allocation_performance");
+}
+
+// test different phy_blk allocation performance concurrently
+TEST_F(TestSSPhysicalBlockManager, test_different_blk_allocation_performance)
+{
+  LOG_INFO("TEST_CASE: start test test_phy_blk_allocation_performance");
+  ObTenantBase *tenant_base = MTL_CTX();
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
+  std::atomic<int64_t> total_data_blk_alloc_cnt = 0;
+  std::atomic<int64_t> total_meta_blk_alloc_cnt = 0;
+  std::atomic<int64_t> total_reorgan_blk_alloc_cnt = 0;
+  std::atomic<int64_t> total_data_blk_cost_us = 0;
+  std::atomic<int64_t> total_meta_blk_cost_us = 0;
+  std::atomic<int64_t> total_reorgan_blk_cost_us = 0;
+  const int64_t data_blk_max_cnt = phy_blk_mgr.blk_cnt_info_.data_blk_.max_cnt_;
+  const int64_t meta_blk_max_cnt = phy_blk_mgr.blk_cnt_info_.meta_blk_.max_cnt_;
+  int64_t reorgan_blk_cnt = phy_blk_mgr.blk_cnt_info_.reorgan_blk_cnt_;
+  LOG_INFO("before test blk cnt", K(phy_blk_mgr.cache_stat_.phy_blk_stat_), K(reorgan_blk_cnt));
+
+  auto alloc_phy_blk = [&](const int64_t thread_index, const int64_t alloc_num, const ObSSPhyBlockType block_type,
+                           std::atomic<int64_t> &data_blk_alloc_cnt, std::atomic<int64_t> &data_blk_cost_us,
+                           std::atomic<int64_t> &meta_blk_alloc_cnt, std::atomic<int64_t> &meta_blk_cost_us,
+                           std::atomic<int64_t> &reorgan_blk_alloc_cnt, std::atomic<int64_t> &reorgan_blk_cost_us) {
+    ObTenantEnv::set_tenant(tenant_base);
+    int64_t phy_blk_idx = -1;
+    ObSSPhyBlockHandle phy_blk_handle;
+
+    for (int i = 0; i < alloc_num; ++i) {
+      const int64_t start_us = ObTimeUtility::current_time_us();
+      int ret = phy_blk_mgr.alloc_block(phy_blk_idx, phy_blk_handle, block_type);
+      const int64_t cost_us = ObTimeUtility::current_time_us() - start_us;
+      if (OB_SUCC(ret)) {
+        LOG_INFO("succ to alloc free phy_block", K(thread_index), KR(ret), K(block_type), K(phy_blk_idx), K(cost_us));
+        if (ObSSPhyBlockType::SS_MICRO_DATA_BLK == block_type) {
+          data_blk_cost_us.fetch_add(cost_us);
+          data_blk_alloc_cnt.fetch_add(1);
+        } else if (ObSSPhyBlockType::SS_MICRO_META_BLK == block_type) {
+          meta_blk_cost_us.fetch_add(cost_us);
+          meta_blk_alloc_cnt.fetch_add(1);
+        } else {
+          reorgan_blk_cost_us.fetch_add(cost_us);
+          reorgan_blk_alloc_cnt.fetch_add(1);
+        }
+      } else if (OB_EAGAIN == ret) {
+        LOG_WARN("no block to alloc free phy_block", K(thread_index), KR(ret), K(block_type));
+      } else {
+        LOG_WARN("some error when alloc free phy_block", K(thread_index), KR(ret), K(block_type));
+      }
+    }
+  };
+  // each thread apply to alloc max_cnt/2 phy_blk, and per kind of phy_blk will be allocated by 3 thread concurrently
+  std::vector<std::thread> th_alloc_blk;
+  const int64_t thread_num = 9;
+  int64_t alloc_num[3];
+  ObSSPhyBlockType block_type[3];
+  block_type[0] = ObSSPhyBlockType::SS_MICRO_DATA_BLK;
+  block_type[1] = ObSSPhyBlockType::SS_MICRO_META_BLK;
+  block_type[2] = ObSSPhyBlockType::SS_REORGAN_BLK;
+  alloc_num[0] = data_blk_max_cnt / 2;
+  alloc_num[1] = meta_blk_max_cnt / 2;
+  alloc_num[2] = reorgan_blk_cnt / 2;
+
+  LOG_INFO("shared blk info", K(phy_blk_mgr.blk_cnt_info_.shared_blk_cnt_), K(phy_blk_mgr.blk_cnt_info_.shared_blk_used_cnt_));
+  for (int64_t i = 0; i < thread_num; ++i) {
+    std::thread th(alloc_phy_blk, i, alloc_num[i % 3], block_type[i % 3],
+                   std::ref(total_data_blk_alloc_cnt), std::ref(total_data_blk_cost_us),
+                   std::ref(total_meta_blk_alloc_cnt), std::ref(total_meta_blk_cost_us),
+                   std::ref(total_reorgan_blk_alloc_cnt), std::ref(total_reorgan_blk_cost_us));
+    th_alloc_blk.push_back(std::move(th));
+  }
+  for (int64_t i = 0; i < thread_num; ++i) {
+    th_alloc_blk[i].join();
+  }
+
+  const int64_t data_blk_used = phy_blk_mgr.blk_cnt_info_.data_blk_.used_cnt_;
+  ASSERT_EQ(total_data_blk_alloc_cnt + total_reorgan_blk_alloc_cnt, data_blk_used);
+  ASSERT_LE(data_blk_used, data_blk_max_cnt);
+  ASSERT_EQ(total_meta_blk_alloc_cnt, meta_blk_max_cnt);
+  int64_t avg_data_blk_time_us = total_data_blk_cost_us / total_data_blk_alloc_cnt;
+  int64_t avg_meta_blk_time_us = total_meta_blk_cost_us / total_meta_blk_alloc_cnt;
+  int64_t avg_reorgan_blk_time_us = total_reorgan_blk_alloc_cnt / total_reorgan_blk_alloc_cnt;
+  LOG_INFO("allocation performance", K(total_data_blk_alloc_cnt.load()), K(avg_data_blk_time_us),
+                                     K(total_meta_blk_alloc_cnt.load()), K(avg_meta_blk_time_us),
+                                     K(total_reorgan_blk_alloc_cnt.load()), K(avg_reorgan_blk_time_us));
+  // phy_blk alloc time should not exceed 70, otherwise it will be considered as performance regression.
+  ASSERT_LT(avg_data_blk_time_us, 400);
+  ASSERT_LT(avg_meta_blk_time_us, 400);
+  ASSERT_LT(avg_reorgan_blk_time_us, 400);
+
+  LOG_INFO("TEST_CASE: finsih test test_phy_blk_allocation_performance");
+}
+
+
 TEST_F(TestSSPhysicalBlockManager, super_block)
 {
   ObSSPhysicalBlockManager &phy_blk_mgr = MTL(ObSSMicroCache *)->phy_blk_mgr_;
@@ -1003,6 +1154,8 @@ int main(int argc, char **argv)
   system("rm -f test_ss_physical_block_manager.log*");
   OB_LOGGER.set_file_name("test_ss_physical_block_manager.log", true, true);
   OB_LOGGER.set_log_level("INFO");
+  ObPLogWriterCfg log_cfg;
+  OB_LOGGER.init(log_cfg, false);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

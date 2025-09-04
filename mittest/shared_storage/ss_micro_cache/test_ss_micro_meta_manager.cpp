@@ -84,6 +84,97 @@ void TestSSMicroMetaManager::TearDown()
   micro_cache->destroy();
 }
 
+// test memory cost of meta
+TEST_F(TestSSMicroMetaManager, test_meta_memory_cost)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("TEST_CASE: start test test_meta_memory_cost");
+  ObTenantBase *tenant_base = MTL_CTX();
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
+  ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
+
+  const int64_t origin_meta_cnt = micro_meta_mgr.micro_meta_map_.count();
+  ASSERT_EQ(0, origin_meta_cnt);
+  const int64_t origin_mem_map_cost = micro_cache->cache_stat_.mem_stat_.micro_map_usage_;
+  const int64_t origin_mem_meta_cost = micro_cache->cache_stat_.mem_stat_.micro_meta_usage_;
+  const int64_t origin_mem_range_cost = micro_cache->cache_stat_.mem_stat_.micro_range_usage_;
+  const int64_t origin_mem_blk_cost = micro_cache->cache_stat_.mem_stat_.mem_blk_usage_;
+  const int64_t origin_phy_blk_cost = micro_cache->cache_stat_.mem_stat_.phy_blk_usage_;
+  const int64_t origin_mem_cost = micro_cache->cache_stat_.mem_stat_.get_total_mem_usage();
+  const int64_t origin_fg_blk_used = micro_cache->cache_stat_.mem_blk_stat_.mem_blk_fg_used_cnt_;
+  const int64_t origin_bg_blk_used = micro_cache->cache_stat_.mem_blk_stat_.mem_blk_bg_used_cnt_;
+  LOG_INFO("init mem usage", K(origin_mem_cost), K(origin_mem_map_cost), K(origin_mem_range_cost), K(origin_mem_meta_cost),
+           K(origin_mem_blk_cost), K(origin_phy_blk_cost));
+
+  // Generate 100,000 micro and insert into mem
+  const int64_t block_size = phy_blk_mgr.block_size_;
+  const int64_t macro_cnt = 250;
+  const int64_t micro_cnt = 400;
+  const int64_t total_micro_cnt = macro_cnt * micro_cnt;
+  const int32_t micro_size = 4 << 10;
+  ObHashMap<ObSSMicroBlockCacheKey, int64_t> micro_key_map;
+  ASSERT_EQ(OB_SUCCESS, micro_key_map.create(1 << 11,  ObMemAttr(MTL_ID(), "test")));
+
+  ObArenaAllocator allocator;
+  char *data_buf = static_cast<char *>(allocator.alloc(micro_size));
+  ASSERT_NE(nullptr, data_buf);
+  MEMSET(data_buf, 'a', micro_size);
+
+  for (int64_t i = 0; i < macro_cnt; ++i) {
+    MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(100 + i);
+    for (int64_t j = 0; j < micro_cnt; ++j) {
+      const int64_t offset = 1 + j * micro_size;
+      ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+      if (OB_SUCC(micro_cache->add_micro_block_cache(micro_key, data_buf, micro_size,
+                  macro_id.second_id()/*effective_tablet_id*/, ObSSMicroCacheAccessType::COMMON_IO_TYPE))) {
+        struct UpdateOp {
+              void operator()(HashMapPair<ObSSMicroBlockCacheKey, int64_t> &pair) { pair.second++; }
+        };
+        UpdateOp update_op;
+        if (OB_FAIL(micro_key_map.set_or_update(micro_key, 1, update_op))) {
+          LOG_WARN("fail to set_or_update micro_key", K(micro_key));
+        }
+      }
+    }
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
+  }
+
+  // Check result
+  ASSERT_EQ(micro_key_map.size(), total_micro_cnt);
+  const int64_t total_cnt_in_meta_map = micro_meta_mgr.micro_meta_map_.count();
+  ASSERT_EQ(total_cnt_in_meta_map, total_micro_cnt);
+  for (auto iter = micro_key_map.begin(); iter != micro_key_map.end(); ++iter) {
+    ObSSMicroBlockMetaHandle micro_meta_handle;
+    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_block_meta(iter->first, micro_meta_handle, ObTabletID::INVALID_TABLET_ID, false));
+  }
+
+  const int64_t curr_mem_map_cost = micro_cache->cache_stat_.mem_stat_.micro_map_usage_;
+  const int64_t curr_mem_meta_cost = micro_cache->cache_stat_.mem_stat_.micro_meta_usage_;
+  const int64_t curr_mem_range_cost = micro_cache->cache_stat_.mem_stat_.micro_range_usage_;
+  const int64_t curr_mem_blk_cost = micro_cache->cache_stat_.mem_stat_.mem_blk_usage_;
+  const int64_t curr_phy_blk_cost = micro_cache->cache_stat_.mem_stat_.phy_blk_usage_;
+  const int64_t curr_mem_cost = micro_cache->cache_stat_.mem_stat_.get_total_mem_usage();
+  const int64_t curr_fg_blk_used = micro_cache->cache_stat_.mem_blk_stat_.mem_blk_fg_used_cnt_;
+  const int64_t curr_bg_blk_used = micro_cache->cache_stat_.mem_blk_stat_.mem_blk_bg_used_cnt_;
+  LOG_INFO("curr mem usage", K(curr_mem_cost), K(curr_mem_map_cost), K(curr_mem_range_cost), K(curr_mem_meta_cost),
+           K(curr_mem_blk_cost), K(curr_phy_blk_cost));
+  LOG_INFO("mem_blk usage", K(origin_fg_blk_used), K(origin_bg_blk_used), K(curr_fg_blk_used), K(curr_bg_blk_used));
+
+  const int64_t mem_map_cost_per_meta = (curr_mem_map_cost - origin_mem_map_cost) / total_micro_cnt;
+  const int64_t mem_meta_cost_per_meta = (curr_mem_meta_cost - origin_mem_meta_cost) / total_micro_cnt;
+  const int64_t mem_range_cost_per_meta = (curr_mem_range_cost - origin_mem_range_cost) / total_micro_cnt;
+  const int64_t mem_cost_per_micro = (curr_mem_cost - origin_mem_cost) / total_micro_cnt;
+  LOG_INFO("mem usage per meta", K(mem_cost_per_micro), K(mem_map_cost_per_meta), K(mem_range_cost_per_meta), K(mem_meta_cost_per_meta));
+
+  const int64_t meta_key_point_size = sizeof(ObSSMicroBlockCacheKey*);
+  const int64_t meta_size = sizeof(ObSSMicroBlockMeta);
+  const int64_t meta_handle_size = sizeof(ObSSMicroBlockMetaHandle);
+  LOG_INFO("meta size", K(meta_size), K(meta_key_point_size), K(meta_handle_size));
+
+  LOG_INFO("TEST_CASE: finsih test test_meta_memory_cost");
+}
+
 TEST_F(TestSSMicroMetaManager, basic_add_micro_meta)
 {
   LOG_INFO("TEST_CASE: start basic_add_micro_meta");
@@ -777,6 +868,8 @@ int main(int argc, char **argv)
   system("rm -f test_ss_micro_meta_manager.log*");
   OB_LOGGER.set_file_name("test_ss_micro_meta_manager.log", true, true);
   OB_LOGGER.set_log_level("INFO");
+  ObPLogWriterCfg log_cfg;
+  OB_LOGGER.init(log_cfg, false);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
