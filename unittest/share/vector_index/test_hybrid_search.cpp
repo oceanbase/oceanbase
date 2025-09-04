@@ -571,7 +571,7 @@ TEST_F(TestHybridSearch, rank_feature)
         }
       }
     })";
-  common::ObString result("SELECT *, (pow(pagerank, 0.6) / (pow(pagerank, 0.6) + pow(40, 0.6))) as _score FROM doc_table ORDER BY _score DESC");
+  common::ObString result("SELECT *, (pow(pagerank, 0.6) / (pow(pagerank, 0.6) + pow(40, 0.6))) as _score FROM doc_table WHERE pagerank IS NOT NULL ORDER BY _score DESC");
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result);
 
@@ -583,7 +583,7 @@ TEST_F(TestHybridSearch, rank_feature)
       }
     }
   })";
-  common::ObString result1("SELECT *, (40 / (pagerank + 40)) as _score FROM doc_table ORDER BY _score DESC");
+  common::ObString result1("SELECT *, (40 / (pagerank + 40)) as _score FROM doc_table WHERE pagerank IS NOT NULL ORDER BY _score DESC");
   TestHybridSearchHelp::runtest(table_name, req_str1, result1);
 
     common::ObString req_str2 = R"({
@@ -594,7 +594,7 @@ TEST_F(TestHybridSearch, rank_feature)
       }
     }
   })";
-  common::ObString result2("SELECT *, (pagerank / (pagerank + 40)) as _score FROM doc_table ORDER BY _score DESC");
+  common::ObString result2("SELECT *, (pagerank / (pagerank + 40)) as _score FROM doc_table WHERE pagerank IS NOT NULL ORDER BY _score DESC");
   TestHybridSearchHelp::runtest(table_name, req_str2, result2);
 
   common::ObString req_str3 = R"({
@@ -605,7 +605,7 @@ TEST_F(TestHybridSearch, rank_feature)
       }
     }
   })";
-  common::ObString result3("SELECT *, pagerank as _score FROM doc_table ORDER BY _score DESC");
+  common::ObString result3("SELECT *, pagerank as _score FROM doc_table WHERE pagerank IS NOT NULL ORDER BY _score DESC");
   TestHybridSearchHelp::runtest(table_name, req_str3, result3);
 
   common::ObString req_str4 = R"({
@@ -616,7 +616,7 @@ TEST_F(TestHybridSearch, rank_feature)
       }
     }
   })";
-  common::ObString result4("SELECT *, (1 / pagerank) as _score FROM doc_table ORDER BY _score DESC");
+  common::ObString result4("SELECT *, (1 / pagerank) as _score FROM doc_table WHERE pagerank IS NOT NULL ORDER BY _score DESC");
   TestHybridSearchHelp::runtest(table_name, req_str4, result4);
 
   common::ObString req_str5 = R"({
@@ -627,7 +627,7 @@ TEST_F(TestHybridSearch, rank_feature)
         }
       }
     })";
-  common::ObString result5("SELECT *, (pow(40, 0.6) / (pow(pagerank, 0.6) + pow(40, 0.6))) as _score FROM doc_table ORDER BY _score DESC");
+  common::ObString result5("SELECT *, (pow(40, 0.6) / (pow(pagerank, 0.6) + pow(40, 0.6))) as _score FROM doc_table WHERE pagerank IS NOT NULL ORDER BY _score DESC");
   TestHybridSearchHelp::runtest(table_name, req_str5, result5);
 
   common::ObString req_str6 = R"({
@@ -638,7 +638,7 @@ TEST_F(TestHybridSearch, rank_feature)
       }
     }
   })";
-  common::ObString result6("SELECT *, ln((pagerank + 4)) as _score FROM doc_table ORDER BY _score DESC");
+  common::ObString result6("SELECT *, ln((pagerank + 4)) as _score FROM doc_table WHERE pagerank IS NOT NULL ORDER BY _score DESC");
   TestHybridSearchHelp::runtest(table_name, req_str6, result6);
 
   // only positive score impact supported
@@ -650,7 +650,7 @@ TEST_F(TestHybridSearch, rank_feature)
       }
     }
   })";
-  common::ObString result7("SELECT *, ln((pagerank + 4)) as _score FROM doc_table ORDER BY _score DESC");
+  common::ObString result7("SELECT *, ln((pagerank + 4)) as _score FROM doc_table WHERE pagerank IS NOT NULL ORDER BY _score DESC");
   TestHybridSearchHelp::runtest(table_name, req_str7, result7);
 
 }

@@ -47,13 +47,14 @@ public :
 };
 
 struct BoolQueryMinShouldMatchInfo {
-  BoolQueryMinShouldMatchInfo() : has_minimum_should_match_(false), has_where_condition_(true) {}
+  BoolQueryMinShouldMatchInfo() : has_minimum_should_match_(false), has_where_condition_(true), ge_expr_(nullptr) {}
   virtual ~BoolQueryMinShouldMatchInfo() {}
   bool has_minimum_should_match_;
   bool has_where_condition_;
   ObReqConstExpr *minimum_should_match_;
   uint64_t msm_count_;
-  TO_STRING_KV(K(has_minimum_should_match_), K(has_where_condition_), K(minimum_should_match_), K(msm_count_));
+  ObReqExpr *ge_expr_;
+  TO_STRING_KV(K(has_minimum_should_match_), K(has_where_condition_), K(minimum_should_match_), K(msm_count_), K(ge_expr_));
 };
 
 struct QueryStringMinShouldMatchInfo {
@@ -93,17 +94,17 @@ public :
   inline ObIArray<ObString> &get_user_column_names() { return user_cols_; }
 private :
   int parse_query(ObIJsonBase &req_node, ObQueryReqFromJson *&query_req);
-  int parse_bool_query(ObIJsonBase &req_node, ObQueryReqFromJson *&query_req, ObReqExpr *&and_expr, bool need_cal_score = true);
+  int parse_bool_query(ObIJsonBase &req_node, ObQueryReqFromJson *&query_req, ObReqExpr *&where_condition, ObReqExpr *&score_expr, bool need_cal_score = true);
   int parse_knn(ObIJsonBase &req_node, ObQueryReqFromJson *&query_req);
   int parse_source(ObIJsonBase &req_node);
-  int parse_must_clauses(ObIJsonBase &req_node, ObQueryReqFromJson *&query_req, ObReqExpr *&and_expr, bool need_cal_score = true);
-  int parse_must_not_clauses(ObIJsonBase &req_node, ObQueryReqFromJson *&query_req, ObReqExpr *&and_expr);
-  int parse_should_clauses(ObIJsonBase &req_node, ObQueryReqFromJson *&query_req, ObReqExpr *&and_expr,
+  int parse_must_clauses(ObIJsonBase &req_node, ObQueryReqFromJson *&query_req, ObReqExpr *&where_condition, common::ObIArray<ObReqExpr *> &score_items, bool need_cal_score = true);
+  int parse_must_not_clauses(ObIJsonBase &req_node, ObQueryReqFromJson *&query_req, ObReqExpr *&where_condition);
+  int parse_should_clauses(ObIJsonBase &req_node, ObQueryReqFromJson *&query_req, ObReqExpr *&where_condition, common::ObIArray<ObReqExpr *> &score_items,
                            BoolQueryMinShouldMatchInfo &bq_min_should_match_info, bool need_cal_score = true);
-  int parse_filter_clauses(ObIJsonBase &req_node, ObQueryReqFromJson *&query_req, ObReqExpr *&and_expr);
-  int parse_single_term(ObIJsonBase &req_node, ObQueryReqFromJson &query_req, ObReqExpr *&expr, ObReqExpr *&where_condition);
-  int parse_match_expr(ObIJsonBase &req_node, ObQueryReqFromJson &query_req, ObReqExpr *&match_expr);
-  int parse_term_expr(ObIJsonBase &req_node, ObReqExpr *&eq_expr);
+  int parse_filter_clauses(ObIJsonBase &req_node, ObQueryReqFromJson *&query_req, ObReqExpr *&where_condition);
+  int parse_single_term(ObIJsonBase &req_node, ObQueryReqFromJson &query_req, ObReqExpr *&score_expr, ObReqExpr *&where_condition);
+  int parse_match_expr(ObIJsonBase &req_node, ObQueryReqFromJson &query_req, ObReqExpr *&score_expr, ObReqExpr *&where_condition);
+  int parse_term_expr(ObIJsonBase &req_node, ObReqExpr *&score_expr, ObReqExpr *&where_condition);
   int parse_query_string_expr(ObIJsonBase &req_node, ObReqExpr *&query_string_expr, ObReqExpr *&where_condition);
   int parse_query_string_boost(ObIJsonBase &req_node, ObReqExpr *&expr);
   int parse_query_string_fields(ObIJsonBase &req_node, common::ObIArray<ObReqColumnExpr *> &field_exprs);
@@ -117,7 +118,7 @@ private :
                                  QueryStringMinShouldMatchInfo &qs_min_should_match_info);
   int parse_minimum_should_match_with_percentage(const common::ObString &percent_str, const int64_t term_count, uint64_t &msm_count);
   int parse_minimum_should_match_with_integer(const common::ObString &val, const bool is_percentage_value, const int64_t term_count, uint64_t &msm_count);
-  int parse_rank_feature(ObIJsonBase &req_node, ObReqExpr *&rank_feat, ObReqColumnExpr *&column_expr);
+  int parse_rank_feature(ObIJsonBase &req_node, ObReqExpr *&rank_feat, ObReqExpr *&where_condition);
   int parse_rank_feat_param(ObIJsonBase &req_node, const ObString &para1, const ObString &para2,
                             ObReqConstExpr *&const_para1, ObReqConstExpr *&const_para2, bool &positive);
   int parse_basic_table(const ObString &table_name, ObQueryReqFromJson *query_req);
@@ -161,14 +162,17 @@ private :
                                  common::ObIArray<ObReqExpr *> &conditions,
                                  QueryStringMinShouldMatchInfo &qs_min_should_match_info,
                                  ObReqScoreType score_type, const ObItemType opr = T_OP_OR);
+  int construct_match_expr(ObIJsonBase &val_node, ObQueryReqFromJson &query_req, ObReqColumnExpr *col_expr, ObReqMatchExpr *&match_expr);
+  int construct_boost_expr(ObReqExpr *expr, ObReqConstExpr *boost_value, ObReqOpExpr *&boost_mul_expr);
   int construct_all_query(ObQueryReqFromJson *&query_req);
-  int parse_const(ObIJsonBase &val_node, ObReqConstExpr *&var, bool is_numeric = false);
+  int parse_const(ObIJsonBase &val_node, ObReqConstExpr *&var, bool is_numeric = false, bool cover_value_to_str = false);
   int wrap_sub_query(ObString &sub_query_name, ObQueryReqFromJson *&query_req);
   int wrap_json_result(ObQueryReqFromJson *&query_res);
   int construct_query_with_similarity(ObReqExpr *dist, ObReqConstExpr *similar, ObQueryReqFromJson *&query_req);
   int construct_query_with_minnum_should_match(ObReqExpr *score, ObReqConstExpr *minnum_should_match, ObQueryReqFromJson *&query_req);
   int construct_op_expr(ObReqExpr *l_param, ObReqExpr *r_param, ObItemType type, ObReqOpExpr *&cmp_expr, bool need_parentheses = true);
-  int parse_range_condition(ObIJsonBase &req_node, ObReqExpr *&expr);
+  int construct_op_expr(common::ObIArray<ObReqExpr *> &expr_items, const ObItemType op, ObReqExpr *&expr, bool need_parentheses = true);
+  int parse_range_condition(ObIJsonBase &req_node, ObReqExpr *&expr, ObReqExpr *&where_condition);
   int construct_sub_query_table(ObString &sub_query_name, ObQueryReqFromJson *query_req, ObReqTable *&sub_query);
   int construct_hybrid_query(ObQueryReqFromJson *fts, ObQueryReqFromJson *knn, ObQueryReqFromJson *&hybrid);
   int contruct_score_sum_expr(ObReqExpr *fts_score, ObReqExpr *vs_score, common::ObString &score_alias, ObReqOpExpr *&score);
@@ -193,7 +197,6 @@ private :
                                                                  col_name == "_semantic_score" ||
                                                                  col_name == "__pk_increment"; }
   int construct_minimum_should_match_info(ObIJsonBase &req_node, BoolQueryMinShouldMatchInfo &min_should_match_info);
-  int construct_bool_score_expr(ObReqExpr *&bool_score_item, common::ObIArray<ObReqExpr *> &score_array);
   int construct_required_params(const char *params_name[], uint32_t name_len, RequiredParamsSet &required_params);
   int get_base_table_query(ObQueryReqFromJson *query_req, ObQueryReqFromJson *&base_table_req);
   int build_should_groups(uint64_t start, uint64_t k, const common::ObIArray<ObReqExpr *> &items, common::ObIArray<ObReqExpr *> &expr_array, ObReqExpr *&or_expr);
@@ -202,7 +205,7 @@ private :
                                                    const common::ObIArray<ObReqConstExpr *> &keyword_exprs,
                                                    const ObReqScoreType score_type,
                                                    QueryStringMinShouldMatchInfo &qs_min_should_match_info);
-  int get_minimum_should_match_(ObIJsonBase &req_node, uint64_t &count);
+  int check_rank_feat_param(ObIJsonBase *sub_node, uint64_t &algorithm_count, bool &has_field, const ObString &key);
   ObIAllocator &alloc_;
   common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> source_cols_;
   bool need_json_wrap_;
