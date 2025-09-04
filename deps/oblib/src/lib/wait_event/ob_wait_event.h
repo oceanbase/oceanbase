@@ -144,7 +144,7 @@ WAIT_EVENT_DEF(USER_INFO_LOCK, 18114, "user info lock", "", "", "", CONCURRENCY,
 WAIT_EVENT_DEF(MYSQL_CONN_GET_LOCK, 18115, "mysql conn get lock", "", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(MYSQL_CONN_DBLINK_POOL_LOCK, 18116, "mysql conn dblink pool lock", "", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(BACKUP_VALIDATE_SERVICE_COND_WAIT, 18117, "backup validate service condition wait", "address", "", "", CONCURRENCY, true, true)
-
+WAIT_EVENT_DEF(HMS_CLIENT_POOL_COND_WAIT, 18118, "hms client pool condition wait", "address", "", "", CONCURRENCY, true, true)
 
 //sleep
 WAIT_EVENT_DEF(BANDWIDTH_THROTTLE_SLEEP, 20000, "sleep: bandwidth throttle sleep wait", "sleep_interval", "", "", NETWORK, true, true)
