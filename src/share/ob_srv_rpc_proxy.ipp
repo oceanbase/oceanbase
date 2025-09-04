@@ -76,6 +76,9 @@
   RPC_S(PR5 check_deployment_mode_match, OB_CHECK_DEPLOYMENT_MODE, (ObCheckDeploymentModeArg), Bool);
 #ifdef OB_BUILD_TDE_SECURITY
   RPC_S(PR5 wait_master_key_in_sync, OB_WAIT_MASTER_KEY_IN_SYNC, (ObWaitMasterKeyInSyncArg));
+#ifdef OB_BUILD_SHARED_STORAGE
+  RPC_S(PR5 notify_upload_root_key, OB_NOTIFY_UPLOAD_ROOT_KEY, (obrpc::UInt64));
+#endif
 #endif
   RPC_S(PR5 notify_create_tenant_user_ls, OB_NOTIFY_CREATE_TENANT_USER_LS, (obrpc::UInt64));
   RPC_S(PR5 report_replica, OB_REPORT_REPLICA);

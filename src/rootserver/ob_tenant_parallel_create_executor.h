@@ -86,6 +86,12 @@ private:
   bool get_create_ls_with_palf_();
 
   bool async_rpc_has_error(ObParallelCreateNormalTenantProxy &proxy);
+
+#ifdef OB_BUILD_TDE_SECURITY
+#ifdef OB_BUILD_SHARED_STORAGE
+  int upload_root_key_();
+#endif
+#endif
 private:
   // set by outside
   obrpc::ObCreateTenantArg create_tenant_arg_;

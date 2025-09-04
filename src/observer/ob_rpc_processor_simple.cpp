@@ -4818,5 +4818,29 @@ int ObCheckSysTableSchemaP::process()
   return ret;
 }
 
+#ifdef OB_BUILD_TDE_SECURITY
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObRpcUploadRootKeyP::process()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg_;
+  if (OB_UNLIKELY(tenant_id != MTL_ID())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("unexpected tenant id", K(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(!GCTX.is_shared_storage_mode())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("should not upload root key for sn", K(ret), K(tenant_id));
+  } else if (OB_FAIL(ObMasterKeyUtil::ss_dump_root_key_if_need_and_not_exist(tenant_id))) {
+    LOG_WARN("fail to dump root key", K(ret), K(tenant_id));
+  }
+
+  return ret;
+}
+#endif
+#endif
+
 } // end of namespace observer
 } // end of namespace oceanbase
