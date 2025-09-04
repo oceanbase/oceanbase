@@ -1443,6 +1443,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprVectorCosineSimilarity::calc_cosine_similarity       /* 872 */
   NULL, // ObExprVectorIPSimilarity::calc_ip_similarity               /* 873 */
   NULL, // ObExprVectorSimilarity::calc_similarity                    /* 874 */
+  NULL, // ObExprVecVisible::generate_vec_visible                     /* 875 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
