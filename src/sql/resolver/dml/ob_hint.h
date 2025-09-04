@@ -220,6 +220,7 @@ struct ObOptParamHint
     DEF(ENABLE_PDML_INSERT_UP,)                     \
     DEF(APPROX_COUNT_DISTINCT_PRECISION,)           \
     DEF(ENABLE_RUNTIME_FILTER_ADAPTIVE_APPLY, )     \
+    DEF(ENABLE_DELETE_INSERT_SCAN,)                 \
 
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);

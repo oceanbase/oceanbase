@@ -307,7 +307,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     px_node_selection_mode_(ObPxNodeSelectionMode::DEFAULT),
     enable_distributed_das_scan_(true),
     enable_topn_runtime_filter_(true),
-    enable_runtime_filter_adaptive_apply_(true)
+    enable_runtime_filter_adaptive_apply_(true),
+    enable_delete_insert_scan_(false)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -811,6 +812,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_enable_topn_runtime_filter(bool enabled) { enable_topn_runtime_filter_ = enabled; }
   inline bool enable_runtime_filter_adaptive_apply() const { return enable_runtime_filter_adaptive_apply_; }
   inline void set_enable_runtime_filter_adaptive_apply(bool enabled) { enable_runtime_filter_adaptive_apply_ = enabled; }
+  inline bool enable_delete_insert_scan() const { return enable_delete_insert_scan_; }
+  inline void set_enable_delete_insert_scan(bool enabled) { enable_delete_insert_scan_ = enabled; }
 private:
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
@@ -936,6 +939,7 @@ private:
   bool enable_distributed_das_scan_;
   bool enable_topn_runtime_filter_;
   bool enable_runtime_filter_adaptive_apply_;
+  bool enable_delete_insert_scan_;
 };
 }
 }

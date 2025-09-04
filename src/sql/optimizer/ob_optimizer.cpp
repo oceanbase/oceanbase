@@ -778,6 +778,8 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
     LOG_WARN("failed to check_enable_topn_runtime_filter");
   } else if (OB_FAIL(check_enable_runtime_filter_adaptive_apply())) {
     LOG_WARN("failed to check enable adaptive runtime filter");
+  } else if (OB_FAIL(check_enable_delete_insert_scan())) {
+    LOG_WARN("failed to check enable delete insert scan");
   } else { /*do nothing*/ }
   return ret;
 }
@@ -1617,6 +1619,38 @@ int ObOptimizer::check_enable_runtime_filter_adaptive_apply()
   }
   if (OB_SUCC(ret)) {
     ctx_.set_enable_runtime_filter_adaptive_apply(enable_runtime_filter_adaptive_apply);
+  }
+  return ret;
+}
+
+int ObOptimizer::check_enable_delete_insert_scan()
+{
+  int ret = OB_SUCCESS;
+  bool enable_delete_insert_scan = false;
+  ObSQLSessionInfo *session_info = nullptr;
+  if (OB_ISNULL(session_info = ctx_.get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr");
+  } else {
+    bool hint_enable = false;
+    bool config_enable = false;
+    int64_t tenant_id = session_info->get_effective_tenant_id();
+    bool hint_exist = false;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      config_enable = tenant_config->_enable_delete_insert_scan;
+    }
+    if (OB_FAIL(ctx_.get_global_hint().opt_params_.get_bool_opt_param(
+                ObOptParamHint::ENABLE_DELETE_INSERT_SCAN, hint_enable, hint_exist))) {
+      LOG_WARN("fail to get hint", K(ret));
+    } else if (hint_exist) {
+      enable_delete_insert_scan = hint_enable;
+    } else {
+      enable_delete_insert_scan = config_enable;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ctx_.set_enable_delete_insert_scan(enable_delete_insert_scan);
   }
   return ret;
 }
