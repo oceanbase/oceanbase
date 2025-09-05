@@ -317,6 +317,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     enable_rich_vector_format_(false),
     rowsets_enabled_(false),
     extend_sql_plan_monitor_metrics_(false),
+    enable_delete_insert_scan_(false),
     min_cluster_version_(GET_MIN_CLUSTER_VERSION())
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
@@ -829,6 +830,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_extend_sql_plan_monitor_metrics(bool enabled) { extend_sql_plan_monitor_metrics_ = enabled; }
   inline bool extend_sql_plan_monitor_metrics() { return extend_sql_plan_monitor_metrics_; }
   inline uint64_t get_min_cluster_version() const { return min_cluster_version_; }
+  inline bool enable_delete_insert_scan() const { return enable_delete_insert_scan_; }
+  inline void set_enable_delete_insert_scan(bool enabled) { enable_delete_insert_scan_ = enabled; }
 private:
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
@@ -963,6 +966,7 @@ private:
   bool enable_rich_vector_format_;
   bool rowsets_enabled_;
   bool extend_sql_plan_monitor_metrics_;
+  bool enable_delete_insert_scan_;
   uint64_t min_cluster_version_; // Record the unified cluster version during the optimizer phase
 };
 }
