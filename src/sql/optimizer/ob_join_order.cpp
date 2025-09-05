@@ -13924,8 +13924,8 @@ int MergeKeyInfoHelper::get_merge_key_info(Path *path, MergeKeyInfo *&merge_key_
       } else {
         if (OB_FAIL(merge_key_infos_.push_back(merge_key_info))) {
           LOG_WARN("failed to push back merge key", K(ret));
-          merge_key_info = nullptr;
           merge_key_info->~MergeKeyInfo();
+          merge_key_info = nullptr;
         } else if (OB_FAIL(paths_.push_back(path))) {
           LOG_WARN("failed to push back", K(ret));
         }
