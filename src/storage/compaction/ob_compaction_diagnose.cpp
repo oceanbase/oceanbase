@@ -847,6 +847,21 @@ void ObCompactionDiagnoseMgr::diagnose_tenant_ls(
   // check ls suspect info for memtable freezing // ls level
   (void) get_and_set_suspect_info(MINI_MERGE, ls_status.ls_id_, UNKNOW_TABLET_ID);
 
+  if (!(MTL(ObTenantMediumChecker*)->locality_cache_refresh_success())) {
+    if (OB_TMP_FAIL(ADD_DIAGNOSE_INFO(
+            MEDIUM_MERGE,
+            ls_status.ls_id_,
+            UNKNOW_TABLET_ID,
+            ObCompactionDiagnoseInfo::DIA_STATUS_WARN,
+            ObTimeUtility::fast_current_time(),
+            K(ls_status),
+            "bad case",
+            "ls locality cache refresh failed"))) {
+      LOG_WARN_RET(tmp_ret, "failed to add dignose info about ls locality cache refresh failed", K(tmp_ret));
+    }
+    LOG_TRACE("diagnose ls locality cache refresh failed", K(tmp_ret), K(ls_status));
+  }
+
   // check ls suspect info for ls locality change
   if (diagnose_major_flag && ls_status.is_leader_ && MTL(ObTenantMediumChecker*)->locality_cache_empty()) {
     if (OB_TMP_FAIL(ADD_DIAGNOSE_INFO(
@@ -1015,7 +1030,7 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_tablet()
       const ObDiagnoseTablet &diagnose_tablet = diagnose_tablets.at(idx);
       const ObLSID &ls_id = diagnose_tablet.ls_id_;
       const ObTabletID &tablet_id = diagnose_tablet.tablet_id_;
-      if (IS_UNKNOW_LS_ID(ls_id) || IS_UNKNOW_TABLET_ID(tablet_id)) {
+      if (IS_UNKNOW_LS_ID(ls_id)) {
         continue;
       } else if (func.get_ls_status().ls_id_ == ls_id) {
         // do nothing
@@ -1028,6 +1043,8 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_tablet()
         IGNORE_RETURN diagnose_tenant_ls(diagnose_major_flag, compaction_scn, func.get_ls_status());
       }
       if (OB_FAIL(ret)) {
+      } else if (IS_UNKNOW_TABLET_ID(tablet_id)) {
+        continue;
       } else if (!func.get_ls_status().can_merge()) {
         // do nothing
       } else if (OB_TMP_FAIL(ls->get_tablet(tablet_id,
