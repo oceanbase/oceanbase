@@ -428,6 +428,8 @@ int ObPartitionSplitTask::init(
     execution_id_ = 1L;
     data_format_version_ = tenant_data_version;
     split_start_delayed_ = false;
+    // TODO: ly435438 adjust this after auto split support column-stored table.
+    target_cg_cnt_ = 1; // auto split support row-stored table only for now.
     if (OB_FAIL(src_table_schema_.assign(*src_table_schema))) {
       LOG_WARN("failed to assign src table schema", K(ret), K(*src_table_schema));
     } else if (OB_FALSE_IT(src_table_schema_.reset_partition_schema())) {
@@ -1005,6 +1007,7 @@ int ObPartitionSplitTask::send_split_request(
     param.data_format_version_ = data_format_version_;
     param.consumer_group_id_ = partition_split_arg_.consumer_group_id_;
     param.min_split_start_scn_ = min_split_start_scn_;
+    param.dest_cg_cnt_ = target_cg_cnt_;
     if (OB_ISNULL(root_service_)) {
       ret = OB_ERR_SYS;
       LOG_WARN("error sys", K(ret));
