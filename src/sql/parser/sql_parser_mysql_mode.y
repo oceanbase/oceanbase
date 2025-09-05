@@ -6131,7 +6131,7 @@ INTNUM
   int err_no = 0;
   uint64_t val = 0;
   val = ob_strntoull($1->raw_text_ + 2, $1->text_len_ - 2, 16, NULL, &err_no);
-  if(val > INT64_MAX || ERANGE == errno) {
+  if(val > INT64_MAX || ERANGE == err_no) {
     YYABORT;
   } else {
     $1->value_ = val;
