@@ -2371,7 +2371,7 @@ UNIT_NUM	bigint(20)	NO
 COMPATIBLE	varchar(65536)	NO			
 MAX_LS_ID	bigint(20)	NO			
 RESTORE_DATA_MODE	varchar(128)	NO			
-INFO	varchar(4096)	NO		NULL	
+COMMENT	varchar(4096)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TENANTS limit 1);
 cnt
 1
