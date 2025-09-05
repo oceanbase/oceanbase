@@ -667,6 +667,8 @@ private:
                                          ObSQLSessionInfo &session,
                                          const ObDMLStmt *dml_stmt);
   int generate_disable_rich_format_flags(int64_t &flags);
+  int set_das_ctdef_false_range_flag(ObDASBaseCtDef &ctdef,
+                                     bool enable_new_false_range);
 private:
   struct BatchExecParamCache {
     BatchExecParamCache(ObExecParamRawExpr* expr, ObOpSpec* spec, bool is_left)

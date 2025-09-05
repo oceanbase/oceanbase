@@ -2818,6 +2818,7 @@ int ObTscCgService::generate_index_merge_node_ctdef(const ObLogTableScan &op,
                 } else if (!op.is_skip_scan()) {
                   scan_ctdef->pre_range_graph_.reset_skip_scan_range();
                 }
+                scan_ctdef->enable_new_false_range_ = child->ap_->pre_range_graph_->enable_new_false_range();
               } else {
                 scan_ctdef->is_new_query_range_ = false;
                 if (OB_FAIL(scan_ctdef->pre_query_range_.deep_copy(*child->ap_->pre_query_range_))) {

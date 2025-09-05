@@ -5778,6 +5778,13 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
   if (OB_SUCC(ret)) {
     if (OB_FAIL(tsc_cg_service_.generate_tsc_ctdef(op, spec.tsc_ctdef_))) {
       LOG_WARN("generate tsc ctdef failed", K(ret));
+    } else if (OB_FAIL(set_das_ctdef_false_range_flag(spec.tsc_ctdef_.scan_ctdef_,
+                                                      spec.tsc_ctdef_.enable_new_false_range_))) {
+      LOG_WARN("failed to set das ctdef false range flag", K(ret));
+    } else if (spec.tsc_ctdef_.lookup_ctdef_ != nullptr &&
+               OB_FAIL(set_das_ctdef_false_range_flag(*spec.tsc_ctdef_.lookup_ctdef_,
+                                                      spec.tsc_ctdef_.enable_new_false_range_))) {
+      LOG_WARN("failed to set das ctdef false range flag", K(ret));
     } else if (FALSE_IT(spec.tsc_ctdef_.scan_flags_.enable_rich_format_
                         = spec.use_rich_format_)) {
       // do nothing
@@ -11289,6 +11296,27 @@ int ObStaticEngineCG::generate_disable_rich_format_flags(int64_t &disable_rich_f
     disable_rich_format_flags = global_hint.disable_op_rich_format_hint_.get_op_flags();
   }
   LOG_TRACE("disable rich format flags", K(disable_rich_format_flags));
+  return ret;
+}
+
+int ObStaticEngineCG::set_das_ctdef_false_range_flag(ObDASBaseCtDef &ctdef,
+                                                     bool enable_new_false_range)
+{
+  int ret = OB_SUCCESS;
+  if (ctdef.op_type_ == ObDASOpType::DAS_OP_TABLE_SCAN) {
+    ObDASScanCtDef *scan_ctdef = static_cast<ObDASScanCtDef *>(&ctdef);
+    scan_ctdef->enable_new_false_range_ = enable_new_false_range;
+  }
+  for (int i = 0; i < ctdef.children_cnt_; i++) {
+    ObDASBaseCtDef *child_ctdef = ctdef.children_[i];
+    if (OB_ISNULL(child_ctdef)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null child ctdef", K(ret), K(i), KPC(child_ctdef));
+    } else if (OB_FAIL(SMART_CALL(set_das_ctdef_false_range_flag(*child_ctdef,
+                                                                 enable_new_false_range)))) {
+      LOG_WARN("failed to set das ctdef false range flag", K(ret));
+    }
+  }
   return ret;
 }
 
