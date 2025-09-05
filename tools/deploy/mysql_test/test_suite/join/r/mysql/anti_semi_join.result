@@ -4385,10 +4385,10 @@ Query Plan
 ========================================================
 |ID|OPERATOR               |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------
-|0 |SORT                   |     |5       |10          |
-|1 |└─HASH RIGHT ANTI JOIN |     |5       |9           |
-|2 |  ├─SUBPLAN SCAN       |VIEW1|1       |5           |
-|3 |  │ └─TABLE FULL SCAN  |xy_t1|1       |5           |
+|0 |SORT                   |     |4       |10          |
+|1 |└─HASH RIGHT ANTI JOIN |     |4       |10          |
+|2 |  ├─SUBPLAN SCAN       |VIEW1|2       |5           |
+|3 |  │ └─TABLE FULL SCAN  |xy_t1|2       |5           |
 |4 |  └─TABLE FULL SCAN    |xy_t2|5       |5           |
 ========================================================
 Outputs & filters:
@@ -4422,11 +4422,11 @@ Query Plan
 ======================================================
 |ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------
-|0 |SORT                 |     |5       |10          |
-|1 |└─HASH ANTI JOIN     |     |5       |10          |
+|0 |SORT                 |     |4       |11          |
+|1 |└─HASH ANTI JOIN     |     |4       |10          |
 |2 |  ├─TABLE FULL SCAN  |xy_t2|5       |5           |
-|3 |  └─SUBPLAN SCAN     |VIEW1|1       |5           |
-|4 |    └─TABLE FULL SCAN|xy_t1|1       |5           |
+|3 |  └─SUBPLAN SCAN     |VIEW1|2       |5           |
+|4 |    └─TABLE FULL SCAN|xy_t1|2       |5           |
 ======================================================
 Outputs & filters:
 -------------------------------------
@@ -4459,11 +4459,11 @@ Query Plan
 ======================================================
 |ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------
-|0 |SORT                 |     |5       |10          |
-|1 |└─HASH ANTI JOIN     |     |5       |10          |
+|0 |SORT                 |     |4       |11          |
+|1 |└─HASH ANTI JOIN     |     |4       |10          |
 |2 |  ├─TABLE FULL SCAN  |xy_t2|5       |5           |
-|3 |  └─SUBPLAN SCAN     |VIEW1|1       |5           |
-|4 |    └─TABLE FULL SCAN|xy_t1|1       |5           |
+|3 |  └─SUBPLAN SCAN     |VIEW1|2       |5           |
+|4 |    └─TABLE FULL SCAN|xy_t1|2       |5           |
 ======================================================
 Outputs & filters:
 -------------------------------------

@@ -142,7 +142,8 @@ ObLogPlan::ObLogPlan(ObOptimizerContext &ctx, const ObDMLStmt *stmt)
     selectivity_ctx_(ctx, this, stmt),
     alloc_sfu_list_(),
     onetime_copier_(NULL),
-    nonrecursive_plan_for_fake_cte_(NULL)
+    nonrecursive_plan_for_fake_cte_(NULL),
+    need_accurate_cardinality_(false)
 {
 }
 

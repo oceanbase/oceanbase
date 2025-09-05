@@ -8969,6 +8969,8 @@ int ObJoinOrder::generate_subquery_paths(PathHelper &helper)
   } else {
     log_plan->set_is_subplan_scan(true);
     log_plan->set_nonrecursive_plan_for_fake_cte(get_plan()->get_nonrecursive_plan_for_fake_cte());
+    log_plan->set_need_accurate_cardinality(get_plan()->get_need_accurate_cardinality() ||
+                                            parent_stmt->has_multi_base_tables());
     if (parent_stmt->is_insert_stmt()) {
       log_plan->set_insert_stmt(static_cast<const ObInsertStmt*>(parent_stmt));
     }

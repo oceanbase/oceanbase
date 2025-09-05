@@ -1834,6 +1834,8 @@ int ObSelectLogPlan::generate_raw_plan_for_set()
       child_input_filters.reuse();
       child_rename_filters.reuse();
       child_remain_filters.reuse();
+      bool need_accurate_cardinality = get_need_accurate_cardinality() ||
+              (select_stmt->is_recursive_union() && 0 == i);
       if (OB_ISNULL(child_stmt = child_stmts.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null stmt", K(child_stmt), K(ret));
@@ -1857,6 +1859,7 @@ int ObSelectLogPlan::generate_raw_plan_for_set()
       } else if (OB_FAIL(generate_child_plan_for_set(child_stmt, child_plan,
                                                      child_rename_filters, i,
                                                      select_stmt->is_set_distinct(),
+                                                     need_accurate_cardinality,
                                                      nonrecursive_plan))) {
         LOG_WARN("failed to generate left subquery plan", K(ret));
       } else if (OB_FAIL(child_plans.push_back(child_plan))) {
@@ -4770,6 +4773,7 @@ int ObSelectLogPlan::generate_child_plan_for_set(const ObDMLStmt *sub_stmt,
                                                  ObIArray<ObRawExpr*> &pushdown_filters,
                                                  const uint64_t child_offset,
                                                  const bool is_set_distinct,
+                                                 const bool need_accurate_cardinality,
                                                  ObSelectLogPlan *nonrecursive_plan)
 {
   int ret = OB_SUCCESS;
@@ -4785,7 +4789,8 @@ int ObSelectLogPlan::generate_child_plan_for_set(const ObDMLStmt *sub_stmt,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("Failed to create logical plan", K(sub_plan), K(ret));
   } else if (FALSE_IT(sub_plan->set_is_parent_set_distinct(is_set_distinct)) ||
-             FALSE_IT(sub_plan->set_nonrecursive_plan_for_fake_cte(nonrecursive_plan))) {
+             FALSE_IT(sub_plan->set_nonrecursive_plan_for_fake_cte(nonrecursive_plan))||
+             FALSE_IT(sub_plan->set_need_accurate_cardinality(need_accurate_cardinality))) {
     // do nothing
   } else if (OB_FAIL(sub_plan->init_rescan_info_for_subquery_paths(*this, false, false))) {
     LOG_WARN("failed to init rescan info", K(ret));

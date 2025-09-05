@@ -1915,6 +1915,8 @@ public:
                                 const int32_t old_ref_id,
                                 const int32_t new_ref_id);
   inline ObRawExprReplacer &gen_col_replacer() { return gen_col_replacer_; }
+  bool get_need_accurate_cardinality() const { return need_accurate_cardinality_; }
+  void set_need_accurate_cardinality(bool need) { need_accurate_cardinality_ = need; }
 private:
   static const int64_t IDP_PATHNUM_THRESHOLD = 5000;
 protected: // member variable
@@ -2067,6 +2069,7 @@ private:
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> new_or_quals_;
 
   ObSelectLogPlan *nonrecursive_plan_for_fake_cte_;
+  bool need_accurate_cardinality_;
   DISALLOW_COPY_AND_ASSIGN(ObLogPlan);
 };
 

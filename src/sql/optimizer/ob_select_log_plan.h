@@ -439,6 +439,7 @@ private:
                                   ObIArray<ObRawExpr*> &pushdown_filters,
                                   const uint64_t child_offset,
                                   const bool is_set_distinct,
+                                  const bool need_accurate_cardinality,
                                   ObSelectLogPlan *nonrecursive_plan);
 
   /**

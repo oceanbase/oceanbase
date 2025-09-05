@@ -1193,10 +1193,10 @@ Query Plan
 =========================================================
 |ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SCALAR GROUP BY          |    |1       |33          |
-|1 |└─HASH JOIN              |    |17      |32          |
+|0 |SCALAR GROUP BY          |    |1       |36          |
+|1 |└─HASH JOIN              |    |46      |35          |
 |2 |  ├─TABLE FULL SCAN      |a   |11      |5           |
-|3 |  └─HASH JOIN            |    |19      |24          |
+|3 |  └─HASH JOIN            |    |32      |25          |
 |4 |    ├─SUBPLAN SCAN       |c   |11      |8           |
 |5 |    │ └─HASH DISTINCT    |    |11      |8           |
 |6 |    │   └─TABLE FULL SCAN|cc  |11      |5           |
@@ -1363,68 +1363,68 @@ EXPLAIN select /* leading(t3 (t2 t1)) */ sum(t1.c1) from nn1 t1 , nn1 t2 , nn1 t
  (select /*+ leading(x,(y z)) */ count(*) from nn1 x, nn2 y, nn1 z where x.c1 = y.d1 and y.d2 = z.c1)
  and t3.c1 in (1,2);
 Query Plan
-================================================================
-|ID|OPERATOR                       |NAME |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------
-|0 |SCALAR GROUP BY                |     |1       |36          |
-|1 |└─NESTED-LOOP JOIN CARTESIAN   |     |5       |36          |
-|2 |  ├─HASH JOIN                  |     |3       |31          |
-|3 |  │ ├─NESTED-LOOP JOIN         |     |2       |26          |
-|4 |  │ │ ├─SUBPLAN SCAN           |VIEW1|1       |21          |
-|5 |  │ │ │ └─SCALAR GROUP BY      |     |1       |21          |
-|6 |  │ │ │   └─HASH JOIN          |     |19      |20          |
-|7 |  │ │ │     ├─TABLE FULL SCAN  |x    |11      |5           |
-|8 |  │ │ │     └─HASH JOIN        |     |15      |13          |
-|9 |  │ │ │       ├─TABLE FULL SCAN|y    |11      |5           |
-|10|  │ │ │       └─TABLE FULL SCAN|z    |11      |5           |
-|11|  │ │ └─TABLE FULL SCAN        |t1   |11      |5           |
-|12|  │ └─TABLE FULL SCAN          |t2   |11      |5           |
-|13|  └─MATERIAL                   |     |2       |5           |
-|14|    └─TABLE FULL SCAN          |t3   |2       |5           |
-================================================================
+==================================================================
+|ID|OPERATOR                         |NAME |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------
+|0 |SCALAR GROUP BY                  |     |1       |36          |
+|1 |└─NESTED-LOOP JOIN CARTESIAN     |     |9       |36          |
+|2 |  ├─TABLE FULL SCAN              |t3   |4       |5           |
+|3 |  └─MATERIAL                     |     |3       |32          |
+|4 |    └─HASH JOIN                  |     |3       |31          |
+|5 |      ├─NESTED-LOOP JOIN         |     |2       |26          |
+|6 |      │ ├─SUBPLAN SCAN           |VIEW1|1       |21          |
+|7 |      │ │ └─SCALAR GROUP BY      |     |1       |21          |
+|8 |      │ │   └─HASH JOIN          |     |19      |20          |
+|9 |      │ │     ├─TABLE FULL SCAN  |x    |11      |5           |
+|10|      │ │     └─HASH JOIN        |     |15      |13          |
+|11|      │ │       ├─TABLE FULL SCAN|y    |11      |5           |
+|12|      │ │       └─TABLE FULL SCAN|z    |11      |5           |
+|13|      │ └─TABLE FULL SCAN        |t1   |11      |5           |
+|14|      └─TABLE FULL SCAN          |t2   |11      |5           |
+==================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_SUM(t1.c1)]), filter(nil), rowset=16
       group(nil), agg_func([T_FUN_SUM(t1.c1)])
   1 - output([t1.c1]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  2 - output([t1.c1]), filter(nil), rowset=16
-      equal_conds([t2.c2 = t1.c2]), other_conds(nil)
-  3 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
-      conds([t1.c1 = VIEW1.count(*)]), nl_params_(nil), use_batch=false
-  4 - output([VIEW1.count(*)]), filter(nil), rowset=16
-      access([VIEW1.count(*)])
-  5 - output([T_FUN_COUNT(*)]), filter(nil), rowset=16
-      group(nil), agg_func([T_FUN_COUNT(*)])
-  6 - output(nil), filter(nil), rowset=16
-      equal_conds([x.c1 = y.d1]), other_conds(nil)
-  7 - output([x.c1]), filter(nil), rowset=16
-      access([x.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([x.__pk_increment]), range(MIN ; MAX)always true
-  8 - output([y.d1]), filter(nil), rowset=16
-      equal_conds([y.d2 = z.c1]), other_conds(nil)
-  9 - output([y.d1], [y.d2]), filter(nil), rowset=16
-      access([y.d1], [y.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([y.__pk_increment]), range(MIN ; MAX)always true
- 10 - output([z.c1]), filter(nil), rowset=16
-      access([z.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([z.__pk_increment]), range(MIN ; MAX)always true
- 11 - output([t1.c2], [t1.c1]), filter(nil), rowset=16
-      access([t1.c2], [t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
- 12 - output([t2.c2]), filter(nil), rowset=16
-      access([t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
- 13 - output(nil), filter(nil), rowset=16
- 14 - output(nil), filter([t3.c1 IN (1, 2)]), rowset=16
+  2 - output(nil), filter([t3.c1 IN (1, 2)]), rowset=16
       access([t3.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([t1.c1]), filter(nil), rowset=16
+  4 - output([t1.c1]), filter(nil), rowset=16
+      equal_conds([t2.c2 = t1.c2]), other_conds(nil)
+  5 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
+      conds([t1.c1 = VIEW1.count(*)]), nl_params_(nil), use_batch=false
+  6 - output([VIEW1.count(*)]), filter(nil), rowset=16
+      access([VIEW1.count(*)])
+  7 - output([T_FUN_COUNT(*)]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_COUNT(*)])
+  8 - output(nil), filter(nil), rowset=16
+      equal_conds([x.c1 = y.d1]), other_conds(nil)
+  9 - output([x.c1]), filter(nil), rowset=16
+      access([x.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([x.__pk_increment]), range(MIN ; MAX)always true
+ 10 - output([y.d1]), filter(nil), rowset=16
+      equal_conds([y.d2 = z.c1]), other_conds(nil)
+ 11 - output([y.d1], [y.d2]), filter(nil), rowset=16
+      access([y.d1], [y.d2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([y.__pk_increment]), range(MIN ; MAX)always true
+ 12 - output([z.c1]), filter(nil), rowset=16
+      access([z.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([z.__pk_increment]), range(MIN ; MAX)always true
+ 13 - output([t1.c2], [t1.c1]), filter(nil), rowset=16
+      access([t1.c2], [t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+ 14 - output([t2.c2]), filter(nil), rowset=16
+      access([t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 select /* leading(t3 (t2 t1)) */ sum(t1.c1) from nn1 t1 , nn1 t2 , nn1 t3  where t2.c2=t1.c2 and t1.c1 = 
  (select /*+ leading(x,(y z)) */ count(*) from nn1 x, nn2 y, nn1 z where x.c1 = y.d1 and y.d2 = z.c1)
  and t3.c1 in (1,2);
