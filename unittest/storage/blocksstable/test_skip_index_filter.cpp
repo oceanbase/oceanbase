@@ -173,7 +173,8 @@ void TestSkipIndexFilter::setup_obj(ObObj& obj, int64_t column_id, int64_t seed)
   row_generate_.set_obj(column_type, row_generate_.column_list_.at(column_id).col_id_, seed, obj, 0);
   if ( ObVarcharType == column_type || ObCharType == column_type || ObHexStringType == column_type
       || ObNVarchar2Type == column_type || ObNCharType == column_type || ObTextType == column_type){
-    obj.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    // obj.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    obj.set_collation_type(CS_TYPE_BINARY);
     obj.set_collation_level(CS_LEVEL_IMPLICIT);
   } else {
     obj.set_collation_type(CS_TYPE_BINARY);
