@@ -2053,10 +2053,15 @@ int ObPlanCacheValue::get_all_dep_schema(ObPlanCacheCtx &pc_ctx,
           const ObSimpleTableSchemaV2 *sn_table_schema = nullptr; // table with the same name
           uint64_t synonym_database_id =
             OB_PUBLIC_SCHEMA_ID == pcv_schema->database_id_ ? database_id : pcv_schema->database_id_;
-          if (OB_FAIL(schema_guard.get_simple_table_schema(
-                tenant_id, synonym_database_id, pcv_schema->table_name_, false, sn_table_schema))) {
-            LOG_WARN("failed to get table schema", K(pcv_schema->schema_id_), K(ret));
-          } else if (nullptr != sn_table_schema) {
+          ObSchemaChecker schema_checker;
+          OZ (schema_checker.init(schema_guard));
+          bool exist = false;
+          OZ (schema_checker.check_exist_same_name_object_with_synonym(tenant_id,
+                                                                        synonym_database_id,
+                                                                        pcv_schema->table_name_,
+                                                                        exist));
+          if (OB_FAIL(ret)) {
+          } else if (exist) {
             ret = OB_OLD_SCHEMA_VERSION;
             LOG_INFO("a table with the same name exists. regenerate the plan", K(ret),
                      K(synonym_database_id), K(pcv_schema->table_name_));

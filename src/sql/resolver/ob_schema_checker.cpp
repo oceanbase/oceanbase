@@ -2812,21 +2812,18 @@ int ObSchemaChecker::get_object_id_by_name(const uint64_t tenant_id,
 }
 
 int ObSchemaChecker::check_exist_same_name_object_with_synonym(const uint64_t tenant_id,
-                                     uint64_t database_id,
-                                     const common::ObString &object_name,
-                                     bool &exist,
-                                     bool &is_private_syn)
+                                                               uint64_t database_id,
+                                                               const common::ObString &object_name,
+                                                               bool &exist)
 {
   int ret = OB_SUCCESS;
   exist = false;
-  is_private_syn = false;
-  common::ObString database_name;
-  const ObDatabaseSchema  *db_schema = NULL;
   const share::schema::ObTableSchema *table_schema = NULL;
+  const ObDatabaseSchema  *db_schema = NULL;
   if (OB_FAIL(get_database_schema(tenant_id, database_id, db_schema))) {
     LOG_WARN("fail to get db schema", K(ret));
   } else if (OB_NOT_NULL(db_schema)) {
-    database_name = db_schema->get_database_name();
+    common::ObString database_name = db_schema->get_database_name();
     ret = get_table_schema(tenant_id, database_name, object_name, false, table_schema);
     if (OB_TABLE_NOT_EXIST == ret) {
       if (lib::is_oracle_mode()) {
@@ -2891,25 +2888,46 @@ int ObSchemaChecker::check_exist_same_name_object_with_synonym(const uint64_t te
         exist = true;
       }
     }
-    //check synonym
-    if (OB_TABLE_NOT_EXIST == ret) {
+  }
+  if (OB_TABLE_NOT_EXIST == ret) {
+    ret = OB_SUCCESS;
+  }
+  return ret;
+}
+
+int ObSchemaChecker::check_object_exists_by_name(const uint64_t tenant_id,
+                                     uint64_t database_id,
+                                     const common::ObString &object_name,
+                                     bool &exist,
+                                     bool &is_private_syn)
+{
+  int ret = OB_SUCCESS;
+  exist = false;
+  is_private_syn = false;
+  //check commmon object
+  OZ(check_exist_same_name_object_with_synonym(tenant_id, database_id, object_name, exist));
+  //check synonym
+  if (OB_FAIL(ret)) {
+  } else if (!exist) {
+    const ObDatabaseSchema  *db_schema = NULL;
+    if (OB_FAIL(get_database_schema(tenant_id, database_id, db_schema))) {
+      LOG_WARN("fail to get db schema", K(ret));
+    } else if (OB_ISNULL(db_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("db_schema is NULL", K(ret));
+    } else {
       ObString obj_db_name;
       ObString obj_name;
       uint64_t synonym_id = OB_INVALID_ID;
       uint64_t database_id = OB_INVALID_ID;
-      ret = OB_SUCCESS;
-      if (OB_FAIL(get_syn_info(tenant_id, database_name, object_name, obj_db_name,
-                               obj_name, synonym_id, database_id, exist))) {
-        ret = OB_TABLE_NOT_EXIST;
+      if (OB_FAIL(get_syn_info(tenant_id, db_schema->get_database_name(), object_name, obj_db_name,
+                              obj_name, synonym_id, database_id, exist))) {
+        ret = OB_SUCCESS;
       } else {
         is_private_syn = true;
       }
     }
   }
-  if (OB_TABLE_NOT_EXIST == ret) {
-    ret = OB_SUCCESS;
-  }
-
   return ret;
 }
 
