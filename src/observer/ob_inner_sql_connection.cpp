@@ -702,6 +702,9 @@ int ObInnerSQLConnection::process_audit_record(sql::ObResultSet &result_set,
       audit_record.sql_len_ = min(ps_sql.length(), session.get_tenant_query_record_size_limit());
     }
     MEMCPY(audit_record.sql_id_, sql_ctx.sql_id_, (int32_t)sizeof(audit_record.sql_id_));
+    MEMCPY(audit_record.format_sql_id_, sql_ctx.format_sql_id_,
+      (int32_t)sizeof(audit_record.format_sql_id_));
+    audit_record.format_sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
     audit_record.affected_rows_ = result_set.get_affected_rows();
     audit_record.return_rows_ = result_set.get_return_rows();
     audit_record.is_batched_multi_stmt_ = sql_ctx.multi_stmt_item_.is_batched_multi_stmt();
