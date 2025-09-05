@@ -61,8 +61,12 @@ struct ObStorageCachePolicyStatus
 };
 
 typedef ObStorageCachePolicyStatus::PolicyStatus PolicyStatus;
-
+class ObStorageCachePolicy;
+int set_default_storage_cache_policy_for_table(const int64_t tenant_id, share::schema::ObTableSchema &table);
+int get_default_storage_cache_policy_for_create_table(const int64_t tenant_id, ObStorageCachePolicy &storage_cache_policy);
 bool is_storage_cache_policy_default(const common::ObString &storage_cache_policy_str);
+bool is_storage_cache_policy_auto(const common::ObString &storage_cache_policy_str);
+bool is_storage_cache_policy_none(const common::ObString &storage_cache_policy_str);
 struct ObStorageCacheGlobalPolicy
 {
   enum PolicyType : uint8_t

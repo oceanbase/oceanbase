@@ -2524,6 +2524,13 @@ int ObTableSqlService::create_table(ObTableSchema &table,
     LOG_INFO("add_sequence for autoinc cost: ", K(cost_usec));
   }
 
+  if (OB_FAIL(ret)) {
+  } else if (table.get_storage_cache_policy().empty()) {
+    if (OB_FAIL(set_default_storage_cache_policy_for_table(tenant_id, table))) {
+      LOG_WARN("failed to set default storage cache policy for table", K(ret));
+    }
+  }
+
   bool only_history = false;
   uint64_t data_version = 0;
   const bool update_object_status_ignore_version = false;

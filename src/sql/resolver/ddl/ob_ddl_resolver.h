@@ -1082,7 +1082,7 @@ protected:
   int check_create_stmt_storage_cache_policy(const ObString &storage_cache_policy_str, const ObTableSchema *tbl_schema);
   int check_alter_stmt_storage_cache_policy(const ObTableSchema *ori_table_schema);
   int set_default_storage_cache_policy(const bool is_alter_add_index = false);
-  int resolve_storage_cache_attribute(const ParseNode *node, ObResolverParams &params);
+  int resolve_storage_cache_attribute(const ParseNode *node, ObResolverParams &params, const bool is_index_option);
   int resolve_storage_cache_time_attribute(const ParseNode *node, ObResolverParams &params, ObStorageCachePolicy &cache_policy);
   int get_storage_cache_tbl_schema(const ObTableSchema *&tbl_schema);
   int resolve_partition_storage_cache_policy(const ParseNode &node, ObBasePartition &partition);
@@ -1178,6 +1178,7 @@ protected:
   common::ObString ttl_definition_;
   common::ObString kv_attributes_;
   common::ObString storage_cache_policy_;
+  common::ObString index_storage_cache_policy_;
   ObNameGeneratedType name_generated_type_;
   bool have_generate_fts_arg_;
   bool is_set_lob_inrow_threshold_;

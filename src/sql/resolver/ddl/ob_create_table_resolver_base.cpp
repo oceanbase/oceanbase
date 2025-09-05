@@ -227,6 +227,7 @@ int ObCreateTableResolverBase::set_table_option_to_schema(ObTableSchema &table_s
           OB_FAIL(table_schema.set_dynamic_partition_policy(dynamic_partition_policy_))) {
         SQL_RESV_LOG(WARN, "set table_options failed", K(ret));
       }
+      storage_cache_policy_.reset();
     }
 
     if (OB_SUCC(ret) && table_schema.get_compressor_type() == ObCompressorType::ZLIB_LITE_COMPRESSOR) {

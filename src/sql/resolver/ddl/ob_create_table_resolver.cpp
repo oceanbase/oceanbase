@@ -2775,7 +2775,7 @@ int ObCreateTableResolver::set_index_option_to_arg()
     } else if (OB_FAIL(ob_write_string(*allocator_, comment_,
                                        index_arg_.index_option_.comment_))) {
       SQL_RESV_LOG(WARN, "set comment str failed", K(ret));
-    } else if (OB_FAIL(ob_write_string(*allocator_, storage_cache_policy_,
+    } else if (OB_FAIL(ob_write_string(*allocator_, index_storage_cache_policy_,
                    index_arg_.index_option_.storage_cache_policy_))) {
       SQL_RESV_LOG(WARN, "set storage cache policy failed", K(ret));
     } else {

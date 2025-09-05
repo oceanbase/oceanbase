@@ -102,6 +102,7 @@ ObDDLResolver::ObDDLResolver(ObResolverParams &params)
     ttl_definition_(),
     kv_attributes_(),
     storage_cache_policy_(),
+    index_storage_cache_policy_(),
     name_generated_type_(GENERATED_TYPE_UNKNOWN),
     have_generate_fts_arg_(false),
     is_set_lob_inrow_threshold_(false),
@@ -1142,16 +1143,6 @@ int ObDDLResolver::resolve_table_options(ParseNode *node, bool is_index_option)
       }
     } else if (OB_FAIL(ObCharset::check_and_fill_info(charset_type_, collation_type_))) {
       SQL_RESV_LOG(WARN, "fail to fill collation info", K(ret));
-    }
-    if (OB_SUCC(ret) && storage_cache_policy_.empty()) {
-      uint64_t tenant_data_version = 0;
-      if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), tenant_data_version))) {
-        LOG_WARN("get data version failed", KR(ret), K(MTL_ID()));
-      } else if (tenant_data_version >= DATA_VERSION_4_3_5_2) {
-        if (OB_FAIL(check_and_set_default_storage_cache_policy())) {
-          SQL_RESV_LOG(WARN, "failed to check and set default storage cache policy", K(ret));
-        }
-      }
     }
   }
   return ret;
@@ -2803,7 +2794,7 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
           ret = OB_ERR_UNEXPECTED;
           SQL_RESV_LOG(WARN, "the children of option_node for storage_cache_policy is null",
               K(option_node->children_[0]), K(ret));
-        } else if (OB_FAIL(resolve_storage_cache_attribute(option_node->children_[0], params_))) {
+        } else if (OB_FAIL(resolve_storage_cache_attribute(option_node->children_[0], params_, is_index_option))) {
           LOG_WARN("fail to resolve storage cache policy attribute", K(ret));
         }
         break;
@@ -5689,6 +5680,7 @@ void ObDDLResolver::reset() {
   ttl_definition_.reset();
   kv_attributes_.reset();
   storage_cache_policy_.reset();
+  index_storage_cache_policy_.reset();
   is_set_lob_inrow_threshold_ = false;
   lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
   auto_increment_cache_size_ = 0;
