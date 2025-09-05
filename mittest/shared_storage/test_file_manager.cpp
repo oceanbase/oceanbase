@@ -467,7 +467,7 @@ TEST_F(TestFileManager, test_path_convert)
   // 17.PRIVATE_TABLET_META
   // tenant_id_epoch_id/ls/ls_id_epoch_id/tablet_meta/tablet_id/tablet_meta_version_transfer_seq
   CHECK_MACRO_ID_TO_PATH(PRIVATE_TABLET_META, true/*is_in_local*/, OB_SUCCESS, "1_0/ls/3_4/tablet_meta/02/2/0/ver5.T10");
-  CHECK_MACRO_ID_TO_PATH(PRIVATE_TABLET_META, false/*is_in_local*/, OB_SUCCESS, "cluster_1/server_1/1_0/ls/3/tablet_meta/2/0/ver5.T10");
+  CHECK_MACRO_ID_TO_PATH(PRIVATE_TABLET_META, false/*is_in_local*/, OB_SUCCESS, "cluster_1/server_1/1_0/ls/3_4/tablet_meta/2/0/ver5.T10");
 
   // 27. MAJOR_PREWARM_DATA
   // cluster_id/tenant_id/tablet/tablet_id/major/compaction_scn

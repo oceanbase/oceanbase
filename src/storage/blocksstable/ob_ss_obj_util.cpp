@@ -273,28 +273,28 @@ void SSObjUtil::get_ss_macro_block_type(const MacroBlockId &macro_id, ObSSMacroB
   STI(macro_id.storage_object_type()).get_ss_macro_block_type(macro_id, block_type);
 }
 int SSObjUtil::to_local_path_format(const MacroBlockId &macro_id, char *path, const int64_t length, int64_t &pos,
-                                    const uint64_t tenant_id, const uint64_t tenant_epoch_id, const uint64_t ls_epoch_id)
+                                    const uint64_t tenant_id, const uint64_t tenant_epoch_id, const int64_t ls_epoch_id)
 {
   return STI(macro_id.storage_object_type()).to_local_path_format(path, length, pos, macro_id, tenant_id, tenant_epoch_id, ls_epoch_id);
 }
 
 int SSObjUtil::to_remote_path_format(const MacroBlockId &macro_id, char *path, const int64_t length, int64_t &pos,
-                                     const char *object_storage_root_dir, const uint64_t cluster_id,
-                                     const uint64_t tenant_id, const uint64_t tenant_epoch_id, const uint64_t server_id)
+                                     const char *object_storage_root_dir, const uint64_t cluster_id, const uint64_t tenant_id,
+                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id)
 {
   return STI(macro_id.storage_object_type()).to_remote_path_format(path, length, pos, macro_id, object_storage_root_dir,
-                                                                   cluster_id, tenant_id, tenant_epoch_id, server_id);
+                                                                   cluster_id, tenant_id, tenant_epoch_id, server_id, ls_epoch_id);
 }
 
 int SSObjUtil::get_parent_dir(const MacroBlockId &macro_id, char *path, const int64_t length, int64_t &pos,
-                              const uint64_t tenant_id, const uint64_t tenant_epoch_id, const uint64_t ls_epoch_id)
+                              const uint64_t tenant_id, const uint64_t tenant_epoch_id, const int64_t ls_epoch_id)
 {
   return STI(macro_id.storage_object_type()).get_parent_dir(path, length, pos, macro_id, tenant_id,
                                                             tenant_epoch_id, ls_epoch_id);
 }
 
 int SSObjUtil::create_parent_dir(const MacroBlockId &macro_id, const uint64_t tenant_id,
-                                 const uint64_t tenant_epoch_id, const uint64_t ls_epoch_id)
+                                 const uint64_t tenant_epoch_id, const int64_t ls_epoch_id)
 {
   return STI(macro_id.storage_object_type()).create_parent_dir(macro_id, tenant_id, tenant_epoch_id, ls_epoch_id);
 }

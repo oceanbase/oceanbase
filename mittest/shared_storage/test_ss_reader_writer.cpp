@@ -883,7 +883,7 @@ TEST_F(TestSSReaderWriter, private_tablet_meta_reader_writer)
 
   // 3. check object storage, expect not exist
   bool is_exist = false;
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_file(macro_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(macro_id, ls_epoch_id, is_exist));
   ASSERT_FALSE(is_exist);
 
   // 4. errsim OB_SERVER_OUTOF_DISK_SPACE
@@ -911,7 +911,7 @@ TEST_F(TestSSReaderWriter, private_tablet_meta_reader_writer)
   read_object_handle.reset();
 
   // 7. check object storage, expect exist
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_file(macro_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_file(macro_id, ls_epoch_id, is_exist));
   ASSERT_TRUE(is_exist);
 
   TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_DISK_OUTOF_SPACE_ERR, OB_SERVER_OUTOF_DISK_SPACE, 0, 0);

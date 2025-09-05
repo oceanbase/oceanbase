@@ -239,8 +239,8 @@ public:
       bool is_exist_remote = false;
       bool is_exist_local = false;
 
-      ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(macro_id, 0, is_exist_remote));
-      ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_local_file(macro_id, 0, is_exist_local));
+      ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(macro_id, META_FILE_LS_EPOCH_ID, is_exist_remote));
+      ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_local_file(macro_id, META_FILE_LS_EPOCH_ID, is_exist_local));
       LOG_INFO("evict_test_info_log", K(is_exist_remote), K(is_exist_local), "cur_type_name", get_ss_macro_cache_type_str(cur_type), K(macro_id), K(test_type));
       ASSERT_EQ(true, is_exist_remote);
       ASSERT_EQ(false, is_exist_local);
@@ -249,11 +249,10 @@ public:
       unsealed_remote_seg_id.set_storage_object_type((uint64_t)ObStorageObjectType::UNSEALED_REMOTE_SEG_FILE);
       unsealed_remote_seg_id.set_fourth_id(WRITE_IO_SIZE);
       bool is_exist_remote = false;
-      ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(unsealed_remote_seg_id, 0, is_exist_remote));
+      ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(unsealed_remote_seg_id, META_FILE_LS_EPOCH_ID, is_exist_remote));
       LOG_INFO("evict_test_info_log", K(is_exist_remote), "cur_type_name", get_ss_macro_cache_type_str(cur_type), K(macro_id), K(test_type));
       ASSERT_EQ(true, is_exist_remote);
     }
-
   }
 
   void init_wr_macro_cache(ObTenantFileManager *tenant_file_mgr, const int64_t test_type)
