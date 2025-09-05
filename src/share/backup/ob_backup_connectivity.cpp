@@ -2400,8 +2400,7 @@ int ObBackupDestIOPermissionMgr::check_zone_valid(const char *src_info)
   int ret = OB_SUCCESS;
   ObArray<share::ObBackupZone> backup_zone_array;
   ObArray<ObZone> zone_array;
-  const int64_t ERROR_MSG_LENGTH = 1024;
-  char error_msg[ERROR_MSG_LENGTH] = "";
+  char error_msg[OB_BACKUP_ZONE_ERROR_MSG_LENGTH] = "";
   int tmp_ret = OB_SUCCESS;
   int64_t pos = 0;
 
@@ -2412,7 +2411,13 @@ int ObBackupDestIOPermissionMgr::check_zone_valid(const char *src_info)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ptr is null", K(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(share::ObBackupUtils::parse_backup_format_input(ObString(src_info), backup_zone_array))) {
-    LOG_WARN("failed to parse backup format input", K(ret), K(src_info));
+    if (OB_TMP_FAIL(databuff_printf(error_msg, OB_BACKUP_ZONE_ERROR_MSG_LENGTH,
+                                        pos, "failed to parse zone: zone=%s.", src_info))) {
+      LOG_WARN("failed to set error msg", KR(ret), KR(tmp_ret), K(error_msg), K(pos), K(src_info));
+    } else {
+      LOG_USER_ERROR(OB_BACKUP_ZONE_IDC_REGION_INVALID, error_msg);
+    }
+    LOG_WARN("failed to parse backup format input", KR(ret), K(src_info));
   } else if (OB_FAIL(share::ObZoneTableOperation::get_zone_list(*GCTX.sql_proxy_, zone_array))) {
     LOG_WARN("failed to get region list", K(ret));
   } else {
@@ -2429,7 +2434,7 @@ int ObBackupDestIOPermissionMgr::check_zone_valid(const char *src_info)
       if (!found) {
         ret = OB_BACKUP_ZONE_IDC_REGION_INVALID;
         LOG_WARN("src info input is not exist in zone array", K(ret), K(src_info), K(zone_array));
-        if (OB_SUCCESS != (tmp_ret = databuff_printf(error_msg, ERROR_MSG_LENGTH,
+        if (OB_SUCCESS != (tmp_ret = databuff_printf(error_msg, OB_BACKUP_ZONE_ERROR_MSG_LENGTH,
             pos, "zone do not exist in zone list. can not set zone : %s.", src_info))) {
           LOG_WARN("failed to set error msg", K(tmp_ret), K(error_msg), K(pos));
         } else {
@@ -2446,8 +2451,7 @@ int ObBackupDestIOPermissionMgr::check_region_valid(const char *src_info)
   int ret = OB_SUCCESS;
   ObArray<share::ObBackupRegion> backup_region_array;
   ObArray<ObRegion> region_array;
-  const int64_t ERROR_MSG_LENGTH = 1024;
-  char error_msg[ERROR_MSG_LENGTH] = "";
+  char error_msg[OB_BACKUP_ZONE_ERROR_MSG_LENGTH] = "";
   int tmp_ret = OB_SUCCESS;
   int64_t pos = 0;
 
@@ -2458,7 +2462,13 @@ int ObBackupDestIOPermissionMgr::check_region_valid(const char *src_info)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ptr is null", K(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(share::ObBackupUtils::parse_backup_format_input(ObString(src_info), backup_region_array))) {
-    LOG_WARN("failed to parse backup format input", K(ret), K(src_info));
+    if (OB_TMP_FAIL(databuff_printf(error_msg, OB_BACKUP_ZONE_ERROR_MSG_LENGTH,
+                                        pos, "failed to parse region: region=%s.", src_info))) {
+      LOG_WARN("failed to set error msg", KR(ret), KR(tmp_ret), K(error_msg), K(pos), K(src_info));
+    } else {
+      LOG_USER_ERROR(OB_BACKUP_ZONE_IDC_REGION_INVALID, error_msg);
+    }
+    LOG_WARN("failed to parse backup format input", KR(ret), K(src_info));
   } else if (OB_FAIL(share::ObZoneTableOperation::get_region_list(*GCTX.sql_proxy_, region_array))) {
     LOG_WARN("failed to get region list", K(ret));
   } else {
@@ -2475,7 +2485,7 @@ int ObBackupDestIOPermissionMgr::check_region_valid(const char *src_info)
       if (!found) {
         ret = OB_BACKUP_ZONE_IDC_REGION_INVALID;
         LOG_WARN("src info input is not exist in region array", K(ret), K(src_info), K(region_array));
-        if (OB_SUCCESS != (tmp_ret = databuff_printf(error_msg, ERROR_MSG_LENGTH,
+        if (OB_SUCCESS != (tmp_ret = databuff_printf(error_msg, OB_BACKUP_ZONE_ERROR_MSG_LENGTH,
             pos, "region do not exist in region list. can not set region : %s.", src_info))) {
           LOG_WARN("failed to set error msg", K(tmp_ret), K(error_msg), K(pos));
         } else {
@@ -2492,19 +2502,23 @@ int ObBackupDestIOPermissionMgr::check_idc_valid(const char *src_info)
   int ret = OB_SUCCESS;
   ObArray<share::ObBackupIdc> backup_idc_array;
   ObArray<ObIDC> idc_array;
-  const int64_t ERROR_MSG_LENGTH = 1024;
-  char error_msg[ERROR_MSG_LENGTH] = "";
+  char error_msg[OB_BACKUP_ZONE_ERROR_MSG_LENGTH] = "";
   int tmp_ret = OB_SUCCESS;
   int64_t pos = 0;
-
   if (OB_ISNULL(src_info)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(src_info));
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ptr is null", K(ret), KP(GCTX.sql_proxy_));
+    LOG_WARN("ptr is  null", K(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(share::ObBackupUtils::parse_backup_format_input(ObString(src_info), backup_idc_array))) {
-    LOG_WARN("failed to parse backup format input", K(ret), K(src_info));
+    if (OB_TMP_FAIL(databuff_printf(error_msg, OB_BACKUP_ZONE_ERROR_MSG_LENGTH,
+                                        pos, "failed to parse idc: idc=%s.", src_info))) {
+      LOG_WARN("failed to set error msg", KR(ret), KR(tmp_ret), K(error_msg), K(pos), K(src_info));
+    } else {
+      LOG_USER_ERROR(OB_BACKUP_ZONE_IDC_REGION_INVALID, error_msg);
+    }
+    LOG_WARN("failed to parse backup format input", KR(ret), K(src_info));
   } else if (OB_FAIL(share::ObZoneTableOperation::get_idc_list(*GCTX.sql_proxy_, idc_array))) {
     LOG_WARN("failed to get idc list", K(ret));
   } else {
@@ -2521,7 +2535,7 @@ int ObBackupDestIOPermissionMgr::check_idc_valid(const char *src_info)
       if (!found) {
         ret = OB_BACKUP_ZONE_IDC_REGION_INVALID;
         LOG_WARN("idc is not exist in idc list", K(ret), K(src_info), K(idc_array));
-        if (OB_SUCCESS != (tmp_ret = databuff_printf(error_msg, ERROR_MSG_LENGTH,
+        if (OB_SUCCESS != (tmp_ret = databuff_printf(error_msg, OB_BACKUP_ZONE_ERROR_MSG_LENGTH,
             pos, "idc do not exist in idc list. can not set idc : %s.", src_info))) {
           LOG_WARN("failed to set error msg", K(tmp_ret), K(error_msg), K(pos));
         } else {

@@ -292,6 +292,7 @@ const char *const OB_STR_LS = "logstream";
 const char *const OB_STR_COMPLEMENT_LOG = "complement_log";
 const char *const OB_STR_MAJOR_BACKUP = "major_data";
 const char *const OB_STR_MINOR_BACKUP = "minor_data";
+const int64_t OB_BACKUP_ZONE_ERROR_MSG_LENGTH = 1024;
 const char *const OB_STR_SYS_BACKUP = "sys_data";
 const char *const OB_STR_USER_BACKUP = "user_data"; // include both minor and major
 const char *const OB_STR_TURN = "turn";
@@ -1324,7 +1325,7 @@ int ObBackupUtils::parse_backup_format_input(
       if (format_input.ptr()[i] == split_commma || format_input.ptr()[i] == split_semicolon) {
         length = i - pos;
         if (length <= 0 || length > INT32_MAX) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_INVALID_ARGUMENT;
           OB_LOG(WARN, "format input value is unexpcted", K(ret), K(format_input), K(length));
         } else {
           ObString tmp_string;
