@@ -1113,6 +1113,23 @@ int ObPLDDLService::alter_udt(const obrpc::ObAlterUDTArg &arg,
   return ret;
 }
 
+int ObPLDDLService::alter_udt_remove_body_dep(ObArray<CriticalDepInfo> &objs,
+                                               uint64_t type_id,
+                                               uint64_t object_type,
+                                               int16_t compile_unit)
+{
+  int ret = OB_SUCCESS;
+  if (ObAlterUDTArg::TYPE_UNIT_BOTH == compile_unit) { //compile both need remove body dep
+    for (int64_t i = 0; i < objs.count(); i++) {
+      if (objs.at(i).element<0>() == type_id && objs.at(i).element<1>() == object_type) {
+        objs.remove(i);
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObPLDDLService::alter_udt_compile(ObSchemaGetterGuard &schema_guard,
                                       ObUDTTypeInfo &udt_info,
                                       const ObUDTTypeInfo *old_udt_info,
@@ -1142,6 +1159,8 @@ int ObPLDDLService::alter_udt_compile(ObSchemaGetterGuard &schema_guard,
                                                               trans,
                                                               objs))) {
       LOG_WARN("failed to collect all dependent objects");
+    } else if (OB_FAIL(alter_udt_remove_body_dep(objs, udt_info.get_type_id(), static_cast<uint64_t>(ObObjectType::TYPE_BODY), compile_unit))) {
+      LOG_WARN("failed to remove body dep", K(ret));
     } else if (OB_FAIL(ObDependencyInfo::batch_invalidate_dependents(objs, trans, tenant_id, udt_info.get_type_id()))) {
       LOG_WARN("invalidate dependents failed", K(ret));
     } else if (OB_FAIL(ObDependencyInfo::modify_dep_obj_status(trans,
