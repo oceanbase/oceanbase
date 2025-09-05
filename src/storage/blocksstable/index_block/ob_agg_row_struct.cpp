@@ -20,7 +20,7 @@ namespace  blocksstable
 {
 
 ObAggRowHeader::ObAggRowHeader()
-  :version_(AGG_ROW_HEADER_VERSION_2),
+  :version_(AGG_ROW_HEADER_VERSION_3),
    length_(0),
    agg_col_cnt_(0),
    pack_(0)
@@ -99,7 +99,9 @@ int ObAggRowWriter::calc_serialize_agg_buf_size()
   int64_t agg_header_size = 0;
   int64_t agg_data_size = 0;
   const bool enable_store_prefix = enable_skip_index_min_max_prefix(major_working_cluster_version_);
-  header_.version_ = enable_store_prefix ? ObAggRowHeader::AGG_ROW_HEADER_VERSION_2 : ObAggRowHeader::AGG_ROW_HEADER_VERSION;
+  header_.version_ = enable_revise_max_prefix(major_working_cluster_version_)
+                     ? ObAggRowHeader::AGG_ROW_HEADER_VERSION_3
+                     : (enable_store_prefix ? ObAggRowHeader::AGG_ROW_HEADER_VERSION_2 : ObAggRowHeader::AGG_ROW_HEADER_VERSION);
   header_.pack_ = 0;
   header_.agg_col_idx_size_ = 0;
   header_.bitmap_size_ = ObAggRowHeader::AGG_COL_TYPE_BITMAP_SIZE;
