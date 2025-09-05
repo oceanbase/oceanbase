@@ -254,7 +254,7 @@
 #include "observer/virtual_table/ob_all_virtual_dba_source.h"
 #include "observer/virtual_table/ob_all_virtual_tenant_vector_mem_info.h"
 #include "observer/virtual_table/ob_all_virtual_ccl_status.h"
-
+#include "observer/virtual_table/ob_all_virtual_ss_object_type_io_stat.h"
 namespace oceanbase
 {
 using namespace common;
@@ -3253,6 +3253,15 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               SERVER_LOG(ERROR, "ObAllVirtualHMSClientPoolStat construct failed", K(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(hms_client_pool_stat_table);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_SS_OBJECT_TYPE_IO_STAT_TID: {
+            ObAllVirtualSSObjectTypeIoStat *ss_object_type_io_stat = nullptr;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualSSObjectTypeIoStat, ss_object_type_io_stat))) {
+              SERVER_LOG(ERROR, "failed to init ObAllVirtualSSObjectTypeIoStat", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(ss_object_type_io_stat);
             }
             break;
           }

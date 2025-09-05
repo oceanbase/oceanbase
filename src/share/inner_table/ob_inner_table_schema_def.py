@@ -17135,7 +17135,37 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   keywords = all_def_keywords['__all_ai_model_endpoint'],
   in_tenant_space=True))
 
-# 12575: __all_virtual_ss_object_type_io_stat
+def_table_schema(
+  owner = 'zhaomiao.xxx',
+  table_name = '__all_virtual_ss_object_type_io_stat',
+  table_id = '12575',
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space   = True,
+  gm_columns        = [],
+  rowkey_columns    = [
+    ('svr_ip',    'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port',  'int'),
+    ('tenant_id', 'int'),
+    ('object_type', 'varchar:128'),
+    ('mode', 'varchar:32'),
+  ],
+  normal_columns    = [
+    ('read_cnt', 'int'),  # read stat not include head
+    ('read_size', 'int'),
+    ('read_fail_cnt', 'int'),
+    ('read_iops', 'int'),
+    ('write_cnt', 'int'),
+    ('write_size', 'int'),
+    ('write_fail_cnt', 'int'),
+    ('write_iops', 'int'),
+    ('delete_cnt', 'int'),
+    ('delete_fail_cnt', 'int'),
+    ('delete_iops', 'int'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -44063,8 +44093,70 @@ def_table_schema(
     WHERE ENDPOINT_ID != -1;
   """.replace("\n", " ")
 )
-# 21693: GV$OB_SS_OBJECT_TYPE_IO_STAT
-# 21694: V$OB_SS_OBJECT_TYPE_IO_STAT
+
+def_table_schema(
+  owner           = 'zhaomiao.xxx',
+  table_name      = 'GV$OB_SS_OBJECT_TYPE_IO_STAT',
+  table_id        = '21693',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    OBJECT_TYPE,
+    MODE,
+    READ_CNT,
+    READ_SIZE,
+    READ_FAIL_CNT,
+    READ_IOPS,
+    WRITE_CNT,
+    WRITE_SIZE,
+    WRITE_FAIL_CNT,
+    WRITE_IOPS,
+    DELETE_CNT,
+    DELETE_FAIL_CNT,
+    DELETE_IOPS
+  FROM oceanbase.__all_virtual_ss_object_type_io_stat
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'zhaomiao.xxx',
+  table_name      = 'V$OB_SS_OBJECT_TYPE_IO_STAT',
+  table_id        = '21694',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    OBJECT_TYPE,
+    MODE,
+    READ_CNT,
+    READ_SIZE,
+    READ_FAIL_CNT,
+    READ_IOPS,
+    WRITE_CNT,
+    WRITE_SIZE,
+    WRITE_FAIL_CNT,
+    WRITE_IOPS,
+    DELETE_CNT,
+    DELETE_FAIL_CNT,
+    DELETE_IOPS
+  FROM oceanbase.GV$OB_SS_OBJECT_TYPE_IO_STAT
+  WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
+  """.replace("\n", " ")
+)
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################

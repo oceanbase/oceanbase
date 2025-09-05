@@ -28,7 +28,6 @@
 # is_read_out_of_bounds: whether to read out of bounds, True or False, default is True
 # is_mds: whether it is mds, True or False
 # is_major: whether it is major, True or False
-# is_prewarm_file: whether it is prewarm file, True or False
 # is_tmp: whether it is tmp file, True or False
 # is_support_sn: whether it is support sn mode, True or False
 # server_tenant_can_have: whether it is 500 tenant can have, True or False
@@ -111,7 +110,6 @@ def_storage_object_type_default_cfg = {
     'is_read_out_of_bounds': True,
     'is_mds': False,
     'is_major': False,
-    'is_prewarm_file': False,
     'is_tmp': False,
     'server_tenant_can_have': False,
     'is_path_include_inner_tablet': False,
@@ -1976,7 +1974,6 @@ def_storage_object_type_cfg(
     read_odirect = True,
     write_odirect = True,
     is_major = True,
-    is_prewarm_file = True,
     is_read_out_of_bounds = False,
     is_valid = '''
 bool is_valid(const MacroBlockId &file_id) const
@@ -2022,7 +2019,6 @@ def_storage_object_type_cfg(
     read_odirect = True,
     write_odirect = True,
     is_major = True,
-    is_prewarm_file = True,
     is_read_out_of_bounds = False,
     is_valid = '''
 bool is_valid(const MacroBlockId &file_id) const
@@ -2068,7 +2064,6 @@ def_storage_object_type_cfg(
     read_odirect = True,
     write_odirect = True,
     is_major = True,
-    is_prewarm_file = True,
     is_read_out_of_bounds = False,
     is_valid = '''
 bool is_valid(const MacroBlockId &file_id) const
@@ -2114,7 +2109,6 @@ def_storage_object_type_cfg(
     read_odirect = True,
     write_odirect = True,
     is_major = True,
-    is_prewarm_file = True,
     is_read_out_of_bounds = False,
     is_valid = '''
 bool is_valid(const MacroBlockId &file_id) const

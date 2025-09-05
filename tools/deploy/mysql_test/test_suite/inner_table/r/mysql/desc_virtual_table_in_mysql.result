@@ -6186,3 +6186,27 @@ response_transform_fn	varchar(64)	YES		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ai_model_endpoint;
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_ss_object_type_io_stat;
+Field	Type	Null	Key	Default	Extra
+svr_ip	varchar(46)	NO	PRI	NULL	
+svr_port	bigint(20)	NO	PRI	NULL	
+tenant_id	bigint(20)	NO	PRI	NULL	
+object_type	varchar(128)	NO	PRI	NULL	
+mode	varchar(32)	NO	PRI	NULL	
+read_cnt	bigint(20)	NO		NULL	
+read_size	bigint(20)	NO		NULL	
+read_fail_cnt	bigint(20)	NO		NULL	
+read_iops	bigint(20)	NO		NULL	
+write_cnt	bigint(20)	NO		NULL	
+write_size	bigint(20)	NO		NULL	
+write_fail_cnt	bigint(20)	NO		NULL	
+write_iops	bigint(20)	NO		NULL	
+delete_cnt	bigint(20)	NO		NULL	
+delete_fail_cnt	bigint(20)	NO		NULL	
+delete_iops	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ss_object_type_io_stat;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_ss_object_type_io_stat runs in single server"
+IF(count(*) >= 0, 1, 0)
+1

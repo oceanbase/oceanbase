@@ -163,7 +163,7 @@ def end_generate_h():
     global h_f
     end = '''
 };
-
+static constexpr uint8_t SS_OBJECT_MAX_TYPE_VAL = static_cast<uint8_t>(ObStorageObjectType::MAX);
 const char *get_storage_objet_type_str(const ObStorageObjectType type);
 
 class ObStorageObjectTypeBase
@@ -224,8 +224,6 @@ public:
   virtual bool is_tmp_file() const { return false; }
   //whether this type of object support sn mode, true or false
   virtual bool is_support_sn() const { return false; }
-  //the ObjectType is prewarm type, true or false
-  virtual bool is_prewarm_file() const { return false; }
   //the ObjectType which 500 tenant can write
   virtual bool server_tenant_can_have() const { return false; }
   // check macro block id valid
@@ -248,8 +246,8 @@ public:
                                 const uint64_t tenant_epoch_id, const uint64_t ls_epoch_id) const { return OB_NOT_SUPPORTED; }
   virtual int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const { return OB_NOT_SUPPORTED; }
   //whethe the objecttype has effective tablet id, true or false
-  virtual void get_ss_macro_block_type(const MacroBlockId &macro_id, storage::ObSSMacroBlockType &ss_macro_block_type) const;
-  virtual int get_macro_cache_type(const uint64_t effective_tablet_id, const bool use_effective_tablet_id,
+  void get_ss_macro_block_type(const MacroBlockId &macro_id, storage::ObSSMacroBlockType &ss_macro_block_type) const;
+  int get_macro_cache_type(const uint64_t effective_tablet_id, const bool use_effective_tablet_id,
                            storage::ObSSMacroCacheType &macro_cache_type) const;
 #endif
   virtual int opt_to_string(char *buf, const int64_t buf_len, int64_t &pos, const ObStorageObjectOpt &opt) const { return OB_SUCCESS; }
@@ -430,7 +428,6 @@ int ObStorageObjectTypeBase::get_macro_cache_type(const uint64_t effective_table
   }
   return ret;
 }
-
 
 int ObStorageObjectTypeBase::get_open_flag_for_write() const
 {
@@ -740,9 +737,6 @@ public:
 
         if cfg.get('is_major'):
             h_f.write('  virtual bool is_major() const { return true; }\n')
-
-        if cfg.get('is_prewarm_file'):
-            h_f.write('  virtual bool is_prewarm_file() const { return true; }\n')
 
         if cfg.get('is_tmp'):
             h_f.write('  virtual bool is_tmp_file() const { return true; }\n')

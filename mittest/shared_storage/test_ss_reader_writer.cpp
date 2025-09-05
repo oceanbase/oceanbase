@@ -19,6 +19,7 @@
 #include "storage/shared_storage/ob_ss_object_access_util.h"
 #include "storage/shared_storage/macro_cache/ob_ss_macro_cache_mgr.h"
 #include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
+#include "storage/blocksstable/ob_ss_obj_util.h"
 #undef private
 #undef protected
 
@@ -371,6 +372,24 @@ void check_local_cache_tablet_stat(const common::ObTabletID effective_tablet_id,
   ASSERT_EQ(hit_cnt, entry.hit_cnt_);
   ASSERT_EQ(hit_size, entry.hit_size_);
 }
+void check_object_type_stat(const MacroBlockId &macro_id,
+                          const uint64_t read_cnt,
+                          const uint64_t read_size,
+                          const uint64_t write_cnt,
+                          const uint64_t write_size,
+                          ObStorageObjectHandle &object_handle)
+{
+  ObSSLocalCacheService *local_cache_service = MTL(ObSSLocalCacheService *);
+  ObSSObjectTypeStat type_stat;
+  ObIOFlag flag;
+  object_handle.get_io_handle().get_io_flag(flag);
+  bool is_remote = flag.is_sync();
+  ASSERT_EQ(OB_SUCCESS, local_cache_service->get_object_type_stat(macro_id.storage_object_type(), is_remote, type_stat));
+  ASSERT_EQ(read_cnt, type_stat.read_cnt_);
+  ASSERT_EQ(read_size, type_stat.read_size_);
+  ASSERT_EQ(write_cnt, type_stat.write_cnt_);
+  ASSERT_EQ(write_size, type_stat.write_size_);
+}
 
 TEST_F(TestSSReaderWriter, private_macro_reader_writer)
 {
@@ -399,7 +418,7 @@ TEST_F(TestSSReaderWriter, private_macro_reader_writer)
   ObSSPrivateMacroWriter private_macro_writer;
   ASSERT_EQ(OB_SUCCESS, private_macro_writer.aio_write(write_info_, write_object_handle));
   ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
-
+  check_object_type_stat(macro_id, 0/*read_cnt*/, 0/*read_size*/, 1/*write_cnt*/, write_info_.size_, write_object_handle);
   // 2. check macro cache
   ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr *);
   ASSERT_NE(nullptr, macro_cache_mgr);
@@ -428,7 +447,6 @@ TEST_F(TestSSReaderWriter, private_macro_reader_writer)
   hit_size += read_info_.size_;
   hit_cnt++;
   check_local_cache_tablet_stat(read_info_.get_effective_tablet_id(), access_size, access_cnt, hit_size, hit_cnt);
-
   // 5. check local cache tablet stat hit and update
   ASSERT_EQ(OB_SUCCESS, private_macro_reader.aio_read(read_info_, read_object_handle));
   access_size += read_info_.size_;
@@ -460,6 +478,7 @@ TEST_F(TestSSReaderWriter, share_macro_reader_writer)
   ObSSShareMacroWriter share_macro_writer;
   ASSERT_EQ(OB_SUCCESS, share_macro_writer.aio_write(write_info_, write_object_handle));
   ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
+  check_object_type_stat(macro_id, 0/*read_cnt*/, 0/*read_size*/, 1/*write_cnt*/, write_info_.size_, write_object_handle);
 
   ObLogicMicroBlockId logic_micro_id_1;
   logic_micro_id_1.version_ = ObLogicMicroBlockId::LOGIC_MICRO_ID_VERSION_V1;
@@ -494,7 +513,6 @@ TEST_F(TestSSReaderWriter, share_macro_reader_writer)
   access_size += read_info_.size_;
   access_cnt++;
   check_local_cache_tablet_stat(read_info_.get_effective_tablet_id(), access_size, access_cnt, hit_size, hit_cnt);
-
   // 3. read <1, WRITE_IO_SIZE / 2>, expect hit memory
   read_info_.macro_block_id_ = macro_id;
   read_info_.offset_ = 1;
@@ -515,7 +533,6 @@ TEST_F(TestSSReaderWriter, share_macro_reader_writer)
   hit_size += read_info_.size_;
   hit_cnt++;
   check_local_cache_tablet_stat(read_info_.get_effective_tablet_id(), access_size, access_cnt, hit_size, hit_cnt);
-
   // 4. read <WRITE_IO_SIZE / 2, WRITE_IO_SIZE>, expect cache miss and load cache
   read_info_.macro_block_id_ = macro_id;
   read_info_.offset_ = WRITE_IO_SIZE / 2;
@@ -533,7 +550,6 @@ TEST_F(TestSSReaderWriter, share_macro_reader_writer)
   access_size += read_info_.size_;
   access_cnt++;
   check_local_cache_tablet_stat(read_info_.get_effective_tablet_id(), access_size, access_cnt, hit_size, hit_cnt);
-
   // 5. wait <1, WRITE_IO_SIZE / 2> flush from memory to disk
   ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
 
@@ -841,12 +857,14 @@ TEST_F(TestSSReaderWriter, private_tablet_meta_reader_writer)
   ObSSPrivateTabletMetaWriter private_tablet_meta_writer;
   ASSERT_EQ(OB_SUCCESS, private_tablet_meta_writer.aio_write(write_info_, write_object_handle));
   ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
+  check_object_type_stat(macro_id, 0/*read_cnt*/, 0/*read_size*/, 1/*write_cnt*/, write_info_.size_, write_object_handle);
   write_object_handle.reset();
 
   // try overwrite PRIVATE_TABLET_META, expect return OB_FILE_ALREADY_EXIST errno
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
   ASSERT_EQ(OB_SUCCESS, private_tablet_meta_writer.aio_write(write_info_, write_object_handle));
   ASSERT_EQ(OB_FILE_ALREADY_EXIST, write_object_handle.wait());
+  check_object_type_stat(macro_id, 0/*read_cnt*/, 0/*read_size*/, 1/*write_cnt*/, write_info_.size_, write_object_handle);
   write_object_handle.reset();
 
   // 2. read and compare the read data with the written data

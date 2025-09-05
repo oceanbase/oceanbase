@@ -15,6 +15,9 @@
 
 #include "share/io/ob_io_define.h"
 #include "storage/blocksstable/ob_macro_block_id.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/shared_storage/ob_ss_local_cache_service.h"
+#endif
 namespace oceanbase
 {
 namespace storage
@@ -98,6 +101,8 @@ private:
 #ifdef OB_BUILD_SHARED_STORAGE
   int ss_async_read(const ObStorageObjectReadInfo &read_info);
   int ss_async_write(const ObStorageObjectWriteInfo &write_info);
+  int ss_update_object_type_rw_stat(const blocksstable::ObStorageObjectType &object_type, const int result,
+    const int64_t delta_cnt);
 #endif
 
 private:

@@ -241,7 +241,6 @@ int ObStorageObjectTypeBase::get_macro_cache_type(const uint64_t effective_table
   return ret;
 }
 
-
 int ObStorageObjectTypeBase::get_open_flag_for_write() const
 {
   int open_flag = ObSSIOCommonOp::SS_DEFAULT_WRITE_FLAG;
