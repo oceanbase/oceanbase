@@ -101,7 +101,8 @@ enum ObVecIdxAdaTryPath : uint8_t
   VEC_INDEX_PRE_FILTER = 1,
   VEC_INDEX_ITERATIVE_FILTER = 2,
   VEC_INDEX_IN_FILTER = 3,
-  VEC_PATH_MAX = 4
+  VEC_INDEX_POST_FILTER=4,
+  VEC_PATH_MAX = 5
 };
 const static double VEC_ESTIMATE_MEMORY_FACTOR = 2.0;
 constexpr static uint32_t VEC_INDEX_MIN_METRIC = 8;
