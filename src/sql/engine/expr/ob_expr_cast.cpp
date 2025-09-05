@@ -593,17 +593,18 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
       type1.set_calc_accuracy(type.get_accuracy());
     }
   }
-  bool implicit_first_century_year = false;
-  ObCastMode cast_mode = cast_raw_expr->get_extra();
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObCompatControl::check_feature_enable(
-               type_ctx.get_compat_version(), ObCompatFeatureType::IMPLICIT_FIRST_CENTURY_YEAR,
-               implicit_first_century_year))) {
-    LOG_WARN("failed to check feature enable", K(ret));
-  } else if (implicit_first_century_year) {
-    cast_mode |= CM_IMPLICIT_FIRST_CENTURY_YEAR;
+  if (OB_SUCC(ret)) {
+    bool implicit_first_century_year = false;
+    ObCastMode cast_mode = cast_raw_expr->get_extra();
+    if (OB_FAIL(ObCompatControl::check_feature_enable(
+                type_ctx.get_compat_version(), ObCompatFeatureType::IMPLICIT_FIRST_CENTURY_YEAR,
+                implicit_first_century_year))) {
+      LOG_WARN("failed to check feature enable", K(ret));
+    } else if (implicit_first_century_year) {
+      cast_mode |= CM_IMPLICIT_FIRST_CENTURY_YEAR;
+    }
+    cast_raw_expr->set_extra(cast_mode);
   }
-  cast_raw_expr->set_extra(cast_mode);
   LOG_DEBUG("calc result type", K(type1), K(type2), K(type), K(dst_type));
   return ret;
 }
