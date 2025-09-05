@@ -50,7 +50,7 @@ void ObMicroBlockBloomFilter::reset()
   rowkey_column_count_ = 0;
   empty_read_prefix_ = 0;
   datum_utils_ = nullptr;
-  hash_set_.reuse();
+  hash_set_.destroy();
   row_count_ = 0;
   is_inited_ = false;
 }
