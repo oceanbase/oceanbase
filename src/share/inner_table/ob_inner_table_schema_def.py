@@ -28127,11 +28127,17 @@ def_table_schema(
       CASE
         WHEN TYPE = 'DELETE OBSOLETE BACKUP' THEN
           CASE
-            WHEN TENANT_ID = 1 THEN CONCAT('init_time:', USEC_TO_TIME(PARAMETER))
+            WHEN TENANT_ID = 1 THEN ''
             ELSE CONCAT('expired_time:', USEC_TO_TIME(PARAMETER))
           END
-        WHEN TYPE = 'DELETE BACKUP ALL' THEN 'request_delete_path:' || data_backup_path_list || log_archive_path_list
-        ELSE CONCAT('request_delete_id:', PARAMETER)
+        WHEN TYPE = 'DELETE BACKUP ALL' THEN
+          CASE
+            WHEN data_backup_path_list IS NOT NULL AND data_backup_path_list != '' THEN CONCAT('data_backup_dest:', data_backup_path_list)
+            ELSE CONCAT('log_archive_dest:', log_archive_path_list)
+          END
+        WHEN TYPE = 'DELETE BACKUPSET' THEN CONCAT('backup_set_id:', PARAMETER)
+        WHEN TYPE = 'DELETE ARCHIVELOG_PIECE' THEN CONCAT('archivelog_piece_id:', PARAMETER)
+        ELSE 'invalid_clean_type'
       END AS PARAMETER,
       JOB_LEVEL,
       USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
@@ -28170,11 +28176,17 @@ def_table_schema(
       CASE
         WHEN TYPE = 'DELETE OBSOLETE BACKUP' THEN
           CASE
-            WHEN TENANT_ID = 1 THEN CONCAT('init_time:', USEC_TO_TIME(PARAMETER))
+            WHEN TENANT_ID = 1 THEN ''
             ELSE CONCAT('expired_time:', USEC_TO_TIME(PARAMETER))
           END
-        WHEN TYPE = 'DELETE BACKUP ALL' THEN 'request_delete_path:' || data_backup_path_list || log_archive_path_list
-        ELSE CONCAT('request_delete_id:', PARAMETER)
+        WHEN TYPE = 'DELETE BACKUP ALL' THEN
+          CASE
+            WHEN data_backup_path_list IS NOT NULL AND data_backup_path_list != '' THEN CONCAT('data_backup_dest:', data_backup_path_list)
+            ELSE CONCAT('log_archive_dest:', log_archive_path_list)
+          END
+        WHEN TYPE = 'DELETE BACKUPSET' THEN CONCAT('backup_set_id:', PARAMETER)
+        WHEN TYPE = 'DELETE ARCHIVELOG_PIECE' THEN CONCAT('archivelog_piece_id:', PARAMETER)
+        ELSE 'invalid_clean_type'
       END AS PARAMETER,
       JOB_LEVEL,
       USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
@@ -29953,11 +29965,17 @@ def_table_schema(
       CASE
         WHEN TYPE = 'DELETE OBSOLETE BACKUP' THEN
           CASE
-            WHEN TENANT_ID = 1 THEN CONCAT('init_time:', USEC_TO_TIME(PARAMETER))
+            WHEN TENANT_ID = 1 THEN ''
             ELSE CONCAT('expired_time:', USEC_TO_TIME(PARAMETER))
           END
-        WHEN TYPE = 'DELETE BACKUP ALL' THEN 'request_delete_path:' || data_backup_path_list || log_archive_path_list
-        ELSE CONCAT('request_delete_id:', PARAMETER)
+        WHEN TYPE = 'DELETE BACKUP ALL' THEN
+          CASE
+            WHEN data_backup_path_list IS NOT NULL AND data_backup_path_list != '' THEN CONCAT('data_backup_dest:', data_backup_path_list)
+            ELSE CONCAT('log_archive_dest:', log_archive_path_list)
+          END
+        WHEN TYPE = 'DELETE BACKUPSET' THEN CONCAT('backup_set_id:', PARAMETER)
+        WHEN TYPE = 'DELETE ARCHIVELOG_PIECE' THEN CONCAT('archivelog_piece_id:', PARAMETER)
+        ELSE 'invalid_clean_type'
       END AS PARAMETER,
       JOB_LEVEL,
       USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
@@ -29997,11 +30015,17 @@ def_table_schema(
       CASE
         WHEN TYPE = 'DELETE OBSOLETE BACKUP' THEN
           CASE
-            WHEN TENANT_ID = 1 THEN CONCAT('init_time:', USEC_TO_TIME(PARAMETER))
+            WHEN TENANT_ID = 1 THEN ''
             ELSE CONCAT('expired_time:', USEC_TO_TIME(PARAMETER))
           END
-        WHEN TYPE = 'DELETE BACKUP ALL' THEN 'request_delete_path:' || data_backup_path_list || log_archive_path_list
-        ELSE CONCAT('request_delete_id:', PARAMETER)
+        WHEN TYPE = 'DELETE BACKUP ALL' THEN
+          CASE
+            WHEN data_backup_path_list IS NOT NULL AND data_backup_path_list != '' THEN CONCAT('data_backup_dest:', data_backup_path_list)
+            ELSE CONCAT('log_archive_dest:', log_archive_path_list)
+          END
+        WHEN TYPE = 'DELETE BACKUPSET' THEN CONCAT('backup_set_id:', PARAMETER)
+        WHEN TYPE = 'DELETE ARCHIVELOG_PIECE' THEN CONCAT('archivelog_piece_id:', PARAMETER)
+        ELSE 'invalid_clean_type'
       END AS PARAMETER,
       JOB_LEVEL,
       USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
@@ -61313,11 +61337,17 @@ def_table_schema(
       CASE
         WHEN TYPE = 'DELETE OBSOLETE BACKUP' THEN
           CASE
-            WHEN TENANT_ID = 1 THEN CONCAT('init_time:', TO_CHAR(PARAMETER / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss'))
+            WHEN TENANT_ID = 1 THEN ''
             ELSE CONCAT('expired_time:', TO_CHAR(PARAMETER / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss'))
           END
-        WHEN TYPE = 'DELETE BACKUP ALL' THEN 'request_delete_path:' || data_backup_path_list || log_archive_path_list
-        ELSE CONCAT('request_delete_id:', PARAMETER)
+        WHEN TYPE = 'DELETE BACKUP ALL' THEN
+          CASE
+            WHEN data_backup_path_list IS NOT NULL AND data_backup_path_list != '' THEN CONCAT('data_backup_dest:', data_backup_path_list)
+            ELSE CONCAT('log_archive_dest:', log_archive_path_list)
+          END
+        WHEN TYPE = 'DELETE BACKUPSET' THEN CONCAT('backup_set_id:', PARAMETER)
+        WHEN TYPE = 'DELETE ARCHIVELOG_PIECE' THEN CONCAT('archivelog_piece_id:', PARAMETER)
+        ELSE 'invalid_clean_type'
       END AS PARAMETER,
       JOB_LEVEL,
       TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
@@ -61359,11 +61389,17 @@ def_table_schema(
       CASE
         WHEN TYPE = 'DELETE OBSOLETE BACKUP' THEN
           CASE
-            WHEN TENANT_ID = 1 THEN CONCAT('init_time:', TO_CHAR(PARAMETER / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss'))
+            WHEN TENANT_ID = 1 THEN ''
             ELSE CONCAT('expired_time:', TO_CHAR(PARAMETER / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss'))
           END
-        WHEN TYPE = 'DELETE BACKUP ALL' THEN 'request_delete_path:' || data_backup_path_list || log_archive_path_list
-        ELSE CONCAT('request_delete_id:', PARAMETER)
+        WHEN TYPE = 'DELETE BACKUP ALL' THEN
+          CASE
+            WHEN data_backup_path_list IS NOT NULL AND data_backup_path_list != '' THEN CONCAT('data_backup_dest:', data_backup_path_list)
+            ELSE CONCAT('log_archive_dest:', log_archive_path_list)
+          END
+        WHEN TYPE = 'DELETE BACKUPSET' THEN CONCAT('backup_set_id:', PARAMETER)
+        WHEN TYPE = 'DELETE ARCHIVELOG_PIECE' THEN CONCAT('archivelog_piece_id:', PARAMETER)
+        ELSE 'invalid_clean_type'
       END AS PARAMETER,
       JOB_LEVEL,
       TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
