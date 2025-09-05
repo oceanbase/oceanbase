@@ -894,7 +894,7 @@ int ObTenantStorageMetaService::safe_batch_write_gc_tablet_slog(
   } else {
     lib::ObMutexGuard guard(tablet_array.lock_);
     int64_t delete_cnt = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && i < item_count; ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && delete_cnt < item_count && i < arr.count(); ++i) {
       const ObPendingFreeTabletItem &item = arr.at(i);
       if (OB_UNLIKELY(!item.is_valid())) {
         ret = OB_INVALID_ARGUMENT;
