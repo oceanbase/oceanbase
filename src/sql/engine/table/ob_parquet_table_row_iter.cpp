@@ -2055,7 +2055,7 @@ int ObParquetTableRowIterator::DataLoader::decode_list_to_array(
   parent_def_level = max_def_level;
   max_def_level += node->is_optional() ? 2 : 1;
   bool set_innermost_value = max_def_level == record_reader_->descr()->max_definition_level();
-  int64_t values_size = (set_innermost_value ? sizeof(DstType) : sizeof(uint32_t)) * levels_count;
+  int64_t values_size = std::max(sizeof(DstType), sizeof(uint32_t)) * levels_count;
   uint8_t* nulls = reinterpret_cast<uint8_t *>(
                     attrs[attrs_idx]->get_str_res_mem(eval_ctx_, sizeof(uint8_t) * levels_count));
   uint32_t *values = reinterpret_cast<uint32_t *>(
