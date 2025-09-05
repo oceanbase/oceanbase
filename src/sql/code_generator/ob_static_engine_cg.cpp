@@ -7855,7 +7855,7 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
       if (!phy_plan_->udf_has_dml_stmt()) {
         phy_plan_->set_udf_has_dml_stmt(log_plan.get_stmt()->get_query_ctx()->udf_has_dml_stmt_);
       }
-      phy_plan_->set_udf_has_dml_stmt(log_plan.get_stmt()->get_query_ctx()->udf_has_dml_stmt_);
+      phy_plan_->set_has_link_udf(log_plan.get_stmt()->get_query_ctx()->has_dblink_udf_);
     }
   }
 
