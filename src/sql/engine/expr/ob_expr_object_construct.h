@@ -65,7 +65,8 @@ public:
 
   static int check_types(ObEvalCtx &ctx, const common::ObObj *objs_stack,
                          const common::ObIArray<ObExprResType> &elem_types,
-                         int64_t param_num);
+                         int64_t param_num,
+                         uint64_t udt_id);
   static int fill_obj_stack(const ObExpr &expr, ObEvalCtx &ctx, ObObj *objs);
 
   static int newx(ObEvalCtx &ctx, ObObj &result, uint64_t udt_id, ObIAllocator *alloc);

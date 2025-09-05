@@ -72,7 +72,8 @@ int ObExprObjectConstruct::calc_result_typeN(ObExprResType &type,
 
 int ObExprObjectConstruct::check_types(ObEvalCtx &ctx, const ObObj *objs_stack,
                                        const common::ObIArray<ObExprResType> &elem_types,
-                                       int64_t param_num)
+                                       int64_t param_num,
+                                       uint64_t udt_id)
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(objs_stack));
@@ -91,7 +92,8 @@ int ObExprObjectConstruct::check_types(ObEvalCtx &ctx, const ObObj *objs_stack,
           int64_t tenant_id = ctx.exec_ctx_.get_my_session()->get_effective_tenant_id();
           const ObUDTTypeInfo *udt_info = NULL;
           OZ (GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard));
-          OZ (schema_guard.get_udt_info(tenant_id, elem_types.at(i).get_udt_id(), udt_info));
+          // Use the actual called type name instead of the expected parameter type name
+          OZ (schema_guard.get_udt_info(pl::get_tenant_id_by_object_id(udt_id) , udt_id, udt_info));
           if (OB_SUCC(ret)) {
             ret = OB_ERR_CALL_WRONG_ARG;
             if (OB_NOT_NULL(udt_info)) {
@@ -196,7 +198,7 @@ int ObExprObjectConstruct::eval_object_construct(const ObExpr &expr, ObEvalCtx &
     LOG_WARN("failed to alloc mem for objs", K(ret));
   } else if (OB_FAIL(fill_obj_stack(expr, ctx, objs))) {
     LOG_WARN("failed to convert obj", K(ret));
-  } else if (expr.arg_cnt_ > 0 && OB_FAIL(check_types(ctx, objs, info->elem_types_, expr.arg_cnt_))) {
+  } else if (expr.arg_cnt_ > 0 && OB_FAIL(check_types(ctx, objs, info->elem_types_, expr.arg_cnt_, info->udt_id_))) {
     LOG_WARN("failed to check types", K(ret));
   } else if (info->rowsize_ != pl::ObRecordType::get_init_size(expr.arg_cnt_)) {
     ret = OB_ERR_UNEXPECTED;
