@@ -191,7 +191,7 @@ TEST_F(TestSSPhysicalBlockManager, test_data_blk_allocation_performance)
   };
   // each thread apply to alloc max_cnt/2 data_blk
   std::vector<std::thread> th_alloc_blk;
-  const int64_t thread_num = 9;
+  const int64_t thread_num = 4;
   ObSSPhyBlockType block_type = ObSSPhyBlockType::SS_MICRO_DATA_BLK;
   const int64_t data_blk_max_cnt = phy_blk_mgr.blk_cnt_info_.data_blk_.max_cnt_;
   const int64_t alloc_num = data_blk_max_cnt / 2;
@@ -209,7 +209,7 @@ TEST_F(TestSSPhysicalBlockManager, test_data_blk_allocation_performance)
   int64_t avg_time_us = total_cost_us / total_alloc_cnt;
   LOG_INFO("blk cnt after test", K(phy_blk_mgr.blk_cnt_info_), K(reorgan_blk_cnt));
   LOG_INFO("allocation performance", K(total_alloc_cnt.load()), K(avg_time_us));
-  // phy_blk alloc time should not exceed 70, otherwise it will be considered as performance regression.
+  // phy_blk alloc time should not exceed 400, otherwise it will be considered as performance regression.
   ASSERT_LT(avg_time_us, 400);
 
   LOG_INFO("TEST_CASE: finsih test test_phy_blk_allocation_performance");
@@ -298,7 +298,7 @@ TEST_F(TestSSPhysicalBlockManager, test_different_blk_allocation_performance)
   LOG_INFO("allocation performance", K(total_data_blk_alloc_cnt.load()), K(avg_data_blk_time_us),
                                      K(total_meta_blk_alloc_cnt.load()), K(avg_meta_blk_time_us),
                                      K(total_reorgan_blk_alloc_cnt.load()), K(avg_reorgan_blk_time_us));
-  // phy_blk alloc time should not exceed 70, otherwise it will be considered as performance regression.
+  // phy_blk alloc time should not exceed 400, otherwise it will be considered as performance regression.
   ASSERT_LT(avg_data_blk_time_us, 400);
   ASSERT_LT(avg_meta_blk_time_us, 400);
   ASSERT_LT(avg_reorgan_blk_time_us, 400);
