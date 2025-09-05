@@ -418,8 +418,7 @@ int ObHiveCatalogStatHelper::merge_partition_column_stats(
                      K(column_name));
           }
         } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected column stat", K(ret), K(column_name));
+          LOG_TRACE("this column do not have stat data", K(ret), K(column_name));
         }
       }
     }
@@ -571,7 +570,9 @@ int ObHiveCatalogStatHelper::fetch_partitions_statistics_batch(
 
       // Create batch partition list
       for (int64_t i = batch_start; i < batch_end; ++i) {
-        batch_partition_names.emplace_back(partition_names[i]);
+        if (partition_names[i].find("__HIVE_DEFAULT_PARTITION__") == std::string::npos) {
+          batch_partition_names.emplace_back(partition_names[i]);
+        }
       }
 
       LOG_TRACE("Processing partition batch", K(batch_start), K(batch_end),
@@ -579,7 +580,9 @@ int ObHiveCatalogStatHelper::fetch_partitions_statistics_batch(
                 partition_names.size());
 
       // Get basic statistics for this batch
-      if (OB_FAIL(client->get_partition_basic_stats(
+      if (batch_partition_names.empty()) {
+        // do nothing
+      } else if (OB_FAIL(client->get_partition_basic_stats(
               ns_name, table_name, case_mode, batch_partition_names,
               batch_basic_stats))) {
         LOG_WARN("failed to get partition basic stats for batch", K(ret),
