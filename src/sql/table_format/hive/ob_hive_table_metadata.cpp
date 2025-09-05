@@ -755,8 +755,18 @@ int ObHiveTableMetadata::handle_column_types(const FieldSchemas &cols,
       } else {
         LOG_TRACE("setup decimal in detail", K(ret), K(precision), K(scale));
       }
-    } else if (original_field_type.prefix_match(VARCHAR) || original_field_type.prefix_match(STRING)
+    } else if (original_field_type.prefix_match(STRING)
                || original_field_type.prefix_match(BINARY)) {
+      if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_string(is_oracle_mode,
+                                                                  column_schema))) {
+        LOG_WARN("failed to setup string", K(ret));
+      } else if (OB_LIKELY(is_csv_format) && OB_LIKELY(!is_open_csv)
+          && original_field_type.prefix_match(BINARY)) {
+        // When hive table is csv format, binary type will be stored as base64 string.
+        // And when hive table is open csv format, binary type will be stored as normal string.
+        column_schema.set_collation_type(CS_TYPE_BINARY);
+      }
+    } else if (original_field_type.prefix_match(VARCHAR)) {
       int64_t varchar_len = 0;
       if (OB_LIKELY(original_field_type.prefix_match(VARCHAR))
           && OB_FAIL(extract_varchar_char_length(original_field_type, &varchar_len))) {
@@ -767,12 +777,6 @@ int ObHiveTableMetadata::handle_column_types(const FieldSchemas &cols,
                                                                           ObCollationType::CS_TYPE_UTF8MB4_BIN,
                                                                           column_schema))) {
         LOG_WARN("failed to setup varchar", K(ret), K(varchar_len));
-      }
-      if (OB_LIKELY(is_csv_format) && OB_LIKELY(!is_open_csv)
-          && original_field_type.prefix_match(BINARY)) {
-        // When hive table is csv format, binary type will be stored as base64 string.
-        // And when hive table is open csv format, binary type will be stored as normal string.
-        column_schema.set_collation_type(CS_TYPE_BINARY);
       }
     } else if (original_field_type.prefix_match(CHAR)) {
       int64_t char_len = 0;

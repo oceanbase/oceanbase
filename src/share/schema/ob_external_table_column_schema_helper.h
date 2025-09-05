@@ -47,6 +47,7 @@ public:
                         ObCharsetType cs_type,
                         ObCollationType collation,
                         ObColumnSchemaV2 &column_schema);
+  static int setup_string(const bool &is_oracle_mode, ObColumnSchemaV2 &column_schema);
   static int setup_timestamp(const bool &is_oracle_mode,
                              ObColumnSchemaV2 &column_schema);
   static int setup_datetime(const bool &is_oracle_mode, ObColumnSchemaV2 &column_schema);
