@@ -65,15 +65,14 @@ int ObHMSClientPoolKey::assign(const ObHMSClientPoolKey &other)
 ObHMSClientPool::ObHMSClientPool()
     : allocator_(nullptr), tenant_id_(OB_INVALID_TENANT_ID), catalog_id_(OB_INVALID_ID), uri_(),
       properties_(), client_queue_(nullptr), pool_size_(DEFAULT_HMS_CLIENT_POOL_SIZE),
-      total_clients_(0), in_use_clients_(0), pool_lock_(ObLatchIds::OBJECT_DEVICE_LOCK),
-      pool_cond_(), is_inited_(false), last_access_ts_(0)
+      total_clients_(0), in_use_clients_(0), waiting_threads_(0), pool_cond_(), is_inited_(false),
+      last_access_ts_(0)
 {
 }
 
 ObHMSClientPool::~ObHMSClientPool()
 {
   int ret = OB_SUCCESS;
-  SpinWLockGuard guard(pool_lock_);
 
   // Clean up all clients in the queue
   // Pool doesn't hold references to clients, so we just need to destroy them
@@ -105,6 +104,7 @@ ObHMSClientPool::~ObHMSClientPool()
   catalog_id_ = OB_INVALID_ID;
   total_clients_ = 0;
   in_use_clients_ = 0;
+  ATOMIC_STORE(&waiting_threads_, 0);
   uri_.reset();
   properties_.reset();
   allocator_ = nullptr;
@@ -117,12 +117,12 @@ int ObHMSClientPool::init(const uint64_t &tenant_id,
                           ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
-  SpinWLockGuard guard(pool_lock_);
-
   ObHMSCatalogProperties hms_properties;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObHMSClientPool init twice", K(ret));
+  } else if (OB_FAIL(pool_cond_.init(ObWaitEventIds::HMS_CLIENT_POOL_COND_WAIT))) {
+    LOG_WARN("failed to init pool condition", K(ret));
   } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id)) {
     ret = OB_INVALID_TENANT_ID;
     LOG_WARN("invalid tenant id", K(ret), K(tenant_id));
@@ -161,7 +161,7 @@ int ObHMSClientPool::init(const uint64_t &tenant_id,
         LOG_WARN("failed to write properties", K(ret), K(properties));
       } else {
         is_inited_ = true;
-        last_access_ts_ = ObTimeUtility::current_time();
+        refresh_last_access_ts();
       }
 
       if (OB_FAIL(ret)) {
@@ -184,11 +184,6 @@ int ObHMSClientPool::get_client(ObHiveMetastoreClient *&client)
   const int64_t remaining_time_us = THIS_WORKER.get_timeout_remain();
   // Using the smaller one of socket timeout and remaining time as timeout.
   const int64_t timeout_us = std::min(socket_timeout_, remaining_time_us);
-  LOG_TRACE("get client by timeout",
-            K(ret),
-            K(timeout_us),
-            K(socket_timeout_),
-            K(remaining_time_us));
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObHMSClientPool not inited", K(ret));
@@ -196,52 +191,43 @@ int ObHMSClientPool::get_client(ObHiveMetastoreClient *&client)
     ret = OB_TIMEOUT;
     LOG_WARN("query timeout is reached", K(timeout_us));
   } else {
+    ObThreadCondGuard guard(pool_cond_);
     const int64_t start_time = ObTimeUtility::current_time();
     bool got_client = false;
 
     // Retry until get client or timeout
     do {
-      // 使用 SpinWLockGuard 保护共享资源访问
-      {
-        SpinWLockGuard guard(pool_lock_);
-        last_access_ts_ = ObTimeUtility::current_time();
+      refresh_last_access_ts();
 
-        // Try to get client from existing queue first
-        int tmp_ret = try_get_client_from_queue_unlocked_(client);
+      // Try to get client from existing queue first
+      int tmp_ret = try_get_client_from_queue_unlocked_(client);
+      if (OB_SUCCESS == tmp_ret) {
+        got_client = true;
+      } else if (can_create_client_unlocked_()) {
+        LOG_TRACE("try to create and get client",
+                  K(ret),
+                  K(tmp_ret),
+                  K(total_clients_),
+                  K(in_use_clients_),
+                  K(pool_size_));
+        tmp_ret = try_create_and_get_client_unlocked_(client);
         if (OB_SUCCESS == tmp_ret) {
           got_client = true;
-        } else if (can_create_client_unlocked_()) {
-          LOG_TRACE("try to create and get client",
-                    K(ret),
-                    K(tmp_ret),
-                    K(total_clients_),
-                    K(in_use_clients_),
-                    K(pool_size_));
-          tmp_ret = try_create_and_get_client_unlocked_(client);
-          if (OB_SUCCESS == tmp_ret) {
-            got_client = true;
-            LOG_TRACE("got client",
-                      K(ret),
-                      K(tmp_ret),
-                      K(total_clients_),
-                      K(in_use_clients_),
-                      K(pool_size_));
-          } else if (OB_INVALID_HMS_METASTORE == tmp_ret) {
-            ret = OB_INVALID_HMS_METASTORE;
-            LOG_WARN("invalid metastore to skip try again", K(ret));
-          } else if (OB_KERBEROS_ERROR == tmp_ret) {
-            ret = OB_KERBEROS_ERROR;
-            LOG_WARN("failed to get or create client due to kerberos error", K(ret));
-          } else {
-            LOG_WARN("failed to get or create client", K(ret), K(tmp_ret));
-          }
+        } else if (OB_INVALID_HMS_METASTORE == tmp_ret) {
+          ret = OB_INVALID_HMS_METASTORE;
+          LOG_WARN("invalid metastore to skip try again", K(ret));
+        } else if (OB_KERBEROS_ERROR == tmp_ret) {
+          ret = OB_KERBEROS_ERROR;
+          LOG_WARN("failed to get or create client due to kerberos error", K(ret));
         } else {
-          // All clients are in use and pool is full, need to wait
-          LOG_TRACE("all clients are in use and pool is full, need to wait",
-                    K(total_clients_),
-                    K(in_use_clients_),
-                    K(pool_size_));
+          LOG_WARN("failed to get or create client", K(ret), K(tmp_ret));
         }
+      } else {
+        // All clients are in use and pool is full, need to wait
+        LOG_TRACE("all clients are in use and pool is full, need to wait",
+                  K(total_clients_),
+                  K(in_use_clients_),
+                  K(pool_size_));
       }
 
       // Check timeout and wait if we haven't got client yet
@@ -251,41 +237,13 @@ int ObHMSClientPool::get_client(ObHiveMetastoreClient *&client)
         const int64_t elapsed_time = ObTimeUtility::current_time() - start_time;
         if (elapsed_time >= timeout_us) {
           ret = OB_TIMEOUT;
-          LOG_WARN("timeout waiting for client",
-                   K(ret),
-                   K(timeout_us),
-                   K(elapsed_time),
-                   K_(tenant_id),
-                   K_(catalog_id));
+          LOG_WARN("timeout waiting for client", K(ret), K(timeout_us), K(elapsed_time), K(remaining_time_us));
         } else {
           const int64_t remaining_time = timeout_us - elapsed_time;
-          LOG_TRACE("waiting for available client",
-                    K(total_clients_),
-                    K(in_use_clients_),
-                    K(pool_size_),
-                    K(elapsed_time),
-                    K(remaining_time));
-
-          if (OB_FAIL(pool_cond_.timedwait(remaining_time))) {
-            if (OB_TIMEOUT == ret) {
-              LOG_WARN("timeout waiting for client condition",
-                       K(ret),
-                       K(timeout_us),
-                       K(elapsed_time),
-                       K_(tenant_id),
-                       K_(catalog_id));
-            } else {
-              LOG_WARN("failed to wait for client condition", K(ret));
-            }
-            break;
-          }
-          LOG_TRACE("wait for available client done",
-                    K(ret),
-                    K(total_clients_),
-                    K(in_use_clients_),
-                    K(pool_size_),
-                    K(elapsed_time),
-                    K(remaining_time));
+          LOG_TRACE("waiting for available client", K(ret), K(timeout_us), K(elapsed_time), K(remaining_time_us));
+          ATOMIC_INC(&waiting_threads_);
+          OZ(pool_cond_.wait_us(remaining_time));
+          ATOMIC_DEC(&waiting_threads_);
         }
       }
     } while (OB_SUCC(ret) && !got_client);
@@ -296,95 +254,63 @@ int ObHMSClientPool::get_client(ObHiveMetastoreClient *&client)
 int ObHMSClientPool::return_client(ObHiveMetastoreClient *&client)
 {
   int ret = OB_SUCCESS;
-
-  LOG_TRACE("return client to pool", K(ret), KP(client), K_(tenant_id), K_(catalog_id));
+  ObThreadCondGuard guard(pool_cond_);
+  bool should_free_client = false;
+  // Update the pool latest access timestamp.
+  refresh_last_access_ts();
+  LOG_TRACE("return client to pool", K(ret), KP(client), K_(tenant_id), K_(catalog_id), K_(last_access_ts));
   if (OB_ISNULL(client)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("client is null", K(ret), KP(client));
-  } else if (OB_UNLIKELY(!client->is_valid())) {
-    // Client is invalid, destroy it to prevent memory leak
-    client->~ObHiveMetastoreClient();
-    allocator_->free(client);
-    client = nullptr;
-
-    // Need to update counters when destroying invalid client
-    {
-      SpinWLockGuard guard(pool_lock_);
-      if (total_clients_ > 0) {
-        total_clients_--; // Adjust counter for destroyed invalid client
-      }
-      if (in_use_clients_ > 0) {
-        in_use_clients_--; // This client was in use, so decrease the counter
-      }
-    }
-
+  } else if (!client->is_valid()) {
+    should_free_client = true;
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("client is invalid, destroying it", K(ret), KP(client), K_(tenant_id), K_(catalog_id));
-  } else if (OB_UNLIKELY(!is_inited_)) {
-    // Pool is shutdown, cannot return to queue, must destroy the client
+  } else if (!is_inited_) {
+    should_free_client = true;
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("pool shutdown that cannot return to queue", K(ret), K_(tenant_id), K_(catalog_id));
+  } else if (can_destroy_client_unlocked_()) {
+    // Pool is full (or over capacity due to configuration change), destroy the client
+    should_free_client = true;
+  } else if (OB_ISNULL(client_queue_)) {
+    should_free_client = true;
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("client queue is null, destroying client", K(ret), KP(client));
+  } else if (OB_FAIL(client_queue_->push_back(client))) {
+    should_free_client = true;
+    // Failed to return to queue, must destroy the client to avoid memory leak
+    LOG_WARN("failed to push client back to queue, destroying client", K(ret), KP(client));
+  } else {
+    in_use_clients_--;
+    // Client has been successfully returned to pool and becomes idle.
+    LOG_TRACE("client successfully returned to pool queue",
+              K(ret),
+              KP(client),
+              K(in_use_clients_),
+              K(total_clients_),
+              K(client->get_client_id()));
+  }
+
+  if (should_free_client) {
     client->~ObHiveMetastoreClient();
     allocator_->free(client);
     client = nullptr;
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("pool shutdown, destroyed client since cannot return to queue",
-             K(ret),
-             K_(tenant_id),
-             K_(catalog_id));
-  } else {
-    SpinWLockGuard guard(pool_lock_);
-
-    last_access_ts_ = ObTimeUtility::current_time();
-
-    // Check if pool size has been reduced and we need to shrink the pool.
-    if (OB_LIKELY(can_destroy_client_unlocked_())) {
-      // Pool is full (or over capacity due to configuration change), destroy the client
-      LOG_TRACE("pool is full, destroying returned client to shrink pool size",
-                K(ret),
-                KP(client),
-                K(total_clients_),
-                K(pool_size_),
-                K(client->get_client_id()));
-      client->~ObHiveMetastoreClient();
-      allocator_->free(client);
-      client = nullptr;
-      total_clients_--;
-      in_use_clients_--;
-    } else if (OB_NOT_NULL(client_queue_)) {
-      // Pool still has capacity, try to return the client to the queue
-      if (OB_FAIL(client_queue_->push_back(client))) {
-        // Failed to return to queue, must destroy the client to avoid memory leak
-        LOG_WARN("failed to push client back to queue, destroying client", K(ret), KP(client));
-        client->~ObHiveMetastoreClient();
-        allocator_->free(client);
-        client = nullptr;
-        // Still decrease in_use_clients_ count since the client was in use.
-        in_use_clients_--;
-        total_clients_--;
-      } else {
-        in_use_clients_--;
-        // Client has been successfully returned to pool and becomes idle.
-        LOG_TRACE("client successfully returned to pool queue",
-                  K(ret),
-                  KP(client),
-                  K(in_use_clients_),
-                  K(total_clients_),
-                  K(client->get_client_id()));
-      }
+    if (total_clients_ > 0) {
+      total_clients_ --;
+    }
+    if (in_use_clients_ > 0) {
+      in_use_clients_ --;
+    }
+    if (OB_FAIL(ret)) {
+      LOG_WARN("free client by unexpected error", K(ret), K_(total_clients), K_(in_use_clients));
     } else {
-      // client_queue_ is null, cannot return to queue, must destroy the client
-      client->~ObHiveMetastoreClient();
-      allocator_->free(client);
-      client = nullptr;
-      total_clients_--;
-      in_use_clients_--;
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("client queue is null, destroying client", K(ret), KP(client));
+      LOG_TRACE("free client by success", K(ret), K_(total_clients), K_(in_use_clients), K_(last_access_ts));
     }
   }
 
-  // 在释放 pool_lock_ 后再发送 signal
+  // Send condition variable signal using ObThreadCond
   pool_cond_.signal();
-
   return ret;
 }
 
@@ -392,7 +318,7 @@ void ObHMSClientPool::get_pool_stats(int64_t &total_clients,
                                      int64_t &in_use_clients,
                                      int64_t &idle_clients) const
 {
-  SpinRLockGuard guard(pool_lock_);
+  ObThreadCondGuard guard(pool_cond_);
   total_clients = total_clients_;
   in_use_clients = in_use_clients_;
   idle_clients = (OB_NOT_NULL(client_queue_)) ? client_queue_->size() : 0;
@@ -401,7 +327,7 @@ void ObHMSClientPool::get_pool_stats(int64_t &total_clients,
 int ObHMSClientPool::cleanup()
 {
   int ret = OB_SUCCESS;
-  SpinWLockGuard guard(pool_lock_);
+  ObThreadCondGuard guard(pool_cond_);
 
   if (OB_UNLIKELY(!is_inited_)) {
     // Pool is shutdown, skip cleanup.
@@ -486,6 +412,16 @@ int ObHMSClientPool::cleanup()
             K(catalog_id_),
             K(pool_size_));
   return ret;
+}
+
+int64_t ObHMSClientPool::get_waiting_threads() const
+{
+  return ATOMIC_LOAD(&waiting_threads_);
+}
+
+void ObHMSClientPool::refresh_last_access_ts()
+{
+  last_access_ts_ = ObTimeUtility::current_time();
 }
 
 bool ObHMSClientPool::is_pool_full_unlocked_()
@@ -800,8 +736,11 @@ int ObHMSClientPoolMgr::cleanup_idle_pools()
         pool->get_pool_stats(total_clients, in_use_clients, idle_clients);
         const int64_t idle_time = ObTimeUtility::current_time() - pool->get_last_access_ts();
 
+        // Check if there are waiting threads, if there are then the pool cannot be deleted.
+        int64_t waiting_threads = pool->get_waiting_threads();
+
         if (0 == total_clients && 0 == in_use_clients && 0 == idle_clients
-            && idle_time >= POOL_REMOVAL_THRESHOLD_US) {
+            && 0 == waiting_threads && idle_time >= POOL_REMOVAL_THRESHOLD_US) {
           can_remove = true;
         }
       } else if (OB_HASH_NOT_EXIST == tmp_ret) {
@@ -837,8 +776,10 @@ int ObHMSClientPoolMgr::cleanup_idle_pools()
       pool->get_pool_stats(total_clients, in_use_clients, idle_clients);
       const int64_t idle_time = ObTimeUtility::current_time() - pool->get_last_access_ts();
 
+      // Check if there are waiting threads, if there are then the pool cannot be deleted.
+      int64_t waiting_threads = pool->get_waiting_threads();
       if (0 == total_clients && 0 == in_use_clients && 0 == idle_clients
-          && idle_time >= POOL_REMOVAL_THRESHOLD_US) {
+          && 0 == waiting_threads && idle_time >= POOL_REMOVAL_THRESHOLD_US) {
         if (OB_SUCCESS != (tmp_ret = pool_map_.erase_refactored(key))) {
           LOG_WARN("erase failed", K(tmp_ret), K(key));
         } else {
@@ -900,7 +841,8 @@ int ObHMSClientPoolMgr::get_or_create_pool(const uint64_t &tenant_id,
     {
       SpinRLockGuard r_guard(pool_mgr_lock_);
       ret = pool_map_.get_refactored(key, pool);
-      if (OB_SUCC(ret) && OB_LIKELY(pool->is_inited())) {
+      if (OB_SUCC(ret) && OB_NOT_NULL(pool) && OB_LIKELY(pool->is_inited())) {
+        pool->refresh_last_access_ts();
         LOG_TRACE("found valid pool", K(ret), K(key));
       } else {
         pool = nullptr;
@@ -915,15 +857,15 @@ int ObHMSClientPoolMgr::get_or_create_pool(const uint64_t &tenant_id,
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc buf for ob hive client pool", K(ret));
       } else {
+        // Second check: write lock
+        SpinWLockGuard w_guard(pool_mgr_lock_);
         ObHMSClientPool *new_pool = new (pool_buf) ObHMSClientPool();
         if (OB_FAIL(new_pool->init(tenant_id, catalog_id, uri, properties, inner_allocator_))) {
           LOG_WARN("failed to init hive client pool", K(ret));
-        }
-
-        // If new pool is valid, insert it into map.
-        if (OB_SUCC(ret)) {
-          // Second check: write lock
-          SpinWLockGuard w_guard(pool_mgr_lock_);
+          new_pool->~ObHMSClientPool();
+          inner_allocator_->free(pool_buf);
+          pool_buf = nullptr;
+        } else {
           bool need_insert_new_pool = false;
           ret = pool_map_.get_refactored(key, pool);
 
@@ -931,15 +873,15 @@ int ObHMSClientPoolMgr::get_or_create_pool(const uint64_t &tenant_id,
             need_insert_new_pool = !pool->is_inited();
             if (need_insert_new_pool) {
               ret = pool_map_.erase_refactored(key);
-              if (OB_SUCC(ret)) {
-                pool->~ObHMSClientPool();
-                inner_allocator_->free(pool);
-                pool = nullptr;
-              } else {
+              pool->~ObHMSClientPool();
+              inner_allocator_->free(pool);
+              pool = nullptr;
+              if (OB_FAIL(ret)) {
                 LOG_WARN("failed to erase invalid pool", K(ret), K(key));
               }
             } else {
-              LOG_TRACE("use existing valid pool", K(ret), K(key));
+
+              LOG_INFO("use existing valid pool", K(ret), K(key));
             }
           } else if (OB_HASH_NOT_EXIST == ret) {
             need_insert_new_pool = true;
@@ -961,9 +903,6 @@ int ObHMSClientPoolMgr::get_or_create_pool(const uint64_t &tenant_id,
             new_pool->~ObHMSClientPool();
             inner_allocator_->free(pool_buf);
           }
-        } else {
-          new_pool->~ObHMSClientPool();
-          inner_allocator_->free(pool_buf);
         }
       }
     }
