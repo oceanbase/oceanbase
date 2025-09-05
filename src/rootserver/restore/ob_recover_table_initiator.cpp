@@ -99,8 +99,6 @@ int ObRecoverTableInitiator::start_recover_table_(const obrpc::ObRecoverTableArg
     LOG_WARN("failed to set description", K(ret));
   } else if (OB_FAIL(fill_aux_tenant_restore_info_(arg, job, physical_restore_job))) {
     LOG_WARN("failed to fill aux tenant resetore info", K(ret), K(arg));
-  } else if (OB_FAIL(check_aux_tenant_restore_type_(physical_restore_job))) {
-    LOG_WARN("failed to check aux tenant restore type", K(ret));
   } else if (OB_FAIL(fill_recover_table_arg_(arg, job))) {
     LOG_WARN("failed to fill recover table arg", K(ret));
   } else if (OB_FAIL(check_recover_table_target_schema_(job))) {

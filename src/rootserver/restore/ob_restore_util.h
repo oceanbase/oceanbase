@@ -223,6 +223,7 @@ private:
              share::ObPhysicalRestoreJob &job);
   static int check_backup_set_version_match_(share::ObBackupSetFileDesc &backup_file_desc);
   static int check_backup_set_compatible_(const share::ObRestoreType &restore_type, const share::ObBackupSetFileDesc &backup_file_desc);
+  static int fill_restore_type_(share::ObPhysicalRestoreJob &job, const share::ObBackupSetFileDesc &backup_file_desc);
   static int get_backup_sys_time_zone_(
       const ObIArray<ObString> &tenant_path_array, 
       common::ObTimeZoneInfoWrap &time_zone_wrap);
@@ -242,7 +243,7 @@ private:
       share::ObPhysicalRestoreJob &job);
   static int fill_sts_credential_(
       const obrpc::ObPhysicalRestoreTenantArg &arg, 
-      share::ObPhysicalRestoreJob &job);      
+      share::ObPhysicalRestoreJob &job);
   DISALLOW_COPY_AND_ASSIGN(ObRestoreUtil);
 };
 
