@@ -767,11 +767,7 @@ static void convert_http_error(const Aws::S3::S3Error &s3_err, int &ob_errcode)
       break;
     }
     case S3_PERMISSION_DENIED: {
-      if (exception == "InvalidAccessKeyId") {
-        ob_errcode = OB_OBJECT_STORAGE_PERMISSION_DENIED;
-      } else {
-        ob_errcode = OB_OBJECT_STORAGE_IO_ERROR;
-      }
+      ob_errcode = OB_OBJECT_STORAGE_PERMISSION_DENIED;
       break;
     }
     case S3_SLOW_DOWN: {
