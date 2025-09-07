@@ -5369,6 +5369,7 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
             if (dst_type.is_string_or_lob_locator_type() || dst_type.is_enum_or_set()) {
               // string data stored in parquet file as UTF8 format
               dst_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+              dst_type.set_collation_level(CS_LEVEL_IMPLICIT);
             }
             file_column_expr->set_result_type(dst_type);
           }
