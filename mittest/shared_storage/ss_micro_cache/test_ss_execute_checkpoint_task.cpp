@@ -22,6 +22,7 @@
 #include "storage/shared_storage/micro_cache/ckpt/ob_ss_ckpt_phy_block_writer.h"
 #include "storage/shared_storage/micro_cache/ob_ss_micro_range_manager.h"
 #include "storage/shared_storage/micro_cache/ob_ss_micro_cache_util.h"
+#include "storage/shared_storage/ob_file_manager.h"
 
 namespace oceanbase
 {
@@ -78,7 +79,10 @@ void TestSSExecuteCheckpointTask::SetUp()
   micro_cache->stop();
   micro_cache->wait();
   micro_cache->destroy();
-  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 32)));
+  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 32), 1/*micro_split_cnt*/));
+  ObTenantFileManager *tnt_file_mgr = MTL(ObTenantFileManager*);
+  ASSERT_NE(nullptr, tnt_file_mgr);
+  tnt_file_mgr->is_cache_file_exist_ = true;
   micro_cache->start();
   micro_cache_ = micro_cache;
   mem_blk_mgr_ = &micro_cache_->mem_blk_mgr_;
@@ -119,7 +123,7 @@ int TestSSExecuteCheckpointTask::restart_micro_cache()
   micro_cache_->destroy();
   tnt_file_mgr->is_cache_file_exist_ = true;
 
-  if (OB_FAIL(micro_cache_->init(MTL_ID(), (1L << 32)))) {
+  if (OB_FAIL(micro_cache_->init(MTL_ID(), (1L << 32), 1/*micro_split_cnt*/))) {
     LOG_WARN("fail to init micro_cache", KR(ret));
   } else {
     micro_cache_->start();
@@ -778,7 +782,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
   micro_cache_->wait();
   micro_cache_->destroy();
   MTL(ObTenantFileManager*)->is_cache_file_exist_ = true;
-  ASSERT_EQ(OB_SUCCESS, micro_cache_->init(MTL_ID(), cache_file_size));
+  ASSERT_EQ(OB_SUCCESS, micro_cache_->init(MTL_ID(), cache_file_size, 1/*micro_split_cnt*/));
   ASSERT_EQ(OB_SUCCESS, micro_cache_->start());
 
   const int64_t REPLAY_CKPT_TIMEOUT_S = 120;
@@ -884,6 +888,10 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
 /* This case tests whether the micro cache can be restored to the expected state after restart.  */
 TEST_F(TestSSExecuteCheckpointTask, test_micro_cache_ckpt_after_restart)
 {
+  LOG_INFO("TEST: start test_micro_cache_ckpt_after_restart",
+    K(persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.cur_super_blk_.get_ckpt_split_cnt()),
+    K(persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.prev_super_blk_.get_ckpt_split_cnt()),
+    K(phy_blk_mgr_->super_blk_.get_ckpt_split_cnt()));
   ObSSMicroCacheStat &cache_stat = micro_cache_->cache_stat_;
   micro_cache_->task_runner_.disable_task();
   micro_cache_->task_runner_.enable_persist_data();
@@ -1025,7 +1033,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_micro_cache_ckpt_persist_many_meta)
   // 1. destroy original init_range, build new init_range
   ObSSMicroRangeManager &micro_range_mgr = micro_cache_->micro_range_mgr_;
   micro_range_mgr.inner_destroy_initial_range();
-  micro_range_mgr.init_range_cnt_ = 2;
+  micro_range_mgr.init_range_cnt_ = 1000;
   ASSERT_EQ(OB_SUCCESS, micro_range_mgr.inner_build_initial_range(false));
 
   // 2. add some micro_block into cache and record their micro_meta
@@ -1046,7 +1054,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_micro_cache_ckpt_persist_many_meta)
   ASSERT_EQ(OB_SUCCESS, persist_meta_task_->persist_meta_op_.start_op());
   persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
   ASSERT_EQ(OB_SUCCESS, persist_meta_task_->persist_meta_op_.gen_checkpoint());
-  ASSERT_LT(0, cache_stat.task_stat().micro_ckpt_item_cnt_);
+  ASSERT_LT(0, persist_meta_task_->persist_meta_op_.full_ckpt_item_cnt_);
 }
 
 /* After persist_meta_task execucte scan_blocks_to_reuse, need_scan_reusable_blk() will return false */
@@ -1355,6 +1363,8 @@ int main(int argc, char **argv)
   system("rm -f test_ss_execute_checkpoint_task.log*");
   OB_LOGGER.set_file_name("test_ss_execute_checkpoint_task.log", true, true);
   OB_LOGGER.set_log_level("INFO");
+  ObPLogWriterCfg log_cfg;
+  OB_LOGGER.init(log_cfg, false);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

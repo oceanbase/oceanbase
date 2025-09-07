@@ -860,6 +860,30 @@ TEST_F(TestSSMicroMetaManager, test_persist_micro_parallel_with_clear)
   clear_thread.join();
 }
 
+TEST_F(TestSSMicroMetaManager, test_micro_cnt_limit)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("TEST: start test_micro_cnt_limit");
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ASSERT_NE(nullptr, micro_cache);
+  const int64_t block_size = micro_cache->phy_blk_size_;
+  ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
+  ObSSPhysicalBlockManager *phy_blk_mgr = &micro_cache->phy_blk_mgr_;
+  ObSSMicroMetaManager *micro_meta_mgr = &micro_cache->get_micro_meta_mgr();
+  const int64_t micro_cnt_limit = micro_meta_mgr->micro_cnt_limit_;
+  ASSERT_LT(0, micro_cnt_limit);
+  LOG_INFO("check micro_cnt_limit", K(micro_cnt_limit), K(micro_meta_mgr->mem_limit_size_));
+
+  ObArray<ObSSMicroBlockMetaHandle> micro_meta_handles;
+  for (int64_t i = 0; i < micro_cnt_limit; ++i) {
+    ObSSMicroBlockMetaHandle micro_meta_handle;
+    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr->alloc_micro_block_meta(micro_meta_handle));
+    ASSERT_EQ(true, micro_meta_handle.is_valid());
+    ASSERT_EQ(OB_SUCCESS, micro_meta_handles.push_back(micro_meta_handle));
+  }
+  ASSERT_EQ(micro_cnt_limit, micro_meta_handles.count());
+}
+
 }  // namespace storage
 }  // namespace oceanbase
 
