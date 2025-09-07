@@ -20952,7 +20952,8 @@ int ObDMLResolver::resolve_es_match_expr(ObMatchFunRawExpr &expr)
     ObIArray<ObRawExpr*> &column_list = expr.get_match_columns();
     uint64_t table_id = OB_INVALID_ID;
     ColumnReferenceSet column_set;
-    const ObColumnSchemaV2 *fulltext_col = NULL;
+    const ObColumnSchemaV2 *column_schema = nullptr;
+    ObCollationType collation_type = CS_TYPE_MAX;
 
     // get matched fulltext index
     for (int64_t i = 0; OB_SUCC(ret) && i < column_list.count(); ++i) {
@@ -20983,8 +20984,16 @@ int ObDMLResolver::resolve_es_match_expr(ObMatchFunRawExpr &expr)
         LOG_WARN("unexpected nullptr to table schema", K(ret));
       } else if (OB_FAIL(resolve_match_index(column_set, *table_schema, expr))) {
         LOG_WARN("failed to resolve fulltext index access exprs", K(ret));
-      } else {
-        column_set.reset();
+      } else if (FALSE_IT(column_set.reset())) {
+      } else if (OB_FAIL(schema_checker_->get_column_schema(session_info_->get_effective_tenant_id(),
+                                                            table_item->ref_id_,
+                                                            col_ref->get_column_id(),
+                                                            column_schema))) {
+        LOG_WARN("failed to get column schema", K(ret));
+      } else if (0 == i && FALSE_IT(collation_type = column_schema->get_collation_type())) {
+      } else if (OB_UNLIKELY(column_schema->get_collation_type() != collation_type)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "MATCH: Columns have different collation types");
       }
     }
     if (OB_FAIL(ret)) {
