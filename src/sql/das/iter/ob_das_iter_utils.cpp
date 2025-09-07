@@ -235,7 +235,7 @@ bool ObDASIterUtils::is_vec_hnsw_scan(const ObDASBaseCtDef *attach_ctdef, ObDASB
 
     if (OB_FAIL(ObDASUtils::find_target_das_def(
             attach_ctdef, attach_rtdef, DAS_OP_VEC_SCAN, vec_aux_ctdef, vec_aux_rtdef))) {
-      LOG_WARN("find ir scan definition failed", K(ret));
+      LOG_TRACE("find DAS_OP_VEC_SCAN definition failed, not vector hnsw index scan", K(ret));
     } else if (vec_aux_ctdef->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW
     || vec_aux_ctdef->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_SQ
     || vec_aux_ctdef->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ
@@ -736,6 +736,14 @@ int ObDASIterUtils::set_vec_pre_filter_related_ids(const ObDASVecAuxScanCtDef *v
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected nullptr", K(ret), KP(hnsw_scan_iter->get_pre_filter_iter()));
         } else if (OB_FAIL(ObDASIterUtils::set_index_merge_related_ids(
+            inv_idx_ctdef, inv_idx_rtdef, related_tablet_ids, ls_id, hnsw_scan_iter->get_pre_filter_iter()))) {
+          LOG_WARN("failed to set text retrieval related ids", K(ret));
+        }
+      } else if (ObDASUtils::is_es_match_scan(inv_idx_ctdef)) {
+        if (OB_ISNULL(hnsw_scan_iter->get_pre_filter_iter())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected nullptr", K(ret), KP(hnsw_scan_iter->get_pre_filter_iter()));
+        } else if (OB_FAIL(ObDASIterUtils::set_text_retrieval_related_ids(
             inv_idx_ctdef, inv_idx_rtdef, related_tablet_ids, ls_id, hnsw_scan_iter->get_pre_filter_iter()))) {
           LOG_WARN("failed to set text retrieval related ids", K(ret));
         }
@@ -1312,7 +1320,8 @@ int ObDASIterUtils::create_match_iter_tree(ObTableScanParam &scan_param,
                                                const ObDASRelatedTabletID &related_tablet_ids,
                                                transaction::ObTxDesc *trans_desc,
                                                transaction::ObTxReadSnapshot *snapshot,
-                                               ObDASIter *&iter_tree)
+                                               ObDASIter *&iter_tree,
+                                               bool is_vec_pre_filter)
 {
   int ret = OB_SUCCESS;
   const ObDASIREsScoreCtDef *match_scan_ctdef = nullptr;
@@ -1327,7 +1336,8 @@ int ObDASIterUtils::create_match_iter_tree(ObTableScanParam &scan_param,
   const bool has_lookup = ObDASOpType::DAS_OP_INDEX_PROJ_LOOKUP == attach_ctdef->op_type_;
   if (OB_UNLIKELY(attach_ctdef->op_type_ != ObDASOpType::DAS_OP_IR_ES_SCORE
       && attach_ctdef->op_type_ != ObDASOpType::DAS_OP_INDEX_PROJ_LOOKUP
-      && attach_ctdef->op_type_ != ObDASOpType::DAS_OP_SORT)) {
+      && attach_ctdef->op_type_ != ObDASOpType::DAS_OP_SORT
+      && (attach_ctdef->op_type_ != ObDASOpType::DAS_OP_IR_AUX_LOOKUP || !is_vec_pre_filter))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("unexpected text retrieval root attach def type", K(ret), KPC(attach_ctdef));
   } else if (OB_FAIL(ObDASUtils::find_target_das_def(
@@ -1374,13 +1384,14 @@ int ObDASIterUtils::create_match_iter_tree(ObTableScanParam &scan_param,
     }
   }
 
-  if (OB_SUCC(ret) && has_lookup) {
+  if (OB_SUCC(ret) && (has_lookup || attach_ctdef->op_type_ == ObDASOpType::DAS_OP_IR_AUX_LOOKUP)) {
     ObDASIter *domain_lookup_result = nullptr;
     bool doc_id_lookup_keep_order = false;
     bool main_lookup_keep_order = false;
     const ObDASIRAuxLookupCtDef *aux_lookup_ctdef = nullptr;
     ObDASMatchIter *match_iter = static_cast<ObDASMatchIter *>(match_result);
-    switch (table_lookup_ctdef->get_rowkey_scan_ctdef()->op_type_) {
+    ObDASOpType op_type = has_lookup ? table_lookup_ctdef->get_rowkey_scan_ctdef()->op_type_ : attach_ctdef->op_type_;
+    switch (op_type) {
     case ObDASOpType::DAS_OP_IR_ES_SCORE:
     case ObDASOpType::DAS_OP_SORT: {
       ObDASCacheLookupIter *lookup_iter = nullptr;
@@ -1406,14 +1417,19 @@ int ObDASIterUtils::create_match_iter_tree(ObTableScanParam &scan_param,
       break;
     }
     case ObDASOpType::DAS_OP_IR_AUX_LOOKUP: {
-      aux_lookup_ctdef = static_cast<const ObDASIRAuxLookupCtDef *>(table_lookup_ctdef->get_rowkey_scan_ctdef());
+      aux_lookup_ctdef = has_lookup ? static_cast<const ObDASIRAuxLookupCtDef *>(table_lookup_ctdef->get_rowkey_scan_ctdef())
+      : static_cast<const ObDASIRAuxLookupCtDef *>(attach_ctdef);
+      ObDASCacheLookupIter *lookup_iter = nullptr;
       // below cases need keep order when look up the table
       // case: Taat or need sort by relevance
       if (DAS_OP_SORT == aux_lookup_ctdef->get_doc_id_scan_ctdef()->op_type_) {
         doc_id_lookup_keep_order = true;
       }
       main_lookup_keep_order = true;
-      if (OB_FAIL(create_domain_lookup_sub_tree(
+      if (!has_lookup && OB_FAIL((create_cache_lookup_sub_tree(scan_param, alloc, attach_ctdef, attach_rtdef,
+                                  trans_desc, snapshot, root_iter, related_tablet_ids, lookup_iter, doc_id_lookup_keep_order)))) {
+        LOG_WARN("failed to create cache lookup sub tree", K(ret));
+      } else if (has_lookup && OB_FAIL(create_domain_lookup_sub_tree(
           scan_param,
           scan_param.ls_id_,
           alloc,
@@ -1428,7 +1444,7 @@ int ObDASIterUtils::create_match_iter_tree(ObTableScanParam &scan_param,
           domain_lookup_result))) {
         LOG_WARN("failed to create domain index lookup iters", K(ret));
       } else {
-        root_iter = domain_lookup_result;
+        root_iter = has_lookup ? domain_lookup_result : lookup_iter;
       }
       break;
     }
@@ -3824,6 +3840,12 @@ int ObDASIterUtils::create_vec_pre_filter_tree(ObTableScanParam &scan_param,
     bool is_idx_merge = ObDASUtils::is_index_merge(inv_idx_ctdef);
     if (is_idx_merge) {
       if (OB_FAIL(create_index_merge_iter_tree(scan_param, alloc, inv_idx_ctdef, inv_idx_rtdef, related_tablet_ids, trans_desc, snapshot, pre_iter_tree))) {
+        LOG_WARN("failed to create index merge lookup tree", K(ret));
+      } else {
+        need_index_back = true;
+      }
+    } else if (ObDASUtils::is_es_match_scan(inv_idx_ctdef)) {
+      if (OB_FAIL(create_match_iter_tree(scan_param, alloc, inv_idx_ctdef, inv_idx_rtdef, related_tablet_ids, trans_desc, snapshot, pre_iter_tree, true))) {
         LOG_WARN("failed to create index merge lookup tree", K(ret));
       } else {
         need_index_back = true;

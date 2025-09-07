@@ -632,9 +632,9 @@ int ObDASHNSWScanIter::inner_get_next_rows(int64_t &count, int64_t capacity)
 int ObDASHNSWScanIter::save_distance_expr_result(ObNewRow *row, int64_t size)
 {
   int ret = OB_SUCCESS;
-
+  int rel_count = vec_aux_ctdef_->relevance_col_cnt_;
   if (need_save_distance_result()) {
-    int64_t a_batch_obj_cnt = 2 + extra_column_count_;
+    int64_t a_batch_obj_cnt = 2 + extra_column_count_ + rel_count;
     ObEvalCtx::BatchInfoScopeGuard batch_info_guard(*sort_rtdef_->eval_ctx_);
     batch_info_guard.set_batch_size(size);
 
@@ -3034,12 +3034,12 @@ int ObDASHNSWScanIter::get_extra_idx_in_outexprs(ObIArray<int64_t> &extra_in_row
                                                                       ObTSCIRScanType::OB_VEC_ROWKEY_VID_SCAN);
   const sql::ExprFixedArray &rowkey_exprs = ctdef->rowkey_exprs_;
   const sql::ExprFixedArray &out_exprs = vec_aux_ctdef_->result_output_;
-  if (out_exprs.count() - 1 != rowkey_exprs.count() || rowkey_exprs.count() != extra_column_count_) {
+  if (out_exprs.count() - (1 + vec_aux_ctdef_->relevance_col_cnt_) != rowkey_exprs.count() || rowkey_exprs.count() != extra_column_count_) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("rowkey count is not equal.", K(ret), K(rowkey_exprs.count()), K(out_exprs.count()));
+    LOG_WARN("rowkey count is not equal.", K(ret), K(rowkey_exprs.count()), K(out_exprs.count()), K(vec_aux_ctdef_->relevance_col_cnt_));
   }
   // out_exprs extra_info is begin with 1, the 0 is vid
-  for (int64_t i = 1; OB_SUCC(ret) && i < out_exprs.count(); ++i) {
+  for (int64_t i = 1; OB_SUCC(ret) && i <= extra_column_count_; ++i) {
     const ObExpr *extra_info_expr = out_exprs.at(i);
     bool find = false;
     for (int64_t j = 0; OB_SUCC(ret) && !find && j < rowkey_exprs.count(); ++j) {
