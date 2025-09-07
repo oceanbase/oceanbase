@@ -84,17 +84,23 @@ def upgrade_across_version(cur):
       raise MyError("tenant_ids count is unexpected")
     tenant_count = len(tenant_ids)
 
-    sql = "select count(*) from __all_virtual_core_table where table_name = '__all_global_stat' and column_name in ('target_data_version', 'current_data_version', 'upgrade_begin_data_version') and column_value = {0}".format(int_current_data_version)
-    results = query(cur, sql)
-    if len(results) != 1 or len(results[0]) != 1:
-      logging.warn('result cnt not match')
-      raise MyError('result cnt not match')
-    elif 3 * tenant_count != results[0][0]:
-      logging.info('target_data_version/current_data_version/upgrade_begin_data_version not match with {0}, tenant_cnt:{1}, result_cnt:{2}'.format(current_data_version, tenant_count, results[0][0]))
-      across_version = True
-    else:
-      logging.info("all tenant's target_data_version/current_data_version/upgrade_begin_data_version are match with {0}".format(current_data_version))
-      across_version = False
+    # 10 second per tenant
+    # at least 100 seconds
+    # ignore default timeout
+    query_timeout = actions.set_default_timeout_by_tenant(cur, 0, 10, 100)
+    with SetSessionTimeout(cur, query_timeout):
+      tenant_id_str = ','.join(map(str, tenant_ids))
+      sql = "select count(*) from __all_virtual_core_table where table_name = '__all_global_stat' and column_name in ('target_data_version', 'current_data_version', 'upgrade_begin_data_version') and column_value = {0} and tenant_id in ({1})".format(int_current_data_version, tenant_id_str)
+      results = query(cur, sql)
+      if len(results) != 1 or len(results[0]) != 1:
+        logging.warn('result cnt not match')
+        raise MyError('result cnt not match')
+      elif 3 * tenant_count != results[0][0]:
+        logging.info('target_data_version/current_data_version/upgrade_begin_data_version not match with {0}, tenant_cnt:{1}, result_cnt:{2}'.format(current_data_version, tenant_count, results[0][0]))
+        across_version = True
+      else:
+        logging.info("all tenant's target_data_version/current_data_version/upgrade_begin_data_version are match with {0}".format(current_data_version))
+        across_version = False
 
   # 2. check if compatible match with current_data_version
   if not across_version:

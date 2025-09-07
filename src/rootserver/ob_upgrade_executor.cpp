@@ -955,6 +955,8 @@ int ObUpgradeExecutor::run_upgrade_system_variable_job_(
       } else if (OB_TMP_FAIL(ObUpgradeUtils::upgrade_sys_variable(*common_rpc_proxy_, *sql_proxy_, tenant_id))) {
         LOG_WARN("fail to upgrade sys variable", KR(tmp_ret), K(tenant_id));
         backup_ret = OB_SUCCESS == backup_ret ? tmp_ret : backup_ret;
+      } else if (OB_FAIL(check_schema_sync_(tenant_id))) {
+        LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
       }
       DEBUG_SYNC(AFTER_UPGRADE_SYS_VARIABLE);
       cost = ObTimeUtility::current_time() - start_ts;
@@ -992,6 +994,8 @@ int ObUpgradeExecutor::run_upgrade_system_table_job_(
       } else if (OB_TMP_FAIL(upgrade_system_table_(tenant_id))) {
         LOG_WARN("fail to upgrade system table", KR(tmp_ret), K(tenant_id));
         backup_ret = OB_SUCCESS == backup_ret ? tmp_ret : backup_ret;
+      } else if (OB_FAIL(check_schema_sync_(tenant_id))) {
+        LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
       }
       DEBUG_SYNC(AFTER_UPGRADE_SYSTEM_TABLE);
       cost = ObTimeUtility::current_time() - start_ts;
@@ -1144,6 +1148,8 @@ int ObUpgradeExecutor::run_upgrade_virtual_schema_job_(
       } else if (OB_TMP_FAIL(common_rpc_proxy_->timeout(timeout).upgrade_table_schema(arg))) {
         LOG_WARN("fail to upgrade virtual schema", KR(tmp_ret), K(arg));
         backup_ret = OB_SUCCESS == backup_ret ? tmp_ret : backup_ret;
+      } else if (OB_FAIL(check_schema_sync_(tenant_id))) {
+        LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
       }
       DEBUG_SYNC(AFTER_UPGRADE_VIRTUAL_SCHEMA);
       cost = ObTimeUtility::current_time() - start_ts;
@@ -1175,6 +1181,8 @@ int ObUpgradeExecutor::run_upgrade_system_package_job_()
     LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
   } else if (OB_FAIL(upgrade_oracle_system_package_job_())) {
     LOG_WARN("fail to upgrade mysql system package", KR(ret));
+  } else if (OB_FAIL(check_schema_sync_(tenant_id))) {
+    LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
 #endif
   }
   cost = ObTimeUtility::current_time() - start_ts;
@@ -1379,6 +1387,8 @@ int ObUpgradeExecutor::run_upgrade_all_post_action_(const uint64_t tenant_id)
     LOG_WARN("failed to init executor", KR(ret), K(tenant_id), K_(sql_proxy));
   } else if (OB_FAIL(run_upgrade_all_processors_(executor))) {
     LOG_WARN("failed to run upgrade all processors", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(check_schema_sync_(tenant_id))) {
+    LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
   }
   return ret;
 }
@@ -1676,6 +1686,8 @@ int ObUpgradeExecutor::run_upgrade_finish_action_(
       } else if (OB_TMP_FAIL(run_upgrade_finish_action_(tenant_id))) {
         LOG_WARN("fail to upgrade finish action", KR(ret), K(tenant_id));
         backup_ret = OB_SUCCESS == backup_ret ? tmp_ret : backup_ret;
+      } else if (OB_FAIL(check_schema_sync_(tenant_id))) {
+        LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
       }
       cost = ObTimeUtility::current_time() - start_ts;
       FLOG_INFO("[UPGRADE] finish run upgrade finish action", KR(ret), K(tenant_id), K(cost));
