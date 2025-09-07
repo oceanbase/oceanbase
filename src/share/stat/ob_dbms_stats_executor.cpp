@@ -149,7 +149,7 @@ int ObDbmsStatsExecutor::gather_partition_stats(ObExecContext &ctx,
           } else {
             derive_param.global_stat_param_.need_modify_ = taskInfo.gather_global_;
             if (ERRSIM_FAILED_ANALYZE_TABLE_STATS) {
-              ret = OB_ERR_UNEXPECTED;
+              ret = ERRSIM_FAILED_ANALYZE_TABLE_STATS;
               LOG_ERROR("ERRSIM: failed to ANALYZE table stats", K(ret));
             } else if (i > 0 && ERRSIM_FAILED_ANALYZE_TIMEOUT) {
               ret = OB_TIMEOUT;

@@ -139,6 +139,7 @@ public:
 
   int get_update_fail_count_value_list(const uint64_t tenant_id,
                                        const uint64_t table_id,
+                                       const uint64_t data_version,
                                        const ObIArray<int64_t> &part_ids,
                                        ObSqlString &value_str);
   int update_column_stat(share::schema::ObSchemaGetterGuard *schema_guard,

@@ -2306,7 +2306,7 @@ int ObOptStatSqlService::update_table_stat_failed_count(
       share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id);
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("fail to get tenant data version", KR(ret));
-  } else if (OB_FAIL(get_update_fail_count_value_list(ext_tenant_id, table_id,
+  } else if (OB_FAIL(get_update_fail_count_value_list(ext_tenant_id, table_id, data_version,
                                                       part_ids, value_str))) {
     LOG_WARN("failed to generate in list", K(ret));
   } else if (OB_UNLIKELY(value_str.empty())) {
@@ -2314,8 +2314,8 @@ int ObOptStatSqlService::update_table_stat_failed_count(
     LOG_WARN("get unexpected null", K(ret), K(value_str));
   } else if (OB_FAIL(raw_sql.append_fmt(
                UPDATE_TABLE_STAT_FAILCOUNT_SQL, share::OB_ALL_TABLE_STAT_TNAME,
-               value_str.ptr(),
-               data_version < DATA_VERSION_4_4_1_0 ? " " : ", internal_stat"))) {
+               data_version < DATA_VERSION_4_4_1_0 ? " " : ", internal_stat",
+               value_str.ptr()))) {
     LOG_WARN("failed to append fmt", K(ret), K(raw_sql));
   } else {
     ObMySQLTransaction trans;
@@ -2342,13 +2342,11 @@ int ObOptStatSqlService::update_table_stat_failed_count(
 
 int ObOptStatSqlService::get_update_fail_count_value_list(
     const uint64_t tenant_id, const uint64_t table_id,
+    const uint64_t data_version,
     const ObIArray<int64_t> &part_ids, ObSqlString &value_str)
 {
   int ret = OB_SUCCESS;
-  uint64_t data_version = 0;
-  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
-    LOG_WARN("fail to get tenant data version", K(ret));
-  } else if (part_ids.empty()) {
+  if (part_ids.empty()) {
     value_str.append_fmt(UPDATE_TABLE_STAT_FAILCOUNT_VALUE,
                          tenant_id,
                          table_id,
