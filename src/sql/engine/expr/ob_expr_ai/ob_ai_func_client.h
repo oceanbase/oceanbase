@@ -29,6 +29,7 @@ public:
   int init(common::ObIAllocator &allocator, ObString &url, ObArray<ObString> &headers);
   void clean_up();
   void reset();
+  void set_timeout_sec(int64_t timeout_sec) { timeout_sec_ = timeout_sec; }
   // ai function interface
   virtual int send_post(common::ObIAllocator &allocator,
                         ObString &url,
@@ -48,8 +49,10 @@ private:
   int error_handle(CURLcode res);
   int send_post(ObJsonObject *data, ObJsonObject *&response);
   int send_post_batch(ObArray<ObJsonObject *> &data_array, ObArray<ObJsonObject *> &responses);
-  int init_easy_handle(CURL *&curl, ObJsonObject *data, ObStringBuffer &response_buf);
+  int init_easy_handle(CURL *curl, ObJsonObject *data, ObStringBuffer &response_buf);
   static size_t write_callback(void *contents, size_t size, size_t nmemb, void *userp);
+  bool is_retryable_status_code(int64_t http_code);
+  bool is_timeout();
   common::ObIAllocator *allocator_;
   char *url_;
   struct curl_slist *header_list_;
@@ -59,6 +62,9 @@ private:
   ObArray<ObStringBuffer *> response_buffers_;
   // atomic boolean value, used to check if the batch task is finished
   std::atomic<bool> is_finished_;
+  int64_t max_retry_times_;
+  int64_t abs_timeout_ts_;
+  int64_t timeout_sec_;
   DISALLOW_COPY_AND_ASSIGN(ObAIFuncClient);
 };
 
