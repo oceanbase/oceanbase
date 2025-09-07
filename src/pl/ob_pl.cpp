@@ -3649,6 +3649,9 @@ int ObPLExecState::final(int ret)
         if (OB_FAIL(profiler->flush_data())) {
           LOG_WARN("[DBMS_PROFILER] failed to flush pl profiler data", K(ret), K(lbt()));
         }
+      } else if (OB_FAIL(profiler->load_schema())) {
+        LOG_WARN("[DBMS_PROFILER] failed to load user schema from package variable",
+                   K(ret), KPC(profiler));
       }
     }
 
@@ -3673,6 +3676,9 @@ int ObPLExecState::final(int ret)
         if (OB_FAIL(code_coverage->flush_data())) {
           LOG_WARN("[DBMS_PLSQL_CODE_COVERAGE] failed to flush pl code coverage data", K(ret), K(lbt()));
         }
+      } else if (OB_FAIL(code_coverage->load_schema())) {
+          LOG_WARN("[DBMS_PLSQL_CODE_COVERAGE] failed to load user schema from package variable",
+                   K(ret), KPC(code_coverage));
       }
     }
   }
