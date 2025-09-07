@@ -586,7 +586,24 @@ int ObPartitionMergePolicy::find_minor_merge_tables(
   } else {
     ObSSTable *table = nullptr;
     bool found_greater = false;
-    ObTablesHandleArray minor_merge_candidates;
+
+    int64_t minor_compact_trigger = DEFAULT_MINOR_COMPACT_TRIGGER;
+    {
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+      if (tenant_config.is_valid()) {
+        minor_compact_trigger = tenant_config->minor_compact_trigger;
+      }
+    }
+
+    // Tables split into 3 parts, to avoid minors acrossed major table
+    // |........    ..........|........     .........|.........
+    //  (candidates1)      min_scn (candidates2)  max_scn  (candidates3)
+
+    bool trans_version_not_filled_in_prev = false;
+    bool contain_uncommitted_row_in_prev = false;
+    bool contain_uncommitted_row_in_next = false;
+    ObTablesHandleArray prev_major_table_candidates;
+    ObTablesHandleArray next_major_table_candidates;
     while (OB_SUCC(ret)) {
       ObTableHandleV2 cur_table_handle;
       if (OB_FAIL(minor_table_iter.get_next(cur_table_handle))) {
@@ -598,11 +615,38 @@ int ObPartitionMergePolicy::find_minor_merge_tables(
         }
       } else if (OB_FAIL(cur_table_handle.get_sstable(table))) {
         LOG_WARN("failed to get sstable from handle", K(ret), K(cur_table_handle));
-      } else if (!found_greater && table->get_upper_trans_version() <= min_snapshot_version) {
+      } else if (!found_greater
+                 && (table->get_upper_trans_version() <= min_snapshot_version ||
+                     (1 < minor_compact_trigger && table->get_max_merged_trans_version() <= min_snapshot_version))) {
+        /* 1. upper trans ver <= min snapshot, should do hist minor merge
+         * 2. max merged trans ver <= min snapshot < upper trans ver:
+         *   2.1. no uncommited contained, upper trans ver != MAX, table crosses the snapshot, cannot merge
+         *   2.2. uncommited contained, upper trans ver == MAX:
+         *     2.2.1. after filled, upper trans ver <= min snapshot, should do hist minor merge
+         *     2.2.2. after filled, upper trans ver > min snapshot, cross the snapshot, cannot merge
+         *     2.2.3. not filled, upper trans ver(INT64_MAX) > min snapshot, cross the snapshot, cannot merge
+         */
+        if (table->get_upper_trans_version() > min_snapshot_version || !prev_major_table_candidates.empty()) {
+          if (OB_FAIL(prev_major_table_candidates.add_table(cur_table_handle))) {
+            LOG_WARN("failed to add table", K(ret));
+          } else {
+            contain_uncommitted_row_in_prev = contain_uncommitted_row_in_prev || table->contain_uncommitted_row();
+            trans_version_not_filled_in_prev = trans_version_not_filled_in_prev || (table->get_upper_trans_version() == INT64_MAX);
+          }
+        }
+        continue;
+      } else if (!found_greater && 1 < minor_compact_trigger && table->get_start_scn().get_val_for_tx() < min_snapshot_version) {
+        // start scn < min snapshot < max merged trans ver < upper trans ver, maybe cross the snapshot, cannot merge
+        if (OB_FAIL(prev_major_table_candidates.add_table(cur_table_handle))) {
+          LOG_WARN("failed to add table", K(ret));
+        } else {
+          contain_uncommitted_row_in_prev = contain_uncommitted_row_in_prev || table->contain_uncommitted_row();
+          trans_version_not_filled_in_prev = trans_version_not_filled_in_prev || (table->get_upper_trans_version() == INT64_MAX);
+        }
         continue;
       } else {
         found_greater = true;
-        if (0 == minor_merge_candidates.get_count()) {
+        if (0 == next_major_table_candidates.get_count()) {
         } else if (is_history_minor_merge(param.merge_type_) && table->get_upper_trans_version() > max_snapshot_version) {
           break;
         } else if (tablet.get_minor_table_count() + tablet.get_major_table_count() < OB_UNSAFE_TABLE_CNT &&
@@ -610,19 +654,26 @@ int ObPartitionMergePolicy::find_minor_merge_tables(
           LOG_INFO("max_snapshot_version reached, stop find more tables", K(param), K(max_snapshot_version), KPC(table));
           break;
         }
-        if (OB_FAIL(minor_merge_candidates.add_table(cur_table_handle))) {
+        if (OB_FAIL(next_major_table_candidates.add_table(cur_table_handle))) {
           LOG_WARN("failed to add table", K(ret));
+        } else {
+          contain_uncommitted_row_in_next = contain_uncommitted_row_in_next || table->contain_uncommitted_row();
         }
       }
     }
-    int64_t minor_compact_trigger = DEFAULT_MINOR_COMPACT_TRIGGER;
-    {
-      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-      if (tenant_config.is_valid()) {
-        minor_compact_trigger = tenant_config->minor_compact_trigger;
+
+    ObTablesHandleArray *minor_merge_candidates = &next_major_table_candidates;
+    if (prev_major_table_candidates.get_count() > next_major_table_candidates.get_count()) {
+      minor_merge_candidates = &prev_major_table_candidates;
+    } else if (prev_major_table_candidates.get_count() == next_major_table_candidates.get_count()) {
+      if (trans_version_not_filled_in_prev) {
+        minor_merge_candidates = &prev_major_table_candidates;
+      } else if (!contain_uncommitted_row_in_next && contain_uncommitted_row_in_prev) {
+        minor_merge_candidates = &prev_major_table_candidates;
       }
     }
-    if (FAILEDx(refine_and_get_minor_merge_result(param, tablet, minor_compact_trigger, minor_merge_candidates, result))) {
+
+    if (FAILEDx(refine_and_get_minor_merge_result(param, tablet, minor_compact_trigger, *minor_merge_candidates, result))) {
       if (OB_NO_NEED_MERGE != ret) {
         LOG_WARN("refine and get minor merge result fail", K(ret));
       }
