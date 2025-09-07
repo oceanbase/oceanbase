@@ -270,18 +270,6 @@ public:
     DISALLOW_COPY_AND_ASSIGN(ObReloadUnitManagerTask);
   };
 
-  class ObLoadDDLTask : public common::ObAsyncTimerTask
-  {
-  public:
-    explicit ObLoadDDLTask(ObRootService &root_service);
-    virtual ~ObLoadDDLTask() = default;
-    virtual int process() override;
-    virtual int64_t get_deep_copy_size() const override { return sizeof(*this); }
-    virtual ObAsyncTask *deep_copy(char *buf, const int64_t buf_size) const override;
-  private:
-    ObRootService &root_service_;
-  };
-
   class ObRefreshIOCalibrationTask : public common::ObAsyncTimerTask
   {
   public:
@@ -895,7 +883,6 @@ public:
   //update statistic cache
   int update_stat_cache(const obrpc::ObUpdateStatCacheArg &arg);
 
-  int schedule_load_ddl_task();
   int schedule_refresh_io_calibration_task();
   int schedule_check_storage_operation_status();
   int schedule_alter_log_external_table_task();
@@ -1139,7 +1126,6 @@ private:
   ObRefreshServerTask refresh_server_task_;  // not repeat & no retry
   ObCheckServerTask check_server_task_;      // repeat & no retry
   ObSelfCheckTask self_check_task_;  //repeat to succeed & no retry
-  ObLoadDDLTask load_ddl_task_; // repeat to succeed & no retry
   ObRefreshIOCalibrationTask refresh_io_calibration_task_; // retry to succeed & no repeat
   ObZoneStorageOperationTask zone_storage_operation_task_;  // repeat & no retry
   share::ObEventTableClearTask event_table_clear_task_;  // repeat & no retry
