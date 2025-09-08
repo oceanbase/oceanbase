@@ -170,6 +170,66 @@ struct ObRawSql {
 	bool search_end_;
 };
 
+struct StringBuffer
+{
+  explicit StringBuffer(common::ObIAllocator &allocator) :
+    allocator_(allocator), buffer_(nullptr), capacity_(0), length_(0)
+  {}
+  int append(const char *str, const int64_t len);
+  int append_character(const char character);
+  int resize_buffer(const int64_t size);
+  OB_INLINE void trim_n(int64_t n)
+  {
+    buffer_ += n;
+    length_ -= (2 * n);
+  }
+  OB_INLINE char begin_character() const
+  {
+    return buffer_[0];
+  }
+  OB_INLINE char end_character() const
+  {
+    return buffer_[length_ - 1];
+  }
+  OB_INLINE char &operator[](int64_t idx) // dangerous
+  {
+    int ret = common::OB_SUCCESS;
+    if (OB_UNLIKELY(0 > idx || idx >= length_)) {
+      LIB_LOG_RET(ERROR, OB_ARRAY_OUT_OF_RANGE, "idx out of range", K(idx), K(length_));
+    }
+    return buffer_[idx];
+  }
+  OB_INLINE char *seek(int64_t idx) // dangerous
+  {
+    if (OB_UNLIKELY(0 > idx || idx > length_)) {
+      LIB_LOG_RET(ERROR, OB_ARRAY_OUT_OF_RANGE, "idx out of range", K(idx), K(length_));
+    }
+    return buffer_ + idx;
+  }
+  OB_INLINE void reuse()
+  {
+    length_ = 0;
+  }
+  OB_INLINE char *buffer()
+  {
+    return buffer_;
+  }
+  OB_INLINE int64_t length() const
+  {
+    return length_;
+  }
+  OB_INLINE int64_t capacity() const
+  {
+    return capacity_;
+  }
+
+  static const int64_t DEFAULT_STR_BUFFER_LEN = 512;
+  common::ObIAllocator &allocator_;
+  char *buffer_;
+  int64_t capacity_;
+  int64_t length_;
+};
+
 class ObFastParserBase
 {
 public:
@@ -506,7 +566,7 @@ protected:
 	int add_nowait_type_node();
 	void lex_store_param(ParseNode *node, char *buf);
 	void append_no_param_sql();
-	void process_escape_string(char *str_buf, int64_t &str_buf_len);
+	int process_escape_string(StringBuffer &str_buffer);
 	ParseNode *new_node(char *&buf, ObItemType type);
 	char* parse_strndup(const char *str, size_t nbyte, char *buf);
 	int64_t get_question_mark(ObQuestionMarkCtx *ctx,
@@ -556,7 +616,7 @@ protected:
 	 * big5, cp932, gbk, sjis. the escape character (0x5C) may be part of a multi-byte
 	 * character and requires special judgment
 	 */
-	void check_real_escape(bool &is_real_escape);
+	void check_real_escape(StringBuffer &str_buffer, bool &is_real_escape);
 	/**
 	 * Used to parse whitespace
 	 * @param [in] : pos the position of the first character
@@ -646,6 +706,9 @@ protected:
   int extend_alloc_sql_buffer();
 	int process_format_token();
 	int try_check_status();
+  int toupper(const ObCollationType collation_type, const ObString &src, ObString &dst,
+              StringBuffer &str_buffer);
+
 protected:
   enum FoundInsertTokenStatus
   {
@@ -664,8 +727,7 @@ protected:
 	int64_t cur_token_begin_pos_;
 	int64_t copy_begin_pos_;
 	int64_t copy_end_pos_;
-	char *tmp_buf_;
-	int64_t tmp_buf_len_;
+	StringBuffer str_buffer_;
 	int64_t last_escape_check_pos_;
 	uint64_t try_check_tick_;
 public:
