@@ -73,6 +73,10 @@ public:
       share::schema::ObTableSchema &table_schema,
       const bool is_hidden,
       const bool is_specified_storing_col);
+  static int check_index_for_if_not_exist(const uint64_t tenant_id,
+                                          const uint64_t index_id,
+                                          int64_t &task_id);
+
 private:
   static const int SPATIAL_MBR_COLUMN_MAX_LENGTH = 32;
   typedef common::ObArray<std::pair<int64_t, common::ObString> > OrderFTColumns;

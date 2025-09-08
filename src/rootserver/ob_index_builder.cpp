@@ -309,6 +309,14 @@ int ObIndexBuilder::do_create_global_index(
           LOG_WARN("fail to create global inner expr index", K(ret));
         }
       }
+      if (OB_ERR_TABLE_EXIST == ret && new_arg.if_not_exist_) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(check_index_for_if_not_exist_(tenant_id, arg.database_name_, index_schema.get_table_name(),
+                        schema_guard, res))) {
+          ret = tmp_ret; //overwrite ret
+          LOG_WARN("fail to check index for if not exist", KR(ret), K(tenant_id), K(arg.database_name_), K(index_schema.get_table_name()));
+        }
+      }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(submit_build_index_task(trans,
                                                  new_arg,
@@ -491,6 +499,14 @@ int ObIndexBuilder::do_create_local_index(
                                                          gen_columns,
                                                          index_schema))) {
           LOG_WARN("fail to create inner expr index", K(ret));
+        }
+      }
+      if (OB_ERR_TABLE_EXIST == ret && my_arg.if_not_exist_) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(check_index_for_if_not_exist_(tenant_id, my_arg.database_name_, index_schema.get_table_name(),
+                        schema_guard, res))) {
+          ret = tmp_ret; //overwrite ret
+          LOG_WARN("fail to check index for if not exist", KR(ret), K(tenant_id), K(my_arg.database_name_), K(index_schema.get_table_name()));
         }
       }
       if (OB_FAIL(ret)) {
@@ -968,6 +984,28 @@ bool ObIndexBuilder::is_final_index_status(const ObIndexStatus index_status) con
   return (INDEX_STATUS_AVAILABLE == index_status
           || INDEX_STATUS_UNIQUE_INELIGIBLE == index_status
           || is_error_index_status(index_status));
+}
+
+int ObIndexBuilder::check_index_for_if_not_exist_(const uint64_t tenant_id,
+                                                  const ObString database_name,
+                                                  const ObString index_name,
+                                                  share::schema::ObSchemaGetterGuard &schema_guard,
+                                                  obrpc::ObAlterTableRes &res)
+{
+  int ret = OB_SUCCESS;
+  uint64_t index_id = OB_INVALID_ID;
+  if (OB_FAIL(schema_guard.get_table_id(tenant_id, database_name, index_name,
+              true/*is_index*/, ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES, index_id))) {
+    LOG_WARN("fail to get index id", KR(ret), K(tenant_id), K(database_name), K(index_name));
+  } else if (OB_INVALID_ID != index_id) {
+    if (OB_FAIL(ObIndexBuilderUtil::check_index_for_if_not_exist(
+                tenant_id, index_id, res.task_id_))) {
+      LOG_WARN("fail to check index status for if not exist", KR(ret), K(tenant_id), K(index_id));
+    } else if (res.task_id_ > 0) {
+      res.index_table_id_ = index_id;
+    }
+  }
+  return ret;
 }
 
 }//end namespace rootserver
