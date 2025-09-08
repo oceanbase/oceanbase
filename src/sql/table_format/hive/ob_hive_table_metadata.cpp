@@ -603,7 +603,7 @@ int ObHiveTableMetadata::extract_host_and_port(const ObString &uri, char *host, 
         const char *port_str = needed_colon + 1;
         const int64_t port_len = tmp_uri_len - ip_len - 1;
 
-        char tmp_port[port_len];
+        char tmp_port[port_len + 1];
         if (OB_UNLIKELY(port_len > tmp_uri_len)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("expected port len exceed malloc",
@@ -625,6 +625,8 @@ int ObHiveTableMetadata::extract_host_and_port(const ObString &uri, char *host, 
           } else if (OB_LIKELY(port == 0)) {
             ret = OB_INVALID_HMS_PORT;
             LOG_WARN("failed to get port", K(ret));
+          } else {
+            LOG_TRACE("get port success", K(ret), K(port));
           }
         }
       }
