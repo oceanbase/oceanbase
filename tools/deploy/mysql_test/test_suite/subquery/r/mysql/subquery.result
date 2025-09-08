@@ -753,7 +753,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3]), filter([(T_OP_EXISTS, subquery(1))]), rowset=16
-      exec_params_([t1.c1(:0)], [cast(t1.c2, DECIMAL(11, 0))(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+      exec_params_([t1.c1(:0)], [t1.c2(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
   1 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
@@ -761,15 +761,15 @@ Outputs & filters:
   2 - output([1]), filter(nil), rowset=16
       access(nil)
   3 - output([UNION([1])]), filter(nil), rowset=16
-  4 - output([cast(cast(T_FUN_SUM(t2.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t2.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter([cast(cast(T_FUN_SUM(t2.c1),
-       DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t2.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4)) = :1]), rowset=16
+  4 - output([cast(cast(T_FUN_SUM(t2.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t2.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter([cast(:1, DECIMAL(11,
+       0)) = cast(cast(T_FUN_SUM(t2.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t2.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), rowset=16
       group(nil), agg_func([T_FUN_SUM(t2.c1)], [T_FUN_COUNT(t2.c1)])
   5 - output([t2.c1]), filter(nil), rowset=16
       access([t2.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t2.c1]), range(MIN ; MAX)always true, 
       range_cond([t2.c1 = :0])
-  6 - output([cast(T_FUN_COUNT(*), DECIMAL(24, 4))]), filter([cast(T_FUN_COUNT(*), DECIMAL(24, 4)) = :1]), rowset=16
+  6 - output([cast(T_FUN_COUNT(*), DECIMAL(24, 4))]), filter([cast(:1, DECIMAL(11, 0)) = cast(T_FUN_COUNT(*), DECIMAL(24, 4))]), rowset=16
       group(nil), agg_func([T_FUN_COUNT(*)])
   7 - output(nil), filter(nil), rowset=16
       access(nil), partitions(p0)
