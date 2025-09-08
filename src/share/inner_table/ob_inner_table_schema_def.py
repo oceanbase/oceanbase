@@ -8421,6 +8421,8 @@ all_ai_model_endpoint_def = dict(
 )
 def_table_schema(**all_ai_model_endpoint_def)
 
+# 573 : __wr_active_session_history_v2
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -17166,6 +17168,8 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
+# 12576: __all_virtual_wr_active_session_history_v2
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -17739,6 +17743,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15531'
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15532', all_def_keywords['__all_virtual_hms_client_pool_stat']))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15533', all_def_keywords['__all_virtual_source']))
 # 15534: __all_virtual_ss_diagnose_info
+# 15535: __all_virtual_wr_active_session_history_v2
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
