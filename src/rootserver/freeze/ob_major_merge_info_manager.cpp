@@ -78,7 +78,7 @@ int ObMajorMergeInfoManager::reload(const bool reload_zone_merge_info)
   } else if (OB_FAIL(freeze_info_mgr_.reload(global_broadcast_scn))) {
     LOG_WARN("fail to update freeze info", KR(ret), K_(tenant_id), K(global_broadcast_scn));
   } else {
-    LOG_INFO("succ to reload merge info manager", K_(tenant_id));
+    LOG_INFO("succ to reload merge info manager", K_(tenant_id), K(global_broadcast_scn));
   }
   return ret;
 }
@@ -195,6 +195,18 @@ int ObMajorMergeInfoManager::generate_frozen_scn(
       LOG_WARN("max frozen_scn in cache is larger than max frozen_scn in table", KR(ret),
                K(local_max_frozen_scn), K(max_frozen_status));
     }
+    if (max_frozen_status.is_modified_) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(compaction::ADD_SUSPECT_LS_INFO(
+                  compaction::MAJOR_MERGE,
+                  ObDiagnoseTabletType::TYPE_RS_MAJOR_MERGE,
+                  ObLSID(1)/*ls_id*/,
+                  ObSuspectInfoType::SUSPECT_RS_FROZEN_SCN_ERROR,
+                  static_cast<int64_t>(max_frozen_status.frozen_scn_.get_val_for_inner_table_field()),
+                  static_cast<int64_t>(local_max_frozen_scn.get_val_for_inner_table_field())))) {
+        LOG_WARN("failed to add suspect info", KR(tmp_ret));
+      }
+    }
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, cur_min_data_version))) {
     LOG_WARN("fail to get min data version", KR(ret), K_(tenant_id));
   } else if (cur_min_data_version < max_frozen_status.data_version_) {
@@ -214,6 +226,7 @@ int ObMajorMergeInfoManager::generate_frozen_scn(
               K(tmp_frozen_scn), K(local_max_frozen_scn), K(snapshot_info));
   } else {
     new_frozen_scn = tmp_frozen_scn;
+    DEL_SUSPECT_INFO(compaction::MAJOR_MERGE, ObLSID(1)/*ls_id*/, UNKNOW_TABLET_ID, share::ObDiagnoseTabletType::TYPE_RS_MAJOR_MERGE);
   }
 
   return ret;
@@ -264,7 +277,7 @@ int ObMajorMergeInfoManager::get_freeze_info(
   return ret;
 }
 
-int ObMajorMergeInfoManager::get_local_latest_frozen_scn(SCN &frozen_scn)
+int ObMajorMergeInfoManager::get_local_latest_freeze_info(share::ObFreezeInfo &freeze_info)
 {
   int ret = OB_SUCCESS;
   ObRecursiveMutexGuard guard(lock_);
@@ -275,7 +288,7 @@ int ObMajorMergeInfoManager::get_local_latest_frozen_scn(SCN &frozen_scn)
   } else if (OB_FAIL(freeze_info_mgr_.get_latest_freeze_info(latest_freeze_info))) {
     LOG_WARN("inner stat error", KR(ret), K(latest_freeze_info));
   } else {
-    frozen_scn = latest_freeze_info.frozen_scn_;
+    freeze_info.assign(latest_freeze_info);
   }
   return ret;
 }

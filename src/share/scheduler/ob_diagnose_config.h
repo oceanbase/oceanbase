@@ -38,6 +38,8 @@ SUSPECT_INFO_TYPE_DEF(SUSPECT_FAILED_TO_REFRESH_LS_LOCALITY, ObDiagnoseInfoPrio:
     1, {"errno"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_RS_SCHEDULE_ERROR, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_MID, false, "rs check progress failed",
     3, {"compaction_scn", "errno", "unfinish_table_cnt"})
+SUSPECT_INFO_TYPE_DEF(SUSPECT_RS_FROZEN_SCN_ERROR, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_MID, false, "unexpect frozen scn, maybe changed manually",
+    2, {"last_frozen_scn", "curr_frozen_scn"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_COMPACTION_REPORT_ADD_FAILED, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH, false, "compaction report task add failed",
     1, {"errno"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_COMPACTION_REPORT_PROGRESS_FAILED, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH, false, "compaction report task process failed",

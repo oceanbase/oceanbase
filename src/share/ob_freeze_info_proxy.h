@@ -50,7 +50,8 @@ struct ObFreezeInfo
   ObFreezeInfo()
     : frozen_scn_(),
       schema_version_(INVALID_SCHEMA_VERSION), 
-      data_version_(0)
+      data_version_(0),
+      is_modified_(false)
   {}
   ObFreezeInfo(const SCN &frozen_scn,
                        const int64_t schema_version,
@@ -59,6 +60,7 @@ struct ObFreezeInfo
       data_version_(data_version)
   {
     frozen_scn_ = frozen_scn;
+    is_modified_ = false;
   }
 
   void assign(const ObFreezeInfo &other)
@@ -66,6 +68,7 @@ struct ObFreezeInfo
     frozen_scn_ = other.frozen_scn_;
     schema_version_ = other.schema_version_;
     data_version_ = other.data_version_;
+    is_modified_ = other.is_modified_;
   }
 
   void reset()
@@ -73,6 +76,7 @@ struct ObFreezeInfo
     frozen_scn_.reset();
     schema_version_ = INVALID_SCHEMA_VERSION;
     data_version_ = 0;
+    is_modified_ = false;
   }
 
   void set_initial_value(const int64_t data_version)
@@ -80,6 +84,7 @@ struct ObFreezeInfo
     schema_version_ = ORIGIN_SCHEMA_VERSION;
     data_version_ = data_version;
     frozen_scn_ = share::SCN::base_scn();
+    is_modified_ = true;
   }
 
   bool is_valid() const
@@ -93,11 +98,12 @@ struct ObFreezeInfo
     return ((this == &other)
             || ((this->frozen_scn_ == other.frozen_scn_)
             && (this->schema_version_ == other.schema_version_)
-            && (this->data_version_ == other.data_version_)));
+            && (this->data_version_ == other.data_version_)
+            && (this->is_modified_ == other.is_modified_)));
   }
 
   TO_STRING_KV(N_FROZEN_VERSION, frozen_scn_, K_(schema_version),
-               K_(data_version));
+               K_(data_version), K_(is_modified));
 
   static const int64_t INVALID_SCHEMA_VERSION = 0;
   static const int64_t ORIGIN_SCHEMA_VERSION = 1;
@@ -109,6 +115,7 @@ struct ObFreezeInfo
   SCN frozen_scn_;
   int64_t schema_version_;
   int64_t data_version_;
+  bool is_modified_;
 
   OB_UNIS_VERSION(1);
 };

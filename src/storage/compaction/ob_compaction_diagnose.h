@@ -607,7 +607,7 @@ private:
       }                                                                        \
     } else {                                                                   \
       STORAGE_LOG(DEBUG, "success to delete suspect info", K(tmp_ret),         \
-                  K(dag_hash));                                                \
+                  K(dag_hash), K(diagnose_type));                                                \
     }                                                                          \
   }
 

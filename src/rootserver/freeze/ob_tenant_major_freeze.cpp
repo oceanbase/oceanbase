@@ -16,7 +16,7 @@
 
 #include "share/ob_tablet_meta_table_compaction_operator.h"
 #include "share/schema/ob_mview_info.h"
-
+#include "storage/compaction/ob_compaction_diagnose.h"
 
 namespace oceanbase
 {
@@ -362,14 +362,14 @@ int ObTenantMajorFreeze::check_tenant_status() const
 int ObTenantMajorFreeze::check_freeze_info()
 {
   int ret = OB_SUCCESS;
-  SCN latest_frozen_scn;
+  share::ObFreezeInfo latest_freeze_info;
   SCN global_last_merged_scn;
   ObZoneMergeInfo::MergeStatus global_merge_status = ObZoneMergeInfo::MergeStatus::MERGE_STATUS_MAX;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_FAIL(major_merge_info_mgr_.get_local_latest_frozen_scn(latest_frozen_scn))) {
+  } else if (OB_FAIL(major_merge_info_mgr_.get_local_latest_freeze_info(latest_freeze_info))) {
     LOG_WARN("fail to get local latest frozen_scn", KR(ret), K_(tenant_id));
   } else {
     ObZoneMergeManager &zone_merge_mgr = major_merge_info_mgr_.get_zone_merge_mgr();
@@ -381,17 +381,34 @@ int ObTenantMajorFreeze::check_freeze_info()
       LOG_WARN("fail to get_global_merge_status", KR(ret), K_(tenant_id));
     } else {
       // check pending freeze_info
-      if (latest_frozen_scn > global_last_merged_scn) {
+      if (latest_freeze_info.frozen_scn_ > global_last_merged_scn) {
         if (global_merge_status == ObZoneMergeInfo::MergeStatus::MERGE_STATUS_IDLE) {
           ret = OB_FROZEN_INFO_ALREADY_EXIST;
         } else {
           ret = OB_MAJOR_FREEZE_NOT_FINISHED;
         }
         LOG_WARN("cannot do major freeze now, need wait current major_freeze finish", KR(ret),
-                K(global_last_merged_scn), K(latest_frozen_scn), K_(tenant_id));
+                K(global_last_merged_scn), K(latest_freeze_info), K_(tenant_id));
+        if (latest_freeze_info.is_modified_) {
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(compaction::ADD_SUSPECT_LS_INFO(
+                      compaction::MAJOR_MERGE,
+                      ObDiagnoseTabletType::TYPE_RS_MAJOR_MERGE,
+                      ObLSID(1)/*ls_id*/,
+                      ObSuspectInfoType::SUSPECT_RS_FROZEN_SCN_ERROR,
+                      static_cast<int64_t>(latest_freeze_info.frozen_scn_.get_val_for_inner_table_field()),
+                      static_cast<int64_t>(global_last_merged_scn.get_val_for_inner_table_field())))) {
+            LOG_WARN("failed to add suspect info", KR(tmp_ret));
+          } else {
+            LOG_INFO("succ to add suspect info", KR(tmp_ret), K(latest_freeze_info), K(global_last_merged_scn));
+          }
+        }
       } else if (merge_scheduler_.is_paused()) {
         ret = OB_LEADER_NOT_EXIST;
         LOG_WARN("leader may switch", KR(ret), K_(tenant_id));
+      }
+      if (OB_SUCC(ret)) {
+        DEL_SUSPECT_INFO(compaction::MAJOR_MERGE, ObLSID(1)/*ls_id*/, UNKNOW_TABLET_ID, share::ObDiagnoseTabletType::TYPE_RS_MAJOR_MERGE);
       }
     }
   }

@@ -1158,6 +1158,7 @@ int ObCompactionDiagnoseMgr::do_tenant_major_merge_diagnose(
     DEL_SUSPECT_INFO(MAJOR_MERGE, UNKNOW_LS_ID, UNKNOW_TABLET_ID, ObDiagnoseTabletType::TYPE_RS_MAJOR_MERGE);
   } else {
     (void) get_and_set_suspect_info(MAJOR_MERGE, UNKNOW_LS_ID, UNKNOW_TABLET_ID); // get RS schedule suspect info
+    (void) get_and_set_suspect_info(MAJOR_MERGE, ObLSID(1), UNKNOW_TABLET_ID); // get RS schedule suspect info
 
     SMART_VARS_2((ObArray<ObTabletReplica>, uncompacted_tablets), (ObArray<uint64_t>, uncompacted_table_ids)) {
       if (OB_FAIL(major_freeze_service->get_uncompacted_tablets(uncompacted_tablets, uncompacted_table_ids))) {
