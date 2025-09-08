@@ -617,6 +617,11 @@ public:
       const int64_t min_reserved_snapshot_on_ls,
       ObStorageSnapshotInfo &snapshot_info,
       const bool skip_tablet_snapshot_and_undo_retention = false) const;
+  int get_kept_and_old_snapshot_info(
+      const int64_t min_reserved_snapshot_on_ls,
+      ObStorageSnapshotInfo &snapshot_info,
+      ObStorageSnapshotInfo &old_snapshot_info,
+      const bool skip_tablet_snapshot_and_undo_retention) const;
   int check_schema_version_elapsed(
       const int64_t schema_version,
       const bool need_wait_trans_end,
@@ -700,6 +705,9 @@ public:
       const int64_t snapshot_version,
       const uint64_t data_format_version);
   int check_tx_data_can_explain_user_data(const share::SCN &tx_data_table_filled_tx_scn);
+
+  static bool is_snapshot_not_advance(const ObStorageSnapshotInfo &snapshot_info,
+                         const int64_t snapshot_version);
 protected:// for MDS use
   virtual bool check_is_inited_() const override final { return is_inited_; }
   virtual const ObTabletMeta &get_tablet_meta_() const override final { return tablet_meta_; }
@@ -1094,6 +1102,17 @@ inline bool ObTablet::is_valid() const
           && storage_schema_addr_.addr_.is_none()
           && nullptr == rowkey_read_info_); // judgement case 2
 }
+
+inline bool ObTablet::is_snapshot_not_advance(const ObStorageSnapshotInfo &snapshot_info,
+                         const int64_t snapshot_version)
+{
+  bool shold_skip_snapshot_condition = (snapshot_info.snapshot_type_ == ObStorageSnapshotInfo::SNAPSHOT_FOR_MAJOR_FREEZE_TS
+                                      || snapshot_info.snapshot_ == 1
+                                      || snapshot_info.snapshot_ >= snapshot_version);
+  bool is_snapshot_timeout = ((snapshot_version - snapshot_info.snapshot_) / 1000 /*use microsecond here*/ > 40_min);
+  return !shold_skip_snapshot_condition && is_snapshot_timeout;
+}
+
 
 inline int ObTablet::allow_to_read_()
 {

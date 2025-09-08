@@ -1296,21 +1296,26 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_multi_version_start(storage::ObLS &
   const int64_t current_time = common::ObTimeUtility::fast_current_time();
   const ObLSID ls_id = ls.get_ls_id();
   ObStorageSnapshotInfo snapshot_info;
-  if (OB_FAIL(tablet.get_kept_snapshot_info(ls.get_min_reserved_snapshot(), snapshot_info, false))) {
+  ObStorageSnapshotInfo old_snapshot_info;
+  if (OB_FAIL(tablet.get_kept_and_old_snapshot_info(ls.get_min_reserved_snapshot(), snapshot_info, old_snapshot_info,
+                                                      false/*donnt skip the tablet snapshot and undo retention*/))) {
     LOG_WARN("failed to get kept snapshot info", K(ret), K(ls_id), K(tablet_id));
   } else {
     // if multi version start not advance for a long time, diagnose major merge
     const int64_t snapshot_version = tablet.get_snapshot_version();
-    if (snapshot_info.snapshot_ < snapshot_version && (snapshot_version - snapshot_info.snapshot_) / 1000 /*use microsecond here*/ > 40_min) {
+    if (ObTablet::is_snapshot_not_advance(snapshot_info, snapshot_version)) {
       LOG_INFO("tablet multi version start not advance for a long time", K(ret),
               "ls_id", ls_id, K(tablet_id), K(current_time), K(snapshot_info));
+      const int64_t major_sstable_snapshot = tablet.get_last_major_snapshot_version();
       if (OB_FAIL(ADD_DIAGNOSE_INFO_FOR_TABLET(
         MAJOR_MERGE,
-        ObCompactionDiagnoseInfo::DIA_STATUS_RUNNING,
+        ObCompactionDiagnoseInfo::DIA_STATUS_WARN,
         ObTimeUtility::fast_current_time(),
         "tablet_id", tablet_id.id(),
         K(snapshot_info),
+        K(old_snapshot_info),
         K(snapshot_version),
+        K(major_sstable_snapshot),
         "status", "table multi version start not advance for a long time"
         ))) {
         LOG_WARN("failed to add diagnose info", K(ret), K(ls_id), K(tablet_id));
