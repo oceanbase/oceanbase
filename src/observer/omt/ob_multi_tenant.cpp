@@ -138,6 +138,9 @@
 #include "observer/table/ob_table_client_info_mgr.h"
 #include "observer/table/ob_table_query_async_processor.h"
 #include "share/backup/ob_backup_connectivity.h"
+#ifdef OB_BUILD_TDE_SECURITY
+#include "share/ob_master_key_getter.h"
+#endif
 #include "sql/engine/table/ob_external_data_access_mgr.h"
 #include "observer/table/common/ob_table_query_session_mgr.h"
 #include "sql/engine/table/ob_pcached_external_file_service.h"
@@ -1164,6 +1167,21 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
       LOG_WARN("fail to set_tenant_mem_limit", K(ret), K(tenant_id));
     }
   }
+
+#ifdef OB_BUILD_TDE_SECURITY
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (OB_FAIL(ret)) {
+  } else if (!GCTX.is_shared_storage_mode() || !write_slog) {
+  } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0) {
+    // rs will specify a replica to upload root key later.
+  } else {
+    ObTenantSwitchGuard guard(tenant);
+    if (OB_FAIL(ObMasterKeyUtil::ss_dump_root_key_if_need_and_not_exist(tenant_id))) {
+      LOG_WARN("fail to dump root key", K(ret), K(tenant_id));
+    }
+  }
+#endif
+#endif
 
   if (OB_SUCC(ret)) {
     if (write_slog && OB_FAIL(SERVER_STORAGE_META_SERVICE.commit_create_tenant(tenant_id, tenant_epoch))) {

@@ -719,9 +719,11 @@ int ObParallelCreateTenantExecutor::upload_root_key_()
   const int64_t timeout = ctx_.get_timeout();
   ObAddr leader;
 
-  if (OB_FAIL(check_inner_stat_())) {
+  if (!GCTX.is_shared_storage_mode()) {
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0) {
+  } else if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("variable is not init", KR(ret));
-  } else if (GCTX.is_shared_storage_mode()) {
+  } else {
     FLOG_INFO("[CREATE_TENANT] start upload root key", K(user_tenant_id));
     // Since any replica can upload root key and the sys ls leader may not be ready yet,
     // let the server where the sslog ls leader is located do it.
