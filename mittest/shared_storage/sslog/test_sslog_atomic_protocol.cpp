@@ -122,8 +122,9 @@ namespace storage {
 typedef ObDefaultSSMetaSSLogValue<ObSSLSMeta> ObSSLSMetaSSLogValue;
 typedef ObAtomicDefaultFile<ObSSLSMetaSSLogValue> ObAtomicLSMetaFile;
 static int64_t lease_epoch = 1;
-
 static bool global_is_sswriter = true;
+
+
 void mock_switch_sswriter()
 {
   ATOMIC_INC(&lease_epoch);
@@ -233,7 +234,9 @@ uint64_t test_tenant_id = 0;
 
 TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
 {
+  ObAtomicFile::ENABLE_PARALLEL_OP = true;
   int ret = OB_SUCCESS;
+  storage::ObAtomicFile::ENABLE_PARALLEL_OP = true;
   TRANS_LOG(INFO, "create tenant start");
   create_test_tenant(test_tenant_id);
   TRANS_LOG(INFO, "create tenant end");
