@@ -1151,7 +1151,7 @@ int ObQueryRetryCtrl::init()
   ERR_RETRY_FUNC("SCHEMA",   OB_SCHEMA_EAGAIN,                   schema_error_proc,          inner_schema_error_proc,                              nullptr);
   ERR_RETRY_FUNC("SCHEMA",   OB_SCHEMA_NOT_UPTODATE,             schema_error_proc,          inner_schema_error_proc,                              nullptr);
   ERR_RETRY_FUNC("SCHEMA",   OB_ERR_PARALLEL_DDL_CONFLICT,       schema_error_proc,          inner_schema_error_proc,                              nullptr);
-  ERR_RETRY_FUNC("SCHEMA",   OB_ERR_DDL_RESOURCE_NOT_ENOUGH,     short_wait_retry_proc,      short_wait_retry_proc,                                nullptr);
+  ERR_RETRY_FUNC("SCHEMA",   OB_ERR_DDL_RESOURCE_NOT_ENOUGH,     long_wait_retry_proc,       long_wait_retry_proc,                                 nullptr);
   ERR_RETRY_FUNC("SCHEMA",   OB_AUTOINC_CACHE_NOT_EQUAL,         autoinc_cache_not_equal_retry_proc, autoinc_cache_not_equal_retry_proc, nullptr);
   ERR_RETRY_FUNC("SCHEMA",   OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR, schema_error_proc,  empty_proc,                                           nullptr);
 

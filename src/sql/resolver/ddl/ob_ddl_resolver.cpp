@@ -9000,7 +9000,8 @@ int ObDDLResolver::generate_global_index_schema(
     SMART_VAR(ObCreateIndexArg, my_create_index_arg) {
       index_schema.set_table_type(USER_INDEX);
       index_schema.set_index_type(create_index_arg.index_type_);
-      ObTableSchema new_table_schema;
+      // use allocator_ to enable the memory allocated during assign to be free when retry
+      SMART_VAR(ObTableSchema, new_table_schema, allocator_) {
       if (OB_FAIL(new_table_schema.assign(*table_schema))) {
         LOG_WARN("fail to assign schema", K(ret));
       } else if (OB_FAIL(my_create_index_arg.assign(create_index_arg))) {
@@ -9022,7 +9023,8 @@ int ObDDLResolver::generate_global_index_schema(
       } else if (OB_FAIL(index_schema.assign(my_create_index_arg.index_schema_))){
         LOG_WARN("fail to assign schema", K(ret));
       }
-    }
+      } // end smart var
+    } // end smart var
   }
   return ret;
 }
