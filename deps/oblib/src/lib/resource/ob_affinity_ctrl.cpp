@@ -26,11 +26,56 @@
 using namespace oceanbase::common;
 using namespace oceanbase::lib;
 
+static inline int check_all_cpu_online()
+{
+  // Check if cpu/online and cpu/possible are the same
+  // AFFINITY_CTRL doesn't support environments with offline CPUs
+  int ret = OB_SUCCESS;
+  FILE *online_file = NULL;
+  FILE *possible_file = NULL;
+  char online_cpus[256] = {0};
+  char possible_cpus[256] = {0};
+
+  if (NULL == (online_file = fopen("/sys/devices/system/cpu/online", "r"))) {
+    LOG_WARN("Failed to open /sys/devices/system/cpu/online", K(errno));
+    ret = OB_ERR_UNEXPECTED;
+  } else if (NULL == (possible_file = fopen("/sys/devices/system/cpu/possible", "r"))) {
+    LOG_WARN("Failed to open /sys/devices/system/cpu/possible", K(errno));
+    fclose(online_file);
+    ret = OB_ERR_UNEXPECTED;
+  } else if (NULL == fgets(online_cpus, sizeof(online_cpus), online_file)) {
+    LOG_WARN("Failed to read from /sys/devices/system/cpu/online");
+    fclose(online_file);
+    fclose(possible_file);
+    ret = OB_ERR_UNEXPECTED;
+  } else if (NULL == fgets(possible_cpus, sizeof(possible_cpus), possible_file)) {
+    LOG_WARN("Failed to read from /sys/devices/system/cpu/possible");
+    fclose(online_file);
+    fclose(possible_file);
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    // Remove trailing newline
+    online_cpus[strcspn(online_cpus, "\n")] = 0;
+    possible_cpus[strcspn(possible_cpus, "\n")] = 0;
+
+    if (strcmp(online_cpus, possible_cpus) != 0) {
+      LOG_WARN("AFFINITY_CTRL doesn't support environments with offline CPUs, please consider disable the _enable_numa_aware option",
+                K(online_cpus), K(possible_cpus));
+      ret = OB_ERR_UNEXPECTED;
+    }
+
+    fclose(online_file);
+    fclose(possible_file);
+  }
+
+  return ret;
+}
+
 ObAffinityCtrl::ObAffinityCtrl()
   : num_nodes_(0), inited_(false)
 {}
 
-int ObAffinityCtrl::init()
+int ObAffinityCtrl::init(const bool strict_check_os_params)
 {
   int ret = OB_SUCCESS;
   DIR *dir;
@@ -39,6 +84,8 @@ int ObAffinityCtrl::init()
   if (inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObAffnityCtrl already inited");
+  } else if (OB_FAIL(check_all_cpu_online())) {
+    ret = OB_ERR_UNEXPECTED;
   } else if (NULL == (dir = opendir("/sys/devices/system/node"))){
     LOG_WARN("/sys/devices/system/node open failed", K(errno));
     ret = OB_ERR_UNEXPECTED;
@@ -85,6 +132,14 @@ int ObAffinityCtrl::init()
         }
       }
     }
+  }
+
+  // If the init failed and the strict_check_os_params is false, set the inited_ false
+  // and return with OB_SUCCESS, calls to AFFINITY_CTRL methods will not take effect.
+  if (ret != OB_SUCCESS && !strict_check_os_params) {
+    LOG_WARN("ignoring the AFFINITY_CTRL init errors as strict_check_os_params is disabled. However, the AFFINITY_CTRL methods will not take any effect.", K(ret));
+    inited_ = false;
+    ret = OB_SUCCESS;
   }
 
   return ret;

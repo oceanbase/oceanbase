@@ -23,7 +23,7 @@ using namespace oceanbase::common;
 
 int main(int argc, char *argv[])
 {
-  AFFINITY_CTRL.init();
+  AFFINITY_CTRL.init(true);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
