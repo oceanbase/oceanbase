@@ -174,8 +174,6 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     bloom_filter_ctx_array_(),
     frames_(NULL),
     frame_cnt_(0),
-    ori_frames_(nullptr),
-    ori_frame_cnt_(0),
     op_kit_store_(),
     convert_allocator_(nullptr),
     mem_context_(nullptr),
