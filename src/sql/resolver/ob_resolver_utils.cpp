@@ -5287,9 +5287,15 @@ bool ObResolverUtils::check_external_pseudo_column_is_valid(
     is_valid = ObExternalFileFormat::CSV_FORMAT == format_type;
   } else if (column_name.prefix_match_ci(N_EXTERNAL_TABLE_COLUMN_PREFIX)) {
     is_valid = ObExternalFileFormat::ODPS_FORMAT == format_type;
-  } else if (0 == column_name.case_compare(N_EXTERNAL_FILE_ROW)
-             || column_name.prefix_match_ci(N_EXTERNAL_FILE_POS)
-             || column_name.prefix_match_ci(N_EXTERNAL_TABLE_COLUMN_ID)) {
+  } else if (0 == column_name.case_compare(N_EXTERNAL_FILE_ROW)) {
+    is_valid = ObExternalFileFormat::PARQUET_FORMAT == format_type
+               || ObExternalFileFormat::ORC_FORMAT == format_type
+               || ObExternalFileFormat::PLUGIN_FORMAT == format_type;
+  } else if (column_name.prefix_match_ci(N_EXTERNAL_FILE_POS)) {
+    is_valid = ObExternalFileFormat::PARQUET_FORMAT == format_type
+               || ObExternalFileFormat::ORC_FORMAT == format_type
+               || ObExternalFileFormat::CSV_FORMAT == format_type;
+  } else if (column_name.prefix_match_ci(N_EXTERNAL_TABLE_COLUMN_ID)) {
     is_valid = ObExternalFileFormat::PARQUET_FORMAT == format_type
                || ObExternalFileFormat::ORC_FORMAT == format_type;
   }
