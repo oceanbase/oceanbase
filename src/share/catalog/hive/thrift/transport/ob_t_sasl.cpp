@@ -192,7 +192,13 @@ TSaslClient::~TSaslClient()
 void TSaslClient::setup_sasl_context() {
   if (OB_NOT_NULL(conn_)) {
     throw SaslClientImplException("Connection should be null");
+  } else if (OB_ISNULL(service_.ptr()) || 0 == service_.length()) {
+    throw SaslClientImplException("Service should not be null");
+  } else if (OB_ISNULL(server_FQDN_.ptr()) || 0 == server_FQDN_.length()) {
+    throw SaslClientImplException("Server FQDN should not be null");
   } else {
+    LOG_TRACE("TSaslClient calling sasl_client_new",
+             "service", service_, "server_FQDN", server_FQDN_);
     int result = sasl_client_new(service_.ptr(), server_FQDN_.ptr(), nullptr,
                                  nullptr, callbacks_, 0, &conn_);
     if (OB_UNLIKELY(SASL_OK != result)) {

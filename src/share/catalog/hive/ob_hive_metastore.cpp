@@ -502,7 +502,6 @@ ObHiveMetastoreClient::~ObHiveMetastoreClient()
   hms_principal_.reset();
   hms_krb5conf_.reset();
   properties_.reset();
-  allocator_->reset();
   is_inited_ = false;
   client_id_ = 0;
   socket_timeout_ = -1;
@@ -511,12 +510,12 @@ ObHiveMetastoreClient::~ObHiveMetastoreClient()
     LOG_WARN("hive metastore client is invalid in destructor", K(ret));
   } else if (OB_FAIL(close())) {
     LOG_WARN("failed to close hive metastore client in destructor", K(ret));
-  } else {
-    hive_metastore_client_.reset();
-    socket_.reset();
-    transport_.reset();
-    protocol_.reset();
   }
+
+  hive_metastore_client_.reset();
+  socket_.reset();
+  transport_.reset();
+  protocol_.reset();
   allocator_ = nullptr;
   // Ensure pool pointer and use state are cleared
   client_pool_ = nullptr;
