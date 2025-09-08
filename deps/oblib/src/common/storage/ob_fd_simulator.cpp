@@ -76,7 +76,7 @@ int ObFdSimulator::init_manager_array(FdSlot* second_array)
     total_fd_cnt_ += array_size_;
   }
 
-  return OB_SUCCESS;
+  return ret;
 }
 
 /*init the fd management unit*/
@@ -113,15 +113,18 @@ int ObFdSimulator::extend_second_array()
 {
   int ret = OB_SUCCESS;
   if (second_array_num_ == array_size_) {
-    OB_LOG(WARN, "can not alloc second arraym, first array is full!", K(second_array_num_));
-    ret = OB_ALLOCATE_MEMORY_FAILED;
+    ret = OB_SIZE_OVERFLOW;
+    OB_LOG(WARN, "can not alloc second arraym, first array is full!", K_(second_array_num),
+           K_(array_size), K_(used_fd_cnt), K_(total_fd_cnt));
   } else {
     FdSlot *second_array_p = static_cast<FdSlot*>(allocator_.alloc(sizeof(FdSlot)*array_size_));
     if (OB_ISNULL(second_array_p)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      OB_LOG(WARN, "fail to extend second array for fd mng!", K(second_array_num_), K(ret));
+      OB_LOG(WARN, "fail to extend second array for fd mng!", K(ret), K_(second_array_num),
+             K_(array_size), K_(used_fd_cnt), K_(total_fd_cnt));
     } else if (OB_FAIL(init_manager_array(second_array_p))) {
-      OB_LOG(WARN, "fail to init extend second array for fd mng!", K(second_array_num_), K(ret));
+      OB_LOG(WARN, "fail to init extend second array for fd mng!", K(ret), K_(second_array_num),
+             K_(array_size), K_(used_fd_cnt), K_(total_fd_cnt));
     }
   }
   return ret;
@@ -174,12 +177,15 @@ int ObFdSimulator::get_fd(void* ctx, const int device_type, const int flag, ObIO
     OB_LOG(WARN, "fail to alloc fd with empty ctx!");
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(try_get_fd_inner(first_array_, second_array_num_, ctx, fd))) {
-    OB_LOG(WARN, "fail to alloc fd, maybe need extend second array!");
+    OB_LOG(WARN, "fail to alloc fd, maybe need extend second array!", K_(second_array_num),
+           K_(array_size), K_(used_fd_cnt), K_(total_fd_cnt));
     /*after the first fail, try to extend*/
     if (OB_FAIL(extend_second_array())) {
-      OB_LOG(WARN, "fail to extand second fd array, it is full!", K(second_array_num_));
+      OB_LOG(WARN, "fail to extand second fd array, it is full!", K_(second_array_num),
+             K_(array_size), K_(used_fd_cnt), K_(total_fd_cnt));
     } else if (OB_FAIL(try_get_fd_inner(first_array_, second_array_num_, ctx, fd))) {
-      OB_LOG(WARN, "fail to alloc fd, it is impossible!");
+      OB_LOG(WARN, "fail to alloc fd, it is impossible!", K_(second_array_num),
+             K_(array_size), K_(used_fd_cnt), K_(total_fd_cnt));
     }
   }
 
