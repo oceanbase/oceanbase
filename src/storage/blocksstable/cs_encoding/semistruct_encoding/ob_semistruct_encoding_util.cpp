@@ -49,8 +49,6 @@ int ObSemiStructColumnEncodeCtx::scan()
     disable_encoding();
   } else if (OB_FAIL(do_scan())) {
     LOG_WARN("scan fail", K(ret));
-  } else {
-    LOG_INFO("[xiaoma] semsitruct encode", K(ret));
   }
 
   if (OB_SEMISTRUCT_SCHEMA_NOT_MATCH == ret) {
@@ -61,7 +59,6 @@ int ObSemiStructColumnEncodeCtx::scan()
     if (OB_FAIL(do_scan())) {
       LOG_WARN("do scan fail", K(ret));
     } else {
-      LOG_INFO("[xiaoma] semsitruct encode", K(ret));
       schema_not_match_block_count_ = 0;
     }
   }
@@ -221,9 +218,7 @@ int ObSemiStructColumnEncodeCtx::init()
   if (OB_FAIL(encoder_allocator_.init())) {
     LOG_WARN("init encoder_allocator_ fail", K(ret));
   } else if (encoding_ctx_.major_working_cluster_version_ < DATA_VERSION_4_4_1_0) {
-    if (freq_threshold_ == 0) {
-      freq_threshold_ == 100;
-    }
+    freq_threshold_ = 100;
     if (OB_ISNULL(sub_schema_ = OB_NEWx(ObSemiStructSubSchema, &schema_allocator_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc ObSemiStructSubSchema memory failed", K(ret));
