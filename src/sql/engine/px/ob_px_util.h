@@ -185,7 +185,7 @@ class ObPXServerAddrUtil
     ObPxSqcTaskCountMeta() : partition_count_(0), thread_count_(0),
     time_(0), idx_(0), finish_(false) {}
     ~ObPxSqcTaskCountMeta() = default;
-    int64_t partition_count_;
+    double partition_count_;
     int64_t thread_count_;
     double time_;
     int64_t idx_;
@@ -224,7 +224,7 @@ public:
                                              ObExecContext &ctx,
                                              ObDfo &dfo);
   static int split_parallel_into_task(const int64_t parallelism,
-                                      const common::ObIArray<int64_t> &sqc_partition_count,
+                                      const common::ObIArray<double> &sqc_partition_count,
                                       common::ObIArray<int64_t> &results);
   static int build_tablet_idx_map(
       const share::schema::ObTableSchema *table_schema,
@@ -352,7 +352,7 @@ private:
 
   static int adjust_sqc_task_count(common::ObIArray<ObPxSqcTaskCountMeta> &sqc_tasks,
                                    int64_t parallel,
-                                   int64_t partition);
+                                   double partition);
   static int do_random_dfo_distribution(const common::ObIArray<common::ObAddr> &src_addrs,
                                         int64_t dst_addrs_count,
                                         common::ObIArray<common::ObAddr> &dst_addrs);
