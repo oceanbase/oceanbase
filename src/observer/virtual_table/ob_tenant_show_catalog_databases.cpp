@@ -16,6 +16,7 @@
 #include "common/ob_range.h"
 #include "lib/container/ob_se_array.h"
 #include "share/catalog/ob_cached_catalog_meta_getter.h"
+#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {
@@ -68,11 +69,22 @@ int ObTenantShowCatalogDatabases::inner_open()
   }
 
   if (OB_SUCC(ret)) {
-    // check privilege
+    // check catalog is existed first
+    // then check privilege
+    const ObCatalogSchema *catalog_schema = NULL;
     ObSessionPrivInfo priv_info;
     if (OB_FAIL(session_->get_session_priv_info(priv_info))) {
       LOG_WARN("fail to get session priv info", K(ret));
-    } else if (OB_FAIL(schema_guard_->check_catalog_access(priv_info, session_->get_enable_role_array(), catalog_id_))) {
+    } else if (OB_FAIL(schema_guard_->get_catalog_schema_by_id(priv_info.tenant_id_,
+                                                               catalog_id_,
+                                                               catalog_schema))) {
+      LOG_WARN("fail to get catalog schema", K(ret));
+    } else if (OB_ISNULL(catalog_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_USER_ERROR(OB_ERR_UNEXPECTED, "current session's catalog is not existed");
+    } else if (OB_FAIL(schema_guard_->check_catalog_access(priv_info,
+                                                           session_->get_enable_role_array(),
+                                                           catalog_id_))) {
       // todo only to check catalog access now
       LOG_WARN("check catalog priv failed", K(ret));
     }
@@ -111,7 +123,7 @@ int ObTenantShowCatalogDatabases::fill_scanner()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cur row cell is NULL", K(ret));
   } else {
-    ObCachedCatalogMetaGetter ob_catalog_meta_getter{*schema_guard_, *allocator_};
+    share::ObCachedCatalogMetaGetter ob_catalog_meta_getter{*schema_guard_, *allocator_};
     if (OB_FAIL(ob_catalog_meta_getter.list_namespace_names(tenant_id_, catalog_id_, db_names))) {
       LOG_WARN("list_namespace_names failed", K(ret), K(tenant_id_), K(catalog_id_));
     }

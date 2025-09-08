@@ -56,6 +56,7 @@
 #include "share/detect/ob_detect_manager.h"
 #include "storage/high_availability/ob_storage_ha_diagnose_service.h"
 #include "share/ob_device_credential_task.h"
+#include "share/external_table/ob_external_table_utils.h"
 #ifdef OB_BUILD_ARBITRATION
 #include "logservice/arbserver/palf_env_lite_mgr.h"
 #include "logservice/arbserver/ob_arb_srv_network_frame.h"
@@ -435,6 +436,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init ObTenantMutilAllocatorMgr failed", KR(ret));
     } else if (OB_FAIL(ObExternalTableFileManager::get_instance().init())) {
       LOG_ERROR("init external table file manager failed", KR(ret));
+    } else if (OB_FAIL(ObCachedExternalFileInfoCollector::get_instance().init())) {
+      LOG_ERROR("init cached external file info collector failed", KR(ret));
     } else if (OB_FAIL(ObCachedCatalogSchemaMgr::get_instance().init())) {
       LOG_ERROR("init ObCachedCatalogSchemaMgr failed", KR(ret));
     } else if (OB_FAIL(ObVirtualTenantManager::get_instance().init())) {

@@ -2367,12 +2367,22 @@ int ObExternalFileInfoCollector::collect_file_modify_time(const common::ObString
   return ret;
 }
 
-int ObExternalFileInfoCollector::collect_file_size(const common::ObString &url, int64_t &file_size)
+int ObExternalFileInfoCollector::collect_file_size(const common::ObString &url,
+                                                   int64_t &file_size,
+                                                   bool enable_cache)
 {
   int ret = OB_SUCCESS;
   file_size = 0;
-  if (OB_FAIL(ObExternalIoAdapter::get_file_length(url, storage_info_, file_size))) {
-    LOG_WARN("failed to get file size", K(ret));
+  if (enable_cache) {
+    ObCachedExternalFileInfoCollector &cached_collector
+        = ObCachedExternalFileInfoCollector::get_instance();
+    if (OB_FAIL(cached_collector.collect_file_size(url, storage_info_, file_size))) {
+      LOG_WARN("failed to get cached file size", K(ret));
+    }
+  } else {
+    if (OB_FAIL(ObExternalIoAdapter::get_file_length(url, storage_info_, file_size))) {
+      LOG_WARN("failed to get file size", K(ret));
+    }
   }
   return ret;
 }
@@ -2664,6 +2674,126 @@ int ObExternalTableUtils::get_credential_field_name(ObSqlString &str, int64_t op
   } else {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid opt", K(ret), K(opt));
+  }
+  return ret;
+}
+
+bool ObCachedExternalFileInfoKey::operator==(const common::ObIKVCacheKey &other) const
+{
+  const ObCachedExternalFileInfoKey &other_key
+      = reinterpret_cast<const ObCachedExternalFileInfoKey &>(other);
+  return tenant_id_ == other_key.tenant_id_ && file_path_ == other_key.file_path_;
+}
+
+uint64_t ObCachedExternalFileInfoKey::hash() const
+{
+  uint64_t hash_ret = 0;
+  hash_ret = murmurhash(&tenant_id_, sizeof(uint64_t), hash_ret);
+  hash_ret = murmurhash(file_path_.ptr(), file_path_.length(), hash_ret);
+  return hash_ret;
+}
+
+int64_t ObCachedExternalFileInfoKey::size() const
+{
+  return sizeof(*this) + file_path_.length();
+}
+
+uint64_t ObCachedExternalFileInfoKey::get_tenant_id() const
+{
+  return tenant_id_;
+}
+
+int ObCachedExternalFileInfoKey::deep_copy(char *buf,
+                                           const int64_t buf_len,
+                                           common::ObIKVCacheKey *&key) const
+{
+  int ret = OB_SUCCESS;
+  ObDataBuffer allocator(buf, buf_len);
+  ObCachedExternalFileInfoKey *new_key = NULL;
+  if (OB_ISNULL(new_key = OB_NEWx(ObCachedExternalFileInfoKey, &allocator))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, file_path_, new_key->file_path_))) {
+    LOG_WARN("failed to write file path", K(ret));
+  } else {
+    new_key->tenant_id_ = tenant_id_;
+    key = new_key;
+  }
+  return ret;
+}
+
+int64_t ObCachedExternalFileInfoValue::size() const
+{
+  return sizeof(*this);
+}
+
+int ObCachedExternalFileInfoValue::deep_copy(char *buf,
+                                             const int64_t buf_len,
+                                             ObIKVCacheValue *&value) const
+{
+  int ret = OB_SUCCESS;
+  ObCachedExternalFileInfoValue *cache_value = new (buf) ObCachedExternalFileInfoValue();
+  if (OB_ISNULL(cache_value)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to create cache value", K(ret));
+  } else {
+    cache_value->file_size_ = file_size_;
+    value = cache_value;
+  }
+  return ret;
+}
+
+ObCachedExternalFileInfoCollector &ObCachedExternalFileInfoCollector::get_instance()
+{
+  static ObCachedExternalFileInfoCollector instance_;
+  return instance_;
+}
+
+int ObCachedExternalFileInfoCollector::init()
+{
+  int ret = OB_SUCCESS;
+  OZ(kv_cache_.init("cached_file_info"));
+  OZ(bucket_lock_.init(bucket_num_));
+  return ret;
+}
+
+int ObCachedExternalFileInfoCollector::collect_file_size(
+    const common::ObString &url,
+    const common::ObObjectStorageInfo *storage_info,
+    int64_t &file_size)
+{
+  int ret = OB_SUCCESS;
+  ObCachedExternalFileInfoKey cached_key;
+  cached_key.tenant_id_ = MTL_ID();
+  cached_key.file_path_ = url;
+  file_size = OB_INVALID_SIZE;
+
+  if (OB_SUCC(ret)) {
+    ObBucketHashRLockGuard(bucket_lock_, cached_key.tenant_id_);
+    ObKVCacheHandle handle;
+    const ObCachedExternalFileInfoValue *cached_value;
+    if (OB_FAIL(kv_cache_.get(cached_key, cached_value, handle))) {
+      if (ret != OB_ENTRY_NOT_EXIST) {
+        LOG_WARN("failed to get cached file info", K(ret));
+      }
+    } else if (OB_ISNULL(cached_value)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null cached value", K(ret));
+    } else {
+      file_size = cached_value->file_size_;
+    }
+  }
+
+  if (OB_ENTRY_NOT_EXIST == ret) {
+    ret = OB_SUCCESS;
+    ObBucketHashWLockGuard(bucket_lock_, cached_key.tenant_id_);
+    if (OB_FAIL(ObExternalIoAdapter::get_file_length(url, storage_info, file_size))) {
+      LOG_WARN("failed to get file size", K(ret));
+    } else {
+      ObCachedExternalFileInfoValue cache_value;
+      cache_value.file_size_ = file_size;
+      OZ(kv_cache_.put(cached_key, cache_value));
+    }
   }
   return ret;
 }

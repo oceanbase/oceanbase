@@ -299,7 +299,7 @@ int TableMetadata::get_table_property(const char *table_property_key, ObString &
   if (OB_SUCC(ret)) {
     if (value.empty()) {
       ret = OB_ENTRY_NOT_EXIST;
-      LOG_WARN("specific table property key not found", K(ret), K(table_property_key));
+      LOG_DEBUG("specific table property key not found", K(ret), K(table_property_key));
     }
   }
   return ret;

@@ -53,6 +53,45 @@ struct ObExternalPathFilter {
   common::ObArenaAllocator temp_allocator_;
 };
 
+class ObCachedExternalFileInfoKey final : public common::ObIKVCacheKey
+{
+public:
+  ObCachedExternalFileInfoKey() = default;
+  ~ObCachedExternalFileInfoKey() = default;
+  bool operator==(const common::ObIKVCacheKey &other) const;
+  uint64_t hash() const override;
+  int64_t size() const override;
+  uint64_t get_tenant_id() const override;
+  int deep_copy(char *buf, const int64_t buf_len, common::ObIKVCacheKey *&key) const override;
+  TO_STRING_KV(K_(tenant_id), K_(file_path));
+
+  uint64_t tenant_id_ = OB_INVALID_TENANT_ID;
+  ObString file_path_;
+};
+
+class ObCachedExternalFileInfoValue final : public common::ObIKVCacheValue
+{
+public:
+  ObCachedExternalFileInfoValue() = default;
+  ~ObCachedExternalFileInfoValue() = default;
+  int64_t size() const override;
+  int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheValue *&value) const override;
+  TO_STRING_KV(K_(file_size));
+  int64_t file_size_ = OB_INVALID_SIZE;
+};
+
+class ObCachedExternalFileInfoCollector
+{
+public:
+  int init();
+  static ObCachedExternalFileInfoCollector &get_instance();
+  int collect_file_size(const common::ObString &url, const common::ObObjectStorageInfo *storage_info, int64_t &file_size);
+private:
+  const int64_t bucket_num_ = 10;
+  common::ObBucketLock bucket_lock_;
+  common::ObKVCache<ObCachedExternalFileInfoKey, ObCachedExternalFileInfoValue> kv_cache_;
+};
+
 class ObExternalFileInfoCollector
 {
 public:
@@ -72,7 +111,7 @@ public:
   int collect_files_modify_time(const common::ObIArray<common::ObString> &file_urls,
                                 common::ObIArray<int64_t> &modify_times);
   int collect_file_modify_time(const common::ObString &url, int64_t &modify_time);
-  int collect_file_size(const common::ObString &url, int64_t &file_size);
+  int collect_file_size(const common::ObString &url, int64_t &file_size, bool enable_cache = false);
 
 private:
   int convert_to_full_file_urls(const common::ObString &location,

@@ -6077,12 +6077,12 @@ int ObSql::check_need_reroute(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session,
     // reroute request,
     // physical table location is already calculated and stored in task_exec_ctx.table_locations_
     const DependenyTableStore &dep_tables = plan->get_dependency_table();
-    for (int64_t i = 0;
-         should_reroute && i < dep_tables.count();
-         i++) {
+    for (int64_t i = 0; should_reroute && i < dep_tables.count(); i++) {
       const ObSchemaObjVersion &schema_obj = dep_tables.at(i);
+
       if (TABLE_SCHEMA == schema_obj.get_schema_type()
-          && is_virtual_table(schema_obj.object_id_)) {
+          && (is_virtual_table(schema_obj.object_id_)
+              || is_external_object_id(schema_obj.object_id_))) {
         should_reroute = false;
       }
     }

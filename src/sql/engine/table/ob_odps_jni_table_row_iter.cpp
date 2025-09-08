@@ -959,7 +959,7 @@ int ObODPSJNITableRowIterator::next_task_storage_row_without_data_getter(const i
       LOG_WARN("failed to resolve odps start step", K(ret));
     }
     if (OB_FAIL(ret)) {
-    } else if (part_spec.compare("#######DUMMY_FILE#######") == 0) {
+    } else if (part_spec.compare(ObExternalTableUtils::dummy_file_name()) == 0) {
       ret = OB_ITER_END;
       LOG_INFO("iterator of odps jni scanner is end with dummy file", K(ret));
     } else {
@@ -1185,7 +1185,7 @@ int ObODPSJNITableRowIterator::next_task_storage(const int64_t capacity)
         K(session_id),
         K(task_idx));
     if (OB_FAIL(ret)) {
-    } else if (part_spec.compare("#######DUMMY_FILE#######") == 0) {
+    } else if (part_spec.compare(ObExternalTableUtils::dummy_file_name()) == 0) {
       ret = OB_ITER_END;
       LOG_TRACE("iterator of odps jni scanner is end with dummy file", K(ret));
       int tmp_ret = OB_SUCCESS;
@@ -1518,7 +1518,7 @@ int ObODPSJNITableRowIterator::next_task_tunnel_without_data_getter(const int64_
                                                     start,
                                                     step))) {
       LOG_WARN("failed to resolve odps start step", K(ret));
-    } else if (part_spec.compare("#######DUMMY_FILE#######") == 0) {
+    } else if (part_spec.compare(ObExternalTableUtils::dummy_file_name()) == 0) {
       ret = OB_ITER_END;
       LOG_INFO(" iterator of odps jni scanner is end with dummy file", K(ret));
     } else {
@@ -1618,7 +1618,7 @@ int ObODPSJNITableRowIterator::next_task_tunnel(const int64_t capacity)
     LOG_TRACE("next_task_tunnel", K(ret), K(part_id), K(part_spec), K(start), K(step));
 
     if (OB_FAIL(ret)) {
-    } else if (part_spec.compare("#######DUMMY_FILE#######") == 0) {
+    } else if (part_spec.compare(ObExternalTableUtils::dummy_file_name()) == 0) {
       ret = OB_ITER_END;
       // END NORMALLY
       if (OB_NOT_NULL(state_.odps_jni_scanner_)) {
@@ -4352,7 +4352,7 @@ int ObOdpsPartitionJNIScannerMgr::fetch_row_count(ObExecContext &exec_ctx, uint6
       } else {
         int64_t record_count = 0;
         if (OB_FAIL(odps_driver.fetch_partition_row_count(odps_partition.file_url_, record_count))) {
-          LOG_WARN("failed to fetch partition row count", K(ret));
+          LOG_WARN("failed to fetch partition row count", K(ret), K(odps_partition.file_url_));
         } else {
           *(const_cast<int64_t *>(&odps_partition.file_size_)) = record_count;
         }
