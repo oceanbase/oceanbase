@@ -267,7 +267,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_macro_cache_full)
   task2->inc_ref_count();
   OK(task2->set_status(ObStorageCacheTaskStatus::OB_STORAGE_CACHE_TASK_DOING));
 
-  micro_cache->clear_micro_cache();
+  IGNORE_RETURN micro_cache->clear_micro_cache();
   OK(prewarmer2.prewarm_hot_tablet(task2));
 
   ObSEArray<MacroBlockId, 64> data_block_ids;

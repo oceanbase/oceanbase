@@ -163,6 +163,7 @@ enum class ObFlushSSLocalCacheType
   FLUSH_LOCAL_MACRO_TYPE = 2,
   FLUSH_MEM_MACRO_TYPE = 3,
   FLUSH_LOCAL_MICRO_TYPE = 4,
+  FLUSH_LOCAL_HOT_MACRO_TYPE = 5,
   MAX_TYPE,
 };
 #endif
@@ -11953,19 +11954,21 @@ struct ObFlushSSLocalCacheArg final
 
 public:
   ObFlushSSLocalCacheArg()
-    : tenant_id_(OB_INVALID_TENANT_ID), flush_type_(ObFlushSSLocalCacheType::INVALID_TYPE)
+    : tenant_id_(OB_INVALID_TENANT_ID), flush_type_(ObFlushSSLocalCacheType::INVALID_TYPE),
+      rpc_abs_timeout_us_(0)
   {}
   ~ObFlushSSLocalCacheArg() {}
   bool is_valid() const
   {
     return is_valid_tenant_id(tenant_id_) && (ObFlushSSLocalCacheType::INVALID_TYPE != flush_type_)
-           && (ObFlushSSLocalCacheType::MAX_TYPE != flush_type_);
+           && (ObFlushSSLocalCacheType::MAX_TYPE != flush_type_) && (rpc_abs_timeout_us_ > 0);
   }
-  TO_STRING_KV(K_(tenant_id), K_(flush_type));
+  TO_STRING_KV(K_(tenant_id), K_(flush_type), K_(rpc_abs_timeout_us));
 
 public:
   uint64_t tenant_id_;
   ObFlushSSLocalCacheType flush_type_;
+  int64_t rpc_abs_timeout_us_;
 };
 
 struct ObDelSSLocalTmpFileArg final

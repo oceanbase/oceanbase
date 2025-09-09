@@ -754,12 +754,12 @@ int ObFlushSSLocalCacheExecutor::execute(ObExecContext &ctx, ObFlushSSLocalCache
     }
 
     if (OB_SUCC(ret)) {
-      const int64_t rpc_timeout = 10000000; // 10s
       obrpc::ObFlushSSLocalCacheArg arg;
       arg.tenant_id_ = tenant_id;
       const ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> micro_cache("micro_cache");
       const ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> macro_cache("macro_cache");
       const ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> mem_macro_cache("mem_macro_cache");
+      const ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> hot_macro_cache("hot_macro_cache");
       if (stmt.cache_name_.is_empty()) {
         arg.flush_type_ = obrpc::ObFlushSSLocalCacheType::FLUSH_ALL_TYPE;
       } else if (stmt.cache_name_ == macro_cache) {
@@ -768,11 +768,14 @@ int ObFlushSSLocalCacheExecutor::execute(ObExecContext &ctx, ObFlushSSLocalCache
         arg.flush_type_ = obrpc::ObFlushSSLocalCacheType::FLUSH_LOCAL_MICRO_TYPE;
       } else if (stmt.cache_name_ == mem_macro_cache)  {
         arg.flush_type_ = obrpc::ObFlushSSLocalCacheType::FLUSH_MEM_MACRO_TYPE;
+      } else if (stmt.cache_name_ == hot_macro_cache)  {
+        arg.flush_type_ = obrpc::ObFlushSSLocalCacheType::FLUSH_LOCAL_HOT_MACRO_TYPE;
       } else {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid cache name", K(ret), K_(stmt.cache_name));
       }
-
+      int64_t rpc_timeout_us = THIS_WORKER.get_timeout_remain();
+      arg.rpc_abs_timeout_us_ = ObTimeUtil::current_time_us() + rpc_timeout_us;
       obrpc::ObSrvRpcProxy *srv_rpc_proxy = nullptr;
       if (OB_FAIL(ret)) {
       } else if (OB_ISNULL(srv_rpc_proxy = GCTX.srv_rpc_proxy_)) {
@@ -780,7 +783,7 @@ int ObFlushSSLocalCacheExecutor::execute(ObExecContext &ctx, ObFlushSSLocalCache
         LOG_WARN("srv rpc proxy is null", KR(ret), KP(srv_rpc_proxy));
       } else {
         FOREACH_X(server_addr, server_list, OB_SUCC(ret)) {
-          if (OB_FAIL(srv_rpc_proxy->to(*server_addr).timeout(rpc_timeout).flush_ss_local_cache(arg))) {
+          if (OB_FAIL(srv_rpc_proxy->to(*server_addr).timeout(rpc_timeout_us).flush_ss_local_cache(arg))) {
             LOG_WARN("fail to send flush_ss_local_cache rpc", KR(ret), K(arg));
           } else {
             LOG_INFO("succ to send flush_ss_local_cache rpc", K(arg));

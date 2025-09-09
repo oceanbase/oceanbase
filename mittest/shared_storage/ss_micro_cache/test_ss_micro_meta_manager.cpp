@@ -843,7 +843,7 @@ TEST_F(TestSSMicroMetaManager, test_persist_micro_parallel_with_clear)
   std::thread clear_thread([&]( ) {
     ob_usleep(78 * 1000L);
     ObTenantEnv::set_tenant(tenant_base);
-    micro_cache->clear_micro_cache();
+    IGNORE_RETURN micro_cache->clear_micro_cache();
   });
 
   // persist micro meta

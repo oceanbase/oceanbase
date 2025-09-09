@@ -299,7 +299,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, basic)
 
   task->status_ = ObStorageCacheTaskStatus::OB_STORAGE_CACHE_TASK_DOING;
   for (int i = 0; i < MAX_RETRY_TIMES && !succeed; i++) {
-    micro_cache->clear_micro_cache();
+    IGNORE_RETURN micro_cache->clear_micro_cache();
     OK(prewarmer.prewarm_hot_tablet(task));
     first_stat = prewarmer.get_hot_retention_prewarm_stat();
     LOG_INFO("read init major", K(i), K(first_stat));

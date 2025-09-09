@@ -175,7 +175,7 @@ TEST_F(TestSSMemMacroCache, test_huge_data_evict)
   LOG_INFO("TEST_CASE: start test_huge_data_evict");
   ObSSMemMacroCache *mem_macro_cache = MTL(ObSSMemMacroCache *);
   ASSERT_NE(nullptr, mem_macro_cache);
-  mem_macro_cache->clear_mem_macro_cache();
+  ASSERT_EQ(OB_SUCCESS, mem_macro_cache->clear_mem_macro_cache());
 
   ObSSMemMacroCacheStat &cache_stat = mem_macro_cache->cache_stat_;
   ObSSMacroCacheMemBlockPool &mem_blk_pool = mem_macro_cache->buf_mgr_.mem_blk_pool_;
@@ -330,7 +330,7 @@ TEST_F(TestSSMemMacroCache, test_huge_data_evict)
   }
 
   {
-    mem_macro_cache->clear_mem_macro_cache();
+    ASSERT_EQ(OB_SUCCESS, mem_macro_cache->clear_mem_macro_cache());
     ASSERT_EQ(0, cache_stat.macro_blk_stat().valid_macro_cnt_);
     LOG_INFO("TEST_CASE_CHECK: step 4", K(cache_stat));
   }

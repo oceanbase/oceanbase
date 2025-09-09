@@ -4309,8 +4309,9 @@ int ObRpcClearSSMicroCacheP::process()
       if (OB_ISNULL(micro_cache = MTL(ObSSMicroCache *))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("micro_cache is nullptr", KR(ret));
+      } else if (OB_FAIL(micro_cache->clear_micro_cache())) {
+        LOG_WARN("fail to clear ss_micro_cache", KR(ret));
       } else {
-        micro_cache->clear_micro_cache();
         LOG_INFO("success clear ss_micro_cache");
       }
     }
@@ -4332,17 +4333,35 @@ int ObRpcFlushSSLocalCacheP::process()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("local_cache is nullptr", KR(ret));
       } else if (arg_.flush_type_ == obrpc::ObFlushSSLocalCacheType::FLUSH_ALL_TYPE) {
-        local_cache->clear_ss_all_cache();
-        LOG_INFO("success clear ss_local_cache");
+        FLOG_INFO("start to clear ss_local_cache", K_(arg));
+        if (OB_FAIL(local_cache->clear_ss_all_cache(arg_.rpc_abs_timeout_us_))) {
+          LOG_WARN("fail to clear ss_local_cache", KR(ret));
+        }
+        FLOG_INFO("finish to clear ss_local_cache", KR(ret));
       } else if (arg_.flush_type_ == obrpc::ObFlushSSLocalCacheType::FLUSH_LOCAL_MACRO_TYPE) {
-        local_cache->clear_ss_macro_cache();
-        LOG_INFO("success clear ss_macro_cache");
+        FLOG_INFO("start to clear ss_macro_cache", K_(arg));
+        if (OB_FAIL(local_cache->clear_ss_macro_cache(arg_.rpc_abs_timeout_us_))) {
+          LOG_WARN("fail to clear ss_macro_cache", KR(ret));
+        }
+        FLOG_INFO("finish to clear ss_macro_cache", KR(ret));
       } else if (arg_.flush_type_ == obrpc::ObFlushSSLocalCacheType::FLUSH_LOCAL_MICRO_TYPE) {
-        local_cache->clear_ss_micro_cache();
-        LOG_INFO("success clear ss_micro_cache");
+        FLOG_INFO("start to clear ss_micro_cache", K_(arg));
+        if (OB_FAIL(local_cache->clear_ss_micro_cache())) {
+          LOG_WARN("fail to clear ss_micro_cache", KR(ret));
+        }
+        FLOG_INFO("finish to clear ss_micro_cache", KR(ret));
       } else if (arg_.flush_type_ == obrpc::ObFlushSSLocalCacheType::FLUSH_MEM_MACRO_TYPE) {
-        local_cache->clear_ss_mem_macro_cache();
-        LOG_INFO("success clear ss_mem_macro_cache");
+        FLOG_INFO("start to clear ss_mem_macro_cache", K_(arg));
+        if (OB_FAIL(local_cache->clear_ss_mem_macro_cache())) {
+          LOG_WARN("fail to clear ss_mem_macro_cache", KR(ret));
+        }
+        FLOG_INFO("finish to clear ss_mem_macro_cache", KR(ret));
+      } else if (arg_.flush_type_ == obrpc::ObFlushSSLocalCacheType::FLUSH_LOCAL_HOT_MACRO_TYPE) {
+        FLOG_INFO("start to clear ss_hot_macro_cache", K_(arg));
+        if (OB_FAIL(local_cache->clear_ss_hot_macro_cache(arg_.rpc_abs_timeout_us_))) {
+          LOG_WARN("fail to clear ss_hot_macro_cache", KR(ret));
+        }
+        FLOG_INFO("finish to clear ss_hot_macro_cache", KR(ret));
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid flush_type", K(ret), K_(arg_.flush_type));

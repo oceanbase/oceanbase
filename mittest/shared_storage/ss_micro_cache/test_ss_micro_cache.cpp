@@ -1273,7 +1273,7 @@ TEST_F(TestSSMicroCache, test_clear_micro_cache)
   task_runner.persist_meta_task_.cur_interval_us_ = ori_persist_micro_us;
   task_runner.schedule_persist_meta_task(ori_persist_micro_us);
 
-  micro_cache->clear_micro_cache();
+  IGNORE_RETURN micro_cache->clear_micro_cache();
   ASSERT_EQ(0, cache_stat.micro_stat().total_micro_cnt_);
   ASSERT_EQ(0, cache_stat.micro_stat().valid_micro_cnt_);
   ASSERT_EQ(0, micro_meta_mgr.micro_meta_map_.count());
@@ -1342,14 +1342,14 @@ TEST_F(TestSSMicroCache, test_parallel_clear_micro_cache)
   }
 
   ob_usleep(5 * 1000);
-  micro_cache->clear_micro_cache();
+  IGNORE_RETURN micro_cache->clear_micro_cache();
   for (int64_t i = 0; i < thread_num; ++i) {
     ths[i].join();
   }
   ASSERT_LT(0, fail_cnt); // failed due to stop micro cache when clear_micro_cache
 
   // in case there still exists some micro_block in cache, we clear it again
-  micro_cache->clear_micro_cache();//2025-05-26 15:17:15.841926
+  IGNORE_RETURN micro_cache->clear_micro_cache();//2025-05-26 15:17:15.841926
 
   // check micro meta
   ASSERT_EQ(0, micro_cache->flying_req_cnt_);
