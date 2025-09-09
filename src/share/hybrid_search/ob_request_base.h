@@ -135,6 +135,7 @@ enum ReqTableType
   BASE_TABLE,
   SUB_QUERY,
   JOINED_TABLE,
+  MULTI_SET,
 };
 
 struct OrderInfo
@@ -166,6 +167,7 @@ enum ObReqJoinType
   LEFT_OUTER_JOIN = 0,
   RIGHT_OUTER_JOIN,
   FULL_OUTER_JOIN,
+  UNION_ALL,
   MAX_JOIN_TYPE
 };
 
