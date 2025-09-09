@@ -1885,10 +1885,26 @@ int ObFetchLSMetaInfoP::process()
     logservice::ObLogHandler *log_handler = nullptr;
     ObLSMetaPackage ls_meta_package;
     const bool check_archive = true;
+    int64_t disk_abnormal_time = 0;
+    ObDeviceHealthStatus dhs = DEVICE_HEALTH_NORMAL;
+
+#ifdef ERRSIM
+    if (OB_SUCC(ret) && DEVICE_HEALTH_NORMAL == dhs && GCONF.fake_disk_error) {
+      dhs = DEVICE_HEALTH_ERROR;
+    }
+#endif
+
     LOG_INFO("start to fetch log stream info", K(arg_.ls_id_), K(arg_));
     if (!arg_.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fetch ls info get invalid argument", K(ret), K(arg_));
+    } else if (DEVICE_HEALTH_NORMAL == dhs
+        && OB_FAIL(ObIOManager::get_instance().get_device_health_status(dhs, disk_abnormal_time))) {
+      STORAGE_LOG(WARN, "failed to check is disk error", KR(ret));
+    } else if (DEVICE_HEALTH_ERROR == dhs) {
+      ret = OB_DISK_ERROR;
+      STORAGE_LOG(ERROR, "observer has disk error, cannot be migrate src", KR(ret),
+        "disk_health_status", device_health_status_to_str(dhs), K(disk_abnormal_time));
     } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
