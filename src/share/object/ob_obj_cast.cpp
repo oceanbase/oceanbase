@@ -1467,6 +1467,8 @@ static int int_bit(const ObObjType expect_type, ObObjCastParams &params,
                   || ObBitTC != ob_obj_type_class(expect_type))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (CM_NEED_RANGE_CHECK(cast_mode)
+             && CAST_FAIL(uint_range_check(ObUInt64Type, in.get_int(), value))) {
   } else if (OB_FAIL(get_bit_len(value, bit_len))) {
     LOG_WARN("fail to get bit len", K(ret), K(value), K(bit_len));
   } else {
