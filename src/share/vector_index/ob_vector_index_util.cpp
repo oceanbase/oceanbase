@@ -4062,6 +4062,29 @@ int ObVectorIndexUtil::get_vector_index_column_name(
   return ret;
 }
 
+bool ObVectorIndexUtil::check_index_is_all_ready(
+    ObSchemaGetterGuard &schema_guard,
+    const schema::ObTableSchema &table_schema,
+    const schema::ObTableSchema &index_schema)
+{
+  int ret = OB_SUCCESS;
+  bool is_all_ready = false;
+
+  ObArray<ObString> vec_column_names;
+  if (index_schema.is_built_in_index()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected index type", K(ret), K(index_schema));
+  } else if (OB_FAIL(get_vector_index_column_name(table_schema, index_schema, vec_column_names))) {
+    LOG_WARN("fail to get vector index column name", K(ret));
+  } else if (vec_column_names.count() <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected vec column count", K(ret), K(index_schema));
+  } else if (OB_FAIL(check_vector_index_by_column_name(schema_guard, table_schema, vec_column_names.at(0), is_all_ready))) {
+    LOG_WARN("fail to check vector index by column name", K(ret), K(vec_column_names));
+  }
+  return is_all_ready;
+}
+
 bool ObVectorIndexUtil::is_match_index_column_name(
     const schema::ObTableSchema &table_schema,
     const schema::ObTableSchema &index_schema,
