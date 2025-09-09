@@ -64,75 +64,75 @@
   select * from matrix where ST_GeomFromText('POINT(1 1)') = JsonType;
   select st_astext(GeometryType) from matrix where ST_GeomFromText('POINT(1 1)') = GeometryType;
 
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') > TinyIntType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') < SmallIntType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') > MediumIntType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') < Int32Type;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') > IntType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') < UTinyIntType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') > USmallIntType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') <= UMediumIntType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') >= UInt32Type;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') <= UInt64Type;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') >= FloatType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') <= DoubleType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') >= UFloatType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') <= UDoubleType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') >= NumberType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') <= UNumberType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') > DateTimeType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') < TimestampType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') > DateType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') < TimeType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') >= YearType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') < VarcharType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') >= CharType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') < VarbinaryType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') >= BinaryType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') <= ExtendType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') > TinyTextType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') <= TextType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') > MediumTextType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') <= LongTextType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') > BitType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') <= EnumType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') > SetType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') < JsonType;
-  --error 1210
+  --error 5083
   select * from matrix where ST_GeomFromText('POINT(1 1)') > GeometryType;
 
 
@@ -155,7 +155,7 @@
   select * from matrix where  GeometryType<<1;
   --error 1210
   select * from matrix where  GeometryType like 'a';
-  --error 1210
+  --error 5083
   select * from matrix where  GeometryType between ST_GeomFromText('POINT(1 1)') and ST_GeomFromText('POINT(2 2)');
   --error 1210
   select MIN(GeometryType) from matrix;
