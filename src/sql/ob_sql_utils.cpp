@@ -6476,28 +6476,13 @@ int ObSQLUtils::match_ccl_rule(ObIAllocator &alloc, ObSQLSessionInfo &session, O
       if (OB_NOT_NULL(parse_result) &&
           OB_NOT_NULL(parse_result->result_tree_) &&
           OB_NOT_NULL(parse_result->result_tree_->children_[0])) {
-
-        bool has_replace = false;
-        // sql key word concurrent limit rule not support replace into
-        if (OB_NOT_NULL(parse_result->result_tree_->children_[0]) &&
-            OB_NOT_NULL(parse_result->result_tree_->children_[0]->children_[1])) {
-            if (parse_result->result_tree_->children_[0]->type_ == T_INSERT &&
-                parse_result->result_tree_->children_[0]->children_[1]->type_ == T_REPLACE) {
-              has_replace = true;
-            }
-        }
         switch (parse_result->result_tree_->children_[0]->type_) {
         case T_SELECT: {
           ccl_affect_dml_type = ObCCLAffectDMLType::SELECT;
           break;
         }
         case T_INSERT: {
-          if (!has_replace) {
-            ccl_affect_dml_type = ObCCLAffectDMLType::INSERT;
-          } else {
-            need_do_match = false;
-            LOG_TRACE("do not do ccl match because current sql's stmt_type is REPLACE");
-          }
+          ccl_affect_dml_type = ObCCLAffectDMLType::INSERT;
           break;
         }
         case T_DELETE: {
