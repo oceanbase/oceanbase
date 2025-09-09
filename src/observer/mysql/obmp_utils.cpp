@@ -44,10 +44,6 @@ int ObMPUtils::add_changed_session_info(OMPKOK &ok_pkt, sql::ObSQLSessionInfo &s
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(OB_SUCCESS != try_add_changed_package_info(session))) {
-    LOG_WARN("failed to add changed package info", K(ret));
-  }
-
   if (session.is_session_info_changed()) {
     ok_pkt.set_state_changed(true);
   }
@@ -563,10 +559,6 @@ int ObMPUtils::add_nls_format(OMPKOK &okp, sql::ObSQLSessionInfo &session, const
 int ObMPUtils::add_session_info_on_connect(OMPKOK &okp, sql::ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(OB_SUCCESS != try_add_changed_package_info(session))) {
-    LOG_WARN("failed to add changed package info", K(ret));
-  }
 
   // treat it as state changed
   okp.set_state_changed(true);
