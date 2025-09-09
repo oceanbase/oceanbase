@@ -8703,14 +8703,14 @@ Query Plan
 ===================================================================
 |ID|OPERATOR                       |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN     |        |1       |23          |
-|1 |├─SUBPLAN SCAN                 |t4      |1       |23          |
-|2 |│ └─HASH INTERSECT DISTINCT    |        |1       |23          |
+|0 |NESTED-LOOP JOIN CARTESIAN     |        |1       |29          |
+|1 |├─SUBPLAN SCAN                 |t4      |1       |24          |
+|2 |│ └─HASH INTERSECT DISTINCT    |        |1       |24          |
 |3 |│   ├─MERGE INTERSECT DISTINCT |        |1       |4           |
 |4 |│   │ ├─TABLE FULL SCAN        |t1      |1       |4           |
 |5 |│   │ └─EXPRESSION             |        |1       |1           |
-|6 |│   └─PX COORDINATOR           |        |1       |19          |
-|7 |│     └─EXCHANGE OUT DISTR     |:EX10000|1       |19          |
+|6 |│   └─PX COORDINATOR           |        |1       |20          |
+|7 |│     └─EXCHANGE OUT DISTR     |:EX10000|1       |20          |
 |8 |│       └─PX PARTITION ITERATOR|        |1       |19          |
 |9 |│         └─TABLE FULL SCAN    |t3      |1       |19          |
 |10|└─TABLE FULL SCAN              |t5      |1       |4           |
@@ -8747,14 +8747,14 @@ Query Plan
 ===================================================================
 |ID|OPERATOR                       |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN     |        |1       |23          |
-|1 |├─SUBPLAN SCAN                 |t3      |1       |23          |
-|2 |│ └─HASH INTERSECT DISTINCT    |        |1       |23          |
+|0 |NESTED-LOOP JOIN CARTESIAN     |        |1       |29          |
+|1 |├─SUBPLAN SCAN                 |t3      |1       |24          |
+|2 |│ └─HASH INTERSECT DISTINCT    |        |1       |24          |
 |3 |│   ├─MERGE INTERSECT DISTINCT |        |1       |4           |
 |4 |│   │ ├─TABLE FULL SCAN        |t1      |1       |4           |
 |5 |│   │ └─EXPRESSION             |        |1       |1           |
-|6 |│   └─PX COORDINATOR           |        |1       |19          |
-|7 |│     └─EXCHANGE OUT DISTR     |:EX10000|1       |19          |
+|6 |│   └─PX COORDINATOR           |        |1       |20          |
+|7 |│     └─EXCHANGE OUT DISTR     |:EX10000|1       |20          |
 |8 |│       └─PX PARTITION ITERATOR|        |1       |19          |
 |9 |│         └─TABLE FULL SCAN    |t2      |1       |19          |
 |10|└─TABLE FULL SCAN              |t4      |1       |4           |
@@ -8791,7 +8791,7 @@ Query Plan
 ==============================================================
 |ID|OPERATOR                      |NAME|EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN    |    |1       |8           |
+|0 |NESTED-LOOP JOIN CARTESIAN    |    |1       |13          |
 |1 |├─SUBPLAN SCAN                |t3  |1       |8           |
 |2 |│ └─MERGE INTERSECT DISTINCT  |    |1       |8           |
 |3 |│   ├─MERGE INTERSECT DISTINCT|    |1       |8           |
@@ -9446,14 +9446,14 @@ Query Plan
 ===================================================================
 |ID|OPERATOR                       |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN     |        |1       |28          |
+|0 |NESTED-LOOP JOIN CARTESIAN     |        |1       |29          |
 |1 |├─SUBPLAN SCAN                 |t3      |1       |24          |
 |2 |│ └─HASH EXCEPT DISTINCT       |        |1       |24          |
 |3 |│   ├─MERGE EXCEPT DISTINCT    |        |1       |4           |
 |4 |│   │ ├─EXPRESSION             |        |1       |1           |
 |5 |│   │ └─TABLE FULL SCAN        |t1      |1       |4           |
-|6 |│   └─PX COORDINATOR           |        |1       |19          |
-|7 |│     └─EXCHANGE OUT DISTR     |:EX10000|1       |19          |
+|6 |│   └─PX COORDINATOR           |        |1       |20          |
+|7 |│     └─EXCHANGE OUT DISTR     |:EX10000|1       |20          |
 |8 |│       └─PX PARTITION ITERATOR|        |1       |19          |
 |9 |│         └─TABLE FULL SCAN    |t2      |1       |19          |
 |10|└─TABLE FULL SCAN              |t4      |1       |4           |
