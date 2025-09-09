@@ -5467,7 +5467,7 @@ int ObAlterTableResolver::resolve_split_partition(const ParseNode *node,
     } else if (OB_UNLIKELY(0 == alter_table_schema.get_partition_num())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid part_num", K(ret), K(alter_table_schema.get_partition_num()));
-    } else if (OB_FAIL(fill_split_source_tablet_id(alter_table_schema.get_split_partition_name(),
+    } else if (OB_FAIL(fill_split_source_tablet_info(alter_table_schema.get_split_partition_name(),
                                                    origin_table_schema, alter_table_schema))) {
       LOG_WARN("fail to fill source split tablet id", KR(ret));
     } else if (OB_UNLIKELY(!origin_table_schema.get_part_option().is_range_part())) {
@@ -5583,7 +5583,7 @@ int ObAlterTableResolver::resolve_reorganize_partition(const ParseNode *node,
         ret = OB_ERR_SPLIT_INTO_ONE_PARTITION;
         LOG_USER_ERROR(OB_ERR_SPLIT_INTO_ONE_PARTITION);
         LOG_WARN("can not split partition into one partition", K(ret), K(alter_table_schema));
-      } else if (OB_FAIL(fill_split_source_tablet_id(alter_table_schema.get_split_partition_name(),
+      } else if (OB_FAIL(fill_split_source_tablet_info(alter_table_schema.get_split_partition_name(),
                                                      origin_table_schema, alter_table_schema))) {
         LOG_WARN("fail to fill source split tablet id", KR(ret));
       }
@@ -5592,7 +5592,7 @@ int ObAlterTableResolver::resolve_reorganize_partition(const ParseNode *node,
   return ret;
 }
 
-int ObAlterTableResolver::fill_split_source_tablet_id(const ObString& source_part_name,
+int ObAlterTableResolver::fill_split_source_tablet_info(const ObString& source_part_name,
                                                       const share::schema::ObTableSchema &origin_table_schema,
                                                       share::schema::AlterTableSchema &alter_table_schema)
 {
@@ -5624,6 +5624,10 @@ int ObAlterTableResolver::fill_split_source_tablet_id(const ObString& source_par
         LOG_ERROR("partition is null", K(ret), K(alter_table_schema));
       } else {
         inc_part_array[i]->set_split_source_tablet_id(source_part->get_tablet_id());
+        if (ObStorageCachePolicyType::MAX_POLICY == inc_part_array[i]->get_part_storage_cache_policy_type() &&
+            ObStorageCachePolicyType::MAX_POLICY != source_part->get_part_storage_cache_policy_type()) {
+          inc_part_array[i]->set_part_storage_cache_policy_type(source_part->get_part_storage_cache_policy_type());
+        }
       }
     }
   }
