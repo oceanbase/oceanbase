@@ -2873,6 +2873,98 @@ TEST_F(TestDeleteInsertRowScan, test_filtered_row_and_blockscan)
   scan_merge.reset();
 }
 
+TEST_F(TestDeleteInsertRowScan, test_constant_filter)
+{
+  int ret = OB_SUCCESS;
+  ObTableStoreIterator table_store_iter;
+
+  ObTableHandleV2 handle1;
+  const char *micro_data1[1];
+  micro_data1[0] =
+      "bigint   bigint  bigint      bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "2        -50      DI_VERSION    9       9    INSERT    NORMAL      CLF\n"
+      "3        -50      DI_VERSION    9       9    INSERT    NORMAL      CLF\n"
+      "4        -50      DI_VERSION    9       9    INSERT    NORMAL      CLF\n"
+      "5        -50      DI_VERSION    9       9    INSERT    NORMAL      CLF\n"
+      "6        -50      DI_VERSION    9       9    INSERT    NORMAL      CLF\n"
+      "7        -50      DI_VERSION    9       9    INSERT    NORMAL      CLF\n"
+      "8        -50      DI_VERSION    9       9    INSERT    NORMAL      CLF\n";
+  int schema_rowkey_cnt = 1;
+  int64_t snapshot_version = 50;
+  ObScnRange scn_range;
+  scn_range.start_scn_.convert_for_tx(0);
+  scn_range.end_scn_.convert_for_tx(50);
+  prepare_table_schema(micro_data1, schema_rowkey_cnt, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data1, 1);
+  prepare_data_end(handle1, ObITable::MAJOR_SSTABLE);
+  table_store_iter.add_table(handle1.get_table());
+  STORAGE_LOG(INFO, "finish prepare sstable1");
+
+  ObDatumRange range;
+  range.set_whole_range();
+  ObVersionRange trans_version_range;
+  trans_version_range.base_version_ = 50;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.snapshot_version_ = 110;
+  prepare_scan_param(trans_version_range, table_store_iter);
+  ObStorageDatum filter_val;
+  filter_val.set_int(9);
+  // second column = 9
+  ASSERT_EQ(OB_SUCCESS, create_pushdown_filter(true,
+                                               common::OB_APP_MIN_COLUMN_ID + 1,
+                                               filter_val,
+                                               ObWhiteFilterOperatorType::WHITE_OP_EQ,
+                                               *access_param_.iter_param_.get_read_info(),
+                                               access_param_.iter_param_.pushdown_filter_));
+  access_param_.iter_param_.pushdown_filter_->set_filter_bool_mask(ObBoolMaskType::ALWAYS_TRUE);
+  ObMultipleScanMerge scan_merge;
+  ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, get_table_param_));
+  ASSERT_EQ(OB_SUCCESS, scan_merge.open(range));
+  scan_merge.disable_padding();
+  scan_merge.disable_fill_virtual_column();
+
+  const char *result1 =
+      "bigint   bigint bigint  flag     flag_type\n"
+      "2         9       9    INSERT    NORMAL\n"
+      "3         9       9    INSERT    NORMAL\n"
+      "4         9       9    INSERT    NORMAL\n"
+      "5         9       9    INSERT    NORMAL\n"
+      "6         9       9    INSERT    NORMAL\n"
+      "7         9       9    INSERT    NORMAL\n"
+      "8         9       9    INSERT    NORMAL\n";
+
+  ret = OB_SUCCESS;
+  int64_t count = 0;
+  int64_t total_count = 0;
+  ObMockIterator res_iter;
+  res_iter.reset();
+  ASSERT_EQ(OB_SUCCESS, res_iter.from(result1));
+  while (OB_SUCC(ret)) {
+    ret = scan_merge.get_next_rows(count, SQL_BATCH_SIZE);
+    if (ret != OB_SUCCESS && ret != OB_ITER_END) {
+      STORAGE_LOG(ERROR, "error return value", K(ret), K(count));
+      ASSERT_EQ(1, 0);
+    }
+    if (count > 0) {
+      ObMockScanMergeIterator merge_iter(count);
+      ASSERT_EQ(OB_SUCCESS, merge_iter.init(reinterpret_cast<ObVectorStore *>(scan_merge.block_row_store_),
+                                            query_allocator_, *access_param_.iter_param_.get_read_info()));
+      bool is_equal = res_iter.equals<ObMockScanMergeIterator, ObStoreRow>(merge_iter, false, false, false, true);
+      ASSERT_TRUE(is_equal);
+
+      total_count += count;
+      STORAGE_LOG(INFO, "get next rows", K(count), K(total_count));
+    } else {
+      break;
+    }
+  }
+  ASSERT_EQ(7, total_count);
+
+  handle1.reset();
+  scan_merge.reset();
+}
+
 }
 }
 
