@@ -620,7 +620,7 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
           ret = OB_PASSWORD_WRONG;
           LOG_WARN("tenant version is below 423 or 432", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "connect proxy user is not supported when data version is below 4.2.3 or 4.3.2");
-        } else if (proxied_user.length() > OB_MAX_USER_NAME_BUF_LENGTH) {
+        } else if (proxied_user.length() > OB_MAX_USER_NAME_LENGTH) {
           ret = OB_SIZE_OVERFLOW;
           LOG_WARN("proxy user name too long", K(ret));
         } else {
