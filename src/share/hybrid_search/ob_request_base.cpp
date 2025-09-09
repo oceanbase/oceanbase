@@ -292,14 +292,6 @@ int ObReqOpExpr::translate_expr(ObObjPrintParams &print_params_, char *buf_, int
         if (current_prec > 0 && param_prec > 0) {
           if (current_prec > param_prec) {
             op_expr->need_parentheses_ = true;
-          } else if (current_prec < param_prec) {
-            op_expr->need_parentheses_ = false;
-          } else {
-            if (current_prec == PREC_MUL) {
-              op_expr->need_parentheses_ = (i == 1);
-            } else {
-              op_expr->need_parentheses_ = !is_left_associative(op_type_);
-            }
           }
         }
       }
@@ -322,6 +314,48 @@ int ObReqOpExpr::translate_expr(ObObjPrintParams &print_params_, char *buf_, int
   }
   if (OB_SUCC(ret) && need_alias && translate_alias(print_params_, buf_, buf_len_, pos_)) {
     LOG_WARN("fail to translate expr alias", K(ret));
+  }
+  return ret;
+}
+
+int ObReqCaseWhenExpr::translate_expr(ObObjPrintParams &print_params_, char *buf_, int64_t buf_len_, int64_t *pos_, ObReqScope scope/*= FIELD_LIST_SCOPE*/, bool need_alias /*= true*/)
+{
+  int ret = OB_SUCCESS;
+  DATA_PRINTF("(case");
+  if (OB_SUCC(ret)) {
+    if (arg_expr_ != NULL) {
+      DATA_PRINTF(" ");
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(arg_expr_->translate_expr(print_params_, buf_, buf_len_, pos_, scope, false))) {
+        LOG_WARN("fail to translate expr", K(ret));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < when_exprs_.count(); i++) {
+      DATA_PRINTF(" when ");
+      ObReqExpr *when_param = when_exprs_.at(i);
+      ObReqExpr *then_param = then_exprs_.at(i);
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(when_param->translate_expr(print_params_, buf_, buf_len_, pos_, scope, false))) {
+        LOG_WARN("fail to translate expr", K(ret));
+      } else {
+        DATA_PRINTF(" then ");
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(then_param->translate_expr(print_params_, buf_, buf_len_, pos_, scope, false))) {
+          LOG_WARN("fail to translate expr", K(ret));
+        }
+      }
+    }
+    DATA_PRINTF(" else");
+    if (OB_SUCC(ret)) {
+      if (NULL != default_expr_) {
+        DATA_PRINTF(" ");
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(default_expr_->translate_expr(print_params_, buf_, buf_len_, pos_, scope, false))) {
+          LOG_WARN("fail to translate expr", K(ret));
+        }
+      }
+    }
+    DATA_PRINTF(" end)");
   }
   return ret;
 }

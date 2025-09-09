@@ -168,7 +168,7 @@ private :
   int parse_const(ObIJsonBase &val_node, ObReqConstExpr *&var, bool is_numeric = false, bool cover_value_to_str = false);
   int wrap_sub_query(ObString &sub_query_name, ObQueryReqFromJson *&query_req);
   int wrap_json_result(ObQueryReqFromJson *&query_res);
-  int construct_query_with_similarity(ObReqExpr *dist, ObReqConstExpr *similar, ObQueryReqFromJson *&query_req);
+  int construct_query_with_similarity(ObVectorIndexDistAlgorithm algor, ObReqExpr *dist, ObReqConstExpr *similar, ObQueryReqFromJson *&query_req);
   int construct_query_with_minnum_should_match(ObReqExpr *score, ObReqConstExpr *minnum_should_match, ObQueryReqFromJson *&query_req);
   int construct_op_expr(ObReqExpr *l_param, ObReqExpr *r_param, ObItemType type, ObReqOpExpr *&cmp_expr, bool need_parentheses = true);
   int construct_op_expr(common::ObIArray<ObReqExpr *> &expr_items, const ObItemType op, ObReqExpr *&expr, bool need_parentheses = true);
@@ -182,7 +182,7 @@ private :
                                const ObString &l_expr_name, const ObString &r_expr_name,
                                ObItemType condition, ObReqOpExpr *&join_condition);
   int construct_weighted_expr(ObReqExpr *base_expr, double weight, ObReqExpr *&weighted_expr);
-  int construct_ip_expr(ObReqColumnExpr *vec_field, ObReqConstExpr *query_vec, ObReqOpExpr *div_expr/* score */,
+  int construct_ip_expr(ObReqColumnExpr *vec_field, ObReqConstExpr *query_vec, ObReqCaseWhenExpr *&case_when/* score */,
                         ObReqOpExpr *minus_expr/* distance */, ObReqExpr *&order_by_vec);
   int set_fts_limit_expr(ObQueryReqFromJson *query, const ObReqConstExpr *size_expr, const ObReqConstExpr *from_expr);
   int get_distance_algor_type(const ObReqColumnExpr &vec_field, ObVectorIndexDistAlgorithm &alg_type);

@@ -55,6 +55,7 @@ enum ObReqExprType
   COLUMN_EXPR,
   CONST_EXPR,
   OP_EXPR,
+  CASE_EXPR,
 };
 
 class ObReqFromJson;
@@ -90,6 +91,20 @@ public:
   virtual int translate_expr(ObObjPrintParams &print_params_, char *buf_, int64_t buf_len_, int64_t *pos_, ObReqScope scope = FIELD_LIST_SCOPE, bool need_alias = true);
   virtual int get_expr_type() { return ObReqExprType::MATCH_EXPR; }
   ObReqScoreType score_type_;
+};
+
+class ObReqCaseWhenExpr : public ObReqExpr
+{
+public:
+  ObReqCaseWhenExpr() : ObReqExpr(), arg_expr_(nullptr),
+    when_exprs_(), then_exprs_(), default_expr_(nullptr) {}
+  virtual ~ObReqCaseWhenExpr() {}
+  virtual int translate_expr(ObObjPrintParams &print_params_, char *buf_, int64_t buf_len_, int64_t *pos_, ObReqScope scope = FIELD_LIST_SCOPE, bool need_alias = true);
+  virtual int get_expr_type() { return ObReqExprType::CASE_EXPR; }
+  ObReqExpr *arg_expr_;
+  common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> when_exprs_;
+  common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> then_exprs_;
+  ObReqExpr *default_expr_;
 };
 
 class ObReqColumnExpr : public ObReqExpr

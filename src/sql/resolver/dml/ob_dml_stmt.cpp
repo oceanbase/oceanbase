@@ -5837,18 +5837,13 @@ bool ObDMLStmt::is_contain_vector_origin_distance_calc() const
     int ret = OB_SUCCESS;
     const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt *>(this);
     ObRawExpr* vector_expr = get_first_vector_expr();
-    for (int64_t i = 0; OB_NOT_NULL(vector_expr) && OB_SUCC(ret) && i < select_stmt->get_select_items().count(); ++i) {
+    for (int64_t i = 0; OB_NOT_NULL(vector_expr) && !bool_ret && OB_SUCC(ret) && i < select_stmt->get_select_items().count(); ++i) {
       const SelectItem &si = select_stmt->get_select_items().at(i);
-      ObExprEqualCheckContext equal_ctx;
-      equal_ctx.override_const_compare_ = true;
       if (OB_ISNULL(si.expr_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("select item expr is null", K(ret));
-      } else if (si.expr_->is_vector_sort_expr()) {
-        if (si.expr_->same_as(*vector_expr, &equal_ctx)) {
-          bool_ret = true;
-          break;
-        }
+      } else if (OB_FAIL(ObRawExprUtils::find_expr(si.expr_, vector_expr, bool_ret))) {
+        LOG_WARN("failed to find expr", K(ret));
       }
     }
   }

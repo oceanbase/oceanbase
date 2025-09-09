@@ -2575,6 +2575,7 @@ int ObESQueryParser::parse_knn(ObIJsonBase &req_node, ObQueryReqFromJson *&query
   // construct normalize expr
   ObReqExpr *normalize_expr = NULL;
   ObReqOpExpr *div_expr = NULL;
+  ObReqCaseWhenExpr *case_when_expr = NULL;
   ObReqOpExpr *add_expr = NULL;
   ObReqConstExpr *norm_const = NULL;
   ObReqConstExpr *round_const = NULL;
@@ -2611,7 +2612,7 @@ int ObESQueryParser::parse_knn(ObIJsonBase &req_node, ObQueryReqFromJson *&query
   } else if (OB_FAIL(get_distance_algor_type(*vec_field, alg_type))) {
     LOG_WARN("fail to get distance algo type", K(ret));
   } else if (alg_type == ObVectorIndexDistAlgorithm::VIDA_IP) {
-    if (OB_FAIL(construct_ip_expr(vec_field, query_vec, div_expr, add_expr, order_by_4ip))) {
+    if (OB_FAIL(construct_ip_expr(vec_field, query_vec, case_when_expr, add_expr, order_by_4ip))) {
       LOG_WARN("fail to construct ip expr", K(ret));
     } else if (OB_FAIL(construct_order_by_item(order_by_4ip, true, order_info))) {
       LOG_WARN("fail to construct order by item", K(ret));
@@ -2641,7 +2642,9 @@ int ObESQueryParser::parse_knn(ObIJsonBase &req_node, ObQueryReqFromJson *&query
     query_req->set_limit(K);
     normalize_expr->expr_name = "round";
     round_const->expr_name = "8";
-    if (OB_FAIL(normalize_expr->params.push_back(div_expr))) {
+    ObReqExpr *score = alg_type == ObVectorIndexDistAlgorithm::VIDA_IP ?
+      static_cast<ObReqExpr *>(case_when_expr) : static_cast<ObReqExpr *>(div_expr);
+    if (OB_FAIL(normalize_expr->params.push_back(score))) {
       LOG_WARN("fail to push back expr param", K(ret));
     } else if (OB_FAIL(normalize_expr->params.push_back(round_const))) {
       LOG_WARN("fail to push back expr param", K(ret));
@@ -2662,10 +2665,8 @@ int ObESQueryParser::parse_knn(ObIJsonBase &req_node, ObQueryReqFromJson *&query
       }
     }
     if (OB_SUCC(ret) && similar != NULL) {
-      if (alg_type == ObVectorIndexDistAlgorithm::VIDA_IP) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not supported sytnax in query", K(ret));
-      } else if (OB_FAIL(construct_query_with_similarity(dist_vec, similar, query_req))) {
+      ObReqExpr *dist = alg_type == ObVectorIndexDistAlgorithm::VIDA_IP ? static_cast<ObReqExpr *>(add_expr) : dist_vec;
+      if (OB_FAIL(construct_query_with_similarity(alg_type, dist, similar, query_req))) {
         LOG_WARN("fail to construct query with similarity", K(ret));
       }
     }
@@ -2674,55 +2675,68 @@ int ObESQueryParser::parse_knn(ObIJsonBase &req_node, ObQueryReqFromJson *&query
   return ret;
 }
 
-int ObESQueryParser::construct_ip_expr(ObReqColumnExpr *vec_field, ObReqConstExpr *query_vec, ObReqOpExpr *div_expr/* score */,
-                                      ObReqOpExpr *minus_expr/* distance */, ObReqExpr *&order_by_vec)
+// distance : 0 - negative_inner_product(vec_field, query_vec)
+// score : case distance < 0 then 1 / (1 - 1 * distance)  else 1 + distance end
+// equals
+// score : case when negative_inner_product(vec_field, query_vec) > 0 then 1 / (1 + negative_inner_product) else 1 - negative_inner_product end
+int ObESQueryParser::construct_ip_expr(ObReqColumnExpr *vec_field, ObReqConstExpr *query_vec, ObReqCaseWhenExpr *&case_when/* score */,
+                                       ObReqOpExpr *minus_expr/* distance */, ObReqExpr *&order_by_vec)
 {
   int ret = OB_SUCCESS;
-  ObReqOpExpr *multi_expr = NULL;
-  ObReqExpr *vec_norm1 = NULL;
-  ObReqExpr *vec_norm2 = NULL;
+  ObReqOpExpr *negtive_expr = NULL;
+  ObReqOpExpr *negtive_score_expr = NULL;
   ObReqExpr *abs_expr = NULL;
   ObReqConstExpr *one_const = NULL;
+  ObReqConstExpr *zero_const = NULL;
+  ObReqOpExpr *cmp_expr = NULL;
+  ObReqOpExpr *add_expr = NULL;
   if (OB_ISNULL(order_by_vec = OB_NEWx(ObReqExpr, &alloc_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to create distance expr", K(ret));
-  } else if (OB_ISNULL(vec_norm1 = OB_NEWx(ObReqExpr, &alloc_))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to create distance expr", K(ret));
-  } else if (OB_ISNULL(vec_norm2 = OB_NEWx(ObReqExpr, &alloc_))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to create distance expr", K(ret));
-  } else if (OB_ISNULL(multi_expr = OB_NEWx(ObReqOpExpr, &alloc_, T_OP_MUL))) {
+  } else if (OB_ISNULL(negtive_expr = OB_NEWx(ObReqOpExpr, &alloc_, T_OP_MINUS))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to create op expr", K(ret));
-  } else if (OB_ISNULL(abs_expr = OB_NEWx(ObReqExpr, &alloc_))) {
+  } else if (OB_ISNULL(negtive_score_expr = OB_NEWx(ObReqOpExpr, &alloc_, T_OP_DIV))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to create op expr", K(ret));
+  } else if (OB_ISNULL(add_expr = OB_NEWx(ObReqOpExpr, &alloc_, T_OP_ADD))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to create op expr", K(ret));
   } else if (OB_ISNULL(one_const = OB_NEWx(ObReqConstExpr, &alloc_, ObIntType))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to create op expr", K(ret));
+  } else if (OB_ISNULL(zero_const = OB_NEWx(ObReqConstExpr, &alloc_, ObIntType))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to create op expr", K(ret));
+  } else if (OB_ISNULL(case_when = OB_NEWx(ObReqCaseWhenExpr, &alloc_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to create op expr", K(ret));
+  } else if (OB_ISNULL(cmp_expr = OB_NEWx(ObReqOpExpr, &alloc_, T_OP_LT))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to create op expr", K(ret));
   } else if (OB_FAIL(order_by_vec->params.push_back(vec_field))) {
     LOG_WARN("fail to push back expr param", K(ret));
   } else if (OB_FAIL(order_by_vec->params.push_back(query_vec))) {
     LOG_WARN("fail to push back expr param", K(ret));
-  } else if (OB_FAIL(abs_expr->params.push_back(order_by_vec))) {
-    LOG_WARN("fail to push back expr param", K(ret));
-  } else if (OB_FAIL(vec_norm1->params.push_back(vec_field))) {
-    LOG_WARN("fail to push back expr param", K(ret));
-  } else if (OB_FAIL(vec_norm2->params.push_back(query_vec))) {
-    LOG_WARN("fail to push back expr param", K(ret));
-  } else if (OB_FAIL(multi_expr->init(vec_norm1, vec_norm2, T_OP_MUL))) {
+  } else if (OB_FAIL(minus_expr->init(zero_const, order_by_vec, T_OP_MINUS))) {
     LOG_WARN("fail to init add expr", K(ret));
-  } else if (OB_FAIL(div_expr->init(abs_expr, multi_expr, T_OP_DIV))) {
+  } else if (OB_FAIL(cmp_expr->init(order_by_vec, zero_const, T_OP_GT))) {
     LOG_WARN("fail to init add expr", K(ret));
-  } else if (OB_FAIL(minus_expr->init(one_const, div_expr, T_OP_MINUS))) {
+  } else if (OB_FAIL(negtive_expr->init(one_const, order_by_vec, T_OP_MINUS))) {
     LOG_WARN("fail to init add expr", K(ret));
+  } else if (OB_FAIL(negtive_score_expr->init(one_const, add_expr, T_OP_DIV))) {
+    LOG_WARN("fail to init add expr", K(ret));
+  } else if (OB_FAIL(add_expr->init(one_const, order_by_vec, T_OP_ADD))) {
+    LOG_WARN("fail to init add expr", K(ret));
+  } else if (OB_FAIL(case_when->when_exprs_.push_back(cmp_expr))) {
+    LOG_WARN("fail to push back expr param", K(ret));
+  } else if (OB_FAIL(case_when->then_exprs_.push_back(negtive_score_expr))) {
+    LOG_WARN("fail to push back expr param", K(ret));
   } else {
     order_by_vec->expr_name = N_VECTOR_NEGATIVE_INNER_PRODUCT;
-    vec_norm1->expr_name = N_VECTOR_NORM;
-    vec_norm2->expr_name = N_VECTOR_NORM;
-    abs_expr->expr_name = N_ABS;
     one_const->expr_name = "1";
+    zero_const->expr_name = "0";
+    case_when->default_expr_ = negtive_expr;
   }
 
   return ret;
@@ -2912,14 +2926,19 @@ int ObESQueryParser::wrap_sub_query(ObString &sub_query_name, ObQueryReqFromJson
   return ret;
 }
 
-int ObESQueryParser::construct_query_with_similarity(ObReqExpr *dist, ObReqConstExpr *similar, ObQueryReqFromJson *&query_req)
+int ObESQueryParser::construct_query_with_similarity(ObVectorIndexDistAlgorithm algor, ObReqExpr *dist,
+  ObReqConstExpr *similar, ObQueryReqFromJson *&query_req)
 {
   int ret = OB_SUCCESS;
   ObReqOpExpr *le = NULL;
   ObReqColumnExpr *col = NULL;
   ObString sub_query_name("_vs0");
   ObReqColumnExpr *score_col = NULL;
-  if (OB_ISNULL(le = OB_NEWx(ObReqOpExpr, &alloc_, T_OP_LE))) {
+  ObItemType op_type = T_OP_LE;
+  if (algor == ObVectorIndexDistAlgorithm::VIDA_IP) {
+    op_type = T_OP_GE;
+  }
+  if (OB_ISNULL(le = OB_NEWx(ObReqOpExpr, &alloc_, op_type))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to create query request", K(ret));
   } else if (OB_ISNULL(col = OB_NEWx(ObReqColumnExpr, &alloc_))) {
@@ -2929,7 +2948,7 @@ int ObESQueryParser::construct_query_with_similarity(ObReqExpr *dist, ObReqConst
     LOG_WARN("fail to push back sub query", K(ret));
   } else if (OB_FAIL(query_req->condition_items_.push_back(le))) {
     LOG_WARN("fail to push back sub query", K(ret));
-  } else if (OB_FAIL(le->init(col, similar, T_OP_LE))) {
+  } else if (OB_FAIL(le->init(col, similar, op_type))) {
     LOG_WARN("fail to init expr", K(ret));
   } else if (OB_ISNULL(score_col = OB_NEWx(ObReqColumnExpr, &alloc_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
