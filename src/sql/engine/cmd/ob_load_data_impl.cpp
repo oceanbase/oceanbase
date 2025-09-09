@@ -2763,6 +2763,22 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
   }
 
   if (OB_SUCC(ret)) {
+    int64_t query_timeout = 0;
+    if (OB_FAIL(hint.get_value(ObLoadDataHint::QUERY_TIMEOUT, query_timeout))) {
+      LOG_WARN("fail to get value", K(ret));
+    } else if (0 == query_timeout) {
+      if (OB_FAIL(ctx.get_my_session()->get_query_timeout(query_timeout))) {
+        LOG_WARN("fail to get query timeout", KR(ret));
+      } else {
+        query_timeout = MAX(query_timeout, RPC_BATCH_INSERT_TIMEOUT_US);
+        THIS_WORKER.set_timeout_ts(ctx.get_my_session()->get_query_start_time() + query_timeout);
+      }
+    } else if (query_timeout > 0) {
+      THIS_WORKER.set_timeout_ts(ctx.get_my_session()->get_query_start_time() + query_timeout);
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     file_read_param.file_location_   = load_file_storage;
     file_read_param.filename_        = load_args.file_name_;
     if (OB_NOT_NULL(ctx.get_my_session()->get_pl_query_sender())) {
@@ -2907,22 +2923,6 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
       }
     }
     LOG_DEBUG("batch size", K(hint_batch_size), K(batch_row_count), K(batch_buffer_size));
-  }
-
-  if (OB_SUCC(ret)) {
-    int64_t query_timeout = 0;
-    if (OB_FAIL(hint.get_value(ObLoadDataHint::QUERY_TIMEOUT, query_timeout))) {
-      LOG_WARN("fail to get value", K(ret));
-    } else if (0 == query_timeout) {
-      if (OB_FAIL(ctx.get_my_session()->get_query_timeout(query_timeout))) {
-        LOG_WARN("fail to get query timeout", KR(ret));
-      } else {
-        query_timeout = MAX(query_timeout, RPC_BATCH_INSERT_TIMEOUT_US);
-        THIS_WORKER.set_timeout_ts(ctx.get_my_session()->get_query_start_time() + query_timeout);
-      }
-    } else if (query_timeout > 0) {
-      THIS_WORKER.set_timeout_ts(ctx.get_my_session()->get_query_start_time() + query_timeout);
-    }
   }
 
   if (OB_SUCC(ret)) {
