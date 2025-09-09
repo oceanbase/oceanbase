@@ -185,10 +185,8 @@ int ObTenantStorageMetaService::prepare_create_ls(const ObLSMeta &meta, int64_t 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-#ifdef OB_BUILD_SHARED_STORAGE
   } else if (is_shared_storage_ && OB_FAIL(ckpt_slog_handler_.create_tenant_ls_item(meta.ls_id_, ls_epoch))) {
     LOG_WARN("fail to create tenant super block ls item", K(ret), K(meta));
-#endif
   } else {
     HEAP_VAR(ObLSMeta, tmp_meta) {
       tmp_meta = meta;
@@ -199,7 +197,14 @@ int ObTenantStorageMetaService::prepare_create_ls(const ObLSMeta &meta, int64_t 
       log_param.cmd_ = ObIRedoModule::gen_cmd(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE,
                                               ObRedoLogSubType::OB_REDO_LOG_CREATE_LS);
       if (OB_FAIL(slogger_.write_log(log_param))) {
-        LOG_WARN("fail to write remove ls slog", K(log_param));
+          LOG_WARN("fail to write remove ls slog", K(log_param));
+      }
+    }
+    if (OB_FAIL(ret) && is_shared_storage_) {
+      LOG_WARN("fail to write create ls prepare slog", K(ret), K(meta));
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(ckpt_slog_handler_.update_tenant_ls_item(meta.ls_id_, ls_epoch, ObLSItemStatus::CREATE_ABORT))) {
+        LOG_WARN("fail to update tenant super block ls item", K(tmp_ret), K(ret), K(meta.ls_id_), K(ls_epoch));
       }
     }
   }

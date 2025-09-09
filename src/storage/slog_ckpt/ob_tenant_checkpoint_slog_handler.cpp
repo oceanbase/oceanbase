@@ -1611,7 +1611,10 @@ int ObTenantCheckpointSlogHandler::create_tenant_ls_item(const ObLSID ls_id, int
         break;
       }
     }
-    if (OB_UNLIKELY(i != tenant_super_block.ls_cnt_)) {
+    if (OB_UNLIKELY(i < tenant_super_block.ls_cnt_) && ObLSItemStatus::CREATING == tenant_super_block.ls_item_arr_[i].status_) {
+      ls_epoch = tenant_super_block.ls_item_arr_[i].epoch_;
+      FLOG_INFO("ls item already exist", K(ret), K(i), "ls_item", tenant_super_block.ls_item_arr_[i], K(ls_epoch));
+    } else if (OB_UNLIKELY(i != tenant_super_block.ls_cnt_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls item already exist", K(ret), "ls_item", tenant_super_block.ls_item_arr_[i]);
     } else if (OB_UNLIKELY(ObTenantSuperBlock::MAX_LS_COUNT == i)) {
