@@ -5907,25 +5907,21 @@ int ObDbmsStats::get_table_stale_percent(sql::ObExecContext &ctx,
   uint64_t table_id = table_schema.get_table_id();
   const int64_t global_part_id = PARTITION_LEVEL_ZERO == table_schema.get_part_level() ? table_id : -1;
   bool is_locked = false;
-  if (OB_FAIL(ObBasicStatsEstimator::check_table_statistics_state(ctx,
-                                                                  tenant_id,
-                                                                  table_id,
-                                                                  global_part_id,
-                                                                  is_locked,
-                                                                  stat_table.partition_stat_infos_))) {
+  if (OB_FAIL(ObBasicStatsEstimator::check_table_statistics_state(
+          ctx, tenant_id, table_id, global_part_id, is_locked, stat_table.partition_stat_infos_))) {
     LOG_WARN("failed to check table has any statistics", K(ret));
   } else if (is_locked) {
-    //if table is locked, don't gather stats.
+    // if table is locked, don't gather stats.
     stat_table.stale_percent_ = 0;
-  } else if (table_schema.is_user_table() && -1 == global_part_id) {//for partitioned user table
-    if (OB_FAIL(get_user_partition_table_stale_percent(ctx, tenant_id, table_schema,
-                                                       stale_percent_threshold,
-                                                       stat_table))) {
+  }else if (table_schema.is_user_table() && -1 == global_part_id) {  // for partitioned user table
+    if (OB_FAIL(get_partition_table_stale_percent(ctx, tenant_id, table_schema, stale_percent_threshold, stat_table))) {
       LOG_WARN("faild to get user partition table stale percent", K(ret));
-    } else {/*do nothing*/}
-  } else if (OB_FAIL(get_common_table_stale_percent(ctx, tenant_id, table_schema, stat_table))) {
+    }
+  } else if (OB_FAIL(get_non_partitioned_table_stale_percent(ctx, tenant_id, table_schema, stat_table))) {
     LOG_WARN("failed to get common table stale percent", K(ret));
-  } else {/*do nothing*/}
+  } else {
+    /*do nothing*/
+  }
   return ret;
 }
 
@@ -5934,10 +5930,10 @@ int ObDbmsStats::get_table_stale_percent(sql::ObExecContext &ctx,
  * 2. if table has global statistics, but statistics is stale, gather whole statistics;
  * 3. otherwise, do not gather statistics
  */
-int ObDbmsStats::get_common_table_stale_percent(sql::ObExecContext &ctx,
-                                                const uint64_t tenant_id,
-                                                const ObTableSchema &table_schema,
-                                                StatTable &stat_table)
+int ObDbmsStats::get_non_partitioned_table_stale_percent(sql::ObExecContext &ctx,
+                                                         const uint64_t tenant_id,
+                                                         const ObTableSchema &table_schema,
+                                                         StatTable &stat_table)
 {
   int ret = OB_SUCCESS;
   //if this is virtual table real agent, we need see the real table id modifed count
@@ -5950,7 +5946,7 @@ int ObDbmsStats::get_common_table_stale_percent(sql::ObExecContext &ctx,
   if (OB_UNLIKELY(table_schema.is_user_table() && -1 == part_id)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(table_schema.is_user_table()), K(part_id));
-  } else if (!is_table_gather_global_stats(part_id, stat_table.partition_stat_infos_, row_cnt)) {
+  } else if (!is_missing_global_stats(part_id, stat_table.partition_stat_infos_, row_cnt)) {
     stat_table.stale_percent_ = -1.0;
   } else if (is_virtual_table(table_id)) {//virtual table doesn't see the modfiy count, no need regather
     stat_table.stale_percent_ = 0.0;
@@ -5972,12 +5968,11 @@ int ObDbmsStats::get_common_table_stale_percent(sql::ObExecContext &ctx,
   return ret;
 }
 
-int ObDbmsStats::get_user_partition_table_stale_percent(
-    sql::ObExecContext &ctx,
-    const uint64_t tenant_id,
-    const ObTableSchema &table_schema,
-    const double stale_percent_threshold,
-    StatTable &stat_table)
+int ObDbmsStats::get_partition_table_stale_percent(sql::ObExecContext &ctx,
+                                                   const uint64_t tenant_id,
+                                                   const ObTableSchema &table_schema,
+                                                   const double stale_percent_threshold,
+                                                   StatTable &stat_table)
 {
   int ret = OB_SUCCESS;
   uint64_t table_id = table_schema.get_table_id();
@@ -6371,9 +6366,9 @@ int ObDbmsStats::convert_vaild_ident_name(common::ObIAllocator &allocator,
   return ret;
 }
 
-bool ObDbmsStats::is_table_gather_global_stats(const int64_t global_id,
-                                               const ObIArray<ObPartitionStatInfo> &partition_stat_infos,
-                                               int64_t &cur_row_cnt)
+bool ObDbmsStats::is_missing_global_stats(const int64_t global_id,
+                                          const ObIArray<ObPartitionStatInfo> &partition_stat_infos,
+                                          int64_t &cur_row_cnt)
 {
   bool is_gather = false;
   cur_row_cnt = 0;
