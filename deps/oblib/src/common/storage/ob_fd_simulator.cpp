@@ -35,9 +35,10 @@ union ob_sim_fd_id
 
 int validate_fd(ObIOFd fd, bool expect);
 
-ObFdSimulator::ObFdSimulator() : array_size_(DEFAULT_ARRAY_SIZE), second_array_num_(0),
-                                 first_array_(NULL), allocator_(SET_USE_500("FdSimulator")),
-              lock_(ObLatchIds::DEFAULT_SPIN_LOCK),used_fd_cnt_(0),total_fd_cnt_(0),is_init_(false)
+ObFdSimulator::ObFdSimulator()
+  : array_size_(DEFAULT_ARRAY_SIZE), second_array_num_(0), first_array_(NULL),
+    allocator_(SET_USE_500("FdSimulator")), lock_(ObLatchIds::FD_SIMULATOR_LOCK),
+    used_fd_cnt_(0), total_fd_cnt_(0), alloc_fd_cnt_(0), release_fd_cnt_(0), is_init_(false)
 {
 }
 
@@ -195,6 +196,11 @@ int ObFdSimulator::get_fd(void* ctx, const int device_type, const int flag, ObIO
     set_fd_device_type(fd, device_type);
     set_fd_flag(fd, flag);
     used_fd_cnt_++;
+    alloc_fd_cnt_++;
+    if (REACH_TIME_INTERVAL(10L * 1000L * 1000L)) { // 10s
+      OB_LOG(INFO, "fd simulator stat", K_(used_fd_cnt), K_(total_fd_cnt), K_(alloc_fd_cnt),
+             K_(release_fd_cnt), K_(second_array_num), K_(array_size));
+    }
   }
 
   return ret;
@@ -316,6 +322,7 @@ int ObFdSimulator::release_fd(const ObIOFd& fd)
     second_array[second_id].pointer.index_id = first_array_[first_id].second_array_free_hd;
     first_array_[first_id].second_array_free_hd = second_id;
     used_fd_cnt_--;
+    release_fd_cnt_++;
   }
   return ret;
 }
