@@ -5552,7 +5552,7 @@ int ObPartitionOption::enable_auto_partition_(const int64_t auto_part_size)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(auto_part_size < ObPartitionOption::MIN_AUTO_PART_SIZE)) {
+  if (OB_UNLIKELY(auto_part_size < ObPartitionOption::get_min_auto_part_size())) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_WARN(OB_NOT_SUPPORTED, "auto partition size less than 128MB is");
     LOG_WARN("auto partition size is less than MIN_AUTO_PART_SIZE", K(ret), K(auto_part_size));
