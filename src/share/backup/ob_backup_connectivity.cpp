@@ -1636,6 +1636,46 @@ int ObBackupStorageInfoOperator::get_backup_dest_extensions(
 }
 
 int ObBackupStorageInfoOperator::get_backup_dest_extension(
+    const uint64_t tenant_id,
+    const int64_t dest_id,
+    char *extension,
+    const int64_t buffer_len)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  common::ObISQLClient *proxy = GCTX.sql_proxy_;
+  if (OB_INVALID_ID == tenant_id || dest_id < OB_START_DEST_ID) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(dest_id));
+  } else if (OB_ISNULL(proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy is NULL", K(ret), KP(proxy));
+  } else if (OB_FAIL(sql.assign_fmt("select %s FROM %s WHERE tenant_id = %lu AND %s = %ld",
+        OB_STR_BACKUP_DEST_EXTENSION, OB_ALL_BACKUP_STORAGE_INFO_TNAME, tenant_id, OB_STR_BACKUP_DEST_ID, dest_id))) {
+    LOG_WARN("fail to assign sql", K(ret), K(tenant_id), K(dest_id));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(proxy->read(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
+        LOG_WARN("fail to execute sql", K(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, query result must not be NULL", K(ret));
+      } else if (OB_SUCC(result->next())) {
+        int64_t tmp_real_str_len = 0;
+
+        EXTRACT_STRBUF_FIELD_MYSQL(*result, OB_STR_BACKUP_DEST_EXTENSION,
+          extension, buffer_len, tmp_real_str_len);
+        UNUSED(tmp_real_str_len);
+      } else {
+        LOG_WARN("fail to get next row", K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+int ObBackupStorageInfoOperator::get_backup_dest_extension(
     common::ObISQLClient &proxy,
     const uint64_t tenant_id,
     const share::ObBackupDest &backup_dest,
@@ -1947,7 +1987,6 @@ int ObBackupDestIOPermissionMgr::get_server_locality_info_(
   }
   return ret;
 }
-
 
 // extension_ may has contain multiple pieces of information, such as 'appid=xxx&zone=z1,z2;z3&s3_region=xxx'
 // src info can have various types
@@ -2760,6 +2799,7 @@ int ObBackupDestIOPermissionMgr::filter_server_list_by_src_info(
     common::ObIDC idc;
     common::ObZone zone;
     bool locality_valid = false;
+    int64_t priority = 0;
     if (OB_FAIL(get_src_info_from_extension(extension, src_info))) {
       LOG_WARN("failed to get src info from extension", K(ret), K(extension));
     }
@@ -2771,7 +2811,7 @@ int ObBackupDestIOPermissionMgr::filter_server_list_by_src_info(
       locality_valid = false;
       if (OB_FAIL(get_server_locality_info_(server, region, idc, zone))) {
         LOG_WARN("failed to get server locality info", K(ret), K(server));
-      } else if (OB_FAIL(src_info.check_locality_info_valid(region, idc, zone, locality_valid))) {
+      } else if (OB_FAIL(src_info.check_locality_info_valid(region, idc, zone, locality_valid, priority))) {
         LOG_WARN("failed to check locality info valid", K(ret), K(server), K(region), K(idc), K(zone));
       } else if (locality_valid) {
         if (OB_FAIL(filtered_server_list.push_back(server))) {
@@ -2798,6 +2838,50 @@ int ObBackupDestIOPermissionMgr::get_src_info_from_extension(const char *extensi
     } else if ('\0' !=  locality_info_str[0]) {
       if (OB_FAIL(ObBackupUtils::parse_backup_format_input(ObString(locality_info_str), src_info.locality_list_))) {
         LOG_WARN("failed to parse backup format input", K(ret), K(locality_info_str));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBackupDestIOPermissionMgr::filter_server_list_by_src_info(
+    const common::ObIArray<ObBackupServer> &server_list,
+    const char *extension,
+    common::ObIArray<ObBackupServer> &filtered_server_list)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(extension)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(extension));
+  } else {
+    ObBackupSrcInfo src_info;
+    common::ObRegion region;
+    common::ObIDC idc;
+    common::ObZone zone;
+    bool locality_valid = false;
+    int64_t priority = OB_INVALID_ID;
+    ObBackupServer tmp_server;
+    if (OB_FAIL(get_src_info_from_extension(extension, src_info))) {
+      LOG_WARN("failed to get src info from extension", K(ret), K(extension));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < server_list.count(); ++i) {
+      const ObAddr &server = server_list.at(i).server_;
+      zone.reset();
+      idc.reset();
+      region.reset();
+      priority = OB_INVALID_ID;
+      locality_valid = false;
+      if (OB_FAIL(get_server_locality_info_(server, region, idc, zone))) {
+        LOG_WARN("failed to get server locality info", K(ret), K(server));
+      } else if (OB_FAIL(src_info.check_locality_info_valid(region, idc, zone, locality_valid, priority))) {
+        LOG_WARN("failed to check locality info valid", K(ret), K(server), K(region), K(idc), K(zone));
+      } else if (locality_valid) {
+        tmp_server.reset();
+        tmp_server.server_ = server;
+        tmp_server.priority_ = priority;
+        if (OB_FAIL(filtered_server_list.push_back(tmp_server))) {
+          LOG_WARN("failed to push back server", K(ret), K(server_list), K(i), K(tmp_server));
+        }
       }
     }
   }

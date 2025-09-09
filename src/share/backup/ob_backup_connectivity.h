@@ -222,6 +222,11 @@ public:
       const ObIArray<int64_t> &dest_ids,
       common::ObIAllocator &allocator,
       ObIArray<std::pair<int64_t, ObString>> &extensions);
+  static int get_backup_dest_extension(
+      const uint64_t tenant_id,
+      const int64_t dest_id,
+      char *extension,
+      const int64_t buffer_len);
 private:
   static int parse_backup_path(
       const char *backup_path,
@@ -270,6 +275,10 @@ public:
       common::ObRegion &region,
       common::ObIDC &idc,
       common::ObZone &zone);
+  static int filter_server_list_by_src_info(
+      const common::ObIArray<ObBackupServer> &server_list,
+      const char *extension,
+      common::ObIArray<ObBackupServer> &filtered_server_list);
 public:
   int refresh_io_permission();
   int is_io_prohibited(const common::ObObjectStorageInfo *storage_info, bool &is_io_prohibited);

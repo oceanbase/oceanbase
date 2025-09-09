@@ -1152,6 +1152,7 @@ public:
   static int get_tenant_sys_time_zone_wrap(const uint64_t tenant_id,
                                            ObFixedLengthString<common::OB_MAX_TIMESTAMP_TZ_LENGTH> &time_zone,
                                            ObTimeZoneInfoWrap &time_zone_info_wrap);
+  static int get_backup_dest_id(const uint64_t tenant_id, int64_t &dest_id);
   static int get_tenant_backup_servers(
       const char *backup_dest_str,
       const uint64_t tenant_id,
@@ -1295,7 +1296,8 @@ struct ObBackupSrcInfo final
   bool is_region() const { return ObBackupSrcType::REGION == src_type_ && !locality_list_.empty(); }
   bool is_idc() const { return ObBackupSrcType::IDC == src_type_ && !locality_list_.empty(); }
   bool is_empty() const { return ObBackupSrcType::EMPTY == src_type_ && locality_list_.empty(); }
-  int check_locality_info_valid(const ObRegion &region, const ObIDC &idc, const ObZone &zone, bool &is_valid) const;
+  int check_locality_info_valid(const ObRegion &region, const ObIDC &idc,
+                                    const ObZone &zone, bool &is_valid, int64_t &priority) const;
   bool is_valid() const { return src_type_ < ObBackupSrcType::MAX && src_type_ >= ObBackupSrcType::EMPTY; }
   TO_STRING_KV(K_(src_type), K_(locality_list));
   ObBackupSrcType src_type_;
