@@ -8908,6 +8908,10 @@ int ObPLCodeGenerator::generate(ObPLFunction &pl_func)
 {
   int ret = OB_SUCCESS;
   ObPLFunctionAST &ast = static_cast<ObPLFunctionAST&>(ast_);
+  // Anonymous block parameters will lose line number information when they cross lines
+  bool forbid_profile = session_info_.get_local_ob_enable_parameter_anonymous_block()
+                        && pl_func.get_proc_type() == STANDALONE_ANONYMOUS;
+  profile_mode_ = profile_mode_ && !forbid_profile;
   if (debug_mode_
       || profile_mode_
       || !ast.get_is_all_sql_stmt()

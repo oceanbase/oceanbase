@@ -272,7 +272,7 @@ void ObPLObjectKey::reset()
   db_id_ = common::OB_INVALID_ID;
   key_id_ = common::OB_INVALID_ID;
   sessid_ = 0;
-  mode_ = ObjectMode::NORMAL;
+  mode_ = static_cast<uint64_t>(ObjectMode::NORMAL);
   name_.reset();
   namespace_ = ObLibCacheNameSpace::NS_INVALID;
   sys_vars_str_.reset();

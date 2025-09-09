@@ -216,7 +216,7 @@ struct ObPLObjectKey : public ObILibCacheKey
     db_id_(common::OB_INVALID_ID),
     key_id_(common::OB_INVALID_ID),
     sessid_(0),
-    mode_(ObjectMode::NORMAL),
+    mode_(static_cast<uint64_t>(ObjectMode::NORMAL)),
     name_(),
     sys_vars_str_() {}
   ObPLObjectKey(uint64_t db_id, uint64_t key_id)
@@ -224,7 +224,7 @@ struct ObPLObjectKey : public ObILibCacheKey
     db_id_(db_id),
     key_id_(key_id),
     sessid_(0),
-    mode_(ObjectMode::NORMAL),
+    mode_(static_cast<uint64_t>(ObjectMode::NORMAL)),
     name_(),
     sys_vars_str_() {}
 
@@ -241,17 +241,19 @@ struct ObPLObjectKey : public ObILibCacheKey
 
   enum class ObjectMode
   {
-    NORMAL,
-    PROFILE,
-  };
+    NORMAL = 0,
+    PROFILE = 1,
+    CODE_COVERAGE = 2,
+    DEBUG = 4,
+  }; // when you add new mode, remember to update the decode_special_compile_mode function !
 
   uint64_t  db_id_;
   uint64_t  key_id_; // routine id or package id
   uint32_t sessid_;
 
-  // sessid_ != 0 and mode_ == NORMAL marks DEBUG compile, for now
-  // TODO: unify DEBUG and PROFILE compile or add DEBUG mode separately
-  ObjectMode mode_;
+  // sessid_ != 0 and mode_ == DEBUG marks DEBUG compile, for now
+  // here maybe profile + code_coverage which means mode_ is 3
+  uint64_t mode_;
   common::ObString name_;
   common::ObString sys_vars_str_;
 };

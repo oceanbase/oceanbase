@@ -1734,8 +1734,13 @@ int ObPLPackageManager::add_package_to_plan_cache(const ObPLResolveCtx &resolve_
       pc_ctx.key_.sessid_ =
         (get_tenant_id_by_object_id(package_id) != OB_SYS_TENANT_ID && resolve_ctx.session_info_.is_pl_debug_on())
           ? resolve_ctx.session_info_.get_server_sid() : 0;
-      pc_ctx.key_.mode_ = resolve_ctx.session_info_.get_pl_profiler() != nullptr
-                          ? ObPLObjectKey::ObjectMode::PROFILE : ObPLObjectKey::ObjectMode::NORMAL;
+      pc_ctx.key_.mode_ = static_cast<uint64_t>(ObPLObjectKey::ObjectMode::NORMAL);
+      if (resolve_ctx.session_info_.get_pl_profiler() != nullptr) {
+        pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::PROFILE);
+      }
+      if (resolve_ctx.session_info_.is_pl_debug_on()) {
+        pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::DEBUG);
+      }
       ObString sql;
       if (OB_FAIL(ObPLCacheCtx::assemble_format_routine_name (sql, package))) {
         LOG_WARN("Failed to asseble format routine name!", K(ret));
@@ -1796,8 +1801,13 @@ int ObPLPackageManager::get_package_from_plan_cache(const ObPLResolveCtx &resolv
       pc_ctx.key_.sessid_ =
         (get_tenant_id_by_object_id(package_id) != OB_SYS_TENANT_ID && resolve_ctx.session_info_.is_pl_debug_on())
           ? resolve_ctx.session_info_.get_server_sid() : 0;
-      pc_ctx.key_.mode_ = resolve_ctx.session_info_.get_pl_profiler() != nullptr
-                          ? ObPLObjectKey::ObjectMode::PROFILE : ObPLObjectKey::ObjectMode::NORMAL;
+      pc_ctx.key_.mode_ = static_cast<uint64_t>(ObPLObjectKey::ObjectMode::NORMAL);
+      if (resolve_ctx.session_info_.get_pl_profiler() != nullptr) {
+        pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::PROFILE);
+      }
+      if (resolve_ctx.session_info_.is_pl_debug_on()) {
+        pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::DEBUG);
+      }
 
       // get package from plan cache
       ObCacheObjGuard* cacheobj_guard = NULL;
