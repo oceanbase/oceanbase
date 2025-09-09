@@ -1460,18 +1460,20 @@ int ObDbmsStatsExecutor::update_online_stat(ObExecContext &ctx,
       common::sqlclient::ObISQLConnection *conn = NULL;
       ctx.set_is_online_stats_gathering(true);
       //lib::CompatModeGuard guard(lib::Worker::CompatMode::MYSQL);
-      if (OB_FAIL(prepare_conn_and_store_session_for_online_stats(ctx.get_my_session(),
-                                                                  ctx.get_sql_proxy(),
-                                                                  schema_guard,
-                                                                  saved_value,
-                                                                  nested_count,
-                                                                  old_db_name,
-                                                                  old_db_id,
-                                                                  old_trx_lock_timeout,
-                                                                  need_restore_session,
-                                                                  need_reset_default_database,
-                                                                  need_reset_trx_lock_timeout,
-                                                                  conn))) {
+      if (OB_FAIL(ObDbmsStatsUtils::cancel_async_gather_stats(ctx))) {
+        LOG_WARN("failed to cancel async gather stats", K(ret));
+      } else if (OB_FAIL(prepare_conn_and_store_session_for_online_stats(ctx.get_my_session(),
+                                                                         ctx.get_sql_proxy(),
+                                                                         schema_guard,
+                                                                         saved_value,
+                                                                         nested_count,
+                                                                         old_db_name,
+                                                                         old_db_id,
+                                                                         old_trx_lock_timeout,
+                                                                         need_restore_session,
+                                                                         need_reset_default_database,
+                                                                         need_reset_trx_lock_timeout,
+                                                                         conn))) {
         LOG_WARN("failed to prepare conn and store session for online stats", K(ret));
       } else if (OB_FAIL(ObDbmsStatsUtils::get_current_opt_stats(allocator,
                                                                  conn,
