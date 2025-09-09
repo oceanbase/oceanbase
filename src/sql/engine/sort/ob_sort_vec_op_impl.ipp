@@ -158,14 +158,15 @@ void ObSortVecOpImpl<Compare, Store_Row, has_addon>::reuse()
     }
     topn_heap_->reset();
   }
-  if (nullptr != last_ties_row_) {
-    store_row_factory_.free_row_store(last_ties_row_);
-    last_ties_row_ = nullptr;
-  }
 
   if (is_aggregate_keep_) {
+    if (nullptr != last_ties_row_) {
+      store_row_factory_.free_row_store(last_ties_row_);
+      last_ties_row_ = nullptr;
+    }
     outputted_rows_cnt_ = 0;
   }
+
   if (use_partition_topn_sort_ && OB_NOT_NULL(partition_topn_sort_)) {
     partition_topn_sort_->reuse();
   }
