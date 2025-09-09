@@ -76,6 +76,7 @@ public:
   ObTabletID get_tablet_id() { return tablet_id_; }
   int online();
   int cleanup();
+  bool is_inited() const { return is_inited_; }
   bool can_freeze();
   int add_idempotence_checker();
   int check_macro_block_idempotence(
@@ -96,6 +97,7 @@ private:
     const uint64_t data_format_version,
     ObDDLKVHandle &kv_handle);
   void free_ddl_kv(const int64_t idx);
+  void cleanup_ddl_kv(const int64_t idx);
   int get_active_ddl_kv_impl(ObDDLKVHandle &kv_handle);
   void try_get_ddl_kv_unlock(const share::SCN &scn, ObDDLKVHandle &kv_handle);
   int get_ddl_kvs_unlock(const bool frozen_only, ObIArray<ObDDLKVHandle> &kv_handle_array);

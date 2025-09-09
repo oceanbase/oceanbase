@@ -134,6 +134,19 @@ int ObDDLReplayExecutor::check_need_replay_(
           K(tablet_handle), "tablet_meta", tablet->get_tablet_meta());
     }
   }
+  if (!need_replay && OB_NOT_NULL(tablet_handle.get_obj())) {
+    int tmp_ret = OB_SUCCESS;
+    ObDDLKvMgrHandle ddl_kv_mgr_handle;
+    if (OB_TMP_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
+      if (OB_ENTRY_NOT_EXIST != tmp_ret) {
+        LOG_WARN("get ddl kv mgr failed", K(tmp_ret), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
+      }
+    } else if (OB_NOT_NULL(ddl_kv_mgr_handle.get_obj())
+        && ddl_kv_mgr_handle.get_obj()->get_count() > 0
+        && OB_TMP_FAIL(ddl_kv_mgr_handle.get_obj()->cleanup())) {
+      LOG_WARN("clean up ddl kv failed", K(tmp_ret), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
+    }
+  }
 
   return ret;
 }

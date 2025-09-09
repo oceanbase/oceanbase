@@ -187,7 +187,7 @@ void ObTabletDDLKvMgr::cleanup_unlock()
   LOG_INFO("cleanup ddl kv mgr", K(*this));
   for (int64_t pos = head_; pos < tail_; ++pos) {
     const int64_t idx = get_idx(pos);
-    free_ddl_kv(idx);
+    cleanup_ddl_kv(idx);
   }
   head_ = 0;
   tail_ = 0;
@@ -821,3 +821,20 @@ void ObTabletDDLKvMgr::free_ddl_kv(const int64_t idx)
   }
 }
 
+void ObTabletDDLKvMgr::cleanup_ddl_kv(const int64_t idx)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTabletDDLKvMgr is not inited", K(ret));
+  } else if (OB_UNLIKELY(idx < 0 || idx >= MAX_DDL_KV_CNT_IN_STORAGE)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(idx));
+  } else {
+    FLOG_INFO("cleanup ddl kv", K(ls_id_), K(tablet_id_), KPC(ddl_kv_handles_[idx].get_obj()));
+    if (OB_NOT_NULL(ddl_kv_handles_[idx].get_obj())) {
+      ddl_kv_handles_[idx].get_obj()->reset();
+    }
+    ddl_kv_handles_[idx].reset();
+  }
+}

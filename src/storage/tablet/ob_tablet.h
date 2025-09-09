@@ -964,6 +964,7 @@ private:
   int assign_ddl_kvs(ObDDLKV * const *ddl_kvs, const int64_t ddl_kv_count);
   int pull_ddl_memtables(ObArenaAllocator &allocator, ObDDLKV **&ddl_kvs_addr, int64_t &ddl_kv_count);
   void reset_ddl_memtables();
+  int cleanup_ddl_kvs();
   int wait_release_memtables_();
   int mark_mds_table_switched_to_empty_shell_();
   int handle_transfer_replace_(const ObBatchUpdateTableStoreParam &param);
