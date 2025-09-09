@@ -3877,7 +3877,8 @@ int ObBasicSessionInfo::get_charset_sys_var(const ObSysVarClassType sys_var_id,
     } else if (OB_FAIL(val->get_value().get_int(coll_int64))) {
       LOG_ERROR("fail to get int from value", K(*val), K(ret));
     } else if (OB_UNLIKELY(false == ObCharset::is_valid_collation(coll_int64))) {
-      if (SYS_VAR_NCHARACTER_SET_CONNECTION == sys_var_id && coll_int64 == 0) {
+      if ((SYS_VAR_NCHARACTER_SET_CONNECTION == sys_var_id || SYS_VAR_CHARACTER_SET_RESULTS == sys_var_id)
+          && coll_int64 == 0) {
         //do nothing
       } else {
         LOG_ERROR("invalid collation", K(sys_var_id), K(coll_int64), K(*val));

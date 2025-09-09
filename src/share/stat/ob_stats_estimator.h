@@ -46,6 +46,18 @@ protected:
                   bool need_copy_basic_stat,
                   ObOptStat &src_opt_stat,
                   ObIArray<ObOptStat> &dst_opt_stats);
+  int prepare_and_store_session(ObSQLSessionInfo *session,
+                                sql::ObSQLSessionInfo::StmtSavedValue *&session_value,
+                                ObCharsetType& old_client_charset_type,
+                                ObCharsetType& old_connection_charset_type,
+                                ObCharsetType& old_result_charset_type,
+                                ObCollationType& old_collation_type);
+  int restore_session(ObSQLSessionInfo *session,
+                      sql::ObSQLSessionInfo::StmtSavedValue *session_value,
+                      ObCharsetType old_client_charset_type,
+                      ObCharsetType old_connection_charset_type,
+                      ObCharsetType old_result_charset_type,
+                      ObCollationType old_collation_type);
 
   int pack(ObSqlString &raw_sql_str);
 

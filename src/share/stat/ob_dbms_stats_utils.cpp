@@ -2127,5 +2127,35 @@ int ObDbmsStatsUtils::get_table_index_infos(share::schema::ObSchemaGetterGuard *
   return ret;
 }
 
+int ObDbmsStatsUtils::dbms_stat_set_names(ObSQLSessionInfo *session_info,
+                                          ObCharsetType client_charset_type,
+                                          ObCharsetType connection_charset_type,
+                                          ObCharsetType result_charset_type,
+                                          ObCollationType collation_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(session_info));
+  } else if (OB_FAIL(session_info->update_sys_variable(
+                                   SYS_VAR_CHARACTER_SET_CLIENT,
+                                   static_cast<int64_t>(ObCharset::get_default_collation(client_charset_type))))) {
+    LOG_WARN("failed to update sys var", K(ret));
+  } else if (OB_FAIL(session_info->update_sys_variable(
+                                   SYS_VAR_CHARACTER_SET_RESULTS,
+                                   static_cast<int64_t>(ObCharset::get_default_collation(result_charset_type))))) {
+    LOG_WARN("failed to update sys var", K(ret));
+  } else if (OB_FAIL(session_info->update_sys_variable(
+                                   SYS_VAR_CHARACTER_SET_CONNECTION,
+                                   static_cast<int64_t>(ObCharset::get_default_collation(connection_charset_type))))) {
+    LOG_WARN("failed to update sys var", K(ret));
+  } else if (OB_FAIL(session_info->update_sys_variable(
+                                   SYS_VAR_COLLATION_CONNECTION,
+                                   static_cast<int64_t>(collation_type)))) {
+    LOG_WARN("failed to update sys var", K(ret));
+  }
+  return ret;
+}
+
 }
 }

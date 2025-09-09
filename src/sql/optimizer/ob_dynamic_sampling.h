@@ -206,7 +206,11 @@ public:
   }
   virtual ~ObDSStatItem() { reset(); }
   virtual bool is_needed() const { return true; }//TODO, need refine??
-  virtual int gen_expr(common::ObIAllocator &allocator, char *buf, const int64_t buf_len, int64_t &pos);
+  virtual int gen_expr(common::ObIAllocator &allocator,
+                       ObSQLSessionInfo *session_info,
+                       char *buf,
+                       const int64_t buf_len,
+                       int64_t &pos);
   virtual int decode(double sample_ratio, ObObj &obj);
   ObDSStatItemType get_type() { return type_; }
   int cast_int(const ObObj &obj, int64_t &ret_value);
@@ -309,7 +313,7 @@ private:
   int do_estimate_rowcount(ObSQLSessionInfo *session_info, const ObSqlString &raw_sql);
   int estimate_rowcount(int64_t max_ds_timeout, int64_t degree, bool &throw_ds_error);
   int pack(ObSqlString &raw_sql_str);
-  int gen_select_filed(ObSqlString &select_fields);
+  int gen_select_field(ObSqlString &select_fields);
   int estimate_table_block_count_and_row_count(const ObDSTableParam &param);
   int get_all_tablet_id_and_object_id(const ObDSTableParam &param,
                                       ObIArray<ObTabletID> &tablet_ids,
@@ -444,6 +448,11 @@ public:
                                        const common::ObIArray<ObDSFailTabInfo> &failed_list);
 
   static bool is_valid_ds_col_type(const ObObjType type);
+  static int print_identifier(ObIAllocator& allocator,
+                              const ObString &src,
+                              ObString &dest,
+                              ObCollationType connection_collation,
+                              bool is_oracle_mode);
 
 private:
 

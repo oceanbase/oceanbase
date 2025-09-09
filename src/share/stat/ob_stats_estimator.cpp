@@ -405,38 +405,34 @@ int ObStatsEstimator::do_estimate(const ObOptStatGatherParam &gather_param,
   ObCommonSqlProxy *sql_proxy = ctx_.get_sql_proxy();
   ObArenaAllocator tmp_alloc("OptStatGather", OB_MALLOC_NORMAL_BLOCK_SIZE, gather_param.tenant_id_);
   sql::ObSQLSessionInfo::StmtSavedValue *session_value = NULL;
-  void *ptr = NULL;
   ObSQLSessionInfo *session = ctx_.get_my_session();
-  if (OB_ISNULL(ptr = tmp_alloc.alloc(sizeof(sql::ObSQLSessionInfo::StmtSavedValue)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to alloc memory for saved session value", K(ret));
-  } else {
-    session_value = new(ptr)sql::ObSQLSessionInfo::StmtSavedValue();
-    if (OB_ISNULL(sql_proxy) || OB_ISNULL(session) ||
-        OB_UNLIKELY(dst_opt_stats.empty() || raw_sql.empty())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected empty", K(ret), K(sql_proxy), K(dst_opt_stats.empty()),
-                                       K(session), K(raw_sql.empty()));
-    } else if (OB_FAIL(session->save_session(*session_value))) {
-      LOG_WARN("failed to save session", K(ret));
-    } else if (session->is_in_external_catalog()
-               && OB_FAIL(session->set_internal_catalog_db())) {
-      LOG_WARN("failed to set catalog", K(ret));
-    } else if (lib::is_oracle_mode()) {
-      if (OB_FAIL(oracle_proxy.init(ctx_.get_sql_proxy()->get_pool()))) {
-        LOG_WARN("failed to init oracle proxy", K(ret));
-      } else {
-        sql_proxy = &oracle_proxy;
-      }
+  ObCharsetType old_client_charset_type = CHARSET_UTF8MB4;
+  ObCharsetType old_connection_charset_type = CHARSET_UTF8MB4;
+  ObCharsetType old_result_charset_type = CHARSET_UTF8MB4;
+  ObCollationType old_collation_type = CS_TYPE_UTF8MB4_GENERAL_CI;
+  if (OB_ISNULL(sql_proxy) || OB_ISNULL(session) ||
+      OB_UNLIKELY(dst_opt_stats.empty() || raw_sql.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected empty", K(ret), K(sql_proxy), K(dst_opt_stats.empty()),
+                                     K(session), K(raw_sql.empty()));
+  } else if (OB_FAIL(prepare_and_store_session(session,
+                                               session_value,
+                                               old_client_charset_type,
+                                               old_connection_charset_type,
+                                               old_result_charset_type,
+                                               old_collation_type))) {
+    LOG_WARN("failed to save session", K(ret));
+  } else if (lib::is_oracle_mode()) {
+    if (OB_FAIL(oracle_proxy.init(ctx_.get_sql_proxy()->get_pool()))) {
+      LOG_WARN("failed to init oracle proxy", K(ret));
+    } else {
+      sql_proxy = &oracle_proxy;
     }
   }
   if (OB_SUCC(ret)) {
     observer::ObInnerSQLConnectionPool *pool =
                             static_cast<observer::ObInnerSQLConnectionPool*>(sql_proxy->get_pool());
     sqlclient::ObISQLConnection *conn = NULL;
-    session->set_inner_session();
-    //
-    session->set_autocommit(true);
     SMART_VAR(ObMySQLProxy::MySQLResult, proxy_result) {
       sqlclient::ObMySQLResult *client_result = NULL;
       if (OB_FAIL(pool->acquire(session, conn, lib::is_oracle_mode()))) {
@@ -487,7 +483,12 @@ int ObStatsEstimator::do_estimate(const ObOptStatGatherParam &gather_param,
       }
     }
     int tmp_ret = OB_SUCCESS;
-    if (session_value != NULL && OB_SUCCESS != (tmp_ret = session->restore_session(*session_value))) {
+    if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = restore_session(session,
+                                                             session_value,
+                                                             old_client_charset_type,
+                                                             old_connection_charset_type,
+                                                             old_result_charset_type,
+                                                             old_collation_type)))) {
       LOG_WARN("failed to restore session", K(tmp_ret));
       ret = COVER_SUCC(tmp_ret);
     }
@@ -495,6 +496,84 @@ int ObStatsEstimator::do_estimate(const ObOptStatGatherParam &gather_param,
       session_value->reset();
     }
   }
+  return ret;
+}
+
+int ObStatsEstimator::prepare_and_store_session(ObSQLSessionInfo *session,
+                                                sql::ObSQLSessionInfo::StmtSavedValue *&session_value,
+                                                ObCharsetType& old_client_charset_type,
+                                                ObCharsetType& old_connection_charset_type,
+                                                ObCharsetType& old_result_charset_type,
+                                                ObCollationType& old_collation_type)
+{
+  int ret = OB_SUCCESS;
+  void *ptr = NULL;
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(session));
+  } else if (OB_ISNULL(ptr = allocator_.alloc(sizeof(sql::ObSQLSessionInfo::StmtSavedValue)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc memory for saved session value", K(ret));
+  } else {
+    session_value = new(ptr)sql::ObSQLSessionInfo::StmtSavedValue();
+    if (OB_FAIL(session->save_session(*session_value))) {
+      LOG_WARN("failed to save session", K(ret));
+    } else if (session->is_in_external_catalog() && OB_FAIL(session->set_internal_catalog_db())) {
+      LOG_WARN("failed to set catalog", K(ret));
+    } else {
+      ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
+      ObCollationType default_collation_type = ObCharset::get_system_collation();
+      ObCharsetType default_charset_type = ObCharset::charset_type_by_coll(default_collation_type);
+      if (OB_FAIL(session->get_character_set_client(old_client_charset_type))) {
+        LOG_WARN("failed to update sys var", K(ret));
+      } else if (OB_FAIL(session->get_character_set_connection(old_connection_charset_type))) {
+        LOG_WARN("failed to update sys var", K(ret));
+      } else if (OB_FAIL(session->get_character_set_results(old_result_charset_type))) {
+        LOG_WARN("failed to update sys var", K(ret));
+      } else if (OB_FAIL(session->get_collation_connection(old_collation_type))) {
+        LOG_WARN("failed to update sys var", K(ret));
+      } else if (OB_FAIL(ObDbmsStatsUtils::dbms_stat_set_names(session,
+                                                               default_charset_type,
+                                                               default_charset_type,
+                                                               default_charset_type,
+                                                               default_collation_type))) {
+        LOG_WARN("fail to dbms_stat_set_names", K(ret));
+      } else {
+        session->set_inner_session();
+        session->set_autocommit(true);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObStatsEstimator::restore_session(ObSQLSessionInfo *session,
+                                      sql::ObSQLSessionInfo::StmtSavedValue *session_value,
+                                      ObCharsetType old_client_charset_type,
+                                      ObCharsetType old_connection_charset_type,
+                                      ObCharsetType old_result_charset_type,
+                                      ObCollationType old_collation_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(session) || OB_ISNULL(session_value)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(session), K(session_value));
+  } else if (OB_FAIL(session->restore_session(*session_value))) {
+    LOG_WARN("failed to restore session", K(ret));
+  } else {
+    ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
+    if (OB_FAIL(ObDbmsStatsUtils::dbms_stat_set_names(session,
+                                                      old_client_charset_type,
+                                                      old_connection_charset_type,
+                                                      old_result_charset_type,
+                                                      old_collation_type))) {
+      LOG_WARN("fail to dbms_stat_set_names", K(ret));
+    }
+  }
+  LOG_TRACE("prepare_and_store session", K(old_client_charset_type),
+                                         K(old_connection_charset_type),
+                                         K(old_result_charset_type),
+                                         K(old_collation_type),K(ret));
   return ret;
 }
 
