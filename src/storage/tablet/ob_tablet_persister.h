@@ -428,6 +428,7 @@ private:
       const ObTabletMacroInfo &macro_info,
       ObTabletHandle &new_handle,
       ObTabletSpaceUsage &space_usage);
+  static int sanity_check_ss_macro_info(const ObTabletMacroInfo &macro_info);
   int delete_blocks_(
     const common::ObIArray<ObSharedObjectsWriteCtx> &total_write_ctxs);
   int check_shared_root_macro_seq_(

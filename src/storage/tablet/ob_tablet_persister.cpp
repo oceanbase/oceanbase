@@ -413,6 +413,8 @@ int ObTabletPersister::persist_ss_aggregated_meta(
              OB_ISNULL(op = param_.op_handle_->get_atomic_op())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("should not be nullptr", K(ret), K(param_), K(new_handle), KPC(param_.op_handle_));
+  } else if (OB_FAIL(sanity_check_ss_macro_info(macro_info))) {
+    LOG_WARN("sanity check macro info failed", K(ret), K(macro_info));
   } else {
     const int64_t op_id = op->get_op_id();
     // persist new tablet
@@ -473,6 +475,31 @@ int ObTabletPersister::persist_ss_aggregated_meta(
     } else {
       space_usage.tablet_clustered_meta_size_ += upper_align(tablet_addr.size(), DIO_READ_ALIGN_SIZE);
       new_tablet->tablet_meta_.space_usage_ = space_usage;
+    }
+  }
+  return ret;
+}
+
+int ObTabletPersister::sanity_check_ss_macro_info(const ObTabletMacroInfo &macro_info)
+{
+  int ret = OB_SUCCESS;
+  ObMacroInfoIterator macro_iter;
+  if (OB_FAIL(macro_iter.init(ObTabletMacroType::MAX, macro_info))) {
+    LOG_WARN("fail to init macro info iterator", K(ret), K(macro_info));
+  } else {
+    while (OB_SUCC(ret)) {
+      ObTabletBlockInfo block_info;
+      if (OB_FAIL(macro_iter.get_next(block_info))) {
+        if (OB_ITER_END != ret) {
+        LOG_WARN("fail to get next block info", K(ret), K(macro_info));
+        } else {
+          ret = OB_SUCCESS;
+          break;
+        }
+      } else if (!block_info.macro_id_.is_shared_data_or_meta()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("unexpected not shared macro block detected", K(ret), K(block_info));
+      }
     }
   }
   return ret;
