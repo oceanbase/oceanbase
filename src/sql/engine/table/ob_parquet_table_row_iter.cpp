@@ -50,6 +50,7 @@ ObParquetTableRowIterator::~ObParquetTableRowIterator()
   }
   malloc_allocator_.reset();
   reader_profile_.dump_metrics();
+  reader_profile_.update_profile();
   LOG_TRACE("print stat", K(stat_), K(mode_));
 }
 

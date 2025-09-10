@@ -1961,6 +1961,7 @@ int ObLocalFileListArrayOpWithFilter::func(const dirent *entry)
     ObString tmp_file;
     bool is_filtered = false;
     ObString cur_path = path_;
+    ObString filter_path;
     if (file_name.case_compare(".") == 0 || file_name.case_compare("..") == 0) {
       // do nothing
     } else if (OB_FAIL(full_path.assign(cur_path))) {
@@ -1970,8 +1971,15 @@ int ObLocalFileListArrayOpWithFilter::func(const dirent *entry)
       OB_LOG(WARN, "append failed", K(ret));
     } else if (OB_FAIL(full_path.append(file_name))) {
       OB_LOG(WARN, "append file name failed", K(ret));
+    } else {
+      filter_path = full_path.string();
+      filter_path += origin_path_.length();  // 只匹配location下的子路径
+    }
+
+    if (OB_FAIL(ret)) {
+      // do nothing
     } else if (OB_NOT_NULL(filter_)
-               && OB_FAIL(filter_->is_filtered(full_path.string(), is_filtered))) {
+               && OB_FAIL(filter_->is_filtered(filter_path, is_filtered))) {
       LOG_WARN("fail check is filtered", K(ret));
     } else if (!is_filtered) {
       ObString target = full_path.string();
